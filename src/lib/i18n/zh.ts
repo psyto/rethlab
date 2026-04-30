@@ -455,6 +455,7 @@ export const zh: TranslationKeys = {
     loadCourse: '加载课程失败，请重试。',
   },
   page: {
+    launchBanner: '免费 · 源码起点 · 基于真实的 Reth、Revm、Alloy、Foundry',
     whyRethLab: {
       title: '为什么选择 RethLab？',
       subtitle: '最全面的 Hyperliquid 学习平台。',

@@ -453,6 +453,7 @@ export const en = {
     loadCourse: 'Failed to load course. Please try again.',
   },
   page: {
+    launchBanner: 'Free · Source-grounded · Built on real Reth, Revm, Alloy, and Foundry',
     whyRethLab: {
       title: 'Why RethLab?',
       subtitle: 'Built to produce engineers who can ship in the Rust Ethereum stack — not casual learners.',

@@ -98,6 +98,11 @@ export default function LandingPage() {
 
   return (
     <div>
+      {/* Launch Banner */}
+      <div className="bg-fabrknt-gradient px-4 py-2.5 text-center text-sm font-medium text-white">
+        {t('page.launchBanner')}
+      </div>
+
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-reth-tiles">
         <div className="pointer-events-none absolute inset-0 bg-fabrknt-gradient-subtle" />
