@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Reth・Revm・Alloy・Foundry を本物のソースコードから学ぶ、要求の高いトレーニングプログラム。「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態まで養成します。',
+      subtitle: 'Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに歩く。HyperEVM・Tempo・Base が本番で動かしているコードそのものです。「Rust が少し書ける」状態から、次世代チェーンが動いている EVM インフラを拡張・フォーク・実装できる状態まで。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -366,15 +366,6 @@ export const ja: TranslationKeys = {
     launchBanner: 'Free · Source-grounded · Built on real Reth, Revm, Alloy, and Foundry',
     whyRethLab: {
       title: 'なぜRethLab？',
-      subtitle: 'Rust Ethereum スタックで本当に出荷できるエンジニアを養成するために作られた — カジュアル学習者向けではない。',
-      builtByBuilder: 'ソース直結',
-      builtByBuilderDesc: 'すべての上位レッスンは本物の Reth・Revm・Alloy・Foundry ソースを行ごとに、設計の意図とともに歩く。',
-      learnByDoing: 'Rust を実際に書く',
-      learnByDoingDesc: 'Rust Playground や `cargo run` で本物の Rust を書きます。クイズは暗記ではなく理解を問う設計 — コードを書かずには解けないように作られている。',
-      growingPlatform: '段階的かつ要求が高い',
-      growingPlatformDesc: '初級 → ファンダメンタルズ → 上級 → エキスパート。各ティアが次の入口になる。装飾もマーケ的な迂回もない。',
-      allCoursesFree: 'オープンアクセス',
-      allCoursesFreeDesc: 'すべてのレッスンは初日から完全公開 — 4ティア全てがアカウント不要、ペイウォールなし。',
     },
     tracks: {
       title: '4つのティア、ひとつのアウトカム',

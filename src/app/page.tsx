@@ -7,7 +7,6 @@ import {
   Terminal,
   TrendingUp,
   BookOpen,
-  Shield,
   Boxes,
   Code2,
   CheckCircle2,
@@ -62,29 +61,6 @@ export default function LandingPage() {
       courses: 1,
       difficulty: t('courses.difficulty.advanced'),
       color: 'from-orange-500/20 to-red-500/20',
-    },
-  ];
-
-  const whyRethLab = [
-    {
-      icon: Shield,
-      title: t('page.whyRethLab.builtByBuilder'),
-      description: t('page.whyRethLab.builtByBuilderDesc'),
-    },
-    {
-      icon: Code2,
-      title: t('page.whyRethLab.learnByDoing'),
-      description: t('page.whyRethLab.learnByDoingDesc'),
-    },
-    {
-      icon: TrendingUp,
-      title: t('page.whyRethLab.growingPlatform'),
-      description: t('page.whyRethLab.growingPlatformDesc'),
-    },
-    {
-      icon: BookOpen,
-      title: t('page.whyRethLab.allCoursesFree'),
-      description: t('page.whyRethLab.allCoursesFreeDesc'),
     },
   ];
 
@@ -319,32 +295,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Sponsor strip */}
-      <section className="border-t border-border bg-fabrknt-gradient-subtle">
-        <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12">
-          <div className="rounded-2xl border border-primary/25 bg-card/80 p-6 shadow-lg shadow-primary/5 backdrop-blur-sm sm:p-8">
-            <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-              <div className="flex items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15">
-                  <Heart className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-base font-semibold text-foreground sm:text-lg">{t('landing.sponsor.title')}</p>
-                  <p className="mt-1.5 text-sm text-muted-foreground">{t('landing.sponsor.subtitle')}</p>
-                </div>
-              </div>
-              <Link
-                href="/donate"
-                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:opacity-90 hover:shadow-lg"
-              >
-                {t('landing.sponsor.cta')}
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Outcomes — "What you'll be able to do" */}
       <section className="border-y border-border bg-card/40">
         <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
@@ -382,47 +332,6 @@ export default function LandingPage() {
               </motion.li>
             ))}
           </motion.ul>
-        </div>
-      </section>
-
-      {/* Why RethLab */}
-      <section className="py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <motion.div
-            className="mx-auto max-w-2xl text-center"
-            {...fadeIn}
-          >
-            <h2 className="text-3xl font-bold sm:text-4xl">
-              {t('page.whyRethLab.title')}
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              {t('page.whyRethLab.subtitle')}
-            </p>
-          </motion.div>
-
-          <motion.div
-            className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-4"
-            variants={stagger}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true }}
-          >
-            {whyRethLab.map((item, i) => (
-              <motion.div
-                key={i}
-                className="group rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5"
-                variants={fadeIn}
-              >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-fabrknt-gradient">
-                  <item.icon className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {item.description}
-                </p>
-              </motion.div>
-            ))}
-          </motion.div>
         </div>
       </section>
 
@@ -496,6 +405,32 @@ export default function LandingPage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-white px-8 py-3.5 text-base font-semibold text-primary shadow-lg transition-all hover:bg-white/90"
               >
                 {t('landing.cta.cta')}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Sponsor strip — bottom of page, after the conversion ask */}
+      <section className="border-t border-border bg-fabrknt-gradient-subtle">
+        <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12">
+          <div className="rounded-2xl border border-primary/25 bg-card/80 p-6 shadow-lg shadow-primary/5 backdrop-blur-sm sm:p-8">
+            <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15">
+                  <Heart className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-foreground sm:text-lg">{t('landing.sponsor.title')}</p>
+                  <p className="mt-1.5 text-sm text-muted-foreground">{t('landing.sponsor.subtitle')}</p>
+                </div>
+              </div>
+              <Link
+                href="/donate"
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:opacity-90 hover:shadow-lg"
+              >
+                {t('landing.sponsor.cta')}
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>

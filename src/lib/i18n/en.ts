@@ -39,7 +39,7 @@ export const en = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'A demanding, source-first training program in Reth, Revm, Alloy, and Foundry. Every advanced lesson is grounded in actual production source — built to take you from familiar with Rust to ready to ship custom EVM infrastructure.',
+      subtitle: 'Walk through the real Reth, Revm, Alloy, and Foundry source — line by line. The same code that runs HyperEVM, Tempo, and Base in production. From "I know some Rust" to ready to extend, fork, and ship the infrastructure the next wave of chains is built on.',
       cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -364,15 +364,6 @@ export const en = {
     launchBanner: 'Free · Source-grounded · Built on real Reth, Revm, Alloy, and Foundry',
     whyRethLab: {
       title: 'Why RethLab?',
-      subtitle: 'Built to produce engineers who can ship in the Rust Ethereum stack — not casual learners.',
-      builtByBuilder: 'Source-Grounded',
-      builtByBuilderDesc: 'Every advanced lesson walks through actual Reth, Revm, Alloy, or Foundry source — line by line, with the design intent.',
-      learnByDoing: 'Hands-On Rust',
-      learnByDoingDesc: 'You write real Rust in Rust Playground or `cargo run`. Quizzes test understanding, not memorization — designed to be unsolvable without writing the code first.',
-      growingPlatform: 'Tiered & Demanding',
-      growingPlatformDesc: 'Beginner → Fundamentals → Advanced → Expert. Each tier ends where the next begins. No fluff, no marketing detours.',
-      allCoursesFree: 'Open Access',
-      allCoursesFreeDesc: 'Every lesson is open from day one — all four tiers, no signup, no paywalls.',
     },
     tracks: {
       title: '4 Tiers, One Outcome',
