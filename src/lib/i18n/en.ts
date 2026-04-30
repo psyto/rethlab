@@ -98,6 +98,7 @@ export const en = {
     sponsor: {
       title: 'Free to learn — supporters keep it growing',
       subtitle: 'If RethLab helps you ship Rust, you can sponsor on GitHub or donate.',
+      cta: 'Sponsor',
     },
   },
   courses: {
@@ -321,6 +322,7 @@ export const en = {
       body: 'The checkout was cancelled. No payment was processed.',
       retry: 'Try again',
     },
+    inlineNudge: 'If RethLab was useful, you can support →',
   },
   quiz: {
     progress: '{{current}} / {{total}}',

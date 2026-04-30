@@ -100,6 +100,7 @@ export const ja: TranslationKeys = {
     sponsor: {
       title: '無料で学べます — サポーターが次のコースを支えています',
       subtitle: 'RethLab が役に立ったら、GitHub Sponsors か donation で支援できます。',
+      cta: '支援する',
     },
   },
   courses: {
@@ -323,6 +324,7 @@ export const ja: TranslationKeys = {
       body: '決済はキャンセルされました。請求は発生していません。',
       retry: 'もう一度試す',
     },
+    inlineNudge: 'RethLab が役に立ったら、支援できます →',
   },
   quiz: {
     progress: '{{current}} / {{total}}',

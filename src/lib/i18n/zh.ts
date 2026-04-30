@@ -100,6 +100,7 @@ export const zh: TranslationKeys = {
     sponsor: {
       title: '免费学习 — 支持者让它持续成长',
       subtitle: '如果 RethLab 帮助你出 Rust，可以在 GitHub Sponsors 或捐赠中支持。',
+      cta: '支持',
     },
   },
   courses: {
@@ -323,6 +324,7 @@ export const zh: TranslationKeys = {
       body: '结账已取消，未发生任何扣款。',
       retry: '再试一次',
     },
+    inlineNudge: '如果 RethLab 对你有帮助，可以支持 →',
   },
   quiz: {
     progress: '{{current}} / {{total}}',

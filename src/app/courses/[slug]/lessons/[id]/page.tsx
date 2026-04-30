@@ -20,6 +20,7 @@ import {
   BookOpen,
   ArrowLeft,
   ArrowRight,
+  Heart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
@@ -559,6 +560,13 @@ function LessonCompletionNav({
           {t('lesson.backToCourses')}
         </button>
       </div>
+      <Link
+        href="/donate"
+        className="mt-4 inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-primary"
+      >
+        <Heart className="h-3.5 w-3.5" />
+        {t('donate.inlineNudge')}
+      </Link>
     </div>
   );
 }

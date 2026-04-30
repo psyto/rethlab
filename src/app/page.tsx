@@ -186,22 +186,29 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Sponsor strip — subtle */}
-      <section className="border-t border-border">
-        <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
-          <Link
-            href="/donate"
-            className="group flex items-center justify-between gap-4 rounded-xl border border-border bg-card/40 px-5 py-4 transition-all hover:border-primary/40 hover:bg-card/60"
-          >
-            <div className="flex items-start gap-3">
-              <Heart className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <div>
-                <p className="text-sm font-medium text-foreground">{t('landing.sponsor.title')}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{t('landing.sponsor.subtitle')}</p>
+      {/* Sponsor strip */}
+      <section className="border-t border-border bg-fabrknt-gradient-subtle">
+        <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12">
+          <div className="rounded-2xl border border-primary/25 bg-card/80 p-6 shadow-lg shadow-primary/5 backdrop-blur-sm sm:p-8">
+            <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15">
+                  <Heart className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-foreground sm:text-lg">{t('landing.sponsor.title')}</p>
+                  <p className="mt-1.5 text-sm text-muted-foreground">{t('landing.sponsor.subtitle')}</p>
+                </div>
               </div>
+              <Link
+                href="/donate"
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:opacity-90 hover:shadow-lg"
+              >
+                {t('landing.sponsor.cta')}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
-            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-          </Link>
+          </div>
         </div>
       </section>
 

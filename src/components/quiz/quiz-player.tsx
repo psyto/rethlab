@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, XCircle, ChevronRight, RotateCcw, Trophy, BookOpen } from 'lucide-react';
+import { CheckCircle2, XCircle, ChevronRight, RotateCcw, Trophy, BookOpen, Heart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocale } from '@/contexts/locale-context';
 import type { QuizQuestion } from '@/types';
@@ -128,6 +128,15 @@ export function QuizPlayer({ questions, onComplete, isCompleted, onNext, nextLes
             </button>
           )}
         </div>
+        {passed && (
+          <Link
+            href="/donate"
+            className="mt-6 inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-primary"
+          >
+            <Heart className="h-3.5 w-3.5" />
+            {t('donate.inlineNudge')}
+          </Link>
+        )}
       </div>
     );
   }
