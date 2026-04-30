@@ -4,13 +4,13 @@ import Link from 'next/link';
 import { useLocale } from '@/contexts/locale-context';
 import {
   ArrowRight,
-  Zap,
   Terminal,
   TrendingUp,
   BookOpen,
   Shield,
   Boxes,
   Code2,
+  CheckCircle2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -87,10 +87,12 @@ export default function LandingPage() {
     },
   ];
 
-  const stats = [
-    { value: '8', label: t('landing.stats.courses') },
-    { value: '74', label: t('landing.stats.lessons') },
-    { value: '4', label: t('landing.stats.tracks') },
+  const outcomes = [
+    'Read Reth\'s stages, Revm\'s interpreter, and Alloy\'s procedural macros',
+    'Extend Revm with custom opcodes and precompiles (the Foundry cheatcode mechanism)',
+    'Ship an Execution Extension (ExEx) — a node-speed indexer or MEV pipeline',
+    'Build a custom Reth fork with custom EVM config, consensus, or storage',
+    'Apply for grant work at Monad / Hyperliquid / Paradigm-style infra teams',
   ];
 
   return (
@@ -105,41 +107,25 @@ export default function LandingPage() {
         <div className="pointer-events-none absolute inset-0 bg-fabrknt-gradient-subtle" />
         <div className="pointer-events-none absolute -top-40 left-1/2 h-[500px] w-[800px] -translate-x-1/2 rounded-full bg-primary/5 blur-3xl" />
 
-        <div className="relative mx-auto max-w-6xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
+        <div className="relative mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
           <motion.div
-            className="mx-auto max-w-3xl text-center"
+            className="mx-auto max-w-4xl text-center"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            {/* Reth-style chip */}
-            <div className="mb-12 flex justify-center">
-              <div className="reth-chip relative w-[280px] px-8 py-7">
-                <span className="screw-tl" />
-                <span className="screw-tr" />
-                <span className="screw-bl" />
-                <span className="screw-br" />
-                <div className="absolute right-4 top-4 rounded-md border border-border bg-black/40 px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
-                  v 1.0
-                </div>
-                <div className="flex justify-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-2xl">
-                    🦀
-                  </div>
-                </div>
-                <div className="mt-3 text-center">
-                  <div className="text-3xl font-bold tracking-tight text-foreground">RethLab</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Made in <span className="font-semibold text-primary">Rust</span>
-                  </div>
-                </div>
+            {/* Tagline */}
+            <div className="mb-6 flex justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-4 py-1.5 font-mono text-xs text-muted-foreground">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                Demanding · Source-grounded · No fluff
               </div>
             </div>
 
             <h1 className="text-4xl font-bold tracking-tight sm:text-6xl lg:text-7xl">
               <span className="text-fabrknt-gradient">{t('landing.hero.title')}</span>
             </h1>
-            <p className="mt-6 text-lg leading-8 text-muted-foreground sm:text-xl">
+            <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-muted-foreground sm:text-xl">
               {t('landing.hero.subtitle')}
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -157,30 +143,85 @@ export default function LandingPage() {
                 {t('page.whyRethLab.title')}
               </Link>
             </div>
+
+            {/* Real source code on hero — proof of source-first approach */}
+            <motion.div
+              className="mt-16 text-left"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.6 }}
+            >
+              <div className="overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+                <div className="flex items-center justify-between border-b border-border bg-background/40 px-4 py-2.5 font-mono text-xs">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span className="h-2.5 w-2.5 rounded-full bg-destructive/60" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/60" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-green-500/60" />
+                    <span className="ml-3">bluealloy/revm · interpreter/instructions/arithmetic.rs</span>
+                  </div>
+                  <a
+                    href="https://github.com/bluealloy/revm/blob/main/crates/interpreter/src/instructions/arithmetic.rs"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    view on GitHub →
+                  </a>
+                </div>
+                <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-relaxed">
+                  <code>
+                    <span className="text-muted-foreground">{`// The real ADD opcode that runs on every Ethereum block`}</span>{`\n`}
+                    <span className="text-primary">pub fn</span>{` `}<span className="text-foreground">add</span><span className="text-muted-foreground">{`<`}</span><span className="text-primary">IT</span><span className="text-muted-foreground">{`: ITy, `}</span><span className="text-primary">H</span><span className="text-muted-foreground">{`: ?Sized>(`}</span>{`\n    `}<span className="text-foreground">context</span><span className="text-muted-foreground">{`: Ictx<'_, H, IT>,`}</span>{`\n`}<span className="text-muted-foreground">{`) -> `}</span><span className="text-primary">Result</span>{` {`}{`\n    `}<span className="text-yellow-400">popn_top!</span>{`([op1], op2, context.interpreter);`}{`\n    `}<span className="text-muted-foreground">{`*`}</span>op2{` = op1.`}<span className="text-foreground">wrapping_add</span>{`(`}<span className="text-muted-foreground">{`*`}</span>op2{`);`}{`\n    `}<span className="text-primary">Ok</span>{`(())`}{`\n}`}{`\n`}{`\n`}
+                    <span className="text-muted-foreground">{`// Walked through line-by-line in lesson:`}</span>{`\n`}
+                    <span className="text-muted-foreground">{`// → reth-advanced / revm-interpreter`}</span>
+                  </code>
+                </pre>
+              </div>
+              <p className="mt-4 text-center font-mono text-xs text-muted-foreground">
+                Every Advanced + Expert lesson is anchored on real source like this.
+              </p>
+            </motion.div>
           </motion.div>
         </div>
       </section>
 
-      {/* Stats */}
-      <section className="border-y border-border bg-card/50">
-        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-3 gap-8">
-            {stats.map((stat, i) => (
-              <motion.div
+      {/* Outcomes — "What you'll be able to do" */}
+      <section className="border-y border-border bg-card/40">
+        <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
+          <motion.div
+            className="text-center"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <div className="font-mono text-xs uppercase tracking-widest text-primary">
+              After this program
+            </div>
+            <h2 className="mt-2 text-2xl font-bold sm:text-3xl">
+              You&apos;ll be able to ship in the Rust EVM stack
+            </h2>
+          </motion.div>
+
+          <motion.ul
+            className="mt-10 space-y-3"
+            variants={stagger}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+          >
+            {outcomes.map((outcome, i) => (
+              <motion.li
                 key={i}
-                className="text-center"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
+                className="flex items-start gap-3 rounded-lg border border-border bg-card px-5 py-4"
+                variants={fadeIn}
               >
-                <div className="text-3xl font-bold text-fabrknt-gradient sm:text-4xl">
-                  {stat.value}
+                <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
                 </div>
-                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
-              </motion.div>
+                <span className="text-sm leading-relaxed text-foreground">{outcome}</span>
+              </motion.li>
             ))}
-          </div>
+          </motion.ul>
         </div>
       </section>
 
