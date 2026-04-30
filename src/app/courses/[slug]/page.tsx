@@ -207,15 +207,6 @@ export default function CourseDetailPage() {
             </div>
           </div>
 
-          {/* Reviews */}
-          <div className="mt-10">
-            <h2 className="text-xl font-semibold">{t('courses.detail.reviews')}</h2>
-            <div className="mt-4 rounded-xl border border-border bg-card p-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                {t('courses.detail.reviewsPlaceholder')}
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Sidebar */}

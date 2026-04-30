@@ -173,8 +173,6 @@ export const en = {
       prerequisites: 'Prerequisites',
       whatYouLearn: "What You'll Learn",
       syllabus: 'Syllabus',
-      reviews: 'Reviews',
-      reviewsPlaceholder: 'Community reviews coming soon. Complete the course and be the first to share your experience!',
     },
     progress: {
       complete: 'Complete',

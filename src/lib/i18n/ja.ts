@@ -175,8 +175,6 @@ export const ja: TranslationKeys = {
       prerequisites: '前提条件',
       whatYouLearn: '学べること',
       syllabus: 'シラバス',
-      reviews: 'レビュー',
-      reviewsPlaceholder: 'コミュニティレビューは近日公開予定。コースを修了して最初のレビューを投稿しましょう！',
     },
     progress: {
       complete: '修了',
