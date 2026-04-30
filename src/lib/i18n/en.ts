@@ -86,8 +86,9 @@ export const en = {
       card3Desc: 'Solidity devs are oversupplied. Engineers who can extend Reth or write Revm precompiles are scarce — the infra hiring story that was on Solana now lives on Ethereum, in Rust.',
     },
     cta: {
-      title: 'Ready to ship Rust EVM infrastructure?',
-      description: 'From your first Alloy script to a custom Reth fork. The same stack used by Paradigm, Hyperliquid, and Tempo — taught from the source.',
+      title: 'The Rust EVM hiring window is open — right now',
+      description: 'Reth is being adopted faster than the engineers who can extend it are showing up. The hires Paradigm, HyperEVM, Tempo, and Foundry make in 2026 will be people who already read this stack. Start before the gap closes.',
+      cta: 'Start now',
     },
     features: {
       title: 'Learn Reth, Revm, and Alloy',

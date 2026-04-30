@@ -495,7 +495,7 @@ export default function LandingPage() {
                 href="/courses"
                 className="inline-flex items-center gap-2 rounded-xl bg-white px-8 py-3.5 text-base font-semibold text-primary shadow-lg transition-all hover:bg-white/90"
               >
-                {t('common.getStarted')}
+                {t('landing.cta.cta')}
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>

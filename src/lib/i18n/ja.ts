@@ -88,8 +88,9 @@ export const ja: TranslationKeys = {
       card3Desc: 'Solidity 開発者は供給過剰。Reth を拡張したり Revm precompile を書けるエンジニアは希少 — Solana で起きていたインフラ採用の波が、今は Rust の Ethereum で起きています。',
     },
     cta: {
-      title: 'Rust EVM インフラを実装する準備はできましたか？',
-      description: '最初の Alloy スクリプトから独自 Reth フォークまで。Paradigm・Hyperliquid・Tempo が使う本物のスタックを、ソースから直接学ぶ。',
+      title: 'Rust EVM の採用ウィンドウは、今、開いています',
+      description: 'Reth の採用速度に対して、それを拡張できるエンジニアの数が追いついていません。2026 年に Paradigm・HyperEVM・Tempo・Foundry が採用する人材は、まさに本コースで歩く本物のソースを読んだ人たちです。ギャップが閉じる前に始めましょう。',
+      cta: '今すぐ始める',
     },
     features: {
       title: 'Reth・Revm・Alloyを学ぶ',
