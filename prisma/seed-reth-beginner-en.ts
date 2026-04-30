@@ -331,50 +331,48 @@ You now have enough Rust to read the first chunks of Alloy code. The next lesson
 
 The simplest possible task:
 
-> Given a string that's supposed to be an Ethereum address, check whether it starts with \`0x\` and print a message.
+> Given a string that's supposed to be an Ethereum address, check whether it starts with \`0x\` and print a message. As a stretch: also verify the length (42 characters total).
 
-## Why this is the right "first step"
+## What you'll need
 
-1. **Variables** — declaring data
-2. **Methods** — calling \`starts_with\` (a built-in)
-3. **Conditionals** — \`if / else\`
+This is your first Rust program in the EVM stack tradition. Three primitives appear in every Rust program you'll ever write:
 
-These primitives appear in every Rust program you'll ever write.
+1. **Variables** — \`let\` and \`let mut\` (we just covered these)
+2. **Methods** — Rust strings have built-in methods. There's one that checks whether a string begins with another string. **Find it in the std docs**: [\`&str\` documentation](https://doc.rust-lang.org/std/primitive.str.html)
+3. **Conditionals** — \`if\` / \`else\`
 
-## The Rust solution
+You also need to know the **length** of an Ethereum address. Look it up if unsure (hint: 40 hex chars + the \`0x\` prefix).
+
+## Try it yourself
+
+Open [Rust Playground](https://play.rust-lang.org/) and write a function with this signature:
 
 \`\`\`rust
 fn is_valid_address(addr: &str) -> bool {
-    addr.starts_with("0x") && addr.len() == 42
-}
-
-fn main() {
-    let a = "0x1234567890abcdef1234567890abcdef12345678";
-    let b = "1234567890abcdef1234567890abcdef12345678";
-
-    println!("a → {}", is_valid_address(a));   // true
-    println!("b → {}", is_valid_address(b));   // false
+    // your code
 }
 \`\`\`
 
-Three things to note:
+Test it against:
 
-1. \`&str\` (not \`String\`) — we **borrow** the input. We don't own it, we just read it.
-2. \`starts_with\` is a method on \`&str\` provided by the standard library — no import needed.
-3. The function returns \`bool\` directly because the last expression in a block is the return value.
+\`\`\`rust
+fn main() {
+    println!("{}", is_valid_address("0x1234567890abcdef1234567890abcdef12345678")); // true
+    println!("{}", is_valid_address("1234567890abcdef1234567890abcdef12345678"));   // false
+}
+\`\`\`
 
-### Try it for real
+A few hints if you get stuck:
 
-Open [Rust Playground](https://play.rust-lang.org/), paste the code above, hit Run. **You just wrote your first Rust program in the EVM stack tradition.**
+- \`addr.\`-something — there's a method on \`&str\` whose name is exactly what you want
+- \`addr.len()\` returns the character byte length
+- Two boolean conditions are joined with \`&&\`
 
-## Stretch goals
-
-- Also verify every character after \`0x\` is a hex digit (\`addr[2..].chars().all(|c| c.is_ascii_hexdigit())\`)
-- Wrap into a proper validation that handles uppercase / mixed-case (EIP-55)
+Don't peek at the answer until you've **tried writing it**. The whole point of Rust is the compiler teaches you — let it.
 
 ## Quiz
 
-Test what you understood. The questions below cover the Rust idioms we just used.`,
+Once you've written and run your version, take the quiz below. Each question targets a specific Rust idiom — you should be able to answer them all from the experience of having written this function.`,
                   quizQuestions: [
                     {
                       question: "Which Rust expression correctly checks whether the string `address` starts with `\"0x\"`?",

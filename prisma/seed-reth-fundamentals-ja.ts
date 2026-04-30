@@ -432,23 +432,48 @@ anvil
 
 ゴール：指定したアドレスの ETH 残高がゼロなら \`true\`、それ以外なら \`false\` を返す関数を書く。
 
-## Rust + Alloy 解答
+## 必要な要素
+
+Alloy で既に出会った2つ：
+
+- \`Provider\` — \`ProviderBuilder::new().connect_http(url)\` で作る（Provider レッスン）
+- \`get_balance(address)\` — 残高を返す async メソッド
+
+加えて、前の Rust レッスンで扱った **\`?\` 演算子**（\`async\` 呼び出しでのエラー伝播：\`x.await?\`）。
+
+## 自分で書いてみる
+
+Rust Playground には Alloy が無いので、ローカルで新規プロジェクト：
+
+\`\`\`bash
+cargo new balance-check && cd balance-check
+\`\`\`
+
+\`Cargo.toml\`：
+
+\`\`\`toml
+[dependencies]
+alloy = { version = "1.0", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+eyre = "0.6"
+\`\`\`
+
+\`src/main.rs\` に、このシグネチャで関数を書く：
 
 \`\`\`rust
-use alloy::primitives::Address;
-use alloy::providers::{Provider, ProviderBuilder};
-use eyre::Result;
-
 async fn is_empty_wallet(
     provider: &impl Provider,
     address: Address,
-) -> Result<bool> {
-    let balance = provider.get_balance(address).await?;
-    Ok(balance.is_zero())
+) -> eyre::Result<bool> {
+    // ここを書く
 }
+\`\`\`
 
+\`main\` から呼ぶ：
+
+\`\`\`rust
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> eyre::Result<()> {
     let provider = ProviderBuilder::new()
         .connect_http("https://reth-ethereum.ithaca.xyz/rpc".parse()?);
 
@@ -459,16 +484,13 @@ async fn main() -> Result<()> {
 }
 \`\`\`
 
-ポイント：
+詰まったとき：
 
-1. 関数は \`&impl Provider\` を取る — **任意の** Provider 実装（HTTP・WebSocket・Anvil-fork）を1つに固定せず受け入れる。**トレイト境界によるポリモーフィズム**。
-2. \`get_balance\` は \`Result<U256>\` を返す。失敗時は \`?\` がネットワークエラーを伝播。
-3. \`balance.is_zero()\` が慣用表現 — \`balance == U256::ZERO\` より明確で、コンパイラが最適化できる場合もある。
-4. ネットワーク呼び出しが async なので関数全体が \`async\`。だが周りの処理は普通の Rust — コールバックも \`.then(...)\` も無い。
+- \`provider.get_balance(address)\` は Future を返す — \`.await?\` で残高を取り出す
+- 残高の型は \`U256\`。「ゼロか？」を聞く慣用メソッドがある — Alloy ドキュメントで探す
+- \`Result<...>\` を返す関数なら最後は \`Ok(...)\` で包む
 
-### 動かしてみる
-
-[Rust Playground](https://play.rust-lang.org/) には Alloy が無いので、ローカルで：\`cargo new balance-check && cd balance-check\`、\`Cargo.toml\` に \`alloy\` を追加、上のコードを貼り、\`cargo run\`。本物の Reth ノードから Vitalik のウォレット残高ステータスが取得できます。
+\`cargo run\` で公開 Reth RPC に当たり、Vitalik のウォレットが空かを教えてくれる（空ではない）。
 
 ## クイズ`,
                   quizQuestions: [
@@ -648,7 +670,20 @@ Rust で小さな EVM 風スタックを 3 操作だけで作ります：
 - \`add()\`: 上から2つ pop し、合計を push
 - \`peek()\`: 上の値を読むだけ（pop しない）
 
-## Rust 解答
+前のレッスンで読んだ本物の Revm \`Stack\` と同じ形を、シンプル化のために \`U256\` の代わりに \`i64\` で作るだけです。
+
+## 必要な要素
+
+- \`Vec<i64>\` をラップする \`struct\`
+- \`impl\` ブロックに \`new()\`、\`push(&mut self, n)\`、\`add(&mut self)\`、\`peek(&self)\`
+- \`Vec::pop\` と \`Vec::last\` の戻り値の型 — 空の Vec のとき Rust は何を返してくる？
+- underflow 処理：要素が 2 つ未満のとき \`add()\` はどうする？
+
+EVM 仕様に忠実に、加算はオーバーフローで **ラップアラウンド** する（飽和もパニックもしない）。整数のメソッドで正しいものを探す。
+
+## 自分で書いてみる
+
+[Rust Playground](https://play.rust-lang.org/) でスケルトンから始める：
 
 \`\`\`rust
 struct MiniEvmStack {
@@ -660,20 +695,7 @@ impl MiniEvmStack {
         Self { data: Vec::new() }
     }
 
-    fn push(&mut self, n: i64) {
-        self.data.push(n);
-    }
-
-    fn add(&mut self) -> Result<(), &'static str> {
-        let a = self.data.pop().ok_or("stack underflow")?;
-        let b = self.data.pop().ok_or("stack underflow")?;
-        self.data.push(a.wrapping_add(b));
-        Ok(())
-    }
-
-    fn peek(&self) -> Option<&i64> {
-        self.data.last()
-    }
+    // TODO: push, add, peek
 }
 
 fn main() {
@@ -681,22 +703,18 @@ fn main() {
     s.push(100);
     s.push(200);
     s.add().unwrap();
-    println!("{:?}", s.peek()); // Some(300)
+    println!("{:?}", s.peek()); // 出力は Some(300) になるはず
 }
 \`\`\`
 
-注目ポイント：
+ヒント：
 
-1. \`Vec::pop\` は \`Option<T>\` を返す — 空のケースが **戻り値の型に符号化** されている。JS の「空配列で undefined」のような落とし穴は無い。
-2. \`Vec::last\` も同様に \`Option<&T>\` を返す — コピーではなく借用。安い。
-3. \`wrapping_add\` は EVM のセマンティクス（u256 のモジュロ算術）と一致する。本物の EVM スタックなら \`U256::wrapping_add\` を使う。
-4. \`add\` が \`Result<()>\` を返すことで、underflow をどう扱うかを呼び出し側に決めさせる — Revm のマクロも同じ形。
+- \`Vec::pop\` は \`Option<T>\` を返す — 空のケースが戻り値の型に符号化されている
+- \`Vec::last\` は \`Option<&T>\` を返す — コピーではなく借用（安い）
+- \`add\` の戻り値は \`Result<(), &'static str>\` にすると、pop 呼び出しに \`.ok_or("stack underflow")?\` が付けられる
+- EVM 互換の加算は、名前に「wrap」を含む整数メソッド
 
-### 動かしてみる
-
-[Rust Playground](https://play.rust-lang.org/) に貼って Run。出力は \`Some(300)\` になるはず。
-
-そして前のレッスンで見た **本物の Revm Stack** と頭の中で比べてみてください — 同じ形、ただし \`i64\` の代わりに \`U256\`、もっと厳密なパフォーマンス最適化が入っています。
+動いたら、前のレッスンの本物の Revm \`Stack\` と頭の中で設計を比較してみてください — 同じ形のはず。
 
 ## クイズ`,
                   quizQuestions: [

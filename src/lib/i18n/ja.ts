@@ -109,7 +109,7 @@ export const ja: TranslationKeys = {
     },
     catalog: {
       title: 'コースカタログ',
-      subtitle: '基礎から高度な開発まで、Hyperliquidをマスターするコースを閲覧。',
+      subtitle: '初級からエキスパートまで、Rust Ethereum スタック（Reth・Revm・Alloy・Foundry）を段階的にマスターするコース。',
       searchPlaceholder: 'コースを検索...',
       noResults: 'フィルター条件に一致するコースが見つかりません。',
     },

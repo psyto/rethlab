@@ -429,23 +429,48 @@ You can now read state. The next module dives into how the EVM actually executes
 
 Goal: write a function that returns \`true\` when a given address has zero ETH balance, \`false\` otherwise.
 
-## The Rust + Alloy solution
+## What you'll need
+
+Two pieces from Alloy you've already met:
+
+- \`Provider\` — created via \`ProviderBuilder::new().connect_http(url)\` (Provider lesson)
+- \`get_balance(address)\` — async method that returns the balance
+
+Plus one bit from the previous Rust lesson: the **\`?\` operator** for error propagation on \`async\` calls (\`x.await?\`).
+
+## Try it yourself
+
+Create a new project locally (Rust Playground has no Alloy):
+
+\`\`\`bash
+cargo new balance-check && cd balance-check
+\`\`\`
+
+In \`Cargo.toml\`:
+
+\`\`\`toml
+[dependencies]
+alloy = { version = "1.0", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+eyre = "0.6"
+\`\`\`
+
+In \`src/main.rs\`, write a function with this signature:
 
 \`\`\`rust
-use alloy::primitives::Address;
-use alloy::providers::{Provider, ProviderBuilder};
-use eyre::Result;
-
 async fn is_empty_wallet(
     provider: &impl Provider,
     address: Address,
-) -> Result<bool> {
-    let balance = provider.get_balance(address).await?;
-    Ok(balance.is_zero())
+) -> eyre::Result<bool> {
+    // your code
 }
+\`\`\`
 
+And exercise it from \`main\`:
+
+\`\`\`rust
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> eyre::Result<()> {
     let provider = ProviderBuilder::new()
         .connect_http("https://reth-ethereum.ithaca.xyz/rpc".parse()?);
 
@@ -456,16 +481,13 @@ async fn main() -> Result<()> {
 }
 \`\`\`
 
-Things worth noting:
+Hints if you get stuck:
 
-1. The function takes \`&impl Provider\` — it accepts **any** Provider implementation (HTTP, WebSocket, Anvil-fork) without committing to one. This is **trait-bound polymorphism**.
-2. \`get_balance\` returns \`Result<U256>\`. The \`?\` propagates the network error if it fails.
-3. \`balance.is_zero()\` is the idiomatic check — clearer than \`balance == U256::ZERO\` and may be optimized by the compiler.
-4. The whole function is \`async\` because the network call is async, but the surrounding logic is plain Rust — no callbacks, no \`.then(...)\`.
+- \`provider.get_balance(address)\` returns a Future — use \`.await?\` to extract the balance
+- The balance type is \`U256\`. There's an idiomatic method on it for the "is this zero?" check — find it in the Alloy docs
+- You return \`Ok(...)\` from a function that returns \`Result<...>\`
 
-### Try it
-
-[Rust Playground](https://play.rust-lang.org/) doesn't have Alloy, but on your machine: \`cargo new balance-check && cd balance-check\`, add \`alloy\` to \`Cargo.toml\`, paste the code above, run \`cargo run\`. You'll see Vitalik's wallet balance status pulled from a real Reth node.
+\`cargo run\` will hit the public Reth RPC and tell you whether Vitalik's wallet is empty (it isn't).
 
 ## Quiz`,
                   quizQuestions: [
@@ -642,7 +664,20 @@ Build a tiny Rust EVM-style stack with three operations:
 - \`add()\` — pop two, push their sum
 - \`peek()\` — read the top without removing it
 
-## The Rust solution
+You're building the same shape as the real Revm \`Stack\` you read in the previous lesson — just with \`i64\` instead of \`U256\` to keep things simple.
+
+## What you'll need
+
+- A \`struct\` that wraps a \`Vec<i64>\`
+- An \`impl\` block with \`new()\`, \`push(&mut self, n)\`, \`add(&mut self)\`, \`peek(&self)\`
+- Knowledge of \`Vec::pop\` and \`Vec::last\` return types — what does Rust hand you when the vector is empty?
+- Underflow handling: what should \`add()\` do when there are fewer than 2 items?
+
+For the EVM-faithful version, addition wraps modulo (it doesn't saturate or panic on overflow). Look up the right method on integers.
+
+## Try it yourself
+
+In [Rust Playground](https://play.rust-lang.org/), start with this scaffold:
 
 \`\`\`rust
 struct MiniEvmStack {
@@ -654,20 +689,7 @@ impl MiniEvmStack {
         Self { data: Vec::new() }
     }
 
-    fn push(&mut self, n: i64) {
-        self.data.push(n);
-    }
-
-    fn add(&mut self) -> Result<(), &'static str> {
-        let a = self.data.pop().ok_or("stack underflow")?;
-        let b = self.data.pop().ok_or("stack underflow")?;
-        self.data.push(a.wrapping_add(b));
-        Ok(())
-    }
-
-    fn peek(&self) -> Option<&i64> {
-        self.data.last()
-    }
+    // TODO: push, add, peek
 }
 
 fn main() {
@@ -675,22 +697,18 @@ fn main() {
     s.push(100);
     s.push(200);
     s.add().unwrap();
-    println!("{:?}", s.peek()); // Some(300)
+    println!("{:?}", s.peek()); // Should print: Some(300)
 }
 \`\`\`
 
-Things to notice:
+Hints:
 
-1. \`Vec::pop\` returns \`Option<T>\` — the empty case is **encoded in the return type**. There's no "empty array undefined" gotcha like in JS.
-2. \`Vec::last\` similarly returns \`Option<&T>\` — a borrow, not a copy. Cheap.
-3. \`wrapping_add\` matches EVM semantics (modular arithmetic on u256). For a real EVM stack you'd use \`U256::wrapping_add\`.
-4. The \`add\` method returns \`Result<()>\` so the caller can decide what to do with underflow — Revm's macro does the same.
+- \`Vec::pop\` returns \`Option<T>\` — empty case is encoded in the return type
+- \`Vec::last\` returns \`Option<&T>\` — borrowed, not copied (cheap)
+- \`add\` should return a \`Result<(), &'static str>\` so you can do \`.ok_or("stack underflow")?\` on the pop calls
+- For EVM-correct addition, the integer method whose name says "wrap" is what you want
 
-### Try it
-
-Paste into [Rust Playground](https://play.rust-lang.org/) and hit Run. The output should be \`Some(300)\`.
-
-Now compare your mental model to the **real Revm Stack** from the previous lesson — same shape, just with \`U256\` instead of \`i64\` and tighter performance optimizations.
+Once it works, mentally compare your design to the real Revm \`Stack\` from the previous lesson — they have the same shape.
 
 ## Quiz`,
                   quizQuestions: [

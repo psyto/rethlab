@@ -107,7 +107,7 @@ export const en = {
     },
     catalog: {
       title: 'Course Catalog',
-      subtitle: 'From basics to advanced development — courses to master Hyperliquid.',
+      subtitle: 'From beginner to expert — tiered courses to master the Rust Ethereum stack: Reth, Revm, Alloy, and Foundry.',
       searchPlaceholder: 'Search courses...',
       noResults: 'No courses found matching your filters.',
     },

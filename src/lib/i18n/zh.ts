@@ -109,7 +109,7 @@ export const zh: TranslationKeys = {
     },
     catalog: {
       title: '课程目录',
-      subtitle: '从基础到高级开发——精通 Hyperliquid 的课程。',
+      subtitle: '从入门到专家——分阶掌握 Rust Ethereum 技术栈（Reth、Revm、Alloy、Foundry）。',
       searchPlaceholder: '搜索课程...',
       noResults: '没有找到匹配的课程。',
     },
