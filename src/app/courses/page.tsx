@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useLocale } from '@/contexts/locale-context';
-import { Search, Clock, Zap, BookOpen, Loader2 } from 'lucide-react';
+import { Search, Clock, BookOpen, Loader2 } from 'lucide-react';
 import { cn, formatDuration } from '@/lib/utils';
 import { useCourses } from '@/hooks';
 
@@ -96,10 +96,6 @@ export default function CourseCatalogPage() {
                   <span className="flex items-center gap-1">
                     <BookOpen className="h-3.5 w-3.5" />
                     {course.totalLessons} {t('courses.detail.lessons').toLowerCase()}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Zap className="h-3.5 w-3.5" />
-                    {course.xpReward} XP
                   </span>
                 </div>
 

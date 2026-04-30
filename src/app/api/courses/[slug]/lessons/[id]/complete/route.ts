@@ -29,7 +29,6 @@ export const POST = withErrorHandler(async (_req, ctx) => {
     return apiError('Lesson not found', 404);
   }
 
-  // Ensure user is enrolled
   let enrollment = await prisma.enrollment.findUnique({
     where: { userId_courseId: { userId: user.id, courseId: course.id } },
   });
@@ -42,7 +41,5 @@ export const POST = withErrorHandler(async (_req, ctx) => {
 
   await learningService.completeLesson(user.id, course.id, lessonIndex);
 
-  const xp = await learningService.getXP(user.id);
-
-  return apiSuccess({ completed: true, totalXP: xp });
+  return apiSuccess({ completed: true });
 });

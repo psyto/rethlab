@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/db';
 import { requireAuth, apiSuccess, apiError, withErrorHandler } from '@/lib/api/utils';
-import { getUserAchievements } from '@/lib/services/achievements';
 
 export const GET = withErrorHandler(async () => {
   const user = await requireAuth();
@@ -11,16 +10,12 @@ export const GET = withErrorHandler(async () => {
       displayName: true,
       name: true,
       bio: true,
-      totalXP: true,
-      currentStreak: true,
-      longestStreak: true,
       createdAt: true,
       locale: true,
       theme: true,
       isPublic: true,
       image: true,
       email: true,
-      achievements: true,
     },
   });
 
@@ -28,7 +23,6 @@ export const GET = withErrorHandler(async () => {
     return apiError('User not found', 404);
   }
 
-  // Completed courses
   const completedEnrollments = await prisma.enrollment.findMany({
     where: { userId: user.id, status: 'COMPLETED' },
     include: {
@@ -43,38 +37,9 @@ export const GET = withErrorHandler(async () => {
     completedAt: e.completedAt?.toISOString() || e.startedAt.toISOString(),
   }));
 
-  // Skill breakdown for radar chart (count completed lessons by track)
-  const allEnrollments = await prisma.enrollment.findMany({
-    where: { userId: user.id },
-    include: {
-      course: { select: { track: true } },
-      lessonProgress: { where: { isCompleted: true } },
-    },
-  });
-
-  const skillMap: Record<string, number> = {
-    'hl-architecture': 0,
-    'trading-api': 0,
-    'vault-development': 0,
-    'hyperevm': 0,
-    'strategies': 0,
-  };
-  for (const enr of allEnrollments) {
-    const track = enr.course.track;
-    if (track && track in skillMap) {
-      skillMap[track] += enr.lessonProgress.length;
-    }
-  }
-
-  // Achievements
-  const achievements = getUserAchievements(dbUser.achievements);
-
   return apiSuccess({
     displayName: dbUser.displayName || dbUser.name || 'Anonymous',
     bio: dbUser.bio,
-    totalXP: dbUser.totalXP,
-    currentStreak: dbUser.currentStreak,
-    longestStreak: dbUser.longestStreak,
     joinDate: dbUser.createdAt.toISOString(),
     completedCourses,
     locale: dbUser.locale,
@@ -82,8 +47,6 @@ export const GET = withErrorHandler(async () => {
     isPublic: dbUser.isPublic,
     image: dbUser.image,
     email: dbUser.email,
-    achievements,
-    skills: skillMap,
   });
 });
 

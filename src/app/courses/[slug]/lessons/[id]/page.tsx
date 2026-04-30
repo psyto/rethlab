@@ -15,7 +15,6 @@ import {
   RotateCcw,
   Loader2,
   Menu,
-  Hexagon,
   Trophy,
   BookOpen,
   ArrowLeft,
@@ -83,42 +82,6 @@ export default function LessonPage() {
   }
 
   if (error || !lesson) {
-    const errorStatus = error && 'status' in error ? (error as { status: number }).status : 0;
-    const errorMessage = error instanceof Error ? error.message : '';
-
-    // 403: not enough XP → show XP requirement
-    if (errorStatus === 403) {
-      // Extract numbers from error message like "You need 200 XP...You have 50."
-      const needMatch = errorMessage.match(/need (\d+)/);
-      const haveMatch = errorMessage.match(/have (\d+)/);
-      const needed = needMatch ? needMatch[1] : '?';
-      const current = haveMatch ? haveMatch[1] : '0';
-
-      return (
-        <div className="flex h-[calc(100vh-4rem)] flex-col items-center justify-center gap-4 px-4 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/10">
-            <Hexagon className="h-8 w-8 text-yellow-400" />
-          </div>
-          <h2 className="text-xl font-bold">{t('honey.needMore')}</h2>
-          <p className="max-w-md text-sm text-muted-foreground">
-            {formatT('honey.requirement', { needed, current })}
-          </p>
-          <div className="mt-2 h-3 w-48 overflow-hidden rounded-full bg-secondary">
-            <div
-              className="xp-bar h-full rounded-full"
-              style={{ width: `${Math.min((Number(current) / Number(needed)) * 100, 100)}%` }}
-            />
-          </div>
-          <Link
-            href="/courses"
-            className="mt-4 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-fabrknt-dark transition-opacity hover:opacity-90"
-          >
-            {t('honey.earnMore')}
-          </Link>
-        </div>
-      );
-    }
-
     return (
       <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
         <p className="text-destructive">{t('errors.loadLesson')}</p>
@@ -196,7 +159,7 @@ export default function LessonPage() {
           {isCompleted && (
             <div className="flex items-center gap-1.5 rounded-lg bg-accent/10 px-3 py-1 text-sm font-medium text-accent">
               <CheckCircle2 className="h-4 w-4" />
-              +{lesson.xpReward} XP
+              {t('lesson.completed')}
             </div>
           )}
           {lesson.prevLesson && (
@@ -549,7 +512,7 @@ function LessonCompletionNav({
       </div>
       <h3 className="mt-3 text-lg font-bold">{t('lesson.courseComplete')}</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        {formatT('lesson.courseCompleteMessage', { honey: String(lesson.courseXpReward) })}
+        {t('lesson.courseCompleteMessage')}
       </p>
       <div className="mt-4 flex flex-col gap-2">
         <button

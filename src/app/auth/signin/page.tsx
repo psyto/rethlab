@@ -30,14 +30,14 @@ export default function SignInPage() {
       setError(t('auth.signInFailed'));
       setLoading(false);
     } else {
-      router.push('/dashboard');
+      router.push('/');
       router.refresh();
     }
   };
 
   const handleOAuth = (provider: string) => {
     setOauthLoading(provider);
-    signIn(provider, { callbackUrl: '/dashboard' });
+    signIn(provider, { callbackUrl: '/' });
   };
 
   return (

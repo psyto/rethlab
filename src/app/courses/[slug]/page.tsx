@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useLocale } from '@/contexts/locale-context';
 import {
   Clock,
-  Zap,
   BookOpen,
   ChevronDown,
   ChevronRight,
@@ -128,10 +127,6 @@ export default function CourseDetailPage() {
                 <BookOpen className="h-4 w-4" />
                 {totalLessons} {t('courses.detail.lessons').toLowerCase()}
               </span>
-              <span className="flex items-center gap-1.5">
-                <Zap className="h-4 w-4" />
-                {course.xpReward} XP
-              </span>
             </div>
           </div>
 
@@ -198,10 +193,6 @@ export default function CourseDetailPage() {
                             </div>
                             <div className="flex items-center gap-3 text-xs text-muted-foreground">
                               <span>{formatDuration(lesson.duration)}</span>
-                              <span className="flex items-center gap-0.5">
-                                <Zap className="h-3 w-3" />
-                                {lesson.xpReward}
-                              </span>
                               {isGated && !session && !isPreview && !lesson.isCompleted && (
                                 <Lock className="h-3 w-3 text-muted-foreground/50" />
                               )}
@@ -292,13 +283,6 @@ export default function CourseDetailPage() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">{t('courses.detail.lessons')}</span>
                 <span className="font-medium">{totalLessons}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{t('courses.detail.xpReward')}</span>
-                <span className="flex items-center gap-1 font-medium text-accent">
-                  <Zap className="h-3.5 w-3.5" />
-                  {course.xpReward} XP
-                </span>
               </div>
             </div>
 

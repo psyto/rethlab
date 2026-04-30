@@ -11,30 +11,9 @@ export interface Progress {
   enrollmentStatus: 'active' | 'completed' | 'dropped';
 }
 
-export interface StreakData {
-  currentStreak: number;
-  longestStreak: number;
-  lastActiveDate: string | null;
-  streakHistory: string[]; // Array of ISO date strings
-  isActiveToday: boolean;
-}
-
-export interface LeaderboardEntry {
-  rank: number;
-  userId: string;
-  displayName: string;
-  image: string | null;
-  totalXP: number;
-  level: number;
-  currentStreak: number;
-}
-
 export interface LearningProgressService {
   getProgress(userId: string, courseId: string): Promise<Progress>;
   completeLesson(userId: string, courseId: string, lessonIndex: number): Promise<void>;
-  getXP(userId: string): Promise<number>;
-  getStreak(userId: string): Promise<StreakData>;
-  getLeaderboard(timeframe: 'weekly' | 'monthly' | 'alltime'): Promise<LeaderboardEntry[]>;
 }
 
 // ==========================================
@@ -101,13 +80,3 @@ export interface QuizQuestion {
   explanation: string;
 }
 
-export interface Achievement {
-  id: number; // 0-255 bitmap index
-  key: string;
-  name: string;
-  description: string;
-  icon: string;
-  category: 'progress' | 'streak' | 'skill' | 'community' | 'special';
-  isUnlocked: boolean;
-  unlockedAt?: string;
-}
