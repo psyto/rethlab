@@ -26,17 +26,8 @@ import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import { useLesson, useCompleteLesson } from '@/hooks';
 import { runChallenge } from '@/lib/challenge-runner';
-import { KodiakComparisonWidget, KodiakCtaCard } from '@/components/kodiak';
 import { QuizPlayer } from '@/components/quiz/quiz-player';
 import type { ChallengeResult } from '@/types';
-
-const KODIAK_CTA_SLUGS = new Set([
-  'what-is-vault', 'building-keeper', 'vault-risk-management',
-  'yield-comparison', 'understanding-delta-neutral', 'implementing-dn',
-  'funding-rate-strategies', 'funding-rate-analysis', 'backtesting-validation',
-  'strategy-comparison-backtest', 'going-live', 'keeper-challenge',
-  'risk-management-vaults', 'dn-challenge', 'strategy-design-challenge',
-]);
 
 // Lazy load Monaco Editor for performance
 const CodeEditor = dynamic(() => import('@/components/editor/code-editor'), {
@@ -95,11 +86,23 @@ export default function LessonPage() {
     const errorStatus = error && 'status' in error ? (error as { status: number }).status : 0;
     const errorMessage = error instanceof Error ? error.message : '';
 
-    // 401: not signed in → show Kodiak gate
+    // 401: not signed in → simple sign-in prompt
     if (errorStatus === 401) {
       return (
-        <div className="h-[calc(100vh-4rem)] overflow-y-auto py-12">
-          <KodiakComparisonWidget variant="gate" />
+        <div className="flex h-[calc(100vh-4rem)] flex-col items-center justify-center gap-4 px-4 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+            <Lock className="h-8 w-8 text-primary" />
+          </div>
+          <h2 className="text-xl font-bold">{t('gate.title')}</h2>
+          <p className="max-w-md text-sm text-muted-foreground">
+            {t('gate.subtitle')}
+          </p>
+          <Link
+            href="/auth/signin"
+            className="mt-4 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-fabrknt-dark transition-opacity hover:opacity-90"
+          >
+            {t('common.signIn')}
+          </Link>
         </div>
       );
     }
@@ -279,9 +282,6 @@ export default function LessonPage() {
                 })()
               }}
             />
-
-            {/* Kodiak contextual CTA */}
-            {KODIAK_CTA_SLUGS.has(lesson.slug) && <KodiakCtaCard />}
 
             {/* Hints */}
             {isChallenge && lesson.hints.length > 0 && (

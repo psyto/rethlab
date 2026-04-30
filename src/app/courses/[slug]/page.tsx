@@ -23,7 +23,6 @@ import { useState } from 'react';
 import { cn, formatDuration } from '@/lib/utils';
 import { useCourse, useEnroll } from '@/hooks';
 import { useSession } from 'next-auth/react';
-import { KodiakCtaCard } from '@/components/kodiak';
 
 const LESSON_TYPE_ICONS: Record<string, typeof FileText> = {
   CONTENT: FileText,
@@ -268,7 +267,7 @@ export default function CourseDetailPage() {
                   href="/auth/signin"
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-base font-semibold text-fabrknt-dark transition-all hover:opacity-90"
                 >
-                  {t('kodiak.signInToLearn')}
+                  {t('gate.signInToLearn')}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               )
@@ -288,13 +287,6 @@ export default function CourseDetailPage() {
                 {!enrollMutation.isPending && <ArrowRight className="h-4 w-4" />}
               </button>
             )}
-
-            {/* Kodiak CTA — show on completion or for vault/strategy courses */}
-            {isEnrolled && completedLessons === totalLessons && totalLessons > 0 ? (
-              <KodiakCtaCard variant="completion" />
-            ) : course.track && ['vault-development', 'strategies', 'keepers-bots'].includes(course.track) ? (
-              <KodiakCtaCard />
-            ) : null}
 
             {/* Course info */}
             <div className="mt-6 space-y-4">

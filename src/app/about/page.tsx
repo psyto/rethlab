@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useLocale } from '@/contexts/locale-context';
-import { ArrowLeft, Shield, Brain, BarChart3, Zap, Globe, TrendingUp, GraduationCap, Activity } from 'lucide-react';
+import { ArrowLeft, Shield, Brain, BarChart3, Globe } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const fadeIn = {
@@ -71,52 +71,7 @@ export default function AboutPage() {
         </div>
       </motion.div>
 
-      {/* What I Built */}
-      <motion.div
-        className="mt-8"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <h2 className="text-xl font-bold">{t('about.built.title')}</h2>
-        <div className="mt-4 space-y-4">
-          {[
-            {
-              icon: TrendingUp,
-              name: 'Kodiak',
-              platform: 'Hyperliquid',
-              description: t('about.built.kodiak'),
-            },
-            {
-              icon: GraduationCap,
-              name: 'RethLab',
-              platform: 'fabrknt.com/rethlab',
-              description: t('page.about.rethlabDesc'),
-            },
-            {
-              icon: Activity,
-              name: 'Fabrknt Flow',
-              platform: 'fabrknt.com/flow',
-              description: t('page.about.flowDesc'),
-            },
-          ].map((project, i) => (
-            <div key={i} className="rounded-xl border border-border bg-card p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <project.icon className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">{project.name}</h3>
-                  <p className="text-xs text-muted-foreground">{project.platform}</p>
-                </div>
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">{project.description}</p>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Why Hyperliquid */}
+      {/* Why this stack */}
       <motion.div
         className="mt-8"
         initial={{ opacity: 0, y: 20 }}
