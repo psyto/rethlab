@@ -2,7 +2,7 @@
 
 > A demanding, source-first training program in **Reth, Revm, Alloy, and Foundry**. Built to take you from "I know some Rust" to "I can ship custom EVM infrastructure" — using the same stack Paradigm, Hyperliquid, and Tempo run in production.
 
-Every advanced lesson walks through **actual production source code** — line by line, with the design intent. Bilingual: English + Japanese. Built by [@psyto](https://github.com/psyto).
+Every advanced lesson walks through **actual production source code** — line by line, with the design intent. Bilingual: English + Japanese. Free and open. Built by [@psyto](https://github.com/psyto).
 
 ---
 
@@ -20,6 +20,8 @@ Most EVM tutorials describe what's happening. The kind of engineers Paradigm, Hy
 - Real **Steel + Risc0 zkEVM guest** from [`boundless-xyz/steel`](https://github.com/boundless-xyz/steel)
 
 Each lesson follows the structure: **real source excerpt → line-by-line walkthrough → design intent → drill**. By the time you open a Reth crate, you've already seen its key code.
+
+Architectural concepts (Reth Staged Sync, Revm Database trait, ExEx pipeline, MPT, zkVM proof flow, etc.) come with **Mermaid diagrams** rendered alongside the prose so the structural shape is visible, not just described.
 
 ---
 
@@ -46,15 +48,18 @@ This is a serious training program — not a casual tutorial.
 
 **Total: 8 courses (4 × EN + JA), 16 modules, 74 lessons.**
 
+All four tiers are free. Reading every lesson works without an account; sign-in only enables progress tracking and shows up on the user's profile page.
+
 ---
 
 ## Stack
 
-- **Next.js 16** + React 19 + TypeScript
+- **Next.js 16** + React 19 + TypeScript (App Router, `basePath: /rethlab`)
 - **Prisma** + PostgreSQL
-- **NextAuth v5** (Google & GitHub OAuth, plus dev-mode credentials)
+- **NextAuth v5** (Google & GitHub OAuth, plus dev-mode credentials) — anonymous-first; sign-in is optional
 - **Tailwind CSS** + Radix UI
-- **Monaco Editor** for in-browser coding challenges
+- **react-markdown** + remark-gfm + rehype-highlight + **Mermaid** for lesson rendering
+- **Stripe** for one-time donations; **GitHub Sponsors** link for recurring support
 - **Vercel Analytics**
 
 ---
@@ -67,7 +72,9 @@ npm install
 
 # Configure your local Postgres + OAuth
 cp .env.example .env
-# edit .env with your DATABASE_URL, AUTH_SECRET, OAuth secrets
+# edit .env with DATABASE_URL, AUTH_SECRET, OAuth secrets,
+# STRIPE_SECRET_KEY (test key OK for dev), and
+# NEXT_PUBLIC_GITHUB_SPONSORS_URL
 
 # Push schema and seed all 74 lessons
 npx prisma db push
@@ -91,7 +98,7 @@ Use the admin endpoint instead:
 curl -X POST "http://localhost:3000/rethlab/api/admin/seed?key=$AUTH_SECRET&mode=add"
 ```
 
-`mode=add` only adds courses that don't exist yet (preserves user enrollments, XP, streaks).
+`mode=add` only adds courses that don't exist yet (preserves user enrollments and lesson-completion progress).
 
 ---
 
@@ -108,12 +115,18 @@ rethlab/
 │   └── seed-reth-expert-{en,ja}.ts            # 10 lessons each
 ├── src/
 │   ├── app/                                   # Next.js App Router pages
-│   │   ├── courses/                           # Course catalog + detail pages
-│   │   ├── api/                               # API routes (courses, auth, admin)
+│   │   ├── courses/                           # Course catalog + detail + lesson pages
+│   │   ├── donate/                            # Donation page + thanks/cancel
+│   │   ├── about/                             # About + Support section
+│   │   ├── api/                               # API routes (courses, auth, checkout, admin)
 │   │   └── ...
-│   ├── components/                            # UI components (header, footer, lesson viewer)
-│   ├── contexts/                              # Locale context (EN / JA / ZH)
-│   ├── lib/                                   # i18n, db, utils, services
+│   ├── components/
+│   │   ├── lesson/                            # LessonMarkdown + MermaidDiagram
+│   │   ├── quiz/                              # QuizPlayer
+│   │   ├── layout/                            # Header + Footer
+│   │   └── ...
+│   ├── contexts/                              # Locale context (EN / JA)
+│   ├── lib/                                   # i18n, db, stripe, services
 │   └── types/                                 # TypeScript types
 └── public/                                    # OG image, favicon
 ```
@@ -124,15 +137,31 @@ rethlab/
 
 - **English** (parity with Japanese)
 - **Japanese** (native — original course material was authored in Japanese)
-- **Chinese** (UI only; course content in EN/JA)
 
 The `Locale` switcher is in the header. Each lesson has `slug-en` and `slug-ja` siblings.
 
 ---
 
+## Monetization
+
+RethLab is free and open. Two voluntary support paths:
+
+- **GitHub Sponsors** — recurring monthly support. URL is configured via `NEXT_PUBLIC_GITHUB_SPONSORS_URL` (defaults to `https://github.com/sponsors/psyto`).
+- **Stripe Checkout** — one-time donations on `/donate`. Requires `STRIPE_SECRET_KEY` to enable; test keys (`sk_test_...`) work for development.
+
+Both surfaces are presented post-value (after a quiz pass, on course completion, on the About page); no content is paywalled.
+
+---
+
+## Sharing
+
+Lesson and completion screens include a one-click "Share on X" button that opens a Twitter intent prefilled with the page URL. The OG card is the real ADD opcode in a terminal-style frame, so a posted link previews as a code excerpt rather than generic marketing.
+
+---
+
 ## Contributing
 
-The course content is in `prisma/seed-reth-*-{en,ja}.ts`. Each lesson is a single string of Markdown. To add or modify content:
+The course content is in `prisma/seed-reth-*-{en,ja}.ts`. Each lesson is a single string of Markdown (with optional Mermaid blocks). To add or modify content:
 
 1. Edit the relevant seed file
 2. `npx prisma db seed` (re-seeds everything; or use the admin endpoint with `mode=add` to preserve user data)
@@ -142,7 +171,7 @@ When adding a lesson that references real source code, please use the same shape
 
 > **real source excerpt (with GitHub deep-link) → line-by-line walkthrough → design intent → drill**
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full lesson-authoring style guide.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full lesson-authoring style guide, including Mermaid diagram conventions.
 
 ---
 

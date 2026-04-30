@@ -42,6 +42,19 @@ Add a sentence above the block citing the source:
 From [`crates/interpreter/src/instructions/arithmetic.rs`](https://github.com/bluealloy/revm/blob/main/crates/interpreter/src/instructions/arithmetic.rs):
 ```
 
+### Diagrams (Mermaid)
+
+For architectural concepts that don't translate to prose alone — pipelines, sequence-of-calls, dependency trees, state machines — use a fenced ` ```mermaid ` block. The lesson renderer wires these to a Mermaid component with a dark theme matching the site palette.
+
+Guidelines:
+
+- **One diagram per concept**, placed adjacent to the prose explaining it.
+- **Avoid `{` and `}` inside node labels** — they're decision-node syntax in Mermaid and break parsing. If you must show code shapes, write `sol! macro` rather than `sol! { ... }`.
+- **Wrap labels with special characters in double quotes**: `Types[".with_types EthereumNode"]`.
+- **Prefer `flowchart LR` for pipelines** (HeaderStage → BodyStage → ...), `sequenceDiagram` for call flows (Opcode → Interpreter → Database trait), `graph TD` for trees / dependency hierarchies.
+
+Don't add diagrams to Rust-syntax lessons (ownership, lifetimes, async) or pure source walkthroughs — the code itself is the explanation.
+
 ### Bilingual parity
 
 Each lesson exists in EN and JA. When you change one, **change the other** in the same PR. The two should explain the same code with the same depth — translation is not literal; idiomatic Japanese is preferred over word-for-word English transliteration.
@@ -77,9 +90,11 @@ Lesson content lives in `prisma/seed-reth-{tier}-{lang}.ts`. Each lesson is a Pr
 
 ### Lesson types
 
-- `CONTENT` — Markdown body, optional code samples
+- `CONTENT` — Markdown body, optional code samples and Mermaid diagrams
 - `CHALLENGE` — Markdown + `starterCode` + `solutionCode` + `hints`. Renders the Monaco editor.
-- `QUIZ` — Markdown intro + `quizQuestions` (array of `{question, options, correctIndex, explanation}`)
+- `QUIZ` — Markdown intro + `quizQuestions` (array of `{question, options, correctIndex, explanation}`). Multiple-choice; passes at 70% correct.
+
+`xpReward` and `duration` exist on lesson rows for legacy reasons but the UI no longer surfaces XP. Set them to anything reasonable (15–30 minutes for `duration`, 20–40 for `xpReward`); they don't affect what learners see.
 
 ---
 
@@ -149,3 +164,5 @@ If you're adding a new specialization (e.g., "Parallel EVM" or "Hyperliquid Inte
 5. Update the home page tracks card count.
 
 Open an RFC issue first if the new tier touches more than ~15 lessons — coordination saves rework.
+
+Note: any new tier should also be free. RethLab does not gate content behind payment or sign-in.
