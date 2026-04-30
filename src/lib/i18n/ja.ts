@@ -255,7 +255,7 @@ export const ja: TranslationKeys = {
   },
   donate: {
     tag: 'RethLabを応援',
-    title: 'ソース直結の Rust EVM 養成を応援する',
+    title: '本番ソース活用 Rust EVM トレーニングを応援する',
     subtitle: 'RethLab は無料・オープンで提供されています。レッスンが役に立ったなら、スポンサーシップが本コースの運営と最新化を支えます。',
     recurring: {
       title: 'GitHub でスポンサーになる',
