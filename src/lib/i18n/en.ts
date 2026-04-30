@@ -39,7 +39,7 @@ export const en = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Walk through the real Reth, Revm, Alloy, and Foundry source — line by line. The same code that runs HyperEVM, Tempo, and Base in production. From "I know some Rust" to ready to extend, fork, and ship the infrastructure the next wave of chains is built on.',
+      subtitle: 'HyperEVM, Tempo, Base — the new wave of EVM chains is Rust-native. Keeping up means mastering the Rust Ethereum stack. RethLab walks you through the real Reth, Revm, Alloy, and Foundry source line by line, from "I know some Rust" to ready to extend, fork, and ship these chains\' infrastructure.',
       cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -322,7 +322,7 @@ export const en = {
   },
   about: {
     title: 'About RethLab',
-    subtitle: 'RethLab is a hardcore training program for Rust Ethereum developers, built on the actual source code of Reth, Revm, Alloy, and Foundry.',
+    subtitle: 'HyperEVM, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab is the training program that brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line.',
     bio: 'Reth, Revm, and Alloy are at the heart of the most performant chains being built today. But the on-ramp from "I know some Rust" to "I can write production EVM infrastructure" is brutal — the docs are scattered, the source is dense, and there is no clear path. RethLab is that path: 4 tiers, ~74 lessons, every advanced concept grounded in actual production source. Finish it and you can read Reth\'s stages, write custom Revm precompiles, ship an ExEx, and apply for grant work with code samples that prove you understand the stack.',
     background: {
       tradfi: 'Why Rust',
@@ -365,7 +365,7 @@ export const en = {
     loadCourse: 'Failed to load course. Please try again.',
   },
   page: {
-    launchBanner: 'Free · Source-grounded · Built on real Reth, Revm, Alloy, and Foundry',
+    launchBanner: 'Free · The same Rust EVM stack that runs HyperEVM, Tempo, and Base',
     whyRethLab: {
       title: 'Why RethLab?',
     },

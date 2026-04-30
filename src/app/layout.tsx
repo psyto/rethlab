@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     template: '%s | RethLab',
   },
   description:
-    'A hardcore training program for Rust Ethereum developers. Master Reth, Revm, Alloy, and Foundry by reading the actual production source — line by line. Self-paced courses in English and Japanese.',
+    'HyperEVM, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
   keywords: [
     'Reth',
     'Revm',
@@ -49,13 +49,13 @@ export const metadata: Metadata = {
     siteName: 'RethLab',
     title: 'RethLab — Hardcore Rust Ethereum Developer Training',
     description:
-      'A hardcore training program for Rust Ethereum developers. Master Reth, Revm, Alloy, and Foundry by reading the actual production source — line by line. Self-paced courses in English and Japanese.',
+      'HyperEVM, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
     images: [
       {
         url: '/og-image.svg',
         width: 1200,
         height: 630,
-        alt: 'RethLab — Hardcore Rust Ethereum Developer Training',
+        alt: 'RethLab — Catch up with the Rust-native EVM wave (Reth, Revm, Alloy, Foundry) line by line',
       },
     ],
   },
@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'RethLab — Hardcore Rust Ethereum Developer Training',
     description:
-      'A hardcore training program for Rust Ethereum developers. Master Reth, Revm, Alloy, and Foundry by reading the actual production source — line by line. Self-paced courses in English and Japanese.',
+      'HyperEVM, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
     creator: '@psyto',
     site: '@psyto',
     images: ['/og-image.svg'],
@@ -95,7 +95,7 @@ const structuredData = {
   '@type': 'WebSite',
   name: 'RethLab',
   url: baseUrl,
-  description: 'A hardcore training program for Rust Ethereum developers. Master Reth, Revm, Alloy, and Foundry by reading the actual production source — line by line.',
+  description: 'HyperEVM, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab walks the real Reth, Revm, Alloy, and Foundry source line by line so you can catch up.',
   publisher: {
     '@type': 'Person',
     name: 'psyto',
