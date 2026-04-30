@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, XCircle, ChevronRight, RotateCcw } from 'lucide-react';
+import { CheckCircle2, XCircle, ChevronRight, RotateCcw, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocale } from '@/contexts/locale-context';
 import type { QuizQuestion } from '@/types';
@@ -10,9 +10,13 @@ interface QuizPlayerProps {
   questions: QuizQuestion[];
   onComplete: () => void;
   isCompleted: boolean;
+  /** Called when the user clicks "Next lesson" on the passed screen. If absent, the button is omitted (e.g. last lesson of a course). */
+  onNext?: () => void;
+  /** Title of the next lesson, shown alongside the button. */
+  nextLessonTitle?: string;
 }
 
-export function QuizPlayer({ questions, onComplete, isCompleted }: QuizPlayerProps) {
+export function QuizPlayer({ questions, onComplete, isCompleted, onNext, nextLessonTitle }: QuizPlayerProps) {
   const { t, formatT } = useLocale();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -88,15 +92,32 @@ export function QuizPlayer({ questions, onComplete, isCompleted }: QuizPlayerPro
         <p className="mt-1 text-sm text-muted-foreground">
           {passed ? t('quiz.passedMessage') : t('quiz.failedMessage')}
         </p>
-        {!passed && (
-          <button
-            onClick={handleRetry}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-fabrknt-dark transition-all hover:opacity-90"
-          >
-            <RotateCcw className="h-4 w-4" />
-            {t('quiz.retry')}
-          </button>
-        )}
+        <div className="mt-6 flex flex-col items-center gap-3">
+          {passed && onNext && (
+            <button
+              onClick={onNext}
+              className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-fabrknt-dark transition-all hover:opacity-90"
+            >
+              {nextLessonTitle ? `${t('lesson.nextLesson')}: ${nextLessonTitle}` : t('lesson.nextLesson')}
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
+          {passed && !onNext && (
+            <div className="inline-flex items-center gap-2 rounded-xl bg-primary/10 px-5 py-2.5 text-sm font-medium text-primary">
+              <Trophy className="h-4 w-4" />
+              {t('lesson.courseComplete')}
+            </div>
+          )}
+          {!passed && (
+            <button
+              onClick={handleRetry}
+              className="inline-flex items-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-fabrknt-dark transition-all hover:opacity-90"
+            >
+              <RotateCcw className="h-4 w-4" />
+              {t('quiz.retry')}
+            </button>
+          )}
+        </div>
       </div>
     );
   }

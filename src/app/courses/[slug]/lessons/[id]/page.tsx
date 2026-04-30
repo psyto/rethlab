@@ -332,6 +332,12 @@ export default function LessonPage() {
                 questions={lesson.quizQuestions}
                 onComplete={handleMarkComplete}
                 isCompleted={isCompleted}
+                onNext={
+                  lesson.nextLesson
+                    ? () => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.id}`)
+                    : undefined
+                }
+                nextLessonTitle={lesson.nextLesson?.title}
               />
               {isCompleted && <LessonCompletionNav lesson={lesson} router={router} t={t} />}
             </div>
