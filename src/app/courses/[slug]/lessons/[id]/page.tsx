@@ -26,6 +26,7 @@ import dynamic from 'next/dynamic';
 import { useLesson, useCompleteLesson } from '@/hooks';
 import { runChallenge } from '@/lib/challenge-runner';
 import { QuizPlayer } from '@/components/quiz/quiz-player';
+import { LessonMarkdown } from '@/components/lesson/lesson-markdown';
 import type { ChallengeResult } from '@/types';
 
 // Lazy load Monaco Editor for performance
@@ -191,49 +192,9 @@ export default function LessonPage() {
           style={{ width: isChallenge ? `${splitPosition}%` : '100%' }}
         >
           <div className="prose prose-invert max-w-none p-6">
-            {/* Render markdown content */}
-            <div
-              className="text-sm leading-relaxed text-foreground [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mb-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-6 [&_h2]:mb-3 [&_p]:text-muted-foreground [&_p]:mb-3 [&_code]:bg-secondary [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono [&_pre]:bg-card [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-4 [&_pre_code]:p-0 [&_pre_code]:bg-transparent [&_pre_code]:rounded-none [&_li]:text-muted-foreground [&_li]:mb-1 [&_ul]:mb-3 [&_ol]:mb-3 [&_strong]:text-foreground [&_table]:w-full [&_table]:my-4 [&_table]:text-sm [&_table]:border-collapse [&_table]:rounded-lg [&_table]:overflow-hidden [&_thead]:bg-secondary [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:text-muted-foreground [&_td]:px-4 [&_td]:py-2.5 [&_td]:text-muted-foreground [&_td]:border-t [&_td]:border-border/50 [&_tr:hover]:bg-secondary/30"
-              dangerouslySetInnerHTML={{
-                __html: (() => {
-                  let content = lesson.content;
-                  // Extract fenced code blocks into placeholders before other regexes
-                  const codeBlocks: string[] = [];
-                  content = content.replace(/```(\w+)?\n([\s\S]+?)```/g, (_match, _lang, code) => {
-                    const index = codeBlocks.length;
-                    codeBlocks.push(`<pre><code>${code.replace(/^\n+|\n+$/g, '')}</code></pre>`);
-                    return `\x00CODEBLOCK_${index}\x00`;
-                  });
-                  // Convert markdown tables to HTML
-                  content = content.replace(
-                    /\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)+)/g,
-                    (_match, headerRow, bodyRows) => {
-                      const headers = headerRow.split('|').map((h: string) => h.trim()).filter(Boolean);
-                      const rows = bodyRows.trim().split('\n').map((row: string) =>
-                        row.split('|').map((c: string) => c.trim()).filter(Boolean)
-                      );
-                      const thead = `<thead><tr>${headers.map((h: string) => `<th>${h}</th>`).join('')}</tr></thead>`;
-                      const tbody = `<tbody>${rows.map((row: string[]) => `<tr>${row.map((c: string) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
-                      return `<table>${thead}${tbody}</table>`;
-                    }
-                  );
-
-                  // Run heading/list/bold/inline-code/paragraph regexes on remaining content
-                  content = content
-                    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-                    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-                    .replace(/^- (.+)$/gm, '<li>$1</li>')
-                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-                    .replace(/\n\n/g, '</p><p>')
-                    .replace(/^(?!<[hluop\x00])/gm, '<p>');
-                  // Re-insert code blocks after all other replacements
-                  content = content.replace(/\x00CODEBLOCK_(\d+)\x00/g, (_match, index) => codeBlocks[Number(index)]);
-                  return content;
-                })()
-              }}
-            />
+            <div className="text-sm leading-relaxed text-foreground [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mb-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-6 [&_h2]:mb-3 [&_p]:text-muted-foreground [&_p]:mb-3 [&_code]:bg-secondary [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono [&_pre]:bg-card [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-4 [&_pre_code]:p-0 [&_pre_code]:bg-transparent [&_pre_code]:rounded-none [&_li]:text-muted-foreground [&_li]:mb-1 [&_ul]:mb-3 [&_ol]:mb-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_strong]:text-foreground [&_table]:w-full [&_table]:my-4 [&_table]:text-sm [&_table]:border-collapse [&_table]:rounded-lg [&_table]:overflow-hidden [&_thead]:bg-secondary [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:text-muted-foreground [&_td]:px-4 [&_td]:py-2.5 [&_td]:text-muted-foreground [&_td]:border-t [&_td]:border-border/50 [&_tr:hover]:bg-secondary/30">
+              <LessonMarkdown content={lesson.content} />
+            </div>
 
             {/* Hints */}
             {isChallenge && lesson.hints.length > 0 && (
