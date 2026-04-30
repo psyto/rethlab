@@ -1,13 +1,11 @@
 import { en, type TranslationKeys } from './en';
 import { ja } from './ja';
-import { zh } from './zh';
 
-export type Locale = 'en' | 'ja' | 'zh';
+export type Locale = 'en' | 'ja';
 
 export const translations: Record<Locale, TranslationKeys> = {
   en,
   ja,
-  zh,
 };
 
 export const defaultLocale: Locale = 'en';
@@ -15,13 +13,11 @@ export const defaultLocale: Locale = 'en';
 export const localeNames: Record<Locale, string> = {
   en: 'English',
   ja: '日本語',
-  zh: '中文 (Beta)',
 };
 
 export const localeFlags: Record<Locale, string> = {
   en: 'US',
   ja: 'JP',
-  zh: 'CN',
 };
 
 export function getTranslations(locale: Locale = defaultLocale): TranslationKeys {
@@ -63,5 +59,5 @@ export function formatT(
   return text;
 }
 
-export { en, ja, zh };
+export { en, ja };
 export type { TranslationKeys };
