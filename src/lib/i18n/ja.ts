@@ -41,11 +41,11 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに解説。HyperEVM・Tempo・Base が本番で動かしているコードそのものを利用。「Rust が少し書ける」レベルから、次世代チェーンが動いている EVM インフラを拡張・フォーク・実装できるレベルまで。',
+      subtitle: 'Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに解説。HyperEVM・Tempo・Base が本番で動かしているコードそのもの。「Rust が少し書ける」レベルから、次世代チェーンが動いている EVM インフラを拡張・フォーク・実装できるレベルまで。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
-      sourceCaption: 'Advanced と Expert のすべてのレッスンは、こういう実コードに紐づいています。',
+      sourceCaption: 'Advanced と Expert のすべてのレッスンは、上記のような本番コードに紐づいています。',
     },
     outcomes: {
       tag: 'このプログラムを修了すると',
@@ -57,8 +57,8 @@ export const ja: TranslationKeys = {
       item5: 'Monad / Hyperliquid / Paradigm 系のインフラチームの grant に応募できる',
     },
     stack: {
-      tag: 'このスタックが動いている場所',
-      title: '実は Reth・Revm・Alloy は、あなたが知っているチェーンの裏で動いています',
+      tag: 'このスタックが稼働している場所',
+      title: 'Reth・Revm・Alloy は、あなたが知っているチェーンの裏で動いています',
       subtitle: 'Rust Ethereum スタックがすでに支えているチェーンとツール。中身を理解すれば、どれにも実装で参加できます。',
       hyperliquidName: 'Hyperliquid (HyperEVM)',
       hyperliquidBadge: 'Reth フォーク',
@@ -77,10 +77,10 @@ export const ja: TranslationKeys = {
       steelDesc: 'Steel は Revm ベースの zk コプロセッサ — 同じ Revm の Database trait が zkVM ゲスト内で動いています。',
     },
     whyNow: {
-      tag: 'なぜ Rust、なぜ今',
-      title: '気づかないうちに、Ethereum は Rust ネイティブになっていた',
+      tag: 'なぜ今 Rust',
+      title: '知らぬ間に、Ethereum は Rust ネイティブになっていた',
       subtitle: 'ここ数年、高パフォーマンスの話題が Solana に流れていた — その認識は間違っていません。でも、Rust の EVM スタック（Reth・Revm・Alloy・Foundry）が静かにそのギャップを埋めました。今、本番で動いている client・chain・tool は Rust ネイティブで、その内部を読めるエンジニアは希少です。',
-      card1Title: 'Rust が EVM スタックを取った',
+      card1Title: 'Rust が EVM スタックを奪った',
       card1Desc: 'Reth（Paradigm）は default execution client になりつつあります。Foundry の内部は Revm。Alloy は ethers-rs の現代的な後継。',
       card2Title: '本番はすでに移行済み',
       card2Desc: 'HyperEVM は Reth フォーク。Tempo は Reth ベース。Base は Op-Reth を本番採用。Steel は Revm を zkVM 内で動かしている。Rust-EVM 時代はもう来ています。',
@@ -367,7 +367,7 @@ export const ja: TranslationKeys = {
     },
     tracks: {
       title: '4つのティア、ひとつのアウトカム',
-      subtitle: '4 つすべて修了すれば、Paradigm・Hyperliquid・Tempo が使う Rust EVM スタックを読み・拡張し・出荷できるようになる。',
+      subtitle: '4 つすべて修了すれば、Paradigm・Hyperliquid・Tempo が使う Rust EVM スタックを読み・拡張し・リリースできるようになる。',
       basicsDesc: 'Rust EVMスタックがなぜ重要か、環境構築、そして実際のRPCに接続する最初のAlloyスクリプト。',
       fundamentals: 'ファンダメンタルズ',
       fundamentalsDesc: 'Alloyの型・Provider・署名、そしてRevmコードを読む前に必要なEVM概念（スタック・メモリ・Opcode・ガス）。',
