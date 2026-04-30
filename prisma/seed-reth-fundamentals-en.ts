@@ -197,6 +197,22 @@ async fn main() -> Result<()> {
 
 Copy this into \`src/main.rs\` and run \`cargo run\`. You'll see your random signer's address, the signature, and a recovered address that matches.
 
+\`\`\`mermaid
+sequenceDiagram
+    participant Signer as PrivateKeySigner
+    participant Msg as message bytes
+    participant Hash as EIP-191 hash
+    participant Sig as Signature
+    participant Verify as recover_address_from_msg
+
+    Signer->>Msg: take "hello"
+    Msg->>Hash: prefix + keccak256
+    Hash->>Sig: sign(privkey, hash)
+    Sig-->>Verify: signature + original message
+    Verify->>Hash: re-hash with prefix
+    Verify-->>Signer: recovered address
+\`\`\`
+
 ## 3. What this code teaches
 
 ### \`PrivateKeySigner::random()\`

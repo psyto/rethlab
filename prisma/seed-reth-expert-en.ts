@@ -456,6 +456,15 @@ All three are crates of \`crate-type = ["proc-macro"]\` with functions that take
 
 ## 2. The toolchain
 
+\`\`\`mermaid
+flowchart LR
+    Src[Your source<br/>sol! { ... }] -->|compiler invokes macro| In[Input TokenStream]
+    In -->|syn::parse| AST[Rust / DSL AST]
+    AST -->|your logic| Tree[Generated AST]
+    Tree -->|quote!| Out[Output TokenStream]
+    Out -->|compiler continues| Compiled[Compiled binary]
+\`\`\`
+
 Two crates do 90% of the work:
 
 | Crate | Job |
@@ -651,6 +660,21 @@ That's a production precompile in Ethereum mainnet. Read it line by line:
 - **\`EthPrecompileOutput\`** carries \`(gas_used, output_bytes)\`.
 
 ## 3. Registering custom precompiles
+
+\`\`\`mermaid
+sequenceDiagram
+    participant C as Contract bytecode
+    participant I as Revm interpreter
+    participant Reg as Precompiles registry
+    participant Fn as Custom precompile fn
+
+    C->>I: CALL 0x00...ff
+    I->>Reg: lookup(addr)
+    Reg-->>I: Found — Precompile
+    I->>Fn: run(input, gas_limit)
+    Fn-->>I: Ok(gas_used, output)
+    I->>C: returndata + gas refund
+\`\`\`
 
 The \`Precompiles\` registry in [\`crates/precompile/src/lib.rs\`](https://github.com/bluealloy/revm/blob/main/crates/precompile/src/lib.rs) has an \`extend\` method designed exactly for this:
 
@@ -902,11 +926,13 @@ MEV (Maximal Extractable Value) is where systems engineering meets game theory. 
 
 ## 1. The pipeline
 
-\`\`\`
-Mempool ──► Decoder ──► Simulator ──► Strategy ──► Bundle Builder ──► Submit
-   │            │            │            │              │              │
- ExEx        Alloy        Revm         Rust          Alloy         Flashbots/
- + p2p       sol!         + DB         logic         encode         direct
+\`\`\`mermaid
+flowchart LR
+    M[Mempool<br/>ExEx + devp2p] --> D[Decoder<br/>Alloy sol!]
+    D --> S[Simulator<br/>Revm + DB]
+    S --> St[Strategy<br/>Rust logic]
+    St --> B[Bundle Builder<br/>Alloy encode]
+    B --> Sub[Submit<br/>Flashbots / direct]
 \`\`\`
 
 Each box is a Rust module. Latency budget for the whole loop in production: **< 100 ms** before the next block.
@@ -1050,16 +1076,20 @@ A zkEVM proves that "this block was executed correctly" without re-executing it.
 
 ## 1. The proving stack
 
-\`\`\`
-+------------------------+
-|  Revm execution        |  ← regular EVM, with one twist:
-|  inside a zkVM         |     it runs inside a generic prover (Risc0, SP1, ...)
-+------------------------+
-|  zkVM (RISC-V)         |  ← every Rust instruction emits a constraint
-+------------------------+
-|  Proving system        |  ← STARK / SNARK
-|  (Plonky3, Halo2, ...) |
-+------------------------+
+\`\`\`mermaid
+flowchart TB
+    subgraph Host
+        RPC[Ethereum RPC] --> Pre[preflight: collect witness]
+    end
+    Pre -->|Input: header + witness + call| Guest
+    subgraph Guest [zkVM guest]
+        Verify[verify witness vs stateRoot]
+        Verify --> RevmRun[Revm runs the EVM call]
+        RevmRun --> Journal[commit block hash + result]
+    end
+    Guest --> Prover[Proving system<br/>STARK / SNARK]
+    Prover --> Proof[Proof + Journal]
+    Proof --> Verifier[on-chain verifier contract]
 \`\`\`
 
 You compile a normal Rust program (which calls Revm) to **RISC-V**, run it inside a zkVM, and the zkVM emits a proof of correct execution.

@@ -430,6 +430,15 @@ where
 
 ## 2. ツールチェイン
 
+\`\`\`mermaid
+flowchart LR
+    Src[ソースコード<br/>sol! { ... }] -->|コンパイラがマクロ呼び出し| In[入力 TokenStream]
+    In -->|syn::parse| AST[Rust / DSL AST]
+    AST -->|あなたのロジック| Tree[生成された AST]
+    Tree -->|quote!| Out[出力 TokenStream]
+    Out -->|コンパイラ続行| Compiled[コンパイル後のバイナリ]
+\`\`\`
+
 ほぼ2クレートで完結：
 
 | クレート | 役割 |
@@ -621,6 +630,21 @@ pub fn identity_run(input: &[u8], gas_limit: u64) -> EthPrecompileResult {
 - **\`EthPrecompileOutput\`** は \`(gas_used, output_bytes)\` を運ぶ。
 
 ## 3. カスタムprecompileを登録する
+
+\`\`\`mermaid
+sequenceDiagram
+    participant C as コントラクト bytecode
+    participant I as Revm interpreter
+    participant Reg as Precompiles レジストリ
+    participant Fn as カスタム precompile fn
+
+    C->>I: CALL 0x00...ff
+    I->>Reg: lookup アドレス
+    Reg-->>I: 発見 — Precompile
+    I->>Fn: run(input, gas_limit)
+    Fn-->>I: Ok(gas_used, output)
+    I->>C: returndata + gas refund
+\`\`\`
 
 [\`crates/precompile/src/lib.rs\`](https://github.com/bluealloy/revm/blob/main/crates/precompile/src/lib.rs) の \`Precompiles\` レジストリにはまさにこのための \`extend\` メソッドがあります：
 
@@ -872,11 +896,13 @@ MEV（Maximal Extractable Value）はシステムエンジニアリング × ゲ
 
 ## 1. パイプライン
 
-\`\`\`
-Mempool ──► デコード ──► シミュレータ ──► 戦略 ──► バンドル組成 ──► 送信
-   │           │             │            │           │              │
- ExEx        Alloy         Revm         Rust       Alloy        Flashbots /
- + p2p       sol!          + DB         ロジック    encode        直接ビルダ
+\`\`\`mermaid
+flowchart LR
+    M[Mempool<br/>ExEx + devp2p] --> D[デコード<br/>Alloy sol!]
+    D --> S[シミュレータ<br/>Revm + DB]
+    S --> St[戦略<br/>Rust ロジック]
+    St --> B[バンドル組成<br/>Alloy encode]
+    B --> Sub[送信<br/>Flashbots / 直接]
 \`\`\`
 
 各箱がRustモジュール。本番のレイテンシ予算は **次ブロックまでに< 100ms**。
@@ -1018,16 +1044,20 @@ zkEVM は「このブロックは正しく実行された」を再実行なし�
 
 ## 1. プルービングスタック
 
-\`\`\`
-+------------------------+
-|  Revm 実行             |  ← 通常のEVM、ただし
-|  zkVM の中で動く       |     汎用プローバ（Risc0、SP1など）の中
-+------------------------+
-|  zkVM (RISC-V)         |  ← Rust命令ごとに制約を吐く
-+------------------------+
-|  Proving system        |  ← STARK / SNARK
-|  (Plonky3, Halo2, ...) |
-+------------------------+
+\`\`\`mermaid
+flowchart TB
+    subgraph Host
+        RPC[Ethereum RPC] --> Pre[preflight: witness 収集]
+    end
+    Pre -->|Input: header + witness + call| Guest
+    subgraph Guest [zkVM guest]
+        Verify[stateRoot に対して witness 検証]
+        Verify --> RevmRun[Revm が EVM call を実行]
+        RevmRun --> Journal[block hash + 結果を commit]
+    end
+    Guest --> Prover[証明システム<br/>STARK / SNARK]
+    Prover --> Proof[Proof + Journal]
+    Proof --> Verifier[オンチェーン verifier コントラクト]
 \`\`\`
 
 普通のRustプログラム（中身でRevmを呼ぶ）を **RISC-V** にコンパイルし、zkVMの中で実行 → zkVMが正しい実行の証明を出す。

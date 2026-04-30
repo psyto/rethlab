@@ -128,6 +128,16 @@ Charge gas, branch-hint on out-of-gas, return early. Every opcode pays gas this 
 
 ## Where the dispatch lives
 
+\`\`\`mermaid
+flowchart LR
+    PC[interpreter.pc] -->|fetch byte| Op[opcode 0x01]
+    Op -->|index into| Table["[Instruction; 256]"]
+    Table --> Fn[fn add ctx]
+    Fn -->|gas! + popn_top!| Stack[Stack op1, op2 top]
+    Fn -->|wrapping_add| Stack
+    Fn --> PC
+\`\`\`
+
 Each opcode is bound to a function pointer in an **instruction table**. Reading order if you open the repo:
 
 1. \`crates/interpreter/src/instructions/mod.rs\` — declares the modules
@@ -236,6 +246,15 @@ pub fn my_hyper_fast_swap<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Resul
     *amount_out = compute_swap_native(*amount_in, *pool_id);
     Ok(())
 }
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+    Std[standard_table 256 slots] -->|copy| Mine[my fork's table]
+    Mine -->|override 0x0C| Custom[my_hyper_fast_swap]
+    Bytecode[bytecode 0x0C ...] -->|interpreter dispatch| Mine
+    Mine --> Custom
+    Custom --> Result[result on stack]
 \`\`\`
 
 ## What you actually buy
@@ -894,6 +913,19 @@ RPC namespaces, engine API extensions, ExEx installations. \`EthereumAddOns::def
 
 ### \`.launch()\`
 Boots everything: opens MDBX, starts P2P, spawns Tokio tasks for stages, exposes RPC. Returns a \`NodeHandle\` you can \`wait_for_node_exit\` on.
+
+\`\`\`mermaid
+flowchart TB
+    Builder[Cli builder] --> Types[".with_types EthereumNode"]
+    Types --> Comps[".with_components"]
+    Comps --> Pool["pool — admission rules"]
+    Comps --> Net["network — P2P"]
+    Comps --> Exec["executor — EVM, opcodes, gas"]
+    Comps --> Cons["consensus — PoS / HyperBFT / etc."]
+    Comps --> Payload["payload — block building"]
+    Comps --> AddOns[".with_add_ons RPC + ExEx"]
+    AddOns --> Launch[".launch — your chain"]
+\`\`\`
 
 ## What customization unlocks
 

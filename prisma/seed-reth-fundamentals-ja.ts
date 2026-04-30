@@ -196,6 +196,22 @@ async fn main() -> Result<()> {
 
 \`src/main.rs\` にコピーして \`cargo run\`。ランダム生成されたシグナーのアドレス、署名、そして検証で復元したアドレス（一致するはず）が表示されます。
 
+\`\`\`mermaid
+sequenceDiagram
+    participant Signer as PrivateKeySigner
+    participant Msg as メッセージバイト
+    participant Hash as EIP-191 ハッシュ
+    participant Sig as 署名
+    participant Verify as recover_address_from_msg
+
+    Signer->>Msg: "hello" を取得
+    Msg->>Hash: prefix + keccak256
+    Hash->>Sig: sign(privkey, hash)
+    Sig-->>Verify: 署名 + 元メッセージ
+    Verify->>Hash: prefix付きで再ハッシュ
+    Verify-->>Signer: 復元したアドレス
+\`\`\`
+
 ## 3. このコードが教えること
 
 ### \`PrivateKeySigner::random()\`

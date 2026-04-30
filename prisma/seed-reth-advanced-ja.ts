@@ -128,6 +128,16 @@ macro_rules! gas {
 
 ## ディスパッチはどこにある？
 
+\`\`\`mermaid
+flowchart LR
+    PC[interpreter.pc] -->|byte 取得| Op[opcode 0x01]
+    Op -->|添字で| Table["[Instruction; 256]"]
+    Table --> Fn[fn add ctx]
+    Fn -->|gas! + popn_top!| Stack[Stack op1 / op2 top]
+    Fn -->|wrapping_add| Stack
+    Fn --> PC
+\`\`\`
+
 各 Opcode は **命令テーブル** の関数ポインタに紐付けられています。リポジトリを開く順番：
 
 1. \`crates/interpreter/src/instructions/mod.rs\` — モジュール宣言
@@ -236,6 +246,15 @@ pub fn my_hyper_fast_swap<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Resul
     *amount_out = compute_swap_native(*amount_in, *pool_id);
     Ok(())
 }
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+    Std[standard_table 256スロット] -->|複製| Mine[フォーク用テーブル]
+    Mine -->|0x0C を上書き| Custom[my_hyper_fast_swap]
+    Bytecode[bytecode 0x0C ...] -->|interpreter dispatch| Mine
+    Mine --> Custom
+    Custom --> Result[結果がスタックへ]
 \`\`\`
 
 ## 実利
@@ -894,6 +913,19 @@ RPCネームスペース、engine API拡張、ExExインストール。\`Ethereu
 
 ### \`.launch()\`
 全部起動：MDBXを開き、P2P開始、ステージ用Tokioタスクをspawn、RPCを公開。\`NodeHandle\` が返り、\`wait_for_node_exit\` で待てる。
+
+\`\`\`mermaid
+flowchart TB
+    Builder[Cli builder] --> Types[".with_types EthereumNode"]
+    Types --> Comps[".with_components"]
+    Comps --> Pool["pool — txプール"]
+    Comps --> Net["network — P2P"]
+    Comps --> Exec["executor — EVM/opcode/ガス"]
+    Comps --> Cons["consensus — PoS / HyperBFT 等"]
+    Comps --> Payload["payload — ブロック構築"]
+    Comps --> AddOns[".with_add_ons — RPC + ExEx"]
+    AddOns --> Launch[".launch — あなたのチェーン"]
+\`\`\`
 
 ## カスタマイズで何が変わるか
 
