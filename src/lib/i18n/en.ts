@@ -254,11 +254,11 @@ export const en = {
   donate: {
     tag: 'Support RethLab',
     title: 'Support source-grounded Rust EVM training',
-    subtitle: 'RethLab is free and open. If the lessons helped you, sponsoring keeps the next Specialization tracks coming.',
+    subtitle: 'RethLab is free and open. If the lessons helped you, sponsoring keeps the course running and current.',
     recurring: {
       title: 'Sponsor on GitHub',
       note: 'Recurring · cancel anytime',
-      body: 'GitHub Sponsors handles billing. Recurring monthly support is the highest-leverage way to help — it lets new content get planned with confidence.',
+      body: 'GitHub Sponsors handles billing. Recurring monthly support is the highest-leverage way to help — it keeps the course alive and the upstream-tracking work sustainable.',
       cta: 'Become a sponsor',
     },
     oneTime: {
@@ -270,7 +270,7 @@ export const en = {
     },
     use: {
       title: 'What your support funds',
-      item1: 'Authoring new Specialization tracks (Parallel EVM, Hyperliquid Internals, MEV)',
+      item1: 'Keeping the curriculum (4 tiers, ~74 lessons) free and open for everyone',
       item2: 'Keeping every lesson updated against upstream Reth / Revm / Alloy / Foundry',
       item3: 'Hosting, infrastructure, and translation work',
     },
@@ -341,7 +341,7 @@ export const en = {
     contact: 'Questions or feedback? Reach out on Twitter.',
     support: {
       title: 'Support this work',
-      body: 'RethLab is free and open. If the lessons helped you ship Rust EVM code, sponsoring on GitHub or a one-time donation keeps new content coming and the existing material updated against upstream.',
+      body: 'RethLab is free and open. If the lessons helped you ship Rust EVM code, sponsoring on GitHub or a one-time donation keeps the course running and the existing material updated against upstream.',
       cta: 'See how to support',
     },
   },

@@ -139,8 +139,8 @@ export const ja: TranslationKeys = {
       learners: '学習者',
     },
     sponsor: {
-      title: '無料で学べます — サポーターが次のコースを支えています',
-      subtitle: 'RethLab が役に立ったら、GitHub Sponsors か donation で支援できます。',
+      title: '無料で学べます — サポーターがこのコースを支えています',
+      subtitle: 'RethLab が役に立ったら、GitHub Sponsors か donation で支援をお願いします。',
       cta: '支援する',
     },
   },
@@ -256,11 +256,11 @@ export const ja: TranslationKeys = {
   donate: {
     tag: 'RethLabを応援',
     title: 'ソース直結の Rust EVM 養成を応援する',
-    subtitle: 'RethLab は無料・オープンで提供されています。レッスンが役に立ったなら、スポンサーシップが次の Specialization トラック開発を支えます。',
+    subtitle: 'RethLab は無料・オープンで提供されています。レッスンが役に立ったなら、スポンサーシップが本コースの運営と最新化を支えます。',
     recurring: {
       title: 'GitHub でスポンサーになる',
       note: '定期支援・いつでもキャンセル可',
-      body: '請求は GitHub Sponsors が処理。月次の定期支援は最も効果的な応援方法 — 新コンテンツの開発計画を安心して進められます。',
+      body: '請求は GitHub Sponsors が処理。月次の定期支援は最も効果的な応援方法 — 本コースの運営継続と upstream 追従作業を持続可能にします。',
       cta: 'スポンサーになる',
     },
     oneTime: {
@@ -272,7 +272,7 @@ export const ja: TranslationKeys = {
     },
     use: {
       title: '寄付の使い道',
-      item1: '新しい Specialization トラックの執筆（Parallel EVM、Hyperliquid Internals、MEV など）',
+      item1: '既存カリキュラム（4ティア・約74レッスン）を全員に無料で提供し続けること',
       item2: '上流の Reth / Revm / Alloy / Foundry に対する各レッスンの随時更新',
       item3: 'ホスティング・インフラ・翻訳作業',
     },
@@ -343,7 +343,7 @@ export const ja: TranslationKeys = {
     contact: 'ご質問やフィードバックはTwitterまでお気軽にどうぞ。',
     support: {
       title: 'この活動を支援する',
-      body: 'RethLab は無料でオープンです。レッスンが Rust EVM のコードを書く役に立ったら、GitHub Sponsors の継続支援か単発の donation で、新しいコンテンツの作成と upstream への追従更新を支えていただけます。',
+      body: 'RethLab は無料でオープンです。レッスンが Rust EVM のコードを書く役に立ったら、GitHub Sponsors の継続支援か単発の donation で、本コースの運営継続と upstream への追従更新を支えていただけます。',
       cta: '支援方法を見る',
     },
   },
