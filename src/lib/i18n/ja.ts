@@ -97,6 +97,10 @@ export const ja: TranslationKeys = {
       tracks: 'トラック',
       learners: '学習者',
     },
+    sponsor: {
+      title: '無料で学べます — サポーターが次のコースを支えています',
+      subtitle: 'RethLab が役に立ったら、GitHub Sponsors か donation で支援できます。',
+    },
   },
   courses: {
     categories: {
@@ -259,11 +263,6 @@ export const ja: TranslationKeys = {
       exportData: 'データをエクスポート',
     },
   },
-  gate: {
-    title: 'RethLabで学習を始めよう',
-    subtitle: 'サインインして学習を続けましょう。',
-    signInToLearn: 'サインインして学ぶ',
-  },
   honey: {
     title: 'XPを貯めて、コースをアンロック',
     subtitle: 'XPで上級コースのアンロックが得られます。',
@@ -401,6 +400,11 @@ export const ja: TranslationKeys = {
       hyperlend: 'キャリア価値: このスタックを読めるインフラエンジニアは、Web3で最も需要の高い職種の一つ。',
     },
     contact: 'ご質問やフィードバックはTwitterまでお気軽にどうぞ。',
+    support: {
+      title: 'この活動を支援する',
+      body: 'RethLab は無料でオープンです。レッスンが Rust EVM のコードを書く役に立ったら、GitHub Sponsors の継続支援か単発の donation で、新しいコンテンツの作成と upstream への追従更新を支えていただけます。',
+      cta: '支援方法を見る',
+    },
   },
   errors: {
     notFound: 'ページが見つかりません',

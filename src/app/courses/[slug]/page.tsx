@@ -254,23 +254,13 @@ export default function CourseDetailPage() {
 
             {/* Enroll CTA */}
             {!session ? (
-              course.track === 'economics' ? (
-                <Link
-                  href={`/courses/${course.slug}/lessons/${course.modules[0]?.lessons[0]?.id}`}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-base font-semibold text-fabrknt-dark transition-all hover:opacity-90"
-                >
-                  {t('landing.hero.cta')}
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              ) : (
-                <Link
-                  href="/auth/signin"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-base font-semibold text-fabrknt-dark transition-all hover:opacity-90"
-                >
-                  {t('gate.signInToLearn')}
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              )
+              <Link
+                href={`/courses/${course.slug}/lessons/${course.modules[0]?.lessons[0]?.id}`}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-base font-semibold text-fabrknt-dark transition-all hover:opacity-90"
+              >
+                {t('landing.hero.cta')}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             ) : (
               <button
                 onClick={handleEnroll}

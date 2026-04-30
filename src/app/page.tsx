@@ -11,6 +11,7 @@ import {
   Boxes,
   Code2,
   CheckCircle2,
+  Heart,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -182,6 +183,25 @@ export default function LandingPage() {
               </p>
             </motion.div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Sponsor strip — subtle */}
+      <section className="border-t border-border">
+        <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
+          <Link
+            href="/donate"
+            className="group flex items-center justify-between gap-4 rounded-xl border border-border bg-card/40 px-5 py-4 transition-all hover:border-primary/40 hover:bg-card/60"
+          >
+            <div className="flex items-start gap-3">
+              <Heart className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div>
+                <p className="text-sm font-medium text-foreground">{t('landing.sponsor.title')}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{t('landing.sponsor.subtitle')}</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+          </Link>
         </div>
       </section>
 

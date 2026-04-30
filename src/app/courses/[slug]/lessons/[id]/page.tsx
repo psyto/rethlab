@@ -15,7 +15,6 @@ import {
   RotateCcw,
   Loader2,
   Menu,
-  Lock,
   Hexagon,
   Trophy,
   BookOpen,
@@ -85,27 +84,6 @@ export default function LessonPage() {
   if (error || !lesson) {
     const errorStatus = error && 'status' in error ? (error as { status: number }).status : 0;
     const errorMessage = error instanceof Error ? error.message : '';
-
-    // 401: not signed in → simple sign-in prompt
-    if (errorStatus === 401) {
-      return (
-        <div className="flex h-[calc(100vh-4rem)] flex-col items-center justify-center gap-4 px-4 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-            <Lock className="h-8 w-8 text-primary" />
-          </div>
-          <h2 className="text-xl font-bold">{t('gate.title')}</h2>
-          <p className="max-w-md text-sm text-muted-foreground">
-            {t('gate.subtitle')}
-          </p>
-          <Link
-            href="/auth/signin"
-            className="mt-4 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-fabrknt-dark transition-opacity hover:opacity-90"
-          >
-            {t('common.signIn')}
-          </Link>
-        </div>
-      );
-    }
 
     // 403: not enough XP → show XP requirement
     if (errorStatus === 403) {
@@ -356,29 +334,29 @@ export default function LessonPage() {
           {/* Mark complete + navigation (for content lessons) */}
           {!isChallenge && !isQuiz && (
             <div className="border-t border-border p-4 space-y-3">
-              <button
-                onClick={handleMarkComplete}
-                disabled={isCompleted || completeMutation.isPending}
-                className={cn(
-                  'flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all',
-                  isCompleted
-                    ? 'bg-accent/10 text-accent'
-                    : 'bg-fabrknt-gradient text-white hover:opacity-90'
-                )}
-              >
-                {completeMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : isCompleted ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    {t('lesson.completed')}
-                  </>
-                ) : !session ? (
-                  'Sign in to track progress'
-                ) : (
-                  t('lesson.markComplete')
-                )}
-              </button>
+              {session && (
+                <button
+                  onClick={handleMarkComplete}
+                  disabled={isCompleted || completeMutation.isPending}
+                  className={cn(
+                    'flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all',
+                    isCompleted
+                      ? 'bg-accent/10 text-accent'
+                      : 'bg-fabrknt-gradient text-white hover:opacity-90'
+                  )}
+                >
+                  {completeMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : isCompleted ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      {t('lesson.completed')}
+                    </>
+                  ) : (
+                    t('lesson.markComplete')
+                  )}
+                </button>
+              )}
 
               <div className="flex gap-3">
                 {lesson.prevLesson && (

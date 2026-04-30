@@ -95,6 +95,10 @@ export const en = {
       tracks: 'Tracks',
       learners: 'Learners',
     },
+    sponsor: {
+      title: 'Free to learn — supporters keep it growing',
+      subtitle: 'If RethLab helps you ship Rust, you can sponsor on GitHub or donate.',
+    },
   },
   courses: {
     categories: {
@@ -257,11 +261,6 @@ export const en = {
       exportData: 'Export Data',
     },
   },
-  gate: {
-    title: 'Start Learning on RethLab',
-    subtitle: 'Sign in to continue learning.',
-    signInToLearn: 'Sign in to learn',
-  },
   honey: {
     title: 'Earn XP, Unlock Courses',
     subtitle: 'XP unlocks advanced courses as you progress.',
@@ -399,6 +398,11 @@ export const en = {
       hyperlend: 'Career value: Infra engineers who can read this stack are some of the highest-paid in Web3.',
     },
     contact: 'Questions or feedback? Reach out on Twitter.',
+    support: {
+      title: 'Support this work',
+      body: 'RethLab is free and open. If the lessons helped you ship Rust EVM code, sponsoring on GitHub or a one-time donation keeps new content coming and the existing material updated against upstream.',
+      cta: 'See how to support',
+    },
   },
   errors: {
     notFound: 'Page not found',

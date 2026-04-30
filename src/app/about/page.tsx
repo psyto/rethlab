@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useLocale } from '@/contexts/locale-context';
-import { ArrowLeft, Shield, Brain, BarChart3, Globe } from 'lucide-react';
+import { ArrowLeft, Shield, Brain, BarChart3, Globe, Heart, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const fadeIn = {
@@ -132,6 +132,33 @@ export default function AboutPage() {
               </div>
             </div>
           ))}
+        </div>
+      </motion.div>
+
+      {/* Support this work */}
+      <motion.div
+        className="mt-8 rounded-2xl border border-border bg-card p-6"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45 }}
+      >
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Heart className="h-4 w-4 text-primary" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold">{t('about.support.title')}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {t('about.support.body')}
+            </p>
+            <Link
+              href="/donate"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
+            >
+              {t('about.support.cta')}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         </div>
       </motion.div>
 

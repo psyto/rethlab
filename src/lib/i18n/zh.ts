@@ -97,6 +97,10 @@ export const zh: TranslationKeys = {
       tracks: '赛道',
       learners: '学习者',
     },
+    sponsor: {
+      title: '免费学习 — 支持者让它持续成长',
+      subtitle: '如果 RethLab 帮助你出 Rust，可以在 GitHub Sponsors 或捐赠中支持。',
+    },
   },
   courses: {
     categories: {
@@ -259,11 +263,6 @@ export const zh: TranslationKeys = {
       exportData: '导出数据',
     },
   },
-  gate: {
-    title: '开始在 RethLab 学习',
-    subtitle: '登录以继续学习。',
-    signInToLearn: '登录以学习',
-  },
   honey: {
     title: '赚取 XP，解锁课程',
     subtitle: '随着学习进度，XP 解锁高级课程。',
@@ -401,6 +400,11 @@ export const zh: TranslationKeys = {
       hyperlend: '生态系统增长：HyperLend、现货代币、HyperEVM dApps 等。',
     },
     contact: '有问题或反馈？在 Twitter 上联系我们。',
+    support: {
+      title: '支持这项工作',
+      body: 'RethLab 是免费开放的。如果课程帮助你编写 Rust EVM 代码，可以通过 GitHub Sponsors 持续支持或一次性捐赠，让新内容持续推出，让现有材料保持与上游同步。',
+      cta: '查看支持方式',
+    },
   },
   errors: {
     notFound: '页面未找到',
