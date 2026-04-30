@@ -168,7 +168,7 @@ export default function LessonPage() {
       setOutput(result.output);
 
       if (result.passed) {
-        completeMutation.mutate();
+        handleAutoComplete();
       }
     } catch {
       setOutput(t('errors.runCode'));
@@ -177,11 +177,21 @@ export default function LessonPage() {
     }
   };
 
+  // Triggered by an explicit user action (Mark Complete button on CONTENT lessons).
+  // Guests get a friendly redirect to the sign-in page since they actively asked.
   const handleMarkComplete = () => {
     if (!session) {
       router.push('/auth/signin');
       return;
     }
+    completeMutation.mutate();
+  };
+
+  // Triggered automatically when a quiz passes or all challenge tests pass.
+  // Guests should NOT be redirected — they should see the Next button and
+  // continue. They just don't earn XP because progress isn't persisted.
+  const handleAutoComplete = () => {
+    if (!session) return;
     completeMutation.mutate();
   };
 
@@ -330,7 +340,7 @@ export default function LessonPage() {
             <div className="border-t border-border p-6">
               <QuizPlayer
                 questions={lesson.quizQuestions}
-                onComplete={handleMarkComplete}
+                onComplete={handleAutoComplete}
                 isCompleted={isCompleted}
                 onNext={
                   lesson.nextLesson
