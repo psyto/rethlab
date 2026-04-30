@@ -458,7 +458,7 @@ All three are crates of \`crate-type = ["proc-macro"]\` with functions that take
 
 \`\`\`mermaid
 flowchart LR
-    Src[Your source<br/>sol! { ... }] -->|compiler invokes macro| In[Input TokenStream]
+    Src["Your source<br/>sol! macro"] -->|compiler invokes macro| In[Input TokenStream]
     In -->|syn::parse| AST[Rust / DSL AST]
     AST -->|your logic| Tree[Generated AST]
     Tree -->|quote!| Out[Output TokenStream]

@@ -432,7 +432,7 @@ where
 
 \`\`\`mermaid
 flowchart LR
-    Src[ソースコード<br/>sol! { ... }] -->|コンパイラがマクロ呼び出し| In[入力 TokenStream]
+    Src["ソースコード<br/>sol! マクロ"] -->|コンパイラがマクロ呼び出し| In[入力 TokenStream]
     In -->|syn::parse| AST[Rust / DSL AST]
     AST -->|あなたのロジック| Tree[生成された AST]
     Tree -->|quote!| Out[出力 TokenStream]
