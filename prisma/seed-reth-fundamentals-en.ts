@@ -419,76 +419,111 @@ anvil
 You can now read state. The next module dives into how the EVM actually executes — stack, memory, opcodes — which prepares you for Revm.`,
                 },
                 {
-                  title: 'Challenge: balance checker',
+                  title: 'Quiz: balance checker',
                   slug: 'balance-checker-challenge-en',
-                  type: 'CHALLENGE',
+                  type: 'QUIZ',
                   sortOrder: 4,
                   duration: 15,
                   xpReward: 30,
-                  challengeLanguage: 'typescript',
-                  content: `# Challenge: balance checker
+                  content: `# Quiz: balance checker
 
-Implement a function that returns \`true\` when a given address has zero balance, \`false\` otherwise.
+Goal: write a function that returns \`true\` when a given address has zero ETH balance, \`false\` otherwise.
 
-In Rust + Alloy, the equivalent is:
+## The Rust + Alloy solution
 
 \`\`\`rust
-let balance = provider.get_balance(addr).await?;
-balance.is_zero()
+use alloy::primitives::Address;
+use alloy::providers::{Provider, ProviderBuilder};
+use eyre::Result;
+
+async fn is_empty_wallet(
+    provider: &impl Provider,
+    address: Address,
+) -> Result<bool> {
+    let balance = provider.get_balance(address).await?;
+    Ok(balance.is_zero())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let provider = ProviderBuilder::new()
+        .connect_http("https://reth-ethereum.ithaca.xyz/rpc".parse()?);
+
+    let vitalik = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045".parse::<Address>()?;
+    println!("vitalik empty? {}", is_empty_wallet(&provider, vitalik).await?);
+
+    Ok(())
+}
 \`\`\`
 
-## TypeScript task
+Things worth noting:
 
-Implement \`isEmptyWallet\` so it:
+1. The function takes \`&impl Provider\` — it accepts **any** Provider implementation (HTTP, WebSocket, Anvil-fork) without committing to one. This is **trait-bound polymorphism**.
+2. \`get_balance\` returns \`Result<U256>\`. The \`?\` propagates the network error if it fails.
+3. \`balance.is_zero()\` is the idiomatic check — clearer than \`balance == U256::ZERO\` and may be optimized by the compiler.
+4. The whole function is \`async\` because the network call is async, but the surrounding logic is plain Rust — no callbacks, no \`.then(...)\`.
 
-- calls \`getBalance(address)\` (a fake provider returning a \`bigint\`)
-- returns \`true\` if balance is \`0n\`, otherwise \`false\``,
-                  starterCode: `type GetBalance = (address: string) => Promise<bigint>;
+### Try it
 
-async function isEmptyWallet(
-  getBalance: GetBalance,
-  address: string
-): Promise<boolean> {
-  // TODO: fetch balance and compare to 0n
-  return false;
-}
+[Rust Playground](https://play.rust-lang.org/) doesn't have Alloy, but on your machine: \`cargo new balance-check && cd balance-check\`, add \`alloy\` to \`Cargo.toml\`, paste the code above, run \`cargo run\`. You'll see Vitalik's wallet balance status pulled from a real Reth node.
 
-const fakeBalances: Record<string, bigint> = {
-  "0xAAAA": 0n,
-  "0xBBBB": 1000000000000000000n,
-};
-const fakeProvider: GetBalance = async (a) => fakeBalances[a] ?? 0n;
-
-(async () => {
-  console.log(await isEmptyWallet(fakeProvider, "0xAAAA")); // true
-  console.log(await isEmptyWallet(fakeProvider, "0xBBBB")); // false
-})();
-`,
-                  solutionCode: `type GetBalance = (address: string) => Promise<bigint>;
-
-async function isEmptyWallet(
-  getBalance: GetBalance,
-  address: string
-): Promise<boolean> {
-  const balance = await getBalance(address);
-  return balance === 0n;
-}
-
-const fakeBalances: Record<string, bigint> = {
-  "0xAAAA": 0n,
-  "0xBBBB": 1000000000000000000n,
-};
-const fakeProvider: GetBalance = async (a) => fakeBalances[a] ?? 0n;
-
-(async () => {
-  console.log(await isEmptyWallet(fakeProvider, "0xAAAA"));
-  console.log(await isEmptyWallet(fakeProvider, "0xBBBB"));
-})();
-`,
-                  hints: [
-                    'Don\'t forget await — getBalance returns a Promise.',
-                    'TypeScript bigint literals end with n: 0n, 1000n, etc.',
-                    'In Rust the call is provider.get_balance(addr).await? and the type is U256.',
+## Quiz`,
+                  quizQuestions: [
+                    {
+                      question: 'Which Rust + Alloy snippet correctly checks whether a wallet has zero balance?',
+                      options: [
+                        '`provider.balance(addr) == 0`',
+                        '`provider.get_balance(addr).await?.is_zero()`',
+                        '`provider.is_zero(addr).await?`',
+                        '`provider.get_balance(addr) == U256::ZERO`',
+                      ],
+                      correctIndex: 1,
+                      explanation: '`get_balance` is async and returns `Result<U256>`. `await?` waits for the response and propagates errors. `is_zero()` is the idiomatic zero check on `U256`.',
+                    },
+                    {
+                      question: 'Why do we write `.await?` on the line that calls `get_balance`?',
+                      options: [
+                        '`.await` is decorative; only `?` matters',
+                        'Because it\'s an `async fn`',
+                        '`.await` waits for the future to resolve, and `?` propagates the error if it fails',
+                        '`.await` makes it run faster',
+                      ],
+                      correctIndex: 2,
+                      explanation: 'These are two separate operators composed: `.await` polls the future to completion (since `get_balance` is async), and `?` returns early from the surrounding function if the result is an `Err`.',
+                    },
+                    {
+                      question: 'What happens if you compare `balance` (`U256`) directly to `0u64` with `==`?',
+                      options: [
+                        'It works because `0` is automatically converted',
+                        'It compiles but issues a warning',
+                        'Compile error — the types don\'t match',
+                        'It panics at runtime',
+                      ],
+                      correctIndex: 2,
+                      explanation: 'Rust does not implicitly convert numeric types. `U256 == u64` is a compile error. You\'d either use `balance == U256::from(0)` or, more idiomatically, `balance.is_zero()`.',
+                    },
+                    {
+                      question: 'What unit does Provider\'s `get_balance` return?',
+                      options: [
+                        'ETH (a floating point)',
+                        'Gwei',
+                        'Wei (as a `U256`)',
+                        'Lamport',
+                      ],
+                      correctIndex: 2,
+                      explanation: '`get_balance` returns the balance in **wei** as a `U256`. To display ETH you divide by 10^18 — but never as `f64`, since precision matters in money. Use `format_ether` from Alloy.',
+                    },
+                    {
+                      question: 'Why does the function signature take `&impl Provider` rather than a concrete type?',
+                      options: [
+                        '`impl` is just shorthand syntax — there\'s no real difference',
+                        'It accepts any Provider implementation (HTTP, WebSocket, Anvil-fork) — trait-bound polymorphism',
+                        'It\'s required by `await`',
+                        'To save memory',
+                      ],
+                      correctIndex: 1,
+                      explanation: '`impl Provider` means "some concrete type that implements the `Provider` trait." This lets the same function work against an HTTP provider, a WebSocket provider, or an in-memory test provider — without rewriting it.',
+                    },
                   ],
                 },
               ],
@@ -593,90 +628,127 @@ Open \`crates/interpreter/src/interpreter/stack.rs\` in the repo. Find:
 Now build a tiny stack machine yourself in the next lesson.`,
                 },
                 {
-                  title: 'Challenge: a mini EVM stack',
+                  title: 'Quiz: a mini EVM stack',
                   slug: 'mini-evm-stack-en',
-                  type: 'CHALLENGE',
+                  type: 'QUIZ',
                   sortOrder: 1,
                   duration: 15,
                   xpReward: 30,
-                  challengeLanguage: 'typescript',
-                  content: `# Challenge: a mini EVM stack
+                  content: `# Quiz: a mini EVM stack
 
-Use a list (\`Vec\` in Rust, an \`Array\` in TS) as a stack and implement:
+Build a tiny Rust EVM-style stack with three operations:
 
 - \`push(n)\` — push a number
 - \`add()\` — pop two, push their sum
 - \`peek()\` — read the top without removing it
 
-## Rust reference
+## The Rust solution
 
 \`\`\`rust
+struct MiniEvmStack {
+    data: Vec<i64>,
+}
+
+impl MiniEvmStack {
+    fn new() -> Self {
+        Self { data: Vec::new() }
+    }
+
+    fn push(&mut self, n: i64) {
+        self.data.push(n);
+    }
+
+    fn add(&mut self) -> Result<(), &'static str> {
+        let a = self.data.pop().ok_or("stack underflow")?;
+        let b = self.data.pop().ok_or("stack underflow")?;
+        self.data.push(a.wrapping_add(b));
+        Ok(())
+    }
+
+    fn peek(&self) -> Option<&i64> {
+        self.data.last()
+    }
+}
+
 fn main() {
-    let mut stack: Vec<i64> = Vec::new();
-    stack.push(100);
-    stack.push(200);
-    let a = stack.pop().unwrap();
-    let b = stack.pop().unwrap();
-    stack.push(a + b);
-    println!("{:?}", stack); // [300]
+    let mut s = MiniEvmStack::new();
+    s.push(100);
+    s.push(200);
+    s.add().unwrap();
+    println!("{:?}", s.peek()); // Some(300)
 }
 \`\`\`
 
-Now implement it as a TypeScript class.`,
-                  starterCode: `class MiniEvmStack {
-  private stack: number[] = [];
+Things to notice:
 
-  push(n: number): void {
-    // TODO
-  }
+1. \`Vec::pop\` returns \`Option<T>\` — the empty case is **encoded in the return type**. There's no "empty array undefined" gotcha like in JS.
+2. \`Vec::last\` similarly returns \`Option<&T>\` — a borrow, not a copy. Cheap.
+3. \`wrapping_add\` matches EVM semantics (modular arithmetic on u256). For a real EVM stack you'd use \`U256::wrapping_add\`.
+4. The \`add\` method returns \`Result<()>\` so the caller can decide what to do with underflow — Revm's macro does the same.
 
-  add(): void {
-    // TODO: pop two, push their sum
-  }
+### Try it
 
-  peek(): number | undefined {
-    // TODO
-    return undefined;
-  }
-}
+Paste into [Rust Playground](https://play.rust-lang.org/) and hit Run. The output should be \`Some(300)\`.
 
-const s = new MiniEvmStack();
-s.push(100);
-s.push(200);
-s.add();
-console.log(s.peek()); // 300
-`,
-                  solutionCode: `class MiniEvmStack {
-  private stack: number[] = [];
+Now compare your mental model to the **real Revm Stack** from the previous lesson — same shape, just with \`U256\` instead of \`i64\` and tighter performance optimizations.
 
-  push(n: number): void {
-    this.stack.push(n);
-  }
-
-  add(): void {
-    const a = this.stack.pop();
-    const b = this.stack.pop();
-    if (a === undefined || b === undefined) {
-      throw new Error("stack underflow");
-    }
-    this.stack.push(a + b);
-  }
-
-  peek(): number | undefined {
-    return this.stack[this.stack.length - 1];
-  }
-}
-
-const s = new MiniEvmStack();
-s.push(100);
-s.push(200);
-s.add();
-console.log(s.peek());
-`,
-                  hints: [
-                    'JavaScript arrays already have push and pop methods.',
-                    'Calling add on an empty stack should error — "stack underflow." The real EVM does the same.',
-                    'A real EVM uses U256 (256-bit ints), not number. We\'re simplifying.',
+## Quiz`,
+                  quizQuestions: [
+                    {
+                      question: 'What is the return type of `Vec::pop`?',
+                      options: [
+                        '`T`',
+                        '`Option<T>` — `Some(value)` or `None` when empty',
+                        '`Result<T, Error>`',
+                        '`&T`',
+                      ],
+                      correctIndex: 1,
+                      explanation: '`pop` returns `Option<T>`. Rust encodes the "stack might be empty" possibility in the type system, so you cannot accidentally unwrap a missing value without acknowledging it.',
+                    },
+                    {
+                      question: "What is the EVM stack's hard size limit?",
+                      options: [
+                        '256 items',
+                        '512 items',
+                        '1024 items',
+                        'unlimited (memory permitting)',
+                      ],
+                      correctIndex: 2,
+                      explanation: 'EVM enforces a hard limit of 1024 stack items. Revm has `pub const STACK_LIMIT: usize = 1024;` exactly because of this. Going over yields `StackOverflow`.',
+                    },
+                    {
+                      question: 'For the real EVM ADD opcode, which arithmetic semantics are correct?',
+                      options: [
+                        '`wrapping_add` — overflow wraps around mod 2²⁵⁶',
+                        '`saturating_add` — overflow saturates to max',
+                        '`checked_add` — returns `Option`, panics on overflow',
+                        'Any of the above is fine',
+                      ],
+                      correctIndex: 0,
+                      explanation: 'EVM uses wrap-around (modulo 2²⁵⁶) arithmetic. This is what Solidity\'s `unchecked { ... }` blocks expose, and what you must use to match consensus. `saturating` or `checked` would diverge from the spec.',
+                    },
+                    {
+                      question: "Why does Revm's `popn_top!` macro use `unwrap_unchecked()` (in `unsafe`) instead of `unwrap()`?",
+                      options: [
+                        "It's a bug — `unwrap()` would also work",
+                        'The length is checked just before, so the panic path is dead code; `unwrap_unchecked` lets the compiler eliminate it from the hot path',
+                        'For thread safety',
+                        'To save memory',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'The macro guards with a length check, then uses `unwrap_unchecked()` so the compiler can omit the panic-path code from the hot path. This is an optimization technique: encode invariants in `unsafe` after a manual check.',
+                    },
+                    {
+                      question: 'Compared to a register machine, what is one practical advantage of a stack machine like the EVM?',
+                      options: [
+                        'Higher raw execution speed on modern hardware',
+                        'Smaller, simpler instruction set with simpler operand encoding — fewer consensus bugs and easier to verify',
+                        'Better cache locality',
+                        'Lower power consumption',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Stack machines have very small instruction sets (no register arguments to encode). For Ethereum that means: simpler interpreter, easier formal verification, easier ZK circuit construction. The trade-off is some runtime efficiency vs. native register code.',
+                    },
                   ],
                 },
                 {

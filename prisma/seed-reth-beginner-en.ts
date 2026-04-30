@@ -323,11 +323,10 @@ You now have enough Rust to read the first chunks of Alloy code. The next lesson
                 {
                   title: 'First homework: 0x check',
                   slug: 'first-homework-en',
-                  type: 'CHALLENGE',
+                  type: 'QUIZ',
                   sortOrder: 2,
                   duration: 15,
                   xpReward: 25,
-                  challengeLanguage: 'typescript',
                   content: `# First homework: 0x check
 
 The simplest possible task:
@@ -342,47 +341,96 @@ The simplest possible task:
 
 These primitives appear in every Rust program you'll ever write.
 
-## Rust hint
+## The Rust solution
 
 \`\`\`rust
-fn main() {
-    let address = "0x1234567890abcdef1234567890abcdef12345678";
+fn is_valid_address(addr: &str) -> bool {
+    addr.starts_with("0x") && addr.len() == 42
+}
 
-    if address.starts_with("0x") {
-        // print success
-    } else {
-        // print error
-    }
+fn main() {
+    let a = "0x1234567890abcdef1234567890abcdef12345678";
+    let b = "1234567890abcdef1234567890abcdef12345678";
+
+    println!("a → {}", is_valid_address(a));   // true
+    println!("b → {}", is_valid_address(b));   // false
 }
 \`\`\`
 
-## Try it
+Three things to note:
 
-The editor below has a TypeScript version of the same problem. The Rust equivalent is essentially identical — paste the snippet above into [Rust Playground](https://play.rust-lang.org/) and tweak it.
+1. \`&str\` (not \`String\`) — we **borrow** the input. We don't own it, we just read it.
+2. \`starts_with\` is a method on \`&str\` provided by the standard library — no import needed.
+3. The function returns \`bool\` directly because the last expression in a block is the return value.
+
+### Try it for real
+
+Open [Rust Playground](https://play.rust-lang.org/), paste the code above, hit Run. **You just wrote your first Rust program in the EVM stack tradition.**
 
 ## Stretch goals
 
-- Also check that the address is **42 characters** long (\`address.len()\` in Rust, \`address.length\` in TS)
-- Wrap it in a function: \`fn is_valid_address(addr: &str) -> bool\``,
-                  starterCode: `function isValidEthAddress(address: string): boolean {
-  // TODO: return true if address starts with "0x" and is 42 chars long
-  return false;
-}
+- Also verify every character after \`0x\` is a hex digit (\`addr[2..].chars().all(|c| c.is_ascii_hexdigit())\`)
+- Wrap into a proper validation that handles uppercase / mixed-case (EIP-55)
 
-console.log(isValidEthAddress("0x1234567890abcdef1234567890abcdef12345678")); // true
-console.log(isValidEthAddress("1234567890abcdef1234567890abcdef12345678"));   // false
-`,
-                  solutionCode: `function isValidEthAddress(address: string): boolean {
-  return address.startsWith("0x") && address.length === 42;
-}
+## Quiz
 
-console.log(isValidEthAddress("0x1234567890abcdef1234567890abcdef12345678"));
-console.log(isValidEthAddress("1234567890abcdef1234567890abcdef12345678"));
-`,
-                  hints: [
-                    'In TypeScript, use String.prototype.startsWith(). In Rust the same method is named starts_with.',
-                    'An Ethereum address is 42 characters including the "0x" prefix.',
-                    'Use && to combine the two conditions.',
+Test what you understood. The questions below cover the Rust idioms we just used.`,
+                  quizQuestions: [
+                    {
+                      question: "Which Rust expression correctly checks whether the string `address` starts with `\"0x\"`?",
+                      options: [
+                        '`address.has_prefix("0x")`',
+                        '`address.starts_with("0x")`',
+                        '`address.contains("0x")`',
+                        '`address[0..2] == "0x"`',
+                      ],
+                      correctIndex: 1,
+                      explanation: '`starts_with` is the standard `&str` method. `has_prefix` does not exist. `contains` matches anywhere in the string, not just the start. Direct slice indexing on `&str` panics if the boundary isn\'t a UTF-8 char boundary, so it\'s unsafe as a general check.',
+                    },
+                    {
+                      question: 'A complete validity check for an Ethereum address string requires:',
+                      options: [
+                        'just confirming the `0x` prefix',
+                        'the `0x` prefix, exact length of 42, and all hex digits after the prefix',
+                        '40 characters and all hex digits',
+                        'nothing — just receive it as `Address` type instead of `&str`',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'A canonical Ethereum address is 40 hex digits (20 bytes), prefixed with `0x`, total 42 characters. All three checks together prevent garbage input. Note: in production Rust EVM code you\'d usually parse into `Address` directly via `address.parse::<Address>()` and let Alloy do this.',
+                    },
+                    {
+                      question: 'Why does Rust let you write `if condition { a } else { b }` as an expression?',
+                      options: [
+                        'Because Rust has no ternary operator (`?:`), so `if/else` is the way to express conditional values',
+                        'Because it\'s faster than `match`',
+                        'Because it lets you skip semicolons',
+                        'Because it\'s required for borrow checking',
+                      ],
+                      correctIndex: 0,
+                      explanation: 'Rust intentionally has no ternary operator. Instead, `if/else` is itself an expression that evaluates to a value, so you write `let x = if cond { a } else { b };`. This keeps the language smaller and more uniform.',
+                    },
+                    {
+                      question: 'The Alloy `address!("0x...")` macro provides what benefit over a runtime parse?',
+                      options: [
+                        'It runs faster at runtime',
+                        'It validates the address literal at compile time, so an invalid address fails to compile',
+                        'It\'s required for Solidity ABI compatibility',
+                        'It encodes the address as ABI bytes',
+                      ],
+                      correctIndex: 1,
+                      explanation: '`address!` is a macro that runs in the compiler. It validates the hex digits and length while compiling. Typo a digit and the program won\'t build — much safer than discovering it at runtime when a user clicks a button.',
+                    },
+                    {
+                      question: 'What does `mut` add to `let mut x = 5;` versus `let x = 5;`?',
+                      options: [
+                        '`mut` makes access faster',
+                        'Without `mut`, you cannot reassign (`x = 6` would be a compile error)',
+                        'Without `mut`, you cannot shadow with `let x = ...`',
+                        'There is no functional difference',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Variables are immutable by default in Rust. `mut` permits reassignment. Shadowing with another `let` is independent of `mut` — you can shadow even immutable variables.',
+                    },
                   ],
                 },
                 {

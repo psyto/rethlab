@@ -323,11 +323,10 @@ println!("{:?}", v);  // [10]
                 {
                   title: '小さな宿題：0xチェック',
                   slug: 'first-homework-ja',
-                  type: 'CHALLENGE',
+                  type: 'QUIZ',
                   sortOrder: 2,
                   duration: 15,
                   xpReward: 25,
-                  challengeLanguage: 'typescript',
                   content: `# 小さな宿題：0xチェック
 
 最初の課題はとてもシンプルです。
@@ -337,52 +336,101 @@ println!("{:?}", v);  // [10]
 ## なぜこれが「最初の一歩」なのか
 
 1. **変数を作る** という最も基本的な動作
-2. **メソッドを呼ぶ** （\`starts_with\`）という、Rustの「道具の使い方」
-3. **条件分岐** （\`if / else\`）でロジックを書く
+2. **メソッドを呼ぶ**（\`starts_with\`）という、Rustの「道具の使い方」
+3. **条件分岐**（\`if / else\`）でロジックを書く
 
 これらはRustに限らず、すべてのプログラミングの基本です。
 
-## ヒント
+## Rust の解答
 
 \`\`\`rust
-fn main() {
-    let address = "0x1234567890abcdef1234567890abcdef12345678";
+fn is_valid_address(addr: &str) -> bool {
+    addr.starts_with("0x") && addr.len() == 42
+}
 
-    if address.starts_with("0x") {
-        // ここで成功メッセージを表示
-    } else {
-        // ここでエラーメッセージを表示
-    }
+fn main() {
+    let a = "0x1234567890abcdef1234567890abcdef12345678";
+    let b = "1234567890abcdef1234567890abcdef12345678";
+
+    println!("a → {}", is_valid_address(a));   // true
+    println!("b → {}", is_valid_address(b));   // false
 }
 \`\`\`
 
-## 試してみよう
+3 つのポイント：
 
-下のエディタには **TypeScript版** の同じ問題を用意しています。Rust側は [Rust Playground](https://play.rust-lang.org/) で試してみてください。考え方はまったく同じです。
+1. \`&str\`（\`String\` ではない）— 入力を **借用** している。所有せず、読むだけ。
+2. \`starts_with\` は \`&str\` に標準ライブラリが提供するメソッド。import 不要。
+3. ブロックの最後の式が暗黙の return 値なので、関数本体が \`bool\` を直接返す。
+
+### 実際に動かしてみる
+
+[Rust Playground](https://play.rust-lang.org/) を開いて、上のコードを貼って Run を押してください。**これで Rust EVM スタックの伝統に連なる最初の Rust プログラムが書けました**。
 
 ## 発展課題
 
-- アドレスが **42文字** であるかも合わせてチェックする（\`address.len()\` を使う）
-- アドレスを引数に取る関数 \`is_valid_address(addr: &str) -> bool\` を作る`,
-                  starterCode: `function isValidEthAddress(address: string): boolean {
-  // TODO: address が "0x" で始まっているかチェックして boolean を返す
-  return false;
-}
+- \`0x\` 以降の各文字が hex 数字かも検証（\`addr[2..].chars().all(|c| c.is_ascii_hexdigit())\`）
+- 大文字小文字混在（EIP-55）に対応する正式なバリデーションまで拡張
 
-console.log(isValidEthAddress("0x1234567890abcdef1234567890abcdef12345678"));
-console.log(isValidEthAddress("1234567890abcdef1234567890abcdef12345678"));
-`,
-                  solutionCode: `function isValidEthAddress(address: string): boolean {
-  return address.startsWith("0x") && address.length === 42;
-}
+## クイズ
 
-console.log(isValidEthAddress("0x1234567890abcdef1234567890abcdef12345678"));
-console.log(isValidEthAddress("1234567890abcdef1234567890abcdef12345678"));
-`,
-                  hints: [
-                    'JavaScript/TypeScriptでは String.prototype.startsWith() を使います。Rustも同名のメソッド starts_with() を持っています。',
-                    'Ethereumアドレスは "0x" を含めて42文字です。長さチェックも入れてみましょう。',
-                    'AND条件は && で繋ぎます。',
+理解度を確認しましょう。下のクイズで、いま使った Rust の慣用表現を問います。`,
+                  quizQuestions: [
+                    {
+                      question: '文字列 `address` が `"0x"` で始まっているかをチェックする Rust の式として正しいのは？',
+                      options: [
+                        '`address.has_prefix("0x")`',
+                        '`address.starts_with("0x")`',
+                        '`address.contains("0x")`',
+                        '`address[0..2] == "0x"`',
+                      ],
+                      correctIndex: 1,
+                      explanation: '`starts_with` が標準の `&str` メソッド。`has_prefix` は存在しない。`contains` は文字列のどこかに含まれていれば true なので「先頭」のチェックにならない。`&str` の直接スライスは UTF-8 文字境界でないとパニックするので汎用チェックには危険。',
+                    },
+                    {
+                      question: 'Ethereum アドレス文字列の完全な妥当性チェックに必要なのは？',
+                      options: [
+                        '`0x` プレフィックスの確認だけ',
+                        '`0x` プレフィックス + 文字数 42 + プレフィックス以降がすべて hex 数字',
+                        '40 文字 + すべて hex 数字',
+                        '不要 — `&str` ではなく `Address` 型で受ければよい',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Ethereum アドレスは 40 hex 桁 (20 バイト) + `0x` プレフィックスで合計 42 文字。3 つすべて確認することでゴミ入力を弾ける。本番の Rust EVM コードでは `address.parse::<Address>()` で Alloy にパースさせるのが普通。',
+                    },
+                    {
+                      question: 'Rust で `if condition { a } else { b }` を「式」として使えるのはなぜ重要？',
+                      options: [
+                        'Rust には三項演算子（`?:`）が無いので、これが条件付きの値を表現する標準手段だから',
+                        '`match` より速いから',
+                        'セミコロンを書かずに済むから',
+                        'borrow checker のために必須だから',
+                      ],
+                      correctIndex: 0,
+                      explanation: 'Rust は意図的に三項演算子を持たない。代わりに `if/else` 自体が値を返す式なので、`let x = if cond { a } else { b };` と書ける。言語を小さく、文法を一様に保つ設計。',
+                    },
+                    {
+                      question: 'Alloy の `address!("0x...")` マクロが、ランタイムでパースする方法より優れている点は？',
+                      options: [
+                        'ランタイムで高速になる',
+                        'コンパイル時にアドレスリテラルを検証するため、不正なアドレスはコンパイルが通らない',
+                        'Solidity ABI 互換性のために必須',
+                        'ABI バイト列を自動でエンコードする',
+                      ],
+                      correctIndex: 1,
+                      explanation: '`address!` はコンパイラ内で動くマクロ。コンパイル時に hex 数字と長さを検証する。1 桁タイポすればビルドが通らない — ユーザーがボタンを押した瞬間にランタイムエラー、よりずっと安全。',
+                    },
+                    {
+                      question: '`let mut x = 5;` と `let x = 5;` の違いは？',
+                      options: [
+                        '`mut` の方がアクセスが速い',
+                        '`mut` が無いと再代入できない（`x = 6` はコンパイルエラー）',
+                        '`mut` が無いと `let x = ...` でのシャドーイングができない',
+                        '機能的な違いはない',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Rust の変数はデフォルトで不変。`mut` が再代入を許可する。シャドーイング（別の `let` で同名変数を再宣言）は `mut` とは独立しており、不変変数でもシャドーイングできる。',
+                    },
                   ],
                 },
                 {

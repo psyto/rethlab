@@ -422,80 +422,111 @@ anvil
 これでAlloyの「Read」（読み取り）まで来ました。次のモジュールでは、EVMが実際に「動く」中身 — スタック、メモリ、Opcode — に踏み込みます。`,
                 },
                 {
-                  title: 'チャレンジ：残高チェッカー',
+                  title: 'クイズ：残高チェッカー',
                   slug: 'balance-checker-challenge-ja',
-                  type: 'CHALLENGE',
+                  type: 'QUIZ',
                   sortOrder: 4,
                   duration: 15,
                   xpReward: 30,
-                  challengeLanguage: 'typescript',
-                  content: `# チャレンジ：残高チェッカー
+                  content: `# クイズ：残高チェッカー
 
-「指定したアドレスの残高を取得して、0 ETHかどうかを判定する」関数を書いてみましょう。
+ゴール：指定したアドレスの ETH 残高がゼロなら \`true\`、それ以外なら \`false\` を返す関数を書く。
 
-ここではTypeScriptのEthers/Viem風APIで模擬しますが、Alloyでも完全に同じ流れです：
+## Rust + Alloy 解答
 
 \`\`\`rust
-let balance = provider.get_balance(addr).await?;
-if balance.is_zero() {
-    // ...
+use alloy::primitives::Address;
+use alloy::providers::{Provider, ProviderBuilder};
+use eyre::Result;
+
+async fn is_empty_wallet(
+    provider: &impl Provider,
+    address: Address,
+) -> Result<bool> {
+    let balance = provider.get_balance(address).await?;
+    Ok(balance.is_zero())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let provider = ProviderBuilder::new()
+        .connect_http("https://reth-ethereum.ithaca.xyz/rpc".parse()?);
+
+    let vitalik = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045".parse::<Address>()?;
+    println!("vitalik empty? {}", is_empty_wallet(&provider, vitalik).await?);
+
+    Ok(())
 }
 \`\`\`
 
-## TypeScript版の課題
+ポイント：
 
-下のエディタで以下の関数を実装してください：
+1. 関数は \`&impl Provider\` を取る — **任意の** Provider 実装（HTTP・WebSocket・Anvil-fork）を1つに固定せず受け入れる。**トレイト境界によるポリモーフィズム**。
+2. \`get_balance\` は \`Result<U256>\` を返す。失敗時は \`?\` がネットワークエラーを伝播。
+3. \`balance.is_zero()\` が慣用表現 — \`balance == U256::ZERO\` より明確で、コンパイラが最適化できる場合もある。
+4. ネットワーク呼び出しが async なので関数全体が \`async\`。だが周りの処理は普通の Rust — コールバックも \`.then(...)\` も無い。
 
-- \`isEmptyWallet(getBalance, address)\` を実装
-- \`getBalance(address)\` は与えられた擬似プロバイダー関数で、bigintを返す
-- 残高が \`0n\` ならtrue、それ以外はfalseを返す`,
-                  starterCode: `type GetBalance = (address: string) => Promise<bigint>;
+### 動かしてみる
 
-async function isEmptyWallet(
-  getBalance: GetBalance,
-  address: string
-): Promise<boolean> {
-  // TODO: getBalance(address) を呼んで残高を取得し、0n かどうかを判定する
-  return false;
-}
+[Rust Playground](https://play.rust-lang.org/) には Alloy が無いので、ローカルで：\`cargo new balance-check && cd balance-check\`、\`Cargo.toml\` に \`alloy\` を追加、上のコードを貼り、\`cargo run\`。本物の Reth ノードから Vitalik のウォレット残高ステータスが取得できます。
 
-// テスト
-const fakeBalances: Record<string, bigint> = {
-  "0xAAAA": 0n,
-  "0xBBBB": 1000000000000000000n,
-};
-const fakeProvider: GetBalance = async (a) => fakeBalances[a] ?? 0n;
-
-(async () => {
-  console.log(await isEmptyWallet(fakeProvider, "0xAAAA")); // true
-  console.log(await isEmptyWallet(fakeProvider, "0xBBBB")); // false
-})();
-`,
-                  solutionCode: `type GetBalance = (address: string) => Promise<bigint>;
-
-async function isEmptyWallet(
-  getBalance: GetBalance,
-  address: string
-): Promise<boolean> {
-  const balance = await getBalance(address);
-  return balance === 0n;
-}
-
-const fakeBalances: Record<string, bigint> = {
-  "0xAAAA": 0n,
-  "0xBBBB": 1000000000000000000n,
-};
-const fakeProvider: GetBalance = async (a) => fakeBalances[a] ?? 0n;
-
-(async () => {
-  console.log(await isEmptyWallet(fakeProvider, "0xAAAA"));
-  console.log(await isEmptyWallet(fakeProvider, "0xBBBB"));
-})();
-`,
-                  hints: [
-                    'await を忘れずに。getBalance は Promise を返します。',
-                    'TypeScriptのbigintリテラルは末尾に n を付けます (0n)。',
-                    'Rustでは provider.get_balance(addr).await? と書き、結果は U256 です。',
+## クイズ`,
+                  quizQuestions: [
+                    {
+                      question: 'ウォレット残高がゼロかをチェックする Rust + Alloy のスニペットとして正しいのは？',
+                      options: [
+                        '`provider.balance(addr) == 0`',
+                        '`provider.get_balance(addr).await?.is_zero()`',
+                        '`provider.is_zero(addr).await?`',
+                        '`provider.get_balance(addr) == U256::ZERO`',
+                      ],
+                      correctIndex: 1,
+                      explanation: '`get_balance` は async で `Result<U256>` を返す。`await?` で完了を待ち、エラーは伝播する。`is_zero()` が `U256` のゼロ判定の慣用表現。',
+                    },
+                    {
+                      question: '`get_balance` を呼ぶ行で `.await?` を書く理由は？',
+                      options: [
+                        '`.await` は飾り、`?` だけが必要',
+                        '`async fn` だから',
+                        '`.await` は Future を完了まで poll し、`?` は失敗時にエラーを呼び出し元へ伝播する',
+                        '`.await` で実行が速くなる',
+                      ],
+                      correctIndex: 2,
+                      explanation: '2つの別演算子の組み合わせ：`.await` は Future を完了まで進める（`get_balance` が async なので）、`?` は結果が `Err` のとき早期 return する。',
+                    },
+                    {
+                      question: '`balance`（`U256`）と `0u64` を `==` で直接比較するとどうなる？',
+                      options: [
+                        '`0` は自動変換されるので動く',
+                        'コンパイルは通るが警告が出る',
+                        'コンパイルエラー — 型が違う',
+                        'ランタイムでパニック',
+                      ],
+                      correctIndex: 2,
+                      explanation: 'Rust は数値型を暗黙変換しない。`U256 == u64` はコンパイルエラー。`balance == U256::from(0)` か、より慣用的に `balance.is_zero()` を使う。',
+                    },
+                    {
+                      question: 'Provider の `get_balance` が返す残高の単位は？',
+                      options: [
+                        'ETH（浮動小数）',
+                        'Gwei',
+                        'Wei（`U256` 型）',
+                        'Lamport',
+                      ],
+                      correctIndex: 2,
+                      explanation: '`get_balance` は **wei** を `U256` で返す。ETH 表示には 10^18 で割るが、お金の精度が重要なので `f64` は絶対NG。Alloy の `format_ether` を使う。',
+                    },
+                    {
+                      question: '関数シグネチャが具体型でなく `&impl Provider` を取る理由は？',
+                      options: [
+                        '`impl` は単なる省略記法で実質的な違いはない',
+                        '任意の Provider 実装（HTTP・WebSocket・Anvil-fork）を受け取れる — トレイト境界によるポリモーフィズム',
+                        '`await` のために必須',
+                        'メモリ節約のため',
+                      ],
+                      correctIndex: 1,
+                      explanation: '`impl Provider` は「`Provider` トレイトを実装した何らかの具体型」を意味する。同じ関数を HTTP プロバイダ、WebSocket プロバイダ、テスト用インメモリプロバイダに対して書き直さずに使える。',
+                    },
                   ],
                 },
               ],
@@ -603,92 +634,127 @@ ADD
 これで次のレッスンで自分のミニスタックマシンを書く準備ができました。`,
                 },
                 {
-                  title: 'チャレンジ：ミニEVMスタック',
+                  title: 'クイズ：ミニEVMスタック',
                   slug: 'mini-evm-stack-ja',
-                  type: 'CHALLENGE',
+                  type: 'QUIZ',
                   sortOrder: 1,
                   duration: 15,
                   xpReward: 30,
-                  challengeLanguage: 'typescript',
-                  content: `# チャレンジ：ミニEVMスタック
+                  content: `# クイズ：ミニEVMスタック
 
-\`Vec\` のような配列を「スタック」として使い、\`ADD\` 命令を実装しましょう。
-
-## 仕様
+Rust で小さな EVM 風スタックを 3 操作だけで作ります：
 
 - \`push(n)\`: スタックに数値を積む
-- \`add()\`: スタックの一番上から2つpopして合計をpushする
-- \`peek()\`: スタックの一番上を返す（読み出すだけ）
+- \`add()\`: 上から2つ pop し、合計を push
+- \`peek()\`: 上の値を読むだけ（pop しない）
 
-## Rustでの典型実装
+## Rust 解答
 
 \`\`\`rust
+struct MiniEvmStack {
+    data: Vec<i64>,
+}
+
+impl MiniEvmStack {
+    fn new() -> Self {
+        Self { data: Vec::new() }
+    }
+
+    fn push(&mut self, n: i64) {
+        self.data.push(n);
+    }
+
+    fn add(&mut self) -> Result<(), &'static str> {
+        let a = self.data.pop().ok_or("stack underflow")?;
+        let b = self.data.pop().ok_or("stack underflow")?;
+        self.data.push(a.wrapping_add(b));
+        Ok(())
+    }
+
+    fn peek(&self) -> Option<&i64> {
+        self.data.last()
+    }
+}
+
 fn main() {
-    let mut stack: Vec<i64> = Vec::new();
-    stack.push(100);
-    stack.push(200);
-    let a = stack.pop().unwrap();
-    let b = stack.pop().unwrap();
-    stack.push(a + b);
-    println!("{:?}", stack); // [300]
+    let mut s = MiniEvmStack::new();
+    s.push(100);
+    s.push(200);
+    s.add().unwrap();
+    println!("{:?}", s.peek()); // Some(300)
 }
 \`\`\`
 
-これを TypeScript でクラスとして実装してみてください。`,
-                  starterCode: `class MiniEvmStack {
-  private stack: number[] = [];
+注目ポイント：
 
-  push(n: number): void {
-    // TODO
-  }
+1. \`Vec::pop\` は \`Option<T>\` を返す — 空のケースが **戻り値の型に符号化** されている。JS の「空配列で undefined」のような落とし穴は無い。
+2. \`Vec::last\` も同様に \`Option<&T>\` を返す — コピーではなく借用。安い。
+3. \`wrapping_add\` は EVM のセマンティクス（u256 のモジュロ算術）と一致する。本物の EVM スタックなら \`U256::wrapping_add\` を使う。
+4. \`add\` が \`Result<()>\` を返すことで、underflow をどう扱うかを呼び出し側に決めさせる — Revm のマクロも同じ形。
 
-  add(): void {
-    // TODO: 上から2つpopして加算してpush
-  }
+### 動かしてみる
 
-  peek(): number | undefined {
-    // TODO
-    return undefined;
-  }
-}
+[Rust Playground](https://play.rust-lang.org/) に貼って Run。出力は \`Some(300)\` になるはず。
 
-const s = new MiniEvmStack();
-s.push(100);
-s.push(200);
-s.add();
-console.log(s.peek()); // 300
-`,
-                  solutionCode: `class MiniEvmStack {
-  private stack: number[] = [];
+そして前のレッスンで見た **本物の Revm Stack** と頭の中で比べてみてください — 同じ形、ただし \`i64\` の代わりに \`U256\`、もっと厳密なパフォーマンス最適化が入っています。
 
-  push(n: number): void {
-    this.stack.push(n);
-  }
-
-  add(): void {
-    const a = this.stack.pop();
-    const b = this.stack.pop();
-    if (a === undefined || b === undefined) {
-      throw new Error("stack underflow");
-    }
-    this.stack.push(a + b);
-  }
-
-  peek(): number | undefined {
-    return this.stack[this.stack.length - 1];
-  }
-}
-
-const s = new MiniEvmStack();
-s.push(100);
-s.push(200);
-s.add();
-console.log(s.peek());
-`,
-                  hints: [
-                    'JavaScriptの配列は push/pop メソッドが標準で使えます。',
-                    'スタックが空の状態で add すると "underflow" が起きます。実際のEVMでも同じくエラーになります。',
-                    'Rustなら Vec<u64> ですが、本物のEVMは U256 (256ビット整数) を使います。',
+## クイズ`,
+                  quizQuestions: [
+                    {
+                      question: '`Vec::pop` の返り値の型は？',
+                      options: [
+                        '`T`',
+                        '`Option<T>` — `Some(value)` か空のとき `None`',
+                        '`Result<T, Error>`',
+                        '`&T`',
+                      ],
+                      correctIndex: 1,
+                      explanation: '`pop` は `Option<T>` を返す。「スタックが空かもしれない」可能性が型システムに符号化されているので、認識せずに値をunwrapすることはできない。',
+                    },
+                    {
+                      question: 'EVM スタックのハードリミット（最大サイズ）は？',
+                      options: [
+                        '256',
+                        '512',
+                        '1024',
+                        '無制限（メモリ次第）',
+                      ],
+                      correctIndex: 2,
+                      explanation: 'EVM は 1024 個までと厳密に決められている。Revm にも `pub const STACK_LIMIT: usize = 1024;` がそのまま定義されている。超えると `StackOverflow`。',
+                    },
+                    {
+                      question: '本物の EVM の ADD opcode で正しい算術セマンティクスは？',
+                      options: [
+                        '`wrapping_add` — オーバーフロー時に mod 2²⁵⁶ でラップ',
+                        '`saturating_add` — オーバーフローで最大値に飽和',
+                        '`checked_add` — `Option` を返し、オーバーフロー時にパニック',
+                        'どれでもよい',
+                      ],
+                      correctIndex: 0,
+                      explanation: 'EVM はラップアラウンド（modulo 2²⁵⁶）の算術を使う。Solidity の `unchecked { ... }` ブロックがこれを露出している。コンセンサスを守るなら必ず wrapping。saturating や checked は仕様から外れる。',
+                    },
+                    {
+                      question: 'Revm の `popn_top!` マクロが（`unwrap()` ではなく）`unwrap_unchecked()` を `unsafe` で使うのはなぜ？',
+                      options: [
+                        'バグ — `unwrap()` でも動く',
+                        '直前で長さチェック済みなのでパニックパスはデッドコード；`unwrap_unchecked` でホットパスから消去できる',
+                        'スレッドセーフのため',
+                        'メモリ節約のため',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'マクロが事前に長さをチェックしているので、`unwrap_unchecked()` を使えばコンパイラがホットパスのパニックパスコードを省略できる。これは「手動チェックの後 `unsafe` で不変条件を符号化する」最適化テクニック。',
+                    },
+                    {
+                      question: 'レジスタマシンと比較した、EVM のようなスタックマシンの実利は？',
+                      options: [
+                        '現代ハードウェアでの素の実行速度',
+                        '命令セットが小さくオペランドのエンコードもシンプル — コンセンサスバグが少なく、検証しやすい',
+                        'キャッシュ局所性が良い',
+                        '消費電力が少ない',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'スタックマシンは命令セットが非常に小さい（レジスタ引数のエンコードが要らない）。Ethereum にとっては：インタープリターがシンプル、形式検証が容易、ZK 回路化も楽。トレードオフはネイティブのレジスタコードに対するランタイム効率。',
+                    },
                   ],
                 },
                 {
