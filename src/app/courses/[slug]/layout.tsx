@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: course.title,
     description: course.description,
     openGraph: {
-      title: `${course.title} | Fabrknt Learn`,
+      title: `${course.title} | RethLab`,
       description: course.description,
     },
   };

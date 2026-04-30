@@ -343,8 +343,8 @@ export const ja: TranslationKeys = {
     subscribe: '登録',
     subscribed: '登録完了！',
     emailPlaceholder: 'your@email.com',
-    builtBy: 'Fabrknt製。',
-    disclaimer: 'RethLabはFabrkntのプロジェクトです。すべてのコンテンツは教育目的のものです。コードサンプルは学習のため簡略化しています — 本番で利用する前にReth・Revm・Alloyの公式リポジトリで必ずご確認ください。',
+    builtBy: '@psyto 製。',
+    disclaimer: 'RethLab はオープンな教育プロジェクトです。すべてのコンテンツは教育目的のものです。コードサンプルは学習のため簡略化しています — 本番で利用する前にReth・Revm・Alloyの公式リポジトリで必ずご確認ください。',
     learn: '学ぶ',
     resources: 'リソース',
     community: 'コミュニティ',
@@ -378,7 +378,7 @@ export const ja: TranslationKeys = {
   },
   about: {
     title: 'RethLabについて',
-    subtitle: 'RethLab は Fabrknt のプロジェクト — Reth・Revm・Alloy・Foundry の本物のソースコードを基盤にした、ハードコアな Rust Ethereum 開発者養成プログラム。',
+    subtitle: 'RethLab は Reth・Revm・Alloy・Foundry の本物のソースコードを基盤にした、ハードコアな Rust Ethereum 開発者養成プログラム。',
     bio: 'Reth・Revm・Alloy は、いま最も性能の高いブロックチェーンの中核にあります。しかし「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態への入り口は険しい — ドキュメントは散在し、ソースは難解で、明確な道筋が存在しません。RethLab がその道筋です：4ティア・約74レッスン、すべての上位概念は本番ソースコードに紐づけられている。修了すれば、Reth の Stage を読み、独自の Revm precompile を書き、ExEx をデプロイし、grant 応募で「スタックを理解している」ことを示すコードサンプルを提示できます。',
     background: {
       tradfi: 'なぜRustなのか',

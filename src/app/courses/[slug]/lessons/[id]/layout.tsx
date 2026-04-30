@@ -25,13 +25,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Extract first ~155 chars of content as description (strip markdown)
   const description = lesson.content
     ? lesson.content.replace(/[#*`\[\]()>_~|\\-]/g, '').replace(/\n+/g, ' ').trim().slice(0, 155) + '...'
-    : `${lesson.title} — ${course.title} on Fabrknt Learn`;
+    : `${lesson.title} — ${course.title} on RethLab`;
 
   return {
     title: `${lesson.title} — ${course.title}`,
     description,
     openGraph: {
-      title: `${lesson.title} — ${course.title} | Fabrknt Learn`,
+      title: `${lesson.title} — ${course.title} | RethLab`,
       description,
     },
   };

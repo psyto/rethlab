@@ -1,5 +1,5 @@
 /**
- * CMS Content Schema for Fabrknt Learn
+ * CMS Content Schema for RethLab
  *
  * This defines the content types for Sanity CMS.
  * Use `sanity init` to create the studio, then import these schemas.

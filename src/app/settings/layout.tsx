@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Settings',
-  description: 'Manage your Fabrknt Learn account preferences.',
+  description: 'Manage your RethLab account preferences.',
 };
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

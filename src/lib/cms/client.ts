@@ -1,5 +1,5 @@
 /**
- * Sanity CMS Client for Fabrknt Learn
+ * Sanity CMS Client for RethLab
  *
  * Provides typed queries for fetching course content.
  * Replace NEXT_PUBLIC_SANITY_PROJECT_ID and NEXT_PUBLIC_SANITY_DATASET

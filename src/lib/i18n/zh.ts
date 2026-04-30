@@ -343,8 +343,8 @@ export const zh: TranslationKeys = {
     subscribe: '订阅',
     subscribed: '已订阅！',
     emailPlaceholder: 'your@email.com',
-    builtBy: '由 Fabrknt 构建。',
-    disclaimer: 'RethLab 是 Fabrknt 项目。所有内容仅供教育目的，不构成财务建议。',
+    builtBy: '由 @psyto 构建。',
+    disclaimer: 'RethLab 是一个开放的教育项目。所有内容仅供教育目的，不构成财务建议。',
     learn: '学习',
     resources: '资源',
     community: '社区',
@@ -378,7 +378,7 @@ export const zh: TranslationKeys = {
   },
   about: {
     title: '关于 RethLab',
-    subtitle: 'RethLab 是 Fabrknt 的项目——通过 Reth、Revm 和 Alloy 进入 Rust Ethereum 技术栈的分阶学习路径。',
+    subtitle: 'RethLab 是通过 Reth、Revm 和 Alloy 进入 Rust Ethereum 技术栈的分阶学习路径。',
     bio: 'Reth、Revm、Alloy 这套 Rust Ethereum 技术栈，已成为当今最高性能区块链的核心。但官方文档分散，源码晦涩，从"会一点 Rust"到"能写 ExEx"之间没有清晰的桥梁。RethLab 就是这座桥——分阶、有立场、从亲身学习的视角出发。',
     background: {
       tradfi: '传统金融',

@@ -2,7 +2,7 @@
 
 > A demanding, source-first training program in **Reth, Revm, Alloy, and Foundry**. Built to take you from "I know some Rust" to "I can ship custom EVM infrastructure" — using the same stack Paradigm, Hyperliquid, and Tempo run in production.
 
-Every advanced lesson walks through **actual production source code** — line by line, with the design intent. Bilingual: English + Japanese. A [Fabrknt](https://fabrknt.com) project.
+Every advanced lesson walks through **actual production source code** — line by line, with the design intent. Bilingual: English + Japanese. Built by [@psyto](https://github.com/psyto).
 
 ---
 

@@ -44,7 +44,7 @@ export default function AboutPage() {
           </div>
           <div>
             <h2 className="text-xl font-bold">psyto</h2>
-            <p className="text-sm text-muted-foreground">@ Fabrknt</p>
+            <p className="text-sm text-muted-foreground">@psyto</p>
           </div>
         </div>
 
@@ -144,12 +144,12 @@ export default function AboutPage() {
       >
         <p className="text-sm font-semibold">{t('about.contact')}</p>
         <a
-          href="https://twitter.com/fabrknt"
+          href="https://x.com/psyto"
           target="_blank"
           rel="noopener noreferrer"
           className="mt-2 inline-flex items-center gap-2 text-sm text-primary hover:underline"
         >
-          @fabrknt
+          @psyto
         </a>
       </motion.div>
     </div>

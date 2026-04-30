@@ -37,10 +37,10 @@ export const metadata: Metadata = {
     'Rust blockchain',
     'EVM internals',
     'RethLab',
-    'Fabrknt',
+    'psyto',
   ],
-  authors: [{ name: 'Fabrknt' }],
-  creator: 'Fabrknt',
+  authors: [{ name: 'psyto' }],
+  creator: 'psyto',
   metadataBase: new URL(baseUrl),
   openGraph: {
     type: 'website',
@@ -64,8 +64,8 @@ export const metadata: Metadata = {
     title: 'RethLab — Hardcore Rust Ethereum Developer Training',
     description:
       'A hardcore training program for Rust Ethereum developers. Master Reth, Revm, Alloy, and Foundry by reading the actual production source — line by line. Self-paced courses in English and Japanese.',
-    creator: '@fabrknt',
-    site: '@fabrknt',
+    creator: '@psyto',
+    site: '@psyto',
     images: ['/og-image.svg'],
   },
   robots: {
@@ -97,9 +97,9 @@ const structuredData = {
   url: baseUrl,
   description: 'A hardcore training program for Rust Ethereum developers. Master Reth, Revm, Alloy, and Foundry by reading the actual production source — line by line.',
   publisher: {
-    '@type': 'Organization',
-    name: 'Fabrknt',
-    url: baseUrl,
+    '@type': 'Person',
+    name: 'psyto',
+    url: 'https://github.com/psyto',
   },
   inLanguage: ['en', 'ja'],
   potentialAction: {

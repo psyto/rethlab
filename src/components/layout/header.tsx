@@ -9,9 +9,7 @@ import { Globe, Menu, X, User } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
-const NAV_LINKS = [
-  { href: '/', label: 'RethLab', active: true },
-];
+const NAV_LINKS: { href: string; label: string; active: boolean }[] = [];
 
 export function Header() {
   const { data: session } = useSession();
@@ -23,9 +21,9 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="mx-auto max-w-6xl px-6 py-3 flex items-center justify-between">
         {/* Logo */}
-        <a href="https://fabrknt.com" className="text-lg font-bold tracking-tight text-foreground">
-          Fabrknt
-        </a>
+        <Link href="/" className="text-lg font-bold tracking-tight text-foreground">
+          RethLab
+        </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-6 text-sm">

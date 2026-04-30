@@ -16,8 +16,8 @@ export function Footer() {
           <Link href="/courses" className="hover:text-foreground transition-colors">{t('nav.courses')}</Link>
           <Link href="/about" className="hover:text-foreground transition-colors">About</Link>
           <Link href="/donate" className="hover:text-foreground transition-colors">Sponsor</Link>
-          <a href="https://github.com/fabrknt" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">GitHub</a>
-          <a href="https://x.com/fabrknt" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">X</a>
+          <a href="https://github.com/psyto" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">GitHub</a>
+          <a href="https://x.com/psyto" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">X</a>
         </div>
       </div>
       <div className="mx-auto max-w-6xl px-6 pb-6">

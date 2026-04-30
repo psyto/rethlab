@@ -1,5 +1,5 @@
 /**
- * Analytics module for Fabrknt Learn
+ * Analytics module for RethLab
  *
  * Integrates: GA4, PostHog (heatmaps + product analytics), Sentry (error monitoring)
  * All tracking is opt-in and respects user preferences.
@@ -122,6 +122,6 @@ export function captureError(error: Error, context?: Record<string, unknown>) {
   }
   // Always log in development
   if (process.env.NODE_ENV === 'development') {
-    console.error('[Fabrknt Learn Error]', error, context);
+    console.error('[RethLab Error]', error, context);
   }
 }

@@ -341,8 +341,8 @@ export const en = {
     subscribe: 'Subscribe',
     subscribed: 'Subscribed!',
     emailPlaceholder: 'your@email.com',
-    builtBy: 'Built by Fabrknt.',
-    disclaimer: 'RethLab is a Fabrknt project. All content is for educational purposes. Code samples are simplified for learning — verify against the official Reth, Revm, and Alloy repositories before using in production.',
+    builtBy: 'Built by @psyto.',
+    disclaimer: 'RethLab is an open educational project. All content is for educational purposes. Code samples are simplified for learning — verify against the official Reth, Revm, and Alloy repositories before using in production.',
     learn: 'Learn',
     resources: 'Resources',
     community: 'Community',
@@ -376,7 +376,7 @@ export const en = {
   },
   about: {
     title: 'About RethLab',
-    subtitle: 'RethLab is a Fabrknt project — a hardcore training program for Rust Ethereum developers, built on the actual source code of Reth, Revm, Alloy, and Foundry.',
+    subtitle: 'RethLab is a hardcore training program for Rust Ethereum developers, built on the actual source code of Reth, Revm, Alloy, and Foundry.',
     bio: 'Reth, Revm, and Alloy are at the heart of the most performant chains being built today. But the on-ramp from "I know some Rust" to "I can write production EVM infrastructure" is brutal — the docs are scattered, the source is dense, and there is no clear path. RethLab is that path: 4 tiers, ~74 lessons, every advanced concept grounded in actual production source. Finish it and you can read Reth\'s stages, write custom Revm precompiles, ship an ExEx, and apply for grant work with code samples that prove you understand the stack.',
     background: {
       tradfi: 'Why Rust',

@@ -37,12 +37,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 60, key: 'first_enrollment', name: 'Eager Learner', description: 'Enroll in your first course', icon: 'user-plus', category: 'community' },
 
   // Special (80-99)
-  { id: 80, key: 'early_adopter', name: 'Early Adopter', description: 'Join Fabrknt Learn in the first month', icon: 'sparkles', category: 'special' },
+  { id: 80, key: 'early_adopter', name: 'Early Adopter', description: 'Join RethLab in the first month', icon: 'sparkles', category: 'special' },
   { id: 81, key: 'bug_hunter', name: 'Bug Hunter', description: 'Report a valid bug', icon: 'bug', category: 'special' },
   { id: 82, key: 'perfect_score', name: 'Perfect Score', description: 'Pass all challenges in a course on first try', icon: 'target', category: 'special' },
   { id: 83, key: 'xp_1000', name: 'Rising Star', description: 'Earn 1,000 XP', icon: 'star', category: 'special' },
   { id: 84, key: 'xp_5000', name: 'Power Learner', description: 'Earn 5,000 XP', icon: 'zap', category: 'special' },
-  { id: 85, key: 'xp_10000', name: 'Fabrknt Master', description: 'Earn 10,000 XP', icon: 'trophy', category: 'special' },
+  { id: 85, key: 'xp_10000', name: 'RethLab Master', description: 'Earn 10,000 XP', icon: 'trophy', category: 'special' },
 ];
 
 // ==========================================
@@ -171,7 +171,7 @@ async function buildContext(userId: string): Promise<CheckContext> {
     where: { id: userId },
     select: { createdAt: true },
   });
-  const launchDate = new Date('2026-03-01'); // Fabrknt Learn launch date
+  const launchDate = new Date('2026-03-01'); // RethLab launch date
   const earlyWindow = new Date(launchDate.getTime() + 30 * 24 * 60 * 60 * 1000);
   const isEarlyAdopter = !!(userFull?.createdAt && userFull.createdAt <= earlyWindow);
 
