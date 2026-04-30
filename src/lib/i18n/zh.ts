@@ -3,7 +3,7 @@ import type { TranslationKeys } from './en';
 export const zh: TranslationKeys = {
   common: {
     appName: 'RethLab',
-    tagline: '精通 Hyperliquid',
+    tagline: '培养硬核 Rust Ethereum 开发者',
     signIn: '登录',
     signUp: '注册',
     signOut: '退出登录',
@@ -42,8 +42,8 @@ export const zh: TranslationKeys = {
   },
   landing: {
     hero: {
-      title: '精通 Hyperliquid',
-      subtitle: '学习 Hyperliquid 的一切——从交易基础到金库开发、HyperEVM 和高级策略。提供英语、日语和中文的自学课程。',
+      title: '成为硬核 Rust Ethereum 开发者',
+      subtitle: 'Reth、Revm、Alloy、Foundry 的源码优先训练计划。从「会一点 Rust」培养到「能够交付生产级 EVM 基础设施」。',
       cta: '开始学习',
       ctaSecondary: '浏览课程',
     },

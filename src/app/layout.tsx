@@ -20,11 +20,11 @@ const baseUrl =
 
 export const metadata: Metadata = {
   title: {
-    default: 'RethLab - Master Reth, Revm, and Alloy',
+    default: 'RethLab — Hardcore Rust Ethereum Developer Training',
     template: '%s | RethLab',
   },
   description:
-    'Learn the Rust Ethereum stack — Reth, Revm, and Alloy — from beginner Rust scripts to Execution Extensions and custom EVM opcodes. Self-paced courses in English and Japanese.',
+    'A hardcore training program for Rust Ethereum developers. Master Reth, Revm, Alloy, and Foundry by reading the actual production source — line by line. Self-paced courses in English and Japanese.',
   keywords: [
     'Reth',
     'Revm',
@@ -47,23 +47,23 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: baseUrl,
     siteName: 'RethLab',
-    title: 'RethLab - Master Reth, Revm, and Alloy',
+    title: 'RethLab — Hardcore Rust Ethereum Developer Training',
     description:
-      'Learn the Rust Ethereum stack — Reth, Revm, and Alloy — from beginner Rust scripts to Execution Extensions and custom EVM opcodes. Self-paced courses in English and Japanese.',
+      'A hardcore training program for Rust Ethereum developers. Master Reth, Revm, Alloy, and Foundry by reading the actual production source — line by line. Self-paced courses in English and Japanese.',
     images: [
       {
         url: '/og-image.svg',
         width: 1200,
         height: 630,
-        alt: 'RethLab - Master Reth, Revm, and Alloy',
+        alt: 'RethLab — Hardcore Rust Ethereum Developer Training',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'RethLab - Master Reth, Revm, and Alloy',
+    title: 'RethLab — Hardcore Rust Ethereum Developer Training',
     description:
-      'Learn the Rust Ethereum stack — Reth, Revm, and Alloy — from beginner Rust scripts to Execution Extensions and custom EVM opcodes. Self-paced courses in English and Japanese.',
+      'A hardcore training program for Rust Ethereum developers. Master Reth, Revm, Alloy, and Foundry by reading the actual production source — line by line. Self-paced courses in English and Japanese.',
     creator: '@fabrknt',
     site: '@fabrknt',
     images: ['/og-image.svg'],
@@ -95,7 +95,7 @@ const structuredData = {
   '@type': 'WebSite',
   name: 'RethLab',
   url: baseUrl,
-  description: 'Learn the Rust Ethereum stack — Reth, Revm, and Alloy — from beginner Rust scripts to Execution Extensions and custom EVM opcodes.',
+  description: 'A hardcore training program for Rust Ethereum developers. Master Reth, Revm, Alloy, and Foundry by reading the actual production source — line by line.',
   publisher: {
     '@type': 'Organization',
     name: 'Fabrknt',

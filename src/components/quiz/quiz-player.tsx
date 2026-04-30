@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, XCircle, ChevronRight, RotateCcw, Trophy } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle2, XCircle, ChevronRight, RotateCcw, Trophy, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocale } from '@/contexts/locale-context';
 import type { QuizQuestion } from '@/types';
@@ -103,9 +104,18 @@ export function QuizPlayer({ questions, onComplete, isCompleted, onNext, nextLes
             </button>
           )}
           {passed && !onNext && (
-            <div className="inline-flex items-center gap-2 rounded-xl bg-primary/10 px-5 py-2.5 text-sm font-medium text-primary">
-              <Trophy className="h-4 w-4" />
-              {t('lesson.courseComplete')}
+            <div className="flex w-full max-w-sm flex-col gap-3">
+              <div className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary/10 py-2.5 text-sm font-medium text-primary">
+                <Trophy className="h-4 w-4" />
+                {t('lesson.courseComplete')}
+              </div>
+              <Link
+                href="/courses"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-fabrknt-dark transition-all hover:opacity-90"
+              >
+                <BookOpen className="h-4 w-4" />
+                {t('lesson.backToCourses')}
+              </Link>
             </div>
           )}
           {!passed && (

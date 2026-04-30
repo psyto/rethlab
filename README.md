@@ -1,14 +1,14 @@
-# RethLab — Master the Rust Ethereum Stack
+# RethLab — Hardcore Rust Ethereum Developer Training
 
-> A tiered, self-paced learning platform for **Reth, Revm, Alloy, and Foundry** — built to take you from "I know some Rust" to "I can ship a custom Reth fork." Every advanced lesson is grounded in **actual source code** from the production repositories.
+> A demanding, source-first training program in **Reth, Revm, Alloy, and Foundry**. Built to take you from "I know some Rust" to "I can ship custom EVM infrastructure" — using the same stack Paradigm, Hyperliquid, and Tempo run in production.
 
-Bilingual: English + Japanese. A [Fabrknt](https://fabrknt.com) project.
+Every advanced lesson walks through **actual production source code** — line by line, with the design intent. Bilingual: English + Japanese. A [Fabrknt](https://fabrknt.com) project.
 
 ---
 
 ## What makes this different
 
-Most EVM tutorials describe what's happening. RethLab walks you through the **actual code** that runs Ethereum — line by line:
+Most EVM tutorials describe what's happening. The kind of engineers Paradigm, Hyperliquid, and Monad hire have **actually read the source**. RethLab closes that gap by walking you through the actual code that runs Ethereum — line by line:
 
 - Real **`add` opcode** from [`bluealloy/revm`](https://github.com/bluealloy/revm/blob/main/crates/interpreter/src/instructions/arithmetic.rs), with the `popn_top!` and `gas!` macros explained
 - Real **`Database` trait** from [`revm/database/interface`](https://github.com/bluealloy/revm/blob/main/crates/database/interface/src/lib.rs)
@@ -22,6 +22,18 @@ Most EVM tutorials describe what's happening. RethLab walks you through the **ac
 Each lesson follows the structure: **real source excerpt → line-by-line walkthrough → design intent → drill**. By the time you open a Reth crate, you've already seen its key code.
 
 ---
+
+## What you'll be able to do
+
+After finishing the program, you'll be able to:
+
+- **Read** Reth's stages, Revm's interpreter, and Alloy's procedural macros — and explain *why* they're written that way
+- **Extend** Revm with custom opcodes and precompiles (the same mechanism Foundry uses for cheatcodes)
+- **Ship** an Execution Extension (ExEx) on top of Reth — a node-speed indexer or MEV-aware service
+- **Build** a custom Reth fork with a different EVM config, consensus, or storage layer
+- **Apply** for grant work at Monad / Hyperliquid / Paradigm-style infra teams with code samples that prove you understand the stack
+
+This is a serious training program — not a casual tutorial.
 
 ## The 4 tiers
 

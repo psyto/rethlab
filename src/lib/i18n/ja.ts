@@ -3,7 +3,7 @@ import type { TranslationKeys } from './en';
 export const ja: TranslationKeys = {
   common: {
     appName: 'RethLab',
-    tagline: 'Reth・Revm・Alloyをマスターする',
+    tagline: 'ハードコアな Rust Ethereum 開発者を養成する',
     signIn: 'サインイン',
     signUp: '登録',
     signOut: 'サインアウト',
@@ -42,14 +42,14 @@ export const ja: TranslationKeys = {
   },
   landing: {
     hero: {
-      title: 'Rust Ethereumスタックをマスター',
-      subtitle: 'Reth・Revm・Alloyを自分のペースで段階的に学ぶ — RPCに接続する最初のRustスクリプトから、EVMの内部構造、ExEx (Execution Extensions) を備えたカスタムRethノードの構築まで。',
-      cta: '学習を始める',
+      title: 'ハードコアな Rust Ethereum 開発者になる',
+      subtitle: 'Reth・Revm・Alloy・Foundry を本物のソースコードから学ぶ、要求の高いトレーニングプログラム。「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態まで養成します。',
+      cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
     },
     cta: {
-      title: 'Rethをマスターする準備はできましたか？',
-      description: '初級から上級まで — Paradigm、Hyperliquid、Tempoが採用するRust Ethereumスタックへの最短ルート。',
+      title: 'Rust EVM インフラを実装する準備はできましたか？',
+      description: '最初の Alloy スクリプトから独自 Reth フォークまで。Paradigm・Hyperliquid・Tempo が使う本物のスタックを、ソースから直接学ぶ。',
     },
     features: {
       title: 'Reth・Revm・Alloyを学ぶ',
@@ -71,8 +71,8 @@ export const ja: TranslationKeys = {
       },
     },
     paths: {
-      title: '学習パス',
-      subtitle: 'Rust初心者からRethコントリビューターへ向けた段階的な構成。',
+      title: 'トレーニングパス',
+      subtitle: '4つのティア、ひとつのアウトカム：Rust EVM スタックを読み・拡張し・本番に出せるようになる。',
       fundamentals: {
         title: '初級',
         description: 'Rust Ethereumスタックがなぜ重要か、環境構築、最初のAlloyスクリプト。',
@@ -295,7 +295,7 @@ export const ja: TranslationKeys = {
     seeResults: '結果を見る',
     passed: 'クイズ合格！',
     failed: 'もう少し！',
-    passedMessage: 'よくできました！次のレッスンに進めます。',
+    passedMessage: '良いペース。理解が地に足がついています。',
     failedMessage: '合格には70%以上必要です。復習してもう一度挑戦しましょう。',
     retry: 'もう一度挑戦',
   },
@@ -340,8 +340,8 @@ export const ja: TranslationKeys = {
   },
   about: {
     title: 'RethLabについて',
-    subtitle: 'RethLabはFabrkntのプロジェクトです。Paradigm、Hyperliquid、TempoなどがRust Ethereumスタックを採用するなか、その中核であるReth・Revm・Alloyを段階的に学べるラーニングパスを提供します。',
-    bio: 'Reth・Revm・Alloyという「Rust Ethereumスタック」は、いま最も性能の高いブロックチェーンの中心にあります。しかし公式ドキュメントは散在し、ソースコードは難解で、「Rustが少し書ける」状態から「ExExを書ける」状態への明確な道筋が存在しません。RethLabはその道筋を提供します — 実際に手を動かして学んだ視点から、段階的かつ実践的に。',
+    subtitle: 'RethLab は Fabrknt のプロジェクト — Reth・Revm・Alloy・Foundry の本物のソースコードを基盤にした、ハードコアな Rust Ethereum 開発者養成プログラム。',
+    bio: 'Reth・Revm・Alloy は、いま最も性能の高いブロックチェーンの中核にあります。しかし「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態への入り口は険しい — ドキュメントは散在し、ソースは難解で、明確な道筋が存在しません。RethLab がその道筋です：4ティア・約74レッスン、すべての上位概念は本番ソースコードに紐づけられている。修了すれば、Reth の Stage を読み、独自の Revm precompile を書き、ExEx をデプロイし、grant 応募で「スタックを理解している」ことを示すコードサンプルを提示できます。',
     background: {
       tradfi: 'なぜRustなのか',
       tradfiDetail: 'メモリ安全性、ゼロコスト抽象化、そして本格的なブロックチェーンインフラを支えるに足る成熟したエコシステム。',
@@ -383,19 +383,19 @@ export const ja: TranslationKeys = {
     launchBanner: 'サインアップなしで全レッスンが読めます — サインインで進捗を記録',
     whyRethLab: {
       title: 'なぜRethLab？',
-      subtitle: 'Rust Ethereumスタックへの段階的なラーニングパス。',
-      builtByBuilder: '段階的なパス',
-      builtByBuilderDesc: '初級 → ファンダメンタルズ → 上級。初日からExExコードに飛び込む必要はなく、各ステップが前のステップの上に積み重なります。',
-      learnByDoing: '実践して学ぶ',
-      learnByDoingDesc: 'Rust Playgroundや`cargo run`にそのまま貼り付けられるRustスニペット、暗記ではなく理解を試すクイズ。',
-      growingPlatform: 'ソース重視',
-      growingPlatformDesc: '実際のReth・Revm・Alloyのソースコードへのポインタを提示。ドキュメントを読むレベルから、コードを読むレベルへ。',
+      subtitle: 'Rust Ethereum スタックで本当に出荷できるエンジニアを養成するために作られた — カジュアル学習者向けではない。',
+      builtByBuilder: 'ソース直結',
+      builtByBuilderDesc: 'すべての上位レッスンは本物の Reth・Revm・Alloy・Foundry ソースを行ごとに、設計の意図とともに歩く。',
+      learnByDoing: 'Rust を実際に書く',
+      learnByDoingDesc: 'Rust Playground や `cargo run` で本物の Rust を書きます。クイズは暗記ではなく理解を問う設計 — コードを書かずには解けないように作られている。',
+      growingPlatform: '段階的かつ要求が高い',
+      growingPlatformDesc: '初級 → ファンダメンタルズ → 上級 → エキスパート。各ティアが次の入口になる。装飾もマーケ的な迂回もない。',
       allCoursesFree: 'オープンアクセス',
-      allCoursesFreeDesc: 'すべてのレッスンはアカウントなしで読めます。進捗の記録とXP獲得のためにサインインを検討してください。',
+      allCoursesFreeDesc: 'すべてのレッスンはアカウントなしで読めます。進捗記録と XP 獲得のためにサインイン — でもコンテンツは初日から全部公開。',
     },
     tracks: {
-      title: '3つのティア、1つのスタック',
-      subtitle: '最初のRustスクリプトから、カスタムRethノード上のExEx実装まで。',
+      title: '4つのティア、ひとつのアウトカム',
+      subtitle: '4 つすべて修了すれば、Paradigm・Hyperliquid・Tempo が使う Rust EVM スタックを読み・拡張し・出荷できるようになる。',
       basicsDesc: 'Rust EVMスタックがなぜ重要か、環境構築、そして実際のRPCに接続する最初のAlloyスクリプト。',
       fundamentals: 'ファンダメンタルズ',
       fundamentalsDesc: 'Alloyの型・Provider・署名、そしてRevmコードを読む前に必要なEVM概念（スタック・メモリ・Opcode・ガス）。',
@@ -410,8 +410,8 @@ export const ja: TranslationKeys = {
       courseCount: '{{count}} コース',
     },
     about: {
-      insightTitle: 'RethLabの背景にある洞察',
-      insightDesc: 'Reth・Revm・Alloyは、Ethereumインフラの中で最もエキサイティングなプロジェクト群です。しかし入り口の難易度は極めて高い。公式ドキュメントはアーキテクチャの理解を前提とし、ソースコードは重いジェネリクスで埋め尽くされています。RethLabは、その「中間層」として存在します — `cargo new`からExEx実装まで、構造化された一貫したパスを提供します。',
+      insightTitle: 'なぜ RethLab が存在するか',
+      insightDesc: '多くの EVM チュートリアルは「何が起きているか」を説明します。しかし Paradigm・Hyperliquid・Monad が雇うエンジニアは、実際にソースを読んでいる人たちです。RethLab はそのギャップを埋める — 本物の Reth・Revm・Alloy・Foundry のソースコードを行ごとに、設計の意図とともに歩く。クレートを開いたとき、すでに重要なコードを見たことがある状態にしておくのが目的。',
       whatsNext: '今後の展開',
       moreContent: 'コンテンツ追加',
       moreContentDesc: 'Revmのより深い内部構造（Precompile、EOF）、Reth SDKの解説、ExExケーススタディ。',

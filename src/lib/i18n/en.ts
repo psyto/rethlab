@@ -1,7 +1,7 @@
 export const en = {
   common: {
     appName: 'RethLab',
-    tagline: 'Master Reth, Revm, and Alloy',
+    tagline: 'Train as a hardcore Rust Ethereum developer',
     signIn: 'Sign In',
     signUp: 'Sign Up',
     signOut: 'Sign Out',
@@ -40,14 +40,14 @@ export const en = {
   },
   landing: {
     hero: {
-      title: 'Master the Rust Ethereum Stack',
-      subtitle: 'A tiered, self-paced path through Reth, Revm, and Alloy — from your first Rust script that hits an RPC, through EVM internals, to building Execution Extensions on a custom Reth node.',
-      cta: 'Start Learning',
+      title: 'Become a Hardcore Rust Ethereum Developer',
+      subtitle: 'A demanding, source-first training program in Reth, Revm, Alloy, and Foundry. Every advanced lesson is grounded in actual production source — built to take you from familiar with Rust to ready to ship custom EVM infrastructure.',
+      cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
     },
     cta: {
-      title: 'Ready to Master Reth?',
-      description: 'Beginner to advanced — the most direct path into the Rust Ethereum stack used by Paradigm, Hyperliquid, and Tempo.',
+      title: 'Ready to ship Rust EVM infrastructure?',
+      description: 'From your first Alloy script to a custom Reth fork. The same stack used by Paradigm, Hyperliquid, and Tempo — taught from the source.',
     },
     features: {
       title: 'Learn Reth, Revm, and Alloy',
@@ -69,8 +69,8 @@ export const en = {
       },
     },
     paths: {
-      title: 'Learning Paths',
-      subtitle: 'Structured tiers to take you from Rust beginner to Reth contributor.',
+      title: 'Training Path',
+      subtitle: 'Four tiers, one outcome: read, extend, and ship custom Rust EVM infrastructure.',
       fundamentals: {
         title: 'Beginner',
         description: 'Why the Rust Ethereum stack matters, environment setup, and your first Alloy script.',
@@ -293,7 +293,7 @@ export const en = {
     seeResults: 'See Results',
     passed: 'Quiz Passed!',
     failed: 'Not quite yet',
-    passedMessage: 'Great job! You can move on to the next lesson.',
+    passedMessage: 'Solid. Your understanding is grounded.',
     failedMessage: 'You need 70% to pass. Review the material and try again.',
     retry: 'Try Again',
   },
@@ -338,8 +338,8 @@ export const en = {
   },
   about: {
     title: 'About RethLab',
-    subtitle: 'RethLab is a Fabrknt project — a tiered learning path through the Rust Ethereum stack used by Paradigm, Hyperliquid, and Tempo.',
-    bio: 'The Rust Ethereum stack — Reth, Revm, and Alloy — sits at the heart of the most performant chains being built today. But the documentation is scattered, the source code is dense, and there is no clear on-ramp from "I know some Rust" to "I can write an ExEx." RethLab is that on-ramp: tiered, opinionated, and written from the perspective of someone who learned by doing.',
+    subtitle: 'RethLab is a Fabrknt project — a hardcore training program for Rust Ethereum developers, built on the actual source code of Reth, Revm, Alloy, and Foundry.',
+    bio: 'Reth, Revm, and Alloy are at the heart of the most performant chains being built today. But the on-ramp from "I know some Rust" to "I can write production EVM infrastructure" is brutal — the docs are scattered, the source is dense, and there is no clear path. RethLab is that path: 4 tiers, ~74 lessons, every advanced concept grounded in actual production source. Finish it and you can read Reth\'s stages, write custom Revm precompiles, ship an ExEx, and apply for grant work with code samples that prove you understand the stack.',
     background: {
       tradfi: 'Why Rust',
       tradfiDetail: 'Memory safety, zero-cost abstractions, and an ecosystem mature enough to power serious blockchain infrastructure.',
@@ -381,19 +381,19 @@ export const en = {
     launchBanner: 'Read any lesson without signing up — sign in to track your progress',
     whyRethLab: {
       title: 'Why RethLab?',
-      subtitle: 'A direct, tiered path through the Rust Ethereum stack.',
-      builtByBuilder: 'Tiered Path',
-      builtByBuilderDesc: 'Beginner → Fundamentals → Advanced. No jumping into ExEx code on day one — each tier builds on the last.',
-      learnByDoing: 'Learn by Doing',
-      learnByDoingDesc: 'Real Rust snippets you can copy into Rust Playground or `cargo run`, plus quizzes that test understanding, not memorization.',
-      growingPlatform: 'Source-First',
-      growingPlatformDesc: 'Pointers into the actual Reth, Revm, and Alloy source so you graduate from reading docs to reading code.',
+      subtitle: 'Built to produce engineers who can ship in the Rust Ethereum stack — not casual learners.',
+      builtByBuilder: 'Source-Grounded',
+      builtByBuilderDesc: 'Every advanced lesson walks through actual Reth, Revm, Alloy, or Foundry source — line by line, with the design intent.',
+      learnByDoing: 'Hands-On Rust',
+      learnByDoingDesc: 'You write real Rust in Rust Playground or `cargo run`. Quizzes test understanding, not memorization — designed to be unsolvable without writing the code first.',
+      growingPlatform: 'Tiered & Demanding',
+      growingPlatformDesc: 'Beginner → Fundamentals → Advanced → Expert. Each tier ends where the next begins. No fluff, no marketing detours.',
       allCoursesFree: 'Open Access',
-      allCoursesFreeDesc: 'Every lesson is readable without an account. Sign in only when you want to track progress and earn XP.',
+      allCoursesFreeDesc: 'Every lesson is readable without an account. Sign in to track progress and earn XP — but the content is all there from day one.',
     },
     tracks: {
-      title: '3 Tiers, One Stack',
-      subtitle: 'From your first Rust script to writing Execution Extensions on a custom Reth node.',
+      title: '4 Tiers, One Outcome',
+      subtitle: 'Finish all four and you can read, extend, and ship the Rust EVM stack used by Paradigm, Hyperliquid, and Tempo.',
       basicsDesc: 'Why the Rust EVM stack matters, environment setup, and your first Alloy script that hits a real RPC.',
       fundamentals: 'Fundamentals',
       fundamentalsDesc: 'Alloy types, providers, signing, and the EVM concepts (stack, memory, opcodes, gas) you need before reading Revm.',
@@ -408,8 +408,8 @@ export const en = {
       courseCount: '{{count}} courses',
     },
     about: {
-      insightTitle: 'The Insight Behind RethLab',
-      insightDesc: "Reth, Revm, and Alloy are some of the most exciting projects in Ethereum infrastructure — but the on-ramp is brutal. The official docs assume you already know the architecture. The source code is dense and uses heavy generics. RethLab exists to be the missing middle layer: a structured, opinionated path from `cargo new` to writing an ExEx.",
+      insightTitle: 'Why this exists',
+      insightDesc: "Most EVM tutorials describe what's happening. The kind of engineers Paradigm, Hyperliquid, and Monad hire have actually read the source. RethLab closes that gap by walking you through real Reth, Revm, Alloy, and Foundry source code — line by line, with the design intent — so by the time you open a crate, you've already seen its key code.",
       whatsNext: "What's Next",
       moreContent: 'More Content',
       moreContentDesc: 'Deeper Revm internals (precompiles, EOF), Reth SDK walkthroughs, and ExEx case studies.',
