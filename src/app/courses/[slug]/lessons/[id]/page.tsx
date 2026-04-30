@@ -465,8 +465,29 @@ export default function LessonPage() {
 
             {/* Next lesson after challenge completion */}
             {isCompleted && (
-              <div className="border-t border-border p-3">
-                <LessonCompletionNav lesson={lesson} router={router} t={t} />
+              <div className="border-t border-border bg-primary/5 p-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-primary">{t('lesson.challenge.allPassed')}</p>
+                  </div>
+                </div>
+                {lesson.nextLesson ? (
+                  <button
+                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.id}`)}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient py-3 text-sm font-semibold text-fabrknt-dark transition-all hover:opacity-90"
+                  >
+                    {t('lesson.nextLesson')}: {lesson.nextLesson.title}
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <div className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary/10 py-3 text-sm font-medium text-primary">
+                    <Trophy className="h-4 w-4" />
+                    {t('lesson.courseComplete')}
+                  </div>
+                )}
               </div>
             )}
 
