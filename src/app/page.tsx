@@ -390,19 +390,19 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="relative overflow-hidden rounded-3xl bg-fabrknt-gradient p-12 text-center sm:p-16">
-            <h2 className="text-3xl font-bold text-white sm:text-4xl">
+      <section className="py-16 sm:py-20">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+          <div className="relative overflow-hidden rounded-2xl border border-primary/25 bg-fabrknt-gradient-subtle p-8 text-center sm:p-10">
+            <h2 className="text-2xl font-bold sm:text-3xl">
               {t('landing.cta.title')}
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg text-white/80">
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
               {t('landing.cta.description')}
             </p>
-            <div className="mt-8">
+            <div className="mt-6">
               <Link
                 href="/courses"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-8 py-3.5 text-base font-semibold text-primary shadow-lg transition-all hover:bg-white/90"
+                className="inline-flex items-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:opacity-90 hover:shadow-lg"
               >
                 {t('landing.cta.cta')}
                 <ArrowRight className="h-4 w-4" />

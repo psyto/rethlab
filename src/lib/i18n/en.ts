@@ -88,7 +88,7 @@ export const en = {
     cta: {
       title: 'The Rust EVM hiring window is open — right now',
       description: 'Reth is being adopted faster than the engineers who can extend it are showing up. The hires Paradigm, HyperEVM, Tempo, and Foundry make in 2026 will be people who already read this stack. Start before the gap closes.',
-      cta: 'Start now',
+      cta: 'Start',
     },
     features: {
       title: 'Learn Reth, Revm, and Alloy',

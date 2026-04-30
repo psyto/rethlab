@@ -90,7 +90,7 @@ export const ja: TranslationKeys = {
     cta: {
       title: 'Rust EVM の採用ウィンドウは、今、開いています',
       description: 'Reth の採用速度に対して、それを拡張できるエンジニアの数が追いついていません。2026 年に Paradigm・HyperEVM・Tempo・Foundry が採用する人材は、まさに本コースで歩く本物のソースを読んだ人たちです。ギャップが閉じる前に始めましょう。',
-      cta: '今すぐ始める',
+      cta: '始める',
     },
     features: {
       title: 'Reth・Revm・Alloyを学ぶ',
