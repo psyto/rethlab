@@ -46,7 +46,7 @@ export const ja: TranslationKeys = {
       subtitle: 'Reth・Revm・Alloy・Foundry を本物のソースコードから学ぶ、要求の高いトレーニングプログラム。「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態まで養成します。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
-      tagline: '高水準 · ソース起点 · 装飾なし',
+      tagline: '妥協なし · ソースに根ざす · 無駄なし',
       sourceCaption: 'Advanced と Expert のすべてのレッスンは、こういう実コードに紐づいています。',
     },
     outcomes: {
@@ -375,7 +375,7 @@ export const ja: TranslationKeys = {
     subscribe: '登録',
     subscribed: '登録完了！',
     emailPlaceholder: 'your@email.com',
-    builtBy: '@psyto 製。',
+    builtBy: '@psyto による。',
     disclaimer: 'RethLab はオープンな教育プロジェクトです。すべてのコンテンツは教育目的のものです。コードサンプルは学習のため簡略化しています — 本番で利用する前にReth・Revm・Alloyの公式リポジトリで必ずご確認ください。',
     learn: '学ぶ',
     resources: 'リソース',
@@ -455,7 +455,6 @@ export const ja: TranslationKeys = {
     loadCourse: 'コースの読み込みに失敗しました。もう一度お試しください。',
   },
   page: {
-    launchBanner: 'サインアップなしで全レッスンが読めます — サインインで進捗を記録',
     whyRethLab: {
       title: 'なぜRethLab？',
       subtitle: 'Rust Ethereum スタックで本当に出荷できるエンジニアを養成するために作られた — カジュアル学習者向けではない。',

@@ -455,7 +455,6 @@ export const zh: TranslationKeys = {
     loadCourse: '加载课程失败，请重试。',
   },
   page: {
-    launchBanner: '无需注册即可阅读任何课时——登录以追踪进度',
     whyRethLab: {
       title: '为什么选择 RethLab？',
       subtitle: '最全面的 Hyperliquid 学习平台。',

@@ -453,7 +453,6 @@ export const en = {
     loadCourse: 'Failed to load course. Please try again.',
   },
   page: {
-    launchBanner: 'Read any lesson without signing up — sign in to track your progress',
     whyRethLab: {
       title: 'Why RethLab?',
       subtitle: 'Built to produce engineers who can ship in the Rust Ethereum stack — not casual learners.',
