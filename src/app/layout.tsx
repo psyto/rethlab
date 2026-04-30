@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     template: '%s | RethLab',
   },
   description:
-    'HyperEVM, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
+    'Hyperliquid, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
   keywords: [
     'Reth',
     'Revm',
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     siteName: 'RethLab',
     title: 'RethLab — Hardcore Rust Ethereum Developer Training',
     description:
-      'HyperEVM, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
+      'Hyperliquid, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
     images: [
       {
         url: '/og-image.svg',
@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'RethLab — Hardcore Rust Ethereum Developer Training',
     description:
-      'HyperEVM, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
+      'Hyperliquid, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
     creator: '@psyto',
     site: '@psyto',
     images: ['/og-image.svg'],
@@ -95,7 +95,7 @@ const structuredData = {
   '@type': 'WebSite',
   name: 'RethLab',
   url: baseUrl,
-  description: 'HyperEVM, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab walks the real Reth, Revm, Alloy, and Foundry source line by line so you can catch up.',
+  description: 'Hyperliquid, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab walks the real Reth, Revm, Alloy, and Foundry source line by line so you can catch up.',
   publisher: {
     '@type': 'Person',
     name: 'psyto',

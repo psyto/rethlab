@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'HyperEVM・Tempo・Base — 最新の EVM チェーンは Rust ベースに移っています。追いつくには Rust Ethereum スタックの習熟が必須です。RethLab は Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに解説 — 「Rust が少し書ける」レベルから、これらのチェーンを拡張・フォーク・実装できるレベルまで。',
+      subtitle: 'Hyperliquid・Tempo・Base — 最新の EVM チェーンは Rust ベースに移っています。追いつくには Rust Ethereum スタックの習熟が必須です。RethLab は Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに解説 — 「Rust が少し書ける」レベルから、これらのチェーンを拡張・フォーク・実装できるレベルまで。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -89,7 +89,7 @@ export const ja: TranslationKeys = {
     },
     cta: {
       title: 'Rust EVM の採用ウィンドウは、今、開いています',
-      description: 'Reth の採用速度に対して、それを拡張できるエンジニアの数が追いついていません。2026 年に Paradigm・HyperEVM・Tempo・Foundry が採用する人材は、まさに本コースで歩く本物のソースを読んだ人たちです。ギャップが閉じる前に始めましょう。',
+      description: 'Reth の採用速度に対して、それを拡張できるエンジニアの数が追いついていません。2026 年に Paradigm・Hyperliquid・Tempo・Foundry が採用する人材は、まさに本コースで歩く本物のソースを読んだ人たちです。ギャップが閉じる前に始めましょう。',
       cta: '始める',
     },
     features: {
@@ -324,7 +324,7 @@ export const ja: TranslationKeys = {
   },
   about: {
     title: 'RethLabについて',
-    subtitle: 'HyperEVM・Tempo・Base — 最新の EVM チェーンは Rust ベースに移っています。RethLab は、Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに解説して、その変化に追いつくためのトレーニングプログラムです。',
+    subtitle: 'Hyperliquid・Tempo・Base — 最新の EVM チェーンは Rust ベースに移っています。RethLab は、Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに解説して、その変化に追いつくためのトレーニングプログラムです。',
     bio: 'Reth・Revm・Alloy は、いま最も性能の高いブロックチェーンの中核にあります。しかし「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態への入り口は険しい — ドキュメントは散在し、ソースは難解で、明確な道筋が存在しません。RethLab がその道筋です：4ティア・約74レッスン、すべての上位概念は本番ソースコードに紐づけられている。修了すれば、Reth の Stage を読み、独自の Revm precompile を書き、ExEx をデプロイし、grant 応募で「スタックを理解している」ことを示すコードサンプルを提示できます。',
     background: {
       tradfi: 'なぜRustなのか',
@@ -367,7 +367,7 @@ export const ja: TranslationKeys = {
     loadCourse: 'コースの読み込みに失敗しました。もう一度お試しください。',
   },
   page: {
-    launchBanner: 'Free · HyperEVM・Tempo・Base が動かしているのと同じ Rust EVM スタック',
+    launchBanner: 'Free · Hyperliquid・Tempo・Base が動かしているのと同じ Rust EVM スタック',
     whyRethLab: {
       title: 'なぜRethLab？',
     },
