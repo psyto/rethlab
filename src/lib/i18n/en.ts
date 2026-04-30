@@ -285,6 +285,44 @@ export const en = {
     requirement: 'This course requires {{needed}} XP. You currently have {{current}} XP.',
     earnMore: 'Complete more lessons to earn XP',
   },
+  donate: {
+    tag: 'Support RethLab',
+    title: 'Support source-grounded Rust EVM training',
+    subtitle: 'RethLab is free and open. If the lessons helped you, sponsoring keeps the next Specialization tracks coming.',
+    recurring: {
+      title: 'Sponsor on GitHub',
+      note: 'Recurring · cancel anytime',
+      body: 'GitHub Sponsors handles billing. Recurring monthly support is the highest-leverage way to help — it lets new content get planned with confidence.',
+      cta: 'Become a sponsor',
+    },
+    oneTime: {
+      title: 'One-time donation',
+      note: 'Secure checkout via Stripe',
+      custom: 'Custom amount',
+      cta: 'Donate',
+      poweredBy: 'Payments processed securely by Stripe.',
+    },
+    use: {
+      title: 'What your support funds',
+      item1: 'Authoring new Specialization tracks (Parallel EVM, Hyperliquid Internals, MEV)',
+      item2: 'Keeping every lesson updated against upstream Reth / Revm / Alloy / Foundry',
+      item3: 'Hosting, infrastructure, and translation work',
+    },
+    errors: {
+      minAmount: 'Please enter an amount of at least $1.',
+      generic: 'Could not start checkout. Please try again later.',
+    },
+    thanks: {
+      title: 'Thank you 🙏',
+      body: 'Your support keeps the source-grounded curriculum growing. The receipt has been emailed to you.',
+      cta: 'Back to courses',
+    },
+    cancel: {
+      title: 'No charge made',
+      body: 'The checkout was cancelled. No payment was processed.',
+      retry: 'Try again',
+    },
+  },
   quiz: {
     progress: '{{current}} / {{total}}',
     correct: 'correct',

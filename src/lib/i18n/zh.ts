@@ -287,6 +287,44 @@ export const zh: TranslationKeys = {
     requirement: '本课程需要 {{needed}} XP。你当前拥有 {{current}} XP。',
     earnMore: '完成更多课时以赚取 XP',
   },
+  donate: {
+    tag: '支持 RethLab',
+    title: '支持源码优先的 Rust EVM 训练',
+    subtitle: 'RethLab 免费且开放。如果课程帮到了你，赞助有助于持续推出新的 Specialization 内容。',
+    recurring: {
+      title: '在 GitHub 上赞助',
+      note: '订阅 · 随时取消',
+      body: '由 GitHub Sponsors 处理结算。每月定期支持是最有杠杆的支援方式——能让新内容的规划更有信心。',
+      cta: '成为赞助者',
+    },
+    oneTime: {
+      title: '一次性捐赠',
+      note: '通过 Stripe 安全结账',
+      custom: '自定义金额',
+      cta: '捐赠',
+      poweredBy: '由 Stripe 安全处理支付。',
+    },
+    use: {
+      title: '资金用途',
+      item1: '撰写新的 Specialization 课程（Parallel EVM、Hyperliquid Internals、MEV 等）',
+      item2: '让所有课程对齐 Reth / Revm / Alloy / Foundry 的最新源码',
+      item3: '托管、基础设施与翻译工作',
+    },
+    errors: {
+      minAmount: '请输入至少 $1 的金额。',
+      generic: '无法启动结账，请稍后再试。',
+    },
+    thanks: {
+      title: '谢谢你 🙏',
+      body: '你的支持让源码优先的课程持续成长。收据已发送到你的邮箱。',
+      cta: '返回课程',
+    },
+    cancel: {
+      title: '未发生扣款',
+      body: '结账已取消，未发生任何扣款。',
+      retry: '再试一次',
+    },
+  },
   quiz: {
     progress: '{{current}} / {{total}}',
     correct: '正确',

@@ -287,6 +287,44 @@ export const ja: TranslationKeys = {
     requirement: 'このコースには {{needed}} XPが必要です。現在 {{current}} XP保有しています。',
     earnMore: 'レッスンを完了してXPを獲得しましょう',
   },
+  donate: {
+    tag: 'RethLabを応援',
+    title: 'ソース直結の Rust EVM 養成を応援する',
+    subtitle: 'RethLab は無料・オープンで提供されています。レッスンが役に立ったなら、スポンサーシップが次の Specialization トラック開発を支えます。',
+    recurring: {
+      title: 'GitHub でスポンサーになる',
+      note: '定期支援・いつでもキャンセル可',
+      body: '請求は GitHub Sponsors が処理。月次の定期支援は最も効果的な応援方法 — 新コンテンツの開発計画を安心して進められます。',
+      cta: 'スポンサーになる',
+    },
+    oneTime: {
+      title: '一度だけの寄付',
+      note: 'Stripe による安全な決済',
+      custom: '自由金額',
+      cta: '寄付する',
+      poweredBy: '決済は Stripe で安全に処理されます。',
+    },
+    use: {
+      title: '寄付の使い道',
+      item1: '新しい Specialization トラックの執筆（Parallel EVM、Hyperliquid Internals、MEV など）',
+      item2: '上流の Reth / Revm / Alloy / Foundry に対する各レッスンの随時更新',
+      item3: 'ホスティング・インフラ・翻訳作業',
+    },
+    errors: {
+      minAmount: '$1 以上の金額を入力してください。',
+      generic: '決済を開始できませんでした。時間をおいて再度お試しください。',
+    },
+    thanks: {
+      title: 'ありがとうございます 🙏',
+      body: 'いただいたご支援で、ソース直結のカリキュラムを拡張していきます。領収書はメールでお送りしています。',
+      cta: 'コース一覧へ戻る',
+    },
+    cancel: {
+      title: '決済されていません',
+      body: '決済はキャンセルされました。請求は発生していません。',
+      retry: 'もう一度試す',
+    },
+  },
   quiz: {
     progress: '{{current}} / {{total}}',
     correct: '正解',

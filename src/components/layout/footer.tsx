@@ -15,6 +15,7 @@ export function Footer() {
         <div className="flex items-center gap-6 text-xs text-muted-foreground">
           <Link href="/courses" className="hover:text-foreground transition-colors">{t('nav.courses')}</Link>
           <Link href="/about" className="hover:text-foreground transition-colors">About</Link>
+          <Link href="/donate" className="hover:text-foreground transition-colors">Sponsor</Link>
           <a href="https://github.com/fabrknt" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">GitHub</a>
           <a href="https://x.com/fabrknt" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">X</a>
         </div>
