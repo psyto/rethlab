@@ -42,7 +42,7 @@ export const ja: TranslationKeys = {
   },
   landing: {
     hero: {
-      title: 'ハードコアな Rust Ethereum 開発者になる',
+      title: 'Become a Hardcore Rust Ethereum Developer',
       subtitle: 'Reth・Revm・Alloy・Foundry を本物のソースコードから学ぶ、要求の高いトレーニングプログラム。「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態まで養成します。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
@@ -455,7 +455,7 @@ export const ja: TranslationKeys = {
     loadCourse: 'コースの読み込みに失敗しました。もう一度お試しください。',
   },
   page: {
-    launchBanner: '完全無料 · ソース起点 · 本物の Reth・Revm・Alloy・Foundry から',
+    launchBanner: 'Free · Source-grounded · Built on real Reth, Revm, Alloy, and Foundry',
     whyRethLab: {
       title: 'なぜRethLab？',
       subtitle: 'Rust Ethereum スタックで本当に出荷できるエンジニアを養成するために作られた — カジュアル学習者向けではない。',
