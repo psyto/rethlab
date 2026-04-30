@@ -367,8 +367,8 @@ export const en = {
     },
     built: {
       title: 'What This Covers',
-      kodiak: 'Beginner: Environment setup, why Rust + EVM is the trend, and your first Alloy script that talks to a real node.',
-      rethlab: 'Fundamentals & Advanced: Alloy types and providers, EVM internals, the Revm interpreter, custom opcodes, the Database trait, Reth Staged Sync, and ExEx.',
+      kodiak: 'Beginner & Fundamentals: Why the Rust EVM stack matters, environment setup, your first Alloy script, EVM as a stack machine, Revm intro, and Foundry (forge / cast / anvil).',
+      rethlab: 'Advanced & Expert: Reading the actual Revm interpreter, custom opcodes & precompiles, the Database trait, Staged Sync, ExEx, NodeBuilder for App-chains, MDBX, MPT, MEV pipelines, zkEVM with Steel, and shipping a custom Reth fork.',
     },
     tech: {
       title: 'Why This Stack?',

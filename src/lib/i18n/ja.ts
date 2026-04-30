@@ -369,8 +369,8 @@ export const ja: TranslationKeys = {
     },
     built: {
       title: 'カバー範囲',
-      kodiak: '初級: 環境構築、Rust + EVMがトレンドである理由、そして実際のノードに接続する最初のAlloyスクリプト。',
-      rethlab: 'ファンダメンタルズ＆上級: Alloyの型とProvider、EVM内部、Revmインタープリター、カスタムOpcode、Databaseトレイト、RethのStaged Sync、ExEx。',
+      kodiak: '初級＆ファンダメンタルズ：Rust EVM スタックがなぜ重要か、環境構築、最初の Alloy スクリプト、EVM のスタックマシン構造、Revm入門、Foundry（forge / cast / anvil）。',
+      rethlab: '上級＆エキスパート：本物の Revm インタープリターを読む、カスタム Opcode と precompile、Database トレイト、Staged Sync、ExEx、App-chain 用 NodeBuilder、MDBX、MPT、本番 MEV パイプライン、Steel を使った zkEVM、独自 Reth フォークの本番運用。',
     },
     tech: {
       title: 'なぜこのスタックか？',

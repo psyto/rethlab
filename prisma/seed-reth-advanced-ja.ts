@@ -883,55 +883,54 @@ RPCネームスペース、engine API拡張、ExExインストール。\`Ethereu
 これで1行のコンポーネント差し替えで動くものを出せました。同じパターンをconsensusやexecutorに拡大すればHyperEVMクラスのインフラ。`,
                 },
                 {
-                  title: 'これから先のロードマップ',
-                  slug: 'reth-roadmap-ja',
+                  title: 'Expert ティアへの橋渡し',
+                  slug: 'reth-bridge-to-expert-ja',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 10,
                   xpReward: 20,
-                  content: `# これから先のロードマップ
+                  content: `# Expert ティアへの橋渡し
 
-3つのティアを通じて、**Alloy（型）→ Revm（実行）→ Reth（ノード／拡張）** の階段を上ってきました。最後に、このコース「以降」の進み方を整理します。
+**Alloy → Revm → Reth（Staged Sync、ExEx、カスタム NodeBuilder）** の階段を上ってきました。3プロジェクトすべてのソースコードを「目的を持って」読める段階です。
 
-## 1. OSSへのコントリビュート
+しかし「読める」は半分。**Expert** ティアは「読める」から「**本番に出せる**」への跳躍です。
 
-まずは小さな貢献から：
+## Expert で待っていること
 
-- [reth](https://github.com/paradigmxyz/reth) の \`good first issue\`
-- [revm](https://github.com/bluealloy/revm) のドキュメント修正
-- [alloy-rs/examples](https://github.com/alloy-rs/examples) に新しいサンプルを追加
+| レッスン | 焦点 |
+| :--- | :--- |
+| **パフォーマンスエンジニアリング** | flamegraph、Criterion、jemalloc、Reth の \`maxperf\` ビルドプロファイル |
+| **MDBXストレージ内部** | Reth の本物の \`Database\` / \`DbTx\` / \`DbTxMut\` トレイト、B+tree mmap、MVCC |
+| **Tokio ランタイム内部** | work-stealing、\`spawn_critical_task\`、パニック監視 |
+| **手続きマクロ** | \`address!\` と \`sol!\` の実装 — \`fixed_bytes_macros!\` メタパターン |
+| **カスタム precompile** | 本物の Revm \`identity_run\` ＋ Foundry の cheatcodes が precompile である事実 |
+| **Merkle Patricia Trie** | reth の本物の \`AccountProof\` / \`StorageProof\` と検証ロジック |
+| **本番MEV** | mempool 取り込み、sol! デコード、Revm forking、ExEx をプライベート mempool として |
+| **zkEVM with Revm** | Steel + Risc0 guest ソース — Ethereum 実行を証明する |
+| **本番フォーク運用** | reth の本物の \`maxperf\` Cargo profile、systemd、監視、diff テスト |
 
-採用面でも「**RethのExExを使った独自プロジェクト**」は数千万円単位の年収差を生む実績になります。
+## マインドセットの転換
 
-## 2. 専門書・ペーパー
+Advanced は **構造** を教えました。Expert はその構造の **背後にある決定** を教えます：
 
-- **Yellow Paper（Ethereum）**: EVMの正式仕様。最初は辛いですがOpcodeリファレンスとしては最強
-- **MDBX papers**: Rethが採用するKVストアの設計理念
-- **HotStuff / Tendermint papers**: BFTコンセンサスの理論
+- *なぜ* Reth は MDBX で、RocksDB ではないのか？（コンパクションストールでの読み取りレイテンシ）
+- *なぜ* Revm は pop / pop / push ではなく1つpopして参照経由で書き戻すのか？（ADD あたりメモリ書き込み1回減）
+- *なぜ* \`Database::tx()\` に \`#[track_caller]\` が必要か？（パニックがバグった呼び出し元を指す、トレイトではなく）
+- *なぜ* Foundry の cheatcodes は Opcode ではなく precompile なのか？（バニラEVMとのコンセンサス互換性）
 
-## 3. 自分でApp-chainを動かす
+この *なぜ* を内部化できれば、Paradigm のエンジニアや Hyperliquid の validator 運用者と設計判断を議論できる — それが grant 応募可能な仕事への入口です。
 
-- [Reth SDK Docs](https://reth.rs/sdk/) を見ながら最小構成のカスタムノードを起動
-- 1つだけ独自のRPCメソッドを足してみる
-- ローカルで複数ノードを起動し、合意を観察
+## 進む前に
 
-## 4. パフォーマンスを測る
+自分の言葉で説明できるか確認：
 
-- [flamegraph](https://github.com/flamegraph-rs/flamegraph) でホットパスを可視化
-- **Criterion** でマイクロベンチマーク
-- メインネットフォークでのフルブロック実行時間を計測
+1. \`popn_top!\` が何をしていて、*なぜ* \`unwrap_unchecked()\` を使っているか
+2. \`Database\` と \`DatabaseRef\` がなぜ別トレイトに分かれているか
+3. \`ExExEvent::FinishedHeight\` が Reth の pruner に何を伝えるか
 
-## 5. 「設計のなぜ」を問い続ける
+ぼんやりしている項目があれば、Expert に進む前に該当の Advanced レッスンを再読してください。Expert は密度が高く、リンクされたコードをローカルで実行しながら読むのが効果的です。
 
-- なぜStaged Syncはこの順番なのか？
-- なぜ \`Database\` トレイトは可変参照（\`&mut\`）なのか？
-- なぜRevmは \`U256\` を独自に持つのか？
-
-> インフラレイヤーの学習は、最初の3ヶ月が一番苦しいです。ドキュメントが不十分なことも多く、**「ソースコードこそが最強の教科書」** です。
-
-HyperliquidやTempoの開発者たちは、既存のライブラリに満足できなかったから自分で書きました。あなたも「**なぜこの設計なのか？**」と常に疑い、コードの裏側を覗く癖をつけてください。
-
-ここまで来たあなたは、もう「ユーザー」ではなく「**インフラの設計者**」です。`,
+> インフラレイヤーの学習は、最初の3ヶ月が一番苦しいです。ドキュメントが不十分なことも多く、**「ソースコードこそが最強の教科書」**。Expert はこの教訓が報われるティアです。`,
                 },
                 {
                   title: 'Advancedまとめクイズ',

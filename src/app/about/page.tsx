@@ -180,27 +180,6 @@ export default function AboutPage() {
         </div>
       </motion.div>
 
-      {/* Consulting CTA */}
-      <motion.div
-        className="mt-8 rounded-xl border border-primary/20 bg-primary/5 p-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.45 }}
-      >
-        <p className="text-sm font-semibold text-primary">{t('page.consulting.deployTitle')}</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {t('page.consulting.deployDesc')}
-        </p>
-        <a
-          href="https://twitter.com/fabrknt"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          {t('page.consulting.cta')}
-        </a>
-      </motion.div>
-
       {/* Contact */}
       <motion.div
         className="mt-8 rounded-xl border border-border bg-card p-6 text-center"

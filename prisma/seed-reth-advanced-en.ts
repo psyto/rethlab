@@ -883,53 +883,54 @@ These all replace one or more \`with_components\` builders with their own. The f
 Now you've shipped a 1-line component swap. Scale this pattern to consensus or executor and you're building HyperEVM-class infra.`,
                 },
                 {
-                  title: 'Roadmap — what to do next',
-                  slug: 'reth-roadmap-en',
+                  title: 'Bridge to Expert — what comes next',
+                  slug: 'reth-bridge-to-expert-en',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 10,
                   xpReward: 20,
-                  content: `# Roadmap — what to do next
+                  content: `# Bridge to Expert — what comes next
 
-Across three tiers you've climbed **Alloy (types) → Revm (execution) → Reth (node and extensions)**. Here's how to keep going past this course.
+You've climbed **Alloy → Revm → Reth (Staged Sync, ExEx, custom NodeBuilder)**. You can now read the source of all three projects with intent.
 
-## 1. Contribute to OSS
+But "reading" is only half. The **Expert** tier crosses from "I can read it" to "I can ship it in production."
 
-Start small:
+## What awaits in Expert
 
-- A "good first issue" on [reth](https://github.com/paradigmxyz/reth)
-- A documentation tweak on [revm](https://github.com/bluealloy/revm)
-- Add a runnable example to [alloy-rs/examples](https://github.com/alloy-rs/examples)
+| Lesson | Focus |
+| :--- | :--- |
+| **Performance engineering** | flamegraph, Criterion, jemalloc, Reth's \`maxperf\` build profile |
+| **MDBX storage internals** | Reth's actual \`Database\` / \`DbTx\` / \`DbTxMut\` traits, B+tree mmap, MVCC |
+| **Tokio runtime internals** | work-stealing, \`spawn_critical_task\`, panic supervision |
+| **Procedural macros** | how \`address!\` and \`sol!\` actually work — the \`fixed_bytes_macros!\` meta-pattern |
+| **Custom precompiles** | the real Revm \`identity_run\` + how Foundry's cheatcodes are precompiles |
+| **Merkle Patricia Trie** | reth's actual \`AccountProof\` / \`StorageProof\` and verification logic |
+| **MEV in practice** | mempool ingest, sol! decoding, Revm forking, ExEx as a private mempool |
+| **zkEVM with Revm** | Steel + Risc0 guest source — proving Ethereum execution |
+| **Production fork ops** | reth's real \`maxperf\` Cargo profile, systemd, monitoring, diff testing |
 
-In hiring, "I built X using Reth's ExEx" is the kind of bullet point that creates real salary differentials.
+## The mindset shift
 
-## 2. Reading list
+Advanced taught you the **structures**. Expert teaches you the **decisions** behind those structures:
 
-- **The Ethereum Yellow Paper** — the formal EVM spec; rough first read but the canonical opcode reference
-- **MDBX papers** — the KV store backing Reth
-- **HotStuff / Tendermint papers** — BFT consensus theory
+- *Why* does Reth use MDBX and not RocksDB? (read latency under compaction stalls)
+- *Why* does Revm pop one and write through a reference instead of pop/pop/push? (one fewer memory write per ADD)
+- *Why* does \`#[track_caller]\` matter on \`Database::tx()\`? (panic shows the buggy caller, not the trait)
+- *Why* are Foundry cheatcodes precompiles and not opcodes? (consensus compatibility with vanilla EVM)
 
-## 3. Run your own App-chain
+Once you internalize the *why*, you can defend design choices to a Paradigm engineer or a Hyperliquid validator op — and that's the gate to grant-eligible work.
 
-- Follow [Reth SDK Docs](https://reth.rs/sdk/) and stand up a minimal custom node
-- Add one custom RPC method
-- Run two nodes locally and watch them reach consensus
+## Before you continue
 
-## 4. Measure what you build
+Make sure you can explain, in your own words:
 
-- [flamegraph](https://github.com/flamegraph-rs/flamegraph) for hot-path profiling
-- **Criterion** for microbenchmarks
-- Time a full mainnet-fork block in Revm
+1. What \`popn_top!\` does and *why* it uses \`unwrap_unchecked()\`
+2. Why \`Database\` and \`DatabaseRef\` are separate traits
+3. What \`ExExEvent::FinishedHeight\` tells Reth's pruner
 
-## 5. Always ask "why is it designed this way?"
+If any of these are fuzzy, re-read the relevant Advanced lesson before starting Expert. Pace yourself — Expert lessons are denser, and most people benefit from running the linked code locally as they read.
 
-- Why does Staged Sync use *this* order?
-- Why does \`Database\` take \`&mut self\` everywhere?
-- Why does Revm have its own \`U256\` type?
-
-> The first three months in infra learning are the hardest. Documentation is sparse — **the source code is the textbook**.
-
-The Hyperliquid and Tempo teams wrote their own engines because no off-the-shelf library was good enough for them. Make a habit of asking "why does this code look like this?" — and from here on, you're not a user of the Rust EVM stack. You're a builder of it.`,
+> The first three months in infra learning are the hardest. Documentation is sparse — **the source code is the textbook**. The Expert tier is where that lesson pays off.`,
                 },
                 {
                   title: 'Advanced quiz',
