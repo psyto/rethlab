@@ -63,7 +63,7 @@ export const en = {
       hyperliquidDesc: "HyperEVM, Hyperliquid's execution layer, is a Reth fork. Read Reth and you can read HyperEVM internals.",
       tempoName: 'Tempo',
       tempoBadge: 'Built on Reth',
-      tempoDesc: 'Tempo — the new stablecoin-focused L1 — is built on Reth. Same primitives, different consensus.',
+      tempoDesc: 'Tempo, the new stablecoin-native L1, is built on Reth. Positioned as the rail for AI-native (agent-to-agent / M2M) payments — the chain for an economy that did not exist three years ago.',
       baseName: 'Base / OP Stack',
       baseBadge: 'Op-Reth',
       baseDesc: 'Base and the wider OP Stack ecosystem ship Op-Reth as a production execution client.',

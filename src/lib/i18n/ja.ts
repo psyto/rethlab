@@ -65,7 +65,7 @@ export const ja: TranslationKeys = {
       hyperliquidDesc: 'Hyperliquid の実行層 HyperEVM は Reth のフォーク。Reth が読めれば HyperEVM の内部も読めます。',
       tempoName: 'Tempo',
       tempoBadge: 'Reth ベース',
-      tempoDesc: 'Tempo — 新しいステーブルコイン特化型 L1 — は Reth ベースで構築。同じプリミティブ、違うコンセンサス。',
+      tempoDesc: 'Tempo は新しいステーブルコイン特化型 L1 で、Reth ベース。AI ネイティブな（agent-to-agent / M2M）決済のレールとして位置づけられています — 3年前には存在しなかった経済圏のチェーン。',
       baseName: 'Base / OP Stack',
       baseBadge: 'Op-Reth',
       baseDesc: 'Base および OP Stack 系エコシステムは、本番の execution client として Op-Reth を採用しています。',
