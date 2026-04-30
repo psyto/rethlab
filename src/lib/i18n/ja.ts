@@ -76,6 +76,17 @@ export const ja: TranslationKeys = {
       steelBadge: 'Revm zk コプロセッサ',
       steelDesc: 'Steel は Revm ベースの zk コプロセッサ — 同じ Revm の Database trait が zkVM ゲスト内で動いています。',
     },
+    whyNow: {
+      tag: 'なぜ Rust、なぜ今',
+      title: '気づかないうちに、Ethereum は Rust ネイティブになっていた',
+      subtitle: 'ここ数年、高パフォーマンスの話題が Solana に流れていた — その認識は間違っていません。でも、Rust の EVM スタック（Reth・Revm・Alloy・Foundry）が静かにそのギャップを埋めました。今、本番で動いている client・chain・tool は Rust ネイティブで、その内部を読めるエンジニアは希少です。',
+      card1Title: 'Rust が EVM スタックを取った',
+      card1Desc: 'Reth（Paradigm）は default execution client になりつつあります。Foundry の内部は Revm。Alloy は ethers-rs の現代的な後継。',
+      card2Title: '本番はすでに移行済み',
+      card2Desc: 'HyperEVM は Reth フォーク。Tempo は Reth ベース。Base は Op-Reth を本番採用。Steel は Revm を zkVM 内で動かしている。Rust-EVM 時代はもう来ています。',
+      card3Title: 'タレントギャップは現実',
+      card3Desc: 'Solidity 開発者は供給過剰。Reth を拡張したり Revm precompile を書けるエンジニアは希少 — Solana で起きていたインフラ採用の波が、今は Rust の Ethereum で起きています。',
+    },
     cta: {
       title: 'Rust EVM インフラを実装する準備はできましたか？',
       description: '最初の Alloy スクリプトから独自 Reth フォークまで。Paradigm・Hyperliquid・Tempo が使う本物のスタックを、ソースから直接学ぶ。',

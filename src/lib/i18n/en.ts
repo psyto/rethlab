@@ -74,6 +74,17 @@ export const en = {
       steelBadge: 'Revm zk coprocessor',
       steelDesc: 'Steel is a Revm-based zk coprocessor — the same Revm Database trait, running inside a zkVM guest.',
     },
+    whyNow: {
+      tag: 'WHY RUST, WHY NOW',
+      title: "While you weren't watching, Ethereum went Rust-native",
+      subtitle: "If you've been watching Solana eat the high-performance narrative, you're not wrong about the past few years. But the Rust EVM stack — Reth, Revm, Alloy, Foundry — quietly closed the gap. The chains, clients, and tools shipping in production today are Rust-native, and the engineers who can read their internals are scarce.",
+      card1Title: 'Rust took the EVM stack',
+      card1Desc: 'Reth (Paradigm) is becoming the default execution client. Foundry runs on Revm. Alloy is the modern replacement for ethers-rs.',
+      card2Title: 'Production already moved',
+      card2Desc: 'HyperEVM is a Reth fork. Tempo is built on Reth. Base ships Op-Reth. Steel runs Revm inside a zkVM. The Rust-EVM era is already shipping.',
+      card3Title: 'The talent gap is real',
+      card3Desc: 'Solidity devs are oversupplied. Engineers who can extend Reth or write Revm precompiles are scarce — the infra hiring story that was on Solana now lives on Ethereum, in Rust.',
+    },
     cta: {
       title: 'Ready to ship Rust EVM infrastructure?',
       description: 'From your first Alloy script to a custom Reth fork. The same stack used by Paradigm, Hyperliquid, and Tempo — taught from the source.',

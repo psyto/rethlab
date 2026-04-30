@@ -186,6 +186,67 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Why Rust, why now — perception flip vs. "Solana is hot, Ethereum is fading" */}
+      <section className="relative overflow-hidden border-t border-border">
+        <div className="pointer-events-none absolute inset-0 bg-fabrknt-gradient-subtle" />
+        <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
+          <motion.div
+            className="mx-auto max-w-3xl text-center"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <div className="font-mono text-xs uppercase tracking-widest text-primary">
+              {t('landing.whyNow.tag')}
+            </div>
+            <h2 className="mt-3 text-2xl font-bold sm:text-3xl lg:text-4xl">
+              {t('landing.whyNow.title')}
+            </h2>
+            <p className="mt-5 text-base leading-relaxed text-muted-foreground sm:text-lg">
+              {t('landing.whyNow.subtitle')}
+            </p>
+          </motion.div>
+
+          <motion.div
+            className="mt-12 grid gap-5 md:grid-cols-3"
+            variants={stagger}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+          >
+            {[
+              {
+                icon: Code2,
+                title: t('landing.whyNow.card1Title'),
+                desc: t('landing.whyNow.card1Desc'),
+              },
+              {
+                icon: Boxes,
+                title: t('landing.whyNow.card2Title'),
+                desc: t('landing.whyNow.card2Desc'),
+              },
+              {
+                icon: TrendingUp,
+                title: t('landing.whyNow.card3Title'),
+                desc: t('landing.whyNow.card3Desc'),
+              },
+            ].map((item, i) => (
+              <motion.div
+                key={i}
+                className="rounded-2xl border border-primary/20 bg-card/80 p-6 backdrop-blur-sm"
+                variants={fadeIn}
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+                  <item.icon className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="mt-4 text-base font-bold text-foreground">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.desc}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
       {/* Where this stack runs in production — surprise hook for HL/Tempo/Base */}
       <section className="border-t border-border bg-card/30">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
