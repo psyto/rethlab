@@ -84,6 +84,16 @@ These three names get muddled all the time, but they play very different roles. 
 - **Reth** depends on **Alloy** and **Revm** internally.
 - "Learning Reth" automatically means touching Alloy and Revm.
 
+\`\`\`mermaid
+graph TD
+    Reth["Reth — full node"]
+    Revm["Revm — EVM execution engine"]
+    Alloy["Alloy — primitives, signing, RPC"]
+    Reth -->|uses| Revm
+    Reth -->|uses| Alloy
+    Revm -->|uses| Alloy
+\`\`\`
+
 ## What each one is for
 
 ### Alloy (you'll touch this most often)

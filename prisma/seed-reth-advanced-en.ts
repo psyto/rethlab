@@ -272,6 +272,23 @@ This is why a "complex options pricer" can drop from 500K gas in Solidity to 5K 
 
 Revm is the "execution engine," but **it doesn't own state**. Storage reads happen through the external \`Database\` trait. Implement it and you can drive Revm against anything: an in-memory map, a forked mainnet, a custom MDBX schema, even a network of remote nodes.
 
+\`\`\`mermaid
+sequenceDiagram
+    participant Op as Opcode (e.g., SLOAD)
+    participant I as Revm Interpreter
+    participant DB as Database trait impl
+    participant State as Backing store
+
+    Op->>I: needs storage[addr][key]
+    I->>DB: storage(addr, key)
+    DB->>State: lookup
+    State-->>DB: U256 value
+    DB-->>I: Ok(value)
+    I-->>Op: pushes value to stack
+\`\`\`
+
+The opcode never touches the store directly — it only knows about the trait. Swap the impl, change the world: in-memory, forked mainnet, MDBX, RPC. Same Revm, different reality.
+
 ## The real trait — verbatim
 
 From [\`crates/database/interface/src/lib.rs\`](https://github.com/bluealloy/revm/blob/main/crates/database/interface/src/lib.rs) (current main):
@@ -471,6 +488,19 @@ The orchestrator stores stages as \`Box<dyn Stage<...>>\` so it can hold a mixed
 
 Reth's stage pipeline (\`crates/stages/stages/src/stages/\`):
 
+\`\`\`mermaid
+flowchart LR
+    H[HeaderStage] --> B[BodyStage]
+    B --> S[SenderRecoveryStage]
+    S --> E[ExecutionStage]
+    E --> AH[AccountHashingStage]
+    AH --> SH[StorageHashingStage]
+    SH --> M[MerkleStage]
+    M --> T[TransactionLookupStage]
+    T --> I[IndexHistoryStages]
+    I --> F[FinishStage]
+\`\`\`
+
 1. **\`HeaderStage\`** — download headers
 2. **\`BodyStage\`** — download transaction bodies
 3. **\`SenderRecoveryStage\`** — ECDSA-recover sender addresses (massively parallel)
@@ -659,6 +689,18 @@ These are the tools you need to read serious Reth code. Next lesson: ExEx itself
                   content: `# ExEx — Execution Extensions
 
 **ExEx** is Reth's mechanism for injecting Rust code into the execution loop. With it you build node-speed indexers, MEV bots, and live risk engines — directly in the same process as the chain itself.
+
+\`\`\`mermaid
+flowchart LR
+    subgraph Reth
+        Sync[Sync] --> Exec[ExecutionStage]
+        Exec --> Commit[Chain commit]
+    end
+    Commit -->|notification| ExEx[Your ExEx]
+    ExEx -->|FinishedHeight| Prune[Reth pruner]
+\`\`\`
+
+The chain executes; Reth pushes a notification for every committed block (or reorg / revert) into your ExEx's stream; you process it and report back the highest block you've finished — that lets Reth prune older history safely.
 
 ## The minimal ExEx — verbatim
 

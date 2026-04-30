@@ -774,6 +774,18 @@ Result: a **256-bit \`stateRoot\`** that uniquely identifies the entire world st
 
 Keys are **nibbles** (4 bits each), so a 32-byte key is 64 nibbles. Every node knows its keccak hash.
 
+\`\`\`mermaid
+graph TD
+    R[Branch — root<br/>16 child slots]
+    R -->|nibble| E[Extension<br/>shared prefix]
+    R -->|nibble| L1[Leaf<br/>account → value]
+    E --> B[Branch]
+    B -->|nibble| L2[Leaf<br/>account → value]
+    B -->|nibble| L3[Leaf<br/>account → value]
+\`\`\`
+
+Each parent stores the **hash** of each child, so the root hash commits to every byte underneath. Change one storage slot anywhere → every parent up to the root rehashes → \`stateRoot\` changes.
+
 ## 3. Inclusion proof in 6 steps
 
 To prove "account X has balance Y":

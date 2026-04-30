@@ -84,6 +84,16 @@ export async function seedRethBeginnerJA(prisma: PrismaClient) {
 - **Reth** は内部で **Alloy** と **Revm** を全面的に採用しています。
 - つまり「Rethを学ぶ＝Alloy／Revmにも触れる」ということになります。
 
+\`\`\`mermaid
+graph TD
+    Reth["Reth — フルノード"]
+    Revm["Revm — EVM 実行エンジン"]
+    Alloy["Alloy — プリミティブ・署名・RPC"]
+    Reth -->|uses| Revm
+    Reth -->|uses| Alloy
+    Revm -->|uses| Alloy
+\`\`\`
+
 ## それぞれの「使い道」
 
 ### Alloy（最も触れる機会が多い）

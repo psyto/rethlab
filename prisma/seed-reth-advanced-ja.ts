@@ -272,6 +272,23 @@ pub fn my_hyper_fast_swap<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Resul
 
 Revmは「実行エンジン」ですが、**状態（State）そのものは持っていません**。状態への読み書きは外部の \`Database\` トレイトを通じて行います。これを実装すれば、何でも繋げられる — インメモリ Map、フォークしたメインネット、独自MDBXスキーマ、リモートノード網など。
 
+\`\`\`mermaid
+sequenceDiagram
+    participant Op as Opcode（例: SLOAD）
+    participant I as Revm Interpreter
+    participant DB as Database トレイト実装
+    participant State as 裏側のストア
+
+    Op->>I: storage[addr][key] が必要
+    I->>DB: storage(addr, key)
+    DB->>State: 検索
+    State-->>DB: U256 値
+    DB-->>I: Ok(value)
+    I-->>Op: スタックに push
+\`\`\`
+
+Opcode は store を直接触らない — トレイトしか知らない。実装を差し替えれば現実が変わる：インメモリ、フォークしたメインネット、MDBX、RPC。同じ Revm、違う現実。
+
 ## 本物のトレイト — 一字一句そのまま
 
 [\`crates/database/interface/src/lib.rs\`](https://github.com/bluealloy/revm/blob/main/crates/database/interface/src/lib.rs) （現 main）から：
@@ -471,6 +488,19 @@ pub struct UnwindInput {
 
 Rethのステージパイプライン（\`crates/stages/stages/src/stages/\`）：
 
+\`\`\`mermaid
+flowchart LR
+    H[HeaderStage] --> B[BodyStage]
+    B --> S[SenderRecoveryStage]
+    S --> E[ExecutionStage]
+    E --> AH[AccountHashingStage]
+    AH --> SH[StorageHashingStage]
+    SH --> M[MerkleStage]
+    M --> T[TransactionLookupStage]
+    T --> I[IndexHistoryStages]
+    I --> F[FinishStage]
+\`\`\`
+
 1. **\`HeaderStage\`** — ヘッダー取得
 2. **\`BodyStage\`** — トランザクション本体取得
 3. **\`SenderRecoveryStage\`** — ECDSAでアドレス復元（大規模並列）
@@ -659,6 +689,18 @@ async fn my_exex<Node: FullNodeComponents>(
                   content: `# ExEx — Execution Extensions
 
 **ExEx** は、Rethが提供する「実行ループにRustコードを注入する」仕組みです。これでノード速度のインデクサ・MEVボット・リアルタイムリスクエンジンを **チェーン本体と同じプロセス内で** 構築できます。
+
+\`\`\`mermaid
+flowchart LR
+    subgraph Reth
+        Sync[Sync] --> Exec[ExecutionStage]
+        Exec --> Commit[Chain commit]
+    end
+    Commit -->|notification| ExEx[あなたの ExEx]
+    ExEx -->|FinishedHeight| Prune[Reth pruner]
+\`\`\`
+
+チェーンが実行 → コミットされた各ブロック（reorg / revert も）の通知が ExEx の stream にプッシュされる → 処理して "ここまで終わった" 高さを返す → Reth が古い履歴を安全に prune できる。
 
 ## 最小ExEx — 一字一句そのまま
 
