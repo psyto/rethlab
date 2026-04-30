@@ -83,8 +83,8 @@ export function Header() {
             )}
           </div>
 
-          {/* User */}
-          {session ? (
+          {/* User — only shown when signed in. Anonymous users find Sign In in the footer. */}
+          {session && (
             <Link href="/profile" className="text-muted-foreground hover:text-foreground transition-colors">
               {session.user.image ? (
                 <Image
@@ -97,13 +97,6 @@ export function Header() {
               ) : (
                 <User className="h-4 w-4" />
               )}
-            </Link>
-          ) : (
-            <Link
-              href="/auth/signin"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {t('common.signIn')}
             </Link>
           )}
         </nav>

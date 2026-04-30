@@ -89,11 +89,11 @@ export default function LandingPage() {
   ];
 
   const outcomes = [
-    'Read Reth\'s stages, Revm\'s interpreter, and Alloy\'s procedural macros',
-    'Extend Revm with custom opcodes and precompiles (the Foundry cheatcode mechanism)',
-    'Ship an Execution Extension (ExEx) — a node-speed indexer or MEV pipeline',
-    'Build a custom Reth fork with custom EVM config, consensus, or storage',
-    'Apply for grant work at Monad / Hyperliquid / Paradigm-style infra teams',
+    t('landing.outcomes.item1'),
+    t('landing.outcomes.item2'),
+    t('landing.outcomes.item3'),
+    t('landing.outcomes.item4'),
+    t('landing.outcomes.item5'),
   ];
 
   return (
@@ -119,7 +119,7 @@ export default function LandingPage() {
             <div className="mb-6 flex justify-center">
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-4 py-1.5 font-mono text-xs text-muted-foreground">
                 <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                Demanding · Source-grounded · No fluff
+                {t('landing.hero.tagline')}
               </div>
             </div>
 
@@ -179,9 +179,81 @@ export default function LandingPage() {
                 </pre>
               </div>
               <p className="mt-4 text-center font-mono text-xs text-muted-foreground">
-                Every Advanced + Expert lesson is anchored on real source like this.
+                {t('landing.hero.sourceCaption')}
               </p>
             </motion.div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Where this stack runs in production — surprise hook for HL/Tempo/Base */}
+      <section className="border-t border-border bg-card/30">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+          <motion.div
+            className="mx-auto max-w-3xl text-center"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <div className="font-mono text-xs uppercase tracking-widest text-primary">
+              {t('landing.stack.tag')}
+            </div>
+            <h2 className="mt-3 text-2xl font-bold sm:text-3xl lg:text-4xl">
+              {t('landing.stack.title')}
+            </h2>
+            <p className="mt-4 text-base text-muted-foreground sm:text-lg">
+              {t('landing.stack.subtitle')}
+            </p>
+          </motion.div>
+
+          <motion.div
+            className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            variants={stagger}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+          >
+            {[
+              {
+                name: t('landing.stack.hyperliquidName'),
+                badge: t('landing.stack.hyperliquidBadge'),
+                desc: t('landing.stack.hyperliquidDesc'),
+              },
+              {
+                name: t('landing.stack.tempoName'),
+                badge: t('landing.stack.tempoBadge'),
+                desc: t('landing.stack.tempoDesc'),
+              },
+              {
+                name: t('landing.stack.baseName'),
+                badge: t('landing.stack.baseBadge'),
+                desc: t('landing.stack.baseDesc'),
+              },
+              {
+                name: t('landing.stack.foundryName'),
+                badge: t('landing.stack.foundryBadge'),
+                desc: t('landing.stack.foundryDesc'),
+              },
+              {
+                name: t('landing.stack.steelName'),
+                badge: t('landing.stack.steelBadge'),
+                desc: t('landing.stack.steelDesc'),
+              },
+            ].map((item, i) => (
+              <motion.div
+                key={i}
+                className="rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40"
+                variants={fadeIn}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-base font-bold text-foreground">{item.name}</h3>
+                  <span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
+                    {item.badge}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{item.desc}</p>
+              </motion.div>
+            ))}
           </motion.div>
         </div>
       </section>
@@ -222,10 +294,10 @@ export default function LandingPage() {
             viewport={{ once: true }}
           >
             <div className="font-mono text-xs uppercase tracking-widest text-primary">
-              After this program
+              {t('landing.outcomes.tag')}
             </div>
             <h2 className="mt-2 text-2xl font-bold sm:text-3xl">
-              You&apos;ll be able to ship in the Rust EVM stack
+              {t('landing.outcomes.title')}
             </h2>
           </motion.div>
 

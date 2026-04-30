@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useLocale } from '@/contexts/locale-context';
 
 export function Footer() {
   const { t } = useLocale();
+  const { data: session } = useSession();
 
   return (
     <footer className="border-t border-border mt-12">
@@ -18,6 +20,9 @@ export function Footer() {
           <Link href="/donate" className="hover:text-foreground transition-colors">Sponsor</Link>
           <a href="https://github.com/psyto" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">GitHub</a>
           <a href="https://x.com/psyto" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">X</a>
+          {!session && (
+            <Link href="/auth/signin" className="hover:text-foreground transition-colors">{t('common.signIn')}</Link>
+          )}
         </div>
       </div>
       <div className="mx-auto max-w-6xl px-6 pb-6">
