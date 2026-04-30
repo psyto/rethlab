@@ -42,9 +42,13 @@ export const metadata: Metadata = {
   authors: [{ name: 'psyto' }],
   creator: 'psyto',
   metadataBase: new URL(baseUrl),
+  alternates: {
+    canonical: '/rethlab',
+  },
   openGraph: {
     type: 'website',
     locale: 'en_US',
+    alternateLocale: 'ja_JP',
     url: baseUrl,
     siteName: 'RethLab',
     title: 'RethLab — Hardcore Rust Ethereum Developer Training',

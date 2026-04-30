@@ -89,7 +89,7 @@ You only need to repeat this when the Prisma schema changes (re-run `db push`) o
    | `GOOGLE_CLIENT_ID` | from step 2 (optional) |
    | `GOOGLE_CLIENT_SECRET` | from step 2 (optional) |
    | `STRIPE_SECRET_KEY` | `sk_test_...` from step 3 |
-   | `NEXT_PUBLIC_SITE_URL` | `https://rethlab.vercel.app` |
+   | `NEXT_PUBLIC_SITE_URL` | `https://rethlab.vercel.app` (origin only — no `/rethlab` suffix; the basePath is appended automatically) |
    | `NEXT_PUBLIC_GITHUB_SPONSORS_URL` | `https://github.com/sponsors/psyto` |
    | `ENABLE_DEV_AUTH` | `false` |
    | `NEXT_PUBLIC_ENABLE_DEV_AUTH` | `false` |
@@ -109,7 +109,7 @@ When you're ready:
    - For apex (`fabrknt.com`): create an `A` record to `76.76.21.21`.
    - For `www`: create a `CNAME` to `cname.vercel-dns.com`.
 3. Wait for DNS propagation (usually < 30 min).
-4. **Update environment variables** in Vercel:
+4. **Update environment variables** in Vercel (origin only — no `/rethlab` suffix):
    - `AUTH_URL` → `https://fabrknt.com`
    - `NEXT_PUBLIC_SITE_URL` → `https://fabrknt.com`
 5. **Update OAuth callbacks**:
@@ -121,9 +121,47 @@ The site is now live at `https://fabrknt.com/rethlab`.
 
 ---
 
-## 8. Going live with Stripe
+## 8. Enable Vercel Analytics + Speed Insights
 
-When you've verified the donation flow with `sk_test_...`:
+The code already wires up `@vercel/analytics`. Turn it on in the dashboard:
+
+1. Vercel → Project → **Analytics** tab → click "Enable Web Analytics" (free for hobby projects).
+2. Same project → **Speed Insights** tab → click "Enable Speed Insights" (also free).
+3. Re-deploy (or wait for the next push to `main`); Vercel injects the tracking automatically.
+
+After ~24 hours, the Analytics tab shows page views, top paths, referrers, locales, devices. Speed Insights shows Core Web Vitals per route.
+
+---
+
+## 9. Verify SEO
+
+After deploy, run the basics:
+
+1. **Open Graph preview**:
+   - Twitter / X: <https://cards-dev.twitter.com/validator>
+   - Facebook: <https://developers.facebook.com/tools/debug/>
+   - Paste `https://fabrknt.com/rethlab/` and confirm the OG card shows the ADD-opcode visual.
+
+2. **Search engine indexing**:
+   - <https://search.google.com/search-console> — verify domain ownership (DNS TXT record), submit `https://fabrknt.com/rethlab/sitemap.xml`.
+   - <https://www.bing.com/webmasters> (optional) — same flow.
+
+3. **Lighthouse**:
+   - Chrome DevTools → Lighthouse tab → run on the production URL.
+   - SEO and Best Practices should both score 90+.
+   - Performance may dip on lesson pages because of Mermaid; that's acceptable since they're lazy-loaded.
+
+4. **Canonical + hreflang sanity-check**:
+   ```bash
+   curl -s https://fabrknt.com/rethlab/courses/reth-beginner-en | grep -oE 'rel="canonical"[^/]+|hrefLang="[a-z]+" href="[^"]+"'
+   ```
+   Should show the canonical URL with `/rethlab/courses/reth-beginner-en` and two `<link rel="alternate">` entries (en, ja).
+
+---
+
+## 10. Going live with Stripe
+
+When you've verified the donation flow with `sk_test_...` end-to-end (place a test card transaction, confirm `/donate/thanks` renders):
 
 1. Stripe Dashboard → switch to **Live mode**.
 2. Copy the live `sk_live_...` secret key.
