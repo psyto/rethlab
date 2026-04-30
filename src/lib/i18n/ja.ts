@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに歩く。HyperEVM・Tempo・Base が本番で動かしているコードそのものです。「Rust が少し書ける」状態から、次世代チェーンが動いている EVM インフラを拡張・フォーク・実装できる状態まで。',
+      subtitle: 'Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに解説。HyperEVM・Tempo・Base が本番で動かしているコードそのものを利用。「Rust が少し書ける」レベルから、次世代チェーンが動いている EVM インフラを拡張・フォーク・実装できるレベルまで。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
