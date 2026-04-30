@@ -1,0 +1,1093 @@
+import { PrismaClient } from '@prisma/client';
+
+export async function seedRethFundamentalsEN(prisma: PrismaClient) {
+  const tags = ['reth', 'revm', 'alloy', 'rust', 'fundamentals', 'evm'];
+
+  await prisma.course.create({
+    data: {
+      slug: 'reth-fundamentals-en',
+      title: 'Reth Fundamentals — Your First Steps with Alloy',
+      description:
+        'Use Alloy to talk to a real Ethereum node — sign messages, query balances, fetch block numbers — and learn the EVM concepts (stack, memory, opcodes) that you need before reading Revm.',
+      difficulty: 'INTERMEDIATE',
+      duration: 150,
+      xpReward: 250,
+      track: 'reth-fundamentals',
+      tags,
+      isPublished: true,
+      sortOrder: 200,
+      locale: 'en',
+      instructorName: 'RethLab',
+      modules: {
+        create: [
+          {
+            title: 'Working with Alloy',
+            sortOrder: 0,
+            lessons: {
+              create: [
+                {
+                  title: 'Rust: ownership and borrowing in 5 minutes',
+                  slug: 'rust-ownership-borrowing-en',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Rust: ownership and borrowing in 5 minutes
+
+The first wall in Rust is **ownership**. You don't need to master it to read Alloy code — you need to **recognize the rules** when they show up.
+
+## 1. Why ownership exists
+
+C/C++ leaves memory management to you. Java/JS hides it behind a garbage collector. Rust takes a third path: **the compiler tracks ownership at compile time** and rejects programs that misuse memory.
+
+The result:
+
+- No garbage collector, no manual \`free\`
+- Double-frees and use-after-free become compile errors
+- Data races between threads become compile errors
+
+That's the property that makes Rust uniquely good at "money-handling code."
+
+## 2. The three rules
+
+\`\`\`
+1. Each value has exactly one owner
+2. When the owner goes out of scope, the value is dropped
+3. Values are either moved (transferring ownership) or borrowed
+\`\`\`
+
+## 3. Move
+
+\`\`\`rust
+let s1 = String::from("hello");
+let s2 = s1;          // ownership moves s1 → s2
+// println!("{}", s1); // ❌ error: s1 no longer valid
+println!("{}", s2);   // OK
+\`\`\`
+
+## 4. Borrowing with \`&\` (read-only reference)
+
+If you only want to read, don't take ownership — borrow:
+
+\`\`\`rust
+fn print_addr(addr: &String) {
+    println!("{}", addr);
+}
+
+let a = String::from("0xABCD...");
+print_addr(&a);   // & lends a
+print_addr(&a);   // a still owns it; lend as many times as you want
+\`\`\`
+
+## 5. \`&mut\` (mutable reference)
+
+\`\`\`rust
+fn append_suffix(s: &mut String) {
+    s.push_str("...");
+}
+
+let mut a = String::from("Hello");
+append_suffix(&mut a);
+\`\`\`
+
+**The rule** at any moment, you can have **either**:
+
+- **Multiple \`&\` (read-only)** OR
+- **Exactly one \`&mut\` (mutable)**
+
+This is what makes data races a compile error.
+
+## 6. What is \`&str\`, really?
+
+\`&str\` is just a **borrow of a string**. \`String\` owns the characters; \`&str\` is a window into them.
+
+\`\`\`rust
+let owned: String = String::from("Hello, Alloy");
+let borrowed: &str = &owned;
+\`\`\`
+
+When a function takes \`&str\`, it's saying: "I just want to read — I don't need to own this."
+
+## 7. Patterns you'll see in Alloy
+
+\`\`\`rust
+// .parse()? — parse and propagate errors
+let url = "https://eth.llamarpc.com".parse()?;
+
+// & — pass a borrow, not ownership
+provider.get_balance(&address).await?;
+
+// mut — declare a variable as mutable
+let mut signer = PrivateKeySigner::random();
+\`\`\`
+
+These all flow from the rules above. When you spot \`&\`, \`&mut\`, or \`mut\` in code, the compiler is enforcing one of the three rules behind the scenes.
+
+## Cheat sheet
+
+| Symbol | Meaning |
+| :--- | :--- |
+| \`x\` | owned |
+| \`&x\` | borrow (read) |
+| \`&mut x\` | borrow (write) |
+| \`mut x\` | variable can be reassigned |
+
+You won't fully internalize ownership until you've fought a few compile errors. That's normal. Move on — the next lesson exercises this.`,
+                },
+                {
+                  title: 'Alloy primitives and signing',
+                  slug: 'alloy-primitives-signing-en',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Alloy primitives and signing
+
+Time to touch **Alloy** directly. Alloy is the de facto Ethereum library suite for Rust, and Reth uses it everywhere.
+
+## 1. Project setup
+
+\`\`\`bash
+cargo new hello_alloy
+cd hello_alloy
+\`\`\`
+
+Add to \`Cargo.toml\` under \`[dependencies]\`:
+
+\`\`\`toml
+[dependencies]
+alloy = { version = "1.0", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+eyre = "0.6"
+\`\`\`
+
+> **Tip**: versions move quickly. Check [crates.io](https://crates.io/crates/alloy) for the latest. \`eyre\` gives you nicer error messages.
+
+## 2. Sign a message — real example
+
+This is the entire \`sign_message.rs\` example from [\`alloy-rs/examples\`](https://github.com/alloy-rs/examples/blob/main/examples/wallets/examples/sign_message.rs):
+
+\`\`\`rust
+//! Example of signing a message with a signer.
+
+use alloy::signers::{local::PrivateKeySigner, Signer};
+use eyre::Result;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Set up a random signer.
+    let signer = PrivateKeySigner::random();
+
+    // Optionally, the wallet's chain id can be set, in order to use EIP-155
+    // replay protection with different chains.
+    let signer = signer.with_chain_id(Some(1337));
+
+    // The message to sign.
+    let message = b"hello";
+
+    // Sign the message asynchronously with the signer.
+    let signature = signer.sign_message(message).await?;
+
+    println!("Signature produced by {}: {:?}", signer.address(), signature);
+    println!("Signature recovered address: {}", signature.recover_address_from_msg(&message[..])?);
+
+    Ok(())
+}
+\`\`\`
+
+Copy this into \`src/main.rs\` and run \`cargo run\`. You'll see your random signer's address, the signature, and a recovered address that matches.
+
+## 3. What this code teaches
+
+### \`PrivateKeySigner::random()\`
+Creates a new keypair via secure RNG. **Never use this for real funds** — it's for tests and learning. For production, load from environment variable, encrypted keystore, or hardware wallet.
+
+### \`with_chain_id(Some(1337))\`
+EIP-155 wraps the chain ID into the signature so a tx signed for chain A can't be replayed on chain B. This is **non-optional** in production. \`1337\` is the typical local Anvil chain ID.
+
+### \`sign_message(message).await\`
+Implements **EIP-191** (the "Ethereum signed message" prefix) — what \`personal_sign\` over JSON-RPC and \`window.ethereum.request("personal_sign", ...)\` produce. The async-ness is because hardware wallets (Ledger/Trezor) take time to respond — even local signers expose the same interface for substitution.
+
+### \`signature.recover_address_from_msg(&message[..])\`
+The verification side. Given a signature and the original message, recover the signing address. This is **how you build "sign in with Ethereum"** — the server picks a nonce, the user signs it, the server recovers the address. No password.
+
+## 4. The \`address!\` macro
+
+\`\`\`rust
+use alloy::primitives::address;
+
+let recipient = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+\`\`\`
+
+\`address!\` is a **procedural macro** that runs at compile time. If you typo a hex digit or get the length wrong, **the program won't compile** — not "fail at runtime when the user clicks send." We'll see exactly how this macro is built in the Expert tier.
+
+## Why types matter so much
+
+Solidity has \`address\` too, but Rust's type system is stricter:
+
+- A function expecting \`U256\` will refuse a \`u64\` at compile time
+- \`Address\` is its own type, not a generic 20-byte array
+- Mixing up \`Address\` and \`B256\` produces a compile error
+- This is what gives Rust EVM code its reputation for safety in money-handling logic
+
+## Drill
+
+Modify the example to:
+
+1. Sign **the same message** with **two different chain IDs** — print the signatures (they should differ)
+2. Try \`recover_address_from_msg\` against a **modified** message — the recovered address won't match. **That's EIP-191's tamper resistance.**
+
+Next up: a real Provider and node connection.`,
+                },
+                {
+                  title: 'Rust: Result, Option, and the `?` operator',
+                  slug: 'rust-result-option-en',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Rust: Result, Option, and the \`?\` operator
+
+Almost every line of Alloy code ends with \`.await?\` or \`.parse()?\`. Time to understand what \`?\` actually does.
+
+## 1. No exceptions
+
+Rust has no try/catch. Errors are **values returned from functions**:
+
+- A function that can fail returns **\`Result<T, E>\`**
+- A function that may not have a value returns **\`Option<T>\`**
+
+Both are \`enum\`s:
+
+\`\`\`rust
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+enum Option<T> {
+    Some(T),
+    None,
+}
+\`\`\`
+
+## 2. \`Option\`: present or absent
+
+\`\`\`rust
+let v: Vec<i32> = vec![1, 2, 3];
+let first: Option<&i32> = v.first();   // Some(&1)
+let empty: Vec<i32> = vec![];
+let none: Option<&i32> = empty.first();// None
+
+match first {
+    Some(n) => println!("got {}", n),
+    None => println!("empty"),
+}
+\`\`\`
+
+## 3. \`Result\`: success or failure
+
+\`\`\`rust
+fn parse_int(s: &str) -> Result<i32, std::num::ParseIntError> {
+    s.parse::<i32>()
+}
+
+match parse_int("42") {
+    Ok(n) => println!("got {}", n),
+    Err(e) => println!("oops: {}", e),
+}
+\`\`\`
+
+## 4. The \`?\` operator: error propagation
+
+\`?\` says: **"if this is an error, return it from this function right now; if it's Ok, give me the inner value."**
+
+\`\`\`rust
+fn parse_two(a: &str, b: &str) -> Result<(i32, i32), std::num::ParseIntError> {
+    let x = a.parse::<i32>()?;   // bail on error
+    let y = b.parse::<i32>()?;   // bail on error
+    Ok((x, y))
+}
+\`\`\`
+
+Without \`?\`, you'd write the same logic with \`match\` blocks — about three times as much code.
+
+## 5. \`Result<(), Box<dyn Error>>\` and \`eyre::Result<()>\`
+
+Common return types for \`main\`:
+
+| Type | Meaning |
+| :--- | :--- |
+| \`Result<(), Box<dyn std::error::Error>>\` | std-only (verbose) |
+| \`eyre::Result<()>\` | the **\`eyre\`** crate's friendly version (recommended) |
+
+\`eyre\` gives you human-readable error chains and lets different error types compose naturally. Alloy code defaults to \`eyre::Result<()>\`.
+
+## 6. \`unwrap()\` and \`expect()\`
+
+The "ignore the error" escape hatch — fine while learning, **don't ship it**. They panic if the value is \`Err\` or \`None\`.
+
+\`\`\`rust
+let n: i32 = "42".parse().unwrap();
+let n: i32 = "42".parse().expect("not an int");
+\`\`\`
+
+## 7. What this looks like in Alloy
+
+\`\`\`rust
+async fn main() -> eyre::Result<()> {
+    let provider = ProviderBuilder::new()
+        .connect_http("https://eth.llamarpc.com".parse()?);  // ?: parse error → return
+    let block = provider.get_block_number().await?;          // ?: RPC error → return
+    Ok(())
+}
+\`\`\`
+
+Almost every line uses \`?\`. Mental model: **"keep going on success, send the error up on failure."**`,
+                },
+                {
+                  title: 'Provider — connecting to a node',
+                  slug: 'alloy-provider-en',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Provider — connecting to a node
+
+A **Provider** is your gateway to a node. Block numbers, balances, transactions — everything goes through it.
+
+## Minimal example — verbatim
+
+This is the entire \`http.rs\` example from [\`alloy-rs/examples\`](https://github.com/alloy-rs/examples/blob/main/examples/providers/examples/http.rs):
+
+\`\`\`rust
+//! Example of using the HTTP provider with the \`reqwest\` crate to get the latest block number.
+
+use alloy::providers::{Provider, ProviderBuilder};
+use eyre::Result;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Create a provider with the HTTP transport using the \`reqwest\` crate.
+    let rpc_url = "https://reth-ethereum.ithaca.xyz/rpc".parse()?;
+    let provider = ProviderBuilder::new().connect_http(rpc_url);
+
+    // Get latest block number.
+    let latest_block = provider.get_block_number().await?;
+
+    println!("Latest block number: {latest_block}");
+
+    Ok(())
+}
+\`\`\`
+
+\`cargo run\` and you should see the current mainnet block number. **This is the seed of every monitoring bot you'll ever write.**
+
+Note the URL: \`https://reth-ethereum.ithaca.xyz/rpc\` is the **public Reth RPC operated by Paradigm/Ithaca** — your code is literally talking to a Reth node. You're already inside the stack.
+
+## Common Provider methods
+
+| Method | Role |
+| :--- | :--- |
+| \`get_block_number\` | Latest block number |
+| \`get_balance(address)\` | ETH balance |
+| \`get_block(...)\` | Full block data |
+| \`get_transaction_by_hash(hash)\` | Transaction details |
+| \`get_logs(filter)\` | Event logs |
+
+## Pointing at any EVM chain
+
+Just swap the URL. HyperEVM, Optimism, your local Anvil — same code:
+
+\`\`\`rust
+let provider = ProviderBuilder::new()
+    .connect_http("https://api.hyperliquid.xyz/evm".parse()?); // HyperEVM
+let provider = ProviderBuilder::new()
+    .connect_http("http://127.0.0.1:8545".parse()?);          // Anvil
+\`\`\`
+
+## Local dev with Anvil
+
+[Anvil](https://book.getfoundry.sh/anvil/) (part of Foundry) runs a local Ethereum node. No real money, no rate limits — perfect for learning.
+
+\`\`\`bash
+anvil
+\`\`\`
+
+## What's next
+
+You can now read state. The next module dives into how the EVM actually executes — stack, memory, opcodes — which prepares you for Revm.`,
+                },
+                {
+                  title: 'Challenge: balance checker',
+                  slug: 'balance-checker-challenge-en',
+                  type: 'CHALLENGE',
+                  sortOrder: 4,
+                  duration: 15,
+                  xpReward: 30,
+                  challengeLanguage: 'typescript',
+                  content: `# Challenge: balance checker
+
+Implement a function that returns \`true\` when a given address has zero balance, \`false\` otherwise.
+
+In Rust + Alloy, the equivalent is:
+
+\`\`\`rust
+let balance = provider.get_balance(addr).await?;
+balance.is_zero()
+\`\`\`
+
+## TypeScript task
+
+Implement \`isEmptyWallet\` so it:
+
+- calls \`getBalance(address)\` (a fake provider returning a \`bigint\`)
+- returns \`true\` if balance is \`0n\`, otherwise \`false\``,
+                  starterCode: `type GetBalance = (address: string) => Promise<bigint>;
+
+async function isEmptyWallet(
+  getBalance: GetBalance,
+  address: string
+): Promise<boolean> {
+  // TODO: fetch balance and compare to 0n
+  return false;
+}
+
+const fakeBalances: Record<string, bigint> = {
+  "0xAAAA": 0n,
+  "0xBBBB": 1000000000000000000n,
+};
+const fakeProvider: GetBalance = async (a) => fakeBalances[a] ?? 0n;
+
+(async () => {
+  console.log(await isEmptyWallet(fakeProvider, "0xAAAA")); // true
+  console.log(await isEmptyWallet(fakeProvider, "0xBBBB")); // false
+})();
+`,
+                  solutionCode: `type GetBalance = (address: string) => Promise<bigint>;
+
+async function isEmptyWallet(
+  getBalance: GetBalance,
+  address: string
+): Promise<boolean> {
+  const balance = await getBalance(address);
+  return balance === 0n;
+}
+
+const fakeBalances: Record<string, bigint> = {
+  "0xAAAA": 0n,
+  "0xBBBB": 1000000000000000000n,
+};
+const fakeProvider: GetBalance = async (a) => fakeBalances[a] ?? 0n;
+
+(async () => {
+  console.log(await isEmptyWallet(fakeProvider, "0xAAAA"));
+  console.log(await isEmptyWallet(fakeProvider, "0xBBBB"));
+})();
+`,
+                  hints: [
+                    'Don\'t forget await — getBalance returns a Promise.',
+                    'TypeScript bigint literals end with n: 0n, 1000n, etc.',
+                    'In Rust the call is provider.get_balance(addr).await? and the type is U256.',
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            title: 'Inside the EVM',
+            sortOrder: 1,
+            lessons: {
+              create: [
+                {
+                  title: 'The EVM is a stack machine',
+                  slug: 'evm-stack-machine-en',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# The EVM is a stack machine
+
+The Ethereum Virtual Machine is a **stack machine**. It has no general registers and no calling conventions in the C sense — almost everything happens on a stack.
+
+## The three "places"
+
+Every EVM instruction reads or writes one of these:
+
+| Place | Property | Purpose |
+| :--- | :--- | :--- |
+| **Stack** | LIFO, max 1024 deep | Operands and results |
+| **Memory** | Volatile within a tx | Temporary scratch space |
+| **Storage** | Persistent (expensive) | Contract state |
+
+## How ADD works
+
+The \`ADD\` opcode takes two values from the top of the stack, adds them, and pushes the result back:
+
+\`\`\`
+Before: stack [..., 7, 5]
+ADD
+After:  stack [..., 12]
+\`\`\`
+
+That's it: pop, pop, add, push.
+
+## The real Revm \`Stack\`
+
+This isn't theory — it's a struct in [\`crates/interpreter/src/interpreter/stack.rs\`](https://github.com/bluealloy/revm/blob/main/crates/interpreter/src/interpreter/stack.rs):
+
+\`\`\`rust
+pub const STACK_LIMIT: usize = 1024;
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct Stack {
+    /// The underlying data of the stack.
+    data: Vec<U256>,
+}
+\`\`\`
+
+That's the entire structure: a vector of \`U256\` values, with a hard limit of 1024. The methods you'll see called all over the interpreter:
+
+\`\`\`rust
+pub fn new() -> Self
+pub fn push(&mut self, value: U256) -> bool
+pub fn pop(&mut self) -> Result<U256, InstructionResult>
+pub fn peek(&self, no_from_top: usize) -> Result<U256, InstructionResult>
+pub fn popn<const N: usize>(&mut self) -> Option<[U256; N]>
+pub fn dup(&mut self, n: usize) -> bool
+pub fn swap(&mut self, n: usize) -> bool
+\`\`\`
+
+Read it carefully:
+
+- **\`push(...) -> bool\`** — \`true\` if pushed, \`false\` on overflow (more than 1024). The interpreter's macros check this and bail to \`StackOverflow\`.
+- **\`pop(...) -> Result<...>\`** — explicit underflow detection, returned as \`InstructionResult::StackUnderflow\`.
+- **\`popn<const N: usize>()\`** — pop **N values at once**, returning a fixed-size array. The const generic means the compiler unrolls the pop loop. **This is what makes \`popn_top!\` fast.**
+
+## How ADD actually works
+
+Pop two, sum, push back. Pseudocode:
+
+\`\`\`
+Before: stack [..., 7, 5]
+ADD
+After:  stack [..., 12]
+\`\`\`
+
+But you've already seen the **real** \`add\` source in the Advanced tier preview — it doesn't even pop both then push: it pops one, writes through a mutable reference to the other. Revm's interpreter is built so the EVM mental model maps directly to Rust, but with cycle-level optimizations layered on.
+
+## Why a stack machine?
+
+- **Simplicity** — small instruction set means fewer consensus bugs
+- **Reproducibility** — easy to re-execute and verify
+- **ZK-friendliness** — stack semantics map cleanly to constraint systems (you'll see this in zkEVM later)
+
+## Drill
+
+Open \`crates/interpreter/src/interpreter/stack.rs\` in the repo. Find:
+
+1. The \`STACK_LIMIT\` check inside \`push\` — what does it do on overflow?
+2. The \`popn\` impl — notice how the const \`N\` lets the compiler skip the loop entirely
+3. The \`dup\` and \`swap\` methods — they don't allocate; they just shuffle indices
+
+Now build a tiny stack machine yourself in the next lesson.`,
+                },
+                {
+                  title: 'Challenge: a mini EVM stack',
+                  slug: 'mini-evm-stack-en',
+                  type: 'CHALLENGE',
+                  sortOrder: 1,
+                  duration: 15,
+                  xpReward: 30,
+                  challengeLanguage: 'typescript',
+                  content: `# Challenge: a mini EVM stack
+
+Use a list (\`Vec\` in Rust, an \`Array\` in TS) as a stack and implement:
+
+- \`push(n)\` — push a number
+- \`add()\` — pop two, push their sum
+- \`peek()\` — read the top without removing it
+
+## Rust reference
+
+\`\`\`rust
+fn main() {
+    let mut stack: Vec<i64> = Vec::new();
+    stack.push(100);
+    stack.push(200);
+    let a = stack.pop().unwrap();
+    let b = stack.pop().unwrap();
+    stack.push(a + b);
+    println!("{:?}", stack); // [300]
+}
+\`\`\`
+
+Now implement it as a TypeScript class.`,
+                  starterCode: `class MiniEvmStack {
+  private stack: number[] = [];
+
+  push(n: number): void {
+    // TODO
+  }
+
+  add(): void {
+    // TODO: pop two, push their sum
+  }
+
+  peek(): number | undefined {
+    // TODO
+    return undefined;
+  }
+}
+
+const s = new MiniEvmStack();
+s.push(100);
+s.push(200);
+s.add();
+console.log(s.peek()); // 300
+`,
+                  solutionCode: `class MiniEvmStack {
+  private stack: number[] = [];
+
+  push(n: number): void {
+    this.stack.push(n);
+  }
+
+  add(): void {
+    const a = this.stack.pop();
+    const b = this.stack.pop();
+    if (a === undefined || b === undefined) {
+      throw new Error("stack underflow");
+    }
+    this.stack.push(a + b);
+  }
+
+  peek(): number | undefined {
+    return this.stack[this.stack.length - 1];
+  }
+}
+
+const s = new MiniEvmStack();
+s.push(100);
+s.push(200);
+s.add();
+console.log(s.peek());
+`,
+                  hints: [
+                    'JavaScript arrays already have push and pop methods.',
+                    'Calling add on an empty stack should error — "stack underflow." The real EVM does the same.',
+                    'A real EVM uses U256 (256-bit ints), not number. We\'re simplifying.',
+                  ],
+                },
+                {
+                  title: 'Rust: async, traits, and generics',
+                  slug: 'rust-async-traits-generics-en',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 15,
+                  xpReward: 30,
+                  content: `# Rust: async, traits, and generics
+
+Three features you have to understand to read serious Alloy/Reth code.
+
+## 1. async / await — describe "wait for it"
+
+For things that take time (network I/O, disk reads), Rust uses async/await.
+
+\`\`\`rust
+async fn fetch_block_number() -> u64 {
+    // imagine an HTTP request here
+    42
+}
+
+#[tokio::main]
+async fn main() {
+    let n = fetch_block_number().await;   // .await actually runs it
+    println!("{}", n);
+}
+\`\`\`
+
+### \`async\` returns a "future"
+
+An \`async fn\` doesn't run when you call it — it returns a **\`Future\`**. \`.await\` is what actually drives it.
+
+### What \`#[tokio::main]\` does
+
+Rust's standard library doesn't include an async runtime. **tokio** is the runtime; \`#[tokio::main]\` boots it. Alloy runs on tokio.
+
+## 2. Traits — "this type can do X"
+
+A trait is like a TypeScript / Java interface, but more powerful. It declares a contract:
+
+\`\`\`rust
+trait HasArea {
+    fn area(&self) -> f64;
+}
+
+struct Square { side: f64 }
+
+impl HasArea for Square {
+    fn area(&self) -> f64 {
+        self.side * self.side
+    }
+}
+
+let s = Square { side: 3.0 };
+println!("{}", s.area());   // 9.0
+\`\`\`
+
+### How Alloy uses traits
+
+\`\`\`rust
+provider.get_block_number().await?;
+\`\`\`
+
+\`provider\` is some type that **implements the \`Provider\` trait**. The actual type might be HTTP, WebSocket, or IPC — but you call it the same way. That's the power of traits.
+
+### Trait patterns you'll see often
+
+| Pattern | Meaning |
+| :--- | :--- |
+| \`impl Trait for Type\` | implement Trait for Type |
+| \`fn f<T: Trait>(x: T)\` | accept anything implementing Trait |
+| \`Box<dyn Trait>\` | dynamic dispatch (resolve method at runtime) |
+| \`async fn ... -> Result<T, E>\` | sugar for "returns a Future implementing a trait" |
+
+## 3. Generics — "decide the type later"
+
+The \`<i32>\` in \`Vec<i32>\` is a generic. \`Vec\` works for any element type, fixed at compile time.
+
+\`\`\`rust
+fn first<T: Clone>(v: &Vec<T>) -> T {
+    v[0].clone()
+}
+
+let v = vec![10, 20, 30];
+let f = first(&v);   // T inferred as i32
+\`\`\`
+
+### Alloy's \`Provider<N: Network = Ethereum>\`
+
+Alloy's \`Provider\` actually carries a type parameter for **which network it talks to**:
+
+\`\`\`rust
+let p = ProviderBuilder::new()              // defaults to Ethereum
+    .connect_http(rpc_url);
+
+let p = ProviderBuilder::new()
+    .network::<Optimism>()                  // switch to OP-stack
+    .connect_http(rpc_url);
+\`\`\`
+
+The chain choice is encoded **in the type** — fewer runtime bugs.
+
+## 4. Lifetimes (a peek)
+
+Borrows like \`&str\` carry an implicit **lifetime** \`<'a>\`:
+
+\`\`\`rust
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() >= y.len() { x } else { y }
+}
+\`\`\`
+
+It says: "the returned reference lives at least as long as the inputs." For now, **read-only is fine**. The Advanced tier covers writing them.
+
+## 5. Putting it all together (Reth-style)
+
+\`\`\`rust
+async fn my_exex<Node: FullNodeComponents>(
+    mut ctx: ExExContext<Node>,
+) -> eyre::Result<()> {
+    while let Some(notification) = ctx.notifications.recv().await {
+        // ...
+    }
+    Ok(())
+}
+\`\`\`
+
+- \`async fn\` — long-running work
+- \`<Node: FullNodeComponents>\` — generic + trait bound
+- \`while let Some(x) = ...\` — pattern matching to unwrap an Option
+- \`.await?\` — async + error propagation
+
+All combinations of what you've already seen. **If you can read it, you can write it.**`,
+                },
+                {
+                  title: 'Revm — the execution engine',
+                  slug: 'revm-introduction-en',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Revm — the execution engine
+
+You've seen Alloy (the outer RPC layer) and now know the EVM is a stack machine. The next character is **Revm** — the engine that actually runs opcodes.
+
+## Where Revm fits
+
+\`\`\`
++----------------+
+|     Reth       |  ← Full node (sync, storage, consensus)
++----------------+
+|     Revm       |  ← Execution engine (this layer)
++----------------+
+| Database / DB  |  ← State (Trie, KV)
++----------------+
+\`\`\`
+
+## Revm's actual top-level API
+
+Revm exports these high-level types ([\`crates/revm/src/lib.rs\`](https://github.com/bluealloy/revm/blob/main/crates/revm/src/lib.rs)):
+
+| Type | Role |
+| :--- | :--- |
+| **\`MainnetEvm\`** | the prebuilt Ethereum mainnet EVM |
+| **\`ExecuteEvm\`**, **\`ExecuteCommitEvm\`** | run a transaction (commit = also write state changes back) |
+| **\`SystemCallEvm\`** | system-level calls (e.g., post-Cancun BEACONROOT) |
+| **\`InspectEvm\`**, **\`InspectCommitEvm\`** | tracing variants — same execution, with hooks |
+| **\`Context\`** | the execution environment (block, tx, cfg) |
+| **\`Journal\`**, **\`JournalEntry\`** | state-change tracking (used for revert) |
+| **\`Database\`**, **\`DatabaseRef\`**, **\`DatabaseCommit\`** | the storage interfaces (covered in Advanced) |
+| **\`Inspector\`** | trait you implement to hook into execution |
+
+The key insight: Revm is **modular by design**. \`ExecuteEvm\`, \`InspectEvm\`, \`ExecuteCommitEvm\` aren't different EVMs — they're the same engine composed with different layers. **You pick what you need.**
+
+## What Revm provides
+
+- **Opcode interpretation** (the Interpreter)
+- **State access trait** (\`Database\`)
+- **Gas accounting** and exception handling
+- **Logs and tracing** via Inspectors
+
+## Why Revm became the standard
+
+| Adopter | Use |
+| :--- | :--- |
+| **Foundry** | Solidity test runner, mainnet fork simulation |
+| **Reth** | The execution engine of the full node |
+| **OP-Reth, Tempo** | L2s and App-chains |
+| **zkEVMs (Risc0, etc.)** | Provable EVM execution |
+| **MEV / simulation** | Anywhere you need to re-execute fast |
+
+The combination of "library-first design," "Rust embeddability," and "easy customization" is what locked in adoption.
+
+## Next
+
+You now know enough to start reading Revm code. The **next lesson** introduces Foundry — the Rust EVM toolchain you'll actually use day-to-day. Then the **Advanced** tier opens the interpreter folder.`,
+                },
+                {
+                  title: 'Foundry — the Rust EVM toolchain',
+                  slug: 'foundry-toolchain-en',
+                  type: 'CONTENT',
+                  sortOrder: 4,
+                  duration: 18,
+                  xpReward: 35,
+                  content: `# Foundry — the Rust EVM toolchain
+
+You've seen Reth (the node) and Revm (the engine). The **third pillar of the Rust EVM stack** is **[Foundry](https://github.com/foundry-rs/foundry)** — Paradigm's Solidity dev toolchain, every part of which is built on Revm. If you write Solidity that touches a Rust EVM chain, you'll use Foundry every day.
+
+Four binaries:
+
+| Tool | Role |
+| :--- | :--- |
+| **forge** | Build, test, format Solidity — runs tests inside Revm |
+| **cast** | The "swiss-army knife" — call contracts, decode calldata, query chains |
+| **anvil** | Local Ethereum node (also a Revm-based fork of mainnet) |
+| **chisel** | Solidity REPL — paste code, run inside Revm immediately |
+
+## 1. Install — verbatim from the [Foundry repo README](https://github.com/foundry-rs/foundry)
+
+\`\`\`bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+\`\`\`
+
+\`foundryup\` is a manager that pulls the latest \`forge\`, \`cast\`, \`anvil\`, \`chisel\` into \`~/.foundry/bin\`.
+
+## 2. \`forge\` — Solidity that runs on Revm
+
+\`\`\`bash
+forge init counter && cd counter
+forge build
+forge test
+\`\`\`
+
+\`forge test\` is the high point. It:
+
+1. Compiles your Solidity tests
+2. **Spawns a fresh Revm instance** with an in-memory database
+3. Executes each \`testXxx\` function via Revm
+4. Reports pass/fail, gas usage, traces
+
+You're already using Revm here. \`forge test\` is, for most Solidity developers, **the production Revm consumer they touch every day.**
+
+## 3. Cheatcodes — Foundry's secret weapon
+
+Inside Solidity tests, you can do things normal contracts can't:
+
+\`\`\`solidity
+import "forge-std/Test.sol";
+
+contract MyTest is Test {
+    function testTransfer() public {
+        vm.deal(alice, 10 ether);             // give alice 10 ETH
+        vm.warp(block.timestamp + 1 days);    // skip 1 day forward
+        vm.prank(alice);                       // next call comes from alice
+        myContract.transfer(bob, 1 ether);
+    }
+}
+\`\`\`
+
+How is this possible? **Cheatcodes are calls to a special address that Foundry injects as a Revm precompile**. From [\`forge-std/src/Base.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Base.sol):
+
+\`\`\`solidity
+address internal constant VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
+\`\`\`
+
+That address has **no special cryptographic property** — it's literally:
+
+\`\`\`solidity
+address(uint160(uint256(keccak256("hevm cheat code"))))
+\`\`\`
+
+Foundry runs Revm with a **custom precompile** registered at this address. When you call \`vm.deal(...)\` from Solidity, you're really doing \`CALL\` to \`0x7109...\` with ABI-encoded arguments — and Foundry's Rust code intercepts it.
+
+This is **exactly the precompile registration mechanism** you'll see in the Expert tier. Foundry is the most widely used real-world example of a custom precompile.
+
+## 4. \`cast\` — the EVM swiss-army knife
+
+\`\`\`bash
+# Talk to any chain
+cast block-number --rpc-url https://eth.merkle.io
+cast balance vitalik.eth --ether --rpc-url https://eth.merkle.io
+
+# Inspect calldata
+cast 4byte 0xa9059cbb              # → "transfer(address,uint256)"
+cast --abi-decode "balanceOf(address)(uint256)" 0x...
+
+# Read storage
+cast storage 0xUniswapV2Pair 0 --rpc-url https://eth.merkle.io
+
+# Call without sending a tx (eth_call)
+cast call $TOKEN "balanceOf(address)(uint256)" $WALLET --rpc-url ...
+\`\`\`
+
+For an MEV searcher or RPC engineer, \`cast\` is reflex-level tooling. You'll use it dozens of times a day to inspect chain state.
+
+## 5. \`anvil\` — local node + mainnet forking
+
+\`\`\`bash
+# Standalone local chain — instant blocks, 10 funded accounts
+anvil
+
+# Fork mainnet at the latest block — interact with real protocols locally
+anvil --fork-url https://eth.merkle.io
+\`\`\`
+
+The fork mode is the killer feature. It runs a **Revm instance with an \`AlloyDB\`-style backing** that lazy-loads state from the upstream RPC on demand. **You can interact with Uniswap V3 against mainnet state from your laptop, no testnet required.**
+
+Internally, anvil is the same family of code as the \`forked_db\` you saw in the MEV lesson. Anvil exposes it over JSON-RPC instead of a Rust API.
+
+## 6. \`chisel\` — Solidity REPL
+
+\`\`\`bash
+chisel
+> uint256 x = 1 + 2 * 3;
+> x
+7
+> address(0x1).balance
+0
+\`\`\`
+
+Backed by Revm. Type a line, get a result. Quick contract experiments without writing a full file.
+
+## 7. Why this matters for hardcore Rust EVM development
+
+If you're aiming for serious Rust EVM work, Foundry is **both your daily tool and a giant Revm consumer to learn from**:
+
+- Reading \`foundry-rs/foundry/crates/cheatcodes\` shows you a production custom-precompile system
+- The \`forge\` test runner is a real Revm orchestrator with fuzzing, invariant testing, coverage
+- \`anvil\`'s state forking is the production version of the \`AlloyDB\` pattern from the Database lesson
+
+## Drill
+
+1. Install Foundry: \`curl -L https://foundry.paradigm.xyz | bash && foundryup\`
+2. \`forge init my-test && cd my-test && forge test\` — run your first Revm-backed test
+3. \`anvil --fork-url <RPC>\` — fork mainnet locally
+4. In another terminal: \`cast call $UNISWAP_V3_POOL "slot0()" --rpc-url http://localhost:8545\` — read live Uniswap state from your local fork
+5. Open [\`forge-std/src/Vm.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Vm.sol) and skim the cheatcode interface — every entry corresponds to a function in Foundry's Rust precompile
+
+You're now using Revm both as a learner and as a daily user.`,
+                },
+                {
+                  title: 'Fundamentals quiz',
+                  slug: 'fundamentals-quiz-en',
+                  type: 'QUIZ',
+                  sortOrder: 5,
+                  duration: 12,
+                  xpReward: 30,
+                  content: `# Fundamentals quiz
+
+Check your grasp on Alloy, the EVM, and where Revm fits.`,
+                  quizQuestions: [
+                    {
+                      question: 'What does Alloy\'s `PrivateKeySigner::random()` give you?',
+                      options: [
+                        'A connection to a public node',
+                        'A signer object backed by a fresh random private key',
+                        'A gas estimate',
+                        'An audited smart contract',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'PrivateKeySigner holds the private key and exposes signing methods. Use .address() to get the derived public address.',
+                    },
+                    {
+                      question: '`ProviderBuilder::new().on_http(url)` produces:',
+                      options: [
+                        'A local web server',
+                        'A Provider that talks JSON-RPC to a node',
+                        'A wallet app',
+                        'A new blockchain',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Provider is the RPC client. It exposes get_block_number, get_balance, etc.',
+                    },
+                    {
+                      question: 'How does the EVM `ADD` opcode work?',
+                      options: [
+                        'Adds the first two bytes of memory',
+                        'Pops two values from the stack and pushes their sum',
+                        'Adds storage slots 0 and 1 and writes to slot 2',
+                        'Doubles the gas limit',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'The EVM is a stack machine. ADD pops two, sums them with uint256 wrap-around, and pushes the result.',
+                    },
+                    {
+                      question: 'Why is Revm the de facto execution engine in Foundry, Reth, and others?',
+                      options: [
+                        'It\'s the only free Rust EVM',
+                        'Its modular design lets you embed and customize it, with Rust\'s safety and speed',
+                        'For Geth (Go) compatibility',
+                        'It bundles the Solidity compiler',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'The library-first design plus Rust ergonomics make it the reusable building block for EVM tools.',
+                    },
+                    {
+                      question: 'Which EVM region is persistent on-chain?',
+                      options: ['Stack', 'Memory', 'Storage', 'Calldata'],
+                      correctIndex: 2,
+                      explanation: 'Stack and memory are transient within a tx. Only Storage writes persist on-chain — and they\'re the most expensive.',
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  });
+}
