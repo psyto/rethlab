@@ -19,7 +19,7 @@ import {
   Lock,
   HelpCircle,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { cn, formatDuration } from '@/lib/utils';
 import { useCourse, useEnroll } from '@/hooks';
 import { useSession } from 'next-auth/react';
@@ -44,6 +44,7 @@ export default function CourseDetailPage() {
   const { t, locale } = useLocale();
   const { data: session } = useSession();
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
+  const initializedRef = useRef(false);
 
   // Redirect to correct locale version when language switches
   useEffect(() => {
@@ -90,9 +91,9 @@ export default function CourseDetailPage() {
   );
   const isEnrolled = course.enrollment !== null;
 
-  // Expand first module by default
-  if (expandedModules.size === 0 && course.modules.length > 0) {
-    expandedModules.add(course.modules[0].id);
+  if (!initializedRef.current && course.modules.length > 0) {
+    initializedRef.current = true;
+    setExpandedModules(new Set(course.modules.map((m) => m.id)));
   }
 
   const handleEnroll = () => {
