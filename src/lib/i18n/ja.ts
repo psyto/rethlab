@@ -303,8 +303,12 @@ export const ja: TranslationKeys = {
     passedMessage: '良いペース。理解が地に足がついています。',
     failedMessage: '合格には70%以上必要です。復習してもう一度挑戦しましょう。',
     retry: 'もう一度挑戦',
-    shareOnX: 'X でシェア',
-    shareText: '@psyto の RethLab で、Reth・Revm・Alloy・Foundry の本物のソースを行ごとに学んでいます。',
+  },
+  share: {
+    onX: 'X でシェア',
+    quizText: '@psyto の RethLab で、Reth・Revm・Alloy・Foundry の本物のソースを行ごとに学んでいます。',
+    courseCompleteText: '@psyto の RethLab でティアを 1 つ修了 — Reth・Revm・Alloy・Foundry の本物のソースを行ごとに学んでいます。',
+    donateThanksText: '@psyto の RethLab を sponsor しました — 無料・本番ソース活用の Rust Ethereum トレーニングプログラム。おすすめ。',
   },
   footer: {
     stayUpdated: '最新情報を受け取る',

@@ -133,14 +133,14 @@ export function QuizPlayer({ questions, onComplete, isCompleted, onNext, nextLes
             <button
               onClick={() => {
                 const url = typeof window !== 'undefined' ? window.location.href : '';
-                const text = t('quiz.shareText');
+                const text = t('share.quizText');
                 const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
                 window.open(tweetUrl, '_blank', 'noopener,noreferrer');
               }}
               className="inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-primary"
             >
               <Twitter className="h-3.5 w-3.5" />
-              {t('quiz.shareOnX')}
+              {t('share.onX')}
             </button>
             <Link
               href="/donate"

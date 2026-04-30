@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Heart, ArrowRight } from 'lucide-react';
+import { Heart, ArrowRight, Twitter } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLocale } from '@/contexts/locale-context';
 
@@ -31,6 +31,20 @@ export default function DonateThanksPage() {
           {t('donate.thanks.cta')}
           <ArrowRight className="h-4 w-4" />
         </Link>
+        <div className="mt-6">
+          <button
+            onClick={() => {
+              const url = typeof window !== 'undefined' ? `${window.location.origin}/rethlab` : '';
+              const text = t('share.donateThanksText');
+              const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+              window.open(tweetUrl, '_blank', 'noopener,noreferrer');
+            }}
+            className="inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-primary"
+          >
+            <Twitter className="h-3.5 w-3.5" />
+            {t('share.onX')}
+          </button>
+        </div>
       </motion.div>
     </div>
   );

@@ -301,8 +301,12 @@ export const en = {
     passedMessage: 'Solid. Your understanding is grounded.',
     failedMessage: 'You need 70% to pass. Review the material and try again.',
     retry: 'Try Again',
-    shareOnX: 'Share on X',
-    shareText: "Reading the real Reth, Revm, Alloy, and Foundry source line by line on @psyto's RethLab.",
+  },
+  share: {
+    onX: 'Share on X',
+    quizText: "Reading the real Reth, Revm, Alloy, and Foundry source line by line on @psyto's RethLab.",
+    courseCompleteText: "Just finished a tier on @psyto's RethLab — walking the real Reth, Revm, Alloy, and Foundry source line by line.",
+    donateThanksText: "Just sponsored @psyto's RethLab — a free, source-grounded Rust Ethereum training program. Highly recommended.",
   },
   footer: {
     stayUpdated: 'Stay Updated',
