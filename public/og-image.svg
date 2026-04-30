@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#050505"/>
@@ -8,14 +8,54 @@
       <stop offset="0%" style="stop-color:#f97316"/>
       <stop offset="100%" style="stop-color:#fb923c"/>
     </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a1d"/>
+      <stop offset="100%" style="stop-color:#111114"/>
+    </linearGradient>
   </defs>
+
+  <!-- background -->
   <rect width="1200" height="630" fill="url(#bg)"/>
   <rect x="0" y="610" width="1200" height="20" fill="url(#accent)"/>
-  <rect x="80" y="200" width="80" height="80" rx="20" fill="url(#accent)"/>
-  <text x="120" y="262" text-anchor="middle" font-family="Arial,sans-serif" font-size="44" fill="#050505">🦀</text>
-  <text x="190" y="260" font-family="Arial,sans-serif" font-weight="bold" font-size="56" fill="white">RethLab</text>
-  <text x="80" y="320" font-family="Arial,sans-serif" font-size="28" fill="#a8a29e">Master Reth, Revm, and Alloy</text>
-  <text x="80" y="400" font-family="Arial,sans-serif" font-size="20" fill="#a8a29e">Tiered: Beginner · Fundamentals · Advanced</text>
-  <text x="80" y="440" font-family="Arial,sans-serif" font-size="20" fill="#a8a29e">Self-paced courses in English and Japanese</text>
-  <text x="80" y="540" font-family="Arial,sans-serif" font-size="18" fill="#f97316">Built by @psyto</text>
+
+  <!-- top-left: brand -->
+  <rect x="60" y="60" width="56" height="56" rx="14" fill="url(#accent)"/>
+  <text x="88" y="100" text-anchor="middle" font-size="32" fill="#050505">🦀</text>
+  <text x="135" y="100" font-weight="800" font-size="40" fill="#fafafa">RethLab</text>
+
+  <!-- tagline pill -->
+  <rect x="60" y="140" width="380" height="34" rx="17" fill="#1a1a1d" stroke="#27272a"/>
+  <circle cx="80" cy="157" r="4" fill="#f97316"/>
+  <text x="96" y="163" font-size="14" fill="#a8a29e">Demanding · Source-grounded · No fluff</text>
+
+  <!-- Headline -->
+  <text x="60" y="240" font-weight="800" font-size="56" fill="#fafafa">Become a Hardcore</text>
+  <text x="60" y="304" font-weight="800" font-size="56" fill="url(#accent)">Rust Ethereum Developer</text>
+
+  <!-- code card -->
+  <rect x="60" y="360" width="1080" height="200" rx="16" fill="url(#cardGrad)" stroke="#27272a"/>
+  <!-- card chrome -->
+  <circle cx="86" cy="386" r="6" fill="#ef4444" opacity="0.7"/>
+  <circle cx="106" cy="386" r="6" fill="#eab308" opacity="0.7"/>
+  <circle cx="126" cy="386" r="6" fill="#22c55e" opacity="0.7"/>
+  <text x="160" y="391" font-size="13" fill="#71717a">bluealloy/revm · interpreter/instructions/arithmetic.rs</text>
+  <line x1="60" y1="406" x2="1140" y2="406" stroke="#27272a"/>
+  <!-- code -->
+  <text x="84" y="436" font-size="18" fill="#71717a">// The real ADD opcode that runs on every Ethereum block</text>
+  <text x="84" y="466" font-size="18" fill="#fafafa">
+    <tspan fill="#f97316">pub fn</tspan><tspan fill="#fafafa"> add</tspan><tspan fill="#71717a">&lt;IT: ITy, H: ?Sized&gt;(ctx: Ictx&lt;'_, H, IT&gt;) -&gt; </tspan><tspan fill="#f97316">Result</tspan><tspan fill="#fafafa"> {</tspan>
+  </text>
+  <text x="84" y="494" font-size="18" fill="#fafafa">
+    <tspan fill="#fafafa">    </tspan><tspan fill="#eab308">popn_top!</tspan><tspan fill="#fafafa">([op1], op2, ctx.interpreter);</tspan>
+  </text>
+  <text x="84" y="522" font-size="18" fill="#fafafa">
+    <tspan fill="#fafafa">    *op2 = op1.</tspan><tspan fill="#fafafa">wrapping_add</tspan><tspan fill="#fafafa">(*op2);</tspan>
+  </text>
+  <text x="84" y="550" font-size="18" fill="#fafafa">
+    <tspan fill="#fafafa">    </tspan><tspan fill="#f97316">Ok</tspan><tspan fill="#fafafa">(())</tspan>
+  </text>
+
+  <!-- footer -->
+  <text x="60" y="595" font-size="16" fill="#a8a29e">Reth · Revm · Alloy · Foundry — line by line</text>
+  <text x="1140" y="595" text-anchor="end" font-size="16" fill="#f97316">@psyto</text>
 </svg>

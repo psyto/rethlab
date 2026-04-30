@@ -301,6 +301,8 @@ export const en = {
     passedMessage: 'Solid. Your understanding is grounded.',
     failedMessage: 'You need 70% to pass. Review the material and try again.',
     retry: 'Try Again',
+    shareOnX: 'Share on X',
+    shareText: "Reading the real Reth, Revm, Alloy, and Foundry source line by line on @psyto's RethLab.",
   },
   footer: {
     stayUpdated: 'Stay Updated',

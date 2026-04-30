@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, XCircle, ChevronRight, RotateCcw, Trophy, BookOpen, Heart } from 'lucide-react';
+import { CheckCircle2, XCircle, ChevronRight, RotateCcw, Trophy, BookOpen, Heart, Twitter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocale } from '@/contexts/locale-context';
 import type { QuizQuestion } from '@/types';
@@ -129,13 +129,27 @@ export function QuizPlayer({ questions, onComplete, isCompleted, onNext, nextLes
           )}
         </div>
         {passed && (
-          <Link
-            href="/donate"
-            className="mt-6 inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-primary"
-          >
-            <Heart className="h-3.5 w-3.5" />
-            {t('donate.inlineNudge')}
-          </Link>
+          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center sm:gap-6">
+            <button
+              onClick={() => {
+                const url = typeof window !== 'undefined' ? window.location.href : '';
+                const text = t('quiz.shareText');
+                const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+                window.open(tweetUrl, '_blank', 'noopener,noreferrer');
+              }}
+              className="inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-primary"
+            >
+              <Twitter className="h-3.5 w-3.5" />
+              {t('quiz.shareOnX')}
+            </button>
+            <Link
+              href="/donate"
+              className="inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-primary"
+            >
+              <Heart className="h-3.5 w-3.5" />
+              {t('donate.inlineNudge')}
+            </Link>
+          </div>
         )}
       </div>
     );
