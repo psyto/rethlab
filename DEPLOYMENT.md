@@ -1,48 +1,38 @@
 # Deployment
 
-This is the runbook for shipping RethLab to Vercel + Neon. Most steps require browser actions in your accounts; the local commands at the end push the schema and seed data into production.
+This is the runbook for shipping RethLab to Vercel + Neon at `rethlab.fabrknt.com`.
 
-The first deploy uses the default `rethlab.vercel.app` URL. Custom-domain setup (`fabrknt.com/rethlab`) is the last step — skip it if you want to ship faster and add the domain later.
+The site has no Next.js basePath — it lives at the root of the deploy URL. The first deploy uses `rethlab.vercel.app`; the custom subdomain `rethlab.fabrknt.com` gets added later via DNS.
 
 ---
 
 ## 1. Create the database (Neon)
 
-1. Sign in at <https://neon.tech> (GitHub login is fine).
-2. Create project — choose any region close to your audience.
-3. From the project dashboard, copy the **pooled** `DATABASE_URL` (the one ending in `?sslmode=require` — Neon's UI labels it "Pooled connection").
-4. Keep the URL handy. You'll paste it into Vercel and use it locally for the one-time seed.
+1. Sign in at <https://neon.tech>.
+2. Create project `rethlab` — pick a region close to your audience.
+3. **Skip "Enable Neon Auth"** — RethLab uses NextAuth + Prisma, not Neon Auth.
+4. Copy the **pooled** `DATABASE_URL` from Connection Details.
 
-Free tier covers RethLab's needs (3 GB storage, scales to zero when idle).
+Free tier covers RethLab's needs (3 GB, scales to zero when idle).
 
 ---
 
-## 2. Create the OAuth apps
+## 2. Create the GitHub OAuth App
 
-### GitHub OAuth (for sign-in)
-
-1. <https://github.com/settings/developers> → "New OAuth App"
+1. <https://github.com/settings/developers> → "OAuth Apps" tab → "New OAuth App".
 2. **Application name**: RethLab
-3. **Homepage URL**: `https://rethlab.vercel.app` (replace later if using fabrknt.com)
-4. **Authorization callback URL**: `https://rethlab.vercel.app/rethlab/api/auth/callback/github`
+3. **Homepage URL**: `https://rethlab.fabrknt.com` (use `https://rethlab.vercel.app` if you're skipping the custom domain for now).
+4. **Authorization callback URL**: `https://rethlab.fabrknt.com/api/auth/callback/github` (or `.vercel.app` equivalent).
 5. Save → copy **Client ID** and generate a **Client secret**.
 
-### Google OAuth (optional — only if you want Google sign-in)
-
-1. <https://console.cloud.google.com/apis/credentials> → Create OAuth client ID
-2. Type: Web application
-3. Authorized redirect URI: `https://rethlab.vercel.app/rethlab/api/auth/callback/google`
-4. Copy **Client ID** and **Client secret**.
-
-If you skip Google, leave `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` empty in Vercel — sign-in will still work via GitHub.
+(Google OAuth is optional. Same callback pattern: `https://rethlab.fabrknt.com/api/auth/callback/google`.)
 
 ---
 
-## 3. Stripe (test mode for now)
+## 3. Stripe (test mode)
 
-1. <https://dashboard.stripe.com> → Developers → API keys
-2. Copy the **Test mode** secret key (`sk_test_...`).
-3. Skip live mode until you've verified the donation flow end-to-end.
+1. <https://dashboard.stripe.com> → Developers → API keys → copy the **Test mode** secret (`sk_test_...`).
+2. Skip live mode until you've verified the donation flow.
 
 ---
 
@@ -52,72 +42,72 @@ If you skip Google, leave `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` empty in
 openssl rand -base64 32
 ```
 
-Save the output — you'll paste it into Vercel.
-
 ---
 
-## 5. Push the schema to Neon (one-time)
+## 5. Deploy to Vercel
 
-Locally, point Prisma at the Neon URL just for this command:
+If you haven't yet: install the Vercel CLI globally and run `vercel login`.
 
 ```bash
-DATABASE_URL="<paste-neon-url-here>" npx prisma db push
-DATABASE_URL="<paste-neon-url-here>" npx prisma db seed
+vercel link --project rethlab --scope <your-team>
 ```
 
-This creates all tables and loads the 8 courses / 16 modules / 74 lessons into Neon.
+Then add environment variables for production. The CLI prompts for each value:
 
-You only need to repeat this when the Prisma schema changes (re-run `db push`) or when you want to refresh course content (re-run `db seed`).
+```bash
+printf "<neon-database-url>" | vercel env add DATABASE_URL production
+printf "<auth-secret-from-step-4>" | vercel env add AUTH_SECRET production
+printf "true" | vercel env add AUTH_TRUST_HOST production
+printf "https://rethlab.vercel.app" | vercel env add AUTH_URL production
+printf "https://rethlab.vercel.app" | vercel env add NEXT_PUBLIC_SITE_URL production
+printf "<github-client-id>" | vercel env add GITHUB_ID production
+printf "<github-client-secret>" | vercel env add GITHUB_SECRET production
+printf "sk_test_..." | vercel env add STRIPE_SECRET_KEY production
+printf "https://github.com/sponsors/psyto" | vercel env add NEXT_PUBLIC_GITHUB_SPONSORS_URL production
+printf "false" | vercel env add ENABLE_DEV_AUTH production
+printf "false" | vercel env add NEXT_PUBLIC_ENABLE_DEV_AUTH production
+```
 
----
+(Use `printf` rather than `echo` to avoid trailing newlines — those break URL fields.)
 
-## 6. Deploy to Vercel
+Trigger the first deploy:
 
-1. Sign in at <https://vercel.com> (GitHub login is fine).
-2. **Add New → Project** → import `psyto/rethlab`.
-3. Vercel auto-detects Next.js. Don't override Build Command or Output Directory.
-4. **Environment Variables** — paste these in (all "Production" + "Preview"):
+```bash
+vercel --prod
+```
 
-   | Key | Value |
-   | :-- | :-- |
-   | `DATABASE_URL` | Neon pooled URL from step 1 |
-   | `AUTH_SECRET` | output from step 4 |
-   | `AUTH_URL` | `https://rethlab.vercel.app` |
-   | `AUTH_TRUST_HOST` | `true` |
-   | `GITHUB_ID` | from step 2 |
-   | `GITHUB_SECRET` | from step 2 |
-   | `GOOGLE_CLIENT_ID` | from step 2 (optional) |
-   | `GOOGLE_CLIENT_SECRET` | from step 2 (optional) |
-   | `STRIPE_SECRET_KEY` | `sk_test_...` from step 3 |
-   | `NEXT_PUBLIC_SITE_URL` | `https://rethlab.vercel.app` (origin only — no `/rethlab` suffix; the basePath is appended automatically) |
-   | `NEXT_PUBLIC_GITHUB_SPONSORS_URL` | `https://github.com/sponsors/psyto` |
-   | `ENABLE_DEV_AUTH` | `false` |
-   | `NEXT_PUBLIC_ENABLE_DEV_AUTH` | `false` |
-
-5. Hit **Deploy**.
-
-First deploy takes ~2 minutes. After it completes, open `https://rethlab.vercel.app/rethlab/`.
+The build runs `prisma generate && prisma db push --accept-data-loss && next build`, so the schema is created in Neon during the build (your local network doesn't need to reach Neon).
 
 ---
 
-## 7. Custom domain (`fabrknt.com`)
+## 6. Seed the courses (one-time)
 
-When you're ready:
+After the first deploy, the database has empty tables. Load the 8 courses / 74 lessons via the admin endpoint:
 
-1. Vercel → Project → Settings → Domains → Add `fabrknt.com`.
-2. Vercel shows the required DNS record. At your domain registrar:
-   - For apex (`fabrknt.com`): create an `A` record to `76.76.21.21`.
-   - For `www`: create a `CNAME` to `cname.vercel-dns.com`.
-3. Wait for DNS propagation (usually < 30 min).
-4. **Update environment variables** in Vercel (origin only — no `/rethlab` suffix):
-   - `AUTH_URL` → `https://fabrknt.com`
-   - `NEXT_PUBLIC_SITE_URL` → `https://fabrknt.com`
-5. **Update OAuth callbacks**:
-   - GitHub: change Authorization callback URL to `https://fabrknt.com/rethlab/api/auth/callback/github`
-   - Google (if used): change redirect URI similarly.
-6. Redeploy (Vercel → Deployments → ... → Redeploy).
+```bash
+curl -X POST "https://rethlab.vercel.app/api/admin/seed?key=$AUTH_SECRET&mode=full"
+```
 
-The site is now live at `https://fabrknt.com/rethlab`.
+`mode=full` clears any existing course data and re-seeds. Use `mode=add` later when iterating to preserve user enrollments.
+
+---
+
+## 7. Custom domain (`rethlab.fabrknt.com`)
+
+1. **DNS at the `fabrknt.com` registrar**: add a `CNAME` record:
+   - Host/Name: `rethlab`
+   - Value: `cname.vercel-dns.com`
+   - TTL: default
+2. **Vercel** → Project → Settings → Domains → Add `rethlab.fabrknt.com`. Vercel verifies DNS automatically (usually <30 min).
+3. **Update env vars** to use the custom domain:
+   ```bash
+   vercel env rm AUTH_URL production --yes
+   vercel env rm NEXT_PUBLIC_SITE_URL production --yes
+   printf "https://rethlab.fabrknt.com" | vercel env add AUTH_URL production
+   printf "https://rethlab.fabrknt.com" | vercel env add NEXT_PUBLIC_SITE_URL production
+   ```
+4. **Update GitHub OAuth App callback URL** to `https://rethlab.fabrknt.com/api/auth/callback/github`.
+5. Redeploy: `vercel --prod`.
 
 ---
 
@@ -125,67 +115,52 @@ The site is now live at `https://fabrknt.com/rethlab`.
 
 The code already wires up `@vercel/analytics`. Turn it on in the dashboard:
 
-1. Vercel → Project → **Analytics** tab → click "Enable Web Analytics" (free for hobby projects).
-2. Same project → **Speed Insights** tab → click "Enable Speed Insights" (also free).
-3. Re-deploy (or wait for the next push to `main`); Vercel injects the tracking automatically.
+1. Vercel → Project → **Analytics** tab → "Enable Web Analytics" (free for hobby projects).
+2. **Speed Insights** tab → "Enable Speed Insights" (also free).
+3. Re-deploy or wait for the next push to `main`; Vercel injects the tracking automatically.
 
-After ~24 hours, the Analytics tab shows page views, top paths, referrers, locales, devices. Speed Insights shows Core Web Vitals per route.
+Data appears in the Analytics tab after ~24 hours.
 
 ---
 
 ## 9. Verify SEO
 
-After deploy, run the basics:
-
-1. **Open Graph preview**:
-   - Twitter / X: <https://cards-dev.twitter.com/validator>
-   - Facebook: <https://developers.facebook.com/tools/debug/>
-   - Paste `https://fabrknt.com/rethlab/` and confirm the OG card shows the ADD-opcode visual.
-
-2. **Search engine indexing**:
-   - <https://search.google.com/search-console> — verify domain ownership (DNS TXT record), submit `https://fabrknt.com/rethlab/sitemap.xml`.
-   - <https://www.bing.com/webmasters> (optional) — same flow.
-
-3. **Lighthouse**:
-   - Chrome DevTools → Lighthouse tab → run on the production URL.
-   - SEO and Best Practices should both score 90+.
-   - Performance may dip on lesson pages because of Mermaid; that's acceptable since they're lazy-loaded.
-
+1. **OG preview**: paste `https://rethlab.fabrknt.com/` into <https://cards-dev.twitter.com/validator> — confirm the ADD-opcode card renders.
+2. **Search Console**: <https://search.google.com/search-console> → verify domain (DNS TXT record) → submit `https://rethlab.fabrknt.com/sitemap.xml`.
+3. **Lighthouse**: Chrome DevTools → Lighthouse → run on the production URL. SEO and Best Practices should both score 90+.
 4. **Canonical + hreflang sanity-check**:
    ```bash
-   curl -s https://fabrknt.com/rethlab/courses/reth-beginner-en | grep -oE 'rel="canonical"[^/]+|hrefLang="[a-z]+" href="[^"]+"'
+   curl -s https://rethlab.fabrknt.com/courses/reth-beginner-en | grep -oE 'rel="canonical"[^/]+|hrefLang="[a-z]+" href="[^"]+"'
    ```
-   Should show the canonical URL with `/rethlab/courses/reth-beginner-en` and two `<link rel="alternate">` entries (en, ja).
+   Should show the canonical URL and two `<link rel="alternate">` entries (en, ja).
 
 ---
 
 ## 10. Going live with Stripe
 
-When you've verified the donation flow with `sk_test_...` end-to-end (place a test card transaction, confirm `/donate/thanks` renders):
+When you've verified the donation flow with `sk_test_...` end-to-end (test card transaction → `/donate/thanks` renders):
 
 1. Stripe Dashboard → switch to **Live mode**.
-2. Copy the live `sk_live_...` secret key.
+2. Copy `sk_live_...`.
 3. Vercel → Settings → Environment Variables → update `STRIPE_SECRET_KEY` to the live key.
 4. Redeploy.
-
-Test by making a small real donation; refund yourself in the Stripe dashboard if you want.
 
 ---
 
 ## Updating the deployed site
 
 - **Code changes**: push to `main` → Vercel auto-deploys.
-- **Schema changes**: edit `prisma/schema.prisma`, then locally run `DATABASE_URL=<neon-url> npx prisma db push` before merging the change. (Or use `prisma migrate` if you want migration history.)
+- **Schema changes**: edit `prisma/schema.prisma` → next deploy runs `prisma db push --accept-data-loss` automatically.
 - **Course content changes**: edit `prisma/seed-reth-*-{en,ja}.ts`, then either:
-  - **Full re-seed** (drops user data): `DATABASE_URL=<neon-url> npx prisma db seed`
-  - **Add-only**: `curl -X POST "https://fabrknt.com/rethlab/api/admin/seed?key=$AUTH_SECRET&mode=add"` — preserves existing courses and user enrollments, only adds new courses.
+  - **Full re-seed** (drops user data): `curl -X POST "https://rethlab.fabrknt.com/api/admin/seed?key=$AUTH_SECRET&mode=full"`
+  - **Add-only**: `mode=add` instead of `mode=full` — preserves existing courses and enrollments.
 
 ---
 
 ## Costs
 
-- **Vercel Hobby**: free until you hit ~100 GB/month bandwidth or build limits
+- **Vercel Hobby**: free until ~100 GB bandwidth or build limits
 - **Neon Free**: free up to 3 GB
-- **Stripe**: 2.9% + 30¢ per donation (no monthly fee)
+- **Stripe**: 2.9% + 30¢ per donation, no monthly fee
 
-Total at low traffic: **$0/month**. Scales as needed without ops work on your side.
+Total at low traffic: **$0/month**.

@@ -54,7 +54,7 @@ All four tiers are free. Reading every lesson works without an account; sign-in 
 
 ## Stack
 
-- **Next.js 16** + React 19 + TypeScript (App Router, `basePath: /rethlab`)
+- **Next.js 16** + React 19 + TypeScript (App Router, deployed at `rethlab.fabrknt.com`)
 - **Prisma** + PostgreSQL
 - **NextAuth v5** (Google & GitHub OAuth, plus dev-mode credentials) — anonymous-first; sign-in is optional
 - **Tailwind CSS** + Radix UI
@@ -84,7 +84,7 @@ npx prisma db seed
 npm run dev
 ```
 
-Then open [http://localhost:3000/rethlab](http://localhost:3000/rethlab) (note the `basePath`).
+Then open [http://localhost:3000](http://localhost:3000).
 
 ### What `db seed` does
 
@@ -95,7 +95,7 @@ The seeder lives in `prisma/seed.ts` and pulls from 8 individual tier files (`pr
 Use the admin endpoint instead:
 
 ```bash
-curl -X POST "http://localhost:3000/rethlab/api/admin/seed?key=$AUTH_SECRET&mode=add"
+curl -X POST "http://localhost:3000/api/admin/seed?key=$AUTH_SECRET&mode=add"
 ```
 
 `mode=add` only adds courses that don't exist yet (preserves user enrollments and lesson-completion progress).
