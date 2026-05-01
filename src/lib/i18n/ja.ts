@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Hyperliquid・Tempo・Base — 最新の EVM チェーンは Rust ベースに移っています。追いつくには Rust Ethereum スタックの習熟が必須です。RethLab は Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに解説 — 「Rust が少し書ける」レベルから、これらのチェーンを拡張・フォーク・実装できるレベルまで。',
+      subtitle: 'Hyperliquid は perps 特化、Tempo は payments 特化、Base は consumer L2。最新の EVM は用途特化型 L1 の波 — そしてそのすべてが Reth・Revm・Alloy・Foundry で動いています。RethLab はその本物のソースコードを行ごとに解説 — 「Rust が少し書ける」レベルから、次の特化型 L1 を拡張・フォーク・実装できるレベルまで。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -78,8 +78,8 @@ export const ja: TranslationKeys = {
     },
     whyNow: {
       tag: 'なぜ今 Rust',
-      title: '知らぬ間に、Ethereum は Rust ネイティブになっていた',
-      subtitle: 'ここ数年、高パフォーマンスの話題が Solana に流れていた — その認識は間違っていません。でも、Rust の EVM スタック（Reth・Revm・Alloy・Foundry）が静かにそのギャップを埋めました。今、本番で動いている client・chain・tool は Rust ネイティブで、その内部を読めるエンジニアは希少です。',
+      title: '知らぬ間に、EVM L1 は用途特化型へ — そのすべてが Rust で動いている',
+      subtitle: '高パフォーマンスの話題が Solana に流れていた数年の間に、EVM 側は静かに別の方向へ進化していました — 単一の汎用チェーンではなく、用途別に特化した L1 の波（perps の Hyperliquid、payments の Tempo、consumer の Base）。そのすべてが同じ Rust 基盤（Reth・Revm・Alloy・Foundry）の上に乗っています。その内部を読めるエンジニアは希少です。',
       card1Title: 'Rust が EVM スタックを奪った',
       card1Desc: 'Reth（Paradigm）は default execution client になりつつあります。Foundry の内部は Revm。Alloy は ethers-rs の現代的な後継。',
       card2Title: '本番はすでに移行済み',
@@ -324,7 +324,7 @@ export const ja: TranslationKeys = {
   },
   about: {
     title: 'RethLabについて',
-    subtitle: 'Hyperliquid・Tempo・Base — 最新の EVM チェーンは Rust ベースに移っています。RethLab は、Reth・Revm・Alloy・Foundry の本物のソースコードを行ごとに解説して、その変化に追いつくためのトレーニングプログラムです。',
+    subtitle: '最新の EVM は用途特化型 L1 の波 — perps の Hyperliquid、payments の Tempo、consumer L2 の Base。そのすべてが Reth・Revm・Alloy・Foundry で動いています。RethLab は、その本物のソースコードを行ごとに解説するトレーニングプログラムです。',
     bio: 'Reth・Revm・Alloy は、いま最も性能の高いブロックチェーンの中核にあります。しかし「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態への入り口は険しい — ドキュメントは散在し、ソースは難解で、明確な道筋が存在しません。RethLab がその道筋です：4ティア・約74レッスン、すべての上位概念は本番ソースコードに紐づけられている。修了すれば、Reth の Stage を読み、独自の Revm precompile を書き、ExEx をデプロイし、grant 応募で「スタックを理解している」ことを示すコードサンプルを提示できます。',
     background: {
       tradfi: 'なぜRustなのか',
@@ -367,7 +367,7 @@ export const ja: TranslationKeys = {
     loadCourse: 'コースの読み込みに失敗しました。もう一度お試しください。',
   },
   page: {
-    launchBanner: 'Free · Hyperliquid・Tempo・Base が動かしているのと同じ Rust EVM スタック',
+    launchBanner: 'Free · 用途特化型 EVM L1 を支える Rust スタック',
     whyRethLab: {
       title: 'なぜRethLab？',
     },

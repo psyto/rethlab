@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 
 export const alt =
-  'RethLab — Catch up with the Rust-native EVM wave (Reth, Revm, Alloy, Foundry) line by line';
+  'RethLab — The Rust stack behind every purpose-built EVM L1 (Reth, Revm, Alloy, Foundry), line by line';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 

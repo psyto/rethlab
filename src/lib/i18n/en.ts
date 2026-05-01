@@ -39,7 +39,7 @@ export const en = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Hyperliquid, Tempo, Base — the new wave of EVM chains is Rust-native. Keeping up means mastering the Rust Ethereum stack. RethLab walks you through the real Reth, Revm, Alloy, and Foundry source line by line, from "I know some Rust" to ready to extend, fork, and ship these chains\' infrastructure.',
+      subtitle: 'Hyperliquid for perps. Tempo for payments. Base for the consumer L2. The new wave of EVM is purpose-built L1s — and they all run on Reth, Revm, Alloy, Foundry. RethLab walks you through that source line by line, from "I know some Rust" to ready to extend, fork, and ship the next one.',
       cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -76,8 +76,8 @@ export const en = {
     },
     whyNow: {
       tag: 'WHY RUST, WHY NOW',
-      title: "While you weren't watching, Ethereum went Rust-native",
-      subtitle: "If you've been watching Solana eat the high-performance narrative, you're not wrong about the past few years. But the Rust EVM stack — Reth, Revm, Alloy, Foundry — quietly closed the gap. The chains, clients, and tools shipping in production today are Rust-native, and the engineers who can read their internals are scarce.",
+      title: "The new EVM L1s are purpose-built — and they all run on Rust",
+      subtitle: "While Solana ate the high-performance narrative, the EVM side quietly evolved into something different: not one general chain, but purpose-built L1s for specific use cases — perps, payments, consumer apps. They all share the same Rust foundation: Reth, Revm, Alloy, Foundry. The engineers who can read that stack are scarce.",
       card1Title: 'Rust took the EVM stack',
       card1Desc: 'Reth (Paradigm) is becoming the default execution client. Foundry runs on Revm. Alloy is the modern replacement for ethers-rs.',
       card2Title: 'Production already moved',
@@ -322,7 +322,7 @@ export const en = {
   },
   about: {
     title: 'About RethLab',
-    subtitle: 'Hyperliquid, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab is the training program that brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line.',
+    subtitle: 'The new wave of EVM is purpose-built L1s — Hyperliquid for perps, Tempo for payments, Base for the consumer L2. They all run on Reth, Revm, Alloy, Foundry. RethLab is the training program that walks you through that source, line by line.',
     bio: 'Reth, Revm, and Alloy are at the heart of the most performant chains being built today. But the on-ramp from "I know some Rust" to "I can write production EVM infrastructure" is brutal — the docs are scattered, the source is dense, and there is no clear path. RethLab is that path: 4 tiers, ~74 lessons, every advanced concept grounded in actual production source. Finish it and you can read Reth\'s stages, write custom Revm precompiles, ship an ExEx, and apply for grant work with code samples that prove you understand the stack.',
     background: {
       tradfi: 'Why Rust',
@@ -365,7 +365,7 @@ export const en = {
     loadCourse: 'Failed to load course. Please try again.',
   },
   page: {
-    launchBanner: 'Free · The same Rust EVM stack that runs Hyperliquid, Tempo, and Base',
+    launchBanner: 'Free · The Rust stack behind every purpose-built EVM L1',
     whyRethLab: {
       title: 'Why RethLab?',
     },
