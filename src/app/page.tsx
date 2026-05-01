@@ -5,12 +5,10 @@ import { useLocale } from '@/contexts/locale-context';
 import {
   ArrowRight,
   Terminal,
-  TrendingUp,
   BookOpen,
   Boxes,
   Code2,
   CheckCircle2,
-  Heart,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -64,9 +62,9 @@ export default function LandingPage() {
     },
   ];
 
+  // Three strongest outcomes aligned with purpose-built L1 thesis
+  // (Ship ExEx → Build Reth fork → Apply for grant work)
   const outcomes = [
-    t('landing.outcomes.item1'),
-    t('landing.outcomes.item2'),
     t('landing.outcomes.item3'),
     t('landing.outcomes.item4'),
     t('landing.outcomes.item5'),
@@ -158,67 +156,6 @@ export default function LandingPage() {
                 {t('landing.hero.sourceCaption')}
               </p>
             </motion.div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Why Rust, why now — perception flip vs. "Solana is hot, Ethereum is fading" */}
-      <section className="relative overflow-hidden border-t border-border">
-        <div className="pointer-events-none absolute inset-0 bg-fabrknt-gradient-subtle" />
-        <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
-          <motion.div
-            className="mx-auto max-w-3xl text-center"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <div className="font-mono text-xs uppercase tracking-widest text-primary">
-              {t('landing.whyNow.tag')}
-            </div>
-            <h2 className="mt-3 text-2xl font-bold sm:text-3xl lg:text-4xl">
-              {t('landing.whyNow.title')}
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-muted-foreground sm:text-lg">
-              {t('landing.whyNow.subtitle')}
-            </p>
-          </motion.div>
-
-          <motion.div
-            className="mt-12 grid gap-5 md:grid-cols-3"
-            variants={stagger}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true }}
-          >
-            {[
-              {
-                icon: Code2,
-                title: t('landing.whyNow.card1Title'),
-                desc: t('landing.whyNow.card1Desc'),
-              },
-              {
-                icon: Boxes,
-                title: t('landing.whyNow.card2Title'),
-                desc: t('landing.whyNow.card2Desc'),
-              },
-              {
-                icon: TrendingUp,
-                title: t('landing.whyNow.card3Title'),
-                desc: t('landing.whyNow.card3Desc'),
-              },
-            ].map((item, i) => (
-              <motion.div
-                key={i}
-                className="rounded-2xl border border-primary/20 bg-card/80 p-6 backdrop-blur-sm"
-                variants={fadeIn}
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
-                  <item.icon className="h-5 w-5 text-primary" />
-                </div>
-                <h3 className="mt-4 text-base font-bold text-foreground">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.desc}</p>
-              </motion.div>
-            ))}
           </motion.div>
         </div>
       </section>
@@ -336,51 +273,51 @@ export default function LandingPage() {
       </section>
 
       {/* Learning Tracks */}
-      <section className="border-t border-border bg-card/30 py-24">
+      <section className="border-t border-border bg-card/30 py-16">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <motion.div
             className="mx-auto max-w-2xl text-center"
             {...fadeIn}
           >
-            <h2 className="text-3xl font-bold sm:text-4xl">
+            <h2 className="text-2xl font-bold sm:text-3xl">
               {t('page.tracks.title')}
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
+            <p className="mt-3 text-base text-muted-foreground sm:text-lg">
               {t('page.tracks.subtitle')}
             </p>
           </motion.div>
 
-          <div className="mt-16 grid gap-6 sm:grid-cols-2">
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {tracks.map((track, i) => (
               <motion.div
                 key={i}
-                className={`group relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br ${track.color} p-6 transition-all hover:border-primary/50`}
+                className={`group relative overflow-hidden rounded-xl border border-border bg-gradient-to-br ${track.color} p-5 transition-all hover:border-primary/50`}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
+                transition={{ delay: i * 0.08 }}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-background/50">
-                    <track.icon className="h-5 w-5 text-foreground" />
+                <div className="flex items-center justify-between">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/50">
+                    <track.icon className="h-4.5 w-4.5 text-foreground" />
                   </div>
-                  <span className="rounded-full bg-background/50 px-3 py-1 text-xs font-medium text-muted-foreground">
+                  <span className="rounded-full bg-background/50 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                     {track.difficulty}
                   </span>
                 </div>
-                <h3 className="mt-4 text-lg font-semibold">{track.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{track.description}</p>
-                <div className="mt-4 text-xs text-muted-foreground">
+                <h3 className="mt-3 text-base font-semibold">{track.title}</h3>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{track.description}</p>
+                <div className="mt-3 text-[11px] text-muted-foreground/70">
                   {formatT('page.tracks.courseCount', { count: String(track.courses) })}
                 </div>
               </motion.div>
             ))}
           </div>
 
-          <div className="mt-12 text-center">
+          <div className="mt-10 text-center">
             <Link
               href="/courses"
-              className="inline-flex items-center gap-2 rounded-xl bg-fabrknt-gradient px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-all hover:opacity-90 hover:shadow-xl"
+              className="inline-flex items-center gap-2 rounded-xl bg-fabrknt-gradient px-7 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:opacity-90 hover:shadow-xl"
             >
               {t('common.exploreCourses')}
               <ArrowRight className="h-4 w-4" />
@@ -412,31 +349,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Sponsor strip — bottom of page, after the conversion ask */}
-      <section className="border-t border-border bg-fabrknt-gradient-subtle">
-        <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12">
-          <div className="rounded-2xl border border-primary/25 bg-card/80 p-6 shadow-lg shadow-primary/5 backdrop-blur-sm sm:p-8">
-            <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-              <div className="flex items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15">
-                  <Heart className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-base font-semibold text-foreground sm:text-lg">{t('landing.sponsor.title')}</p>
-                  <p className="mt-1.5 text-sm text-muted-foreground">{t('landing.sponsor.subtitle')}</p>
-                </div>
-              </div>
-              <Link
-                href="/donate"
-                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:opacity-90 hover:shadow-lg"
-              >
-                {t('landing.sponsor.cta')}
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
