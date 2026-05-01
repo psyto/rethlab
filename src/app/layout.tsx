@@ -54,14 +54,7 @@ export const metadata: Metadata = {
     title: 'RethLab — Hardcore Rust Ethereum Developer Training',
     description:
       'Hyperliquid, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
-    images: [
-      {
-        url: '/og-image.svg',
-        width: 1200,
-        height: 630,
-        alt: 'RethLab — Catch up with the Rust-native EVM wave (Reth, Revm, Alloy, Foundry) line by line',
-      },
-    ],
+    // images are auto-derived from app/opengraph-image.tsx (PNG, 1200x630)
   },
   twitter: {
     card: 'summary_large_image',
@@ -70,7 +63,7 @@ export const metadata: Metadata = {
       'Hyperliquid, Tempo, Base — the new wave of EVM chains is Rust-native. RethLab brings you up to speed by walking the real Reth, Revm, Alloy, and Foundry source line by line. Free, English + Japanese, no signup required.',
     creator: '@psyto',
     site: '@psyto',
-    images: ['/og-image.svg'],
+    // images are auto-derived from app/opengraph-image.tsx
   },
   robots: {
     index: true,
