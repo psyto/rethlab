@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "prebuild": "prisma generate",
+    "prebuild": "prisma generate && prisma db push --accept-data-loss",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "eslint src/ --ext .ts,.tsx",
