@@ -1113,9 +1113,19 @@ Now you've shipped a 1-line component swap. Scale this pattern to consensus or e
                   xpReward: 20,
                   content: `# Bridge to Expert — what comes next
 
-You've climbed **Alloy → Revm → Reth (Staged Sync, ExEx, custom NodeBuilder)**. You can now read the source of all three projects with intent.
+> 🛑 **Gate check.** Before claiming you've finished Advanced, answer these — out loud or on paper, no scrolling back through previous lessons:
+>
+> 1. What does \`popn_top!\` expand to? Why does it use \`unwrap_unchecked()\` inside \`unsafe\`?
+> 2. Why are \`Database\` and \`DatabaseRef\` separate traits? What does the asymmetric \`auto_impl\` list (\`&mut, Box\` vs \`&, &mut, Box, Rc, Arc\`) tell you?
+> 3. What does \`ExExEvent::FinishedHeight\` tell Reth's pruner — and what's the disk consequence of forgetting it?
+> 4. Why is \`MerkleStage\` *after* hashing, not interleaved?
+> 5. To ship a purpose-built L1 like Tempo, which Reth components do you swap?
+>
+> **Got fewer than 4 right?** Don't continue. Go back to the relevant Advanced lesson. Expert assumes these as fluent vocabulary, not concepts you'll re-look-up.
 
-But "reading" is only half. The **Expert** tier crosses from "I can read it" to "I can ship it in production."
+If you cleared the gate: you've climbed **Alloy → Revm → Reth (Staged Sync, ExEx, custom NodeBuilder)**. You can read the source of all three with intent.
+
+But "reading" is only half. **Expert** crosses from "I can read it" to "I can ship it in production."
 
 ## What awaits in Expert
 
@@ -1133,24 +1143,31 @@ But "reading" is only half. The **Expert** tier crosses from "I can read it" to 
 
 ## The mindset shift
 
-Advanced taught you the **structures**. Expert teaches you the **decisions** behind those structures:
+Advanced taught you the **structures**. Expert teaches you the **decisions** behind them.
 
-- *Why* does Reth use MDBX and not RocksDB? (read latency under compaction stalls)
-- *Why* does Revm pop one and write through a reference instead of pop/pop/push? (one fewer memory write per ADD)
-- *Why* does \`#[track_caller]\` matter on \`Database::tx()\`? (panic shows the buggy caller, not the trait)
-- *Why* are Foundry cheatcodes precompiles and not opcodes? (consensus compatibility with vanilla EVM)
+> 🛑 **Predict the answers before reading mine.** Have an opinion first — even a wrong one. Engineers shipping infra do.
+>
+> - *Why* does Reth use MDBX and not RocksDB?
+> - *Why* does Revm pop one and write through a reference instead of pop/pop/push?
+> - *Why* does \`#[track_caller]\` matter on \`Database::tx()\`?
+> - *Why* are Foundry cheatcodes precompiles and not opcodes?
 
-Once you internalize the *why*, you can defend design choices to a Paradigm engineer or a Hyperliquid validator op — and that's the gate to grant-eligible work.
+---
+
+Now mine:
+
+- **MDBX vs RocksDB** — read latency under compaction stalls.
+- **Pop-one-write-through** — one fewer memory write per ADD opcode.
+- **\`#[track_caller]\`** — panic backtrace shows the buggy caller, not the trait method.
+- **Cheatcodes as precompiles** — consensus compatibility with vanilla EVM (precompiles are reserved addresses, not new opcodes — your fork still parses mainnet bytecode).
+
+The point isn't that you matched my wording. The point is: did you have an *opinion* before reading? **Once you internalize the *why*, you can defend design choices to a Paradigm engineer or a Hyperliquid validator op — and that's the gate to grant-eligible work.**
 
 ## Before you continue
 
-Make sure you can explain, in your own words:
+If the Gate check at the top felt easy, jump into Expert.
 
-1. What \`popn_top!\` does and *why* it uses \`unwrap_unchecked()\`
-2. Why \`Database\` and \`DatabaseRef\` are separate traits
-3. What \`ExExEvent::FinishedHeight\` tells Reth's pruner
-
-If any of these are fuzzy, re-read the relevant Advanced lesson before starting Expert. Pace yourself — Expert lessons are denser, and most people benefit from running the linked code locally as they read.
+If any of the five questions sent you back to a previous lesson — re-read them now. Expert is denser. Running the linked code locally as you go is no longer optional.
 
 > The first three months in infra learning are the hardest. Documentation is sparse — **the source code is the textbook**. The Expert tier is where that lesson pays off.`,
                 },
@@ -1166,70 +1183,70 @@ If any of these are fuzzy, re-read the relevant Advanced lesson before starting 
 Final check across Revm internals, ExEx, and the Reth SDK.`,
                   quizQuestions: [
                     {
-                      question: "What is `crates/interpreter` in the Revm repo mainly responsible for?",
+                      question: "Which of these is `crates/interpreter` in Revm responsible for?",
                       options: [
-                        'Block sync and P2P networking',
+                        'Defining the EVM type system primitives (Address, U256, B256)',
                         'Implementing each EVM opcode in Rust',
-                        'JSON-RPC server definitions',
-                        'Consensus leader election',
+                        'Holding the Database trait and the state-supply interface',
+                        'Building the instruction dispatch table at runtime',
                       ],
                       correctIndex: 1,
-                      explanation: 'crates/interpreter holds the per-opcode implementations: ADD, MUL, PUSH, JUMP, SLOAD, SSTORE, etc.',
+                      explanation: 'crates/interpreter holds the per-opcode implementations: ADD, MUL, PUSH, JUMP, SLOAD, SSTORE, etc. (Primitives live in crates/primitives. The Database trait lives in crates/database-interface. The dispatch table is built at compile time, not runtime.) If you guessed runtime dispatch — re-read the custom opcodes lesson.',
                     },
                     {
-                      question: 'What does "adding a custom opcode" to Revm let you do?',
+                      question: 'What does adding a custom opcode to a Revm-based fork actually let you do?',
                       options: [
-                        'Run private opcodes on Ethereum mainnet',
-                        'Provide a fast, single-instruction shortcut on your own chain (consensus-incompatible with mainnet)',
-                        'Replace Geth with a Rust binary',
-                        "Change Solidity's syntax",
+                        'Override how a standard opcode (like ADD) computes its result for all clients',
+                        'Provide a fast, single-instruction shortcut on your own chain — consensus-incompatible with mainnet',
+                        'Add a precompile callable at a fixed address from any Solidity contract on mainnet',
+                        'Reduce gas costs for the same opcode without forking',
                       ],
                       correctIndex: 1,
-                      explanation: 'Custom opcodes break consensus with mainnet, so they only make sense on your own App-chain. Inside that chain they\'re a powerful optimization.',
+                      explanation: 'Custom opcodes occupy unallocated bytes (e.g. 0x0C). Mainnet does not know your opcode, so any block using it cannot be replayed by go-ethereum. The shortcut is real *inside your fork*. Precompiles are a different mechanism (reserved addresses, not new opcode bytes) and gas costs cannot be cheaper without forking consensus.',
                     },
                     {
-                      question: 'The main role of Revm\'s `Database` trait is:',
+                      question: "The main role of Revm's `Database` trait is:",
                       options: [
-                        'To commit EVM execution directly',
+                        'To commit EVM state changes back to the underlying storage',
                         'To supply account info, contract code, storage slots, and past block hashes that the EVM needs to execute',
-                        'To manage P2P networking',
-                        'To swap the gas-pricing algorithm',
+                        'To handle the gas-accounting hot path',
+                        'To provide the dispatch table from opcode bytes to functions',
                       ],
                       correctIndex: 1,
-                      explanation: 'Database abstracts the state source. Different impls let you back the EVM with in-memory data, RPC, production storage, or custom DBs.',
+                      explanation: 'Database is the read-side state source. Writes go through DatabaseCommit. Gas accounting is internal to the interpreter. Dispatch is the instruction table. Different Database impls let you back the EVM with in-memory data, JSON-RPC (forked mainnet), production MDBX, or anything else.',
                     },
                     {
-                      question: 'What is the advantage of Reth\'s Staged Sync?',
+                      question: "What's the actual advantage of Reth's Staged Sync over block-by-block sync?",
                       options: [
-                        'Full Geth database compatibility',
-                        'Processing blocks in stages (over ranges) maximizes I/O, CPU, and cache efficiency',
-                        'Verifying all blocks in parallel and ignoring ordering',
-                        'It works without ZK proofs',
+                        'Allows blocks to be downloaded but never executed, saving disk',
+                        'Processing in stages over block ranges maximizes I/O, CPU, and cache efficiency — and makes reorgs symmetrical via unwind',
+                        'Skips Merkle root computation by deferring it indefinitely',
+                        'Removes the database — state is derived on demand at query time',
                       ],
                       correctIndex: 1,
-                      explanation: 'Staged Sync — Headers → Bodies → Senders → Execution → Merkle → TxLookup — processes ranges of blocks per stage, which is critical for managing huge chain state.',
+                      explanation: 'Staged Sync (Headers → Bodies → Senders → Execution → Hashing → Merkle → TxLookup → Indexes → Finish) processes ranges per stage. Sender recovery parallelizes via Rayon. Hashing is sorted before MerkleStage runs. And every stage has both `execute` and `unwind` — making reorgs a normal mode of operation, not a special case.',
                     },
                     {
                       question: 'What can you do with ExEx (Execution Extensions)?',
                       options: [
-                        'Rewrite mainnet consensus',
+                        'Inject custom logic into the JSON-RPC pipeline before responses are sent',
                         'Run Rust code in-process on every chain commit, reorg, or revert at near-execution-time latency',
-                        'Execute arbitrary Solidity for free',
-                        'Disable Ethereum RPC',
+                        'Override how transactions are gossiped on the P2P network',
+                        "Replace Reth's consensus engine with a custom one",
                       ],
                       correctIndex: 1,
-                      explanation: 'ExEx receives ChainCommitted / ChainReorged / ChainReverted notifications. It\'s the basis for indexers, MEV tools, and real-time monitoring at node speed.',
+                      explanation: 'ExEx receives ChainCommitted / ChainReorged / ChainReverted notifications in-process — perfect for indexers, MEV pipelines, and real-time risk engines. (RPC customization is via add_ons, network and consensus customization is via with_components — different SDK surfaces.)',
                     },
                     {
-                      question: 'Which components do you typically customize when building an App-chain with the Reth SDK?',
+                      question: 'Which of these is the realistic customization surface when building an App-chain with the Reth SDK?',
                       options: [
-                        'Only the Solidity compiler version',
-                        'EVM config (opcodes, gas), consensus, storage, and RPC',
-                        'The user\'s web browser',
-                        'TypeScript type definitions',
+                        'Only the chain ID and gas limit at the genesis level',
+                        'Pool, network, payload, executor (EVM), and consensus components — plus RPC and ExEx via add-ons',
+                        'Only Stage<Provider> implementations — the rest is locked',
+                        'Database tables and indices only — the EVM itself is fixed',
                       ],
                       correctIndex: 1,
-                      explanation: 'Reth SDK exposes pluggable EVMConfig, Consensus, Storage, Network, and RPC — the foundations of an App-chain.',
+                      explanation: 'The SDK exposes `with_components.{pool, network, payload, executor, consensus}` plus `with_add_ons` for RPC and ExEx. Everything from a custom mempool (Tempo-style priority lanes) to a custom consensus (HyperBFT) to a custom EVM (custom opcodes / precompiles) is one builder swap away.',
                     },
                   ],
                 },
