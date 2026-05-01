@@ -81,8 +81,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // PrismaAdapter handles user/account creation on OAuth sign-in
   // but we use JWT for session management (database sessions have
   // issues in NextAuth v5 beta).
-  // For URL generation under Next.js basePath, set AUTH_URL to
-  // include /rethlab (e.g. https://fabrknt.com/rethlab).
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
   providers,

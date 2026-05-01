@@ -1,16 +1,11 @@
 import { MetadataRoute } from 'next';
 import { prisma } from '@/lib/db';
 
-const BASE_PATH = '/rethlab';
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // NEXT_PUBLIC_SITE_URL should be the site origin without basePath
-  // (e.g. https://fabrknt.com); we append BASE_PATH consistently here.
-  const origin =
+  const root =
     process.env.NEXT_PUBLIC_SITE_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-    'https://fabrknt.com';
-  const root = `${origin}${BASE_PATH}`;
+    'https://rethlab.fabrknt.com';
 
   const staticPages: MetadataRoute.Sitemap = [
     { url: root, changeFrequency: 'weekly', priority: 1 },

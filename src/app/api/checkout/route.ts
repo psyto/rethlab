@@ -11,11 +11,6 @@ function siteOrigin(req: Request): string {
   return new URL(req.url).origin;
 }
 
-function basePath(): string {
-  // basePath is configured in next.config.js as '/rethlab'
-  return '/rethlab';
-}
-
 export async function POST(req: Request) {
   let amountUsd: number;
   try {
@@ -44,7 +39,6 @@ export async function POST(req: Request) {
   }
 
   const origin = siteOrigin(req);
-  const bp = basePath();
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -64,8 +58,8 @@ export async function POST(req: Request) {
           },
         },
       ],
-      success_url: `${origin}${bp}/donate/thanks?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}${bp}/donate/cancel`,
+      success_url: `${origin}/donate/thanks?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/donate/cancel`,
     });
 
     return NextResponse.json({ url: session.url });

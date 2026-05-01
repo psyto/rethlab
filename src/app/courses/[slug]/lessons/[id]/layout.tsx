@@ -40,8 +40,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     prisma.lesson.findFirst({ where: { slug: jaLessonSlug }, select: { id: true } }),
   ]);
 
-  const enUrl = enLesson ? `/rethlab/courses/${baseCourseSlug}-en/lessons/${enLesson.id}` : undefined;
-  const jaUrl = jaLesson ? `/rethlab/courses/${baseCourseSlug}-ja/lessons/${jaLesson.id}` : undefined;
+  const enUrl = enLesson ? `/courses/${baseCourseSlug}-en/lessons/${enLesson.id}` : undefined;
+  const jaUrl = jaLesson ? `/courses/${baseCourseSlug}-ja/lessons/${jaLesson.id}` : undefined;
   const canonical = isJa ? jaUrl : enUrl;
 
   const languages: Record<string, string> = {};

@@ -18,8 +18,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const isJa = slug.endsWith('-ja');
   const baseSlug = isJa ? slug.replace(/-ja$/, '') : slug.replace(/-en$/, '');
-  const enUrl = `/rethlab/courses/${baseSlug}-en`;
-  const jaUrl = `/rethlab/courses/${baseSlug}-ja`;
+  const enUrl = `/courses/${baseSlug}-en`;
+  const jaUrl = `/courses/${baseSlug}-ja`;
   const canonical = isJa ? jaUrl : enUrl;
 
   return {

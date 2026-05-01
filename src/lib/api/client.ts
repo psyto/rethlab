@@ -8,15 +8,11 @@ export class ApiError extends Error {
   }
 }
 
-const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || '/rethlab';
-
 export async function apiFetch<T>(
   url: string,
   options?: RequestInit
 ): Promise<T> {
-  // Prefix relative API paths with basePath so they route to RethLab's API
-  const fullUrl = url.startsWith('/') ? `${BASE_PATH}${url}` : url;
-  const res = await fetch(fullUrl, {
+  const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
   });

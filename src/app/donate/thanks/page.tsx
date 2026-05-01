@@ -34,7 +34,7 @@ export default function DonateThanksPage() {
         <div className="mt-6">
           <button
             onClick={() => {
-              const url = typeof window !== 'undefined' ? `${window.location.origin}/rethlab` : '';
+              const url = typeof window !== 'undefined' ? window.location.origin : '';
               const text = t('share.donateThanksText');
               const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
               window.open(tweetUrl, '_blank', 'noopener,noreferrer');

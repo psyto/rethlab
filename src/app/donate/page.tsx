@@ -29,7 +29,7 @@ export default function DonatePage() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch('/rethlab/api/checkout', {
+      const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ amountUsd: effectiveAmount }),

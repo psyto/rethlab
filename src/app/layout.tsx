@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   creator: 'psyto',
   metadataBase: new URL(baseUrl),
   alternates: {
-    canonical: '/rethlab',
+    canonical: '/',
   },
   openGraph: {
     type: 'website',
