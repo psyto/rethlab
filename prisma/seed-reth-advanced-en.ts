@@ -34,7 +34,9 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
                   xpReward: 30,
                   content: `# Reading the interpreter
 
-We're going inside [\`bluealloy/revm\`](https://github.com/bluealloy/revm). The folder that matters is \`crates/interpreter\` — that's where every EVM opcode is implemented in Rust.
+You're going inside [\`bluealloy/revm\`](https://github.com/bluealloy/revm). The folder that matters is \`crates/interpreter\` — every EVM opcode is implemented here, in Rust.
+
+This lesson: read the real \`add\` opcode and the dispatch loop that calls it. Three lines of code. Half a page of nuance per line. **Reading is the easy part. Internalizing it is the lesson.**
 
 ## Layout
 
@@ -52,9 +54,10 @@ revm/
 │   │   │   └── interpreter.rs
 │   ├── primitives/         ← Address, U256, B256
 │   ├── database-interface/ ← the Database trait
-│   ├── precompile/         ← built-in precompiles
-│   └── ...
+│   └── precompile/         ← built-in precompiles
 \`\`\`
+
+> 📂 **Open the repo in another tab now.** Don't read the rest of this lesson without it open. Every claim below should be cross-checked against the actual file.
 
 ## The real \`add\` opcode
 
@@ -68,18 +71,27 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 }
 \`\`\`
 
-Three lines. But every detail matters:
+Three lines. Six things a lazy reader will miss.
 
-### 1. \`<IT: ITy, H: ?Sized>\`
-Two generics:
-- \`IT\` is an **interpreter-types** marker — concrete vs traced vs sandboxed (Inspector). The same \`add\` works for all three.
-- \`H: ?Sized\` is the **Host** trait, the callback into the outer environment (state reads, gas refund, log emission). \`?Sized\` lets you pass a \`&mut dyn Host\`.
+> 🛑 **Stop. Before scrolling, answer in one sentence each:**
+> 1. Why is there a generic \`IT\` here at all? What would change if it were removed?
+> 2. Why \`?Sized\` on \`H\`? When does removing the \`?\` break the build?
+> 3. The body never returns the result anywhere visible. Where does the EVM observe the new top of stack?
+>
+> If any answer is "I don't know" or "something about traits," scroll up and re-read the signature before continuing. The point is not to scroll past comfortable.
 
-This is why "modular" is more than marketing. One ADD, all execution modes.
+---
 
-### 2. \`popn_top!([op1], op2, context.interpreter)\`
+### \`<IT: ITy, H: ?Sized>\`
 
-That's a macro. Its real definition lives in \`instructions/macros.rs\`:
+- \`IT\` is an **interpreter-types** marker. It selects the execution mode at compile time: concrete, traced, or sandboxed (Inspector). The same \`add\` function compiles to specialized binaries, one per mode. **Without \`IT\`, you'd write \`add\` three times.**
+- \`?Sized\` opts \`H\` *out* of the implicit \`Sized\` bound. Without \`?\`, \`H\` must be a concrete type known at compile time. With \`?\`, \`H\` can be \`dyn Host\` — a trait object whose size is unknown at compile time. That's the only reason \`&mut dyn Host\` compiles.
+
+> 🔍 **Open \`revm/src/host.rs\`. Find one place where \`dyn Host\` is actually constructed.** That's the proof these generics earn their complexity. If you can't find one, the generics are just noise to you — find one before continuing.
+
+### \`popn_top!([op1], op2, context.interpreter)\`
+
+A macro. Find its definition in \`instructions/macros.rs\`:
 
 \`\`\`rust
 macro_rules! popn_top {
@@ -96,22 +108,34 @@ macro_rules! popn_top {
 }
 \`\`\`
 
-What this does:
-- \`stack.len()\` check ensures we have at least \`N+1\` items
-- On underflow → \`cold_path()\` hints the CPU's branch predictor that the error path is rare → straight-line code stays hot
-- On the happy path, we use \`unwrap_unchecked()\` (in \`unsafe\`) because the length was just checked. **No double-checking, no panic machinery on the hot path.**
+> 🛑 **Predict before reading the explanation:**
+> - What does this macro expand to when called as \`popn_top!([op1], op2, ctx.interpreter)\`? Write the expansion out — actually, on paper if you have to.
+> - Why is \`cold_path()\` called on the error branch? What does it do to generated assembly?
+> - \`unwrap_unchecked()\` inside \`unsafe\`: what *exact* condition makes this not undefined behavior?
 
-This is performance engineering at the cycle level.
+---
 
-### 3. \`*op2 = op1.wrapping_add(*op2)\`
+Walk:
 
-\`op2\` is a **mutable reference to the new top of stack**. We don't pop, add, push — we **write through the reference**. One memory write, not three.
+- \`$($x:ident),*\` matches a comma-separated list of identifiers. With \`[op1]\`, the list has one element. The expansion creates a binding for \`op1\` (popped value) and \`op2\` (mutable reference to the new top of stack).
+- \`cold_path()\` is a hint to LLVM that the branch is statistically rare. The compiler then keeps the rare-branch code out of the hot instruction cache. **Net effect: the happy path stays one straight line of cache-warm assembly.**
+- \`unwrap_unchecked()\` skips the runtime \`Some\` check. It's safe here because the \`if stack.len() < ...\` guard *just ran* — the value is provably \`Some\`. The \`unsafe\` block is the contract: *"I checked, so don't double-check."* Delete the guard and you've made it instant UB.
 
-Notice \`wrapping_add\` (modulo 2²⁵⁶), the exact uint256 semantics of EVM.
+> 🛑 **Anti-fluency test.** Without scrolling back: in your own words, why doesn't the compiler optimize away the redundant \`Some\` check itself, requiring \`unwrap_unchecked\` instead?
+>
+> If you can't answer, you don't understand the macro yet — re-read.
+
+### \`*op2 = op1.wrapping_add(*op2)\`
+
+\`op2\` is a **mutable reference** to the new top of stack (after \`op1\` was popped). The line writes the result *through* the reference — one memory write, no pop-add-push.
+
+\`wrapping_add\` performs addition modulo 2²⁵⁶. EVM's \`ADD\` is required to wrap, not panic.
+
+> 🛑 **Predict.** What hex value does \`U256::MAX.wrapping_add(U256::from(1))\` produce?
+>
+> If your answer wasn't \`0x0\` (or \`U256::ZERO\`), pause. EVM consensus depends on this exact behavior. Get it wrong in your own implementation and you've forked the chain.
 
 ## The \`gas!\` macro
-
-You'll see this everywhere too:
 
 \`\`\`rust
 macro_rules! gas {
@@ -124,7 +148,9 @@ macro_rules! gas {
 }
 \`\`\`
 
-Charge gas, branch-hint on out-of-gas, return early. Every opcode pays gas this way.
+Same structural pattern as \`popn_top!\`: check, cold-hint on failure, return early. Charge gas, fall off the cliff if you can't afford it.
+
+> 🔍 **Why isn't \`gas!\` called inside the body of \`add\`?** Look at \`arithmetic.rs\`. Form a hypothesis. Then open \`interpreter.rs\` and find where constant-gas opcodes are actually charged. Verify your hypothesis against the source — don't take this lesson's word for it.
 
 ## Where the dispatch lives
 
@@ -133,26 +159,32 @@ flowchart LR
     PC[interpreter.pc] -->|fetch byte| Op[opcode 0x01]
     Op -->|index into| Table["[Instruction; 256]"]
     Table --> Fn[fn add ctx]
-    Fn -->|gas! + popn_top!| Stack[Stack op1, op2 top]
+    Fn -->|popn_top!| Stack[Stack op1, op2 top]
     Fn -->|wrapping_add| Stack
     Fn --> PC
 \`\`\`
 
-Each opcode is bound to a function pointer in an **instruction table**. Reading order if you open the repo:
+Each opcode is a function pointer indexed by byte value. The dispatch loop fetches a byte from \`pc\`, indexes into a \`[Instruction; 256]\` table, calls. **No \`match\` statement, no jump table the compiler builds for you — an array of function pointers built at compile time.**
 
-1. \`crates/interpreter/src/instructions/mod.rs\` — declares the modules
-2. \`crates/interpreter/src/instructions/arithmetic.rs\` — \`add\`, \`mul\`, \`sub\`, \`div\`, \`sdiv\`, \`mod\`, \`smod\`, \`addmod\`, \`mulmod\`, \`exp\`, \`signextend\`
-3. \`crates/interpreter/src/table.rs\` (or wherever the dispatch is wired) — the array \`[Instruction; 256]\`
+> 🔍 **Trace it yourself before continuing.** In the repo:
+>
+> 1. Open \`crates/interpreter/src/instructions/mod.rs\` — what does it declare?
+> 2. Find where the table \`[Instruction; 256]\` is built. (Search for \`Instruction;\` or \`instruction_table\`.)
+> 3. At index \`0x01\`, what's the function pointer? Confirm it's \`add\`.
+>
+> If you can't locate the table, you don't yet know how the interpreter dispatches. Don't proceed without finding it.
 
 ## Drill
 
-Open \`arithmetic.rs\` in the repo. Then:
+Reading is rehearsal. Now do these in order:
 
-1. Find \`mul\` — confirm it has the same shape as \`add\` but uses \`wrapping_mul\`
-2. Find \`exp\` — notice it's longer; figure out where the dynamic gas cost is computed (hint: \`gas\` calls)
-3. Modify \`add\` locally to use \`saturating_add\` instead of \`wrapping_add\`. Build, run the test suite. Watch tests fail for transactions that depend on overflow. **You've just discovered why consensus is so fragile.**
+1. **Find \`mul\`.** Confirm it has the exact same shape as \`add\` but uses \`wrapping_mul\`. **Why** are these two opcodes structurally identical down to the line count? (Answer in your own words before moving on.)
+2. **Find \`exp\`.** It's longer. Locate where its **dynamic** gas cost is computed (hint: a \`gas\` call mid-function, not at entry). Why is \`exp\` charged dynamically when \`add\` is charged at dispatch?
+3. **Break consensus on purpose.** Modify \`add\` locally: use \`saturating_add\` instead of \`wrapping_add\`. Build. Run the test suite. Watch tests fail. **You now have empirical proof that consensus is one library function call away from forking the network.**
 
-After this drill, you've already read more EVM source than 99% of Solidity developers ever will.`,
+---
+
+After this drill, you've read more EVM source than 99% of Solidity developers ever will. **More importantly: you can prove it — answer the predict/recall prompts above, in your own words, without scrolling back.** If you can't, the lesson isn't done with you.`,
                 },
                 {
                   title: 'Custom opcodes — the design space',
