@@ -78,12 +78,11 @@ if (process.env.ENABLE_DEV_AUTH === 'true') {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
-  // basePath has to include /rethlab because Next.js basePath doesn't
-  // get prepended automatically to the NextAuth route handler.
-  basePath: '/rethlab/api/auth',
   // PrismaAdapter handles user/account creation on OAuth sign-in
   // but we use JWT for session management (database sessions have
-  // issues in NextAuth v5 beta)
+  // issues in NextAuth v5 beta).
+  // For URL generation under Next.js basePath, set AUTH_URL to
+  // include /rethlab (e.g. https://fabrknt.com/rethlab).
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
   providers,
