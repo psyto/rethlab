@@ -36,8 +36,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const jaLessonSlug = `${baseLessonSlug}-ja`;
 
   const [enLesson, jaLesson] = await Promise.all([
-    prisma.lesson.findUnique({ where: { slug: enLessonSlug }, select: { id: true } }),
-    prisma.lesson.findUnique({ where: { slug: jaLessonSlug }, select: { id: true } }),
+    prisma.lesson.findFirst({ where: { slug: enLessonSlug }, select: { id: true } }),
+    prisma.lesson.findFirst({ where: { slug: jaLessonSlug }, select: { id: true } }),
   ]);
 
   const enUrl = enLesson ? `/rethlab/courses/${baseCourseSlug}-en/lessons/${enLesson.id}` : undefined;
