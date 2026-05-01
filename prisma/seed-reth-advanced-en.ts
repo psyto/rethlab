@@ -195,7 +195,13 @@ After this drill, you've read more EVM source than 99% of Solidity developers ev
                   xpReward: 25,
                   content: `# Custom opcodes — the design space
 
-When Hyperliquid or Tempo say "we picked Revm because it's modular," **adding custom opcodes** is the headline feature. Now we'll see exactly where they hook in.
+When Hyperliquid or Tempo say "we picked Revm because it's modular," **adding custom opcodes** is the headline feature. This lesson: where exactly they hook in, what it costs, and the failure modes "modular" hides.
+
+> 🛑 **Predict before scrolling.** Without looking at the source, sketch how revm dispatches opcodes to functions:
+> - Is it a \`match\` statement? A \`HashMap<u8, fn>\`? An array? Something else?
+> - Wherever you guessed: **why does the choice matter?** What's the cost of the wrong shape?
+>
+> Hold your guess. We'll check it against the real implementation in a moment.
 
 ## The real instruction table
 
@@ -237,11 +243,18 @@ const fn instruction_table_impl<WIRE: InterpreterTypes, H: Host>()
 }
 \`\`\`
 
-Three things to notice:
+Compare your prediction. Three details earn their keep — but only if you can defend why each one matters:
 
-1. **\`const fn\`** — the table is built **at compile time**. There's no runtime cost to dispatch setup.
-2. **\`[Instruction::unknown(); 256]\`** — every byte 0x00–0xFF starts mapped to "unknown opcode" (which halts the EVM with an error). Only the opcodes Ethereum has defined get overwritten with real implementations.
-3. **\`Instruction::new(arithmetic::add)\`** — each slot holds a typed function pointer. The opcode byte is the array index. **Dispatch is one indexed lookup.**
+### \`const fn\`
+The table is built **at compile time**. Zero runtime cost to set up dispatch.
+
+> 🛑 **Anti-fluency.** Without scrolling: what *exactly* changes if you replace \`const fn\` with \`fn\`? "It's slower because runtime" is parroting. Be precise — what runs when, and how often?
+
+### \`[Instruction::unknown(); 256]\`
+Every byte 0x00–0xFF starts mapped to "unknown opcode" — which halts the EVM. Defined Ethereum opcodes overwrite their slot with the real implementation.
+
+### \`Instruction::new(arithmetic::add)\`
+Each slot is a typed function pointer. Opcode byte = array index. **Dispatch is one indexed lookup, period.**
 
 ## The opcode byte map
 
@@ -261,7 +274,11 @@ Quick reference (from [\`bytecode::opcode\`](https://github.com/bluealloy/revm/b
 | **0x0C–0x0F** | **unallocated** ← this is where you add custom opcodes |
 | **0x21–0x2F** | **unallocated** |
 
-There are several gaps the standard EVM hasn't claimed. Your fork picks one (say \`0x0C\`) and slots in your function:
+> 🔍 **Verify, don't trust.** Open \`bytecode::opcode\` in the repo. Confirm \`0x0C\` is genuinely unassigned **on the version you'd actually fork**. The gaps shift across hard forks — a table in a lesson is a snapshot, not a contract.
+
+## Wiring a custom opcode
+
+Pick an unallocated byte, slot in your function:
 
 \`\`\`rust
 const HYPER_FAST_SWAP: u8 = 0x0C;
@@ -289,28 +306,32 @@ flowchart LR
     Custom --> Result[result on stack]
 \`\`\`
 
-## What you actually buy
+## What this actually buys you — and what it costs
 
-The cost saving comes from **two places**:
+Two compounding wins:
 
 1. **No interpreter loop overhead per inner step** — a complex Solidity function might be 200 EVM instructions; one custom opcode is 1 dispatch.
-2. **You can use SIMD, FFI, or pre-computed tables in Rust** — none of which are available to bytecode.
+2. **SIMD, FFI, or pre-computed tables in Rust** — none available to bytecode.
 
-This is why a "complex options pricer" can drop from 500K gas in Solidity to 5K gas as a single custom opcode.
+A complex options pricer can drop from **500K gas in Solidity → 5K gas as a single custom opcode**.
 
-## Caveats
+> 🛑 **Predict the failure modes** before scrolling. You're shipping a custom opcode tomorrow. List 3 things that will go wrong if you treat this casually. Hold your list — compare to the caveats below.
 
-1. **Consensus compatibility**: deviating from standard EVM means you can't share blocks with other Ethereum clients. Only valid for **your own chain**.
-2. **Gas pricing**: a powerful shortcut needs a properly priced gas cost — otherwise it's a DoS vector.
-3. **Provability**: if your chain wants ZK proofs, every new opcode needs to be made provable inside your zkVM.
+### Caveats — these aren't optional
+
+1. **Consensus compatibility**: deviating from standard EVM means you can't share blocks with other Ethereum clients. Valid only on **your own chain**. Fork mainnet with this opcode and try to peer with go-ethereum → instant disconnect on the first transaction that touches \`0x0C\`.
+2. **Gas pricing**: a powerful shortcut needs a properly priced gas cost — otherwise it's a DoS vector. **How would you derive the gas price for \`my_hyper_fast_swap\`?** If you can't sketch a methodology in three sentences, you can't safely ship this opcode.
+3. **Provability**: if your chain wants ZK proofs, every new opcode needs to be made provable inside your zkVM. That's potentially weeks of additional work *per opcode*.
 
 ## Drill
 
-1. Open \`instructions.rs\` in the repo. Find the unallocated opcode bytes by looking for slots that **don't appear** in the table assignments.
+1. Open \`instructions.rs\` in the repo. Find unallocated opcode bytes by spotting the slots that **don't appear** in the table assignments. (Don't trust the table above — verify on the actual code you'd fork.)
 2. Pick one. Define a constant for it.
 3. Implement a function with the same signature as \`add\` that does **2x multiplication** (\`*op2 = (*op2).wrapping_mul(U256::from(2))\`).
 4. Add \`table[YOUR_OPCODE as usize] = Instruction::new(your_fn);\`.
-5. Encode bytecode that uses your opcode. Run the EVM. **You just shipped a fork.**`,
+5. Encode bytecode that uses your opcode. Run the EVM. **You just shipped a fork.**
+
+> Final check: explain in one sentence why a chain shipping this opcode can never participate in mainnet consensus. If you can't, scroll back to caveat #1 — the lesson isn't done with you.`,
                 },
                 {
                   title: 'The Database trait — supplying state',
@@ -321,7 +342,11 @@ This is why a "complex options pricer" can drop from 500K gas in Solidity to 5K 
                   xpReward: 25,
                   content: `# The Database trait — supplying state
 
-Revm is the "execution engine," but **it doesn't own state**. Storage reads happen through the external \`Database\` trait. Implement it and you can drive Revm against anything: an in-memory map, a forked mainnet, a custom MDBX schema, even a network of remote nodes.
+Revm is the "execution engine," but **it doesn't own state**. Storage reads happen through the external \`Database\` trait. Implement it and you can drive Revm against anything: an in-memory map, a forked mainnet, a custom MDBX schema, a network of remote nodes.
+
+> 🛑 **Predict before scrolling.** Without looking, write down the **minimum** API revm needs from its state store. How many methods? What signatures?
+>
+> Hint: think about every opcode that touches state. \`SLOAD\`, \`BALANCE\`, \`EXTCODESIZE\`, \`BLOCKHASH\` — what does revm need to ask for to satisfy each? Don't scroll until you have a draft.
 
 \`\`\`mermaid
 sequenceDiagram
@@ -371,15 +396,23 @@ pub trait Database {
 }
 \`\`\`
 
-### Notice these things
+> 🛑 **Compare your prediction.** What did you miss? More importantly: **what's NOT here that you might have predicted?**
+>
+> No \`set_storage\`. No \`set_balance\`. No \`commit\`. **Why is the read API and write API split into separate traits?** What design constraint is that serving?
 
-- **\`#[auto_impl(&mut, Box)]\`** — \`auto_impl\` derives \`Database\` automatically for \`&mut T\` and \`Box<T>\`. So you can pass \`&mut my_db\` or \`Box::new(my_db)\` anywhere a \`Database\` is wanted. Free ergonomics.
-- **\`type Error: DBErrorMarker\`** — every implementation picks its own error type but must implement a marker trait. This is how Revm composes user errors with its own.
-- **\`storage_by_account_id\` with a default** — a recent optimization. If you've already located the account in your storage, pass its internal ID and skip the address lookup. Default forwards to \`storage\`. **Performance is in the trait API, not just the implementation.**
+### Three things to look hard at
 
-## Companion traits
+- **\`#[auto_impl(&mut, Box)]\`** — \`auto_impl\` derives \`Database\` automatically for \`&mut T\` and \`Box<T>\`. Pass \`&mut my_db\` or \`Box::new(my_db)\` anywhere a \`Database\` is wanted.
 
-Same file, two more traits to know:
+> 🛑 **Anti-fluency.** Mentally delete the \`#[auto_impl]\` attribute. Now: what does the user write manually to pass \`&mut MyDatabase\` where \`Database\` is expected? Sketch the \`impl<T: Database> Database for &mut T\` block. If you can't, the macro is just noise to you — write the manual impl out before continuing.
+
+- **\`type Error: DBErrorMarker\`** — every implementation picks its own error type but must implement a marker trait. Why a marker instead of a fixed enum? Because revm needs to compose your custom errors (network failures, MDBX errors, RPC timeouts) with its own without you being trapped in a closed taxonomy.
+
+- **\`storage_by_account_id\` with a default** — recent optimization. If you've already located the account, pass its internal ID and skip the address lookup. The default forwards to \`storage\`. **Performance lives in the trait API, not just the implementation.**
+
+> 🔍 **Find the call site.** Where in revm is \`storage_by_account_id\` actually invoked instead of \`storage\`? Search \`crates/handler/\`. Who benefits from the override — the database author, or revm itself?
+
+## Companion traits — read split from write
 
 \`\`\`rust
 #[auto_impl(&mut, Box)]
@@ -402,9 +435,11 @@ pub trait DatabaseRef {
 
 | Trait | Use it for |
 | :--- | :--- |
-| \`Database\` | normal execution (mutable: caching is allowed) |
+| \`Database\` | normal execution (\`&mut self\` — caching is allowed) |
 | \`DatabaseRef\` | shared, immutable view — \`&self\` lets you wrap in \`Arc\` for parallel tasks |
 | \`DatabaseCommit\` | optional: write-back path, used by \`commit_state\` |
+
+> 🛑 **Predict.** \`DatabaseRef\`'s \`auto_impl\` list is longer (\`&, &mut, Box, Rc, Arc\`) than \`Database\`'s (\`&mut, Box\`). Why? What does the asymmetry tell you about how each trait gets used in practice?
 
 ## Real implementations to skim
 
@@ -412,9 +447,9 @@ pub trait DatabaseRef {
 | :--- | :--- | :--- |
 | \`InMemoryDB\` | \`crates/database/src/in_memory_db.rs\` | minimal \`HashMap\`-backed; the toy version |
 | \`AlloyDB\` | \`crates/database/src/alloydb.rs\` | fetches over JSON-RPC — fork-mainnet pattern |
-| \`StateProviderDatabase\` | reth: \`crates/storage/storage-api/src/database_provider.rs\` | the production MDBX-backed Reth implementation |
+| \`StateProviderDatabase\` | reth: \`crates/storage/storage-api/src/database_provider.rs\` | production MDBX-backed Reth implementation |
 
-Reading these in order — toy → networked → production — is one of the fastest ways to internalize how serious EVM systems wire state.
+Read in order — toy → networked → production — to see how the same trait scales from 50 lines to thousands.
 
 ## Drill
 
@@ -441,7 +476,13 @@ impl Database for ZeroDb {
 }
 \`\`\`
 
-Plug this into a Revm and execute a 1-tx block. Even though everything reads zero, the EVM runs cleanly. **Now you understand the entire harness around Revm — every other database is just this, with real data.**`,
+> 🛑 **Before plugging it in, predict.** What kind of bytecode would actually fail under \`ZeroDb\`? What would succeed?
+>
+> Specifically: \`CALL\` to an address with no code — what happens? \`SLOAD\` from an uninitialized slot — what does the EVM see? \`BALANCE\` of any account — does the tx revert?
+
+Plug \`ZeroDb\` into a Revm and execute a 1-tx block. Even though everything reads zero, the EVM runs cleanly. **Now you understand the entire harness around Revm — every other database is just this, with real data.**
+
+> Final check: in one sentence, why does revm split read (\`Database\`) from write (\`DatabaseCommit\`)? If you can't answer, scroll back to the trait reveal — you missed the point.`,
                 },
               ],
             },
@@ -460,7 +501,13 @@ Plug this into a Revm and execute a 1-tx block. Even though everything reads zer
                   xpReward: 25,
                   content: `# Staged Sync — the Reth architecture
 
-Staged Sync is the spine of Reth: instead of "process one block at a time," sync is split into stages, each operating on a range of blocks. Each stage is a Rust type that implements one trait. Let's read it.
+Staged Sync is the spine of Reth. Instead of "process one block at a time," sync is split into stages, each operating on a range of blocks. Each stage is a Rust type that implements one trait. Read the trait, and you've read the architecture.
+
+> 🛑 **Predict before scrolling.** You've been told to sync 20 million blocks from genesis. What stages would *you* split it into?
+>
+> Write down 5-7 stages from first principles — not the names from existing implementations. What runs first? What can be done in parallel? What needs the previous stage's output?
+>
+> The point isn't to be right. It's to have an opinion before you see Paradigm's answer.
 
 ## The real \`Stage\` trait
 
@@ -497,7 +544,11 @@ pub trait Stage<Provider>: Send {
 }
 \`\`\`
 
-Notice the **symmetry**: every stage has both \`execute\` and \`unwind\`. Reorgs aren't a special case — they're a **normal mode of operation**. Going forward = call \`execute\` over a range. Going back = call \`unwind\` over a range. **Same trait, two directions.**
+Notice the **symmetry**: every stage has both \`execute\` and \`unwind\`.
+
+> 🛑 **If \`unwind\` weren't here, how would Reth handle a chain reorg?** Predict the alternative architecture — what additional code paths would a "no unwind" design need? Spoiler: it gets ugly fast.
+
+Reorgs aren't a special case — they're a **normal mode of operation**. Going forward = call \`execute\` over a range. Going back = call \`unwind\` over a range. **Same trait, two directions.** This is why Reth doesn't have a separate "reorg path" eating up half the codebase.
 
 ## The input/output types
 
@@ -531,9 +582,11 @@ pub struct UnwindInput {
 
 This is **explicitly resumable**. A node restart picks up exactly where the previous run stopped. No "scan from zero" hack.
 
+> 🛑 **Anti-fluency.** Why is \`done\` returned as a flag inside \`ExecOutput\` rather than as a separate method like \`has_more()\`? What design constraint is that choice serving? (Hint: think about how the orchestrator schedules stages.)
+
 ## What \`#[auto_impl(Box)]\` buys you
 
-The orchestrator stores stages as \`Box<dyn Stage<...>>\` so it can hold a mixed list. \`auto_impl\` derives \`Stage\` for \`Box<S: Stage>\` automatically — without it, you'd need to manually forward every method through the box.
+The orchestrator stores stages as \`Box<dyn Stage<...>>\` so it can hold a heterogeneous list. \`auto_impl\` derives \`Stage\` for \`Box<S: Stage>\` automatically — without it, you'd manually forward every method through the box.
 
 ## The actual stages
 
@@ -563,18 +616,26 @@ flowchart LR
 9. **\`IndexAccountHistoryStage\`** + **\`IndexStorageHistoryStage\`** — historical access indices
 10. **\`FinishStage\`** — finalize
 
-Each is a separate file; each implements the trait above. Open one (\`SenderRecoveryStage\` is the most readable) and you'll see the whole shape: \`execute\` reads a block range, processes it, returns a checkpoint with \`done: false\` until the range is exhausted.
+> 🛑 **Compare your prediction.** What stages did you miss? What did you guess that's NOT here? **The interesting question is the second one** — Paradigm's omissions are often more revealing than their inclusions.
+
+> 🔍 **Why is MerkleStage *after* hashing, not interleaved?** What ordering constraint is being respected? (Hint: a Merkle root needs sorted leaves. What does that say about how hashing must be staged?)
+
+> 🔍 **Could AccountHashingStage and StorageHashingStage run in parallel?** They take similar input from ExecutionStage. Predict yes/no — then verify by opening one of them.
 
 ## Drill
 
 In the \`reth\` repo, open \`crates/stages/stages/src/stages/sender_recovery.rs\`:
 
-1. Find the \`execute\` method
-2. Spot the **batch loop** — it processes blocks in chunks, not all at once
-3. Find where it returns \`done: false\` vs \`done: true\`
-4. Look at the parallelism — \`SenderRecoveryStage\` uses Rayon to recover senders across CPU cores
+> 🛑 **Before opening: predict.** In one sentence, what does \`SenderRecoveryStage::execute\` do? What's the "compute" inside it? What's the "I/O" around that compute? Hold your sentences.
 
-You're now reading the same code Paradigm uses to keep Reth in sync.`,
+1. Find the \`execute\` method
+2. Spot the **batch loop** — it processes blocks in chunks, not all at once. **Why chunks instead of one block at a time? Why not all blocks at once?**
+3. Find where it returns \`done: false\` vs \`done: true\` — what condition flips it?
+4. Look at the parallelism — \`SenderRecoveryStage\` uses Rayon to recover senders across CPU cores. **Why is sender recovery the stage that benefits most from parallelism?**
+
+You're now reading the same code Paradigm uses to keep Reth in sync.
+
+> Final check: explain in one sentence why staged sync is faster than block-by-block sync. If your answer is "parallelism," go deeper — what specifically gets batched, sorted, or amortized? The lesson isn't done with you until you can name three.`,
                 },
                 {
                   title: 'Rust: lifetimes, Box, Arc, dyn Trait',
