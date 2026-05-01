@@ -142,16 +142,16 @@ export default async function Image() {
             <span style={{ color: '#f97316' }}>pub fn</span>
             <span>&nbsp;add&lt;IT, H&gt;(ctx) -&gt; Result {'{'}</span>
           </div>
-          <div>
-            &nbsp;&nbsp;
+          <div style={{ display: 'flex' }}>
+            <span>&nbsp;&nbsp;</span>
             <span style={{ color: '#eab308' }}>popn_top!</span>
-            ([op1], op2, ctx.interpreter);
+            <span>([op1], op2, ctx.interpreter);</span>
           </div>
           <div>&nbsp;&nbsp;*op2 = op1.wrapping_add(*op2);</div>
-          <div>
-            &nbsp;&nbsp;
+          <div style={{ display: 'flex' }}>
+            <span>&nbsp;&nbsp;</span>
             <span style={{ color: '#f97316' }}>Ok</span>
-            (())
+            <span>(())</span>
           </div>
           <div>{'}'}</div>
         </div>
