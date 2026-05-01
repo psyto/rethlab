@@ -984,6 +984,8 @@ Do this and \`eth_getProof\` becomes a structure you can reason about, write, an
 
 MEV (Maximal Extractable Value) is where systems engineering meets game theory. Here's how a serious searcher / builder pipeline is structured in 2026.
 
+> 🛑 **Predict before scrolling.** Ethereum block time is 12 seconds. **Yet a serious MEV pipeline targets <100ms end-to-end.** Why is the budget that tight? What eats the other ~11.9 seconds? Form a hypothesis citing competition, network propagation, or block proposer timing.
+
 ## 1. The pipeline
 
 \`\`\`mermaid
@@ -1069,6 +1071,8 @@ match event {
 
 For an MEV searcher, replace "bridge addresses" with "DEX router addresses" and the deposit/withdrawal handlers with "swap detection + sandwich opportunity scoring." **Same shape, different filter set.**
 
+> 🛑 **Anti-fluency.** Three nested \`flat_map\`s. Could you collapse them into one \`fold\`? Why did the author stack them this way? (Hint: think about iterator laziness and where filter happens — early or late.)
+
 ## 4. Simulation
 
 Pre-trade, you simulate against a forked state with Revm. Real shape:
@@ -1092,6 +1096,8 @@ let profit = compute_profit(&result.state);
 \`\`\`
 
 A bundled simulation (your tx + the victim tx + your tx) tells you the realized profit before you pay gas. Hot path; profile aggressively. The \`forked_db\` is typically built on \`AlloyDB\` (which we saw in the Database trait lesson) plus an LRU cache layer so identical reads don't re-hit the network.
+
+> 🛑 **Predict.** You simulate against \`latest\` instead of the parent of your target slot. **What goes wrong?** Be specific — what does your simulator see that the real block won't? (Hint: the victim tx in your bundle has already executed in your sim's "latest" view.)
 
 ## 5. ExEx as a private mempool
 
@@ -1121,7 +1127,7 @@ Bundles are JSON-RPC; the wire format is small. Race between competing searchers
 3. **Gas griefing.** Adversaries publish high-gas transactions just to push yours out. Pay attention to the priority fee curve in real time.
 4. **Toxic flow.** Some "opportunities" are sandwich bait. Run a classifier; not all profit is real.
 
-After this lesson, you can read [reth-exex-examples](https://github.com/paradigmxyz/reth-exex-examples) and recognize each component, not as toy code but as the production architecture's skeleton.`,
+> Final check: your bundle landed in block 1000. The chain reorgs and block 1000 is replaced. **Where is your money — your ETH, the victim's ETH, the gas you paid?** Trace the P&L through the reorg. If you can't, you don't yet understand why the ChainReverted handler exists in ExEx — re-read the Advanced ExEx lesson.`,
                 },
                 {
                   title: 'zkEVM with Revm',
@@ -1133,6 +1139,8 @@ After this lesson, you can read [reth-exex-examples](https://github.com/paradigm
                   content: `# zkEVM with Revm
 
 A zkEVM proves that "this block was executed correctly" without re-executing it. Revm is the canonical EVM implementation that **provers consume**. Here's how that works.
+
+> 🛑 **Predict before scrolling.** Risc0 and SP1 use **Revm**, not geth, to prove Ethereum execution inside their zkVMs. **List 3 properties of Revm** that make it the right choice for in-zkVM use. (Hint: think about what a zkVM punishes — non-determinism, syscalls, large binaries, dynamic dispatch. Revm earns its place by being friendly to all of those.)
 
 ## 1. The proving stack
 
@@ -1203,6 +1211,8 @@ The guest reads its inputs from the host through a serialized stream. The \`Inpu
 ### \`input.evm_input.into_env(chain_spec)\`
 This is where the magic is. \`evm_input\` contains a **block header** and a **state witness** (every storage slot the call will touch, with their MPT proofs). \`.into_env(...)\` **verifies the witness against the header's stateRoot** — if a single byte is wrong, this fails. This is what guarantees the prover can't lie about state.
 
+> 🛑 **Anti-fluency.** "If a single byte is wrong, this fails." **HOW does the verifier know it's wrong?** What's the exact mechanism — what does the verifier compare to what? You learned this in the MPT lesson; recall it without scrolling. If you can't, you don't yet understand why the proof is *cryptographic*.
+
 ### \`IERC20::balanceOfCall\` (sol!)
 The same \`sol!\` macro you saw in MEV — generates the typed call. **The same code that talks to a node over RPC also runs inside the zkVM.** That's the unification: ABI, encoding, type system — all shared between the off-chain world and the in-prover world.
 
@@ -1251,6 +1261,8 @@ impl Database for WitnessDB {
 
 If the block reads something not in the witness, the proof fails. The witness producer (your indexer / Reth ExEx) is therefore *part of the security model*.
 
+> 🛑 **Predict.** An attacker submits an Input where the witness has correct state for everything *except* one storage slot the call needs. **Where in the guest does it abort?** What's the failure visible to the prover? Be specific — name the line.
+
 ## 5. Performance reality
 
 Proving a single Ethereum block in 2026:
@@ -1262,6 +1274,8 @@ Proving a single Ethereum block in 2026:
 | **Custom zkEVM (Linea, Scroll)** | sub-second per block | dedicated infra |
 
 Generic zkVMs (Risc0/SP1) trade some prover speed for **flexibility** — they can prove *any* Rust program, not just EVM. Custom zkEVMs are faster but rebuild the whole stack from scratch.
+
+> 🛑 **Predict.** A custom zkEVM (Linea, Scroll) is **orders of magnitude faster per block** than Risc0. **Why would anyone use Risc0 anyway?** Name two production scenarios where the genericity is worth the slowdown.
 
 ## 6. Why this matters
 
@@ -1280,7 +1294,9 @@ Before claiming familiarity, write the smallest possible host/guest pair:
 3. Modify the guest to call Revm on a 1-tx block
 4. Compare guest cycle counts before/after — that's where the perf engineering lives
 
-Now you know what "L2 prover" actually does.`,
+Now you know what "L2 prover" actually does.
+
+> Final check: in two sentences, explain what makes a zk proof of EVM execution **trustless** — versus a node operator just claiming "I ran the block, here's the result." If your answer doesn't reference the verifier-side check (commitment + recomputation in the verifier contract), the lesson isn't done with you.`,
                 },
                 {
                   title: 'Running a Reth fork in production',
@@ -1292,6 +1308,8 @@ Now you know what "L2 prover" actually does.`,
                   content: `# Running a Reth fork in production
 
 You've built a custom fork. Now you have to run it without it eating your weekend. This lesson is the operations checklist.
+
+> 🛑 **Predict before scrolling.** You ship your fork built with **default \`cargo build --release\`** — no jemalloc, no asm-keccak, no \`target-cpu=native\`. List the production symptoms you'd see in **week 1, week 4, month 3**. (Hint: which symptoms creep in slowly versus hit immediately?)
 
 ## 1. Build & release pipeline
 
@@ -1322,6 +1340,8 @@ TasksMax=infinity
 \`\`\`
 
 The file-descriptor limit matters: Reth holds many MDBX pages and many P2P connections.
+
+> 🛑 **Anti-fluency.** You set \`LimitNOFILE=8192\` (a typical default-ish value). Reth runs fine for hours, then breaks. **What's the failure signature in logs?** What system call returns the error, and what does Reth do with it? If you can't predict the error message, you'll waste an oncall shift on it.
 
 ## 3. Storage discipline
 
@@ -1360,6 +1380,8 @@ for block in mainnet[recent_1000]:
 
 Any unintended divergence — even one storage slot — means a consensus bug. **Bug = chain halt** for an App-chain.
 
+> 🛑 **Predict.** Your diff harness reports a stateRoot divergence on block N. **Name the 3 most likely root causes in YOUR fork** (not vanilla Reth's bug — your fork's). Be specific: which of your changes is the prime suspect? Which is the second-most likely? If you can't, your fork has too many active changes to debug — re-read your own commits.
+
 ## 6. Deployment topology for an App-chain
 
 Minimum:
@@ -1382,12 +1404,16 @@ The hardest part of running a fork is **upgrading** it without halting the chain
 
 This is exactly how Ethereum hard forks work; an App-chain is no different, just smaller scale.
 
+> 🛑 **Predict.** You announce activation at block 1000. 3 of 4 validators upgrade in time. The 4th doesn't. **At block 1001, what does each validator see?** When does the chain detect divergence? **What's the recovery path** for the lagging validator?
+
 ## 8. Reading list
 
 - [Reth Book "Run a node" + "Custom chain"](https://reth.rs/) sections
 - The validator ops post-mortem from any major chain incident — they're gold for ops intuition
 
-You now have a complete picture: develop, profile, extend, deploy, monitor. Welcome to the small club.`,
+You now have a complete picture: develop, profile, extend, deploy, monitor. Welcome to the small club.
+
+> Final check: in one sentence, why is "diff testing against vanilla Reth" the highest-value test you can write for a fork? **What class of bug does it catch that no unit test ever will?** If your answer doesn't mention "consensus" or "the only output that matters is stateRoot," re-read Section 5.`,
                 },
                 {
                   title: 'Expert quiz',
