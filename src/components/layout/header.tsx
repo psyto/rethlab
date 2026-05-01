@@ -25,34 +25,54 @@ export function Header() {
           RethLab
         </Link>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-6 text-sm">
-          {NAV_LINKS.map((link) =>
-            link.active ? (
-              <Link
-                key={link.label}
-                href={link.href}
-                className="text-foreground font-medium"
-              >
-                {link.label}
-              </Link>
-            ) : (
-              <a
-                key={link.label}
-                href={link.href}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {link.label}
-              </a>
-            )
-          )}
+        {/* Right group: desktop nav (md+) + language switcher (always) + mobile menu (md-) */}
+        <div className="flex items-center gap-4">
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-6 text-sm">
+            {NAV_LINKS.map((link) =>
+              link.active ? (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  className="text-foreground font-medium"
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {link.label}
+                </a>
+              )
+            )}
 
-          {/* Language Switcher */}
+            {/* User — only shown when signed in. Anonymous users find Sign In in the footer. */}
+            {session && (
+              <Link href="/profile" className="text-muted-foreground hover:text-foreground transition-colors">
+                {session.user.image ? (
+                  <Image
+                    src={session.user.image}
+                    alt={session.user.name || 'User avatar'}
+                    width={24}
+                    height={24}
+                    className="h-6 w-6 rounded-full"
+                  />
+                ) : (
+                  <User className="h-4 w-4" />
+                )}
+              </Link>
+            )}
+          </nav>
+
+          {/* Language Switcher — always visible (mobile + desktop) */}
           <div className="relative">
             <button
               onClick={() => setLangMenuOpen(!langMenuOpen)}
               aria-label={t('settings.preferences.language')}
-              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <Globe className="h-4 w-4" />
               <span>{locale.toUpperCase()}</span>
@@ -83,32 +103,17 @@ export function Header() {
             )}
           </div>
 
-          {/* User — only shown when signed in. Anonymous users find Sign In in the footer. */}
-          {session && (
-            <Link href="/profile" className="text-muted-foreground hover:text-foreground transition-colors">
-              {session.user.image ? (
-                <Image
-                  src={session.user.image}
-                  alt={session.user.name || 'User avatar'}
-                  width={24}
-                  height={24}
-                  className="h-6 w-6 rounded-full"
-                />
-              ) : (
-                <User className="h-4 w-4" />
-              )}
-            </Link>
+          {/* Mobile menu toggle — only when there are nav links to show */}
+          {NAV_LINKS.length > 0 && (
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? t('common.closeMenu') : t('common.openMenu')}
+              className="text-muted-foreground hover:text-foreground md:hidden"
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
           )}
-        </nav>
-
-        {/* Mobile menu toggle */}
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label={mobileMenuOpen ? t('common.closeMenu') : t('common.openMenu')}
-          className="text-muted-foreground hover:text-foreground md:hidden"
-        >
-          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        </div>
       </div>
 
       {/* Mobile Navigation */}
