@@ -36,6 +36,8 @@ export async function seedRethExpertEN(prisma: PrismaClient) {
 
 If you're going to ship a Reth fork or write hot-path code in Revm, **profiling and benchmarking are non-negotiable**. Premature optimization is bad; *invisible* slowdowns are worse.
 
+> 🛑 **Predict before scrolling.** A junior engineer says "the node feels slow, let me try replacing the HashMap with a BTreeMap." **List 3 things wrong with that approach** before reading the lesson. Hold your list.
+
 ## 1. Profile first, optimize second
 
 Two tools, two purposes:
@@ -78,6 +80,8 @@ criterion_main!(benches);
 
 \`cargo bench\` produces statistical comparisons. **Always commit your benchmark results** when claiming a perf improvement.
 
+> 🛑 **Anti-fluency.** Your Criterion bench shows function X is 20% faster after a change. Is the **node** 20% faster? Why might it not be? Be specific — name two reasons a microbench can lie about real-world impact.
+
 ## 2. Cache lines, not lines of code
 
 Modern CPUs make memory access ~100x slower than computation. The unit of memory access is a **64-byte cache line**.
@@ -100,6 +104,8 @@ struct Hot { id: u64, version: u32 }
 struct Cold { big_blob: [u8; 192] }
 \`\`\`
 
+> 🛑 **Predict.** You have a million-element \`Vec<Row>\`. You iterate, summing only \`row.id\`. The big_blob is never read. **How much memory does the CPU actually load through cache?** Why?
+
 ## 3. Allocator choice
 
 Default allocators (glibc malloc, jemalloc) have different performance profiles. Reth uses **jemalloc** for stable latency under load.
@@ -117,6 +123,8 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 \`\`\`
 
 This single line frequently shaves 10-30% off tail latency in I/O-heavy services.
+
+> 🛑 **Anti-fluency.** Where exactly does jemalloc save the 10-30%? **Average** latency or **tail** latency? Under what kind of load does the gap widen? If your answer is just "it's faster," you don't yet understand allocator design — re-read.
 
 ## 4. Reth's actual production build profiles
 
@@ -153,6 +161,8 @@ This is what the Paradigm team actually ships. Three profiles, three trade-offs:
 ### \`maxperf-symbols\` — profiling production
 Same optimization as \`maxperf\`, but keeps full debug symbols. Use it when you need a flamegraph that shows actual function names instead of mangled offsets in production-grade code. **This is the profile you build when something is slow in production and you need to find out why.**
 
+> 🛑 **Predict.** Why would you NEVER use \`maxperf\` for daily development builds? Be specific about the cost. (Hint: \`codegen-units = 1\` and \`lto = "fat"\` together — what do they do to the compiler?)
+
 ### How to invoke
 
 \`\`\`bash
@@ -169,6 +179,8 @@ Combine with the \`jemalloc\` and \`asm-keccak\` features you saw earlier.
 2. **Optimize the path the profiler shows you.** Anything else is busy work.
 3. **Re-measure after.** Compilers can defeat your hand-optimization.
 
+> Final check: revisit your "junior engineer wants to swap HashMap for BTreeMap" prediction from the top. Did you cite measurement, profiling, and re-verification? If you cited "well, BTreeMap is sometimes slower" — that's also wrong reasoning, just on the other side. **The point isn't which container; the point is that the question is unanswerable without data.**
+
 You're now equipped to start opening Reth's perf-critical files (\`crates/storage/db\`, \`crates/blockchain-tree\`) with intent rather than just curiosity.`,
                 },
                 {
@@ -182,6 +194,8 @@ You're now equipped to start opening Reth's perf-critical files (\`crates/storag
 
 Reth stores all chain state in **MDBX**, a memory-mapped B+tree KV store derived from LMDB. Understanding MDBX is what separates "I can use Reth" from "I can extend Reth."
 
+> 🛑 **Predict before scrolling.** RocksDB is the dominant KV store in many blockchain clients (geth, erigon historically). **Why does Reth pick MDBX instead?** Form a hypothesis citing one of: write throughput, read latency, crash safety, mmap, compaction. Hold your guess.
+
 ## 1. Why MDBX (not LevelDB / RocksDB)?
 
 | Feature | RocksDB | MDBX |
@@ -193,6 +207,8 @@ Reth stores all chain state in **MDBX**, a memory-mapped B+tree KV store derived
 | **Read concurrency** | Locks | **Lock-free reads** |
 
 Reth picks MDBX because Ethereum is **read-heavy** and **latency-sensitive**. LSM trees do well at writes but stall on compactions — fatal for sync speed and validator latency.
+
+> 🛑 **Anti-fluency.** What is a **compaction** in an LSM tree? Why does it stall reads? B+tree doesn't compact — what does it do instead to reclaim space? If you can't answer in two sentences each, you're trusting the table without understanding it.
 
 ## 2. Reth's actual \`Database\` trait
 
@@ -217,9 +233,11 @@ pub trait Database: Send + Sync + Debug {
 }
 \`\`\`
 
+> 🛑 **Predict.** Why does this trait have **two** associated types (\`TX\` and \`TXMut\`) instead of one? What invariant does the split enforce that a single \`Tx\` type couldn't?
+
 Read this carefully:
 
-- **Two associated transaction types** — \`TX\` (read-only) and \`TXMut\` (read-write). Different methods on each.
+- **Two associated transaction types** — \`TX\` (read-only) and \`TXMut\` (read-write). Different methods on each. The split prevents you from accidentally calling \`put\` on a read transaction at compile time.
 - **\`oldest_reader_txnid\`** — exposes the oldest still-active read transaction. Operators use this to detect long-running readers that block GC.
 - **\`#[track_caller]\`** — when a tx open fails, the panic shows the **caller's line number**, not the trait method. Real production debugging discipline.
 
@@ -260,15 +278,19 @@ Each table is a Rust **type** that implements the \`Table\` trait. The compiler 
 
 \`put\` works for any key. \`append\` is **only valid when the key is greater than the current max** — but it's faster because it skips a B+tree search. When you're processing blocks sequentially, you use \`append\`; when reorging, you fall back to \`put\`.
 
+> 🛑 **Predict.** You call \`append\` with a key that's *smaller* than the current max. What happens? Crash? Silent corruption? Error? Why is it on you (not MDBX) to enforce the invariant? If you can't answer, you don't yet understand why \`append\` is faster — re-read.
+
 ### Cursors
 
 For range scans, you use a **cursor** instead of repeated \`get\` calls. A cursor positions itself in the B+tree once and walks neighboring entries — orders of magnitude faster than independent gets, because adjacent keys likely share the same page.
+
+> 🛑 **Anti-fluency.** Why is a cursor so much faster than N independent \`get\`s for adjacent keys? The answer involves **B+tree structure** AND **page cache locality**. Name both, in two sentences.
 
 ### \`disable_long_read_transaction_safety\`
 
 A real-life ergonomic detail. Long read tx blocks GC, which grows the DB. Reth normally aborts read txs that have been open too long. Set this when you **really** need a long snapshot (and accept the cost).
 
-## 4. Hot path — why this matters
+## 4. Why this matters for hot paths
 
 Because reads are mmap'd:
 
@@ -278,41 +300,25 @@ Because reads are mmap'd:
 
 Reth's tables are designed so that Execution-stage reads (account → storage → code) hit pages that are already warm.
 
-## 5. Drill
-
-Open [\`crates/storage/db-api/src/tables\`](https://github.com/paradigmxyz/reth/tree/main/crates/storage/db-api/src/tables) in the repo:
-
-1. Find the \`Headers\` table — note its key (\`BlockNumber\`) and value (\`Header\`)
-2. Find a \`DupSort\` table — these are tables where one key has multiple values
-3. Trace one Execution-stage read through: which tables does it consult, in what order?
-
-You'll come out the other side knowing where every byte of Ethereum state lives in Reth.
-
-## 3. Why this matters for hot paths
-
-Because reads are mmap'd:
-
-- A "warm" header lookup is a **pointer dereference**, not a syscall
-- The OS page cache becomes your read cache for free
-- **Locality matters**: keep related data on the same page
-
-Reth's "tables" are designed so that Execution-stage reads (account → storage → code) hit pages that are already warm.
-
-## 4. Pitfalls
+## 5. Pitfalls
 
 1. **Long read transactions block writers' garbage collection.** Don't keep a read tx open for hours; the DB grows.
 2. **Page size and key ordering matter.** B+tree fanout depends on key size; a 200-byte key is a different beast than a 32-byte one.
 3. **mmap means OS pressure.** A 500GB DB on a 16GB machine will thrash unless your access pattern is local.
 
-## 5. Reading the source
+## Drill
 
-Files to skim, in order:
+Open [\`crates/storage/db-api/src/tables\`](https://github.com/paradigmxyz/reth/tree/main/crates/storage/db-api/src/tables) in the repo:
 
-1. \`crates/storage/db/src/abstraction\` — the Database/Tx traits
-2. \`crates/storage/db/src/tables\` — the table definitions (this teaches you what Reth stores)
-3. \`crates/storage/db/src/implementation/mdbx\` — the MDBX glue
+> 🛑 **Before opening, predict.** What's the key/value of the \`Headers\` table? \`Transactions\`? \`PlainAccountState\`? Make a guess. Then verify.
 
-After this, you'll understand where every byte of Ethereum state lives in Reth.`,
+1. Find the \`Headers\` table — note its key (\`BlockNumber\`) and value (\`Header\`)
+2. Find a \`DupSort\` table — these are tables where one key has multiple values. **Why does \`DupSort\` exist? What kind of data needs it?**
+3. Trace one Execution-stage read through: which tables does it consult, in what order?
+
+You'll come out the other side knowing where every byte of Ethereum state lives in Reth.
+
+> Final check: in one sentence, why does mmap let you treat a 500GB DB like a Rust slice? **Where does the OS fit in?** If you can't explain the page-fault → page-load mechanism, the "pointer dereference, not syscall" claim is words to you, not understanding.`,
                 },
                 {
                   title: 'Tokio runtime internals',
@@ -324,6 +330,13 @@ After this, you'll understand where every byte of Ethereum state lives in Reth.`
                   content: `# Tokio runtime internals
 
 You've been writing \`#[tokio::main]\` and \`.await\`. Now: what actually happens?
+
+> 🛑 **Predict before scrolling.** You write \`async fn foo() { bar().await; }\`. The compiler generates *something* concrete. **What?** Specifically:
+> - What trait does the resulting type implement?
+> - What's the runtime cost vs a plain function call?
+> - Where do local variables live across an \`await\` point?
+>
+> If any answer is fuzzy, this lesson is what you need.
 
 ## 1. The runtime stack
 
@@ -355,6 +368,8 @@ Worker B: [task3, task4]
 
 This avoids contention on a global mutex while still balancing load.
 
+> 🛑 **Anti-fluency.** Without work-stealing, what's the alternative for distributing tasks across workers? Why is it worse? (Hint: think about a global mutex on a single shared queue, hot under contention.)
+
 ## 3. Spawning vs blocking
 
 \`\`\`rust
@@ -371,6 +386,8 @@ tokio::task::spawn_blocking(|| {
 
 **Rule**: never call CPU-bound code in an async context without \`spawn_blocking\`. You'll starve the runtime and the whole node grinds.
 
+> 🛑 **Predict.** You ignore the rule. You call \`expensive_sync_calc()\` directly inside an async fn. The node runs. **What's the symptom in production?** Be specific — what would Prometheus / your dashboard show? How would oncall discover this? (Hint: it's not a crash.)
+
 ## 4. Channels — picking the right one
 
 | Channel | Use |
@@ -381,6 +398,8 @@ tokio::task::spawn_blocking(|| {
 | \`tokio::sync::oneshot\` | a single value, request-response |
 
 ExEx uses **broadcast** for chain notifications because every ExEx wants every event.
+
+> 🛑 **Anti-fluency.** Why doesn't ExEx use \`mpsc\`? With \`mpsc\`, what happens to event delivery if you have 3 ExExes registered? Spell out the failure mode \`broadcast\` prevents.
 
 ## 5. Custom executors / Future polling
 
@@ -422,6 +441,8 @@ Two flavors:
 - **\`spawn_task\`** — fire and forget. If it panics, the panic is silently lost (Tokio default).
 - **\`spawn_critical_task\`** — registered with a name; if it panics, a \`TaskManager\` channel fires and **the whole node shuts down with the task's name in the log**.
 
+> 🛑 **Predict.** You spawn a background "verify pruner state" task with \`spawn_task\`. Six weeks later it panics on a corrupted entry. Reth keeps running. **What's the user-visible symptom?** Why is "fail loudly" better than "fail silently" for infra?
+
 This is real production discipline: you don't want a silently-dead background task to leave your node running in a degraded state. **Critical tasks fail loudly.**
 
 The \`TaskExecutor = Runtime\` alias lets you pass it through stage code without dragging in raw Tokio types — clean abstraction with the safety net underneath.
@@ -431,7 +452,7 @@ The \`TaskExecutor = Runtime\` alias lets you pass it through stage code without
 - \`tokio/tokio/src/runtime/scheduler/multi_thread_alt\` — the modern multi-thread scheduler
 - \`reth/crates/tasks/src/runtime.rs\` — Reth's task supervisor wrapping Tokio
 
-After this lesson, "Tokio is magic" should become "Tokio is a state-machine driver with work-stealing — and Reth wraps it with panic supervision so production failures aren't silent."`,
+> Final check: in one sentence, what's the difference between \`async fn\` and \`fn\` *as Rust types*? If your answer is "one returns a Future and one doesn't," go deeper — what *is* a Future, structurally? **The lesson isn't done with you until "Tokio is magic" becomes "Tokio polls compiler-generated state machines on a work-stealing scheduler."**`,
                 },
                 {
                   title: 'Procedural macros — how `sol!` and `address!` work',
