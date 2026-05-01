@@ -646,7 +646,17 @@ You're now reading the same code Paradigm uses to keep Reth in sync.
                   xpReward: 30,
                   content: `# Rust: lifetimes, Box, Arc, dyn Trait
 
-Four "advanced but actually simple" Rust features you need to read ExEx and Reth SDK code.
+Four "advanced but actually simple" Rust features you need to read ExEx and Reth SDK code. **This lesson tests you, not teaches you** — if you stumble on the predict prompts, the gap is real and worth closing.
+
+> 🛑 **Cold start: define each in one sentence.** Without scrolling:
+> - \`'a\` (a lifetime parameter)
+> - \`'static\`
+> - \`Box<T>\`
+> - \`Arc<T>\` (vs \`Rc<T>\`)
+> - \`Mutex<T>\`
+> - \`dyn Trait\`
+>
+> If you stumbled on more than two, this lesson earns its place. If you breezed through, the lesson tests whether your definitions are *actually right*.
 
 ## 1. Lifetimes \`'a\`
 
@@ -662,6 +672,8 @@ fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
 - Both inputs and the output share the same \`'a\` → "the returned reference lives at least as long as both inputs"
 - Often the compiler infers them — **most signatures don't need explicit lifetimes**
 
+> 🛑 **Anti-fluency.** Delete the \`'a\` annotations from \`longest\`. What error does the compiler give? Be precise — name the rule it cites.
+
 ### \`'static\`
 
 \`'static\` means **"lives for the entire program."** String literals are \`&'static str\`:
@@ -671,6 +683,8 @@ let s: &'static str = "hello";
 \`\`\`
 
 Long-running tasks (like ExEx) often require \`'static\` bounds because they can outlive any local scope.
+
+> 🛑 **Predict.** When does a closure passed to \`tokio::spawn\` need to be \`'static\`? Why? Answer before continuing — this exact bound shows up in every ExEx file you'll ever read.
 
 ## 2. \`Box<T>\` — heap allocation
 
@@ -686,6 +700,8 @@ Common reasons:
 - **Recursive types** (linked lists) need a fixed-size pointer
 - Holding a **dynamically-sized** value (\`dyn Trait\`)
 - **Move** large values cheaply instead of copying
+
+> 🛑 **Predict.** Without \`Box\`, why can't you write \`enum List { Cons(i32, List), Nil }\`? Spell out the compiler's complaint.
 
 ## 3. \`Rc<T>\` and \`Arc<T>\` — shared ownership
 
@@ -709,6 +725,8 @@ std::thread::spawn(move || println!("{}", clone1));
 
 **Reth and ExEx code is full of \`Arc<...>\`** — multiple async tasks need to read the same component.
 
+> 🛑 **Anti-fluency.** \`Arc::clone(&x)\` doesn't deep-copy the inner \`T\`. So what does it copy, exactly? What's the cost? Why "atomic" in "Arc"?
+
 ## 4. \`Mutex\` / \`RwLock\` — shared mutability
 
 \`Arc<T>\` alone is read-only. To mutate shared state, wrap in \`Mutex\` or \`RwLock\`:
@@ -729,6 +747,8 @@ std::thread::spawn(move || {
 | :--- | :--- |
 | \`Mutex\` | exclusive read/write |
 | \`RwLock\` | many readers OR one writer |
+
+> 🛑 **Predict.** What does \`.lock().unwrap()\` panic on? When does that happen? (Hint: search for "poisoning" if you don't know.) **Reth code uses \`.lock().unwrap()\` everywhere — understand when it can crash.**
 
 ## 5. \`dyn Trait\` — dynamic dispatch
 
@@ -761,6 +781,8 @@ g.greet();
 
 \`impl\` is faster, but \`dyn\` lets you have heterogeneous collections like \`Vec<Box<dyn Trait>>\`.
 
+> 🛑 **Anti-fluency.** \`Box<dyn Greet>\` is more expensive than \`Box<En>\` at the call site. **Where exactly is the cost?** What's a vtable? If you can't answer, you don't yet understand dynamic dispatch — re-read.
+
 ## 6. What you'll see in ExEx code
 
 \`\`\`rust
@@ -774,8 +796,10 @@ async fn my_exex<Node: FullNodeComponents>(
 }
 \`\`\`
 
+> 🛑 **Stop. Annotate this signature in your head before scrolling.** Which piece is generics? Which is a trait bound? Which uses shared ownership internally? Which lifetime is implicit?
+
 - \`Node: FullNodeComponents\` — trait bound
-- \`ExExContext<Node>\` — generic
+- \`ExExContext<Node>\` — generic over the node bundle
 - Internally uses \`Arc<...>\` for shared components
 - Lifetime annotations are elided but \`'static\` is required
 
@@ -789,7 +813,7 @@ async fn my_exex<Node: FullNodeComponents>(
 | \`Mutex<T>\` | safely mutate shared data |
 | \`dyn Trait\` | runtime method dispatch |
 
-These are the tools you need to read serious Reth code. Next lesson: ExEx itself, where you'll see them in action.`,
+> Final check: close this tab. Write the ExEx \`my_exex\` signature from memory. If you can't, you don't yet own the vocabulary — open it back up. The next lesson reads ExEx in detail; you'll need each of these without the cheat sheet.`,
                 },
                 {
                   title: 'ExEx — Execution Extensions',
@@ -801,6 +825,8 @@ These are the tools you need to read serious Reth code. Next lesson: ExEx itself
                   content: `# ExEx — Execution Extensions
 
 **ExEx** is Reth's mechanism for injecting Rust code into the execution loop. With it you build node-speed indexers, MEV bots, and live risk engines — directly in the same process as the chain itself.
+
+> 🛑 **Predict before scrolling.** Reth needs to tell your code about every new block. **Sketch the API.** What does Reth send you on every commit? On a reorg? How does your code tell Reth "I'm done with block N — you can prune"? Hold your guess.
 
 \`\`\`mermaid
 flowchart LR
@@ -868,6 +894,8 @@ fn main() -> eyre::Result<()> {
 
 That's a working production-shaped ExEx. ~40 lines.
 
+> 🛑 **Stop. Without scrolling, name the three notification types this code handles.** Why does it handle all three? What would happen if you removed two of the three match arms?
+
 ## Reading it in detail
 
 ### \`exex_init\` vs \`exex\`
@@ -881,6 +909,8 @@ async fn exex_init<Node: FullNodeComponents>(
 \`\`\`
 
 Reth calls \`exex_init\` once at startup and **expects you to return a Future to be polled forever**. The two-stage pattern lets you do **synchronous setup** in \`exex_init\` (open files, prepare state) before the long-running future starts.
+
+> 🛑 **Predict.** Why is the init/run split necessary? What concrete bug would happen if you put file-open inside \`exex\` (the long-running loop) instead of \`exex_init\`?
 
 ### The notification stream
 
@@ -900,6 +930,8 @@ ExExNotification::ChainReverted { old }        // segment removed (no replacemen
 
 A correct ExEx handles **all three**. A naive implementation that only listens to \`ChainCommitted\` will silently corrupt its derived state on every reorg. **This is the #1 ExEx bug.**
 
+> 🛑 **Anti-fluency.** You're indexing transactions to a HashMap. You handle only \`ChainCommitted\`. The chain reorgs 5 blocks deep. **What's wrong with your HashMap?** Be specific — write the failure mode in two sentences. Then ask: how does \`ChainReverted\` save you?
+
 ### The \`FinishedHeight\` event
 
 \`\`\`rust
@@ -909,6 +941,8 @@ if let Some(committed_chain) = notification.committed_chain() {
 \`\`\`
 
 This tells Reth: "I've processed up to this block hash; you can prune older history that I'd no longer need." Without it, **Reth keeps everything forever** because it doesn't know what your ExEx still wants to read.
+
+> 🛑 **Predict the disk consequence.** You ship an ExEx without the \`FinishedHeight\` event. Six months later your node is at block 21M. What's the disk usage relative to a node without ExEx? Why?
 
 ### \`install_exex\`
 
@@ -929,13 +963,17 @@ The same repo has more substantial examples — read them once you've got \`mini
 | \`tracking-state\` | Persists ExEx-internal state to a separate DB (so restarts are cheap) |
 | \`rollup\` | Implements a minimal rollup using only ExEx hooks |
 
+> 🔍 **Open \`rollup\`.** Read until you find where it commits state changes. **A rollup as an ExEx — sit with that for a moment.** That's the architectural unlock.
+
 ## Drill
 
 1. Clone \`reth-exex-examples\`, run \`minimal\` against a synced node
 2. Modify the \`ChainCommitted\` arm to print the **transaction count** of each block: \`new.tip().body.transactions.len()\`
 3. Add a \`HashMap<Address, u64>\` that counts how many txs each address sent — survive a reorg correctly (subtract on \`ChainReverted\`, re-add on \`ChainCommitted\` for the new chain)
 
-When that works, you've written a node-speed indexer.`,
+When that works, you've written a node-speed indexer.
+
+> Final check: in one sentence, why is an ExEx-based indexer faster than a separate process polling the RPC? If your answer doesn't mention "same process" or "no I/O round trip," you missed the architectural reason — re-read the diagram.`,
                 },
                 {
                   title: 'Reth SDK — building an App-chain',
@@ -946,7 +984,9 @@ When that works, you've written a node-speed indexer.`,
                   xpReward: 25,
                   content: `# Reth SDK — building an App-chain
 
-ExEx extends an existing Ethereum node. The Reth SDK lets you build **your own App-chain** in Rust by composing components.
+ExEx extends an existing Ethereum node. The Reth SDK lets you build **your own App-chain** in Rust by composing components. This is the lesson where "purpose-built EVM L1" stops being a thesis and starts being a binary you can compile.
+
+> 🛑 **Predict before scrolling.** You're building Tempo (a payments-focused L1). Which Reth components do you need to swap? Which can you keep as-is? Write a list of 3-4 swaps before reading the example.
 
 ## A real custom-node main.rs — verbatim
 
@@ -987,7 +1027,11 @@ fn main() {
 }
 \`\`\`
 
-That's a working chain binary. Read the four key calls in the chain:
+That's a working chain binary. ~30 lines.
+
+> 🛑 **Stop. Without scrolling, name the four chained calls** (\`with_types\`, \`with_components\`, \`with_add_ons\`, \`launch\`). What does each one decide? Hold your guess — compare below.
+
+Read the four key calls in the chain:
 
 ### \`.with_types::<EthereumNode>()\`
 Picks the **type bundle** — chain spec, primitives (block, tx, header types), engine API. \`EthereumNode\` ships defaults; replace with \`OpNode\`, your custom types, or any \`NodeTypes\` impl.
@@ -1000,6 +1044,8 @@ This is where customization lives. You take the base set (\`EthereumNode::compon
 - \`.payload(...)\` — custom block builder
 - \`.executor(...)\` — custom EVM executor (this is where custom opcodes/precompiles plug in)
 - \`.consensus(...)\` — custom consensus
+
+> 🛑 **Anti-fluency.** Pick *one* component above. Sketch the trait you'd implement to swap it. (Just the method signatures — no real impl needed.) If you can't, you don't yet "see" the customization point — open the source for that builder before continuing.
 
 ### \`.with_add_ons(...)\`
 RPC namespaces, engine API extensions, ExEx installations. \`EthereumAddOns::default()\` gives you the standard Ethereum RPC; you can chain \`.install_exex(...)\` here.
@@ -1034,11 +1080,18 @@ flowchart TB
 
 ## Production examples in the wild
 
+> 🛑 **Predict before reading.** For each of these chains, **which Reth components do they swap?** Make a guess for all three:
+> - **Hyperliquid HyperEVM**
+> - **Tempo**
+> - **Berachain (bera-reth)**
+>
+> Then check below.
+
 - **Hyperliquid HyperEVM** — HyperBFT + custom execution + order-book-coupled DB
 - **Tempo** — payment-specialized priority lanes
 - **Berachain (bera-reth)** — Proof of Liquidity consensus
 
-These all replace one or more \`with_components\` builders with their own. The framework above is what they extend.
+These all replace one or more \`with_components\` builders with their own. The framework above is what they extend. **Compare to your prediction** — what did you get right? What surprised you?
 
 ## Drill
 
@@ -1047,7 +1100,9 @@ These all replace one or more \`with_components\` builders with their own. The f
 3. Modify it to **log every transaction's gas price** as it enters the pool
 4. \`cargo run\` against a dev chain. Watch your custom log fire.
 
-Now you've shipped a 1-line component swap. Scale this pattern to consensus or executor and you're building HyperEVM-class infra.`,
+Now you've shipped a 1-line component swap. Scale this pattern to consensus or executor and you're building HyperEVM-class infra.
+
+> Final check: in one sentence, why is the Reth SDK's component-builder pattern more useful for shipping a purpose-built L1 than forking the entire codebase? If your answer doesn't mention "you only own the parts you change," re-read \`with_components\` — that's the entire architectural idea.`,
                 },
                 {
                   title: 'Bridge to Expert — what comes next',
