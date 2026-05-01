@@ -463,7 +463,14 @@ The \`TaskExecutor = Runtime\` alias lets you pass it through stage code without
                   xpReward: 35,
                   content: `# Procedural macros — how \`sol!\` and \`address!\` work
 
-\`address!("0xabc...")\` looks like a function call but **runs at compile time**. So does \`sol! { contract IERC20 { ... } }\`. Both are **procedural macros** — code that runs in the compiler, takes a TokenStream, and emits a TokenStream.
+\`address!("0xabc...")\` looks like a function call but **runs at compile time**. So does \`sol! { contract IERC20 { ... } }\`.
+
+> 🛑 **Predict before scrolling.** When you write \`address!("0xabc123...")\`:
+> - **Where** does the hex parsing happen — at compile time, or at runtime?
+> - If compile-time, **what tool** in the Rust compiler does it?
+> - What error do you get if you write \`address!("0xZZZ")\`?
+>
+> Hold your guesses. The lesson has at least one surprise about \`address!\` that disagrees with the common explanation.
 
 ## 1. The three kinds
 
@@ -495,7 +502,11 @@ Two crates do 90% of the work:
 
 ## 3. The actual \`address!\` macro
 
-Here's what's surprising: **\`address!\` is not a procedural macro at all.** It's a regular \`macro_rules!\` declarative macro. Here's the real source from [\`crates/primitives/src/bits/macros.rs\`](https://github.com/alloy-rs/core/blob/main/crates/primitives/src/bits/macros.rs):
+Here's what's surprising: **\`address!\` is not a procedural macro at all.** It's a regular \`macro_rules!\` declarative macro.
+
+> 🛑 **If \`address!\` is just declarative, what does it delegate to that IS procedural?** Predict — read the source below to verify.
+
+Here's the real source from [\`crates/primitives/src/bits/macros.rs\`](https://github.com/alloy-rs/core/blob/main/crates/primitives/src/bits/macros.rs):
 
 \`\`\`rust
 macro_rules! fixed_bytes_macros {
@@ -534,6 +545,8 @@ Read it twice. There's a lot here.
 ### The \`$d:tt\` trick
 
 \`$d\` matches a token tree (in practice: \`$\`). This solves a famous problem: when you generate a macro inside a macro, you can't just write \`$\` for the inner macro's variables — Rust's macro parser would consume them as the outer macro's metavariables. So \`$d\` is bound to \`$\` and \`$d ($d t:tt)+\` produces \`$ ( $ t:tt )+\` in the generated code. **This is a textbook macro-hygiene workaround.**
+
+> 🛑 **Anti-fluency.** If you removed the \`$d:tt\` trick and wrote a literal \`$\` inside the inner macro, what error would the compiler give? (Hint: it's not "syntax error" — it's about which macro owns the metavariable.) If you can't predict the error class, the trick is just folklore to you.
 
 ### Where compile-time validation lives
 
@@ -583,6 +596,8 @@ let balance = IERC20::new(token, &provider).balanceOf(owner).call().await?;
 
 — that \`.balanceOf(owner)\` call is statically typed, the \`uint256\` becomes a real \`U256\`, the selector is computed at compile time, and the ABI encoding is monomorphized. **No reflection, no runtime parsing, no string-typed errors.**
 
+> 🛑 **Predict.** The selector for \`balanceOf(address)\` is \`0x70a08231\` — the first 4 bytes of \`keccak256("balanceOf(address)")\`. **At what point in the build is the keccak hash computed?** If your answer is "at runtime, the first time you call .balanceOf," re-read — that's exactly the runtime cost \`sol!\` eliminates.
+
 ## 5. When to write your own
 
 Build a proc macro when you have:
@@ -602,7 +617,9 @@ cargo install cargo-expand
 cargo expand --bin my_app
 \`\`\`
 
-Now you can read what your macro is producing and pinpoint any wrong codegen.`,
+Now you can read what your macro is producing and pinpoint any wrong codegen.
+
+> Final check: explain in one sentence the difference between \`macro_rules!\` and a procedural macro. If your answer is just "one's older," go deeper — what does each operate on, and where does each run? **The Rust ecosystem is built on this distinction; without it, you can't read the code that builds your binary.**`,
                 },
               ],
             },
@@ -622,6 +639,8 @@ Now you can read what your macro is producing and pinpoint any wrong codegen.`,
                   content: `# Custom precompiles
 
 Custom **opcodes** add new EVM instructions. Custom **precompiles** add native-Rust functions that are callable like ordinary contracts. Precompiles are the *less invasive* extension point — and they preserve consensus across most tooling.
+
+> 🛑 **Predict before scrolling.** A custom *opcode* breaks consensus with mainnet (you saw this in Advanced). A custom *precompile* doesn't — even though it's also new code that didn't exist in vanilla EVM. **Why is the answer different?** Form a hypothesis citing the EVM bytecode parser. Hold your guess.
 
 ## 1. Opcode vs precompile
 
@@ -680,6 +699,8 @@ That's a production precompile in Ethereum mainnet. Read it line by line:
 - **Halt vs revert** — \`PrecompileHalt::OutOfGas\` means the entire frame halts with no refund, distinct from a regular revert.
 - **\`EthPrecompileOutput\`** carries \`(gas_used, output_bytes)\`.
 
+> 🛑 **Predict.** You CALL the identity precompile with 1 KB of input. **Compute the gas cost.** Show your work: how many words, what's the formula, what's the answer? If you can't, the gas math is just numbers to you — calculate it now.
+
 ## 3. Registering custom precompiles
 
 \`\`\`mermaid
@@ -735,6 +756,8 @@ Notice the \`optimized_access[short_idx]\` write. For addresses that fit in a sm
 
 ## 4. Real-world: Foundry's cheatcodes ARE custom precompiles
 
+> 🛑 **Predict before reading.** \`vm.deal(addr, 1 ether)\` mutates state — gives an arbitrary account ETH out of thin air. **Standard precompiles can't mutate state** (look at \`identity_run\` — pure function, input → output). So how does Foundry implement \`vm.deal\`? Form a hypothesis.
+
 The most widely-deployed custom precompile in the Rust EVM stack lives in Foundry. Every \`vm.deal\`, \`vm.warp\`, \`vm.prank\` you've ever written in a Solidity test is a **\`CALL\` to a custom precompile**.
 
 From [\`forge-std/src/Base.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Base.sol):
@@ -778,7 +801,9 @@ A reasonable workflow:
 3. Convert to gas via your chain's gas/CPU ratio
 4. Re-benchmark on adversarial inputs
 
-After this, your precompile is cheap to use in normal code and prohibitively expensive to abuse.`,
+After this, your precompile is cheap to use in normal code and prohibitively expensive to abuse.
+
+> Final check: you ship a precompile at gas cost = 100. An attacker discovers an input shape that takes **10x normal CPU time** at the same 100 gas. **What's the economic attack? How much does it cost the attacker per second of node CPU?** If you can't sketch the math, you can't safely price a precompile — re-read Section 6 and Ethereum's EIP-2929 for what real underpricing has cost mainnet.`,
                 },
                 {
                   title: 'Merkle Patricia Trie & state proofs',
@@ -791,6 +816,10 @@ After this, your precompile is cheap to use in normal code and prohibitively exp
 
 Ethereum's state lives in a **Merkle Patricia Trie (MPT)**. Understanding it is what lets you reason about state roots, light clients, and witnesses — and write your own.
 
+> 🛑 **Predict before scrolling.** You want to cryptographically prove "account X has balance Y" — to a verifier who **doesn't have the full state**, only a 32-byte trusted root. **Sketch your protocol.** What do you send the verifier? What do they hash? How do they conclude proof or rejection?
+>
+> Write 3-4 lines. Then read the lesson and find what you missed.
+
 ## 1. What an MPT is
 
 Combine three ideas:
@@ -800,6 +829,8 @@ Combine three ideas:
 - **Merkle**: each node hashes its children, so the root commits to all data
 
 Result: a **256-bit \`stateRoot\`** that uniquely identifies the entire world state. Change any byte → root changes.
+
+> 🛑 **Anti-fluency.** Patricia's path-compression is an optimization. **What's the cost if you skip it** and use a plain trie? Why does Ethereum care enough to add the complexity? (Hint: think about a 64-nibble key with mostly-empty trie. How many nodes does the path traverse with vs without compression?)
 
 ## 2. Node types
 
@@ -843,6 +874,8 @@ To prove "account X has balance Y":
 6. If equal → X really has balance Y
 
 That's it. **Light clients** are just verifiers with the trusted root.
+
+> 🛑 **Predict.** You receive a witness for account X — a list of trie node bytes. The verifier hashes back up to the root. **What does the verifier need that's NOT in the witness?** What's the verifier's only secret/trusted input? If you can't answer, you don't yet understand what makes this *cryptographic* (not just "I trust the bytes you sent me").
 
 ## 4. Witnesses
 
@@ -893,6 +926,8 @@ The list of trie nodes from root to the account's leaf — encoded as RLP. The v
 ### \`AccountProof.info: Option<Account>\`
 \`None\` if the account doesn't exist (a "non-inclusion" proof). \`Some\` if it does. **Both cases are valid proofs** — proving "this address has no account" is just as important as proving balance.
 
+> 🛑 **Predict.** When is a non-inclusion proof useful in practice? Name a concrete scenario where you'd want to prove "this address has NEVER held tokens." (Hint: airdrops, sybil resistance, slashing eligibility — pick one and trace the protocol.)
+
 ### \`StorageProof.nibbles: Nibbles\`
 Pre-computed nibble representation of the storage key. Reth caches this because nibble conversion is on the hot path.
 
@@ -900,6 +935,8 @@ Pre-computed nibble representation of the storage key. Reth caches this because 
 Pure logic — given a trusted state root, verify the proof. **This is the entire light-client check.** A few hundred bytes of bytecode, runs in milliseconds, gives you a cryptographic guarantee about state.
 
 ## 6. The pitfall: storage tries
+
+> 🛑 **Predict.** Why does each contract have its **own** storage MPT? What if Ethereum used one giant MPT keyed by \`(contract, slot)\`? Spell out the trade-off.
 
 Each contract has its **own** MPT for its storage slots. So the global state has:
 
@@ -932,7 +969,9 @@ Read in this order: \`common\` (types) → \`trie\` (data structure) → \`db\` 
 3. Notice it calls \`StorageProof::verify\` for each storage proof in \`storage_proofs\`, with \`storage_root\` (not \`root\`) as the parent
 4. Now read [EIP-1186](https://eips.ethereum.org/EIPS/eip-1186) — \`AccountProof\` is the Rust mirror of the spec
 
-Do this and \`eth_getProof\` becomes a structure you can reason about, write, and debug — not magic.`,
+Do this and \`eth_getProof\` becomes a structure you can reason about, write, and debug — not magic.
+
+> Final check: in two sentences, explain why a state proof gives a stronger guarantee than "trust me, I'm a node operator." What property does Merkle hashing give you that a non-cryptographic claim cannot? **The lesson isn't done with you until you can argue this convincingly to someone who has never used a light client.**`,
                 },
                 {
                   title: 'MEV in practice — mempool, ExEx, simulation',
