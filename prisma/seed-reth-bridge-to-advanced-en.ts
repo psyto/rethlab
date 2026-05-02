@@ -512,6 +512,373 @@ When Advanced lesson 5 (custom precompiles) talks about the gas pricing model, o
               ],
             },
           },
+          {
+            title: 'Block-level Ethereum',
+            sortOrder: 1,
+            lessons: {
+              create: [
+                {
+                  title: 'Blocks, receipts, and reorgs',
+                  slug: 'blocks-receipts-reorgs-en',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Blocks, receipts, and reorgs
+
+You've worked with one transaction at a time. The chain operates at a different level: **blocks** of transactions, **receipts** of what they did, and the occasional **reorg** when the chain rewrites recent history.
+
+This is the layer Advanced lessons on Reth's Staged Sync and ExEx assume you understand.
+
+## A block — three pieces
+
+Every Ethereum block is conceptually three things bundled together:
+
+| Piece | What it contains | Hashing |
+| :--- | :--- | :--- |
+| **Header** | Metadata: parent hash, state root, tx root, receipts root, gas limit, timestamp, etc. | The block's "identity" hash is keccak256(header) |
+| **Body** | The actual list of transactions, ordered | Tx root in header is the Merkle root of this list |
+| **Receipts** | One receipt per transaction: status, gas used, logs/events emitted | Receipts root in header commits to this list |
+
+When you hear "block hash 0x123...", that's keccak256 of the *header* — the body and receipts are committed to *via* the header but aren't part of the hash directly.
+
+### Why three roots in the header?
+
+The header carries three Merkle roots: state, transactions, receipts. Each root commits to a different piece of the chain's data:
+
+- **\`state_root\`**: the root of the world-state MPT *after* this block's transactions executed
+- **\`transactions_root\`**: the root of an MPT of all txs in this block (so you can prove "tx X was in block N")
+- **\`receipts_root\`**: the root of an MPT of all receipts (so you can prove "tx X emitted log Y")
+
+A light client can verify any of these by holding only the header and walking a proof. (You'll see this in Expert.)
+
+## Receipts and logs — the audit trail
+
+Each transaction produces a **receipt**:
+
+\`\`\`
+struct Receipt {
+    status: bool,           // success / failed
+    cumulative_gas_used: u64,
+    logs: Vec<Log>,
+    bloom: BloomFilter,     // log filter for fast searches
+}
+
+struct Log {
+    address: Address,       // emitting contract
+    topics: Vec<B256>,      // up to 4, indexed
+    data: Bytes,            // unindexed payload
+}
+\`\`\`
+
+Two things matter:
+
+### 1. Logs are how Solidity \`event\`s reach off-chain
+
+When you write \`emit Transfer(from, to, amount)\` in Solidity, the EVM executes the \`LOG3\` opcode with:
+
+- topic[0] = keccak256("Transfer(address,address,uint256)") — the event signature
+- topic[1] = from (indexed param)
+- topic[2] = to (indexed param)
+- data = ABI-encoded amount (not indexed)
+
+The log goes into the receipt. Indexers, MEV bots, and ExEx all consume these.
+
+### 2. The bloom filter is a fast "did this block touch X?" check
+
+Each block's receipts root has a 256-byte **bloom filter** that summarizes all log addresses and topics in the block. Light clients and indexers use it to quickly skip blocks that don't mention an address they care about — without downloading the full receipts.
+
+When Advanced lesson 7 (MEV in practice) shows you ExEx code that filters logs by address, this bloom is what makes the pre-filter fast.
+
+## How a block actually gets built
+
+A typical block lifecycle:
+
+\`\`\`
+1. Block proposer (validator) gets selected for slot N
+2. Proposer collects pending txs from mempool (or builders)
+3. For each tx (in order):
+   a. Open a frame, run the EVM
+   b. Update world state on success, revert on failure
+   c. Append receipt
+4. Compute roots: state_root, transactions_root, receipts_root
+5. Compute bloom filter from logs
+6. Build header with all roots + parent_hash + timestamp + ...
+7. Sign and propagate
+\`\`\`
+
+The full node executing this block performs **the same execution** to verify — it gets the body, runs every tx, and checks that the resulting state_root matches the header. If it doesn't, the block is rejected.
+
+When you read Reth's \`ExecutionStage\` in Advanced lesson 4, that's exactly the verification path: replay each block's transactions, accumulate state changes, validate the resulting root.
+
+## Reorgs — the chain rewriting itself
+
+Most of the time the chain extends linearly:
+
+\`\`\`
+... → block 100 → block 101 → block 102 → block 103
+\`\`\`
+
+But sometimes two validators propose blocks for the same slot, or a network partition heals, and the **canonical chain switches**. A few blocks at the tip get *unwound*, and the chain re-extends along a different path:
+
+\`\`\`
+                                    ┌─→ 102b → 103b   (new canonical)
+... → 100 → 101 → 102a → 103a ──────┘
+                  └────────── unwound (no longer canonical)
+\`\`\`
+
+This is a **reorg**. From the node's perspective:
+
+1. New chain segment arrives, longer or with more attestations than current
+2. Walk back to the common ancestor (block 101 in the example)
+3. **Unwind** state changes from 102a, 103a (in reverse order)
+4. **Apply** state changes from 102b, 103b
+5. New canonical tip is 103b
+
+In modern Ethereum (post-Merge PoS), reorgs **deeper than 1-2 blocks are rare** but happen. Validators reorganize around missed proposals or equivocations.
+
+### What this means for off-chain consumers
+
+If you wrote an indexer that listened to "block N committed, write txs to my DB," and then block N got reorged:
+
+- Your DB now has rows for transactions that **never happened on the canonical chain**
+- You need to **delete those rows** when the reorg is detected
+- Then re-insert rows for the new canonical block N's transactions
+
+This is **the** reason ExEx has three notification types — \`ChainCommitted\`, \`ChainReorged\`, \`ChainReverted\`. A naive indexer that handles only \`ChainCommitted\` corrupts its derived state on every reorg. (Advanced lesson 6 walks through this in detail.)
+
+### Why Reth's Staged Sync is symmetric
+
+Every Reth Stage has \`execute\` (forward) and \`unwind\` (backward). The stages aren't designed for reorgs as a "special case" — reorgs are a **normal mode of operation**, modeled with the same trait. Going forward 1000 blocks: \`execute\`. Going back 3 blocks for a reorg: \`unwind\`. Same code path, opposite direction.
+
+This is a design choice you'll appreciate in Advanced lesson 4 (Staged Sync architecture).
+
+## Reading list
+
+1. **Find a real block on [Etherscan](https://etherscan.io)**. Click "Click to see More" on the header to see all the fields. Find: parentHash, stateRoot, transactionsRoot, receiptsRoot, logsBloom.
+2. **Open one of its transactions**, look at the Logs tab. Each log has an Address, Topics, and Data — that's the structure above.
+3. **For a sense of how reorgs look in production**, search "reorg" on [reth.rs blog](https://reth.rs/) or any Ethereum client release notes — operators care a lot about reorg-handling correctness.
+
+## What you should walk away with
+
+- A **block** is header + body + receipts; the header carries three Merkle roots committing to state, txs, and receipts.
+- **Receipts** capture each tx's status, gas, and logs (Solidity \`event\`s become logs via the LOG opcodes).
+- **Reorgs** rewrite recent history; off-chain consumers must handle the rewind explicitly.
+- Reth's Staged Sync is **symmetric** (execute / unwind) precisely because reorgs are normal, not exceptional.
+
+When Advanced lesson 4 walks through the Stage trait and lesson 6 walks through ExEx notification types, you'll already have the model in your head. You'll just be reading the Rust that implements it.`,
+                },
+              ],
+            },
+          },
+          {
+            title: 'Rust for source-reading',
+            sortOrder: 2,
+            lessons: {
+              create: [
+                {
+                  title: 'Generics, trait bounds, ?Sized, dyn vs impl',
+                  slug: 'rust-generics-traits-bounds-en',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 15,
+                  xpReward: 30,
+                  content: `# Generics, trait bounds, ?Sized, dyn vs impl
+
+This is the lesson that lets you read \`pub fn add<IT: ITy, H: ?Sized>(...)\` without flinching. Reth and Revm source code is **dense with generics** — function signatures with three type parameters and trait bounds aren't unusual. This lesson goes through every piece of that machinery.
+
+## Generics 101 — the basic shape
+
+A generic function takes a **type parameter** in angle brackets, then uses it like an ordinary type:
+
+\`\`\`rust
+fn first<T>(items: &[T]) -> Option<&T> {
+    items.first()
+}
+
+let nums = [1, 2, 3];
+let first_num = first(&nums);          // T inferred as i32
+
+let words = ["hello", "world"];
+let first_word = first(&words);        // T inferred as &str
+\`\`\`
+
+The compiler **monomorphizes** — it generates a specialized copy of \`first\` for each concrete \`T\` you call it with. \`first::<i32>\` and \`first::<&str>\` are two separate functions in the compiled binary, both with zero runtime cost vs hand-written non-generic code.
+
+## Trait bounds — "T must support these operations"
+
+Plain \`<T>\` says "T can be anything." Often you need to *do* something with T — call a method, compare, format. That's where **trait bounds** come in:
+
+\`\`\`rust
+use std::fmt::Display;
+
+fn print_first<T: Display>(items: &[T]) {
+    if let Some(first) = items.first() {
+        println!("{}", first);          // requires T: Display
+    }
+}
+\`\`\`
+
+\`<T: Display>\` reads as "T must implement the Display trait." Without it, the compiler refuses — it doesn't know that T has a \`{}\` formatter.
+
+Multiple bounds with \`+\`:
+
+\`\`\`rust
+fn process<T: Display + Clone>(item: T) {
+    let copy = item.clone();
+    println!("{} (cloned: {})", item, copy);
+}
+\`\`\`
+
+## \`where\` clauses — same thing, different syntax
+
+When bounds get long, they move below the signature:
+
+\`\`\`rust
+fn process<T>(item: T)
+where
+    T: Display + Clone + Send + 'static,
+{
+    // body
+}
+\`\`\`
+
+This is purely cosmetic. \`<T: Bound>\` and \`where T: Bound\` mean the exact same thing. Reth code uses both styles depending on length.
+
+## Sized — the implicit bound you didn't know about
+
+Every type parameter \`T\` in Rust has an **implicit \`Sized\` bound**. That is, \`<T>\` is silently \`<T: Sized>\`. \`Sized\` means "the compiler knows the type's size at compile time."
+
+Most types are Sized: \`i32\` is 4 bytes, \`String\` is 24 bytes (pointer + length + capacity), your custom struct has a known size.
+
+Some types are **not Sized**:
+
+- \`str\` (the bare string type, not \`&str\`) — its length depends on what's in it
+- \`[i32]\` (a bare slice type, not \`&[i32]\`) — same
+- \`dyn Trait\` (we'll get to this) — the underlying concrete type can be anything
+
+When you say \`<T: ?Sized>\`, you're **opting out of the implicit Sized bound**. T is now allowed to be unsized. The \`?\` is "maybe Sized, maybe not."
+
+Why would you do this? Because **\`&T\`** and **\`Box<T>\`** can hold unsized types if T is \`?Sized\`. Without \`?Sized\`, you can never write \`fn foo<T>(x: &T)\` and pass a \`&dyn Trait\` to it — the compiler enforces \`T: Sized\` and \`dyn Trait\` doesn't satisfy it.
+
+When Revm writes:
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+\`\`\`
+
+The \`H: ?Sized\` is *exactly* so that \`H\` can be \`dyn Host\`. The function works for both \`&MyConcreteHost\` (Sized) and \`&mut dyn Host\` (unsized, \`?Sized\`).
+
+**This single character (\`?\`) decides whether the function accepts trait objects.**
+
+## \`dyn Trait\` — the trait object
+
+\`dyn Trait\` is a **trait object**. It's a "pointer + vtable" pair:
+
+- The pointer points to the concrete value
+- The vtable is a table of function pointers — one for each method of the trait
+
+When you call \`obj.method()\` on a \`dyn Trait\`, the compiler emits a **vtable lookup**: load the method pointer from the vtable, call it indirectly. This is **dynamic dispatch** — resolved at runtime.
+
+\`dyn Trait\` itself is unsized (the concrete type behind the pointer can be any size). So you always see it behind some pointer:
+
+\`\`\`rust
+&dyn Trait        // shared reference
+&mut dyn Trait    // exclusive reference
+Box<dyn Trait>    // owned, heap-allocated
+Rc<dyn Trait>     // shared ownership, single-threaded
+Arc<dyn Trait>    // shared ownership, thread-safe
+\`\`\`
+
+A vector of mixed implementations:
+
+\`\`\`rust
+trait Greet { fn greet(&self); }
+struct En; struct Ja;
+impl Greet for En { fn greet(&self) { println!("Hi"); } }
+impl Greet for Ja { fn greet(&self) { println!("こんにちは"); } }
+
+let mixed: Vec<Box<dyn Greet>> = vec![Box::new(En), Box::new(Ja)];
+for g in &mixed { g.greet(); }
+\`\`\`
+
+Without \`dyn\`, this is impossible — \`Vec<T>\` requires all elements be the same concrete type.
+
+## \`impl Trait\` — the static counterpart
+
+\`impl Trait\` looks similar but is fundamentally different:
+
+\`\`\`rust
+fn make_greeter(lang: &str) -> impl Greet {
+    if lang == "ja" { Ja } else { En }
+    // ❌ won't compile — return type must be a single concrete type
+}
+\`\`\`
+
+\`impl Trait\` in return position means "I return *some specific type* that implements Trait, but I'm hiding it from the caller." It's **static dispatch** — the compiler picks one type, monomorphizes, no vtable.
+
+The trade-off:
+
+| | \`impl Trait\` | \`dyn Trait\` |
+| :--- | :--- | :--- |
+| **Dispatch** | Static (compile-time) | Dynamic (runtime vtable) |
+| **Speed** | Faster (inlinable) | Slightly slower (one indirect call) |
+| **Heterogeneous collections** | ❌ no | ✅ yes (Vec<Box<dyn Trait>>) |
+| **Object safety** | Doesn't matter | Required (some traits aren't object-safe) |
+
+Reth and Revm use **both**, with \`impl\` as the default and \`dyn\` reserved for cases where heterogeneity matters (lists of stages, plug-in points).
+
+## Object safety — when \`dyn Trait\` doesn't compile
+
+A trait must be **object safe** to be used as \`dyn Trait\`. The rules are subtle, but the most common gotcha:
+
+- **No generic methods** in the trait (other than over lifetimes)
+- **No \`Self\` returns** in methods other than \`Self: Sized\` ones
+- **No associated constants**
+
+If you try \`Box<dyn MyTrait>\` and the trait isn't object-safe, you'll get a compile error like "cannot be made into an object." The fix is usually adding \`where Self: Sized\` to the offending method, or splitting the trait.
+
+You won't hit this often as a *consumer* of Reth/Revm code, but it explains why some traits in the source aren't \`dyn\`-able.
+
+## Putting it together — reading a real signature
+
+Back to:
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+\`\`\`
+
+Now you can read it word by word:
+
+- \`pub fn add\` — public function named \`add\`
+- \`<IT: ITy, H: ?Sized>\` — two type parameters:
+  - \`IT\` must implement the \`ITy\` trait (interpreter-types marker — concrete vs traced vs sandboxed)
+  - \`H\` is allowed to be unsized (so it can be \`dyn Host\`)
+- \`context: Ictx<'_, H, IT>\` — takes a context parameterized by both
+- \`-> Result\` — returns a Result
+
+Same function, **two specialization paths**: one for \`(ConcreteIT, ConcreteHost)\` (fully monomorphized, fastest), one for \`(ConcreteIT, dyn Host)\` (vtable for Host calls). The \`?Sized\` is what enables the second path.
+
+This is **why Revm is "modular":** the same opcode function compiles into multiple binaries for different execution modes, with the dispatch decided at the type-system level instead of via runtime branches.
+
+## Reading list
+
+1. **Rust Book chapters 10 (Generics, Traits, Lifetimes), 17 (Trait Objects)** — open them, even if just to skim the section headings. Free reference.
+2. **Find any function in \`reth/crates\` with three or more type parameters.** Read the signature. You should now be able to translate every piece into "what concrete shapes is this function valid for."
+3. **Try this thought experiment:** if you removed \`?Sized\` from \`H\` in the \`add\` signature, what concrete error would the compiler give a caller passing \`&mut dyn Host\`? (Answer: "the trait \`Sized\` is not implemented for \`dyn Host\`.")
+
+## What you should walk away with
+
+- **Generics + bounds** are the Rust analog of "interface" or "concept": "T is whatever, but it must support these operations."
+- **\`Sized\` is implicit** on every type parameter; \`?Sized\` opts out so the parameter can be a trait object.
+- **\`dyn Trait\`** is a runtime-dispatched pointer-plus-vtable; **\`impl Trait\`** is compile-time monomorphized.
+- Revm's heavy use of generics is **modularity at the type level** — same code, multiple specializations.
+
+When Advanced lesson 1 hits you with three type parameters and \`?Sized\` in the very first line, you'll read it as one connected sentence, not as five intimidating tokens.`,
+                },
+              ],
+            },
+          },
         ],
       },
     },
