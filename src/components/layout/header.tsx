@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { useLocale } from '@/contexts/locale-context';
 import { type Locale, localeNames } from '@/lib/i18n';
-import { Globe, Menu, X, User } from 'lucide-react';
+import { Globe, Menu, X, User, Github } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -66,6 +66,17 @@ export function Header() {
               </Link>
             )}
           </nav>
+
+          {/* GitHub link — always visible */}
+          <a
+            href="https://github.com/psyto/rethlab"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub repository"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Github className="h-4 w-4" />
+          </a>
 
           {/* Language Switcher — always visible (mobile + desktop) */}
           <div className="relative">

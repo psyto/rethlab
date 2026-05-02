@@ -170,14 +170,24 @@ export default function AboutPage() {
         transition={{ delay: 0.5 }}
       >
         <p className="text-sm font-semibold">{t('about.contact')}</p>
-        <a
-          href="https://x.com/psyto"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-flex items-center gap-2 text-sm text-primary hover:underline"
-        >
-          @psyto
-        </a>
+        <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-4">
+          <a
+            href="https://github.com/psyto/rethlab/discussions"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:border-primary/50 hover:text-primary transition-colors"
+          >
+            GitHub Discussions
+          </a>
+          <a
+            href="https://x.com/psyto"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:border-primary/50 hover:text-primary transition-colors"
+          >
+            @psyto on X
+          </a>
+        </div>
       </motion.div>
     </div>
   );

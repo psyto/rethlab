@@ -345,7 +345,7 @@ export const en = {
       tilt: 'Compose: Use Alloy to talk to any chain, drive Revm in process, or extend Reth as a node operator.',
       hyperlend: 'Career value: Infra engineers who can read this stack are some of the highest-paid in Web3.',
     },
-    contact: 'Questions or feedback? Reach out on Twitter.',
+    contact: 'Questions, content feedback, or typo reports go on GitHub. Casual chat or shoutouts on X.',
     support: {
       title: 'Support this work',
       body: 'RethLab is free and open. If the lessons helped you ship Rust EVM code, sponsoring on GitHub or a one-time donation keeps the course running and the existing material updated against upstream.',

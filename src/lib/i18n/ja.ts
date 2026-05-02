@@ -347,7 +347,7 @@ export const ja: TranslationKeys = {
       tilt: '組み合わせ: Alloyで任意のチェーンと通信し、Revmをプロセス内で動かし、Rethをノードオペレーターとして拡張。',
       hyperlend: 'キャリア価値: このスタックを読めるインフラエンジニアは、Web3で最も需要の高い職種の一つ。',
     },
-    contact: 'ご質問やフィードバックはTwitterまでお気軽にどうぞ。',
+    contact: '質問・コンテンツへのフィードバック・typo 報告は GitHub へ。カジュアルな会話や反応共有は X へ。',
     support: {
       title: 'この活動を支援する',
       body: 'RethLab は無料でオープンです。レッスンが Rust EVM のコードを書く役に立ったら、GitHub Sponsors の継続支援か単発の donation で、本コースの運営継続と upstream への追従更新を支えていただけます。',
