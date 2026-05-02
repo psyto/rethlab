@@ -167,9 +167,12 @@ export default function LessonPage() {
 
         <div className="flex items-center gap-2">
           {isCompleted && (
-            <div className="flex items-center gap-1.5 rounded-lg bg-accent/10 px-3 py-1 text-sm font-medium text-accent">
+            <div
+              className="flex items-center gap-1.5 rounded-lg bg-accent/10 p-1.5 text-accent sm:px-3 sm:py-1 sm:text-sm sm:font-medium"
+              title={t('lesson.completed')}
+            >
               <CheckCircle2 className="h-4 w-4" />
-              {t('lesson.completed')}
+              <span className="hidden sm:inline">{t('lesson.completed')}</span>
             </div>
           )}
           {lesson.prevLesson && (
