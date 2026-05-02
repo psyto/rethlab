@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { apiSuccess, apiError, withErrorHandler } from '@/lib/api/utils';
 
 export const GET = withErrorHandler(async (_req, ctx) => {
-  const { slug, id } = await ctx.params;
+  const { slug, lessonSlug } = await ctx.params;
 
   const course = await prisma.course.findUnique({
     where: { slug },
@@ -36,15 +36,18 @@ export const GET = withErrorHandler(async (_req, ctx) => {
   const allLessons = course.modules.flatMap((m) =>
     m.lessons.map((l) => ({ ...l, moduleTitle: m.title }))
   );
-  const lessonIndex = allLessons.findIndex((l) => l.id === id);
+  const lessonIndex = allLessons.findIndex((l) => l.slug === lessonSlug);
 
   if (lessonIndex === -1) {
     return apiError('Lesson not found', 404);
   }
 
-  // Fetch full lesson data
+  // Slug is unique within a module (per @@unique([moduleId, slug])); resolve
+  // it to the row id we already have from the course query, then fetch the
+  // full lesson body by id.
+  const lessonId = allLessons[lessonIndex].id;
   const lesson = await prisma.lesson.findUnique({
-    where: { id },
+    where: { id: lessonId },
   });
 
   if (!lesson) {
@@ -52,10 +55,10 @@ export const GET = withErrorHandler(async (_req, ctx) => {
   }
 
   const prevLesson = lessonIndex > 0
-    ? { id: allLessons[lessonIndex - 1].id, title: allLessons[lessonIndex - 1].title }
+    ? { slug: allLessons[lessonIndex - 1].slug, title: allLessons[lessonIndex - 1].title }
     : null;
   const nextLesson = lessonIndex < allLessons.length - 1
-    ? { id: allLessons[lessonIndex + 1].id, title: allLessons[lessonIndex + 1].title }
+    ? { slug: allLessons[lessonIndex + 1].slug, title: allLessons[lessonIndex + 1].title }
     : null;
 
   // Check completion status
@@ -71,7 +74,7 @@ export const GET = withErrorHandler(async (_req, ctx) => {
         where: {
           enrollmentId_lessonId: {
             enrollmentId: enrollment.id,
-            lessonId: id,
+            lessonId,
           },
         },
       });

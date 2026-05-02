@@ -45,7 +45,7 @@ export default function LessonPage() {
   const router = useRouter();
   const { t, formatT, locale } = useLocale();
   const slug = params.slug as string;
-  const id = params.id as string;
+  const lessonSlug = params.lessonSlug as string;
 
   // Redirect to course list if locale doesn't match slug
   useEffect(() => {
@@ -56,8 +56,8 @@ export default function LessonPage() {
   }, [locale, slug, router]);
 
   const { data: session } = useSession();
-  const { data: lesson, isLoading, error } = useLesson(slug, id);
-  const completeMutation = useCompleteLesson(slug, id);
+  const { data: lesson, isLoading, error } = useLesson(slug, lessonSlug);
+  const completeMutation = useCompleteLesson(slug, lessonSlug);
   const localCompletion = useLocalCompletion();
 
   const [code, setCode] = useState('');
@@ -177,7 +177,7 @@ export default function LessonPage() {
           )}
           {lesson.prevLesson && (
             <button
-              onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.prevLesson!.id}`)}
+              onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.prevLesson!.slug}`)}
               className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary"
               title={t('lesson.previousLesson')}
             >
@@ -186,7 +186,7 @@ export default function LessonPage() {
           )}
           {lesson.nextLesson && (
             <button
-              onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.id}`)}
+              onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}`)}
               className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary"
               title={t('lesson.nextLesson')}
             >
@@ -259,7 +259,7 @@ export default function LessonPage() {
                 isCompleted={isCompleted}
                 onNext={
                   lesson.nextLesson
-                    ? () => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.id}`)
+                    ? () => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}`)
                     : undefined
                 }
                 nextLessonTitle={lesson.nextLesson?.title}
@@ -296,7 +296,7 @@ export default function LessonPage() {
               <div className="flex gap-3">
                 {lesson.prevLesson && (
                   <button
-                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.prevLesson!.id}`)}
+                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.prevLesson!.slug}`)}
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
                     <ArrowLeft className="h-4 w-4" />
@@ -305,7 +305,7 @@ export default function LessonPage() {
                 )}
                 {lesson.nextLesson ? (
                   <button
-                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.id}`)}
+                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}`)}
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
                     {t('lesson.nextLesson')}
@@ -399,7 +399,7 @@ export default function LessonPage() {
                 </div>
                 {lesson.nextLesson ? (
                   <button
-                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.id}`)}
+                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}`)}
                     className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient py-3 text-sm font-semibold text-fabrknt-dark transition-all hover:opacity-90"
                   >
                     {t('lesson.nextLesson')}: {lesson.nextLesson.title}
@@ -466,7 +466,7 @@ function LessonCompletionNav({
   if (lesson.nextLesson) {
     return (
       <button
-        onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.id}`)}
+        onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}`)}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient py-3 text-sm font-semibold text-fabrknt-dark transition-all hover:opacity-90"
       >
         {t('lesson.nextLesson')}: {lesson.nextLesson.title}

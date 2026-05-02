@@ -180,7 +180,7 @@ export default function CourseDetailPage() {
                         return (
                           <Link
                             key={lesson.id}
-                            href={`/courses/${course.slug}/lessons/${lesson.id}`}
+                            href={`/courses/${course.slug}/lessons/${lesson.slug}`}
                             className="flex items-center justify-between border-b border-border/50 px-4 py-3 last:border-b-0 hover:bg-secondary/50 transition-colors"
                           >
                             <div className="flex items-center gap-3">
@@ -250,7 +250,7 @@ export default function CourseDetailPage() {
             {/* Enroll CTA */}
             {!session ? (
               <Link
-                href={`/courses/${course.slug}/lessons/${course.modules[0]?.lessons[0]?.id}`}
+                href={`/courses/${course.slug}/lessons/${course.modules[0]?.lessons[0]?.slug}`}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-base font-semibold text-fabrknt-dark transition-all hover:opacity-90"
               >
                 {t('landing.hero.cta')}

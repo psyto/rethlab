@@ -2,23 +2,27 @@ import type { Metadata } from 'next';
 import { prisma } from '@/lib/db';
 
 type Props = {
-  params: Promise<{ slug: string; id: string }>;
+  params: Promise<{ slug: string; lessonSlug: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug, id } = await params;
-
-  const lesson = await prisma.lesson.findUnique({
-    where: { id },
-    select: { title: true, content: true, slug: true },
-  });
+  const { slug, lessonSlug } = await params;
 
   const course = await prisma.course.findUnique({
     where: { slug },
-    select: { title: true },
+    select: { id: true, title: true },
   });
 
-  if (!lesson || !course) {
+  if (!course) {
+    return { title: 'Lesson Not Found' };
+  }
+
+  const lesson = await prisma.lesson.findFirst({
+    where: { slug: lessonSlug, module: { courseId: course.id } },
+    select: { title: true, content: true, slug: true },
+  });
+
+  if (!lesson) {
     return { title: 'Lesson Not Found' };
   }
 
@@ -35,18 +39,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const enLessonSlug = `${baseLessonSlug}-en`;
   const jaLessonSlug = `${baseLessonSlug}-ja`;
 
-  const [enLesson, jaLesson] = await Promise.all([
-    prisma.lesson.findFirst({ where: { slug: enLessonSlug }, select: { id: true } }),
-    prisma.lesson.findFirst({ where: { slug: jaLessonSlug }, select: { id: true } }),
-  ]);
-
-  const enUrl = enLesson ? `/courses/${baseCourseSlug}-en/lessons/${enLesson.id}` : undefined;
-  const jaUrl = jaLesson ? `/courses/${baseCourseSlug}-ja/lessons/${jaLesson.id}` : undefined;
+  // Slugs are stable across reseeds, so we can build hreflang URLs without
+  // re-querying for the sibling lesson rows.
+  const enUrl = `/courses/${baseCourseSlug}-en/lessons/${enLessonSlug}`;
+  const jaUrl = `/courses/${baseCourseSlug}-ja/lessons/${jaLessonSlug}`;
   const canonical = isJa ? jaUrl : enUrl;
 
-  const languages: Record<string, string> = {};
-  if (enUrl) languages.en = enUrl;
-  if (jaUrl) languages.ja = jaUrl;
+  const languages: Record<string, string> = {
+    en: enUrl,
+    ja: jaUrl,
+  };
 
   return {
     title: `${lesson.title} — ${course.title}`,

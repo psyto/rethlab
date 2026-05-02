@@ -4,7 +4,7 @@ import { learningService } from '@/lib/services/learning-progress';
 
 export const POST = withErrorHandler(async (_req, ctx) => {
   const user = await requireAuth();
-  const { slug, id } = await ctx.params;
+  const { slug, lessonSlug } = await ctx.params;
 
   const course = await prisma.course.findUnique({
     where: { slug },
@@ -12,7 +12,7 @@ export const POST = withErrorHandler(async (_req, ctx) => {
       modules: {
         orderBy: { sortOrder: 'asc' },
         include: {
-          lessons: { orderBy: { sortOrder: 'asc' }, select: { id: true } },
+          lessons: { orderBy: { sortOrder: 'asc' }, select: { id: true, slug: true } },
         },
       },
     },
@@ -23,7 +23,7 @@ export const POST = withErrorHandler(async (_req, ctx) => {
   }
 
   const allLessons = course.modules.flatMap((m) => m.lessons);
-  const lessonIndex = allLessons.findIndex((l) => l.id === id);
+  const lessonIndex = allLessons.findIndex((l) => l.slug === lessonSlug);
 
   if (lessonIndex === -1) {
     return apiError('Lesson not found', 404);

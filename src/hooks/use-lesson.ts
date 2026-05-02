@@ -20,15 +20,15 @@ export interface LessonDetail {
   courseTitle: string;
   courseXpReward: number;
   lessonIndex: number;
-  prevLesson: { id: string; title: string } | null;
-  nextLesson: { id: string; title: string } | null;
+  prevLesson: { slug: string; title: string } | null;
+  nextLesson: { slug: string; title: string } | null;
   isCompleted: boolean;
 }
 
-export function useLesson(slug: string, id: string) {
+export function useLesson(slug: string, lessonSlug: string) {
   return useQuery<LessonDetail>({
-    queryKey: ['lesson', slug, id],
-    queryFn: () => apiFetch<LessonDetail>(`/api/courses/${slug}/lessons/${id}`),
-    enabled: !!slug && !!id,
+    queryKey: ['lesson', slug, lessonSlug],
+    queryFn: () => apiFetch<LessonDetail>(`/api/courses/${slug}/lessons/${lessonSlug}`),
+    enabled: !!slug && !!lessonSlug,
   });
 }
