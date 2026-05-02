@@ -1111,19 +1111,17 @@ When you read Reth source and see \`Arc<RwLock<Foo>>\` next to \`Arc<Mutex<Bar>>
 When Advanced lesson 6 (ExEx) shows you a struct with three \`Arc<...>\` fields and you wonder "why all the wrappers," you'll know each one is the load-bearing piece of how that component is shared across the runtime's tasks.`,
                 },
                 {
-                  title: 'unsafe Rust and macro_rules! basics',
-                  slug: 'rust-unsafe-and-macros-en',
+                  title: 'unsafe Rust',
+                  slug: 'rust-unsafe-en',
                   type: 'CONTENT',
                   sortOrder: 2,
-                  duration: 15,
-                  xpReward: 30,
-                  content: `# unsafe Rust and macro_rules! basics
+                  duration: 10,
+                  xpReward: 20,
+                  content: `# unsafe Rust
 
-Two areas where the standard Rust book is *thin*, and where Revm's interpreter goes *deep*. This lesson gives you enough vocabulary to read Revm's hot path without flinching at \`unsafe { ... }\` blocks or macro definitions full of \`$d:tt\`.
+One of two areas where the standard Rust book is *thin*, and where Revm's interpreter goes *deep*. This lesson gives you enough vocabulary to read Revm's hot path without flinching at \`unsafe { ... }\` blocks. (The other area — \`macro_rules!\` — is the next lesson; together they're what you need to read \`popn_top!\` and friends.)
 
-## Part 1: \`unsafe\` Rust
-
-### What \`unsafe\` actually allows
+## What \`unsafe\` actually allows
 
 Rust's safety guarantees (no data races, no use-after-free, no out-of-bounds access) are enforced by the compiler — but only over **safe Rust**. There are five things only \`unsafe\` code can do:
 
@@ -1135,7 +1133,7 @@ Rust's safety guarantees (no data races, no use-after-free, no out-of-bounds acc
 
 That's *the entire list*. Crucially, \`unsafe\` doesn't turn off Rust's borrow checker for your local variables, doesn't allow null pointer derefs *automatically*, and doesn't let you skip type-checking.
 
-### The contract — what \`unsafe\` *does*
+## The contract — what \`unsafe\` *does*
 
 \`unsafe\` is a **promise from you to the compiler**: "I have manually verified that this code maintains Rust's safety invariants. You can trust me."
 
@@ -1143,7 +1141,7 @@ If the promise is wrong, you get **undefined behavior (UB)** — and UB is *cata
 
 **There is no "small UB."** A program with UB is wrong, full stop.
 
-### Why Revm uses \`unsafe\` on the hot path
+## Why Revm uses \`unsafe\` on the hot path
 
 Revm's \`popn_top!\` macro from Advanced lesson 1 contains:
 
@@ -1168,7 +1166,7 @@ So at the moment of \`unwrap_unchecked()\`, the stack length is **provably** suf
 
 The cost saved: one branch per opcode execution. On the hot path of an interpreter that runs billions of times, that's measurable.
 
-### The \`unsafe\` discipline in Revm/Reth
+## The \`unsafe\` discipline in Revm/Reth
 
 Idiomatic \`unsafe\` use looks like this:
 
@@ -1181,7 +1179,7 @@ let result = unsafe { popn_top.unwrap_unchecked() };
 
 Every \`unsafe\` block in well-written Rust has a **\`// SAFETY:\` comment** describing why the unsafe is sound. Reviewers look for these; their absence is a code smell.
 
-### \`unsafe fn\` vs \`unsafe { ... }\`
+## \`unsafe fn\` vs \`unsafe { ... }\`
 
 Two related but different concepts:
 
@@ -1192,7 +1190,7 @@ Two related but different concepts:
 
 \`unwrap_unchecked()\` is an \`unsafe fn\`. To call it, you wrap the call site in \`unsafe { ... }\`. That's the contract: the function declares "I have a precondition," the caller declares "I've checked it."
 
-### What you do NOT need to know yet
+## What you do NOT need to know yet
 
 - Manual implementation of \`Send\` / \`Sync\` (Reth doesn't really do this)
 - Inline assembly (almost never)
@@ -1200,13 +1198,28 @@ Two related but different concepts:
 
 For reading Revm/Reth source, **the patterns above (manual safety verification + \`unwrap_unchecked\` after a check) are 95% of what you'll see**.
 
----
+## What you should walk away with
 
-## Part 2: \`macro_rules!\`
+- **\`unsafe\`** allows 5 specific things; it's a *contract* with the compiler, not a license
+- **\`unwrap_unchecked()\`** + a preceding length/state check is the canonical Revm pattern for skipping redundant runtime checks on the hot path
+- The **\`// SAFETY:\` comment** discipline — every \`unsafe\` block in well-written Rust documents the invariant that justifies it
+
+The next lesson covers \`macro_rules!\`, the other half of what you need to read Revm's interpreter source.`,
+                },
+                {
+                  title: 'macro_rules! basics',
+                  slug: 'rust-macros-en',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 10,
+                  xpReward: 20,
+                  content: `# macro_rules! basics
+
+The other of two areas where the standard Rust book is *thin*. The previous lesson covered \`unsafe\`; this one covers \`macro_rules!\`. Together they're what you need to read Revm's hot-path source — \`popn_top!\`, \`gas!\`, and the rest.
 
 Revm's interpreter is **dense with macros**. \`popn_top!\`, \`gas!\`, \`push!\`, \`as_usize_or_fail!\` — these aren't function calls, they're compile-time text expansions. Reading them requires knowing the syntax.
 
-### The basic shape
+## The basic shape
 
 A \`macro_rules!\` macro is **pattern → expansion**. The pattern matches caller syntax; the expansion produces code:
 
@@ -1222,7 +1235,7 @@ let n = square!(3 + 4);    // expands to: (3 + 4) * (3 + 4) → 49
 
 The \`$x:expr\` part declares a **metavariable** \`$x\` that matches any expression. \`expr\` is a **fragment specifier** telling the parser what kind of syntax to expect.
 
-### Common fragment specifiers
+## Common fragment specifiers
 
 | Specifier | Matches |
 | :--- | :--- |
@@ -1236,7 +1249,7 @@ The \`$x:expr\` part declares a **metavariable** \`$x\` that matches any express
 
 For reading source, \`expr\` and \`ident\` and \`tt\` cover most cases.
 
-### Repetition: \`$( ... ),*\`
+## Repetition: \`$( ... ),*\`
 
 Macros can match **lists** with repetition syntax:
 
@@ -1262,7 +1275,7 @@ Reading the syntax:
 - \`,*\` says "separated by commas, zero or more times" (use \`,+\` for one or more)
 - Inside the expansion, \`$( ... )*\` repeats the body once per match
 
-### Reading Revm's \`popn_top!\`
+## Reading Revm's \`popn_top!\`
 
 Now armed with the basics:
 
@@ -1290,7 +1303,7 @@ Calling \`popn_top!([a, b, c], top, ctx.interpreter)\` would have \`$x\` as a li
 
 The expansion uses \`$($x),*\` to expand the same list of identifiers into the destructuring pattern.
 
-### Macro hygiene — why a macro can't pollute your scope
+## Macro hygiene — why a macro can't pollute your scope
 
 \`macro_rules!\` macros are **hygienic**: variable names introduced inside a macro don't conflict with variables in the caller's scope.
 
@@ -1309,7 +1322,7 @@ println!("{}", temp);        // still "important"
 
 Hygiene is a feature of \`macro_rules!\` (and a major reason it's preferred over C-style macros).
 
-### \`macro_rules!\` vs \`proc_macro\`
+## \`macro_rules!\` vs \`proc_macro\`
 
 You'll meet both. Quick distinction:
 
@@ -1352,15 +1365,15 @@ You're not reading magic. You're reading **patterns you now know**.
 
 ## Reading list
 
-1. **Rust Book chapter 19.5 (Macros)** and **chapter 19.1 (Unsafe Rust)** — both are concise. Read once, refer back as needed.
+1. **Rust Book chapter 19.5 (Macros)** — concise. Read once, refer back as needed.
 2. **The Little Book of Rust Macros** ([danielkeep.github.io](https://danielkeep.github.io/tlborm/book/index.html)) — free, the best macro-by-example reference.
-3. **Search Revm for \`unsafe {\`** and read the surrounding code with the \`SAFETY:\` lens — what's the precondition? Where is it verified?
 
 ## What you should walk away with
 
-- **\`unsafe\`** allows 5 specific things; it's a *contract* with the compiler, not a license
-- **\`unwrap_unchecked()\`** + a preceding length/state check is the canonical Revm pattern for skipping redundant runtime checks on the hot path
-- **\`macro_rules!\`** matches token patterns and expands to code; \`$x:expr\`, \`$($x),*\`, fragment specifiers, hygiene
+- **\`macro_rules!\`** matches token patterns and expands to code at compile time
+- Fragment specifiers (\`$x:expr\`, \`$x:ident\`, \`$x:tt\`) declare what kind of syntax each metavariable matches
+- Repetition syntax \`$( ... ),*\` lets one pattern match a list of arguments
+- **Hygiene** prevents macros from polluting caller scope
 - **proc-macros** are the heavier sibling — separate crate, operates on TokenStream — covered in Expert
 
 ## Course complete — next steps

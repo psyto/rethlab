@@ -1111,19 +1111,17 @@ Reth ソースを読んで \`Arc<RwLock<Foo>>\` の隣に \`Arc<Mutex<Bar>>\` �
 Advanced lesson 6 (ExEx) で \`Arc<...>\` フィールドが 3 つあるような struct を見て「なぜラッパーだらけ?」と思った時、各々がそのコンポーネントが runtime のタスク間でどう共有されるかの load-bearing 部品だと知っているはず。`,
                 },
                 {
-                  title: 'unsafe Rust と macro_rules! 基礎',
-                  slug: 'rust-unsafe-and-macros-ja',
+                  title: 'unsafe Rust',
+                  slug: 'rust-unsafe-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
-                  duration: 15,
-                  xpReward: 30,
-                  content: `# unsafe Rust と macro_rules! 基礎
+                  duration: 10,
+                  xpReward: 20,
+                  content: `# unsafe Rust
 
-標準 Rust 教科書が *薄い* 2 領域、そして Revm のインタープリタが *深く* 入る 2 領域。このレッスンで、Revm のホットパスを \`unsafe { ... }\` ブロックや \`$d:tt\` だらけのマクロ定義に怯まず読める語彙を得ます。
+標準 Rust 教科書が *薄い* 2 領域のうちの 1 つ、そして Revm のインタープリタが *深く* 入る領域。このレッスンで、Revm のホットパスを \`unsafe { ... }\` ブロックに怯まず読める語彙を得ます。(もう 1 つの領域 — \`macro_rules!\` — は次のレッスン。両方合わせて \`popn_top!\` 等を読むのに必要。)
 
-## Part 1: \`unsafe\` Rust
-
-### \`unsafe\` が実際に許すもの
+## \`unsafe\` が実際に許すもの
 
 Rust の安全性保証 (データ競合なし、use-after-free なし、境界外アクセスなし) はコンパイラが強制する — でも **safe Rust** に対してだけ。\`unsafe\` コードだけが許される 5 つのこと：
 
@@ -1135,7 +1133,7 @@ Rust の安全性保証 (データ競合なし、use-after-free なし、境界�
 
 それが *リスト全部*。重要なことに、\`unsafe\` はローカル変数の借用チェッカーを *無効化しない*、null ポインタ deref を *自動的に* 許可しない、型チェックをスキップさせない。
 
-### 契約 — \`unsafe\` が *する* こと
+## 契約 — \`unsafe\` が *する* こと
 
 \`unsafe\` はあなたからコンパイラへの **約束**: 「このコードが Rust の安全性不変条件を維持していることを手動で検証した。信用していい」。
 
@@ -1143,7 +1141,7 @@ Rust の安全性保証 (データ競合なし、use-after-free なし、境界�
 
 **「小さな UB」は存在しない**。UB のあるプログラムは間違っている、それだけ。
 
-### なぜ Revm はホットパスで \`unsafe\` を使うか
+## なぜ Revm はホットパスで \`unsafe\` を使うか
 
 Advanced lesson 1 の Revm の \`popn_top!\` マクロには：
 
@@ -1168,7 +1166,7 @@ if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
 
 節約されるコスト: opcode 実行ごとに 1 分岐。何十億回走るインタープリタのホットパスで、それは計測できる。
 
-### Revm/Reth での \`unsafe\` 規律
+## Revm/Reth での \`unsafe\` 規律
 
 慣用的な \`unsafe\` 使用はこんな感じ：
 
@@ -1181,7 +1179,7 @@ let result = unsafe { popn_top.unwrap_unchecked() };
 
 よく書かれた Rust の各 \`unsafe\` ブロックには **\`// SAFETY:\` コメント** があり、なぜ unsafe が健全かを記述する。レビュアーはこれを探す; 不在は code smell。
 
-### \`unsafe fn\` vs \`unsafe { ... }\`
+## \`unsafe fn\` vs \`unsafe { ... }\`
 
 関連するが異なる 2 つの概念：
 
@@ -1192,7 +1190,7 @@ let result = unsafe { popn_top.unwrap_unchecked() };
 
 \`unwrap_unchecked()\` は \`unsafe fn\`。呼ぶには呼び出し場所を \`unsafe { ... }\` で囲む。それが契約: 関数が「事前条件がある」と宣言、呼び出し元が「チェック済み」と宣言。
 
-### まだ知らなくて良いもの
+## まだ知らなくて良いもの
 
 - \`Send\` / \`Sync\` の手動実装 (Reth はあまりやらない)
 - インラインアセンブリ (ほぼなし)
@@ -1200,13 +1198,28 @@ let result = unsafe { popn_top.unwrap_unchecked() };
 
 Revm/Reth ソースを読むには、**上のパターン (手動安全性検証 + チェック後の \`unwrap_unchecked\`) が見るものの 95%**。
 
----
+## このレッスンで持ち帰るもの
 
-## Part 2: \`macro_rules!\`
+- **\`unsafe\`** は 5 つの特定のことを許す; ライセンスではなくコンパイラとの *契約*
+- **\`unwrap_unchecked()\`** + 直前の長さ/状態チェックは、Revm のホットパスで冗長な実行時チェックをスキップする正準パターン
+- **\`// SAFETY:\` コメント** 規律 — よく書かれた Rust の各 unsafe ブロックは、それを正当化する不変条件を文書化する
+
+次のレッスンは \`macro_rules!\` をカバーする — Revm のインタープリタソースを読むのに必要なもう一つの半分。`,
+                },
+                {
+                  title: 'macro_rules! 基礎',
+                  slug: 'rust-macros-ja',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 10,
+                  xpReward: 20,
+                  content: `# macro_rules! 基礎
+
+標準 Rust 教科書が *薄い* 2 領域のうちのもう 1 つ。前のレッスンが \`unsafe\` をカバー、これが \`macro_rules!\`。両方合わせて Revm のホットパスソース — \`popn_top!\`、\`gas!\` 等 — を読むのに必要なもの。
 
 Revm のインタープリタは **マクロでぎっしり**。\`popn_top!\`、\`gas!\`、\`push!\`、\`as_usize_or_fail!\` — これらは関数呼び出しではなく、コンパイル時のテキスト展開。読むには構文を知る必要がある。
 
-### 基本の形
+## 基本の形
 
 \`macro_rules!\` マクロは **パターン → 展開**。パターンが呼び出し構文にマッチ、展開がコードを生成：
 
@@ -1222,7 +1235,7 @@ let n = square!(3 + 4);    // 展開: (3 + 4) * (3 + 4) → 49
 
 \`$x:expr\` 部分が **メタ変数** \`$x\` を宣言、任意の式にマッチ。\`expr\` は **フラグメント specifier**、パーサに何の構文を期待するか教える。
 
-### 一般的なフラグメント specifier
+## 一般的なフラグメント specifier
 
 | Specifier | マッチ対象 |
 | :--- | :--- |
@@ -1236,7 +1249,7 @@ let n = square!(3 + 4);    // 展開: (3 + 4) * (3 + 4) → 49
 
 ソース読みには \`expr\`・\`ident\`・\`tt\` でほとんど足りる。
 
-### 繰り返し: \`$( ... ),*\`
+## 繰り返し: \`$( ... ),*\`
 
 マクロは **リスト** を繰り返し構文でマッチできる：
 
@@ -1262,7 +1275,7 @@ print_all!(1, "hello", 3.14);
 - \`,*\` が「カンマ区切り、ゼロ回以上」(\`,+\` で 1 回以上)
 - 展開内の \`$( ... )*\` が本体をマッチ 1 つにつき 1 回繰り返す
 
-### Revm の \`popn_top!\` を読む
+## Revm の \`popn_top!\` を読む
 
 基礎を装備して：
 
@@ -1290,7 +1303,7 @@ macro_rules! popn_top {
 
 展開は \`$($x),*\` を使って同じ識別子リストを destructuring パターンに展開する。
 
-### マクロの hygiene — マクロがあなたのスコープを汚染できない理由
+## マクロの hygiene — マクロがあなたのスコープを汚染できない理由
 
 \`macro_rules!\` マクロは **hygienic**: マクロ内で導入された変数名は呼び出し元のスコープの変数と衝突しない。
 
@@ -1309,7 +1322,7 @@ println!("{}", temp);        // まだ "important"
 
 Hygiene は \`macro_rules!\` の特徴 (そして C スタイルのマクロより好まれる主な理由)。
 
-### \`macro_rules!\` vs \`proc_macro\`
+## \`macro_rules!\` vs \`proc_macro\`
 
 両方に出会う。簡単な区別：
 
@@ -1352,15 +1365,15 @@ macro_rules! popn_top {
 
 ## 読み物リスト
 
-1. **Rust Book 章 19.5 (Macros) と章 19.1 (Unsafe Rust)** — 両方とも簡潔。1 度読んで、必要時に戻る。
+1. **Rust Book 章 19.5 (Macros)** — 簡潔。1 度読んで、必要時に戻る。
 2. **The Little Book of Rust Macros** ([danielkeep.github.io](https://danielkeep.github.io/tlborm/book/index.html)) — 無料、最高のマクロ-by-example リファレンス。
-3. **Revm で \`unsafe {\` を検索** して周辺コードを \`SAFETY:\` レンズで読む — 事前条件は何? どこで検証されている?
 
 ## このレッスンで持ち帰るもの
 
-- **\`unsafe\`** は 5 つの特定のことを許す; ライセンスではなくコンパイラとの *契約*
-- **\`unwrap_unchecked()\`** + 直前の長さ/状態チェックは、Revm のホットパスで冗長な実行時チェックをスキップする正準パターン
-- **\`macro_rules!\`** は token パターンにマッチしてコードに展開する; \`$x:expr\`、\`$($x),*\`、フラグメント specifier、hygiene
+- **\`macro_rules!\`** は token パターンにマッチしてコンパイル時にコードに展開する
+- フラグメント specifier (\`$x:expr\`、\`$x:ident\`、\`$x:tt\`) が各メタ変数がマッチする構文を宣言
+- 繰り返し構文 \`$( ... ),*\` で 1 つのパターンが引数のリストにマッチできる
+- **Hygiene** がマクロが呼び出し元のスコープを汚染するのを防ぐ
 - **proc-macros** は重い兄弟 — 別クレート、TokenStream で動く — Expert で扱う
 
 ## コース完了 — 次のステップ
