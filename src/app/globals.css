@@ -145,3 +145,88 @@ pre code { white-space: pre; }
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--fg-muted); }
+
+/* ============================================================
+   Code block syntax highlighting (rehype-highlight + highlight.js)
+   Brand-tuned to match the hero code snippet on the home page.
+   ============================================================ */
+
+.hljs {
+  color: var(--fg-primary);
+  background: transparent;
+}
+
+/* Comments — muted gray */
+.hljs-comment,
+.hljs-quote {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+/* Keywords — Rust orange (pub, fn, let, if, match, impl, trait, etc.) */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+  color: var(--accent-orange);
+}
+
+/* Built-in types and constants — Rust orange (Result, Option, Some, None, etc.) */
+.hljs-built_in,
+.hljs-type,
+.hljs-class .hljs-title {
+  color: var(--accent-orange);
+}
+
+/* Strings — soft yellow */
+.hljs-string,
+.hljs-template-string,
+.hljs-regexp,
+.hljs-addition {
+  color: #facc6c;
+}
+
+/* Numbers — muted blue */
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: #93c5fd;
+}
+
+/* Function names — keep foreground (titles read as identifiers) */
+.hljs-title,
+.hljs-name,
+.hljs-attr {
+  color: var(--fg-primary);
+}
+
+/* Macros, attributes, decorators — Rust yellow (popn_top!, gas!, #[derive], etc.) */
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-template-tag,
+.hljs-template-variable {
+  color: #eab308;
+}
+
+/* Variables — muted */
+.hljs-variable,
+.hljs-params {
+  color: var(--fg-primary);
+}
+
+/* Tags / properties — orange */
+.hljs-tag,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-property {
+  color: var(--accent-orange);
+}
+
+/* Subtle */
+.hljs-deletion {
+  color: var(--accent-red);
+}
+
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
