@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { cn, formatDuration } from '@/lib/utils';
-import { useCourse, useEnroll } from '@/hooks';
+import { useCourse, useEnroll, useLocalCompletion } from '@/hooks';
 import { useSession } from 'next-auth/react';
 
 const LESSON_TYPE_ICONS: Record<string, typeof FileText> = {
@@ -58,6 +58,7 @@ export default function CourseDetailPage() {
 
   const { data: course, isLoading, error } = useCourse(slug);
   const enrollMutation = useEnroll(slug);
+  const localCompletion = useLocalCompletion();
 
   const toggleModule = (moduleId: string) => {
     setExpandedModules((prev) => {
@@ -84,12 +85,21 @@ export default function CourseDetailPage() {
     );
   }
 
+  // Merge server-side completion (signed-in users) with localStorage
+  // completion (anonymous users) so both populations see consistent
+  // checkmarks and progress numbers.
+  const isLessonDone = (lesson: { isCompleted?: boolean; slug: string }) =>
+    Boolean(lesson.isCompleted) || localCompletion.isCompleted(lesson.slug);
+
   const totalLessons = course.modules.reduce((sum, m) => sum + m.lessons.length, 0);
   const completedLessons = course.modules.reduce(
-    (sum, m) => sum + m.lessons.filter((l) => l.isCompleted).length,
+    (sum, m) => sum + m.lessons.filter(isLessonDone).length,
     0
   );
   const isEnrolled = course.enrollment !== null;
+  // Show progress UI to anyone who has at least one completed lesson —
+  // either via DB enrollment or local tracker.
+  const showProgress = isEnrolled || completedLessons > 0;
 
   if (!initializedRef.current && course.modules.length > 0) {
     initializedRef.current = true;
@@ -163,6 +173,7 @@ export default function CourseDetailPage() {
                     <div className="border-t border-border">
                       {module.lessons.map((lesson) => {
                         const Icon = LESSON_TYPE_ICONS[lesson.type];
+                        const done = isLessonDone(lesson);
                         // LAUNCH MODE: no gating — all courses open
                         const isGated = false;
                         const isPreview = false;
@@ -173,12 +184,12 @@ export default function CourseDetailPage() {
                             className="flex items-center justify-between border-b border-border/50 px-4 py-3 last:border-b-0 hover:bg-secondary/50 transition-colors"
                           >
                             <div className="flex items-center gap-3">
-                              {lesson.isCompleted ? (
+                              {done ? (
                                 <CheckCircle2 className="h-4 w-4 text-accent" />
                               ) : (
                                 <Icon className="h-4 w-4 text-muted-foreground" />
                               )}
-                              <span className={cn('text-sm', lesson.isCompleted && 'text-muted-foreground line-through')}>
+                              <span className={cn('text-sm', done && 'text-muted-foreground line-through')}>
                                 {lesson.title}
                               </span>
                               {isPreview && (
@@ -194,7 +205,7 @@ export default function CourseDetailPage() {
                             </div>
                             <div className="flex items-center gap-3 text-xs text-muted-foreground">
                               <span>{formatDuration(lesson.duration)}</span>
-                              {isGated && !session && !isPreview && !lesson.isCompleted && (
+                              {isGated && !session && !isPreview && !done && (
                                 <Lock className="h-3 w-3 text-muted-foreground/50" />
                               )}
                             </div>
@@ -213,8 +224,8 @@ export default function CourseDetailPage() {
         {/* Sidebar */}
         <div className="mt-8 lg:mt-0">
           <div className="sticky top-24 rounded-2xl border border-border bg-card p-6">
-            {/* Progress (if enrolled) */}
-            {isEnrolled && (
+            {/* Progress (if enrolled OR anonymous user has any local progress) */}
+            {showProgress && (
               <div className="mb-6">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">

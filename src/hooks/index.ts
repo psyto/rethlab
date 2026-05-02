@@ -4,6 +4,7 @@ export type { CourseDetail } from './use-course';
 export { useLesson } from './use-lesson';
 export type { LessonDetail } from './use-lesson';
 export { useCompleteLesson } from './use-complete-lesson';
+export { useLocalCompletion } from './use-local-completion';
 export { useEnroll } from './use-enroll';
 export { useProfile } from './use-profile';
 export type { ProfileData } from './use-profile';

@@ -30,7 +30,13 @@ export const GET = withErrorHandler(async (req) => {
     orderBy: { sortOrder: 'asc' },
     include: {
       modules: {
-        include: { lessons: { select: { id: true } } },
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          lessons: {
+            orderBy: { sortOrder: 'asc' },
+            select: { id: true, slug: true },
+          },
+        },
       },
       _count: { select: { enrollments: true } },
     },
@@ -77,6 +83,7 @@ export const GET = withErrorHandler(async (req) => {
       instructorName: cms?.instructorName || course.instructorName,
       instructorImage: cms?.instructorImage || course.instructorImage,
       totalLessons: course.modules.reduce((sum, m) => sum + m.lessons.length, 0),
+      lessonSlugs: course.modules.flatMap((m) => m.lessons.map((l) => l.slug)),
       enrolledCount: course._count.enrollments,
       userProgress: enrollments[course.id],
     };

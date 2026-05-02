@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useLocale } from '@/contexts/locale-context';
 import { Search, Clock, BookOpen, Loader2 } from 'lucide-react';
 import { cn, formatDuration } from '@/lib/utils';
-import { useCourses } from '@/hooks';
+import { useCourses, useLocalCompletion } from '@/hooks';
 
 const DIFFICULTY_COLORS = {
   BEGINNER: 'bg-green-500/10 text-green-400 border-green-500/20',
@@ -19,6 +19,7 @@ export default function CourseCatalogPage() {
   const [search, setSearch] = useState('');
 
   const { data: courses, isLoading, error } = useCourses(search, 'all', locale);
+  const localCompletion = useLocalCompletion();
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
@@ -59,7 +60,24 @@ export default function CourseCatalogPage() {
       {/* Course Grid */}
       {courses && (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {courses.map((course) => (
+          {courses.map((course) => {
+            // Prefer server-side enrollment progress when available;
+            // otherwise compute from localStorage so anonymous users still
+            // see how far they've gotten.
+            const localCompleted = course.lessonSlugs.filter((s) =>
+              localCompletion.isCompleted(s)
+            ).length;
+            const localProgress =
+              course.totalLessons > 0
+                ? Math.round((localCompleted / course.totalLessons) * 100)
+                : 0;
+            const displayProgress =
+              course.userProgress !== undefined
+                ? course.userProgress
+                : localCompleted > 0
+                  ? localProgress
+                  : undefined;
+            return (
             <Link
               key={course.id}
               href={`/courses/${course.slug}`}
@@ -100,26 +118,27 @@ export default function CourseCatalogPage() {
                   </span>
                 </div>
 
-                {/* Progress bar (if enrolled) */}
-                {course.userProgress !== undefined && (
+                {/* Progress bar (server enrollment OR local progress) */}
+                {displayProgress !== undefined && (
                   <div className="mt-3">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
-                        {course.userProgress >= 100 ? t('courses.progress.complete') : t('courses.progress.inProgress')}
+                        {displayProgress >= 100 ? t('courses.progress.complete') : t('courses.progress.inProgress')}
                       </span>
-                      <span className="font-medium">{course.userProgress}%</span>
+                      <span className="font-medium">{displayProgress}%</span>
                     </div>
                     <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                       <div
                         className="xp-bar h-full rounded-full"
-                        style={{ width: `${course.userProgress}%` }}
+                        style={{ width: `${displayProgress}%` }}
                       />
                     </div>
                   </div>
                 )}
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
 

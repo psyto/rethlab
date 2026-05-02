@@ -34,6 +34,9 @@ export interface CourseCard {
   instructorName: string | null;
   instructorImage: string | null;
   totalLessons: number;
+  // Slugs of every lesson in the course, in order. Used by the catalog to
+  // compute per-course progress for anonymous users from localStorage.
+  lessonSlugs: string[];
   enrolledCount: number;
   userProgress?: number; // 0-100 if enrolled
 }

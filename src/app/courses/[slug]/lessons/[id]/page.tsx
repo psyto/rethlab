@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
-import { useLesson, useCompleteLesson } from '@/hooks';
+import { useLesson, useCompleteLesson, useLocalCompletion } from '@/hooks';
 import { runChallenge } from '@/lib/challenge-runner';
 import { QuizPlayer } from '@/components/quiz/quiz-player';
 import { LessonMarkdown } from '@/components/lesson/lesson-markdown';
@@ -58,6 +58,7 @@ export default function LessonPage() {
   const { data: session } = useSession();
   const { data: lesson, isLoading, error } = useLesson(slug, id);
   const completeMutation = useCompleteLesson(slug, id);
+  const localCompletion = useLocalCompletion();
 
   const [code, setCode] = useState('');
   const [codeInitialized, setCodeInitialized] = useState(false);
@@ -93,7 +94,10 @@ export default function LessonPage() {
 
   const isChallenge = lesson.type === 'CHALLENGE';
   const isQuiz = lesson.type === 'QUIZ';
-  const isCompleted = lesson.isCompleted || completeMutation.isSuccess;
+  const isCompleted =
+    lesson.isCompleted ||
+    completeMutation.isSuccess ||
+    (!session && localCompletion.isCompleted(lesson.slug));
 
   const handleRun = async () => {
     setIsRunning(true);
@@ -122,20 +126,24 @@ export default function LessonPage() {
   };
 
   // Triggered by an explicit user action (Mark Complete button on CONTENT lessons).
-  // Guests get a friendly redirect to the sign-in page since they actively asked.
+  // Guests persist progress to localStorage so returning visitors still see
+  // checkmarks; signed-in users go through the DB-backed mutation (which also
+  // awards XP).
   const handleMarkComplete = () => {
     if (!session) {
-      router.push('/auth/signin');
+      localCompletion.markComplete(lesson.slug);
       return;
     }
     completeMutation.mutate();
   };
 
   // Triggered automatically when a quiz passes or all challenge tests pass.
-  // Guests should NOT be redirected — they should see the Next button and
-  // continue. They just don't earn XP because progress isn't persisted.
+  // Same split: guests get local persistence, signed-in users earn XP.
   const handleAutoComplete = () => {
-    if (!session) return;
+    if (!session) {
+      localCompletion.markComplete(lesson.slug);
+      return;
+    }
     completeMutation.mutate();
   };
 
@@ -260,29 +268,27 @@ export default function LessonPage() {
           {/* Mark complete + navigation (for content lessons) */}
           {!isChallenge && !isQuiz && (
             <div className="border-t border-border p-4 space-y-3">
-              {session && (
-                <button
-                  onClick={handleMarkComplete}
-                  disabled={isCompleted || completeMutation.isPending}
-                  className={cn(
-                    'flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all',
-                    isCompleted
-                      ? 'bg-accent/10 text-accent'
-                      : 'bg-fabrknt-gradient text-white hover:opacity-90'
-                  )}
-                >
-                  {completeMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : isCompleted ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      {t('lesson.completed')}
-                    </>
-                  ) : (
-                    t('lesson.markComplete')
-                  )}
-                </button>
-              )}
+              <button
+                onClick={handleMarkComplete}
+                disabled={isCompleted || completeMutation.isPending}
+                className={cn(
+                  'flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all',
+                  isCompleted
+                    ? 'bg-accent/10 text-accent'
+                    : 'bg-fabrknt-gradient text-white hover:opacity-90'
+                )}
+              >
+                {completeMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isCompleted ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" />
+                    {t('lesson.completed')}
+                  </>
+                ) : (
+                  t('lesson.markComplete')
+                )}
+              </button>
 
               <div className="flex gap-3">
                 {lesson.prevLesson && (
