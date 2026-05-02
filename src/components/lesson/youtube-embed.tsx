@@ -13,8 +13,14 @@ interface YouTubeEmbedProps {
  * Lazy YouTube embed.
  *
  * Renders a thumbnail + play button by default; only mounts the actual
- * iframe (and its ~500KB of YouTube JS) once the user clicks play. Uses
- * youtube-nocookie.com so no cookies are set until then either.
+ * iframe (and its ~500KB of YouTube JS) once the user clicks play. The
+ * lazy-load IS the main privacy win — no cookies, no tracking, no
+ * network calls to Google until the user explicitly opts in by clicking.
+ *
+ * Uses the regular youtube.com embed domain (not youtube-nocookie.com).
+ * The nocookie variant has been triggering aggressive "log in to confirm
+ * you're not a bot" walls in 2025–2026, which is a worse UX than the
+ * marginal privacy delta gives back.
  *
  * Markdown integration: see `lesson-markdown.tsx`. Authors write
  *
@@ -28,7 +34,7 @@ export function YouTubeEmbed({ id, title, start }: YouTubeEmbedProps) {
   const [activated, setActivated] = useState(false);
 
   const startParam = start && start > 0 ? `?start=${start}&autoplay=1` : '?autoplay=1';
-  const embedSrc = `https://www.youtube-nocookie.com/embed/${id}${startParam}`;
+  const embedSrc = `https://www.youtube.com/embed/${id}${startParam}`;
   // hqdefault is the most-likely-to-exist thumbnail across all videos.
   const thumbSrc = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
   const watchUrl = `https://www.youtube.com/watch?v=${id}${start ? `&t=${start}s` : ''}`;

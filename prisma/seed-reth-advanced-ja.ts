@@ -748,7 +748,11 @@ flowchart LR
 ## 📺 関連動画
 
 \`\`\`youtube
-zntRpCKHyDc | Georgios Konstantopoulos — Reth: A New Rust Ethereum Client
+zntRpCKHyDc | Georgios Konstantopoulos — Reth: A New Rust Ethereum Client (アーキテクチャ概論)
+\`\`\`
+
+\`\`\`youtube
+z3tj8Lk_Ydo | Alexey Shekhirin & Dan Cline — Hyperoptimizing Reth (Frontiers 2025, pipeline perf)
 \`\`\`
 `,
                 },
@@ -1222,7 +1226,7 @@ flowchart TB
 ## 📺 関連動画
 
 \`\`\`youtube
-30FaIa-7FxE | Georgios Konstantopoulos — Reth is not a node, it's an SDK for building nodes (Oct 2024)
+cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
 \`\`\`
 `,
                 },

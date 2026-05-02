@@ -748,7 +748,11 @@ You're now reading the same code Paradigm uses to keep Reth in sync.
 ## 📺 Further watching
 
 \`\`\`youtube
-zntRpCKHyDc | Georgios Konstantopoulos — Reth: A New Rust Ethereum Client
+zntRpCKHyDc | Georgios Konstantopoulos — Reth: A New Rust Ethereum Client (architecture intro)
+\`\`\`
+
+\`\`\`youtube
+z3tj8Lk_Ydo | Alexey Shekhirin & Dan Cline — Hyperoptimizing Reth (Frontiers 2025, pipeline perf)
 \`\`\`
 `,
                 },
@@ -1222,7 +1226,7 @@ Now you've shipped a 1-line component swap. Scale this pattern to consensus or e
 ## 📺 Further watching
 
 \`\`\`youtube
-30FaIa-7FxE | Georgios Konstantopoulos — Reth is not a node, it's an SDK for building nodes (Oct 2024)
+cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
 \`\`\`
 `,
                 },
