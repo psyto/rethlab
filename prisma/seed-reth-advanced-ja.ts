@@ -26,10 +26,111 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
+                  title: 'Advanced へようこそ — このティアの読み方',
+                  slug: 'advanced-welcome-ja',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 7,
+                  xpReward: 15,
+                  content: `# Advanced へようこそ — このティアの読み方
+
+Fundamentals は終えてきた（理想的には Bridge to Advanced も）。Beginner と Fundamentals のレッスンはあなたに寄り添って歩いてきました。**Advanced は違います。** この短いオリエンテーションで、その違いを把握して、レッスン 1 から正しいマインドセットで臨めるようにします。
+
+## ここで変わるもの
+
+Beginner と Fundamentals は、スタックの **形** を教えました — Alloy 型はどんなものか、Foundry の使い方、EVM が高レベルで何をしているか。
+
+Advanced は別のことを要求します。**Reth・Revm・Alloy・Foundry の本物の本番ソースを 1 行ずつ読みます。** レッスンはあなたが既にこのスタックを使えることを前提にしている — *読めるように* 教えます。
+
+これは本物の転換点。レッスン 1 からこんなコードが出てきます：
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
+    *op2 = op1.wrapping_add(*op2);
+    Ok(())
+}
+\`\`\`
+
+(このシグネチャが見慣れないなら、Bridge to Advanced コースの Rust モジュールが各部品をすべてカバーしています。)
+
+## 編集スタイル — そしてその理由
+
+Advanced レッスンは、これまでのティアにはない **能動学習プロンプト** を使います：
+
+- 🛑 **Predict (予測)** — *止まる。解説を読む前に、これに頭の中で答えてください。* ポイントは質問に取り組むこと。間違っていてもいい。間違った予測こそが学習の起点。
+- 🔍 **Find in repo (リポジトリで確認)** — 実際のソースファイルを開いて、レッスンの主張を検証する。レッスンはガイダンス、ソースが真実。
+- **理解度チェック (Anti-fluency)** — *自分の言葉で、なぜこれが効くか?* 答えられないなら、レッスンは明示的に「戻れ」と言います。**スキップしないこと。**
+- **末尾の想起テスト** — ほとんどのレッスンが「自分の言葉で X に答えられないうちは、このレッスンはまだあなたを離しません」で終わります。文字通り受け取ってください。
+
+編集スタイルはこれまでのチュートリアルより難しい。意図的にそうしています。**滑らかなチュートリアル散文は「わかった気になる」trap を作る** — 読者は複雑な内容を流して読み、浅い理解で去ってしまう。Predict / Recall パターンは実際のエンゲージメントを強制します。
+
+これは **設計上の摩擦**。受け入れて。
+
+## 前提知識 — 自分に正直に
+
+レッスン 1 の前に、以下に **流暢である** べき：
+
+**EVM 内部**:
+- バイトコードと dispatch loop（バイトとしての opcode、PC、命令テーブル）
+- スタック / メモリ / calldata / ストレージ — 各々何で、どう違うか
+- cold vs warm ガス (EIP-2929)
+- コールフレーム: CALL / DELEGATECALL / STATICCALL のセマンティクス
+- ブロック構造 (header / body / receipts)、reorg は通常運用
+
+**中級 Rust**:
+- Generics + trait bounds、\`?Sized\`、\`dyn Trait\` vs \`impl Trait\`
+- \`Arc<T>\`、\`Mutex<T>\`、\`RwLock<T>\` — どれをいつ使うか
+- \`unsafe\` ブロックと \`unwrap_unchecked()\`
+- \`macro_rules!\` 構文 (\`$x:ident\`、\`$($x),*\`、フラグメント specifier)
+
+**どれかでも不安?** ブルートフォースで進まないこと。**Bridge to Advanced** コースに戻って該当レッスンをやってください。各々がこのティアが前提とする準備そのものです。
+
+(Advanced 内にも *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンがあるが、それは *テスト* であって *教える* ものではありません。Bridge コースが教える側。)
+
+## セットアップ — 一度だけ
+
+レッスン 1 を始める前に、別ウィンドウでこれらを準備：
+
+1. **\`bluealloy/revm\` を clone** — \`git clone https://github.com/bluealloy/revm\`
+2. **\`paradigmxyz/reth\` を clone** — \`git clone https://github.com/paradigmxyz/reth\`
+3. **動く \`cargo\` ツールチェイン** — \`rustc --version\` でモダンなバージョンが出ること
+4. **\`cargo-expand\`** — \`cargo install cargo-expand\` (Expert の手続きマクロレッスンで欲しくなる)
+5. **セカンドモニタか分割端末** — レッスンを読みながらソースを参照する
+
+「Find in repo」プロンプトはリポジトリを実際に開いていなければ機能しません。レッスン 1 を始める前にこのループを閉じておく。
+
+## レッスンの実際の読み方
+
+Advanced 全レッスンに共通するパターン：
+
+1. **レッスンを開く、本物のソース抜粋を見る**（GitHub リンク付き）。
+2. **解説の前に 🛑 Predict プロンプトに当たる**。止まる。頭の中か紙で答える。それから続ける。
+3. **解説を読む**。予測と比較。間違っていた箇所が学びの場所。
+4. **🔍 Find-in-repo プロンプトに当たる**。リポジトリを開く。実際のファイルを見つける。レッスンの主張を検証。
+5. **末尾の想起テスト**。自分の言葉で答えられたらタブを閉じる。答えられないならスクロールバック。
+
+これは典型的なチュートリアルより遅い。**でも内在化する**。意図的なトレードオフ。
+
+## ペース
+
+Advanced レッスン 1 本は、プロンプトを実際にやれば **30〜60 分** かかります。Expert はもっと長い。
+
+**1 セッションで 5 本やろうとしないこと**。1 晩 1〜2 本、コードを開きながら predict プロンプトに本気で取り組むペースが正解。一気読みは能動学習モデルを壊します。
+
+## 準備完了
+
+前提リストに見覚えがあって、リポジトリも開いている: コース詳細に戻って **「インタープリターを読む」** から始める。
+
+前提リストが不安だった: まず Bridge to Advanced コースを通す。各項目が「再調査する概念」ではなく「自分の語彙」として読めるようになってから戻ってくる。
+
+どちらの道も問題なし。間違った選択は **ギャップを無視してブルートフォースで Advanced を突破しようとすること** — その道は「全レッスン読んだけど \`?Sized\` が実際何をしているか説明できない」状態で終わります。準備時間に投資してください。ソース読みは、ソースが読めるようになって初めて報われる。`,
+                },
+                {
                   title: 'インタープリターを読む',
                   slug: 'revm-interpreter-ja',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 1,
                   duration: 15,
                   xpReward: 30,
                   content: `# インタープリターを読む
@@ -190,7 +291,7 @@ flowchart LR
                   title: 'カスタムOpcodeの設計空間',
                   slug: 'custom-opcodes-ja',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 2,
                   duration: 12,
                   xpReward: 25,
                   content: `# カスタムOpcodeの設計空間
@@ -337,7 +438,7 @@ flowchart LR
                   title: 'Databaseトレイト — 状態をどう供給するか',
                   slug: 'revm-database-trait-ja',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 12,
                   xpReward: 25,
                   content: `# Databaseトレイト — 状態をどう供給するか

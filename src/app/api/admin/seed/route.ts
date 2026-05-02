@@ -5,6 +5,7 @@ import { seedRethBeginnerJA } from '../../../../../prisma/seed-reth-beginner-ja'
 import { seedRethFundamentalsEN } from '../../../../../prisma/seed-reth-fundamentals-en';
 import { seedRethFundamentalsJA } from '../../../../../prisma/seed-reth-fundamentals-ja';
 import { seedRethBridgeToAdvancedEN } from '../../../../../prisma/seed-reth-bridge-to-advanced-en';
+import { seedRethBridgeToAdvancedJA } from '../../../../../prisma/seed-reth-bridge-to-advanced-ja';
 import { seedRethAdvancedEN } from '../../../../../prisma/seed-reth-advanced-en';
 import { seedRethAdvancedJA } from '../../../../../prisma/seed-reth-advanced-ja';
 import { seedRethExpertEN } from '../../../../../prisma/seed-reth-expert-en';
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
       { name: 'Fundamentals EN', fn: seedRethFundamentalsEN, checkSlug: 'reth-fundamentals-en' },
       { name: 'Fundamentals JA', fn: seedRethFundamentalsJA, checkSlug: 'reth-fundamentals-ja' },
       { name: 'Bridge to Advanced EN', fn: seedRethBridgeToAdvancedEN, checkSlug: 'reth-bridge-to-advanced-en' },
+      { name: 'Bridge to Advanced JA', fn: seedRethBridgeToAdvancedJA, checkSlug: 'reth-bridge-to-advanced-ja' },
       { name: 'Advanced EN', fn: seedRethAdvancedEN, checkSlug: 'reth-advanced-en' },
       { name: 'Advanced JA', fn: seedRethAdvancedJA, checkSlug: 'reth-advanced-ja' },
       { name: 'Expert EN', fn: seedRethExpertEN, checkSlug: 'reth-expert-en' },
