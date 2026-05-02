@@ -285,7 +285,14 @@ flowchart LR
 
 ---
 
-ここまで来れば、Solidity 開発者の 99% より EVM ソースを多く読んだことになります。**より重要なのは、それを証明できること** — 上の予測/想起プロンプトに、スクロール戻しなしで自分の言葉で答えられること。答えられなければ、このレッスンはまだあなたを離しません。`,
+ここまで来れば、Solidity 開発者の 99% より EVM ソースを多く読んだことになります。**より重要なのは、それを証明できること** — 上の予測/想起プロンプトに、スクロール戻しなしで自分の言葉で答えられること。答えられなければ、このレッスンはまだあなたを離しません。
+
+## 📺 関連動画
+
+\`\`\`youtube
+Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough
+\`\`\`
+`,
                 },
                 {
                   title: 'カスタムOpcodeの設計空間',
@@ -736,7 +743,14 @@ flowchart LR
 
 これで Paradigm が Reth を同期させているのと **同じコード** を読めるようになりました。
 
-> 最終チェック: なぜ Staged Sync はブロック単位の同期より速いのか、一文で。「並列化」と答えたら深掘り — 具体的に何がバッチ化・ソート・償却されている? 3 つ挙げられないうちは、このレッスンはまだあなたを離しません。`,
+> 最終チェック: なぜ Staged Sync はブロック単位の同期より速いのか、一文で。「並列化」と答えたら深掘り — 具体的に何がバッチ化・ソート・償却されている? 3 つ挙げられないうちは、このレッスンはまだあなたを離しません。
+
+## 📺 関連動画
+
+\`\`\`youtube
+zntRpCKHyDc | Georgios Konstantopoulos — Reth: A New Rust Ethereum Client
+\`\`\`
+`,
                 },
                 {
                   title: 'Rust：ライフタイム・Box・Arc・dyn Trait',
@@ -1203,7 +1217,14 @@ flowchart TB
 
 これで1行のコンポーネント差し替えで動くものを出せました。同じパターンをconsensusやexecutorに拡大すればHyperEVMクラスのインフラ。
 
-> 最終チェック: なぜ Reth SDK のコンポーネントビルダーパターンが、コードベース全体を fork するより purpose-built L1 のリリースに有用なのか、一文で。答えに「変更する部分だけ自分のものにする」(you only own the parts you change) という意味の一節がないなら、\`with_components\` を読み直し — それがアーキテクチャ全体のアイデア。`,
+> 最終チェック: なぜ Reth SDK のコンポーネントビルダーパターンが、コードベース全体を fork するより purpose-built L1 のリリースに有用なのか、一文で。答えに「変更する部分だけ自分のものにする」(you only own the parts you change) という意味の一節がないなら、\`with_components\` を読み直し — それがアーキテクチャ全体のアイデア。
+
+## 📺 関連動画
+
+\`\`\`youtube
+30FaIa-7FxE | Georgios Konstantopoulos — Reth is not a node, it's an SDK for building nodes (Oct 2024)
+\`\`\`
+`,
                 },
                 {
                   title: 'Expert ティアへの橋渡し',

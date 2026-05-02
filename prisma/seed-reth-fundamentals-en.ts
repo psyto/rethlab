@@ -980,7 +980,14 @@ The combination of "library-first design," "Rust embeddability," and "easy custo
 
 ## Next
 
-You now know enough to start reading Revm code. The **next lesson** introduces Foundry — the Rust EVM toolchain you'll actually use day-to-day. Then the **Advanced** tier opens the interpreter folder.`,
+You now know enough to start reading Revm code. The **next lesson** introduces Foundry — the Rust EVM toolchain you'll actually use day-to-day. Then the **Advanced** tier opens the interpreter folder.
+
+## 📺 Further watching
+
+\`\`\`youtube
+xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024)
+\`\`\`
+`,
                 },
                 {
                   title: 'Foundry — the Rust EVM toolchain',

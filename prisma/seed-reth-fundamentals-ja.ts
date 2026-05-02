@@ -988,7 +988,14 @@ Revmは以下を公開（[\`crates/revm/src/lib.rs\`](https://github.com/blueall
 
 ## 次のステップ
 
-Revmは「動かすための部品」が分かれば、コードを読み始められます。**次のレッスン** で Foundry — 日常的に使う Rust EVM ツールチェイン — を扱い、その後 **Advanced** ティアで Interpreter フォルダに入ります。`,
+Revmは「動かすための部品」が分かれば、コードを読み始められます。**次のレッスン** で Foundry — 日常的に使う Rust EVM ツールチェイン — を扱い、その後 **Advanced** ティアで Interpreter フォルダに入ります。
+
+## 📺 関連動画
+
+\`\`\`youtube
+xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024)
+\`\`\`
+`,
                 },
                 {
                   title: 'Foundry — Rust EVMツールチェイン',

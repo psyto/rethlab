@@ -285,7 +285,14 @@ Reading is rehearsal. Now do these in order:
 
 ---
 
-After this drill, you've read more EVM source than 99% of Solidity developers ever will. **More importantly: you can prove it — answer the predict/recall prompts above, in your own words, without scrolling back.** If you can't, the lesson isn't done with you.`,
+After this drill, you've read more EVM source than 99% of Solidity developers ever will. **More importantly: you can prove it — answer the predict/recall prompts above, in your own words, without scrolling back.** If you can't, the lesson isn't done with you.
+
+## 📺 Further watching
+
+\`\`\`youtube
+Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough
+\`\`\`
+`,
                 },
                 {
                   title: 'Custom opcodes — the design space',
@@ -736,7 +743,14 @@ In the \`reth\` repo, open \`crates/stages/stages/src/stages/sender_recovery.rs\
 
 You're now reading the same code Paradigm uses to keep Reth in sync.
 
-> Final check: explain in one sentence why staged sync is faster than block-by-block sync. If your answer is "parallelism," go deeper — what specifically gets batched, sorted, or amortized? The lesson isn't done with you until you can name three.`,
+> Final check: explain in one sentence why staged sync is faster than block-by-block sync. If your answer is "parallelism," go deeper — what specifically gets batched, sorted, or amortized? The lesson isn't done with you until you can name three.
+
+## 📺 Further watching
+
+\`\`\`youtube
+zntRpCKHyDc | Georgios Konstantopoulos — Reth: A New Rust Ethereum Client
+\`\`\`
+`,
                 },
                 {
                   title: 'Rust: lifetimes, Box, Arc, dyn Trait',
@@ -1203,7 +1217,14 @@ These all replace one or more \`with_components\` builders with their own. The f
 
 Now you've shipped a 1-line component swap. Scale this pattern to consensus or executor and you're building HyperEVM-class infra.
 
-> Final check: in one sentence, why is the Reth SDK's component-builder pattern more useful for shipping a purpose-built L1 than forking the entire codebase? If your answer doesn't mention "you only own the parts you change," re-read \`with_components\` — that's the entire architectural idea.`,
+> Final check: in one sentence, why is the Reth SDK's component-builder pattern more useful for shipping a purpose-built L1 than forking the entire codebase? If your answer doesn't mention "you only own the parts you change," re-read \`with_components\` — that's the entire architectural idea.
+
+## 📺 Further watching
+
+\`\`\`youtube
+30FaIa-7FxE | Georgios Konstantopoulos — Reth is not a node, it's an SDK for building nodes (Oct 2024)
+\`\`\`
+`,
                 },
                 {
                   title: 'Bridge to Expert — what comes next',

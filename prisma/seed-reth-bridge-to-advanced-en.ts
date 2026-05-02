@@ -190,7 +190,14 @@ Why an array of function pointers instead?
 - Each opcode is a small Rust function (in Revm's case) with a **fixed contract**: it touches the stack, memory, gas, and possibly storage, then returns control.
 - Every detail you'll see in Advanced lesson 1 (\`add<IT, H>\`, the instruction table, PC, halts) maps directly to this model.
 
-When you start Advanced, the first lesson opens with the *exact* \`add\` function above. You won't be surprised by what it is — you'll just be reading the production-grade implementation of something you already understand.`,
+When you start Advanced, the first lesson opens with the *exact* \`add\` function above. You won't be surprised by what it is — you'll just be reading the production-grade implementation of something you already understand.
+
+## 📺 Further watching
+
+\`\`\`youtube
+RxL_1AfV7N4 | EVM: From Solidity to byte code, memory, and storage
+\`\`\`
+`,
                 },
                 {
                   title: 'Memory, storage, and the world state',
