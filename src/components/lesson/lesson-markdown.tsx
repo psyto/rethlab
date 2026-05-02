@@ -5,6 +5,28 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { MermaidDiagram } from './mermaid-diagram';
+import { YouTubeEmbed } from './youtube-embed';
+
+/**
+ * Parses a `youtube` fenced-block payload.
+ *
+ * Format: `<id>[ | <title>][ @<seconds>]`
+ * Examples:
+ *   `_KsEPoLnJR4`
+ *   `_KsEPoLnJR4 | RethLab demo (46s)`
+ *   `dQw4w9WgXcQ | Reth deep dive @420`
+ */
+function parseYouTubePayload(raw: string): { id: string; title?: string; start?: number } | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const startMatch = trimmed.match(/\s+@(\d+)\s*$/);
+  const start = startMatch ? Number(startMatch[1]) : undefined;
+  const withoutStart = startMatch ? trimmed.slice(0, startMatch.index!).trim() : trimmed;
+  const [idPart, ...titleParts] = withoutStart.split('|').map((s) => s.trim());
+  if (!idPart) return null;
+  const title = titleParts.length > 0 ? titleParts.join(' | ') : undefined;
+  return { id: idPart, title, start };
+}
 
 // Pretty labels for common languages we use in lessons
 const LANG_LABELS: Record<string, string> = {
@@ -47,8 +69,8 @@ export function LessonMarkdown({ content }: { content: string }) {
             if (match) lang = match[1].toLowerCase();
           }
 
-          // Mermaid diagrams: render directly without the terminal frame
-          if (lang === 'mermaid') {
+          // Mermaid diagrams + YouTube embeds: render directly without the terminal frame
+          if (lang === 'mermaid' || lang === 'youtube') {
             return <>{children}</>;
           }
 
@@ -81,6 +103,13 @@ export function LessonMarkdown({ content }: { content: string }) {
 
           if (lang === 'mermaid') {
             return <MermaidDiagram code={codeStr} />;
+          }
+
+          if (lang === 'youtube') {
+            const parsed = parseYouTubePayload(codeStr);
+            if (parsed) {
+              return <YouTubeEmbed id={parsed.id} title={parsed.title} start={parsed.start} />;
+            }
           }
 
           return (
