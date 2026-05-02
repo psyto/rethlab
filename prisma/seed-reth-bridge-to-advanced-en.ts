@@ -876,6 +876,519 @@ This is **why Revm is "modular":** the same opcode function compiles into multip
 
 When Advanced lesson 1 hits you with three type parameters and \`?Sized\` in the very first line, you'll read it as one connected sentence, not as five intimidating tokens.`,
                 },
+                {
+                  title: 'Shared ownership: Arc, Mutex, RwLock',
+                  slug: 'rust-shared-ownership-en',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Shared ownership: Arc, Mutex, RwLock
+
+Rust's "one owner" rule is sharp — and helpful 90% of the time. The other 10%, you need **multiple parts of the program to hold the same value**, possibly across threads, possibly with mutation. That's what this lesson is about.
+
+Reth and ExEx code is **densely sprinkled with \`Arc\` and \`Mutex\`**. Without this lesson those wrappers feel like noise. With it, they're the load-bearing pieces of how Reth shares state across async tasks.
+
+## The problem — why ownership isn't enough
+
+Imagine an indexer that:
+
+- Receives every new block from the chain (one task)
+- Lets the RPC server query its current state (many tasks)
+- Periodically snapshots state to disk (one task)
+
+All three need access to the same in-memory state. Plain Rust ownership says "one owner" — but here we *need* shared access.
+
+Two questions to answer:
+
+1. **Who owns the value?** Multiple places.
+2. **Who can mutate it?** It depends.
+
+## Arc — multiple owners, immutable shared
+
+\`Arc<T>\` ("Atomically Reference-Counted") lets multiple owners share a value, with the value freed when the last owner drops it.
+
+\`\`\`rust
+use std::sync::Arc;
+
+let data = Arc::new(String::from("hello"));
+let clone1 = Arc::clone(&data);   // refcount: 1 → 2
+let clone2 = Arc::clone(&data);   // refcount: 2 → 3
+
+std::thread::spawn(move || {
+    println!("{}", clone1);       // can move into another thread
+});
+println!("{}", clone2);
+// clone2 dropped → refcount: 3 → 2
+// clone1 dropped (in spawned thread) → refcount: 2 → 1
+// data dropped → refcount: 1 → 0 → memory freed
+\`\`\`
+
+Two important properties:
+
+### \`Arc::clone\` is cheap
+
+\`Arc::clone(&x)\` does **not** deep-copy the inner T. It only:
+
+1. Atomically increments a counter
+2. Returns a new pointer to the same heap allocation
+
+Cost: one atomic add. The inner T isn't touched. This is why you'll see \`Arc::clone(&shared_state)\` everywhere in Reth — it's effectively free.
+
+### Arc gives you read-only sharing
+
+Through an \`Arc<T>\`, you can only call \`&self\` methods on T. **You cannot mutate.** That's by design — multiple threads holding the same \`Arc<T>\` can't simultaneously read and write without synchronization, and Rust enforces this at the type level.
+
+If you need mutation, wrap T in a \`Mutex\` or \`RwLock\` first.
+
+### Arc vs Rc
+
+\`Rc<T>\` is the same shape but **single-threaded**. It uses a regular (non-atomic) counter, which is faster but unsound across threads. Reth and ExEx use \`Arc\` exclusively — they're multi-threaded by design.
+
+## Mutex — exclusive read/write access
+
+\`Mutex<T>\` wraps a value with a lock. To read or write, you must \`lock()\` first:
+
+\`\`\`rust
+use std::sync::{Arc, Mutex};
+
+let counter = Arc::new(Mutex::new(0u64));
+
+let c = Arc::clone(&counter);
+std::thread::spawn(move || {
+    let mut guard = c.lock().unwrap();   // acquire lock
+    *guard += 1;                          // mutate
+    // guard dropped here → lock released
+});
+\`\`\`
+
+\`lock()\` returns a \`MutexGuard<T>\` — a smart pointer that:
+
+- **Implements \`Deref\`** so you can use it like \`&T\` (reading) or \`&mut T\` (writing)
+- **Releases the lock when dropped** (RAII pattern — no manual unlock)
+- **Blocks the calling thread** if another thread already holds the lock
+
+### What \`.unwrap()\` panics on — poisoning
+
+You'll see \`.lock().unwrap()\` everywhere. Why \`unwrap\`?
+
+Because \`lock()\` returns \`Result<MutexGuard, PoisonError>\`. The error case is **mutex poisoning** — if a thread holds the lock and panics, the mutex is marked "poisoned" so subsequent lockers know the data might be inconsistent.
+
+Most Reth code chooses to propagate (panic on) poisoning rather than handle it specially. \`.unwrap()\` is the right call when you can't reason about partial-update inconsistency.
+
+If you ever see \`Mutex\` poisoning in your own logs, **the underlying bug is the original panic**, not the lock — find what panicked and fix that.
+
+### The pattern: \`Arc<Mutex<T>>\`
+
+You'll see this combination constantly:
+
+\`\`\`rust
+let shared_state: Arc<Mutex<MyState>> = Arc::new(Mutex::new(MyState::default()));
+
+for _ in 0..10 {
+    let s = Arc::clone(&shared_state);
+    std::thread::spawn(move || {
+        let mut guard = s.lock().unwrap();
+        guard.do_work();
+    });
+}
+\`\`\`
+
+\`Arc\` provides the multi-owner pointer; \`Mutex\` provides the mutation safety. Together: thread-safe shared mutable state.
+
+## RwLock — many readers OR one writer
+
+\`Mutex\` is exclusive — only one thread at a time, even for reads. That's wasteful when reads vastly outnumber writes.
+
+\`RwLock<T>\` allows:
+
+- **Many concurrent readers** (\`.read()\`)
+- **Or one exclusive writer** (\`.write()\`)
+- Never both at the same time
+
+\`\`\`rust
+use std::sync::{Arc, RwLock};
+
+let cache = Arc::new(RwLock::new(HashMap::<String, u64>::new()));
+
+// Many threads can read simultaneously
+let c = Arc::clone(&cache);
+std::thread::spawn(move || {
+    let guard = c.read().unwrap();      // shared read access
+    if let Some(v) = guard.get("key") {
+        println!("{}", v);
+    }
+});
+
+// One thread writes (blocks all readers and other writers)
+let c2 = Arc::clone(&cache);
+std::thread::spawn(move || {
+    let mut guard = c2.write().unwrap();
+    guard.insert("key".to_string(), 42);
+});
+\`\`\`
+
+When to choose:
+
+| Pattern | Choose |
+| :--- | :--- |
+| 50/50 reads and writes | \`Mutex\` (simpler) |
+| Many reads, few writes (caches, config) | \`RwLock\` |
+| Tight write-only inner loop | \`Mutex\` |
+| Single-threaded | Neither — just use \`RefCell\` |
+
+\`RwLock\` is slightly heavier than \`Mutex\` for the writer (more bookkeeping), so don't reach for it unless reads dominate.
+
+## The async story — \`tokio::sync::Mutex\`
+
+Standard \`std::sync::Mutex\` is **synchronous**: \`.lock()\` blocks the OS thread. In an async context (Tokio), blocking the thread is bad — it starves other tasks on the same worker.
+
+For async code, use \`tokio::sync::Mutex\`:
+
+\`\`\`rust
+use tokio::sync::Mutex;
+let m = Arc::new(Mutex::new(0u64));
+
+let m_clone = Arc::clone(&m);
+tokio::spawn(async move {
+    let mut guard = m_clone.lock().await;   // .await, not .unwrap()
+    *guard += 1;
+});
+\`\`\`
+
+The differences:
+
+- \`.lock()\` returns a Future — you \`.await\` it
+- The task **yields** to the runtime while waiting (doesn't block the worker)
+- No poisoning concept (panicking inside an async task is handled by Tokio)
+
+Reth uses both: \`std::sync::Mutex\` for fast critical sections that won't span an \`.await\`, \`tokio::sync::Mutex\` for guarded state shared across awaits.
+
+**The rule of thumb**: if your critical section contains an \`.await\`, use \`tokio::sync::Mutex\`. Otherwise \`std::sync::Mutex\` is fine and slightly faster.
+
+## A real Reth pattern — sharing a database handle
+
+A simplified version of how Reth shares its database across tasks:
+
+\`\`\`rust
+struct Node {
+    db: Arc<Database>,                     // shared, immutable handle
+    blockchain_tree: Arc<RwLock<Tree>>,    // shared, mostly read
+    metrics: Arc<Mutex<MetricsCollector>>, // shared, write-heavy
+}
+
+impl Node {
+    fn spawn_indexer(&self) {
+        let db = Arc::clone(&self.db);
+        let metrics = Arc::clone(&self.metrics);
+        tokio::spawn(async move {
+            // db: read-only access through Arc, no lock needed
+            // metrics: lock to update counters
+            metrics.lock().unwrap().increment("blocks_indexed");
+        });
+    }
+}
+\`\`\`
+
+Three different sharing patterns in one struct. **Each choice is deliberate** — the lock granularity matches the access pattern.
+
+When you read Reth source and see \`Arc<RwLock<Foo>>\` next to \`Arc<Mutex<Bar>>\`, the author has thought about which one is right. Now you can read those decisions.
+
+## Reading list
+
+1. **Rust Book chapter 16 (Fearless Concurrency)** — read the section on \`Arc\` and \`Mutex\`.
+2. **\`tokio::sync\` docs** — skim the page for \`Mutex\`, \`RwLock\`, \`broadcast\`, \`oneshot\`. Each maps to a real pattern in Reth's task code.
+3. **Search Reth source for \`Arc<RwLock\`** and \`Arc<Mutex\`. Pick a couple. The choice between them is always intentional — try to explain why.
+
+## What you should walk away with
+
+- **\`Arc<T>\`** is multi-owner, immutable, cheap to clone (one atomic add).
+- **\`Mutex<T>\`** is exclusive (one reader-or-writer at a time), and \`.lock()\` blocks the thread.
+- **\`RwLock<T>\`** is many-reader OR one-writer — use when reads dominate.
+- **\`tokio::sync::Mutex\`** is the async-aware version — use when the critical section spans \`.await\`.
+- **\`Arc<Mutex<T>>\`** is the canonical "shared mutable state" pattern — you'll see it everywhere in Reth/ExEx.
+
+When Advanced lesson 6 (ExEx) shows you a struct with three \`Arc<...>\` fields and you wonder "why all the wrappers," you'll know each one is the load-bearing piece of how that component is shared across the runtime's tasks.`,
+                },
+                {
+                  title: 'unsafe Rust and macro_rules! basics',
+                  slug: 'rust-unsafe-and-macros-en',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 15,
+                  xpReward: 30,
+                  content: `# unsafe Rust and macro_rules! basics
+
+Two areas where the standard Rust book is *thin*, and where Revm's interpreter goes *deep*. This lesson gives you enough vocabulary to read Revm's hot path without flinching at \`unsafe { ... }\` blocks or macro definitions full of \`$d:tt\`.
+
+## Part 1: \`unsafe\` Rust
+
+### What \`unsafe\` actually allows
+
+Rust's safety guarantees (no data races, no use-after-free, no out-of-bounds access) are enforced by the compiler — but only over **safe Rust**. There are five things only \`unsafe\` code can do:
+
+1. **Dereference a raw pointer** (\`*const T\` or \`*mut T\`)
+2. **Call an \`unsafe fn\`** (a function the compiler can't verify)
+3. **Access or modify a mutable static variable**
+4. **Implement an \`unsafe trait\`** (like \`Send\` or \`Sync\` manually)
+5. **Access fields of a \`union\`**
+
+That's *the entire list*. Crucially, \`unsafe\` doesn't turn off Rust's borrow checker for your local variables, doesn't allow null pointer derefs *automatically*, and doesn't let you skip type-checking.
+
+### The contract — what \`unsafe\` *does*
+
+\`unsafe\` is a **promise from you to the compiler**: "I have manually verified that this code maintains Rust's safety invariants. You can trust me."
+
+If the promise is wrong, you get **undefined behavior (UB)** — and UB is *catastrophic*. Once UB happens, the entire program is in an inconsistent state. The compiler may have optimized assuming UB doesn't happen, so the actual runtime behavior can be anything: crashes, wrong results, security holes, plausible-looking-but-wrong output.
+
+**There is no "small UB."** A program with UB is wrong, full stop.
+
+### Why Revm uses \`unsafe\` on the hot path
+
+Revm's \`popn_top!\` macro from Advanced lesson 1 contains:
+
+\`\`\`rust
+let ([$( $x ),*], $top) = unsafe {
+    $crate::interpreter_types::StackTr::popn_top(&mut $interpreter.stack)
+        .unwrap_unchecked()
+};
+\`\`\`
+
+The function being called returns \`Option<...>\`. \`unwrap_unchecked()\` is **the unsafe version of \`unwrap()\`** — it skips the runtime "is this Some?" check.
+
+Why is this safe here? Because the **immediately preceding code** is:
+
+\`\`\`rust
+if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
+    return Err(...);
+}
+\`\`\`
+
+So at the moment of \`unwrap_unchecked()\`, the stack length is **provably** sufficient. The author has verified by inspection that \`popn_top\` will return \`Some\`. Calling \`.unwrap()\` would do a redundant runtime check; \`.unwrap_unchecked()\` skips it.
+
+The cost saved: one branch per opcode execution. On the hot path of an interpreter that runs billions of times, that's measurable.
+
+### The \`unsafe\` discipline in Revm/Reth
+
+Idiomatic \`unsafe\` use looks like this:
+
+\`\`\`rust
+// Comment block explaining the safety invariant
+// SAFETY: We just checked stack.len() >= N+1 above, so popn_top
+// is guaranteed to return Some.
+let result = unsafe { popn_top.unwrap_unchecked() };
+\`\`\`
+
+Every \`unsafe\` block in well-written Rust has a **\`// SAFETY:\` comment** describing why the unsafe is sound. Reviewers look for these; their absence is a code smell.
+
+### \`unsafe fn\` vs \`unsafe { ... }\`
+
+Two related but different concepts:
+
+| Form | Meaning |
+| :--- | :--- |
+| \`unsafe { ... }\` block | "I'm doing one of the 5 unsafe things, and I've verified the invariants" |
+| \`unsafe fn foo(...)\` | "Calling this function requires unsafe — the *caller* must verify invariants" |
+
+\`unwrap_unchecked()\` is an \`unsafe fn\`. To call it, you wrap the call site in \`unsafe { ... }\`. That's the contract: the function declares "I have a precondition," the caller declares "I've checked it."
+
+### What you do NOT need to know yet
+
+- Manual implementation of \`Send\` / \`Sync\` (Reth doesn't really do this)
+- Inline assembly (almost never)
+- FFI to C (only relevant for jemalloc, which is one global setting)
+
+For reading Revm/Reth source, **the patterns above (manual safety verification + \`unwrap_unchecked\` after a check) are 95% of what you'll see**.
+
+---
+
+## Part 2: \`macro_rules!\`
+
+Revm's interpreter is **dense with macros**. \`popn_top!\`, \`gas!\`, \`push!\`, \`as_usize_or_fail!\` — these aren't function calls, they're compile-time text expansions. Reading them requires knowing the syntax.
+
+### The basic shape
+
+A \`macro_rules!\` macro is **pattern → expansion**. The pattern matches caller syntax; the expansion produces code:
+
+\`\`\`rust
+macro_rules! square {
+    ($x:expr) => {
+        $x * $x
+    };
+}
+
+let n = square!(3 + 4);    // expands to: (3 + 4) * (3 + 4) → 49
+\`\`\`
+
+The \`$x:expr\` part declares a **metavariable** \`$x\` that matches any expression. \`expr\` is a **fragment specifier** telling the parser what kind of syntax to expect.
+
+### Common fragment specifiers
+
+| Specifier | Matches |
+| :--- | :--- |
+| \`expr\` | Any Rust expression |
+| \`ident\` | An identifier (variable name, function name) |
+| \`tt\` | A single token tree (the most flexible) |
+| \`stmt\` | A statement |
+| \`pat\` | A pattern (in match arms, let bindings) |
+| \`ty\` | A type |
+| \`block\` | A \`{ ... }\` block |
+
+For reading source, \`expr\` and \`ident\` and \`tt\` cover most cases.
+
+### Repetition: \`$( ... ),*\`
+
+Macros can match **lists** with repetition syntax:
+
+\`\`\`rust
+macro_rules! print_all {
+    ( $( $x:expr ),* ) => {
+        $(
+            println!("{}", $x);
+        )*
+    };
+}
+
+print_all!(1, "hello", 3.14);
+// expands to:
+// println!("{}", 1);
+// println!("{}", "hello");
+// println!("{}", 3.14);
+\`\`\`
+
+Reading the syntax:
+
+- \`$( ... )\` declares a repetition group
+- \`,*\` says "separated by commas, zero or more times" (use \`,+\` for one or more)
+- Inside the expansion, \`$( ... )*\` repeats the body once per match
+
+### Reading Revm's \`popn_top!\`
+
+Now armed with the basics:
+
+\`\`\`rust
+macro_rules! popn_top {
+    ([ $($x:ident),* ], $top:ident, $interpreter:expr) => {
+        // ... body
+    };
+}
+\`\`\`
+
+Translation:
+
+- The pattern starts with \`[\`, then \`$($x:ident),*\` (a comma-separated list of identifiers), then \`]\`
+- Then a comma, then \`$top:ident\` (one identifier)
+- Then a comma, then \`$interpreter:expr\` (an expression)
+
+So calling \`popn_top!([op1], op2, ctx.interpreter)\` matches with:
+
+- \`$x\` = list of one identifier: \`op1\`
+- \`$top\` = \`op2\`
+- \`$interpreter\` = \`ctx.interpreter\`
+
+Calling \`popn_top!([a, b, c], top, ctx.interpreter)\` would have \`$x\` as a list of three.
+
+The expansion uses \`$($x),*\` to expand the same list of identifiers into the destructuring pattern.
+
+### Macro hygiene — why a macro can't pollute your scope
+
+\`macro_rules!\` macros are **hygienic**: variable names introduced inside a macro don't conflict with variables in the caller's scope.
+
+\`\`\`rust
+macro_rules! double {
+    ($e:expr) => {{
+        let temp = $e;       // 'temp' inside macro
+        temp * 2
+    }};
+}
+
+let temp = "important";      // 'temp' in caller
+let n = double!(5);          // expands without breaking the caller's 'temp'
+println!("{}", temp);        // still "important"
+\`\`\`
+
+Hygiene is a feature of \`macro_rules!\` (and a major reason it's preferred over C-style macros).
+
+### \`macro_rules!\` vs \`proc_macro\`
+
+You'll meet both. Quick distinction:
+
+| | \`macro_rules!\` | proc-macro |
+| :--- | :--- | :--- |
+| **Defined as** | Pattern-matching rules | Rust function in a separate \`proc-macro\` crate |
+| **Operates on** | Token trees (literal syntax) | TokenStream (compiler's parsed representation) |
+| **Power** | Limited but enough for most things | Arbitrary code generation |
+| **Examples** | \`vec!\`, \`println!\`, \`popn_top!\`, \`gas!\` | \`#[derive(Serialize)]\`, \`sol!\`, \`address!\`'s underlying \`hex!\` |
+
+\`macro_rules!\` covers most of what Revm's interpreter uses. \`sol!\` and the heavy proc-macros are an Expert-tier topic.
+
+## Putting it together
+
+When you open \`revm/crates/interpreter/src/instructions/macros.rs\` in Advanced lesson 1, you'll see:
+
+\`\`\`rust
+macro_rules! popn_top {
+    ([ $($x:ident),* ], $top:ident, $interpreter:expr) => {
+        if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
+            $crate::primitives::hints_util::cold_path();
+            return Err($crate::InstructionResult::StackUnderflow);
+        }
+        let ([$( $x ),*], $top) = unsafe {
+            $crate::interpreter_types::StackTr::popn_top(&mut $interpreter.stack)
+                .unwrap_unchecked()
+        };
+    };
+}
+\`\`\`
+
+You can now read it word by word:
+
+- \`macro_rules!\` — declarative macro definition
+- Pattern \`([ $($x:ident),* ], $top:ident, $interpreter:expr)\` — destructure caller arguments
+- Body: a length check, then an \`unsafe { ... }\` block calling \`unwrap_unchecked()\` because the length was just verified
+- The \`SAFETY\` reasoning is the length check — the comment is implicit (Revm sometimes elides them on tight code)
+
+You're not reading magic. You're reading **patterns you now know**.
+
+## Reading list
+
+1. **Rust Book chapter 19.5 (Macros)** and **chapter 19.1 (Unsafe Rust)** — both are concise. Read once, refer back as needed.
+2. **The Little Book of Rust Macros** ([danielkeep.github.io](https://danielkeep.github.io/tlborm/book/index.html)) — free, the best macro-by-example reference.
+3. **Search Revm for \`unsafe {\`** and read the surrounding code with the \`SAFETY:\` lens — what's the precondition? Where is it verified?
+
+## What you should walk away with
+
+- **\`unsafe\`** allows 5 specific things; it's a *contract* with the compiler, not a license
+- **\`unwrap_unchecked()\`** + a preceding length/state check is the canonical Revm pattern for skipping redundant runtime checks on the hot path
+- **\`macro_rules!\`** matches token patterns and expands to code; \`$x:expr\`, \`$($x),*\`, fragment specifiers, hygiene
+- **proc-macros** are the heavier sibling — separate crate, operates on TokenStream — covered in Expert
+
+## Course complete — next steps
+
+You've now finished **Reading the Stack — Bridge to Advanced**:
+
+- ✓ EVM at the bytes level (dispatch loop, stores, gas, call frames)
+- ✓ Block-level Ethereum (blocks, receipts, reorgs)
+- ✓ Rust for source-reading (generics, dyn, Arc, unsafe, macros)
+
+When you open Advanced lesson 1, you'll see:
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
+    *op2 = op1.wrapping_add(*op2);
+    Ok(())
+}
+\`\`\`
+
+And every piece of it should now read like one connected sentence:
+
+- The signature: two type parameters, one of them \`?Sized\` so it can be \`dyn Host\`
+- The macro call: pop 1, get a mutable ref to the new top, with the unsafe \`unwrap_unchecked\` justified by an internal length check
+- The arithmetic: \`wrapping_add\` because EVM \`ADD\` is mod 2²⁵⁶
+
+You're ready. Start Advanced.`,
+                },
               ],
             },
           },
