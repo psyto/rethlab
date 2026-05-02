@@ -192,6 +192,323 @@ match opcode {
 
 Advanced を始めたら、最初のレッスンで **まったく同じ** \`add\` 関数が出てきます。それが何か驚きはない — あなたが既に理解している何かの本番グレード実装を読むだけです。`,
                 },
+                {
+                  title: 'メモリ・ストレージ・ワールドステート',
+                  slug: 'memory-storage-world-state-ja',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# メモリ・ストレージ・ワールドステート
+
+dispatch loop は opcode が *何* かを見せました。ほとんどの opcode は 4 つのストアのうちの 1 つに触れます。このレッスンはそれらを順に歩きます — そして Solidity が隠しているけれど Advanced レッスンが前提とするワールドステートのモデルも。
+
+## 4 つのストア
+
+| ストア | 寿命 | コスト形状 | Solidity 表面 |
+| :--- | :--- | :--- | :--- |
+| **Stack** | 1 コールフレーム | 安い (3 ガス / op) | 暗黙 |
+| **Memory** | 1 コールフレーム | 安いが二次曲線で増加 | \`memory\` キーワード |
+| **Calldata** | 1 コールフレーム、読み取り専用 | 読み取り安い | 関数引数 |
+| **Storage** | 永続 (コントラクトごと) | 高い (cold = 2100, warm = 100) | 状態変数 |
+
+各ストアが固有の opcode を持ちます。混同するのは Solidity 開発者の最頻バグの 1 つ。
+
+## Stack — EVM の主要スクラッチ空間
+
+すでに会いました。最大 1024 アイテム、各 32 バイト (1 EVM word)。算術 / 比較 / 論理の各 opcode はスタックトップから読み、トップに書き戻します。
+
+スタックオーバーフロー (深さ > 1024) とアンダーフロー (空スタックから pop) はどちらもフレームを halt させます。
+
+## Memory — リニア、伸縮、フレームローカル
+
+メモリは **バイトのフラット配列**。オフセット 0 からアドレス指定、必要に応じて伸びる。2 つの opcode が中心：
+
+- \`MLOAD offset\` → memory[offset..offset+32] から 32 バイト読み込み、スタックへ push
+- \`MSTORE offset value\` → スタックから 32 バイトの値を memory[offset..offset+32] へ書き込み
+
+(\`MSTORE8\` は 1 バイト書き込み。\`MCOPY\` はメモリ間コピー。)
+
+重要なポイントが 2 つ：
+
+### 1. メモリは要求時に伸びる — そしてその対価を払う
+
+オフセット 1000 に書き込もうとして現在のメモリサイズが 64 バイトなら、EVM は **書き込み前にメモリをオフセット 1000 まで拡張** します。拡張はガスを消費し、**32 KB を超えると二次曲線**：
+
+\`\`\`
+gas_cost(size_in_words) = 3 × words + words² / 512
+\`\`\`
+
+これが長いバイト配列操作が一気に高くなる理由。1 MB のメモリ拡張は **空間だけ** で約 200 万ガス、書き込む前に。
+
+### 2. メモリはフレーム終了で消える
+
+\`CALL\` がリターンしたり \`STOP\` が halt したりすると、メモリは消えます。次の call は新しい空のメモリをオフセット 0 から得ます。
+
+## Calldata — 不変の入力バッファ
+
+コントラクトを呼ぶとき、calldata は入力バイト — 関数セレクタ (4 バイト) と ABI エンコード済み引数。**読み取り専用** で、オフセット 0 からアドレス指定。
+
+\`\`\`
+CALLDATALOAD offset → calldata から 32 バイトロード
+CALLDATASIZE        → calldata サイズを push
+CALLDATACOPY        → calldata をメモリへコピー
+\`\`\`
+
+Calldata 読み取りは安く、拡張コストもなし — call 作成時に既に支払い済み。
+
+## Storage — 永続マップ
+
+ワールドステートを理解する上で最重要のストア。
+
+**各コントラクトは自分のストレージを持ち**、**\`U256\` キーから \`U256\` 値へのマップ** としてモデル化されます：
+
+\`\`\`
+storage[address]: HashMap<U256, U256>
+\`\`\`
+
+キーは 32 バイトワード。値は 32 バイトワード。固定スロットはない — \`U256\` 空間内のすべてのキーが *仮想的に* 存在し、デフォルトはゼロ。
+
+2 つの opcode：
+
+- \`SLOAD key\` → storage[key] を読み、スタックへ push
+- \`SSTORE key value\` → storage[key] へ value を書き込み
+
+### Cold vs warm — ガストラップ
+
+トランザクション内で同一スロットへの最初の \`SLOAD\` は **cold** — 2100 ガス。
+同 tx 内の同一スロットへの後続 \`SLOAD\` は **warm** — 100 ガス。
+
+なぜか? 実装はそのスロットが触られたか確認する必要があり (Merkle Patricia Trie ルックアップ) — 後続アクセスはキャッシュされる。
+
+これは **EIP-2929**、後付けで Ethereum に追加されたもの。攻撃者が cold スロットへの \`SLOAD\` 連発で安くネットワークを DoS できると判明したから。cold/warm 区別が修正策。
+
+### Solidity がストレージをどう使うか
+
+Solidity はコンパイル時にストレージスロットを割り当てます。\`uint256 private balance\` はスロット 0、\`mapping(address => uint256) balances\` は \`keccak256(address . slot_index)\` 等。Solidity は raw \`U256 → U256\` マップ **の上で** スロット割り当てをやっている。
+
+Advanced lesson 3 (Database トレイト) で：
+
+\`\`\`rust
+fn storage(&mut self, address: Address, index: StorageKey)
+    -> Result<StorageValue, Self::Error>;
+\`\`\`
+
+— このシグネチャは **上のモデルそのまま**。トレイトは「コントラクトアドレスとスロットキーを与えれば U256 値を返す」と言っている。それがストレージマップ。
+
+## ワールドステート — どこにでもアカウント
+
+ここまで 1 コントラクトを記述してきた。Ethereum のワールドステート全体は **アドレスからアカウントへのマップ**：
+
+\`\`\`
+world_state: HashMap<Address, Account>
+
+struct Account {
+    nonce: u64,
+    balance: U256,
+    code_hash: B256,        // このアカウントのバイトコードの keccak256 (EOA は空)
+    storage_root: B256,     // このコントラクトのストレージ trie のルート
+}
+\`\`\`
+
+Ethereum のすべてのアカウント — あなたのも、各コントラクトも、各ウォレットも — このマップの 1 行。興味深いフィールド：
+
+- **\`code_hash\`**: 外部所有アカウント (EOA) なら空、コントラクトならバイトコードを指す
+- **\`storage_root\`**: *このコントラクトの* ストレージマップの Merkle ルート (Expert で扱う trie)
+
+トランザクションを送ると、このマップを更新している: nonce のインクリメント、残高の振替、コントラクトストレージの変更。
+
+Revm の \`Database\` トレイトで、\`fn basic(&mut self, address: Address)\` はアドレスに対する \`Option<AccountInfo>\` を返す。それがこのマップでの行ルックアップ。
+
+## 全部まとめると
+
+Solidity で書いた 1 つの \`SSTORE\` がこうなる：
+
+1. Solidity がスロットキーを計算 (例: \`keccak256(msg.sender . 5)\`)
+2. コンパイラが \`PUSH32 <key>\` の後に \`SSTORE\` を吐く
+3. EVM が SSTORE を実行: cold → 22100 ガス (書き込み + 初回触れ)、warm → 5000 ガス
+4. インタープリタが \`Database\` のストレージ書き込みパスを呼ぶ
+5. このコントラクトの MPT が更新され、最終的に Account の \`storage_root\` が変わり、最終的にグローバル \`stateRoot\` が変わる
+
+Solidity 1 行とチェーンの state root の間に 5 つのレイヤー。**5 つすべてが Advanced と Expert で読むソースの中にある**。
+
+## 読み物リスト
+
+1. **[evm.codes](https://www.evm.codes) を開いて** MLOAD・MSTORE・SLOAD・SSTORE・CALLDATALOAD を探す。ガスメモを読む。
+2. **[Etherscan](https://etherscan.io) で実コントラクトを探し**、バイトコードを見る、\`SLOAD\` (\`0x54\`) と \`SSTORE\` (\`0x55\`) のバイトを検索。至る所にある。
+3. **Foundry で** 1 つの \`uint256\` 状態変数を持つコントラクトを書く。1 関数内で 2 度読む。\`forge test --gas-report\` でガス計測。2 度目の読みが約 2000 ガス安い — それが cold-vs-warm の実例。
+
+## このレッスンで持ち帰るもの
+
+- Stack・memory・calldata・storage は **4 つの異なるストア** で、寿命・コスト・API が異なる。
+- **Storage** はコントラクトごとの \`U256 → U256\` マップ — Solidity のスロット割り当てはその上のパッキング。
+- **ワールドステート** は \`Address → Account\` マップ。各 Account が自分のストレージ trie を指す。
+- Revm \`Database\` トレイトの 3 つのコアメソッド (\`basic\`、\`code_by_hash\`、\`storage\`) は **このワールドステートモデルを直接ミラー** している。
+
+Advanced lesson 3 で Database トレイトを見たとき、これがまさにこの絵を Rust トレイトで表現したものだと認識できるはず。`,
+                },
+                {
+                  title: 'ガス機構の深掘りとコールフレーム',
+                  slug: 'gas-call-frames-ja',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# ガス機構の深掘りとコールフレーム
+
+「ガスはお金がかかる」は知っている。このレッスンはもう 1 段下げる — ガスが実際どこに行くか、そして 1 つのトランザクションがどう **コールフレーム** のツリーを生成するか、各フレームが独自のコンテキストを持つこと。
+
+両トピックとも、カスタム opcode・precompile・ExEx の Advanced レッスンで前提知識として扱われます。
+
+## ガス — 3 カテゴリ
+
+各トランザクションのガス予算は 3 通りに消費される：
+
+### 1. 内在ガス (intrinsic) — opcode 実行前に支払う
+
+ただ *トランザクションである* だけで：
+
+- **21,000 ガス** の固定 tx 料
+- **calldata のゼロバイトあたり +4 ガス**
+- **calldata の非ゼロバイトあたり +16 ガス**
+- コントラクト作成 tx なら **+32,000 ガス**
+
+これは最初の opcode が実行される *前* に支払う。tx に内在ガスを賄うガスもないなら、ブロックに入れない。
+
+### 2. opcode ごとのガス — 固定と動的
+
+ほとんどの opcode は **固定コスト**: ADD = 3、MUL = 5、JUMP = 8、MLOAD = 3。
+
+少数は **コンテキスト依存の動的コスト**：
+
+| Opcode | 動的の理由 |
+| :--- | :--- |
+| \`SLOAD\` | Cold (2100) vs warm (100) — その tx でスロットが触れられたかに依存 |
+| \`SSTORE\` | Cold-write、warm-write、ゼロからの書き、ゼロへの書き、すべて別価格 |
+| \`CALL\` / \`CALLCODE\` / \`DELEGATECALL\` / \`STATICCALL\` | 呼び先アカウントの cold/warm、value 転送、アカウント作成に依存 |
+| \`EXP\` | 大きな指数ほど高い |
+| \`KECCAK256\` | 大きな入力ほど高い |
+| \`CALLDATACOPY\` / \`CODECOPY\` / \`MCOPY\` | 大きなコピーほど高い |
+| メモリに触る opcode | メモリを伸ばすなら拡張ガスを払う |
+
+### 3. リファンド — 戻ってくるガス
+
+一部の操作は *リファンド* される：
+
+- **スロットをクリアする SSTORE** (非ゼロスロットにゼロを書く): 4800 ガスリファンド
+- **SELFDESTRUCT** (レガシー、EIP-6780 でほぼ削除): 24,000 ガスリファンド
+
+リファンドは **gas_used / 5** にキャップされる (EIP-3529)。小さい tx で千個のスロットをクリアしてもシステムを欺けない。
+
+## OOG vs revert — 似て非なるもの
+
+両方とも実行を halt するが、違いが重要：
+
+| | Out-Of-Gas | REVERT |
+| :--- | :--- | :--- |
+| **残りガス** | 全部消費 | 呼び出し元に返す |
+| **状態変更** | すべて巻き戻し | すべて巻き戻し |
+| **Returndata** | 空 | REVERT オペランドからのデータ |
+| **呼び出し元が見る** | 「call 失敗、データなし」 | 「call 失敗、データあり」 |
+
+Solidity の \`require(x, "msg")\` で、EVM はエンコード済み "msg" を returndata として REVERT を吐く。Solidity ≥ 0.8 の算術オーバーフローも同様 — REVERT に Panic(uint256) エラーコード。
+
+OOG は別物。フレームが実行中にガス枯渇すると起きる。フレームはすべて (状態 + 残りガス) を失い、呼び出し元は汎用失敗を見る。
+
+Advanced lesson 1 で Revm の \`PrecompileHalt::OutOfGas\` と他の halt が出てくる時、この区別がモデル化されている。
+
+## コールフレーム — EVM のコールスタック
+
+トランザクションは **1 フレーム** で始まる — EOA からコントラクトへのトップレベル call (もしくはコントラクト作成)。
+
+そのフレームが \`CALL\` (もしくは \`DELEGATECALL\` / \`STATICCALL\` / \`CREATE\`) を実行すると、**新しいフレームが生まれる**。新フレームは独自に持つ：
+
+- スタック (新規)
+- メモリ (新規、空)
+- Calldata (call opcode からの入力バイト)
+- PC (呼ばれたコントラクトのコードのオフセット 0 から開始)
+- ガス予算 (呼び出し元の残りガスのサブセット)
+
+内側フレームが halt すると、制御が外側フレームに戻る。外側は以下を見る：
+
+- 成功 / 失敗フラグ
+- Returndata バッファ
+- 残りガス (外側の予算に戻される)
+
+このネストは **1024 レベル** まで可能。それを超えるとコールスタックオーバーフロー。
+
+## 4 つの call 系 opcode — 何を所有するか
+
+Solidity 開発者を最も混乱させる表：
+
+| Opcode | 内側の \`address(this)\` | 内側の \`msg.sender\` | 触るストレージ | 走るコード |
+| :--- | :--- | :--- | :--- | :--- |
+| **\`CALL\`** | 呼び先コントラクト | 呼び出し元 | 呼び先のストレージ | 呼び先のコード |
+| **\`STATICCALL\`** | CALL と同じ | CALL と同じ | 同じ — ただし書き込みは revert | CALL と同じ |
+| **\`DELEGATECALL\`** | **呼び出し元** | 呼び出し元の呼び出し元 | **呼び出し元の** ストレージ | 呼び先のコード |
+| **\`CALLCODE\`** | (廃止) | (廃止) | (廃止) | (廃止) |
+
+3 つがモダン Ethereum で生きている。表を 2 度読んでください。バグを理解する上で重要なもの：
+
+### CALL
+
+最も一般的。コントラクト \`X\` から \`A.foo()\`: 新フレームが A のコードを走らせ、A のストレージを見て、\`msg.sender = X\`。A が書くものは A のストレージへ。**ストレージとコードが揃う**。
+
+### STATICCALL
+
+CALL と同じ形だが、内側フレームは **状態書き込み禁止** (SSTORE、LOG、CREATE、SELFDESTRUCT、value 付き CALL すべて revert で halt)。「view」call 用 — Solidity が \`view\` 関数呼び出しで STATICCALL を吐く。
+
+### DELEGATECALL
+
+危険なやつ。**A のコードが X のコンテキストで走る**。つまり: \`address(this)\` は X。\`msg.sender\` は X の呼び出し元。ストレージ読み書きは **X のストレージへ、A のではない**。コードは A から読む。
+
+これがプロキシパターン (UUPS、Transparent Proxy、Diamond) の動作原理: プロキシコントラクト (X) が実装コントラクト (A) に DELEGATECALL し、X のストレージが A のロジックで変更される。
+
+これが多くの著名な hack の元凶でもある — Wormhole、Parity マルチシグ、等 — A のストレージレイアウトが X と一致しないと、書き込みが X の予期しないスロットを破壊する。
+
+Advanced lesson 6 (ExEx) で「この tx がこれらのアカウントのこれらのストレージスロットに触れた」と出た時、CALL vs DELEGATECALL を知っていることが理解の鍵。
+
+## 実コールグラフ
+
+\`\`\`
+EOA がコントラクト X に tx 送信
+│
+├── X のコードが走る (frame 1)
+│    │
+│    ├── X.transfer() → コントラクト Y へ CALL
+│    │    │
+│    │    └── Y のコードが走る (frame 2、新規メモリ/スタック)
+│    │          │
+│    │          └── Y は Y.storage から読む (SLOAD で)
+│    │
+│    ├── X がコントラクト Z に STATICCALL (view 関数)
+│    │    │
+│    │    └── Z のコードが走る (frame 3、新規、書き込みロック)
+│    │
+│    └── X がコントラクト W に DELEGATECALL (実装)
+│         │
+│         └── W のコードが走る (frame 4) — でも書き込みは X のストレージへ!
+│
+└── tx 完了; receipt が全フレームのログを発行
+\`\`\`
+
+各フレームが独自のメモリ/スタック。Returndata は各 return で上に流れる。ガス会計はフレームごとに消費を追跡。
+
+## 読み物リスト
+
+1. **[evm.codes](https://www.evm.codes)** で CALL・DELEGATECALL・STATICCALL を読む。パラメータ (gas, address, value, argsOffset, argsSize, retOffset, retSize) を見る — DELEGATECALL/STATICCALL が \`value\` を落とす以外は同じ。
+2. **Foundry で** 小さいプロキシ + 実装ペアをデプロイ。\`forge test -vvvv\` でコールトレースを見る — 各 CALL と DELEGATECALL がフレームネスト付きで表示される。
+3. **[Wormhole hack postmortem](https://www.coinbase.com/blog/decoding-the-wormhole-attack)** を読む — バグは DELEGATECALL セマンティクスの誤解。このレッスンが頭にあると exploit が明白になる。
+
+## このレッスンで持ち帰るもの
+
+- ガスは **3 つの形** で来る: 内在 (per-tx)、opcode ごと (固定 + 動的)、リファンド (キャップ付き)。
+- **OOG と REVERT** は似ているが returndata と残りガスで違う。
+- tx は **コールフレームのツリー**。各フレームが独自の stack/memory/PC/gas を持つ。
+- **DELEGATECALL** は呼び先のコードを呼び出し元のコンテキストで走らせる call スタイル — プロキシパターンの基盤、多くのバグの元凶。
+
+Advanced lesson 5 (カスタム precompile) でガス価格モデル、もしくは lesson 6 (ExEx) で複数のコミット済みトランザクションを跨いで再構成する話が出た時、コールフレームとガスモデルが頭にある — 抽象概念ではなく具体的な機械として。`,
+                },
               ],
             },
           },
