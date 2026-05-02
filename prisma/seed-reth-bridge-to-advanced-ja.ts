@@ -876,6 +876,519 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 
 Advanced lesson 1 でいきなり 1 行目に型パラメータ 3 つと \`?Sized\` をぶつけられた時、それを 5 つの威圧的なトークンではなく、1 つの繋がった文として読めるはず。`,
                 },
+                {
+                  title: '所有権の共有: Arc・Mutex・RwLock',
+                  slug: 'rust-shared-ownership-ja',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# 所有権の共有: Arc・Mutex・RwLock
+
+Rust の「ただ一人のオーナー」ルールは厳しい — そして 90% の場合は助かる。残り 10% は **複数の場所から同じ値を保持** する必要があり、スレッド跨ぎだったり、変更ありだったりする。それがこのレッスン。
+
+Reth と ExEx のコードは **\`Arc\` と \`Mutex\` がぎっしり**。このレッスンなしだと、それらのラッパーは雑音に感じる。あった上では、Reth が状態を非同期タスク間でどう共有しているかの load-bearing な部品。
+
+## 問題 — なぜ所有権だけでは不十分か
+
+インデクサが：
+
+- チェーンから新ブロックを受け取る (1 タスク)
+- RPC サーバが現在の状態をクエリする (多タスク)
+- 定期的に状態をディスクへスナップショット (1 タスク)
+
+3 つすべてが同じインメモリ状態にアクセスする必要がある。素の Rust 所有権は「ただ一人のオーナー」と言う — でもここでは *本当に* 共有アクセスが必要。
+
+答える質問が 2 つ：
+
+1. **誰が値を所有するか?** 複数の場所。
+2. **誰が変更できるか?** 場合による。
+
+## Arc — 多重所有、不変共有
+
+\`Arc<T>\` ("Atomically Reference-Counted") は複数のオーナーが値を共有できるようにし、最後のオーナーが drop した時に値を解放する。
+
+\`\`\`rust
+use std::sync::Arc;
+
+let data = Arc::new(String::from("hello"));
+let clone1 = Arc::clone(&data);   // refcount: 1 → 2
+let clone2 = Arc::clone(&data);   // refcount: 2 → 3
+
+std::thread::spawn(move || {
+    println!("{}", clone1);       // 別スレッドへ move 可能
+});
+println!("{}", clone2);
+// clone2 drop → refcount: 3 → 2
+// clone1 drop (spawn 先で) → refcount: 2 → 1
+// data drop → refcount: 1 → 0 → メモリ解放
+\`\`\`
+
+重要な性質が 2 つ：
+
+### \`Arc::clone\` は安い
+
+\`Arc::clone(&x)\` は内部の T を **deep copy しない**。やるのは：
+
+1. アトミックにカウンタをインクリメント
+2. 同じヒープ確保への新しいポインタを返す
+
+コスト: アトミック add 1 回。内部の T は触らない。だから Reth で \`Arc::clone(&shared_state)\` がどこにでもある — 実質タダ。
+
+### Arc は読み取り専用共有を提供
+
+\`Arc<T>\` 経由では T の \`&self\` メソッドしか呼べない。**変更不可**。設計上そう — 同じ \`Arc<T>\` を持つ複数スレッドは同時に読み書きできない、同期なしでは。Rust が型レベルで強制する。
+
+変更が必要なら、最初に T を \`Mutex\` か \`RwLock\` で包む。
+
+### Arc vs Rc
+
+\`Rc<T>\` は同じ形だが **シングルスレッド**。通常 (非アトミック) カウンタを使う。速いがスレッド跨ぎでは unsound。Reth と ExEx は \`Arc\` 一本 — マルチスレッド設計だから。
+
+## Mutex — 排他読み書きアクセス
+
+\`Mutex<T>\` は値をロックでラップする。読み書きには \`lock()\` が必要：
+
+\`\`\`rust
+use std::sync::{Arc, Mutex};
+
+let counter = Arc::new(Mutex::new(0u64));
+
+let c = Arc::clone(&counter);
+std::thread::spawn(move || {
+    let mut guard = c.lock().unwrap();   // ロック取得
+    *guard += 1;                          // 変更
+    // guard がここで drop → ロック解放
+});
+\`\`\`
+
+\`lock()\` は \`MutexGuard<T>\` を返す — スマートポインタで：
+
+- **\`Deref\` 実装** で \`&T\` (読み) や \`&mut T\` (書き) のように使える
+- **drop 時にロック解放** (RAII パターン — 手動 unlock 不要)
+- **他スレッドがロック保持中なら呼び出しスレッドをブロック**
+
+### \`.unwrap()\` は何で panic するか — poisoning
+
+\`.lock().unwrap()\` を至る所で見るはず。なぜ \`unwrap\`?
+
+\`lock()\` は \`Result<MutexGuard, PoisonError>\` を返すから。エラーケースは **mutex poisoning** — スレッドがロック保持中に panic すると、mutex は「poisoned」とマークされ、後続のロッカーがデータが不整合かもしれないと知る。
+
+ほとんどの Reth コードは特別扱いせず poisoning を伝播 (panic) させる選択。\`.unwrap()\` が正しい呼び方なのは、部分更新の不整合を推論できない時。
+
+自分のログで Mutex poisoning を見たら、**根本のバグは元の panic** であってロックではない — 何が panic したかを見つけて修正する。
+
+### パターン: \`Arc<Mutex<T>>\`
+
+この組み合わせを常に見ます：
+
+\`\`\`rust
+let shared_state: Arc<Mutex<MyState>> = Arc::new(Mutex::new(MyState::default()));
+
+for _ in 0..10 {
+    let s = Arc::clone(&shared_state);
+    std::thread::spawn(move || {
+        let mut guard = s.lock().unwrap();
+        guard.do_work();
+    });
+}
+\`\`\`
+
+\`Arc\` が多オーナーポインタを提供; \`Mutex\` が変更安全性を提供。組み合わせ: スレッドセーフな共有可変状態。
+
+## RwLock — 多 reader OR 単 writer
+
+\`Mutex\` は排他 — 一度に 1 スレッド、読みでも。読みが書きを大幅に上回る場合は無駄。
+
+\`RwLock<T>\` は許す：
+
+- **多くの並行 reader** (\`.read()\`)
+- **または排他的な 1 writer** (\`.write()\`)
+- 同時には決して両方ではない
+
+\`\`\`rust
+use std::sync::{Arc, RwLock};
+
+let cache = Arc::new(RwLock::new(HashMap::<String, u64>::new()));
+
+// 多スレッドが同時に読める
+let c = Arc::clone(&cache);
+std::thread::spawn(move || {
+    let guard = c.read().unwrap();      // 共有読み
+    if let Some(v) = guard.get("key") {
+        println!("{}", v);
+    }
+});
+
+// 1 スレッドが書く (全 reader と他 writer をブロック)
+let c2 = Arc::clone(&cache);
+std::thread::spawn(move || {
+    let mut guard = c2.write().unwrap();
+    guard.insert("key".to_string(), 42);
+});
+\`\`\`
+
+選び方：
+
+| パターン | 選ぶもの |
+| :--- | :--- |
+| 50/50 の読み書き | \`Mutex\` (シンプル) |
+| 多読み・少書き (キャッシュ・config) | \`RwLock\` |
+| 書き専用のタイトな内側ループ | \`Mutex\` |
+| シングルスレッド | どちらも不要 — \`RefCell\` を使う |
+
+\`RwLock\` は writer に対して \`Mutex\` よりやや重い (簿記が多い)、なので読みが支配的でない限り手を出さない。
+
+## async の話 — \`tokio::sync::Mutex\`
+
+標準 \`std::sync::Mutex\` は **同期的**: \`.lock()\` は OS スレッドをブロックする。async コンテキスト (Tokio) ではスレッドをブロックするのは悪い — 同じワーカー上の他タスクを飢えさせる。
+
+async コードには \`tokio::sync::Mutex\`：
+
+\`\`\`rust
+use tokio::sync::Mutex;
+let m = Arc::new(Mutex::new(0u64));
+
+let m_clone = Arc::clone(&m);
+tokio::spawn(async move {
+    let mut guard = m_clone.lock().await;   // .await、.unwrap() ではない
+    *guard += 1;
+});
+\`\`\`
+
+違い：
+
+- \`.lock()\` は Future を返す — \`.await\` する
+- 待機中タスクは **runtime に yield** する (ワーカーをブロックしない)
+- poisoning の概念なし (async タスク内の panic は Tokio が処理)
+
+Reth は両方使う: \`.await\` を跨がない高速クリティカルセクションには \`std::sync::Mutex\`、await を跨ぐ guarded 状態には \`tokio::sync::Mutex\`。
+
+**経験則**: クリティカルセクションが \`.await\` を含むなら \`tokio::sync::Mutex\`。そうでなければ \`std::sync::Mutex\` で OK、やや速い。
+
+## Reth の実パターン — DB ハンドルの共有
+
+Reth が DB をタスク間で共有する単純化版：
+
+\`\`\`rust
+struct Node {
+    db: Arc<Database>,                     // 共有、不変ハンドル
+    blockchain_tree: Arc<RwLock<Tree>>,    // 共有、ほぼ読み
+    metrics: Arc<Mutex<MetricsCollector>>, // 共有、書き重め
+}
+
+impl Node {
+    fn spawn_indexer(&self) {
+        let db = Arc::clone(&self.db);
+        let metrics = Arc::clone(&self.metrics);
+        tokio::spawn(async move {
+            // db: Arc 経由で読み専用、ロック不要
+            // metrics: カウンタ更新にロック
+            metrics.lock().unwrap().increment("blocks_indexed");
+        });
+    }
+}
+\`\`\`
+
+3 つの異なる共有パターンが 1 つの struct に。**各選択は意図的** — ロック粒度がアクセスパターンに合っている。
+
+Reth ソースを読んで \`Arc<RwLock<Foo>>\` の隣に \`Arc<Mutex<Bar>>\` を見たら、著者がどちらが正しいか考えている。今やあなたはその判断を読める。
+
+## 読み物リスト
+
+1. **Rust Book 章 16 (Fearless Concurrency)** — \`Arc\` と \`Mutex\` のセクションを読む。
+2. **\`tokio::sync\` ドキュメント** — \`Mutex\`・\`RwLock\`・\`broadcast\`・\`oneshot\` のページをスキム。各々が Reth のタスクコードの実パターンにマップする。
+3. **Reth ソースで \`Arc<RwLock\` と \`Arc<Mutex\` を検索**。いくつか選ぶ。どちらを選ぶかは常に意図的 — なぜか説明してみる。
+
+## このレッスンで持ち帰るもの
+
+- **\`Arc<T>\`** は多オーナー、不変、clone が安い (アトミック add 1 回)。
+- **\`Mutex<T>\`** は排他 (一度に reader-or-writer 1 つ)、\`.lock()\` がスレッドをブロック。
+- **\`RwLock<T>\`** は多 reader OR 単 writer — 読みが支配的な時に使う。
+- **\`tokio::sync::Mutex\`** は async-aware 版 — クリティカルセクションが \`.await\` を跨ぐ時に使う。
+- **\`Arc<Mutex<T>>\`** は正準の「共有可変状態」パターン — Reth/ExEx の至る所で見る。
+
+Advanced lesson 6 (ExEx) で \`Arc<...>\` フィールドが 3 つあるような struct を見て「なぜラッパーだらけ?」と思った時、各々がそのコンポーネントが runtime のタスク間でどう共有されるかの load-bearing 部品だと知っているはず。`,
+                },
+                {
+                  title: 'unsafe Rust と macro_rules! 基礎',
+                  slug: 'rust-unsafe-and-macros-ja',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 15,
+                  xpReward: 30,
+                  content: `# unsafe Rust と macro_rules! 基礎
+
+標準 Rust 教科書が *薄い* 2 領域、そして Revm のインタープリタが *深く* 入る 2 領域。このレッスンで、Revm のホットパスを \`unsafe { ... }\` ブロックや \`$d:tt\` だらけのマクロ定義に怯まず読める語彙を得ます。
+
+## Part 1: \`unsafe\` Rust
+
+### \`unsafe\` が実際に許すもの
+
+Rust の安全性保証 (データ競合なし、use-after-free なし、境界外アクセスなし) はコンパイラが強制する — でも **safe Rust** に対してだけ。\`unsafe\` コードだけが許される 5 つのこと：
+
+1. **生ポインタの dereference** (\`*const T\` または \`*mut T\`)
+2. **\`unsafe fn\` の呼び出し** (コンパイラが検証できない関数)
+3. **可変 static 変数のアクセス・変更**
+4. **\`unsafe trait\` の実装** (\`Send\` や \`Sync\` を手動で)
+5. **\`union\` のフィールドアクセス**
+
+それが *リスト全部*。重要なことに、\`unsafe\` はローカル変数の借用チェッカーを *無効化しない*、null ポインタ deref を *自動的に* 許可しない、型チェックをスキップさせない。
+
+### 契約 — \`unsafe\` が *する* こと
+
+\`unsafe\` はあなたからコンパイラへの **約束**: 「このコードが Rust の安全性不変条件を維持していることを手動で検証した。信用していい」。
+
+その約束が間違っていると、**未定義動作 (UB)** が起きる — UB は *破滅的*。一度 UB が起きると、プログラム全体が不整合状態。コンパイラは UB が起きないと仮定して最適化していたかもしれない、なので実行時の振る舞いは何でもありうる: クラッシュ・誤った結果・セキュリティホール・もっともらしいけど誤った出力。
+
+**「小さな UB」は存在しない**。UB のあるプログラムは間違っている、それだけ。
+
+### なぜ Revm はホットパスで \`unsafe\` を使うか
+
+Advanced lesson 1 の Revm の \`popn_top!\` マクロには：
+
+\`\`\`rust
+let ([$( $x ),*], $top) = unsafe {
+    $crate::interpreter_types::StackTr::popn_top(&mut $interpreter.stack)
+        .unwrap_unchecked()
+};
+\`\`\`
+
+呼ばれている関数は \`Option<...>\` を返す。\`unwrap_unchecked()\` は **\`unwrap()\` の unsafe 版** — 実行時の「これは Some か?」チェックをスキップする。
+
+なぜここで安全か? 直前のコードが：
+
+\`\`\`rust
+if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
+    return Err(...);
+}
+\`\`\`
+
+だから \`unwrap_unchecked()\` の瞬間、スタック長は **証明可能に** 十分。著者は目視で \`popn_top\` が Some を返すと検証済み。\`.unwrap()\` を呼ぶと冗長な実行時チェックが入る; \`.unwrap_unchecked()\` がそれをスキップ。
+
+節約されるコスト: opcode 実行ごとに 1 分岐。何十億回走るインタープリタのホットパスで、それは計測できる。
+
+### Revm/Reth での \`unsafe\` 規律
+
+慣用的な \`unsafe\` 使用はこんな感じ：
+
+\`\`\`rust
+// 安全性不変条件を説明するコメントブロック
+// SAFETY: We just checked stack.len() >= N+1 above, so popn_top
+// is guaranteed to return Some.
+let result = unsafe { popn_top.unwrap_unchecked() };
+\`\`\`
+
+よく書かれた Rust の各 \`unsafe\` ブロックには **\`// SAFETY:\` コメント** があり、なぜ unsafe が健全かを記述する。レビュアーはこれを探す; 不在は code smell。
+
+### \`unsafe fn\` vs \`unsafe { ... }\`
+
+関連するが異なる 2 つの概念：
+
+| 形 | 意味 |
+| :--- | :--- |
+| \`unsafe { ... }\` ブロック | 「5 つの unsafe な事の 1 つをやっている、不変条件を検証済み」 |
+| \`unsafe fn foo(...)\` | 「この関数を呼ぶには unsafe が必要 — *呼び出し元* が不変条件を検証する必要がある」 |
+
+\`unwrap_unchecked()\` は \`unsafe fn\`。呼ぶには呼び出し場所を \`unsafe { ... }\` で囲む。それが契約: 関数が「事前条件がある」と宣言、呼び出し元が「チェック済み」と宣言。
+
+### まだ知らなくて良いもの
+
+- \`Send\` / \`Sync\` の手動実装 (Reth はあまりやらない)
+- インラインアセンブリ (ほぼなし)
+- C への FFI (jemalloc 関連だけ、それも 1 つのグローバル設定)
+
+Revm/Reth ソースを読むには、**上のパターン (手動安全性検証 + チェック後の \`unwrap_unchecked\`) が見るものの 95%**。
+
+---
+
+## Part 2: \`macro_rules!\`
+
+Revm のインタープリタは **マクロでぎっしり**。\`popn_top!\`、\`gas!\`、\`push!\`、\`as_usize_or_fail!\` — これらは関数呼び出しではなく、コンパイル時のテキスト展開。読むには構文を知る必要がある。
+
+### 基本の形
+
+\`macro_rules!\` マクロは **パターン → 展開**。パターンが呼び出し構文にマッチ、展開がコードを生成：
+
+\`\`\`rust
+macro_rules! square {
+    ($x:expr) => {
+        $x * $x
+    };
+}
+
+let n = square!(3 + 4);    // 展開: (3 + 4) * (3 + 4) → 49
+\`\`\`
+
+\`$x:expr\` 部分が **メタ変数** \`$x\` を宣言、任意の式にマッチ。\`expr\` は **フラグメント specifier**、パーサに何の構文を期待するか教える。
+
+### 一般的なフラグメント specifier
+
+| Specifier | マッチ対象 |
+| :--- | :--- |
+| \`expr\` | 任意の Rust 式 |
+| \`ident\` | 識別子 (変数名、関数名) |
+| \`tt\` | 単一の token tree (最も柔軟) |
+| \`stmt\` | 文 |
+| \`pat\` | パターン (match arm、let 束縛で) |
+| \`ty\` | 型 |
+| \`block\` | \`{ ... }\` ブロック |
+
+ソース読みには \`expr\`・\`ident\`・\`tt\` でほとんど足りる。
+
+### 繰り返し: \`$( ... ),*\`
+
+マクロは **リスト** を繰り返し構文でマッチできる：
+
+\`\`\`rust
+macro_rules! print_all {
+    ( $( $x:expr ),* ) => {
+        $(
+            println!("{}", $x);
+        )*
+    };
+}
+
+print_all!(1, "hello", 3.14);
+// 展開:
+// println!("{}", 1);
+// println!("{}", "hello");
+// println!("{}", 3.14);
+\`\`\`
+
+構文を読む：
+
+- \`$( ... )\` が繰り返しグループを宣言
+- \`,*\` が「カンマ区切り、ゼロ回以上」(\`,+\` で 1 回以上)
+- 展開内の \`$( ... )*\` が本体をマッチ 1 つにつき 1 回繰り返す
+
+### Revm の \`popn_top!\` を読む
+
+基礎を装備して：
+
+\`\`\`rust
+macro_rules! popn_top {
+    ([ $($x:ident),* ], $top:ident, $interpreter:expr) => {
+        // ... 本体
+    };
+}
+\`\`\`
+
+翻訳：
+
+- パターンは \`[\` で始まり、\`$($x:ident),*\` (識別子のカンマ区切りリスト)、それから \`]\`
+- それからカンマ、それから \`$top:ident\` (1 つの識別子)
+- それからカンマ、それから \`$interpreter:expr\` (式)
+
+なので \`popn_top!([op1], op2, ctx.interpreter)\` を呼ぶとマッチは：
+
+- \`$x\` = 識別子 1 つのリスト: \`op1\`
+- \`$top\` = \`op2\`
+- \`$interpreter\` = \`ctx.interpreter\`
+
+\`popn_top!([a, b, c], top, ctx.interpreter)\` を呼ぶと \`$x\` は 3 つのリスト。
+
+展開は \`$($x),*\` を使って同じ識別子リストを destructuring パターンに展開する。
+
+### マクロの hygiene — マクロがあなたのスコープを汚染できない理由
+
+\`macro_rules!\` マクロは **hygienic**: マクロ内で導入された変数名は呼び出し元のスコープの変数と衝突しない。
+
+\`\`\`rust
+macro_rules! double {
+    ($e:expr) => {{
+        let temp = $e;       // マクロ内の 'temp'
+        temp * 2
+    }};
+}
+
+let temp = "important";      // 呼び出し元の 'temp'
+let n = double!(5);          // 呼び出し元の 'temp' を壊さず展開
+println!("{}", temp);        // まだ "important"
+\`\`\`
+
+Hygiene は \`macro_rules!\` の特徴 (そして C スタイルのマクロより好まれる主な理由)。
+
+### \`macro_rules!\` vs \`proc_macro\`
+
+両方に出会う。簡単な区別：
+
+| | \`macro_rules!\` | proc-macro |
+| :--- | :--- | :--- |
+| **定義** | パターンマッチルール | 別の \`proc-macro\` クレート内の Rust 関数 |
+| **操作対象** | Token tree (リテラル構文) | TokenStream (コンパイラのパース後表現) |
+| **力** | 限定的だがほぼ十分 | 任意のコード生成 |
+| **例** | \`vec!\`、\`println!\`、\`popn_top!\`、\`gas!\` | \`#[derive(Serialize)]\`、\`sol!\`、\`address!\` の裏の \`hex!\` |
+
+\`macro_rules!\` が Revm のインタープリタが使うものをカバー。\`sol!\` と重い proc-macro は Expert ティアのトピック。
+
+## 全部まとめる
+
+Advanced lesson 1 で \`revm/crates/interpreter/src/instructions/macros.rs\` を開くと：
+
+\`\`\`rust
+macro_rules! popn_top {
+    ([ $($x:ident),* ], $top:ident, $interpreter:expr) => {
+        if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
+            $crate::primitives::hints_util::cold_path();
+            return Err($crate::InstructionResult::StackUnderflow);
+        }
+        let ([$( $x ),*], $top) = unsafe {
+            $crate::interpreter_types::StackTr::popn_top(&mut $interpreter.stack)
+                .unwrap_unchecked()
+        };
+    };
+}
+\`\`\`
+
+これを単語ずつ読める：
+
+- \`macro_rules!\` — 宣言的マクロ定義
+- パターン \`([ $($x:ident),* ], $top:ident, $interpreter:expr)\` — 呼び出し引数を destructure
+- 本体: 長さチェック、それから \`unsafe { ... }\` ブロックで \`unwrap_unchecked()\` を呼ぶ (長さが直前で検証済みだから)
+- \`SAFETY\` の根拠は長さチェック — コメントは暗黙 (Revm はタイトなコードでは時々省略)
+
+魔法を読んでいない。**今や知っているパターンを** 読んでいる。
+
+## 読み物リスト
+
+1. **Rust Book 章 19.5 (Macros) と章 19.1 (Unsafe Rust)** — 両方とも簡潔。1 度読んで、必要時に戻る。
+2. **The Little Book of Rust Macros** ([danielkeep.github.io](https://danielkeep.github.io/tlborm/book/index.html)) — 無料、最高のマクロ-by-example リファレンス。
+3. **Revm で \`unsafe {\` を検索** して周辺コードを \`SAFETY:\` レンズで読む — 事前条件は何? どこで検証されている?
+
+## このレッスンで持ち帰るもの
+
+- **\`unsafe\`** は 5 つの特定のことを許す; ライセンスではなくコンパイラとの *契約*
+- **\`unwrap_unchecked()\`** + 直前の長さ/状態チェックは、Revm のホットパスで冗長な実行時チェックをスキップする正準パターン
+- **\`macro_rules!\`** は token パターンにマッチしてコードに展開する; \`$x:expr\`、\`$($x),*\`、フラグメント specifier、hygiene
+- **proc-macros** は重い兄弟 — 別クレート、TokenStream で動く — Expert で扱う
+
+## コース完了 — 次のステップ
+
+これで **スタックを読む — Advanced への橋渡し** を完了：
+
+- ✓ EVM をバイト単位で (dispatch loop、ストア、ガス、コールフレーム)
+- ✓ ブロックレベルの Ethereum (ブロック、レシート、reorg)
+- ✓ ソース読みのための Rust (generics、dyn、Arc、unsafe、マクロ)
+
+Advanced lesson 1 を開くと：
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
+    *op2 = op1.wrapping_add(*op2);
+    Ok(())
+}
+\`\`\`
+
+そしてその全部品が、今や 1 つの繋がった文として読めるはず：
+
+- シグネチャ: 型パラメータ 2 つ、片方が \`?Sized\` で \`dyn Host\` になれる
+- マクロ呼び出し: 1 pop、新トップへの可変参照、内側の長さチェックで正当化された unsafe \`unwrap_unchecked\`
+- 算術: \`wrapping_add\` は EVM の \`ADD\` が mod 2²⁵⁶ だから
+
+準備完了。Advanced を始めましょう。`,
+                },
               ],
             },
           },
