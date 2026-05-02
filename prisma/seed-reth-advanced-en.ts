@@ -26,10 +26,111 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
+                  title: 'Welcome to Advanced — how this tier works',
+                  slug: 'advanced-welcome-en',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 7,
+                  xpReward: 15,
+                  content: `# Welcome to Advanced — how this tier works
+
+You've finished Fundamentals (and ideally the Bridge to Advanced course). The Beginner and Fundamentals lessons walked alongside you. **Advanced is different.** This short orientation explains how, so you can engage with the right mindset from lesson 1.
+
+## What changes here
+
+Beginner and Fundamentals taught you the *shape* of the stack — what Alloy types look like, how to use Foundry, what the EVM does at a high level.
+
+Advanced asks something different. **You will read the actual production source of Reth, Revm, Alloy, and Foundry, line by line.** The lessons assume you can already use the stack — they teach you to *read* it.
+
+That's a real shift. You'll see code like:
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
+    *op2 = op1.wrapping_add(*op2);
+    Ok(())
+}
+\`\`\`
+
+— from lesson 1 onward. (If that signature is unfamiliar, the Bridge to Advanced course's Rust module covers every piece of it.)
+
+## The editorial style — and why
+
+Advanced lessons use **active-learning prompts** that you don't see in earlier tiers:
+
+- 🛑 **Predict** — *Stop. Before reading the explanation, answer this in your head.* The point is to engage with the question, even if you're wrong. Wrong predictions are where the learning happens.
+- 🔍 **Find in repo** — Open the actual source file and verify the lesson's claim. The lesson is guidance; the source is truth.
+- **Anti-fluency checks** — *In your own words, why does this work?* If you can't answer, the lesson explicitly tells you to scroll back. **Don't skip these.**
+- **End-of-lesson recall tests** — Most lessons close with "the lesson isn't done with you until you can answer X." Take that literally.
+
+The editorial style is harder than tutorials you've read. It's deliberately so. **Smooth tutorial prose creates a "わかった気になる" trap** — readers nod through complex material and walk away with shallow comprehension. The Predict / Recall pattern forces actual engagement.
+
+This is friction by design. Lean into it.
+
+## Prerequisites — be honest with yourself
+
+Before lesson 1, you should be comfortable with:
+
+**EVM internals**:
+- Bytecode and the dispatch loop (opcodes as bytes, PC, instruction table)
+- Stack / memory / calldata / storage — what each is and how they differ
+- Cold vs warm gas (EIP-2929)
+- Call frames: CALL / DELEGATECALL / STATICCALL semantics
+- Block structure (header / body / receipts), reorgs as a normal phenomenon
+
+**Intermediate Rust**:
+- Generics with trait bounds, \`?Sized\`, \`dyn Trait\` vs \`impl Trait\`
+- \`Arc<T>\`, \`Mutex<T>\`, \`RwLock<T>\` — when to use each
+- \`unsafe\` blocks and \`unwrap_unchecked()\`
+- \`macro_rules!\` syntax (\`$x:ident\`, \`$($x),*\`, fragment specifiers)
+
+**Shaky on any of these?** Don't push through hoping you'll catch up. Go to the **Bridge to Advanced** course and work through the relevant lesson first. Each one is exactly the prep this tier assumes.
+
+(There's also a *Rust: lifetimes, Box, Arc, dyn Trait* lesson inside Advanced — but that's a *test*, not a *teach*. The Bridge course is the teach.)
+
+## Setup — do this once
+
+Have these ready in another window before you start lesson 1:
+
+1. **\`bluealloy/revm\` cloned** — \`git clone https://github.com/bluealloy/revm\`
+2. **\`paradigmxyz/reth\` cloned** — \`git clone https://github.com/paradigmxyz/reth\`
+3. **A working \`cargo\` toolchain** — \`rustc --version\` should print something modern
+4. **\`cargo-expand\`** — \`cargo install cargo-expand\` (you'll want it for the procedural macros lesson in Expert)
+5. **A second monitor or split terminal** — you'll be cross-referencing source while you read
+
+The "Find in repo" prompts only work if you actually have the repos open. Close that loop before starting.
+
+## How to actually read these lessons
+
+The pattern across every Advanced lesson:
+
+1. **Open the lesson, see a real source excerpt** (with a GitHub link).
+2. **Hit a 🛑 Predict prompt before the explanation.** Stop. Answer in your head or on paper. Then continue.
+3. **Read the walkthrough.** Compare to your prediction. Where you were wrong is where the learning happens.
+4. **Hit a 🔍 Find-in-repo prompt.** Open the repo. Find the actual file. Verify the lesson's claim.
+5. **End-of-lesson recall test.** Close the tab if you can answer in your own words. If not, scroll back.
+
+This is slower than typical tutorials. **It also internalizes.** The trade is intentional.
+
+## Pacing
+
+A single Advanced lesson takes **30–60 minutes** if you actually do the prompts. Expert lessons go longer.
+
+**Don't try to do five in one sitting.** One or two per evening, with the code open and the predict prompts engaged, is the right pace. Sprinting through breaks the active-learning model the lessons are built around.
+
+## You're ready
+
+If the prerequisite list looked familiar and you have the repos open: scroll back to the course detail and start with **Reading the interpreter**.
+
+If the prerequisite list felt shaky: go work through the Bridge to Advanced course first. Come back when each item on that list reads like vocabulary you own, not concepts you'd have to re-look-up.
+
+Either path is fine. The wrong choice is to ignore the gap and brute-force through Advanced — that's the path that ends with "I read all the lessons but couldn't tell you what \`?Sized\` actually does." Spend the prep time. The source-walking pays off only if you can read the source.`,
+                },
+                {
                   title: 'Reading the interpreter',
                   slug: 'revm-interpreter-en',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 1,
                   duration: 15,
                   xpReward: 30,
                   content: `# Reading the interpreter
@@ -190,7 +291,7 @@ After this drill, you've read more EVM source than 99% of Solidity developers ev
                   title: 'Custom opcodes — the design space',
                   slug: 'custom-opcodes-en',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 2,
                   duration: 12,
                   xpReward: 25,
                   content: `# Custom opcodes — the design space
@@ -337,7 +438,7 @@ A complex options pricer can drop from **500K gas in Solidity → 5K gas as a si
                   title: 'The Database trait — supplying state',
                   slug: 'revm-database-trait-en',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 12,
                   xpReward: 25,
                   content: `# The Database trait — supplying state
