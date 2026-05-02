@@ -179,4 +179,26 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full lesson-authoring style guide
 
 ## License
 
-MIT
+RethLab uses a **dual-license** split to keep the platform open while protecting
+the lesson content:
+
+- **Platform code** (Next.js app, React components, Prisma schema, API routes,
+  build config — everything except the lesson bodies) — **MIT License**. See
+  [LICENSE](LICENSE).
+- **Lesson content** (markdown bodies inside `prisma/seed-reth-*.ts`, quiz
+  questions, course / module / lesson structure) — **Creative Commons
+  Attribution-NonCommercial-ShareAlike 4.0** (CC BY-NC-SA 4.0). See
+  [LICENSE-CONTENT](LICENSE-CONTENT).
+
+In plain language:
+
+- Anyone can fork the **platform** and build their own thing with it (commercial
+  or otherwise). It's just a Next.js + Prisma reference.
+- Anyone can **read, share, translate, and remix** the lessons — for free,
+  forever — as long as they credit RethLab and don't use them commercially. No
+  reposting under a different license, no paid courses built on top of this
+  content.
+
+If you want to use the lesson content for something the license doesn't clearly
+cover (corporate training, conference workshop, a derived non-commercial project
+that needs different terms), open an issue and let's talk.

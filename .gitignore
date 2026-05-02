@@ -50,3 +50,9 @@ test-ledger/
 RethDojo_*.txt
 reth-2.png
 scripts/
+
+# Claude Code local settings
+.claude/
+
+# Demo video (host elsewhere; not in repo)
+*.mp4

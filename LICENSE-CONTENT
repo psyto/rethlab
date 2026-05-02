@@ -1,0 +1,55 @@
+RethLab Lesson Content License
+==============================
+
+The **lesson content** of RethLab — the markdown bodies inside
+`prisma/seed-reth-*.ts`, all quiz questions and answers, the pedagogical
+structure (course/module/lesson hierarchy), and any image, diagram, or media
+file that is part of a lesson — is licensed under
+
+**Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International**
+(CC BY-NC-SA 4.0)
+
+Full legal text: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+
+Plain-language summary: https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+Copyright (c) 2026 psyto and RethLab contributors
+
+---
+
+What this means in practice
+----------------------------
+
+You ARE free to:
+
+- **Read** the lessons on rethlab.fabrknt.com or in this repository
+- **Share** the content (copy, redistribute) in any medium or format
+- **Adapt** the content (remix, transform, translate, build upon)
+
+You MUST:
+
+- **Give credit** — link back to rethlab.fabrknt.com and the original author
+- **Use the same license** for any derivative work (no relicensing as
+  proprietary or as a more permissive license)
+- **State clearly** what changes you made
+
+You may NOT:
+
+- **Use the content commercially** — selling it, putting it behind a paywall,
+  using it as part of a paid course, or any other for-profit use is not
+  permitted without separate written permission
+
+---
+
+Why this license
+----------------
+
+RethLab is built to be free for everyone who wants to learn the Rust Ethereum
+stack — and to stay that way. CC BY-NC-SA keeps the door open for translation,
+study groups, classroom use, and personal study, while preventing the content
+from being silently absorbed into a paid course or commercial product.
+
+If you have a use case that isn't clearly covered (corporate training,
+conference workshop, derived non-commercial project that wants a different
+license, etc.), open an issue or reach out — the goal is to keep the content
+spreading, not to be obstructive.

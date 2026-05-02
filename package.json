@@ -2,6 +2,7 @@
   "name": "rethlab",
   "version": "0.1.0",
   "private": true,
+  "license": "SEE LICENSE AND LICENSE-CONTENT",
   "scripts": {
     "dev": "next dev -p 3000",
     "prebuild": "prisma generate && prisma db push --accept-data-loss",
