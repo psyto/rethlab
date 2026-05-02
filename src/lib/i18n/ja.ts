@@ -113,7 +113,7 @@ export const ja: TranslationKeys = {
     },
     paths: {
       title: 'トレーニングパス',
-      subtitle: '4つのティア、ひとつのアウトカム：Rust EVM スタックを読み・拡張し・本番に出せるようになる。',
+      subtitle: '5 コース、ひとつのアウトカム：Rust EVM スタックを読み・拡張し・本番に出せるようになる。',
       fundamentals: {
         title: '初級',
         description: 'Rust Ethereumスタックがなぜ重要か、環境構築、最初のAlloyスクリプト。',
@@ -163,6 +163,7 @@ export const ja: TranslationKeys = {
       beginner: '初級',
       intermediate: '中級',
       advanced: '上級',
+      expert: 'エキスパート',
     },
     detail: {
       enroll: '受講する',
@@ -272,7 +273,7 @@ export const ja: TranslationKeys = {
     },
     use: {
       title: '寄付の使い道',
-      item1: '既存カリキュラム（4ティア・約74レッスン）を全員に無料で提供し続けること',
+      item1: '既存カリキュラム（5コース・約90レッスン）を全員に無料で提供し続けること',
       item2: '上流の Reth / Revm / Alloy / Foundry に対する各レッスンの随時更新',
       item3: 'ホスティング・インフラ・翻訳作業',
     },
@@ -325,7 +326,7 @@ export const ja: TranslationKeys = {
   about: {
     title: 'RethLabについて',
     subtitle: '最新の EVM は用途特化型 L1 の波 — perps の Hyperliquid、payments の Tempo、consumer L2 の Base。そのすべてが Reth・Revm・Alloy・Foundry で動いています。RethLab は、その本物のソースコードを行ごとに解説するトレーニングプログラムです。',
-    bio: 'Reth・Revm・Alloy は、いま最も性能の高いブロックチェーンの中核にあります。しかし「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態への入り口は険しい — ドキュメントは散在し、ソースは難解で、明確な道筋が存在しません。RethLab がその道筋です：4ティア・約74レッスン、すべての上位概念は本番ソースコードに紐づけられている。修了すれば、Reth の Stage を読み、独自の Revm precompile を書き、ExEx をデプロイし、grant 応募で「スタックを理解している」ことを示すコードサンプルを提示できます。',
+    bio: 'Reth・Revm・Alloy は、いま最も性能の高いブロックチェーンの中核にあります。しかし「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態への入り口は険しい — ドキュメントは散在し、ソースは難解で、明確な道筋が存在しません。RethLab がその道筋です：5コース・約90レッスン、すべての上位概念は本番ソースコードに紐づけられている。修了すれば、Reth の Stage を読み、独自の Revm precompile を書き、ExEx をデプロイし、grant 応募で「スタックを理解している」ことを示すコードサンプルを提示できます。',
     background: {
       tradfi: 'なぜRustなのか',
       tradfiDetail: 'メモリ安全性、ゼロコスト抽象化、そして本格的なブロックチェーンインフラを支えるに足る成熟したエコシステム。',
@@ -372,11 +373,13 @@ export const ja: TranslationKeys = {
       title: 'なぜRethLab？',
     },
     tracks: {
-      title: '4つのティア、ひとつのアウトカム',
-      subtitle: '4 つすべて修了すれば、Paradigm・Hyperliquid・Tempo が使う Rust EVM スタックを読み・拡張し・リリースできるようになる。',
+      title: '5 コース、ひとつのアウトカム',
+      subtitle: '5 つすべて修了すれば、Paradigm・Hyperliquid・Tempo が使う Rust EVM スタックを読み・拡張し・リリースできるようになる。',
       basicsDesc: 'Rust EVMスタックがなぜ重要か、環境構築、そして実際のRPCに接続する最初のAlloyスクリプト。',
       fundamentals: 'ファンダメンタルズ',
       fundamentalsDesc: 'Alloyの型・Provider・署名、そしてRevmコードを読む前に必要なEVM概念（スタック・メモリ・Opcode・ガス）。',
+      bridge: 'Advanced への橋渡し',
+      bridgeDesc: 'EVM をバイト単位で（dispatch loop・ワールドステート・ガス・コールフレーム・reorg）と中級 Rust（generics・?Sized・dyn・Arc・unsafe・マクロ）— Solidity 主体の開発者が Advanced で当たるギャップを埋める。',
       hyperliquid: '上級',
       hyperliquidDesc: 'Revmインタープリター内部、カスタムOpcode、Databaseトレイト、RethのStaged Sync、Execution Extensions。',
       expertDesc: 'パフォーマンスエンジニアリング、MDBX、Tokio内部、手続きマクロ、カスタムPrecompile、MPT、本番MEV、zkEVM、独自Rethフォーク運用。',

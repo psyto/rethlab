@@ -45,6 +45,14 @@ export default function LandingPage() {
       color: 'from-blue-500/20 to-cyan-500/20',
     },
     {
+      title: t('page.tracks.bridge'),
+      description: t('page.tracks.bridgeDesc'),
+      icon: ArrowRight,
+      courses: 1,
+      difficulty: t('courses.difficulty.intermediate'),
+      color: 'from-cyan-500/20 to-teal-500/20',
+    },
+    {
       title: t('courses.categories.advanced'),
       description: t('page.tracks.hyperliquidDesc'),
       icon: Terminal,
@@ -57,7 +65,7 @@ export default function LandingPage() {
       description: t('page.tracks.expertDesc'),
       icon: Boxes,
       courses: 1,
-      difficulty: t('courses.difficulty.advanced'),
+      difficulty: t('courses.difficulty.expert'),
       color: 'from-orange-500/20 to-red-500/20',
     },
   ];
@@ -287,7 +295,7 @@ export default function LandingPage() {
             </p>
           </motion.div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {tracks.map((track, i) => (
               <motion.div
                 key={i}

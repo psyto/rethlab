@@ -37,18 +37,19 @@ After finishing the program, you'll be able to:
 
 This is a serious training program — not a casual tutorial.
 
-## The 4 tiers
+## The 5 courses
 
-| Tier | Focus | Highlight |
+| Course | Focus | Highlight |
 | :--- | :--- | :--- |
-| **Beginner** (1 course) | Why Rust EVM matters, environment setup | First Rust program, three-pillar overview |
-| **Fundamentals** (1 course) | Alloy + EVM internals + **Foundry** | Real `sign_message.rs`, real Provider, real Revm Stack, forge/cast/anvil |
-| **Advanced** (1 course) | Revm interpreter, Database trait, Reth Staged Sync, ExEx, Reth SDK | Reading the actual ADD opcode, custom opcodes, NodeBuilder for App-chains |
-| **Expert** (1 course) | Performance engineering, MDBX, Tokio internals, procedural macros, custom precompiles, MPT, MEV pipelines, zkEVM, production fork ops | Foundry cheatcodes as precompiles, real Steel zkVM guest, MEV decoding from `op-bridge` |
+| **Beginner** | Why Rust EVM matters, environment setup | First Rust program, three-pillar overview |
+| **Fundamentals** | Alloy + EVM internals + **Foundry** | Real `sign_message.rs`, real Provider, real Revm Stack, forge/cast/anvil |
+| **Bridge to Advanced** | EVM at the bytes level (dispatch loop, world state, gas, call frames, reorgs) + intermediate Rust (generics, ?Sized, dyn, Arc, unsafe, macros) | Smooth tutorial bridge for Solidity-native developers — closes the gap before source-walking begins |
+| **Advanced** | Revm interpreter, Database trait, Reth Staged Sync, ExEx, Reth SDK | Reading the actual ADD opcode, custom opcodes, NodeBuilder for App-chains. Active-learning style — Predict / Find-in-repo / Anti-fluency prompts throughout |
+| **Expert** | Performance engineering, MDBX, Tokio internals, procedural macros, custom precompiles, MPT, MEV pipelines, zkEVM, production fork ops | Foundry cheatcodes as precompiles, real Steel zkVM guest, MEV decoding from `op-bridge` |
 
-**Total: 8 courses (4 × EN + JA), 16 modules, 74 lessons.**
+**Total: 10 courses (5 × EN + JA), 18 modules, 90 lessons.**
 
-All four tiers are free. Reading every lesson works without an account; sign-in only enables progress tracking and shows up on the user's profile page.
+All courses are free. Reading every lesson works without an account; sign-in only enables progress tracking and shows up on the user's profile page.
 
 ---
 
@@ -76,7 +77,7 @@ cp .env.example .env
 # STRIPE_SECRET_KEY (test key OK for dev), and
 # NEXT_PUBLIC_GITHUB_SPONSORS_URL
 
-# Push schema and seed all 74 lessons
+# Push schema and seed all 90 lessons
 npx prisma db push
 npx prisma db seed
 
@@ -88,7 +89,7 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ### What `db seed` does
 
-The seeder lives in `prisma/seed.ts` and pulls from 8 individual tier files (`prisma/seed-reth-{beginner,fundamentals,advanced,expert}-{en,ja}.ts`). It clears all course tables and re-creates 8 courses / 16 modules / 74 lessons in one shot.
+The seeder lives in `prisma/seed.ts` and pulls from 10 individual course files (`prisma/seed-reth-{beginner,fundamentals,bridge-to-advanced,advanced,expert}-{en,ja}.ts`). It clears all course tables and re-creates 10 courses / 18 modules / 90 lessons in one shot.
 
 ### Re-seeding without losing user data
 
@@ -111,7 +112,8 @@ rethlab/
 │   ├── seed.ts                                # Top-level orchestrator
 │   ├── seed-reth-beginner-{en,ja}.ts          # 7 lessons each
 │   ├── seed-reth-fundamentals-{en,ja}.ts      # 11 lessons each (incl. Foundry)
-│   ├── seed-reth-advanced-{en,ja}.ts          # 9 lessons each
+│   ├── seed-reth-bridge-to-advanced-{en,ja}.ts # 7 lessons each
+│   ├── seed-reth-advanced-{en,ja}.ts          # 10 lessons each (incl. orientation)
 │   └── seed-reth-expert-{en,ja}.ts            # 10 lessons each
 ├── src/
 │   ├── app/                                   # Next.js App Router pages

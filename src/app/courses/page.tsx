@@ -11,6 +11,7 @@ const DIFFICULTY_COLORS = {
   BEGINNER: 'bg-green-500/10 text-green-400 border-green-500/20',
   INTERMEDIATE: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
   ADVANCED: 'bg-red-500/10 text-red-400 border-red-500/20',
+  EXPERT: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
 };
 
 export default function CourseCatalogPage() {

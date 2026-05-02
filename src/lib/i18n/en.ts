@@ -111,7 +111,7 @@ export const en = {
     },
     paths: {
       title: 'Training Path',
-      subtitle: 'Four tiers, one outcome: read, extend, and ship custom Rust EVM infrastructure.',
+      subtitle: 'Five courses, one outcome: read, extend, and ship custom Rust EVM infrastructure.',
       fundamentals: {
         title: 'Beginner',
         description: 'Why the Rust Ethereum stack matters, environment setup, and your first Alloy script.',
@@ -161,6 +161,7 @@ export const en = {
       beginner: 'Beginner',
       intermediate: 'Intermediate',
       advanced: 'Advanced',
+      expert: 'Expert',
     },
     detail: {
       enroll: 'Enroll Now',
@@ -270,7 +271,7 @@ export const en = {
     },
     use: {
       title: 'What your support funds',
-      item1: 'Keeping the curriculum (4 tiers, ~74 lessons) free and open for everyone',
+      item1: 'Keeping the curriculum (5 courses, ~90 lessons) free and open for everyone',
       item2: 'Keeping every lesson updated against upstream Reth / Revm / Alloy / Foundry',
       item3: 'Hosting, infrastructure, and translation work',
     },
@@ -323,7 +324,7 @@ export const en = {
   about: {
     title: 'About RethLab',
     subtitle: 'The new wave of EVM is purpose-built L1s — Hyperliquid for perps, Tempo for payments, Base for the consumer L2. They all run on Reth, Revm, Alloy, Foundry. RethLab is the training program that walks you through that source, line by line.',
-    bio: 'Reth, Revm, and Alloy are at the heart of the most performant chains being built today. But the on-ramp from "I know some Rust" to "I can write production EVM infrastructure" is brutal — the docs are scattered, the source is dense, and there is no clear path. RethLab is that path: 4 tiers, ~74 lessons, every advanced concept grounded in actual production source. Finish it and you can read Reth\'s stages, write custom Revm precompiles, ship an ExEx, and apply for grant work with code samples that prove you understand the stack.',
+    bio: 'Reth, Revm, and Alloy are at the heart of the most performant chains being built today. But the on-ramp from "I know some Rust" to "I can write production EVM infrastructure" is brutal — the docs are scattered, the source is dense, and there is no clear path. RethLab is that path: 5 courses, ~90 lessons, every advanced concept grounded in actual production source. Finish it and you can read Reth\'s stages, write custom Revm precompiles, ship an ExEx, and apply for grant work with code samples that prove you understand the stack.',
     background: {
       tradfi: 'Why Rust',
       tradfiDetail: 'Memory safety, zero-cost abstractions, and an ecosystem mature enough to power serious blockchain infrastructure.',
@@ -370,11 +371,13 @@ export const en = {
       title: 'Why RethLab?',
     },
     tracks: {
-      title: '4 Tiers, One Outcome',
-      subtitle: 'Finish all four and you can read, extend, and ship the Rust EVM stack used by Paradigm, Hyperliquid, and Tempo.',
+      title: '5 Courses, One Outcome',
+      subtitle: 'Finish all five and you can read, extend, and ship the Rust EVM stack used by Paradigm, Hyperliquid, and Tempo.',
       basicsDesc: 'Why the Rust EVM stack matters, environment setup, and your first Alloy script that hits a real RPC.',
       fundamentals: 'Fundamentals',
       fundamentalsDesc: 'Alloy types, providers, signing, and the EVM concepts (stack, memory, opcodes, gas) you need before reading Revm.',
+      bridge: 'Bridge to Advanced',
+      bridgeDesc: 'EVM at the bytes level (dispatch loop, world state, gas, call frames, reorgs) and intermediate Rust (generics, ?Sized, dyn, Arc, unsafe, macros) — the gap Solidity-native devs hit when they reach Advanced.',
       hyperliquid: 'Advanced',
       hyperliquidDesc: 'Revm interpreter internals, custom opcodes, the Database trait, Reth Staged Sync, and Execution Extensions.',
       expertDesc: 'Performance engineering, MDBX storage, Tokio internals, procedural macros, custom precompiles, MPT, MEV pipelines, zkEVM, and shipping a custom Reth fork.',
