@@ -3,6 +3,7 @@ import { seedRethBeginnerJA } from './seed-reth-beginner-ja';
 import { seedRethBeginnerEN } from './seed-reth-beginner-en';
 import { seedRethFundamentalsJA } from './seed-reth-fundamentals-ja';
 import { seedRethFundamentalsEN } from './seed-reth-fundamentals-en';
+import { seedRethBridgeToAdvancedEN } from './seed-reth-bridge-to-advanced-en';
 import { seedRethAdvancedJA } from './seed-reth-advanced-ja';
 import { seedRethAdvancedEN } from './seed-reth-advanced-en';
 import { seedRethExpertJA } from './seed-reth-expert-ja';
@@ -44,6 +45,10 @@ async function main() {
   await seedRethFundamentalsEN(prisma);
   await seedRethFundamentalsJA(prisma);
   console.log('  Seeded Fundamentals (EN + JA)');
+
+  console.log('\nSeeding Bridge to Advanced course...');
+  await seedRethBridgeToAdvancedEN(prisma);
+  console.log('  Seeded Bridge to Advanced (EN)');
 
   console.log('\nSeeding Advanced courses...');
   await seedRethAdvancedEN(prisma);
