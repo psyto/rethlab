@@ -512,6 +512,373 @@ Advanced lesson 5 (カスタム precompile) でガス価格モデル、もしく
               ],
             },
           },
+          {
+            title: 'ブロックレベルの Ethereum',
+            sortOrder: 1,
+            lessons: {
+              create: [
+                {
+                  title: 'ブロック・レシート・reorg',
+                  slug: 'blocks-receipts-reorgs-ja',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# ブロック・レシート・reorg
+
+ここまで 1 トランザクションずつ扱ってきました。チェーンは別のレベルで動きます: トランザクションの **ブロック**、何をしたかの **レシート**、そして時々起きる **reorg** (チェーンが直近の歴史を書き換えること)。
+
+これは Reth の Staged Sync と ExEx の Advanced レッスンが暗黙の前提とするレイヤー。
+
+## ブロック — 3 つの部分
+
+各 Ethereum ブロックは概念的に 3 つの束：
+
+| 部分 | 中身 | ハッシング |
+| :--- | :--- | :--- |
+| **ヘッダー** | メタデータ: 親ハッシュ、state root、tx root、receipts root、ガスリミット、タイムスタンプ等 | ブロックの「身元」ハッシュは keccak256(header) |
+| **ボディ** | トランザクションの実リスト、順序付き | ヘッダーの tx root はこのリストの Merkle root |
+| **レシート** | tx ごと 1 レシート: ステータス、使用ガス、発行ログ/イベント | ヘッダーの receipts root がこのリストにコミット |
+
+「ブロックハッシュ 0x123...」と聞いたら、それはヘッダーの keccak256 — ボディとレシートはヘッダーを *経由して* コミットされるが、ハッシュに直接は入らない。
+
+### なぜヘッダーに 3 つの root?
+
+ヘッダーは 3 つの Merkle root を持つ: state、transactions、receipts。各 root はチェーンデータの異なる部分にコミット：
+
+- **\`state_root\`**: このブロックの tx 実行 *後* のワールドステート MPT のルート
+- **\`transactions_root\`**: このブロックの全 tx の MPT のルート (「tx X はブロック N にあった」を証明できる)
+- **\`receipts_root\`**: 全レシートの MPT のルート (「tx X がログ Y を発行した」を証明できる)
+
+ライトクライアントはヘッダーだけを持ち、proof を歩いてどれでも検証可能 (Expert で見ます)。
+
+## レシートとログ — 監査証跡
+
+各トランザクションは **レシート** を生成：
+
+\`\`\`
+struct Receipt {
+    status: bool,           // 成功 / 失敗
+    cumulative_gas_used: u64,
+    logs: Vec<Log>,
+    bloom: BloomFilter,     // ログフィルタ、高速検索用
+}
+
+struct Log {
+    address: Address,       // 発行コントラクト
+    topics: Vec<B256>,      // 最大 4 つ、indexed
+    data: Bytes,            // unindexed payload
+}
+\`\`\`
+
+重要なポイントが 2 つ：
+
+### 1. ログが Solidity \`event\` をオフチェーンに届ける手段
+
+Solidity で \`emit Transfer(from, to, amount)\` を書くと、EVM は \`LOG3\` opcode を実行：
+
+- topic[0] = keccak256("Transfer(address,address,uint256)") — イベントシグネチャ
+- topic[1] = from (indexed)
+- topic[2] = to (indexed)
+- data = ABI エンコード済み amount (indexed でない)
+
+ログがレシートに入る。インデクサ・MEV ボット・ExEx すべてがこれを消費する。
+
+### 2. ブルームフィルタは「このブロックは X に触れたか?」の高速チェック
+
+各ブロックの receipts root は **256 バイトのブルームフィルタ** を持ち、ブロック内の全ログアドレスとトピックを要約。ライトクライアントとインデクサがこれを使って、自分が気にするアドレスを言及していないブロックを高速にスキップする — フルレシートをダウンロードせずに。
+
+Advanced lesson 7 (本番 MEV) で ExEx コードがアドレスでログをフィルタする時、このブルームが事前フィルタを高速にする。
+
+## ブロックは実際どう作られるか
+
+典型的なブロックライフサイクル：
+
+\`\`\`
+1. ブロックプロポーザ (validator) がスロット N で選ばれる
+2. プロポーザが mempool (もしくはビルダー) から保留中 tx を集める
+3. 各 tx について (順番に):
+   a. フレームを開いて EVM 実行
+   b. 成功ならワールドステート更新、失敗なら巻き戻し
+   c. レシート追記
+4. root 計算: state_root, transactions_root, receipts_root
+5. ログからブルームフィルタ計算
+6. 全 root + parent_hash + timestamp + ... でヘッダー構築
+7. 署名して伝播
+\`\`\`
+
+このブロックを実行するフルノードは **同じ実行を** 検証のために行う — ボディを取得、各 tx を実行、結果の state_root がヘッダーに一致するか確認。一致しなければブロックは却下。
+
+Advanced lesson 4 で Reth の \`ExecutionStage\` を読む時、それが正にこの検証パス: 各ブロックの tx を再生し、状態変更を蓄積、結果のルートを検証。
+
+## Reorg — チェーンが自分を書き換える
+
+通常チェーンは線形に伸びる：
+
+\`\`\`
+... → block 100 → block 101 → block 102 → block 103
+\`\`\`
+
+しかし時々、2 人の validator が同じスロットでブロックを提案したり、ネットワーク分断が回復したりすると、**正準チェーンが切り替わる**。tip の数ブロックが *巻き戻され*、チェーンは別のパスで再延伸：
+
+\`\`\`
+                                    ┌─→ 102b → 103b   (新しい正準)
+... → 100 → 101 → 102a → 103a ──────┘
+                  └────────── 巻き戻し (もう正準ではない)
+\`\`\`
+
+これが **reorg**。ノードの視点から：
+
+1. 新チェーンセグメント到着、現在より長いか attestation が多い
+2. 共通祖先まで遡る (例だと block 101)
+3. 102a, 103a の状態変更を **巻き戻す** (逆順で)
+4. 102b, 103b の状態変更を **適用**
+5. 新正準 tip は 103b
+
+モダン Ethereum (Merge 後 PoS) では **1-2 ブロックより深い reorg は稀** だが起きる。validator が proposal 欠落や equivocation 周りで再構成する。
+
+### オフチェーン消費者にとっての意味
+
+「ブロック N コミット → 自分の DB に txs 書き込み」というインデクサを書いて、ブロック N が reorg されたら：
+
+- DB に **正準チェーン上で起きなかった** トランザクションの行が残る
+- reorg 検知時にそれらの行を **削除する必要** がある
+- そして新正準ブロック N の tx の行を再挿入
+
+これが **まさに** ExEx に 3 通知タイプがある理由 — \`ChainCommitted\`、\`ChainReorged\`、\`ChainReverted\`。\`ChainCommitted\` だけ扱う naive インデクサは reorg のたびに導出状態を破壊する。(Advanced lesson 6 で詳しく扱う。)
+
+### なぜ Reth の Staged Sync が対称なのか
+
+Reth の各 Stage は \`execute\` (forward) と \`unwind\` (backward) を持つ。Stage は reorg を「特殊ケース」として設計されていない — reorg は **通常運用**、同じトレイトでモデル化される。1000 ブロック前進: \`execute\`。reorg で 3 ブロック後退: \`unwind\`。同じコードパス、逆方向。
+
+これは Advanced lesson 4 (Staged Sync アーキテクチャ) で評価できる設計判断。
+
+## 読み物リスト
+
+1. **[Etherscan](https://etherscan.io) で実ブロックを探す**。ヘッダーの「Click to see More」をクリックして全フィールドを見る。parentHash、stateRoot、transactionsRoot、receiptsRoot、logsBloom を見つける。
+2. **そのトランザクションの 1 つを開いて** Logs タブを見る。各ログが Address・Topics・Data を持つ — それが上の構造。
+3. **本番での reorg の感覚を得るには** [reth.rs ブログ](https://reth.rs/) や Ethereum クライアントのリリースノートで「reorg」を検索 — 運用者は reorg ハンドリングの正しさを大いに気にする。
+
+## このレッスンで持ち帰るもの
+
+- **ブロック** = ヘッダー + ボディ + レシート。ヘッダーは 3 つの Merkle root (state・txs・receipts) を持つ。
+- **レシート** が各 tx のステータス・ガス・ログを記録 (Solidity \`event\` は LOG opcode 経由でログになる)。
+- **Reorg** は直近の歴史を書き換える。オフチェーン消費者は巻き戻しを明示的に扱う必要がある。
+- Reth の Staged Sync は **対称** (execute / unwind) — それは reorg が例外ではなく通常運用だから。
+
+Advanced lesson 4 で Stage トレイトを歩く時、lesson 6 で ExEx 通知タイプを歩く時、モデルが既に頭にある。実装する Rust を読むだけ。`,
+                },
+              ],
+            },
+          },
+          {
+            title: 'ソース読みのための Rust',
+            sortOrder: 2,
+            lessons: {
+              create: [
+                {
+                  title: 'Generics・trait bounds・?Sized・dyn vs impl',
+                  slug: 'rust-generics-traits-bounds-ja',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 15,
+                  xpReward: 30,
+                  content: `# Generics・trait bounds・?Sized・dyn vs impl
+
+これが \`pub fn add<IT: ITy, H: ?Sized>(...)\` を見て怯まないで読めるようになるレッスン。Reth と Revm のソースは **generics でぎっしり** — 関数シグネチャに型パラメータが 3 つあるのは普通。このレッスンでその機械を 1 つずつ歩きます。
+
+## Generics 101 — 基本の形
+
+ジェネリック関数は **型パラメータ** を山括弧で取り、それを通常の型のように使う：
+
+\`\`\`rust
+fn first<T>(items: &[T]) -> Option<&T> {
+    items.first()
+}
+
+let nums = [1, 2, 3];
+let first_num = first(&nums);          // T は i32 と推論
+
+let words = ["hello", "world"];
+let first_word = first(&words);        // T は &str と推論
+\`\`\`
+
+コンパイラは **モノモーフ化** する — 各具象 \`T\` 用に \`first\` の特殊化コピーを生成する。\`first::<i32>\` と \`first::<&str>\` はコンパイル後のバイナリでは別関数で、両方とも手書きの非ジェネリックコードと比べて実行時コストゼロ。
+
+## Trait bounds — 「T はこれらの操作をサポートする必要がある」
+
+裸の \`<T>\` は「T は何でも良い」と言う。多くの場合 T で *何かする* 必要がある — メソッド呼び出し、比較、フォーマット。そこで **trait bounds** が登場：
+
+\`\`\`rust
+use std::fmt::Display;
+
+fn print_first<T: Display>(items: &[T]) {
+    if let Some(first) = items.first() {
+        println!("{}", first);          // T: Display が要る
+    }
+}
+\`\`\`
+
+\`<T: Display>\` は「T は Display トレイトを実装している必要がある」と読む。これがないとコンパイラは拒否 — T が \`{}\` フォーマッタを持つか知らない。
+
+\`+\` で複数 bound：
+
+\`\`\`rust
+fn process<T: Display + Clone>(item: T) {
+    let copy = item.clone();
+    println!("{} (cloned: {})", item, copy);
+}
+\`\`\`
+
+## \`where\` 節 — 同じこと、別構文
+
+bound が長くなるとシグネチャの下に移動：
+
+\`\`\`rust
+fn process<T>(item: T)
+where
+    T: Display + Clone + Send + 'static,
+{
+    // 本体
+}
+\`\`\`
+
+これは純粋に表記の話。\`<T: Bound>\` と \`where T: Bound\` は完全に同じ意味。Reth コードは長さに応じて両方使う。
+
+## Sized — あなたが知らなかった暗黙 bound
+
+Rust のすべての型パラメータ \`T\` には **暗黙の \`Sized\` bound** がある。つまり \`<T>\` は静かに \`<T: Sized>\` になっている。\`Sized\` は「コンパイラがコンパイル時に型のサイズを知っている」という意味。
+
+ほとんどの型は Sized: \`i32\` は 4 バイト、\`String\` は 24 バイト (ポインタ + 長さ + 容量)、自作の struct は既知のサイズ。
+
+一部の型は **Sized でない**：
+
+- \`str\` (裸の文字列型、\`&str\` ではない) — 長さは中身次第
+- \`[i32]\` (裸のスライス型、\`&[i32]\` ではない) — 同様
+- \`dyn Trait\` (これから扱う) — 裏の具象型は何でもありうる
+
+\`<T: ?Sized>\` と書くと、**暗黙の Sized bound から opt out している**。T は unsized でも良くなる。\`?\` は「Sized かもしれない、そうでないかもしれない」。
+
+なぜそうするか? **\`&T\`** と **\`Box<T>\`** は T が \`?Sized\` なら unsized 型を保持できるから。\`?Sized\` がないと \`fn foo<T>(x: &T)\` を書いて \`&dyn Trait\` を渡すことは絶対にできない — コンパイラは \`T: Sized\` を強制し、\`dyn Trait\` はそれを満たさない。
+
+Revm がこう書く時：
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+\`\`\`
+
+\`H: ?Sized\` は *まさに* \`H\` が \`dyn Host\` になれるため。関数は \`&MyConcreteHost\` (Sized) と \`&mut dyn Host\` (unsized、\`?Sized\`) の両方で動く。
+
+**この 1 文字 (\`?\`) が、関数がトレイトオブジェクトを受け入れるかを決める**。
+
+## \`dyn Trait\` — トレイトオブジェクト
+
+\`dyn Trait\` は **トレイトオブジェクト**。「ポインタ + vtable」のペア：
+
+- ポインタが具象値を指す
+- vtable は関数ポインタの表 — トレイトの各メソッドに 1 つ
+
+\`dyn Trait\` で \`obj.method()\` を呼ぶと、コンパイラは **vtable ルックアップ** を吐く: vtable からメソッドポインタをロード、間接呼び出し。これが **動的ディスパッチ** — 実行時に解決される。
+
+\`dyn Trait\` 自体は unsized (ポインタの裏の具象型はどんなサイズでもありうる)。だから常に何らかのポインタ越しに見る：
+
+\`\`\`rust
+&dyn Trait        // 共有参照
+&mut dyn Trait    // 排他参照
+Box<dyn Trait>    // 所有、ヒープ確保
+Rc<dyn Trait>     // 共有所有、シングルスレッド
+Arc<dyn Trait>    // 共有所有、スレッドセーフ
+\`\`\`
+
+混在実装のベクタ：
+
+\`\`\`rust
+trait Greet { fn greet(&self); }
+struct En; struct Ja;
+impl Greet for En { fn greet(&self) { println!("Hi"); } }
+impl Greet for Ja { fn greet(&self) { println!("こんにちは"); } }
+
+let mixed: Vec<Box<dyn Greet>> = vec![Box::new(En), Box::new(Ja)];
+for g in &mixed { g.greet(); }
+\`\`\`
+
+\`dyn\` がないと不可能 — \`Vec<T>\` は全要素が同じ具象型である必要がある。
+
+## \`impl Trait\` — 静的な対応物
+
+\`impl Trait\` は似て見えるが根本的に違う：
+
+\`\`\`rust
+fn make_greeter(lang: &str) -> impl Greet {
+    if lang == "ja" { Ja } else { En }
+    // ❌ コンパイルしない — 戻り型は単一の具象型でないと
+}
+\`\`\`
+
+戻り位置の \`impl Trait\` は「Trait を実装する *特定の型* を返すが、呼び出し元から隠している」と意味する。**静的ディスパッチ** — コンパイラが 1 つの型を選び、モノモーフ化、vtable なし。
+
+トレードオフ：
+
+| | \`impl Trait\` | \`dyn Trait\` |
+| :--- | :--- | :--- |
+| **ディスパッチ** | 静的 (コンパイル時) | 動的 (実行時 vtable) |
+| **速度** | 速い (インライン化可能) | 少し遅い (1 度の間接呼び出し) |
+| **異種コレクション** | ❌ 不可 | ✅ 可 (Vec<Box<dyn Trait>>) |
+| **オブジェクト安全性** | 関係なし | 必要 (一部のトレイトはオブジェクト安全でない) |
+
+Reth と Revm は **両方** 使う。\`impl\` がデフォルトで、\`dyn\` は異種性が重要なケース (stage のリスト、プラグイン点) のために予約。
+
+## オブジェクト安全性 — \`dyn Trait\` がコンパイルしない時
+
+\`dyn Trait\` として使うにはトレイトが **オブジェクト安全** でなければならない。ルールは微妙だが、最頻 gotcha：
+
+- トレイト内の **ジェネリックメソッド禁止** (ライフタイム以外で)
+- \`Self: Sized\` でないメソッドの **\`Self\` 戻り型禁止**
+- **関連定数禁止**
+
+\`Box<dyn MyTrait>\` を試してトレイトがオブジェクト安全でないと、「cannot be made into an object」のようなコンパイルエラーが出る。修正は通常、問題のメソッドに \`where Self: Sized\` を追加するか、トレイトを分割する。
+
+Reth/Revm コードの *消費者* としてはあまりヒットしないが、なぜソースの一部のトレイトが \`dyn\` 化できないかを説明する。
+
+## 全部まとめる — 実シグネチャを読む
+
+戻ろう：
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+\`\`\`
+
+これで単語ずつ読める：
+
+- \`pub fn add\` — \`add\` という名前のパブリック関数
+- \`<IT: ITy, H: ?Sized>\` — 型パラメータ 2 つ:
+  - \`IT\` は \`ITy\` トレイトを実装する必要がある (interpreter-types マーカー — 通常 vs トレース vs サンドボックス)
+  - \`H\` は unsized で良い (なので \`dyn Host\` になれる)
+- \`context: Ictx<'_, H, IT>\` — 両方でパラメータ化されたコンテキストを取る
+- \`-> Result\` — Result を返す
+
+同じ関数、**2 つの特殊化パス**: 1 つは \`(具象IT, 具象Host)\` 用 (完全モノモーフ化、最速)、もう 1 つは \`(具象IT, dyn Host)\` 用 (Host 呼び出しは vtable)。\`?Sized\` が 2 つ目のパスを可能にする。
+
+これが **Revm が「モジュラー」である理由**: 同じ opcode 関数が異なる実行モード用に複数バイナリにコンパイルされ、ディスパッチは実行時の分岐ではなく型システムレベルで決まる。
+
+## 読み物リスト
+
+1. **Rust Book 章 10 (Generics, Traits, Lifetimes)、章 17 (Trait Objects)** — 開いて、せめてセクション見出しだけでもスキム。無料リファレンス。
+2. **\`reth/crates\` で型パラメータが 3 つ以上の関数を見つける**。シグネチャを読む。各部品を「この関数はどんな具象形で valid か」に翻訳できるはず。
+3. **思考実験**: \`add\` シグネチャの \`H\` から \`?Sized\` を取り除いたら、\`&mut dyn Host\` を渡す呼び出し元にコンパイラはどんな具体的なエラーを出す? (答え: 「the trait \`Sized\` is not implemented for \`dyn Host\`」)
+
+## このレッスンで持ち帰るもの
+
+- **Generics + bounds** は Rust 版の「インターフェース」: 「T は何でもいいが、これらの操作をサポートする必要がある」。
+- **\`Sized\` は暗黙** に各型パラメータに付く; \`?Sized\` が opt out してパラメータをトレイトオブジェクトにできるようにする。
+- **\`dyn Trait\`** は実行時ディスパッチのポインタ + vtable; **\`impl Trait\`** はコンパイル時モノモーフ化。
+- Revm の重い generics 使用は **型レベルでのモジュラリティ** — 同じコード、複数特殊化。
+
+Advanced lesson 1 でいきなり 1 行目に型パラメータ 3 つと \`?Sized\` をぶつけられた時、それを 5 つの威圧的なトークンではなく、1 つの繋がった文として読めるはず。`,
+                },
+              ],
+            },
+          },
         ],
       },
     },
