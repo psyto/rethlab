@@ -984,7 +984,9 @@ if let Some(committed_chain) = notification.committed_chain() {
                   xpReward: 25,
                   content: `# Reth SDK — App-chainを作る
 
-ExExは既存のEthereumノードを拡張しますが、Reth SDKは **コンポーネントを組み立てて自前のApp-chain** をRustで構築できる仕組み。
+ExExは既存のEthereumノードを拡張しますが、Reth SDKは **コンポーネントを組み立てて自前のApp-chain** をRustで構築できる仕組み。これが「purpose-built EVM L1」が thesis から **コンパイル可能なバイナリ** になるレッスン。
+
+> 🛑 **スクロールする前に予測。** あなたが Tempo（payments 特化型 L1）を作るとして、Reth のどのコンポーネントを差し替える必要がある? どれはそのまま使える? 例を読む前に 3〜4 個の swap をリストアップ。
 
 ## 本物のカスタムノード main.rs — 一字一句そのまま
 
@@ -1025,7 +1027,11 @@ fn main() {
 }
 \`\`\`
 
-これが動くチェーンバイナリ。チェーン内の4つの呼び出しを読み解く：
+これが動くチェーンバイナリ。約 30 行。
+
+> 🛑 **止まる。スクロールせずに、4 つのチェーン呼び出し** (\`with_types\`, \`with_components\`, \`with_add_ons\`, \`launch\`) **を挙げてください。** それぞれが何を決めている? 予想を保持 — 下で答え合わせ。
+
+チェーン内の4つの呼び出しを読み解く：
 
 ### \`.with_types::<EthereumNode>()\`
 **型バンドル** を選択 — chain spec、primitives（block・tx・header型）、engine API。\`EthereumNode\` がデフォルトを提供；\`OpNode\`、独自型、任意の \`NodeTypes\` impl に置換可能。
@@ -1038,6 +1044,8 @@ fn main() {
 - \`.payload(...)\` — カスタムブロックビルダー
 - \`.executor(...)\` — カスタムEVMエグゼキュータ（カスタムOpcode/precompileがここに入る）
 - \`.consensus(...)\` — カスタムコンセンサス
+
+> 🛑 **理解度チェック。** 上のコンポーネントから *1 つ* 選ぶ。差し替えるために実装するトレイトをスケッチしてください。(メソッドシグネチャだけで OK、本物の impl は不要。) 書けないなら、カスタマイズポイントをまだ「見えて」いません — そのビルダーのソースを開いてから次へ。
 
 ### \`.with_add_ons(...)\`
 RPCネームスペース、engine API拡張、ExExインストール。\`EthereumAddOns::default()\` で標準Ethereum RPC；ここに \`.install_exex(...)\` をチェインできる。
@@ -1072,11 +1080,18 @@ flowchart TB
 
 ## 本番採用例
 
+> 🛑 **読む前に予測。** 各チェーンが Reth のどのコンポーネントを差し替えているか、3 つすべてに対して推測：
+> - **Hyperliquid HyperEVM**
+> - **Tempo**
+> - **Berachain (bera-reth)**
+>
+> その後、下で確認。
+
 - **Hyperliquid HyperEVM** — HyperBFT + カスタム実行 + オーダーブック直結DB
 - **Tempo** — 支払い特化の優先レーン
 - **Berachain (bera-reth)** — Proof of Liquidity コンセンサス
 
-これらは1つ以上の \`with_components\` ビルダーを自前のものに差し替えています。上記の枠組みが彼らの拡張ベース。
+これらは1つ以上の \`with_components\` ビルダーを自前のものに差し替えています。上記の枠組みが彼らの拡張ベース。**予想と比較** — 当たったのは何? 意外だったのは何?
 
 ## 練習
 
@@ -1085,7 +1100,9 @@ flowchart TB
 3. **プールに入る各トランザクションのガス価格をログ出力** するように変更
 4. dev chain に対して \`cargo run\`。カスタムログが発火するのを観察
 
-これで1行のコンポーネント差し替えで動くものを出せました。同じパターンをconsensusやexecutorに拡大すればHyperEVMクラスのインフラ。`,
+これで1行のコンポーネント差し替えで動くものを出せました。同じパターンをconsensusやexecutorに拡大すればHyperEVMクラスのインフラ。
+
+> 最終チェック: なぜ Reth SDK のコンポーネントビルダーパターンが、コードベース全体を fork するより purpose-built L1 のリリースに有用なのか、一文で。答えに「変更する部分だけ自分のものにする」(you only own the parts you change) という意味の一節がないなら、\`with_components\` を読み直し — それがアーキテクチャ全体のアイデア。`,
                 },
                 {
                   title: 'Expert ティアへの橋渡し',
@@ -1096,9 +1113,19 @@ flowchart TB
                   xpReward: 20,
                   content: `# Expert ティアへの橋渡し
 
-**Alloy → Revm → Reth（Staged Sync、ExEx、カスタム NodeBuilder）** の階段を上ってきました。3プロジェクトすべてのソースコードを「目的を持って」読める段階です。
+> 🛑 **ゲートチェック。** Advanced 終了を主張する前に、**前のレッスンに戻らずに** これらに答えてください — 声に出すか紙に書いて：
+>
+> 1. \`popn_top!\` は何に展開される? なぜ \`unsafe\` 内で \`unwrap_unchecked()\` を使うのか?
+> 2. \`Database\` と \`DatabaseRef\` がなぜ別トレイトなのか? \`auto_impl\` リストの非対称（\`&mut, Box\` vs \`&, &mut, Box, Rc, Arc\`）が何を語っているか?
+> 3. \`ExExEvent::FinishedHeight\` が Reth の pruner に何を伝えるか — 忘れた場合のディスク帰結は?
+> 4. なぜ \`MerkleStage\` がハッシング後で、間に挟まれていないのか?
+> 5. Tempo のような purpose-built L1 を出荷するために、Reth のどのコンポーネントを差し替えるか?
+>
+> **正解が 4 未満なら?** 進まないこと。該当の Advanced レッスンに戻る。Expert はこれらを「再調査する概念」ではなく「流暢な語彙」として前提します。
 
-しかし「読める」は半分。**Expert** ティアは「読める」から「**本番に出せる**」への跳躍です。
+ゲートを通過したら: **Alloy → Revm → Reth（Staged Sync、ExEx、カスタム NodeBuilder）** の階段を上ってきたことになります。3プロジェクトすべてのソースを目的を持って読めます。
+
+しかし「読める」は半分。**Expert** は「読める」から「**本番に出せる**」への跳躍。
 
 ## Expert で待っていること
 
@@ -1116,26 +1143,33 @@ flowchart TB
 
 ## マインドセットの転換
 
-Advanced は **構造** を教えました。Expert はその構造の **背後にある決定** を教えます：
+Advanced は **構造** を教えました。Expert はその構造の **背後にある決定** を教えます。
 
-- *なぜ* Reth は MDBX で、RocksDB ではないのか？（コンパクションストールでの読み取りレイテンシ）
-- *なぜ* Revm は pop / pop / push ではなく1つpopして参照経由で書き戻すのか？（ADD あたりメモリ書き込み1回減）
-- *なぜ* \`Database::tx()\` に \`#[track_caller]\` が必要か？（パニックがバグった呼び出し元を指す、トレイトではなく）
-- *なぜ* Foundry の cheatcodes は Opcode ではなく precompile なのか？（バニラEVMとのコンセンサス互換性）
+> 🛑 **私の答えを読む前に、答えを予測してください。** 先に意見を持つ — 間違っていてもいい。インフラを出荷するエンジニアはそうします。
+>
+> - *なぜ* Reth は MDBX で、RocksDB ではないのか?
+> - *なぜ* Revm は pop / pop / push ではなく 1 つ pop して参照経由で書き戻すのか?
+> - *なぜ* \`Database::tx()\` に \`#[track_caller]\` が必要か?
+> - *なぜ* Foundry の cheatcodes は Opcode ではなく precompile なのか?
 
-この *なぜ* を内部化できれば、Paradigm のエンジニアや Hyperliquid の validator 運用者と設計判断を議論できる — それが grant 応募可能な仕事への入口です。
+---
+
+私の答え:
+
+- **MDBX vs RocksDB** — コンパクションストールでの読み取りレイテンシ。
+- **pop-1-write-through** — ADD あたりメモリ書き込みが 1 回減る。
+- **\`#[track_caller]\`** — パニックのバックトレースがトレイトメソッドではなく、バグった呼び出し元を指す。
+- **cheatcodes が precompile** — バニラ EVM とのコンセンサス互換性 (precompile は予約アドレス、新 Opcode ではない — fork でもメインネット bytecode をパースできる)。
+
+ポイントは私の言い回しと一致したかではなく: **読む前に意見があったか?** 一度この *なぜ* を内部化すれば、Paradigm のエンジニアや Hyperliquid の validator 運用者と設計判断を議論できる — それが grant 応募可能な仕事への入口です。
 
 ## 進む前に
 
-自分の言葉で説明できるか確認：
+冒頭のゲートチェックが楽だったなら、Expert に飛び込んでください。
 
-1. \`popn_top!\` が何をしていて、*なぜ* \`unwrap_unchecked()\` を使っているか
-2. \`Database\` と \`DatabaseRef\` がなぜ別トレイトに分かれているか
-3. \`ExExEvent::FinishedHeight\` が Reth の pruner に何を伝えるか
+5 問のどれかで前のレッスンに戻った場合 — 今、再読してください。Expert は密度が高い。リンクされたコードをローカルで実行しながら読むのは、もはやオプションではありません。
 
-ぼんやりしている項目があれば、Expert に進む前に該当の Advanced レッスンを再読してください。Expert は密度が高く、リンクされたコードをローカルで実行しながら読むのが効果的です。
-
-> インフラレイヤーの学習は、最初の3ヶ月が一番苦しいです。ドキュメントが不十分なことも多く、**「ソースコードこそが最強の教科書」**。Expert はこの教訓が報われるティアです。`,
+> インフラレイヤーの学習は、最初の 3 ヶ月が一番苦しいです。ドキュメントが不十分なことも多く、**「ソースコードこそが最強の教科書」**。Expert はこの教訓が報われるティアです。`,
                 },
                 {
                   title: 'Advancedまとめクイズ',
@@ -1149,70 +1183,70 @@ Advanced は **構造** を教えました。Expert はその構造の **背後�
 Revm内部・ExEx・Reth SDKの理解度を確認します。`,
                   quizQuestions: [
                     {
-                      question: 'Revmの `crates/interpreter` フォルダで主に行われていることは？',
+                      question: 'Revm の `crates/interpreter` の責務として正しいものは？',
                       options: [
-                        'ブロックの同期とP2P通信',
-                        'EVMのOpcodeをRustで一つずつ実装している',
-                        'JSON-RPCサーバーの定義',
-                        'コンセンサスのリーダー選出',
+                        'EVM の型システムプリミティブ（Address・U256・B256）の定義',
+                        'EVM の各 Opcode を Rust で実装している',
+                        'Database トレイトと state-supply インターフェースを保持する',
+                        '命令ディスパッチテーブルを実行時に構築する',
                       ],
                       correctIndex: 1,
-                      explanation: 'crates/interpreterはADD・MUL・PUSH・JUMPなど、各Opcodeの実行ロジックが集まる場所です。',
+                      explanation: 'crates/interpreter は ADD・MUL・PUSH・JUMP・SLOAD・SSTORE 等の各 Opcode 実装を持ちます。(Primitives は crates/primitives。Database トレイトは crates/database-interface。ディスパッチテーブルはコンパイル時構築、実行時ではない。) 実行時ディスパッチと答えたなら、カスタム Opcode のレッスンを再読してください。',
                     },
                     {
-                      question: 'Revmに「カスタムOpcodeを追加する」ことの意味として正しいのは？',
+                      question: 'Revm ベースの fork に「カスタム Opcode を追加する」ことで実際にできることは？',
                       options: [
-                        'メインネットEthereumで自分専用の高速命令を使える',
-                        '自前のチェーン上で標準EVMにない高速処理を1命令で呼べるようになる',
-                        'GethのバージョンをRustに置き換えられる',
-                        'Solidityの構文を変えられる',
+                        '標準 Opcode（ADD など）の計算結果をすべてのクライアントで上書きする',
+                        '自前のチェーンで 1 命令の高速ショートカットを提供 — メインネットとはコンセンサス非互換',
+                        'メインネット上の任意の Solidity コントラクトから固定アドレスで呼べる precompile を追加する',
+                        'fork なしで同じ Opcode のガスコストを下げる',
                       ],
                       correctIndex: 1,
-                      explanation: 'カスタムOpcodeはコンセンサス互換性を破るためメインネットでは使えませんが、自前のApp-chain上では強力な最適化手段になります。',
+                      explanation: 'カスタム Opcode は未割当バイト（例: 0x0C）を占有。メインネットはこの Opcode を知らないので、それを使うブロックは go-ethereum で再生不能。ショートカットは *自前 fork 内で* 本物。precompile は別の仕組み（予約アドレス、新 Opcode バイトではない）。コンセンサスを fork せずにガスコストを下げることはできない。',
                     },
                     {
-                      question: 'Revmの `Database` トレイトの主な役割は？',
+                      question: 'Revm の `Database` トレイトの主な役割は？',
                       options: [
-                        'EVMの実行を直接コミットする',
-                        'EVMが必要なときにアカウント情報・コード・ストレージスロット・過去ブロックハッシュを供給する',
-                        'P2Pネットワークを管理する',
-                        'ガス代の計算アルゴリズムを差し替える',
+                        'EVM の状態変更を裏のストレージに書き戻す',
+                        'EVM が実行に必要なアカウント情報・コントラクトコード・ストレージスロット・過去のブロックハッシュを供給する',
+                        'ガス計算のホットパスを処理する',
+                        'Opcode バイトから関数へのディスパッチテーブルを提供する',
                       ],
                       correctIndex: 1,
-                      explanation: 'Databaseトレイトは「状態の供給元」を抽象化します。インメモリ・RPCバックエンド・本番ストレージなどを差し替え可能にします。',
+                      explanation: 'Database は読み取り側の状態供給元。書き込みは DatabaseCommit を経由。ガス計算はインタープリター内部。ディスパッチは命令テーブル。実装を差し替えれば、インメモリデータ、JSON-RPC（フォークメインネット）、本番 MDBX、何でも EVM のバックエンドにできる。',
                     },
                     {
-                      question: 'RethのStaged Syncの利点として正しいのは？',
+                      question: 'Reth の Staged Sync が、ブロック単位の同期に対して持つ実利は？',
                       options: [
-                        'Gethと完全に互換性があり同じデータベースを使える',
-                        'ブロックを「ステージごと」にまとめて処理することで、I/OやCPUの効率を最大化する',
-                        'すべてのブロックを並列に検証して時間順序を破る',
-                        'ZK証明がなくても動く',
+                        'ブロックをダウンロードするだけで実行しない設計でディスクを節約できる',
+                        '範囲をステージごとに処理することで I/O・CPU・キャッシュ効率を最大化 — かつ unwind により reorg を対称的に扱える',
+                        'Merkle ルート計算を無期限に遅延することでスキップする',
+                        'データベース不要 — 状態はクエリ時に都度導出する',
                       ],
                       correctIndex: 1,
-                      explanation: 'Staged SyncはHeaders→Bodies→Senders→Execution→Merkle…の順に「範囲をまとめて」処理する設計で、巨大状態を捌く鍵となります。',
+                      explanation: 'Staged Sync (Headers → Bodies → Senders → Execution → Hashing → Merkle → TxLookup → Indexes → Finish) は範囲をステージごとに処理。Sender 復元は Rayon で並列化。Hashing でソートしてから MerkleStage が動く。すべてのステージが `execute` と `unwind` を持つから、reorg は特殊ケースではなく通常運用。',
                     },
                     {
-                      question: 'ExEx（Execution Extensions）でできることの説明として正しいのは？',
+                      question: 'ExEx（Execution Extensions）で何ができる？',
                       options: [
-                        'メインネットノード自体のコンセンサスを書き換える',
-                        'ブロックがコミット／reorg／巻き戻しされたときに、ノードプロセス内でRustコードを実行できる',
-                        'ガス代を払わずに任意のSolidityを実行できる',
-                        'EthereumのRPCをすべて廃止する',
+                        'JSON-RPC パイプラインの応答送信前にカスタムロジックを注入する',
+                        'チェーンの commit / reorg / revert ごとに、ノードプロセス内で実行時間に近いレイテンシで Rust コードを動かす',
+                        'P2P ネットワークでのトランザクションの gossip 方法を上書きする',
+                        'Reth のコンセンサスエンジンを独自のものに置き換える',
                       ],
                       correctIndex: 1,
-                      explanation: 'ExExは ChainCommitted / ChainReorged / ChainReverted の通知を受け、低レイテンシーで処理を行うフックです。インデクサーやMEVツールに最適です。',
+                      explanation: 'ExEx は ChainCommitted / ChainReorged / ChainReverted の通知を in-process で受け取り、インデクサ・MEV パイプライン・リアルタイムリスクエンジンに最適。(RPC カスタマイズは add_ons、ネットワークやコンセンサスのカスタマイズは with_components 経由 — 別の SDK 表面。)',
                     },
                     {
-                      question: 'Reth SDKを使うことで、自前のApp-chainで「典型的にカスタマイズされる」要素は？',
+                      question: 'Reth SDK で App-chain を作るとき、現実的なカスタマイズ表面は？',
                       options: [
-                        'Solidityコンパイラのバージョンのみ',
-                        'EVM設定（Opcode・ガス）、コンセンサス、ストレージ、RPC',
-                        'Webブラウザの種類',
-                        'TypeScriptの型定義',
+                        'genesis レベルの chain ID と gas limit のみ',
+                        'pool・network・payload・executor (EVM)・consensus コンポーネント、加えて RPC と ExEx を add-ons 経由で',
+                        '`Stage<Provider>` 実装のみ — それ以外はロックされている',
+                        'Database テーブルとインデックスのみ — EVM 自体は固定',
                       ],
                       correctIndex: 1,
-                      explanation: 'Reth SDKでは、EVMConfig・Consensus・Storage・Network・RPCなど、ノードを構成する主要コンポーネントを差し替えられます。',
+                      explanation: 'SDK は `with_components.{pool, network, payload, executor, consensus}` と RPC/ExEx 用の `with_add_ons` を露出。カスタムメンプール (Tempo 風優先レーン) からカスタムコンセンサス (HyperBFT)、カスタム EVM (custom opcode / precompile) まで、すべてビルダー差し替え 1 つの距離。',
                     },
                   ],
                 },
