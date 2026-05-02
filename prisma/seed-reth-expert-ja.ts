@@ -459,7 +459,14 @@ where
                   xpReward: 35,
                   content: `# 手続きマクロ — \`sol!\`と\`address!\`の中身
 
-\`address!("0xabc...")\` は関数呼び出しに見えますが **コンパイル時に走ります**。\`sol! { contract IERC20 { ... } }\` も同じ。これらは **手続きマクロ（procedural macro）** — TokenStream を受けてTokenStreamを返す、コンパイラ内で動くコードです。
+\`address!("0xabc...")\` は関数呼び出しに見えますが **コンパイル時に走ります**。\`sol! { contract IERC20 { ... } }\` も同じ。
+
+> 🛑 **スクロールする前に予測。** \`address!("0xabc123...")\` を書いたとき：
+> - hex のパースは **どこ** で起きる — コンパイル時か実行時か?
+> - コンパイル時なら、Rust コンパイラの **どのツール** がそれをやる?
+> - \`address!("0xZZZ")\` を書いたら、どんなエラーが出る?
+>
+> 推測を保持して。このレッスンには \`address!\` について、世間の説明と意見を異にするサプライズが少なくとも 1 つあります。
 
 ## 1. 3種類
 
@@ -491,7 +498,11 @@ flowchart LR
 
 ## 3. 本物の \`address!\` マクロ
 
-驚くかもしれません：**\`address!\` は手続きマクロではありません**。普通の \`macro_rules!\` 宣言的マクロです。これが [\`crates/primitives/src/bits/macros.rs\`](https://github.com/alloy-rs/core/blob/main/crates/primitives/src/bits/macros.rs) の本物のソース：
+驚くかもしれません：**\`address!\` は手続きマクロではありません**。普通の \`macro_rules!\` 宣言的マクロです。
+
+> 🛑 **\`address!\` が宣言的だけなら、何に委譲しているのが手続きマクロ?** 予測 → 下のソースで検証してください。
+
+これが [\`crates/primitives/src/bits/macros.rs\`](https://github.com/alloy-rs/core/blob/main/crates/primitives/src/bits/macros.rs) の本物のソース：
 
 \`\`\`rust
 macro_rules! fixed_bytes_macros {
@@ -530,6 +541,8 @@ fixed_bytes_macros! { $
 ### \`$d:tt\` のトリック
 
 \`$d\` はトークンツリー（実際は \`$\`）にマッチします。これは有名な問題を解いている：マクロ内でマクロを生成するとき、内側マクロの変数のために単に \`$\` を書くと、Rustのマクロパーサーが外側マクロのメタ変数として食べてしまう。だから \`$d\` を \`$\` にバインドし、\`$d ($d t:tt)+\` が生成コードでは \`$ ( $ t:tt )+\` になる。**マクロハイジーン回避の教科書的テクニック**。
+
+> 🛑 **理解度チェック。** \`$d:tt\` のトリックを取り除いて、内側マクロにそのまま \`$\` を書いたら、コンパイラは何のエラーを出す? (ヒント: 「シンタックスエラー」ではない — どっちのマクロがメタ変数を所有するかについてのエラー。) エラークラスを予測できなければ、このトリックはあなたにとってまだ伝承です。
 
 ### コンパイル時バリデーションは別のマクロが担当
 
@@ -577,6 +590,8 @@ let balance = IERC20::new(token, &provider).balanceOf(owner).call().await?;
 
 — この \`.balanceOf(owner)\` は静的型付き、\`uint256\` は本物の \`U256\`、セレクタはコンパイル時計算、ABIエンコードはモノモーフ化済み。**リフレクションなし、実行時パースなし、文字列型エラーなし**。
 
+> 🛑 **予測。** \`balanceOf(address)\` のセレクタは \`0x70a08231\` — \`keccak256("balanceOf(address)")\` の先頭 4 バイト。**この keccak ハッシュはビルドのどの時点で計算される?** 「実行時、初回 .balanceOf 呼び出し時」と答えたら読み直し — それこそ \`sol!\` が排除する実行時コスト。
+
 ## 5. proc macro を書くべき場面
 
 - **何度も同じ定型コード** がコンパクトな1行マクロに圧縮できるとき
@@ -594,7 +609,9 @@ cargo install cargo-expand
 cargo expand --bin my_app
 \`\`\`
 
-コード生成のミスを目で確認できます。`,
+コード生成のミスを目で確認できます。
+
+> 最終チェック: \`macro_rules!\` と手続きマクロの違いを一文で。「片方が古い」だけなら深掘り — 各々が何を操作し、どこで走る? **Rust のエコシステムはこの区別の上に成り立っています。理解せずにバイナリを構築するコードは読めません。**`,
                 },
               ],
             },
@@ -614,6 +631,8 @@ cargo expand --bin my_app
                   content: `# カスタムPrecompile
 
 カスタム **Opcode** は新しいEVM命令を追加します。カスタム **Precompile** は通常のコントラクトのように呼び出せるネイティブRust関数を追加します。Precompile のほうが **侵襲が小さく** 、ほとんどのツーリングと共存できます。
+
+> 🛑 **スクロールする前に予測。** カスタム *Opcode* はメインネットとのコンセンサスを破る (Advanced で見た通り)。カスタム *Precompile* は破らない — 同じく vanilla EVM になかった新コードなのに。**なぜ答えが違う?** EVM バイトコードパーサーを引いて仮説を立ててください。
 
 ## 1. Opcode vs Precompile
 
@@ -672,6 +691,8 @@ pub fn identity_run(input: &[u8], gas_limit: u64) -> EthPrecompileResult {
 - **Halt vs revert** — \`PrecompileHalt::OutOfGas\` はフレーム全体停止（リファンドなし）。通常のrevertとは別物。
 - **\`EthPrecompileOutput\`** は \`(gas_used, output_bytes)\` を運ぶ。
 
+> 🛑 **予測。** identity precompile を 1 KB の入力で CALL する。**ガスコストを計算してください。** 計算過程を示す: 何ワード? 計算式は? 答えは? 計算できないなら、ガス計算は数字のままです — 今やってください。
+
 ## 3. カスタムprecompileを登録する
 
 \`\`\`mermaid
@@ -727,6 +748,8 @@ precompiles.extend([my_pre]);
 
 ## 4. 実例：Foundry の cheatcodes はカスタム precompile
 
+> 🛑 **読む前に予測。** \`vm.deal(addr, 1 ether)\` は状態を変更します — 任意のアカウントに何もないところから ETH を与える。**標準 precompile は状態を変更できません** (\`identity_run\` を見る — 純粋関数、入力 → 出力)。では Foundry はどうやって \`vm.deal\` を実装する? 仮説を立てて。
+
 Rust EVM スタックで最も広くデプロイされているカスタム precompile は Foundry にあります。Solidity テストで書いた \`vm.deal\`、\`vm.warp\`、\`vm.prank\` のすべては **カスタム precompile への \`CALL\`**。
 
 [\`forge-std/src/Base.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Base.sol) より：
@@ -770,7 +793,9 @@ address(uint160(uint256(keccak256("hevm cheat code"))))
 3. チェーンの ガス/CPU 比率に変換
 4. 敵対的入力で再ベンチ
 
-これで通常コードからは安く、悪用には法外に高い precompile になります。`,
+これで通常コードからは安く、悪用には法外に高い precompile になります。
+
+> 最終チェック: precompile をガスコスト = 100 でリリース。攻撃者が **同じ 100 ガスで通常の 10 倍の CPU 時間** を要する入力形を発見。**経済攻撃は何? 攻撃者がノード CPU 1 秒あたりにいくら払う?** 計算をスケッチできないなら、precompile を安全に価格設定できません — セクション 6 と Ethereum の EIP-2929 を読み直して、メインネットで実際の安すぎが何のコストになったか確認。`,
                 },
                 {
                   title: 'Merkle Patricia Trie & 状態証明',
@@ -783,6 +808,10 @@ address(uint160(uint256(keccak256("hevm cheat code"))))
 
 Ethereum の状態は **Merkle Patricia Trie (MPT)** に住んでいます。これを理解すると、stateRoot・ライトクライアント・witness の理屈が全部つながり、自分で実装できるようになります。
 
+> 🛑 **スクロールする前に予測。** あなたは「アカウント X の残高は Y」を **暗号学的に証明したい** — フル状態を持たず、信頼済み 32 バイトのルートだけ持つ検証者に対して。**プロトコルをスケッチしてください。** 検証者に何を送る? 検証者は何をハッシュする? どうやって proof or rejection を結論する?
+>
+> 3-4 行書いてから、レッスンを読んで何を取りこぼしたか確認。
+
 ## 1. MPT とは何か
 
 3つの考えを合わせたもの：
@@ -792,6 +821,8 @@ Ethereum の状態は **Merkle Patricia Trie (MPT)** に住んでいます。こ
 - **Merkle**：各ノードが子のハッシュを保持 → ルートが全データをコミット
 
 結果：**256ビットの \`stateRoot\`** が世界状態を一意に識別する。1バイトでも変えればルートが変わる。
+
+> 🛑 **理解度チェック。** Patricia の経路圧縮は最適化です。**圧縮なしで普通の trie を使うとコストは何?** Ethereum がなぜわざわざ複雑さを足してまで気にするのか? (ヒント: 64 ニブルのキー、ほぼ空の trie。圧縮あり vs なしで経路はいくつのノードを通る?)
 
 ## 2. ノードの種類
 
@@ -835,6 +866,8 @@ graph TD
 6. 一致 → Xの残高が本当にYだと確認
 
 これだけ。**ライトクライアントは「信頼ルートを持つ検証器」** にすぎません。
+
+> 🛑 **予測。** あなたはアカウント X の witness を受け取る — trie ノードのバイトリスト。検証者はルートまでハッシュアップ。**検証者が必要だが witness にないものは何?** 検証者の唯一の secret/trusted な入力は何? 答えられないなら、これを *暗号学的* にしている要素 (「あなたが送ったバイトを信用する」ではない) をまだ理解していません。
 
 ## 4. Witness（証人データ）
 
@@ -885,6 +918,8 @@ impl StorageProof {
 ### \`AccountProof.info: Option<Account>\`
 アカウントが存在しなければ \`None\`（「非包含」証明）、存在すれば \`Some\`。**両方とも有効な証明** — 「このアドレスにアカウントがない」を証明することは残高証明と同じくらい重要。
 
+> 🛑 **予測。** 非包含証明が実用で役立つのはいつ? 「このアドレスはトークンを一度も保有していない」を証明したい具体的なシナリオを 1 つ挙げてください。(ヒント: airdrop、シビル耐性、slashing 適格性 — 1 つ選んでプロトコルを追跡。)
+
 ### \`StorageProof.nibbles: Nibbles\`
 ストレージキーのニブル表現を事前計算してキャッシュ。ニブル変換はホットパスにあるため。
 
@@ -892,6 +927,8 @@ impl StorageProof {
 純粋ロジック — 信頼済みstate rootを与えれば、証明を検証する。**これがライトクライアント検査の全て**。数百バイトのバイトコード、ミリ秒で走り、状態に対する暗号学的保証を与える。
 
 ## 6. 落とし穴：ストレージtrie
+
+> 🛑 **予測。** 各コントラクトがなぜ **自分専用** のストレージ MPT を持つのか? Ethereum が \`(contract, slot)\` をキーとする 1 つの巨大な MPT を使っていたら? トレードオフを書き出してください。
 
 各コントラクトは **自分専用** のMPTをストレージスロット用に持ちます。だから世界状態は：
 
@@ -924,7 +961,9 @@ crates/trie/
 3. \`storage_proofs\` 内の各 \`StorageProof::verify\` 呼び出しに注目 — 親が \`storage_root\`（\`root\` ではない）になっている
 4. [EIP-1186](https://eips.ethereum.org/EIPS/eip-1186) を読む — \`AccountProof\` はこの仕様のRust ミラー
 
-これで \`eth_getProof\` が「魔法」ではなく「読めて、書けて、デバッグできる構造」になります。`,
+これで \`eth_getProof\` が「魔法」ではなく「読めて、書けて、デバッグできる構造」になります。
+
+> 最終チェック: 二文で、なぜ state proof が「私を信じて、ノード運用者だから」より強い保証を与えるのか説明してください。Merkle ハッシングが暗号学的でない主張に与えられない性質は何? **ライトクライアントを使ったことがない人を納得させられるまで、このレッスンはあなたを離しません。**`,
                 },
                 {
                   title: '本番MEV — Mempool・ExEx・シミュレーション',
