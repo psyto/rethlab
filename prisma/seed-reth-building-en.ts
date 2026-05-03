@@ -1041,6 +1041,460 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
 \`\`\`
 `,
                 },
+                {
+                  title: 'Build a Wallet Backend in Rust',
+                  slug: 'build-wallet-backend-en',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 45,
+                  xpReward: 80,
+                  content: `# Build a Wallet Backend in Rust
+
+Wallet UIs are the famous part. The boring part — the **send service** behind them — is what teams actually wrestle with: keep nonces straight when sending 50 txs in a row, don't strand a tx in the mempool when gas spikes, replace it with a higher fee, watch for inclusion, retry intelligently. This lesson walks the complete code of a minimal send service in ~250 lines that does all of that.
+
+> 📌 **Scope honesty.** We build the **service** — signer pool + nonce manager + send queue + replace-on-stuck + confirm watcher — exposed over a tiny HTTP API. We don't cover key custody (HSM, MPC, KMS), fiat onramps, or the JS SDK. Those layers all sit *on top of* a send service that works; this lesson builds the part that has to work.
+
+## What you'll build
+
+A backend service that exposes:
+
+\`\`\`bash
+$ curl -X POST http://localhost:7000/send \\
+    -H "Content-Type: application/json" \\
+    -d '{
+      "from":  "0xAlice...",
+      "to":    "0xBob...",
+      "value": "0x16345785d8a0000",
+      "data":  "0x"
+    }'
+{ "tx_hash": "0xabc...", "queued_at": "2026-05-04T12:34:56Z" }
+\`\`\`
+
+Behind that one POST: signer lookup by from-address, nonce reservation, gas-price computation, tx signing, broadcast via Alloy, **and a background watcher that bumps the fee if the tx hasn't landed within 30 seconds**.
+
+\`\`\`mermaid
+flowchart TB
+    Client["HTTP client"] -->|POST /send| API["axum handler"]
+    API -->|reserve nonce| NM["NonceManager<br/>(per-address)"]
+    API -->|build & sign| Signer["PrivateKeySigner<br/>(loaded from env)"]
+    API -->|broadcast| Provider["Alloy Provider"]
+    API -->|track| Q["pending queue<br/>(tx_hash, deadline, fee)"]
+    Q -->|every 5s| Watcher["confirm watcher"]
+    Watcher -->|landed?| Provider
+    Watcher -->|stuck > 30s| Bump["bump fee 1.25x<br/>+ resubmit"]
+    Bump --> Q
+\`\`\`
+
+> 🛑 **Predict before scrolling.** The naive way is "fetch nonce from RPC, sign, send". Walk through what breaks if you POST /send twice within 100 ms for the same from-address. **Form a one-sentence answer about what specifically goes wrong.** Hold your guess.
+
+## Why this is hard
+
+| Problem | Naive approach | What goes wrong |
+| :--- | :--- | :--- |
+| **Nonce racing** | \`provider.get_transaction_count(from).await\` per send | Two concurrent sends both read nonce N, both sign with N, only one lands. The other is rejected by the mempool. |
+| **Stuck txs** | Hope the gas price was high enough | Mainnet gas spikes from 5 → 80 gwei in seconds. Your tx sits in mempool for hours. |
+| **Replace logic** | "Just resubmit with the same nonce" | Most nodes reject replacements that don't bump fee by ≥10%. Naive resubmit silently fails. |
+| **Confirmation loss** | Trust \`eth_sendRawTransaction\`'s return | The tx hash is "I accepted it"; not "it landed". Network reorgs and dropped peers happen. |
+
+A real wallet backend solves each. We'll do all four.
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "wallet-backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Alloy
+alloy-primitives    = "1.5"
+alloy-provider      = "1.0"
+alloy-rpc-types     = "1.0"
+alloy-network       = "1.0"
+alloy-signer        = "1.0"
+alloy-signer-local  = "1.0"
+alloy-consensus     = "2.0"
+alloy-eips          = "1.0"
+
+# HTTP server
+axum                = "0.7"
+
+# Plumbing
+tokio               = { version = "1", features = ["full"] }
+serde               = { version = "1", features = ["derive"] }
+serde_json          = "1"
+eyre                = "0.6"
+tracing             = "0.1"
+tracing-subscriber  = "0.3"
+\`\`\`
+
+## Step 1: Signer pool + nonce manager
+
+The core invariant: **every address has exactly one source of truth for its next nonce**, and that source is in-process state, not a fresh RPC call:
+
+\`\`\`rust
+use alloy_primitives::Address;
+use alloy_signer_local::PrivateKeySigner;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
+
+pub struct SignerPool {
+    inner: HashMap<Address, PrivateKeySigner>,
+}
+
+impl SignerPool {
+    pub fn from_env() -> eyre::Result<Self> {
+        // SIGNERS env var: comma-separated 0x-prefixed private keys
+        let mut inner = HashMap::new();
+        for hex in std::env::var("SIGNERS")?.split(',') {
+            let signer: PrivateKeySigner = hex.trim().parse()?;
+            inner.insert(signer.address(), signer);
+        }
+        Ok(Self { inner })
+    }
+
+    pub fn get(&self, addr: &Address) -> Option<&PrivateKeySigner> {
+        self.inner.get(addr)
+    }
+}
+
+#[derive(Clone)]
+pub struct NonceManager {
+    state: Arc<Mutex<HashMap<Address, u64>>>,
+}
+
+impl NonceManager {
+    pub fn new() -> Self {
+        Self { state: Arc::new(Mutex::new(HashMap::new())) }
+    }
+
+    /// Reserve the next nonce for \`addr\`, initializing from RPC on first use.
+    pub async fn reserve<P: alloy_provider::Provider>(
+        &self,
+        addr: Address,
+        provider: &P,
+    ) -> eyre::Result<u64> {
+        let mut state = self.state.lock().await;
+        let nonce = match state.get(&addr) {
+            Some(&n) => n,
+            None => provider.get_transaction_count(addr).pending().await?,
+        };
+        state.insert(addr, nonce + 1);
+        Ok(nonce)
+    }
+
+    /// Reset cached nonce for \`addr\` (call after a non-recoverable submission failure).
+    pub async fn forget(&self, addr: Address) {
+        self.state.lock().await.remove(&addr);
+    }
+}
+\`\`\`
+
+Walk:
+
+- **\`Arc<Mutex<HashMap>>\` for the nonce state** — yes, a single global mutex. Send throughput is bounded by *signing speed*, not by lock contention; the critical section here is microseconds. Don't pre-optimize with sharded locks until you've measured.
+- **\`provider.get_transaction_count(addr).pending()\`** — \`pending\` is the key word. The default \`get_transaction_count\` returns confirmed-only count; \`pending\` includes txs sitting in the mempool. **You want pending** — confirmed-only would re-use a nonce that's already in flight.
+- **\`reserve\` is \`async\` because the *first* call hits RPC.** Subsequent calls are pure local state. This means the slow path (cold start) is one RPC; the hot path (sustained sends) is zero.
+- **\`forget\` is the safety valve.** If a submission fails for "nonce too low" or similar, the in-memory state has drifted from the chain — drop it and let the next call re-initialize from RPC.
+
+> 🔍 **Find in repo.** Open [\`alloy-signer-local\`](https://github.com/alloy-rs/alloy/tree/main/crates/signer-local). The \`PrivateKeySigner\` you parsed from a hex string is the same type you'd get from a keystore file (\`PrivateKeySigner::decrypt_keystore\`) or a mnemonic. **The send service doesn't care which.**
+
+## Step 2: Gas estimation (EIP-1559)
+
+EIP-1559 gas: \`max_priority_fee_per_gas\` (your tip to the validator) + \`base_fee\` (burned, set by the protocol per block). Your \`max_fee_per_gas\` is the cap on the sum.
+
+\`\`\`rust
+use alloy_eips::eip1559::Eip1559Estimation;
+
+#[derive(Clone, Copy, Debug)]
+pub struct GasParams {
+    pub max_fee_per_gas: u128,
+    pub max_priority_fee_per_gas: u128,
+}
+
+pub async fn estimate_gas<P: alloy_provider::Provider>(provider: &P) -> eyre::Result<GasParams> {
+    let est: Eip1559Estimation = provider.estimate_eip1559_fees().await?;
+    Ok(GasParams {
+        max_fee_per_gas: est.max_fee_per_gas,
+        max_priority_fee_per_gas: est.max_priority_fee_per_gas,
+    })
+}
+
+pub fn bump(params: GasParams) -> GasParams {
+    // 25% bump — comfortably above the 10% mempool minimum on most clients
+    GasParams {
+        max_fee_per_gas: params.max_fee_per_gas * 125 / 100,
+        max_priority_fee_per_gas: params.max_priority_fee_per_gas * 125 / 100,
+    }
+}
+\`\`\`
+
+Walk:
+
+- **\`provider.estimate_eip1559_fees()\`** — Alloy's helper that calls \`eth_feeHistory\` under the hood and gives you a sane \`(max_fee, priority_fee)\` based on the last few blocks. **Don't hand-roll fee math** for the simple case; use the helper.
+- **\`bump\` is 25%, not 10%.** The mempool's minimum replacement bump is 10% on most clients (geth, Reth, Erigon). Submit at exactly 10% and you're betting the float won't trip a node's \`>\` vs \`>=\` check. **25% is the cheap safety margin** that always works.
+- **No retry on the *estimate*.** If \`estimate_eip1559_fees\` fails, your provider is having a bad time and any send right now is unsafe.
+
+## Step 3: Send + queue for confirmation
+
+\`\`\`rust
+use alloy_consensus::{TxEip1559, SignableTransaction};
+use alloy_network::{TxSignerSync, TransactionBuilder};
+use alloy_primitives::{Bytes, U256};
+use alloy_rpc_types::TransactionRequest;
+use std::time::{Duration, Instant};
+
+#[derive(Clone)]
+pub struct PendingTx {
+    pub from: Address,
+    pub nonce: u64,
+    pub current_hash: alloy_primitives::B256,
+    pub gas_params: GasParams,
+    pub deadline: Instant,
+    pub original_request: TransactionRequest,
+}
+
+pub async fn send_one<P: alloy_provider::Provider>(
+    provider: &P,
+    pool: &SignerPool,
+    nm: &NonceManager,
+    req: TransactionRequest,
+) -> eyre::Result<PendingTx> {
+    let from = req.from.ok_or_else(|| eyre::eyre!("from required"))?;
+    let signer = pool.get(&from).ok_or_else(|| eyre::eyre!("unknown signer: {from}"))?;
+
+    let nonce = nm.reserve(from, provider).await?;
+    let gas = estimate_gas(provider).await?;
+    let chain_id = provider.get_chain_id().await?;
+
+    let req = req
+        .with_nonce(nonce)
+        .with_chain_id(chain_id)
+        .with_gas_limit(req.gas.unwrap_or(100_000))
+        .with_max_fee_per_gas(gas.max_fee_per_gas)
+        .with_max_priority_fee_per_gas(gas.max_priority_fee_per_gas);
+
+    let tx = req.clone().build(&signer.clone().into()).await?;
+    let raw = tx.encoded_2718();
+    let pending = provider.send_raw_transaction(&raw).await?;
+
+    Ok(PendingTx {
+        from,
+        nonce,
+        current_hash: *pending.tx_hash(),
+        gas_params: gas,
+        deadline: Instant::now() + Duration::from_secs(30),
+        original_request: req,
+    })
+}
+\`\`\`
+
+Walk:
+
+- **Reserve nonce before signing, not after** — ordering matters under concurrency. If you signed first and then reserved, two parallel sends could sign with the same nonce and only one would win.
+- **\`build(&signer.clone().into())\`** — Alloy's \`TransactionBuilder\` calls \`sign_transaction_sync\` under the hood. \`PrivateKeySigner\` is sync; if you swap to a remote signer (KMS, HSM), this becomes async and the signature changes — but the rest of the function stays.
+- **\`send_raw_transaction\` returns a \`PendingTransactionBuilder\`.** We don't \`.await.confirmations(N)\` on it here; the **watcher** in Step 4 owns confirmation. The send path returns immediately so the API can respond fast.
+
+## Step 4: Confirm watcher with replace-on-stuck
+
+The background loop. One tokio task that watches every queued tx; bumps the fee on anything older than its deadline:
+
+\`\`\`rust
+use std::collections::HashMap;
+use tokio::sync::RwLock;
+use tokio::time::sleep;
+
+#[derive(Clone)]
+pub struct PendingQueue {
+    inner: Arc<RwLock<HashMap<alloy_primitives::B256, PendingTx>>>,
+}
+
+impl PendingQueue {
+    pub fn new() -> Self { Self { inner: Arc::new(RwLock::new(HashMap::new())) } }
+
+    pub async fn insert(&self, ptx: PendingTx) {
+        self.inner.write().await.insert(ptx.current_hash, ptx);
+    }
+}
+
+pub async fn watcher<P: alloy_provider::Provider + Clone>(
+    provider: P,
+    pool: SignerPool,
+    queue: PendingQueue,
+) {
+    loop {
+        sleep(Duration::from_secs(5)).await;
+
+        // Snapshot to avoid holding the read lock during RPC.
+        let snapshot: Vec<PendingTx> = queue.inner.read().await.values().cloned().collect();
+
+        for mut ptx in snapshot {
+            // Check inclusion
+            if let Ok(Some(_receipt)) = provider.get_transaction_receipt(ptx.current_hash).await {
+                queue.inner.write().await.remove(&ptx.current_hash);
+                tracing::info!(hash = ?ptx.current_hash, "landed");
+                continue;
+            }
+
+            // Stuck? Bump and resubmit
+            if Instant::now() >= ptx.deadline {
+                let bumped = bump(ptx.gas_params);
+                let signer = pool.get(&ptx.from).expect("signer missing");
+                let req = ptx.original_request
+                    .clone()
+                    .with_max_fee_per_gas(bumped.max_fee_per_gas)
+                    .with_max_priority_fee_per_gas(bumped.max_priority_fee_per_gas);
+
+                match req.build(&signer.clone().into()).await {
+                    Ok(tx) => {
+                        let raw = tx.encoded_2718();
+                        if let Ok(p) = provider.send_raw_transaction(&raw).await {
+                            let new_hash = *p.tx_hash();
+                            let mut w = queue.inner.write().await;
+                            w.remove(&ptx.current_hash);
+                            ptx.current_hash = new_hash;
+                            ptx.gas_params = bumped;
+                            ptx.deadline = Instant::now() + Duration::from_secs(30);
+                            w.insert(new_hash, ptx);
+                            tracing::warn!("bumped + resubmitted");
+                        }
+                    }
+                    Err(e) => tracing::error!(?e, "rebuild failed"),
+                }
+            }
+        }
+    }
+}
+\`\`\`
+
+Walk:
+
+- **Snapshot, then iterate.** Holding the lock during \`get_transaction_receipt\` would serialize the whole queue behind a single RPC. Snapshotting trades a Vec allocation for parallelism.
+- **\`get_transaction_receipt\` returning \`Some\` is the inclusion signal.** Note this is *eventual* consistency — a tx can be included in block N and the receipt visible at block N+1 due to RPC caching. The 5-second poll absorbs that lag.
+- **Bump strategy is 25%, repeated.** Each cycle that misses the deadline triples down. After 3 bumps a tx that started at 5 gwei is at \`5 × 1.25³ ≈ 9.77\` gwei. Real production caps at a configurable max to avoid blowing budget on a network-wide spike.
+- **The \`expect("signer missing")\`** — by construction, anything in the queue was signed by a key in the pool. Panicking here means our invariant is broken; better than silently dropping.
+
+> 🛑 **Anti-fluency check.** Without scrolling: why does the watcher *replace* a stuck tx with a same-nonce, higher-fee version, instead of just *waiting longer*? Hint: think about **what blocks the next nonce** when the previous one is stuck.
+
+## Step 5: HTTP API skeleton (axum)
+
+\`\`\`rust
+use axum::{extract::State, routing::post, Json, Router};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone)]
+pub struct AppState<P: alloy_provider::Provider + Clone + 'static> {
+    pub provider: P,
+    pub signers: Arc<SignerPool>,
+    pub nonces: NonceManager,
+    pub queue: PendingQueue,
+}
+
+#[derive(Deserialize)]
+pub struct SendRequest {
+    from: Address,
+    to: Address,
+    value: U256,
+    data: Option<Bytes>,
+    gas: Option<u64>,
+}
+
+#[derive(Serialize)]
+pub struct SendResponse {
+    tx_hash: alloy_primitives::B256,
+}
+
+async fn handle_send<P: alloy_provider::Provider + Clone + 'static>(
+    State(state): State<AppState<P>>,
+    Json(req): Json<SendRequest>,
+) -> Result<Json<SendResponse>, (axum::http::StatusCode, String)> {
+    let tx_req = TransactionRequest::default()
+        .with_from(req.from)
+        .with_to(req.to)
+        .with_value(req.value)
+        .with_input(req.data.unwrap_or_default())
+        .with_gas_limit(req.gas.unwrap_or(100_000));
+
+    let pending = send_one(&state.provider, &state.signers, &state.nonces, tx_req)
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let hash = pending.current_hash;
+    state.queue.insert(pending).await;
+    Ok(Json(SendResponse { tx_hash: hash }))
+}
+
+#[tokio::main]
+async fn main() -> eyre::Result<()> {
+    tracing_subscriber::fmt::init();
+
+    let provider = alloy_provider::ProviderBuilder::new()
+        .connect(&std::env::var("RPC_URL")?)
+        .await?;
+
+    let state = AppState {
+        provider: provider.clone(),
+        signers: Arc::new(SignerPool::from_env()?),
+        nonces: NonceManager::new(),
+        queue: PendingQueue::new(),
+    };
+
+    // Spawn the watcher
+    {
+        let p = provider.clone();
+        let s = (*state.signers).clone();  // Note: SignerPool needs Clone
+        let q = state.queue.clone();
+        tokio::spawn(async move { watcher(p, s, q).await });
+    }
+
+    let app = Router::new()
+        .route("/send", post(handle_send))
+        .with_state(state);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:7000").await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+\`\`\`
+
+That's the whole service. ~250 lines including imports.
+
+> 🔍 **Find in repo.** Open [\`alloy-rpc-types\`](https://github.com/alloy-rs/alloy/tree/main/crates/rpc-types-eth). Find \`TransactionRequest\`. Note that it's the *same* type that all the \`with_*\` builder methods extend. **Your wallet backend, an arb bot, a deployment script — they all build txs through this same type.** That's the leverage Alloy gives you.
+
+## What's missing for production
+
+| Gap | What real wallet backends do |
+| :--- | :--- |
+| **Key custody** | KMS / HSM / MPC (e.g., Fireblocks, ZenGo, Privy). \`PrivateKeySigner\` is fine for self-custody / hot ops; not for user funds. |
+| **Idempotency** | The \`/send\` endpoint should accept a \`request_id\` and dedupe. Naive POST/retry can double-spend a user. |
+| **Per-key rate limiting** | One bad actor with API access can drain a key's nonce range. Cap concurrent sends per from-address. |
+| **Persistent queue** | A process restart drops everything in memory. Production persists \`PendingTx\` to Postgres / Redis and rehydrates on boot. |
+| **Multi-RPC fanout** | Submit to 2–3 providers simultaneously so a single dead provider doesn't strand txs. The same signed bytes work everywhere. |
+| **Nonce gap detection** | If you reserved nonces 5, 6, 7 and only 5 + 7 land, nonce 6 is *missing* — chain stalls until you fill it. Detect this and inject a no-op tx. |
+| **Observability** | Per-from \`pending_count\`, \`oldest_pending_age\`, \`bumps_per_hour\`. Page when oldest_pending exceeds a threshold. |
+
+The architecture you wrote — signer pool, nonce manager, send path, background watcher with replace-on-stuck — **is the spine of every production wallet backend**. Pick any commercial wallet's docs and you'll see this same shape under the marketing.
+
+## Drill
+
+1. **Idempotency.** Add a \`request_id: String\` field to \`SendRequest\`; cache \`request_id → tx_hash\` for 1 hour. Returning the cached hash on duplicate POST. (30 min)
+2. **Per-key rate limit.** Wrap \`/send\` in a per-from semaphore (max 4 concurrent). Reject with 429 if exceeded. (30 min)
+3. **Persistent queue.** Write \`PendingTx\` to Redis on insert, delete on land. Rehydrate on startup. (1.5 hours)
+4. **Multi-RPC fanout.** Build a \`MultiProvider\` that wraps two providers and broadcasts \`send_raw_transaction\` to both, returning the first \`Ok\`. (1 hour)
+5. **Cancel endpoint.** Add \`POST /cancel { from, nonce }\` that submits a 0-value self-transfer at the same nonce with a 50% bump — a confirmed cancel of a stuck tx. (1 hour)
+
+Finish drill 5 and you have a wallet backend that real users could rely on, modulo key custody. Wire in HSM-backed signing and you're at parity with what wallet teams ship.
+
+> 🛑 **Final check.** In one sentence: why is **local nonce state** the load-bearing piece of this design, even though every other layer (signing, gas, watcher) gets more attention? If your answer doesn't mention "concurrent sends without RPC roundtrip per nonce", re-read Step 1 — that's why nonce management is the part that's hard.
+
+## 📺 Further watching
+
+\`\`\`youtube
+wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular toolkit (the same Alloy + Rust signer machinery, used inside Foundry's tx pipeline)
+\`\`\`
+`,
+                },
               ],
             },
           },
