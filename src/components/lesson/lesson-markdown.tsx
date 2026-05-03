@@ -6,6 +6,21 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { MermaidDiagram } from './mermaid-diagram';
 import { YouTubeEmbed } from './youtube-embed';
+import { CopyButton } from './copy-button';
+
+// Recursively pull the text content out of a `pre`'s children so the
+// copy button sees the raw source the user expects to paste, not the
+// syntax-highlighted DOM tree.
+function extractText(node: unknown): string {
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(extractText).join('');
+  if (isValidElement(node)) {
+    const children = (node as ReactElement<{ children?: unknown }>).props.children;
+    return extractText(children);
+  }
+  return '';
+}
 
 /**
  * Parses a `youtube` fenced-block payload.
@@ -75,6 +90,7 @@ export function LessonMarkdown({ content }: { content: string }) {
           }
 
           const label = LANG_LABELS[lang] ?? lang;
+          const codeText = extractText(children);
 
           return (
             <div className="my-6 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
@@ -84,11 +100,14 @@ export function LessonMarkdown({ content }: { content: string }) {
                   <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/60" />
                   <span className="h-2.5 w-2.5 rounded-full bg-green-500/60" />
                 </div>
-                {label && (
-                  <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-                    {label}
-                  </span>
-                )}
+                <div className="flex items-center gap-3">
+                  {label && (
+                    <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                      {label}
+                    </span>
+                  )}
+                  <CopyButton text={codeText} />
+                </div>
               </div>
               <pre className="overflow-x-auto p-4 font-mono text-[13px] leading-relaxed">
                 {children}

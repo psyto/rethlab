@@ -1139,7 +1139,14 @@ chisel
 4. 別のターミナルで：\`cast call $UNISWAP_V3_POOL "slot0()" --rpc-url http://localhost:8545\` — ローカルフォーク経由で生きた Uniswap 状態を読む
 5. [\`forge-std/src/Vm.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Vm.sol) を開いて cheatcode インターフェースを眺める — 各エントリが Foundry の Rust precompile の関数に対応している
 
-これで Revm を学習者として、また毎日のユーザーとして使う立場になりました。`,
+これで Revm を学習者として、また毎日のユーザーとして使う立場になりました。
+
+## 📺 関連動画
+
+\`\`\`youtube
+wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular toolkit for Ethereum applications
+\`\`\`
+`,
                 },
                 {
                   title: 'Fundamentalsまとめクイズ',
