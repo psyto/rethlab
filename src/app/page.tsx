@@ -68,6 +68,14 @@ export default function LandingPage() {
       difficulty: t('courses.difficulty.expert'),
       color: 'from-orange-500/20 to-red-500/20',
     },
+    {
+      title: t('page.tracks.building'),
+      description: t('page.tracks.buildingDesc'),
+      icon: CheckCircle2,
+      courses: 1,
+      difficulty: t('courses.difficulty.advanced'),
+      color: 'from-pink-500/20 to-rose-500/20',
+    },
   ];
 
   // Three strongest outcomes aligned with purpose-built L1 thesis
