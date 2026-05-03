@@ -382,10 +382,6 @@ Drill 5 を完成させれば、本物の searcher のアルゴリズム的核�
 vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm)
 \`\`\`
 
-\`\`\`youtube
-xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024) — 上で fork したエンジン
-\`\`\`
-
 ---
 
 ## このティアの今後

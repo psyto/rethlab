@@ -383,10 +383,6 @@ Finish drill 5 and you have the algorithmic core of a real searcher. Add submiss
 vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm)
 \`\`\`
 
-\`\`\`youtube
-xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024) — the engine you forked above
-\`\`\`
-
 ---
 
 ## Coming in this tier
