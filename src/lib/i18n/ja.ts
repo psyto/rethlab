@@ -329,7 +329,7 @@ export const ja: TranslationKeys = {
     bio: '15+ 年、金融機関のミッションクリティカルなシステム — コアバンキング、リテール預金、住宅ローン、KYC、規制対応 — を Tokyo (新生銀行)、Bangalore (オフショア QA)、Hong Kong (無料英語学習 E メール、50 万ユーザ超) で ship してきました。現在は SBI R3 Japan で Head of Sales Engineering、Solana エンタープライズ採用と RWA トークン化にフォーカス。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda 全部で active に build 中。\n\nRethLab を作ったのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとした時に、まさにこのカリキュラムが walk through する穴に当たったから — ドキュメントは散在、ソースは難解、「Rust が少し書ける」状態から「本番 EVM インフラを ship できる」状態への明確な道筋がない。やりながら学び、その効いた部分を「自分が欲しかったカリキュラム」にしたのが RethLab — 6 コース・約 108 レッスン、最終 Building tier で 8 本の動くアプリを end-to-end で ship する。永久無料、source-first。',
     background: {
       tradfi: '経歴',
-      tradfiDetail: '15+ 年の金融機関ミッションクリティカル開発を新生銀行で: コアバンキング (Flexcube)、リテール預金、住宅ローン、貸付、KYC/FATCA、全銀。Backbase (オランダの Banking as a Service ユニコーン) で PM も短期。',
+      tradfiDetail: '15+ 年の金融機関ミッションクリティカル開発を新生銀行で: コアバンキング (Flexcube)、リテール預金、住宅ローン、貸付、KYC/FATCA、全銀。Backbase (オランダの Banking as a Service ユニコーン) で PM も。',
       blockchain: '現在',
       blockchainDetail: 'SBI R3 Japan で Head of Sales Engineering — 日本の金融機関向け Solana エンタープライズ採用と RWA トークン化を推進。',
       vaults: 'Web3',
