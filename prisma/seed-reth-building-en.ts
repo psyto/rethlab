@@ -1495,6 +1495,350 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
 \`\`\`
 `,
                 },
+                {
+                  title: 'Build a Minimal EIP-7702 Sponsor Service in Rust',
+                  slug: 'build-7702-sponsor-en',
+                  type: 'CONTENT',
+                  sortOrder: 4,
+                  duration: 45,
+                  xpReward: 80,
+                  content: `# Build a Minimal EIP-7702 Sponsor Service in Rust
+
+EIP-7702 (live on mainnet since Pectra, March 2025) is the cheap path to smart-account features for EOAs: a user signs an *authorization* that says "for this transaction, treat my EOA as if it had this contract's code." A sponsor — your service — pays the gas. The user gets atomic batched calls, custom validation, session keys, all without migrating to a new account. This lesson builds the sponsor in ~200 lines.
+
+> 📌 **Scope honesty.** We sponsor **single-user** EIP-7702 transactions: the user signs an authorization off-chain, posts it + their intended calls to our service, the service wraps it in a Type 4 transaction it pays for, submits, returns the hash. **Multi-user batching** (the "bundler" pattern, where you pack N users into one chain tx) is a one-loop extension covered in the drill. Account-abstraction policy logic — spending limits, session keys, recovery — is what your delegate contract decides; the sponsor just relays.
+
+## EIP-7702 in 90 seconds
+
+\`\`\`
+Without 7702: Alice's EOA → CALL → Contract
+With 7702:    Alice's EOA = (delegated to) → Contract code → executes AS Alice's address
+\`\`\`
+
+The mechanics:
+
+- **Tx type 4** carries a new field: \`authorization_list: Vec<SignedAuthorization>\`.
+- An \`Authorization { chain_id, address (delegate), nonce }\` is signed by the EOA whose code should be set.
+- When the tx executes, each authorization in the list **rewrites that EOA's account code** to a 23-byte delegation pointer (\`0xef0100 || delegate_address\`) for **the rest of that transaction**.
+- All the EOA's storage, balance, and address stay intact. The delegated code runs as if it were the EOA's own code.
+
+That's it. Three sentences of protocol; the rest is plumbing.
+
+## What you'll build
+
+\`\`\`bash
+$ curl -X POST http://localhost:8080/sponsor \\
+    -H "Content-Type: application/json" \\
+    -d '{
+      "user":              "0xAlice...",
+      "delegate":          "0xMyAccountImpl...",
+      "user_authorization": "0x04f8...",
+      "calls": [
+        { "target": "0xToken...", "value": "0x0", "data": "0xa9059cbb..." },
+        { "target": "0xRouter...", "value": "0x0", "data": "0x38ed1739..." }
+      ]
+    }'
+{ "tx_hash": "0xabc..." }
+\`\`\`
+
+\`\`\`mermaid
+flowchart TB
+    User["Alice (EOA)"] -->|sign Authorization off-chain| AuthPayload["Authorization<br/>chain_id, delegate, nonce"]
+    User -->|POST /sponsor| API
+    AuthPayload -->|HTTP body| API["axum handler"]
+    API -->|build Type 4 tx<br/>auth_list = [user_auth]| Sponsor["Sponsor signer<br/>(pays gas)"]
+    Sponsor -->|broadcast| Chain
+    Chain -->|delegated code runs<br/>AS Alice's address| Effects["Token transfer +<br/>Router swap atomically"]
+\`\`\`
+
+> 🛑 **Predict before scrolling.** Why does the sponsor (Bob) need to be the \`from\` of the Type 4 tx, not Alice? Form a one-sentence answer about **what \`from\` means** in EIP-1559 vs. who the *authorization* is on behalf of. Hold your guess.
+
+## Why a sponsor service vs. native smart-account
+
+| Approach | User experience | Cost | Migration |
+| :--- | :--- | :--- | :--- |
+| **Native smart account (4337)** | Best — full custom validation | High — every tx pays bundler markup | User funds → new account |
+| **Pure 7702 (user pays own gas)** | OK — gets batching but still needs ETH | Low — single tx | None — same EOA |
+| **7702 + sponsor (this lesson)** | Best for onboarding — no ETH needed | Sponsor eats gas (charge via app subscription, fees, etc.) | None — same EOA |
+
+The sweet spot for app-team product work: existing EOA, smart-account features, your backend covers gas as a UX investment.
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "eip7702-sponsor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alloy = { version = "1.0", features = [
+  "providers", "signer-local", "rpc-types", "network",
+  "consensus", "eips", "sol-types"
+] }
+axum                = "0.7"
+serde               = { version = "1", features = ["derive"] }
+serde_json          = "1"
+tokio               = { version = "1", features = ["full"] }
+hex                 = "0.4"
+eyre                = "0.6"
+\`\`\`
+
+## Step 1: The authorization payload (what the user signs)
+
+The user (Alice) signs an \`Authorization\` off-chain — your frontend or wallet does this. The bytes she sends to your service are the result. Reproducing the signing logic here so you can see what the service expects:
+
+\`\`\`rust
+// FRONTEND / wallet code — runs in the user's browser / MetaMask, NOT on the server.
+use alloy::{
+    eips::eip7702::Authorization,
+    primitives::{Address, U256},
+    signers::{local::PrivateKeySigner, SignerSync},
+};
+
+fn sign_authorization_for_user(
+    user: &PrivateKeySigner,
+    delegate: Address,
+    chain_id: u64,
+    user_nonce: u64,
+) -> eyre::Result<alloy::eips::eip7702::SignedAuthorization> {
+    let auth = Authorization {
+        chain_id: U256::from(chain_id),
+        address: delegate,
+        nonce: user_nonce,
+    };
+    let sig = user.sign_hash_sync(&auth.signature_hash())?;
+    Ok(auth.into_signed(sig))
+}
+\`\`\`
+
+Walk:
+
+- **\`Authorization { chain_id, address, nonce }\`** — three fields. \`address\` is the **delegate** contract whose code Alice is authorizing for her EOA.
+- **\`auth.signature_hash()\`** — the hash that gets signed. Per spec: \`keccak256(MAGIC || rlp([chain_id, address, nonce]))\` where \`MAGIC\` is \`0x05\`. **Don't hand-compute this** — Alloy does it; if you reach for keccak yourself you've already made a mistake.
+- **\`user_nonce\`** — Alice's *current EOA nonce*. The authorization is consumed exactly when the tx that includes it is mined; replaying it requires Alice's nonce to still match. **One-shot replay protection** built in.
+
+The serialized \`SignedAuthorization\` is what hits your service. EIP-2718 envelope encoding is the canonical wire format:
+
+\`\`\`rust
+let bytes = signed_auth.encoded_2718();
+let hex = format!("0x{}", hex::encode(bytes));
+// Send this hex string in the JSON body
+\`\`\`
+
+> 🔍 **Find in repo.** Open [\`alloy-eips/src/eip7702\`](https://github.com/alloy-rs/eips/tree/main/crates/eip7702/src). Find \`Authorization::signature_hash\`. Note the \`MAGIC\` constant — that's the EIP-7702 prefix that prevents the same RLP being misread as some other signed message. **Domain separation, in one byte.**
+
+## Step 2: Service receives + builds the Type 4 tx
+
+\`\`\`rust
+use alloy::{
+    consensus::SignableTransaction,
+    eips::eip2718::Decodable2718,
+    eips::eip7702::SignedAuthorization,
+    network::{TransactionBuilder, TransactionBuilder7702},
+    primitives::{Address, B256, Bytes, U256},
+    providers::{Provider, ProviderBuilder},
+    rpc::types::TransactionRequest,
+    signers::local::PrivateKeySigner,
+    sol,
+};
+
+sol! {
+    // Standard "execute multiple calls" interface — the delegate must implement this
+    function executeBatch(
+        (address target, uint256 value, bytes data)[] calls
+    ) external;
+}
+
+#[derive(Clone, serde::Deserialize)]
+pub struct CallSpec {
+    pub target: Address,
+    pub value: U256,
+    pub data: Bytes,
+}
+
+pub async fn build_sponsored_tx<P: Provider>(
+    provider: &P,
+    sponsor: &PrivateKeySigner,
+    user: Address,
+    user_authorization_hex: &str,
+    calls: Vec<CallSpec>,
+) -> eyre::Result<TransactionRequest> {
+    // 1. Parse the user's signed authorization from the wire format.
+    let auth_bytes = hex::decode(user_authorization_hex.trim_start_matches("0x"))?;
+    let signed_auth = SignedAuthorization::decode_2718(&mut auth_bytes.as_slice())?;
+
+    // 2. ABI-encode the batched call.
+    let batch = executeBatchCall {
+        calls: calls.into_iter().map(|c| (c.target, c.value, c.data)).collect(),
+    };
+    let calldata = batch.abi_encode();
+
+    // 3. Build the Type 4 tx: from = sponsor, to = user (the EOA being delegated),
+    //    auth_list contains the user's signed auth, calldata invokes the delegate.
+    let chain_id = provider.get_chain_id().await?;
+    let nonce = provider.get_transaction_count(sponsor.address()).await?;
+    let fee = provider.estimate_eip1559_fees().await?;
+
+    let req = TransactionRequest::default()
+        .with_from(sponsor.address())
+        .with_to(user)
+        .with_chain_id(chain_id)
+        .with_nonce(nonce)
+        .with_max_fee_per_gas(fee.max_fee_per_gas)
+        .with_max_priority_fee_per_gas(fee.max_priority_fee_per_gas)
+        .with_gas_limit(500_000)  // batch txs need headroom; estimate for prod
+        .with_input(Bytes::from(calldata))
+        .with_authorization_list(vec![signed_auth]);
+
+    Ok(req)
+}
+\`\`\`
+
+Walk:
+
+- **\`SignedAuthorization::decode_2718\`** — the inverse of the \`encoded_2718\` the user sent. **One round-trip, no manual byte fiddling.**
+- **\`from = sponsor, to = user\`** — this is the heart of the design. The tx is *from the sponsor* (paying gas, signing the outer envelope) but *to the user's EOA* (which now executes as if it were the delegate). Anyone watching the tx sees Bob as initiator and Alice's address as the call target — and the **logs come from Alice's address** because that's the address running the delegate's code.
+- **\`with_authorization_list(vec![signed_auth])\`** — the line that makes this a Type 4. Add multiple \`SignedAuthorization\`s here and you're now batching multiple users into one tx (drill 3).
+- **The delegate's \`executeBatch\` is a convention, not a protocol mandate.** Most EIP-7702 delegate contracts in the wild expose a similar method (see [Soneium](https://github.com/coinbase/sponsored-erc20)'s pattern, OpenZeppelin's reference impl). Pick the convention your delegate uses.
+
+> 🛑 **Anti-fluency check.** Without scrolling: when Bob (sponsor) submits this tx, **whose nonce increments**? Bob's, Alice's, both? Hint: think about which nonce is in the outer tx envelope vs. what the authorization's \`nonce\` field is for.
+
+## Step 3: Submit + wait for inclusion
+
+\`\`\`rust
+use alloy::providers::WalletProvider;
+
+pub async fn submit_and_track<P: WalletProvider + Provider>(
+    provider: P,
+    req: TransactionRequest,
+) -> eyre::Result<B256> {
+    let pending = provider.send_transaction(req).await?;
+    let hash = *pending.tx_hash();
+
+    // For a sponsor service, returning the hash immediately is usually right —
+    // the user's UI can poll. If you want server-side confirmation:
+    // let receipt = pending.with_required_confirmations(1).get_receipt().await?;
+
+    Ok(hash)
+}
+\`\`\`
+
+Walk:
+
+- **\`provider.send_transaction(req)\`** — Alloy signs with the wallet attached to the provider (your sponsor key) and broadcasts. \`req\` already has \`from = sponsor.address()\`, so the wallet machinery picks the right key.
+- **The watcher pattern from the wallet-backend lesson applies here too.** A 30-second deadline + bumped fee on stuck txs would make this production-grade. We omit it for clarity; copy/paste the watcher from lesson 4 if you want it.
+
+## Step 4: Wire it together as an HTTP service
+
+\`\`\`rust
+use axum::{extract::State, routing::post, Json, Router};
+use std::sync::Arc;
+
+#[derive(serde::Deserialize)]
+struct SponsorRequest {
+    user: Address,
+    user_authorization: String,
+    calls: Vec<CallSpec>,
+}
+
+#[derive(serde::Serialize)]
+struct SponsorResponse {
+    tx_hash: B256,
+}
+
+#[derive(Clone)]
+struct AppState<P: Provider + WalletProvider + Clone + 'static> {
+    provider: P,
+    sponsor: Arc<PrivateKeySigner>,
+}
+
+async fn sponsor_handler<P: Provider + WalletProvider + Clone + 'static>(
+    State(state): State<AppState<P>>,
+    Json(body): Json<SponsorRequest>,
+) -> Result<Json<SponsorResponse>, (axum::http::StatusCode, String)> {
+    let req = build_sponsored_tx(
+        &state.provider,
+        &state.sponsor,
+        body.user,
+        &body.user_authorization,
+        body.calls,
+    )
+    .await
+    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let hash = submit_and_track(state.provider.clone(), req)
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(SponsorResponse { tx_hash: hash }))
+}
+
+#[tokio::main]
+async fn main() -> eyre::Result<()> {
+    let sponsor: PrivateKeySigner = std::env::var("SPONSOR_KEY")?.parse()?;
+    let provider = ProviderBuilder::new()
+        .wallet(sponsor.clone())
+        .connect(&std::env::var("RPC_URL")?)
+        .await?;
+
+    let state = AppState {
+        provider,
+        sponsor: Arc::new(sponsor),
+    };
+
+    let app = Router::new()
+        .route("/sponsor", post(sponsor_handler))
+        .with_state(state);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+\`\`\`
+
+Whole service: ~200 LOC including the imports and the helper module. The frontend produces the \`user_authorization\` hex (Step 1 code, but in the user's wallet); the service handles everything else.
+
+> 🔍 **Find in repo.** Open [\`alloy/examples/transactions/send_eip7702_transaction.rs\`](https://github.com/alloy-rs/examples/blob/main/examples/transactions/examples/send_eip7702_transaction.rs). Note that the official example has Bob send + Alice authorize — the **same separation we built**. The official example just hardcodes everything in main(); we wrapped it as a service. **Same pattern, productionized.**
+
+## What's missing for production
+
+| Gap | What real sponsor services do |
+| :--- | :--- |
+| **Authorization validation** | Decode + verify \`signed_auth.recover_authority()\` matches the claimed user before paying. We trust the input; production checks. |
+| **Replay protection** | The user's nonce changes after this tx; check the authorization's nonce equals the current EOA nonce *before* submitting. Stale authorizations should be rejected synchronously. |
+| **Spending limits** | Per-user daily caps. Per-call value caps. Allowlist of delegate addresses. (You pay the gas; you decide who you'll sponsor for.) |
+| **Watcher** | Lesson 4's replace-on-stuck logic. EIP-7702 txs go through the same mempool; the bumping pattern is identical. |
+| **Multi-user batching** | One tx with \`auth_list = [Alice's auth, Bob's auth, Carol's auth]\` and a \`multicall\` style delegate call. Lower per-user gas amortization. |
+| **Gas sponsorship accounting** | Track how much you've spent per user; expose a \`/balance\` endpoint; refill via Stripe / on-chain top-ups / app subscription. |
+| **Delegate version pinning** | Allow only specific delegate addresses (your audited set). Reject authorizations to unknown delegates — they could be malicious. |
+| **Frontend SDK** | A TypeScript / Swift / Kotlin client that takes \`(provider, calls)\` and returns the \`user_authorization\` hex, abstracting the signing flow from app developers. |
+
+The architecture you wrote — accept signed authorization + intent, wrap in Type 4, sponsor the gas, submit — **is what every production EIP-7702 paymaster does**. Companies like Privy, Dynamic, and Coinbase Smart Wallet are running variations of this exact code path.
+
+## Drill
+
+1. **Validate authority.** Add a sanity check: \`signed_auth.recover_authority()? == body.user\`. Reject mismatches with 400. (15 min)
+2. **Check nonce freshness.** Before submitting, fetch the user's current nonce and verify it equals the authorization's \`nonce\`. (15 min)
+3. **Multi-user batching.** Change \`/sponsor\` to accept a list of \`(user, user_authorization, calls)\` triples. Build one tx with all authorizations and a multicall delegate call. **What's the worst case if one user's auth is invalid mid-batch?** (1.5 hours)
+4. **Spending cap.** Track per-user gas spent in a \`HashMap<Address, U256>\`. Reject sponsoring requests that would exceed a configurable per-day limit. (45 min)
+5. **Replace-on-stuck.** Lift the watcher from lesson 4 and integrate it. (30 min — mostly copy/paste once you understand the pattern.)
+
+Finish drill 5 and you have a sponsor service ready for an internal app. Add SDK + spending policy + observability and you're shipping the Privy-style developer experience.
+
+> 🛑 **Final check.** In one sentence: why does EIP-7702 specifically (vs. EIP-4337) make sponsorship so much *cheaper* to operate? If your answer doesn't mention "no entry-point contract overhead" and "single tx vs. UserOp wrapping", re-read the 90-second refresher — that's the whole reason 7702 exists.
+
+## 📺 Further watching
+
+\`\`\`youtube
+_k5fKlKBWV4 | EIP-7702: a technical deep dive — lightclient (Devcon SEA 2024)
+\`\`\`
+
+\`\`\`youtube
+K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — the engine running your sponsored txs
+\`\`\`
+`,
+                },
               ],
             },
           },

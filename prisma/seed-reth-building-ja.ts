@@ -1494,6 +1494,350 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
 \`\`\`
 `,
                 },
+                {
+                  title: '最小限の EIP-7702 Sponsor サービスを Rust で作る',
+                  slug: 'build-7702-sponsor-ja',
+                  type: 'CONTENT',
+                  sortOrder: 4,
+                  duration: 45,
+                  xpReward: 80,
+                  content: `# 最小限の EIP-7702 Sponsor サービスを Rust で作る
+
+EIP-7702 (Pectra 以降、2025 年 3 月から mainnet で稼働) は EOA に smart-account 機能を安く付与する道: ユーザは「この tx の間、私の EOA をこのコントラクトのコードを持つかのように扱え」と言う *authorization* に署名する。Sponsor — あなたのサービス — がガスを払う。ユーザは atomic に batched call、custom validation、session key を、新しいアカウントへ移行せずに得る。本レッスンは sponsor を ~200 行で構築します。
+
+> 📌 **スコープの正直な開示。** **単一ユーザ** EIP-7702 トランザクションを sponsor する: ユーザがオフチェーンで authorization に署名、それと意図する call をサービスに POST、サービスがそれを Type 4 トランザクション (ガス支払い) で wrap、submit、hash を返す。**マルチユーザバッチング** ("bundler" パターン、N ユーザを 1 つのチェーン tx に詰める) は drill で 1 ループの拡張として扱う。Account abstraction ポリシーロジック — 支出制限、セッションキー、リカバリ — は delegate コントラクトが決めること; sponsor は relay するだけ。
+
+## EIP-7702 を 90 秒で
+
+\`\`\`
+7702 なし: Alice の EOA → CALL → Contract
+7702 あり: Alice の EOA = (delegate された) → Contract code → Alice のアドレスとして実行
+\`\`\`
+
+メカニクス:
+
+- **Tx type 4** が新フィールドを運ぶ: \`authorization_list: Vec<SignedAuthorization>\`
+- \`Authorization { chain_id, address (delegate), nonce }\` がコードを設定される EOA によって署名される
+- tx 実行時、リスト内の各 authorization は **その EOA のアカウントコードを書き換える** — 23 byte の delegation pointer (\`0xef0100 || delegate_address\`) に **その tx の残りの間**
+- EOA のストレージ、残高、アドレスはそのまま。Delegate のコードが EOA 自身のコードかのように走る
+
+それだけ。プロトコルの 3 文; 残りは配管。
+
+## 何を作るか
+
+\`\`\`bash
+$ curl -X POST http://localhost:8080/sponsor \\
+    -H "Content-Type: application/json" \\
+    -d '{
+      "user":              "0xAlice...",
+      "delegate":          "0xMyAccountImpl...",
+      "user_authorization": "0x04f8...",
+      "calls": [
+        { "target": "0xToken...", "value": "0x0", "data": "0xa9059cbb..." },
+        { "target": "0xRouter...", "value": "0x0", "data": "0x38ed1739..." }
+      ]
+    }'
+{ "tx_hash": "0xabc..." }
+\`\`\`
+
+\`\`\`mermaid
+flowchart TB
+    User["Alice (EOA)"] -->|オフチェーンで Authorization 署名| AuthPayload["Authorization<br/>chain_id, delegate, nonce"]
+    User -->|POST /sponsor| API
+    AuthPayload -->|HTTP body| API["axum handler"]
+    API -->|Type 4 tx を構築<br/>auth_list = [user_auth]| Sponsor["Sponsor signer<br/>(ガス支払い)"]
+    Sponsor -->|broadcast| Chain
+    Chain -->|delegated code が<br/>Alice のアドレスとして走る| Effects["Token transfer +<br/>Router swap atomically"]
+\`\`\`
+
+> 🛑 **スクロール前に予測。** なぜ sponsor (Bob) が Type 4 tx の \`from\` である必要があるか、Alice ではなく? EIP-1559 で **\`from\` が何を意味するか** vs *authorization* が誰のためのものか、一文で答えてください。答えを保持。
+
+## なぜ sponsor サービスか (vs ネイティブ smart-account)
+
+| 方式 | UX | コスト | 移行 |
+| :--- | :--- | :--- | :--- |
+| **ネイティブ smart account (4337)** | 最高 — フル custom validation | 高 — 全 tx で bundler マークアップ | ユーザ資金 → 新アカウント |
+| **純 7702 (ユーザが自分のガスを払う)** | OK — batching は得られるが ETH は必要 | 低 — 単一 tx | なし — 同じ EOA |
+| **7702 + sponsor (本レッスン)** | onboarding に最高 — ETH 不要 | sponsor がガスを食う (アプリ subscription、手数料、等で課金) | なし — 同じ EOA |
+
+アプリチームのプロダクト作業のスイートスポット: 既存 EOA、smart-account 機能、UX 投資としてバックエンドがガスを賄う。
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "eip7702-sponsor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alloy = { version = "1.0", features = [
+  "providers", "signer-local", "rpc-types", "network",
+  "consensus", "eips", "sol-types"
+] }
+axum                = "0.7"
+serde               = { version = "1", features = ["derive"] }
+serde_json          = "1"
+tokio               = { version = "1", features = ["full"] }
+hex                 = "0.4"
+eyre                = "0.6"
+\`\`\`
+
+## Step 1: Authorization ペイロード (ユーザが署名するもの)
+
+ユーザ (Alice) はオフチェーンで \`Authorization\` に署名する — フロントエンドや wallet が行う。彼女がサービスに送る bytes はその結果。サービスが何を期待するか見せるために署名ロジックをここで再現:
+
+\`\`\`rust
+// FRONTEND / wallet コード — ユーザのブラウザ / MetaMask で走る、サーバではない。
+use alloy::{
+    eips::eip7702::Authorization,
+    primitives::{Address, U256},
+    signers::{local::PrivateKeySigner, SignerSync},
+};
+
+fn sign_authorization_for_user(
+    user: &PrivateKeySigner,
+    delegate: Address,
+    chain_id: u64,
+    user_nonce: u64,
+) -> eyre::Result<alloy::eips::eip7702::SignedAuthorization> {
+    let auth = Authorization {
+        chain_id: U256::from(chain_id),
+        address: delegate,
+        nonce: user_nonce,
+    };
+    let sig = user.sign_hash_sync(&auth.signature_hash())?;
+    Ok(auth.into_signed(sig))
+}
+\`\`\`
+
+Walk:
+
+- **\`Authorization { chain_id, address, nonce }\`** — 3 フィールド。\`address\` は **delegate** コントラクト、Alice が EOA に対して認可するコード。
+- **\`auth.signature_hash()\`** — 署名されるハッシュ。仕様: \`keccak256(MAGIC || rlp([chain_id, address, nonce]))\`、\`MAGIC\` は \`0x05\`。**自分で計算しない** — Alloy がやる; keccak に手を出した時点でミスしている。
+- **\`user_nonce\`** — Alice の *現在の EOA nonce*。authorization は含まれる tx が mine された瞬間に消費される; 再生には Alice の nonce が一致する必要がある。**ワンショットの replay 防止** が組み込まれている。
+
+シリアライズされた \`SignedAuthorization\` がサービスに届くもの。EIP-2718 envelope エンコーディングが正規 wire 形式:
+
+\`\`\`rust
+let bytes = signed_auth.encoded_2718();
+let hex = format!("0x{}", hex::encode(bytes));
+// この hex 文字列を JSON ボディで送る
+\`\`\`
+
+> 🔍 **リポで探す。** [\`alloy-eips/src/eip7702\`](https://github.com/alloy-rs/eips/tree/main/crates/eip7702/src) を開く。\`Authorization::signature_hash\` を見つける。\`MAGIC\` 定数 — それが EIP-7702 プレフィクスで、同じ RLP が他の署名済みメッセージとして誤読されるのを防ぐ。**ドメイン分離、1 byte で。**
+
+## Step 2: サービスが受け取って Type 4 tx を構築
+
+\`\`\`rust
+use alloy::{
+    consensus::SignableTransaction,
+    eips::eip2718::Decodable2718,
+    eips::eip7702::SignedAuthorization,
+    network::{TransactionBuilder, TransactionBuilder7702},
+    primitives::{Address, B256, Bytes, U256},
+    providers::{Provider, ProviderBuilder},
+    rpc::types::TransactionRequest,
+    signers::local::PrivateKeySigner,
+    sol,
+};
+
+sol! {
+    // 標準的な「複数 call を実行」インターフェース — delegate がこれを実装する
+    function executeBatch(
+        (address target, uint256 value, bytes data)[] calls
+    ) external;
+}
+
+#[derive(Clone, serde::Deserialize)]
+pub struct CallSpec {
+    pub target: Address,
+    pub value: U256,
+    pub data: Bytes,
+}
+
+pub async fn build_sponsored_tx<P: Provider>(
+    provider: &P,
+    sponsor: &PrivateKeySigner,
+    user: Address,
+    user_authorization_hex: &str,
+    calls: Vec<CallSpec>,
+) -> eyre::Result<TransactionRequest> {
+    // 1. ユーザの signed authorization を wire 形式から parse
+    let auth_bytes = hex::decode(user_authorization_hex.trim_start_matches("0x"))?;
+    let signed_auth = SignedAuthorization::decode_2718(&mut auth_bytes.as_slice())?;
+
+    // 2. バッチ call を ABI エンコード
+    let batch = executeBatchCall {
+        calls: calls.into_iter().map(|c| (c.target, c.value, c.data)).collect(),
+    };
+    let calldata = batch.abi_encode();
+
+    // 3. Type 4 tx を構築: from = sponsor、to = user (delegate される EOA)、
+    //    auth_list はユーザの signed auth、calldata は delegate を呼ぶ
+    let chain_id = provider.get_chain_id().await?;
+    let nonce = provider.get_transaction_count(sponsor.address()).await?;
+    let fee = provider.estimate_eip1559_fees().await?;
+
+    let req = TransactionRequest::default()
+        .with_from(sponsor.address())
+        .with_to(user)
+        .with_chain_id(chain_id)
+        .with_nonce(nonce)
+        .with_max_fee_per_gas(fee.max_fee_per_gas)
+        .with_max_priority_fee_per_gas(fee.max_priority_fee_per_gas)
+        .with_gas_limit(500_000)  // batch tx には余裕が必要; production は estimate
+        .with_input(Bytes::from(calldata))
+        .with_authorization_list(vec![signed_auth]);
+
+    Ok(req)
+}
+\`\`\`
+
+Walk:
+
+- **\`SignedAuthorization::decode_2718\`** — ユーザが送った \`encoded_2718\` の逆。**1 ラウンドトリップ、手動 byte いじりなし。**
+- **\`from = sponsor、to = user\`** — これがデザインの心臓部。tx は *sponsor から* (ガス支払い、外側の envelope に署名) であって *user の EOA に向かう* (今や delegate であるかのように実行する)。tx を観察する誰もが Bob を initiator、Alice のアドレスを call ターゲットと見る — そして **ログは Alice のアドレスから出る**、なぜなら delegate のコードを走らせているのはそのアドレスだから。
+- **\`with_authorization_list(vec![signed_auth])\`** — これを Type 4 にする 1 行。複数の \`SignedAuthorization\` をここに足せば、複数ユーザを 1 つの tx にバッチしている (drill 3)。
+- **delegate の \`executeBatch\` は慣例であってプロトコル必須ではない。** 野生の大半の EIP-7702 delegate コントラクトが似たようなメソッドを公開する ([Soneium](https://github.com/coinbase/sponsored-erc20) のパターン、OpenZeppelin の参照実装等を見よ)。あなたの delegate が使う慣例を選ぶ。
+
+> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: Bob (sponsor) がこの tx を提出する時、**誰の nonce が増える** か? Bob、Alice、両方? ヒント: 外側の tx envelope にあるのはどの nonce vs authorization の \`nonce\` フィールドが何のためか考えて。
+
+## Step 3: 提出 + inclusion 待ち
+
+\`\`\`rust
+use alloy::providers::WalletProvider;
+
+pub async fn submit_and_track<P: WalletProvider + Provider>(
+    provider: P,
+    req: TransactionRequest,
+) -> eyre::Result<B256> {
+    let pending = provider.send_transaction(req).await?;
+    let hash = *pending.tx_hash();
+
+    // sponsor サービスでは、即時に hash を返すのが普通正しい —
+    // ユーザ UI が poll できる。サーバ側 confirmation が欲しいなら:
+    // let receipt = pending.with_required_confirmations(1).get_receipt().await?;
+
+    Ok(hash)
+}
+\`\`\`
+
+Walk:
+
+- **\`provider.send_transaction(req)\`** — Alloy が provider に attach された wallet (sponsor 鍵) で署名 + broadcast。\`req\` は既に \`from = sponsor.address()\` を持つので wallet 機構が正しい鍵を選ぶ。
+- **wallet-backend lesson の watcher パターンがここでも適用できる。** 30 秒 deadline + stuck tx の bumped fee で production 級になる。明瞭性のため省略; ほしければ lesson 4 の watcher をコピペで。
+
+## Step 4: HTTP サービスとして組み立て
+
+\`\`\`rust
+use axum::{extract::State, routing::post, Json, Router};
+use std::sync::Arc;
+
+#[derive(serde::Deserialize)]
+struct SponsorRequest {
+    user: Address,
+    user_authorization: String,
+    calls: Vec<CallSpec>,
+}
+
+#[derive(serde::Serialize)]
+struct SponsorResponse {
+    tx_hash: B256,
+}
+
+#[derive(Clone)]
+struct AppState<P: Provider + WalletProvider + Clone + 'static> {
+    provider: P,
+    sponsor: Arc<PrivateKeySigner>,
+}
+
+async fn sponsor_handler<P: Provider + WalletProvider + Clone + 'static>(
+    State(state): State<AppState<P>>,
+    Json(body): Json<SponsorRequest>,
+) -> Result<Json<SponsorResponse>, (axum::http::StatusCode, String)> {
+    let req = build_sponsored_tx(
+        &state.provider,
+        &state.sponsor,
+        body.user,
+        &body.user_authorization,
+        body.calls,
+    )
+    .await
+    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let hash = submit_and_track(state.provider.clone(), req)
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(SponsorResponse { tx_hash: hash }))
+}
+
+#[tokio::main]
+async fn main() -> eyre::Result<()> {
+    let sponsor: PrivateKeySigner = std::env::var("SPONSOR_KEY")?.parse()?;
+    let provider = ProviderBuilder::new()
+        .wallet(sponsor.clone())
+        .connect(&std::env::var("RPC_URL")?)
+        .await?;
+
+    let state = AppState {
+        provider,
+        sponsor: Arc::new(sponsor),
+    };
+
+    let app = Router::new()
+        .route("/sponsor", post(sponsor_handler))
+        .with_state(state);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+\`\`\`
+
+サービス全体: ~200 LOC、import + ヘルパモジュールを含めて。フロントエンドが \`user_authorization\` hex を生成 (Step 1 のコード、ただしユーザ wallet 内); サービスが残り全部を扱う。
+
+> 🔍 **リポで探す。** [\`alloy/examples/transactions/send_eip7702_transaction.rs\`](https://github.com/alloy-rs/examples/blob/main/examples/transactions/examples/send_eip7702_transaction.rs) を開く。公式 example が Bob 送信 + Alice 認可 — **作ったのと同じ分離**。公式 example は main() に全部 hardcode、私たちはサービスとして wrap した。**同じパターン、production 化しただけ。**
+
+## Production に足りないもの
+
+| ギャップ | 本物の sponsor サービスが何をしているか |
+| :--- | :--- |
+| **Authorization 検証** | \`signed_auth.recover_authority()\` が claim された user と一致するかを decode + 検証する (ガス支払い前に)。本サービスは入力を信頼; production はチェックする |
+| **Replay 保護** | tx 後にユーザの nonce が変わる; 提出 *前* に authorization の nonce が現在の EOA nonce と一致するかチェック。古い authorization は同期的に reject すべき |
+| **支出制限** | ユーザ単位日次 cap。Call ごとの value cap。Delegate アドレスの allowlist。(あなたがガスを払う; 誰のために sponsor するかはあなたが決める) |
+| **Watcher** | Lesson 4 の replace-on-stuck ロジック。EIP-7702 tx は同じ mempool を通る; bump パターンは同一 |
+| **マルチユーザバッチング** | 1 つの tx で \`auth_list = [Alice's auth, Bob's auth, Carol's auth]\` + \`multicall\` スタイルの delegate call。ユーザ単位ガス償却が低くなる |
+| **ガス sponsor 会計** | ユーザごとの支出量を track; \`/balance\` endpoint を公開; Stripe / オンチェーン入金 / アプリ subscription で refill |
+| **Delegate バージョンピン留め** | 特定の delegate アドレス (audit 済みセット) のみ許可。未知の delegate への authorization は reject — 悪意の可能性 |
+| **フロントエンド SDK** | \`(provider, calls)\` を取って \`user_authorization\` hex を返す TypeScript / Swift / Kotlin クライアント。アプリ開発者から署名フローを抽象化 |
+
+書いたアーキテクチャ — signed authorization + intent を受け取り、Type 4 で wrap、ガス sponsor、submit — **すべての production EIP-7702 paymaster がやっていること**。Privy、Dynamic、Coinbase Smart Wallet 等の会社が、この正確なコードパスのバリエーションを動かしている。
+
+## Drill
+
+1. **Authority 検証。** 健全性チェックを追加: \`signed_auth.recover_authority()? == body.user\`。不一致は 400 で reject。(15分)
+2. **Nonce 新鮮度チェック。** 提出前に現在のユーザ nonce を fetch、authorization の \`nonce\` と一致するか検証。(15分)
+3. **マルチユーザバッチング。** \`/sponsor\` を \`(user, user_authorization, calls)\` トリプルのリストを受け取るよう変更。全 authorization + multicall delegate call を持つ 1 tx を構築。**1 ユーザの auth が batch 中で invalid だったら最悪何が起きる?** (1.5時間)
+4. **支出 cap。** \`HashMap<Address, U256>\` でユーザ単位ガス支出を track。設定可能な日次上限を超えるリクエストは reject。(45分)
+5. **Replace-on-stuck。** Lesson 4 の watcher を持ってきて統合する。(30分 — パターンを理解していれば大半コピペ)
+
+Drill 5 を完成させれば内部アプリ用の sponsor サービスが ready。SDK + 支出ポリシー + observability を足せば Privy スタイルの開発者体験を ship している。
+
+> 🛑 **最終チェック。** 一文で: なぜ EIP-7702 が *特に* (vs EIP-4337) sponsorship をはるかに *安く* 運用させるのか? 答えに「entry-point コントラクトオーバーヘッドなし」と「単一 tx vs UserOp wrapping」がないなら、90 秒リフレッシャを読み直し — それが 7702 が存在する全理由。
+
+## 📺 関連動画
+
+\`\`\`youtube
+_k5fKlKBWV4 | EIP-7702: a technical deep dive — lightclient (Devcon SEA 2024)
+\`\`\`
+
+\`\`\`youtube
+K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — sponsor された tx を走らせるエンジン
+\`\`\`
+`,
+                },
               ],
             },
           },

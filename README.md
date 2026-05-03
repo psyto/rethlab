@@ -46,9 +46,9 @@ This is a serious training program — not a casual tutorial.
 | **Bridge to Advanced** | EVM at the bytes level (dispatch loop, world state, gas, call frames, reorgs) + intermediate Rust (generics, ?Sized, dyn, Arc, unsafe, macros) | Smooth tutorial bridge for Solidity-native developers — closes the gap before source-walking begins |
 | **Advanced** | Revm interpreter, Database trait, Reth Staged Sync, ExEx, Reth SDK | Reading the actual ADD opcode, custom opcodes, NodeBuilder for App-chains. Active-learning style — Predict / Find-in-repo / Anti-fluency prompts throughout |
 | **Expert** | Performance engineering, MDBX, Tokio internals, procedural macros, custom precompiles, MPT, MEV pipelines, zkEVM, production fork ops | Foundry cheatcodes as precompiles, real Steel zkVM guest, MEV decoding from `op-bridge` |
-| **Building with the Stack** | Real-world apps in Rust + Alloy + Revm — the payoff for reading the source | L1: minimal MEV searcher. L2: reorg-aware Postgres indexer via ExEx. L3: custom RPC endpoint via `extend_rpc_modules`. L4: wallet backend (signer pool + nonce manager + replace-on-stuck watcher + axum API). EIP-7702 bundler coming |
+| **Building with the Stack** | Real-world apps in Rust + Alloy + Revm — the payoff for reading the source | L1: minimal MEV searcher. L2: reorg-aware Postgres indexer via ExEx. L3: custom RPC endpoint via `extend_rpc_modules`. L4: wallet backend (signer pool + nonce manager + replace-on-stuck watcher). L5: EIP-7702 sponsor service (Type 4 tx + paymaster pattern) |
 
-**Total: 12 courses (6 × EN + JA), 20 modules, 100 lessons.**
+**Total: 12 courses (6 × EN + JA), 20 modules, 102 lessons.**
 
 All courses are free. Reading every lesson works without an account. Anonymous visitors get **browser-local completion tracking** (lesson checkmarks + per-course progress bars persisted in `localStorage`); sign-in adds cross-device sync, XP, and a profile page.
 
@@ -78,7 +78,7 @@ cp .env.example .env
 # STRIPE_SECRET_KEY (test key OK for dev), and
 # NEXT_PUBLIC_GITHUB_SPONSORS_URL
 
-# Push schema and seed all 100 lessons
+# Push schema and seed all 102 lessons
 npx prisma db push
 npx prisma db seed
 
@@ -90,7 +90,7 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ### What `db seed` does
 
-The seeder lives in `prisma/seed.ts` and pulls from 12 individual course files (`prisma/seed-reth-{beginner,fundamentals,bridge-to-advanced,advanced,expert,building}-{en,ja}.ts`). It clears all course tables and re-creates 12 courses / 20 modules / 100 lessons in one shot.
+The seeder lives in `prisma/seed.ts` and pulls from 12 individual course files (`prisma/seed-reth-{beginner,fundamentals,bridge-to-advanced,advanced,expert,building}-{en,ja}.ts`). It clears all course tables and re-creates 12 courses / 20 modules / 102 lessons in one shot.
 
 Lesson URLs key on the **slug** (stable across reseeds), not the database CUID, so a full reseed never breaks shared links.
 
@@ -118,7 +118,7 @@ rethlab/
 │   ├── seed-reth-bridge-to-advanced-{en,ja}.ts # 8 lessons each
 │   ├── seed-reth-advanced-{en,ja}.ts          # 10 lessons each (incl. orientation)
 │   ├── seed-reth-expert-{en,ja}.ts            # 10 lessons each
-│   └── seed-reth-building-{en,ja}.ts          # 4 lessons each (more coming)
+│   └── seed-reth-building-{en,ja}.ts          # 5 lessons each
 ├── src/
 │   ├── app/                                   # Next.js App Router pages
 │   │   ├── courses/                           # Course catalog + detail + lesson pages
