@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Solidity でコントラクトは書ける。**でもその周りのインフラは、今すべて Rust で書かれています** — MEV searcher、indexer、wallet backend、AA bundler、custom RPC、paymaster、そして用途特化型 L1 (Hyperliquid、Tempo、Base) — 全部が Reth・Revm・Alloy・Foundry の上で動いている。本気のクリプトインフラチームで働きたいなら、ここを越える必要があります。RethLab がその道筋: 本物のソースを行単位で読み、動くアプリ 8 本を end-to-end で ship する。',
+      subtitle: 'Hyperliquid はその上で動く。Tempo はその上でローンチした。Paradigm が作った — Reth、Revm、Foundry、Alloy。本気のクリプトインフラが今 ship されているスタックです。それを読めるエンジニアはまだ希少。RethLab は本物のソースを行単位で walk through — そして 8 本の動くアプリを end-to-end で build、frontrun-resistant order router を capstone に。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -78,18 +78,18 @@ export const ja: TranslationKeys = {
     },
     whyNow: {
       tag: 'なぜ今 Rust',
-      title: 'Solidity は contract を ship する。Rust はその周りすべてを ship する。',
-      subtitle: '今日の本番 Ethereum スタックを見てください — MEV searcher、indexer、wallet backend、AA bundler、custom RPC、app-chain L1、zkEVM prover — 全部 Rust。お金が動くインフラレイヤーは、もう JavaScript でも Solidity でもない。スマートコントラクトを書く以上のキャリアを目指すなら、これが学ぶべき言語です。',
-      card1Title: 'Rust が EVM インフラ層を奪った',
-      card1Desc: 'Reth (Paradigm) はデフォルトの execution client。Foundry — 全 Solidity 開発者が日常的に使う — は Revm の上で動く。Alloy は ethers-rs を置き換えた。あなたが call しているスタック全体が、もう Rust です。',
-      card2Title: 'アプリはインフラに従う',
-      card2Desc: 'MEV searcher、indexer、wallet backend、EIP-7702 sponsor、AA bundler — チェーンと話す全バックエンドサービスに、より速く、より安く、MDBX を直読する Rust 版が存在します。これらを作ることが本気のクリプト企業の job description。',
+      title: 'Rust EVM スタックは今が瞬間 — そしてまだ早期',
+      subtitle: 'Hyperliquid は Reth フォーク (HyperEVM) の上で世界最大の perps DEX に成長した。Tempo は AI ネイティブな stablecoin L1 として、同じく Reth でローンチ。Paradigm — Uniswap や OpenSea を funded したファーム — は Reth・Revm・Foundry を、他のどのクリプトインフラ投資より速いペースで ship し続けている。今注目すべき理由は、このスタックが明らかに勝っていて、かつそれを拡張できるエンジニアがまだ希少なこと。',
+      card1Title: 'Hyperliquid: スケールしている Reth フォーク',
+      card1Desc: 'HyperEVM は Reth フォーク。Hyperliquid は中央集権取引所と競合するボリュームで perpetuals を捌いている、全部この Rust execution スタック上で。Reth が読めれば HyperEVM 内部も読める。',
+      card2Title: 'Paradigm は ship し続ける',
+      card2Desc: 'Reth、Revm、Foundry、Alloy — 全部 Paradigm が build + 攻めの iteration (Frontiers 2025 で「Hyperoptimizing Reth」「The Future of Reth」が ship された)。Tempo は最新の Reth ベース app-chain。このスタックの cadence は、今のクリプトインフラ最強のシグナル。',
       card3Title: 'タレントギャップは現実',
-      card3Desc: 'Solidity 開発者は供給過剰。Reth を読み、Revm precompile を書き、ExEx を ship し、frontrun-resistant router を作れる人材 — それが 2026 年に Paradigm / Hyperliquid / Tempo / Privy / Coinbase Smart Wallet が金を払う相手です。',
+      card3Desc: 'Reth の採用速度に対して、それを拡張できるエンジニアが追いついていない。2026 年に Paradigm・Hyperliquid・Tempo・次の Reth ベースチームが採用するインフラ人材は、まさにこのスタックを読んで ship した経験を持つ人たち。',
     },
     cta: {
-      title: '本番 Ethereum は Rust に移行中 — タレントはまだ追いついていない',
-      description: 'app-chain L1 だけの話ではありません。Paradigm、Hyperliquid、Tempo、Privy、Coinbase Smart Wallet、Beaverbuild、Cyfrin — 全部が、Reth を読み、Revm を拡張し、ExEx を ship し、Alloy で本番アプリを作れるエンジニアを欲しがっています。RethLab がその境界線を越えさせる。ギャップが閉じる前に始めましょう。',
+      title: 'Hyperliquid が採用中。Tempo が採用中。Paradigm ポートフォリオのインフラチームが採用中。',
+      description: 'Rust EVM スタックは速く動いている — Reth は他のプロジェクトが追いつけない cadence でリリースを ship し、それを読めるエンジニアは希少。RethLab は、スタック読解の深さ + 8 本のポートフォリオ即戦力 build (MEV searcher、indexer、custom RPC、wallet backend、EIP-7702 sponsor、swap aggregator、frontrun-resistant router) を提供します。2026 年に行われる採用は、これらの artifact を持って現れた人たちです。',
       cta: '始める',
     },
     features: {
@@ -368,7 +368,7 @@ export const ja: TranslationKeys = {
     loadCourse: 'コースの読み込みに失敗しました。もう一度お試しください。',
   },
   page: {
-    launchBanner: 'Free · 本気の Ethereum エンジニアが ship する Rust スタック',
+    launchBanner: 'Free · Reth・Revm・Alloy・Foundry — Hyperliquid、Tempo、Paradigm が ship する Rust スタック',
     whyRethLab: {
       title: 'なぜRethLab？',
     },

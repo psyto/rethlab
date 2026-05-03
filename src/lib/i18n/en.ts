@@ -39,7 +39,7 @@ export const en = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Solidity ships your contracts. **Everything around them now ships in Rust** — MEV searchers, indexers, wallet backends, AA bundlers, custom RPCs, paymasters, AND the new wave of purpose-built L1s (Hyperliquid, Tempo, Base) — all running on Reth, Revm, Alloy, Foundry. If you want to work at any serious crypto infra team, you have to cross this line. RethLab is the path: read the source line by line, then ship eight working apps end to end.',
+      subtitle: 'Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. The Rust EVM stack is where serious crypto infrastructure is being shipped today, and the engineers who can read it are scarce. RethLab walks you through that source line by line — then has you build eight working apps end to end, capstoning in a frontrun-resistant order router.',
       cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -76,18 +76,18 @@ export const en = {
     },
     whyNow: {
       tag: 'WHY RUST, WHY NOW',
-      title: "Solidity ships your contracts. Rust ships everything else around them.",
-      subtitle: "Look at any production Ethereum stack today — MEV searcher, indexer, wallet backend, AA bundler, custom RPC, app-chain L1, zkEVM prover — they're all Rust. The infrastructure layer where the money is being made is no longer JavaScript or Solidity. If your career horizon is anything beyond shipping smart contracts, this is the language you have to learn.",
-      card1Title: 'Rust took the EVM infra layer',
-      card1Desc: 'Reth (Paradigm) is the default execution client. Foundry — every Solidity dev uses it daily — runs on Revm. Alloy replaced ethers-rs. The whole stack you call into is Rust now.',
-      card2Title: "Apps follow the infra",
-      card2Desc: "MEV searchers, indexers, wallet backends, EIP-7702 sponsors, AA bundlers — every backend service that talks to chain has a Rust version that runs faster, costs less, and reads from MDBX directly. Building these is the job description at every serious crypto company.",
+      title: "The Rust EVM stack is having its moment — and it's still early",
+      subtitle: "Hyperliquid grew into the largest perps DEX on the planet on a Reth fork (HyperEVM). Tempo launched as the AI-native stablecoin L1, also on Reth. Paradigm — the firm that funded Uniswap and OpenSea — has been shipping Reth, Revm, and Foundry faster than any other crypto infrastructure bet on the table. The reason to pay attention right now is that this stack is clearly winning AND the engineers who can extend it are still scarce.",
+      card1Title: 'Hyperliquid: a Reth fork at scale',
+      card1Desc: "HyperEVM is a Reth fork. Hyperliquid runs perpetuals at volumes that compete with centralized exchanges, all on this Rust execution stack. Read Reth and you can read HyperEVM internals.",
+      card2Title: 'Paradigm keeps shipping',
+      card2Desc: "Reth, Revm, Foundry, Alloy — all built and maintained by Paradigm and aggressively iterated on (Frontiers 2025 just shipped 'Hyperoptimizing Reth' and 'The Future of Reth'). Tempo is the newest portfolio-adjacent app-chain to launch on Reth. The cadence of this stack is the strongest signal in crypto infra right now.",
       card3Title: 'The talent gap is real',
-      card3Desc: 'Solidity devs are oversupplied. Engineers who can read Reth, write Revm precompiles, ship an ExEx, build a frontrun-resistant router — those are the people Paradigm / Hyperliquid / Tempo / Privy / Coinbase Smart Wallet are paying for in 2026.',
+      card3Desc: "Reth is being adopted faster than the engineers who can extend it are showing up. The infra hires Paradigm, Hyperliquid, Tempo, and the next wave of Reth-based teams make in 2026 will be people who already read this stack and shipped against it.",
     },
     cta: {
-      title: 'Production Ethereum is moving to Rust — and the talent isn\'t there yet',
-      description: 'It\'s not just app-chain L1s. The hiring stories at Paradigm, Hyperliquid, Tempo, Privy, Coinbase Smart Wallet, Beaverbuild, Cyfrin — all of them want engineers who can read Reth, extend Revm, ship an ExEx, and build production apps in Alloy. RethLab gets you across that line. Start before the gap closes.',
+      title: 'Hyperliquid is hiring. Tempo is hiring. Paradigm-portfolio infra teams are hiring.',
+      description: "The Rust EVM stack is moving fast — Reth ships releases on a cadence most projects can't match, and the engineers who can read it are scarce. RethLab gives you the stack-reading depth plus eight portfolio-ready builds (MEV searcher, indexer, custom RPC, wallet backend, EIP-7702 sponsor, swap aggregator, frontrun-resistant router). The hires made in 2026 will be people who already showed up with these artifacts.",
       cta: 'Start',
     },
     features: {
@@ -366,7 +366,7 @@ export const en = {
     loadCourse: 'Failed to load course. Please try again.',
   },
   page: {
-    launchBanner: 'Free · The Rust stack every serious Ethereum engineer ships in',
+    launchBanner: 'Free · Reth, Revm, Alloy, Foundry — the stack Hyperliquid, Tempo, and Paradigm ship on',
     whyRethLab: {
       title: 'Why RethLab?',
     },
