@@ -8,7 +8,7 @@ export async function seedRethBuildingEN(prisma: PrismaClient) {
       slug: 'reth-building-en',
       title: 'Building with the Stack — Real-World Rust EVM Apps',
       description:
-        "Reading the source is the prerequisite. This tier is the payoff: ship working applications with Rust + Alloy + Revm. The first lesson is a complete minimal MEV searcher (mempool → fork-simulate → arb-detect → bundle) in ~200 lines. More builds coming: indexer, custom RPC, wallet backend, EIP-7702 bundler.",
+        "Reading the source is the prerequisite. This tier is the payoff — eight working apps in Rust + Alloy + Revm: minimal MEV searcher, reorg-aware Postgres indexer (ExEx), custom RPC endpoint, wallet backend, EIP-7702 sponsor service, Foundry-style cheatcode, swap aggregator, and a frontrun-resistant order router capstone that integrates them all.",
       difficulty: 'ADVANCED',
       duration: 60,
       xpReward: 100,
@@ -386,11 +386,19 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 ---
 
-## Coming in this tier
+## What comes next in this tier
 
-The next lesson in **Building with the Stack** picks up where this one stops: an in-process indexer that turns the chain into a queryable Postgres dataset, with full reorg correctness, in another ~250 lines. Planned after that: a custom RPC endpoint on Reth, a Rust wallet backend, and a minimal EIP-7702 bundler.
+The full **Building with the Stack** tier ships eight lessons end to end. From here:
 
-Subscribe to the [GitHub repo](https://github.com/psyto/rethlab) for new lessons.
+- **L2** — Reorg-aware Postgres indexer (ExEx-driven, in-process)
+- **L3** — Custom RPC endpoint via \`extend_rpc_modules\`
+- **L4** — Wallet backend (signer pool + nonce manager + replace-on-stuck)
+- **L5** — EIP-7702 sponsor service (Type 4 tx + paymaster pattern)
+- **L6** — Foundry-style cheatcode (custom precompile + minimal harness)
+- **L7** — Swap aggregator (Revm fork + cross-venue quotes)
+- **L8 (Capstone)** — Frontrun-resistant order router that integrates everything above
+
+Each is a self-contained ~200–300 line build with the same predict / find-in-repo / anti-fluency style. Pick the one that maps to your target use case.
 `,
                 },
                 {

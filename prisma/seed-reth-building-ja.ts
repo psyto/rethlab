@@ -8,7 +8,7 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
       slug: 'reth-building-ja',
       title: 'Building with the Stack — 実アプリを作る',
       description:
-        'ソースを読むのは前提条件、このティアはその対価です。Rust + Alloy + Revm で動くアプリケーションを実装します。第1回は ~200行 の最小限 MEV searcher (mempool → fork-simulate → arb 検出 → bundle 構築) を完成させます。今後追加予定: indexer・カスタム RPC・wallet backend・EIP-7702 bundler。',
+        'ソースを読むのは前提条件、このティアはその対価 — Rust + Alloy + Revm の動くアプリ 8 本: 最小 MEV searcher、reorg-aware Postgres indexer (ExEx)、カスタム RPC エンドポイント、wallet backend、EIP-7702 sponsor、Foundry スタイル cheatcode、swap aggregator、そして全部を統合する frontrun-resistant order router の capstone。',
       difficulty: 'ADVANCED',
       duration: 60,
       xpReward: 100,
@@ -385,11 +385,19 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 ---
 
-## このティアの今後
+## このティアの先
 
-**Building with the Stack** の次のレッスンは本レッスンが止まった所から続く: in-process な indexer がチェーンをクエリ可能な Postgres データセットに変換、フル reorg 正確性、もう ~250 行で。それ以降の予定: Reth カスタム RPC エンドポイント、Rust wallet backend、最小限の EIP-7702 bundler。
+**Building with the Stack** ティアは 8 lesson 全部 ship 済み。ここから:
 
-新レッスンの通知は [GitHub repo](https://github.com/psyto/rethlab) を watch してください。
+- **L2** — Reorg-aware Postgres indexer (ExEx 駆動、in-process)
+- **L3** — \`extend_rpc_modules\` 経由のカスタム RPC エンドポイント
+- **L4** — Wallet backend (signer pool + nonce manager + replace-on-stuck)
+- **L5** — EIP-7702 sponsor service (Type 4 tx + paymaster パターン)
+- **L6** — Foundry スタイル cheatcode (custom precompile + 最小ハーネス)
+- **L7** — Swap aggregator (Revm fork + 横断 venue クオート)
+- **L8 (Capstone)** — 上記すべてを統合する frontrun-resistant order router
+
+各々が自己完結した ~200〜300 行の build、同じ predict / find-in-repo / anti-fluency スタイル。ターゲットユースケースに合うものから選ぶ。
 `,
                 },
                 {
