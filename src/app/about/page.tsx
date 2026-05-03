@@ -48,7 +48,7 @@ export default function AboutPage() {
           </div>
         </div>
 
-        <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-6 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
           {t('about.bio')}
         </p>
 
@@ -186,6 +186,14 @@ export default function AboutPage() {
             className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:border-primary/50 hover:text-primary transition-colors"
           >
             @psyto on X
+          </a>
+          <a
+            href="https://www.linkedin.com/in/hiroyuki-saito/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:border-primary/50 hover:text-primary transition-colors"
+          >
+            LinkedIn
           </a>
         </div>
       </motion.div>
