@@ -1839,6 +1839,1065 @@ K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — the engine running y
 \`\`\`
 `,
                 },
+                {
+                  title: 'Build Your Own Foundry-Style Cheatcode in Rust',
+                  slug: 'build-foundry-cheatcode-en',
+                  type: 'CONTENT',
+                  sortOrder: 5,
+                  duration: 45,
+                  xpReward: 80,
+                  content: `# Build Your Own Foundry-Style Cheatcode in Rust
+
+Foundry's \`vm.deal()\`, \`vm.warp()\`, \`vm.expectRevert()\` — those aren't built-in EVM ops. They're **Rust precompiles** Foundry installs at address \`0x7109709E...\`, callable from Solidity test code via the \`Vm.sol\` interface. This lesson shows you how that machinery works by **building your own**: a custom \`cheats.measureGas(target, data)\` precompile that gives test authors a clean way to measure sub-call gas without manual wrapping.
+
+> 📌 **Scope honesty.** We **don't** fork Foundry. We build the precompile + a minimal Revm-based test harness that loads it. The pattern (high-address precompile + Solidity ABI surface + test runner that wires it in) **is identical** to how Foundry adds cheatcodes — you just see all of it instead of inheriting an opaque framework.
+
+## What you'll build
+
+A new Solidity-callable cheatcode:
+
+\`\`\`solidity
+interface Cheats {
+    function measureGas(address target, bytes calldata data) external returns (uint256 gasUsed);
+}
+
+contract MyTest {
+    Cheats constant cheats = Cheats(0x7110000000000000000000000000000000000000);
+
+    function test_swap_gas() public {
+        uint256 gas = cheats.measureGas(
+            address(uniswapRouter),
+            abi.encodeWithSignature("swapExactTokensForTokens(...)", ...)
+        );
+        assertLt(gas, 200_000, "swap exceeded gas budget");
+    }
+}
+\`\`\`
+
+\`\`\`mermaid
+flowchart TB
+    Test["Solidity test"] -->|call| Cheats["0x7110... precompile"]
+    Cheats -->|nested EVM call| Inner["Revm sub-EVM<br/>executes target.data"]
+    Inner -->|gas_used| Cheats
+    Cheats -->|abi.encode(uint256)| Test
+\`\`\`
+
+> 🛑 **Predict before scrolling.** Why is implementing this as a **precompile** the right call, instead of a regular Solidity contract? Form a one-sentence answer about **what a precompile can do that a regular contract can't**. Hold your guess.
+
+## Why precompile (not contract, not opcode)
+
+| Approach | Can call into Revm internals? | Consensus impact | Effort |
+| :--- | :--- | :--- | :--- |
+| **Regular Solidity contract** | No — only EVM ops | None | trivial |
+| **New EVM opcode** | Yes — full control | **Forks consensus immediately** (Advanced lesson) | massive |
+| **Precompile (Foundry's choice)** | Yes — full Rust access | Only present in **your** Revm build, not mainnet | ~50 lines |
+
+A precompile sits in the *executor*, not the protocol. Mainnet Revm doesn't have your precompile; your test runner Revm does. **No consensus break, full Rust power.** That's why Foundry's cheatcodes are precompiles, not opcodes.
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "rust-cheatcode"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+revm                = { version = "38" }
+revm-precompile     = { version = "34" }
+alloy-primitives    = "1.5"
+alloy-sol-types     = "1.5"
+eyre                = "0.6"
+\`\`\`
+
+## Step 1: The precompile function
+
+A Revm precompile is a Rust function with the signature \`fn(input: &[u8], gas_limit: u64) -> PrecompileResult\`. We layer the cheatcode dispatch inside:
+
+\`\`\`rust
+use alloy_primitives::{Address, U256};
+use alloy_sol_types::{sol, SolValue};
+use revm::{
+    context::TxEnv,
+    context_interface::result::ExecutionResult,
+    primitives::TxKind,
+    Context, ExecuteEvm, MainBuilder, MainContext,
+};
+use revm_precompile::{
+    EthPrecompileOutput, EthPrecompileResult, Precompile, PrecompileHalt, PrecompileId,
+};
+
+pub const CHEATS_ADDRESS: Address = alloy_primitives::address!("7110000000000000000000000000000000000000");
+
+sol! {
+    function measureGas(address target, bytes calldata data) external returns (uint256 gasUsed);
+}
+
+/// The precompile entry point.
+pub fn cheats_run(input: &[u8], gas_limit: u64) -> EthPrecompileResult {
+    // The first 4 bytes are the function selector — same dispatch model as a Solidity contract.
+    if input.len() < 4 {
+        return Err(PrecompileHalt::OutOfGas); // really "bad input"; map to a real error in prod
+    }
+
+    let selector = &input[..4];
+    let calldata = &input[4..];
+
+    if selector == measureGasCall::SELECTOR {
+        let decoded = measureGasCall::abi_decode_raw(calldata, true)
+            .map_err(|_| PrecompileHalt::OutOfGas)?;
+
+        let gas_used = run_measure_gas(decoded.target, decoded.data, gas_limit)?;
+        return Ok(EthPrecompileOutput::new(
+            21_000, // flat cost for the cheatcode call itself
+            U256::from(gas_used).abi_encode().into(),
+        ));
+    }
+
+    Err(PrecompileHalt::OutOfGas)
+}
+\`\`\`
+
+Walk:
+
+- **\`CHEATS_ADDRESS\`** — \`0x7110...\` deliberately just above Foundry's \`0x7109\` so we don't collide. **Cheatcode addresses are convention; pick anything that doesn't conflict with mainnet precompiles or other dev tools.**
+- **Selector dispatch** — same 4-byte ABI selector machinery as a Solidity contract. The \`sol!\` macro generates \`measureGasCall::SELECTOR\` (a constant \`[u8; 4]\`) and \`abi_decode_raw\`. **Type-safe end to end** — no manual byte slicing.
+- **Two return paths** — \`Ok(EthPrecompileOutput)\` carries gas-used + abi-encoded result bytes; \`Err(PrecompileHalt::*)\` halts the calling frame. Production cheatcodes use specific halt variants (Foundry has its own); we keep it simple.
+
+## Step 2: The cheatcode logic
+
+The interesting part: \`measureGas\` runs a *nested* EVM execution against the same world state, measures gas, and returns the number. The key API: spin up a fresh \`Context\` over the existing journal (so state is shared) and run a one-off transaction:
+
+\`\`\`rust
+fn run_measure_gas(target: Address, data: Vec<u8>, gas_limit: u64) -> Result<u64, PrecompileHalt> {
+    // In a real cheatcode, we'd be handed access to the parent EVM's state via
+    // a custom Inspector. For lesson clarity, we spin up an isolated EVM
+    // against an empty in-memory DB — enough to demonstrate the gas math.
+    let mut db = revm::database::CacheDB::new(revm::database::EmptyDB::default());
+
+    let mut evm = Context::mainnet().with_db(&mut db).build_mainnet();
+
+    let tx = TxEnv::builder()
+        .caller(Address::ZERO)
+        .kind(TxKind::Call(target))
+        .data(data.into())
+        .gas_limit(gas_limit)
+        .build()
+        .map_err(|_| PrecompileHalt::OutOfGas)?;
+
+    let result = evm.transact_one(tx).map_err(|_| PrecompileHalt::OutOfGas)?;
+
+    match result.result {
+        ExecutionResult::Success { gas_used, .. } => Ok(gas_used),
+        ExecutionResult::Revert { gas_used, .. } => Ok(gas_used),
+        ExecutionResult::Halt { gas_used, .. } => Ok(gas_used),
+    }
+}
+\`\`\`
+
+Walk:
+
+- **\`Context::mainnet().with_db(&mut db).build_mainnet()\`** — same builder you used in Lesson 1 (MEV searcher). The cheatcode is a tiny EVM-on-EVM. **Once you've run one Revm, you've run them all.**
+- **All three result variants return \`gas_used\`** — Success, Revert, Halt. Even reverted txs consumed gas. We return the real number; the test author can decide what counts.
+- **\`db = EmptyDB\` in this lesson is a simplification.** Real Foundry cheatcodes share state with the parent test EVM via a custom Inspector hook (because \`vm.deal()\` needs to mutate balances the parent test will see). Drill 3 explores that.
+
+> 🛑 **Anti-fluency check.** Without scrolling: in your own words, why does the **\`gas_used\`** returned here include the gas the *target contract* consumed but **not** the gas the cheatcode call itself paid? Hint: the precompile's \`21_000\` flat cost is on the *outer* frame, not the inner one.
+
+## Step 3: Wire into a Revm test harness
+
+Now we need a test runner that registers our precompile + executes Solidity test contracts against it. The minimum viable harness:
+
+\`\`\`rust
+use revm::Context;
+use revm_precompile::{Precompiles, PrecompileSpecId};
+
+// (from the standard precompile interface)
+revm_precompile::eth_precompile_fn!(cheats_precompile_fn, cheats_run);
+
+const CHEATS_PRECOMPILE: Precompile = Precompile::new(
+    PrecompileId::Custom(std::borrow::Cow::Borrowed("cheats")),
+    CHEATS_ADDRESS,
+    cheats_precompile_fn,
+);
+
+fn build_test_evm_context<'db, DB>(db: &'db mut DB) -> impl ExecuteEvm + 'db
+where
+    DB: revm::Database<Error: std::fmt::Debug>,
+{
+    // Start from mainnet precompiles, extend with ours
+    let mut precompiles = Precompiles::new(PrecompileSpecId::OSAKA).clone();
+    precompiles.extend([CHEATS_PRECOMPILE]);
+
+    Context::mainnet()
+        .with_db(db)
+        .with_precompiles(precompiles)
+        .build_mainnet()
+}
+
+fn run_test_contract<DB>(db: &mut DB, test_contract_bytecode: Vec<u8>, test_calldata: Vec<u8>)
+    -> eyre::Result<bool>
+where
+    DB: revm::Database<Error: std::fmt::Debug>,
+{
+    // 1. Deploy the test contract
+    let mut evm = build_test_evm_context(db);
+    let deploy_tx = TxEnv::builder()
+        .caller(Address::from([0xAB; 20]))
+        .kind(TxKind::Create)
+        .data(test_contract_bytecode.into())
+        .gas_limit(10_000_000)
+        .build()?;
+    let deploy_result = evm.transact_one(deploy_tx)?;
+
+    let test_addr = match deploy_result.result {
+        ExecutionResult::Success { output: revm::context_interface::result::Output::Create(_, Some(a)), .. } => a,
+        _ => eyre::bail!("test contract deploy failed"),
+    };
+
+    // 2. Call the test method
+    let test_tx = TxEnv::builder()
+        .caller(Address::from([0xAB; 20]))
+        .kind(TxKind::Call(test_addr))
+        .data(test_calldata.into())
+        .gas_limit(10_000_000)
+        .build()?;
+    let test_result = evm.transact_one(test_tx)?;
+
+    Ok(matches!(test_result.result, ExecutionResult::Success { .. }))
+}
+\`\`\`
+
+Walk:
+
+- **\`Precompiles::new(PrecompileSpecId::OSAKA).clone()\`** — start from the standard mainnet set (ECRECOVER, SHA256, RIPEMD160, IDENTITY, modexp, BN254, KZG, BLS) and extend with ours. The standard precompiles are still available; your new one is *additive*.
+- **\`with_precompiles(...)\`** — Revm 38's API for installing a custom precompile registry. **Same line wires in any number of cheatcodes.**
+- **The harness is ~30 lines.** Foundry adds: a Solidity compiler integration (\`forge\` does this via solc), test discovery (find functions starting with \`test_\`), structured failure reporting, parallel execution. **The kernel is what you wrote.**
+
+> 🔍 **Find in repo.** Open [\`forge-std/src/Vm.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Vm.sol) and skim the cheatcode interface. Every function in there is a Solidity ABI surface for a Rust precompile in [Foundry's cheatcode crate](https://github.com/foundry-rs/foundry/tree/master/crates/cheatcodes). **Scroll until you can name 3 cheatcodes you didn't realize were Rust.**
+
+## Step 4: Write a test
+
+Now from the Solidity side, calling our cheatcode is identical to calling \`vm.deal\` or any other:
+
+\`\`\`solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+interface Cheats {
+    function measureGas(address target, bytes calldata data) external returns (uint256);
+}
+
+contract Counter {
+    uint256 public count;
+    function increment() public { count++; }
+}
+
+contract CounterTest {
+    Cheats constant cheats = Cheats(0x7110000000000000000000000000000000000000);
+
+    function test_increment_gas_under_25k() public {
+        Counter c = new Counter();
+        bytes memory data = abi.encodeWithSignature("increment()");
+        uint256 gas = cheats.measureGas(address(c), data);
+        require(gas < 25_000, "increment too expensive");
+    }
+}
+\`\`\`
+
+Compile with \`solc\`, hand the bytecode + the \`test_increment_gas_under_25k()\` selector to \`run_test_contract\`, and you've executed a Solidity test that called your custom Rust cheatcode end to end.
+
+## What's missing for production-grade test framework
+
+| Gap | What Foundry does |
+| :--- | :--- |
+| **Solidity compilation** | \`forge\` shells out to solc, caches artifacts, handles imports. Reproduce only if you really need it; otherwise let users pre-compile. |
+| **Shared parent state** | \`vm.deal()\` mutates balances the *test* sees. That requires a custom Inspector hook into the parent EVM — a non-trivial extension to our isolated harness. |
+| **Parallelism** | Foundry runs tests across threads with isolated DBs per test. Trivial to add (one tokio task per test contract). |
+| **Better failure reporting** | Stack traces, decoded revert reasons, fuzz shrink. All polish on top of the kernel above. |
+| **Cheatcode persistence between calls** | E.g., \`vm.expectRevert\` sets state for the *next* call only. Stored in inspector state, not in the precompile itself. |
+| **Permissionless cheatcode discovery** | A real plugin system would let cheatcodes be loaded as dynamic libraries. Foundry doesn't do this — they're compiled in. We won't either. |
+
+The architecture you wrote — high-address precompile + selector dispatch + ABI-decoded args + nested EVM execution + harness that registers it — **is the kernel of how Foundry's cheatcode system works**. Foundry adds Rust-level glue and Solidity-level ergonomics; the foundation is identical.
+
+## Drill
+
+1. **Add \`balanceOf(address)\`.** A second selector that returns the balance of any address using \`evm.db.basic(addr).balance\`. (15 min)
+2. **Make the call \`payable\`.** Add a \`value\` argument to \`measureGas\` and pass it through to the inner tx. **What changes about the Solidity side when the cheatcode becomes payable?** (30 min)
+3. **Shared state cheatcode.** Implement \`cheats.deal(address, uint256)\` that *mutates* the parent test's state. Hint: you'll need a custom Revm \`Inspector\` rather than an isolated nested EVM. (3 hours)
+4. **Solidity test discovery.** Build a minimal test runner that takes a directory, compiles all \`.sol\` files via \`solc\`, finds every function starting with \`test_\`, runs each, and prints pass/fail. (4 hours)
+5. **Performance comparison.** Run the same test (Counter increment × 1000) under (a) your custom harness, (b) \`forge test\`. **What's the latency gap, and where does it come from?** (1 hour profiling)
+
+Finish drill 4 and you have, structurally, a fork of Foundry. Add fuzz testing + invariant testing on top and you're at parity with what's in the wild.
+
+> 🛑 **Final check.** In one sentence: why is **selector-dispatched ABI-decoded args** the thing that makes a precompile feel like a Solidity contract from the test author's side? If your answer doesn't mention "Solidity already knows how to encode calls to addresses", re-read Step 1 — that ABI compatibility is what makes the deception possible.
+
+## 📺 Further watching
+
+\`\`\`youtube
+sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (the cheatcode patterns this lesson reverse-engineers)
+\`\`\`
+`,
+                },
+                {
+                  title: 'Build a Swap Aggregator: DEX State, Forked, in Rust',
+                  slug: 'build-swap-aggregator-en',
+                  type: 'CONTENT',
+                  sortOrder: 6,
+                  duration: 45,
+                  xpReward: 80,
+                  content: `# Build a Swap Aggregator: DEX State, Forked, in Rust
+
+1inch, Paraswap, 0x — they all answer one question for the user: *"given X token A, what's the most token B I can get right now?"* Behind that question is a fan-out across every liquidity venue, a quote at the live state of each, and a routing decision. This lesson builds a minimal aggregator in ~250 lines: fork mainnet locally, read reserves from Uniswap V2 + Sushi + Uniswap V3, compute quotes, pick the winner.
+
+> 📌 **Scope honesty.** We compute quotes across **three V2-style pools and one V3 pool** for a single hop. Real aggregators add: split routing (send 30% through Uniswap, 70% through Curve), multi-hop (A → WETH → B), CFMMs with custom math (Curve's stableswap, Balancer's weighted pools), gas-aware routing. Each is a one-loop extension of the kernel here.
+
+## What you'll build
+
+\`\`\`bash
+$ cargo run -- quote \\
+    --in-token  0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 \\  # USDC
+    --out-token 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 \\  # WETH
+    --amount-in 10000000000                                       # 10,000 USDC
+
+Quotes (10000 USDC -> WETH):
+  Uniswap V2:    2.94821 WETH  (price 3393.08 USDC/WETH)
+  Sushi V2:      2.94619 WETH  (price 3395.41 USDC/WETH)
+  Uniswap V3:    2.95104 WETH  (price 3389.84 USDC/WETH)  ← BEST
+\`\`\`
+
+\`\`\`mermaid
+flowchart TB
+    User["CLI: in/out token, amount"] --> Fork["Revm fork<br/>at latest block"]
+    Fork -->|getReserves| V2A["Uniswap V2 pool"]
+    Fork -->|getReserves| V2B["Sushi V2 pool"]
+    Fork -->|simulate swap| V3["Uniswap V3 pool<br/>(more complex math)"]
+    V2A --> Quote["Quote calculator"]
+    V2B --> Quote
+    V3 --> Quote
+    Quote --> Pick["Pick best (post-fee, post-gas)"]
+\`\`\`
+
+> 🛑 **Predict before scrolling.** Why **fork** and read on-chain state, instead of using the **chain's RPC** directly to call \`getReserves\` on each pool? Form a one-sentence answer about *what fork buys you that direct RPC doesn't*. Hold your guess.
+
+## Why fork (vs direct RPC)
+
+| Approach | Latency for N quotes | Gas-cost simulation? | Multi-pool atomic view? |
+| :--- | :--- | :--- | :--- |
+| **N \`eth_call\`s over RPC** | N × ~50 ms = seconds for 10 pools | No (you'd need separate \`eth_estimateGas\`) | No — each call is a separate state read; pool A and pool B might be from slightly different blocks |
+| **Fork once, read N times** | first ~50 ms (block fetch), then ~200 µs/pool | **Yes — same Revm fork lets you measure gas of a hypothetical swap** | **Yes** — every read is from the same atomic snapshot |
+
+For aggregation specifically, atomicity matters: if pool A's reserves moved between your read of pool A and pool B, your "best route" math is comparing apples and oranges. **Fork gives you a single view of the world.**
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "swap-aggregator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alloy-eips         = "1.0"
+alloy-primitives   = "1.5"
+alloy-provider     = "1.0"
+alloy-network      = "1.0"
+alloy-sol-types    = "1.5"
+revm               = { version = "38", features = ["alloydb"] }
+clap               = { version = "4", features = ["derive"] }
+tokio              = { version = "1", features = ["full"] }
+eyre               = "0.6"
+\`\`\`
+
+## Step 1: Fork mainnet (same pattern as Lesson 1)
+
+\`\`\`rust
+use alloy_eips::BlockId;
+use alloy_provider::{network::Ethereum, DynProvider, ProviderBuilder};
+use revm::{
+    context::TxEnv,
+    context_interface::result::{ExecutionResult, Output},
+    database::{AlloyDB, CacheDB},
+    database_interface::WrapDatabaseAsync,
+    primitives::{Address, TxKind, U256},
+    Context, ExecuteEvm, MainBuilder, MainContext,
+};
+
+type ForkedDB = CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, DynProvider>>>;
+
+async fn build_fork() -> eyre::Result<ForkedDB> {
+    let provider = ProviderBuilder::new()
+        .connect(&std::env::var("ETH_RPC_URL")?)
+        .await?
+        .erased();
+    let alloy_db = WrapDatabaseAsync::new(AlloyDB::new(provider, BlockId::latest()))
+        .ok_or_else(|| eyre::eyre!("AlloyDB init failed"))?;
+    Ok(CacheDB::new(alloy_db))
+}
+\`\`\`
+
+Identical to Lesson 1 (MEV searcher) — and that's the point. **The same fork pattern shows up everywhere; if you can build one, you can build them all.**
+
+## Step 2: Read V2 pool reserves
+
+Uniswap V2 / Sushi / any V2 fork: same ABI, same constant-product math.
+
+\`\`\`rust
+use alloy_sol_types::{sol, SolCall};
+
+sol! {
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function token0() external view returns (address);
+    function token1() external view returns (address);
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct V2Pool {
+    pub address: Address,
+    pub reserve_in: U256,
+    pub reserve_out: U256,
+    pub fee_bps: u32, // Uniswap V2: 30 (= 0.3%)
+}
+
+async fn read_v2_pool(
+    db: &mut ForkedDB,
+    pool: Address,
+    in_token: Address,
+    fee_bps: u32,
+) -> eyre::Result<V2Pool> {
+    let mut evm = Context::mainnet().with_db(db).build_mainnet();
+
+    // 1. Find which side of the pool is in_token (token0 or token1)
+    let token0 = call_view::<token0Call>(&mut evm, pool, token0Call {})?;
+    let in_is_zero = token0._0 == in_token;
+
+    // 2. Read reserves
+    let r = call_view::<getReservesCall>(&mut evm, pool, getReservesCall {})?;
+
+    let (reserve_in, reserve_out) = if in_is_zero {
+        (U256::from(r.reserve0), U256::from(r.reserve1))
+    } else {
+        (U256::from(r.reserve1), U256::from(r.reserve0))
+    };
+
+    Ok(V2Pool { address: pool, reserve_in, reserve_out, fee_bps })
+}
+
+fn call_view<C: SolCall>(
+    evm: &mut impl ExecuteEvm<Tx = TxEnv>,
+    target: Address,
+    call: C,
+) -> eyre::Result<C::Return> {
+    let result = evm.transact_one(
+        TxEnv::builder()
+            .caller(Address::ZERO)
+            .kind(TxKind::Call(target))
+            .data(call.abi_encode().into())
+            .gas_limit(1_000_000)
+            .build()?,
+    )?;
+
+    match result.result {
+        ExecutionResult::Success { output: Output::Call(out), .. } => {
+            Ok(C::abi_decode_returns(&out, true)?)
+        }
+        _ => eyre::bail!("view call failed"),
+    }
+}
+\`\`\`
+
+Walk:
+
+- **The same EVM call we made in Lesson 5's \`read_reserves\`** — generalized into a \`call_view\` helper that works for any \`SolCall\`. **Re-use accumulates** as you build.
+- **\`token0\` lookup is necessary because we don't know which side is which.** Pools are sorted by address; depending on which token is which, "reserve_in" maps to reserve0 or reserve1. **Skip this and your quote math is upside-down half the time.**
+- **\`fee_bps\` parameterizes the V2 family.** Uniswap V2: 30 bps (0.3%). Sushi: also 30 bps. Older Mooniswap, custom forks: anywhere from 5 to 100 bps. **Same code, different parameter.**
+
+> 🔍 **Find in repo.** Open the [Uniswap V2 router source](https://github.com/Uniswap/v2-periphery/blob/master/contracts/libraries/UniswapV2Library.sol). Find \`getAmountOut\`. That's the math the next step implements. **Compare your Rust to the reference Solidity, line by line.**
+
+## Step 3: V2 quote math (constant product)
+
+\`\`\`rust
+fn quote_v2(pool: V2Pool, amount_in: U256) -> U256 {
+    // Uniswap V2 formula: amount_in_with_fee = amount_in * (10000 - fee_bps)
+    //                     numerator   = amount_in_with_fee * reserve_out
+    //                     denominator = reserve_in * 10000 + amount_in_with_fee
+    //                     amount_out  = numerator / denominator
+    let amount_in_with_fee = amount_in * U256::from(10_000 - pool.fee_bps);
+    let numerator   = amount_in_with_fee * pool.reserve_out;
+    let denominator = pool.reserve_in * U256::from(10_000) + amount_in_with_fee;
+    numerator / denominator
+}
+\`\`\`
+
+Walk:
+
+- **9 lines of math = the entire AMM** for V2-style pools. Constant product (\`x · y = k\`), held under a fee discount.
+- **Integer-only** — no floats, no panics. \`U256\` arithmetic carries the precision the EVM uses on-chain. **Your quote will match the on-chain swap to the wei.**
+- **Fee in basis points lets you support Uniswap, Sushi, custom-fee forks** with the same code.
+
+> 🛑 **Anti-fluency check.** Without scrolling: why does \`amount_in_with_fee * pool.reserve_out\` go in the **numerator** and not the denominator? Hint: think about what it means dimensionally — \`[in_with_fee] * [reserve_out]\` produces what units?
+
+## Step 4: V3 quote (more complex math, simpler approach)
+
+Uniswap V3 prices liquidity in *ticks* and *concentrated ranges*. The quote formula is non-trivial. The **shortcut**: don't reimplement V3 math; ask the on-chain Quoter to give you the answer, but do it via Revm so you don't pay an RPC roundtrip:
+
+\`\`\`rust
+sol! {
+    interface IQuoterV2 {
+        function quoteExactInputSingle(
+            address tokenIn,
+            address tokenOut,
+            uint24  fee,
+            uint256 amountIn,
+            uint160 sqrtPriceLimitX96
+        ) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate);
+    }
+}
+
+const UNI_V3_QUOTER: Address = alloy_primitives::address!("61fFE014bA17989E743c5F6cB21bF9697530B21e");
+
+fn quote_v3(
+    db: &mut ForkedDB,
+    in_token: Address,
+    out_token: Address,
+    fee: u32,  // 100 / 500 / 3000 / 10000
+    amount_in: U256,
+) -> eyre::Result<U256> {
+    let mut evm = Context::mainnet().with_db(db).build_mainnet();
+    let call = IQuoterV2::quoteExactInputSingleCall {
+        tokenIn:               in_token,
+        tokenOut:              out_token,
+        fee:                   fee.into(),
+        amountIn:              amount_in,
+        sqrtPriceLimitX96:     U256::ZERO,
+    };
+
+    let result = evm.transact_one(
+        TxEnv::builder()
+            .caller(Address::ZERO)
+            .kind(TxKind::Call(UNI_V3_QUOTER))
+            .data(call.abi_encode().into())
+            .gas_limit(10_000_000)
+            .build()?,
+    )?;
+
+    match result.result {
+        ExecutionResult::Success { output: Output::Call(out), .. } => {
+            let decoded = IQuoterV2::quoteExactInputSingleCall::abi_decode_returns(&out, true)?;
+            Ok(decoded.amountOut)
+        }
+        _ => eyre::bail!("V3 quote failed"),
+    }
+}
+\`\`\`
+
+Walk:
+
+- **\`UNI_V3_QUOTER\` is a deployed contract.** Its job is exactly this — answer "how much would I get out?" without doing an actual swap. **Free for us to call** because we're calling it in-Revm, not on-chain.
+- **\`sqrtPriceLimitX96 = 0\`** disables price limit (i.e., "any price is fine"). For real routing you'd set it to bound slippage.
+- **The fee parameter selects the pool tier.** V3 has 1bp (stable pairs), 5bp (stable pools), 30bp (most pairs), 100bp (exotic pairs). Production aggregators query all four and pick the best.
+
+The same \`call_view\` pattern would also work — we wrote it inline here so the V3 call's specifics are visible.
+
+## Step 5: Aggregate and pick
+
+\`\`\`rust
+#[derive(Debug)]
+struct Quote {
+    venue: &'static str,
+    amount_out: U256,
+}
+
+async fn aggregate(
+    db: &mut ForkedDB,
+    in_token: Address,
+    out_token: Address,
+    amount_in: U256,
+) -> eyre::Result<Vec<Quote>> {
+    let uni_v2_pool   = address!("0d4a11d5EEaaC28EC3F61d100daF4d40471f1852"); // USDC/WETH on Uniswap V2 (example)
+    let sushi_pool    = address!("397FF1542f962076d0BFE58eA045FfA2d347ACa0"); // USDC/WETH on Sushi (example)
+
+    let v2 = read_v2_pool(db, uni_v2_pool, in_token, 30).await?;
+    let sushi = read_v2_pool(db, sushi_pool, in_token, 30).await?;
+    let v3 = quote_v3(db, in_token, out_token, 500, amount_in)?;
+
+    Ok(vec![
+        Quote { venue: "Uniswap V2", amount_out: quote_v2(v2, amount_in) },
+        Quote { venue: "Sushi V2",   amount_out: quote_v2(sushi, amount_in) },
+        Quote { venue: "Uniswap V3", amount_out: v3 },
+    ])
+}
+
+fn pick_best(quotes: &[Quote]) -> &Quote {
+    quotes.iter().max_by_key(|q| q.amount_out).expect("non-empty quotes")
+}
+
+#[tokio::main]
+async fn main() -> eyre::Result<()> {
+    let args = Args::parse();
+    let mut db = build_fork().await?;
+    let quotes = aggregate(&mut db, args.in_token, args.out_token, args.amount_in).await?;
+    let best = pick_best(&quotes);
+
+    println!("Quotes ({} {} -> {}):", args.amount_in, args.in_token, args.out_token);
+    for q in &quotes {
+        let marker = if std::ptr::eq(q, best) { "  ← BEST" } else { "" };
+        println!("  {:<14} {:>20}{}", q.venue, q.amount_out, marker);
+    }
+    Ok(())
+}
+\`\`\`
+
+Whole binary: ~250 LOC including imports + CLI parsing.
+
+## What's missing for production
+
+| Gap | What real aggregators do |
+| :--- | :--- |
+| **Multi-hop routing** | A → WETH → B routing across pools. Build a graph, run Bellman-Ford weighted by output amount. |
+| **Split routing** | Send 40% through V3, 60% through V2 if the combined output exceeds either alone. Convex optimization on the weights. |
+| **Curve / Balancer / etc.** | Each CFMM has its own quote function. Curve uses stableswap (Newton's method); Balancer uses weighted pools. **Same fork, different math per venue.** |
+| **Gas-aware** | Subtract estimated gas cost (in out-token terms) from each quote. A 0.1% better price isn't worth 50¢ extra gas on a $100 swap. |
+| **Price-impact thresholds** | Reject routes that move the pool >X% — protects against MEV sandwich attacks on low-liquidity venues. |
+| **Re-quote at submission** | The fork was at block N; the swap lands at block N+k. Re-quote right before submission to catch state drift. |
+| **MEV protection** | Submit through Flashbots Protect / MEV-Share so frontrunners don't see the route ahead of time. (Lesson 8 — Capstone — does this.) |
+
+The architecture you wrote — fork once, read reserves atomically, compute quotes per venue, pick the winner — **is exactly how 1inch and Paraswap shape their internal pricing layer**. They add scale, more venues, better routing optimization. The kernel is identical.
+
+## Drill
+
+1. **Add Curve.** Pick a Curve pool (e.g., 3pool). Read its state, implement its quote (stableswap) using \`get_dy(int128 i, int128 j, uint256 dx)\` via the same \`call_view\` pattern. (1.5 hours)
+2. **Add gas accounting.** Subtract estimated gas cost from each quote (use \`evm.estimate_gas\` on a hypothetical swap). The "best" route should now be the one that maximizes \`amount_out − gas_cost_in_out_token\`. (2 hours)
+3. **Multi-hop search.** Build a 2-hop search: A → WETH → B. For each candidate via WETH, compute the chained quote and compare to the direct route. (3 hours)
+4. **Split routing.** Implement a 50/50 split between the top two venues; check whether the combined output beats either alone. (2 hours)
+5. **Cross-tier:** Wire the aggregator into the wallet backend (Lesson 4) as a \`POST /quote-and-swap\` that returns a signed tx ready for submission. (3 hours)
+
+Finish drill 5 and you have, structurally, an aggregator-as-a-service. Plug in MEV protection (Lesson 8) and you're at parity with what shipped in 2023.
+
+> 🛑 **Final check.** In one sentence: why is **forking** strictly better than **N parallel \`eth_call\`s** for an aggregator? If your answer doesn't mention "atomic state across all reads", re-read Step 1 — that atomicity is what makes the comparison sound.
+
+## 📺 Further watching
+
+\`\`\`youtube
+xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024) — the engine doing the simulation work above
+\`\`\`
+`,
+                },
+                {
+                  title: 'Capstone — Build a Frontrun-Resistant Order Router',
+                  slug: 'build-capstone-router-en',
+                  type: 'CONTENT',
+                  sortOrder: 7,
+                  duration: 60,
+                  xpReward: 100,
+                  content: `# Capstone — Build a Frontrun-Resistant Order Router
+
+This is the build that ties **everything in this tier** together. A router that takes a user's swap intent, checks the mempool for adversarial txs that could frontrun it, picks the best venue using the aggregator, sponsors gas via EIP-7702, and submits through a private orderflow channel so the route itself never appears in public mempool. The user posts JSON; the router does the seven things real production routing services do.
+
+> 📌 **Scope honesty.** This capstone integrates patterns from lessons 1–7 of this tier. The novel build is the **frontrun-detection logic** + the **submission path that bypasses public mempool**. We use Flashbots Protect as the private RPC; the same shape works with MEV-Share, Beaverbuild's private endpoint, or any other private orderflow auction.
+
+## What you'll build
+
+\`\`\`bash
+$ curl -X POST http://localhost:9000/route \\
+    -d '{
+      "user":      "0xAlice...",
+      "in_token":  "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "out_token": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "amount_in": "10000000000",
+      "min_out":   "2900000000000000000",
+      "user_authorization": "0x04f8..."
+    }'
+
+{
+  "decision": "EXECUTE_PRIVATE",
+  "venue": "Uniswap V3",
+  "expected_out": "2951042818093142817",
+  "frontrun_risk": "LOW",
+  "tx_hash": "0xabc...",
+  "submission": "flashbots-protect"
+}
+\`\`\`
+
+\`\`\`mermaid
+flowchart TB
+    User["POST /route"] --> Router["Router service"]
+    Router -->|fork mainnet| Aggregator["Aggregator (L7)<br/>quotes + best venue"]
+    Router -->|scan pending txs| Detector["Frontrun detector<br/>(L1 mempool watch +<br/>L7 simulation)"]
+    Detector -->|adversarial tx found?| Decide{"Risk?"}
+    Aggregator --> Decide
+    Decide -->|HIGH| PrivPath["Private mempool<br/>(Flashbots Protect)"]
+    Decide -->|LOW| PubPath["Public mempool"]
+    PrivPath --> Sponsor["EIP-7702 sponsor (L5)"]
+    PubPath --> Sponsor
+    Sponsor --> Wallet["Wallet backend (L4)<br/>nonce/gas/replace"]
+    Wallet --> Chain
+\`\`\`
+
+> 🛑 **Predict before scrolling.** The MEV searcher in Lesson 1 is *the threat* this router defends against. **In one sentence**: what does that searcher do that this router needs to defeat? Hold your guess until Step 3.
+
+## What lessons feed in (and what's new)
+
+| Component | From | What's new here |
+| :--- | :--- | :--- |
+| **Quote across DEXes** | L7 | Reused as-is |
+| **Mempool watching** | L1 (the searcher's input!) | Repurposed as defense — find candidate adversaries instead of opportunities |
+| **Revm fork simulation** | L1 | Used here to score "would this adversary tx hurt my user?" |
+| **EIP-7702 sponsorship** | L5 | Lifted into the path so the user pays no gas |
+| **Wallet backend submission + replace** | L4 | Used for the public-mempool path |
+| **Private orderflow submission** | NEW | Flashbots Protect / MEV-Share integration |
+| **Decision logic (route + risk → submission path)** | NEW | The capstone's contribution |
+
+The novelty is the **decision layer**. Everything below it is patterns you've already built.
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "frontrun-resistant-router"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alloy = { version = "1.0", features = [
+  "providers", "signer-local", "rpc-types", "network",
+  "consensus", "eips", "sol-types"
+] }
+revm     = { version = "38", features = ["alloydb"] }
+axum     = "0.7"
+tokio    = { version = "1", features = ["full"] }
+serde    = { version = "1", features = ["derive"] }
+serde_json = "1"
+futures  = "0.3"
+eyre     = "0.6"
+\`\`\`
+
+## Step 1: The decision struct (the architecture in one type)
+
+The whole router is a function from \`RouteRequest\` to \`RouteDecision\`. Sketch the types first; the rest writes itself.
+
+\`\`\`rust
+use alloy::primitives::{Address, B256, U256};
+
+#[derive(serde::Deserialize)]
+pub struct RouteRequest {
+    pub user: Address,
+    pub in_token: Address,
+    pub out_token: Address,
+    pub amount_in: U256,
+    pub min_out: U256,
+    pub user_authorization: String,  // EIP-7702 SignedAuthorization, hex-encoded
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum FrontrunRisk { Low, Medium, High }
+
+#[derive(serde::Serialize)]
+pub struct RouteDecision {
+    pub decision:        &'static str,    // "EXECUTE_PRIVATE" | "EXECUTE_PUBLIC" | "REJECT_TOO_RISKY"
+    pub venue:           Option<&'static str>,
+    pub expected_out:    Option<U256>,
+    pub frontrun_risk:   String,          // serializable FrontrunRisk
+    pub tx_hash:         Option<B256>,
+    pub submission:      Option<&'static str>,  // "flashbots-protect" | "public" | null
+    pub reason:          Option<String>,
+}
+\`\`\`
+
+Walk:
+
+- **Three terminal states.** Either we send privately, send publicly, or refuse. Refusal is a feature: if the slippage on the best public venue exceeds what we can offer privately, the right answer is to tell the user.
+- **\`expected_out\` is from the aggregator** (Lesson 7). Compared against \`min_out\` to decide if the user's slippage tolerance is met *before* we submit anything.
+- **\`submission\` field tells the user where their tx went.** Useful for transparency — they can verify the Flashbots Protect endpoint received their bundle.
+
+## Step 2: Get the best quote (Lesson 7, reused)
+
+\`\`\`rust
+// Pulled in directly from Lesson 7 — same code, no changes.
+use crate::aggregator::{aggregate, pick_best, Quote};
+
+async fn best_quote(
+    db: &mut ForkedDB,
+    req: &RouteRequest,
+) -> eyre::Result<(Quote, &'static str)> {
+    let quotes = aggregate(db, req.in_token, req.out_token, req.amount_in).await?;
+    let best   = pick_best(&quotes).clone();
+    Ok((best.clone(), best.venue))
+}
+\`\`\`
+
+We don't even glance at the implementation — it's lesson 7. **Importing your earlier lesson code is part of the capstone reading too.** Keep things modular.
+
+## Step 3: Frontrun detection — the new bit
+
+The MEV searcher in Lesson 1 watches mempool for *opportunities*. Inverted, the same scan finds *threats* against our user. Specifically: any pending tx that targets the same pool the router is about to use, in the same direction the router will move price.
+
+\`\`\`rust
+use alloy::providers::{Provider, ProviderBuilder, WsConnect};
+use futures::StreamExt;
+use std::time::Duration;
+
+async fn scan_for_adversaries(
+    provider: &(impl Provider + Clone),
+    target_pool: Address,  // The pool our user is about to use
+    in_token:    Address,  // Direction matters: same direction = sandwich risk
+    duration:    Duration,
+) -> eyre::Result<Vec<alloy::rpc::types::Transaction>> {
+    let mut sub = provider.subscribe_pending_transactions().await?.into_stream();
+    let mut findings = Vec::new();
+    let deadline = tokio::time::Instant::now() + duration;
+
+    loop {
+        tokio::select! {
+            _ = tokio::time::sleep_until(deadline) => break,
+            tx_hash = sub.next() => {
+                let Some(tx_hash) = tx_hash else { break; };
+                let Ok(Some(tx)) = provider.get_transaction_by_hash(tx_hash).await else { continue };
+
+                if !looks_like_swap_on(&tx, target_pool, in_token) { continue }
+                findings.push(tx);
+                if findings.len() >= 5 { break }  // 5 candidates is enough to score
+            }
+        }
+    }
+    Ok(findings)
+}
+
+fn looks_like_swap_on(tx: &alloy::rpc::types::Transaction, pool: Address, in_token: Address) -> bool {
+    // Heuristic: tx targets a known router AND its calldata mentions our pool's tokens.
+    // Production routers would decode against router ABIs (UniV2 / V3 / Curve / Sushi)
+    // and check the path. We keep the heuristic for clarity.
+    use alloy::primitives::address;
+    const KNOWN_ROUTERS: &[Address] = &[
+        address!("7a250d5630B4cF539739dF2C5dAcb4c659F2488D"), // UniV2
+        address!("d9e1cE17f2641f24aE83637ab66a2cca9C378B9F"), // Sushi V2
+        address!("E592427A0AEce92De3Edee1F18E0157C05861564"), // UniV3
+    ];
+    if !KNOWN_ROUTERS.contains(&tx.to().unwrap_or_default()) { return false; }
+    let input = tx.input();
+    let pool_bytes = pool.as_slice();
+    let in_token_bytes = in_token.as_slice();
+    // Quick substring checks — cheap, false positives OK at this layer
+    has_subseq(input, pool_bytes) || has_subseq(input, in_token_bytes)
+}
+
+fn has_subseq(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+\`\`\`
+
+Walk:
+
+- **\`subscribe_pending_transactions\`** — the same Alloy subscription from Lesson 1. **Verbatim re-use of the searcher's mempool input.**
+- **The heuristic is deliberately loose.** Real production decodes router ABIs and reasons about the swap *path*. Loose heuristics over-flag (false positives = users routed privately when they didn't need to be), which is the safe failure mode.
+- **\`duration\` is the look-ahead window.** ~2 seconds is a sensible default — long enough to catch a slow human, short enough not to delay the user noticeably.
+
+> 🛑 **Anti-fluency check.** Without scrolling: why does the **direction** of the candidate swap matter for whether it's a sandwich threat? Hint: think about what a frontrunner gains by trading the *same* direction as the victim vs. the *opposite* direction.
+
+## Step 4: Score the threat with Revm simulation
+
+A list of suspicious txs isn't enough. We need to know: **if these landed before our user, how much would the user's expected output drop?**
+
+\`\`\`rust
+async fn score_risk(
+    db: &mut ForkedDB,                            // fresh fork, will mutate
+    adversary_txs: &[alloy::rpc::types::Transaction],
+    quote_before: U256,                           // Output the user would get with no adversary
+    req: &RouteRequest,
+) -> eyre::Result<FrontrunRisk> {
+    if adversary_txs.is_empty() { return Ok(FrontrunRisk::Low); }
+
+    // Apply each adversary tx to the fork.
+    // (In a real router, we'd snapshot+rollback per scenario. Here, sequential.)
+    for adv in adversary_txs {
+        apply_tx_to_fork(db, adv).await?;
+    }
+
+    // Re-quote in the post-adversary state.
+    let quote_after = aggregate(db, req.in_token, req.out_token, req.amount_in).await?;
+    let after_amount = pick_best(&quote_after).amount_out;
+
+    // What fraction of expected output would the user lose?
+    let lost_bps = if quote_before > after_amount {
+        ((quote_before - after_amount) * U256::from(10_000) / quote_before)
+            .to_string().parse::<u64>().unwrap_or(0)
+    } else { 0 };
+
+    Ok(match lost_bps {
+        0..=10   => FrontrunRisk::Low,    // <0.10% drop — noise
+        11..=50  => FrontrunRisk::Medium, // 0.10%–0.50% drop — worth defending
+        _        => FrontrunRisk::High,   // >0.50% drop — definitely route private
+    })
+}
+
+async fn apply_tx_to_fork(
+    db: &mut ForkedDB,
+    tx: &alloy::rpc::types::Transaction,
+) -> eyre::Result<()> {
+    use revm::context::TxEnv;
+    use revm::primitives::TxKind;
+    let mut evm = revm::Context::mainnet().with_db(db).build_mainnet();
+    let tx_env = TxEnv::builder()
+        .caller(tx.from())
+        .kind(if let Some(to) = tx.to() { TxKind::Call(to) } else { TxKind::Create })
+        .data(tx.input().clone())
+        .value(tx.value())
+        .gas_limit(tx.gas_limit())
+        .build()?;
+    let _ = evm.transact_one(tx_env)?;
+    Ok(())
+}
+\`\`\`
+
+Walk:
+
+- **Quote-before vs. quote-after is the actual measure.** Heuristic detection (Step 3) finds *candidates*; simulation tells us *whether they hurt*. Only the latter justifies routing privately.
+- **Sequential application** is a simplification. A real implementation would simulate each adversary independently, take the worst case, and combine them. Drill 2.
+- **Thresholds in basis points** are tunable per protocol. A USDC/USDT stable swap might tolerate 1bp; an exotic-pair swap might call 50bp acceptable.
+
+## Step 5: Submit
+
+The decision tree:
+
+\`\`\`rust
+async fn execute_decision(
+    state: &AppState,
+    req: &RouteRequest,
+    venue: &'static str,
+    expected_out: U256,
+    risk: FrontrunRisk,
+) -> eyre::Result<RouteDecision> {
+    if expected_out < req.min_out {
+        return Ok(RouteDecision {
+            decision:      "REJECT_TOO_RISKY",
+            venue:         Some(venue),
+            expected_out:  Some(expected_out),
+            frontrun_risk: format!("{risk:?}"),
+            tx_hash:       None,
+            submission:    None,
+            reason:        Some(format!("expected_out {} < min_out {}", expected_out, req.min_out)),
+        });
+    }
+
+    // Build the EIP-7702 sponsored tx (Lesson 5, lifted directly)
+    let tx_request = build_sponsored_tx(
+        &state.public_provider,
+        &state.sponsor,
+        req.user,
+        &req.user_authorization,
+        vec![/* the swap call against the chosen venue's router */],
+    ).await?;
+
+    let (submission, hash) = match risk {
+        FrontrunRisk::High | FrontrunRisk::Medium => {
+            // Submit through Flashbots Protect (or any private RPC)
+            let private = &state.private_provider;
+            let h = private.send_transaction(tx_request).await?;
+            ("flashbots-protect", *h.tx_hash())
+        }
+        FrontrunRisk::Low => {
+            // Public mempool is fine — save the bundler markup
+            let h = state.public_provider.send_transaction(tx_request).await?;
+            ("public", *h.tx_hash())
+        }
+    };
+
+    Ok(RouteDecision {
+        decision:      if submission == "flashbots-protect" { "EXECUTE_PRIVATE" } else { "EXECUTE_PUBLIC" },
+        venue:         Some(venue),
+        expected_out:  Some(expected_out),
+        frontrun_risk: format!("{risk:?}"),
+        tx_hash:       Some(hash),
+        submission:    Some(submission),
+        reason:        None,
+    })
+}
+\`\`\`
+
+The **two providers** are the load-bearing piece. \`public_provider\` connects to a normal RPC (Infura, your own Reth); \`private_provider\` connects to https://rpc.flashbots.net/protect. **Same Alloy code, different endpoint** — that's the asymmetry that defeats sandwich attacks.
+
+## Step 6: Wire it together
+
+\`\`\`rust
+async fn route_handler(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<RouteRequest>,
+) -> Result<Json<RouteDecision>, (axum::http::StatusCode, String)> {
+    // 1. Quote across venues (L7 lifted)
+    let mut db = build_fork().await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let (best, venue) = best_quote(&mut db, &req).await
+        .map_err(|e| (axum::http::StatusCode::BAD_GATEWAY, e.to_string()))?;
+
+    // 2. Watch mempool for ~2s for adversarial txs (L1 inverted)
+    let pool_for_route = address_for_venue(venue, req.in_token, req.out_token);
+    let adversaries = scan_for_adversaries(&state.public_provider, pool_for_route, req.in_token, Duration::from_secs(2)).await
+        .unwrap_or_default();
+
+    // 3. Score risk via simulation (L1 + L7 combined)
+    let mut risk_db = build_fork().await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let risk = score_risk(&mut risk_db, &adversaries, best.amount_out, &req).await
+        .unwrap_or(FrontrunRisk::Low);
+
+    // 4. Execute on the matching submission path (L4 + L5 lifted)
+    let decision = execute_decision(&state, &req, venue, best.amount_out, risk).await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(decision))
+}
+\`\`\`
+
+Total new code in this lesson: ~250 LOC. Total **router** code: this 250 + the lessons it lifts — a working frontrun-resistant order router that fits in one repo.
+
+## What's missing for production
+
+| Gap | What real production routers do |
+| :--- | :--- |
+| **MEV-Share / OFA integration** | Privately auction your orderflow to the highest searcher bid; share rebates back to users. (Flashbots Protect is the simple version.) |
+| **Slippage budget per user** | Don't quote past 5% slippage; tell the user to reduce \`amount_in\`. |
+| **Cancel + refund flow** | If a private bundle doesn't land in 2 blocks, the EIP-7702 authorization is wasted. Need user-facing UI + refund logic. |
+| **Multi-region private RPCs** | Submit to Flashbots, Beaverbuild, Titan, Rsync simultaneously; the first to land wins. |
+| **Per-user rate limiting** | A bad actor with API access can spam quotes (cheap) but each quote consumes a fork; cap. |
+| **Observability** | Log every (venue, risk, submission) decision. After 1000 routes, evaluate: when we routed private, was the simulated drop the actual on-chain outcome? Tune thresholds with real data. |
+
+The architecture you wrote — quote → detect adversaries → score with sim → decide private vs public → submit via the right path — **is the spine of every defensive routing service**. CowSwap, MEV-Share consumers, retail wallet backends — they all do variations of this. **You've now built one.**
+
+## Drill (the longest in the curriculum, on purpose)
+
+1. **Real router ABI decoding.** Replace the loose substring heuristic in \`looks_like_swap_on\` with proper \`sol!\` decoding for UniV2 / V3 / Sushi router calldata. Check whether the path includes \`(in_token, out_token)\` in either direction. (3 hours)
+2. **Independent simulation.** Score each adversary independently (snapshot + rollback the fork between each). Take the worst-case drop. (2 hours)
+3. **Cancel flow.** Add \`POST /cancel { tx_hash }\` that refunds the user's authorization (i.e., signs a no-op tx at the same nonce to invalidate the original). Wire to UI. (3 hours)
+4. **Multi-RPC private submission.** Submit to two private endpoints (Flashbots Protect + Beaverbuild) simultaneously. Return the hash from whichever lands first. (1.5 hours)
+5. **Threshold autotuning.** Log every router decision + the actual on-chain outcome (was the drop bigger or smaller than predicted?). Build a small offline script that fits the bps thresholds to your historical data. (5 hours)
+
+After drill 5 you have a tuned, observably-correct frontrun-resistant router. **This is what you'd ship to production for a wallet team that takes user trust seriously.**
+
+> 🛑 **Final check (the curriculum's final check).** In one sentence: of the 8 lessons in this tier, why does the *capstone* depend on **simulation** (L1) more than any other component? If your answer doesn't mention "you can't decide whether to defend without first measuring the threat in the same units as the user's loss", the capstone hasn't quite landed yet — re-read Step 4.
+
+## 📺 Further watching
+
+\`\`\`youtube
+vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm) — the threat this router is built to defeat
+\`\`\`
+
+---
+
+## You've finished the Building tier
+
+Recap of what you've built across 8 lessons:
+
+1. Minimal MEV searcher (mempool → fork-sim → arb)
+2. Reorg-aware Postgres indexer (ExEx + reorg dispatch)
+3. Custom RPC endpoint (jsonrpsee + extend_rpc_modules)
+4. Wallet backend (signer pool + nonce mgr + replace-on-stuck)
+5. EIP-7702 sponsor (Type 4 tx + paymaster pattern)
+6. Foundry-style cheatcode (custom precompile + harness)
+7. Swap aggregator (Revm fork + cross-venue quotes)
+8. **Frontrun-resistant order router (this lesson)** — all of the above, integrated
+
+Pick the one that interests your target employer / project most. Open the production gaps. Ship it as a small public repo. **That's the artifact you bring to a Paradigm / Tempo / serious-team conversation.**
+`,
+                },
               ],
             },
           },

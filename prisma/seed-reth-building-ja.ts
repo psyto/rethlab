@@ -1838,6 +1838,1065 @@ K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — sponsor された tx
 \`\`\`
 `,
                 },
+                {
+                  title: 'Foundry スタイルのカスタム cheatcode を Rust で作る',
+                  slug: 'build-foundry-cheatcode-ja',
+                  type: 'CONTENT',
+                  sortOrder: 5,
+                  duration: 45,
+                  xpReward: 80,
+                  content: `# Foundry スタイルのカスタム cheatcode を Rust で作る
+
+Foundry の \`vm.deal()\`、\`vm.warp()\`、\`vm.expectRevert()\` — これらは組み込み EVM op ではない。Foundry がアドレス \`0x7109709E...\` にインストールする **Rust precompile** で、\`Vm.sol\` インターフェース経由で Solidity テストコードから呼ばれる。本レッスンはこの機構を **自作することで** 学ぶ: \`cheats.measureGas(target, data)\` という、テスト作者がサブコールのガスを手動 wrap せずに測れる cheatcode を構築する。
+
+> 📌 **スコープの正直な開示。** Foundry を **fork しない**。precompile + それをロードする最小 Revm ベースのテストハーネスを作る。パターン (高アドレス precompile + Solidity ABI 表面 + それを wire するテストランナー) **は同一** — Foundry が cheatcode を追加するのと同じパターン、ただし不透明なフレームワークを継承するのではなく全部見える形で。
+
+## 何を作るか
+
+Solidity から呼べる新 cheatcode:
+
+\`\`\`solidity
+interface Cheats {
+    function measureGas(address target, bytes calldata data) external returns (uint256 gasUsed);
+}
+
+contract MyTest {
+    Cheats constant cheats = Cheats(0x7110000000000000000000000000000000000000);
+
+    function test_swap_gas() public {
+        uint256 gas = cheats.measureGas(
+            address(uniswapRouter),
+            abi.encodeWithSignature("swapExactTokensForTokens(...)", ...)
+        );
+        assertLt(gas, 200_000, "swap exceeded gas budget");
+    }
+}
+\`\`\`
+
+\`\`\`mermaid
+flowchart TB
+    Test["Solidity test"] -->|call| Cheats["0x7110... precompile"]
+    Cheats -->|nested EVM call| Inner["Revm sub-EVM<br/>target.data を実行"]
+    Inner -->|gas_used| Cheats
+    Cheats -->|abi.encode(uint256)| Test
+\`\`\`
+
+> 🛑 **スクロール前に予測。** なぜこれを **precompile** として実装するのが正解か? 普通の Solidity contract ではなく? **precompile が普通の contract にできないこと** について一文で答えてください。答えを保持。
+
+## なぜ precompile か (contract でも opcode でもなく)
+
+| 方式 | Revm 内部を呼べる? | コンセンサス影響 | 労力 |
+| :--- | :--- | :--- | :--- |
+| **普通の Solidity contract** | NO — EVM op のみ | なし | 簡単 |
+| **新 EVM opcode** | YES — フル制御 | **即コンセンサスを fork する** (Advanced lesson) | 莫大 |
+| **Precompile (Foundry の選択)** | YES — フル Rust アクセス | **あなたの** Revm ビルドにのみ存在、mainnet にはなし | ~50 行 |
+
+precompile は *executor* に座る、プロトコルではない。Mainnet Revm はあなたの precompile を持たない; あなたのテストランナー Revm が持つ。**コンセンサスは壊れず、フル Rust パワー。** だから Foundry の cheatcode は precompile であって opcode ではない。
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "rust-cheatcode"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+revm                = { version = "38" }
+revm-precompile     = { version = "34" }
+alloy-primitives    = "1.5"
+alloy-sol-types     = "1.5"
+eyre                = "0.6"
+\`\`\`
+
+## Step 1: precompile 関数
+
+Revm precompile は \`fn(input: &[u8], gas_limit: u64) -> PrecompileResult\` シグネチャの Rust 関数。中で cheatcode dispatch をレイヤリング:
+
+\`\`\`rust
+use alloy_primitives::{Address, U256};
+use alloy_sol_types::{sol, SolValue};
+use revm::{
+    context::TxEnv,
+    context_interface::result::ExecutionResult,
+    primitives::TxKind,
+    Context, ExecuteEvm, MainBuilder, MainContext,
+};
+use revm_precompile::{
+    EthPrecompileOutput, EthPrecompileResult, Precompile, PrecompileHalt, PrecompileId,
+};
+
+pub const CHEATS_ADDRESS: Address = alloy_primitives::address!("7110000000000000000000000000000000000000");
+
+sol! {
+    function measureGas(address target, bytes calldata data) external returns (uint256 gasUsed);
+}
+
+/// precompile エントリーポイント
+pub fn cheats_run(input: &[u8], gas_limit: u64) -> EthPrecompileResult {
+    // 最初の 4 byte が関数セレクタ — Solidity contract と同じディスパッチモデル
+    if input.len() < 4 {
+        return Err(PrecompileHalt::OutOfGas); // 本当は "bad input"; production は適切なエラーへマップ
+    }
+
+    let selector = &input[..4];
+    let calldata = &input[4..];
+
+    if selector == measureGasCall::SELECTOR {
+        let decoded = measureGasCall::abi_decode_raw(calldata, true)
+            .map_err(|_| PrecompileHalt::OutOfGas)?;
+
+        let gas_used = run_measure_gas(decoded.target, decoded.data, gas_limit)?;
+        return Ok(EthPrecompileOutput::new(
+            21_000, // cheatcode 自体の呼び出しの flat コスト
+            U256::from(gas_used).abi_encode().into(),
+        ));
+    }
+
+    Err(PrecompileHalt::OutOfGas)
+}
+\`\`\`
+
+Walk:
+
+- **\`CHEATS_ADDRESS\`** — \`0x7110...\`、Foundry の \`0x7109\` の真上、衝突回避のため意図的に。**cheatcode アドレスは慣例だけ; mainnet precompile や他の dev tool と衝突しない何かを選ぶ。**
+- **セレクタ dispatch** — Solidity contract と同じ 4-byte ABI セレクタ機構。\`sol!\` マクロが \`measureGasCall::SELECTOR\` (定数 \`[u8; 4]\`) と \`abi_decode_raw\` を生成。**端から端まで型安全** — 手動 byte slice 不要。
+- **2 つの戻り値経路** — \`Ok(EthPrecompileOutput)\` は gas-used + abi-encode された結果 bytes を運ぶ; \`Err(PrecompileHalt::*)\` は呼び出しフレームを停止。Production の cheatcode は specific halt variants を使う (Foundry には自前のものがある); ここではシンプルに保つ。
+
+## Step 2: cheatcode ロジック
+
+面白い部分: \`measureGas\` は同じ world state に対して *nested* EVM 実行を走らせ、ガスを測り、その数を返す。キー API: 既存 journal に対する fresh \`Context\` を立ち上げて (state 共有のため) ワンショット tx を走らせる:
+
+\`\`\`rust
+fn run_measure_gas(target: Address, data: Vec<u8>, gas_limit: u64) -> Result<u64, PrecompileHalt> {
+    // 本物の cheatcode では、custom Inspector 経由で親 EVM の state にアクセスする。
+    // レッスン明瞭化のため、ここでは empty in-memory DB に対する独立 EVM を立ち上げる —
+    // gas 数学のデモには十分。
+    let mut db = revm::database::CacheDB::new(revm::database::EmptyDB::default());
+
+    let mut evm = Context::mainnet().with_db(&mut db).build_mainnet();
+
+    let tx = TxEnv::builder()
+        .caller(Address::ZERO)
+        .kind(TxKind::Call(target))
+        .data(data.into())
+        .gas_limit(gas_limit)
+        .build()
+        .map_err(|_| PrecompileHalt::OutOfGas)?;
+
+    let result = evm.transact_one(tx).map_err(|_| PrecompileHalt::OutOfGas)?;
+
+    match result.result {
+        ExecutionResult::Success { gas_used, .. } => Ok(gas_used),
+        ExecutionResult::Revert { gas_used, .. } => Ok(gas_used),
+        ExecutionResult::Halt { gas_used, .. } => Ok(gas_used),
+    }
+}
+\`\`\`
+
+Walk:
+
+- **\`Context::mainnet().with_db(&mut db).build_mainnet()\`** — Lesson 1 (MEV searcher) で使った同じ builder。cheatcode は EVM-on-EVM な小型版。**Revm を 1 回走らせれば、全部走らせたことになる。**
+- **3 つの結果バリアント全部が \`gas_used\` を返す** — Success、Revert、Halt。revert した tx もガスを消費した。実数を返し、テスト作者が何をカウントするかを決める。
+- **\`db = EmptyDB\` は本レッスンの簡素化。** 本物の Foundry cheatcode は custom Inspector hook 経由で親テスト EVM と state を共有する (\`vm.deal()\` は親テストが見る balance を mutate する必要があるから)。Drill 3 で扱う。
+
+> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで、自分の言葉で: ここで返される **\`gas_used\`** はなぜ *target contract* が消費したガスを含むが、cheatcode 呼び出し自体が払ったガスは含まない? ヒント: precompile の \`21_000\` flat コストは *outer* フレーム上にある、inner ではない。
+
+## Step 3: Revm テストハーネスに wire
+
+precompile を register + Solidity テスト contract をそれに対して実行するテストランナーが必要。最小限のハーネス:
+
+\`\`\`rust
+use revm::Context;
+use revm_precompile::{Precompiles, PrecompileSpecId};
+
+// (標準 precompile インターフェースから)
+revm_precompile::eth_precompile_fn!(cheats_precompile_fn, cheats_run);
+
+const CHEATS_PRECOMPILE: Precompile = Precompile::new(
+    PrecompileId::Custom(std::borrow::Cow::Borrowed("cheats")),
+    CHEATS_ADDRESS,
+    cheats_precompile_fn,
+);
+
+fn build_test_evm_context<'db, DB>(db: &'db mut DB) -> impl ExecuteEvm + 'db
+where
+    DB: revm::Database<Error: std::fmt::Debug>,
+{
+    // mainnet precompile から開始、こちらを extend
+    let mut precompiles = Precompiles::new(PrecompileSpecId::OSAKA).clone();
+    precompiles.extend([CHEATS_PRECOMPILE]);
+
+    Context::mainnet()
+        .with_db(db)
+        .with_precompiles(precompiles)
+        .build_mainnet()
+}
+
+fn run_test_contract<DB>(db: &mut DB, test_contract_bytecode: Vec<u8>, test_calldata: Vec<u8>)
+    -> eyre::Result<bool>
+where
+    DB: revm::Database<Error: std::fmt::Debug>,
+{
+    // 1. テスト contract をデプロイ
+    let mut evm = build_test_evm_context(db);
+    let deploy_tx = TxEnv::builder()
+        .caller(Address::from([0xAB; 20]))
+        .kind(TxKind::Create)
+        .data(test_contract_bytecode.into())
+        .gas_limit(10_000_000)
+        .build()?;
+    let deploy_result = evm.transact_one(deploy_tx)?;
+
+    let test_addr = match deploy_result.result {
+        ExecutionResult::Success { output: revm::context_interface::result::Output::Create(_, Some(a)), .. } => a,
+        _ => eyre::bail!("test contract deploy failed"),
+    };
+
+    // 2. テストメソッドを呼ぶ
+    let test_tx = TxEnv::builder()
+        .caller(Address::from([0xAB; 20]))
+        .kind(TxKind::Call(test_addr))
+        .data(test_calldata.into())
+        .gas_limit(10_000_000)
+        .build()?;
+    let test_result = evm.transact_one(test_tx)?;
+
+    Ok(matches!(test_result.result, ExecutionResult::Success { .. }))
+}
+\`\`\`
+
+Walk:
+
+- **\`Precompiles::new(PrecompileSpecId::OSAKA).clone()\`** — 標準 mainnet セット (ECRECOVER、SHA256、RIPEMD160、IDENTITY、modexp、BN254、KZG、BLS) から開始、こちらを extend。標準 precompile は依然利用可能; 新 precompile は *additive*。
+- **\`with_precompiles(...)\`** — Revm 38 のカスタム precompile registry インストール API。**同じ 1 行で任意数の cheatcode を wire。**
+- **ハーネスは ~30 行。** Foundry が足すもの: Solidity コンパイラ統合 (\`forge\` が solc 経由で行う)、テスト発見 (\`test_\` で始まる関数を見つける)、構造化失敗レポート、並列実行。**カーネルはあなたが書いたもの。**
+
+> 🔍 **リポで探す。** [\`forge-std/src/Vm.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Vm.sol) を開いて cheatcode インターフェースをスキム。そこの全関数が [Foundry の cheatcode crate](https://github.com/foundry-rs/foundry/tree/master/crates/cheatcodes) の Rust precompile への Solidity ABI 表面。**Rust だと知らなかった cheatcode を 3 つ言えるまでスクロール。**
+
+## Step 4: テストを書く
+
+Solidity 側からは、cheatcode を呼ぶのは \`vm.deal\` その他と同一:
+
+\`\`\`solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+interface Cheats {
+    function measureGas(address target, bytes calldata data) external returns (uint256);
+}
+
+contract Counter {
+    uint256 public count;
+    function increment() public { count++; }
+}
+
+contract CounterTest {
+    Cheats constant cheats = Cheats(0x7110000000000000000000000000000000000000);
+
+    function test_increment_gas_under_25k() public {
+        Counter c = new Counter();
+        bytes memory data = abi.encodeWithSignature("increment()");
+        uint256 gas = cheats.measureGas(address(c), data);
+        require(gas < 25_000, "increment too expensive");
+    }
+}
+\`\`\`
+
+\`solc\` でコンパイル、bytecode + \`test_increment_gas_under_25k()\` セレクタを \`run_test_contract\` に渡せば、Solidity テストがあなたのカスタム Rust cheatcode を end-to-end で呼んだことになる。
+
+## Production レベルテストフレームワークに足りないもの
+
+| ギャップ | Foundry が何をしているか |
+| :--- | :--- |
+| **Solidity コンパイル** | \`forge\` が solc を shell out、artifact をキャッシュ、import を扱う。本当に必要な時だけ再現; ユーザに事前コンパイルさせる方が普通 |
+| **親 state 共有** | \`vm.deal()\` は *テスト* が見る balance を mutate する。それは親 EVM への custom Inspector hook が必要 — 独立ハーネスへの非自明な拡張 |
+| **並列性** | Foundry は test ごとに独立 DB を持つスレッドで実行。簡単に追加 (test contract 1 つにつき 1 tokio タスク) |
+| **より良い失敗レポート** | スタックトレース、デコード済み revert reason、fuzz shrink。すべて上記カーネルの上のポリッシュ |
+| **コール間 cheatcode 永続化** | 例: \`vm.expectRevert\` は *次の* call にだけ state を設定。inspector state に保存、precompile 自体ではない |
+| **パーミッションレス cheatcode 発見** | 本物のプラグインシステムなら cheatcode を動的ライブラリとしてロードできる。Foundry はやらない — コンパイル時統合。私たちもしない |
+
+書いたアーキテクチャ — 高アドレス precompile + selector dispatch + ABI デコード arg + nested EVM 実行 + register するハーネス — **Foundry cheatcode システムが動くカーネル**。Foundry は Rust レベル glue と Solidity レベル ergonomics を足す; 基礎は同じ。
+
+## Drill
+
+1. **\`balanceOf(address)\` を追加。** \`evm.db.basic(addr).balance\` 経由で任意アドレスの残高を返す 2 つ目のセレクタ。(15分)
+2. **call を \`payable\` に。** \`measureGas\` に \`value\` 引数を追加、内側 tx へ pass through。**cheatcode が payable になると Solidity 側で何が変わる?** (30分)
+3. **共有 state cheatcode。** 親テストの state を *mutate* する \`cheats.deal(address, uint256)\` を実装。ヒント: 独立 nested EVM ではなく custom Revm \`Inspector\` が必要。(3時間)
+4. **Solidity テスト発見。** ディレクトリを取って、全 \`.sol\` を solc でコンパイル、\`test_\` で始まる全関数を見つけ、各々を実行、pass/fail を出力する最小テストランナー。(4時間)
+5. **性能比較。** 同じテスト (Counter increment × 1000) を (a) 自前ハーネス、(b) \`forge test\` で実行。**レイテンシギャップは? どこから来ている?** (1時間プロファイリング)
+
+Drill 4 を完成させれば、構造的に Foundry の fork が完成。fuzz testing + invariant testing を上に足せば、野生のものと同等水準。
+
+> 🛑 **最終チェック。** 一文で: なぜ **selector ディスパッチ + ABI デコード arg** がテスト作者側から見て precompile を Solidity contract に感じさせるのか? 答えに「Solidity はアドレスへの呼び出しをエンコードする方法を既に知っている」がないなら、Step 1 を読み直し — その ABI 互換性が "騙し" を可能にする。
+
+## 📺 関連動画
+
+\`\`\`youtube
+sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッスンが reverse-engineer した cheatcode パターン)
+\`\`\`
+`,
+                },
+                {
+                  title: 'Swap Aggregator を作る — DEX state を fork して',
+                  slug: 'build-swap-aggregator-ja',
+                  type: 'CONTENT',
+                  sortOrder: 6,
+                  duration: 45,
+                  xpReward: 80,
+                  content: `# Swap Aggregator を作る: DEX state を fork して、Rust で
+
+1inch、Paraswap、0x — どれもユーザのために 1 つの問いに答える: *「X token A を渡したら、いま何 token B を最大限もらえる?」* その問いの裏で、全流動性 venue へファンアウト、各々の live state でクオート、ルーティング判断。本レッスンは ~250 行の最小 aggregator を作る: mainnet をローカル fork、Uniswap V2 + Sushi + Uniswap V3 の reserve を読み、クオート計算、勝者を選ぶ。
+
+> 📌 **スコープの正直な開示。** **3 つの V2 系 pool と 1 つの V3 pool** に対して 1-hop のクオートを計算する。本物の aggregator は: split routing (30% を Uniswap、70% を Curve に送る)、multi-hop (A → WETH → B)、独自数学の CFMM (Curve の stableswap、Balancer の重み付き pool)、ガスを考慮したルーティング、を加える。それぞれは本レッスンのカーネルの 1 ループ拡張。
+
+## 何を作るか
+
+\`\`\`bash
+$ cargo run -- quote \\
+    --in-token  0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 \\  # USDC
+    --out-token 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 \\  # WETH
+    --amount-in 10000000000                                       # 10,000 USDC
+
+Quotes (10000 USDC -> WETH):
+  Uniswap V2:    2.94821 WETH  (price 3393.08 USDC/WETH)
+  Sushi V2:      2.94619 WETH  (price 3395.41 USDC/WETH)
+  Uniswap V3:    2.95104 WETH  (price 3389.84 USDC/WETH)  ← BEST
+\`\`\`
+
+\`\`\`mermaid
+flowchart TB
+    User["CLI: in/out token, amount"] --> Fork["Revm fork<br/>at latest block"]
+    Fork -->|getReserves| V2A["Uniswap V2 pool"]
+    Fork -->|getReserves| V2B["Sushi V2 pool"]
+    Fork -->|simulate swap| V3["Uniswap V3 pool<br/>(より複雑な数学)"]
+    V2A --> Quote["Quote calculator"]
+    V2B --> Quote
+    V3 --> Quote
+    Quote --> Pick["Pick best (post-fee, post-gas)"]
+\`\`\`
+
+> 🛑 **スクロール前に予測。** なぜ各 pool に対して直接 **chain RPC** で \`getReserves\` を呼ぶのではなく **fork** してオンチェーン state を読むのか? *直接 RPC が買えないものを fork が買ってくれる* について一文で答えて。答えを保持。
+
+## なぜ fork か (vs 直接 RPC)
+
+| 方式 | N 個のクオートのレイテンシ | ガスコストシミュレーション? | マルチプール atomic ビュー? |
+| :--- | :--- | :--- | :--- |
+| **N 回の RPC \`eth_call\`** | N × ~50ms = 10 pool で数秒 | NO (別途 \`eth_estimateGas\` 必要) | NO — 各 call は別々の state read; pool A と pool B が微妙に違うブロック由来の可能性 |
+| **1 回 fork、N 回 read** | 初回 ~50ms (block fetch)、以降 ~200µs/pool | **YES — 同じ Revm fork でハイポセティカル swap のガスを測れる** | **YES** — 全 read が同じ atomic snapshot から |
+
+aggregation 特に atomicity が重要: pool A の reserve があなたの pool A read と pool B read の間に動いたら、「ベストルート」数学はリンゴと梨を比較している。**Fork が世界の単一ビューを与えてくれる。**
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "swap-aggregator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alloy-eips         = "1.0"
+alloy-primitives   = "1.5"
+alloy-provider     = "1.0"
+alloy-network      = "1.0"
+alloy-sol-types    = "1.5"
+revm               = { version = "38", features = ["alloydb"] }
+clap               = { version = "4", features = ["derive"] }
+tokio              = { version = "1", features = ["full"] }
+eyre               = "0.6"
+\`\`\`
+
+## Step 1: mainnet を fork (Lesson 1 と同じパターン)
+
+\`\`\`rust
+use alloy_eips::BlockId;
+use alloy_provider::{network::Ethereum, DynProvider, ProviderBuilder};
+use revm::{
+    context::TxEnv,
+    context_interface::result::{ExecutionResult, Output},
+    database::{AlloyDB, CacheDB},
+    database_interface::WrapDatabaseAsync,
+    primitives::{Address, TxKind, U256},
+    Context, ExecuteEvm, MainBuilder, MainContext,
+};
+
+type ForkedDB = CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, DynProvider>>>;
+
+async fn build_fork() -> eyre::Result<ForkedDB> {
+    let provider = ProviderBuilder::new()
+        .connect(&std::env::var("ETH_RPC_URL")?)
+        .await?
+        .erased();
+    let alloy_db = WrapDatabaseAsync::new(AlloyDB::new(provider, BlockId::latest()))
+        .ok_or_else(|| eyre::eyre!("AlloyDB init failed"))?;
+    Ok(CacheDB::new(alloy_db))
+}
+\`\`\`
+
+Lesson 1 (MEV searcher) と同じ — それが要点。**同じ fork パターンがあちこちで現れる; 1 つ作れたら、全部作れる。**
+
+## Step 2: V2 pool reserve を読む
+
+Uniswap V2 / Sushi / 任意の V2 fork: 同じ ABI、同じ constant-product 数学。
+
+\`\`\`rust
+use alloy_sol_types::{sol, SolCall};
+
+sol! {
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function token0() external view returns (address);
+    function token1() external view returns (address);
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct V2Pool {
+    pub address: Address,
+    pub reserve_in: U256,
+    pub reserve_out: U256,
+    pub fee_bps: u32, // Uniswap V2: 30 (= 0.3%)
+}
+
+async fn read_v2_pool(
+    db: &mut ForkedDB,
+    pool: Address,
+    in_token: Address,
+    fee_bps: u32,
+) -> eyre::Result<V2Pool> {
+    let mut evm = Context::mainnet().with_db(db).build_mainnet();
+
+    // 1. pool のどちら側が in_token か (token0 or token1) を見つける
+    let token0 = call_view::<token0Call>(&mut evm, pool, token0Call {})?;
+    let in_is_zero = token0._0 == in_token;
+
+    // 2. reserve を読む
+    let r = call_view::<getReservesCall>(&mut evm, pool, getReservesCall {})?;
+
+    let (reserve_in, reserve_out) = if in_is_zero {
+        (U256::from(r.reserve0), U256::from(r.reserve1))
+    } else {
+        (U256::from(r.reserve1), U256::from(r.reserve0))
+    };
+
+    Ok(V2Pool { address: pool, reserve_in, reserve_out, fee_bps })
+}
+
+fn call_view<C: SolCall>(
+    evm: &mut impl ExecuteEvm<Tx = TxEnv>,
+    target: Address,
+    call: C,
+) -> eyre::Result<C::Return> {
+    let result = evm.transact_one(
+        TxEnv::builder()
+            .caller(Address::ZERO)
+            .kind(TxKind::Call(target))
+            .data(call.abi_encode().into())
+            .gas_limit(1_000_000)
+            .build()?,
+    )?;
+
+    match result.result {
+        ExecutionResult::Success { output: Output::Call(out), .. } => {
+            Ok(C::abi_decode_returns(&out, true)?)
+        }
+        _ => eyre::bail!("view call failed"),
+    }
+}
+\`\`\`
+
+Walk:
+
+- **Lesson 5 の \`read_reserves\` で行ったのと同じ EVM call** — 任意の \`SolCall\` で動く \`call_view\` ヘルパに一般化。**再利用が積み重なる**、構築が進むに連れて。
+- **\`token0\` lookup が必要なのはどちらがどちらかわからないから。** Pool は address でソートされる; トークンによって、"reserve_in" は reserve0 か reserve1 のどちらにマップする。**スキップするとクオート数学が半分の時間で逆さま。**
+- **\`fee_bps\` が V2 ファミリーをパラメタ化する。** Uniswap V2: 30 bps (0.3%)。Sushi: 同じく 30 bps。古い Mooniswap、独自 fork: 5〜100 bps のどこでも。**同じコード、違うパラメータ。**
+
+> 🔍 **リポで探す。** [Uniswap V2 router source](https://github.com/Uniswap/v2-periphery/blob/master/contracts/libraries/UniswapV2Library.sol) を開く。\`getAmountOut\` を見つける。それが次 step が実装する数学。**Rust と参照 Solidity を行単位で比較せよ。**
+
+## Step 3: V2 quote 数学 (constant product)
+
+\`\`\`rust
+fn quote_v2(pool: V2Pool, amount_in: U256) -> U256 {
+    // Uniswap V2 公式: amount_in_with_fee = amount_in * (10000 - fee_bps)
+    //                  numerator   = amount_in_with_fee * reserve_out
+    //                  denominator = reserve_in * 10000 + amount_in_with_fee
+    //                  amount_out  = numerator / denominator
+    let amount_in_with_fee = amount_in * U256::from(10_000 - pool.fee_bps);
+    let numerator   = amount_in_with_fee * pool.reserve_out;
+    let denominator = pool.reserve_in * U256::from(10_000) + amount_in_with_fee;
+    numerator / denominator
+}
+\`\`\`
+
+Walk:
+
+- **9 行の数学 = V2 系 pool の AMM 全体。** Constant product (\`x · y = k\`)、fee discount のもとで。
+- **整数のみ** — float なし、panic なし。\`U256\` 算術が EVM がオンチェーンで使う精度を持つ。**クオートは on-chain swap と wei レベルで一致する。**
+- **basis points での fee で Uniswap、Sushi、独自 fee fork を同じコードでサポート。**
+
+> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: なぜ \`amount_in_with_fee * pool.reserve_out\` が **分子** に行き、分母ではないのか? ヒント: 次元的に何を意味するか考えて — \`[in_with_fee] * [reserve_out]\` はどんな単位を作る?
+
+## Step 4: V3 quote (より複雑な数学、よりシンプルなアプローチ)
+
+Uniswap V3 は流動性を *tick* と *concentrated range* で価格付けする。クオート公式は非自明。**ショートカット**: V3 数学を再実装しない; on-chain Quoter に答えを聞く、ただし RPC ラウンドトリップを払わないように Revm 経由で:
+
+\`\`\`rust
+sol! {
+    interface IQuoterV2 {
+        function quoteExactInputSingle(
+            address tokenIn,
+            address tokenOut,
+            uint24  fee,
+            uint256 amountIn,
+            uint160 sqrtPriceLimitX96
+        ) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate);
+    }
+}
+
+const UNI_V3_QUOTER: Address = alloy_primitives::address!("61fFE014bA17989E743c5F6cB21bF9697530B21e");
+
+fn quote_v3(
+    db: &mut ForkedDB,
+    in_token: Address,
+    out_token: Address,
+    fee: u32,  // 100 / 500 / 3000 / 10000
+    amount_in: U256,
+) -> eyre::Result<U256> {
+    let mut evm = Context::mainnet().with_db(db).build_mainnet();
+    let call = IQuoterV2::quoteExactInputSingleCall {
+        tokenIn:               in_token,
+        tokenOut:              out_token,
+        fee:                   fee.into(),
+        amountIn:              amount_in,
+        sqrtPriceLimitX96:     U256::ZERO,
+    };
+
+    let result = evm.transact_one(
+        TxEnv::builder()
+            .caller(Address::ZERO)
+            .kind(TxKind::Call(UNI_V3_QUOTER))
+            .data(call.abi_encode().into())
+            .gas_limit(10_000_000)
+            .build()?,
+    )?;
+
+    match result.result {
+        ExecutionResult::Success { output: Output::Call(out), .. } => {
+            let decoded = IQuoterV2::quoteExactInputSingleCall::abi_decode_returns(&out, true)?;
+            Ok(decoded.amountOut)
+        }
+        _ => eyre::bail!("V3 quote failed"),
+    }
+}
+\`\`\`
+
+Walk:
+
+- **\`UNI_V3_QUOTER\` はデプロイ済み contract。** その仕事はまさにこれ — 「いくらもらえるか?」を実 swap せずに答える。**呼び出しは無料**、in-Revm で呼んでいるから、on-chain ではない。
+- **\`sqrtPriceLimitX96 = 0\`** が price limit を無効化する (つまり「どんな価格でも OK」)。実ルーティングなら slippage を bound するために設定する。
+- **fee パラメータが pool tier を選ぶ。** V3 は 1bp (stable pair)、5bp (stable pool)、30bp (大半のペア)、100bp (エキゾチックペア)。Production aggregator は 4 つ全部を query して best を選ぶ。
+
+同じ \`call_view\` パターンも動く — V3 call の specific が見えるよう、ここでは inline で書いた。
+
+## Step 5: aggregate + best を選ぶ
+
+\`\`\`rust
+#[derive(Debug)]
+struct Quote {
+    venue: &'static str,
+    amount_out: U256,
+}
+
+async fn aggregate(
+    db: &mut ForkedDB,
+    in_token: Address,
+    out_token: Address,
+    amount_in: U256,
+) -> eyre::Result<Vec<Quote>> {
+    let uni_v2_pool   = address!("0d4a11d5EEaaC28EC3F61d100daF4d40471f1852"); // USDC/WETH on Uniswap V2 (例)
+    let sushi_pool    = address!("397FF1542f962076d0BFE58eA045FfA2d347ACa0"); // USDC/WETH on Sushi (例)
+
+    let v2 = read_v2_pool(db, uni_v2_pool, in_token, 30).await?;
+    let sushi = read_v2_pool(db, sushi_pool, in_token, 30).await?;
+    let v3 = quote_v3(db, in_token, out_token, 500, amount_in)?;
+
+    Ok(vec![
+        Quote { venue: "Uniswap V2", amount_out: quote_v2(v2, amount_in) },
+        Quote { venue: "Sushi V2",   amount_out: quote_v2(sushi, amount_in) },
+        Quote { venue: "Uniswap V3", amount_out: v3 },
+    ])
+}
+
+fn pick_best(quotes: &[Quote]) -> &Quote {
+    quotes.iter().max_by_key(|q| q.amount_out).expect("non-empty quotes")
+}
+
+#[tokio::main]
+async fn main() -> eyre::Result<()> {
+    let args = Args::parse();
+    let mut db = build_fork().await?;
+    let quotes = aggregate(&mut db, args.in_token, args.out_token, args.amount_in).await?;
+    let best = pick_best(&quotes);
+
+    println!("Quotes ({} {} -> {}):", args.amount_in, args.in_token, args.out_token);
+    for q in &quotes {
+        let marker = if std::ptr::eq(q, best) { "  ← BEST" } else { "" };
+        println!("  {:<14} {:>20}{}", q.venue, q.amount_out, marker);
+    }
+    Ok(())
+}
+\`\`\`
+
+バイナリ全体: ~250 LOC、import + CLI parse 込み。
+
+## Production に足りないもの
+
+| ギャップ | 本物の aggregator が何をしているか |
+| :--- | :--- |
+| **マルチホップルーティング** | A → WETH → B 経由のルーティング、pool 横断。グラフを構築、output 量で重み付けされた Bellman-Ford |
+| **Split routing** | 40% を V3 経由、60% を V2 経由、合計 output が単独より大きいなら。重みに対する凸最適化 |
+| **Curve / Balancer / etc.** | 各 CFMM が独自の quote 関数。Curve は stableswap (Newton's method)、Balancer は weighted pool。**同じ fork、venue ごとに違う数学。** |
+| **ガス考慮** | 各 quote から推定ガスコスト (out-token 単位) を引く。$100 swap で 50¢ 追加ガスを払うなら 0.1% 良い価格は無価値 |
+| **Price-impact 閾値** | pool を X% 超え動かすルートは reject — 低流動性 venue の MEV sandwich 対策 |
+| **submission 時 re-quote** | Fork はブロック N での state、swap はブロック N+k で着地。state drift を捕まえるために submission 直前に re-quote |
+| **MEV 保護** | Flashbots Protect / MEV-Share 経由で submit して frontrunner にルートを事前に見せない (Lesson 8 — Capstone — がこれをやる) |
+
+書いたアーキテクチャ — 1 回 fork、reserve を atomic に読む、venue ごとに quote 計算、勝者を選ぶ — **1inch と Paraswap が内部 pricing layer をどう shape するか正確そのもの**。彼らはスケール、より多い venue、より良いルーティング最適化を加える。カーネルは同一。
+
+## Drill
+
+1. **Curve を追加。** Curve pool (例: 3pool) を選ぶ。state を read、quote を実装 (stableswap)、\`get_dy(int128 i, int128 j, uint256 dx)\` を同じ \`call_view\` パターンで。(1.5時間)
+2. **ガス会計。** 各 quote から推定ガスコストを引く (\`evm.estimate_gas\` をハイポセティカル swap に使う)。「best」ルートはいま \`amount_out − gas_cost_in_out_token\` を最大化するルートのはず。(2時間)
+3. **マルチホップ探索。** 2-hop 探索を構築: A → WETH → B。WETH 経由の各候補に対して、連鎖 quote を計算、直接ルートと比較。(3時間)
+4. **Split routing。** トップ 2 venue の 50/50 split を実装、合計 output が単独より大きいかチェック。(2時間)
+5. **クロスティア:** aggregator を wallet backend (Lesson 4) に \`POST /quote-and-swap\` として wire、submission 用 signed tx を返す。(3時間)
+
+Drill 5 を完成させれば、構造的に aggregator-as-a-service ができる。MEV 保護 (Lesson 8) を plug in すれば、2023 年に出荷されたものと同等水準。
+
+> 🛑 **最終チェック。** 一文で: なぜ aggregator にとって **forking** が **N 並列 \`eth_call\`** より厳密に優れているか? 答えに「全 read 横断の atomic state」がないなら、Step 1 を読み直し — その atomicity が比較を健全にする。
+
+## 📺 関連動画
+
+\`\`\`youtube
+xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024) — 上のシミュレーション作業をしているエンジン
+\`\`\`
+`,
+                },
+                {
+                  title: 'Capstone — Frontrun-Resistant Order Router を作る',
+                  slug: 'build-capstone-router-ja',
+                  type: 'CONTENT',
+                  sortOrder: 7,
+                  duration: 60,
+                  xpReward: 100,
+                  content: `# Capstone — Frontrun-Resistant Order Router を作る
+
+これは **このティアのすべてを** 結ぶ build。ユーザの swap intent を取り、frontrun する可能性のある adversarial tx を mempool でチェック、aggregator で best venue を選び、EIP-7702 でガスを sponsor、ルート自体が public mempool に絶対現れないよう private orderflow チャネルで提出する router。ユーザは JSON を post し、router は本物のプロダクションルーティングサービスがする 7 つのことをやる。
+
+> 📌 **スコープの正直な開示。** このキャップストーンは本ティアの lesson 1〜7 のパターンを統合する。新規 build は **frontrun 検出ロジック** + **public mempool を bypass する submission パス**。Private RPC として Flashbots Protect を使う; 同じ形が MEV-Share、Beaverbuild の private endpoint、その他任意の private orderflow オークションでも動く。
+
+## 何を作るか
+
+\`\`\`bash
+$ curl -X POST http://localhost:9000/route \\
+    -d '{
+      "user":      "0xAlice...",
+      "in_token":  "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "out_token": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "amount_in": "10000000000",
+      "min_out":   "2900000000000000000",
+      "user_authorization": "0x04f8..."
+    }'
+
+{
+  "decision": "EXECUTE_PRIVATE",
+  "venue": "Uniswap V3",
+  "expected_out": "2951042818093142817",
+  "frontrun_risk": "LOW",
+  "tx_hash": "0xabc...",
+  "submission": "flashbots-protect"
+}
+\`\`\`
+
+\`\`\`mermaid
+flowchart TB
+    User["POST /route"] --> Router["Router service"]
+    Router -->|fork mainnet| Aggregator["Aggregator (L7)<br/>quotes + best venue"]
+    Router -->|scan pending txs| Detector["Frontrun detector<br/>(L1 mempool watch +<br/>L7 simulation)"]
+    Detector -->|adversarial tx found?| Decide{"Risk?"}
+    Aggregator --> Decide
+    Decide -->|HIGH| PrivPath["Private mempool<br/>(Flashbots Protect)"]
+    Decide -->|LOW| PubPath["Public mempool"]
+    PrivPath --> Sponsor["EIP-7702 sponsor (L5)"]
+    PubPath --> Sponsor
+    Sponsor --> Wallet["Wallet backend (L4)<br/>nonce/gas/replace"]
+    Wallet --> Chain
+\`\`\`
+
+> 🛑 **スクロール前に予測。** Lesson 1 の MEV searcher は、この router が防御する **脅威そのもの**。**一文で**: その searcher が何をやって、この router が何を defeat する必要があるのか? Step 3 まで答えを保持。
+
+## どの lesson が入るか (そして新規部分)
+
+| コンポーネント | 出典 | ここで新規なもの |
+| :--- | :--- | :--- |
+| **DEX 横断クオート** | L7 | そのまま再利用 |
+| **Mempool 監視** | L1 (searcher の入力!) | 防御として再利用 — opportunity ではなく敵候補を見つける |
+| **Revm fork シミュレーション** | L1 | 「この敵 tx はユーザを傷つけるか?」をスコアするのに使用 |
+| **EIP-7702 sponsor** | L5 | パスに統合してユーザがガスを払わないよう |
+| **Wallet backend submission + replace** | L4 | public-mempool パスに使用 |
+| **Private orderflow submission** | NEW | Flashbots Protect / MEV-Share 統合 |
+| **決定ロジック (route + risk → submission パス)** | NEW | Capstone の貢献部分 |
+
+新規性は **decision layer**。その下は全部、既に作ったパターン。
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "frontrun-resistant-router"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alloy = { version = "1.0", features = [
+  "providers", "signer-local", "rpc-types", "network",
+  "consensus", "eips", "sol-types"
+] }
+revm     = { version = "38", features = ["alloydb"] }
+axum     = "0.7"
+tokio    = { version = "1", features = ["full"] }
+serde    = { version = "1", features = ["derive"] }
+serde_json = "1"
+futures  = "0.3"
+eyre     = "0.6"
+\`\`\`
+
+## Step 1: 決定 struct (アーキテクチャを 1 つの型で)
+
+router 全体は \`RouteRequest\` から \`RouteDecision\` への関数。型を先にスケッチ; 残りは自分で書ける。
+
+\`\`\`rust
+use alloy::primitives::{Address, B256, U256};
+
+#[derive(serde::Deserialize)]
+pub struct RouteRequest {
+    pub user: Address,
+    pub in_token: Address,
+    pub out_token: Address,
+    pub amount_in: U256,
+    pub min_out: U256,
+    pub user_authorization: String,  // EIP-7702 SignedAuthorization、hex エンコード
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum FrontrunRisk { Low, Medium, High }
+
+#[derive(serde::Serialize)]
+pub struct RouteDecision {
+    pub decision:        &'static str,    // "EXECUTE_PRIVATE" | "EXECUTE_PUBLIC" | "REJECT_TOO_RISKY"
+    pub venue:           Option<&'static str>,
+    pub expected_out:    Option<U256>,
+    pub frontrun_risk:   String,          // serializable な FrontrunRisk
+    pub tx_hash:         Option<B256>,
+    pub submission:      Option<&'static str>,  // "flashbots-protect" | "public" | null
+    pub reason:          Option<String>,
+}
+\`\`\`
+
+Walk:
+
+- **3 つの終端状態。** private 送信、public 送信、拒否。**拒否は機能**: best public venue のスリッページが private で提供できる範囲を超えるなら、ユーザに伝えるのが正解。
+- **\`expected_out\` は aggregator 由来** (Lesson 7)。\`min_out\` と比較して、何かを送る *前* にユーザのスリッページ許容度を満たすかチェック。
+- **\`submission\` フィールドはユーザに tx がどこに行ったかを伝える。** 透明性に有用 — Flashbots Protect endpoint が彼らの bundle を受信したか検証できる。
+
+## Step 2: best quote を取る (Lesson 7 を再利用)
+
+\`\`\`rust
+// Lesson 7 から直接取り込み — 同じコード、変更なし
+use crate::aggregator::{aggregate, pick_best, Quote};
+
+async fn best_quote(
+    db: &mut ForkedDB,
+    req: &RouteRequest,
+) -> eyre::Result<(Quote, &'static str)> {
+    let quotes = aggregate(db, req.in_token, req.out_token, req.amount_in).await?;
+    let best   = pick_best(&quotes).clone();
+    Ok((best.clone(), best.venue))
+}
+\`\`\`
+
+実装は見もしない — Lesson 7 のもの。**過去のレッスンコードをインポートするのも Capstone の reading の一部。** モジュラーに保つ。
+
+## Step 3: Frontrun 検出 — 新しい部分
+
+Lesson 1 の MEV searcher は mempool で *機会* を監視する。逆転すると、同じスキャンがユーザに対する *脅威* を見つける。具体的には: router が使おうとしているのと同じ pool を、router が価格を動かすのと同じ方向でターゲットにする pending tx。
+
+\`\`\`rust
+use alloy::providers::{Provider, ProviderBuilder, WsConnect};
+use futures::StreamExt;
+use std::time::Duration;
+
+async fn scan_for_adversaries(
+    provider: &(impl Provider + Clone),
+    target_pool: Address,  // ユーザがこれから使う pool
+    in_token:    Address,  // 方向が重要: 同じ方向 = sandwich リスク
+    duration:    Duration,
+) -> eyre::Result<Vec<alloy::rpc::types::Transaction>> {
+    let mut sub = provider.subscribe_pending_transactions().await?.into_stream();
+    let mut findings = Vec::new();
+    let deadline = tokio::time::Instant::now() + duration;
+
+    loop {
+        tokio::select! {
+            _ = tokio::time::sleep_until(deadline) => break,
+            tx_hash = sub.next() => {
+                let Some(tx_hash) = tx_hash else { break; };
+                let Ok(Some(tx)) = provider.get_transaction_by_hash(tx_hash).await else { continue };
+
+                if !looks_like_swap_on(&tx, target_pool, in_token) { continue }
+                findings.push(tx);
+                if findings.len() >= 5 { break }  // 5 候補でスコアには十分
+            }
+        }
+    }
+    Ok(findings)
+}
+
+fn looks_like_swap_on(tx: &alloy::rpc::types::Transaction, pool: Address, in_token: Address) -> bool {
+    // ヒューリスティック: tx が known router をターゲット、かつ calldata に pool トークンが言及される。
+    // Production router は router ABI でデコードして path をチェックする。
+    // 明瞭性のためヒューリスティックを保つ。
+    use alloy::primitives::address;
+    const KNOWN_ROUTERS: &[Address] = &[
+        address!("7a250d5630B4cF539739dF2C5dAcb4c659F2488D"), // UniV2
+        address!("d9e1cE17f2641f24aE83637ab66a2cca9C378B9F"), // Sushi V2
+        address!("E592427A0AEce92De3Edee1F18E0157C05861564"), // UniV3
+    ];
+    if !KNOWN_ROUTERS.contains(&tx.to().unwrap_or_default()) { return false; }
+    let input = tx.input();
+    let pool_bytes = pool.as_slice();
+    let in_token_bytes = in_token.as_slice();
+    // 簡易 substring check — 安価、このレイヤーでは false positive OK
+    has_subseq(input, pool_bytes) || has_subseq(input, in_token_bytes)
+}
+
+fn has_subseq(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+\`\`\`
+
+Walk:
+
+- **\`subscribe_pending_transactions\`** — Lesson 1 の同じ Alloy subscription。**searcher の mempool 入力を逐語的に再利用。**
+- **ヒューリスティックは意図的に緩い。** 本物の production は router ABI をデコードして swap *path* を推論する。緩いヒューリスティックは過剰検出する (false positive = 必要なくても private にルート) が、これは安全な失敗モード。
+- **\`duration\` が look-ahead window。** ~2 秒が sensible なデフォルト — 遅い人間を捕まえるには十分長く、ユーザが感じるほどの遅延ではない短さ。
+
+> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: 候補 swap の **方向** がなぜ sandwich 脅威かを判定するのに重要か? ヒント: frontrunner が victim と *同じ* 方向で取引する利益 vs *逆* 方向で取引する利益を考えて。
+
+## Step 4: Revm シミュレーションで脅威をスコア
+
+怪しい tx のリストだけでは不十分。**もしこれらがユーザより先に着地したら、ユーザの期待 output はどれだけ落ちるか?** を知る必要がある。
+
+\`\`\`rust
+async fn score_risk(
+    db: &mut ForkedDB,                            // fresh fork、mutate される
+    adversary_txs: &[alloy::rpc::types::Transaction],
+    quote_before: U256,                           // 敵がいない場合のユーザの output
+    req: &RouteRequest,
+) -> eyre::Result<FrontrunRisk> {
+    if adversary_txs.is_empty() { return Ok(FrontrunRisk::Low); }
+
+    // 各敵 tx を fork に適用
+    // (本物の router はシナリオごとに snapshot+rollback。ここでは sequential)
+    for adv in adversary_txs {
+        apply_tx_to_fork(db, adv).await?;
+    }
+
+    // post-敵 state で re-quote
+    let quote_after = aggregate(db, req.in_token, req.out_token, req.amount_in).await?;
+    let after_amount = pick_best(&quote_after).amount_out;
+
+    // ユーザは期待 output の何分の何を失うか?
+    let lost_bps = if quote_before > after_amount {
+        ((quote_before - after_amount) * U256::from(10_000) / quote_before)
+            .to_string().parse::<u64>().unwrap_or(0)
+    } else { 0 };
+
+    Ok(match lost_bps {
+        0..=10   => FrontrunRisk::Low,    // <0.10% drop — ノイズ
+        11..=50  => FrontrunRisk::Medium, // 0.10%〜0.50% drop — 防御の価値あり
+        _        => FrontrunRisk::High,   // >0.50% drop — 必ず private にルート
+    })
+}
+
+async fn apply_tx_to_fork(
+    db: &mut ForkedDB,
+    tx: &alloy::rpc::types::Transaction,
+) -> eyre::Result<()> {
+    use revm::context::TxEnv;
+    use revm::primitives::TxKind;
+    let mut evm = revm::Context::mainnet().with_db(db).build_mainnet();
+    let tx_env = TxEnv::builder()
+        .caller(tx.from())
+        .kind(if let Some(to) = tx.to() { TxKind::Call(to) } else { TxKind::Create })
+        .data(tx.input().clone())
+        .value(tx.value())
+        .gas_limit(tx.gas_limit())
+        .build()?;
+    let _ = evm.transact_one(tx_env)?;
+    Ok(())
+}
+\`\`\`
+
+Walk:
+
+- **Quote-before vs quote-after が実際の measure。** ヒューリスティック検出 (Step 3) は *候補* を見つける; シミュレーションが *傷つけるか* を教える。後者だけが private ルーティングを正当化する。
+- **Sequential application は簡素化。** 本物の実装は各敵を独立にシミュレート、worst case を取り、結合する。Drill 2。
+- **basis points での閾値** はプロトコル単位で調整可能。USDC/USDT の stable swap は 1bp 許容するかも; エキゾチックペアの swap は 50bp 受け入れるかも。
+
+## Step 5: 提出
+
+決定木:
+
+\`\`\`rust
+async fn execute_decision(
+    state: &AppState,
+    req: &RouteRequest,
+    venue: &'static str,
+    expected_out: U256,
+    risk: FrontrunRisk,
+) -> eyre::Result<RouteDecision> {
+    if expected_out < req.min_out {
+        return Ok(RouteDecision {
+            decision:      "REJECT_TOO_RISKY",
+            venue:         Some(venue),
+            expected_out:  Some(expected_out),
+            frontrun_risk: format!("{risk:?}"),
+            tx_hash:       None,
+            submission:    None,
+            reason:        Some(format!("expected_out {} < min_out {}", expected_out, req.min_out)),
+        });
+    }
+
+    // EIP-7702 sponsored tx を構築 (Lesson 5、直接持ち込み)
+    let tx_request = build_sponsored_tx(
+        &state.public_provider,
+        &state.sponsor,
+        req.user,
+        &req.user_authorization,
+        vec![/* 選んだ venue の router への swap call */],
+    ).await?;
+
+    let (submission, hash) = match risk {
+        FrontrunRisk::High | FrontrunRisk::Medium => {
+            // Flashbots Protect (or 任意の private RPC) 経由で提出
+            let private = &state.private_provider;
+            let h = private.send_transaction(tx_request).await?;
+            ("flashbots-protect", *h.tx_hash())
+        }
+        FrontrunRisk::Low => {
+            // public mempool で OK — bundler markup を節約
+            let h = state.public_provider.send_transaction(tx_request).await?;
+            ("public", *h.tx_hash())
+        }
+    };
+
+    Ok(RouteDecision {
+        decision:      if submission == "flashbots-protect" { "EXECUTE_PRIVATE" } else { "EXECUTE_PUBLIC" },
+        venue:         Some(venue),
+        expected_out:  Some(expected_out),
+        frontrun_risk: format!("{risk:?}"),
+        tx_hash:       Some(hash),
+        submission:    Some(submission),
+        reason:        None,
+    })
+}
+\`\`\`
+
+**2 つの provider** が load-bearing piece。\`public_provider\` は普通の RPC (Infura、自前 Reth) に接続; \`private_provider\` は https://rpc.flashbots.net/protect に接続。**同じ Alloy コード、違う endpoint** — それが sandwich 攻撃を defeat する非対称性。
+
+## Step 6: 統合
+
+\`\`\`rust
+async fn route_handler(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<RouteRequest>,
+) -> Result<Json<RouteDecision>, (axum::http::StatusCode, String)> {
+    // 1. venue 横断 quote (L7 持ち込み)
+    let mut db = build_fork().await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let (best, venue) = best_quote(&mut db, &req).await
+        .map_err(|e| (axum::http::StatusCode::BAD_GATEWAY, e.to_string()))?;
+
+    // 2. ~2 秒間 mempool で adversarial tx を監視 (L1 反転)
+    let pool_for_route = address_for_venue(venue, req.in_token, req.out_token);
+    let adversaries = scan_for_adversaries(&state.public_provider, pool_for_route, req.in_token, Duration::from_secs(2)).await
+        .unwrap_or_default();
+
+    // 3. シミュレーションでリスクをスコア (L1 + L7 結合)
+    let mut risk_db = build_fork().await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let risk = score_risk(&mut risk_db, &adversaries, best.amount_out, &req).await
+        .unwrap_or(FrontrunRisk::Low);
+
+    // 4. 一致する submission パスで実行 (L4 + L5 持ち込み)
+    let decision = execute_decision(&state, &req, venue, best.amount_out, risk).await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(decision))
+}
+\`\`\`
+
+本レッスンの新規コード合計: ~250 LOC。**router** 全体コード: この 250 + 持ち込まれる lesson — 1 つのリポに収まる動く frontrun-resistant order router。
+
+## Production に足りないもの
+
+| ギャップ | 本物の production router が何をしているか |
+| :--- | :--- |
+| **MEV-Share / OFA 統合** | Orderflow を最高 searcher 入札に private auction; rebate をユーザに戻す。(Flashbots Protect は単純版) |
+| **ユーザ単位スリッページ予算** | 5% スリッページを超えて quote しない; ユーザに \`amount_in\` を減らすよう伝える |
+| **キャンセル + 返金フロー** | private bundle が 2 ブロックで着地しないなら、EIP-7702 authorization は無駄。ユーザ向け UI + 返金ロジックが必要 |
+| **マルチリージョン private RPC** | Flashbots、Beaverbuild、Titan、Rsync に同時 submit; 最初に着地したものが勝つ |
+| **ユーザ単位レート制限** | API access を持つ bad actor は quote を spam できる (安価)、しかし各 quote は fork を消費する; cap |
+| **Observability** | 全 (venue, risk, submission) 決定をログ。1000 ルート後に評価: private にルートしたとき、シミュレートされた drop は実 on-chain 結果と一致したか? 実データで閾値をチューニング |
+
+書いたアーキテクチャ — quote → 敵検出 → sim でスコア → private vs public 決定 → 適切なパス経由で submit — **すべての defensive routing service の背骨**。CowSwap、MEV-Share consumer、retail wallet backend — すべてこのバリエーションをやっている。**今あなたは作った。**
+
+## Drill (カリキュラム最長、意図的に)
+
+1. **本物の router ABI デコード。** \`looks_like_swap_on\` の緩い substring ヒューリスティックを UniV2 / V3 / Sushi router calldata の proper \`sol!\` デコードに置き換え。path に \`(in_token, out_token)\` がどちらかの方向で含まれるかチェック。(3時間)
+2. **独立シミュレーション。** 各敵を独立にスコア (各敵間で fork を snapshot + rollback)。worst-case drop を取る。(2時間)
+3. **キャンセルフロー。** \`POST /cancel { tx_hash }\` を追加 — ユーザの authorization を refund (即ち、original を invalidate する no-op tx を同じ nonce で署名)。UI に wire。(3時間)
+4. **マルチ RPC private submission。** 2 つの private endpoint (Flashbots Protect + Beaverbuild) に同時 submit。最初に着地した方の hash を返す。(1.5時間)
+5. **閾値オートチューニング。** 各 router 決定 + 実 on-chain 結果 (drop は予測より大きいか小さいか?) をログ。historical data に対して bps 閾値を fit する小さい offline スクリプトを構築。(5時間)
+
+Drill 5 後、チューニング済み・観察可能に正しい frontrun-resistant router が手に入る。**これがユーザ trust を真剣に受け取る wallet チームに対して production に出すもの。**
+
+> 🛑 **最終チェック (カリキュラム最終チェック)。** 一文で: このティアの 8 lesson のうち、なぜ *capstone* が他のどのコンポーネントより **simulation** (L1) に依存するのか? 答えに「ユーザの損失と同じ単位で脅威を測らずに、防御するか決められない」がないなら、capstone はまだ完全には届いていない — Step 4 を読み直し。
+
+## 📺 関連動画
+
+\`\`\`youtube
+vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm) — この router が defeat するために作られた脅威
+\`\`\`
+
+---
+
+## Building tier 完走
+
+8 lesson の総まとめ:
+
+1. 最小 MEV searcher (mempool → fork-sim → arb)
+2. Reorg-aware Postgres indexer (ExEx + reorg ディスパッチ)
+3. カスタム RPC エンドポイント (jsonrpsee + extend_rpc_modules)
+4. Wallet backend (signer pool + nonce mgr + replace-on-stuck)
+5. EIP-7702 sponsor (Type 4 tx + paymaster パターン)
+6. Foundry スタイル cheatcode (custom precompile + ハーネス)
+7. Swap aggregator (Revm fork + venue 横断 quote)
+8. **Frontrun-resistant order router (本レッスン)** — 上記すべて統合
+
+ターゲット雇用主 / プロジェクトに最も興味のあるものを選ぶ。Production ギャップを開く。小さな public リポとして ship。**それが Paradigm / Tempo / 真剣チーム との会話に持っていく artifact。**
+`,
+                },
               ],
             },
           },

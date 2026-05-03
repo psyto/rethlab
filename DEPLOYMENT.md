@@ -82,7 +82,7 @@ The build runs `prisma generate && prisma db push --accept-data-loss && next bui
 
 ## 6. Seed the courses (one-time)
 
-After the first deploy, the database has empty tables. Load the 12 courses / 102 lessons via the admin endpoint:
+After the first deploy, the database has empty tables. Load the 12 courses / 108 lessons via the admin endpoint:
 
 ```bash
 curl -X POST "https://rethlab.vercel.app/api/admin/seed?key=$AUTH_SECRET&mode=full"
