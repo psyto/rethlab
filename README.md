@@ -1,6 +1,6 @@
 # RethLab — Hardcore Rust Ethereum Developer Training
 
-> A demanding, source-first training program in **Reth, Revm, Alloy, and Foundry**. The new wave of EVM is **purpose-built L1s** — Hyperliquid for perps, Tempo for payments, Base for the consumer L2 — and they all run on this Rust stack. **And the apps on top of them** — MEV searchers, indexers, custom RPCs, wallet backends — all run on the same stack. RethLab takes you from "I know some Rust" to "I can read the source AND ship a real app."
+> A demanding, source-first training program in **Reth, Revm, Alloy, and Foundry**. **Solidity ships your contracts; Rust ships everything around them** — MEV searchers, indexers, wallet backends, AA bundlers, custom RPCs, paymasters, AND the new wave of purpose-built L1s (Hyperliquid, Tempo, Base). If your career horizon is anything beyond writing contracts, the production layer of crypto infrastructure is now Rust. RethLab takes you from "I know some Rust" to "I can read the source AND ship a real app."
 
 Every advanced lesson walks through **actual production source code** — line by line, with the design intent. Bilingual: English + Japanese. Free and open. Built by [@psyto](https://github.com/psyto).
 
