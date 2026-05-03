@@ -49,7 +49,9 @@ test-ledger/
 # private notes / legacy assets
 RethDojo_*.txt
 reth-2.png
-scripts/
+# Anchor with leading / so this only matches a /scripts dir at the repo
+# root. .github/scripts/ (CI helpers) is NOT ignored.
+/scripts/
 
 # Claude Code local settings
 .claude/
