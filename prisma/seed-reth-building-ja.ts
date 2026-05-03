@@ -376,6 +376,12 @@ Drill 5 を完成させれば、本物の searcher のアルゴリズム的核�
 
 > 🛑 **最終チェック。** 一文で: なぜこの設計の中で **Step 3 の fork** が searcher を可能にする部分なのか? 答えに「候補が乗ったかのように世界を観察する」という意味の一節がないなら、Step 3 を読み直し — その再アンカリングがゲーム全体。
 
+## 📺 関連動画
+
+\`\`\`youtube
+vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm)
+\`\`\`
+
 
 ---
 
@@ -2858,11 +2864,6 @@ Drill 5 後、チューニング済み・観察可能に正しい frontrun-resis
 
 > 🛑 **最終チェック (カリキュラム最終チェック)。** 一文で: このティアの 8 lesson のうち、なぜ *capstone* が他のどのコンポーネントより **simulation** (L1) に依存するのか? 答えに「ユーザの損失と同じ単位で脅威を測らずに、防御するか決められない」がないなら、capstone はまだ完全には届いていない — Step 4 を読み直し。
 
-## 📺 関連動画
-
-\`\`\`youtube
-vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm) — この router が defeat するために作られた脅威
-\`\`\`
 
 ---
 

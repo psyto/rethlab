@@ -377,6 +377,12 @@ Finish drill 5 and you have the algorithmic core of a real searcher. Add submiss
 
 > 🛑 **Final check.** In one sentence: why is the *fork* in this design (Step 3) the part that makes the searcher possible at all? If your answer doesn't mention "observing the world *as if* the candidate had landed", re-read Step 3 — that re-anchoring is the whole game.
 
+## 📺 Further watching
+
+\`\`\`youtube
+vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm)
+\`\`\`
+
 
 ---
 
@@ -2859,11 +2865,6 @@ After drill 5 you have a tuned, observably-correct frontrun-resistant router. **
 
 > 🛑 **Final check (the curriculum's final check).** In one sentence: of the 8 lessons in this tier, why does the *capstone* depend on **simulation** (L1) more than any other component? If your answer doesn't mention "you can't decide whether to defend without first measuring the threat in the same units as the user's loss", the capstone hasn't quite landed yet — re-read Step 4.
 
-## 📺 Further watching
-
-\`\`\`youtube
-vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm) — the threat this router is built to defeat
-\`\`\`
 
 ---
 
