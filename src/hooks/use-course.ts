@@ -7,7 +7,7 @@ export interface CourseDetail {
   slug: string;
   title: string;
   description: string;
-  difficulty: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+  difficulty: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';
   duration: number;
   xpReward: number;
   track: string | null;

@@ -9,7 +9,7 @@ export async function seedRethExpertEN(prisma: PrismaClient) {
       title: 'Reth Expert — Production Engineering',
       description:
         'Hardcore systems work: profiling and cache-aware Rust, MDBX storage internals, Tokio runtime, procedural macros, custom precompiles, Merkle Patricia Trie, MEV in production, zkEVM, and shipping a custom Reth fork.',
-      difficulty: 'ADVANCED',
+      difficulty: 'EXPERT',
       duration: 240,
       xpReward: 500,
       track: 'reth-expert',

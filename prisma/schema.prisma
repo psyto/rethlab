@@ -245,6 +245,7 @@ enum CourseDifficulty {
   BEGINNER
   INTERMEDIATE
   ADVANCED
+  EXPERT
 }
 
 enum LessonType {

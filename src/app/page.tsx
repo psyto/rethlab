@@ -73,7 +73,7 @@ export default function LandingPage() {
       description: t('page.tracks.buildingDesc'),
       icon: CheckCircle2,
       courses: 1,
-      difficulty: t('courses.difficulty.advanced'),
+      difficulty: t('courses.difficulty.expert'),
       color: 'from-pink-500/20 to-rose-500/20',
     },
   ];

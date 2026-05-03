@@ -26,7 +26,7 @@ export interface CourseCard {
   title: string;
   description: string;
   thumbnail: string | null;
-  difficulty: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+  difficulty: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';
   duration: number;
   xpReward: number;
   track: string | null;

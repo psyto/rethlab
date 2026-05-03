@@ -9,7 +9,7 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
       title: 'Building with the Stack — 実アプリを作る',
       description:
         'ソースを読むのは前提条件、このティアはその対価 — Rust + Alloy + Revm の動くアプリ 8 本: 最小 MEV searcher、reorg-aware Postgres indexer (ExEx)、カスタム RPC エンドポイント、wallet backend、EIP-7702 sponsor、Foundry スタイル cheatcode、swap aggregator、そして全部を統合する frontrun-resistant order router の capstone。',
-      difficulty: 'ADVANCED',
+      difficulty: 'EXPERT',
       duration: 60,
       xpReward: 100,
       track: 'reth-building',
