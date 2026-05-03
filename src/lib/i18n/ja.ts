@@ -325,7 +325,7 @@ export const ja: TranslationKeys = {
   },
   about: {
     title: 'RethLabについて',
-    subtitle: '最新の EVM は用途特化型 L1 の波 — perps の Hyperliquid、payments の Tempo、consumer L2 の Base。そのすべてが Reth・Revm・Alloy・Foundry で動いています。RethLab は、その本物のソースコードを行ごとに解説するトレーニングプログラムです。',
+    subtitle: 'Hyperliquid はその上で動く。Tempo はその上でローンチした。Paradigm が作った — Reth・Revm・Foundry・Alloy。Rust EVM スタックは今クリプトインフラで瞬間を迎えていて、それを読めるエンジニアは希少。RethLab は、本物のソースを行単位で walk through し、そして 8 本の動くアプリを end-to-end で build させるトレーニングプログラムです。',
     bio: 'Reth・Revm・Alloy は、いま最も性能の高いブロックチェーンの中核にあります。しかし「Rust が少し書ける」状態から「本番の EVM インフラを実装できる」状態への入り口は険しい — ドキュメントは散在し、ソースは難解で、明確な道筋が存在しません。RethLab がその道筋です：6 コース・約108 レッスン、すべての上位概念は本番ソースコードに紐づけられ、最終 Building tier では動くアプリ 8 本 (MEV searcher、indexer、カスタム RPC、wallet backend、EIP-7702 sponsor、Foundry スタイル cheatcode、swap aggregator、frontrun-resistant order router) を end-to-end で walk through。修了すれば、Reth の Stage を読み、独自の Revm precompile を書き、ExEx をデプロイし、Paradigm / Tempo / 真剣チームとの会話に持って行けるポートフォリオリポを持てます。',
     background: {
       tradfi: 'なぜRustなのか',

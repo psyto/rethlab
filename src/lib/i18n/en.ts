@@ -323,7 +323,7 @@ export const en = {
   },
   about: {
     title: 'About RethLab',
-    subtitle: 'The new wave of EVM is purpose-built L1s — Hyperliquid for perps, Tempo for payments, Base for the consumer L2. They all run on Reth, Revm, Alloy, Foundry. RethLab is the training program that walks you through that source, line by line.',
+    subtitle: 'Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. The Rust EVM stack is having its moment in crypto infrastructure, and the engineers who can read it are scarce. RethLab is the training program that walks you through that source line by line, then has you build eight working apps end to end.',
     bio: 'Reth, Revm, and Alloy are at the heart of the most performant chains being built today. But the on-ramp from "I know some Rust" to "I can write production EVM infrastructure" is brutal — the docs are scattered, the source is dense, and there is no clear path. RethLab is that path: 6 courses, ~108 lessons, every advanced concept grounded in actual production source, and a final Building tier that walks you through eight working apps end to end (MEV searcher, indexer, custom RPC, wallet backend, EIP-7702 sponsor, Foundry-style cheatcode, swap aggregator, frontrun-resistant order router). Finish it and you can read Reth\'s stages, write custom Revm precompiles, ship an ExEx, AND have a portfolio repo to bring to a Paradigm / Tempo / serious-team conversation.',
     background: {
       tradfi: 'Why Rust',
