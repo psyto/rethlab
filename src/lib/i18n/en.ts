@@ -327,7 +327,7 @@ export const en = {
     bio: '15+ years shipping mission-critical financial systems — core banking, retail deposits, mortgages, KYC, regulatory reporting — across Tokyo (Shinsei Bank), Bangalore (offshore QA), and Hong Kong (free English-learning email, 500K+ users). Now Head of Sales Engineering at SBI R3 Japan, focused on Solana enterprise adoption and real-world-asset tokenization, while building actively across Bitcoin, Ethereum, Solana, Hyperliquid, and Corda.\n\nI built RethLab because when I tried to learn Reth / Revm / Alloy / Foundry properly, I hit the gap the curriculum walks through: the docs are scattered, the source is dense, and there is no clear path from "I know some Rust" to "I can ship production EVM infrastructure." I learned by doing, then turned what worked into the curriculum I wish I\'d had — 6 courses, ~108 lessons, with a final Building tier that has you ship eight working apps end to end. Free forever, source-first.',
     background: {
       tradfi: 'Background',
-      tradfiDetail: '15+ yrs of mission-critical FS at Shinsei Bank: core banking (Flexcube), retail deposits, mortgages, lending, KYC/FATCA, Zengin payments. Brief Backbase stint as turnaround PM.',
+      tradfiDetail: '15+ yrs of mission-critical FS at Shinsei Bank: core banking (Flexcube), retail deposits, mortgages, KYC/FATCA, Zengin payments, ATM. Backbase (Dutch Banking-as-a-Service unicorn) as PM.',
       blockchain: 'Now',
       blockchainDetail: 'Head of Sales Engineering at SBI R3 Japan — driving Solana enterprise adoption and RWA tokenization for Japanese financial institutions.',
       vaults: 'Web3',
