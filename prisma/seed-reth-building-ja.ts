@@ -376,11 +376,6 @@ Drill 5 を完成させれば、本物の searcher のアルゴリズム的核�
 
 > 🛑 **最終チェック。** 一文で: なぜこの設計の中で **Step 3 の fork** が searcher を可能にする部分なのか? 答えに「候補が乗ったかのように世界を観察する」という意味の一節がないなら、Step 3 を読み直し — その再アンカリングがゲーム全体。
 
-## 📺 関連動画
-
-\`\`\`youtube
-vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm)
-\`\`\`
 
 ---
 
@@ -1033,11 +1028,6 @@ Drill 5 を完成させればループが閉じる: ノード固有の insight �
 
 > 🛑 **最終チェック。** 一文で: なぜ \`extend_rpc_modules\` は、Reth の標準 RPC を呼ぶ sidecar サービスを動かすより厳密に強力か? 答えに「ノードコンポーネントへの in-process アクセス」がないなら、Step 3 を読み直し — そのアクセスがレバレッジ。
 
-## 📺 関連動画
-
-\`\`\`youtube
-GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next generation indexing (Devcon 2024) — 別の拡張点 (ExEx)、同じノード拡張哲学
-\`\`\`
 `,
                 },
                 {
@@ -1545,7 +1535,7 @@ flowchart TB
     User["Alice (EOA)"] -->|オフチェーンで Authorization 署名| AuthPayload["Authorization<br/>chain_id, delegate, nonce"]
     User -->|POST /sponsor| API
     AuthPayload -->|HTTP body| API["axum handler"]
-    API -->|Type 4 tx を構築<br/>auth_list = [user_auth]| Sponsor["Sponsor signer<br/>(ガス支払い)"]
+    API -->|Type 4 tx を構築 user_auth 付き| Sponsor["Sponsor signer<br/>(ガス支払い)"]
     Sponsor -->|broadcast| Chain
     Chain -->|delegated code が<br/>Alice のアドレスとして走る| Effects["Token transfer +<br/>Router swap atomically"]
 \`\`\`
@@ -1878,7 +1868,7 @@ flowchart TB
     Test["Solidity test"] -->|call| Cheats["0x7110... precompile"]
     Cheats -->|nested EVM call| Inner["Revm sub-EVM<br/>target.data を実行"]
     Inner -->|gas_used| Cheats
-    Cheats -->|abi.encode(uint256)| Test
+    Cheats -->|abi-encoded uint256| Test
 \`\`\`
 
 > 🛑 **スクロール前に予測。** なぜこれを **precompile** として実装するのが正解か? 普通の Solidity contract ではなく? **precompile が普通の contract にできないこと** について一文で答えてください。答えを保持。
@@ -2474,11 +2464,6 @@ Drill 5 を完成させれば、構造的に aggregator-as-a-service ができ�
 
 > 🛑 **最終チェック。** 一文で: なぜ aggregator にとって **forking** が **N 並列 \`eth_call\`** より厳密に優れているか? 答えに「全 read 横断の atomic state」がないなら、Step 1 を読み直し — その atomicity が比較を健全にする。
 
-## 📺 関連動画
-
-\`\`\`youtube
-xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024) — 上のシミュレーション作業をしているエンジン
-\`\`\`
 `,
                 },
                 {

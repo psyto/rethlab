@@ -377,11 +377,6 @@ Finish drill 5 and you have the algorithmic core of a real searcher. Add submiss
 
 > 🛑 **Final check.** In one sentence: why is the *fork* in this design (Step 3) the part that makes the searcher possible at all? If your answer doesn't mention "observing the world *as if* the candidate had landed", re-read Step 3 — that re-anchoring is the whole game.
 
-## 📺 Further watching
-
-\`\`\`youtube
-vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm)
-\`\`\`
 
 ---
 
@@ -1034,11 +1029,6 @@ Finish drill 5 and you've closed the loop: a node that exposes node-only insight
 
 > 🛑 **Final check.** In one sentence: why is \`extend_rpc_modules\` strictly more powerful than running a sidecar service that calls Reth's standard RPC? If your answer doesn't mention "in-process access to node components", re-read Step 3 — that access is the leverage.
 
-## 📺 Further watching
-
-\`\`\`youtube
-GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next generation indexing (Devcon 2024) — different extension point (ExEx), same node-extension philosophy
-\`\`\`
 `,
                 },
                 {
@@ -1546,7 +1536,7 @@ flowchart TB
     User["Alice (EOA)"] -->|sign Authorization off-chain| AuthPayload["Authorization<br/>chain_id, delegate, nonce"]
     User -->|POST /sponsor| API
     AuthPayload -->|HTTP body| API["axum handler"]
-    API -->|build Type 4 tx<br/>auth_list = [user_auth]| Sponsor["Sponsor signer<br/>(pays gas)"]
+    API -->|build Type 4 tx with user_auth| Sponsor["Sponsor signer<br/>(pays gas)"]
     Sponsor -->|broadcast| Chain
     Chain -->|delegated code runs<br/>AS Alice's address| Effects["Token transfer +<br/>Router swap atomically"]
 \`\`\`
@@ -1879,7 +1869,7 @@ flowchart TB
     Test["Solidity test"] -->|call| Cheats["0x7110... precompile"]
     Cheats -->|nested EVM call| Inner["Revm sub-EVM<br/>executes target.data"]
     Inner -->|gas_used| Cheats
-    Cheats -->|abi.encode(uint256)| Test
+    Cheats -->|abi-encoded uint256| Test
 \`\`\`
 
 > 🛑 **Predict before scrolling.** Why is implementing this as a **precompile** the right call, instead of a regular Solidity contract? Form a one-sentence answer about **what a precompile can do that a regular contract can't**. Hold your guess.
@@ -2475,11 +2465,6 @@ Finish drill 5 and you have, structurally, an aggregator-as-a-service. Plug in M
 
 > 🛑 **Final check.** In one sentence: why is **forking** strictly better than **N parallel \`eth_call\`s** for an aggregator? If your answer doesn't mention "atomic state across all reads", re-read Step 1 — that atomicity is what makes the comparison sound.
 
-## 📺 Further watching
-
-\`\`\`youtube
-xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024) — the engine doing the simulation work above
-\`\`\`
 `,
                 },
                 {
