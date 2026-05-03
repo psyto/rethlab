@@ -386,14 +386,343 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 ## このティアの今後
 
-本レッスンは **Building with the Stack** の最初の 1 本。今後の予定 (無料、source-first、同じ active-learning スタイル):
-
-- **Reorg-Aware Indexer を ExEx で作る** — etherscan.io を駆動するのと同種のもの、ただし 300 行で、Reth と同一プロセスで動く
-- **Reth にカスタム RPC エンドポイントを足す** — \`eth_myThing\` を Rust 拡張として shipping
-- **Wallet Backend を Rust で作る** — Alloy signer + nonce/gas 管理、wallet チームが実際に格闘している部分
-- **最小限の EIP-7702 Bundler を作る** — Pectra 時代の EIP-4337 bundler 同等品、想像より単純
+**Building with the Stack** の次のレッスンは本レッスンが止まった所から続く: in-process な indexer がチェーンをクエリ可能な Postgres データセットに変換、フル reorg 正確性、もう ~250 行で。それ以降の予定: Reth カスタム RPC エンドポイント、Rust wallet backend、最小限の EIP-7702 bundler。
 
 新レッスンの通知は [GitHub repo](https://github.com/psyto/rethlab) を watch してください。
+`,
+                },
+                {
+                  title: 'Reorg-Aware Indexer を ExEx で作る',
+                  slug: 'build-exex-indexer-ja',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 45,
+                  xpReward: 80,
+                  content: `# Reorg-Aware Indexer を ExEx で作る
+
+すべてのブロックエクスプローラ、アナリティクスパイプライン、リクイデーションモニタは同じプリミティブを必要とします: **チェーンを自分のデータストアに読み込み、reorg が起きても壊さない。** ExEx は Reth のこの部分を、2,000 行のサイドプロジェクトから 250 行の単一ファイルに変える機構です。本レッスンはその完全なコードを walk through します。
+
+> 📌 **スコープの正直な開示。** ERC-20 Transfer イベントを Postgres にインデックスする (フル reorg 対応 — \`ChainCommitted\` で commit、\`ChainReverted\` で undo、\`ChainReorged\` で swap)。データの上に public API を載せる部分は構築しない。それは indexer の後半で、本レッスンが答える問いとは直交: *「ノード速度で正しいチェーンデータをデータストアに入れるには?」*
+
+## 何を作るか
+
+\`\`\`mermaid
+flowchart LR
+    Reth["Reth node<br/>(in-process)"] -->|ExExNotification| Loop["ExEx loop"]
+    Loop -->|ChainCommitted| Decode["Decode Transfer logs<br/>from receipts"]
+    Decode -->|rows| Insert["INSERT into Postgres"]
+    Loop -->|ChainReverted| Delete["DELETE WHERE<br/>block IN range"]
+    Loop -->|ChainReorged| Swap["DELETE old +<br/>INSERT new"]
+    Insert --> Signal["Send FinishedHeight<br/>(let Reth prune)"]
+    Delete --> Signal
+    Swap --> Signal
+\`\`\`
+
+単一の \`main.rs\` が **Reth のプロセス内で** 動く。JSON-RPC ラウンドトリップなし、別ノードなし、WebSocket 再接続ロジックなし。ExEx は Reth 自身が生成するチェーンイベントを型付きストリームで受け取る。
+
+> 🛑 **スクロール前に予測。** なぜ「in-process」がここでのアーキテクチャ的な勝ちか? ノード外で動くことが indexer に強いる作業のうち、内側に住むことでスキップできるものを、一文で答えてください。Step 2 まで答えを保持。
+
+## なぜ ExEx か (\`eth_getLogs\` ポーリング vs 直接 DB read との比較)
+
+| 方式 | レイテンシ | reorg 正確性 | Reth 結合度 |
+| :--- | :--- | :--- | :--- |
+| **\`eth_getLogs\` ポーリング** | 秒 (poll 間隔 + RPC) | 手動 — 自分で再取得 + reconcile | なし、ただしレイテンシ + 負荷で代償 |
+| **直接 MDBX read** | µs | なし — MDBX は committed state を見せる、チェーン履歴は見えない | 密、しかし reorg シグナルが一切ない |
+| **ExEx** | µs (in-process channel) | **型付き reorg event が届く** | Reth crate への Cargo dep |
+
+ExEx は 3 つのうち **正確性 (reorg event)** と **レイテンシ (in-process)** の両方を提供する唯一の選択肢。代償は indexer が **Reth バイナリの一部として shipping** されること — コードが同一プロセスに住む。単一目的の indexer にとって、これは features: 1 バイナリ、1 データストア、glue 不要。
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "transfer-indexer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Reth crate — production では特定タグにピン留め
+reth                = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-exex           = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-node-ethereum  = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-tracing        = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-primitives     = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+
+# Alloy (event デコード用)
+alloy-primitives    = "1.5"
+alloy-sol-types     = "1.5"
+
+# Postgres
+sqlx                = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "migrate"] }
+
+# 配管
+futures-util        = "0.3"
+tokio               = { version = "1", features = ["macros", "rt-multi-thread"] }
+eyre                = "0.6"
+\`\`\`
+
+> Reth は ExEx crate を crates.io に安定的なペースで publish しない — Git タグから引くのが標準パターン。特定タグ (ここでは \`v1.5.0\`) にピン留めし、新 Reth でテストする準備ができたら意図的に bump する。
+
+## Step 1: ExEx スケルトン
+
+すべての ExEx の形は同じ。これを読めば、これから世界に存在するすべての ExEx の 80% を読んだことになる:
+
+\`\`\`rust
+use futures_util::TryStreamExt;
+use reth::{api::FullNodeComponents, builder::NodeTypes, primitives::EthPrimitives};
+use reth_exex::{ExExContext, ExExEvent, ExExNotification};
+use reth_node_ethereum::EthereumNode;
+use reth_tracing::tracing::info;
+
+async fn indexer<Node>(mut ctx: ExExContext<Node>, db: sqlx::PgPool) -> eyre::Result<()>
+where
+    Node: FullNodeComponents<Types: NodeTypes<Primitives = EthPrimitives>>,
+{
+    while let Some(notification) = ctx.notifications.try_next().await? {
+        match &notification {
+            ExExNotification::ChainCommitted { new } => {
+                handle_commit(&db, new).await?;
+            }
+            ExExNotification::ChainReverted { old } => {
+                handle_revert(&db, old).await?;
+            }
+            ExExNotification::ChainReorged { old, new } => {
+                handle_revert(&db, old).await?;
+                handle_commit(&db, new).await?;
+            }
+        }
+
+        if let Some(committed) = notification.committed_chain() {
+            ctx.events.send(ExExEvent::FinishedHeight(committed.tip().num_hash()))?;
+        }
+    }
+    Ok(())
+}
+
+fn main() -> eyre::Result<()> {
+    reth::cli::Cli::parse_args().run(async move |builder, _| {
+        let db = sqlx::PgPool::connect(&std::env::var("DATABASE_URL")?).await?;
+        sqlx::migrate!().run(&db).await?;
+
+        let handle = builder
+            .node(EthereumNode::default())
+            .install_exex("transfer-indexer", async move |ctx| Ok(indexer(ctx, db.clone())))
+            .launch_with_debug_capabilities()
+            .await?;
+
+        handle.wait_for_node_exit().await
+    })
+}
+\`\`\`
+
+Walk:
+
+- **\`ctx.notifications\`** — \`ExExNotification\` の型付きストリーム。3 バリアント: \`ChainCommitted\` (新ブロック追加)、\`ChainReverted\` (ローカルチェーンが背後で fork されたためブロック削除)、\`ChainReorged\` (チェーンが別チェーンに丸ごと swap)。**reorg はファーストクラス。** ポーリングなし、推測なし — Reth が教えてくれる。
+- **\`ctx.events.send(FinishedHeight(...))\`** — Reth に「ブロック N までは durably にデータストアに書いた」と伝える。Reth はこれを使って、あなたのパイプラインを壊さずに state をどこまで prune できるかを知る。**送らないと Reth は安全側に倒して state を永久保持する**; 送ればディスク使用量は Reth 通常の prune 方針内に収まる。
+- **\`main\` の \`install_exex\`** — ExEx を名前付きで登録。Builder が channel 配線とプロセス統合を引き受ける。
+
+> 🔍 **リポで探す。** [\`reth-exex-examples\`](https://github.com/paradigmxyz/reth-exex-examples) を開いて、好きなプロジェクトを 1 つ選ぶ。\`install_exex\` 呼び出しを見つける。その \`indexer\` (またはそれっぽい名前の) 関数を上記と比較せよ — **全部この同じ形。** これがパターン。一度見えれば、世の中の ExEx 全部読める。
+
+## Step 2: receipt から Transfer event をデコード
+
+\`handle_commit\` を埋めていきます。コミットされたチェーン内のすべてのブロック、すべての tx、その receipt のすべての log を walk して、ERC-20 Transfer event をデコード:
+
+\`\`\`rust
+use alloy_primitives::{Address, B256, U256};
+use alloy_sol_types::{sol, SolEvent};
+use reth::providers::Chain;
+
+sol! {
+    event Transfer(address indexed from, address indexed to, uint256 value);
+}
+
+#[derive(Debug)]
+struct TransferRow {
+    block_number: u64,
+    tx_hash: B256,
+    log_index: u32,
+    token: Address,
+    from_addr: Address,
+    to_addr: Address,
+    value: U256,
+}
+
+fn extract_transfers(chain: &Chain) -> Vec<TransferRow> {
+    let mut rows = Vec::new();
+
+    for (block, receipts) in chain.blocks_and_receipts() {
+        let block_number = block.number;
+
+        for (tx, receipt) in block.body.transactions.iter().zip(receipts.iter()) {
+            let tx_hash = tx.hash();
+
+            for (log_index, log) in receipt.logs.iter().enumerate() {
+                // topic[0] が event signature; abi_decode_log が検証する
+                let Ok(decoded) = Transfer::decode_log(log, true) else { continue };
+
+                rows.push(TransferRow {
+                    block_number,
+                    tx_hash,
+                    log_index: log_index as u32,
+                    token: log.address,
+                    from_addr: decoded.from,
+                    to_addr: decoded.to,
+                    value: decoded.value,
+                });
+            }
+        }
+    }
+    rows
+}
+\`\`\`
+
+Walk:
+
+- **\`chain.blocks_and_receipts()\`** — Chain 型はブロックと receipt をすでにアラインされた形で対にしてくれる。**これが in-process で動くことの対価。** ポーリング型 indexer はこのアラインを 2 つの別 RPC コールから再構築 + race condition を reconcile する必要がある。
+- **\`Transfer::decode_log\`** — \`sol!\` マクロが生成。\`true\` は \`topic[0]\` が Transfer signature と一致するかを検証; Transfer 以外の log は綺麗に \`Err\` を返してスキップされる。
+- **ここでは token フィルタしない。** すべての ERC-20 がこの正確な event を emit する。indexer はそれら全部を取得し、consumer が気になる token を query する設計。(token アドレスでフィルタするなら、下流で 1 行 WHERE 句を足すだけ)
+
+> 🛑 **予測。** あるトークンコントラクトが malformed な Transfer event (topic 数が違う、ABI が変) を emit する。\`decode_log\` がどう振る舞うか walk through。**なぜ silently skip (\`Err → continue\`) が indexer にとって正解か?** ヒント: 代替 (panic する) がパイプラインに何をするかを考えて。
+
+## Step 3: Postgres スキーマと insert
+
+スキーマ (\`migrations/0001_init.sql\`):
+
+\`\`\`sql
+CREATE TABLE IF NOT EXISTS transfers (
+    block_number   BIGINT       NOT NULL,
+    tx_hash        BYTEA        NOT NULL,
+    log_index      INTEGER      NOT NULL,
+    token          BYTEA        NOT NULL,
+    from_addr      BYTEA        NOT NULL,
+    to_addr        BYTEA        NOT NULL,
+    value          NUMERIC(78)  NOT NULL,  -- U256 を入れる
+    PRIMARY KEY (tx_hash, log_index)
+);
+
+CREATE INDEX transfers_block_number_idx ON transfers (block_number);
+CREATE INDEX transfers_token_idx        ON transfers (token);
+CREATE INDEX transfers_from_addr_idx    ON transfers (from_addr);
+CREATE INDEX transfers_to_addr_idx      ON transfers (to_addr);
+\`\`\`
+
+Insert (Transfer 1 件 = 1 row):
+
+\`\`\`rust
+async fn handle_commit(db: &sqlx::PgPool, chain: &Chain) -> eyre::Result<()> {
+    let rows = extract_transfers(chain);
+    if rows.is_empty() { return Ok(()); }
+
+    let mut tx = db.begin().await?;
+    for r in &rows {
+        sqlx::query!(
+            "INSERT INTO transfers (block_number, tx_hash, log_index, token, from_addr, to_addr, value)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (tx_hash, log_index) DO NOTHING",
+            r.block_number as i64,
+            r.tx_hash.as_slice(),
+            r.log_index as i32,
+            r.token.as_slice(),
+            r.from_addr.as_slice(),
+            r.to_addr.as_slice(),
+            r.value.to_string().parse::<sqlx::types::BigDecimal>()?,
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+\`\`\`
+
+Walk:
+
+- **\`(tx_hash, log_index)\` を主キーに** — Ethereum log の正規 ID。reorg をきれいに生き残る: 再 inclusion された tx は同じ hash を保つので、\`ON CONFLICT DO NOTHING\` で正しく no-op になる。
+- **chain commit ごとに 1 トランザクション、row ごとではない。** Reth は通常 1 ノーティフィケーションあたり 1〜8 ブロックを届ける; 書き込みを 1 つの Postgres トランザクションにバッチすることが、忙しい committer で 50ms と 5s の違いを生む。
+- **\`NUMERIC(78)\`** — U256 max は 2²⁵⁶ ≈ 1.16 × 10⁷⁷、78 桁の十進数に収まる。\`BigDecimal\` が sqlx の Rust マッピング。
+
+## Step 4: reorg ハンドリング
+
+これこそが indexing で ExEx を使う最大の理由。canonical chain が足元で変わったら、orphan になったブロックに対して書いたものを undo する必要がある:
+
+\`\`\`rust
+async fn handle_revert(db: &sqlx::PgPool, chain: &Chain) -> eyre::Result<()> {
+    let range = chain.range();
+    let from = *range.start() as i64;
+    let to   = *range.end() as i64;
+
+    sqlx::query!(
+        "DELETE FROM transfers WHERE block_number BETWEEN $1 AND $2",
+        from,
+        to,
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
+\`\`\`
+
+それだけ。みんなが最初の挑戦で間違える部分が 3 行。なぜこんなにシンプルか?
+
+- **冪等な schema。** \`(tx_hash, log_index)\` が主キーなので、同じ row が 2 回存在できない。block 範囲で削除すれば commit 時に書いた row を正確に消せる。
+- **Reth が正確な範囲を教えてくれる。** 「reorg はブロック N から始まったか N-1 か?」の推測なし。reverted Chain の range *が* 答え。
+- **\`ChainReorged\` は revert + commit の合成。** Step 1 のディスパッチでそう扱う。**1 つのパターンで 3 つの notification 型をカバー。**
+
+> 🔍 **リポで探す。** [reth-execution-types の \`Chain\`](https://github.com/paradigmxyz/reth/blob/main/crates/evm/execution-types/src/chain.rs) を開く。\`range()\` メソッドを見つける。\`RangeInclusive<BlockNumber>\` を返す — 両端点が有効なブロック。\`*range.start()\` と \`*range.end()\` で取り出す; iterator から \`.first()\` を使うのは違う (range 全体を materialize して useful には使わない)。
+
+## Step 5: FinishedHeight — Reth に prune させる
+
+Step 1 ですでに書いたこの 1 行:
+
+\`\`\`rust
+ctx.events.send(ExExEvent::FinishedHeight(committed.tip().num_hash()))?;
+\`\`\`
+
+しかし立ち止まる価値がある。あなたが送る信号は Reth に伝える: *「このブロックまで durably に書きました。これより前の state と履歴は私を壊さずに prune できる」*。これを送らないと:
+
+- Reth は あなたの ExEx が任意の歴史的ブロックの state をまだ読みたいかもしれないと仮定する必要がある
+- ディスク使用量が無限に線形成長
+- ExEx を 6 ヶ月走らせたノードは普通のノードの 6 倍のストレージ
+
+送れば:
+
+- Reth の pruner はあなたの一番遅い ExEx と同じ速さで進む
+- ディスク使用量は Reth 通常の prune ポリシー内に収まる
+- 複数の ExEx が共存する場合、Reth は全 ExEx の中で最低の \`FinishedHeight\` を tracking する
+
+> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: なぜ Reth はあなたの一番遅い ExEx の \`FinishedHeight\` より先のブロックを prune したがらないのか? 自分の言葉で答えてください。ヒント: ノード再起動時に、ExEx がまだ処理していないブロックを Reth がすでに prune してしまっていたら何が起きるか考えて。(ネタバレ: あなたの indexer がそのブロックを永久にスキップ、データが間違う、誰かが query するまで気づかない)
+
+## Production に足りないもの
+
+| ギャップ | 本物の indexer が何をしているか |
+| :--- | :--- |
+| **Backpressure** | Postgres が遅いと ExEx が stall して Reth の notification channel が back up する。Production は writer を bounded queue で wrap + 溢れたら disk-buffer に dump |
+| **スキーママイグレーション** | sqlx migrations を使う (ここでも最低限使った)。Production は起動時に lock 取って running する (replica レース防止) |
+| **レプリカ / シャーディング** | 1 ExEx → 1 Postgres。読み取りレプリカ、\`block_number\` でのパーティショニング、archive vs hot 階層 — 全て標準の DBA 仕事 |
+| **より多い event のデコード** | ここでは \`Transfer\` だけ。\`Approval\`、\`Swap\`、\`Sync\`、独自プロトコル event を足す。パターン (event 1 つにつき \`sol! { event ... }\` 1 ブロック、フィルタ 1 つにつき \`decode_log\` 1 つ) はスケールする |
+| **トークン単位のエンリッチメント** | Transfer row を token メタデータ (name, symbol, decimals) に書き込み時 vs query 時で join。トレードオフ: 書き込み時は RPC コスト、query 時は JOIN コスト |
+| **Liveness モニタリング** | indexer の \`FinishedHeight\` を Reth の tip と毎分比較。閾値超えたら page |
+
+あなたが書いたアーキテクチャ — ExEx loop、notification 型でディスパッチ、Postgres write、FinishedHeight シグナル — **このレイヤーより上のすべての production indexer が同じことをしている**。彼らは features と運用を足す; 背骨は同一。
+
+## Drill
+
+1. **Approval を足す。** ERC-20 \`Approval(address,address,uint256)\` は Transfer と同じ形。2 番目の \`sol!\` event、2 番目の \`extract_*\` ヘルパ、2 番目のテーブルを足す。**ExEx loop 自体は何も変わらない** ことを確認。(15分)
+2. **単一トークンに絞る。** \`if log.address != USDC { continue; }\` を入れる。同期済みノードで 1 分間動かす — フィルタ前後で row 数はどれくらい? **なぜフィルタリングがそんなに効くのか?** (20分)
+3. **レイテンシ計測。** 各 \`handle_commit\` を \`Instant::now()\` で囲んでログ: *chain 受信 → N row 書込 → FinishedHeight emit*。予算は? どこが食う? (30分)
+4. **Reorg テスト。** Hoodi または Holesky テストネットで Reth を走らせる (mainnet より頻繁に reorg)。1 時間動かす。\`ChainReorged\` パスが発火したかを DB で確認 — 過去に \`max(block_number) > committed_chain_max\` だったブロックを query して確認。(1時間)
+5. **Backpressure を追加。** Postgres プールを bounded \`mpsc::channel\` + 別 writer task で wrap。溢れたら ExEx を block するのではなく drop か disk-buffer。**indexer が FinishedHeight を emit しなくなったら Reth の振る舞いは何が変わるか?** (3時間)
+
+Drill 5 を完成させると、Postgres outage で Reth を巻き添えにしない indexer ができる。query API を足せば ~500 行の単一バイナリで Etherscan のデータレイヤー相当が手に入る。
+
+> 🛑 **最終チェック。** 一文で: なぜ \`FinishedHeight\` が本レッスンで最も重要な行なのか (1 メソッド呼び出しに過ぎないが)? 答えに「Reth の pruning」と「あなたの indexer の再起動時の正確性」の繋がりがないなら、Step 5 を読み直し — その相互作用が ExEx を production-grade にしている。
+
+## 📺 関連動画
+
+\`\`\`youtube
+GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next generation indexing (Devcon 2024)
+\`\`\`
 `,
                 },
               ],

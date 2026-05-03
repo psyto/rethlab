@@ -387,14 +387,343 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 ## Coming in this tier
 
-This lesson is the first in **Building with the Stack**. Planned follow-ups (free, source-first, same active-learning style):
-
-- **Build a Reorg-Aware Indexer with ExEx** — the same kind of thing that powers etherscan.io, but in 300 lines and running in-process with Reth
-- **Build a Custom RPC Endpoint on Reth** — \`eth_myThing\` shipped as a Rust extension
-- **Build a Wallet Backend in Rust** — Alloy signer + nonce/gas management, the part wallet teams actually wrestle with
-- **Build a Minimal EIP-7702 Bundler** — the Pectra-era equivalent of an EIP-4337 bundler, simpler than you'd expect
+The next lesson in **Building with the Stack** picks up where this one stops: an in-process indexer that turns the chain into a queryable Postgres dataset, with full reorg correctness, in another ~250 lines. Planned after that: a custom RPC endpoint on Reth, a Rust wallet backend, and a minimal EIP-7702 bundler.
 
 Subscribe to the [GitHub repo](https://github.com/psyto/rethlab) for new lessons.
+`,
+                },
+                {
+                  title: 'Build a Reorg-Aware Indexer with ExEx',
+                  slug: 'build-exex-indexer-en',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 45,
+                  xpReward: 80,
+                  content: `# Build a Reorg-Aware Indexer with ExEx
+
+Every block explorer, every analytics pipeline, every liquidation monitor needs the same primitive: **read the chain into your own datastore, and don't corrupt it when a reorg happens.** ExEx is the part of Reth that turns this from a 2,000-line side-project into a 250-line single file. This lesson walks the complete code.
+
+> 📌 **Scope honesty.** We index ERC-20 Transfer events into Postgres with full reorg handling — commit on \`ChainCommitted\`, undo on \`ChainReverted\`, swap on \`ChainReorged\`. We don't build a public API on top of the data; that's the second half of any indexer and orthogonal to the question this lesson answers: *"how do I get correct chain data into a datastore at node speed?"*
+
+## What you'll build
+
+\`\`\`mermaid
+flowchart LR
+    Reth["Reth node<br/>(in-process)"] -->|ExExNotification| Loop["ExEx loop"]
+    Loop -->|ChainCommitted| Decode["Decode Transfer logs<br/>from receipts"]
+    Decode -->|rows| Insert["INSERT into Postgres"]
+    Loop -->|ChainReverted| Delete["DELETE WHERE<br/>block IN range"]
+    Loop -->|ChainReorged| Swap["DELETE old +<br/>INSERT new"]
+    Insert --> Signal["Send FinishedHeight<br/>(let Reth prune)"]
+    Delete --> Signal
+    Swap --> Signal
+\`\`\`
+
+A single \`main.rs\` that runs **inside Reth's process**. No JSON-RPC roundtrips, no separate node, no websocket reconnection logic. The ExEx receives a typed stream of chain events as Reth itself produces them.
+
+> 🛑 **Predict before scrolling.** Why is "in-process" the architectural win here? Form a one-sentence answer about what running outside the node forces an indexer to do that you skip when you live inside it. Hold your guess until Step 2.
+
+## Why ExEx (vs \`eth_getLogs\` polling, vs direct DB reads)
+
+| Approach | Latency | Reorg correctness | Reth coupling |
+| :--- | :--- | :--- | :--- |
+| **\`eth_getLogs\` polling** | seconds (poll interval + RPC) | manual — you re-fetch and reconcile yourself | none, but you pay it in latency + load |
+| **Direct MDBX read** | µs | none — MDBX shows committed state, not chain history | tight, but no reorg signal at all |
+| **ExEx** | µs (in-process channel) | **typed reorg events delivered to you** | Cargo dependency on Reth crates |
+
+ExEx is the only one of the three that gives you both **correctness** (reorg events) and **latency** (in-process). The cost is that your indexer ships **as part of the Reth binary** — your code lives in the same process. For a single-purpose indexer, that's a feature: one binary, one datastore, no glue.
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "transfer-indexer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Reth crates — pin to a specific tag in production
+reth                = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-exex           = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-node-ethereum  = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-tracing        = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-primitives     = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+
+# Alloy for event decoding
+alloy-primitives    = "1.5"
+alloy-sol-types     = "1.5"
+
+# Postgres
+sqlx                = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "migrate"] }
+
+# Plumbing
+futures-util        = "0.3"
+tokio               = { version = "1", features = ["macros", "rt-multi-thread"] }
+eyre                = "0.6"
+\`\`\`
+
+> Reth doesn't publish its ExEx crates to crates.io as a stable cadence — pulling from a Git tag is the canonical pattern. Pin a specific tag (here \`v1.5.0\`) and bump it deliberately when you're ready to test against a new Reth.
+
+## Step 1: The ExEx skeleton
+
+The shape of every ExEx is the same. Read it and you've read 80% of every ExEx that will ever exist:
+
+\`\`\`rust
+use futures_util::TryStreamExt;
+use reth::{api::FullNodeComponents, builder::NodeTypes, primitives::EthPrimitives};
+use reth_exex::{ExExContext, ExExEvent, ExExNotification};
+use reth_node_ethereum::EthereumNode;
+use reth_tracing::tracing::info;
+
+async fn indexer<Node>(mut ctx: ExExContext<Node>, db: sqlx::PgPool) -> eyre::Result<()>
+where
+    Node: FullNodeComponents<Types: NodeTypes<Primitives = EthPrimitives>>,
+{
+    while let Some(notification) = ctx.notifications.try_next().await? {
+        match &notification {
+            ExExNotification::ChainCommitted { new } => {
+                handle_commit(&db, new).await?;
+            }
+            ExExNotification::ChainReverted { old } => {
+                handle_revert(&db, old).await?;
+            }
+            ExExNotification::ChainReorged { old, new } => {
+                handle_revert(&db, old).await?;
+                handle_commit(&db, new).await?;
+            }
+        }
+
+        if let Some(committed) = notification.committed_chain() {
+            ctx.events.send(ExExEvent::FinishedHeight(committed.tip().num_hash()))?;
+        }
+    }
+    Ok(())
+}
+
+fn main() -> eyre::Result<()> {
+    reth::cli::Cli::parse_args().run(async move |builder, _| {
+        let db = sqlx::PgPool::connect(&std::env::var("DATABASE_URL")?).await?;
+        sqlx::migrate!().run(&db).await?;
+
+        let handle = builder
+            .node(EthereumNode::default())
+            .install_exex("transfer-indexer", async move |ctx| Ok(indexer(ctx, db.clone())))
+            .launch_with_debug_capabilities()
+            .await?;
+
+        handle.wait_for_node_exit().await
+    })
+}
+\`\`\`
+
+Walk:
+
+- **\`ctx.notifications\`** — a typed stream of \`ExExNotification\`. Three variants: \`ChainCommitted\` (new blocks added), \`ChainReverted\` (blocks removed because the local chain forked behind us), \`ChainReorged\` (one chain swapped out for another). **Reorgs are first-class.** You don't poll, you don't infer — Reth tells you.
+- **\`ctx.events.send(FinishedHeight(...))\`** — you tell Reth "I've written everything up to block N to my datastore." Reth uses this to know how far back it can prune state without breaking your pipeline. **Skip it and Reth retains state forever** to be safe; emit it and disk usage stays bounded.
+- **\`install_exex\`** in \`main\` — registers your ExEx by name. The builder takes care of the channel wiring and process integration.
+
+> 🔍 **Find in repo.** Open [\`reth-exex-examples\`](https://github.com/paradigmxyz/reth-exex-examples) and pick any project. Find the \`install_exex\` call. Compare its \`indexer\` (or whatever it's named) function to the one above — **they all have this exact shape.** That's the pattern. Once you see it, you can read every ExEx in the wild.
+
+## Step 2: Decode Transfer events from receipts
+
+Now we fill in \`handle_commit\`. We walk every block in the committed chain, every transaction in those blocks, every log in those transactions' receipts, and decode the ERC-20 Transfer event:
+
+\`\`\`rust
+use alloy_primitives::{Address, B256, U256};
+use alloy_sol_types::{sol, SolEvent};
+use reth::providers::Chain;
+
+sol! {
+    event Transfer(address indexed from, address indexed to, uint256 value);
+}
+
+#[derive(Debug)]
+struct TransferRow {
+    block_number: u64,
+    tx_hash: B256,
+    log_index: u32,
+    token: Address,
+    from_addr: Address,
+    to_addr: Address,
+    value: U256,
+}
+
+fn extract_transfers(chain: &Chain) -> Vec<TransferRow> {
+    let mut rows = Vec::new();
+
+    for (block, receipts) in chain.blocks_and_receipts() {
+        let block_number = block.number;
+
+        for (tx, receipt) in block.body.transactions.iter().zip(receipts.iter()) {
+            let tx_hash = tx.hash();
+
+            for (log_index, log) in receipt.logs.iter().enumerate() {
+                // Topic[0] is the event signature; abi_decode_log validates it
+                let Ok(decoded) = Transfer::decode_log(log, true) else { continue };
+
+                rows.push(TransferRow {
+                    block_number,
+                    tx_hash,
+                    log_index: log_index as u32,
+                    token: log.address,
+                    from_addr: decoded.from,
+                    to_addr: decoded.to,
+                    value: decoded.value,
+                });
+            }
+        }
+    }
+    rows
+}
+\`\`\`
+
+Walk:
+
+- **\`chain.blocks_and_receipts()\`** — the Chain type pairs blocks with their receipts already aligned. **This is what running in-process buys you.** A polling indexer has to reconstruct this alignment from two separate RPC calls and reconcile race conditions.
+- **\`Transfer::decode_log\`** — the \`sol!\` macro generates this. The \`true\` validates that \`topic[0]\` matches the Transfer signature; non-Transfer logs return \`Err\` cleanly and we skip.
+- **We don't filter by token here.** Every ERC-20 emits this exact event. The indexer captures all of them and lets the consumer query whichever token they care about. (Filtering by \`token\` address would be a one-line WHERE clause downstream.)
+
+> 🛑 **Predict.** A token contract emits a malformed Transfer event (wrong number of topics, weird ABI). Walk through what \`decode_log\` does. **Why is silently skipping (\`Err → continue\`) the right choice for an indexer?** Hint: think about what the alternative — panicking — would do to your pipeline.
+
+## Step 3: Postgres schema and insert
+
+Schema (in \`migrations/0001_init.sql\`):
+
+\`\`\`sql
+CREATE TABLE IF NOT EXISTS transfers (
+    block_number   BIGINT       NOT NULL,
+    tx_hash        BYTEA        NOT NULL,
+    log_index      INTEGER      NOT NULL,
+    token          BYTEA        NOT NULL,
+    from_addr      BYTEA        NOT NULL,
+    to_addr        BYTEA        NOT NULL,
+    value          NUMERIC(78)  NOT NULL,  -- big enough for U256
+    PRIMARY KEY (tx_hash, log_index)
+);
+
+CREATE INDEX transfers_block_number_idx ON transfers (block_number);
+CREATE INDEX transfers_token_idx        ON transfers (token);
+CREATE INDEX transfers_from_addr_idx    ON transfers (from_addr);
+CREATE INDEX transfers_to_addr_idx      ON transfers (to_addr);
+\`\`\`
+
+Insert (one row per Transfer):
+
+\`\`\`rust
+async fn handle_commit(db: &sqlx::PgPool, chain: &Chain) -> eyre::Result<()> {
+    let rows = extract_transfers(chain);
+    if rows.is_empty() { return Ok(()); }
+
+    let mut tx = db.begin().await?;
+    for r in &rows {
+        sqlx::query!(
+            "INSERT INTO transfers (block_number, tx_hash, log_index, token, from_addr, to_addr, value)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (tx_hash, log_index) DO NOTHING",
+            r.block_number as i64,
+            r.tx_hash.as_slice(),
+            r.log_index as i32,
+            r.token.as_slice(),
+            r.from_addr.as_slice(),
+            r.to_addr.as_slice(),
+            r.value.to_string().parse::<sqlx::types::BigDecimal>()?,
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+\`\`\`
+
+Walk:
+
+- **\`(tx_hash, log_index)\` as primary key** — the canonical Ethereum log identifier. Survives reorgs cleanly: a re-included tx keeps the same hash, so the \`ON CONFLICT DO NOTHING\` no-ops correctly.
+- **One transaction per chain commit, not per row.** Reth typically delivers chains of 1–8 blocks per notification; batching the writes into one Postgres transaction is the difference between 50ms and 5s for a busy committer.
+- **\`NUMERIC(78)\`** — U256 max is 2²⁵⁶ ≈ 1.16 × 10⁷⁷, which fits in 78 decimal digits. \`BigDecimal\` is the sqlx Rust mapping.
+
+## Step 4: Reorg handling
+
+The whole point of ExEx for indexing. When the canonical chain changes underneath us, we need to undo what we wrote for the now-orphaned blocks:
+
+\`\`\`rust
+async fn handle_revert(db: &sqlx::PgPool, chain: &Chain) -> eyre::Result<()> {
+    let range = chain.range();
+    let from = *range.start() as i64;
+    let to   = *range.end() as i64;
+
+    sqlx::query!(
+        "DELETE FROM transfers WHERE block_number BETWEEN $1 AND $2",
+        from,
+        to,
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
+\`\`\`
+
+That's it. Three lines for the part everyone gets wrong on their first try. Why so simple?
+
+- **Idempotent schema.** Because \`(tx_hash, log_index)\` is the primary key, the same row can't exist twice. Deleting by block range removes exactly the rows we wrote on commit.
+- **Reth tells us the exact range.** No "did the reorg start at block N or N-1?" guessing. The reverted Chain's range *is* the answer.
+- **\`ChainReorged\` is just revert + commit.** We handle it as such in the dispatch in Step 1. **One pattern, three notification types.**
+
+> 🔍 **Find in repo.** Open [\`Chain\` in reth-execution-types\`](https://github.com/paradigmxyz/reth/blob/main/crates/evm/execution-types/src/chain.rs). Find the \`range()\` method. Note that it returns a \`RangeInclusive<BlockNumber>\` — both endpoints are valid blocks. Use \`*range.start()\` and \`*range.end()\` to extract them; using \`.first()\` from an iterator is wrong (iterates the whole range materializing nothing useful).
+
+## Step 5: FinishedHeight — let Reth prune
+
+We already wrote this line in Step 1:
+
+\`\`\`rust
+ctx.events.send(ExExEvent::FinishedHeight(committed.tip().num_hash()))?;
+\`\`\`
+
+But it's worth pausing on. The signal you send tells Reth: *"I've durably written everything up to this block. You can prune state and history before it without breaking me."* Without this:
+
+- Reth has to assume your ExEx might still need to read state from any historical block
+- Disk usage grows linearly forever
+- A node that runs your ExEx for 6 months has 6× the storage of a vanilla node
+
+With it:
+
+- Reth's pruner advances as fast as your slowest ExEx
+- Disk usage stays bounded by Reth's normal pruning policy
+- Multiple ExExes coexist; Reth tracks the lowest \`FinishedHeight\` across all of them
+
+> 🛑 **Anti-fluency check.** Without scrolling: in your own words, why would Reth refuse to prune blocks ahead of your slowest ExEx's \`FinishedHeight\`? Hint: think about what would happen on a node restart if Reth had pruned a block your ExEx hadn't yet processed. (Spoiler: your indexer skips that block forever, your data is wrong, and you don't notice until someone queries.)
+
+## What's missing for production
+
+| Gap | What real indexers do |
+| :--- | :--- |
+| **Backpressure** | If Postgres is slow, your ExEx stalls and Reth's notification channel backs up. Production wraps the writer in a bounded queue + drops to disk-buffer when full. |
+| **Schema migrations** | Use sqlx migrations (we did, minimally). Production runs them on startup with a lock to prevent racing replicas. |
+| **Replicas / sharding** | One ExEx writes to one Postgres. Read replicas, partitioning by \`block_number\`, archive-vs-hot tiers — all the standard DBA work. |
+| **Decoding more events** | We only decode \`Transfer\`. Add \`Approval\`, \`Swap\`, \`Sync\`, custom protocol events. The pattern (one \`sol! { event ... }\` block per event, one \`decode_log\` per filter) scales. |
+| **Per-token enrichment** | Joining Transfer rows to token metadata (name, symbol, decimals) at write time vs. query time. Trade-off: write-time costs RPC, query-time costs JOIN. |
+| **Liveness monitoring** | Compare your indexer's \`FinishedHeight\` to Reth's tip every minute. Page when the gap exceeds a threshold. |
+
+The architecture you wrote — ExEx loop, dispatch on notification type, Postgres write, FinishedHeight signal — is **what every production indexer above this layer does**. They add features and operations; the spine is identical.
+
+## Drill
+
+1. **Add Approval.** ERC-20 \`Approval(address,address,uint256)\` has the same shape as Transfer. Add a second \`sol!\` event, second \`extract_*\` helper, second table. Note how nothing about the ExEx loop changes. (15 min)
+2. **Filter to a single token.** Add \`if log.address != USDC { continue; }\`. Run for a minute on a synced node — what's your row count vs. without the filter? **Why does filtering help so much?** (20 min)
+3. **Latency probe.** Wrap each \`handle_commit\` in \`Instant::now()\` and log: *received chain → wrote N rows → emitted FinishedHeight*. What's the budget? Where's the bite? (30 min)
+4. **Reorg test.** Use Reth in Hoodi or Holesky testnet mode (where reorgs happen more often than mainnet). Run for an hour. Check the database for the \`ChainReorged\` path firing — by querying for blocks where \`max(block_number) > committed_chain_max\` historically. (1 hour)
+5. **Add backpressure.** Wrap the Postgres pool in a bounded \`mpsc::channel\` with a separate writer task. Drop or buffer-to-disk on overflow rather than blocking the ExEx. **What changes about Reth's behavior when your indexer stops emitting FinishedHeight?** (3 hours)
+
+Finish drill 5 and you have an indexer that survives Postgres outages without taking down Reth. Add a query API and you have something resembling Etherscan's data layer in a ~500-line single binary.
+
+> 🛑 **Final check.** In one sentence: why is \`FinishedHeight\` the most important line in this lesson, even though it's just one method call? If your answer doesn't connect "Reth's pruning" to "your indexer's correctness on restart", re-read Step 5 — that interplay is what makes ExEx production-grade.
+
+## 📺 Further watching
+
+\`\`\`youtube
+GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next generation indexing (Devcon 2024)
+\`\`\`
 `,
                 },
               ],
