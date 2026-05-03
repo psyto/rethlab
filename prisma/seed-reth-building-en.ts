@@ -10,7 +10,7 @@ export async function seedRethBuildingEN(prisma: PrismaClient) {
       description:
         "Reading the source is the prerequisite. This tier is the payoff — eight working apps in Rust + Alloy + Revm: minimal MEV searcher, reorg-aware Postgres indexer (ExEx), custom RPC endpoint, wallet backend, EIP-7702 sponsor service, Foundry-style cheatcode, swap aggregator, and a frontrun-resistant order router capstone that integrates them all.",
       difficulty: 'EXPERT',
-      duration: 60,
+      duration: 360,
       xpReward: 100,
       track: 'reth-building',
       tags,

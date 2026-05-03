@@ -10,7 +10,7 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
       description:
         'Revmのインタープリターを読み解き、カスタムOpcodeとDatabaseトレイトの実装方法を学びます。さらにRethのStaged SyncとExEx (Execution Extensions) を通じて、独自のEVMインフラを構築するための基礎を固めます。',
       difficulty: 'ADVANCED',
-      duration: 180,
+      duration: 120,
       xpReward: 350,
       track: 'reth-advanced',
       tags,

@@ -10,7 +10,7 @@ export async function seedRethBeginnerJA(prisma: PrismaClient) {
       description:
         'Reth・Revm・Alloyとは何かを俯瞰し、なぜいま注目されているのかを理解します。Rust環境を構築し、最初の小さなRustプログラムを動かすところまで。',
       difficulty: 'BEGINNER',
-      duration: 90,
+      duration: 75,
       xpReward: 150,
       track: 'reth-beginner',
       tags,

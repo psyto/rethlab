@@ -10,7 +10,7 @@ export async function seedRethBridgeToAdvancedJA(prisma: PrismaClient) {
       description:
         'Fundamentals は終えた。でも Advanced のソース読みは依然として圧倒的。このコースがそのギャップを埋めます。EVM をバイト単位で（ディスパッチループ・ワールドステート・コールフレーム・reorg）、そして Reth/Revm のソースが暗黙の前提とする中級 Rust（generics・dyn・Arc・unsafe・macro_rules）。',
       difficulty: 'INTERMEDIATE',
-      duration: 180,
+      duration: 100,
       xpReward: 200,
       track: 'reth-bridge-to-advanced',
       tags,

@@ -10,7 +10,7 @@ export async function seedRethExpertJA(prisma: PrismaClient) {
       description:
         'ハードコアな実装：プロファイリングとキャッシュ意識のRust、MDBXストレージ内部、Tokioランタイム、手続きマクロ、カスタムPrecompile、Merkle Patricia Trie、本番MEVパイプライン、zkEVM、そして独自Rethフォークの運用。',
       difficulty: 'EXPERT',
-      duration: 240,
+      duration: 180,
       xpReward: 500,
       track: 'reth-expert',
       tags,

@@ -10,7 +10,7 @@ export async function seedRethBeginnerEN(prisma: PrismaClient) {
       description:
         'Get oriented in the Rust Ethereum stack. Learn what Reth, Revm, and Alloy actually are, why they matter, set up your Rust environment, and run your first small Rust program.',
       difficulty: 'BEGINNER',
-      duration: 90,
+      duration: 75,
       xpReward: 150,
       track: 'reth-beginner',
       tags,

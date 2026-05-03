@@ -10,7 +10,7 @@ export async function seedRethBridgeToAdvancedEN(prisma: PrismaClient) {
       description:
         'You finished Fundamentals. Source-walking in Advanced still feels overwhelming. This course closes the gap: EVM at the bytes level (dispatch loop, world state, call frames, reorgs) and the intermediate Rust (generics, dyn, Arc, unsafe, macros) that Reth and Revm source assume you know.',
       difficulty: 'INTERMEDIATE',
-      duration: 180,
+      duration: 100,
       xpReward: 200,
       track: 'reth-bridge-to-advanced',
       tags,

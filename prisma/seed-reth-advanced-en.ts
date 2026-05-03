@@ -10,7 +10,7 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
       description:
         'Read the Revm interpreter, learn how custom opcodes and the Database trait work, and pick up Reth Staged Sync and Execution Extensions (ExEx) — the path to building your own EVM infrastructure.',
       difficulty: 'ADVANCED',
-      duration: 180,
+      duration: 120,
       xpReward: 350,
       track: 'reth-advanced',
       tags,
