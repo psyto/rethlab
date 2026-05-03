@@ -1,6 +1,6 @@
 # RethLab — Hardcore Rust Ethereum Developer Training
 
-> A demanding, source-first training program in **Reth, Revm, Alloy, and Foundry**. The new wave of EVM is **purpose-built L1s** — Hyperliquid for perps, Tempo for payments, Base for the consumer L2 — and they all run on this Rust stack. RethLab takes you from "I know some Rust" to "I can ship the next one."
+> A demanding, source-first training program in **Reth, Revm, Alloy, and Foundry**. The new wave of EVM is **purpose-built L1s** — Hyperliquid for perps, Tempo for payments, Base for the consumer L2 — and they all run on this Rust stack. **And the apps on top of them** — MEV searchers, indexers, custom RPCs, wallet backends — all run on the same stack. RethLab takes you from "I know some Rust" to "I can read the source AND ship a real app."
 
 Every advanced lesson walks through **actual production source code** — line by line, with the design intent. Bilingual: English + Japanese. Free and open. Built by [@psyto](https://github.com/psyto).
 
@@ -37,7 +37,7 @@ After finishing the program, you'll be able to:
 
 This is a serious training program — not a casual tutorial.
 
-## The 5 courses
+## The 6 courses
 
 | Course | Focus | Highlight |
 | :--- | :--- | :--- |
@@ -46,8 +46,9 @@ This is a serious training program — not a casual tutorial.
 | **Bridge to Advanced** | EVM at the bytes level (dispatch loop, world state, gas, call frames, reorgs) + intermediate Rust (generics, ?Sized, dyn, Arc, unsafe, macros) | Smooth tutorial bridge for Solidity-native developers — closes the gap before source-walking begins |
 | **Advanced** | Revm interpreter, Database trait, Reth Staged Sync, ExEx, Reth SDK | Reading the actual ADD opcode, custom opcodes, NodeBuilder for App-chains. Active-learning style — Predict / Find-in-repo / Anti-fluency prompts throughout |
 | **Expert** | Performance engineering, MDBX, Tokio internals, procedural macros, custom precompiles, MPT, MEV pipelines, zkEVM, production fork ops | Foundry cheatcodes as precompiles, real Steel zkVM guest, MEV decoding from `op-bridge` |
+| **Building with the Stack** | Real-world apps in Rust + Alloy + Revm — the payoff for reading the source | Lesson 1: a complete minimal MEV searcher in ~200 LOC (mempool → fork-sim → arb-detect → bundle). More builds coming: indexer, custom RPC, wallet backend, EIP-7702 bundler |
 
-**Total: 10 courses (5 × EN + JA), 18 modules, 92 lessons.**
+**Total: 12 courses (6 × EN + JA), 20 modules, 94 lessons.**
 
 All courses are free. Reading every lesson works without an account. Anonymous visitors get **browser-local completion tracking** (lesson checkmarks + per-course progress bars persisted in `localStorage`); sign-in adds cross-device sync, XP, and a profile page.
 
@@ -77,7 +78,7 @@ cp .env.example .env
 # STRIPE_SECRET_KEY (test key OK for dev), and
 # NEXT_PUBLIC_GITHUB_SPONSORS_URL
 
-# Push schema and seed all 92 lessons
+# Push schema and seed all 94 lessons
 npx prisma db push
 npx prisma db seed
 
@@ -89,7 +90,7 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ### What `db seed` does
 
-The seeder lives in `prisma/seed.ts` and pulls from 10 individual course files (`prisma/seed-reth-{beginner,fundamentals,bridge-to-advanced,advanced,expert}-{en,ja}.ts`). It clears all course tables and re-creates 10 courses / 18 modules / 92 lessons in one shot.
+The seeder lives in `prisma/seed.ts` and pulls from 12 individual course files (`prisma/seed-reth-{beginner,fundamentals,bridge-to-advanced,advanced,expert,building}-{en,ja}.ts`). It clears all course tables and re-creates 12 courses / 20 modules / 94 lessons in one shot.
 
 Lesson URLs key on the **slug** (stable across reseeds), not the database CUID, so a full reseed never breaks shared links.
 
@@ -116,7 +117,8 @@ rethlab/
 │   ├── seed-reth-fundamentals-{en,ja}.ts      # 11 lessons each (incl. Foundry)
 │   ├── seed-reth-bridge-to-advanced-{en,ja}.ts # 8 lessons each
 │   ├── seed-reth-advanced-{en,ja}.ts          # 10 lessons each (incl. orientation)
-│   └── seed-reth-expert-{en,ja}.ts            # 10 lessons each
+│   ├── seed-reth-expert-{en,ja}.ts            # 10 lessons each
+│   └── seed-reth-building-{en,ja}.ts          # 1 lesson each (more coming)
 ├── src/
 │   ├── app/                                   # Next.js App Router pages
 │   │   ├── courses/                           # Course catalog + detail + lesson pages

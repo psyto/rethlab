@@ -9,6 +9,8 @@ import { seedRethAdvancedJA } from './seed-reth-advanced-ja';
 import { seedRethAdvancedEN } from './seed-reth-advanced-en';
 import { seedRethExpertJA } from './seed-reth-expert-ja';
 import { seedRethExpertEN } from './seed-reth-expert-en';
+import { seedRethBuildingEN } from './seed-reth-building-en';
+import { seedRethBuildingJA } from './seed-reth-building-ja';
 
 const prisma = new PrismaClient();
 
@@ -61,6 +63,11 @@ async function main() {
   await seedRethExpertEN(prisma);
   await seedRethExpertJA(prisma);
   console.log('  Seeded Expert (EN + JA)');
+
+  console.log('\nSeeding Building courses...');
+  await seedRethBuildingEN(prisma);
+  await seedRethBuildingJA(prisma);
+  console.log('  Seeded Building (EN + JA)');
 
   const courseCount = await prisma.course.count();
   const moduleCount = await prisma.module.count();

@@ -10,6 +10,8 @@ import { seedRethAdvancedEN } from '../../../../../prisma/seed-reth-advanced-en'
 import { seedRethAdvancedJA } from '../../../../../prisma/seed-reth-advanced-ja';
 import { seedRethExpertEN } from '../../../../../prisma/seed-reth-expert-en';
 import { seedRethExpertJA } from '../../../../../prisma/seed-reth-expert-ja';
+import { seedRethBuildingEN } from '../../../../../prisma/seed-reth-building-en';
+import { seedRethBuildingJA } from '../../../../../prisma/seed-reth-building-ja';
 
 // Temporary admin endpoint — remove after seeding
 // POST /api/admin/seed?key=<AUTH_SECRET>
@@ -52,6 +54,8 @@ export async function POST(req: Request) {
       { name: 'Advanced JA', fn: seedRethAdvancedJA, checkSlug: 'reth-advanced-ja' },
       { name: 'Expert EN', fn: seedRethExpertEN, checkSlug: 'reth-expert-en' },
       { name: 'Expert JA', fn: seedRethExpertJA, checkSlug: 'reth-expert-ja' },
+      { name: 'Building EN', fn: seedRethBuildingEN, checkSlug: 'reth-building-en' },
+      { name: 'Building JA', fn: seedRethBuildingJA, checkSlug: 'reth-building-ja' },
     ];
 
     for (const track of tracks) {
