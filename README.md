@@ -47,9 +47,9 @@ This is a serious training program — not a casual tutorial.
 | **Advanced** | Revm interpreter, Database trait, Reth Staged Sync, ExEx, Reth SDK | Reading the actual ADD opcode, custom opcodes, NodeBuilder for App-chains. Active-learning style — Predict / Find-in-repo / Anti-fluency prompts throughout |
 | **Expert** | Performance engineering, MDBX, Tokio internals, procedural macros, custom precompiles, MPT, MEV pipelines, zkEVM, production fork ops | Foundry cheatcodes as precompiles, real Steel zkVM guest, MEV decoding from `op-bridge` |
 
-**Total: 10 courses (5 × EN + JA), 18 modules, 90 lessons.**
+**Total: 10 courses (5 × EN + JA), 18 modules, 92 lessons.**
 
-All courses are free. Reading every lesson works without an account; sign-in only enables progress tracking and shows up on the user's profile page.
+All courses are free. Reading every lesson works without an account. Anonymous visitors get **browser-local completion tracking** (lesson checkmarks + per-course progress bars persisted in `localStorage`); sign-in adds cross-device sync, XP, and a profile page.
 
 ---
 
@@ -59,7 +59,7 @@ All courses are free. Reading every lesson works without an account; sign-in onl
 - **Prisma** + PostgreSQL
 - **NextAuth v5** (Google & GitHub OAuth, plus dev-mode credentials) — anonymous-first; sign-in is optional
 - **Tailwind CSS** + Radix UI
-- **react-markdown** + remark-gfm + rehype-highlight + **Mermaid** for lesson rendering
+- **react-markdown** + remark-gfm + rehype-highlight + **Mermaid** for lesson rendering, plus a lazy YouTube embed (thumbnail only — the iframe and Google's tracking JS load only after the user clicks play)
 - **Stripe** for one-time donations; **GitHub Sponsors** link for recurring support
 - **Vercel Analytics**
 
@@ -77,7 +77,7 @@ cp .env.example .env
 # STRIPE_SECRET_KEY (test key OK for dev), and
 # NEXT_PUBLIC_GITHUB_SPONSORS_URL
 
-# Push schema and seed all 90 lessons
+# Push schema and seed all 92 lessons
 npx prisma db push
 npx prisma db seed
 
@@ -89,7 +89,9 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ### What `db seed` does
 
-The seeder lives in `prisma/seed.ts` and pulls from 10 individual course files (`prisma/seed-reth-{beginner,fundamentals,bridge-to-advanced,advanced,expert}-{en,ja}.ts`). It clears all course tables and re-creates 10 courses / 18 modules / 90 lessons in one shot.
+The seeder lives in `prisma/seed.ts` and pulls from 10 individual course files (`prisma/seed-reth-{beginner,fundamentals,bridge-to-advanced,advanced,expert}-{en,ja}.ts`). It clears all course tables and re-creates 10 courses / 18 modules / 92 lessons in one shot.
+
+Lesson URLs key on the **slug** (stable across reseeds), not the database CUID, so a full reseed never breaks shared links.
 
 ### Re-seeding without losing user data
 
@@ -112,7 +114,7 @@ rethlab/
 │   ├── seed.ts                                # Top-level orchestrator
 │   ├── seed-reth-beginner-{en,ja}.ts          # 7 lessons each
 │   ├── seed-reth-fundamentals-{en,ja}.ts      # 11 lessons each (incl. Foundry)
-│   ├── seed-reth-bridge-to-advanced-{en,ja}.ts # 7 lessons each
+│   ├── seed-reth-bridge-to-advanced-{en,ja}.ts # 8 lessons each
 │   ├── seed-reth-advanced-{en,ja}.ts          # 10 lessons each (incl. orientation)
 │   └── seed-reth-expert-{en,ja}.ts            # 10 lessons each
 ├── src/
@@ -158,6 +160,8 @@ Both surfaces are presented post-value (after a quiz pass, on course completion,
 ## Sharing
 
 Lesson and completion screens include a one-click "Share on X" button that opens a Twitter intent prefilled with the page URL. The OG card is the real ADD opcode in a terminal-style frame, so a posted link previews as a code excerpt rather than generic marketing.
+
+Lesson URLs are slug-based (`/courses/<course-slug>/lessons/<lesson-slug>`) and stay valid across content updates, so a link posted today still resolves after the next reseed.
 
 ---
 

@@ -82,13 +82,15 @@ The build runs `prisma generate && prisma db push --accept-data-loss && next bui
 
 ## 6. Seed the courses (one-time)
 
-After the first deploy, the database has empty tables. Load the 10 courses / 90 lessons via the admin endpoint:
+After the first deploy, the database has empty tables. Load the 10 courses / 92 lessons via the admin endpoint:
 
 ```bash
 curl -X POST "https://rethlab.vercel.app/api/admin/seed?key=$AUTH_SECRET&mode=full"
 ```
 
-`mode=full` clears any existing course data and re-seeds. Use `mode=add` later when iterating to preserve user enrollments.
+`mode=full` clears all course data (and the dependent `enrollment` / `lessonProgress` / `xPEvent` / `streakDay` rows for signed-in users) and re-seeds. `mode=add` only inserts courses that don't yet exist, preserving everything else — use this when you only added a new course and don't want to wipe progress.
+
+Lesson URLs key on the slug (stable across reseeds), not the database CUID, so `mode=full` is safe for shared/bookmarked lesson links — those keep resolving after the reseed.
 
 ---
 
@@ -152,8 +154,10 @@ When you've verified the donation flow with `sk_test_...` end-to-end (test card 
 - **Code changes**: push to `main` → Vercel auto-deploys.
 - **Schema changes**: edit `prisma/schema.prisma` → next deploy runs `prisma db push --accept-data-loss` automatically.
 - **Course content changes**: edit `prisma/seed-reth-*-{en,ja}.ts`, then either:
-  - **Full re-seed** (drops user data): `curl -X POST "https://rethlab.fabrknt.com/api/admin/seed?key=$AUTH_SECRET&mode=full"`
-  - **Add-only**: `mode=add` instead of `mode=full` — preserves existing courses and enrollments.
+  - **Full re-seed** (drops user progress, but lesson URLs survive because they're slug-based): `curl -X POST "https://rethlab.fabrknt.com/api/admin/seed?key=$AUTH_SECRET&mode=full"`
+  - **Add-only**: `mode=add` instead of `mode=full` — preserves existing courses and enrollments. Note that `mode=add` won't update content for courses that already exist; use `mode=full` when you've edited a lesson body.
+
+Need `AUTH_SECRET` locally? `vercel env pull .env.production.local --environment=production`, then `export AUTH_SECRET=$(grep '^AUTH_SECRET=' .env.production.local | cut -d= -f2- | tr -d '"')`.
 
 ---
 

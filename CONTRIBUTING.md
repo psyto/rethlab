@@ -55,6 +55,25 @@ Guidelines:
 
 Don't add diagrams to Rust-syntax lessons (ownership, lifetimes, async) or pure source walkthroughs — the code itself is the explanation.
 
+### YouTube embeds (Further watching)
+
+For lessons where there's a strong public talk by the maintainer or a Paradigm/Frontiers/Devcon speaker, append a `## 📺 Further watching` (EN) / `## 📺 関連動画` (JA) section at the end of the lesson body and use a `youtube` fenced block:
+
+```
+\```youtube
+<video_id>[ | <optional title>][ @<start_seconds>]
+\```
+```
+
+The lesson renderer converts the block into a lazy-loaded thumbnail; the actual iframe only mounts after the user clicks play, so a lesson with three embeds still costs zero requests to Google on first paint.
+
+Guidelines:
+
+- **One video per concept**, ideally the most current talk by the actual maintainer (e.g., Rakita for Revm, Georgios for Reth direction). Multiple videos are fine when they cover different angles (architecture intro + perf deep-dive).
+- **Place at the end** of the lesson, never above the source-walking content. The course is source-first; videos are supplementary.
+- **Skip when there's no clean fit.** A weak generic tutorial dilutes the section — better empty than diluted.
+- **Embed-disabled videos** show a "Video unavailable" iframe; if you spot one in the wild, swap to an alternative or remove the block.
+
 ### Bilingual parity
 
 Each lesson exists in EN and JA. When you change one, **change the other** in the same PR. The two should explain the same code with the same depth — translation is not literal; idiomatic Japanese is preferred over word-for-word English transliteration.
@@ -82,7 +101,7 @@ Lesson content lives in `prisma/seed-reth-{tier}-{lang}.ts`. Each lesson is a Pr
 
 ### Slugs
 
-`slug` follows `kebab-case-{en,ja}`. **Once a lesson is in production, do not change its slug** — it breaks bookmarks and progress tracking.
+`slug` follows `kebab-case-{en,ja}`. **Once a lesson is in production, do not change its slug** — lesson URLs are keyed on slug (`/courses/<course-slug>/lessons/<lesson-slug>`), so renaming breaks every external link, bookmark, and stored localStorage completion record. The CUID `id` regenerates on every full reseed; the slug is the only stable identifier.
 
 ### Sort order
 
