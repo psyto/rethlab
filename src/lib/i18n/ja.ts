@@ -326,7 +326,7 @@ export const ja: TranslationKeys = {
   about: {
     title: 'RethLabについて',
     subtitle: 'Hyperliquid はその上で動く。Tempo はその上でローンチした。Paradigm が作った — Reth・Revm・Foundry・Alloy。Rust EVM スタックは今クリプトインフラで瞬間を迎えていて、それを読めるエンジニアは希少。RethLab は、本物のソースを行単位で walk through し、そして 8 本の動くアプリを end-to-end で build させるトレーニングプログラムです。',
-    bio: '15+ 年、金融機関のミッションクリティカルなシステム — コアバンキング、リテール預金、住宅ローン、KYC、規制対応 — を Tokyo (新生銀行)、Bangalore (オフショア QA)、Hong Kong (無料英語学習 E メール、50 万ユーザ超) で ship してきました。現在は SBI R3 Japan で Head of Sales Engineering、Solana エンタープライズ採用と RWA トークン化にフォーカス。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda 全部で active に build 中。\n\nRethLab を作ったのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとした時に、まさにこのカリキュラムが walk through する穴に当たったから — ドキュメントは散在、ソースは難解、「Rust が少し書ける」状態から「本番 EVM インフラを ship できる」状態への明確な道筋がない。やりながら学び、その効いた部分を「自分が欲しかったカリキュラム」にしたのが RethLab — 6 コース・約 108 レッスン、最終 Building tier で 8 本の動くアプリを end-to-end で ship する。永久無料、source-first。',
+    bio: '15+ 年、金融機関のミッションクリティカルなシステム — コアバンキング、リテール預金、住宅ローン、KYC、規制対応 — を Tokyo (新生銀行)、Bangalore (オフショア開発)、Hong Kong (無料英語学習 E メール、50 万ユーザ超) で ship してきました。現在は SBI R3 Japan で Head of Sales Engineering、Solana エンタープライズ採用と RWA トークン化にフォーカス。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda 全部で active に build 中。\n\nRethLab を作ったのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとした時に、まさにこのカリキュラムが walk through する穴に当たったから — ドキュメントは散在、ソースは難解、「Rust が少し書ける」状態から「本番 EVM インフラを ship できる」状態への明確な道筋がない。やりながら学び、その効いた部分を「自分が欲しかったカリキュラム」にしたのが RethLab — 6 コース・約 108 レッスン、最終 Building tier で 8 本の動くアプリを end-to-end で ship する。永久無料、source-first。',
     background: {
       tradfi: '経歴',
       tradfiDetail: '15+ 年の金融機関ミッションクリティカル開発を新生銀行で: コアバンキング (Flexcube)、リテール預金、住宅ローン、KYC/FATCA、全銀、ATM。Backbase (オランダの Banking as a Service ユニコーン) で PM。',
@@ -335,7 +335,7 @@ export const ja: TranslationKeys = {
       vaults: 'Web3',
       vaultsDetail: 'Bitcoin、Ethereum、Solana、Hyperliquid、Corda 全部で active。Solana Cypherpunk Hackathon 第3位 (NTT Docomo R&D サイドトラック)。',
       multilingual: 'グローバル',
-      multilingualDetail: 'Hong Kong (50万ユーザのインターネットスタートアップ) 2 年、Bangalore (iGate オフショア QA リード) 2 年、Tokyo (金融機関) 15+ 年。EN/JA バイリンガル — RethLab コンテンツも完全 parity で出荷。',
+      multilingualDetail: 'Hong Kong (50万ユーザのインターネットスタートアップ) 2 年、Bangalore (iGate オフショア開発 リード) 2 年、Tokyo (金融機関) 15+ 年。EN/JA バイリンガル — RethLab コンテンツも完全 parity で出荷。',
     },
     tech: {
       title: 'なぜこのスタックか？',
