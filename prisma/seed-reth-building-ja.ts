@@ -725,6 +725,321 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
 \`\`\`
 `,
                 },
+                {
+                  title: 'Reth にカスタム RPC エンドポイントを足す',
+                  slug: 'build-custom-rpc-ja',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 40,
+                  xpReward: 70,
+                  content: `# Reth にカスタム RPC エンドポイントを足す
+
+Reth には標準 JSON-RPC ネームスペース (\`eth_*\`、\`net_*\`、\`web3_*\`、\`debug_*\`、\`trace_*\`、\`txpool_*\`) が同梱されています。そのリストに *無いもの* が欲しい時 — ドメイン固有の集計、独自デバッグヘルパ、自分のプロトコルに合わせたリアルタイム subscription — Reth を fork する必要はない。trait を 1 つ書き、実装し、node builder に渡す。Rust ~50 行で、ネイティブと同じ HTTP / WebSocket / IPC エンドポイントから新メソッドが live になる。
+
+> 📌 **スコープの正直な開示。** 読み取り専用メソッド 1 つ (\`txpoolPlus_pendingByGasBucket\`) を追加する — ローカル mempool を 10 個の gas-price バケットに集計するもの。認証、レート制限、書き込みメソッドは扱わない — それらは同じパターンの上に重ねるレイヤー。アーキテクチャ的レッスンは「trait はどう wire される?」。
+
+## 何を作るか
+
+新 RPC メソッド、ネイティブと同じように呼べる:
+
+\`\`\`bash
+$ cast rpc txpoolPlus_pendingByGasBucket
+[
+  {"min_gwei": 0,   "max_gwei": 1,   "count": 12},
+  {"min_gwei": 1,   "max_gwei": 5,   "count": 47},
+  {"min_gwei": 5,   "max_gwei": 10,  "count": 89},
+  {"min_gwei": 10,  "max_gwei": 20,  "count": 134},
+  {"min_gwei": 20,  "max_gwei": 30,  "count": 56},
+  {"min_gwei": 30,  "max_gwei": 50,  "count": 21},
+  {"min_gwei": 50,  "max_gwei": 100, "count": 8},
+  {"min_gwei": 100, "max_gwei": 250, "count": 2},
+  {"min_gwei": 250, "max_gwei": 500, "count": 0},
+  {"min_gwei": 500, "max_gwei": 0,   "count": 1}
+]
+\`\`\`
+
+用途: gas-price oracle、ダッシュボード、料金入札戦略、MEV searcher (pending priority fee の 90 パーセンタイル超えで入札)。
+
+\`\`\`mermaid
+flowchart LR
+    Client["RPC client<br/>(cast / dapp / dashboard)"] -->|JSON-RPC POST| Handler["jsonrpsee handler"]
+    Handler -->|read snapshot| Pool["TransactionPool<br/>(in-process)"]
+    Pool -->|all_transactions| Bucket["Bucket math<br/>(10 ranges)"]
+    Bucket -->|JSON| Client
+\`\`\`
+
+> 🛑 **スクロール前に予測。** なぜ *サーバーサイド集計* が勝ちか? \`txpool_content\` が返すもの vs ダッシュボードが実際に必要とするもの — ペイロードサイズについて一文で答えてください。答えを保持。
+
+## なぜカスタム RPC か (workaround との比較)
+
+| 方式 | レイテンシ | ペイロード | 労力 |
+| :--- | :--- | :--- | :--- |
+| **\`txpool_content\` を呼んでクライアント側で集計** | RPC ラウンドトリップ + 全 tx 転送 | 数百 KB | 簡単 |
+| **mempool を subscribe する外部 indexer** | µs/query (in-mem) | 小 | glue + 運用に数日 |
+| **カスタム RPC メソッド** | µs (in-process スナップショット) | bytes | 1 回 ~50 行 |
+
+カスタム RPC はスイートスポットに座る: indexer のレイテンシ、集計のペイロード、Rust 数ページの労力。**そしてノードの一部として shipping** — 別サービスなし、別デプロイなし、ポート開放なし。
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "txpool-plus"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Reth — production ではタグにピン
+reth                = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-ethereum       = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+
+# jsonrpsee — Reth が end-to-end で使っている RPC フレームワーク
+jsonrpsee           = { version = "0.24", features = ["server", "macros"] }
+
+# CLI フラグ
+clap                = { version = "4", features = ["derive"] }
+
+# 配管
+serde               = { version = "1", features = ["derive"] }
+tokio               = { version = "1", features = ["macros", "rt-multi-thread"] }
+\`\`\`
+
+> Reth の RPC スタックは \`jsonrpsee\` で構築されている。あなたのカスタムメソッドは同一プロセスに住み、同じリスナを共有し、ネイティブと同じ認証を使う。並行 \`jsonrpsee\` サーバを立てようとしないこと — \`extend_rpc_modules\` で Reth の既存サーバに登録させる。
+
+## Step 1: RPC trait を定義
+
+\`jsonrpsee\` は trait から RPC plumbing を生成する手続きマクロを使う。trait の形を書く; マクロが server stub、client stub、JSON シリアライズを派生させる:
+
+\`\`\`rust
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GasBucket {
+    pub min_gwei: u64,
+    pub max_gwei: u64,  // 0 = 上限なし (最上位バケット用)
+    pub count: usize,
+}
+
+#[rpc(server, namespace = "txpoolPlus")]
+pub trait TxpoolPlusApi {
+    #[method(name = "pendingByGasBucket")]
+    fn pending_by_gas_bucket(&self) -> RpcResult<Vec<GasBucket>>;
+}
+\`\`\`
+
+Walk:
+
+- **\`#[rpc(server, namespace = "txpoolPlus")]\`** — マクロが \`TxpoolPlusApiServer\` trait を生成、それを実装する。\`namespace\` が JSON-RPC メソッドプレフィックスになる; \`#[method(name = "pendingByGasBucket")]\` と組み合わせて、wire 上のメソッド名は \`txpoolPlus_pendingByGasBucket\`。
+- **\`RpcResult<T>\`** — \`jsonrpsee\` の \`Result<T, ErrorObjectOwned>\` エイリアス。エラーは proper JSON-RPC エラーオブジェクト (コード付き) として返る; シリアライズは自分で書かない。
+- **戻り値型に \`Serialize\`** — それだけで OK。\`GasBucket\` は \`min_gwei\`、\`max_gwei\`、\`count\` フィールドを持つ JSON オブジェクトになる。snake → camel ケースマッピングは設定可能; ここでは明瞭性のため snake のまま。
+
+> 🔍 **リポで探す。** [\`reth-rpc-api\`](https://github.com/paradigmxyz/reth/tree/main/crates/rpc/rpc-api) を開く — 全ネイティブネームスペース (\`EthApi\`、\`DebugApi\`、\`TraceApi\`、\`TxpoolApi\`、…) がこの正確な \`#[rpc(...)]\` パターンで宣言された trait。**あなたのカスタム trait は構造的にネイティブと同一。** 偶然ではなく、それが contract。
+
+## Step 2: pool アクセス付きで実装
+
+trait は \`TxpoolPlusApiServer\` を派生させた。トランザクションプールへのハンドルを持つ struct に実装する:
+
+\`\`\`rust
+use reth_ethereum::pool::{PoolTransaction, TransactionPool};
+
+pub struct TxpoolPlus<Pool> {
+    pool: Pool,
+}
+
+const BUCKETS: &[(u64, u64)] = &[
+    (0, 1), (1, 5), (5, 10), (10, 20), (20, 30),
+    (30, 50), (50, 100), (100, 250), (250, 500), (500, 0),
+];
+
+impl<Pool> TxpoolPlusApiServer for TxpoolPlus<Pool>
+where
+    Pool: TransactionPool + Clone + 'static,
+{
+    fn pending_by_gas_bucket(&self) -> RpcResult<Vec<GasBucket>> {
+        let mut counts = vec![0usize; BUCKETS.len()];
+
+        // pending() はスナップショット iterator を返す; 呼び出しは安価
+        for tx in self.pool.pending() {
+            let max_priority_fee_wei = tx.max_priority_fee_per_gas().unwrap_or(0);
+            let gwei = (max_priority_fee_wei / 1_000_000_000) as u64;
+
+            for (i, &(min, max)) in BUCKETS.iter().enumerate() {
+                let upper_match = max == 0 || gwei < max;
+                if gwei >= min && upper_match {
+                    counts[i] += 1;
+                    break;
+                }
+            }
+        }
+
+        Ok(BUCKETS
+            .iter()
+            .zip(counts)
+            .map(|(&(min, max), count)| GasBucket { min_gwei: min, max_gwei: max, count })
+            .collect())
+    }
+}
+\`\`\`
+
+Walk:
+
+- **\`Pool: TransactionPool\`** — trait バウンド。\`TransactionPool\` は Reth がどこでも使う抽象; 具体型はノードビルダーが決める。**\`EthPool\` や \`BasicPool\` を hardcode しない** — ジェネリックなので、vanilla mainnet ノード、op-reth L2 ノード、カスタム App-chain で同じコードが動く。
+- **\`pool.pending()\`** — pending tx のスナップショットを返す; 新規 insert に対してプールをロックしない。プロダクション級。
+- **\`max_priority_fee_per_gas\`** — バケット対象。(本物の searcher は base fee も考慮; 明瞭性のため priority fee のみ)
+- **内側ループは \`O(buckets * pending)\`** — 典型的なプールサイズ (~10K) には十分。100K+ pending には bucket 配列での二分探索に切り替える。
+
+> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: なぜ \`pool.pending()\` がここでは安価で、本物の \`txpool_content\` RPC は重いか? ヒント: \`pending()\` が返すもの vs \`txpool_content\` が wire のためにマテリアライズするものを考えて。
+
+## Step 3: NodeBuilder に wire
+
+ここが統合点。ノードビルダーは \`extend_rpc_modules\` を公開している; context (pool, provider, network handle, ...) とモジュールレジストリへの mut handle を渡してくれる:
+
+\`\`\`rust
+use clap::Parser;
+use reth_ethereum::{
+    cli::{chainspec::EthereumChainSpecParser, interface::Cli},
+    node::EthereumNode,
+};
+
+#[derive(Debug, Clone, Copy, Default, clap::Args)]
+struct Args {
+    /// txpoolPlus 拡張を有効化
+    #[arg(long)]
+    enable_txpool_plus: bool,
+}
+
+fn main() {
+    Cli::<EthereumChainSpecParser, Args>::parse()
+        .run(async move |builder, args| {
+            let handle = builder
+                .node(EthereumNode::default())
+                .extend_rpc_modules(move |ctx| {
+                    if !args.enable_txpool_plus {
+                        return Ok(());
+                    }
+                    let ext = TxpoolPlus { pool: ctx.pool().clone() };
+                    ctx.modules.merge_configured(ext.into_rpc())?;
+                    println!("txpoolPlus_pendingByGasBucket enabled");
+                    Ok(())
+                })
+                .launch_with_debug_capabilities()
+                .await?;
+            handle.wait_for_node_exit().await
+        })
+        .unwrap();
+}
+\`\`\`
+
+Walk:
+
+- **\`Cli<...>::parse()\`** — Reth の CLI 機構。第 2 ジェネリックパラメータがあなたのカスタム args struct、標準 Reth CLI フラグにマージされる。\`reth node --enable-txpool-plus --http\` で動く。
+- **\`extend_rpc_modules(|ctx| { ... })\`** — クロージャは起動時に 1 回走る、ノード構築後 + RPC サーバ起動前。\`ctx\` は \`pool()\`、\`provider()\`、\`network()\`、\`tasks()\` を公開 — RPC ハンドラが必要とする全コンポーネント。
+- **\`ctx.modules.merge_configured(ext.into_rpc())\`** — \`into_rpc()\` は \`#[rpc]\` マクロが生成したメソッド; \`RpcModule\` を作る。\`merge_configured\` がそれを Reth の既存ディスパッチテーブルに **設定された全トランスポートに対して** はめ込む (\`--http\` なら HTTP、\`--ws\` なら WS、\`--ipc\` なら IPC)。1 行、3 トランスポート。
+
+> 🔍 **リポで探す。** [\`reth/examples/node-custom-rpc\`](https://github.com/paradigmxyz/reth/tree/main/examples/node-custom-rpc) を開く — Paradigm 公式 example。同じ形を使っている。**書いたものと並べて比較。** 構造的スケルトンは同一; 違うのは namespace、メソッド名、ハンドラ内で何をするか。
+
+## Step 4: cast でテスト
+
+ビルド、走らせる、query:
+
+\`\`\`bash
+# 1 つのターミナル: ノード起動
+$ cargo run --release -- node --http --enable-txpool-plus
+
+# 別のターミナル: 新メソッドを叩く
+$ cast rpc txpoolPlus_pendingByGasBucket --rpc-url http://localhost:8545
+[{"min_gwei":0,"max_gwei":1,"count":12}, ...]
+
+# 生 curl
+$ curl -X POST http://localhost:8545 \\
+    -H "Content-Type: application/json" \\
+    -d '{"jsonrpc":"2.0","method":"txpoolPlus_pendingByGasBucket","params":[],"id":1}'
+{"jsonrpc":"2.0","result":[{"min_gwei":0,"max_gwei":1,"count":12}, ...],"id":1}
+\`\`\`
+
+メソッドはどの RPC クライアントから見てもネイティブと区別がつかない。**同じ認証、同じレート制限 (設定していれば)、同じロギング。** それが \`extend_rpc_modules\` の contract。
+
+## Step 5 (おまけ): subscription バリアント
+
+WebSocket subscription は同じパターン、\`#[subscription(...)]\` 属性付き:
+
+\`\`\`rust
+use jsonrpsee::{core::SubscriptionResult, PendingSubscriptionSink, SubscriptionMessage};
+use std::time::Duration;
+use tokio::time::sleep;
+
+#[rpc(server, namespace = "txpoolPlus")]
+pub trait TxpoolPlusApi {
+    #[method(name = "pendingByGasBucket")]
+    fn pending_by_gas_bucket(&self) -> RpcResult<Vec<GasBucket>>;
+
+    #[subscription(name = "subscribeBuckets", item = Vec<GasBucket>)]
+    fn subscribe_buckets(&self, interval_secs: Option<u64>) -> SubscriptionResult;
+}
+
+// impl 内:
+fn subscribe_buckets(
+    &self,
+    pending: PendingSubscriptionSink,
+    interval_secs: Option<u64>,
+) -> SubscriptionResult {
+    let pool = self.pool.clone();
+    let interval = Duration::from_secs(interval_secs.unwrap_or(5));
+
+    tokio::spawn(async move {
+        let Ok(sink) = pending.accept().await else { return };
+        loop {
+            sleep(interval).await;
+            let buckets = compute_buckets(&pool); // Step 2 から factor out
+            let Ok(raw) = serde_json::value::to_raw_value(&buckets) else { continue };
+            if sink.send(SubscriptionMessage::from(raw)).await.is_err() { return; }
+        }
+    });
+    Ok(())
+}
+\`\`\`
+
+Walk:
+
+- **\`PendingSubscriptionSink\` → \`accept().await\` → \`sink.send(...)\`** — \`jsonrpsee\` 標準 subscription handshake。
+- **クロージャは \`tokio::spawn\` で走る** — RPC ハンドラは即 return; 実際のストリーミングはバックグラウンドタスク。**ここでブロックしたら RPC サーバスレッドが stall する。**
+- **\`sink.send(...).is_err()\`** — クライアント切断 or channel フル; clean に return してタスクが exit。**subscription leak なし。**
+
+これでダッシュボードが \`eth_subscribe("txpoolPlus_subscribeBuckets", [10])\` で 10 秒ごとの live ヒストグラムを受け取れる、サーバ側集計済みで。
+
+## Production に足りないもの
+
+| ギャップ | 本物のカスタム RPC が何をしているか |
+| :--- | :--- |
+| **認証** | engine API と同じ \`AUTH_SECRET\` 機構; Reth が \`extend_rpc_modules\` 経由で自動 wire する、ただしメソッドが respect しているかは確認すべき (大半の \`ctx\` accessor は respect する) |
+| **レート制限** | Reth はメソッド単位レート制限を ship しない; production は \`tower\` ミドルウェアで wrap、または impl 内で閾値超えを reject |
+| **クライアント単位の状態** | subscription はデフォルトで接続単位。クライアント間調整 (例: 共有キャッシュ無効化) には impl struct 内で \`Arc<RwLock<...>>\` |
+| **バージョニング** | レスポンス形が変わったら namespace を bump (\`txpoolPlus_v2_*\`); 古いクライアントは動き続けるべき |
+| **メトリクス** | Reth の RPC レイヤーはメソッド単位 latency/count を metrics endpoint で公開、ただしネイティブのみ。ハンドラ内に自分の \`metrics::counter!(...)\` を追加 |
+| **引数バリデーション** | \`RpcResult\` で \`ErrorObjectOwned::owned(code, message, data)\` を clean に返せる。安定したコードを選ぶ; 標準 JSON-RPC エラーコードを reuse しない (-32603 = "internal error" は予約済み) |
+
+書いたアーキテクチャ — trait 定義、コンポーネントアクセス付き impl、\`extend_rpc_modules\` 経由で登録 — **production の Reth カスタム RPC が全部こう見える**。50 行スケルトンは同じ; impl 本体に各プロジェクトの価値が宿る。
+
+## Drill
+
+1. **\`pendingByNonce(address)\` を追加。** 指定アドレスから現在 pending の tx 数を nonce ごとに返す 2 つ目のメソッド。パターン: 同じ trait、2 つ目の \`#[method]\`、2 つ目のハンドラ。(15分)
+2. **gas price (post-EIP-1559) でバケット化。** priority-fee バケット化を effective-gas-price バケット化に置き換える (\`base_fee + priority_fee\`、\`max_fee_per_gas\` で cap)。base fee を provider から取得する必要あり。**\`ctx\` は何を公開している?** (30分)
+3. **メソッドを auth-gate。** \`txpoolPlus_pendingByGasBucket\` を engine \`AUTH_SECRET\` を提示しない呼び出しは reject する。(ヒント: Reth の debug メソッドがどうやってるか見る) (45分)
+4. **スナップショットの新鮮さ。** レスポンスにスナップショットごとのタイムスタンプ + monotonic ブロック高を追加。\`ctx.provider().best_block_number()\` が 2 つ目の真の source。(30分)
+5. **クロスティア統合。** このティアの lesson 1 の MEV searcher が \`txpoolPlus_pendingByGasBucket\` を query して 90 パーセンタイル超えで自分の入札を設定できる。\`jsonrpsee::http_client\` を使ってこれをやる Rust クライアントを追加。(2時間)
+
+Drill 5 を完成させればループが閉じる: ノード固有の insight を typed RPC として公開するノード、その insight を mempool で勝つために使う別 Rust プロセスが consume する。**そのラウンドトリップ — カスタム RPC 経由の observability、別 consumer 経由の挙動 — は本物の searcher / market-maker スタックがどう組織されているか。**
+
+> 🛑 **最終チェック。** 一文で: なぜ \`extend_rpc_modules\` は、Reth の標準 RPC を呼ぶ sidecar サービスを動かすより厳密に強力か? 答えに「ノードコンポーネントへの in-process アクセス」がないなら、Step 3 を読み直し — そのアクセスがレバレッジ。
+
+## 📺 関連動画
+
+\`\`\`youtube
+GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next generation indexing (Devcon 2024) — 別の拡張点 (ExEx)、同じノード拡張哲学
+\`\`\`
+`,
+                },
               ],
             },
           },
