@@ -173,6 +173,14 @@ The honest answer is **it depends on what you want to build**, but here's the co
 
 If your priority is **trend, breadth, and reusability**, Rust EVM wins. Solana is still excellent, but Reth + Revm offers the unique combination of "EVM developer experience × Rust performance."
 
+## The 2026 reality — not "either/or" but "intersection"
+
+The picture has gotten more interesting. **Tempo** — a Reth-based payments abstraction layer — is emerging as the connective tissue between Stripe (fiat-side distribution) and Solana (crypto-side distribution). When Meta launched USDC payments, they didn't build their own chain — they composed existing networks (Solana + Stripe). Stripe is a central player in Tempo, so the structural connection Meta — Stripe — Tempo — Solana is forming.
+
+So the question shifts from "should I learn Solana or Rust EVM" to **"which distribution do I want to bet on."** The Rust EVM side (this course) covers: app-chains (Hyperliquid), stablecoin payments (Tempo), L2s (Base / OP-Reth) — Reth is becoming the foundation for "Stripe-of-crypto"–style infrastructure.
+
+> **Key point**: Stablecoins are the base currency of DeFi. Owning a stablecoin payment rail also means opening the path to DeFi onboarding later. Today, Stripe / Tempo abstract crypto away to onboard TradFi users — but lending, swap, and perps will eventually layer on top of that rail. Reth/Revm engineers who can read **both the rail and the protocol** sit in scarce-talent territory.
+
 ## Next up
 
 Now that you can place these projects on a map, let's get Rust running on your machine.`,
