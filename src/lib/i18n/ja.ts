@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Hyperliquid はその上で動く。Tempo はその上でローンチした。Paradigm が作った — Reth、Revm、Foundry、Alloy。emerging な Rust EVM スタックは execution client シェアまだ ~7-12% (Geth ~50%) だが急速に成長中、それを読めるエンジニアはまだ希少。RethLab は本物のソースを行単位で walk through — そして 9 本の動くアプリを end-to-end で build、frontrun-resistant order router と cross-client validation harness を capstone に。',
+      subtitle: 'Hyperliquid が動いている基盤。Tempo がローンチした基盤。Paradigm が build した — Reth、Revm、Foundry、Alloy。この emerging な Rust EVM スタックは execution client シェアでまだ ~7-12% (Geth ~50%) だが急速に伸びていて、読めるエンジニアはまだ希少。RethLab は本物のソースを行単位で walk through し、9 本の動くアプリを end-to-end で build。Capstone は frontrun-resistant な order router と cross-client validation harness。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -79,17 +79,17 @@ export const ja: TranslationKeys = {
     whyNow: {
       tag: 'なぜ今 Rust',
       title: 'Rust EVM スタックは今が瞬間 — そしてまだ早期',
-      subtitle: 'Hyperliquid は Reth フォーク (HyperEVM) の上で世界最大の perps DEX に成長した。Tempo は AI ネイティブな stablecoin L1 として、同じく Reth でローンチ。Paradigm — Uniswap や OpenSea を funded したファーム — は Reth・Revm・Foundry を、他のどのクリプトインフラ投資より速いペースで ship し続けている。Reth は execution client シェアまだ ~7-12% (Geth ~50%、Nethermind ~25%、[clientdiversity.org](https://clientdiversity.org/) より) — ただし 2023 年リリース時の <1% からそこまで成長。今注目すべき理由は、このスタックが明らかに emerging で、かつそれを拡張できるエンジニアがまだ希少なこと。',
+      subtitle: 'Hyperliquid は Reth フォーク (HyperEVM) 上で世界最大の perps DEX に成長した。Tempo は AI ネイティブな stablecoin L1 として、同じく Reth でローンチ。Paradigm — Uniswap や OpenSea に出資したファーム — は Reth・Revm・Foundry を、他のどのクリプトインフラ投資より速いペースで ship し続けている。Reth は execution client シェアでまだ ~7-12% (Geth ~50%、Nethermind ~25%、[clientdiversity.org](https://clientdiversity.org/) より) — ただし 2023 年リリース時の <1% からここまで伸びた。今このスタックに注目すべき理由は、明らかに emerging でありながら、それを拡張できるエンジニアがまだ希少だから。',
       card1Title: 'Hyperliquid: スケールしている Reth フォーク',
-      card1Desc: 'HyperEVM は Reth フォーク。Hyperliquid は中央集権取引所と競合するボリュームで perpetuals を捌いている、全部この Rust execution スタック上で。Reth が読めれば HyperEVM 内部も読める。',
+      card1Desc: 'HyperEVM は Reth フォーク。Hyperliquid は中央集権取引所と競合するボリュームの perpetuals を、すべてこの Rust execution スタック上で捌いている。Reth が読めれば HyperEVM の内部も読める。',
       card2Title: 'Paradigm は ship し続ける',
-      card2Desc: 'Reth、Revm、Foundry、Alloy — 全部 Paradigm が build + 攻めの iteration (Frontiers 2025 で「Hyperoptimizing Reth」「The Future of Reth」が ship された)。Tempo は最新の Reth ベース app-chain。このスタックの cadence は、今のクリプトインフラ最強のシグナル。',
+      card2Desc: 'Reth、Revm、Foundry、Alloy — すべて Paradigm が build し、攻めの iteration を続けている (Frontiers 2025 では「Hyperoptimizing Reth」「The Future of Reth」が ship された)。Tempo は最新の Reth ベース app-chain。このスタックの cadence は、今のクリプトインフラで最も強いシグナル。',
       card3Title: 'Emerging であって支配的ではない — まだ',
-      card3Desc: 'Reth は execution client シェアまだ一桁〜低い 2 桁 % — Geth と Nethermind が大半のチェーンを serve する。RethLab は Revm-based コードを ship する方法 + production で実際に喋る non-Revm チェーンに対してそれを検証する方法を教える (Building tier に含まれる)。タレントギャップが現実なのは、まさにこのスタックがまだ emerging だから。',
+      card3Desc: 'Reth は execution client シェアでまだ一桁〜低い 2 桁 % — Geth と Nethermind が大半のチェーンを serve している。RethLab は Revm ベースのコードを ship する方法と、それを production で動いている non-Revm チェーンに対して検証する方法の両方を教える (Building tier に収録)。タレントギャップが現実なのは、まさにこのスタックがまだ emerging だから。',
     },
     cta: {
       title: 'Hyperliquid が採用中。Tempo が採用中。Paradigm ポートフォリオのインフラチームが採用中。',
-      description: 'Rust EVM スタックは速く動いている — Reth は他のプロジェクトが追いつけない cadence でリリースを ship し、それを読めるエンジニアは希少。RethLab は、スタック読解の深さ + 8 本のポートフォリオ即戦力 build (MEV searcher、indexer、custom RPC、wallet backend、EIP-7702 sponsor、swap aggregator、frontrun-resistant router) を提供します。2026 年に行われる採用は、これらの artifact を持って現れた人たちです。',
+      description: 'Rust EVM スタックは速く動いている — Reth は他のプロジェクトが追いつけない cadence でリリースを ship し、それを読めるエンジニアは希少です。RethLab はスタック読解の深さに加え、9 本のポートフォリオ即戦力 build (MEV searcher、indexer、custom RPC、wallet backend、EIP-7702 sponsor、Foundry-style cheatcode、swap aggregator、frontrun-resistant router、cross-client validation harness) を提供します。2026 年の採用枠を取るのは、これらの artifact を持って現れる人たちです。',
       cta: '始める',
     },
     features: {
@@ -368,7 +368,7 @@ export const ja: TranslationKeys = {
     loadCourse: 'コースの読み込みに失敗しました。もう一度お試しください。',
   },
   page: {
-    launchBanner: 'Free · emerging な Rust EVM スタック — Hyperliquid・Tempo・Paradigm が ship するもの',
+    launchBanner: 'Free · Hyperliquid・Tempo・Paradigm が ship する emerging な Rust EVM スタック',
     whyRethLab: {
       title: 'なぜRethLab？',
     },
