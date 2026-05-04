@@ -77,13 +77,13 @@ export const en = {
     whyNow: {
       tag: 'WHY RUST, WHY NOW',
       title: "The Rust EVM stack is having its moment — and it's still early",
-      subtitle: "Hyperliquid grew into the largest perps DEX on the planet on a Reth fork (HyperEVM). Tempo launched as the AI-native stablecoin L1, also on Reth. Paradigm — the firm that funded Uniswap and OpenSea — has been shipping Reth, Revm, and Foundry faster than any other crypto infrastructure bet on the table. The reason to pay attention right now is that this stack is clearly winning AND the engineers who can extend it are still scarce.",
+      subtitle: "Hyperliquid grew into the largest perps DEX on the planet on a Reth fork (HyperEVM). Tempo launched as the AI-native stablecoin L1, also on Reth. Paradigm — the firm that funded Uniswap and OpenSea — has been shipping Reth, Revm, and Foundry faster than any other crypto infrastructure bet on the table. Reth is still ~7-12% of execution-client share (Geth ~50%, Nethermind ~25%) per [clientdiversity.org](https://clientdiversity.org/) — but it grew there from <1% at its 2023 release. The reason to pay attention right now is that this stack is clearly emerging AND the engineers who can extend it are still scarce.",
       card1Title: 'Hyperliquid: a Reth fork at scale',
       card1Desc: "HyperEVM is a Reth fork. Hyperliquid runs perpetuals at volumes that compete with centralized exchanges, all on this Rust execution stack. Read Reth and you can read HyperEVM internals.",
       card2Title: 'Paradigm keeps shipping',
       card2Desc: "Reth, Revm, Foundry, Alloy — all built and maintained by Paradigm and aggressively iterated on (Frontiers 2025 just shipped 'Hyperoptimizing Reth' and 'The Future of Reth'). Tempo is the newest portfolio-adjacent app-chain to launch on Reth. The cadence of this stack is the strongest signal in crypto infra right now.",
-      card3Title: 'The talent gap is real',
-      card3Desc: "Reth is being adopted faster than the engineers who can extend it are showing up. The infra hires Paradigm, Hyperliquid, Tempo, and the next wave of Reth-based teams make in 2026 will be people who already read this stack and shipped against it.",
+      card3Title: 'Emerging, not dominant — yet',
+      card3Desc: "Reth is still single-digit / low double-digit % of execution clients — Geth and Nethermind serve most of the chain you call into. RethLab teaches you to ship Revm-based code AND validate it against the non-Revm chains your code talks to in production (covered in the Building tier capstone). The talent gap is real precisely because the stack is still emerging.",
     },
     cta: {
       title: 'Hyperliquid is hiring. Tempo is hiring. Paradigm-portfolio infra teams are hiring.',

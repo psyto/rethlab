@@ -79,13 +79,13 @@ export const ja: TranslationKeys = {
     whyNow: {
       tag: 'なぜ今 Rust',
       title: 'Rust EVM スタックは今が瞬間 — そしてまだ早期',
-      subtitle: 'Hyperliquid は Reth フォーク (HyperEVM) の上で世界最大の perps DEX に成長した。Tempo は AI ネイティブな stablecoin L1 として、同じく Reth でローンチ。Paradigm — Uniswap や OpenSea を funded したファーム — は Reth・Revm・Foundry を、他のどのクリプトインフラ投資より速いペースで ship し続けている。今注目すべき理由は、このスタックが明らかに勝っていて、かつそれを拡張できるエンジニアがまだ希少なこと。',
+      subtitle: 'Hyperliquid は Reth フォーク (HyperEVM) の上で世界最大の perps DEX に成長した。Tempo は AI ネイティブな stablecoin L1 として、同じく Reth でローンチ。Paradigm — Uniswap や OpenSea を funded したファーム — は Reth・Revm・Foundry を、他のどのクリプトインフラ投資より速いペースで ship し続けている。Reth は execution client シェアまだ ~7-12% (Geth ~50%、Nethermind ~25%、[clientdiversity.org](https://clientdiversity.org/) より) — ただし 2023 年リリース時の <1% からそこまで成長。今注目すべき理由は、このスタックが明らかに emerging で、かつそれを拡張できるエンジニアがまだ希少なこと。',
       card1Title: 'Hyperliquid: スケールしている Reth フォーク',
       card1Desc: 'HyperEVM は Reth フォーク。Hyperliquid は中央集権取引所と競合するボリュームで perpetuals を捌いている、全部この Rust execution スタック上で。Reth が読めれば HyperEVM 内部も読める。',
       card2Title: 'Paradigm は ship し続ける',
       card2Desc: 'Reth、Revm、Foundry、Alloy — 全部 Paradigm が build + 攻めの iteration (Frontiers 2025 で「Hyperoptimizing Reth」「The Future of Reth」が ship された)。Tempo は最新の Reth ベース app-chain。このスタックの cadence は、今のクリプトインフラ最強のシグナル。',
-      card3Title: 'タレントギャップは現実',
-      card3Desc: 'Reth の採用速度に対して、それを拡張できるエンジニアが追いついていない。2026 年に Paradigm・Hyperliquid・Tempo・次の Reth ベースチームが採用するインフラ人材は、まさにこのスタックを読んで ship した経験を持つ人たち。',
+      card3Title: 'Emerging であって支配的ではない — まだ',
+      card3Desc: 'Reth は execution client シェアまだ一桁〜低い 2 桁 % — Geth と Nethermind が大半のチェーンを serve する。RethLab は Revm-based コードを ship する方法 + production で実際に喋る non-Revm チェーンに対してそれを検証する方法を教える (Building tier に含まれる)。タレントギャップが現実なのは、まさにこのスタックがまだ emerging だから。',
     },
     cta: {
       title: 'Hyperliquid が採用中。Tempo が採用中。Paradigm ポートフォリオのインフラチームが採用中。',
