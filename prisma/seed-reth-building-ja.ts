@@ -8,7 +8,7 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
       slug: 'reth-building-ja',
       title: 'Building with the Stack — 実アプリを作る',
       description:
-        'ソースを読むのは前提条件、このティアはその対価 — Rust + Alloy + Revm の動くアプリ 8 本: 最小 MEV searcher、reorg-aware Postgres indexer (ExEx)、カスタム RPC エンドポイント、wallet backend、EIP-7702 sponsor、Foundry スタイル cheatcode、swap aggregator、そして全部を統合する frontrun-resistant order router の capstone。',
+        'ソースを読めるのは前提条件、このティアはその payoff です — Rust + Alloy + Revm の動くアプリ 9 本: 最小 MEV searcher、reorg-aware Postgres indexer (ExEx)、カスタム RPC エンドポイント、wallet backend、EIP-7702 sponsor、Foundry スタイル cheatcode、swap aggregator、すべてを統合する frontrun-resistant order router の capstone、そして cross-client validation harness。',
       difficulty: 'EXPERT',
       duration: 420,
       xpReward: 100,
@@ -34,7 +34,7 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
                   xpReward: 80,
                   content: `# 最小限の MEV Searcher を Rust で作る
 
-\`add\` を読み、\`Stage\` トレイトを読み、\`identity_run\` を読みました。次は何かを **作る** 番です。本レッスンでは、最小限の MEV searcher の **完全なコード** を walk through します — Rust ~200 行で、public mempool を監視 → 候補トランザクションを fork した Revm でシミュレート → 2-hop アービトラージ機会を検出 → Flashbots スタイルの bundle を構築するまで。
+\`add\` を読み、\`Stage\` トレイトを読み、\`identity_run\` を読みました。次は何かを **作る** 番です。本レッスンでは、最小限の MEV searcher の **完全なコード** を walk through します — Rust ~200 行で、public mempool を監視 → 候補トランザクションを fork した Revm でシミュレート → 2-hop アービトラージ機会を検出 → Flashbots スタイルの bundle を構築するところまで、一気通貫で。
 
 > 📌 **スコープの正直な開示。** 本レッスンは「bundle 構築」で止まります。実際に relay へ提出するには認証、ガスオークション、MEV-Boost 統合、そして ~~あなたのお金~~ 本物のリスク管理が必要 — それらは本質とは別のプロダクション複雑度です。本レッスンが答える問いは: *「自分のラップトップで、ネットワーク全体と同じタイミングで arb 機会を見られるか?」*
 

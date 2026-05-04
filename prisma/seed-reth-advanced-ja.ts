@@ -34,7 +34,7 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
                   xpReward: 15,
                   content: `# Advanced へようこそ — このティアの読み方
 
-Fundamentals は終えてきた（理想的には Bridge to Advanced も）。Beginner と Fundamentals のレッスンはあなたに寄り添って歩いてきました。**Advanced は違います。** この短いオリエンテーションで、その違いを把握して、レッスン 1 から正しいマインドセットで臨めるようにします。
+Fundamentals は終えている前提です（理想的には Bridge to Advanced も）。Beginner と Fundamentals のレッスンは、あなたに寄り添って歩いてきました。**Advanced は違います。** この短いオリエンテーションで違いを把握し、レッスン 1 から正しいマインドセットで臨めるようにしましょう。
 
 ## ここで変わるもの
 
@@ -54,7 +54,7 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 
 (このシグネチャが見慣れないなら、Bridge to Advanced コースの Rust モジュールが各部品をすべてカバーしています。)
 
-## 編集スタイル — そしてその理由
+## レッスンの書き方 — そしてその理由
 
 Advanced レッスンは、これまでのティアにはない **能動学習プロンプト** を使います：
 
@@ -69,7 +69,7 @@ Advanced レッスンは、これまでのティアにはない **能動学習�
 
 ## 前提知識 — 自分に正直に
 
-レッスン 1 の前に、以下に **流暢である** べき：
+レッスン 1 の前に、以下が **手に馴染んでいる** こと：
 
 **EVM 内部**:
 - バイトコードと dispatch loop（バイトとしての opcode、PC、命令テーブル）
@@ -84,7 +84,7 @@ Advanced レッスンは、これまでのティアにはない **能動学習�
 - \`unsafe\` ブロックと \`unwrap_unchecked()\`
 - \`macro_rules!\` 構文 (\`$x:ident\`、\`$($x),*\`、フラグメント specifier)
 
-**どれかでも不安?** ブルートフォースで進まないこと。**Bridge to Advanced** コースに戻って該当レッスンをやってください。各々がこのティアが前提とする準備そのものです。
+**どれかでも不安?** 力技で進まないこと。**Bridge to Advanced** コースに戻って該当レッスンをやってください。どれもこのティアが前提とする準備そのものです。
 
 (Advanced 内にも *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンがあるが、それは *テスト* であって *教える* ものではありません。Bridge コースが教える側。)
 
