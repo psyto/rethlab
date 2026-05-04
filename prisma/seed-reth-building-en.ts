@@ -2902,6 +2902,279 @@ Recap of what you've built across 8 lessons:
 Pick the one that interests your target employer / project most. Open the production gaps. Ship it as a small public repo. **That's the artifact you bring to a Paradigm / Tempo / serious-team conversation.**
 `,
                 },
+                {
+                  title: 'Validate Your Revm Simulation Against a Production Provider',
+                  slug: 'build-validate-revm-en',
+                  type: 'CONTENT',
+                  sortOrder: 8,
+                  duration: 50,
+                  xpReward: 90,
+                  content: `# Validate Your Revm Simulation Against a Production Provider
+
+You learned in the Beginner tier that Reth is ~7-12% of execution-client share — Geth still serves the chain most production RPC calls hit. That asymmetry creates a discipline every Revm-based system needs: **the result your local Revm fork computes must match what the chain (running mostly Geth/Nethermind) would compute for the same input.** This lesson builds the validation harness in ~200 lines.
+
+> 📌 **Scope honesty.** We diff Revm against a JSON-RPC provider for a single transaction's gas + return data. Production validation harnesses extend this to: full state-diff comparison via \`debug_traceTransaction\` prestate, statistical sampling across thousands of historical txs, hardfork-boundary regression tests, and CI integration. The kernel — *what does "they match" actually mean, and how do you check it cheaply?* — is the same.
+
+## Why this matters (the real reason)
+
+Every other lesson in this tier built something on top of Revm. The MEV searcher (L1) uses Revm to predict if an arb is profitable; the swap aggregator (L7) uses Revm to compute quote outputs; the capstone (L8) uses Revm to score frontrun risk. **If Revm computes a result that disagrees with what mainnet (Geth) does, every one of those systems silently produces wrong answers.**
+
+The discipline is cheap and the cost of skipping it is real. From the [Reth team's benchmarking philosophy](https://www.paradigm.xyz/2024/04/reth-perf): "any divergence from mainnet behavior is a bug." That's the bar.
+
+\`\`\`mermaid
+flowchart LR
+    Tx["Test transaction<br/>(real mainnet tx hash<br/>or fabricated call)"] --> Revm["Revm fork<br/>at parent block"]
+    Tx --> Prov["Provider<br/>(Infura / QuickNode<br/>= Geth or Reth backend)"]
+    Revm --> R1["gas_used + output"]
+    Prov --> R2["gas_used + output"]
+    R1 --> Diff["Diff"]
+    R2 --> Diff
+    Diff --> Pass["✅ identical"]
+    Diff --> Fail["❌ debug<br/>(hardfork? precompile?<br/>RPC caching?)"]
+\`\`\`
+
+> 🛑 **Predict before scrolling.** A custom Revm setup runs an opcode added by a non-mainnet hardfork (e.g., a chain still running Cancun rules while mainnet is Osaka). It computes a result that's **technically correct for the spec it's running** but disagrees with mainnet. Walk through how this disagreement would show up in your validation harness. Hold your guess.
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "revm-cross-validation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alloy-eips         = "1.0"
+alloy-primitives   = "1.5"
+alloy-provider     = "1.0"
+alloy-network      = "1.0"
+alloy-rpc-types    = "1.0"
+alloy-sol-types    = "1.5"
+revm               = { version = "38", features = ["alloydb"] }
+tokio              = { version = "1", features = ["full"] }
+eyre               = "0.6"
+\`\`\`
+
+## Step 1: Pick a test case
+
+Two flavors of test target. Use both:
+
+1. **A historical mainnet transaction** — replay an already-mined tx at its parent block. The receipt gives you ground-truth gas_used; the provider's \`eth_call\` at the parent block gives you ground-truth return data.
+2. **A fabricated call against current state** — pick a contract + method (e.g., \`USDC.balanceOf(some_holder)\`), run it both via provider \`eth_call\` and via Revm fork at the same block. The provider's response is ground truth.
+
+Flavor 2 is simpler to start with (no historical RPC needed), so we'll build that one. Flavor 1 is in the drill.
+
+\`\`\`rust
+use alloy_primitives::{address, Address, Bytes, U256};
+use alloy_sol_types::{sol, SolCall};
+
+sol! {
+    function balanceOf(address account) external view returns (uint256);
+}
+
+const USDC: Address = address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48");
+const HOLDER: Address = address!("47ac0fb4f2d84898e4d9e7b4dab3c24507a6d503"); // a known whale
+
+fn build_calldata() -> Bytes {
+    balanceOfCall { account: HOLDER }.abi_encode().into()
+}
+\`\`\`
+
+## Step 2: Get the production provider's answer
+
+\`\`\`rust
+use alloy_eips::BlockId;
+use alloy_provider::{Provider, ProviderBuilder};
+use alloy_rpc_types::TransactionRequest;
+use alloy_network::TransactionBuilder;
+
+async fn provider_answer(
+    rpc_url: &str,
+    block: u64,
+    to: Address,
+    data: Bytes,
+) -> eyre::Result<(u64, Bytes)> {
+    let provider = ProviderBuilder::new().connect(rpc_url).await?;
+
+    let tx = TransactionRequest::default()
+        .with_to(to)
+        .with_input(data);
+
+    // Ground truth output via eth_call at the chosen block
+    let output = provider.call(&tx).block(BlockId::number(block)).await?;
+
+    // Ground truth gas via eth_estimateGas at the same block
+    let gas = provider.estimate_gas(&tx).block(BlockId::number(block)).await?;
+
+    Ok((gas, output))
+}
+\`\`\`
+
+Walk:
+
+- **\`eth_call\` returns the function's return bytes** without sending a transaction — exact same execution path the contract would use, just without persisting state changes.
+- **\`eth_estimateGas\` returns the gas units the call would consume.** Slightly higher than the actual minimum on-chain gas because it includes a safety buffer; for view calls (like \`balanceOf\`) the buffer is small.
+- **Both pinned to a specific \`block\`** — so when we run Revm against the same block's state, we're comparing apples to apples.
+
+> 🔍 **Find in repo.** Open [\`alloy_provider::Provider\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs). Note that \`call\` and \`estimate_gas\` are part of the same trait — when you swap providers (Infura → QuickNode → your own Reth node), nothing about your validation code changes. **That's the abstraction earning its keep.**
+
+## Step 3: Run the same call locally via Revm
+
+Same fork pattern as L1 / L7. Pin to the same block as Step 2:
+
+\`\`\`rust
+use alloy_provider::{network::Ethereum, DynProvider};
+use revm::{
+    context::TxEnv,
+    context_interface::result::{ExecutionResult, Output},
+    database::{AlloyDB, CacheDB},
+    database_interface::WrapDatabaseAsync,
+    primitives::TxKind,
+    Context, ExecuteEvm, MainBuilder, MainContext,
+};
+
+type ForkedDB = CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, DynProvider>>>;
+
+async fn revm_answer(
+    rpc_url: &str,
+    block: u64,
+    to: Address,
+    data: Bytes,
+) -> eyre::Result<(u64, Bytes)> {
+    let provider = ProviderBuilder::new().connect(rpc_url).await?.erased();
+    let alloy_db = WrapDatabaseAsync::new(AlloyDB::new(provider, BlockId::number(block)))
+        .ok_or_else(|| eyre::eyre!("AlloyDB init"))?;
+    let mut db = CacheDB::new(alloy_db);
+
+    let mut evm = Context::mainnet().with_db(&mut db).build_mainnet();
+
+    let tx = TxEnv::builder()
+        .caller(Address::ZERO)
+        .kind(TxKind::Call(to))
+        .data(data)
+        .gas_limit(10_000_000)
+        .build()?;
+
+    let result = evm.transact_one(tx)?;
+    match result.result {
+        ExecutionResult::Success { gas_used, output: Output::Call(out), .. } => {
+            Ok((gas_used, out.into()))
+        }
+        other => eyre::bail!("Revm execution did not succeed: {other:?}"),
+    }
+}
+\`\`\`
+
+Walk:
+
+- **\`AlloyDB::new(provider, BlockId::number(block))\`** pins the fork to the exact block the provider answered against. **Same input, same world.**
+- **\`Context::mainnet()\`** uses the mainnet hardfork rules. If the chain you're validating against is *not* mainnet (e.g., a custom L2), use the matching spec — Revm's \`Context\` builder lets you pick.
+- **\`Address::ZERO\` as caller** for view-style calls — no signature needed, just like an \`eth_call\` from a generic address.
+
+## Step 4: Diff
+
+\`\`\`rust
+async fn validate(rpc_url: &str, block: u64, to: Address, data: Bytes) -> eyre::Result<()> {
+    let (prod_gas, prod_out) = provider_answer(rpc_url, block, to, data.clone()).await?;
+    let (revm_gas, revm_out) = revm_answer(rpc_url, block, to, data).await?;
+
+    println!("== Output bytes ==");
+    println!("  provider: 0x{}", hex::encode(&prod_out));
+    println!("  revm:     0x{}", hex::encode(&revm_out));
+    if prod_out != revm_out {
+        eyre::bail!("OUTPUT MISMATCH");
+    }
+    println!("  ✅ match");
+
+    println!("== Gas ==");
+    println!("  provider: {prod_gas}");
+    println!("  revm:     {revm_gas}");
+    // Allow a small spread because eth_estimateGas includes a buffer (~10%).
+    let diff = prod_gas.abs_diff(revm_gas);
+    let allowance = (prod_gas / 10).max(5_000);
+    if diff > allowance {
+        eyre::bail!("GAS MISMATCH: diff {diff} > allowance {allowance}");
+    }
+    println!("  ✅ within allowance");
+
+    Ok(())
+}
+\`\`\`
+
+Walk:
+
+- **Output bytes are compared exactly.** A byte-level diff is the right contract — if your Revm version returns even a single byte different from the provider, downstream code that decodes the response will produce different values.
+- **Gas comparison allows a spread** because \`eth_estimateGas\` includes a buffer (often 10-20%) that Revm's exact gas accounting won't add. Compare order of magnitude, not exact equality.
+- **\`println!\` instead of fancy reporting** is fine for the kernel. Production wrappers use \`tracing::error!\` + a structured diff so failures are queryable in logs.
+
+> 🛑 **Anti-fluency check.** Without scrolling: explain in one sentence why the **byte-level output comparison is exact** but the **gas comparison is approximate**. Hint: think about what \`eth_estimateGas\` is *supposed* to do beyond what \`evm.transact_one\` measures.
+
+## Step 5: When they don't match — debug taxonomy
+
+Real validation runs find mismatches. Here's the diagnosis tree:
+
+| Symptom | Likely cause | Fix |
+| :--- | :--- | :--- |
+| **Output is consistently 0x or empty when it shouldn't be** | Revm spec mismatch (e.g., you built with \`Context::mainnet()\` but the chain is op-mainnet). | Match the chain spec: \`OpEvm\`, \`Context::op_mainnet()\`, etc. |
+| **Output differs only at a hardfork boundary** | Revm's hardfork-activation block disagrees with the chain. | Pin Revm's spec to the actual hardfork active at that block — see \`SpecId\` |
+| **Output differs only when the contract calls a precompile** | Custom precompile your Revm doesn't have (e.g., RIP-7212 secp256r1 active on some L2s). | Add the precompile to your Revm precompile registry (see L6). |
+| **Output flickers — sometimes match, sometimes don't, same input** | RPC caching. The provider returned a stale state from a different block. | Pin to a finalized block (subtract ~32 from latest), and re-run. |
+| **Gas mismatches by a constant offset** | Different intrinsic gas accounting (you skipped 21,000 base, or vice versa). | Reconcile: are you measuring just the call's gas or the full tx's gas? |
+| **Gas spreads with random variance** | Hot vs cold storage access. The provider may have warmer state due to recent calls. | Re-run after a clean cycle, or fork at a synthetic state where you control warm/cold. |
+
+Most divergences land in the top 3 rows in practice — chain-spec / hardfork / precompile mismatches.
+
+## What's missing for production-grade validation
+
+| Gap | What real validation harnesses do |
+| :--- | :--- |
+| **Sampling strategy** | Pick 1000 random historical txs over the last 7 days; validate all. Look for systematic drift. |
+| **State-diff comparison** | \`debug_traceTransaction\` with prestate + statediff modes gives byte-level state changes. Compare to Revm's journal entries. (Costly RPC; sample sparingly.) |
+| **Hardfork regression** | After upgrading Revm, re-validate around the last 5 hardfork blocks. New Revm versions sometimes change spec activations. |
+| **Custom-precompile awareness** | Your Revm setup must include every precompile the target chain has. RIP-7212, EIP-2537, custom op-stack precompiles, MEV-Share helper precompiles, etc. |
+| **CI integration** | Run validation as part of your CI pipeline. Fail merges if the diff allowance is exceeded. |
+| **Multi-provider cross-check** | Run the same validation against 2-3 providers (QuickNode, Infura, Alchemy). If providers disagree with each other, your validation is moot — pick one as source of truth. |
+| **Performance** | Caching the provider's answer + only re-validating changed lessons. Reduces RPC bill. |
+
+Build the kernel above, add the production-grade habits as your needs grow. Most teams start with a few hand-picked test cases and grow from there.
+
+## Drill
+
+1. **Historical tx replay.** Pick a real mainnet tx hash. Fetch its receipt → use the parent block as fork point → diff its receipt.gas_used against your Revm replay's gas_used. (1 hour)
+2. **Custom precompile case.** Pick an op-stack chain (Base, Optimism). Try to validate a tx that uses a precompile present on op-stack but not on mainnet (e.g., L1 block info precompile). Watch the failure mode. **What does the diff show?** (1 hour)
+3. **Sampling harness.** Wrap the validate function in a loop that walks the last 100 successful txs from a single contract (Uniswap V3 router is dense). Track pass/fail. **What's the failure rate? Is the failure pattern systematic or random?** (2 hours)
+4. **Multi-provider cross-check.** Run the same validation against QuickNode + Alchemy. If the two providers disagree on the same call at the same block, what does that say about your validation harness's underlying assumption? (1.5 hours)
+5. **CI wire-up.** Make the validation script exit-code 1 on any failure. Wire it into a GitHub Action that runs nightly against mainnet. Fail PRs that introduce >0.1% mismatch rate vs the baseline. (3 hours)
+
+Finish drill 5 and you have, structurally, the same continuous-validation discipline shipped at every serious Revm-based searcher / wallet / aggregator team. **The discipline is what separates "Revm code that works on my laptop" from "Revm code I trust in production."**
+
+> 🛑 **Final check.** In one sentence: why does building L1-L8 in this tier require **also** building this validation lesson? If your answer doesn't connect "Reth is ~7-12% of clients" to "your sim's correctness depends on agreeing with the 88-93% that aren't Reth," re-read the opening — that's the entire reason this lesson sits last in the tier.
+
+## 📺 Further watching
+
+\`\`\`youtube
+Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — the spec your Revm needs to follow exactly to match production
+\`\`\`
+
+---
+
+## You've finished the Building tier (now for real)
+
+Nine lessons covering everything from "I have an arbitrage idea" to "I can guarantee my Revm matches Geth in production":
+
+1. Minimal MEV searcher (mempool → fork-sim → arb)
+2. Reorg-aware Postgres indexer (ExEx + reorg dispatch)
+3. Custom RPC endpoint (jsonrpsee + extend_rpc_modules)
+4. Wallet backend (signer pool + nonce mgr + replace-on-stuck)
+5. EIP-7702 sponsor (Type 4 tx + paymaster pattern)
+6. Foundry-style cheatcode (custom precompile + harness)
+7. Swap aggregator (Revm fork + cross-venue quotes)
+8. Frontrun-resistant order router (capstone — integrates 1-7)
+9. **Cross-client validation harness (this lesson)** — turns the previous eight from "demos" into "production-trusted"
+
+Pick the build that maps to your target employer / project most closely. Open the production gaps. Ship as a small public repo. **That's the artifact you bring to the conversation.**
+`,
+                },
               ],
             },
           },

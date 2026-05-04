@@ -2901,6 +2901,279 @@ Drill 5 後、チューニング済み・観察可能に正しい frontrun-resis
 ターゲット雇用主 / プロジェクトに最も興味のあるものを選ぶ。Production ギャップを開く。小さな public リポとして ship。**それが Paradigm / Tempo / 真剣チーム との会話に持っていく artifact。**
 `,
                 },
+                {
+                  title: 'Revm シミュレーションを Production Provider で検証する',
+                  slug: 'build-validate-revm-ja',
+                  type: 'CONTENT',
+                  sortOrder: 8,
+                  duration: 50,
+                  xpReward: 90,
+                  content: `# Revm シミュレーションを Production Provider で検証する
+
+Beginner tier で「Reth は execution client シェアの ~7-12%」と学びました — Geth が依然として大半の production RPC コールを serve する。この非対称性が Revm ベースシステムには規律を要求します: **ローカル Revm fork が計算した結果は、(大半が Geth/Nethermind の) チェーンが同じ入力に対して計算するものと一致しなければならない。** 本レッスンはその検証ハーネスを ~200 行で構築します。
+
+> 📌 **スコープの正直な開示。** Revm を JSON-RPC provider に対して、単一トランザクションのガス + 戻り data で diff する。production 検証ハーネスはこれを拡張する: \`debug_traceTransaction\` の prestate による完全 state-diff 比較、数千の歴史的 tx に対する統計的サンプリング、ハードフォーク境界の回帰テスト、CI 統合。カーネル — *「一致する」とはどういう意味か、それを安価にどう確認するか?* — は同じ。
+
+## なぜこれが重要か (本当の理由)
+
+このティアの他の全レッスンは Revm の上に何かを build してきた。MEV searcher (L1) は arb の収益性を予測するのに Revm を使う; swap aggregator (L7) はクオート出力を計算するのに Revm を使う; capstone (L8) は frontrun リスクをスコアするのに Revm を使う。**Revm が mainnet (Geth) と異なる結果を計算したら、これらすべてのシステムが silently に誤った答えを生む。**
+
+規律は安価で、スキップのコストは現実。[Reth team のベンチマーキング哲学](https://www.paradigm.xyz/2024/04/reth-perf) より: 「mainnet 挙動からの逸脱はどれもバグ」。それが基準。
+
+\`\`\`mermaid
+flowchart LR
+    Tx["テストトランザクション<br/>(実 mainnet tx hash<br/>または fabricated call)"] --> Revm["Revm fork<br/>at parent block"]
+    Tx --> Prov["Provider<br/>(Infura / QuickNode<br/>= Geth or Reth backend)"]
+    Revm --> R1["gas_used + output"]
+    Prov --> R2["gas_used + output"]
+    R1 --> Diff["Diff"]
+    R2 --> Diff
+    Diff --> Pass["✅ identical"]
+    Diff --> Fail["❌ debug<br/>(hardfork? precompile?<br/>RPC caching?)"]
+\`\`\`
+
+> 🛑 **スクロール前に予測。** カスタム Revm セットアップが、非 mainnet ハードフォーク (例: mainnet が Osaka なのにチェーンがまだ Cancun ルール) で追加された opcode を実行する。それは **走らせている spec に対しては技術的に正しい** 結果を計算するが、mainnet と一致しない。この不一致が検証ハーネスでどう見えるか walk through。答えを保持。
+
+## Cargo.toml
+
+\`\`\`toml
+[package]
+name = "revm-cross-validation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alloy-eips         = "1.0"
+alloy-primitives   = "1.5"
+alloy-provider     = "1.0"
+alloy-network      = "1.0"
+alloy-rpc-types    = "1.0"
+alloy-sol-types    = "1.5"
+revm               = { version = "38", features = ["alloydb"] }
+tokio              = { version = "1", features = ["full"] }
+eyre               = "0.6"
+\`\`\`
+
+## Step 1: テストケースを選ぶ
+
+テストターゲットは 2 種類。両方使う:
+
+1. **歴史的 mainnet トランザクション** — 既に mine された tx を parent block でリプレイ。receipt が gas_used の ground truth、provider の \`eth_call\` が parent block での return data の ground truth。
+2. **現状 state に対する fabricated call** — contract + メソッド (例: \`USDC.balanceOf(some_holder)\`) を選び、provider \`eth_call\` と Revm fork で同じブロックで実行。provider のレスポンスが ground truth。
+
+Flavor 2 が始めるのに簡単 (歴史的 RPC 不要) なので、それを構築。Flavor 1 は drill で。
+
+\`\`\`rust
+use alloy_primitives::{address, Address, Bytes, U256};
+use alloy_sol_types::{sol, SolCall};
+
+sol! {
+    function balanceOf(address account) external view returns (uint256);
+}
+
+const USDC: Address = address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48");
+const HOLDER: Address = address!("47ac0fb4f2d84898e4d9e7b4dab3c24507a6d503"); // known whale
+
+fn build_calldata() -> Bytes {
+    balanceOfCall { account: HOLDER }.abi_encode().into()
+}
+\`\`\`
+
+## Step 2: Production provider の答えを取る
+
+\`\`\`rust
+use alloy_eips::BlockId;
+use alloy_provider::{Provider, ProviderBuilder};
+use alloy_rpc_types::TransactionRequest;
+use alloy_network::TransactionBuilder;
+
+async fn provider_answer(
+    rpc_url: &str,
+    block: u64,
+    to: Address,
+    data: Bytes,
+) -> eyre::Result<(u64, Bytes)> {
+    let provider = ProviderBuilder::new().connect(rpc_url).await?;
+
+    let tx = TransactionRequest::default()
+        .with_to(to)
+        .with_input(data);
+
+    // 選んだブロックでの eth_call による出力 ground truth
+    let output = provider.call(&tx).block(BlockId::number(block)).await?;
+
+    // 同ブロックでの eth_estimateGas によるガス ground truth
+    let gas = provider.estimate_gas(&tx).block(BlockId::number(block)).await?;
+
+    Ok((gas, output))
+}
+\`\`\`
+
+Walk:
+
+- **\`eth_call\` は関数の return bytes を返す**、トランザクションを送らずに — contract が使うのと正確に同じ実行パス、ただし state を永続化しない。
+- **\`eth_estimateGas\` は call が消費するガス単位を返す。** 実 on-chain ガスより少し高い (safety buffer 含む); view 呼び出し (\`balanceOf\` 等) では buffer は小さい。
+- **両方とも特定の \`block\` にピン留め** — Revm を同じブロックの state に対して走らせれば、apple to apple で比較できる。
+
+> 🔍 **リポで探す。** [\`alloy_provider::Provider\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) を開く。\`call\` と \`estimate_gas\` が同じ trait の一部 — provider を切り替えると (Infura → QuickNode → 自前 Reth ノード) 、検証コードに何も変更がいらない。**それが抽象化が稼いでる対価。**
+
+## Step 3: 同じ call をローカルで Revm 経由で走らせる
+
+L1 / L7 と同じ fork パターン。Step 2 と同じブロックにピン:
+
+\`\`\`rust
+use alloy_provider::{network::Ethereum, DynProvider};
+use revm::{
+    context::TxEnv,
+    context_interface::result::{ExecutionResult, Output},
+    database::{AlloyDB, CacheDB},
+    database_interface::WrapDatabaseAsync,
+    primitives::TxKind,
+    Context, ExecuteEvm, MainBuilder, MainContext,
+};
+
+type ForkedDB = CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, DynProvider>>>;
+
+async fn revm_answer(
+    rpc_url: &str,
+    block: u64,
+    to: Address,
+    data: Bytes,
+) -> eyre::Result<(u64, Bytes)> {
+    let provider = ProviderBuilder::new().connect(rpc_url).await?.erased();
+    let alloy_db = WrapDatabaseAsync::new(AlloyDB::new(provider, BlockId::number(block)))
+        .ok_or_else(|| eyre::eyre!("AlloyDB init"))?;
+    let mut db = CacheDB::new(alloy_db);
+
+    let mut evm = Context::mainnet().with_db(&mut db).build_mainnet();
+
+    let tx = TxEnv::builder()
+        .caller(Address::ZERO)
+        .kind(TxKind::Call(to))
+        .data(data)
+        .gas_limit(10_000_000)
+        .build()?;
+
+    let result = evm.transact_one(tx)?;
+    match result.result {
+        ExecutionResult::Success { gas_used, output: Output::Call(out), .. } => {
+            Ok((gas_used, out.into()))
+        }
+        other => eyre::bail!("Revm execution did not succeed: {other:?}"),
+    }
+}
+\`\`\`
+
+Walk:
+
+- **\`AlloyDB::new(provider, BlockId::number(block))\`** が fork を provider が答えた正確なブロックにピン。**同じ入力、同じ世界。**
+- **\`Context::mainnet()\`** が mainnet ハードフォークルールを使う。検証対象のチェーンが mainnet *ではない* なら (例: カスタム L2)、それに合致する spec を使う — Revm の \`Context\` builder は選択可能。
+- **caller を \`Address::ZERO\`** view-style call には署名不要、generic アドレスからの \`eth_call\` と同じ。
+
+## Step 4: Diff
+
+\`\`\`rust
+async fn validate(rpc_url: &str, block: u64, to: Address, data: Bytes) -> eyre::Result<()> {
+    let (prod_gas, prod_out) = provider_answer(rpc_url, block, to, data.clone()).await?;
+    let (revm_gas, revm_out) = revm_answer(rpc_url, block, to, data).await?;
+
+    println!("== Output bytes ==");
+    println!("  provider: 0x{}", hex::encode(&prod_out));
+    println!("  revm:     0x{}", hex::encode(&revm_out));
+    if prod_out != revm_out {
+        eyre::bail!("OUTPUT MISMATCH");
+    }
+    println!("  ✅ match");
+
+    println!("== Gas ==");
+    println!("  provider: {prod_gas}");
+    println!("  revm:     {revm_gas}");
+    // eth_estimateGas に buffer (~10%) があるので少しの spread を許容
+    let diff = prod_gas.abs_diff(revm_gas);
+    let allowance = (prod_gas / 10).max(5_000);
+    if diff > allowance {
+        eyre::bail!("GAS MISMATCH: diff {diff} > allowance {allowance}");
+    }
+    println!("  ✅ within allowance");
+
+    Ok(())
+}
+\`\`\`
+
+Walk:
+
+- **出力 bytes は完全一致で比較。** byte レベル diff が正しい契約 — Revm 版が provider と 1 byte でも違う bytes を返したら、レスポンスを decode する下流コードが違う値を生む。
+- **ガス比較は spread を許容**、\`eth_estimateGas\` には Revm の正確なガス計算が加えない buffer (大抵 10-20%) が含まれるから。完全 equality ではなく order of magnitude を比較。
+- **\`println!\` でカーネルとしては OK。** Production wrapper は \`tracing::error!\` + 構造化 diff でログから query 可能にする。
+
+> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで、なぜ **byte レベル出力比較は完全** で、**ガス比較は近似** か一文で。ヒント: \`eth_estimateGas\` が \`evm.transact_one\` が測ること以上に何を *すべき* かを考えて。
+
+## Step 5: 一致しないとき — debug 分類
+
+実 validation 実行は不一致を見つける。診断ツリー:
+
+| 症状 | 想定原因 | 修正 |
+| :--- | :--- | :--- |
+| **本来非ゼロのはずの出力が一貫して 0x or 空** | Revm の spec が違う (例: \`Context::mainnet()\` で構築したがチェーンは op-mainnet) | チェーン spec に合わせる: \`OpEvm\`、\`Context::op_mainnet()\` 等 |
+| **ハードフォーク境界でだけ出力が違う** | Revm のハードフォーク有効化ブロックがチェーンと不一致 | Revm の spec をそのブロックでアクティブな実ハードフォークにピン留め — \`SpecId\` 参照 |
+| **contract が precompile を呼ぶときだけ出力が違う** | Revm にないカスタム precompile (例: いくつかの L2 でアクティブな RIP-7212 secp256r1) | precompile を Revm precompile registry に追加 (L6 参照) |
+| **出力がフリッカーする — 同じ入力で時々一致、時々違う** | RPC キャッシング。provider が違うブロックの古い state を返した | 確定ブロック (latest から ~32 引いた) にピン、再実行 |
+| **ガスが固定オフセットでずれる** | intrinsic gas accounting が違う (21,000 base をスキップした、あるいは逆) | 整合: 測ってるのは call のガスだけか、tx 全体のガスか? |
+| **ガスがランダムにばらつく** | hot vs cold ストレージアクセス。provider が直近 call で warm state を持っている | clean サイクル後に再実行、または warm/cold 制御可能な合成 state で fork |
+
+実用上、上位 3 行に大半が落ちる — チェーン spec / ハードフォーク / precompile mismatch。
+
+## Production レベル validation に足りないもの
+
+| ギャップ | 実 validation ハーネスが何をしているか |
+| :--- | :--- |
+| **サンプリング戦略** | 直近 7 日のランダム歴史的 tx を 1000 件; 全部 validate。系統的 drift を見つける |
+| **State-diff 比較** | \`debug_traceTransaction\` の prestate + statediff モードで byte レベル state 変化を取得。Revm の journal entry と比較 (高コスト RPC、サンプリング sparse に) |
+| **ハードフォーク regression** | Revm 更新後、直近 5 ハードフォークブロック周辺で再 validate。新 Revm version は spec activation を変えることがある |
+| **カスタム precompile awareness** | Revm セットアップは対象チェーンの全 precompile を含む必要がある。RIP-7212、EIP-2537、カスタム op-stack precompile、MEV-Share helper precompile 等 |
+| **CI 統合** | validation を CI パイプラインに含める。diff allowance 超過なら merge を fail |
+| **Multi-provider クロスチェック** | 同じ validation を 2-3 provider (QuickNode、Infura、Alchemy) に対して走らせる。provider 同士が同意しないなら、validation の前提が崩れる — どれかを source of truth に選ぶ |
+| **Performance** | provider の答えをキャッシュ + 変更 lesson のみ再 validation。RPC bill 削減 |
+
+上記カーネルを作って、production-grade な習慣はニーズに合わせて足す。大半のチームは少数の手選びテストケースから始めて成長させる。
+
+## Drill
+
+1. **歴史的 tx replay。** 実 mainnet tx hash を選ぶ。receipt 取得 → parent block を fork point に → receipt.gas_used を Revm replay の gas_used と diff。(1 時間)
+2. **カスタム precompile ケース。** op-stack チェーン (Base、Optimism) を選ぶ。op-stack にあるが mainnet にない precompile を使う tx (例: L1 block info precompile) の validation を試みる。失敗モードを観察。**diff は何を示す?** (1 時間)
+3. **サンプリングハーネス。** validate 関数を、単一 contract (Uniswap V3 router は trafficが多い) の直近 100 個の成功 tx を walk するループで wrap。pass/fail を track。**失敗率は? 失敗パターンは系統的かランダムか?** (2 時間)
+4. **Multi-provider クロスチェック。** 同じ validation を QuickNode + Alchemy に対して走らせる。両者が同じブロックの同じ call で同意しないなら、validation ハーネスの前提について何が言えるか? (1.5 時間)
+5. **CI wire-up。** 任意の失敗で exit-code 1 になるよう validation スクリプトを修正。GitHub Action に組み込んで mainnet に対し nightly 実行。baseline vs >0.1% 不一致率を導入する PR を fail に。(3 時間)
+
+Drill 5 を完成させれば、構造的に全 serious Revm-based searcher / wallet / aggregator チームが ship する継続検証規律と同じものができる。**「ラップトップで動く Revm コード」と「production で信頼する Revm コード」を分ける規律。**
+
+> 🛑 **最終チェック。** 一文で: なぜこのティアで L1-L8 を build することは、**同時に** この validation lesson を build することを要求するのか? 答えに「Reth が ~7-12% のクライアントシェア」と「sim の正しさは Reth ではない 88-93% との一致に依存する」が繋がってないなら、冒頭を読み直し — それがこの lesson が tier 最後にいる全理由。
+
+## 📺 関連動画
+
+\`\`\`youtube
+Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が production と一致するために従う必要のある spec
+\`\`\`
+
+---
+
+## Building tier 完走 (今度こそ本当に)
+
+「arb のアイデアがある」から「Revm が production の Geth と一致することを保証できる」まで網羅する 9 lesson:
+
+1. 最小 MEV searcher (mempool → fork-sim → arb)
+2. Reorg-aware Postgres indexer (ExEx + reorg ディスパッチ)
+3. カスタム RPC エンドポイント (jsonrpsee + extend_rpc_modules)
+4. Wallet backend (signer pool + nonce mgr + replace-on-stuck)
+5. EIP-7702 sponsor (Type 4 tx + paymaster パターン)
+6. Foundry スタイル cheatcode (custom precompile + ハーネス)
+7. Swap aggregator (Revm fork + venue 横断 quote)
+8. Frontrun-resistant order router (capstone — 1-7 統合)
+9. **Cross-client validation harness (本レッスン)** — 上記 8 本を「デモ」から「production-trusted」へ
+
+ターゲット雇用主 / プロジェクトに最も近い build を選ぶ。Production gaps を開ける。小さな public リポとして ship。**それが会話に持っていく artifact。**
+`,
+                },
               ],
             },
           },
