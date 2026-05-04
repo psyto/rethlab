@@ -112,6 +112,25 @@ graph TD
 - **ExEx (Execution Extensions)** で実行ループにフックして拡張
 - 独自のApp-chainの基盤として使う
 
+## EVM クライアント市場での Reth の位置
+
+Reth は **唯一の Ethereum execution client ではない** — まだ支配的でもない。[clientdiversity.org](https://clientdiversity.org/) (2026 年 5 月時点) より:
+
+| クライアント | 概算シェア | 言語 |
+| :--- | :--- | :--- |
+| **Geth** | ~50% | Go |
+| **Nethermind** | ~25% | C# |
+| **Besu** | ~9% | Java |
+| **Reth** | **~7-12%** | **Rust** |
+| **Erigon** | ~7% | Go |
+
+ここから 2 つの結論:
+
+1. **Reth は emerging で、支配的ではない。** 2023 年リリース時の <1% から 3 年で ~7-12% まで成長 — 早い軌道だが、Geth が依然として mainnet RPC コールの大半を serve している。**production であなたが書く Alloy コードは大半 Geth-served なチェーンと話す。** これは問題ない — Alloy は JSON-RPC 経由でどの execution client とも話せる。
+2. **Revm ベースのシミュレーションは production クライアントが行うことと一致する必要がある。** ローカル Revm fork でトランザクションを実行 (Advanced + Building tier で使うパターン)、その結果は同じトランザクションを Geth や Nethermind が処理するのと一致するはず。普通は動く — Revm は EVM 仕様に従うから — ただし **Revm を non-Revm provider に対して検証する** 規律は production の必須事項。Building tier capstone で扱う。
+
+なので「Rust EVM スタック」は **emerging + extensible** と読むべき、「勝者総取り」ではなく。Paradigm + Hyperliquid + Tempo が Reth/Revm の上に build する理由は、市場シェアではなくそれが可能にすること (modularity、embeddability、performance)。
+
 ## 学習の順番
 
 > **Alloy → Revm → Reth**
