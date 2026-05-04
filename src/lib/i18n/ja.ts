@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Hyperliquid はその上で動く。Tempo はその上でローンチした。Paradigm が作った — Reth、Revm、Foundry、Alloy。本気のクリプトインフラが今 ship されているスタックです。それを読めるエンジニアはまだ希少。RethLab は本物のソースを行単位で walk through — そして 8 本の動くアプリを end-to-end で build、frontrun-resistant order router を capstone に。',
+      subtitle: 'Hyperliquid はその上で動く。Tempo はその上でローンチした。Paradigm が作った — Reth、Revm、Foundry、Alloy。emerging な Rust EVM スタックは execution client シェアまだ ~7-12% (Geth ~50%) だが急速に成長中、それを読めるエンジニアはまだ希少。RethLab は本物のソースを行単位で walk through — そして 9 本の動くアプリを end-to-end で build、frontrun-resistant order router と cross-client validation harness を capstone に。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -368,7 +368,7 @@ export const ja: TranslationKeys = {
     loadCourse: 'コースの読み込みに失敗しました。もう一度お試しください。',
   },
   page: {
-    launchBanner: 'Free · Reth・Revm・Alloy・Foundry — Hyperliquid、Tempo、Paradigm が ship する Rust スタック',
+    launchBanner: 'Free · emerging な Rust EVM スタック — Hyperliquid・Tempo・Paradigm が ship するもの',
     whyRethLab: {
       title: 'なぜRethLab？',
     },

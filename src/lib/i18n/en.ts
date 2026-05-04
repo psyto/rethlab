@@ -39,7 +39,7 @@ export const en = {
   landing: {
     hero: {
       title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. The Rust EVM stack is where serious crypto infrastructure is being shipped today, and the engineers who can read it are scarce. RethLab walks you through that source line by line — then has you build eight working apps end to end, capstoning in a frontrun-resistant order router.',
+      subtitle: 'Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. The emerging Rust EVM stack is still ~7-12% of execution clients (vs Geth ~50%) but growing fast, and the engineers who can read it are scarce. RethLab walks you through that source line by line — then has you build nine working apps end to end, capstoning in a frontrun-resistant order router and a cross-client validation harness.',
       cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -366,7 +366,7 @@ export const en = {
     loadCourse: 'Failed to load course. Please try again.',
   },
   page: {
-    launchBanner: 'Free · Reth, Revm, Alloy, Foundry — the stack Hyperliquid, Tempo, and Paradigm ship on',
+    launchBanner: 'Free · The emerging Rust EVM stack — what Hyperliquid, Tempo, and Paradigm ship on',
     whyRethLab: {
       title: 'Why RethLab?',
     },
