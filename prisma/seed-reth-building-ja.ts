@@ -1043,7 +1043,7 @@ Walk:
 2. **gas price (post-EIP-1559) でバケット化。** priority-fee バケット化を effective-gas-price バケット化に置き換える (\`base_fee + priority_fee\`、\`max_fee_per_gas\` で cap)。base fee を provider から取得する必要あり。**\`ctx\` は何を公開している?** (30分)
 3. **メソッドを auth-gate。** \`txpoolPlus_pendingByGasBucket\` を engine \`AUTH_SECRET\` を提示しない呼び出しは reject する。(ヒント: Reth の debug メソッドがどうやってるか見る) (45分)
 4. **スナップショットの新鮮さ。** レスポンスにスナップショットごとのタイムスタンプ + monotonic ブロック高を追加。\`ctx.provider().best_block_number()\` が 2 つ目の真の source。(30分)
-5. **クロスティア統合。** このティアの lesson 1 の MEV searcher が \`txpoolPlus_pendingByGasBucket\` を query して 90 パーセンタイル超えで自分の入札を設定できる。\`jsonrpsee::http_client\` を使ってこれをやる Rust クライアントを追加。(2時間)
+5. **クロスティア統合。** このティアの [lesson 1](/courses/reth-building-ja/lessons/build-mev-searcher-ja) の MEV searcher が \`txpoolPlus_pendingByGasBucket\` を query して 90 パーセンタイル超えで自分の入札を設定できる。\`jsonrpsee::http_client\` を使ってこれをやる Rust クライアントを追加。(2時間)
 
 Drill 5 を完成させればループが閉じる: ノード固有の insight を typed RPC として公開するノード、その insight を mempool で勝つために使う別 Rust プロセスが consume する。**そのラウンドトリップ — カスタム RPC 経由の observability、別 consumer 経由の挙動 — は本物の searcher / market-maker スタックがどう組織されているか。**
 
@@ -1738,7 +1738,7 @@ pub async fn submit_and_track<P: WalletProvider + Provider>(
 Walk:
 
 - **\`provider.send_transaction(req)\`** — Alloy が provider に attach された wallet (sponsor 鍵) で署名 + broadcast。\`req\` は既に \`from = sponsor.address()\` を持つので wallet 機構が正しい鍵を選ぶ。
-- **wallet-backend lesson の watcher パターンがここでも適用できる。** 30 秒 deadline + stuck tx の bumped fee で production 級になる。明瞭性のため省略; ほしければ lesson 4 の watcher をコピペで。
+- **wallet-backend lesson の watcher パターンがここでも適用できる。** 30 秒 deadline + stuck tx の bumped fee で production 級になる。明瞭性のため省略; ほしければ [lesson 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) の watcher をコピペで。
 
 ## Step 4: HTTP サービスとして組み立て
 
@@ -1820,7 +1820,7 @@ async fn main() -> eyre::Result<()> {
 | **Authorization 検証** | \`signed_auth.recover_authority()\` が claim された user と一致するかを decode + 検証する (ガス支払い前に)。本サービスは入力を信頼; production はチェックする |
 | **Replay 保護** | tx 後にユーザの nonce が変わる; 提出 *前* に authorization の nonce が現在の EOA nonce と一致するかチェック。古い authorization は同期的に reject すべき |
 | **支出制限** | ユーザ単位日次 cap。Call ごとの value cap。Delegate アドレスの allowlist。(あなたがガスを払う; 誰のために sponsor するかはあなたが決める) |
-| **Watcher** | Lesson 4 の replace-on-stuck ロジック。EIP-7702 tx は同じ mempool を通る; bump パターンは同一 |
+| **Watcher** | [Lesson 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) の replace-on-stuck ロジック。EIP-7702 tx は同じ mempool を通る; bump パターンは同一 |
 | **マルチユーザバッチング** | 1 つの tx で \`auth_list = [Alice's auth, Bob's auth, Carol's auth]\` + \`multicall\` スタイルの delegate call。ユーザ単位ガス償却が低くなる |
 | **ガス sponsor 会計** | ユーザごとの支出量を track; \`/balance\` endpoint を公開; Stripe / オンチェーン入金 / アプリ subscription で refill |
 | **Delegate バージョンピン留め** | 特定の delegate アドレス (audit 済みセット) のみ許可。未知の delegate への authorization は reject — 悪意の可能性 |
@@ -1834,7 +1834,7 @@ async fn main() -> eyre::Result<()> {
 2. **Nonce 新鮮度チェック。** 提出前に現在のユーザ nonce を fetch、authorization の \`nonce\` と一致するか検証。(15分)
 3. **マルチユーザバッチング。** \`/sponsor\` を \`(user, user_authorization, calls)\` トリプルのリストを受け取るよう変更。全 authorization + multicall delegate call を持つ 1 tx を構築。**1 ユーザの auth が batch 中で invalid だったら最悪何が起きる?** (1.5時間)
 4. **支出 cap。** \`HashMap<Address, U256>\` でユーザ単位ガス支出を track。設定可能な日次上限を超えるリクエストは reject。(45分)
-5. **Replace-on-stuck。** Lesson 4 の watcher を持ってきて統合する。(30分 — パターンを理解していれば大半コピペ)
+5. **Replace-on-stuck。** [Lesson 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) の watcher を持ってきて統合する。(30分 — パターンを理解していれば大半コピペ)
 
 Drill 5 を完成させれば内部アプリ用の sponsor サービスが ready。SDK + 支出ポリシー + observability を足せば Privy スタイルの開発者体験を ship している。
 
@@ -2009,7 +2009,7 @@ fn run_measure_gas(target: Address, data: Vec<u8>, gas_limit: u64) -> Result<u64
 
 Walk:
 
-- **\`Context::mainnet().with_db(&mut db).build_mainnet()\`** — Lesson 1 (MEV searcher) で使った同じ builder。cheatcode は EVM-on-EVM な小型版。**Revm を 1 回走らせれば、全部走らせたことになる。**
+- **\`Context::mainnet().with_db(&mut db).build_mainnet()\`** — [Lesson 1 (MEV searcher)](/courses/reth-building-ja/lessons/build-mev-searcher-ja) で使った同じ builder。cheatcode は EVM-on-EVM な小型版。**Revm を 1 回走らせれば、全部走らせたことになる。**
 - **3 つの結果バリアント全部が \`gas_used\` を返す** — Success、Revert、Halt。revert した tx もガスを消費した。実数を返し、テスト作者が何をカウントするかを決める。
 - **\`db = EmptyDB\` は本レッスンの簡素化。** 本物の Foundry cheatcode は custom Inspector hook 経由で親テスト EVM と state を共有する (\`vm.deal()\` は親テストが見る balance を mutate する必要があるから)。Drill 3 で扱う。
 
@@ -2248,7 +2248,7 @@ async fn build_fork() -> eyre::Result<ForkedDB> {
 }
 \`\`\`
 
-Lesson 1 (MEV searcher) と同じ — それが要点。**同じ fork パターンがあちこちで現れる; 1 つ作れたら、全部作れる。**
+[Lesson 1 (MEV searcher)](/courses/reth-building-ja/lessons/build-mev-searcher-ja) と同じ — それが要点。**同じ fork パターンがあちこちで現れる; 1 つ作れたら、全部作れる。**
 
 ## Step 2: V2 pool reserve を読む
 
@@ -2320,7 +2320,7 @@ fn call_view<C: SolCall>(
 
 Walk:
 
-- **Lesson 5 の \`read_reserves\` で行ったのと同じ EVM call** — 任意の \`SolCall\` で動く \`call_view\` ヘルパに一般化。**再利用が積み重なる**、構築が進むに連れて。
+- **[Lesson 1 (MEV searcher)](/courses/reth-building-ja/lessons/build-mev-searcher-ja) の \`read_reserves\` で行ったのと同じ EVM call** — 任意の \`SolCall\` で動く \`call_view\` ヘルパに一般化。**再利用が積み重なる**、構築が進むに連れて。
 - **\`token0\` lookup が必要なのはどちらがどちらかわからないから。** Pool は address でソートされる; トークンによって、"reserve_in" は reserve0 か reserve1 のどちらにマップする。**スキップするとクオート数学が半分の時間で逆さま。**
 - **\`fee_bps\` が V2 ファミリーをパラメタ化する。** Uniswap V2: 30 bps (0.3%)。Sushi: 同じく 30 bps。古い Mooniswap、独自 fork: 5〜100 bps のどこでも。**同じコード、違うパラメータ。**
 
@@ -2472,7 +2472,7 @@ async fn main() -> eyre::Result<()> {
 | **ガス考慮** | 各 quote から推定ガスコスト (out-token 単位) を引く。$100 swap で 50¢ 追加ガスを払うなら 0.1% 良い価格は無価値 |
 | **Price-impact 閾値** | pool を X% 超え動かすルートは reject — 低流動性 venue の MEV sandwich 対策 |
 | **submission 時 re-quote** | Fork はブロック N での state、swap はブロック N+k で着地。state drift を捕まえるために submission 直前に re-quote |
-| **MEV 保護** | Flashbots Protect / MEV-Share 経由で submit して frontrunner にルートを事前に見せない (Lesson 8 — Capstone — がこれをやる) |
+| **MEV 保護** | Flashbots Protect / MEV-Share 経由で submit して frontrunner にルートを事前に見せない ([Lesson 8 — Capstone](/courses/reth-building-ja/lessons/build-capstone-router-ja) がこれをやる) |
 
 書いたアーキテクチャ — 1 回 fork、reserve を atomic に読む、venue ごとに quote 計算、勝者を選ぶ — **1inch と Paraswap が内部 pricing layer をどう shape するか正確そのもの**。彼らはスケール、より多い venue、より良いルーティング最適化を加える。カーネルは同一。
 
@@ -2482,9 +2482,9 @@ async fn main() -> eyre::Result<()> {
 2. **ガス会計。** 各 quote から推定ガスコストを引く (\`evm.estimate_gas\` をハイポセティカル swap に使う)。「best」ルートはいま \`amount_out − gas_cost_in_out_token\` を最大化するルートのはず。(2時間)
 3. **マルチホップ探索。** 2-hop 探索を構築: A → WETH → B。WETH 経由の各候補に対して、連鎖 quote を計算、直接ルートと比較。(3時間)
 4. **Split routing。** トップ 2 venue の 50/50 split を実装、合計 output が単独より大きいかチェック。(2時間)
-5. **クロスティア:** aggregator を wallet backend (Lesson 4) に \`POST /quote-and-swap\` として wire、submission 用 signed tx を返す。(3時間)
+5. **クロスティア:** aggregator を wallet backend ([Lesson 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja)) に \`POST /quote-and-swap\` として wire、submission 用 signed tx を返す。(3時間)
 
-Drill 5 を完成させれば、構造的に aggregator-as-a-service ができる。MEV 保護 (Lesson 8) を plug in すれば、2023 年に出荷されたものと同等水準。
+Drill 5 を完成させれば、構造的に aggregator-as-a-service ができる。MEV 保護 ([Lesson 8](/courses/reth-building-ja/lessons/build-capstone-router-ja)) を plug in すれば、2023 年に出荷されたものと同等水準。
 
 > 🛑 **最終チェック。** 一文で: なぜ aggregator にとって **forking** が **N 並列 \`eth_call\`** より厳密に優れているか? 答えに「全 read 横断の atomic state」がないなら、Step 1 を読み直し — その atomicity が比較を健全にする。
 
@@ -2547,11 +2547,11 @@ flowchart TB
 
 | コンポーネント | 出典 | ここで新規なもの |
 | :--- | :--- | :--- |
-| **DEX 横断クオート** | L7 | そのまま再利用 |
-| **Mempool 監視** | L1 (searcher の入力!) | 防御として再利用 — opportunity ではなく敵候補を見つける |
-| **Revm fork シミュレーション** | L1 | 「この敵 tx はユーザを傷つけるか?」をスコアするのに使用 |
-| **EIP-7702 sponsor** | L5 | パスに統合してユーザがガスを払わないよう |
-| **Wallet backend submission + replace** | L4 | public-mempool パスに使用 |
+| **DEX 横断クオート** | [L7](/courses/reth-building-ja/lessons/build-swap-aggregator-ja) | そのまま再利用 |
+| **Mempool 監視** | [L1](/courses/reth-building-ja/lessons/build-mev-searcher-ja) (searcher の入力!) | 防御として再利用 — opportunity ではなく敵候補を見つける |
+| **Revm fork シミュレーション** | [L1](/courses/reth-building-ja/lessons/build-mev-searcher-ja) | 「この敵 tx はユーザを傷つけるか?」をスコアするのに使用 |
+| **EIP-7702 sponsor** | [L5](/courses/reth-building-ja/lessons/build-7702-sponsor-ja) | パスに統合してユーザがガスを払わないよう |
+| **Wallet backend submission + replace** | [L4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) | public-mempool パスに使用 |
 | **Private orderflow submission** | NEW | Flashbots Protect / MEV-Share 統合 |
 | **決定ロジック (route + risk → submission パス)** | NEW | Capstone の貢献部分 |
 

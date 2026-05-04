@@ -1044,7 +1044,7 @@ The architecture you wrote — define trait, impl with component access, registe
 2. **Bucket by gas price (post-EIP-1559).** Replace priority-fee bucketing with effective-gas-price bucketing (\`base_fee + priority_fee\`, capped at \`max_fee_per_gas\`). Need to fetch base fee from the provider. **What does \`ctx\` expose to get it?** (30 min)
 3. **Auth-gate the method.** Make \`txpoolPlus_pendingByGasBucket\` reject calls that don't present the engine \`AUTH_SECRET\`. (Hint: look at how Reth's debug methods do this.) (45 min)
 4. **Snapshot freshness.** Add a per-snapshot timestamp + monotonic block height to the response. \`ctx.provider().best_block_number()\` is the second source of truth. (30 min)
-5. **Cross-tier integration.** The MEV searcher in lesson 1 of this tier could query \`txpoolPlus_pendingByGasBucket\` to set its own bid above the 90th percentile. Add a Rust client that does exactly that, using \`jsonrpsee::http_client\`. (2 hours)
+5. **Cross-tier integration.** The MEV searcher in [lesson 1](/courses/reth-building-en/lessons/build-mev-searcher-en) of this tier could query \`txpoolPlus_pendingByGasBucket\` to set its own bid above the 90th percentile. Add a Rust client that does exactly that, using \`jsonrpsee::http_client\`. (2 hours)
 
 Finish drill 5 and you've closed the loop: a node that exposes node-only insight as a typed RPC, consumed by a separate Rust process that uses that insight to compete in the mempool. **That round trip — observability via custom RPC, behavior via a separate consumer — is how real searcher / market-maker stacks are organized.**
 
@@ -1739,7 +1739,7 @@ pub async fn submit_and_track<P: WalletProvider + Provider>(
 Walk:
 
 - **\`provider.send_transaction(req)\`** — Alloy signs with the wallet attached to the provider (your sponsor key) and broadcasts. \`req\` already has \`from = sponsor.address()\`, so the wallet machinery picks the right key.
-- **The watcher pattern from the wallet-backend lesson applies here too.** A 30-second deadline + bumped fee on stuck txs would make this production-grade. We omit it for clarity; copy/paste the watcher from lesson 4 if you want it.
+- **The watcher pattern from the wallet-backend lesson applies here too.** A 30-second deadline + bumped fee on stuck txs would make this production-grade. We omit it for clarity; copy/paste the watcher from [lesson 4](/courses/reth-building-en/lessons/build-wallet-backend-en) if you want it.
 
 ## Step 4: Wire it together as an HTTP service
 
@@ -1821,7 +1821,7 @@ Whole service: ~200 LOC including the imports and the helper module. The fronten
 | **Authorization validation** | Decode + verify \`signed_auth.recover_authority()\` matches the claimed user before paying. We trust the input; production checks. |
 | **Replay protection** | The user's nonce changes after this tx; check the authorization's nonce equals the current EOA nonce *before* submitting. Stale authorizations should be rejected synchronously. |
 | **Spending limits** | Per-user daily caps. Per-call value caps. Allowlist of delegate addresses. (You pay the gas; you decide who you'll sponsor for.) |
-| **Watcher** | Lesson 4's replace-on-stuck logic. EIP-7702 txs go through the same mempool; the bumping pattern is identical. |
+| **Watcher** | [Lesson 4](/courses/reth-building-en/lessons/build-wallet-backend-en)'s replace-on-stuck logic. EIP-7702 txs go through the same mempool; the bumping pattern is identical. |
 | **Multi-user batching** | One tx with \`auth_list = [Alice's auth, Bob's auth, Carol's auth]\` and a \`multicall\` style delegate call. Lower per-user gas amortization. |
 | **Gas sponsorship accounting** | Track how much you've spent per user; expose a \`/balance\` endpoint; refill via Stripe / on-chain top-ups / app subscription. |
 | **Delegate version pinning** | Allow only specific delegate addresses (your audited set). Reject authorizations to unknown delegates — they could be malicious. |
@@ -1835,7 +1835,7 @@ The architecture you wrote — accept signed authorization + intent, wrap in Typ
 2. **Check nonce freshness.** Before submitting, fetch the user's current nonce and verify it equals the authorization's \`nonce\`. (15 min)
 3. **Multi-user batching.** Change \`/sponsor\` to accept a list of \`(user, user_authorization, calls)\` triples. Build one tx with all authorizations and a multicall delegate call. **What's the worst case if one user's auth is invalid mid-batch?** (1.5 hours)
 4. **Spending cap.** Track per-user gas spent in a \`HashMap<Address, U256>\`. Reject sponsoring requests that would exceed a configurable per-day limit. (45 min)
-5. **Replace-on-stuck.** Lift the watcher from lesson 4 and integrate it. (30 min — mostly copy/paste once you understand the pattern.)
+5. **Replace-on-stuck.** Lift the watcher from [lesson 4](/courses/reth-building-en/lessons/build-wallet-backend-en) and integrate it. (30 min — mostly copy/paste once you understand the pattern.)
 
 Finish drill 5 and you have a sponsor service ready for an internal app. Add SDK + spending policy + observability and you're shipping the Privy-style developer experience.
 
@@ -2010,7 +2010,7 @@ fn run_measure_gas(target: Address, data: Vec<u8>, gas_limit: u64) -> Result<u64
 
 Walk:
 
-- **\`Context::mainnet().with_db(&mut db).build_mainnet()\`** — same builder you used in Lesson 1 (MEV searcher). The cheatcode is a tiny EVM-on-EVM. **Once you've run one Revm, you've run them all.**
+- **\`Context::mainnet().with_db(&mut db).build_mainnet()\`** — same builder you used in [Lesson 1 (MEV searcher)](/courses/reth-building-en/lessons/build-mev-searcher-en). The cheatcode is a tiny EVM-on-EVM. **Once you've run one Revm, you've run them all.**
 - **All three result variants return \`gas_used\`** — Success, Revert, Halt. Even reverted txs consumed gas. We return the real number; the test author can decide what counts.
 - **\`db = EmptyDB\` in this lesson is a simplification.** Real Foundry cheatcodes share state with the parent test EVM via a custom Inspector hook (because \`vm.deal()\` needs to mutate balances the parent test will see). Drill 3 explores that.
 
@@ -2249,7 +2249,7 @@ async fn build_fork() -> eyre::Result<ForkedDB> {
 }
 \`\`\`
 
-Identical to Lesson 1 (MEV searcher) — and that's the point. **The same fork pattern shows up everywhere; if you can build one, you can build them all.**
+Identical to [Lesson 1 (MEV searcher)](/courses/reth-building-en/lessons/build-mev-searcher-en) — and that's the point. **The same fork pattern shows up everywhere; if you can build one, you can build them all.**
 
 ## Step 2: Read V2 pool reserves
 
@@ -2321,7 +2321,7 @@ fn call_view<C: SolCall>(
 
 Walk:
 
-- **The same EVM call we made in Lesson 5's \`read_reserves\`** — generalized into a \`call_view\` helper that works for any \`SolCall\`. **Re-use accumulates** as you build.
+- **The same EVM call we made in [Lesson 1 (MEV searcher)](/courses/reth-building-en/lessons/build-mev-searcher-en)'s \`read_reserves\`** — generalized into a \`call_view\` helper that works for any \`SolCall\`. **Re-use accumulates** as you build.
 - **\`token0\` lookup is necessary because we don't know which side is which.** Pools are sorted by address; depending on which token is which, "reserve_in" maps to reserve0 or reserve1. **Skip this and your quote math is upside-down half the time.**
 - **\`fee_bps\` parameterizes the V2 family.** Uniswap V2: 30 bps (0.3%). Sushi: also 30 bps. Older Mooniswap, custom forks: anywhere from 5 to 100 bps. **Same code, different parameter.**
 
@@ -2473,7 +2473,7 @@ Whole binary: ~250 LOC including imports + CLI parsing.
 | **Gas-aware** | Subtract estimated gas cost (in out-token terms) from each quote. A 0.1% better price isn't worth 50¢ extra gas on a $100 swap. |
 | **Price-impact thresholds** | Reject routes that move the pool >X% — protects against MEV sandwich attacks on low-liquidity venues. |
 | **Re-quote at submission** | The fork was at block N; the swap lands at block N+k. Re-quote right before submission to catch state drift. |
-| **MEV protection** | Submit through Flashbots Protect / MEV-Share so frontrunners don't see the route ahead of time. (Lesson 8 — Capstone — does this.) |
+| **MEV protection** | Submit through Flashbots Protect / MEV-Share so frontrunners don't see the route ahead of time. ([Lesson 8 — Capstone](/courses/reth-building-en/lessons/build-capstone-router-en) does this.) |
 
 The architecture you wrote — fork once, read reserves atomically, compute quotes per venue, pick the winner — **is exactly how 1inch and Paraswap shape their internal pricing layer**. They add scale, more venues, better routing optimization. The kernel is identical.
 
@@ -2483,9 +2483,9 @@ The architecture you wrote — fork once, read reserves atomically, compute quot
 2. **Add gas accounting.** Subtract estimated gas cost from each quote (use \`evm.estimate_gas\` on a hypothetical swap). The "best" route should now be the one that maximizes \`amount_out − gas_cost_in_out_token\`. (2 hours)
 3. **Multi-hop search.** Build a 2-hop search: A → WETH → B. For each candidate via WETH, compute the chained quote and compare to the direct route. (3 hours)
 4. **Split routing.** Implement a 50/50 split between the top two venues; check whether the combined output beats either alone. (2 hours)
-5. **Cross-tier:** Wire the aggregator into the wallet backend (Lesson 4) as a \`POST /quote-and-swap\` that returns a signed tx ready for submission. (3 hours)
+5. **Cross-tier:** Wire the aggregator into the wallet backend ([Lesson 4](/courses/reth-building-en/lessons/build-wallet-backend-en)) as a \`POST /quote-and-swap\` that returns a signed tx ready for submission. (3 hours)
 
-Finish drill 5 and you have, structurally, an aggregator-as-a-service. Plug in MEV protection (Lesson 8) and you're at parity with what shipped in 2023.
+Finish drill 5 and you have, structurally, an aggregator-as-a-service. Plug in MEV protection ([Lesson 8](/courses/reth-building-en/lessons/build-capstone-router-en)) and you're at parity with what shipped in 2023.
 
 > 🛑 **Final check.** In one sentence: why is **forking** strictly better than **N parallel \`eth_call\`s** for an aggregator? If your answer doesn't mention "atomic state across all reads", re-read Step 1 — that atomicity is what makes the comparison sound.
 
@@ -2548,11 +2548,11 @@ flowchart TB
 
 | Component | From | What's new here |
 | :--- | :--- | :--- |
-| **Quote across DEXes** | L7 | Reused as-is |
-| **Mempool watching** | L1 (the searcher's input!) | Repurposed as defense — find candidate adversaries instead of opportunities |
-| **Revm fork simulation** | L1 | Used here to score "would this adversary tx hurt my user?" |
-| **EIP-7702 sponsorship** | L5 | Lifted into the path so the user pays no gas |
-| **Wallet backend submission + replace** | L4 | Used for the public-mempool path |
+| **Quote across DEXes** | [L7](/courses/reth-building-en/lessons/build-swap-aggregator-en) | Reused as-is |
+| **Mempool watching** | [L1](/courses/reth-building-en/lessons/build-mev-searcher-en) (the searcher's input!) | Repurposed as defense — find candidate adversaries instead of opportunities |
+| **Revm fork simulation** | [L1](/courses/reth-building-en/lessons/build-mev-searcher-en) | Used here to score "would this adversary tx hurt my user?" |
+| **EIP-7702 sponsorship** | [L5](/courses/reth-building-en/lessons/build-7702-sponsor-en) | Lifted into the path so the user pays no gas |
+| **Wallet backend submission + replace** | [L4](/courses/reth-building-en/lessons/build-wallet-backend-en) | Used for the public-mempool path |
 | **Private orderflow submission** | NEW | Flashbots Protect / MEV-Share integration |
 | **Decision logic (route + risk → submission path)** | NEW | The capstone's contribution |
 
