@@ -415,6 +415,8 @@ Every block explorer, every analytics pipeline, every liquidation monitor needs 
 
 > 📌 **Scope honesty.** We index ERC-20 Transfer events into Postgres with full reorg handling — commit on \`ChainCommitted\`, undo on \`ChainReverted\`, swap on \`ChainReorged\`. We don't build a public API on top of the data; that's the second half of any indexer and orthogonal to the question this lesson answers: *"how do I get correct chain data into a datastore at node speed?"*
 
+> 📚 **See also.** [QuickNode's *How to Build and Deploy Reth ExExs*](https://www.quicknode.com/guides/infrastructure/how-to-use-reth-exex) is a great primer on the ExEx mechanism this lesson sits on. We extend those concepts here into a complete reorg-aware indexer with Postgres writes, FinishedHeight signaling, and production gaps.
+
 ## What you'll build
 
 \`\`\`mermaid
@@ -710,6 +712,7 @@ With it:
 | :--- | :--- |
 | **Backpressure** | If Postgres is slow, your ExEx stalls and Reth's notification channel backs up. Production wraps the writer in a bounded queue + drops to disk-buffer when full. |
 | **Schema migrations** | Use sqlx migrations (we did, minimally). Production runs them on startup with a lock to prevent racing replicas. |
+| **Self-hosted Reth ops** | Cluster ops, peer management, snapshot recovery. Alternative: managed Reth via [QuickNode Dedicated Clusters](https://www.quicknode.com/guides/infrastructure/node-setup/how-to-run-a-reth-node) lets you select Reth as the execution client — useful when ExEx is your value-add, not running the node. |
 | **Replicas / sharding** | One ExEx writes to one Postgres. Read replicas, partitioning by \`block_number\`, archive-vs-hot tiers — all the standard DBA work. |
 | **Decoding more events** | We only decode \`Transfer\`. Add \`Approval\`, \`Swap\`, \`Sync\`, custom protocol events. The pattern (one \`sol! { event ... }\` block per event, one \`decode_log\` per filter) scales. |
 | **Per-token enrichment** | Joining Transfer rows to token metadata (name, symbol, decimals) at write time vs. query time. Trade-off: write-time costs RPC, query-time costs JOIN. |
@@ -748,6 +751,8 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
 Reth ships with the standard JSON-RPC namespaces (\`eth_*\`, \`net_*\`, \`web3_*\`, \`debug_*\`, \`trace_*\`, \`txpool_*\`). When you want something *not* in that list — a domain-specific aggregation, a custom debug helper, a real-time subscription tailored to your protocol — you don't fork Reth. You add a trait, implement it, hand it to the node builder. ~50 lines of Rust and your method is live on the same HTTP / WebSocket / IPC endpoints as the natives.
 
 > 📌 **Scope honesty.** We add one read-only method (\`txpoolPlus_pendingByGasBucket\`) that aggregates the local mempool into 10 gas-price buckets. We don't cover authentication, rate-limiting, or write methods — those are the same patterns layered on top. The architecture lesson is "how does the trait get wired in?"
+
+> 📚 **See also.** [QuickNode's *How to Build Custom RPC Methods with Reth*](https://www.quicknode.com/guides/infrastructure/build-custom-rpc-methods-with-reth) covers the foundation of registering a custom RPC trait. We build on top of it here with server-side aggregation, a subscription variant, and the production gaps a real custom RPC has to close.
 
 ## What you'll build
 
@@ -1026,6 +1031,7 @@ Now your dashboard can \`eth_subscribe("txpoolPlus_subscribeBuckets", [10])\` an
 | **Auth** | The same \`AUTH_SECRET\` mechanism as the engine API; Reth wires this through automatically when you \`extend_rpc_modules\`, but you should verify your method respects it (most \`ctx\` accessors do). |
 | **Rate limiting** | Reth doesn't ship a per-method rate limiter; production wraps the handler in \`tower\` middleware or rejects above a threshold inside the impl. |
 | **Per-client state** | Subscriptions are per-connection by default. Cross-client coordination (e.g., shared cache invalidation) requires \`Arc<RwLock<...>>\` inside the impl struct. |
+| **Self-hosted Reth ops** | If you don't want to run Reth yourself, [QuickNode Dedicated Clusters](https://www.quicknode.com/guides/infrastructure/node-setup/how-to-run-a-reth-node) let you pick Reth as the execution client and ship your custom-RPC binary as the value-add. |
 | **Versioning** | Bump the namespace (\`txpoolPlus_v2_*\`) when the response shape changes; old clients should keep working. |
 | **Metrics** | Reth's RPC layer exposes per-method latency / count via the metrics endpoint, but only for natives. Add your own \`metrics::counter!(...)\` calls inside your handler. |
 | **Argument validation** | \`RpcResult\` lets you return \`ErrorObjectOwned::owned(code, message, data)\` cleanly. Pick stable codes; don't reuse standard JSON-RPC error codes (-32603 is "internal error", reserved). |

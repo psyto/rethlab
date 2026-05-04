@@ -414,6 +414,8 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 > 📌 **スコープの正直な開示。** ERC-20 Transfer イベントを Postgres にインデックスする (フル reorg 対応 — \`ChainCommitted\` で commit、\`ChainReverted\` で undo、\`ChainReorged\` で swap)。データの上に public API を載せる部分は構築しない。それは indexer の後半で、本レッスンが答える問いとは直交: *「ノード速度で正しいチェーンデータをデータストアに入れるには?」*
 
+> 📚 **参考。** [QuickNode の *How to Build and Deploy Reth ExExs*](https://www.quicknode.com/guides/infrastructure/how-to-use-reth-exex) は本レッスンが乗る ExEx 機構の良い primer。ここではそれを土台に、Postgres 書き込み・FinishedHeight シグナル・production gaps まで含む完全な reorg-aware indexer を組み上げる。
+
 ## 何を作るか
 
 \`\`\`mermaid
@@ -709,6 +711,7 @@ ctx.events.send(ExExEvent::FinishedHeight(committed.tip().num_hash()))?;
 | :--- | :--- |
 | **Backpressure** | Postgres が遅いと ExEx が stall して Reth の notification channel が back up する。Production は writer を bounded queue で wrap + 溢れたら disk-buffer に dump |
 | **スキーママイグレーション** | sqlx migrations を使う (ここでも最低限使った)。Production は起動時に lock 取って running する (replica レース防止) |
+| **Self-hosted Reth 運用** | クラスタ運用、ピア管理、snapshot リカバリ。代替: [QuickNode Dedicated Clusters](https://www.quicknode.com/guides/infrastructure/node-setup/how-to-run-a-reth-node) でマネージド Reth を選択可能 — ExEx が value-add でノード運用が本業ではない場合に有用 |
 | **レプリカ / シャーディング** | 1 ExEx → 1 Postgres。読み取りレプリカ、\`block_number\` でのパーティショニング、archive vs hot 階層 — 全て標準の DBA 仕事 |
 | **より多い event のデコード** | ここでは \`Transfer\` だけ。\`Approval\`、\`Swap\`、\`Sync\`、独自プロトコル event を足す。パターン (event 1 つにつき \`sol! { event ... }\` 1 ブロック、フィルタ 1 つにつき \`decode_log\` 1 つ) はスケールする |
 | **トークン単位のエンリッチメント** | Transfer row を token メタデータ (name, symbol, decimals) に書き込み時 vs query 時で join。トレードオフ: 書き込み時は RPC コスト、query 時は JOIN コスト |
@@ -747,6 +750,8 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
 Reth には標準 JSON-RPC ネームスペース (\`eth_*\`、\`net_*\`、\`web3_*\`、\`debug_*\`、\`trace_*\`、\`txpool_*\`) が同梱されています。そのリストに *無いもの* が欲しい時 — ドメイン固有の集計、独自デバッグヘルパ、自分のプロトコルに合わせたリアルタイム subscription — Reth を fork する必要はない。trait を 1 つ書き、実装し、node builder に渡す。Rust ~50 行で、ネイティブと同じ HTTP / WebSocket / IPC エンドポイントから新メソッドが live になる。
 
 > 📌 **スコープの正直な開示。** 読み取り専用メソッド 1 つ (\`txpoolPlus_pendingByGasBucket\`) を追加する — ローカル mempool を 10 個の gas-price バケットに集計するもの。認証、レート制限、書き込みメソッドは扱わない — それらは同じパターンの上に重ねるレイヤー。アーキテクチャ的レッスンは「trait はどう wire される?」。
+
+> 📚 **参考。** [QuickNode の *How to Build Custom RPC Methods with Reth*](https://www.quicknode.com/guides/infrastructure/build-custom-rpc-methods-with-reth) は custom RPC trait 登録の基礎をカバー。ここではそれを土台に、サーバーサイド集計・subscription バリアント・本物のカスタム RPC が閉じる必要のある production gaps まで構築する。
 
 ## 何を作るか
 
@@ -1025,6 +1030,7 @@ Walk:
 | **認証** | engine API と同じ \`AUTH_SECRET\` 機構; Reth が \`extend_rpc_modules\` 経由で自動 wire する、ただしメソッドが respect しているかは確認すべき (大半の \`ctx\` accessor は respect する) |
 | **レート制限** | Reth はメソッド単位レート制限を ship しない; production は \`tower\` ミドルウェアで wrap、または impl 内で閾値超えを reject |
 | **クライアント単位の状態** | subscription はデフォルトで接続単位。クライアント間調整 (例: 共有キャッシュ無効化) には impl struct 内で \`Arc<RwLock<...>>\` |
+| **Self-hosted Reth 運用** | Reth を自分で動かしたくない場合、[QuickNode Dedicated Clusters](https://www.quicknode.com/guides/infrastructure/node-setup/how-to-run-a-reth-node) で Reth を execution client として選択、自前のカスタム RPC バイナリを value-add として shipping できる |
 | **バージョニング** | レスポンス形が変わったら namespace を bump (\`txpoolPlus_v2_*\`); 古いクライアントは動き続けるべき |
 | **メトリクス** | Reth の RPC レイヤーはメソッド単位 latency/count を metrics endpoint で公開、ただしネイティブのみ。ハンドラ内に自分の \`metrics::counter!(...)\` を追加 |
 | **引数バリデーション** | \`RpcResult\` で \`ErrorObjectOwned::owned(code, message, data)\` を clean に返せる。安定したコードを選ぶ; 標準 JSON-RPC エラーコードを reuse しない (-32603 = "internal error" は予約済み) |
