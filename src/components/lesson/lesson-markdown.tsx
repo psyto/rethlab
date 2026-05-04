@@ -115,6 +115,16 @@ export function LessonMarkdown({ content }: { content: string }) {
             </div>
           );
         },
+        // External-by-default for lesson links — most point to upstream
+        // GitHub source, official docs, papers; opening in-place would lose
+        // the lesson's scroll position.
+        a({ href, children, ...props }) {
+          return (
+            <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+              {children}
+            </a>
+          );
+        },
         code({ className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || '');
           const lang = match?.[1];
