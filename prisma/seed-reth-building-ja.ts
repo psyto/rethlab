@@ -95,6 +95,7 @@ use futures::StreamExt;
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let ws_url = std::env::var("ETH_WS_URL")?;
+    // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
     let provider = ProviderBuilder::new()
         .connect_ws(WsConnect::new(ws_url))
         .await?;
@@ -1433,7 +1434,8 @@ async fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt::init();
 
     let provider = alloy_provider::ProviderBuilder::new()
-        .connect(&std::env::var("RPC_URL")?)
+            // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
+.connect(&std::env::var("RPC_URL")?)
         .await?;
 
     let state = AppState {
@@ -1782,7 +1784,8 @@ async fn main() -> eyre::Result<()> {
     let sponsor: PrivateKeySigner = std::env::var("SPONSOR_KEY")?.parse()?;
     let provider = ProviderBuilder::new()
         .wallet(sponsor.clone())
-        .connect(&std::env::var("RPC_URL")?)
+            // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
+.connect(&std::env::var("RPC_URL")?)
         .await?;
 
     let state = AppState {
@@ -2229,7 +2232,8 @@ type ForkedDB = CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, DynProvider>>>;
 
 async fn build_fork() -> eyre::Result<ForkedDB> {
     let provider = ProviderBuilder::new()
-        .connect(&std::env::var("ETH_RPC_URL")?)
+            // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
+.connect(&std::env::var("ETH_RPC_URL")?)
         .await?
         .erased();
     let alloy_db = WrapDatabaseAsync::new(AlloyDB::new(provider, BlockId::latest()))
