@@ -170,6 +170,14 @@ Reth は **唯一の Ethereum execution client ではない** — まだ支配�
 
 「**現在のトレンドと汎用性**」を重視するなら、**Reth系（このコース）** が答えです。Solanaは依然として強いですが、Rust EVMは「EVMの開発体験 × Rustの性能」という両取りができる稀有なポジションにあります。
 
+## 2026年の現実 — 「どちらか」ではなく「交差点」
+
+最近の構図はもう少し複雑です。Stripe (fiat 側 distribution) と Solana (crypto 側 distribution) を **Tempo** という Reth ベースの payments 抽象化レイヤーがつなぐ、という形が現れつつあります。Meta が USDC 決済を始めたとき、選んだのは「自前チェーン」ではなく、Solana + Stripe という既存ネットワークの組み合わせでした。Stripe は Tempo の中心プレイヤーなので、構造的には Meta — Stripe — Tempo — Solana という connection が形成されつつあります。
+
+つまり「Solana を学ぶか、Rust EVM を学ぶか」より、**「自分はどちらの distribution に賭けたいか」** が実際の判断軸になりつつあります。Rust EVM 側 (このコース) のフィールドは: app-chain (Hyperliquid)、stablecoin 決済 (Tempo)、L2 (Base / OP-Reth) — Reth は「Stripe of crypto」型インフラの基盤になりつつあります。
+
+> **要点**: stablecoin は DeFi の基軸通貨。stablecoin 決済 rail を握ることは、将来的な DeFi onboarding の道を拓くことでもあります。今は Stripe / Tempo が「ユーザーに crypto を見せない」抽象化で TradFi を取り込んでいますが、その rail の上に lending・swap・perps が乗ってくる構造が次の数年の勝負どころ。Reth/Revm エンジニアは、その **rail 側と protocol 側の両方を読み書きできる希少人材** です。
+
 ## 次の一歩
 
 役割と相対的な価値が見えたところで、いよいよ **Rust環境を構築** していきましょう。`,
