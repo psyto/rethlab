@@ -325,17 +325,17 @@ export const ja: TranslationKeys = {
   },
   about: {
     title: 'RethLabについて',
-    subtitle: 'Hyperliquid はその上で動く。Tempo はその上でローンチした。Paradigm が作った — Reth・Revm・Foundry・Alloy。Rust EVM スタックは今クリプトインフラで瞬間を迎えていて、それを読めるエンジニアは希少。RethLab は、本物のソースを行単位で walk through し、そして 8 本の動くアプリを end-to-end で build させるトレーニングプログラムです。',
-    bio: '15+ 年、金融機関のミッションクリティカルなシステム — コアバンキング、リテール預金、住宅ローン、KYC、規制対応 — を Tokyo (新生銀行)、Bangalore (オフショア開発)、Hong Kong (無料英語学習 E メール、50 万ユーザ超) で ship してきました。現在は SBI R3 Japan で Head of Sales Engineering、Solana エンタープライズ採用と RWA トークン化にフォーカス。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda 全部で active に build 中。\n\nRethLab を作ったのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとした時に、まさにこのカリキュラムが walk through する穴に当たったから — ドキュメントは散在、ソースは難解、「Rust が少し書ける」状態から「本番 EVM インフラを ship できる」状態への明確な道筋がない。やりながら学び、その効いた部分を「自分が欲しかったカリキュラム」にしたのが RethLab — 6 コース・約 108 レッスン、最終 Building tier で 8 本の動くアプリを end-to-end で ship する。永久無料、source-first。\n\n個人的には、このスタックを ship しているチーム — 特に Paradigm と Tempo — に興味があります。',
+    subtitle: 'Hyperliquid が動いている基盤。Tempo がローンチした基盤。Paradigm が build した — Reth・Revm・Foundry・Alloy。Rust EVM スタックは今クリプトインフラで瞬間を迎えていて、それを読めるエンジニアはまだ希少です。RethLab は本物のソースを行単位で walk through し、9 本の動くアプリを end-to-end で build するトレーニングプログラムです。',
+    bio: '15+ 年、金融機関のミッションクリティカルなシステム — コアバンキング、リテール預金、住宅ローン、KYC、規制対応 — を Tokyo (新生銀行)、Bangalore (オフショア開発)、Hong Kong (無料英語学習 E メール、50 万ユーザ超) で ship してきました。現在は SBI R3 Japan で Head of Sales Engineering として、Solana のエンタープライズ採用と RWA トークン化にフォーカスしています。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda すべてで active に build 中です。\n\nRethLab を作ったのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとしたとき、まさにこのカリキュラムが埋めようとしている穴にぶつかったからです — ドキュメントは散在し、ソースは難解で、「Rust が少し書ける」状態から「本番 EVM インフラを ship できる」状態までの明確な道筋がない。やりながら学び、効いた部分を「自分が欲しかったカリキュラム」として整理したのが RethLab です — 6 コース・110 レッスン、最終 Building tier で 9 本の動くアプリを end-to-end で ship します。永久無料・source-first。\n\n個人的には、このスタックを ship しているチーム — 特に Paradigm と Tempo — に興味があります。',
     background: {
       tradfi: '経歴',
-      tradfiDetail: '15+ 年の金融機関ミッションクリティカル開発を新生銀行で: コアバンキング (Flexcube)、リテール預金、住宅ローン、KYC/FATCA、全銀、ATM。Backbase (オランダの Banking as a Service ユニコーン) で PM。',
+      tradfiDetail: '新生銀行で 15+ 年、金融機関のミッションクリティカル開発に従事 — コアバンキング (Flexcube)、リテール預金、住宅ローン、KYC/FATCA、全銀、ATM。Backbase (オランダの Banking as a Service ユニコーン) で PM。',
       blockchain: '現在',
       blockchainDetail: 'SBI R3 Japan で Head of Sales Engineering — 日本の金融機関向け Solana エンタープライズ採用と RWA トークン化を推進。',
       vaults: 'Web3',
-      vaultsDetail: 'Bitcoin、Ethereum、Solana、Hyperliquid、Corda 全部で active。Solana Cypherpunk Hackathon 第3位 (NTT Docomo R&D サイドトラック)。',
+      vaultsDetail: 'Bitcoin、Ethereum、Solana、Hyperliquid、Corda — すべてで active に build 中。Solana Cypherpunk Hackathon 第 3 位 (NTT Docomo R&D サイドトラック)。',
       multilingual: 'グローバル',
-      multilingualDetail: 'Hong Kong (50万ユーザのインターネットスタートアップ) 2 年、Bangalore (iGate オフショア開発 リード) 2 年、Tokyo (金融機関) 15+ 年。EN/JA バイリンガル — RethLab コンテンツも完全 parity で出荷。',
+      multilingualDetail: 'Hong Kong (50 万ユーザのインターネットスタートアップ) 2 年、Bangalore (iGate オフショア開発リード) 2 年、Tokyo (金融機関) 15+ 年。EN/JA バイリンガル — RethLab のコンテンツも EN/JA 完全 parity で ship。',
     },
     tech: {
       title: 'なぜこのスタックか？',
@@ -350,7 +350,7 @@ export const ja: TranslationKeys = {
     contact: '質問・コンテンツへのフィードバック・typo 報告は GitHub へ。カジュアルな会話や反応共有は X へ。',
     support: {
       title: 'この活動を支援する',
-      body: 'RethLab は無料でオープンです。レッスンが Rust EVM のコードを書く役に立ったら、GitHub Sponsors の継続支援か単発の donation で、本コースの運営継続と upstream への追従更新を支えていただけます。',
+      body: 'RethLab は無料・オープンです。レッスンが Rust EVM のコードを書くのに役立ったら、GitHub Sponsors での継続支援、または単発の donation で、本コースの運営継続と upstream への追従更新を支えていただけます。',
       cta: '支援方法を見る',
     },
   },
