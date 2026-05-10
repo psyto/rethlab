@@ -10,8 +10,8 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
       description:
         'Read the Revm interpreter, learn how custom opcodes and the Database trait work, and pick up Reth Staged Sync and Execution Extensions (ExEx) — the path to building your own EVM infrastructure.',
       difficulty: 'ADVANCED',
-      duration: 165,
-      xpReward: 495,
+      duration: 190,
+      xpReward: 570,
       track: 'reth-advanced',
       tags,
       isPublished: true,
@@ -1094,97 +1094,196 @@ If any answer is shaky, the lesson isn't done with you. Re-do the drill or re-re
 After this drill, you've actually shipped a custom opcode in code. **More importantly: you've felt the cost.** Next: how revm gets state — the \`Database\` trait.`,
                 },
                 {
-                  title: 'The Database trait — supplying state',
-                  slug: 'revm-database-trait-en',
+                  title: 'Building the \`Database\` trait — read API',
+                  slug: 'revm-database-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 9,
-                  duration: 12,
+                  duration: 10,
                   xpReward: 25,
-                  content: `# The Database trait — supplying state
+                  content: `# Building the \`Database\` trait — read API
 
-Revm is the "execution engine," but **it doesn't own state**. Storage reads happen through the external \`Database\` trait. Implement it and you can drive Revm against anything: an in-memory map, a forked mainnet, a custom MDBX schema, a network of remote nodes.
+Revm is the "execution engine," but **it doesn't own state.** Storage reads happen through an external \`Database\` trait — implement it and you can drive Revm against anything: an in-memory map, a forked mainnet, a custom MDBX schema, a network of remote nodes.
 
-> 🛑 **Predict before scrolling.** Without looking, write down the **minimum** API revm needs from its state store. How many methods? What signatures?
->
-> Hint: think about every opcode that touches state. \`SLOAD\`, \`BALANCE\`, \`EXTCODESIZE\`, \`BLOCKHASH\` — what does revm need to ask for to satisfy each? Don't scroll until you have a draft.
-
-\`\`\`mermaid
-sequenceDiagram
-    participant Op as Opcode (e.g., SLOAD)
-    participant I as Revm Interpreter
-    participant DB as Database trait impl
-    participant State as Backing store
-
-    Op->>I: needs storage[addr][key]
-    I->>DB: storage(addr, key)
-    DB->>State: lookup
-    State-->>DB: U256 value
-    DB-->>I: Ok(value)
-    I-->>Op: pushes value to stack
-\`\`\`
-
-The opcode never touches the store directly — it only knows about the trait. Swap the impl, change the world: in-memory, forked mainnet, MDBX, RPC. Same Revm, different reality.
-
-## The real trait — verbatim
-
-From [\`crates/database/interface/src/lib.rs\`](https://github.com/bluealloy/revm/blob/main/crates/database/interface/src/lib.rs) (current main):
+This lesson builds that trait up from the simplest possible sketch. By the end you'll have built every piece of:
 
 \`\`\`rust
 #[auto_impl(&mut, Box)]
 pub trait Database {
     type Error: DBErrorMarker;
-
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
-
     fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
-
     fn storage(&mut self, address: Address, index: StorageKey)
         -> Result<StorageValue, Self::Error>;
-
-    #[inline]
-    fn storage_by_account_id(
-        &mut self,
-        address: Address,
-        account_id: AccountId,
-        storage_key: StorageKey,
-    ) -> Result<StorageValue, Self::Error> {
-        let _ = account_id;
-        self.storage(address, storage_key)
-    }
-
     fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error>;
 }
 \`\`\`
 
-> 🛑 **Compare your prediction.** What did you miss? More importantly: **what's NOT here that you might have predicted?**
->
-> No \`set_storage\`. No \`set_balance\`. No \`commit\`. **Why is the read API and write API split into separate traits?** What design constraint is that serving?
+> 📂 **Open \`bluealloy/revm\` in another tab.** Cross-check at every step.
 
-### Three things to look hard at
+## Step 0 — The naive Revm: state baked in
 
-- **\`#[auto_impl(&mut, Box)]\`** — \`auto_impl\` derives \`Database\` automatically for \`&mut T\` and \`Box<T>\`. Pass \`&mut my_db\` or \`Box::new(my_db)\` anywhere a \`Database\` is wanted.
+Without thinking, you'd write Revm with state owned internally:
 
-> 🛑 **Anti-fluency.** Mentally delete the \`#[auto_impl]\` attribute. Now: what does the user write manually to pass \`&mut MyDatabase\` where \`Database\` is expected? Sketch the \`impl<T: Database> Database for &mut T\` block. If you can't, the macro is just noise to you — write the manual impl out before continuing.
+\`\`\`rust
+pub struct Revm {
+    stack: Vec<U256>,
+    storage: HashMap<(Address, U256), U256>,
+    accounts: HashMap<Address, AccountInfo>,
+    // ...
+}
+\`\`\`
 
-- **\`type Error: DBErrorMarker\`** — every implementation picks its own error type but must implement a marker trait. Why a marker instead of a fixed enum? Because revm needs to compose your custom errors (network failures, MDBX errors, RPC timeouts) with its own without you being trapped in a closed taxonomy.
+The interpreter calls \`self.storage.get(...)\` directly. Simple. Works for a toy.
 
-- **\`storage_by_account_id\` with a default** — recent optimization. If you've already located the account, pass its internal ID and skip the address lookup. The default forwards to \`storage\`. **Performance lives in the trait API, not just the implementation.**
+> 🛑 **Predict.** Without scrolling: name three production scenarios this naive design *can't* handle. (Hint: each is a different *kind of* state source.)
 
-> 🔍 **Find the call site.** Where in revm is \`storage_by_account_id\` actually invoked instead of \`storage\`? Search \`crates/handler/\`. Who benefits from the override — the database author, or revm itself?
+The three:
 
-## Companion traits — read split from write
+1. **Forked mainnet.** State lives on a remote RPC, not in your \`HashMap\`.
+2. **MDBX-backed production.** A real Reth node uses on-disk MDBX, not in-memory maps.
+3. **Custom schemas.** Your app-chain might want a sparse Merkle store, a network of remote shards, or anything else.
+
+Each requires *different code* to fetch state. You don't want to fork Revm three ways.
+
+## Step 1 — Push state behind a trait
+
+Define a trait that *describes* what Revm needs from state, without owning the storage:
+
+\`\`\`rust
+pub trait Database {
+    fn storage(&mut self, address: Address, key: U256) -> U256;
+    fn balance(&mut self, address: Address) -> U256;
+    fn code(&mut self, address: Address) -> Vec<u8>;
+    fn block_hash(&mut self, number: u64) -> B256;
+}
+\`\`\`
+
+Now the interpreter takes \`db: &mut dyn Database\` instead of owning storage. Anyone can implement the trait — your forked-mainnet impl, your MDBX impl, your in-memory impl all fit the same socket.
+
+> 🛑 **Predict.** Why \`&mut self\`, not \`&self\`? What does \`&mut\` allow that \`&self\` would forbid?
+
+**Caching.** A real implementation (forked mainnet, RPC-backed) wants to cache reads — first call to \`storage(addr, key)\` hits the network; subsequent calls return from a local cache. Cache mutation requires \`&mut self\`. \`&self\` would force every impl to wrap its cache in \`RwLock\` or \`RefCell\` — fine sometimes, but a tax overall. Default to \`&mut\`. (Lesson 2 covers the \`&self\` case via a companion trait.)
+
+## Step 2 — Group the methods correctly
+
+Look at the naive trait: \`balance\` and \`code\` both ask about an account, but they're separate methods. **Are they really independent?**
+
+In practice, you almost always want both. Networked impls especially — you don't want two RPC round-trips for the same account. Better: one method that returns *both*, and let the impl decide how to fetch them.
+
+\`\`\`rust
+fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
+\`\`\`
+
+\`AccountInfo\` bundles balance, nonce, and code hash. **One round-trip, three pieces of data.** The \`Option\` lets the impl signal "no such account" cleanly — useful for \`EXTCODEHASH\`, which has special semantics for unknown accounts.
+
+Code stays separate, addressed by *hash*:
+
+\`\`\`rust
+fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
+\`\`\`
+
+> 🛑 **Predict.** Why split \`code_by_hash\` from \`basic\`? Why is code addressed by *hash*, not by address?
+
+Because contract code is **content-addressed.** A given bytecode (a popular DEX router, say) is shared across many addresses — caching by hash dedupes automatically. \`basic\` returns just the hash; \`code_by_hash\` materializes the bytes only if you actually need to execute. Lazy load with content addressing.
+
+## Step 3 — Add \`Result\` and an associated \`Error\` type
+
+Networked impls fail. RPC times out, MDBX returns a stale lock, an Arc gets poisoned. **Every method must be allowed to fail.**
+
+\`\`\`rust
+fn basic(&mut self, ...) -> Result<Option<AccountInfo>, Self::Error>;
+\`\`\`
+
+But \`Self::Error\` — why an associated type instead of a fixed enum?
+
+Because **revm cannot know what your errors look like.** RPC errors, disk I/O errors, lock poisoning — all different shapes. A fixed enum would either be too narrow (and force every impl to flatten its real errors) or too wide (and force revm to handle 50 variants).
+
+\`\`\`rust
+type Error: DBErrorMarker;
+\`\`\`
+
+\`DBErrorMarker\` is a vacuous bound (auto-implemented for any sensible type). Its purpose: **document intent** ("this is the kind of error a database can produce") and give revm a hook to add bounds later (e.g. \`Send\`, \`Sync\`) without breaking impls.
+
+> 🛑 **Anti-fluency.** "It's open for extension" is parroting. In your own words: imagine you're writing a fork-mainnet impl using \`reqwest\`. What *specifically* breaks if \`Error\` is a fixed \`DatabaseError\` enum?
+
+You'd have to flatten \`reqwest::Error\`, \`serde_json::Error\`, network timeouts, and parse errors into the closed enum's variants — and *every* new failure mode would require a PR against revm. The associated type lets your error stay yours.
+
+## Step 4 — \`#[auto_impl(&mut, Box)]\`
+
+Without this attribute, you'd write the same forwarding code by hand:
+
+\`\`\`rust
+impl<T: Database> Database for &mut T {
+    type Error = T::Error;
+    fn basic(&mut self, addr: Address) -> Result<Option<AccountInfo>, T::Error> {
+        (**self).basic(addr)
+    }
+    // ... 3 more methods, all the same pattern
+}
+impl<T: Database> Database for Box<T> { /* ... same 4 methods ... */ }
+\`\`\`
+
+Twelve method bodies of identical forwarding boilerplate (across \`Database\`, \`DatabaseRef\`, \`DatabaseCommit\`).
+
+\`auto_impl\` is a procedural macro that generates these forwarding impls automatically. With \`#[auto_impl(&mut, Box)]\`, both \`&mut MyDb\` and \`Box<MyDb>\` automatically implement \`Database\` if \`MyDb\` does. **No user-written boilerplate.**
+
+> 🛑 **Predict.** What if you want \`Database\` to also work for \`Arc<MyDb>\`? Why doesn't \`auto_impl(&mut, Box, Arc)\` solve it?
+
+You can't — at least not directly. \`Arc<T>\` only gives you \`&T\`, not \`&mut T\`. Since \`Database\`'s methods take \`&mut self\`, \`Arc<MyDb>\` cannot implement \`Database\`. **This forces a design split** that the next lesson resolves: revm has a *companion* read-only trait (\`DatabaseRef\`) for exactly the \`Arc\` case.
+
+## What you've built
 
 \`\`\`rust
 #[auto_impl(&mut, Box)]
-pub trait DatabaseCommit {
-    fn commit(&mut self, changes: AddressMap<Account>);
-    // ...
+pub trait Database {
+    type Error: DBErrorMarker;
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
+    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
+    fn storage(&mut self, address: Address, index: StorageKey)
+        -> Result<StorageValue, Self::Error>;
+    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error>;
 }
+\`\`\`
 
+Every piece earned its keep:
+
+- **\`&mut self\`** (Step 1) — caching without \`RefCell\`/\`RwLock\` overhead
+- **\`basic\` returning \`AccountInfo\`** (Step 2) — one round-trip per account
+- **\`code_by_hash\`** (Step 2) — content-addressed, deduped across contracts
+- **\`type Error: DBErrorMarker\`** (Step 3) — open error taxonomy, marker bound
+- **\`#[auto_impl(&mut, Box)]\`** (Step 4) — automatic forwarding
+
+The next lesson covers what \`auto_impl\` *can't* do (Arc), how revm splits read from write, and the three real impls that show how the same trait scales from 50 lines to thousands.
+
+## Recall before moving on
+
+Without scrolling:
+
+1. Why does \`Database\` use \`&mut self\` and not \`&self\`?
+2. What's the difference between \`basic\` and \`code_by_hash\`, and why split them?
+3. Why is \`Error\` an associated type instead of a fixed enum?
+4. What does \`#[auto_impl(&mut, Box)]\` save you from writing?
+
+If any answer is shaky, scroll back. Next lesson: the read/write split.
+`,
+                },
+                {
+                  title: 'Companion traits, optimizations, and real impls',
+                  slug: 'revm-database-companions-en',
+                  type: 'CONTENT',
+                  sortOrder: 10,
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# Companion traits, optimizations, and real impls
+
+Last lesson, you built up \`Database\`. We ended on a hint: the \`&mut self\` requirement means \`Arc<MyDb>\` *can't* implement it. **This lesson explains why that's OK** — revm has a companion read-only trait, plus a separate write-back trait, plus a perf optimization in the trait API itself, plus three reference impls that show how the same shape scales from toy to production.
+
+## Step 1 — \`DatabaseRef\`: read-only access
+
+\`\`\`rust
 #[auto_impl(&, &mut, Box, Rc, Arc)]
 pub trait DatabaseRef {
     type Error: DBErrorMarker;
-
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
     fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error>;
     fn storage_ref(&self, address: Address, index: StorageKey)
@@ -1193,27 +1292,168 @@ pub trait DatabaseRef {
 }
 \`\`\`
 
-| Trait | Use it for |
-| :--- | :--- |
-| \`Database\` | normal execution (\`&mut self\` — caching is allowed) |
-| \`DatabaseRef\` | shared, immutable view — \`&self\` lets you wrap in \`Arc\` for parallel tasks |
-| \`DatabaseCommit\` | optional: write-back path, used by \`commit_state\` |
+Same four methods as \`Database\`. Two differences:
 
-> 🛑 **Predict.** \`DatabaseRef\`'s \`auto_impl\` list is longer (\`&, &mut, Box, Rc, Arc\`) than \`Database\`'s (\`&mut, Box\`). Why? What does the asymmetry tell you about how each trait gets used in practice?
+- **\`&self\` instead of \`&mut self\`.** No interior mutation allowed (without \`RwLock\` / \`OnceLock\` etc.).
+- **\`auto_impl\` list is longer** — \`&, &mut, Box, Rc, Arc\` (five wrappers vs. \`Database\`'s two).
 
-## Real implementations to skim
+> 🛑 **Predict.** Why is the \`auto_impl\` list longer for \`DatabaseRef\`? What does the asymmetry tell you?
 
-| Impl | Where | When to read |
-| :--- | :--- | :--- |
-| \`InMemoryDB\` | \`crates/database/src/in_memory_db.rs\` | minimal \`HashMap\`-backed; the toy version |
-| \`AlloyDB\` | \`crates/database/src/alloydb.rs\` | fetches over JSON-RPC — fork-mainnet pattern |
-| \`StateProviderDatabase\` | reth: \`crates/storage/storage-api/src/database_provider.rs\` | production MDBX-backed Reth implementation |
+Because \`&self\` access is *strictly less restrictive* than \`&mut self\`. \`Arc<T>\` and \`Rc<T>\` give you cheap, shareable \`&T\` but never \`&mut T\`. So \`DatabaseRef\` works through them; \`Database\` doesn't. The longer list is mechanical, not a design choice.
 
-Read in order — toy → networked → production — to see how the same trait scales from 50 lines to thousands.
+The pattern: **need shared concurrent access? Implement \`DatabaseRef\`. Need caching? Implement \`Database\`. Need both? Implement both** — revm has helpers like \`WrapDatabaseRef\` to lift one to the other.
 
-## Drill
+## Step 2 — \`DatabaseCommit\`: separate write-back trait
 
-Implement a \`Database\` that always returns "balance = 0, no code, slot = 0":
+\`\`\`rust
+#[auto_impl(&mut, Box)]
+pub trait DatabaseCommit {
+    fn commit(&mut self, changes: AddressMap<Account>);
+}
+\`\`\`
+
+A separate trait for write-back. Why?
+
+> 🛑 **Predict.** Without scrolling: why isn't \`commit\` just another method on \`Database\`?
+
+Two reasons:
+
+1. **Read-only databases exist.** A forked-mainnet impl reads from RPC but has no business committing — there's no real backing store to write to. Forcing it to implement \`commit\` would require a panicking stub or pollute the type with a bogus method.
+2. **Different lifecycle.** Reading is per-call; committing is end-of-transaction. Splitting the trait makes that lifecycle explicit and lets the type system enforce it.
+
+Same pattern as Rust's \`Read\` and \`Write\` in \`std::io\` — mixing them into one trait would force every reader to think about writing.
+
+## Step 3 — \`storage_by_account_id\` (the optimization)
+
+\`Database\` has one more method we didn't show last lesson:
+
+\`\`\`rust
+#[inline]
+fn storage_by_account_id(
+    &mut self,
+    address: Address,
+    account_id: AccountId,
+    storage_key: StorageKey,
+) -> Result<StorageValue, Self::Error> {
+    let _ = account_id;
+    self.storage(address, storage_key)
+}
+\`\`\`
+
+Note: it has a **default implementation** that ignores \`account_id\` and forwards to \`storage\`. That default is the key feature.
+
+> 🛑 **Predict.** Why is this method here at all? When does the default's "ignore \`account_id\`, fall through to \`storage\`" *not* satisfy revm's needs?
+
+For impls with **internal account indexing** — e.g., MDBX-backed Reth, where the account has been resolved to an internal numeric ID earlier in the call frame. Passing \`account_id\` skips a redundant address-to-account-ID lookup on each storage hit. The default forwards safely; impls that *can* go faster override.
+
+**Performance lives in the trait API, not just the implementation.** A naive impl (in-memory) takes the default and runs fine. A production impl (MDBX) overrides and gets paid back for the work.
+
+## Step 4 — Three real implementations to skim
+
+Same trait, three radically different backends:
+
+| Impl | Where | Backing | Lines |
+| :--- | :--- | :--- | :--- |
+| \`InMemoryDB\` | \`crates/database/src/in_memory_db.rs\` | \`HashMap\`s | ~50 |
+| \`AlloyDB\` | \`crates/database/src/alloydb.rs\` | JSON-RPC over the network | ~150 |
+| \`StateProviderDatabase\` | reth: \`crates/storage/storage-api/src/database_provider.rs\` | MDBX, sparse Merkle | thousands |
+
+> 🔍 **Read all three openings.** Just the type definitions and the first method (\`basic\`). Compare:
+> - \`InMemoryDB::basic\` — direct \`HashMap::get\`, infallible
+> - \`AlloyDB::basic\` — async RPC call wrapped in a sync façade, fallible
+> - \`StateProviderDatabase::basic\` — MDBX cursor lookup, fallible
+>
+> Three different worlds, one trait shape.
+
+> 🛑 **Anti-fluency.** Without scrolling: which would you reach for to *fork mainnet at block N* and run arbitrary transactions on top? Why?
+
+\`AlloyDB\`. It fetches state lazily over RPC — no need to download a full archive node. The first time your tx hits a slot or account, \`AlloyDB\` queries the upstream node; subsequent reads come from its in-memory cache. **The fork-mainnet pattern is exactly 150 lines of glue around \`Database\`.**
+
+## Recall before the quiz
+
+Without scrolling:
+
+1. Why does \`DatabaseRef\`'s \`auto_impl\` list include \`Rc\` and \`Arc\` while \`Database\`'s doesn't?
+2. Why is \`commit\` on a separate trait from \`Database\`?
+3. What does overriding \`storage_by_account_id\` actually save in the MDBX impl?
+4. Among \`InMemoryDB\`, \`AlloyDB\`, \`StateProviderDatabase\` — which would you pick to fork mainnet?
+
+The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
+`,
+                },
+                {
+                  title: 'Quiz: did the \`Database\` trait shape stick?',
+                  slug: 'revm-database-quiz-en',
+                  type: 'QUIZ',
+                  sortOrder: 11,
+                  duration: 4,
+                  xpReward: 25,
+                  content: `# Quiz: did the \`Database\` trait shape stick?
+
+Four questions covering the trait's design decisions and the read/write split. Same rule: **you can't nod past a quiz.**
+
+If you miss two or more, scroll back to *Building the \`Database\` trait* before going on to the drill.`,
+                  quizQuestions: [
+                    {
+                      question: "Why does `Database` take `&mut self` instead of `&self` on its methods?",
+                      options: [
+                        "To prevent shared concurrent access from multiple threads.",
+                        "To allow implementations to mutate internal caches (e.g., a forked-mainnet impl caching the result of a network read) without RefCell/RwLock scaffolding.",
+                        "Because the EVM needs to *write* state through `Database` methods.",
+                        "It's a Rust requirement — `&self` traits can't be `dyn`-compatible.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "`&mut self` lets impls mutate caches directly. A networked impl wants to cache RPC results across calls; `&self` would force interior-mutability scaffolding (RwLock/RefCell). For users who genuinely need shared `&self` access (Arc-wrapped, parallel tasks), revm provides the companion `DatabaseRef` trait — a deliberate design split.",
+                    },
+                    {
+                      question: "Why is `Error` an associated type bounded by the marker trait `DBErrorMarker`?",
+                      options: [
+                        "It's an open extension point: each impl picks its own error type, but revm can tighten bounds (Send, Sync) later via the marker without breaking impls.",
+                        "It's a Rust limitation — traits can't have generic methods.",
+                        "The marker is a vacuous bound; it serves no design purpose.",
+                        "It's a back-compat shim for an older revm API.",
+                      ],
+                      correctIndex: 0,
+                      explanation: "A fixed `enum DatabaseError` would force you to flatten `reqwest::Error`, `serde_json::Error`, MDBX errors, etc., into closed variants — and require a revm PR every time you needed a new failure mode. The associated type leaves your error yours. The marker trait gives revm a place to *tighten* requirements without breaking impls.",
+                    },
+                    {
+                      question: "Why is `auto_impl` longer for `DatabaseRef` (`&, &mut, Box, Rc, Arc`) than for `Database` (`&mut, Box`)?",
+                      options: [
+                        "`Rc` and `Arc` aren't thread-safe, so they can't implement `Database`.",
+                        "`DatabaseRef` is older; the list grew over time.",
+                        "`Rc<T>` and `Arc<T>` give shared `&T` access but cannot provide `&mut T`. `DatabaseRef`'s methods take `&self`, so they fit through Rc/Arc. `Database`'s `&mut self` methods don't.",
+                        "`DatabaseRef` requires `Send + Sync`; `Database` doesn't.",
+                      ],
+                      correctIndex: 2,
+                      explanation: "Mechanical, not stylistic. `Arc<T>` only gives out `&T`. So any `&self`-only trait works through `Arc`, but `&mut self` traits don't. The longer list is a consequence of `DatabaseRef`'s read-only methods — it's not a design choice in the trait itself.",
+                    },
+                    {
+                      question: "Among `InMemoryDB`, `AlloyDB`, and `StateProviderDatabase`, which is the right choice for 'fork mainnet at block N and run arbitrary transactions'?",
+                      options: [
+                        "`InMemoryDB` — pre-load all of mainnet state into RAM.",
+                        "`AlloyDB` — fetch state lazily over JSON-RPC; the upstream node is the source of truth.",
+                        "`StateProviderDatabase` — direct MDBX access requires a full Reth archive locally.",
+                        "Any of them, equally — they're interchangeable.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "`AlloyDB` is purpose-built for this — it queries an upstream RPC for state slots and accounts as the EVM touches them, then caches. `InMemoryDB` would need you to pre-load all of mainnet (impractical). `StateProviderDatabase` requires a local MDBX with an actual Reth node behind it.",
+                    },
+                  ],
+                },
+                {
+                  title: 'Drill: implement \`ZeroDb\` and watch revm read state',
+                  slug: 'revm-database-drill-en',
+                  type: 'CONTENT',
+                  sortOrder: 12,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Drill: implement \`ZeroDb\` and watch revm read state
+
+Reading is rehearsal. **Implementing is memory.** This drill takes you from "I can describe the \`Database\` trait" to "I have implemented one and watched the EVM run against it."
+
+## The target
+
+A \`Database\` impl that always returns "balance = 0, no code, slot = 0":
 
 \`\`\`rust
 struct ZeroDb;
@@ -1236,13 +1476,120 @@ impl Database for ZeroDb {
 }
 \`\`\`
 
-> 🛑 **Before plugging it in, predict.** What kind of bytecode would actually fail under \`ZeroDb\`? What would succeed?
+\`type Error = std::convert::Infallible\` — we literally cannot fail. Every call returns \`Ok(...)\`. \`Infallible\` is the conventional "this never errors" type.
+
+## Drill 1 — Predict before plugging it in
+
+> 🛑 **Question (write your answers down before scrolling):** Each of these EVM operations runs against \`ZeroDb\`. What happens?
 >
-> Specifically: \`CALL\` to an address with no code — what happens? \`SLOAD\` from an uninitialized slot — what does the EVM see? \`BALANCE\` of any account — does the tx revert?
+> 1. \`BALANCE\` of any address.
+> 2. \`SLOAD\` of any slot.
+> 3. \`EXTCODESIZE\` of any address.
+> 4. \`CALL\` to an address with no code, transferring 0 ETH.
+> 5. \`BLOCKHASH(N)\` for any block number \`N\`.
 
-Plug \`ZeroDb\` into a Revm and execute a 1-tx block. Even though everything reads zero, the EVM runs cleanly. **Now you understand the entire harness around Revm — every other database is just this, with real data.**
+Answers:
 
-> Final check: in one sentence, why does revm split read (\`Database\`) from write (\`DatabaseCommit\`)? If you can't answer, scroll back to the trait reveal — you missed the point.`,
+1. **Returns 0.** \`basic\` returns \`AccountInfo::default()\` (balance 0).
+2. **Returns 0.** \`storage\` returns \`U256::ZERO\` — same as a fresh Ethereum slot.
+3. **Returns 0.** \`code_by_hash\` returns empty \`Bytecode\` (length 0).
+4. **Succeeds with no execution.** A \`CALL\` to an EOA (no code) is a valid Ethereum operation — transfer value (here zero), return. **No revert.**
+5. **Returns \`B256::ZERO\`.** Useful as a placeholder for tests.
+
+If you missed any of these, your mental model of \`Database\` × EVM semantics needs another pass — re-read the build-up lesson before continuing the drill.
+
+## Drill 2 — Plug \`ZeroDb\` into Revm and execute a 1-tx block
+
+Write a one-shot \`examples/zero_db_drill.rs\` (or use revm's existing test harness):
+
+\`\`\`rust
+use revm::{database_interface::Database, Evm, primitives::*};
+
+fn main() {
+    let mut evm = Evm::builder()
+        .with_db(ZeroDb)
+        .build();
+
+    // PUSH1 0x42 PUSH1 0x00 SSTORE STOP
+    // Push 0x42, push 0x00, write 0x42 to slot 0, stop.
+    let bytecode = hex::decode("604260005500").unwrap();
+
+    let result = evm.transact(&bytecode);
+    println!("{:?}", result);
+}
+\`\`\`
+
+> 🛑 **Predict.** Will this transaction succeed against \`ZeroDb\`?
+
+Yes. \`SSTORE\` is a *write*, not a read — and \`Database\` doesn't see writes (those go through \`DatabaseCommit\`, which we deliberately didn't implement). The pre-existing slot value is read via \`storage\` (returns 0, fine). The new value 0x42 is staged in revm's journaling layer and never reaches \`ZeroDb\`. The tx commits successfully.
+
+## Drill 3 — Now watch reads happen
+
+Add \`println!\`s to \`ZeroDb\`:
+
+\`\`\`rust
+fn basic(&mut self, addr: Address) -> Result<Option<AccountInfo>, Self::Error> {
+    println!("[ZeroDb] basic({addr})");
+    Ok(Some(AccountInfo::default()))
+}
+fn storage(&mut self, addr: Address, key: StorageKey) -> Result<StorageValue, Self::Error> {
+    println!("[ZeroDb] storage({addr}, {key})");
+    Ok(StorageValue::ZERO)
+}
+// ... same pattern for code_by_hash and block_hash
+\`\`\`
+
+Re-run. **You'll see exactly which reads revm needs** — and *only* those reads. No phantom queries. No eager state loading. Lazy, on-demand, exact.
+
+> 🔧 **Question:** How many distinct method calls did you observe? Which methods? On which keys?
+
+The exact answer depends on the bytecode and harness, but for \`PUSH1 0x42 PUSH1 0x00 SSTORE STOP\` you'll see something like:
+
+- One \`basic(tx.from)\` to validate the sender's nonce/balance
+- One \`storage(tx.to, 0)\` to read the existing slot for SSTORE refund accounting
+
+Two reads. That's it. **You now understand the entire harness around Revm — every other database is just this, with real data.**
+
+## Drill 4 — Make it fail (optional, harder)
+
+Replace \`Infallible\` with a custom error and have \`storage\` return \`Err(...)\` for one key:
+
+\`\`\`rust
+#[derive(Debug)]
+struct DbErr(String);
+impl revm::database_interface::DBErrorMarker for DbErr {}
+
+struct PickyDb;
+
+impl Database for PickyDb {
+    type Error = DbErr;
+    // basic, code_by_hash, block_hash all Ok(...)
+    fn storage(&mut self, _: Address, key: StorageKey) -> Result<StorageValue, Self::Error> {
+        if key == StorageKey::from(13u64) {
+            Err(DbErr("slot 13 is unlucky".into()))
+        } else {
+            Ok(StorageValue::ZERO)
+        }
+    }
+    // ... rest
+}
+\`\`\`
+
+Run a tx that does \`SLOAD(13)\`. **What does revm do?** (Hint: it's *not* a revert — it's a different category of failure.)
+
+The tx aborts as a "fatal external error" — distinct from a revert. Reverts are *consensus*; database errors are *infrastructure*. Revm bubbles \`Self::Error\` up to the caller without converting it to a revert, so your harness can decide whether to retry, log, or propagate. **That's why \`Error\` is your type, not revm's.**
+
+## End-of-lesson recall
+
+Without scrolling, in your own words:
+
+1. Why does \`ZeroDb::basic\` return \`Ok(Some(AccountInfo::default()))\` instead of \`Ok(None)\`?
+2. Why didn't \`SSTORE\` in Drill 2 ever call \`ZeroDb\` for the *write*?
+3. What's the difference between a tx revert and a \`Database::Error\` bubbling up?
+
+If any answer is shaky, the lesson isn't done with you. Re-run the drill or re-read the build-up.
+
+After this drill, you have a working mental model of how revm gets state — every other database is just \`ZeroDb\` with real data behind it. Next module: how Reth wires execution into a full sync pipeline.`,
                 },
               ],
             },

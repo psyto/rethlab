@@ -10,8 +10,8 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
       description:
         'Revmのインタープリターを読み解き、カスタムOpcodeとDatabaseトレイトの実装方法を学びます。さらにRethのStaged SyncとExEx (Execution Extensions) を通じて、独自のEVMインフラを構築するための基礎を固めます。',
       difficulty: 'ADVANCED',
-      duration: 165,
-      xpReward: 495,
+      duration: 190,
+      xpReward: 570,
       track: 'reth-advanced',
       tags,
       isPublished: true,
@@ -1096,97 +1096,196 @@ STOP        // 0x00
 このドリルの後、あなたは本当にカスタム Opcode をコードに配線しました。**より重要なのは、コストを体で感じたこと。** 次: revm がどう状態を取るか — \`Database\` トレイト。`,
                 },
                 {
-                  title: 'Databaseトレイト — 状態をどう供給するか',
-                  slug: 'revm-database-trait-ja',
+                  title: '\`Database\` トレイトを組み立てる — 読み API',
+                  slug: 'revm-database-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 9,
-                  duration: 12,
+                  duration: 10,
                   xpReward: 25,
-                  content: `# Databaseトレイト — 状態をどう供給するか
+                  content: `# \`Database\` トレイトを組み立てる — 読み API
 
-Revmは「実行エンジン」ですが、**状態（State）そのものは持っていません**。状態への読み書きは外部の \`Database\` トレイトを通じて行います。これを実装すれば、何でも繋げられる — インメモリ Map、フォークしたメインネット、独自MDBXスキーマ、リモートノード網など。
+Revm は「実行エンジン」ですが、**状態（State）を持っていません。** ストレージ読み込みは外部の \`Database\` トレイト経由で行います — これを実装すれば、Revm を何にでも繋げられる: インメモリ Map、フォークしたメインネット、独自 MDBX スキーマ、リモートノード網。
 
-> 🛑 **スクロールする前に予測。** Revm が状態ストアに必要とする **最小の API** を、見ずに書き出してください。メソッド数は? シグネチャは?
->
-> ヒント: 状態に触る各 Opcode を考える。\`SLOAD\`, \`BALANCE\`, \`EXTCODESIZE\`, \`BLOCKHASH\` — それぞれを満たすために何を聞く必要がある? 下書きを持ってからスクロール。
-
-\`\`\`mermaid
-sequenceDiagram
-    participant Op as Opcode（例: SLOAD）
-    participant I as Revm Interpreter
-    participant DB as Database トレイト実装
-    participant State as 裏側のストア
-
-    Op->>I: storage[addr][key] が必要
-    I->>DB: storage(addr, key)
-    DB->>State: 検索
-    State-->>DB: U256 値
-    DB-->>I: Ok(value)
-    I-->>Op: スタックに push
-\`\`\`
-
-Opcode は store を直接触らない — トレイトしか知らない。実装を差し替えれば現実が変わる：インメモリ、フォークしたメインネット、MDBX、RPC。同じ Revm、違う現実。
-
-## 本物のトレイト — 一字一句そのまま
-
-[\`crates/database/interface/src/lib.rs\`](https://github.com/bluealloy/revm/blob/main/crates/database/interface/src/lib.rs) （現 main）から：
+このレッスンは、最も素朴なスケッチからこのトレイトを積み上げます。終わりにはこれの全ピースを自分で組み立てたことになります:
 
 \`\`\`rust
 #[auto_impl(&mut, Box)]
 pub trait Database {
     type Error: DBErrorMarker;
-
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
-
     fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
-
     fn storage(&mut self, address: Address, index: StorageKey)
         -> Result<StorageValue, Self::Error>;
-
-    #[inline]
-    fn storage_by_account_id(
-        &mut self,
-        address: Address,
-        account_id: AccountId,
-        storage_key: StorageKey,
-    ) -> Result<StorageValue, Self::Error> {
-        let _ = account_id;
-        self.storage(address, storage_key)
-    }
-
     fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error>;
 }
 \`\`\`
 
-> 🛑 **予想と比較。** 何を取りこぼした? もっと重要なのは、**ここに無いけど予想にあったのは何?**
->
-> \`set_storage\` がない。\`set_balance\` がない。\`commit\` がない。**読み API と書き API が別トレイトに分割されているのはなぜ?** どんな設計上の制約に応えているのか?
+> 📂 **別タブで \`bluealloy/revm\` を開いてください。** 各ステップで照合します。
 
-### 3つの注目ポイント
+## ステップ 0 — 素朴な Revm: 状態を内部に持つ
 
-- **\`#[auto_impl(&mut, Box)]\`** — \`auto_impl\` クレートが \`&mut T\` と \`Box<T>\` の \`Database\` 実装を自動生成。\`&mut my_db\` でも \`Box::new(my_db)\` でもそのまま渡せる。
+何も考えずに書くと、Revm が状態を内部に持つ形:
 
-> 🛑 **理解度チェック。** 頭の中で \`#[auto_impl]\` 属性を消してください。さて: \`Database\` を期待する関数に \`&mut MyDatabase\` を渡すには、ユーザーは何を手書きする? \`impl<T: Database> Database for &mut T\` のブロックをスケッチ。書けないなら、このマクロはあなたにとってまだ雑音 — 手書きの実装を書いてから次へ。
+\`\`\`rust
+pub struct Revm {
+    stack: Vec<U256>,
+    storage: HashMap<(Address, U256), U256>,
+    accounts: HashMap<Address, AccountInfo>,
+    // ...
+}
+\`\`\`
 
-- **\`type Error: DBErrorMarker\`** — 各実装が自分のエラー型を持てるが、マーカートレイト実装は強制。なぜマーカーで、固定の enum じゃないのか? Revm はあなたのカスタムエラー（ネットワーク失敗、MDBX エラー、RPC タイムアウト）を、自分の閉じた分類に閉じ込めずに合成する必要があるから。
+インタープリターが \`self.storage.get(...)\` を直接呼ぶ。シンプル。おもちゃとしては動く。
 
-- **デフォルト実装付きの \`storage_by_account_id\`** — 最近の最適化。アカウントを特定済みなら内部 ID を渡してアドレス検索をスキップ。デフォルト実装は \`storage\` に転送。**パフォーマンスがトレイト API の設計レベルで考慮されている。**
+> 🛑 **予測。** スクロールせずに: この素朴な設計が *扱えない* 本番シナリオを3つ挙げてください。（ヒント: 各々が *別種の* 状態ソース。）
 
-> 🔍 **呼び出し側を探す。** Revm の中で \`storage_by_account_id\` が \`storage\` の代わりに実際に呼ばれている箇所はどこ? \`crates/handler/\` を検索。オーバーライドで得をするのは Database 作者か、それとも Revm 自身か?
+3つ:
 
-## 仲間のトレイト — 読みと書きの分離
+1. **フォークしたメインネット。** 状態はリモート RPC にあって、あなたの \`HashMap\` の中ではない。
+2. **本番の MDBX バックエンド。** 本物の Reth ノードはディスク上の MDBX を使っていて、インメモリ Map ではない。
+3. **独自スキーマ。** あなたのアプリチェーンはスパースなマークルストア、リモートシャード網、なんでもありえる。
+
+それぞれ状態を *取りに行く* コードが違う。Revm を3通りにフォークしたくない。
+
+## ステップ 1 — 状態をトレイトの後ろに押し出す
+
+何かのトレイトを定義して、Revm が状態に必要とすることを *記述する* — ストレージを所有せずに:
+
+\`\`\`rust
+pub trait Database {
+    fn storage(&mut self, address: Address, key: U256) -> U256;
+    fn balance(&mut self, address: Address) -> U256;
+    fn code(&mut self, address: Address) -> Vec<u8>;
+    fn block_hash(&mut self, number: u64) -> B256;
+}
+\`\`\`
+
+これでインタープリターはストレージを所有する代わりに \`db: &mut dyn Database\` を取る。誰でもこのトレイトを実装できる — フォークメインネット実装も、MDBX 実装も、インメモリ実装も、同じソケットに刺さる。
+
+> 🛑 **予測。** なぜ \`&mut self\` で、\`&self\` ではないのか? \`&mut\` が許して \`&self\` が許さないのは何?
+
+**キャッシュ。** 本物の実装（フォークメインネット、RPC バックエンド）は読み込みをキャッシュしたい — \`storage(addr, key)\` の最初の呼び出しはネットワークを叩き、以降の呼び出しはローカルキャッシュから返す。キャッシュの変更には \`&mut self\` が必要。\`&self\` だと各実装が \`RwLock\` か \`RefCell\` でラップする羽目になる — 場合によっては良いが、全体としては税金。デフォルトを \`&mut\` に。（\`&self\` の場合は次レッスンの仲間トレイトでカバー。）
+
+## ステップ 2 — メソッドを正しくグループ化する
+
+素朴なトレイトを見ると: \`balance\` と \`code\` は両方ともアカウントについて聞いているのに、別メソッドになっている。**本当に独立?**
+
+実務では大抵両方欲しい。特にネットワーク実装 — 同じアカウントについて RPC のラウンドトリップを2回したくない。良い形: 1つのメソッドで *両方* 返し、実装に取得方法を任せる。
+
+\`\`\`rust
+fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
+\`\`\`
+
+\`AccountInfo\` は balance、nonce、code hash を束ねる。**1ラウンドトリップで3つのデータ。** \`Option\` は実装が「そんなアカウントは存在しない」を綺麗にシグナルできるようにする — \`EXTCODEHASH\` が未知アカウントに特殊な意味を持つので便利。
+
+コード本体は別、*ハッシュ* でアドレッシング:
+
+\`\`\`rust
+fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
+\`\`\`
+
+> 🛑 **予測。** なぜ \`code_by_hash\` を \`basic\` から分けるのか? なぜコードはアドレスではなく *ハッシュ* で引くのか?
+
+コントラクトコードは **コンテンツアドレス指定** だから。あるバイトコード（例: 人気の DEX ルーター）は多くのアドレスで共有されている — ハッシュでキャッシュすれば自動的にデデュプ。\`basic\` はハッシュだけ返し、\`code_by_hash\` は実際に実行が必要なときだけバイトを実体化。コンテンツアドレッシングによる遅延ロード。
+
+## ステップ 3 — \`Result\` と関連型 \`Error\` を加える
+
+ネットワーク実装は失敗する。RPC タイムアウト、MDBX が古いロックを返す、Arc が poisoned — **どのメソッドも失敗を許す必要がある。**
+
+\`\`\`rust
+fn basic(&mut self, ...) -> Result<Option<AccountInfo>, Self::Error>;
+\`\`\`
+
+でも \`Self::Error\` — なぜ固定 enum ではなく関連型?
+
+**Revm にはあなたのエラー形状が分からない** から。RPC エラー、ディスク I/O エラー、ロック poison — 全部形が違う。固定 enum は狭すぎる（実装が本物のエラーを潰す羽目になる）か、広すぎる（Revm が50バリアントを処理する羽目になる）。
+
+\`\`\`rust
+type Error: DBErrorMarker;
+\`\`\`
+
+\`DBErrorMarker\` は無内容な制約（まともな型ならどれでも自動実装）。目的は: **意図の文書化**（「これは Database が出すエラーの種類です」）と、Revm が後から制約を加える（\`Send\`、\`Sync\` など）ためのフックを残すこと、実装を壊さずに。
+
+> 🛑 **理解度チェック。** 「拡張に開いている」は単なる受け売り。自分の言葉で: \`reqwest\` を使ってフォークメインネット実装を書いていると想像してください。\`Error\` が固定 \`DatabaseError\` enum だと *具体的に* 何が壊れる?
+
+\`reqwest::Error\`、\`serde_json::Error\`、ネットワークタイムアウト、パースエラーを閉じた enum のバリアントに *潰す* 羽目になる — そして *新しい失敗モード* が出るたびに Revm への PR が必要。関連型ならエラーはあなたのもの。
+
+## ステップ 4 — \`#[auto_impl(&mut, Box)]\`
+
+この属性がなければ、同じ転送コードを手書き:
+
+\`\`\`rust
+impl<T: Database> Database for &mut T {
+    type Error = T::Error;
+    fn basic(&mut self, addr: Address) -> Result<Option<AccountInfo>, T::Error> {
+        (**self).basic(addr)
+    }
+    // ... 残り3メソッドも全部同じパターン
+}
+impl<T: Database> Database for Box<T> { /* ... 同じ4メソッド ... */ }
+\`\`\`
+
+12個のメソッド本体が同一の転送ボイラープレート（\`Database\`、\`DatabaseRef\`、\`DatabaseCommit\` の合計）。
+
+\`auto_impl\` はこの転送実装を自動生成する手続きマクロ。\`#[auto_impl(&mut, Box)]\` が付いていれば、\`MyDb\` が \`Database\` を実装していれば、\`&mut MyDb\` も \`Box<MyDb>\` も自動的に \`Database\` を実装する。**ユーザー側のボイラープレートゼロ。**
+
+> 🛑 **予測。** \`Database\` を \`Arc<MyDb>\` でも動かしたい場合は? なぜ \`auto_impl(&mut, Box, Arc)\` で解決しないのか?
+
+直接的には解決しない。\`Arc<T>\` は \`&T\` しか出さない、\`&mut T\` は出さない。\`Database\` のメソッドは \`&mut self\` を取るので、\`Arc<MyDb>\` は \`Database\` を実装できない。**これが設計の分割を強制する** — 次レッスンが解決します: Revm は \`Arc\` のために *仲間の* 読み専用トレイト（\`DatabaseRef\`）を持っています。
+
+## ここまでに組み立てたもの
 
 \`\`\`rust
 #[auto_impl(&mut, Box)]
-pub trait DatabaseCommit {
-    fn commit(&mut self, changes: AddressMap<Account>);
-    // ...
+pub trait Database {
+    type Error: DBErrorMarker;
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
+    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
+    fn storage(&mut self, address: Address, index: StorageKey)
+        -> Result<StorageValue, Self::Error>;
+    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error>;
 }
+\`\`\`
 
+各ピースが場所代を稼いでいる:
+
+- **\`&mut self\`**（ステップ 1）— \`RefCell\`/\`RwLock\` のオーバーヘッドなしでキャッシュ
+- **\`AccountInfo\` を返す \`basic\`**（ステップ 2）— アカウントごとに1ラウンドトリップ
+- **\`code_by_hash\`**（ステップ 2）— コンテンツアドレッシング、コントラクト間でデデュプ
+- **\`type Error: DBErrorMarker\`**（ステップ 3）— 開いたエラー分類、マーカー制約
+- **\`#[auto_impl(&mut, Box)]\`**（ステップ 4）— 自動転送
+
+次レッスン: \`auto_impl\` が *できないこと*（Arc）、Revm が読みと書きをどう分けるか、同じトレイトが 50 行から数千行までどうスケールするかを見せる3つの本物の実装。
+
+## 進む前の想起
+
+スクロールせずに:
+
+1. なぜ \`Database\` は \`&self\` ではなく \`&mut self\` なのか?
+2. \`basic\` と \`code_by_hash\` の違いは? なぜ分けるのか?
+3. なぜ \`Error\` は固定 enum ではなく関連型なのか?
+4. \`#[auto_impl(&mut, Box)]\` は何の手書きを省いてくれるか?
+
+どれか曖昧なら戻る。次のレッスンは読み/書き分離。
+`,
+                },
+                {
+                  title: '仲間トレイト・最適化・本物の実装',
+                  slug: 'revm-database-companions-ja',
+                  type: 'CONTENT',
+                  sortOrder: 10,
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# 仲間トレイト・最適化・本物の実装
+
+前のレッスンで \`Database\` を組み立てました。最後にヒントを残しました: \`&mut self\` 要件のせいで \`Arc<MyDb>\` は \`Database\` を実装できない。**このレッスンはそれが OK な理由を説明します** — Revm には仲間の読み専用トレイト、別の書き戻しトレイト、トレイト API の中の性能最適化、そしておもちゃから本番までスケールする3つの実装があります。
+
+## ステップ 1 — \`DatabaseRef\`: 読み専用アクセス
+
+\`\`\`rust
 #[auto_impl(&, &mut, Box, Rc, Arc)]
 pub trait DatabaseRef {
     type Error: DBErrorMarker;
-
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
     fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error>;
     fn storage_ref(&self, address: Address, index: StorageKey)
@@ -1195,27 +1294,168 @@ pub trait DatabaseRef {
 }
 \`\`\`
 
-| トレイト | 用途 |
-| :--- | :--- |
-| \`Database\` | 通常実行（\`&mut self\` — 内部キャッシュ可） |
-| \`DatabaseRef\` | 共有・不変ビュー — \`&self\` なので \`Arc\` で包んで並列タスクに分配可能 |
-| \`DatabaseCommit\` | オプション：書き戻しパス、\`commit_state\` で使用 |
+メソッド4つは \`Database\` と同じ。違いは2つ:
 
-> 🛑 **予測。** \`DatabaseRef\` の \`auto_impl\` リスト（\`&, &mut, Box, Rc, Arc\`）は \`Database\` のリスト（\`&mut, Box\`）より長い。なぜ? この非対称は、各トレイトが実際にどう使われているかについて何を語っているか?
+- **\`&mut self\` ではなく \`&self\`。** 内部変更は許されない（\`RwLock\` / \`OnceLock\` などを使わない限り）。
+- **\`auto_impl\` のリストが長い** — \`&, &mut, Box, Rc, Arc\`（5種、\`Database\` の2種に対して）。
 
-## 読むべき実装
+> 🛑 **予測。** なぜ \`DatabaseRef\` の \`auto_impl\` リストが長いのか? この非対称は何を語っている?
 
-| 実装 | 場所 | 読むタイミング |
-| :--- | :--- | :--- |
-| \`InMemoryDB\` | \`crates/database/src/in_memory_db.rs\` | 最小 \`HashMap\` ベース。おもちゃ版 |
-| \`AlloyDB\` | \`crates/database/src/alloydb.rs\` | JSON-RPCで取得 — フォークメインネットの典型 |
-| \`StateProviderDatabase\` | reth: \`crates/storage/storage-api/src/database_provider.rs\` | 本番のMDBXバックエンドReth実装 |
+\`&self\` アクセスは \`&mut self\` より *厳密に弱い* 制約だから。\`Arc<T>\` と \`Rc<T>\` は安価で共有可能な \`&T\` を出すが、\`&mut T\` は決して出さない。だから \`DatabaseRef\` はそれらを通じて動くが、\`Database\` は動かない。長いリストは設計上の選択ではなく、機械的な帰結。
 
-「おもちゃ → ネットワーク → 本番」の順で読むと、同じトレイトが 50 行から数千行まで、どうスケールするかが見える。
+パターン: **共有並列アクセスが必要? \`DatabaseRef\` を実装。キャッシュが必要? \`Database\` を実装。両方必要? 両方実装** — Revm には \`WrapDatabaseRef\` のような片方を片方に持ち上げるヘルパーがある。
 
-## 練習
+## ステップ 2 — \`DatabaseCommit\`: 書き戻しを別トレイトに
 
-「残高ゼロ・コードなし・スロット0」を返すだけの \`Database\` を実装：
+\`\`\`rust
+#[auto_impl(&mut, Box)]
+pub trait DatabaseCommit {
+    fn commit(&mut self, changes: AddressMap<Account>);
+}
+\`\`\`
+
+書き戻し用の別トレイト。なぜ?
+
+> 🛑 **予測。** スクロールせずに: なぜ \`commit\` は \`Database\` のもう1つのメソッドではないのか?
+
+理由は2つ:
+
+1. **読み専用 Database が存在する。** フォークメインネット実装は RPC から読むだけで、commit する用事はない — 書き戻すべき本当のバッキングストアがない。\`commit\` の実装を強制すると panic スタブが必要か、嘘のメソッドで型を汚染することになる。
+2. **ライフサイクルが違う。** 読みは呼び出しごと、commit はトランザクション終了時。トレイトを分けることでこのライフサイクルを明示し、型システムに強制させる。
+
+Rust の \`std::io\` の \`Read\` と \`Write\` と同じパターン — 1つのトレイトに混ぜたら、すべての読み手が書きについて考えなければならなくなる。
+
+## ステップ 3 — \`storage_by_account_id\`（最適化）
+
+\`Database\` には前のレッスンで見せなかったメソッドがもう1つあります:
+
+\`\`\`rust
+#[inline]
+fn storage_by_account_id(
+    &mut self,
+    address: Address,
+    account_id: AccountId,
+    storage_key: StorageKey,
+) -> Result<StorageValue, Self::Error> {
+    let _ = account_id;
+    self.storage(address, storage_key)
+}
+\`\`\`
+
+注目: **デフォルト実装** が \`account_id\` を無視して \`storage\` に転送している。このデフォルトが鍵。
+
+> 🛑 **予測。** なぜこのメソッドがそもそも存在するのか? いつデフォルトの「\`account_id\` を無視して \`storage\` にフォールバック」が Revm のニーズを満たさないのか?
+
+**内部のアカウントインデックスを持つ実装** のため — 例えば MDBX バックエンドの Reth では、コールフレームの早い段階でアカウントが内部の数値 ID に解決済み。\`account_id\` を渡せば、ストレージ読み込みごとに冗長なアドレス→アカウント ID 検索を省ける。デフォルトは安全に転送する; *もっと速くできる* 実装はオーバーライドする。
+
+**パフォーマンスがトレイト API の中に存在する**、実装の中だけではなく。素朴な実装（インメモリ）はデフォルトを取って普通に動く。本番実装（MDBX）はオーバーライドして仕事の見返りを得る。
+
+## ステップ 4 — 読むべき3つの本物の実装
+
+同じトレイト、3つの全く違うバックエンド:
+
+| 実装 | 場所 | バッキング | 行数 |
+| :--- | :--- | :--- | :--- |
+| \`InMemoryDB\` | \`crates/database/src/in_memory_db.rs\` | \`HashMap\` 群 | 約50 |
+| \`AlloyDB\` | \`crates/database/src/alloydb.rs\` | ネットワーク経由の JSON-RPC | 約150 |
+| \`StateProviderDatabase\` | reth: \`crates/storage/storage-api/src/database_provider.rs\` | MDBX、スパースマークル | 数千 |
+
+> 🔍 **3つ全ての出だしを読んでください。** 型定義と最初のメソッド（\`basic\`）だけ。比較:
+> - \`InMemoryDB::basic\` — 直接 \`HashMap::get\`、失敗しない
+> - \`AlloyDB::basic\` — 同期 façade に包まれた非同期 RPC 呼び出し、失敗しうる
+> - \`StateProviderDatabase::basic\` — MDBX カーソル lookup、失敗しうる
+>
+> 3つの違う世界、1つのトレイト形。
+
+> 🛑 **理解度チェック。** スクロールせずに: *メインネットをブロック N でフォーク* して任意のトランザクションを上で走らせたい場合、3つのうちどれを選ぶか? なぜ?
+
+\`AlloyDB\`。RPC 経由で状態を遅延取得する — フルアーカイブノードをダウンロードする必要がない。tx が初めてスロットやアカジェントに触れたとき、\`AlloyDB\` は上流ノードに問い合わせ、以降の読み込みはインメモリキャッシュから返る。**フォークメインネットパターンはまさに \`Database\` 周りの150行のグルー。**
+
+## クイズ前の想起
+
+スクロールせずに:
+
+1. なぜ \`DatabaseRef\` の \`auto_impl\` には \`Rc\` と \`Arc\` が含まれていて、\`Database\` には無いのか?
+2. なぜ \`commit\` は \`Database\` とは別トレイトなのか?
+3. \`storage_by_account_id\` のオーバーライドは MDBX 実装で何を節約するのか?
+4. \`InMemoryDB\`、\`AlloyDB\`、\`StateProviderDatabase\` の中で、メインネットフォークに選ぶのはどれ?
+
+次のレッスンはクイズ。曖昧な答えがあるなら今、想起してください。
+`,
+                },
+                {
+                  title: 'クイズ: \`Database\` トレイトの形は身についた?',
+                  slug: 'revm-database-quiz-ja',
+                  type: 'QUIZ',
+                  sortOrder: 11,
+                  duration: 4,
+                  xpReward: 25,
+                  content: `# クイズ: \`Database\` トレイトの形は身についた?
+
+トレイトの設計判断と読み/書き分離をカバーする4問。前回と同じルール: **クイズはうなずきで通せない。**
+
+2問以上落としたら、ドリルへ進む前に「\`Database\` トレイトを組み立てる」を読み直してください。`,
+                  quizQuestions: [
+                    {
+                      question: "`Database` のメソッドが `&self` ではなく `&mut self` を取るのはなぜですか?",
+                      options: [
+                        "複数スレッドからの共有並列アクセスを防ぐため。",
+                        "実装が内部キャッシュ（例: フォークメインネット実装がネットワーク読み込みの結果をキャッシュする）を RefCell/RwLock のスキャフォールドなしに変更できるようにするため。",
+                        "EVM が `Database` メソッド経由で状態を *書く* 必要があるため。",
+                        "Rust の制約 — `&self` トレイトは `dyn` 互換にできないため。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "`&mut self` で実装はキャッシュを直接変更できる。ネットワーク実装は呼び出し間で RPC 結果をキャッシュしたい; `&self` だと内部可変性スキャフォールド（RwLock/RefCell）を強制する。本当に共有 `&self` アクセスが必要なユーザー（Arc ラップ、並列タスク）には、Revm は仲間トレイト `DatabaseRef` を提供している — 意図的な設計分割。",
+                    },
+                    {
+                      question: "`Error` がマーカートレイト `DBErrorMarker` で制約された関連型なのはなぜですか?",
+                      options: [
+                        "拡張に開いた接点: 各実装が独自のエラー型を選べるが、Revm は後からマーカー経由で制約（Send、Sync）を厳しくでき、実装を壊さない。",
+                        "Rust の制約 — トレイトはジェネリックメソッドを持てないため。",
+                        "マーカーは無内容な制約; 設計上の目的は無い。",
+                        "古い Revm API の後方互換シム。",
+                      ],
+                      correctIndex: 0,
+                      explanation: "固定 `enum DatabaseError` だと、`reqwest::Error`、`serde_json::Error`、MDBX エラーなどを閉じたバリアントに潰す羽目になる — そして新しい失敗モードが必要なたびに Revm への PR が必要。関連型ならあなたのエラーはあなたのもの。マーカートレイトは Revm が *制約を厳しくする* ための場所を残す、実装を壊さずに。",
+                    },
+                    {
+                      question: "`auto_impl` のリストが `DatabaseRef`（`&, &mut, Box, Rc, Arc`）の方が `Database`（`&mut, Box`）より長いのはなぜですか?",
+                      options: [
+                        "`Rc` と `Arc` はスレッドセーフではないため、`Database` を実装できない。",
+                        "`DatabaseRef` の方が古いため、リストが時間とともに伸びた。",
+                        "`Rc<T>` と `Arc<T>` は共有 `&T` アクセスを提供するが `&mut T` は提供できない。`DatabaseRef` のメソッドは `&self` を取るので Rc/Arc 経由で動くが、`Database` の `&mut self` メソッドは動かない。",
+                        "`DatabaseRef` は `Send + Sync` を要求するが、`Database` は要求しない。",
+                      ],
+                      correctIndex: 2,
+                      explanation: "様式ではなく機械的な帰結。`Arc<T>` は `&T` しか出さない。だから `&self` のみのトレイトは `Arc` 経由で動くが、`&mut self` のトレイトは動かない。長いリストは `DatabaseRef` の読み専用メソッドの帰結 — トレイト自体の設計上の選択ではない。",
+                    },
+                    {
+                      question: "`InMemoryDB`、`AlloyDB`、`StateProviderDatabase` の中で、「メインネットをブロック N でフォークして任意のトランザクションを走らせる」用途に正しいのはどれですか?",
+                      options: [
+                        "`InMemoryDB` — メインネットの全状態を RAM に事前ロード。",
+                        "`AlloyDB` — JSON-RPC 経由で状態を遅延取得; 上流ノードが正典。",
+                        "`StateProviderDatabase` — 直接 MDBX アクセスにはローカルにフル Reth アーカイブが必要。",
+                        "どれでも同じ — 互換的。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "`AlloyDB` がこの用途のために作られている — EVM が触れるたびに上流 RPC に状態スロットやアカウントを問い合わせ、キャッシュする。`InMemoryDB` だとメインネット全体の事前ロードが必要（非実用的）。`StateProviderDatabase` には実 Reth ノードを伴うローカル MDBX が必要。",
+                    },
+                  ],
+                },
+                {
+                  title: 'ドリル: \`ZeroDb\` を実装して Revm の状態読みを観測する',
+                  slug: 'revm-database-drill-ja',
+                  type: 'CONTENT',
+                  sortOrder: 12,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# ドリル: \`ZeroDb\` を実装して Revm の状態読みを観測する
+
+読むのはリハーサル。**実装するのが記憶。** このドリルは「\`Database\` トレイトを説明できる」から「自分で実装して、それに対して EVM が走るのを観察した」までを連れて行きます。
+
+## 目標
+
+「残高ゼロ・コードなし・スロット 0」を返すだけの \`Database\` 実装:
 
 \`\`\`rust
 struct ZeroDb;
@@ -1238,13 +1478,120 @@ impl Database for ZeroDb {
 }
 \`\`\`
 
-> 🛑 **繋ぐ前に予測。** \`ZeroDb\` で実際に失敗するバイトコードは? 成功するバイトコードは?
+\`type Error = std::convert::Infallible\` — 文字通り失敗できない。すべての呼び出しが \`Ok(...)\` を返す。\`Infallible\` は「これはエラーを起こさない」を表す慣用型。
+
+## ドリル 1 — 繋ぐ前に予測
+
+> 🛑 **質問（スクロールする前に答えを書き留めて）:** 以下の各 EVM 操作が \`ZeroDb\` に対して走ります。何が起きる?
 >
-> 具体的に: コードのないアドレスへの \`CALL\` は何が起きる? 未初期化スロットからの \`SLOAD\` は EVM に何を見せる? どのアカウントへの \`BALANCE\` も tx は revert する?
+> 1. 任意のアドレスへの \`BALANCE\`。
+> 2. 任意のスロットの \`SLOAD\`。
+> 3. 任意のアドレスへの \`EXTCODESIZE\`。
+> 4. コードのないアドレスへの 0 ETH 転送 \`CALL\`。
+> 5. 任意のブロック番号 \`N\` への \`BLOCKHASH(N)\`。
 
-これを Revm に繋いで 1 tx ブロックを実行。すべてゼロを読んでも EVM はきれいに動く。**これで Revm 周りのハーネス全体が見えました — 他の Database はこれに本物のデータを足しただけ。**
+答え:
 
-> 最終チェック: なぜ Revm は読み (\`Database\`) と書き (\`DatabaseCommit\`) を別トレイトに分割するのか、一文で答えてください。答えられないなら、トレイトの reveal に戻る — 要点を取り逃しています。`,
+1. **0 を返す。** \`basic\` が \`AccountInfo::default()\`（残高 0）を返す。
+2. **0 を返す。** \`storage\` が \`U256::ZERO\` を返す — Ethereum の新規スロットと同じ。
+3. **0 を返す。** \`code_by_hash\` が空の \`Bytecode\`（長さ 0）を返す。
+4. **実行なしで成功。** コードのない EOA への \`CALL\` は有効な Ethereum 操作 — 値を転送（ここではゼロ）して return。**revert はしない。**
+5. **\`B256::ZERO\` を返す。** テストのプレースホルダーとして有用。
+
+どれか間違えたら、\`Database\` × EVM セマンティクスのメンタルモデルに再パスが必要 — 組み立てレッスンを読み直してからドリルを続けてください。
+
+## ドリル 2 — \`ZeroDb\` を Revm に繋いで 1-tx ブロックを実行
+
+ワンショットの \`examples/zero_db_drill.rs\` を書く（または Revm の既存テストハーネスを使う）:
+
+\`\`\`rust
+use revm::{database_interface::Database, Evm, primitives::*};
+
+fn main() {
+    let mut evm = Evm::builder()
+        .with_db(ZeroDb)
+        .build();
+
+    // PUSH1 0x42 PUSH1 0x00 SSTORE STOP
+    // 0x42 を push、0x00 を push、スロット 0 に 0x42 を書き込み、stop。
+    let bytecode = hex::decode("604260005500").unwrap();
+
+    let result = evm.transact(&bytecode);
+    println!("{:?}", result);
+}
+\`\`\`
+
+> 🛑 **予測。** このトランザクションは \`ZeroDb\` に対して成功する?
+
+成功します。\`SSTORE\` は *書き* で、読みではない — そして \`Database\` は書きを見ない（書きは \`DatabaseCommit\` 経由で、これは意図的に実装していない）。スロットの既存値は \`storage\`（0 を返す、問題なし）で読まれる。新値 0x42 は Revm のジャーナリング層にステージされ、\`ZeroDb\` には届かない。tx は無事 commit。
+
+## ドリル 3 — 読みが起きるのを観察する
+
+\`ZeroDb\` に \`println!\` を追加:
+
+\`\`\`rust
+fn basic(&mut self, addr: Address) -> Result<Option<AccountInfo>, Self::Error> {
+    println!("[ZeroDb] basic({addr})");
+    Ok(Some(AccountInfo::default()))
+}
+fn storage(&mut self, addr: Address, key: StorageKey) -> Result<StorageValue, Self::Error> {
+    println!("[ZeroDb] storage({addr}, {key})");
+    Ok(StorageValue::ZERO)
+}
+// ... code_by_hash と block_hash も同じパターン
+\`\`\`
+
+再実行。**Revm が必要とする読みが正確に見える** — そしてそれ *だけ*。幻のクエリなし。先取りの状態ロードなし。遅延、オンデマンド、正確。
+
+> 🔧 **質問:** 何種類のメソッド呼び出しを観測した? どのメソッド? どのキーで?
+
+正確な答えはバイトコードとハーネス次第ですが、\`PUSH1 0x42 PUSH1 0x00 SSTORE STOP\` ならこんな感じ:
+
+- 送信者の nonce/残高検証で \`basic(tx.from)\` 1回
+- SSTORE 返金会計のためのスロット読み込みで \`storage(tx.to, 0)\` 1回
+
+読み込み2回。それで全部。**これで Revm 周りのハーネス全体が見えた — 他の Database はこれに本物のデータを足しただけ。**
+
+## ドリル 4 — 失敗させる（オプション、難）
+
+\`Infallible\` をカスタムエラー型に置き換え、特定のキーで \`storage\` が \`Err(...)\` を返すようにする:
+
+\`\`\`rust
+#[derive(Debug)]
+struct DbErr(String);
+impl revm::database_interface::DBErrorMarker for DbErr {}
+
+struct PickyDb;
+
+impl Database for PickyDb {
+    type Error = DbErr;
+    // basic、code_by_hash、block_hash はすべて Ok(...)
+    fn storage(&mut self, _: Address, key: StorageKey) -> Result<StorageValue, Self::Error> {
+        if key == StorageKey::from(13u64) {
+            Err(DbErr("slot 13 is unlucky".into()))
+        } else {
+            Ok(StorageValue::ZERO)
+        }
+    }
+    // ... 残り
+}
+\`\`\`
+
+\`SLOAD(13)\` を行う tx を実行。**Revm はどうする?**（ヒント: revert *ではない* — 別カテゴリの失敗。）
+
+tx は「致命的な外部エラー」として中断する — revert とは別物。Revert は *コンセンサス*、Database エラーは *インフラ*。Revm は \`Self::Error\` を呼び出し元に bubble up し、revert に変換しない。これにより、ハーネスがリトライ・ログ・伝播のどれを選ぶか決められる。**だから \`Error\` はあなたの型で、Revm の型ではない。**
+
+## レッスン終了の想起
+
+スクロールせずに、自分の言葉で:
+
+1. なぜ \`ZeroDb::basic\` は \`Ok(None)\` ではなく \`Ok(Some(AccountInfo::default()))\` を返すのか?
+2. ドリル 2 で \`SSTORE\` が *書き* のために \`ZeroDb\` のメソッドを呼ばなかったのはなぜか?
+3. tx の revert と \`Database::Error\` が bubble up するのとの違いは?
+
+どれか曖昧なら、レッスンはまだあなたを離しません。ドリルをやり直すか、組み立てレッスンを読み直し。
+
+このドリルの後、Revm がどう状態を取るかの動くメンタルモデルがあります — 他のすべての Database はこの \`ZeroDb\` に本物のデータが乗っただけ。次モジュール: Reth が実行をどうフルシンクパイプラインに配線するか。`,
                 },
               ],
             },
