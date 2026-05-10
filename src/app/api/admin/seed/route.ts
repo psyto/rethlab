@@ -6,6 +6,8 @@ import { seedRethFundamentalsEN } from '../../../../../prisma/seed-reth-fundamen
 import { seedRethFundamentalsJA } from '../../../../../prisma/seed-reth-fundamentals-ja';
 import { seedRethBridgeToAdvancedEN } from '../../../../../prisma/seed-reth-bridge-to-advanced-en';
 import { seedRethBridgeToAdvancedJA } from '../../../../../prisma/seed-reth-bridge-to-advanced-ja';
+import { seedRethRevmAdvancedEN } from '../../../../../prisma/seed-reth-revm-advanced-en';
+import { seedRethRevmAdvancedJA } from '../../../../../prisma/seed-reth-revm-advanced-ja';
 import { seedRethAdvancedEN } from '../../../../../prisma/seed-reth-advanced-en';
 import { seedRethAdvancedJA } from '../../../../../prisma/seed-reth-advanced-ja';
 import { seedRethExpertEN } from '../../../../../prisma/seed-reth-expert-en';
@@ -50,8 +52,10 @@ export async function POST(req: Request) {
       { name: 'Fundamentals JA', fn: seedRethFundamentalsJA, checkSlug: 'reth-fundamentals-ja' },
       { name: 'Bridge to Advanced EN', fn: seedRethBridgeToAdvancedEN, checkSlug: 'reth-bridge-to-advanced-en' },
       { name: 'Bridge to Advanced JA', fn: seedRethBridgeToAdvancedJA, checkSlug: 'reth-bridge-to-advanced-ja' },
-      { name: 'Advanced EN', fn: seedRethAdvancedEN, checkSlug: 'reth-advanced-en' },
-      { name: 'Advanced JA', fn: seedRethAdvancedJA, checkSlug: 'reth-advanced-ja' },
+      { name: 'Revm Advanced EN', fn: seedRethRevmAdvancedEN, checkSlug: 'revm-advanced-en' },
+      { name: 'Revm Advanced JA', fn: seedRethRevmAdvancedJA, checkSlug: 'revm-advanced-ja' },
+      { name: 'Reth Advanced EN', fn: seedRethAdvancedEN, checkSlug: 'reth-advanced-en' },
+      { name: 'Reth Advanced JA', fn: seedRethAdvancedJA, checkSlug: 'reth-advanced-ja' },
       { name: 'Expert EN', fn: seedRethExpertEN, checkSlug: 'reth-expert-en' },
       { name: 'Expert JA', fn: seedRethExpertJA, checkSlug: 'reth-expert-ja' },
       { name: 'Building EN', fn: seedRethBuildingEN, checkSlug: 'reth-building-en' },

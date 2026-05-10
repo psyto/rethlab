@@ -5,6 +5,8 @@ import { seedRethFundamentalsJA } from './seed-reth-fundamentals-ja';
 import { seedRethFundamentalsEN } from './seed-reth-fundamentals-en';
 import { seedRethBridgeToAdvancedEN } from './seed-reth-bridge-to-advanced-en';
 import { seedRethBridgeToAdvancedJA } from './seed-reth-bridge-to-advanced-ja';
+import { seedRethRevmAdvancedEN } from './seed-reth-revm-advanced-en';
+import { seedRethRevmAdvancedJA } from './seed-reth-revm-advanced-ja';
 import { seedRethAdvancedJA } from './seed-reth-advanced-ja';
 import { seedRethAdvancedEN } from './seed-reth-advanced-en';
 import { seedRethExpertJA } from './seed-reth-expert-ja';
@@ -54,10 +56,15 @@ async function main() {
   await seedRethBridgeToAdvancedJA(prisma);
   console.log('  Seeded Bridge to Advanced (EN + JA)');
 
-  console.log('\nSeeding Advanced courses...');
+  console.log('\nSeeding Revm Advanced courses...');
+  await seedRethRevmAdvancedEN(prisma);
+  await seedRethRevmAdvancedJA(prisma);
+  console.log('  Seeded Revm Advanced (EN + JA)');
+
+  console.log('\nSeeding Reth Advanced courses...');
   await seedRethAdvancedEN(prisma);
   await seedRethAdvancedJA(prisma);
-  console.log('  Seeded Advanced (EN + JA)');
+  console.log('  Seeded Reth Advanced (EN + JA)');
 
   console.log('\nSeeding Expert courses...');
   await seedRethExpertEN(prisma);
