@@ -10,8 +10,8 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
       description:
         'Read the Revm interpreter, learn how custom opcodes and the Database trait work, and pick up Reth Staged Sync and Execution Extensions (ExEx) — the path to building your own EVM infrastructure.',
       difficulty: 'ADVANCED',
-      duration: 215,
-      xpReward: 645,
+      duration: 236,
+      xpReward: 715,
       track: 'reth-advanced',
       tags,
       isPublished: true,
@@ -2261,33 +2261,191 @@ async fn my_exex<Node: FullNodeComponents>(
 > Final check: close this tab. Write the ExEx \`my_exex\` signature from memory. If you can't, you don't yet own the vocabulary — open it back up. The next lesson reads ExEx in detail; you'll need each of these without the cheat sheet.`,
                 },
                 {
-                  title: 'ExEx — Execution Extensions',
-                  slug: 'reth-exex-en',
+                  title: 'Building the ExEx API step by step',
+                  slug: 'reth-exex-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 5,
-                  duration: 15,
-                  xpReward: 30,
-                  content: `# ExEx — Execution Extensions
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# Building the ExEx API step by step
 
-**ExEx** is Reth's mechanism for injecting Rust code into the execution loop. With it you build node-speed indexers, MEV bots, and live risk engines — directly in the same process as the chain itself.
+**ExEx (Execution Extension)** is Reth's mechanism for injecting Rust code into the execution loop. With it you build node-speed indexers, MEV bots, and live risk engines — directly in the same process as the chain itself.
 
-> 🛑 **Predict before scrolling.** Reth needs to tell your code about every new block. **Sketch the API.** What does Reth send you on every commit? On a reorg? How does your code tell Reth "I'm done with block N — you can prune"? Hold your guess.
+But the API has 4 parts that look weighty: an init/run split, a notification *enum* with 3 variants, an event channel for pruning hints, and an install method on the node builder. Walk it cold and you get four ideas at once.
 
-\`\`\`mermaid
-flowchart LR
-    subgraph Reth
-        Sync[Sync] --> Exec[ExecutionStage]
-        Exec --> Commit[Chain commit]
-    end
-    Commit -->|notification| ExEx[Your ExEx]
-    ExEx -->|FinishedHeight| Prune[Reth pruner]
+This lesson builds the API up from the simplest possible "block listener." By the end you'll have built every piece of the real minimal ExEx — which the next lesson reads in detail.
+
+> 📂 **Open \`paradigmxyz/reth-exex-examples/minimal\` in another tab.** That's the file we're building toward.
+
+## Step 0 — The naive indexer: separate process polling RPC
+
+Without thinking, you'd index Ethereum like this:
+
+\`\`\`rust
+fn main() {
+    let rpc = HttpProvider::new("http://localhost:8545");
+    let mut last_block = 0;
+    loop {
+        let head = rpc.get_block_number().unwrap();
+        for n in (last_block+1)..=head {
+            let block = rpc.get_block(n).unwrap();
+            index(block);
+        }
+        last_block = head;
+        sleep(Duration::from_secs(1));
+    }
+}
 \`\`\`
 
-The chain executes; Reth pushes a notification for every committed block (or reorg / revert) into your ExEx's stream; you process it and report back the highest block you've finished — that lets Reth prune older history safely.
+A separate process. Polls the RPC every second. Indexes any new blocks.
 
-## The minimal ExEx — verbatim
+> 🛑 **Predict.** Without scrolling: name three reasons this naive design is *significantly worse* than running in-process inside Reth. (Hint: each is a different *kind of* problem.)
 
-This is the entire \`main.rs\` of [\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal):
+The three:
+
+1. **Latency.** The RPC poll has request/response overhead. The indexer is always seconds behind the tip — useless for MEV, risk, real-time UX.
+2. **Atomicity.** Reth commits a new block to disk *before* your indexer sees it. There's a window where Reth has a block your code hasn't processed. If your code is the source of truth for a derived view, that window is a race condition.
+3. **Reorgs.** Polling sees \`head = N\`, then later \`head = N\` (different block). Your indexer has to detect and handle reorgs from outside, with weaker information than Reth itself has.
+
+The fix: **run in the same process as Reth.** Get notified the moment a block commits, with full chain context.
+
+## Step 1 — First stab: a callback per block
+
+Naive in-process API:
+
+\`\`\`rust
+fn on_new_block<F: Fn(&Block)>(reth: &mut Reth, callback: F) {
+    reth.add_listener(callback);
+}
+\`\`\`
+
+Reth calls your closure for every new block. Simple.
+
+> 🛑 **Predict.** What's missing? (Two big things.)
+
+The two:
+
+1. **Reorgs aren't append-only.** A callback that only fires on "new block added" can't represent "block N at hash X was replaced by block N at hash Y." Your indexer's derived state silently corrupts on every reorg.
+2. **No way to tell Reth you're done.** If your indexer is processing block N, Reth doesn't know whether it can prune block N-100,000's data. Without this signal, **Reth keeps everything forever.**
+
+## Step 2 — A richer notification: the three chain events
+
+Replace the bare callback with an enum that captures all three things that can happen to the chain:
+
+\`\`\`rust
+enum ExExNotification {
+    ChainCommitted { new: Chain },             // canonical blocks added
+    ChainReorged   { old: Chain, new: Chain }, // old replaced by new
+    ChainReverted  { old: Chain },             // removed (no replacement yet)
+}
+\`\`\`
+
+Each variant carries enough information for the indexer to undo or redo derived state:
+
+- **\`ChainCommitted { new }\`** — append the new blocks' state to your index.
+- **\`ChainReorged { old, new }\`** — undo \`old\`'s state, apply \`new\`'s state. Atomic swap.
+- **\`ChainReverted { old }\`** — undo \`old\`'s state, wait. Reth will follow up with a future \`ChainCommitted\` once it picks a new tip.
+
+> 🛑 **Anti-fluency.** You're indexing transactions to a \`HashMap\`. You handle only \`ChainCommitted\`. The chain reorgs 5 blocks deep. **What's wrong with your HashMap?** Be specific — write the failure mode in two sentences.
+
+The HashMap contains the *old* chain's transactions, but the canonical chain is now the *new* chain. Any later read off your index will return transactions that no longer exist on the canonical chain — a phantom-data bug. Worse: the *new* chain's transactions never got indexed (you didn't see a \`ChainCommitted\` for them — you saw a \`ChainReorged\` you ignored).
+
+This is the **#1 ExEx bug.** The three-variant enum exists specifically to prevent it.
+
+## Step 3 — Tell Reth what you've finished: \`FinishedHeight\`
+
+If your indexer has processed block N, Reth needs to know. Otherwise it can't safely prune anything below N.
+
+\`\`\`rust
+ctx.events.send(ExExEvent::FinishedHeight(block_number_hash))?;
+\`\`\`
+
+\`ctx.events\` is a write-only channel back to Reth. Whenever your handler finishes a block (or chain), you send \`FinishedHeight(N)\`. Reth aggregates the minimum across all installed ExExes and prunes below that.
+
+> 🛑 **Predict the disk consequence.** You ship an ExEx without the \`FinishedHeight\` event. Six months later your node is at block 21M. What's the disk usage relative to a node without ExEx? Why?
+
+The node retains *all* historical state Reth would otherwise prune — because it can't safely prune anything your ExEx might want to read later. **Disk usage compounds.** Without \`FinishedHeight\`, an "innocuous indexer" turns Reth into a full-archive node by accident.
+
+## Step 4 — The notification stream: async pull, not callback
+
+A callback would force Reth to wait for your slow code on every block. Better: push notifications into a stream, your handler pulls when ready:
+
+\`\`\`rust
+while let Some(notification) = ctx.notifications.try_next().await? {
+    // process at your pace
+}
+\`\`\`
+
+\`ctx.notifications\` is a \`Stream\` of \`ExExNotification\`. \`try_next\` is async — your handler runs in the same async runtime as Reth. **Reth's progress isn't gated on your indexing speed**, but your handler still observes every event in order.
+
+When Reth shuts down or the channel closes, the loop exits cleanly with \`Ok(())\`.
+
+## Step 5 — The init/run split
+
+A user wants to do *synchronous setup* (open files, init a database, allocate a buffer) before the async loop starts. A single \`async fn\` would force this setup into the future itself, where it can't be reasoned about clearly:
+
+\`\`\`rust
+async fn exex_init<Node: FullNodeComponents>(
+    ctx: ExExContext<Node>,
+) -> eyre::Result<impl Future<Output = eyre::Result<()>>> {
+    // synchronous setup goes here
+    Ok(exex(ctx))  // return the long-running future
+}
+\`\`\`
+
+Two functions:
+
+- **\`exex_init\`** — runs *once* at node startup. Synchronous setup. Returns a future.
+- **\`exex\`** (the future) — runs *forever* (or until shutdown). Polls the notification stream.
+
+> 🛑 **Predict.** Why is the init/run split necessary? What concrete bug would happen if you put file-open inside \`exex\` instead of \`exex_init\`?
+
+Reth needs to *acknowledge* the ExEx is alive before it starts pushing notifications. If you put \`File::open(...)\` inside \`exex\`, the file open happens *after* Reth has already started buffering notifications — and if it fails (permissions, missing path), notifications pile up while Reth thinks the ExEx is healthy. The init/run split lets Reth distinguish "ExEx couldn't start" from "ExEx ran for a while and crashed."
+
+## Step 6 — \`install_exex\`: multiple extensions
+
+Your \`main\` wires the ExEx into the node builder:
+
+\`\`\`rust
+.install_exex("MyIndexer", exex_init)
+\`\`\`
+
+The first arg is a name (used in metrics and logs); the second is the init function. **You can chain multiple \`.install_exex(...)\` calls** — each ExEx gets its own notification stream and its own \`FinishedHeight\` channel. The pruner aggregates.
+
+## What you've built
+
+Every piece earned its keep:
+
+- **\`ExExNotification\` enum with 3 variants** (Step 2) — handles append, reorg, revert
+- **\`FinishedHeight\` event** (Step 3) — opt-in pruning, prevents disk bloat
+- **Stream-pulled notifications** (Step 4) — Reth doesn't block on your handler
+- **init/run split** (Step 5) — synchronous setup before async loop
+- **\`install_exex\`** (Step 6) — multiple extensions, each with its own stream
+
+The next lesson reads the minimal ExEx — \`~40 lines of main.rs\` — and shows how all six pieces fit together in real code.
+
+## Recall before moving on
+
+Without scrolling:
+
+1. Why does the API push notifications via a stream instead of calling your code directly?
+2. What are the three \`ExExNotification\` variants, and why do you need all three?
+3. What does \`FinishedHeight\` tell Reth, and what's the disk consequence of forgetting it?
+4. Why is the API split into \`exex_init\` (sync) and \`exex\` (async future)?
+
+If any answer is shaky, scroll back. The next lesson reads the real minimal ExEx in detail.
+`,
+                },
+                {
+                  title: 'Reading the minimal ExEx, line by line',
+                  slug: 'reth-exex-walkthrough-en',
+                  type: 'CONTENT',
+                  sortOrder: 6,
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# Reading the minimal ExEx, line by line
+
+Last lesson, you built up the API. **Now: see it in real code.** This is the entire \`main.rs\` of [\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal) — a working production-shaped ExEx in ~40 lines.
 
 \`\`\`rust
 use futures::{Future, TryStreamExt};
@@ -2337,13 +2495,11 @@ fn main() -> eyre::Result<()> {
 }
 \`\`\`
 
-That's a working production-shaped ExEx. ~40 lines.
+40 lines. Every line maps back to a build-up step from the previous lesson.
 
-> 🛑 **Stop. Without scrolling, name the three notification types this code handles.** Why does it handle all three? What would happen if you removed two of the three match arms?
+## Walk it, line by line
 
-## Reading it in detail
-
-### \`exex_init\` vs \`exex\`
+### \`exex_init\` — the init/run split (Step 5)
 
 \`\`\`rust
 async fn exex_init<Node: FullNodeComponents>(
@@ -2353,31 +2509,49 @@ async fn exex_init<Node: FullNodeComponents>(
 }
 \`\`\`
 
-Reth calls \`exex_init\` once at startup and **expects you to return a Future to be polled forever**. The two-stage pattern lets you do **synchronous setup** in \`exex_init\` (open files, prepare state) before the long-running future starts.
+\`exex_init\` is called *once* at node startup. Reth passes you \`ExExContext\` (which contains \`notifications\`, \`events\`, and node access). You return a future to be polled forever.
 
-> 🛑 **Predict.** Why is the init/run split necessary? What concrete bug would happen if you put file-open inside \`exex\` (the long-running loop) instead of \`exex_init\`?
+This minimal ExEx does no synchronous setup — it just hands \`ctx\` straight to \`exex\`. **Real ExExes** that need \`File::open(...)\` or \`Database::connect(...)\` would do that work inside \`exex_init\`, *before* returning the future.
 
-### The notification stream
+> 🔍 **Find in repo.** Open the \`tracking-state\` example. What does its \`exex_init\` do that \`minimal\` doesn't?
 
-\`\`\`rust
-while let Some(notification) = ctx.notifications.try_next().await? {
-\`\`\`
-
-\`ctx.notifications\` is a Stream — \`try_next\` returns \`Result<Option<ExExNotification>>\`. When the node shuts down or an error occurs, the loop exits cleanly.
-
-### Three notification types — what each means
+### \`exex\` — the long-running future
 
 \`\`\`rust
-ExExNotification::ChainCommitted { new }       // canonical blocks added
-ExExNotification::ChainReorged { old, new }    // reorg: old segment replaced by new
-ExExNotification::ChainReverted { old }        // segment removed (no replacement yet)
+async fn exex<Node: FullNodeComponents>(mut ctx: ExExContext<Node>) -> eyre::Result<()> {
+    while let Some(notification) = ctx.notifications.try_next().await? {
+        // ...
+    }
+    Ok(())
+}
 \`\`\`
 
-A correct ExEx handles **all three**. A naive implementation that only listens to \`ChainCommitted\` will silently corrupt its derived state on every reorg. **This is the #1 ExEx bug.**
+The loop. \`ctx.notifications.try_next()\` is async — when no notification is available, the runtime parks the task and runs other ExExes / Reth itself. Cooperative concurrency, no blocking.
 
-> 🛑 **Anti-fluency.** You're indexing transactions to a HashMap. You handle only \`ChainCommitted\`. The chain reorgs 5 blocks deep. **What's wrong with your HashMap?** Be specific — write the failure mode in two sentences. Then ask: how does \`ChainReverted\` save you?
+When the channel closes (node shutdown), \`try_next()\` returns \`Ok(None)\`, the \`while let\` exits, and the function returns \`Ok(())\`. Clean termination.
 
-### The \`FinishedHeight\` event
+### The three-arm match (Step 2)
+
+\`\`\`rust
+match &notification {
+    ExExNotification::ChainCommitted { new } => { /* ... */ }
+    ExExNotification::ChainReorged { old, new } => { /* ... */ }
+    ExExNotification::ChainReverted { old } => { /* ... */ }
+};
+\`\`\`
+
+This is the load-bearing decision. **All three arms must be present** in any non-toy ExEx, because:
+
+- **Missing \`ChainReorged\`** → your derived state contains the *old* chain's data forever; the new canonical chain's data is missing because you never saw a \`ChainCommitted\` for it.
+- **Missing \`ChainReverted\`** → after a reorg-trigger but before Reth picks a new tip, your state is one chain ahead of canonical with no way to roll back.
+
+The minimal ExEx logs each variant; that's instructive but not useful. **Real ExExes update derived state** — and getting all three arms right is what separates a working indexer from a phantom-data bug.
+
+> 🛑 **Anti-fluency.** Read the \`ChainReorged\` arm. The \`old\` and \`new\` chains are both passed. **Why both?** Why not just \`new\` (the post-reorg tip)?
+
+Because the indexer needs to *undo* \`old\`'s state changes before *applying* \`new\`'s. If you only got \`new\`, you'd have no way to roll back the old chain's effect on your derived state — and you'd silently double-count or skip transactions.
+
+### \`committed_chain()\` and \`FinishedHeight\` (Step 3)
 
 \`\`\`rust
 if let Some(committed_chain) = notification.committed_chain() {
@@ -2385,21 +2559,36 @@ if let Some(committed_chain) = notification.committed_chain() {
 }
 \`\`\`
 
-This tells Reth: "I've processed up to this block hash; you can prune older history that I'd no longer need." Without it, **Reth keeps everything forever** because it doesn't know what your ExEx still wants to read.
+Two methods to know:
 
-> 🛑 **Predict the disk consequence.** You ship an ExEx without the \`FinishedHeight\` event. Six months later your node is at block 21M. What's the disk usage relative to a node without ExEx? Why?
+- **\`notification.committed_chain()\`** — returns \`Some(Chain)\` for \`ChainCommitted\` *and* \`ChainReorged\` (the new chain), \`None\` for \`ChainReverted\`. **It's the "what's the canonical state after this notification" accessor.**
+- **\`ctx.events.send(ExExEvent::FinishedHeight(...))\`** — tells Reth's pruner "I've processed up to this block; you can prune below this hash."
 
-### \`install_exex\`
+**Send \`FinishedHeight\` after every commit-shaped notification.** Forget this and your node accumulates archive data forever (Step 3's disk-bloat scenario from the previous lesson).
+
+> 🔍 **Verify.** Open the source of \`notification.committed_chain()\` in \`reth-exex\`. Confirm the three-cases behavior we just described.
+
+### \`main\`: wiring the ExEx into a node
 
 \`\`\`rust
-.install_exex("Minimal", exex_init)
+fn main() -> eyre::Result<()> {
+    reth::cli::Cli::parse_args().run(|builder, _| async move {
+        let handle = builder
+            .node(EthereumNode::default())
+            .install_exex("Minimal", exex_init)
+            .launch_with_debug_capabilities()
+            .await?;
+
+        handle.wait_for_node_exit().await
+    })
+}
 \`\`\`
 
-The first arg is a name (used in metrics and logs); the second is the init function. You can chain multiple \`.install_exex(...)\` calls — each ExEx gets its own notification stream.
+This is "ordinary Reth node, plus one extension." The \`install_exex("Minimal", exex_init)\` is the only ExEx-specific line. **Stack multiple \`install_exex\` calls** to compose extensions.
 
 ## What real ExExes do
 
-The same repo has more substantial examples — read them once you've got \`minimal\` running:
+The same repo has more substantial examples:
 
 | Example | What it does |
 | :--- | :--- |
@@ -2408,23 +2597,218 @@ The same repo has more substantial examples — read them once you've got \`mini
 | \`tracking-state\` | Persists ExEx-internal state to a separate DB (so restarts are cheap) |
 | \`rollup\` | Implements a minimal rollup using only ExEx hooks |
 
-> 🔍 **Open \`rollup\`.** Read until you find where it commits state changes. **A rollup as an ExEx — sit with that for a moment.** That's the architectural unlock.
+> 🔍 **Open \`rollup\`.** Read until you find where it commits state changes. **A rollup as an ExEx — sit with that for a moment.** That's the architectural unlock: you don't need to fork Reth to build a rollup; you can build one as an extension.
 
-## Drill
+## Recall before the quiz
 
-1. Clone \`reth-exex-examples\`, run \`minimal\` against a synced node
-2. Modify the \`ChainCommitted\` arm to print the **transaction count** of each block: \`new.tip().body.transactions.len()\`
-3. Add a \`HashMap<Address, u64>\` that counts how many txs each address sent — survive a reorg correctly (subtract on \`ChainReverted\`, re-add on \`ChainCommitted\` for the new chain)
+Without scrolling:
 
-When that works, you've written a node-speed indexer.
+1. What does \`exex_init\` do that \`exex\` (the future) cannot?
+2. Why must a non-toy ExEx handle all three notification variants?
+3. What does \`notification.committed_chain()\` return for each of the three variants?
+4. What does a "rollup as an ExEx" rely on for finality and data availability?
 
-> Final check: in one sentence, why is an ExEx-based indexer faster than a separate process polling the RPC? If your answer doesn't mention "same process" or "no I/O round trip," you missed the architectural reason — re-read the diagram.`,
+The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
+`,
+                },
+                {
+                  title: 'Quiz: did the ExEx API stick?',
+                  slug: 'reth-exex-quiz-en',
+                  type: 'QUIZ',
+                  sortOrder: 7,
+                  duration: 4,
+                  xpReward: 25,
+                  content: `# Quiz: did the ExEx API stick?
+
+Four questions covering the API design and the failure modes the design prevents. Same rule: **you can't nod past a quiz.**
+
+If you miss two or more, scroll back to *Building the ExEx API* before going on to the drill.`,
+                  quizQuestions: [
+                    {
+                      question: "Why is the ExEx API an init/run split (`exex_init` returns a future) rather than a single `async fn`?",
+                      options: [
+                        "Rust requires a setup function for `async` traits.",
+                        "It's a backwards-compat shim from an older Reth version.",
+                        "Init/run lets you do synchronous setup (open files, init DBs) at node startup before the long-running notification loop begins. Reth distinguishes 'ExEx couldn't start' from 'ExEx ran for a while and crashed.'",
+                        "Performance — split functions inline better.",
+                      ],
+                      correctIndex: 2,
+                      explanation: "A single `async fn` would force setup into the future itself — making 'ExEx never started' indistinguishable from 'ExEx crashed during the loop.' The init/run split gives Reth a clean acknowledgment moment for 'this extension is alive and ready' before notifications start.",
+                    },
+                    {
+                      question: "You implement an ExEx that only handles `ChainCommitted`, ignoring `ChainReorged` and `ChainReverted`. The chain reorgs 5 blocks deep. What's wrong with your derived state?",
+                      options: [
+                        "It contains 5 extra blocks that should have been pruned.",
+                        "It contains the *old* chain's data (from the segment that's no longer canonical) AND is missing the *new* chain's data (because no `ChainCommitted` fires for replaced segments). Phantom data + missing data simultaneously.",
+                        "It crashes with a panic.",
+                        "The state is fine; Reth re-emits `ChainCommitted` for the new chain.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "This is the #1 ExEx bug. `ChainReorged` carries both `old` and `new` so the indexer can undo `old`'s effects and apply `new`'s. Ignoring it leaves both halves wrong — old data still indexed, new data never indexed.",
+                    },
+                    {
+                      question: "What does `ctx.events.send(ExExEvent::FinishedHeight(N))` tell Reth?",
+                      options: [
+                        "'Stop sending me notifications below block N.'",
+                        "'I've processed up to block N; you can safely prune historical state below N.' Reth aggregates the minimum across all installed ExExes for its pruning decision.",
+                        "'Block N is bad — discard it.'",
+                        "'Resume from block N on next restart.'",
+                      ],
+                      correctIndex: 1,
+                      explanation: "Without `FinishedHeight`, Reth can't safely prune anything your ExEx might want to read later — it conservatively keeps everything forever. Forgetting this event turns an 'innocuous indexer' into an accidental archive node.",
+                    },
+                    {
+                      question: "An ExEx-based indexer is faster than a separate process polling the RPC. What's the *primary* architectural reason?",
+                      options: [
+                        "The indexer runs on a faster CPU.",
+                        "Same process, no I/O round trip. The ExEx receives a notification the moment Reth commits a block — no RPC request/response, no polling interval, no atomicity gap. Plus full chain context (including reorg structure) Reth already computed.",
+                        "ExEx skips the EVM execution step.",
+                        "The RPC has a rate limiter; ExEx doesn't.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "The architectural unlock is colocation. Polling RPC = at best ~1s lag, often more under load, plus reorgs are seen second-hand. ExEx = zero-lag, full context, no IPC.",
+                    },
+                  ],
+                },
+                {
+                  title: 'Drill: build a reorg-safe indexer',
+                  slug: 'reth-exex-drill-en',
+                  type: 'CONTENT',
+                  sortOrder: 8,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Drill: build a reorg-safe indexer
+
+Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about ExEx" to "I have written one and watched it survive a reorg correctly."
+
+## Setup
+
+\`\`\`bash
+git clone https://github.com/paradigmxyz/reth-exex-examples
+cd reth-exex-examples/minimal
+cargo build
+\`\`\`
+
+If the build fails, fix that before proceeding.
+
+## Drill 1 — Run the minimal ExEx against a node
+
+You need an existing Reth node, or run with \`--chain holesky\` for a small testnet (faster initial sync, more frequent reorgs):
+
+\`\`\`bash
+cargo run -- node --chain holesky
+\`\`\`
+
+> 🛑 **Question (write it down):** What gets logged for the first 10 blocks? Is every log line a \`ChainCommitted\`, or do you see other variants?
+
+For a fresh sync, you'll see \`ChainCommitted\` for every block. \`ChainReorged\` and \`ChainReverted\` are rarer — they require an actual chain disagreement, which holesky generates more often than mainnet (lower hashpower → more contested forks).
+
+## Drill 2 — Add a transaction counter
+
+Modify the \`ChainCommitted\` arm to print transaction count per block:
+
+\`\`\`rust
+ExExNotification::ChainCommitted { new } => {
+    let total: usize = new.blocks().values()
+        .map(|b| b.body.transactions.len())
+        .sum();
+    info!(committed_chain = ?new.range(), tx_count = total, "Received commit");
+}
+\`\`\`
+
+> 🛑 **Predict.** Run again. What's the average transaction count per holesky block? Per mainnet block?
+
+Holesky: low — usually 5–20 tx per block, sometimes 0. Mainnet: 100–300, depending on block fullness. **You're now reading real chain data at zero latency.**
+
+## Drill 3 — Add a reorg-safe HashMap
+
+Track how many transactions each address sent. **Survive reorgs correctly** — that's the whole point.
+
+\`\`\`rust
+use std::collections::HashMap;
+use alloy_primitives::Address;
+
+let mut tx_count: HashMap<Address, u64> = HashMap::new();
+
+while let Some(notification) = ctx.notifications.try_next().await? {
+    match &notification {
+        ExExNotification::ChainCommitted { new } => {
+            for (_, block) in new.blocks() {
+                for tx in block.body.transactions() {
+                    *tx_count.entry(tx.signer()).or_insert(0) += 1;
+                }
+            }
+        }
+        ExExNotification::ChainReorged { old, new } => {
+            // Undo old, then apply new — order matters
+            for (_, block) in old.blocks() {
+                for tx in block.body.transactions() {
+                    *tx_count.entry(tx.signer()).or_insert(0) -= 1;
+                }
+            }
+            for (_, block) in new.blocks() {
+                for tx in block.body.transactions() {
+                    *tx_count.entry(tx.signer()).or_insert(0) += 1;
+                }
+            }
+        }
+        ExExNotification::ChainReverted { old } => {
+            // Undo old, no replacement yet
+            for (_, block) in old.blocks() {
+                for tx in block.body.transactions() {
+                    *tx_count.entry(tx.signer()).or_insert(0) -= 1;
+                }
+            }
+        }
+    };
+
+    if let Some(committed_chain) = notification.committed_chain() {
+        ctx.events.send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
+    }
+}
+\`\`\`
+
+(Adjust the API names to your local reth's current shape — \`block.body.transactions()\` vs \`.transactions\`, \`tx.signer()\` vs \`tx.recover_signer()\`. The point is the *structure*, not the exact identifier.)
+
+> 🛑 **Question:** Read the three arms. **What invariant must hold for \`tx_count\` to be correct after any sequence of notifications?**
+
+**For every \`Address\`, the count equals (txs sent on the *canonical* chain) − (txs sent on segments that were committed-then-reverted).** The reorg arm is the trick: it undoes \`old\` *and* applies \`new\` in a single notification, atomically.
+
+If you forget the \`-=\` in \`ChainReverted\`, your counts grow forever. If you forget the \`-=\` in \`ChainReorged\`, your counts represent the union of old and new chains, not just canonical.
+
+## Drill 4 — Verify reorg handling
+
+Holesky generates reorgs occasionally. Run for a few hours.
+
+> 🔍 **Find the reorg.** Search your logs for "Received reorg". When one appears:
+>
+> 1. Note the \`from_chain\` and \`to_chain\` ranges.
+> 2. Spot-check a high-tx address in \`tx_count\` *before* the reorg log line — record its count.
+> 3. After the reorg log line — record again.
+> 4. Manually verify: did the count change consistently with the difference between the old and new chain segments at that address?
+
+If yes — your indexer is reorg-safe. **You've written the same kind of code production-grade indexers (e.g., goldsky, the graph) ship.**
+
+> 🛑 **Final question:** Why does the *order* of operations in the \`ChainReorged\` arm matter? Specifically: does it matter if you apply \`new\` *before* undoing \`old\`?
+
+It matters in exactly one case: when \`old\` and \`new\` share a common prefix that the runtime helpfully *omits* from both — but if the implementation does include any shared blocks in both, applying \`new\` first would double-count them, then \`old\`'s undo would zero them out. The convention is **undo \`old\` first, then apply \`new\`**, which mirrors the chronological order Reth itself processes the reorg.
+
+## End-of-lesson recall
+
+Without scrolling, in your own words:
+
+1. What's the rationale for handling \`ChainReorged\` with both \`old\` and \`new\` in the same notification?
+2. What invariant does the three-arm pattern preserve in your derived state?
+3. If you forget \`FinishedHeight\`, what specifically grows on disk over time?
+4. What's the one architectural reason an ExEx beats a separate RPC-polling indexer?
+
+After this drill, you've shipped a reorg-safe node-speed indexer. **The same tool now lets you build MEV bots, live risk engines, and rollups.**`,
                 },
                 {
                   title: 'Reth SDK — building an App-chain',
                   slug: 'reth-sdk-appchain-en',
                   type: 'CONTENT',
-                  sortOrder: 6,
+                  sortOrder: 9,
                   duration: 12,
                   xpReward: 25,
                   content: `# Reth SDK — building an App-chain
@@ -2560,7 +2944,7 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
                   title: 'Bridge to Expert — what comes next',
                   slug: 'reth-bridge-to-expert-en',
                   type: 'CONTENT',
-                  sortOrder: 7,
+                  sortOrder: 10,
                   duration: 10,
                   xpReward: 20,
                   content: `# Bridge to Expert — what comes next
@@ -2627,7 +3011,7 @@ If any of the five questions sent you back to a previous lesson — re-read them
                   title: 'Advanced quiz',
                   slug: 'advanced-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 8,
+                  sortOrder: 11,
                   duration: 12,
                   xpReward: 35,
                   content: `# Advanced quiz

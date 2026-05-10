@@ -10,8 +10,8 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
       description:
         'Revmのインタープリターを読み解き、カスタムOpcodeとDatabaseトレイトの実装方法を学びます。さらにRethのStaged SyncとExEx (Execution Extensions) を通じて、独自のEVMインフラを構築するための基礎を固めます。',
       difficulty: 'ADVANCED',
-      duration: 215,
-      xpReward: 645,
+      duration: 236,
+      xpReward: 715,
       track: 'reth-advanced',
       tags,
       isPublished: true,
@@ -2263,33 +2263,191 @@ async fn my_exex<Node: FullNodeComponents>(
 > 最終チェック: タブを閉じて、ExEx の \`my_exex\` シグネチャを記憶から書き出してください。書けないなら、語彙をまだ所有していません — 開き直し。次のレッスンは ExEx を詳細に読みます; カンニングペーパーなしで各概念が必要になります。`,
                 },
                 {
-                  title: 'ExEx — Execution Extensions',
-                  slug: 'reth-exex-ja',
+                  title: 'ExEx API をステップで組み立てる',
+                  slug: 'reth-exex-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 5,
-                  duration: 15,
-                  xpReward: 30,
-                  content: `# ExEx — Execution Extensions
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# ExEx API をステップで組み立てる
 
-**ExEx** は、Rethが提供する「実行ループにRustコードを注入する」仕組みです。これでノード速度のインデクサ・MEVボット・リアルタイムリスクエンジンを **チェーン本体と同じプロセス内で** 構築できます。
+**ExEx（Execution Extension）** は Reth が提供する「実行ループに Rust コードを注入する」仕組みです。これでノード速度のインデクサ・MEV ボット・リアルタイムリスクエンジンを **チェーン本体と同じプロセス内で** 構築できます。
 
-> 🛑 **スクロールする前に予測。** Reth は新しいブロックごとにあなたのコードに知らせる必要があります。**API をスケッチしてください。** Reth はコミットごとに何を送る? reorg では? あなたのコードは「ブロック N まで終わった、prune して OK」をどう Reth に伝える? 予測を保持して。
+ただ API は重そうな部分が4つある: init/run の分割、3 つのバリアントを持つ通知 *enum*、prune ヒント用のイベントチャンネル、ノードビルダーへの install メソッド。素のまま読むと一度に 4 つのアイデアが降ってくる。
 
-\`\`\`mermaid
-flowchart LR
-    subgraph Reth
-        Sync[Sync] --> Exec[ExecutionStage]
-        Exec --> Commit[Chain commit]
-    end
-    Commit -->|notification| ExEx[あなたの ExEx]
-    ExEx -->|FinishedHeight| Prune[Reth pruner]
+このレッスンは、最も素朴な「ブロックリスナー」から API を積み上げます。終わりには本物の最小 ExEx の全ピースを自分で組み立てたことになります — 次レッスンがそれを詳細に読みます。
+
+> 📂 **別タブで \`paradigmxyz/reth-exex-examples/minimal\` を開いてください。** これが組み立て先のファイル。
+
+## ステップ 0 — 素朴なインデクサ: RPC をポーリングする別プロセス
+
+何も考えずに書くと、Ethereum のインデックスはこんな形:
+
+\`\`\`rust
+fn main() {
+    let rpc = HttpProvider::new("http://localhost:8545");
+    let mut last_block = 0;
+    loop {
+        let head = rpc.get_block_number().unwrap();
+        for n in (last_block+1)..=head {
+            let block = rpc.get_block(n).unwrap();
+            index(block);
+        }
+        last_block = head;
+        sleep(Duration::from_secs(1));
+    }
+}
 \`\`\`
 
-チェーンが実行 → コミットされた各ブロック（reorg / revert も）の通知が ExEx の stream にプッシュされる → 処理して "ここまで終わった" 高さを返す → Reth が古い履歴を安全に prune できる。
+別プロセス。1秒ごとに RPC をポーリング。新ブロックがあればインデックス。
 
-## 最小ExEx — 一字一句そのまま
+> 🛑 **予測。** スクロールせずに: この素朴な設計が Reth の中で動くより *大幅に劣る* 理由を 3 つ挙げてください。（ヒント: 各々が *別種の* 問題。）
 
-これは [\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal) の \`main.rs\` 全体：
+3つ:
+
+1. **レイテンシ。** RPC ポーリングはリクエスト/レスポンスのオーバーヘッド。インデクサは tip から数秒遅れる — MEV、リスク、リアルタイム UX には使えない。
+2. **アトミック性。** Reth は新ブロックを *先に* ディスクにコミットし、そのあとあなたのインデクサが見る。Reth はブロックを持っていてあなたのコードがまだ処理していない期間がある。あなたのコードが派生ビューの正典なら、その期間が race condition。
+3. **Reorg。** ポーリングは \`head = N\` を見て、後で \`head = N\`（違うブロック）を見る。インデクサは外側で reorg を検出して扱う必要がある — Reth 自体より弱い情報で。
+
+修正方針: **Reth と同じプロセスで動く。** ブロックがコミットされた瞬間に通知される、フルチェーンコンテキスト付きで。
+
+## ステップ 1 — 最初の試案: ブロックごとのコールバック
+
+素朴なインプロセス API:
+
+\`\`\`rust
+fn on_new_block<F: Fn(&Block)>(reth: &mut Reth, callback: F) {
+    reth.add_listener(callback);
+}
+\`\`\`
+
+Reth が新ブロックごとにクロージャを呼ぶ。シンプル。
+
+> 🛑 **予測。** 何が足りない?（大きく2つ。）
+
+2つ:
+
+1. **Reorg は append-only ではない。** 「新ブロック追加」だけのコールバックは「ブロック N のハッシュ X が ハッシュ Y に置換された」を表現できない。インデクサの導出状態は reorg のたびに静かに壊れる。
+2. **Reth に「終わった」を伝える方法がない。** インデクサがブロック N を処理中なら、Reth はブロック N-100,000 のデータを prune していいのか分からない。このシグナルなしでは **Reth は何も捨てられない。**
+
+## ステップ 2 — リッチな通知: 3 つのチェーンイベント
+
+裸のコールバックを、チェーンに起こりうる 3 つのことを捉える enum に置き換える:
+
+\`\`\`rust
+enum ExExNotification {
+    ChainCommitted { new: Chain },             // canonical ブロック追加
+    ChainReorged   { old: Chain, new: Chain }, // old が new に置換
+    ChainReverted  { old: Chain },             // 削除（置換なし）
+}
+\`\`\`
+
+各バリアントが、インデクサが派生状態を undo / redo するのに十分な情報を運ぶ:
+
+- **\`ChainCommitted { new }\`** — 新しいブロックの状態をインデックスに append。
+- **\`ChainReorged { old, new }\`** — \`old\` の状態を undo し、\`new\` の状態を apply。アトミックなスワップ。
+- **\`ChainReverted { old }\`** — \`old\` の状態を undo して待つ。Reth は新しい tip を選んだら後続の \`ChainCommitted\` を送る。
+
+> 🛑 **理解度チェック。** トランザクションを \`HashMap\` にインデックスしている。\`ChainCommitted\` だけ扱う。チェーンが 5 ブロック深く reorg した。**HashMap の何がおかしくなる?** 失敗モードを 2 文で具体的に書いてください。
+
+HashMap には *古い* チェーンのトランザクションが入っているが、canonical チェーンは *新しい* チェーン。インデックスの後の読み込みは canonical 上に存在しないトランザクションを返す — phantom-data バグ。さらに悪いことに: *新しい* チェーンのトランザクションはインデックスされなかった（\`ChainCommitted\` を見ていない、無視した \`ChainReorged\` を見た）。
+
+これが **ExEx の #1 バグ。** 3 バリアント enum はこれを防ぐために存在する。
+
+## ステップ 3 — Reth に「終わった」と伝える: \`FinishedHeight\`
+
+インデクサがブロック N を処理し終わったら、Reth はそれを知る必要がある。さもないと N 以下を安全に prune できない。
+
+\`\`\`rust
+ctx.events.send(ExExEvent::FinishedHeight(block_number_hash))?;
+\`\`\`
+
+\`ctx.events\` は Reth への書き込み専用チャンネル。ハンドラがブロック（あるいはチェーン）を終えるたびに \`FinishedHeight(N)\` を送る。Reth はインストールされたすべての ExEx の最小値を集約し、その下を prune する。
+
+> 🛑 **ディスク帰結を予測。** \`FinishedHeight\` イベントなしで ExEx をリリースしたとする。半年後、ノードはブロック 21M。ExEx なしノードと比較してディスク使用量はどうなる? なぜ?
+
+ノードは Reth が通常 prune するであろう履歴をすべて保持する — ExEx が後で読みたいかもしれないものを安全に prune できないから。**ディスク使用量が複利で膨らむ。** \`FinishedHeight\` を忘れると、「無害なインデクサ」が偶然 Reth をフルアーカイブノードにする。
+
+## ステップ 4 — 通知ストリーム: コールバックではなく非同期 pull
+
+コールバックなら Reth がブロックごとにあなたの遅いコードを待つことになる。良い形: 通知をストリームに push、ハンドラが準備ができたときに pull:
+
+\`\`\`rust
+while let Some(notification) = ctx.notifications.try_next().await? {
+    // 自分のペースで処理
+}
+\`\`\`
+
+\`ctx.notifications\` は \`ExExNotification\` の \`Stream\`。\`try_next\` は async — ハンドラは Reth と同じ async ランタイムで動く。**Reth の進捗があなたのインデックス速度に縛られない**、でもハンドラはすべてのイベントを順番に観測する。
+
+Reth が停止するかチャンネルが閉じるとループはきれいに \`Ok(())\` で抜ける。
+
+## ステップ 5 — init/run の分割
+
+ユーザーは async ループの開始前に *同期的なセットアップ*（ファイル開放、DB 初期化、バッファ確保）をしたい。単一の \`async fn\` だとこのセットアップを future の中に押し込むことになり、明瞭に推論できなくなる:
+
+\`\`\`rust
+async fn exex_init<Node: FullNodeComponents>(
+    ctx: ExExContext<Node>,
+) -> eyre::Result<impl Future<Output = eyre::Result<()>>> {
+    // 同期的セットアップはここ
+    Ok(exex(ctx))  // 長時間動く future を返す
+}
+\`\`\`
+
+関数2つ:
+
+- **\`exex_init\`** — ノード起動時に *1度* 走る。同期的セットアップ。future を返す。
+- **\`exex\`**（その future）— *永続的に*（または停止まで）走る。通知ストリームを poll する。
+
+> 🛑 **予測。** init/run の分割がなぜ必要なのか? ファイル開放を \`exex_init\` ではなく \`exex\` に入れると、どんな具体的なバグが発生する?
+
+Reth は通知のプッシュを始める前に ExEx が生きていることを *確認する* 必要がある。\`File::open(...)\` を \`exex\` に入れると、Reth がすでに通知をバッファし始めた *後* にファイル開放が起きる — 失敗（権限なし、パス不存在）すると Reth は ExEx が健康だと思っている間に通知が積み上がる。init/run の分割によって Reth は「ExEx が起動できなかった」と「ExEx が動いた後でクラッシュした」を区別できる。
+
+## ステップ 6 — \`install_exex\`: 複数の拡張
+
+\`main\` で ExEx をノードビルダーに配線する:
+
+\`\`\`rust
+.install_exex("MyIndexer", exex_init)
+\`\`\`
+
+第 1 引数は名前（メトリクスとログで使われる）、第 2 引数は init 関数。**\`.install_exex(...)\` を複数チェインできる** — 各 ExEx が独立した通知ストリームと \`FinishedHeight\` チャンネルを持つ。Pruner が集約する。
+
+## ここまでに組み立てたもの
+
+各ピースが場所代を稼いでいる:
+
+- **3 バリアントの \`ExExNotification\`**（ステップ 2）— append、reorg、revert を扱う
+- **\`FinishedHeight\` イベント**（ステップ 3）— opt-in の prune、ディスク膨張を防ぐ
+- **ストリーム pull の通知**（ステップ 4）— Reth がハンドラでブロックしない
+- **init/run の分割**（ステップ 5）— async ループ前の同期的セットアップ
+- **\`install_exex\`**（ステップ 6）— 複数の拡張、それぞれ独立したストリーム
+
+次のレッスンは最小 ExEx — \`main.rs\` の約 40 行 — を読み、6 つのピースが実コードでどう組み合わさるかを見せる。
+
+## 進む前の想起
+
+スクロールせずに:
+
+1. なぜ API はコールバックではなくストリームで通知を push するのか?
+2. \`ExExNotification\` の 3 バリアントは何で、なぜすべて必要なのか?
+3. \`FinishedHeight\` は Reth に何を伝える? 忘れたときのディスク帰結は?
+4. なぜ API は \`exex_init\`（同期）と \`exex\`（async future）に分かれているのか?
+
+どれか曖昧なら戻る。次のレッスンは本物の最小 ExEx を詳細に読みます。
+`,
+                },
+                {
+                  title: '最小 ExEx を 1 行ずつ読む',
+                  slug: 'reth-exex-walkthrough-ja',
+                  type: 'CONTENT',
+                  sortOrder: 6,
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# 最小 ExEx を 1 行ずつ読む
+
+前のレッスンで API を組み立てました。**さあ、本物のコードで見ます。** これは [\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal) の \`main.rs\` 全体 — 本番形の動く ExEx が約 40 行。
 
 \`\`\`rust
 use futures::{Future, TryStreamExt};
@@ -2339,13 +2497,11 @@ fn main() -> eyre::Result<()> {
 }
 \`\`\`
 
-これで本番形のExExが動きます。約40行。
+40 行。各行が前レッスンの組み立てステップに対応している。
 
-> 🛑 **止まる。スクロールせずに、このコードが扱う 3 種類の通知タイプを挙げてください。** なぜ 3 つすべてを扱う? 3 つのうち 2 つの match アームを削除したら何が起きる?
+## 1 行ずつ歩く
 
-## 詳細に読む
-
-### \`exex_init\` と \`exex\` の2段構え
+### \`exex_init\` — init/run の分割（ステップ 5）
 
 \`\`\`rust
 async fn exex_init<Node: FullNodeComponents>(
@@ -2355,31 +2511,49 @@ async fn exex_init<Node: FullNodeComponents>(
 }
 \`\`\`
 
-Rethは起動時に \`exex_init\` を1度呼び、**永続的にpollされるFuture** を返すことを期待します。2段にすることで、長時間ループの開始前に **同期的セットアップ**（ファイル開放、状態準備）ができます。
+\`exex_init\` はノード起動時に *1 度* 呼ばれる。Reth が \`ExExContext\`（\`notifications\`、\`events\`、ノードアクセスを含む）を渡してくる。あなたは永続的に poll される future を返す。
 
-> 🛑 **予測。** init/run の分割が必要なのはなぜ? ファイル開放を \`exex\`（長時間ループ）の中に入れると、どんな具体的なバグが発生する?
+この最小 ExEx は同期的セットアップを何もしない — \`ctx\` を \`exex\` にそのまま渡すだけ。**本物の ExEx** で \`File::open(...)\` や \`Database::connect(...)\` が必要なら、その仕事は future を返す *前* の \`exex_init\` 内で行う。
 
-### 通知ストリーム
+> 🔍 **リポジトリで確認。** \`tracking-state\` 例を開く。\`minimal\` がしていない何を \`exex_init\` でしているか?
 
-\`\`\`rust
-while let Some(notification) = ctx.notifications.try_next().await? {
-\`\`\`
-
-\`ctx.notifications\` は Stream — \`try_next\` は \`Result<Option<ExExNotification>>\` を返します。ノード停止やエラー時にループはきれいに抜ける。
-
-### 3つの通知タイプ
+### \`exex\` — 長時間動く future
 
 \`\`\`rust
-ExExNotification::ChainCommitted { new }       // canonicalブロック追加
-ExExNotification::ChainReorged { old, new }    // reorg：oldがnewに置換
-ExExNotification::ChainReverted { old }        // 削除（置換なし）
+async fn exex<Node: FullNodeComponents>(mut ctx: ExExContext<Node>) -> eyre::Result<()> {
+    while let Some(notification) = ctx.notifications.try_next().await? {
+        // ...
+    }
+    Ok(())
+}
 \`\`\`
 
-正しいExExは **3つすべてを処理** します。\`ChainCommitted\` だけ聞く naive 実装は、reorg のたびに導出状態を静かに壊します。**これがExExの#1バグ**。
+ループ。\`ctx.notifications.try_next()\` は async — 通知がないとき、ランタイムはタスクを park して他の ExEx や Reth 自体を走らせる。協調的並行、ブロッキングなし。
 
-> 🛑 **理解度チェック。** トランザクションを HashMap にインデックスしている。\`ChainCommitted\` だけ扱う。チェーンが 5 ブロック深く reorg した。**HashMap の何がおかしくなる?** 失敗モードを 2 文で具体的に書いてください。それから問う: \`ChainReverted\` はどう救うのか?
+チャンネルが閉じる（ノード停止）と、\`try_next()\` は \`Ok(None)\` を返し、\`while let\` が抜け、関数は \`Ok(())\` を返す。きれいな終了。
 
-### \`FinishedHeight\` イベント
+### 3 アームの match（ステップ 2）
+
+\`\`\`rust
+match &notification {
+    ExExNotification::ChainCommitted { new } => { /* ... */ }
+    ExExNotification::ChainReorged { old, new } => { /* ... */ }
+    ExExNotification::ChainReverted { old } => { /* ... */ }
+};
+\`\`\`
+
+これが load-bearing な判断。**3 アームすべてが必要** — おもちゃでない ExEx には:
+
+- **\`ChainReorged\` 欠落** → 派生状態に *古い* チェーンのデータが残り続ける; 新 canonical チェーンのデータは欠落（\`ChainCommitted\` が来ないから）。
+- **\`ChainReverted\` 欠落** → reorg トリガー後、Reth が新 tip を選ぶ前の状態で、あなたの状態が canonical より 1 チェーン進んでいて巻き戻し方法がない。
+
+最小 ExEx は各バリアントをログするだけ; 学習用には有益だが実用ではない。**本物の ExEx は派生状態を更新する** — そして 3 アームを正しく扱うことが、動くインデクサと phantom-data バグの境界。
+
+> 🛑 **理解度チェック。** \`ChainReorged\` アームを読む。\`old\` と \`new\` 両方が渡される。**なぜ両方?** \`new\`（reorg 後の tip）だけではダメか?
+
+インデクサは \`new\` を *apply* する前に \`old\` の状態変更を *undo* する必要があるから。\`new\` だけだと、古いチェーンの効果を派生状態から巻き戻せない — そして静かに二重カウントするか取りこぼす。
+
+### \`committed_chain()\` と \`FinishedHeight\`（ステップ 3）
 
 \`\`\`rust
 if let Some(committed_chain) = notification.committed_chain() {
@@ -2387,46 +2561,256 @@ if let Some(committed_chain) = notification.committed_chain() {
 }
 \`\`\`
 
-これがRethに「このブロックハッシュまで処理したから、それより古い履歴は私には不要」と伝えます。送らないと **Rethは何も捨てられない**（ExExが何を読みたいか分からないから）。
+知っておくべき 2 メソッド:
 
-> 🛑 **ディスク帰結を予測。** \`FinishedHeight\` イベントなしで ExEx をリリースしたとする。半年後、ノードはブロック 21M。**ExEx なしのノードと比較してディスク使用量はどうなる?** なぜ?
+- **\`notification.committed_chain()\`** — \`ChainCommitted\` *と* \`ChainReorged\`（new チェーン）に \`Some(Chain)\` を、\`ChainReverted\` には \`None\` を返す。**「この通知後の canonical 状態は何か」のアクセサ。**
+- **\`ctx.events.send(ExExEvent::FinishedHeight(...))\`** — Reth の pruner に「このブロックまで処理した、これ以下を prune してよい」を伝える。
 
-### \`install_exex\`
+**commit 形の通知ごとに \`FinishedHeight\` を送る。** 忘れると、ノードはアーカイブデータを永久に蓄積する（前レッスンのステップ 3 のディスク膨張シナリオ）。
+
+> 🔍 **検証。** \`reth-exex\` の \`notification.committed_chain()\` のソースを開く。今説明した 3 ケースの動作を確認。
+
+### \`main\`: ExEx をノードに配線
 
 \`\`\`rust
-.install_exex("Minimal", exex_init)
+fn main() -> eyre::Result<()> {
+    reth::cli::Cli::parse_args().run(|builder, _| async move {
+        let handle = builder
+            .node(EthereumNode::default())
+            .install_exex("Minimal", exex_init)
+            .launch_with_debug_capabilities()
+            .await?;
+
+        handle.wait_for_node_exit().await
+    })
+}
 \`\`\`
 
-第1引数は名前（メトリクスとログで使われる）、第2引数は init 関数。\`.install_exex(...)\` を複数チェインできる — 各ExExが独立した通知ストリームを持ちます。
+これは「通常の Reth ノード、+ 拡張 1 つ」。\`install_exex("Minimal", exex_init)\` が ExEx 固有の唯一の行。**複数の \`install_exex\` をスタック** すれば拡張をコンポーズできる。
 
-## 本物のExExは何をやっているか
+## 本物の ExEx は何をやっているか
 
-同じリポジトリにより本格的な例があります。\`minimal\` を動かしたら次に読む：
+同じリポジトリにより本格的な例があります:
 
 | 例 | 内容 |
 | :--- | :--- |
 | \`backfill\` | 起動時に過去ブロックを自分のハンドラに再生 |
 | \`in_memory_state\` | 各ブロックから派生したカスタムインデックス状態を保持 |
-| \`tracking-state\` | ExEx内部状態を別DBに永続化（再起動が安い） |
-| \`rollup\` | ExExフックだけで最小ロールアップを実装 |
+| \`tracking-state\` | ExEx 内部状態を別 DB に永続化（再起動が安い） |
+| \`rollup\` | ExEx フックだけで最小ロールアップを実装 |
 
-> 🔍 **\`rollup\` を開いてください。** state 変更をコミットしている箇所まで読む。**ExEx としてのロールアップ — その意味を一瞬考えてみてください。** これがアーキテクチャ的なアンロックです。
+> 🔍 **\`rollup\` を開いてください。** state 変更をコミットしている箇所まで読む。**ExEx としてのロールアップ — その意味を一瞬考えてみてください。** これがアーキテクチャ的なアンロック: ロールアップを作るのに Reth を fork する必要はなく、拡張として作れる。
 
-## 練習
+## クイズ前の想起
 
-1. \`reth-exex-examples\` を clone、同期済みノードに対して \`minimal\` を実行
-2. \`ChainCommitted\` アームを修正し、各ブロックの **トランザクション数** を出力：\`new.tip().body.transactions.len()\`
-3. \`HashMap<Address, u64>\` を追加し、各アドレスが何txを送ったかカウント — reorgを正しく扱う（\`ChainReverted\` で減算、\`ChainCommitted\` で新チェーンを再加算）
+スクロールせずに:
 
-これが動けば、ノード速度のインデクサを書けたことになります。
+1. \`exex_init\` ができて \`exex\`（future）にできないことは?
+2. なぜおもちゃでない ExEx は 3 つの通知バリアント全部を扱う必要があるのか?
+3. \`notification.committed_chain()\` は 3 つのバリアントそれぞれに何を返す?
+4. 「ExEx としてのロールアップ」は finality と data availability を何に頼っているか?
 
-> 最終チェック: ExEx ベースのインデクサは、なぜ別プロセスで RPC をポーリングするインデクサより速いのか、一文で。答えに「同一プロセス」または「I/O ラウンドトリップなし」が含まれないなら、アーキテクチャ的な理由を取り逃しています — 図を読み直し。`,
+次のレッスンはクイズ。曖昧な答えがあるなら今、想起してください。
+`,
+                },
+                {
+                  title: 'クイズ: ExEx API は身についた?',
+                  slug: 'reth-exex-quiz-ja',
+                  type: 'QUIZ',
+                  sortOrder: 7,
+                  duration: 4,
+                  xpReward: 25,
+                  content: `# クイズ: ExEx API は身についた?
+
+API 設計と、その設計が防ぐ失敗モードをカバーする 4 問。同じルール: **クイズはうなずきで通せない。**
+
+2 問以上落としたら、ドリルへ進む前に「ExEx API をステップで組み立てる」を読み直してください。`,
+                  quizQuestions: [
+                    {
+                      question: "ExEx API が単一の `async fn` ではなく init/run の分割（`exex_init` が future を返す）になっているのはなぜですか?",
+                      options: [
+                        "Rust が `async` トレイトにセットアップ関数を要求するため。",
+                        "古い Reth バージョンの後方互換シム。",
+                        "init/run なら長時間の通知ループが始まる前に同期的セットアップ（ファイル開放、DB 初期化）ができる。Reth は「ExEx が起動できなかった」と「ExEx が動いた後でクラッシュした」を区別できる。",
+                        "性能 — 分割した関数の方がインライン化される。",
+                      ],
+                      correctIndex: 2,
+                      explanation: "単一の `async fn` だとセットアップが future の中に押し込まれる — 「ExEx が起動しなかった」と「ループ中にクラッシュした」が区別不能になる。init/run の分割は Reth に「この拡張は起動して準備完了」のクリーンな確認の瞬間を与える、通知が始まる前に。",
+                    },
+                    {
+                      question: "ExEx を実装し、`ChainCommitted` だけ扱い、`ChainReorged` と `ChainReverted` を無視する。チェーンが 5 ブロック深く reorg した。派生状態に何が起きる?",
+                      options: [
+                        "prune されるべき余分な 5 ブロックが含まれる。",
+                        "*古い* チェーン（もう canonical でないセグメント）のデータを含み、*同時に* *新しい* チェーンのデータが欠落（置換されたセグメントには `ChainCommitted` が来ない）。Phantom データと欠落データが同時。",
+                        "panic でクラッシュする。",
+                        "状態は無事; Reth が新チェーン用に `ChainCommitted` を再送する。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "これが ExEx の #1 バグ。`ChainReorged` は `old` と `new` を両方運ぶので、インデクサが `old` の効果を undo して `new` を apply できる。無視すると両半分とも間違う — 古いデータがインデックスされたまま、新しいデータは決してインデックスされない。",
+                    },
+                    {
+                      question: "`ctx.events.send(ExExEvent::FinishedHeight(N))` は Reth に何を伝えるのですか?",
+                      options: [
+                        "「ブロック N より下の通知を送らないで。」",
+                        "「ブロック N まで処理した; N より下の歴史的状態は安全に prune してよい。」Reth はインストールされたすべての ExEx の最小値を集約して prune の判断に使う。",
+                        "「ブロック N は不正 — 捨てて。」",
+                        "「次の再起動でブロック N から再開して。」",
+                      ],
+                      correctIndex: 1,
+                      explanation: "`FinishedHeight` なしでは、Reth は ExEx が後で読みたいかもしれないものを安全に prune できない — 保守的にすべてを永久に保持する。このイベントを忘れると「無害なインデクサ」が偶然のアーカイブノードに変わる。",
+                    },
+                    {
+                      question: "ExEx ベースのインデクサは別プロセスで RPC をポーリングするインデクサより速い。*主な* アーキテクチャ的理由は?",
+                      options: [
+                        "インデクサが速い CPU で動いている。",
+                        "同じプロセス、I/O ラウンドトリップなし。Reth がブロックをコミットした瞬間に ExEx が通知を受け取る — RPC リクエスト/レスポンスもポーリング間隔もアトミック性のギャップもない。さらに Reth が既に計算したフルチェーンコンテキスト（reorg 構造を含む）。",
+                        "ExEx は EVM 実行ステップをスキップする。",
+                        "RPC にはレートリミッターがある; ExEx にはない。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "アーキテクチャ的アンロックは co-location（同居）。RPC ポーリング = 最良で〜1 秒のラグ、負荷時はもっと長く、reorg は二次情報。ExEx = ゼロラグ、フルコンテキスト、IPC なし。",
+                    },
+                  ],
+                },
+                {
+                  title: 'ドリル: reorg-safe なインデクサを作る',
+                  slug: 'reth-exex-drill-ja',
+                  type: 'CONTENT',
+                  sortOrder: 8,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# ドリル: reorg-safe なインデクサを作る
+
+読むのはリハーサル。**実装するのが記憶。** このドリルは「ExEx について読んだ」から「自分で書いて reorg を正しくサバイブするのを観察した」までを連れて行きます。
+
+## セットアップ
+
+\`\`\`bash
+git clone https://github.com/paradigmxyz/reth-exex-examples
+cd reth-exex-examples/minimal
+cargo build
+\`\`\`
+
+ビルドが失敗したら、進む前に直してください。
+
+## ドリル 1 — ノードに対して minimal ExEx を実行
+
+既存の Reth ノードが必要、あるいは小さなテストネット用に \`--chain holesky\`（初期同期が速く、reorg 頻度も高い）:
+
+\`\`\`bash
+cargo run -- node --chain holesky
+\`\`\`
+
+> 🛑 **質問（書き留めて）:** 最初の 10 ブロックで何がログされる? すべてのログ行が \`ChainCommitted\` か、それとも他のバリアントも見える?
+
+新規同期では、すべてのブロックで \`ChainCommitted\` が見える。\`ChainReorged\` と \`ChainReverted\` はもっと珍しい — 実際のチェーン不一致が必要で、holesky はメインネットより頻繁に生成する（ハッシュパワーが低い → contested fork が増える）。
+
+## ドリル 2 — トランザクションカウンターを追加
+
+\`ChainCommitted\` アームを修正してブロックごとの tx 数を出力:
+
+\`\`\`rust
+ExExNotification::ChainCommitted { new } => {
+    let total: usize = new.blocks().values()
+        .map(|b| b.body.transactions.len())
+        .sum();
+    info!(committed_chain = ?new.range(), tx_count = total, "Received commit");
+}
+\`\`\`
+
+> 🛑 **予測。** 再実行。holesky のブロックあたり平均 tx 数は? メインネットでは?
+
+Holesky: 低い — 通常 5〜20 tx/ブロック、たまに 0。メインネット: 100〜300、ブロックの満杯度次第。**ゼロレイテンシで本物のチェーンデータを読んでいることになります。**
+
+## ドリル 3 — reorg-safe な HashMap を追加
+
+各アドレスが送ったトランザクション数を追跡する。**reorg を正しくサバイブする** — それが要点。
+
+\`\`\`rust
+use std::collections::HashMap;
+use alloy_primitives::Address;
+
+let mut tx_count: HashMap<Address, u64> = HashMap::new();
+
+while let Some(notification) = ctx.notifications.try_next().await? {
+    match &notification {
+        ExExNotification::ChainCommitted { new } => {
+            for (_, block) in new.blocks() {
+                for tx in block.body.transactions() {
+                    *tx_count.entry(tx.signer()).or_insert(0) += 1;
+                }
+            }
+        }
+        ExExNotification::ChainReorged { old, new } => {
+            // old を undo してから new を apply — 順序が大事
+            for (_, block) in old.blocks() {
+                for tx in block.body.transactions() {
+                    *tx_count.entry(tx.signer()).or_insert(0) -= 1;
+                }
+            }
+            for (_, block) in new.blocks() {
+                for tx in block.body.transactions() {
+                    *tx_count.entry(tx.signer()).or_insert(0) += 1;
+                }
+            }
+        }
+        ExExNotification::ChainReverted { old } => {
+            // old を undo、置換なし
+            for (_, block) in old.blocks() {
+                for tx in block.body.transactions() {
+                    *tx_count.entry(tx.signer()).or_insert(0) -= 1;
+                }
+            }
+        }
+    };
+
+    if let Some(committed_chain) = notification.committed_chain() {
+        ctx.events.send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
+    }
+}
+\`\`\`
+
+（API 名はあなたのローカル reth の現状に合わせて調整してください — \`block.body.transactions()\` vs \`.transactions\`、\`tx.signer()\` vs \`tx.recover_signer()\`。要点は *構造*、正確な識別子ではない。）
+
+> 🛑 **質問:** 3 アームを読む。**任意の通知シーケンスの後で \`tx_count\` が正しいために保たれるべき不変条件は?**
+
+**各 \`Address\` について、カウント = (canonical チェーンで送られた tx 数) − (commit され revert されたセグメントで送られた tx 数)。** Reorg アームがコツ: \`old\` を undo して \`new\` を apply、1 通知でアトミックに。
+
+\`ChainReverted\` で \`-=\` を忘れると、カウントが永久に膨らむ。\`ChainReorged\` で \`-=\` を忘れると、カウントは canonical ではなく古いチェーンと新しいチェーンの和を表す。
+
+## ドリル 4 — Reorg ハンドリングを検証
+
+Holesky は時々 reorg を生成する。数時間動かす。
+
+> 🔍 **Reorg を見つける。** ログで「Received reorg」を検索。出てきたら:
+>
+> 1. \`from_chain\` と \`to_chain\` の範囲をメモ。
+> 2. Reorg ログ行 *の前に* 高 tx アドレスの \`tx_count\` をスポットチェック — カウントを記録。
+> 3. Reorg ログ行 *の後に* 再度記録。
+> 4. 手動で確認: そのアドレスでの古いチェーンと新しいチェーンセグメントの差と一致してカウントが変化したか?
+
+Yes なら — インデクサは reorg-safe。**本番グレードのインデクサ（goldsky、the graph など）が出荷しているのと同種のコードを書いた。**
+
+> 🛑 **最終質問:** \`ChainReorged\` アームでの操作の *順序* がなぜ重要か? 具体的に: \`new\` を apply してから \`old\` を undo しても問題ないか?
+
+問題になるケースは厳密に 1 つ: \`old\` と \`new\` が共通プレフィックスを共有していて、ランタイムがそれを *両方から省く* 場合 — でも実装が共有ブロックを両方に含めると、\`new\` を先に apply すると二重カウントしてから \`old\` の undo で 0 にする。慣習は **\`old\` を先に undo してから \`new\` を apply** で、Reth 自体が reorg を処理する時系列順序と一致する。
+
+## レッスン終了の想起
+
+スクロールせずに、自分の言葉で:
+
+1. \`ChainReorged\` を \`old\` と \`new\` 両方を同じ通知で扱う論理的根拠は?
+2. 3 アームのパターンが派生状態で保持する不変条件は?
+3. \`FinishedHeight\` を忘れると、ディスク上で時間と共に何が膨らむか?
+4. ExEx が別プロセスの RPC ポーリングインデクサに勝つ唯一のアーキテクチャ的理由は?
+
+このドリルの後、reorg-safe なノード速度のインデクサを出荷したことになります。**同じ道具で MEV ボット、リアルタイムリスクエンジン、ロールアップが作れる。**`,
                 },
                 {
                   title: 'Reth SDK — App-chainを作る',
                   slug: 'reth-sdk-appchain-ja',
                   type: 'CONTENT',
-                  sortOrder: 6,
+                  sortOrder: 9,
                   duration: 12,
                   xpReward: 25,
                   content: `# Reth SDK — App-chainを作る
@@ -2562,7 +2946,7 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
                   title: 'Expert ティアへの橋渡し',
                   slug: 'reth-bridge-to-expert-ja',
                   type: 'CONTENT',
-                  sortOrder: 7,
+                  sortOrder: 10,
                   duration: 10,
                   xpReward: 20,
                   content: `# Expert ティアへの橋渡し
@@ -2629,7 +3013,7 @@ Advanced は **構造** を教えました。Expert はその構造の **背後�
                   title: 'Advancedまとめクイズ',
                   slug: 'advanced-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 8,
+                  sortOrder: 11,
                   duration: 12,
                   xpReward: 35,
                   content: `# Advancedまとめクイズ
