@@ -10,8 +10,8 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
       description:
         'Read the Revm interpreter, learn how custom opcodes and the Database trait work, and pick up Reth Staged Sync and Execution Extensions (ExEx) — the path to building your own EVM infrastructure.',
       difficulty: 'ADVANCED',
-      duration: 236,
-      xpReward: 715,
+      duration: 260,
+      xpReward: 790,
       track: 'reth-advanced',
       tags,
       isPublished: true,
@@ -2805,133 +2805,523 @@ Without scrolling, in your own words:
 After this drill, you've shipped a reorg-safe node-speed indexer. **The same tool now lets you build MEV bots, live risk engines, and rollups.**`,
                 },
                 {
-                  title: 'Reth SDK — building an App-chain',
-                  slug: 'reth-sdk-appchain-en',
+                  title: 'Building the node-builder API step by step',
+                  slug: 'reth-sdk-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 9,
-                  duration: 12,
+                  duration: 10,
                   xpReward: 25,
-                  content: `# Reth SDK — building an App-chain
+                  content: `# Building the node-builder API step by step
 
-ExEx extends an existing Ethereum node. The Reth SDK lets you build **your own App-chain** in Rust by composing components. This is the lesson where "purpose-built EVM L1" stops being a thesis and starts being a binary you can compile.
+ExEx extends an existing Ethereum node. The **Reth SDK** lets you build *your own* App-chain in Rust by composing components. This is where "purpose-built EVM L1" stops being a thesis and starts being a binary you can compile.
 
-> 🛑 **Predict before scrolling.** You're building Tempo (a payments-focused L1). Which Reth components do you need to swap? Which can you keep as-is? Write a list of 3-4 swaps before reading the example.
+But the API has fluent calls — \`with_types\`, \`with_components\`, \`with_add_ons\`, \`launch\` — and each one decides something architecturally different. This lesson builds it up from "the dumbest thing that works," so you can see why each method earns its keep.
 
-## A real custom-node main.rs — verbatim
-
-This is from [\`paradigmxyz/reth/examples/custom-node-components/src/main.rs\`](https://github.com/paradigmxyz/reth/tree/main/examples/custom-node-components):
+By the end you'll have built every piece of:
 
 \`\`\`rust
-use reth_ethereum::{
-    chainspec::ChainSpec,
-    cli::interface::Cli,
-    evm::primitives::ConfigureEvm,
-    node::{
-        api::{FullNodeTypes, NodeTypes},
-        builder::{components::PoolBuilder, BuilderContext},
-        node::EthereumAddOns,
-        EthereumNode,
-    },
-    pool::{
-        blobstore::InMemoryBlobStore, CoinbaseTipOrdering, EthTransactionPool, Pool, PoolConfig,
-        TransactionValidationTaskExecutor,
-    },
-    provider::CanonStateSubscriptions,
-    EthPrimitives,
-};
-
 fn main() {
     Cli::parse_args()
         .run(async move |builder, _| {
             let handle = builder
                 .with_types::<EthereumNode>()
-                .with_components(EthereumNode::components().pool(CustomPoolBuilder::default()))
+                .with_components(
+                    EthereumNode::components().pool(CustomPoolBuilder::default())
+                )
                 .with_add_ons(EthereumAddOns::default())
                 .launch()
                 .await?;
-
             handle.wait_for_node_exit().await
         })
         .unwrap();
 }
 \`\`\`
 
-That's a working chain binary. ~30 lines.
+> 📂 **Open \`paradigmxyz/reth/examples/custom-node-components/src/main.rs\` in another tab.** That's the file we're building toward.
 
-> 🛑 **Stop. Without scrolling, name the four chained calls** (\`with_types\`, \`with_components\`, \`with_add_ons\`, \`launch\`). What does each one decide? Hold your guess — compare below.
+## Step 0 — The naive App-chain: fork all of Reth
 
-Read the four key calls in the chain:
+Without thinking, you'd ship a custom L1 by:
 
-### \`.with_types::<EthereumNode>()\`
-Picks the **type bundle** — chain spec, primitives (block, tx, header types), engine API. \`EthereumNode\` ships defaults; replace with \`OpNode\`, your custom types, or any \`NodeTypes\` impl.
+\`\`\`bash
+git clone https://github.com/paradigmxyz/reth my-chain
+cd my-chain
+# edit crates/everything to taste
+cargo build
+\`\`\`
 
-### \`.with_components(...)\`
-This is where customization lives. You take the base set (\`EthereumNode::components()\`) and override individual builders:
+Fork all 200K+ lines of Reth, edit whatever you need, ship the result.
 
-- \`.pool(CustomPoolBuilder::default())\` — custom transaction pool (the example does this)
-- \`.network(...)\` — custom P2P
-- \`.payload(...)\` — custom block builder
-- \`.executor(...)\` — custom EVM executor (this is where custom opcodes/precompiles plug in)
-- \`.consensus(...)\` — custom consensus
+> 🛑 **Predict.** Without scrolling: name three reasons this naive approach is *catastrophic* if you plan to ship and maintain a chain for years. (Hint: each is a different *kind of* cost.)
 
-> 🛑 **Anti-fluency.** Pick *one* component above. Sketch the trait you'd implement to swap it. (Just the method signatures — no real impl needed.) If you can't, you don't yet "see" the customization point — open the source for that builder before continuing.
+The three:
 
-### \`.with_add_ons(...)\`
-RPC namespaces, engine API extensions, ExEx installations. \`EthereumAddOns::default()\` gives you the standard Ethereum RPC; you can chain \`.install_exex(...)\` here.
+1. **Upstream divergence.** Paradigm ships Reth updates every week. Your fork has no way to pull them in cleanly — every release becomes a rebase nightmare. Six months in, you can't safely upgrade.
+2. **Surface area you don't want.** You forked because you wanted to change *one* subsystem. Now you own *everything* — bugs in code you never read, security patches you have to track, modules you'll never modify but must still build.
+3. **Review cost.** A reviewer can't tell which 50 lines you actually changed vs the 200K you didn't. Audits, security firms, regulators — all have to treat your fork as a brand-new client.
 
-### \`.launch()\`
-Boots everything: opens MDBX, starts P2P, spawns Tokio tasks for stages, exposes RPC. Returns a \`NodeHandle\` you can \`wait_for_node_exit\` on.
+The fix: **don't fork. Compose.** Override only the subsystems you actually want to change; depend on Reth as a library for everything else.
+
+## Step 1 — Identify the swap points
+
+What subsystems would you actually want to customize for a real chain?
+
+> 🛑 **Predict.** You're building Tempo (payments-focused L1). Which of Reth's subsystems would you swap? (Hint: there are 4–6 candidates.)
+
+The candidates that show up across real production chains:
+
+- **Pool** — admission rules, priority lanes (Tempo wants payments-priority)
+- **Network** — peer policy, private subnets
+- **Executor** — custom opcodes, precompiles, gas table (the lesson on custom opcodes)
+- **Consensus** — PoS → HyperBFT, PoA, Tendermint
+- **Payload** — block builder (MEV-aware, ordered for app-specific reasons)
+- **Add-ons** — custom JSON-RPC namespaces, ExEx hooks
+
+These are exactly the override points the SDK exposes. Everything *else* (sync orchestrator, MDBX schema, header download, sender recovery, hashing stages) you take from Reth as-is.
+
+## Step 2 — First sketch: pass overrides as a struct
+
+Naive composition API:
+
+\`\`\`rust
+struct NodeConfig<P, N, E, C, Pl> {
+    pool: P,
+    network: N,
+    executor: E,
+    consensus: C,
+    payload: Pl,
+}
+
+fn main() {
+    let cfg = NodeConfig {
+        pool: CustomPool::default(),
+        network: DefaultNetwork::default(),
+        executor: DefaultExecutor::default(),
+        consensus: DefaultConsensus::default(),
+        payload: DefaultPayload::default(),
+    };
+    Reth::run(cfg);
+}
+\`\`\`
+
+Pass a struct of overrides. Works, but clunky.
+
+> 🛑 **Predict.** Two specific user-experience problems with this shape?
+
+The two:
+
+1. **You spell out every field every time** — even the ones you didn't customize. The struct enforces all-or-nothing.
+2. **Type inference falls apart fast.** Each component has its own generic parameters. Specifying them all as a single struct creates a tangled type signature you can't reason about.
+
+**Builder pattern fixes both.** Each method takes one override and returns a new builder type — Rust's type system tracks the changes, defaults stay implicit.
+
+## Step 3 — Builder pattern: fluent chained calls
+
+\`\`\`rust
+let handle = builder
+    .with_pool(CustomPool::default())
+    // skip the rest — defaults
+    .launch()
+    .await?;
+\`\`\`
+
+Each \`with_*\` call returns a new builder type. Defaults stay invisible. **You only spell out what you actually overrode.**
+
+But "one method per component" doesn't capture all of Reth's customization surface. There's a higher-level grouping: *types* (block/tx/header layouts), *components* (the runtime subsystems above), and *add-ons* (RPC, ExEx). The real SDK splits the builder along those three axes.
+
+## Step 4 — \`.with_types::<EthereumNode>()\`
+
+\`\`\`rust
+.with_types::<EthereumNode>()
+\`\`\`
+
+This picks the **type bundle** — chain spec, primitives (block, tx, header types), engine API.
+
+Why is this its own step? Because the *types* are load-bearing for everything else. If you change the tx structure, every component (pool, executor, payload, network) has to use the new tx type. So the SDK forces you to commit to a type bundle *first* — before configuring components.
+
+\`EthereumNode\` ships defaults (Ethereum block + tx + header). You can also pass \`OpNode\` (Optimism types) or your own \`NodeTypes\` impl.
+
+> 🛑 **Anti-fluency.** What concrete bug would happen if \`with_types\` came *after* \`with_components\` in the chain? Sketch the failure mode.
+
+The components would have to be specified *before* the types they operate on are known. Either every component-builder would need to be generic over not-yet-chosen types (compiler-hostile), or you'd commit to types implicitly via \`.with_components\`'s arguments (silent and confusing). **\`with_types\` first** lets the rest of the chain be type-aware.
+
+## Step 5 — \`.with_components(...)\`: where customization lives
+
+\`\`\`rust
+.with_components(EthereumNode::components().pool(CustomPoolBuilder::default()))
+\`\`\`
+
+The trick: take the *base set* of components (\`EthereumNode::components()\`) and override individual builders by chaining \`.pool(...)\`, \`.network(...)\`, \`.executor(...)\` etc.
+
+Same override-only-what-you-need pattern from Step 3, applied to the runtime subsystems. Defaults stay invisible:
+
+\`\`\`rust
+.with_components(
+    EthereumNode::components()
+        .pool(CustomPoolBuilder::default())   // overridden
+        // .network is default
+        // .executor is default
+        // .consensus is default
+        // .payload is default
+)
+\`\`\`
+
+You wrote one custom builder. The rest came from Reth.
+
+> 🛑 **Predict.** Sketch the trait \`PoolBuilder\` (the one \`CustomPoolBuilder\` implements). Just method signatures, no real impl. What does Reth need from a pool builder?
+
+Roughly:
+
+\`\`\`rust
+trait PoolBuilder<Node>: Send {
+    type Pool;
+    fn build_pool(self, ctx: &BuilderContext<Node>)
+        -> impl Future<Output = eyre::Result<Self::Pool>>;
+}
+\`\`\`
+
+One method: given a context (which contains chain spec, primitives, etc.), build the pool. **Components are *built* lazily, not passed pre-constructed**, because they need the context that earlier builder steps assembled. (We'll meet this shape across all 6 builders in the next lesson.)
+
+## Step 6 — \`.with_add_ons(...)\` and \`.launch()\`
+
+\`\`\`rust
+.with_add_ons(EthereumAddOns::default())
+.launch()
+\`\`\`
+
+Add-ons are the things that aren't load-bearing for the runtime: RPC namespaces, engine API extensions, ExEx installations. \`EthereumAddOns::default()\` gives you the standard Ethereum RPC; chain \`.install_exex(...)\` calls here for the ExEx pattern from earlier lessons.
+
+\`.launch()\` is where the real work happens: opens MDBX, starts the P2P stack, spawns Tokio tasks for sync stages, wires up the RPC server. Returns a \`NodeHandle\` that drives the whole thing.
+
+## What you've built
+
+\`\`\`rust
+let handle = builder
+    .with_types::<EthereumNode>()              // (Step 4) the type bundle
+    .with_components(                          // (Step 5) runtime subsystems
+        EthereumNode::components().pool(CustomPoolBuilder::default())
+    )
+    .with_add_ons(EthereumAddOns::default())   // (Step 6) RPC + ExEx
+    .launch()                                  // (Step 6) boot everything
+    .await?;
+\`\`\`
+
+Every step earned its keep:
+
+- **\`with_types\` first** (Step 4) — types are load-bearing for everything else
+- **\`with_components\` with chained overrides** (Step 5) — override what you change, default the rest
+- **\`with_add_ons\`** (Step 6) — non-load-bearing extensions
+- **\`launch\`** (Step 6) — the boot
+
+The next lesson walks the **6 components** — what each does, what swapping it lets you ship, and which production chains swap which.
+
+## Recall before moving on
+
+Without scrolling:
+
+1. Why doesn't "fork all of Reth" scale to a chain you maintain for years?
+2. Why does \`.with_types::<EthereumNode>()\` come *first* in the chain?
+3. What's the pattern for overriding *one* component while keeping the others as Reth defaults?
+4. What does \`.launch()\` actually start?
+
+If any answer is shaky, scroll back. The next lesson tours the 6 components and what real chains do with them.
+`,
+                },
+                {
+                  title: 'The 6 components — what each one unlocks',
+                  slug: 'reth-sdk-components-en',
+                  type: 'CONTENT',
+                  sortOrder: 10,
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# The 6 components — what each one unlocks
+
+Last lesson, you built up the node-builder API. The interesting work happens inside \`.with_components(...)\` — that's where you actually swap subsystems. **This lesson walks the 6 component builders and shows what swapping each one unlocks for a real chain.**
 
 \`\`\`mermaid
 flowchart TB
-    Builder[Cli builder] --> Types[".with_types EthereumNode"]
-    Types --> Comps[".with_components"]
+    Builder["builder · .with_types"] --> Comps[".with_components"]
     Comps --> Pool["pool — admission rules"]
     Comps --> Net["network — P2P"]
     Comps --> Exec["executor — EVM, opcodes, gas"]
     Comps --> Cons["consensus — PoS / HyperBFT / etc."]
     Comps --> Payload["payload — block building"]
-    Comps --> AddOns[".with_add_ons RPC + ExEx"]
+    Comps --> AddOns["add-ons — RPC + ExEx"]
     AddOns --> Launch[".launch — your chain"]
 \`\`\`
 
-## What customization unlocks
+## The 6 components, walked
 
-| Component | What changes |
+| Component | What you swap | What it unlocks |
+| :--- | :--- | :--- |
+| \`pool\` | Tx admission, ordering, eviction | priority lanes, payments-first ordering, app-specific MEV rules |
+| \`network\` | P2P transport, peer policy | private subnets, allowlists, custom protocols |
+| \`executor\` | EVM configuration | **custom opcodes**, custom precompiles, custom gas table |
+| \`consensus\` | Block validation rules | PoS → HyperBFT, PoA, Tendermint, anything |
+| \`payload\` | Block builder | MEV-aware ordering, app-specific batching |
+| \`add_ons\` | Non-runtime extensions | custom JSON-RPC namespaces, ExEx installs |
+
+Each gets a \`*Builder\` trait — \`PoolBuilder\`, \`NetworkBuilder\`, etc. — that the SDK calls during \`.launch()\` to construct the actual subsystem.
+
+> 🛑 **Predict.** Of these 6 components, which is the one Hyperliquid most heavily customized for HyperEVM? Which is the one Tempo most heavily customized for payments? Hold both guesses.
+
+## Hyperliquid HyperEVM — what they swap
+
+- **\`consensus\`** — They run **HyperBFT** (their own BFT consensus), not Ethereum PoS. The consensus subsystem is replaced.
+- **\`executor\`** — Order-book-coupled execution: certain opcodes interact with the perp order book that lives alongside the EVM. Custom executor.
+- **\`pool\`** — Admission rules tuned for high-frequency perp updates.
+- **everything else** — Reth defaults.
+
+> 🛑 **Anti-fluency.** Hyperliquid swapped \`consensus\` and \`executor\`. **Why didn't they fork all of Reth and rewrite from scratch?** The honest answer is what makes the SDK matter — they wanted everything *else* (sync, MDBX, header downloads, sender recovery, RPC) to track upstream Reth so they can pull Paradigm's updates without a rebase nightmare. Component composition is the maintenance story.
+
+## Tempo — what they swap
+
+(Public information at the time of writing — verify against latest.)
+
+- **\`pool\`** — Payment-prioritized lanes. A merchant payment shouldn't wait behind a high-gas DeFi tx; the pool surfaces them differently.
+- **\`payload\`** — Block construction tuned for payment-finality patterns.
+- **\`add_ons\`** — Custom RPC for payment-specific endpoints.
+- **\`consensus\` / \`executor\`** — likely Reth defaults plus standard L1 consensus.
+
+The pattern: **swap the parts that match your thesis, keep everything else.** Tempo's thesis is payments-priority; the components they swap reflect that. They don't need a custom executor (no custom opcodes) or custom consensus (standard PoS works).
+
+## Berachain (bera-reth) — what they swap
+
+- **\`consensus\`** — **Proof of Liquidity**: validators stake liquidity into BEX (their DEX) instead of staking the native token alone. The consensus rules differ from Ethereum PoS.
+- **\`executor\`** — Coupled with PoL, so reward distribution interacts with execution differently.
+- **\`add_ons\`** — DEX-aware RPC namespaces.
+- **everything else** — Reth defaults.
+
+## The pattern: swap what your thesis demands
+
+If you can articulate your chain's thesis in one sentence, you can usually map it to 1–3 component swaps:
+
+| Thesis | Components to swap |
 | :--- | :--- |
-| \`with_types\` | block/tx structure, header layout, chain ID semantics |
-| \`with_components.executor\` | **EVM** — custom opcodes (lesson 2), custom precompiles (Expert), custom gas |
-| \`with_components.consensus\` | PoS → HyperBFT, PoA, Tendermint, anything |
-| \`with_components.pool\` | priority lanes (Tempo-style), custom tx admission rules |
-| \`with_components.payload\` | custom block-building (e.g., MEV-aware ordering) |
-| \`with_components.network\` | private subnets, peer policy |
-| \`with_add_ons\` | custom JSON-RPC, ExEx install |
+| "Faster perp execution coupled to an order book" | \`consensus\`, \`executor\`, \`pool\` |
+| "Payment-priority L1" | \`pool\`, \`payload\`, \`add_ons\` |
+| "Liquidity-staked PoS" | \`consensus\`, \`executor\`, \`add_ons\` |
+| "Privacy-focused L1 with shielded txs" | \`pool\`, \`executor\`, \`add_ons\` (custom RPC) |
 
-## Production examples in the wild
+> 🔍 **Find in repo.** Open \`EthereumNode::components()\`'s definition. The default builders for each component are listed there — that's the menu of "what comes for free."
 
-> 🛑 **Predict before reading.** For each of these chains, **which Reth components do they swap?** Make a guess for all three:
-> - **Hyperliquid HyperEVM**
-> - **Tempo**
-> - **Berachain (bera-reth)**
+## What stays constant: the load-bearing 80%
+
+The components you *don't* swap are the bulk of the value:
+
+- **Sync orchestrator** (the \`Stage\` pipeline you read in Module 1)
+- **MDBX schema and storage layer**
+- **Header download, sender recovery, hashing, Merkle, indexes**
+- **JSON-RPC server runtime, engine API server**
+- **Tokio runtime, tracing, metrics**
+
+This is why "compose, don't fork" is the only viable maintenance story for an L1 you intend to run for years. **Paradigm's updates flow into the 80%; your fork-shaped surface area stays in the 20% you wrote.**
+
+## Recall before the quiz
+
+Without scrolling:
+
+1. Of the 6 components, which would Hyperliquid most heavily customize, and why?
+2. Why is \`pool\` the right component to swap for payments-priority, not \`consensus\`?
+3. What's the maintenance argument for "compose, don't fork"?
+4. Sketch the *minimum* set of components you'd swap to ship a privacy-focused L1.
+
+The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
+`,
+                },
+                {
+                  title: 'Quiz: did the SDK component model stick?',
+                  slug: 'reth-sdk-quiz-en',
+                  type: 'QUIZ',
+                  sortOrder: 11,
+                  duration: 4,
+                  xpReward: 25,
+                  content: `# Quiz: did the SDK component model stick?
+
+Four questions covering the builder pattern and the component menu. Same rule: **you can't nod past a quiz.**
+
+If you miss two or more, scroll back to *Building the node-builder API* before going on to the drill.`,
+                  quizQuestions: [
+                    {
+                      question: "Why does `.with_types::<EthereumNode>()` come *first* in the builder chain, before `.with_components(...)`?",
+                      options: [
+                        "Stylistic — order doesn't matter to the compiler.",
+                        "Performance — types-first compiles faster.",
+                        "Types are load-bearing for components: tx and block types determine what the pool, executor, payload, etc. operate on. The chain commits to a type bundle first so subsequent component builders can be type-aware.",
+                        "Backwards compatibility with older Reth versions.",
+                      ],
+                      correctIndex: 2,
+                      explanation: "Components depend on types. If `with_components` came first, every builder would have to be generic over not-yet-chosen types. The chain's order encodes the dependency graph — types first, then components built on top.",
+                    },
+                    {
+                      question: "You're building a payment-priority L1. Which component(s) most directly enable that?",
+                      options: [
+                        "`consensus` — payment priority is a consensus rule.",
+                        "`pool` (admission and ordering rules) plus `payload` (block builder). The pool decides which txs get into the next block first; the payload builder decides their final order.",
+                        "`executor` — payment priority is encoded in opcodes.",
+                        "`network` — the P2P layer routes payments.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "Pool surfaces high-priority payments early; payload finalizes the block ordering. Consensus, executor, and network are unrelated to admission/ordering. This maps to Tempo's actual customization.",
+                    },
+                    {
+                      question: "Why is 'compose components, don't fork all of Reth' the only viable strategy for a chain you maintain for years?",
+                      options: [
+                        "Forking is faster.",
+                        "Forking gives you ownership of 200K+ lines you don't actually want to change. Component composition lets you own only the parts you swap (typically <10K lines), while Paradigm's upstream updates flow into the 80% you depend on as a library.",
+                        "Forking violates Reth's license.",
+                        "It doesn't matter — both work equally well.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "This is the maintenance argument. Forks accumulate divergence with every upstream release. Composition keeps the upgrade path open: Reth ships an update, you bump a Cargo dep, and your custom builders keep working because they only touched the override surface.",
+                    },
+                    {
+                      question: "What's the difference between using ExEx and using the Reth SDK?",
+                      options: [
+                        "There's no difference — they're aliases for the same thing.",
+                        "ExEx extends an existing Ethereum node by hooking into chain commits (you're a guest). The SDK lets you build *your own chain* by composing Reth's components (you're the host). ExEx is for indexers, MEV bots, rollups; the SDK is for L1s/L2s.",
+                        "ExEx is for L1s, SDK is for indexers.",
+                        "SDK is a deprecated version of ExEx.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "ExEx = listen to chain events, derive state, prune-friendly. SDK = define the chain, swap components, ship a node binary. They're complementary tools at different levels of the stack — and a real production deployment often uses both (the SDK to define the chain, then ExEx to add an indexer).",
+                    },
+                  ],
+                },
+                {
+                  title: 'Drill: ship a custom pool builder',
+                  slug: 'reth-sdk-drill-en',
+                  type: 'CONTENT',
+                  sortOrder: 12,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Drill: ship a custom pool builder
+
+Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about the SDK" to "I have written a custom pool builder, swapped it in, and watched my code run inside a node binary."
+
+## Setup
+
+\`\`\`bash
+git clone https://github.com/paradigmxyz/reth
+cd reth/examples/custom-node-components
+\`\`\`
+
+The example builds standalone — no need to build the rest of Reth.
+
+## Drill 1 — Read \`CustomPoolBuilder\`
+
+Open \`src/main.rs\`. The example overrides exactly one component: \`pool\`. Find the \`CustomPoolBuilder\` struct and its \`PoolBuilder\` impl.
+
+> 🛑 **Predict.** In one sentence, what does \`CustomPoolBuilder::build_pool\` do? Hold your guess.
+
+Skim the impl. Three sections:
+
+1. **Validators** — sets up the transaction validator (signature checks, nonce checks, etc.).
+2. **Ordering** — picks a tx ordering strategy (\`CoinbaseTipOrdering\` is the default).
+3. **Construction** — builds an \`EthTransactionPool\` with those choices and an \`InMemoryBlobStore\`.
+
+If your guess missed any of those three, scroll back and re-read the impl. The pool isn't a single piece — it's a composition of (validator, ordering, blob store).
+
+## Drill 2 — Add a log on every transaction
+
+You want to see your custom code actually run. Add a log on every transaction the validator accepts.
+
+The cleanest approach: wrap the validator in your own validator that logs and then delegates:
+
+\`\`\`rust
+struct LoggingValidator<V> {
+    inner: V,
+}
+
+impl<V: TransactionValidator> TransactionValidator for LoggingValidator<V> {
+    type Transaction = V::Transaction;
+
+    async fn validate_transaction(
+        &self,
+        origin: TransactionOrigin,
+        transaction: Self::Transaction,
+    ) -> TransactionValidationOutcome<Self::Transaction> {
+        info!(
+            tx_hash = %transaction.hash(),
+            gas_price = ?transaction.gas_price(),
+            "Pool: validating transaction"
+        );
+        self.inner.validate_transaction(origin, transaction).await
+    }
+}
+\`\`\`
+
+(Adapt to the exact \`TransactionValidator\` trait shape in your local Reth — the API drifts. The point is the *structure*.)
+
+Then in \`CustomPoolBuilder::build_pool\`, wrap the underlying validator:
+
+\`\`\`rust
+let inner_validator = TransactionValidationTaskExecutor::eth_builder(...)
+    /* ...existing setup... */
+    .build_with_tasks(...);
+
+let validator = LoggingValidator { inner: inner_validator };
+
+// pass \`validator\` instead of \`inner_validator\` to the pool
+\`\`\`
+
+> 🔧 **The wiring is left as the drill.** The exact incantation depends on the version of \`reth-pool\` you're on. The point is to put your code on the path of every tx that enters the pool.
+
+## Drill 3 — Run a dev chain and watch your log fire
+
+\`\`\`bash
+cargo run -- --dev
+\`\`\`
+
+\`--dev\` starts a single-node ephemeral chain that mines blocks fast. Send a tx (any way — \`cast send\`, MetaMask pointed at \`localhost:8545\`, your own script):
+
+\`\`\`bash
+cast send \\
+  --rpc-url http://localhost:8545 \\
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \\
+  --value 1ether \\
+  0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
+\`\`\`
+
+(Use the dev account's private key — \`--dev\` ships a known one; the one above is the standard Anvil/Reth dev key.)
+
+> 🛑 **Watch your terminal.** You should see:
 >
-> Then check below.
+> \`\`\`
+> Pool: validating transaction tx_hash=0x... gas_price=...
+> \`\`\`
+>
+> If you don't, the wiring is wrong. Common cause: you constructed \`LoggingValidator\` but the builder still hands the *inner* validator to the pool. Fix the wiring; rerun.
 
-- **Hyperliquid HyperEVM** — HyperBFT + custom execution + order-book-coupled DB
-- **Tempo** — payment-specialized priority lanes
-- **Berachain (bera-reth)** — Proof of Liquidity consensus
+## Drill 4 — One more swap, sketched
 
-These all replace one or more \`with_components\` builders with their own. The framework above is what they extend. **Compare to your prediction** — what did you get right? What surprised you?
+You've owned \`pool\`. Now sketch what changes for one more component.
 
-## Drill
+> 🛑 **Question (write it down):** You want to add a custom precompile (e.g., a fast ed25519 verifier) for your chain. Which component do you swap? What does the swap roughly look like?
 
-1. Clone \`reth\` and \`cd examples/custom-node-components\`
-2. Read \`CustomPoolBuilder\` — see how it implements \`PoolBuilder\` to swap the pool
-3. Modify it to **log every transaction's gas price** as it enters the pool
-4. \`cargo run\` against a dev chain. Watch your custom log fire.
+You swap \`executor\`. The custom precompile lives inside the EVM configuration. The skeleton:
 
-Now you've shipped a 1-line component swap. Scale this pattern to consensus or executor and you're building HyperEVM-class infra.
+\`\`\`rust
+.with_components(
+    EthereumNode::components()
+        .executor(CustomExecutorBuilder { extra_precompiles: vec![ed25519_verify] })
+)
+\`\`\`
 
-> Final check: in one sentence, why is the Reth SDK's component-builder pattern more useful for shipping a purpose-built L1 than forking the entire codebase? If your answer doesn't mention "you only own the parts you change," re-read \`with_components\` — that's the entire architectural idea.
+You'd implement \`ExecutorBuilder\` analogously to how \`CustomPoolBuilder\` implements \`PoolBuilder\`. **The pattern transfers.** That's the whole point of the SDK — once you've swapped one component, swapping another is mechanical.
+
+> 🔍 **Open** \`examples/custom-node-precompiles/\` (if it exists in your version of the repo) for a worked example of swapping the executor.
+
+## End-of-lesson recall
+
+Without scrolling, in your own words:
+
+1. What three pieces does \`CustomPoolBuilder::build_pool\` compose?
+2. Why is wrapping the validator the cleanest way to inject logging into the pool?
+3. If you wanted to add a custom precompile, which component would you swap?
+4. What's the *one* line change in \`main.rs\` to use a different component builder?
+
+After this drill, you've shipped a 1-line component swap. **Scale this pattern to consensus or executor and you're building HyperEVM-class infra.**
 
 ## 📺 Further watching
 
@@ -2944,7 +3334,7 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
                   title: 'Bridge to Expert — what comes next',
                   slug: 'reth-bridge-to-expert-en',
                   type: 'CONTENT',
-                  sortOrder: 10,
+                  sortOrder: 13,
                   duration: 10,
                   xpReward: 20,
                   content: `# Bridge to Expert — what comes next
@@ -3011,7 +3401,7 @@ If any of the five questions sent you back to a previous lesson — re-read them
                   title: 'Advanced quiz',
                   slug: 'advanced-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 11,
+                  sortOrder: 14,
                   duration: 12,
                   xpReward: 35,
                   content: `# Advanced quiz

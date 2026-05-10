@@ -10,8 +10,8 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
       description:
         'Revmのインタープリターを読み解き、カスタムOpcodeとDatabaseトレイトの実装方法を学びます。さらにRethのStaged SyncとExEx (Execution Extensions) を通じて、独自のEVMインフラを構築するための基礎を固めます。',
       difficulty: 'ADVANCED',
-      duration: 236,
-      xpReward: 715,
+      duration: 260,
+      xpReward: 790,
       track: 'reth-advanced',
       tags,
       isPublished: true,
@@ -2807,133 +2807,523 @@ Yes なら — インデクサは reorg-safe。**本番グレードのインデ�
 このドリルの後、reorg-safe なノード速度のインデクサを出荷したことになります。**同じ道具で MEV ボット、リアルタイムリスクエンジン、ロールアップが作れる。**`,
                 },
                 {
-                  title: 'Reth SDK — App-chainを作る',
-                  slug: 'reth-sdk-appchain-ja',
+                  title: 'ノードビルダー API をステップで組み立てる',
+                  slug: 'reth-sdk-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 9,
-                  duration: 12,
+                  duration: 10,
                   xpReward: 25,
-                  content: `# Reth SDK — App-chainを作る
+                  content: `# ノードビルダー API をステップで組み立てる
 
-ExExは既存のEthereumノードを拡張しますが、Reth SDKは **コンポーネントを組み立てて自前のApp-chain** をRustで構築できる仕組み。これが「purpose-built EVM L1」が thesis から **コンパイル可能なバイナリ** になるレッスン。
+ExEx は既存の Ethereum ノードを拡張するもの。**Reth SDK** はコンポーネントを組み立てて *自前の* App-chain を Rust で構築できる仕組み。これが「purpose-built EVM L1」が thesis から **コンパイル可能なバイナリ** になる場所。
 
-> 🛑 **スクロールする前に予測。** あなたが Tempo（payments 特化型 L1）を作るとして、Reth のどのコンポーネントを差し替える必要がある? どれはそのまま使える? 例を読む前に 3〜4 個の swap をリストアップ。
+ただ API は流れるような呼び出し — \`with_types\`、\`with_components\`、\`with_add_ons\`、\`launch\` — が並んで、それぞれがアーキテクチャ的に違うことを決めている。このレッスンは「最も素朴に動くもの」から積み上げて、各メソッドがなぜ場所代を稼ぐかを見せる。
 
-## 本物のカスタムノード main.rs — 一字一句そのまま
-
-[\`paradigmxyz/reth/examples/custom-node-components/src/main.rs\`](https://github.com/paradigmxyz/reth/tree/main/examples/custom-node-components) より：
+終わりにはこれの全ピースを自分で組み立てたことになります:
 
 \`\`\`rust
-use reth_ethereum::{
-    chainspec::ChainSpec,
-    cli::interface::Cli,
-    evm::primitives::ConfigureEvm,
-    node::{
-        api::{FullNodeTypes, NodeTypes},
-        builder::{components::PoolBuilder, BuilderContext},
-        node::EthereumAddOns,
-        EthereumNode,
-    },
-    pool::{
-        blobstore::InMemoryBlobStore, CoinbaseTipOrdering, EthTransactionPool, Pool, PoolConfig,
-        TransactionValidationTaskExecutor,
-    },
-    provider::CanonStateSubscriptions,
-    EthPrimitives,
-};
-
 fn main() {
     Cli::parse_args()
         .run(async move |builder, _| {
             let handle = builder
                 .with_types::<EthereumNode>()
-                .with_components(EthereumNode::components().pool(CustomPoolBuilder::default()))
+                .with_components(
+                    EthereumNode::components().pool(CustomPoolBuilder::default())
+                )
                 .with_add_ons(EthereumAddOns::default())
                 .launch()
                 .await?;
-
             handle.wait_for_node_exit().await
         })
         .unwrap();
 }
 \`\`\`
 
-これが動くチェーンバイナリ。約 30 行。
+> 📂 **別タブで \`paradigmxyz/reth/examples/custom-node-components/src/main.rs\` を開いてください。** これが組み立て先のファイル。
 
-> 🛑 **止まる。スクロールせずに、4 つのチェーン呼び出し** (\`with_types\`, \`with_components\`, \`with_add_ons\`, \`launch\`) **を挙げてください。** それぞれが何を決めている? 予想を保持 — 下で答え合わせ。
+## ステップ 0 — 素朴な App-chain: Reth 全体を fork する
 
-チェーン内の4つの呼び出しを読み解く：
+何も考えずにカスタム L1 を出すならこう:
 
-### \`.with_types::<EthereumNode>()\`
-**型バンドル** を選択 — chain spec、primitives（block・tx・header型）、engine API。\`EthereumNode\` がデフォルトを提供；\`OpNode\`、独自型、任意の \`NodeTypes\` impl に置換可能。
+\`\`\`bash
+git clone https://github.com/paradigmxyz/reth my-chain
+cd my-chain
+# 好きなように crates/ を編集
+cargo build
+\`\`\`
 
-### \`.with_components(...)\`
-カスタマイズの中核。基本セット（\`EthereumNode::components()\`）を取って各ビルダーを上書きする：
+200K 行以上の Reth を全部 fork、必要箇所を編集してリリース。
 
-- \`.pool(CustomPoolBuilder::default())\` — カスタムトランザクションプール（例ではこれ）
-- \`.network(...)\` — カスタムP2P
-- \`.payload(...)\` — カスタムブロックビルダー
-- \`.executor(...)\` — カスタムEVMエグゼキュータ（カスタムOpcode/precompileがここに入る）
-- \`.consensus(...)\` — カスタムコンセンサス
+> 🛑 **予測。** スクロールせずに: 何年もチェーンを運用するなら、この素朴なアプローチが *破滅的* な理由を 3 つ挙げてください。（ヒント: 各々が *別種の* コスト。）
 
-> 🛑 **理解度チェック。** 上のコンポーネントから *1 つ* 選ぶ。差し替えるために実装するトレイトをスケッチしてください。(メソッドシグネチャだけで OK、本物の impl は不要。) 書けないなら、カスタマイズポイントをまだ「見えて」いません — そのビルダーのソースを開いてから次へ。
+3つ:
 
-### \`.with_add_ons(...)\`
-RPCネームスペース、engine API拡張、ExExインストール。\`EthereumAddOns::default()\` で標準Ethereum RPC；ここに \`.install_exex(...)\` をチェインできる。
+1. **アップストリームの分岐。** Paradigm は Reth のアップデートを毎週リリース。あなたの fork はそれをきれいに取り込む方法がない — リリースのたびに rebase 地獄。半年も経つと安全にアップグレードできない。
+2. **欲しくない表面積。** *1 つの* サブシステムを変えたいから fork した。でも今や *すべて* を所有している — 読んだことのないコードのバグ、追跡しなければいけないセキュリティパッチ、決して触らないけれどビルドし続けるモジュール。
+3. **レビューコスト。** レビュアーには、あなたが実際に変更した 50 行と触っていない 200K 行の区別がつかない。監査、セキュリティ会社、規制当局 — 全員が fork を新しいクライアントとして扱うことになる。
 
-### \`.launch()\`
-全部起動：MDBXを開き、P2P開始、ステージ用Tokioタスクをspawn、RPCを公開。\`NodeHandle\` が返り、\`wait_for_node_exit\` で待てる。
+修正方針: **fork するな。組み立てろ。** 実際に変えたいサブシステムだけ上書きし、残りは Reth をライブラリとして依存。
+
+## ステップ 1 — 差し替えポイントを特定する
+
+実際にカスタマイズしたくなるサブシステムは何か?
+
+> 🛑 **予測。** Tempo（payments 特化型 L1）を作るなら、Reth のどのサブシステムを差し替える?（ヒント: 候補は 4〜6 個。）
+
+実本番のチェーンに登場する候補:
+
+- **Pool** — 受付ルール、優先レーン（Tempo は payments 優先）
+- **Network** — ピアポリシー、プライベートサブネット
+- **Executor** — カスタム Opcode、precompile、ガス表（カスタム Opcode のレッスン）
+- **Consensus** — PoS → HyperBFT、PoA、Tendermint
+- **Payload** — ブロックビルダー（MEV-aware、アプリ固有の理由でオーダーされる）
+- **Add-ons** — カスタム JSON-RPC ネームスペース、ExEx フック
+
+これらが SDK が公開している差し替えポイントそのもの。それ *以外*（sync オーケストレータ、MDBX スキーマ、ヘッダーダウンロード、sender 復元、ハッシングステージ）は Reth から as-is で取る。
+
+## ステップ 2 — 最初の試案: 上書きを struct で渡す
+
+素朴な合成 API:
+
+\`\`\`rust
+struct NodeConfig<P, N, E, C, Pl> {
+    pool: P,
+    network: N,
+    executor: E,
+    consensus: C,
+    payload: Pl,
+}
+
+fn main() {
+    let cfg = NodeConfig {
+        pool: CustomPool::default(),
+        network: DefaultNetwork::default(),
+        executor: DefaultExecutor::default(),
+        consensus: DefaultConsensus::default(),
+        payload: DefaultPayload::default(),
+    };
+    Reth::run(cfg);
+}
+\`\`\`
+
+上書きを struct で渡す。動くが、ぎこちない。
+
+> 🛑 **予測。** この形のユーザー体験的な問題を 2 つ?
+
+2つ:
+
+1. **毎回全フィールドを書くことになる** — カスタマイズしてないものまで。struct が all-or-nothing を強制する。
+2. **型推論が早めに崩れる。** 各コンポーネントが独自のジェネリックパラメータを持つ。それを単一 struct でまとめると推論できないからまった型シグネチャに。
+
+**Builder パターンが両方を直す。** 各メソッドが 1 つの上書きを受け取り、新しいビルダー型を返す — Rust の型システムが変更を追跡し、デフォルトは暗黙のままに。
+
+## ステップ 3 — Builder パターン: 流れるようなチェーン呼び出し
+
+\`\`\`rust
+let handle = builder
+    .with_pool(CustomPool::default())
+    // 残りはスキップ — デフォルト
+    .launch()
+    .await?;
+\`\`\`
+
+各 \`with_*\` 呼び出しが新しいビルダー型を返す。デフォルトは見えないまま。**実際に上書きしたものだけ書く。**
+
+ただ「コンポーネントごとに 1 メソッド」だと Reth のカスタマイズ表面を捉えきれない。もう一段上のグルーピングがある: *types*（block/tx/header レイアウト）、*components*（上のランタイムサブシステム）、*add-ons*（RPC、ExEx）。本物の SDK はビルダーをこの 3 軸に分ける。
+
+## ステップ 4 — \`.with_types::<EthereumNode>()\`
+
+\`\`\`rust
+.with_types::<EthereumNode>()
+\`\`\`
+
+これは **型バンドル** を選ぶ — chain spec、primitives（block・tx・header 型）、engine API。
+
+なぜこれが独立したステップか? *型* は他のすべての load-bearing だから。tx 構造を変えると、各コンポーネント（pool、executor、payload、network）はその新しい tx 型を使う必要がある。だから SDK は型バンドルを *先に* commit させる — コンポーネント設定の前に。
+
+\`EthereumNode\` はデフォルト（Ethereum block + tx + header）。\`OpNode\`（Optimism 型）や独自の \`NodeTypes\` impl も渡せる。
+
+> 🛑 **理解度チェック。** \`with_types\` がチェーンで \`with_components\` の *後* に来たら、どんな具体的なバグが発生するか? 失敗モードをスケッチ。
+
+コンポーネントが、依存する型がまだ選ばれていない時点で指定されることになる。各コンポーネントビルダーを未確定の型でジェネリックにする（コンパイラ敵対的）か、\`.with_components\` の引数で型を暗黙に commit する（無音で混乱を招く）かしかない。**\`with_types\` 先頭** は残りのチェーンを型認識可能にする。
+
+## ステップ 5 — \`.with_components(...)\`: カスタマイズの中心
+
+\`\`\`rust
+.with_components(EthereumNode::components().pool(CustomPoolBuilder::default()))
+\`\`\`
+
+トリック: コンポーネントの *基本セット*（\`EthereumNode::components()\`）を取って、\`.pool(...)\`、\`.network(...)\`、\`.executor(...)\` 等をチェインして個別ビルダーを上書きする。
+
+ステップ 3 の「変えるものだけ上書き」パターンを、ランタイムサブシステムに適用したもの。デフォルトは見えないまま:
+
+\`\`\`rust
+.with_components(
+    EthereumNode::components()
+        .pool(CustomPoolBuilder::default())   // 上書き
+        // .network はデフォルト
+        // .executor はデフォルト
+        // .consensus はデフォルト
+        // .payload はデフォルト
+)
+\`\`\`
+
+カスタムビルダーを 1 つ書いた。残りは Reth から来た。
+
+> 🛑 **予測。** \`CustomPoolBuilder\` が実装するトレイト \`PoolBuilder\` をスケッチしてください。メソッドシグネチャだけ、本物の impl は不要。Reth は pool ビルダーから何が必要?
+
+おおよそ:
+
+\`\`\`rust
+trait PoolBuilder<Node>: Send {
+    type Pool;
+    fn build_pool(self, ctx: &BuilderContext<Node>)
+        -> impl Future<Output = eyre::Result<Self::Pool>>;
+}
+\`\`\`
+
+メソッド 1 つ: コンテキスト（chain spec、primitives 等を含む）が与えられたら pool を作る。**コンポーネントは事前構築されて渡されるのではなく、遅延ビルドされる**。前のビルダーステップが組み立てたコンテキストを必要とするから。（次レッスンで 6 つのビルダー全部に同じ形を見ます。）
+
+## ステップ 6 — \`.with_add_ons(...)\` と \`.launch()\`
+
+\`\`\`rust
+.with_add_ons(EthereumAddOns::default())
+.launch()
+\`\`\`
+
+Add-ons はランタイムの load-bearing でないもの: RPC ネームスペース、engine API 拡張、ExEx インストール。\`EthereumAddOns::default()\` で標準 Ethereum RPC; ここに \`.install_exex(...)\` をチェインして前レッスンの ExEx パターンを使う。
+
+\`.launch()\` で本物の仕事が起きる: MDBX を開き、P2P スタックを起動、sync ステージ用 Tokio タスクを spawn、RPC サーバーを配線。すべてを駆動する \`NodeHandle\` を返す。
+
+## ここまでに組み立てたもの
+
+\`\`\`rust
+let handle = builder
+    .with_types::<EthereumNode>()              // (ステップ 4) 型バンドル
+    .with_components(                          // (ステップ 5) ランタイムサブシステム
+        EthereumNode::components().pool(CustomPoolBuilder::default())
+    )
+    .with_add_ons(EthereumAddOns::default())   // (ステップ 6) RPC + ExEx
+    .launch()                                  // (ステップ 6) すべて起動
+    .await?;
+\`\`\`
+
+各ステップが場所代を稼いでいる:
+
+- **\`with_types\` 先頭**（ステップ 4）— 型は他のすべての load-bearing
+- **\`with_components\` のチェイン上書き**（ステップ 5）— 変えるものだけ上書き、残りはデフォルト
+- **\`with_add_ons\`**（ステップ 6）— load-bearing でない拡張
+- **\`launch\`**（ステップ 6）— 起動
+
+次のレッスンは **6 つのコンポーネント** を歩く — それぞれが何をして、差し替えで何が出荷でき、どの本番チェーンが何を差し替えているか。
+
+## 進む前の想起
+
+スクロールせずに:
+
+1. なぜ「Reth 全体を fork」は何年も運用するチェーンに通用しないのか?
+2. なぜ \`.with_types::<EthereumNode>()\` がチェーンで *先頭* に来るのか?
+3. *1 つの* コンポーネントを上書きして残りを Reth デフォルトにするパターンは?
+4. \`.launch()\` が実際に起動するのは何?
+
+どれか曖昧なら戻る。次のレッスンは 6 コンポーネントと本物のチェーンの使い方を歩きます。
+`,
+                },
+                {
+                  title: '6 コンポーネント — それぞれが何を解放するか',
+                  slug: 'reth-sdk-components-ja',
+                  type: 'CONTENT',
+                  sortOrder: 10,
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# 6 コンポーネント — それぞれが何を解放するか
+
+前のレッスンでノードビルダー API を組み立てました。面白い仕事は \`.with_components(...)\` の中で起きる — そこで実際にサブシステムを差し替える。**このレッスンは 6 つのコンポーネントビルダーを歩き、各々の差し替えが本物のチェーンに何を解放するかを見せます。**
 
 \`\`\`mermaid
 flowchart TB
-    Builder[Cli builder] --> Types[".with_types EthereumNode"]
-    Types --> Comps[".with_components"]
-    Comps --> Pool["pool — txプール"]
+    Builder["builder · .with_types"] --> Comps[".with_components"]
+    Comps --> Pool["pool — 受付ルール"]
     Comps --> Net["network — P2P"]
-    Comps --> Exec["executor — EVM/opcode/ガス"]
+    Comps --> Exec["executor — EVM/Opcode/ガス"]
     Comps --> Cons["consensus — PoS / HyperBFT 等"]
     Comps --> Payload["payload — ブロック構築"]
-    Comps --> AddOns[".with_add_ons — RPC + ExEx"]
+    Comps --> AddOns["add-ons — RPC + ExEx"]
     AddOns --> Launch[".launch — あなたのチェーン"]
 \`\`\`
 
-## カスタマイズで何が変わるか
+## 6 コンポーネント、歩く
 
-| コンポーネント | 変えられること |
+| コンポーネント | 差し替える対象 | 解放されるもの |
+| :--- | :--- | :--- |
+| \`pool\` | tx 受付・順序付け・追い出し | 優先レーン、payments-first 順序、アプリ固有の MEV ルール |
+| \`network\` | P2P トランスポート、ピアポリシー | プライベートサブネット、許可リスト、独自プロトコル |
+| \`executor\` | EVM 設定 | **カスタム Opcode**、カスタム precompile、カスタムガス表 |
+| \`consensus\` | ブロック検証ルール | PoS → HyperBFT、PoA、Tendermint、何でも |
+| \`payload\` | ブロックビルダー | MEV-aware 順序、アプリ固有のバッチング |
+| \`add_ons\` | ランタイム外の拡張 | カスタム JSON-RPC ネームスペース、ExEx インストール |
+
+それぞれに \`*Builder\` トレイト（\`PoolBuilder\`、\`NetworkBuilder\` 等）があり、SDK が \`.launch()\` 中に呼んで実際のサブシステムを構築する。
+
+> 🛑 **予測。** これら 6 コンポーネントの中で、Hyperliquid が HyperEVM 用に最も大きくカスタマイズしたのはどれ? Tempo が payments 用に最も大きくカスタマイズしたのはどれ? 両方の予想を保持。
+
+## Hyperliquid HyperEVM — 何を差し替えているか
+
+- **\`consensus\`** — Ethereum PoS ではなく **HyperBFT**（独自の BFT コンセンサス）。コンセンサスサブシステムを置き換えている。
+- **\`executor\`** — オーダーブック直結の実行: 一部の Opcode が EVM と並走する perp オーダーブックと相互作用。カスタム executor。
+- **\`pool\`** — 高頻度な perp 更新に合わせた受付ルール。
+- **その他すべて** — Reth デフォルト。
+
+> 🛑 **理解度チェック。** Hyperliquid は \`consensus\` と \`executor\` を差し替えた。**なぜ Reth 全体を fork してゼロから書き直さなかったのか?** 正直な答えは SDK が重要な理由そのもの — 彼らは *それ以外* すべて（sync、MDBX、ヘッダーダウンロード、sender 復元、RPC）をアップストリームの Reth に追従させたかった、Paradigm のアップデートを rebase 地獄なしに取り込めるように。コンポーネント合成は保守の物語。
+
+## Tempo — 何を差し替えているか
+
+（執筆時点の公開情報 — 最新を検証してください。）
+
+- **\`pool\`** — payments 優先レーン。マーチャント決済が高 gas な DeFi tx の後ろで待つべきではない; pool が違う扱いで surface する。
+- **\`payload\`** — payment finality パターンに合わせたブロック構築。
+- **\`add_ons\`** — payment 固有エンドポイント用のカスタム RPC。
+- **\`consensus\` / \`executor\`** — おそらく Reth デフォルト + 標準 L1 コンセンサス。
+
+パターン: **thesis に合う部分を差し替え、それ以外はそのまま。** Tempo の thesis は payments-priority; 差し替えるコンポーネントがそれを反映する。カスタム executor（カスタム Opcode なし）やカスタム consensus（標準 PoS で OK）は不要。
+
+## Berachain (bera-reth) — 何を差し替えているか
+
+- **\`consensus\`** — **Proof of Liquidity**: バリデータがネイティブトークンを単独で stake するのではなく、流動性を BEX（彼らの DEX）に stake する。コンセンサスルールが Ethereum PoS と異なる。
+- **\`executor\`** — PoL と結合しているので、報酬分配が実行と相互作用する。
+- **\`add_ons\`** — DEX-aware な RPC ネームスペース。
+- **その他すべて** — Reth デフォルト。
+
+## パターン: thesis が要求する部分を差し替える
+
+チェーンの thesis を 1 文で言えるなら、たいてい 1〜3 個のコンポーネント差し替えにマッピングできる:
+
+| Thesis | 差し替えるコンポーネント |
 | :--- | :--- |
-| \`with_types\` | block/tx 構造、header レイアウト、chain ID セマンティクス |
-| \`with_components.executor\` | **EVM** — カスタムOpcode（レッスン2）、カスタムprecompile（Expert）、カスタムガス |
-| \`with_components.consensus\` | PoS → HyperBFT、PoA、Tendermint、何でも |
-| \`with_components.pool\` | 優先レーン（Tempo方式）、独自tx admission ルール |
-| \`with_components.payload\` | カスタムブロック構築（例：MEV-aware ordering） |
-| \`with_components.network\` | プライベートサブネット、ピアポリシー |
-| \`with_add_ons\` | カスタムJSON-RPC、ExExインストール |
+| 「オーダーブック結合した perp 高速実行」 | \`consensus\`、\`executor\`、\`pool\` |
+| 「payment-priority L1」 | \`pool\`、\`payload\`、\`add_ons\` |
+| 「流動性 stake PoS」 | \`consensus\`、\`executor\`、\`add_ons\` |
+| 「shielded tx 対応のプライバシー L1」 | \`pool\`、\`executor\`、\`add_ons\`（カスタム RPC） |
 
-## 本番採用例
+> 🔍 **リポジトリで確認。** \`EthereumNode::components()\` の定義を開く。各コンポーネントのデフォルトビルダーがそこに並んでいる — それが「無料で来るもの」のメニュー。
 
-> 🛑 **読む前に予測。** 各チェーンが Reth のどのコンポーネントを差し替えているか、3 つすべてに対して推測：
-> - **Hyperliquid HyperEVM**
-> - **Tempo**
-> - **Berachain (bera-reth)**
+## 不変のもの: load-bearing な 80%
+
+差し替え *ない* コンポーネントが価値の大半:
+
+- **Sync オーケストレータ**（Module 1 で読んだ \`Stage\` パイプライン）
+- **MDBX スキーマとストレージレイヤ**
+- **ヘッダーダウンロード、sender 復元、ハッシング、Merkle、インデックス**
+- **JSON-RPC サーバーランタイム、engine API サーバー**
+- **Tokio ランタイム、トレース、メトリクス**
+
+これが「fork ではなく組み立てる」が、何年も運用する L1 にとって唯一の保守可能な物語の理由。**Paradigm のアップデートは 80% に流れ込み、あなたの fork 形状の表面積は書いた 20% に留まる。**
+
+## クイズ前の想起
+
+スクロールせずに:
+
+1. 6 コンポーネントの中で Hyperliquid が最も大きくカスタマイズするのはどれで、なぜか?
+2. なぜ payments-priority に \`pool\` が正しい差し替え先で、\`consensus\` ではないのか?
+3. 「fork ではなく組み立て」の保守上の議論は?
+4. プライバシー L1 を出すための *最小* のコンポーネント差し替え集合をスケッチ。
+
+次のレッスンはクイズ。曖昧な答えがあるなら今、想起してください。
+`,
+                },
+                {
+                  title: 'クイズ: SDK のコンポーネントモデルは身についた?',
+                  slug: 'reth-sdk-quiz-ja',
+                  type: 'QUIZ',
+                  sortOrder: 11,
+                  duration: 4,
+                  xpReward: 25,
+                  content: `# クイズ: SDK のコンポーネントモデルは身についた?
+
+ビルダーパターンとコンポーネントメニューをカバーする 4 問。同じルール: **クイズはうなずきで通せない。**
+
+2 問以上落としたら、ドリルへ進む前に「ノードビルダー API をステップで組み立てる」を読み直してください。`,
+                  quizQuestions: [
+                    {
+                      question: "なぜ `.with_types::<EthereumNode>()` がビルダーチェーンで `.with_components(...)` の *先* に来るのですか?",
+                      options: [
+                        "様式 — コンパイラに順序は関係ない。",
+                        "性能 — 型先頭のほうがコンパイルが速い。",
+                        "型はコンポーネントの load-bearing: tx と block の型が pool、executor、payload などが操作する対象を決める。チェーンが先に型バンドルに commit して、後続のコンポーネントビルダーが型認識可能になる。",
+                        "古い Reth バージョンとの後方互換性。",
+                      ],
+                      correctIndex: 2,
+                      explanation: "コンポーネントは型に依存する。`with_components` が先頭なら、各ビルダーは未確定の型でジェネリックにする必要がある。チェーンの順序が依存グラフをエンコードする — 型が先、その上にコンポーネントが乗る。",
+                    },
+                    {
+                      question: "あなたが payment-priority L1 を作ろうとしている。どのコンポーネントが最も直接的にそれを実現しますか?",
+                      options: [
+                        "`consensus` — payment priority はコンセンサスルール。",
+                        "`pool`（受付と順序付けルール）と `payload`（ブロックビルダー）。Pool が次のブロックに先に入る tx を決め、payload ビルダーが最終的な順序を決める。",
+                        "`executor` — payment priority は Opcode にエンコードされる。",
+                        "`network` — P2P レイヤが payment をルーティングする。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "Pool が高優先 payment を早めに surface する; payload がブロックの最終順序を決める。Consensus、executor、network は受付/順序付けに関係ない。これは Tempo の実際のカスタマイズに対応する。",
+                    },
+                    {
+                      question: "「Reth 全体を fork ではなく、コンポーネントを組み立てる」が、何年も運用するチェーンの唯一の実行可能な戦略であるのはなぜですか?",
+                      options: [
+                        "Fork のほうが速い。",
+                        "Fork は実際には変えたくない 200K 行以上の所有権を与える。コンポーネント合成なら差し替える部分（通常 10K 行未満）だけを所有しつつ、Paradigm のアップストリームのアップデートが依存ライブラリの 80% に流れ込む。",
+                        "Fork が Reth のライセンスに違反する。",
+                        "関係ない — どちらも同じくらい有効。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "これが保守の議論。Fork はアップストリームのリリースごとに分岐を蓄積する。合成はアップグレードパスを開けたままにする: Reth がアップデートを出し、Cargo の依存をバンプし、カスタムビルダーは差し替え表面しか触っていないので動き続ける。",
+                    },
+                    {
+                      question: "ExEx を使うことと Reth SDK を使うことの違いは何ですか?",
+                      options: [
+                        "違いはない — 同じものの別名。",
+                        "ExEx は既存の Ethereum ノードを chain commit にフックして拡張する（あなたはゲスト）。SDK はコンポーネントを組み立てて *自前のチェーン* を作る（あなたはホスト）。ExEx はインデクサ・MEV ボット・ロールアップ向け; SDK は L1/L2 向け。",
+                        "ExEx は L1 向け、SDK はインデクサ向け。",
+                        "SDK は ExEx の非推奨バージョン。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "ExEx = チェーンイベントを聞く、派生状態、prune に優しい。SDK = チェーンを定義、コンポーネントを差し替え、ノードバイナリを出荷。スタックの違うレイヤの相補的な道具で、本番デプロイは両方使うことが多い（SDK でチェーンを定義、ExEx でインデクサを足す）。",
+                    },
+                  ],
+                },
+                {
+                  title: 'ドリル: カスタム pool ビルダーを出荷する',
+                  slug: 'reth-sdk-drill-ja',
+                  type: 'CONTENT',
+                  sortOrder: 12,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# ドリル: カスタム pool ビルダーを出荷する
+
+読むのはリハーサル。**実装するのが記憶。** このドリルは「SDK について読んだ」から「カスタム pool ビルダーを書いて差し替え、ノードバイナリ内で自分のコードが動くのを観察した」までを連れて行きます。
+
+## セットアップ
+
+\`\`\`bash
+git clone https://github.com/paradigmxyz/reth
+cd reth/examples/custom-node-components
+\`\`\`
+
+例は単独でビルドできる — Reth 全体をビルドする必要はない。
+
+## ドリル 1 — \`CustomPoolBuilder\` を読む
+
+\`src/main.rs\` を開く。例はちょうど 1 つのコンポーネント \`pool\` を上書きする。\`CustomPoolBuilder\` 構造体とその \`PoolBuilder\` 実装を見つける。
+
+> 🛑 **予測。** \`CustomPoolBuilder::build_pool\` は何をする、一文で? 推測を保持。
+
+実装をスキム。3 セクションを特定:
+
+1. **Validators** — トランザクションバリデータをセットアップ（署名、nonce 等のチェック）。
+2. **Ordering** — tx 順序付け戦略を選ぶ（デフォルトは \`CoinbaseTipOrdering\`）。
+3. **Construction** — 上記の選択と \`InMemoryBlobStore\` で \`EthTransactionPool\` を構築。
+
+予測がこの 3 つのいずれかを取り逃したら、戻って実装を読み直してください。Pool は単一のものではない — (validator、ordering、blob store) の合成。
+
+## ドリル 2 — 各トランザクションでログを追加
+
+カスタムコードが実際に動くのを見たい。バリデータが受け入れるトランザクションごとにログを追加。
+
+クリーンなアプローチ: バリデータをログ + 委譲する自前のバリデータでラップ:
+
+\`\`\`rust
+struct LoggingValidator<V> {
+    inner: V,
+}
+
+impl<V: TransactionValidator> TransactionValidator for LoggingValidator<V> {
+    type Transaction = V::Transaction;
+
+    async fn validate_transaction(
+        &self,
+        origin: TransactionOrigin,
+        transaction: Self::Transaction,
+    ) -> TransactionValidationOutcome<Self::Transaction> {
+        info!(
+            tx_hash = %transaction.hash(),
+            gas_price = ?transaction.gas_price(),
+            "Pool: validating transaction"
+        );
+        self.inner.validate_transaction(origin, transaction).await
+    }
+}
+\`\`\`
+
+（ローカル Reth の \`TransactionValidator\` トレイトの正確な形に合わせて調整 — API はドリフトする。要点は *構造*。）
+
+そして \`CustomPoolBuilder::build_pool\` の中で、内側のバリデータをラップ:
+
+\`\`\`rust
+let inner_validator = TransactionValidationTaskExecutor::eth_builder(...)
+    /* ...既存セットアップ... */
+    .build_with_tasks(...);
+
+let validator = LoggingValidator { inner: inner_validator };
+
+// inner_validator の代わりに validator を pool に渡す
+\`\`\`
+
+> 🔧 **配線はドリルとして残します。** 正確な呪文はあなたが使っている \`reth-pool\` のバージョン次第。要点は: pool に入る各 tx の経路に自分のコードを置くこと。
+
+## ドリル 3 — Dev チェーンを実行してログが発火するのを観察
+
+\`\`\`bash
+cargo run -- --dev
+\`\`\`
+
+\`--dev\` はブロックを速くマインする 1 ノードのエフェメラルチェーンを起動。tx を送る（任意の方法で — \`cast send\`、\`localhost:8545\` を向けた MetaMask、自前スクリプト）:
+
+\`\`\`bash
+cast send \\
+  --rpc-url http://localhost:8545 \\
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \\
+  --value 1ether \\
+  0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
+\`\`\`
+
+（dev アカウントの秘密鍵を使う — \`--dev\` は既知のものを使う; 上記は標準的な Anvil/Reth dev 鍵。）
+
+> 🛑 **ターミナルを観察。** こう出るはず:
 >
-> その後、下で確認。
+> \`\`\`
+> Pool: validating transaction tx_hash=0x... gas_price=...
+> \`\`\`
+>
+> 出ないなら配線が間違っている。よくある原因: \`LoggingValidator\` を構築したけれどビルダーがまだ *内側の* バリデータを pool に渡している。配線を直して再実行。
 
-- **Hyperliquid HyperEVM** — HyperBFT + カスタム実行 + オーダーブック直結DB
-- **Tempo** — 支払い特化の優先レーン
-- **Berachain (bera-reth)** — Proof of Liquidity コンセンサス
+## ドリル 4 — もう 1 つの差し替え、スケッチ
 
-これらは1つ以上の \`with_components\` ビルダーを自前のものに差し替えています。上記の枠組みが彼らの拡張ベース。**予想と比較** — 当たったのは何? 意外だったのは何?
+\`pool\` を所有した。次にもう 1 つのコンポーネントの差し替えで何が変わるかをスケッチ。
 
-## 練習
+> 🛑 **質問（書き留めて）:** チェーンにカスタム precompile（例: 高速 ed25519 検証器）を追加したい。どのコンポーネントを差し替える? 差し替えはおおよそどんな形?
 
-1. \`reth\` をclone、\`cd examples/custom-node-components\`
-2. \`CustomPoolBuilder\` を読む — \`PoolBuilder\` をどう実装してプールを差し替えているか
-3. **プールに入る各トランザクションのガス価格をログ出力** するように変更
-4. dev chain に対して \`cargo run\`。カスタムログが発火するのを観察
+\`executor\` を差し替える。カスタム precompile は EVM 設定の中に住む。スケルトン:
 
-これで1行のコンポーネント差し替えで動くものを出せました。同じパターンをconsensusやexecutorに拡大すればHyperEVMクラスのインフラ。
+\`\`\`rust
+.with_components(
+    EthereumNode::components()
+        .executor(CustomExecutorBuilder { extra_precompiles: vec![ed25519_verify] })
+)
+\`\`\`
 
-> 最終チェック: なぜ Reth SDK のコンポーネントビルダーパターンが、コードベース全体を fork するより purpose-built L1 のリリースに有用なのか、一文で。答えに「変更する部分だけ自分のものにする」(you only own the parts you change) という意味の一節がないなら、\`with_components\` を読み直し — それがアーキテクチャ全体のアイデア。
+\`CustomPoolBuilder\` が \`PoolBuilder\` を実装するのと同じやり方で \`ExecutorBuilder\` を実装する。**パターンが転移する。** これが SDK の要点 — 1 つのコンポーネントを差し替えたら、別のを差し替えるのは機械的。
+
+> 🔍 **\`examples/custom-node-precompiles/\` を開く**（あなたのリポジトリのバージョンに存在すれば）— executor を差し替える例。
+
+## レッスン終了の想起
+
+スクロールせずに、自分の言葉で:
+
+1. \`CustomPoolBuilder::build_pool\` は何の 3 ピースを合成しているか?
+2. なぜバリデータをラップするのが pool にロギングを注入するクリーンな方法か?
+3. カスタム precompile を追加したい場合、どのコンポーネントを差し替えるか?
+4. 違うコンポーネントビルダーを使うための \`main.rs\` の *1 行* 変更は?
+
+このドリルの後、1 行のコンポーネント差し替えで動くものを出荷した。**同じパターンを consensus や executor に拡大すれば HyperEVM クラスのインフラを構築している。**
 
 ## 📺 関連動画
 
@@ -2946,7 +3336,7 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
                   title: 'Expert ティアへの橋渡し',
                   slug: 'reth-bridge-to-expert-ja',
                   type: 'CONTENT',
-                  sortOrder: 10,
+                  sortOrder: 13,
                   duration: 10,
                   xpReward: 20,
                   content: `# Expert ティアへの橋渡し
@@ -3013,7 +3403,7 @@ Advanced は **構造** を教えました。Expert はその構造の **背後�
                   title: 'Advancedまとめクイズ',
                   slug: 'advanced-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 11,
+                  sortOrder: 14,
                   duration: 12,
                   xpReward: 35,
                   content: `# Advancedまとめクイズ
