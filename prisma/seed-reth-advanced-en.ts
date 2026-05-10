@@ -62,8 +62,9 @@ Advanced lessons use **active-learning prompts** that you don't see in earlier t
 - 🔍 **Find in repo** — Open the actual source file and verify the lesson's claim. The lesson is guidance; the source is truth.
 - **Anti-fluency checks** — *In your own words, why does this work?* If you can't answer, the lesson explicitly tells you to scroll back. **Don't skip these.**
 - **End-of-lesson recall tests** — Most lessons close with "the lesson isn't done with you until you can answer X." Take that literally.
+- **Quiz gates** — Every major topic ends with a 4–5 question quiz that gates progression. **You can't nod past a quiz** — that's the design. Miss two or more and the build-up didn't internalize; scroll back.
 
-The editorial style is harder than tutorials you've read. It's deliberately so. **Smooth tutorial prose creates a "わかった気になる" trap** — readers nod through complex material and walk away with shallow comprehension. The Predict / Recall pattern forces actual engagement.
+The editorial style is harder than tutorials you've read. It's deliberately so. **Smooth tutorial prose creates a "わかった気になる" trap** — readers nod through complex material and walk away with shallow comprehension. The Predict / Recall / Quiz pattern forces actual engagement.
 
 This is friction by design. Lean into it.
 
@@ -102,21 +103,29 @@ The "Find in repo" prompts only work if you actually have the repos open. Close 
 
 ## How to actually read these lessons
 
-The pattern across every Advanced lesson:
+Each major Advanced topic — \`add\`, custom opcodes, the Database trait, Staged Sync, ExEx, the Reth SDK — is split into a **chain of 3–4 atomic lessons**:
 
-1. **Open the lesson, see a real source excerpt** (with a GitHub link).
-2. **Hit a 🛑 Predict prompt before the explanation.** Stop. Answer in your head or on paper. Then continue.
-3. **Read the walkthrough.** Compare to your prediction. Where you were wrong is where the learning happens.
-4. **Hit a 🔍 Find-in-repo prompt.** Open the repo. Find the actual file. Verify the lesson's claim.
-5. **End-of-lesson recall test.** Close the tab if you can answer in your own words. If not, scroll back.
+1. **Build-up lesson** — start from the dumbest version of the code you could write, then earn each piece of complexity step by step. By the end, you've built every line of the real production source from a motivated starting point. Predict prompts at each step.
+2. **Walkthrough / pipeline / companions lesson** (some chains have one) — read the surrounding production code in detail, with predict and find-in-repo prompts.
+3. **Quiz** — 4–5 multiple-choice questions that gate progression. Pass to continue; miss too many and you scroll back.
+4. **Drill** — hands-on exercise in a real checkout (\`cargo build\`, modify the source, observe behavior). The drill is what makes the lesson stick a day later.
+
+Within any individual lesson, the rhythm is:
+
+1. Hit a 🛑 **Predict** prompt before the explanation. Stop. Answer in your head or on paper. Then continue.
+2. Read the walkthrough. Compare to your prediction. **Where you were wrong is where the learning happens.**
+3. Hit a 🔍 **Find-in-repo** prompt. Open the repo. Find the actual file. Verify the lesson's claim.
+4. End-of-lesson recall test. Close the tab if you can answer in your own words. If not, scroll back.
 
 This is slower than typical tutorials. **It also internalizes.** The trade is intentional.
 
 ## Pacing
 
-A single Advanced lesson takes **30–60 minutes** if you actually do the prompts. Expert lessons go longer.
+Each atomic lesson is **8–12 minutes stated, ~15–25 minutes with the prompts actually engaged**. A full topic chain (build-up → walkthrough → quiz → drill, 3–4 lessons) is **roughly 45–80 minutes** — one solid evening's work. Expert lessons go longer.
 
-**Don't try to do five in one sitting.** One or two per evening, with the code open and the predict prompts engaged, is the right pace. Sprinting through breaks the active-learning model the lessons are built around.
+**The right unit is one chain per session.** Plan to start a chain (say, the four \`add\` lessons) and finish it. The build-up, walkthrough, and quiz reinforce each other, and the drill is where doing-not-reading turns the chain into memory. Splitting a chain across days — half the build-up tonight, the rest plus drill next week — breaks the model.
+
+If you're short on time: do *one* lesson well rather than skim two. Engagement matters more than coverage at this tier.
 
 ## You're ready
 
