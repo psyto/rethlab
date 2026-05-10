@@ -10,8 +10,8 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
       description:
         'Read the Revm interpreter, learn how custom opcodes and the Database trait work, and pick up Reth Staged Sync and Execution Extensions (ExEx) — the path to building your own EVM infrastructure.',
       difficulty: 'ADVANCED',
-      duration: 120,
-      xpReward: 350,
+      duration: 165,
+      xpReward: 495,
       track: 'reth-advanced',
       tags,
       isPublished: true,
@@ -120,49 +120,22 @@ A single Advanced lesson takes **30–60 minutes** if you actually do the prompt
 
 ## You're ready
 
-If the prerequisite list looked familiar and you have the repos open: scroll back to the course detail and start with **Reading the interpreter**.
+If the prerequisite list looked familiar and you have the repos open: scroll back to the course detail and start with **Building \`add\` step by step: signature and body**.
 
 If the prerequisite list felt shaky: go work through the Bridge to Advanced course first. Come back when each item on that list reads like vocabulary you own, not concepts you'd have to re-look-up.
 
 Either path is fine. The wrong choice is to ignore the gap and brute-force through Advanced — that's the path that ends with "I read all the lessons but couldn't tell you what \`?Sized\` actually does." Spend the prep time. The source-walking pays off only if you can read the source.`,
                 },
                 {
-                  title: 'Reading the interpreter',
-                  slug: 'revm-interpreter-en',
+                  title: 'Building \`add\` step by step: signature and body',
+                  slug: 'revm-add-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 1,
-                  duration: 15,
-                  xpReward: 30,
-                  content: `# Reading the interpreter
+                  duration: 8,
+                  xpReward: 20,
+                  content: `# Building \`add\` step by step: signature and body
 
-You're going inside [\`bluealloy/revm\`](https://github.com/bluealloy/revm). The folder that matters is \`crates/interpreter\` — every EVM opcode is implemented here, in Rust.
-
-This lesson: read the real \`add\` opcode and the dispatch loop that calls it. Three lines of code. Half a page of nuance per line. **Reading is the easy part. Internalizing it is the lesson.**
-
-## Layout
-
-\`\`\`
-revm/
-├── crates/
-│   ├── interpreter/        ← we are here
-│   │   ├── src/
-│   │   │   ├── instructions/
-│   │   │   │   ├── arithmetic.rs   ← ADD, MUL, SUB, ...
-│   │   │   │   ├── stack.rs        ← PUSH, POP, DUP, SWAP
-│   │   │   │   ├── memory.rs       ← MLOAD, MSTORE, ...
-│   │   │   │   ├── macros.rs       ← gas!, popn_top!, push! ...
-│   │   │   │   └── ...
-│   │   │   └── interpreter.rs
-│   ├── primitives/         ← Address, U256, B256
-│   ├── database-interface/ ← the Database trait
-│   └── precompile/         ← built-in precompiles
-\`\`\`
-
-> 📂 **Open the repo in another tab now.** Don't read the rest of this lesson without it open. Every claim below should be cross-checked against the actual file.
-
-## The real \`add\` opcode
-
-Pulled from [\`crates/interpreter/src/instructions/arithmetic.rs\`](https://github.com/bluealloy/revm/blob/main/crates/interpreter/src/instructions/arithmetic.rs):
+The real \`add\` opcode in [\`bluealloy/revm\`](https://github.com/bluealloy/revm) looks intimidating:
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -172,27 +145,297 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 }
 \`\`\`
 
-Three lines. Six things a lazy reader will miss.
+Walk that line by line and you get six new ideas at once. Easier path: **build it up.** Start from the dumbest \`add\` you could write, and earn each piece of complexity. By the end of *this* lesson you'll have built everything except the macro on line 2 — that's the next lesson.
 
-> 🛑 **Stop. Before scrolling, answer in one sentence each:**
-> 1. Why is there a generic \`IT\` here at all? What would change if it were removed?
-> 2. Why \`?Sized\` on \`H\`? When does removing the \`?\` break the build?
-> 3. The body never returns the result anywhere visible. Where does the EVM observe the new top of stack?
->
-> If any answer is "I don't know" or "something about traits," scroll up and re-read the signature before continuing. The point is not to scroll past comfortable.
+> 📂 **Open \`bluealloy/revm\` in another tab.** You'll be cross-checking the build-up against the real source.
 
----
+## Step 0 — The naive \`add\`
 
-### \`<IT: ITy, H: ?Sized>\`
+If you were writing an EVM in Rust without thinking too hard, your \`add\` would look like:
 
-- \`IT\` is an **interpreter-types** marker. It selects the execution mode at compile time: concrete, traced, or sandboxed (Inspector). The same \`add\` function compiles to specialized binaries, one per mode. **Without \`IT\`, you'd write \`add\` three times.**
-- \`?Sized\` opts \`H\` *out* of the implicit \`Sized\` bound. Without \`?\`, \`H\` must be a concrete type known at compile time. With \`?\`, \`H\` can be \`dyn Host\` — a trait object whose size is unknown at compile time. That's the only reason \`&mut dyn Host\` compiles.
+\`\`\`rust
+pub fn add(stack: &mut Vec<U256>) -> Result<(), &'static str> {
+    let a = stack.pop().ok_or("underflow")?;
+    let b = stack.pop().ok_or("underflow")?;
+    stack.push(a + b);
+    Ok(())
+}
+\`\`\`
 
-> 🔍 **Open \`revm/src/host.rs\`. Find one place where \`dyn Host\` is actually constructed.** That's the proof these generics earn their complexity. If you can't find one, the generics are just noise to you — find one before continuing.
+Pop two values. Add them. Push the result. Done.
 
-### \`popn_top!([op1], op2, context.interpreter)\`
+> 🛑 **Predict.** Without scrolling: name **two** things this version does that revm's real \`add\` deliberately avoids. (Hint: one is in the signature, one is in the body.) Hold your guesses — we'll fix each.
 
-A macro. Find its definition in \`instructions/macros.rs\`:
+The two are:
+
+1. **It only works with one host environment.** \`&mut Vec<U256>\` is a concrete type. You can't swap in a tracer's stack, a fuzzer's stack, or an Inspector-sandboxed stack without rewriting the function.
+2. **It pops *and* pushes — three stack operations.** Real \`add\` does *one* — overwrite the new top in place.
+
+We'll fix #1 first (the signature), then #2 (the body).
+
+## Step 1 — Make it generic over the host
+
+Revm has to plug into multiple environments:
+
+- **Production execution** (the main path)
+- **Tracing** (record every stack op for debugging)
+- **Inspector sandbox** (let an external observer step the EVM)
+- **Fuzzers, mainnet forks, state-test runners**
+
+Each of these has a slightly different stack/state shape. We don't want six copies of \`add\`.
+
+First-attempt fix: a generic over a \`Host\` trait.
+
+\`\`\`rust
+pub fn add<H: Host>(host: &mut H) -> Result {
+    // ... same body, but calling host.stack instead of a concrete Vec
+}
+\`\`\`
+
+\`H: Host\` reads as "any type that implements the \`Host\` trait." One source. **One specialized binary per concrete \`H\`** at compile time.
+
+> 🛑 **Predict.** What's the catch with \`<H: Host>\`? Why might revm not stop here?
+
+Two catches:
+
+1. With many host types, monomorphization explodes compile times.
+2. **You can't pass a trait object** like \`&mut dyn Host\` — \`<H: Host>\` only accepts types whose size is known at compile time.
+
+Why would you want a trait object? Because sometimes you build the host at runtime (selected by a config flag, or constructed dynamically by a test harness). Trait objects are the way you say "I don't know which concrete \`Host\` impl this is until runtime — please use a vtable."
+
+That's where \`?Sized\` comes in.
+
+## Step 2 — Allow trait objects: \`H: ?Sized\`
+
+Rust silently adds a \`Sized\` bound to **every** generic parameter. Without \`?Sized\`, \`H\` must be a type whose size is known at compile time — which excludes \`dyn Host\` (a trait object's size depends on the runtime concrete type behind it).
+
+Adding \`?Sized\`:
+
+\`\`\`rust
+pub fn add<H: Host + ?Sized>(host: &mut H) -> Result {
+    // ...
+}
+\`\`\`
+
+Now \`host: &mut dyn Host\` is a valid argument. **One compiled \`add\` works against any \`Host\` impl,** at the cost of a vtable indirection per host call.
+
+> 🛑 **Anti-fluency check.** "It opts out of \`Sized\`" is parroting. In your own words: *why* must we accept an unknown-size type at all? If you can't motivate it without scrolling, re-read.
+
+> 🔍 **Open \`revm/src/host.rs\`.** Find one place where \`dyn Host\` is actually constructed. That's the empirical proof this opt-out earns its complexity.
+
+## Step 3 — Add the second generic: \`IT: ITy\`
+
+\`H\` handles host plug-ability. But what about the **execution mode** — production vs. traced vs. Inspector-sandboxed?
+
+Revm uses a *second* generic, \`IT\`, to select that at compile time:
+
+\`\`\`rust
+pub fn add<IT: ITy, H: Host + ?Sized>(host: &mut H) -> Result {
+    // ...
+}
+\`\`\`
+
+\`IT\` is an "interpreter-types" marker — think of it as a strategy parameter. The same source compiles to specialized binaries, **one per execution mode.** Without \`IT\`, you'd write \`add\` three times — once for production, once for tracing, once for the sandbox.
+
+You now have the real signature of \`add\` (the parameter type is wrapped in revm's \`Ictx<...>\` for ergonomics, but the generics are exactly what we built):
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+\`\`\`
+
+That matches the source. **You built it.**
+
+## Step 4 — Fix the body: write through a reference
+
+Naive body:
+
+\`\`\`rust
+let a = stack.pop().ok_or(StackUnderflow)?;
+let b = stack.pop().ok_or(StackUnderflow)?;
+stack.push(a + b);
+\`\`\`
+
+Three stack operations. Each is a memory write or capacity check. The interpreter's hot path runs this *hundreds of millions* of times per block — that overhead is the difference between competitive and uncompetitive throughput.
+
+Better: pop *one* value, then mutate the new top **in place** through a \`&mut\` reference.
+
+\`\`\`rust
+let a = stack.pop().ok_or(StackUnderflow)?;       // pop op1
+let b = stack.last_mut().ok_or(StackUnderflow)?;  // &mut to new top
+*b = a + *b;                                       // overwrite in place
+\`\`\`
+
+One pop, one in-place write. **No push.**
+
+> 🛑 **Predict.** Now that the body writes through \`&mut\`, what does the function actually need to *return* on success?
+
+Just \`Ok(())\` — there's nothing to return because the data flow happens through the reference, not the return value. Look back at the real signature: \`-> Result\` with no associated value. That's why.
+
+## Step 5 — Use \`wrapping_add\`
+
+One detail left. Replace \`+\` with \`wrapping_add\`:
+
+\`\`\`rust
+*b = a.wrapping_add(*b);
+\`\`\`
+
+Why? **EVM consensus requires \`ADD\` to wrap modulo 2²⁵⁶.** Use \`+\` and you have a release/debug-divergent client (Rust's \`+\` panics in debug, wraps in release). Use \`saturating_add\` and you fork the network on first overflow — you'll prove that empirically in the drill lesson.
+
+> 🛑 **Predict.** What hex value does \`U256::MAX.wrapping_add(U256::from(1))\` produce?
+
+If your answer wasn't \`0x0\`, pause. EVM consensus depends on this exact behavior.
+
+## What you've built
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    let op1 = context.interpreter.stack.pop().ok_or(StackUnderflow)?;
+    let op2 = context.interpreter.stack.last_mut().ok_or(StackUnderflow)?;
+    *op2 = op1.wrapping_add(*op2);
+    Ok(())
+}
+\`\`\`
+
+That is **the real \`add\` semantically**, just with the stack manipulation done by hand. The real source factors those middle two lines into a macro called \`popn_top!\` — which earns its own lesson, next.
+
+## Recall before moving on
+
+Without scrolling, in your own words:
+
+1. What does \`IT: ITy\` buy us at compile time? What would happen without it?
+2. What does \`?Sized\` allow that the default doesn't?
+3. Why is the body one in-place write instead of pop-add-push?
+4. What does \`U256::MAX.wrapping_add(U256::from(1))\` produce, and why does it matter?
+
+If any answer is shaky, scroll back. The next lesson refactors the body into a macro — you can't follow the refactor if you don't own the version we just built.
+`,
+                },
+                {
+                  title: 'Reading \`add\`: factoring out the macro',
+                  slug: 'revm-add-macro-en',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 8,
+                  xpReward: 25,
+                  content: `# Reading \`add\`: factoring out the macro
+
+Last lesson, you built up to:
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    let op1 = context.interpreter.stack.pop().ok_or(StackUnderflow)?;
+    let op2 = context.interpreter.stack.last_mut().ok_or(StackUnderflow)?;
+    *op2 = op1.wrapping_add(*op2);
+    Ok(())
+}
+\`\`\`
+
+That's \`add\` semantically. The real source is shorter:
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
+    *op2 = op1.wrapping_add(*op2);
+    Ok(())
+}
+\`\`\`
+
+The first two lines from your hand-written version became one macro call. **This lesson is just that refactor.** Why a macro, what's inside it, and why three details inside earn their keep.
+
+## Step 1 — Why a macro at all
+
+Look at \`mul\`, \`sub\`, \`div\`, \`mod\`, \`lt\`, \`gt\`, \`eq\`, \`and\`, \`or\`, \`xor\`, ... — every binary opcode begins with the same two lines:
+
+\`\`\`rust
+let op1 = ctx.interpreter.stack.pop().ok_or(StackUnderflow)?;
+let op2 = ctx.interpreter.stack.last_mut().ok_or(StackUnderflow)?;
+\`\`\`
+
+Repeated 30+ times across the codebase. **That's a refactor opportunity.**
+
+> 🛑 **Predict.** Why a \`macro_rules!\` and not a regular function? (Two reasons; name at least one.)
+
+Two reasons:
+
+1. **Variable arity.** Some opcodes pop 1, some pop 2, some pop 3. A macro matches \`[op1]\`, \`[op1, op2]\`, \`[op1, op2, op3]\` with the same arm — a function would need \`popn_top1\`, \`popn_top2\`, \`popn_top3\`, or const-generic gymnastics.
+2. **Direct early return.** A function returning \`Result\` would force \`?\` boilerplate at every call site. The macro emits a \`return Err(StackUnderflow);\` that returns from the *opcode* function directly — no \`?\`, no \`Result\` plumbing.
+
+## Step 2 — A naive version of the macro
+
+If you were writing it without thinking about the optimizer, you'd write:
+
+\`\`\`rust
+macro_rules! popn_top_naive {
+    ([ $($x:ident),* ], $top:ident, $interpreter:expr) => {
+        $(
+            let $x = $interpreter.stack.pop().ok_or(StackUnderflow)?;
+        )*
+        let $top = $interpreter.stack.last_mut().ok_or(StackUnderflow)?;
+    };
+}
+\`\`\`
+
+**Read the syntax slowly:**
+
+- \`$($x:ident),*\` matches a comma-separated list of identifiers (zero or more). With \`[op1]\`, the list has one element. With \`[op1, op2]\`, it has two.
+- \`$( ... )*\` repeats whatever's inside per element of the list. Here it pops once per identifier.
+
+That works. It's also slower than the real version, in two ways revm cares about.
+
+> 🛑 **Predict.** Where is the slowness? (Hint: think about (a) repeated bounds checks per pop, and (b) what the optimizer can prove.)
+
+## Step 3 — Pre-check the underflow once
+
+Calling \`.pop()\` N times means N internal bounds checks. **Better: check once, up-front.**
+
+\`\`\`rust
+if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
+    return Err(StackUnderflow);
+}
+// ... now do the pops without re-checking
+\`\`\`
+
+\`_count!\` is a helper macro that counts the identifiers in the repetition. For \`[op1]\`, the guard becomes \`stack.len() < 2\` (one popped + one mutable-borrowed). Once that guard passes, **the subsequent pops are provably safe** — we just verified there are enough items.
+
+## Step 4 — \`cold_path()\`: tell LLVM the failure branch is rare
+
+Stack underflow is a bug, not a normal path. You don't want the rare-failure code in your hot instruction cache.
+
+\`\`\`rust
+if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
+    $crate::primitives::hints_util::cold_path();
+    return Err(StackUnderflow);
+}
+\`\`\`
+
+> 🛑 **Predict.** What does \`cold_path()\` actually compile to?
+
+It compiles to **nothing at runtime.** It's a compile-time hint to LLVM: "the code reachable through this branch is statistically rare." The optimizer responds by laying out the rare-branch code far from the hot path's machine instructions, keeping the hot path one straight line of cache-warm assembly.
+
+Zero-cost optimization hint. That's the whole pattern.
+
+## Step 5 — \`unwrap_unchecked()\`: cash in the guard
+
+Now we've manually verified \`stack.len() >= N\`. But Rust's \`pop()\` returns \`Option<T>\` — so naive code would write \`.unwrap()\` (panics on \`None\`) or \`.ok_or(...)?\` (re-checks). Both repeat the work the guard already did.
+
+The real macro instead does:
+
+\`\`\`rust
+let ([$( $x ),*], $top) = unsafe {
+    $crate::interpreter_types::StackTr::popn_top(&mut $interpreter.stack)
+        .unwrap_unchecked()
+};
+\`\`\`
+
+\`unwrap_unchecked()\` skips the runtime \`Some\` check. **It's only safe when you can prove the value is \`Some\` — and the guard we wrote in Step 3 just proved exactly that.** The \`unsafe\` block is the contract: *"I checked, so don't double-check."* Delete the guard and you've made it instant UB.
+
+> 🛑 **Anti-fluency.** Without scrolling: why doesn't the compiler optimize the \`Some\` check away itself? Why force \`unwrap_unchecked\`?
+
+The compiler can't prove the relationship between \`stack.len() >= N\` and \`popn_top\` returning \`Some\` — that's a domain invariant (we know what \`popn_top\` does), not a type invariant the type system can see. \`unwrap_unchecked\` is the seam between domain knowledge and type-system limits — how you tell the compiler "trust me, I checked."
+
+## Step 6 — The full \`popn_top!\`
+
+Putting it all together:
 
 \`\`\`rust
 macro_rules! popn_top {
@@ -209,34 +452,15 @@ macro_rules! popn_top {
 }
 \`\`\`
 
-> 🛑 **Predict before reading the explanation:**
-> - What does this macro expand to when called as \`popn_top!([op1], op2, ctx.interpreter)\`? Write the expansion out — actually, on paper if you have to.
-> - Why is \`cold_path()\` called on the error branch? What does it do to generated assembly?
-> - \`unwrap_unchecked()\` inside \`unsafe\`: what *exact* condition makes this not undefined behavior?
+Three details, each earning its keep:
 
----
+- **\`cold_path()\`** — keeps the rare-failure code out of the hot icache (zero-cost hint)
+- **\`unwrap_unchecked\`** — skips the runtime check the guard already did
+- **The arity-N matcher** — one macro for any opcode that pops N
 
-Walk:
+> 🔍 **Find in repo.** Open \`crates/interpreter/src/instructions/macros.rs\`. Find \`popn_top!\`. Confirm what we just walked is what's in the file (modulo formatting).
 
-- \`$($x:ident),*\` matches a comma-separated list of identifiers. With \`[op1]\`, the list has one element. The expansion creates a binding for \`op1\` (popped value) and \`op2\` (mutable reference to the new top of stack).
-- \`cold_path()\` is a hint to LLVM that the branch is statistically rare. The compiler then keeps the rare-branch code out of the hot instruction cache. **Net effect: the happy path stays one straight line of cache-warm assembly.**
-- \`unwrap_unchecked()\` skips the runtime \`Some\` check. It's safe here because the \`if stack.len() < ...\` guard *just ran* — the value is provably \`Some\`. The \`unsafe\` block is the contract: *"I checked, so don't double-check."* Delete the guard and you've made it instant UB.
-
-> 🛑 **Anti-fluency test.** Without scrolling back: in your own words, why doesn't the compiler optimize away the redundant \`Some\` check itself, requiring \`unwrap_unchecked\` instead?
->
-> If you can't answer, you don't understand the macro yet — re-read.
-
-### \`*op2 = op1.wrapping_add(*op2)\`
-
-\`op2\` is a **mutable reference** to the new top of stack (after \`op1\` was popped). The line writes the result *through* the reference — one memory write, no pop-add-push.
-
-\`wrapping_add\` performs addition modulo 2²⁵⁶. EVM's \`ADD\` is required to wrap, not panic.
-
-> 🛑 **Predict.** What hex value does \`U256::MAX.wrapping_add(U256::from(1))\` produce?
->
-> If your answer wasn't \`0x0\` (or \`U256::ZERO\`), pause. EVM consensus depends on this exact behavior. Get it wrong in your own implementation and you've forked the chain.
-
-## The \`gas!\` macro
+## Step 7 — \`gas!\`: the same pattern, applied elsewhere
 
 \`\`\`rust
 macro_rules! gas {
@@ -249,43 +473,22 @@ macro_rules! gas {
 }
 \`\`\`
 
-Same structural pattern as \`popn_top!\`: check, cold-hint on failure, return early. Charge gas, fall off the cliff if you can't afford it.
+Same shape: check, cold-hint on failure, return early. Charge gas; fall off the cliff if you can't afford it. Once you've internalized \`popn_top!\`, \`gas!\` is the same pattern in five lines.
 
-> 🔍 **Why isn't \`gas!\` called inside the body of \`add\`?** Look at \`arithmetic.rs\`. Form a hypothesis. Then open \`interpreter.rs\` and find where constant-gas opcodes are actually charged. Verify your hypothesis against the source — don't take this lesson's word for it.
+> 🔍 **Find in repo.** Why isn't \`gas!\` called inside the body of \`add\`? Look at \`arithmetic.rs\`. Form a hypothesis. Then open \`interpreter.rs\` and find where constant-gas opcodes are charged.
 
-## Where the dispatch lives
+Hint: \`add\` has a *fixed* gas cost (3 in current Ethereum). Fixed costs get paid up-front by the dispatch loop, before each opcode function runs. Only opcodes with **operand-dependent** costs (\`exp\`, \`sha3\`, the memory-touching ops) charge inside their bodies — you'll meet one such case in the drill.
 
-\`\`\`mermaid
-flowchart LR
-    PC[interpreter.pc] -->|fetch byte| Op[opcode 0x01]
-    Op -->|index into| Table["[Instruction; 256]"]
-    Table --> Fn[fn add ctx]
-    Fn -->|popn_top!| Stack[Stack op1, op2 top]
-    Fn -->|wrapping_add| Stack
-    Fn --> PC
-\`\`\`
+## Recall before the quiz
 
-Each opcode is a function pointer indexed by byte value. The dispatch loop fetches a byte from \`pc\`, indexes into a \`[Instruction; 256]\` table, calls. **No \`match\` statement, no jump table the compiler builds for you — an array of function pointers built at compile time.**
+Without scrolling:
 
-> 🔍 **Trace it yourself before continuing.** In the repo:
->
-> 1. Open \`crates/interpreter/src/instructions/mod.rs\` — what does it declare?
-> 2. Find where the table \`[Instruction; 256]\` is built. (Search for \`Instruction;\` or \`instruction_table\`.)
-> 3. At index \`0x01\`, what's the function pointer? Confirm it's \`add\`.
->
-> If you can't locate the table, you don't yet know how the interpreter dispatches. Don't proceed without finding it.
+1. Why is \`popn_top!\` a macro instead of a function? (Name one mechanical reason.)
+2. What does \`cold_path()\` compile to at runtime?
+3. Why is \`unwrap_unchecked\` not UB inside \`popn_top!\`?
+4. What's the structural relationship between \`popn_top!\` and \`gas!\`?
 
-## Drill
-
-Reading is rehearsal. Now do these in order:
-
-1. **Find \`mul\`.** Confirm it has the exact same shape as \`add\` but uses \`wrapping_mul\`. **Why** are these two opcodes structurally identical down to the line count? (Answer in your own words before moving on.)
-2. **Find \`exp\`.** It's longer. Locate where its **dynamic** gas cost is computed (hint: a \`gas\` call mid-function, not at entry). Why is \`exp\` charged dynamically when \`add\` is charged at dispatch?
-3. **Break consensus on purpose.** Modify \`add\` locally: use \`saturating_add\` instead of \`wrapping_add\`. Build. Run the test suite. Watch tests fail. **You now have empirical proof that consensus is one library function call away from forking the network.**
-
----
-
-After this drill, you've read more EVM source than 99% of Solidity developers ever will. **More importantly: you can prove it — answer the predict/recall prompts above, in your own words, without scrolling back.** If you can't, the lesson isn't done with you.
+The next lesson is a quiz that gates progression. **You can't nod through a quiz** — engage with these recalls now if any answer is shaky.
 
 ## 📺 Further watching
 
@@ -295,25 +498,260 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough
 `,
                 },
                 {
-                  title: 'Custom opcodes — the design space',
-                  slug: 'custom-opcodes-en',
+                  title: 'Quiz: did \`add\` actually stick?',
+                  slug: 'revm-add-opcode-quiz-en',
+                  type: 'QUIZ',
+                  sortOrder: 3,
+                  duration: 5,
+                  xpReward: 30,
+                  content: `# Quiz: did \`add\` actually stick?
+
+This quiz isn't decoration. It exists because the previous lesson's "predict" prompts are easy to nod past — and a day from now, "I read it, nodded, and couldn't reproduce it" is the failure mode that breaks Advanced.
+
+Five questions. Each one maps to a piece of the previous lesson. **If you find yourself guessing**, stop and re-read the relevant section before answering. The quiz will still be here.
+
+If you miss two or more, the lesson hasn't internalized — re-read \`Reading add\` before going on to the drill.`,
+                  quizQuestions: [
+                    {
+                      question: 'What does removing the `?` from `H: ?Sized` actually break in the `add` function signature?',
+                      options: [
+                        'Nothing — `?Sized` is a stylistic hint the compiler ignores.',
+                        '`add` would no longer compile, because `H` is implicitly `?Sized` already.',
+                        '`&mut dyn Host` would no longer be a valid argument — only concrete, sized types could be passed as `H`.',
+                        '`unwrap_unchecked()` inside `popn_top!` would become undefined behavior.',
+                      ],
+                      correctIndex: 2,
+                      explanation: 'Rust adds an implicit `Sized` bound to every generic type parameter by default. `?Sized` opts out of that bound. Without it, `H` must be a type whose size is known at compile time — which excludes trait objects like `dyn Host` (their size depends on the runtime concrete type). The whole reason `&mut dyn Host` compiles is the `?Sized` opt-out.',
+                    },
+                    {
+                      question: 'Why is the `unwrap_unchecked()` call inside `popn_top!` not undefined behavior?',
+                      options: [
+                        'Because `unsafe` blocks suspend UB checks at runtime.',
+                        "Because the macro's preceding `if stack.len() < ...` guard just proved the popped value would be `Some`.",
+                        'Because `cold_path()` ensures the underflow branch can never execute.',
+                        'Because Rust automatically validates `Option` types inside `unsafe` blocks.',
+                      ],
+                      correctIndex: 1,
+                      explanation: "`unwrap_unchecked` is undefined behavior if the value is `None`. The macro's `if` guard returns early when the stack has fewer items than required — so by the time `unwrap_unchecked` runs, the value is provably `Some`. Delete the guard and it becomes instant UB. The `unsafe` block is the contract: *\"I checked manually, so the runtime doesn't need to.\"*",
+                    },
+                    {
+                      question: 'What does `cold_path()` actually compile to in the generated assembly?',
+                      options: [
+                        'An unconditional jump to a panic handler.',
+                        "Nothing at runtime — it's a hint to LLVM that the branch is statistically rare.",
+                        'A `std::process::abort()` call.',
+                        'A logging call that prints a stack trace.',
+                      ],
+                      correctIndex: 1,
+                      explanation: "`cold_path()` emits no instructions. It tells LLVM \"the code reachable through this branch is rare,\" and the optimizer responds by laying that branch's code out away from the hot instruction cache. The happy path stays as one straight line of cache-warm assembly — that's the entire point.",
+                    },
+                    {
+                      question: 'What hex value does `U256::MAX.wrapping_add(U256::from(1))` produce?',
+                      options: [
+                        '`0xFFFF...FF` — saturated at the maximum.',
+                        'A panic on overflow.',
+                        '`0x0` — wraps modulo 2²⁵⁶.',
+                        'The transaction reverts.',
+                      ],
+                      correctIndex: 2,
+                      explanation: "EVM's `ADD` opcode is *required* by consensus to wrap modulo 2²⁵⁶. `wrapping_add` implements exactly that. Replace it with `saturating_add` or `checked_add` and your client forks the network the first time anyone overflows — which the drill lesson makes you prove empirically.",
+                    },
+                    {
+                      question: 'The `add` function body never visibly returns the sum. Where does the EVM observe the new top of stack?',
+                      options: [
+                        'Through the `Result` return value, which carries the sum on success.',
+                        'Through `*op2 = ...` — `op2` is a mutable reference into the stack, so writing through it mutates the stack in place.',
+                        'Through a thread-local side channel maintained by the interpreter.',
+                        "Through `popn_top!`'s implicit return value, which the dispatch loop reads.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "`popn_top!` binds `op2` as `&mut U256` pointing at the new top of stack (the slot just below where `op1` was). Writing `*op2 = ...` mutates the stack in place — one memory write, no pop-then-push. That's why the function's `Result` only carries success/failure: the data flow is through the reference, not the return value.",
+                    },
+                  ],
+                },
+                {
+                  title: 'Drill: prove you can read interpreter source',
+                  slug: 'revm-add-opcode-drill-en',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 4,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Custom opcodes — the design space
+                  content: `# Drill: prove you can read interpreter source
 
-When Hyperliquid or Tempo say "we picked Revm because it's modular," **adding custom opcodes** is the headline feature. This lesson: where exactly they hook in, what it costs, and the failure modes "modular" hides.
+Reading is rehearsal. **Doing is memory.** This lesson is three drills you run yourself, in a real revm checkout, with cargo open in another window. Every drill is *do, then write down what you observed* — not "read about."
 
-> 🛑 **Predict before scrolling.** Without looking at the source, sketch how revm dispatches opcodes to functions:
-> - Is it a \`match\` statement? A \`HashMap<u8, fn>\`? An array? Something else?
-> - Wherever you guessed: **why does the choice matter?** What's the cost of the wrong shape?
+## Setup
+
+\`\`\`bash
+git clone https://github.com/bluealloy/revm
+cd revm
+cargo build  # warm the toolchain
+\`\`\`
+
+If \`cargo build\` failed, fix that before proceeding. The remaining drills assume a working build — there is no version of these drills that's "read along."
+
+## Drill 1 — Find \`mul\`, prove the shape
+
+Open \`crates/interpreter/src/instructions/arithmetic.rs\`. Find the \`mul\` function. Compare it line-by-line to \`add\`.
+
+> 🛑 **Question (write the answer down before scrolling):** \`mul\` and \`add\` are structurally identical down to the line count. **Why?** Not "because they're both arithmetic" — be specific about *what mechanical property* of the EVM forces them into the same shape.
+
+The answer: both are **2-stack-in, 1-stack-out, fixed-gas, no-side-effect** opcodes. Anything matching that profile compiles to the exact same control-flow shape: \`popn_top!([a], b, ctx.interpreter); *b = a.OP(*b); Ok(())\`. The differences are the \`OP\` (\`wrapping_add\` vs \`wrapping_mul\`) and the gas charge (both happen to be 3, in current Ethereum).
+
+If your written answer was less specific than that, you didn't earn this drill — re-read.
+
+## Drill 2 — Find \`exp\`, find the dynamic gas charge
+
+\`exp\` is in the same file. It's longer than \`add\` and \`mul\`. Two reasons:
+
+1. The math is more complex (it's exponentiation, not a single op).
+2. The gas charge is **dynamic** — it depends on the size of the exponent.
+
+> 🔍 **Find** the \`gas!\` macro call inside \`exp\` that charges *per byte* of the exponent. Read its arithmetic.
+
+> 🛑 **Question (write it down):** Why is \`exp\` charged dynamically when \`add\` is charged statically by the dispatch loop?
+
+The answer: dispatch can charge a *fixed* cost up-front, but \`exp\`'s cost depends on a runtime value (the size of the exponent operand). You can only know that cost *inside* the function body, after you've inspected the operand. So \`exp\` charges itself.
+
+This generalizes. Any opcode whose cost is shaped by an operand has to charge mid-function. File this — you'll meet the same pattern in \`sha3\`, \`mload\`, and the \`call\`-family opcodes.
+
+## Drill 3 — Break consensus on purpose
+
+This is the canonical "prove you understand" drill. **You won't believe how brittle consensus is until you've broken it on purpose.**
+
+1. Open \`crates/interpreter/src/instructions/arithmetic.rs\`.
+2. Find \`add\`. Change \`wrapping_add\` to \`saturating_add\`. Save.
+3. From the repo root: \`cargo test -p revm-interpreter\`.
+4. **Watch tests fail.** Read at least one failure message — note that the failure is a numeric mismatch, not a panic.
+
+What you've just done: patched a single library function call, and your client now disagrees with every other Ethereum client in the world about the result of \`0xFFF...FF + 1\`. The first transaction that overflows \`ADD\` would fork your node off mainnet.
+
+> 🔧 **Now revert your change** and confirm the tests pass again:
 >
-> Hold your guess. We'll check it against the real implementation in a moment.
+> \`\`\`bash
+> git checkout crates/interpreter/src/instructions/arithmetic.rs
+> cargo test -p revm-interpreter
+> \`\`\`
+>
+> The point isn't the change. It's the empirical proof that consensus is **one library function call away** from being lost — and now you've felt that.
 
-## The real instruction table
+If you didn't actually run \`cargo test\` and watch real output, you skipped the drill. The drill *is* the running. There's no version of this drill where you read it and "got it."
 
-From [\`crates/interpreter/src/instructions.rs\`](https://github.com/bluealloy/revm/blob/main/crates/interpreter/src/instructions.rs):
+## End-of-lesson recall
+
+Without scrolling, in your own words on paper:
+
+1. What is the *mechanical* property of \`add\` and \`mul\` that makes their source identical?
+2. Why does \`exp\` charge gas inside its body instead of via dispatch?
+3. What single change converts \`add\` from EVM-compliant to EVM-incompatible — and what test failure mode did you observe?
+
+If any answer is shaky, the lesson isn't done with you. Re-run the drill or re-read.
+
+After this, you've read more EVM source than 99% of Solidity developers ever will — and you've proven it by making the chain disagree with itself, then putting it back. The next lesson zooms out from one opcode to the table that dispatches all 256.`,
+                },
+                {
+                  title: 'Building the instruction table step by step',
+                  slug: 'custom-opcodes-table-en',
+                  type: 'CONTENT',
+                  sortOrder: 5,
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# Building the instruction table step by step
+
+> 📋 **Recall before reading.** Three questions from the last lessons. If any are shaky, scroll back to *Building \`add\` step by step* or its drill — the rest of this lesson assumes the answers are vocabulary you own.
+>
+> 1. What does the type signature \`<IT: ITy, H: ?Sized>\` on an opcode function buy us at compile time?
+> 2. The \`popn_top!\` macro binds \`op2\` as a \`&mut\`. Why a reference, not a value?
+> 3. \`add\` uses \`wrapping_add\`. What test failure mode did you observe when you swapped it for \`saturating_add\` and reran \`cargo test -p revm-interpreter\`?
+
+---
+
+When the EVM sees byte \`0x01\` in bytecode, **what mechanism** decides that \`add\` runs? This lesson is the answer — and the answer earns its complexity, just like \`add\` did. We'll start from the dumbest dispatch you could write and build up to revm's actual instruction table.
+
+By the end you'll have built every piece of:
+
+\`\`\`rust
+const fn instruction_table_impl<WIRE: InterpreterTypes, H: Host>()
+    -> InstructionTable<WIRE, H>
+{
+    let mut table = [Instruction::unknown(); 256];
+    table[ADD as usize] = Instruction::new(arithmetic::add);
+    table[MUL as usize] = Instruction::new(arithmetic::mul);
+    // ...
+}
+\`\`\`
+
+> 📂 **Open \`bluealloy/revm\` in another tab.** As before — every claim below should be verified against the actual file.
+
+## Step 0 — The naive dispatch
+
+Without thinking, you'd write:
+
+\`\`\`rust
+fn dispatch(byte: u8, ctx: &mut Context) -> Result {
+    match byte {
+        0x01 => add(ctx),
+        0x02 => mul(ctx),
+        0x03 => sub(ctx),
+        // ... 256 arms
+        _ => return Err(Unknown),
+    }
+}
+\`\`\`
+
+256 match arms. The compiler *might* turn this into a jump table — or might not. Worse: every time you add or rename an opcode, you touch this giant match.
+
+> 🛑 **Predict.** Without scrolling: name two reasons revm doesn't ship this naive version. (One is about the compiler, one is about maintenance.)
+
+The two:
+
+1. **No guarantee of jump-table compilation.** A 256-arm match is large enough that LLVM usually does the right thing, but "usually" is not a contract you ship consensus on. You want a guaranteed O(1) lookup.
+2. **Opcode mutation is expensive.** Adding a custom opcode means editing this match. A "modular" custom-opcodes feature whose user-friendliness is "modify the dispatch match" is broken-by-design.
+
+## Step 1 — Function pointers in an array
+
+Replace the match with an array indexed by opcode byte. Each slot holds a function pointer:
+
+\`\`\`rust
+let mut table: [fn(&mut Context) -> Result; 256] = [unknown; 256];
+table[0x01] = add;
+table[0x02] = mul;
+// ...
+fn dispatch(byte: u8, ctx: &mut Context) -> Result {
+    (table[byte as usize])(ctx)
+}
+\`\`\`
+
+Dispatch is now **one indexed lookup** — no match, no jump table the compiler builds for you. The shape is guaranteed.
+
+> 🛑 **Predict.** Why is the array sized exactly \`256\` and not \`usize::MAX\` or whatever fits the defined opcodes?
+
+Because the EVM opcode is one byte. There are only 256 possible values, period. A fixed-size array exhausts the space — every byte either has an opcode or maps to \`unknown\`.
+
+## Step 2 — Make the table \`const\`
+
+The naive code builds the table at runtime — push the assignments through and hope the optimizer hoists them out of the hot path. Better: build it **at compile time**, so dispatch starts up with the table already populated.
+
+\`\`\`rust
+const fn build_table() -> [fn(&mut Context) -> Result; 256] {
+    let mut t = [unknown; 256];
+    t[0x01] = add;
+    t[0x02] = mul;
+    // ...
+    t
+}
+const TABLE: [fn(&mut Context) -> Result; 256] = build_table();
+\`\`\`
+
+\`const fn\` reads as "this function can be evaluated at compile time." The compiler executes \`build_table()\` *during compilation*, freezes the resulting array, and bakes it into the binary's data section. Dispatch never runs \`build_table\` at runtime — it just reads from the baked array.
+
+> 🛑 **Anti-fluency.** "It runs at compile time" is parroting. In your own words: what *exactly* runs zero times that would otherwise run once? Be specific.
+
+What runs zero times: the loop/sequence that populates the table slots. The runtime \`TABLE\` is identical to a literal \`[unknown, add, mul, sub, ...; 256]\` written by hand. **Zero runtime cost to set up dispatch.** That's the whole point.
+
+## Step 3 — Wrap function pointers in an \`Instruction\` struct
+
+Bare \`fn\` pointers work, but they're inflexible — you can't attach metadata (gas costs, opcode names) without breaking the dispatch type. Revm wraps the function pointer in a struct:
 
 \`\`\`rust
 #[derive(Debug)]
@@ -327,7 +765,22 @@ impl<W: InterpreterTypes, H: Host + ?Sized> Instruction<W, H> {
         Self { fn_ }
     }
 }
+\`\`\`
 
+> 🛑 **Predict.** Why a struct around a single field \`fn_:\`? What does this enable that a bare \`fn\` doesn't?
+
+Two things:
+
+1. **Future metadata.** You could later add \`gas_cost: u16\`, \`name: &'static str\`, etc. without changing the dispatch signature.
+2. **Type discipline.** \`Instruction::new(arithmetic::add)\` is more type-safe than a bare function pointer assignment — the compiler verifies the signature matches the table's slot type at the call site.
+
+The generics \`W: InterpreterTypes, H: ?Sized\` are exactly the same \`IT\`/\`H\` we built up two lessons ago. Same reasoning — let one table work across all execution modes and host types.
+
+## Step 4 — The full real instruction table
+
+Putting it together, the actual revm code from [\`crates/interpreter/src/instructions.rs\`](https://github.com/bluealloy/revm/blob/main/crates/interpreter/src/instructions.rs):
+
+\`\`\`rust
 const fn instruction_table_impl<WIRE: InterpreterTypes, H: Host>()
     -> InstructionTable<WIRE, H>
 {
@@ -339,34 +792,25 @@ const fn instruction_table_impl<WIRE: InterpreterTypes, H: Host>()
     table[SUB as usize] = Instruction::new(arithmetic::sub);
     table[DIV as usize] = Instruction::new(arithmetic::div);
     table[SDIV as usize] = Instruction::new(arithmetic::sdiv);
-    table[MOD as usize] = Instruction::new(arithmetic::rem);
-    table[SMOD as usize] = Instruction::new(arithmetic::smod);
     // ...
-
     table[LT as usize] = Instruction::new(bitwise::lt);
     table[GT as usize] = Instruction::new(bitwise::gt);
-    table[EQ as usize] = Instruction::new(bitwise::eq);
-    table[AND as usize] = Instruction::new(bitwise::bitand);
     // ...
+
+    table
 }
 \`\`\`
 
-Compare your prediction. Three details earn their keep — but only if you can defend why each one matters:
+You built every piece:
 
-### \`const fn\`
-The table is built **at compile time**. Zero runtime cost to set up dispatch.
+- **Array indexed by opcode byte** (Step 1) — guaranteed O(1) dispatch
+- **\`const fn\`** (Step 2) — table baked at compile time, zero startup cost
+- **\`Instruction::unknown()\` everywhere first** — every undefined byte halts cleanly; defined opcodes overwrite their slot
+- **\`Instruction::new(fn)\`** (Step 3) — typed wrapper, future-proof for metadata
 
-> 🛑 **Anti-fluency.** Without scrolling: what *exactly* changes if you replace \`const fn\` with \`fn\`? "It's slower because runtime" is parroting. Be precise — what runs when, and how often?
+## The opcode byte map (reference)
 
-### \`[Instruction::unknown(); 256]\`
-Every byte 0x00–0xFF starts mapped to "unknown opcode" — which halts the EVM. Defined Ethereum opcodes overwrite their slot with the real implementation.
-
-### \`Instruction::new(arithmetic::add)\`
-Each slot is a typed function pointer. Opcode byte = array index. **Dispatch is one indexed lookup, period.**
-
-## The opcode byte map
-
-Quick reference (from [\`bytecode::opcode\`](https://github.com/bluealloy/revm/blob/main/crates/bytecode/src/opcode.rs)):
+From [\`bytecode::opcode\`](https://github.com/bluealloy/revm/blob/main/crates/bytecode/src/opcode.rs):
 
 | Byte | Opcode |
 | :--- | :--- |
@@ -379,14 +823,39 @@ Quick reference (from [\`bytecode::opcode\`](https://github.com/bluealloy/revm/b
 | 0x60–0x7F | PUSH1–PUSH32 |
 | 0x80–0x8F | DUP1–DUP16 |
 | 0xA0–0xA4 | LOG0–LOG4 |
-| **0x0C–0x0F** | **unallocated** ← this is where you add custom opcodes |
+| **0x0C–0x0F** | **unallocated** ← gaps for custom opcodes |
 | **0x21–0x2F** | **unallocated** |
 
 > 🔍 **Verify, don't trust.** Open \`bytecode::opcode\` in the repo. Confirm \`0x0C\` is genuinely unassigned **on the version you'd actually fork**. The gaps shift across hard forks — a table in a lesson is a snapshot, not a contract.
 
-## Wiring a custom opcode
+## Recall before moving on
 
-Pick an unallocated byte, slot in your function:
+Without scrolling:
+
+1. Why an array of function pointers, not a \`match\` statement or a \`HashMap<u8, fn>\`?
+2. What does \`const fn\` save at runtime?
+3. Why is every slot initialized to \`Instruction::unknown()\` before defined opcodes overwrite their slots?
+4. Why a struct \`Instruction { fn_ }\` around the function pointer instead of a bare \`fn\`?
+
+Next lesson: now that you have the table, slot in your own opcode.
+`,
+                },
+                {
+                  title: 'Wiring a custom opcode — and the failure modes',
+                  slug: 'custom-opcodes-wiring-en',
+                  type: 'CONTENT',
+                  sortOrder: 6,
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# Wiring a custom opcode — and the failure modes
+
+Last lesson, you built up to revm's instruction table — a 256-slot array of \`Instruction\` structs, baked at compile time. **Now slot in your own opcode.**
+
+This lesson is half mechanics (it's actually short) and half caveats (it's not). The mechanics fit on a notecard. The caveats are why "Hyperliquid picked Revm because it's modular" is *not* a free lunch.
+
+## The mechanics — three lines
+
+Pick an unallocated byte. Slot in your function:
 
 \`\`\`rust
 const HYPER_FAST_SWAP: u8 = 0x0C;
@@ -395,7 +864,7 @@ let mut table = standard_table();
 table[HYPER_FAST_SWAP as usize] = Instruction::new(my_hyper_fast_swap);
 \`\`\`
 
-Where \`my_hyper_fast_swap\` follows the exact \`add\` shape from the previous lesson:
+Where \`my_hyper_fast_swap\` follows the exact \`add\` shape from two lessons ago:
 
 \`\`\`rust
 pub fn my_hyper_fast_swap<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -405,47 +874,230 @@ pub fn my_hyper_fast_swap<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Resul
 }
 \`\`\`
 
+**That's it.** You took the standard table, copied it, overwrote one slot. The dispatch loop now routes byte \`0x0C\` to your function.
+
 \`\`\`mermaid
 flowchart LR
-    Std[standard_table 256 slots] -->|copy| Mine[my fork's table]
+    Std[standard_table — 256 slots] -->|copy| Mine[my fork's table]
     Mine -->|override 0x0C| Custom[my_hyper_fast_swap]
     Bytecode[bytecode 0x0C ...] -->|interpreter dispatch| Mine
     Mine --> Custom
     Custom --> Result[result on stack]
 \`\`\`
 
-## What this actually buys you — and what it costs
+## What this actually buys you
 
 Two compounding wins:
 
-1. **No interpreter loop overhead per inner step** — a complex Solidity function might be 200 EVM instructions; one custom opcode is 1 dispatch.
-2. **SIMD, FFI, or pre-computed tables in Rust** — none available to bytecode.
+1. **No interpreter loop overhead per inner step.** A complex Solidity function might be 200 EVM instructions; one custom opcode is 1 dispatch.
+2. **SIMD, FFI, or pre-computed tables in Rust.** None of those are available to bytecode.
 
-A complex options pricer can drop from **500K gas in Solidity → 5K gas as a single custom opcode**.
+A complex options pricer can drop from **500K gas in Solidity → 5K gas as a single custom opcode**. That's why Hyperliquid added perp-specific opcodes; that's the kind of compression payment-layer chains explore for stablecoin operations.
 
 > 🛑 **Predict the failure modes** before scrolling. You're shipping a custom opcode tomorrow. List 3 things that will go wrong if you treat this casually. Hold your list — compare to the caveats below.
 
-### Caveats — these aren't optional
+## Caveats — these aren't optional
 
-1. **Consensus compatibility**: deviating from standard EVM means you can't share blocks with other Ethereum clients. Valid only on **your own chain**. Fork mainnet with this opcode and try to peer with go-ethereum → instant disconnect on the first transaction that touches \`0x0C\`.
-2. **Gas pricing**: a powerful shortcut needs a properly priced gas cost — otherwise it's a DoS vector. **How would you derive the gas price for \`my_hyper_fast_swap\`?** If you can't sketch a methodology in three sentences, you can't safely ship this opcode.
-3. **Provability**: if your chain wants ZK proofs, every new opcode needs to be made provable inside your zkVM. That's potentially weeks of additional work *per opcode*.
+### 1. Consensus compatibility
 
-## Drill
+Deviating from standard EVM means **you can't share blocks with other Ethereum clients.** Valid only on **your own chain**. Fork mainnet with this opcode and try to peer with go-ethereum → instant disconnect on the first transaction that touches \`0x0C\`.
 
-1. Open \`instructions.rs\` in the repo. Find unallocated opcode bytes by spotting the slots that **don't appear** in the table assignments. (Don't trust the table above — verify on the actual code you'd fork.)
-2. Pick one. Define a constant for it.
-3. Implement a function with the same signature as \`add\` that does **2x multiplication** (\`*op2 = (*op2).wrapping_mul(U256::from(2))\`).
-4. Add \`table[YOUR_OPCODE as usize] = Instruction::new(your_fn);\`.
-5. Encode bytecode that uses your opcode. Run the EVM. **You just shipped a fork.**
+> 🔍 **Reason about an experiment you could run.** If you spun up a Reth node with your custom opcode, then pointed a stock geth at the same chain head: at what point does geth disconnect? (Answer: as soon as it tries to execute a block containing \`0x0C\`. The block fails state-root validation because geth executes \`0x0C\` as INVALID and your Reth executed it as a swap.) The "you can't share blocks" claim is something you should *feel*, not just read.
 
-> Final check: explain in one sentence why a chain shipping this opcode can never participate in mainnet consensus. If you can't, scroll back to caveat #1 — the lesson isn't done with you.`,
+### 2. Gas pricing is not optional
+
+A powerful shortcut needs a properly priced gas cost — otherwise it's a DoS vector.
+
+> 🛑 **Question (write it down):** How would you derive the gas price for \`my_hyper_fast_swap\`? If you can't sketch a methodology in three sentences, you can't safely ship this opcode.
+
+A defensible methodology:
+
+1. **Benchmark the worst case.** Run the opcode against pathological inputs (max-size pool ID, max amount). Measure wall-clock time.
+2. **Convert to a gas budget.** Pick a target throughput (say, 1 second per block of pure-opcode load). Divide the budget by worst-case time.
+3. **Add safety margin.** 2–3× for variance, future hardware changes, and the gap between *your* benchmark and *an attacker's* benchmark.
+
+If your three-sentence answer wasn't shaped like that, your opcode is a DoS waiting to happen.
+
+### 3. Provability — if you want ZK
+
+If your chain wants ZK proofs (a real concern for app-chains aiming at L2 settlement), every new opcode needs to be made provable inside your zkVM. **That's potentially weeks of additional work *per opcode*.**
+
+This is why "we picked Revm because it's modular" doesn't translate to "we ship 50 custom opcodes." Each one carries:
+
+- **Consensus risk** (you fork on every implementation bug)
+- **Pricing risk** (DoS vector if mis-priced)
+- **Provability cost** (weeks of zkVM integration if you want proofs)
+
+The right number of custom opcodes for most chains is **0–3**. Hyperliquid added a small handful. Most production app-chains exploring this end up with a similarly small footprint.
+
+## Recall before the quiz
+
+Without scrolling:
+
+1. The mechanics of slotting in a custom opcode are **three lines.** Sketch them from memory.
+2. The "modular" pitch hides three caveats. What are they?
+3. What's the rough order-of-magnitude gas savings for compiling complex logic into a custom opcode? (And why?)
+4. If you wanted to ship a custom opcode that does pairing-friendly elliptic curve operations, **which caveat hits hardest?**
+
+Next: a quiz that gates progression, then a drill where you actually wire one in a fork.
+`,
+                },
+                {
+                  title: 'Quiz: did the table mechanics stick?',
+                  slug: 'custom-opcodes-quiz-en',
+                  type: 'QUIZ',
+                  sortOrder: 7,
+                  duration: 4,
+                  xpReward: 25,
+                  content: `# Quiz: did the table mechanics stick?
+
+Four questions covering the instruction table and the wiring mechanics. Same rule as before: **you can't nod past a quiz.** These are gates, not decoration.
+
+If you miss two or more, scroll back to *Building the instruction table* before going on to the drill.`,
+                  quizQuestions: [
+                    {
+                      question: "Why is the instruction table a fixed-size `[Instruction; 256]` array, not a `HashMap<u8, Instruction>` or a `match` statement?",
+                      options: [
+                        "A HashMap would handle missing opcodes more elegantly than the array.",
+                        "The compiler optimizes a 256-arm match identically to an indexed array — they're equivalent.",
+                        "An indexed array gives guaranteed O(1) dispatch with no hashing or compiler-dependent jump-table compilation, and 256 slots exhausts the byte space.",
+                        "HashMap is unsafe at compile time.",
+                      ],
+                      correctIndex: 2,
+                      explanation: "Opcode bytes are 1 byte = 256 possible values, so a fixed array exhausts the space. Indexing is guaranteed O(1) — no hashing, no compiler hand-waving about whether `match` becomes a jump table. Every byte either has a defined opcode or maps to `unknown`. Both shape and worst-case latency are part of the contract.",
+                    },
+                    {
+                      question: "What does `const fn` do for `instruction_table_impl()`?",
+                      options: [
+                        "It forces the function to be inlined at every call site.",
+                        "It allows the compiler to evaluate the function at compile time, baking the populated table directly into the binary so no setup runs at startup.",
+                        "It marks the function as thread-safe.",
+                        "It disables runtime mutation of the resulting table.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "`const fn` reads as 'this function can be evaluated at compile time.' The table-population code runs during compilation; the runtime `TABLE` is identical to a hand-written array literal. Zero startup cost to set up dispatch — that's the whole point of using `const fn` here.",
+                    },
+                    {
+                      question: "Why is every slot initialized to `Instruction::unknown()` before defined opcodes overwrite their slots?",
+                      options: [
+                        "It's a debugging hint — `unknown` is just a placeholder name.",
+                        "It ensures every byte 0x00–0xFF maps to a halt-cleanly handler, so undefined opcodes can't be silently skipped or cause memory unsafety.",
+                        "It's the only way to satisfy Rust's array initialization syntax.",
+                        "It's a pre-allocation step that gets optimized away.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "Two reasons combined, but the safety one dominates: every undefined byte should produce a clean `Unknown` halt rather than UB or a silent miss. `Instruction::unknown()` is the safe default; defined opcodes overwrite. Rust's array init does need all slots filled, but `MaybeUninit` would let you defer — using `unknown()` is a deliberate safety choice.",
+                    },
+                    {
+                      question: "You're shipping a custom opcode that does an expensive cryptographic operation (e.g., pairing-friendly EC). Which caveat is the *highest-cost item* in practice?",
+                      options: [
+                        "Consensus compatibility — you can't share blocks with mainnet.",
+                        "Gas pricing — getting it wrong creates a DoS vector.",
+                        "Provability inside a zkVM — every new opcode is potentially weeks of zkVM integration work, and crypto ops are notoriously hard to constrain.",
+                        "Type-system limits in Rust.",
+                      ],
+                      correctIndex: 2,
+                      explanation: "All three caveats apply, but provability is the killer for crypto ops specifically. ZK-unfriendly cryptography (pairing, certain hash functions) can take weeks of zkVM specification work per opcode — vastly more than designing the gas pricing or accepting the consensus split. Production chains' small custom-opcode counts are partly governed by exactly this cost.",
+                    },
+                  ],
+                },
+                {
+                  title: 'Drill: ship a fork',
+                  slug: 'custom-opcodes-drill-en',
+                  type: 'CONTENT',
+                  sortOrder: 8,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Drill: ship a fork
+
+Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about custom opcodes" to "I have wired one in a real revm checkout and seen it execute."
+
+## Setup
+
+You should already have the revm checkout from the earlier drill. If not:
+
+\`\`\`bash
+git clone https://github.com/bluealloy/revm
+cd revm
+cargo build  # confirm clean build before proceeding
+\`\`\`
+
+If \`cargo build\` failed, fix that before the drill.
+
+## Drill 1 — Find unallocated opcode bytes (don't trust the lesson)
+
+The lesson showed \`0x0C–0x0F\` as unallocated. **Verify on the actual file** of the version you'd fork.
+
+> 🔍 **Open** \`crates/interpreter/src/instructions.rs\`. Scan the table-construction function. Any byte that *does not appear* on the left side of an assignment is unallocated.
+
+> 🛑 **Question (write it down before scrolling):** What's the most surprising unallocated byte you found? (One that's adjacent to allocated ones — the gaps tell you which proposals were considered and rejected, or are reserved for future EIPs.)
+
+There's no single right answer — but if your answer is "I just trusted the lesson's table," you skipped the drill. Verify against source.
+
+## Drill 2 — Define your own opcode
+
+Pick one unallocated byte. Define a constant for it. Implement a function with the same shape as \`add\` — but stack-profile **1-in, 1-out, in-place** (a "double the top" opcode):
+
+\`\`\`rust
+const DOUBLE_TOP: u8 = 0x0C;  // or whichever you picked
+
+pub fn double_top<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([], op, context.interpreter);
+    *op = (*op).wrapping_mul(U256::from(2));
+    Ok(())
+}
+\`\`\`
+
+> 🛑 **Question:** Why \`popn_top!([], op, ...)\` and not \`popn_top!([op1], op2, ...)\`? What's the structural difference, and what is it telling you about this opcode's stack profile?
+
+The empty \`[]\` means **no values popped** — only \`op\` is bound, as a \`&mut\` to the current top of stack. That's how you express a 1-stack-in, 1-stack-out, in-place-mutating opcode (vs. \`add\`'s 2-in, 1-out). The macro's arity matcher pays off here — same macro, different stack profiles, no second function.
+
+## Drill 3 — Wire it into the table
+
+Add to your standard-table copy:
+
+\`\`\`rust
+let mut table = standard_table();
+table[DOUBLE_TOP as usize] = Instruction::new(double_top);
+\`\`\`
+
+That's all the wiring. The dispatch loop will now call \`double_top\` whenever it sees byte \`0x0C\`.
+
+## Drill 4 — Run bytecode that uses your opcode
+
+Encode bytecode that pushes a value, executes your opcode, and stops:
+
+\`\`\`
+PUSH1 0x05  // push 5 onto the stack — bytes: 0x60 0x05
+DOUBLE_TOP  // your custom opcode — byte: 0x0C
+STOP        // 0x00
+\`\`\`
+
+In hex: \`60 05 0C 00\`.
+
+Run this bytecode in your revm-with-table fork. The stack should end with \`10\` (= 5 × 2).
+
+> 🔧 **The wiring is left as the drill.** Use revm's existing test harness in \`crates/interpreter/tests/\` (or write a one-shot binary in \`examples/\`). The point is to construct the EVM context, install your modified table, run the bytecode, and assert the final stack value.
+
+If you got \`10\` on the stack, **you've shipped a fork.** Your client now executes a chain incompatible with mainnet — and you've felt the difference between "I read about it" and "I did it."
+
+## End-of-lesson recall
+
+Without scrolling, in your own words:
+
+1. What's the mechanical difference between \`popn_top!([op1], op2, ...)\` and \`popn_top!([], op, ...)\`? What does each tell you about the opcode's stack profile?
+2. What stack profile does your \`double_top\` have? (X-in, Y-out, side-effects?)
+3. If you wanted to ship \`double_top\` to mainnet, what's the *first* thing that would break — and at which moment in time?
+
+If any answer is shaky, the lesson isn't done with you. Re-do the drill or re-read.
+
+After this drill, you've actually shipped a custom opcode in code. **More importantly: you've felt the cost.** Next: how revm gets state — the \`Database\` trait.`,
                 },
                 {
                   title: 'The Database trait — supplying state',
                   slug: 'revm-database-trait-en',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 9,
                   duration: 12,
                   xpReward: 25,
                   content: `# The Database trait — supplying state
