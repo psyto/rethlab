@@ -34,13 +34,7 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
                   xpReward: 15,
                   content: `# Welcome to Reth Advanced — how this course works
 
-You've finished Fundamentals (and ideally Revm Advanced and the Bridge to Advanced course). The Beginner and Fundamentals lessons walked alongside you. **Reth Advanced is different.** This short orientation explains how, so you can engage with the right mindset from lesson 1.
-
-## What this course is — and isn't
-
-This course teaches you to **read the Reth source line by line.** Specifically: the \`Stage\` trait and the 10-stage sync pipeline, **ExEx (Execution Extensions)** for in-process indexers / MEV / risk engines, and the **Reth SDK** for composing your own App-chain.
-
-It's one of three parallel Advanced courses you can take in any order:
+This course is one of three independent Advanced-tier courses on RethLab:
 
 - **Revm Advanced** — Inside the EVM engine *(recommended first if you haven't done it)*
 - **Reth Advanced** (you are here) — Inside Reth: Staged Sync, ExEx, the Reth SDK
@@ -48,45 +42,35 @@ It's one of three parallel Advanced courses you can take in any order:
 
 These three are independent, but **several lessons here assume comfort with the \`Database\` trait and Revm execution model from Revm Advanced**. If those concepts feel shaky, do Revm Advanced first.
 
-## The editorial style — and why
+> 📋 **First time at the Advanced tier?** Read **"How Advanced courses work"** at the end of *Bridge to Advanced* before starting. It explains the editorial style (Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape) and pacing — applies to all three Advanced courses, so you only read it once.
 
-Reth Advanced lessons use **active-learning prompts** that you don't see in earlier tiers:
+## What this course teaches
 
-- 🛑 **Predict** — *Stop. Before reading the explanation, answer this in your head.* The point is to engage with the question, even if you're wrong. Wrong predictions are where the learning happens.
-- 🔍 **Find in repo** — Open the actual source file and verify the lesson's claim. The lesson is guidance; the source is truth.
-- **Anti-fluency checks** — *In your own words, why does this work?* If you can't answer, the lesson explicitly tells you to scroll back. **Don't skip these.**
-- **End-of-lesson recall tests** — Most lessons close with "the lesson isn't done with you until you can answer X." Take that literally.
-- **Quiz gates** — Every major topic ends with a 4-question quiz that gates progression. **You can't nod past a quiz** — that's the design. Miss two and the build-up didn't internalize; scroll back.
+You'll read the [\`paradigmxyz/reth\`](https://github.com/paradigmxyz/reth) source line by line: the \`Stage\` trait and the 10-stage sync pipeline, **ExEx (Execution Extensions)** for in-process indexers / MEV / risk engines, and the **Reth SDK** for composing your own App-chain. Three topic chains, each with build-up + walkthrough + quiz + drill.
 
-The editorial style is harder than tutorials you've read. It's deliberately so. **Smooth tutorial prose creates a "わかった気になる" trap** — readers nod through complex material and walk away with shallow comprehension. The Predict / Recall / Quiz pattern forces actual engagement.
+By the end, you'll have read enough Reth internals to ship a node-speed indexer or a custom App-chain.
 
-This is friction by design. Lean into it.
-
-## Prerequisites — be honest with yourself
-
-Before lesson 1, you should be comfortable with:
+## Prerequisites
 
 **Revm internals** (if you haven't done Revm Advanced):
 - The \`Database\` trait surface and how Revm reads state through it
 - How \`Stage\` and \`Database\` interact during \`ExecutionStage\`
 
-**Block-level Ethereum**:
+**Block-level Ethereum** (covered in Bridge to Advanced):
 - Block structure (header / body / receipts), reorgs as a normal phenomenon
 - What sender recovery, transaction body decoding, and receipts contain
 
-**Intermediate Rust**:
+**Intermediate Rust** (also Bridge to Advanced; there's a *Rust: lifetimes, Box, Arc, dyn Trait* lesson inside this course for self-checking):
 - Generics with trait bounds, \`?Sized\`, \`dyn Trait\` vs \`impl Trait\`
 - \`Arc<T>\`, \`Mutex<T>\`, \`RwLock<T>\` — when to use each
 - \`async\` / \`Future\` / \`Stream\` basics
 - \`auto_impl\` macros and procedural attributes
 
-**Shaky on Rust?** There's a *Rust: lifetimes, Box, Arc, dyn Trait* lesson inside this course — but that's a *test*, not a *teach*. The Bridge to Advanced course is the teach.
-
 **Shaky on Revm?** Do Revm Advanced first. The Stage trait and the SDK both reference Revm types directly.
 
 ## Setup — do this once
 
-Have these ready in another window before you start lesson 1:
+Before lesson 1, have these ready in another window:
 
 1. **\`paradigmxyz/reth\` cloned** — \`git clone https://github.com/paradigmxyz/reth\`
 2. **\`bluealloy/revm\` cloned** — \`git clone https://github.com/bluealloy/revm\` (cross-referenced during ExEx and SDK lessons)
@@ -96,39 +80,11 @@ Have these ready in another window before you start lesson 1:
 
 The "Find in repo" prompts only work if you actually have the repos open. Close that loop before starting.
 
-## How to actually read these lessons
-
-Each major topic — Staged Sync, ExEx, the Reth SDK — is split into a **chain of 3-4 atomic lessons**:
-
-1. **Build-up lesson** — start from the dumbest version of the code you could write, then earn each piece of complexity step by step. By the end, you've built every line of the real production source from a motivated starting point. Predict prompts at each step.
-2. **Walkthrough / pipeline / companions lesson** (some chains have one) — read the surrounding production code in detail, with predict and find-in-repo prompts.
-3. **Quiz** — 4-5 multiple-choice questions that gate progression. Pass to continue; miss too many and you scroll back.
-4. **Drill** — hands-on exercise in a real checkout (\`cargo build\`, modify the source, observe behavior). The drill is what makes the lesson stick a day later.
-
-Within any individual lesson, the rhythm is:
-
-1. Hit a 🛑 **Predict** prompt before the explanation. Stop. Answer in your head or on paper. Then continue.
-2. Read the walkthrough. Compare to your prediction. **Where you were wrong is where the learning happens.**
-3. Hit a 🔍 **Find-in-repo** prompt. Open the repo. Find the actual file. Verify the lesson's claim.
-4. End-of-lesson recall test. Close the tab if you can answer in your own words. If not, scroll back.
-
-This is slower than typical tutorials. **It also internalizes.** The trade is intentional.
-
-## Pacing
-
-Each atomic lesson is **8-12 minutes stated, ~15-25 minutes with the prompts actually engaged**. A full topic chain (build-up → walkthrough → quiz → drill, 3-4 lessons) is **roughly 45-80 minutes** — one solid evening's work. Expert lessons go longer.
-
-**The right unit is one chain per session.** Plan to start a chain (say, the four Staged Sync lessons) and finish it. The build-up, walkthrough, and quiz reinforce each other, and the drill is where doing-not-reading turns the chain into memory. Splitting a chain across days — half the build-up tonight, the rest plus drill next week — breaks the model.
-
-If you're short on time: do *one* lesson well rather than skim two. Engagement matters more than coverage at this tier.
-
 ## You're ready
 
-If the prerequisite list looked familiar and you have the repos open: scroll back to the course detail and start with **Building the \`Stage\` trait step by step**.
+Scroll back to the course detail and start with **Building the \`Stage\` trait step by step**.
 
-If the prerequisite list felt shaky: revisit Revm Advanced or work through Bridge to Advanced.
-
-After Reth Advanced, head to **Alloy Advanced** if you haven't yet — or move on to **Expert** for the procedural-macro and zkVM-integration deep dives.`,
+After Reth Advanced: head to **Alloy Advanced** if you haven't yet — or move on to **Expert** for the procedural-macro and zkVM-integration deep dives.`,
                 },
               ],
             },

@@ -1383,15 +1383,15 @@ You're not reading magic. You're reading **patterns you now know**.
 - **Hygiene** prevents macros from polluting caller scope
 - **proc-macros** are the heavier sibling — separate crate, operates on TokenStream — covered in Expert
 
-## Course complete — next steps
+## Technical prereqs complete
 
-You've now finished **Reading the Stack — Bridge to Advanced**:
+You've now finished the **technical** prereqs of Reading the Stack — Bridge to Advanced:
 
 - ✓ EVM at the bytes level (dispatch loop, stores, gas, call frames)
 - ✓ Block-level Ethereum (blocks, receipts, reorgs)
 - ✓ Rust for source-reading (generics, dyn, Arc, unsafe, macros)
 
-When you open Advanced lesson 1, you'll see:
+A quick gate-check before you go on. When you open the first Advanced lesson, you'll see:
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -1401,13 +1401,92 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 }
 \`\`\`
 
-And every piece of it should now read like one connected sentence:
+Every piece should now read like one connected sentence:
 
 - The signature: two type parameters, one of them \`?Sized\` so it can be \`dyn Host\`
 - The macro call: pop 1, get a mutable ref to the new top, with the unsafe \`unwrap_unchecked\` justified by an internal length check
 - The arithmetic: \`wrapping_add\` because EVM \`ADD\` is mod 2²⁵⁶
 
-You're ready. Start Advanced.`,
+If those three sentences fit, the technical prereqs are absorbed.
+
+## One more lesson — how Advanced courses work
+
+The Advanced tier is **three independent courses** (Revm, Reth, Alloy), and they all share the same editorial style — Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape. Read **"How Advanced courses work"** next; it's the meta-orientation that applies to all three Advanced courses, so you only read it once.
+
+After that, pick a course and start.`,
+                },
+                {
+                  title: 'How Advanced courses work',
+                  slug: 'advanced-tier-orientation-en',
+                  type: 'CONTENT',
+                  sortOrder: 4,
+                  duration: 6,
+                  xpReward: 15,
+                  content: `# How Advanced courses work
+
+You're at the doorstep of the Advanced tier — three independent courses (**Revm Advanced**, **Reth Advanced**, **Alloy Advanced**) that all teach the same skill: **reading production Rust source line by line.** This short lesson explains how those courses are structured, so you can engage with the right mindset from lesson 1 — whichever Advanced course you start with.
+
+(Each Advanced course also has its own short welcome handling course-specific prereqs and setup. *This* lesson is the **generic** orientation, applied once.)
+
+## The tier shift
+
+Beginner and Fundamentals taught you the *shape* of the stack — what Alloy types look like, how to use Foundry, what the EVM does at a high level.
+
+Advanced asks something different. **You will read the actual production source of Reth, Revm, Alloy, and Foundry, line by line.** The lessons assume you can already use the stack — they teach you to *read* it.
+
+The previous lesson confirmed the technical prereqs landed (you can read the \`add\` opcode signature). What's left is *how* the lessons themselves are written, and the rhythm they expect from you.
+
+## The editorial style — and why
+
+Advanced lessons use **active-learning prompts** that you don't see in earlier tiers:
+
+- 🛑 **Predict** — *Stop. Before reading the explanation, answer this in your head.* The point is to engage with the question, even if you're wrong. Wrong predictions are where the learning happens.
+- 🔍 **Find in repo** — Open the actual source file and verify the lesson's claim. The lesson is guidance; the source is truth.
+- **Anti-fluency checks** — *In your own words, why does this work?* If you can't answer, the lesson explicitly tells you to scroll back. **Don't skip these.**
+- **End-of-lesson recall tests** — Most lessons close with "the lesson isn't done with you until you can answer X." Take that literally.
+- **Quiz gates** — Every major topic ends with a 4-question quiz that gates progression. **You can't nod past a quiz** — that's the design. Miss two and the build-up didn't internalize; scroll back.
+
+The editorial style is harder than tutorials you've read. It's deliberately so. **Smooth tutorial prose creates a "わかった気になる" trap** — readers nod through complex material and walk away with shallow comprehension. The Predict / Recall / Quiz pattern forces actual engagement.
+
+This is friction by design. Lean into it.
+
+## How to read these lessons
+
+Each major Advanced topic — \`add\`, custom opcodes, the Database trait, Staged Sync, ExEx, the Reth SDK, the Provider trait — is split into a **chain of 3-4 atomic lessons**:
+
+1. **Build-up lesson** — start from the dumbest version of the code you could write, then earn each piece of complexity step by step. By the end, you've built every line of the real production source from a motivated starting point. Predict prompts at each step.
+2. **Walkthrough / pipeline / companions lesson** (some chains have one) — read the surrounding production code in detail, with predict and find-in-repo prompts.
+3. **Quiz** — 4-5 multiple-choice questions that gate progression. Pass to continue; miss too many and you scroll back.
+4. **Drill** — hands-on exercise in a real checkout (\`cargo build\`, modify the source, observe behavior). The drill is what makes the lesson stick a day later.
+
+Within any individual lesson, the rhythm is:
+
+1. Hit a 🛑 **Predict** prompt before the explanation. Stop. Answer in your head or on paper. Then continue.
+2. Read the walkthrough. Compare to your prediction. **Where you were wrong is where the learning happens.**
+3. Hit a 🔍 **Find-in-repo** prompt. Open the repo. Find the actual file. Verify the lesson's claim.
+4. End-of-lesson recall test. Close the tab if you can answer in your own words. If not, scroll back.
+
+This is slower than typical tutorials. **It also internalizes.** The trade is intentional.
+
+## Pacing
+
+Each atomic lesson is **8-12 minutes stated, ~15-25 minutes with the prompts actually engaged**. A full topic chain (build-up → walkthrough → quiz → drill, 3-4 lessons) is **roughly 45-80 minutes** — one solid evening's work. Expert lessons go longer.
+
+**The right unit is one chain per session.** Plan to start a chain (say, the four \`add\` lessons in Revm Advanced) and finish it. The build-up, walkthrough, and quiz reinforce each other, and the drill is where doing-not-reading turns the chain into memory. Splitting a chain across days — half the build-up tonight, the rest plus drill next week — breaks the model.
+
+If you're short on time: do *one* lesson well rather than skim two. Engagement matters more than coverage at this tier.
+
+## Now go pick a course
+
+The three Advanced courses are independent and can be taken in any order — though **Revm Advanced is the recommended first stop** since its types (\`Address\`, \`U256\`, \`Database\` trait) underpin Reth and Alloy:
+
+- **Revm Advanced** — Inside the EVM engine
+- **Reth Advanced** — Inside Reth: Staged Sync, ExEx, the Reth SDK
+- **Alloy Advanced** *(coming soon)* — Inside Alloy: Provider, Network, Signer
+
+Each course has a brief welcome that handles course-specific prereqs and setup. Read that and start lesson 1.
+
+You're ready.`,
                 },
               ],
             },
