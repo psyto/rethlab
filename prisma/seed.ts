@@ -5,6 +5,8 @@ import { seedRethFundamentalsJA } from './seed-reth-fundamentals-ja';
 import { seedRethFundamentalsEN } from './seed-reth-fundamentals-en';
 import { seedRethBridgeToAdvancedEN } from './seed-reth-bridge-to-advanced-en';
 import { seedRethBridgeToAdvancedJA } from './seed-reth-bridge-to-advanced-ja';
+import { seedRethAlloyAdvancedEN } from './seed-reth-alloy-advanced-en';
+import { seedRethAlloyAdvancedJA } from './seed-reth-alloy-advanced-ja';
 import { seedRethRevmAdvancedEN } from './seed-reth-revm-advanced-en';
 import { seedRethRevmAdvancedJA } from './seed-reth-revm-advanced-ja';
 import { seedRethAdvancedJA } from './seed-reth-advanced-ja';
@@ -55,6 +57,11 @@ async function main() {
   await seedRethBridgeToAdvancedEN(prisma);
   await seedRethBridgeToAdvancedJA(prisma);
   console.log('  Seeded Bridge to Advanced (EN + JA)');
+
+  console.log('\nSeeding Alloy Advanced course (EN + JA draft, isPublished=false)...');
+  await seedRethAlloyAdvancedEN(prisma);
+  await seedRethAlloyAdvancedJA(prisma);
+  console.log('  Seeded Alloy Advanced (EN + JA draft)');
 
   console.log('\nSeeding Revm Advanced courses...');
   await seedRethRevmAdvancedEN(prisma);
