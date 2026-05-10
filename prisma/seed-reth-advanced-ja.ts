@@ -10,8 +10,8 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
       description:
         'Revmのインタープリターを読み解き、カスタムOpcodeとDatabaseトレイトの実装方法を学びます。さらにRethのStaged SyncとExEx (Execution Extensions) を通じて、独自のEVMインフラを構築するための基礎を固めます。',
       difficulty: 'ADVANCED',
-      duration: 190,
-      xpReward: 570,
+      duration: 215,
+      xpReward: 645,
       track: 'reth-advanced',
       tags,
       isPublished: true,
@@ -1602,79 +1602,142 @@ tx は「致命的な外部エラー」として中断する — revert とは�
             lessons: {
               create: [
                 {
-                  title: 'Staged Sync — Rethのアーキテクチャ',
-                  slug: 'staged-sync-ja',
+                  title: '\`Stage\` トレイトをステップで組み立てる',
+                  slug: 'staged-sync-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
-                  duration: 12,
+                  duration: 10,
                   xpReward: 25,
-                  content: `# Staged Sync — Rethのアーキテクチャ
+                  content: `# \`Stage\` トレイトをステップで組み立てる
 
-Staged SyncはRethの背骨です。「1ブロックずつ処理」ではなく、同期を複数のステージに分割し、各ステージがブロック範囲に対して動く設計。各ステージは1つのトレイトを実装したRust型です。トレイトを読めば、アーキテクチャを読んだことになる。
+Staged Sync は Reth の背骨です。**そして、見た目は威圧的** — 本物の \`Stage\` トレイトは6つのメソッド、非同期の準備チェック、双方向の対称性、そして \`auto_impl(Box)\` 属性を持っています。素のまま読むと、新しい概念が一度に6つ降ってくる。
 
-> 🛑 **スクロールする前に予測。** 「genesis から 2000 万ブロック同期せよ」と言われたら、**あなたなら** どんなステージに分けますか?
->
-> 既存実装の名前ではなく、第一原理から 5〜7 個のステージを書き出してください。何を最初に走らせる? 並列化できるのは何? 前段の出力に依存するのは何?
->
-> 正解する必要はありません。Paradigm の答えを見る前に、自分の意見を持つことが目的。
-
-## 本物の \`Stage\` トレイト
-
-[\`crates/stages/api/src/stage.rs\`](https://github.com/paradigmxyz/reth/blob/main/crates/stages/api/src/stage.rs) より：
+このレッスンは、最も素朴な同期ループからこのトレイトを積み上げます。終わりにはこれの全ピースを自分で組み立てたことになります:
 
 \`\`\`rust
 #[auto_impl::auto_impl(Box)]
 pub trait Stage<Provider>: Send {
     fn id(&self) -> StageId;
-
-    fn poll_execute_ready(
-        &mut self,
-        _cx: &mut Context<'_>,
-        _input: ExecInput,
-    ) -> Poll<Result<(), StageError>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn execute(&mut self, provider: &Provider, input: ExecInput) -> Result<ExecOutput, StageError>;
-
-    fn post_execute_commit(&mut self) -> Result<(), StageError> {
-        Ok(())
-    }
-
-    fn unwind(
-        &mut self,
-        provider: &Provider,
-        input: UnwindInput,
-    ) -> Result<UnwindOutput, StageError>;
-
-    fn post_unwind_commit(&mut self) -> Result<(), StageError> {
-        Ok(())
-    }
+    fn poll_execute_ready(&mut self, _cx: &mut Context<'_>, _input: ExecInput)
+        -> Poll<Result<(), StageError>> { Poll::Ready(Ok(())) }
+    fn execute(&mut self, provider: &Provider, input: ExecInput)
+        -> Result<ExecOutput, StageError>;
+    fn post_execute_commit(&mut self) -> Result<(), StageError> { Ok(()) }
+    fn unwind(&mut self, provider: &Provider, input: UnwindInput)
+        -> Result<UnwindOutput, StageError>;
+    fn post_unwind_commit(&mut self) -> Result<(), StageError> { Ok(()) }
 }
 \`\`\`
 
-**対称性に注目**：すべてのステージが \`execute\` と \`unwind\` の両方を持つ。
+> 📂 **別タブで \`paradigmxyz/reth\` を開いてください。** 各ステップで照合します。
 
-> 🛑 **\`unwind\` がなかったら、Reth はどうやって reorg を扱うのか?** スクロール前に代替アーキテクチャを予測。「unwind なし」設計に必要な追加コードパスは何か? — 答えはとても汚い。
+## ステップ 0 — 素朴な同期: 1ブロックずつ
 
-reorgは特殊ケースではなく **通常運用**。前進＝範囲に対して \`execute\`、後退＝範囲に対して \`unwind\`。**同じトレイトで2方向。** だから Reth は「reorg 専用パス」がコードベースの半分を食う事態にならない。
-
-## 入出力型
+何も考えずに書くと、Ethereum の同期はこんな形:
 
 \`\`\`rust
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
+fn sync_to_tip(client: &mut RethNode) -> Result<(), Error> {
+    while let Some(block) = client.next_block()? {
+        let header = client.fetch_header(block)?;
+        let body   = client.fetch_body(block)?;
+        let senders = recover_senders(&body)?;
+        let receipts = client.execute(&block, &header, &body)?;
+        client.update_state(receipts)?;
+        client.update_merkle_root(&block)?;
+        client.write_indexes(&block)?;
+        client.commit()?;
+    }
+    Ok(())
+}
+\`\`\`
+
+1ブロックずつ。各ブロックが次のブロックを始める前に全フェーズを通る。
+
+> 🛑 **予測。** スクロールせずに: この素朴な設計が 2000 万ブロックで *破滅的に* 遅い理由を3つ挙げてください。（ヒント: 各々が *別種の* 非効率。）
+
+3つ:
+
+1. **バッチがない。** ECDSA sender 復元は1ブロックあたり 200 回同じ操作。それを 200 回別々の呼び出しでやると、200 回分のセットアップコスト。
+2. **I/O 償却がない。** ブロックごとに Merkle ルートを書く = 2000 万回の \`commit()\` 呼び出し — それぞれディスクに触る。バッチ化すれば、Merkle ルートは100万ブロックに1回書けばいい。
+3. **並列化がない。** ヘッダー取得は tx 実行に依存しない。Sender 復元は前ブロックに依存しない。でもループは各フェーズでブロックする。
+
+修正方針: **作業をステージに分割。** 各ステージが *ブロック範囲* を端から端まで処理してから次に渡す。
+
+## ステップ 1 — ステージをスケッチする
+
+\`\`\`rust
+let stages = vec![
+    HeaderStage,       // [N..M] のヘッダーをダウンロード
+    BodyStage,         // tx 本体をダウンロード
+    SenderRecovery,    // ECDSA sender 復元（並列）
+    Execution,         // Revm を走らせ、状態差分を蓄積
+    Hashing,           // ハッシュ化されたアカウント/ストレージ変更をソート
+    Merkle,            // 範囲の Merkle ルートを計算
+    Indexes,           // txhash → (block, index) などのインデックス
+    Finish,            // commit + 報告
+];
+
+for stage in &mut stages {
+    stage.run(blocks_n_to_m)?;
+}
+\`\`\`
+
+これで sender 復元はブロック間でバッチ化、Merkle ルートは償却され、ステージ内で並列化できる。**データ構造はステージのリスト、各ステージは1つのトレイトを実装。** 次にトレイトを組み立てる。
+
+## ステップ 2 — \`Stage\` の最初の試案
+
+> 🛑 **予測。** トレイトをスケッチしてください。オーケストレータが呼ぶメソッドは? ステージは何を返す? 推測を保持。
+
+最初の試み:
+
+\`\`\`rust
+trait Stage {
+    fn execute(&mut self, blocks: BlockRange) -> Result<(), StageError>;
+}
+\`\`\`
+
+メソッド1つ。呼び出し側が範囲を渡し、ステージが処理する。完了。
+
+これは前進同期で動きます — でも致命的な穴がある。
+
+## ステップ 3 — \`unwind\`: reorg はオプションではない
+
+> 🛑 **予測。** Ethereum の reorg は特殊ケースではなく日常的に起きる。スクロールせずに: この単一メソッドの \`Stage\` でブロック 1000 → 980 への reorg をどう扱うか?
+
+このトレイトには無い *別の* メソッドが必要 — そしてオーケストレータには別のコードパスが必要。コードベースの半分が「reorg パス」になる。これが他の Ethereum クライアントが持つ形で、Reth が避けるよう設計された形。
+
+Reth の答え: **同じトレイトに \`unwind\` を加える**:
+
+\`\`\`rust
+trait Stage {
+    fn execute(&mut self, blocks: BlockRange) -> Result<(), StageError>;
+    fn unwind(&mut self, blocks: BlockRange) -> Result<(), StageError>;
+}
+\`\`\`
+
+前進 = 範囲に対して \`execute\`。後退 = 範囲に対して \`unwind\`。**同じトレイト、2方向。** Reorg は通常運用になり、特殊ケースではなくなる。**この対称性がアーキテクチャの要石。**
+
+## ステップ 4 — \`ExecInput\` / \`ExecOutput\`: 明示的な再開可能性
+
+\`BlockRange\` は薄すぎ。オーケストレータはステージに伝える必要がある:
+
+- *どこで止まるか。* ターゲットブロック。
+- *どこから再開するか。* 前回のチェックポイント（ノード再起動後）。
+
+ステージはオーケストレータに伝える必要がある:
+
+- *どこで止まったか。* 新しいチェックポイント。
+- *終わったかどうか。* \`false\` ならオーケストレータがまた呼ぶ — backpressure 制御。
+
+\`\`\`rust
 pub struct ExecInput {
     pub target: Option<BlockNumber>,
     pub checkpoint: Option<StageCheckpoint>,
 }
-
-#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ExecOutput {
     pub checkpoint: StageCheckpoint,
     pub done: bool,
 }
-
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct UnwindInput {
     pub checkpoint: StageCheckpoint,
     pub unwind_to: BlockNumber,
@@ -1682,24 +1745,86 @@ pub struct UnwindInput {
 }
 \`\`\`
 
-| フィールド | 役割 |
-| :--- | :--- |
-| \`ExecInput.target\` | 「このブロックまで処理して」 — オーケストレータがバッチサイズを決定 |
-| \`ExecInput.checkpoint\` | 「前回ここで止まった」 — ディスクから再開 |
-| \`ExecOutput.done\` | \`false\` =「まだやることがある、また呼んで」 — オーケストレータに backpressure 制御を返す |
-| \`UnwindInput.bad_block\` | reorgが特定のbad blockで起きた場合、ステージにそれを渡す |
+> 🛑 **理解度チェック。** \`done\` が \`ExecOutput\` の *中のフラグ* として返されるのはなぜ? \`has_more()\` のような別メソッドではなく? その設計選択はどんな制約に応えているのか?
 
-これが **明示的に再開可能** な設計。ノード再起動時に前回の続きから正確に始まる。「最初から走査しなおす」ハックは不要。
+アトミックな呼び出し/戻り値。オーケストレータはターンごとに正確に1つのフィードバックが欲しい:「チェックポイント X まで進めた; また呼ぶかどうかはあなた次第」。\`has_more()\` を別にするとオーケストレータがターンに2回呼ぶことになり、checkpoint と has_more が食い違うバグの種類が開く。
 
-> 🛑 **理解度チェック。** \`done\` が \`ExecOutput\` の中のフラグとして返されるのはなぜ? \`has_more()\` のような別メソッドではなく? その設計選択がどんな制約に応えているか? (ヒント: オーケストレータがステージをどうスケジュールするか考える。)
+## ステップ 5 — 非同期の準備: \`poll_execute_ready\`
 
-## \`#[auto_impl(Box)]\` のメリット
+ヘッダーをダウンロードするステージは即座に \`execute\` できない — ネットワーク応答を待つ。でもオーケストレータは1つの遅いステージで全パイプラインをブロックさせたくない。
 
-オーケストレータはステージを \`Box<dyn Stage<...>>\` で保持し、ヘテロなリストを持てる。\`auto_impl\` がなければ手動で全メソッドをbox越しに転送する必要がある。
+\`\`\`rust
+fn poll_execute_ready(&mut self, _cx: &mut Context<'_>, _input: ExecInput)
+    -> Poll<Result<(), StageError>>
+{
+    Poll::Ready(Ok(()))  // デフォルト: 常に準備完了
+}
+\`\`\`
 
-## 実際のステージ群
+Rust の async 形式の poll メソッド。常に準備完了のステージ（多くがそう）はデフォルトを取る。I/O を待つステージはオーバーライドして、futures が動いている間 \`Poll::Pending\` を返す。
 
-Rethのステージパイプライン（\`crates/stages/stages/src/stages/\`）：
+**オーケストレータは各ステージを poll する; pending なら次に進む。** どのステージも他をブロックしない。
+
+## ステップ 6 — Commit フック: \`post_execute_commit\` / \`post_unwind_commit\`
+
+ステージによっては、データがディスクに commit された *後* に作業をしたい場合がある — メトリクス送信、通知ブロードキャスト、古いデータの prune。これらのフックは「commit 完了したか?」のロジックで \`execute\` を汚さずにそういう仕事を許す。
+
+\`\`\`rust
+fn post_execute_commit(&mut self) -> Result<(), StageError> { Ok(()) }
+fn post_unwind_commit(&mut self) -> Result<(), StageError> { Ok(()) }
+\`\`\`
+
+デフォルトは no-op、必要なステージだけオーバーライド。**ほとんどはオーバーライドしない。** opt-in のライフサイクル、必須の plumbing ではない。
+
+## ステップ 7 — \`#[auto_impl(Box)]\`: ヘテロなステージリスト
+
+オーケストレータはステージを \`Vec<Box<dyn Stage<...>>>\` に格納する。これには \`Box<S>\` が \`S: Stage\` のとき \`Stage\` を実装している必要がある。
+
+属性がなければ手書きでこれを書く:
+
+\`\`\`rust
+impl<S: Stage<P>> Stage<P> for Box<S> {
+    // 全6メソッドを (**self).method(...) で転送
+}
+\`\`\`
+
+\`auto_impl\` は手続きマクロで、この転送を生成する。\`#[auto_impl(Box)]\` 付きで、オーケストレータは違う型のステージのリストを保持し、同じトレイトオブジェクト経由で全部呼べる。
+
+## ここまでに組み立てたもの
+
+各ピースが場所代を稼いでいる:
+
+- **\`execute\` / \`unwind\`**（ステップ 3–4）— 対称性: 前進と reorg が同じ表面を使う
+- **\`ExecInput\` / \`ExecOutput\`**（ステップ 4）— 再起動を跨いだ明示的な再開
+- **フラグとしての \`done\`**（ステップ 4）— アトミックな呼び出し/戻り値
+- **\`poll_execute_ready\`**（ステップ 5）— 非同期の準備、ノンブロッキングなスケジュール
+- **\`post_*_commit\`**（ステップ 6）— opt-in のライフサイクルフック
+- **\`#[auto_impl(Box)]\`**（ステップ 7）— ヘテロなステージリスト
+
+次のレッスンは Reth の本物の10ステージパイプラインを巡ります — 各ステージが何をするか、なぜこの順序か。
+
+## 進む前の想起
+
+スクロールせずに:
+
+1. なぜ \`unwind\` は \`execute\` と同じトレイトにあるのか?
+2. \`done: bool\` は \`has_more()\` ではできない何を可能にするか?
+3. なぜ \`poll_execute_ready\` が存在する? どのステージがオーバーライドするか?
+4. \`#[auto_impl(Box)]\` は何の手書きを省いてくれるか?
+
+どれか曖昧なら戻る。次のレッスンは Reth の本物のパイプライン。
+`,
+                },
+                {
+                  title: 'Reth のパイプライン: 10ステージ、順番付き',
+                  slug: 'staged-sync-pipeline-ja',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# Reth のパイプライン: 10ステージ、順番付き
+
+前のレッスンで \`Stage\` トレイトを組み立てました。**さあ、本物のステージに会いに行きます。** Reth のパイプラインは固定された順序の10ステージ、それぞれが今組み立てたトレイトを実装。順序は恣意的ではない — ステージ間のすべての制約は *どのステージがいつ走るか* にエンコードされている。
 
 \`\`\`mermaid
 flowchart LR
@@ -1714,37 +1839,84 @@ flowchart LR
     I --> F[FinishStage]
 \`\`\`
 
-1. **\`HeaderStage\`** — ヘッダー取得
-2. **\`BodyStage\`** — トランザクション本体取得
-3. **\`SenderRecoveryStage\`** — ECDSAでアドレス復元（大規模並列）
-4. **\`ExecutionStage\`** — Revmで実行、状態変更を蓄積
-5. **\`AccountHashingStage\`** — ハッシュ化アカウント変更をソート
-6. **\`StorageHashingStage\`** — ハッシュ化ストレージ変更をソート
-7. **\`MerkleStage\`** — Merkle Patricia Trie ルートを更新
-8. **\`TransactionLookupStage\`** — txhash → (block, index) インデックス
-9. **\`IndexAccountHistoryStage\`** + **\`IndexStorageHistoryStage\`** — 履歴アクセスインデックス
-10. **\`FinishStage\`** — 確定処理
+読みながら Reth リポジトリの \`crates/stages/stages/src/stages/\` を開いてください。
 
-> 🛑 **予想と比較。** どのステージが抜けていた? 予想にあって **ここに無い** ものは何? **興味深いのは2問目** — Paradigm の "省いたもの" は "入れたもの" より雄弁なことが多い。
+## 10ステージ
 
-> 🔍 **\`MerkleStage\` がハッシング後で、間に挟まれていないのはなぜ?** どんな順序制約が守られている? (ヒント: Merkle ルート計算には葉のソートが必要。それがハッシングのステージ分けに何を強いるか?)
+| # | ステージ | 何をする | ホットループ |
+| - | -------- | -------- | ------------ |
+| 1 | \`HeaderStage\` | ブロックヘッダーをダウンロード | ネットワーク I/O |
+| 2 | \`BodyStage\` | tx 本体 + uncle をダウンロード | ネットワーク I/O |
+| 3 | \`SenderRecoveryStage\` | tx 署名から ECDSA で sender を復元 | CPU（並列） |
+| 4 | \`ExecutionStage\` | Revm を走らせ、状態差分を蓄積 | CPU（Revm） |
+| 5 | \`AccountHashingStage\` | アカウント変更をハッシュ化キーでソート | sort + write |
+| 6 | \`StorageHashingStage\` | ストレージ変更をハッシュ化キーでソート | sort + write |
+| 7 | \`MerkleStage\` | Merkle Patricia Trie ルートを更新 | tree compute |
+| 8 | \`TransactionLookupStage\` | \`tx_hash → (block, index)\` インデックスを構築 | sort + write |
+| 9 | \`IndexAccountHistoryStage\` + \`IndexStorageHistoryStage\` | 履歴アクセスインデックス | sort + write |
+| 10 | \`FinishStage\` | 帳簿付け、確定 | なし |
 
-> 🔍 **\`AccountHashingStage\` と \`StorageHashingStage\` は並列実行できる?** どちらも \`ExecutionStage\` から似た入力を取る。yes/no を予測 → 1つ開いて検証。
+> 🛑 **前のレッスンの予想と比較。** 予想にあって *ここに無い* ステージは何? 含まれていないものが含まれているものよりも雄弁な場合がある — Paradigm はこのリストに「PrunerStage」を含めないことを選んだ（pruning は別のスケジュールで走る）。
 
-## 練習
+## 順序が物を言う: 3つの制約
 
-\`reth\` リポジトリで \`crates/stages/stages/src/stages/sender_recovery.rs\` を開く：
+### 制約 1 — \`MerkleStage\` はハッシング *の後* でなければならない
 
-> 🛑 **開く前に予測。** \`SenderRecoveryStage::execute\` は何をする? 一文で。中の "計算" は? その周りの "I/O" は? 文を保持して。
+> 🛑 **予測。** Merkle Patricia Trie のルートには葉がハッシュ化キーでソートされている必要がある。**それがハッシングのステージ分けに何を強いるか?**
 
-1. \`execute\` メソッドを探す
-2. **バッチループ** を見つける — 一度に全部ではなくチャンクで処理。**なぜチャンクで? なぜ 1 ブロックずつでも全ブロック一度でもダメなのか?**
-3. \`done: false\` と \`done: true\` を返す箇所 — どんな条件で切り替わる?
-4. 並列化に注目 — \`SenderRecoveryStage\` はRayonでCPUコアを使い倒す。**なぜ sender 復元が並列化で最も得をするステージなのか?**
+Merkle ステージはソート済みハッシュ化キーを *消費する*。だからアカウントハッシングとストレージハッシングは Merkle が始まる *前* にソートを完了して commit する必要がある。ブロック間でハッシングと Merkle 計算をインターリーブできない — Merkle ステージが処理するブロック範囲については *全ソート集合* が必要。
 
-これで Paradigm が Reth を同期させているのと **同じコード** を読めるようになりました。
+これが \`AccountHashingStage\`(5) と \`StorageHashingStage\`(6) が \`MerkleStage\`(7) より前にある理由。「何かの順序で」ではなく、**この特定の順序で、間に完全な commit を挟んで**。
 
-> 最終チェック: なぜ Staged Sync はブロック単位の同期より速いのか、一文で。「並列化」と答えたら深掘り — 具体的に何がバッチ化・ソート・償却されている? 3 つ挙げられないうちは、このレッスンはまだあなたを離しません。
+### 制約 2 — \`AccountHashingStage\` と \`StorageHashingStage\` は *並列実行できる*
+
+両方 \`ExecutionStage\` の出力を消費する。独立したソート済み変更集合を生成する（アカウントキーで vs ストレージキーで）。**なのにパイプラインが順次実行するのはなぜ?**
+
+> 🔍 **\`account_hashing.rs\` と \`storage_hashing.rs\` を開く。** それぞれ最初の30行を読む。何を共有している? Reth が2スレッドに分けない実用的な理由は?
+
+通常2つの理由が成り立つ:
+
+1. **ディスク書き込みの競合。** どちらのステージも MDBX に書く。並列実行するとデータベースロックで競合し、計算面の利得はない。
+2. **パイプラインの単純さ。** 順次実行ならオーケストレータのスケジューラはフラットなリスト。並列分岐を加えると DAG スケジューラが必要 — 複雑さが増えるが利得は限界的。
+
+下で紹介する Frontiers 2025 のトークがまさにこのトレードオフを論じている — 何が *並列化された* かと何が順次のままかを、それぞれの理由とともに。
+
+### 制約 3 — \`SenderRecoveryStage\` が並列化の勝ちパターン
+
+> 🛑 **予測。** 10ステージの中で、並列化で *最も* 得をするのはどれ? なぜ?
+
+\`SenderRecoveryStage\`。tx 署名から ECDSA で sender アドレスを復元 — 純粋な CPU、共有状態なし、embarrassingly parallel。Reth は Rayon で全 CPU コアに展開する。
+
+なぜこのステージが特別なのか?
+
+- **巨大なバッチサイズ。** 各ブロックは 100–300 tx; ステージ呼び出しは 100K+ ブロックを一度に処理 = 1呼び出しで 10–30M 個の署名。
+- **データ依存なし。** 各署名復元は他から独立 — 前の結果を待つ必要がない。
+- **純粋計算。** 復元の合間に I/O なし。
+
+\`ExecutionStage\`(4) も CPU バウンドだが *順次の* 状態依存がある — ブロック N のストレージ書き込みがブロック N+1 の読み込みに影響。Optimistic execution（Block-STM など）なしには簡単に並列化できず、それは独自のコンセンサス的な複雑さを伴う。
+
+## なぜ Staged Sync が勝つのか
+
+3つの複利的な要因がアーキテクチャを説明する:
+
+1. **バッチ化。** Sender 復元、ハッシング、Merkle ルート計算 — 全部1呼び出しで数千ブロックに償却される。
+2. **ステージ内並列化。** ステージ内で（特に \`SenderRecoveryStage\`）、Rayon が全コアに作業を展開。
+3. **I/O 償却。** ディスク書き込みはブロックごとではなくステージ境界の大きなソート済みバッチで起きる。
+
+> 🛑 **最後の予測。** ノードバイノードの同期（geth の昔のデフォルト）は最大時で〜50–100 blocks/sec。Staged sync は 10K+ blocks/sec。100 倍の係数はどこから来る?
+
+係数は単一のトリックにはない。複利の積: (1) ECDSA 復元のバッチ化＋並列化（〜10× 単独）、(2) Merkle ルートを範囲ごとに1回（ブロックごとではない）（〜10× 単独）、(3) ディスク書き込みが MDBX が効率的に書ける大きなソート済み範囲にバッチ化（〜3× 単独）。掛け合わせて〜300×; ハードウェア依存で実際は 100〜200× に着地。
+
+## クイズ前の想起
+
+スクロールせずに:
+
+1. なぜ \`MerkleStage\` はハッシングの *後* でインターリーブされていないのか?
+2. \`AccountHashingStage\` と \`StorageHashingStage\` は並列実行できるのに、なぜしないのか?
+3. 10ステージの中で、並列化で最大の勝ちを得るのはどれ? なぜ?
+4. Staged sync がブロックバイブロックより速い3つの理由?
+
+次のレッスンはクイズ。曖昧な答えがあるなら今、想起してください。
 
 ## 📺 関連動画
 
@@ -1758,10 +1930,165 @@ z3tj8Lk_Ydo | Alexey Shekhirin & Dan Cline — Hyperoptimizing Reth (Frontiers 2
 `,
                 },
                 {
+                  title: 'クイズ: Stage トレイト + パイプラインの形は身についた?',
+                  slug: 'staged-sync-quiz-ja',
+                  type: 'QUIZ',
+                  sortOrder: 2,
+                  duration: 4,
+                  xpReward: 25,
+                  content: `# クイズ: Stage トレイト + パイプラインの形は身についた?
+
+トレイトの設計とパイプラインの順序制約をカバーする4問。同じルール: **クイズはうなずきで通せない。**
+
+2問以上落としたら、ドリルへ進む前に「\`Stage\` トレイトをステップで組み立てる」を読み直してください。`,
+                  quizQuestions: [
+                    {
+                      question: "なぜ `unwind` は別の reorg トレイトやメソッドではなく、`Stage` トレイトの中で `execute` と同じ場所にあるのですか?",
+                      options: [
+                        "Reorg はまれなので様式上の選択。",
+                        "Rust はトレイトに対称的なメソッドを要求する。",
+                        "Reorg は通常運用の一部で、同じトレイトに置くと「範囲を前進」と「範囲を後退」が構造的に同一になり、コードベースから並行する「reorg パス」を取り除ける。",
+                        "古い Reth バージョンの後方互換シム。",
+                      ],
+                      correctIndex: 2,
+                      explanation: "Reth の設計は reorg を特殊ではなく日常として扱う。同じトレイト → 同じオーケストレータスケジューラ、同じステージ単位ロジック。reorg を別トレイトにすると各ステージを2回実装することになり、オーケストレータが前進パスと後退パスに分裂 — まさに他のクライアントが持っていて Reth が避けるよう作られた形。",
+                    },
+                    {
+                      question: "なぜ `ExecOutput.done` は別の `has_more()` メソッドではなく、結果の中のフラグとして返されるのですか?",
+                      options: [
+                        "様式 — どちらでも同じ。",
+                        "別の `has_more()` だとオーケストレータがターンに2回呼ぶ羽目になり（execute、それから has_more）、checkpoint と has_more が食い違うバグの種類を開く。出力の中のフラグなら呼び出しがアトミック — `execute` が状態のスナップショットを1つ返すだけ。",
+                        "Rust の型システムが `has_more()` を表現できない。",
+                        "非同期キャンセルを可能にするため。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "アトミックな呼び出し/戻り値が肝心。オーケストレータはターンごとに正確に1つのフィードバックが欲しい:「チェックポイント X まで進めた; また呼ぶかどうかはあなた次第」。これを2つのメソッドに分けると、その間に何が起きるかについての推論ギャップが開く。",
+                    },
+                    {
+                      question: "なぜ `MerkleStage` は `AccountHashingStage` と `StorageHashingStage` の *後* に配置され、間に挟まれないのですか?",
+                      options: [
+                        "歴史的な事故; 順序は違ってもよい。",
+                        "Merkle Patricia Trie のルートには葉がハッシュ化キーでソートされている必要がある。ハッシングステージがそのソートを生成し、Merkle はブロック範囲のソート集合全体を必要とするので、ハッシングは Merkle が始まる前に完了して commit しなければならない。",
+                        "`MerkleStage` はハッシングより遅いので、性能のために最後。",
+                        "メモリを節約するため。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "アルゴリズム上の制約: Merkle ルートの計算はソートされた葉が commit されるまで始められない。ハッシングがプロデューサ、Merkle がコンシューマ。プロデューサが完了し、それからコンシューマが走る。インターリーブすると部分的な Merkle 再計算が強制され、適切なバッチ化よりコストがかかる。",
+                    },
+                    {
+                      question: "Reth の10ステージのうち、`SenderRecoveryStage` が並列化で最も得をする。なぜ（例えば）`ExecutionStage` ではなく、これなのか?",
+                      options: [
+                        "`SenderRecoveryStage` の方が処理する tx 数が多い。",
+                        "Sender 復元は embarrassingly parallel: 各 ECDSA 復元が他から独立、共有状態なし。Execution には順次の状態依存がある — ブロック N のストレージ書き込みがブロック N+1 の読み込みに影響 — ので簡単には並列化できない。",
+                        "Rayon は `ExecutionStage` の中では動かない。",
+                        "`ExecutionStage` は既に1コアを飽和させているので、並列化で得しない。",
+                      ],
+                      correctIndex: 1,
+                      explanation: "ECDSA 復元は署名間で独立、全コアに簡単に展開できる。Execution にはコンセンサスで決まった順次の状態依存があり、並列化には optimistic execution（Block-STM など）が必要で独自の複雑さを持つ。Sender 復元は作業の形が Rayon のモデルと完全に合うので、特別なケース。",
+                    },
+                  ],
+                },
+                {
+                  title: 'ドリル: \`SenderRecoveryStage\` を端から端まで読む',
+                  slug: 'staged-sync-drill-ja',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# ドリル: \`SenderRecoveryStage\` を端から端まで読む
+
+読むのはリハーサル。**実装するのが記憶。** このドリルは「Staged Sync について読んだ」から「\`SenderRecoveryStage\` を1行ずつ読み、ソースから3つのアーキテクチャ的質問に答えた」までを連れて行きます。
+
+## セットアップ
+
+\`\`\`bash
+git clone https://github.com/paradigmxyz/reth
+cd reth
+\`\`\`
+
+ビルドする必要はない — これは読みのドリル、コンパイルのドリルではない。
+
+## ターゲットファイル
+
+\`crates/stages/stages/src/stages/sender_recovery.rs\`
+
+開いてください。順番に進めます。
+
+## ドリル 1 — \`Stage\` 実装を見つける
+
+> 🛑 **スクロールする前に予測。** \`SenderRecoveryStage::execute\` は何をする、一文で? 中の「計算」は? その周りの「I/O」は? 文を保持して。
+
+ファイルを開く。\`impl<Provider> Stage<Provider> for SenderRecoveryStage\` を見つける。\`execute\` メソッドが目標。
+
+メソッド本体をスキム。3つのセクションを特定:
+
+1. **読み** — 入力範囲のブロックの tx エンベロープを MDBX から取得
+2. **計算** — 各 tx の sender を ECDSA で復元（ここで Rayon が登場）
+3. **書き** — 復元した sender を MDBX に書き戻し、checkpoint を更新
+
+予測の文がこの読み/計算/書きの分割を捉えていなかったら、組み立てレッスンのステップ1を読み直してください — この形はパイプラインのパターン全体で、このステージ固有ではない。
+
+## ドリル 2 — バッチループを見つける
+
+ステージは \`ExecInput.target\` の *全* ブロックを一度に処理しない。バッチ化する。
+
+> 🔍 **バッチループを見つける。** ファイル内で \`commit_threshold\`、\`chunk\`、\`batch\` を検索。
+
+> 🛑 **質問（書き留めて）:** なぜバッチ化? なぜ範囲の全ブロックを一度に処理しない?
+
+理由は2つ:
+
+1. **メモリ。** 1000 万署名分のエンベロープバッファを RAM に保持するのは高コスト。バッチが working set を有界に保つ。
+2. **Backpressure。** 各バッチ後、ステージは \`done: false\` を返してオーケストレータに「commit して次に進むか、また呼ぶか」を決めさせる。バッチ化なしだとステージは all-or-nothing で commit。
+
+ステージ struct の \`commit_threshold\` フィールドがバッチサイズを制御。**デフォルト値を見つけて** — これは本番でチューニングできる値。
+
+## ドリル 3 — \`done: false\` が返される箇所を見つける
+
+メソッド本体で \`done: false\` または \`ExecOutput { done\` を検索。
+
+> 🛑 **質問:** \`done\` が \`true\` に切り替わる条件は?
+
+ステージが \`ExecInput.target\` までの全ブロックを処理したとき（この範囲でこれ以上仕事がない）。それまで \`done: false\` がオーケストレータに「次のバッチでまた呼んで」と伝える。true になったらオーケストレータは次のステージに進む。
+
+## ドリル 4 — Rayon の並列化を見つける
+
+ファイル内で \`par_iter\` または \`rayon::\` を検索。
+
+> 🔍 **質問:** Rayon はどこで登場? どのデータに?
+
+内側の ECDSA 復元ループ — 通常こんな形:
+
+\`\`\`rust
+chunk.par_iter()
+    .map(|tx| recover_signer(tx))
+    .collect::<Vec<_>>()
+\`\`\`
+
+各 tx の sender 復元は独立 → コア間に展開しても安全 → Rayon が仕事をする。
+
+> 🛑 **最終質問（答えを書き留めて）:** チェーンが1ブロックあたり 20 倍の tx を持つようになったがコア数は同じだとしたら、\`SenderRecoveryStage\` は *20 倍* 遅くなるか? なぜ/なぜそうでない?
+
+サブ線形にスケールする。1ブロックあたりの tx が増えると各 Rayon バッチが大きくなるがコア数は同じ — 実時間は総署名数に対して概ね線形に増えるが、バッチごとのオーバーヘッド（chunking、チャンネルの調整）はより多くの仕事に償却されるので、総スループットは少し改善。**ネット: 20倍の署名で〜15–18倍遅い**、キャッシュの振る舞い次第。
+
+## レッスン終了の想起
+
+スクロールせずに、自分の言葉で:
+
+1. \`SenderRecoveryStage::execute\` の読み/計算/書きの構造は?
+2. \`commit_threshold\` は何を制御する? なぜ存在するのか?
+3. なぜ Rayon の並列化は ECDSA 復元に適用され、（例えば）MDBX 書き込みには適用されないのか?
+4. なぜ \`done: false\` が戻り値の状態として存在するのか? 全 \`execute\` が範囲全体を完了する必要があったら何が壊れるか?
+
+どれか曖昧なら、レッスンはまだあなたを離しません。関連する組み立てステップを読み直すか、ファイルを再度開いてください。
+
+このドリルの後、Paradigm が Reth を同期させているのと同じコードを読めるようになりました。`,
+                },
+                {
                   title: 'Rust：ライフタイム・Box・Arc・dyn Trait',
                   slug: 'rust-lifetimes-arc-dyn-ja',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 4,
                   duration: 15,
                   xpReward: 30,
                   content: `# Rust：ライフタイム・Box・Arc・dyn Trait
@@ -1939,7 +2266,7 @@ async fn my_exex<Node: FullNodeComponents>(
                   title: 'ExEx — Execution Extensions',
                   slug: 'reth-exex-ja',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 5,
                   duration: 15,
                   xpReward: 30,
                   content: `# ExEx — Execution Extensions
@@ -2099,7 +2426,7 @@ if let Some(committed_chain) = notification.committed_chain() {
                   title: 'Reth SDK — App-chainを作る',
                   slug: 'reth-sdk-appchain-ja',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 6,
                   duration: 12,
                   xpReward: 25,
                   content: `# Reth SDK — App-chainを作る
@@ -2235,7 +2562,7 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
                   title: 'Expert ティアへの橋渡し',
                   slug: 'reth-bridge-to-expert-ja',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 7,
                   duration: 10,
                   xpReward: 20,
                   content: `# Expert ティアへの橋渡し
@@ -2302,7 +2629,7 @@ Advanced は **構造** を教えました。Expert はその構造の **背後�
                   title: 'Advancedまとめクイズ',
                   slug: 'advanced-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 5,
+                  sortOrder: 8,
                   duration: 12,
                   xpReward: 35,
                   content: `# Advancedまとめクイズ

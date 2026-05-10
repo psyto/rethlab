@@ -10,8 +10,8 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
       description:
         'Read the Revm interpreter, learn how custom opcodes and the Database trait work, and pick up Reth Staged Sync and Execution Extensions (ExEx) — the path to building your own EVM infrastructure.',
       difficulty: 'ADVANCED',
-      duration: 190,
-      xpReward: 570,
+      duration: 215,
+      xpReward: 645,
       track: 'reth-advanced',
       tags,
       isPublished: true,
@@ -1600,79 +1600,142 @@ After this drill, you have a working mental model of how revm gets state — eve
             lessons: {
               create: [
                 {
-                  title: 'Staged Sync — the Reth architecture',
-                  slug: 'staged-sync-en',
+                  title: 'Building the \`Stage\` trait step by step',
+                  slug: 'staged-sync-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 0,
-                  duration: 12,
+                  duration: 10,
                   xpReward: 25,
-                  content: `# Staged Sync — the Reth architecture
+                  content: `# Building the \`Stage\` trait step by step
 
-Staged Sync is the spine of Reth. Instead of "process one block at a time," sync is split into stages, each operating on a range of blocks. Each stage is a Rust type that implements one trait. Read the trait, and you've read the architecture.
+Staged Sync is the spine of Reth. **It also looks intimidating** — the real \`Stage\` trait has 6 methods, async readiness, two-direction symmetry, and an \`auto_impl(Box)\` attribute. Walk it cold and you get six new ideas at once.
 
-> 🛑 **Predict before scrolling.** You've been told to sync 20 million blocks from genesis. What stages would *you* split it into?
->
-> Write down 5-7 stages from first principles — not the names from existing implementations. What runs first? What can be done in parallel? What needs the previous stage's output?
->
-> The point isn't to be right. It's to have an opinion before you see Paradigm's answer.
-
-## The real \`Stage\` trait
-
-From [\`crates/stages/api/src/stage.rs\`](https://github.com/paradigmxyz/reth/blob/main/crates/stages/api/src/stage.rs):
+This lesson builds the trait up from the simplest possible sync loop. By the end you'll have built every piece of:
 
 \`\`\`rust
 #[auto_impl::auto_impl(Box)]
 pub trait Stage<Provider>: Send {
     fn id(&self) -> StageId;
-
-    fn poll_execute_ready(
-        &mut self,
-        _cx: &mut Context<'_>,
-        _input: ExecInput,
-    ) -> Poll<Result<(), StageError>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn execute(&mut self, provider: &Provider, input: ExecInput) -> Result<ExecOutput, StageError>;
-
-    fn post_execute_commit(&mut self) -> Result<(), StageError> {
-        Ok(())
-    }
-
-    fn unwind(
-        &mut self,
-        provider: &Provider,
-        input: UnwindInput,
-    ) -> Result<UnwindOutput, StageError>;
-
-    fn post_unwind_commit(&mut self) -> Result<(), StageError> {
-        Ok(())
-    }
+    fn poll_execute_ready(&mut self, _cx: &mut Context<'_>, _input: ExecInput)
+        -> Poll<Result<(), StageError>> { Poll::Ready(Ok(())) }
+    fn execute(&mut self, provider: &Provider, input: ExecInput)
+        -> Result<ExecOutput, StageError>;
+    fn post_execute_commit(&mut self) -> Result<(), StageError> { Ok(()) }
+    fn unwind(&mut self, provider: &Provider, input: UnwindInput)
+        -> Result<UnwindOutput, StageError>;
+    fn post_unwind_commit(&mut self) -> Result<(), StageError> { Ok(()) }
 }
 \`\`\`
 
-Notice the **symmetry**: every stage has both \`execute\` and \`unwind\`.
+> 📂 **Open \`paradigmxyz/reth\` in another tab.** Cross-check at every step.
 
-> 🛑 **If \`unwind\` weren't here, how would Reth handle a chain reorg?** Predict the alternative architecture — what additional code paths would a "no unwind" design need? Spoiler: it gets ugly fast.
+## Step 0 — The naive sync: block by block
 
-Reorgs aren't a special case — they're a **normal mode of operation**. Going forward = call \`execute\` over a range. Going back = call \`unwind\` over a range. **Same trait, two directions.** This is why Reth doesn't have a separate "reorg path" eating up half the codebase.
-
-## The input/output types
+Without thinking, you'd write Ethereum sync as:
 
 \`\`\`rust
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
+fn sync_to_tip(client: &mut RethNode) -> Result<(), Error> {
+    while let Some(block) = client.next_block()? {
+        let header = client.fetch_header(block)?;
+        let body   = client.fetch_body(block)?;
+        let senders = recover_senders(&body)?;
+        let receipts = client.execute(&block, &header, &body)?;
+        client.update_state(receipts)?;
+        client.update_merkle_root(&block)?;
+        client.write_indexes(&block)?;
+        client.commit()?;
+    }
+    Ok(())
+}
+\`\`\`
+
+One block at a time. Each block goes through every phase before the next block starts.
+
+> 🛑 **Predict.** Without scrolling: name three reasons this naive design is *catastrophically* slow at 20M blocks. (Hint: each is a different *kind of* inefficiency.)
+
+The three:
+
+1. **No batching.** ECDSA sender recovery is the same operation 200 times per block. Doing it in 200 separate calls is 200 separate setup costs.
+2. **No I/O amortization.** Writing one Merkle root per block means 20M \`commit()\` calls — each touches disk. Batched, you write Merkle roots once per million blocks.
+3. **No parallelism.** Headers don't depend on tx execution; sender recovery doesn't depend on the previous block. But the loop blocks on each phase.
+
+The fix: **split the work into stages.** Each stage processes a *range of blocks* end-to-end before handing off.
+
+## Step 1 — Sketch the stages
+
+\`\`\`rust
+let stages = vec![
+    HeaderStage,       // download headers for blocks [N..M]
+    BodyStage,         // download tx bodies
+    SenderRecovery,    // ECDSA-recover senders (parallel)
+    Execution,         // run Revm, accumulate state diffs
+    Hashing,           // sort hashed account/storage changes
+    Merkle,            // compute Merkle roots for the range
+    Indexes,           // build txhash → (block, index) etc.
+    Finish,            // commit + report
+];
+
+for stage in &mut stages {
+    stage.run(blocks_n_to_m)?;
+}
+\`\`\`
+
+Now sender recovery batches across blocks, Merkle roots are amortized, and you can parallelize within stages. **The data structure is a list of stages, each implementing one trait.** Build the trait next.
+
+## Step 2 — The first stab at \`Stage\`
+
+> 🛑 **Predict.** Sketch the trait. What method does the orchestrator call? What does the stage return? Hold your guess.
+
+First attempt:
+
+\`\`\`rust
+trait Stage {
+    fn execute(&mut self, blocks: BlockRange) -> Result<(), StageError>;
+}
+\`\`\`
+
+One method. Caller passes a range, stage processes it. Done.
+
+This works for forward sync — but it has a critical hole.
+
+## Step 3 — \`unwind\`: reorgs are not optional
+
+> 🛑 **Predict.** Ethereum reorgs aren't a special case — they happen routinely. Without scrolling: how does this single-method \`Stage\` handle a reorg from block 1000 → block 980?
+
+You'd need a *separate* method, not on this trait — and a separate code path in the orchestrator. Half the codebase becomes "the reorg path." That's exactly what other Ethereum clients have, and exactly what Reth was designed to avoid.
+
+Reth's answer: **add \`unwind\` to the same trait**:
+
+\`\`\`rust
+trait Stage {
+    fn execute(&mut self, blocks: BlockRange) -> Result<(), StageError>;
+    fn unwind(&mut self, blocks: BlockRange) -> Result<(), StageError>;
+}
+\`\`\`
+
+Going forward = call \`execute\` over a range. Going back = call \`unwind\` over a range. **Same trait, two directions.** Reorgs become a normal mode of operation, not a special case. **This symmetry is the architectural keystone.**
+
+## Step 4 — \`ExecInput\` / \`ExecOutput\`: explicit resumability
+
+\`BlockRange\` is too thin. The orchestrator needs to tell the stage:
+
+- *Where to stop.* A target block.
+- *Where to resume.* The stage's checkpoint from the last run (after a node restart).
+
+And the stage needs to tell the orchestrator:
+
+- *Where it stopped.* New checkpoint.
+- *Whether it's done.* If \`false\`, the orchestrator should call again — backpressure control.
+
+\`\`\`rust
 pub struct ExecInput {
     pub target: Option<BlockNumber>,
     pub checkpoint: Option<StageCheckpoint>,
 }
-
-#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ExecOutput {
     pub checkpoint: StageCheckpoint,
     pub done: bool,
 }
-
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct UnwindInput {
     pub checkpoint: StageCheckpoint,
     pub unwind_to: BlockNumber,
@@ -1680,24 +1743,86 @@ pub struct UnwindInput {
 }
 \`\`\`
 
-| Field | What it does |
-| :--- | :--- |
-| \`ExecInput.target\` | "Process up to this block" — the orchestrator decides batch size |
-| \`ExecInput.checkpoint\` | "Last time this stage ran, it stopped here" — resume from disk |
-| \`ExecOutput.done\` | \`false\` = "more to do, call me again" — gives the orchestrator backpressure control |
-| \`UnwindInput.bad_block\` | If a reorg was triggered by a specific bad block, the stage gets it |
+> 🛑 **Anti-fluency.** Why is \`done\` returned as a *flag inside* \`ExecOutput\`, not a separate \`has_more()\` method? What design constraint is that choice serving?
 
-This is **explicitly resumable**. A node restart picks up exactly where the previous run stopped. No "scan from zero" hack.
+Atomic call/return. The orchestrator wants exactly one piece of feedback per turn: "I made progress to checkpoint X; whether you call me again is your decision." A separate \`has_more()\` would force the orchestrator into two calls per turn and open a class of bugs where checkpoint and has_more disagree.
 
-> 🛑 **Anti-fluency.** Why is \`done\` returned as a flag inside \`ExecOutput\` rather than as a separate method like \`has_more()\`? What design constraint is that choice serving? (Hint: think about how the orchestrator schedules stages.)
+## Step 5 — Async readiness: \`poll_execute_ready\`
 
-## What \`#[auto_impl(Box)]\` buys you
+A stage that downloads headers can't always execute *immediately* — it has to wait for network responses. But the orchestrator wants to schedule across stages without blocking on one slow stage.
 
-The orchestrator stores stages as \`Box<dyn Stage<...>>\` so it can hold a heterogeneous list. \`auto_impl\` derives \`Stage\` for \`Box<S: Stage>\` automatically — without it, you'd manually forward every method through the box.
+\`\`\`rust
+fn poll_execute_ready(&mut self, _cx: &mut Context<'_>, _input: ExecInput)
+    -> Poll<Result<(), StageError>>
+{
+    Poll::Ready(Ok(()))  // default: always ready
+}
+\`\`\`
 
-## The actual stages
+A Rust async-style poll method. Stages that are always ready (most of them) take the default. Stages that wait on I/O override it to return \`Poll::Pending\` while their futures are in flight.
 
-Reth's stage pipeline (\`crates/stages/stages/src/stages/\`):
+**The orchestrator polls each stage; if pending, it moves on.** No stage blocks the others.
+
+## Step 6 — Commit hooks: \`post_execute_commit\` / \`post_unwind_commit\`
+
+Some stages need to do work *after* their data is committed to disk — emit metrics, broadcast a notification, prune old data. These hooks let stages do that without polluting \`execute\` with "are we committed yet?" logic.
+
+\`\`\`rust
+fn post_execute_commit(&mut self) -> Result<(), StageError> { Ok(()) }
+fn post_unwind_commit(&mut self) -> Result<(), StageError> { Ok(()) }
+\`\`\`
+
+Default no-op; stages override only when they need it. **Most don't.** Opt-in lifecycle, not mandatory plumbing.
+
+## Step 7 — \`#[auto_impl(Box)]\`: heterogeneous stage list
+
+The orchestrator stores stages in a \`Vec<Box<dyn Stage<...>>>\`. That requires \`Stage\` to be implemented for \`Box<S>\` where \`S: Stage\`.
+
+Without the attribute, you'd manually write:
+
+\`\`\`rust
+impl<S: Stage<P>> Stage<P> for Box<S> {
+    // forward all 6 methods through (**self).method(...)
+}
+\`\`\`
+
+\`auto_impl\` is a procedural macro that generates this forwarding. With \`#[auto_impl(Box)]\`, the orchestrator can hold a list of differently-typed stages and call them all through the same trait object.
+
+## What you've built
+
+Every piece earned its keep:
+
+- **\`execute\` / \`unwind\`** (Steps 3–4) — symmetry: forward and reorg use the same surface
+- **\`ExecInput\` / \`ExecOutput\`** (Step 4) — explicit resumability across restarts
+- **\`done\` as a flag** (Step 4) — atomic call/return
+- **\`poll_execute_ready\`** (Step 5) — async readiness, non-blocking scheduling
+- **\`post_*_commit\`** (Step 6) — opt-in lifecycle hooks
+- **\`#[auto_impl(Box)]\`** (Step 7) — heterogeneous stage list
+
+The next lesson tours Reth's actual 10-stage pipeline — what each stage does and why the order matters.
+
+## Recall before moving on
+
+Without scrolling:
+
+1. Why is \`unwind\` on the same trait as \`execute\`?
+2. What does \`done: bool\` enable that \`has_more()\` wouldn't?
+3. Why does \`poll_execute_ready\` exist? Which stages would override it?
+4. What does \`#[auto_impl(Box)]\` save you from writing?
+
+If any answer is shaky, scroll back. The next lesson is Reth's actual pipeline.
+`,
+                },
+                {
+                  title: "Reth's pipeline: 10 stages, in order",
+                  slug: 'staged-sync-pipeline-en',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 10,
+                  xpReward: 25,
+                  content: `# Reth's pipeline: 10 stages, in order
+
+Last lesson, you built up the \`Stage\` trait. **Now: meet the actual stages.** Reth's pipeline is 10 stages in a fixed order, each implementing the trait you just built. The order is not arbitrary — every constraint between stages is encoded in *which stage runs when*.
 
 \`\`\`mermaid
 flowchart LR
@@ -1712,37 +1837,84 @@ flowchart LR
     I --> F[FinishStage]
 \`\`\`
 
-1. **\`HeaderStage\`** — download headers
-2. **\`BodyStage\`** — download transaction bodies
-3. **\`SenderRecoveryStage\`** — ECDSA-recover sender addresses (massively parallel)
-4. **\`ExecutionStage\`** — run Revm, accumulate state changes
-5. **\`AccountHashingStage\`** — sort hashed account changes
-6. **\`StorageHashingStage\`** — sort hashed storage changes
-7. **\`MerkleStage\`** — update Merkle Patricia Trie roots
-8. **\`TransactionLookupStage\`** — build the txhash → (block, index) index
-9. **\`IndexAccountHistoryStage\`** + **\`IndexStorageHistoryStage\`** — historical access indices
-10. **\`FinishStage\`** — finalize
+Open \`crates/stages/stages/src/stages/\` in the Reth repo as you read.
 
-> 🛑 **Compare your prediction.** What stages did you miss? What did you guess that's NOT here? **The interesting question is the second one** — Paradigm's omissions are often more revealing than their inclusions.
+## The 10 stages
 
-> 🔍 **Why is MerkleStage *after* hashing, not interleaved?** What ordering constraint is being respected? (Hint: a Merkle root needs sorted leaves. What does that say about how hashing must be staged?)
+| # | Stage | What it does | Hot loop |
+| - | ----- | ------------ | -------- |
+| 1 | \`HeaderStage\` | Download block headers | network I/O |
+| 2 | \`BodyStage\` | Download tx bodies + uncles | network I/O |
+| 3 | \`SenderRecoveryStage\` | ECDSA-recover sender from each tx signature | CPU (parallel) |
+| 4 | \`ExecutionStage\` | Run Revm; accumulate state diffs | CPU (Revm) |
+| 5 | \`AccountHashingStage\` | Sort account changes by hashed key | sort + write |
+| 6 | \`StorageHashingStage\` | Sort storage changes by hashed key | sort + write |
+| 7 | \`MerkleStage\` | Update Merkle Patricia Trie roots | tree compute |
+| 8 | \`TransactionLookupStage\` | Build \`tx_hash → (block, index)\` index | sort + write |
+| 9 | \`IndexAccountHistoryStage\` + \`IndexStorageHistoryStage\` | Historical access indices | sort + write |
+| 10 | \`FinishStage\` | Bookkeep, finalize | none |
 
-> 🔍 **Could AccountHashingStage and StorageHashingStage run in parallel?** They take similar input from ExecutionStage. Predict yes/no — then verify by opening one of them.
+> 🛑 **Compare your prediction from last lesson.** What stages did you list that *aren't* here? Sometimes the omissions are more revealing than the inclusions — Paradigm chose not to bundle "PrunerStage" into this list (pruning runs separately, on its own schedule).
 
-## Drill
+## Order matters: three constraints
 
-In the \`reth\` repo, open \`crates/stages/stages/src/stages/sender_recovery.rs\`:
+### Constraint 1 — \`MerkleStage\` must come *after* hashing
 
-> 🛑 **Before opening: predict.** In one sentence, what does \`SenderRecoveryStage::execute\` do? What's the "compute" inside it? What's the "I/O" around that compute? Hold your sentences.
+> 🛑 **Predict.** A Merkle Patricia Trie root needs leaves in sorted-by-hashed-key order. **What does that say about how hashing must be staged?**
 
-1. Find the \`execute\` method
-2. Spot the **batch loop** — it processes blocks in chunks, not all at once. **Why chunks instead of one block at a time? Why not all blocks at once?**
-3. Find where it returns \`done: false\` vs \`done: true\` — what condition flips it?
-4. Look at the parallelism — \`SenderRecoveryStage\` uses Rayon to recover senders across CPU cores. **Why is sender recovery the stage that benefits most from parallelism?**
+The Merkle stage *consumes* sorted hashed keys. So account hashing and storage hashing must complete and commit their sort *before* Merkle starts. You can't interleave hashing and Merkle computation across blocks — the Merkle stage needs the *whole sorted set* for the block range it's processing.
 
-You're now reading the same code Paradigm uses to keep Reth in sync.
+This is why \`AccountHashingStage\` (5) and \`StorageHashingStage\` (6) come before \`MerkleStage\` (7). Not "in some order" but **in this specific order, with full commits between them.**
 
-> Final check: explain in one sentence why staged sync is faster than block-by-block sync. If your answer is "parallelism," go deeper — what specifically gets batched, sorted, or amortized? The lesson isn't done with you until you can name three.
+### Constraint 2 — \`AccountHashingStage\` and \`StorageHashingStage\` *could* run in parallel
+
+They both consume the output of \`ExecutionStage\`. They produce independent sorted change sets (account-keyed vs storage-keyed). **Why does the pipeline run them sequentially?**
+
+> 🔍 **Open \`account_hashing.rs\` and \`storage_hashing.rs\`.** Read the first 30 lines of each. What do they share? What's the practical reason Reth doesn't fork off two threads here?
+
+Two reasons typically hold:
+
+1. **Disk write contention.** Both stages write to MDBX. Running them in parallel would contend on the database lock with no compute benefit.
+2. **Pipeline simplicity.** Sequential execution means the orchestrator's scheduler is a flat list. Adding parallel branches would require a DAG scheduler — more complexity, marginal gain.
+
+The Frontiers 2025 talk (linked at the bottom) discusses exactly this trade-off — what *did* get parallelized and what stayed sequential, and why.
+
+### Constraint 3 — \`SenderRecoveryStage\` is the parallelism win
+
+> 🛑 **Predict.** Of all 10 stages, which one benefits *most* from parallelism, and why?
+
+\`SenderRecoveryStage\`. ECDSA-recover sender addresses from transaction signatures — pure CPU, no shared state, embarrassingly parallel. Reth uses Rayon to fan it out across all CPU cores.
+
+Why is this stage the standout?
+
+- **Massive batch size.** Each block has 100–300 transactions; a stage call processes 100K+ blocks at a time = 10–30M signatures per call.
+- **No data dependencies.** Each signature recovery is independent — no need to wait for previous results.
+- **Pure compute.** No I/O between recoveries.
+
+\`ExecutionStage\` (4) is also CPU-bound but has *sequential* state dependencies — block N's storage writes affect block N+1's reads. You can't trivially parallelize it without optimistic execution (Block-STM, etc.), which has its own consensus complications.
+
+## Why staged sync wins
+
+Three compounding factors explain the architecture:
+
+1. **Batching.** Sender recovery, hashing, Merkle root computation — all amortized across thousands of blocks per call.
+2. **Stage-level parallelism.** Within a stage (especially \`SenderRecoveryStage\`), Rayon fans work across all cores.
+3. **I/O amortization.** Disk writes happen in big sorted batches at stage boundaries, not after every block.
+
+> 🛑 **Final predict.** A node-by-node sync (geth's old default) does ~50–100 blocks/sec at full tilt. Staged sync does 10K+ blocks/sec. Where does the 100× factor come from?
+
+The factor isn't any single trick. It's the compounding of: (1) ECDSA recovery batched + parallelized (~10× alone), (2) Merkle root once per range, not per block (~10× alone), (3) disk writes batched into sorted ranges that MDBX writes efficiently (~3× alone). Multiplied: ~300×; the practical number lands around 100–200× depending on hardware.
+
+## Recall before the quiz
+
+Without scrolling:
+
+1. Why is \`MerkleStage\` *after* hashing, not interleaved?
+2. Why don't \`AccountHashingStage\` and \`StorageHashingStage\` run in parallel, even though they could?
+3. Of the 10 stages, which has the biggest parallelism win and why?
+4. Three reasons staged sync is faster than block-by-block?
+
+The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
 
 ## 📺 Further watching
 
@@ -1756,10 +1928,165 @@ z3tj8Lk_Ydo | Alexey Shekhirin & Dan Cline — Hyperoptimizing Reth (Frontiers 2
 `,
                 },
                 {
+                  title: 'Quiz: did the Stage trait + pipeline shape stick?',
+                  slug: 'staged-sync-quiz-en',
+                  type: 'QUIZ',
+                  sortOrder: 2,
+                  duration: 4,
+                  xpReward: 25,
+                  content: `# Quiz: did the Stage trait + pipeline shape stick?
+
+Four questions covering the trait design and the pipeline ordering constraints. Same rule: **you can't nod past a quiz.**
+
+If you miss two or more, scroll back to *Building the Stage trait* before going on to the drill.`,
+                  quizQuestions: [
+                    {
+                      question: "Why is `unwind` a method on the same `Stage` trait as `execute`, instead of a separate 'reorg' trait or method?",
+                      options: [
+                        "Reorgs are rare enough that it's a stylistic choice.",
+                        "Rust requires symmetric methods on traits.",
+                        "Reorgs are a normal mode of operation; putting them on the same trait makes 'forward over a range' and 'back over a range' structurally identical, which removes a parallel 'reorg path' from the codebase.",
+                        "It's a backwards-compat shim from an older Reth version.",
+                      ],
+                      correctIndex: 2,
+                      explanation: "Reth's design treats reorgs as routine, not special. Same trait → same orchestrator scheduler, same per-stage logic. A separate reorg trait would force every stage to be implemented twice and would split the orchestrator into a forward path and a reverse path — exactly what other clients have, and exactly what Reth was built to avoid.",
+                    },
+                    {
+                      question: "Why does `ExecOutput.done` return a flag inside the result instead of being a separate `has_more()` method?",
+                      options: [
+                        "It's stylistic — both work equally well.",
+                        "A separate `has_more()` would force the orchestrator into two calls per turn (execute, then has_more) and open a class of bugs where checkpoint and has_more disagree. The flag inside the output makes the call atomic — `execute` returns one snapshot of its state.",
+                        "Rust's type system can't express `has_more()`.",
+                        "To enable async cancellation.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "Atomic call/return matters here. The orchestrator wants exactly one piece of feedback per turn: 'I made progress to checkpoint X; whether you call me again is your decision.' Splitting that into two methods opens reasoning gaps about what happens between them.",
+                    },
+                    {
+                      question: "Why is `MerkleStage` placed *after* both `AccountHashingStage` and `StorageHashingStage`, not interleaved?",
+                      options: [
+                        "It's a historical accident; the order could be different.",
+                        "A Merkle Patricia Trie root requires leaves in sorted-by-hashed-key order. The hashing stages produce that sorted order; Merkle needs the full sorted set for its block range, so hashing must complete and commit before Merkle starts.",
+                        "`MerkleStage` is slower than hashing; it's placed last for performance.",
+                        "To save memory.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "An algorithmic constraint: Merkle root computation cannot start until its sorted leaves are committed. Hashing is the producer, Merkle is the consumer. Producer completes, then consumer runs. Interleaving would force partial Merkle recomputation, which costs more than just batching properly.",
+                    },
+                    {
+                      question: "Of Reth's 10 stages, `SenderRecoveryStage` benefits most from parallelism. Why is it the one, not (say) `ExecutionStage`?",
+                      options: [
+                        "`SenderRecoveryStage` has more transactions to process than `ExecutionStage`.",
+                        "Sender recovery is embarrassingly parallel: each ECDSA recovery is independent of every other, no shared state. Execution has sequential state dependencies — block N's storage writes affect block N+1's reads — so it can't be trivially parallelized.",
+                        "Rayon doesn't work inside `ExecutionStage`.",
+                        "`ExecutionStage` already saturates a single core, so parallelism wouldn't help.",
+                      ],
+                      correctIndex: 1,
+                      explanation: "ECDSA recovery is independent across signatures; you can fan it across all cores trivially. Execution has consensus-defined sequential state dependencies — parallelizing it requires optimistic execution (Block-STM, etc.) with its own complications. Sender recovery is the standout because its work shape matches Rayon's model perfectly.",
+                    },
+                  ],
+                },
+                {
+                  title: 'Drill: read \`SenderRecoveryStage\` end-to-end',
+                  slug: 'staged-sync-drill-en',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Drill: read \`SenderRecoveryStage\` end-to-end
+
+Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about staged sync" to "I have read \`SenderRecoveryStage\` line by line and answered three architectural questions about it from the source."
+
+## Setup
+
+\`\`\`bash
+git clone https://github.com/paradigmxyz/reth
+cd reth
+\`\`\`
+
+You don't need to build it — this is a reading drill, not a compile drill.
+
+## The target file
+
+\`crates/stages/stages/src/stages/sender_recovery.rs\`
+
+Open it. We'll work through it in order.
+
+## Drill 1 — Find the \`Stage\` impl
+
+> 🛑 **Predict before scrolling.** What does \`SenderRecoveryStage::execute\` do, in one sentence? What's the "compute" inside it? What's the "I/O" around the compute? Hold your sentences.
+
+Open the file. Find \`impl<Provider> Stage<Provider> for SenderRecoveryStage\`. The \`execute\` method is your target.
+
+Skim the method body. Identify three sections:
+
+1. **Read** — pull tx envelopes for blocks in the input range from MDBX
+2. **Compute** — ECDSA-recover senders for each tx (this is where Rayon enters)
+3. **Write** — write recovered senders back to MDBX, update checkpoint
+
+If your sentences from the predict prompt missed the read/compute/write split, scroll back and re-read the build-up lesson's Step 1 — that shape is the entire pipeline pattern, not unique to this stage.
+
+## Drill 2 — Find the batch loop
+
+The stage doesn't process *every* block in \`ExecInput.target\` at once. It batches.
+
+> 🔍 **Find the batch loop.** Search for \`commit_threshold\` or \`chunk\` or \`batch\` in the file.
+
+> 🛑 **Question (write it down):** Why batch? Why not process every block in the range in one shot?
+
+Two reasons:
+
+1. **Memory.** Holding 10M signatures' worth of envelope buffers in RAM is expensive. Batches keep the working set bounded.
+2. **Backpressure.** After each batch, the stage can return \`done: false\` and let the orchestrator decide whether to commit and move on, or call again. Without batching, the stage commits everything or nothing.
+
+The \`commit_threshold\` field on the stage struct controls the batch size. **Find its default value** — that's a tunable that matters in production.
+
+## Drill 3 — Find where \`done: false\` is returned
+
+Search for \`done: false\` or \`ExecOutput { done\` in the method body.
+
+> 🛑 **Question:** What condition makes \`done\` flip to \`true\`?
+
+When the stage has processed all blocks up to \`ExecInput.target\` (no more work in this range). Until then, \`done: false\` tells the orchestrator "call me again on the next batch." Once true, the orchestrator advances to the next stage.
+
+## Drill 4 — Find the Rayon parallelism
+
+Search for \`par_iter\` or \`rayon::\` in the file.
+
+> 🔍 **Question:** Where does Rayon enter? On what data?
+
+It's on the inner ECDSA recovery loop — usually shaped like:
+
+\`\`\`rust
+chunk.par_iter()
+    .map(|tx| recover_signer(tx))
+    .collect::<Vec<_>>()
+\`\`\`
+
+Each transaction's sender recovery is independent → safe to fan across cores → Rayon does the work.
+
+> 🛑 **Final question (write your answer down):** If the chain had 20× more transactions per block but the same number of cores, would \`SenderRecoveryStage\` get *20×* slower? Why or why not?
+
+It scales sub-linearly. With more transactions per block, each Rayon batch grows but core count stays the same — wall-clock time grows roughly linearly with total signatures, but per-batch overhead (chunking, channel coordination) is amortized over more work, so total throughput improves slightly. **Net: ~15–18× slower for 20× more signatures**, depending on cache behavior.
+
+## End-of-lesson recall
+
+Without scrolling, in your own words:
+
+1. What's the read/compute/write structure of \`SenderRecoveryStage::execute\`?
+2. What does \`commit_threshold\` control, and why does it exist?
+3. Why is Rayon's parallelism applied to ECDSA recovery and not (say) MDBX writes?
+4. Why does \`done: false\` exist as a return state at all? What would break if every \`execute\` had to finish the whole range?
+
+If any answer is shaky, the lesson isn't done with you. Re-read the relevant build-up step or re-open the file.
+
+After this drill, you've read the same code Paradigm uses to keep Reth in sync.`,
+                },
+                {
                   title: 'Rust: lifetimes, Box, Arc, dyn Trait',
                   slug: 'rust-lifetimes-arc-dyn-en',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 4,
                   duration: 15,
                   xpReward: 30,
                   content: `# Rust: lifetimes, Box, Arc, dyn Trait
@@ -1937,7 +2264,7 @@ async fn my_exex<Node: FullNodeComponents>(
                   title: 'ExEx — Execution Extensions',
                   slug: 'reth-exex-en',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 5,
                   duration: 15,
                   xpReward: 30,
                   content: `# ExEx — Execution Extensions
@@ -2097,7 +2424,7 @@ When that works, you've written a node-speed indexer.
                   title: 'Reth SDK — building an App-chain',
                   slug: 'reth-sdk-appchain-en',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 6,
                   duration: 12,
                   xpReward: 25,
                   content: `# Reth SDK — building an App-chain
@@ -2233,7 +2560,7 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
                   title: 'Bridge to Expert — what comes next',
                   slug: 'reth-bridge-to-expert-en',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 7,
                   duration: 10,
                   xpReward: 20,
                   content: `# Bridge to Expert — what comes next
@@ -2300,7 +2627,7 @@ If any of the five questions sent you back to a previous lesson — re-read them
                   title: 'Advanced quiz',
                   slug: 'advanced-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 5,
+                  sortOrder: 8,
                   duration: 12,
                   xpReward: 35,
                   content: `# Advanced quiz
