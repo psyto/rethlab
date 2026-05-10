@@ -14,6 +14,23 @@ const nextConfig = {
       },
     ];
   },
+  async redirects() {
+    const advancedRenames = [
+      ['revm-interpreter', 'revm-add-buildup'],
+      ['custom-opcodes', 'custom-opcodes-table'],
+      ['revm-database-trait', 'revm-database-buildup'],
+      ['staged-sync', 'staged-sync-buildup'],
+      ['reth-exex', 'reth-exex-buildup'],
+      ['reth-sdk-appchain', 'reth-sdk-buildup'],
+    ];
+    return advancedRenames.flatMap(([oldStem, newStem]) =>
+      ['en', 'ja'].map((locale) => ({
+        source: `/courses/reth-advanced-${locale}/lessons/${oldStem}-${locale}`,
+        destination: `/courses/reth-advanced-${locale}/lessons/${newStem}-${locale}`,
+        permanent: true,
+      })),
+    );
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
