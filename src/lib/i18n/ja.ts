@@ -53,8 +53,8 @@ export const ja: TranslationKeys = {
       item1: 'Reth の Stage、Revm の interpreter、Alloy の procedural macro を読める',
       item2: '独自 opcode や precompile で Revm を拡張できる（Foundry のチートコード機構と同じ仕組み）',
       item3: 'ExEx（Execution Extension）を実装できる — ノード速度のインデクサや MEV パイプライン',
-      item4: '独自 EVM 設定・コンセンサス・ストレージを持つ Reth フォークを構築できる',
-      item5: 'Monad / Hyperliquid / Paradigm 系のインフラチームの grant に応募できる',
+      item4: 'L1 を architect できる — consensus、bridge、sequencer、P2P、validator 運用を設計し、カスタム Reth フォークとして ship',
+      item5: 'Paradigm / Tempo / Hyperliquid / Monad 系のインフラチームの grant に応募できる',
     },
     stack: {
       tag: 'このスタックが稼働している場所',

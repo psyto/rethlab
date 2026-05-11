@@ -51,8 +51,8 @@ export const en = {
       item1: "Read Reth's stages, Revm's interpreter, and Alloy's procedural macros",
       item2: 'Extend Revm with custom opcodes and precompiles (the Foundry cheatcode mechanism)',
       item3: 'Ship an Execution Extension (ExEx) — a node-speed indexer or MEV pipeline',
-      item4: 'Build a custom Reth fork with custom EVM config, consensus, or storage',
-      item5: 'Apply for grant work at Monad / Hyperliquid / Paradigm-style infra teams',
+      item4: 'Architect an L1 — design consensus, bridges, sequencer, P2P, and validator ops; ship it as a custom Reth fork',
+      item5: 'Apply for grant work at Paradigm / Tempo / Hyperliquid / Monad-style infra teams',
     },
     stack: {
       tag: 'WHERE THIS STACK RUNS',
