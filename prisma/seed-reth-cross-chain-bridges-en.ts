@@ -15,7 +15,7 @@ export async function seedRethCrossChainBridgesEN(prisma: PrismaClient) {
       track: 'reth-l1-architect',
       tags,
       isPublished: true,
-      sortOrder: 510,
+      sortOrder: 310,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {

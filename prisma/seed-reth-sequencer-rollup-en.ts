@@ -15,7 +15,7 @@ export async function seedRethSequencerRollupEN(prisma: PrismaClient) {
       track: 'reth-l1-architect',
       tags,
       isPublished: true,
-      sortOrder: 520,
+      sortOrder: 320,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {

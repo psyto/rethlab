@@ -15,7 +15,7 @@ export async function seedRethValidatorOpsJA(prisma: PrismaClient) {
       track: 'reth-l1-architect',
       tags,
       isPublished: true,
-      sortOrder: 540,
+      sortOrder: 340,
       locale: 'ja',
       instructorName: 'RethLab',
       modules: {

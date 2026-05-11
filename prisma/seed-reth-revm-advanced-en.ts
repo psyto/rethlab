@@ -15,7 +15,7 @@ export async function seedRethRevmAdvancedEN(prisma: PrismaClient) {
       track: 'revm-advanced',
       tags,
       isPublished: true,
-      sortOrder: 310,
+      sortOrder: 210,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {
