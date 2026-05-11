@@ -40,7 +40,7 @@ export const ja: TranslationKeys = {
   },
   landing: {
     hero: {
-      title: 'Rust EVM L1 エンジニアのための学校',
+      title: 'The school for Rust EVM L1 engineers',
       subtitle: 'Hyperliquid・Tempo・Berachain — モダンな Rust EVM L1 はすべて Reth・Revm・Alloy・Foundry で動いている。これを architect できるエンジニアはまだ希少。RethLab は 13 コース 4 ティアで、EVM の基礎から、Alloy/Revm/Reth の本番ソースの行単位読解、L1 アーキテクチャ設計、9 本の動くアプリ開発までを通す。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
