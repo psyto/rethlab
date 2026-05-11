@@ -15,6 +15,16 @@ import { seedRethExpertJA } from './seed-reth-expert-ja';
 import { seedRethExpertEN } from './seed-reth-expert-en';
 import { seedRethBuildingEN } from './seed-reth-building-en';
 import { seedRethBuildingJA } from './seed-reth-building-ja';
+import { seedRethConsensusEngineeringEN } from './seed-reth-consensus-engineering-en';
+import { seedRethConsensusEngineeringJA } from './seed-reth-consensus-engineering-ja';
+import { seedRethCrossChainBridgesEN } from './seed-reth-cross-chain-bridges-en';
+import { seedRethCrossChainBridgesJA } from './seed-reth-cross-chain-bridges-ja';
+import { seedRethSequencerRollupEN } from './seed-reth-sequencer-rollup-en';
+import { seedRethSequencerRollupJA } from './seed-reth-sequencer-rollup-ja';
+import { seedRethP2PNetworkingEN } from './seed-reth-p2p-networking-en';
+import { seedRethP2PNetworkingJA } from './seed-reth-p2p-networking-ja';
+import { seedRethValidatorOpsEN } from './seed-reth-validator-ops-en';
+import { seedRethValidatorOpsJA } from './seed-reth-validator-ops-ja';
 
 const prisma = new PrismaClient();
 
@@ -82,6 +92,31 @@ async function main() {
   await seedRethBuildingEN(prisma);
   await seedRethBuildingJA(prisma);
   console.log('  Seeded Building (EN + JA)');
+
+  console.log('\nSeeding Consensus Engineering courses...');
+  await seedRethConsensusEngineeringEN(prisma);
+  await seedRethConsensusEngineeringJA(prisma);
+  console.log('  Seeded Consensus Engineering (EN + JA)');
+
+  console.log('\nSeeding Cross-Chain Bridges courses...');
+  await seedRethCrossChainBridgesEN(prisma);
+  await seedRethCrossChainBridgesJA(prisma);
+  console.log('  Seeded Cross-Chain Bridges (EN + JA)');
+
+  console.log('\nSeeding Sequencer & Rollup Architecture courses...');
+  await seedRethSequencerRollupEN(prisma);
+  await seedRethSequencerRollupJA(prisma);
+  console.log('  Seeded Sequencer & Rollup (EN + JA)');
+
+  console.log('\nSeeding P2P Networking courses...');
+  await seedRethP2PNetworkingEN(prisma);
+  await seedRethP2PNetworkingJA(prisma);
+  console.log('  Seeded P2P Networking (EN + JA)');
+
+  console.log('\nSeeding Validator Operations courses...');
+  await seedRethValidatorOpsEN(prisma);
+  await seedRethValidatorOpsJA(prisma);
+  console.log('  Seeded Validator Operations (EN + JA)');
 
   const courseCount = await prisma.course.count();
   const moduleCount = await prisma.module.count();

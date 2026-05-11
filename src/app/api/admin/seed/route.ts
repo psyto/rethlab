@@ -16,6 +16,16 @@ import { seedRethExpertEN } from '../../../../../prisma/seed-reth-expert-en';
 import { seedRethExpertJA } from '../../../../../prisma/seed-reth-expert-ja';
 import { seedRethBuildingEN } from '../../../../../prisma/seed-reth-building-en';
 import { seedRethBuildingJA } from '../../../../../prisma/seed-reth-building-ja';
+import { seedRethConsensusEngineeringEN } from '../../../../../prisma/seed-reth-consensus-engineering-en';
+import { seedRethConsensusEngineeringJA } from '../../../../../prisma/seed-reth-consensus-engineering-ja';
+import { seedRethCrossChainBridgesEN } from '../../../../../prisma/seed-reth-cross-chain-bridges-en';
+import { seedRethCrossChainBridgesJA } from '../../../../../prisma/seed-reth-cross-chain-bridges-ja';
+import { seedRethSequencerRollupEN } from '../../../../../prisma/seed-reth-sequencer-rollup-en';
+import { seedRethSequencerRollupJA } from '../../../../../prisma/seed-reth-sequencer-rollup-ja';
+import { seedRethP2PNetworkingEN } from '../../../../../prisma/seed-reth-p2p-networking-en';
+import { seedRethP2PNetworkingJA } from '../../../../../prisma/seed-reth-p2p-networking-ja';
+import { seedRethValidatorOpsEN } from '../../../../../prisma/seed-reth-validator-ops-en';
+import { seedRethValidatorOpsJA } from '../../../../../prisma/seed-reth-validator-ops-ja';
 
 // Temporary admin endpoint — remove after seeding
 // POST /api/admin/seed?key=<AUTH_SECRET>
@@ -64,6 +74,16 @@ export async function POST(req: Request) {
       { name: 'Expert JA', fn: seedRethExpertJA, checkSlug: 'reth-expert-ja' },
       { name: 'Building EN', fn: seedRethBuildingEN, checkSlug: 'reth-building-en' },
       { name: 'Building JA', fn: seedRethBuildingJA, checkSlug: 'reth-building-ja' },
+      { name: 'Consensus Engineering EN', fn: seedRethConsensusEngineeringEN, checkSlug: 'reth-consensus-engineering-en' },
+      { name: 'Consensus Engineering JA', fn: seedRethConsensusEngineeringJA, checkSlug: 'reth-consensus-engineering-ja' },
+      { name: 'Cross-Chain Bridges EN', fn: seedRethCrossChainBridgesEN, checkSlug: 'reth-cross-chain-bridges-en' },
+      { name: 'Cross-Chain Bridges JA', fn: seedRethCrossChainBridgesJA, checkSlug: 'reth-cross-chain-bridges-ja' },
+      { name: 'Sequencer & Rollup EN', fn: seedRethSequencerRollupEN, checkSlug: 'reth-sequencer-rollup-en' },
+      { name: 'Sequencer & Rollup JA', fn: seedRethSequencerRollupJA, checkSlug: 'reth-sequencer-rollup-ja' },
+      { name: 'P2P Networking EN', fn: seedRethP2PNetworkingEN, checkSlug: 'reth-p2p-networking-en' },
+      { name: 'P2P Networking JA', fn: seedRethP2PNetworkingJA, checkSlug: 'reth-p2p-networking-ja' },
+      { name: 'Validator Ops EN', fn: seedRethValidatorOpsEN, checkSlug: 'reth-validator-ops-en' },
+      { name: 'Validator Ops JA', fn: seedRethValidatorOpsJA, checkSlug: 'reth-validator-ops-ja' },
     ];
 
     for (const track of tracks) {
