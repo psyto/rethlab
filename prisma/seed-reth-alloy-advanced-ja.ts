@@ -1470,7 +1470,7 @@ let s = block_summary::<Optimism, _>(&eth_provider, BlockId::latest()).await?;
 1. \`block_summary\` は 1 関数本体。**Ethereum と Optimism の両方で具体化されたとき、コンパイラは何個の特殊化コピーを emit するか?** なぜそれが性能に重要か?
 2. \`Header\` は Ethereum と Optimism で再利用されるが、\`BlockResponse\` は異なる。**ドリル 1 のテーブルは *どんな種類のデータ* がオーバーライドを強制し、共有を許すかについて何を明らかにするか?**
 3. コンパイラは \`block_summary::<Optimism>(&eth_provider, ...)\` を拒否する。トレースする: どのトレイト境界が違反され、どの関連型の不一致がエラーを生むか?
-4. Polygon zkEVM を 3 つ目のチェーンとして追加したい場合、何を書くか?（ヒント: 新しい \`struct PolygonZkEvm; impl Network for PolygonZkEvm { ... }\`。)
+4. Polygon zkEVM を 3 つ目のチェーンとして追加したい場合、何を書くか?（ヒント: 新しい \`struct PolygonZkEvm; impl Network for PolygonZkEvm { ... }\` を書く。）
 
 このドリルの後、本番インデクサとエクスプローラが出荷するのと同じ形のマルチチェーンツールを出荷した: 1 つのコア関数、\`N: Network\` 上ジェネリック、コンパイル時にチェーンごとに特殊化。**次のチェーン: \`Signer\` モデル — alloy が署名、ガス、nonce 充填を層状の Provider に合成する仕組み。**`,
                 },
@@ -1526,7 +1526,7 @@ fn sign_tx(privkey: B256, mut tx: TypedTransaction) -> Result<TxEnvelope> {
 
 関数。ハードコードされた \`B256\` 秘密鍵。ハードコードされた \`TypedTransaction\`（Ethereum 型）。ハードコードされた \`secp256k1_sign\`（プロセス内、sync、I/O なし）。
 
-> 🛑 **予測。** スクロールせずに: このナイーブ設計が失敗する本番シナリオを 3 つ挙げる。（ヒント: 各々が *異なるカテゴリ* の署名 — どれもプロセス内に生秘密鍵を持っていない。)
+> 🛑 **予測。** スクロールせずに: このナイーブ設計が失敗する本番シナリオを 3 つ挙げる。（ヒント: 各々が *異なるカテゴリ* の署名 — どれもプロセス内に生秘密鍵を持っていない。）
 
 3 つ:
 
@@ -1598,7 +1598,7 @@ async fn sign_transaction(&self, tx: TypedTransaction) -> Result<TxEnvelope> { .
 必要なこと:
 
 1. tx の型に従ってエンコード（Legacy / EIP-1559 / その他）
-2. そのエンコードをハッシュ化（*署名ハッシュ*、*トランザクションハッシュ* とは別物)
+2. そのエンコードをハッシュ化（*署名ハッシュ*、*トランザクションハッシュ* とは別物）
 3. ハッシュに署名
 4. 署名を取り付けて \`TxEnvelope\` を生成
 
@@ -2112,7 +2112,7 @@ async fn main() -> eyre::Result<()> {
 
 \`cargo run\`。署名者のアドレス、続いてマッチする回復アドレスが見えるはず。
 
-> 🛑 **質問（書き留める):** \`signer.sign_hash(&hash)\` は \`Result<Signature>\` を返す。\`Signature\` は alloy の \`(r, s, v)\` タプル。**署名者は \`v\`（recovery バイト）を計算するために内部で何をしなければならなかったか?**
+> 🛑 **質問（書き留めてから先へ）:** \`signer.sign_hash(&hash)\` は \`Result<Signature>\` を返す。\`Signature\` は alloy の \`(r, s, v)\` タプル。**署名者は \`v\`（recovery バイト）を計算するために内部で何をしなければならなかったか?**
 
 \`PrivateKeySigner\` では、\`v\` は \`k256\` ECDSA recoverable 署名プリミティブから直接落ちてくる — secp256k1 sign-recoverable 関数が署名の一部としてそれを返す。**追加作業なし。** これが \`PrivateKeySigner::sign_hash\` が暗号 1 行である理由: \`(r, s, v) = k256::sign_recoverable(privkey, hash)\`。
 
@@ -2178,7 +2178,7 @@ recipient balance: 1000000000000000000
 
 \`with_recommended_fillers()\` + \`.wallet(signer)\` 呼び出しが 4 つの \`TxFiller\` をチェーンに重ねた。\`send_transaction\` が何かを送信できる前に、各 filler は流出する \`TransactionRequest\` 上でスタック順に実行された。
 
-> 🛑 **予測（スクロール前に書き留める):** あなたの \`TransactionRequest::default().with_to(recipient).with_value(value)\` は \`to\` と \`value\` のみを設定した。レシートは tx が nonce、gas limit、gas price（または maxFeePerGas)、chain_id、署名を持っていたことを示す。**各欠損フィールドについて、*どの filler* がそれを埋めたか、*どんなアクション* を取ったかを挙げる。**
+> 🛑 **予測（スクロール前に書き留める）：** あなたの \`TransactionRequest::default().with_to(recipient).with_value(value)\` は \`to\` と \`value\` のみを設定した。レシートは tx が nonce、gas limit、gas price（または maxFeePerGas)、chain_id、署名を持っていたことを示す。**各欠損フィールドについて、*どの filler* がそれを埋めたか、*どんなアクション* を取ったかを挙げる。**
 
 4 つの filler とそのアクション:
 
@@ -2278,7 +2278,7 @@ expected (), found
                       question: "\`Network\` はトレイト上の 10 ジェネリックパラメータではなく 10 個の *関連型*（TxType、TxEnvelope、TransactionRequest、TransactionResponse、ReceiptEnvelope、ReceiptResponse、Header、HeaderResponse、BlockResponse、UnsignedTx）を使う。Network 上ジェネリックなコードに対する荷重を担う利点は?",
                       options: [
                         "関連型はジェネリックパラメータより高速にコンパイルされる。",
-                        "凝集性 + 簡潔性: 関連型は「これらは一緒に行く」をグループ化する（Ethereum の TxRequest は Ethereum の TxEnvelope とペアにならなければならず、Optimism のとは決してペアにならない)、加えて呼び出し側は 10 個の生ジェネリックではなく 1 つのパラメータ（\`<N: Network>\`）だけを綴る。",
+                        "凝集性 + 簡潔性: 関連型は「これらは一緒に行く」をグループ化する（Ethereum の TxRequest は Ethereum の TxEnvelope とペアにならなければならず、Optimism のとは決してペアにならない）、加えて呼び出し側は 10 個の生ジェネリックではなく 1 つのパラメータ（\`<N: Network>\`）だけを綴る。",
                         "ジェネリックパラメータはトレイトメソッドシグネチャでは使用できず、トレイト本体でのみ使用できる。",
                         "関連型は \`dyn Trait\` をサポートする; ジェネリックパラメータはしない。",
                       ],

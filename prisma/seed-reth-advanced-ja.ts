@@ -179,7 +179,7 @@ for stage in &mut stages {
 
 ## ステップ 2 — \`Stage\` の最初の試案
 
-> 🛑 **予測。** トレイトをスケッチしてください。オーケストレータが呼ぶメソッドは? ステージは何を返す? 推測を保持。
+> 🛑 **予測。** トレイトをスケッチしてください。オーケストレータが呼ぶメソッドは? ステージは何を返す? 予想を立ててから先へ。
 
 最初の試み:
 
@@ -509,7 +509,7 @@ cd reth
 
 ## ドリル 1 — \`Stage\` 実装を見つける
 
-> 🛑 **スクロールする前に予測。** \`SenderRecoveryStage::execute\` は何をする、一文で? 中の「計算」は? その周りの「I/O」は? 文を保持して。
+> 🛑 **スクロール前に予測。** \`SenderRecoveryStage::execute\` は何をする、一文で? 中の「計算」は? その周りの「I/O」は? 文を書き留めてから先へ。
 
 ファイルを開く。\`impl<Provider> Stage<Provider> for SenderRecoveryStage\` を見つける。\`execute\` メソッドが目標。
 
@@ -1558,7 +1558,7 @@ flowchart TB
 
 それぞれに \`*Builder\` トレイト（\`PoolBuilder\`、\`NetworkBuilder\` 等）があり、SDK が \`.launch()\` 中に呼んで実際のサブシステムを構築する。
 
-> 🛑 **予測。** これら 6 コンポーネントの中で、Hyperliquid が HyperEVM 用に最も大きくカスタマイズしたのはどれ? Tempo が payments 用に最も大きくカスタマイズしたのはどれ? 両方の予想を保持。
+> 🛑 **予測。** これら 6 コンポーネントの中で、Hyperliquid が HyperEVM 用に最も大きくカスタマイズしたのはどれ? Tempo が payments 用に最も大きくカスタマイズしたのはどれ? 両方の予想を書き留めてから先へ。
 
 ## Hyperliquid HyperEVM — 何を差し替えているか
 
@@ -1707,7 +1707,7 @@ cd reth/examples/custom-node-components
 
 \`src/main.rs\` を開く。例はちょうど 1 つのコンポーネント \`pool\` を上書きする。\`CustomPoolBuilder\` 構造体とその \`PoolBuilder\` 実装を見つける。
 
-> 🛑 **予測。** \`CustomPoolBuilder::build_pool\` は何をする、一文で? 推測を保持。
+> 🛑 **予測。** \`CustomPoolBuilder::build_pool\` は何をする、一文で? 予想を立ててから先へ。
 
 実装をスキム。3 セクションを特定:
 

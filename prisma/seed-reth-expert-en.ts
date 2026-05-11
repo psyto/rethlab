@@ -8,10 +8,10 @@ export async function seedRethExpertEN(prisma: PrismaClient) {
       slug: 'reth-expert-en',
       title: 'Reth Expert — Production Engineering',
       description:
-        'Hardcore systems work: profiling and cache-aware Rust, MDBX storage internals, Tokio runtime, procedural macros, custom precompiles, Merkle Patricia Trie, MEV in production, zkEVM, and shipping a custom Reth fork.',
+        'Hardcore systems work: profiling and cache-aware Rust, MDBX storage internals, Tokio runtime, procedural macros, custom precompiles, Merkle Patricia Trie, MEV in production, zkEVM, shipping a custom Reth fork, and reading Reth-based chains (op-stack, alphanet, Tempo) via the extension pattern.',
       difficulty: 'EXPERT',
-      duration: 180,
-      xpReward: 500,
+      duration: 290,
+      xpReward: 815,
       track: 'reth-expert',
       tags,
       isPublished: true,
@@ -1535,6 +1535,704 @@ A final stress test on the production engineering layer.`,
                       ],
                       correctIndex: 1,
                       explanation: 'BFT safety needs a quorum across failure domains — single-DC (option 1) and single-region (option 3) collapse on one fault. Two validators (option 4) cannot tolerate any byzantine behavior. The realistic minimum is geographic distribution + sentry separation + dedicated RPC fleet, because one DDoS on a public RPC must not halt consensus.',
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            title: 'Reth-based Chains — Reading the Extension Pattern',
+            sortOrder: 2,
+            lessons: {
+              create: [
+                {
+                  title: 'The Reth extension pattern — library, not fork',
+                  slug: 'reth-extension-pattern-en',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 14,
+                  xpReward: 40,
+                  content: `# The Reth extension pattern — library, not fork
+
+If you've worked with **op-geth**, **bsc-geth**, or **bor** (Polygon), you know the geth-fork story: clone the upstream, apply your patches, rebase forever. Every upstream merge is a weekend of conflict resolution, and the audit surface drifts away from mainline.
+
+**Reth was designed to make this model obsolete.** Optimism, Base, Berachain, Scroll, Seismic, Sova, alphanet, and Tempo all run on Reth — and almost none of them are forks in the traditional sense. They are *node crates* that **depend on reth as a library** and override the parts they care about via traits.
+
+> 🛑 **Predict before scrolling.** A geth-fork chain ships a critical security patch from upstream. The fork is 18 months out of date. **Estimate how long the rebase takes** and **list 3 ways the rebase can introduce its own consensus bug**. Hold your answer.
+
+## 1. The two models
+
+| Model | How it works | Cost over time |
+| :--- | :--- | :--- |
+| **Fork model** (geth-style) | Clone upstream, patch source, rebase periodically | Drift cost is **superlinear** — patches and upstream diverge, conflicts compound |
+| **Extension model** (reth-style) | Depend on reth crates, implement chain-specific traits in a separate crate | Drift cost is **localized** — your code changes only when trait signatures change |
+
+Reth's whole architecture is built around the second model. The NodeBuilder / components / ChainSpec pattern you saw in the Advanced course exists precisely so that **you never have to patch reth's source to ship a chain**.
+
+## 2. Why Paradigm chose this
+
+Paradigm builds Reth, alphanet, **and** Tempo. They are their own customer. Three forces pushed them toward the extension model:
+
+1. **Rebase pain is real.** Optimism's op-geth had a fork-divergence story bad enough that the org sponsored a rewrite — folded into reth itself as \`crates/optimism/\`.
+2. **Audit surface.** An auditor reading a fork has to diff against upstream and reason about every patch. An auditor reading a node crate sees one repo, one set of traits implemented.
+3. **Composability.** Berachain wants reth + custom consensus. Scroll wants reth + zk-friendly state. Seismic wants reth + encrypted txs. The extension model lets all three coexist; the fork model would force each to maintain their own divergent copy.
+
+The result: **reth's trait architecture is the API for building a chain.**
+
+## 3. What you actually customize
+
+A Reth-based chain typically overrides these slots:
+
+- **\`ChainSpec\`** — fork heights, gas params, precompile schedule, genesis
+- **\`ConfigureEvm\` / block execution strategy** — execution layer, custom precompiles, deposit-tx handling
+- **\`PayloadBuilder\`** — how blocks get produced (sequencer mode for L2s)
+- **Pool / mempool policy** — what txs are admitted, in what order
+- **Custom RPC namespaces** — exposing chain-specific endpoints via \`extend_rpc_modules\`
+- **Custom consensus** — for non-Ethereum-PoS chains
+
+Everything else (P2P, MDBX storage, staged sync, ExEx, trie commitments) **comes from reth for free**.
+
+> 🛑 **Anti-fluency.** Someone says "Berachain forked reth to add Proof-of-Liquidity." Why is the verb "forked" probably wrong, and what should it be? If you can't restate the sentence accurately, you don't have the model yet.
+
+## 4. Concrete examples to read
+
+Order them from "shipped to mainnet" → "R&D":
+
+1. **\`crates/optimism/\`** in [paradigmxyz/reth](https://github.com/paradigmxyz/reth/tree/main/crates/optimism) — Optimism / Base / Mode / OP Stack. The most production-tested extension on the planet.
+2. **[paradigmxyz/alphanet](https://github.com/paradigmxyz/alphanet)** — Paradigm's own OP-Stack testnet for trying custom precompiles (EIP-7212 P-256 verify, etc.) before they exist on mainnet.
+3. **[SovaNetwork/sova-reth](https://github.com/SovaNetwork/sova-reth)** — Reth as a Bitcoin execution layer.
+4. **[SeismicSystems/seismic-reth](https://github.com/SeismicSystems/seismic-reth)** — Reth with encrypted transactions.
+
+Each of these is a study in "what's the smallest patch the chain needs?" The answer is usually **a few thousand lines in a node crate**, not a fork of 200k lines of execution client.
+
+## 5. Why this matters for what you're building
+
+If you are building anything that touches a Reth-based chain — a bridge, a settlement layer, a custom node, a sequencer integration — you need to read at the **trait level**, not the binary level. The question "how does Tempo handle X?" reduces to "which trait does Tempo's node crate override, and how?"
+
+You don't need Tempo's source to start. The trait surface is **already in reth**, fully public. Once Tempo's node crate is published, reading it will be a matter of asking "which of these standard slots did they customize, and why?"
+
+## 6. Practice
+
+1. Open [reth's workspace Cargo.toml](https://github.com/paradigmxyz/reth/blob/main/Cargo.toml) and find every crate matching \`reth-optimism-*\`
+2. Note what each one owns (chainspec? evm? payload? rpc?)
+3. List the 6 customization slots you'd fill to ship a real chain
+4. Identify which one is "the consensus-rules-of-my-chain" slot
+
+You should now be able to read any Reth-based chain repo without flinching at the directory structure.
+
+> Final check: in one sentence, what is the structural reason a Reth-based chain rarely needs to patch reth's source? If your answer doesn't reference **trait-based extension** and **NodeBuilder composition**, the lesson hasn't stuck. Re-read sections 1 and 2.`,
+                },
+                {
+                  title: 'Reading op-stack-on-reth — the anatomy of a Reth-based L2',
+                  slug: 'reading-op-stack-on-reth-en',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 16,
+                  xpReward: 45,
+                  content: `# Reading op-stack-on-reth — the anatomy of a Reth-based L2
+
+Optimism is the canonical "Reth-based L2." Its node code lives at \`paradigmxyz/reth/crates/optimism/\`. If Tempo's node crate looked anything like this, you'd already know how to read it. So that's the goal of this lesson: **make the directory shape obvious.**
+
+> 🛑 **Predict before scrolling.** A new Reth-based L2 ships its node crate. **List the 5 subdirectories you'd expect** to see, and what each owns. If you cannot, stop and re-read the previous lesson.
+
+## 1. Where to look
+
+Browse: [paradigmxyz/reth → crates/optimism/](https://github.com/paradigmxyz/reth/tree/main/crates/optimism)
+
+You will see subcrates roughly along these lines (exact names drift across reth versions — verify in source):
+
+| Subdirectory | What it owns |
+| :--- | :--- |
+| \`chainspec/\` | OP chain spec — forks, genesis, gas params, precompile schedule |
+| \`node/\` | The top-level \`NodeBuilder\` wiring — "this is what an OP node is" |
+| \`evm/\` | EVM config — custom precompiles, deposit-tx semantics, L1 cost logic |
+| \`payload/\` | Payload builder — block production in sequencer mode |
+| \`consensus/\` | Consensus engine for OP (delegates finality to L1) |
+| \`rpc/\` | Custom RPC namespaces (\`optimism_*\` methods) |
+| \`txpool/\` (or similar) | Deposit-tx-aware mempool policy |
+| \`hardforks/\` | Bedrock, Canyon, Ecotone, Fjord, ... fork activation logic |
+
+> **Find-in-repo.** Don't trust the table above blindly. Navigate the actual repo and **make your own table**. Versions move — your table is what matters.
+
+## 2. The dependency shape
+
+Run \`cargo tree -p reth-optimism-node\` (the exact crate name varies; locate it in the workspace).
+
+What you'll see:
+
+- \`reth-optimism-node\` depends on \`reth-node-builder\`, \`reth-chainspec\`, \`reth-evm\`, \`reth-payload-builder\`, \`reth-rpc-builder\`, \`revm\`, \`alloy-*\`
+- It also depends on its OP-specific siblings: \`reth-optimism-chainspec\`, \`reth-optimism-evm\`, \`reth-optimism-payload-builder\`, ...
+- It does **not** depend on \`reth-node-ethereum\` — that's the parallel mainnet node crate
+
+**The pattern**: a chain's node crate is **siblings** with the Ethereum node crate, both consuming the same shared reth-core crates. That's the extension model in dependency form.
+
+## 3. The "spine" you should be able to find in 5 minutes
+
+For any Reth-based chain, you should be able to locate these five things in under 5 minutes of repo navigation:
+
+1. **NodeBuilder composition** — where the chain says "I want these components." Usually in \`*-node/src/lib.rs\` or \`node/builder.rs\`.
+2. **ChainSpec** — the consensus rule type. Usually in \`*-chainspec/src/\`.
+3. **Executor / EVM config** — usually in \`*-evm/src/\`.
+4. **Payload builder** — usually in \`*-payload-builder/src/\` or \`*-payload/src/\`.
+5. **Genesis JSON** — sometimes inline in the chainspec crate, sometimes a separate \`.json\`.
+
+If you can find those, you can read the chain.
+
+> 🛑 **Anti-fluency.** You found a file called \`node.rs\` with a type \`OpNode\`. Where do you go next to understand what an \`OpNode\` **is** versus what it **does**? **Predict** the trait it implements before you scroll.
+
+## 4. Reading order for a first pass
+
+Recommended sequence when reading any Reth-based chain for the first time:
+
+1. **\`README.md\`** + **\`Cargo.toml\`** at the chain root — establish what crates exist
+2. **\`chainspec/\`** — read the fork activation list out loud
+3. **\`node/\`** — read the NodeBuilder composition; this tells you what's customized
+4. **Each customized component crate**, in the order it was named in the NodeBuilder
+5. **Tests** — especially state-transition tests; they encode the actual behavioral commitments
+
+By the end of step 3 you know **what's different**. Steps 4–5 are reading the *how*.
+
+## 5. What Tempo will probably look like
+
+Working hypothesis (until Paradigm publishes Tempo's node crate):
+
+- A \`tempo-chainspec\` crate with Tempo's fork heights, gas params, payment-specific precompiles
+- A \`tempo-node\` crate composing the NodeBuilder
+- A \`tempo-evm\` crate with custom precompiles for payment primitives (FX rate oracle? settlement-proof verify? regulated-asset check?)
+- A \`tempo-payload-builder\` crate for the sequencer
+- A \`tempo-pool\` crate for payment-specific mempool policy (e.g., merchant authorization)
+- Optional: \`tempo-consensus\` if Tempo doesn't use vanilla L1-anchored finality (it's an L1, so almost certainly yes)
+
+When this lands, you read it the same way you'd read \`crates/optimism/\`.
+
+## 6. Practice
+
+Pick a Reth-based chain. Browse its repo. **Build the table in §1 for that chain.**
+
+Candidates ranked by reading quality:
+- \`paradigmxyz/reth/crates/optimism/\` (largest, most polished)
+- \`paradigmxyz/alphanet\` (smaller, R&D-flavored — easier to read end-to-end)
+- \`SovaNetwork/sova-reth\` (Bitcoin angle — different chainspec shape)
+
+> Final check: in two sentences, describe **the shape of a Reth-based chain repo**, in words that would let a new hire find anything in 10 minutes. If you start with "it has a folder," start over and lead with the *concept* (extension via traits + NodeBuilder composition).`,
+                },
+                {
+                  title: 'Custom ChainSpec — forks, genesis, and the precompile schedule',
+                  slug: 'custom-chainspec-en',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 14,
+                  xpReward: 40,
+                  content: `# Custom ChainSpec — forks, genesis, and the precompile schedule
+
+\`ChainSpec\` is the type that owns "what makes this chain different from mainnet Ethereum at the protocol level." If you're going to read or build a Reth-based chain, **this is the type you read first**.
+
+> 🛑 **Predict before scrolling.** "ChainSpec" sounds like config. **List 5 categories of information** you'd expect it to hold. If your list is shorter than 5 or all of them are gas-related, you're under-imagining what consensus rules touch.
+
+## 1. What ChainSpec is
+
+In \`reth-chainspec\`, \`ChainSpec\` is a struct (with various extensions in chain-specific crates) that captures:
+
+| Category | What it controls |
+| :--- | :--- |
+| **Chain ID** | EIP-155 replay protection key |
+| **Hardfork activation** | Block-height- or timestamp-based switches for protocol upgrades |
+| **Base fee params** | EIP-1559 parameters (elasticity, change denominator) |
+| **Genesis** | Initial allocations, state root, gas limit |
+| **Precompile schedule** | Which precompile addresses are active at each fork |
+| **Misc legacy params** | Block gas limits, DAO fork, mining difficulty (legacy) |
+
+For Reth-based L2s, the chain provides an *extended* ChainSpec — e.g., the OP chain spec wraps the base \`ChainSpec\` and adds OP-specific fork tracking (Bedrock, Canyon, Ecotone, Fjord, ...).
+
+> 🛑 **Find-in-repo.** Open \`crates/optimism/chainspec/\` and locate the exact type that represents an OP chain spec. Is it a struct around \`ChainSpec\`? A trait extension? **Both?** Don't read on until you've answered.
+
+## 2. The hardfork list as the chain's history
+
+Reading the hardfork enum out loud is the fastest way to understand a chain.
+
+For OP Stack you'll find an enum roughly like:
+
+\`\`\`rust
+pub enum OptimismHardfork {
+    Bedrock,
+    Regolith,
+    Canyon,
+    Ecotone,
+    Fjord,
+    Granite,
+    Holocene,
+    // ...
+}
+\`\`\`
+
+Each variant comes with **activation logic** (block height on mainnet, separate timestamp on each network like Sepolia, Base, etc.). Reading this enum + its activation table = reading the chain's entire protocol history.
+
+For Tempo, expect a similar enum. The names will be different, but the shape will be the same.
+
+## 3. The precompile schedule
+
+A precompile is a "native function" living at a reserved address (\`0x00..01\` through \`0x00..0a\` on mainnet, plus optional extras). Each chain decides which precompiles exist at which fork.
+
+OP Stack inherits most of Ethereum's precompiles and adds a few of its own. Future hardforks add more. The precompile schedule is essentially:
+
+\`\`\`
+At fork F, address A maps to native function impl I
+\`\`\`
+
+You'll find this in the chain's EVM config crate (covered in the next lesson), but the **activation gating** lives in ChainSpec — because activation is a consensus rule.
+
+> 🛑 **Anti-fluency.** Why must precompile activation live in ChainSpec rather than in the EVM config alone? If your answer is just "consistency," go deeper. **What goes wrong if two nodes disagree on which precompile is active at block N?**
+
+## 4. Genesis encoding
+
+Genesis is just "the state at block 0." A custom chain ships:
+
+- A genesis JSON file (allocations, gas limit, initial difficulty/seal)
+- A \`Genesis\` Rust struct in the chainspec crate, often loadable from the JSON
+- A computed genesis state root that all nodes must agree on
+
+If you're auditing a chain, **verify the genesis state root in code matches the network**. Disagreement here means every node disagrees on block 1.
+
+## 5. What's special about an L2 chainspec
+
+L2 chainspecs (Optimism, Base, ...) also track:
+
+- **L1 chain ID** the L2 is anchored to (for cross-domain message verification)
+- **L1 block oracle** address on the L2 (the contract that records the current L1 block hash)
+- **Sequencer address** (for sequencer-signed batch validation)
+- **Withdrawal config** (the time delay for L2→L1 withdrawals)
+
+These don't apply to a Tempo-style L1, but illustrate the *kind* of thing that lives in an extended ChainSpec.
+
+## 6. Reading exercise
+
+In \`crates/optimism/chainspec/\` (or wherever the OP chainspec lives in your reth checkout):
+
+1. **Find** the struct that represents an OP chain spec
+2. **Read** its hardfork list out loud
+3. **Locate** the function that answers "is fork F active at block height H, timestamp T?"
+4. **Find** where Bedrock's activation block is hard-coded for OP mainnet vs Base
+
+Now do the same for any other chain in awesome-reth's "Layer 2" section.
+
+> Final check: if I asked you "what fork activation rule does chain X use at block N?", what files would you need to read, and in what order? If your answer is more than 2 files, you're over-complicating it — ChainSpec + the activation table is the whole story.`,
+                },
+                {
+                  title: 'Custom executor — swapping the execution layer',
+                  slug: 'custom-executor-en',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 18,
+                  xpReward: 45,
+                  content: `# Custom executor — swapping the execution layer
+
+The executor is "what actually runs the transactions and produces the post-state." For Ethereum mainnet, this is vanilla revm. For Optimism, it's revm **plus deposit-tx handling**, **plus L1 cost computation**, **plus a slightly different precompile list**. This lesson is about how Reth lets you swap that in.
+
+> 🛑 **Predict before scrolling.** A Reth-based L2 needs to execute "deposit transactions" — txs that originate on L1 and have no signature on L2. **At which layer does the L2 customize**: the mempool? The transaction validator? The executor? **Justify** before reading.
+
+## 1. The trait surface
+
+The relevant traits (names may drift slightly across reth versions; verify in source):
+
+- **\`ConfigureEvm\`** — given a block context, produce a configured revm instance (with the right precompile set, gas schedule, etc.)
+- **\`BlockExecutionStrategy\`** (or similar) — the loop that pulls txs from a block and feeds them to revm, accumulating receipts and state changes
+- **\`ExecutorBuilder\`** — the NodeBuilder slot that produces an executor for the running node
+
+A chain customizes the first two via trait impls in its own crate, then registers them via the third in its NodeBuilder.
+
+## 2. What Optimism overrides
+
+Reading \`crates/optimism/evm/\` will show you roughly:
+
+| Override | Why |
+| :--- | :--- |
+| **Custom precompile list** | OP adds a few precompiles (e.g., for L1 block hash access) |
+| **Deposit transaction handling** | Deposit txs skip signature verification (they're authenticated by L1) |
+| **L1 cost calculation** | Every OP tx pays both L2 gas AND an L1 data cost (calldata posting) |
+| **Pre-execution hooks** | Update the L1 block oracle storage slot before the first tx in a block |
+
+The first one is config. The other three are execution-strategy-level — they live in the block executor's main loop.
+
+> 🛑 **Find-in-repo.** Locate the exact function in \`crates/optimism/evm/\` that decides "this is a deposit transaction; skip signature verify." **What's the function signature?** (Don't memorize — just verify you can find it.)
+
+## 3. The custom-precompile story
+
+You wrote a custom precompile earlier. Now ask: **where does that precompile get plugged into a chain?**
+
+Answer: \`ConfigureEvm\` impls hand revm a precompile set. A chain's \`ConfigureEvm\` impl extends the default set with its custom precompiles, gated by the chain's hardfork schedule.
+
+So the wiring is:
+
+\`\`\`
+ChainSpec  ──[which fork is active?]──▶  EVM config  ──[active precompile set]──▶  revm
+\`\`\`
+
+The EVM config crate is where the precompile registration code physically lives.
+
+## 4. The L1 cost computation (and why it's a great example)
+
+OP Stack charges every transaction an *L1 data cost* — the amortized cost of posting the transaction's calldata to L1. This is a hard requirement: every node must compute the exact same L1 cost or block validation fails.
+
+It's implemented inside the executor by:
+1. Before each tx, look up the current L1 base fee and blob gas price from a known storage slot
+2. Compute \`l1_cost = calldata_gas * l1_base_fee + blob_overhead\`
+3. Deduct from the sender's balance **in addition to** the L2 gas charge
+4. Credit it to the fee vault
+
+This is a **clean example of consensus-critical logic that you cannot put in a precompile** — it has to be in the executor itself.
+
+> 🛑 **Anti-fluency.** Why can't OP's L1 cost charging be implemented as a precompile? If your answer is just "performance," go deeper — what's the **consensus reason** a precompile can't deduct from arbitrary accounts before tx execution?
+
+## 5. The execution loop, in pseudo-code
+
+\`\`\`
+for tx in block.body:
+    if is_deposit_tx(tx) and current_fork.allows_deposits():
+        skip_signature_verify()
+    else:
+        verify_signature(tx)?
+
+    db = state_provider.load_relevant_accounts(tx)
+    cfg = configure_evm(chainspec, block, db)   // sets precompiles, gas schedule
+    result = revm.transact(cfg, tx)
+    apply_l1_cost(tx, result, db)               // L2-specific
+    state.commit(result.state_changes)
+    receipts.push(result.receipt)
+return post_state_root(state), receipts
+\`\`\`
+
+For Ethereum mainnet, lines 3 and 9 disappear. **Everything else is identical.** That's the whole point of the extension model.
+
+## 6. For Tempo, what to expect
+
+Tempo is an L1, so:
+- No "deposit tx" concept (no parent chain to be deposited from)
+- No L1 cost charge
+
+But likely YES:
+- Custom precompiles for payment primitives (FX, settlement attestations, ...)
+- Pre-execution hooks if Tempo has a built-in "current FX rate" oracle slot, by analogy with OP's L1 block hash slot
+- A different fee market structure (Tempo is stablecoin-native; the fee-asset choice is interesting)
+
+When Tempo's executor crate is public, this is the file you read most carefully.
+
+## 7. Practice
+
+In \`crates/optimism/evm/\`:
+
+1. **Find** the \`ConfigureEvm\` impl for OP
+2. **List** every precompile address that's NOT on Ethereum mainnet
+3. **Find** the function that adds the L1 cost charge
+4. **Trace** how a deposit transaction bypasses signature verification
+
+> Final check: name the two things that **must** be in the executor (not in a precompile, not in the mempool) for a Reth-based chain, and explain why each must live there. If you can't, re-read sections 4 and 5.`,
+                },
+                {
+                  title: 'Custom payload builder — sequencer-mode block production',
+                  slug: 'custom-payload-builder-en',
+                  type: 'CONTENT',
+                  sortOrder: 4,
+                  duration: 16,
+                  xpReward: 45,
+                  content: `# Custom payload builder — sequencer-mode block production
+
+For Ethereum mainnet, blocks are produced by **validators** running the consensus client and pulling proposed payloads from the execution client. For an L2 or any centralized-sequencer chain, the block-production model is different: **the sequencer is the block producer**, full stop. The payload builder is the component that knows how.
+
+> 🛑 **Predict before scrolling.** On a centralized-sequencer L2, who/what decides **transaction ordering** inside a block? **What does the sequencer optimize for**, and what's the MEV implication? Hold your prediction.
+
+## 1. The trait surface
+
+\`PayloadBuilder\` (and friends) is the slot in reth's NodeBuilder for "how to build a block." It takes:
+
+- A parent block (where we're building from)
+- Current chain state
+- A pool of pending transactions
+- A timestamp / slot
+
+...and returns a built block (the "payload"). On mainnet, the validator's consensus client triggers this via the Engine API. On a sequencer L2, the sequencer triggers it directly.
+
+## 2. Two production-relevant builders
+
+The reth ecosystem has multiple payload builders to study:
+
+| Builder | Where | Use case |
+| :--- | :--- | :--- |
+| Default Ethereum builder | \`crates/payload/builder/\` | Mainnet validators |
+| OP payload builder | \`crates/optimism/payload/\` | OP Stack sequencer |
+| **op-rbuilder** | [paradigmxyz/rbuilder](https://github.com/paradigmxyz/rbuilder) | High-perf external block builder for OP Stack |
+
+The first two are inside reth. **op-rbuilder** is a separate repo, more aggressive about MEV and ordering policy, and is the production builder several OP Stack chains use.
+
+## 3. What an L2 builder does differently
+
+Sequencer-mode block production typically:
+
+1. **Force-includes deposit txs** at the top of the block (from a known L1 oracle queue)
+2. **Sorts the rest of the block** by either FIFO (first-come-first-serve) or priority-fee
+3. **Updates the L1 block oracle storage slot** as the first state write
+4. **Caps the block at the L2 gas limit** (not the mainnet limit)
+5. **Tags the block with the sequencer's signature** (some L2s commit to sequencer identity)
+
+Notice that several of these are **not in the executor** — they're in the *builder*. Why? Because the builder controls *what goes into a block*; the executor only runs *what's in a block*.
+
+> 🛑 **Anti-fluency.** A junior engineer says "we'll just FIFO the mempool and that's our sequencer." **Name 3 attacks** they haven't considered. (Hint: think about latency on tx submission, about toxic order flow, about reorg.)
+
+## 4. The MEV question
+
+A sequencer that orders transactions can extract MEV in ways a validator can't (it has no consensus competitor inside its block).
+
+Three positions a sequencer can take:
+
+| Position | What it means | Examples |
+| :--- | :--- | :--- |
+| **MEV-blind** | Strict FIFO, no peeking into tx semantics | Some smaller L2s claim this |
+| **MEV-aware, public** | Public order flow, builder accepts MEV-share-style bids | OP Stack with op-rbuilder |
+| **MEV-extracting** | Sequencer runs internal searchers | (Often opaque; centralized chains can do whatever they want) |
+
+The choice ends up in the **payload builder's source code**, gated by feature flags or external builder integrations. Reading a chain's payload builder is reading its MEV policy.
+
+## 5. op-rbuilder — the production-grade reference
+
+[paradigmxyz/rbuilder](https://github.com/paradigmxyz/rbuilder) is the external builder Paradigm built for OP Stack. Worth studying because:
+
+- It implements **bundle merging** (private order flow + public mempool)
+- It supports **sealing strategies** (greedy, parallelizable algorithms)
+- It exposes a **builder API** other parties can submit bundles to
+- It's the closest thing in the open-source world to a "real" production block builder
+
+If Tempo uses or extends op-rbuilder for sequencer-mode block production, this is the codebase to study first.
+
+## 6. For Tempo specifically
+
+Predictions:
+- Tempo will have a **payment-aware payload builder** — payments may get priority over generic txs
+- A **merchant authorization filter** at the builder level — only authorized merchants can submit certain tx types
+- A **rate limiter** on per-merchant tx volume to prevent abuse
+- Likely **no public mempool** at launch (sequencer-private)
+
+Each of those is one trait impl in a payload-builder crate.
+
+## 7. Practice
+
+Open \`crates/optimism/payload/\` and:
+
+1. **Find** the \`PayloadBuilder\` trait impl
+2. **Trace** how deposit txs get included at the top of the block
+3. **Identify** where the block gas cap is enforced
+4. **Find** the function that signs/seals the built block
+
+Then read [op-rbuilder's README](https://github.com/paradigmxyz/rbuilder) for the "external builder" model.
+
+> Final check: in one sentence, what does the payload builder **decide** that the executor does not? If your answer doesn't include the word "ordering" or "selection," go back and re-read section 3.`,
+                },
+                {
+                  title: "Case study — Paradigm's stack: alphanet, Tempo, and the L1 pattern",
+                  slug: 'paradigm-stack-case-study-en',
+                  type: 'CONTENT',
+                  sortOrder: 5,
+                  duration: 18,
+                  xpReward: 50,
+                  content: `# Case study — Paradigm's stack: alphanet, Tempo, and the L1 pattern
+
+You've now seen the four extension slots (ChainSpec, executor, payload builder, RPC) and the dependency shape of a Reth-based chain. This lesson is the **synthesis**: what does Paradigm's full stack look like, and what should you expect when Tempo's source goes public?
+
+> 🛑 **Predict before scrolling.** Paradigm has shipped, in order: **revm → alloy → reth → alphanet → op-stack-on-reth → Tempo**. **What's the trajectory** that sequence describes? Hold your answer; the lesson will compare.
+
+## 1. The stack, top to bottom
+
+| Layer | Component | What it does |
+| :--- | :--- | :--- |
+| **EVM core** | revm | The byte-level EVM interpreter |
+| **Toolkit** | alloy | Rust types, providers, signers, ABI |
+| **Execution client** | reth | Full Ethereum node — staged sync, mempool, RPC, MDBX, P2P |
+| **Reth-based chain** | reth's \`crates/optimism/\` | OP Stack execution as a reth node crate |
+| **R&D testnet** | alphanet | "What if Ethereum had EIP-X precompile?" playground |
+| **Production L1** | Tempo | Paradigm's payment rail |
+
+**Every layer below depends only on the layers above it.** That's the architectural invariant. Tempo doesn't fork reth — it builds *on* reth.
+
+## 2. alphanet — the precompile R&D playground
+
+[paradigmxyz/alphanet](https://github.com/paradigmxyz/alphanet) is an OP-Stack-compatible testnet rollup. Its explicit purpose: **try EVM extensions before they exist on mainnet**.
+
+Examples of what alphanet has shipped or experimented with:
+- **EIP-7212** — \`secp256r1\` (P-256) verification precompile (relevant for WebAuthn / Passkeys)
+- **EIP-3074 / 7702** — account abstraction primitives
+- Various opcode and gas tweaks
+
+Why this matters as a *learning target*: alphanet is **small enough to read end-to-end**, and the customizations are educational by design. It's the cleanest "how do I add a precompile to a chain" example in the wild.
+
+> 🛑 **Find-in-repo.** Open alphanet's repo and locate the file where the P-256 precompile is **registered with the chain**. (Not where the math is implemented — where it joins the chain's active precompile set.) **Why does it live there?**
+
+## 3. From alphanet to production
+
+The trajectory matters: alphanet is where Paradigm tries things, and then either:
+- The experiment graduates into **mainnet Ethereum** as an EIP (e.g., 7212 is on the path), or
+- The experiment graduates into **a production Reth-based chain** (e.g., Tempo)
+
+If you want to predict what Tempo has, **look at what's been validated in alphanet recently**. The technical lineage is direct.
+
+## 4. Tempo — Paradigm's payment L1 on Reth
+
+What we know with high confidence:
+- Tempo is a Paradigm-built payment-focused L1
+- Tempo runs on Reth (Paradigm builds both)
+- Tempo Moderato is the public testnet
+- Chainlink CCIP is the cross-chain rail (CCTP doesn't cover Tempo)
+
+What we should expect when the node crate is published:
+- **Custom ChainSpec** with Tempo-specific forks and precompile schedule
+- **Custom executor** with payment-specific precompiles (likely candidates: FX rate read, settlement attestation verify, regulated-asset check)
+- **Custom payload builder** with merchant-aware ordering and rate-limiting
+- **Custom RPC namespace** (\`tempo_*\` methods) for merchant/payment endpoints
+- **Custom mempool policy** — almost certainly private mempool at launch, restricted to authorized submitters
+
+What we should NOT expect:
+- A divergent fork of reth core
+- A bespoke EVM implementation (revm is the EVM)
+- A custom networking stack (reth's P2P is reused)
+
+## 5. The L1 vs L2 distinction in the extension model
+
+Reading op-stack-on-reth and (eventually) reading tempo-on-reth will look structurally similar but differ in:
+
+| Aspect | OP Stack (L2) | Tempo (L1) |
+| :--- | :--- | :--- |
+| **Deposit txs** | Yes (from L1) | No |
+| **L1 cost charge** | Yes | No |
+| **L1 block oracle slot** | Yes | No |
+| **Standalone consensus** | No (anchored to L1) | Yes (Tempo runs its own consensus) |
+| **Sequencer model** | Centralized at launch, decentralization roadmap | Likely centralized, payment-rail justification |
+| **Native asset** | ETH-equivalent | Likely USD stablecoin |
+
+The L1-ness of Tempo means **the consensus layer is also a customization point**, not just the execution layer. That's a slot most L2 chains skip.
+
+## 6. Why this matters for what you ship
+
+If you are building on top of Tempo:
+
+| Project | Why Reth-on-Tempo knowledge matters |
+| :--- | :--- |
+| Cross-VM intent matcher | Intent matching needs deterministic EVM semantics. Reading Tempo's executor crate tells you exact gas costs, precompile availability, and execution edge cases. |
+| Cross-chain settlement layer | Settlement proofs on the EVM side must match Tempo's state exactly. Reading Tempo's chainspec and executor gives you the source of truth. |
+| Merchant treasury / payment ops | Merchant operations need predictable confirmation semantics. Tempo's payload builder + mempool policy tells you when a tx becomes inclusion-final. |
+
+You are **months ahead** of anyone who shows up at Tempo's launch without having read reth at the trait level.
+
+## 7. Final practice
+
+The deliverable for this module: when Tempo's node crate goes public, you should be able to write a 1-page architectural summary within a single sitting by reading:
+
+1. The Tempo node crate's \`Cargo.toml\`
+2. The chainspec crate (hardforks + precompile schedule)
+3. The NodeBuilder composition in \`node/src/lib.rs\`
+4. Each crate listed in the NodeBuilder, in order
+5. The tests directory
+
+Practice this on alphanet **now**. When Tempo lands, you're ready.
+
+> Final check: name **5 specific hypotheses** about Tempo's source that you'd test the moment the repo is public, ranked by importance for your own work. If you can't list 5, this module hasn't fully landed — re-read sections 4 and 5.`,
+                },
+                {
+                  title: 'Quiz: did the extension pattern stick?',
+                  slug: 'reth-chains-quiz-en',
+                  type: 'QUIZ',
+                  sortOrder: 6,
+                  duration: 15,
+                  xpReward: 50,
+                  content: `# Quiz: did the extension pattern stick?
+
+A short test on the extension model and where each customization lives. No fluency — every question has a real "which trait / which crate" answer.`,
+                  quizQuestions: [
+                    {
+                      question: 'Why do most Reth-based chains use the extension model rather than the geth-style fork model?',
+                      options: [
+                        'Reth is faster than geth, so chains are forced to adopt it for performance',
+                        "Reth's modular trait architecture (NodeBuilder + ChainSpec + ExecutorBuilder + PayloadBuilder) lets a chain customize only the parts it needs while consuming the rest as a library — eliminating rebase cost",
+                        'Rust prevents source-level forking due to its module system',
+                        'Paradigm enforces an extension-only policy on all chains that use Reth',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Speed (option 1) is a happy side-effect, not the architectural reason. Rust does not prevent forking (option 3 is wrong). Paradigm enforces nothing on independent chains (option 4 is wrong). The real driver is the trait architecture — chains override the slots that matter and inherit the rest.',
+                    },
+                    {
+                      question: "Where does a Reth-based chain's hardfork activation logic live?",
+                      options: [
+                        'In the payload builder, because the builder is what produces blocks at each fork',
+                        'In ChainSpec — which fork is active at a given block height / timestamp is a consensus rule, and ChainSpec owns consensus rules',
+                        'In the executor, because forks change execution behavior',
+                        'In the genesis JSON, alongside the initial state allocations',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Multiple layers read the fork state, but only one owns it: ChainSpec. Builder (option 1) and executor (option 3) read fork state to make decisions, but they consult ChainSpec — they do not own activation. Genesis (option 4) is the *initial* state, not the fork schedule.',
+                    },
+                    {
+                      question: "OP Stack charges an L1 data cost in addition to L2 gas. Which trait's implementation contains that logic, and why?",
+                      options: [
+                        'A custom precompile, because precompiles are the natural place to put native fee logic',
+                        'The mempool policy, because the fee is calculated at admission time',
+                        'The block execution strategy / executor, because charging an account before tx execution is a consensus-critical state mutation that every node must compute identically',
+                        "The RPC layer, because clients need to know the L1 cost before they submit",
+                      ],
+                      correctIndex: 2,
+                      explanation: 'A precompile (option 1) cannot deduct from arbitrary accounts on its own — that requires executor-level authority. Mempool (option 2) might *estimate* the cost but cannot enforce consensus state changes. RPC (option 4) is informational, not consensus-critical. The executor is the only layer with both the authority and the consensus-critical position.',
+                    },
+                    {
+                      question: 'A Reth-based L2 needs to force-include deposit transactions at the top of every block. Which trait should handle that?',
+                      options: [
+                        "The ChainSpec — deposit handling is a chain rule",
+                        'The payload builder — it decides what goes into a block and in what order',
+                        'The mempool — deposit txs sit in a separate queue and the mempool drains them first',
+                        'Custom consensus — only consensus can enforce ordering',
+                      ],
+                      correctIndex: 1,
+                      explanation: "ChainSpec (option 1) defines *what* a deposit tx is, not how it's selected. Mempool (option 3) can track deposit queues but the *include-at-top* rule is a block-composition decision. Consensus (option 4) is overkill — selection is a builder concern, not a finality concern. The payload builder is the single component that decides block composition and order.",
+                    },
+                    {
+                      question: 'When you write a custom precompile for a Reth-based chain, where does the *registration* of that precompile happen?',
+                      options: [
+                        'In the precompile crate itself, via a static registry',
+                        "In the chain's EVM config (a ConfigureEvm impl), which hands revm the active precompile set — gated by the chain's hardfork schedule",
+                        "In reth's core, by editing the precompile dispatch table",
+                        'In the genesis JSON, as part of the initial code allocation',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Static registries (option 1) cannot be gated by chain rules. Editing reth core (option 3) is exactly the fork-model anti-pattern we are avoiding. Genesis (option 4) holds state, not protocol-level functions. The EVM config is the right slot: it joins ChainSpec (which fork?) with revm (what runs).',
+                    },
+                    {
+                      question: 'Which of the following best describes the relationship between alphanet and Tempo?',
+                      options: [
+                        'They are the same project under two names',
+                        'alphanet is the test deployment of Tempo',
+                        'alphanet is an R&D testnet where Paradigm validates EVM extensions (e.g., custom precompiles) that may later ship in production chains like Tempo or be proposed as Ethereum EIPs',
+                        'Tempo is built on alphanet, which is built on Reth',
+                        'They are unrelated except for shared maintainership',
+                      ],
+                      correctIndex: 2,
+                      explanation: 'alphanet is the playground; Tempo is a production rail. Option 1 and 2 conflate them. Option 4 has the dependency order wrong — both depend on Reth, not on each other. Option 5 is too weak: the technical lineage of precompile experiments is real and traceable.',
+                    },
+                    {
+                      question: "On a centralized-sequencer L2, what does the payload builder decide that the executor does not?",
+                      options: [
+                        'The payload builder decides gas pricing; the executor decides ordering',
+                        'The payload builder decides which transactions to include in the block and in what order; the executor merely runs whatever the builder hands it, in the given order',
+                        "They make identical decisions — the builder is a thin wrapper around the executor",
+                        'The payload builder validates signatures; the executor applies state changes',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Gas pricing (option 1 swap) is mostly chainspec, not builder vs executor. Identical (option 3) is wrong — the separation is the entire point. Signature validation (option 4) is at the executor / tx validator layer, not the builder. The clean split: builder = selection + ordering, executor = run-what-you-are-told.',
+                    },
+                    {
+                      question: 'You want to predict the structure of Tempo\'s node crate before it is published. Which of the following is the BEST source of structural priors?',
+                      options: [
+                        "Tempo's marketing site and announcement blog posts",
+                        "Reading geth's source to understand how payment-focused chains are typically built",
+                        "Reading reth's crates/optimism/ and paradigmxyz/alphanet as canonical examples of how Paradigm builds Reth-based chains, then mentally adjusting for L1 vs L2 differences",
+                        "Waiting until the source is published — speculation before then is unreliable",
+                      ],
+                      correctIndex: 2,
+                      explanation: 'Marketing (option 1) tells you positioning, not structure. Geth (option 2) is the opposite of the model Tempo will follow. Waiting (option 4) is a posture, not a strategy — and the priors from option 3 are very strong because Paradigm is the same org. Reading their existing Reth-based chains is the highest-signal preparation.',
                     },
                   ],
                 },

@@ -8,10 +8,10 @@ export async function seedRethExpertJA(prisma: PrismaClient) {
       slug: 'reth-expert-ja',
       title: 'Reth Expert — 本番エンジニアリング',
       description:
-        'ハードコアな実装：プロファイリングとキャッシュ意識のRust、MDBXストレージ内部、Tokioランタイム、手続きマクロ、カスタムPrecompile、Merkle Patricia Trie、本番MEVパイプライン、zkEVM、そして独自Rethフォークの運用。',
+        'ハードコアな実装：プロファイリングとキャッシュ意識のRust、MDBXストレージ内部、Tokioランタイム、手続きマクロ、カスタムPrecompile、Merkle Patricia Trie、本番MEVパイプライン、zkEVM、独自Rethフォークの運用、そして拡張パターン経由で Reth ベース chain (op-stack、alphanet、Tempo) を読む。',
       difficulty: 'EXPERT',
-      duration: 180,
-      xpReward: 500,
+      duration: 290,
+      xpReward: 815,
       track: 'reth-expert',
       tags,
       isPublished: true,
@@ -36,7 +36,7 @@ export async function seedRethExpertJA(prisma: PrismaClient) {
 
 Rethフォークを本番に出すか、Revmのホットパスをいじるなら、**プロファイリングとベンチマークは必須** です。早すぎる最適化は悪、ですが **「見えていない遅さ」はもっと悪い**。
 
-> 🛑 **スクロールする前に予測。** ジュニアエンジニアが「ノードが遅い気がする、HashMap を BTreeMap に置き換えてみよう」と言ってきました。**そのアプローチの問題点を 3 つ挙げてください。** リストを保持。
+> 🛑 **スクロール前に予測。** ジュニアエンジニアが「ノードが遅い気がする、HashMap を BTreeMap に置き換えてみよう」と言ってきました。**そのアプローチの問題点を 3 つ挙げてください。** 自分のリストを手元に残してから先へ。
 
 ## 1. 「測ってから直す」
 
@@ -177,7 +177,7 @@ RUSTFLAGS="-C target-cpu=native" cargo build --profile maxperf --bin reth
 
 1. **何かを変える前に必ず測る。** 「速くなった気がする」はデータではない。
 2. **プロファイラーが示すパスだけを最適化する。** それ以外は徒労。
-3. **変更後にもう一度測る。** コンパイラがあなたの手最適化を相殺することがある。
+3. **変更後にもう一度測る。** 手動の最適化がコンパイラの最適化と打ち消し合うこともある。
 
 > 最終チェック: 冒頭の「ジュニアエンジニアが HashMap を BTreeMap に置き換えたい」予測に戻る。**測定・プロファイリング・再検証** を挙げたか? 「BTreeMap は時に遅い」と挙げたなら、それも誤った推論 — 反対側で同じ間違い。**ポイントはどのコンテナかではなく、データなしには答えられない問いだということ。**
 
@@ -194,7 +194,7 @@ RUSTFLAGS="-C target-cpu=native" cargo build --profile maxperf --bin reth
 
 Rethはチェーン状態を **MDBX**（LMDBから派生したメモリマップB+treeのKVストア）に保存します。MDBXを理解できると「Rethを使える」から「Rethを拡張できる」に進化します。
 
-> 🛑 **スクロールする前に予測。** RocksDB は多くのブロックチェーンクライアントで支配的な KV ストア（geth、erigon の歴史的に）。**Reth はなぜ代わりに MDBX を選ぶのか?** 書き込みスループット・読み取りレイテンシ・クラッシュ安全性・mmap・コンパクションのいずれかを引いて仮説を立ててください。
+> 🛑 **スクロール前に予測。** RocksDB は多くのブロックチェーンクライアントで支配的な KV ストア（geth、erigon の歴史的に）。**Reth はなぜ代わりに MDBX を選ぶのか?** 書き込みスループット・読み取りレイテンシ・クラッシュ安全性・mmap・コンパクションのいずれかを引いて仮説を立ててください。
 
 ## 1. なぜMDBX（LevelDB / RocksDBではなく）？
 
@@ -208,7 +208,7 @@ Rethはチェーン状態を **MDBX**（LMDBから派生したメモリマップ
 
 Ethereumは **読み取り重く・レイテンシ敏感** なので、コンパクションでストールするLSMは validator や同期にとって致命的。MDBXのほうが噛み合います。
 
-> 🛑 **理解度チェック。** LSM ツリーの **コンパクション** とは何? なぜ読み取りをストールさせる? B+tree はコンパクションしない — 代わりに何をやって空間を回収する? 各 2 文で答えられないなら、表を理解せずに信じています。
+> 🛑 **理解度チェック。** LSM ツリーの **コンパクション** とは何? なぜ読み取りをストールさせる? B+tree はコンパクションしない — 代わりに何をやって空間を回収する? 各 2 文で答えられないなら、表を理解せずに鵜呑みにしているだけです。
 
 ## 2. Rethの本物の \`Database\` トレイト
 
@@ -288,7 +288,7 @@ fn cursor_dup_write<T: DupSort>(&self) -> Result<Self::DupCursorMut<T>, Database
 
 ### \`disable_long_read_transaction_safety\`
 
-実用的なエルゴノミクス。長い読み取りtxはGCをブロックしDBを膨らませる。Rethは通常、開きすぎた読み取りtxを中止する。**本当に** 長いスナップショットが必要な時だけ設定する（コストを受け入れて）。
+実用的なエルゴノミクス。長い読み取りtxはGCをブロックしDBを膨らませる。Rethは通常、開きすぎた読み取りtxを中止する。**本当に** 長いスナップショットが必要な時だけ設定する（コストを承知のうえで）。
 
 ## 4. ホットパスで重要な理由
 
@@ -325,7 +325,7 @@ Rethのテーブル設計は、Executionステージの読み取り（アカウ�
 
 \`#[tokio::main]\` と \`.await\` を書いてきました。次は **実際に何が起きているか**。
 
-> 🛑 **スクロールする前に予測。** \`async fn foo() { bar().await; }\` を書く。コンパイラは *何か具体的なもの* を生成する。**それは何?** 具体的に：
+> 🛑 **スクロール前に予測。** \`async fn foo() { bar().await; }\` を書く。コンパイラは *何か具体的なもの* を生成する。**それは何?** 具体的に：
 > - 結果の型はどのトレイトを実装する?
 > - 通常の関数呼び出しと比較した実行時コストは?
 > - \`await\` 点を跨いだローカル変数はどこに置かれる?
@@ -461,12 +461,12 @@ where
 
 \`address!("0xabc...")\` は関数呼び出しに見えますが **コンパイル時に走ります**。\`sol! { contract IERC20 { ... } }\` も同じ。
 
-> 🛑 **スクロールする前に予測。** \`address!("0xabc123...")\` を書いたとき：
+> 🛑 **スクロール前に予測。** \`address!("0xabc123...")\` を書いたとき：
 > - hex のパースは **どこ** で起きる — コンパイル時か実行時か?
 > - コンパイル時なら、Rust コンパイラの **どのツール** がそれをやる?
 > - \`address!("0xZZZ")\` を書いたら、どんなエラーが出る?
 >
-> 推測を保持して。このレッスンには \`address!\` について、世間の説明と意見を異にするサプライズが少なくとも 1 つあります。
+> 予想を立ててから先へ。このレッスンには \`address!\` について、世間の説明と意見を異にするサプライズが少なくとも 1 つあります。
 
 ## 1. 3種類
 
@@ -595,7 +595,7 @@ let balance = IERC20::new(token, &provider).balanceOf(owner).call().await?;
 ## 5. proc macro を書くべき場面
 
 - **何度も同じ定型コード** がコンパクトな1行マクロに圧縮できるとき
-- **コンパイル時バリデーション** ができるとき（例：address のバース）
+- **コンパイル時バリデーション** ができるとき（例：address のパース）
 - **DSL 級の使い心地** に値する規模感のとき
 
 「1回しか書かない5行を浮かせる」ためには書かない。
@@ -630,9 +630,9 @@ cargo expand --bin my_app
                   xpReward: 35,
                   content: `# カスタムPrecompile
 
-カスタム **Opcode** は新しいEVM命令を追加します。カスタム **Precompile** は通常のコントラクトのように呼び出せるネイティブRust関数を追加します。Precompile のほうが **侵襲が小さく** 、ほとんどのツーリングと共存できます。
+カスタム **Opcode** は新しいEVM命令を追加します。カスタム **Precompile** は通常のコントラクトのように呼び出せるネイティブRust関数を追加します。Precompile のほうが **既存ツーリングへの影響が小さく**、ほとんどのツールと共存できます。
 
-> 🛑 **スクロールする前に予測。** カスタム *Opcode* はメインネットとのコンセンサスを破る (Advanced で見た通り)。カスタム *Precompile* は破らない — 同じく vanilla EVM になかった新コードなのに。**なぜ答えが違う?** EVM バイトコードパーサーを引いて仮説を立ててください。
+> 🛑 **スクロール前に予測。** カスタム *Opcode* はメインネットとのコンセンサスを破る (Advanced で見た通り)。カスタム *Precompile* は破らない — 同じく vanilla EVM になかった新コードなのに。**なぜ答えが違う?** EVM バイトコードパーサーを引いて仮説を立ててください。
 
 ## 1. Opcode vs Precompile
 
@@ -808,7 +808,7 @@ address(uint160(uint256(keccak256("hevm cheat code"))))
 
 Ethereum の状態は **Merkle Patricia Trie (MPT)** に住んでいます。これを理解すると、stateRoot・ライトクライアント・witness の理屈が全部つながり、自分で実装できるようになります。
 
-> 🛑 **スクロールする前に予測。** あなたは「アカウント X の残高は Y」を **暗号学的に証明したい** — フル状態を持たず、信頼済み 32 バイトのルートだけ持つ検証者に対して。**プロトコルをスケッチしてください。** 検証者に何を送る? 検証者は何をハッシュする? どうやって proof or rejection を結論する?
+> 🛑 **スクロール前に予測。** あなたは「アカウント X の残高は Y」を **暗号学的に証明したい** — フル状態を持たず、信頼済み 32 バイトのルートだけ持つ検証者に対して。**プロトコルをスケッチしてください。** 検証者に何を送る? 検証者は何をハッシュする? どうやって proof or rejection を結論する?
 >
 > 3-4 行書いてから、レッスンを読んで何を取りこぼしたか確認。
 
@@ -976,7 +976,7 @@ crates/trie/
 
 MEV（Maximal Extractable Value）はシステムエンジニアリング × ゲーム理論。本気のサーチャー／ビルダーパイプラインが2026年現在どう構築されているか整理します。
 
-> 🛑 **スクロールする前に予測。** Ethereum のブロックタイムは 12 秒。**にもかかわらず本気の MEV パイプラインは end-to-end で <100ms を狙う。** なぜ予算がそこまでタイトなのか? 残りの ~11.9 秒を何が食う? 競争・ネットワーク伝播・ブロックプロポーザータイミングのいずれかを引いて仮説を立ててください。
+> 🛑 **スクロール前に予測。** Ethereum のブロックタイムは 12 秒。**にもかかわらず本気の MEV パイプラインは end-to-end で <100ms を狙う。** なぜ予算がそこまでタイトなのか? 残りの ~11.9 秒を何が食う? 競争・ネットワーク伝播・ブロックプロポーザータイミングのいずれかを引いて仮説を立ててください。
 
 ## 1. パイプライン
 
@@ -1130,7 +1130,7 @@ ExEx はゼロレイテンシで **すべてのブロック** を受け取りま
 
 zkEVM は「このブロックは正しく実行された」を再実行なしで証明します。Revm はプローバが消費する **EVM正準実装**。仕組みを整理します。
 
-> 🛑 **スクロールする前に予測。** Risc0 と SP1 は Ethereum 実行を zkVM 内で証明するのに **Revm** を使い、geth は使わない。**zkVM 内で使うのに Revm が正しい選択である性質を 3 つ挙げてください。** (ヒント: zkVM が罰するもの — 非決定性、syscall、巨大バイナリ、動的ディスパッチ。Revm はこれらすべてに優しい。)
+> 🛑 **スクロール前に予測。** Risc0 と SP1 は Ethereum 実行を zkVM 内で証明するのに **Revm** を使い、geth は使わない。**zkVM 内で使うのに Revm が正しい選択である性質を 3 つ挙げてください。** (ヒント: zkVM が罰するもの — 非決定性、syscall、巨大バイナリ、動的ディスパッチ。Revm はこれらすべてに優しい。)
 
 ## 1. プルービングスタック
 
@@ -1298,7 +1298,7 @@ impl Database for WitnessDB {
 
 カスタムフォークを作りました。ここからはそれを **週末を食いつぶさず** 運用するための実務チェックリスト。
 
-> 🛑 **スクロールする前に予測。** あなたはフォークを **デフォルトの \`cargo build --release\`** でリリースする — jemalloc なし、asm-keccak なし、\`target-cpu=native\` なし。**1 週目、4 週目、3 ヶ月目** に見える本番症状をリストアップ。(ヒント: どの症状はゆっくり忍び寄る? どれは即ヒットする?)
+> 🛑 **スクロール前に予測。** あなたはフォークを **デフォルトの \`cargo build --release\`** でリリースする — jemalloc なし、asm-keccak なし、\`target-cpu=native\` なし。**1 週目、4 週目、3 ヶ月目** に見える本番症状をリストアップ。(ヒント: どの症状はゆっくり忍び寄る? どれは即ヒットする?)
 
 ## 1. ビルド & リリースパイプライン
 
@@ -1435,7 +1435,7 @@ for block in mainnet[recent_1000]:
                         'ホットループを std::simd 組み込みでベクトル化する',
                       ],
                       correctIndex: 2,
-                      explanation: '早すぎる最適化は悪、見えない遅さはもっと悪い。他の 3 つの選択肢はそれぞれ本物の・擁護可能な最適化 — しかし測定なしに適用するのが、このレッスンが防ごうとする失敗モードそのもの。',
+                      explanation: '早すぎる最適化は悪、見えない遅さはもっと悪い。他の 3 つの選択肢はそれぞれ本物の擁護可能な最適化 — しかし測定なしに適用するのが、このレッスンが防ごうとする失敗モードそのもの。',
                     },
                     {
                       question: 'Tokio ランタイム内で CPU 重い処理をやる正しい方法は？',
@@ -1501,7 +1501,7 @@ for block in mainnet[recent_1000]:
                         'OS スケジューラが予約した CPU コアで動き、他のワークロードがプリエンプトできない',
                       ],
                       correctIndex: 1,
-                      explanation: 'ExEx は RPC エンドポイントではない (選択肢 1 を除外) — Rust コードへのコールバック。コンセンサスをバイパスできない; 通知が従うルールそのもの (選択肢 3 を除外)。Tokio スケジューリングは OS レベルの CPU pinning と関係ない (選択肢 4 を除外)。勝ちは各チェーンイベントで in-process レイテンシ。',
+                      explanation: 'ExEx は RPC エンドポイントではない (選択肢 1 を除外) — Rust コードへのコールバック。コンセンサスをバイパスできない; 通知が従うルールそのもの (選択肢 3 を除外)。Tokio スケジューリングは OS レベルの CPU pinning と関係ない (選択肢 4 を除外)。本領は各チェーンイベントで得られる in-process のレイテンシ。',
                     },
                     {
                       question: 'カスタム Precompile の価格設定で守るべき大原則は？',
@@ -1524,6 +1524,704 @@ for block in mainnet[recent_1000]:
                       ],
                       correctIndex: 1,
                       explanation: 'BFT 安全性は障害ドメイン跨ぎの定足数を要求 — 単一 DC (選択肢 1) と単一リージョン (選択肢 3) は 1 障害で崩壊。2 バリデータ (選択肢 4) はビザンチン振る舞いに耐えられない。現実的最低限は 地理分散 + sentry 分離 + 専用 RPC フリート、なぜなら公開 RPC への 1 度の DDoS でコンセンサスを止めてはいけないから。',
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            title: 'Reth ベースのチェーン — 拡張パターンを読む',
+            sortOrder: 2,
+            lessons: {
+              create: [
+                {
+                  title: 'Reth 拡張パターン — フォークではなくライブラリ',
+                  slug: 'reth-extension-pattern-ja',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 14,
+                  xpReward: 40,
+                  content: `# Reth 拡張パターン — フォークではなくライブラリ
+
+**op-geth**、**bsc-geth**、**bor** (Polygon) を触った経験があれば、geth-fork パターンの苦しみは知っているはずです。upstream をクローンしてパッチを当て、ずっと rebase し続ける。upstream マージのたびに週末がコンフリクト解消で潰れ、監査対象は徐々に mainline からドリフトしていく。
+
+**Reth はこのモデルを終わらせるために設計されました。** Optimism、Base、Berachain、Scroll、Seismic、Sova、alphanet、Tempo — これらはすべて Reth 上で動いていますが、従来の意味での "fork" はほぼ存在しません。いずれも **reth をライブラリとして依存する node crate** であり、必要な部分だけを trait で override する形になっています。
+
+> 🛑 **スクロール前に予測。** geth-fork のチェーンが、upstream から重大な security patch を取り込もうとしている状況を考えてください。fork は 18 ヶ月遅れ。**rebase にどれくらい時間がかかるか見積もり**、**rebase 自体が consensus bug を引き起こす経路を 3 つ** 挙げてください。
+
+## 1. 二つのモデル
+
+| Model | やり方 | 時間が経つほどのコスト |
+| :--- | :--- | :--- |
+| **Fork model** (geth 流) | upstream をクローン、ソースに patch、定期的に rebase | ドリフトコストは **超線形に増大** — パッチと upstream の距離が開き続け、コンフリクトが複利で効いてくる |
+| **Extension model** (reth 流) | reth crate に依存、chain 固有の trait を別 crate で実装 | ドリフトコストは **局所化** — trait のシグネチャが変わったときだけ手を入れれば済む |
+
+Reth のアーキテクチャ全体は二つ目のモデルを軸に組まれています。Advanced で見た NodeBuilder / components / ChainSpec パターンは、まさに **reth のソースを patch せずに chain を出荷する** ために存在しているのです。
+
+## 2. Paradigm がこのモデルを選んだ理由
+
+Paradigm は Reth、alphanet、**そして** Tempo のすべてを自社で開発しています。つまり自社が顧客でもある。三つの理由が拡張モデルを後押ししました。
+
+1. **Rebase の痛みは現実。** Optimism の op-geth はフォーク乖離が深刻化し、Optimism 自身が書き直しに資金を投じることになりました — その成果は今 \`crates/optimism/\` として reth 本体に統合されています。
+2. **監査の範囲。** Fork を読む監査人は upstream に対する diff を取り、すべての patch を一つひとつ理由づけしなければなりません。Node crate を読む監査人は repo を一つ、実装された trait の集合だけを見れば済みます。
+3. **コンポーザビリティ。** Berachain は reth + 独自 consensus を、Scroll は reth + zk-friendly state を、Seismic は reth + 暗号化 tx を必要としています。拡張モデルならこの 3 つが共存できますが、フォークモデルでは各々が独自の分岐コピーを保守し続けることになります。
+
+つまり: **reth の trait アーキテクチャ = chain を作るための API**。
+
+## 3. カスタマイズするのは何か
+
+Reth ベースの chain が典型的に override するスロット:
+
+- **\`ChainSpec\`** — fork 高、gas params、precompile schedule、genesis
+- **\`ConfigureEvm\` / block execution strategy** — 実行レイヤー、custom precompile、deposit tx 処理
+- **\`PayloadBuilder\`** — block 生成 (L2 の sequencer mode)
+- **Pool / mempool policy** — どの tx をどの順序で受け入れるか
+- **Custom RPC namespace** — \`extend_rpc_modules\` 経由で chain 固有のエンドポイントを公開
+- **Custom consensus** — Ethereum-PoS 以外の chain 向け
+
+それ以外 (P2P、MDBX storage、staged sync、ExEx、trie commitment) は **何もしなくても reth が提供してくれる**。
+
+> 🛑 **理解度チェック。** 誰かが「Berachain は Proof-of-Liquidity を入れるために reth を fork した」と言ったとします。なぜ "fork" という動詞がほぼ間違いで、どう言い直すべきか? 正しく言い換えられないなら、モデルがまだ入っていません。
+
+## 4. 読むべき具体例
+
+「mainnet 出荷済み」→「R&D」の順:
+
+1. **\`crates/optimism/\`** in [paradigmxyz/reth](https://github.com/paradigmxyz/reth/tree/main/crates/optimism) — Optimism / Base / Mode / OP Stack。世界で最も本番運用された extension。
+2. **[paradigmxyz/alphanet](https://github.com/paradigmxyz/alphanet)** — Paradigm 自身が運営する OP Stack 互換テストネット。mainnet に実装される前の custom precompile (EIP-7212 P-256 verify など) を試す場。
+3. **[SovaNetwork/sova-reth](https://github.com/SovaNetwork/sova-reth)** — Reth を Bitcoin の execution layer として動かす。
+4. **[SeismicSystems/seismic-reth](https://github.com/SeismicSystems/seismic-reth)** — 暗号化 tx 対応の Reth。
+
+いずれも「chain に必要な最小パッチは何か?」を考えるための題材になります。答えは大抵 **node crate 数千行で済む** — execution client 20 万行をフォークする必要はありません。
+
+## 5. 自分が作るものへの含意
+
+Reth ベース chain に触れるもの (bridge、settlement layer、custom node、sequencer integration など) を作るなら、**バイナリレベルではなく trait レベルで読む** 必要があります。「Tempo は X をどう処理するか?」という問いは、「Tempo の node crate がどの trait を override し、どう実装しているか?」に還元されます。
+
+Tempo のソースを待つ必要はありません。trait の境界はすでに **reth 側で完全公開** されています。Tempo の node crate が公開された時には、「この標準スロットのどれをカスタマイズし、なぜか?」を問うだけになります。
+
+## 6. 練習
+
+1. [reth ワークスペースの Cargo.toml](https://github.com/paradigmxyz/reth/blob/main/Cargo.toml) を開き、\`reth-optimism-*\` にマッチする crate をすべて探す
+2. それぞれが何を担当しているか (chainspec? evm? payload? rpc?) を確認
+3. 本番 chain を出荷するために埋めるべき 6 つのカスタマイズスロットを列挙
+4. その中で「自分の chain の consensus rule」を担うスロットを特定
+
+ここまでできれば、どんな Reth ベース chain repo もディレクトリ構造で怯まずに読めるはず。
+
+> 最終チェック: Reth ベース chain が reth のソースをほぼ patch せずに済む構造的理由を、1 文で答えてください。**trait-based extension** と **NodeBuilder composition** に触れていないなら、まだ定着していない — §1、§2 を再読。`,
+                },
+                {
+                  title: 'op-stack-on-reth を読む — Reth ベース L2 の解剖',
+                  slug: 'reading-op-stack-on-reth-ja',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 16,
+                  xpReward: 45,
+                  content: `# op-stack-on-reth を読む — Reth ベース L2 の解剖
+
+Optimism は「Reth ベース L2」の正典です。その node コードは \`paradigmxyz/reth/crates/optimism/\` にあります。Tempo の node crate がこれに似た構造で来るなら、すでに読める状態だということ。本レッスンの目的は、**ディレクトリ構造を自明にする** ことです。
+
+> 🛑 **スクロール前に予測。** 新しい Reth ベース L2 が node crate を出荷したとして、**そこに並ぶサブディレクトリを 5 つ** とそれぞれの担当を挙げてください。出てこなければ前レッスンに戻る。
+
+## 1. 見る場所
+
+ここを開く: [paradigmxyz/reth → crates/optimism/](https://github.com/paradigmxyz/reth/tree/main/crates/optimism)
+
+ざっくり以下のような sub-crate が並んでいるはず (正確な名前は reth のバージョンで揺れるので、ソースで確認すること):
+
+| Subdirectory | 担当 |
+| :--- | :--- |
+| \`chainspec/\` | OP chain spec — fork、genesis、gas params、precompile schedule |
+| \`node/\` | トップレベルの \`NodeBuilder\` 配線 — 「これが OP node である」を定義 |
+| \`evm/\` | EVM config — custom precompile、deposit tx semantics、L1 cost logic |
+| \`payload/\` | Payload builder — sequencer mode での block 生成 |
+| \`consensus/\` | OP の consensus engine (finality は L1 に委ねる) |
+| \`rpc/\` | Custom RPC namespace (\`optimism_*\` メソッド) |
+| \`txpool/\` (または類似) | Deposit-tx を認識する mempool policy |
+| \`hardforks/\` | Bedrock、Canyon、Ecotone、Fjord、... の fork activation logic |
+
+> **現物を確認。** 上の表を鵜呑みにせず、実際の repo を歩いて **自分で表を作り直してください**。バージョンは動きます — 自分の表だけが信頼できる。
+
+## 2. 依存関係の形
+
+\`cargo tree -p reth-optimism-node\` を実行してみる (正確な crate 名はワークスペースで確認)。
+
+見えるもの:
+
+- \`reth-optimism-node\` が依存しているもの: \`reth-node-builder\`、\`reth-chainspec\`、\`reth-evm\`、\`reth-payload-builder\`、\`reth-rpc-builder\`、\`revm\`、\`alloy-*\`
+- OP 固有の兄弟 crate にも依存: \`reth-optimism-chainspec\`、\`reth-optimism-evm\`、\`reth-optimism-payload-builder\`、…
+- \`reth-node-ethereum\` には **依存していない** — これは並列に存在する mainnet 用 node crate
+
+**パターン**: chain の node crate は Ethereum node crate と **兄弟関係** にあり、両者が共有の reth-core crate 群を消費している。これが依存関係として現れる extension model の姿です。
+
+## 3. 5 分で辿り着くべき「背骨」
+
+どの Reth ベース chain でも、以下の 5 つは 5 分以内に見つけられるはず:
+
+1. **NodeBuilder composition** — chain が「このコンポーネントを使う」と宣言している場所。大抵 \`*-node/src/lib.rs\` か \`node/builder.rs\`。
+2. **ChainSpec** — consensus rule を担う型。大抵 \`*-chainspec/src/\`。
+3. **Executor / EVM config** — 大抵 \`*-evm/src/\`。
+4. **Payload builder** — 大抵 \`*-payload-builder/src/\` か \`*-payload/src/\`。
+5. **Genesis JSON** — chainspec crate にインラインの場合と、独立した \`.json\` の場合がある。
+
+ここまで辿れれば、その chain は読めます。
+
+> 🛑 **理解度チェック。** \`node.rs\` というファイルに \`OpNode\` という型を見つけたとします。\`OpNode\` が **何であるか** と **何をするか** を理解するために、次にどこを見ますか? 実装している trait を **予測してから** スクロールしてください。
+
+## 4. 初回読書の順序
+
+新しい Reth ベース chain を初めて読むときの推奨シーケンス:
+
+1. **\`README.md\`** と **\`Cargo.toml\`** (chain ルート) — どの crate が存在するかを把握
+2. **\`chainspec/\`** — fork activation の一覧を声に出して読む
+3. **\`node/\`** — NodeBuilder composition を読み、どこがカスタマイズされているかを掴む
+4. **NodeBuilder で名前が出てきた順** に、各カスタマイズコンポーネント crate を読む
+5. **Tests** — 特に state-transition test。実際の振る舞いに対するコミットメントが符号化されている
+
+ステップ 3 が終わった時点で **何が違うか** はわかります。ステップ 4–5 は *どう違うか* を読む段階。
+
+## 5. Tempo はこう見えるはず
+
+作業仮説 (Paradigm が Tempo の node crate を公開するまで):
+
+- \`tempo-chainspec\` crate — Tempo の fork 高、gas params、決済固有の precompile
+- \`tempo-node\` crate — NodeBuilder composition
+- \`tempo-evm\` crate — 決済プリミティブの custom precompile (FX rate oracle? settlement-proof verify? regulated-asset check?)
+- \`tempo-payload-builder\` crate — sequencer 用
+- \`tempo-pool\` crate — 決済固有の mempool policy (merchant 認可など)
+- 任意: \`tempo-consensus\` — L1-anchored finality を使わない場合 (Tempo は L1 なので、ほぼ確実に "yes")
+
+これが出てきたときには、\`crates/optimism/\` と同じ要領で読めます。
+
+## 6. 練習
+
+Reth ベース chain を 1 つ選び、repo を歩いて **§1 の表をその chain ぶん作ってみる**。
+
+読みやすさ順の候補:
+- \`paradigmxyz/reth/crates/optimism/\` (規模最大、最も洗練されている)
+- \`paradigmxyz/alphanet\` (小ぶり、R&D 寄り — end-to-end で通読しやすい)
+- \`SovaNetwork/sova-reth\` (Bitcoin 視点 — chainspec の形が違う)
+
+> 最終チェック: **Reth ベース chain repo の形** を、新人が 10 分で何でも見つけられる言葉で 2 文にしてください。「フォルダがあって」から始めたらやり直し — *コンセプト* (trait による拡張 + NodeBuilder composition) から始める。`,
+                },
+                {
+                  title: 'Custom ChainSpec — fork、genesis、precompile schedule',
+                  slug: 'custom-chainspec-ja',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 14,
+                  xpReward: 40,
+                  content: `# Custom ChainSpec — fork、genesis、precompile schedule
+
+\`ChainSpec\` は「この chain が protocol レベルで mainnet Ethereum と何が違うか」を所有する型です。Reth ベース chain を読むときも書くときも、**最初に読むべき型** です。
+
+> 🛑 **予測。** "ChainSpec" という名前は config 風に聞こえますが、実際には何が入っているか **カテゴリを 5 つ** 予想してみてください。5 つに届かない、あるいは全部 gas 関連、というなら consensus rule が触れる範囲を過小評価しています。
+
+## 1. ChainSpec とは
+
+\`reth-chainspec\` の \`ChainSpec\` は (chain 固有 crate の拡張型も含めて) 以下を抱える struct です:
+
+| カテゴリ | 何を制御するか |
+| :--- | :--- |
+| **Chain ID** | EIP-155 の replay protection キー |
+| **Hardfork activation** | Protocol upgrade を切り替える block-height / timestamp ベースのスイッチ |
+| **Base fee params** | EIP-1559 のパラメータ (elasticity、change denominator) |
+| **Genesis** | 初期 allocation、state root、gas limit |
+| **Precompile schedule** | 各 fork でアクティブになる precompile アドレス |
+| **その他のレガシー params** | Block gas limit、DAO fork、mining difficulty (legacy) |
+
+Reth ベース L2 では、chain は *拡張された* ChainSpec を提供します — たとえば OP chain spec は base \`ChainSpec\` をラップし、OP 固有の fork 追跡 (Bedrock、Canyon、Ecotone、Fjord、…) を追加しています。
+
+> 🛑 **現物を確認。** \`crates/optimism/chainspec/\` を開いて、OP chain spec を表す正確な型を特定してください。\`ChainSpec\` のラッパー struct ですか? Trait 拡張? **その両方?** 答えが出るまで先に進まない。
+
+## 2. Hardfork のリスト = chain の歴史
+
+Hardfork enum を声に出して読むのが、chain を理解する最速の方法です。
+
+OP Stack ならおよそ以下のような enum が見つかるはず:
+
+\`\`\`rust
+pub enum OptimismHardfork {
+    Bedrock,
+    Regolith,
+    Canyon,
+    Ecotone,
+    Fjord,
+    Granite,
+    Holocene,
+    // ...
+}
+\`\`\`
+
+各 variant には **activation logic** が紐づいています (mainnet では block height、Sepolia や Base などの各ネットワークでは別の timestamp)。この enum と activation table を読むことが、すなわち chain のプロトコル史全体を読むこと。
+
+Tempo でも同じ形の enum が出てくるはず。名前は違っても、構造は同じです。
+
+## 3. Precompile schedule
+
+Precompile は予約アドレス (mainnet の \`0x00..01\` から \`0x00..0a\`、加えて任意の追加分) に存在する「ネイティブ関数」です。どの fork でどの precompile が存在するかは、各 chain が決めます。
+
+OP Stack は Ethereum の precompile の大半を継承し、独自のものを少し追加しています。今後の hardfork でさらに追加されていく。Precompile schedule は要するに以下の対応:
+
+\`\`\`
+Fork F において、アドレス A は ネイティブ関数 impl I にマップされる
+\`\`\`
+
+実体は chain の EVM config crate に置かれます (次レッスン) が、**activation の判定** は ChainSpec にあります — activation 自体が consensus rule だからです。
+
+> 🛑 **理解度チェック。** なぜ precompile の activation は EVM config 単独ではなく ChainSpec に置かねばならないのか? 答えが「一貫性のため」だけなら掘り下げが足りません。**block N でどの precompile がアクティブかを 2 つのノードが食い違って判定したら、何が壊れますか?**
+
+## 4. Genesis encoding
+
+Genesis は要するに「block 0 の state」。Custom chain が出荷するものは:
+
+- Genesis JSON ファイル (allocation、gas limit、初期 difficulty/seal)
+- chainspec crate 内の \`Genesis\` Rust struct (たいていは JSON からロード可能)
+- 計算済みの genesis state root — 全ノードが合意していないと成立しない
+
+chain を監査するなら、**コード上の genesis state root が実ネットワークと一致するか必ず検証** してください。ここで食い違えば、全ノードが block 1 で食い違います。
+
+## 5. L2 chainspec の特殊性
+
+L2 の chainspec (Optimism、Base、…) はさらに以下も追跡します:
+
+- **L1 chain ID** — L2 がアンカーされている先 (cross-domain message verification 用)
+- **L1 block oracle** address on L2 — 現在の L1 block hash を記録するコントラクト
+- **Sequencer address** — sequencer 署名つき batch の検証用
+- **Withdrawal config** — L2 → L1 withdrawal の時間遅延
+
+Tempo のような L1 にはこれらは適用されませんが、拡張された ChainSpec にどんな *種類* の情報が住むかという例として参考になります。
+
+## 6. 読解演習
+
+\`crates/optimism/chainspec/\` (または手元の reth チェックアウトの該当箇所) で:
+
+1. **特定**: OP chain spec を表す struct
+2. **音読**: hardfork のリストを声に出す
+3. **位置特定**: 「fork F は block height H、timestamp T でアクティブか?」に答える関数
+4. **発見**: OP mainnet と Base の Bedrock activation block がハードコードされている場所
+
+そのあと、awesome-reth の "Layer 2" セクションにある任意の chain で同じ作業をしてみてください。
+
+> 最終チェック: 「chain X が block N で使っている fork activation rule は?」と問われたら、どのファイルをどの順序で読みますか? 2 ファイルを超えるなら過剰 — ChainSpec と activation table、それだけで足ります。`,
+                },
+                {
+                  title: 'Custom executor — execution layer を差し替える',
+                  slug: 'custom-executor-ja',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 18,
+                  xpReward: 45,
+                  content: `# Custom executor — execution layer を差し替える
+
+Executor とは「実際に tx を実行して post-state を生成するもの」です。Ethereum mainnet では vanilla revm がそれにあたります。Optimism では revm に **deposit-tx 処理**、**L1 cost 計算**、**少し異なる precompile リスト** を足したものになる。本レッスンでは、Reth がこの実行レイヤーをどう差し替えさせてくれるかを見ていきます。
+
+> 🛑 **予測。** Reth ベース L2 が "deposit transaction" — L1 起源で L2 側には署名のない tx — を実行する必要があるとき、**L2 がカスタマイズするのはどの層** ですか? mempool? Transaction validator? Executor? **理由づけしてから** 読み進めてください。
+
+## 1. Trait の境界
+
+関連する trait (正確な名前は reth のバージョンで揺れるのでソースで確認):
+
+- **\`ConfigureEvm\`** — block コンテキストを受け取り、適切な precompile セット、gas schedule などを備えた revm インスタンスを構成
+- **\`BlockExecutionStrategy\`** (または類似) — block から tx を取り出して revm に流し、receipt と state change を蓄積していくループ
+- **\`ExecutorBuilder\`** — 動作中の node に executor を供給する NodeBuilder のスロット
+
+Chain は前者 2 つを自分の crate での trait impl でカスタマイズし、3 つ目を経由して NodeBuilder に登録します。
+
+## 2. Optimism が override しているもの
+
+\`crates/optimism/evm/\` を読むと、おおむね以下が見つかります:
+
+| Override | 理由 |
+| :--- | :--- |
+| **Custom precompile リスト** | OP は precompile をいくつか追加 (例: L1 block hash アクセス) |
+| **Deposit transaction の処理** | Deposit tx は署名検証をスキップ (L1 側で認証済みのため) |
+| **L1 cost 計算** | OP の tx はすべて、L2 gas に加えて L1 data cost を支払う |
+| **Pre-execution hook** | Block 内の最初の tx 実行前に、L1 block oracle の storage slot を更新する |
+
+最初の 1 つは config。残り 3 つは実行戦略レベルの話で、block executor のメインループに住みます。
+
+> 🛑 **現物を確認。** \`crates/optimism/evm/\` の中で「これは deposit tx だから署名検証をスキップ」と判断している関数を特定してください。**シグネチャは?** (記憶する必要はない — 見つけられればいい)。
+
+## 3. Custom precompile の話
+
+すでに custom precompile を書いた経験があるはず。問いは: **その precompile はどこで chain に組み込まれるのか?**
+
+答えは: \`ConfigureEvm\` impl が revm に precompile セットを手渡す。Chain の \`ConfigureEvm\` impl が、chain の hardfork schedule で gate された custom precompile をデフォルトセットに足していく形です。
+
+配線:
+
+\`\`\`
+ChainSpec  ──[どの fork がアクティブ?]──▶  EVM config  ──[アクティブな precompile set]──▶  revm
+\`\`\`
+
+precompile を登録するコードが物理的に住む場所が、この EVM config crate。
+
+## 4. L1 cost 計算 (なぜ良い例か)
+
+OP Stack は tx すべてに *L1 data cost* — その tx の calldata を L1 に投稿する分の償却コスト — を課金します。これは厳しい要求で、全ノードが寸分違わず同じ L1 cost を計算できないと block validation が失敗します。
+
+Executor 内では以下のように実装されます:
+1. 各 tx の実行前に、既知の storage slot から現在の L1 base fee と blob gas price を読み出す
+2. \`l1_cost = calldata_gas * l1_base_fee + blob_overhead\` を計算
+3. L2 gas の課金に **加えて** 送信者の残高から控除
+4. Fee vault に入金
+
+これは **precompile には収まらない consensus-critical なロジック** の典型例 — executor 自体に置く以外ない。
+
+> 🛑 **理解度チェック。** OP の L1 cost charging はなぜ precompile として実装できないのか? 答えが「performance のため」だけなら掘り下げが足りません — precompile が tx 実行前に任意のアカウントから控除できない **consensus 上の理由** は何ですか?
+
+## 5. Execution loop を擬似コードで
+
+\`\`\`
+for tx in block.body:
+    if is_deposit_tx(tx) and current_fork.allows_deposits():
+        skip_signature_verify()
+    else:
+        verify_signature(tx)?
+
+    db = state_provider.load_relevant_accounts(tx)
+    cfg = configure_evm(chainspec, block, db)   // precompile、gas schedule をセット
+    result = revm.transact(cfg, tx)
+    apply_l1_cost(tx, result, db)               // L2 固有
+    state.commit(result.state_changes)
+    receipts.push(result.receipt)
+return post_state_root(state), receipts
+\`\`\`
+
+Ethereum mainnet では 3 行目と 9 行目が消えるだけ。**他はまったく同じ。** これが extension model のすべて。
+
+## 6. Tempo で何が来るか
+
+Tempo は L1 なので、以下は無いはず:
+- "deposit tx" の概念 (deposit 元になる親 chain がない)
+- L1 cost の課金
+
+逆におそらく "yes":
+- 決済プリミティブ用の custom precompile (FX、settlement attestation など)
+- Tempo に「現在の FX rate」のような oracle slot が組み込まれているなら pre-execution hook (OP の L1 block hash slot と同じ発想)
+- 異なる fee 市場構造 (Tempo は stablecoin-native なので、fee 資産の選択が興味深い)
+
+Tempo の executor crate が公開されたら、最も注意深く読むべきファイルです。
+
+## 7. 練習
+
+\`crates/optimism/evm/\` で:
+
+1. **特定**: OP の \`ConfigureEvm\` impl
+2. **列挙**: Ethereum mainnet には無い precompile アドレスをすべて
+3. **特定**: L1 cost charge を加える関数
+4. **追跡**: deposit transaction が署名検証をどのようにバイパスしているか
+
+> 最終チェック: Reth ベース chain で executor に **必ず** 住む (precompile にも mempool にも置けない) 要素を 2 つ挙げ、それぞれなぜ executor にしか置けないかを説明してください。できなければ §4、§5 を再読。`,
+                },
+                {
+                  title: 'Custom payload builder — sequencer モードの block 生成',
+                  slug: 'custom-payload-builder-ja',
+                  type: 'CONTENT',
+                  sortOrder: 4,
+                  duration: 16,
+                  xpReward: 45,
+                  content: `# Custom payload builder — sequencer モードの block 生成
+
+Ethereum mainnet では、block は **validator** が consensus client を動かし、execution client から提案された payload を pull することで生成されます。一方、L2 や中央集権 sequencer の chain では block 生成モデルが違います: **sequencer がそのまま block producer になる**、それだけ。Payload builder は、その「どうやって作るか」を担うコンポーネントです。
+
+> 🛑 **予測。** 中央集権 sequencer の L2 において、block 内の **tx ordering を決める** のは誰/何ですか? sequencer は何を最適化していて、MEV 上の含意はどうなる? 自分の予測を立ててから読み進めてください。
+
+## 1. Trait の境界
+
+\`PayloadBuilder\` (と関連 trait 群) は、reth NodeBuilder の「block の作り方」を担うスロット。受け取るもの:
+
+- Parent block (どこから建てるか)
+- 現在の chain state
+- Pending transaction の pool
+- Timestamp / slot
+
+…返すものは、構築済みの block ("payload")。Mainnet では validator 側の consensus client が Engine API 経由でこれをトリガーします。Sequencer L2 では sequencer が直接トリガーする。
+
+## 2. 本番で出てくる 2 種類の builder
+
+Reth エコシステムには複数の payload builder が存在します:
+
+| Builder | 場所 | 用途 |
+| :--- | :--- | :--- |
+| Default Ethereum builder | \`crates/payload/builder/\` | Mainnet validator |
+| OP payload builder | \`crates/optimism/payload/\` | OP Stack sequencer |
+| **op-rbuilder** | [paradigmxyz/rbuilder](https://github.com/paradigmxyz/rbuilder) | OP Stack 向けの高性能な external block builder |
+
+最初の 2 つは reth 本体に入っています。**op-rbuilder** は別 repo で、MEV と ordering policy にずっと積極的、複数の OP Stack chain が本番で使用しています。
+
+## 3. L2 の builder が違うこと
+
+Sequencer モードでの block 生成では、典型的に以下を行います:
+
+1. **Deposit tx を block の先頭に強制 include する** (既知の L1 oracle queue から)
+2. **残りを FIFO か priority-fee でソート**
+3. **最初の state write として L1 block oracle の storage slot を更新**
+4. **L2 の gas limit で block をキャップ** (mainnet limit ではない)
+5. **Sequencer signature で block にタグ付け** (一部 L2 は sequencer identity にコミットする)
+
+これらのいくつかは **executor 側にはない** — *builder* 側にあります。なぜか。Builder は *block に何が入るか* を制御し、executor は *block に入っているもの* を実行するだけだからです。
+
+> 🛑 **理解度チェック。** ジュニアエンジニアが「mempool を FIFO に流せば sequencer 完成」と言ったとします。**そこに考慮が抜けている攻撃を 3 つ** 挙げてください。(ヒント: tx 提出の latency、toxic order flow、reorg)
+
+## 4. MEV の問題
+
+Tx を順序づける sequencer は、validator にはできない形で MEV を抽出できます (block 内で consensus 上の競合相手がいないため)。
+
+Sequencer が取れる立場は 3 つ:
+
+| Position | 意味 | 例 |
+| :--- | :--- | :--- |
+| **MEV-blind** | 厳格 FIFO、tx の意味には踏み込まない | 一部の小規模 L2 がそう主張 |
+| **MEV-aware, public** | 公開 order flow、builder が MEV-share 風の bid を受ける | OP Stack + op-rbuilder |
+| **MEV-extracting** | Sequencer が内部 searcher を運用 | (不透明な場合が多い。中央集権 chain は何でもできる) |
+
+どの立場を取るかは **payload builder のソースコード** に現れます — feature flag や外部 builder 統合で gate されている形が多い。Chain の payload builder を読むことは、その chain の MEV policy を読むことと同義です。
+
+## 5. op-rbuilder — 本番グレードのリファレンス
+
+[paradigmxyz/rbuilder](https://github.com/paradigmxyz/rbuilder) は、Paradigm が OP Stack 向けに作った external builder。読む価値がある理由:
+
+- **Bundle merging** が実装されている (private order flow + public mempool)
+- **Sealing strategy** (greedy、並列化可能なアルゴリズム)
+- **Builder API** — 第三者が bundle を提出できる
+- オープンソースの中では「本物の」本番 block builder に最も近い
+
+Tempo が sequencer モード block 生成に op-rbuilder を採用または拡張するなら、最初に学ぶべき codebase です。
+
+## 6. Tempo 特有のこと
+
+予測:
+- Tempo は **決済認識型の payload builder** を持つ — 決済 tx が汎用 tx より優先される可能性
+- Builder レベルでの **merchant 認可フィルタ** — 認可された merchant だけが特定の tx 種別を提出できる
+- 濫用防止のための **merchant 単位のレート制限**
+- ローンチ時は **公開 mempool 無し** の可能性が高い (sequencer-private)
+
+これらはそれぞれ、payload-builder crate の一つの trait impl として現れるはずです。
+
+## 7. 練習
+
+\`crates/optimism/payload/\` を開いて:
+
+1. **特定**: \`PayloadBuilder\` の trait impl
+2. **追跡**: deposit tx が block 先頭にどう include されるか
+3. **特定**: block の gas cap が強制されている箇所
+4. **特定**: 構築した block を sign / seal する関数
+
+そのあと [op-rbuilder の README](https://github.com/paradigmxyz/rbuilder) を読み、"external builder" モデルの考え方を掴んでください。
+
+> 最終チェック: 1 文で、payload builder が **決定する** けれども executor は決定しないものは? 答えに "ordering" または "selection" が出てこないなら §3 を再読。`,
+                },
+                {
+                  title: 'ケーススタディ — Paradigm のスタック: alphanet、Tempo、L1 パターン',
+                  slug: 'paradigm-stack-case-study-ja',
+                  type: 'CONTENT',
+                  sortOrder: 5,
+                  duration: 18,
+                  xpReward: 50,
+                  content: `# ケーススタディ — Paradigm のスタック: alphanet、Tempo、L1 パターン
+
+ここまでで 4 つの拡張スロット (ChainSpec、executor、payload builder、RPC) と、Reth ベース chain の依存関係の形を見てきました。本レッスンはその **総合編** です: Paradigm の全スタックはどう見えるか、Tempo のソースが公開されたときに何を期待すべきか。
+
+> 🛑 **予測。** Paradigm はこの順で出荷してきました: **revm → alloy → reth → alphanet → op-stack-on-reth → Tempo**。**このシーケンスは何の軌跡か?** 予想してから読み進めてください。後で答え合わせします。
+
+## 1. スタックを上から下まで
+
+| Layer | Component | 役割 |
+| :--- | :--- | :--- |
+| **EVM core** | revm | バイトレベルの EVM インタプリタ |
+| **Toolkit** | alloy | Rust の型、provider、signer、ABI |
+| **Execution client** | reth | フル Ethereum node — staged sync、mempool、RPC、MDBX、P2P |
+| **Reth ベース chain** | reth の \`crates/optimism/\` | OP Stack の execution を reth node crate として実装 |
+| **R&D testnet** | alphanet | 「Ethereum に EIP-X precompile があったら?」を試す遊び場 |
+| **本番 L1** | Tempo | Paradigm の決済レール |
+
+**下の層は上の層にしか依存しない** — これが構造的な不変量です。Tempo は reth を fork しません。reth の *上に* 建てます。
+
+## 2. alphanet — precompile R&D の遊び場
+
+[paradigmxyz/alphanet](https://github.com/paradigmxyz/alphanet) は OP Stack 互換のテストネットロールアップ。明示的な目的は **mainnet に実装される前に EVM 拡張を試す** こと。
+
+これまでに alphanet で実装・実験されたもの:
+- **EIP-7212** — \`secp256r1\` (P-256) verification precompile (WebAuthn / Passkey 関連)
+- **EIP-3074 / 7702** — account abstraction primitives
+- 各種 opcode / gas の微調整
+
+学習対象としての価値: alphanet は **end-to-end で通読できる規模**、カスタマイズも教育目的で設計されています。「chain に precompile を追加するとはこういうこと」という最もクリーンな実例です。
+
+> 🛑 **現物を確認。** alphanet repo を開き、P-256 precompile が **chain に登録されている** ファイルを特定してください (math の実装場所ではなく — chain のアクティブな precompile セットに加わるところ)。**なぜそのファイルに置かれているのか?**
+
+## 3. Alphanet から本番へ
+
+軌跡が重要です。alphanet は Paradigm の実験場で、そこで試したものはやがて:
+- **mainnet Ethereum に EIP として graduate** する (例: 7212 はその経路上)、もしくは
+- **本番の Reth ベース chain に graduate** する (例: Tempo)
+
+Tempo に何が入っているかを予測したいなら、**最近 alphanet で検証されたもの** を見るのが最短ルートです。技術的な系譜はそのまま繋がっています。
+
+## 4. Tempo — Paradigm の決済 L1 on Reth
+
+高い確信で言えること:
+- Tempo は Paradigm 製の決済特化 L1
+- Tempo は Reth 上で動く (両方とも Paradigm 開発)
+- Tempo Moderato が公開テストネット
+- Chainlink CCIP が cross-chain rail (CCTP は Tempo をカバーしていない)
+
+Node crate が公開されたら期待すべきもの:
+- **Custom ChainSpec** — Tempo 固有の fork と precompile schedule
+- **Custom executor** — 決済プリミティブ用 precompile (候補: FX rate 読み出し、settlement attestation の検証、regulated-asset チェック)
+- **Custom payload builder** — merchant 認識つきの ordering とレート制限
+- **Custom RPC namespace** — \`tempo_*\` 系のメソッド、merchant / payment 用エンドポイント
+- **Custom mempool policy** — ローンチ時はほぼ間違いなく private mempool、認可された提出者だけが受け付けられる
+
+期待 **すべきでない** もの:
+- Reth core から乖離した独自 fork
+- 独自 EVM 実装 (revm が EVM そのもの)
+- 独自ネットワークスタック (reth の P2P を再利用するはず)
+
+## 5. Extension model における L1 vs L2
+
+op-stack-on-reth を読むこと、そして将来 tempo-on-reth を読むことは、構造的には似ていますが以下の点で異なります:
+
+| 観点 | OP Stack (L2) | Tempo (L1) |
+| :--- | :--- | :--- |
+| **Deposit tx** | あり (L1 から) | なし |
+| **L1 cost charge** | あり | なし |
+| **L1 block oracle slot** | あり | なし |
+| **独立 consensus** | なし (L1 にアンカー) | あり (Tempo は自前の consensus を持つ) |
+| **Sequencer モデル** | ローンチ時は中央集権、分散化ロードマップあり | おそらく中央集権、決済レールという正当化あり |
+| **ネイティブ資産** | ETH 相当 | おそらく USD ステーブル |
+
+Tempo が L1 であるということは、**consensus layer もカスタマイズポイントになる** ということ — execution layer だけではありません。これは大半の L2 chain がスキップするスロットです。
+
+## 6. 自分の作るものへの含意
+
+Tempo の上に何かを作るなら:
+
+| プロジェクト | Reth-on-Tempo 知識が効く理由 |
+| :--- | :--- |
+| Cross-VM intent matcher | Intent matching には決定論的な EVM semantics が必要。Tempo の executor crate を読むことで、正確な gas コスト、利用可能な precompile、execution のエッジケースが把握できる。 |
+| Cross-chain settlement layer | EVM 側の settlement proof は Tempo の state と厳密に一致しなければならない。Tempo の chainspec と executor が信頼できる source of truth。 |
+| Merchant treasury / payment ops | Merchant 運用には予測可能な confirmation semantics が必要。Tempo の payload builder と mempool policy が、tx が inclusion-final になるタイミングを教えてくれる。 |
+
+Tempo のローンチ時に reth を trait レベルで読まずに現れる誰よりも、**数ヶ月先** にいることになります。
+
+## 7. 最終練習
+
+このモジュールの成果物: Tempo の node crate が公開された日に、以下を 1 セッションで読み通して 1 ページのアーキテクチャサマリーが書けるようになること。
+
+1. Tempo node crate の \`Cargo.toml\`
+2. chainspec crate (hardfork + precompile schedule)
+3. \`node/src/lib.rs\` の NodeBuilder composition
+4. NodeBuilder で名前が出た順に、各 crate を読む
+5. Tests ディレクトリ
+
+これを **今のうちに alphanet で練習** しておいてください。Tempo が出てきたときには、もう準備は終わっています。
+
+> 最終チェック: Tempo repo が公開された瞬間に検証する **具体的な仮説を 5 つ**、自分の仕事への重要度順に挙げてください。5 つ挙げられないなら、本モジュールはまだ完全には定着していません — §4、§5 を再読。`,
+                },
+                {
+                  title: 'クイズ: 拡張パターンは定着したか?',
+                  slug: 'reth-chains-quiz-ja',
+                  type: 'QUIZ',
+                  sortOrder: 6,
+                  duration: 15,
+                  xpReward: 50,
+                  content: `# クイズ: 拡張パターンは定着したか?
+
+拡張モデルと、各カスタマイズの居場所を確認する短いテストです。雰囲気で答えず — 各設問には「どの trait / どの crate」という具体的な答えがあります。`,
+                  quizQuestions: [
+                    {
+                      question: 'なぜ大半の Reth ベース chain は geth 流のフォークモデルではなく拡張モデルを採用しているのか?',
+                      options: [
+                        'Reth が geth より速いため、性能を求めて chain は採用せざるを得ない',
+                        'Reth のモジュラーな trait アーキテクチャ (NodeBuilder + ChainSpec + ExecutorBuilder + PayloadBuilder) により、必要な部分だけをカスタマイズし、残りはライブラリとして利用できるため — rebase コストが消える',
+                        'Rust のモジュールシステムが source レベルの fork を阻止するため',
+                        'Paradigm が Reth を使うすべての chain に対して「拡張のみ」のポリシーを強制しているため',
+                      ],
+                      correctIndex: 1,
+                      explanation: '速度 (選択肢 1) は副産物であってアーキテクチャ上の理由ではない。Rust は fork を阻止しない (選択肢 3 は誤り)。Paradigm が独立 chain に何かを強制している事実もない (選択肢 4 は誤り)。本当の駆動要因は trait アーキテクチャそのもの — 重要なスロットだけを override し、残りを継承する設計が成り立つ。',
+                    },
+                    {
+                      question: 'Reth ベース chain の hardfork activation のロジックはどこに住むか?',
+                      options: [
+                        'Payload builder — builder が各 fork で block を生成するため',
+                        'ChainSpec — ある block height / timestamp でどの fork がアクティブかは consensus rule であり、それを所有するのは ChainSpec だから',
+                        'Executor — fork によって execution の振る舞いが変わるため',
+                        'Genesis JSON — 初期 state allocation と並べて記述されるため',
+                      ],
+                      correctIndex: 1,
+                      explanation: '複数の層が fork state を「読む」が、所有しているのは ChainSpec 一つだけ。Builder (1) や executor (3) は判断のために fork state を参照するが、その都度 ChainSpec に問い合わせる — activation 自体を所有しているわけではない。Genesis (4) は *初期* state を担うもので、fork schedule ではない。',
+                    },
+                    {
+                      question: 'OP Stack は L2 gas に加えて L1 data cost を課金する。このロジックを含む trait の impl はどれで、なぜか?',
+                      options: [
+                        'Custom precompile — precompile が native な fee logic を置く自然な場所だから',
+                        'Mempool policy — fee は admission 時に計算されるため',
+                        'Block execution strategy / executor — tx 実行前にアカウントから控除する操作は consensus-critical な state mutation であり、全ノードが寸分違わず同じ計算を行わなければならないから',
+                        'RPC layer — クライアントが tx 提出前に L1 cost を知る必要があるため',
+                      ],
+                      correctIndex: 2,
+                      explanation: 'Precompile (1) は単独では任意アカウントから控除できない — executor の権限が必要。Mempool (2) は cost を *推定* できるが consensus 上の state change を強制することはできない。RPC (4) は情報提供であって consensus-critical ではない。権限と consensus-critical な位置の両方を持っているのは executor だけ。',
+                    },
+                    {
+                      question: 'Reth ベース L2 が、すべての block の先頭に deposit tx を強制的に含める必要がある。これを処理するのはどの trait か?',
+                      options: [
+                        'ChainSpec — deposit の取り扱いは chain rule の一部だから',
+                        'Payload builder — block に何が入るか、どの順序で入るかを決めるのは payload builder だから',
+                        'Mempool — deposit tx は別 queue にあり、mempool がそこから先に drain するから',
+                        'Custom consensus — ordering を強制できるのは consensus だけだから',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'ChainSpec (1) は deposit tx の *定義* を持つが、選び出し方は持たない。Mempool (3) は deposit queue を追跡できるかもしれないが、「先頭に置く」は block composition の決定。Consensus (4) は過剰 — これは選択の問題であって finality の問題ではない。Block composition と順序を決定する単一コンポーネントが payload builder。',
+                    },
+                    {
+                      question: 'Reth ベース chain で custom precompile を書いたとき、その *登録* はどこで行われるか?',
+                      options: [
+                        'Precompile crate 内部、static registry を経由して',
+                        "Chain の EVM config (ConfigureEvm impl) 内 — revm にアクティブな precompile セットを手渡し、chain の hardfork schedule で gate する",
+                        'Reth core 内部、precompile dispatch table を直接編集して',
+                        'Genesis JSON、初期 code allocation の一部として',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Static registry (1) では chain rule で gate できない。Reth core を編集 (3) は、まさに避けたい fork-model アンチパターンそのもの。Genesis (4) は state を保持する場所であり、protocol レベルの関数を置く場所ではない。EVM config こそが正しいスロット — ChainSpec (どの fork か) と revm (実際に走るもの) を結ぶ役。',
+                    },
+                    {
+                      question: 'alphanet と Tempo の関係を最も正確に表す説明は?',
+                      options: [
+                        '同じプロジェクトの呼び名違い',
+                        'alphanet は Tempo のテストデプロイ',
+                        'alphanet は Paradigm が EVM 拡張 (custom precompile など) を検証する R&D testnet で、そこで成熟した実験は Tempo のような本番 chain に出荷されたり、Ethereum EIP として提案されたりする',
+                        'Tempo は alphanet の上に建てられ、alphanet は Reth の上に建てられている',
+                        'メンテナーが共通である以外はほぼ無関係',
+                      ],
+                      correctIndex: 2,
+                      explanation: 'alphanet は遊び場で、Tempo は本番のレール。選択肢 1、2 は両者を混同している。選択肢 4 は依存関係の順序が逆 — どちらも直接 Reth に依存しており、互いに依存しているわけではない。選択肢 5 は弱すぎる: precompile 実験の技術的な系譜は実在し、追跡できる。',
+                    },
+                    {
+                      question: '中央集権 sequencer の L2 において、payload builder が決め、executor が決めないことは?',
+                      options: [
+                        'Payload builder は gas pricing を、executor は ordering を決める',
+                        'Payload builder は block にどの tx をどの順序で入れるかを決める。executor は、渡された tx を渡された順序で実行するだけ',
+                        '両者の決定範囲は同じ — builder は executor の薄いラッパーにすぎない',
+                        'Payload builder は署名を検証し、executor は state change を適用する',
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Gas pricing (選択肢 1 は逆) は主に chainspec の問題で、builder と executor の対比軸ではない。両者同じ (3) は誤り — この分離こそが要点。署名検証 (4) は executor / tx validator 側の責務で、builder ではない。クリーンな分割: builder = 選択 + 順序づけ、executor = 言われたとおりに実行。',
+                    },
+                    {
+                      question: 'Tempo の node crate 構造を公開前に予測したい。構造的な事前知識の出どころとして最良なのは?',
+                      options: [
+                        'Tempo のマーケティングサイトと発表ブログ',
+                        'Geth のソースを読み、決済特化 chain がどう作られるかを把握する',
+                        'Reth の crates/optimism/ と paradigmxyz/alphanet を「Paradigm が Reth ベース chain をどう作るか」の正典として読み、L1 と L2 の差分を頭の中で調整する',
+                        '公開されるまで待つ — 公開前の推測は信頼できない',
+                      ],
+                      correctIndex: 2,
+                      explanation: 'マーケティング (1) はポジショニングを教えてくれるが構造は教えない。Geth (2) は Tempo が採用しているモデルとは逆方向。待つ (4) は姿勢であって戦略ではない — Paradigm が同じ組織であることから、選択肢 3 の事前確率は非常に強い。彼らがすでに公開している Reth ベース chain を読むことが、最も信頼できる準備。',
                     },
                   ],
                 },

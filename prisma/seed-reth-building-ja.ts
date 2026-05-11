@@ -51,7 +51,7 @@ flowchart LR
 
 単一の \`main.rs\`。フレームワークなし。Alloy と Revm を直接呼ぶだけ。**起きていることのバイト単位を全部見える** ようにすることが目的です。
 
-> 🛑 **スクロール前に予測。** なぜ provider に \`eth_call\` で問い合わせる代わりに、ローカルで fork してシミュレートするのか? *\`eth_call\` が返すもの vs. 自分が必要とするもの* について、一文で答えてください。答えを保持してから先へ。
+> 🛑 **スクロール前に予測。** なぜ provider に \`eth_call\` で問い合わせる代わりに、ローカルで fork してシミュレートするのか? *\`eth_call\` が返すもの vs. 自分が必要とするもの* について、一文で答えてください。答えを書き留めてから先へ。
 
 ## なぜ Rust + Alloy + Revm か
 
@@ -166,7 +166,7 @@ Walk:
 - \`abi_decode(input, true)\` — \`true\` でセレクタが一致するかを検証。router の別関数への呼び出しなら綺麗に \`Err\` を返す。
 - \`call.path.len() != 2\` — production はもっと長いルートも扱う。本レッスンは明瞭性のためスコープを絞る。
 
-> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: なぜ \`sol!\` が手書きセレクタより優れているか? 「便利」と言わずに、\`sol!\` が防いでくれる失敗モードを2つ挙げてください。(ヒント: 上流の Solidity ABI 変更、セレクタハッシュ計算ミス、を考えて)
+> 🛑 **理解度チェック。** スクロール戻しなしで: なぜ \`sol!\` が手書きセレクタより優れているか? 「便利」と言わずに、\`sol!\` が防いでくれる失敗モードを2つ挙げてください。(ヒント: 上流の Solidity ABI 変更、セレクタハッシュ計算ミス、を考えて)
 
 ## Step 3: Revm + AlloyDB で mainnet を fork
 
@@ -432,7 +432,7 @@ flowchart LR
 
 単一の \`main.rs\` が **Reth のプロセス内で** 動く。JSON-RPC ラウンドトリップなし、別ノードなし、WebSocket 再接続ロジックなし。ExEx は Reth 自身が生成するチェーンイベントを型付きストリームで受け取る。
 
-> 🛑 **スクロール前に予測。** なぜ「in-process」がここでのアーキテクチャ的な勝ちか? ノード外で動くことが indexer に強いる作業のうち、内側に住むことでスキップできるものを、一文で答えてください。Step 2 まで答えを保持。
+> 🛑 **スクロール前に予測。** なぜ「in-process」がここでのアーキテクチャ的な勝ちか? ノード外で動くことが indexer に強いる作業のうち、内側に住むことでスキップできるものを、一文で答えてください。Step 2 まで答えを書き留めてから先へ。
 
 ## なぜ ExEx か (\`eth_getLogs\` ポーリング vs 直接 DB read との比較)
 
@@ -703,7 +703,7 @@ ctx.events.send(ExExEvent::FinishedHeight(committed.tip().num_hash()))?;
 - ディスク使用量は Reth 通常の prune ポリシー内に収まる
 - 複数の ExEx が共存する場合、Reth は全 ExEx の中で最低の \`FinishedHeight\` を tracking する
 
-> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: なぜ Reth はあなたの一番遅い ExEx の \`FinishedHeight\` より先のブロックを prune したがらないのか? 自分の言葉で答えてください。ヒント: ノード再起動時に、ExEx がまだ処理していないブロックを Reth がすでに prune してしまっていたら何が起きるか考えて。(ネタバレ: あなたの indexer がそのブロックを永久にスキップ、データが間違う、誰かが query するまで気づかない)
+> 🛑 **理解度チェック。** スクロール戻しなしで: なぜ Reth はあなたの一番遅い ExEx の \`FinishedHeight\` より先のブロックを prune したがらないのか? 自分の言葉で答えてください。ヒント: ノード再起動時に、ExEx がまだ処理していないブロックを Reth がすでに prune してしまっていたら何が起きるか考えて。(ネタバレ: あなたの indexer がそのブロックを永久にスキップ、データが間違う、誰かが query するまで気づかない)
 
 ## Production に足りないもの
 
@@ -783,7 +783,7 @@ flowchart LR
     Bucket -->|JSON| Client
 \`\`\`
 
-> 🛑 **スクロール前に予測。** なぜ *サーバーサイド集計* が勝ちか? \`txpool_content\` が返すもの vs ダッシュボードが実際に必要とするもの — ペイロードサイズについて一文で答えてください。答えを保持。
+> 🛑 **スクロール前に予測。** なぜ *サーバーサイド集計* が勝ちか? \`txpool_content\` が返すもの vs ダッシュボードが実際に必要とするもの — ペイロードサイズについて一文で答えてください。答えを書き留めてから先へ。
 
 ## なぜカスタム RPC か (workaround との比較)
 
@@ -904,7 +904,7 @@ Walk:
 - **\`max_priority_fee_per_gas\`** — バケット対象。(本物の searcher は base fee も考慮; 明瞭性のため priority fee のみ)
 - **内側ループは \`O(buckets * pending)\`** — 典型的なプールサイズ (~10K) には十分。100K+ pending には bucket 配列での二分探索に切り替える。
 
-> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: なぜ \`pool.pending()\` がここでは安価で、本物の \`txpool_content\` RPC は重いか? ヒント: \`pending()\` が返すもの vs \`txpool_content\` が wire のためにマテリアライズするものを考えて。
+> 🛑 **理解度チェック。** スクロール戻しなしで: なぜ \`pool.pending()\` がここでは安価で、本物の \`txpool_content\` RPC は重いか? ヒント: \`pending()\` が返すもの vs \`txpool_content\` が wire のためにマテリアライズするものを考えて。
 
 ## Step 3: NodeBuilder に wire
 
@@ -1095,7 +1095,7 @@ flowchart TB
     Bump --> Q
 \`\`\`
 
-> 🛑 **スクロール前に予測。** ナイーブな方法は「nonce を RPC から取得、署名、送信」。同じ from-address で 100 ms 以内に POST /send を 2 回叩いた時に何が壊れるか walk through。**何が具体的に間違うか一文で答えてください。** 答えを保持。
+> 🛑 **スクロール前に予測。** ナイーブな方法は「nonce を RPC から取得、署名、送信」。同じ from-address で 100 ms 以内に POST /send を 2 回叩いた時に何が壊れるか walk through。**何が具体的に間違うか一文で答えてください。** 答えを書き留めてから先へ。
 
 ## なぜこれが難しいか
 
@@ -1385,7 +1385,7 @@ Walk:
 - **bump 戦略は 25%、繰り返し。** deadline を逃すサイクルごとに重ねる。3 回 bump 後、5 gwei で始まった tx は \`5 × 1.25³ ≈ 9.77\` gwei。Production は network 全体の急騰で予算を吹き飛ばさないよう設定可能 max で cap する。
 - **\`expect("signer missing")\`** — 構造上、queue に入っているものは pool 内の鍵で署名されたもの。ここで panic は不変条件が破れている合図; 静かに drop するより良い。
 
-> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: なぜ watcher は stuck tx を *もっと長く待つ* のではなく *同じ nonce + 高い fee で置換* するのか? ヒント: 前の nonce が stuck の時 **次の nonce が何でブロックされる** か考えて。
+> 🛑 **理解度チェック。** スクロール戻しなしで: なぜ watcher は stuck tx を *もっと長く待つ* のではなく *同じ nonce + 高い fee で置換* するのか? ヒント: 前の nonce が stuck の時 **次の nonce が何でブロックされる** か考えて。
 
 ## Step 5: HTTP API スケルトン (axum)
 
@@ -1562,7 +1562,7 @@ flowchart TB
     Chain -->|delegated code が<br/>Alice のアドレスとして走る| Effects["Token transfer +<br/>Router swap atomically"]
 \`\`\`
 
-> 🛑 **スクロール前に予測。** なぜ sponsor (Bob) が Type 4 tx の \`from\` である必要があるか、Alice ではなく? EIP-1559 で **\`from\` が何を意味するか** vs *authorization* が誰のためのものか、一文で答えてください。答えを保持。
+> 🛑 **スクロール前に予測。** なぜ sponsor (Bob) が Type 4 tx の \`from\` である必要があるか、Alice ではなく? EIP-1559 で **\`from\` が何を意味するか** vs *authorization* が誰のためのものか、一文で答えてください。答えを書き留めてから先へ。
 
 ## なぜ sponsor サービスか (vs ネイティブ smart-account)
 
@@ -1713,7 +1713,7 @@ Walk:
 - **\`with_authorization_list(vec![signed_auth])\`** — これを Type 4 にする 1 行。複数の \`SignedAuthorization\` をここに足せば、複数ユーザを 1 つの tx にバッチしている (drill 3)。
 - **delegate の \`executeBatch\` は慣例であってプロトコル必須ではない。** 野生の大半の EIP-7702 delegate コントラクトが似たようなメソッドを公開する ([Soneium](https://github.com/coinbase/sponsored-erc20) のパターン、OpenZeppelin の参照実装等を見よ)。あなたの delegate が使う慣例を選ぶ。
 
-> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: Bob (sponsor) がこの tx を提出する時、**誰の nonce が増える** か? Bob、Alice、両方? ヒント: 外側の tx envelope にあるのはどの nonce vs authorization の \`nonce\` フィールドが何のためか考えて。
+> 🛑 **理解度チェック。** スクロール戻しなしで: Bob (sponsor) がこの tx を提出する時、**誰の nonce が増える** か? Bob、Alice、両方? ヒント: 外側の tx envelope にあるのはどの nonce vs authorization の \`nonce\` フィールドが何のためか考えて。
 
 ## Step 3: 提出 + inclusion 待ち
 
@@ -1894,7 +1894,7 @@ flowchart TB
     Cheats -->|abi-encoded uint256| Test
 \`\`\`
 
-> 🛑 **スクロール前に予測。** なぜこれを **precompile** として実装するのが正解か? 普通の Solidity contract ではなく? **precompile が普通の contract にできないこと** について一文で答えてください。答えを保持。
+> 🛑 **スクロール前に予測。** なぜこれを **precompile** として実装するのが正解か? 普通の Solidity contract ではなく? **precompile が普通の contract にできないこと** について一文で答えてください。答えを書き留めてから先へ。
 
 ## なぜ precompile か (contract でも opcode でもなく)
 
@@ -2013,7 +2013,7 @@ Walk:
 - **3 つの結果バリアント全部が \`gas_used\` を返す** — Success、Revert、Halt。revert した tx もガスを消費した。実数を返し、テスト作者が何をカウントするかを決める。
 - **\`db = EmptyDB\` は本レッスンの簡素化。** 本物の Foundry cheatcode は custom Inspector hook 経由で親テスト EVM と state を共有する (\`vm.deal()\` は親テストが見る balance を mutate する必要があるから)。Drill 3 で扱う。
 
-> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで、自分の言葉で: ここで返される **\`gas_used\`** はなぜ *target contract* が消費したガスを含むが、cheatcode 呼び出し自体が払ったガスは含まない? ヒント: precompile の \`21_000\` flat コストは *outer* フレーム上にある、inner ではない。
+> 🛑 **理解度チェック。** スクロール戻しなしで、自分の言葉で: ここで返される **\`gas_used\`** はなぜ *target contract* が消費したガスを含むが、cheatcode 呼び出し自体が払ったガスは含まない? ヒント: precompile の \`21_000\` flat コストは *outer* フレーム上にある、inner ではない。
 
 ## Step 3: Revm テストハーネスに wire
 
@@ -2189,7 +2189,7 @@ flowchart TB
     Quote --> Pick["Pick best (post-fee, post-gas)"]
 \`\`\`
 
-> 🛑 **スクロール前に予測。** なぜ各 pool に対して直接 **chain RPC** で \`getReserves\` を呼ぶのではなく **fork** してオンチェーン state を読むのか? *直接 RPC が買えないものを fork が買ってくれる* について一文で答えて。答えを保持。
+> 🛑 **スクロール前に予測。** なぜ各 pool に対して直接 **chain RPC** で \`getReserves\` を呼ぶのではなく **fork** してオンチェーン state を読むのか? *直接 RPC が買えないものを fork が買ってくれる* について一文で答えて。答えを書き留めてから先へ。
 
 ## なぜ fork か (vs 直接 RPC)
 
@@ -2347,7 +2347,7 @@ Walk:
 - **整数のみ** — float なし、panic なし。\`U256\` 算術が EVM がオンチェーンで使う精度を持つ。**クオートは on-chain swap と wei レベルで一致する。**
 - **basis points での fee で Uniswap、Sushi、独自 fee fork を同じコードでサポート。**
 
-> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: なぜ \`amount_in_with_fee * pool.reserve_out\` が **分子** に行き、分母ではないのか? ヒント: 次元的に何を意味するか考えて — \`[in_with_fee] * [reserve_out]\` はどんな単位を作る?
+> 🛑 **理解度チェック。** スクロール戻しなしで: なぜ \`amount_in_with_fee * pool.reserve_out\` が **分子** に行き、分母ではないのか? ヒント: 次元的に何を意味するか考えて — \`[in_with_fee] * [reserve_out]\` はどんな単位を作る?
 
 ## Step 4: V3 quote (より複雑な数学、よりシンプルなアプローチ)
 
@@ -2541,7 +2541,7 @@ flowchart TB
     Wallet --> Chain
 \`\`\`
 
-> 🛑 **スクロール前に予測。** Lesson 1 の MEV searcher は、この router が防御する **脅威そのもの**。**一文で**: その searcher が何をやって、この router が何を defeat する必要があるのか? Step 3 まで答えを保持。
+> 🛑 **スクロール前に予測。** Lesson 1 の MEV searcher は、この router が防御する **脅威そのもの**。**一文で**: その searcher が何をやって、この router が何を defeat する必要があるのか? Step 3 まで答えを書き留めてから先へ。
 
 ## どの lesson が入るか (そして新規部分)
 
@@ -2699,7 +2699,7 @@ Walk:
 - **ヒューリスティックは意図的に緩い。** 本物の production は router ABI をデコードして swap *path* を推論する。緩いヒューリスティックは過剰検出する (false positive = 必要なくても private にルート) が、これは安全な失敗モード。
 - **\`duration\` が look-ahead window。** ~2 秒が sensible なデフォルト — 遅い人間を捕まえるには十分長く、ユーザが感じるほどの遅延ではない短さ。
 
-> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで: 候補 swap の **方向** がなぜ sandwich 脅威かを判定するのに重要か? ヒント: frontrunner が victim と *同じ* 方向で取引する利益 vs *逆* 方向で取引する利益を考えて。
+> 🛑 **理解度チェック。** スクロール戻しなしで: 候補 swap の **方向** がなぜ sandwich 脅威かを判定するのに重要か? ヒント: frontrunner が victim と *同じ* 方向で取引する利益 vs *逆* 方向で取引する利益を考えて。
 
 ## Step 4: Revm シミュレーションで脅威をスコア
 
@@ -2932,7 +2932,7 @@ flowchart LR
     Diff --> Fail["❌ debug<br/>(hardfork? precompile?<br/>RPC caching?)"]
 \`\`\`
 
-> 🛑 **スクロール前に予測。** カスタム Revm セットアップが、非 mainnet ハードフォーク (例: mainnet が Osaka なのにチェーンがまだ Cancun ルール) で追加された opcode を実行する。それは **走らせている spec に対しては技術的に正しい** 結果を計算するが、mainnet と一致しない。この不一致が検証ハーネスでどう見えるか walk through。答えを保持。
+> 🛑 **スクロール前に予測。** カスタム Revm セットアップが、非 mainnet ハードフォーク (例: mainnet が Osaka なのにチェーンがまだ Cancun ルール) で追加された opcode を実行する。それは **走らせている spec に対しては技術的に正しい** 結果を計算するが、mainnet と一致しない。この不一致が検証ハーネスでどう見えるか walk through。答えを書き留めてから先へ。
 
 ## Cargo.toml
 
@@ -3106,7 +3106,7 @@ Walk:
 - **ガス比較は spread を許容**、\`eth_estimateGas\` には Revm の正確なガス計算が加えない buffer (大抵 10-20%) が含まれるから。完全 equality ではなく order of magnitude を比較。
 - **\`println!\` でカーネルとしては OK。** Production wrapper は \`tracing::error!\` + 構造化 diff でログから query 可能にする。
 
-> 🛑 **アンチフルエンシーチェック。** スクロール戻しなしで、なぜ **byte レベル出力比較は完全** で、**ガス比較は近似** か一文で。ヒント: \`eth_estimateGas\` が \`evm.transact_one\` が測ること以上に何を *すべき* かを考えて。
+> 🛑 **理解度チェック。** スクロール戻しなしで、なぜ **byte レベル出力比較は完全** で、**ガス比較は近似** か一文で。ヒント: \`eth_estimateGas\` が \`evm.transact_one\` が測ること以上に何を *すべき* かを考えて。
 
 ## Step 5: 一致しないとき — debug 分類
 
