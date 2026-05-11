@@ -1826,15 +1826,15 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
 `,
                 },
                 {
-                  title: 'Bridge to Expert — what comes next',
+                  title: 'Bridge to what comes next — Advanced and Expert',
                   slug: 'reth-bridge-to-expert-en',
                   type: 'CONTENT',
                   sortOrder: 13,
                   duration: 10,
                   xpReward: 20,
-                  content: `# Bridge to Expert — what comes next
+                  content: `# Bridge to what comes next — Advanced (L1 Architect) and Expert
 
-> 🛑 **Gate check.** Before claiming you've finished Advanced, answer these — out loud or on paper, no scrolling back through previous lessons:
+> 🛑 **Gate check.** Before claiming you've finished Inside Reth, answer these — out loud or on paper, no scrolling back through previous lessons:
 >
 > 1. What does \`popn_top!\` expand to? Why does it use \`unwrap_unchecked()\` inside \`unsafe\`?
 > 2. Why are \`Database\` and \`DatabaseRef\` separate traits? What does the asymmetric \`auto_impl\` list (\`&mut, Box\` vs \`&, &mut, Box, Rc, Arc\`) tell you?
@@ -1842,29 +1842,45 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
 > 4. Why is \`MerkleStage\` *after* hashing, not interleaved?
 > 5. To ship a purpose-built L1 like Tempo, which Reth components do you swap?
 >
-> **Got fewer than 4 right?** Don't continue. Go back to the relevant Advanced lesson. Expert assumes these as fluent vocabulary, not concepts you'll re-look-up.
+> **Got fewer than 4 right?** Don't continue. Go back to the relevant Inside Reth lesson. What comes next assumes these as fluent vocabulary, not concepts you'll re-look-up.
 
 If you cleared the gate: you've climbed **Alloy → Revm → Reth (Staged Sync, ExEx, custom NodeBuilder)**. You can read the source of all three with intent.
 
-But "reading" is only half. **Expert** crosses from "I can read it" to "I can ship it in production."
+But "reading" is only half. **Two tiers** wait next, depending on your goal (many learners do both):
 
-## What awaits in Expert
+## Advanced tier — design your own L1 (5 courses, ADVANCED difficulty)
 
-| Lesson | Focus |
+Use the source you read in Inside to *design* L1s. The implementation skills behind architecting Hyperliquid- or Tempo-class chains.
+
+| Course | Focus |
 | :--- | :--- |
-| **Performance engineering** | flamegraph, Criterion, jemalloc, Reth's \`maxperf\` build profile |
-| **MDBX storage internals** | Reth's actual \`Database\` / \`DbTx\` / \`DbTxMut\` traits, B+tree mmap, MVCC |
-| **Tokio runtime internals** | work-stealing, \`spawn_critical_task\`, panic supervision |
-| **Procedural macros** | how \`address!\` and \`sol!\` actually work — the \`fixed_bytes_macros!\` meta-pattern |
-| **Custom precompiles** | the real Revm \`identity_run\` + how Foundry's cheatcodes are precompiles |
-| **Merkle Patricia Trie** | reth's actual \`AccountProof\` / \`StorageProof\` and verification logic |
-| **MEV in practice** | mempool ingest, sol! decoding, Revm forking, ExEx as a private mempool |
-| **zkEVM with Revm** | Steel + Risc0 guest source — proving Ethereum execution |
-| **Production fork ops** | reth's real \`maxperf\` Cargo profile, systemd, monitoring, diff testing |
+| **Consensus Engineering** | PoS / BFT / Tendermint internals; latency / liveness / finality trade-offs |
+| **Cross-Chain Bridges** | CCIP, OP Standard Bridge, light clients in real source — then build your own |
+| **Sequencer & Rollup Architecture** | centralized to shared sequencers; MEV defense and forced inclusion |
+| **P2P Networking Internals** | devp2p, libp2p, gossip subprotocols, peer scoring |
+| **Validator Operations** | key management, slashing conditions, coordinated upgrades |
+
+## Expert tier — ship in production (2 courses, EXPERT difficulty)
+
+Cross from "I can read it" to "I can ship it." Performance, ops, application engineering.
+
+| Course | Focus |
+| :--- | :--- |
+| **Reth Expert** | performance, MDBX, Tokio internals, procedural macros, custom precompiles, MPT, MEV, zkEVM, Reth fork ops |
+| **Building with the Stack** | 9 runnable apps — MEV searcher, indexer, wallet backend, cheatcode, swap aggregator, order router capstone, cross-client validation |
+
+## Which one first?
+
+Both are reachable directly from Inside Reth and are independent:
+
+- **Advanced (L1 Architect) first** — if you want to design L1s, understand Hyperliquid/Tempo from the inside
+- **Expert first** — if you want to ship apps on an existing chain, or you need ops / performance engineering
+
+No strict order. Pick whichever matches your interest and project. Finishing both means "read + design + ship" — the full triad.
 
 ## The mindset shift
 
-Advanced taught you the **structures**. Expert teaches you the **decisions** behind them.
+Inside (Intermediate) taught you the **structures**. The next tiers teach you the **decisions** behind them.
 
 > 🛑 **Predict the answers before reading mine.** Have an opinion first — even a wrong one. Engineers shipping infra do.
 >
@@ -1886,11 +1902,11 @@ The point isn't that you matched my wording. The point is: did you have an *opin
 
 ## Before you continue
 
-If the Gate check at the top felt easy, jump into Expert.
+If the Gate check at the top felt easy, jump into Advanced or Expert.
 
-If any of the five questions sent you back to a previous lesson — re-read them now. Expert is denser. Running the linked code locally as you go is no longer optional.
+If any of the five questions sent you back to a previous lesson — re-read them now. Both next tiers are denser. Running the linked code locally as you go is no longer optional.
 
-> The first three months in infra learning are the hardest. Documentation is sparse — **the source code is the textbook**. The Expert tier is where that lesson pays off.`,
+> The first three months in infra learning are the hardest. Documentation is sparse — **the source code is the textbook**. The Advanced and Expert tiers are where that lesson pays off.`,
                 },
                 {
                   title: 'Inside Reth final quiz',

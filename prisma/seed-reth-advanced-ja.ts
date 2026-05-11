@@ -1826,15 +1826,15 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
 `,
                 },
                 {
-                  title: 'Expert ティアへの橋渡し',
+                  title: '次のティアへの橋渡し — Advanced と Expert',
                   slug: 'reth-bridge-to-expert-ja',
                   type: 'CONTENT',
                   sortOrder: 13,
                   duration: 10,
                   xpReward: 20,
-                  content: `# Expert ティアへの橋渡し
+                  content: `# 次のティアへの橋渡し — Advanced (L1 Architect) と Expert
 
-> 🛑 **ゲートチェック。** Advanced 終了を主張する前に、**前のレッスンに戻らずに** これらに答えてください — 声に出すか紙に書いて：
+> 🛑 **ゲートチェック。** Inside Reth 終了を主張する前に、**前のレッスンに戻らずに** これらに答えてください — 声に出すか紙に書いて：
 >
 > 1. \`popn_top!\` は何に展開される? なぜ \`unsafe\` 内で \`unwrap_unchecked()\` を使うのか?
 > 2. \`Database\` と \`DatabaseRef\` がなぜ別トレイトなのか? \`auto_impl\` リストの非対称（\`&mut, Box\` vs \`&, &mut, Box, Rc, Arc\`）が何を語っているか?
@@ -1842,29 +1842,45 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
 > 4. なぜ \`MerkleStage\` がハッシング後で、間に挟まれていないのか?
 > 5. Tempo のような purpose-built L1 を出荷するために、Reth のどのコンポーネントを差し替えるか?
 >
-> **正解が 4 未満なら?** 進まないこと。該当の Advanced レッスンに戻る。Expert はこれらを「再調査する概念」ではなく「流暢な語彙」として前提します。
+> **正解が 4 未満なら?** 進まないこと。該当の Inside Reth レッスンに戻る。次のティアはこれらを「再調査する概念」ではなく「流暢な語彙」として前提します。
 
-ゲートを通過したら: **Alloy → Revm → Reth（Staged Sync、ExEx、カスタム NodeBuilder）** の階段を上ってきたことになります。3プロジェクトすべてのソースを目的を持って読めます。
+ゲートを通過したら: **Alloy → Revm → Reth（Staged Sync、ExEx、カスタム NodeBuilder）** の階段を上ってきたことになります。3 プロジェクトすべてのソースを目的を持って読めます。
 
-しかし「読める」は半分。**Expert** は「読める」から「**本番に出せる**」への跳躍。
+しかし「読める」は半分。次の **2 ティア** が待っています、目的に応じて選択 (両方やる人も多い):
 
-## Expert で待っていること
+## Advanced ティア — L1 を architect する (5 コース、難易度 ADVANCED)
 
-| レッスン | 焦点 |
+Inside で読んだソースを使って、自分の L1 を設計する。Hyperliquid・Tempo クラスの chain アーキテクチャに必要な実装スキル。
+
+| コース | 焦点 |
 | :--- | :--- |
-| **パフォーマンスエンジニアリング** | flamegraph、Criterion、jemalloc、Reth の \`maxperf\` ビルドプロファイル |
-| **MDBXストレージ内部** | Reth の本物の \`Database\` / \`DbTx\` / \`DbTxMut\` トレイト、B+tree mmap、MVCC |
-| **Tokio ランタイム内部** | work-stealing、\`spawn_critical_task\`、パニック監視 |
-| **手続きマクロ** | \`address!\` と \`sol!\` の実装 — \`fixed_bytes_macros!\` メタパターン |
-| **カスタム precompile** | 本物の Revm \`identity_run\` ＋ Foundry の cheatcodes が precompile である事実 |
-| **Merkle Patricia Trie** | reth の本物の \`AccountProof\` / \`StorageProof\` と検証ロジック |
-| **本番MEV** | mempool 取り込み、sol! デコード、Revm forking、ExEx をプライベート mempool として |
-| **zkEVM with Revm** | Steel + Risc0 guest ソース — Ethereum 実行を証明する |
-| **本番フォーク運用** | reth の本物の \`maxperf\` Cargo profile、systemd、監視、diff テスト |
+| **Consensus Engineering** | PoS / BFT / Tendermint 内部、レイテンシ・ライブネス・finality の設計トレードオフ |
+| **Cross-Chain Bridges** | CCIP・OP Standard Bridge・light client を本番ソースで読み、自分で書く |
+| **Sequencer & Rollup アーキテクチャ** | 中央集権 sequencer から共有 sequencer、MEV 防衛、forced inclusion |
+| **P2P Networking Internals** | devp2p・libp2p・gossip サブプロトコル・ピアスコアリング |
+| **Validator Operations** | 鍵管理、slashing 条件、協調アップグレード |
+
+## Expert ティア — 本番に出す (2 コース、難易度 EXPERT)
+
+「読める」から「本番に出せる」への跳躍。性能、運用、application 開発。
+
+| コース | 焦点 |
+| :--- | :--- |
+| **Reth Expert** | パフォーマンス、MDBX、Tokio 内部、手続きマクロ、カスタム precompile、MPT、本番 MEV、zkEVM、Reth フォーク運用 |
+| **Building with the Stack** | 動くアプリ 9 本 — MEV searcher、indexer、wallet backend、cheatcode、swap aggregator、order router capstone、cross-client 検証 |
+
+## どちらから始める?
+
+両方とも Inside Reth から直接ジャンプ可能、独立しています:
+
+- **Advanced (L1 Architect) を先に** — 自分で L1 を architect したい、Hyperliquid・Tempo を理解したい
+- **Expert を先に** — 既存 chain で本番アプリを ship したい、運用 / 性能エンジニアリングが必要
+
+順序にこだわらず、興味とプロジェクトに合うほうから。両方終えれば「読める + 設計できる + 出荷できる」の三拍子。
 
 ## マインドセットの転換
 
-Advanced は **構造** を教えました。Expert はその構造の **背後にある決定** を教えます。
+Inside (Intermediate) は **構造** を教えました。次のティアはその構造の **背後にある決定** を教えます。
 
 > 🛑 **私の答えを読む前に、答えを予測してください。** 先に意見を持つ — 間違っていてもいい。インフラを出荷するエンジニアはそうします。
 >
@@ -1886,11 +1902,11 @@ Advanced は **構造** を教えました。Expert はその構造の **背後�
 
 ## 進む前に
 
-冒頭のゲートチェックが楽だったなら、Expert に飛び込んでください。
+冒頭のゲートチェックが楽だったなら、Advanced か Expert に飛び込んでください。
 
-5 問のどれかで前のレッスンに戻った場合 — 今、再読してください。Expert は密度が高い。リンクされたコードをローカルで実行しながら読むのは、もはやオプションではありません。
+5 問のどれかで前のレッスンに戻った場合 — 今、再読してください。次のティアはどちらも密度が高い。リンクされたコードをローカルで実行しながら読むのは、もはやオプションではありません。
 
-> インフラレイヤーの学習は、最初の 3 ヶ月が一番苦しいです。ドキュメントが不十分なことも多く、**「ソースコードこそが最強の教科書」**。Expert はこの教訓が報われるティアです。`,
+> インフラレイヤーの学習は、最初の 3 ヶ月が一番苦しいです。ドキュメントが不十分なことも多く、**「ソースコードこそが最強の教科書」**。Advanced と Expert はこの教訓が報われるティアです。`,
                 },
                 {
                   title: 'Inside Reth ファイナルクイズ',
