@@ -6,9 +6,9 @@ export async function seedRethBridgeToAdvancedJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'reth-bridge-to-advanced-ja',
-      title: 'スタックを読む — Advanced への橋渡し',
+      title: 'スタックを読む — ソース読解への橋渡し',
       description:
-        'Fundamentals は終えた。でも Advanced のソース読みは依然として圧倒的。このコースがそのギャップを埋めます。EVM をバイト単位で（ディスパッチループ・ワールドステート・コールフレーム・reorg）、そして Reth/Revm のソースが暗黙の前提とする中級 Rust（generics・dyn・Arc・unsafe・macro_rules）。',
+        'Beginner ティアの Rust と Alloy の基礎は固まった。でも次の Alloy/Revm/Reth Advanced のソース読みは依然として圧倒的。このコースがそのギャップを埋めます。EVM をバイト単位で（ディスパッチループ・ワールドステート・コールフレーム・reorg）、そして Reth/Revm のソースが暗黙の前提とする中級 Rust（generics・dyn・Arc・unsafe・macro_rules）。',
       difficulty: 'BEGINNER',
       duration: 100,
       xpReward: 200,

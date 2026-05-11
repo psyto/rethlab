@@ -6,9 +6,9 @@ export async function seedRethBridgeToAdvancedEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'reth-bridge-to-advanced-en',
-      title: 'Reading the Stack — Bridge to Advanced',
+      title: 'Reading the Stack — Bridge to Source-Reading',
       description:
-        'You finished Fundamentals. Source-walking in Advanced still feels overwhelming. This course closes the gap: EVM at the bytes level (dispatch loop, world state, call frames, reorgs) and the intermediate Rust (generics, dyn, Arc, unsafe, macros) that Reth and Revm source assume you know.',
+        'You finished the Beginner-tier foundations in Rust and Alloy. But source-walking the Alloy/Revm/Reth Advanced courses still feels overwhelming. This course closes the gap: EVM at the bytes level (dispatch loop, world state, call frames, reorgs) and the intermediate Rust (generics, dyn, Arc, unsafe, macros) that Reth and Revm source assume you know.',
       difficulty: 'BEGINNER',
       duration: 100,
       xpReward: 200,
