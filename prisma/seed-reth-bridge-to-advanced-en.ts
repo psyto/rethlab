@@ -1416,29 +1416,29 @@ The Advanced tier is **three independent courses** (Revm, Reth, Alloy), and they
 After that, pick a course and start.`,
                 },
                 {
-                  title: 'How Advanced courses work',
+                  title: 'How the source-reading courses work',
                   slug: 'advanced-tier-orientation-en',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 6,
                   xpReward: 15,
-                  content: `# How Advanced courses work
+                  content: `# How the source-reading courses work
 
-You're at the doorstep of the Advanced tier — three independent courses (**Revm Advanced**, **Reth Advanced**, **Alloy Advanced**) that all teach the same skill: **reading production Rust source line by line.** This short lesson explains how those courses are structured, so you can engage with the right mindset from lesson 1 — whichever Advanced course you start with.
+You're at the doorstep of the **Intermediate tier** — three independent courses (**Revm Advanced**, **Reth Advanced**, **Alloy Advanced**) that all teach the same skill: **reading production Rust source line by line.** This short lesson explains how those courses are structured, so you can engage with the right mindset from lesson 1 — whichever course you start with.
 
-(Each Advanced course also has its own short welcome handling course-specific prereqs and setup. *This* lesson is the **generic** orientation, applied once.)
+(Each course also has its own short welcome handling course-specific prereqs and setup. *This* lesson is the **generic** orientation, applied once.)
 
 ## The tier shift
 
-Beginner and Fundamentals taught you the *shape* of the stack — what Alloy types look like, how to use Foundry, what the EVM does at a high level.
+The Beginner tier (Beginner + Fundamentals + Bridge to Advanced) taught you the *shape* of the stack — what Alloy types look like, how to use Foundry, what the EVM does at a high level.
 
-Advanced asks something different. **You will read the actual production source of Reth, Revm, Alloy, and Foundry, line by line.** The lessons assume you can already use the stack — they teach you to *read* it.
+The Intermediate tier asks something different. **You will read the actual production source of Reth, Revm, Alloy, and Foundry, line by line.** The lessons assume you can already use the stack — they teach you to *read* it.
 
 The previous lesson confirmed the technical prereqs landed (you can read the \`add\` opcode signature). What's left is *how* the lessons themselves are written, and the rhythm they expect from you.
 
 ## The editorial style — and why
 
-Advanced lessons use **active-learning prompts** that you don't see in earlier tiers:
+Source-reading lessons use **active-learning prompts** that you don't see in earlier tiers:
 
 - 🛑 **Predict** — *Stop. Before reading the explanation, answer this in your head.* The point is to engage with the question, even if you're wrong. Wrong predictions are where the learning happens.
 - 🔍 **Find in repo** — Open the actual source file and verify the lesson's claim. The lesson is guidance; the source is truth.
@@ -1452,7 +1452,7 @@ This is friction by design. Lean into it.
 
 ## How to read these lessons
 
-Each major Advanced topic — \`add\`, custom opcodes, the Database trait, Staged Sync, ExEx, the Reth SDK, the Provider trait — is split into a **chain of 3-4 atomic lessons**:
+Each major source-reading topic — \`add\`, custom opcodes, the Database trait, Staged Sync, ExEx, the Reth SDK, the Provider trait — is split into a **chain of 3-4 atomic lessons**:
 
 1. **Build-up lesson** — start from the dumbest version of the code you could write, then earn each piece of complexity step by step. By the end, you've built every line of the real production source from a motivated starting point. Predict prompts at each step.
 2. **Walkthrough / pipeline / companions lesson** (some chains have one) — read the surrounding production code in detail, with predict and find-in-repo prompts.
@@ -1470,7 +1470,7 @@ This is slower than typical tutorials. **It also internalizes.** The trade is in
 
 ## Pacing
 
-Each atomic lesson is **8-12 minutes stated, ~15-25 minutes with the prompts actually engaged**. A full topic chain (build-up → walkthrough → quiz → drill, 3-4 lessons) is **roughly 45-80 minutes** — one solid evening's work. **L1 Architect tier** chains (beyond Advanced) go longer — 1.5–3 hours per session is typical, because that's the length real L1 architect work demands.
+Each atomic lesson is **8-12 minutes stated, ~15-25 minutes with the prompts actually engaged**. A full topic chain (build-up → walkthrough → quiz → drill, 3-4 lessons) is **roughly 45-80 minutes** — one solid evening's work. **Advanced tier** chains (the L1 Architect courses, after Intermediate) go longer — 1.5–3 hours per session is typical, because that's the length real L1 architect work demands.
 
 **The right unit is one chain per session.** Plan to start a chain (say, the four \`add\` lessons in Revm Advanced) and finish it. The build-up, walkthrough, and quiz reinforce each other, and the drill is where doing-not-reading turns the chain into memory. Splitting a chain across days — half the build-up tonight, the rest plus drill next week — breaks the model.
 
@@ -1478,7 +1478,7 @@ If you're short on time: do *one* lesson well rather than skim two. Engagement m
 
 ## Now go pick a course
 
-The three Advanced courses are independent and can be taken in any order — though **Revm Advanced is the recommended first stop** since its types (\`Address\`, \`U256\`, \`Database\` trait) underpin Reth and Alloy:
+The three source-reading courses are independent and can be taken in any order — though **Revm Advanced is the recommended first stop** since its types (\`Address\`, \`U256\`, \`Database\` trait) underpin Reth and Alloy:
 
 - **Revm Advanced** — Inside the EVM engine
 - **Reth Advanced** — Inside Reth: Staged Sync, ExEx, the Reth SDK
@@ -1486,9 +1486,9 @@ The three Advanced courses are independent and can be taken in any order — tho
 
 Each course has a brief welcome that handles course-specific prereqs and setup. Read that and start lesson 1.
 
-## Beyond Advanced — the L1 Architect tier
+## Beyond Intermediate — the Advanced tier (L1 Architect)
 
-After Advanced, the **L1 Architect tier** waits (5 courses, **EXPERT** difficulty, track \`reth-l1-architect\`). Advanced teaches you to **read** production source. L1 Architect teaches you to **design** an L1 — the implementation skills behind architecting Hyperliquid- or Tempo-class chains.
+After the Intermediate source-reading courses, the **Advanced tier** waits (5 courses, **ADVANCED** difficulty, track \`reth-l1-architect\`). Intermediate teaches you to **read** production source. The Advanced tier teaches you to **design** an L1 — the implementation skills behind architecting Hyperliquid- or Tempo-class chains.
 
 - **Consensus Engineering** — PoS / BFT / Tendermint internals; the latency / liveness / finality trade-offs of consensus design
 - **Cross-Chain Bridges** — read CCIP, the OP Standard Bridge, and light clients in real source; then build your own
@@ -1496,7 +1496,7 @@ After Advanced, the **L1 Architect tier** waits (5 courses, **EXPERT** difficult
 - **P2P Networking Internals** — devp2p, libp2p, gossip subprotocols, and peer scoring at the implementation level
 - **Validator Operations** — key management, slashing conditions, coordinated upgrades
 
-Each chain runs 1.5–3× the length of an Advanced chain. **Don't worry about it now** — finish a single Advanced chain first. Keep L1 Architect as a distant destination on the map and nothing more.
+Each chain runs 1.5–3× the length of an Intermediate source-reading chain. **Don't worry about it now** — finish a single source-reading chain first. Keep the Advanced tier as a distant destination on the map and nothing more.
 
 You're ready.`,
                 },
