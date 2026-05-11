@@ -1470,7 +1470,7 @@ This is slower than typical tutorials. **It also internalizes.** The trade is in
 
 ## Pacing
 
-Each atomic lesson is **8-12 minutes stated, ~15-25 minutes with the prompts actually engaged**. A full topic chain (build-up → walkthrough → quiz → drill, 3-4 lessons) is **roughly 45-80 minutes** — one solid evening's work. Expert lessons go longer.
+Each atomic lesson is **8-12 minutes stated, ~15-25 minutes with the prompts actually engaged**. A full topic chain (build-up → walkthrough → quiz → drill, 3-4 lessons) is **roughly 45-80 minutes** — one solid evening's work. **L1 Architect tier** chains (beyond Advanced) go longer — 1.5–3 hours per session is typical, because that's the length real L1 architect work demands.
 
 **The right unit is one chain per session.** Plan to start a chain (say, the four \`add\` lessons in Revm Advanced) and finish it. The build-up, walkthrough, and quiz reinforce each other, and the drill is where doing-not-reading turns the chain into memory. Splitting a chain across days — half the build-up tonight, the rest plus drill next week — breaks the model.
 
@@ -1485,6 +1485,18 @@ The three Advanced courses are independent and can be taken in any order — tho
 - **Alloy Advanced** *(coming soon)* — Inside Alloy: Provider, Network, Signer
 
 Each course has a brief welcome that handles course-specific prereqs and setup. Read that and start lesson 1.
+
+## Beyond Advanced — the L1 Architect tier
+
+After Advanced, the **L1 Architect tier** waits (5 courses, **EXPERT** difficulty, track \`reth-l1-architect\`). Advanced teaches you to **read** production source. L1 Architect teaches you to **design** an L1 — the implementation skills behind architecting Hyperliquid- or Tempo-class chains.
+
+- **Consensus Engineering** — PoS / BFT / Tendermint internals; the latency / liveness / finality trade-offs of consensus design
+- **Cross-Chain Bridges** — read CCIP, the OP Standard Bridge, and light clients in real source; then build your own
+- **Sequencer & Rollup Architecture** — centralized sequencers to shared sequencers; MEV defense and forced inclusion
+- **P2P Networking Internals** — devp2p, libp2p, gossip subprotocols, and peer scoring at the implementation level
+- **Validator Operations** — key management, slashing conditions, coordinated upgrades
+
+Each chain runs 1.5–3× the length of an Advanced chain. **Don't worry about it now** — finish a single Advanced chain first. Keep L1 Architect as a distant destination on the map and nothing more.
 
 You're ready.`,
                 },
