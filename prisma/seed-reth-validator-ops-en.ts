@@ -9,7 +9,7 @@ export async function seedRethValidatorOpsEN(prisma: PrismaClient) {
       title: 'Validator Operations — Keys, Slashing, and Coordinated Upgrades',
       description:
         "The operational layer between writing consensus code and running consensus in production. Validator key management (hot keys, HSM, MPC, threshold signatures), slashing detection and double-signing prevention, and coordinated hardfork upgrades. The skills that turn a working consensus implementation into a production L1 that doesn't lose its operators' stake.",
-      difficulty: 'EXPERT',
+      difficulty: 'ADVANCED',
       duration: 110,
       xpReward: 350,
       track: 'reth-l1-architect',

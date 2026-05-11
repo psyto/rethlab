@@ -9,7 +9,7 @@ export async function seedRethFundamentalsEN(prisma: PrismaClient) {
       title: 'Reth Fundamentals — Your First Steps with Alloy',
       description:
         'Use Alloy to talk to a real Ethereum node — sign messages, query balances, fetch block numbers — and learn the EVM concepts (stack, memory, opcodes) that you need before reading Revm.',
-      difficulty: 'INTERMEDIATE',
+      difficulty: 'BEGINNER',
       duration: 150,
       xpReward: 250,
       track: 'reth-fundamentals',

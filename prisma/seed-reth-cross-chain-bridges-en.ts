@@ -9,7 +9,7 @@ export async function seedRethCrossChainBridgesEN(prisma: PrismaClient) {
       title: 'Cross-Chain Bridges — From CCIP to Light Clients',
       description:
         'The honest accounting of how value moves between chains: trust models from "trust this multisig" to "trust nothing but the source chain\'s consensus," attack history ($2B+ stolen), reading production bridge code (OP Standard Bridge, Chainlink CCIP, Wormhole, IBC), and building a minimal light-client-verified bridge on Reth. The course that prepares you to architect Tempo↔Solana settlement, OP-stack bridges, and ZK light clients.',
-      difficulty: 'EXPERT',
+      difficulty: 'ADVANCED',
       duration: 150,
       xpReward: 450,
       track: 'reth-l1-architect',

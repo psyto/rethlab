@@ -9,7 +9,7 @@ export async function seedRethP2PNetworkingEN(prisma: PrismaClient) {
       title: 'P2P Networking Internals — From devp2p to Custom Gossip',
       description:
         "The network layer that every blockchain depends on but few engineers understand. devp2p vs libp2p, peer discovery (Kademlia, ENR), RLPx encryption, transaction gossip, eth/68 sub-protocol, reading reth's network crate, peer scoring, and building custom gossip behavior for MEV / private orderflow / sequencer coordination.",
-      difficulty: 'EXPERT',
+      difficulty: 'ADVANCED',
       duration: 110,
       xpReward: 350,
       track: 'reth-l1-architect',

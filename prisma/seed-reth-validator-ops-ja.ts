@@ -9,7 +9,7 @@ export async function seedRethValidatorOpsJA(prisma: PrismaClient) {
       title: 'Validator 運用 — 鍵、slashing、協調アップグレード',
       description:
         'コンセンサスコードを書くことと本番でコンセンサスを走らせることの間の運用層。Validator 鍵管理 (hot 鍵、HSM、MPC、閾値署名)、slashing 検知と double-signing 防止、協調 hardfork アップグレード。動くコンセンサス実装を、オペレータの stake を失わない本番 L1 に変えるスキル。',
-      difficulty: 'EXPERT',
+      difficulty: 'ADVANCED',
       duration: 110,
       xpReward: 350,
       track: 'reth-l1-architect',

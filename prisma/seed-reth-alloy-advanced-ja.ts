@@ -9,7 +9,7 @@ export async function seedRethAlloyAdvancedJA(prisma: PrismaClient) {
       title: 'Alloy Advanced — Rust Ethereum ライブラリを読む',
       description:
         'alloy のソースを 1 行ずつ読み解く — `Provider` トレイト、`Network` 抽象、`Signer`/`Filler` モデル。3 つの独立した Advanced コース（Revm・Reth・Alloy）の 3 つ目で、順番は自由。alloy は Reth と dapp が依拠する基盤なので、このコースは Rust Ethereum コードを書くあらゆる場面で報われる。',
-      difficulty: 'ADVANCED',
+      difficulty: 'INTERMEDIATE',
       duration: 123,
       xpReward: 340,
       track: 'alloy-advanced',

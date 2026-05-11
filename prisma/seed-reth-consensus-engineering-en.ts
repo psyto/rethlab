@@ -9,7 +9,7 @@ export async function seedRethConsensusEngineeringEN(prisma: PrismaClient) {
       title: 'Consensus Engineering — Building L1 Consensus on Reth',
       description:
         "The biggest gap between 'I can read reth' and 'I can ship an L1.' Consensus theory from scratch (BFT, safety/liveness, FLP), reading real Rust consensus engines (reth's Consensus trait, Malachite, bera-reth's Proof-of-Liquidity), and wiring custom consensus into a Reth-based chain. The course that prepares you to read HyperBFT and ship Tempo-class L1s.",
-      difficulty: 'EXPERT',
+      difficulty: 'ADVANCED',
       duration: 220,
       xpReward: 650,
       track: 'reth-l1-architect',

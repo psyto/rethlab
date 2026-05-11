@@ -9,7 +9,7 @@ export async function seedRethFundamentalsJA(prisma: PrismaClient) {
       title: 'Reth Fundamentals — Alloyで動かす最初の一歩',
       description:
         'Alloyを使ってEthereumノードに接続し、署名・残高取得・ブロック番号取得など実用的なRustコードを書きます。さらにEVMの基本概念（スタック、メモリ、Opcode）を学びRevmへの橋渡しを行います。',
-      difficulty: 'INTERMEDIATE',
+      difficulty: 'BEGINNER',
       duration: 150,
       xpReward: 250,
       track: 'reth-fundamentals',

@@ -9,7 +9,7 @@ export async function seedRethRevmAdvancedEN(prisma: PrismaClient) {
       title: 'Revm Advanced — Reading the EVM Engine',
       description:
         'Read the Revm interpreter line by line. Walk the real `add` opcode, custom opcodes, and the `Database` trait that supplies state. The first of three independent Advanced courses (Revm, Reth, Alloy) you can take in any order — though Revm gives you the type vocabulary the others assume.',
-      difficulty: 'ADVANCED',
+      difficulty: 'INTERMEDIATE',
       duration: 120,
       xpReward: 340,
       track: 'revm-advanced',

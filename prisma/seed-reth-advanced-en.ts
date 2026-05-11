@@ -9,7 +9,7 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
       title: 'Reth Advanced — Sync, Extensions, and the SDK',
       description:
         'Read the real Reth source: Staged Sync (the 10-stage pipeline), ExEx (Execution Extensions for in-process indexers / MEV / risk engines), and the Reth SDK (compose your own App-chain). One of three independent Advanced courses (Revm, Reth, Alloy) — Revm Advanced is the recommended prerequisite since several lessons here assume comfort with the `Database` trait and Revm execution model.',
-      difficulty: 'ADVANCED',
+      difficulty: 'INTERMEDIATE',
       duration: 145,
       xpReward: 470,
       track: 'reth-advanced',

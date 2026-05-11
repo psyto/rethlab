@@ -9,7 +9,7 @@ export async function seedRethSequencerRollupJA(prisma: PrismaClient) {
       title: 'Sequencer & Rollup アーキテクチャ — 中央集権ブロック生成から共有 sequencer まで',
       description:
         '現代の L2 が実際どう動くか: sequencer の役割、batch 投稿と data availability、fraud proof vs validity (ZK) proof、op-rbuilder と op-batcher を読み、Reth 上で最小 sequencer を作り、単一オペレータから共有 sequencer までの分散化パス。Tempo Moderato 級の L2 を architect、OP Stack chain を出荷、次の共有 sequencer を作る準備ができる。',
-      difficulty: 'EXPERT',
+      difficulty: 'ADVANCED',
       duration: 165,
       xpReward: 500,
       track: 'reth-l1-architect',

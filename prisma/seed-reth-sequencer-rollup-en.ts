@@ -9,7 +9,7 @@ export async function seedRethSequencerRollupEN(prisma: PrismaClient) {
       title: 'Sequencer & Rollup Architecture — From Centralized Block Producer to Shared Sequencers',
       description:
         "How modern L2s actually work: the sequencer's role, batch posting and data availability, fraud proofs vs validity (ZK) proofs, reading op-rbuilder and op-batcher, building a minimal sequencer on Reth, and the decentralization paths from single-operator to shared sequencers. The course that prepares you to architect L2s like Tempo Moderato, ship an OP Stack chain, or build the next shared sequencer.",
-      difficulty: 'EXPERT',
+      difficulty: 'ADVANCED',
       duration: 165,
       xpReward: 500,
       track: 'reth-l1-architect',
