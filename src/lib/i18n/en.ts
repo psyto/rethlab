@@ -38,8 +38,8 @@ export const en = {
   },
   landing: {
     hero: {
-      title: 'Become a Hardcore Rust Ethereum Developer',
-      subtitle: 'Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. The emerging Rust EVM stack is still ~7-12% of execution clients (vs Geth ~50%) but growing fast, and the engineers who can read it are scarce. RethLab walks you through that source line by line — then has you build nine working apps end to end, capstoning in a frontrun-resistant order router and a cross-client validation harness.',
+      title: 'The school for Rust EVM L1 engineers',
+      subtitle: 'Hyperliquid, Tempo, Berachain — every modern Rust EVM L1 runs on Reth, Revm, Alloy, Foundry. The engineers who can architect these chains are scarce. RethLab walks you through 13 courses across 4 tiers — from EVM foundations, to reading Alloy/Revm/Reth source line by line, to architecting L1 consensus, to shipping nine production-grade apps.',
       cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -323,7 +323,7 @@ export const en = {
   },
   about: {
     title: 'About RethLab',
-    subtitle: 'Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. The Rust EVM stack is having its moment in crypto infrastructure, and the engineers who can read it are scarce. RethLab walks you through 13 courses across 4 tiers — from Rust EVM foundations, through reading Alloy/Revm/Reth source line by line, to architecting L1 consensus and shipping nine production-grade apps.',
+    subtitle: 'The school for Rust EVM L1 engineers. Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. RethLab walks you through 13 courses across 4 tiers — from EVM foundations, to reading Alloy/Revm/Reth source line by line, to architecting L1 consensus, to shipping nine production-grade apps.',
     bio: '15+ years shipping mission-critical financial systems — core banking, retail deposits, mortgages, KYC, regulatory reporting — across Tokyo (Shinsei Bank), Bangalore (offshore dev), and Hong Kong (free English-learning email, 500K+ users). Now Head of Sales Engineering at SBI R3 Japan, focused on Solana enterprise adoption and real-world-asset tokenization, while building actively across Bitcoin, Ethereum, Solana, Hyperliquid, and Corda.\n\nI built RethLab because when I tried to learn Reth / Revm / Alloy / Foundry properly, I hit the gap the curriculum walks through: the docs are scattered, the source is dense, and there is no clear path from "I know some Rust" to "I can ship production EVM infrastructure." I learned by doing, then turned what worked into the curriculum I wish I\'d had — 13 courses across 4 tiers (Foundations / Source-Reading / L1 Architecture / Production), ~131 lessons. The Advanced tier covers consensus, cross-chain bridges, sequencer & rollup architecture, P2P networking, and validator operations. The Expert tier ships nine end-to-end apps. Free forever, source-first.\n\nPersonally, I\'m interested in the teams shipping this stack — Paradigm and Tempo above all.',
     background: {
       tradfi: 'Background',

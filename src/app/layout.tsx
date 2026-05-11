@@ -20,11 +20,11 @@ const baseUrl =
 
 export const metadata: Metadata = {
   title: {
-    default: 'RethLab — Hardcore Rust Ethereum Developer Training',
+    default: 'RethLab — The school for Rust EVM L1 engineers',
     template: '%s | RethLab',
   },
   description:
-    'The new wave of EVM is purpose-built L1s — Hyperliquid for perps, Tempo for payments, Base for the consumer L2. They all run on Reth, Revm, Alloy, Foundry. RethLab walks you through that source line by line. Free, English + Japanese, no signup required.',
+    'The school for Rust EVM L1 engineers. Hyperliquid, Tempo, and Berachain all run on Reth, Revm, Alloy, Foundry. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
   keywords: [
     'Reth',
     'Revm',
@@ -51,16 +51,16 @@ export const metadata: Metadata = {
     alternateLocale: 'ja_JP',
     url: baseUrl,
     siteName: 'RethLab',
-    title: 'RethLab — Hardcore Rust Ethereum Developer Training',
+    title: 'RethLab — The school for Rust EVM L1 engineers',
     description:
-      'The new wave of EVM is purpose-built L1s — Hyperliquid for perps, Tempo for payments, Base for the consumer L2. They all run on Reth, Revm, Alloy, Foundry. RethLab walks you through that source line by line. Free, English + Japanese, no signup required.',
+      'The school for Rust EVM L1 engineers. Hyperliquid, Tempo, and Berachain all run on Reth, Revm, Alloy, Foundry. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
     // images are auto-derived from app/opengraph-image.tsx (PNG, 1200x630)
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'RethLab — Hardcore Rust Ethereum Developer Training',
+    title: 'RethLab — The school for Rust EVM L1 engineers',
     description:
-      'The new wave of EVM is purpose-built L1s — Hyperliquid for perps, Tempo for payments, Base for the consumer L2. They all run on Reth, Revm, Alloy, Foundry. RethLab walks you through that source line by line. Free, English + Japanese, no signup required.',
+      'The school for Rust EVM L1 engineers. Hyperliquid, Tempo, and Berachain all run on Reth, Revm, Alloy, Foundry. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
     creator: '@psyto',
     site: '@psyto',
     // images are auto-derived from app/opengraph-image.tsx
