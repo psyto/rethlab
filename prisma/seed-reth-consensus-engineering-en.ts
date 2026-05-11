@@ -750,7 +750,7 @@ The structure stays the same. **You're not rewriting the trait** — you're prov
 
 ## 6. The NodeBuilder slot
 
-From Reth Advanced (you've seen this):
+From Inside Reth (you've seen this):
 
 \`\`\`rust
 let node = NodeBuilder::new()
@@ -1239,7 +1239,7 @@ You've read the trait. You've seen Malachite and bera-reth. Now: **wire it toget
 
 ## 1. The consensus component in Reth's component model
 
-From Reth Advanced — six NodeBuilder components:
+From Inside Reth — six NodeBuilder components:
 
 | Component | Trait | Default |
 | :--- | :--- | :--- |

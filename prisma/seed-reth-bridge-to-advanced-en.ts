@@ -8,7 +8,7 @@ export async function seedRethBridgeToAdvancedEN(prisma: PrismaClient) {
       slug: 'reth-bridge-to-advanced-en',
       title: 'Reading the Stack — Bridge to Source-Reading',
       description:
-        'You finished the Beginner-tier foundations in Rust and Alloy. But source-walking the Alloy/Revm/Reth Advanced courses still feels overwhelming. This course closes the gap: EVM at the bytes level (dispatch loop, world state, call frames, reorgs) and the intermediate Rust (generics, dyn, Arc, unsafe, macros) that Reth and Revm source assume you know.',
+        'You finished the Beginner-tier foundations in Rust and Alloy. But source-walking the Alloy/Revm/Inside Reth courses still feels overwhelming. This course closes the gap: EVM at the bytes level (dispatch loop, world state, call frames, reorgs) and the intermediate Rust (generics, dyn, Arc, unsafe, macros) that Reth and Revm source assume you know.',
       difficulty: 'BEGINNER',
       duration: 100,
       xpReward: 200,
@@ -1424,7 +1424,7 @@ After that, pick a course and start.`,
                   xpReward: 15,
                   content: `# How the source-reading courses work
 
-You're at the doorstep of the **Intermediate tier** — three independent courses (**Revm Advanced**, **Reth Advanced**, **Alloy Advanced**) that all teach the same skill: **reading production Rust source line by line.** This short lesson explains how those courses are structured, so you can engage with the right mindset from lesson 1 — whichever course you start with.
+You're at the doorstep of the **Intermediate tier** — three independent courses (**Inside Revm**, **Inside Reth**, **Inside Alloy**) that all teach the same skill: **reading production Rust source line by line.** This short lesson explains how those courses are structured, so you can engage with the right mindset from lesson 1 — whichever course you start with.
 
 (Each course also has its own short welcome handling course-specific prereqs and setup. *This* lesson is the **generic** orientation, applied once.)
 
@@ -1472,17 +1472,17 @@ This is slower than typical tutorials. **It also internalizes.** The trade is in
 
 Each atomic lesson is **8-12 minutes stated, ~15-25 minutes with the prompts actually engaged**. A full topic chain (build-up → walkthrough → quiz → drill, 3-4 lessons) is **roughly 45-80 minutes** — one solid evening's work. **Advanced tier** chains (the L1 Architect courses, after Intermediate) go longer — 1.5–3 hours per session is typical, because that's the length real L1 architect work demands.
 
-**The right unit is one chain per session.** Plan to start a chain (say, the four \`add\` lessons in Revm Advanced) and finish it. The build-up, walkthrough, and quiz reinforce each other, and the drill is where doing-not-reading turns the chain into memory. Splitting a chain across days — half the build-up tonight, the rest plus drill next week — breaks the model.
+**The right unit is one chain per session.** Plan to start a chain (say, the four \`add\` lessons in Inside Revm) and finish it. The build-up, walkthrough, and quiz reinforce each other, and the drill is where doing-not-reading turns the chain into memory. Splitting a chain across days — half the build-up tonight, the rest plus drill next week — breaks the model.
 
 If you're short on time: do *one* lesson well rather than skim two. Engagement matters more than coverage at this tier.
 
 ## Now go pick a course
 
-The three source-reading courses are independent and can be taken in any order — though **Revm Advanced is the recommended first stop** since its types (\`Address\`, \`U256\`, \`Database\` trait) underpin Reth and Alloy:
+The three source-reading courses are independent and can be taken in any order — though **Inside Revm is the recommended first stop** since its types (\`Address\`, \`U256\`, \`Database\` trait) underpin Reth and Alloy:
 
-- **Revm Advanced** — Inside the EVM engine
-- **Reth Advanced** — Inside Reth: Staged Sync, ExEx, the Reth SDK
-- **Alloy Advanced** *(coming soon)* — Inside Alloy: Provider, Network, Signer
+- **Inside Revm** — Inside the EVM engine
+- **Inside Reth** — Inside Reth: Staged Sync, ExEx, the Reth SDK
+- **Inside Alloy** *(coming soon)* — Inside Alloy: Provider, Network, Signer
 
 Each course has a brief welcome that handles course-specific prereqs and setup. Read that and start lesson 1.
 

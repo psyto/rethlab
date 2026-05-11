@@ -6,9 +6,9 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'reth-advanced-ja',
-      title: 'Reth Advanced — シンク・拡張・SDK',
+      title: 'Inside Reth — シンク・拡張・SDK',
       description:
-        'Reth の本物のソースを読む: Staged Sync (10 ステージのパイプライン)、ExEx (Execution Extensions — インプロセスのインデクサ・MEV・リスクエンジン用)、Reth SDK (自前の App-chain を組み立てる)。3 つの独立した Advanced コース (Revm・Reth・Alloy) の 1 つ — `Database` トレイトと Revm 実行モデルへの慣れを前提にする箇所があるので、Revm Advanced を先にやることを推奨。',
+        'Reth の本物のソースを読む: Staged Sync (10 ステージのパイプライン)、ExEx (Execution Extensions — インプロセスのインデクサ・MEV・リスクエンジン用)、Reth SDK (自前の App-chain を組み立てる)。3 つの独立した Advanced コース (Revm・Reth・Alloy) の 1 つ — `Database` トレイトと Revm 実行モデルへの慣れを前提にする箇所があるので、Inside Revm を先にやることを推奨。',
       difficulty: 'INTERMEDIATE',
       duration: 145,
       xpReward: 470,
@@ -26,21 +26,21 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Reth Advanced へようこそ — このコースの読み方',
+                  title: 'Inside Reth へようこそ — このコースの読み方',
                   slug: 'reth-advanced-welcome-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Reth Advanced へようこそ — このコースの読み方
+                  content: `# Inside Reth へようこそ — このコースの読み方
 
 これは RethLab の 3 つの独立した Advanced ティアのコースの 1 つです:
 
-- **Revm Advanced** — EVM エンジンの内部 *(まだなら先に推奨)*
-- **Reth Advanced**（あなたはここ）— Reth の内部: Staged Sync・ExEx・Reth SDK
-- **Alloy Advanced** *(近日公開)* — Alloy の内部: Provider・Network・Signer
+- **Inside Revm** — EVM エンジンの内部 *(まだなら先に推奨)*
+- **Inside Reth**（あなたはここ）— Reth の内部: Staged Sync・ExEx・Reth SDK
+- **Inside Alloy** *(近日公開)* — Alloy の内部: Provider・Network・Signer
 
-3 つは独立していますが、**ここのいくつかのレッスンは Revm Advanced で学ぶ \`Database\` トレイトと Revm 実行モデルへの慣れを前提にしています**。それが不安なら、Revm Advanced を先に。
+3 つは独立していますが、**ここのいくつかのレッスンは Inside Revm で学ぶ \`Database\` トレイトと Revm 実行モデルへの慣れを前提にしています**。それが不安なら、Inside Revm を先に。
 
 > 📋 **Advanced ティアは初めて?** *Bridge to Advanced* の最後にある **「Advanced コースの読み方」** を先に読んでください。編集スタイル（Predict プロンプト・クイズゲート・積み上げ→ウォークスルー→クイズ→ドリルのチェーン構造）とペースを説明しています — 3 つの Advanced コース全てに適用される、1 度読めば済む内容です。
 
@@ -52,7 +52,7 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
 
 ## 前提知識
 
-**Revm 内部**（Revm Advanced を未受講の場合）:
+**Revm 内部**（Inside Revm を未受講の場合）:
 - \`Database\` トレイトの面と Revm がそれを通じて状態を読む方法
 - \`ExecutionStage\` で \`Stage\` と \`Database\` がどう相互作用するか
 
@@ -66,7 +66,7 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
 - \`async\` / \`Future\` / \`Stream\` の基礎
 - \`auto_impl\` マクロと手続き属性
 
-**Revm が不安?** Revm Advanced を先に。Stage トレイトも SDK も Revm 型を直接参照します。
+**Revm が不安?** Inside Revm を先に。Stage トレイトも SDK も Revm 型を直接参照します。
 
 ## セットアップ — 一度だけ
 
@@ -84,7 +84,7 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
 
 コース詳細に戻って **「\`Stage\` トレイトをステップで組み立てる」** から始める。
 
-Reth Advanced の後: **Alloy Advanced**（未受講なら）か、手続きマクロや zkVM 統合の深掘りがある **Expert** へ。`,
+Inside Reth の後: **Inside Alloy**（未受講なら）か、手続きマクロや zkVM 統合の深掘りがある **Expert** へ。`,
                 },
               ],
             },
@@ -1893,15 +1893,15 @@ Advanced は **構造** を教えました。Expert はその構造の **背後�
 > インフラレイヤーの学習は、最初の 3 ヶ月が一番苦しいです。ドキュメントが不十分なことも多く、**「ソースコードこそが最強の教科書」**。Expert はこの教訓が報われるティアです。`,
                 },
                 {
-                  title: 'Reth Advanced ファイナルクイズ',
+                  title: 'Inside Reth ファイナルクイズ',
                   slug: 'reth-advanced-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 14,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Reth Advanced ファイナルクイズ
+                  content: `# Inside Reth ファイナルクイズ
 
-Staged Sync・ExEx・Reth SDK の最終チェック。3 問。同じルール: **クイズはうなずきで通せない。** 2 問落としたら、Reth Advanced を「完了」と称する前に該当する積み上げレッスンを読み直してください。`,
+Staged Sync・ExEx・Reth SDK の最終チェック。3 問。同じルール: **クイズはうなずきで通せない。** 2 問落としたら、Inside Reth を「完了」と称する前に該当する積み上げレッスンを読み直してください。`,
                   quizQuestions: [
                     {
                       question: 'Reth の Staged Sync が、ブロック単位の同期に対して持つ実利は？',

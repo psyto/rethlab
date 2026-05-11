@@ -750,7 +750,7 @@ BFT コンセンサス付きカスタム L1 は次を override:
 
 ## 6. NodeBuilder スロット
 
-Reth Advanced から (見たはず):
+Inside Reth から (見たはず):
 
 \`\`\`rust
 let node = NodeBuilder::new()
@@ -1239,7 +1239,7 @@ Trait を読んだ。Malachite と bera-reth を見た。次は **配線する**
 
 ## 1. Reth コンポーネントモデルでのコンセンサスコンポーネント
 
-Reth Advanced から — 6 つの NodeBuilder コンポーネント:
+Inside Reth から — 6 つの NodeBuilder コンポーネント:
 
 | コンポーネント | Trait | デフォルト |
 | :--- | :--- | :--- |

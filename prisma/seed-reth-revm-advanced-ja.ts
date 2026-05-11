@@ -6,7 +6,7 @@ export async function seedRethRevmAdvancedJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'revm-advanced-ja',
-      title: 'Revm Advanced — EVMエンジンを読む',
+      title: 'Inside Revm — EVMエンジンを読む',
       description:
         'Revmのインタープリターを1行ずつ読み解きます。本物の `add` Opcode、カスタムOpcode、状態を供給する `Database` トレイトを歩く。3つの独立したAdvancedコース（Revm・Reth・Alloy）の最初の一つ — 順番は自由ですが、Revmが提供する型の語彙は他の2つが前提とします。',
       difficulty: 'INTERMEDIATE',
@@ -26,19 +26,19 @@ export async function seedRethRevmAdvancedJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Revm Advanced へようこそ — このコースの読み方',
+                  title: 'Inside Revm へようこそ — このコースの読み方',
                   slug: 'revm-advanced-welcome-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Revm Advanced へようこそ — このコースの読み方
+                  content: `# Inside Revm へようこそ — このコースの読み方
 
 これは RethLab の 3 つの独立した Advanced ティアのコースの最初の 1 つです:
 
-- **Revm Advanced**（あなたはここ）— EVM エンジンの内部
-- **Reth Advanced** — Reth の内部: Staged Sync・ExEx・Reth SDK
-- **Alloy Advanced** *(近日公開)* — Alloy の内部: Provider・Network・Signer
+- **Inside Revm**（あなたはここ）— EVM エンジンの内部
+- **Inside Reth** — Reth の内部: Staged Sync・ExEx・Reth SDK
+- **Inside Alloy** *(近日公開)* — Alloy の内部: Provider・Network・Signer
 
 Revm を最初に推奨するのは、Revm の型（\`Address\`・\`U256\`・\`B256\`・\`Database\` トレイト）が Reth と Alloy の多くの部分の前提になるから。ただし 3 コースは独立しているので、構築しているものに合わせて選んで OK。
 
@@ -59,7 +59,7 @@ Revm を最初に推奨するのは、Revm の型（\`Address\`・\`U256\`・\`B
 - コールフレーム: CALL / DELEGATECALL / STATICCALL のセマンティクス
 - ブロック構造 (header / body / receipts)、reorg は通常運用
 
-**中級 Rust**（同じく Bridge to Advanced で。Reth Advanced 内の *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンが自己チェック用）:
+**中級 Rust**（同じく Bridge to Advanced で。Inside Reth 内の *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンが自己チェック用）:
 - Generics + trait bounds、\`?Sized\`、\`dyn Trait\` vs \`impl Trait\`
 - \`Arc<T>\`、\`Mutex<T>\`、\`RwLock<T>\` — どれをいつ使うか
 - \`unsafe\` ブロックと \`unwrap_unchecked()\`
@@ -80,7 +80,7 @@ Revm を最初に推奨するのは、Revm の型（\`Address\`・\`U256\`・\`B
 
 コース詳細に戻って **「\`add\` をステップで組み立てる：シグネチャと本体」** から始める。
 
-Revm Advanced の後: **Reth Advanced** で Reth 固有の sync パイプライン + ExEx + SDK へ、または **Alloy Advanced**（公開後）へ。`,
+Inside Revm の後: **Inside Reth** で Reth 固有の sync パイプライン + ExEx + SDK へ、または **Inside Alloy**（公開後）へ。`,
                 },
                 {
                   title: '\`add\` をステップで組み立てる：シグネチャと本体',
@@ -1549,20 +1549,20 @@ tx は「致命的な外部エラー」として中断する — revert とは�
 
 このドリルの後、Revm がどう状態を取るかの動くメンタルモデルがあります — 他のすべての Database はこの \`ZeroDb\` に本物のデータが乗っただけ。
 
-最後に 1 レッスン残っています: コース全体を通したファイナルクイズ。それを終えたら Revm Advanced は完了 — **Reth Advanced** が自然な次のステップ（Staged Sync・ExEx・Reth SDK）。`,
+最後に 1 レッスン残っています: コース全体を通したファイナルクイズ。それを終えたら Inside Revm は完了 — **Inside Reth** が自然な次のステップ（Staged Sync・ExEx・Reth SDK）。`,
                 },
                 {
-                  title: 'Revm Advanced ファイナルクイズ',
+                  title: 'Inside Revm ファイナルクイズ',
                   slug: 'revm-advanced-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 13,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Revm Advanced ファイナルクイズ
+                  content: `# Inside Revm ファイナルクイズ
 
 Revm 内部の最終チェック: インタープリター、カスタム Opcode、Database トレイト。
 
-3 問。同じルール: **クイズはうなずきで通せない。** 2 問落としたら、Revm Advanced を「完了」と称する前に該当する積み上げレッスンを読み直してください。`,
+3 問。同じルール: **クイズはうなずきで通せない。** 2 問落としたら、Inside Revm を「完了」と称する前に該当する積み上げレッスンを読み直してください。`,
                   quizQuestions: [
                     {
                       question: 'Revm の `crates/interpreter` が責任を持つのはどれですか?',

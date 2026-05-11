@@ -6,7 +6,7 @@ export async function seedRethAlloyAdvancedEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'alloy-advanced-en',
-      title: 'Alloy Advanced — Reading the Rust Ethereum Library',
+      title: 'Inside Alloy — Reading the Rust Ethereum Library',
       description:
         'Read the alloy source line by line — the `Provider` trait, the `Network` abstraction, and the `Signer`/`Filler` model. The third of three independent Advanced courses (Revm, Reth, Alloy) you can take in any order. Alloy is the foundation Reth and dapps build on, so this course pays back wherever you build Rust Ethereum code.',
       difficulty: 'INTERMEDIATE',
@@ -26,21 +26,21 @@ export async function seedRethAlloyAdvancedEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Welcome to Alloy Advanced — how this course works',
+                  title: 'Welcome to Inside Alloy — how this course works',
                   slug: 'alloy-advanced-welcome-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Welcome to Alloy Advanced — how this course works
+                  content: `# Welcome to Inside Alloy — how this course works
 
 This is one of three independent Advanced-tier courses on RethLab:
 
-- **Revm Advanced** — Inside the EVM engine
-- **Reth Advanced** — Inside Reth: Staged Sync, ExEx, the Reth SDK
-- **Alloy Advanced** (you are here) — Inside Alloy: Provider, Network, Signer
+- **Inside Revm** — Inside the EVM engine
+- **Inside Reth** — Inside Reth: Staged Sync, ExEx, the Reth SDK
+- **Inside Alloy** (you are here) — Inside Alloy: Provider, Network, Signer
 
-Alloy is the foundation everyone else builds on — Reth uses alloy types, Revm uses alloy primitives, and every dapp / MEV bot / indexer that talks to Ethereum from Rust uses the alloy \`Provider\`. This course teaches you to **read the alloy source**, the same way Revm Advanced teaches you to read revm.
+Alloy is the foundation everyone else builds on — Reth uses alloy types, Revm uses alloy primitives, and every dapp / MEV bot / indexer that talks to Ethereum from Rust uses the alloy \`Provider\`. This course teaches you to **read the alloy source**, the same way Inside Revm teaches you to read revm.
 
 > 📋 **First time at the Advanced tier?** Read **"How Advanced courses work"** at the end of *Bridge to Advanced* before starting. It explains the editorial style (Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape) and pacing — applies to all three Advanced courses, so you only read it once.
 
@@ -64,7 +64,7 @@ By the end, you'll be able to read alloy's hot path and build custom Provider la
 - \`async\` / \`Future\` basics, the Tokio runtime model
 - \`auto_impl\` macros and procedural attributes
 
-**No EVM internals required.** Alloy operates above the EVM — it talks to nodes, not to opcodes. (If you're doing all three Advanced courses, you'll see EVM internals in Revm Advanced.)
+**No EVM internals required.** Alloy operates above the EVM — it talks to nodes, not to opcodes. (If you're doing all three Advanced courses, you'll see EVM internals in Inside Revm.)
 
 **Familiarity with using alloy as a user** — \`Provider::get_balance\`, \`ProviderBuilder\`, signing a tx — covered in Fundamentals (\`alloy-primitives-signing\`, \`alloy-provider\`). If those concepts are shaky, do those Fundamentals lessons first; this course teaches you to *read* alloy, not to *use* it.
 
@@ -82,7 +82,7 @@ The "Find in repo" prompts only work if you actually have the repo open. Close t
 
 Scroll back to the course detail and start with **Building the \`Provider\` trait step by step**.
 
-After Alloy Advanced: you've completed all three Advanced courses. **Expert** picks up the procedural-macro and zkVM-integration deep dives.`,
+After Inside Alloy: you've completed all three Advanced courses. **Expert** picks up the procedural-macro and zkVM-integration deep dives.`,
                 },
                 {
                   title: 'Building the \`Provider\` trait step by step',
@@ -403,7 +403,7 @@ Every \`Provider\` implementation must be safe to send across threads (\`Send\`)
 
 ### \`#[auto_impl(&, &mut, Box, Rc, Arc)]\`
 
-Five wrappers. Same shape as \`DatabaseRef\` from Revm Advanced, and for the same reason: \`Provider\` only needs \`&self\` to read state — no \`&mut self\` mutation in the method signatures — so all five wrapper types work through the trait. \`Arc<P>\` and \`Rc<P>\` give you cheap shareable handles.
+Five wrappers. Same shape as \`DatabaseRef\` from Inside Revm, and for the same reason: \`Provider\` only needs \`&self\` to read state — no \`&mut self\` mutation in the method signatures — so all five wrapper types work through the trait. \`Arc<P>\` and \`Rc<P>\` give you cheap shareable handles.
 
 > 🛑 **Predict.** \`Database\` (in revm) had \`auto_impl(&mut, Box)\` — only two wrappers. \`Provider\` (here) has five. **What's the structural difference between \`Database\` and \`Provider\` that drives the asymmetry?**
 
@@ -2251,17 +2251,17 @@ If any answer is shaky, the lesson isn't done with you. Re-run the drills or re-
 After this drill, you've shipped a *signed transaction through the full Provider/Network/Signer trio* — the same shape every dapp, MEV bot, and indexer uses in production. **Provider, Network, and Signer chains are complete.** The course's final quiz is the next stop.`,
                 },
                 {
-                  title: 'Alloy Advanced final quiz',
+                  title: 'Inside Alloy final quiz',
                   slug: 'alloy-advanced-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 13,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Alloy Advanced final quiz
+                  content: `# Inside Alloy final quiz
 
 Final check across the three chains: \`Provider\`, \`Network\`, \`Signer\`.
 
-Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant chain's build-up before claiming you're done with Alloy Advanced.`,
+Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant chain's build-up before claiming you're done with Inside Alloy.`,
                   quizQuestions: [
                     {
                       question: "`Provider`'s `root()` method is the only required method on the trait — every other RPC method has a default impl. What's its load-bearing architectural purpose?",

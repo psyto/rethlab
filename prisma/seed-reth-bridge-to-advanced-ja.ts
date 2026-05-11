@@ -8,7 +8,7 @@ export async function seedRethBridgeToAdvancedJA(prisma: PrismaClient) {
       slug: 'reth-bridge-to-advanced-ja',
       title: 'スタックを読む — ソース読解への橋渡し',
       description:
-        'Beginner ティアの Rust と Alloy の基礎は固まった。でも次の Alloy/Revm/Reth Advanced のソース読みは依然として圧倒的。このコースがそのギャップを埋めます。EVM をバイト単位で（ディスパッチループ・ワールドステート・コールフレーム・reorg）、そして Reth/Revm のソースが暗黙の前提とする中級 Rust（generics・dyn・Arc・unsafe・macro_rules）。',
+        'Beginner ティアの Rust と Alloy の基礎は固まった。でも次の Alloy/Revm/Inside Reth のソース読みは依然として圧倒的。このコースがそのギャップを埋めます。EVM をバイト単位で（ディスパッチループ・ワールドステート・コールフレーム・reorg）、そして Reth/Revm のソースが暗黙の前提とする中級 Rust（generics・dyn・Arc・unsafe・macro_rules）。',
       difficulty: 'BEGINNER',
       duration: 100,
       xpReward: 200,
@@ -1424,7 +1424,7 @@ Advanced ティアは **3 つの独立したコース**（Revm・Reth・Alloy）
                   xpReward: 15,
                   content: `# ソース読解コースの読み方
 
-あなたは **Intermediate ティア** の入口に立っています — **3 つの独立したコース**（**Revm Advanced**・**Reth Advanced**・**Alloy Advanced**）はすべて同じスキルを教えます: **本番の Rust ソースを 1 行ずつ読む。** この短いレッスンは、それらのコースがどう構成されているかを説明し、レッスン 1 から正しいマインドセットで臨めるようにします — どのコースから始めても。
+あなたは **Intermediate ティア** の入口に立っています — **3 つの独立したコース**（**Inside Revm**・**Inside Reth**・**Inside Alloy**）はすべて同じスキルを教えます: **本番の Rust ソースを 1 行ずつ読む。** この短いレッスンは、それらのコースがどう構成されているかを説明し、レッスン 1 から正しいマインドセットで臨めるようにします — どのコースから始めても。
 
 (各コースにも、コース固有の前提とセットアップを扱う短いウェルカムがあります。*このレッスン* は、1 度読めば済む **汎用的な** オリエンテーション。)
 
@@ -1472,17 +1472,17 @@ Intermediate ティアは別のことを要求します。**Reth・Revm・Alloy�
 
 各アトミックレッスンは表示上 **8〜12 分、プロンプトに本気で取り組むと〜15〜25 分**。1 つのトピックチェーン全体（積み上げ → ウォークスルー → クイズ → ドリル、3〜4 本）は **おおよそ 45〜80 分** — 1 晩がかりの仕事。**Advanced ティア（Intermediate の先の L1 Architect 系）** のチェーンはさらに長い — 1 セッションに 1.5〜3 時間が普通。実際の L1 アーキテクトの仕事が要求する長さだから。
 
-**正しい単位はセッションあたり 1 チェーン**。チェーン（例えば Revm Advanced の \`add\` の 4 本）を始めたら、その日のうちに終わらせる計画で。積み上げ・ウォークスルー・クイズが互いに強化し合い、ドリルで「読み」が「記憶」に変わる。チェーンを跨日で割る — 今晩は積み上げの半分、来週に残りとドリル — はモデルを壊します。
+**正しい単位はセッションあたり 1 チェーン**。チェーン（例えば Inside Revm の \`add\` の 4 本）を始めたら、その日のうちに終わらせる計画で。積み上げ・ウォークスルー・クイズが互いに強化し合い、ドリルで「読み」が「記憶」に変わる。チェーンを跨日で割る — 今晩は積み上げの半分、来週に残りとドリル — はモデルを壊します。
 
 時間がないなら: 2 本を流すよりも *1 本を丁寧に*。このティアではエンゲージメントが網羅性より重要。
 
 ## さあ、コースを選ぶ
 
-3 つのソース読解コースは独立していて任意の順序で進められます — ただし **Revm Advanced を最初に推奨**、その型（\`Address\`、\`U256\`、\`Database\` トレイト）が Reth と Alloy の前提になるから:
+3 つのソース読解コースは独立していて任意の順序で進められます — ただし **Inside Revm を最初に推奨**、その型（\`Address\`、\`U256\`、\`Database\` トレイト）が Reth と Alloy の前提になるから:
 
-- **Revm Advanced** — EVM エンジンの内部
-- **Reth Advanced** — Reth の内部: Staged Sync・ExEx・Reth SDK
-- **Alloy Advanced** *(近日公開)* — Alloy の内部: Provider・Network・Signer
+- **Inside Revm** — EVM エンジンの内部
+- **Inside Reth** — Reth の内部: Staged Sync・ExEx・Reth SDK
+- **Inside Alloy** *(近日公開)* — Alloy の内部: Provider・Network・Signer
 
 各コースに、コース固有の前提とセットアップを扱う短いウェルカムがあります。それを読んでレッスン 1 を始めてください。
 

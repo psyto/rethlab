@@ -6,7 +6,7 @@ export async function seedRethRevmAdvancedEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'revm-advanced-en',
-      title: 'Revm Advanced — Reading the EVM Engine',
+      title: 'Inside Revm — Reading the EVM Engine',
       description:
         'Read the Revm interpreter line by line. Walk the real `add` opcode, custom opcodes, and the `Database` trait that supplies state. The first of three independent Advanced courses (Revm, Reth, Alloy) you can take in any order — though Revm gives you the type vocabulary the others assume.',
       difficulty: 'INTERMEDIATE',
@@ -26,19 +26,19 @@ export async function seedRethRevmAdvancedEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Welcome to Revm Advanced — how this course works',
+                  title: 'Welcome to Inside Revm — how this course works',
                   slug: 'revm-advanced-welcome-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Welcome to Revm Advanced — how this course works
+                  content: `# Welcome to Inside Revm — how this course works
 
 This is the first of three independent Advanced-tier courses on RethLab:
 
-- **Revm Advanced** (you are here) — Inside the EVM engine
-- **Reth Advanced** — Inside Reth: Staged Sync, ExEx, the Reth SDK
-- **Alloy Advanced** *(coming soon)* — Inside Alloy: Provider, Network, Signer
+- **Inside Revm** (you are here) — Inside the EVM engine
+- **Inside Reth** — Inside Reth: Staged Sync, ExEx, the Reth SDK
+- **Inside Alloy** *(coming soon)* — Inside Alloy: Provider, Network, Signer
 
 We recommend Revm first because Revm types (\`Address\`, \`U256\`, \`B256\`, the \`Database\` trait) underpin most of what Reth and Alloy do. But the courses are independent — pick the one that matches what you're building.
 
@@ -59,7 +59,7 @@ By the end, you'll have read every line of revm's hot path and be able to explai
 - Call frames: CALL / DELEGATECALL / STATICCALL semantics
 - Block structure (header / body / receipts), reorgs as a normal phenomenon
 
-**Intermediate Rust** (also Bridge to Advanced; there's a *Rust: lifetimes, Box, Arc, dyn Trait* lesson inside Reth Advanced for self-checking):
+**Intermediate Rust** (also Bridge to Advanced; there's a *Rust: lifetimes, Box, Arc, dyn Trait* lesson inside Inside Reth for self-checking):
 - Generics with trait bounds, \`?Sized\`, \`dyn Trait\` vs \`impl Trait\`
 - \`Arc<T>\`, \`Mutex<T>\`, \`RwLock<T>\` — when to use each
 - \`unsafe\` blocks and \`unwrap_unchecked()\`
@@ -80,7 +80,7 @@ The "Find in repo" prompts only work if you actually have the repos open. Close 
 
 Scroll back to the course detail and start with **Building \`add\` step by step: signature and body**.
 
-After Revm Advanced: head to **Reth Advanced** for the Reth-specific sync pipeline + ExEx + SDK, or **Alloy Advanced** when it's available.`,
+After Inside Revm: head to **Inside Reth** for the Reth-specific sync pipeline + ExEx + SDK, or **Inside Alloy** when it's available.`,
                 },
                 {
                   title: 'Building \`add\` step by step: signature and body',
@@ -1547,20 +1547,20 @@ If any answer is shaky, the lesson isn't done with you. Re-run the drill or re-r
 
 After this drill, you have a working mental model of how revm gets state — every other database is just \`ZeroDb\` with real data behind it.
 
-One lesson left: a final quiz across the whole course. After that, Revm Advanced is done — **Reth Advanced** is the natural next stop (Staged Sync, ExEx, the Reth SDK).`,
+One lesson left: a final quiz across the whole course. After that, Inside Revm is done — **Inside Reth** is the natural next stop (Staged Sync, ExEx, the Reth SDK).`,
                 },
                 {
-                  title: 'Revm Advanced final quiz',
+                  title: 'Inside Revm final quiz',
                   slug: 'revm-advanced-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 13,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Revm Advanced final quiz
+                  content: `# Inside Revm final quiz
 
 Final check across Revm internals: the interpreter, custom opcodes, and the Database trait.
 
-Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant build-up before claiming you're done with Revm Advanced.`,
+Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant build-up before claiming you're done with Inside Revm.`,
                   quizQuestions: [
                     {
                       question: "Which of these is `crates/interpreter` in Revm responsible for?",

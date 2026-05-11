@@ -6,9 +6,9 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'reth-advanced-en',
-      title: 'Reth Advanced — Sync, Extensions, and the SDK',
+      title: 'Inside Reth — Sync, Extensions, and the SDK',
       description:
-        'Read the real Reth source: Staged Sync (the 10-stage pipeline), ExEx (Execution Extensions for in-process indexers / MEV / risk engines), and the Reth SDK (compose your own App-chain). One of three independent Advanced courses (Revm, Reth, Alloy) — Revm Advanced is the recommended prerequisite since several lessons here assume comfort with the `Database` trait and Revm execution model.',
+        'Read the real Reth source: Staged Sync (the 10-stage pipeline), ExEx (Execution Extensions for in-process indexers / MEV / risk engines), and the Reth SDK (compose your own App-chain). One of three independent Advanced courses (Revm, Reth, Alloy) — Inside Revm is the recommended prerequisite since several lessons here assume comfort with the `Database` trait and Revm execution model.',
       difficulty: 'INTERMEDIATE',
       duration: 145,
       xpReward: 470,
@@ -26,21 +26,21 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Welcome to Reth Advanced — how this course works',
+                  title: 'Welcome to Inside Reth — how this course works',
                   slug: 'reth-advanced-welcome-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Welcome to Reth Advanced — how this course works
+                  content: `# Welcome to Inside Reth — how this course works
 
 This course is one of three independent Advanced-tier courses on RethLab:
 
-- **Revm Advanced** — Inside the EVM engine *(recommended first if you haven't done it)*
-- **Reth Advanced** (you are here) — Inside Reth: Staged Sync, ExEx, the Reth SDK
-- **Alloy Advanced** *(coming soon)* — Inside Alloy: Provider, Network, Signer
+- **Inside Revm** — Inside the EVM engine *(recommended first if you haven't done it)*
+- **Inside Reth** (you are here) — Inside Reth: Staged Sync, ExEx, the Reth SDK
+- **Inside Alloy** *(coming soon)* — Inside Alloy: Provider, Network, Signer
 
-These three are independent, but **several lessons here assume comfort with the \`Database\` trait and Revm execution model from Revm Advanced**. If those concepts feel shaky, do Revm Advanced first.
+These three are independent, but **several lessons here assume comfort with the \`Database\` trait and Revm execution model from Inside Revm**. If those concepts feel shaky, do Inside Revm first.
 
 > 📋 **First time at the Advanced tier?** Read **"How Advanced courses work"** at the end of *Bridge to Advanced* before starting. It explains the editorial style (Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape) and pacing — applies to all three Advanced courses, so you only read it once.
 
@@ -52,7 +52,7 @@ By the end, you'll have read enough Reth internals to ship a node-speed indexer 
 
 ## Prerequisites
 
-**Revm internals** (if you haven't done Revm Advanced):
+**Revm internals** (if you haven't done Inside Revm):
 - The \`Database\` trait surface and how Revm reads state through it
 - How \`Stage\` and \`Database\` interact during \`ExecutionStage\`
 
@@ -66,7 +66,7 @@ By the end, you'll have read enough Reth internals to ship a node-speed indexer 
 - \`async\` / \`Future\` / \`Stream\` basics
 - \`auto_impl\` macros and procedural attributes
 
-**Shaky on Revm?** Do Revm Advanced first. The Stage trait and the SDK both reference Revm types directly.
+**Shaky on Revm?** Do Inside Revm first. The Stage trait and the SDK both reference Revm types directly.
 
 ## Setup — do this once
 
@@ -84,7 +84,7 @@ The "Find in repo" prompts only work if you actually have the repos open. Close 
 
 Scroll back to the course detail and start with **Building the \`Stage\` trait step by step**.
 
-After Reth Advanced: head to **Alloy Advanced** if you haven't yet — or move on to **Expert** for the procedural-macro and zkVM-integration deep dives.`,
+After Inside Reth: head to **Inside Alloy** if you haven't yet — or move on to **Expert** for the procedural-macro and zkVM-integration deep dives.`,
                 },
               ],
             },
@@ -1893,15 +1893,15 @@ If any of the five questions sent you back to a previous lesson — re-read them
 > The first three months in infra learning are the hardest. Documentation is sparse — **the source code is the textbook**. The Expert tier is where that lesson pays off.`,
                 },
                 {
-                  title: 'Reth Advanced final quiz',
+                  title: 'Inside Reth final quiz',
                   slug: 'reth-advanced-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 14,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Reth Advanced final quiz
+                  content: `# Inside Reth final quiz
 
-Final check across Staged Sync, ExEx, and the Reth SDK. Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant build-up before claiming you're done with Reth Advanced.`,
+Final check across Staged Sync, ExEx, and the Reth SDK. Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant build-up before claiming you're done with Inside Reth.`,
                   quizQuestions: [
                     {
                       question: "What's the actual advantage of Reth's Staged Sync over block-by-block sync?",

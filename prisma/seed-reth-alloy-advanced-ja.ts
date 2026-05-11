@@ -6,7 +6,7 @@ export async function seedRethAlloyAdvancedJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'alloy-advanced-ja',
-      title: 'Alloy Advanced — Rust Ethereum ライブラリを読む',
+      title: 'Inside Alloy — Rust Ethereum ライブラリを読む',
       description:
         'alloy のソースを 1 行ずつ読み解く — `Provider` トレイト、`Network` 抽象、`Signer`/`Filler` モデル。3 つの独立した Advanced コース（Revm・Reth・Alloy）の 3 つ目で、順番は自由。alloy は Reth と dapp が依拠する基盤なので、このコースは Rust Ethereum コードを書くあらゆる場面で報われる。',
       difficulty: 'INTERMEDIATE',
@@ -26,21 +26,21 @@ export async function seedRethAlloyAdvancedJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Alloy Advanced へようこそ — このコースの読み方',
+                  title: 'Inside Alloy へようこそ — このコースの読み方',
                   slug: 'alloy-advanced-welcome-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Alloy Advanced へようこそ — このコースの読み方
+                  content: `# Inside Alloy へようこそ — このコースの読み方
 
 これは RethLab の 3 つの独立した Advanced ティアコースの 1 つです:
 
-- **Revm Advanced** — EVM エンジンの内側
-- **Reth Advanced** — Reth の内側: Staged Sync・ExEx・Reth SDK
-- **Alloy Advanced**（あなたはここ）— Alloy の内側: Provider・Network・Signer
+- **Inside Revm** — EVM エンジンの内側
+- **Inside Reth** — Reth の内側: Staged Sync・ExEx・Reth SDK
+- **Inside Alloy**（あなたはここ）— Alloy の内側: Provider・Network・Signer
 
-Alloy は他の全員が依拠する基盤 — Reth は alloy の型を使い、Revm は alloy の primitive を使い、Rust から Ethereum と話すすべての dapp / MEV ボット / インデクサが alloy の \`Provider\` を使います。このコースは **alloy のソースを読む** スキルを教えます — Revm Advanced が revm を読むスキルを教えるのと同じ形で。
+Alloy は他の全員が依拠する基盤 — Reth は alloy の型を使い、Revm は alloy の primitive を使い、Rust から Ethereum と話すすべての dapp / MEV ボット / インデクサが alloy の \`Provider\` を使います。このコースは **alloy のソースを読む** スキルを教えます — Inside Revm が revm を読むスキルを教えるのと同じ形で。
 
 > 📋 **Advanced ティアは初めて?** 始める前に *Bridge to Advanced* の末尾の **「Advanced コースの読み方」** を読んでください。編集スタイル（Predict プロンプト、クイズゲート、build-up → walkthrough → quiz → drill のチェーン構造）とペースを説明しています。3 つの Advanced コース全てに適用されるので、1 度だけ読めば OK。
 
@@ -64,7 +64,7 @@ Alloy は他の全員が依拠する基盤 — Reth は alloy の型を使い、
 - \`async\` / \`Future\` の基礎、Tokio ランタイムモデル
 - \`auto_impl\` マクロと手続き属性
 
-**EVM 内部知識は不要。** Alloy は EVM の上で動きます — ノードと話すのであって opcode と話すわけではない。(3 つの Advanced コース全てを取るなら EVM 内部は Revm Advanced で見ます。)
+**EVM 内部知識は不要。** Alloy は EVM の上で動きます — ノードと話すのであって opcode と話すわけではない。(3 つの Advanced コース全てを取るなら EVM 内部は Inside Revm で見ます。)
 
 **alloy をユーザーとして使った経験** — \`Provider::get_balance\`、\`ProviderBuilder\`、tx 署名 — Fundamentals（\`alloy-primitives-signing\`、\`alloy-provider\`）でカバー。それが不安なら Fundamentals レッスンを先に。このコースは alloy を *使う* ではなく *読む* ことを教えます。
 
@@ -82,7 +82,7 @@ Alloy は他の全員が依拠する基盤 — Reth は alloy の型を使い、
 
 コース詳細に戻り、**\`Provider\` トレイトをステップで組み立てる** から始めましょう。
 
-Alloy Advanced の後: 3 つの Advanced コースを全て完了したことになります。**Expert** で手続きマクロと zkVM 統合の深掘りに進みます。`,
+Inside Alloy の後: 3 つの Advanced コースを全て完了したことになります。**Expert** で手続きマクロと zkVM 統合の深掘りに進みます。`,
                 },
                 {
                   title: '\`Provider\` トレイトをステップで組み立てる',
@@ -403,7 +403,7 @@ pub trait Provider<N: Network = Ethereum>: Send + Sync {
 
 ### \`#[auto_impl(&, &mut, Box, Rc, Arc)]\`
 
-5 つのラッパー。Revm Advanced の \`DatabaseRef\` と同じ形、同じ理由で: \`Provider\` は状態読み取りに \`&self\` だけを必要とする — メソッドシグネチャに \`&mut self\` 変異がない — ので、5 つのラッパー型すべてがトレイト経由で動く。\`Arc<P>\` と \`Rc<P>\` は安価な共有ハンドルを与える。
+5 つのラッパー。Inside Revm の \`DatabaseRef\` と同じ形、同じ理由で: \`Provider\` は状態読み取りに \`&self\` だけを必要とする — メソッドシグネチャに \`&mut self\` 変異がない — ので、5 つのラッパー型すべてがトレイト経由で動く。\`Arc<P>\` と \`Rc<P>\` は安価な共有ハンドルを与える。
 
 > 🛑 **予測。** \`Database\`（revm）は \`auto_impl(&mut, Box)\` — 2 つだけ。\`Provider\`（ここ）は 5 つ。**\`Database\` と \`Provider\` の構造的違いで非対称を駆動するのは何か?**
 
@@ -2251,17 +2251,17 @@ expected (), found
 このドリルの後、*完全な Provider/Network/Signer トリオを通した署名済トランザクション* を出荷した — 全 dapp、MEV bot、インデクサが本番で使うのと同じ形。**Provider、Network、Signer チェーンが完了。** コースの最終クイズが次の停留所。`,
                 },
                 {
-                  title: 'Alloy Advanced 最終クイズ',
+                  title: 'Inside Alloy 最終クイズ',
                   slug: 'alloy-advanced-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 13,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Alloy Advanced 最終クイズ
+                  content: `# Inside Alloy 最終クイズ
 
 3 つのチェーン横断の最終チェック: \`Provider\`、\`Network\`、\`Signer\`。
 
-3 問。同じルール: **クイズを頷きで通過することはできない。** 2 問落としたら、Alloy Advanced を終えたと主張する前に該当チェーンの組み立てを再読する。`,
+3 問。同じルール: **クイズを頷きで通過することはできない。** 2 問落としたら、Inside Alloy を終えたと主張する前に該当チェーンの組み立てを再読する。`,
                   quizQuestions: [
                     {
                       question: "\`Provider\` の \`root()\` メソッドはトレイトで唯一必須のメソッド — 他の全 RPC メソッドはデフォルト impl を持つ。荷重を担うアーキテクチャ目的は?",
