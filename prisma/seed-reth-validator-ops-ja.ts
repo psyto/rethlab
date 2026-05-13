@@ -34,7 +34,9 @@ export async function seedRethValidatorOpsJA(prisma: PrismaClient) {
                   xpReward: 45,
                   content: `# Validator 鍵管理 — hot 鍵、HSM、MPC、閾値署名
 
-Validator の署名鍵は **経済的アイデンティティ**。鍵を失う → stake を失う。鍵を漏らす → 攻撃者が double-sign 可能 → slashing → stake を失う。鍵を再利用 → 同じ。本レッスンが validator 運用の実現実: 本番チームがどう鍵を安全に保つか、失敗すると何が壊れるか、validator set スケーリングを可能にする暗号プリミティブ。
+ステーキングオペレータが午前 3 時にページを受ける。スタンバイ機で 2 つ目の validator プロセスが誤って起動 — 同じ鍵、両方オンライン、両方が height 9,801,442 で attestation 署名。気づく頃には、ネットワークが既に同一アイデンティティから 2 つの valid な署名を見ている。これが **equivocation** (同じ slot で 2 つの矛盾メッセージに署名するコンセンサス用語)、プロトコルが slashing する。重複プロセスのために $2M ペナルティで目覚める。
+
+Validator の署名鍵は **経済的アイデンティティ**。失う → stake を失う。漏らす → 攻撃者が double-sign → slashing → stake を失う。再利用 → 同じ。本レッスンは運用の現実: 本番チームがどう鍵を安全に保つか、失敗すると何が壊れるか、validator set をスケールさせる暗号プリミティブ。
 
 > 🛑 **スクロール前に予測。** Validator が 100 ノード走らせる。**署名鍵のコピーは何個存在?** 最初の直感が「1 (オリジナル) + 100 (走行中)」なら、それが許す攻撃は?
 
@@ -65,24 +67,24 @@ Cons: ファイルシステムアクセスある誰でも鍵保持。バック�
 
 ### 2.2 HSM (Hardware Security Module)
 
-HSM は **秘密鍵保持し、露出せずに署名する物理デバイス**。AWS CloudHSM、YubiHSM、Thales のような vendor の専用ボックス。
+HSM は **耐タンパー性の物理デバイスで、秘密鍵を保持しつつ露出させずに署名する**。AWS CloudHSM、YubiHSM、Thales のような vendor の専用ボックス。
 
 ワークフロー:
 1. Validator が HSM 内で鍵生成
-2. 公開鍵は露出; 秘密鍵は絶対露出しない
-3. 署名するには: validator software が HSM に hash 送る; HSM が署名返す
-4. Validator software 侵害されたら、攻撃者は何でも **valid** に署名できるが鍵盗めない
+2. 公開鍵は露出; 秘密鍵はデバイスから絶対に出ない
+3. 署名: validator software が HSM に hash 送る; HSM が署名返す
+4. Validator software が侵害されても、攻撃者は何でも **valid** に署名できるが鍵自体は盗めない
 
-Pros: 鍵がディスクに存在しない、validator プロセスのメモリにも存在しない。
-Cons: 単一デバイス; 物理喪失 = 鍵喪失。バックアップが難。
+Pros: 鍵がディスクに存在せず、validator プロセスのメモリにも存在しない。
+Cons: 単一デバイス — 物理喪失 = 鍵喪失。バックアップが難しい。
 
 **ETH ステーキングプール向けのプロ validator (Ledger Enterprise、Fireblocks 等) が使用**。
 
 ### 2.3 MPC (Multi-Party Computation)
 
-鍵が **複数デバイスに分割**。署名は N-of-M 協力必要。単一デバイスがフル鍵持つことなし。
+鍵が **複数デバイスに分割**され、署名は N-of-M の協力が必要。単一デバイスが完全な鍵を持つことはない。
 
-例: 3 データセンタの 3 デバイス。署名するには、3 中 2 が協力。1 デバイス侵害されても、攻撃者は鍵の 1/3 — 役立たず。2/3 取得には、2 別施設侵害必要。
+例: 3 データセンタの 3 デバイス。署名するには、3 中 2 が協力。1 デバイスが侵害されても、攻撃者は鍵の 1/3 — 役立たず。2/3 を得るには、2 つの別施設を侵害する必要。
 
 Pros: 単一デバイスが鍵保持しない。
 Cons: 協力要求 = 各署名にレイテンシ。複雑なプロトコル。
@@ -91,9 +93,9 @@ Cons: 協力要求 = 各署名にレイテンシ。複雑なプロトコル。
 
 ### 2.4 閾値署名 (MPC の暗号バージョン)
 
-MPC と同じ idea だが **閾値署名暗号** 使用。各デバイスが鍵の「share」保持。署名がフル鍵再構築せずに通常見える署名生成。
+MPC と同じ idea だが **閾値署名暗号** (N-of-M の share 保有者によって、鍵を再組立せずに生成できるよう設計された署名 scheme) を使用。各デバイスが鍵の「share」保持。署名はフル鍵を再構築せずに通常見える署名を生成。
 
-BLS 閾値署名が Ethereum 系 PoS の標準:
+BLS 閾値署名 (BLS = ペアリングベースの署名 scheme で集約がクリーン) が Ethereum 系 PoS の標準:
 - 各 validator が集約署名鍵の share 持つ
 - ブロック署名が部分署名を 1 最終署名に集約
 - Verifier は閾値署名と知らない — 標準 BLS sig として見える
@@ -109,12 +111,12 @@ MPC は **汎用プロトコル**、秘密 share 上の関数を露出せず計�
 
 ## 3. 「2 鍵」パターン
 
-大半の本番 validator が分離:
+このパターンの目的: 鍵漏洩の被害範囲を限定する。大半の本番 validator が分離:
 
 - **Withdrawal 鍵** (cold): staked 資金制御。オフライン保持 (紙、ハードウェアウォレット)
 - **署名鍵** (hot): 投票/proposing 制御。オンライン保持、slashable
 
-パターン: 署名鍵が侵害されたら、攻撃者は validator を **slash** 可能 (コスト: hot stake) だが **資金は盗めない** (withdrawal 鍵が cold)。損失は有界。
+署名鍵が侵害されたら、攻撃者は validator を **slash** 可能 (コスト: hot stake) だが **資金は盗めない** (withdrawal 鍵が cold)。損失は有界。
 
 Ethereum 向け:
 - Withdrawal credentials (0x01...): cold storage
@@ -126,7 +128,7 @@ Hyperliquid 向け:
 
 ## 4. Slashing 防止チェックリスト
 
-保証必要:
+この 4 ルールが「報酬を稼ぐ validator」と「slashed される validator」を分ける。保証必要:
 1. **アイデンティティごと単一署名者** — 同じ鍵で 2 プロセス絶対走らせない
 2. **Slashing-protection データベース** — 各署名メッセージ追跡、slashing 引き起こす何にも署名拒否
 3. **不確実時 fail-closed** — 最近履歴検証できないなら署名しない
@@ -221,7 +223,7 @@ CCIP、soltempo、mppsol の relayer は独自鍵使用。同じ原則適用:
                   xpReward: 40,
                   content: `# Slashing 検知とオフライン validator
 
-Validator の最も高価な間違いは **2 矛盾メッセージに署名** — slashable 違反で stake コスト。次に高価なのは **高参加中にオフライン** — inactivity ペナルティ。本レッスンが両方の検知 + 防止について、watcher が slashable 証拠見つけて whistleblower 報酬 earn する方法。
+Validator stake を失う方法は厳密に 2 つしかない。高価な方: **2 矛盾メッセージに署名** (slashing — 1 イベントで stake の大部分が消える)。遅い方: **ネットワークが必要とする時にオフライン** (inactivity ペナルティ — 数日かけて滴り落ちる)。本レッスンの運用判断はすべて、何かが壊れた時にこの 2 損失のうち小さい方を選ぶことに帰着する。
 
 > 🛑 **スクロール前に予測。** Validator が 2 日オフライン。**いくら失う?** 分断中で 1/3 の validator 連れて行かれたら?
 
@@ -255,6 +257,8 @@ Vote2: { height: 1000, block: 0xB..., signature: SigB }
 
 ### 2.2 Surround voting (Casper FFG 特有)
 
+Casper FFG (Ethereum の finality gadget) では validator が **source → target** のチェックポイントペアに投票する。Surround-vote は、後の投票の範囲が先の投票の範囲を厳密に包含するもの:
+
 Vote1: source A → target B
 Vote2: source C → target D
 
@@ -262,7 +266,7 @@ C > A かつ B > D (2 番目が 1 番目を「surround」) なら slashable。�
 
 ### 2.3 BFT (Tendermint、HotStuff) の equivocation
 
-同じ height/round で違うブロックの 2 pre-commit。Double voting と同じロジック; slashing-protection データベースが catch 必要。
+同じ height/round で違うブロックの 2 pre-commit (BFT round の「このブロックにコミットする」メッセージ)。Double voting と同じロジック; slashing-protection データベースが catch 必要。
 
 ## 3. Slashing-protection データベース
 
@@ -309,7 +313,7 @@ DB と signer は **1 atomic 操作** でコミット必要。署名してから
 
 ## 5. Whistleblower watcher
 
-Slashing は **暗号的に証明可能** — 2 矛盾署名持つ誰でも slashing transaction 提出可能。大半 chain が slash stake の小数を **whistleblower 報酬** として submitter に支払う。
+プロトコルが slashing を強制するのは **誰かが proof を提出した時のみ**。そこで watcher の出番。Slashing は **暗号的に証明可能** — 2 矛盾署名持つ誰でも slashing transaction 提出可能。大半 chain が slash stake の小数を **whistleblower 報酬** として submitter に支払う。
 
 Ethereum 向け: slashed 額の ~1/512 が proof 提出者に。$1M の主要 slashing で ~$2k — watcher incentivize に十分。
 
@@ -327,7 +331,7 @@ Validator がオフラインなら:
 - 通常運用中: 報酬逃す (日次小損失)
 - Finality 問題中 (>1/3 オフライン): **inactivity leak** kicks in
 
-Inactivity leak: 各 epoch、オフライン validator が stake 失う。Finality 遅延長くなるほど率増加。**Chain が self-heal** — 最終的にオンライン validator >2/3、finality 再開、オフライン validator は stake 削減で残る。
+Inactivity leak (Ethereum が分断した chain を >2/3 オンラインに強制復帰させる機構): 各 epoch、オフライン validator が stake 失う。Finality 遅延長くなるほど率増加。**Chain が self-heal** — 最終的にオンライン validator >2/3、finality 再開、オフライン validator は stake 削減で残る。
 
 これが **BFT 系 chain の大量オフラインイベント応答**。永久 halt せずに、プロトコルがゆっくりオフライン validator を quorum 達成可能まで削除。
 
@@ -391,17 +395,19 @@ Tempo に slashing watcher のマーケット可能性 (launch で slashing 仮�
                   xpReward: 45,
                   content: `# Hot upgrade と協調 chain アップグレード
 
-固定 validator set 付き L1 が **in place アップグレード** 必要 — コンセンサスルール切替、パラメータ変更、バグ修正 — halt せずに。これが **ブロックチェーンで最も難しい運用問題**、validator が正確に協調必要 — 一部がアップグレードして他がしないなら fork。本レッスンが hot upgrade を動かすプロトコル機構と運用 drill カバー。
+メインネット hardfork 当日を想像。新バイナリはコンセンサスルールを変える。何万もの validator が走らせる、あらゆる大陸、あらゆるクラウド、あらゆる自宅セットアップに散らばって。マスタースイッチはない。スケジュールされたメンテナンス窓もない。Chain は止められない。それでも 14:13 UTC に、**canonical chain に残るすべての validator が同時に新ルールでブロック生成を開始** — アップグレードしなかった者は静かに fork off して無関係になる。どうやって?
+
+この協調問題が **ブロックチェーンで最も難しい運用問題**: validator が互いに直接話さずに足並み揃えてルールを切り替えなければならない。本レッスンがそれを動かすプロトコル機構と運用 drill をカバー。
 
 > 🛑 **スクロール前に予測。** Ethereum が主要 outage なしで 10+ hardfork 実行。**これを動かすプロトコル機構は?** 「全員が同時にアップグレード」ではない — それは協調不可。何かもっと強いもの。
 
 ## 1. コア機構 — height-gate ルール
 
-Hardfork が定義される:
+仕掛けは **バイナリ自体が切替時刻を知っている** こと。Hardfork が定義される:
 - 新ルールが activate する **block height (or timestamp)**
 - **新ルールのセット** (コンセンサス、EVM、gas、等)
 
-Validator は全員同時にアップグレードしない。Activation height **前に** アップグレード。Activation block で、すべてのアップグレード済 validator が新ルール適用。アップグレードしてない validator は古いルールで続行 — **脱落**、ネットワークの残りが reject するブロック生成。
+Validator は全員同時にアップグレードしない。Activation height **前に** アップグレード。Activation block で、アップグレード済の全 validator が同じブロック、同じ瞬間に新ルール適用 — 協調不要。アップグレードしてない validator は古いルールで続行し **脱落**、ネットワークの残りが reject するブロック生成。
 
 \`\`\`
 Block 999: 全 validator (旧 + 新コード) がこのブロック受け入れ
@@ -452,7 +458,7 @@ Slashing リスクなし (canonical 上で double-sign せず別 fork 上にい�
 
 ## 4. アップグレードは chain spec に
 
-Reth ベース chain 向け、アップグレードは **chain spec** にエンコード。Course 1 (Consensus Engineering) の Lesson 5 から:
+Reth ベース chain 向け、アップグレードは **chain spec** (chain のアイデンティティ — genesis、fork height、chain ID — を定義する Rust 構造体) にエンコード。Course 1 (Consensus Engineering) の Lesson 5 から:
 
 \`\`\`rust
 pub enum CustomHardfork {
@@ -525,7 +531,7 @@ Tempo 向け: 最終的に incident 出る。Validator set + ガバナンスが 
 ## 8. 「Halt と recover」パターン
 
 純粋 BFT chain 向け (Tempo、Hyperliquid):
-- >1/3 validator オフラインなら、chain halt (BFT 性質)
+- >1/3 validator オフラインなら、chain halt (BFT の >2/3 quorum 要件の直接的帰結 — quorum なし = 進捗なし)
 - オペレータが validator オンライン戻す
 - Chain がブロック生成再開
 

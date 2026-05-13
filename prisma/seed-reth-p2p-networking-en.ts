@@ -34,26 +34,28 @@ export async function seedRethP2PNetworkingEN(prisma: PrismaClient) {
                   xpReward: 40,
                   content: `# P2P fundamentals — devp2p, libp2p, and peer discovery
 
-Every Ethereum node talks to other nodes via **devp2p** — Ethereum's purpose-built peer-to-peer protocol. Other chains use **libp2p** (modular, multi-chain) or custom stacks. The P2P layer is invisible until it isn't: when sync stalls, when gossip drops your tx, when peer scoring boots you off the network, you need to know what's happening underneath.
+You launch a fresh reth node. It has no peers, no blocks, no state. Within seconds it's downloading headers from somewhere — but *where did the peers come from*? It can't ask the network for peers without already being on the network. That chicken-and-egg is the **bootstrapping problem**, and it's the first thing the P2P layer has to solve before anything else can happen.
+
+The P2P layer stays invisible until it isn't: sync stalls, gossip drops your tx, peer scoring boots you off the network. When that happens, you need to know what's running underneath. On Ethereum that's **devp2p** — Ethereum's purpose-built peer-to-peer stack. Other chains use **libp2p** (a modular, multi-chain alternative) or roll their own.
 
 > 🛑 **Predict before scrolling.** A reth node syncs from scratch. **What does it need to find first — peers or blocks?** And how does it find peers without already knowing peers?
 
 ## 1. The two layers
 
-P2P networking splits into two concerns:
+Every P2P stack splits the work in two:
 
 | Layer | Job | Protocol on Ethereum |
 | :--- | :--- | :--- |
 | **Discovery** | "Find peers" | discv4 / discv5 (Kademlia DHT) |
 | **Transport** | "Talk to peers" | RLPx (encrypted TCP) |
 
-Discovery is the **bootstrapping problem** — you need peers before you can do anything, but how do you find peers without peers? The answer: hardcoded bootnodes.
+Discovery is the bootstrapping problem from the opener — peers need peers to find peers. The answer: **bootnodes**, well-known IP addresses hardcoded into the chainspec. You connect to one, it gives you more, the DHT takes over.
 
 ## 2. devp2p — Ethereum's protocol
 
-[devp2p](https://github.com/ethereum/devp2p) is the protocol Ethereum nodes use. It's specific to Ethereum (not multi-chain). It defines:
+[devp2p](https://github.com/ethereum/devp2p) is the protocol Ethereum nodes speak. Ethereum-specific (not multi-chain). It bundles three pieces:
 
-- **discv5**: peer discovery via Kademlia DHT
+- **discv5**: peer discovery via Kademlia DHT (a distributed hash table for finding nodes)
 - **RLPx**: encrypted, authenticated TCP transport
 - **eth/68** (current sub-protocol): block + transaction gossip
 
@@ -71,7 +73,9 @@ flowchart LR
 
 ## 3. discv5 — peer discovery via Kademlia
 
-Kademlia is a **distributed hash table (DHT)**. Each node has a 256-bit ID (derived from its public key). To find peers "close to" some target ID, you query nodes you know about and they give you their closest known peers — recursive lookup.
+How do you scale "find me peers" from one bootnode to a global network of millions? Kademlia.
+
+Kademlia is a **distributed hash table (DHT)** — a structure where each node holds a small slice of the directory and routes queries to nodes that hold the rest. Each Ethereum node has a 256-bit ID (derived from its public key). To find peers "close to" some target ID, you query nodes you already know; they return their closest known peers; you query those; repeat. Recursive lookup, O(log N) hops.
 
 For Ethereum:
 - Each peer publishes an **ENR (Ethereum Node Record)** — its ID, IP, port, capabilities
@@ -80,21 +84,21 @@ For Ethereum:
 
 > 🛑 **Anti-fluency.** "Kademlia finds the closest peers." **Why does "closest" matter when we want any peer?** Re-read if your answer is just "for routing."
 
-Kademlia's "closeness" is XOR distance over node IDs — purely topological, no geographic meaning. The point: nodes close in ID can find each other efficiently (O(log N) lookups). It's a **scalable** way to find any peer in a network of millions.
+Kademlia's "closeness" is XOR distance over node IDs — purely topological, no geographic meaning. The point: nodes close in ID can find each other efficiently. That's what makes finding any peer in a network of millions tractable.
 
 ## 4. RLPx — the transport layer
 
-After discovery, your node uses RLPx to actually talk:
+Once you have a peer's address, you need an encrypted channel to talk to it. That's RLPx.
 
 - **Handshake**: ECDH key exchange + signature verification
 - **Encryption**: AES-CTR with per-direction keys
-- **Framing**: RLP-encoded messages with length prefixes
+- **Framing**: RLP-encoded messages with length prefixes (RLP = Recursive Length Prefix, Ethereum's wire encoding)
 
-RLPx is **roughly TLS for Ethereum** — encrypted, authenticated, ordered byte stream. The reason Ethereum has its own protocol instead of TLS: pre-2015 history, plus subtle requirements (peer ID = pubkey, no centralized CA).
+Think of RLPx as **TLS for Ethereum** — encrypted, authenticated, ordered byte stream. Why not just use TLS? Pre-2015 history, plus subtle requirements TLS doesn't fit: peer ID *is* the pubkey, no centralized CA.
 
 ## 5. eth/68 — the sub-protocol
 
-Over RLPx, peers speak **eth/68**, the current Ethereum sub-protocol. Messages include:
+RLPx gives you a secure channel; **eth/68** is what flows through it. The current Ethereum sub-protocol. Messages include:
 
 | Message | Purpose |
 | :--- | :--- |
@@ -105,19 +109,19 @@ Over RLPx, peers speak **eth/68**, the current Ethereum sub-protocol. Messages i
 | PooledTransactions | Request full tx bodies |
 | Receipts | Request/respond receipts |
 
-Note: in eth/68, transactions are announced as **hashes first** — peers request the full body only if they don't already have it. This avoids re-broadcasting txs everywhere.
+Note: in eth/68, transactions are announced as **hashes first** — peers request the full body only if they don't already have it. This kills the "every node re-broadcasts every full tx" amplification.
 
 ## 6. libp2p — the alternative
 
-[libp2p](https://github.com/libp2p/) is **modular, multi-chain** P2P infrastructure. Used by:
+If devp2p is the bundled Ethereum stack, [libp2p](https://github.com/libp2p/) is the unbundled multi-chain one. Used by:
 - Polkadot (built on libp2p)
 - IPFS (libp2p's origin)
 - Solana (custom transport but libp2p concepts)
 - Many newer chains
 
-libp2p separates concerns: discovery (separate), transports (TCP/QUIC/WebRTC), encryption (Noise), multiplexing (yamux/mplex). You compose what you need.
+libp2p separates concerns: discovery (separate), transports (TCP/QUIC/WebRTC), encryption (Noise — a key-agreement protocol framework), multiplexing (yamux/mplex — running many logical streams over one connection). You compose what you need.
 
-Why Ethereum doesn't use libp2p: history. devp2p existed first. Switching is hard. Some newer Ethereum tools (Lighthouse consensus client) use libp2p; reth uses devp2p (matching the execution layer protocol).
+Why Ethereum doesn't use libp2p: history. devp2p existed first; switching is hard. Some newer Ethereum tools (Lighthouse, a consensus client) use libp2p anyway; reth sticks with devp2p to match the execution-layer protocol.
 
 ## 7. For Reth-based chains
 
@@ -148,7 +152,7 @@ For Hyperliquid: their custom transport (HyperBFT communication) is **separate f
                   xpReward: 45,
                   content: `# Reading reth's network crate
 
-reth's network layer is in [\`crates/net/\`](https://github.com/paradigmxyz/reth/tree/main/crates/net). It's substantial — ~30k lines of Rust handling discovery, transport, gossip, and peer management. This lesson is the orientation: what's where, what each crate does, where you'd extend it for a custom chain.
+You want to add a custom sub-protocol for your chain — say, payment-finality hints or MEV bundle gossip. Where in the reth tree does that code go, and what existing pieces does it plug into? Reth's network layer lives at [\`crates/net/\`](https://github.com/paradigmxyz/reth/tree/main/crates/net) — ~30k lines of Rust split across six sub-crates handling discovery, transport, gossip, and peer management. This lesson is the orientation: what's where, what each crate does, where the extension points are.
 
 > 🛑 **Predict before scrolling.** Reth's network has ~5 sub-crates. **What separation of concerns would make sense?** Sketch the modules before reading. (Hint: discovery, transport, sub-protocols are obvious starts.)
 
@@ -172,7 +176,7 @@ Reading order if you want to understand the whole thing:
 
 ## 2. The NetworkManager — central orchestrator
 
-In \`crates/net/network/src/manager.rs\`, the \`NetworkManager\` is the central struct that owns:
+Every peer message, every discovery hit, every "broadcast this tx" command from the rest of the node flows through one struct. That struct is \`NetworkManager\`, in \`crates/net/network/src/manager.rs\`:
 
 \`\`\`rust
 pub struct NetworkManager<C> {
@@ -185,19 +189,19 @@ pub struct NetworkManager<C> {
 }
 \`\`\`
 
-The \`run\` loop:
+The \`run\` loop is small:
 1. Poll \`swarm\` for peer messages
 2. Poll \`discovery\` for newly discovered peers
 3. Poll \`from_handle_rx\` for commands (e.g., "broadcast this tx")
 4. Dispatch each event
 
-This is the **central event loop of all networking**. Every peer message, every discovery event, every app-initiated broadcast flows through here.
+Three input streams, one dispatcher. That's the heart of reth's networking.
 
 > 🔍 **Find in repo.** Open \`crates/net/network/src/manager.rs\` and find the main \`poll_next\` or \`run\` method. **What's the polling order?** Why might that matter?
 
 ## 3. The Swarm — peer connection pool
 
-\`Swarm\` manages active peer connections. Each connection goes through stages:
+\`Swarm\` is the pool of active peer connections under \`NetworkManager\`. Each connection runs through a small state machine:
 
 \`\`\`
 NewConnection → Handshake → Negotiation → Active → Disconnected
@@ -210,11 +214,11 @@ For each peer:
 - **Active**: exchange messages
 - **Disconnected**: graceful close or error
 
-The Swarm enforces **peer limits** (typically 25-50 active) and **eviction policy** (drop low-scoring peers).
+The Swarm enforces **peer limits** (typically 25-50 active) and **eviction policy** (drop low-scoring peers when new ones want in).
 
 ## 4. eth-wire — the protocol messages
 
-Each message type in eth/68 is a Rust struct with RLP encoding:
+Wire-format code lives in one crate. Each eth/68 message is a Rust struct with RLP-derive macros doing the encoding for you:
 
 \`\`\`rust
 #[derive(Debug, RlpDecodable, RlpEncodable)]
@@ -233,7 +237,7 @@ pub struct NewPooledTransactionHashes {
 
 The derive macros generate the wire format. **Every message is RLP** — the same encoding used for transactions and blocks.
 
-For custom sub-protocols, you define your own message structs and register them with the network.
+For custom sub-protocols, you define your own message structs and register them with the network. (We do that in lesson 3.)
 
 ## 5. The peer state machine
 
@@ -251,7 +255,7 @@ Peer scoring matters: peers that misbehave get evicted. The default scoring pena
 
 ## 6. Adding custom sub-protocols
 
-For a custom chain (Tempo, Hyperliquid, etc.), you might want **chain-specific gossip**:
+This is the extension point most Reth-based chains use. Need chain-specific gossip — merchant attestations, payment finality hints, sequencer coordination? You ship a sub-protocol:
 
 \`\`\`rust
 // In your chain's crate
@@ -275,13 +279,11 @@ impl SubProtocol for TempoSubProtocol {
 }
 \`\`\`
 
-Register this with the network manager, and your custom protocol runs alongside eth/68 on the same RLPx connections.
-
-This is **the extension point** for chain-specific networking. Tempo uses it (most likely) for payment-specific gossip. You'd use it for any chain-specific protocol you ship.
+Register this with the network manager and your custom protocol runs alongside eth/68 on the same RLPx connections. No new TCP ports, no separate discovery — it rides on the existing peering. Tempo likely uses this pattern for payment-specific gossip.
 
 ## 7. The peer scoring opportunity
 
-Default peer scoring is generic — punishes bad actors. For specialized chains:
+Default peer scoring is generic — it punishes bad actors. But scoring is also a *steering wheel* for specialized chains:
 
 - **MEV-relevant chains**: score peers based on tx propagation speed
 - **Privacy-focused chains**: score peers based on metadata leakage
@@ -309,23 +311,25 @@ For Tempo: a payment-priority chain might score peers by **whether they're known
                   xpReward: 50,
                   content: `# Building custom gossip — MEV-Boost-style messaging on Reth
 
-Default eth/68 gossip works fine for vanilla chains. But specialized infrastructure — MEV-Boost, private mempools, shared sequencer coordination, payment routing — needs **custom gossip protocols**. This lesson builds a minimal one: a peer-to-peer message bus on top of reth's networking that lets your application broadcast and receive chain-specific messages.
+You're running a searcher node. You find a profitable bundle. You want to ship it only to a small set of trusted builders — not broadcast it to every peer on the network so the bundle leaks and gets front-run. eth/68 transaction gossip is the wrong tool: it's public, it assumes "everyone relays everything," and it has no concept of "send to *these specific* peers."
+
+That's the gap **custom sub-protocols** fill. This lesson builds a minimal one — a peer-to-peer message bus on top of reth's networking — that lets your application broadcast and receive chain-specific messages on its own rules. Same pattern used by MEV-Boost, private mempools, shared sequencer coordination, and payment-routing infra.
 
 > 🛑 **Predict before scrolling.** You want to broadcast "this MEV bundle is for sale" to a private peer set. **Why not use eth/68 transactions?** What does a separate gossip protocol give you that abusing tx gossip doesn't?
 
 ## 1. The motivation — when default gossip fails
 
-eth/68 gossip is for **canonical chain data** — blocks, transactions, receipts. It assumes:
+eth/68 carries **canonical chain data** — blocks, transactions, receipts. Its assumptions:
 - Messages are public (anyone with a connection sees them)
 - Messages are about consensus
-- Peers cooperate by relaying
+- Peers cooperate by relaying everything
 
-For non-canonical messages, you need:
+Custom traffic breaks all three. To ship it you need:
 - **Private gossip** — only your peer set sees it
 - **Application-layer routing** — route to specific peers based on capabilities
 - **Custom signatures** — chain-specific authentication
 
-Examples:
+Where this shows up in production:
 - MEV-Boost bundles (private orderflow)
 - Shared sequencer pre-confirmations
 - Payment rail merchant attestations
@@ -454,17 +458,17 @@ That's it. Your custom protocol runs on the same RLPx connections as eth/68. Pee
 
 ## 5. Peer discovery for private protocols
 
-Default discv5 announces your full capability list — anyone can see "this node supports bundle/1". For private protocols, you'd typically:
+There's a problem you should be uncomfortable with: default discv5 announces your full capability list. Anyone scanning the network can see "this node supports bundle/1" — which defeats the privacy goal. So private protocols don't use discv5 for peer-finding. Common patterns:
 
 - **Allowlist-based**: hardcode peer IDs of your protocol participants
 - **Out-of-band invitation**: have peers exchange contact info via separate channel
 - **Tor-routed**: hide network location entirely
 
-For MEV-Boost-style: bundle relays distribute their peer IDs via Discord, GitHub, etc. — out-of-band. The protocol is then point-to-point between known parties.
+MEV-Boost uses the second pattern: bundle relays distribute their peer IDs via Discord, GitHub, etc. The protocol is then point-to-point between known parties.
 
 ## 6. The MEV-Boost pattern
 
-[Flashbots' MEV-Boost](https://github.com/flashbots/mev-boost) is the production reference. Its key ideas, applied to our custom protocol:
+[Flashbots' MEV-Boost](https://github.com/flashbots/mev-boost) is the production reference for this whole approach. Its key ideas, mapped to our custom protocol:
 
 | Concept | Implementation |
 | :--- | :--- |
@@ -483,7 +487,7 @@ Could ship in 2026 if Tempo decentralizes its sequencer.
 
 ## 7. The DOS protection problem
 
-Custom protocols expose new attack surfaces:
+Custom protocols expose new attack surfaces. Default eth/68 has battle-tested defenses; yours has none until you write them. The minimum:
 
 | Attack | Mitigation |
 | :--- | :--- |
@@ -492,7 +496,7 @@ Custom protocols expose new attack surfaces:
 | Bandwidth exhaustion | Per-peer bandwidth caps; eviction on excess |
 | Sybil (many fake peers) | Peer ID allowlist or proof-of-stake binding |
 
-Without these, your custom protocol is a DOS amplifier. Build the protections in alongside the core logic.
+Skip these and your custom protocol is a DOS amplifier — every peer can flood every other peer through your code. Build the protections in alongside the core logic, not as a follow-up.
 
 ## 8. For Hiro's projects
 

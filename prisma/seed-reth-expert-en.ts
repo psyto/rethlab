@@ -34,13 +34,15 @@ export async function seedRethExpertEN(prisma: PrismaClient) {
                   xpReward: 40,
                   content: `# Performance engineering for Reth
 
+A Reth fork ships. Block import was 12ms in your benches; in production it's 80ms. Where did the 68ms go? You don't know — because nobody profiled. This is the failure mode this lesson exists to prevent: **invisible slowdowns**, the kind that compound silently until a validator falls 200 blocks behind.
+
 If you're going to ship a Reth fork or write hot-path code in Revm, **profiling and benchmarking are non-negotiable**. Premature optimization is bad; *invisible* slowdowns are worse.
 
 > 🛑 **Predict before scrolling.** A junior engineer says "the node feels slow, let me try replacing the HashMap with a BTreeMap." **List 3 things wrong with that approach** before reading the lesson. Hold your list.
 
 ## 1. Profile first, optimize second
 
-Two tools, two purposes:
+The discipline: never optimize anything you haven't measured. Two tools cover the two questions you'll ever ask:
 
 | Tool | Purpose |
 | :--- | :--- |
@@ -84,7 +86,7 @@ criterion_main!(benches);
 
 ## 2. Cache lines, not lines of code
 
-Modern CPUs make memory access ~100x slower than computation. The unit of memory access is a **64-byte cache line**.
+On a modern CPU, reading from RAM is ~100x slower than doing arithmetic on a register. So "make the code shorter" is the wrong knob — **make the memory layout friendlier** is the right one. The unit the CPU actually loads is a **64-byte cache line** (not a byte, not a struct field — a fixed 64-byte chunk).
 
 ### Implications
 
@@ -108,7 +110,7 @@ struct Cold { big_blob: [u8; 192] }
 
 ## 3. Allocator choice
 
-Default allocators (glibc malloc, jemalloc) have different performance profiles. Reth uses **jemalloc** for stable latency under load.
+Every \`Vec::push\` and \`Box::new\` eventually calls into the global allocator. Which allocator you use changes the latency distribution — not the throughput, the **tails**. Reth picks **jemalloc** (Facebook's allocator, now under the tikv-jemallocator crate) over the system default (glibc malloc on Linux) because jemalloc keeps p99 stable under heavy fragmentation.
 
 \`\`\`toml
 # Cargo.toml
@@ -192,7 +194,9 @@ You're now equipped to start opening Reth's perf-critical files (\`crates/storag
                   xpReward: 40,
                   content: `# MDBX & storage internals
 
-Reth stores all chain state in **MDBX**, a memory-mapped B+tree KV store derived from LMDB. Understanding MDBX is what separates "I can use Reth" from "I can extend Reth."
+Every account balance, every storage slot, every receipt — Reth keeps all of it in **one** key-value store: **MDBX**. Not Postgres, not RocksDB, not a custom format. MDBX is a memory-mapped B+tree (a balanced tree where each node holds multiple keys to fit a disk page) descended from LMDB. The whole 500GB database is exposed to your Rust code as if it were a giant in-memory slice — the OS handles the disk-vs-RAM dance through mmap.
+
+Understanding MDBX is what separates "I can use Reth" from "I can extend Reth."
 
 > 🛑 **Predict before scrolling.** RocksDB is the dominant KV store in many blockchain clients (geth, erigon historically). **Why does Reth pick MDBX instead?** Form a hypothesis citing one of: write throughput, read latency, crash safety, mmap, compaction. Hold your guess.
 
@@ -206,7 +210,7 @@ Reth stores all chain state in **MDBX**, a memory-mapped B+tree KV store derived
 | **Crash safety** | Manual flush | **ACID via MVCC** |
 | **Read concurrency** | Locks | **Lock-free reads** |
 
-Reth picks MDBX because Ethereum is **read-heavy** and **latency-sensitive**. LSM trees do well at writes but stall on compactions — fatal for sync speed and validator latency.
+Reth picks MDBX because Ethereum is **read-heavy** and **latency-sensitive**. LSM trees (the log-structured-merge design RocksDB and LevelDB use — fast writes, periodic background rewrites) do well at writes but **stall on compactions** — the moments where they pause everything to rewrite tiers — and those stalls are fatal for sync speed and validator latency.
 
 > 🛑 **Anti-fluency.** What is a **compaction** in an LSM tree? Why does it stall reads? B+tree doesn't compact — what does it do instead to reclaim space? If you can't answer in two sentences each, you're trusting the table without understanding it.
 
@@ -329,7 +333,7 @@ You'll come out the other side knowing where every byte of Ethereum state lives 
                   xpReward: 40,
                   content: `# Tokio runtime internals
 
-You've been writing \`#[tokio::main]\` and \`.await\`. Now: what actually happens?
+You've been writing \`#[tokio::main]\` and sprinkling \`.await\` over every async call. Reth has 200+ of those scattered through its codebase, and at peak load it handles thousands of concurrent peer connections plus dozens of background tasks on **8 worker threads**. No magic; just a state machine the compiler wrote for you, a work-stealing scheduler, and an epoll loop. This lesson is what's underneath the \`.await\`.
 
 > 🛑 **Predict before scrolling.** You write \`async fn foo() { bar().await; }\`. The compiler generates *something* concrete. **What?** Specifically:
 > - What trait does the resulting type implement?
@@ -357,7 +361,7 @@ When you write \`async fn\`, the compiler generates a **state machine** that imp
 
 ## 2. Work-stealing in 60 seconds
 
-Tokio's multi-threaded runtime gives each worker thread a **local task queue** plus access to a global queue. When a worker is idle, it **steals** tasks from busy workers' queues.
+The problem: 8 worker threads, thousands of tasks. How do you distribute them without all 8 threads fighting over one shared queue? Tokio's answer: give each worker its own **local queue** (cheap, no contention), plus a fallback **global queue**. When a worker runs dry, it **steals** tasks from a busy neighbor's queue.
 
 \`\`\`
 Worker A: [task1, task2, task3, task4]   ← busy
@@ -480,7 +484,7 @@ The \`TaskExecutor = Runtime\` alias lets you pass it through stage code without
 | **Derive** | \`#[derive(MyTrait)]\` | \`#[derive(Serialize)]\` |
 | **Attribute** | \`#[my_attr]\` | \`#[tokio::main]\` |
 
-All three are crates of \`crate-type = ["proc-macro"]\` with functions that take and return \`proc_macro::TokenStream\`.
+All three live in crates marked \`crate-type = ["proc-macro"]\` in their Cargo.toml. The compiler loads such a crate as a plugin and calls functions inside it that take a \`TokenStream\` (the parsed-but-not-yet-typechecked tokens of the macro's input) and return another \`TokenStream\` (what the compiler will continue compiling in its place).
 
 ## 2. The toolchain
 
@@ -638,7 +642,9 @@ Now you can read what your macro is producing and pinpoint any wrong codegen.
                   xpReward: 35,
                   content: `# Custom precompiles
 
-Custom **opcodes** add new EVM instructions. Custom **precompiles** add native-Rust functions that are callable like ordinary contracts. Precompiles are the *less invasive* extension point — and they preserve consensus across most tooling.
+You want SHA-256 inside the EVM. Two roads: add a new **opcode** (a new byte in the instruction stream — \`SHA256\` next to \`ADD\`), or add a **precompile** (a native Rust function the EVM calls when a contract does \`CALL 0x00...02\`). Real Ethereum picked the second: precompiles at addresses \`0x01\` through \`0x0a\` cover ecrecover, sha256, modexp, and the BN254 elliptic-curve ops. Foundry's cheatcodes (\`vm.deal\`, \`vm.warp\`) are the same trick at industrial scale.
+
+Custom opcodes break consensus with every wallet, indexer, and Solidity compiler on the planet. Custom precompiles **don't**. This lesson is why the answer is different, and how to register one.
 
 > 🛑 **Predict before scrolling.** A custom *opcode* breaks consensus with mainnet (you saw this in Advanced). A custom *precompile* doesn't — even though it's also new code that didn't exist in vanilla EVM. **Why is the answer different?** Form a hypothesis citing the EVM bytecode parser. Hold your guess.
 
@@ -814,7 +820,9 @@ After this, your precompile is cheap to use in normal code and prohibitively exp
                   xpReward: 40,
                   content: `# Merkle Patricia Trie & state proofs
 
-Ethereum's state lives in a **Merkle Patricia Trie (MPT)**. Understanding it is what lets you reason about state roots, light clients, and witnesses — and write your own.
+A phone-sized device wants to know "does Alice's account hold 1 ETH?" — and it cannot store Ethereum's 500GB state. So it asks a full node, which sends back **a few hundred bytes**. The phone runs a hash loop, compares the result to **32 trusted bytes** it already knows, and gets a cryptographic answer: yes or no. That's a light client. The 32 trusted bytes are Ethereum's **stateRoot**, and the data structure that makes this work is the **Merkle Patricia Trie (MPT)**.
+
+Understand the MPT and you understand state roots, light clients, witnesses, \`eth_getProof\`, and the entire stateless-client roadmap. You can also write your own.
 
 > 🛑 **Predict before scrolling.** You want to cryptographically prove "account X has balance Y" — to a verifier who **doesn't have the full state**, only a 32-byte trusted root. **Sketch your protocol.** What do you send the verifier? What do they hash? How do they conclude proof or rejection?
 >
@@ -879,9 +887,9 @@ That's it. **Light clients** are just verifiers with the trusted root.
 
 ## 4. Witnesses
 
-A **witness** is the set of trie nodes needed to re-execute a block without storing the full state. zkEVM provers consume witnesses; stateless clients use them; some MEV searchers use them for forked simulation.
+A **witness** is the bundle of trie nodes you need to *re-execute a block* without holding the whole state. Instead of "give me the 500GB DB," you ask "give me only the parts this block touched." zkEVM provers consume witnesses (they cannot read disk inside a zkVM). Stateless clients use them (so they can verify without syncing). Some MEV searchers use them for forked simulation.
 
-A typical block witness is a few hundred KB to a few MB.
+A typical block's witness is a few hundred KB to a few MB.
 
 ## 5. Reth's actual proof types
 
@@ -982,7 +990,7 @@ Do this and \`eth_getProof\` becomes a structure you can reason about, write, an
                   xpReward: 45,
                   content: `# MEV in practice — mempool, ExEx, simulation
 
-MEV (Maximal Extractable Value) is where systems engineering meets game theory. Here's how a serious searcher / builder pipeline is structured in 2026.
+A pending tx hits the mempool. 80 milliseconds later, your bundle either landed or it didn't — beaten by a competing searcher who decoded the same tx 5ms faster, simulated the outcome 10ms faster, and submitted to the same builder 2ms ahead. MEV (Maximal Extractable Value — the profit a tx-orderer can pull out of pending transactions) is **systems engineering meeting game theory** at single-digit-millisecond timescales. This lesson is the shape of a serious 2026-era pipeline.
 
 > 🛑 **Predict before scrolling.** Ethereum block time is 12 seconds. **Yet a serious MEV pipeline targets <100ms end-to-end.** Why is the budget that tight? What eats the other ~11.9 seconds? Form a hypothesis citing competition, network propagation, or block proposer timing.
 
@@ -1138,7 +1146,9 @@ Bundles are JSON-RPC; the wire format is small. Race between competing searchers
                   xpReward: 35,
                   content: `# zkEVM with Revm
 
-A zkEVM proves that "this block was executed correctly" without re-executing it. Revm is the canonical EVM implementation that **provers consume**. Here's how that works.
+Linea, zkSync, Scroll, Polygon zkEVM — every production zkEVM rollup makes the same claim: "the verifier doesn't trust us, the verifier checks a 250-byte proof and that's it." No re-execution. No "trust the operator." A 32-byte commitment, a SNARK or STARK, and a smart contract that says yes or no.
+
+The thing producing the proof is called a **prover**. The prover doesn't run geth, doesn't run nethermind — it runs **Revm**, the Rust EVM, compiled to RISC-V (a clean reduced-instruction-set CPU architecture that zkVMs can model cheaply) and executed inside a zkVM. This lesson is why Revm specifically, and what the prover-side code actually looks like.
 
 > 🛑 **Predict before scrolling.** Risc0 and SP1 use **Revm**, not geth, to prove Ethereum execution inside their zkVMs. **List 3 properties of Revm** that make it the right choice for in-zkVM use. (Hint: think about what a zkVM punishes — non-determinism, syscalls, large binaries, dynamic dispatch. Revm earns its place by being friendly to all of those.)
 
@@ -1307,7 +1317,7 @@ Now you know what "L2 prover" actually does.
                   xpReward: 40,
                   content: `# Running a Reth fork in production
 
-You've built a custom fork. Now you have to run it without it eating your weekend. This lesson is the operations checklist.
+It's 3am. Your validator stopped producing blocks 40 minutes ago. The dashboard shows: file-descriptor exhaustion, MDBX page-cache pressure, peer count at 2. None of these would have shown up in unit tests. None of them would have shown up the day you shipped. They show up at month 3, all at once. This lesson is the **ops checklist** that prevents that 3am page — build flags, systemd limits, diff testing against vanilla, the deployment topology that lets your fork survive contact with reality.
 
 > 🛑 **Predict before scrolling.** You ship your fork built with **default \`cargo build --release\`** — no jemalloc, no asm-keccak, no \`target-cpu=native\`. List the production symptoms you'd see in **week 1, week 4, month 3**. (Hint: which symptoms creep in slowly versus hit immediately?)
 
@@ -1726,7 +1736,9 @@ Candidates ranked by reading quality:
                   xpReward: 40,
                   content: `# Custom ChainSpec — forks, genesis, and the precompile schedule
 
-\`ChainSpec\` is the type that owns "what makes this chain different from mainnet Ethereum at the protocol level." If you're going to read or build a Reth-based chain, **this is the type you read first**.
+The block validates on mainnet but rejects on your chain. Same block, same client binary, same Revm — different result. Why? Because something inside \`ChainSpec\` said "at this height, the rules are different here." A wrong fork height, a wrong precompile schedule entry, a wrong base-fee parameter — any one of them, and your chain forks itself off the network in one block.
+
+\`ChainSpec\` is the Rust struct that owns "what makes this chain different from mainnet Ethereum at the **protocol** level" — chain ID, fork activation, base fee curve, genesis allocation, precompile schedule. If you're going to read or build a Reth-based chain, **this is the type you read first**.
 
 > 🛑 **Predict before scrolling.** "ChainSpec" sounds like config. **List 5 categories of information** you'd expect it to hold. If your list is shorter than 5 or all of them are gas-related, you're under-imagining what consensus rules touch.
 

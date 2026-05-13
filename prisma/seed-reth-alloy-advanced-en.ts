@@ -93,7 +93,7 @@ After Inside Alloy: you've completed all three Advanced courses. **Expert** pick
                   xpReward: 25,
                   content: `# Building the \`Provider\` trait step by step
 
-[\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy)'s \`Provider\` is the central abstraction for talking to Ethereum nodes. Every Rust dapp, MEV bot, indexer, and Reth-SDK app that touches an RPC endpoint uses it. Open \`crates/provider/src/provider/trait.rs\` and the trait looks like this (excerpted):
+Every Rust program that talks to an Ethereum node — your MEV bot, your indexer, your dapp backend, your Reth-SDK app — routes through [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy)'s \`Provider\`. It's the single abstraction over RPC. Open \`crates/provider/src/provider/trait.rs\` and the trait header looks like this (excerpted):
 
 \`\`\`rust
 #[auto_impl(&, &mut, Box, Rc, Arc)]
@@ -111,7 +111,7 @@ pub trait Provider<N: Network = Ethereum>: Send + Sync {
 }
 \`\`\`
 
-Several things are happening at once: a generic over \`N: Network\` with a default, a \`root()\` accessor returning a separate \`RootProvider\` type, methods that return weird wrapper types (\`ProviderCall\`, \`RpcWithBlock\`, \`EthCall\`), and \`auto_impl\` covering five wrapper types.
+Several things are happening at once: a generic over \`N: Network\` with a default (the chain — Ethereum, Optimism, custom L2), a \`root()\` accessor returning a separate \`RootProvider\` type, methods that return wrapper types you've never seen (\`ProviderCall\`, \`RpcWithBlock\`, \`EthCall\`), and \`auto_impl\` (a macro that derives the trait for \`&P\`, \`Box<P>\`, \`Arc<P>\`, etc.) covering five wrapper types.
 
 Walk it cold and you get six new ideas at once. Easier path: **build it up.** Start from the dumbest RPC client you could write, then earn each piece of complexity. By the end you'll have built the real shape — Network parameterization, transport indirection, layered providers, and all.
 
@@ -371,9 +371,9 @@ If any answer is shaky, scroll back. The next lesson is a guided walkthrough of 
                   xpReward: 25,
                   content: `# Reading the real \`Provider\` trait
 
-The build-up constructed every part of \`Provider\` from a naive starting point. This lesson does the inverse — opens [\`crates/provider/src/provider/trait.rs\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) and reads the production version line by line, mapping each piece back to its motivation.
+You built \`Provider\` from a naive RPC client up to the real trait shape. Now open the source — [\`crates/provider/src/provider/trait.rs\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) — and read the production version line by line. Each piece you read should snap back to the buildup step that motivated it.
 
-Most importantly, this lesson covers what the build-up deliberately glossed over: the **return-type machinery** (\`ProviderCall\`, \`RpcWithBlock\`, \`EthCall\`, \`PendingTransactionBuilder\`). Those wrapper types are the part of alloy that newcomers find weirdest — and once you see why they exist, the trait surface stops looking arbitrary.
+Most importantly, this lesson covers what the build-up deliberately glossed over: the **return-type machinery** (\`ProviderCall\`, \`RpcWithBlock\`, \`EthCall\`, \`PendingTransactionBuilder\` — future-builder types that let you customize an RPC call *before* awaiting it). Those wrapper types are the part of alloy that newcomers find weirdest — and once you see why they exist, the trait surface stops looking arbitrary.
 
 > 📂 **Open \`alloy-rs/alloy/crates/provider/src/provider/trait.rs\` now.** The exact line numbers and method bodies drift; the structural points are durable. When the lesson says "in current alloy main," **verify yourself** before quoting it elsewhere.
 
@@ -399,7 +399,7 @@ Three things to look hard at:
 
 ### \`Send + Sync\` supertraits
 
-Every \`Provider\` implementation must be safe to send across threads (\`Send\`) and reference from multiple threads (\`Sync\`). This isn't decorative — production users wrap providers in \`Arc<P>\` and clone the Arc into many task handlers (workers, MEV searchers, indexer streams). Without \`Send + Sync\`, those usages don't compile.
+Every \`Provider\` implementation must be safe to send across threads (\`Send\` — the value can move to another thread) and reference from multiple threads (\`Sync\` — \`&P\` can be shared). This isn't decorative — production users wrap providers in \`Arc<P>\` (an atomically reference-counted shared pointer) and clone the Arc into many task handlers (workers, MEV searchers, indexer streams). Without \`Send + Sync\`, those usages don't compile.
 
 ### \`#[auto_impl(&, &mut, Box, Rc, Arc)]\`
 
@@ -808,7 +808,9 @@ After this drill, you've shipped the same kind of code MEV pipelines and indexer
                   xpReward: 25,
                   content: `# Building the \`Network\` trait step by step
 
-The Provider chain mentioned \`N: Network = Ethereum\` but treated \`Network\` as a black box. **This chain opens it up.** \`Network\` is alloy's *type-level dictionary* for chain-specific primitives — the mechanism that lets one \`Provider\` impl talk to Ethereum, Optimism, Anvil, and custom L2s with the same API surface.
+Optimism's transactions carry an L1 \`mint\` field. Their receipts carry \`l1_fee\` and \`l1_block_number\`. Polygon zkEVM's tx envelope has a sequencer signature. Each L2 has its own tx, receipt, and block shapes — but the same \`Provider\` API still works on all of them. **How?** Through \`Network\`: alloy's *type-level dictionary* (one trait whose associated types select the bundle of chain-specific shapes a given chain uses).
+
+The Provider chain treated \`Network\` as a black box. This chain opens it up.
 
 By the end of this lesson you'll have built every piece of:
 
@@ -833,13 +835,13 @@ Ten associated types. The shape looks weird until you see the failure modes that
 
 ## Step 0 — The naive Provider, hardcoded to Ethereum
 
-Earlier, our Provider \`send_transaction\` looked like:
+Earlier in the Provider chain, our \`send_transaction\` looked like:
 
 \`\`\`rust
 fn send_transaction(&self, tx: EthereumTransactionRequest) -> SendTransaction;
 \`\`\`
 
-Hardcoded \`EthereumTransactionRequest\`. Hardcoded receipts. Hardcoded block headers.
+Hardcoded \`EthereumTransactionRequest\`. Hardcoded receipts. Hardcoded block headers. Works on mainnet — and only on mainnet.
 
 > 🛑 **Predict.** Without scrolling: name three production chains where this hardcoded design breaks. Hint — each is a *different shape* of transaction or receipt.
 
@@ -1034,9 +1036,9 @@ If any answer is shaky, scroll back. The next lesson reads alloy's real \`Networ
                   xpReward: 25,
                   content: `# Reading the real \`Network\` trait + Ethereum / Optimism impls
 
-The buildup justified each of the 10 associated types and the trait bounds. **This lesson reads the real source** — including the per-associated-type trait bounds the buildup glossed over, the \`Ethereum\` impl, the \`Optimism\` impl side-by-side, and the related \`TransactionBuilder\` helper trait.
+You motivated all 10 associated types and the trait bounds from a naive starting point. Now read the real source — the per-associated-type bounds the buildup glossed over, alloy's \`Ethereum\` impl, the \`Optimism\` impl side-by-side, and the helper trait (\`TransactionBuilder\`) that makes \`TransactionRequest\` fluent across chains.
 
-The cohesion property from buildup Step 4 ("changing one slot cascades to others") becomes concrete here: you'll see exactly which slots Optimism overrides and which it reuses from Ethereum.
+The cohesion property from buildup Step 4 ("associated types group 'these go together'") becomes concrete here: side-by-side, you'll see exactly which slots Optimism overrides and which it reuses from Ethereum.
 
 > 📂 **Open three files in tabs:**
 > - \`crates/network/src/lib.rs\` — the \`Network\` trait
@@ -1085,7 +1087,7 @@ Because chain configuration (chain ID, hardfork schedule, etc.) varies *per prov
 
 ### \`TxType: Into<u8> + TryFrom<u8>\`
 
-This is the consensus serialization hook. EIP-2718 transactions are typed by a single byte prefix (0x01 = EIP-2930, 0x02 = EIP-1559, 0x03 = EIP-4844). The \`Into<u8>\` and \`TryFrom<u8>\` bounds let you map between the high-level enum and the wire byte:
+This is the consensus serialization hook. EIP-2718 (Ethereum's typed-transaction envelope spec) marks each transaction with a single byte prefix (0x01 = EIP-2930 access lists, 0x02 = EIP-1559 base fee, 0x03 = EIP-4844 blob txs). The \`Into<u8>\` and \`TryFrom<u8>\` bounds let you map between the high-level enum and the wire byte:
 
 \`\`\`rust
 let tx_type: TxType = bytes[0].try_into()?;
@@ -1483,9 +1485,9 @@ After this drill, you've shipped the same shape multi-chain tooling production i
                   xpReward: 25,
                   content: `# Building the \`Signer\` trait step by step
 
-You've built the \`Provider\` (RPC abstraction) and the \`Network\` (chain primitives). The third foundational alloy concept is **how transactions get signed**. Production users sign with raw private keys, AWS KMS, hardware wallets, mnemonic-derived keys, or remote signing services — and the *same* application code has to work across all of them.
+A MEV searcher signs with an AWS KMS key (cloud key — the private key never leaves AWS). A treasury operator signs with a Ledger (hardware wallet — key on a USB device, requires a button press). A test suite signs with raw secp256k1 bytes in process. **The same alloy application code has to drive all three.** That's the constraint that shapes the \`Signer\` trait.
 
-This chain is about the abstractions that make that possible: the \`Signer\` trait, the \`TxSigner<N>\` chain-specific variant, the async/sync split, and the \`WalletFiller\` that ties signing into the \`ProviderBuilder\` you used in the Provider drill.
+This chain builds the abstractions that make that possible: the \`Signer\` trait, the \`TxSigner<N>\` chain-specific variant, the async/sync split, and the \`WalletFiller\` that ties signing into the \`ProviderBuilder\` you used in the Provider drill.
 
 By the end of this lesson you'll have built every piece of:
 
@@ -1747,7 +1749,7 @@ If any answer is shaky, scroll back. The next lesson reads alloy's real \`Signer
                   xpReward: 25,
                   content: `# Reading the real \`Signer\` trait + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\`
 
-The buildup justified the three-trait split (\`Signer\` / \`TxSigner\` / \`SignerSync\`) and the \`WalletFiller\` bridge. **This lesson reads the real source** — the trait header with all its bounds, the in-process \`PrivateKeySigner\`, the cloud \`AwsSigner\`, the \`SignableTransaction\` glue, and \`WalletFiller\`'s integration into the FillProvider chain.
+You motivated the three-trait split (\`Signer\` / \`TxSigner\` / \`SignerSync\`) and the \`WalletFiller\` bridge. Now read the real source — the trait header with all its bounds, the in-process \`PrivateKeySigner\`, the cloud \`AwsSigner\` (where the recovery byte has to be brute-forced because AWS won't return it), the \`SignableTransaction\` glue, and \`WalletFiller\`'s integration into the FillProvider chain.
 
 > 📂 **Open four files in tabs:**
 > - \`crates/signer/src/signer.rs\` — the \`Signer\` and \`SignerSync\` traits
@@ -1779,7 +1781,7 @@ Three things to look hard at:
 
 ### \`Sig = Signature\` — default associated type-style parameter
 
-The buildup wrote \`Signer<Sig = Signature>\`. The \`Sig\` parameter exists because not every chain uses ECDSA k1 secp256k1 signatures. Some L2s use BLS, some use ed25519, some use post-quantum schemes. Defaulting to \`Signature\` (alloy's k1 secp256k1 type) keeps the common case ergonomic — \`impl Signer\` is implicitly \`impl Signer<Signature>\` — while letting alternative schemes plug in.
+The buildup wrote \`Signer<Sig = Signature>\`. The \`Sig\` parameter exists because not every chain uses ECDSA secp256k1 signatures (Ethereum's curve — 65-byte (r, s, v) tuple). Some L2s use BLS (aggregate-friendly), some use ed25519 (Solana's curve), some use post-quantum schemes. Defaulting to \`Signature\` (alloy's secp256k1 type) keeps the common case ergonomic — \`impl Signer\` is implicitly \`impl Signer<Signature>\` — while letting alternative schemes plug in.
 
 > 🛑 **Predict.** Why is \`Sig\` a *generic parameter on the trait*, not an *associated type* (the way \`Network::TxEnvelope\` is)?
 

@@ -34,7 +34,9 @@ export async function seedRethConsensusEngineeringEN(prisma: PrismaClient) {
                   xpReward: 40,
                   content: `# The BFT problem from scratch
 
-Before you write a single line of consensus code, you need to understand **what problem consensus is trying to solve**. Most engineers skip this and end up debugging Byzantine bugs at 3am with no mental model. This lesson builds the foundation: failure modes, the safety/liveness split, and why FLP makes "perfect" consensus impossible.
+It's 3am. One validator in your 30-node chain just signed two conflicting blocks. Other validators are voting both ways. The chain's split-brained. **What do you reach for?** If you don't have a mental model for *why this is even possible* — for what failure modes consensus is supposed to survive — you'll spend the next eight hours guessing.
+
+This lesson builds the model: failure modes, the safety/liveness split, and why FLP (the 1985 impossibility theorem) makes "perfect" consensus mathematically off the table.
 
 > 🛑 **Predict before scrolling.** Three nodes A, B, C must agree on a single value. **What can go wrong?** List 4 distinct failure modes. (Hint: not just "the network is slow.")
 
@@ -46,7 +48,7 @@ Multiple nodes, one decision. They must all decide:
 - **A value that was proposed** — they can't just agree on "42" if nobody asked about 42
 - **Eventually** — at some point, not "later if we feel like it"
 
-These three are **safety**, **validity**, **liveness**. They are not free. The whole field of consensus research is about figuring out which trade-offs are tolerable.
+These three are **safety**, **validity**, **liveness**. They aren't free — you cannot get all three under arbitrary network conditions. The whole field of consensus research is figuring out which trade-offs are tolerable for which use case.
 
 ## 2. The failure modes you must plan for
 
@@ -57,7 +59,7 @@ These three are **safety**, **validity**, **liveness**. They are not free. The w
 | **Network partition** | A subset of nodes can't reach another subset. | Submarine cable cut; AWS region outage. |
 | **Byzantine** | A node lies. Sends contradictory messages. Signs both A and ¬A. | Compromised validator key; bug. |
 
-The classical literature calls all of these "faults." The **Byzantine** case is the hardest because the faulty node is **actively adversarial**. Crash + omission are easy comparatively.
+The classical literature calls all of these "faults." The **Byzantine** case (named after the Byzantine Generals problem — a node that behaves arbitrarily, including lying) is the hardest because the faulty node is **actively adversarial**. Crash + omission are comparatively easy.
 
 > 🛑 **Predict.** You have 4 nodes. One is Byzantine. **What's the maximum number of total nodes f Byzantines you can tolerate while still reaching consensus?** (Answer below — but predict first. The answer is famous.)
 
@@ -106,9 +108,9 @@ Every real protocol uses at least one of these escapes.
 
 ## 5. The 3f+1 rule, intuited
 
-Why exactly **3f+1**? Three way intuition:
+Why exactly **3f+1**? Here's the intuition before the algebra.
 
-Consider you ask for votes. **f nodes might lie.** You need a quorum where:
+You ask for votes. **f nodes might lie.** You need a quorum (a vote count that "counts as agreement") where:
 
 - The quorum is large enough that **f Byzantines can't form a majority** in it
 - Two quorums must **overlap** in at least one honest node (otherwise you could decide both x and ¬x)
@@ -156,7 +158,9 @@ Tempo (likely) picks: ~30 validators, synchronous, BFT (halt on partition), slas
                   xpReward: 40,
                   content: `# Three consensus families — PoW, PoS, classical BFT
 
-Now that you understand the BFT problem, the families of solutions become obvious. Each family makes different sacrifices from §3 of the last lesson. **The protocol you pick determines the chain you can build** — throughput, latency, decentralization, validator set size, slashing semantics, all flow from this one choice.
+Bitcoin, Ethereum, and Hyperliquid all run consensus. None of them picked the same family. Each one made a different trade against the 4-way impossibility from last lesson (safety / liveness / fault tolerance / no synchrony) — and that single choice determined everything else about their chain: throughput, latency, validator count, slashing semantics, even who's allowed to be a validator.
+
+This lesson is the map of those three families and what each one costs you.
 
 > 🛑 **Predict before scrolling.** You're building a payment rail (Tempo). Sub-second finality matters more than 1M validators. **Which family do you pick — and why does Bitcoin's family lose immediately?**
 
@@ -172,7 +176,7 @@ Each family wins on one axis and loses on others. **No free lunches.** Your job 
 
 ## 2. Nakamoto / PoW — the original
 
-**Mechanism**: Miners compete to solve a hash puzzle. Whoever solves first gets to propose the next block. Other miners "vote" by building on top of it. The longest chain wins.
+**Mechanism**: Miners compete to solve a hash puzzle (find a nonce such that the block's SHA-256 hash starts with N zero bits). Whoever solves first gets to propose the next block. Other miners "vote" by building on top of it. The longest chain wins.
 
 What this buys:
 
@@ -194,7 +198,7 @@ What this costs:
 
 ## 3. Classical BFT — the L1 architect's default
 
-**Mechanism**: A bounded committee of validators. A leader proposes a block. The committee votes. If 2/3+ vote yes, the block is final — instantly.
+**Mechanism**: A bounded committee of validators (typically 20–150, identities known up front). A leader proposes a block. The committee votes. If 2/3+ vote yes, the block is final — instantly, no waiting for confirmations.
 
 The classical references:
 
@@ -312,7 +316,9 @@ For each chain, identify the family and one specific trade-off:
                   xpReward: 45,
                   content: `# Ethereum's PoS — Casper FFG + LMD-GHOST
 
-Ethereum's consensus is the most-studied, most-staked PoS protocol in production. It's also the hybrid you saw last lesson — **two protocols layered**. This lesson breaks the hybrid apart so you can read the actual specs and understand why each part exists.
+Ethereum doesn't run *one* consensus protocol. It runs two, stacked. **LMD-GHOST** decides which block is "the head right now"; **Casper FFG** decides "what's actually final and can never be reorged." Why two? Because at ~1 million validators, you can't do BFT-style instant finality without melting the network — but you also can't ship a chain where nothing ever truly settles. The hybrid is the compromise.
+
+This lesson takes the hybrid apart so you can read the spec and know what each half is doing.
 
 > 🛑 **Predict before scrolling.** Ethereum slot time is 12 seconds, epoch is 32 slots. **Finality takes ~2 epochs minimum.** Compute the wall-clock time. Why isn't this faster — why doesn't Ethereum finalize every slot?
 
@@ -329,11 +335,11 @@ LMD-GHOST runs continuously, picks the tip. Casper FFG runs at epoch boundaries,
 
 ## 2. LMD-GHOST in 60 seconds
 
-**Latest Message Driven, Greedy Heaviest Observed Sub-Tree.**
+**Latest Message Driven, Greedy Heaviest Observed Sub-Tree.** (The mouthful unpacks below.)
 
 Each slot, validators do two things:
 1. **Propose** (if it's your slot) — broadcast a block
-2. **Attest** — vote on which block you think is the head
+2. **Attest** — vote on which block you think is the head (an *attestation* is a signed message naming a block)
 
 The fork choice rule: **for each block, count attestations in its subtree (weighted by stake). Pick the subtree with most weight.**
 
@@ -394,7 +400,7 @@ Because an attacker needs to acquire stake (millions of ETH) and then **lose it*
 
 ## 5. The Engine API — where consensus talks to execution
 
-Ethereum splits **consensus client** (CL — Lighthouse, Prysm, etc.) from **execution client** (EL — Reth, Geth, etc.). They communicate over the **Engine API**, a JSON-RPC interface.
+Ethereum splits the node into two processes: a **consensus client** (CL — Lighthouse, Prysm, etc.) that runs the voting protocol, and an **execution client** (EL — Reth, Geth, etc.) that runs the EVM and stores state. They communicate over the **Engine API** — a JSON-RPC interface defined by the Ethereum spec, spoken locally between the two processes on the same machine.
 
 \`\`\`mermaid
 sequenceDiagram
@@ -455,7 +461,9 @@ Sketch on paper:
                   xpReward: 45,
                   content: `# HotStuff and HyperBFT — the single-leader BFT family
 
-HyperBFT is the consensus underneath Hyperliquid. It's a descendant of **HotStuff** (2018), which is itself a descendant of **PBFT** (1999). This family is what most modern non-Ethereum L1s pick when they need instant finality. Reading HotStuff is the closest open-source reference you have to understanding HyperBFT.
+Hyperliquid does ~200,000 perp trades per second with sub-second finality. The consensus under that is **HyperBFT** — and HyperBFT isn't an exotic new design. It's a HotStuff variant. HotStuff (2018) is itself a descendant of PBFT (1999), and the whole family is what nearly every modern non-Ethereum L1 picks when it needs instant finality.
+
+Hyperliquid hasn't open-sourced HyperBFT. But HotStuff is published, and reading it is the closest reference you have to what's actually running under HYPE.
 
 > 🛑 **Predict before scrolling.** PBFT (1999) has O(n²) messages per block. HotStuff (2018) has O(n). **What changed to enable that 10000x message reduction at n=100 validators?** (Hint: cryptography.)
 
@@ -481,11 +489,11 @@ Yin, Malkhi, Reiter, Gueta, Abraham (VMware, 2018). Two innovations:
 
 ### 2.1 Threshold signatures
 
-Instead of every validator sending their signature to everyone, use **threshold cryptography**:
+Instead of every validator sending their signature to everyone, use **threshold cryptography** (a signature scheme — typically BLS — where partial signatures from k different signers can be mathematically combined into one short signature that verifies as "k of them signed"):
 
-- 2f+1 validators sign a partial signature
-- These can be combined into **one aggregated signature** of size O(1)
-- Leader broadcasts just the aggregate, not n individual signatures
+- 2f+1 validators each produce a partial signature
+- The partials combine into **one aggregated signature** of size O(1) — same byte count whether it represents 4 signers or 400
+- The leader broadcasts just the aggregate, not n individual signatures
 
 This collapses n²→n communication. The leader fans out a single aggregated signature; validators don't need to talk to each other.
 
@@ -609,7 +617,9 @@ For each chain, identify the consensus family and one design choice:
                   xpReward: 45,
                   content: `# Reading Reth's Consensus trait
 
-Reth is **execution-only**. It doesn't implement PoS or BFT. So where does "consensus" live in Reth? The answer is the **\`Consensus\` trait** — the integration point where any consensus engine plugs into Reth's execution pipeline. This is the trait Hyperliquid's node, Tempo's node, and every Reth-based chain implements.
+Open Reth's source. Search for "PoS." You will find very little, because **Reth doesn't implement PoS or BFT at all** — that work lives in the consensus client (Lighthouse, Prysm, or your own engine). So when people say "Hyperliquid runs on Reth" or "Berachain forks Reth for PoL," what consensus surface are they actually touching?
+
+The answer is one trait: **\`Consensus\`**. It's the integration point where any consensus engine plugs into Reth's execution pipeline. This is the trait Hyperliquid's node, Tempo's node, and every Reth-based chain implements.
 
 > 🛑 **Predict before scrolling.** Reth needs to validate a block coming from the consensus layer. **What checks must run before the EVM executes the transactions?** List 4. (Hint: cryptographic, structural, temporal, and one consensus-specific.)
 
@@ -620,8 +630,8 @@ Reth's architecture splits concerns:
 | Layer | Responsibility | Component |
 | :--- | :--- | :--- |
 | **Execution** | Run transactions, produce post-state | revm + executor |
-| **Storage** | Persist blocks, state, receipts | MDBX |
-| **Network** | Receive blocks from peers | devp2p |
+| **Storage** | Persist blocks, state, receipts | MDBX (Reth's embedded key-value store) |
+| **Network** | Receive blocks from peers | devp2p (Ethereum's P2P transport) |
 | **Consensus** | Validate block correctness per chain rules | \`Consensus\` trait |
 
 Note: **Reth's \`Consensus\` trait doesn't pick the chain head.** That's the consensus client's job (Lighthouse, Prysm, or custom). Reth's job is to **validate** blocks it receives — were they built per the rules?
@@ -794,7 +804,9 @@ Then:
                   xpReward: 45,
                   content: `# Reading Malachite — Rust-native BFT by Informal Systems
 
-[\`informalsystems/malachite\`](https://github.com/informalsystems/malachite) is **Tendermint, rewritten in Rust**, by the same team that built CometBFT (the Go reference). It's the closest Rust-native BFT engine you can study. If you want to ship a Tendermint-family chain on Reth, this is your reference implementation.
+If your Reth-based L1 needs Tendermint-style BFT consensus, you have three options. (1) Write your own — months of work plus security risk. (2) Shell out to CometBFT in Go — ugly cross-process glue. (3) Use [\`informalsystems/malachite\`](https://github.com/informalsystems/malachite): **Tendermint, rewritten in Rust**, by the same team that built CometBFT. Option 3 is the reason this lesson exists.
+
+Malachite is the closest Rust-native BFT engine you can study, and the cleanest one to embed.
 
 > 🛑 **Predict before scrolling.** Tendermint has **3 voting rounds per block**: Propose, Prevote, Precommit. **For each round, what does a validator decide to do?** List the input and output of each round.
 
@@ -851,7 +863,7 @@ Each block round, validators transition through these:
 
 1. **NewRound** → enter the round, decide if you're the proposer
 2. **Propose** → if proposer, broadcast a block. If not, wait.
-3. **Prevote** → vote "yes" or "nil" on the proposed block (with 2f+1 prevotes, you have a *polka*)
+3. **Prevote** → vote "yes" or "nil" on the proposed block. 2f+1 prevotes for the same block is called a *polka* (Tendermint's name for "enough first-round support to move on").
 4. **Precommit** → if you saw a polka, broadcast precommit. With 2f+1 precommits, **block is committed**.
 5. **Commit** → finalize, move to next height
 
@@ -1000,7 +1012,9 @@ That's it at the architecture level. Malachite handles the protocol; you handle 
                   xpReward: 40,
                   content: `# Reading bera-reth — Proof-of-Liquidity as consensus customization
 
-[\`berachain/bera-reth\`](https://github.com/berachain/bera-reth) is the production example of "**Reth + radically different consensus**." Berachain's Proof-of-Liquidity (PoL) is **not just renaming PoS** — it changes who can be a validator and how rewards flow. Reading bera-reth shows you the practical surface of "swap the consensus."
+Most "we have a different consensus" pitches turn out to be PoS with a renamed token. Berachain's **Proof-of-Liquidity** (PoL) is the rare exception: it actually changes who's allowed to validate and where the rewards go. And the implementation — [\`berachain/bera-reth\`](https://github.com/berachain/bera-reth) — is in production, on Reth, with the diff small enough to read in an afternoon.
+
+This is the practical surface of "swap the consensus." If you want to know what a real custom L1 looks like on Reth, this is the one to study.
 
 > 🛑 **Predict before scrolling.** In Ethereum PoS, you become a validator by **staking 32 ETH**. In Berachain's PoL, what's the analogous step? (Hint: it's not "staking BGT.") **What does Berachain require validators to do that Ethereum doesn't?**
 
@@ -1009,7 +1023,7 @@ That's it at the architecture level. Malachite handles the protocol; you handle 
 The Berachain pitch:
 
 - **In PoS**: validators stake a native token. The token's only utility is staking.
-- **In PoL**: validators stake **BGT** (governance token), but BGT is earned by **providing liquidity to BEX** (their DEX).
+- **In PoL**: validators stake **BGT** (Bera Governance Token — Berachain's non-transferable governance asset), but BGT is earned by **providing liquidity to BEX** (BeraSwap, Berachain's native AMM/DEX).
 
 The cascade:
 1. Users provide liquidity to BEX → earn BGT
@@ -1233,7 +1247,9 @@ Short test on what you've read in this module. **No fluency answers** — every 
                   xpReward: 45,
                   content: `# NodeBuilder consensus slot — wiring custom consensus
 
-You've read the trait. You've seen Malachite and bera-reth. Now: **wire it together.** This lesson walks through the actual NodeBuilder API call sites where consensus plugs into a Reth-based chain. By the end, you should be able to sketch the integration for a new L1.
+You have a custom \`Consensus\` impl (you wrote it last lesson). You have Malachite or your own engine driving the votes. **How do those two pieces actually become a running node?** Answer: one builder, one impl, one chained method call on NodeBuilder — the exact same shape as plugging in a custom mempool or custom EVM.
+
+This lesson walks the call sites. By the end you should be able to sketch the wiring for a new L1 on a whiteboard.
 
 > 🛑 **Predict before scrolling.** You're wiring custom consensus into Reth's NodeBuilder. **What 4 pieces does the builder need from you?** (Hint: trait impl, validator set, signature scheme, and one more.)
 
@@ -1437,7 +1453,9 @@ Sketch (no need to compile):
                   xpReward: 50,
                   content: `# Building a minimal single-leader BFT in Rust
 
-You've seen the trait. You've read Malachite. Now you build **the smallest viable BFT consensus** that could ship a real L1. This lesson is the shortcut: **what every L2 sequencer and Tempo-class L1 actually does at launch** — a centralized leader, then progressively decentralize.
+Open the OP Stack docs. Open the Arbitrum docs. Open Hyperliquid's blog from launch. They all say variations of "we will decentralize the sequencer over time." Translation: **at launch, there is one machine producing every block, and a signature from a specific key is the only consensus.** That's it.
+
+You can ship this in ~100 lines of Rust on top of Reth. This lesson is that ~100 lines, plus the trajectory for what to add when "later" arrives.
 
 > 🛑 **Predict before scrolling.** Hyperliquid, Tempo, every OP Stack chain, and Arbitrum — **what consensus do they all run at launch**? It's not HotStuff. It's not Tendermint. (Hint: simpler than both.)
 
@@ -1606,7 +1624,7 @@ Because consensus is "agreement on a single value." With one decider, the value 
 
 ## 5. Step 1 of decentralization: 2-of-3 multisig sequencer
 
-Move from single signer to multisig:
+Move from a single signer to a **multisig** — block validity now requires signatures from 2 of 3 designated keys instead of 1:
 
 \`\`\`rust
 pub struct MultisigSequencer {
@@ -1700,7 +1718,9 @@ Code-along (no need to run):
                   xpReward: 45,
                   content: `# Validator economics — slashing, rewards, attack vectors
 
-A consensus protocol is half cryptography, half economics. The cryptography says "you can't sign two conflicting messages without leaving proof." The **economics** say "the proof of misbehavior costs you more than you'd gain from misbehaving." This lesson is the economics layer.
+Cryptography alone doesn't secure a PoS chain. It can *prove* that a validator double-signed — but proof is worthless if the validator pays nothing for it. **The protocol is safe only when the cost of cheating exceeds the cash you can extract by cheating.** That's the economics layer, and it's load-bearing — without it, the elegant 3f+1 quorum math collapses into "they shouldn't double-sign, please."
+
+This lesson is the economics layer: slashing mechanics, attack vector pricing, and how to design slashing for your own L1.
 
 > 🛑 **Predict before scrolling.** Ethereum mainnet has ~$50B+ staked. **What's the dollar cost of attempting a 51% attack on finality?** (You don't need an exact number — sketch the calculation.) Why is this the **security argument** for PoS?
 
@@ -1723,7 +1743,7 @@ This is **economic security**: the protocol is safe because attacking is irratio
 
 In any BFT system that supports slashing:
 
-### 2.1 Double-signing (equivocation)
+### 2.1 Double-signing (equivocation — signing two conflicting messages for the same slot)
 
 \`\`\`
 Validator V signs Vote(block_A, round_5)

@@ -34,20 +34,20 @@ export async function seedRethCrossChainBridgesJA(prisma: PrismaClient) {
                   xpReward: 40,
                   content: `# Bridge とは何か? Trust モデルと bridge トリレンマ
 
-**Bridge** は、chain A での state 変更が chain B での state 変更を引き起こすシステム。クロスチェーンインフラの全分野は、これを動かすために **どれだけ信頼が必要か** と、その信頼を最小化した時に **どんな攻撃が残るか** を見つけ出す作業。
+**過去 5 年で bridge から $2B+ が盗まれた**。マイナーな DeFi 領域ではない — 業界最大手チームが運用する最高 TVL の bridge から: Ronin ($625M)、Wormhole ($325M)、Poly Network ($611M、返却)、Nomad ($190M)。クロスチェーンアーキテクチャの設計判断はすべて、ひとつの問いから派生する: **chain A の state を chain B に動かすために何を信頼しなければならないか、そしてその信頼を最小化したあとに残る攻撃は何か?**
 
-> 🛑 **スクロール前に予測。** 過去 3 年で 3 つの bridge が $300M+ ずつハックされた (Ronin、Wormhole、Nomad)。**共通の攻撃パターンは?** (ヒント: スマートコントラクトのバグではない。)
+**Bridge** はその問いに答えるシステム。クロスチェーンインフラの全分野は、**信頼の量** と **残る攻撃** のバリエーション。
+
+> 🛑 **スクロール前に予測。** あのうち 3 つは $300M+ のハック。**共通の攻撃パターンは?** (ヒント: スマートコントラクトのバグではない。)
 
 ## 1. Bridge プリミティブ — 価値 vs メッセージ
 
-「Bridge」の 2 種類:
+「Asset bridge」と「Message bridge」が別物のように語られるが、別ではない。**Asset bridge = message bridge + 各側のトークンコントラクト**。すべてのクロスチェーンインフラは根本的にメッセージパッシングで、asset ケースは規約を上に重ねただけ。
 
 | 種類 | 何が動くか | 例 |
 | :--- | :--- | :--- |
 | **Asset bridge** | トークン残高 (canonical または wrapped) | USDC をチェーン間で |
 | **Message bridge** | 任意の calldata | LayerZero、CCIP arbitrary message |
-
-Asset は messaging の特殊ケース: asset bridge は message bridge + 各側のトークンコントラクト。**すべてのクロスチェーンインフラは根本的に message bridge** で、上に規約が乗る。
 
 Tempo↔Solana 決済 (mppsol) 向け: message bridge。「Asset」は決済領収書、トークンではない。
 OP↔Ethereum 向け: ネイティブトークン規約付き message bridge (ETH deposit/withdrawal)。
@@ -55,7 +55,7 @@ BTC↔EVM (wrapped BTC) 向け: asset bridge。
 
 ## 2. Trust スペクトラム
 
-Bridge は **何を信頼せねばならないか** のスペクトラム上に位置する:
+すべての bridge は同じ 1 つの軸上のどこかに位置する: **何を信頼するか?** 最悪端は人間の委員会。最良端は数学。
 
 \`\`\`
 外部信頼 (最悪)                                              内部信頼 (最良)
@@ -173,9 +173,11 @@ Tempo が Solana に bridge するとき: trustless は現状不可能 (cross-VM
                   xpReward: 40,
                   content: `# Light client — gold standard の検証プリミティブ
 
-**Light client** は、フルノードを走らせずに chain の state を検証するプログラム。ヘッダーだけダウンロード、コンセンサスルールに従い、コンセンサスプロトコルが保証するものだけを信頼する。クロスチェーン bridge において、light client は **trust 最小化の gold standard** であり、Rust が本番 light client の選択言語。
+Ethereum のフルノードは ~1TB のストレージと ~200GB の RAM を必要とする。**Light client** は同じ仕事 — chain が主張通りのものであると検証する — を、数 MB のストレージとスマホレベルの CPU で行う。Block header をダウンロード、フルノードと同じコンセンサスルールに従い、プロトコル自体が保証するものだけを信頼。それ以外は **何も**。
 
-> 🛑 **スクロール前に予測。** Ethereum フルノードは ~1TB の state を保存。Light client は ~MB を保存。**Light client にできないことは?** スクロール前に 3 つ挙げる。(ヒント: 何が state を要求するか考える。)
+これが、まじめなクロスチェーン bridge が必ず辿りつく問いの背景: **source chain の light client を destination chain の中に置いて、クロスチェーンメッセージを暗号的に検証できないか?** 答えが yes になれば、それが **trust 最小化の gold standard**。そしてその領域に到達した本番 light client は Rust で書かれている。
+
+> 🛑 **スクロール前に予測。** Light client は ~MB、フルノードは ~1TB。**Light client にできないことは?** スクロール前に 3 つ挙げる。(ヒント: 何が *state* を必要とするか考える。)
 
 ## 1. Light client とは何か — そして何でないか
 
@@ -194,12 +196,12 @@ Light client は **できない**:
 
 ## 2. Ethereum light client プロトコル
 
-Ethereum の PoS が PoW 時代より light client を遥かに安価にした。プロトコル ([\`ethereum/consensus-specs\`](https://github.com/ethereum/consensus-specs)):
+PoW Ethereum の light client は研究用おもちゃだった — chain-of-work をブラウザ内で安価に検証する話は実用に届かなかった。PoS が経済性を変えた: 固定バリデータセット + BLS 集約署名 (N 個の署名が 1 つの短い署名にまとまる) で、light client 検証が安価になる。プロトコルは [\`ethereum/consensus-specs\`](https://github.com/ethereum/consensus-specs) にある:
 
-- 各 **sync committee period** (~27 時間) ごとに、512 バリデータがランダムに選ばれて sync committee になる
+- 各 **sync committee period** (~27 時間) ごとに、512 バリデータがランダムに選ばれて **sync committee** になる — その期間の block header に署名するだけが仕事のローテーションサブセット
 - Sync committee がその期間の全 block header に署名
-- Light client は sync committee + 署名だけダウンロード
-- Light client は committee の BLS 集約公開鍵に対して署名を検証
+- Light client は sync committee メンバーシップ + 署名だけダウンロード
+- Light client は committee の BLS 集約公開鍵に対して署名を検証 (BLS = N 個の署名を 1 つに集約できる署名方式)
 
 Ethereum に従うために light client が必要なもの:
 - **初期信頼 checkpoint** (out-of-band で取得必要、e.g., 信頼ソースから)
@@ -320,9 +322,9 @@ Reth EVM は mainnet と同じなので、任意の Solidity light client (Helio
                   xpReward: 45,
                   content: `# OP Standard Bridge — canonical な L2 deposit/withdrawal パターン
 
-OP Standard Bridge は canonical な「trustless L1↔L2 bridge」参照。すべての OP Stack chain (Optimism、Base、Mode など) が使う。**rollup 自身のコンセンサスを bridge のセキュリティモデルとして使う** 教科書的例 — 別 multisig なし、別バリデータなし、chain そのもののみ。
+すべての OP Stack chain — Optimism、Base、Mode、Worldchain、Zora — が同じ bridge を走らせる。各 chain が個別に multisig を選んだりバリデータセットを立ち上げたりしない。すべて rollup 自身のコンセンサスを bridge のセキュリティモデルとして使う。**Bridge は rollup へのインタフェースに過ぎず、rollup が trust アンカー**。これが canonical な「trustless L1↔L2」参照で、一度読めば任意のネイティブ L2 bridge に (バリエーションはあれど) 現れるパターンを学べる。
 
-> 🛑 **スクロール前に予測。** Ethereum から Optimism に 1 ETH を deposit。同じ ETH が Optimism に ~2 分で現れる。1 ETH を引き出す。**Ethereum で再び使えるまでどれだけかかるか?** なぜか?
+> 🛑 **スクロール前に予測。** Ethereum から Optimism に 1 ETH を deposit。~2 分で現れる。1 ETH を引き出す。**Ethereum で再び使えるまでどれだけかかるか?** なぜか?
 
 ## 1. Deposit フロー
 
@@ -482,7 +484,9 @@ use crate::L1StandardBridge::{
                   xpReward: 45,
                   content: `# Chainlink CCIP — Tempo が使うクロスチェーンレール
 
-Chainlink CCIP (Cross-Chain Interoperability Protocol) は **任意 chain ペア** 用の本番 bridge。Tempo は Ethereum↔Tempo↔Solana 決済に CCIP を使用。Hyperliquid は使用しない (独自 bridge)。mppsol と soltempo にとって、CCIP は理論的代替ではなく **運用上の現実**。
+Tempo で merchant が USDC 決済を受け取る。その USDC は裏で Ethereum (treasury 用) と Solana (DeFi yield 用) に決済される必要がある — 3 chain に跨り、しかもそのうち 2 つは互いに直接話せない。**このクロスチェーン決済は理論上の bridge 課題ではなく Tempo が今日本番で走らせているもので、それが走るレールが Chainlink CCIP** (Cross-Chain Interoperability Protocol)。Light client ではない。Wormhole の fork でもない。任意 chain ペア向けに設計された本番 bridge。
+
+Hyperliquid は CCIP を使わない (独自 bridge)。だが mppsol と soltempo にとって、CCIP は理論的代替ではなく **運用上の現実**。Tempo の payments スタックに触れるものを architect するつもりなら、理解は任意ではない。
 
 > 🛑 **スクロール前に予測。** CCIP は「Risk Management Network」を持ち、メッセージを **ブロックする** 権限を持つ。**なぜ?** 純粋暗号では防げない、どんな攻撃を防ぐか?
 
@@ -542,15 +546,13 @@ Soltempo 向けのユースケース: **トークン + データ** — Ethereum 
 
 ## 3. トークンプールモデル
 
-Asset 用に、CCIP は汎用 wrapper ではなく **トークンプール** を使用:
+2021 年にクロスチェーン DEX を使った人は wrapped token の混乱を覚えているはず: Avalanche の USDC.e、Fantom の anyUSDC、3 種類の「wrapped USDC」がありどれも *本物の* USDC ではない。CCIP はこれを完全に回避する。Wrapping の代わりに **トークンプール** を使う — canonical asset を保持 (または mint) する各 chain のプールコントラクト:
 
 - 各 chain の **プールコントラクト** が asset 保持
 - Bridge 時、source プールが asset を lock; destination プールが release
-- **Burn-mint** モデル: source プールが burn; destination プールが mint
+- **Burn-mint** モデル: source プールが burn; destination プールが同 total supply から mint
 
-Tempo の Ethereum への USDC 接続は CCIP 経由の burn-mint。Source-chain USDC が burn、destination USDC が同 total supply のプールから mint。
-
-これが **wrapped token より単純で安全** — 別「USDC.e」representation なし、ただ違う chain 上の同じ USDC。
+Tempo の Ethereum 上 USDC は CCIP 経由の burn-mint。Source USDC が burn、destination USDC が mint。「USDC.e」は存在しない — ただ違う chain 上の同じ USDC。**Wrapped token より単純で安全**。
 
 > 🔍 **リポで探す。** [\`smartcontractkit/ccip\`](https://github.com/smartcontractkit/ccip) — CCIP コントラクト。\`TokenPool.sol\` を見つける。**継承構造は?** Contract は異なるトークンタイプ向けに複数 variant を持つ。
 
@@ -676,7 +678,7 @@ Merchant 支払い ──[CCIP]── Solana DeFi ──[CCIP]── Tempo merch
                   xpReward: 40,
                   content: `# Wormhole と IBC — マルチチェーンメッセージプロトコル
 
-Wormhole と IBC は CCIP を超えた 2 つの本番マルチチェーンメッセージプロトコル。非常に異なる聴衆にサービス。**Wormhole** は「すべてを接続する permissionless multisig bridge」 — 速く、安く、よりリスキー。**IBC** は「Cosmos chain 向け trust 最小化 bridge」 — 遅く、より安全、エコシステムロック。
+CCIP が規制された Tempo merchant が使う bridge なら、**Wormhole は 2022 年にすべての Solana DeFi プロトコルが Ethereum に届くために使ったもの** — 速くて安くて、19 鍵 multisig (一度ハックされている) で支えられている。**IBC は 2019 年以来すべての Cosmos chain が使ってきたもの** — 遅く、より安全で、構造的に Cosmos エコシステムから離脱できない。2 つの本番プロトコル、非常に異なる聴衆。両方とも理解する価値がある — CCIP が中間に位置する trust スペクトラムの両端を画する。
 
 > 🛑 **スクロール前に予測。** Wormhole は 30+ chain を接続。IBC は Cosmos chain だけ接続。**なぜ IBC は Ethereum サポートを追加して支配的 bridge になれない?**
 
@@ -694,9 +696,9 @@ Wormhole は Solana、Ethereum、Sui、Aptos、Bitcoin (wrapping 経由) を含�
 
 ### 1.1 Wormhole の攻撃の歴史
 
-2022 年、Wormhole は **$325M** で exploit された。バグは **鍵侵害ではなく** — Solana コントラクトの署名検証バグ。攻撃者が欠けたチェックを exploit して guardian 署名を偽造。
+2022 年 2 月、攻撃者が Wormhole-bridged ETH **$325M** を持ち去った。バグは **鍵盗難ではなく** — guardian 署名を検証する Solana program のチェック漏れ。攻撃者は実際には署名者を検証していないコントラクトに対して、妥当に見える署名を偽造した。
 
-**教訓**: Multisig bridge は鍵だけでなく **検証ロジック** でも頻繁に失敗する。guardian 数は、チェックするコントラクトにバグがあれば意味がない。
+**教訓**: Multisig bridge は鍵だけでなく **検証ロジック** でも同じ頻度で失敗する。Guardian 19 個も、チェックするコントラクトにバグがあれば意味がない。
 
 > 🛑 **理解度チェック。** Wormhole は 19 guardian。**f は?** なぜ「guardian が多い = より安全」が multisig を考える間違った方法か?
 
@@ -822,7 +824,7 @@ Lesson 1 から、trust スペクトラム:
                   xpReward: 55,
                   content: `# Reth 上の最小 bridge を作る — light-client 検証メッセージング
 
-理論は読んだ。本番コードは見た。次は **最小 viable trust 最小化 bridge** を作る: Ethereum→Tempo bridge、Tempo が Ethereum light client を走らせ source イベントの inclusion proof を検証。
+理論は読んだ。本番コードも読んだ。**次は最小の trust 最小化 bridge を作る** — Tempo が Ethereum light client を走らせ source-chain イベントの inclusion proof を検証する Ethereum→Tempo フロー。Multisig なし、guardian なし、fast-withdrawal LP なし。ただ: source chain がイベント発火、light client が「そのイベントは finalize された Ethereum block 内にある」と言い、destination chain が mint。3 コントラクト、1 relayer、1 trust 仮定。
 
 > 🛑 **スクロール前に予測。** Bridge は 3 コンポーネント: Ethereum 上のコントラクト、relayer、Tempo 上のコントラクト。**各々が何をして、何を信頼するか?**
 

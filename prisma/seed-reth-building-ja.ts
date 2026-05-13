@@ -34,7 +34,9 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
                   xpReward: 80,
                   content: `# 最小限の MEV Searcher を Rust で作る
 
-\`add\` を読み、\`Stage\` トレイトを読み、\`identity_run\` を読みました。次は何かを **作る** 番です。本レッスンでは、最小限の MEV searcher の **完全なコード** を walk through します — Rust ~200 行で、public mempool を監視 → 候補トランザクションを fork した Revm でシミュレート → 2-hop アービトラージ機会を検出 → Flashbots スタイルの bundle を構築するところまで、一気通貫で。
+mempool (public な未確定トランザクションキュー) に、Uniswap プールの価格を動かしそうな swap が現れる。**そのトランザクションが取り込まれる前に、自分のラップトップで — ネットワーク上のプロの searcher と同じタイミングで — その swap が生む arb を検知できるか?** これが本レッスンで作るものです。Rust ~200 行: public mempool を監視 → 候補トランザクションを fork した Revm (Reth の EVM エンジン、ローカルで mainnet 状態に対して動かす) でシミュレート → 2-hop アービトラージ機会を検出 → Flashbots スタイルの bundle を構築。
+
+\`add\`、\`Stage\` トレイト、\`identity_run\` を読んできました。次はその機械で組み立てる番です。
 
 > 📌 **スコープの正直な開示。** 本レッスンは「bundle 構築」で止まります。実際に relay へ提出するには認証、ガスオークション、MEV-Boost 統合、そして ~~あなたのお金~~ 本物のリスク管理が必要 — それらは本質とは別のプロダクション複雑度です。本レッスンが答える問いは: *「自分のラップトップで、ネットワーク全体と同じタイミングで arb 機会を見られるか?」*
 
@@ -55,11 +57,11 @@ flowchart LR
 
 ## なぜ Rust + Alloy + Revm か
 
-- **Rust** — 決定論的レイテンシ。GC pause なし。エッジが「このブロックに乗るか、次か」のマイクロ秒の差にかかっている時、これが効く。
-- **Revm** — **RPC ラウンドトリップなしで** ローカルシミュレーション。Infura への \`eth_call\` は wire 越しに ~30〜80 ms。Revm をインメモリキャッシュで叩くと **~200 µs**。2 桁速い。(さらに \`eth_call\` は *結果のみ* 返す — Revm は **state delta** を返してくれる。アービ検出に必要なのはまさに後者)
-- **Alloy** — \`sol!\` による型付きコントラクトバインディング、型付き Provider、手書き ABI エンコード不要。Solidity 一辺倒の開発者が払う配管税が消える。
+- **Rust** — 決定論的レイテンシ。GC (ガーベジコレクタ) pause なし。エッジが「このブロックに乗るか、次か」のマイクロ秒の差にかかっている時、これが効く。
+- **Revm** — **RPC ラウンドトリップなしで** ローカルシミュレーション。Infura への \`eth_call\` (chain 上で read-only に実行する標準 RPC) は wire 越しに ~30〜80 ms。Revm をインメモリキャッシュで叩くと **~200 µs**。2 桁速い。さらに \`eth_call\` は *結果のみ* 返す — Revm は **state delta** (どのスロットがいくら変わったか) を返す。アービ検出に必要なのはまさに後者。
+- **Alloy** — \`sol!\` (Solidity シグネチャを Rust 構造体に展開するマクロ) による型付きコントラクトバインディング、型付き Provider、手書き ABI エンコード不要。Solidity 一辺倒の開発者が払う配管税が消える。
 
-Flashbots / Frontier / お気に入りのブロックビルダー全員が production で使っているのと同じスタックです。**おもちゃではなく、本番品質**を学んでいます。
+Flashbots / Frontier / お気に入りのブロックビルダー全員が production で使っているのと同じスタック。おもちゃではない。
 
 ## Cargo.toml
 
@@ -410,7 +412,7 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
                   xpReward: 80,
                   content: `# Reorg-Aware Indexer を ExEx で作る
 
-すべてのブロックエクスプローラ、アナリティクスパイプライン、リクイデーションモニタは同じプリミティブを必要とします: **チェーンを自分のデータストアに読み込み、reorg が起きても壊さない。** ExEx は Reth のこの部分を、2,000 行のサイドプロジェクトから 250 行の単一ファイルに変える機構です。本レッスンはその完全なコードを walk through します。
+Etherscan、Dune、すべてのリクイデーション bot — どれも同じ問題を解いている: **チェーンを自分のデータストアに読み込み、reorg が起きても壊さない** (*reorg* とは、一時的にノードがチェーンの先端で食い違い、別ブロックが勝つこと — 結果、自分の DB には「もう存在しないブロック」の行が残る)。ExEx (Reth の Execution Extension API — Reth プロセス内で動くカスタムコードのフック) は、これを 2,000 行のサイドプロジェクトから ~250 行の単一ファイルに変える機構です。それを作ります。
 
 > 📌 **スコープの正直な開示。** ERC-20 Transfer イベントを Postgres にインデックスする (フル reorg 対応 — \`ChainCommitted\` で commit、\`ChainReverted\` で undo、\`ChainReorged\` で swap)。データの上に public API を載せる部分は構築しない。それは indexer の後半で、本レッスンが答える問いとは直交: *「ノード速度で正しいチェーンデータをデータストアに入れるには?」*
 
@@ -747,7 +749,7 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
                   xpReward: 70,
                   content: `# Reth にカスタム RPC エンドポイントを足す
 
-Reth には標準 JSON-RPC ネームスペース (\`eth_*\`、\`net_*\`、\`web3_*\`、\`debug_*\`、\`trace_*\`、\`txpool_*\`) が同梱されています。そのリストに *無いもの* が欲しい時 — ドメイン固有の集計、独自デバッグヘルパ、自分のプロトコルに合わせたリアルタイム subscription — Reth を fork する必要はない。trait を 1 つ書き、実装し、node builder に渡す。Rust ~50 行で、ネイティブと同じ HTTP / WebSocket / IPC エンドポイントから新メソッドが live になる。
+fee-bidding bot のために、pending tx の gas price ヒストグラムを 1 回の API 呼び出しで返してほしい。標準の \`txpool_content\` は *pending tx を全部フルで* 返す — 結局 10 個の数字にまとめるのに、数百 KB を転送することになる。正解の動きは、**ノード内で**集計してヒストグラムだけ返す独自メソッドを追加すること。Rust ~50 行。Reth fork なし。ネイティブネームスペース (\`eth_*\`、\`net_*\`、\`debug_*\`、\`txpool_*\` ...) と同じ HTTP / WebSocket / IPC エンドポイントで live になる。
 
 > 📌 **スコープの正直な開示。** 読み取り専用メソッド 1 つ (\`txpoolPlus_pendingByGasBucket\`) を追加する — ローカル mempool を 10 個の gas-price バケットに集計するもの。認証、レート制限、書き込みメソッドは扱わない — それらは同じパターンの上に重ねるレイヤー。アーキテクチャ的レッスンは「trait はどう wire される?」。
 
@@ -1060,7 +1062,7 @@ Drill 5 を完成させればループが閉じる: ノード固有の insight �
                   xpReward: 80,
                   content: `# Wallet Backend を Rust で作る
 
-Wallet UI が有名な部分。退屈な部分 — その背後にある **送信サービス** — こそチームが実際に格闘する箇所: 50 件連続送信時に nonce を整列させる、ガス急騰で mempool に取り残されないようにする、より高い fee で置換する、inclusion を監視する、賢くリトライする。本レッスンは、それら全部をやる ~250 行の最小送信サービスの完全コードを walk through します。
+ユーザーが 1 分間に「Send」を 50 回押す。あなたの wallet は: 次の *nonce* (アカウントごとのトランザクション順序を決めるカウンタ) を衝突なしに選び、正しい鍵で署名し、broadcast し、mempool を監視し、そして — ガス価格が 5 gwei から 80 gwei へ急騰した時 — **詰まった tx の fee を bump して置換する**。これでユーザーのセッションが「捨て値で送ったたった 1 件」の後ろでデッドロックしない。Wallet UI が有名な部分。背後の send service こそチームが実際に格闘する部分。以下、Rust ~250 行 — signer pool、nonce manager、send queue、replace-on-stuck、confirm watcher。
 
 > 📌 **スコープの正直な開示。** **サービス** を作る — signer pool + nonce manager + send queue + replace-on-stuck + confirm watcher — 小さな HTTP API で公開。鍵カストディ (HSM, MPC, KMS)、フィアットオンランプ、JS SDK は扱わない。これらのレイヤーは全部、動く send service の *上に* 乗る; 本レッスンは動かなければならない部分を作る。
 
@@ -1515,7 +1517,7 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
                   xpReward: 80,
                   content: `# 最小限の EIP-7702 Sponsor サービスを Rust で作る
 
-EIP-7702 (Pectra 以降、2025 年 3 月から mainnet で稼働) は EOA に smart-account 機能を安く付与する道: ユーザは「この tx の間、私の EOA をこのコントラクトのコードを持つかのように扱え」と言う *authorization* に署名する。Sponsor — あなたのサービス — がガスを払う。ユーザは atomic に batched call、custom validation、session key を、新しいアカウントへ移行せずに得る。本レッスンは sponsor を ~200 行で構築します。
+Alice は EOA (Externally Owned Account — スマートコントラクトではない、ただの鍵ペアのウォレット) を持っている。ETH を事前に保有せず、smart-contract アカウントへの移行もせずに、1 クリックで 2 つのトークンを swap したい。EIP-7702 (Pectra フォーク以降、2025 年 3 月から mainnet で稼働) がその手段: 「この tx の間、私の EOA をこのコントラクトのコードを持つかのように扱え」と言う *authorization* に、彼女がオフチェーンで署名する。**Sponsor** — あなたのサービス — がその authorization を Type 4 トランザクションに wrap してガスを払う。Alice は atomic な batched call、custom validation、session key を得る。同じアドレス、同じ鍵、移行なし。以下、Rust ~200 行。
 
 > 📌 **スコープの正直な開示。** **単一ユーザ** EIP-7702 トランザクションを sponsor する: ユーザがオフチェーンで authorization に署名、それと意図する call をサービスに POST、サービスがそれを Type 4 トランザクション (ガス支払い) で wrap、submit、hash を返す。**マルチユーザバッチング** ("bundler" パターン、N ユーザを 1 つのチェーン tx に詰める) は drill で 1 ループの拡張として扱う。Account abstraction ポリシーロジック — 支出制限、セッションキー、リカバリ — は delegate コントラクトが決めること; sponsor は relay するだけ。
 
@@ -1860,7 +1862,7 @@ K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — sponsor された tx
                   xpReward: 80,
                   content: `# Foundry スタイルのカスタム cheatcode を Rust で作る
 
-Foundry の \`vm.deal()\`、\`vm.warp()\`、\`vm.expectRevert()\` — これらは組み込み EVM op ではない。Foundry がアドレス \`0x7109709E...\` にインストールする **Rust precompile** で、\`Vm.sol\` インターフェース経由で Solidity テストコードから呼ばれる。本レッスンはこの機構を **自作することで** 学ぶ: \`cheats.measureGas(target, data)\` という、テスト作者がサブコールのガスを手動 wrap せずに測れる cheatcode を構築する。
+Foundry テストで \`vm.deal(alice, 100 ether)\` と書く時、**それは EVM opcode ではない**。Rust の関数 — *precompile* (EVM エンジンに組み込まれた「コードがチェーン上に存在しない」コントラクト) — を Foundry がマジックアドレス \`0x7109709E...\` にインストールし、\`Vm.sol\` インターフェース経由で Solidity から見えるようにしている。\`vm.warp()\`、\`vm.expectRevert()\` も全部同じ。**あなたも自前で出荷できる。** 本レッスンは \`cheats.measureGas(target, data)\` を作る — Foundry が内部で使っているのと同じパターンで、テスト作者がサブコールのガスを手動 wrap せずに測れる precompile を。
 
 > 📌 **スコープの正直な開示。** Foundry を **fork しない**。precompile + それをロードする最小 Revm ベースのテストハーネスを作る。パターン (高アドレス precompile + Solidity ABI 表面 + それを wire するテストランナー) **は同一** — Foundry が cheatcode を追加するのと同じパターン、ただし不透明なフレームワークを継承するのではなく全部見える形で。
 
@@ -2159,7 +2161,7 @@ sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッス�
                   xpReward: 80,
                   content: `# Swap Aggregator を作る: DEX state を fork して、Rust で
 
-1inch、Paraswap、0x — どれもユーザのために 1 つの問いに答える: *「X token A を渡したら、いま何 token B を最大限もらえる?」* その問いの裏で、全流動性 venue へファンアウト、各々の live state でクオート、ルーティング判断。本レッスンは ~250 行の最小 aggregator を作る: mainnet をローカル fork、Uniswap V2 + Sushi + Uniswap V3 の reserve を読み、クオート計算、勝者を選ぶ。
+ユーザが 10,000 USDC を ETH に swap したい。Uniswap V2 なら 2.948 WETH もらえる。Sushi なら 2.946。Uniswap V3 なら 2.951。Aggregator の仕事: **同じクオートを全 venue に同じ瞬間にファンアウト、比較、勝者を選ぶ。** これが 1inch、Paraswap、0x が裏でやっていること。以下、Rust ~250 行: Revm で mainnet をローカル fork (全クオートが *同じ* atomic state を読むため)、Uniswap V2 + Sushi + Uniswap V3 から reserve を引き、出力を計算、ベストを選ぶ。
 
 > 📌 **スコープの正直な開示。** **3 つの V2 系 pool と 1 つの V3 pool** に対して 1-hop のクオートを計算する。本物の aggregator は: split routing (30% を Uniswap、70% を Curve に送る)、multi-hop (A → WETH → B)、独自数学の CFMM (Curve の stableswap、Balancer の重み付き pool)、ガスを考慮したルーティング、を加える。それぞれは本レッスンのカーネルの 1 ループ拡張。
 
@@ -2499,7 +2501,7 @@ Drill 5 を完成させれば、構造的に aggregator-as-a-service ができ�
                   xpReward: 100,
                   content: `# Capstone — Frontrun-Resistant Order Router を作る
 
-これは **このティアのすべてを** 結ぶ build。ユーザの swap intent を取り、frontrun する可能性のある adversarial tx を mempool でチェック、aggregator で best venue を選び、EIP-7702 でガスを sponsor、ルート自体が public mempool に絶対現れないよう private orderflow チャネルで提出する router。ユーザは JSON を post し、router は本物のプロダクションルーティングサービスがする 7 つのことをやる。
+キャップストーン。本ティアのすべてを 1 つのサービスに統合する。ユーザが swap intent (JSON) を POST。Router は: DEX 全体で quote (Lesson 7)、mempool を監視して swap を sandwich する敵対 tx を探し (Lesson 1 を反転)、Revm で **その脅威をシミュレートしてユーザがどれだけ output を失うか測定**、EIP-7702 でガスを sponsor (Lesson 5)、そして — 脅威スコアが高ければ — Flashbots Protect 経由で submit (注文は public mempool に一切現れない)。脅威が低ければ public submission で OK、bundler のマージンも節約できる。**1 サービス、過去 6 レッスンを縫合、新規は決定レイヤー 1 つ。**
 
 > 📌 **スコープの正直な開示。** このキャップストーンは本ティアの lesson 1〜7 のパターンを統合する。新規 build は **frontrun 検出ロジック** + **public mempool を bypass する submission パス**。Private RPC として Flashbots Protect を使う; 同じ形が MEV-Share、Beaverbuild の private endpoint、その他任意の private orderflow オークションでも動く。
 
@@ -2910,15 +2912,13 @@ Drill 5 後、チューニング済み・観察可能に正しい frontrun-resis
                   xpReward: 90,
                   content: `# Revm シミュレーションを Production Provider で検証する
 
-Beginner tier で「Reth は execution client シェアの ~7-12%」と学びました — Geth が依然として大半の production RPC コールを serve する。この非対称性が Revm ベースシステムには規律を要求します: **ローカル Revm fork が計算した結果は、(大半が Geth/Nethermind の) チェーンが同じ入力に対して計算するものと一致しなければならない。** 本レッスンはその検証ハーネスを ~200 行で構築します。
+あなたの arb bot の Revm fork は「この swap で 2.95 WETH 取れる」と言う。実際にチェーン (大半が Geth と Nethermind — Reth は依然として execution client シェアの ~7-12% に過ぎない) で実行されると 2.93 しか届かない。**bot は自分のシミュレーションのバグで損を出した**。本ティアで作った Revm ベースのシステム全部に同じリスクがある: L1 の MEV searcher は Revm で arb を予測、L7 の aggregator は Revm で quote、L8 の capstone は Revm で frontrun リスクをスコアする。Revm が mainnet を実際に動かしている Geth/Nethermind の多数派と食い違えば、全部のシステムが silently に誤った答えを出荷する。以下の ~200 行がクロスチェックを作る。
 
 > 📌 **スコープの正直な開示。** Revm を JSON-RPC provider に対して、単一トランザクションのガス + 戻り data で diff する。production 検証ハーネスはこれを拡張する: \`debug_traceTransaction\` の prestate による完全 state-diff 比較、数千の歴史的 tx に対する統計的サンプリング、ハードフォーク境界の回帰テスト、CI 統合。カーネル — *「一致する」とはどういう意味か、それを安価にどう確認するか?* — は同じ。
 
 ## なぜこれが重要か (本当の理由)
 
-このティアの他の全レッスンは Revm の上に何かを build してきた。MEV searcher (L1) は arb の収益性を予測するのに Revm を使う; swap aggregator (L7) はクオート出力を計算するのに Revm を使う; capstone (L8) は frontrun リスクをスコアするのに Revm を使う。**Revm が mainnet (Geth) と異なる結果を計算したら、これらすべてのシステムが silently に誤った答えを生む。**
-
-規律は安価で、スキップのコストは現実。[Reth team のベンチマーキング哲学](https://www.paradigm.xyz/2024/04/reth-perf) より: 「mainnet 挙動からの逸脱はどれもバグ」。それが基準。
+規律は安価。スキップのコストは現実 — bot の P&L、aggregator がユーザに見せる quote、router の脅威スコア、すべてが silently にズレる。[Reth team のベンチマーキング哲学](https://www.paradigm.xyz/2024/04/reth-perf) より: 「mainnet 挙動からの逸脱はどれもバグ」。それが基準。
 
 \`\`\`mermaid
 flowchart LR

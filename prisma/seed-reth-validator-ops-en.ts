@@ -34,7 +34,9 @@ export async function seedRethValidatorOpsEN(prisma: PrismaClient) {
                   xpReward: 45,
                   content: `# Validator key management — hot keys, HSM, MPC, threshold signatures
 
-A validator's signing key is its **economic identity**. Lose the key → lose your stake. Leak the key → an attacker can double-sign → slashing → lose your stake. Reuse the key → same. This lesson is the operational reality of running validators: how production teams keep keys safe, what fails when they don't, and the cryptographic primitives that make scaling validator sets possible.
+A staking operator gets paged at 3 AM. A second validator process accidentally started on the standby box — same key, both online, both signing attestations at height 9,801,442. By the time anyone notices, the network has already seen two valid signatures from one identity. That's **equivocation** (the consensus term for signing two conflicting messages at the same slot), and the protocol slashes them for it. They wake up to a $2M penalty for a duplicate process.
+
+A validator's signing key is its **economic identity**. Lose it → lose your stake. Leak it → attacker double-signs → slashing → lose your stake. Reuse it → same. This lesson is the operational reality: how production teams keep keys safe, what fails when they don't, and the cryptographic primitives that scale validator sets.
 
 > 🛑 **Predict before scrolling.** A validator runs 100 nodes. **How many copies of the signing key exist?** If your first instinct is "1 (the original) + 100 (running)," what attack does that allow?
 
@@ -65,24 +67,24 @@ Cons: Anyone with file system access has the key. Backup = clone of key.
 
 ### 2.2 HSM (Hardware Security Module)
 
-A HSM is **a physical device that holds the private key and signs without exposing it**. AWS CloudHSM, YubiHSM, or dedicated boxes from vendors like Thales.
+An HSM is **a tamper-resistant physical device that holds the private key and signs without ever exposing it**. AWS CloudHSM, YubiHSM, or dedicated boxes from vendors like Thales.
 
 Workflow:
-1. Validator generates key inside HSM
-2. Public key is exposed; private key never is
-3. To sign: validator software sends hash to HSM; HSM returns signature
-4. If validator software is compromised, attacker can sign anything **valid** but not steal the key
+1. Validator generates key inside the HSM
+2. Public key is exposed; private key never leaves the device
+3. To sign: validator software sends a hash to the HSM; HSM returns the signature
+4. If validator software is compromised, the attacker can sign anything **valid** but cannot steal the key itself
 
-Pros: Key never on disk, never in memory of validator process.
-Cons: Single device; physical loss = key loss. Backup is hard.
+Pros: Key never on disk, never in the validator process's memory.
+Cons: Single device — physical loss = key loss. Backup is hard.
 
 **Used by professional validators (Ledger Enterprise, Fireblocks, etc.) for ETH staking pools.**
 
 ### 2.3 MPC (Multi-Party Computation)
 
-The key is **split across multiple devices**. Signing requires N-of-M cooperation. No single device ever has the full key.
+The key is **split across multiple devices**, and signing requires N-of-M cooperation. No single device ever holds the full key.
 
-Example: 3 devices in 3 data centers. To sign, 2 of 3 cooperate. If 1 device is compromised, attacker has 1/3 of the key — useless. To get 2/3, you'd need to compromise 2 separate facilities.
+Example: 3 devices in 3 data centers. To sign, 2 of 3 cooperate. Compromise 1 device → attacker has 1/3 of the key, useless. To get to 2/3, you'd need to compromise 2 separate facilities.
 
 Pros: No single device holds the key.
 Cons: Requires cooperation = latency on every signature. Complex protocol.
@@ -91,9 +93,9 @@ Cons: Requires cooperation = latency on every signature. Complex protocol.
 
 ### 2.4 Threshold signatures (the cryptographic version of MPC)
 
-Same idea as MPC but using **threshold signature cryptography**. Each device holds a "share" of the key. Signing produces a normal-looking signature without ever reconstructing the full key.
+Same idea as MPC, but using **threshold signature cryptography** (signature schemes specifically designed to be produced by N-of-M shareholders without ever reassembling the key). Each device holds a "share" of the key. Signing produces a normal-looking signature without ever reconstructing the full key.
 
-BLS threshold signatures are the standard for Ethereum-style PoS:
+BLS threshold signatures (BLS = a pairing-based signature scheme that aggregates cleanly) are the standard for Ethereum-style PoS:
 - Each validator has a share of the aggregate signing key
 - Block signing aggregates partial signatures into one final signature
 - Verifiers don't know it's a threshold signature — they just see a standard BLS sig
@@ -109,12 +111,12 @@ MPC is a **general protocol** to compute functions over secret shares without re
 
 ## 3. The "two-keys" pattern
 
-Most production validators separate:
+The point of this pattern: bound the blast radius of a key leak. Most production validators separate:
 
 - **Withdrawal key** (cold): controls the staked funds. Held offline (paper, hardware wallet)
 - **Signing key** (hot): controls voting/proposing. Held online, slashable
 
-The pattern: if the signing key gets compromised, the attacker can **slash** the validator (cost: hot stake) but **cannot steal** funds (withdrawal key is cold). Loss is bounded.
+If the signing key gets compromised, the attacker can **slash** the validator (cost: hot stake) but **cannot steal** funds (withdrawal key is cold). Loss is bounded.
 
 For Ethereum:
 - Withdrawal credentials (0x01...): cold storage
@@ -126,7 +128,7 @@ For Hyperliquid:
 
 ## 4. The slashing-prevention checklist
 
-You must guarantee:
+These four rules are what separates "validator that earns rewards" from "validator that gets slashed." You must guarantee:
 1. **Single signer per identity** — never run two processes with the same key
 2. **Slashing-protection database** — track every signed message, refuse to sign anything that would cause slashing
 3. **Fail-closed on uncertainty** — if you can't verify recent history, don't sign
@@ -221,7 +223,7 @@ Relayers in CCIP, soltempo, mppsol use their own keys. Same principles apply:
                   xpReward: 40,
                   content: `# Slashing detection and the offline validator
 
-A validator's most expensive mistake is **signing two conflicting messages** — a slashable offense that costs them stake. The second-most-expensive is **going offline during high participation** — an inactivity penalty. This lesson is about how to detect and prevent both, and how watchers earn whistleblower rewards by finding slashable evidence.
+There are exactly two ways to lose validator stake. The expensive way: **sign two conflicting messages** (slashing — one event, big chunk of stake gone). The slow way: **be offline when the network needs you** (inactivity penalty — drips out over days). Every operational decision in this lesson comes down to picking the smaller of those two losses when something goes wrong.
 
 > 🛑 **Predict before scrolling.** A validator goes offline for 2 days. **How much do they lose?** What if they go offline during a partition that takes a third of validators with them?
 
@@ -255,6 +257,8 @@ The fix: validator software MUST track every signed vote and refuse to sign a se
 
 ### 2.2 Surround voting (Casper FFG specific)
 
+Casper FFG (Ethereum's finality gadget) has validators vote on **source → target** checkpoint pairs. A surround-vote is one where a later vote's range strictly contains an earlier vote's range:
+
 Vote1: source A → target B
 Vote2: source C → target D
 
@@ -262,7 +266,7 @@ If C > A and B > D (the second "surrounds" the first), this is slashable. The fi
 
 ### 2.3 Equivocation in BFT (Tendermint, HotStuff)
 
-Two pre-commits for the same height/round but different blocks. Same logic as double voting; the slashing-protection database must catch it.
+Two pre-commits (the "I'm committed to this block" message in a BFT round) for the same height/round but different blocks. Same logic as double voting; the slashing-protection database must catch it.
 
 ## 3. The slashing-protection database
 
@@ -309,7 +313,7 @@ The DB and signer must commit in **one atomic operation**. If you sign, then try
 
 ## 5. Whistleblower watchers
 
-Slashing is **cryptographically provable** — anyone with the two conflicting signatures can submit a slashing transaction. Most chains pay a small fraction of the slashed stake to the submitter as a **whistleblower reward**.
+The protocol enforces slashing **only when somebody submits the proof**. That's where watchers come in. Slashing is **cryptographically provable** — anyone with the two conflicting signatures can submit a slashing transaction. Most chains pay a small fraction of the slashed stake to the submitter as a **whistleblower reward**.
 
 For Ethereum: ~1/512 of the slashed amount goes to whoever submitted the proof. For a major slashing of $1M, that's ~$2k — enough to incentivize watchers.
 
@@ -327,7 +331,7 @@ If a validator is offline:
 - During normal operations: they miss rewards (small daily loss)
 - During finality issues (>1/3 offline): **inactivity leak** kicks in
 
-Inactivity leak: every epoch, offline validators lose stake. The rate increases the longer finality remains delayed. **The chain self-heals** — eventually online validators are >2/3 and finality resumes, leaving offline ones with reduced stake.
+Inactivity leak (the mechanism Ethereum uses to force a partitioned chain back to >2/3 online): every epoch, offline validators lose stake. The rate increases the longer finality remains delayed. **The chain self-heals** — eventually online validators are >2/3 and finality resumes, leaving offline ones with reduced stake.
 
 This is **the BFT-style chain's response to mass offline events**. Instead of halting forever, the protocol slowly removes offline validators until quorum is achievable.
 
@@ -391,17 +395,19 @@ There may be a market for slashing watchers on Tempo (assuming it has slashing o
                   xpReward: 45,
                   content: `# Hot upgrades and coordinated chain upgrades
 
-An L1 with a fixed validator set needs to **upgrade in place** — switch consensus rules, change parameters, fix bugs — without halting. This is the **hardest operational problem in blockchains** because validators must coordinate exactly: if some upgrade and others don't, you fork. This lesson covers the protocol mechanisms and operational drills that make hot upgrades work.
+Picture mainnet hardfork day. The new binary changes consensus rules. Tens of thousands of validators run it, spread across every continent, every cloud, every home setup. There is no master switch. There is no scheduled maintenance window. The chain cannot pause. And yet at 14:13 UTC, **every validator that's going to stay on the canonical chain starts producing blocks under the new rules at the same time** — and the ones that didn't upgrade quietly fork off into irrelevance. How?
+
+That coordination problem is the **hardest operational problem in blockchains**: validators must switch rules in lockstep without ever talking to each other directly. This lesson covers the protocol mechanisms and operational drills that make it work.
 
 > 🛑 **Predict before scrolling.** Ethereum has executed 10+ hardforks without major outages. **What's the protocol mechanism that makes this work?** It's not "everyone upgrades at the same time" — that's impossible to coordinate. Something stronger.
 
 ## 1. The core mechanism — height-gated rules
 
-A hardfork is defined by:
+The trick is that **the binary already knows when to switch**. A hardfork is defined by:
 - A **block height (or timestamp)** at which new rules activate
 - A **set of new rules** (consensus, EVM, gas, etc.)
 
-Validators don't all upgrade simultaneously. They upgrade **before** the activation height. Then at the activation block, all upgraded validators apply the new rules. Validators who haven't upgraded continue with old rules — they **fall off**, producing blocks the rest of the network rejects.
+Validators don't all upgrade simultaneously. They upgrade **before** the activation height. Then at the activation block, every upgraded validator applies the new rules — same block, same instant, no coordination needed. Validators who haven't upgraded continue with old rules and **fall off**, producing blocks the rest of the network rejects.
 
 \`\`\`
 Block 999: All validators (old + new code) accept this block
@@ -452,7 +458,7 @@ No slashing risk (they were on a different fork, not double-signing on the canon
 
 ## 4. The upgrade is in the chain spec
 
-For a Reth-based chain, upgrades are encoded in **chain spec**. From Lesson 5 of Course 1 (Consensus Engineering):
+For a Reth-based chain, upgrades are encoded in the **chain spec** (the Rust struct that defines a chain's identity — genesis, fork heights, chain ID). From Lesson 5 of Course 1 (Consensus Engineering):
 
 \`\`\`rust
 pub enum CustomHardfork {
@@ -525,7 +531,7 @@ For Tempo: there will eventually be incidents. The validator set + governance mu
 ## 8. The "halt and recover" pattern
 
 For purely BFT chains (Tempo, Hyperliquid):
-- If >1/3 validators go offline, chain halts (BFT property)
+- If >1/3 validators go offline, chain halts (a direct consequence of BFT's >2/3 quorum requirement — no quorum means no progress)
 - Operators bring validators back online
 - Chain resumes producing blocks
 

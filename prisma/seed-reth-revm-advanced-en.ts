@@ -34,13 +34,15 @@ export async function seedRethRevmAdvancedEN(prisma: PrismaClient) {
                   xpReward: 15,
                   content: `# Welcome to Inside Revm — how this course works
 
+Revm is the **execution engine** inside every Rust EVM client: Reth, Hyperliquid's HyperEVM, Berachain's bera-reth, Tempo. When a chain says "we run Revm," it means: the opcode loop, the gas accounting, the way state gets read — *that's the same code*, no matter whose fork you're looking at. Read it once and you can read all of them.
+
 This is the first of three independent Advanced-tier courses on RethLab:
 
 - **Inside Revm** (you are here) — Inside the EVM engine
 - **Inside Reth** — Inside Reth: Staged Sync, ExEx, the Reth SDK
 - **Inside Alloy** *(coming soon)* — Inside Alloy: Provider, Network, Signer
 
-We recommend Revm first because Revm types (\`Address\`, \`U256\`, \`B256\`, the \`Database\` trait) underpin most of what Reth and Alloy do. But the courses are independent — pick the one that matches what you're building.
+Revm goes first because its types (\`Address\`, \`U256\`, \`B256\`, the \`Database\` trait) underpin most of what Reth and Alloy do. The three courses are independent — pick the one that matches what you're building.
 
 > 📋 **First time at the Advanced tier?** Read **"How Advanced courses work"** at the end of *Bridge to Advanced* before starting. It explains the editorial style (Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape) and pacing — applies to all three Advanced courses, so you only read it once.
 
@@ -91,7 +93,9 @@ After Inside Revm: head to **Inside Reth** for the Reth-specific sync pipeline +
                   xpReward: 20,
                   content: `# Building \`add\` step by step: signature and body
 
-The real \`add\` opcode in [\`bluealloy/revm\`](https://github.com/bluealloy/revm) looks intimidating:
+\`ADD\` is the simplest non-trivial EVM opcode: pop two numbers, push their sum. A weekend hobby EVM would do it in five lines of Rust. Revm does it in **four**, but those four lines hide a generic signature with two type parameters, a \`?Sized\` opt-out, a macro that compiles to a stack-underflow guard with a branch-prediction hint, and a \`wrapping_add\` whose alternative would fork your client off mainnet on the first overflow.
+
+Here's the real source from [\`bluealloy/revm\`](https://github.com/bluealloy/revm):
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -101,7 +105,7 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 }
 \`\`\`
 
-Walk that line by line and you get six new ideas at once. Easier path: **build it up.** Start from the dumbest \`add\` you could write, and earn each piece of complexity. By the end of *this* lesson you'll have built everything except the macro on line 2 — that's the next lesson.
+Walk it line by line and you get six new ideas at once. Easier path: **build it up.** Start from the dumbest \`add\` you could write, and earn each piece of complexity. By the end of *this* lesson you'll have built everything except the macro on line 2 — that's the next one.
 
 > 📂 **Open \`bluealloy/revm\` in another tab.** You'll be cross-checking the build-up against the real source.
 
@@ -138,9 +142,9 @@ Revm has to plug into multiple environments:
 - **Inspector sandbox** (let an external observer step the EVM)
 - **Fuzzers, mainnet forks, state-test runners**
 
-Each of these has a slightly different stack/state shape. We don't want six copies of \`add\`.
+Each has a slightly different stack/state shape. We don't want six copies of \`add\`.
 
-First-attempt fix: a generic over a \`Host\` trait.
+First-attempt fix: make the function generic over a \`Host\` trait (a Rust trait is a shared interface — like a Java interface, but resolved at compile time).
 
 \`\`\`rust
 pub fn add<H: Host>(host: &mut H) -> Result {
@@ -148,16 +152,16 @@ pub fn add<H: Host>(host: &mut H) -> Result {
 }
 \`\`\`
 
-\`H: Host\` reads as "any type that implements the \`Host\` trait." One source. **One specialized binary per concrete \`H\`** at compile time.
+\`H: Host\` reads as "any type that implements the \`Host\` trait." One source. **One specialized binary per concrete \`H\`** at compile time (Rust's *monomorphization* — the compiler stamps out a copy per type that uses it).
 
 > 🛑 **Predict.** What's the catch with \`<H: Host>\`? Why might revm not stop here?
 
 Two catches:
 
 1. With many host types, monomorphization explodes compile times.
-2. **You can't pass a trait object** like \`&mut dyn Host\` — \`<H: Host>\` only accepts types whose size is known at compile time.
+2. **You can't pass a trait object** like \`&mut dyn Host\` (a \`dyn Trait\` is Rust's runtime-dispatched trait pointer, the equivalent of a Java interface reference). \`<H: Host>\` only accepts types whose size is known at compile time.
 
-Why would you want a trait object? Because sometimes you build the host at runtime (selected by a config flag, or constructed dynamically by a test harness). Trait objects are the way you say "I don't know which concrete \`Host\` impl this is until runtime — please use a vtable."
+Why would you want a trait object? Because sometimes you build the host at runtime — selected by a config flag, or constructed dynamically by a test harness. Trait objects are how you say "I don't know which concrete \`Host\` impl this is until runtime — please use a vtable."
 
 That's where \`?Sized\` comes in.
 
@@ -211,7 +215,7 @@ let b = stack.pop().ok_or(StackUnderflow)?;
 stack.push(a + b);
 \`\`\`
 
-Three stack operations. Each is a memory write or capacity check. The interpreter's hot path runs this *hundreds of millions* of times per block — that overhead is the difference between competitive and uncompetitive throughput.
+Three stack operations. Each is a memory write or capacity check. The interpreter's hot path (the inner loop that runs once per opcode in every transaction) runs this *hundreds of millions* of times per block — that overhead is the difference between competitive and uncompetitive throughput.
 
 Better: pop *one* value, then mutate the new top **in place** through a \`&mut\` reference.
 
@@ -275,7 +279,9 @@ If any answer is shaky, scroll back. The next lesson refactors the body into a m
                   xpReward: 25,
                   content: `# Reading \`add\`: factoring out the macro
 
-Last lesson, you built up to:
+Open \`crates/interpreter/src/instructions/arithmetic.rs\` and you'll see \`add\`, \`mul\`, \`sub\`, \`div\`, \`mod\`, \`lt\`, \`gt\`, \`eq\`, \`and\`, \`or\`, \`xor\` — 30+ binary opcodes. **Every one of them starts with the same two lines of stack-popping boilerplate.** That's a refactor begging to happen, and revm did it: one macro, \`popn_top!\`, replaces those two lines everywhere.
+
+Last lesson, you built up to the hand-written version:
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -286,7 +292,7 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 }
 \`\`\`
 
-That's \`add\` semantically. The real source is shorter:
+The real source replaces those middle two lines with one macro call:
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -296,20 +302,20 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 }
 \`\`\`
 
-The first two lines from your hand-written version became one macro call. **This lesson is just that refactor.** Why a macro, what's inside it, and why three details inside earn their keep.
+**This lesson is just that refactor.** Why a macro, what's inside it, and why three small details inside earn their keep.
 
 ## Step 1 — Why a macro at all
 
-Look at \`mul\`, \`sub\`, \`div\`, \`mod\`, \`lt\`, \`gt\`, \`eq\`, \`and\`, \`or\`, \`xor\`, ... — every binary opcode begins with the same two lines:
+Every binary opcode begins with the same two lines:
 
 \`\`\`rust
 let op1 = ctx.interpreter.stack.pop().ok_or(StackUnderflow)?;
 let op2 = ctx.interpreter.stack.last_mut().ok_or(StackUnderflow)?;
 \`\`\`
 
-Repeated 30+ times across the codebase. **That's a refactor opportunity.**
+Repeated 30+ times across the codebase. The question isn't *whether* to factor that — it's *how*.
 
-> 🛑 **Predict.** Why a \`macro_rules!\` and not a regular function? (Two reasons; name at least one.)
+> 🛑 **Predict.** Why a \`macro_rules!\` (Rust's pattern-matching macro system that operates on syntax at compile time) and not a regular function? (Two reasons; name at least one.)
 
 Two reasons:
 
@@ -355,7 +361,7 @@ if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
 
 ## Step 4 — \`cold_path()\`: tell LLVM the failure branch is rare
 
-Stack underflow is a bug, not a normal path. You don't want the rare-failure code in your hot instruction cache.
+Stack underflow is a bug, not a normal path. You don't want the rare-failure code in the hot instruction cache (the CPU's icache, where the bytes of the currently-executing function live). Cold instructions there evict the hot ones.
 
 \`\`\`rust
 if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
@@ -534,7 +540,7 @@ If you miss two or more, the lesson hasn't internalized — re-read \`Reading ad
                   xpReward: 25,
                   content: `# Drill: prove you can read interpreter source
 
-Reading is rehearsal. **Doing is memory.** This lesson is three drills you run yourself, in a real revm checkout, with cargo open in another window. Every drill is *do, then write down what you observed* — not "read about."
+You've read \`add\` and its macro. **Now prove you can read the rest of the file without the lesson holding your hand.** Three drills, run in a real revm checkout with \`cargo\` open in another window. Every one is *do, then write down what you observed* — not "read about."
 
 ## Setup
 
@@ -622,9 +628,9 @@ After this, you've read more EVM source than 99% of Solidity developers ever wil
 
 ---
 
-When the EVM sees byte \`0x01\` in bytecode, **what mechanism** decides that \`add\` runs? This lesson is the answer — and the answer earns its complexity, just like \`add\` did. We'll start from the dumbest dispatch you could write and build up to revm's actual instruction table.
+When the EVM sees byte \`0x01\` in bytecode, **what mechanism** decides that \`add\` runs? That's *dispatch* — the lookup that turns one byte into one function call, repeated for every opcode in every transaction. Hot path of the hottest path. Get it wrong and your client is uncompetitive; get it right and a custom opcode is three lines of code (next lesson).
 
-By the end you'll have built every piece of:
+We'll start from the dumbest dispatch you could write and build up to revm's actual instruction table. By the end you'll have built every piece of:
 
 \`\`\`rust
 const fn instruction_table_impl<WIRE: InterpreterTypes, H: Host>()
@@ -686,7 +692,7 @@ Because the EVM opcode is one byte. There are only 256 possible values, period. 
 
 ## Step 2 — Make the table \`const\`
 
-The naive code builds the table at runtime — push the assignments through and hope the optimizer hoists them out of the hot path. Better: build it **at compile time**, so dispatch starts up with the table already populated.
+The naive code builds the table at runtime — push the assignments through at startup and hope the optimizer hoists them. Better: build it **at compile time** so the table is already populated the moment the binary loads.
 
 \`\`\`rust
 const fn build_table() -> [fn(&mut Context) -> Result; 256] {
@@ -805,9 +811,11 @@ Next lesson: now that you have the table, slot in your own opcode.
                   xpReward: 25,
                   content: `# Wiring a custom opcode — and the failure modes
 
-Last lesson, you built up to revm's instruction table — a 256-slot array of \`Instruction\` structs, baked at compile time. **Now slot in your own opcode.**
+Hyperliquid runs perpetuals on its own EVM and added a handful of order-book-specific opcodes — direct calls into native code, dispatched as a single byte instead of a 200-instruction Solidity function. **That's what a custom opcode buys you: a 100× shortcut on your own chain.** The wiring is *three lines.* The shortcut is real. The reason most chains *don't* ship 50 of them is three caveats that are not optional.
 
-This lesson is half mechanics (it's actually short) and half caveats (it's not). The mechanics fit on a notecard. The caveats are why "Hyperliquid picked Revm because it's modular" is *not* a free lunch.
+You've built up revm's instruction table — a 256-slot array of \`Instruction\` structs, baked at compile time. Now slot in your own opcode.
+
+This lesson is half mechanics (short) and half caveats (not short). The mechanics fit on a notecard. The caveats are why "Hyperliquid picked Revm because it's modular" is *not* a free lunch.
 
 ## The mechanics — three lines
 
@@ -848,7 +856,7 @@ Two compounding wins:
 1. **No interpreter loop overhead per inner step.** A complex Solidity function might be 200 EVM instructions; one custom opcode is 1 dispatch.
 2. **SIMD, FFI, or pre-computed tables in Rust.** None of those are available to bytecode.
 
-A complex options pricer can drop from **500K gas in Solidity → 5K gas as a single custom opcode**. That's why Hyperliquid added perp-specific opcodes; that's the kind of compression payment-layer chains explore for stablecoin operations.
+A complex options pricer can drop from **500K gas in Solidity → 5K gas as a single custom opcode**. That's why Hyperliquid added perp-specific opcodes; that's the kind of compression payment-layer chains (Tempo, etc.) explore for stablecoin operations.
 
 > 🛑 **Predict the failure modes** before scrolling. You're shipping a custom opcode tomorrow. List 3 things that will go wrong if you treat this casually. Hold your list — compare to the caveats below.
 
@@ -966,7 +974,7 @@ If you miss two or more, scroll back to *Building the instruction table* before 
                   xpReward: 25,
                   content: `# Drill: ship a fork
 
-Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about custom opcodes" to "I have wired one in a real revm checkout and seen it execute."
+You've read the three-line mechanics and the three caveats. **Now wire one yourself.** This drill takes you from "I've read about custom opcodes" to "I have wired one in a real revm checkout and watched it execute." Three lines plus the surrounding harness — bring \`cargo\` up in another window.
 
 ## Setup
 
@@ -1058,7 +1066,7 @@ After this drill, you've actually shipped a custom opcode in code. **More import
                   xpReward: 25,
                   content: `# Building the \`Database\` trait — read API
 
-Revm is the "execution engine," but **it doesn't own state.** Storage reads happen through an external \`Database\` trait — implement it and you can drive Revm against anything: an in-memory map, a forked mainnet, a custom MDBX schema, a network of remote nodes.
+When the EVM hits an \`SLOAD\`, where does the value come from? Not from Revm — Revm is the **execution engine** and doesn't own state. The answer comes through a trait called \`Database\`, and **implementing that trait is how you connect Revm to anything**: an in-memory map for tests, a remote JSON-RPC node to fork mainnet, MDBX for a real Reth client, a network of shards for an exotic L1. Same four-method shape, four wildly different backends.
 
 This lesson builds that trait up from the simplest possible sketch. By the end you'll have built every piece of:
 
@@ -1103,7 +1111,7 @@ Each requires *different code* to fetch state. You don't want to fork Revm three
 
 ## Step 1 — Push state behind a trait
 
-Define a trait that *describes* what Revm needs from state, without owning the storage:
+The fix is the classic dependency-inversion move: don't make Revm own storage; make it *ask* for what it needs through an interface. Define a trait that describes what Revm needs from state, without owning the storage:
 
 \`\`\`rust
 pub trait Database {
@@ -1232,7 +1240,7 @@ If any answer is shaky, scroll back. Next lesson: the read/write split.
                   xpReward: 25,
                   content: `# Companion traits, optimizations, and real impls
 
-Last lesson, you built up \`Database\`. We ended on a hint: the \`&mut self\` requirement means \`Arc<MyDb>\` *can't* implement it. **This lesson explains why that's OK** — revm has a companion read-only trait, plus a separate write-back trait, plus a perf optimization in the trait API itself, plus three reference impls that show how the same shape scales from toy to production.
+You finished the last lesson holding a four-method \`Database\` trait that takes \`&mut self\` — and an awkward dangling problem: \`Arc<MyDb>\` (Rust's atomic reference-counted pointer, the standard way to share data across threads) only hands out \`&T\`, never \`&mut T\`. So **parallel readers can't share a \`Database\` at all.** Production needs that, so revm solves it with three more pieces: a read-only companion trait, a separate write-back trait, and one perf escape hatch that lives in the trait API itself. Plus three reference impls that show the same shape stretching from 50 lines to thousands.
 
 ## Step 1 — \`DatabaseRef\`: read-only access
 
@@ -1277,7 +1285,7 @@ Two reasons:
 1. **Read-only databases exist.** A forked-mainnet impl reads from RPC but has no business committing — there's no real backing store to write to. Forcing it to implement \`commit\` would require a panicking stub or pollute the type with a bogus method.
 2. **Different lifecycle.** Reading is per-call; committing is end-of-transaction. Splitting the trait makes that lifecycle explicit and lets the type system enforce it.
 
-Same pattern as Rust's \`Read\` and \`Write\` in \`std::io\` — mixing them into one trait would force every reader to think about writing.
+Same pattern as Rust's \`Read\` and \`Write\` in \`std::io\` (the standard library's two-trait split for streams) — mixing them into one trait would force every reader to think about writing.
 
 ## Step 3 — \`storage_by_account_id\` (the optimization)
 
@@ -1405,7 +1413,7 @@ If you miss two or more, scroll back to *Building the \`Database\` trait* before
                   xpReward: 25,
                   content: `# Drill: implement \`ZeroDb\` and watch revm read state
 
-Reading is rehearsal. **Implementing is memory.** This drill takes you from "I can describe the \`Database\` trait" to "I have implemented one and watched the EVM run against it."
+You've read the trait shape and the three reference impls. **Now build your own — the smallest one anyone can write.** A \`Database\` that always says "balance zero, slot zero, no code." Stub four methods, plug it into Revm, run a transaction, and watch exactly which reads the EVM actually performs. (Spoiler: fewer than you'd guess. The EVM is *very* lazy about state.)
 
 ## The target
 

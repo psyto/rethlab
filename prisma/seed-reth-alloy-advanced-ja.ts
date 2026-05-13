@@ -93,7 +93,7 @@ Inside Alloy の後: 3 つの Advanced コースを全て完了したことに�
                   xpReward: 25,
                   content: `# \`Provider\` トレイトをステップで組み立てる
 
-[\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) の \`Provider\` は Ethereum ノードと話すための中心的な抽象です。RPC エンドポイントに触れる Rust の dapp、MEV ボット、インデクサ、Reth-SDK アプリすべてがこれを使います。\`crates/provider/src/provider/trait.rs\` を開くと、トレイトはこんな形（抜粋）:
+Ethereum ノードと話す Rust プログラム — MEV ボット、インデクサ、dapp バックエンド、Reth-SDK アプリ — はすべて [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) の \`Provider\` を経由する。RPC の上の唯一の抽象。\`crates/provider/src/provider/trait.rs\` を開くと、トレイトヘッダーはこんな形（抜粋）:
 
 \`\`\`rust
 #[auto_impl(&, &mut, Box, Rc, Arc)]
@@ -111,7 +111,7 @@ pub trait Provider<N: Network = Ethereum>: Send + Sync {
 }
 \`\`\`
 
-複数のことが一度に起きています: デフォルト付きの \`N: Network\` ジェネリック、別の \`RootProvider\` 型を返す \`root()\` アクセサ、見慣れないラッパー型（\`ProviderCall\`、\`RpcWithBlock\`、\`EthCall\`）を返すメソッド、5 つのラッパー型をカバーする \`auto_impl\`。
+複数のことが一度に起きています: デフォルト付きの \`N: Network\` ジェネリック（チェーン — Ethereum、Optimism、カスタム L2）、別の \`RootProvider\` 型を返す \`root()\` アクセサ、見慣れないラッパー型（\`ProviderCall\`、\`RpcWithBlock\`、\`EthCall\`）を返すメソッド、5 つのラッパー型をカバーする \`auto_impl\`（\`&P\`、\`Box<P>\`、\`Arc<P>\` などに対するトレイト実装を導出するマクロ）。
 
 冷たく読むと一度に 6 つの新概念が来ます。もっと楽な道: **積み上げる**。書ける最も素朴な RPC クライアントから始めて、複雑さを 1 つずつ獲得する。終わりには本物の形（Network パラメータ化、トランスポート間接化、層状プロバイダ、すべて）を組み立てたことになる。
 
@@ -371,9 +371,9 @@ pub trait Provider<N: Network = Ethereum>: Send + Sync {
                   xpReward: 25,
                   content: `# 本物の \`Provider\` トレイトを読む
 
-組み立てレッスンは素朴な開始点から \`Provider\` の各部分を構築しました。このレッスンは逆 — [\`crates/provider/src/provider/trait.rs\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) を開いて本番版を 1 行ずつ読み、各ピースを動機に対応させる。
+素朴な RPC クライアントから本物のトレイトの形まで \`Provider\` を組み立てました。今度はソースを開く — [\`crates/provider/src/provider/trait.rs\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) を開いて本番版を 1 行ずつ読む。読む各ピースが、それを動機づけた組み立てステップに戻ってつながるはず。
 
-最も重要: 組み立てが意図的に省いた部分をカバーする — **返り値型機構**（\`ProviderCall\`、\`RpcWithBlock\`、\`EthCall\`、\`PendingTransactionBuilder\`）。これらラッパー型は新参者が alloy で最も奇妙に感じる部分 — でも存在理由が見えると、トレイト表面が恣意的に見えなくなる。
+最も重要: 組み立てが意図的に省いた部分をカバーする — **返り値型機構**（\`ProviderCall\`、\`RpcWithBlock\`、\`EthCall\`、\`PendingTransactionBuilder\` — await する *前に* RPC 呼び出しをカスタマイズできる future ビルダー型）。これらラッパー型は新参者が alloy で最も奇妙に感じる部分 — でも存在理由が見えると、トレイト表面が恣意的に見えなくなる。
 
 > 📂 **\`alloy-rs/alloy/crates/provider/src/provider/trait.rs\` を今開く。** 正確な行番号やメソッド本体は動きます; 構造的ポイントは永続的です。レッスンが「現行 alloy main」と言っても、引用前に **自分で確認** してください。
 
@@ -399,7 +399,7 @@ pub trait Provider<N: Network = Ethereum>: Send + Sync {
 
 ### \`Send + Sync\` スーパートレイト
 
-すべての \`Provider\` 実装はスレッド間移動安全（\`Send\`）かつ複数スレッドからの参照安全（\`Sync\`）でなければならない。これは飾りではない — 本番ユーザーはプロバイダを \`Arc<P>\` でラップし、Arc を多数のタスクハンドラ（ワーカー、MEV サーチャー、インデクサストリーム）にクローンする。\`Send + Sync\` なしではそれらの利用がコンパイルしない。
+すべての \`Provider\` 実装はスレッド間移動安全（\`Send\` — 値を別スレッドに move できる）かつ複数スレッドからの参照安全（\`Sync\` — \`&P\` を共有できる）でなければならない。これは飾りではない — 本番ユーザーはプロバイダを \`Arc<P>\`（アトミック参照カウントの共有ポインタ）でラップし、Arc を多数のタスクハンドラ（ワーカー、MEV サーチャー、インデクサストリーム）にクローンする。\`Send + Sync\` なしではそれらの利用がコンパイルしない。
 
 ### \`#[auto_impl(&, &mut, Box, Rc, Arc)]\`
 
@@ -808,7 +808,9 @@ let bal = provider.get_balance(addr).await?;
                   xpReward: 25,
                   content: `# \`Network\` トレイトをステップで組み立てる
 
-Provider チェーンで \`N: Network = Ethereum\` に触れたが、\`Network\` をブラックボックス扱いしました。**このチェーンはそれを開きます。** \`Network\` はチェーン固有のプリミティブのための alloy の *型レベル辞書* — 1 つの \`Provider\` 実装で Ethereum・Optimism・Anvil・カスタム L2 と同じ API で話せる仕組み。
+Optimism のトランザクションは L1 \`mint\` フィールドを運ぶ。レシートは \`l1_fee\` と \`l1_block_number\` を運ぶ。Polygon zkEVM の tx エンベロープにはシーケンサ署名がある。各 L2 は独自の tx、レシート、ブロックの形を持つ — でも同じ \`Provider\` API がそのすべてで動く。**どうやって?** \`Network\` を通じて: alloy の *型レベル辞書*（1 つのトレイト、その関連型が与えられたチェーンの使うチェーン固有形状の束を選ぶ）。
+
+Provider チェーンは \`Network\` をブラックボックス扱いしました。このチェーンはそれを開きます。
 
 このレッスンの終わりには次のすべてを組み立てたことになる:
 
@@ -833,13 +835,13 @@ pub trait Network: Send + Sync + 'static {
 
 ## ステップ 0 — 素朴な Provider、Ethereum にハードコード
 
-以前、Provider の \`send_transaction\` はこんな形:
+Provider チェーンの早い段階で、\`send_transaction\` はこんな形でした:
 
 \`\`\`rust
 fn send_transaction(&self, tx: EthereumTransactionRequest) -> SendTransaction;
 \`\`\`
 
-\`EthereumTransactionRequest\` ハードコード。レシートハードコード。ブロックヘッダーハードコード。
+\`EthereumTransactionRequest\` ハードコード。レシートハードコード。ブロックヘッダーハードコード。メインネットでは動く — メインネットでだけ動く。
 
 > 🛑 **予測。** スクロールせずに: このハードコード設計が壊れる本番チェーンを 3 つ挙げる。ヒント — それぞれがトランザクションやレシートの *異なる形*。
 
@@ -1034,9 +1036,9 @@ alloy の具象実装: \`Ethereum\`（\`alloy-network\` 内）、\`Optimism\`（
                   xpReward: 25,
                   content: `# 本物の \`Network\` トレイト + Ethereum / Optimism 実装を読む
 
-組み立てが 10 個の関連型とトレイト境界を正当化しました。**このレッスンは本物のソースを読む** — 組み立てが省いた関連型ごとのトレイト境界、\`Ethereum\` 実装、\`Optimism\` 実装を並べて、関連する \`TransactionBuilder\` ヘルパートレイトも。
+10 個の関連型とトレイト境界を素朴な開始点から動機づけました。今度は本物のソースを読む — 組み立てが省いた関連型ごとのトレイト境界、alloy の \`Ethereum\` 実装、\`Optimism\` 実装を並べて、\`TransactionRequest\` をチェーン越しに流暢にするヘルパートレイト（\`TransactionBuilder\`）も。
 
-組み立てステップ 4 の凝集性プロパティ（「あるスロットを変えると他に波及」）がここで具体的になる: Optimism が正確にどのスロットをオーバーライドし、どのスロットを Ethereum から再利用するかが見える。
+組み立てステップ 4 の凝集性プロパティ（「関連型は『これらは一緒に行く』をグループ化する」）がここで具体的になる: 並べて見ると、Optimism が正確にどのスロットをオーバーライドし、どのスロットを Ethereum から再利用するかが見える。
 
 > 📂 **3 つのファイルをタブで開く:**
 > - \`crates/network/src/lib.rs\` — \`Network\` トレイト
@@ -1085,7 +1087,7 @@ pub trait Network: Debug + Clone + Copy + Send + Sync + Sized + 'static {
 
 ### \`TxType: Into<u8> + TryFrom<u8>\`
 
-これはコンセンサスシリアライゼーションフック。EIP-2718 トランザクションは単一バイトプレフィックスで型付けされる（0x01 = EIP-2930、0x02 = EIP-1559、0x03 = EIP-4844）。\`Into<u8>\` と \`TryFrom<u8>\` 境界が高レベル enum とワイヤバイトの間のマッピングを可能にする:
+これはコンセンサスシリアライゼーションフック。EIP-2718（Ethereum の型付きトランザクションエンベロープ仕様）は各トランザクションを単一バイトプレフィックスで型付けする（0x01 = EIP-2930 アクセスリスト、0x02 = EIP-1559 base fee、0x03 = EIP-4844 blob tx）。\`Into<u8>\` と \`TryFrom<u8>\` 境界が高レベル enum とワイヤバイトの間のマッピングを可能にする:
 
 \`\`\`rust
 let tx_type: TxType = bytes[0].try_into()?;
@@ -1483,9 +1485,9 @@ let s = block_summary::<Optimism, _>(&eth_provider, BlockId::latest()).await?;
                   xpReward: 25,
                   content: `# \`Signer\` トレイトをステップごとに組み立てる
 
-\`Provider\`（RPC 抽象）と \`Network\`（チェーンプリミティブ）を組み立てた。3 つ目の基礎的な alloy 概念は **トランザクションがどう署名されるか**。本番ユーザは生秘密鍵、AWS KMS、ハードウェアウォレット、ニーモニック由来鍵、リモート署名サービスで署名する — そして *同じ* アプリケーションコードがそれら全てに対して動かなければならない。
+MEV サーチャーは AWS KMS の鍵で署名する（クラウド鍵 — 秘密鍵は AWS から出ない）。トレジャリーオペレータは Ledger で署名する（ハードウェアウォレット — 鍵は USB デバイス上、ボタン押下が必要）。テストスイートはプロセス内の生 secp256k1 バイトで署名する。**同じ alloy のアプリケーションコードがこの 3 つすべてを駆動しなければならない。** それが \`Signer\` トレイトの形を決める制約。
 
-このチェーンはそれを可能にする抽象についてだ: \`Signer\` トレイト、\`TxSigner<N>\` のチェーン固有版、async/sync 分割、Provider ドリルで使った \`ProviderBuilder\` に署名を結びつける \`WalletFiller\`。
+このチェーンはそれを可能にする抽象を組み立てる: \`Signer\` トレイト、\`TxSigner<N>\` のチェーン固有版、async/sync 分割、Provider ドリルで使った \`ProviderBuilder\` に署名を結びつける \`WalletFiller\`。
 
 このレッスン終了時には次の全ピースを組み立てたことになる:
 
@@ -1747,7 +1749,7 @@ pub trait TxSigner<Sig> {
                   xpReward: 25,
                   content: `# 実 \`Signer\` トレイト + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\` を読む
 
-組み立てが 3 トレイト分割（\`Signer\` / \`TxSigner\` / \`SignerSync\`）と \`WalletFiller\` ブリッジを正当化した。**このレッスンは実ソースを読む** — 全境界付きトレイトヘッダ、プロセス内 \`PrivateKeySigner\`、クラウド \`AwsSigner\`、\`SignableTransaction\` グルー、\`WalletFiller\` の FillProvider チェーンへの統合。
+3 トレイト分割（\`Signer\` / \`TxSigner\` / \`SignerSync\`）と \`WalletFiller\` ブリッジを動機づけた。今度は実ソースを読む — 全境界付きトレイトヘッダ、プロセス内 \`PrivateKeySigner\`、クラウド \`AwsSigner\`（AWS が返さないリカバリバイトをブルートフォースしなければならない場所）、\`SignableTransaction\` グルー、\`WalletFiller\` の FillProvider チェーンへの統合。
 
 > 📂 **タブで 4 ファイルを開く:**
 > - \`crates/signer/src/signer.rs\` — \`Signer\` と \`SignerSync\` トレイト
@@ -1779,7 +1781,7 @@ pub trait Signer<Sig = Signature>: Send + Sync {
 
 ### \`Sig = Signature\` — デフォルト関連型スタイルパラメータ
 
-組み立ては \`Signer<Sig = Signature>\` と書いた。\`Sig\` パラメータが存在するのは、全チェーンが ECDSA k1 secp256k1 署名を使うわけではないから。一部の L2 は BLS、一部は ed25519、一部は耐量子計算スキームを使う。\`Signature\`（alloy の k1 secp256k1 型）をデフォルトにすることで一般ケースを人間工学的に保ちつつ — \`impl Signer\` は暗黙的に \`impl Signer<Signature>\` — 代替スキームをプラグインできる。
+組み立ては \`Signer<Sig = Signature>\` と書いた。\`Sig\` パラメータが存在するのは、全チェーンが ECDSA secp256k1 署名を使うわけではないから（Ethereum のカーブ — 65 バイト (r, s, v) タプル）。一部の L2 は BLS（集約に向く）、一部は ed25519（Solana のカーブ）、一部は耐量子計算スキームを使う。\`Signature\`（alloy の secp256k1 型）をデフォルトにすることで一般ケースを人間工学的に保ちつつ — \`impl Signer\` は暗黙的に \`impl Signer<Signature>\` — 代替スキームをプラグインできる。
 
 > 🛑 **予測。** なぜ \`Sig\` は *関連型* ではなく *トレイトのジェネリックパラメータ* なのか?（\`Network::TxEnvelope\` のように)
 

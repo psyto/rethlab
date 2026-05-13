@@ -34,9 +34,11 @@ export async function seedRethSequencerRollupEN(prisma: PrismaClient) {
                   xpReward: 40,
                   content: `# What is a sequencer? The rollup model in 15 minutes
 
-A **sequencer** is the entity that orders transactions on a rollup. Single-sequencer rollups have one. Decentralized rollups have many. **Most production L2s today have exactly one** — the sequencer is centralized, the data is posted to L1, and decentralization is "on the roadmap." This is not a temporary state; it's the operational reality of Optimism, Arbitrum, Base, Mantle, and most others.
+You send a swap on Base. It confirms in under a second. The transaction shows up in your wallet. **One company** — Coinbase — chose the order it landed in, executed it on their own server, and *will* eventually post it to Ethereum. By every conventional definition, that's a centralized system. So why is Base called a "decentralized rollup"?
 
-> 🛑 **Predict before scrolling.** Optimism is a "decentralized rollup." It has **one sequencer** operated by the OP Labs team. **Why is this acceptable?** What attack is mitigated even with a single sequencer that *would* be possible without the rollup architecture?
+This lesson is the answer. A **sequencer** (the entity that orders transactions on a rollup) is centralized in Base, Optimism, Arbitrum, Mantle, and almost every production L2. Decentralization is "on the roadmap" everywhere and it's been on the roadmap for years. That's not an embarrassment — it's the design.
+
+> 🛑 **Predict before scrolling.** Optimism has **one sequencer** operated by the OP Labs team. **Why is this acceptable?** What attack is mitigated even with a single sequencer that *would* be possible without the rollup architecture?
 
 ## 1. The rollup model
 
@@ -61,9 +63,9 @@ flowchart TB
     L1 -->|finalize after challenge| L2
 \`\`\`
 
-The architectural insight: **the sequencer can be centralized because the user's funds are not at the sequencer's mercy.** If the sequencer censors you, you can submit your tx directly to L1's force-inclusion contract. If the sequencer lies about state, the L1 contracts will reject your withdrawal.
+The architectural payoff: **a centralized sequencer doesn't put your funds at risk.** If it censors you, submit the tx directly to L1's force-inclusion contract — the protocol forces the sequencer to include it on a deadline. If it lies about state, L1 contracts reject your withdrawal.
 
-This is the rollup model's genius: **trust the sequencer for UX, not for funds**.
+That's the rollup model's whole pitch: **trust the sequencer for UX, not for funds**.
 
 ## 2. The sequencer's three jobs
 
@@ -88,17 +90,15 @@ The user submits the tx to the **L1 inbox contract** (e.g., OptimismPortal). The
 
 ## 3. The centralization paradox
 
-Why do production L2s have centralized sequencers when "decentralization" is the whole point?
-
-Five practical reasons:
+If decentralization is the whole point, why ship centralized sequencers? Five practical reasons keep the centralized default sticky:
 
 1. **Performance**: a centralized sequencer has predictable ordering. Decentralized = consensus overhead = latency.
-2. **MEV**: a centralized sequencer controls MEV extraction. Decentralized = either give up MEV or coordinate via auctions.
+2. **MEV** (maximal extractable value — the value a block builder can capture by reordering txs): a centralized sequencer controls MEV extraction. Decentralized = either give up MEV or coordinate via auctions.
 3. **Liveness**: one operator is easier to keep online than coordinated validators.
-4. **Pre-confirmations**: a single sequencer can offer "your tx will be included" guarantees instantly. Multi-party requires voting.
+4. **Pre-confirmations**: a single sequencer can promise "your tx will be included" instantly. Multi-party requires voting.
 5. **Operational simplicity**: monitoring, on-call, deployment — all easier with one operator.
 
-So the trade-off is **UX (centralized sequencer) vs censorship-resistance (decentralized)**. Most L2s pick UX.
+The trade-off is **UX (centralized sequencer) vs censorship-resistance (decentralized)**. Most L2s pick UX.
 
 Tempo Moderato (Tempo's testnet) is centralized today. Hyperliquid is centralized too. Both will likely decentralize eventually but **not at launch**.
 
@@ -189,7 +189,9 @@ For each chain, identify (a) sequencer position on the spectrum, (b) how a user 
                   xpReward: 40,
                   content: `# Batch posting and data availability
 
-A rollup's security depends on **anyone being able to reconstruct the L2 state from L1 data**. If you can't reconstruct it, you have to trust the sequencer's word — which defeats the purpose. This lesson covers **how rollups post data to L1**, the data availability (DA) question, and the EIP-4844 blob revolution that made rollups 10x cheaper.
+Before March 2024, posting 1MB of rollup data to Ethereum cost roughly **$300 per batch**. After EIP-4844, that same megabyte costs roughly **$3-$30**. The 10× drop is the single biggest cost improvement in rollup history — and it's why Base txs cost cents instead of dollars.
+
+That improvement rests on a deeper question: **why does a rollup have to post any data to L1 at all?** The answer is **data availability** (DA — the property that anyone, not just the sequencer, can get hold of the transaction data). Without it, the sequencer's state root is unverifiable and you're back to trusting one company. This lesson covers what DA is, the four DA models, the EIP-4844 blob trick that made it cheap, and how op-batcher actually posts it.
 
 > 🛑 **Predict before scrolling.** A rollup posts 1MB of transaction data to L1 every 12 minutes. **At Ethereum mainnet's gas prices, how much does this cost per day?** What was the cost difference before vs after EIP-4844?
 
@@ -218,9 +220,9 @@ For Tempo, Hyperliquid, and most chains we care about: **rollup** model. Data go
 
 ## 3. EIP-4844 — the blob revolution
 
-Before March 2024, rollups posted data as **calldata** to L1. This cost ~16 gas per byte (~$0.02/byte at 50 gwei). For 1MB per batch: ~$300 per batch.
+Before March 2024, rollups posted data as **calldata** (the input bytes of a regular Ethereum transaction) on L1. Calldata costs ~16 gas per byte (~$0.02/byte at 50 gwei). For 1MB per batch: ~$300.
 
-EIP-4844 introduced **blob transactions**: separate data carriers, priced differently, intended specifically for rollup DA.
+EIP-4844 added a brand new transaction type — **blob transactions** — with its own fee market, priced for one use case: rollup DA.
 
 | Property | Calldata | Blob (4844) |
 | :--- | :--- | :--- |
@@ -373,7 +375,7 @@ For Tempo: as a Paradigm-built L1, Tempo likely uses Ethereum DA initially. Swit
                   xpReward: 45,
                   content: `# Reading op-rbuilder — the Reth-based OP Stack sequencer
 
-[\`paradigmxyz/op-rbuilder\`](https://github.com/paradigmxyz/op-rbuilder) is **Paradigm's Rust implementation of an OP Stack block builder**, designed to run as the sequencer for any OP-derived chain. It's the production reference for "sequencer on Reth." Every Reth-based L2 either uses op-rbuilder directly or starts from its source.
+If you spin up your own OP Stack chain today, the binary producing blocks is almost certainly [\`paradigmxyz/op-rbuilder\`](https://github.com/paradigmxyz/op-rbuilder) — Paradigm's Rust block builder for OP-derived rollups. Every Reth-based L2 either runs it directly or forks from it. It's the production reference for "sequencer on Reth," and it's the code you'd read if you wanted to understand what a real sequencer does once the marketing diagrams stop.
 
 > 🛑 **Predict before scrolling.** A sequencer must produce blocks every ~2s. **What's the bottleneck — execution speed (revm) or block building (selection + ordering)?** The answer matters because it tells you where optimization effort should go.
 
@@ -492,7 +494,7 @@ That's the sequencer loop in ~30 lines. The complexity in production op-rbuilder
 
 ## 4. The MEV question — what does the sequencer extract?
 
-A sequencer that orders txs can extract MEV. For OP Stack chains, three positions:
+Whoever picks the tx order picks who profits. For OP Stack chains, three positions on how aggressively the sequencer monetizes that power:
 
 | Position | What sequencer does | Examples |
 | :--- | :--- | :--- |
@@ -500,17 +502,15 @@ A sequencer that orders txs can extract MEV. For OP Stack chains, three position
 | **Priority-fee ordering** | Order by gas tip (like Ethereum mainnet) | OP Stack default |
 | **MEV-aware with builder market** | Accept external bids for block construction | OP Stack with op-rbuilder + bundle markets |
 
-op-rbuilder supports the third — chains can configure whether to **accept external bundles** from builders/searchers. The bundle market pays the sequencer for blockspace.
+op-rbuilder supports the third — chains can configure whether to **accept external bundles** from builders/searchers (third-party block constructors that compete to build the most valuable block). The bundle market pays the sequencer for blockspace.
 
-This is where **Flashbots-style PBS** comes to L2: builders compete to construct the most profitable block, the sequencer accepts the winning bid.
+This is where **Flashbots-style PBS** (proposer-builder separation — split who *chooses* the block from who *builds* it) comes to L2: builders compete to construct the most profitable block, the sequencer accepts the winning bid.
 
 ## 5. The pre-confirmation game
 
-A sequencer's killer UX feature: **pre-confirmations**.
+A single sequencer's killer UX feature is the **pre-confirmation**: the moment you submit a tx, the sequencer signs back "yes, this will be included in block N at position M." You can show the user "confirmed" in 100 ms — long before any L1 finality.
 
-When you submit a tx to a single sequencer, it can immediately say "yes, this will be included in block N at position M, here's a signed receipt." Users see instant confirmation.
-
-This is **only possible with a single sequencer** — multi-party requires consensus, which delays.
+This trick **only works with one sequencer.** Multi-party setups have to vote, and voting takes round trips.
 
 In op-rbuilder: the mempool admission step is where pre-confirmations would be issued. If the sequencer signs "I commit to including this tx," users can treat it as final without waiting for L1 finality.
 
@@ -554,7 +554,9 @@ The architectural pattern is the same as any OP Stack L2; the business logic on 
                   xpReward: 45,
                   content: `# Fraud proofs vs validity (ZK) proofs
 
-A rollup's L1 contracts trust the sequencer's state root claims for **a fixed period** (challenge window). After that window, the state root is final. The two paradigms for what happens during the window are **fraud proofs** (challenge-based) and **validity / ZK proofs** (cryptographic). This single choice defines whether a rollup is **optimistic** or **ZK**.
+You withdraw from Optimism. You wait **seven days**. You withdraw from zkSync. You wait **about an hour**. Both are EVM rollups posting to Ethereum. The 170× difference isn't because Optimism's team is slower — it's because Optimism chose **fraud proofs** and zkSync chose **validity proofs**, and that single choice forces every downstream UX decision.
+
+A rollup's L1 contracts trust the sequencer's state root claims for **a fixed period** (the challenge window). After the window closes, the state root is final. The two paradigms for what happens during the window are **fraud proofs** (challenge-based — "trust unless proven wrong") and **validity / ZK proofs** (cryptographic — "always require a proof of correctness"). Optimistic or ZK: pick one. Everything else follows.
 
 > 🛑 **Predict before scrolling.** Optimism's withdrawal takes 7 days. zkSync's withdrawal takes ~1 hour. **What's the structural reason for the 10x difference?** (Hint: not better tech, different proof paradigm.)
 
@@ -653,7 +655,7 @@ ZK wins for:
 
 ## 5. Reading fraud proof code — OP Stack Cannon
 
-OP Stack's fraud proof system is called **Cannon**. It's a single-step verifier: any disputed execution step gets re-run on L1 in a constrained MIPS VM.
+OP Stack's fraud proof system is called **Cannon**. The non-obvious move: instead of re-running the entire L2 on L1 (impossible — way too expensive), Cannon re-runs **a single disputed MIPS instruction** in a constrained MIPS VM running on L1.
 
 The flow:
 1. Challenger asserts "step X is wrong"
@@ -663,7 +665,7 @@ The flow:
 
 [\`ethereum-optimism/optimism/cannon\`](https://github.com/ethereum-optimism/optimism/tree/develop/cannon) is the codebase.
 
-The non-obvious insight: **fraud proofs don't re-run the whole L2**. They re-run **one disputed instruction** via interactive bisection. This makes proofs feasible despite L2 having tons of execution.
+The bisection-to-one-instruction pattern is what makes fraud proofs *feasible at all* — without it, you'd be asking L1 to re-execute potentially years of L2 history.
 
 ## 6. Reading ZK proof code — SP1 + Reth
 
@@ -725,7 +727,9 @@ Each step adds trust-minimization at the cost of complexity and operational over
                   xpReward: 55,
                   content: `# Building a minimal sequencer on Reth
 
-You've read op-rbuilder. Now you build **the smallest viable sequencer** — one that can produce blocks, accept user txs, batch to L1, and survive simple failures. ~300 lines of Rust. This is the actual launch architecture of most production L2s.
+A working L2 sequencer is **~270 lines of Rust**. That's the entire orchestration layer: block production loop, mempool, L1 inbox watcher, batcher. The reason it's so small is that **Reth does everything that's actually hard** — revm execution, MDBX storage, state management, P2P. The sequencer's job is to drive Reth via Engine API and post the results to L1.
+
+That ~270-line number is the actual launch architecture of most production L2s. This lesson is the walk-through.
 
 > 🛑 **Predict before scrolling.** You have a sequencer building L2 blocks every 2 seconds. **What's the most likely first failure mode in production?** (Hint: not consensus, not crypto.)
 
@@ -1039,7 +1043,9 @@ The novel parts are in the application logic, not the consensus mechanics.
                   xpReward: 45,
                   content: `# Decentralization paths — shared sequencers and MEV-aware auctions
 
-Every L2 launches centralized. The decentralization roadmap is the **second half of the L2's life**. Two architectural patterns compete for the future: **decentralized sequencer set** (chain-specific) and **shared sequencer** (cross-chain). This lesson is the architectural map of where rollups are heading.
+Optimism announced "we will decentralize the sequencer" in 2023. Three years later, the sequencer is still one box at OP Labs. Arbitrum says the same. So does Base. The decentralization roadmap is real — and it's the **second half of the L2's life**. Two architectural patterns are competing to be the destination: **decentralized sequencer set** (chain runs its own validators) and **shared sequencer** (multiple rollups outsource ordering to a common set).
+
+This lesson is the map. Why is decentralization stuck? What does each path actually look like? Which one are Espresso, Astria, Polygon zkEVM, and Linea betting on, and why?
 
 > 🛑 **Predict before scrolling.** Optimism has been "decentralizing the sequencer" for 3 years. **What's blocked them?** Why is this so hard?
 
@@ -1108,7 +1114,7 @@ The trade-off: you go from 1 operator to ~10-30 operators. Increment in trust mi
 
 ## 4. Shared sequencers — the architectural bet
 
-A **shared sequencer** is a single sequencer set that serves **multiple rollups**. Instead of each L2 running its own validator set, they share one.
+What if N rollups didn't each need their own decentralized sequencer set — what if they all *shared* one? That's the **shared sequencer** bet: a single sequencer set serves multiple rollups. Each L2 keeps its own Reth execution layer, but the ordering happens in a shared validator set.
 
 \`\`\`mermaid
 flowchart TB

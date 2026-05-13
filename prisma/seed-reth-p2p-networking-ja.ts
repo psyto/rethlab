@@ -34,26 +34,28 @@ export async function seedRethP2PNetworkingJA(prisma: PrismaClient) {
                   xpReward: 40,
                   content: `# P2P の基礎 — devp2p、libp2p、peer discovery
 
-すべての Ethereum ノードが他ノードと **devp2p** 経由で通信 — Ethereum 目的別 peer-to-peer プロトコル。他 chain は **libp2p** (モジュラー、マルチチェーン) かカスタムスタック使用。P2P 層は壊れるまで invisible: sync stall、gossip が tx を drop、peer scoring がネットワークから boot するとき、下で何が起きているか知る必要。
+新しい reth ノードを起動。peer ゼロ、ブロックゼロ、state ゼロ。数秒後にはどこかから header を download している — でも *peer はどこから来た*? まだネットワーク上にいないノードがネットワークに peer を聞けるはずがない。この鶏と卵が **bootstrapping 問題** で、P2P 層が他の何かを始める前に最初に解決しなければならないこと。
+
+P2P 層は壊れるまで invisible: sync stall、gossip が tx を drop、peer scoring がネットワークから boot するとき。そうなったら下で何が動いているか知る必要。Ethereum では **devp2p** — Ethereum 目的別 peer-to-peer スタック。他 chain は **libp2p** (モジュラー、マルチチェーン代替) か独自実装。
 
 > 🛑 **スクロール前に予測。** Reth ノードがゼロから sync。**最初に peer を見つけるか、ブロックを見つけるか?** 既知 peer なしでどう peer 見つけるか?
 
 ## 1. 2 層
 
-P2P ネットワーキングは 2 つの関心事に分割:
+どの P2P スタックも仕事は 2 つに分かれる:
 
 | 層 | 仕事 | Ethereum でのプロトコル |
 | :--- | :--- | :--- |
 | **Discovery** | 「Peer を見つける」 | discv4 / discv5 (Kademlia DHT) |
 | **Transport** | 「Peer と話す」 | RLPx (暗号化 TCP) |
 
-Discovery は **bootstrapping 問題** — 何かする前に peer 必要、peer なしでどう peer 見つける? 答え: hardcoded bootnode。
+Discovery が冒頭の bootstrapping 問題 — peer 見つけるには peer 必要。答え: **bootnode**、chainspec に hardcode された既知 IP。1 つに接続、それが他を教える、DHT が引き継ぐ。
 
 ## 2. devp2p — Ethereum のプロトコル
 
-[devp2p](https://github.com/ethereum/devp2p) は Ethereum ノードが使うプロトコル。Ethereum 固有 (マルチチェーンでない)。定義:
+[devp2p](https://github.com/ethereum/devp2p) は Ethereum ノードが話すプロトコル。Ethereum 固有 (マルチチェーンでない)。3 つの piece を束ねる:
 
-- **discv5**: Kademlia DHT 経由 peer discovery
+- **discv5**: Kademlia DHT 経由 peer discovery (ノード探し用分散ハッシュテーブル)
 - **RLPx**: 暗号化、認証 TCP transport
 - **eth/68** (現サブプロトコル): ブロック + transaction gossip
 
@@ -71,7 +73,9 @@ flowchart LR
 
 ## 3. discv5 — Kademlia 経由 peer discovery
 
-Kademlia は **分散ハッシュテーブル (DHT)**。各ノードが 256 bit ID 持つ (公開鍵から導出)。「ターゲット ID に近い」peer を見つけるには、知っている peer に query、彼らが知っている最も近い peer を返す — 再帰 lookup。
+1 つの bootnode から始めて、何百万ノードのグローバルネットワークで「peer 見つけて」をどうスケールさせる? Kademlia。
+
+Kademlia は **分散ハッシュテーブル (DHT)** — 各ノードがディレクトリの小さな slice を持ち、残りを持つノードに query を route する構造。各 Ethereum ノードが 256 bit ID 持つ (公開鍵から導出)。「ターゲット ID に近い」peer を見つけるには、既知 peer に query、彼らが知る最も近い peer を返す、それに query、繰り返し。再帰 lookup、O(log N) hop。
 
 Ethereum 向け:
 - 各 peer が **ENR (Ethereum Node Record)** 公開 — ID、IP、port、能力
@@ -80,21 +84,21 @@ Ethereum 向け:
 
 > 🛑 **理解度チェック。** 「Kademlia は最も近い peer を見つける」**任意の peer 欲しい時、なぜ「最も近い」が重要?** 答えが「routing 用」だけなら再読。
 
-Kademlia の「近さ」はノード ID 上の XOR distance — 純粋にトポロジカル、地理的意味なし。ポイント: ID で近いノードが互いに効率的に見つかる (O(log N) lookup)。**スケーラブル** に何百万のネットワークで任意の peer 見つける方法。
+Kademlia の「近さ」はノード ID 上の XOR distance — 純粋にトポロジカル、地理的意味なし。ポイント: ID で近いノードが互いに効率的に見つかる。これが何百万ネットワークでも任意 peer 探しを tractable にする理由。
 
 ## 4. RLPx — Transport 層
 
-Discovery 後、ノードは実際に話すために RLPx 使用:
+Peer のアドレスを得たら、話すには暗号化チャネルが必要。それが RLPx。
 
 - **Handshake**: ECDH 鍵交換 + 署名検証
 - **Encryption**: 方向ごと鍵で AES-CTR
-- **Framing**: 長さ prefix 付き RLP エンコードメッセージ
+- **Framing**: 長さ prefix 付き RLP エンコードメッセージ (RLP = Recursive Length Prefix、Ethereum の wire encoding)
 
-RLPx は **大体 TLS for Ethereum** — 暗号化、認証、順序付けバイトストリーム。Ethereum が TLS でなく独自プロトコル持つ理由: 2015 前歴史、加えて微妙な要件 (peer ID = pubkey、中央 CA なし)。
+RLPx は **Ethereum の TLS** と思え — 暗号化、認証、順序付けバイトストリーム。なぜ TLS そのままでない? 2015 前歴史、加えて TLS が合わない微妙な要件: peer ID *がそのまま* pubkey、中央 CA なし。
 
 ## 5. eth/68 — サブプロトコル
 
-RLPx 上で peer は **eth/68**、現 Ethereum サブプロトコル、を話す。メッセージ含む:
+RLPx が安全チャネルを提供、そこを流れるのが **eth/68**。現 Ethereum サブプロトコル。メッセージ含む:
 
 | メッセージ | 目的 |
 | :--- | :--- |
@@ -105,19 +109,19 @@ RLPx 上で peer は **eth/68**、現 Ethereum サブプロトコル、を話す
 | PooledTransactions | フル tx ボディ要求 |
 | Receipts | Receipt 要求/応答 |
 
-注: eth/68 で、transaction は **hash 先にアナウンス** — peer は持っていなければフルボディだけ要求。これが全 tx の全 peer への再ブロードキャスト避ける。
+注: eth/68 で、transaction は **hash 先にアナウンス** — peer は持っていなければフルボディだけ要求。これが「全ノードが全 tx を再ブロードキャスト」増幅を kill。
 
 ## 6. libp2p — 代替
 
-[libp2p](https://github.com/libp2p/) は **モジュラー、マルチチェーン** P2P インフラ。使用:
+devp2p が束ねた Ethereum スタックなら、[libp2p](https://github.com/libp2p/) は un-bundle されたマルチチェーン版。使用:
 - Polkadot (libp2p ベース)
 - IPFS (libp2p の起源)
 - Solana (カスタム transport だが libp2p 概念)
 - 多くの新 chain
 
-libp2p は関心事分離: discovery (別)、transport (TCP/QUIC/WebRTC)、encryption (Noise)、multiplexing (yamux/mplex)。必要なもの compose。
+libp2p は関心事分離: discovery (別)、transport (TCP/QUIC/WebRTC)、encryption (Noise — 鍵合意プロトコルフレームワーク)、multiplexing (yamux/mplex — 1 つの接続で複数論理ストリーム実行)。必要なもの compose。
 
-Ethereum が libp2p 使わない理由: 歴史。devp2p が先に存在。切り替え難。一部の新 Ethereum ツール (Lighthouse consensus client) は libp2p 使用; reth は devp2p 使用 (execution 層プロトコルと一致)。
+Ethereum が libp2p 使わない理由: 歴史。devp2p が先に存在; 切り替え難。一部の新 Ethereum ツール (Lighthouse、consensus client) は libp2p 使用; reth は execution 層プロトコルと一致させて devp2p のまま。
 
 ## 7. Reth ベース chain 向け
 
@@ -148,7 +152,7 @@ Hyperliquid 向け: 彼らのカスタム transport (HyperBFT 通信) は **exec
                   xpReward: 45,
                   content: `# Reth の network crate を読む
 
-Reth のネットワーク層は [\`crates/net/\`](https://github.com/paradigmxyz/reth/tree/main/crates/net) に。実質的 — discovery、transport、gossip、peer 管理を処理する Rust ~30k 行。本レッスンが orientation: 何がどこに、各 crate が何するか、カスタム chain にどこで拡張するか。
+自 chain 向けにカスタムサブプロトコル — 決済 finality hint や MEV bundle gossip 等 — を追加したい。reth tree のどこにそのコードを置く、既存のどの piece に plug in する? Reth のネットワーク層は [\`crates/net/\`](https://github.com/paradigmxyz/reth/tree/main/crates/net) — discovery、transport、gossip、peer 管理を扱う 6 サブ crate に分散した Rust ~30k 行。本レッスンが orientation: 何がどこに、各 crate が何するか、拡張点はどこか。
 
 > 🛑 **スクロール前に予測。** Reth のネットワークは ~5 サブ crate。**どんな関心事分離が意味あるか?** 読む前にモジュールスケッチ。(ヒント: discovery、transport、サブプロトコルは明らかな出発点。)
 
@@ -172,7 +176,7 @@ Reth のネットワーク層は [\`crates/net/\`](https://github.com/paradigmxy
 
 ## 2. NetworkManager — 中央オーケストレータ
 
-\`crates/net/network/src/manager.rs\` で、\`NetworkManager\` が所有する中央 struct:
+すべての peer メッセージ、すべての discovery ヒット、ノード残りからの「この tx ブロードキャスト」コマンド、すべてが 1 つの struct を通る。それが \`NetworkManager\`、\`crates/net/network/src/manager.rs\`:
 
 \`\`\`rust
 pub struct NetworkManager<C> {
@@ -185,19 +189,19 @@ pub struct NetworkManager<C> {
 }
 \`\`\`
 
-\`run\` ループ:
+\`run\` ループは小さい:
 1. \`swarm\` を peer メッセージ用に poll
 2. \`discovery\` を新発見 peer 用に poll
 3. \`from_handle_rx\` をコマンド (e.g., 「この tx をブロードキャスト」) 用に poll
 4. 各イベント dispatch
 
-これが **全ネットワーキングの中央イベントループ**。すべての peer メッセージ、すべての discovery イベント、すべてのアプリ initiated ブロードキャストがここを通る。
+3 入力ストリーム、1 dispatcher。これが reth ネットワーキングの心臓。
 
 > 🔍 **リポで探す。** \`crates/net/network/src/manager.rs\` を開いてメイン \`poll_next\` or \`run\` メソッド見つける。**Polling 順序は?** なぜそれが重要かも?
 
 ## 3. Swarm — peer 接続プール
 
-\`Swarm\` がアクティブ peer 接続管理。各接続は stage を通る:
+\`Swarm\` は \`NetworkManager\` 下のアクティブ peer 接続のプール。各接続が小さな状態機械を走る:
 
 \`\`\`
 NewConnection → Handshake → Negotiation → Active → Disconnected
@@ -210,11 +214,11 @@ NewConnection → Handshake → Negotiation → Active → Disconnected
 - **Active**: メッセージ交換
 - **Disconnected**: graceful close or エラー
 
-Swarm が **peer 制限** (典型 25-50 アクティブ) と **eviction policy** (低スコア peer drop) 強制。
+Swarm が **peer 制限** (典型 25-50 アクティブ) と **eviction policy** (新規が入りたい時に低スコア peer drop) 強制。
 
 ## 4. eth-wire — プロトコルメッセージ
 
-eth/68 の各メッセージタイプは RLP エンコード付き Rust struct:
+Wire フォーマットのコードが 1 crate に集約。eth/68 の各メッセージは Rust struct、RLP-derive マクロが encoding を生成:
 
 \`\`\`rust
 #[derive(Debug, RlpDecodable, RlpEncodable)]
@@ -233,7 +237,7 @@ pub struct NewPooledTransactionHashes {
 
 Derive マクロが wire フォーマット生成。**すべてのメッセージは RLP** — transaction と block に使う同じエンコード。
 
-カスタムサブプロトコル向けに、独自メッセージ struct 定義してネットワークに登録。
+カスタムサブプロトコル向けに、独自メッセージ struct 定義してネットワークに登録。(レッスン 3 でやる。)
 
 ## 5. Peer 状態機械
 
@@ -251,7 +255,7 @@ Peer scoring 重要: 不正動作 peer は evict。デフォルト scoring が�
 
 ## 6. カスタムサブプロトコル追加
 
-カスタム chain (Tempo、Hyperliquid、etc.) 向け、**chain 固有 gossip** が欲しい:
+これが大半の Reth ベース chain が使う拡張点。chain 固有 gossip — merchant attestation、決済 finality hint、sequencer coordination — が必要? サブプロトコル出荷:
 
 \`\`\`rust
 // 自 chain の crate 内
@@ -275,13 +279,11 @@ impl SubProtocol for TempoSubProtocol {
 }
 \`\`\`
 
-これをネットワークマネージャに登録、カスタムプロトコルが同じ RLPx 接続上で eth/68 と並んで動く。
-
-これが chain 固有ネットワーキングの **拡張点**。Tempo は (おそらく) 決済固有 gossip にこれ使用。任意の chain 固有プロトコル出荷するならこれ使用。
+これをネットワークマネージャに登録、カスタムプロトコルが eth/68 と同じ RLPx 接続上で並んで動く。新 TCP port なし、別 discovery なし — 既存 peering に乗る。Tempo は決済固有 gossip にこのパターン使用 likely。
 
 ## 7. Peer scoring の機会
 
-デフォルト peer scoring は汎用 — 悪役罰則。特化 chain 向け:
+デフォルト peer scoring は汎用 — 悪役罰則。だが scoring は特化 chain にとって *ハンドル* でもある:
 
 - **MEV 関連 chain**: tx propagation 速度で peer スコア
 - **プライバシー特化 chain**: メタデータ漏洩で peer スコア
@@ -309,23 +311,25 @@ Tempo 向け: 決済優先 chain は **既知 merchant インフラ** vs 汎用 
                   xpReward: 50,
                   content: `# カスタム gossip 構築 — Reth 上の MEV-Boost 系メッセージング
 
-デフォルト eth/68 gossip は vanilla chain に問題ない。だが特化インフラ — MEV-Boost、private mempool、共有 sequencer coordination、決済 routing — は **カスタム gossip プロトコル** 必要。本レッスンが最小版構築: reth のネットワーキング上の peer-to-peer メッセージバスで、アプリが chain 固有メッセージをブロードキャスト + 受信可能に。
+Searcher ノードを走らせている。収益的 bundle を見つけた。これを信頼できる builder の小集合だけに送りたい — ネットワーク上の全 peer にブロードキャストして bundle が漏れて front-run されるのは避けたい。eth/68 transaction gossip は間違ったツール: public、「皆が皆を relay」前提、「*これら特定の* peer に送る」概念なし。
+
+そのギャップを埋めるのが **カスタムサブプロトコル**。本レッスンが最小版を構築 — reth のネットワーキング上の peer-to-peer メッセージバス、独自ルールで chain 固有メッセージをアプリがブロードキャスト + 受信可能。MEV-Boost、private mempool、共有 sequencer coordination、決済 routing インフラが使う同じパターン。
 
 > 🛑 **スクロール前に予測。** Private peer セットに「この MEV bundle 売り出し」をブロードキャストしたい。**なぜ eth/68 transaction 使わない?** Tx gossip 悪用ではなく別 gossip プロトコルが与えるものは?
 
 ## 1. 動機 — デフォルト gossip が失敗する時
 
-eth/68 gossip は **canonical chain data** 用 — block、transaction、receipt。前提:
+eth/68 が運ぶのは **canonical chain data** — block、transaction、receipt。前提:
 - メッセージは public (接続持つ誰でも見る)
 - メッセージは consensus について
-- Peer が relay 協力
+- Peer がすべて relay 協力
 
-非 canonical メッセージ向けに必要:
+カスタムトラフィックが 3 つすべて壊す。出荷するには必要:
 - **Private gossip** — peer セットだけ見える
 - **アプリケーション層 routing** — capability ベースで特定 peer に route
 - **カスタム署名** — chain 固有認証
 
-例:
+本番でこれが現れる場所:
 - MEV-Boost bundle (private orderflow)
 - 共有 sequencer pre-confirmation
 - 決済レール merchant attestation
@@ -454,17 +458,17 @@ let node = NodeBuilder::new(config)
 
 ## 5. Private プロトコル向け peer discovery
 
-デフォルト discv5 は全 capability list アナウンス — 誰でも「このノードは bundle/1 サポート」見える。Private プロトコル向けに、典型的に:
+ここは不安に感じるべき問題: デフォルト discv5 は全 capability list をアナウンス。ネットワークを scan する誰でも「このノードは bundle/1 サポート」が見える — プライバシー目標を defeat。だから private プロトコルは peer 探しに discv5 を使わない。一般パターン:
 
 - **Allowlist ベース**: プロトコル参加者の peer ID hardcode
 - **Out-of-band 招待**: peer が別チャネル経由で連絡先交換
 - **Tor routed**: ネットワーク位置完全隠蔽
 
-MEV-Boost 系: bundle relay が peer ID を Discord、GitHub などで配布 — out-of-band。プロトコルは既知当事者間 point-to-point。
+MEV-Boost は 2 番目のパターン使用: bundle relay が peer ID を Discord、GitHub などで配布。プロトコルは既知当事者間 point-to-point。
 
 ## 6. MEV-Boost パターン
 
-[Flashbots の MEV-Boost](https://github.com/flashbots/mev-boost) が本番参照。鍵概念、カスタムプロトコルに適用:
+[Flashbots の MEV-Boost](https://github.com/flashbots/mev-boost) がこの全アプローチの本番参照。鍵概念、カスタムプロトコルにマップ:
 
 | 概念 | 実装 |
 | :--- | :--- |
@@ -483,7 +487,7 @@ Tempo が sequencer 分散化したら 2026 出荷可能。
 
 ## 7. DOS 保護問題
 
-カスタムプロトコルが新攻撃面公開:
+カスタムプロトコルが新攻撃面公開。デフォルト eth/68 には実戦試験済 defense があるが、あなたのは書くまで何もない。最低限:
 
 | 攻撃 | Mitigation |
 | :--- | :--- |
@@ -492,7 +496,7 @@ Tempo が sequencer 分散化したら 2026 出荷可能。
 | 帯域消耗 | Peer ごと帯域上限; 超過時 eviction |
 | Sybil (多 fake peer) | Peer ID allowlist or proof-of-stake binding |
 
-これらなしだとカスタムプロトコルは DOS amplifier。コアロジックと並行に保護構築。
+これらをスキップするとカスタムプロトコルは DOS amplifier — すべての peer があなたのコード経由で他すべての peer を flood 可能。コアロジックと並行に保護構築、follow-up でなく。
 
 ## 8. Hiro のプロジェクト向け
 

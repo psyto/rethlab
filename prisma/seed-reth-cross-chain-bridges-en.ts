@@ -34,20 +34,20 @@ export async function seedRethCrossChainBridgesEN(prisma: PrismaClient) {
                   xpReward: 40,
                   content: `# What is a bridge? Trust models and the bridge trilemma
 
-A **bridge** is a system that lets a state change on chain A trigger a state change on chain B. The whole field of cross-chain infrastructure is figuring out **how much you have to trust** to make this work, and **what attacks remain** when you minimize that trust.
+**$2B+ has been stolen from bridges in the last five years.** Not from obscure DeFi corners — from the highest-TVL bridges run by the biggest teams in the industry: Ronin ($625M), Wormhole ($325M), Poly Network ($611M, returned), Nomad ($190M). Every cross-chain architecture decision is downstream of one question: **what do you have to trust for state on chain A to move state on chain B, and what attacks remain once you've minimized that trust?**
 
-> 🛑 **Predict before scrolling.** Three bridges have been hacked for $300M+ each in the last three years (Ronin, Wormhole, Nomad). **What's the common attack pattern?** (Hint: not smart contract bugs.)
+A **bridge** is the system that answers it. The whole field of cross-chain infrastructure is variations on **how much trust** and **what residual attacks**.
+
+> 🛑 **Predict before scrolling.** Three of those four hacks were $300M+ each. **What's the common attack pattern?** (Hint: not smart contract bugs.)
 
 ## 1. The bridge primitive — value vs. message
 
-Two kinds of "bridges":
+People talk about "asset bridges" and "message bridges" as if they're separate things. They're not. **An asset bridge is a message bridge plus a token contract on each side.** All cross-chain infrastructure is fundamentally message-passing — the asset case just adds conventions on top.
 
 | Kind | What moves | Example |
 | :--- | :--- | :--- |
 | **Asset bridge** | Token balance (canonical or wrapped) | USDC across chains |
 | **Message bridge** | Arbitrary calldata | LayerZero, CCIP arbitrary messages |
-
-The asset case is a special case of messaging: an asset bridge is a message bridge plus a token contract on each side. **All cross-chain infrastructure is fundamentally a message bridge** with conventions on top.
 
 For Tempo↔Solana settlement (mppsol): message bridge. The "asset" is a payment receipt, not a token.
 For OP↔Ethereum: message bridge with native token convention (ETH deposit/withdrawal).
@@ -55,7 +55,7 @@ For BTC↔EVM (wrapped BTC): asset bridge.
 
 ## 2. The trust spectrum
 
-Bridges fall on a spectrum of **what you have to trust:**
+Every bridge sits somewhere on a single axis: **what do you have to trust?** The worst end is a committee of humans. The best end is math.
 
 \`\`\`
 External trust (worst)                                  Internal trust (best)
@@ -173,9 +173,11 @@ For each chain pair, identify the realistic trust model today:
                   xpReward: 40,
                   content: `# Light clients — the gold standard verification primitive
 
-A **light client** is a program that verifies a chain's state without running a full node. It downloads only headers, follows the consensus rules, and trusts only what the consensus protocol itself guarantees. For cross-chain bridges, light clients are **the gold standard of trust minimization** — and Rust is the language of choice for production light clients.
+A full Ethereum node stores ~1TB and runs ~200GB of RAM. A **light client** does the same job — verifying that the chain is what it claims to be — using a few megabytes and a phone-grade CPU. It downloads block headers, follows the same consensus rules a full node does, and trusts **only** what the protocol itself guarantees. Nothing else.
 
-> 🛑 **Predict before scrolling.** An Ethereum full node stores ~1TB of state. A light client stores ~MB. **What can a light client NOT do?** Three things — name them before scrolling. (Hint: think about what state requires.)
+That's why every serious cross-chain bridge eventually asks: can we put a light client of the source chain *inside the destination chain* and verify cross-chain messages cryptographically? When the answer is yes, you've reached the **trust-minimization gold standard**. And the production light clients that get there are written in Rust.
+
+> 🛑 **Predict before scrolling.** A light client uses ~MB; a full node uses ~1TB. **What can a light client NOT do?** Name three things before scrolling. (Hint: think about what *state* enables.)
 
 ## 1. What a light client is — and isn't
 
@@ -194,12 +196,12 @@ So a light client is **a verifier of claims about chain state**, not a producer.
 
 ## 2. The Ethereum light client protocol
 
-Ethereum's PoS made light clients much cheaper than they were in PoW days. The protocol (in [\`ethereum/consensus-specs\`](https://github.com/ethereum/consensus-specs)):
+Light clients on PoW Ethereum were a research toy — verifying chains-of-work cheaply enough to run in a browser didn't really work. PoS changed the economics: a fixed validator set with BLS-aggregated signatures (one short signature per block, regardless of how many validators signed) makes light-client verification cheap. The protocol lives in [\`ethereum/consensus-specs\`](https://github.com/ethereum/consensus-specs):
 
-- Every **sync committee period** (~27 hours), 512 validators are randomly selected as the sync committee
-- The sync committee signs every block header for that period
-- Light client downloads just the sync committee + their signatures
-- Light client verifies signatures against the committee's BLS aggregated public key
+- Every **sync committee period** (~27 hours), 512 validators are randomly selected as the **sync committee** — a rotating subset whose only job is to sign block headers for that period
+- The sync committee signs every block header
+- Light client downloads just the sync committee membership + their signatures
+- Light client verifies signatures against the committee's BLS aggregated public key (BLS = a signature scheme where N signatures combine into one)
 
 So to follow Ethereum, a light client needs:
 - **Initial trusted checkpoint** (must be obtained out-of-band, e.g., from a trusted source)
@@ -320,9 +322,9 @@ Reth's EVM runs the same as mainnet, so any Solidity light client (Helios's cont
                   xpReward: 45,
                   content: `# OP Standard Bridge — the canonical L2 deposit/withdrawal pattern
 
-The OP Standard Bridge is the canonical "trustless L1↔L2 bridge" reference. Every OP Stack chain (Optimism, Base, Mode, etc.) uses it. It's the textbook example of how to **use the rollup's own consensus** as the bridge's security model — no separate multisig, no separate validators, just the chain itself.
+Every OP Stack chain — Optimism, Base, Mode, Worldchain, Zora — runs the same bridge. They don't each pick a multisig or stand up a validator set; they all use the rollup's own consensus as the bridge's security model. **The bridge is just an interface to the rollup**, and the rollup is the trust anchor. This is the canonical "trustless L1↔L2" reference, and reading it once teaches you a pattern you'll see (with variations) in every native L2 bridge you encounter.
 
-> 🛑 **Predict before scrolling.** You deposit 1 ETH from Ethereum to Optimism. The same ETH appears on Optimism in ~2 minutes. You withdraw 1 ETH back. **How long until you can spend it on Ethereum?** And why?
+> 🛑 **Predict before scrolling.** You deposit 1 ETH from Ethereum to Optimism. It shows up in ~2 minutes. You withdraw 1 ETH back. **How long until you can spend it on Ethereum?** Why?
 
 ## 1. The deposit flow
 
@@ -482,7 +484,9 @@ The same pattern works for Tempo: an ExEx on Tempo that watches CCIP bridge even
                   xpReward: 45,
                   content: `# Chainlink CCIP — the cross-chain rail Tempo uses
 
-Chainlink CCIP (Cross-Chain Interoperability Protocol) is the production bridge for **arbitrary chain pairs**. Tempo uses CCIP for Ethereum↔Tempo↔Solana settlement. Hyperliquid does not (they use their own bridge). For mppsol and soltempo, CCIP is the **operational reality**, not a theoretical alternative.
+A merchant accepts USDC payment in Tempo. Behind the scenes that USDC needs to settle on Ethereum (for treasury) and Solana (for DeFi yield) — across three chains, two of which can't speak to each other directly. **That cross-chain settlement isn't a theoretical bridge problem; it's what Tempo runs in production today, and the rail it runs on is Chainlink CCIP** (Cross-Chain Interoperability Protocol). Not a light client. Not a fork of Wormhole. A production bridge designed for arbitrary chain pairs.
+
+Hyperliquid doesn't use CCIP — they ship their own bridge. But for mppsol and soltempo, CCIP is the **operational reality**, not a theoretical alternative. Understanding it isn't optional if you're going to architect anything that touches Tempo's payments stack.
 
 > 🛑 **Predict before scrolling.** CCIP has a "Risk Management Network" with the power to **block** messages. **Why?** What kind of attack does this defend against that pure cryptography can't?
 
@@ -542,15 +546,13 @@ For soltempo, the use case is **tokens + data**: send USDC from Ethereum to Temp
 
 ## 3. The token pool model
 
-For assets, CCIP uses **token pools** instead of generic wrappers:
+Anyone who used cross-chain DEXes in 2021 remembers the wrapped-token mess: USDC.e on Avalanche, anyUSDC on Fantom, three different "wrapped USDC" representations none of which were the *real* USDC. CCIP avoids this entirely. Instead of wrapping, it uses **token pools** — a pool contract on each chain that holds (or mints) the canonical asset:
 
 - A **pool contract** on each chain holds the asset
 - On bridging, source pool locks the asset; destination pool releases
-- For **burn-mint** model: source pool burns; destination pool mints
+- For **burn-mint** model: source pool burns; destination pool mints from the same total supply
 
-Tempo's USDC connection to Ethereum uses burn-mint via CCIP. The source-chain USDC is burned, the destination USDC is minted from a pool with same total supply.
-
-This is **simpler and more secure than wrapped tokens** — there's no separate "USDC.e" representation, just the same USDC on different chains.
+Tempo's USDC on Ethereum uses burn-mint via CCIP. Source USDC is burned; destination USDC is minted. There's no "USDC.e" — just the same USDC on different chains. **Simpler, and more secure than wrapped tokens.**
 
 > 🔍 **Find in repo.** [\`smartcontractkit/ccip\`](https://github.com/smartcontractkit/ccip) — the CCIP contracts. Find \`TokenPool.sol\`. **What's the inheritance structure?** The contract has multiple variants for different token types.
 
@@ -676,7 +678,7 @@ For settlement-scale: $0.50 on $1M = 0.005% fee. Hugely viable. Throughput: CCIP
                   xpReward: 40,
                   content: `# Wormhole and IBC — multi-chain message protocols
 
-Wormhole and IBC are the two production multi-chain message protocols beyond CCIP. They serve very different audiences. **Wormhole** is the "permissionless multisig bridge connecting everything" — fast, cheap, riskier. **IBC** is the "trust-minimized bridge for Cosmos chains" — slower, more secure, ecosystem-locked.
+If CCIP is the bridge a regulated Tempo merchant uses, **Wormhole is what every Solana DeFi protocol used in 2022 to reach Ethereum** — fast, cheap, and held together with a 19-key multisig that's been hacked once. **IBC is what every Cosmos chain has used since 2019** — slower, more secure, and structurally unable to leave the Cosmos ecosystem. Two production protocols, very different audiences, both important to understand because they bracket the trust spectrum CCIP sits in the middle of.
 
 > 🛑 **Predict before scrolling.** Wormhole connects 30+ chains. IBC connects only Cosmos chains. **Why can't IBC just add Ethereum support and become the dominant bridge?**
 
@@ -694,9 +696,9 @@ Wormhole supports 30+ chains including Solana, Ethereum, Sui, Aptos, Bitcoin (vi
 
 ### 1.1 Wormhole's attack history
 
-In 2022, Wormhole was exploited for **$325M**. The bug was **not** key compromise — it was a signature verification bug in the Solana contract. An attacker forged a guardian signature by exploiting a missing check.
+February 2022: an attacker walked away with **$325M** of Wormhole-bridged ETH. The bug was **not** a stolen key — it was a missing check in the Solana program that verifies guardian signatures. The attacker forged a valid-looking signature against a contract that didn't actually verify the signer.
 
-**Takeaway**: multisig bridges fail at the **verification logic** as often as at the keys. The number of guardians doesn't matter if the contract that checks them has a bug.
+**Takeaway**: multisig bridges fail at the **verification logic** as often as at the keys. 19 guardians don't help if the contract checking them has a bug.
 
 > 🛑 **Anti-fluency.** Wormhole has 19 guardians. **What's f?** And why is "more guardians = more secure" the wrong way to think about multisig?
 
@@ -822,9 +824,9 @@ Where each protocol sits:
                   xpReward: 55,
                   content: `# Building a minimal bridge on Reth — light-client-verified messaging
 
-You've read the theory. You've seen the production code. Now you build **the smallest viable trust-minimized bridge**: an Ethereum→Tempo bridge where Tempo runs an Ethereum light client and verifies inclusion proofs of source events.
+You've read the theory. You've read the production code. **Now you build the smallest possible trust-minimized bridge** — an Ethereum→Tempo flow where Tempo runs an Ethereum light client and verifies inclusion proofs of source-chain events. No multisig, no guardians, no fast-withdrawal LP. Just: source chain emits an event, light client says "yes, that event is in a finalized Ethereum block," destination chain mints. Three contracts, one relayer, one trust assumption.
 
-> 🛑 **Predict before scrolling.** Your bridge has 3 components: a contract on Ethereum, a relayer, and a contract on Tempo. **What does each one do, and what does each one trust?**
+> 🛑 **Predict before scrolling.** The bridge has 3 components: a contract on Ethereum, a relayer, and a contract on Tempo. **What does each one do, and what does each one trust?**
 
 ## 1. The architecture
 

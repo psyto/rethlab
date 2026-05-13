@@ -34,7 +34,9 @@ export async function seedRethConsensusEngineeringJA(prisma: PrismaClient) {
                   xpReward: 40,
                   content: `# BFT 問題をゼロから
 
-コンセンサスを 1 行も書く前に、**そもそも何を解決しようとしているのか** を理解する必要があります。多くのエンジニアがこれをスキップして、Byzantine バグを 3am にメンタルモデル無しでデバッグする羽目になる。本レッスンで土台を作ります: 故障モード、safety/liveness の分割、なぜ FLP が「完璧な」コンセンサスを不可能にするか。
+午前 3 時。30 ノードの chain で 1 バリデータがちょうど矛盾する 2 つのブロックに署名した。他のバリデータは両方に投票している。Chain は split-brain。**何に手を伸ばす?** なぜこれが起こりうるのか — コンセンサスがそもそも何の故障を生き残るための仕組みなのか — のメンタルモデルがなければ、次の 8 時間を当てずっぽうで過ごすことになる。
+
+本レッスンでそのモデルを作る: 故障モード、safety/liveness の分割、なぜ FLP (1985 年の不可能性定理) が「完璧な」コンセンサスを数学的に不可能にするか。
 
 > 🛑 **スクロール前に予測。** 3 ノード A、B、C が単一の値に合意しなければならない。**何が間違いうるか?** 4 つの異なる故障モードを列挙。(ヒント: 「ネットワークが遅い」だけではない。)
 
@@ -46,7 +48,7 @@ export async function seedRethConsensusEngineeringJA(prisma: PrismaClient) {
 - **提案された値** — 誰も「42」について聞いていないのに、勝手に「42」で合意できない
 - **いつかは** — 「気が向いたら」ではなく、ある時点で
 
-この 3 つは順に **safety**、**validity**、**liveness**。これらは無料ではない。コンセンサス研究の全分野は、どのトレードオフが許容可能かを決めることに費やされている。
+この 3 つは順に **safety**、**validity**、**liveness**。これらは無料ではない — 任意のネットワーク条件下で 3 つすべてを得ることはできない。コンセンサス研究の全分野は、どのユースケースに対してどのトレードオフが許容可能かを決めることに費やされている。
 
 ## 2. 想定すべき故障モード
 
@@ -57,7 +59,7 @@ export async function seedRethConsensusEngineeringJA(prisma: PrismaClient) {
 | **Network partition** | ノードの一部が他のノード集合に到達できない | 海底ケーブル切断、AWS リージョン障害 |
 | **Byzantine** | ノードが嘘をつく。矛盾するメッセージを送る。A と ¬A の両方に署名する | バリデータ鍵の侵害、バグ |
 
-古典文献ではすべてを「fault」と呼びます。**Byzantine** ケースが最も難しい — 故障ノードが **積極的に敵対的** だから。Crash + omission は相対的に楽。
+古典文献ではすべてを「fault」と呼びます。**Byzantine** ケース (Byzantine 将軍問題から命名 — 嘘も含めて任意に振る舞うノード) が最も難しい — 故障ノードが **積極的に敵対的** だから。Crash + omission は相対的に楽。
 
 > 🛑 **予測。** 4 ノードがある。1 つが Byzantine。**コンセンサスを保ちつつ許容できる Byzantine の最大数 f は?** (下に答えがあるが、まず予測してください。有名な結果です。)
 
@@ -106,9 +108,9 @@ safety、liveness、fault tolerance、同期仮定なし — この 4 つすべ�
 
 ## 5. 3f+1 ルール、直感的に
 
-なぜ正確に **3f+1** か? 3 方向の直感:
+なぜ正確に **3f+1** か? 代数の前に直感を。
 
-投票を求めるとします。**f ノードは嘘をつくかもしれない**。次のような quorum が必要:
+投票を求めるとします。**f ノードは嘘をつくかもしれない**。次のような quorum (「合意とみなす」票数) が必要:
 
 - f Byzantine が quorum 内で過半数を形成できない大きさ
 - 2 つの quorum が **少なくとも 1 つの正直なノード** で交わる (そうでなければ x と ¬x の両方を決定可能)
@@ -156,7 +158,9 @@ Tempo (おそらく): ~30 バリデータ、同期、BFT (分断時停止)、sla
                   xpReward: 40,
                   content: `# 3 つのコンセンサス系統 — PoW、PoS、古典 BFT
 
-BFT 問題が分かれば、解の系統は自明になります。各系統は前レッスン §3 から違う妥協を選んでいる。**選んだプロトコルが、作れる chain を決める** — スループット、レイテンシ、分散化、validator set サイズ、slashing semantics — すべてはこの 1 つの選択から流れる。
+Bitcoin、Ethereum、Hyperliquid はすべてコンセンサスを走らせている。誰も同じ系統を選んでいない。それぞれが前レッスンの 4 軸の不可能性 (safety / liveness / 故障耐性 / 同期仮定なし) に対して違うトレードを選んだ — そしてその 1 つの選択が chain のすべてを決めた: スループット、レイテンシ、バリデータ数、slashing semantics、誰がバリデータになれるかさえ。
+
+本レッスンはその 3 系統の地図と、各々が要するコストを示す。
 
 > 🛑 **スクロール前に予測。** 決済レール (Tempo) を作る。100 万バリデータより 1 秒未満 finality が重要。**どの系統を選ぶ? なぜ Bitcoin の系統は即座に負けるか?**
 
@@ -172,7 +176,7 @@ BFT 問題が分かれば、解の系統は自明になります。各系統は�
 
 ## 2. Nakamoto / PoW — 原点
 
-**機構**: マイナーがハッシュパズルを競合解決。最初に解いた者が次のブロックを提案。他のマイナーはその上に積むことで「投票」。最長の chain が勝つ。
+**機構**: マイナーがハッシュパズルを競合解決 (ブロックの SHA-256 ハッシュが先頭 N ビットゼロになる nonce を探す)。最初に解いた者が次のブロックを提案。他のマイナーはその上に積むことで「投票」。最長の chain が勝つ。
 
 これが買うもの:
 
@@ -194,7 +198,7 @@ BFT 問題が分かれば、解の系統は自明になります。各系統は�
 
 ## 3. 古典 BFT — L1 アーキテクトのデフォルト
 
-**機構**: 有界バリデータ委員会。リーダーがブロックを提案。委員会が投票。2/3+ が yes なら、ブロックは即座に確定。
+**機構**: 有界バリデータ委員会 (典型的に 20–150、ID は事前に既知)。リーダーがブロックを提案。委員会が投票。2/3+ が yes なら、ブロックは即座に確定 — confirmation 待ち不要。
 
 古典的参照:
 
@@ -312,7 +316,9 @@ Lesson 5 で実 \`Consensus\` trait を読み、Lesson 7 で Berachain がどう
                   xpReward: 45,
                   content: `# Ethereum の PoS — Casper FFG + LMD-GHOST
 
-Ethereum のコンセンサスは、本番で最も研究されており最も staked されている PoS プロトコル。前レッスンで見たハイブリッド — **2 つのプロトコルを重ねた** — でもあります。本レッスンでハイブリッドを分解し、実仕様を読めて各部の存在理由が分かるようにします。
+Ethereum は *1 つの* コンセンサスプロトコルを走らせていない。**2 つを重ねて** 走らせている。**LMD-GHOST** が「今 head はどのブロック」を決める; **Casper FFG** が「何が実際に最終で reorg できないか」を決める。なぜ 2 つ? 100 万バリデータでネットワークを溶かさずに BFT 系即時 finality は不可能 — だが「何も最終に settle しない」chain も出荷不可能。ハイブリッドはその妥協。
+
+本レッスンはハイブリッドを分解し、仕様を読めて各半分が何をしているか分かるようにする。
 
 > 🛑 **スクロール前に予測。** Ethereum slot time は 12 秒、epoch は 32 slot。**finality は最短 ~2 epoch**。実時間を計算。なぜもっと速くないのか — なぜ毎 slot finalize しないのか?
 
@@ -329,11 +335,11 @@ LMD-GHOST が継続的に動き、tip を選ぶ。Casper FFG が epoch 境界で
 
 ## 2. LMD-GHOST を 60 秒で
 
-**Latest Message Driven, Greedy Heaviest Observed Sub-Tree**。
+**Latest Message Driven, Greedy Heaviest Observed Sub-Tree**。(長い名前は下で分解する。)
 
 各 slot でバリデータは 2 つする:
 1. **Propose** (自分の slot なら) — ブロックをブロードキャスト
-2. **Attest** — どのブロックが head と思うか投票
+2. **Attest** — どのブロックが head と思うか投票 (*attestation* はブロック名を含む署名済メッセージ)
 
 Fork choice 規則: **各ブロックについて、その subtree 内の attestation を (stake 加重で) 数える。最大重量の subtree を選ぶ**。
 
@@ -394,7 +400,7 @@ Slashing は **暗号的に検出可能**。誰でも slashing proof を chain �
 
 ## 5. Engine API — コンセンサスが実行に話す場所
 
-Ethereum は **consensus client** (CL — Lighthouse、Prysm、etc.) と **execution client** (EL — Reth、Geth、etc.) を分離する。両者は **Engine API**、JSON-RPC インタフェース、で通信する。
+Ethereum はノードを 2 プロセスに分割する: 投票プロトコルを走らせる **consensus client** (CL — Lighthouse、Prysm、etc.) と、EVM を走らせ状態を保存する **execution client** (EL — Reth、Geth、etc.)。両者は **Engine API** — Ethereum 仕様で定義され、同マシン上の 2 プロセス間でローカルに話される JSON-RPC インタフェース — で通信する。
 
 \`\`\`mermaid
 sequenceDiagram
@@ -455,7 +461,9 @@ Ethereum ハイブリッドの 2 半分 (LMD-GHOST + Casper FFG) は新規 PoS c
                   xpReward: 45,
                   content: `# HotStuff と HyperBFT — 単一リーダー BFT 系統
 
-HyperBFT は Hyperliquid のコンセンサスエンジン。**HotStuff** (2018) の派生で、HotStuff はさらに **PBFT** (1999) の派生。この系統は、即時 finality が必要な現代の非 Ethereum L1 の多数が選ぶ。HotStuff を読むことが、HyperBFT 理解への最も近いオープンソース参照になります。
+Hyperliquid は秒間 ~20 万 perp 取引を 1 秒未満 finality で処理する。その下のコンセンサスが **HyperBFT** — そして HyperBFT は奇妙な新設計ではない。HotStuff の variant。HotStuff (2018) はさらに PBFT (1999) の派生で、この系統全体が、即時 finality を要する現代のほぼすべての非 Ethereum L1 が選ぶもの。
+
+Hyperliquid は HyperBFT をオープンソース化していない。しかし HotStuff は公開されていて、それを読むことが HYPE の下で実際に走っているものへの最も近い参照になる。
 
 > 🛑 **スクロール前に予測。** PBFT (1999) はブロックあたり O(n²) メッセージ。HotStuff (2018) は O(n)。**n=100 バリデータでこの 10000x メッセージ削減を可能にした変更は?** (ヒント: 暗号。)
 
@@ -481,10 +489,10 @@ Yin、Malkhi、Reiter、Gueta、Abraham (VMware、2018)。2 つの革新。
 
 ### 2.1 閾値署名
 
-各バリデータが全員に署名を送る代わりに、**閾値暗号** を使う:
+各バリデータが全員に署名を送る代わりに、**閾値暗号** (典型的に BLS — k 個の異なる署名者からの部分署名を「k 個が署名した」として検証できる 1 つの短い署名に数学的に結合できる署名方式) を使う:
 
-- 2f+1 バリデータが部分署名
-- 部分署名は **サイズ O(1) の 1 つの集約署名** に結合可能
+- 2f+1 バリデータが各々部分署名を生成
+- 部分署名は **サイズ O(1) の 1 つの集約署名** に結合可能 — 4 署名者を表しても 400 署名者を表しても同じバイト数
 - リーダーは集約のみブロードキャスト、n 個別署名ではない
 
 これが n²→n の通信を圧縮する。リーダーが 1 集約署名を fan-out、バリデータは互いに話す必要なし。
@@ -609,7 +617,9 @@ Tendermint と比較: Tendermint はよりシンプルだが pipelining が積�
                   xpReward: 45,
                   content: `# Reth の Consensus trait を読む
 
-Reth は **execution-only**。PoS や BFT を実装していない。では「コンセンサス」は Reth のどこに住んでいるのか? 答えは **\`Consensus\` trait** — 任意のコンセンサスエンジンが Reth の実行パイプラインに接続する統合点。これが Hyperliquid のノード、Tempo のノード、すべての Reth ベース chain が実装する trait。
+Reth のソースを開く。「PoS」を検索する。ほとんど見つからない — なぜなら **Reth は PoS も BFT も全く実装していないから**。その仕事は consensus client (Lighthouse、Prysm、自前エンジン) に住む。では「Hyperliquid は Reth で動く」「Berachain は PoL のために Reth を fork した」と言う時、実際に触っているコンセンサス表面は何か?
+
+答えは 1 つの trait: **\`Consensus\`**。任意のコンセンサスエンジンが Reth の実行パイプラインに接続する統合点。Hyperliquid のノード、Tempo のノード、すべての Reth ベース chain が実装する trait。
 
 > 🛑 **スクロール前に予測。** Reth はコンセンサスレイヤから来るブロックを validate する必要がある。**EVM が tx を実行する前に、どんなチェックが走るべき?** 4 つ列挙。(ヒント: 暗号的、構造的、時間的、コンセンサス固有の 1 つ。)
 
@@ -620,8 +630,8 @@ Reth のアーキテクチャは関心事を分割:
 | レイヤ | 責務 | コンポーネント |
 | :--- | :--- | :--- |
 | **実行** | tx を走らせ、post-state を生成 | revm + executor |
-| **ストレージ** | ブロック、状態、receipt を永続化 | MDBX |
-| **ネットワーク** | peer からブロックを受信 | devp2p |
+| **ストレージ** | ブロック、状態、receipt を永続化 | MDBX (Reth 埋め込みのキー値ストア) |
+| **ネットワーク** | peer からブロックを受信 | devp2p (Ethereum の P2P トランスポート) |
 | **コンセンサス** | chain ルール上のブロック正当性を validate | \`Consensus\` trait |
 
 注意: **Reth の \`Consensus\` trait は chain head を選ばない**。それは consensus client の仕事 (Lighthouse、Prysm、またはカスタム)。Reth の仕事は受け取ったブロックを **validate** する — ルール通りに作られたか?
@@ -794,7 +804,9 @@ cd reth
                   xpReward: 45,
                   content: `# Malachite を読む — Informal Systems の Rust-native BFT
 
-[\`informalsystems/malachite\`](https://github.com/informalsystems/malachite) は **Tendermint の Rust 書き直し**、CometBFT (Go 参照実装) を作った同じチームによる。学べる最も近い Rust-native BFT エンジン。Reth 上に Tendermint 系 chain を出荷したいなら、これが参照実装。
+Reth ベース L1 が Tendermint 系 BFT コンセンサスを必要とするなら、選択肢は 3 つ。(1) 自前で書く — 数ヶ月の作業 + セキュリティリスク。(2) CometBFT (Go) にプロセス越しで委譲 — 醜いクロスプロセス糊。(3) [\`informalsystems/malachite\`](https://github.com/informalsystems/malachite) を使う: CometBFT を作った同じチームによる **Tendermint の Rust 書き直し**。本レッスンが存在するのは選択肢 3 のため。
+
+Malachite は学べる最も近い Rust-native BFT エンジンであり、embed が最もクリーンなもの。
 
 > 🛑 **スクロール前に予測。** Tendermint はブロックあたり **3 投票ラウンド**: Propose、Prevote、Precommit。**各ラウンドで、バリデータは何を決定する?** 各ラウンドの入力と出力を列挙。
 
@@ -851,7 +863,7 @@ pub enum Step {
 
 1. **NewRound** → ラウンドに入る、自分が proposer かを決める
 2. **Propose** → proposer ならブロックをブロードキャスト。違うなら待つ。
-3. **Prevote** → 提案ブロックに「yes」か「nil」を投票 (2f+1 prevote で *polka* 達成)
+3. **Prevote** → 提案ブロックに「yes」か「nil」を投票。同ブロックへの 2f+1 prevote を *polka* と呼ぶ (Tendermint 用語で「次へ進むのに十分な第 1 ラウンドの支持」)。
 4. **Precommit** → polka を見たら precommit をブロードキャスト。2f+1 precommit で、**ブロック commit**。
 5. **Commit** → 確定、次の height へ
 
@@ -1000,7 +1012,9 @@ loop {
                   xpReward: 40,
                   content: `# bera-reth を読む — Proof-of-Liquidity をコンセンサスカスタマイズとして
 
-[\`berachain/bera-reth\`](https://github.com/berachain/bera-reth) は「**Reth + 根本的に違うコンセンサス**」の本番例。Berachain の Proof-of-Liquidity (PoL) は **単に PoS の renaming ではない** — バリデータになれる人と報酬の流れを変える。bera-reth を読むことで「コンセンサスを差し替える」の実用表面が見える。
+ほとんどの「うちは違うコンセンサスを使ってる」ピッチは、トークンの名前を変えただけの PoS に終わる。Berachain の **Proof-of-Liquidity** (PoL) は珍しい例外: 実際に誰が validate できるか、報酬がどこに流れるかを変える。そして実装 — [\`berachain/bera-reth\`](https://github.com/berachain/bera-reth) — は本番で動いており、Reth 上で、diff は午後 1 つで読める程度に小さい。
+
+これが「コンセンサスを差し替える」の実用表面。Reth 上で実カスタム L1 が何に見えるかを知りたいなら、これが学ぶべきもの。
 
 > 🛑 **スクロール前に予測。** Ethereum PoS では **32 ETH を staking** してバリデータになる。Berachain の PoL では類似ステップは何? (ヒント: 「BGT を staking」ではない。) **Berachain がバリデータに要求する、Ethereum が要求しないものは?**
 
@@ -1009,7 +1023,7 @@ loop {
 Berachain のピッチ:
 
 - **PoS では**: バリデータはネイティブトークンを stake する。トークンの唯一の効用は staking。
-- **PoL では**: バリデータは **BGT** (ガバナンストークン) を stake するが、BGT は **BEX (彼らの DEX) に流動性を提供** することで earn する。
+- **PoL では**: バリデータは **BGT** (Bera Governance Token — Berachain の譲渡不能なガバナンス資産) を stake するが、BGT は **BEX (BeraSwap、Berachain ネイティブの AMM/DEX) に流動性を提供** することで earn する。
 
 カスケード:
 1. ユーザが BEX に流動性を提供 → BGT を earn
@@ -1233,7 +1247,9 @@ bera-reth を参照として学ぶ:
                   xpReward: 45,
                   content: `# NodeBuilder コンセンサススロット — カスタムコンセンサスを配線
 
-Trait を読んだ。Malachite と bera-reth を見た。次は **配線する**。本レッスンでは、コンセンサスが Reth ベース chain に接続する実 NodeBuilder API 呼び出し箇所を歩く。終わりには新 L1 の統合をスケッチできるべき。
+カスタム \`Consensus\` impl がある (前レッスンで書いた)。Malachite か自前エンジンが票を駆動する。**その 2 つはどう動くノードになるのか?** 答え: NodeBuilder で 1 ビルダー、1 impl、1 チェーンメソッド呼び出し — カスタム mempool やカスタム EVM を差し込むのと完全に同じ形。
+
+本レッスンは呼び出し箇所を歩く。終わりにはホワイトボードで新 L1 の配線をスケッチできるべき。
 
 > 🛑 **スクロール前に予測。** Reth の NodeBuilder にカスタムコンセンサスを配線する。**ビルダーに渡す 4 つは?** (ヒント: trait impl、validator set、署名方式、もう 1 つ。)
 
@@ -1437,7 +1453,9 @@ Tempo ~30 バリデータで BLS 検証 ~5ms。Hyperliquid ~20 でさらに高�
                   xpReward: 50,
                   content: `# 最小の単一リーダー BFT を Rust で作る
 
-Trait は見た。Malachite は読んだ。次は **実 L1 を出荷できる最小のコンセンサス** を作る。本レッスンは近道: **すべての L2 sequencer と Tempo クラス L1 が launch 時に実際にやっていること** — 中央集権リーダー、その後で漸進的に分散化。
+OP Stack ドキュメントを開く。Arbitrum ドキュメントを開く。Hyperliquid の launch 時ブログを開く。すべてが「sequencer を時間とともに分散化する」のバリエーションを言う。翻訳すると: **launch 時には、毎ブロックを生成する 1 台のマシンがあり、特定の鍵による署名が唯一のコンセンサス**。それだけ。
+
+これが Reth 上に Rust ~100 行で出荷できる。本レッスンがその ~100 行 — そして「後で」が来た時に何を追加するかの軌跡。
 
 > 🛑 **スクロール前に予測。** Hyperliquid、Tempo、全 OP Stack chain、Arbitrum — **launch 時に全部が走らせているコンセンサスは?** HotStuff ではない。Tendermint でもない。(ヒント: 両者より単純。)
 
@@ -1606,7 +1624,7 @@ impl<B: Block> Consensus<B> for CentralizedConsensus {
 
 ## 5. 分散化のステップ 1: 2-of-3 multisig sequencer
 
-単一署名者から multisig へ:
+単一署名者から **multisig** へ — ブロックの validity が 1 鍵でなく指定 3 鍵のうち 2 鍵の署名を要するようになる:
 
 \`\`\`rust
 pub struct MultisigSequencer {
@@ -1700,7 +1718,9 @@ fn current_proposer(slot: u64, validator_set: &[Address]) -> Address {
                   xpReward: 45,
                   content: `# バリデータ経済 — slashing、報酬、攻撃ベクター
 
-コンセンサスプロトコルは半分が暗号、半分が経済。暗号は「証拠を残さずに矛盾するメッセージに署名できない」と言う。**経済** は「不正の証拠コストが不正から得られる利益を上回る」と言う。本レッスンは経済層。
+暗号だけでは PoS chain を保護できない。バリデータが double-sign したことを *証明* できる — だがその証明は、バリデータが何の代償も払わないなら無価値。**チートのコストがチートで抽出できる現金を超える時にのみプロトコルは安全**。それが経済層、そして load-bearing — それなしには優雅な 3f+1 quorum 数学が「double-sign すべきでない、お願い」に崩壊する。
+
+本レッスンが経済層: slashing 機構、攻撃ベクター価格付け、自分の L1 用 slashing 設計法。
 
 > 🛑 **スクロール前に予測。** Ethereum mainnet は ~$50B+ staked。**finality に 51% 攻撃を試みるドル単位コストは?** (正確な数字不要 — 計算をスケッチ。) なぜこれが PoS の **security 議論** か?
 
@@ -1723,7 +1743,7 @@ Ethereum で $50B staked、finality 攻撃は ~$33B の stake が必要。Slashi
 
 Slashing をサポートする任意の BFT システムで:
 
-### 2.1 Double-signing (equivocation)
+### 2.1 Double-signing (equivocation — 同 slot で矛盾する 2 メッセージに署名)
 
 \`\`\`
 バリデータ V が Vote(block_A, round_5) に署名
