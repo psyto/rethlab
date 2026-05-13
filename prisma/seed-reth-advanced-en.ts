@@ -317,7 +317,11 @@ If any answer is shaky, scroll back. The next lesson is Reth's actual pipeline.
                   xpReward: 25,
                   content: `# Reth's pipeline: 10 stages, in order
 
-Last lesson, you built up the \`Stage\` trait. **Now: meet the actual stages.** Reth's pipeline is 10 stages in a fixed order, each implementing the trait you just built. The order is not arbitrary — every constraint between stages is encoded in *which stage runs when*.
+Picture your node a minute after it joins the network. It has just pulled down 10 million blocks worth of headers from peers. Now it has to turn that pile of headers into a fully validated chain — execute every transaction, recompute every state root, build every index. Done block-by-block the way old clients did it, that takes **weeks**. Reth does it in **hours**.
+
+The trick: don't process one block at a time. Process **one *operation* at a time, across thousands of blocks** — recover all the senders, then execute all the transactions, then hash all the accounts, and so on. That's "staged sync." There are 10 stages, they run in a fixed order, and **the order is not arbitrary** — every constraint between stages is encoded in which one runs when.
+
+(Last lesson you built up the \`Stage\` trait. The 10 stages below are the actual implementations.)
 
 \`\`\`mermaid
 flowchart LR
@@ -340,11 +344,11 @@ Open \`crates/stages/stages/src/stages/\` in the Reth repo as you read.
 | - | ----- | ------------ | -------- |
 | 1 | \`HeaderStage\` | Download block headers | network I/O |
 | 2 | \`BodyStage\` | Download tx bodies + uncles | network I/O |
-| 3 | \`SenderRecoveryStage\` | ECDSA-recover sender from each tx signature | CPU (parallel) |
+| 3 | \`SenderRecoveryStage\` | ECDSA-recover the sender of each tx (turn the signature back into the address that signed it) | CPU (parallel) |
 | 4 | \`ExecutionStage\` | Run Revm; accumulate state diffs | CPU (Revm) |
 | 5 | \`AccountHashingStage\` | Sort account changes by hashed key | sort + write |
 | 6 | \`StorageHashingStage\` | Sort storage changes by hashed key | sort + write |
-| 7 | \`MerkleStage\` | Update Merkle Patricia Trie roots | tree compute |
+| 7 | \`MerkleStage\` | Update Merkle Patricia Trie roots (Ethereum's state-tree hash structure) | tree compute |
 | 8 | \`TransactionLookupStage\` | Build \`tx_hash → (block, index)\` index | sort + write |
 | 9 | \`IndexAccountHistoryStage\` + \`IndexStorageHistoryStage\` | Historical access indices | sort + write |
 | 10 | \`FinishStage\` | Bookkeep, finalize | none |
@@ -353,24 +357,26 @@ Open \`crates/stages/stages/src/stages/\` in the Reth repo as you read.
 
 ## Order matters: three constraints
 
+The pipeline's order is fixed by three constraints. Each one forces one stage to come before another.
+
 ### Constraint 1 — \`MerkleStage\` must come *after* hashing
 
 > 🛑 **Predict.** A Merkle Patricia Trie root needs leaves in sorted-by-hashed-key order. **What does that say about how hashing must be staged?**
 
-The Merkle stage *consumes* sorted hashed keys. So account hashing and storage hashing must complete and commit their sort *before* Merkle starts. You can't interleave hashing and Merkle computation across blocks — the Merkle stage needs the *whole sorted set* for the block range it's processing.
+The Merkle stage consumes sorted hashed keys. Account hashing and storage hashing must finish — and commit their sort — before Merkle starts. Interleaving doesn't work: the Merkle stage needs the *whole sorted set* for the block range it's processing.
 
-This is why \`AccountHashingStage\` (5) and \`StorageHashingStage\` (6) come before \`MerkleStage\` (7). Not "in some order" but **in this specific order, with full commits between them.**
+That's why \`AccountHashingStage\` (5) and \`StorageHashingStage\` (6) come before \`MerkleStage\` (7). **In this specific order, with full commits between them.**
 
 ### Constraint 2 — \`AccountHashingStage\` and \`StorageHashingStage\` *could* run in parallel
 
-They both consume the output of \`ExecutionStage\`. They produce independent sorted change sets (account-keyed vs storage-keyed). **Why does the pipeline run them sequentially?**
+Both consume \`ExecutionStage\`'s output. They produce independent sorted change sets (account-keyed vs storage-keyed). So why does the pipeline run them sequentially?
 
 > 🔍 **Open \`account_hashing.rs\` and \`storage_hashing.rs\`.** Read the first 30 lines of each. What do they share? What's the practical reason Reth doesn't fork off two threads here?
 
-Two reasons typically hold:
+Two reasons:
 
-1. **Disk write contention.** Both stages write to MDBX. Running them in parallel would contend on the database lock with no compute benefit.
-2. **Pipeline simplicity.** Sequential execution means the orchestrator's scheduler is a flat list. Adding parallel branches would require a DAG scheduler — more complexity, marginal gain.
+1. **Disk write contention.** Both stages write to MDBX (Reth's embedded key-value store). Running them in parallel would contend on the database lock with no compute benefit.
+2. **Pipeline simplicity.** Sequential execution lets the orchestrator's scheduler stay a flat list. Parallel branches would require a DAG scheduler (one that can run independent stages concurrently) — more complexity, marginal gain.
 
 The Frontiers 2025 talk (linked at the bottom) discusses exactly this trade-off — what *did* get parallelized and what stayed sequential, and why.
 
@@ -378,27 +384,27 @@ The Frontiers 2025 talk (linked at the bottom) discusses exactly this trade-off 
 
 > 🛑 **Predict.** Of all 10 stages, which one benefits *most* from parallelism, and why?
 
-\`SenderRecoveryStage\`. ECDSA-recover sender addresses from transaction signatures — pure CPU, no shared state, embarrassingly parallel. Reth uses Rayon to fan it out across all CPU cores.
+\`SenderRecoveryStage\`. ECDSA recovery — turning a transaction signature back into the signer's address — is pure CPU, no shared state, embarrassingly parallel. Reth uses Rayon (Rust's data-parallelism library) to fan it out across all CPU cores.
 
-Why is this stage the standout?
+What makes this stage the standout:
 
 - **Massive batch size.** Each block has 100–300 transactions; a stage call processes 100K+ blocks at a time = 10–30M signatures per call.
-- **No data dependencies.** Each signature recovery is independent — no need to wait for previous results.
+- **No data dependencies.** Each recovery is independent — no waiting on previous results.
 - **Pure compute.** No I/O between recoveries.
 
-\`ExecutionStage\` (4) is also CPU-bound but has *sequential* state dependencies — block N's storage writes affect block N+1's reads. You can't trivially parallelize it without optimistic execution (Block-STM, etc.), which has its own consensus complications.
+\`ExecutionStage\` (4) is also CPU-bound but has *sequential* state dependencies — block N's storage writes affect block N+1's reads. You can't trivially parallelize it without optimistic execution (Block-STM and similar schemes, which speculatively run blocks in parallel and re-run on conflict), which brings its own consensus complications.
 
 ## Why staged sync wins
 
-Three compounding factors explain the architecture:
+Block-by-block sync (geth's old default) does ~50–100 blocks/sec at full tilt. Staged sync does 10K+ blocks/sec. The 100× comes from three compounding factors:
 
 1. **Batching.** Sender recovery, hashing, Merkle root computation — all amortized across thousands of blocks per call.
 2. **Stage-level parallelism.** Within a stage (especially \`SenderRecoveryStage\`), Rayon fans work across all cores.
 3. **I/O amortization.** Disk writes happen in big sorted batches at stage boundaries, not after every block.
 
-> 🛑 **Final predict.** A node-by-node sync (geth's old default) does ~50–100 blocks/sec at full tilt. Staged sync does 10K+ blocks/sec. Where does the 100× factor come from?
+> 🛑 **Final predict.** Try to attribute the 100× to specific stages before reading on. Which one contributes the most?
 
-The factor isn't any single trick. It's the compounding of: (1) ECDSA recovery batched + parallelized (~10× alone), (2) Merkle root once per range, not per block (~10× alone), (3) disk writes batched into sorted ranges that MDBX writes efficiently (~3× alone). Multiplied: ~300×; the practical number lands around 100–200× depending on hardware.
+Roughly: ECDSA recovery batched + parallelized contributes ~10×; Merkle root computed once per range instead of per block contributes another ~10×; sorted batched writes that MDBX handles efficiently contribute ~3×. Multiplied: ~300× theoretical; the practical number lands around 100–200× depending on hardware.
 
 ## Recall before the quiz
 
@@ -586,7 +592,7 @@ After this drill, you've read the same code Paradigm uses to keep Reth in sync.`
                   xpReward: 30,
                   content: `# Rust: lifetimes, Box, Arc, dyn Trait
 
-Four "advanced but actually simple" Rust features you need to read ExEx and Reth SDK code. **This lesson tests you, not teaches you** — if you stumble on the predict prompts, the gap is real and worth closing.
+Open any ExEx source file. The first ten lines will throw \`Arc<>\`, \`'static\`, \`dyn Trait\`, and \`Box<>\` at you. Four "advanced but actually simple" Rust features — and you need every one to read the code Reth ships with. **This lesson tests you, not teaches you** — if you stumble on the predict prompts, the gap is real and worth closing.
 
 > 🛑 **Cold start: define each in one sentence.** Without scrolling:
 > - \`'a\` (a lifetime parameter)
@@ -624,7 +630,7 @@ let s: &'static str = "hello";
 
 Long-running tasks (like ExEx) often require \`'static\` bounds because they can outlive any local scope.
 
-> 🛑 **Predict.** When does a closure passed to \`tokio::spawn\` need to be \`'static\`? Why? Answer before continuing — this exact bound shows up in every ExEx file you'll ever read.
+> 🛑 **Predict.** When does a closure passed to \`tokio::spawn\` (Tokio is Rust's async runtime — the executor that drives futures) need to be \`'static\`? Why? Answer before continuing — this exact bound shows up in every ExEx file you'll ever read.
 
 ## 2. \`Box<T>\` — heap allocation
 
@@ -940,7 +946,7 @@ If any answer is shaky, scroll back. The next lesson reads the real minimal ExEx
                   xpReward: 25,
                   content: `# Reading the minimal ExEx, line by line
 
-Last lesson, you built up the API. **Now: see it in real code.** This is the entire \`main.rs\` of [\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal) — a working production-shaped ExEx in ~40 lines.
+A working ExEx is 40 lines of Rust. That's it — no fork of Reth, no separate process, just a function you hand to the node builder and Reth runs it inside the same binary. Below is the entire \`main.rs\` of [\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal). By the end of this lesson, every line maps back to a build-up step from the previous one.
 
 \`\`\`rust
 use futures::{Future, TryStreamExt};
@@ -990,7 +996,7 @@ fn main() -> eyre::Result<()> {
 }
 \`\`\`
 
-40 lines. Every line maps back to a build-up step from the previous lesson.
+Now we walk it.
 
 ## Walk it, line by line
 
@@ -1004,7 +1010,7 @@ async fn exex_init<Node: FullNodeComponents>(
 }
 \`\`\`
 
-\`exex_init\` is called *once* at node startup. Reth passes you \`ExExContext\` (which contains \`notifications\`, \`events\`, and node access). You return a future to be polled forever.
+\`exex_init\` is called *once* at node startup. Reth passes you \`ExExContext\` — a struct bundling \`notifications\` (the incoming chain-event stream), \`events\` (your channel back to Reth's pruner), and a handle to the node's components. You return a future for Reth to poll forever.
 
 This minimal ExEx does no synchronous setup — it just hands \`ctx\` straight to \`exex\`. **Real ExExes** that need \`File::open(...)\` or \`Database::connect(...)\` would do that work inside \`exex_init\`, *before* returning the future.
 
@@ -1021,7 +1027,7 @@ async fn exex<Node: FullNodeComponents>(mut ctx: ExExContext<Node>) -> eyre::Res
 }
 \`\`\`
 
-The loop. \`ctx.notifications.try_next()\` is async — when no notification is available, the runtime parks the task and runs other ExExes / Reth itself. Cooperative concurrency, no blocking.
+The main loop. \`ctx.notifications\` is an async channel (a typed queue Reth pushes chain events into); \`try_next()\` awaits the next one without blocking the thread — when none is available, the runtime parks the task and runs other ExExes or Reth itself. Cooperative concurrency, no blocking.
 
 When the channel closes (node shutdown), \`try_next()\` returns \`Ok(None)\`, the \`while let\` exits, and the function returns \`Ok(())\`. Clean termination.
 
@@ -1531,7 +1537,7 @@ If any answer is shaky, scroll back. The next lesson tours the 6 components and 
                   xpReward: 25,
                   content: `# The 6 components — what each one unlocks
 
-Last lesson, you built up the node-builder API. The interesting work happens inside \`.with_components(...)\` — that's where you actually swap subsystems. **This lesson walks the 6 component builders and shows what swapping each one unlocks for a real chain.**
+Hyperliquid runs HyperEVM on Reth. Tempo is building a payments L1 on Reth. Berachain ships bera-reth. None of them forked Reth — they each swapped **2 or 3 of Reth's 6 components** and inherited the rest. That's the SDK's whole pitch: **don't rewrite a Rust EVM client, swap the parts that matter to your thesis.** This lesson walks those 6 components — and shows what each swap unlocked for the three chains above.
 
 \`\`\`mermaid
 flowchart TB
@@ -1562,7 +1568,7 @@ Each gets a \`*Builder\` trait — \`PoolBuilder\`, \`NetworkBuilder\`, etc. —
 
 ## Hyperliquid HyperEVM — what they swap
 
-- **\`consensus\`** — They run **HyperBFT** (their own BFT consensus), not Ethereum PoS. The consensus subsystem is replaced.
+- **\`consensus\`** — They run **HyperBFT** (their own Byzantine-fault-tolerant consensus protocol), not Ethereum PoS. The consensus subsystem is replaced.
 - **\`executor\`** — Order-book-coupled execution: certain opcodes interact with the perp order book that lives alongside the EVM. Custom executor.
 - **\`pool\`** — Admission rules tuned for high-frequency perp updates.
 - **everything else** — Reth defaults.
@@ -1855,9 +1861,9 @@ Use the source you read in Inside to *design* L1s. The implementation skills beh
 | Course | Focus |
 | :--- | :--- |
 | **Consensus Engineering** | PoS / BFT / Tendermint internals; latency / liveness / finality trade-offs |
-| **Cross-Chain Bridges** | CCIP, OP Standard Bridge, light clients in real source — then build your own |
-| **Sequencer & Rollup Architecture** | centralized to shared sequencers; MEV defense and forced inclusion |
-| **P2P Networking Internals** | devp2p, libp2p, gossip subprotocols, peer scoring |
+| **Cross-Chain Bridges** | CCIP (Chainlink's cross-chain protocol), OP Standard Bridge, light clients in real source — then build your own |
+| **Sequencer & Rollup Architecture** | centralized to shared sequencers; MEV defense and forced inclusion (letting users land txs even when a sequencer censors) |
+| **P2P Networking Internals** | devp2p (Ethereum's transport), libp2p (the modular alternative used by many L1s), gossip subprotocols, peer scoring |
 | **Validator Operations** | key management, slashing conditions, coordinated upgrades |
 
 ## Expert tier — ship in production (2 courses, EXPERT difficulty)

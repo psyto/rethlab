@@ -317,7 +317,11 @@ impl<S: Stage<P>> Stage<P> for Box<S> {
                   xpReward: 25,
                   content: `# Reth のパイプライン: 10ステージ、順番付き
 
-前のレッスンで \`Stage\` トレイトを組み立てました。**さあ、本物のステージに会いに行きます。** Reth のパイプラインは固定された順序の10ステージ、それぞれが今組み立てたトレイトを実装。順序は恣意的ではない — ステージ間のすべての制約は *どのステージがいつ走るか* にエンコードされている。
+ノードがネットワークに参加して1分後を想像してください。ピアからすでに 10M ブロック分のヘッダーを引っ張ってきた。ここから、その大量のヘッダーを完全に検証されたチェーンに変換しなければならない — すべての tx を実行し、すべての state root を再計算し、すべてのインデックスを構築する。古いクライアントのようにブロックごとに処理すると、**数週間** かかる。Reth は **数時間** で終わらせる。
+
+トリックはこれ: 一度に1ブロックずつ処理するのではなく、**1つの *操作* を、数千ブロックにまたがって処理する** — まず全部の sender を復元、次に全部の tx を実行、次に全アカウントをハッシュ化、と続ける。これが「Staged Sync」。10ステージあり、固定された順序で走り、**順序は恣意的ではない** — ステージ間のすべての制約はどのステージがいつ走るかにエンコードされている。
+
+（前のレッスンで \`Stage\` トレイトを組み立てました。下の10ステージはその実装です。）
 
 \`\`\`mermaid
 flowchart LR
@@ -340,11 +344,11 @@ flowchart LR
 | - | -------- | -------- | ------------ |
 | 1 | \`HeaderStage\` | ブロックヘッダーをダウンロード | ネットワーク I/O |
 | 2 | \`BodyStage\` | tx 本体 + uncle をダウンロード | ネットワーク I/O |
-| 3 | \`SenderRecoveryStage\` | tx 署名から ECDSA で sender を復元 | CPU（並列） |
+| 3 | \`SenderRecoveryStage\` | 各 tx の sender を ECDSA で復元（署名を、それを生成したアドレスに戻す） | CPU（並列） |
 | 4 | \`ExecutionStage\` | Revm を走らせ、状態差分を蓄積 | CPU（Revm） |
 | 5 | \`AccountHashingStage\` | アカウント変更をハッシュ化キーでソート | sort + write |
 | 6 | \`StorageHashingStage\` | ストレージ変更をハッシュ化キーでソート | sort + write |
-| 7 | \`MerkleStage\` | Merkle Patricia Trie ルートを更新 | tree compute |
+| 7 | \`MerkleStage\` | Merkle Patricia Trie ルートを更新（Ethereum の state ツリーのハッシュ構造） | tree compute |
 | 8 | \`TransactionLookupStage\` | \`tx_hash → (block, index)\` インデックスを構築 | sort + write |
 | 9 | \`IndexAccountHistoryStage\` + \`IndexStorageHistoryStage\` | 履歴アクセスインデックス | sort + write |
 | 10 | \`FinishStage\` | 帳簿付け、確定 | なし |
@@ -353,24 +357,26 @@ flowchart LR
 
 ## 順序が物を言う: 3つの制約
 
+パイプラインの順序は3つの制約で決まる。それぞれが特定のステージを別のステージの前に置くことを強いる。
+
 ### 制約 1 — \`MerkleStage\` はハッシング *の後* でなければならない
 
 > 🛑 **予測。** Merkle Patricia Trie のルートには葉がハッシュ化キーでソートされている必要がある。**それがハッシングのステージ分けに何を強いるか?**
 
-Merkle ステージはソート済みハッシュ化キーを *消費する*。だからアカウントハッシングとストレージハッシングは Merkle が始まる *前* にソートを完了して commit する必要がある。ブロック間でハッシングと Merkle 計算をインターリーブできない — Merkle ステージが処理するブロック範囲については *全ソート集合* が必要。
+Merkle ステージはソート済みハッシュ化キーを消費する。アカウントハッシングとストレージハッシングは Merkle が始まる前にソートを完了して commit する必要がある。インターリーブは効かない — Merkle ステージが処理するブロック範囲について *全ソート集合* が必要。
 
-これが \`AccountHashingStage\`(5) と \`StorageHashingStage\`(6) が \`MerkleStage\`(7) より前にある理由。「何かの順序で」ではなく、**この特定の順序で、間に完全な commit を挟んで**。
+これが \`AccountHashingStage\`(5) と \`StorageHashingStage\`(6) が \`MerkleStage\`(7) より前にある理由。**この特定の順序で、間に完全な commit を挟んで。**
 
 ### 制約 2 — \`AccountHashingStage\` と \`StorageHashingStage\` は *並列実行できる*
 
-両方 \`ExecutionStage\` の出力を消費する。独立したソート済み変更集合を生成する（アカウントキーで vs ストレージキーで）。**なのにパイプラインが順次実行するのはなぜ?**
+両方 \`ExecutionStage\` の出力を消費する。独立したソート済み変更集合を生成する（アカウントキーで vs ストレージキーで）。なのにパイプラインが順次実行するのはなぜ?
 
 > 🔍 **\`account_hashing.rs\` と \`storage_hashing.rs\` を開く。** それぞれ最初の30行を読む。何を共有している? Reth が2スレッドに分けない実用的な理由は?
 
-通常2つの理由が成り立つ:
+理由は2つ:
 
-1. **ディスク書き込みの競合。** どちらのステージも MDBX に書く。並列実行するとデータベースロックで競合し、計算面の利得はない。
-2. **パイプラインの単純さ。** 順次実行ならオーケストレータのスケジューラはフラットなリスト。並列分岐を加えると DAG スケジューラが必要 — 複雑さが増えるが利得は限界的。
+1. **ディスク書き込みの競合。** どちらのステージも MDBX（Reth の組み込みキーバリューストア）に書く。並列実行するとデータベースロックで競合し、計算面の利得はない。
+2. **パイプラインの単純さ。** 順次実行ならオーケストレータのスケジューラはフラットなリストのまま。並列分岐を加えると DAG スケジューラ（独立したステージを並行実行できるもの）が必要 — 複雑さが増えるが利得は限界的。
 
 下で紹介する Frontiers 2025 のトークがまさにこのトレードオフを論じている — 何が *並列化された* かと何が順次のままかを、それぞれの理由とともに。
 
@@ -378,27 +384,27 @@ Merkle ステージはソート済みハッシュ化キーを *消費する*。�
 
 > 🛑 **予測。** 10ステージの中で、並列化で *最も* 得をするのはどれ? なぜ?
 
-\`SenderRecoveryStage\`。tx 署名から ECDSA で sender アドレスを復元 — 純粋な CPU、共有状態なし、embarrassingly parallel。Reth は Rayon で全 CPU コアに展開する。
+\`SenderRecoveryStage\`。ECDSA 復元 — tx の署名を署名者のアドレスに戻す処理 — は純粋な CPU、共有状態なし、embarrassingly parallel。Reth は Rayon（Rust のデータ並列ライブラリ）で全 CPU コアに展開する。
 
-なぜこのステージが特別なのか?
+このステージが特別な理由:
 
 - **巨大なバッチサイズ。** 各ブロックは 100–300 tx; ステージ呼び出しは 100K+ ブロックを一度に処理 = 1呼び出しで 10–30M 個の署名。
-- **データ依存なし。** 各署名復元は他から独立 — 前の結果を待つ必要がない。
+- **データ依存なし。** 各復元は他から独立 — 前の結果を待つ必要がない。
 - **純粋計算。** 復元の合間に I/O なし。
 
-\`ExecutionStage\`(4) も CPU バウンドだが *順次の* 状態依存がある — ブロック N のストレージ書き込みがブロック N+1 の読み込みに影響。Optimistic execution（Block-STM など）なしには簡単に並列化できず、それは独自のコンセンサス的な複雑さを伴う。
+\`ExecutionStage\`(4) も CPU バウンドだが *順次の* 状態依存がある — ブロック N のストレージ書き込みがブロック N+1 の読み込みに影響。Optimistic execution（Block-STM など、ブロックを投機的に並列実行して衝突したら再実行する方式）なしには簡単に並列化できず、独自のコンセンサス的な複雑さを伴う。
 
 ## なぜ Staged Sync が勝つのか
 
-3つの複利的な要因がアーキテクチャを説明する:
+ブロックバイブロック同期（geth の昔のデフォルト）は最大時でも〜50–100 blocks/sec。Staged sync は 10K+ blocks/sec。この 100× は3つの複利的な要因の積:
 
-1. **バッチ化。** Sender 復元、ハッシング、Merkle ルート計算 — 全部1呼び出しで数千ブロックに償却される。
+1. **バッチ化。** Sender 復元、ハッシング、Merkle ルート計算 — すべて1呼び出しで数千ブロックに償却される。
 2. **ステージ内並列化。** ステージ内で（特に \`SenderRecoveryStage\`）、Rayon が全コアに作業を展開。
 3. **I/O 償却。** ディスク書き込みはブロックごとではなくステージ境界の大きなソート済みバッチで起きる。
 
-> 🛑 **最後の予測。** ノードバイノードの同期（geth の昔のデフォルト）は最大時で〜50–100 blocks/sec。Staged sync は 10K+ blocks/sec。100 倍の係数はどこから来る?
+> 🛑 **最後の予測。** 読み進める前に、この 100× を具体的なステージに帰属させてみてください。最も寄与するのはどれ?
 
-係数は単一のトリックにはない。複利の積: (1) ECDSA 復元のバッチ化＋並列化（〜10× 単独）、(2) Merkle ルートを範囲ごとに1回（ブロックごとではない）（〜10× 単独）、(3) ディスク書き込みが MDBX が効率的に書ける大きなソート済み範囲にバッチ化（〜3× 単独）。掛け合わせて〜300×; ハードウェア依存で実際は 100〜200× に着地。
+おおよそ: ECDSA 復元のバッチ化＋並列化が〜10×、Merkle ルートを範囲ごとに1回（ブロックごとではない）でさらに〜10×、MDBX が効率的に書ける大きなソート済みバッチが〜3×。掛け合わせて〜300× が理論値; ハードウェア依存で実際は 100〜200× に着地。
 
 ## クイズ前の想起
 
@@ -586,7 +592,7 @@ chunk.par_iter()
                   xpReward: 30,
                   content: `# Rust：ライフタイム・Box・Arc・dyn Trait
 
-ExEx・Reth SDKのコードを読むのに必要な、Rustの **「上級だが実は単純」** な4つの機能。**このレッスンはあなたを試すもので、教えるものではない** — 予測プロンプトでつまずくなら、ギャップが本物で、埋める価値がある。
+ExEx のソースファイルを開いてみてください。最初の 10 行で \`Arc<>\`、\`'static\`、\`dyn Trait\`、\`Box<>\` が立て続けに出てきます。Rustの **「上級だが実は単純」** な4つの機能 — そして Reth が出荷するコードを読むには、そのどれもが必要です。**このレッスンはあなたを試すもので、教えるものではない** — 予測プロンプトでつまずくなら、ギャップが本物で、埋める価値がある。
 
 > 🛑 **コールドスタート: 各概念を一文で定義してください。** スクロールせずに：
 > - \`'a\`（ライフタイムパラメータ）
@@ -624,7 +630,7 @@ let s: &'static str = "hello";
 
 ExExなど **「いつ終わるか分からないバックグラウンドタスク」** には \`'static\` 制約が頻出します。
 
-> 🛑 **予測。** \`tokio::spawn\` に渡すクロージャが \`'static\` を必要とするのはいつ? なぜ? 続ける前に答えてください — この境界は今後読むすべての ExEx ファイルに出てきます。
+> 🛑 **予測。** \`tokio::spawn\`（Tokio は Rust の非同期ランタイム — future を駆動するエグゼキュータ）に渡すクロージャが \`'static\` を必要とするのはいつ? なぜ? 続ける前に答えてください — この境界は今後読むすべての ExEx ファイルに出てきます。
 
 ## 2. \`Box<T>\` — ヒープに置く
 
@@ -940,7 +946,7 @@ Reth は通知のプッシュを始める前に ExEx が生きていることを
                   xpReward: 25,
                   content: `# 最小 ExEx を 1 行ずつ読む
 
-前のレッスンで API を組み立てました。**さあ、本物のコードで見ます。** これは [\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal) の \`main.rs\` 全体 — 本番形の動く ExEx が約 40 行。
+動く ExEx は Rust 約 40 行。それだけ — Reth を fork する必要も、別プロセスを立てる必要もなく、ノードビルダーに渡す関数を 1 つ書けば Reth が同じバイナリ内で走らせてくれる。下は [\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal) の \`main.rs\` 全体。このレッスンの終わりには、各行が前レッスンの組み立てステップに対応していることが分かります。
 
 \`\`\`rust
 use futures::{Future, TryStreamExt};
@@ -990,7 +996,7 @@ fn main() -> eyre::Result<()> {
 }
 \`\`\`
 
-40 行。各行が前レッスンの組み立てステップに対応している。
+では歩いていきます。
 
 ## 1 行ずつ歩く
 
@@ -1004,7 +1010,7 @@ async fn exex_init<Node: FullNodeComponents>(
 }
 \`\`\`
 
-\`exex_init\` はノード起動時に *1 度* 呼ばれる。Reth が \`ExExContext\`（\`notifications\`、\`events\`、ノードアクセスを含む）を渡してくる。あなたは永続的に poll される future を返す。
+\`exex_init\` はノード起動時に *1 度* 呼ばれる。Reth が \`ExExContext\` を渡してくる — これは \`notifications\`（流れてくるチェーンイベントのストリーム）、\`events\`（Reth の pruner への返信チャンネル）、ノードコンポーネントへのハンドルをまとめた struct。あなたは Reth が永続的に poll する future を返す。
 
 この最小 ExEx は同期的セットアップを何もしない — \`ctx\` を \`exex\` にそのまま渡すだけ。**本物の ExEx** で \`File::open(...)\` や \`Database::connect(...)\` が必要なら、その仕事は future を返す *前* の \`exex_init\` 内で行う。
 
@@ -1021,7 +1027,7 @@ async fn exex<Node: FullNodeComponents>(mut ctx: ExExContext<Node>) -> eyre::Res
 }
 \`\`\`
 
-ループ。\`ctx.notifications.try_next()\` は async — 通知がないとき、ランタイムはタスクを park して他の ExEx や Reth 自体を走らせる。協調的並行、ブロッキングなし。
+メインループ。\`ctx.notifications\` は非同期チャンネル（Reth がチェーンイベントを push してくる型付きキュー）; \`try_next()\` はスレッドをブロックせずに次のイベントを await する — 利用可能な通知がなければ、ランタイムはタスクを park して他の ExEx や Reth 自体を走らせる。協調的並行、ブロッキングなし。
 
 チャンネルが閉じる（ノード停止）と、\`try_next()\` は \`Ok(None)\` を返し、\`while let\` が抜け、関数は \`Ok(())\` を返す。きれいな終了。
 
@@ -1531,7 +1537,7 @@ let handle = builder
                   xpReward: 25,
                   content: `# 6 コンポーネント — それぞれが何を解放するか
 
-前のレッスンでノードビルダー API を組み立てました。面白い仕事は \`.with_components(...)\` の中で起きる — そこで実際にサブシステムを差し替える。**このレッスンは 6 つのコンポーネントビルダーを歩き、各々の差し替えが本物のチェーンに何を解放するかを見せます。**
+Hyperliquid は HyperEVM を Reth 上で動かしている。Tempo は payments L1 を Reth 上で構築中。Berachain は bera-reth を出荷している。どれも Reth を fork していない — それぞれが **Reth の 6 コンポーネントのうち 2〜3 個だけを差し替え**、残りを継承している。これが SDK のすべての売り: **Rust EVM クライアントを書き直すのではなく、自分の thesis に合う部分だけを差し替える。** このレッスンはその 6 コンポーネントを歩き、上記 3 チェーンが各差し替えで何を解放したかを示します。
 
 \`\`\`mermaid
 flowchart TB
@@ -1562,7 +1568,7 @@ flowchart TB
 
 ## Hyperliquid HyperEVM — 何を差し替えているか
 
-- **\`consensus\`** — Ethereum PoS ではなく **HyperBFT**（独自の BFT コンセンサス）。コンセンサスサブシステムを置き換えている。
+- **\`consensus\`** — Ethereum PoS ではなく **HyperBFT**（独自の Byzantine-fault-tolerant コンセンサスプロトコル）。コンセンサスサブシステムを置き換えている。
 - **\`executor\`** — オーダーブック直結の実行: 一部の Opcode が EVM と並走する perp オーダーブックと相互作用。カスタム executor。
 - **\`pool\`** — 高頻度な perp 更新に合わせた受付ルール。
 - **その他すべて** — Reth デフォルト。
@@ -1855,9 +1861,9 @@ Inside で読んだソースを使って、自分の L1 を設計する。Hyperl
 | コース | 焦点 |
 | :--- | :--- |
 | **Consensus Engineering** | PoS / BFT / Tendermint 内部、レイテンシ・ライブネス・finality の設計トレードオフ |
-| **Cross-Chain Bridges** | CCIP・OP Standard Bridge・light client を本番ソースで読み、自分で書く |
-| **Sequencer & Rollup アーキテクチャ** | 中央集権 sequencer から共有 sequencer、MEV 防衛、forced inclusion |
-| **P2P Networking Internals** | devp2p・libp2p・gossip サブプロトコル・ピアスコアリング |
+| **Cross-Chain Bridges** | CCIP（Chainlink のクロスチェーンプロトコル）・OP Standard Bridge・light client を本番ソースで読み、自分で書く |
+| **Sequencer & Rollup アーキテクチャ** | 中央集権 sequencer から共有 sequencer、MEV 防衛、forced inclusion（sequencer に検閲されてもユーザが tx をオンチェーンに乗せられる仕組み） |
+| **P2P Networking Internals** | devp2p（Ethereum のトランスポート）・libp2p（多くの L1 が採用するモジュラー代替）・gossip サブプロトコル・ピアスコアリング |
 | **Validator Operations** | 鍵管理、slashing 条件、協調アップグレード |
 
 ## Expert ティア — 本番に出す (2 コース、難易度 EXPERT)
