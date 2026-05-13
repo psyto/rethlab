@@ -1196,7 +1196,7 @@ Multi-sequencer pre-conf models:
 
 This is the active R&D area in 2026 — solving the "decentralized but fast" problem.
 
-## 8. For Hiro's projects
+## 8. For my projects
 
 ### Tempo Moderato → Tempo mainnet
 

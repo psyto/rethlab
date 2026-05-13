@@ -1196,7 +1196,7 @@ Hyperliquid 向け: orderbook が本質的に MEV — 中央集権 sequencer を
 
 これが 2026 のアクティブ R&D エリア — 「分散化だが速い」問題解決。
 
-## 8. Hiro のプロジェクト向け
+## 8. 私のプロジェクトの場合
 
 ### Tempo Moderato → Tempo mainnet
 

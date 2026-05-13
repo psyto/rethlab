@@ -180,7 +180,7 @@ Tempo or Hyperliquid 向け: 類似パターン。Validator がコンセンサ�
 
 View change 付き BFT chain 向け、コストは miss slot 1 つ。Nakamoto 系 chain 向け、さらに少ない影響。
 
-## 7. Hiro のプロジェクト向け
+## 7. 私のプロジェクトの場合
 
 ### Tempo validator 運用
 
@@ -358,7 +358,7 @@ Mitigation:
 
 **停止が正しい**。Slashing リスクより小さい inactivity ペナルティ失う。Validator software が自動で検知 + fail-closed すべき。
 
-## 8. Hiro のプロジェクト向け
+## 8. 私のプロジェクトの場合
 
 ### Tempo validator 運用するなら
 

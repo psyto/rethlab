@@ -180,7 +180,7 @@ The transition between active and standby is the hardest part. **It cannot be au
 
 For BFT chains with view changes, the cost is a missed slot. For Nakamoto-style chains, even less impact.
 
-## 7. For Hiro's projects
+## 7. For my projects
 
 ### Tempo validator operation
 
@@ -358,7 +358,7 @@ If it stops signing: 30 minutes of inactivity (small penalty). When connection r
 
 **Stop signing is correct.** Lose a tiny inactivity penalty rather than risk slashing. The validator software should automatically detect this and fail-closed.
 
-## 8. For Hiro's projects
+## 8. For my projects
 
 ### Tempo validator if you operate
 

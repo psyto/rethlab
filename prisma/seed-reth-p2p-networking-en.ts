@@ -498,7 +498,7 @@ Custom protocols expose new attack surfaces. Default eth/68 has battle-tested de
 
 Skip these and your custom protocol is a DOS amplifier — every peer can flood every other peer through your code. Build the protections in alongside the core logic, not as a follow-up.
 
-## 8. For Hiro's projects
+## 8. For my projects
 
 ### Telos (Tempo↔HL intent matching)
 

@@ -498,7 +498,7 @@ Tempo が sequencer 分散化したら 2026 出荷可能。
 
 これらをスキップするとカスタムプロトコルは DOS amplifier — すべての peer があなたのコード経由で他すべての peer を flood 可能。コアロジックと並行に保護構築、follow-up でなく。
 
-## 8. Hiro のプロジェクト向け
+## 8. 私のプロジェクトの場合
 
 ### Telos (Tempo↔HL intent matching)
 
