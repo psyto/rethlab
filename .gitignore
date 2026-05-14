@@ -58,3 +58,7 @@ reth-2.png
 
 # Demo video (host elsewhere; not in repo)
 *.mp4
+
+# Generated curriculum exports (regenerate via `npm run build:ja-ebook`)
+rethlab-ja.pdf
+rethlab-ja.epub
