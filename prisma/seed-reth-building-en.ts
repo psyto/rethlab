@@ -34,351 +34,198 @@ export async function seedRethBuildingEN(prisma: PrismaClient) {
                   xpReward: 80,
                   content: `# Build a Minimal MEV Searcher in Rust
 
-A pending swap shows up in the mempool (the public queue of unconfirmed transactions). It's about to move a Uniswap pool's price. **Can you, on your laptop, see the arb the swap creates before it lands — and at the same time the network's professional searchers do?** That's the build. ~200 lines of Rust: watch the public mempool, simulate each candidate tx in a forked Revm (Reth's EVM engine, run locally against live mainnet state), detect a 2-hop arbitrage opportunity, construct a Flashbots-style bundle.
+A greenfield "you'd structure your bot like this" walkthrough lies about the shape of production. Real searchers don't start from \`main.rs\`. They start from a **framework** — and the one to read is Paradigm's [\`artemis\`](https://github.com/paradigmxyz/artemis), the Rust MEV-bot framework Paradigm open-sourced and continues to dogfood.
 
-You've read \`add\`, the \`Stage\` trait, \`identity_run\`. Now you build with that machinery.
+Open the repo. Read it. This lesson walks you through it.
 
-> 📌 **Scope honesty.** This lesson stops at "bundle constructed". Actually submitting to a relay involves authentication, gas auctions, MEV-Boost integration, and ~~your money~~ real risk management — all production complexity orthogonal to the question this lesson answers: *"can I, on my laptop, see an arb opportunity at the same time the rest of the network does?"*
+> 📌 **Why this is the right starting point.** Watching the public mempool, decoding a swap, fork-simulating in Revm, building a Flashbots bundle — every searcher does these things. The interesting question isn't "can you write them once?" It's "how do you organize them so the next strategy you ship isn't a rewrite?" That's exactly the question artemis answers. The MEV logic is yours; the orchestration is borrowed.
 
-## What you'll build
+## The artemis architecture, in one sentence
 
-\`\`\`mermaid
-flowchart LR
-    Mempool["WS mempool subscribe"] -->|tx hash| Decode["Decode<br/>swapExactTokensForTokens"]
-    Decode -->|valid swap| Fork["Revm fork<br/>at latest block"]
-    Fork -->|apply tx| Sim["Simulate<br/>observe state delta"]
-    Sim -->|new pool reserves| Detect["Detect 2-hop<br/>arb opportunity"]
-    Detect -->|profitable| Bundle["Build bundle:<br/>frontrun + tx + backrun"]
-\`\`\`
+A searcher is an **event-processing pipeline**: external signals come in, MEV logic decides what to do, actions go out. Artemis splits that pipeline into three traits and an engine that wires them together.
 
-A single \`main.rs\`. No frameworks. Direct calls into Alloy and Revm. The whole point is that you can see every byte of what's happening.
+| Component | Trait | What it does |
+| :--- | :--- | :--- |
+| **Collector** | \`Collector<E>\` | External world → internal event \`E\`. Pending tx, new block, marketplace order, MEV-Share hint — each gets its own collector. |
+| **Strategy** | \`Strategy<E, A>\` | Event \`E\` → zero or more actions \`A\`. This is the MEV brain. The only file you actually write per opportunity. |
+| **Executor** | \`Executor<A>\` | Action \`A\` → side effect. Flashbots bundle submit, public-mempool send, off-chain order post. |
 
-> 🛑 **Predict before scrolling.** Why fork-and-simulate locally instead of just calling \`eth_call\` against your provider? Form a one-sentence answer about *what \`eth_call\` returns vs. what you need*. Hold your guess.
+> 🛑 **Predict before scrolling.** Why is the Executor trait separate from the Strategy trait? Form a one-sentence answer about *what changes break if you fuse them*. Hold your guess until Step 4.
 
-## Why Rust + Alloy + Revm here
+## Step 1: Open the traits
 
-- **Rust** — deterministic latency. No GC (garbage-collector) pauses. When your edge is the difference between landing in this block vs. the next, this matters.
-- **Revm** — local simulation **without an RPC roundtrip**. \`eth_call\` (the standard "run this read-only on the chain" RPC) against Infura is ~30–80 ms over the wire. Revm against an in-memory cache is **~200 µs**. Two orders of magnitude. And \`eth_call\` only returns the *result* — Revm gives you the **state delta** (which slots changed and by how much), which is what arb detection needs.
-- **Alloy** — typed contract bindings via \`sol!\` (a macro that turns a Solidity signature into a Rust struct), typed Provider, no manual ABI encoding. The plumbing tax that pure-Solidity devs pay disappears.
-
-Same stack Flashbots / Frontier / your-favorite-block-builder runs in production. Not a toy.
-
-## Cargo.toml
-
-\`\`\`toml
-[package]
-name = "minimal-searcher"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-alloy-eips         = "1.0"
-alloy-primitives   = "1.5"
-alloy-provider     = { version = "1.0", features = ["ws"] }
-alloy-rpc-types    = "1.0"
-alloy-sol-types    = "1.5"
-alloy-network      = "1.0"
-alloy-signer       = "1.0"
-alloy-signer-local = "1.0"
-revm               = { version = "38", features = ["alloydb"] }
-tokio              = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
-futures            = "0.3"
-eyre               = "0.6"
-\`\`\`
-
-> Versions pinned for May 2026. Alloy 1.x and Revm 38 are the relevant majors at the time of writing — both move fast, so when you copy this code, run \`cargo update\` and skim the release notes for breaking renames.
-
-## Step 1: Subscribe to the mempool
+The whole core abstraction is one file, ~120 lines: [\`crates/artemis-core/src/types.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/artemis-core/src/types.rs). Open it now.
 
 \`\`\`rust
-use alloy_provider::{Provider, ProviderBuilder, WsConnect};
-use futures::StreamExt;
+#[async_trait]
+pub trait Collector<E>: Send + Sync {
+    async fn get_event_stream(&self) -> Result<CollectorStream<'_, E>>;
+}
 
-#[tokio::main]
-async fn main() -> eyre::Result<()> {
-    let ws_url = std::env::var("ETH_WS_URL")?;
-    // Provider examples: QuickNode, Alchemy, Infura, or your own Reth node.
-    let provider = ProviderBuilder::new()
-        .connect_ws(WsConnect::new(ws_url))
-        .await?;
+#[async_trait]
+pub trait Strategy<E, A>: Send + Sync {
+    async fn sync_state(&mut self) -> Result<()>;
+    async fn process_event(&mut self, event: E) -> Vec<A>;
+}
 
-    let mut sub = provider
-        .subscribe_pending_transactions()
-        .await?
-        .into_stream();
-
-    while let Some(tx_hash) = sub.next().await {
-        let Some(tx) = provider.get_transaction_by_hash(tx_hash).await? else {
-            continue;
-        };
-        // ... handle tx
-    }
-    Ok(())
+#[async_trait]
+pub trait Executor<A>: Send + Sync {
+    async fn execute(&self, action: A) -> Result<()>;
 }
 \`\`\`
 
-Walk:
+That's the entire contract. Three methods. Two generic params (\`E\` for events, \`A\` for actions). Everything else in the framework — engine, channels, mappers — is plumbing around these three.
 
-- \`WsConnect\` — WebSocket transport. **Why not HTTP polling?** HTTP costs you a roundtrip per poll, ~50 ms each. WS pushes hashes the moment your provider sees them. At this layer, polling is conceding.
-- \`subscribe_pending_transactions()\` returns a stream of **tx hashes**, not full txs. Why? Mempool traffic is high — your provider doesn't want to push 500 KB of raw tx data per second to every subscriber. You fetch the body for ones you care about.
-- \`get_transaction_by_hash\` — second roundtrip to materialize the body. **This is your first latency budget item.** A real searcher uses a private mempool stream that pushes the full body inline. We're using the public path because it's free and educational.
+> 🔍 **Find in repo.** In that same file, find \`CollectorMap\` and \`ExecutorMap\`. Read 30 seconds. **In your own words:** what does \`CollectorMap\` solve that you'd otherwise have to solve by writing a new Collector?
 
-> 🔍 **Find in repo.** In Alloy, \`subscribe_pending_transactions\` is on the [\`Provider\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) trait. Open it. Note that this method requires the \`pubsub\` feature on your provider — your HTTP-only Infura key won't work. WS endpoint required.
+## Step 2: How events flow — read the engine
 
-## Step 2: Decode the swap call
+Open [\`crates/artemis-core/src/engine.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/artemis-core/src/engine.rs). The \`Engine<E, A>\` struct holds three \`Vec<Box<dyn …>>\` — one each for collectors, strategies, executors. The \`run\` method spawns one Tokio task per component and connects them with two \`tokio::sync::broadcast\` channels:
 
-We're filtering for Uniswap V2 router swaps. The router lives at \`0x7a25...488D\` on mainnet:
-
-\`\`\`rust
-use alloy_primitives::{address, Address, U256};
-use alloy_sol_types::{sol, SolCall};
-
-const UNI_V2_ROUTER: Address = address!("7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
-
-sol! {
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-}
+\`\`\`
+collectors -- events --> [event channel] -- events --> strategies
+                                                          |
+                                                         actions
+                                                          v
+executors <-- actions <-- [action channel] <-- actions <--+
 \`\`\`
 
-In the main loop:
+Broadcast — so every strategy sees every event; every executor sees every action. Strategies that don't care for a given event return \`vec![]\`. Executors that don't care for a given action filter via \`ExecutorMap\`.
+
+**The whole point:** you ship a new strategy by writing one \`impl Strategy\` and calling \`engine.add_strategy(...)\`. Collectors and executors are reused.
+
+> 🛑 **Recall checkpoint.** Without scrolling: where is the cross-strategy coordination logic? (Answer: there isn't any. The engine doesn't coordinate strategies — they're independent consumers of the same event stream. Coordination, if you need it, lives inside a single strategy by composing collectors.)
+
+## Step 3: Find the real Collectors and Executors
+
+Don't trust the abstraction until you've seen concrete implementors. Open these and skim:
+
+- [\`crates/artemis-core/src/collectors/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/artemis-core/src/collectors): \`mempool_collector.rs\` (subscribe to pending txs), \`block_collector.rs\` (new heads), \`mevshare_collector.rs\` (private hint stream), \`opensea_order_collector.rs\` (NFT marketplace), \`log_collector.rs\` (filtered log subscription).
+- [\`crates/artemis-core/src/executors/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/artemis-core/src/executors): \`mempool_executor.rs\` (public submit), \`flashbots_executor.rs\` (bundle to Flashbots relay), \`mev_share_executor.rs\` (MEV-Share submission).
+
+Each file is small — ~50-100 lines. Open \`mempool_collector.rs\` specifically:
 
 \`\`\`rust
-if tx.to() != Some(UNI_V2_ROUTER) { continue; }
-
-let Ok(call) = swapExactTokensForTokensCall::abi_decode(tx.input(), true) else {
-    continue; // wrong selector or malformed input
-};
-
-// We only care about 2-hop swaps for the simple version
-if call.path.len() != 2 { continue; }
-let token_in  = call.path[0];
-let token_out = call.path[1];
-let amount_in = call.amountIn;
-\`\`\`
-
-Walk:
-
-- The \`sol!\` macro expands the Solidity signature into a typed Rust struct \`swapExactTokensForTokensCall\` plus an \`abi_decode\` method. **No hand-written ABI plumbing.** This is the same machinery Foundry uses for cheatcode dispatch (you saw \`Vm.sol\` in Fundamentals).
-- \`abi_decode(input, true)\` — the \`true\` validates the selector matches. Returns \`Err\` cleanly if the call is to a different function on the router.
-- \`call.path.len() != 2\` — production would handle longer routes. We're scoping for clarity.
-
-> 🛑 **Anti-fluency check.** Without scrolling back: why is \`sol!\` better than typing out the function selector manually? Don't say "convenience" — name two specific failure modes \`sol!\` prevents. (Hint: think about Solidity ABI changes upstream and about getting selector hashing wrong.)
-
-## Step 3: Fork mainnet with Revm + AlloyDB
-
-The fork setup is the most "production-shaped" code in the lesson. Read carefully:
-
-\`\`\`rust
-use alloy_eips::BlockId;
-use alloy_provider::{network::Ethereum, DynProvider};
-use revm::{
-    context::TxEnv,
-    context_interface::result::{ExecutionResult, Output},
-    database::{AlloyDB, CacheDB},
-    database_interface::WrapDatabaseAsync,
-    primitives::TxKind,
-    Context, ExecuteEvm, MainBuilder, MainContext,
-};
-
-type ForkedDB = CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, DynProvider>>>;
-
-async fn build_fork(provider: DynProvider) -> eyre::Result<ForkedDB> {
-    let alloy_db = WrapDatabaseAsync::new(
-        AlloyDB::new(provider, BlockId::latest())
-    ).ok_or_else(|| eyre::eyre!("AlloyDB init failed"))?;
-    Ok(CacheDB::new(alloy_db))
-}
-\`\`\`
-
-Three layers:
-
-| Layer | Job |
-| :--- | :--- |
-| \`AlloyDB\` | Lazy state loader. When Revm asks for slot \`X\` of address \`Y\`, AlloyDB issues an \`eth_getStorageAt\` to your provider behind the scenes. |
-| \`WrapDatabaseAsync\` | Bridges AlloyDB's async API to Revm's sync \`Database\` trait. Revm wants sync; the wrapper does the \`block_on\` for you. |
-| \`CacheDB\` | In-memory cache that sits in front. **First** access to a slot hits the provider; **subsequent** accesses are instant. This is the magic that makes simulation cheap. |
-
-> 🔍 **Find in repo.** \`AlloyDB\` and \`WrapDatabaseAsync\` live in [\`revm/crates/database\`](https://github.com/bluealloy/revm/tree/main/crates/database). Open them. Compare them to the bare \`Database\` trait you read in **Advanced**. The same trait powers both an in-memory test DB and this live-fork DB. **That's the payoff of the trait abstraction you read about line by line.**
-
-## Step 4: Apply the candidate tx and observe state
-
-\`\`\`rust
-async fn simulate_candidate(
-    provider: DynProvider,
-    tx: &alloy_rpc_types::Transaction,
-) -> eyre::Result<Option<ForkedDB>> {
-    let mut db = build_fork(provider).await?;
-
-    let mut evm = Context::mainnet().with_db(&mut db).build_mainnet();
-
-    let tx_env = TxEnv::builder()
-        .caller(tx.from())
-        .kind(TxKind::Call(UNI_V2_ROUTER))
-        .data(tx.input().clone())
-        .value(tx.value())
-        .gas_limit(tx.gas_limit())
-        .build()?;
-
-    let result = evm.transact_one(tx_env)?;
-
-    match result.result {
-        ExecutionResult::Success { .. } => Ok(Some(db)),
-        _ => Ok(None), // tx would revert — no arb edge here
+#[async_trait]
+impl<M> Collector<Transaction> for MempoolCollector<M>
+where
+    M: Middleware,
+    M::Provider: PubsubClient,
+{
+    async fn get_event_stream(&self) -> Result<CollectorStream<'_, Transaction>> {
+        let stream = self.provider.subscribe_pending_txs().await?;
+        let stream = stream.transactions_unordered(256);
+        let stream = stream.filter_map(|res| async move { res.ok() });
+        Ok(Box::pin(stream))
     }
 }
 \`\`\`
 
-Walk:
+That's the entire mempool collector. The \`subscribe_pending_txs().transactions_unordered(256)\` pattern materializes tx bodies in parallel — concurrency 256 — instead of one-by-one. Note what's **not** in this file: no MEV logic, no decoding, no strategy concerns. A collector's job is to push a typed stream upstream and shut up.
 
-- \`Context::mainnet().with_db(&mut db).build_mainnet()\` — assembles the **mainnet** EVM (current hardfork rules, mainnet precompiles) with our forked DB as state source.
-- \`TxEnv::builder()\` — the immutable per-transaction environment. \`caller\`, \`kind\` (Call vs Create), \`data\`, \`value\`, \`gas_limit\`. Every field that affects execution.
-- \`evm.transact_one(tx_env)?\` — runs the tx **against the cache**. State changes are written back into \`db\`. **Critical:** you now have a DB representing "the world if this candidate tx had executed." That's what we needed.
-- The \`Ok(None)\` branch is the searcher's first cull: txs that revert have no arb edge for us — they didn't move any pool reserves.
+## Step 4: A real Strategy — opensea-sudo-arb
 
-> 🛑 **Predict.** A user submits a swap that consumes 100% of the pool reserves (drain attack). After \`transact_one\`, what is the pool's reserve state in our DB? Answer in your head, then think through what that means for our 2-hop arb math in Step 5.
+Now the payoff. Open [\`crates/strategies/opensea-sudo-arb/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/strategies/opensea-sudo-arb). This is the one strategy shipped in the artemis tree — atomic cross-market NFT arb between OpenSea (Seaport) and Sudoswap (LSSVM pools).
 
-## Step 5: Detect the arbitrage
+Two files matter:
 
-We need to know: did the candidate tx move pool A's prices enough that a different pool (pool B with the same pair) now has an exploitable spread?
+- [\`src/types.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/strategies/opensea-sudo-arb/src/types.rs) — defines this strategy's \`Event\` and \`Action\` enums.
+- [\`src/strategy.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/strategies/opensea-sudo-arb/src/strategy.rs) — the \`impl Strategy<Event, Action> for OpenseaSudoArb\`.
+
+The \`Event\` is just:
 
 \`\`\`rust
-sol! {
-    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
-}
-
-fn read_reserves(db: &mut ForkedDB, pool: Address) -> eyre::Result<(U256, U256)> {
-    let mut evm = Context::mainnet().with_db(db).build_mainnet();
-    let call = getReservesCall {}.abi_encode();
-
-    let result = evm.transact_one(
-        TxEnv::builder()
-            .caller(address!("0000000000000000000000000000000000000001"))
-            .kind(TxKind::Call(pool))
-            .data(call.into())
-            .gas_limit(1_000_000)
-            .build()?,
-    )?;
-
-    let ExecutionResult::Success { output: Output::Call(out), .. } = result.result else {
-        eyre::bail!("getReserves failed");
-    };
-
-    let decoded = getReservesCall::abi_decode_returns(&out, true)?;
-    Ok((U256::from(decoded.reserve0), U256::from(decoded.reserve1)))
-}
-
-fn detect_arb(
-    pool_a: (U256, U256),  // post-candidate reserves on the pool the user touched
-    pool_b: (U256, U256),  // current reserves on a parallel pool (different DEX, same pair)
-) -> Option<U256> {
-    // Constant-product invariant: x * y = k. If pool A is now at (xA, yA)
-    // and pool B sits at (xB, yB), the price gap is exploitable when
-    // (yA / xA) != (yB / xB). The optimal in-amount is the closed-form
-    // solution from Angeris et al. (2020): we want to push the cheaper
-    // pool's price up until it equals the expensive pool's price.
-    //
-    // Simplified for the lesson: we just check if the spread exceeds a
-    // 30 bps threshold (covers 2x 0.3% Uniswap fees + headroom).
-    let price_a = pool_a.1 * U256::from(10_000) / pool_a.0;
-    let price_b = pool_b.1 * U256::from(10_000) / pool_b.0;
-    let spread = if price_a > price_b { price_a - price_b } else { price_b - price_a };
-
-    if spread < U256::from(30) { return None; }
-
-    // Production code computes optimal arb size here. We return a fixed
-    // 1 ETH probe — enough to demonstrate; not enough to capture the edge.
-    Some(U256::from(10).pow(U256::from(18)))
+pub enum Event {
+    NewBlock(NewBlock),
+    OpenseaOrder(Box<OpenseaOrder>),
 }
 \`\`\`
 
-Walk:
+Two collectors feed this strategy: a block collector and an OpenSea order collector. That's it.
 
-- We re-build a Revm Context with the **same** \`db\` so reserves come from the post-candidate state. \`getReserves\` is a pure view — it doesn't write — so we're not corrupting the simulation.
-- Spread math: scaled to basis points (10,000 = 100%). 30 bps ≈ 0.30% — the round-trip Uniswap fee. Smaller spread = no real edge after fees.
-- The fixed 1 ETH return is **deliberately wrong** for production. The closed-form optimal size from Angeris–Chitra–Evans is ~30 lines of math; we're skipping it because the lesson is about the *shape* of the build, not arb optimization. Drill 5 below makes you implement it.
-
-> 🔍 **Find in repo.** Open the [Uniswap V2 pair](https://github.com/Uniswap/v2-core/blob/master/contracts/UniswapV2Pair.sol) source. Find \`getReserves\`. Note it returns three values, but we only use two — the timestamp is for TWAPs (Uniswap V2's price-oracle hack). **You'll see this exact pattern in dozens of forks.**
-
-## Step 6: Build the bundle (without submitting)
+The \`process_event\` body is the **whole MEV decision**:
 
 \`\`\`rust
-use alloy_signer_local::PrivateKeySigner;
-use alloy_network::TransactionBuilder;
-use alloy_rpc_types::TransactionRequest;
-use serde_json::json;
-
-async fn build_bundle(
-    signer: &PrivateKeySigner,
-    nonce: u64,
-    base_fee: u128,
-    candidate_tx_raw: &[u8],
-    arb_amount: U256,
-) -> eyre::Result<serde_json::Value> {
-    // Backrun: a swap on the cheaper pool, in the opposite direction
-    let backrun_request = TransactionRequest::default()
-        .with_from(signer.address())
-        .with_to(UNI_V2_ROUTER)
-        .with_value(arb_amount)
-        .with_nonce(nonce)
-        .with_gas_limit(300_000)
-        .with_max_fee_per_gas(base_fee * 3)
-        .with_max_priority_fee_per_gas(base_fee);
-    // (input data for the backrun swap call elided — see drill 1)
-
-    let backrun_signed = backrun_request
-        .build(&signer.clone().into())
-        .await?
-        .encoded_2718();
-
-    Ok(json!({
-        "txs": [
-            format!("0x{}", hex::encode(candidate_tx_raw)),
-            format!("0x{}", hex::encode(backrun_signed)),
-        ],
-        "blockNumber": "pending",
-    }))
+async fn process_event(&mut self, event: Event) -> Vec<Action> {
+    match event {
+        Event::OpenseaOrder(order) => self
+            .process_order_event(*order).await
+            .map_or(vec![], |a| vec![a]),
+        Event::NewBlock(block) => match self.process_new_block_event(block).await {
+            Ok(_) => vec![],
+            Err(e) => { panic!("Strategy is out of sync {}", e); }
+        },
+    }
 }
 \`\`\`
 
-Walk:
+\`process_order_event\`: a new NFT listing arrived on OpenSea — is there a Sudoswap pool willing to pay more than the listing price for that NFT? If yes, return an \`Action::SubmitTx\` for an atomic arb contract that buys on OpenSea and sells into the Sudo pool in one tx.
 
-- \`PrivateKeySigner\` — Alloy's local signer. Loads from a hex string or a keystore file. Don't commit your real key.
-- \`TransactionBuilder\` extension methods (\`with_from\`, \`with_to\`, etc.) — fluent API on \`TransactionRequest\`. The \`build()\` call is what hashes + signs.
-- \`encoded_2718()\` — EIP-2718 envelope encoding. Required by every Flashbots-style relay.
-- The bundle JSON shape is **exactly** what \`eth_sendBundle\` accepts. Submitting is a one-line POST. We don't, because: (a) you'd need a relay endpoint and \`X-Flashbots-Signature\` auth; (b) the searcher world has real money in it and we want you to think before you submit.
+\`process_new_block_event\`: scan the new block's logs for Sudo pool state changes (buys/sells/spot-price updates) and refresh the internal \`pool_bids\` map. No actions; just state hygiene.
 
-## What's missing for production
+> 🔍 **Find in repo.** In the same \`strategy.rs\` file, find \`sync_state\`. Read it. **Predict:** why does it need to enumerate every Sudo pool ever deployed before the strategy can start? What breaks if you skip it?
 
-Be honest with yourself about the gap between this lesson and what actually wins MEV games:
+The arb contract itself is a separate piece of Solidity ([\`contracts/src/SudoOpenseaArb.sol\`](https://github.com/paradigmxyz/artemis/blob/main/crates/strategies/opensea-sudo-arb/contracts/src/SudoOpenseaArb.sol)) — the strategy's job is to detect the opportunity and shape the calldata; the on-chain contract does the atomic buy-sell.
 
-| Gap | What real searchers do |
-| :--- | :--- |
-| **Multi-DEX coverage** | V3, Curve, Balancer, custom AMMs, CEX/DEX legs |
-| **Optimal sizing** | Closed-form Angeris–Chitra–Evans; fall back to ternary search for non-CFMMs |
-| **Bundle submission** | \`eth_sendBundle\` to Flashbots, Beaverbuild, Titan, Rsync — and watch the inclusion rate per relay |
-| **Gas auction** | Coinbase tip escalation; conditional bundles; private orderflow auctions (PBS) |
-| **Latency** | Private mempool subscriptions; colocation with builders; FPGA / kernel-bypass networking at the top of the stack |
-| **Risk management** | Sim accuracy vs. on-chain reality; revert protection (failed inclusion still costs you the inclusion fee on conditional builders); position limits |
+## Step 5: Now answer the Step 1 predict
 
-The architecture you built — mempool → fork-sim → detect → bundle — **is exactly the architecture used at the top**. Real searchers add scale, optimization, and edge — they don't restructure.
+**Why is Executor separate from Strategy?** Because the same MEV opportunity can be submitted three different ways depending on chain conditions: public mempool (cheap, exposed), Flashbots bundle (private, atomic), MEV-Share (semi-private, partial-reveal). A strategy that emits a typed \`Action\` and lets the engine route to whichever executor is healthy today is **resilient**. A strategy that hardcodes \`flashbots_relay.send_bundle(...)\` dies the day Flashbots is degraded.
+
+The trait split isn't theoretical cleanliness — it's about **swapping submission paths without touching MEV logic**.
+
+> 🛑 **Predict.** Where would you add a private-mempool collector (e.g., Chainbound's Fiber, bloXroute) for the opensea-sudo-arb strategy? *Specifically:* which trait do you implement, what does it emit, and what (if anything) in \`strategy.rs\` has to change?
+
+(Answer: implement \`Collector<OpenseaOrder>\` — or \`Collector<Event>\` directly via \`CollectorMap\` — and register it on the engine. Zero changes to \`strategy.rs\`. That's the architecture working.)
+
+## Step 6: From reading to shipping — your own bot
+
+If you wanted to ship a 2-hop Uniswap arb searcher (the classic) on Tempo or MegaETH using artemis:
+
+1. **Reuse:** \`MempoolCollector\` for pending swaps, \`BlockCollector\` for new heads, \`FlashbotsExecutor\` (or your L1's equivalent bundle endpoint). All as-is.
+2. **Write:** a single \`UniArbStrategy\` with \`Event = { NewBlock, PendingTx }\` and \`Action = { SubmitBundle }\`. Inside \`process_event\` on \`PendingTx\`: decode the swap, fork-simulate in Revm, detect the cross-pool spread, build the bundle. Inside \`process_event\` on \`NewBlock\`: refresh reserves cache, drop stale opportunities.
+3. **Plumb:** \`engine.add_collector(...)\` × 2, \`engine.add_strategy(UniArbStrategy::new(...))\`, \`engine.add_executor(...)\`, \`engine.run().await\`.
+
+The MEV-logic surface is one file. Everything else is borrowed.
+
+## The honest comparison — artemis vs subway
+
+Artemis acknowledges its lineage. Read the README's [Acknowledgements](https://github.com/paradigmxyz/artemis/blob/main/README.md#acknowledgements): [\`subway\`](https://github.com/libevm/subway), \`subway-rs\`, \`rusty-sando\`. These are **fully-baked** MEV bots — subway specifically is a TypeScript sandwich bot, shipped end to end, opinionated about *what MEV you're doing*.
+
+Artemis is the opposite: a **framework** with one example strategy. Subway tells you what to run. Artemis tells you how to organize whatever you choose to run.
+
+| | subway | artemis |
+| :--- | :--- | :--- |
+| **Shape** | Turnkey sandwich bot | Framework + one example strategy |
+| **Language** | TypeScript | Rust |
+| **Customization** | Fork and rewrite | Implement traits |
+| **What you supply** | API keys, capital | MEV logic, capital |
+| **Right choice when** | You want sandwiching, today, as a learning artifact | You're shipping a strategy that doesn't exist yet |
+
+If you're reading this lesson, you're shipping the latter. Artemis is your scaffolding.
+
+## Recall checklist
+
+Before moving on, confirm you can answer each of these without scrolling back:
+
+1. Name the three artemis traits and what each consumes/produces.
+2. Where in the codebase does cross-strategy coordination live? (Trap question — see Step 2.)
+3. Why is the Action enum strategy-local rather than framework-wide?
+4. In \`opensea-sudo-arb\`, what does \`process_new_block_event\` do that \`process_order_event\` doesn't?
+5. To swap submission from public mempool to Flashbots, what changes in the Strategy implementation? (Answer: nothing — you change the registered Executor.)
+
+If you stumbled on 2 or 4, re-read Steps 2 and 4 before the next lesson.
 
 ## Drill
 
-1. **Add Sushi.** Sushiswap V2 uses the same router ABI as Uniswap V2, just at address \`0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F\`. Extend the candidate filter to accept either router. (5 min)
-2. **Filter dust.** Add a \`if amount_in < parse_units("1", "ether") { continue; }\` so the searcher ignores swaps below 1 ETH. Profile your CPU usage before vs. after — how much computation were you spending on dust? (15 min)
-3. **Profit threshold.** Compute expected profit (in ETH) for each detected opportunity. Only "would submit" when expected profit > 0.01 ETH after gas. (30 min)
-4. **Latency budget.** Wrap each step in \`Instant::now()\`. Log \`tx_received_at → simulation_done_at → bundle_built_at\`. What's your end-to-end latency? Where's the biggest bite? (1 hour)
-5. **Optimal sizing.** Replace the fixed 1 ETH probe with the closed-form optimal arb size from [Angeris–Chitra–Evans 2020](https://arxiv.org/abs/2003.10001). The math is ~20 lines of Rust if you keep U256 throughout. (3–6 hours)
+1. **Map out a new strategy.** Pick a real MEV opportunity (Uniswap V3 JIT liquidity, Curve cross-pool arb, perp-funding-rate arb). On paper: what \`Event\` variants does it need? What \`Action\` variants? Which existing collectors/executors can you reuse? (30 min)
+2. **Trace one event end-to-end.** From a mainnet pending tx hitting \`MempoolCollector::get_event_stream\` to a hypothetical \`SubmitTxToMempool\` action being executed, list every \`.await\` point in the artemis codebase. There are fewer than you think. (45 min)
+3. **Backport a collector.** Pick one collector in [\`crates/artemis-core/src/collectors/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/artemis-core/src/collectors) and translate it from \`ethers-rs\` to Alloy 1.x. The trait signature doesn't change; only the underlying provider does. (2 hours)
+4. **Read the run loop.** Open \`engine.rs\` again. The \`run\` method spawns \`collectors.len() + strategies.len() + executors.len()\` tasks. Walk the message-flow: how does an event from collector \`A\` reach strategy \`B\`'s \`process_event\`? Name the channel type and the receiver. (30 min)
+5. **Build a stub strategy on top.** Clone artemis, add a new module under \`crates/strategies/\` that implements \`Strategy<Event, Action>\` where \`process_event\` just logs the event. Wire it into a minimal binary that runs \`MempoolCollector\` + your stub + a no-op executor. \`cargo run\` it against a free WS endpoint. (3 hours)
 
-Finish drill 5 and you have the algorithmic core of a real searcher. Add submission + multi-DEX and you're at parity with what shipped in 2022.
+Finish drill 5 and you have a working artemis-based searcher skeleton ready for whatever MEV logic you want to ship into it.
 
-> 🛑 **Final check.** In one sentence: why is the *fork* in this design (Step 3) the part that makes the searcher possible at all? If your answer doesn't mention "observing the world *as if* the candidate had landed", re-read Step 3 — that re-anchoring is the whole game.
+> 🛑 **Final check.** In one sentence: what does artemis give you that writing a one-off \`main.rs\` doesn't? If your answer doesn't mention *reuse across strategies* or *swappable submission paths*, re-read Step 5 — that's the whole reason the abstraction exists.
 
 ## 📺 Further watching
 

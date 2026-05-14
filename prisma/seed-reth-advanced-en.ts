@@ -1537,7 +1537,17 @@ If any answer is shaky, scroll back. The next lesson tours the 6 components and 
                   xpReward: 25,
                   content: `# The 6 components — what each one unlocks
 
-Hyperliquid runs HyperEVM on Reth. Tempo is building a payments L1 on Reth. Berachain ships bera-reth. None of them forked Reth — they each swapped **2 or 3 of Reth's 6 components** and inherited the rest. That's the SDK's whole pitch: **don't rewrite a Rust EVM client, swap the parts that matter to your thesis.** This lesson walks those 6 components — and shows what each swap unlocked for the three chains above.
+Tempo is building a payments L1 on Reth. Berachain ships bera-reth. MegaETH is building a high-throughput L1 on Reth. Hyperliquid runs HyperEVM (their own Reth-adjacent execution layer). **None of them forked Reth** — they each swapped a few of Reth's 6 components and inherited the rest. That's the SDK's whole pitch: **don't rewrite a Rust EVM client, swap the parts that matter to your thesis.** This lesson walks those 6 components — and shows what each swap unlocked for production chains.
+
+The empirical proof, today:
+
+| Chain | Reth relationship | Evidence |
+| :--- | :--- | :--- |
+| **Tempo** | empty fork | [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth): 0 commits ahead, 1374 behind upstream |
+| **MegaETH** | empty fork | [\`megaeth-labs/reth\`](https://github.com/megaeth-labs/reth): 0 commits ahead, 7666 behind upstream |
+| **Berachain** | not even a fork | [\`berachain/bera-reth\`](https://github.com/berachain/bera-reth): standalone repo using Reth crates as dependency |
+
+Every chain that touches Reth uses upstream-as-library. The customizations live entirely in their own crates.
 
 \`\`\`mermaid
 flowchart TB
@@ -1600,6 +1610,19 @@ The pattern: **swap the parts that match your thesis, keep everything else.** Te
 - **\`add_ons\`** — DEX-aware RPC namespaces.
 - **everything else** — Reth defaults.
 
+[\`berachain/bera-reth\`](https://github.com/berachain/bera-reth) is interesting structurally too: it's not even a GitHub fork of upstream Reth — it's a fresh repo that depends on Reth crates. Even cleaner expression of "compose, don't fork" than the empty-fork pattern Tempo and MegaETH use.
+
+## MegaETH — what they swap
+
+MegaETH ([\`megaeth-labs/\`](https://github.com/megaeth-labs)) is a 100K+ TPS L1 thesis built on Reth. The customization is deeper than Tempo's because the thesis (raw throughput) reaches further into execution and storage:
+
+- **\`executor\`** — JIT/AOT compiled EVM on the sequencer (built on Paradigm's [\`revmc\`](https://github.com/paradigmxyz/revmc)). [\`megaeth-labs/mega-evm\`](https://github.com/megaeth-labs/mega-evm) wraps revm with MegaETH-specific specs.
+- **storage / state** — They replaced **MDBX** with [\`SALT\`](https://github.com/megaeth-labs/salt) (Small Authentication Large Trie) — an authenticated KV store that holds ~3B items in 1 GB of memory and eliminates random disk I/O during state-root updates. This is not one of the standard 6 component slots; SALT plugs in via Reth's storage abstractions.
+- **validators run a different binary** — [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) verifies blocks statelessly using SALT witnesses, so validators need a fraction of sequencer hardware.
+- **\`consensus\` / \`pool\` / \`network\`** — Reth defaults plus their performance optimizations.
+
+The MegaETH picture is important pedagogically because it shows the SDK's ceiling: how deep customization can go without forking core Reth. Tempo swaps a few components and keeps everything else. MegaETH replaces the EVM executor and the storage layer **and still doesn't fork Reth** (\`megaeth-labs/reth\`: 0 ahead, 7666 behind).
+
 ## The pattern: swap what your thesis demands
 
 If you can articulate your chain's thesis in one sentence, you can usually map it to 1–3 component swaps:
@@ -1609,6 +1632,7 @@ If you can articulate your chain's thesis in one sentence, you can usually map i
 | "Faster perp execution coupled to an order book" | \`consensus\`, \`executor\`, \`pool\` |
 | "Payment-priority L1" | \`pool\`, \`payload\`, \`add_ons\` |
 | "Liquidity-staked PoS" | \`consensus\`, \`executor\`, \`add_ons\` |
+| "100K+ TPS via JIT EVM + stateless validators" | \`executor\`, storage layer, validator client |
 | "Privacy-focused L1 with shielded txs" | \`pool\`, \`executor\`, \`add_ons\` (custom RPC) |
 
 > 🔍 **Find in repo.** Open \`EthereumNode::components()\`'s definition. The default builders for each component are listed there — that's the menu of "what comes for free."

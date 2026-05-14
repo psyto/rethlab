@@ -1537,7 +1537,17 @@ let handle = builder
                   xpReward: 25,
                   content: `# 6 コンポーネント — それぞれが何を解放するか
 
-Hyperliquid は HyperEVM を Reth 上で動かしている。Tempo は payments L1 を Reth 上で構築中。Berachain は bera-reth を出荷している。どれも Reth を fork していない — それぞれが **Reth の 6 コンポーネントのうち 2〜3 個だけを差し替え**、残りを継承している。これが SDK のすべての売り: **Rust EVM クライアントを書き直すのではなく、自分の thesis に合う部分だけを差し替える。** このレッスンはその 6 コンポーネントを歩き、上記 3 チェーンが各差し替えで何を解放したかを示します。
+Tempo は payments L1 を Reth 上で構築中。Berachain は bera-reth を出荷している。MegaETH は高スループット L1 を Reth 上で構築中。Hyperliquid は HyperEVM (独自の Reth 近接の実行レイヤ) を動かしている。**どれも Reth を fork していない** — それぞれが Reth の 6 コンポーネントのうち数個だけを差し替え、残りを継承している。これが SDK のすべての売り: **Rust EVM クライアントを書き直すのではなく、自分の thesis に合う部分だけを差し替える。** このレッスンはその 6 コンポーネントを歩き、本番チェーンが各差し替えで何を解放したかを示します。
+
+今日時点の経験的証拠:
+
+| Chain | Reth との関係 | 証拠 |
+| :--- | :--- | :--- |
+| **Tempo** | 空 fork | [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth): upstream に対して 0 commits ahead, 1374 behind |
+| **MegaETH** | 空 fork | [\`megaeth-labs/reth\`](https://github.com/megaeth-labs/reth): upstream に対して 0 commits ahead, 7666 behind |
+| **Berachain** | fork ですらない | [\`berachain/bera-reth\`](https://github.com/berachain/bera-reth): Reth crate を依存として使う独立 repo |
+
+Reth に触れるチェーンはどれも upstream-as-library。カスタマイズは完全に自分の crate に住んでいる。
 
 \`\`\`mermaid
 flowchart TB
@@ -1600,6 +1610,19 @@ L1 と同時に出荷された隣接 crate（Reth コンポーネント差し替
 - **\`add_ons\`** — DEX-aware な RPC ネームスペース。
 - **その他すべて** — Reth デフォルト。
 
+[\`berachain/bera-reth\`](https://github.com/berachain/bera-reth) は構造的にも興味深い: そもそも upstream Reth の GitHub fork ですらない — Reth crate を依存として使う独立 repo。Tempo / MegaETH の空 fork パターンよりさらにクリーンな「compose, don't fork」の表現。
+
+## MegaETH — 何を差し替えているか
+
+MegaETH ([\`megaeth-labs/\`](https://github.com/megaeth-labs)) は Reth 上に構築された 100K+ TPS L1 thesis。Tempo よりカスタマイズが深い — thesis (生スループット) が execution と storage の奥まで届く必要があるから:
+
+- **\`executor\`** — sequencer 上で JIT/AOT コンパイルされた EVM (Paradigm の [\`revmc\`](https://github.com/paradigmxyz/revmc) ベース)。[\`megaeth-labs/mega-evm\`](https://github.com/megaeth-labs/mega-evm) が revm を MegaETH 固有の仕様でラップ。
+- **storage / state** — **MDBX を [\`SALT\`](https://github.com/megaeth-labs/salt) (Small Authentication Large Trie) に置き換え** — 30 億アイテムを 1 GB のメモリで保持し、state-root 更新中のランダムディスク I/O を排除する authenticated KV store。標準 6 コンポーネントスロットではなく、Reth のストレージ抽象を経由してプラグイン。
+- **バリデータは別のバイナリを走らせる** — [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) が SALT witness を使ってステートレスにブロックを検証する。バリデータは sequencer の数分の一のハードウェアで済む。
+- **\`consensus\` / \`pool\` / \`network\`** — Reth デフォルト + 性能最適化。
+
+MegaETH の絵が教育的に重要なのは、SDK の天井を見せてくれるから: コア Reth を fork せずにカスタマイズはどこまで深く行けるか。Tempo は数コンポーネントだけ差し替えて残りはそのまま。MegaETH は EVM executor と storage layer を置き換え、**それでも Reth を fork しない** (\`megaeth-labs/reth\`: 0 ahead, 7666 behind)。
+
 ## パターン: thesis が要求する部分を差し替える
 
 チェーンの thesis を 1 文で言えるなら、たいてい 1〜3 個のコンポーネント差し替えにマッピングできる:
@@ -1609,6 +1632,7 @@ L1 と同時に出荷された隣接 crate（Reth コンポーネント差し替
 | 「オーダーブック結合した perp 高速実行」 | \`consensus\`、\`executor\`、\`pool\` |
 | 「payment-priority L1」 | \`pool\`、\`payload\`、\`add_ons\` |
 | 「流動性 stake PoS」 | \`consensus\`、\`executor\`、\`add_ons\` |
+| 「JIT EVM + stateless validator による 100K+ TPS」 | \`executor\`、storage layer、validator client |
 | 「shielded tx 対応のプライバシー L1」 | \`pool\`、\`executor\`、\`add_ons\`（カスタム RPC） |
 
 > 🔍 **リポジトリで確認。** \`EthereumNode::components()\` の定義を開く。各コンポーネントのデフォルトビルダーがそこに並んでいる — それが「無料で来るもの」のメニュー。

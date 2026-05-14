@@ -1555,13 +1555,140 @@ If any answer is shaky, the lesson isn't done with you. Re-run the drill or re-r
 
 After this drill, you have a working mental model of how revm gets state — every other database is just \`ZeroDb\` with real data behind it.
 
-One lesson left: a final quiz across the whole course. After that, Inside Revm is done — **Inside Reth** is the natural next stop (Staged Sync, ExEx, the Reth SDK).`,
+One lesson left before the final quiz: stepping past Revm-as-interpreter into Revm-as-compilable — Paradigm's revmc. After that, Inside Revm is done — **Inside Reth** is the natural next stop (Staged Sync, ExEx, the Reth SDK).`,
+                },
+                {
+                  title: 'Beyond interpretation — JIT/AOT compilation with revmc',
+                  slug: 'revm-jit-aot-revmc-en',
+                  type: 'CONTENT',
+                  sortOrder: 13,
+                  duration: 16,
+                  xpReward: 40,
+                  content: `# Beyond interpretation — JIT/AOT compilation with revmc
+
+Everything in this course so far treats Revm as an **interpreter**: read an opcode byte, dispatch to a Rust function, mutate the stack, advance the program counter, loop. That's still revm's main mode of operation — and for normal mainnet workloads it's fast enough that no one cares.
+
+It stops being fast enough for L1s that target six-digit TPS. MegaETH advertises 100K+ TPS on the EVM; that's roughly 1000× the per-second opcode budget of mainnet Ethereum. Once you push throughput that far, **the interpreter loop itself becomes the bottleneck** — not Solidity gas costs, not state access, but the cost of doing dispatch-then-execute-then-advance a few hundred million times a second.
+
+The escape hatch is to **stop interpreting and start compiling.** Take EVM bytecode and turn it into native code that runs at machine speed, no per-opcode dispatch. That's what Paradigm's [\`paradigmxyz/revmc\`](https://github.com/paradigmxyz/revmc) does — and it's *built on revm*, not in place of it. Revm's interpreter is still the spec the compiler has to match.
+
+revmc is **experimental** — the README says so up front — but it's the most legible Rust-native answer to the question "what comes after the interpreter?", and it's the toolchain real L1 teams are watching. This lesson is the bridge between "I can read revm's interpreter" (the rest of this course) and "I know what 'compiled EVM' actually means."
+
+> 🛑 **Anti-fluency check, before we start.** Without scrolling: predict what "compile EVM bytecode" means concretely. Output format? Where does the compiled artifact live? When does it run? Hold your guess.
+
+## What "compile EVM bytecode" actually means
+
+Two flavors. Same destination (native machine code), different timing.
+
+**JIT (just-in-time).** First time a contract is called at runtime, revmc compiles its bytecode to native code via LLVM and caches the resulting function pointer keyed by code hash. Second call hits the cache and dispatches to the compiled function directly. Cold call pays compile cost; warm calls run at native speed.
+
+**AOT (ahead-of-time).** You pick a set of bytecodes you *know* will be hot — Uniswap V2/V3 routers, the chain's system contracts, ERC-20 transfer hot paths — compile them offline into a shared object or static library, and ship that binary alongside the node. Zero compile cost at runtime; the trade-off is you commit to which contracts get the treatment.
+
+Both produce the same kind of artifact: a native function with a fixed C-ABI signature that takes the EVM context plus a stack pointer and runs the contract to completion (or to a host callout). The difference is *when* compilation happens.
+
+> 🔍 **Find-in-repo.** Open [\`crates/revmc/src/lib.rs\`](https://github.com/paradigmxyz/revmc/blob/main/crates/revmc/src/lib.rs). Notice the crate is a thin re-export of \`revmc-codegen\`, \`revmc-runtime\`, \`revmc-backend\`, \`revmc-context\`. **Why one façade crate over four?** Because the compiler ([\`revmc-codegen\`]), the backend trait ([\`revmc-backend\`]), the LLVM impl ([\`revmc-llvm\`]), and the runtime glue ([\`revmc-context\`]) are designed to vary independently — you could write a Cranelift backend tomorrow without touching codegen.
+
+## Why this is hard — three problems that aren't obvious
+
+A naive reading of "compile EVM bytecode to native code" makes it sound like a normal LLVM frontend exercise. It's not. The EVM has three properties that fight the compiler.
+
+### Problem 1: gas accounting must stay deterministic
+
+Gas is **consensus-critical state.** Every opcode has a defined gas cost; every block's gas used is part of the header; nodes that disagree on gas usage fork the chain. The interpreter satisfies this by deducting gas inside each opcode handler before running it. The compiler has to do the same — except the compiler's whole job is to *delete code that isn't necessary for correctness*.
+
+> 🛑 **Predict.** Without scrolling: what's an "optimization" that looks safe on normal code but breaks gas accounting?
+
+Three landmines, at least:
+
+1. **Dead-store elimination across opcodes.** A naive LLVM optimizer might notice "this \`MSTORE\` writes a value that's overwritten before being read" and remove the write. But \`MSTORE\` has a *gas cost that depends on whether memory grows.* The write is dead in the data-flow sense, alive in the gas sense.
+2. **Constant folding through arithmetic opcodes.** \`PUSH1 2, PUSH1 3, ADD\` looks like "push 5." The compiler is allowed to fold this — but only if it still charges 3 + 3 + 3 = 9 gas. The folded literal pushes one value, not three.
+3. **Loop-invariant code motion past \`GAS\`-reading opcodes.** The \`GAS\` opcode reads the *current* gas remaining. Hoisting work past it changes what \`GAS\` reads. Same observable difference; same consensus fork.
+
+revmc's defense: gas metering is **explicit IR**, not implicit. Each opcode emits IR to decrement \`gas.remaining\`, branch to an \`OutOfGas\` block if it underflows, then run. **The optimizer sees the gas writes and can't elide them without proving they're unobservable** — which they almost never are.
+
+> 🔍 **Find-in-repo — gas metering in IR.** Open [\`crates/revmc-codegen/src/compiler/translate/mod.rs\`](https://github.com/paradigmxyz/revmc/blob/main/crates/revmc-codegen/src/compiler/translate/mod.rs) and search for \`gas_cost_imm\` and \`gas_remaining_addr\`. You'll see that every static gas deduction emits an explicit IR \`load → sub → compare → conditional branch to OutOfGas\` — same shape every opcode. That's the compiler making gas a first-class citizen of the IR. There's also a \`gas_metering: bool\` config flag — flip it off and you get fast-but-non-consensus code, useful for off-chain re-execution where you trust the input was already gas-valid.
+
+### Problem 2: EVM's stack/memory model is not native
+
+EVM is a stack machine: a 1024-deep stack of 256-bit words plus a byte-addressable memory region that grows linearly. Native code is register-based with a separate machine stack and machine memory.
+
+revmc handles this by **giving the compiled function a heap-allocated stack and memory passed in via the EVM context**, not by mapping the EVM stack to native registers. The compiler tracks stack depth statically where it can, then emits loads/stores to the stack buffer. \`U256\` doesn't fit in a register on most targets, so even arithmetic opcodes lower to load-load-op-store sequences against the stack buffer, not register ops.
+
+Counter-intuitive consequence: **compiled EVM is not as fast as compiled C.** A native \`a + b\` on \`u64\` is one instruction. The compiled EVM equivalent on \`U256\` is several. The win over the interpreter isn't "now it's like native code" — it's "now there's no dispatch loop and the optimizer can see across opcodes."
+
+### Problem 3: side effects must remain visible to the host
+
+SLOAD reads chain state. SSTORE writes chain state. CALL recursively invokes another contract. BALANCE asks the host about an arbitrary account. These can't be elided, reordered, or folded — they're calls **out of the compiled function back into revm's host environment** (i.e., your \`Database\` impl from the previous module).
+
+In revmc, every such opcode lowers to a call to a runtime *builtin* — a Rust function in [\`revmc-builtins\`](https://github.com/paradigmxyz/revmc/tree/main/crates/revmc-builtins) that does the host callout via the same \`EvmContext\` the interpreter would use. The optimizer treats builtin calls as opaque side-effecting calls (LLVM \`call\`, not \`readonly\`/\`readnone\`) and won't reorder them.
+
+> 🛑 **Recall check.** Without scrolling: of the three problems above, which is the one that constrains the LLVM optimizer most aggressively? (Answer: #3 — opaque calls block almost all optimizer reordering. #1 is solved by making gas IR-explicit, #2 is mostly a perf ceiling rather than a correctness issue.)
+
+## How revmc plugs into revm
+
+revmc is not a fork of revm — it's a layer **on top** of it.
+
+The integration point is [\`JitEvm\`](https://github.com/paradigmxyz/revmc/blob/main/crates/revmc-context/src/jit_evm.rs) in \`revmc-context\`. \`JitEvm\` wraps any \`EvmTr\`-based EVM and overrides \`frame_run\`. When a frame starts, it looks up the code hash:
+
+\`\`\`rust
+// Conceptual shape — see crates/revmc-context/src/jit_evm.rs for the real version.
+pub struct JitEvm<EVM, F = ...> {
+    inner: EVM,
+    functions: B256Map<RawEvmCompilerFn>, // code hash -> compiled fn
+    on_miss: F,                            // optional JIT-on-the-fly hook
+}
+\`\`\`
+
+If the code hash is in the precompiled map, dispatch goes to the compiled function. Otherwise, optionally call the \`on_miss\` hook (compile-on-first-call, i.e. JIT), or fall back to the interpreter. **The interpreter is the safety net.** Anything revmc can't compile — unsupported opcodes, debug builds, anything weird — silently routes through revm's normal interpreter path. There's no failure mode where "the compiled path is wrong" — at worst it's "the compiled path isn't taken."
+
+The other half is the runtime: AOT-compiled artifacts need a set of Rust symbols (the builtins) to link against. That's the [\`revmc-build\`](https://github.com/paradigmxyz/revmc/tree/main/crates/revmc-build) build script that node operators run when they ship an AOT binary.
+
+> 🔍 **Find-in-repo — see dispatch in action.** Open [\`examples/runner/src/lib.rs\`](https://github.com/paradigmxyz/revmc/blob/main/examples/runner/src/lib.rs). Notice the entire integration is: build a normal \`MainnetEvm\`, wrap it in \`JitEvm::new(inner, functions)\` where \`functions\` maps the Fibonacci bytecode's hash to its compiled function. That's it. Eight lines. The compiled fibonacci runs; everything else interprets.
+
+## AOT vs JIT in production
+
+Pick AOT when:
+
+- You know the hot set. The chain's system contracts. WETH. The router on your top DEX. Things called in nearly every block.
+- You need predictable startup latency. AOT artifacts are loaded once at node start; no per-contract compile pause.
+- You're shipping a node binary anyway and can afford to bake compiled contracts into your release.
+
+Pick JIT when:
+
+- The hot set is workload-dependent. A general-purpose RPC node or an indexer can't predict what users will call.
+- Compile-once-cache-forever amortizes well over a node's uptime.
+- You want a single binary that adapts to any chain.
+
+In practice high-throughput L1s use both: AOT for the known hot set, JIT for everything else, interpreter as the fallback under all of it.
+
+## Where this goes next
+
+Once you accept "EVM bytecode is compilable," several adjacent problems get the same treatment:
+
+- **Native rollups / Stateless re-execution.** Block re-execution for proof generation runs the same bytecode many times; compiling once and replaying the compiled artifact dominates.
+- **zkEVM proving.** Some zk stacks lower EVM bytecode through a similar pipeline; revmc's IR-explicit gas metering is a useful primitive even when the eventual backend is a SNARK circuit rather than LLVM.
+- **Indexers and tracers.** Anything that re-runs historical blocks to extract derived data benefits from compilation, since the workload is "the same bytecode, millions of times."
+
+This is also where the EVM-L1 ecosystem (MegaETH, Reth-fork chains, Paradigm-adjacent infra) is moving as a whole. "Revm is the spec, revmc is the fast path" is a defensible architecture for the next round of EVM L1s.
+
+## End-of-lesson recall
+
+Without scrolling, in your own words:
+
+1. Why does revmc deliberately make gas metering explicit IR (load/sub/branch) instead of letting the optimizer reason about it?
+2. What's the integration boundary between revmc and revm — what does \`JitEvm\` actually intercept?
+3. Why isn't compiled EVM as fast as compiled C even after JIT? Name two reasons.
+4. When would you choose AOT over JIT for a node you're operating?
+
+If any answer is shaky, re-skim the relevant section. Don't carry the gap into the final quiz.
+
+This is the last content lesson of Inside Revm. The final quiz is next — and after that, the natural next stop is **Inside Reth** (Staged Sync, ExEx, the Reth SDK), where the same source-first treatment continues at the node layer.`,
                 },
                 {
                   title: 'Inside Revm final quiz',
                   slug: 'revm-advanced-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 13,
+                  sortOrder: 14,
                   duration: 8,
                   xpReward: 25,
                   content: `# Inside Revm final quiz

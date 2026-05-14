@@ -304,7 +304,27 @@ mmap で読むので：
 
 Rethのテーブル設計は、Executionステージの読み取り（アカウント → ストレージ → コード）が温まったページを叩くようになっています。
 
-## 5. 練習
+## 5. 比較対象: MegaETH の SALT
+
+MDBX はバニラ Reth ノードのための正しいデフォルト。しかし「正しいデフォルト」と「どんな chain にも正しい」は別物です。MegaETH は MDBX を完全に置き換え、ディスクバックの B+tree が許す以上のスループットを押し上げるために **[SALT](https://github.com/megaeth-labs/salt)** (Small Authentication Large Trie) を採用しました。
+
+設計のコントラスト — どちらを読むときも頭に置く価値あり:
+
+| 観点 | **MDBX** (Reth デフォルト) | **SALT** (MegaETH) |
+| :--- | :--- | :--- |
+| 形 | Memory-mapped B+tree | 2 階層: 4 段の完全 256-ary trie + SHI ハッシュテーブルのバケット |
+| ストレージモデル | 全データがディスク、OS が mmap でページイン | 認証層は **完全にメモリ上** (30 億アイテムで ~1 GB)、データはバケットに |
+| state root 更新 | MPT を歩き、多数のランダムディスクページに触れる | バケット内ローカル更新; ルート再計算中のランダムディスク I/O を排除 |
+| trie の形 | なし — Reth は MDBX の上で MPT を別途維持 | trie *が* ストレージそのもの; commitment が内在 |
+| 挿入順不変性 | 該当なし (KV agnostic) | SHI (Strongly History-Independent) — 挿入順によらず正準的な commitment |
+| 強み | 成熟、クラッシュセーフ、ACID、ツール生態系が深い | 数十億スケールでのメモリ効率良好な authentication、state root のランダム I/O ゼロ |
+| トレードオフ | 高 TPS では state root 更新時のランダム I/O がボトルネックになる | 新しい (~2026 年設計)、デプロイ範囲が狭い、メモリ圧力に敏感 |
+
+教育的なポイントは「SALT のほうが良い」ではない。MDBX の設計判断は、**誰かが違う選択をしたものを見て初めて見えるようになる** ということ。ストレージレイヤを 1 つしか読んだことがないと、どの判断が必須でどれが偶発的かを区別できません。
+
+[\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) を Reth の MDBX ラッパーと並べて読んでみてください。そのとき浮かんでくる問い — 「Reth は高 TPS で必要ないクラッシュ安全性のためにどこで対価を払っているか?」「SALT は authentication をメモリに収めるために何を諦めているか?」 — が、自分の chain のためにストレージレイヤを拡張するときに直面する設計の問いそのものです。
+
+## 6. 練習
 
 リポジトリで [\`crates/storage/db-api/src/tables\`](https://github.com/paradigmxyz/reth/tree/main/crates/storage/db-api/src/tables) を開く：
 
@@ -974,10 +994,142 @@ crates/trie/
 > 最終チェック: 二文で、なぜ state proof が「私を信じて、ノード運用者だから」より強い保証を与えるのか説明してください。Merkle ハッシングが暗号学的でない主張に与えられない性質は何? **ライトクライアントを使ったことがない人を納得させられるまで、このレッスンはあなたを離しません。**`,
                 },
                 {
+                  title: 'Stateless Ethereum — ress と stateless-validator を並べて読む',
+                  slug: 'stateless-ethereum-ja',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 18,
+                  xpReward: 45,
+                  content: `# Stateless Ethereum — ress と stateless-validator を並べて読む
+
+今日のメインネットで Reth フルノードを動かすには **~3 TB のディスク** と、それに見合う IOPS が必要です。このレッスンを読んでいる人のほとんどはそれを動かせません — ラップトップでは無理、一般的な VPS でも無理、趣味の NUC でも無理。だからフルノードを実際に動かす人々は小さな祭司階級になり、Ethereum の「誰でも検証できる」という主張は、バリデータ層では静かに事実でなくなります。
+
+**ステートレスクライアント** がその出口です。Paradigm の [\`ress\`](https://github.com/paradigmxyz/ress) は **14 GB** のディスクでメインネットの全ブロックを再検証します。MegaETH の [\`stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) は高 TPS の L2 をコモディティハードウェアで再検証します。両方とも Rust。両方とも Ethereum 等価の状態遷移を検証する。そして興味深いすべてのレイヤで **異なる設計選択** をしています — 並べて読むのが、その選択肢が何なのかを学ぶ最も安い方法です。
+
+> 🛑 **スクロール前に予測。** 「ステートレス」ノードはフル状態を持たずにブロックを検証する。**ブロックプロポーザーは普通のノードに送らないものを、ステートレスノードには何を送らないといけない?** その追加ペイロードは何と呼ばれる? Ethereum の典型的なブロックでサイズを見積もってください。両方の答えはセクション 3 で出てきます。
+
+## 1. 「ディスクが少ない」を超えて、なぜステートレスが大事か
+
+ress に付随する [Paradigm のブログ記事](https://www.paradigm.xyz/2025/03/stateless-reth-nodes) は 4 つのユースケースを挙げています。どれも「HDD を節約する」ではありません。
+
+- **L1 の分散化。** ラップトップを持つ誰もが、完全検証する実行クライアントを動かせる。バリデータ集合がハードウェアでゲートされなくなる。
+- **L1 ガス上限の拡張。** 現在のガス上限は「**ステートフル** なフルノードが追従できる範囲」がボトルネック — state read のランダム I/O が支配的だから。ステートレス検証者はメモリから witness を読む。I/O の天井が動く。
+- **Optimistic L2 のセキュリティ。** Fraud-proof の見張り役は、見張る L2 ごとに \`reth\` を動かしたくない。チェーンごとのステートレス検証者なら安い。
+- **Native rollups.** Vitalik が描いた「サービスとしての EVM」方向には、L1 に埋め込んだ再実行可能な検証者が要る — そしてその検証者は 3 TB の状態を抱えられない。
+
+つまりステートレスは「小さいノード」のための機能ではない。**検証者層の機能**で、Ethereum を安く・繰り返し・場合によっては zkVM 内で・場合によっては数百のチェーンで同時に — 再実行する必要がある特定クラスのクライアントのためのもの。
+
+## 2. 「ステートレス」の正確な意味
+
+ステートレスクライアントは、**ワールド状態全体をストレージに持たずに** ブロックを検証する。そのために、ブロックが行うすべての state read (とブロックが再計算しなければならない post-state root) は、**witness** から来なければならない — 前ブロックの信頼済み state root に対して、ブロックが触るスロットにどんな値があったかを暗号学的に証明する束。
+
+ステートレス側は残りの状態を見ない。post-state root だけは見て・再導出する。そしてそれが *次の* witness の信頼済みルートになる。
+
+witness はどこからか来なくてはならない。あらゆるステートレス設計で、**ステートレスでない誰か** (ress なら Reth フルノード、stateless-validator なら MegaETH の sequencer) がそれを生成する。この非対称性こそが取引の核心: 少数のステートフルな witness 提供者を置くことで、はるかに多くのステートレス検証者が成立する。
+
+> 🛑 **理解度チェック。** 「ステートフルピアからの witness」は信頼に聞こえます。**でも信頼ではない、なぜ?** ステートレスクライアントは witness の中の値に触る *前に* 何を暗号学的に検査する? 答えが「ピアを信頼する」なら、[MPT レッスン](mpt-state-proofs-ja) のセクション 4 を読み直してください — 暗号学的な部分を取りこぼしています。
+
+## 3. 二つの独立した実装
+
+2026 年時点で、本番品質の Rust 製ステートレスクライアントが 2 つ存在する。違うチームが、違うチェーンのために、違う優先順位で作った。**それがプレゼントです** — ほとんどのカリキュラムは参照実装を 1 つしか手にできない。我々には 2 つある。
+
+### Paradigm の \`ress\` (Reth Stateless)
+
+- **リポジトリ:** [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress)
+- **対象チェーン:** Ethereum メインネット、完全検証。
+- **ディスク:** 14 GB (フル Reth の ~3 TB に対して)。
+- **Witness ソース:** \`--ress.enable\` で起動した任意の Reth フルノード。ress は専用 RLPx サブプロトコル \`ress\` でピアリングする — [Reth の \`crates/ress/protocol\`](https://github.com/paradigmxyz/reth/tree/main/crates/ress/protocol) 参照。
+- **Witness フォーマット:** Merkle Patricia Trie の証明 (MPT レッスンで見たもの — \`AccountProof\` / \`StorageProof\` と同じ形)。
+- **バイトコード:** ステートフルピアから **オンデマンド** で取得 (\`GetBytecode\` メッセージ経由)。ress は見たものをキャッシュし、未取得分はピアから引く。
+- **検証フロー:** コンセンサスクライアントが \`NewPayload\` 送信 → ress が Reth ピアに witness と不足バイトコードを要求 → メモリ上で payload を検証 → \`PayloadStatus\` を返す。
+- **本番ステータス:** 実験的。ただし Holesky で ress 駆動バリデータを実走し、Hive Cancun テスト 226 件中 206 件をパス。
+
+### MegaETH の \`stateless-validator\`
+
+- **リポジトリ:** [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator)
+- **対象チェーン:** MegaETH (Ethereum 互換、高 TPS の L2、OP-Stack 系)。
+- **Witness ソース:** MegaETH の sequencer、専用 witness RPC エンドポイント (\`--witness-endpoint\`) で配信。
+- **Witness フォーマット:** **SALT** の証明、MPT ではない — [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) 参照。SALT は静的な 4-レベル 256-ary trie で、葉が SHI ハッシュテーブルのバケット。Banderwagon + IPA でコミットする。約 1 GB のメモリで 30 億アイテムを authenticate。
+- **バイトコード:** **部分ステートレス**。コントラクトコードは witness に **含まない**。バリデータはパブリック RPC からオンデマンドで取得し、有界 \`ContractCache\` (\`crates/stateless-db/src/cache.rs\`) にローカルキャッシュする。
+- **検証フロー:** [\`crates/stateless-core/src/pipeline\`](https://github.com/megaeth-labs/stateless-validator/tree/main/crates/stateless-core/src/pipeline) で定義された 3 ステージのパイプライン (FETCH → PROCESS → ADVANCE)。複数の検証ワーカーが異なるブロックを並列処理する — 各ブロックが自分の witness と自分の pre-state root を持つので embarrassingly parallel。
+- **実行エンジン:** **プラガブル**。デフォルトはバニラ revm。第二バックエンドは Pi² と共同開発した [EVM の形式 K セマンティクス](https://github.com/Pi-Squared-Inc/evm-semantics)。JIT コンパイルされた sequencer エクゼキュータと合わせて、MegaETH は同一の状態遷移関数に対して **3 つの独立クライアント実装** を持つ。
+- **信頼モデル:** バリデータは状態遷移だけを検査する。カノニカル性は \`op-node\` が L1 + DA から L2 チェーンを導出することで担保 — これがバリデータを「単一の RPC プロバイダに対するトラストレス」ではなく **trust-minimized** にしている。
+
+> 🔍 **リポジトリで確認。** [\`bin/stateless-validator/src/app.rs\`](https://github.com/megaeth-labs/stateless-validator/blob/main/bin/stateless-validator/src/app.rs) を開いて、バリデータがパイプラインを組み立てる箇所を探してください。ress の main エントリと比較 — 両者がノードの「外側のループ」として何を扱っているか?
+
+## 4. サイドバイサイド
+
+| 観点 | \`ress\` (Paradigm) | \`stateless-validator\` (MegaETH) |
+| :--- | :--- | :--- |
+| **対象チェーン** | Ethereum メインネット (L1) | MegaETH (L2) |
+| **Witness フォーマット** | MPT 証明 | SALT 証明 (Banderwagon + IPA) |
+| **Witness ソース** | Reth ピア、\`ress\` RLPx サブプロトコル経由 | Sequencer、\`--witness-endpoint\` JSON-RPC 経由 |
+| **バイトコード処理** | ピアからオンデマンド取得・キャッシュ | RPC からオンデマンド取得、\`ContractCache\` にキャッシュ |
+| **ステートレス度** | フル (state) | **部分** — state はステートレス、bytecode はそうでない |
+| **実行エンジン** | revm (単一) | revm **と** 形式 K-セマンティクス (プラガブル) |
+| **並列性** | 1 ブロックずつ (CL ペーシング) | ブロック横断で embarrassingly parallel (N ワーカー) |
+| **カノニカル性** | コンセンサスクライアントを信頼 (Engine API) | \`op-node\` を信頼 (L1 + DA 導出) |
+| **ディスクフットプリント** | ~14 GB | \`ContractCache\` + redb メタデータで有界 |
+
+## 5. 部分ステートレスを選んだ理由を予測
+
+> 🛑 **予測。** MegaETH は *部分的* ステートレスを選択: state は witness に入れ、bytecode は入れない。**なぜ?** bytecode が state と共有しない性質を 2 つ挙げてください。次に自分を検査: どんなワークロードパターンで、毎 witness に bytecode を含めるのが特に無駄になる?
+
+MegaETH の README は明確: コントラクトコードは state に比べて **滅多に変わらない**。ホットな DeFi コントラクトは毎ブロック state を発信・読み込みするが、bytecode はデプロイ以来変わっていない。bytecode を毎 witness に埋めるとは、同じ 100 KB を毎ブロック再送ること。一度取って局所キャッシュするのは明らかな手 — *ただし* バリデータが小さな永続ストアを持つことを受け入れるなら (実際そうしている — \`crates/stateless-db/src/cache.rs\` の有界 \`ContractCache\`)。
+
+ress は同じ簡単な勝ちを得られない。メインネットを対象にしていて、1 チェーン分のコントラクトコードは大きいが無際限ではない、そして「全部 1 つのピアから来る」という対称性がプロトコルを単純にしている。チェーンが違えば、取引も違う。
+
+## 6. 二つの実行エンジンを選んだ理由を予測
+
+> 🛑 **予測。** MegaETH の README はバリデータが **2 つ** の実行エンジン (revm と形式 K-セマンティクス) をサポートし、sequencer がさらに 3 つ目 (JIT コンパイル) を加えると述べている。**同じ STF の独立実装を 3 つ走らせて得られる性質で、十分にテストされた 1 実装で得られないものは何?** 二文で答えてください。
+
+revm のコンセンサスバグは、存在するすべての Reth フォーク横断のコンセンサスバグになる。MegaETH が revm 系クライアントだけを走らせていたら、ひとつの微妙なインタプリタバグ — バージョン間で revm 自身が共有しているものですら — がチェーンを分裂か凍結させ、第二意見が得られない事態を生む。形式仕様の K-セマンティクス エクゼキュータは、バギーな revm と **設計上** 異なる動きをする: そのバグは数学的に存在しない。MegaETH の README はこれを **小さな Trusted Computing Base** 原則と呼び、プラガブルなエンジンを single-point-of-failure を防ぐためのものと明示している。
+
+これがまた、バリデータが **シングルスレッドのバニラ revm インタプリタとメモリ内ストレージ** をデフォルトに選んだ理由でもある — 性能よりシンプルさ。TCB を徹底監査できるほど小さく保つため。JIT コンパイルの sequencer が性能の代価を払うので、バリデータが払わなくていい。
+
+## 7. 対比だけが教えること、片方では教えられないこと
+
+ress しか読まなかったら、こう思い込んでしまう:
+
+- Witness は MPT 証明である (常にそうではない)
+- ステートレス = フルステートレス (そうある必要はない)
+- 実行エンジンは EVM のインタプリタである (それは選択肢)
+- ステートレスクライアントはコンセンサスレイヤにペースを合わせる (そうである必要はない)
+
+stateless-validator しか読まなかったら、こう思い込んでしまう:
+
+- ステートレスクライアントには常にカスタムコミットメントスキームが必要 (メインネット系は MPT)
+- ステートレスクライアントには常に L2 流の trust-minimized 導出パイプラインが必要 (メインネット系は Engine API)
+- ステートレスは L2 形状である (そうではない — Paradigm の主張は明示的に L1)
+
+対比が教えるのは、ステートレス設計の **自由度** です。上の表の各観点は、誰かが下した設計選択であって、ステートレスについての事実ではない。自分のチェーンのためにいずれかをフォークするとき、それがあなたが回すダイヤルになる。
+
+> 🔍 **リポジトリで確認。** [\`crates/stateless-core/src/evm_database.rs\`](https://github.com/megaeth-labs/stateless-validator/blob/main/crates/stateless-core/src/evm_database.rs) を開いて \`WitnessDatabase\` を見つけてください。\`revm::DatabaseRef\` を実装している — 実行中のすべての state read がここを通る。**witness にない読み込みでは何を返す?** その答えが witness 生成 (sequencer) と witness 消費 (validator) の間の契約。同じ契約が ress にも、別の形で存在する — 探してみてください。
+
+## 8. 進む前のリコール
+
+スクロールせずに:
+
+1. ステートレスクライアントがディスク節約以外で有用な理由は? ディスク以外のユースケースを 2 つ。
+2. Witness とは何か。検証者はその中の値を読む前に、それを *暗号学的に* 何に対して検査する?
+3. \`ress\` と \`stateless-validator\` は bytecode について真逆の判断をした。各々の判断と、その背景にあるワークロード上の理由を述べてください。
+4. なぜ MegaETH は同じチェーンに 2 つの実行エンジンを出荷する? それが防ぐ失敗は何?
+5. セクション 4 の表の観点のうち、**1 つだけ**最も多くの下流設計を駆動するのはどれだと思うか? 一文で論じてください。
+
+1–4 が怪しいなら戻る。5 を論じられないなら、**まだ対比を内在化していない** — 表はフラットなリストだが、各行はいくつもの他の行と繋がっている。そのうち少なくとも 2 つの繋がりを辿れるまで、このレッスンはあなたを離しません。
+
+## 追加で読むもの
+
+- [Paradigm ブログ: Stateless Reth Nodes](https://www.paradigm.xyz/2025/03/stateless-reth-nodes) — セクション 1 のユースケース整理はここ由来。
+- [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress) — README → \`bin/\` のエントリ → [\`paradigmxyz/reth/crates/ress/protocol\`](https://github.com/paradigmxyz/reth/tree/main/crates/ress/protocol) の RLPx サブプロトコル。
+- [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) — README → \`crates/stateless-core/src/pipeline\` → \`crates/stateless-core/src/executor.rs\`。
+- [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) — MegaETH の witness フォーマットで MPT を置き換える authenticated KV store。`,
+                },
+                {
                   title: '本番MEV — Mempool・ExEx・シミュレーション',
                   slug: 'mev-in-practice-ja',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 20,
                   xpReward: 45,
                   content: `# 本番MEV — Mempool・ExEx・シミュレーション
@@ -1131,7 +1283,7 @@ ExEx はゼロレイテンシで **すべてのブロック** を受け取りま
                   title: 'zkEVM with Revm',
                   slug: 'zkevm-revm-ja',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 4,
                   duration: 15,
                   xpReward: 35,
                   content: `# zkEVM with Revm
@@ -1301,7 +1453,7 @@ impl Database for WitnessDB {
                   title: '本番でのRethフォーク運用',
                   slug: 'reth-fork-production-ja',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 5,
                   duration: 18,
                   xpReward: 40,
                   content: `# 本番でのRethフォーク運用
@@ -1418,7 +1570,7 @@ for block in mainnet[recent_1000]:
                   title: 'Expertまとめクイズ',
                   slug: 'expert-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 5,
+                  sortOrder: 6,
                   duration: 15,
                   xpReward: 50,
                   content: `# Expertまとめクイズ
@@ -2102,7 +2254,18 @@ L1 と同時に出荷された隣接 crate:
 - 独自 EVM 実装 (revm が EVM そのもの)
 - 独自ネットワークスタック (reth の P2P を再利用)
 
-## 5. Extension model における L1 vs L2
+## 5. MegaETH — 同じパターン、より深いカスタマイズ
+
+Tempo が SDK の **浅い端** (数コンポーネントだけ差し替え、残りはすべて継承) を見せるなら、[\`megaeth-labs\`](https://github.com/megaeth-labs) は **深い端** を見せます:
+
+- **[\`megaeth-labs/reth\`](https://github.com/megaeth-labs/reth)** — 空 fork (**0 commits ahead, 7666 commits behind**)。Tempo と同じ compose-don't-fork パターン、ただ遅れがさらに大きいだけ。
+- **[\`megaeth-labs/mega-evm\`](https://github.com/megaeth-labs/mega-evm)** — revm と op-revm の上に MegaETH 固有仕様 (\`EQUIVALENCE\` から \`REX4\`) で構築されたカスタム EVM。sequencer は Paradigm の [\`revmc\`](https://github.com/paradigmxyz/revmc) を経由した JIT/AOT コンパイル実行を走らせる。
+- **[\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt)** — **MDBX をカスタム authenticated KV store で置き換え**。30 億アイテムを ~1 GB のメモリで authenticate、state-root 更新中のランダムディスク I/O を排除。これは標準 6 コンポーネントスロットを大きく超えるカスタマイズ。
+- **[\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator)** — sequencer とは別の **完全に別のバリデータバイナリ**。SALT witness を読み、ブロックをバニラ revm interpreter で実行、コモディティハードウェアで動く。アーキテクチャ的な動き: high-spec sequencer と low-spec validator を、まったく違うノードコードを与えることで分離する。
+
+このレッスンで Tempo の隣に MegaETH を置く理由: **SDK はカスタマイズの深さを制約しない**。Tempo は 3 コンポーネントを差し替えて upstream の ~80% を継承。MegaETH は EVM executor を差し替え、storage layer を置き換え、完全に別の validator client を出荷 — それでも **Reth を fork しない** (\`megaeth-labs/reth\`: 0 ahead, 7666 behind)。天井は最初に読んだときより遥かに高い。
+
+## 6. Extension model における L1 vs L2
 
 op-stack-on-reth を読むこと、そして将来 tempo-on-reth を読むことは、構造的には似ていますが以下の点で異なります:
 
@@ -2117,7 +2280,7 @@ op-stack-on-reth を読むこと、そして将来 tempo-on-reth を読むこと
 
 Tempo が L1 であるということは、**consensus layer もカスタマイズポイントになる** ということ — execution layer だけではありません。これは大半の L2 chain がスキップするスロットです。
 
-## 6. 自分の作るものへの含意
+## 7. 自分の作るものへの含意
 
 Tempo の上に何かを作るなら:
 
@@ -2129,7 +2292,7 @@ Tempo の上に何かを作るなら:
 
 Tempo のローンチ時に reth を trait レベルで読まずに現れる誰よりも、**数ヶ月先** にいることになります。
 
-## 7. 最終練習
+## 8. 最終練習
 
 このモジュールの成果物: [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) を開いて、1 セッションで以下を読み通して 1 ページのアーキテクチャサマリーを書くこと。
 

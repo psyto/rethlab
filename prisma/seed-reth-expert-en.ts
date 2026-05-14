@@ -310,6 +310,26 @@ Reth's tables are designed so that Execution-stage reads (account → storage �
 2. **Page size and key ordering matter.** B+tree fanout depends on key size; a 200-byte key is a different beast than a 32-byte one.
 3. **mmap means OS pressure.** A 500GB DB on a 16GB machine will thrash unless your access pattern is local.
 
+## 6. The comparator: MegaETH's SALT
+
+MDBX is the right default for a vanilla Reth node. But "right default" is not the same as "right for every chain." MegaETH replaced MDBX entirely with **[SALT](https://github.com/megaeth-labs/salt)** (Small Authentication Large Trie) to push throughput beyond what a disk-backed B+tree allows.
+
+The design contrast is worth holding in your head when you read either:
+
+| Aspect | **MDBX** (Reth default) | **SALT** (MegaETH) |
+| :--- | :--- | :--- |
+| Form | Memory-mapped B+tree | Two-tier: 4-level complete 256-ary trie + SHI hash-table buckets |
+| Storage model | All data on disk, OS pages it in via mmap | Authentication layer lives **fully in memory** (~1 GB per 3 B items); data sits in buckets |
+| State-root update | Walks the MPT, touches many random disk pages | Bucket-local updates; eliminates random disk I/O during root recomputation |
+| Trie shape | None — Reth maintains the MPT separately on top of MDBX | Trie *is* the storage; commitments are intrinsic |
+| Insertion-order invariance | N/A (KV agnostic) | SHI (Strongly History-Independent) — canonical commitment regardless of insertion order |
+| Strengths | Mature, crash-safe, ACID, deep tool ecosystem | Memory-efficient authentication at billion-scale, no random disk I/O on state roots |
+| Trade-offs | Random I/O during state root updates becomes the bottleneck at high TPS | New (~2026 design), narrower deployment, sensitive to memory pressure |
+
+The pedagogical point is **not** "SALT is better." It's that MDBX's design assumptions become visible only when you see what someone else chose differently and why. If you've only ever read one storage layer, you can't tell which decisions are essential vs. accidental.
+
+Read [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) alongside Reth's MDBX wrapper. The questions that surface when you do — "where does Reth pay for crash safety we don't need at high TPS?" "what does SALT give up to fit authentication in memory?" — are the design questions you'll face when extending Reth's storage layer for your own chain.
+
 ## Drill
 
 Open [\`crates/storage/db-api/src/tables\`](https://github.com/paradigmxyz/reth/tree/main/crates/storage/db-api/src/tables) in the repo:
@@ -982,10 +1002,142 @@ Do this and \`eth_getProof\` becomes a structure you can reason about, write, an
 > Final check: in two sentences, explain why a state proof gives a stronger guarantee than "trust me, I'm a node operator." What property does Merkle hashing give you that a non-cryptographic claim cannot? **The lesson isn't done with you until you can argue this convincingly to someone who has never used a light client.**`,
                 },
                 {
+                  title: 'Stateless Ethereum — reading ress and stateless-validator side by side',
+                  slug: 'stateless-ethereum-en',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 18,
+                  xpReward: 45,
+                  content: `# Stateless Ethereum — reading ress and stateless-validator side by side
+
+A full Reth node on mainnet today wants **~3 TB of disk** and the IOPS that match. Most of the people reading this lesson can't run one — not on a laptop, not on a typical VPS, not even on a hobbyist NUC. So the people who *do* run them become a small priesthood, and Ethereum's "anyone can verify" claim quietly stops being true at the validator layer.
+
+A **stateless client** is the way out. Paradigm's [\`ress\`](https://github.com/paradigmxyz/ress) re-validates every mainnet block with **14 GB** of disk. MegaETH's [\`stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) re-validates an entire high-TPS L2 on commodity hardware. Both are Rust. Both verify Ethereum-equivalent state transitions. They made **different design choices** at every interesting layer — and reading them side by side is the cheapest way to learn what those choices even are.
+
+> 🛑 **Predict before scrolling.** A "stateless" node validates blocks without holding the full state. **What does the block proposer have to send it that a regular node doesn't need?** What's that extra payload called? Estimate its size for a typical Ethereum block. Hold your guesses — both numbers will surface in Section 3.
+
+## 1. Why stateless matters beyond "less disk"
+
+The Paradigm [blog post that ships with ress](https://www.paradigm.xyz/2025/03/stateless-reth-nodes) names four use cases. None of them is "save a hard drive."
+
+- **L1 decentralization.** Anyone with a laptop can run a fully validating execution client. Validator set is no longer hardware-gated.
+- **L1 gas scaling.** Today the gas limit is bottlenecked on what a *stateful* full node can keep up with — random-I/O for state reads dominates. A stateless verifier reads the witness from memory; the I/O ceiling moves.
+- **Optimistic L2 security.** Fraud-proof watchtowers don't want to run \`reth\` for every L2 chain they watch. A stateless verifier per chain is cheap.
+- **Native rollups.** The "EVM as a service" direction Vitalik described needs a re-executable verifier embedded in L1 — and that verifier can't carry a 3 TB state.
+
+So stateless is not a "small node" feature. It's a **verifier-layer feature** for a particular class of clients that need to re-execute Ethereum cheaply, repeatedly, possibly inside a zkVM, possibly on hundreds of chains at once.
+
+## 2. What "stateless" means, precisely
+
+A stateless client validates a block **without holding the entire world state in storage**. To do that, every state read the block performs (and the post-state root it has to recompute) must come from a **witness** — a cryptographic bundle proving, against the *previous* block's trusted state root, exactly what values were at the slots the block touches.
+
+The stateless party never sees the rest of the state. It does see — and re-derive — the post-state root, which then becomes the trusted root for the *next* witness.
+
+The witness has to come from somewhere. In every stateless design, **some non-stateless party** (a Reth full node in ress's case, a MegaETH sequencer in stateless-validator's case) generates it. That asymmetry is the whole bargain: a small number of stateful witness-providers makes a much larger number of stateless verifiers possible.
+
+> 🛑 **Anti-fluency.** "Witness from a stateful peer" sounds like trust. **Why isn't it?** What does the stateless client verify about the witness *before* it touches a single state value? If your answer is "the peer is trusted," re-read Section 4 of the [MPT lesson](mpt-state-proofs-en) — you're missing the cryptographic part.
+
+## 3. Two independent implementations
+
+Two production Rust stateless clients exist as of 2026. They were built by different teams, for different chains, with different priorities. **That's the gift** — most curricula get one reference implementation to study. We get two.
+
+### Paradigm's \`ress\` (Reth Stateless)
+
+- **Repo:** [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress)
+- **Target chain:** Ethereum mainnet, fully validating.
+- **Disk:** 14 GB (vs ~3 TB for full Reth).
+- **Witness source:** any full Reth node running with \`--ress.enable\`. Ress peers with it over a dedicated RLPx subprotocol named \`ress\` — see [\`crates/ress/protocol\` in Reth](https://github.com/paradigmxyz/reth/tree/main/crates/ress/protocol).
+- **Witness format:** Merkle Patricia Trie proofs (the format you saw in the MPT lesson — same \`AccountProof\` / \`StorageProof\` shape).
+- **Bytecode:** fetched from the stateful peer **on demand** (via a separate \`GetBytecode\` message). Ress caches what it has seen; missing entries pull from the peer.
+- **Validation flow:** consensus client sends \`NewPayload\` → ress requests witness + missing bytecode from a Reth peer → validates payload in memory → returns \`PayloadStatus\`.
+- **Production status:** experimental, but the team ran ress-backed validators on Holesky and passed 206 of 226 Hive Cancun tests.
+
+### MegaETH's \`stateless-validator\`
+
+- **Repo:** [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator)
+- **Target chain:** MegaETH (a high-TPS Ethereum-compatible L2, OP-Stack-derived).
+- **Witness source:** the MegaETH sequencer, served via a dedicated witness RPC endpoint (\`--witness-endpoint\`).
+- **Witness format:** **SALT** proofs, not MPT — see [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt). SALT is a static 4-level 256-ary trie whose leaves are SHI hash-table buckets, committed with Banderwagon + IPA. ~1 GB of memory authenticates 3 billion items.
+- **Bytecode:** **partial statelessness.** Contract code is NOT in the witness. The validator fetches bytecode on demand from a public RPC and caches it locally in a bounded \`ContractCache\` (\`crates/stateless-db/src/cache.rs\`).
+- **Validation flow:** three-stage pipeline (FETCH → PROCESS → ADVANCE) in [\`crates/stateless-core/src/pipeline\`](https://github.com/megaeth-labs/stateless-validator/tree/main/crates/stateless-core/src/pipeline). Multiple validation workers run in parallel on different blocks — embarrassingly parallel because each block has its own witness and its own pre-state root.
+- **Execution engine:** **pluggable**. Default is vanilla revm. A second backend uses the formal [K semantics of the EVM](https://github.com/Pi-Squared-Inc/evm-semantics) developed with Pi². Together with the JIT-compiled sequencer executor, that gives MegaETH **three independent client implementations** of the same state transition function.
+- **Trust model:** the validator only checks the state transition. Canonicality comes from \`op-node\` deriving the L2 chain from L1 + DA — that's what makes the validator *trust-minimized*, not just trustless against a single RPC provider.
+
+> 🔍 **Find in repo.** Open [\`bin/stateless-validator/src/app.rs\`](https://github.com/megaeth-labs/stateless-validator/blob/main/bin/stateless-validator/src/app.rs) and find where the validator wires up the pipeline. Compare against ress's main entry — what does each treat as the "outer loop" of the node?
+
+## 4. Side-by-side
+
+| Aspect | \`ress\` (Paradigm) | \`stateless-validator\` (MegaETH) |
+| :--- | :--- | :--- |
+| **Target chain** | Ethereum mainnet (L1) | MegaETH (L2) |
+| **Witness format** | MPT proofs | SALT proofs (Banderwagon + IPA) |
+| **Witness source** | Reth peer over \`ress\` RLPx subprotocol | Sequencer over JSON-RPC \`--witness-endpoint\` |
+| **Bytecode handling** | Fetched on demand from peer, cached | Fetched on demand from RPC, cached in \`ContractCache\` |
+| **Statelessness** | Full (state) | **Partial** — state is stateless, bytecode is not |
+| **Execution engine** | revm (single) | revm **and** formal K-semantics (pluggable) |
+| **Parallelism** | One block at a time (CL pacing) | Embarrassingly parallel across blocks (N workers) |
+| **Canonicality** | Trusts consensus client (Engine API) | Trusts \`op-node\` (L1 + DA derivation) |
+| **Disk footprint** | ~14 GB | Bounded by \`ContractCache\` + redb metadata |
+
+## 5. Predict why partial statelessness
+
+> 🛑 **Predict.** MegaETH chose *partial* statelessness: state goes in the witness, bytecode does not. **Why?** Name two properties of bytecode that state doesn't share. Then check yourself: under what workload pattern would including bytecode in every witness be especially wasteful?
+
+The MegaETH README spells it out: contract code **changes infrequently** compared to state. Hot DeFi contracts emit and read state every block; their bytecode hasn't changed since deployment. Embedding bytecode in every witness re-ships the same hundred kilobytes block after block. Fetching it once and caching locally is the obvious move — *if* you're willing to accept that the validator now has a small persistent store (it does — the bounded \`ContractCache\` in \`crates/stateless-db/src/cache.rs\`).
+
+Ress doesn't get the same easy win because it's targeting mainnet, where one chain's worth of contract code is large but not unbounded, and the symmetry of "everything comes from one peer" simplifies the protocol. Different chain, different trade.
+
+## 6. Predict why two execution engines
+
+> 🛑 **Predict.** The MegaETH README says the validator supports **two** execution engines (revm and formal K-semantics) and that the sequencer adds a third (JIT-compiled). **What property does running three independent implementations of the same STF give you that running one heavily-tested implementation does not?** Two-sentence answer.
+
+A consensus bug in revm is a consensus bug across every Reth fork in existence. If MegaETH ran only revm-derived clients, a single subtle interpreter bug — even one revm shares with itself across versions — could split or freeze the chain with no second opinion available. A formally-specified K-semantics executor disagrees with a buggy revm by *design*: the bug doesn't exist in the math. The MegaETH README calls this the **small Trusted Computing Base** principle and explicitly frames the pluggable engine as preventing single-points-of-failure.
+
+This is also why the validator chose a **single-threaded vanilla revm interpreter and in-memory storage** as the *default* — simplicity over performance, so the TCB is small enough to audit thoroughly. The JIT-compiled sequencer takes the performance hit so the validator doesn't have to.
+
+## 7. What the contrast teaches that one alone can't
+
+If you'd only read ress, you'd come away thinking:
+
+- Witnesses are MPT proofs (they aren't always)
+- Stateless means fully stateless (it doesn't have to)
+- The execution engine is the EVM's interpreter (it's a choice)
+- Stateless clients are paced by the consensus layer (they don't have to be)
+
+If you'd only read stateless-validator, you'd come away thinking:
+
+- Stateless clients always need a custom commitment scheme (mainnet ones use MPT)
+- Stateless clients always need an L2-style trust-minimized derivation pipeline (mainnet ones use Engine API)
+- Statelessness is L2-shaped (it isn't — Paradigm's pitch is explicitly L1)
+
+The contrast teaches the **degrees of freedom** in stateless design. Every aspect in the table above is a design choice someone made — not a fact about statelessness. When you fork either codebase for your own chain, those are the dials you'll be turning.
+
+> 🔍 **Find in repo.** Open [\`crates/stateless-core/src/evm_database.rs\`](https://github.com/megaeth-labs/stateless-validator/blob/main/crates/stateless-core/src/evm_database.rs) and find \`WitnessDatabase\`. It implements \`revm::DatabaseRef\` — every state read during execution goes through it. **What does it return on a read that isn't in the witness?** That answer is the contract between witness-generation (sequencer) and witness-consumption (validator). The same contract exists in ress, structured differently — find it.
+
+## 8. Recall before you move on
+
+Without scrolling:
+
+1. Why is a stateless client useful beyond saving disk? Name two non-disk use cases.
+2. What's the witness, and what does the verifier *cryptographically* check it against before reading any value out of it?
+3. \`ress\` and \`stateless-validator\` make opposite calls on bytecode. State the call each made and the workload reason for the difference.
+4. Why does MegaETH ship two execution engines for one chain? What failure does that prevent?
+5. Of every aspect in the Section 4 table, which **single** difference do you think drives the most downstream design? Argue your pick in one sentence.
+
+If 1–4 are shaky, scroll back. If you can't argue 5, **you haven't internalized the contrast yet** — the table is a flat list, but every row is connected to several others, and the lesson isn't done with you until you can trace at least two of those connections.
+
+## Further reading
+
+- [Paradigm blog: Stateless Reth Nodes](https://www.paradigm.xyz/2025/03/stateless-reth-nodes) — the use-case framing in Section 1 comes from here.
+- [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress) — README, then \`bin/\` entry point, then the RLPx subprotocol in [\`paradigmxyz/reth/crates/ress/protocol\`](https://github.com/paradigmxyz/reth/tree/main/crates/ress/protocol).
+- [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) — README, then \`crates/stateless-core/src/pipeline\`, then \`crates/stateless-core/src/executor.rs\`.
+- [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) — the authenticated KV store that replaces the MPT in MegaETH's witness format.`,
+                },
+                {
                   title: 'MEV in practice — mempool, ExEx, simulation',
                   slug: 'mev-in-practice-en',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 20,
                   xpReward: 45,
                   content: `# MEV in practice — mempool, ExEx, simulation
@@ -1141,7 +1293,7 @@ Bundles are JSON-RPC; the wire format is small. Race between competing searchers
                   title: 'zkEVM with Revm',
                   slug: 'zkevm-revm-en',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 4,
                   duration: 15,
                   xpReward: 35,
                   content: `# zkEVM with Revm
@@ -1312,7 +1464,7 @@ Now you know what "L2 prover" actually does.
                   title: 'Running a Reth fork in production',
                   slug: 'reth-fork-production-en',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 5,
                   duration: 18,
                   xpReward: 40,
                   content: `# Running a Reth fork in production
@@ -1429,7 +1581,7 @@ You now have a complete picture: develop, profile, extend, deploy, monitor. Welc
                   title: 'Expert quiz',
                   slug: 'expert-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 5,
+                  sortOrder: 6,
                   duration: 15,
                   xpReward: 50,
                   content: `# Expert quiz
@@ -2113,7 +2265,18 @@ What to verify is *absent* (because the SDK lets it be absent):
 - A bespoke EVM implementation (revm is the EVM)
 - A custom networking stack (reth's P2P is reused)
 
-## 5. The L1 vs L2 distinction in the extension model
+## 5. MegaETH — same pattern, deeper customization
+
+If Tempo shows the **shallow end** of the SDK (swap a few components, keep everything else), [\`megaeth-labs\`](https://github.com/megaeth-labs) shows the **deep end**:
+
+- **[\`megaeth-labs/reth\`](https://github.com/megaeth-labs/reth)** — empty fork (**0 commits ahead, 7666 commits behind**). Same compose-don't-fork pattern as Tempo, just further out of sync.
+- **[\`megaeth-labs/mega-evm\`](https://github.com/megaeth-labs/mega-evm)** — custom EVM built on revm + op-revm with MegaETH-specific specs (\`EQUIVALENCE\` through \`REX4\`). The sequencer runs JIT/AOT compiled execution via Paradigm's [\`revmc\`](https://github.com/paradigmxyz/revmc).
+- **[\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt)** — they replaced **MDBX with a custom authenticated KV store**. ~1 GB of memory authenticates 3 B items; random disk I/O during state-root updates is eliminated. This goes far past the standard 6 component slots.
+- **[\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator)** — a **different validator binary** entirely, separate from the sequencer. Reads SALT witnesses, runs blocks against a vanilla revm interpreter, fits on commodity hardware. The architectural move: separate the high-spec sequencer from low-spec validators by giving them entirely different node code.
+
+The point of putting MegaETH next to Tempo in this lesson: **the SDK doesn't constrain how deep you customize.** Tempo swaps three components and inherits ~80% of upstream. MegaETH swaps the EVM executor, replaces the storage layer, and ships an entirely separate validator client — and **still does not fork Reth** (\`megaeth-labs/reth\`: 0 ahead, 7666 behind). The ceiling is much higher than first reading suggests.
+
+## 6. The L1 vs L2 distinction in the extension model
 
 Reading op-stack-on-reth and (eventually) reading tempo-on-reth will look structurally similar but differ in:
 
@@ -2128,7 +2291,7 @@ Reading op-stack-on-reth and (eventually) reading tempo-on-reth will look struct
 
 The L1-ness of Tempo means **the consensus layer is also a customization point**, not just the execution layer. That's a slot most L2 chains skip.
 
-## 6. Why this matters for what you ship
+## 7. Why this matters for what you ship
 
 If you are building on top of Tempo:
 
@@ -2140,7 +2303,7 @@ If you are building on top of Tempo:
 
 You are **months ahead** of anyone who shows up at Tempo's launch without having read reth at the trait level.
 
-## 7. Final practice
+## 8. Final practice
 
 The deliverable for this module: open [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) and write a 1-page architectural summary in a single sitting by reading:
 

@@ -34,350 +34,198 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
                   xpReward: 80,
                   content: `# 最小限の MEV Searcher を Rust で作る
 
-mempool (public な未確定トランザクションキュー) に、Uniswap プールの価格を動かしそうな swap が現れる。**そのトランザクションが取り込まれる前に、自分のラップトップで — ネットワーク上のプロの searcher と同じタイミングで — その swap が生む arb を検知できるか?** これが本レッスンで作るものです。Rust ~200 行: public mempool を監視 → 候補トランザクションを fork した Revm (Reth の EVM エンジン、ローカルで mainnet 状態に対して動かす) でシミュレート → 2-hop アービトラージ機会を検出 → Flashbots スタイルの bundle を構築。
+「あなたなら bot をこう組み立てる」という greenfield のウォークスルーは、production の本当の形を誤魔化してしまう。本物の searcher は \`main.rs\` から始めない。**フレームワーク** から始める — そして読むべきは Paradigm の [\`artemis\`](https://github.com/paradigmxyz/artemis)、Paradigm がオープンソース化し自社でも使い続けている Rust 製 MEV bot フレームワークです。
 
-\`add\`、\`Stage\` トレイト、\`identity_run\` を読んできました。次はその機械で組み立てる番です。
+repo を開く。読む。本レッスンはそれを案内します。
 
-> 📌 **スコープの正直な開示。** 本レッスンは「bundle 構築」で止まります。実際に relay へ提出するには認証、ガスオークション、MEV-Boost 統合、そして ~~あなたのお金~~ 本物のリスク管理が必要 — それらは本質とは別のプロダクション複雑度です。本レッスンが答える問いは: *「自分のラップトップで、ネットワーク全体と同じタイミングで arb 機会を見られるか?」*
+> 📌 **なぜこれが正しい出発点か。** public mempool の監視、swap のデコード、Revm でのフォークシミュレーション、Flashbots bundle の構築 — どの searcher もやっていること。面白い問いは「これらを1回書けるか?」ではない。「次の strategy を ship するときに書き直しにならないように、これらをどう組織化するか?」です。それこそ artemis が答える問い。MEV ロジックはあなたのもの; オーケストレーションは借り物。
 
-## 何を作るか
+## artemis アーキテクチャを一文で
 
-\`\`\`mermaid
-flowchart LR
-    Mempool["WS mempool subscribe"] -->|tx hash| Decode["Decode<br/>swapExactTokensForTokens"]
-    Decode -->|valid swap| Fork["Revm fork<br/>at latest block"]
-    Fork -->|apply tx| Sim["Simulate<br/>observe state delta"]
-    Sim -->|new pool reserves| Detect["Detect 2-hop<br/>arb opportunity"]
-    Detect -->|profitable| Bundle["Build bundle:<br/>frontrun + tx + backrun"]
-\`\`\`
+searcher は **イベント処理パイプライン** です: 外部シグナルが入り、MEV ロジックが何をするか決め、アクションが出ていく。artemis はそのパイプラインを 3 つの trait と、それらを配線する engine に分割しています。
 
-単一の \`main.rs\`。フレームワークなし。Alloy と Revm を直接呼ぶだけ。**起きていることのバイト単位を全部見える** ようにすることが目的です。
+| コンポーネント | trait | 役割 |
+| :--- | :--- | :--- |
+| **Collector** | \`Collector<E>\` | 外部世界 → 内部イベント \`E\`。pending tx、新ブロック、marketplace order、MEV-Share ヒント — それぞれが独自の collector を持つ |
+| **Strategy** | \`Strategy<E, A>\` | イベント \`E\` → 0 個以上のアクション \`A\`。MEV の脳。opportunity ごとに自分が書く唯一のファイル |
+| **Executor** | \`Executor<A>\` | アクション \`A\` → 副作用。Flashbots bundle 送信、public mempool 送信、オフチェーン注文 post |
 
-> 🛑 **スクロール前に予測。** なぜ provider に \`eth_call\` で問い合わせる代わりに、ローカルで fork してシミュレートするのか? *\`eth_call\` が返すもの vs. 自分が必要とするもの* について、一文で答えてください。答えを書き留めてから先へ。
+> 🛑 **スクロール前に予測。** なぜ Executor trait は Strategy trait と分離されているのか? *両者を融合させたら何が壊れるか* について一文で答えてください。答えを Step 4 まで保留。
 
-## なぜ Rust + Alloy + Revm か
+## Step 1: trait を開く
 
-- **Rust** — 決定論的レイテンシ。GC (ガーベジコレクタ) pause なし。エッジが「このブロックに乗るか、次か」のマイクロ秒の差にかかっている時、これが効く。
-- **Revm** — **RPC ラウンドトリップなしで** ローカルシミュレーション。Infura への \`eth_call\` (chain 上で read-only に実行する標準 RPC) は wire 越しに ~30〜80 ms。Revm をインメモリキャッシュで叩くと **~200 µs**。2 桁速い。さらに \`eth_call\` は *結果のみ* 返す — Revm は **state delta** (どのスロットがいくら変わったか) を返す。アービ検出に必要なのはまさに後者。
-- **Alloy** — \`sol!\` (Solidity シグネチャを Rust 構造体に展開するマクロ) による型付きコントラクトバインディング、型付き Provider、手書き ABI エンコード不要。Solidity 一辺倒の開発者が払う配管税が消える。
-
-Flashbots / Frontier / お気に入りのブロックビルダー全員が production で使っているのと同じスタック。おもちゃではない。
-
-## Cargo.toml
-
-\`\`\`toml
-[package]
-name = "minimal-searcher"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-alloy-eips         = "1.0"
-alloy-primitives   = "1.5"
-alloy-provider     = { version = "1.0", features = ["ws"] }
-alloy-rpc-types    = "1.0"
-alloy-sol-types    = "1.5"
-alloy-network      = "1.0"
-alloy-signer       = "1.0"
-alloy-signer-local = "1.0"
-revm               = { version = "38", features = ["alloydb"] }
-tokio              = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
-futures            = "0.3"
-eyre               = "0.6"
-\`\`\`
-
-> 2026年5月時点でピン留め。Alloy 1.x と Revm 38 が執筆時点での該当メジャー。両方とも変化が早いので、コピーしたら \`cargo update\` を実行し、breaking rename をリリースノートで確認すること。
-
-## Step 1: mempool に subscribe
+中核の抽象は 1 ファイル、~120 行: [\`crates/artemis-core/src/types.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/artemis-core/src/types.rs)。今すぐ開いてください。
 
 \`\`\`rust
-use alloy_provider::{Provider, ProviderBuilder, WsConnect};
-use futures::StreamExt;
+#[async_trait]
+pub trait Collector<E>: Send + Sync {
+    async fn get_event_stream(&self) -> Result<CollectorStream<'_, E>>;
+}
 
-#[tokio::main]
-async fn main() -> eyre::Result<()> {
-    let ws_url = std::env::var("ETH_WS_URL")?;
-    // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
-    let provider = ProviderBuilder::new()
-        .connect_ws(WsConnect::new(ws_url))
-        .await?;
+#[async_trait]
+pub trait Strategy<E, A>: Send + Sync {
+    async fn sync_state(&mut self) -> Result<()>;
+    async fn process_event(&mut self, event: E) -> Vec<A>;
+}
 
-    let mut sub = provider
-        .subscribe_pending_transactions()
-        .await?
-        .into_stream();
-
-    while let Some(tx_hash) = sub.next().await {
-        let Some(tx) = provider.get_transaction_by_hash(tx_hash).await? else {
-            continue;
-        };
-        // ... handle tx
-    }
-    Ok(())
+#[async_trait]
+pub trait Executor<A>: Send + Sync {
+    async fn execute(&self, action: A) -> Result<()>;
 }
 \`\`\`
 
-Walk:
+これがフレームワークの契約のすべて。3 つのメソッド。2 つの generic パラメータ (\`E\` がイベント、\`A\` がアクション)。残り全部 — engine、channel、mapper — この 3 つの周りの配管にすぎない。
 
-- \`WsConnect\` — WebSocket トランスポート。**なぜ HTTP ポーリングではないか?** HTTP は 1 回のポーリングごとにラウンドトリップが必要 (~50ms)。WS なら provider が見た瞬間に hash がプッシュされる。このレイヤーでは、ポーリングは負け。
-- \`subscribe_pending_transactions()\` は **tx hash** のストリームを返す、tx 本体ではない。なぜ? mempool トラフィックは多い — provider は秒速 500KB の生 tx データを全 subscriber に押し付けたくない。気になる tx だけ本体を取得する設計。
-- \`get_transaction_by_hash\` — body をマテリアライズする 2 回目のラウンドトリップ。**ここがあなたの最初のレイテンシ予算項目。** 本物の searcher は body をインラインでプッシュする private mempool stream を使う。本レッスンは public path を使う — 無料で教育的だから。
+> 🔍 **リポで探す。** 同じファイル内で \`CollectorMap\` と \`ExecutorMap\` を探す。30 秒読む。**自分の言葉で:** \`CollectorMap\` は、新しい Collector を書かないと解けない問題を、何を解いてくれているか?
 
-> 🔍 **リポで探す。** Alloy の \`subscribe_pending_transactions\` は [\`Provider\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) trait にある。開いて確認。このメソッドには provider に \`pubsub\` feature が必要 — HTTP only の Infura key は使えない。WS endpoint 必須。
+## Step 2: イベントの流れ — engine を読む
 
-## Step 2: swap call をデコード
+[\`crates/artemis-core/src/engine.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/artemis-core/src/engine.rs) を開く。\`Engine<E, A>\` 構造体は 3 本の \`Vec<Box<dyn …>>\` を持つ — collector、strategy、executor それぞれ 1 本ずつ。\`run\` メソッドはコンポーネント 1 つにつき Tokio task を 1 つ spawn し、2 本の \`tokio::sync::broadcast\` channel で繋ぐ:
 
-Uniswap V2 router の swap で絞り込みます。router は mainnet で \`0x7a25...488D\`:
-
-\`\`\`rust
-use alloy_primitives::{address, Address, U256};
-use alloy_sol_types::{sol, SolCall};
-
-const UNI_V2_ROUTER: Address = address!("7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
-
-sol! {
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-}
+\`\`\`
+collectors -- events --> [event channel] -- events --> strategies
+                                                          |
+                                                         actions
+                                                          v
+executors <-- actions <-- [action channel] <-- actions <--+
 \`\`\`
 
-メインループ内:
+broadcast — つまり全 strategy が全イベントを見、全 executor が全アクションを見る。あるイベントに興味がない strategy は \`vec![]\` を返す。あるアクションに興味がない executor は \`ExecutorMap\` でフィルタする。
+
+**要点:** 新しい strategy を ship するには \`impl Strategy\` を 1 つ書いて \`engine.add_strategy(...)\` を呼ぶだけ。collector と executor は再利用される。
+
+> 🛑 **リコールチェックポイント。** スクロールせずに: strategy 間の調整ロジックはどこにあるか? (答え: ない。engine は strategy を調整しない — 各 strategy は同じイベントストリームの独立した consumer。調整が必要なら、複数の collector を組み合わせて単一 strategy 内に持つ。)
+
+## Step 3: 実物の Collector と Executor を探す
+
+具体の実装体を見るまで抽象を信用しない。以下を開いて目を通すこと:
+
+- [\`crates/artemis-core/src/collectors/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/artemis-core/src/collectors): \`mempool_collector.rs\` (pending tx を subscribe)、\`block_collector.rs\` (新 head)、\`mevshare_collector.rs\` (private hint stream)、\`opensea_order_collector.rs\` (NFT marketplace)、\`log_collector.rs\` (フィルタ済みログ subscription)。
+- [\`crates/artemis-core/src/executors/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/artemis-core/src/executors): \`mempool_executor.rs\` (public 送信)、\`flashbots_executor.rs\` (Flashbots relay へ bundle)、\`mev_share_executor.rs\` (MEV-Share 提出)。
+
+各ファイルは小さい — ~50〜100 行。特に \`mempool_collector.rs\` を開く:
 
 \`\`\`rust
-if tx.to() != Some(UNI_V2_ROUTER) { continue; }
-
-let Ok(call) = swapExactTokensForTokensCall::abi_decode(tx.input(), true) else {
-    continue; // 違うセレクタ、または不正な input
-};
-
-// 簡素版では 2-hop swap だけを対象
-if call.path.len() != 2 { continue; }
-let token_in  = call.path[0];
-let token_out = call.path[1];
-let amount_in = call.amountIn;
-\`\`\`
-
-Walk:
-
-- \`sol!\` マクロは Solidity シグネチャを Rust 構造体 \`swapExactTokensForTokensCall\` + \`abi_decode\` メソッドに展開する。**手書き ABI 配管が一切ない。** これは Foundry が cheatcode dispatch に使っているのと同じ機構 (Fundamentals で \`Vm.sol\` を見たもの)。
-- \`abi_decode(input, true)\` — \`true\` でセレクタが一致するかを検証。router の別関数への呼び出しなら綺麗に \`Err\` を返す。
-- \`call.path.len() != 2\` — production はもっと長いルートも扱う。本レッスンは明瞭性のためスコープを絞る。
-
-> 🛑 **理解度チェック。** スクロール戻しなしで: なぜ \`sol!\` が手書きセレクタより優れているか? 「便利」と言わずに、\`sol!\` が防いでくれる失敗モードを2つ挙げてください。(ヒント: 上流の Solidity ABI 変更、セレクタハッシュ計算ミス、を考えて)
-
-## Step 3: Revm + AlloyDB で mainnet を fork
-
-fork セットアップは本レッスンで最も「本番らしい」コードです。慎重に読むこと:
-
-\`\`\`rust
-use alloy_eips::BlockId;
-use alloy_provider::{network::Ethereum, DynProvider};
-use revm::{
-    context::TxEnv,
-    context_interface::result::{ExecutionResult, Output},
-    database::{AlloyDB, CacheDB},
-    database_interface::WrapDatabaseAsync,
-    primitives::TxKind,
-    Context, ExecuteEvm, MainBuilder, MainContext,
-};
-
-type ForkedDB = CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, DynProvider>>>;
-
-async fn build_fork(provider: DynProvider) -> eyre::Result<ForkedDB> {
-    let alloy_db = WrapDatabaseAsync::new(
-        AlloyDB::new(provider, BlockId::latest())
-    ).ok_or_else(|| eyre::eyre!("AlloyDB init failed"))?;
-    Ok(CacheDB::new(alloy_db))
-}
-\`\`\`
-
-3 層構造:
-
-| レイヤー | 役割 |
-| :--- | :--- |
-| \`AlloyDB\` | 遅延 state ローダー。Revm がアドレス \`Y\` のスロット \`X\` を要求すると、AlloyDB が裏で \`eth_getStorageAt\` を provider に発行する |
-| \`WrapDatabaseAsync\` | AlloyDB の async API を Revm の同期 \`Database\` trait にブリッジする。Revm は同期を要求する; ラッパが \`block_on\` を肩代わり |
-| \`CacheDB\` | 前段に座るインメモリキャッシュ。slot への **初回** アクセスは provider に到達; **2回目以降** は瞬時。シミュレーションを安価にする魔法はここ |
-
-> 🔍 **リポで探す。** \`AlloyDB\` と \`WrapDatabaseAsync\` は [\`revm/crates/database\`](https://github.com/bluealloy/revm/tree/main/crates/database) にある。開いて確認。**Advanced** で読んだ素の \`Database\` trait と比較せよ。同じ trait が、インメモリテスト DB と本番 fork DB の両方を駆動している。**これがあなたが行単位で読んだ trait 抽象化の対価。**
-
-## Step 4: 候補 tx を適用、state を観察
-
-\`\`\`rust
-async fn simulate_candidate(
-    provider: DynProvider,
-    tx: &alloy_rpc_types::Transaction,
-) -> eyre::Result<Option<ForkedDB>> {
-    let mut db = build_fork(provider).await?;
-
-    let mut evm = Context::mainnet().with_db(&mut db).build_mainnet();
-
-    let tx_env = TxEnv::builder()
-        .caller(tx.from())
-        .kind(TxKind::Call(UNI_V2_ROUTER))
-        .data(tx.input().clone())
-        .value(tx.value())
-        .gas_limit(tx.gas_limit())
-        .build()?;
-
-    let result = evm.transact_one(tx_env)?;
-
-    match result.result {
-        ExecutionResult::Success { .. } => Ok(Some(db)),
-        _ => Ok(None), // 失敗する tx — arb エッジなし
+#[async_trait]
+impl<M> Collector<Transaction> for MempoolCollector<M>
+where
+    M: Middleware,
+    M::Provider: PubsubClient,
+{
+    async fn get_event_stream(&self) -> Result<CollectorStream<'_, Transaction>> {
+        let stream = self.provider.subscribe_pending_txs().await?;
+        let stream = stream.transactions_unordered(256);
+        let stream = stream.filter_map(|res| async move { res.ok() });
+        Ok(Box::pin(stream))
     }
 }
 \`\`\`
 
-Walk:
+これが mempool collector の全部。\`subscribe_pending_txs().transactions_unordered(256)\` パターンは、1 つずつではなく並列に — 並行数 256 — tx 本体をマテリアライズする。このファイルに **ない** ものに注目: MEV ロジックなし、デコードなし、strategy の関心事なし。collector の仕事は、型付きストリームを上流に push して黙ること。
 
-- \`Context::mainnet().with_db(&mut db).build_mainnet()\` — **mainnet** EVM を組み立てる (現行ハードフォーク規則、mainnet precompile)、state ソースは fork した DB。
-- \`TxEnv::builder()\` — トランザクション単位の不変環境。\`caller\`, \`kind\` (Call vs Create), \`data\`, \`value\`, \`gas_limit\`。実行に影響する全フィールド。
-- \`evm.transact_one(tx_env)?\` — **キャッシュに対して** tx を実行。state 変更は \`db\` に書き戻される。**重要:** 「もし候補 tx が実行されたら、世界はこうなる」を表す DB が手元にある。これが必要だったもの。
-- \`Ok(None)\` 分岐は searcher 最初のフィルタ: revert する tx に arb エッジはない — pool の reserve が動かなかったから。
+## Step 4: 実物の Strategy — opensea-sudo-arb
 
-> 🛑 **予測。** ユーザーが pool の reserve の 100% を消費する swap を出した (drain 攻撃)。\`transact_one\` 後、DB 内の pool reserve は何になる? 頭の中で答えてから、Step 5 の 2-hop arb 数学に対する意味を考えてください。
+ここから本題。[\`crates/strategies/opensea-sudo-arb/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/strategies/opensea-sudo-arb) を開く。これは artemis ツリーに同梱されている唯一の strategy — OpenSea (Seaport) と Sudoswap (LSSVM プール) の間でアトミックにクロスマーケット NFT アービを取る。
 
-## Step 5: アービトラージを検出
+重要なファイルは 2 つ:
 
-知りたいこと: 候補 tx が pool A の価格を十分動かして、(同じペアの) 別 pool B に exploitable な spread が生まれたか?
+- [\`src/types.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/strategies/opensea-sudo-arb/src/types.rs) — この strategy 固有の \`Event\` / \`Action\` enum を定義。
+- [\`src/strategy.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/strategies/opensea-sudo-arb/src/strategy.rs) — \`impl Strategy<Event, Action> for OpenseaSudoArb\`。
+
+\`Event\` はこれだけ:
 
 \`\`\`rust
-sol! {
-    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
-}
-
-fn read_reserves(db: &mut ForkedDB, pool: Address) -> eyre::Result<(U256, U256)> {
-    let mut evm = Context::mainnet().with_db(db).build_mainnet();
-    let call = getReservesCall {}.abi_encode();
-
-    let result = evm.transact_one(
-        TxEnv::builder()
-            .caller(address!("0000000000000000000000000000000000000001"))
-            .kind(TxKind::Call(pool))
-            .data(call.into())
-            .gas_limit(1_000_000)
-            .build()?,
-    )?;
-
-    let ExecutionResult::Success { output: Output::Call(out), .. } = result.result else {
-        eyre::bail!("getReserves failed");
-    };
-
-    let decoded = getReservesCall::abi_decode_returns(&out, true)?;
-    Ok((U256::from(decoded.reserve0), U256::from(decoded.reserve1)))
-}
-
-fn detect_arb(
-    pool_a: (U256, U256),  // ユーザが触った pool の post-候補 reserves
-    pool_b: (U256, U256),  // 並行 pool (別 DEX、同ペア) の現在 reserves
-) -> Option<U256> {
-    // Constant-product 不変式: x * y = k。pool A が今 (xA, yA) で
-    // pool B が (xB, yB) にある時、(yA / xA) != (yB / xB) なら
-    // 価格差は exploitable。最適 in-amount は Angeris ら (2020) の閉形式解。
-    // 安い pool の価格を高い pool の価格に合うまで押し上げる。
-    //
-    // レッスンでは簡素化: spread が 30 bps (Uniswap fee 0.3% × 2 + headroom)
-    // を超えるかだけチェック。
-    let price_a = pool_a.1 * U256::from(10_000) / pool_a.0;
-    let price_b = pool_b.1 * U256::from(10_000) / pool_b.0;
-    let spread = if price_a > price_b { price_a - price_b } else { price_b - price_a };
-
-    if spread < U256::from(30) { return None; }
-
-    // 本物のコードはここで最適 arb サイズを計算する。
-    // レッスンは固定 1 ETH probe を返す — デモには十分、エッジ捕獲には不足。
-    Some(U256::from(10).pow(U256::from(18)))
+pub enum Event {
+    NewBlock(NewBlock),
+    OpenseaOrder(Box<OpenseaOrder>),
 }
 \`\`\`
 
-Walk:
+この strategy には 2 つの collector が入力を供給する: block collector と OpenSea order collector。それだけ。
 
-- **同じ** \`db\` を使って Revm Context を再構築する — reserve は post-候補 state から読む。\`getReserves\` は純粋 view (書き込まない) なのでシミュレーションを汚染しない。
-- spread の数学: basis points にスケール (10,000 = 100%)。30 bps ≈ 0.30% — Uniswap の往復手数料。これより小さい spread は手数料後に実質エッジなし。
-- 固定 1 ETH return は **意図的に production では誤り**。Angeris–Chitra–Evans の閉形式最適サイズは ~30 行の数学; 本レッスンは build の *形* を教えるためにスキップ。下の Drill 5 で実装してもらう。
-
-> 🔍 **リポで探す。** [Uniswap V2 pair](https://github.com/Uniswap/v2-core/blob/master/contracts/UniswapV2Pair.sol) ソースを開く。\`getReserves\` を見つける。3 値返すが、本レッスンでは 2 つしか使わない — タイムスタンプは TWAP 用 (Uniswap V2 の price-oracle ハック)。**何十もの fork でこの正確なパターンを目にする。**
-
-## Step 6: bundle を構築 (送らない)
+\`process_event\` の本体が **MEV 判断のすべて**:
 
 \`\`\`rust
-use alloy_signer_local::PrivateKeySigner;
-use alloy_network::TransactionBuilder;
-use alloy_rpc_types::TransactionRequest;
-use serde_json::json;
-
-async fn build_bundle(
-    signer: &PrivateKeySigner,
-    nonce: u64,
-    base_fee: u128,
-    candidate_tx_raw: &[u8],
-    arb_amount: U256,
-) -> eyre::Result<serde_json::Value> {
-    // Backrun: 安い pool で逆方向の swap
-    let backrun_request = TransactionRequest::default()
-        .with_from(signer.address())
-        .with_to(UNI_V2_ROUTER)
-        .with_value(arb_amount)
-        .with_nonce(nonce)
-        .with_gas_limit(300_000)
-        .with_max_fee_per_gas(base_fee * 3)
-        .with_max_priority_fee_per_gas(base_fee);
-    // (backrun swap call の input data は省略 — Drill 1 を見よ)
-
-    let backrun_signed = backrun_request
-        .build(&signer.clone().into())
-        .await?
-        .encoded_2718();
-
-    Ok(json!({
-        "txs": [
-            format!("0x{}", hex::encode(candidate_tx_raw)),
-            format!("0x{}", hex::encode(backrun_signed)),
-        ],
-        "blockNumber": "pending",
-    }))
+async fn process_event(&mut self, event: Event) -> Vec<Action> {
+    match event {
+        Event::OpenseaOrder(order) => self
+            .process_order_event(*order).await
+            .map_or(vec![], |a| vec![a]),
+        Event::NewBlock(block) => match self.process_new_block_event(block).await {
+            Ok(_) => vec![],
+            Err(e) => { panic!("Strategy is out of sync {}", e); }
+        },
+    }
 }
 \`\`\`
 
-Walk:
+\`process_order_event\`: 新しい NFT 出品が OpenSea に届いた — その NFT に対して出品価格より高く払う気のある Sudoswap プールはあるか? あれば、OpenSea で買って Sudo プールに売り抜ける 1 tx を出すアトミックな arb コントラクトへの \`Action::SubmitTx\` を返す。
 
-- \`PrivateKeySigner\` — Alloy ローカルサイナ。hex 文字列か keystore ファイルからロード。本物の鍵をコミットしないこと。
-- \`TransactionBuilder\` 拡張メソッド (\`with_from\`, \`with_to\` 等) — \`TransactionRequest\` への流れる API。\`build()\` 呼び出しがハッシュ + 署名を行う。
-- \`encoded_2718()\` — EIP-2718 エンベロープエンコーディング。Flashbots 系 relay が全て要求する。
-- bundle JSON の形は **\`eth_sendBundle\` が受け取るそのもの**。送るのは1 行の POST。送らない理由: (a) relay endpoint と \`X-Flashbots-Signature\` 認証が要る; (b) searcher の世界には本物のお金が動いていて、送る前に考えてほしいから。
+\`process_new_block_event\`: 新ブロックのログをスキャンして Sudo プールの state 変化 (buy / sell / spot price 更新) を拾い、内部の \`pool_bids\` マップを更新。アクションは出さない; state のメンテだけ。
 
-## Production に足りないもの
+> 🔍 **リポで探す。** 同じ \`strategy.rs\` 内で \`sync_state\` を探す。読む。**予測:** なぜこの strategy は開始前に「これまでに deploy された全 Sudo プール」を列挙する必要があるのか? 飛ばすと何が壊れる?
 
-このレッスンと、実際に MEV ゲームに勝つもののギャップに正直であれ:
+アービコントラクト自体は別の Solidity ファイル ([\`contracts/src/SudoOpenseaArb.sol\`](https://github.com/paradigmxyz/artemis/blob/main/crates/strategies/opensea-sudo-arb/contracts/src/SudoOpenseaArb.sol)) — strategy の仕事は機会を検出して calldata を整えること; アトミックな buy-sell はオンチェーンコントラクトが担う。
 
-| ギャップ | 本物の searcher が何をしているか |
-| :--- | :--- |
-| **マルチ DEX 対応** | V3, Curve, Balancer, カスタム AMM, CEX/DEX 脚 |
-| **最適サイジング** | Angeris–Chitra–Evans の閉形式; 非 CFMM では三分探索フォールバック |
-| **Bundle 提出** | \`eth_sendBundle\` を Flashbots / Beaverbuild / Titan / Rsync へ — relay ごとの inclusion rate を監視 |
-| **ガスオークション** | Coinbase tip エスカレーション; 条件付き bundle; private orderflow auction (PBS) |
-| **レイテンシ** | private mempool 購読; ビルダーとの colocation; スタック上位での FPGA / kernel-bypass ネットワーク |
-| **リスク管理** | sim 精度 vs オンチェーン現実; revert 保護 (条件付き builder では非 inclusion でも inclusion fee が発生); ポジション制限 |
+## Step 5: Step 1 の予測に答える
 
-あなたが組んだアーキテクチャ — mempool → fork-sim → detect → bundle — **はトップで使われているそのものです**。本物の searcher はスケール、最適化、エッジを足す — 構造を変えはしない。
+**なぜ Executor は Strategy と分離されているのか?** 同じ MEV opportunity を、その時点のチェーン状況に応じて 3 通りに提出しうるから: public mempool (安いが見える)、Flashbots bundle (private、アトミック)、MEV-Share (準 private、部分開示)。型付き \`Action\` を出して、engine がその日健康な executor へルーティングしてくれる strategy は **resilient**。\`flashbots_relay.send_bundle(...)\` をハードコードした strategy は Flashbots が degrade した日に死ぬ。
+
+trait の分割は理論的な綺麗さではない — **MEV ロジックを触らずに提出経路を入れ替えるため** の構造。
+
+> 🛑 **予測。** opensea-sudo-arb strategy に対して private mempool collector (例: Chainbound の Fiber、bloXroute) を足すなら、どこに足す? *具体的に:* どの trait を実装し、何を emit し、\`strategy.rs\` の何を (もしあれば) 変えるか?
+
+(答え: \`Collector<OpenseaOrder>\` を実装する — または \`CollectorMap\` 経由で \`Collector<Event>\` を直接実装 — engine に register する。\`strategy.rs\` への変更はゼロ。これが「アーキテクチャが効いている」状態。)
+
+## Step 6: 読みから出荷へ — 自分の bot
+
+artemis を使って Tempo や MegaETH 上で 2-hop Uniswap アービ searcher (古典) を ship したいとしたら:
+
+1. **再利用:** pending swap に \`MempoolCollector\`、新 head に \`BlockCollector\`、\`FlashbotsExecutor\` (または対象 L1 の bundle エンドポイント相当)。全部そのまま。
+2. **書く:** \`Event = { NewBlock, PendingTx }\` / \`Action = { SubmitBundle }\` を持つ \`UniArbStrategy\` を 1 つ。\`process_event\` の \`PendingTx\` 分岐: swap をデコード、Revm で fork シミュレート、クロスプール spread を検出、bundle を構築。\`NewBlock\` 分岐: reserve cache をリフレッシュ、古くなった opportunity を捨てる。
+3. **配線:** \`engine.add_collector(...)\` ×2、\`engine.add_strategy(UniArbStrategy::new(...))\`、\`engine.add_executor(...)\`、\`engine.run().await\`。
+
+MEV ロジックの面積はファイル 1 つ。残り全部は借り物。
+
+## 正直な比較 — artemis vs subway
+
+artemis は自分の系譜を認めている。README の [Acknowledgements](https://github.com/paradigmxyz/artemis/blob/main/README.md#acknowledgements) を読む: [\`subway\`](https://github.com/libevm/subway)、\`subway-rs\`、\`rusty-sando\`。これらは **完成品** の MEV bot — 特に subway は TypeScript のサンドイッチ bot で、end to end で出荷済み、*何の MEV をやるか* について意見を持っている。
+
+artemis はその逆: **フレームワーク** + 例として 1 つの strategy。subway は何を走らせるか教えてくれる。artemis はあなたが選んだものをどう組織化するかを教えてくれる。
+
+| | subway | artemis |
+| :--- | :--- | :--- |
+| **形** | turnkey サンドイッチ bot | フレームワーク + 例 strategy 1 つ |
+| **言語** | TypeScript | Rust |
+| **カスタマイズ** | fork して書き換え | trait を実装 |
+| **自分が用意するもの** | API キー、資本 | MEV ロジック、資本 |
+| **正解な状況** | サンドイッチを今日、学習素材として欲しい | まだ世にない strategy を ship したい |
+
+このレッスンを読んでいるあなたは後者を ship する側。artemis はあなたの足場。
+
+## リコールチェックリスト
+
+次のレッスンに進む前に、スクロールせずに以下に答えられることを確認:
+
+1. artemis の 3 つの trait の名前と、それぞれが何を入力 / 出力するか。
+2. strategy 間の調整ロジックはコードベースのどこにあるか? (引っ掛け — Step 2 参照。)
+3. なぜ Action enum はフレームワーク全体ではなく strategy 単位なのか?
+4. \`opensea-sudo-arb\` で \`process_new_block_event\` は \`process_order_event\` がやらないことを何をするか?
+5. 提出を public mempool から Flashbots に切り替えるとき、Strategy 実装の何を変えるか? (答え: 何も — 登録する Executor を入れ替える。)
+
+2 と 4 で詰まったら、次のレッスンに行く前に Step 2 と Step 4 を読み直し。
 
 ## Drill
 
-1. **Sushi に対応する。** Sushiswap V2 は同じ router ABI、アドレスは \`0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F\`。候補フィルタを両方の router を受け入れるように拡張せよ。(5分)
-2. **dust を弾く。** \`if amount_in < parse_units("1", "ether") { continue; }\` を入れて、1 ETH 未満の swap を無視する。前後で CPU 使用率を計測 — dust にどれだけ計算を費やしていたか? (15分)
-3. **利益閾値。** 各検出機会の期待利益 (ETH) を計算。ガス控除後の期待利益が 0.01 ETH を超える時のみ「送ったとする」処理を行う。(30分)
-4. **レイテンシ予算。** 各 step を \`Instant::now()\` で囲む。\`tx_received_at → simulation_done_at → bundle_built_at\` をログ。end-to-end レイテンシは何 ms か? どこが一番食ってる? (1時間)
-5. **最適サイジング。** 固定 1 ETH probe を [Angeris–Chitra–Evans 2020](https://arxiv.org/abs/2003.10001) の閉形式最適 arb サイズに置き換える。U256 で押し通せば数式は ~20 行の Rust。(3〜6時間)
+1. **新しい strategy を紙の上で設計する。** 本物の MEV opportunity を 1 つ選ぶ (Uniswap V3 JIT liquidity、Curve クロスプールアービ、perp funding-rate アービ)。紙の上で: どんな \`Event\` バリアントが必要か? どんな \`Action\` バリアントか? どの既存 collector / executor を再利用できるか? (30 分)
+2. **1 イベントを end-to-end で追う。** mainnet の pending tx が \`MempoolCollector::get_event_stream\` に届いてから、仮想の \`SubmitTxToMempool\` アクションが実行されるまで、artemis のコードベース内の \`.await\` ポイントを全部列挙する。思っているより少ない。(45 分)
+3. **collector を移植する。** [\`crates/artemis-core/src/collectors/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/artemis-core/src/collectors) から 1 つ選び、\`ethers-rs\` から Alloy 1.x に翻訳する。trait シグネチャは変わらない; 下回りの provider だけが変わる。(2 時間)
+4. **run loop を読む。** \`engine.rs\` をもう一度開く。\`run\` メソッドは \`collectors.len() + strategies.len() + executors.len()\` 個の task を spawn する。メッセージ経路を辿る: collector \`A\` からのイベントは、どうやって strategy \`B\` の \`process_event\` に届く? channel の型と receiver を答える。(30 分)
+5. **スタブ strategy を載せる。** artemis を clone し、\`crates/strategies/\` 配下に新モジュールを足し、\`Strategy<Event, Action>\` を実装。\`process_event\` はイベントを log するだけでよい。\`MempoolCollector\` + スタブ + no-op executor を走らせる最小バイナリに配線する。無料の WS エンドポイントに対して \`cargo run\`。(3 時間)
 
-Drill 5 を完成させれば、本物の searcher のアルゴリズム的核を持つ。提出 + マルチ DEX を加えれば 2022 年に出荷されたものと同等水準。
+Drill 5 まで終えれば、好きな MEV ロジックを流し込める artemis-based searcher の骨組みが手元にある。
 
-> 🛑 **最終チェック。** 一文で: なぜこの設計の中で **Step 3 の fork** が searcher を可能にする部分なのか? 答えに「候補が乗ったかのように世界を観察する」という意味の一節がないなら、Step 3 を読み直し — その再アンカリングがゲーム全体。
+> 🛑 **最終チェック。** 一文で: 一発書きの \`main.rs\` ではなく artemis を選ぶことで何が手に入るか? 答えに *strategy 間の再利用* または *提出経路の差し替え可能性* が入っていないなら、Step 5 を読み直し — その抽象が存在する理由の全部はそこ。
 
 ## 📺 関連動画
 
