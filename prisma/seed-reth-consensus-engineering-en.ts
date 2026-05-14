@@ -1118,7 +1118,7 @@ Studying bera-reth as a reference:
 - Your executor hooks ~= bera-reth's PoL hooks, with your business logic
 - Your NodeBuilder wiring ~= bera-reth's, calling your components
 
-**bera-reth is the template.** Tempo's node crate, when public, will look structurally identical — different business logic, same skeleton.
+**bera-reth is the template.** Tempo's node crate ([\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo)) is now public and you can verify the same shape directly — different business logic (payments-priority instead of PoL), same skeleton. Same compose-don't-fork pattern: their \`tempoxyz/reth\` is 0 commits ahead of upstream.
 
 ## 7. Practice
 
@@ -1908,7 +1908,7 @@ The final consensus check. You'll need this to ship a Tempo-class L1.`,
                         'Single sequencer — fastest, simplest.',
                       ],
                       correctIndex: 2,
-                      explanation: 'Hybrid PoS (option 2) is overengineered for 30 validators — you don\'t need a finality gadget when you can BFT directly. PoW (option 1) sacrifices finality. Single sequencer (option 4) works for launch but isn\'t a real "consensus design." Pure BFT at 30 validators is the textbook fit — Hyperliquid does this with ~20, Tempo will likely do similar.',
+                      explanation: 'Hybrid PoS (option 2) is overengineered for 30 validators — you don\'t need a finality gadget when you can BFT directly. PoW (option 1) sacrifices finality. Single sequencer (option 4) works for launch but isn\'t a real "consensus design." Pure BFT at 30 validators is the textbook fit — Hyperliquid does this with ~20, Tempo (now public at `tempoxyz/tempo`) lands in the same family.',
                     },
                     {
                       question: "What's the **purpose** of Reth's `Consensus` trait, and what does it explicitly NOT do?",

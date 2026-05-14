@@ -1609,7 +1609,7 @@ Reth ベースの chain が典型的に override するスロット:
 
 Reth ベース chain に触れるもの (bridge、settlement layer、custom node、sequencer integration など) を作るなら、**バイナリレベルではなく trait レベルで読む** 必要があります。「Tempo は X をどう処理するか?」という問いは、「Tempo の node crate がどの trait を override し、どう実装しているか?」に還元されます。
 
-Tempo のソースを待つ必要はありません。trait の境界はすでに **reth 側で完全公開** されています。Tempo の node crate が公開された時には、「この標準スロットのどれをカスタマイズし、なぜか?」を問うだけになります。
+**Tempo のソースは現在公開されています** ([\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo))。「この標準スロットのどれをカスタマイズし、なぜか?」というレンズで読んでください。開く前の参考データ: [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) は upstream Paradigm Reth に対して **0 commits ahead, 1374 commits behind**。Reth を一切 fork していないということ。payments 固有のカスタマイズはすべて \`tempoxyz/tempo\` crate に依存レベル拡張として存在します。
 
 ## 6. 練習
 
@@ -1631,7 +1631,7 @@ Tempo のソースを待つ必要はありません。trait の境界はすで�
                   xpReward: 45,
                   content: `# op-stack-on-reth を読む — Reth ベース L2 の解剖
 
-Optimism は「Reth ベース L2」の正典です。その node コードは \`paradigmxyz/reth/crates/optimism/\` にあります。Tempo の node crate がこれに似た構造で来るなら、すでに読める状態だということ。本レッスンの目的は、**ディレクトリ構造を自明にする** ことです。
+Optimism は「Reth ベース L2」の正典です。その node コードは \`paradigmxyz/reth/crates/optimism/\` にあります。Tempo の node crate も同様の構造で公開済み ([\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo))、ここを読めれば向こうも読める。本レッスンの目的は、**ディレクトリ構造を自明にする** ことです。
 
 > 🛑 **スクロール前に予測。** 新しい Reth ベース L2 が node crate を出荷したとして、**そこに並ぶサブディレクトリを 5 つ** とそれぞれの担当を挙げてください。出てこなければ前レッスンに戻る。
 
@@ -1692,18 +1692,18 @@ Optimism は「Reth ベース L2」の正典です。その node コードは \`
 
 ステップ 3 が終わった時点で **何が違うか** はわかります。ステップ 4–5 は *どう違うか* を読む段階。
 
-## 5. Tempo はこう見えるはず
+## 5. Tempo を読む — 公開済み
 
-作業仮説 (Paradigm が Tempo の node crate を公開するまで):
+Tempo のソースは [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo)（900+★、Rust）で公開されています。\`crates/optimism/\` と同じ要領で読めます。期待される構造（あなた自身で source-of-truth として検証してください）:
 
-- \`tempo-chainspec\` crate — Tempo の fork 高、gas params、決済固有の precompile
-- \`tempo-node\` crate — NodeBuilder composition
-- \`tempo-evm\` crate — 決済プリミティブの custom precompile (FX rate oracle? settlement-proof verify? regulated-asset check?)
-- \`tempo-payload-builder\` crate — sequencer 用
-- \`tempo-pool\` crate — 決済固有の mempool policy (merchant 認可など)
-- 任意: \`tempo-consensus\` — L1-anchored finality を使わない場合 (Tempo は L1 なので、ほぼ確実に "yes")
+- \`tempo-chainspec\` 相当 — Tempo の fork 高、gas params、決済固有の precompile
+- \`tempo-node\` 相当 — NodeBuilder composition
+- \`tempo-evm\` 相当 — 決済プリミティブの custom precompile (FX rate oracle? settlement-proof verify? regulated-asset check?)
+- \`tempo-payload-builder\` 相当 — sequencer 用
+- \`tempo-pool\` 相当 — 決済固有の mempool policy (merchant 認可など)
+- \`tempo-consensus\` 相当 — Tempo は L1 なので存在する
 
-これが出てきたときには、\`crates/optimism/\` と同じ要領で読めます。
+開く前のメタ観察: [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) は upstream に対して **0 commits ahead, 1374 commits behind**。Reth 本体は触られていない。L1 全体が依存レベルの拡張で実現されているという、SDK の最強の証拠。
 
 ## 6. 練習
 
@@ -1916,7 +1916,7 @@ Tempo は L1 なので、以下は無いはず:
 - Tempo に「現在の FX rate」のような oracle slot が組み込まれているなら pre-execution hook (OP の L1 block hash slot と同じ発想)
 - 異なる fee 市場構造 (Tempo は stablecoin-native なので、fee 資産の選択が興味深い)
 
-Tempo の executor crate が公開されたら、最も注意深く読むべきファイルです。
+Tempo の executor は現在公開されています — [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) で該当ファイルを開き、上記の仮説を実コードに対して検証してください。
 
 ## 7. 練習
 
@@ -2036,7 +2036,7 @@ Tempo が sequencer モード block 生成に op-rbuilder を採用または拡�
                   xpReward: 50,
                   content: `# ケーススタディ — Paradigm のスタック: alphanet、Tempo、L1 パターン
 
-ここまでで 4 つの拡張スロット (ChainSpec、executor、payload builder、RPC) と、Reth ベース chain の依存関係の形を見てきました。本レッスンはその **総合編** です: Paradigm の全スタックはどう見えるか、Tempo のソースが公開されたときに何を期待すべきか。
+ここまでで 4 つの拡張スロット (ChainSpec、executor、payload builder、RPC) と、Reth ベース chain の依存関係の形を見てきました。本レッスンはその **総合編** です: Paradigm の全スタックはどう見えるか、そして **Tempo のソースが公開された今**、先ほど学んだ構造のレンズでそれをどう読むか。
 
 > 🛑 **予測。** Paradigm はこの順で出荷してきました: **revm → alloy → reth → alphanet → op-stack-on-reth → Tempo**。**このシーケンスは何の軌跡か?** 予想してから読み進めてください。後で答え合わせします。
 
@@ -2076,23 +2076,31 @@ Tempo に何が入っているかを予測したいなら、**最近 alphanet �
 
 ## 4. Tempo — Paradigm の決済 L1 on Reth
 
-高い確信で言えること:
-- Tempo は Paradigm 製の決済特化 L1
-- Tempo は Reth 上で動く (両方とも Paradigm 開発)
-- Tempo Moderato が公開テストネット
-- Chainlink CCIP が cross-chain rail (CCTP は Tempo をカバーしていない)
+公開済み。構造はこのモジュールのテーゼをそのまま裏付けています:
 
-Node crate が公開されたら期待すべきもの:
+- **[\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo)** (900+★、Rust) — "the blockchain for payments"。L1 node crate。
+- **[\`tempoxyz/reth\`](https://github.com/tempoxyz/reth)** — upstream Paradigm Reth に対して **0 commits ahead, 1374 commits behind**。Reth を一切 fork していない。Tempo は upstream Reth をライブラリとして依存。これが「compose, don't fork」の教科書的な実例です。
+- **Tempo Moderato** が公開テストネット。
+- **Chainlink CCIP** が cross-chain rail (CCTP は Tempo をカバーしていない)。
+
+L1 と同時に出荷された隣接 crate:
+- **[\`tempoxyz/zones\`](https://github.com/tempoxyz/zones)** — Tempo にアンカーされた confidential blockchain。暗号化された deposit/withdrawal、250ms ブロック時間、L1 から継承される compliance ポリシー (TIP-403)。
+- **[\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs)** — Machine Payments Protocol: agent/machine 決済用の HTTP-402 ベース支払いプロトコル。IETF draft。Payment-method agnostic (Tempo、Stripe、ACH)。
+- **[\`tempoxyz/tempo-foundry\`](https://github.com/tempoxyz/tempo-foundry)** — Tempo サポートつきの Foundry fork (これも薄い fork — 同じ compose-don't-fork パターン)。
+- **[\`tempoxyz/tidx\`](https://github.com/tempoxyz/tidx)** — PostgreSQL + ClickHouse のハイブリッドインデクサ (OLTP の point lookup + OLAP analytics)。
+
+[\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) を開いた時に学んだばかりの構造に対して期待するもの:
+
 - **Custom ChainSpec** — Tempo 固有の fork と precompile schedule
-- **Custom executor** — 決済プリミティブ用 precompile (候補: FX rate 読み出し、settlement attestation の検証、regulated-asset チェック)
+- **Custom executor** — 決済プリミティブ用 precompile (FX rate 読み出し、settlement attestation の検証、regulated-asset チェック)
 - **Custom payload builder** — merchant 認識つきの ordering とレート制限
-- **Custom RPC namespace** — \`tempo_*\` 系のメソッド、merchant / payment 用エンドポイント
-- **Custom mempool policy** — ローンチ時はほぼ間違いなく private mempool、認可された提出者だけが受け付けられる
+- **Custom RPC namespace** — \`tempo_*\` 系のメソッド、merchant / payment 用エンドポイント、加えて Machine Payments Protocol との統合
+- **Custom mempool policy** — ローンチ時はほぼ間違いなく private mempool、認可された提出者だけ受け付け
 
-期待 **すべきでない** もの:
-- Reth core から乖離した独自 fork
+*不在* を検証すべきもの (SDK がそれを不在にできるから):
+- Reth core から乖離した独自 fork (確認済み — fork は空)
 - 独自 EVM 実装 (revm が EVM そのもの)
-- 独自ネットワークスタック (reth の P2P を再利用するはず)
+- 独自ネットワークスタック (reth の P2P を再利用)
 
 ## 5. Extension model における L1 vs L2
 
@@ -2123,17 +2131,17 @@ Tempo のローンチ時に reth を trait レベルで読まずに現れる誰�
 
 ## 7. 最終練習
 
-このモジュールの成果物: Tempo の node crate が公開された日に、以下を 1 セッションで読み通して 1 ページのアーキテクチャサマリーが書けるようになること。
+このモジュールの成果物: [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) を開いて、1 セッションで以下を読み通して 1 ページのアーキテクチャサマリーを書くこと。
 
-1. Tempo node crate の \`Cargo.toml\`
-2. chainspec crate (hardfork + precompile schedule)
-3. \`node/src/lib.rs\` の NodeBuilder composition
-4. NodeBuilder で名前が出た順に、各 crate を読む
-5. Tests ディレクトリ
+1. Tempo node crate の \`Cargo.toml\` — reth 依存が upstream で fork されていないことを確認
+2. chainspec crate — hardfork + precompile schedule
+3. NodeBuilder composition (\`node/src/lib.rs\` 相当) — 6 コンポーネントのうちどれが差し替えられ、どれが継承されているか
+4. 差し替えられた各 crate を順に — payload、pool、RPC namespace
+5. Tests ディレクトリ — どの振る舞いを assert する価値があると判断したか?
 
-これを **今のうちに alphanet で練習** しておいてください。Tempo が出てきたときには、もう準備は終わっています。
+alphanet を end-to-end で読んだことがないなら、それを先に練習として。規模が小さくクリーン。
 
-> 最終チェック: Tempo repo が公開された瞬間に検証する **具体的な仮説を 5 つ**、自分の仕事への重要度順に挙げてください。5 つ挙げられないなら、本モジュールはまだ完全には定着していません — §4、§5 を再読。`,
+> 最終チェック: [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) のソースを読んで **検証した具体的な事実を 5 つ**、自分の仕事への重要度順に挙げてください。5 つ挙げられないなら、本モジュールはまだ完全には定着していません — §4、§5 を再読してからソースに戻る。`,
                 },
                 {
                   title: 'クイズ: 拡張パターンは定着したか?',
@@ -2225,15 +2233,15 @@ Tempo のローンチ時に reth を trait レベルで読まずに現れる誰�
                       explanation: 'Gas pricing (選択肢 1 は逆) は主に chainspec の問題で、builder と executor の対比軸ではない。両者同じ (3) は誤り — この分離こそが要点。署名検証 (4) は executor / tx validator 側の責務で、builder ではない。クリーンな分割: builder = 選択 + 順序づけ、executor = 言われたとおりに実行。',
                     },
                     {
-                      question: 'Tempo の node crate 構造を公開前に予測したい。構造的な事前知識の出どころとして最良なのは?',
+                      question: '`tempoxyz/tempo` を初めて開き、Paradigm が「compose, don\'t fork」モデルに従ったかを確認したい。最もシグナルが強い 1 手は?',
                       options: [
-                        'Tempo のマーケティングサイトと発表ブログ',
-                        'Geth のソースを読み、決済特化 chain がどう作られるかを把握する',
-                        'Reth の crates/optimism/ と paradigmxyz/alphanet を「Paradigm が Reth ベース chain をどう作るか」の正典として読み、L1 と L2 の差分を頭の中で調整する',
-                        '公開されるまで待つ — 公開前の推測は信頼できない',
+                        'README と発表ブログを読む',
+                        '`tempoxyz/reth` を開き、`paradigmxyz/reth` に対する commits-ahead/behind を確認する',
+                        '`tempoxyz/tempo` ワークスペース内の crate 数を数える',
+                        'Tempo と upstream Reth のスループットを比較するベンチマークを走らせる',
                       ],
-                      correctIndex: 2,
-                      explanation: 'マーケティング (1) はポジショニングを教えてくれるが構造は教えない。Geth (2) は Tempo が採用しているモデルとは逆方向。待つ (4) は姿勢であって戦略ではない — Paradigm が同じ組織であることから、選択肢 3 の事前確率は非常に強い。彼らがすでに公開している Reth ベース chain を読むことが、最も信頼できる準備。',
+                      correctIndex: 1,
+                      explanation: 'README / ブログ (1) は正しいことを言っているが証明にはならない。Crate 数 (3) は緩い相関しかなくノイジー。ベンチマーク (4) は性能を測るのであって fork したかどうかではない。Fork チェック (2) が決定的な構造的テスト — そして答えは "0 ahead, 1374 behind"、これが「compose, don\'t fork」テーゼに対する最強の経験的証明。',
                     },
                   ],
                 },

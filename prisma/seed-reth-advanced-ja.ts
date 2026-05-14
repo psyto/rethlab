@@ -1577,14 +1577,21 @@ flowchart TB
 
 ## Tempo — 何を差し替えているか
 
-（執筆時点の公開情報 — 最新を検証してください。）
+Tempo のソースは現在公開されています（[\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) — 900+★、"the blockchain for payments"）。開く前に知っておく価値があるのが、Tempo の Reth fork [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) は upstream Paradigm Reth に対して **0 commits ahead, 1374 commits behind**。Reth を fork していないということ。payments 固有のカスタマイズはすべて \`tempoxyz/tempo\` crate に存在し、それが upstream Reth をライブラリとして依存している。
+
+これは SDK の売りに対する最強の経験的証明 — そして Paradigm の設計が、継承する 80% を触らずにどのコンポーネントを差し替えられるようにしたかを正確に示している:
 
 - **\`pool\`** — payments 優先レーン。マーチャント決済が高 gas な DeFi tx の後ろで待つべきではない; pool が違う扱いで surface する。
 - **\`payload\`** — payment finality パターンに合わせたブロック構築。
-- **\`add_ons\`** — payment 固有エンドポイント用のカスタム RPC。
-- **\`consensus\` / \`executor\`** — おそらく Reth デフォルト + 標準 L1 コンセンサス。
+- **\`add_ons\`** — payment 固有エンドポイント用のカスタム RPC ネームスペース、加えて [Machine Payments Protocol](https://github.com/tempoxyz/mpp-specs)（エージェント決済用の HTTP-402 レイヤ）との統合。
+- **\`consensus\` / \`executor\`** — Reth デフォルトで十分。カスタム EVM もカスタムコンセンサスも不要だった。
 
-パターン: **thesis に合う部分を差し替え、それ以外はそのまま。** Tempo の thesis は payments-priority; 差し替えるコンポーネントがそれを反映する。カスタム executor（カスタム Opcode なし）やカスタム consensus（標準 PoS で OK）は不要。
+L1 と同時に出荷された隣接 crate（Reth コンポーネント差し替えそのものではないが、Reth を未改造のまま依存できることで成立しているもの）:
+
+- **[Zones](https://github.com/tempoxyz/zones)** — Tempo にアンカーされた confidential blockchain。暗号化された deposit/withdrawal、250ms ブロック時間、L1 から継承される compliance ポリシー（TIP-403）。
+- **[tidx](https://github.com/tempoxyz/tidx)** — hot point lookup と analytics 用の PostgreSQL+ClickHouse ハイブリッドインデクサ。
+
+パターン: **thesis に合う部分を差し替え、それ以外はそのまま。** Tempo の thesis は payments-priority; 差し替えるコンポーネントがそれを反映する。カスタム executor（カスタム Opcode なし）やカスタム consensus（標準 L1 PoS で OK）は不要だったので書かなかった。
 
 ## Berachain (bera-reth) — 何を差し替えているか
 

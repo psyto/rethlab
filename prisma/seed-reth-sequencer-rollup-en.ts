@@ -152,6 +152,10 @@ Most chains are at position 1. Position 4 is the architectural frontier — cove
 - Decentralization path likely: multi-operator → PoS → eventually maybe shared
 - Your soltempo / mppsol code interacts with **the sequencer's RPC**, treats it as the chain's source of truth
 
+### Tempo Zones — the anchored-confidential pattern
+
+Worth knowing as a sequencer-architecture variant. [\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) are private blockchains *anchored to Tempo*: a Zone runs its own sequencer with **250ms block time**, processes confidential transactions (encrypted balances and recipients), and **submits batched withdrawals back to Tempo every Tempo block (~500ms)**. Compliance policies (TIP-403) are inherited from Tempo L1 and enforced inside the Zone. The architectural takeaway: a "rollup-like" privacy chain that lives on top of an L1 you also control, with anchored finality and inherited compliance — a pattern most L2 designs don't have a name for yet.
+
 ### Hypothetical "your own L2"
 
 If you spin up a chain on OP Stack:

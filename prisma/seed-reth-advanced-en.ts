@@ -1577,14 +1577,21 @@ Each gets a \`*Builder\` trait — \`PoolBuilder\`, \`NetworkBuilder\`, etc. —
 
 ## Tempo — what they swap
 
-(Public information at the time of writing — verify against latest.)
+Tempo's source is now public ([\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) — 900+★, "the blockchain for payments"). Worth knowing **before you open it**: their Reth fork at [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) is **0 commits ahead, 1374 commits behind** upstream Paradigm Reth. They did not fork Reth at all. The entire payments-specific customization lives in the \`tempoxyz/tempo\` crate, which depends on upstream Reth as a library.
+
+That's the strongest possible empirical proof of the SDK's pitch — and it tells you exactly which components Paradigm's design enabled them to swap without touching the 80% they inherit:
 
 - **\`pool\`** — Payment-prioritized lanes. A merchant payment shouldn't wait behind a high-gas DeFi tx; the pool surfaces them differently.
 - **\`payload\`** — Block construction tuned for payment-finality patterns.
-- **\`add_ons\`** — Custom RPC for payment-specific endpoints.
-- **\`consensus\` / \`executor\`** — likely Reth defaults plus standard L1 consensus.
+- **\`add_ons\`** — Custom RPC namespaces for payment-specific endpoints, plus integration with the [Machine Payments Protocol](https://github.com/tempoxyz/mpp-specs) (their HTTP-402 layer for agent payments).
+- **\`consensus\` / \`executor\`** — Reth defaults are sufficient; they did not need a custom EVM or custom consensus.
 
-The pattern: **swap the parts that match your thesis, keep everything else.** Tempo's thesis is payments-priority; the components they swap reflect that. They don't need a custom executor (no custom opcodes) or custom consensus (standard PoS works).
+Adjacent novel surfaces worth knowing they shipped (not direct Reth component swaps, but enabled by the unmodified Reth dependency):
+
+- **[Zones](https://github.com/tempoxyz/zones)** — confidential blockchains anchored to Tempo, with encrypted deposits/withdrawals and 250ms block times. Compliance policies (TIP-403) inherited from L1.
+- **[tidx](https://github.com/tempoxyz/tidx)** — PostgreSQL+ClickHouse hybrid indexer for hot point lookups + analytics.
+
+The pattern: **swap the parts that match your thesis, keep everything else.** Tempo's thesis is payments-priority; the components they swap reflect that. They didn't need a custom executor (no custom opcodes) or custom consensus (standard L1 PoS works), so they didn't write those.
 
 ## Berachain (bera-reth) — what they swap
 

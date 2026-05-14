@@ -1620,7 +1620,7 @@ Each of these is a study in "what's the smallest patch the chain needs?" The ans
 
 If you are building anything that touches a Reth-based chain — a bridge, a settlement layer, a custom node, a sequencer integration — you need to read at the **trait level**, not the binary level. The question "how does Tempo handle X?" reduces to "which trait does Tempo's node crate override, and how?"
 
-You don't need Tempo's source to start. The trait surface is **already in reth**, fully public. Once Tempo's node crate is published, reading it will be a matter of asking "which of these standard slots did they customize, and why?"
+**Tempo's source is now public** at [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo), and you should read it through the lens of that question: "which of these standard slots did they customize, and why?" One concrete data point before you open it: [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) is **0 commits ahead, 1374 behind** upstream Paradigm Reth — they did not fork Reth at all. Every payments-specific customization lives in the \`tempoxyz/tempo\` crate as a dependency-level extension.
 
 ## 6. Practice
 
@@ -1780,7 +1780,7 @@ pub enum OptimismHardfork {
 
 Each variant comes with **activation logic** (block height on mainnet, separate timestamp on each network like Sepolia, Base, etc.). Reading this enum + its activation table = reading the chain's entire protocol history.
 
-For Tempo, expect a similar enum. The names will be different, but the shape will be the same.
+For Tempo, you can verify the same shape directly in [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) — different fork names, same enum + activation-table structure.
 
 ## 3. The precompile schedule
 
@@ -1927,7 +1927,7 @@ But likely YES:
 - Pre-execution hooks if Tempo has a built-in "current FX rate" oracle slot, by analogy with OP's L1 block hash slot
 - A different fee market structure (Tempo is stablecoin-native; the fee-asset choice is interesting)
 
-When Tempo's executor crate is public, this is the file you read most carefully.
+Tempo's executor is now public — find it in [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo); the equivalent file is where you'd verify each of the above hypotheses against actual code.
 
 ## 7. Practice
 
@@ -2047,7 +2047,7 @@ Then read [op-rbuilder's README](https://github.com/paradigmxyz/rbuilder) for th
                   xpReward: 50,
                   content: `# Case study — Paradigm's stack: alphanet, Tempo, and the L1 pattern
 
-You've now seen the four extension slots (ChainSpec, executor, payload builder, RPC) and the dependency shape of a Reth-based chain. This lesson is the **synthesis**: what does Paradigm's full stack look like, and what should you expect when Tempo's source goes public?
+You've now seen the four extension slots (ChainSpec, executor, payload builder, RPC) and the dependency shape of a Reth-based chain. This lesson is the **synthesis**: what does Paradigm's full stack look like, and now that **Tempo's source is public**, how do you read it against the structure you just learned?
 
 > 🛑 **Predict before scrolling.** Paradigm has shipped, in order: **revm → alloy → reth → alphanet → op-stack-on-reth → Tempo**. **What's the trajectory** that sequence describes? Hold your answer; the lesson will compare.
 
@@ -2087,21 +2087,29 @@ If you want to predict what Tempo has, **look at what's been validated in alphan
 
 ## 4. Tempo — Paradigm's payment L1 on Reth
 
-What we know with high confidence:
-- Tempo is a Paradigm-built payment-focused L1
-- Tempo runs on Reth (Paradigm builds both)
-- Tempo Moderato is the public testnet
-- Chainlink CCIP is the cross-chain rail (CCTP doesn't cover Tempo)
+Now public, and the structure validates the entire thesis of this module:
 
-What we should expect when the node crate is published:
+- **[\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo)** (900+★, Rust) — "the blockchain for payments." This is the L1 node crate.
+- **[\`tempoxyz/reth\`](https://github.com/tempoxyz/reth)** — **0 commits ahead, 1374 commits behind** upstream Paradigm Reth. They did not fork Reth. Tempo depends on upstream Reth as a library. This is the textbook example of "compose, don't fork."
+- **Tempo Moderato** is the public testnet.
+- **Chainlink CCIP** is the cross-chain rail (CCTP doesn't cover Tempo).
+
+Adjacent crates shipped alongside the L1:
+- **[\`tempoxyz/zones\`](https://github.com/tempoxyz/zones)** — confidential blockchains anchored to Tempo. Encrypted deposits/withdrawals, 250ms block time, compliance (TIP-403) inherited from L1.
+- **[\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs)** — Machine Payments Protocol: an HTTP-402-based payment protocol for agent/machine transactions. IETF draft. Payment-method agnostic (Tempo, Stripe, ACH).
+- **[\`tempoxyz/tempo-foundry\`](https://github.com/tempoxyz/tempo-foundry)** — Foundry fork with Tempo support (also a thin fork, same compose-don't-fork pattern).
+- **[\`tempoxyz/tidx\`](https://github.com/tempoxyz/tidx)** — hybrid PostgreSQL + ClickHouse indexer (OLTP point lookups + OLAP analytics).
+
+What to expect when you open [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo), matching what you just learned:
+
 - **Custom ChainSpec** with Tempo-specific forks and precompile schedule
-- **Custom executor** with payment-specific precompiles (likely candidates: FX rate read, settlement attestation verify, regulated-asset check)
+- **Custom executor** with payment-specific precompiles (FX rate read, settlement attestation, regulated-asset checks)
 - **Custom payload builder** with merchant-aware ordering and rate-limiting
-- **Custom RPC namespace** (\`tempo_*\` methods) for merchant/payment endpoints
-- **Custom mempool policy** — almost certainly private mempool at launch, restricted to authorized submitters
+- **Custom RPC namespace** (\`tempo_*\` methods) for merchant/payment endpoints, plus integration with the Machine Payments Protocol
+- **Custom mempool policy** — likely private mempool at launch, restricted to authorized submitters
 
-What we should NOT expect:
-- A divergent fork of reth core
+What to verify is *absent* (because the SDK lets it be absent):
+- A divergent fork of reth core (confirmed — the fork is empty)
 - A bespoke EVM implementation (revm is the EVM)
 - A custom networking stack (reth's P2P is reused)
 
@@ -2134,17 +2142,17 @@ You are **months ahead** of anyone who shows up at Tempo's launch without having
 
 ## 7. Final practice
 
-The deliverable for this module: when Tempo's node crate goes public, you should be able to write a 1-page architectural summary within a single sitting by reading:
+The deliverable for this module: open [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) and write a 1-page architectural summary in a single sitting by reading:
 
-1. The Tempo node crate's \`Cargo.toml\`
-2. The chainspec crate (hardforks + precompile schedule)
-3. The NodeBuilder composition in \`node/src/lib.rs\`
-4. Each crate listed in the NodeBuilder, in order
-5. The tests directory
+1. The Tempo node crate's \`Cargo.toml\` — confirm the reth dependency is upstream and unforked
+2. The chainspec crate — hardforks + precompile schedule
+3. The NodeBuilder composition (likely in \`node/src/lib.rs\` or similar) — which of the 6 components are swapped, which inherit
+4. Each swapped crate in order — payload, pool, RPC namespace
+5. The tests directory — what behaviors did they care enough about to assert?
 
-Practice this on alphanet **now**. When Tempo lands, you're ready.
+If you've never read alphanet end-to-end, do that first as practice — it's smaller and cleaner.
 
-> Final check: name **5 specific hypotheses** about Tempo's source that you'd test the moment the repo is public, ranked by importance for your own work. If you can't list 5, this module hasn't fully landed — re-read sections 4 and 5.`,
+> Final check: write **5 specific things you verified by reading \`tempoxyz/tempo\` source**, ranked by importance for your own work. If you can't list 5, this module hasn't fully landed — re-read sections 4 and 5, then go back to the source.`,
                 },
                 {
                   title: 'Quiz: did the extension pattern stick?',
@@ -2236,15 +2244,15 @@ A short test on the extension model and where each customization lives. No fluen
                       explanation: 'Gas pricing (option 1 swap) is mostly chainspec, not builder vs executor. Identical (option 3) is wrong — the separation is the entire point. Signature validation (option 4) is at the executor / tx validator layer, not the builder. The clean split: builder = selection + ordering, executor = run-what-you-are-told.',
                     },
                     {
-                      question: 'You want to predict the structure of Tempo\'s node crate before it is published. Which of the following is the BEST source of structural priors?',
+                      question: 'You open `tempoxyz/tempo` for the first time and want to confirm Paradigm followed the "compose, don\'t fork" model. What is the single highest-signal check?',
                       options: [
-                        "Tempo's marketing site and announcement blog posts",
-                        "Reading geth's source to understand how payment-focused chains are typically built",
-                        "Reading reth's crates/optimism/ and paradigmxyz/alphanet as canonical examples of how Paradigm builds Reth-based chains, then mentally adjusting for L1 vs L2 differences",
-                        "Waiting until the source is published — speculation before then is unreliable",
+                        "Read the README and announcement blog posts",
+                        "Open `tempoxyz/reth` and check its commits-ahead/behind count against `paradigmxyz/reth`",
+                        "Count the number of crates in the `tempoxyz/tempo` workspace",
+                        "Run a benchmark comparing Tempo and upstream Reth throughput",
                       ],
-                      correctIndex: 2,
-                      explanation: 'Marketing (option 1) tells you positioning, not structure. Geth (option 2) is the opposite of the model Tempo will follow. Waiting (option 4) is a posture, not a strategy — and the priors from option 3 are very strong because Paradigm is the same org. Reading their existing Reth-based chains is the highest-signal preparation.',
+                      correctIndex: 1,
+                      explanation: 'README / blog posts (option 1) say the right things but don\'t prove them. Crate count (option 3) is loosely correlated but noisy. Benchmarks (option 4) measure perf, not whether they forked. The fork check (option 2) is the definitive structural test — and the answer is "0 ahead, 1374 behind," which is the strongest empirical proof of the compose-don\'t-fork thesis.',
                     },
                   ],
                 },

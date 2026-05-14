@@ -152,6 +152,10 @@ Rollup はスペクトラム上に存在:
 - 分散化パス: マルチオペレータ → PoS → 最終的に共有も
 - Soltempo / mppsol コードは **sequencer の RPC** とやり取り、chain の source of truth として扱う
 
+### Tempo Zones — アンカードな confidential パターン
+
+Sequencer アーキテクチャのバリエーションとして知っておく価値あり。[\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) は **Tempo にアンカーされた** プライベートブロックチェーン。各 Zone は自前の sequencer を **250ms ブロック時間** で運用、confidential な tx (暗号化された残高と受取人) を処理し、**Tempo ブロックごと (約 500ms) にバッチ化された withdrawal を Tempo へ提出** する。コンプライアンスポリシー (TIP-403) は Tempo L1 から継承され Zone 内で強制される。アーキテクチャ上の学び: 自分が同時に運用する L1 の上に乗る "ロールアップ的" なプライバシー chain、アンカードな finality と継承された compliance を伴う — 大半の L2 設計がまだ名前を持たないパターン。
+
 ### 仮想「自分の L2」
 
 OP Stack で chain を spin up:

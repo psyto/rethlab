@@ -1118,7 +1118,7 @@ bera-reth を参照として学ぶ:
 - 自分の executor hook ~= bera-reth の PoL hook、自分のビジネスロジック付き
 - 自分の NodeBuilder 配線 ~= bera-reth の、自分のコンポーネントを呼ぶ
 
-**bera-reth がテンプレート**。Tempo の node crate が公開された時、構造的に同一に見える — ビジネスロジック違い、骨格同じ。
+**bera-reth がテンプレート**。Tempo の node crate ([\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo)) は公開されていて、同じ形を直接検証できる — ビジネスロジック違い (PoL ではなく payments-priority)、骨格同じ。同じ compose-don't-fork パターン: \`tempoxyz/reth\` は upstream に対して 0 commits ahead。
 
 ## 7. 練習
 
@@ -1974,7 +1974,7 @@ Hyperliquid は slashing 付き launch。OP-Stack chain は notoriously slashing
                         '0% — bera-reth はただの config file。',
                       ],
                       correctIndex: 1,
-                      explanation: 'Expert Module 3 の headline でも: Reth ベース chain は *拡張* で作られ、fork ではない。bera-reth の vanilla Reth に対する diff は小さいが consensus-critical。Tempo の node crate 出荷時に同じパターン。',
+                      explanation: 'Expert Module 3 の headline でも: Reth ベース chain は *拡張* で作られ、fork ではない。bera-reth の vanilla Reth に対する diff は小さいが consensus-critical。公開された `tempoxyz/tempo` も同じパターン (彼らの `tempoxyz/reth` は upstream に対して 0 commits ahead)。',
                     },
                     {
                       question: 'L1 を launch する。Day 0 コンセンサス: 単一 sequencer。**最初の 2 年で現実的な分散化軌跡** は?',
