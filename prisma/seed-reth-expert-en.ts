@@ -84,6 +84,14 @@ criterion_main!(benches);
 
 > 🛑 **Anti-fluency.** Your Criterion bench shows function X is 20% faster after a change. Is the **node** 20% faster? Why might it not be? Be specific — name two reasons a microbench can lie about real-world impact.
 
+### Whole-node benchmarks: snapshot the disk
+
+The anti-fluency prompt above lands the real problem: microbenchmarks don't capture system effects. The fix is to benchmark a whole-node workload, but that needs the same on-disk state every run — and a 500 GB Reth database takes hours to rebuild between runs. Paradigm uses [\`tempoxyz/schelk\`](https://github.com/tempoxyz/schelk) for exactly this: a block-device snapshot/rollback tool that restores the scratch volume by copying only the blocks that the benchmark *wrote* (tracked via \`dm-era\`), so rollback takes seconds instead of hours, and the workload still runs against plain ext4 on real NVMe with no overlay or CoW filesystem in the read path.
+
+The pedagogical point: when you read perf claims about Reth ("we shaved 15% off staged sync"), assume the authors are using something like schelk between runs. A benchmark without rollback discipline is unrepeatable; a benchmark with the wrong rollback (LVM thin overlays, btrfs snapshots) measures the rollback machinery as much as the workload.
+
+> 🔍 **Find in repo.** Open [\`tempoxyz/schelk\`](https://github.com/tempoxyz/schelk) and read \`docs/SKILL.md\`. **Three things will surprise you about how it does rollback.** Name them before continuing — then verify against the repo.
+
 ## 2. Cache lines, not lines of code
 
 On a modern CPU, reading from RAM is ~100x slower than doing arithmetic on a register. So "make the code shorter" is the wrong knob — **make the memory layout friendlier** is the right one. The unit the CPU actually loads is a **64-byte cache line** (not a byte, not a struct field — a fixed 64-byte chunk).

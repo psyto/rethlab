@@ -252,334 +252,235 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 `,
                 },
                 {
-                  title: 'Reorg-Aware Indexer を ExEx で作る',
+                  title: '本物の Production Indexer を読む — Tempo の tidx',
                   slug: 'build-exex-indexer-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Reorg-Aware Indexer を ExEx で作る
+                  content: `# 本物の Production Indexer を読む — Tempo の tidx
 
-Etherscan、Dune、すべてのリクイデーション bot — どれも同じ問題を解いている: **チェーンを自分のデータストアに読み込み、reorg が起きても壊さない** (*reorg* とは、一時的にノードがチェーンの先端で食い違い、別ブロックが勝つこと — 結果、自分の DB には「もう存在しないブロック」の行が残る)。ExEx (Reth の Execution Extension API — Reth プロセス内で動くカスタムコードのフック) は、これを 2,000 行のサイドプロジェクトから ~250 行の単一ファイルに変える機構です。それを作ります。
+Etherscan も Dune も indexer です。そのアーキテクチャは公開されていません。[\`tidx\`](https://github.com/tempoxyz/tidx) は公開されている — Tempo の EVM L1 向け production indexer で、オープンソース、実運用中。本レッスンではこのコードを読み解きます。何を選び、何が当たっていて、ソースを読まないと見えないトレードオフはどこか — それを見る。
 
-> 📌 **スコープの正直な開示。** ERC-20 Transfer イベントを Postgres にインデックスする (フル reorg 対応 — \`ChainCommitted\` で commit、\`ChainReverted\` で undo、\`ChainReorged\` で swap)。データの上に public API を載せる部分は構築しない。それは indexer の後半で、本レッスンが答える問いとは直交: *「ノード速度で正しいチェーンデータをデータストアに入れるには?」*
+リポを開く。読む。本レッスンはそのガイド。
 
-> 📚 **参考。** [QuickNode の *How to Build and Deploy Reth ExExs*](https://www.quicknode.com/guides/infrastructure/how-to-use-reth-exex) は本レッスンが乗る ExEx 機構の良い primer。ここではそれを土台に、Postgres 書き込み・FinishedHeight シグナル・production gaps まで含む完全な reorg-aware indexer を組み上げる。
+> 📌 **これが正しい出発点である理由。** あらゆる「indexer を作る」チュートリアルは、データベース 1 つで足りるフリをする。production が現実に壁にぶつかるのは、2 種類のクエリ形が共存する瞬間: *「アドレス X から最新 10 件の transfer」* (point lookup — PostgreSQL の勝ち) と *「過去 1 年の日次 transfer 量」* (range scan — ClickHouse の勝ち)。tidx は両方のバックエンドに並列で書き込み、クエリを適合する方に振り分ける。**この dual-storage の決断こそがレッスン全体のテーマ。**
 
-## 何を作るか
+## OLTP vs OLAP の設計テンション、具体に
 
-\`\`\`mermaid
-flowchart LR
-    Reth["Reth node<br/>(in-process)"] -->|ExExNotification| Loop["ExEx loop"]
-    Loop -->|ChainCommitted| Decode["Decode Transfer logs<br/>from receipts"]
-    Decode -->|rows| Insert["INSERT into Postgres"]
-    Loop -->|ChainReverted| Delete["DELETE WHERE<br/>block IN range"]
-    Loop -->|ChainReorged| Swap["DELETE old +<br/>INSERT new"]
-    Insert --> Signal["Send FinishedHeight<br/>(let Reth prune)"]
-    Delete --> Signal
-    Swap --> Signal
-\`\`\`
+PostgreSQL のような row store は、各 transfer の全カラムをディスク上で隣接させる。「0xAlice からの最新 10 件」を答えるには、planner が \`from\` の index で 10 ページほどジャンプして返す。マイクロ秒。
 
-単一の \`main.rs\` が **Reth のプロセス内で** 動く。JSON-RPC ラウンドトリップなし、別ノードなし、WebSocket 再接続ロジックなし。ExEx は Reth 自身が生成するチェーンイベントを型付きストリームで受け取る。
+ClickHouse のような column store は、**カラム単位**で隣接させる。「過去 1 年の日次 volume」を答えるには、何百万行に渡って \`value\` と \`block_timestamp\` の **2 カラムだけ** をスキャンして集計。これもマイクロ秒。各行の残り 12 カラムには触れていないから。
 
-> 🛑 **スクロール前に予測。** なぜ「in-process」がここでのアーキテクチャ的な勝ちか? ノード外で動くことが indexer に強いる作業のうち、内側に住むことでスキップできるものを、一文で答えてください。Step 2 まで答えを書き留めてから先へ。
+それぞれに相手の質問をすると死ぬ:
 
-## なぜ ExEx か (\`eth_getLogs\` ポーリング vs 直接 DB read との比較)
+- PostgreSQL に *「過去 1 年の日次 volume」*: その範囲に Transfer を含む全ページの全行を read。ディスク律速。実データセットで数十秒〜数分。
+- ClickHouse に *「0xAlice からの最新 10 件」*: ClickHouse には point-lookup index がない; スキャンする。答えが 10 行のためのムダ IO。
 
-| 方式 | レイテンシ | reorg 正確性 | Reth 結合度 |
-| :--- | :--- | :--- | :--- |
-| **\`eth_getLogs\` ポーリング** | 秒 (poll 間隔 + RPC) | 手動 — 自分で再取得 + reconcile | なし、ただしレイテンシ + 負荷で代償 |
-| **直接 MDBX read** | µs | なし — MDBX は committed state を見せる、チェーン履歴は見えない | 密、しかし reorg シグナルが一切ない |
-| **ExEx** | µs (in-process channel) | **型付き reorg event が届く** | Reth crate への Cargo dep |
+> 🛑 **スクロール前に予測。** もし PostgreSQL しかなかったら、indexer を殺すクエリクラスを 1 つ挙げよ。ClickHouse だけならどうか。両方の答えを頭に入れる — 残りのレッスンはこの両方の死を tidx がどう回避するかの話。
 
-ExEx は 3 つのうち **正確性 (reorg event)** と **レイテンシ (in-process)** の両方を提供する唯一の選択肢。代償は indexer が **Reth バイナリの一部として shipping** されること — コードが同一プロセスに住む。単一目的の indexer にとって、これは features: 1 バイナリ、1 データストア、glue 不要。
+tidx の解: **両方に書き、read で振り分ける。** 同じチェーンデータが両エンジンに着地し、HTTP API はクエリに応じて (または明示的な \`?engine=\` で) エンジンを選ぶ。
 
-## Cargo.toml
+## Step 1: Dual Sink — 1 つの reader、2 つの write
 
-\`\`\`toml
-[package]
-name = "transfer-indexer"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-# Reth crate — production では特定タグにピン留め
-reth                = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-exex           = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-node-ethereum  = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-tracing        = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-primitives     = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-
-# Alloy (event デコード用)
-alloy-primitives    = "1.5"
-alloy-sol-types     = "1.5"
-
-# Postgres
-sqlx                = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "migrate"] }
-
-# 配管
-futures-util        = "0.3"
-tokio               = { version = "1", features = ["macros", "rt-multi-thread"] }
-eyre                = "0.6"
-\`\`\`
-
-> Reth は ExEx crate を crates.io に安定的なペースで publish しない — Git タグから引くのが標準パターン。特定タグ (ここでは \`v1.5.0\`) にピン留めし、新 Reth でテストする準備ができたら意図的に bump する。
-
-## Step 1: ExEx スケルトン
-
-すべての ExEx の形は同じ。これを読めば、これから世界に存在するすべての ExEx の 80% を読んだことになる:
+[\`src/sync/sink.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/sink.rs) を開く。「2 回書く」抽象が ~120 行で全部入っている:
 
 \`\`\`rust
-use futures_util::TryStreamExt;
-use reth::{api::FullNodeComponents, builder::NodeTypes, primitives::EthPrimitives};
-use reth_exex::{ExExContext, ExExEvent, ExExNotification};
-use reth_node_ethereum::EthereumNode;
-use reth_tracing::tracing::info;
-
-async fn indexer<Node>(mut ctx: ExExContext<Node>, db: sqlx::PgPool) -> eyre::Result<()>
-where
-    Node: FullNodeComponents<Types: NodeTypes<Primitives = EthPrimitives>>,
-{
-    while let Some(notification) = ctx.notifications.try_next().await? {
-        match &notification {
-            ExExNotification::ChainCommitted { new } => {
-                handle_commit(&db, new).await?;
-            }
-            ExExNotification::ChainReverted { old } => {
-                handle_revert(&db, old).await?;
-            }
-            ExExNotification::ChainReorged { old, new } => {
-                handle_revert(&db, old).await?;
-                handle_commit(&db, new).await?;
-            }
-        }
-
-        if let Some(committed) = notification.committed_chain() {
-            ctx.events.send(ExExEvent::FinishedHeight(committed.tip().num_hash()))?;
-        }
-    }
-    Ok(())
+#[derive(Clone)]
+pub struct SinkSet {
+    pool: Pool,                 // PostgreSQL (常に存在)
+    ch: Option<ClickHouseSink>, // ClickHouse (オプショナル)
 }
 
-fn main() -> eyre::Result<()> {
-    reth::cli::Cli::parse_args().run(async move |builder, _| {
-        let db = sqlx::PgPool::connect(&std::env::var("DATABASE_URL")?).await?;
-        sqlx::migrate!().run(&db).await?;
-
-        let handle = builder
-            .node(EthereumNode::default())
-            .install_exex("transfer-indexer", async move |ctx| Ok(indexer(ctx, db.clone())))
-            .launch_with_debug_capabilities()
-            .await?;
-
-        handle.wait_for_node_exit().await
-    })
+impl SinkSet {
+    pub async fn write_all(
+        &self,
+        blocks: &[BlockRow], txs: &[TxRow],
+        logs: &[LogRow], receipts: &[ReceiptRow],
+    ) -> Result<()> {
+        if let Some(ch) = &self.ch {
+            tokio::try_join!(
+                writer::write_batch(&self.pool, blocks, txs, logs, receipts),
+                ch.write_blocks(blocks),
+                ch.write_txs(txs),
+                ch.write_logs(logs),
+                ch.write_receipts(receipts),
+            )?;
+        } else {
+            writer::write_batch(&self.pool, blocks, txs, logs, receipts).await?;
+        }
+        Ok(())
+    }
 }
 \`\`\`
 
 Walk:
 
-- **\`ctx.notifications\`** — \`ExExNotification\` の型付きストリーム。3 バリアント: \`ChainCommitted\` (新ブロック追加)、\`ChainReverted\` (ローカルチェーンが背後で fork されたためブロック削除)、\`ChainReorged\` (チェーンが別チェーンに丸ごと swap)。**reorg はファーストクラス。** ポーリングなし、推測なし — Reth が教えてくれる。
-- **\`ctx.events.send(FinishedHeight(...))\`** — Reth に「ブロック N までは durably にデータストアに書いた」と伝える。Reth はこれを使って、あなたのパイプラインを壊さずに state をどこまで prune できるかを知る。**送らないと Reth は安全側に倒して state を永久保持する**; 送ればディスク使用量は Reth 通常の prune 方針内に収まる。
-- **\`main\` の \`install_exex\`** — ExEx を名前付きで登録。Builder が channel 配線とプロセス統合を引き受ける。
+- **\`tokio::try_join!\`** — PG と CH の書き込みは sequential ではなく concurrent。Wall-clock コストは \`pg + ch\` ではなく \`max(pg, ch)\`。健全なノードなら両方とも 1 桁 ms。
+- **PG は 1 トランザクション、CH は 4 つの直接 insert。** PostgreSQL の \`write_batch\` は 4 テーブル (blocks/txs/logs/receipts) を 1 トランザクションに入れる — クラッシュで部分書き込みが残らない。ClickHouse はマルチテーブルトランザクションをサポートしない — append-only なので、クラッシュ時の部分バッチは chunk-retry の仕事 ([\`src/sync/ch_sink.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/ch_sink.rs) の \`CH_MAX_RETRIES\` ループ)。
+- **CH は \`Option\` 型。** ClickHouse を設定しなければ、tidx はクリーンに PG-only にデグレードする。OLAP クエリが使えなくなるだけ。
 
-> 🔍 **リポで探す。** [\`reth-exex-examples\`](https://github.com/paradigmxyz/reth-exex-examples) を開いて、好きなプロジェクトを 1 つ選ぶ。\`install_exex\` 呼び出しを見つける。その \`indexer\` (またはそれっぽい名前の) 関数を上記と比較せよ — **全部この同じ形。** これがパターン。一度見えれば、世の中の ExEx 全部読める。
+> 🛑 **予測。** 素朴な dual-sink だと、1 回のチェーン read が必ず 2 回の write になる。\`write_all\` が reader に与える順序保証は? 具体に: ブロック N について CH には未到達なのに PG にはあるという状況は起き得るか? \`try_join!\` の semantics を読んで答えよ。
 
-## Step 2: receipt から Transfer event をデコード
+(答え: 起き得る、ただし一瞬。\`try_join!\` は両方が成功した時点で return するが、その間 CH を先に叩いた reader は古い状態を見る。tidx はこれを受容する; ClickHouse の backfill cursor — \`sync_state\` の \`ch_backfill_block\` — はまさにこのギャップを事後修復するために存在する。)
 
-\`handle_commit\` を埋めていきます。コミットされたチェーン内のすべてのブロック、すべての tx、その receipt のすべての log を walk して、ERC-20 Transfer event をデコード:
+## Step 2: Sync Engine — 1 つの fetcher、ファンアウト
 
-\`\`\`rust
-use alloy_primitives::{Address, B256, U256};
-use alloy_sol_types::{sol, SolEvent};
-use reth::providers::Chain;
-
-sol! {
-    event Transfer(address indexed from, address indexed to, uint256 value);
-}
-
-#[derive(Debug)]
-struct TransferRow {
-    block_number: u64,
-    tx_hash: B256,
-    log_index: u32,
-    token: Address,
-    from_addr: Address,
-    to_addr: Address,
-    value: U256,
-}
-
-fn extract_transfers(chain: &Chain) -> Vec<TransferRow> {
-    let mut rows = Vec::new();
-
-    for (block, receipts) in chain.blocks_and_receipts() {
-        let block_number = block.number;
-
-        for (tx, receipt) in block.body.transactions.iter().zip(receipts.iter()) {
-            let tx_hash = tx.hash();
-
-            for (log_index, log) in receipt.logs.iter().enumerate() {
-                // topic[0] が event signature; abi_decode_log が検証する
-                let Ok(decoded) = Transfer::decode_log(log, true) else { continue };
-
-                rows.push(TransferRow {
-                    block_number,
-                    tx_hash,
-                    log_index: log_index as u32,
-                    token: log.address,
-                    from_addr: decoded.from,
-                    to_addr: decoded.to,
-                    value: decoded.value,
-                });
-            }
-        }
-    }
-    rows
-}
-\`\`\`
-
-Walk:
-
-- **\`chain.blocks_and_receipts()\`** — Chain 型はブロックと receipt をすでにアラインされた形で対にしてくれる。**これが in-process で動くことの対価。** ポーリング型 indexer はこのアラインを 2 つの別 RPC コールから再構築 + race condition を reconcile する必要がある。
-- **\`Transfer::decode_log\`** — \`sol!\` マクロが生成。\`true\` は \`topic[0]\` が Transfer signature と一致するかを検証; Transfer 以外の log は綺麗に \`Err\` を返してスキップされる。
-- **ここでは token フィルタしない。** すべての ERC-20 がこの正確な event を emit する。indexer はそれら全部を取得し、consumer が気になる token を query する設計。(token アドレスでフィルタするなら、下流で 1 行 WHERE 句を足すだけ)
-
-> 🛑 **予測。** あるトークンコントラクトが malformed な Transfer event (topic 数が違う、ABI が変) を emit する。\`decode_log\` がどう振る舞うか walk through。**なぜ silently skip (\`Err → continue\`) が indexer にとって正解か?** ヒント: 代替 (panic する) がパイプラインに何をするかを考えて。
-
-## Step 3: Postgres スキーマと insert
-
-スキーマ (\`migrations/0001_init.sql\`):
-
-\`\`\`sql
-CREATE TABLE IF NOT EXISTS transfers (
-    block_number   BIGINT       NOT NULL,
-    tx_hash        BYTEA        NOT NULL,
-    log_index      INTEGER      NOT NULL,
-    token          BYTEA        NOT NULL,
-    from_addr      BYTEA        NOT NULL,
-    to_addr        BYTEA        NOT NULL,
-    value          NUMERIC(78)  NOT NULL,  -- U256 を入れる
-    PRIMARY KEY (tx_hash, log_index)
-);
-
-CREATE INDEX transfers_block_number_idx ON transfers (block_number);
-CREATE INDEX transfers_token_idx        ON transfers (token);
-CREATE INDEX transfers_from_addr_idx    ON transfers (from_addr);
-CREATE INDEX transfers_to_addr_idx      ON transfers (to_addr);
-\`\`\`
-
-Insert (Transfer 1 件 = 1 row):
+[\`src/sync/engine.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/engine.rs) を開く。Engine はチェーンを *1 回* 読んで、結果を \`SinkSet::write_all\` に渡す。構造体フィールドを読む:
 
 \`\`\`rust
-async fn handle_commit(db: &sqlx::PgPool, chain: &Chain) -> eyre::Result<()> {
-    let rows = extract_transfers(chain);
-    if rows.is_empty() { return Ok(()); }
-
-    let mut tx = db.begin().await?;
-    for r in &rows {
-        sqlx::query!(
-            "INSERT INTO transfers (block_number, tx_hash, log_index, token, from_addr, to_addr, value)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (tx_hash, log_index) DO NOTHING",
-            r.block_number as i64,
-            r.tx_hash.as_slice(),
-            r.log_index as i32,
-            r.token.as_slice(),
-            r.from_addr.as_slice(),
-            r.to_addr.as_slice(),
-            r.value.to_string().parse::<sqlx::types::BigDecimal>()?,
-        )
-        .execute(&mut *tx)
-        .await?;
-    }
-    tx.commit().await?;
-    Ok(())
+pub struct SyncEngine {
+    throttled_pool: ThrottledPool,
+    sinks: SinkSet,             // ← ファンアウトはここ
+    realtime_rpc: RpcClient,    // ← tip 追跡用の別 RPC client
+    backfill_rpc: RpcClient,    // ← gap 埋め用の別 RPC client
+    chain_id: u64,
+    ...
 }
 \`\`\`
 
-Walk:
+RPC client が 1 つではなく 2 つ。なぜ? Realtime sync (チェーン head 追跡) は厳しいレイテンシ予算; backfill (古い gap 埋め) は帯域貪欲。両者が 1 つのコネクション制限付き pool を共有すると、遅い backfill が realtime を starve させてノードが visibly に lag する。**別 client = 別 concurrency 予算。** ファイル冒頭の定数: \`REALTIME_RPC_CONCURRENCY = 4\`、\`BACKFILL_RPC_CONCURRENCY = 8\`。
 
-- **\`(tx_hash, log_index)\` を主キーに** — Ethereum log の正規 ID。reorg をきれいに生き残る: 再 inclusion された tx は同じ hash を保つので、\`ON CONFLICT DO NOTHING\` で正しく no-op になる。
-- **chain commit ごとに 1 トランザクション、row ごとではない。** Reth は通常 1 ノーティフィケーションあたり 1〜8 ブロックを届ける; 書き込みを 1 つの Postgres トランザクションにバッチすることが、忙しい committer で 50ms と 5s の違いを生む。
-- **\`NUMERIC(78)\`** — U256 max は 2²⁵⁶ ≈ 1.16 × 10⁷⁷、78 桁の十進数に収まる。\`BigDecimal\` が sqlx の Rust マッピング。
+> 🔍 **リポで探す。** 同じファイルで \`backfill_first\` と \`trust_rpc\` を見つける。それぞれ 30 秒ずつ読む。**自分の言葉で:** \`backfill_first\` はノード起動の何を変えるか? \`trust_rpc\` は何をオプトアウトするか?
 
-## Step 4: reorg ハンドリング
+## Step 3: スキーマ — 同じデータ、2 つの形
 
-これこそが indexing で ExEx を使う最大の理由。canonical chain が足元で変わったら、orphan になったブロックに対して書いたものを undo する必要がある:
+ここで OLTP/OLAP の二重性が抽象でなくなる。両方を並べて開く:
+
+- PostgreSQL: [\`db/blocks.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/blocks.sql), [\`txs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/txs.sql), [\`logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/logs.sql), [\`receipts.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/receipts.sql)
+- ClickHouse: [\`db/clickhouse/blocks.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/blocks.sql), [\`txs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/txs.sql), [\`logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/logs.sql), [\`receipts.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/receipts.sql)
+
+カラムは同じ。テーブルエンジン、ordering key、index が違う。PG は \`(tx_hash)\`、\`(block_num)\`、\`(from)\`、\`(to)\` に btree index — point lookup したい全カラム。CH は MergeTree 系エンジンで \`(block_num, ...)\` ソート — time-range スキャンに自然な物理レイアウト。
+
+カラムの選択自体も **よくある質問では JOIN 不要** になるよう作られている。\`txs\` テーブルは \`block_timestamp\` を非正規化で持つ。\`logs\` も同様。\`receipts\` も同様。関係正規化主義者なら正規化するところを、本物の production indexer は「analytics クエリには毎回 timestamp が必要」という経験を積んでバイトを払う。
+
+> 🔍 **リポで探す。** [\`db/logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/logs.sql) と [\`db/clickhouse/logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/logs.sql) を両方開く。片方にあり片方にないカラムまたは index を 1 つ特定。**自分の言葉で:** それぞれが最適化しているクエリクラスは何か?
+
+## Step 4: Lazy event decoding — キモの設計判断
+
+ほとんどの indexer (Subgraph、Goldsky、OpenZeppelin Defender) は index したい event すべての **事前登録** を要求する。ABI を前もって宣言し、indexer は event ごとに型付きテーブルを作り、書き込み時にその event だけをデコードする。
+
+tidx はそれをしない。\`logs\` スキーマを見る — 格納されているのは **生バイト**: \`selector BYTEA, topics BYTEA[], data BYTEA\`。Event 単位のテーブルなし。事前登録なし。デコードは **クエリ時** に、ABI signature を CTE generator として渡す形で行われる。
+
+[\`src/query/parser.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/query/parser.rs) を開く。\`EventSignature::parse\` は \`Transfer(address indexed from, address indexed to, uint256 value)\` のような文字列を受け取って:
+
+1. ABI param 型をパース
+2. \`topic0 = keccak256("Transfer(address,address,uint256)")\` を計算
+3. \`logs\` を \`selector = topic0\` でフィルタしデコード済みフィールドを名前付きカラムとして射影する CTE を router が **合成** するための \`EventSignature\` を返す
+
+ユーザの SQL はその event 名をテーブルとして参照できる:
+
+\`\`\`bash
+tidx query \\
+  --signature "Transfer(address indexed from, address indexed to, uint256 value)" \\
+  "SELECT * FROM Transfer WHERE from = '\\\\xAlice...' LIMIT 10"
+\`\`\`
+
+代償: 永遠に全コントラクトの全ログを保存する。Subgraph 方式の「これらのコントラクトだけ index する」と比べて生バイトで ~5〜10 倍。
+
+得るもの: **事前登録していない質問に答えられる。** 新トークンが launch — 1 分目からクエリできる。新しい event signature が出現 — backfill なしでデコードできる。トレードオフは「質問空間を開いたままにする代価としてディスクを払う」 — ディスクは安い。
+
+> 🛑 **理解度チェック。** スクロール戻しなしで自分の言葉で: なぜ tidx は Subgraph が要求する事前登録をスキップできるのか? デコードが起きる **場所** が両者でどう違う? ヒント: ABI が両システムでどこに住むかを考えよ。
+
+## Step 5: Query routing — engine 選択
+
+[\`src/query/router.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/query/router.rs) を開く。エンジン選択の契約はこれだけ:
 
 \`\`\`rust
-async fn handle_revert(db: &sqlx::PgPool, chain: &Chain) -> eyre::Result<()> {
-    let range = chain.range();
-    let from = *range.start() as i64;
-    let to   = *range.end() as i64;
-
-    sqlx::query!(
-        "DELETE FROM transfers WHERE block_number BETWEEN $1 AND $2",
-        from,
-        to,
-    )
-    .execute(db)
-    .await?;
-
-    Ok(())
+pub enum QueryEngine {
+    ClickHouse,  // OLAP
+    Postgres,    // OLTP
 }
 \`\`\`
 
-それだけ。みんなが最初の挑戦で間違える部分が 3 行。なぜこんなにシンプルか?
+エンジン 2 つ。HTTP API ([\`/query\`](https://github.com/tempoxyz/tidx/tree/main/src/api)) はオプションの \`?engine=\` パラメータを受け取る; 省略すれば router が選ぶ。README の例:
 
-- **冪等な schema。** \`(tx_hash, log_index)\` が主キーなので、同じ row が 2 回存在できない。block 範囲で削除すれば commit 時に書いた row を正確に消せる。
-- **Reth が正確な範囲を教えてくれる。** 「reorg はブロック N から始まったか N-1 か?」の推測なし。reverted Chain の range *が* 答え。
-- **\`ChainReorged\` は revert + commit の合成。** Step 1 のディスパッチでそう扱う。**1 つのパターンで 3 つの notification 型をカバー。**
+- \`SELECT * FROM blocks WHERE num = 12345\` → point lookup → PG。
+- \`SELECT type, COUNT(*) FROM txs GROUP BY type\` → 集計 → CH。
 
-> 🔍 **リポで探す。** [reth-execution-types の \`Chain\`](https://github.com/paradigmxyz/reth/blob/main/crates/evm/execution-types/src/chain.rs) を開く。\`range()\` メソッドを見つける。\`RangeInclusive<BlockNumber>\` を返す — 両端点が有効なブロック。\`*range.start()\` と \`*range.end()\` で取り出す; iterator から \`.first()\` を使うのは違う (range 全体を materialize して useful には使わない)。
+正直な版: 振り分けルールは魔法ではなくヒューリスティック。プロダクションユーザは \`?engine=clickhouse\` で明示的にオーバーライドする (用途がわかっているとき)。エンジン分離が **アーキテクチャ的なコミット**; auto-routing は上に乗ったコンビニエンス。
 
-## Step 5: FinishedHeight — Reth に prune させる
+## Step 6: Materialized views — CH 上の事前計算 analytics
 
-Step 1 ですでに書いたこの 1 行:
+[\`src/api/views.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/api/views.rs) を開く。ClickHouse は「materialized view」を持つ — read 時ではなく insert 時に計算する自動更新の aggregation。tidx はそれを管理する HTTP API を ship している:
 
-\`\`\`rust
-ctx.events.send(ExExEvent::FinishedHeight(committed.tip().num_hash()))?;
+\`\`\`bash
+curl -X POST "https://tidx.example.com/views" -d '{
+  "chainId": 4217,
+  "name": "top_holders",
+  "sql": "SELECT token, holder, sum(balance) AS balance
+          FROM token_balances GROUP BY token, holder HAVING balance > 0",
+  "orderBy": ["token", "holder"]
+}'
 \`\`\`
 
-しかし立ち止まる価値がある。あなたが送る信号は Reth に伝える: *「このブロックまで durably に書きました。これより前の state と履歴は私を壊さずに prune できる」*。これを送らないと:
+\`POST /views\` で CH がやること: 推定スキーマでターゲットテーブル \`analytics_4217.top_holders\` を作成、ソースへの insert で自動 populate される materialized view \`top_holders_mv\` を作成、そして **既存データを backfill** (ソースクエリから)。以降、ソースへの新規 insert ごとに view が増分更新される。\`SELECT * FROM top_holders\` はもうスキャンではなく index lookup。
 
-- Reth は あなたの ExEx が任意の歴史的ブロックの state をまだ読みたいかもしれないと仮定する必要がある
-- ディスク使用量が無限に線形成長
-- ExEx を 6 ヶ月走らせたノードは普通のノードの 6 倍のストレージ
+認可に注目: \`POST\` と \`DELETE\` は **trusted IP** (\`trusted_cidrs\` で設定、典型は Tailscale) からの接続を要求する。パターン: read API は public、write/admin API は CIDR ゲート。
 
-送れば:
+> 🔍 **リポで探す。** [\`views.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/api/views.rs) で \`require_admin_mutation\` を見つける。trusted IP *かつ* \`x-tidx-admin: 1\` ヘッダの両方を要求していることに注意。**なぜ両方?** (Defense in depth — IP は誤設定されたネットワーク内ではスプーフできる; ヘッダは安価な 2 段目のチェック。)
 
-- Reth の pruner はあなたの一番遅い ExEx と同じ速さで進む
-- ディスク使用量は Reth 通常の prune ポリシー内に収まる
-- 複数の ExEx が共存する場合、Reth は全 ExEx の中で最低の \`FinishedHeight\` を tracking する
+## Step 7: Sync アーキテクチャ — Realtime + Gap Sync
 
-> 🛑 **理解度チェック。** スクロール戻しなしで: なぜ Reth はあなたの一番遅い ExEx の \`FinishedHeight\` より先のブロックを prune したがらないのか? 自分の言葉で答えてください。ヒント: ノード再起動時に、ExEx がまだ処理していないブロックを Reth がすでに prune してしまっていたら何が起きるか考えて。(ネタバレ: あなたの indexer がそのブロックを永久にスキップ、データが間違う、誰かが query するまで気づかない)
+README の [Sync Architecture](https://github.com/tempoxyz/tidx/blob/main/README.md#sync-architecture) セクションは concurrent な 2 ループを図示している:
 
-## Production に足りないもの
+- **Realtime** はチェーン head を追って ~0 lag を維持。
+- **Gap Sync** は不連続を検出し、最新から最古に向かって埋める。
 
-| ギャップ | 本物の indexer が何をしているか |
-| :--- | :--- |
-| **Backpressure** | Postgres が遅いと ExEx が stall して Reth の notification channel が back up する。Production は writer を bounded queue で wrap + 溢れたら disk-buffer に dump |
-| **スキーママイグレーション** | sqlx migrations を使う (ここでも最低限使った)。Production は起動時に lock 取って running する (replica レース防止) |
-| **Self-hosted Reth 運用** | クラスタ運用、ピア管理、snapshot リカバリ。代替: [QuickNode Dedicated Clusters](https://www.quicknode.com/guides/infrastructure/node-setup/how-to-run-a-reth-node) でマネージド Reth を選択可能 — ExEx が value-add でノード運用が本業ではない場合に有用 |
-| **レプリカ / シャーディング** | 1 ExEx → 1 Postgres。読み取りレプリカ、\`block_number\` でのパーティショニング、archive vs hot 階層 — 全て標準の DBA 仕事 |
-| **より多い event のデコード** | ここでは \`Transfer\` だけ。\`Approval\`、\`Swap\`、\`Sync\`、独自プロトコル event を足す。パターン (event 1 つにつき \`sol! { event ... }\` 1 ブロック、フィルタ 1 つにつき \`decode_log\` 1 つ) はスケールする |
-| **トークン単位のエンリッチメント** | Transfer row を token メタデータ (name, symbol, decimals) に書き込み時 vs query 時で join。トレードオフ: 書き込み時は RPC コスト、query 時は JOIN コスト |
-| **Liveness モニタリング** | indexer の \`FinishedHeight\` を Reth の tip と毎分比較。閾値超えたら page |
+Gap sync が最新優先なのは設計上の判断: ユーザが query する最近のデータが先に落ちるべきで、古い履歴は下で backfill する。\`sync_state\` テーブルは 4 つのブロック番号 — \`head_num\`、\`tip_num\`、\`synced_num\`、\`backfill_num\` — を tracking し、それぞれが異なる条件下で動く。[\`db/sync_state.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/sync_state.sql) を開いてカラムコメントを読む; この 4-cursor 設計が 2 つのループを互いに踏まずに共存させている。
 
-あなたが書いたアーキテクチャ — ExEx loop、notification 型でディスパッチ、Postgres write、FinishedHeight シグナル — **このレイヤーより上のすべての production indexer が同じことをしている**。彼らは features と運用を足す; 背骨は同一。
+## Step 8: 読みから書きへ — 自分の indexer
+
+MegaETH 用、独自 OP-stack rollup 用、または自前チェーン用の indexer を ship したいとして、tidx を adopt するとどうなる? 2 つの道:
+
+**そのまま採用。** チェーンが Ethereum JSON-RPC を喋るなら、\`config.toml\` の 1 フィールド — \`rpc_url\` — を変えて \`tidx up\` を走らせるだけ。tidx のテーブルはチェーン非依存; \`chain_id\` はカラムであってスキーマ決定ではない。
+
+**Fork。** チェーンに tidx のスキーマがモデル化していない feature があるなら (Tempo 系の fee payer、独自 precompile trace、sponsored-tx フィールドなど) 3 箇所を fork:
+
+1. \`db/*.sql\` と \`db/clickhouse/*.sql\` — チェーン固有の追加カラム
+2. \`src/sync/decoder.rs\` — 各 block / tx / receipt から追加フィールドを抽出
+3. \`src/types.rs\` — decoder から sink に流れる \`*Row\` struct を拡張
+
+ほぼ fork しない部分: sync engine、dual sink、query router、views API。これらがアーキテクチャ; その他はすべてデータ定義。
+
+## tidx vs Subgraph / Goldsky — 正直な比較
+
+| | tidx | Subgraph / Goldsky |
+| :--- | :--- | :--- |
+| **ホスティング** | セルフホスト (PG + CH を自分で運用) | マネージドサービス |
+| **定義** | SQL schema + on-the-fly ABI | Subgraph manifest + AssemblyScript handler |
+| **事前登録** | なし — どの event でも signature で query | 必須 — manifest で全 event 宣言 |
+| **ストレージコスト** | 高い (生 log を永続保存) | 低い (宣言された event のみ) |
+| **クエリ I/F** | SQL + REST | GraphQL |
+| **OLAP クエリ** | ネイティブ (ClickHouse) | 一般に弱い / export 必要 |
+| **正しい選択になるとき** | データを所有し、SQL を使い、熱い OLAP クエリを走らせる | zero-ops、GraphQL-native、event スコープが宣言済み |
+
+どちらが厳密に良いというわけではない。tidx は indexed chain data を **自分のデータベース** として扱う場合 (OLAP scan が重要なとき) の選択; マネージドサービスは「チェーンデータの上の API」で十分で運用キャパが制約のときの選択。
+
+## Recall チェックリスト
+
+次に進む前に、スクロールせずに以下に答えられるか確認:
+
+1. PostgreSQL が殺すクエリクラスを 1 つ; ClickHouse が殺すクエリクラスを 1 つ挙げよ。
+2. PG と CH の書き込みが単一の sync ステップからファンアウトするのはコードのどこか? (ファイル + 関数)
+3. なぜ tidx は sync engine で別々の RPC client を 2 つ使うのか?
+4. なぜ tidx は Subgraph が要求する event 事前登録をスキップできるのか? (ABI デコードはどこで起きる?)
+5. Materialized view が ad-hoc な \`GROUP BY\` query にない何を買ってくれるのか?
+6. 新チェーンのカスタム tx フィールド向けに tidx を fork するとして、触る 3 ファイルを挙げよ。
+
+3、4、6 でつまずいたら、次のレッスンに進む前に Step 2、4、8 を読み直し。
 
 ## Drill
 
-1. **Approval を足す。** ERC-20 \`Approval(address,address,uint256)\` は Transfer と同じ形。2 番目の \`sol!\` event、2 番目の \`extract_*\` ヘルパ、2 番目のテーブルを足す。**ExEx loop 自体は何も変わらない** ことを確認。(15分)
-2. **単一トークンに絞る。** \`if log.address != USDC { continue; }\` を入れる。同期済みノードで 1 分間動かす — フィルタ前後で row 数はどれくらい? **なぜフィルタリングがそんなに効くのか?** (20分)
-3. **レイテンシ計測。** 各 \`handle_commit\` を \`Instant::now()\` で囲んでログ: *chain 受信 → N row 書込 → FinishedHeight emit*。予算は? どこが食う? (30分)
-4. **Reorg テスト。** Hoodi または Holesky テストネットで Reth を走らせる (mainnet より頻繁に reorg)。1 時間動かす。\`ChainReorged\` パスが発火したかを DB で確認 — 過去に \`max(block_number) > committed_chain_max\` だったブロックを query して確認。(1時間)
-5. **Backpressure を追加。** Postgres プールを bounded \`mpsc::channel\` + 別 writer task で wrap。溢れたら ExEx を block するのではなく drop か disk-buffer。**indexer が FinishedHeight を emit しなくなったら Reth の振る舞いは何が変わるか?** (3時間)
+1. **Dual sink をマップ。** [\`sink.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/sink.rs) を開く。\`try_join!\` 内で \`writer::write_batch\` (PG) が成功して \`ch.write_blocks\` が失敗したら何が起きるかをトレース。PG トランザクションは roll back する? 次の sync iteration は何をする? (30分)
+2. **Routing rule を見つける。** [\`src/query/router.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/query/router.rs) と周囲の \`mod.rs\` を開く。\`?engine=\` パラメータなしのクエリがどう振り分けられるかを正確に特定。常に PG? 常に CH? ヒューリスティック? 1 文でルールを書け。(45分)
+3. **両方のスキーマにカラム追加。** 1 つ選ぶ — 例えば L2 用途の per-tx \`l1_origin\` フィールド。\`db/txs.sql\`、\`db/clickhouse/txs.sql\`、\`src/types.rs\` の \`TxRow\` struct、そして decoder に追加。\`cargo build\` を通す。(2時間)
+4. **Materialized view を定義。** 実 analytics 質問を 1 つ選ぶ (送信数 top 100、日次アクティブアドレス、出来高 top トークンなど)。\`POST /views\` ボディを書く。CH が推定するスキーマを確認。(1時間)
+5. **公開チェーンに対して走らせる。** \`tidx init\`、\`rpc_url\` を free な Tempo または testnet エンドポイントに向ける、\`tidx up\`、\`tidx status --watch\` で realtime が追いつくのを見る。Query する。(1時間)
 
-Drill 5 を完成させると、Postgres outage で Reth を巻き添えにしない indexer ができる。query API を足せば ~500 行の単一バイナリで Etherscan のデータレイヤー相当が手に入る。
+Drill 5 を終わらせれば、両エンジン稼働中の本物のチェーンを index する稼働中の tidx インスタンスを手に入れる。
 
-> 🛑 **最終チェック。** 一文で: なぜ \`FinishedHeight\` が本レッスンで最も重要な行なのか (1 メソッド呼び出しに過ぎないが)? 答えに「Reth の pruning」と「あなたの indexer の再起動時の正確性」の繋がりがないなら、Step 5 を読み直し — その相互作用が ExEx を production-grade にしている。
+> 🛑 **最終チェック。** 一文で: tidx の dual-storage 設計が単一 DB indexer に買えない何を買ってくれるか? 答えに「point lookup レイテンシ」と「analytics スキャンスループット」の **両方** が登場しないなら、冒頭を読み直し — その緊張関係こそがアーキテクチャ全体。
 
 ## 📺 関連動画
 
@@ -3020,6 +2921,183 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
 9. **Cross-client validation harness (本レッスン)** — 上記 8 本を「デモ」から「production-trusted」へ
 
 ターゲット雇用主 / プロジェクトに最も近い build を選ぶ。Production gaps を開ける。小さな public リポとして ship。**それが会話に持っていく artifact。**
+`,
+                },
+                {
+                  title: 'Machine Payments — HTTP 402 と Tempo MPP スタック',
+                  slug: 'build-mpp-payments-ja',
+                  type: 'CONTENT',
+                  sortOrder: 9,
+                  duration: 16,
+                  xpReward: 40,
+                  content: `# Machine Payments — HTTP 402 と Tempo MPP スタック
+
+2026 年の有料 API はどれも同じダンスを強要してくる。サインアップ。メール認証。API キー発行。請求アカウント紐付け。プランを事前コミット。*それから* 有料リソースを 1 つ fetch できる。SaaS を ship する人間なら問題ない。フライト状況を *1 回だけ* 引きたい自律 agent にとっては、摩擦こそが製品 — そして製品は壊れている。
+
+**Machine Payments Protocol (MPP)** — Tempo Labs と Stripe が共同で開発する IETF ドラフト — はこの契約を変える。クライアントが HTTP リクエストを送る。サーバが \`402 Payment Required\` を challenge とともに返す。クライアントが支払う。クライアントが証明付きで retry する。サーバが \`200 OK\` を返す。アカウント不要。API キー不要。チェックアウトフロー不要。1 リクエストごとに、同じラウンドトリップ内で、サーバが受け付けるどの payment rail でも支払える — Tempo、Stripe、ACH、Lightning、カード、custom。
+
+本レッスンはソースを読む: 仕様 ([\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs))、Rust SDK ([\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs))、エンドツーエンドで動く CLI ([\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet))。
+
+> 📌 **仕様ステータス — 適切にヘッジする。** MPP は *IETF ドラフト* ([draft-ryan-httpauth-payment-00](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)) であって、批准済み標準ではない。ワイヤフォーマットはまだ変わり得る。今すぐ build に使える程度に安定しているのは *形* — HTTP 402 + \`Payment\` 認証スキーム — と Tempo / Stripe のリファレンス実装。バイトはドラフトとして扱う; アーキテクチャをレッスンとして扱う。
+
+## 誰も使わなかったステータスコード
+
+HTTP 402 は 30 年前に「将来の用途のため」予約された。誰も使わないまま web は API キー、OAuth、Stripe Checkout、その他「ネイティブな支払いステータスコードを *持たない* ための回避策」のあらゆる形で成長した。MPP はこれを真剣に claim した最初の仕様です。
+
+完全なフロー — [\`mpp-specs/README.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/README.md) からそのまま:
+
+\`\`\`mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: GET /resource
+    Server-->>Client: 402 Payment Required<br/>WWW-Authenticate: Payment ...
+
+    Note over Client: Client fulfills payment challenge
+
+    Client->>Server: GET /resource<br/>Authorization: Payment credential
+    Server-->>Client: 200 OK
+\`\`\`
+
+5 ステップ。境界を読む:
+
+1. クライアント \`GET /resource\` — キャッシュなし・未認証の通常の GET と同じ形。
+2. サーバ \`402 Payment Required\` + \`WWW-Authenticate: Payment <challenge>\` — challenge には *何の* 支払いが必要か、*どの rail* を受け付けるかがエンコードされている。
+3. クライアントが **off-band** で支払いを履行する — Tempo のオンチェーン charge、Stripe Shared Payment Token、Lightning invoice。プロトコルはどれかを気にしない。
+4. クライアントが \`Authorization: Payment <credential>\` を付けて \`GET /resource\` を retry。credential が支払いの証明になる。
+5. サーバが検証して \`200 OK\` を返す。
+
+設計の中立性を担保している部分: ステップ 3 は *HTTP ラウンドトリップの内側にない*。プロトコルは *ハンドシェイク* (ステップ 1, 2, 4, 5) を規定し、*決済* は challenge が広告した rail に委譲する。この分離が肝。
+
+> 🛑 **スクロール前に予測。** \`WWW-Authenticate: Payment\` の challenge フォーマットは拡張可能 — どの rail もプラグインできる。なぜそれが正解か、Tempo を埋め込んでしまうのと比べて? *1 つの rail にプロトコルを融合させたら何が壊れるか* について一文で答える。アーキテクチャの章まで保留。
+
+## 3 層 — Core / Intents / Methods
+
+仕様 repo は理由あってモジュラ。[\`tempoxyz/mpp-specs/specs/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs) を開く。重要な 3 つのサブディレクトリ:
+
+| 層 | パス | 何を固定するか |
+| :--- | :--- | :--- |
+| **Core** | [\`specs/core/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) | HTTP 402 セマンティクス、\`Payment\` 認証スキーム、ヘッダ文法、IANA レジストリ。payment-rail 非依存 |
+| **Intents** | [\`specs/intents/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents) | 抽象パターン: charge、authorize、subscription。*どんな種類* の支払いかを規定するが、*どう* するかは規定しない |
+| **Methods** | [\`specs/methods/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) | rail 別の具体実装: \`tempo/\`、\`stripe/\`、\`evm/\`、\`solana/\`、\`stellar/\`、\`lightning/\`、\`card/\` |
+
+この分割が解いている設計問題: **Tempo にも Stripe にも ACH にも Lightning にも対応する 1 つのクライアントライブラリをどう書くか?** 答え — [artemis レッスン](./build-mev-searcher-ja) で読んだ Collector / Strategy / Executor の分割と同じ形。HTTP メカニクス (Core) と payment intent (Intents) と rail 固有のバイト (Methods) を分離する。Core 層はブロックチェーンが何か知らない。Methods 層は HTTP 402 がどんな見た目か知らない。Intents 層は両者の契約。
+
+Core に Tempo 固有の仮定を埋め込んでいたら、Stripe が共同 maintainer に加わった瞬間 — *それは実際に起きた* — Core のあらゆる部分を再検討する必要があった。モジュラ分割のおかげで、Stripe の追加は \`specs/methods/stripe/\` 配下に新ディレクトリを置くだけで済み、プロトコル本体に手を入れずに済んだ。
+
+> 🔍 **リポで探す。** [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md) を開く。IANA レジストリのセクションを目で追う。**自分の言葉で:** 新しい payment method を追加するのに実際何が必要か? 答えは「Core への PR」か「\`specs/methods/\` 配下に 1 ファイル追加する PR」か? (答えこそが本プロトコルを将来 proof にしている部分 — そして \`WWW-Authenticate: Payment\` を設計上拡張可能にしている部分です。)
+
+## Rust SDK を 30 秒で
+
+[\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs) を開く。SDK はプロトコルと同じ断層に沿って分かれている — マーチャント側は [\`src/server/\`](https://github.com/tempoxyz/mpp-rs/tree/main/src/server)、買い手側は [\`src/client/\`](https://github.com/tempoxyz/mpp-rs/tree/main/src/client)。
+
+**サーバ側** — challenge を発行し、credential を検証する:
+
+\`\`\`rust
+use mpp::server::{Mpp, tempo, TempoConfig};
+
+let mpp = Mpp::create(tempo(TempoConfig {
+    recipient: "0x742d35Cc6634C0532925a3b844Bc9e7595f1B0F2",
+}))?;
+
+let challenge = mpp.charge("1")?;             // WWW-Authenticate の値を返す
+let receipt = mpp.verify_credential(&credential).await?;
+\`\`\`
+
+\`Mpp::create\` は *payment provider* を取る — \`tempo(...)\`、\`stripe(...)\`、自前のもの。返ってくる \`Mpp\` は challenge を発行し credential を *汎用に* 検証する。provider を差し替えればよく、サーバの残り部分は動かない。
+
+**クライアント側** — 402 を透過化する:
+
+\`\`\`rust
+use mpp::client::{PaymentMiddleware, TempoProvider};
+use reqwest_middleware::ClientBuilder;
+
+let provider = TempoProvider::new(signer, "https://rpc.moderato.tempo.xyz")?;
+let client = ClientBuilder::new(reqwest::Client::new())
+    .with(PaymentMiddleware::new(provider))
+    .build();
+
+// 以降のリクエストは 402 を自動でハンドリング
+let resp = client.get("https://mpp.dev/api/ping/paid").send().await?;
+\`\`\`
+
+\`PaymentMiddleware\` は reqwest クライアントをラップする。ミドルウェアが 402 レスポンスを intercept し、challenge をパースし、provider を呼んで支払いを履行し、\`Authorization: Payment\` ヘッダを付けて retry する。呼び出し側から見ると、\`.get(...).send()\` は MPP 対応エンドポイントに対して Just Works。
+
+> 🔍 **リポで探す。** [\`src/client/middleware.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/client/middleware.rs) を開いて retry を処理する関数を探す。次に [\`src/server/mpp.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/server/mpp.rs) を開いて challenge が emit される箇所を探す。**予測:** 新しい payment provider を追加する — たとえばカスタム L2 のネイティブ資産 — のに必要な最小の変更は? (答え: クライアント側で \`PaymentProvider\` trait を、サーバ側で \`ChargeMethod\` trait を実装する。ミドルウェアやプロトコルパーサには手を入れない。)
+
+## なぜ Intents が必要か — agent スケール問題
+
+> 🛑 **予測。** ある agent が 1 分間に 1000 件の有料 API リクエストを送る。それを 1000 件のオンチェーン Tempo トランザクションでやるのは何が壊れているか? プロトコルの *Intents* 層がそれを直すために提供するものは何か?
+
+(答え: 1000 件のオンチェーン charge は遅く、手数料がかさみ、agent がブロック時間に直列化される。Intents 層は *charge* — 1 リクエストごとに個別決済 — と *authorize* / *subscription* パターン — チャネルやセッションを 1 度開いて後でまとめて決済 — を分離する。後述するウォレットの「Session Payment (Channel)」モードがまさにこれ — オンチェーンチャネルを 1 度開き、オフチェーン voucher を 1 リクエストごとに交換し、終わったらチャネルを閉じる。Core 層はチャネルを知らない。Core 層は challenge と credential を知っている。Intents 層が「セッションあたり 1000 件の cheap requests」に名前を与える場所です。)
+
+該当ディレクトリ: [\`specs/intents/draft-payment-intent-charge-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/intents/draft-payment-intent-charge-00.md) がドラフト段階で批准されている唯一の intent。authorize と subscription は README によればロードマップ上にある。
+
+## プロトコルから production へ — \`tempo wallet\`
+
+[\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet) は MPP の正統な動作統合例。MPP がビルトインされた CLI ウォレット。3 つのコマンドで全フローをやる:
+
+\`\`\`bash
+tempo wallet login                        # passkey ログイン、ブラウザが開く
+tempo wallet fund                         # トップアップ
+tempo request https://aviationstack.mpp.tempo.xyz/v1/flights?flight_iata=AA100
+\`\`\`
+
+3 番目がレッスン本体。\`tempo request <url>\` が 402 ダンス全部 — challenge、署名、支払い、retry — を実行し、レスポンス本体を表示する。API キー不要。請求アカウント不要。*ウォレットが存在して資金があるだけ*。
+
+ウォレットがサポートする支払い形態は 2 つ、[README](https://github.com/tempoxyz/wallet/blob/main/README.md) からそのまま:
+
+| 形態 | トレードオフ | 使うとき |
+| :--- | :--- | :--- |
+| **One-shot (charge)** | リクエストごとに独立してオンチェーン決済。セッション状態なし | 単発の有料コール、低頻度 |
+| **Session (channel)** | オンチェーンチャネルを 1 度開く。オフチェーン voucher をリクエストごとに交換。close 時に決済 | ストリーミング (SSE のトークン単位)、同一エンドポイントへの反復コール |
+
+セッションモードは上の「1 分あたり 1000 リクエスト」予測への Intents 層からの答えを具体化したもの。
+
+もう一歩踏み込んだ設計ポイント: ログインフローは **passkey** (Touch ID / Face ID / ハードウェアキー) で **スコープ付きセッションキー** — 時限・上限金額・チェーンバウンド — を認可し、CLI はそれを使って署名する。passkey はブラウザから出ない。CLI が持つのは制限付きクレデンシャルで、root キーではない。これは agent に与えるべきパターンと同じ — 王国の鍵は渡すな、期限付きのスコープキーを渡せ。
+
+> 🔍 **リポで探す。** ウォレットの [\`ARCHITECTURE.md\`](https://github.com/tempoxyz/wallet/blob/main/ARCHITECTURE.md) を開く (またはトップレベルの Rust crate を目で追う)。**自分の言葉で:** ウォレットは passkey 派生のセッションキーをどの層に持つか? どの層で \`PaymentProvider\` を MPP ミドルウェアに渡すか? 答えは、本仕組みの上に agent を build するときのデプロイ形を教えてくれる。
+
+## Step 1 の予測に答える
+
+**なぜ \`WWW-Authenticate: Payment\` は Tempo 固定ではなく拡張可能か?** 1 つの rail を埋め込んだ瞬間、別の rail を使いたい全員からプロトコルを fork したことになるから。Stripe が MPP を共同 maintain できているのは Core が rail 中立だからこそ — Stripe は \`methods/stripe/\` ディレクトリを寄与しているのであって、Core を編集しているのではない。Lightning、ACH、将来のあらゆる rail も同じ形になる。
+
+これは [artemis](./build-mev-searcher-ja) (Collector / Strategy / Executor) や [validate-revm](./build-validate-revm-ja) のクロスチェック (Alloy \`Provider\` trait による provider 非依存) で見たのと同じ trait 分割の規律です。本気のプロトコル/フレームワークは毎回繰り返す: *メカニクス* と *ポリシー* と *具体実装* を分離する、すると将来が安く済む。
+
+## なぜこれが「あなたが build するもの」にとって重要か
+
+2 つの角度、どちらも実用:
+
+- **有料サービスを ship する。** エンドポイントを \`Mpp::create(tempo(...))\` (または Stripe、または両方) で wrap する。agent もアプリも 1 リクエストごとに払える。請求インフラ不要、API キー発行不要、レートリミットダッシュボード不要、Stripe ポータル統合不要。各リクエストに見合う金額を charge してプロトコルが決済する。L7 のアグリゲータ、L3 のカスタム RPC エンドポイント、L6 の cheatcode harness — どれもこの形で有料化できる。
+
+- **有料サービスを consume する。** \`PaymentMiddleware\` を reqwest クライアントに足す。agent — もしくはインデクサ、バリデータのオブザーバビリティスタック — はベンダごとの統合なしに、MPP 対応エンドポイントを支払える。L1 の MEV searcher が有料 mempool feed を欲しい? MPP を差し込む。L4 の wallet backend が有料 data oracle を欲しい? MPP を差し込む。L8 capstone のルータが有料 private order flow を欲しい? MPP を差し込む。
+
+追いかける価値のある本物の product idea: *この粒度では agent しか欲しがらない* 有料サービス — 単発のフライト状況、単発のプライシング oracle、トークン単位課金の単発 LLM 補完。人間用 API は十分に小さく値付けできない; agent 用 API はできる、なぜなら MPP がリクエスト単位決済を cheap にするから。
+
+## リコールチェックリスト
+
+次に進む前に、スクロールせずに各問に答えられること:
+
+1. MPP が claim する HTTP ステータスコードは? サーバの \`WWW-Authenticate\` ヘッダはどう見えるか?
+2. 仕様の 3 層を挙げよ。各層が何を固定するか。
+3. SDK サーバ側で \`Mpp::create(tempo(...))\` は何をくれるか? クライアント側で \`PaymentMiddleware\` は何をするか?
+4. Intents 層が Core から分離されているのはなぜか? 具体的なシナリオを挙げよ。
+5. \`tempo request\` の one-shot とセッションモードのトレードオフは?
+
+2 か 4 でつまずいたら、次のレッスンに進む前に Core / Intents / Methods の章を読み直す。
+
+## ドリル
+
+1. **IETF ドラフトを読む。** [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md) を開く。\`Payment\` スキームが定義するヘッダフィールド 3 つと各々が運ぶものを言えるまで目を通す。(45 分)
+2. **有料エンドポイントを立てる。** [\`mpp-rs\`](https://github.com/tempoxyz/mpp-rs) を clone し、[\`examples/\`](https://github.com/tempoxyz/mpp-rs/tree/main/examples) を見て、1 ルートで 0.01 を charge する axum サーバを動かす。curl で叩く、402 を観察。\`tempo request\` で叩く、200 を観察。(2 時間)
+3. **既存サービスを wrap する。** 自分の以前のレッスンの成果物のうち 1 つを選ぶ — たとえば L3 のカスタム RPC エンドポイント。\`mpp\` の axum 統合を足す。コールごとに charge。ウォレットで検証。(3 時間)
+4. **セッションをトレースする。** 有料 SSE エンドポイント対象でセッションモードの \`tempo request\` を実行し、ネットワークをトレースする: チャネルはいつ open する? voucher はいつ交換する? いつ決済する? \`tempo wallet sessions list\` と \`close\` で状態を inspect。(1.5 時間)
+5. **カスタム provider を実装する。** SDK にない payment rail を選ぶ (好きな L2 のネイティブ資産)。\`PaymentProvider\` (クライアント) と \`ChargeMethod\` (サーバ) を実装。自分の有料エンドポイントに対してテスト。*抽象が元を取れるかどうかのテスト*。(4 時間)
+
+ドリル 3 までやれば、本物のインフラにデプロイ可能な有料エンドポイントを持っている。ドリル 5 までやれば、プロトコルを拡張できるレベルまで内在化したことになる。
+
+> 🛑 **最終チェック。** 一文で: MPP は agent に対して API キー + Stripe Checkout が与えないものとして何をくれるか? 答えに *リクエスト単位決済、アカウント不要、rail ロックイン不要* が入っていなければ、冒頭を読み直す — それこそが本プロトコルが存在する理由のすべて。
 `,
                 },
               ],

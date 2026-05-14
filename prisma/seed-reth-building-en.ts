@@ -252,334 +252,235 @@ Each is a self-contained ~200–300 line build with the same predict / find-in-r
 `,
                 },
                 {
-                  title: 'Build a Reorg-Aware Indexer with ExEx',
+                  title: "Read a Real Production Indexer — Tempo's tidx",
                   slug: 'build-exex-indexer-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Build a Reorg-Aware Indexer with ExEx
+                  content: `# Read a Real Production Indexer — Tempo's tidx
 
-Etherscan, Dune, every liquidation bot — all of them solve the same problem: **read the chain into your own datastore, and don't corrupt it when a reorg happens** (a *reorg* is when nodes briefly disagree on the chain tip, then a different block wins — your DB now has rows for blocks that no longer exist). ExEx (Reth's Execution Extension API — a hook that runs custom code inside the Reth process) turns this from a 2,000-line side-project into ~250 lines in one file. That's what we build.
+Etherscan and Dune are indexers. Their architectures are not public. [\`tidx\`](https://github.com/tempoxyz/tidx) is — Tempo's production indexer for its EVM L1, open source, in active use. This lesson walks you through it. You'll see what they had to choose, what they got right, and what trade-offs are visible only by reading the source.
 
-> 📌 **Scope honesty.** We index ERC-20 Transfer events into Postgres with full reorg handling — commit on \`ChainCommitted\`, undo on \`ChainReverted\`, swap on \`ChainReorged\`. We don't build a public API on top of the data; that's the second half of any indexer and orthogonal to the question this lesson answers: *"how do I get correct chain data into a datastore at node speed?"*
+Open the repo. Read it. We'll go through it together.
 
-> 📚 **See also.** [QuickNode's *How to Build and Deploy Reth ExExs*](https://www.quicknode.com/guides/infrastructure/how-to-use-reth-exex) is a great primer on the ExEx mechanism this lesson sits on. We extend those concepts here into a complete reorg-aware indexer with Postgres writes, FinishedHeight signaling, and production gaps.
+> 📌 **Why this is the right starting point.** Every "build an indexer" tutorial pretends one database is enough. Real production hits a wall the moment two query shapes coexist: *"show me the last 10 transfers from address X"* (point lookup — PostgreSQL wins) and *"show me daily transfer volume for the past year"* (range scan — ClickHouse wins). tidx writes to both backends in parallel and routes queries to whichever fits. That dual-storage decision is the whole lesson.
 
-## What you'll build
+## The OLTP vs OLAP design tension, concretely
 
-\`\`\`mermaid
-flowchart LR
-    Reth["Reth node<br/>(in-process)"] -->|ExExNotification| Loop["ExEx loop"]
-    Loop -->|ChainCommitted| Decode["Decode Transfer logs<br/>from receipts"]
-    Decode -->|rows| Insert["INSERT into Postgres"]
-    Loop -->|ChainReverted| Delete["DELETE WHERE<br/>block IN range"]
-    Loop -->|ChainReorged| Swap["DELETE old +<br/>INSERT new"]
-    Insert --> Signal["Send FinishedHeight<br/>(let Reth prune)"]
-    Delete --> Signal
-    Swap --> Signal
-\`\`\`
+A row store like PostgreSQL keeps each transfer's columns adjacent on disk. To answer *"last 10 transfers from 0xAlice,"* the planner uses an index on \`from\`, jumps to ~10 disk pages, returns. Microseconds.
 
-A single \`main.rs\` that runs **inside Reth's process**. No JSON-RPC roundtrips, no separate node, no websocket reconnection logic. The ExEx receives a typed stream of chain events as Reth itself produces them.
+A column store like ClickHouse keeps each *column* contiguous. To answer *"daily volume for the past year,"* it scans the \`value\` and \`block_timestamp\` columns — only those two — across millions of rows, then aggregates. Also microseconds, because it never touched the other twelve columns of each row.
 
-> 🛑 **Predict before scrolling.** Why is "in-process" the architectural win here? Form a one-sentence answer about what running outside the node forces an indexer to do that you skip when you live inside it. Hold your guess until Step 2.
+Ask each store the other's question and you die:
 
-## Why ExEx (vs \`eth_getLogs\` polling, vs direct DB reads)
+- *"Daily volume for the past year"* on PostgreSQL: read every row of every page that contains a Transfer in that range. Disk-bound. Tens of seconds to minutes on a real dataset.
+- *"Last 10 transfers from 0xAlice"* on ClickHouse: ClickHouse has no point-lookup index; it scans. Wasted IO when the answer is 10 rows.
 
-| Approach | Latency | Reorg correctness | Reth coupling |
-| :--- | :--- | :--- | :--- |
-| **\`eth_getLogs\` polling** | seconds (poll interval + RPC) | manual — you re-fetch and reconcile yourself | none, but you pay it in latency + load |
-| **Direct MDBX read** | µs | none — MDBX shows committed state, not chain history | tight, but no reorg signal at all |
-| **ExEx** | µs (in-process channel) | **typed reorg events delivered to you** | Cargo dependency on Reth crates |
+> 🛑 **Predict before scrolling.** If you only had PostgreSQL, name one query class that would kill your indexer. If only ClickHouse, name one query class that would kill it. Hold both answers in mind — the rest of the lesson is how tidx avoids both deaths.
 
-ExEx is the only one of the three that gives you both **correctness** (reorg events) and **latency** (in-process). The cost is that your indexer ships **as part of the Reth binary** — your code lives in the same process. For a single-purpose indexer, that's a feature: one binary, one datastore, no glue.
+tidx's resolution: **write to both, route on read.** Same chain data lands in both engines; the HTTP API picks the engine based on the query (or an explicit \`?engine=\` override).
 
-## Cargo.toml
+## Step 1: The Dual Sink — one chain reader, two writes
 
-\`\`\`toml
-[package]
-name = "transfer-indexer"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-# Reth crates — pin to a specific tag in production
-reth                = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-exex           = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-node-ethereum  = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-tracing        = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-primitives     = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-
-# Alloy for event decoding
-alloy-primitives    = "1.5"
-alloy-sol-types     = "1.5"
-
-# Postgres
-sqlx                = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "migrate"] }
-
-# Plumbing
-futures-util        = "0.3"
-tokio               = { version = "1", features = ["macros", "rt-multi-thread"] }
-eyre                = "0.6"
-\`\`\`
-
-> Reth doesn't publish its ExEx crates to crates.io as a stable cadence — pulling from a Git tag is the canonical pattern. Pin a specific tag (here \`v1.5.0\`) and bump it deliberately when you're ready to test against a new Reth.
-
-## Step 1: The ExEx skeleton
-
-The shape of every ExEx is the same. Read it and you've read 80% of every ExEx that will ever exist:
+Open [\`src/sync/sink.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/sink.rs). The whole "write twice" abstraction is here in ~120 lines:
 
 \`\`\`rust
-use futures_util::TryStreamExt;
-use reth::{api::FullNodeComponents, builder::NodeTypes, primitives::EthPrimitives};
-use reth_exex::{ExExContext, ExExEvent, ExExNotification};
-use reth_node_ethereum::EthereumNode;
-use reth_tracing::tracing::info;
-
-async fn indexer<Node>(mut ctx: ExExContext<Node>, db: sqlx::PgPool) -> eyre::Result<()>
-where
-    Node: FullNodeComponents<Types: NodeTypes<Primitives = EthPrimitives>>,
-{
-    while let Some(notification) = ctx.notifications.try_next().await? {
-        match &notification {
-            ExExNotification::ChainCommitted { new } => {
-                handle_commit(&db, new).await?;
-            }
-            ExExNotification::ChainReverted { old } => {
-                handle_revert(&db, old).await?;
-            }
-            ExExNotification::ChainReorged { old, new } => {
-                handle_revert(&db, old).await?;
-                handle_commit(&db, new).await?;
-            }
-        }
-
-        if let Some(committed) = notification.committed_chain() {
-            ctx.events.send(ExExEvent::FinishedHeight(committed.tip().num_hash()))?;
-        }
-    }
-    Ok(())
+#[derive(Clone)]
+pub struct SinkSet {
+    pool: Pool,                 // PostgreSQL (always present)
+    ch: Option<ClickHouseSink>, // ClickHouse (optional)
 }
 
-fn main() -> eyre::Result<()> {
-    reth::cli::Cli::parse_args().run(async move |builder, _| {
-        let db = sqlx::PgPool::connect(&std::env::var("DATABASE_URL")?).await?;
-        sqlx::migrate!().run(&db).await?;
-
-        let handle = builder
-            .node(EthereumNode::default())
-            .install_exex("transfer-indexer", async move |ctx| Ok(indexer(ctx, db.clone())))
-            .launch_with_debug_capabilities()
-            .await?;
-
-        handle.wait_for_node_exit().await
-    })
+impl SinkSet {
+    pub async fn write_all(
+        &self,
+        blocks: &[BlockRow], txs: &[TxRow],
+        logs: &[LogRow], receipts: &[ReceiptRow],
+    ) -> Result<()> {
+        if let Some(ch) = &self.ch {
+            tokio::try_join!(
+                writer::write_batch(&self.pool, blocks, txs, logs, receipts),
+                ch.write_blocks(blocks),
+                ch.write_txs(txs),
+                ch.write_logs(logs),
+                ch.write_receipts(receipts),
+            )?;
+        } else {
+            writer::write_batch(&self.pool, blocks, txs, logs, receipts).await?;
+        }
+        Ok(())
+    }
 }
 \`\`\`
 
 Walk:
 
-- **\`ctx.notifications\`** — a typed stream of \`ExExNotification\`. Three variants: \`ChainCommitted\` (new blocks added), \`ChainReverted\` (blocks removed because the local chain forked behind us), \`ChainReorged\` (one chain swapped out for another). **Reorgs are first-class.** You don't poll, you don't infer — Reth tells you.
-- **\`ctx.events.send(FinishedHeight(...))\`** — you tell Reth "I've written everything up to block N to my datastore." Reth uses this to know how far back it can prune state without breaking your pipeline. **Skip it and Reth retains state forever** to be safe; emit it and disk usage stays bounded.
-- **\`install_exex\`** in \`main\` — registers your ExEx by name. The builder takes care of the channel wiring and process integration.
+- **\`tokio::try_join!\`** — PG and CH writes are concurrent, not sequential. Wall-clock cost is \`max(pg, ch)\`, not \`pg + ch\`. On a healthy node, both finish in single-digit ms.
+- **PG is a single transaction; CH is four direct inserts.** PostgreSQL's \`write_batch\` puts all four tables (blocks/txs/logs/receipts) in one transaction so a crash leaves nothing partial. ClickHouse doesn't do multi-table transactions — it's append-only, so partial-batch on crash is the chunk-retry path's job ([\`src/sync/ch_sink.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/ch_sink.rs), the \`CH_MAX_RETRIES\` loop).
+- **CH is \`Option\`-al.** If you don't configure ClickHouse, tidx degrades cleanly to PG-only. The OLAP queries just stop being available.
 
-> 🔍 **Find in repo.** Open [\`reth-exex-examples\`](https://github.com/paradigmxyz/reth-exex-examples) and pick any project. Find the \`install_exex\` call. Compare its \`indexer\` (or whatever it's named) function to the one above — **they all have this exact shape.** That's the pattern. Once you see it, you can read every ExEx in the wild.
+> 🛑 **Predict.** A naive dual-sink would mean every chain read becomes two writes. What ordering guarantee does \`write_all\` give a reader? Specifically: can you query CH for block N and find it missing while PG already has it? Read the \`try_join!\` semantics and answer.
 
-## Step 2: Decode Transfer events from receipts
+(Answer: yes, briefly — \`try_join!\` returns when both succeed, but between the two completing, a reader hitting CH first will see stale state. tidx accepts this; the ClickHouse backfill cursor — \`ch_backfill_block\` in \`sync_state\` — exists precisely to repair these gaps after the fact.)
 
-Now we fill in \`handle_commit\`. We walk every block in the committed chain, every transaction in those blocks, every log in those transactions' receipts, and decode the ERC-20 Transfer event:
+## Step 2: The Sync Engine — one fetcher, fanned out
 
-\`\`\`rust
-use alloy_primitives::{Address, B256, U256};
-use alloy_sol_types::{sol, SolEvent};
-use reth::providers::Chain;
-
-sol! {
-    event Transfer(address indexed from, address indexed to, uint256 value);
-}
-
-#[derive(Debug)]
-struct TransferRow {
-    block_number: u64,
-    tx_hash: B256,
-    log_index: u32,
-    token: Address,
-    from_addr: Address,
-    to_addr: Address,
-    value: U256,
-}
-
-fn extract_transfers(chain: &Chain) -> Vec<TransferRow> {
-    let mut rows = Vec::new();
-
-    for (block, receipts) in chain.blocks_and_receipts() {
-        let block_number = block.number;
-
-        for (tx, receipt) in block.body.transactions.iter().zip(receipts.iter()) {
-            let tx_hash = tx.hash();
-
-            for (log_index, log) in receipt.logs.iter().enumerate() {
-                // Topic[0] is the event signature; abi_decode_log validates it
-                let Ok(decoded) = Transfer::decode_log(log, true) else { continue };
-
-                rows.push(TransferRow {
-                    block_number,
-                    tx_hash,
-                    log_index: log_index as u32,
-                    token: log.address,
-                    from_addr: decoded.from,
-                    to_addr: decoded.to,
-                    value: decoded.value,
-                });
-            }
-        }
-    }
-    rows
-}
-\`\`\`
-
-Walk:
-
-- **\`chain.blocks_and_receipts()\`** — the Chain type pairs blocks with their receipts already aligned. **This is what running in-process buys you.** A polling indexer has to reconstruct this alignment from two separate RPC calls and reconcile race conditions.
-- **\`Transfer::decode_log\`** — the \`sol!\` macro generates this. The \`true\` validates that \`topic[0]\` matches the Transfer signature; non-Transfer logs return \`Err\` cleanly and we skip.
-- **We don't filter by token here.** Every ERC-20 emits this exact event. The indexer captures all of them and lets the consumer query whichever token they care about. (Filtering by \`token\` address would be a one-line WHERE clause downstream.)
-
-> 🛑 **Predict.** A token contract emits a malformed Transfer event (wrong number of topics, weird ABI). Walk through what \`decode_log\` does. **Why is silently skipping (\`Err → continue\`) the right choice for an indexer?** Hint: think about what the alternative — panicking — would do to your pipeline.
-
-## Step 3: Postgres schema and insert
-
-Schema (in \`migrations/0001_init.sql\`):
-
-\`\`\`sql
-CREATE TABLE IF NOT EXISTS transfers (
-    block_number   BIGINT       NOT NULL,
-    tx_hash        BYTEA        NOT NULL,
-    log_index      INTEGER      NOT NULL,
-    token          BYTEA        NOT NULL,
-    from_addr      BYTEA        NOT NULL,
-    to_addr        BYTEA        NOT NULL,
-    value          NUMERIC(78)  NOT NULL,  -- big enough for U256
-    PRIMARY KEY (tx_hash, log_index)
-);
-
-CREATE INDEX transfers_block_number_idx ON transfers (block_number);
-CREATE INDEX transfers_token_idx        ON transfers (token);
-CREATE INDEX transfers_from_addr_idx    ON transfers (from_addr);
-CREATE INDEX transfers_to_addr_idx      ON transfers (to_addr);
-\`\`\`
-
-Insert (one row per Transfer):
+Open [\`src/sync/engine.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/engine.rs). The engine reads the chain *once* and hands the result to \`SinkSet::write_all\`. Read the struct fields:
 
 \`\`\`rust
-async fn handle_commit(db: &sqlx::PgPool, chain: &Chain) -> eyre::Result<()> {
-    let rows = extract_transfers(chain);
-    if rows.is_empty() { return Ok(()); }
-
-    let mut tx = db.begin().await?;
-    for r in &rows {
-        sqlx::query!(
-            "INSERT INTO transfers (block_number, tx_hash, log_index, token, from_addr, to_addr, value)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (tx_hash, log_index) DO NOTHING",
-            r.block_number as i64,
-            r.tx_hash.as_slice(),
-            r.log_index as i32,
-            r.token.as_slice(),
-            r.from_addr.as_slice(),
-            r.to_addr.as_slice(),
-            r.value.to_string().parse::<sqlx::types::BigDecimal>()?,
-        )
-        .execute(&mut *tx)
-        .await?;
-    }
-    tx.commit().await?;
-    Ok(())
+pub struct SyncEngine {
+    throttled_pool: ThrottledPool,
+    sinks: SinkSet,             // ← fan-out lives here
+    realtime_rpc: RpcClient,    // ← separate RPC client for tip-following
+    backfill_rpc: RpcClient,    // ← separate RPC client for gap-filling
+    chain_id: u64,
+    ...
 }
 \`\`\`
 
-Walk:
+Two RPC clients, not one. Why? Realtime sync (following the chain head) has tight latency budgets; backfill (filling old gaps) is bandwidth-greedy. If they shared one connection-limited pool, a slow backfill would starve realtime and the node would visibly lag. **Separate clients = separate concurrency budgets.** The constants at the top of the file: \`REALTIME_RPC_CONCURRENCY = 4\`, \`BACKFILL_RPC_CONCURRENCY = 8\`.
 
-- **\`(tx_hash, log_index)\` as primary key** — the canonical Ethereum log identifier. Survives reorgs cleanly: a re-included tx keeps the same hash, so the \`ON CONFLICT DO NOTHING\` no-ops correctly.
-- **One transaction per chain commit, not per row.** Reth typically delivers chains of 1–8 blocks per notification; batching the writes into one Postgres transaction is the difference between 50ms and 5s for a busy committer.
-- **\`NUMERIC(78)\`** — U256 max is 2²⁵⁶ ≈ 1.16 × 10⁷⁷, which fits in 78 decimal digits. \`BigDecimal\` is the sqlx Rust mapping.
+> 🔍 **Find in repo.** Same file, find \`backfill_first\` and \`trust_rpc\`. Read 30 seconds each. **In your own words:** what does \`backfill_first\` change about node startup behavior, and what does \`trust_rpc\` opt out of?
 
-## Step 4: Reorg handling
+## Step 3: Schemas — same data, two shapes
 
-The whole point of ExEx for indexing. When the canonical chain changes underneath us, we need to undo what we wrote for the now-orphaned blocks:
+This is where the OLTP/OLAP duality stops being an abstraction. Open both side by side:
+
+- PostgreSQL: [\`db/blocks.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/blocks.sql), [\`txs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/txs.sql), [\`logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/logs.sql), [\`receipts.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/receipts.sql)
+- ClickHouse: [\`db/clickhouse/blocks.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/blocks.sql), [\`txs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/txs.sql), [\`logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/logs.sql), [\`receipts.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/receipts.sql)
+
+Same columns. Different table engines, different ordering keys, different indexes. PG uses btree indexes on \`(tx_hash)\`, \`(block_num)\`, \`(from)\`, \`(to)\` — every column you'd point-lookup on. CH uses MergeTree-family engines sorted by \`(block_num, ...)\` — the natural physical layout for time-range scans.
+
+The columns themselves are picked to be **JOIN-free for the common questions**. The \`txs\` table carries \`block_timestamp\` denormalized. So does \`logs\`. So does \`receipts\`. A relational purist would normalize that; a real production indexer learns it always needs a timestamp for any analytics query and pays the bytes.
+
+> 🔍 **Find in repo.** Open both [\`db/logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/logs.sql) and [\`db/clickhouse/logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/logs.sql). Identify one column or index that exists in one and not the other. **In your own words:** what query class does each version optimize for?
+
+## Step 4: Lazy event decoding — the killer design choice
+
+Most indexers (Subgraph, Goldsky, OpenZeppelin Defender) demand you **pre-register** every event you want to index. You declare your ABI up front, the indexer creates a typed table per event, and only those events are decoded at write time.
+
+tidx doesn't. Look at the \`logs\` schema — it stores **raw bytes**: \`selector BYTEA, topics BYTEA[], data BYTEA\`. No per-event tables. No pre-registration. Decoding happens at **query time**, by passing the ABI signature as a CTE generator.
+
+Open [\`src/query/parser.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/query/parser.rs). \`EventSignature::parse\` takes a string like \`Transfer(address indexed from, address indexed to, uint256 value)\` and:
+
+1. Parses ABI param types
+2. Computes \`topic0 = keccak256("Transfer(address,address,uint256)")\`
+3. Returns an \`EventSignature\` the router uses to **synthesize a CTE** that filters \`logs\` by \`selector = topic0\` and projects decoded fields as named columns
+
+The user's SQL then references the event name as a table:
+
+\`\`\`bash
+tidx query \\
+  --signature "Transfer(address indexed from, address indexed to, uint256 value)" \\
+  "SELECT * FROM Transfer WHERE from = '\\\\xAlice...' LIMIT 10"
+\`\`\`
+
+What this costs: storing every log on every contract, ever, even ones you'll never query. ~5–10× more raw bytes than a Subgraph-style "only index these contracts" approach.
+
+What this buys: **a question you didn't pre-register is answerable.** A new token launches; you query it from minute one. A new event signature shows up; you decode it without backfilling. The trade-off is "spend disk to keep the question space open" — and disk is cheap.
+
+> 🛑 **Anti-fluency check.** Without scrolling: in your own words, why can tidx skip pre-registration that Subgraph requires? What's different about *where* the decoding happens? Hint: think about where the ABI lives in the two systems.
+
+## Step 5: Query routing — engine selection
+
+Open [\`src/query/router.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/query/router.rs). The whole engine-selection contract:
 
 \`\`\`rust
-async fn handle_revert(db: &sqlx::PgPool, chain: &Chain) -> eyre::Result<()> {
-    let range = chain.range();
-    let from = *range.start() as i64;
-    let to   = *range.end() as i64;
-
-    sqlx::query!(
-        "DELETE FROM transfers WHERE block_number BETWEEN $1 AND $2",
-        from,
-        to,
-    )
-    .execute(db)
-    .await?;
-
-    Ok(())
+pub enum QueryEngine {
+    ClickHouse,  // OLAP
+    Postgres,    // OLTP
 }
 \`\`\`
 
-That's it. Three lines for the part everyone gets wrong on their first try. Why so simple?
+Two engines. The HTTP API ([\`/query\`](https://github.com/tempoxyz/tidx/tree/main/src/api)) takes an optional \`?engine=\` parameter; if omitted, the router picks. Examples from the README:
 
-- **Idempotent schema.** Because \`(tx_hash, log_index)\` is the primary key, the same row can't exist twice. Deleting by block range removes exactly the rows we wrote on commit.
-- **Reth tells us the exact range.** No "did the reorg start at block N or N-1?" guessing. The reverted Chain's range *is* the answer.
-- **\`ChainReorged\` is just revert + commit.** We handle it as such in the dispatch in Step 1. **One pattern, three notification types.**
+- \`SELECT * FROM blocks WHERE num = 12345\` → point lookup → PG.
+- \`SELECT type, COUNT(*) FROM txs GROUP BY type\` → aggregation → CH.
 
-> 🔍 **Find in repo.** Open [\`Chain\` in reth-execution-types\`](https://github.com/paradigmxyz/reth/blob/main/crates/evm/execution-types/src/chain.rs). Find the \`range()\` method. Note that it returns a \`RangeInclusive<BlockNumber>\` — both endpoints are valid blocks. Use \`*range.start()\` and \`*range.end()\` to extract them; using \`.first()\` from an iterator is wrong (iterates the whole range materializing nothing useful).
+The honest version: the routing rules are heuristics, not magic. Production users override with \`?engine=clickhouse\` when they know what they want. The engine separation is the architectural commitment; the auto-routing is convenience on top.
 
-## Step 5: FinishedHeight — let Reth prune
+## Step 6: Materialized views — pre-computed analytics on CH
 
-We already wrote this line in Step 1:
+Open [\`src/api/views.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/api/views.rs). ClickHouse exposes "materialized views" — auto-updated aggregations that compute on insert, not on read. tidx ships an HTTP API to manage them:
 
-\`\`\`rust
-ctx.events.send(ExExEvent::FinishedHeight(committed.tip().num_hash()))?;
+\`\`\`bash
+curl -X POST "https://tidx.example.com/views" -d '{
+  "chainId": 4217,
+  "name": "top_holders",
+  "sql": "SELECT token, holder, sum(balance) AS balance
+          FROM token_balances GROUP BY token, holder HAVING balance > 0",
+  "orderBy": ["token", "holder"]
+}'
 \`\`\`
 
-But it's worth pausing on. The signal you send tells Reth: *"I've durably written everything up to this block. You can prune state and history before it without breaking me."* Without this:
+What CH does on \`POST /views\`: creates a target table \`analytics_4217.top_holders\` with an inferred schema, creates a materialized view \`top_holders_mv\` that auto-populates on inserts to the source, then **backfills existing data** from the source query. From then on, every new insert into the source incrementally updates the view. \`SELECT * FROM top_holders\` is now an indexed lookup, not a scan.
 
-- Reth has to assume your ExEx might still need to read state from any historical block
-- Disk usage grows linearly forever
-- A node that runs your ExEx for 6 months has 6× the storage of a vanilla node
+Note the authorization: \`POST\` and \`DELETE\` require connection from a **trusted IP** (configured via \`trusted_cidrs\`, typically Tailscale). The pattern: read APIs are public; write/admin APIs are CIDR-gated.
 
-With it:
+> 🔍 **Find in repo.** In [\`views.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/api/views.rs), find \`require_admin_mutation\`. Note that it requires *both* a trusted IP *and* an \`x-tidx-admin: 1\` header. **Why both?** (Defense in depth — IP can be spoofed inside a misconfigured network; the header is a cheap second check.)
 
-- Reth's pruner advances as fast as your slowest ExEx
-- Disk usage stays bounded by Reth's normal pruning policy
-- Multiple ExExes coexist; Reth tracks the lowest \`FinishedHeight\` across all of them
+## Step 7: Sync architecture — Realtime + Gap Sync
 
-> 🛑 **Anti-fluency check.** Without scrolling: in your own words, why would Reth refuse to prune blocks ahead of your slowest ExEx's \`FinishedHeight\`? Hint: think about what would happen on a node restart if Reth had pruned a block your ExEx hadn't yet processed. (Spoiler: your indexer skips that block forever, your data is wrong, and you don't notice until someone queries.)
+The README's [Sync Architecture](https://github.com/tempoxyz/tidx/blob/main/README.md#sync-architecture) section diagrams two concurrent loops:
 
-## What's missing for production
+- **Realtime** follows the chain head, maintains ~0 lag.
+- **Gap Sync** detects discontinuities, fills them from most recent to earliest.
 
-| Gap | What real indexers do |
-| :--- | :--- |
-| **Backpressure** | If Postgres is slow, your ExEx stalls and Reth's notification channel backs up. Production wraps the writer in a bounded queue + drops to disk-buffer when full. |
-| **Schema migrations** | Use sqlx migrations (we did, minimally). Production runs them on startup with a lock to prevent racing replicas. |
-| **Self-hosted Reth ops** | Cluster ops, peer management, snapshot recovery. Alternative: managed Reth via [QuickNode Dedicated Clusters](https://www.quicknode.com/guides/infrastructure/node-setup/how-to-run-a-reth-node) lets you select Reth as the execution client — useful when ExEx is your value-add, not running the node. |
-| **Replicas / sharding** | One ExEx writes to one Postgres. Read replicas, partitioning by \`block_number\`, archive-vs-hot tiers — all the standard DBA work. |
-| **Decoding more events** | We only decode \`Transfer\`. Add \`Approval\`, \`Swap\`, \`Sync\`, custom protocol events. The pattern (one \`sol! { event ... }\` block per event, one \`decode_log\` per filter) scales. |
-| **Per-token enrichment** | Joining Transfer rows to token metadata (name, symbol, decimals) at write time vs. query time. Trade-off: write-time costs RPC, query-time costs JOIN. |
-| **Liveness monitoring** | Compare your indexer's \`FinishedHeight\` to Reth's tip every minute. Page when the gap exceeds a threshold. |
+Gap sync is recent-first by design: users querying recent data should see it land first; old history backfills underneath. The \`sync_state\` table tracks four block numbers — \`head_num\`, \`tip_num\`, \`synced_num\`, \`backfill_num\` — and they each move under different conditions. Open [\`db/sync_state.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/sync_state.sql) and read the column comments; the four-cursor design is what lets the two loops coexist without stepping on each other.
 
-The architecture you wrote — ExEx loop, dispatch on notification type, Postgres write, FinishedHeight signal — is **what every production indexer above this layer does**. They add features and operations; the spine is identical.
+## Step 8: From reading to writing — your own indexer
+
+If you wanted to ship an indexer for MegaETH, a custom OP-stack rollup, or your own chain, what does adopting tidx look like? Two paths:
+
+**Adopt as-is.** If your chain speaks Ethereum JSON-RPC, change one field — \`rpc_url\` — in \`config.toml\` and run \`tidx up\`. tidx's tables are chain-agnostic; \`chain_id\` is a column, not a schema decision.
+
+**Fork.** If your chain has features tidx's schema doesn't model — Tempo-style fee payers, custom precompile traces, sponsored-tx fields — fork three things:
+
+1. \`db/*.sql\` and \`db/clickhouse/*.sql\` — add columns for your chain's extras.
+2. \`src/sync/decoder.rs\` — extract the extra fields from each block / tx / receipt.
+3. \`src/types.rs\` — extend the \`*Row\` structs that flow from decoder to sinks.
+
+What you almost never fork: the sync engine, the dual sink, the query router, the views API. Those are the architecture; everything else is data definition.
+
+## tidx vs Subgraph / Goldsky — the honest comparison
+
+| | tidx | Subgraph / Goldsky |
+| :--- | :--- | :--- |
+| **Hosting** | Self-hosted (you run PG + CH) | Managed service |
+| **Definition** | SQL schemas + on-the-fly ABI | Subgraph manifest + AssemblyScript handlers |
+| **Pre-registration** | None — query any event by signature | Required — declare every event in manifest |
+| **Storage cost** | Higher (raw logs kept forever) | Lower (only declared events) |
+| **Query interface** | SQL + REST | GraphQL |
+| **OLAP queries** | Native (ClickHouse) | Generally weak / requires export |
+| **Right choice when** | You own your data, want SQL, run hot OLAP queries | You want zero-ops, GraphQL-native, declared event scope |
+
+Neither is strictly better. tidx is the choice when you treat indexed chain data as **your database** (and the OLAP scans matter); managed services are the choice when "an API on top of chain data" is sufficient and ops capacity is the constraint.
+
+## Recall checklist
+
+Before moving on, confirm without scrolling:
+
+1. Name a query class PostgreSQL kills on; name a query class ClickHouse kills on.
+2. Where in the codebase do PG and CH writes fan out from a single sync step? (File + function.)
+3. Why does tidx use two separate RPC clients in the sync engine?
+4. Why can tidx skip event pre-registration that Subgraph requires? (Where does ABI decoding happen?)
+5. What does a materialized view buy you that an ad-hoc \`GROUP BY\` query doesn't?
+6. If you forked tidx for a new chain's custom tx field, name the three files you'd touch.
+
+If you stumbled on 3, 4, or 6, re-read Steps 2, 4, and 8 before the next lesson.
 
 ## Drill
 
-1. **Add Approval.** ERC-20 \`Approval(address,address,uint256)\` has the same shape as Transfer. Add a second \`sol!\` event, second \`extract_*\` helper, second table. Note how nothing about the ExEx loop changes. (15 min)
-2. **Filter to a single token.** Add \`if log.address != USDC { continue; }\`. Run for a minute on a synced node — what's your row count vs. without the filter? **Why does filtering help so much?** (20 min)
-3. **Latency probe.** Wrap each \`handle_commit\` in \`Instant::now()\` and log: *received chain → wrote N rows → emitted FinishedHeight*. What's the budget? Where's the bite? (30 min)
-4. **Reorg test.** Use Reth in Hoodi or Holesky testnet mode (where reorgs happen more often than mainnet). Run for an hour. Check the database for the \`ChainReorged\` path firing — by querying for blocks where \`max(block_number) > committed_chain_max\` historically. (1 hour)
-5. **Add backpressure.** Wrap the Postgres pool in a bounded \`mpsc::channel\` with a separate writer task. Drop or buffer-to-disk on overflow rather than blocking the ExEx. **What changes about Reth's behavior when your indexer stops emitting FinishedHeight?** (3 hours)
+1. **Map the dual sink.** Open [\`sink.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/sink.rs). Trace what happens if \`writer::write_batch\` (PG) succeeds but \`ch.write_blocks\` fails inside \`try_join!\`. Does the PG transaction roll back? What does the next sync iteration do? (30 min)
+2. **Find the routing rule.** Open [\`src/query/router.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/query/router.rs) and the surrounding \`mod.rs\`. Identify exactly how a query with no \`?engine=\` parameter gets routed. Is it always PG? Always CH? Heuristic? Write the rule in one sentence. (45 min)
+3. **Add a column to both schemas.** Pick one — say, a per-tx \`l1_origin\` field for an L2 use case. Add it to \`db/txs.sql\`, \`db/clickhouse/txs.sql\`, the \`TxRow\` struct in \`src/types.rs\`, and the decoder. \`cargo build\` it. (2 hours)
+4. **Define a materialized view.** Pick a real analytics question (top 100 senders by tx count, daily-active-addresses, top-volume tokens). Write the \`POST /views\` body. Confirm the schema CH infers. (1 hour)
+5. **Run it against a public chain.** \`tidx init\`, point \`rpc_url\` at a free Tempo or testnet endpoint, \`tidx up\`, watch \`tidx status --watch\` until realtime catches up. Query it. (1 hour)
 
-Finish drill 5 and you have an indexer that survives Postgres outages without taking down Reth. Add a query API and you have something resembling Etherscan's data layer in a ~500-line single binary.
+Finish drill 5 and you have a running tidx instance indexing a real chain with both engines online.
 
-> 🛑 **Final check.** In one sentence: why is \`FinishedHeight\` the most important line in this lesson, even though it's just one method call? If your answer doesn't connect "Reth's pruning" to "your indexer's correctness on restart", re-read Step 5 — that interplay is what makes ExEx production-grade.
+> 🛑 **Final check.** In one sentence: what does tidx's dual-storage design buy you that a single-database indexer can't? If your answer doesn't mention *both* "point lookup latency" and "analytics scan throughput," re-read the opening — that tension is the whole architecture.
 
 ## 📺 Further watching
 
@@ -3020,6 +2921,183 @@ Nine lessons covering everything from "I have an arbitrage idea" to "I can guara
 9. **Cross-client validation harness (this lesson)** — turns the previous eight from "demos" into "production-trusted"
 
 Pick the build that maps to your target employer / project most closely. Open the production gaps. Ship as a small public repo. **That's the artifact you bring to the conversation.**
+`,
+                },
+                {
+                  title: 'Machine payments — HTTP 402 and the Tempo MPP stack',
+                  slug: 'build-mpp-payments-en',
+                  type: 'CONTENT',
+                  sortOrder: 9,
+                  duration: 16,
+                  xpReward: 40,
+                  content: `# Machine payments — HTTP 402 and the Tempo MPP stack
+
+Every paid API in 2026 forces the same dance. Sign up. Verify email. Provision an API key. Wire a billing account. Pre-commit to a plan. *Then* you can fetch one paid resource. For a human shipping a SaaS, fine. For an autonomous agent that needed *one* flight-status lookup *once*, the friction is the product — and the product is broken.
+
+The **Machine Payments Protocol (MPP)** — IETF draft, jointly developed by Tempo Labs and Stripe — changes the contract. The client makes the HTTP request. The server replies \`402 Payment Required\` with a challenge. The client pays. The client retries with proof. The server returns \`200 OK\`. No account. No key. No checkout flow. Pay-per-request, in the same roundtrip, against any payment rail the server accepts — Tempo, Stripe, ACH, Lightning, card, custom.
+
+This lesson reads the source: the spec ([\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs)), the Rust SDK ([\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs)), and a working end-to-end CLI ([\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet)).
+
+> 📌 **Spec status — hedge appropriately.** MPP is an *IETF draft* ([draft-ryan-httpauth-payment-00](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)), not a ratified standard. The wire format may still evolve. What's stable enough to build on right now is the *shape* — HTTP 402 + a \`Payment\` auth scheme — and the Tempo/Stripe reference implementations. Treat the bytes as draft; treat the architecture as the lesson.
+
+## The status code that nobody used
+
+HTTP 402 was reserved 30 years ago "for future use." It sat unused while the web grew around API keys, OAuth, Stripe Checkout, and every other workaround for *not* having a native payment status code. MPP is the first serious specification to claim it.
+
+The full flow — reproduced straight from [\`mpp-specs/README.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/README.md):
+
+\`\`\`mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: GET /resource
+    Server-->>Client: 402 Payment Required<br/>WWW-Authenticate: Payment ...
+
+    Note over Client: Client fulfills payment challenge
+
+    Client->>Server: GET /resource<br/>Authorization: Payment credential
+    Server-->>Client: 200 OK
+\`\`\`
+
+Five steps. Read the boundaries:
+
+1. Client \`GET /resource\` — same request shape as any uncached, unauthenticated GET.
+2. Server \`402 Payment Required\` + \`WWW-Authenticate: Payment <challenge>\` — the challenge encodes *what* payment is needed and *which rails* the server accepts.
+3. Client fulfills the payment **off-band** — a Tempo on-chain charge, a Stripe Shared Payment Token, a Lightning invoice. The protocol does not care which.
+4. Client retries \`GET /resource\` with \`Authorization: Payment <credential>\` — the credential proves the payment happened.
+5. Server validates, returns \`200 OK\`.
+
+The piece that earns the design its agnosticism: step 3 is *not in the HTTP roundtrip*. The protocol specifies the *handshake* (steps 1, 2, 4, 5) and delegates the *settlement* to whatever rail the challenge advertised. That separation is the whole game.
+
+> 🛑 **Predict before scrolling.** The \`WWW-Authenticate: Payment\` challenge format is extensible — any rail can plug in. Why is that the right choice, instead of baking in (say) Tempo specifically? Form a one-sentence answer about *what changes break if you fuse the protocol with one rail*. Hold your guess until the architecture section.
+
+## Three layers — Core / Intents / Methods
+
+The spec repo is modular for a reason. Open [\`tempoxyz/mpp-specs/specs/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs). Three subdirectories matter:
+
+| Layer | Path | What it pins down |
+| :--- | :--- | :--- |
+| **Core** | [\`specs/core/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) | HTTP 402 semantics, the \`Payment\` auth scheme, header grammar, IANA registries. Payment-rail agnostic. |
+| **Intents** | [\`specs/intents/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents) | Abstract patterns: charge, authorize, subscription. Define *what kind* of payment without specifying *how*. |
+| **Methods** | [\`specs/methods/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) | Concrete per-rail implementations: \`tempo/\`, \`stripe/\`, \`evm/\`, \`solana/\`, \`stellar/\`, \`lightning/\`, \`card/\`. |
+
+The design problem the split solves: **how do you write one client library that works against Tempo and Stripe and ACH and Lightning?** Answer — the same shape as the Collector/Strategy/Executor split you read in [the artemis lesson](./build-mev-searcher-en). Separate the HTTP mechanics (Core) from the payment intent (Intents) from the rail-specific bytes (Methods). The Core layer doesn't know what a blockchain is. The Methods layer doesn't know what HTTP 402 looks like. The Intents layer is the contract between them.
+
+If you forced Tempo-specific assumptions into Core, the moment Stripe joined as a co-maintainer — *which happened* — every piece of Core would need re-litigating. The modular split made adding Stripe a matter of dropping a new directory under \`specs/methods/stripe/\` without touching the protocol itself.
+
+> 🔍 **Find in repo.** Open [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md). Skim the IANA registry section. **In your own words:** what does adding a new payment method actually require? Is the answer "a PR against Core" or "a PR adding one file under \`specs/methods/\`"? (The answer is what makes this protocol future-proof — and what makes \`WWW-Authenticate: Payment\` extensible by design.)
+
+## The Rust SDK in 30 seconds
+
+Open [\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs). The SDK splits along the same fault line as the protocol — [\`src/server/\`](https://github.com/tempoxyz/mpp-rs/tree/main/src/server) for the merchant side, [\`src/client/\`](https://github.com/tempoxyz/mpp-rs/tree/main/src/client) for the buyer side.
+
+**Server side** — produce challenges, verify credentials:
+
+\`\`\`rust
+use mpp::server::{Mpp, tempo, TempoConfig};
+
+let mpp = Mpp::create(tempo(TempoConfig {
+    recipient: "0x742d35Cc6634C0532925a3b844Bc9e7595f1B0F2",
+}))?;
+
+let challenge = mpp.charge("1")?;             // returns WWW-Authenticate value
+let receipt = mpp.verify_credential(&credential).await?;
+\`\`\`
+
+\`Mpp::create\` takes a *payment provider* — \`tempo(...)\`, \`stripe(...)\`, your own. The returned \`Mpp\` produces challenges and validates credentials *generically*. Swap the provider; the rest of your server doesn't move.
+
+**Client side** — make 402s transparent:
+
+\`\`\`rust
+use mpp::client::{PaymentMiddleware, TempoProvider};
+use reqwest_middleware::ClientBuilder;
+
+let provider = TempoProvider::new(signer, "https://rpc.moderato.tempo.xyz")?;
+let client = ClientBuilder::new(reqwest::Client::new())
+    .with(PaymentMiddleware::new(provider))
+    .build();
+
+// Requests now handle 402 automatically
+let resp = client.get("https://mpp.dev/api/ping/paid").send().await?;
+\`\`\`
+
+\`PaymentMiddleware\` wraps a reqwest client. The middleware intercepts 402 responses, parses the challenge, calls the provider to fulfill the payment, retries with the \`Authorization: Payment\` header. From the caller's perspective, \`.get(...).send()\` Just Works against any MPP-compatible endpoint.
+
+> 🔍 **Find in repo.** Open [\`src/client/middleware.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/client/middleware.rs) and find the function that handles the retry. Then open [\`src/server/mpp.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/server/mpp.rs) and find where the challenge is emitted. **Predict:** what's the smallest change you'd make to add a new payment provider — say, a custom L2's native asset? (Answer: implement the \`PaymentProvider\` trait on the client side and the \`ChargeMethod\` trait on the server. Zero changes to middleware or the protocol parser.)
+
+## Why Intents matter — the agent-at-scale problem
+
+> 🛑 **Predict.** An agent makes 1000 paid API requests per minute. What's broken about doing that as 1000 on-chain Tempo transactions? What does the protocol's *Intents* layer give you to fix it?
+
+(Answer: 1000 on-chain charges are slow, expensive in fees, and serialize the agent against block time. The Intents layer separates *charge* — settle each request individually — from *authorize* and *subscription* patterns — open a channel or session once, settle later. The wallet's "Session Payment (Channel)" mode below is exactly this — an on-chain channel opens once, off-chain vouchers settle per request, the channel closes when you're done. The Core layer doesn't know about channels. It knows about challenges and credentials. The Intents layer is where "1000 cheap requests per session" gets a name.)
+
+The relevant directories: [\`specs/intents/draft-payment-intent-charge-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/intents/draft-payment-intent-charge-00.md) is the one ratified intent at draft stage. Authorize and subscription are on the roadmap per the README.
+
+## From protocol to production — \`tempo wallet\`
+
+[\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet) is the canonical working integration. A CLI wallet with MPP built in. Three commands carry the whole flow:
+
+\`\`\`bash
+tempo wallet login                        # passkey login, opens browser
+tempo wallet fund                         # top up
+tempo request https://aviationstack.mpp.tempo.xyz/v1/flights?flight_iata=AA100
+\`\`\`
+
+The third command is the lesson. \`tempo request <url>\` performs the full 402 dance — challenge, sign, pay, retry — and prints the response body. No API key. No billing account. Just *the wallet exists and is funded*.
+
+Two payment shapes the wallet supports, lifted straight from the [README](https://github.com/tempoxyz/wallet/blob/main/README.md):
+
+| Shape | Trade-off | Use when |
+| :--- | :--- | :--- |
+| **One-shot (charge)** | Every request independently settles on-chain. No session state. | Sporadic paid calls, low frequency. |
+| **Session (channel)** | On-chain channel opens once. Off-chain vouchers exchanged per request. Settles when you close. | Streaming (SSE token-by-token), repeated calls to the same endpoint. |
+
+Session mode is the Intents-layer answer to the 1000-requests-per-minute predict above, made concrete.
+
+A subtler design point worth pausing on: the login flow uses a **passkey** (Touch ID / Face ID / hardware key) to authorize a **scoped session key** — time-limited, spending-capped, chain-bound — that the CLI then uses for signing. Your passkey never leaves the browser. The CLI holds a restricted credential, not your root key. This is the same pattern an agent should use: don't give it the keys to the kingdom; give it a scoped key that expires.
+
+> 🔍 **Find in repo.** Open the wallet's [\`ARCHITECTURE.md\`](https://github.com/tempoxyz/wallet/blob/main/ARCHITECTURE.md) (or skim the top-level Rust crates). **In your own words:** at what layer does the wallet hold the passkey-derived session key, and at what layer does it hand a \`PaymentProvider\` to the MPP middleware? The answer tells you the deployment shape for any agent you build on top of this.
+
+## Now answer the Step 1 predict
+
+**Why is \`WWW-Authenticate: Payment\` extensible rather than Tempo-specific?** Because the moment you bake in one rail, you've forked the protocol from anyone who wants to use a different one. Stripe co-maintaining MPP is only possible because Core is rail-agnostic — Stripe contributes the \`methods/stripe/\` directory, not edits to Core. Same shape Lightning, ACH, and any future rail will follow.
+
+This is the same trait-split discipline you saw in [artemis](./build-mev-searcher-en) (Collector / Strategy / Executor) and in the [validate-revm](./build-validate-revm-en) cross-check (provider-agnostic via the Alloy \`Provider\` trait). The pattern repeats in every serious protocol or framework: separate *mechanics* from *policy* from *concrete implementation*, and the future stays cheap.
+
+## Why this matters for what you build
+
+Two angles, both real:
+
+- **You ship a paid service.** Wrap your endpoint with \`Mpp::create(tempo(...))\` (or Stripe, or both). Agents and apps can pay per-request. No billing infrastructure, no API-key issuance, no rate-limit dashboards, no Stripe-portal integration. You charge what each request is worth and the protocol handles settlement. The aggregator from L7, the RPC endpoint from L3, the cheatcode harness from L6 — any of them could expose a paid surface this way.
+
+- **You ship a paid consumer.** Bolt \`PaymentMiddleware\` onto a reqwest client. Now your agent — or your indexer, or your validator's observability stack — can pay any MPP-compatible endpoint without per-vendor integration. The MEV searcher from L1 wants paid mempool feeds? Plug in MPP. The wallet backend from L4 wants paid data oracles? Plug in MPP. The capstone router from L8 wants paid private order flow? Plug in MPP.
+
+The genuine product idea worth chasing: a paid service that *only an agent would want at this granularity* — single-shot flight-status lookups, single-shot pricing oracles, single-shot LLM completions billed per token. Human-grade APIs don't price small enough; agent-grade APIs do because MPP makes per-request settlement cheap.
+
+## Recall checklist
+
+Before moving on, confirm you can answer each of these without scrolling back:
+
+1. What HTTP status code does MPP claim, and what does the server's \`WWW-Authenticate\` header look like?
+2. Name the three layers of the spec and what each one pins down.
+3. On the SDK server side, what does \`Mpp::create(tempo(...))\` give you? On the client side, what does \`PaymentMiddleware\` do?
+4. Why is the Intents layer separate from Core? Give a concrete scenario where it matters.
+5. What's the trade-off between a one-shot \`tempo request\` and a session-mode \`tempo request\`?
+
+If you stumbled on 2 or 4, re-read the Core/Intents/Methods section before the next lesson.
+
+## Drill
+
+1. **Read the IETF draft.** Open [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md). Skim until you can name three header fields the \`Payment\` scheme defines and what each one carries. (45 min)
+2. **Stand up a paid endpoint.** Clone [\`mpp-rs\`](https://github.com/tempoxyz/mpp-rs), look at [\`examples/\`](https://github.com/tempoxyz/mpp-rs/tree/main/examples), and run an axum server that charges 0.01 for one route. Hit it with curl, observe the 402. Hit it with \`tempo request\`, observe the 200. (2 hours)
+3. **Wrap an existing service.** Pick one of your earlier-tier builds — say, the custom RPC endpoint from L3. Add \`mpp\`'s axum integration. Charge per call. Verify with the wallet. (3 hours)
+4. **Trace a session.** With session-mode \`tempo request\` against a paid SSE endpoint, walk the network: when does the channel open? when do vouchers exchange? when does it settle? Use \`tempo wallet sessions list\` and \`close\` to inspect state. (1.5 hours)
+5. **Implement a custom provider.** Pick a payment rail not in the SDK (your favorite L2's native asset). Implement \`PaymentProvider\` (client) and \`ChargeMethod\` (server). Test against your own paid endpoint. *This is the test of whether the abstraction earns its keep.* (4 hours)
+
+Finish drill 3 and you have a paid endpoint deployable on real infrastructure. Finish drill 5 and you've internalized the protocol well enough to extend it.
+
+> 🛑 **Final check.** In one sentence: what does MPP give an agent that API keys + Stripe Checkout don't? If your answer doesn't mention *per-request settlement, no account, no rail lock-in*, re-read the opening — that's the entire reason the protocol exists.
 `,
                 },
               ],
