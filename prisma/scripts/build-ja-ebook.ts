@@ -1,9 +1,15 @@
 /**
- * Builds Japanese-locale curriculum exports:
- *   - rethlab-ja.pdf   (formatted, with page numbers in footer)
- *   - rethlab-ja.epub  (reflowable, for Kindle / iBooks etc.)
+ * Builds Japanese-locale curriculum exports, split into two volumes:
  *
- * Pipeline:
+ *   Volume 1 — Beginner + Intermediate (foundations through Inside Reth):
+ *     rethlab-ja-vol1.pdf   (page numbers in footer)
+ *     rethlab-ja-vol1.epub  (reflowable, for Kindle / iBooks)
+ *
+ *   Volume 2 — Advanced (L1 Architect) + Expert:
+ *     rethlab-ja-vol2.pdf
+ *     rethlab-ja-vol2.epub
+ *
+ * Pipeline per volume:
  *   prisma seed funcs  →  combined markdown  →  pandoc  →  PDF (via Chrome) + EPUB
  *
  * Run with: npm run build:ja-ebook
@@ -29,29 +35,46 @@ import { seedRethExpertJA } from '../seed-reth-expert-ja';
 import { seedRethBuildingJA } from '../seed-reth-building-ja';
 
 const REPO_ROOT = resolve(__dirname, '../..');
-const MD_PATH = '/tmp/rethlab-ja.md';
-const HEADER_PATH = '/tmp/rethlab-ja-header.html';
-const HTML_PATH = '/tmp/rethlab-ja.html';
-const PDF_PATH = resolve(REPO_ROOT, 'rethlab-ja.pdf');
-const EPUB_PATH = resolve(REPO_ROOT, 'rethlab-ja.epub');
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const TITLE = 'RethLab — 全カリキュラム (日本語版)';
 const AUTHOR = 'RethLab';
 
-const seeds: Array<(p: any) => Promise<unknown>> = [
-  seedRethBeginnerJA,
-  seedRethFundamentalsJA,
-  seedRethBridgeToAdvancedJA,
-  seedRethAlloyAdvancedJA,
-  seedRethRevmAdvancedJA,
-  seedRethAdvancedJA,
-  seedRethConsensusEngineeringJA,
-  seedRethCrossChainBridgesJA,
-  seedRethSequencerRollupJA,
-  seedRethP2PNetworkingJA,
-  seedRethValidatorOpsJA,
-  seedRethExpertJA,
-  seedRethBuildingJA,
+type SeedFn = (p: any) => Promise<unknown>;
+
+interface Volume {
+  slug: string;
+  title: string;
+  description: string;
+  seeds: SeedFn[];
+}
+
+const VOLUMES: Volume[] = [
+  {
+    slug: 'vol1',
+    title: 'RethLab Vol.1 — 入門・中級編 (日本語版)',
+    description: 'Rust EVM L1 エンジニアのための学校 — Beginner と Intermediate の全カリキュラム',
+    seeds: [
+      seedRethBeginnerJA,
+      seedRethFundamentalsJA,
+      seedRethBridgeToAdvancedJA,
+      seedRethAlloyAdvancedJA,
+      seedRethRevmAdvancedJA,
+      seedRethAdvancedJA,
+    ],
+  },
+  {
+    slug: 'vol2',
+    title: 'RethLab Vol.2 — 上級・専門編 (日本語版)',
+    description: 'Rust EVM L1 エンジニアのための学校 — Advanced (L1 Architect) と Expert の全カリキュラム',
+    seeds: [
+      seedRethConsensusEngineeringJA,
+      seedRethCrossChainBridgesJA,
+      seedRethSequencerRollupJA,
+      seedRethP2PNetworkingJA,
+      seedRethValidatorOpsJA,
+      seedRethExpertJA,
+      seedRethBuildingJA,
+    ],
+  },
 ];
 
 // Inline CSS for the PDF. Page numbers live in @bottom-center via CSS Paged Media,
@@ -129,7 +152,7 @@ const PDF_HEADER_HTML = `<style>
 </style>
 `;
 
-async function extractMarkdown(): Promise<string> {
+async function extractMarkdown(volume: Volume): Promise<string> {
   const allCourses: any[] = [];
   const mockPrisma: any = new Proxy(
     {},
@@ -148,10 +171,10 @@ async function extractMarkdown(): Promise<string> {
     },
   );
 
-  for (const fn of seeds) await fn(mockPrisma);
+  for (const fn of volume.seeds) await fn(mockPrisma);
 
   let md = '---\n';
-  md += `title: "${TITLE}"\n`;
+  md += `title: "${volume.title}"\n`;
   md += `author: "${AUTHOR}"\n`;
   md += 'lang: ja\n';
   md += '---\n\n';
@@ -192,42 +215,75 @@ async function extractMarkdown(): Promise<string> {
   return md;
 }
 
-async function main() {
-  console.log('1/4  Extracting markdown from JA seeds...');
-  const md = await extractMarkdown();
-  writeFileSync(MD_PATH, md, 'utf8');
-  console.log(`     → ${MD_PATH} (${md.length.toLocaleString()} chars)`);
+async function buildVolume(volume: Volume, headerPath: string): Promise<{ pdf: string; epub: string; pages: number | null }> {
+  const mdPath = `/tmp/rethlab-ja-${volume.slug}.md`;
+  const htmlPath = `/tmp/rethlab-ja-${volume.slug}.html`;
+  const pdfPath = resolve(REPO_ROOT, `rethlab-ja-${volume.slug}.pdf`);
+  const epubPath = resolve(REPO_ROOT, `rethlab-ja-${volume.slug}.epub`);
 
-  console.log('2/4  Pandoc → HTML (for PDF step)...');
-  writeFileSync(HEADER_PATH, PDF_HEADER_HTML, 'utf8');
+  console.log(`\n[${volume.slug}] Extracting markdown (${volume.seeds.length} courses)...`);
+  const md = await extractMarkdown(volume);
+  writeFileSync(mdPath, md, 'utf8');
+  console.log(`         → ${mdPath} (${md.length.toLocaleString()} chars)`);
+
+  console.log(`[${volume.slug}] Pandoc → HTML...`);
   execSync(
-    `pandoc ${MD_PATH} -o ${HTML_PATH} --standalone --toc --toc-depth=2 ` +
-      `-V lang=ja --include-in-header=${HEADER_PATH} ` +
-      `--metadata title="${TITLE}"`,
+    `pandoc ${mdPath} -o ${htmlPath} --standalone --toc --toc-depth=2 ` +
+      `-V lang=ja --include-in-header=${headerPath} ` +
+      `--metadata title="${volume.title}"`,
     { stdio: 'inherit' },
   );
 
-  console.log('3/4  Chrome headless → PDF...');
+  console.log(`[${volume.slug}] Chrome headless → PDF...`);
+  execSync(
+    `"${CHROME_PATH}" --headless=new --disable-gpu --no-pdf-header-footer ` +
+      `--print-to-pdf="${pdfPath}" "file://${htmlPath}"`,
+    { stdio: 'inherit' },
+  );
+
+  console.log(`[${volume.slug}] Pandoc → EPUB...`);
+  execSync(
+    `pandoc ${mdPath} -o "${epubPath}" --toc --toc-depth=2 --split-level=1 ` +
+      `-V lang=ja --metadata title="${volume.title}" --metadata author="${AUTHOR}" ` +
+      `--metadata description="${volume.description}"`,
+    { stdio: 'inherit' },
+  );
+
+  // Estimate page count for the PDF
+  let pages: number | null = null;
+  try {
+    const out = execSync(
+      `python3 -c "import re; d=open('${pdfPath}','rb').read(); print(len(re.findall(rb'/Type\\s*/Page[^s]', d)))"`,
+    )
+      .toString()
+      .trim();
+    pages = parseInt(out, 10);
+  } catch {
+    /* page count is best-effort */
+  }
+
+  return { pdf: pdfPath, epub: epubPath, pages };
+}
+
+async function main() {
   if (!existsSync(CHROME_PATH)) {
     throw new Error(`Chrome not found at ${CHROME_PATH}`);
   }
-  execSync(
-    `"${CHROME_PATH}" --headless=new --disable-gpu --no-pdf-header-footer ` +
-      `--print-to-pdf="${PDF_PATH}" "file://${HTML_PATH}"`,
-    { stdio: 'inherit' },
-  );
-  console.log(`     → ${PDF_PATH}`);
 
-  console.log('4/4  Pandoc → EPUB...');
-  execSync(
-    `pandoc ${MD_PATH} -o "${EPUB_PATH}" --toc --toc-depth=2 --split-level=1 ` +
-      `-V lang=ja --metadata title="${TITLE}" --metadata author="${AUTHOR}" ` +
-      `--metadata description="Rust EVM L1 エンジニアのための学校 — 全カリキュラム"`,
-    { stdio: 'inherit' },
-  );
-  console.log(`     → ${EPUB_PATH}`);
+  const headerPath = '/tmp/rethlab-ja-header.html';
+  writeFileSync(headerPath, PDF_HEADER_HTML, 'utf8');
 
-  console.log('\nDone. Both outputs ready for distribution.');
+  const results = [] as Array<{ slug: string; pdf: string; epub: string; pages: number | null }>;
+  for (const volume of VOLUMES) {
+    const res = await buildVolume(volume, headerPath);
+    results.push({ slug: volume.slug, ...res });
+  }
+
+  console.log('\nDone. Outputs:');
+  for (const r of results) {
+    console.log(`  ${r.slug}:  ${r.pdf}${r.pages != null ? `  (~${r.pages} pages)` : ''}`);
+    console.log(`        ${r.epub}`);
+  }
 }
 
 main().catch((err) => {

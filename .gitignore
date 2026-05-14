@@ -60,5 +60,5 @@ reth-2.png
 *.mp4
 
 # Generated curriculum exports (regenerate via `npm run build:ja-ebook`)
-rethlab-ja.pdf
-rethlab-ja.epub
+rethlab-ja*.pdf
+rethlab-ja*.epub
