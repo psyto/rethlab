@@ -153,9 +153,15 @@ When you've verified the donation flow with `sk_test_...` end-to-end (test card 
 
 - **Code changes**: push to `main` → Vercel auto-deploys.
 - **Schema changes**: edit `prisma/schema.prisma` → next deploy runs `prisma db push --accept-data-loss` automatically.
-- **Course content changes**: edit `prisma/seed-reth-*-{en,ja}.ts`, then either:
+- **Course content changes**: edit `prisma/seed-reth-*-{en,ja}.ts`, then pick one of:
+  - **Upsert (recommended for content updates after launch)** — updates all courses/modules/lessons by stable keys; **preserves users, enrollments, lesson progress, XP, streak days**. Use this whenever you've edited an existing lesson body and don't want to wipe user data.
+    ```bash
+    vercel env pull .env.production.local --environment production
+    DATABASE_URL=$(grep '^DATABASE_URL' .env.production.local | cut -d'"' -f2) npm run seed:upsert
+    ```
+    ~3–5 min depending on network. Note: orphaned lessons (slug renamed in source but not deleted in DB) are NOT auto-cleaned up; do that manually if needed.
   - **Full re-seed** (drops user progress, but lesson URLs survive because they're slug-based): `curl -X POST "https://rethlab.fabrknt.com/api/admin/seed?key=$AUTH_SECRET&mode=full"`
-  - **Add-only**: `mode=add` instead of `mode=full` — preserves existing courses and enrollments. Note that `mode=add` won't update content for courses that already exist; use `mode=full` when you've edited a lesson body.
+  - **Add-only**: `mode=add` instead of `mode=full` — preserves existing courses and enrollments. Note that `mode=add` won't update content for courses that already exist; use `mode=full` or `seed:upsert` when you've edited a lesson body.
 
 Need `AUTH_SECRET` locally? `vercel env pull .env.production.local --environment=production`, then `export AUTH_SECRET=$(grep '^AUTH_SECRET=' .env.production.local | cut -d= -f2- | tr -d '"')`.
 

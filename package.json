@@ -16,7 +16,8 @@
     "postinstall": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:ja-ebook": "tsx prisma/scripts/build-ja-ebook.ts"
+    "build:ja-ebook": "tsx prisma/scripts/build-ja-ebook.ts",
+    "seed:upsert": "tsx prisma/seed-upsert.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
