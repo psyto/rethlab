@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'The school for Rust EVM L1 engineers',
-      subtitle: 'Hyperliquid・Tempo・Berachain — モダンな Rust EVM L1 はすべて Reth・Revm・Alloy・Foundry で動いている。これを architect できるエンジニアはまだ希少。RethLab は 13 コース 4 ティアで、EVM の基礎から、Alloy/Revm/Reth の本番ソースの行単位読解、L1 アーキテクチャ設計、9 本の動くアプリ開発までを通す。',
+      subtitle: 'Hyperliquid・Tempo・Berachain — モダンな Rust EVM L1 はすべて Reth・Revm・Alloy・Foundry で動いている。これを architect できるエンジニアはまだ希少。RethLab は 13 コース 4 ティアで、EVM の基礎から、Alloy/Revm/Reth の本番ソースの行単位読解、L1 アーキテクチャ設計、10 本の動くアプリ開発までを通す。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -89,7 +89,7 @@ export const ja: TranslationKeys = {
     },
     cta: {
       title: 'Hyperliquid が採用中。Tempo が採用中。Paradigm ポートフォリオのインフラチームが採用中。',
-      description: 'Rust EVM スタックは速く動いている — Reth は他のプロジェクトが追いつけない cadence でリリースを ship し、それを読めるエンジニアは希少です。RethLab はスタック読解の深さに加え、9 本のポートフォリオ即戦力 build (MEV searcher、indexer、custom RPC、wallet backend、EIP-7702 sponsor、Foundry-style cheatcode、swap aggregator、frontrun-resistant router、cross-client validation harness) を提供します。2026 年の採用枠を取るのは、これらの artifact を持って現れる人たちです。',
+      description: 'Rust EVM スタックは速く動いている — Reth は他のプロジェクトが追いつけない cadence でリリースを ship し、それを読めるエンジニアは希少です。RethLab はスタック読解の深さに加え、10 本のポートフォリオ即戦力 build (MEV searcher、indexer、custom RPC、wallet backend、EIP-7702 sponsor、Foundry-style cheatcode、swap aggregator、frontrun-resistant router、cross-client validation harness、HTTP 402 / MPP machine-payments エンドポイント) を提供します。2026 年の採用枠を取るのは、これらの artifact を持って現れる人たちです。',
       cta: '始める',
     },
     features: {
@@ -325,8 +325,8 @@ export const ja: TranslationKeys = {
   },
   about: {
     title: 'RethLabについて',
-    subtitle: 'Rust EVM L1 エンジニアのための学校。Hyperliquid が動いている基盤。Tempo がローンチした基盤。Paradigm が build した — Reth・Revm・Foundry・Alloy。RethLab は 13 コース 4 ティアで、EVM の基礎・本番ソースの行単位読解・L1 アーキテクチャ設計・9 本の動くアプリ開発までを通すトレーニングプログラムです。',
-    bio: '15+ 年、金融機関のミッションクリティカルなシステム — コアバンキング、リテール預金、住宅ローン、KYC、規制対応 — を Tokyo (新生銀行)、Bangalore (オフショア開発)、Hong Kong (無料英語学習 E メール、50 万ユーザ超) で ship してきました。現在は SBI R3 Japan で Head of Sales Engineering として、Solana のエンタープライズ採用と RWA トークン化にフォーカスしています。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda すべてで active に build 中です。\n\nRethLab を作ったのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとしたとき、まさにこのカリキュラムが埋めようとしている穴にぶつかったからです — ドキュメントは散在し、ソースは難解で、「Rust が少し書ける」状態から「本番 EVM インフラを ship できる」状態までの明確な道筋がない。やりながら学び、効いた部分を「自分が欲しかったカリキュラム」として整理したのが RethLab です — 13 コース 4 ティア (基礎 / ソース読解 / L1 アーキテクチャ / 本番)、約 131 レッスン。Advanced ティアで consensus・cross-chain bridge・sequencer & rollup・P2P・validator 運用を扱い、Expert ティアで 9 本の動くアプリを end-to-end で ship します。永久無料・source-first。\n\n個人的には、このスタックを ship しているチーム — 特に Paradigm と Tempo — に興味があります。',
+    subtitle: 'Rust EVM L1 エンジニアのための学校。Hyperliquid が動いている基盤。Tempo がローンチした基盤。Paradigm が build した — Reth・Revm・Foundry・Alloy。RethLab は 13 コース 4 ティアで、EVM の基礎・本番ソースの行単位読解・L1 アーキテクチャ設計・10 本の動くアプリ開発までを通すトレーニングプログラムです。',
+    bio: '15+ 年、金融機関のミッションクリティカルなシステム — コアバンキング、リテール預金、住宅ローン、KYC、規制対応 — を Tokyo (新生銀行)、Bangalore (オフショア開発)、Hong Kong (無料英語学習 E メール、50 万ユーザ超) で ship してきました。現在は SBI R3 Japan で Head of Sales Engineering として、Solana のエンタープライズ採用と RWA トークン化にフォーカスしています。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda すべてで active に build 中です。\n\nRethLab を作ったのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとしたとき、まさにこのカリキュラムが埋めようとしている穴にぶつかったからです — ドキュメントは散在し、ソースは難解で、「Rust が少し書ける」状態から「本番 EVM インフラを ship できる」状態までの明確な道筋がない。やりながら学び、効いた部分を「自分が欲しかったカリキュラム」として整理したのが RethLab です — 13 コース 4 ティア (基礎 / ソース読解 / L1 アーキテクチャ / 本番)、約 131 レッスン。Advanced ティアで consensus・cross-chain bridge・sequencer & rollup・P2P・validator 運用を扱い、Expert ティアで 10 本の動くアプリを end-to-end で ship します。永久無料・source-first。\n\n個人的には、このスタックを ship しているチーム — 特に Paradigm と Tempo — に興味があります。',
     background: {
       tradfi: '経歴',
       tradfiDetail: '新生銀行で 15+ 年、金融機関のミッションクリティカル開発に従事 — コアバンキング (Flexcube)、リテール預金、住宅ローン、KYC/FATCA、全銀、ATM。Backbase (オランダの Banking as a Service ユニコーン) で PM。',
