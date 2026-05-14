@@ -8,7 +8,7 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
       slug: 'reth-building-ja',
       title: 'Building with the Stack — 実アプリを作る',
       description:
-        'ソースを読めるのは前提条件、このティアはその payoff です — Rust + Alloy + Revm の動くアプリ 9 本: 最小 MEV searcher、reorg-aware Postgres indexer (ExEx)、カスタム RPC エンドポイント、wallet backend、EIP-7702 sponsor、Foundry スタイル cheatcode、swap aggregator、すべてを統合する frontrun-resistant order router の capstone、そして cross-client validation harness。',
+        'ソースを読めるのは前提条件、このティアはその payoff です — Rust + Alloy + Revm の動くアプリ 10 本: 最小 MEV searcher、reorg-aware Postgres indexer (ExEx)、カスタム RPC エンドポイント、wallet backend、EIP-7702 sponsor、Foundry スタイル cheatcode、swap aggregator、すべてを統合する frontrun-resistant order router の capstone、cross-client validation harness、そして HTTP 402 + MPP による agent 向け machine-payments エンドポイント。',
       difficulty: 'EXPERT',
       duration: 420,
       xpReward: 100,
@@ -339,7 +339,7 @@ pub struct SyncEngine {
 }
 \`\`\`
 
-RPC client が 1 つではなく 2 つ。なぜ? Realtime sync (チェーン head 追跡) は厳しいレイテンシ予算; backfill (古い gap 埋め) は帯域貪欲。両者が 1 つのコネクション制限付き pool を共有すると、遅い backfill が realtime を starve させてノードが visibly に lag する。**別 client = 別 concurrency 予算。** ファイル冒頭の定数: \`REALTIME_RPC_CONCURRENCY = 4\`、\`BACKFILL_RPC_CONCURRENCY = 8\`。
+RPC client が 1 つではなく 2 つ。なぜ? Realtime sync (チェーン head 追跡) は厳しいレイテンシ予算; backfill (古い gap 埋め) は帯域貪欲。両者が 1 つのコネクション制限付き pool を共有すると、遅い backfill が realtime を starve させて、ノードが目に見えて lag する。**別 client = 別 concurrency 予算。** ファイル冒頭の定数: \`REALTIME_RPC_CONCURRENCY = 4\`、\`BACKFILL_RPC_CONCURRENCY = 8\`。
 
 > 🔍 **リポで探す。** 同じファイルで \`backfill_first\` と \`trust_rpc\` を見つける。それぞれ 30 秒ずつ読む。**自分の言葉で:** \`backfill_first\` はノード起動の何を変えるか? \`trust_rpc\` は何をオプトアウトするか?
 
@@ -2908,7 +2908,7 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
 
 ## Building tier 完走 (今度こそ本当に)
 
-「arb のアイデアがある」から「Revm が production の Geth と一致することを保証できる」まで網羅する 9 lesson:
+「arb のアイデアがある」から「Revm が production の Geth と一致することを保証できる」まで網羅する 10 lesson:
 
 1. 最小 MEV searcher (mempool → fork-sim → arb)
 2. Reorg-aware Postgres indexer (ExEx + reorg ディスパッチ)
@@ -2919,6 +2919,7 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
 7. Swap aggregator (Revm fork + venue 横断 quote)
 8. Frontrun-resistant order router (capstone — 1-7 統合)
 9. **Cross-client validation harness (本レッスン)** — 上記 8 本を「デモ」から「production-trusted」へ
+10. Machine-payments エンドポイント (HTTP 402 + MPP) — 上記の有料化レイヤ
 
 ターゲット雇用主 / プロジェクトに最も近い build を選ぶ。Production gaps を開ける。小さな public リポとして ship。**それが会話に持っていく artifact。**
 `,
@@ -2932,19 +2933,19 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
                   xpReward: 40,
                   content: `# Machine Payments — HTTP 402 と Tempo MPP スタック
 
-2026 年の有料 API はどれも同じダンスを強要してくる。サインアップ。メール認証。API キー発行。請求アカウント紐付け。プランを事前コミット。*それから* 有料リソースを 1 つ fetch できる。SaaS を ship する人間なら問題ない。フライト状況を *1 回だけ* 引きたい自律 agent にとっては、摩擦こそが製品 — そして製品は壊れている。
+2026 年の有料 API はどれも同じ手順を要求してきます。サインアップ、メール認証、API キー発行、請求アカウントの紐付け、プランの事前コミット。*そこまでやって初めて* 有料リソースを 1 つ取得できる。SaaS を提供する側にとっては問題ありません。しかしフライト状況を *1 回だけ* 取得したい自律 agent にとっては、その摩擦自体が製品体験 — そして体験は壊れています。
 
-**Machine Payments Protocol (MPP)** — Tempo Labs と Stripe が共同で開発する IETF ドラフト — はこの契約を変える。クライアントが HTTP リクエストを送る。サーバが \`402 Payment Required\` を challenge とともに返す。クライアントが支払う。クライアントが証明付きで retry する。サーバが \`200 OK\` を返す。アカウント不要。API キー不要。チェックアウトフロー不要。1 リクエストごとに、同じラウンドトリップ内で、サーバが受け付けるどの payment rail でも支払える — Tempo、Stripe、ACH、Lightning、カード、custom。
+**Machine Payments Protocol (MPP)** — Tempo Labs と Stripe が共同で開発する IETF ドラフト — はこの前提を変えます。クライアントが HTTP リクエストを送る。サーバが \`402 Payment Required\` を challenge とともに返す。クライアントが支払う。クライアントが証明を付けて再試行する。サーバが \`200 OK\` を返す。アカウント不要、API キー不要、チェックアウトフロー不要。1 リクエストごとに、同じラウンドトリップ内で、サーバが受け付けるあらゆる payment rail で支払える — Tempo、Stripe、ACH、Lightning、カード、独自の rail まで。
 
-本レッスンはソースを読む: 仕様 ([\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs))、Rust SDK ([\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs))、エンドツーエンドで動く CLI ([\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet))。
+本レッスンでは、3 つのソースを並行して読んでいきます: 仕様 ([\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs))、Rust SDK ([\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs))、そしてエンドツーエンドで動く CLI ([\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet))。
 
-> 📌 **仕様ステータス — 適切にヘッジする。** MPP は *IETF ドラフト* ([draft-ryan-httpauth-payment-00](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)) であって、批准済み標準ではない。ワイヤフォーマットはまだ変わり得る。今すぐ build に使える程度に安定しているのは *形* — HTTP 402 + \`Payment\` 認証スキーム — と Tempo / Stripe のリファレンス実装。バイトはドラフトとして扱う; アーキテクチャをレッスンとして扱う。
+> 📌 **仕様ステータス — 期待値を正しく持つ。** MPP は *IETF ドラフト* ([draft-ryan-httpauth-payment-00](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)) であり、批准済みの標準ではありません。ワイヤフォーマットの細部はまだ変わる可能性があります。今すぐ実装に使える程度に安定しているのは *全体像* — HTTP 402 + \`Payment\` 認証スキーム — と Tempo / Stripe のリファレンス実装です。細部はドラフト扱い、アーキテクチャ全体を学習対象として扱ってください。
 
 ## 誰も使わなかったステータスコード
 
-HTTP 402 は 30 年前に「将来の用途のため」予約された。誰も使わないまま web は API キー、OAuth、Stripe Checkout、その他「ネイティブな支払いステータスコードを *持たない* ための回避策」のあらゆる形で成長した。MPP はこれを真剣に claim した最初の仕様です。
+HTTP 402 は 30 年前に「将来の用途のため」予約されました。誰も使わないまま、web は API キー、OAuth、Stripe Checkout など「ネイティブな支払いステータスコードを *持たない* ことを補う回避策」によって成長してきた。MPP はこの 402 を本気で活用しようとした最初の仕様です。
 
-完全なフロー — [\`mpp-specs/README.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/README.md) からそのまま:
+完全なフロー — [\`mpp-specs/README.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/README.md) のとおり:
 
 \`\`\`mermaid
 sequenceDiagram
@@ -2960,37 +2961,37 @@ sequenceDiagram
     Server-->>Client: 200 OK
 \`\`\`
 
-5 ステップ。境界を読む:
+5 ステップ。各ステップの担当を読み解いてください:
 
-1. クライアント \`GET /resource\` — キャッシュなし・未認証の通常の GET と同じ形。
-2. サーバ \`402 Payment Required\` + \`WWW-Authenticate: Payment <challenge>\` — challenge には *何の* 支払いが必要か、*どの rail* を受け付けるかがエンコードされている。
-3. クライアントが **off-band** で支払いを履行する — Tempo のオンチェーン charge、Stripe Shared Payment Token、Lightning invoice。プロトコルはどれかを気にしない。
-4. クライアントが \`Authorization: Payment <credential>\` を付けて \`GET /resource\` を retry。credential が支払いの証明になる。
+1. クライアントが \`GET /resource\` — キャッシュなし・未認証の通常の GET と同じ形。
+2. サーバが \`402 Payment Required\` + \`WWW-Authenticate: Payment <challenge>\` を返す — challenge には *何の* 支払いが必要か、*どの rail* が受け付けられるかがエンコードされている。
+3. クライアントが **HTTP の外で**(out-of-band で)支払いを履行する — Tempo のオンチェーン charge、Stripe Shared Payment Token、Lightning invoice など。プロトコルはどの rail を使うかを問わない。
+4. クライアントが \`Authorization: Payment <credential>\` を付けて \`GET /resource\` を再試行。credential が支払い済みの証明になる。
 5. サーバが検証して \`200 OK\` を返す。
 
-設計の中立性を担保している部分: ステップ 3 は *HTTP ラウンドトリップの内側にない*。プロトコルは *ハンドシェイク* (ステップ 1, 2, 4, 5) を規定し、*決済* は challenge が広告した rail に委譲する。この分離が肝。
+設計の中立性を担保している箇所: ステップ 3 は *HTTP ラウンドトリップの外側* にあります。プロトコルは *ハンドシェイク* (ステップ 1, 2, 4, 5) のみを規定し、*決済そのもの* は challenge で示された rail に委譲する。この分離が肝です。
 
-> 🛑 **スクロール前に予測。** \`WWW-Authenticate: Payment\` の challenge フォーマットは拡張可能 — どの rail もプラグインできる。なぜそれが正解か、Tempo を埋め込んでしまうのと比べて? *1 つの rail にプロトコルを融合させたら何が壊れるか* について一文で答える。アーキテクチャの章まで保留。
+> 🛑 **スクロール前に予測。** \`WWW-Authenticate: Payment\` の challenge フォーマットは拡張可能 — どの rail でもプラグインできる設計になっている。Tempo を埋め込んでしまう設計と比べて、なぜこちらが正解か? *プロトコルを 1 つの rail に縛り付けたら何が壊れるか* について一文で答えてみてください。アーキテクチャの章まで答えを保留。
 
 ## 3 層 — Core / Intents / Methods
 
-仕様 repo は理由あってモジュラ。[\`tempoxyz/mpp-specs/specs/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs) を開く。重要な 3 つのサブディレクトリ:
+仕様 repo がモジュール化されているのには明確な理由があります。[\`tempoxyz/mpp-specs/specs/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs) を開いてください。重要な 3 つのサブディレクトリ:
 
-| 層 | パス | 何を固定するか |
+| 層 | パス | 何を定義するか |
 | :--- | :--- | :--- |
-| **Core** | [\`specs/core/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) | HTTP 402 セマンティクス、\`Payment\` 認証スキーム、ヘッダ文法、IANA レジストリ。payment-rail 非依存 |
-| **Intents** | [\`specs/intents/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents) | 抽象パターン: charge、authorize、subscription。*どんな種類* の支払いかを規定するが、*どう* するかは規定しない |
+| **Core** | [\`specs/core/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) | HTTP 402 のセマンティクス、\`Payment\` 認証スキーム、ヘッダ文法、IANA レジストリ。payment-rail 非依存 |
+| **Intents** | [\`specs/intents/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents) | 抽象パターン: charge、authorize、subscription。*どんな種類* の支払いかを規定するが、*どう* やるかは規定しない |
 | **Methods** | [\`specs/methods/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) | rail 別の具体実装: \`tempo/\`、\`stripe/\`、\`evm/\`、\`solana/\`、\`stellar/\`、\`lightning/\`、\`card/\` |
 
-この分割が解いている設計問題: **Tempo にも Stripe にも ACH にも Lightning にも対応する 1 つのクライアントライブラリをどう書くか?** 答え — [artemis レッスン](./build-mev-searcher-ja) で読んだ Collector / Strategy / Executor の分割と同じ形。HTTP メカニクス (Core) と payment intent (Intents) と rail 固有のバイト (Methods) を分離する。Core 層はブロックチェーンが何か知らない。Methods 層は HTTP 402 がどんな見た目か知らない。Intents 層は両者の契約。
+この分割が解いている設計問題: **Tempo にも Stripe にも ACH にも Lightning にも対応する 1 つのクライアントライブラリをどう書くか?** 答えは [artemis レッスン](./build-mev-searcher-ja) で読んだ Collector / Strategy / Executor の分割と同じ構造です。HTTP のメカニクス (Core)、payment の意図 (Intents)、rail 固有の具体実装 (Methods) を分離する。Core 層はブロックチェーンが何かを知らない。Methods 層は HTTP 402 がどう振る舞うかを知らない。Intents 層が両者をつなぐインターフェースになる。
 
-Core に Tempo 固有の仮定を埋め込んでいたら、Stripe が共同 maintainer に加わった瞬間 — *それは実際に起きた* — Core のあらゆる部分を再検討する必要があった。モジュラ分割のおかげで、Stripe の追加は \`specs/methods/stripe/\` 配下に新ディレクトリを置くだけで済み、プロトコル本体に手を入れずに済んだ。
+もし Core に Tempo 固有の仮定を埋め込んでいたら、Stripe が共同 maintainer に加わった瞬間 — *これは実際に起きました* — Core のあらゆる部分を再検討せざるを得なかったはずです。モジュラ分割のおかげで、Stripe の追加は \`specs/methods/stripe/\` 配下に新ディレクトリを置くだけで済み、プロトコル本体に手を入れずに完了しています。
 
-> 🔍 **リポで探す。** [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md) を開く。IANA レジストリのセクションを目で追う。**自分の言葉で:** 新しい payment method を追加するのに実際何が必要か? 答えは「Core への PR」か「\`specs/methods/\` 配下に 1 ファイル追加する PR」か? (答えこそが本プロトコルを将来 proof にしている部分 — そして \`WWW-Authenticate: Payment\` を設計上拡張可能にしている部分です。)
+> 🔍 **リポで探す。** [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md) を開き、IANA レジストリのセクションに目を通す。**自分の言葉で答えてください:** 新しい payment method を追加するのに実際何が必要か? 答えは「Core への PR」か、それとも「\`specs/methods/\` 配下に 1 ファイル追加する PR」か? (この答えこそが本プロトコルを将来の変化に耐えられる設計にしている部分であり、\`WWW-Authenticate: Payment\` を拡張可能にしている部分です。)
 
 ## Rust SDK を 30 秒で
 
-[\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs) を開く。SDK はプロトコルと同じ断層に沿って分かれている — マーチャント側は [\`src/server/\`](https://github.com/tempoxyz/mpp-rs/tree/main/src/server)、買い手側は [\`src/client/\`](https://github.com/tempoxyz/mpp-rs/tree/main/src/client)。
+[\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs) を開いてください。SDK は仕様と同じ断層で分かれています — マーチャント側は [\`src/server/\`](https://github.com/tempoxyz/mpp-rs/tree/main/src/server)、購入側は [\`src/client/\`](https://github.com/tempoxyz/mpp-rs/tree/main/src/client)。
 
 **サーバ側** — challenge を発行し、credential を検証する:
 
@@ -3005,9 +3006,9 @@ let challenge = mpp.charge("1")?;             // WWW-Authenticate の値を返�
 let receipt = mpp.verify_credential(&credential).await?;
 \`\`\`
 
-\`Mpp::create\` は *payment provider* を取る — \`tempo(...)\`、\`stripe(...)\`、自前のもの。返ってくる \`Mpp\` は challenge を発行し credential を *汎用に* 検証する。provider を差し替えればよく、サーバの残り部分は動かない。
+\`Mpp::create\` は *payment provider* を引数に取ります — \`tempo(...)\`、\`stripe(...)\`、または自前のもの。返ってくる \`Mpp\` は challenge を発行し、credential を *rail に依存しない形で* 検証します。provider を差し替えるだけでよく、サーバの他のコードは変更不要です。
 
-**クライアント側** — 402 を透過化する:
+**クライアント側** — 402 を透過的に扱う:
 
 \`\`\`rust
 use mpp::client::{PaymentMiddleware, TempoProvider};
@@ -3018,86 +3019,86 @@ let client = ClientBuilder::new(reqwest::Client::new())
     .with(PaymentMiddleware::new(provider))
     .build();
 
-// 以降のリクエストは 402 を自動でハンドリング
+// 以降のリクエストは 402 が自動でハンドリングされる
 let resp = client.get("https://mpp.dev/api/ping/paid").send().await?;
 \`\`\`
 
-\`PaymentMiddleware\` は reqwest クライアントをラップする。ミドルウェアが 402 レスポンスを intercept し、challenge をパースし、provider を呼んで支払いを履行し、\`Authorization: Payment\` ヘッダを付けて retry する。呼び出し側から見ると、\`.get(...).send()\` は MPP 対応エンドポイントに対して Just Works。
+\`PaymentMiddleware\` は reqwest クライアントをラップします。ミドルウェアが 402 レスポンスを受け取り、challenge をパースし、provider を呼び出して支払いを履行し、\`Authorization: Payment\` ヘッダを付けて再試行する。呼び出し側から見れば、MPP 対応エンドポイントに対して \`.get(...).send()\` がそのまま機能します。
 
-> 🔍 **リポで探す。** [\`src/client/middleware.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/client/middleware.rs) を開いて retry を処理する関数を探す。次に [\`src/server/mpp.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/server/mpp.rs) を開いて challenge が emit される箇所を探す。**予測:** 新しい payment provider を追加する — たとえばカスタム L2 のネイティブ資産 — のに必要な最小の変更は? (答え: クライアント側で \`PaymentProvider\` trait を、サーバ側で \`ChargeMethod\` trait を実装する。ミドルウェアやプロトコルパーサには手を入れない。)
+> 🔍 **リポで探す。** [\`src/client/middleware.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/client/middleware.rs) を開いて再試行を処理する関数を探す。次に [\`src/server/mpp.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/server/mpp.rs) を開いて challenge が発行される箇所を探す。**予測してください:** 新しい payment provider を追加する — たとえば独自 L2 のネイティブ資産で支払えるようにする — のに必要な最小限の変更は? (答え: クライアント側で \`PaymentProvider\` trait を、サーバ側で \`ChargeMethod\` trait を実装する。ミドルウェアやプロトコルパーサには手を入れません。)
 
 ## なぜ Intents が必要か — agent スケール問題
 
-> 🛑 **予測。** ある agent が 1 分間に 1000 件の有料 API リクエストを送る。それを 1000 件のオンチェーン Tempo トランザクションでやるのは何が壊れているか? プロトコルの *Intents* 層がそれを直すために提供するものは何か?
+> 🛑 **予測。** ある agent が 1 分間に 1000 件の有料 API リクエストを送るとします。これを 1000 件のオンチェーン Tempo トランザクションで処理しようとすると、何が壊れるか? プロトコルの *Intents* 層は、これを解決するために何を提供しているか?
 
-(答え: 1000 件のオンチェーン charge は遅く、手数料がかさみ、agent がブロック時間に直列化される。Intents 層は *charge* — 1 リクエストごとに個別決済 — と *authorize* / *subscription* パターン — チャネルやセッションを 1 度開いて後でまとめて決済 — を分離する。後述するウォレットの「Session Payment (Channel)」モードがまさにこれ — オンチェーンチャネルを 1 度開き、オフチェーン voucher を 1 リクエストごとに交換し、終わったらチャネルを閉じる。Core 層はチャネルを知らない。Core 層は challenge と credential を知っている。Intents 層が「セッションあたり 1000 件の cheap requests」に名前を与える場所です。)
+(答え: 1000 件のオンチェーン charge は遅く、手数料がかさみ、agent がブロック時間に直列化されてしまう。Intents 層は *charge* — 1 リクエストごとに個別決済 — と、*authorize* / *subscription* パターン — チャネルやセッションを 1 度開いてあとでまとめて決済 — を分離します。後述するウォレットの「Session Payment (Channel)」モードがまさにこれで、オンチェーンチャネルを 1 度だけ開き、オフチェーン voucher を 1 リクエストごとに交換し、終わったらチャネルを閉じる、という仕組み。Core 層はチャネルの存在を知らない、challenge と credential しか知らない。Intents 層こそが「1 セッションあたり 1000 件の安価なリクエスト」というパターンに名前を与える場所です。)
 
-該当ディレクトリ: [\`specs/intents/draft-payment-intent-charge-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/intents/draft-payment-intent-charge-00.md) がドラフト段階で批准されている唯一の intent。authorize と subscription は README によればロードマップ上にある。
+該当ディレクトリ: [\`specs/intents/draft-payment-intent-charge-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/intents/draft-payment-intent-charge-00.md) が現時点で公開されている唯一の intent ドラフト。authorize と subscription は README によればロードマップに記載されています。
 
 ## プロトコルから production へ — \`tempo wallet\`
 
-[\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet) は MPP の正統な動作統合例。MPP がビルトインされた CLI ウォレット。3 つのコマンドで全フローをやる:
+[\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet) は MPP の正規の動作統合例です。MPP がビルトインされた CLI ウォレットで、3 つのコマンドで全フローが実行できます:
 
 \`\`\`bash
 tempo wallet login                        # passkey ログイン、ブラウザが開く
-tempo wallet fund                         # トップアップ
+tempo wallet fund                         # 残高をトップアップ
 tempo request https://aviationstack.mpp.tempo.xyz/v1/flights?flight_iata=AA100
 \`\`\`
 
-3 番目がレッスン本体。\`tempo request <url>\` が 402 ダンス全部 — challenge、署名、支払い、retry — を実行し、レスポンス本体を表示する。API キー不要。請求アカウント不要。*ウォレットが存在して資金があるだけ*。
+3 番目がレッスンの中核です。\`tempo request <url>\` が 402 のやりとり全体 — challenge、署名、支払い、再試行 — を実行し、レスポンス本体を表示する。API キー不要、請求アカウント不要、*ウォレットがあって資金が入っているだけ* で済みます。
 
-ウォレットがサポートする支払い形態は 2 つ、[README](https://github.com/tempoxyz/wallet/blob/main/README.md) からそのまま:
+ウォレットがサポートする支払い形態は 2 つ、[README](https://github.com/tempoxyz/wallet/blob/main/README.md) のとおり:
 
 | 形態 | トレードオフ | 使うとき |
 | :--- | :--- | :--- |
-| **One-shot (charge)** | リクエストごとに独立してオンチェーン決済。セッション状態なし | 単発の有料コール、低頻度 |
-| **Session (channel)** | オンチェーンチャネルを 1 度開く。オフチェーン voucher をリクエストごとに交換。close 時に決済 | ストリーミング (SSE のトークン単位)、同一エンドポイントへの反復コール |
+| **One-shot (charge)** | リクエストごとに独立してオンチェーン決済。セッション状態なし | 単発の有料コール、低頻度のアクセス |
+| **Session (channel)** | オンチェーンチャネルを 1 度開く。オフチェーン voucher をリクエストごとに交換。close 時に決済 | ストリーミング (SSE のトークン単位課金など)、同一エンドポイントへの反復コール |
 
-セッションモードは上の「1 分あたり 1000 リクエスト」予測への Intents 層からの答えを具体化したもの。
+セッションモードは、先ほどの「1 分あたり 1000 リクエスト」予測に対する Intents 層からの答えを具体化したものです。
 
-もう一歩踏み込んだ設計ポイント: ログインフローは **passkey** (Touch ID / Face ID / ハードウェアキー) で **スコープ付きセッションキー** — 時限・上限金額・チェーンバウンド — を認可し、CLI はそれを使って署名する。passkey はブラウザから出ない。CLI が持つのは制限付きクレデンシャルで、root キーではない。これは agent に与えるべきパターンと同じ — 王国の鍵は渡すな、期限付きのスコープキーを渡せ。
+もう一歩踏み込んだ設計ポイント: ログインフローは **passkey** (Touch ID / Face ID / ハードウェアキー) を使って **スコープ付きセッションキー** — 時限・上限金額・チェーンバウンド — を認可し、CLI はそれを使って署名する。passkey 自体はブラウザの外に出ません。CLI が保持しているのは制限付きクレデンシャルであり、root キーではない。これは agent に権限を渡すときに採用すべきパターンと同じです — 全権の鍵は渡さず、期限と権限を絞ったキーを渡す。
 
-> 🔍 **リポで探す。** ウォレットの [\`ARCHITECTURE.md\`](https://github.com/tempoxyz/wallet/blob/main/ARCHITECTURE.md) を開く (またはトップレベルの Rust crate を目で追う)。**自分の言葉で:** ウォレットは passkey 派生のセッションキーをどの層に持つか? どの層で \`PaymentProvider\` を MPP ミドルウェアに渡すか? 答えは、本仕組みの上に agent を build するときのデプロイ形を教えてくれる。
+> 🔍 **リポで探す。** ウォレットの [\`ARCHITECTURE.md\`](https://github.com/tempoxyz/wallet/blob/main/ARCHITECTURE.md) を開く (またはトップレベルの Rust crate に目を通す)。**自分の言葉で答えてください:** ウォレットは passkey 派生のセッションキーをどの層に保持しているか? どの層で \`PaymentProvider\` を MPP ミドルウェアに渡しているか? この答えが、本仕組みの上に agent を構築するときのデプロイ形を教えてくれます。
 
-## Step 1 の予測に答える
+## 冒頭の予測に答える
 
-**なぜ \`WWW-Authenticate: Payment\` は Tempo 固定ではなく拡張可能か?** 1 つの rail を埋め込んだ瞬間、別の rail を使いたい全員からプロトコルを fork したことになるから。Stripe が MPP を共同 maintain できているのは Core が rail 中立だからこそ — Stripe は \`methods/stripe/\` ディレクトリを寄与しているのであって、Core を編集しているのではない。Lightning、ACH、将来のあらゆる rail も同じ形になる。
+**なぜ \`WWW-Authenticate: Payment\` は Tempo に固定されず、拡張可能なのか?** 1 つの rail を埋め込んだ瞬間、別の rail を使いたい人すべてからプロトコルを fork されることになるからです。Stripe が MPP を共同 maintain できているのは、Core が rail 中立だからこそ — Stripe は \`methods/stripe/\` ディレクトリを寄贈しているのであり、Core を編集しているわけではない。Lightning、ACH、将来登場するあらゆる rail も同じ形で追加されていきます。
 
-これは [artemis](./build-mev-searcher-ja) (Collector / Strategy / Executor) や [validate-revm](./build-validate-revm-ja) のクロスチェック (Alloy \`Provider\` trait による provider 非依存) で見たのと同じ trait 分割の規律です。本気のプロトコル/フレームワークは毎回繰り返す: *メカニクス* と *ポリシー* と *具体実装* を分離する、すると将来が安く済む。
+これは [artemis](./build-mev-searcher-ja) (Collector / Strategy / Executor) や [validate-revm](./build-validate-revm-ja) のクロスチェック (Alloy \`Provider\` trait による provider 非依存) でも見たのと同じ trait 分割の規律です。本気のプロトコル/フレームワークは毎回これを繰り返す: *メカニクス* と *ポリシー* と *具体実装* を分離する、そうすれば将来の変更コストが下がる。
 
-## なぜこれが「あなたが build するもの」にとって重要か
+## なぜこれが「自分で作るもの」にとって重要か
 
-2 つの角度、どちらも実用:
+2 つの角度、どちらも実用的です:
 
-- **有料サービスを ship する。** エンドポイントを \`Mpp::create(tempo(...))\` (または Stripe、または両方) で wrap する。agent もアプリも 1 リクエストごとに払える。請求インフラ不要、API キー発行不要、レートリミットダッシュボード不要、Stripe ポータル統合不要。各リクエストに見合う金額を charge してプロトコルが決済する。L7 のアグリゲータ、L3 のカスタム RPC エンドポイント、L6 の cheatcode harness — どれもこの形で有料化できる。
+- **有料サービスを提供する側として。** エンドポイントを \`Mpp::create(tempo(...))\` (または Stripe、または両方) でラップします。agent もアプリも 1 リクエストごとに支払える。請求インフラ不要、API キー発行不要、レートリミットダッシュボード不要、Stripe ポータルの統合も不要。各リクエストに見合う金額を charge すれば、プロトコルが決済まで済ませてくれる。L7 のアグリゲータ、L3 のカスタム RPC エンドポイント、L6 の cheatcode harness — どれもこの形で有料化できます。
 
-- **有料サービスを consume する。** \`PaymentMiddleware\` を reqwest クライアントに足す。agent — もしくはインデクサ、バリデータのオブザーバビリティスタック — はベンダごとの統合なしに、MPP 対応エンドポイントを支払える。L1 の MEV searcher が有料 mempool feed を欲しい? MPP を差し込む。L4 の wallet backend が有料 data oracle を欲しい? MPP を差し込む。L8 capstone のルータが有料 private order flow を欲しい? MPP を差し込む。
+- **有料サービスを利用する側として。** \`PaymentMiddleware\` を reqwest クライアントに足すだけ。agent — もしくはインデクサ、バリデータの監視スタック — がベンダごとの統合なしに、MPP 対応エンドポイントに支払える。L1 の MEV searcher が有料 mempool feed を欲しい? MPP を差し込む。L4 の wallet backend が有料 data oracle を欲しい? MPP を差し込む。L8 capstone のルータが有料 private order flow を欲しい? MPP を差し込む。
 
-追いかける価値のある本物の product idea: *この粒度では agent しか欲しがらない* 有料サービス — 単発のフライト状況、単発のプライシング oracle、トークン単位課金の単発 LLM 補完。人間用 API は十分に小さく値付けできない; agent 用 API はできる、なぜなら MPP がリクエスト単位決済を cheap にするから。
+追いかける価値のある実プロダクトのアイデア: *この粒度では agent しか欲しがらない* 有料サービス — 単発のフライト状況、単発のプライシング oracle、トークン単位課金の単発 LLM 補完など。人間向け API はこの粒度では小さすぎて値付けできない、しかし agent 向け API ならできる。MPP がリクエスト単位の決済を安価にしているからです。
 
 ## リコールチェックリスト
 
-次に進む前に、スクロールせずに各問に答えられること:
+次に進む前に、スクロールせずに次の問いに答えられることを確認してください:
 
-1. MPP が claim する HTTP ステータスコードは? サーバの \`WWW-Authenticate\` ヘッダはどう見えるか?
-2. 仕様の 3 層を挙げよ。各層が何を固定するか。
-3. SDK サーバ側で \`Mpp::create(tempo(...))\` は何をくれるか? クライアント側で \`PaymentMiddleware\` は何をするか?
-4. Intents 層が Core から分離されているのはなぜか? 具体的なシナリオを挙げよ。
-5. \`tempo request\` の one-shot とセッションモードのトレードオフは?
+1. MPP が活用する HTTP ステータスコードは? サーバの \`WWW-Authenticate\` ヘッダはどう見えるか?
+2. 仕様の 3 層を挙げ、各層が何を定義しているか述べる。
+3. SDK サーバ側で \`Mpp::create(tempo(...))\` は何を提供してくれるか? クライアント側で \`PaymentMiddleware\` は何をするか?
+4. Intents 層が Core から分離されているのはなぜか? 具体的なシナリオを 1 つ挙げる。
+5. \`tempo request\` の one-shot モードとセッションモードのトレードオフは?
 
-2 か 4 でつまずいたら、次のレッスンに進む前に Core / Intents / Methods の章を読み直す。
+2 か 4 でつまずいたら、次のレッスンに進む前に Core / Intents / Methods の章を読み直してください。
 
 ## ドリル
 
-1. **IETF ドラフトを読む。** [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md) を開く。\`Payment\` スキームが定義するヘッダフィールド 3 つと各々が運ぶものを言えるまで目を通す。(45 分)
-2. **有料エンドポイントを立てる。** [\`mpp-rs\`](https://github.com/tempoxyz/mpp-rs) を clone し、[\`examples/\`](https://github.com/tempoxyz/mpp-rs/tree/main/examples) を見て、1 ルートで 0.01 を charge する axum サーバを動かす。curl で叩く、402 を観察。\`tempo request\` で叩く、200 を観察。(2 時間)
-3. **既存サービスを wrap する。** 自分の以前のレッスンの成果物のうち 1 つを選ぶ — たとえば L3 のカスタム RPC エンドポイント。\`mpp\` の axum 統合を足す。コールごとに charge。ウォレットで検証。(3 時間)
-4. **セッションをトレースする。** 有料 SSE エンドポイント対象でセッションモードの \`tempo request\` を実行し、ネットワークをトレースする: チャネルはいつ open する? voucher はいつ交換する? いつ決済する? \`tempo wallet sessions list\` と \`close\` で状態を inspect。(1.5 時間)
-5. **カスタム provider を実装する。** SDK にない payment rail を選ぶ (好きな L2 のネイティブ資産)。\`PaymentProvider\` (クライアント) と \`ChargeMethod\` (サーバ) を実装。自分の有料エンドポイントに対してテスト。*抽象が元を取れるかどうかのテスト*。(4 時間)
+1. **IETF ドラフトを読む。** [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md) を開く。\`Payment\` スキームが定義するヘッダフィールド 3 つと、各々が何を運ぶかを自分の言葉で言えるまで読む。(45 分)
+2. **有料エンドポイントを立てる。** [\`mpp-rs\`](https://github.com/tempoxyz/mpp-rs) を clone し、[\`examples/\`](https://github.com/tempoxyz/mpp-rs/tree/main/examples) を参考に、1 ルートで 0.01 を charge する axum サーバを動かす。curl で叩いて 402 を観察、\`tempo request\` で叩いて 200 を観察する。(2 時間)
+3. **既存サービスをラップする。** これまでのレッスンで作った成果物のうち 1 つを選ぶ — たとえば L3 のカスタム RPC エンドポイント。\`mpp\` の axum 統合を追加し、コールごとに charge する。ウォレットで検証。(3 時間)
+4. **セッションをトレースする。** 有料 SSE エンドポイントに対してセッションモードで \`tempo request\` を実行し、ネットワークをトレースする: チャネルはいつ open するか? voucher はいつ交換されるか? いつ決済されるか? \`tempo wallet sessions list\` と \`close\` で状態を確認する。(1.5 時間)
+5. **カスタム provider を実装する。** SDK にない payment rail を 1 つ選ぶ (好きな L2 のネイティブ資産など)。\`PaymentProvider\` (クライアント側) と \`ChargeMethod\` (サーバ側) を実装。自分の有料エンドポイントに対してテストする。*抽象が本当に役に立つかどうかのテスト* です。(4 時間)
 
-ドリル 3 までやれば、本物のインフラにデプロイ可能な有料エンドポイントを持っている。ドリル 5 までやれば、プロトコルを拡張できるレベルまで内在化したことになる。
+ドリル 3 まで進めば、本物のインフラにデプロイ可能な有料エンドポイントを持っていることになる。ドリル 5 まで進めば、プロトコルを自分で拡張できるレベルまで内在化できたと言えます。
 
-> 🛑 **最終チェック。** 一文で: MPP は agent に対して API キー + Stripe Checkout が与えないものとして何をくれるか? 答えに *リクエスト単位決済、アカウント不要、rail ロックイン不要* が入っていなければ、冒頭を読み直す — それこそが本プロトコルが存在する理由のすべて。
+> 🛑 **最終チェック。** 一文で答えてください: API キーと Stripe Checkout の組み合わせでは agent に提供できないもののうち、MPP が提供してくれるものは何か? 答えに *リクエスト単位決済、アカウント不要、rail ロックイン不要* が入っていなければ、冒頭を読み直してください — その 3 点こそが本プロトコルが存在する理由のすべてです。
 `,
                 },
               ],

@@ -1904,7 +1904,7 @@ Cross from "I can read it" to "I can ship it." Performance, ops, application eng
 | Course | Focus |
 | :--- | :--- |
 | **Reth Expert** | performance, MDBX, Tokio internals, procedural macros, custom precompiles, MPT, MEV, zkEVM, Reth fork ops |
-| **Building with the Stack** | 9 runnable apps — MEV searcher, indexer, wallet backend, cheatcode, swap aggregator, order router capstone, cross-client validation |
+| **Building with the Stack** | 10 runnable apps — MEV searcher, indexer, wallet backend, cheatcode, swap aggregator, order router capstone, cross-client validation, HTTP 402 / MPP machine-payments endpoint |
 
 ## Which one first?
 

@@ -380,7 +380,7 @@ export const ja: TranslationKeys = {
       fundamentalsDesc: 'Alloy・Revm・Reth の本番ソースを 1 行ずつ読む 3 コース。Provider/Network/Signer、interpreter 内部、Staged Sync と ExEx。任意の順で受講可。',
       hyperliquid: '上級',
       hyperliquidDesc: 'L1 を architect する 5 コース。BFT コンセンサス、cross-chain bridge、sequencer & rollup、P2P ネットワーキング、validator 運用。Hyperliquid・Tempo クラスへの設計力。',
-      expertDesc: '本番運用とアプリ開発の 2 コース。Reth Expert で性能、MDBX、Tokio、本番 MEV、zkEVM、Reth フォーク運用。Building with the Stack で MEV searcher・indexer・wallet・order router など動くアプリ 9 本。',
+      expertDesc: '本番運用とアプリ開発の 2 コース。Reth Expert で性能、MDBX、Tokio、本番 MEV、zkEVM、Reth フォーク運用。Building with the Stack で MEV searcher・indexer・wallet・order router・HTTP 402 machine-payments エンドポイントなど動くアプリ 10 本。',
       hlDev: 'Reth開発者',
       hlDevDesc: 'RethのStaged Sync、独自RPCメソッド、ExEx、そしてApp-chain構築のためのReth SDK。',
       beginner: '初級',

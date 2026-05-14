@@ -1904,7 +1904,7 @@ Inside で読んだソースを使って、自分の L1 を設計する。Hyperl
 | コース | 焦点 |
 | :--- | :--- |
 | **Reth Expert** | パフォーマンス、MDBX、Tokio 内部、手続きマクロ、カスタム precompile、MPT、本番 MEV、zkEVM、Reth フォーク運用 |
-| **Building with the Stack** | 動くアプリ 9 本 — MEV searcher、indexer、wallet backend、cheatcode、swap aggregator、order router capstone、cross-client 検証 |
+| **Building with the Stack** | 動くアプリ 10 本 — MEV searcher、indexer、wallet backend、cheatcode、swap aggregator、order router capstone、cross-client 検証、HTTP 402 / MPP の machine-payments エンドポイント |
 
 ## どちらから始める?
 

@@ -8,7 +8,7 @@ export async function seedRethBuildingEN(prisma: PrismaClient) {
       slug: 'reth-building-en',
       title: 'Building with the Stack — Real-World Rust EVM Apps',
       description:
-        "Reading the source is the prerequisite. This tier is the payoff — eight working apps in Rust + Alloy + Revm: minimal MEV searcher, reorg-aware Postgres indexer (ExEx), custom RPC endpoint, wallet backend, EIP-7702 sponsor service, Foundry-style cheatcode, swap aggregator, and a frontrun-resistant order router capstone that integrates them all.",
+        "Reading the source is the prerequisite. This tier is the payoff — ten working apps in Rust + Alloy + Revm: minimal MEV searcher, reorg-aware Postgres indexer (ExEx), custom RPC endpoint, wallet backend, EIP-7702 sponsor service, Foundry-style cheatcode, swap aggregator, a frontrun-resistant order router capstone that integrates them all, a cross-client validation harness, and an HTTP 402 / MPP machine-payments endpoint.",
       difficulty: 'EXPERT',
       duration: 420,
       xpReward: 100,
@@ -2908,7 +2908,7 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — the spec your Revm
 
 ## You've finished the Building tier (now for real)
 
-Nine lessons covering everything from "I have an arbitrage idea" to "I can guarantee my Revm matches Geth in production":
+Ten lessons covering everything from "I have an arbitrage idea" to "I can guarantee my Revm matches Geth in production" and "I can monetize any of it per request":
 
 1. Minimal MEV searcher (mempool → fork-sim → arb)
 2. Reorg-aware Postgres indexer (ExEx + reorg dispatch)
@@ -2919,6 +2919,7 @@ Nine lessons covering everything from "I have an arbitrage idea" to "I can guara
 7. Swap aggregator (Revm fork + cross-venue quotes)
 8. Frontrun-resistant order router (capstone — integrates 1-7)
 9. **Cross-client validation harness (this lesson)** — turns the previous eight from "demos" into "production-trusted"
+10. Machine-payments endpoint (HTTP 402 + MPP) — the monetization layer on top of any of the above
 
 Pick the build that maps to your target employer / project most closely. Open the production gaps. Ship as a small public repo. **That's the artifact you bring to the conversation.**
 `,
