@@ -590,6 +590,22 @@ chunk.par_iter()
 
 どれか曖昧なら、ここで足止めです。関連する組み立てステップを読み直すか、ファイルを開き直してください。
 
+## ドリル 5 — \`tracing\` 経由でステージが実行される様子を観測する（任意）
+
+これまで全部「読む」だった。最後に **動かして見る** 1 段。Reth はあらゆるステージに \`tracing\` の span / event を仕込んでいる。debug レベルで動かせば、本番ノードでステージが何をしているかが行ごとに見える:
+
+\`\`\`bash
+# reth リポジトリのルートで:
+RUST_LOG=reth_stages=debug,reth_stages_api=debug \\
+  cargo run --bin reth --release -- node --dev --dev.block-time 5s
+\`\`\`
+
+\`--dev\` は単一ノードの devnet を起動し、\`--dev.block-time 5s\` で 5 秒ごとにブロックを mine する。ターミナルにステージ遷移ログが流れ始めるはず — \`headers\`、\`bodies\`、\`sender_recovery\`、\`execution\`、\`hashing\`、\`merkle\`、\`tx_lookup\` などの span が、各ブロックに対して **読んだとおりの順序で** 走る。
+
+> 🛑 **何を観察すべきか:** 特定のブロック番号で \`sender_recovery\` の開始 → \`commit\` → 完了の流れが現れる。その間に \`execute()\` が **何回呼ばれているか** を数える（バッチサイズが小さいと複数回 — \`done: false\` の戻りパターンの実物）。
+
+これが本物。組み立てで読んだ「\`done: false\` を返してオーケストレータに backpressure を伝える」 が、\`tracing\` 出力にそのまま現れる。**メンタルモデルとログの一致が、レッスンを「分かった」から「動くと分かった」へ昇格させる。**
+
 このドリルを終えた時点で、Paradigm が Reth を同期させているのと同じコードを読めるようになっています。`,
                 },
                 {

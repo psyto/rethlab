@@ -599,6 +599,32 @@ What you've just done: patched a single library function call, and your client n
 
 If you didn't actually run \`cargo test\` and watch real output, you skipped the drill. The drill *is* the running. There's no version of this drill where you read it and "got it."
 
+## Drill 4 — Instrument \`add\` and watch the data flow
+
+Reading source is one mode. *Watching data move through the source you read* is a stronger one.
+
+1. Open \`crates/interpreter/src/instructions/arithmetic.rs\`.
+2. Add \`eprintln!\` at the top and bottom of \`add\`:
+
+   \`\`\`rust
+   pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+       popn_top!([op1], op2, context.interpreter);
+       eprintln!("ADD: {:#x} + {:#x} = ?", op1, *op2);  // ← add this
+       *op2 = op1.wrapping_add(*op2);
+       eprintln!("ADD result: {:#x}", *op2);              // ← and this
+       Ok(())
+   }
+   \`\`\`
+
+3. Re-run with \`cargo test -p revm-interpreter -- --nocapture\`. The \`--nocapture\` flag tells cargo to show \`eprintln!\` output.
+4. Read the output. **Count how many times ADD ran across the test suite.**
+
+This is the production reality compressed to your terminal: every Ethereum mainnet transaction containing \`0x01\` causes this exact function to run, with these exact operands, producing this exact result. Across years, on millions of nodes.
+
+> 🔧 **Revert when done.** \`git checkout crates/interpreter/src/instructions/arithmetic.rs\`. The \`eprintln!\` is for learning; production code never instruments hot paths this way (it uses the existing tracing integration — covered in Inside Reth).
+
+After watching ADD execute, the "the interpreter is just a Rust function loop" framing stops being theoretical.
+
 ## End-of-lesson recall
 
 Without scrolling, in your own words on paper:
@@ -1059,6 +1085,24 @@ Run this bytecode in your revm-with-table fork. The stack should end with \`10\`
 > 🔧 **The wiring is left as the drill.** Use revm's existing test harness in \`crates/interpreter/tests/\` (or write a one-shot binary in \`examples/\`). The point is to construct the EVM context, install your modified table, run the bytecode, and assert the final stack value.
 
 If you got \`10\` on the stack, **you've shipped a fork.** Your client now executes a chain incompatible with mainnet — and you've felt the difference between "I read about it" and "I did it."
+
+## Drill 5 — Instrument the opcode and watch the dispatch reach you
+
+Add an \`eprintln!\` inside \`double_top\` so you can *see* dispatch actually reach your Rust function:
+
+\`\`\`rust
+pub fn double_top<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([], op, context.interpreter);
+    let before = *op;
+    *op = (*op).wrapping_mul(U256::from(2));
+    eprintln!("DOUBLE_TOP: {:#x} -> {:#x}", before, *op);  // ← add this
+    Ok(())
+}
+\`\`\`
+
+Run with \`cargo run\` (or \`cargo test -- --nocapture\`). Feed bytecode \`60 05 0C 00\` and you should see **exactly one** log line: \`DOUBLE_TOP: 0x5 -> 0xa\`. That is the moment the instruction-table dispatch reached the Rust function you wrote. **One byte of bytecode (\`0x0C\`) triggered three lines of Rust** — and you've physically observed the causal chain.
+
+Try a bytecode with branching (e.g. \`PUSH1 3 PUSH1 1 LT JUMPI ... DOUBLE_TOP\`) and watch the \`eprintln!\` line appear / not appear depending on the branch. That is dispatch's net behaviour.
 
 ## End-of-lesson recall
 

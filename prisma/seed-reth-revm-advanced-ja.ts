@@ -601,6 +601,32 @@ cargo build  # ツールチェーンをウォームアップ
 
 \`cargo test\` を実際に走らせて出力を見ていなければ、ドリルをスキップしました。ドリル *は* 走らせること。読んで「分かった」と思えるバージョンは存在しません。
 
+## ドリル 4 — \`add\` を計装してデータの流れを観測する
+
+ソースを読むのは 1 つのモード。*読んだソースをデータが流れていく様子を見る* のはもっと強い。
+
+1. \`crates/interpreter/src/instructions/arithmetic.rs\` を開く
+2. \`add\` の先頭と末尾に \`eprintln!\` を追加:
+
+   \`\`\`rust
+   pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+       popn_top!([op1], op2, context.interpreter);
+       eprintln!("ADD: {:#x} + {:#x} = ?", op1, *op2);  // ← 追加
+       *op2 = op1.wrapping_add(*op2);
+       eprintln!("ADD result: {:#x}", *op2);              // ← 追加
+       Ok(())
+   }
+   \`\`\`
+
+3. 再実行: \`cargo test -p revm-interpreter -- --nocapture\`。\`--nocapture\` フラグで cargo が \`eprintln!\` 出力を見せる
+4. テスト出力を読む。**テストスイート全体で ADD が何回走ったか数える。**
+
+これが production の現実をターミナルに圧縮したもの: \`0x01\` を含む Ethereum mainnet の各トランザクションがこの正確な関数を、この正確なオペランドで実行し、この正確な結果を生む。何年もの間、数百万ノード上で。
+
+> 🔧 **終わったら戻す。** \`git checkout crates/interpreter/src/instructions/arithmetic.rs\`。\`eprintln!\` は学習用 — production コードは hot path をこの形で計装しない（既存の tracing 統合を使う、Inside Reth で扱う）。
+
+ADD が実行される様子を *見た* 後、「インタープリターはただの Rust 関数ループ」という枠組みが理論ではなくなる。
+
 ## レッスン終了の想起
 
 スクロールせずに、紙に自分の言葉で:
@@ -1060,6 +1086,24 @@ STOP        // 0x00
 > 🔧 **配線はドリルとして残します。** revm の既存テストハーネス \`crates/interpreter/tests/\` を使うか、\`examples/\` にワンショットバイナリを書く。要点は: EVM コンテキストを構築し、改変したテーブルを差し込み、バイトコードを実行し、最終スタック値をアサートすること。
 
 スタックに \`10\` が出たら **フォークを出荷したことになります。** あなたのクライアントは今、メインネットと非互換なチェーンを実行している — そして「読んだ」と「やった」の差を体で感じた。
+
+## ドリル 5 — Opcode を計装して呼び出しを観測
+
+\`double_top\` 内に \`eprintln!\` を入れて、ディスパッチが本当にあなたの Rust 関数を呼んでいることを *見る*:
+
+\`\`\`rust
+pub fn double_top<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([], op, context.interpreter);
+    let before = *op;
+    *op = (*op).wrapping_mul(U256::from(2));
+    eprintln!("DOUBLE_TOP: {:#x} -> {:#x}", before, *op);  // ← 追加
+    Ok(())
+}
+\`\`\`
+
+\`cargo run\`（または \`cargo test -- --nocapture\`）で実行。バイトコード \`60 05 0C 00\` を流すと、ターミナルに **正確に 1 回** のログが出るはず: \`DOUBLE_TOP: 0x5 -> 0xa\`。これが、命令テーブルディスパッチがあなたが書いた Rust 関数に到達した瞬間の証跡。**1 行のバイトコード \`0x0C\` が、3 行の Rust 関数を起動した** — その因果の鎖を物理的に観測した。
+
+ループや条件分岐入りのバイトコード（例: \`PUSH1 3 PUSH1 1 LT JUMPI ... DOUBLE_TOP\`）に変えると、\`eprintln!\` 行が分岐の挙動どおりに出る/出ないが見える。これがディスパッチの正味の挙動。
 
 ## レッスン終了の想起
 

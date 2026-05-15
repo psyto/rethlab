@@ -590,6 +590,22 @@ Without scrolling, in your own words:
 
 If any answer is shaky, the lesson isn't done with you. Re-read the relevant build-up step or re-open the file.
 
+## Drill 5 — Watch the stage execute via \`tracing\` (optional)
+
+Everything above was reading. One step of **running and watching**. Reth instruments every stage with \`tracing\` spans / events. Run with debug-level logging and you can see, line by line, what stages do in a real node:
+
+\`\`\`bash
+# From the reth repo root:
+RUST_LOG=reth_stages=debug,reth_stages_api=debug \\
+  cargo run --bin reth --release -- node --dev --dev.block-time 5s
+\`\`\`
+
+\`--dev\` boots a single-node devnet; \`--dev.block-time 5s\` mines a block every 5 s. Stage transition logs start streaming — \`headers\`, \`bodies\`, \`sender_recovery\`, \`execution\`, \`hashing\`, \`merkle\`, \`tx_lookup\` spans run **in the order you read them in the build-up**, for each block.
+
+> 🛑 **What to observe:** for one block number, watch the \`sender_recovery\` start → \`commit\` → finish flow. Count **how many times \`execute()\` was called** for that block (small batch sizes mean multiple calls — the \`done: false\` return pattern, made physical).
+
+This is the real thing. The "return \`done: false\` to backpressure the orchestrator" model from the build-up shows up directly in the \`tracing\` output. **The match between mental model and log output is what promotes the lesson from "I understood it" to "I understood it because I saw it work."**
+
 After this drill, you've read the same code Paradigm uses to keep Reth in sync.`,
                 },
                 {
