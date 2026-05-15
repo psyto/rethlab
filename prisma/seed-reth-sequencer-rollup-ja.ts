@@ -562,7 +562,7 @@ Optimism から withdraw する。**7 日**待つ。zkSync から withdraw す�
 
 Rollup の L1 contract は、sequencer の state root クレームを **一定期間**(チャレンジ window)信頼する。Window が閉じた後、state root は最終確定する。その window の中で何が起きるかの 2 つのパラダイムが、**fraud proof**(チャレンジ・ベース — 「誤りが証明されない限り信頼する」)と **validity / ZK proof**(暗号的アプローチ — 「常に正確性の proof を要求する」)である。Optimistic か ZK、一方を選ぶと、残りはすべてそれに従う。
 
-> 🛑 **スクロール前に予測。** Optimism の withdrawal は 7 日、zkSync の withdrawal はおよそ 1 時間。**10 倍以上の差を生む構造的な理由は何か?**(ヒント: 技術が優れているからではない、proof のパラダイムが違うからである。)
+> 🛑 **スクロール前に予測。** Optimism の withdrawal は 7 日、zkSync の withdrawal はおよそ 1 時間。**170 倍の差を生む構造的な理由は何か?**(ヒント: 技術が優れているからではない、proof のパラダイムが違うからである。)
 
 ## 1. State root commitment の問題
 

@@ -141,7 +141,7 @@ Hyperliquid の場合、独自の transport (HyperBFT 通信) は **execution �
 2. Reth の [\`crates/net/network\`](https://github.com/paradigmxyz/reth/tree/main/crates/net/network) をブラウズし、エントリポイントを見つける
 3. 自分の言葉でまとめる: 決済固有 gossip 用のカスタムサブプロトコルをどう追加するか?
 
-> 最終チェック: 一文で答えてみる。**bootnode** が解決する bootstrapping 問題とは何か? **答えに「peer を見つけるには peer が必要」というジレンマが含まれていなければ、§3 を読み直す**。`,
+> 最終チェック: 一文で答えてみる。**bootnode** が解決する bootstrapping 問題とは何か? **答えに「peer を見つけるには peer が必要」というジレンマが含まれていなければ、§1 を読み直す**。`,
                 },
                 {
                   title: 'Reth の network crate を読む',

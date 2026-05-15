@@ -141,7 +141,7 @@ For Hyperliquid: their custom transport (HyperBFT communication) is **separate f
 2. Browse reth's [\`crates/net/network\`](https://github.com/paradigmxyz/reth/tree/main/crates/net/network) — find the entry point
 3. Identify: how would you add a custom sub-protocol for payment-specific gossip?
 
-> Final check: in one sentence, what's the bootstrapping problem solved by **bootnodes**? **If your answer doesn't reference "peers need peers to find peers," re-read §3.**`,
+> Final check: in one sentence, what's the bootstrapping problem solved by **bootnodes**? **If your answer doesn't reference "peers need peers to find peers," re-read §1.**`,
                 },
                 {
                   title: "Reading reth's network crate",

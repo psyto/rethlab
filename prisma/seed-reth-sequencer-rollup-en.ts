@@ -562,7 +562,7 @@ You withdraw from Optimism. You wait **seven days**. You withdraw from zkSync. Y
 
 A rollup's L1 contracts trust the sequencer's state root claims for **a fixed period** (the challenge window). After the window closes, the state root is final. The two paradigms for what happens during the window are **fraud proofs** (challenge-based — "trust unless proven wrong") and **validity / ZK proofs** (cryptographic — "always require a proof of correctness"). Optimistic or ZK: pick one. Everything else follows.
 
-> 🛑 **Predict before scrolling.** Optimism's withdrawal takes 7 days. zkSync's withdrawal takes ~1 hour. **What's the structural reason for the 10x difference?** (Hint: not better tech, different proof paradigm.)
+> 🛑 **Predict before scrolling.** Optimism's withdrawal takes 7 days. zkSync's withdrawal takes ~1 hour. **What's the structural reason for the 170× difference?** (Hint: not better tech, different proof paradigm.)
 
 ## 1. The state root commitment problem
 
