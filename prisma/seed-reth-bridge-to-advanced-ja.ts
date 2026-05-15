@@ -684,10 +684,211 @@ Reth の各 Stage は \`execute\` (forward) と \`unwind\` (backward) を持つ�
             lessons: {
               create: [
                 {
+                  title: 'Solidity エンジニアのための Rust — 移行マップ',
+                  slug: 'rust-for-solidity-ja',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 18,
+                  xpReward: 35,
+                  content: `# Solidity エンジニアのための Rust — 移行マップ
+
+Solidity を ship してきたなら、EVM 挙動について *気にかけるべきもの* はすでにすべて知っている。足りないのは **自分の contract を走らせるエンジンを読むための Rust メンタルモデル**。本レッスンは、下にある密な Rust レッスンに進む前にそのギャップを埋める、横並び対訳表。
+
+ゼロから Rust を教えるレッスンではない。あなたが信頼している Solidity の概念が、Rust にどう写る（写らない）かを 1 行ずつ示す — 1 時間後に \`bluealloy/revm\` を開いたとき、画面いっぱいが「ああ、これは Solidity でやっているのと同じことを別の書き方で書いているだけだ」になるように。
+
+> 📌 **対象正直開示。** Solidity contract を書いて ship した経験がある人向けです。Solidity を触ったことがないなら、本レッスンは飛ばしてください — 下の Rust トラックは generics から直接始まります。
+
+## 1. 基本データ型はほぼ 1:1
+
+| Solidity | Rust (alloy / revm) | 備考 |
+| :--- | :--- | :--- |
+| \`address\` | \`Address\` (= \`B160\` = 20 byte 固定配列) | 同じ 20 byte。型付きラッパ |
+| \`uint256\` | \`U256\` | 256-bit 符号なし。\`alloy-primitives\` で定義、Rust EVM ツール全部が使う |
+| \`int256\` | \`I256\` | 同じだが符号あり |
+| \`bytes32\` | \`B256\` (= 32 byte 固定配列) | ハッシュ・スロットキー・tx ハッシュに使う |
+| \`bytes\` | \`Bytes\` (\`Vec<u8>\` のラッパ) | 動的バイト列 |
+| \`string\` | \`String\` | 同じ概念; UTF-8 所有文字列 |
+| \`bool\` | \`bool\` | 同じ |
+| \`mapping(K => V)\` | \`HashMap<K, V>\` | ただし — §3 の所有権を参照 |
+| \`uint256[]\` | \`Vec<U256>\` | ヒープ確保の伸長可能ベクタ |
+
+**型は同型です。** \`U256::from(100)\`、\`Address::from_slice(...)\`、\`B256::random()\` — Solidity で \`uint256(100)\` や \`address(0x...)\` がそうあるのと同じ感覚で組み合わせる。ここまで驚きなし。
+
+> 🔍 **リポジトリで確認。** \`alloy/crates/primitives/src/\` が \`Address\`、\`U256\`、\`B256\` の住処。1 ファイル開いてみる。**筋肉記憶にある Solidity 型たちは、すべて 1 crate に住んでいる。**
+
+## 2. Contract の形 ≈ struct + impl
+
+Solidity の contract は *状態* (storage フィールド) + *挙動* (関数)。Rust はこれを 2 つの宣言に分ける:
+
+\`\`\`solidity
+contract Vault {
+    mapping(address => uint256) public balances;
+    address public owner;
+
+    function deposit() public payable {
+        balances[msg.sender] += msg.value;
+    }
+}
+\`\`\`
+
+Rust 版（概念上 — 実際には contract をこう書かない; これは *形* の話）:
+
+\`\`\`rust
+struct Vault {
+    balances: HashMap<Address, U256>,
+    owner: Address,
+}
+
+impl Vault {
+    fn deposit(&mut self, sender: Address, value: U256) {
+        *self.balances.entry(sender).or_insert(U256::ZERO) += value;
+    }
+}
+\`\`\`
+
+変わったこと:
+
+- **\`msg.sender\` と \`msg.value\` が消えた。** 明示的なパラメータになる。Solidity はそれらをグローバルに隠す; Rust は渡すよう強制する。(Revm はこれに従っている: 各 opcode が \`context\` パラメータを取り、それが等価物を保持する。)
+- **\`payable\` が存在しない。** これは常に Solidity レベルの約束ごとで、ABI にエンコードされていた; Rust は「この関数はお金を受け取る」をモデル化しない。
+- **\`&mut self\`** が新しい部分。\`deposit\` 関数が *contract の状態を mutate する必要がある* と宣言する。後ほど戻ってきます。
+
+> 🛑 **スクロール前に予測。** \`&mut self\` が、Solidity の暗黙の \`this\` ではくれない何をくれるか?
+
+**\`deposit\` の実行中、他の誰も この struct を読み書きしていない** ことのコンパイラ検証済み保証。Solidity ではこれは EVM レベルでは真（一度に 1 tx）だが、言語がそれを表現する手段を持たない。Rust では型システムが — スレッド間、async タスク間、どこでも — 強制する。これがエンジン層に Rust が持ち込む価値: **構築段階で並行変更バグなし。**
+
+## 3. 所有権: Solidity に対応物がない部分
+
+ここで Solidity 直感が効かなくなる。Solidity に *所有権* の概念はない。すべては storage（contract が永遠に所有）か memory（1 呼び出しにスコープ）にある。「この値の所有者は誰?」を疑問にしたことはない、答えは常に「contract」だから。
+
+Rust はすべての値について、この質問に答えるよう強制する:
+
+| Solidity にある | Rust にある | なぜ重要か |
+| :--- | :--- | :--- |
+| 暗黙の storage | \`&self\` / \`&mut self\` / 所有 \`self\` | 「読んでいるか・mutate しているか・consume しているか」がシグネチャにコンパイル |
+| \`memory\` キーワード | デフォルト — Rust 値は box しない限りスタック上 | キーワード不要 |
+| 暗黙の値コピー | 所有型には明示 \`.clone()\`、プリミティブには安価な \`Copy\` | 「これは高いか?」が呼び出し地点で見える |
+| 参照安全性なし | ライフタイム (\`'a\`) が参照の有効期間を annotate | 参照が出所より長生きしうるならコンパイラがコンパイルを拒否 |
+
+メンタルシフト: **Rust では各値の所有者は同時に 1 つだけ**で、所有者だけが借用を配れる。\`&mut\` 借用が 1 つ、または \`&\` 借用が任意の数 — 両方は不可。これが GC なしの並行コード安全性を支え、最初の 2〜3 週間で文法を重く感じさせる正体。
+
+良いニュース: **これから読む EVM ソースの大半は「退屈な」所有権領域に留まる** — struct が状態を保持し、関数が \`&mut\` か \`&\` を取る、それで 9 割。エキゾチックなもの（関数境界を脱出するライフタイム、\`Pin\`、自己参照 struct）は async / unsafe の隅っこに現れる、opcode 本体にはほぼ出ない。
+
+> 🛑 **理解度チェック。** Solidity では「他の誰かが \`balances\` を mutate していないか?」を聞く方法がない、なぜなら並行性が無いから。Rust は \`&mut\` ごとにその質問をする。**EVM スタックのどんなコードで、答えが「誰もしない」から「誰かがしうる」に変わるか?**
+
+Reth や revm が複数のことを並行で走らせる場所すべて: 実行と並走するトレース、複数 ExEx subscriber、複数スレッドの fuzz harness。Solidity はこれを考えなくていい; エンジン *は* 考える必要があり、所有権が答えをエンコードする方法。
+
+## 4. エラー: \`require\` は \`Result\` になる
+
+Solidity:
+
+\`\`\`solidity
+function withdraw(uint256 amount) public {
+    require(balances[msg.sender] >= amount, "Insufficient balance");
+    balances[msg.sender] -= amount;
+    payable(msg.sender).transfer(amount);
+}
+\`\`\`
+
+Rust:
+
+\`\`\`rust
+fn withdraw(&mut self, sender: Address, amount: U256) -> Result<(), VaultError> {
+    let balance = self.balances.get(&sender).copied().unwrap_or(U256::ZERO);
+    if balance < amount {
+        return Err(VaultError::InsufficientBalance);
+    }
+    *self.balances.get_mut(&sender).unwrap() -= amount;
+    Ok(())
+}
+\`\`\`
+
+押さえるべき違いが 2 つ:
+
+- **\`Result<T, E>\` はただの enum。** 魔法なし。関数は \`Ok(value)\` か \`Err(reason)\` のどちらかを返し、呼び出し側が両アームを処理するか、\`?\` で伝搬する必要がある。コンパイラはエラーの無視を許さない — Solidity でいえば「revert の処理を忘れたらコンパイルエラー」に最も近い。
+- **エラーは型付き。** \`VaultError\` はあなたの enum: \`InsufficientBalance\`、\`Unauthorized\`、など。Rust EVM スタックはこれをどこでも使う — Revm は \`InstructionResult\`、Reth は \`StageError\`。各バリアントが、何が起きたかを正確に読者に伝える。
+
+\`require(...)\` は *1 つの* 失敗パターン（文字列付きで revert）。\`Result\` は *一般的な* 失敗パターン。これを内在化したら、Rust ソースで「もし X が失敗したらどうなる?」のすべての疑問に正確な答えがある: 関数の戻り型を読む。
+
+## 5. 継承が消える — trait が仕事をする
+
+Solidity の \`is\` (継承):
+
+\`\`\`solidity
+contract ERC20Token is Ownable, ReentrancyGuard {
+    function transfer(address to, uint256 amount) public onlyOwner nonReentrant { ... }
+}
+\`\`\`
+
+Rust にクラス継承はない。代わりに **trait** がある — Java/C# のインターフェースに似ているが、重要な違いがある:
+
+\`\`\`rust
+trait Token {
+    fn transfer(&mut self, to: Address, amount: U256) -> Result<(), Error>;
+}
+
+trait Ownable {
+    fn owner(&self) -> Address;
+    fn assert_owner(&self, caller: Address) -> Result<(), Error> {
+        if self.owner() != caller {
+            return Err(Error::Unauthorized);
+        }
+        Ok(())
+    }
+}
+
+impl Token for MyToken { /* ... */ }
+impl Ownable for MyToken { /* ... */ }
+\`\`\`
+
+Solidity エンジニアが即座に役立つと感じる 2 点:
+
+- **デフォルトメソッド本体。** 上の \`assert_owner\` を見る — trait が *実装* を提供する。実装者は override しない限り無料でそれを得る。これが alloy の \`Provider\` トレイトが \`root()\` アクセサ 1 つから 30 以上のデフォルト RPC メソッドを得る仕組み（Inside Alloy で歩く）。
+- **ダイヤモンド問題なし。** struct は多くの trait を実装できる; 継承順序はない。Solidity で \`Ownable + ReentrancyGuard + Pausable\` を「継承」するには微妙な落とし穴があるが、Rust では \`impl Trait1\` + \`impl Trait2\` + \`impl Trait3\` だけ。順序非依存。
+
+Reth のソースは **trait で密** — \`Stage\`、\`Provider\`、\`Database\`、\`Network\`、\`Signer\`、その他多数。各 trait は「ここに契約がある; 実装者はこれに従う必要がある」と言う。trait を \`interface IERC20\` を読むのと同じように読めれば、コードベースの残りが開ける。
+
+## 6. 怖い 2 つの語: ライフタイムと async
+
+ここからは本当に Solidity に対応物がない部分。事前オリエンテーション 2 段落、下の専用レッスンで深く扱う。
+
+**ライフタイム (\`'a\`)** は参照の有効期間を annotate する。Solidity には関数境界を生き残る参照がない — ローカルポインタは関数終了で死ぬ。Rust *は* 持ち、コンパイラはそれが出所より長生きしないことを証明させる。\`fn foo<'a>(x: &'a Bar)\` は「この参照 \`x\` は少なくともライフタイム \`'a\` だけ生きる」を意味する。95% の時間は無視できる; コンパイラが推論する。自分で書く 5% が、放っておけばバグが忍び込む場所。
+
+**\`async fn\` / \`await\`** は Rust の non-blocking I/O のメカニズム。Solidity 関数は 1 tx の中で同期的に走る; Rust ノードは多くのことを同時にやる（RPC リクエスト、P2P メッセージ、ディスク書き込み）。\`async\` は「これを待っている間に他のことをする」を Rust が表現する方法。メカニズムは最初は重い（\`Future\`、\`Pin\`、ランタイム）が、ユーザ向け表面は小さい: \`async fn\` を書き、待つところに \`.await\` を散りばめる。
+
+## 7. Solidity → Rust 移行チートシート
+
+1 時間後にソースを読むときに:
+
+| Rust で見えるもの | Solidity に対応するもの | 持ち越し方 |
+| :--- | :--- | :--- |
+| \`U256\`、\`Address\`、\`B256\` | \`uint256\`、\`address\`、\`bytes32\` | 同じ byte、型付きラッパ |
+| \`struct Foo { ... }\` | contract の状態フィールド | 状態の形 |
+| \`impl Foo { ... }\` | contract の関数 | 挙動 |
+| \`&mut self\` | 暗黙の storage を mutate する関数 | コンパイラ検証済み排他 |
+| \`Result<T, E>\` | \`require\` / \`revert\` | 型付きエラー。\`?\` 演算子で伝搬 |
+| \`trait X { ... }\` | \`interface IX\` + おそらく library | trait はデフォルト impl を持てる |
+| \`Option<T>\` | 「ゼロかも / 見つからないかも」 | \`Some(value)\` か \`None\` |
+| \`Arc<T>\` | 「共有・複数 reader」 | 共有所有レッスンで扱う |
+| \`Box<dyn Trait>\` | 実行時多態 | ヒープ確保 + vtable |
+| \`async fn\` / \`.await\` | (対応物なし) | Non-blocking I/O。別レッスンで扱う |
+| ライフタイム (\`'a\`) | (対応物なし) | コンパイラ強制の参照スコープ |
+
+続く 4 レッスンは generics、共有所有、unsafe、macros — ソース読解 tier の **load-bearing な Rust** を扱う。本レッスンを先に読めば、残りはより綺麗に着地する。
+
+## ドリル
+
+1. **Solidity contract を 1 つ翻訳。** 自分で書いた小さな contract（または [\`solady\`](https://github.com/Vectorized/solady) の ERC20）を選ぶ。紙の上で、同じ状態形と 1〜2 つのメソッドを持つ Rust の struct + impl を書く。動かさなくていい — 形だけ書く。30 分。
+2. **alloy の Rust struct を 1 つ読む。** \`alloy/crates/primitives/src/address.rs\` を開く。\`Address\` 型を見つける。何が \`struct\` で、何が \`impl\` ブロックで、何が trait impl かを観察。**Solidity に対応物がない部分を見つける**（ライフタイム、derive、属性マクロ）。30 分。
+3. **エラー処理を比較する。** \`require\` 文を 2 つ持つ Solidity 関数を選ぶ。2 バリアントのカスタムエラー enum と \`Result\` を使った Rust 等価をスケッチ。**型** がどう各失敗モードを文書化するか観察。45 分。
+
+本レッスンを終えれば、下にある密な Rust — generics、Arc、unsafe、macros — がすでに持っているモデルの上に乗る追加の語彙として読める。**ゼロから Rust を学ぶのではなく、エンジン層コードに Solidity 直感を翻訳する Rust 慣用句を学んでいる。**
+`,
+                },
+                {
                   title: 'Generics・trait bounds・?Sized・dyn vs impl',
                   slug: 'rust-generics-traits-bounds-ja',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 1,
                   duration: 15,
                   xpReward: 30,
                   content: `# Generics・trait bounds・?Sized・dyn vs impl
@@ -887,7 +1088,7 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
                   title: '所有権の共有: Arc・Mutex・RwLock',
                   slug: 'rust-shared-ownership-ja',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 2,
                   duration: 12,
                   xpReward: 25,
                   content: `# 所有権の共有: Arc・Mutex・RwLock
@@ -1121,7 +1322,7 @@ Reth ソースで \`Arc<RwLock<Foo>>\` の隣に \`Arc<Mutex<Bar>>\` を見た�
                   title: 'unsafe Rust',
                   slug: 'rust-unsafe-ja',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 10,
                   xpReward: 20,
                   content: `# unsafe Rust
@@ -1217,7 +1418,7 @@ Revm/Reth ソースを読むには、**上のパターン (手動安全性検証
                   title: 'macro_rules! 基礎',
                   slug: 'rust-macros-ja',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 4,
                   duration: 10,
                   xpReward: 20,
                   content: `# macro_rules! 基礎
@@ -1419,7 +1620,7 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
                   title: 'ソース読解コースの読み方',
                   slug: 'advanced-tier-orientation-ja',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 5,
                   duration: 6,
                   xpReward: 15,
                   content: `# ソース読解コースの読み方

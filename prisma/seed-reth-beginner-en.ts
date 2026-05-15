@@ -185,6 +185,98 @@ So the question shifts from "should I learn Solana or Rust EVM" to **"which dist
 
 Now that you can place these projects on a map, let's get Rust running on your machine.`,
                 },
+                {
+                  title: 'From Solana / Anchor to Reth — what carries over (skip if not from Solana)',
+                  slug: 'solana-to-reth-en',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 12,
+                  xpReward: 20,
+                  content: `# From Solana / Anchor to Reth — what carries over (skip if not from Solana)
+
+> 📌 **Audience.** This lesson is **only useful if you've shipped on Solana** — Anchor program, Jito MEV bot, Solana program tests, Firedancer contributor, anything with \`solana-program\` or \`anchor-lang\`. If you've never touched Solana, skip to *Set Up Rust*. Nothing in the rest of the curriculum depends on this lesson.
+
+Most curricula assume you're coming from Solidity. You're not — you're coming from Rust on a fundamentally different runtime model. This lesson is the translation layer.
+
+## 1. What carries over (a lot, actually)
+
+Your hard-won skills on the Solana side **all stay valuable** in the Rust EVM stack:
+
+| Skill from Solana | How it lands here |
+| :--- | :--- |
+| **Rust ownership / lifetimes / async** | Identical. You skip ~3 weeks of "Rust onboarding" that Solidity migrants need. |
+| **Reading low-level systems code** | Reth and Revm are denser than \`solana-program\`, but the *reading discipline* is the same — work outside in, trust trait shapes, verify against tests. |
+| **Mental model for "engine you don't own"** | If you've patched Firedancer or read Jito's relayer source, the Reth fork model is immediately legible. |
+| **Comfort with parallel execution** | Sealevel made you think about concurrent state access. Reth's stage pipeline runs different concerns concurrently; the muscle transfers. |
+| **\`cargo\` toolchain fluency** | Same. Workspaces, features, \`cargo expand\` for macro debugging — all of it. |
+
+The honest framing: **your Rust skills are an asset most EVM-side engineers don't have**. The curriculum's harder section — *Bridge to Intermediate*'s Rust module — is mostly review for you.
+
+## 2. What's structurally different
+
+The model gap that *does* matter:
+
+| Concept | Solana | Reth / EVM |
+| :--- | :--- | :--- |
+| **State** | Per-account, declared in advance (account model) | Per-contract storage, dynamic (\`SLOAD\` / \`SSTORE\` on slot keys) |
+| **Parallelism** | Per-account, runtime-scheduled (Sealevel) | Sequential within a block; ExEx / Reth SDK lets you add parallel components |
+| **Programs** | One global program, accounts passed in | Each contract is its own deployed bytecode with its own storage |
+| **Compute units** | Linear gas-like budget per tx | EVM gas with non-trivial cost curves per opcode |
+| **Verification** | BPF VM with custom syscalls | EVM with EOF + spec-tests |
+| **Wallet / signer** | Ed25519 throughout | secp256k1 mostly, eventually post-quantum via account abstraction |
+
+The biggest mental flip: **storage is per-contract, not per-account**. In Solana you pass the account that holds the state; in EVM the contract *is* the state. Read this carefully when you reach Inside Revm's \`Database\` trait — that trait is the EVM-side answer to "what AccountInfo do I touch?"
+
+> 🛑 **Predict.** You've written a Solana program that updates per-user counters. In EVM, what does the equivalent storage look like? Where does the data live?
+
+A \`mapping(address => uint256) counter\` inside the contract. The contract owns the slot keys; each user's counter is at \`keccak256(user_address . slot)\`. Solana would have one account per user; EVM packs them all into one contract's storage trie. Same problem, different model.
+
+## 3. Where the two stacks meet: HyperEVM, Tempo
+
+These chains are **specifically built to bring Solana-style performance to EVM semantics**. They are the natural landing zone for a Solana migrant:
+
+- **HyperEVM (Hyperliquid)**: Reth fork with HyperBFT consensus. The execution layer runs EVM bytecode at performance levels Solana engineers expect. Reading HyperEVM means you carry your Solana performance intuitions into EVM territory — this is exactly what Inside Reth + the L1 Architect tier prepare you for.
+- **Tempo**: a Reth-based payments chain backed by Stripe. Designed for high-throughput stablecoin transfers. Solana's payment-rail experience (Stripe's earlier Solana integration was the predecessor) translates directly.
+- **MegaETH**: another Reth-based high-performance chain pursuing Solana-like UX.
+
+**The Solana → Reth path is not a downgrade.** It's a move from a chain-specific runtime to an execution engine that the next generation of high-performance L1s and L2s are building on. The Rust EVM stack is where your skills compound.
+
+## 4. The specific cultural difference: source-first vs abstraction-first
+
+This is the point Solana engineers tell us about most:
+
+- **Anchor**: heavy abstraction. The framework hides the SVM, hides the serialization, hides the account validation. You write \`#[derive(Accounts)]\` and trust it. When something breaks, the trail to the actual SVM behaviour is long.
+- **Firedancer / Jito**: source-first. You read the C, you read the relayer, you patch and rebuild. Excellent culture, narrow access (Firedancer's contribution funnel is effectively closed; Jito is open but Solana-specific).
+- **Reth / Revm / Foundry**: source-first by *design*, with *broad* contribution access. The maintainers explicitly publish "read this, ship a custom node" patterns. This is the discipline RethLab is built around.
+
+If Anchor's abstraction felt opaque to you, RethLab will feel like home. If you enjoyed reading Firedancer / Jito but wanted a broader application surface, the Rust EVM stack is the larger version of that.
+
+## 5. The curriculum, mapped for you
+
+Given your Rust background, here's an honest recommendation on which lessons you can skip / accelerate:
+
+| Section | Recommendation |
+| :--- | :--- |
+| **Beginner — *Set Up Rust*** | Skim. You have \`rustup\`. |
+| **Fundamentals — Rust async / traits / generics** | Skim. You have this. |
+| **Fundamentals — EVM concepts** | **Read carefully.** This is where your model differs from Solana. |
+| **Bridge to Intermediate — EVM at the bytes level** | **Read carefully.** Dispatch loop, gas, call frames — all new. |
+| **Bridge to Intermediate — Rust for source-reading** | Skim. Generics, Arc, unsafe, macros — review for you. |
+| **Inside Revm / Inside Reth / Inside Alloy** | **Read carefully.** The payoff. |
+| **L1 Architecture (Advanced) tier** | **The reason you came.** Especially Consensus + Cross-Chain Bridges. |
+| **Expert + Building** | The output. Apply what you read. |
+
+## 6. The bet you're making
+
+Solana's runtime is good but Solana-specific. Reth is the **substrate for many chains** — Hyperliquid, Tempo, OP-Reth, MegaETH, Berachain — and the count keeps growing. The Rust EVM stack is where your skills compound across the broader L1/L2 surface, not just one chain.
+
+This isn't a takedown of Solana. It's the observation that **the engineers who can read Reth are scarcer than the engineers who can read Solana programs, and the chains betting on Reth are growing fast**. Your Solana-trained Rust intuitions land you in that scarce-talent niche faster than anyone migrating from Solidity.
+
+## Next up
+
+You can either skip *Set Up Rust* and head straight to *Fundamentals* (Rust toolchain is yours already), or skim *Set Up Rust* to install Foundry / Anvil if you haven't seen those tools.
+`,
+                },
               ],
             },
           },

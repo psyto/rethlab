@@ -39,7 +39,7 @@ export const en = {
   landing: {
     hero: {
       title: 'The school for Rust EVM L1 engineers',
-      subtitle: 'Hyperliquid, Tempo, Berachain — every modern Rust EVM L1 runs on Reth, Revm, Alloy, Foundry. The engineers who can architect these chains are scarce. RethLab walks you through 13 courses across 4 tiers — from EVM foundations, to reading Alloy/Revm/Reth source line by line, to architecting L1 consensus, to shipping ten production-grade apps.',
+      subtitle: "HyperEVM (Hyperliquid). Tempo (Stripe). OP-Reth (Optimism / Base). MegaETH. Berachain. The execution layer of every modern Rust EVM L1 is a Reth fork — open source, in Rust, and almost nobody can read it. RethLab walks you through 13 courses across 4 tiers: from EVM foundations, to reading Alloy / Revm / Reth source line by line, to architecting L1 consensus, to shipping ten production-grade apps.",
       cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
       tagline: 'Demanding · Source-grounded · No fluff',

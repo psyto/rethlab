@@ -182,6 +182,98 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
 
 役割と相対的な価値が見えたところで、いよいよ **Rust環境を構築** していきましょう。`,
                 },
+                {
+                  title: 'Solana / Anchor から Reth へ — 持ち越せるもの (Solana 経験が無ければスキップ)',
+                  slug: 'solana-to-reth-ja',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 12,
+                  xpReward: 20,
+                  content: `# Solana / Anchor から Reth へ — 持ち越せるもの (Solana 経験が無ければスキップ)
+
+> 📌 **対象。** 本レッスンは **Solana で ship した経験がある人向け** — Anchor プログラム、Jito MEV bot、Solana プログラムのテスト、Firedancer コントリビュータ、\`solana-program\` か \`anchor-lang\` を触ったことがある人。Solana を触ったことが無いなら、*Rust 環境を整える* に飛んでください。本レッスンに依存する後続レッスンはありません。
+
+多くのカリキュラムは Solidity からの移行を前提にする。あなたはそうではなく、**根本的に違うランタイムモデル上の Rust** から来ている。本レッスンはその翻訳レイヤー。
+
+## 1. 持ち越せるもの（実は多い）
+
+Solana 側で築いた苦労した技は、**Rust EVM スタックでもすべて価値を保つ**:
+
+| Solana 由来のスキル | こちらでの着地 |
+| :--- | :--- |
+| **Rust ownership / lifetimes / async** | 同じ。Solidity 移行者が必要とする「Rust オンボーディングの 3 週間」を skip できる |
+| **低レベルシステムコードを読む力** | Reth と Revm は \`solana-program\` より密だが、*読む規律* は同じ — 外から内へ、trait の形を信じ、テストで検証する |
+| **「自分が所有しないエンジン」のメンタルモデル** | Firedancer をパッチしたか Jito relayer のソースを読んだことがあるなら、Reth fork モデルは即座に読める |
+| **並列実行への慣れ** | Sealevel が並行ステート操作を考えさせた。Reth の stage パイプラインは異なる関心事を並行で走らせる; 筋肉は移植可能 |
+| **\`cargo\` ツールチェイン熟達** | 同じ。workspace、feature、macro デバッグの \`cargo expand\` — すべて |
+
+率直な構図: **あなたの Rust スキルは大半の EVM 側エンジニアが持っていない資産**。本カリキュラムの厳しいセクション — *中級への橋渡し* の Rust モジュール — はあなたにとってほぼ復習。
+
+## 2. 構造的に違うもの
+
+実際に重要なモデルのギャップ:
+
+| 概念 | Solana | Reth / EVM |
+| :--- | :--- | :--- |
+| **状態** | アカウント単位、事前宣言（account モデル） | コントラクト単位の storage、動的（slot キーの \`SLOAD\` / \`SSTORE\`） |
+| **並列性** | アカウント単位、ランタイムスケジュール（Sealevel） | ブロック内は逐次; ExEx / Reth SDK で並列コンポーネントを追加可能 |
+| **プログラム** | グローバルな 1 プログラム、アカウントを渡す | 各コントラクトが自分の bytecode と storage を持つ |
+| **計算単位** | tx あたり線形のガス類似予算 | EVM ガス、opcode ごとに非自明なコストカーブ |
+| **検証** | カスタム syscall 付き BPF VM | EOF + spec-tests 付き EVM |
+| **ウォレット / 署名者** | 終始 Ed25519 | 主に secp256k1、最終的には account abstraction で post-quantum へ |
+
+最大のメンタル反転: **storage はコントラクト単位、アカウント単位ではない**。Solana では状態を保持するアカウントを渡す; EVM では **コントラクトそのものが状態**。Inside Revm の \`Database\` トレイトに到達したら丁寧に読む — そのトレイトが「どの AccountInfo に触れるか」の EVM 側の答え。
+
+> 🛑 **予測。** Solana プログラムでユーザごとのカウンタを更新するものを書いた。EVM での等価ストレージはどう見える? データはどこに住む?
+
+コントラクト内部の \`mapping(address => uint256) counter\`。コントラクトが slot キーを所有する; 各ユーザのカウンタは \`keccak256(user_address . slot)\` にある。Solana ならユーザごとに 1 アカウント; EVM では全部 1 コントラクトの storage trie に詰める。同じ問題、違うモデル。
+
+## 3. 2 つのスタックが交わる場所: HyperEVM、Tempo
+
+これらのチェーンは **Solana スタイルのパフォーマンスを EVM セマンティクスに持ち込むため** に作られた。Solana 移行者にとって自然な着地点:
+
+- **HyperEVM (Hyperliquid)**: HyperBFT コンセンサスの Reth fork。EVM bytecode を Solana エンジニアが期待するパフォーマンスレベルで execution layer が走らせる。HyperEVM を読むことは、Solana のパフォーマンス直感を EVM 領域に持ち込むこと — これが Inside Reth + L1 Architect tier が準備する内容そのもの。
+- **Tempo**: Stripe バックの Reth ベース決済チェーン。高スループット stablecoin 送金向け設計。Solana の決済 rail 経験（Stripe の以前の Solana 統合が先行例）が直接翻訳できる。
+- **MegaETH**: 別の Reth ベース高性能チェーン、Solana 風 UX を追求。
+
+**Solana → Reth は格下げではない。** チェーン固有ランタイムから、次世代の高性能 L1 / L2 が build している実行エンジンへの移行。Rust EVM スタックはあなたのスキルが複利で効く場所。
+
+## 4. 具体的な文化の違い: source-first vs abstraction-first
+
+Solana エンジニアから一番多く聞く論点:
+
+- **Anchor**: 重い抽象。フレームワークが SVM を隠し、シリアライズを隠し、account 検証を隠す。\`#[derive(Accounts)]\` を書いて信じる。何かが壊れたとき、実際の SVM 挙動への道のりは長い。
+- **Firedancer / Jito**: source-first。C を読み、relayer を読み、パッチして再ビルドする。優れた文化、狭いアクセス（Firedancer のコントリビューション窓口は事実上閉じている; Jito はオープンだが Solana 固有）。
+- **Reth / Revm / Foundry**: 設計上 source-first、かつ **広い** コントリビューションアクセス。メンテナが「これを読んでカスタムノードを ship」のパターンを明示的に公開している。これが RethLab が build されている規律。
+
+Anchor の抽象が不透明に感じたなら、RethLab は home に感じる。Firedancer / Jito を楽しめたが応用範囲がもっと欲しかったなら、Rust EVM スタックがその拡大版。
+
+## 5. あなた向けにマップしたカリキュラム
+
+Rust 背景を踏まえて、skip / 加速できるレッスンの率直な推奨:
+
+| セクション | 推奨 |
+| :--- | :--- |
+| **Beginner — *Rust 環境を整える*** | 流し読み。\`rustup\` は持っている |
+| **Fundamentals — Rust async / traits / generics** | 流し読み。持っている |
+| **Fundamentals — EVM 概念** | **丁寧に読む。** Solana モデルとの違いが現れる場所 |
+| **中級への橋渡し — EVM をバイト単位で** | **丁寧に読む。** Dispatch loop、ガス、コールフレーム — 全部新しい |
+| **中級への橋渡し — ソース読みのための Rust** | 流し読み。Generics、Arc、unsafe、macros — あなたにとっては復習 |
+| **Inside Revm / Inside Reth / Inside Alloy** | **丁寧に読む。** ご褒美 |
+| **L1 Architecture (Advanced) tier** | **来た理由。** 特に Consensus + Cross-Chain Bridges |
+| **Expert + Building** | アウトプット。読んだことを応用 |
+
+## 6. あなたが賭けているもの
+
+Solana のランタイムは良いが Solana 固有。Reth は **多くのチェーンの基板** — Hyperliquid、Tempo、OP-Reth、MegaETH、Berachain — その数は増え続けている。Rust EVM スタックはあなたのスキルがより広い L1 / L2 表面で複利になる場所、1 つのチェーンだけではなく。
+
+これは Solana への takedown ではない。**Reth を読めるエンジニアは Solana プログラムを読めるエンジニアより希少で、Reth に賭けているチェーンは急速に成長している** という観察。あなたの Solana 育ちの Rust 直感は、Solidity からの移行者の誰よりも早くその希少人材ニッチに着地させる。
+
+## 次へ
+
+*Rust 環境を整える* を skip して直接 *Fundamentals* に向かう（Rust ツールチェインは既に持っている）か、Foundry / Anvil をまだ見ていないなら *Rust 環境を整える* を流し読みするか、どちらでも先に進めます。
+`,
+                },
               ],
             },
           },

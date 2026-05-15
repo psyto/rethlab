@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'The school for Rust EVM L1 engineers',
-      subtitle: 'Hyperliquid・Tempo・Berachain — モダンな Rust EVM L1 はすべて Reth・Revm・Alloy・Foundry で動いている。これを architect できるエンジニアはまだ希少。RethLab は 13 コース 4 ティアで、EVM の基礎から、Alloy/Revm/Reth の本番ソースの行単位読解、L1 アーキテクチャ設計、10 本の動くアプリ開発までを通す。',
+      subtitle: 'HyperEVM (Hyperliquid)。Tempo (Stripe)。OP-Reth (Optimism / Base)。MegaETH。Berachain。モダンな Rust EVM L1 の execution layer はすべて Reth fork — オープンソース、Rust 製、しかし読めるエンジニアはほとんどいない。RethLab は 13 コース 4 ティアで、EVM の基礎から、Alloy / Revm / Reth の本番ソースの行単位読解、L1 アーキテクチャ設計、10 本の動くアプリ開発まで通します。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',

@@ -684,10 +684,211 @@ When Intermediate lesson 4 walks through the Stage trait and lesson 6 walks thro
             lessons: {
               create: [
                 {
+                  title: 'Rust for Solidity engineers — the migration map',
+                  slug: 'rust-for-solidity-en',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 18,
+                  xpReward: 35,
+                  content: `# Rust for Solidity engineers — the migration map
+
+If you've shipped Solidity, you already know everything you need to *care* about EVM behaviour. What's missing is **the Rust mental model that lets you read the engine that runs your contracts**. This lesson is the side-by-side translation table that closes the gap before the dense Rust lessons below.
+
+We're not teaching you Rust from zero. We're showing you, line by line, how the Solidity concepts you already trust map (and don't map) to Rust — so when you open \`bluealloy/revm\` an hour from now, every screenful is "oh, that's the same thing I do in Solidity, written differently."
+
+> 📌 **Audience honesty.** This is for someone who has written and shipped Solidity contracts. If you've never touched Solidity, skip this lesson — the rest of the Rust track starts from generics directly.
+
+## 1. The core data types map almost 1:1
+
+| Solidity | Rust (alloy / revm) | Notes |
+| :--- | :--- | :--- |
+| \`address\` | \`Address\` (= \`B160\` = 20-byte fixed array) | Same 20 bytes. Just a typed wrapper. |
+| \`uint256\` | \`U256\` | 256-bit unsigned. Defined in \`alloy-primitives\`, used by every Rust EVM tool. |
+| \`int256\` | \`I256\` | Same but signed. |
+| \`bytes32\` | \`B256\` (= 32-byte fixed array) | Used for hashes, slot keys, tx hashes. |
+| \`bytes\` | \`Bytes\` (a wrapper around \`Vec<u8>\`) | Dynamic byte string. |
+| \`string\` | \`String\` | Same idea; UTF-8 owned string. |
+| \`bool\` | \`bool\` | Same. |
+| \`mapping(K => V)\` | \`HashMap<K, V>\` | But — see §3 on ownership. |
+| \`uint256[]\` | \`Vec<U256>\` | Heap-allocated growable vector. |
+
+**The types are isomorphic.** \`U256::from(100)\`, \`Address::from_slice(...)\`, \`B256::random()\` — these compose the same way \`uint256(100)\` and \`address(0x...)\` do in Solidity. Nothing surprising yet.
+
+> 🔍 **Find in repo.** \`alloy/crates/primitives/src/\` is the home of \`Address\`, \`U256\`, \`B256\`. Open one file. **The Solidity types you have in muscle memory all live in this one crate.**
+
+## 2. Contract-shape ≈ struct + impl
+
+A Solidity contract is *state* (storage fields) + *behavior* (functions). Rust splits these into two declarations:
+
+\`\`\`solidity
+contract Vault {
+    mapping(address => uint256) public balances;
+    address public owner;
+
+    function deposit() public payable {
+        balances[msg.sender] += msg.value;
+    }
+}
+\`\`\`
+
+The Rust analogue (conceptually — you wouldn't write a contract this way; this is the *shape*):
+
+\`\`\`rust
+struct Vault {
+    balances: HashMap<Address, U256>,
+    owner: Address,
+}
+
+impl Vault {
+    fn deposit(&mut self, sender: Address, value: U256) {
+        *self.balances.entry(sender).or_insert(U256::ZERO) += value;
+    }
+}
+\`\`\`
+
+What changed:
+
+- **\`msg.sender\` and \`msg.value\` are gone.** They become explicit parameters. Solidity hides them in a global; Rust forces you to pass them. (Revm follows this: every opcode takes a \`context\` parameter that holds the equivalent.)
+- **\`payable\` doesn't exist.** It was always a Solidity-level convention encoded in the ABI; Rust just doesn't model "this function receives money."
+- **\`&mut self\`** is the new bit. The \`deposit\` function declares it *needs to mutate* the contract's state. We'll come back to this.
+
+> 🛑 **Predict before scrolling.** What does \`&mut self\` give you that Solidity's implicit \`this\` doesn't?
+
+A compiler-checked guarantee that **nobody else is reading or writing this struct while \`deposit\` is running.** In Solidity that's true at the EVM level (one tx at a time), but the language has no way to express it. In Rust the type system enforces it — across threads, across async tasks, everywhere. That's the value Rust brings to the engine layer: **no concurrent-modification bugs by construction.**
+
+## 3. Ownership: the part with no Solidity analog
+
+This is where Solidity intuition stops helping. Solidity has no concept of *ownership*. Everything is in storage (the contract owns it forever) or memory (scoped to one call). You never wonder "who owns this value" because the answer is always "the contract."
+
+Rust forces you to answer that question for every value:
+
+| Solidity has | Rust has | Why it matters |
+| :--- | :--- | :--- |
+| Implicit storage | \`&self\` / \`&mut self\` / owned \`self\` | "Am I reading, mutating, or consuming?" gets compiled into the signature. |
+| \`memory\` keyword | The default — Rust values live on the stack unless boxed | No keyword needed. |
+| Implicit value copy | Explicit \`.clone()\` for owned types; cheap \`Copy\` for primitives | "Is this expensive?" becomes visible at the call site. |
+| No reference safety | Lifetimes (\`'a\`) annotate how long a reference is valid | The compiler refuses to compile if a reference could outlive its source. |
+
+The mental shift: **every value in Rust has exactly one owner at a time**, and only the owner can hand out borrows. Either one \`&mut\` borrow, or any number of \`&\` borrows, never both. This is what makes Rust safe in concurrent code without a GC — and what makes the syntax feel heavy for the first 2–3 weeks.
+
+The good news: **the EVM source you're going to read mostly stays in "boring" ownership territory** — a struct holds its state, a function takes \`&mut\` or \`&\`, and that's 90% of it. The exotic stuff (lifetimes that escape function boundaries, \`Pin\`, self-referential structs) shows up in async / unsafe corners, not in opcode bodies.
+
+> 🛑 **Recall check.** Solidity gives you no way to ask "is anyone else mutating \`balances\` right now?" because there is no concurrency. Rust *does* ask that question on every \`&mut\`. **In what kind of EVM-stack code would the answer change from "nobody" to "someone might"?**
+
+Anywhere Reth or revm runs multiple things in parallel: trace alongside execution, multiple ExEx subscribers, fuzz harness with many threads. Solidity doesn't have to think about this; the engine *does*, and ownership is how the engine encodes the answer.
+
+## 4. Errors: \`require\` becomes \`Result\`
+
+Solidity:
+
+\`\`\`solidity
+function withdraw(uint256 amount) public {
+    require(balances[msg.sender] >= amount, "Insufficient balance");
+    balances[msg.sender] -= amount;
+    payable(msg.sender).transfer(amount);
+}
+\`\`\`
+
+Rust:
+
+\`\`\`rust
+fn withdraw(&mut self, sender: Address, amount: U256) -> Result<(), VaultError> {
+    let balance = self.balances.get(&sender).copied().unwrap_or(U256::ZERO);
+    if balance < amount {
+        return Err(VaultError::InsufficientBalance);
+    }
+    *self.balances.get_mut(&sender).unwrap() -= amount;
+    Ok(())
+}
+\`\`\`
+
+Two differences worth noticing:
+
+- **\`Result<T, E>\` is just an enum.** No magic. The function returns either \`Ok(value)\` or \`Err(reason)\`, and the caller has to handle both arms (or use \`?\` to propagate). The compiler refuses to let you ignore errors — the closest equivalent in Solidity would be if forgetting to handle a revert was a compile error.
+- **Errors are typed.** \`VaultError\` is your own enum: \`InsufficientBalance\`, \`Unauthorized\`, etc. The Rust EVM stack uses this everywhere — Revm has \`InstructionResult\`, Reth has \`StageError\`. Each variant tells the reader exactly what went wrong.
+
+\`require(...)\` is *one* failure pattern (revert with a string). \`Result\` is the *general* failure pattern. Once you internalize this, every "what happens if X fails?" question in Rust source has a precise answer: read the function's return type.
+
+## 5. Inheritance is gone — traits do the work
+
+Solidity \`is\` (inheritance):
+
+\`\`\`solidity
+contract ERC20Token is Ownable, ReentrancyGuard {
+    function transfer(address to, uint256 amount) public onlyOwner nonReentrant { ... }
+}
+\`\`\`
+
+Rust doesn't have class inheritance. It has **traits**, which look like interfaces in Java/C#, but with key differences:
+
+\`\`\`rust
+trait Token {
+    fn transfer(&mut self, to: Address, amount: U256) -> Result<(), Error>;
+}
+
+trait Ownable {
+    fn owner(&self) -> Address;
+    fn assert_owner(&self, caller: Address) -> Result<(), Error> {
+        if self.owner() != caller {
+            return Err(Error::Unauthorized);
+        }
+        Ok(())
+    }
+}
+
+impl Token for MyToken { /* ... */ }
+impl Ownable for MyToken { /* ... */ }
+\`\`\`
+
+Two things Solidity engineers find immediately useful:
+
+- **Default method bodies.** Look at \`assert_owner\` above — the trait *provides* an implementation. Implementors get it for free unless they override. This is how alloy's \`Provider\` trait gets 30+ default RPC methods from one \`root()\` accessor (we walk this in Inside Alloy).
+- **No diamond problem.** A struct can implement many traits; there's no inheritance order. "Inheriting" \`Ownable + ReentrancyGuard + Pausable\` in Solidity has subtle gotchas; in Rust it's just \`impl Trait1\` + \`impl Trait2\` + \`impl Trait3\`. Order-independent.
+
+Reth's source is **dense with traits** — \`Stage\`, \`Provider\`, \`Database\`, \`Network\`, \`Signer\`, dozens more. Each trait says "here is a contract; implementors must obey it." Once you read traits the way you used to read \`interface IERC20\`, the rest of the codebase opens up.
+
+## 6. The two scary words: lifetimes and async
+
+These are the parts that genuinely don't have Solidity analogues. Two paragraphs of pre-orientation; the dedicated lessons below cover them in depth.
+
+**Lifetimes (\`'a\`)** annotate how long a reference is valid. Solidity doesn't have references that survive function boundaries — local pointers die at function exit. Rust *does*, and the compiler needs you to prove they don't outlive their source. You'll see \`fn foo<'a>(x: &'a Bar)\` mean "this reference \`x\` lives for at least lifetime \`'a\`." 95% of the time you ignore them; the compiler infers them. The 5% where you write them yourself is where bugs would otherwise sneak in.
+
+**\`async fn\` / \`await\`** is Rust's mechanism for non-blocking I/O. A Solidity function runs synchronously inside one tx; a Rust node has dozens of things happening at once (RPC requests, P2P messages, disk writes). \`async\` is how Rust expresses "do other things while waiting for this." The mechanism is heavy at first read (\`Future\`, \`Pin\`, runtimes) but the user-facing surface is small: write \`async fn\`, sprinkle \`.await\` where you wait.
+
+## 7. The Solidity → Rust migration cheatsheet
+
+For when you're reading source an hour from now:
+
+| You see in Rust | It maps to Solidity | Move forward thinking |
+| :--- | :--- | :--- |
+| \`U256\`, \`Address\`, \`B256\` | \`uint256\`, \`address\`, \`bytes32\` | Same bytes, typed wrapper. |
+| \`struct Foo { ... }\` | contract state fields | The state shape. |
+| \`impl Foo { ... }\` | contract functions | The behavior. |
+| \`&mut self\` | implicit storage-mutating function | Compiler-checked exclusion. |
+| \`Result<T, E>\` | \`require\` / \`revert\` | Typed errors. The \`?\` operator propagates. |
+| \`trait X { ... }\` | \`interface IX\` + maybe a library | Traits can carry default impls. |
+| \`Option<T>\` | "could be zero / not found" | \`Some(value)\` or \`None\`. |
+| \`Arc<T>\` | "shared, multi-reader" | We cover this in the Shared ownership lesson. |
+| \`Box<dyn Trait>\` | runtime polymorphism | Heap allocation + vtable. |
+| \`async fn\` / \`.await\` | (no analog) | Non-blocking I/O. Covered separately. |
+| Lifetimes (\`'a\`) | (no analog) | Compiler-enforced reference scoping. |
+
+The next four lessons go through generics, shared ownership, unsafe, and macros — the **load-bearing Rust** of the source-reading tier. Read this lesson first; the rest will land more cleanly.
+
+## Drill
+
+1. **Translate one Solidity contract.** Pick a small contract you've written (or [\`solady\`](https://github.com/Vectorized/solady)'s ERC20). On paper, write the Rust struct + impl that has the same state shape and one or two methods. Don't run it — just write the shape. 30 minutes.
+2. **Read one Rust struct from alloy.** Open \`alloy/crates/primitives/src/address.rs\`. Find the \`Address\` type. Note what's a \`struct\`, what's an \`impl\` block, what's a trait impl. **Spot the parts that have no Solidity equivalent** (lifetimes, derives, attribute macros). 30 minutes.
+3. **Compare error handling.** Take a Solidity function with two \`require\` statements. Sketch the Rust equivalent using \`Result\` and a custom error enum with two variants. Note how the *types* now document every failure mode. 45 minutes.
+
+After this lesson, the dense Rust below — generics, Arc, unsafe, macros — reads as additional vocabulary on top of a model you already have. **You're not learning Rust from zero; you're learning the Rust idioms that translate Solidity intuition into engine-layer code.**
+`,
+                },
+                {
                   title: 'Generics, trait bounds, ?Sized, dyn vs impl',
                   slug: 'rust-generics-traits-bounds-en',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 1,
                   duration: 15,
                   xpReward: 30,
                   content: `# Generics, trait bounds, ?Sized, dyn vs impl
@@ -887,7 +1088,7 @@ When Intermediate lesson 1 hits you with three type parameters and \`?Sized\` in
                   title: 'Shared ownership: Arc, Mutex, RwLock',
                   slug: 'rust-shared-ownership-en',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 2,
                   duration: 12,
                   xpReward: 25,
                   content: `# Shared ownership: Arc, Mutex, RwLock
@@ -1121,7 +1322,7 @@ When Intermediate lesson 6 (ExEx) shows you a struct with three \`Arc<...>\` fie
                   title: 'unsafe Rust',
                   slug: 'rust-unsafe-en',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 10,
                   xpReward: 20,
                   content: `# unsafe Rust
@@ -1217,7 +1418,7 @@ The next lesson covers \`macro_rules!\`, the other half of what you need to read
                   title: 'macro_rules! basics',
                   slug: 'rust-macros-en',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 4,
                   duration: 10,
                   xpReward: 20,
                   content: `# macro_rules! basics
@@ -1419,7 +1620,7 @@ After that, pick a course and start.`,
                   title: 'How the source-reading courses work',
                   slug: 'advanced-tier-orientation-en',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 5,
                   duration: 6,
                   xpReward: 15,
                   content: `# How the source-reading courses work
