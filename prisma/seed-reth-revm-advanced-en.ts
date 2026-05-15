@@ -197,7 +197,7 @@ pub fn add<IT: ITy, H: Host + ?Sized>(host: &mut H) -> Result {
 
 \`IT\` is an "interpreter-types" marker — think of it as a strategy parameter. The same source compiles to specialized binaries, **one per execution mode.** Without \`IT\`, you'd write \`add\` three times — once for production, once for tracing, once for the sandbox.
 
-You now have the real signature of \`add\` (the parameter type is wrapped in revm's \`Ictx<...>\` for ergonomics, but the generics are exactly what we built):
+You now have the real signature of \`add\` (the parameter type is wrapped in revm's \`Ictx<...>\` for ergonomics, and the explicit \`Host\` bound moves into \`Ictx\` itself — the generics that remain on \`add\` are the \`IT: ITy\` and \`H: ?Sized\` we just earned):
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -1187,7 +1187,7 @@ impl<T: Database> Database for &mut T {
 impl<T: Database> Database for Box<T> { /* ... same 4 methods ... */ }
 \`\`\`
 
-Twelve method bodies of identical forwarding boilerplate (across \`Database\`, \`DatabaseRef\`, \`DatabaseCommit\`).
+Eight method bodies of identical forwarding boilerplate just for \`Database\` (4 methods × \`&mut\` and \`Box\`) — and the same pattern repeats across \`DatabaseRef\` and \`DatabaseCommit\`.
 
 \`auto_impl\` is a procedural macro that generates these forwarding impls automatically. With \`#[auto_impl(&mut, Box)]\`, both \`&mut MyDb\` and \`Box<MyDb>\` automatically implement \`Database\` if \`MyDb\` does. **No user-written boilerplate.**
 

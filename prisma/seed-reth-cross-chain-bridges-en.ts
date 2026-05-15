@@ -107,7 +107,7 @@ Real attacks, sorted by amount stolen, with the root cause:
 | 2021 | Poly Network | $611M (returned) | Storage layout assumption bug |
 | 2024 | Orbit | $80M | Multisig key compromise |
 
-**3 of 5 are key/signing compromises**. Not smart contract logic — operational security failures.
+**2 of 5 are outright key compromises** (Ronin, Orbit) — and the other three are bugs in cross-chain trust/verification logic rather than core asset logic. Either way: the failure mode is the bridge's trust apparatus, not the underlying token contracts.
 
 The takeaway: **multisig bridges are operationally dangerous**, not just theoretically suboptimal. Even with audited code, the keys themselves are the attack surface.
 
@@ -502,7 +502,7 @@ flowchart LR
     RMN["Risk Management<br/>Network"] -.->|cursing| DON
 \`\`\`
 
-Two networks of nodes operate the protocol:
+Two networks of nodes operate the protocol (the first two rows below — Committing DON and Executing DON — together form the DON; the third row, the Risk Management Network, is a separate safety net):
 
 | Network | Role | Trust model |
 | :--- | :--- | :--- |
@@ -1101,15 +1101,15 @@ For Tempo (Reth-based BFT), the light client on Ethereum is **much simpler than 
 The cross-chain final check. You'll need this to architect any bridge that touches Tempo, Hyperliquid, or any Reth-based L1.`,
                   quizQuestions: [
                     {
-                      question: 'Why are **3 of 5 top historical bridge hacks** key/operational compromises rather than smart contract bugs?',
+                      question: 'Why do **the largest bridge hacks** keep coming from key/operational compromises and cross-chain trust-logic bugs rather than asset-contract bugs?',
                       options: [
                         'Smart contracts are formally verified, so bugs are rare.',
-                        'Multisig bridges rely on key holders for security; once a sufficient subset of keys is compromised (phishing, malware, insider), the contract\'s code is irrelevant because the signatures verify correctly. Operational security is the weakest link.',
+                        'Multisig bridges rely on key holders for security; once a sufficient subset of keys is compromised (phishing, malware, insider), the contract\'s code is irrelevant because the signatures verify correctly. Operational security is the weakest link — and the bugs that do hit are in the bridge\'s cross-chain trust apparatus, not the underlying tokens.',
                         'Hackers prefer easier targets like exchanges.',
                         'Smart contract hacks are not categorized as bridge hacks.',
                       ],
                       correctIndex: 1,
-                      explanation: 'Ronin ($625M), Orbit ($80M), Poly Network ($611M returned) — all key compromises. The bridge\'s code did exactly what it was supposed to do: verify signatures. The attack succeeded because the keys themselves were stolen. This is why multisig is a fundamental risk model, not just a feature choice.',
+                      explanation: 'Ronin ($625M) and Orbit ($80M) were outright key compromises — the bridge code did exactly what it was supposed to do (verify signatures) and the attack succeeded because the keys themselves were stolen. The other big losses (Wormhole, Nomad, Poly Network) were bugs not in the asset token contracts but in the bridge\'s cross-chain trust/verification logic — signature checks, initialization, storage-layout assumptions. Either way: multisig and trust-apparatus complexity are the systemic risk surface, not the token layer.',
                     },
                     {
                       question: "What's the **bridge trilemma**, and which two corners does Chainlink CCIP pick?",

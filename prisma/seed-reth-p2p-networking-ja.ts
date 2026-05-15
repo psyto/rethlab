@@ -154,7 +154,7 @@ Hyperliquid の場合、独自の transport (HyperBFT 通信) は **execution �
 
 自分の chain 向けに、カスタムサブプロトコル — 決済 finality hint や MEV bundle gossip など — を追加したい。そのコードを reth ツリーのどこに置けばよいか、既存のどのピースにつなぎ込めばよいか? Reth のネットワーク層は [\`crates/net/\`](https://github.com/paradigmxyz/reth/tree/main/crates/net) にあり、discovery、transport、gossip、peer 管理を扱う 6 つのサブ crate に分散した、Rust 約 30k 行のコードベースです。本レッスンはその全体地図 — 何がどこにあり、各 crate は何をしており、拡張点はどこかを押さえます。
 
-> 🛑 **スクロール前に予測。** Reth のネットワークは約 5 つのサブ crate に分かれている。**どんな関心事の分離が妥当だろうか?** 読み始める前に、自分でモジュール構成をスケッチしてみる。(ヒント: discovery、transport、サブプロトコルは分けるのが自然な出発点。)
+> 🛑 **スクロール前に予測。** Reth のネットワークは約 6 つのサブ crate に分かれている。**どんな関心事の分離が妥当だろうか?** 読み始める前に、自分でモジュール構成をスケッチしてみる。(ヒント: discovery、transport、サブプロトコルは分けるのが自然な出発点。)
 
 ## 1. ネットワーク crate マップ
 
@@ -339,7 +339,7 @@ eth/68 が運ぶのは **canonical chain data** — block、transaction、receip
 
 ここで \`bundle/1\` という名前のプロトコルを構築します。役割はシンプル — peer が「収益的な bundle を持っている」とアナウンスし、他の peer がそれを要求できるようにすることです。
 
-メッセージは次の 3 タイプ:
+メッセージは次の 4 タイプ:
 
 | メッセージ | 目的 |
 | :--- | :--- |

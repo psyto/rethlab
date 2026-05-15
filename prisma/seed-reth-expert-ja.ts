@@ -280,7 +280,7 @@ fn cursor_write<T: Table>(&self) -> Result<Self::CursorMut<T>, DatabaseError>;
 fn cursor_dup_write<T: DupSort>(&self) -> Result<Self::DupCursorMut<T>, DatabaseError>;
 \`\`\`
 
-最重要ポイントは3つ：
+最重要ポイントは4つ：
 
 ### \`<T: Table>\` — テーブルは型、文字列ではない
 
@@ -677,7 +677,7 @@ EVM の中で SHA-256 を使いたいとします。道は 2 つ: 新しい **Op
 | **ツールへの影響** | Solidity・ABI 破壊 | ほぼ透過 |
 | **用途** | 内側の高頻度ループ | ペアリング・ハッシュなど重い演算 |
 
-実Ethereumは既に 0x01〜0x0a に precompile を持ちます（ecrecover, sha256, ripemd160, modexp, BN254 ops, BLAKE2F, point eval）。
+実Ethereumは既に 0x01〜0x0a に precompile を持ちます（ecrecover, sha256, ripemd160, identity, modexp, BN254 ops, BLAKE2F, point eval）。
 
 ## 2. 本物のprecompile — identity precompile (0x04)
 
@@ -1203,7 +1203,7 @@ fn decode_chain_into_events(
 }
 \`\`\`
 
-これが **本番形のMEVデコード**。3つのflat_map：
+これが **本番形のMEVデコード**。\`flat_map\` 2 段 + 最後に \`filter_map\` の重ね合わせ：
 
 1. **\`chain.blocks_and_receipts()\`** — コミットされたチェーンの各ブロックとレシートのペア
 2. **各(block, receipt)について** — トランザクションをレシートとzipしてflat化
@@ -1231,7 +1231,7 @@ match event {
 
 MEVサーチャーなら、「ブリッジアドレス」を「DEXルーターアドレス」に、「デポジット/引き出し処理」を「swap検出 + サンドイッチ機会スコアリング」に置き換えれば良い。**同じ形、フィルタセットが違うだけ**。
 
-> 🛑 **理解度チェック。** 3 つネストした \`flat_map\`。1 つの \`fold\` に潰せる? 著者がなぜこの形を選んだ? (ヒント: イテレータの遅延評価と、フィルタが早いか遅いかを考える。)
+> 🛑 **理解度チェック。** 3 段ネストしたイテレータ ( \`flat_map\` 2 + \`filter_map\` 1 ) を 1 つの \`fold\` に潰せる? 著者がなぜこの形を選んだ? (ヒント: イテレータの遅延評価と、フィルタが早いか遅いかを考える。)
 
 ## 4. シミュレーション
 
@@ -1391,7 +1391,7 @@ let env = ExecutorEnv::builder().write(&input)?.build()?;
 let receipt = default_prover().prove(env, ERC20_COUNTER_GUEST_ELF)?;
 \`\`\`
 
-## 3. なぜ Revm なのか
+## 4. なぜ Revm なのか
 
 - **モジュラー**（Database トレイトのおかげで witness/oracle パターンが綺麗）
 - **決定論的** — 同じ入力で同じ出力
@@ -1399,7 +1399,7 @@ let receipt = default_prover().prove(env, ERC20_COUNTER_GUEST_ELF)?;
 
 Go製のGethを zkVM 用にコンパイル＆最小化するのは悪夢。Revm は素直に動く。
 
-## 4. Witness パターン
+## 5. Witness パターン
 
 プローバの中では「ディスクから状態を読む」ができません。代わりに、証明前に **witness**（ブロックが触ったすべての状態値）を組み立てます。in-zkVM の Database 実装はこんな形：
 
@@ -1422,7 +1422,7 @@ impl Database for WitnessDB {
 
 > 🛑 **予測。** 攻撃者が、コールが必要とする 1 つのストレージスロット *以外* はすべて正しい状態を持つ witness を含む Input を提出する。**guest のどこで abort する?** プローバが見える失敗は何? 具体的に — どの行か言ってください。
 
-## 5. 性能の現実
+## 6. 性能の現実
 
 2026年のEthereum 1ブロック証明：
 
@@ -1436,7 +1436,7 @@ impl Database for WitnessDB {
 
 > 🛑 **予測。** 専用 zkEVM (Linea, Scroll) は **ブロックあたり Risc0 より桁違いに速い**。**にもかかわらず Risc0 を使う理由は何?** 速度の遅さに対して汎用性が値する本番シナリオを 2 つ挙げてください。
 
-## 6. なぜ重要か
+## 7. なぜ重要か
 
 - **zkEVM L2** はこのパイプライン上に載る（Linea、zkSync、Scroll、Polygon zkEVM）
 - **Optimistic Rollup** も「妥当性証明によるファストファイナリティ」へ移行中
@@ -1444,7 +1444,7 @@ impl Database for WitnessDB {
 
 [risc0/risc0-ethereum](https://github.com/risc0/risc0-ethereum) を読むのが zk × Revm の本番版を理解する最短ルート。
 
-## 7. 練習
+## 8. 練習
 
 「分かった」と言う前に、最小の host/guest を書いてみる：
 
@@ -2113,7 +2113,7 @@ Ethereum mainnet では、block は **validator** が consensus client を動か
 
 …返すものは、構築済みの block ("payload")。Mainnet では validator 側の consensus client が Engine API 経由でこれをトリガーします。Sequencer L2 では sequencer が直接トリガーする。
 
-## 2. 本番で出てくる 2 種類の builder
+## 2. 本番で出てくる 3 種類の builder
 
 Reth エコシステムには複数の payload builder が存在します:
 

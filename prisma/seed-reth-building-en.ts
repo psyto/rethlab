@@ -50,7 +50,7 @@ A searcher is an **event-processing pipeline**: external signals come in, MEV lo
 | **Strategy** | \`Strategy<E, A>\` | Event \`E\` → zero or more actions \`A\`. This is the MEV brain. The only file you actually write per opportunity. |
 | **Executor** | \`Executor<A>\` | Action \`A\` → side effect. Flashbots bundle submit, public-mempool send, off-chain order post. |
 
-> 🛑 **Predict before scrolling.** Why is the Executor trait separate from the Strategy trait? Form a one-sentence answer about *what changes break if you fuse them*. Hold your guess until Step 4.
+> 🛑 **Predict before scrolling.** Why is the Executor trait separate from the Strategy trait? Form a one-sentence answer about *what changes break if you fuse them*. Hold your guess until Step 5.
 
 ## Step 1: Open the traits
 
@@ -238,7 +238,7 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 ## What comes next in this tier
 
-The full **Building with the Stack** tier ships eight lessons end to end. From here:
+The full **Building with the Stack** tier ships ten lessons end to end. From here:
 
 - **L2** — Reorg-aware Postgres indexer (ExEx-driven, in-process)
 - **L3** — Custom RPC endpoint via \`extend_rpc_modules\`
@@ -247,6 +247,8 @@ The full **Building with the Stack** tier ships eight lessons end to end. From h
 - **L6** — Foundry-style cheatcode (custom precompile + minimal harness)
 - **L7** — Swap aggregator (Revm fork + cross-venue quotes)
 - **L8 (Capstone)** — Frontrun-resistant order router that integrates everything above
+- **L9** — Validate-revm cross-client harness (compare your sim against a production provider)
+- **L10** — HTTP 402 / MPP machine-payments endpoint (Tempo's payments stack)
 
 Each is a self-contained ~200–300 line build with the same predict / find-in-repo / anti-fluency style. Pick the one that maps to your target use case.
 `,
@@ -1912,7 +1914,7 @@ sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (the cheatcode 
 
 A user wants to swap 10,000 USDC for ETH. Uniswap V2 will give them 2.948 WETH. Sushi gives 2.946. Uniswap V3 gives 2.951. The aggregator's job: **fan out the same quote to every venue at the same instant, compare, pick the winner.** That's what 1inch, Paraswap, and 0x do under the hood. ~250 lines of Rust below: fork mainnet locally with Revm (so every quote reads the *same* atomic state), pull reserves from Uniswap V2 + Sushi + Uniswap V3, compute the output, pick the best.
 
-> 📌 **Scope honesty.** We compute quotes across **three V2-style pools and one V3 pool** for a single hop. Real aggregators add: split routing (send 30% through Uniswap, 70% through Curve), multi-hop (A → WETH → B), CFMMs with custom math (Curve's stableswap, Balancer's weighted pools), gas-aware routing. Each is a one-loop extension of the kernel here.
+> 📌 **Scope honesty.** We compute quotes across **two V2-style pools (Uniswap V2 + Sushi) and one V3 pool (Uniswap V3)** for a single hop. Real aggregators add: split routing (send 30% through Uniswap, 70% through Curve), multi-hop (A → WETH → B), CFMMs with custom math (Curve's stableswap, Balancer's weighted pools), gas-aware routing. Each is a one-loop extension of the kernel here.
 
 ## What you'll build
 
@@ -2250,9 +2252,9 @@ Finish drill 5 and you have, structurally, an aggregator-as-a-service. Plug in M
                   xpReward: 100,
                   content: `# Capstone — Build a Frontrun-Resistant Order Router
 
-The capstone. Everything in the tier, integrated into one service. A user posts a swap intent (JSON). The router: quotes across DEXes (Lesson 7), watches the mempool for adversarial txs that would sandwich the swap (Lesson 1, inverted), simulates the threat in Revm to **measure** how much output the user would lose, sponsors gas via EIP-7702 (Lesson 5), and — when the threat score is high — submits through Flashbots Protect so the order never appears in the public mempool. When threat is low, public submission is fine and saves the bundler markup. **One service, six previous lessons stitched in, one new piece: the decision layer.**
+The capstone. Patterns from across the tier, integrated into one service. A user posts a swap intent (JSON). The router: quotes across DEXes (Lesson 7), watches the mempool for adversarial txs that would sandwich the swap (Lesson 1, inverted), simulates the threat in Revm to **measure** how much output the user would lose, sponsors gas via EIP-7702 (Lesson 5), and — when the threat score is high — submits through Flashbots Protect so the order never appears in the public mempool. When threat is low, public submission is fine and saves the bundler markup. **One service, four earlier lessons stitched in (L1, L4, L5, L7), one new piece: the decision layer.**
 
-> 📌 **Scope honesty.** This capstone integrates patterns from lessons 1–7 of this tier. The novel build is the **frontrun-detection logic** + the **submission path that bypasses public mempool**. We use Flashbots Protect as the private RPC; the same shape works with MEV-Share, Beaverbuild's private endpoint, or any other private orderflow auction.
+> 📌 **Scope honesty.** This capstone integrates patterns from L1 / L4 / L5 / L7 of this tier. The novel build is the **frontrun-detection logic** + the **submission path that bypasses public mempool**. We use Flashbots Protect as the private RPC; the same shape works with MEV-Share, Beaverbuild's private endpoint, or any other private orderflow auction.
 
 ## What you'll build
 
@@ -2631,14 +2633,14 @@ The architecture you wrote — quote → detect adversaries → score with sim �
 
 After drill 5 you have a tuned, observably-correct frontrun-resistant router. **This is what you'd ship to production for a wallet team that takes user trust seriously.**
 
-> 🛑 **Final check (the curriculum's final check).** In one sentence: of the 8 lessons in this tier, why does the *capstone* depend on **simulation** (L1) more than any other component? If your answer doesn't mention "you can't decide whether to defend without first measuring the threat in the same units as the user's loss", the capstone hasn't quite landed yet — re-read Step 4.
+> 🛑 **Final check (this lesson's final check).** In one sentence: of the lessons in this tier, why does the *capstone* depend on **simulation** (L1) more than any other component? If your answer doesn't mention "you can't decide whether to defend without first measuring the threat in the same units as the user's loss", the capstone hasn't quite landed yet — re-read Step 4.
 
 
 ---
 
-## You've finished the Building tier
+## Capstone complete — two lessons remain
 
-Recap of what you've built across 8 lessons:
+Recap of what you've built up to this capstone:
 
 1. Minimal MEV searcher (mempool → fork-sim → arb)
 2. Reorg-aware Postgres indexer (ExEx + reorg dispatch)
@@ -2647,7 +2649,9 @@ Recap of what you've built across 8 lessons:
 5. EIP-7702 sponsor (Type 4 tx + paymaster pattern)
 6. Foundry-style cheatcode (custom precompile + harness)
 7. Swap aggregator (Revm fork + cross-venue quotes)
-8. **Frontrun-resistant order router (this lesson)** — all of the above, integrated
+8. **Frontrun-resistant order router (this lesson)** — L1 / L4 / L5 / L7 integrated
+
+Still ahead: L9 (validate-revm cross-client harness) and L10 (HTTP 402 / MPP machine-payments endpoint). They sit outside the swap-router arc but ship in the same tier.
 
 Pick the one that interests your target employer / project most. Open the production gaps. Ship it as a small public repo. **That's the artifact you bring to a Paradigm / Tempo / serious-team conversation.**
 `,
@@ -3060,7 +3064,7 @@ A subtler design point worth pausing on: the login flow uses a **passkey** (Touc
 
 > 🔍 **Find in repo.** Open the wallet's [\`ARCHITECTURE.md\`](https://github.com/tempoxyz/wallet/blob/main/ARCHITECTURE.md) (or skim the top-level Rust crates). **In your own words:** at what layer does the wallet hold the passkey-derived session key, and at what layer does it hand a \`PaymentProvider\` to the MPP middleware? The answer tells you the deployment shape for any agent you build on top of this.
 
-## Now answer the Step 1 predict
+## Now answer the earlier predict
 
 **Why is \`WWW-Authenticate: Payment\` extensible rather than Tempo-specific?** Because the moment you bake in one rail, you've forked the protocol from anyone who wants to use a different one. Stripe co-maintaining MPP is only possible because Core is rail-agnostic — Stripe contributes the \`methods/stripe/\` directory, not edits to Core. Same shape Lightning, ACH, and any future rail will follow.
 

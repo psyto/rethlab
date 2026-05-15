@@ -668,7 +668,7 @@ pub trait FullConsensus<N: NodePrimitives>: Consensus<N::Block> {
 }
 \`\`\`
 
-Three methods, three phases of validation. **Read them in order:**
+Three methods, three phases of validation. **Read them in the order they fire** (which is not the order they're declared in the trait above — the pre/structural/post sequence below is the runtime execution order):
 
 ### \`validate_block_pre_execution\` — before running txs
 
@@ -1842,7 +1842,7 @@ What can a malicious validator try?
 | **51% finality attack** | Acquire 2/3+ stake, sign everything | Economic cost > $33B for ETH; impossible at TVL |
 | **Liveness attack** | Acquire 1/3+ stake, refuse to vote | Halts chain; doesn't compromise safety |
 
-The first three are **slashable** = economically irrational. The last two require **majority capital** = economically extreme.
+The first two are **slashable** = economically irrational. The third (long-range) is blocked by **weak subjectivity** rather than slashing. The last two require **majority capital** = economically extreme.
 
 The most realistic attack: **liveness halt** with 1/3+. This costs you the income from honestly staking, but you don't lose stake. Some attackers might rationally do this for political reasons (e.g., government coercion).
 

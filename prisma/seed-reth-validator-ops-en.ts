@@ -262,7 +262,7 @@ Casper FFG (Ethereum's finality gadget) has validators vote on **source → targ
 Vote1: source A → target B
 Vote2: source C → target D
 
-If C > A and B > D (the second "surrounds" the first), this is slashable. The fix: track every voted source/target pair; reject votes that would surround prior votes.
+If C < A and D > B (the second "surrounds" the first), this is slashable. The fix: track every voted source/target pair; reject votes that would surround prior votes.
 
 ### 2.3 Equivocation in BFT (Tendermint, HotStuff)
 
@@ -599,7 +599,7 @@ The validator ops final check. You'll need this to operate any validator, design
                       explanation: 'Atomic operation requirement. Local DB + signer in one process = atomic. Remote DB = race condition. The "atomic" guarantee is the entire security model of slashing-protection.',
                     },
                     {
-                      question: 'A validator is offline during a network partition. **Should it continue signing when partition heals?**',
+                      question: 'A validator is on one side of a network partition. **Should it continue signing during the partition?**',
                       options: [
                         'Yes, immediately resume signing.',
                         "**No, stop signing during partition.** If it continues signing, it might be on a fork and producing blocks the rest of the network doesn't see. When the network heals, the validator's chain is wrong → equivocates with canonical chain → slashed. Better to lose inactivity penalty (small) than slashing penalty (large).",

@@ -752,10 +752,11 @@ flowchart TB
     Batcher -->|blob tx| L1["L1 (Ethereum)"]
 \`\`\`
 
-1 プロセスに 3 つのコンポーネント:
+1 プロセスに 4 つのコンポーネント:
 1. **Sequencer loop** — Engine API 経由でブロック生成を駆動する
 2. **Mempool** — ユーザ tx を受け入れ、fee で優先順位を付ける
-3. **Batcher** — 定期的に L1 に投稿する
+3. **L1 inbox watcher** — L1 の deposit イベントを subscribe し、force-include 用 tx として mempool に流し込む
+4. **Batcher** — 定期的に L1 に投稿する
 
 最小 MVP では、これらを 1 つのバイナリで走らせる。本番では分割してスケールさせる。
 

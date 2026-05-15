@@ -425,7 +425,7 @@ let provider = ProviderBuilder::new()
 
 ## ローカルで試すなら Anvil
 
-[Foundry](https://book.getfoundry.sh/) に同梱の **Anvil** を使うと、自分のマシン上で完全なEthereumノードのフォークを立てられます。
+[Foundry](https://book.getfoundry.sh/) に同梱の **Anvil** を使うと、自分のマシン上でローカルなEthereumノードを立てられます（後で \`--fork-url\` を付ければメインネットフォークにもできます）。
 
 \`\`\`bash
 anvil
@@ -1171,7 +1171,7 @@ Alloy・EVM・Revmの基礎を理解できたか確認します。`,
                       explanation: 'PrivateKeySignerは秘密鍵を保持し、署名を行うオブジェクトです。.address()で公開アドレスを取り出せます。',
                     },
                     {
-                      question: 'Alloyの `ProviderBuilder::new().on_http(url)` で作るのは？',
+                      question: 'Alloyの `ProviderBuilder::new().connect_http(url)` で作るのは？',
                       options: [
                         'ローカルWebサーバー',
                         'JSON-RPC経由でノードと通信するProviderインスタンス',

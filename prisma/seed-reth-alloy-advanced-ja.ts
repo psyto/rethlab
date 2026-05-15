@@ -1158,8 +1158,8 @@ impl Network for Optimism {
 
 **一貫性の性質の働きかた:**
 
-- 4 つの *トランザクション* 関連スロット（TxType、TxEnvelope、UnsignedTx、TransactionRequest、TransactionResponse）はすべて Ethereum と違う。Optimism の deposit-tx バリアントがすべてに波及するためだ。
-- 3 つの *レシート* 関連スロット（ReceiptEnvelope、ReceiptResponse）も違う。L1 ガス / L1 ブロックのフィールドが波及するためだ。
+- 5 つの *トランザクション* 関連スロット（TxType、TxEnvelope、UnsignedTx、TransactionRequest、TransactionResponse）はすべて Ethereum と違う。Optimism の deposit-tx バリアントがすべてに波及するためだ。
+- 2 つの *レシート* 関連スロット（ReceiptEnvelope、ReceiptResponse）はどちらも違う。L1 ガス / L1 ブロックのフィールドが波及するためだ。
 - *ヘッダー* 型と \`HeaderResponse\` は **Ethereum と共有**。Optimism のブロックは同じヘッダー構造を持つから（OP がコンセンサスヘッダーのレベルで EVM 互換であることの副産物）。
 - \`BlockResponse\` は別物。なぜなら *ブロックのトランザクションリスト* に OP 型のトランザクションが含まれるから。Ethereum の \`Block\` を再利用すると、OP のデポジットが Ethereum 型 tx としてシリアライズされてしまう — それは誤り。
 

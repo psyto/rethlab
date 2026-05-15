@@ -154,7 +154,7 @@ For Hyperliquid: their custom transport (HyperBFT communication) is **separate f
 
 You want to add a custom sub-protocol for your chain — say, payment-finality hints or MEV bundle gossip. Where in the reth tree does that code go, and what existing pieces does it plug into? Reth's network layer lives at [\`crates/net/\`](https://github.com/paradigmxyz/reth/tree/main/crates/net) — ~30k lines of Rust split across six sub-crates handling discovery, transport, gossip, and peer management. This lesson is the orientation: what's where, what each crate does, where the extension points are.
 
-> 🛑 **Predict before scrolling.** Reth's network has ~5 sub-crates. **What separation of concerns would make sense?** Sketch the modules before reading. (Hint: discovery, transport, sub-protocols are obvious starts.)
+> 🛑 **Predict before scrolling.** Reth's network has ~6 sub-crates. **What separation of concerns would make sense?** Sketch the modules before reading. (Hint: discovery, transport, sub-protocols are obvious starts.)
 
 ## 1. The network crate map
 
@@ -339,7 +339,7 @@ Where this shows up in production:
 
 You're going to build a protocol called \`bundle/1\`. Its job: peers announce "I have a profitable bundle" and others can request it.
 
-Three message types:
+Four message types:
 
 | Message | Purpose |
 | :--- | :--- |

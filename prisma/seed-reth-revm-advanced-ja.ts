@@ -203,7 +203,7 @@ pub fn add<IT: ITy, H: Host + ?Sized>(host: &mut H) -> Result {
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 \`\`\`
 
-（パラメータ型は revm の \`Ictx<...>\` で人間工学的にラップされていますが、ジェネリクスは私たちが組んだ形そのもの。）
+（パラメータ型は revm の \`Ictx<...>\` で人間工学的にラップされ、明示的な \`Host\` 制約は \`Ictx\` 側へ移っています — \`add\` に残ったジェネリクスは、いま積み上げた \`IT: ITy\` と \`H: ?Sized\`。）
 
 ソースに一致。**自分で組み立てた。**
 
@@ -1189,7 +1189,7 @@ impl<T: Database> Database for &mut T {
 impl<T: Database> Database for Box<T> { /* ... 同じ4メソッド ... */ }
 \`\`\`
 
-12個のメソッド本体が同一の転送ボイラープレート（\`Database\`、\`DatabaseRef\`、\`DatabaseCommit\` の合計）。
+\`Database\` だけで8個のメソッド本体が同一の転送ボイラープレート（4メソッド × \`&mut\` と \`Box\`）— そして同じパターンが \`DatabaseRef\` と \`DatabaseCommit\` でも繰り返される。
 
 \`auto_impl\` はこの転送実装を自動生成する手続きマクロ。\`#[auto_impl(&mut, Box)]\` が付いていれば、\`MyDb\` が \`Database\` を実装していれば、\`&mut MyDb\` も \`Box<MyDb>\` も自動的に \`Database\` を実装する。**ユーザー側のボイラープレートゼロ。**
 

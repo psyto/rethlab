@@ -50,7 +50,7 @@ searcher は **イベント処理パイプライン** です: 外部シグナル
 | **Strategy** | \`Strategy<E, A>\` | イベント \`E\` → 0 個以上のアクション \`A\`。MEV の脳。opportunity ごとに自分が書く唯一のファイル |
 | **Executor** | \`Executor<A>\` | アクション \`A\` → 副作用。Flashbots bundle 送信、public mempool 送信、オフチェーン注文 post |
 
-> 🛑 **スクロール前に予測。** なぜ Executor trait は Strategy trait と分離されているのか? *両者を融合させたら何が壊れるか* について一文で答えてください。答えを Step 4 まで保留。
+> 🛑 **スクロール前に予測。** なぜ Executor trait は Strategy trait と分離されているのか? *両者を融合させたら何が壊れるか* について一文で答えてください。答えを Step 5 まで保留。
 
 ## Step 1: trait を開く
 
@@ -238,7 +238,7 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 ## このティアの先
 
-**Building with the Stack** ティアは 8 lesson 全部 ship 済み。ここから:
+**Building with the Stack** ティアは 10 lesson 全部 ship 済み。ここから:
 
 - **L2** — Reorg-aware Postgres indexer (ExEx 駆動、in-process)
 - **L3** — \`extend_rpc_modules\` 経由のカスタム RPC エンドポイント
@@ -247,6 +247,8 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 - **L6** — Foundry スタイル cheatcode (custom precompile + 最小ハーネス)
 - **L7** — Swap aggregator (Revm fork + 横断 venue クオート)
 - **L8 (Capstone)** — 上記すべてを統合する frontrun-resistant order router
+- **L9** — Validate-revm クロスクライアントハーネス (production provider と比較)
+- **L10** — HTTP 402 / MPP machine-payments エンドポイント (Tempo の payments スタック)
 
 各々が自己完結した ~200〜300 行の build、同じ predict / find-in-repo / anti-fluency スタイル。ターゲットユースケースに合うものから選ぶ。
 `,
@@ -1912,7 +1914,7 @@ sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッス�
 
 ユーザが 10,000 USDC を ETH に swap したい。Uniswap V2 なら 2.948 WETH もらえる。Sushi なら 2.946。Uniswap V3 なら 2.951。Aggregator の仕事は: **同じクオートを全 venue に同じ瞬間にファンアウトし、比較し、勝者を選ぶこと。** これが 1inch、Paraswap、0x が裏でやっていること。以下、Rust ~250 行: Revm で mainnet をローカル fork し (全クオートが *同じ* atomic state を読むため)、Uniswap V2 + Sushi + Uniswap V3 から reserve を引き、出力を計算し、ベストを選ぶ。
 
-> 📌 **スコープの正直な開示。** **3 つの V2 系 pool と 1 つの V3 pool** に対して 1-hop のクオートを計算する。本物の aggregator はさらに: split routing (30% を Uniswap、70% を Curve に送る)、multi-hop (A → WETH → B)、独自数式の CFMM (Curve の stableswap、Balancer の重み付き pool)、ガスを考慮したルーティング、を加える。それぞれは本レッスンのカーネルの 1 ループ拡張に相当する。
+> 📌 **スコープの正直な開示。** **2 つの V2 系 pool (Uniswap V2 + Sushi) と 1 つの V3 pool (Uniswap V3)** に対して 1-hop のクオートを計算する。本物の aggregator はさらに: split routing (30% を Uniswap、70% を Curve に送る)、multi-hop (A → WETH → B)、独自数式の CFMM (Curve の stableswap、Balancer の重み付き pool)、ガスを考慮したルーティング、を加える。それぞれは本レッスンのカーネルの 1 ループ拡張に相当する。
 
 ## 何を作るか
 
@@ -2250,9 +2252,9 @@ Drill 5 を完成させれば、構造的に aggregator-as-a-service ができ�
                   xpReward: 100,
                   content: `# Capstone — Frontrun-Resistant Order Router を作る
 
-キャップストーン。本ティアのすべてを 1 つのサービスに統合する。ユーザが swap intent (JSON) を POST。Router がやることは: DEX 全体で quote する (Lesson 7)、mempool を監視して swap を sandwich する敵対 tx を探す (Lesson 1 の反転)、Revm で **その脅威をシミュレートしてユーザがどれだけ output を失うかを測る**、EIP-7702 でガスを sponsor する (Lesson 5)、そして — 脅威スコアが高ければ — Flashbots Protect 経由で submit する (注文は public mempool に一切現れない)。脅威が低ければ public submission で OK で、bundler のマージンも節約できる。**1 つのサービスで過去 6 レッスンを縫い合わせ、新規部分は決定レイヤー 1 つだけ。**
+キャップストーン。本ティアのあちこちのパターンを 1 つのサービスに統合する。ユーザが swap intent (JSON) を POST。Router がやることは: DEX 全体で quote する (Lesson 7)、mempool を監視して swap を sandwich する敵対 tx を探す (Lesson 1 の反転)、Revm で **その脅威をシミュレートしてユーザがどれだけ output を失うかを測る**、EIP-7702 でガスを sponsor する (Lesson 5)、そして — 脅威スコアが高ければ — Flashbots Protect 経由で submit する (注文は public mempool に一切現れない)。脅威が低ければ public submission で OK で、bundler のマージンも節約できる。**1 つのサービスで過去 4 レッスン (L1 / L4 / L5 / L7) を縫い合わせ、新規部分は決定レイヤー 1 つだけ。**
 
-> 📌 **スコープの正直な開示。** このキャップストーンは本ティアの lesson 1〜7 のパターンを統合する。新規に作る部分は **frontrun 検出ロジック** と **public mempool をバイパスする submission パス**。Private RPC として Flashbots Protect を使うが、同じ形が MEV-Share、Beaverbuild の private endpoint、その他任意の private orderflow オークションでも動く。
+> 📌 **スコープの正直な開示。** このキャップストーンは本ティアの L1 / L4 / L5 / L7 のパターンを統合する。新規に作る部分は **frontrun 検出ロジック** と **public mempool をバイパスする submission パス**。Private RPC として Flashbots Protect を使うが、同じ形が MEV-Share、Beaverbuild の private endpoint、その他任意の private orderflow オークションでも動く。
 
 ## 何を作るか
 
@@ -2631,14 +2633,14 @@ async fn route_handler(
 
 Drill 5 後、チューニング済みで観察可能、正しく動く frontrun-resistant router が手に入る。**これがユーザの信頼を真剣に受け取る wallet チームに対して production に出すもの。**
 
-> 🛑 **最終チェック (カリキュラム最終チェック)。** 一文で: このティアの 8 lesson のうち、なぜ *capstone* が他のどのコンポーネントよりも **シミュレーション** (L1) に依存するのか? 答えに「ユーザの損失と同じ単位で脅威を測らずに、防御するかを決められない」が含まれていないなら、capstone はまだ完全には届いていない — Step 4 を読み直す。
+> 🛑 **最終チェック (本レッスンの最終チェック)。** 一文で: このティアのレッスンのうち、なぜ *capstone* が他のどのコンポーネントよりも **シミュレーション** (L1) に依存するのか? 答えに「ユーザの損失と同じ単位で脅威を測らずに、防御するかを決められない」が含まれていないなら、capstone はまだ完全には届いていない — Step 4 を読み直す。
 
 
 ---
 
-## Building tier 完走
+## Capstone 完了 — 残り 2 レッスン
 
-8 lesson の総まとめ:
+ここまでに作ってきたものの総まとめ:
 
 1. 最小 MEV searcher (mempool → fork-sim → arb)
 2. Reorg-aware Postgres indexer (ExEx + reorg ディスパッチ)
@@ -2647,9 +2649,9 @@ Drill 5 後、チューニング済みで観察可能、正しく動く frontrun
 5. EIP-7702 sponsor (Type 4 tx + paymaster パターン)
 6. Foundry スタイル cheatcode (custom precompile + ハーネス)
 7. Swap aggregator (Revm fork + venue 横断 quote)
-8. **Frontrun-resistant order router (本レッスン)** — 上記すべて統合
+8. **Frontrun-resistant order router (本レッスン)** — L1 / L4 / L5 / L7 を統合
 
-ターゲットの雇用主 / プロジェクトに最も近いものを選ぶ。Production ギャップを埋める。小さな public リポとして公開する。**それが Paradigm / Tempo / 本気のチームとの会話に持っていく成果物。**
+この先: L9 (validate-revm クロスクライアントハーネス) と L10 (HTTP 402 / MPP machine-payments エンドポイント)。swap-router の弧の外側に立つが、同じティアで ship される。
 `,
                 },
                 {

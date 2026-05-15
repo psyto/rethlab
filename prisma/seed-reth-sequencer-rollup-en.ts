@@ -752,10 +752,11 @@ flowchart TB
     Batcher -->|blob tx| L1["L1 (Ethereum)"]
 \`\`\`
 
-Three components in one process:
+Four components in one process:
 1. **Sequencer loop** — drives block production via Engine API
 2. **Mempool** — accepts user txs, prioritizes by fee
-3. **Batcher** — periodically posts to L1
+3. **L1 inbox watcher** — subscribes to L1 deposit events and feeds them into the mempool as force-included txs
+4. **Batcher** — periodically posts to L1
 
 For minimal MVP, run them all in one binary. Production scales them separately.
 

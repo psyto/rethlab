@@ -668,7 +668,7 @@ pub trait FullConsensus<N: NodePrimitives>: Consensus<N::Block> {
 }
 \`\`\`
 
-3 メソッド、検証の 3 フェーズ。**順番に読む**:
+3 メソッド、検証の 3 フェーズ。**実行される順序で読む**(上の trait 定義の宣言順ではなく、ランタイムで走る pre → 構造 → post の順序):
 
 ### \`validate_block_pre_execution\` — tx 実行前
 
@@ -1842,7 +1842,7 @@ slash_amount = (slashed_stake / total_stake) * stake * multiplier
 | **51% finality attack** | stake の 2/3+ を握り、その全部で署名する | ETH 換算の経済コスト > 330 億ドル。TVL 的に不可能。 |
 | **Liveness attack** | stake の 1/3+ を握り、投票を拒否する | chain は停止するが、safety は妥協しない |
 
-最初の 3 つは **slash 可能** = 経済的に非合理。最後の 2 つは **過半数の資本** が必要 = 経済的に極端。
+最初の 2 つは **slash 可能** = 経済的に非合理。3 つ目 (long-range) は slashing ではなく **弱い主観性** で防がれる。最後の 2 つは **過半数の資本** が必要 = 経済的に極端。
 
 最も現実的な攻撃は、**1/3+ による liveness 停止**。正直にステーキングしたときの収入は失うが、stake 自体は失わない。一部の攻撃者は政治的理由 (例えば国家強制) によって合理的にこれを実行しうる。
 

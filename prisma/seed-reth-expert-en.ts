@@ -280,7 +280,7 @@ fn cursor_write<T: Table>(&self) -> Result<Self::CursorMut<T>, DatabaseError>;
 fn cursor_dup_write<T: DupSort>(&self) -> Result<Self::DupCursorMut<T>, DatabaseError>;
 \`\`\`
 
-Three things matter most:
+Four things matter most:
 
 ### \`<T: Table>\` — table is a type, not a string
 
@@ -685,7 +685,7 @@ Custom opcodes break consensus with every wallet, indexer, and Solidity compiler
 | **Tooling impact** | breaks Solidity, ABIs | mostly transparent |
 | **Use case** | tight inner loops | heavy operations like pairings, hashing |
 
-Real Ethereum already has precompiles at addresses 0x01–0x0a (ecrecover, sha256, ripemd160, modexp, BN254 ops, BLAKE2F, point eval).
+Real Ethereum already has precompiles at addresses 0x01–0x0a (ecrecover, sha256, ripemd160, identity, modexp, BN254 ops, BLAKE2F, point eval).
 
 ## 2. A real precompile — the identity precompile (0x04)
 
@@ -1211,7 +1211,7 @@ fn decode_chain_into_events(
 }
 \`\`\`
 
-This is **production-shape MEV decoding**. Three flat_maps:
+This is **production-shape MEV decoding**. Two \`flat_map\`s and a \`filter_map\`, stacked:
 
 1. **\`chain.blocks_and_receipts()\`** — every block in the committed chain, paired with its receipts
 2. **For each (block, receipt)** — zip transactions with their receipts and flatten
@@ -1239,7 +1239,7 @@ match event {
 
 For an MEV searcher, replace "bridge addresses" with "DEX router addresses" and the deposit/withdrawal handlers with "swap detection + sandwich opportunity scoring." **Same shape, different filter set.**
 
-> 🛑 **Anti-fluency.** Three nested \`flat_map\`s. Could you collapse them into one \`fold\`? Why did the author stack them this way? (Hint: think about iterator laziness and where filter happens — early or late.)
+> 🛑 **Anti-fluency.** Three nested iterator stages (two \`flat_map\`s + a \`filter_map\`). Could you collapse them into one \`fold\`? Why did the author stack them this way? (Hint: think about iterator laziness and where filter happens — early or late.)
 
 ## 4. Simulation
 
@@ -1402,7 +1402,7 @@ let env = ExecutorEnv::builder().write(&input)?.build()?;
 let receipt = default_prover().prove(env, ERC20_COUNTER_GUEST_ELF)?;
 \`\`\`
 
-## 3. Why Revm specifically?
+## 4. Why Revm specifically?
 
 - It's **modular** (Database trait makes the witness/oracle pattern clean)
 - It's **deterministic** — every run with the same inputs produces the same outputs
@@ -1410,7 +1410,7 @@ let receipt = default_prover().prove(env, ERC20_COUNTER_GUEST_ELF)?;
 
 Geth in Go would be a nightmare to compile and minimize for a zkVM. Revm just works.
 
-## 4. The witness pattern
+## 5. The witness pattern
 
 Inside the prover you can't "read state from disk." Instead, before proving you assemble a **witness**: every state value the block touched. Then your in-zkVM Database impl looks like:
 
@@ -1433,7 +1433,7 @@ If the block reads something not in the witness, the proof fails. The witness pr
 
 > 🛑 **Predict.** An attacker submits an Input where the witness has correct state for everything *except* one storage slot the call needs. **Where in the guest does it abort?** What's the failure visible to the prover? Be specific — name the line.
 
-## 5. Performance reality
+## 6. Performance reality
 
 Proving a single Ethereum block in 2026:
 
@@ -1447,7 +1447,7 @@ Generic zkVMs (Risc0/SP1) trade some prover speed for **flexibility** — they c
 
 > 🛑 **Predict.** A custom zkEVM (Linea, Scroll) is **orders of magnitude faster per block** than Risc0. **Why would anyone use Risc0 anyway?** Name two production scenarios where the genericity is worth the slowdown.
 
-## 6. Why this matters
+## 7. Why this matters
 
 - **L2s using zkEVM** rely on this pipeline (Linea, zkSync, Scroll, Polygon zkEVM)
 - **Optimistic rollups** are migrating toward "validity proofs as fast finality"
@@ -1455,7 +1455,7 @@ Generic zkVMs (Risc0/SP1) trade some prover speed for **flexibility** — they c
 
 Reading [risc0/risc0-ethereum](https://github.com/risc0/risc0-ethereum) is the most direct path to understanding zk + Revm in production.
 
-## 7. Practice
+## 8. Practice
 
 Before claiming familiarity, write the smallest possible host/guest pair:
 
@@ -2124,7 +2124,7 @@ For Ethereum mainnet, blocks are produced by **validators** running the consensu
 
 ...and returns a built block (the "payload"). On mainnet, the validator's consensus client triggers this via the Engine API. On a sequencer L2, the sequencer triggers it directly.
 
-## 2. Two production-relevant builders
+## 2. Three production-relevant builders
 
 The reth ecosystem has multiple payload builders to study:
 

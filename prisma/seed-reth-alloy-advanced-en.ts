@@ -1158,8 +1158,8 @@ impl Network for Optimism {
 
 **The cohesion property in action:**
 
-- All four *transaction* slots (TxType, TxEnvelope, UnsignedTx, TransactionRequest, TransactionResponse) differ from Ethereum. Optimism's deposit-tx variant cascades through all of them.
-- All three *receipt* slots (ReceiptEnvelope, ReceiptResponse) differ. The L1 gas / L1 block fields cascade through.
+- All five *transaction* slots (TxType, TxEnvelope, UnsignedTx, TransactionRequest, TransactionResponse) differ from Ethereum. Optimism's deposit-tx variant cascades through all of them.
+- Both *receipt* slots (ReceiptEnvelope, ReceiptResponse) differ. The L1 gas / L1 block fields cascade through.
 - The *header* type and \`HeaderResponse\` are **shared with Ethereum**. Optimism's blocks have the same header structure (it's a side-effect of OP being EVM-compatible at the consensus header level).
 - \`BlockResponse\` differs because *the block's transaction list* contains OP-typed transactions. Reusing Ethereum's \`Block\` would force serialization of OP deposits as Ethereum-typed txs — wrong.
 

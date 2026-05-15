@@ -1163,7 +1163,7 @@ Check your grasp on Alloy, the EVM, and where Revm fits.`,
                       explanation: 'PrivateKeySigner holds the private key and exposes signing methods. Use .address() to get the derived public address.',
                     },
                     {
-                      question: '`ProviderBuilder::new().on_http(url)` produces:',
+                      question: '`ProviderBuilder::new().connect_http(url)` produces:',
                       options: [
                         'A local web server',
                         'A Provider that talks JSON-RPC to a node',

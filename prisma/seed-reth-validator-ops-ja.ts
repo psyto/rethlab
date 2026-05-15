@@ -262,7 +262,7 @@ Casper FFG (Ethereum の finality gadget) では、validator は **source → ta
 Vote1: source A → target B
 Vote2: source C → target D
 
-C > A かつ B > D (つまり 2 つ目が 1 つ目を「surround」している) なら slashable。修正: 投票した source/target ペアをすべて追跡し、先行する投票を surround するような票は拒否する。
+C < A かつ D > B (つまり 2 つ目が 1 つ目を「surround」している) なら slashable。修正: 投票した source/target ペアをすべて追跡し、先行する投票を surround するような票は拒否する。
 
 ### 2.3 BFT (Tendermint、HotStuff) における equivocation
 
@@ -599,7 +599,7 @@ Validator ops の最終チェック。任意の validator 運用、L1 の経済�
                       explanation: '本質は atomic 操作の要件である。同一プロセス内のローカル DB + signer なら atomic に保てる。リモート DB を挟むとレースコンディションが入り込む。この「atomic」保証こそが slashing-protection 全体のセキュリティモデルの土台になっている。',
                     },
                     {
-                      question: 'Validator がネットワーク分断中にオフラインだった。**分断が解消したとき、署名を続行すべきか?**',
+                      question: 'Validator がネットワーク分断の片側にいる。**分断中に署名を続けるべきか?**',
                       options: [
                         'Yes、ただちに署名を再開する。',
                         "**No、分断中は署名を停止する**。続行すれば fork 側にいる可能性があり、ネットワークの残りが目にしないブロックを生成しているかもしれない。分断が解消したとき、自分の chain が誤っていれば canonical chain と equivocate することになり、slashed される。小さな inactivity ペナルティを払うほうが、大きな slashing ペナルティを払うよりはるかに良い。",

@@ -923,7 +923,7 @@ Every piece earned its keep:
 - **init/run split** (Step 5) — synchronous setup before async loop
 - **\`install_exex\`** (Step 6) — multiple extensions, each with its own stream
 
-The next lesson reads the minimal ExEx — \`~40 lines of main.rs\` — and shows how all six pieces fit together in real code.
+The next lesson reads the minimal ExEx — \`~40 lines of main.rs\` — and shows how all five pieces fit together in real code.
 
 ## Recall before moving on
 
