@@ -26,10 +26,153 @@ export async function seedRethBuildingEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
+                  title: 'Test gate — every app in this tier ships with passing tests',
+                  slug: 'building-test-gate-en',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 18,
+                  xpReward: 35,
+                  content: `# Test gate — every app in this tier ships with passing tests
+
+You spent four tiers reading source. From here on you build. The temptation, after months of reading, is to write code, read it back, satisfy yourself it looks right, and move on. **That is the failure mode this tier is engineered to prevent.**
+
+The rule for the rest of this tier: **a lesson is not complete until its test suite is green.** Not "I read the lesson, I built the thing, I think it works." Green tests, or you didn't ship it.
+
+> 🛑 **Predict.** Why is this rule strict for Building (Expert) and not for Foundations / Intermediate? Form a hypothesis before reading on.
+
+---
+
+The reason: in Foundations and Intermediate you were *reading* code that someone else already proved correct (the Reth/Revm/Alloy maintainers run their own test suites). Reading exposes you to design choices but does not require you to defend any. **The moment you write your own MEV searcher, indexer, or wallet backend, you become the proof of correctness for that code.** Without tests you have no proof — only opinion.
+
+This lesson sets the gate. The next 10 lessons each make you cross it.
+
+## What "tested" looks like, by app type
+
+Each app in this tier has a different shape, so the tests look different. Here is the minimum bar per category:
+
+| App | Minimum test gate |
+| :--- | :--- |
+| **MEV searcher** | Forked-state test — replay a real historical opportunity and assert P&L is positive. Reorg test — your bundle survives or unwinds correctly across a 1-block reorg. |
+| **ExEx indexer** (\`tidx\` walk-through) | Fixture chain replay — feed a known sequence of \`Notification::ChainCommitted\` / \`ChainReverted\` and assert your derived state matches a golden reference. |
+| **Custom RPC endpoint** | Integration test — start the node in-process, hit your new method over HTTP, assert the JSON response. Error paths covered (bad params, missing block). |
+| **Wallet backend** | Roundtrip test — signed tx decodes back to the original. Nonce invariant — sequential calls produce sequential nonces, never gaps or duplicates. |
+| **EIP-7702 sponsor** | Replay-protection test — same auth tuple cannot be sponsored twice. Gas accounting test — sponsor pays the right amount, user pays zero. |
+| **Custom cheatcode** | Differential test — your Rust precompile and a reference Solidity implementation produce the same output for 1000 fuzz inputs. |
+| **Swap aggregator** | Forked-state test — quote against a real Uniswap V3 pool at a pinned block, assert output is within ε of a known-good quote. |
+| **Capstone (order router)** | End-to-end fork test — submit an order, watch the router split / route / land / report fills. |
+| **Revm validation** | Differential test — for every block in a small mainnet range, your Revm trace matches a non-Revm provider's \`debug_traceTransaction\` output. |
+| **Machine payments (HTTP 402)** | Integration test — a request with no payment returns 402; with a valid micropayment, returns the resource. Replay-protection test — same payment cannot satisfy two requests. |
+
+Each row is the minimum. Real production systems layer fuzz, invariant, and chaos tests on top.
+
+## The scaffold
+
+Every app in this tier follows the same scaffold:
+
+\`\`\`
+my-app/
+├── Cargo.toml          # workspace
+├── src/
+│   └── lib.rs          # the app code
+├── tests/
+│   ├── integration.rs  # crosses async / RPC / DB boundaries
+│   └── fixtures/       # golden test inputs (tx hashes, block numbers, expected outputs)
+├── foundry.toml        # if you have a Solidity surface
+└── test/
+    └── *.t.sol         # forge tests for the Solidity side
+\`\`\`
+
+For pure-Rust apps (MEV searcher, indexer, wallet backend, sponsor): just \`Cargo.toml\` + \`src\` + \`tests\`.
+
+For apps with a Solidity surface (custom cheatcode, swap aggregator, capstone): both Rust and Foundry test suites. The Solidity side uses everything you learned in *Writing Tests with Foundry* (Fundamentals tier) — \`vm.expectRevert\`, \`vm.expectEmit\`, fork tests, fuzz.
+
+## Two patterns that recur across the tier
+
+### Pattern 1 — pinned mainnet fork
+
+Almost every app in this tier needs to test against real chain state. The pattern:
+
+\`\`\`rust
+// Cargo.toml
+[dev-dependencies]
+alloy = { version = "...", features = ["providers"] }
+revm = "..."
+\`\`\`
+
+\`\`\`rust
+// tests/integration.rs
+use alloy::providers::ProviderBuilder;
+
+const PINNED_BLOCK: u64 = 18_500_000;
+const FORK_RPC: &str = "https://eth.merkle.io";
+
+#[tokio::test]
+async fn searcher_finds_known_opportunity() {
+    let provider = ProviderBuilder::new()
+        .connect_http(FORK_RPC.parse().unwrap());
+
+    // Build an AlloyDB-backed Revm at PINNED_BLOCK
+    // Run your searcher against it
+    // Assert the expected opportunity is found
+    // Assert P&L matches the historical record
+}
+\`\`\`
+
+The pin is the discipline: \`PINNED_BLOCK\` is a constant in your repo. When you change it, every test reproduces against the new block. Without the pin, your tests are non-deterministic and CI is meaningless.
+
+### Pattern 2 — differential testing
+
+When you build a Revm-based simulator (cheatcode, swap aggregator, validation app), correctness is **not "my output looks right"** — it is **"my output matches a trusted reference for the same input."** That reference is a non-Revm provider (Geth, Erigon, Alchemy's \`debug_trace\`).
+
+\`\`\`rust
+#[tokio::test]
+async fn simulator_matches_geth_debug_trace() {
+    for tx_hash in HISTORICAL_TX_HASHES {
+        let our_trace = our_simulator.trace(tx_hash).await;
+        let geth_trace = alchemy_provider.debug_trace_transaction(tx_hash).await;
+        assert_traces_equivalent(&our_trace, &geth_trace);
+    }
+}
+\`\`\`
+
+Differential testing is the gold standard for any code that re-implements consensus-defined behavior. It is the only honest answer to "are you sure?"
+
+## What you ship at the end of each lesson
+
+For every Building lesson, completion means **a public-facing artifact** with:
+
+1. A repository (Git or local — your choice)
+2. \`README\` describing what the app does
+3. \`Cargo.toml\` (and \`foundry.toml\` if applicable) pinning all dependencies
+4. \`src/\` with the implementation
+5. \`tests/\` with the gate suite from the table above
+6. A passing \`cargo test\` (and \`forge test\` if applicable) — locally and reproducibly
+7. The pinned mainnet fork block (or fixture chain) recorded in the test file
+
+If any of these is missing, the lesson is not complete. **You ship the artifact and the proof together, or you do not ship.**
+
+> 🛑 **One-line gate check.** Before claiming any Building lesson done, answer: *"What command demonstrates the app is correct, and what is its current exit code?"* If you cannot answer in one sentence, you have not built it.
+
+## A note on "I'll write tests later"
+
+The most common reader objection at this point: "I'll prototype first, then add tests once the design stabilizes." This sounds reasonable. It is not.
+
+In production EVM engineering, the test is not a verification of the code — **it is the executable specification of what the code is supposed to do.** Writing tests after prototyping forces you to derive the spec from the code, which means the spec is whatever the code happens to do, including its bugs. Writing tests first (or alongside) forces you to articulate the spec independently, then bend the code to it. Bug-finding follows naturally from the asymmetry.
+
+The Reth, Revm, and Foundry maintainers all work test-first or test-alongside. There is no version of "production-quality EVM code" that comes from writing the code first and tests later. **This tier holds you to the same standard.**
+
+## Ready
+
+Open the next lesson — *Build a Minimal MEV Searcher in Rust* — and read it through once. Then, before writing any searcher code, write the test from row 1 of the table above. Make it fail with no implementation. Then build until it passes.
+
+That order — test first, code second — is the gate.
+`,
+                },
+                {
                   title: 'Build a Minimal MEV Searcher in Rust',
                   slug: 'build-mev-searcher-en',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 1,
                   duration: 45,
                   xpReward: 80,
                   content: `# Build a Minimal MEV Searcher in Rust
@@ -227,6 +370,39 @@ Finish drill 5 and you have a working artemis-based searcher skeleton ready for 
 
 > 🛑 **Final check.** In one sentence: what does artemis give you that writing a one-off \`main.rs\` doesn't? If your answer doesn't mention *reuse across strategies* or *swappable submission paths*, re-read Step 5 — that's the whole reason the abstraction exists.
 
+## Test gate
+
+Per *Test gate — every app in this tier ships with passing tests*, this lesson's minimum gate is two tests in your stub strategy from drill 5:
+
+1. **Forked-state opportunity replay.** Pin a block where a known arb existed (Etherscan + EigenPhi will surface candidates). Build your strategy against an \`AlloyDB\`-backed Revm at that block. Assert the strategy emits an \`Action\` with positive expected P&L.
+2. **Reorg integrity.** Feed a synthetic \`ChainReorged\` notification through your collector and assert the strategy retracts any pending \`Action\` that depended on the reorged block. (Ignoring reorgs is the most common production failure mode in MEV systems — you submit a bundle, the chain reorgs, your accounting still claims you won.)
+
+Sketch:
+
+\`\`\`rust
+// tests/integration.rs
+const PINNED_BLOCK: u64 = 18_500_000;  // a block with a known Uniswap V3 / Curve arb
+const FORK_RPC: &str = "https://eth.merkle.io";
+
+#[tokio::test]
+async fn finds_known_arb_at_pinned_block() {
+    let provider = forked_provider_at(FORK_RPC, PINNED_BLOCK).await;
+    let strategy = MyArbStrategy::new(provider);
+    let event = Event::NewBlock { number: PINNED_BLOCK };
+    let actions = strategy.process_event(event).await;
+    let arb = actions.iter().find(|a| matches!(a, Action::SubmitBundle { .. }));
+    assert!(arb.is_some(), "should have found the known arb");
+    assert_pnl_positive(arb.unwrap());
+}
+
+#[tokio::test]
+async fn retracts_action_on_reorg() {
+    // submit synthetic block N, then reorg over N; assert the action queue is empty
+}
+\`\`\`
+
+The lesson is **not complete** until both tests are green. If you can \`cargo run\` your searcher against mainnet but cannot \`cargo test\` it, you have a demo, not a deliverable.
+
 ## 📺 Further watching
 
 \`\`\`youtube
@@ -257,7 +433,7 @@ Each is a self-contained ~200–300 line build with the same predict / find-in-r
                   title: "Read a Real Production Indexer — Tempo's tidx",
                   slug: 'build-exex-indexer-en',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 2,
                   duration: 45,
                   xpReward: 80,
                   content: `# Read a Real Production Indexer — Tempo's tidx
@@ -495,7 +671,7 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
                   title: 'Build a Custom RPC Endpoint on Reth',
                   slug: 'build-custom-rpc-en',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 40,
                   xpReward: 70,
                   content: `# Build a Custom RPC Endpoint on Reth
@@ -808,7 +984,7 @@ Finish drill 5 and you've closed the loop: a node that exposes node-only insight
                   title: 'Build a Wallet Backend in Rust',
                   slug: 'build-wallet-backend-en',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 4,
                   duration: 45,
                   xpReward: 80,
                   content: `# Build a Wallet Backend in Rust
@@ -1263,7 +1439,7 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
                   title: 'Build a Minimal EIP-7702 Sponsor Service in Rust',
                   slug: 'build-7702-sponsor-en',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 5,
                   duration: 45,
                   xpReward: 80,
                   content: `# Build a Minimal EIP-7702 Sponsor Service in Rust
@@ -1608,7 +1784,7 @@ K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — the engine running y
                   title: 'Build Your Own Foundry-Style Cheatcode in Rust',
                   slug: 'build-foundry-cheatcode-en',
                   type: 'CONTENT',
-                  sortOrder: 5,
+                  sortOrder: 6,
                   duration: 45,
                   xpReward: 80,
                   content: `# Build Your Own Foundry-Style Cheatcode in Rust
@@ -1907,7 +2083,7 @@ sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (the cheatcode 
                   title: 'Build a Swap Aggregator: DEX State, Forked, in Rust',
                   slug: 'build-swap-aggregator-en',
                   type: 'CONTENT',
-                  sortOrder: 6,
+                  sortOrder: 7,
                   duration: 45,
                   xpReward: 80,
                   content: `# Build a Swap Aggregator: DEX State, Forked, in Rust
@@ -2247,7 +2423,7 @@ Finish drill 5 and you have, structurally, an aggregator-as-a-service. Plug in M
                   title: 'Capstone — Build a Frontrun-Resistant Order Router',
                   slug: 'build-capstone-router-en',
                   type: 'CONTENT',
-                  sortOrder: 7,
+                  sortOrder: 8,
                   duration: 60,
                   xpReward: 100,
                   content: `# Capstone — Build a Frontrun-Resistant Order Router
@@ -2660,7 +2836,7 @@ Pick the one that interests your target employer / project most. Open the produc
                   title: 'Validate Your Revm Simulation Against a Production Provider',
                   slug: 'build-validate-revm-en',
                   type: 'CONTENT',
-                  sortOrder: 8,
+                  sortOrder: 9,
                   duration: 50,
                   xpReward: 90,
                   content: `# Validate Your Revm Simulation Against a Production Provider
@@ -2932,7 +3108,7 @@ Pick the build that maps to your target employer / project most closely. Open th
                   title: 'Machine payments — HTTP 402 and the Tempo MPP stack',
                   slug: 'build-mpp-payments-en',
                   type: 'CONTENT',
-                  sortOrder: 9,
+                  sortOrder: 10,
                   duration: 16,
                   xpReward: 40,
                   content: `# Machine payments — HTTP 402 and the Tempo MPP stack

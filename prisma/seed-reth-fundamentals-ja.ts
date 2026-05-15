@@ -1149,10 +1149,238 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
 `,
                 },
                 {
+                  title: 'Foundry でテストを書く — \`forge test\` を本番スキルとして',
+                  slug: 'foundry-tests-ja',
+                  type: 'CONTENT',
+                  sortOrder: 5,
+                  duration: 25,
+                  xpReward: 50,
+                  content: `# Foundry でテストを書く — \`forge test\` を本番スキルとして
+
+前のレッスンで \`forge test\` を実行し、その下で Revm が立ち上がる様子を見ました。本レッスンでは、実際にバグを捕まえる **テストを書く** スキルに進みます — 監査済みコントラクト、MEV searcher、L2 sequencer が本番に出すときに必ず備えているテストです。
+
+テスト設計こそ、趣味の Solidity と本番コードを分ける境界線です。立派なコメントが付いていてテストが無いコントラクトは本番ではなく、スケッチです。
+
+## 1. 全テストの形：Arrange · Act · Assert
+
+Foundry のテストは 3 つに分解できます：
+
+\`\`\`solidity
+import "forge-std/Test.sol";
+
+contract CounterTest is Test {
+    Counter counter;
+
+    function setUp() public {
+        counter = new Counter();
+    }
+
+    function testIncrementsByOne() public {
+        // Arrange — 上の setUp() で完了
+        uint256 before = counter.count();
+
+        // Act
+        counter.increment();
+
+        // Assert
+        assertEq(counter.count(), before + 1);
+    }
+}
+\`\`\`
+
+\`setUp()\` は各テストの前に実行される。\`assertEq\` が主アサーション — Rust の \`assert_eq!\` と同じ発想。値が違えばトレースに diff 付きで失敗が表示される。
+
+Foundry は各 \`testXxx\` 関数を **\`setUp()\` から組み直した新しい Revm 状態** に対して実行します。テスト間で状態が漏れることはありません。
+
+## 2. 9 割の場面で使う 4 つの cheatcode
+
+前のレッスンで \`vm.deal\`、\`vm.warp\`、\`vm.prank\` を見ました。あれらは状態を *書き換えて* シナリオを準備するもの。次の 4 つは状態を *確認する* cheatcode — コントラクトが正しく振る舞ったかを assert する道具です。
+
+### \`vm.expectRevert(bytes)\` — 「次の呼び出しは revert するはず」
+
+\`\`\`solidity
+function testCannotWithdrawMoreThanBalance() public {
+    vm.expectRevert("Insufficient balance");
+    vault.withdraw(100 ether);
+}
+\`\`\`
+
+Foundry は次の外部呼び出しが指定の理由文字列（カスタムエラーなら 4 バイトセレクタ）で revert することを期待する。成功したら fail。違う理由で revert したら期待値と実値の両方を出して fail。
+
+\`try/catch\` の plumbing を書かずに **失敗パスをテストする** 方法。
+
+### \`vm.expectEmit(...)\` — 「イベントが発火するはず」
+
+\`\`\`solidity
+function testTransferEmitsEvent() public {
+    vm.expectEmit(true, true, false, true);    // topic1, topic2, topic3, data を確認
+    emit Transfer(alice, bob, 1 ether);         // 期待されるイベント
+    token.transfer(bob, 1 ether);
+}
+\`\`\`
+
+bool フラグはどの topic を確認するか。indexed イベント引数は topic に、非 indexed 引数は \`data\` にパックされる。これは ERC-20 / ERC-721 の表面が、下流のインデクサや dapp が依存するイベントをちゃんと吐いていることを保証する手段。
+
+### \`vm.expectCall(address, bytes)\` — 「コントラクトは X を呼ぶはず」
+
+\`\`\`solidity
+function testWithdrawCallsTransfer() public {
+    vm.expectCall(
+        address(token),
+        abi.encodeWithSelector(token.transfer.selector, alice, 1 ether)
+    );
+    vault.withdraw(1 ether);
+}
+\`\`\`
+
+これはコンポーザビリティのテスト方法 — 依存先に正しく委譲しているかを確認する。特に依存先が fork した本番アドレスのとき、価値が高い。
+
+### \`vm.recordLogs()\` / \`vm.getRecordedLogs()\` — 「発火したものを全部見せろ」
+
+\`\`\`solidity
+function testReentrancyEmitsTwoEvents() public {
+    vm.recordLogs();
+    vault.deposit{value: 1 ether}();
+    Vm.Log[] memory logs = vm.getRecordedLogs();
+    assertEq(logs.length, 2);
+}
+\`\`\`
+
+事前にどのイベントが出るか分からないとき — たとえばデバッグ中 — は全部記録して配列に対して assert する。
+
+## 3. Fork テスト — 本物のチェーン状態でテストを走らせる
+
+ユニットテストは空の Revm に対して走る。Fork テストは **mainnet（あるいは任意のチェーン）の特定ブロック時点のスナップショット** に対して走る：
+
+\`\`\`solidity
+contract UniswapV3Test is Test {
+    uint256 mainnetFork;
+
+    function setUp() public {
+        mainnetFork = vm.createFork("https://eth.merkle.io", 18_500_000);
+        vm.selectFork(mainnetFork);
+    }
+
+    function testPriceQuoteAgainstRealPool() public {
+        IUniswapV3Pool pool = IUniswapV3Pool(0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640);
+        (uint160 sqrtPriceX96,,,,,,) = pool.slot0();
+        // sqrtPriceX96 はブロック 18_500_000 の本物の値
+        assertGt(sqrtPriceX96, 0);
+    }
+}
+\`\`\`
+
+\`vm.createFork\` は \`AlloyDB\` 風の状態を背後に持つ Revm インスタンスを構築し、\`SLOAD\` ごとに upstream RPC から lazy load してキャッシュします。**実際にデプロイされている Uniswap V3 コントラクトに対して、特定ブロック高でテストできる** — testnet も、ローカルデプロイも、チェーン状態のモックも要らない。
+
+これは **MEV searcher、監査再現、オンチェーンプロトコルと統合するコントラクト** の本番パターンです。テストを決定的にするためにブロックを pin する。
+
+> 💡 **CI コスト。** Fork テストは upstream RPC を叩く。有料エンドポイント（Alchemy、Infura）はクォータを消費する。ブロックを pin してレスポンスをキャッシュする（Foundry はデフォルトで \`~/.foundry/cache\` にキャッシュ）か、CI ではパブリック RPC を使う。
+
+## 4. Fuzz テスト — 1 本のテストを数千本に化けさせる
+
+\`testXxx\` 関数に引数を足すと、Foundry がランダム入力を生成します：
+
+\`\`\`solidity
+function testTransferAlwaysReducesSenderBalance(uint96 amount) public {
+    amount = uint96(bound(amount, 1, token.balanceOf(alice)));
+    uint256 before = token.balanceOf(alice);
+
+    vm.prank(alice);
+    token.transfer(bob, amount);
+
+    assertEq(token.balanceOf(alice), before - amount);
+}
+\`\`\`
+
+Foundry はデフォルトで 256 回、ランダム \`amount\` で実行する。\`bound(value, min, max)\` は任意の入力を有効範囲にマップする — \`vm.assume()\`（範囲外を捨てて遅くなる）より優先して使う、特定の理由で捨てる必要がない限り。
+
+**fuzz するタイミング**：ユーザー入力で算術をするときは常に。\`uint256\`、\`int256\`、\`bytes\` を受け取るものは信用する前に fuzz する。Foundry の fuzzer は本番監査コードでユニットテストが取り逃したバグを日常的に発見します。
+
+## 5. Invariant テスト — どの呼び出し順でも成立すべき性質
+
+Invariant は、どの関数がどの順で呼ばれても **常に** 成立すべき性質をテストする：
+
+\`\`\`solidity
+contract VaultInvariantTest is Test {
+    Vault vault;
+    Handler handler;
+
+    function setUp() public {
+        vault = new Vault();
+        handler = new Handler(vault);
+        targetContract(address(handler));   // \`handler\` の関数をランダムに呼ぶよう Foundry に指示
+    }
+
+    function invariant_totalSharesMatchesAssets() public view {
+        assertEq(vault.totalShares(), vault.totalAssetsBacking());
+    }
+}
+\`\`\`
+
+Foundry の invariant runner は \`handler\`（fuzz したい操作を露出させる）の関数をランダム順で呼び、呼び出し間で \`invariant_*\` を全部評価する。invariant を破る順序があれば、最小の再現ケースが返ってくる。
+
+DEX、貸出、vault のような contracts が「3 つの操作の組み合わせで会計が壊れる」種類のバグを単純な fuzz では捕まえられないとき、これが効きます。
+
+## 6. Gas snapshot — リグレッション検出
+
+\`\`\`bash
+forge snapshot
+\`\`\`
+
+\`.gas-snapshot\` ファイルに各テストのガス使用量を記録する。次回 \`forge test\` 時、ガスが増えたテストを警告する。CI でリグレッションを fail にできる。
+
+\`\`\`bash
+forge snapshot --diff
+\`\`\`
+
+最後の snapshot からの差分を見せる。「リファクタしたら全 transfer に 10K gas 足してしまった」を merge 前に捕まえる方法です。
+
+## 7. EVM コントラクトテストのチェックリスト
+
+本番投入予定のコントラクトについて、**「テスト済みか?」** という問いは次のように分解できます：
+
+| レイヤー | 何を assert するか |
+| :--- | :--- |
+| **State** | 状態を変える呼び出しの後、変わるはずのストレージスロットが期待値を持っているか |
+| **Events** | 公開アクションがドキュメント通りの引数でドキュメント通りのイベントを吐くか |
+| **Reverts** | revert パスが全て試されているか — 不正入力、未認可呼び出し、残高不足、pause 状態 |
+| **Gas** | hot path に snapshot テストがあり、リファクタで暗黙に膨らまないか |
+| **Composability** | 跨りコールが正しい引数で起きているか（\`vm.expectCall\`） |
+| **Fork integrations** | Uniswap / Aave / 本物のアドレスに依存するなら、pin した mainnet fork でテストしているか |
+| **Properties (fuzz)** | ユーザー入力との算術は fuzz されているか、保存則（total supply、残高合計）は invariant で守られているか |
+
+「完全な」Foundry テストスイートは、全 public 関数についてこれらの行をすべて埋めている。本番監査の指摘の大半は **Reverts** と **Properties** の行が空であることに集中します。
+
+## ドリル
+
+1. \`forge init counter && cd counter\`
+2. \`Counter.sol\` を書く: \`increment()\`、\`decrement()\`（underflow で revert）、\`set(uint256)\`（owner のみ呼べる、\`CountSet(uint256 newValue)\` イベントを吐く）
+3. 以下に当たるテストを書く：
+   - \`increment\` の \`assertEq\`（state）
+   - 0 からの \`decrement\` で \`vm.expectRevert\`
+   - 非 owner からの \`set\` で \`vm.expectRevert\`
+   - \`set\` の \`vm.expectEmit\`
+   - fuzz テスト：\`testSetReturnsTheValueYouSet(uint256 x)\`
+4. \`forge test -vvv\` — トレースを読む
+5. \`forge snapshot\` — snapshot をコミット
+6. \`increment\` に無意味な \`unchecked\` ブロックを足す。再実行して gas snapshot が変化を検出することを確認
+
+\`forge test\` が green で snapshot がコミットされたら、「テストについて読んだ」から「テスト済みコントラクトを持っている」に渡れたことになります。
+
+## なぜこれが中級ティアの前に必要か
+
+Inside REVM では Revm 自身の state-test フレームワークを歩く。Inside Reth では \`Stage\` トレイトの単体テストを歩く。**どちらもあなたが既に test-first で考えている前提** で進む — 「テストは後で足す」が smell であって計画ではないことを、本レッスンが先に植え付ける。
+
+## 📺 関連リンク
+
+[Foundry Book — Forge testing chapter](https://getfoundry.sh/forge/tests/overview/) — 全 cheatcode リファレンスと CLI オプション。
+`,
+                },
+                {
                   title: 'Fundamentalsまとめクイズ',
                   slug: 'fundamentals-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 5,
+                  sortOrder: 6,
                   duration: 12,
                   xpReward: 30,
                   content: `# Fundamentalsまとめクイズ

@@ -1143,10 +1143,238 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
 `,
                 },
                 {
+                  title: 'Writing Tests with Foundry — \`forge test\` as a Production Skill',
+                  slug: 'foundry-tests-en',
+                  type: 'CONTENT',
+                  sortOrder: 5,
+                  duration: 25,
+                  xpReward: 50,
+                  content: `# Writing Tests with Foundry — \`forge test\` as a Production Skill
+
+The previous lesson ran \`forge test\` and showed Revm spinning up underneath. This lesson teaches you to **write** tests that catch real bugs — the kind that ship with audited contracts, MEV searchers, and L2 sequencers.
+
+Test design is what separates a hobbyist's Solidity from production code. A contract with great prose comments and no tests is not production — it is a sketch.
+
+## 1. The shape of every test: Arrange · Act · Assert
+
+Every Foundry test breaks into three parts:
+
+\`\`\`solidity
+import "forge-std/Test.sol";
+
+contract CounterTest is Test {
+    Counter counter;
+
+    function setUp() public {
+        counter = new Counter();
+    }
+
+    function testIncrementsByOne() public {
+        // Arrange — done in setUp() above
+        uint256 before = counter.count();
+
+        // Act
+        counter.increment();
+
+        // Assert
+        assertEq(counter.count(), before + 1);
+    }
+}
+\`\`\`
+
+\`setUp()\` runs before every test. \`assertEq\` is the primary assertion — same idea as Rust's \`assert_eq!\`. If the values differ, the test fails with a diff in the trace.
+
+Foundry runs each \`testXxx\` function against **a fresh Revm state** built from \`setUp()\`. Tests cannot pollute each other.
+
+## 2. The four cheatcodes you'll use 90% of the time
+
+The previous lesson introduced \`vm.deal\`, \`vm.warp\`, \`vm.prank\`. Those *change* state to set up a scenario. The four below *check* state — they're how you assert the contract behaved correctly.
+
+### \`vm.expectRevert(bytes)\` — "the next call must revert"
+
+\`\`\`solidity
+function testCannotWithdrawMoreThanBalance() public {
+    vm.expectRevert("Insufficient balance");
+    vault.withdraw(100 ether);
+}
+\`\`\`
+
+Foundry expects the very next external call to revert with the given reason string (or a 4-byte selector for custom errors). If it succeeds, the test fails. If it reverts with a different reason, the test fails and shows you both expected and actual.
+
+This is how you test **failure paths** without writing \`try/catch\` plumbing.
+
+### \`vm.expectEmit(...)\` — "an event must fire"
+
+\`\`\`solidity
+function testTransferEmitsEvent() public {
+    vm.expectEmit(true, true, false, true);    // check topic1, topic2, topic3, data
+    emit Transfer(alice, bob, 1 ether);         // the expected event
+    token.transfer(bob, 1 ether);
+}
+\`\`\`
+
+The boolean flags say which topics to check. Indexed event arguments become topics; non-indexed arguments are packed in \`data\`. This is how you test that ERC-20 / ERC-721 surfaces emit the events that downstream indexers and dapps depend on.
+
+### \`vm.expectCall(address, bytes)\` — "the contract must call X"
+
+\`\`\`solidity
+function testWithdrawCallsTransfer() public {
+    vm.expectCall(
+        address(token),
+        abi.encodeWithSelector(token.transfer.selector, alice, 1 ether)
+    );
+    vault.withdraw(1 ether);
+}
+\`\`\`
+
+This is how you test composability — that a contract correctly delegates to its dependencies. Especially valuable when the dependency is a real production address you're forking against.
+
+### \`vm.recordLogs()\` / \`vm.getRecordedLogs()\` — "show me everything that fired"
+
+\`\`\`solidity
+function testReentrancyEmitsTwoEvents() public {
+    vm.recordLogs();
+    vault.deposit{value: 1 ether}();
+    Vm.Log[] memory logs = vm.getRecordedLogs();
+    assertEq(logs.length, 2);
+}
+\`\`\`
+
+When you do not know which events should fire ahead of time — for instance, while debugging — record everything, then assert against the array.
+
+## 3. Fork tests — running tests against real chain state
+
+Unit tests run against an empty Revm. Fork tests run against **a snapshot of mainnet** (or any chain) at a specific block:
+
+\`\`\`solidity
+contract UniswapV3Test is Test {
+    uint256 mainnetFork;
+
+    function setUp() public {
+        mainnetFork = vm.createFork("https://eth.merkle.io", 18_500_000);
+        vm.selectFork(mainnetFork);
+    }
+
+    function testPriceQuoteAgainstRealPool() public {
+        IUniswapV3Pool pool = IUniswapV3Pool(0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640);
+        (uint160 sqrtPriceX96,,,,,,) = pool.slot0();
+        // sqrtPriceX96 is the real value at block 18_500_000
+        assertGt(sqrtPriceX96, 0);
+    }
+}
+\`\`\`
+
+\`vm.createFork\` builds a Revm instance backed by \`AlloyDB\`-style state — every \`SLOAD\` lazy-loads from the upstream RPC and caches. **You can test against the actual deployed Uniswap V3 contracts at a specific block height**, with no testnet, no local deployment, and no chain-state mocking.
+
+This is the production pattern for **MEV searchers, audit reproducers, and any contract that integrates with on-chain protocols**. Pin the fork to a specific block so your test is deterministic.
+
+> 💡 **CI cost.** Fork tests hit the upstream RPC. For paid endpoints (Alchemy, Infura) this consumes quota. Either pin a block + cache the responses (Foundry caches by default in \`~/.foundry/cache\`), or use a public RPC for CI.
+
+## 4. Fuzz tests — turn one test into thousands
+
+Add parameters to a \`testXxx\` function and Foundry generates random inputs:
+
+\`\`\`solidity
+function testTransferAlwaysReducesSenderBalance(uint96 amount) public {
+    amount = uint96(bound(amount, 1, token.balanceOf(alice)));
+    uint256 before = token.balanceOf(alice);
+
+    vm.prank(alice);
+    token.transfer(bob, amount);
+
+    assertEq(token.balanceOf(alice), before - amount);
+}
+\`\`\`
+
+Foundry runs this 256 times by default with random \`amount\` values. \`bound(value, min, max)\` maps any input into the valid range — preferable to \`vm.assume()\` (which discards out-of-range inputs and slows the run) unless you specifically need to discard.
+
+**When to fuzz**: any time the contract does math with user input. Anything that takes a \`uint256\`, \`int256\`, or \`bytes\` should be fuzzed before you trust it. The Foundry fuzzer regularly finds bugs in production audit codebases that unit tests missed.
+
+## 5. Invariant tests — properties that must hold under any sequence
+
+Invariants test what should **always** be true, regardless of which functions are called in which order:
+
+\`\`\`solidity
+contract VaultInvariantTest is Test {
+    Vault vault;
+    Handler handler;
+
+    function setUp() public {
+        vault = new Vault();
+        handler = new Handler(vault);
+        targetContract(address(handler));   // tell Foundry to call random functions on \`handler\`
+    }
+
+    function invariant_totalSharesMatchesAssets() public view {
+        assertEq(vault.totalShares(), vault.totalAssetsBacking());
+    }
+}
+\`\`\`
+
+Foundry's invariant runner calls random sequences of functions on \`handler\` (which exposes the operations you want to fuzz), then runs every \`invariant_*\` between calls. If any sequence breaks the invariant, you get a minimal reproducer.
+
+This is how DEX, lending, and vault contracts catch the "sequence of three actions that breaks accounting" bugs that simple unit fuzz cannot find.
+
+## 6. Gas snapshots — regression detection
+
+\`\`\`bash
+forge snapshot
+\`\`\`
+
+Writes a \`.gas-snapshot\` file recording gas usage of every test. On the next run, \`forge test\` warns if any test got more expensive. CI can fail on regressions.
+
+\`\`\`bash
+forge snapshot --diff
+\`\`\`
+
+Shows what changed since the last snapshot. This is how production teams catch "you added 10K gas to every transfer" before a refactor merges.
+
+## 7. The EVM contract testing checklist
+
+For any production-bound contract, the question **"is it tested?"** decomposes to:
+
+| Layer | What to assert |
+| :--- | :--- |
+| **State** | After every state-mutating call, the storage slots you expect to change have the values you expect |
+| **Events** | Every public-facing action emits the documented event with the documented arguments |
+| **Reverts** | Every revert path is exercised — bad input, unauthorized caller, insufficient balance, paused state |
+| **Gas** | Hot paths have a snapshot test so refactors don't bloat them silently |
+| **Composability** | Cross-contract calls happen with the right arguments (\`vm.expectCall\`) |
+| **Fork integrations** | If you depend on Uniswap / Aave / a real address, you test against a pinned mainnet fork |
+| **Properties (fuzz)** | Math with user input is fuzzed; conservation laws (total supply, sum of balances) are invariants |
+
+A "complete" Foundry test suite hits every row above for every public function. Most production audits flag missing coverage on the **Reverts** and **Properties** rows.
+
+## Drill
+
+1. \`forge init counter && cd counter\`
+2. Write a \`Counter.sol\` with \`increment()\`, \`decrement()\` (reverts on underflow), and \`set(uint256)\` (only callable by owner — emits \`CountSet(uint256 newValue)\` event).
+3. Write tests that hit:
+   - \`assertEq\` on \`increment\` (state)
+   - \`vm.expectRevert\` on \`decrement\` from zero
+   - \`vm.expectRevert\` on \`set\` from non-owner
+   - \`vm.expectEmit\` on \`set\`
+   - A fuzz test: \`testSetReturnsTheValueYouSet(uint256 x)\`
+4. \`forge test -vvv\` — read the trace
+5. \`forge snapshot\` — commit the snapshot
+6. Add a useless \`unchecked\` block to \`increment\`; re-run and verify the gas snapshot detects the change
+
+Once \`forge test\` is green and the snapshot is committed, you have crossed from "I read about testing" to "I have a tested contract."
+
+## Why this matters before the Intermediate tier
+
+Inside REVM walks Revm's own state-test framework. Inside Reth walks the \`Stage\` trait's unit tests. **Both assume you already think in test-first terms** — that "I'll add tests later" is a smell, not a plan. This lesson is the precondition.
+
+## 📺 Further reading
+
+[Foundry Book — Forge testing chapter](https://getfoundry.sh/forge/tests/overview/) for the full cheatcode reference and CLI options.
+`,
+                },
+                {
                   title: 'Fundamentals quiz',
                   slug: 'fundamentals-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 5,
+                  sortOrder: 6,
                   duration: 12,
                   xpReward: 30,
                   content: `# Fundamentals quiz

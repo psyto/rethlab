@@ -26,10 +26,153 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
+                  title: 'Test gate — この tier では全アプリがテスト green で初めて完了',
+                  slug: 'building-test-gate-ja',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 18,
+                  xpReward: 35,
+                  content: `# Test gate — この tier では全アプリがテスト green で初めて完了
+
+ここまでの 4 ティアではソースを **読んで** きました。ここから先は **作る**。読み続けたあとに陥りがちなのは、コードを書いて、自分で読み返して、「正しそうだ」と納得して次に進むことです。**この tier はその失敗モードを構造的に潰すために設計されています。**
+
+ここから先のルール：**テストスイートが green になるまでレッスンは完了ではない。** 「読んだ、作った、たぶん動く」では駄目。green か、未完了か、そのどちらか。
+
+> 🛑 **予測。** なぜこのルールは Building (Expert) では厳しく、Foundations / Intermediate では適用されないのか? 先を読む前に仮説を立てる。
+
+---
+
+理由：Foundations と Intermediate では、**他人がすでに正しさを証明したコード**（Reth/Revm/Alloy のメンテナが自分でテストスイートを回している）を読んでいた。読むことは設計判断に触れる行為で、何も自分で defend する必要がない。**自分で MEV searcher・インデクサ・ウォレットバックエンドを書いた瞬間、そのコードの「正しさの証明」はあなたになる。** テストが無ければ、その証明は存在しない — 意見しかない。
+
+このレッスンが gate を設定する。続く 10 レッスンは全部、その gate を越えさせる作りになっている。
+
+## アプリ種別ごとに「テスト済み」の最低ライン
+
+このティアの各アプリは形が違うので、テストの形も違う。種類別の最低ラインは次の通り：
+
+| アプリ | 最低テスト gate |
+| :--- | :--- |
+| **MEV searcher** | Forked-state テスト — 過去の実機会を再現し P&L が正であることを assert。Reorg テスト — 1 ブロック reorg を bundle が生き残るか正しく巻き戻る |
+| **ExEx インデクサ**（\`tidx\` walk-through） | Fixture chain replay — 既知の \`Notification::ChainCommitted\` / \`ChainReverted\` を流し込んで、導出状態が golden reference と一致することを assert |
+| **Custom RPC エンドポイント** | Integration テスト — ノードを in-process で起動、新メソッドを HTTP で叩いて JSON レスポンスを assert。エラーパス（不正パラメータ、欠損ブロック）も網羅 |
+| **ウォレットバックエンド** | Roundtrip テスト — 署名済み tx が元に decode で戻る。Nonce invariant — 連続呼び出しが連続 nonce を返し、欠損も重複も無い |
+| **EIP-7702 sponsor** | Replay 防止テスト — 同じ auth tuple は 2 度 sponsor できない。ガス会計テスト — sponsor が正しい額を払い、ユーザは 0 を払う |
+| **カスタム cheatcode** | Differential テスト — Rust precompile と参照実装の Solidity が、1000 件の fuzz 入力で同じ出力を返す |
+| **Swap aggregator** | Forked-state テスト — pin したブロックの実 Uniswap V3 pool に対して quote を取り、既知の正答との差が ε 以内 |
+| **Capstone（order router）** | End-to-end fork テスト — order を投入し、router が分割 / ルーティング / 着地 / fill 報告するまでを観察 |
+| **Revm validation** | Differential テスト — mainnet の小範囲の各ブロックで、Revm のトレースが Revm 以外のプロバイダの \`debug_traceTransaction\` 出力と一致 |
+| **Machine payments (HTTP 402)** | Integration テスト — 支払い無しのリクエストは 402、有効な micropayment 付きはリソースを返す。Replay 防止テスト — 同じ payment が 2 リクエストを満たせない |
+
+各行が最低ライン。実際の本番システムはこの上に fuzz、invariant、chaos テストを積みます。
+
+## scaffold
+
+このティアの全アプリが従う scaffold：
+
+\`\`\`
+my-app/
+├── Cargo.toml          # workspace
+├── src/
+│   └── lib.rs          # アプリ本体
+├── tests/
+│   ├── integration.rs  # async / RPC / DB の境界をまたぐ
+│   └── fixtures/       # golden テスト入力（tx ハッシュ・ブロック番号・期待出力）
+├── foundry.toml        # Solidity サーフェスがある場合
+└── test/
+    └── *.t.sol         # Solidity 側の forge テスト
+\`\`\`
+
+純 Rust アプリ（MEV searcher・インデクサ・ウォレットバックエンド・sponsor）は \`Cargo.toml\` + \`src\` + \`tests\` だけ。
+
+Solidity サーフェスを持つアプリ（カスタム cheatcode・swap aggregator・capstone）は Rust と Foundry の両方のテストスイート。Solidity 側は *Foundry でテストを書く*（Fundamentals tier）で学んだもの全て — \`vm.expectRevert\`、\`vm.expectEmit\`、fork test、fuzz — をそのまま使う。
+
+## このティア全体で再帰する 2 パターン
+
+### パターン 1 — pin した mainnet fork
+
+このティアのほぼ全アプリは、本物のチェーン状態に対してテストする必要がある。パターン：
+
+\`\`\`rust
+// Cargo.toml
+[dev-dependencies]
+alloy = { version = "...", features = ["providers"] }
+revm = "..."
+\`\`\`
+
+\`\`\`rust
+// tests/integration.rs
+use alloy::providers::ProviderBuilder;
+
+const PINNED_BLOCK: u64 = 18_500_000;
+const FORK_RPC: &str = "https://eth.merkle.io";
+
+#[tokio::test]
+async fn searcher_finds_known_opportunity() {
+    let provider = ProviderBuilder::new()
+        .connect_http(FORK_RPC.parse().unwrap());
+
+    // PINNED_BLOCK で AlloyDB-backed Revm を構築
+    // searcher を走らせる
+    // 期待される機会が見つかることを assert
+    // P&L が史実と一致することを assert
+}
+\`\`\`
+
+pin が規律：\`PINNED_BLOCK\` はリポジトリ内の定数。変えれば全テストが新ブロックに対して再現される。pin しなければテストは非決定的になり、CI は意味を失う。
+
+### パターン 2 — differential testing
+
+Revm ベースのシミュレータ（cheatcode・swap aggregator・validation app）を作るとき、正しさは **「自分の出力が正しそうに見える」ではなく**「同じ入力に対して信頼できる参照実装と出力が一致する」**こと。その参照実装は Revm 以外のプロバイダ（Geth、Erigon、Alchemy の \`debug_trace\`）です。
+
+\`\`\`rust
+#[tokio::test]
+async fn simulator_matches_geth_debug_trace() {
+    for tx_hash in HISTORICAL_TX_HASHES {
+        let our_trace = our_simulator.trace(tx_hash).await;
+        let geth_trace = alchemy_provider.debug_trace_transaction(tx_hash).await;
+        assert_traces_equivalent(&our_trace, &geth_trace);
+    }
+}
+\`\`\`
+
+Differential testing はコンセンサスで定義された挙動を再実装するコードに対する gold standard。「本当に正しい?」への唯一の誠実な答えがこれ。
+
+## 各レッスン終了時に ship するもの
+
+Building レッスン全てについて、完了とは **公開可能な artifact** が次を備えている状態：
+
+1. リポジトリ（Git でも local でも好きに）
+2. アプリの説明を書いた \`README\`
+3. 全依存を pin した \`Cargo.toml\`（適用可能なら \`foundry.toml\` も）
+4. 実装が入った \`src/\`
+5. 上の表の gate スイートが入った \`tests/\`
+6. ローカルで再現可能に通る \`cargo test\`（適用可能なら \`forge test\`）
+7. pin した mainnet fork ブロック（または fixture chain）がテストファイルに記録されている
+
+どれか欠ければ、レッスンは未完了。**artifact と証明はセットで ship、もしくは ship しない。**
+
+> 🛑 **1 行ゲートチェック。** Building レッスンを「完了」と主張する前に答える：*「このアプリが正しいことを示すコマンドは何で、現在の終了コードは何か?」* 1 文で答えられないなら、まだ作っていない。
+
+## 「テストは後で書く」について
+
+ここで一番よく出る読者の反論：「先にプロトタイプを作って、設計が固まったらテストを足す」。一見もっともらしい。違う。
+
+本番 EVM 工学で、テストはコードの検証ではない — **コードがどう振る舞うべきかの実行可能な仕様** だ。プロトタイプ後にテストを書くと、仕様をコードから派生させることになる。つまり仕様は「コードがたまたまやっていること」になる、バグも含めて。先に（あるいは並行して）テストを書けば、仕様をコードから独立して articulate することになり、それに合わせてコードを曲げることになる。バグの発見はその非対称性から自然に生まれる。
+
+Reth・Revm・Foundry のメンテナは全員、test-first か test-alongside で働く。「コードを先に書いてテストを後で足す」工程から「本番品質の EVM コード」が生まれるバージョンは存在しない。**このティアはあなたを同じ基準に立たせる。**
+
+## 準備完了
+
+次のレッスン — *最小限の MEV Searcher を Rust で作る* — を一度通読する。次に、searcher のコードを書く前に、上の表の 1 行目のテストを先に書く。実装無しで fail させる。それから pass するまで作る。
+
+その順序 — テストが先、コードが後 — が gate。
+`,
+                },
+                {
                   title: '最小限の MEV Searcher を Rust で作る',
                   slug: 'build-mev-searcher-ja',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 1,
                   duration: 45,
                   xpReward: 80,
                   content: `# 最小限の MEV Searcher を Rust で作る
@@ -227,6 +370,39 @@ Drill 5 まで終えれば、好きな MEV ロジックを流し込める artemi
 
 > 🛑 **最終チェック。** 一文で: 一発書きの \`main.rs\` ではなく artemis を選ぶことで何が手に入るか? 答えに *strategy 間の再利用* または *提出経路の差し替え可能性* が入っていないなら、Step 5 を読み直し — その抽象が存在する理由の全部はそこ。
 
+## Test gate
+
+*Test gate — この tier では全アプリがテスト green で初めて完了* に従い、本レッスンの最低 gate は drill 5 のスタブ strategy に対するテスト 2 本：
+
+1. **Forked-state 機会再現。** 既知の arb があったブロックを pin する（Etherscan + EigenPhi で候補が見つかる）。そのブロックの \`AlloyDB\` バック Revm に対して strategy を走らせる。strategy が正の期待 P&L を持つ \`Action\` を吐くことを assert。
+2. **Reorg 整合性。** 合成 \`ChainReorged\` 通知を collector に流し込み、reorg されたブロックに依存する pending \`Action\` を strategy が正しく取り下げることを assert。(reorg 無視は MEV システムで最も多い本番障害モード — bundle を出す、チェーンが reorg する、会計はまだ「勝った」と主張している。)
+
+スケッチ：
+
+\`\`\`rust
+// tests/integration.rs
+const PINNED_BLOCK: u64 = 18_500_000;  // 既知の Uniswap V3 / Curve arb があったブロック
+const FORK_RPC: &str = "https://eth.merkle.io";
+
+#[tokio::test]
+async fn finds_known_arb_at_pinned_block() {
+    let provider = forked_provider_at(FORK_RPC, PINNED_BLOCK).await;
+    let strategy = MyArbStrategy::new(provider);
+    let event = Event::NewBlock { number: PINNED_BLOCK };
+    let actions = strategy.process_event(event).await;
+    let arb = actions.iter().find(|a| matches!(a, Action::SubmitBundle { .. }));
+    assert!(arb.is_some(), "既知の arb を検出するはず");
+    assert_pnl_positive(arb.unwrap());
+}
+
+#[tokio::test]
+async fn retracts_action_on_reorg() {
+    // 合成ブロック N を提出、N を reorg、action queue が空になることを assert
+}
+\`\`\`
+
+両方が green になるまでレッスンは **未完了**。mainnet に対して \`cargo run\` できても \`cargo test\` できないなら、それはデモであって deliverable ではない。
+
 ## 📺 関連動画
 
 \`\`\`youtube
@@ -257,7 +433,7 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
                   title: '本物の Production Indexer を読む — Tempo の tidx',
                   slug: 'build-exex-indexer-ja',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 2,
                   duration: 45,
                   xpReward: 80,
                   content: `# 本物の Production Indexer を読む — Tempo の tidx
@@ -495,7 +671,7 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
                   title: 'Reth にカスタム RPC エンドポイントを足す',
                   slug: 'build-custom-rpc-ja',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 40,
                   xpReward: 70,
                   content: `# Reth にカスタム RPC エンドポイントを足す
@@ -808,7 +984,7 @@ Drill 5 を完成させればループが閉じる: ノード固有の insight �
                   title: 'Wallet Backend を Rust で作る',
                   slug: 'build-wallet-backend-ja',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 4,
                   duration: 45,
                   xpReward: 80,
                   content: `# Wallet Backend を Rust で作る
@@ -1263,7 +1439,7 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
                   title: '最小限の EIP-7702 Sponsor サービスを Rust で作る',
                   slug: 'build-7702-sponsor-ja',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 5,
                   duration: 45,
                   xpReward: 80,
                   content: `# 最小限の EIP-7702 Sponsor サービスを Rust で作る
@@ -1608,7 +1784,7 @@ K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — sponsor された tx
                   title: 'Foundry スタイルのカスタム cheatcode を Rust で作る',
                   slug: 'build-foundry-cheatcode-ja',
                   type: 'CONTENT',
-                  sortOrder: 5,
+                  sortOrder: 6,
                   duration: 45,
                   xpReward: 80,
                   content: `# Foundry スタイルのカスタム cheatcode を Rust で作る
@@ -1907,7 +2083,7 @@ sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッス�
                   title: 'Swap Aggregator を作る — DEX state を fork して',
                   slug: 'build-swap-aggregator-ja',
                   type: 'CONTENT',
-                  sortOrder: 6,
+                  sortOrder: 7,
                   duration: 45,
                   xpReward: 80,
                   content: `# Swap Aggregator を作る: DEX state を fork して、Rust で
@@ -2247,7 +2423,7 @@ Drill 5 を完成させれば、構造的に aggregator-as-a-service ができ�
                   title: 'Capstone — Frontrun-Resistant Order Router を作る',
                   slug: 'build-capstone-router-ja',
                   type: 'CONTENT',
-                  sortOrder: 7,
+                  sortOrder: 8,
                   duration: 60,
                   xpReward: 100,
                   content: `# Capstone — Frontrun-Resistant Order Router を作る
@@ -2658,7 +2834,7 @@ Drill 5 後、チューニング済みで観察可能、正しく動く frontrun
                   title: 'Revm シミュレーションを Production Provider で検証する',
                   slug: 'build-validate-revm-ja',
                   type: 'CONTENT',
-                  sortOrder: 8,
+                  sortOrder: 9,
                   duration: 50,
                   xpReward: 90,
                   content: `# Revm シミュレーションを Production Provider で検証する
@@ -2930,7 +3106,7 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
                   title: 'Machine Payments — HTTP 402 と Tempo MPP スタック',
                   slug: 'build-mpp-payments-ja',
                   type: 'CONTENT',
-                  sortOrder: 9,
+                  sortOrder: 10,
                   duration: 16,
                   xpReward: 40,
                   content: `# Machine Payments — HTTP 402 と Tempo MPP スタック
