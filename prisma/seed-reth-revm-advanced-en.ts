@@ -1555,13 +1555,138 @@ If any answer is shaky, the lesson isn't done with you. Re-run the drill or re-r
 
 After this drill, you have a working mental model of how revm gets state — every other database is just \`ZeroDb\` with real data behind it.
 
-One lesson left before the final quiz: stepping past Revm-as-interpreter into Revm-as-compilable — Paradigm's revmc. After that, Inside Revm is done — **Inside Reth** is the natural next stop (Staged Sync, ExEx, the Reth SDK).`,
+Two lessons left before the final quiz. First, **how Revm itself is tested** — the harness that proves correctness against the Ethereum spec for every fork. Then revmc, the JIT/AOT compilation path. After both, Inside Revm is done.`,
+                },
+                {
+                  title: 'How Revm tests itself — state tests, EOF tests, and execution-spec compliance',
+                  slug: 'revm-testing-en',
+                  type: 'CONTENT',
+                  sortOrder: 13,
+                  duration: 22,
+                  xpReward: 45,
+                  content: `# How Revm tests itself — state tests, EOF tests, and execution-spec compliance
+
+You walked the interpreter, the instruction table, and the Database trait. **Now: how does the Revm team prove that Revm actually executes the EVM correctly?** The answer is not "we read it and nodded." A consensus-critical engine — one bug ships a chain split — is held to a different bar. This lesson reads the test infrastructure that bar requires.
+
+## The three test surfaces every EVM implementation has to pass
+
+| Test surface | Where it lives | What it proves |
+| :--- | :--- | :--- |
+| **State tests** ([\`ethereum/tests\`](https://github.com/ethereum/tests)) | the canonical, multi-client test corpus | a single transaction takes a pre-state to the right post-state with the right gas cost |
+| **EOF tests** ([\`ethereum/tests/EOFTests\`](https://github.com/ethereum/tests/tree/develop/EOFTests)) | EVM Object Format conformance | the new bytecode container format (validation, sub-containers) accepts/rejects what the spec says |
+| **execution-spec-tests** ([\`ethereum/execution-spec-tests\`](https://github.com/ethereum/execution-spec-tests)) | spec-derived test generator | tests are *generated from* the spec, so passing them = matching the spec by construction |
+
+Revm runs all three. **Passing them is what makes Revm safe to ship as the engine inside Reth, Hyperliquid's HyperEVM, Foundry, Tempo.** Without this discipline, every downstream consumer is exposed to consensus bugs.
+
+## 1. State tests — the standard format
+
+A state test is a JSON file. Open any one in [\`ethereum/tests/GeneralStateTests\`](https://github.com/ethereum/tests/tree/develop/GeneralStateTests). The shape:
+
+\`\`\`json
+{
+  "TestName": {
+    "env": { "currentNumber": "...", "currentTimestamp": "...", "currentGasLimit": "..." },
+    "pre": {
+      "0xAlice": { "balance": "0x..", "nonce": "0x..", "code": "0x..", "storage": {} }
+    },
+    "transaction": {
+      "data": ["0x..."],
+      "gasLimit": ["0x..."],
+      "to": "0xBob",
+      "value": ["0x.."]
+    },
+    "post": {
+      "Cancun": [{
+        "hash":   "0x...post-state-trie-root...",
+        "logs":   "0x...logs-bloom...",
+        "indexes": { "data": 0, "gas": 0, "value": 0 }
+      }]
+    }
+  }
+}
+\`\`\`
+
+Three sections: \`pre\` (account state before), \`transaction\` (what to apply), \`post\` (the state-root + logs hash that should result, per fork). The runner builds the pre-state, executes the tx, hashes the post-state, and compares against \`post.Cancun[].hash\`. Match → pass. Diverge → bug.
+
+> 🔍 **Find in repo.** In [\`bluealloy/revm\`](https://github.com/bluealloy/revm), search for \`statetest\` (likely under \`bins/revme/\` or a similar runner crate). Note that the runner is a separate binary — you can run it locally against the upstream test suite. **The same suite Geth, Erigon, Nethermind, and Besu run.**
+
+## 2. EOF tests — validation conformance
+
+EOF (EVM Object Format, EIP-3540 family) introduces a new bytecode container with sections, type signatures, and structural validation. Unlike legacy bytecode (anything-goes), EOF must be parsed and validated before execution. The validator is consensus-critical: accepting a malformed container or rejecting a valid one is a chain split.
+
+EOF tests are JSON like state tests, but the assertion is just "this bytecode validates" or "this bytecode is rejected with this error code":
+
+\`\`\`json
+{
+  "EmptyContainer": {
+    "code": "0x",
+    "results": { "Cancun": { "exception": "EOFException.MISSING_HEADER" } }
+  }
+}
+\`\`\`
+
+Hundreds of these cover edge cases: misaligned section sizes, invalid type sections, unreachable code, jump tables that escape sub-containers. The Revm validator is run against all of them on every CI run.
+
+## 3. execution-spec-tests — tests generated from the spec
+
+The most powerful tier. [\`ethereum/execution-spec-tests\`](https://github.com/ethereum/execution-spec-tests) is a Python framework where you write test scenarios in spec-aware DSL, and the framework generates concrete state tests across all forks:
+
+\`\`\`python
+@pytest.mark.valid_from("Cancun")
+def test_my_opcode(state_test, fork):
+    pre = { Address(0x1000): Account(code=Op.MY_NEW_OPCODE + Op.STOP) }
+    tx = Transaction(to=Address(0x1000), gas_limit=100_000)
+    post = { Address(0x1000): Account(storage={0: 1}) }  # opcode wrote 1 to slot 0
+    state_test(env=Environment(), pre=pre, post=post, tx=tx)
+\`\`\`
+
+The framework runs this test against every fork that defined \`MY_NEW_OPCODE\` — automatically generating the right pre-state, gas costs, and post-state hashes from the spec. **Passing execution-spec-tests means matching the spec by construction**, not "we wrote some tests and they happen to agree."
+
+This is how new EIPs get coverage before they ship. **Every new opcode, every new precompile, every gas-rule change** comes with execution-spec-tests; client implementations (Geth, Erigon, Revm-based clients) run them and report compatibility before mainnet activation.
+
+## What this teaches the Revm consumer
+
+You will not (usually) write state tests yourself — they're written upstream and you consume them. But the *patterns* matter for any code you write that re-implements EVM behavior:
+
+1. **Pre-state → tx → post-state** is the universal shape of "I claim to execute the EVM correctly." Use it whenever you build something that processes transactions (Foundry cheatcode, custom precompile, ExEx that re-executes).
+2. **Differential against a non-Revm reference** is the "I'm not the spec, but I match it" pattern. The Building tier's *Validate Your Revm Simulation Against a Production Provider* lesson is exactly this discipline applied at the application layer.
+3. **Generated tests ≥ hand-written** when the spec is authoritative. If you build something with formal semantics (a custom CFMM, a sponsorship policy), generating tests from the semantics catches the bugs hand-written tests miss.
+
+> 🛑 **Predict before scrolling.** Suppose a new EIP changes the gas cost of \`SLOAD\` for cold accounts. Walk through which of the three test surfaces would catch a Revm bug that miscomputes the new gas cost. **Hold your guess.**
+
+---
+
+All three would catch it, but at different latencies:
+
+- **execution-spec-tests** would catch it *first* — the spec change generates new tests automatically; CI runs them on the EIP draft branch before activation. **Issue filed before the EIP merges.**
+- **State tests** catch it *next* — once the spec is finalized, the Ethereum tests team produces canonical state tests for the new behavior. CI catches divergence before mainnet activation. **Issue filed during fork rollout.**
+- **EOF tests** would not catch this specific bug (gas cost is opcode behavior, not container validation). **EOF tests catch a different class of bug — structural validation, not execution semantics.**
+
+The lesson: **the three test surfaces are not redundant — they partition the consensus-correctness space.**
+
+## Drill
+
+1. **Run the state-test runner locally.** Clone [\`bluealloy/revm\`](https://github.com/bluealloy/revm) and find the \`statetest\` binary (often under \`bins/revme/\`). Clone [\`ethereum/tests\`](https://github.com/ethereum/tests). Run the runner against a small subset (e.g., \`GeneralStateTests/stArgsZeroOneBalance/\`). **Verify all pass.** 30 minutes.
+2. **Read one state test JSON end-to-end.** Pick a single test (e.g., one of the \`stArgsZeroOneBalance\` files). Map every field in the JSON to where the Revm runner uses it. **Trace one full execution mentally.** 30 minutes.
+3. **Read one execution-spec-test source.** Pick any test in [\`execution-spec-tests/tests/\`](https://github.com/ethereum/execution-spec-tests/tree/main/tests). Identify the DSL operators (\`Op.X\`, \`Account(...)\`, \`Transaction(...)\`) and read the docs to understand how they generate concrete state tests. 45 minutes.
+4. **Find a Revm-resolved consensus issue.** Search [\`bluealloy/revm\` closed issues](https://github.com/bluealloy/revm/issues?q=is%3Aissue+is%3Aclosed+state+test) for one that was caught by state tests. Read the bug, the fix, and the regression test added. **This is what consensus correctness costs in practice.** 45 minutes.
+
+After drill 4 you've seen the full feedback loop: spec changes → tests generated → Revm fails → Revm fixed → regression test added → consensus protected.
+
+> 🛑 **Final check.** In one sentence: why does Revm — a library, not a chain — need to run state tests at all, when state tests are usually associated with full clients? If your answer doesn't mention "every client embedding Revm inherits Revm's correctness; a Revm bug is a bug in *every* downstream client," re-read the opening — that's the entire reason this discipline exists at the engine layer.
+
+## 📺 Further reading
+
+- [Ethereum tests README](https://github.com/ethereum/tests) — the canonical state-test corpus
+- [execution-spec-tests docs](https://eest.ethereum.org/) — the test-generation framework
+- [EIP-3540 — EOF v1](https://eips.ethereum.org/EIPS/eip-3540) — the format whose validator the EOF tests cover
+`,
                 },
                 {
                   title: 'Beyond interpretation — JIT/AOT compilation with revmc',
                   slug: 'revm-jit-aot-revmc-en',
                   type: 'CONTENT',
-                  sortOrder: 13,
+                  sortOrder: 14,
                   duration: 16,
                   xpReward: 40,
                   content: `# Beyond interpretation — JIT/AOT compilation with revmc
@@ -1688,7 +1813,7 @@ This is the last content lesson of Inside Revm. The final quiz is next — and a
                   title: 'Inside Revm final quiz',
                   slug: 'revm-advanced-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 14,
+                  sortOrder: 15,
                   duration: 8,
                   xpReward: 25,
                   content: `# Inside Revm final quiz

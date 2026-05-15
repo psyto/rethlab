@@ -1557,13 +1557,138 @@ tx は「致命的な外部エラー」として中断する — revert とは�
 
 このドリルの後、Revm がどう状態を取るかの動くメンタルモデルがあります — 他のすべての Database はこの \`ZeroDb\` に本物のデータが乗っただけ。
 
-ファイナルクイズの前に、もう 1 レッスン残っています: Revm をインタープリターからコンパイラブルへと一段先に進める — Paradigm の revmc。それを終えたら Inside Revm は完了 — **Inside Reth** が自然な次のステップ（Staged Sync・ExEx・Reth SDK）。`,
+ファイナルクイズの前に、あと 2 レッスン。まず **Revm 自身がどうテストされているか** — 各 fork で Ethereum 仕様への準拠を証明するテストハーネス。次に revmc、JIT/AOT コンパイル経路。両方を終えたら Inside Revm は完了。`,
+                },
+                {
+                  title: 'Revm 自身のテスト — state test、EOF test、execution-spec 準拠',
+                  slug: 'revm-testing-ja',
+                  type: 'CONTENT',
+                  sortOrder: 13,
+                  duration: 22,
+                  xpReward: 45,
+                  content: `# Revm 自身のテスト — state test、EOF test、execution-spec 準拠
+
+インタープリター、命令テーブル、Database トレイトを歩いてきた。**次は: Revm チームはどうやって「Revm が EVM を正しく実行する」ことを証明しているのか?** 答えは「読んでうなずいた」ではない。コンセンサスクリティカルなエンジン — バグ 1 つでチェーンが分裂する種類のソフトウェア — は別の基準で計られる。本レッスンはその基準が要求するテスト基盤を読む。
+
+## EVM 実装が通すべき 3 つのテスト面
+
+| テスト面 | 在処 | 何を証明するか |
+| :--- | :--- | :--- |
+| **State tests** ([\`ethereum/tests\`](https://github.com/ethereum/tests)) | 標準の、複数クライアント横断テストコーパス | 単一トランザクションが pre-state を正しい post-state へ遷移させ、ガスコストが正しいこと |
+| **EOF tests** ([\`ethereum/tests/EOFTests\`](https://github.com/ethereum/tests/tree/develop/EOFTests)) | EVM Object Format への準拠 | 新バイトコードコンテナフォーマット（validation、sub-container）が仕様通りに accept/reject すること |
+| **execution-spec-tests** ([\`ethereum/execution-spec-tests\`](https://github.com/ethereum/execution-spec-tests)) | 仕様から生成されるテスト群 | テストが *仕様から生成される* ので、pass = 構造的に仕様と一致 |
+
+Revm は 3 つすべてを通す。**これが Reth・Hyperliquid の HyperEVM・Foundry・Tempo の中の engine として Revm を ship するに足る安全性を担保する。** この規律無しでは下流の全消費者がコンセンサスバグに晒される。
+
+## 1. State tests — 標準フォーマット
+
+state test は JSON ファイル。[\`ethereum/tests/GeneralStateTests\`](https://github.com/ethereum/tests/tree/develop/GeneralStateTests) のどれかを開く。形:
+
+\`\`\`json
+{
+  "TestName": {
+    "env": { "currentNumber": "...", "currentTimestamp": "...", "currentGasLimit": "..." },
+    "pre": {
+      "0xAlice": { "balance": "0x..", "nonce": "0x..", "code": "0x..", "storage": {} }
+    },
+    "transaction": {
+      "data": ["0x..."],
+      "gasLimit": ["0x..."],
+      "to": "0xBob",
+      "value": ["0x.."]
+    },
+    "post": {
+      "Cancun": [{
+        "hash":   "0x...post-state-trie-root...",
+        "logs":   "0x...logs-bloom...",
+        "indexes": { "data": 0, "gas": 0, "value": 0 }
+      }]
+    }
+  }
+}
+\`\`\`
+
+3 セクション: \`pre\`（実行前のアカウント状態）、\`transaction\`（適用するもの）、\`post\`（fork ごとに、結果として得られるべき state-root + logs ハッシュ）。runner は pre-state を構築し、tx を実行、post-state をハッシュ化、\`post.Cancun[].hash\` と比較。一致 → pass、乖離 → バグ。
+
+> 🔍 **リポジトリで確認。** [\`bluealloy/revm\`](https://github.com/bluealloy/revm) で \`statetest\` を検索（\`bins/revme/\` あたりの runner crate）。runner は別バイナリで、ローカルで upstream テストスイートに対して走らせられる。**Geth、Erigon、Nethermind、Besu と同じスイート。**
+
+## 2. EOF tests — validation 準拠
+
+EOF（EVM Object Format、EIP-3540 ファミリ）は section、type 署名、構造 validation を持つ新バイトコードコンテナを導入。レガシーバイトコード（何でも有り）と違い、EOF は実行前にパース・validate される必要がある。validator はコンセンサスクリティカル: 不正なコンテナを accept したり、有効なものを reject したりはチェーン分裂。
+
+EOF tests は state test と同じく JSON だが、assertion は「このバイトコードは validate される」または「このバイトコードはこのエラーコードで reject される」だけ:
+
+\`\`\`json
+{
+  "EmptyContainer": {
+    "code": "0x",
+    "results": { "Cancun": { "exception": "EOFException.MISSING_HEADER" } }
+  }
+}
+\`\`\`
+
+数百件がエッジケースをカバー: section サイズの不整合、不正な type section、到達不能コード、sub-container を脱出する jump table。Revm の validator は CI 走行のたびに全部に対して走る。
+
+## 3. execution-spec-tests — 仕様から生成されるテスト
+
+最も強力な層。[\`ethereum/execution-spec-tests\`](https://github.com/ethereum/execution-spec-tests) は Python フレームワークで、テストシナリオを spec-aware DSL で書くと、フレームワークが全 fork に対して具体的な state test を生成する:
+
+\`\`\`python
+@pytest.mark.valid_from("Cancun")
+def test_my_opcode(state_test, fork):
+    pre = { Address(0x1000): Account(code=Op.MY_NEW_OPCODE + Op.STOP) }
+    tx = Transaction(to=Address(0x1000), gas_limit=100_000)
+    post = { Address(0x1000): Account(storage={0: 1}) }  # opcode が slot 0 に 1 を書いた
+    state_test(env=Environment(), pre=pre, post=post, tx=tx)
+\`\`\`
+
+フレームワークがこのテストを \`MY_NEW_OPCODE\` を定義した全 fork に対して走らせる — 仕様から正しい pre-state、ガスコスト、post-state ハッシュを自動生成する。**execution-spec-tests を pass する = 構造的に仕様と一致する**。「テストを書いたらたまたま一致した」ではない。
+
+新 EIP がカバレッジを得る方法。**新 opcode、新 precompile、ガス規則変更** はすべて execution-spec-tests を伴う; クライアント実装（Geth、Erigon、Revm ベースのクライアント）は mainnet 起動前にそれらを走らせ互換性を報告する。
+
+## Revm 消費者にとっての教訓
+
+state test を *書く* ことは（普通は）無い — upstream で書かれたものを消費する。しかし *パターン* は EVM 挙動を再実装する任意のコードに効く:
+
+1. **Pre-state → tx → post-state** は「EVM を正しく実行すると主張する」普遍的な形。tx を処理するもの（Foundry cheatcode、カスタム precompile、再実行する ExEx）を作るときには常にこの形を使う。
+2. **Revm 以外のリファレンスに対する differential** は「自分は仕様ではないが、それと一致する」パターン。Building tier の *Revm シミュレーションを Production Provider で検証する* レッスンは、まさにこの規律をアプリケーション層に適用したもの。
+3. **生成テスト ≥ 手書き** — 仕様が権威であるとき。形式的セマンティクスを持つもの（独自 CFMM、sponsor ポリシー）を作るなら、セマンティクスからテストを生成すれば、手書きテストが取り逃すバグを捕まえる。
+
+> 🛑 **スクロール前に予測。** 新 EIP が cold アカウントの \`SLOAD\` ガスコストを変えるとする。新ガスコストを誤計算する Revm バグが、3 つのテスト面のうちどれで捕まるか辿る。**答えを保留せよ。**
+
+---
+
+3 つすべてが捕まえる、ただし違う遅延で:
+
+- **execution-spec-tests** が *最初* に捕まえる — 仕様変更が新テストを自動生成し、活性化前の EIP draft branch で CI が回す。**EIP merge 前に issue が立つ。**
+- **State tests** が *次に* 捕まえる — 仕様確定後、Ethereum tests チームが新挙動の正典 state test を出す。CI が mainnet 活性化前に乖離を捕まえる。**fork ロールアウト中に issue が立つ。**
+- **EOF tests** はこのバグを捕まえない（ガスコストは opcode 挙動で、コンテナ validation ではない）。**EOF tests は別クラスのバグ — 構造 validation、実行セマンティクスではない — を捕まえる。**
+
+教訓: **3 つのテスト面は冗長ではない — コンセンサス正しさの空間を分割している。**
+
+## ドリル
+
+1. **state-test runner をローカルで走らせる。** [\`bluealloy/revm\`](https://github.com/bluealloy/revm) を clone し \`statetest\` バイナリ（多くは \`bins/revme/\` 配下）を見つける。[\`ethereum/tests\`](https://github.com/ethereum/tests) を clone。runner を小さなサブセット（例: \`GeneralStateTests/stArgsZeroOneBalance/\`）に対して実行。**全 pass を確認。** 30 分。
+2. **state test JSON を 1 つ end-to-end で読む。** 1 つテストを選び（例: \`stArgsZeroOneBalance\` 配下のどれか）、JSON の各フィールドが Revm runner のどこで使われるかをマッピング。**1 件の実行を頭の中で完全に追う。** 30 分。
+3. **execution-spec-test ソースを 1 つ読む。** [\`execution-spec-tests/tests/\`](https://github.com/ethereum/execution-spec-tests/tree/main/tests) から任意のテスト。DSL 演算子（\`Op.X\`、\`Account(...)\`、\`Transaction(...)\`）を識別し、ドキュメントを読み、それらがどう具体 state test を生成するかを理解。45 分。
+4. **Revm で解決済みのコンセンサス issue を探す。** [\`bluealloy/revm\` の closed issues](https://github.com/bluealloy/revm/issues?q=is%3Aissue+is%3Aclosed+state+test) で state test に捕まったものを 1 件。バグ・修正・追加された回帰テストを読む。**コンセンサス正しさが実務で何を要するか。** 45 分。
+
+ドリル 4 の後、フィードバックループ全体が見えている: 仕様変更 → テスト生成 → Revm fail → Revm 修正 → 回帰テスト追加 → コンセンサス防御。
+
+> 🛑 **最終チェック。** 一文で: なぜ Revm — チェーンではなくライブラリ — が state tests を走らせる必要があるのか? state tests は通常フルクライアントと結びつくのに。答えに「Revm を埋め込む全クライアントは Revm の正しさを継承する; Revm のバグは *全* 下流クライアントのバグ」が無いなら、冒頭を読み直す — それがこの規律がエンジン層に存在する理由の全部。
+
+## 📺 関連リンク
+
+- [Ethereum tests README](https://github.com/ethereum/tests) — 正典 state-test コーパス
+- [execution-spec-tests docs](https://eest.ethereum.org/) — テスト生成フレームワーク
+- [EIP-3540 — EOF v1](https://eips.ethereum.org/EIPS/eip-3540) — EOF tests がカバーする validator のフォーマット
+`,
                 },
                 {
                   title: 'インタープリターの先へ — revmc による JIT/AOT コンパイル',
                   slug: 'revm-jit-aot-revmc-ja',
                   type: 'CONTENT',
-                  sortOrder: 13,
+                  sortOrder: 14,
                   duration: 16,
                   xpReward: 40,
                   content: `# インタープリターの先へ — revmc による JIT/AOT コンパイル
@@ -1690,7 +1815,7 @@ EVM-L1 エコシステム全体 (MegaETH、Reth フォーク系チェーン、Pa
                   title: 'Inside Revm ファイナルクイズ',
                   slug: 'revm-advanced-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 14,
+                  sortOrder: 15,
                   duration: 8,
                   xpReward: 25,
                   content: `# Inside Revm ファイナルクイズ

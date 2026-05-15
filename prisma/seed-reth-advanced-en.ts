@@ -1863,10 +1863,183 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
 `,
                 },
                 {
+                  title: 'Testing Stage and ExEx — fixture chains, in-process nodes, golden state',
+                  slug: 'reth-testing-en',
+                  type: 'CONTENT',
+                  sortOrder: 13,
+                  duration: 24,
+                  xpReward: 50,
+                  content: `# Testing Stage and ExEx — fixture chains, in-process nodes, golden state
+
+You walked the \`Stage\` trait, the ExEx API, and the NodeBuilder SDK. **Now: how does Reth — and the apps that extend it — verify any of this works?** A node component that "looks correct" in dev silently corrupts state for thousands of users in production. The patterns below are how Reth's own CI guards against that, and how every ExEx-based app you ship in the Building tier needs to be tested.
+
+## The two test layers any Reth-extending app needs
+
+| Layer | What it tests | What it boots |
+| :--- | :--- | :--- |
+| **Stage / ExEx unit tests** | the trait impl in isolation given canned chain events | nothing — pure Rust + fixtures |
+| **NodeBuilder integration tests** | the assembled node with your component plugged in | the full Reth node in-process against a fixture or anvil chain |
+
+Reth's own crates use both. Production extensions (\`tidx\`, MEV ExEx, custom App-chains) need both too. Skip either and a class of bugs gets through.
+
+## 1. Stage unit testing — the canonical pattern
+
+A \`Stage\` impl is two methods: \`execute\` (forward sync) and \`unwind\` (reorg rollback). Both are pure functions of the staged DB state at a given checkpoint. The unit test pattern: build a temp DB, seed pre-state, call \`execute\`, assert post-state; then call \`unwind\` and assert rollback.
+
+\`\`\`rust
+use reth_provider::test_utils::create_test_provider_factory;
+use reth_stages::test_utils::{TestRunnerError, TestStageDB};
+
+#[tokio::test]
+async fn execute_advances_checkpoint() {
+    let db = TestStageDB::default();
+    seed_blocks(&db, 0..=10).await;             // your fixture helper
+
+    let mut stage = MyStage::default();
+    let input = ExecInput { target: Some(10), checkpoint: None };
+    let output = stage.execute(&db.factory.provider_rw().unwrap(), input).await.unwrap();
+
+    assert_eq!(output.checkpoint.block_number, 10);
+    assert!(output.done);
+    assert_my_derived_state(&db, 10).await;
+}
+
+#[tokio::test]
+async fn unwind_rolls_back_to_checkpoint() {
+    let db = TestStageDB::default();
+    seed_blocks(&db, 0..=10).await;
+    let mut stage = MyStage::default();
+
+    // Forward to 10
+    stage.execute(&db.factory.provider_rw().unwrap(),
+        ExecInput { target: Some(10), checkpoint: None }).await.unwrap();
+
+    // Unwind to 5
+    let output = stage.unwind(&db.factory.provider_rw().unwrap(),
+        UnwindInput { unwind_to: 5, checkpoint: ..., bad_block: None }).await.unwrap();
+
+    assert_eq!(output.checkpoint.block_number, 5);
+    assert_my_derived_state(&db, 5).await;
+}
+\`\`\`
+
+The key tooling: **\`create_test_provider_factory\`** and **\`TestStageDB\`** (under \`reth_provider::test_utils\` and \`reth_stages::test_utils\`). They give you an ephemeral MDBX DB per test — no shared state, no cleanup boilerplate, no stale fixtures.
+
+> 🔍 **Find in repo.** Open [\`paradigmxyz/reth\`](https://github.com/paradigmxyz/reth), search \`test_utils\` under \`crates/stages/\`. Read one of the existing stage tests (e.g., \`SenderRecoveryStage\` tests). **Notice that every Reth-shipped stage has unit tests with this exact shape.** Your custom stage should too.
+
+## 2. ExEx unit testing — the harness pattern
+
+\`reth-exex-test-utils\` exports a harness that lets you drive an ExEx with synthetic notifications without booting a full node:
+
+\`\`\`rust
+use reth_exex_test_utils::{test_exex_context, PollOnce};
+use reth_exex::{ExExEvent, ExExNotification};
+
+#[tokio::test]
+async fn handles_committed_then_reverted() {
+    let (ctx, mut handle) = test_exex_context().await.unwrap();
+    let exex = my_exex(ctx);
+    tokio::spawn(exex);
+
+    // Send a committed-chain notification covering blocks N..N+5
+    handle.send_notification_chain_committed(committed_chain(N..=N+5)).await.unwrap();
+    handle.assert_event_finished_height(N+5).await;
+
+    // Reorg N+3..N+5
+    handle.send_notification_chain_reverted(reverted_chain(N+3..=N+5)).await.unwrap();
+    handle.assert_event_finished_height(N+2).await;
+
+    // Verify your derived state
+    assert_my_state_at_height(N+2).await;
+}
+\`\`\`
+
+The harness is what makes ExEx development tractable. **Without it, you'd need to spin up a full node, replay real chain data, and wait for events** — minutes per test cycle. With it, every notification is a single function call.
+
+## 3. NodeBuilder integration testing — in-process Reth
+
+Sometimes the unit-test layer isn't enough. If your code depends on the *interaction* between components (a custom pool builder reading from a custom payload validator, say), you need the assembled node:
+
+\`\`\`rust
+use reth_node_builder::NodeBuilder;
+use reth_node_ethereum::EthereumNode;
+use reth_tasks::TokioTaskExecutor;
+
+#[tokio::test]
+async fn custom_pool_builder_filters_blob_txs() {
+    let node = NodeBuilder::new(test_node_config())
+        .testing_node(TokioTaskExecutor::default())
+        .with_types::<EthereumNode>()
+        .with_components(EthereumNode::components().pool(MyPoolBuilder))
+        .with_add_ons(EthereumNode::add_ons())
+        .launch()
+        .await
+        .unwrap();
+
+    // Submit txs via the pool's API
+    let pool = node.pool();
+    let blob_tx = test_blob_tx();
+    let result = pool.add_external_transaction(blob_tx).await;
+    assert!(matches!(result, Err(PoolError::BlobsExcluded)));
+}
+\`\`\`
+
+The pattern: \`NodeBuilder::new(...).testing_node(...)\` boots the node in-process with your custom components, exposes handles (\`node.pool()\`, \`node.provider()\`, \`node.network()\`) that you can drive directly. Slower than unit tests (~1 second per test) but indispensable for cross-component behavior.
+
+## 4. Fixture-chain testing — when canned data isn't enough
+
+For the heaviest tests — full sync verification, multi-block reorg scenarios — you can replay real captured chain data:
+
+\`\`\`rust
+#[tokio::test]
+async fn full_sync_to_pinned_block_matches_golden_state() {
+    let chain_fixture = load_fixture("tests/fixtures/sepolia_blocks_0_to_1000.rlp").await;
+    let db = TestStageDB::default();
+
+    // Drive every stage through the fixture
+    for stage in default_stages_for_test() {
+        run_stage_to_completion(&mut stage, &db, chain_fixture.range()).await;
+    }
+
+    // Compare derived state-root to the known-good value at block 1000
+    let derived = db.factory.provider().header(1000).unwrap().state_root;
+    assert_eq!(derived, GOLDEN_SEPOLIA_STATE_ROOT_AT_1000);
+}
+\`\`\`
+
+This is how Reth verifies sync correctness against historical data. The fixture is a one-time capture from a known-good node; CI replays it on every push. **A regression in any stage shows up as a state-root mismatch — and that's a consensus bug, caught before mainnet.**
+
+## How this connects to the Building tier
+
+The Building tier *Read a Real Production Indexer — tidx* lesson lists this test gate:
+
+> **Fixture chain replay** — feed a known sequence of \`Notification::ChainCommitted\` / \`ChainReverted\` and assert your derived state matches a golden reference exactly.
+
+That is **§2 of this lesson** at the application layer. The Reth-internal pattern (test harness + synthetic notifications) is exactly what the tidx test gate asks you to apply. When you reach Building, this lesson is the precondition.
+
+## Drill
+
+1. **Read one Reth stage test end-to-end.** Open \`paradigmxyz/reth\`, find \`SenderRecoveryStage\` tests under \`crates/stages\`. Read one test top to bottom. Map every helper (\`TestStageDB\`, \`create_test_provider_factory\`, \`ExecInput\`) to where it appears in the test. 30 minutes.
+2. **Read one ExEx test using the harness.** Search [\`reth-exex-test-utils\`](https://github.com/paradigmxyz/reth/tree/main/crates/exex/test-utils) usages in the Reth repo and pick one. Trace what \`test_exex_context()\` returns and how the test drives notifications. 30 minutes.
+3. **Write a stage unit test from scratch.** Take a trivial stage that just counts blocks (\`output.checkpoint.block_number = input.target\`). Test \`execute\` advances the checkpoint and \`unwind\` rolls it back. Use \`create_test_provider_factory\`. **Get \`cargo test\` green.** 1.5 hours.
+4. **Write an ExEx unit test from scratch.** A trivial ExEx that increments a counter on each \`ChainCommitted\` and decrements on \`ChainReverted\`. Use \`test_exex_context()\` to drive 3 commits + 1 revert; assert counter ends at 2. 1 hour.
+5. **Run a NodeBuilder integration test.** Pick the simplest test in \`crates/node/builder/\` that uses \`testing_node()\`. Run it locally with \`cargo test\`. Read what the test asserts. 1 hour.
+
+After drill 5, you can write tests for any custom Reth component you ship — no different from how the Reth maintainers test their own.
+
+> 🛑 **Final check.** In one sentence: why does Reth ship a separate \`reth-exex-test-utils\` crate instead of just expecting users to construct \`ExExNotification\` values manually? If your answer doesn't mention "the harness owns the back-channel for events / completion signals so the test can synchronize without polling," re-read §2 — that synchronization is what makes ExEx tests deterministic.
+
+## 📺 Further reading
+
+- [\`reth_exex_test_utils\`](https://reth.rs/docs/reth_exex_test_utils/) — generated docs for the ExEx test harness
+- [Reth Book — Testing chapter](https://reth.rs/) — official guidance on stage and node tests
+`,
+                },
+                {
                   title: 'Bridge to what comes next — Advanced and Expert',
                   slug: 'reth-bridge-to-expert-en',
                   type: 'CONTENT',
-                  sortOrder: 13,
+                  sortOrder: 14,
                   duration: 10,
                   xpReward: 20,
                   content: `# Bridge to what comes next — Advanced (L1 Architect) and Expert
@@ -1949,7 +2122,7 @@ If any of the five questions sent you back to a previous lesson — re-read them
                   title: 'Inside Reth final quiz',
                   slug: 'reth-advanced-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 14,
+                  sortOrder: 15,
                   duration: 8,
                   xpReward: 25,
                   content: `# Inside Reth final quiz

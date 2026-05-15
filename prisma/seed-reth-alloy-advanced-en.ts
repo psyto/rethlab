@@ -2253,10 +2253,162 @@ If any answer is shaky, the lesson isn't done with you. Re-run the drills or re-
 After this drill, you've shipped a *signed transaction through the full Provider/Network/Signer trio* — the same shape every dapp, MEV bot, and indexer uses in production. **Provider, Network, and Signer chains are complete.** The course's final quiz is the next stop.`,
                 },
                 {
+                  title: 'Testing alloy consumers — anvil, Provider mocks, and trait substitution',
+                  slug: 'alloy-testing-en',
+                  type: 'CONTENT',
+                  sortOrder: 13,
+                  duration: 22,
+                  xpReward: 45,
+                  content: `# Testing alloy consumers — anvil, Provider mocks, and trait substitution
+
+You walked the \`Provider\`, \`Network\`, and \`Signer\` trait shapes. **Now: how do you test code that depends on them?** Every app you'll build in the Building tier — MEV searcher, indexer, wallet backend, swap aggregator — instantiates a \`Provider\`, signs with a \`Signer\`, fills via the filler chain. If you can't unit-test that code without standing up a real RPC endpoint, you have no test gate. This lesson is the answer.
+
+## The three test types you'll write against alloy-consuming code
+
+| Test type | Provider used | Cost | When |
+| :--- | :--- | :--- | :--- |
+| **Programmatic anvil** | real \`anvil\` instance, in-process | ~50 ms startup | almost always — anvil is fast enough for unit tests |
+| **Forked anvil** | \`anvil --fork-url <RPC>\` at a pinned block | ~200 ms + RPC quota | when the test needs real mainnet contract state |
+| **Hand-rolled trait substitution** | a struct you wrote that \`impl Provider for ...\` | none | rare — only when the logic has nothing to do with chain semantics |
+
+90% of your tests are programmatic anvil. The other two are escape hatches.
+
+## 1. Programmatic anvil — the production pattern
+
+Alloy ships an \`Anvil\` builder that boots an anvil process from your test, prefunds 10 accounts, and gives you the URL to point your provider at:
+
+\`\`\`rust
+use alloy::node_bindings::Anvil;
+use alloy::providers::ProviderBuilder;
+use alloy::primitives::U256;
+
+#[tokio::test]
+async fn user_balance_round_trips() {
+    let anvil = Anvil::new().spawn();              // ~50 ms in-process
+    let provider = ProviderBuilder::new().connect_http(anvil.endpoint().parse().unwrap());
+
+    let addr = anvil.addresses()[0];
+    let balance = provider.get_balance(addr).await.unwrap();
+    assert_eq!(balance, U256::from(10_000) * U256::from(10).pow(U256::from(18)));  // 10,000 ETH default
+
+    drop(anvil);  // anvil process killed when dropped
+}
+\`\`\`
+
+That's the entire pattern. **Every assertion in your Building tier tests that touches a Provider runs through this**.
+
+## 2. Anvil cheats accessible through the Provider trait
+
+The whole point of using anvil for testing is that you can manipulate state in ways mainnet doesn't allow. Alloy exposes anvil's cheats *through the same Provider trait* via the \`AnvilApi\` extension:
+
+\`\`\`rust
+use alloy::providers::ext::AnvilApi;
+
+#[tokio::test]
+async fn impersonates_a_real_address() {
+    let anvil = Anvil::new().spawn();
+    let provider = ProviderBuilder::new().connect_http(anvil.endpoint().parse().unwrap());
+
+    let vitalik: Address = "0xab5801a7d398351b8be11c439e05c5b3259aec9b".parse().unwrap();
+
+    // Cheat 1: give Vitalik 100 ETH on this anvil instance
+    provider.anvil_set_balance(vitalik, U256::from(100) * U256::from(10).pow(U256::from(18))).await.unwrap();
+
+    // Cheat 2: become Vitalik for one tx
+    provider.anvil_impersonate_account(vitalik).await.unwrap();
+
+    // Now provider can send a tx as if from Vitalik (no signature required)
+    let tx = TransactionRequest::default().from(vitalik).to(BOB).value(U256::from(1));
+    let receipt = provider.send_transaction(tx).await.unwrap().get_receipt().await.unwrap();
+    assert!(receipt.status());
+
+    provider.anvil_stop_impersonating_account(vitalik).await.unwrap();
+}
+\`\`\`
+
+The full cheat surface: \`anvil_set_balance\`, \`anvil_set_storage_at\`, \`anvil_set_code\`, \`anvil_impersonate_account\`, \`anvil_mine\` (force a block), \`anvil_snapshot\` / \`anvil_revert\` (state checkpoint and rollback). **These are the tools that make MEV / wallet / indexer tests feasible** — without them, you'd need to construct entire transaction sequences just to set up an arb scenario.
+
+> 🔍 **Find in repo.** Open [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy), search for \`AnvilApi\`. Note that it is **a trait extension on \`Provider\`** — not a separate type. **The same Provider you use in production is what you use in tests; cheats are method calls on it when (and only when) the underlying transport is anvil.**
+
+## 3. Forked anvil — mainnet contract state in your tests
+
+When the code under test depends on real mainnet contract state — Uniswap V3 pool reserves, Aave's interest rate model, an audited token's balanceOf — you fork mainnet at a pinned block:
+
+\`\`\`rust
+#[tokio::test]
+async fn quotes_against_real_uniswap_v3() {
+    let anvil = Anvil::new()
+        .fork("https://eth.merkle.io")
+        .fork_block_number(18_500_000)
+        .spawn();
+    let provider = ProviderBuilder::new().connect_http(anvil.endpoint().parse().unwrap());
+
+    // The USDC/WETH 0.3% pool address at block 18_500_000
+    let pool: Address = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640".parse().unwrap();
+    let slot0 = provider.call(/* IUniswapV3Pool::slot0Call */).await.unwrap();
+    // slot0 is the *real* pool state at block 18_500_000 — deterministic across runs
+}
+\`\`\`
+
+Pin the block. **Without a pin, your tests are non-deterministic and CI is meaningless** (the pool's price changes every block; your assertion's tolerance has to be huge to survive). With a pin, the assertion can be tight (within 5 bps of QuoterV2's output, for instance — the test pattern used in Building tier's Swap Aggregator lesson).
+
+## 4. When to write a hand-rolled trait mock
+
+Sometimes you have logic that *touches* Provider but doesn't actually depend on chain semantics — it's pure decision logic given some balance / nonce / receipt. For those cases, write a fake Provider:
+
+\`\`\`rust
+struct CannedProvider {
+    balance_responses: Vec<U256>,
+    call_count: AtomicUsize,
+}
+
+#[async_trait]
+impl Provider for CannedProvider {
+    fn root(&self) -> &RootProvider {
+        // ...
+    }
+    fn get_balance(&self, _addr: Address) -> ProviderCall<NoParams, U256, U256> {
+        let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
+        ProviderCall::ready(Ok(self.balance_responses[idx]))
+    }
+    // ... all other methods get default impls (will panic if called — which is what you want)
+}
+\`\`\`
+
+This is rare in practice because anvil is fast enough that you rarely need to skip it. Use this pattern only when you have a deterministic decision function and want to run hundreds of variations per second.
+
+## How this connects to the Building tier
+
+Every Building tier app (MEV searcher, indexer, wallet, sponsor, cheatcode, aggregator, capstone, Revm validator, MPP) lists test gates that look like:
+
+\`\`\`rust
+let svc = test_service().await;
+let provider = forked_provider_at(FORK_RPC, PINNED_BLOCK).await;
+\`\`\`
+
+**\`forked_provider_at(...)\` is a one-line wrapper around the \`Anvil::new().fork(...).spawn()\` pattern from §3 above.** When you reach Building, the test gate sketches assume this lesson is in your hands. The Building-tier MEV searcher's "find known arb at pinned block" test is the §3 pattern with one extra layer.
+
+## Drill
+
+1. **Write a unit test for a balance-checker function.** Take a function \`async fn alert_if_below<P: Provider>(p: &P, addr: Address, threshold: U256) -> bool\`. Test it with anvil where the address has 5 ETH and threshold is 10 ETH (should return \`true\`). Then test with threshold 1 ETH (should return \`false\`). 30 minutes.
+2. **Write an integration test using anvil cheats.** A function that "transfers if the sender has been impersonated as a known whale." Use \`anvil_set_balance\` + \`anvil_impersonate_account\` to set up. Assert a successful receipt. 45 minutes.
+3. **Write a forked-state test.** Pick a known mainnet contract (USDC, WETH). Fork at a recent block. Assert \`balanceOf(YOUR_TREASURY_ADDR)\` returns the historical balance you find on Etherscan for that block. The point: prove your test setup matches the real chain. 1 hour.
+4. **Hand-roll a Provider mock.** For a function that calls \`get_balance\` then \`get_block_number\`, write a \`CannedProvider\` that returns canned values and asserts the call sequence. Compare the test-write effort to drills 1-3. **You'll see why anvil wins for almost everything.** 1 hour.
+
+Finish drill 3 and you can write the test gate for any Building tier lesson without further reference. Drill 4 makes you appreciate when *not* to bother with mocks.
+
+> 🛑 **Final check.** In one sentence: why does using \`Anvil::new().spawn()\` in tests give you better fidelity than a hand-rolled \`MockProvider\`? If your answer doesn't mention "the same Provider trait you use in production runs in tests; cheats are layered on the same surface," re-read §2 — that surface-equivalence is the whole reason this pattern beats mock-heavy approaches.
+
+## 📺 Further reading
+
+[Alloy book — Anvil chapter](https://alloy.rs/) covers the full programmatic anvil API + cheat surface.
+`,
+                },
+                {
                   title: 'Inside Alloy final quiz',
                   slug: 'alloy-advanced-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 13,
+                  sortOrder: 14,
                   duration: 8,
                   xpReward: 25,
                   content: `# Inside Alloy final quiz

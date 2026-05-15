@@ -1586,10 +1586,144 @@ You now have a complete picture: develop, profile, extend, deploy, monitor. Welc
 > Final check: in one sentence, why is "diff testing against vanilla Reth" the highest-value test you can write for a fork? **What class of bug does it catch that no unit test ever will?** If your answer doesn't mention "consensus" or "the only output that matters is stateRoot," re-read Section 5.`,
                 },
                 {
+                  title: 'Differential fuzzing & execution-spec-tests — the consensus correctness toolkit',
+                  slug: 'expert-differential-fuzzing-en',
+                  type: 'CONTENT',
+                  sortOrder: 6,
+                  duration: 26,
+                  xpReward: 60,
+                  content: `# Differential fuzzing & execution-spec-tests — the consensus correctness toolkit
+
+You've shipped a fork. Custom precompiles, custom payload builder, maybe a tweaked gas schedule. Your unit tests pass. Diff testing against vanilla Reth (from the previous lesson) tells you the *changed* parts behave the same in the *unchanged* paths. **But how do you know the *unchanged* paths haven't been broken by your changes?** And — harder — how do you find the bug that lives in a path no human thought to test?
+
+The answer: **automated correctness pressure from two angles** — \`execution-spec-tests\` to assert spec compliance by construction, and **differential fuzzing** to surface bugs no one knew to look for. Every L1 team running a Revm/Reth fork in production runs both. This lesson is how.
+
+> 📌 **Where this fits.** Inside REVM's *How Revm tests itself* lesson taught you the formats: state tests, EOF tests, execution-spec-tests. **This lesson is the production-engineering counterpart**: how a chain team applies these tools to *their own fork*, not to vanilla Revm.
+
+## 1. execution-spec-tests, applied to your fork
+
+Vanilla Revm passes the upstream EEST suite. Your fork — different gas schedule, custom precompiles, different ChainSpec — has to **prove the same**. Run EEST against your fork's binary; flag every divergence as either an intentional spec deviation (document it) or a bug (fix it).
+
+\`\`\`bash
+# Clone the spec-tests framework
+git clone https://github.com/ethereum/execution-spec-tests
+cd execution-spec-tests
+uv sync
+
+# Build your fork's spec-test runner binary (each fork ships its own; revm has \`revme\`)
+cargo build --release -p revme
+
+# Run the suite against the binary
+uv run consume direct \\
+  --bin /path/to/your/fork/target/release/revme \\
+  -- ./tests/cancun/      # or any subset
+\`\`\`
+
+The output: **N tests pass, M tests fail, K tests skipped.** Each failure is a tx the spec says should produce state-root \`0xA\`, your fork produces \`0xB\`. **Triage: is the divergence intentional (your fork added a precompile that costs less gas — fine, document) or unintentional (your gas-schedule patch broke an unrelated opcode's pricing — bug)?**
+
+> 🔍 **Find in repo.** Look at how revm wires its spec-test runner: search the [\`bluealloy/revm\`](https://github.com/bluealloy/revm) repo for \`statetest\` or \`spectest\` or \`revme\`. Note the runner takes a JSON test, executes it via Revm, and reports state-root match/mismatch. **Your fork's runner has the exact same shape**, but configured for your ChainSpec.
+
+The discipline: **EEST runs on every CI push for your fork, and a non-zero failure delta from yesterday is a build break.** Without this, your fork drifts from spec silently.
+
+## 2. Differential fuzzing — surface bugs no one wrote a test for
+
+EEST proves "my fork matches the spec for cases someone wrote down." **Differential fuzzing finds bugs in cases no one wrote down.** The pattern:
+
+\`\`\`
+random tx → [Your fork] → state_root_A
+                    ↓
+            [Reference impl] → state_root_B
+
+assert(state_root_A == state_root_B)
+\`\`\`
+
+For 100,000 random txs. If the two roots ever diverge, you've found a bug — *somewhere*. Fuzz harness output is reduced (Foundry-style shrinking) to a minimal repro: usually 50–200 bytes of bytecode + a tiny calldata. Then a human reads the repro and identifies the divergence root cause.
+
+**Reference implementations to diff against:**
+- **Vanilla Revm** — for forks that should match Revm semantics in unchanged paths
+- **Geth** (\`debug_traceTransaction\`) — for forks that should match mainnet consensus in unchanged paths
+- **Erigon** — same, useful when Geth and Revm both have shared lineage you want to escape
+- **A formal spec interpreter** (e.g., the Python EELS) — for cases where you want to compare against the *spec* rather than another implementation
+
+\`\`\`rust
+// tests/differential_fuzz.rs
+use libafl::prelude::*;       // or proptest, arbitrary, custom harness
+
+fn fuzz_target(input: &[u8]) -> Result<()> {
+    let tx = arbitrary_tx_from_bytes(input)?;
+    let pre = arbitrary_pre_state_from_bytes(input)?;
+
+    let your_root = your_fork_execute(pre.clone(), tx.clone())?.state_root;
+    let ref_root  = reference_execute(pre, tx)?.state_root;
+
+    if your_root != ref_root {
+        return Err(format!("DIFFERENTIAL: your={your_root}, ref={ref_root}").into());
+    }
+    Ok(())
+}
+\`\`\`
+
+Run for 24-48 hours; each crash is a candidate consensus bug. The fuzzer shrinks to a 100-byte tx; you stare at it; you find that your custom \`MUL_HALF\` precompile rounds differently when the input has a leading bit set. **Caught a bug humans wouldn't have written a test for.**
+
+> 💡 **Why this is uniquely valuable for forks.** Vanilla EVM has been fuzzed for years. Bugs exist mostly in untested combinations of new features. Your fork *is* the new feature. **The first 6 months of your fork's life is the period when fuzzing's hit rate is highest.**
+
+## 3. The combined production discipline
+
+Spec compliance + fuzzing aren't substitutes — they're complements:
+
+| Tool | Catches | Misses |
+| :--- | :--- | :--- |
+| **EEST** | regressions on cases the Ethereum spec covers explicitly | bugs in spec-undefined behavior, fork-specific edge cases |
+| **Differential fuzzing** | divergences from a reference, including spec-undefined paths | spec violations where reference and your fork are *both* wrong |
+| **Both together** | a high coverage fraction of consensus-critical bugs | the rare bug where spec is silent, no reference exists, and the fuzzer doesn't reach the input |
+
+**Production L1 teams (Hyperliquid, Tempo, Berachain) run both on every CI cycle.** A spec-test regression is a build break; a fuzz divergence is a P0. Their forks ship without consensus incidents largely because of this discipline.
+
+## 4. Beyond differential fuzzing — fault injection
+
+A more advanced variant: instead of fuzzing inputs, fuzz the *environment*. Inject database read failures, network partitions, partial writes, OOM conditions; assert your fork's safety properties (no double-spend, no invalid state acceptance, recoverable shutdown) hold under all of them. **This is what catches the "I crashed mid-write and now my chain is corrupted" class of bug** — the kind that doesn't show up in any unit test or differential fuzz.
+
+For Reth this means: kill the process mid-execution, restart, assert the DB is recoverable; corrupt a random page in MDBX, assert detection at startup; force network reorgs in the test harness, assert the indexer/ExEx state stays consistent. Reth's own CI doesn't run all of this; production fork teams add it.
+
+## How this connects to everything else
+
+Every prior testing lesson has been a precondition for this one:
+
+- **Foundry tests** (Fundamentals) — the cheatcodes you'd use to construct fuzz inputs and assert state.
+- **Inside REVM's testing lesson** — the EEST format you're now running against your fork.
+- **Inside Reth's testing lesson** — the harness that lets your fuzzer drive Reth in-process.
+- **Building tier's *Validate Your Revm Simulation Against a Production Provider*** — differential testing applied per-tx; this lesson scales it to per-input-fuzzing.
+
+**This lesson is the apex.** When you ship a Revm/Reth fork to production, the answer to "how do you know it's correct?" is *this entire pipeline running on every commit*.
+
+## Drill
+
+1. **Run revm's existing EEST runner against vanilla revm.** Clone \`bluealloy/revm\`, build \`revme\`, fetch the EEST suite (\`uv tool install eest\` then \`uv run consume direct ...\`), run a small subset (e.g., \`tests/cancun/eip4844_blobs/\`). **Verify all pass.** This is the baseline. 1 hour.
+2. **Modify one Revm opcode and re-run.** Patch a single opcode (change \`ADD\` to \`SUB\` for instance, just to break it). Re-run the suite. **Watch failures appear.** Note which tests failed and why. Revert. 1 hour.
+3. **Write a minimal differential fuzz harness.** Take two implementations (your patched Revm and vanilla; or Revm and Geth's \`debug_traceTransaction\`). Use \`proptest\` to generate random tx + pre-state, execute on both, assert state-root equality. Run for 1 hour, log any divergences. 3 hours.
+4. **Read one production fuzz fix.** Search the [\`bluealloy/revm\` issues](https://github.com/bluealloy/revm/issues?q=is%3Aissue+fuzz) for one that originated from a fuzz finding. Read the bug, the fix, the regression test. **This is what fuzzing pays for.** 1 hour.
+5. **Sketch your fork's CI matrix.** On paper: what spec-test subsets run on every push? What fuzz duration? What reference impls? Where do failures get triaged? 1 hour. *(No code; this is the planning artifact you'd hand to your team.)*
+
+After drill 5, you have the full mental model for shipping a Revm/Reth fork with production-grade correctness assurance.
+
+> 🛑 **Final check.** In one sentence: why are EEST and differential fuzzing **not redundant** even though both look for divergence from "correctness"? If your answer doesn't mention "EEST checks against the spec; fuzzing checks against another implementation, including paths the spec doesn't constrain," re-read §3 — that gap-coverage difference is why production teams run both.
+
+## 📺 Further reading
+
+- [execution-spec-tests docs](https://eest.ethereum.org/) — the spec-test framework
+- [\`paradigmxyz/revm-rs\` fuzzing harnesses](https://github.com/paradigmxyz/revm-rs) — reference implementations of the differential pattern
+- The historical [Geth Yellow Paper Test Suite](https://github.com/ethereum/tests) — for understanding test-corpus evolution
+
+---
+
+**You've reached the end of Reth Expert.** The Building tier puts every testing pattern you've learned into production apps; the L1 Architect tier (Advanced) uses this same correctness discipline at the protocol design layer. The skills you've built across the test lessons are what separate "Revm code that runs" from "Revm code that's safe to ship as the heart of an L1."
+`,
+                },
+                {
                   title: 'Expert quiz',
                   slug: 'expert-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 6,
+                  sortOrder: 7,
                   duration: 15,
                   xpReward: 50,
                   content: `# Expert quiz

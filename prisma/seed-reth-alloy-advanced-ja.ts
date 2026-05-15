@@ -2253,10 +2253,162 @@ expected (), found
 このドリルを終えた時点で、*完全な Provider / Network / Signer のトリオを通した署名済みトランザクション* を投入したことになる — dapp、MEV ボット、インデクサが本番で使っているのと同じ形だ。**Provider、Network、Signer のチェーンが完走。** 次はコースの最終クイズ。`,
                 },
                 {
+                  title: 'alloy 消費者コードのテスト — anvil・Provider モック・トレイト差し替え',
+                  slug: 'alloy-testing-ja',
+                  type: 'CONTENT',
+                  sortOrder: 13,
+                  duration: 22,
+                  xpReward: 45,
+                  content: `# alloy 消費者コードのテスト — anvil・Provider モック・トレイト差し替え
+
+\`Provider\`、\`Network\`、\`Signer\` トレイトの形を歩いてきた。**次は: それらに依存するコードをどうテストするか?** Building tier で作る全アプリ — MEV searcher、indexer、wallet backend、swap aggregator — が \`Provider\` をインスタンス化し、\`Signer\` で署名し、filler chain で fill する。実 RPC エンドポイントを立てずにそのコードをユニットテストできなければ、test gate は機能しない。本レッスンがその答え。
+
+## alloy 消費者コードに対して書く 3 種類のテスト
+
+| テスト種別 | 使う Provider | コスト | いつ |
+| :--- | :--- | :--- | :--- |
+| **プログラマブル anvil** | 実 \`anvil\` インスタンスをインプロセスで起動 | ~50 ms 起動 | ほぼ常時 — anvil はユニットテストにも十分速い |
+| **Forked anvil** | pin したブロックの \`anvil --fork-url <RPC>\` | ~200 ms + RPC クォータ | 実 mainnet コントラクト状態が必要なとき |
+| **手書きトレイト差し替え** | \`impl Provider for ...\` した自作 struct | なし | レア — ロジックがチェーンセマンティクスに無関係なときのみ |
+
+テストの 9 割はプログラマブル anvil。残り 2 つは escape hatch。
+
+## 1. プログラマブル anvil — 本番パターン
+
+Alloy はテスト内から anvil プロセスを起動し、10 アカウントを prefund し、provider の接続先 URL を返す \`Anvil\` ビルダを同梱:
+
+\`\`\`rust
+use alloy::node_bindings::Anvil;
+use alloy::providers::ProviderBuilder;
+use alloy::primitives::U256;
+
+#[tokio::test]
+async fn user_balance_round_trips() {
+    let anvil = Anvil::new().spawn();              // インプロセスで ~50 ms
+    let provider = ProviderBuilder::new().connect_http(anvil.endpoint().parse().unwrap());
+
+    let addr = anvil.addresses()[0];
+    let balance = provider.get_balance(addr).await.unwrap();
+    assert_eq!(balance, U256::from(10_000) * U256::from(10).pow(U256::from(18)));  // デフォルト 10,000 ETH
+
+    drop(anvil);  // drop で anvil プロセスは終了
+}
+\`\`\`
+
+これだけ。**Building tier テストで Provider に触れる全アサーションがこの形を通る**。
+
+## 2. Provider トレイト経由でアクセスできる anvil cheats
+
+テストで anvil を使う最大の理由は、mainnet では許されない方法で状態を操作できること。Alloy は anvil cheats を **同じ Provider トレイトの拡張**（\`AnvilApi\`）として公開:
+
+\`\`\`rust
+use alloy::providers::ext::AnvilApi;
+
+#[tokio::test]
+async fn impersonates_a_real_address() {
+    let anvil = Anvil::new().spawn();
+    let provider = ProviderBuilder::new().connect_http(anvil.endpoint().parse().unwrap());
+
+    let vitalik: Address = "0xab5801a7d398351b8be11c439e05c5b3259aec9b".parse().unwrap();
+
+    // Cheat 1: vitalik にこの anvil 上で 100 ETH を与える
+    provider.anvil_set_balance(vitalik, U256::from(100) * U256::from(10).pow(U256::from(18))).await.unwrap();
+
+    // Cheat 2: 1 tx の間 vitalik になりすます
+    provider.anvil_impersonate_account(vitalik).await.unwrap();
+
+    // これで provider は vitalik 発の tx を送れる（署名不要）
+    let tx = TransactionRequest::default().from(vitalik).to(BOB).value(U256::from(1));
+    let receipt = provider.send_transaction(tx).await.unwrap().get_receipt().await.unwrap();
+    assert!(receipt.status());
+
+    provider.anvil_stop_impersonating_account(vitalik).await.unwrap();
+}
+\`\`\`
+
+cheat の全体像: \`anvil_set_balance\`、\`anvil_set_storage_at\`、\`anvil_set_code\`、\`anvil_impersonate_account\`、\`anvil_mine\`（強制 mine）、\`anvil_snapshot\` / \`anvil_revert\`（状態チェックポイントとロールバック）。**MEV / wallet / indexer のテストを実現可能にする道具立て** — これが無ければ arb シナリオを準備するだけで丸ごとのトランザクション列を構築する羽目になる。
+
+> 🔍 **リポジトリで確認。** [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) を開き、\`AnvilApi\` を検索。これは独立した型ではなく **\`Provider\` のトレイト拡張** です。**本番で使うのと同じ Provider をテストでも使う。cheat は基底トランスポートが anvil のときに（そのときに限り）そのプロバイダ上のメソッド呼び出しになる。**
+
+## 3. Forked anvil — テスト内に実 mainnet コントラクト状態を持ち込む
+
+テスト対象が実 mainnet コントラクト状態に依存するとき — Uniswap V3 pool reserves、Aave の利率モデル、監査済みトークンの balanceOf — pin したブロックで mainnet を fork する:
+
+\`\`\`rust
+#[tokio::test]
+async fn quotes_against_real_uniswap_v3() {
+    let anvil = Anvil::new()
+        .fork("https://eth.merkle.io")
+        .fork_block_number(18_500_000)
+        .spawn();
+    let provider = ProviderBuilder::new().connect_http(anvil.endpoint().parse().unwrap());
+
+    // ブロック 18_500_000 時点の USDC/WETH 0.3% pool アドレス
+    let pool: Address = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640".parse().unwrap();
+    let slot0 = provider.call(/* IUniswapV3Pool::slot0Call */).await.unwrap();
+    // slot0 はブロック 18_500_000 の *本物の* pool 状態 — 実行間で決定的
+}
+\`\`\`
+
+ブロックを pin する。**pin しなければテストは非決定的になり、CI は意味を失う**（pool の price はブロックごとに動く; アサーションの許容幅を広く取らねばならず、それで何を担保したのか分からなくなる）。pin すれば assertion は厳しくできる（QuoterV2 出力との 5 bps 以内、など — Building tier の Swap Aggregator レッスンで使ったテストパターン）。
+
+## 4. 手書きトレイトモックを書くべき場面
+
+たまに、Provider に *触る* がチェーンセマンティクスに依存しないロジックがある — ある残高 / nonce / receipt が与えられたときの純粋な決定関数。そういうケースでは fake Provider を書く:
+
+\`\`\`rust
+struct CannedProvider {
+    balance_responses: Vec<U256>,
+    call_count: AtomicUsize,
+}
+
+#[async_trait]
+impl Provider for CannedProvider {
+    fn root(&self) -> &RootProvider {
+        // ...
+    }
+    fn get_balance(&self, _addr: Address) -> ProviderCall<NoParams, U256, U256> {
+        let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
+        ProviderCall::ready(Ok(self.balance_responses[idx]))
+    }
+    // ... 他メソッドは default impl（呼ばれたら panic — それで OK）
+}
+\`\`\`
+
+実務でレアな理由は、anvil が十分速くてスキップが要らないから。決定論的な関数を秒間数百バリエーションで回したいときだけこれを使う。
+
+## Building tier との接続
+
+Building tier の全アプリ（MEV searcher、indexer、wallet、sponsor、cheatcode、aggregator、capstone、Revm validator、MPP）の test gate スケッチは次のような形:
+
+\`\`\`rust
+let svc = test_service().await;
+let provider = forked_provider_at(FORK_RPC, PINNED_BLOCK).await;
+\`\`\`
+
+**\`forked_provider_at(...)\` は §3 の \`Anvil::new().fork(...).spawn()\` パターンの 1 行ラッパ。** Building に着いたとき、test gate スケッチは本レッスンが手中にある前提で書かれている。Building tier の MEV searcher の "find known arb at pinned block" テストは、§3 のパターンに 1 層追加しただけ。
+
+## ドリル
+
+1. **残高チェッカ関数のユニットテストを書く。** \`async fn alert_if_below<P: Provider>(p: &P, addr: Address, threshold: U256) -> bool\` をテスト。anvil でアドレスに 5 ETH を持たせ閾値 10 ETH（\`true\` を期待）、次に閾値 1 ETH（\`false\` を期待）。30 分。
+2. **anvil cheat を使った integration テストを書く。** 「送信元が既知 whale としてなりすましされていれば transfer する」関数。\`anvil_set_balance\` + \`anvil_impersonate_account\` で setup。成功 receipt を assert。45 分。
+3. **forked-state テストを書く。** 既知 mainnet コントラクト（USDC、WETH）を選ぶ。最近のブロックで fork。\`balanceOf(YOUR_TREASURY_ADDR)\` がそのブロックで Etherscan が示す史実残高と一致することを assert。**ポイント: テスト setup が本物のチェーンと一致することの証明。** 1 時間。
+4. **Provider モックを手書きする。** \`get_balance\` 後 \`get_block_number\` を呼ぶ関数のため、定型値を返し呼び出し順を assert する \`CannedProvider\` を書く。テスト記述コストをドリル 1〜3 と比較する。**ほぼ全てで anvil が勝つ理由が分かる。** 1 時間。
+
+ドリル 3 まで終えれば、Building tier 任意レッスンの test gate を参照無しで書ける。ドリル 4 はモックを *使わない* べきタイミングを実感させる。
+
+> 🛑 **最終チェック。** 一文で: なぜ \`Anvil::new().spawn()\` をテストで使う方が手書き \`MockProvider\` よりも忠実度が高いのか? 答えに「本番で使う Provider トレイトがテストでも走り、cheat はその同じ表面上に重なる」が無いなら、§2 を読み直す — その表面同等性こそ、このパターンが mock 中心アプローチに勝る理由の全部。
+
+## 📺 関連リンク
+
+[Alloy book — Anvil chapter](https://alloy.rs/) は programmatic anvil API + cheat surface の全体像。
+`,
+                },
+                {
                   title: 'Inside Alloy 最終クイズ',
                   slug: 'alloy-advanced-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 13,
+                  sortOrder: 14,
                   duration: 8,
                   xpReward: 25,
                   content: `# Inside Alloy 最終クイズ

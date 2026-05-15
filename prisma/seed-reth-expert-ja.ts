@@ -1575,10 +1575,144 @@ for block in mainnet[recent_1000]:
 > 最終チェック: なぜ「バニラ Reth に対する diff テスト」がフォークに対して書ける最も価値の高いテストなのか、一文で。**ユニットテストでは決して捕まえられないバグの種類は何?** 答えに「コンセンサス」または「重要な唯一の出力は stateRoot」と出てこなければ、セクション 5 を再読。`,
                 },
                 {
+                  title: 'Differential fuzzing と execution-spec-tests — コンセンサス正しさのツールキット',
+                  slug: 'expert-differential-fuzzing-ja',
+                  type: 'CONTENT',
+                  sortOrder: 6,
+                  duration: 26,
+                  xpReward: 60,
+                  content: `# Differential fuzzing と execution-spec-tests — コンセンサス正しさのツールキット
+
+フォークを ship した。カスタム precompile、カスタム payload builder、いじったガススケジュール。ユニットテストは pass。バニラ Reth に対する diff テスト（前のレッスン）は、*変更した* 部分が *変更してない* パスで同じ挙動だと教えてくれる。**しかし *変更してない* パスがあなたの変更で壊れていないことをどう知るか?** さらに難しい — *誰もテストを書かなかったパス* に住むバグをどう見つけるか?
+
+答え: **2 角度からの自動正しさ圧力** — \`execution-spec-tests\` で構造的に仕様準拠を assert し、**differential fuzzing** で誰も探そうと思わなかったバグを浮かび上がらせる。production で Revm/Reth フォークを動かす L1 チームは全員両方を回している。本レッスンがその方法。
+
+> 📌 **位置付け。** Inside REVM の *Revm 自身のテスト* レッスンはフォーマット（state tests、EOF tests、execution-spec-tests）を教えた。**本レッスンは production-engineering の対応物**: チェーンチームがこれらツールを *自分のフォーク* に — vanilla Revm にではなく — どう適用するか。
+
+## 1. execution-spec-tests を自分のフォークに適用
+
+vanilla Revm は upstream EEST スイートを通る。あなたのフォーク — 異なるガススケジュール、カスタム precompile、異なる ChainSpec — は **同じことを証明する必要がある**。EEST をフォークのバイナリに対して走らせ、各乖離を意図的な仕様逸脱（document する）か、バグ（修正する）として triage する。
+
+\`\`\`bash
+# spec-tests フレームワークを clone
+git clone https://github.com/ethereum/execution-spec-tests
+cd execution-spec-tests
+uv sync
+
+# フォークの spec-test runner バイナリをビルド（各フォークが自前同梱; revm は \`revme\`）
+cargo build --release -p revme
+
+# スイートをバイナリに対して実行
+uv run consume direct \\
+  --bin /path/to/your/fork/target/release/revme \\
+  -- ./tests/cancun/      # または任意のサブセット
+\`\`\`
+
+出力: **N tests pass、M tests fail、K tests skipped。** 各 fail は、仕様が「state-root \`0xA\` を生むはず」と言う tx に対し、フォークが \`0xB\` を生んだもの。**Triage: 乖離は意図的か（フォークが追加した precompile がガス安 — OK、document）、意図的でないか（ガススケジュールパッチが無関係な opcode の価格を壊した — バグ）?**
+
+> 🔍 **リポジトリで確認。** revm が spec-test runner をどう配線しているか見る: [\`bluealloy/revm\`](https://github.com/bluealloy/revm) で \`statetest\`、\`spectest\`、\`revme\` を検索。runner は JSON テストを取り、Revm 経由で実行し、state-root の一致 / 不一致を報告する。**フォークの runner は同じ形** — ChainSpec が異なるだけ。
+
+規律: **EEST はフォーク CI の毎回 push で走り、昨日からの fail デルタが非ゼロなら build break。** これ無しではフォークは仕様から静かに drift する。
+
+## 2. Differential fuzzing — 誰もテストを書かなかったバグを浮かび上がらせる
+
+EEST は「仕様が明示的に書いた範囲でフォークが仕様と一致する」を証明する。**Differential fuzzing は誰も書かなかったケースのバグを見つける。** パターン:
+
+\`\`\`
+ランダム tx → [自前フォーク] → state_root_A
+                       ↓
+              [リファレンス実装] → state_root_B
+
+assert(state_root_A == state_root_B)
+\`\`\`
+
+10 万 tx 分。2 つの root が一度でも乖離したら *どこかに* バグがある。Fuzz harness 出力は縮約（Foundry スタイルの shrinking）で最小再現に絞る: 通常 50〜200 byte の bytecode + 小さな calldata。次に人間が repro を読み、乖離の根本原因を特定する。
+
+**diff 対象のリファレンス実装:**
+- **vanilla Revm** — 変更してないパスで Revm セマンティクスと一致すべきフォーク向け
+- **Geth** (\`debug_traceTransaction\`) — 変更してないパスで mainnet コンセンサスと一致すべきフォーク向け
+- **Erigon** — 同様、Geth と Revm が共通系譜を持ち、それから逃れたい時に有用
+- **形式仕様インタプリタ**（例: Python EELS）— *仕様* と比較したい場合（別実装ではなく）
+
+\`\`\`rust
+// tests/differential_fuzz.rs
+use libafl::prelude::*;       // または proptest、arbitrary、独自 harness
+
+fn fuzz_target(input: &[u8]) -> Result<()> {
+    let tx = arbitrary_tx_from_bytes(input)?;
+    let pre = arbitrary_pre_state_from_bytes(input)?;
+
+    let your_root = your_fork_execute(pre.clone(), tx.clone())?.state_root;
+    let ref_root  = reference_execute(pre, tx)?.state_root;
+
+    if your_root != ref_root {
+        return Err(format!("DIFFERENTIAL: your={your_root}, ref={ref_root}").into());
+    }
+    Ok(())
+}
+\`\`\`
+
+24〜48 時間走らせる; 各 crash は候補のコンセンサスバグ。Fuzzer が 100 byte の tx に縮約; あなたが眺める; カスタム \`MUL_HALF\` precompile が入力先頭ビット立っている場合に丸めが違うと判明する。**人間が書きそうにないテストでバグを捕まえた。**
+
+> 💡 **なぜフォークでこれが特に有用か。** バニラ EVM は何年も fuzz されている。バグはほぼ新機能の未テスト組み合わせに残る。あなたのフォークは *新機能そのもの*。**フォーク誕生から半年は fuzzing のヒット率が最も高い時期。**
+
+## 3. 統合された production の規律
+
+仕様準拠 + fuzzing は代替ではなく補完:
+
+| ツール | 捕まえる | 捕まえない |
+| :--- | :--- | :--- |
+| **EEST** | Ethereum 仕様が明示的にカバーするケースの回帰 | 仕様未定義挙動のバグ、フォーク固有エッジケース |
+| **Differential fuzzing** | リファレンスからの乖離（仕様未定義パスを含む） | リファレンスとフォークが *両方* 間違っている仕様違反 |
+| **両方併用** | コンセンサスクリティカルバグの広範囲 | 仕様が黙していて、リファレンスが存在せず、fuzzer が入力に到達しない稀なバグ |
+
+**Production L1 チーム（Hyperliquid、Tempo、Berachain）は両方を毎 CI サイクルで回す。** Spec test 回帰は build break、fuzz 乖離は P0。彼らのフォークがコンセンサス事故無く ship されているのは、概ねこの規律のおかげ。
+
+## 4. Differential fuzzing の先 — fault injection
+
+より進んだ変種: 入力を fuzz する代わりに *環境* を fuzz する。データベース read 失敗、ネットワーク分断、部分書き込み、OOM 状況を inject し、フォークの安全性プロパティ（二重支払なし、不正状態の受け入れなし、回復可能シャットダウン）が全部の下で成立することを assert。**「書き込み中に crash してチェーンが壊れた」クラスのバグ — どのユニットテストや differential fuzz にも現れない種類 — を捕まえる。**
+
+Reth ではこれは: 実行中にプロセスを kill し再起動して DB が回復可能なことを assert; MDBX の random page を破壊し起動時の検出を assert; テスト harness で network reorg を強制し indexer/ExEx 状態の整合性を assert。Reth 自身の CI はここまで全部回さない; production フォークチームが追加する。
+
+## 全体への接続
+
+これまでの全テストレッスンが本レッスンの前提:
+
+- **Foundry tests**（Fundamentals）— fuzz 入力構築と状態 assertion に使う cheatcode
+- **Inside REVM のテストレッスン** — フォークに対して走らせている EEST フォーマット
+- **Inside Reth のテストレッスン** — fuzzer に Reth をインプロセスで駆動させる harness
+- **Building tier の *Revm シミュレーションを Production Provider で検証する*** — per-tx で適用された differential テスト; 本レッスンはそれを per-input fuzzing にスケール
+
+**本レッスンが頂点。** Revm/Reth フォークを production に出荷するとき、「正しいことをどう知るか?」への答えは *このパイプライン全部が毎 commit で走ること*。
+
+## ドリル
+
+1. **revm 既存 EEST runner を vanilla revm に対して走らせる。** \`bluealloy/revm\` を clone、\`revme\` をビルド、EEST スイートを取得（\`uv tool install eest\` 後 \`uv run consume direct ...\`）、小さなサブセット（例: \`tests/cancun/eip4844_blobs/\`）を実行。**全 pass を確認。** これがベースライン。1 時間。
+2. **Revm の opcode を 1 つ改変して再実行。** 1 つの opcode をパッチ（例: \`ADD\` を \`SUB\` に変えて壊す）。スイートを再実行。**fail が現れるのを観察。** どのテストがなぜ fail したかメモ。revert。1 時間。
+3. **最小 differential fuzz harness を書く。** 2 つの実装を取る（パッチ済み Revm と vanilla; もしくは Revm と Geth の \`debug_traceTransaction\`）。\`proptest\` でランダム tx + pre-state を生成し、両方で実行、state-root 一致を assert。1 時間走らせ、乖離を log。3 時間。
+4. **production の fuzz fix を 1 件読む。** [\`bluealloy/revm\` の issues](https://github.com/bluealloy/revm/issues?q=is%3Aissue+fuzz) で fuzz 発見起源のものを 1 件。バグ・修正・回帰テストを読む。**fuzzing が何を支払うか。** 1 時間。
+5. **フォーク CI マトリクスをスケッチ。** 紙で: 毎 push で走らせる spec-test サブセットは? Fuzz duration は? リファレンス実装は? 失敗 triage はどこで起きるか? 1 時間。*（コードなし; チームに渡す計画 artifact。）*
+
+ドリル 5 後、production グレードの正しさ保証付きで Revm/Reth フォークを ship する完全なメンタルモデルが揃う。
+
+> 🛑 **最終チェック。** 一文で: なぜ EEST と differential fuzzing は両方とも「正しさ」からの乖離を探すにもかかわらず **冗長ではない** のか? 答えに「EEST は仕様に対してチェックする; fuzzing は別実装に対してチェックする — 仕様が制約しないパスも含めて」が無いなら §3 を読み直す — このカバレッジギャップの違いが、production チームが両方回す理由。
+
+## 📺 関連リンク
+
+- [execution-spec-tests docs](https://eest.ethereum.org/) — spec-test フレームワーク
+- [\`paradigmxyz/revm-rs\` fuzzing harnesses](https://github.com/paradigmxyz/revm-rs) — differential パターンのリファレンス実装
+- 史的な [Geth Yellow Paper Test Suite](https://github.com/ethereum/tests) — テストコーパス進化を理解するため
+
+---
+
+**Reth Expert の終わりに到達。** Building tier はここまで学んだ全テストパターンを production アプリに適用する; L1 Architect tier (Advanced) は同じ正しさ規律をプロトコル設計層で使う。テストレッスン横断で築いたスキルが、「動く Revm コード」と「L1 の心臓部として ship 安全な Revm コード」を分ける。
+`,
+                },
+                {
                   title: 'Expertまとめクイズ',
                   slug: 'expert-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 6,
+                  sortOrder: 7,
                   duration: 15,
                   xpReward: 50,
                   content: `# Expertまとめクイズ

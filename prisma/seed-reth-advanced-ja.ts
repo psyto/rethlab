@@ -1863,10 +1863,183 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
 `,
                 },
                 {
+                  title: 'Stage と ExEx のテスト — fixture chain・インプロセスノード・golden state',
+                  slug: 'reth-testing-ja',
+                  type: 'CONTENT',
+                  sortOrder: 13,
+                  duration: 24,
+                  xpReward: 50,
+                  content: `# Stage と ExEx のテスト — fixture chain・インプロセスノード・golden state
+
+\`Stage\` トレイト、ExEx API、NodeBuilder SDK を歩いてきた。**次は: Reth — そして Reth を拡張するアプリ — はどうやってこれらが動くことを検証するのか?** dev で「正しそうに見える」ノードコンポーネントは production で何千ユーザの状態を静かに破壊する。以下のパターンが Reth 自身の CI がそれを防ぐ方法であり、Building tier で出荷する全 ExEx ベースアプリがテストされるべき方法です。
+
+## Reth を拡張するアプリに必要な 2 つのテスト層
+
+| 層 | 何をテストするか | 何を起動するか |
+| :--- | :--- | :--- |
+| **Stage / ExEx ユニットテスト** | trait 実装を、与えられた canned chain イベントに対して単独で | 何も — 純 Rust + fixture |
+| **NodeBuilder integration テスト** | 自前コンポーネントを差した状態で組み立てたノード | Reth ノード全体をインプロセスで fixture または anvil チェーンに対して |
+
+Reth 自身の crate は両方を使う。Production 拡張（\`tidx\`、MEV ExEx、独自 App-chain）も両方が必要。どちらかをスキップすると、あるクラスのバグが通り抜ける。
+
+## 1. Stage ユニットテスト — 正典パターン
+
+\`Stage\` 実装は 2 メソッド: \`execute\`（前進 sync）と \`unwind\`（reorg ロールバック）。両方とも、与えられたチェックポイントの staged DB 状態の純粋関数。ユニットテストパターン: temp DB を作り、pre-state を seed、\`execute\` を呼び post-state を assert; その後 \`unwind\` を呼びロールバックを assert。
+
+\`\`\`rust
+use reth_provider::test_utils::create_test_provider_factory;
+use reth_stages::test_utils::{TestRunnerError, TestStageDB};
+
+#[tokio::test]
+async fn execute_advances_checkpoint() {
+    let db = TestStageDB::default();
+    seed_blocks(&db, 0..=10).await;             // fixture ヘルパ
+
+    let mut stage = MyStage::default();
+    let input = ExecInput { target: Some(10), checkpoint: None };
+    let output = stage.execute(&db.factory.provider_rw().unwrap(), input).await.unwrap();
+
+    assert_eq!(output.checkpoint.block_number, 10);
+    assert!(output.done);
+    assert_my_derived_state(&db, 10).await;
+}
+
+#[tokio::test]
+async fn unwind_rolls_back_to_checkpoint() {
+    let db = TestStageDB::default();
+    seed_blocks(&db, 0..=10).await;
+    let mut stage = MyStage::default();
+
+    // 10 まで前進
+    stage.execute(&db.factory.provider_rw().unwrap(),
+        ExecInput { target: Some(10), checkpoint: None }).await.unwrap();
+
+    // 5 まで unwind
+    let output = stage.unwind(&db.factory.provider_rw().unwrap(),
+        UnwindInput { unwind_to: 5, checkpoint: ..., bad_block: None }).await.unwrap();
+
+    assert_eq!(output.checkpoint.block_number, 5);
+    assert_my_derived_state(&db, 5).await;
+}
+\`\`\`
+
+要のツール: **\`create_test_provider_factory\`** と **\`TestStageDB\`**（\`reth_provider::test_utils\` および \`reth_stages::test_utils\` 配下）。これらがテストごとに ephemeral MDBX DB を提供する — 共有状態なし、cleanup 定型コードなし、stale fixture なし。
+
+> 🔍 **リポジトリで確認。** [\`paradigmxyz/reth\`](https://github.com/paradigmxyz/reth) を開き、\`crates/stages/\` 配下で \`test_utils\` を検索。既存 stage テスト（例: \`SenderRecoveryStage\` テスト）を 1 つ読む。**Reth 同梱の全 stage がこの形のユニットテストを持つ。** 自前 stage も同じ形であるべき。
+
+## 2. ExEx ユニットテスト — ハーネスパターン
+
+\`reth-exex-test-utils\` は、フルノードを起動せずに合成通知で ExEx を駆動できるハーネスを export:
+
+\`\`\`rust
+use reth_exex_test_utils::{test_exex_context, PollOnce};
+use reth_exex::{ExExEvent, ExExNotification};
+
+#[tokio::test]
+async fn handles_committed_then_reverted() {
+    let (ctx, mut handle) = test_exex_context().await.unwrap();
+    let exex = my_exex(ctx);
+    tokio::spawn(exex);
+
+    // ブロック N..N+5 をカバーする committed-chain 通知を送る
+    handle.send_notification_chain_committed(committed_chain(N..=N+5)).await.unwrap();
+    handle.assert_event_finished_height(N+5).await;
+
+    // N+3..N+5 を reorg
+    handle.send_notification_chain_reverted(reverted_chain(N+3..=N+5)).await.unwrap();
+    handle.assert_event_finished_height(N+2).await;
+
+    // 自前の導出状態を検証
+    assert_my_state_at_height(N+2).await;
+}
+\`\`\`
+
+このハーネスが ExEx 開発を実用可能にする。**無ければフルノードを起動し本物のチェーンデータを再生してイベントを待つ必要がある** — テストサイクルあたり数分。あれば各通知が単一の関数呼び出し。
+
+## 3. NodeBuilder integration テスト — Reth をインプロセスで
+
+ユニットテスト層では足りない場合がある。コードがコンポーネント間の *相互作用* に依存する場合（カスタム pool ビルダーがカスタム payload validator から read する、など）、組み立てたノードが必要:
+
+\`\`\`rust
+use reth_node_builder::NodeBuilder;
+use reth_node_ethereum::EthereumNode;
+use reth_tasks::TokioTaskExecutor;
+
+#[tokio::test]
+async fn custom_pool_builder_filters_blob_txs() {
+    let node = NodeBuilder::new(test_node_config())
+        .testing_node(TokioTaskExecutor::default())
+        .with_types::<EthereumNode>()
+        .with_components(EthereumNode::components().pool(MyPoolBuilder))
+        .with_add_ons(EthereumNode::add_ons())
+        .launch()
+        .await
+        .unwrap();
+
+    // pool の API 経由で tx を提出
+    let pool = node.pool();
+    let blob_tx = test_blob_tx();
+    let result = pool.add_external_transaction(blob_tx).await;
+    assert!(matches!(result, Err(PoolError::BlobsExcluded)));
+}
+\`\`\`
+
+パターン: \`NodeBuilder::new(...).testing_node(...)\` がカスタムコンポーネント付きでノードをインプロセス起動し、handle（\`node.pool()\`、\`node.provider()\`、\`node.network()\`）を露出する — 直接駆動可能。ユニットテストより遅い（テストあたり ~1 秒）が、コンポーネント間挙動には不可欠。
+
+## 4. Fixture-chain テスト — canned data では足りないとき
+
+最重量のテスト — フル sync 検証、複数ブロック reorg シナリオ — のためには、捕獲済みの本物のチェーンデータを再生できる:
+
+\`\`\`rust
+#[tokio::test]
+async fn full_sync_to_pinned_block_matches_golden_state() {
+    let chain_fixture = load_fixture("tests/fixtures/sepolia_blocks_0_to_1000.rlp").await;
+    let db = TestStageDB::default();
+
+    // fixture を通して全 stage を駆動
+    for stage in default_stages_for_test() {
+        run_stage_to_completion(&mut stage, &db, chain_fixture.range()).await;
+    }
+
+    // ブロック 1000 時点の derived state-root を既知の正答と比較
+    let derived = db.factory.provider().header(1000).unwrap().state_root;
+    assert_eq!(derived, GOLDEN_SEPOLIA_STATE_ROOT_AT_1000);
+}
+\`\`\`
+
+これが Reth が史実データに対して sync 正しさを検証する方法。fixture は既知正常ノードからの 1 回キャプチャ; CI が push のたびに再生する。**任意 stage の回帰が state-root 不一致として現れる — それはコンセンサスバグで、mainnet 前に捕まる。**
+
+## Building tier との接続
+
+Building tier の *Read a Real Production Indexer — tidx* レッスンはこの test gate を提示:
+
+> **Fixture chain replay** — 既知の \`Notification::ChainCommitted\` / \`ChainReverted\` の列を流し込み、導出状態が golden reference と完全一致することを assert。
+
+それは **本レッスンの §2** をアプリケーション層で適用したもの。Reth 内部のパターン（テストハーネス + 合成通知）こそが、tidx test gate が要求する適用方法そのもの。Building に着いたとき、本レッスンが前提となる。
+
+## ドリル
+
+1. **Reth の stage テストを 1 つ end-to-end で読む。** \`paradigmxyz/reth\` を開き、\`crates/stages\` 配下の \`SenderRecoveryStage\` テストを見つける。1 件のテストを最初から最後まで読む。各ヘルパ（\`TestStageDB\`、\`create_test_provider_factory\`、\`ExecInput\`）がテスト内のどこに現れるかをマップ。30 分。
+2. **ハーネスを使った ExEx テストを 1 つ読む。** [\`reth-exex-test-utils\`](https://github.com/paradigmxyz/reth/tree/main/crates/exex/test-utils) の使用例を Reth リポジトリで検索し 1 つ選ぶ。\`test_exex_context()\` が何を返し、テストがどう通知を駆動するかを追う。30 分。
+3. **stage ユニットテストをゼロから書く。** ブロックを数えるだけの自明な stage（\`output.checkpoint.block_number = input.target\`）を取る。\`execute\` がチェックポイントを進め、\`unwind\` がロールバックすることをテスト。\`create_test_provider_factory\` を使う。**\`cargo test\` を green にする。** 1.5 時間。
+4. **ExEx ユニットテストをゼロから書く。** 各 \`ChainCommitted\` でカウンタをインクリメント、\`ChainReverted\` でデクリメントするだけの自明な ExEx。\`test_exex_context()\` を使い 3 commit + 1 revert を駆動; カウンタが 2 で終わることを assert。1 時間。
+5. **NodeBuilder integration テストを 1 つ走らせる。** \`crates/node/builder/\` で \`testing_node()\` を使う最も単純なテストを選ぶ。\`cargo test\` でローカル実行。テストが何を assert するか読む。1 時間。
+
+ドリル 5 後、自分が出荷する任意のカスタム Reth コンポーネントのテストを書ける — Reth メンテナが自分のコンポーネントをテストするのと同じ方法で。
+
+> 🛑 **最終チェック。** 一文で: なぜ Reth は \`reth-exex-test-utils\` を別 crate で同梱するのか? ユーザに \`ExExNotification\` 値を手で構築させるだけでよいのに。答えに「ハーネスがイベント / 完了シグナルの裏チャンネルを所有することで、テストが poll 無しで同期できる」が無いなら §2 を読み直す — その同期が ExEx テストを決定的にする。
+
+## 📺 関連リンク
+
+- [\`reth_exex_test_utils\`](https://reth.rs/docs/reth_exex_test_utils/) — ExEx テストハーネスの自動生成ドキュメント
+- [Reth Book — Testing chapter](https://reth.rs/) — stage / node テストの公式ガイダンス
+`,
+                },
+                {
                   title: '次のティアへの橋渡し — Advanced と Expert',
                   slug: 'reth-bridge-to-expert-ja',
                   type: 'CONTENT',
-                  sortOrder: 13,
+                  sortOrder: 14,
                   duration: 10,
                   xpReward: 20,
                   content: `# 次のティアへの橋渡し — Advanced (L1 Architect) と Expert
@@ -1949,7 +2122,7 @@ Inside (Intermediate) は **構造** を教えました。次のティアはそ�
                   title: 'Inside Reth ファイナルクイズ',
                   slug: 'reth-advanced-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 14,
+                  sortOrder: 15,
                   duration: 8,
                   xpReward: 25,
                   content: `# Inside Reth ファイナルクイズ
