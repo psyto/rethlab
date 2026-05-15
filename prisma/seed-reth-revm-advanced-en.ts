@@ -215,7 +215,7 @@ let b = stack.pop().ok_or(StackUnderflow)?;
 stack.push(a + b);
 \`\`\`
 
-Three stack operations. Each is a memory write or capacity check. The interpreter's hot path (the inner loop that runs once per opcode in every transaction) runs this *hundreds of millions* of times per block — that overhead is the difference between competitive and uncompetitive throughput.
+Three stack operations. Each is a memory write or capacity check. The interpreter's hot path (the inner loop that runs once per opcode in every transaction) runs this *thousands to tens of thousands of times per tx, millions per mainnet block, hundreds of millions per second under CI / fuzz* — that overhead is the difference between competitive and uncompetitive throughput.
 
 Better: pop *one* value, then mutate the new top **in place** through a \`&mut\` reference.
 
@@ -734,11 +734,26 @@ impl<W: InterpreterTypes, H: Host + ?Sized> Instruction<W, H> {
 Two things:
 
 1. **Future metadata.** You could later add \`gas_cost: u16\`, \`name: &'static str\`, etc. without changing the dispatch signature.
-2. **Type discipline.** \`Instruction::new(arithmetic::add)\` is more type-safe than a bare function pointer assignment — the compiler verifies the signature matches the table's slot type at the call site.
+2. **Type discipline.** \`Instruction::new(arithmetic::add)\` is more type-safe than a bare function pointer assignment — the compiler verifies the signature matches the table's slot type at the call site. Concretely, with a bare \`fn\` the following **compiles**:
+
+   \`\`\`rust
+   table[ADD as usize] = some_fn_with_wrong_signature;
+   // e.g. fn(InstructionContext, ExtraArg) -> SomethingElse
+   // Function-pointer types coerce far enough that the assignment passes —
+   // you find out at runtime when the dispatcher actually calls it.
+   \`\`\`
+
+   \`Instruction::new(...)\` is an explicit typed constructor, so a signature mismatch fails **at the assignment line**, not at runtime. Bug shifted from runtime to compile time.
 
 The generics \`W: InterpreterTypes, H: ?Sized\` are exactly the same \`IT\`/\`H\` we built up two lessons ago. Same reasoning — let one table work across all execution modes and host types.
 
+> 🛑 **Recall check.** Why does \`Instruction\` carry the \`<W, H>\` generics? What breaks if you hardcode the concrete types as \`Instruction { fn_: fn(InstructionContext) -> InstructionExecResult }\`?
+
+You'd need a separate \`Instruction\` type per execution mode (production / tracing / Inspector sandbox) and per host type — meaning a separate table and a separate dispatcher per combination. \`Instruction<W, H>\` lets one table + one dispatcher cover all modes × all hosts. Same reasoning that made \`add\` itself generic in the previous lesson.
+
 ## Step 4 — The full real instruction table
+
+> 🛑 **Predict.** What does combining Steps 1–3 produce? Sketch the signature: a function returning a table, it'll be a \`const fn\`, the generics are…?
 
 Putting it together, the actual revm code from [\`crates/interpreter/src/instructions.rs\`](https://github.com/bluealloy/revm/blob/main/crates/interpreter/src/instructions.rs):
 
@@ -1111,7 +1126,7 @@ Each requires *different code* to fetch state. You don't want to fork Revm three
 
 ## Step 1 — Push state behind a trait
 
-The fix is the classic dependency-inversion move: don't make Revm own storage; make it *ask* for what it needs through an interface. Define a trait that describes what Revm needs from state, without owning the storage:
+The fix is the classic **dependency inversion** move (instead of Revm depending on a *concrete* storage implementation, both Revm and any storage backend depend on an *abstract* trait — the dependency arrow gets inverted). Don't make Revm own storage; make it *ask* for what it needs through an interface. Define a trait that describes what Revm needs from state, without owning the storage:
 
 \`\`\`rust
 pub trait Database {

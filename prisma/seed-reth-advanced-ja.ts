@@ -254,20 +254,29 @@ fn poll_execute_ready(&mut self, _cx: &mut Context<'_>, _input: ExecInput)
 }
 \`\`\`
 
-Rust の async 形式の poll メソッドです。常に準備完了のステージ（多くがそう）はデフォルトをそのまま使う。I/O を待つステージはオーバーライドして、futures が動いている間は \`Poll::Pending\` を返す。
+Rust の async 形式の poll メソッドです。
+
+> **\`Poll<T>\` とは:** Rust の \`Future\` は内部で \`fn poll(...) -> Poll<T>\` という関数を持ち、呼ばれるたびに \`Poll::Ready(value)\`（完了）か \`Poll::Pending\`（まだ準備中）のどちらかを返す。\`Pending\` を返したら、ランタイムはそのステージを脇に置き、別のステージを poll する。準備が整ったら別の経路で起こされ、再度 poll される。**スレッドをブロックせずに「待つ」を表現する仕組み。**
+
+常に準備完了のステージ（多くがそう）はデフォルトをそのまま使う。I/O を待つステージはオーバーライドして、futures が動いている間は \`Poll::Pending\` を返す。
 
 **オーケストレータは各ステージを poll し、pending なら次へ進む。** どのステージも他のステージをブロックしません。
 
 ## ステップ 6 — Commit フック: \`post_execute_commit\` / \`post_unwind_commit\`
 
-ステージによっては、データがディスクに commit された *後* に作業をしたい場合があります — メトリクス送信、通知ブロードキャスト、古いデータの prune など。これらのフックを使えば、「commit 完了したか?」というロジックで \`execute\` を汚さずに、そうした仕事をこなせます。
+ステージによっては、データがディスクに commit された *後* に作業をしたい場合があります。これらのフックを使えば、「commit 完了したか?」というロジックで \`execute\` を汚さずに、そうした仕事をこなせます。
 
 \`\`\`rust
 fn post_execute_commit(&mut self) -> Result<(), StageError> { Ok(()) }
 fn post_unwind_commit(&mut self) -> Result<(), StageError> { Ok(()) }
 \`\`\`
 
-デフォルトは no-op、必要なステージだけオーバーライドする。**ほとんどはオーバーライドしません。** opt-in のライフサイクルであって、必須の配線ではない。
+デフォルトは no-op、必要なステージだけオーバーライドする。Reth 内の具体例:
+
+- **\`ExecutionStage\`** が \`post_execute_commit\` でブロック実行通知を ExEx subscriber へ流す — トランザクション本体のコミットが先に完了している保証が必要だから (subscriber は commit 済みデータを読みに来る)
+- **Pruner 系ステージ** がチェックポイント書き込み後にディスクから古いインデックスを開放する
+
+**ほとんどのステージはオーバーライドしません。** opt-in のライフサイクルであって、必須の配線ではない。
 
 ## ステップ 7 — \`#[auto_impl(Box)]\`: ヘテロなステージリスト
 
@@ -909,9 +918,22 @@ Reth は通知の push を始める前に、ExEx が生きていることを *�
 
 \`\`\`rust
 .install_exex("MyIndexer", exex_init)
+.install_exex("MevWatcher", mev_init)
+.install_exex("RiskEngine", risk_init)
 \`\`\`
 
-第 1 引数は名前（メトリクスとログで使われる）、第 2 引数は init 関数です。**\`.install_exex(...)\` は複数チェインできます** — 各 ExEx は独立した通知ストリームと \`FinishedHeight\` チャンネルを持ち、Pruner がそれらを集約します。
+第 1 引数は名前（メトリクスとログで使われる）、第 2 引数は init 関数です。**\`.install_exex(...)\` は複数チェインできます** — 各 ExEx は独立した通知ストリームと \`FinishedHeight\` チャンネルを持ちます。
+
+**実用的な含意:**
+
+- **互いに干渉しない。** インデクサが遅延しても MEV Watcher の処理は止まらない（各 stream が独立にバッファされる）
+- **Pruner は最遅の 1 つに合わせる。** Pruner はインストールされた全 ExEx の \`FinishedHeight\` の **最小値** より下しか prune しない — インデクサがブロック 100 で止まれば、Reth は MEV Watcher が 1000 まで進んでいてもブロック 100 以下を保持する
+- **クラッシュは独立。** ある ExEx が panic しても他の ExEx と Reth 本体は動き続ける（init で失敗した場合は除く — その場合はノード起動が失敗）
+- **メトリクスは ExEx ごと。** 第 1 引数の名前が \`reth_exex_<name>_*\` 系メトリクスのラベルになる
+
+> 🛑 **理解度チェック。** あなたのインデクサがある日 OOM で落ちて、別 ExEx の MEV Watcher は問題なく走り続けたとします。Pruner は何時間ぶんの履歴を抱え込み始めるか? なぜか?
+
+インデクサが落ちた時点での \`FinishedHeight\` で Pruner は固まる — その瞬間以降に到達したブロックは全部「インデクサがまだ読みたいかも」という扱いになり、prune できない。インデクサを再起動して \`FinishedHeight\` を進めるまで、Reth は **インデクサが落ちていた間ずっと** 全履歴を蓄積する。これが本番で「監視を忘れた死んだ ExEx がディスクを食い潰す」事故の典型形です。
 
 ## ここまでに組み立てたもの
 
@@ -1371,12 +1393,14 @@ cargo build
 
 実本番のチェーンに登場する候補:
 
-- **Pool** — 受付ルール、優先レーン（Tempo は payments 優先）
-- **Network** — ピアポリシー、プライベートサブネット
-- **Executor** — カスタム Opcode、precompile、ガス表（カスタム Opcode のレッスン）
-- **Consensus** — PoS → HyperBFT、PoA、Tendermint
-- **Payload** — ブロックビルダー（MEV-aware、アプリ固有の理由でオーダーされる）
-- **Add-ons** — カスタム JSON-RPC ネームスペース、ExEx フック
+| サブシステム | 何を変えるか | 本番例 |
+| :--- | :--- | :--- |
+| **Pool** | 受付ルール、優先レーン | Tempo は payments tx を gas 価格より優先するレーンを実装 |
+| **Network** | ピアポリシー、プライベートサブネット | バリデータが互いを優先する private gossip subnet など |
+| **Executor** | カスタム Opcode、precompile、ガス表 | Hyperliquid は HyperBFT 専用 precompile を追加 |
+| **Consensus** | PoS → HyperBFT、PoA、Tendermint | Hyperliquid の HyperBFT、Berachain の Polaris |
+| **Payload** | ブロックビルダー | MEV-aware、アプリ固有の優先順 (Tempo の payments-first ordering) |
+| **Add-ons** | カスタム JSON-RPC ネームスペース、ExEx フック | tidx の \`tidx_*\` ネームスペース、検閲耐性監視の ExEx |
 
 これらが SDK が公開している差し替えポイントそのものです。それ *以外*（sync オーケストレータ、MDBX スキーマ、ヘッダーダウンロード、sender 復元、ハッシングステージ）は Reth からそのまま使います。
 
@@ -1412,7 +1436,20 @@ fn main() {
 2つ:
 
 1. **毎回全フィールドを書く羽目になる** — カスタマイズしていないものまで。struct が all-or-nothing を強制する。
-2. **型推論が早々に崩れる。** 各コンポーネントが独自のジェネリックパラメータを持つ。それを単一 struct にまとめると推論が効かず、行き詰まった型シグネチャになる。
+2. **型推論が早々に崩れる。** 各コンポーネントが独自のジェネリックパラメータを持つ。それを単一 struct にまとめると推論が効かず、行き詰まった型シグネチャになる。具体的にはこんな形:
+
+\`\`\`rust
+// pool だけ差し替えたいのに、コンパイラが全パラメータの specification を要求
+let cfg: NodeConfig<
+    CustomPool,
+    DefaultNetwork<EthereumPrimitives, DefaultDiscovery>,
+    DefaultExecutor<EthereumChainSpec, EthereumPrimitives>,
+    DefaultConsensus<EthereumChainSpec>,
+    DefaultPayload<EthereumPayloadBuilder, EthereumPrimitives>,
+> = NodeConfig { /* ... */ };
+\`\`\`
+
+毎行に Reth 内部の具体型を書く羽目になり、ライブラリのバージョンアップで型が変わるたびに全ファイル書き直し。実用上、ユーザコードは触れません。
 
 **Builder パターンが両方を解決します。** 各メソッドが 1 つの上書きを受け取り、新しいビルダー型を返す — Rust の型システムが変更を追跡し、デフォルトは暗黙のまま据え置けます。
 

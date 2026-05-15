@@ -254,20 +254,29 @@ fn poll_execute_ready(&mut self, _cx: &mut Context<'_>, _input: ExecInput)
 }
 \`\`\`
 
-A Rust async-style poll method. Stages that are always ready (most of them) take the default. Stages that wait on I/O override it to return \`Poll::Pending\` while their futures are in flight.
+A Rust async-style poll method.
+
+> **What \`Poll<T>\` is:** every Rust \`Future\` has an internal \`fn poll(...) -> Poll<T>\` that, on each call, returns either \`Poll::Ready(value)\` (done) or \`Poll::Pending\` (not yet). When it returns \`Pending\`, the runtime sets the stage aside and polls a different one. When the stage is ready it gets woken up by another path, and the runtime polls it again. **The mechanism for "wait" without blocking a thread.**
+
+Stages that are always ready (most of them) take the default. Stages that wait on I/O override it to return \`Poll::Pending\` while their futures are in flight.
 
 **The orchestrator polls each stage; if pending, it moves on.** No stage blocks the others.
 
 ## Step 6 — Commit hooks: \`post_execute_commit\` / \`post_unwind_commit\`
 
-Some stages need to do work *after* their data is committed to disk — emit metrics, broadcast a notification, prune old data. These hooks let stages do that without polluting \`execute\` with "are we committed yet?" logic.
+Some stages need to do work *after* their data is committed to disk. These hooks let stages do that without polluting \`execute\` with "are we committed yet?" logic.
 
 \`\`\`rust
 fn post_execute_commit(&mut self) -> Result<(), StageError> { Ok(()) }
 fn post_unwind_commit(&mut self) -> Result<(), StageError> { Ok(()) }
 \`\`\`
 
-Default no-op; stages override only when they need it. **Most don't.** Opt-in lifecycle, not mandatory plumbing.
+Default no-op; stages override only when they need it. Concrete examples in Reth:
+
+- **\`ExecutionStage\`** uses \`post_execute_commit\` to push block-executed notifications to ExEx subscribers — the commit must finish first because subscribers will read the committed data.
+- **Pruner stages** free old indexes on disk after a checkpoint write succeeds.
+
+**Most stages don't override.** Opt-in lifecycle, not mandatory plumbing.
 
 ## Step 7 — \`#[auto_impl(Box)]\`: heterogeneous stage list
 
@@ -909,9 +918,22 @@ Your \`main\` wires the ExEx into the node builder:
 
 \`\`\`rust
 .install_exex("MyIndexer", exex_init)
+.install_exex("MevWatcher", mev_init)
+.install_exex("RiskEngine", risk_init)
 \`\`\`
 
-The first arg is a name (used in metrics and logs); the second is the init function. **You can chain multiple \`.install_exex(...)\` calls** — each ExEx gets its own notification stream and its own \`FinishedHeight\` channel. The pruner aggregates.
+The first arg is a name (used in metrics and logs); the second is the init function. **You can chain multiple \`.install_exex(...)\` calls** — each ExEx gets its own notification stream and its own \`FinishedHeight\` channel.
+
+**Practical implications:**
+
+- **They don't interfere.** If the indexer falls behind, the MEV watcher keeps processing (each stream is independently buffered).
+- **The pruner aligns to the slowest one.** The pruner only prunes below the **minimum** \`FinishedHeight\` across all installed ExExs — if the indexer stalls at block 100, Reth keeps everything ≤ 100, even if the MEV watcher is at 1000.
+- **Crashes are independent.** If one ExEx panics, the others and Reth itself keep running (unless init fails, which fails node startup).
+- **Metrics are per-ExEx.** The first-arg name labels the \`reth_exex_<name>_*\` metrics.
+
+> 🛑 **Recall check.** Your indexer dies overnight from an OOM, but the MEV watcher is still running fine. How many hours of history does the pruner start hoarding? Why?
+
+The pruner freezes at the indexer's last \`FinishedHeight\` — every block after that is treated as "the indexer might still want to read this," so nothing prunes. Until you restart the indexer and let it advance \`FinishedHeight\`, Reth accumulates history for **the entire window the indexer was down**. This is the canonical production failure mode of "an unmonitored dead ExEx eats your disk."
 
 ## What you've built
 
@@ -1371,12 +1393,14 @@ What subsystems would you actually want to customize for a real chain?
 
 The candidates that show up across real production chains:
 
-- **Pool** — admission rules, priority lanes (Tempo wants payments-priority)
-- **Network** — peer policy, private subnets
-- **Executor** — custom opcodes, precompiles, gas table (the lesson on custom opcodes)
-- **Consensus** — PoS → HyperBFT, PoA, Tendermint
-- **Payload** — block builder (MEV-aware, ordered for app-specific reasons)
-- **Add-ons** — custom JSON-RPC namespaces, ExEx hooks
+| Subsystem | What you swap | Production example |
+| :--- | :--- | :--- |
+| **Pool** | admission rules, priority lanes | Tempo runs a payments-priority lane that beats gas-price ordering |
+| **Network** | peer policy, private subnets | private gossip subnet so validators preferentially gossip to each other |
+| **Executor** | custom opcodes, precompiles, gas table | Hyperliquid adds HyperBFT-specific precompiles |
+| **Consensus** | PoS → HyperBFT, PoA, Tendermint | Hyperliquid's HyperBFT, Berachain's Polaris |
+| **Payload** | block builder | MEV-aware, app-specific ordering (Tempo's payments-first ordering) |
+| **Add-ons** | custom JSON-RPC namespaces, ExEx hooks | tidx's \`tidx_*\` namespace, censorship-monitoring ExEx |
 
 These are exactly the override points the SDK exposes. Everything *else* (sync orchestrator, MDBX schema, header download, sender recovery, hashing stages) you take from Reth as-is.
 
@@ -1412,7 +1436,20 @@ Pass a struct of overrides. Works, but clunky.
 The two:
 
 1. **You spell out every field every time** — even the ones you didn't customize. The struct enforces all-or-nothing.
-2. **Type inference falls apart fast.** Each component has its own generic parameters. Specifying them all as a single struct creates a tangled type signature you can't reason about.
+2. **Type inference falls apart fast.** Each component has its own generic parameters. Specifying them all as a single struct creates a tangled type signature you can't reason about. Concretely:
+
+\`\`\`rust
+// You only want to swap the pool, but the compiler demands every parameter
+let cfg: NodeConfig<
+    CustomPool,
+    DefaultNetwork<EthereumPrimitives, DefaultDiscovery>,
+    DefaultExecutor<EthereumChainSpec, EthereumPrimitives>,
+    DefaultConsensus<EthereumChainSpec>,
+    DefaultPayload<EthereumPayloadBuilder, EthereumPrimitives>,
+> = NodeConfig { /* ... */ };
+\`\`\`
+
+You end up spelling Reth-internal concrete types on every line, and every library bump that touches one of those types forces you to rewrite the file. In practice no user code goes near this.
 
 **Builder pattern fixes both.** Each method takes one override and returns a new builder type — Rust's type system tracks the changes, defaults stay implicit.
 

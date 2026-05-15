@@ -222,6 +222,8 @@ struct WsProvider<N: Network>   { conn: WsConnection, _phantom: PhantomData<N> }
 struct IpcProvider<N: Network>  { /* ... */ }
 \`\`\`
 
+> **What \`PhantomData<N>\` is:** a zero-sized field that holds no runtime value but tells the compiler "this struct is generic over \`N\`". Zero runtime overhead; only compile-time type accounting. Used when you want \`N\` as a type parameter without actually storing a value of type \`N\`.
+
 Three structs with the same trait methods, copy-pasted bodies. Bad.
 
 Better: **introduce a transport trait**. The provider holds *something* that can send JSON-RPC; the something is itself a trait object:
@@ -911,7 +913,11 @@ trait Network {
 }
 \`\`\`
 
-Six associated types. Receipts and blocks turn out to need similar splitting.
+Six associated types. **Notice:** the same reason that forced "one transaction type per lifecycle stage" applies to Receipts and Blocks too.
+
+> 🛑 **Predict.** If you split Receipts and Blocks by the same principle, how many associated types do you end up with for each? Why?
+
+Write down your guess before scrolling. The answer follows.
 
 ## Step 3 — Receipts and headers split, too
 
@@ -1656,7 +1662,9 @@ Generic-over-S code can require either bound: \`fn foo<S: Signer>\` for code tha
 
 > 🛑 **Anti-fluency.** Why is \`SignerSync\` not just \`Signer\` with a non-async \`sign_hash\`? Why are they distinct traits?
 
-Because **traits with \`async fn\` and traits without \`async fn\` are different kinds of things in Rust.** An in-process signer can implement both — its sync method does the actual work, its async method just wraps in \`async\` for compatibility. A network-bound signer can only implement the async trait. Generic-over-S code chooses which contract to require. Fusing them would force every signer to commit to async, losing the cheaper-sync optimization.
+Because **traits with \`async fn\` and traits without \`async fn\` are different kinds of things in Rust.** An \`async fn foo() -> T\` is really \`fn foo() -> impl Future<Output = T>\` — it returns a Future rather than the result, forcing every caller to \`.await\`. Exposing the same method in sync and async forms means two completely different signatures.
+
+An in-process signer can implement both — its sync method does the actual work, its async method just wraps in \`async\` for compatibility. A network-bound signer can only implement the async trait (I/O has to happen). Generic-over-S code chooses which contract to require. Fusing them would force every signer to commit to async, losing the cheaper-sync optimization (in-process signing skips both the \`.await\` and the Future allocation).
 
 ## Step 5 — Tying it back to \`Provider\`: the \`WalletFiller\`
 
