@@ -660,6 +660,41 @@ Finish drill 5 and you have a running tidx instance indexing a real chain with b
 
 > 🛑 **Final check.** In one sentence: what does tidx's dual-storage design buy you that a single-database indexer can't? If your answer doesn't mention *both* "point lookup latency" and "analytics scan throughput," re-read the opening — that tension is the whole architecture.
 
+## Test gate
+
+Per *Test gate — every app in this tier ships with passing tests*, this lesson's minimum gate is **fixture-chain replay**: feed a known sequence of \`Notification::ChainCommitted\` and \`Notification::ChainReverted\` into your indexer's processing function, then assert the derived state in PG (and CH if you wired it) matches a golden reference exactly.
+
+The reorg case is non-negotiable: a sink-into-PG indexer that handles only \`ChainCommitted\` corrupts derived state on every reorg. Your gate must prove the \`ChainReverted\` path actually reverses the writes.
+
+\`\`\`rust
+// tests/fixture_replay.rs
+use reth_exex::ExExNotification;
+
+#[tokio::test]
+async fn replays_committed_then_reverted() {
+    let pg = test_pg_pool().await;            // ephemeral schema per test
+    let mut indexer = Indexer::new(pg.clone());
+
+    // Apply blocks N..N+5
+    for n in N..N+5 {
+        indexer.handle(committed_fixture(n)).await.unwrap();
+    }
+    assert_eq!(pg.tx_count_at_block(N+4).await, GOLDEN_TX_COUNT);
+
+    // Reorg over N+3..N+5
+    indexer.handle(reverted_fixture(N+3..=N+5)).await.unwrap();
+    assert_eq!(pg.tx_count_at_block(N+2).await, GOLDEN_TX_COUNT_AT_N2);
+    assert_eq!(pg.tx_count_at_block(N+5).await, 0, "reorged blocks must vanish");
+}
+
+#[tokio::test]
+async fn idempotent_under_replay() {
+    // Same notification twice must be a no-op (crash-recovery scenario)
+}
+\`\`\`
+
+The fixture lives under \`tests/fixtures/\` as a serialized \`ExExNotification\` (use \`reth\`'s test helpers or capture from a real node once and pin). The lesson is **not complete** until both tests are green and CI runs them on every push.
+
 ## 📺 Further watching
 
 \`\`\`youtube
@@ -977,6 +1012,50 @@ The architecture you wrote — define trait, impl with component access, registe
 Finish drill 5 and you've closed the loop: a node that exposes node-only insight as a typed RPC, consumed by a separate Rust process that uses that insight to compete in the mempool. **That round trip — observability via custom RPC, behavior via a separate consumer — is how real searcher / market-maker stacks are organized.**
 
 > 🛑 **Final check.** In one sentence: why is \`extend_rpc_modules\` strictly more powerful than running a sidecar service that calls Reth's standard RPC? If your answer doesn't mention "in-process access to node components", re-read Step 3 — that access is the leverage.
+
+## Test gate
+
+Per *Test gate — every app in this tier ships with passing tests*, this lesson's minimum gate is **in-process integration tests** that boot the node with your custom RPC registered, hit the new methods over HTTP, and assert the JSON shape — including error paths.
+
+A custom RPC that "looks correct" in dev breaks in three ways in production: bad parameter handling returns the wrong error code, the subscription leaks tasks on disconnect, the auth-gate is missing on a method that should require it. Each is testable in seconds.
+
+\`\`\`rust
+// tests/rpc_integration.rs
+use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
+use jsonrpsee::rpc_params;
+
+#[tokio::test]
+async fn returns_buckets_for_known_state() {
+    let node = boot_node_with_extension().await;       // spins up Reth in-process
+    let client = HttpClientBuilder::default().build(node.http_url()).unwrap();
+
+    seed_mempool(&node, &TEST_TX_FIXTURES).await;
+    let buckets: Vec<Bucket> = client
+        .request("txpoolPlus_pendingByGasBucket", rpc_params![10u32])
+        .await.unwrap();
+
+    assert_eq!(buckets.len(), 10);
+    assert_eq!(buckets.iter().map(|b| b.count).sum::<u64>(), TEST_TX_FIXTURES.len() as u64);
+}
+
+#[tokio::test]
+async fn rejects_invalid_bucket_count() {
+    let node = boot_node_with_extension().await;
+    let client = HttpClientBuilder::default().build(node.http_url()).unwrap();
+
+    let err = client.request::<Vec<Bucket>, _>("txpoolPlus_pendingByGasBucket", rpc_params![0u32])
+        .await.unwrap_err();
+    assert_jsonrpc_error_code(&err, -32602);            // Invalid params, not -32603 (internal)
+}
+
+#[tokio::test]
+async fn subscription_does_not_leak_on_disconnect() {
+    // Open subscription, drop the client, assert the spawned task exits
+    // (use a Drop probe inside the closure to verify)
+}
+\`\`\`
+
+The lesson is **not complete** until: (1) the success path test passes, (2) at least one error-code test passes (wrong type, out-of-range, missing param), (3) the subscription cleanup test passes. \`cargo run\` against mainnet doesn't substitute for any of these.
 
 `,
                 },
@@ -1428,6 +1507,53 @@ Finish drill 5 and you have a wallet backend that real users could rely on, modu
 
 > 🛑 **Final check.** In one sentence: why is **local nonce state** the load-bearing piece of this design, even though every other layer (signing, gas, watcher) gets more attention? If your answer doesn't mention "concurrent sends without RPC roundtrip per nonce", re-read Step 1 — that's why nonce management is the part that's hard.
 
+## Test gate
+
+Per *Test gate — every app in this tier ships with passing tests*, this lesson's minimum gate is **two invariants that must hold in any production wallet backend**:
+
+1. **Tx encoding roundtrip** — every signed transaction your service produces must decode back to the exact \`TransactionRequest\` it originated from (sender, to, value, nonce, gas params, data). A wallet that signs txs that "look right" but encode incorrectly silently ruins users when their txs revert at the EVM layer.
+2. **Nonce monotonicity under concurrency** — fire N concurrent \`/send\` requests for the same \`from\`; assert the resulting tx hashes have nonces \`base\`, \`base+1\`, ..., \`base+N-1\` with **no gaps and no duplicates**. The whole reason for local nonce state (per the Final check above) is to prevent this; the test makes the prevention real.
+
+\`\`\`rust
+// tests/wallet_invariants.rs
+use alloy::consensus::TxEnvelope;
+use alloy::eips::Decodable2718;
+
+#[tokio::test]
+async fn signed_tx_roundtrips() {
+    let svc = test_service().await;
+    let req = SendRequest { from: ALICE, to: BOB, value: U256::from(1), data: vec![] };
+
+    let signed_bytes = svc.sign_only(&req).await.unwrap();
+    let decoded = TxEnvelope::decode_2718(&mut signed_bytes.as_slice()).unwrap();
+
+    assert_eq!(decoded.recover_signer().unwrap(), ALICE);
+    assert_eq!(decoded.tx().to(), Some(BOB));
+    assert_eq!(decoded.tx().value(), U256::from(1));
+}
+
+#[tokio::test]
+async fn no_nonce_gaps_under_concurrent_send() {
+    let svc = test_service().await;
+    let base = svc.next_nonce(ALICE).await;
+
+    let handles: Vec<_> = (0..50)
+        .map(|_| {
+            let svc = svc.clone();
+            tokio::spawn(async move { svc.send(stub_request(ALICE)).await.unwrap() })
+        })
+        .collect();
+    let mut nonces: Vec<u64> = futures::future::try_join_all(handles).await.unwrap()
+        .into_iter().map(|r| r.nonce).collect();
+    nonces.sort();
+
+    let expected: Vec<u64> = (base..base + 50).collect();
+    assert_eq!(nonces, expected, "nonces must be contiguous and unique");
+}
+\`\`\`
+
+The lesson is **not complete** until both pass. The wallet that fails (1) loses funds; the wallet that fails (2) deadlocks users behind a single stuck nonce.
+
 ## 📺 Further watching
 
 \`\`\`youtube
@@ -1769,6 +1895,53 @@ Finish drill 5 and you have a sponsor service ready for an internal app. Add SDK
 
 > 🛑 **Final check.** In one sentence: why does EIP-7702 specifically (vs. EIP-4337) make sponsorship so much *cheaper* to operate? If your answer doesn't mention "no entry-point contract overhead" and "single tx vs. UserOp wrapping", re-read the 90-second refresher — that's the whole reason 7702 exists.
 
+## Test gate
+
+Per *Test gate — every app in this tier ships with passing tests*, this lesson's minimum gate covers the two failure modes that would burn the sponsor in production:
+
+1. **Replay protection** — the same \`SignedAuthorization\` cannot be sponsored twice. (The user signs once with nonce N; if your sponsor accepts the same signed authorization a second time after the first lands, the replay-protected tx will revert at the EVM layer but your service will have already paid gas to *try*.) Assert that the second \`/sponsor\` call with the same auth tuple is rejected at your service boundary, before submission.
+2. **Gas-accounting honesty** — after a successful sponsored tx, the sponsor's balance dropped by exactly the gas paid (within ε for tip variance), and the user's balance is unchanged. If your accounting is off, your spending-cap drill (drill 4) silently breaks.
+
+Run both against an \`anvil --hardfork prague\` instance (or a forked mainnet at a post-Pectra block):
+
+\`\`\`rust
+// tests/sponsor_invariants.rs
+#[tokio::test]
+async fn rejects_duplicate_authorization() {
+    let svc = test_sponsor().await;
+    let user = anvil_account(0);
+    let auth = sign_authorization(&user, DELEGATE, 0).await;
+    let calls = vec![simple_transfer(BOB, U256::from(1))];
+
+    // First request lands
+    let h1 = svc.sponsor(&auth, calls.clone()).await.unwrap();
+    wait_for_inclusion(h1).await;
+
+    // Second request with same auth must be rejected at the service, not the chain
+    let err = svc.sponsor(&auth, calls).await.unwrap_err();
+    assert!(matches!(err, SponsorError::ReplayedAuthorization));
+}
+
+#[tokio::test]
+async fn gas_accounting_matches_actual_cost() {
+    let svc = test_sponsor().await;
+    let user = anvil_account(0);
+    let sponsor_before = balance(svc.sponsor_address()).await;
+    let user_before = balance(user.address()).await;
+
+    let h = svc.sponsor(&fresh_auth(&user).await, vec![simple_transfer(BOB, U256::from(1))])
+        .await.unwrap();
+    let receipt = wait_for_receipt(h).await;
+    let actual_cost = U256::from(receipt.gas_used) * receipt.effective_gas_price;
+
+    let sponsor_after = balance(svc.sponsor_address()).await;
+    assert_eq!(sponsor_before - sponsor_after, actual_cost);
+    assert_eq!(balance(user.address()).await, user_before, "user must pay zero gas");
+}
+\`\`\`
+
+The lesson is **not complete** until both pass. A sponsor that fails (1) burns money on every replay attempt; one that fails (2) cannot enforce per-user spending caps.
+
 ## 📺 Further watching
 
 \`\`\`youtube
@@ -2071,6 +2244,53 @@ The architecture you wrote — high-address precompile + selector dispatch + ABI
 Finish drill 4 and you have, structurally, a fork of Foundry. Add fuzz testing + invariant testing on top and you're at parity with what's in the wild.
 
 > 🛑 **Final check.** In one sentence: why is **selector-dispatched ABI-decoded args** the thing that makes a precompile feel like a Solidity contract from the test author's side? If your answer doesn't mention "Solidity already knows how to encode calls to addresses", re-read Step 1 — that ABI compatibility is what makes the deception possible.
+
+## Test gate
+
+Per *Test gate — every app in this tier ships with passing tests*, this lesson's minimum gate is **a differential test against a reference implementation** of the same primitive.
+
+Custom cheatcodes are dual-use code: a Rust precompile for speed, plus a Solidity-only reference for trust. If your \`cheats.measureGas(target, data)\` returns a different number than the manual \`gasleft() - gasleft()\` pattern in plain Solidity, **all tests using your cheatcode are silently lying**. The differential test is the only way to know.
+
+\`\`\`solidity
+// test/MeasureGasDifferential.t.sol
+import "forge-std/Test.sol";
+import {Cheats} from "src/Cheats.sol";
+
+contract MeasureGasDifferential is Test {
+    Cheats cheats = Cheats(0x7109709ECfa91a80626fF3989D68f67F5b1DD12E);  // your address
+    Target target = new Target();
+
+    function testMatches_referenceForKnownInput() public {
+        bytes memory data = abi.encodeCall(target.work, (42));
+
+        // (a) Your Rust precompile
+        uint256 viaPrecompile = cheats.measureGas(address(target), data);
+
+        // (b) The Solidity-only reference
+        uint256 before = gasleft();
+        (bool ok,) = address(target).call(data);
+        uint256 referenceGas = before - gasleft();
+        require(ok);
+
+        assertApproxEqAbs(viaPrecompile, referenceGas, 5);  // tiny ε for measurement overhead
+    }
+
+    function testFuzz_alwaysAgreesWithReference(uint256 input) public {
+        input = bound(input, 0, 10_000);
+        bytes memory data = abi.encodeCall(target.work, (input));
+
+        uint256 viaPrecompile = cheats.measureGas(address(target), data);
+        uint256 before = gasleft();
+        (bool ok,) = address(target).call(data);
+        uint256 referenceGas = before - gasleft();
+        require(ok);
+
+        assertApproxEqAbs(viaPrecompile, referenceGas, 5);
+    }
+}
+\`\`\`
+
+Run \`forge test --match-test testFuzz_ -vvv\` with the default 256 fuzz iterations. The lesson is **not complete** until the precompile and the reference agree across all 256 inputs (give or take a few-gas measurement window). If they diverge on one input, your cheatcode would silently corrupt anyone's gas accounting on that exact input.
 
 ## 📺 Further watching
 
@@ -2416,6 +2636,47 @@ The architecture you wrote — fork once, read reserves atomically, compute quot
 Finish drill 5 and you have, structurally, an aggregator-as-a-service. Plug in MEV protection ([Lesson 8](/courses/reth-building-en/lessons/build-capstone-router-en)) and you're at parity with what shipped in 2023.
 
 > 🛑 **Final check.** In one sentence: why is **forking** strictly better than **N parallel \`eth_call\`s** for an aggregator? If your answer doesn't mention "atomic state across all reads", re-read Step 1 — that atomicity is what makes the comparison sound.
+
+## Test gate
+
+Per *Test gate — every app in this tier ships with passing tests*, this lesson's minimum gate is **a forked-state quote test against a known-good reference quote** at a pinned mainnet block.
+
+The aggregator's correctness is binary: either your computed output matches what \`Quoter\` (Uniswap's official off-chain quoter contract, deployed at \`0x...3258\`) returns for the same input at the same block, or you have a bug in your CFMM math. Reading reserves correctly is necessary; doing the math correctly is what the test enforces.
+
+\`\`\`rust
+// tests/aggregator_quote_diff.rs
+use alloy::primitives::{address, U256};
+
+const PINNED_BLOCK: u64 = 18_500_000;
+const FORK_RPC: &str = "https://eth.merkle.io";
+const QUOTER_V2: Address = address!("61fFE014bA17989E743c5F6cB21bF9697530B21e");
+
+#[tokio::test]
+async fn matches_quoter_for_known_input() {
+    let mut db = build_fork_at(FORK_RPC, PINNED_BLOCK).await;
+
+    // 10,000 USDC -> WETH via Uniswap V3 0.3% pool
+    let amount_in = U256::from(10_000) * U256::from(10).pow(U256::from(6));
+
+    // Our aggregator's path (V3 only, single hop)
+    let our_quote = quote_v3(&mut db, USDC, WETH, 3000, amount_in).await.unwrap();
+
+    // Reference: Uniswap's QuoterV2 in the SAME forked state
+    let reference_quote = call_quoter_v2(&mut db, QUOTER_V2, USDC, WETH, 3000, amount_in).await.unwrap();
+
+    // Allow ε for fee accounting precision (basis-point level)
+    let diff_bps = (our_quote.abs_diff(reference_quote) * U256::from(10_000)) / reference_quote;
+    assert!(diff_bps < U256::from(5), "must match QuoterV2 within 5 bps; got {} bps", diff_bps);
+}
+
+#[tokio::test]
+async fn picks_best_when_v3_dominates() {
+    // Construct a scenario where V3 has best price; assert pick_best returns V3
+    // Use a real block where this holds (look up via block explorer)
+}
+\`\`\`
+
+The lesson is **not complete** until the QuoterV2 differential passes. If your math is off by 50 bps, you're recommending suboptimal routes — silently — to every user.
 
 `,
                 },
@@ -2811,6 +3072,42 @@ After drill 5 you have a tuned, observably-correct frontrun-resistant router. **
 
 > 🛑 **Final check (this lesson's final check).** In one sentence: of the lessons in this tier, why does the *capstone* depend on **simulation** (L1) more than any other component? If your answer doesn't mention "you can't decide whether to defend without first measuring the threat in the same units as the user's loss", the capstone hasn't quite landed yet — re-read Step 4.
 
+## Test gate
+
+Per *Test gate — every app in this tier ships with passing tests*, the capstone's gate is **end-to-end on a forked mainnet**: a real swap intent goes in, the router decides PUBLIC vs PRIVATE based on a simulated threat, the right submission path is taken, and the user receives at least \`min_out\`. The decision layer is the novel piece — and the only thing the test can't lift from earlier lessons.
+
+\`\`\`rust
+// tests/router_e2e.rs
+#[tokio::test]
+async fn benign_path_uses_public_mempool() {
+    // anvil --fork-url <RPC> --fork-block-number <PINNED>
+    // No adversarial tx in mempool
+    let svc = test_router().await;
+    let resp = svc.route(stub_intent(ALICE)).await.unwrap();
+    assert_eq!(resp.decision, Decision::ExecutePublic);
+    let receipt = wait_for_receipt(resp.tx_hash).await;
+    assert!(out_amount(&receipt) >= MIN_OUT);
+}
+
+#[tokio::test]
+async fn detected_threat_routes_through_private_mempool() {
+    let svc = test_router().await;
+    seed_mempool_with_sandwich_setup(&svc).await;       // simulate adversary
+    let resp = svc.route(stub_intent(ALICE)).await.unwrap();
+    assert_eq!(resp.decision, Decision::ExecutePrivate);
+    assert!(resp.submission_url.contains("flashbots") || resp.submission_url.contains("protect"));
+}
+
+#[tokio::test]
+async fn respects_min_out() {
+    // Force a slippage scenario; assert the router refuses to submit, returns 422
+    let svc = test_router().await;
+    let resp = svc.route(intent_with_unrealistic_min_out(ALICE)).await;
+    assert!(matches!(resp, Err(RouteError::SlippageExceeded)));
+}
+\`\`\`
+
+The capstone is **not complete** until all three pass on a forked-mainnet \`anvil\`. The first proves the public path works end-to-end; the second proves the decision layer flips paths under threat; the third proves you don't lose user funds on bad slippage.
 
 ---
 
@@ -3078,6 +3375,44 @@ Finish drill 5 and you have, structurally, the same continuous-validation discip
 
 > 🛑 **Final check.** In one sentence: why does building L1-L8 in this tier require **also** building this validation lesson? If your answer doesn't connect "Reth is ~7-12% of clients" to "your sim's correctness depends on agreeing with the 88-93% that aren't Reth," re-read the opening — that's the entire reason this lesson sits last in the tier.
 
+## Test gate
+
+Per *Test gate — every app in this tier ships with passing tests*, this lesson **is the test gate for the rest of the tier** — but it has its own gate too: **a differential trace test against a non-Revm provider over a small recent block range**.
+
+The premise of the whole lesson is that "your Revm trace matches Geth/Erigon's \`debug_traceTransaction\` output." The test makes that claim machine-checkable.
+
+\`\`\`rust
+// tests/revm_vs_provider.rs
+#[tokio::test]
+async fn matches_provider_for_recent_blocks() {
+    // Use any provider that exposes debug_traceTransaction:
+    //   - Erigon: built-in
+    //   - Geth: --gcmode=archive --http.api debug
+    //   - Alchemy: paid plan; rate-limited
+    let reference = ProviderBuilder::new().connect_http(REFERENCE_RPC.parse().unwrap());
+
+    for block_num in (LATEST - 10)..=LATEST {
+        let block = reference.get_block_by_number(block_num.into(), true).await.unwrap().unwrap();
+
+        for tx in block.transactions.into_transactions() {
+            let our_trace = our_revm_trace(tx.hash).await.unwrap();
+            let reference_trace = reference.debug_trace_transaction(tx.hash).await.unwrap();
+
+            assert_traces_equivalent(&our_trace, &reference_trace,
+                "tx {:?} diverged from reference at block {}", tx.hash, block_num);
+        }
+    }
+}
+
+#[tokio::test]
+async fn coverage_includes_create_and_call_paths() {
+    // Pick known transactions that exercise CREATE, CREATE2, CALL, DELEGATECALL,
+    // STATICCALL — each must individually match the reference
+}
+\`\`\`
+
+The lesson — and by extension your trust in everything you built in L1–L8 — is **not complete** until both pass on a real recent-block range. A single divergent tx means your simulation lies about something, and you cannot know which sim-dependent decision in L1–L8 was wrong without first finding it.
+
 ## 📺 Further watching
 
 \`\`\`youtube
@@ -3279,6 +3614,65 @@ If you stumbled on 2 or 4, re-read the Core/Intents/Methods section before the n
 Finish drill 3 and you have a paid endpoint deployable on real infrastructure. Finish drill 5 and you've internalized the protocol well enough to extend it.
 
 > 🛑 **Final check.** In one sentence: what does MPP give an agent that API keys + Stripe Checkout don't? If your answer doesn't mention *per-request settlement, no account, no rail lock-in*, re-read the opening — that's the entire reason the protocol exists.
+
+## Test gate
+
+Per *Test gate — every app in this tier ships with passing tests*, this lesson's minimum gate covers the two failure modes that would either lock out paying users or let attackers double-spend:
+
+1. **402 on no payment, 200 on valid payment** — the protocol's main contract. A request without a valid \`X-PAYMENT\` header returns HTTP 402 with the cost + receiving address. The same request *with* a valid micropayment returns 200 + the resource.
+2. **Replay protection** — the same micropayment receipt cannot satisfy two requests. (Without this, an attacker captures one valid \`X-PAYMENT\` header and uses it to drain your endpoint indefinitely.) The second request with an already-used receipt returns 402 (or 409 \`Conflict\`, depending on your design).
+
+\`\`\`rust
+// tests/mpp_gate.rs
+use reqwest::StatusCode;
+
+#[tokio::test]
+async fn returns_402_without_payment() {
+    let svc = test_endpoint().await;
+    let resp = reqwest::get(svc.url("/resource")).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::PAYMENT_REQUIRED);
+
+    let body: PaymentRequired = resp.json().await.unwrap();
+    assert!(body.amount > U256::ZERO);
+    assert_eq!(body.recipient, svc.recipient_address());
+}
+
+#[tokio::test]
+async fn returns_resource_with_valid_payment() {
+    let svc = test_endpoint().await;
+    let receipt = make_micropayment(&svc).await;
+
+    let resp = reqwest::Client::new()
+        .get(svc.url("/resource"))
+        .header("X-PAYMENT", receipt.encode())
+        .send().await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), EXPECTED_RESOURCE_BODY);
+}
+
+#[tokio::test]
+async fn rejects_replayed_payment() {
+    let svc = test_endpoint().await;
+    let receipt = make_micropayment(&svc).await;
+    let header_value = receipt.encode();
+
+    // First use lands
+    let r1 = reqwest::Client::new()
+        .get(svc.url("/resource"))
+        .header("X-PAYMENT", &header_value)
+        .send().await.unwrap();
+    assert_eq!(r1.status(), StatusCode::OK);
+
+    // Second use must fail
+    let r2 = reqwest::Client::new()
+        .get(svc.url("/resource"))
+        .header("X-PAYMENT", &header_value)
+        .send().await.unwrap();
+    assert!(matches!(r2.status(), StatusCode::PAYMENT_REQUIRED | StatusCode::CONFLICT));
+}
+\`\`\`
+
+The lesson is **not complete** until all three pass against your endpoint running locally (with a forked Tempo testnet or anvil for the payment leg). A 402 endpoint that fails the replay test is a wallet-drainer waiting for someone to find your URL.
 `,
                 },
               ],
