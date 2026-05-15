@@ -183,6 +183,15 @@ Open the repo. Read it. This lesson walks you through it.
 
 > 📌 **Why this is the right starting point.** Watching the public mempool, decoding a swap, fork-simulating in Revm, building a Flashbots bundle — every searcher does these things. The interesting question isn't "can you write them once?" It's "how do you organize them so the next strategy you ship isn't a rewrite?" That's exactly the question artemis answers. The MEV logic is yours; the orchestration is borrowed.
 
+## Acceptance criteria
+
+The lesson is complete when these tests pass (full code at the end in §Test gate):
+
+1. **\`finds_known_arb_at_pinned_block\`** — at a pinned mainnet block where a known arb existed, your strategy emits an \`Action\` with positive expected P&L.
+2. **\`retracts_action_on_reorg\`** — on a synthetic \`ChainReorged\` notification, the strategy retracts any pending \`Action\` that depended on the reorged block.
+
+**Test-first reading.** Skim these now. The walkthrough below explains the types (\`Strategy<E, A>\`, \`Action::SubmitBundle\`) and patterns (forked Revm, mempool collectors) you'll need to write tests against.
+
 ## The artemis architecture, in one sentence
 
 A searcher is an **event-processing pipeline**: external signals come in, MEV logic decides what to do, actions go out. Artemis splits that pipeline into three traits and an engine that wires them together.
@@ -443,6 +452,15 @@ Etherscan and Dune are indexers. Their architectures are not public. [\`tidx\`](
 Open the repo. Read it. We'll go through it together.
 
 > 📌 **Why this is the right starting point.** Every "build an indexer" tutorial pretends one database is enough. Real production hits a wall the moment two query shapes coexist: *"show me the last 10 transfers from address X"* (point lookup — PostgreSQL wins) and *"show me daily transfer volume for the past year"* (range scan — ClickHouse wins). tidx writes to both backends in parallel and routes queries to whichever fits. That dual-storage decision is the whole lesson.
+
+## Acceptance criteria
+
+The lesson is complete when these tests pass (full code at the end in §Test gate):
+
+1. **\`replays_committed_then_reverted\`** — apply N..N+5 then revert N+3..N+5; the derived state in PG matches the golden reference at every height.
+2. **\`idempotent_under_replay\`** — feeding the same notification twice is a no-op (crash-recovery scenario).
+
+**Test-first reading.** The walkthrough below explains the dual-sink architecture and \`Notification::ChainCommitted\` / \`ChainReverted\` shapes you'll need to construct fixture inputs for these tests.
 
 ## The OLTP vs OLAP design tension, concretely
 
@@ -716,6 +734,16 @@ You need a single API call that returns a histogram of pending tx gas prices for
 > 📌 **Scope honesty.** We add one read-only method (\`txpoolPlus_pendingByGasBucket\`) that aggregates the local mempool into 10 gas-price buckets. We don't cover authentication, rate-limiting, or write methods — those are the same patterns layered on top. The architecture lesson is "how does the trait get wired in?"
 
 > 📚 **See also.** [QuickNode's *How to Build Custom RPC Methods with Reth*](https://www.quicknode.com/guides/infrastructure/build-custom-rpc-methods-with-reth) covers the foundation of registering a custom RPC trait. We build on top of it here with server-side aggregation, a subscription variant, and the production gaps a real custom RPC has to close.
+
+## Acceptance criteria
+
+The lesson is complete when these tests pass (full code at the end in §Test gate):
+
+1. **\`returns_buckets_for_known_state\`** — boot the node in-process, seed the mempool with fixture txs, call \`txpoolPlus_pendingByGasBucket\` over HTTP, assert bucket count and total tx count.
+2. **\`rejects_invalid_bucket_count\`** — bad parameter returns the right JSON-RPC error code (\`-32602\` Invalid params, *not* \`-32603\` Internal error).
+3. **\`subscription_does_not_leak_on_disconnect\`** — open a subscription, drop the client, assert the spawned task exits.
+
+**Test-first reading.** The walkthrough below shows the trait registration, parameter handling, and subscription pattern you'll exercise in these tests.
 
 ## What you'll build
 
@@ -1071,6 +1099,15 @@ The lesson is **not complete** until: (1) the success path test passes, (2) at l
 A user clicks "Send" fifty times in a minute. Your wallet has to: pick the next *nonce* (the per-account counter Ethereum uses to order transactions) without colliding, sign with the right key, broadcast, watch the mempool, and — when gas spikes from 5 gwei to 80 gwei mid-flight — **bump the fee on stuck txs and replace them** so the user's session doesn't deadlock behind a single dust-priced transaction. Wallet UIs are the famous part. The send service behind them is the part teams actually wrestle with. ~250 lines of Rust below — signer pool, nonce manager, send queue, replace-on-stuck, confirm watcher.
 
 > 📌 **Scope honesty.** We build the **service** — signer pool + nonce manager + send queue + replace-on-stuck + confirm watcher — exposed over a tiny HTTP API. We don't cover key custody (HSM, MPC, KMS), fiat onramps, or the JS SDK. Those layers all sit *on top of* a send service that works; this lesson builds the part that has to work.
+
+## Acceptance criteria
+
+The lesson is complete when these tests pass (full code at the end in §Test gate):
+
+1. **\`signed_tx_roundtrips\`** — every signed transaction your service produces decodes back to the exact \`TransactionRequest\` it originated from (sender, to, value, nonce, gas params, data).
+2. **\`no_nonce_gaps_under_concurrent_send\`** — fire 50 concurrent \`/send\` requests for the same \`from\`; resulting nonces are \`base..base+50\` with no gaps and no duplicates.
+
+**Test-first reading.** The walkthrough below shows the signer pool, nonce manager, and \`TransactionRequest\` flow these tests exercise.
 
 ## What you'll build
 
@@ -1590,6 +1627,15 @@ The mechanics:
 
 That's it. Three sentences of protocol; the rest is plumbing.
 
+## Acceptance criteria
+
+The lesson is complete when these tests pass (full code at the end in §Test gate):
+
+1. **\`rejects_duplicate_authorization\`** — the same \`SignedAuthorization\` cannot be sponsored twice; the second \`/sponsor\` call is rejected at the service boundary, before submission.
+2. **\`gas_accounting_matches_actual_cost\`** — after a successful sponsored tx, the sponsor's balance dropped by the actual gas paid; the user's balance is unchanged.
+
+**Test-first reading.** The walkthrough below shows the Type 4 tx construction, signed-authorization handling, and gas-accounting paths these tests exercise.
+
 ## What you'll build
 
 \`\`\`bash
@@ -1966,6 +2012,15 @@ When you write \`vm.deal(alice, 100 ether)\` in a Foundry test, **that's not an 
 
 > 📌 **Scope honesty.** We **don't** fork Foundry. We build the precompile + a minimal Revm-based test harness that loads it. The pattern (high-address precompile + Solidity ABI surface + test runner that wires it in) **is identical** to how Foundry adds cheatcodes — you just see all of it instead of inheriting an opaque framework.
 
+## Acceptance criteria
+
+The lesson is complete when these tests pass (full code at the end in §Test gate):
+
+1. **\`testMatches_referenceForKnownInput\`** — for one fixed input, your Rust precompile and the Solidity-only \`gasleft()\` reference agree within ε (a few gas).
+2. **\`testFuzz_alwaysAgreesWithReference\`** — over Foundry's default 256 fuzz iterations, precompile and reference agree on every input.
+
+**Test-first reading.** The walkthrough below shows how the precompile is registered and how its output is computed — the parts both tests measure against the Solidity reference.
+
 ## What you'll build
 
 A new Solidity-callable cheatcode:
@@ -2311,6 +2366,15 @@ sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (the cheatcode 
 A user wants to swap 10,000 USDC for ETH. Uniswap V2 will give them 2.948 WETH. Sushi gives 2.946. Uniswap V3 gives 2.951. The aggregator's job: **fan out the same quote to every venue at the same instant, compare, pick the winner.** That's what 1inch, Paraswap, and 0x do under the hood. ~250 lines of Rust below: fork mainnet locally with Revm (so every quote reads the *same* atomic state), pull reserves from Uniswap V2 + Sushi + Uniswap V3, compute the output, pick the best.
 
 > 📌 **Scope honesty.** We compute quotes across **two V2-style pools (Uniswap V2 + Sushi) and one V3 pool (Uniswap V3)** for a single hop. Real aggregators add: split routing (send 30% through Uniswap, 70% through Curve), multi-hop (A → WETH → B), CFMMs with custom math (Curve's stableswap, Balancer's weighted pools), gas-aware routing. Each is a one-loop extension of the kernel here.
+
+## Acceptance criteria
+
+The lesson is complete when these tests pass (full code at the end in §Test gate):
+
+1. **\`matches_quoter_for_known_input\`** — for one fixed input at a pinned mainnet block, your computed V3 quote matches Uniswap's official QuoterV2 within 5 bps.
+2. **\`picks_best_when_v3_dominates\`** — at a block where V3 has the best price, \`pick_best\` returns the V3 quote.
+
+**Test-first reading.** The walkthrough below shows how to fork mainnet, read pool reserves, compute quotes per venue, and pick the winner — exactly the pieces these tests measure.
 
 ## What you'll build
 
@@ -2692,6 +2756,16 @@ The lesson is **not complete** until the QuoterV2 differential passes. If your m
 The capstone. Patterns from across the tier, integrated into one service. A user posts a swap intent (JSON). The router: quotes across DEXes (Lesson 7), watches the mempool for adversarial txs that would sandwich the swap (Lesson 1, inverted), simulates the threat in Revm to **measure** how much output the user would lose, sponsors gas via EIP-7702 (Lesson 5), and — when the threat score is high — submits through Flashbots Protect so the order never appears in the public mempool. When threat is low, public submission is fine and saves the bundler markup. **One service, four earlier lessons stitched in (L1, L4, L5, L7), one new piece: the decision layer.**
 
 > 📌 **Scope honesty.** This capstone integrates patterns from L1 / L4 / L5 / L7 of this tier. The novel build is the **frontrun-detection logic** + the **submission path that bypasses public mempool**. We use Flashbots Protect as the private RPC; the same shape works with MEV-Share, Beaverbuild's private endpoint, or any other private orderflow auction.
+
+## Acceptance criteria
+
+The lesson is complete when these tests pass (full code at the end in §Test gate):
+
+1. **\`benign_path_uses_public_mempool\`** — no adversarial tx in the mempool; the router decides PUBLIC, the swap lands, output ≥ \`min_out\`.
+2. **\`detected_threat_routes_through_private_mempool\`** — sandwich-setup tx in the mempool; the router decides PRIVATE and submits via Flashbots Protect.
+3. **\`respects_min_out\`** — slippage scenario; the router refuses to submit and returns \`SlippageExceeded\`.
+
+**Test-first reading.** The walkthrough below shows the decision layer (the only novel piece — the rest is L1/L4/L5/L7 stitched in) that these tests directly exercise.
 
 ## What you'll build
 
@@ -3142,6 +3216,15 @@ Your arb bot's Revm fork says the swap nets 2.95 WETH. The chain — running mos
 
 > 📌 **Scope honesty.** We diff Revm against a JSON-RPC provider for a single transaction's gas + return data. Production validation harnesses extend this to: full state-diff comparison via \`debug_traceTransaction\` prestate, statistical sampling across thousands of historical txs, hardfork-boundary regression tests, and CI integration. The kernel — *what does "they match" actually mean, and how do you check it cheaply?* — is the same.
 
+## Acceptance criteria
+
+The lesson is complete when these tests pass (full code at the end in §Test gate):
+
+1. **\`matches_provider_for_recent_blocks\`** — over the last 10 blocks, every transaction your Revm trace matches the reference provider's \`debug_traceTransaction\` output.
+2. **\`coverage_includes_create_and_call_paths\`** — known transactions exercising CREATE / CREATE2 / CALL / DELEGATECALL / STATICCALL each individually match the reference.
+
+**Test-first reading.** The walkthrough below shows how to construct the Revm trace and how to call \`debug_traceTransaction\` — the inputs both tests compare.
+
 ## Why this matters (the real reason)
 
 The discipline is cheap. The cost of skipping it is your bot's P&L, your aggregator's user-facing quote, your router's threat score — all silently off. From the [Reth team's benchmarking philosophy](https://www.paradigm.xyz/2024/04/reth-perf): "any divergence from mainnet behavior is a bug." That's the bar.
@@ -3455,6 +3538,16 @@ The **Machine Payments Protocol (MPP)** — IETF draft, jointly developed by Tem
 This lesson reads the source: the spec ([\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs)), the Rust SDK ([\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs)), and a working end-to-end CLI ([\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet)).
 
 > 📌 **Spec status — hedge appropriately.** MPP is an *IETF draft* ([draft-ryan-httpauth-payment-00](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)), not a ratified standard. The wire format may still evolve. What's stable enough to build on right now is the *shape* — HTTP 402 + a \`Payment\` auth scheme — and the Tempo/Stripe reference implementations. Treat the bytes as draft; treat the architecture as the lesson.
+
+## Acceptance criteria
+
+The lesson is complete when these tests pass (full code at the end in §Test gate):
+
+1. **\`returns_402_without_payment\`** — a request without \`X-PAYMENT\` returns \`402\` with the cost + receiving address.
+2. **\`returns_resource_with_valid_payment\`** — the same request *with* a valid micropayment returns \`200\` + the resource body.
+3. **\`rejects_replayed_payment\`** — the same payment receipt cannot satisfy two requests; the second returns \`402\` or \`409\`.
+
+**Test-first reading.** The walkthrough below shows the 402 challenge format, payment receipt structure, and replay-protection mechanism — the contract these tests pin down.
 
 ## The status code that nobody used
 
