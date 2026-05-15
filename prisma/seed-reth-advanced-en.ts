@@ -8,7 +8,7 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
       slug: 'reth-advanced-en',
       title: 'Inside Reth — Sync, Extensions, and the SDK',
       description:
-        'Read the real Reth source: Staged Sync (the 10-stage pipeline), ExEx (Execution Extensions for in-process indexers / MEV / risk engines), and the Reth SDK (compose your own App-chain). One of three independent Advanced courses (Revm, Reth, Alloy) — Inside Revm is the recommended prerequisite since several lessons here assume comfort with the `Database` trait and Revm execution model.',
+        'Read the real Reth source: Staged Sync (the 10-stage pipeline), ExEx (Execution Extensions for in-process indexers / MEV / risk engines), and the Reth SDK (compose your own App-chain). One of three independent Intermediate courses (Revm, Reth, Alloy) — Inside Revm is the recommended prerequisite since several lessons here assume comfort with the `Database` trait and Revm execution model.',
       difficulty: 'INTERMEDIATE',
       duration: 145,
       xpReward: 470,
@@ -34,7 +34,7 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
                   xpReward: 15,
                   content: `# Welcome to Inside Reth — how this course works
 
-This course is one of three independent Advanced-tier courses on RethLab:
+This course is one of three independent Intermediate-tier courses on RethLab:
 
 - **Inside Revm** — Inside the EVM engine *(recommended first if you haven't done it)*
 - **Inside Reth** (you are here) — Inside Reth: Staged Sync, ExEx, the Reth SDK
@@ -42,7 +42,7 @@ This course is one of three independent Advanced-tier courses on RethLab:
 
 These three are independent, but **several lessons here assume comfort with the \`Database\` trait and Revm execution model from Inside Revm**. If those concepts feel shaky, do Inside Revm first.
 
-> 📋 **First time at the Advanced tier?** Read **"How Advanced courses work"** at the end of *Bridge to Advanced* before starting. It explains the editorial style (Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape) and pacing — applies to all three Advanced courses, so you only read it once.
+> 📋 **First time at the Intermediate tier?** Read **"How Intermediate courses work"** at the end of *Bridge to Intermediate* before starting. It explains the editorial style (Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape) and pacing — applies to all three Intermediate courses, so you only read it once.
 
 ## What this course teaches
 
@@ -56,11 +56,11 @@ By the end, you'll have read enough Reth internals to ship a node-speed indexer 
 - The \`Database\` trait surface and how Revm reads state through it
 - How \`Stage\` and \`Database\` interact during \`ExecutionStage\`
 
-**Block-level Ethereum** (covered in Bridge to Advanced):
+**Block-level Ethereum** (covered in Bridge to Intermediate):
 - Block structure (header / body / receipts), reorgs as a normal phenomenon
 - What sender recovery, transaction body decoding, and receipts contain
 
-**Intermediate Rust** (also Bridge to Advanced; there's a *Rust: lifetimes, Box, Arc, dyn Trait* lesson inside this course for self-checking):
+**Intermediate Rust** (also Bridge to Intermediate; there's a *Rust: lifetimes, Box, Arc, dyn Trait* lesson inside this course for self-checking):
 - Generics with trait bounds, \`?Sized\`, \`dyn Trait\` vs \`impl Trait\`
 - \`Arc<T>\`, \`Mutex<T>\`, \`RwLock<T>\` — when to use each
 - \`async\` / \`Future\` / \`Stream\` basics

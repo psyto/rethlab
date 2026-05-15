@@ -43,7 +43,7 @@ export const en = {
       cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
       tagline: 'Demanding · Source-grounded · No fluff',
-      sourceCaption: 'Every Advanced + Expert lesson is anchored on real source like this.',
+      sourceCaption: 'Every Intermediate + Expert lesson is anchored on real source like this.',
     },
     outcomes: {
       tag: 'AFTER THIS PROGRAM',
@@ -148,6 +148,7 @@ export const en = {
       developer: 'Developer',
       beginner: 'Beginner',
       fundamentals: 'Fundamentals',
+      intermediate: 'Intermediate',
       advanced: 'Advanced',
       expert: 'Expert',
     },

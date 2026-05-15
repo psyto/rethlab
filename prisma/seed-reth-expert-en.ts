@@ -674,7 +674,7 @@ You want SHA-256 inside the EVM. Two roads: add a new **opcode** (a new byte in 
 
 Custom opcodes break consensus with every wallet, indexer, and Solidity compiler on the planet. Custom precompiles **don't**. This lesson is why the answer is different, and how to register one.
 
-> 🛑 **Predict before scrolling.** A custom *opcode* breaks consensus with mainnet (you saw this in Advanced). A custom *precompile* doesn't — even though it's also new code that didn't exist in vanilla EVM. **Why is the answer different?** Form a hypothesis citing the EVM bytecode parser. Hold your guess.
+> 🛑 **Predict before scrolling.** A custom *opcode* breaks consensus with mainnet (you saw this in Intermediate). A custom *precompile* doesn't — even though it's also new code that didn't exist in vanilla EVM. **Why is the answer different?** Form a hypothesis citing the EVM bytecode parser. Hold your guess.
 
 ## 1. Opcode vs precompile
 
@@ -1295,7 +1295,7 @@ Bundles are JSON-RPC; the wire format is small. Race between competing searchers
 3. **Gas griefing.** Adversaries publish high-gas transactions just to push yours out. Pay attention to the priority fee curve in real time.
 4. **Toxic flow.** Some "opportunities" are sandwich bait. Run a classifier; not all profit is real.
 
-> Final check: your bundle landed in block 1000. The chain reorgs and block 1000 is replaced. **Where is your money — your ETH, the victim's ETH, the gas you paid?** Trace the P&L through the reorg. If you can't, you don't yet understand why the ChainReverted handler exists in ExEx — re-read the Advanced ExEx lesson.`,
+> Final check: your bundle landed in block 1000. The chain reorgs and block 1000 is replaced. **Where is your money — your ETH, the victim's ETH, the gas you paid?** Trace the P&L through the reorg. If you can't, you don't yet understand why the ChainReverted handler exists in ExEx — re-read the Intermediate ExEx lesson.`,
                 },
                 {
                   title: 'zkEVM with Revm',
@@ -1738,7 +1738,7 @@ If you've worked with **op-geth**, **bsc-geth**, or **bor** (Polygon), you know 
 | **Fork model** (geth-style) | Clone upstream, patch source, rebase periodically | Drift cost is **superlinear** — patches and upstream diverge, conflicts compound |
 | **Extension model** (reth-style) | Depend on reth crates, implement chain-specific traits in a separate crate | Drift cost is **localized** — your code changes only when trait signatures change |
 
-Reth's whole architecture is built around the second model. The NodeBuilder / components / ChainSpec pattern you saw in the Advanced course exists precisely so that **you never have to patch reth's source to ship a chain**.
+Reth's whole architecture is built around the second model. The NodeBuilder / components / ChainSpec pattern you saw in the Intermediate course exists precisely so that **you never have to patch reth's source to ship a chain**.
 
 ## 2. Why Paradigm chose this
 

@@ -45,7 +45,7 @@ export const ja: TranslationKeys = {
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
-      sourceCaption: 'Advanced と Expert のすべてのレッスンは、上記のような本番コードに紐づいています。',
+      sourceCaption: '中級と Expert のすべてのレッスンは、上記のような本番コードに紐づいています。',
     },
     outcomes: {
       tag: 'このプログラムを修了すると',
@@ -150,6 +150,7 @@ export const ja: TranslationKeys = {
       developer: '開発者',
       beginner: '初級',
       fundamentals: 'ファンダメンタルズ',
+      intermediate: '中級',
       advanced: '上級',
       expert: 'エキスパート',
     },

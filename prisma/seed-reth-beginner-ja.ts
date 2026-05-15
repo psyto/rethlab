@@ -127,7 +127,7 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
 ここから2つの結論が出ます:
 
 1. **Rethは新興であり、支配的ではない。** 2023年リリース時の<1%から3年で~7-12%まで成長したのは早い軌道ですが、mainnetのRPCコール大半を捌いているのは依然としてGethです。**本番であなたが書くAlloyコードの大半は、Gethが応答するチェーンと通信することになる**。これ自体は問題ありません — AlloyはJSON-RPC経由ならどのexecution clientとも話せます。
-2. **Revmベースのシミュレーションは、本番クライアントの挙動と一致している必要がある。** ローカルのRevm forkでトランザクションを実行する（Advanced + Building tierで使うパターン）とき、その結果は同じトランザクションをGethやNethermindで処理した場合と一致しているはずです。普通はそうなります — RevmはEVM仕様に従っているので — ただし **Revmの結果を非Revmなproviderに対して検証する** 規律は、本番運用では必須です。Building tierのcapstoneで扱います。
+2. **Revmベースのシミュレーションは、本番クライアントの挙動と一致している必要がある。** ローカルのRevm forkでトランザクションを実行する（中級 + Building tierで使うパターン）とき、その結果は同じトランザクションをGethやNethermindで処理した場合と一致しているはずです。普通はそうなります — RevmはEVM仕様に従っているので — ただし **Revmの結果を非Revmなproviderに対して検証する** 規律は、本番運用では必須です。Building tierのcapstoneで扱います。
 
 つまり「Rust EVMスタック」は **新興かつ拡張可能** と捉えるべきで、「勝者総取り」ではありません。Paradigm・Hyperliquid・TempoがReth/Revmの上に積み上げているのは、市場シェアではなく、それが可能にすること（モジュラリティ、組み込みやすさ、性能）が理由です。
 
@@ -137,7 +137,7 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
 >
 > 理由：「ミクロ（型）→ ミドル（実行）→ マクロ（ノード全体）」と進むのが最も挫折しにくいから。
 
-このコースの次のティアであるFundamentalsで、まずはAlloyから手を動かし始めます。`,
+このコースの次のティアであるFundamentalsで、まずはAlloyから手を動かし始めます。ただし Rust 環境を整える前に、よく出る疑問を一つだけ片付けておきましょう — *「Solanaも Rust なのに、なぜわざわざ EVM？」* 次のレッスンで扱います。`,
                 },
                 {
                   title: 'なぜSolanaではなくEthereum（Rust）なのか',

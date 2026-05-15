@@ -128,7 +128,7 @@ Two things follow from this picture:
 
 1. **Reth is emerging, not dominant.** It grew from <1% at its 2023 release to today's ~7-12% in three years — a fast trajectory, but Geth still serves the majority of mainnet RPC calls you make. **The Alloy code you write will mostly talk to Geth-served chains in production.** That's fine — Alloy speaks to any execution client over JSON-RPC.
 
-2. **Revm-based simulation needs to match what production clients do.** When you run a transaction in a local Revm fork (the pattern you'll use in Advanced + Building tiers), the result has to match what a Geth or Nethermind node would produce for the same transaction. This usually just works — Revm follows the EVM spec — but the discipline of **validating Revm against a non-Revm provider** is a production must. The Building tier capstone covers this.
+2. **Revm-based simulation needs to match what production clients do.** When you run a transaction in a local Revm fork (the pattern you'll use in Intermediate + Building tiers), the result has to match what a Geth or Nethermind node would produce for the same transaction. This usually just works — Revm follows the EVM spec — but the discipline of **validating Revm against a non-Revm provider** is a production must. The Building tier capstone covers this.
 
 So when you hear "the Rust EVM stack," read it as **emerging + extensible**, not as "winner take all." The reason Paradigm + Hyperliquid + Tempo build on Reth/Revm is what they enable (modularity, embeddability, performance), not market share.
 
@@ -138,7 +138,7 @@ So when you hear "the Rust EVM stack," read it as **emerging + extensible**, not
 >
 > Going micro (types) → middle (execution) → macro (whole node) is the path of least friction.
 
-The next tier of this course (**Fundamentals**) starts by getting your hands on Alloy directly.`,
+The next tier of this course (**Fundamentals**) starts by getting your hands on Alloy directly. But before we set up Rust, one objection that always comes up is worth addressing head-on: *"Solana is also Rust — why bother with EVM at all?"* That's the next lesson.`,
                 },
                 {
                   title: 'Why not just use Solana?',

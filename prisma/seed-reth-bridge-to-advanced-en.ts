@@ -6,7 +6,7 @@ export async function seedRethBridgeToAdvancedEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'reth-bridge-to-advanced-en',
-      title: 'Reading the Stack — Bridge to Source-Reading',
+      title: 'Reading the Stack — Bridge to Intermediate',
       description:
         'You finished the Beginner-tier foundations in Rust and Alloy. But source-walking the Alloy/Revm/Inside Reth courses still feels overwhelming. This course closes the gap: EVM at the bytes level (dispatch loop, world state, call frames, reorgs) and the intermediate Rust (generics, dyn, Arc, unsafe, macros) that Reth and Revm source assume you know.',
       difficulty: 'BEGINNER',
@@ -36,7 +36,7 @@ export async function seedRethBridgeToAdvancedEN(prisma: PrismaClient) {
 
 You've written Solidity. You've used Foundry to deploy and test. But what does the EVM **actually do** with your contract once it's deployed? This lesson takes you down one layer — to the bytes.
 
-This is the layer Advanced lessons assume you already understand. Without it, the source of \`revm/crates/interpreter\` reads like noise.
+This is the layer Intermediate lessons assume you already understand. Without it, the source of \`revm/crates/interpreter\` reads like noise.
 
 ## What Solidity becomes
 
@@ -140,9 +140,9 @@ bytecode: 0x60 0x80 0x60 0x40 0x52 0x34 0x80 ...
 
 Repeat until a halt opcode is hit, gas runs out, or an invalid opcode is encountered.
 
-## Why this matters for Advanced
+## Why this matters for Intermediate
 
-When you open \`revm/crates/interpreter/src/instructions/arithmetic.rs\` in the Advanced course, you'll see:
+When you open \`revm/crates/interpreter/src/instructions/arithmetic.rs\` in the Intermediate course, you'll see:
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -176,9 +176,9 @@ Why an array of function pointers instead?
 
 - **Predictable performance**: array index is one CPU instruction. A \`match\` compiles to either a branch tree or a jump table — usually fast, but the array is *always* fast.
 - **Compile-time construction**: the 256-entry table can be built with \`const fn\` at compile time. Zero runtime setup cost.
-- **Easy customization**: a fork can replace **one slot** to add a custom opcode (you'll see this in Advanced lesson 2).
+- **Easy customization**: a fork can replace **one slot** to add a custom opcode (you'll see this in Intermediate lesson 2).
 
-## Reading list — do these before Advanced
+## Reading list — do these before Intermediate
 
 1. **Open [evm.codes](https://www.evm.codes)** and click around. Every opcode, with gas cost and stack effect. Bookmark it.
 2. **Skim the EVM section of the [Yellow Paper](https://ethereum.github.io/yellowpaper/paper.pdf)**, pages 9–13. Don't try to read cover-to-cover; just see the formal definition of the loop and the opcodes. It looks denser than it is.
@@ -188,9 +188,9 @@ Why an array of function pointers instead?
 
 - The EVM is a **byte-driven dispatch loop**: fetch a byte, index into a 256-slot function table, run the handler, advance PC.
 - Each opcode is a small Rust function (in Revm's case) with a **fixed contract**: it touches the stack, memory, gas, and possibly storage, then returns control.
-- Every detail you'll see in Advanced lesson 1 (\`add<IT, H>\`, the instruction table, PC, halts) maps directly to this model.
+- Every detail you'll see in Intermediate lesson 1 (\`add<IT, H>\`, the instruction table, PC, halts) maps directly to this model.
 
-When you start Advanced, the first lesson opens with the *exact* \`add\` function above. You won't be surprised by what it is — you'll just be reading the production-grade implementation of something you already understand.
+When you start Intermediate, the first lesson opens with the *exact* \`add\` function above. You won't be surprised by what it is — you'll just be reading the production-grade implementation of something you already understand.
 
 ## 📺 Further watching
 
@@ -208,7 +208,7 @@ RxL_1AfV7N4 | EVM: From Solidity to byte code, memory, and storage
                   xpReward: 25,
                   content: `# Memory, storage, and the world state
 
-The dispatch loop showed you what an opcode *is*. Most opcodes touch one of four stores. This lesson walks through them — and through the world-state model that Solidity hides from you but Advanced lessons assume you know.
+The dispatch loop showed you what an opcode *is*. Most opcodes touch one of four stores. This lesson walks through them — and through the world-state model that Solidity hides from you but Intermediate lessons assume you know.
 
 ## The four stores
 
@@ -294,7 +294,7 @@ This is **EIP-2929**, retrofitted into Ethereum after attackers found that a con
 
 Solidity assigns storage slots at compile time. \`uint256 private balance\` lives at slot 0, \`mapping(address => uint256) balances\` lives at \`keccak256(address . slot_index)\`, etc. Solidity is doing slot allocation **on top of** the raw \`U256 → U256\` map.
 
-When Advanced lesson 3 (Database trait) shows you:
+When Intermediate lesson 3 (Database trait) shows you:
 
 \`\`\`rust
 fn storage(&mut self, address: Address, index: StorageKey)
@@ -337,7 +337,7 @@ A single \`SSTORE\` you write in Solidity becomes:
 4. The interpreter calls the \`Database\`'s storage-write path
 5. The MPT for this contract gets updated, eventually changing \`storage_root\` in the account, eventually changing the global \`stateRoot\`
 
-Five layers between your line of Solidity and the chain's state root. **All five are in the source you'll read in Advanced and Expert.**
+Five layers between your line of Solidity and the chain's state root. **All five are in the source you'll read in Intermediate and Expert.**
 
 ## Reading list
 
@@ -352,7 +352,7 @@ Five layers between your line of Solidity and the chain's state root. **All five
 - **The world state** is a \`Address → Account\` map; each Account points to its own storage trie.
 - The Revm \`Database\` trait's three core methods (\`basic\`, \`code_by_hash\`, \`storage\`) **directly mirror** the world-state model above.
 
-When Advanced lesson 3 shows you the \`Database\` trait, you'll recognize it as exactly this picture, expressed as Rust traits.`,
+When Intermediate lesson 3 shows you the \`Database\` trait, you'll recognize it as exactly this picture, expressed as Rust traits.`,
                 },
                 {
                   title: 'Gas accounting in depth, and call frames',
@@ -365,7 +365,7 @@ When Advanced lesson 3 shows you the \`Database\` trait, you'll recognize it as 
 
 You know "gas costs money." This lesson goes one level deeper — into where gas actually goes, and how a single transaction can trigger a tree of nested **call frames** with separate context.
 
-Both topics are assumed knowledge in Advanced lessons on custom opcodes, precompiles, and ExEx.
+Both topics are assumed knowledge in Intermediate lessons on custom opcodes, precompiles, and ExEx.
 
 ## Gas — three categories
 
@@ -422,7 +422,7 @@ In a Solidity \`require(x, "msg")\`, the EVM emits \`REVERT\` with the encoded "
 
 OOG is different. It happens when a frame runs out of gas mid-execution. The frame loses everything (state + remaining gas), and the caller sees a generic failure.
 
-When Advanced lesson 1 shows you Revm's \`PrecompileHalt::OutOfGas\` vs other halts, this distinction is what's being modeled.
+When Intermediate lesson 1 shows you Revm's \`PrecompileHalt::OutOfGas\` vs other halts, this distinction is what's being modeled.
 
 ## Call frames — the EVM's call stack
 
@@ -473,7 +473,7 @@ This is how proxy patterns work (UUPS, Transparent Proxy, Diamond): the proxy co
 
 It's also the source of many high-profile hacks — Wormhole, Parity multisig, etc. — because if A's storage layout doesn't match X's, writes corrupt X's state in unexpected slots.
 
-When Advanced lesson 6 (ExEx) shows you "this transaction touched these storage slots across these accounts," knowing CALL vs DELEGATECALL is what lets you make sense of it.
+When Intermediate lesson 6 (ExEx) shows you "this transaction touched these storage slots across these accounts," knowing CALL vs DELEGATECALL is what lets you make sense of it.
 
 ## A real call graph
 
@@ -514,7 +514,7 @@ Every frame has its own memory/stack. Returndata flows back up at each return. G
 - A tx is a **tree of call frames**, each with its own stack/memory/PC/gas.
 - **DELEGATECALL** is the call style that runs the callee's code in the caller's context — the foundation of proxy patterns and the source of many bugs.
 
-When Advanced lesson 5 (custom precompiles) talks about the gas pricing model, or lesson 6 (ExEx) talks about reorganizing across multiple committed transactions, you'll have the call-frame and gas model in your head — not as abstract concepts, but as concrete machinery.`,
+When Intermediate lesson 5 (custom precompiles) talks about the gas pricing model, or lesson 6 (ExEx) talks about reorganizing across multiple committed transactions, you'll have the call-frame and gas model in your head — not as abstract concepts, but as concrete machinery.`,
                 },
               ],
             },
@@ -535,7 +535,7 @@ When Advanced lesson 5 (custom precompiles) talks about the gas pricing model, o
 
 You've worked with one transaction at a time. The chain operates at a different level: **blocks** of transactions, **receipts** of what they did, and the occasional **reorg** when the chain rewrites recent history.
 
-This is the layer Advanced lessons on Reth's Staged Sync and ExEx assume you understand.
+This is the layer Intermediate lessons on Reth's Staged Sync and ExEx assume you understand.
 
 ## A block — three pieces
 
@@ -595,7 +595,7 @@ The log goes into the receipt. Indexers, MEV bots, and ExEx all consume these.
 
 Each block's receipts root has a 256-byte **bloom filter** that summarizes all log addresses and topics in the block. Light clients and indexers use it to quickly skip blocks that don't mention an address they care about — without downloading the full receipts.
 
-When Advanced lesson 7 (MEV in practice) shows you ExEx code that filters logs by address, this bloom is what makes the pre-filter fast.
+When Intermediate lesson 7 (MEV in practice) shows you ExEx code that filters logs by address, this bloom is what makes the pre-filter fast.
 
 ## How a block actually gets built
 
@@ -616,7 +616,7 @@ A typical block lifecycle:
 
 The full node executing this block performs **the same execution** to verify — it gets the body, runs every tx, and checks that the resulting state_root matches the header. If it doesn't, the block is rejected.
 
-When you read Reth's \`ExecutionStage\` in Advanced lesson 4, that's exactly the verification path: replay each block's transactions, accumulate state changes, validate the resulting root.
+When you read Reth's \`ExecutionStage\` in Intermediate lesson 4, that's exactly the verification path: replay each block's transactions, accumulate state changes, validate the resulting root.
 
 ## Reorgs — the chain rewriting itself
 
@@ -652,13 +652,13 @@ If you wrote an indexer that listened to "block N committed, write txs to my DB,
 - You need to **delete those rows** when the reorg is detected
 - Then re-insert rows for the new canonical block N's transactions
 
-This is **the** reason ExEx has three notification types — \`ChainCommitted\`, \`ChainReorged\`, \`ChainReverted\`. A naive indexer that handles only \`ChainCommitted\` corrupts its derived state on every reorg. (Advanced lesson 6 walks through this in detail.)
+This is **the** reason ExEx has three notification types — \`ChainCommitted\`, \`ChainReorged\`, \`ChainReverted\`. A naive indexer that handles only \`ChainCommitted\` corrupts its derived state on every reorg. (Intermediate lesson 6 walks through this in detail.)
 
 ### Why Reth's Staged Sync is symmetric
 
 Every Reth Stage has \`execute\` (forward) and \`unwind\` (backward). The stages aren't designed for reorgs as a "special case" — reorgs are a **normal mode of operation**, modeled with the same trait. Going forward 1000 blocks: \`execute\`. Going back 3 blocks for a reorg: \`unwind\`. Same code path, opposite direction.
 
-This is a design choice you'll appreciate in Advanced lesson 4 (Staged Sync architecture).
+This is a design choice you'll appreciate in Intermediate lesson 4 (Staged Sync architecture).
 
 ## Reading list
 
@@ -673,7 +673,7 @@ This is a design choice you'll appreciate in Advanced lesson 4 (Staged Sync arch
 - **Reorgs** rewrite recent history; off-chain consumers must handle the rewind explicitly.
 - Reth's Staged Sync is **symmetric** (execute / unwind) precisely because reorgs are normal, not exceptional.
 
-When Advanced lesson 4 walks through the Stage trait and lesson 6 walks through ExEx notification types, you'll already have the model in your head. You'll just be reading the Rust that implements it.`,
+When Intermediate lesson 4 walks through the Stage trait and lesson 6 walks through ExEx notification types, you'll already have the model in your head. You'll just be reading the Rust that implements it.`,
                 },
               ],
             },
@@ -881,7 +881,7 @@ This is **why Revm is "modular":** the same opcode function compiles into multip
 - **\`dyn Trait\`** is a runtime-dispatched pointer-plus-vtable; **\`impl Trait\`** is compile-time monomorphized.
 - Revm's heavy use of generics is **modularity at the type level** — same code, multiple specializations.
 
-When Advanced lesson 1 hits you with three type parameters and \`?Sized\` in the very first line, you'll read it as one connected sentence, not as five intimidating tokens.`,
+When Intermediate lesson 1 hits you with three type parameters and \`?Sized\` in the very first line, you'll read it as one connected sentence, not as five intimidating tokens.`,
                 },
                 {
                   title: 'Shared ownership: Arc, Mutex, RwLock',
@@ -1115,7 +1115,7 @@ When you read Reth source and see \`Arc<RwLock<Foo>>\` next to \`Arc<Mutex<Bar>>
 - **\`tokio::sync::Mutex\`** is the async-aware version — use when the critical section spans \`.await\`.
 - **\`Arc<Mutex<T>>\`** is the canonical "shared mutable state" pattern — you'll see it everywhere in Reth/ExEx.
 
-When Advanced lesson 6 (ExEx) shows you a struct with three \`Arc<...>\` fields and you wonder "why all the wrappers," you'll know each one is the load-bearing piece of how that component is shared across the runtime's tasks.`,
+When Intermediate lesson 6 (ExEx) shows you a struct with three \`Arc<...>\` fields and you wonder "why all the wrappers," you'll know each one is the load-bearing piece of how that component is shared across the runtime's tasks.`,
                 },
                 {
                   title: 'unsafe Rust',
@@ -1150,7 +1150,7 @@ If the promise is wrong, you get **undefined behavior (UB)** — and UB is *cata
 
 ## Why Revm uses \`unsafe\` on the hot path
 
-Revm's \`popn_top!\` macro from Advanced lesson 1 contains:
+Revm's \`popn_top!\` macro from Intermediate lesson 1 contains:
 
 \`\`\`rust
 let ([$( $x ),*], $top) = unsafe {
@@ -1344,7 +1344,7 @@ You'll meet both. Quick distinction:
 
 ## Putting it together
 
-When you open \`revm/crates/interpreter/src/instructions/macros.rs\` in Advanced lesson 1, you'll see:
+When you open \`revm/crates/interpreter/src/instructions/macros.rs\` in Intermediate lesson 1, you'll see:
 
 \`\`\`rust
 macro_rules! popn_top {
@@ -1385,13 +1385,13 @@ You're not reading magic. You're reading **patterns you now know**.
 
 ## Technical prereqs complete
 
-You've now finished the **technical** prereqs of Reading the Stack — Bridge to Advanced:
+You've now finished the **technical** prereqs of Reading the Stack — Bridge to Intermediate:
 
 - ✓ EVM at the bytes level (dispatch loop, stores, gas, call frames)
 - ✓ Block-level Ethereum (blocks, receipts, reorgs)
 - ✓ Rust for source-reading (generics, dyn, Arc, unsafe, macros)
 
-A quick gate-check before you go on. When you open the first Advanced lesson, you'll see:
+A quick gate-check before you go on. When you open the first Intermediate lesson, you'll see:
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -1409,9 +1409,9 @@ Every piece should now read like one connected sentence:
 
 If those three sentences fit, the technical prereqs are absorbed.
 
-## One more lesson — how Advanced courses work
+## One more lesson — how Intermediate courses work
 
-The Advanced tier is **three independent courses** (Revm, Reth, Alloy), and they all share the same editorial style — Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape. Read **"How Advanced courses work"** next; it's the meta-orientation that applies to all three Advanced courses, so you only read it once.
+The Intermediate tier is **three independent courses** (Revm, Reth, Alloy), and they all share the same editorial style — Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape. Read **"How Intermediate courses work"** next; it's the meta-orientation that applies to all three Intermediate courses, so you only read it once.
 
 After that, pick a course and start.`,
                 },
@@ -1430,7 +1430,7 @@ You're at the doorstep of the **Intermediate tier** — three independent course
 
 ## The tier shift
 
-The Beginner tier (Beginner + Fundamentals + Bridge to Advanced) taught you the *shape* of the stack — what Alloy types look like, how to use Foundry, what the EVM does at a high level.
+The Beginner tier (Beginner + Fundamentals + Bridge to Intermediate) taught you the *shape* of the stack — what Alloy types look like, how to use Foundry, what the EVM does at a high level.
 
 The Intermediate tier asks something different. **You will read the actual production source of Reth, Revm, Alloy, and Foundry, line by line.** The lessons assume you can already use the stack — they teach you to *read* it.
 

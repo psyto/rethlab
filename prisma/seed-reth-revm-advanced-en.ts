@@ -8,7 +8,7 @@ export async function seedRethRevmAdvancedEN(prisma: PrismaClient) {
       slug: 'revm-advanced-en',
       title: 'Inside Revm — Reading the EVM Engine',
       description:
-        'Read the Revm interpreter line by line. Walk the real `add` opcode, custom opcodes, and the `Database` trait that supplies state. The first of three independent Advanced courses (Revm, Reth, Alloy) you can take in any order — though Revm gives you the type vocabulary the others assume.',
+        'Read the Revm interpreter line by line. Walk the real `add` opcode, custom opcodes, and the `Database` trait that supplies state. One of three independent Intermediate courses (Revm, Reth, Alloy) you can take in any order — though Revm gives you the type vocabulary the others assume.',
       difficulty: 'INTERMEDIATE',
       duration: 120,
       xpReward: 340,
@@ -36,7 +36,7 @@ export async function seedRethRevmAdvancedEN(prisma: PrismaClient) {
 
 Revm is the **execution engine** inside every Rust EVM client: Reth, Hyperliquid's HyperEVM, Berachain's bera-reth, Tempo. When a chain says "we run Revm," it means: the opcode loop, the gas accounting, the way state gets read — *that's the same code*, no matter whose fork you're looking at. Read it once and you can read all of them.
 
-This is the first of three independent Advanced-tier courses on RethLab:
+This is one of three independent Intermediate-tier courses on RethLab:
 
 - **Inside Revm** (you are here) — Inside the EVM engine
 - **Inside Reth** — Inside Reth: Staged Sync, ExEx, the Reth SDK
@@ -44,7 +44,7 @@ This is the first of three independent Advanced-tier courses on RethLab:
 
 Revm goes first because its types (\`Address\`, \`U256\`, \`B256\`, the \`Database\` trait) underpin most of what Reth and Alloy do. The three courses are independent — pick the one that matches what you're building.
 
-> 📋 **First time at the Advanced tier?** Read **"How Advanced courses work"** at the end of *Bridge to Advanced* before starting. It explains the editorial style (Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape) and pacing — applies to all three Advanced courses, so you only read it once.
+> 📋 **First time at the Intermediate tier?** Read **"How Intermediate courses work"** at the end of *Bridge to Intermediate* before starting. It explains the editorial style (Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape) and pacing — applies to all three Intermediate courses, so you only read it once.
 
 ## What this course teaches
 
@@ -54,14 +54,14 @@ By the end, you'll have read every line of revm's hot path and be able to explai
 
 ## Prerequisites
 
-**EVM internals** (covered in Bridge to Advanced — go back if shaky):
+**EVM internals** (covered in Bridge to Intermediate — go back if shaky):
 - Bytecode and the dispatch loop (opcodes as bytes, PC, instruction table)
 - Stack / memory / calldata / storage — what each is and how they differ
 - Cold vs warm gas (EIP-2929)
 - Call frames: CALL / DELEGATECALL / STATICCALL semantics
 - Block structure (header / body / receipts), reorgs as a normal phenomenon
 
-**Intermediate Rust** (also Bridge to Advanced; there's a *Rust: lifetimes, Box, Arc, dyn Trait* lesson inside Inside Reth for self-checking):
+**Intermediate Rust** (also Bridge to Intermediate; there's a *Rust: lifetimes, Box, Arc, dyn Trait* lesson inside Inside Reth for self-checking):
 - Generics with trait bounds, \`?Sized\`, \`dyn Trait\` vs \`impl Trait\`
 - \`Arc<T>\`, \`Mutex<T>\`, \`RwLock<T>\` — when to use each
 - \`unsafe\` blocks and \`unwrap_unchecked()\`
@@ -468,11 +468,11 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough
                   xpReward: 30,
                   content: `# Quiz: did \`add\` actually stick?
 
-This quiz isn't decoration. It exists because the previous lesson's "predict" prompts are easy to nod past — and a day from now, "I read it, nodded, and couldn't reproduce it" is the failure mode that breaks Advanced.
+This quiz isn't decoration. It exists because the previous two lessons' "predict" prompts are easy to nod past — and a day from now, "I read it, nodded, and couldn't reproduce it" is the failure mode that breaks Intermediate.
 
-Five questions. Each one maps to a piece of the previous lesson. **If you find yourself guessing**, stop and re-read the relevant section before answering. The quiz will still be here.
+Five questions, covering both the build-up and the macro refactor. **If you find yourself guessing**, stop and re-read the relevant section before answering. The quiz will still be here.
 
-If you miss two or more, the lesson hasn't internalized — re-read \`Reading add\` before going on to the drill.`,
+If you miss two or more, the lessons haven't internalized — re-read both *Building \`add\` step by step* and *Reading \`add\`: factoring out the macro* before going on to the drill.`,
                   quizQuestions: [
                     {
                       question: 'What does removing the `?` from `H: ?Sized` actually break in the `add` function signature?',

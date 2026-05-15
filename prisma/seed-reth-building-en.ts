@@ -1654,7 +1654,7 @@ flowchart TB
 | Approach | Can call into Revm internals? | Consensus impact | Effort |
 | :--- | :--- | :--- | :--- |
 | **Regular Solidity contract** | No — only EVM ops | None | trivial |
-| **New EVM opcode** | Yes — full control | **Forks consensus immediately** (Advanced lesson) | massive |
+| **New EVM opcode** | Yes — full control | **Forks consensus immediately** (Intermediate lesson) | massive |
 | **Precompile (Foundry's choice)** | Yes — full Rust access | Only present in **your** Revm build, not mainnet | ~50 lines |
 
 A precompile sits in the *executor*, not the protocol. Mainnet Revm doesn't have your precompile; your test runner Revm does. **No consensus break, full Rust power.** That's why Foundry's cheatcodes are precompiles, not opcodes.

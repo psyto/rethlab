@@ -252,7 +252,7 @@ Solidityも \`address\` 型を持ちますが、Rustの型システムはより�
 1. **同じメッセージ** を **異なる2つのチェーンID** で署名 — 署名は異なるはず
 2. \`recover_address_from_msg\` を **改ざんされたメッセージ** に対して呼ぶ — 復元アドレスが一致しない。**それがEIP-191の改ざん耐性**
 
-次は本物のProviderと実際のノード接続。`,
+次は \`Result\`・\`Option\`・\`?\` — Provider に触れる前に押さえるべきエラーハンドリングの語彙。`,
                 },
                 {
                   title: 'Rust：Result・Option・`?` 演算子',
@@ -653,7 +653,7 @@ ADD
 事後: スタック [..., 12]
 \`\`\`
 
-ただしAdvancedティアのプレビューで見た **本物の** \`add\` ソースは、両方popしてpushすらしません：1つpopし、もう1つには可変参照経由で書き戻します。RevmのインタープリターはEVMの概念モデルをそのままRustに写しつつ、サイクル単位の最適化を重ねた設計になっています。
+Revm の **本物の** \`add\` ソース — 中級ティアで一行ずつ分解する — は、両方popしてpushすらしません：1つpopし、もう1つには可変参照経由で書き戻します。RevmのインタープリターはEVMの概念モデルをそのままRustに写しつつ、サイクル単位の最適化を重ねた設計になっています。
 
 ## なぜEVMはスタックマシンか
 
@@ -903,7 +903,7 @@ fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
 }
 \`\`\`
 
-「返す参照は、引数の参照と同じ寿命を持つ」というアノテーション。**最初は読めればOK**、書けるのは上級ティアで。
+「返す参照は、引数の参照と同じ寿命を持つ」というアノテーション。**最初は読めればOK**、書けるのは中級ティアで。
 
 ## 5. これからRevm/Rethで見る形
 
@@ -962,7 +962,7 @@ Revmは以下を公開（[\`crates/revm/src/lib.rs\`](https://github.com/blueall
 | **\`InspectEvm\`**, **\`InspectCommitEvm\`** | トレース版 — 同じ実行、フック付き |
 | **\`Context\`** | 実行環境（block、tx、cfg） |
 | **\`Journal\`**, **\`JournalEntry\`** | 状態変更追跡（revert用） |
-| **\`Database\`**, **\`DatabaseRef\`**, **\`DatabaseCommit\`** | ストレージインターフェース（Advancedで扱う） |
+| **\`Database\`**, **\`DatabaseRef\`**, **\`DatabaseCommit\`** | ストレージインターフェース（中級で扱う） |
 | **\`Inspector\`** | 実行にフックするトレイト |
 
 要点：Revmは **設計からしてモジュラー**。\`ExecuteEvm\`、\`InspectEvm\`、\`ExecuteCommitEvm\` は別のEVMではなく、**同じエンジンを異なるレイヤーで組み合わせた** もの。**必要なものだけ選ぶ**。
@@ -988,7 +988,7 @@ Revmは以下を公開（[\`crates/revm/src/lib.rs\`](https://github.com/blueall
 
 ## 次のステップ
 
-Revmは「動かすための部品」が分かれば、コードを読み始められます。**次のレッスン** で Foundry — 日常的に使う Rust EVM ツールチェイン — を扱い、その後 **Advanced** ティアで Interpreter フォルダに入ります。
+Revmは「動かすための部品」が分かれば、コードを読み始められます。**次のレッスン** で Foundry — 日常的に使う Rust EVM ツールチェイン — を扱い、その後 **中級** ティアで Interpreter フォルダに入ります。
 
 ## 📺 関連動画
 
@@ -1108,7 +1108,7 @@ anvil --fork-url https://eth.merkle.io
 
 フォークモードがキラー機能。これは **\`AlloyDB\` 型のバッキングストアを持つ Revm インスタンス** で、上流 RPC から状態を遅延ロードします。**Uniswap V3 のメインネット状態に対して、ラップトップから testnet 不要で対話できる**。
 
-内部的には anvil は MEV レッスンで見た \`forked_db\` と同系統のコード。anvil はそれを Rust API ではなく JSON-RPC で公開しているだけ。
+内部的には anvil は中級ティアの MEV レッスンで分解する \`forked_db\` パターンと同系統のコード。anvil はそれを Rust API ではなく JSON-RPC で公開しているだけ。
 
 ## 6. \`chisel\` — Solidity REPL
 
@@ -1129,7 +1129,7 @@ chisel
 
 - \`foundry-rs/foundry/crates/cheatcodes\` を読めば、本番のカスタム precompile システムが分かる
 - \`forge\` テストランナーはファジング・invariant テスト・カバレッジ付きの本物の Revm オーケストレータ
-- \`anvil\` の状態フォーキングは、Database レッスンの \`AlloyDB\` パターンの本番版
+- \`anvil\` の状態フォーキングは、中級ティアの Database レッスンで扱う \`AlloyDB\` パターンの本番版
 
 ## 練習
 
@@ -1209,7 +1209,7 @@ Alloy・EVM・Revmの基礎を理解できたか確認します。`,
                         'スタック（Stack）',
                         'メモリ（Memory）',
                         'ストレージ（Storage）',
-                        'カレンダー（Calldata）',
+                        'コールデータ（Calldata）',
                       ],
                       correctIndex: 2,
                       explanation: 'スタックとメモリはトランザクション内のみ揮発、Storageだけがブロックチェーン状態に永続化されます。書き込みコストが高いのもStorageの特徴です。',

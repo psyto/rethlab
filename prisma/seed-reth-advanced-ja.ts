@@ -8,7 +8,7 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
       slug: 'reth-advanced-ja',
       title: 'Inside Reth — シンク・拡張・SDK',
       description:
-        'Reth の本物のソースを読む: Staged Sync (10 ステージのパイプライン)、ExEx (Execution Extensions — インプロセスのインデクサ・MEV・リスクエンジン用)、Reth SDK (自前の App-chain を組み立てる)。3 つの独立した Advanced コース (Revm・Reth・Alloy) の 1 つ — `Database` トレイトと Revm 実行モデルへの慣れを前提にする箇所があるので、Inside Revm を先にやることを推奨。',
+        'Reth の本物のソースを読む: Staged Sync (10 ステージのパイプライン)、ExEx (Execution Extensions — インプロセスのインデクサ・MEV・リスクエンジン用)、Reth SDK (自前の App-chain を組み立てる)。3 つの独立した中級コース (Revm・Reth・Alloy) の 1 つ — `Database` トレイトと Revm 実行モデルへの慣れを前提にする箇所があるので、Inside Revm を先にやることを推奨。',
       difficulty: 'INTERMEDIATE',
       duration: 145,
       xpReward: 470,
@@ -34,7 +34,7 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
                   xpReward: 15,
                   content: `# Inside Reth へようこそ — このコースの読み方
 
-これは RethLab の 3 つの独立した Advanced ティアのコースの 1 つです:
+これは RethLab の 3 つの独立した中級ティアコースの 1 つです:
 
 - **Inside Revm** — EVM エンジンの内部 *(まだなら先に推奨)*
 - **Inside Reth**（あなたはここ）— Reth の内部: Staged Sync・ExEx・Reth SDK
@@ -42,7 +42,7 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
 
 3 つは独立していますが、**ここのいくつかのレッスンは Inside Revm で学ぶ \`Database\` トレイトと Revm 実行モデルへの慣れを前提にしています**。それが不安なら、Inside Revm を先に。
 
-> 📋 **Advanced ティアは初めて?** *Bridge to Advanced* の最後にある **「Advanced コースの読み方」** を先に読んでください。編集スタイル（Predict プロンプト・クイズゲート・積み上げ→ウォークスルー→クイズ→ドリルのチェーン構造）とペースを説明しています — 3 つの Advanced コース全てに適用される、1 度読めば済む内容です。
+> 📋 **中級ティアは初めて?** *中級への橋渡し* の最後にある **「中級コースの読み方」** を先に読んでください。編集スタイル（Predict プロンプト・クイズゲート・積み上げ→ウォークスルー→クイズ→ドリルのチェーン構造）とペースを説明しています — 3 つの中級コース全てに適用される、1 度読めば済む内容です。
 
 ## このコースで学ぶこと
 
@@ -56,11 +56,11 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
 - \`Database\` トレイトの形と、Revm がそれを通じて状態を読む仕組み
 - \`ExecutionStage\` で \`Stage\` と \`Database\` がどう相互作用するか
 
-**ブロックレベルの Ethereum**（Bridge to Advanced でカバー）:
+**ブロックレベルの Ethereum**（中級への橋渡し でカバー）:
 - ブロック構造 (header / body / receipts)、reorg は通常運用
 - sender 復元、tx body デコード、receipt の中身
 
-**中級 Rust**（同じく Bridge to Advanced で。このコース内の *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンが自己チェック用）:
+**中級 Rust**（同じく 中級への橋渡し で。このコース内の *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンが自己チェック用）:
 - Generics + trait bounds、\`?Sized\`、\`dyn Trait\` vs \`impl Trait\`
 - \`Arc<T>\`、\`Mutex<T>\`、\`RwLock<T>\` — どれをいつ使うか
 - \`async\` / \`Future\` / \`Stream\` の基礎

@@ -1654,7 +1654,7 @@ flowchart TB
 | 方式 | Revm 内部を呼べる? | コンセンサス影響 | 労力 |
 | :--- | :--- | :--- | :--- |
 | **普通の Solidity contract** | NO — EVM op のみ | なし | 簡単 |
-| **新 EVM opcode** | YES — フル制御 | **即コンセンサスを fork する** (Advanced lesson) | 莫大 |
+| **新 EVM opcode** | YES — フル制御 | **即コンセンサスを fork する** (中級レッスン) | 莫大 |
 | **Precompile (Foundry の選択)** | YES — フル Rust アクセス | **あなたの** Revm ビルドにのみ存在、mainnet にはなし | ~50 行 |
 
 precompile は *executor* に組み込まれ、プロトコル本体には入らない。Mainnet Revm はあなたの precompile を持たない。あなたのテストランナー Revm だけが持つ。**コンセンサスは壊れず、Rust のフルパワー。** だから Foundry の cheatcode は precompile であって opcode ではない。

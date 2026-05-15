@@ -37,7 +37,7 @@ export default function LandingPage() {
       color: 'from-green-500/20 to-emerald-500/20',
     },
     {
-      title: t('courses.difficulty.intermediate'),
+      title: t('courses.categories.intermediate'),
       description: t('page.tracks.fundamentalsDesc'),
       icon: Code2,
       courses: 3,

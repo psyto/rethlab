@@ -253,7 +253,7 @@ Modify the example to:
 1. Sign **the same message** with **two different chain IDs** — print the signatures (they should differ)
 2. Try \`recover_address_from_msg\` against a **modified** message — the recovered address won't match. **That's EIP-191's tamper resistance.**
 
-Next up: a real Provider and node connection.`,
+Next up: \`Result\`, \`Option\`, and \`?\` — the error-handling vocabulary you'll need before touching a real Provider.`,
                 },
                 {
                   title: 'Rust: Result, Option, and the `?` operator',
@@ -647,7 +647,7 @@ ADD
 After:  stack [..., 12]
 \`\`\`
 
-But you've already seen the **real** \`add\` source in the Advanced tier preview — it doesn't even pop both then push: it pops one, writes through a mutable reference to the other. Revm's interpreter is built so the EVM mental model maps directly to Rust, but with cycle-level optimizations layered on.
+The **real** \`add\` source in Revm — which the Intermediate tier dissects line by line — doesn't even pop both then push: it pops one, writes through a mutable reference to the other. Revm's interpreter is built so the EVM mental model maps directly to Rust, but with cycle-level optimizations layered on.
 
 ## Why a stack machine?
 
@@ -897,7 +897,7 @@ fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
 }
 \`\`\`
 
-It says: "the returned reference lives at least as long as the inputs." For now, **read-only is fine**. The Advanced tier covers writing them.
+It says: "the returned reference lives at least as long as the inputs." For now, **read-only is fine**. The Intermediate tier covers writing them.
 
 ## 5. Putting it all together (Reth-style)
 
@@ -917,7 +917,9 @@ async fn my_exex<Node: FullNodeComponents>(
 - \`while let Some(x) = ...\` — pattern matching to unwrap an Option
 - \`.await?\` — async + error propagation
 
-All combinations of what you've already seen. **If you can read it, you can write it.**`,
+All combinations of what you've already seen. **If you can read it, you can write it.**
+
+Next: step into the Revm world itself.`,
                 },
                 {
                   title: 'Revm — the execution engine',
@@ -954,7 +956,7 @@ Revm exports these high-level types ([\`crates/revm/src/lib.rs\`](https://github
 | **\`InspectEvm\`**, **\`InspectCommitEvm\`** | tracing variants — same execution, with hooks |
 | **\`Context\`** | the execution environment (block, tx, cfg) |
 | **\`Journal\`**, **\`JournalEntry\`** | state-change tracking (used for revert) |
-| **\`Database\`**, **\`DatabaseRef\`**, **\`DatabaseCommit\`** | the storage interfaces (covered in Advanced) |
+| **\`Database\`**, **\`DatabaseRef\`**, **\`DatabaseCommit\`** | the storage interfaces (covered in Intermediate) |
 | **\`Inspector\`** | trait you implement to hook into execution |
 
 The key insight: Revm is **modular by design**. \`ExecuteEvm\`, \`InspectEvm\`, \`ExecuteCommitEvm\` aren't different EVMs — they're the same engine composed with different layers. **You pick what you need.**
@@ -980,7 +982,7 @@ The combination of "library-first design," "Rust embeddability," and "easy custo
 
 ## Next
 
-You now know enough to start reading Revm code. The **next lesson** introduces Foundry — the Rust EVM toolchain you'll actually use day-to-day. Then the **Advanced** tier opens the interpreter folder.
+You now know enough to start reading Revm code. The **next lesson** introduces Foundry — the Rust EVM toolchain you'll actually use day-to-day. Then the **Intermediate** tier opens the interpreter folder.
 
 ## 📺 Further watching
 
@@ -1100,7 +1102,7 @@ anvil --fork-url https://eth.merkle.io
 
 The fork mode is the killer feature. It runs a **Revm instance with an \`AlloyDB\`-style backing** that lazy-loads state from the upstream RPC on demand. **You can interact with Uniswap V3 against mainnet state from your laptop, no testnet required.**
 
-Internally, anvil is the same family of code as the \`forked_db\` you saw in the MEV lesson. Anvil exposes it over JSON-RPC instead of a Rust API.
+Internally, anvil is the same family of code as the \`forked_db\` pattern dissected in the Intermediate tier's MEV lesson. Anvil exposes it over JSON-RPC instead of a Rust API.
 
 ## 6. \`chisel\` — Solidity REPL
 
@@ -1121,7 +1123,7 @@ If you're aiming for serious Rust EVM work, Foundry is **both your daily tool an
 
 - Reading \`foundry-rs/foundry/crates/cheatcodes\` shows you a production custom-precompile system
 - The \`forge\` test runner is a real Revm orchestrator with fuzzing, invariant testing, coverage
-- \`anvil\`'s state forking is the production version of the \`AlloyDB\` pattern from the Database lesson
+- \`anvil\`'s state forking is the production version of the \`AlloyDB\` pattern covered in the Intermediate tier's Database lesson
 
 ## Drill
 

@@ -8,7 +8,7 @@ export async function seedRethAlloyAdvancedEN(prisma: PrismaClient) {
       slug: 'alloy-advanced-en',
       title: 'Inside Alloy — Reading the Rust Ethereum Library',
       description:
-        'Read the alloy source line by line — the `Provider` trait, the `Network` abstraction, and the `Signer`/`Filler` model. The third of three independent Advanced courses (Revm, Reth, Alloy) you can take in any order. Alloy is the foundation Reth and dapps build on, so this course pays back wherever you build Rust Ethereum code.',
+        'Read the alloy source line by line — the `Provider` trait, the `Network` trait, and the `Signer`/`Filler` traits. One of three independent Intermediate courses (Revm, Reth, Alloy) you can take in any order. Alloy is the foundation Reth and dapps build on, so this course pays back wherever you build Rust Ethereum code.',
       difficulty: 'INTERMEDIATE',
       duration: 120,
       xpReward: 340,
@@ -34,7 +34,7 @@ export async function seedRethAlloyAdvancedEN(prisma: PrismaClient) {
                   xpReward: 15,
                   content: `# Welcome to Inside Alloy — how this course works
 
-This is one of three independent Advanced-tier courses on RethLab:
+This is one of three independent Intermediate-tier courses on RethLab:
 
 - **Inside Revm** — Inside the EVM engine
 - **Inside Reth** — Inside Reth: Staged Sync, ExEx, the Reth SDK
@@ -42,15 +42,15 @@ This is one of three independent Advanced-tier courses on RethLab:
 
 Alloy is the foundation everyone else builds on — Reth uses alloy types, Revm uses alloy primitives, and every dapp / MEV bot / indexer that talks to Ethereum from Rust uses the alloy \`Provider\`. This course teaches you to **read the alloy source**, the same way Inside Revm teaches you to read revm.
 
-> 📋 **First time at the Advanced tier?** Read **"How Advanced courses work"** at the end of *Bridge to Advanced* before starting. It explains the editorial style (Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape) and pacing — applies to all three Advanced courses, so you only read it once.
+> 📋 **First time at the Intermediate tier?** Read **"How Intermediate courses work"** at the end of *Bridge to Intermediate* before starting. It explains the editorial style (Predict prompts, Quiz gates, the build-up → walkthrough → quiz → drill chain shape) and pacing — applies to all three Intermediate courses, so you only read it once.
 
 ## What this course teaches
 
 You'll read the [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) source line by line:
 
 - The **\`Provider\` trait** — the central abstraction for talking to Ethereum nodes
-- The **\`Network\` abstraction** — how alloy supports Ethereum, Optimism, Anvil, custom L2s with the same API surface
-- The **\`Signer\` / \`Filler\` model** — how transaction signing, gas estimation, and nonce management compose into layered providers
+- The **\`Network\` trait** — how alloy supports Ethereum, Optimism, Anvil, custom L2s with the same API surface
+- The **\`Signer\` / \`Filler\` traits** — how transaction signing, gas estimation, and nonce management compose into layered providers
 
 Three topic chains, each with build-up + walkthrough + quiz + drill.
 
@@ -58,13 +58,13 @@ By the end, you'll be able to read alloy's hot path and build custom Provider la
 
 ## Prerequisites
 
-**Intermediate Rust** (covered in Bridge to Advanced):
+**Intermediate Rust** (covered in Bridge to Intermediate):
 - Generics with trait bounds, associated types, default type parameters
 - \`Arc<T>\`, \`dyn Trait\`, layered ownership
 - \`async\` / \`Future\` basics, the Tokio runtime model
 - \`auto_impl\` macros and procedural attributes
 
-**No EVM internals required.** Alloy operates above the EVM — it talks to nodes, not to opcodes. (If you're doing all three Advanced courses, you'll see EVM internals in Inside Revm.)
+**No EVM internals required.** Alloy operates above the EVM — it talks to nodes, not to opcodes. (If you're doing all three Intermediate courses, you'll see EVM internals in Inside Revm.)
 
 **Familiarity with using alloy as a user** — \`Provider::get_balance\`, \`ProviderBuilder\`, signing a tx — covered in Fundamentals (\`alloy-primitives-signing\`, \`alloy-provider\`). If those concepts are shaky, do those Fundamentals lessons first; this course teaches you to *read* alloy, not to *use* it.
 
@@ -82,7 +82,7 @@ The "Find in repo" prompts only work if you actually have the repo open. Close t
 
 Scroll back to the course detail and start with **Building the \`Provider\` trait step by step**.
 
-After Inside Alloy: you've completed all three Advanced courses. **Expert** picks up the procedural-macro and zkVM-integration deep dives.`,
+After Inside Alloy: you've completed all three Intermediate courses. **Expert** picks up the procedural-macro and zkVM-integration deep dives.`,
                 },
                 {
                   title: 'Building the \`Provider\` trait step by step',
@@ -560,7 +560,7 @@ The next lesson is a quiz that gates progression. **You can't nod past a quiz** 
                   xpReward: 25,
                   content: `# Quiz: did the \`Provider\` trait shape stick?
 
-Four questions covering the design decisions across the buildup and walkthrough. Same rule as the other Advanced quizzes: **you can't nod past a quiz.**
+Four questions covering the design decisions across the buildup and walkthrough. Same rule as the other Intermediate quizzes: **you can't nod past a quiz.**
 
 If you miss two or more, scroll back to *Building the \`Provider\` trait step by step* before going on to the drill.`,
                   quizQuestions: [
@@ -1243,7 +1243,7 @@ The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
                   xpReward: 25,
                   content: `# Quiz: did the \`Network\` trait shape stick?
 
-Four questions covering the design decisions across the buildup and walkthrough. Same rule as the other Advanced quizzes: **you can't nod past a quiz.**
+Four questions covering the design decisions across the buildup and walkthrough. Same rule as the other Intermediate quizzes: **you can't nod past a quiz.**
 
 If you miss two or more, scroll back to *Building the \`Network\` trait step by step* before going on to the drill.`,
                   quizQuestions: [
@@ -1988,7 +1988,7 @@ The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
                   xpReward: 25,
                   content: `# Quiz: did the \`Signer\` model stick?
 
-Four questions covering the design decisions across the Signer buildup and walkthrough. Same rule as the other Advanced quizzes: **you can't nod past a quiz.**
+Four questions covering the design decisions across the Signer buildup and walkthrough. Same rule as the other Intermediate quizzes: **you can't nod past a quiz.**
 
 If you miss two or more, scroll back to *Building the \`Signer\` trait step by step* before going on to the drill.`,
                   quizQuestions: [

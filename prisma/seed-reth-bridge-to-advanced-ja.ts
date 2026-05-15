@@ -6,7 +6,7 @@ export async function seedRethBridgeToAdvancedJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'reth-bridge-to-advanced-ja',
-      title: 'スタックを読む — ソース読解への橋渡し',
+      title: 'スタックを読む — 中級への橋渡し',
       description:
         'Beginner ティアの Rust と Alloy の基礎は固まった。でも次の Alloy/Revm/Inside Reth のソース読みは依然として歯が立たない。このコースがそのギャップを埋めます。EVM をバイト単位で（ディスパッチループ・ワールドステート・コールフレーム・reorg）、そして Reth/Revm のソースが暗黙の前提とする中級 Rust（generics・dyn・Arc・unsafe・macro_rules）。',
       difficulty: 'BEGINNER',
@@ -36,7 +36,7 @@ export async function seedRethBridgeToAdvancedJA(prisma: PrismaClient) {
 
 Solidity を書いてきた。Foundry でデプロイとテストもした。でも、デプロイ後の EVM は **実際に何をやっているのか?** このレッスンは1段階下のレイヤー — バイトの世界 — に降りていきます。
 
-これが Advanced レッスンが暗黙の前提にしているレイヤー。これがないと \`revm/crates/interpreter\` のソースは雑音にしか読めません。
+これが 中級レッスンが暗黙の前提にしているレイヤー。これがないと \`revm/crates/interpreter\` のソースは雑音にしか読めません。
 
 ## Solidity が変身する先
 
@@ -140,9 +140,9 @@ bytecode: 0x60 0x80 0x60 0x40 0x52 0x34 0x80 ...
 
 halt opcode に当たるか、ガス枯渇か、無効 opcode に出会うまで繰り返し。
 
-## なぜ Advanced で重要か
+## なぜ中級で重要か
 
-Advanced コースで \`revm/crates/interpreter/src/instructions/arithmetic.rs\` を開くと、こう書いてあります：
+中級コースで \`revm/crates/interpreter/src/instructions/arithmetic.rs\` を開くと、こう書いてあります：
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -176,9 +176,9 @@ match opcode {
 
 - **予測可能なパフォーマンス**: 配列アクセスは CPU 命令 1 つ。\`match\` は分岐ツリーかジャンプテーブルにコンパイルされる — 大抵速いが、配列は *常に* 速い。
 - **コンパイル時構築**: 256 エントリのテーブルは \`const fn\` でコンパイル時に組める。実行時セットアップコストゼロ。
-- **カスタマイズ容易**: フォークは **1 スロット** を置き換えるだけでカスタム opcode を追加できる（Advanced lesson 2 で出てきます）。
+- **カスタマイズ容易**: フォークは **1 スロット** を置き換えるだけでカスタム opcode を追加できる（中級レッスン 2 で出てきます）。
 
-## 読み物リスト — Advanced 前にやること
+## 読み物リスト — 中級前にやること
 
 1. **[evm.codes](https://www.evm.codes) を開いて** クリックして回る。各 opcode、ガスコスト、スタック効果。ブックマーク必須。
 2. **[Yellow Paper](https://ethereum.github.io/yellowpaper/paper.pdf) の EVM セクション**、9–13 ページをスキム。通読しなくていい。ループと opcode の形式定義を見るだけ。見た目より読みやすい。
@@ -188,9 +188,9 @@ match opcode {
 
 - EVM は **バイト駆動の dispatch ループ**: バイトを fetch、256 スロットの関数テーブルを引く、ハンドラを実行、PC を進める。
 - 各 opcode は **決まった規約** を持つ小さな Rust 関数（Revm の場合）: スタック・メモリ・ガス・必要ならストレージに触れて、制御を返す。
-- Advanced lesson 1 で見るすべての詳細（\`add<IT, H>\`、命令テーブル、PC、halt）はこのモデルに直接マッピングされる。
+- 中級レッスン 1 で見るすべての詳細（\`add<IT, H>\`、命令テーブル、PC、halt）はこのモデルに直接マッピングされる。
 
-Advanced を始めたら、最初のレッスンで **まったく同じ** \`add\` 関数が出てきます。驚くことは何もない — あなたがすでに理解している中身の、本番グレードの実装を読むだけです。
+中級を始めたら、最初のレッスンで **まったく同じ** \`add\` 関数が出てきます。驚くことは何もない — あなたがすでに理解している中身の、本番グレードの実装を読むだけです。
 
 ## 📺 関連動画
 
@@ -208,7 +208,7 @@ RxL_1AfV7N4 | EVM: From Solidity to byte code, memory, and storage
                   xpReward: 25,
                   content: `# メモリ・ストレージ・ワールドステート
 
-dispatch loop で opcode が *何* かは見えました。ほとんどの opcode は 4 つのストアのうちの 1 つに触れます。本レッスンではそれらを順に見ていきます — そして Solidity が隠しているけれど Advanced レッスンが前提とするワールドステートのモデルも。
+dispatch loop で opcode が *何* かは見えました。ほとんどの opcode は 4 つのストアのうちの 1 つに触れます。本レッスンではそれらを順に見ていきます — そして Solidity が隠しているけれど 中級レッスンが前提とするワールドステートのモデルも。
 
 ## 4 つのストア
 
@@ -294,7 +294,7 @@ storage[address]: HashMap<U256, U256>
 
 Solidity はコンパイル時にストレージスロットを割り当てます。\`uint256 private balance\` はスロット 0、\`mapping(address => uint256) balances\` は \`keccak256(address . slot_index)\` 等。Solidity は raw \`U256 → U256\` マップ **の上で** スロット割り当てをやっている。
 
-Advanced lesson 3 (Database トレイト) で：
+中級レッスン 3 (Database トレイト) で：
 
 \`\`\`rust
 fn storage(&mut self, address: Address, index: StorageKey)
@@ -337,7 +337,7 @@ Solidity で書いた 1 つの \`SSTORE\` がこうなる：
 4. インタープリタが \`Database\` のストレージ書き込みパスを呼ぶ
 5. このコントラクトの MPT が更新され、最終的に Account の \`storage_root\` が変わり、最終的にグローバル \`stateRoot\` が変わる
 
-Solidity 1 行とチェーンの state root の間に 5 つのレイヤー。**5 つすべてが Advanced と Expert で読むソースの中にある**。
+Solidity 1 行とチェーンの state root の間に 5 つのレイヤー。**5 つすべてが中級と Expert で読むソースの中にある**。
 
 ## 読み物リスト
 
@@ -352,7 +352,7 @@ Solidity 1 行とチェーンの state root の間に 5 つのレイヤー。**5
 - **ワールドステート** は \`Address → Account\` マップ。各 Account が自分のストレージ trie を指す。
 - Revm \`Database\` トレイトの 3 つのコアメソッド (\`basic\`、\`code_by_hash\`、\`storage\`) は **このワールドステートモデルを直接ミラー** している。
 
-Advanced lesson 3 で Database トレイトを見たとき、これがまさにこの絵を Rust トレイトで表現したものだと認識できるはず。`,
+中級レッスン 3 で Database トレイトを見たとき、これがまさにこの絵を Rust トレイトで表現したものだと認識できるはず。`,
                 },
                 {
                   title: 'ガス機構の深掘りとコールフレーム',
@@ -365,7 +365,7 @@ Advanced lesson 3 で Database トレイトを見たとき、これがまさに�
 
 「ガスはお金がかかる」は知っているはず。本レッスンではもう 1 段掘り下げる — ガスが実際どこへ消えるか、そして 1 つのトランザクションがどう **コールフレーム** のツリーを生成するか、各フレームが独自のコンテキストを持つこと。
 
-両トピックとも、カスタム opcode・precompile・ExEx の Advanced レッスンで前提知識として扱われます。
+両トピックとも、カスタム opcode・precompile・ExEx の 中級レッスンで前提知識として扱われます。
 
 ## ガス — 3 カテゴリ
 
@@ -422,7 +422,7 @@ Solidity の \`require(x, "msg")\` で、EVM はエンコード済み "msg" を 
 
 OOG は別物。フレームが実行中にガス枯渇すると起きる。フレームはすべて (状態 + 残りガス) を失い、呼び出し元は汎用失敗を見る。
 
-Advanced lesson 1 で Revm の \`PrecompileHalt::OutOfGas\` と他の halt が出てくる時、この区別がモデル化されている。
+中級レッスン 1 で Revm の \`PrecompileHalt::OutOfGas\` と他の halt が出てくる時、この区別がモデル化されている。
 
 ## コールフレーム — EVM のコールスタック
 
@@ -473,7 +473,7 @@ CALL と同じ形だが、内側フレームは **状態書き込み禁止** (SS
 
 これが多くの著名な hack の元凶でもある — Wormhole、Parity マルチシグ、等 — A のストレージレイアウトが X と一致しないと、書き込みが X の予期しないスロットを破壊する。
 
-Advanced lesson 6 (ExEx) で「この tx がこれらのアカウントのこれらのストレージスロットに触れた」と出た時、CALL vs DELEGATECALL を知っていることが理解の鍵。
+中級レッスン 6 (ExEx) で「この tx がこれらのアカウントのこれらのストレージスロットに触れた」と出た時、CALL vs DELEGATECALL を知っていることが理解の鍵。
 
 ## 実コールグラフ
 
@@ -514,7 +514,7 @@ EOA がコントラクト X に tx 送信
 - tx は **コールフレームのツリー**。各フレームが独自の stack/memory/PC/gas を持つ。
 - **DELEGATECALL** は呼び先のコードを呼び出し元のコンテキストで走らせる call スタイル — プロキシパターンの基盤、多くのバグの元凶。
 
-Advanced lesson 5 (カスタム precompile) でガス価格モデル、もしくは lesson 6 (ExEx) で複数のコミット済みトランザクションを跨いで再構成する話が出た時、コールフレームとガスモデルはすでに頭の中にある — 抽象概念ではなく、具体的な機械として。`,
+中級レッスン 5 (カスタム precompile) でガス価格モデル、もしくは lesson 6 (ExEx) で複数のコミット済みトランザクションを跨いで再構成する話が出た時、コールフレームとガスモデルはすでに頭の中にある — 抽象概念ではなく、具体的な機械として。`,
                 },
               ],
             },
@@ -535,7 +535,7 @@ Advanced lesson 5 (カスタム precompile) でガス価格モデル、もしく
 
 ここまで 1 トランザクションずつ扱ってきました。チェーンは別のレベルで動きます: トランザクションの **ブロック**、何をしたかの **レシート**、そして時々起きる **reorg** (チェーンが直近の歴史を書き換えること)。
 
-これは Reth の Staged Sync と ExEx の Advanced レッスンが暗黙の前提とするレイヤー。
+これは Reth の Staged Sync と ExEx の 中級レッスンが暗黙の前提とするレイヤー。
 
 ## ブロック — 3 つの部分
 
@@ -595,7 +595,7 @@ Solidity で \`emit Transfer(from, to, amount)\` を書くと、EVM は \`LOG3\`
 
 各ブロックの receipts root は **256 バイトのブルームフィルタ** を持ち、ブロック内の全ログアドレスとトピックを要約。ライトクライアントとインデクサがこれを使って、自分が気にするアドレスを言及していないブロックを高速にスキップする — フルレシートをダウンロードせずに。
 
-Advanced lesson 7 (本番 MEV) で ExEx コードがアドレスでログをフィルタする時、このブルームが事前フィルタを高速にする。
+中級レッスン 7 (本番 MEV) で ExEx コードがアドレスでログをフィルタする時、このブルームが事前フィルタを高速にする。
 
 ## ブロックは実際どう作られるか
 
@@ -616,7 +616,7 @@ Advanced lesson 7 (本番 MEV) で ExEx コードがアドレスでログをフ�
 
 このブロックを実行するフルノードは **同じ実行を** 検証のために行う — ボディを取得、各 tx を実行、結果の state_root がヘッダーに一致するか確認。一致しなければブロックは却下。
 
-Advanced lesson 4 で Reth の \`ExecutionStage\` を読む時、それが正にこの検証パス: 各ブロックの tx を再生し、状態変更を蓄積、結果のルートを検証。
+中級レッスン 4 で Reth の \`ExecutionStage\` を読む時、それが正にこの検証パス: 各ブロックの tx を再生し、状態変更を蓄積、結果のルートを検証。
 
 ## Reorg — チェーンが自分を書き換える
 
@@ -652,13 +652,13 @@ Advanced lesson 4 で Reth の \`ExecutionStage\` を読む時、それが正に
 - reorg 検知時にそれらの行を **削除する必要** がある
 - そして新正準ブロック N の tx の行を再挿入
 
-これが **まさに** ExEx に 3 通知タイプがある理由 — \`ChainCommitted\`、\`ChainReorged\`、\`ChainReverted\`。\`ChainCommitted\` だけ扱う naive インデクサは reorg のたびに導出状態を破壊する。(Advanced lesson 6 で詳しく扱う。)
+これが **まさに** ExEx に 3 通知タイプがある理由 — \`ChainCommitted\`、\`ChainReorged\`、\`ChainReverted\`。\`ChainCommitted\` だけ扱う naive インデクサは reorg のたびに導出状態を破壊する。(中級レッスン 6 で詳しく扱う。)
 
 ### なぜ Reth の Staged Sync が対称なのか
 
 Reth の各 Stage は \`execute\` (forward) と \`unwind\` (backward) を持つ。Stage は reorg を「特殊ケース」として設計されていない — reorg は **通常運用**、同じトレイトでモデル化される。1000 ブロック前進: \`execute\`。reorg で 3 ブロック後退: \`unwind\`。同じコードパス、逆方向。
 
-これは Advanced lesson 4 (Staged Sync アーキテクチャ) で評価できる設計判断。
+これは 中級レッスン 4 (Staged Sync アーキテクチャ) で評価できる設計判断。
 
 ## 読み物リスト
 
@@ -673,7 +673,7 @@ Reth の各 Stage は \`execute\` (forward) と \`unwind\` (backward) を持つ�
 - **Reorg** は直近の歴史を書き換える。オフチェーン消費者は巻き戻しを明示的に扱う必要がある。
 - Reth の Staged Sync は **対称** (execute / unwind) — それは reorg が例外ではなく通常運用だから。
 
-Advanced lesson 4 で Stage トレイトを読み解く時、lesson 6 で ExEx 通知タイプを読み解く時、モデルはすでに頭にある。あとは実装している Rust を読むだけです。`,
+中級レッスン 4 で Stage トレイトを読み解く時、lesson 6 で ExEx 通知タイプを読み解く時、モデルはすでに頭にある。あとは実装している Rust を読むだけです。`,
                 },
               ],
             },
@@ -881,7 +881,7 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 - **\`dyn Trait\`** は実行時ディスパッチのポインタ + vtable; **\`impl Trait\`** はコンパイル時モノモーフ化。
 - Revm の重い generics 使用は **型レベルでのモジュラリティ** — 同じコード、複数特殊化。
 
-Advanced lesson 1 でいきなり 1 行目に型パラメータ 3 つと \`?Sized\` をぶつけられた時、それを 5 つの威圧的なトークンではなく、1 つの繋がった文として読めるはず。`,
+中級レッスン 1 でいきなり 1 行目に型パラメータ 3 つと \`?Sized\` をぶつけられた時、それを 5 つの威圧的なトークンではなく、1 つの繋がった文として読めるはず。`,
                 },
                 {
                   title: '所有権の共有: Arc・Mutex・RwLock',
@@ -1115,7 +1115,7 @@ Reth ソースで \`Arc<RwLock<Foo>>\` の隣に \`Arc<Mutex<Bar>>\` を見た�
 - **\`tokio::sync::Mutex\`** は async-aware 版 — クリティカルセクションが \`.await\` を跨ぐ時に使う。
 - **\`Arc<Mutex<T>>\`** は正準の「共有可変状態」パターン — Reth/ExEx の至る所で見る。
 
-Advanced lesson 6 (ExEx) で \`Arc<...>\` フィールドが 3 つあるような struct を見て「なぜラッパーだらけ?」と思った時、各々がそのコンポーネントを runtime のタスク間でどう共有するかを支える、欠かせない部品なのだと分かるはずです。`,
+中級レッスン 6 (ExEx) で \`Arc<...>\` フィールドが 3 つあるような struct を見て「なぜラッパーだらけ?」と思った時、各々がそのコンポーネントを runtime のタスク間でどう共有するかを支える、欠かせない部品なのだと分かるはずです。`,
                 },
                 {
                   title: 'unsafe Rust',
@@ -1150,7 +1150,7 @@ Rust の安全性保証 (データ競合なし、use-after-free なし、境界�
 
 ## なぜ Revm はホットパスで \`unsafe\` を使うか
 
-Advanced lesson 1 の Revm の \`popn_top!\` マクロには：
+中級レッスン 1 の Revm の \`popn_top!\` マクロには：
 
 \`\`\`rust
 let ([$( $x ),*], $top) = unsafe {
@@ -1344,7 +1344,7 @@ Hygiene は \`macro_rules!\` の特徴 (そして C スタイルのマクロよ�
 
 ## 全部まとめる
 
-Advanced lesson 1 で \`revm/crates/interpreter/src/instructions/macros.rs\` を開くと：
+中級レッスン 1 で \`revm/crates/interpreter/src/instructions/macros.rs\` を開くと：
 
 \`\`\`rust
 macro_rules! popn_top {
@@ -1385,13 +1385,13 @@ macro_rules! popn_top {
 
 ## 技術的前提知識は完了
 
-これで **スタックを読む — Advanced への橋渡し** の **技術的** 前提は終了：
+これで **スタックを読む — 中級への橋渡し** の **技術的** 前提は終了：
 
 - ✓ EVM をバイト単位で (dispatch loop、ストア、ガス、コールフレーム)
 - ✓ ブロックレベルの Ethereum (ブロック、レシート、reorg)
 - ✓ ソース読みのための Rust (generics、dyn、Arc、unsafe、マクロ)
 
-進む前に、簡単なゲートチェック。最初の Advanced レッスンを開くとこれが見えるはず：
+進む前に、簡単なゲートチェック。最初の中級レッスンを開くとこれが見えるはず：
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -1409,9 +1409,9 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 
 この 3 文がしっくり来たら、技術的前提は身についています。
 
-## あと 1 レッスン — Advanced コースの読み方
+## あと 1 レッスン — 中級コースの読み方
 
-Advanced ティアは **3 つの独立したコース**（Revm・Reth・Alloy）で、すべてが同じ編集スタイル — Predict プロンプト、クイズゲート、積み上げ → ウォークスルー → クイズ → ドリルのチェーン構造 — を共有します。次は **「Advanced コースの読み方」** を読んでください。3 つの Advanced コース全てに適用されるメタオリエンテーション、つまり 1 度読めば済む内容です。
+中級ティアは **3 つの独立したコース**（Revm・Reth・Alloy）で、すべてが同じ編集スタイル — Predict プロンプト、クイズゲート、積み上げ → ウォークスルー → クイズ → ドリルのチェーン構造 — を共有します。次は **「中級コースの読み方」** を読んでください。3 つの中級コース全てに適用されるメタオリエンテーション、つまり 1 度読めば済む内容です。
 
 それから、コースを 1 つ選んで始める。`,
                 },
@@ -1430,7 +1430,7 @@ Advanced ティアは **3 つの独立したコース**（Revm・Reth・Alloy）
 
 ## ティアシフト
 
-Beginner ティア (Beginner / Fundamentals / Bridge to Advanced) は、スタックの **形** を教えました — Alloy 型はどんなものか、Foundry の使い方、EVM が高レベルで何をしているか。
+Beginner ティア (Beginner / Fundamentals / 中級への橋渡し) は、スタックの **形** を教えました — Alloy 型はどんなものか、Foundry の使い方、EVM が高レベルで何をしているか。
 
 Intermediate ティアは別のことを要求します。**Reth・Revm・Alloy・Foundry の本物の本番ソースを 1 行ずつ読みます。** レッスンはあなたが既にこのスタックを使えることを前提にしている — *読めるように* 教えます。
 

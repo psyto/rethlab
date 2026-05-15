@@ -8,7 +8,7 @@ export async function seedRethRevmAdvancedJA(prisma: PrismaClient) {
       slug: 'revm-advanced-ja',
       title: 'Inside Revm — EVMエンジンを読む',
       description:
-        'Revmのインタープリターを1行ずつ読み解きます。本物の `add` Opcode、カスタムOpcode、状態を供給する `Database` トレイトを歩く。3つの独立したAdvancedコース（Revm・Reth・Alloy）の最初の一つ — 順番は自由ですが、Revmが提供する型の語彙は他の2つが前提とします。',
+        'Revmのインタープリターを1行ずつ読み解きます。本物の `add` Opcode、カスタムOpcode、状態を供給する `Database` トレイトを歩く。3つの独立した中級コース（Revm・Reth・Alloy）の1つ — 順番は自由ですが、Revmが提供する型の語彙は他の2つが前提とします。',
       difficulty: 'INTERMEDIATE',
       duration: 120,
       xpReward: 340,
@@ -36,7 +36,7 @@ export async function seedRethRevmAdvancedJA(prisma: PrismaClient) {
 
 Revm は Rust 製 EVM クライアント全ての **実行エンジン**です: Reth・Hyperliquid の HyperEVM・Berachain の bera-reth・Tempo。「うちは Revm を使っている」と言うチェーンは、Opcode ループ・ガス会計・状態読み出しの作法 — *全部同じコード* を走らせています。誰のフォークを見ても同じ。一度読めば全てが読めるようになる。
 
-これは RethLab の 3 つの独立した Advanced ティアのコースの最初の 1 つです:
+これは RethLab の 3 つの独立した中級ティアコースの 1 つです:
 
 - **Inside Revm**（あなたはここ）— EVM エンジンの内部
 - **Inside Reth** — Reth の内部: Staged Sync・ExEx・Reth SDK
@@ -44,7 +44,7 @@ Revm は Rust 製 EVM クライアント全ての **実行エンジン**です: 
 
 Revm を最初に置く理由は、その型（\`Address\`・\`U256\`・\`B256\`・\`Database\` トレイト）が Reth と Alloy の多くの部分の前提になるから。ただし 3 コースは独立しているので、構築しているものに合わせて選んで OK。
 
-> 📋 **Advanced ティアは初めて?** *Bridge to Advanced* の最後にある **「Advanced コースの読み方」** を先に読んでください。編集スタイル（Predict プロンプト・クイズゲート・積み上げ→ウォークスルー→クイズ→ドリルのチェーン構造）とペースを説明しています — 3 つの Advanced コース全てに適用される、1 度読めば済む内容です。
+> 📋 **中級ティアは初めて?** *中級への橋渡し* の最後にある **「中級コースの読み方」** を先に読んでください。編集スタイル（Predict プロンプト・クイズゲート・積み上げ→ウォークスルー→クイズ→ドリルのチェーン構造）とペースを説明しています — 3 つの中級コース全てに適用される、1 度読めば済む内容です。
 
 ## このコースで学ぶこと
 
@@ -54,14 +54,14 @@ Revm を最初に置く理由は、その型（\`Address\`・\`U256\`・\`B256\`
 
 ## 前提知識
 
-**EVM 内部**（Bridge to Advanced でカバー — 不安なら戻る）:
+**EVM 内部**（中級への橋渡し でカバー — 不安なら戻る）:
 - バイトコードと dispatch loop（バイトとしての opcode、PC、命令テーブル）
 - スタック / メモリ / calldata / ストレージ — 各々何で、どう違うか
 - cold vs warm ガス (EIP-2929)
 - コールフレーム: CALL / DELEGATECALL / STATICCALL のセマンティクス
 - ブロック構造 (header / body / receipts)、reorg は通常運用
 
-**中級 Rust**（同じく Bridge to Advanced で。Inside Reth 内の *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンが自己チェック用）:
+**中級 Rust**（同じく 中級への橋渡し で。Inside Reth 内の *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンが自己チェック用）:
 - Generics + trait bounds、\`?Sized\`、\`dyn Trait\` vs \`impl Trait\`
 - \`Arc<T>\`、\`Mutex<T>\`、\`RwLock<T>\` — どれをいつ使うか
 - \`unsafe\` ブロックと \`unwrap_unchecked()\`
@@ -470,7 +470,7 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough
                   xpReward: 30,
                   content: `# クイズ: \`add\` は本当に身についた?
 
-このクイズは飾りではありません。前のレッスンの「予測」プロンプトはうなずいて通り過ぎやすい — そして1日後の「読んでうなずいたけど再現できない」が、Advanced を壊す失敗モードです。
+このクイズは飾りではありません。前のレッスンの「予測」プロンプトはうなずいて通り過ぎやすい — そして1日後の「読んでうなずいたけど再現できない」が、中級を壊す失敗モードです。
 
 5問。前2レッスンの各ピースに1問ずつ対応。**自分が当て推量していると気づいたら**、止まって関連箇所を読み直してから答えてください。クイズは逃げません。
 

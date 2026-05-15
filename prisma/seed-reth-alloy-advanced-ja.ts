@@ -8,7 +8,7 @@ export async function seedRethAlloyAdvancedJA(prisma: PrismaClient) {
       slug: 'alloy-advanced-ja',
       title: 'Inside Alloy — Rust Ethereum ライブラリを読む',
       description:
-        'alloy のソースを 1 行ずつ読み解く — `Provider` トレイト、`Network` 抽象、`Signer`/`Filler` モデル。3 つの独立した Advanced コース（Revm・Reth・Alloy）の 3 つ目で、受講順は自由。alloy は Reth と dapp が依拠する基盤なので、Rust で Ethereum を扱うあらゆる場面で本コースは効いてきます。',
+        'alloy のソースを 1 行ずつ読み解く — `Provider` トレイト、`Network` トレイト、`Signer`/`Filler` トレイト。3 つの独立した中級コース（Revm・Reth・Alloy）の 1 つで、受講順は自由。alloy は Reth と dapp が依拠する基盤なので、Rust で Ethereum を扱うあらゆる場面で本コースは効いてきます。',
       difficulty: 'INTERMEDIATE',
       duration: 123,
       xpReward: 340,
@@ -34,7 +34,7 @@ export async function seedRethAlloyAdvancedJA(prisma: PrismaClient) {
                   xpReward: 15,
                   content: `# Inside Alloy へようこそ — このコースの読み方
 
-これは RethLab の 3 つの独立した Advanced ティアコースの 1 つです:
+これは RethLab の 3 つの独立した中級ティアコースの 1 つです:
 
 - **Inside Revm** — EVM エンジンの内側
 - **Inside Reth** — Reth の内側: Staged Sync・ExEx・Reth SDK
@@ -42,15 +42,15 @@ export async function seedRethAlloyAdvancedJA(prisma: PrismaClient) {
 
 Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い、Revm は alloy の primitive を使い、Rust から Ethereum と通信する dapp / MEV ボット / インデクサはすべて alloy の \`Provider\` を使います。本コースが教えるのは **alloy のソースを読む** スキル — Inside Revm が revm を読む力を養うのと同じ形です。
 
-> 📋 **Advanced ティアは初めて?** 始める前に *Bridge to Advanced* の末尾にある **「Advanced コースの読み方」** に目を通してください。編集スタイル（Predict プロンプト、クイズゲート、build-up → walkthrough → quiz → drill のチェーン構造）とペース配分を説明しています。3 つの Advanced コース全てに共通なので、1 度だけ読めば十分。
+> 📋 **中級ティアは初めて?** 始める前に *中級への橋渡し* の末尾にある **「中級コースの読み方」** に目を通してください。編集スタイル（Predict プロンプト、クイズゲート、build-up → walkthrough → quiz → drill のチェーン構造）とペース配分を説明しています。3 つの中級コース全てに共通なので、1 度だけ読めば十分。
 
 ## このコースが教えること
 
 [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) のソースを 1 行ずつ読みます:
 
-- **\`Provider\` トレイト** — Ethereum ノードと話すための中心的な抽象
-- **\`Network\` 抽象** — alloy が Ethereum・Optimism・Anvil・カスタム L2 を同じ API で扱う仕組み
-- **\`Signer\` / \`Filler\` モデル** — トランザクション署名、ガス推定、nonce 管理を層状のプロバイダに合成する仕組み
+- **\`Provider\` トレイト** — Ethereum ノードと話すための中心的なトレイト
+- **\`Network\` トレイト** — alloy が Ethereum・Optimism・Anvil・カスタム L2 を同じ API で扱う仕組み
+- **\`Signer\` / \`Filler\` トレイト** — トランザクション署名、ガス推定、nonce 管理を層状のプロバイダに合成する仕組み
 
 トピックチェーンは 3 本、それぞれ build-up + walkthrough + quiz + drill の構成。
 
@@ -58,13 +58,13 @@ Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い
 
 ## 前提知識
 
-**中級 Rust**（Bridge to Advanced でカバー）:
+**中級 Rust**（中級への橋渡し でカバー）:
 - ジェネリクスとトレイト境界、関連型、デフォルト型パラメータ
 - \`Arc<T>\`、\`dyn Trait\`、層状の所有権
 - \`async\` / \`Future\` の基礎、Tokio ランタイムモデル
 - \`auto_impl\` マクロと手続き属性
 
-**EVM 内部の知識は不要。** Alloy は EVM の上で動きます — 通信相手はノードであって opcode ではありません。(3 つの Advanced コース全てを受けるなら、EVM 内部は Inside Revm で扱います。)
+**EVM 内部の知識は不要。** Alloy は EVM の上で動きます — 通信相手はノードであって opcode ではありません。(3 つの中級コース全てを受けるなら、EVM 内部は Inside Revm で扱います。)
 
 **alloy をユーザーとして使った経験** — \`Provider::get_balance\`、\`ProviderBuilder\`、tx 署名 — は Fundamentals（\`alloy-primitives-signing\`、\`alloy-provider\`）で扱います。心もとなければ Fundamentals レッスンを先に。本コースが教えるのは alloy を *使う* ことではなく *読む* ことです。
 
@@ -82,7 +82,7 @@ Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い
 
 コース詳細に戻り、**\`Provider\` トレイトをステップで組み立てる** から始めましょう。
 
-Inside Alloy を終えると、3 つの Advanced コースをすべて完了したことになります。続く **Expert** では手続きマクロと zkVM 統合を深掘りします。`,
+Inside Alloy を終えると、3 つの中級コースをすべて完了したことになります。続く **Expert** では手続きマクロと zkVM 統合を深掘りします。`,
                 },
                 {
                   title: '\`Provider\` トレイトをステップで組み立てる',
@@ -93,7 +93,7 @@ Inside Alloy を終えると、3 つの Advanced コースをすべて完了し�
                   xpReward: 25,
                   content: `# \`Provider\` トレイトをステップで組み立てる
 
-Ethereum ノードと通信する Rust プログラム — MEV ボット、インデクサ、dapp バックエンド、Reth-SDK アプリ — は、すべて [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) の \`Provider\` を経由する。RPC の上に立つ唯一の抽象だ。\`crates/provider/src/provider/trait.rs\` を開くと、トレイトヘッダーはこんな形（抜粋）になっている:
+Ethereum ノードと通信する Rust プログラム — MEV ボット、インデクサ、dapp バックエンド、Reth-SDK アプリ — は、すべて [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) の \`Provider\` トレイトを経由する。alloy では生の JSON-RPC を直接叩くことはなく、Ethereum との通信は必ずこの \`Provider\` に集約されている。\`crates/provider/src/provider/trait.rs\` を開くと、トレイトヘッダーはこんな形（抜粋）になっている:
 
 \`\`\`rust
 #[auto_impl(&, &mut, Box, Rc, Arc)]
@@ -136,7 +136,7 @@ async fn get_balance(addr: Address) -> Result<U256, Box<dyn Error>> {
 }
 \`\`\`
 
-自由関数。URL はハードコード。トランスポート（HTTP）もハードコード。チェーン（Ethereum 形式の JSON-RPC）もハードコード。
+型に紐づかないただの関数。URL はハードコード。トランスポート（HTTP）もハードコード。チェーン（Ethereum 形式の JSON-RPC）もハードコード。
 
 > 🛑 **予測。** スクロールせずに: この素朴な設計が本番運用で生き残れない理由を 3 つ挙げる。ヒント — それぞれ別 *種類* の問題。
 
@@ -165,7 +165,7 @@ pub trait Provider {
 
 これは *Ethereum* なら通用する。が、Optimism が欲しくなった瞬間にトレイトの形が足りないことに気づく。
 
-## ステップ 2 — 複数チェーン: \`Network\` 抽象
+## ステップ 2 — 複数チェーン: \`Network\` トレイト
 
 Optimism の \`TransactionRequest\` には \`l1_block_number\` ヒントがある。Optimism のレシートには \`l1_fee\` フィールドがある。RPC のメソッド名は同じ（\`eth_sendTransaction\`、\`eth_getTransactionReceipt\`）でも *型* が違う。
 
@@ -560,7 +560,7 @@ provider.send_transaction(tx).with_required_confirmations(3).get_receipt().await
                   xpReward: 25,
                   content: `# クイズ: \`Provider\` トレイトの形は身についた?
 
-組み立てとウォークスルーにまたがる設計判断を問う 4 問。ほかの Advanced クイズと同じルール: **クイズはうなずきでは通せない。**
+組み立てとウォークスルーにまたがる設計判断を問う 4 問。ほかの中級クイズと同じルール: **クイズはうなずきでは通せない。**
 
 2 問以上落としたら、ドリルへ進む前に *\`Provider\` トレイトをステップで組み立てる* に戻ること。`,
                   quizQuestions: [
@@ -797,7 +797,7 @@ let bal = provider.get_balance(addr).await?;
 
 答えが曖昧なら、レッスンはあなたを掴んだままだ。ドリルをやり直すか、組み立てのステップ 4（\`root()\`）を読み直す。
 
-このドリルを終えた時点で、本番 MEV パイプラインやインデクサで使われているのと同じ種類のコード — alloy をフォークせずに観測可能性を層として積み増す — を投入したことになる。**次のチェーン: \`Network\` 抽象。**`,
+このドリルを終えた時点で、本番 MEV パイプラインやインデクサで使われているのと同じ種類のコード — alloy をフォークせずに観測可能性を層として積み増す — を投入したことになる。**次のチェーン: \`Network\` トレイト。**`,
                 },
                 {
                   title: '\`Network\` トレイトをステップで組み立てる',
@@ -1243,7 +1243,7 @@ impl Network for AnyNetwork {
                   xpReward: 25,
                   content: `# クイズ: \`Network\` トレイトの形は身についた?
 
-組み立てとウォークスルーにまたがる設計判断を問う 4 問。ほかの Advanced クイズと同じルール: **クイズはうなずきでは通せない。**
+組み立てとウォークスルーにまたがる設計判断を問う 4 問。ほかの中級クイズと同じルール: **クイズはうなずきでは通せない。**
 
 2 問以上落としたら、ドリルへ進む前に *\`Network\` トレイトをステップで組み立てる* に戻ること。`,
                   quizQuestions: [
@@ -1474,7 +1474,7 @@ let s = block_summary::<Optimism, _>(&eth_provider, BlockId::latest()).await?;
 3. コンパイラは \`block_summary::<Optimism>(&eth_provider, ...)\` を拒否する。経路を追う: どのトレイト境界に違反し、どの関連型の不一致がエラーを生むのか?
 4. 3 つ目のチェーンとして Polygon zkEVM を足したい場合、何を書くか?（ヒント: 新しい \`struct PolygonZkEvm; impl Network for PolygonZkEvm { ... }\` を書く。）
 
-このドリルを終えた時点で、本番のインデクサやエクスプローラが投入しているのと同じ形のマルチチェーンツール — \`N: Network\` 上ジェネリックな中核関数 1 つを、コンパイル時にチェーンごとに特殊化させる形 — を投入したことになる。**次のチェーン: \`Signer\` モデル — alloy が署名、ガス、nonce の充填を層状の Provider に合成する仕組み。**`,
+このドリルを終えた時点で、本番のインデクサやエクスプローラが投入しているのと同じ形のマルチチェーンツール — \`N: Network\` 上ジェネリックな中核関数 1 つを、コンパイル時にチェーンごとに特殊化させる形 — を投入したことになる。**次のチェーン: \`Signer\` トレイト — alloy が署名、ガス、nonce の充填を層状の Provider に合成する仕組み。**`,
                 },
                 {
                   title: '\`Signer\` トレイトをステップごとに組み立てる',
@@ -1487,7 +1487,7 @@ let s = block_summary::<Optimism, _>(&eth_provider, BlockId::latest()).await?;
 
 MEV サーチャーは AWS KMS の鍵で署名する（クラウド鍵 — 秘密鍵は AWS の外に出ない）。トレジャリーのオペレータは Ledger で署名する（ハードウェアウォレット — 鍵は USB デバイス上にあり、毎回ボタン押下が要る）。テストスイートはプロセス内の生 secp256k1 バイトで署名する。**同じ alloy のアプリケーションコードが、この 3 つすべてを駆動できなければならない。** これが \`Signer\` トレイトの形を決めている制約だ。
 
-本チェーンでは、それを可能にする抽象を組み立てる: \`Signer\` トレイト、チェーン固有版の \`TxSigner<N>\`、async / sync の分離、そして Provider ドリルで使った \`ProviderBuilder\` に署名を結びつける \`WalletFiller\`。
+本チェーンでは、それを可能にするトレイト群を組み立てる: \`Signer\` トレイト、チェーン固有版の \`TxSigner<N>\`、async / sync の分離、そして Provider ドリルで使った \`ProviderBuilder\` に署名を結びつける \`WalletFiller\`。
 
 このレッスンを終える頃には、次のピース一式を組み立てたことになる:
 
@@ -1516,7 +1516,7 @@ pub trait SignerSync<Sig = Signature> { /* Signer の sync ミラー */ }
 
 ## ステップ 0 — 素朴な sign 関数
 
-なにも考えずに書けば、署名は 1 つの自由関数になるだろう:
+なにも考えずに書けば、署名は型に紐づかない 1 つの関数になるだろう:
 
 \`\`\`rust
 fn sign_tx(privkey: B256, mut tx: TypedTransaction) -> Result<TxEnvelope> {
@@ -1583,9 +1583,9 @@ trait Signer {
 
 \`sign_message\` は EIP-191 のプレフィックス処理を行ってから \`sign_hash\` を呼ぶ *デフォルト実装* を持つ。**すべての \`Signer\` が \`sign_message\` を追加コストなしで得られる** が、独自のプレフィックスロジックを持つリモート署名者は、それをオーバーライドできる。
 
-> 🛑 **理解度チェック。** なぜデフォルト実装にするのか — 自由関数 \`fn sign_message<S: Signer>(s: &S, msg: &[u8])\` ではいけないのか?
+> 🛑 **理解度チェック。** なぜデフォルト実装にするのか — トレイトメソッドではない関数 \`fn sign_message<S: Signer>(s: &S, msg: &[u8])\` ではいけないのか?
 
-理由は、**デフォルト実装なら署名者側で挙動をオーバーライドできる** から。AWS KMS は、独自にプレフィクシングを行うサービスへメッセージのバイト列を転送したいかもしれない — \`AwsSigner\` 側で \`sign_message\` をオーバーライドすれば、呼び出し側のコードを変えずに済む。自由関数ではオーバーライドできない。「共通の挙動 + 実装単位のオプションカスタマイズ」が欲しいときには、デフォルト実装が正しい道具だ。
+理由は、**デフォルト実装なら署名者側で挙動をオーバーライドできる** から。AWS KMS は、独自にプレフィクシングを行うサービスへメッセージのバイト列を転送したいかもしれない — \`AwsSigner\` 側で \`sign_message\` をオーバーライドすれば、呼び出し側のコードを変えずに済む。トレイト外の関数ではオーバーライドできない。「共通の挙動 + 実装単位のオプションカスタマイズ」が欲しいときには、デフォルト実装が正しい道具だ。
 
 これは \`Provider\` と同じ形（Provider チェーンのステップ 4）: デフォルト実装が共通ケースを、オーバーライドがチェーン固有ケースを引き受け、すべてを 1 つのトレイトの裏でまとめる。
 
@@ -1980,15 +1980,15 @@ where
 `,
                 },
                 {
-                  title: 'クイズ: \`Signer\` モデルは身についたか?',
+                  title: 'クイズ: \`Signer\` トレイトは身についたか?',
                   slug: 'alloy-signer-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 11,
                   duration: 4,
                   xpReward: 25,
-                  content: `# クイズ: \`Signer\` モデルは身についたか?
+                  content: `# クイズ: \`Signer\` トレイトは身についたか?
 
-Signer の組み立てとウォークスルーにまたがる設計判断を問う 4 問。ほかの Advanced クイズと同じルール: **クイズはうなずきでは通せない。**
+Signer の組み立てとウォークスルーにまたがる設計判断を問う 4 問。ほかの中級クイズと同じルール: **クイズはうなずきでは通せない。**
 
 2 問以上落としたら、ドリルへ進む前に *\`Signer\` トレイトをステップごとに組み立てる* に戻ること。`,
                   quizQuestions: [
