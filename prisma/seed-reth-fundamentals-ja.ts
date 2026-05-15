@@ -221,7 +221,7 @@ sequenceDiagram
 EIP-155 がチェーンIDを署名に含めるので、チェーンAで署名したtxがチェーンBで再送できなくなります。**本番では必須**。\`1337\` はローカルAnvilの典型的チェーンID。
 
 ### \`sign_message(message).await\`
-**EIP-191** （"Ethereum signed message" プレフィックス）を実装。JSON-RPCの \`personal_sign\` や \`window.ethereum.request("personal_sign", ...)\` が出すものと同じ。async なのは、ハードウェアウォレット（Ledger/Trezor）が応答に時間がかかるため — ローカルシグナーも同じインターフェースで差し替え可能。
+**EIP-191** （"Ethereum signed message" プレフィックス）を実装。JSON-RPCの \`personal_sign\` や \`window.ethereum.request("personal_sign", ...)\` が返すものと同じ。async なのは、ハードウェアウォレット（Ledger/Trezor）が応答に時間がかかるため — ローカルシグナーも同じインターフェースで差し替え可能。
 
 ### \`signature.recover_address_from_msg(&message[..])\`
 検証側。署名と元メッセージから、署名者のアドレスを復元。これが **「Sign in with Ethereum」の作り方** — サーバーがnonceを発行、ユーザーが署名、サーバーがアドレスを復元。パスワード不要。
@@ -506,7 +506,7 @@ async fn main() -> eyre::Result<()> {
 - 残高の型は \`U256\`。「ゼロか？」を聞く慣用メソッドがある — Alloy ドキュメントで探す
 - \`Result<...>\` を返す関数なら最後は \`Ok(...)\` で包む
 
-\`cargo run\` で公開 Reth RPC に当たり、Vitalik のウォレットが空かを教えてくれる（空ではない）。
+\`cargo run\` で公開 Reth RPC に問い合わせ、Vitalik のウォレットが空かどうかを返す（空ではない）。
 
 ## クイズ`,
                   quizQuestions: [
@@ -653,7 +653,7 @@ ADD
 事後: スタック [..., 12]
 \`\`\`
 
-でもAdvancedティアのプレビューで見た **本物の** \`add\` ソースは、両方popしてpushすらしません：1つpopし、もう1つには可変参照経由で書き戻す。RevmのインタープリターはEVMの概念モデルがそのままRustに対応しつつ、サイクル単位の最適化が重ねられている。
+ただしAdvancedティアのプレビューで見た **本物の** \`add\` ソースは、両方popしてpushすらしません：1つpopし、もう1つには可変参照経由で書き戻します。RevmのインタープリターはEVMの概念モデルをそのままRustに写しつつ、サイクル単位の最適化を重ねた設計になっています。
 
 ## なぜEVMはスタックマシンか
 
@@ -743,7 +743,7 @@ fn main() {
                         '`&T`',
                       ],
                       correctIndex: 1,
-                      explanation: '`pop` は `Option<T>` を返す。「スタックが空かもしれない」可能性が型システムに符号化されているので、認識せずに値をunwrapすることはできない。',
+                      explanation: '`pop` は `Option<T>` を返す。「スタックが空かもしれない」という可能性が型システムに組み込まれているので、空のケースを処理しないまま値を取り出すことはできない。',
                     },
                     {
                       question: 'EVM スタックのハードリミット（最大サイズ）は？',
@@ -1072,7 +1072,7 @@ address internal constant VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12
 address(uint160(uint256(keccak256("hevm cheat code"))))
 \`\`\`
 
-Foundry はこのアドレスに **カスタム precompile を登録した Revm** を回しています。Solidity から \`vm.deal(...)\` を呼ぶと、実際は \`0x7109...\` への \`CALL\` で ABI エンコード引数を渡している — そして Foundry の Rust コードが横取りする。
+Foundry はこのアドレスに **カスタム precompile を登録した Revm** を走らせています。Solidity から \`vm.deal(...)\` を呼ぶと、実際は \`0x7109...\` への \`CALL\` で ABI エンコード済み引数を渡しており、それを Foundry の Rust コードが横取りする仕組みです。
 
 これが **Expert ティアで見る precompile 登録機構そのもの**。Foundry は最も広く使われている本番のカスタム precompile 実例。
 
@@ -1094,7 +1094,7 @@ cast storage 0xUniswapV2Pair 0 --rpc-url https://eth.merkle.io
 cast call $TOKEN "balanceOf(address)(uint256)" $WALLET --rpc-url ...
 \`\`\`
 
-MEV サーチャーや RPC エンジニアにとって、\`cast\` は反射神経レベルのツール。1日に何十回もチェーン状態を確認するのに使う。
+MEV サーチャーや RPC エンジニアにとって、\`cast\` は手が勝手に動くレベルの常用ツール。1日に何十回もチェーン状態を確認するのに使う。
 
 ## 5. \`anvil\` — ローカルノード + メインネットフォーク
 
@@ -1108,7 +1108,7 @@ anvil --fork-url https://eth.merkle.io
 
 フォークモードがキラー機能。これは **\`AlloyDB\` 型のバッキングストアを持つ Revm インスタンス** で、上流 RPC から状態を遅延ロードします。**Uniswap V3 のメインネット状態に対して、ラップトップから testnet 不要で対話できる**。
 
-内部的には anvil は MEV レッスンで見た \`forked_db\` と同じファミリーのコード。anvil はそれを Rust API ではなく JSON-RPC で公開しているだけ。
+内部的には anvil は MEV レッスンで見た \`forked_db\` と同系統のコード。anvil はそれを Rust API ではなく JSON-RPC で公開しているだけ。
 
 ## 6. \`chisel\` — Solidity REPL
 
@@ -1139,7 +1139,7 @@ chisel
 4. 別のターミナルで：\`cast call $UNISWAP_V3_POOL "slot0()" --rpc-url http://localhost:8545\` — ローカルフォーク経由で生きた Uniswap 状態を読む
 5. [\`forge-std/src/Vm.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Vm.sol) を開いて cheatcode インターフェースを眺める — 各エントリが Foundry の Rust precompile の関数に対応している
 
-これで Revm を学習者として、また毎日のユーザーとして使う立場になりました。
+これで Revm を学習者として、また日常的な利用者として使う立場になりました。
 
 ## 📺 関連動画
 

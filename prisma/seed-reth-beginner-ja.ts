@@ -114,7 +114,7 @@ graph TD
 
 ## EVM クライアント市場での Reth の位置
 
-Reth は **唯一の Ethereum execution client ではない** — まだ支配的でもない。[clientdiversity.org](https://clientdiversity.org/) (2026 年 5 月時点) より:
+Reth は **唯一の Ethereum execution client ではなく**、まだ支配的でもありません。[clientdiversity.org](https://clientdiversity.org/)（2026年5月時点）から:
 
 | クライアント | 概算シェア | 言語 |
 | :--- | :--- | :--- |
@@ -124,12 +124,12 @@ Reth は **唯一の Ethereum execution client ではない** — まだ支配�
 | **Reth** | **~7-12%** | **Rust** |
 | **Erigon** | ~7% | Go |
 
-ここから 2 つの結論:
+ここから2つの結論が出ます:
 
-1. **Reth は emerging で、支配的ではない。** 2023 年リリース時の <1% から 3 年で ~7-12% まで成長 — 早い軌道だが、Geth が依然として mainnet RPC コールの大半を serve している。**production であなたが書く Alloy コードは大半 Geth-served なチェーンと話す。** これは問題ない — Alloy は JSON-RPC 経由でどの execution client とも話せる。
-2. **Revm ベースのシミュレーションは production クライアントが行うことと一致する必要がある。** ローカル Revm fork でトランザクションを実行 (Advanced + Building tier で使うパターン)、その結果は同じトランザクションを Geth や Nethermind が処理するのと一致するはず。普通は動く — Revm は EVM 仕様に従うから — ただし **Revm を non-Revm provider に対して検証する** 規律は production の必須事項。Building tier capstone で扱う。
+1. **Rethは新興であり、支配的ではない。** 2023年リリース時の<1%から3年で~7-12%まで成長したのは早い軌道ですが、mainnetのRPCコール大半を捌いているのは依然としてGethです。**本番であなたが書くAlloyコードの大半は、Gethが応答するチェーンと通信することになる**。これ自体は問題ありません — AlloyはJSON-RPC経由ならどのexecution clientとも話せます。
+2. **Revmベースのシミュレーションは、本番クライアントの挙動と一致している必要がある。** ローカルのRevm forkでトランザクションを実行する（Advanced + Building tierで使うパターン）とき、その結果は同じトランザクションをGethやNethermindで処理した場合と一致しているはずです。普通はそうなります — RevmはEVM仕様に従っているので — ただし **Revmの結果を非Revmなproviderに対して検証する** 規律は、本番運用では必須です。Building tierのcapstoneで扱います。
 
-なので「Rust EVM スタック」は **emerging + extensible** と読むべき、「勝者総取り」ではなく。Paradigm + Hyperliquid + Tempo が Reth/Revm の上に build する理由は、市場シェアではなくそれが可能にすること (modularity、embeddability、performance)。
+つまり「Rust EVMスタック」は **新興かつ拡張可能** と捉えるべきで、「勝者総取り」ではありません。Paradigm・Hyperliquid・TempoがReth/Revmの上に積み上げているのは、市場シェアではなく、それが可能にすること（モジュラリティ、組み込みやすさ、性能）が理由です。
 
 ## 学習の順番
 
@@ -172,11 +172,11 @@ Reth は **唯一の Ethereum execution client ではない** — まだ支配�
 
 ## 2026年の現実 — 「どちらか」ではなく「交差点」
 
-最近の構図はもう少し複雑です。Stripe (fiat 側 distribution) と Solana (crypto 側 distribution) を **Tempo** という Reth ベースの payments 抽象化レイヤーがつなぐ、という形が現れつつあります。Meta が USDC 決済を始めたとき、選んだのは「自前チェーン」ではなく、Solana + Stripe という既存ネットワークの組み合わせでした。Stripe は Tempo の中心プレイヤーなので、構造的には Meta — Stripe — Tempo — Solana という connection が形成されつつあります。
+最近の構図はもう少し複雑です。Stripe（fiat側の流通網）とSolana（crypto側の流通網）を **Tempo** というRethベースの決済抽象化レイヤーがつなぐ、という形が現れつつあります。MetaがUSDC決済を始めたとき、選んだのは「自前チェーン」ではなく、Solana + Stripeという既存ネットワークの組み合わせでした。StripeはTempoの中心プレイヤーなので、構造的には Meta — Stripe — Tempo — Solana という接続が形成されつつあります。
 
-つまり「Solana を学ぶか、Rust EVM を学ぶか」より、**「自分はどちらの distribution に賭けたいか」** が実際の判断軸になりつつあります。Rust EVM 側 (このコース) のフィールドは: app-chain (Hyperliquid)、stablecoin 決済 (Tempo)、L2 (Base / OP-Reth) — Reth は「Stripe of crypto」型インフラの基盤になりつつあります。
+つまり「SolanaかRust EVMか」よりも、**「自分はどちらの流通網に賭けるか」** のほうが実際の判断軸になりつつあります。Rust EVM側（このコース）のフィールドは、app-chain（Hyperliquid）、stablecoin決済（Tempo）、L2（Base / OP-Reth）— Rethは「Stripe of crypto」型インフラの基盤になりつつあります。
 
-> **要点**: stablecoin は DeFi の基軸通貨。stablecoin 決済 rail を握ることは、将来的な DeFi onboarding の道を拓くことでもあります。今は Stripe / Tempo が「ユーザーに crypto を見せない」抽象化で TradFi を取り込んでいますが、その rail の上に lending・swap・perps が乗ってくる構造が次の数年の勝負どころ。Reth/Revm エンジニアは、その **rail 側と protocol 側の両方を読み書きできる希少人材** です。
+> **要点**: stablecoinはDeFiの基軸通貨。stablecoinの決済rail（流通路）を押さえることは、将来のDeFiオンボーディングの道を拓くことでもあります。いまはStripe / Tempoが「ユーザーにcryptoを意識させない」抽象化でTradFiを取り込んでいますが、そのrailの上にlending・swap・perpsが乗ってくる構造が、これから数年の勝負どころ。Reth/Revmエンジニアは、その **rail側とprotocol側の両方を読み書きできる希少人材** です。
 
 ## 次の一歩
 
@@ -372,13 +372,13 @@ println!("{:?}", v);  // [10]
 
 ## 必要な要素
 
-これがあなたの「Rust EVM スタック流」初の Rust プログラムです。Rust プログラム全般で使う 3 つの基本要素：
+これがあなたの「Rust EVMスタック流」初のRustプログラムになります。Rustプログラム全般で使う3つの基本要素：
 
-1. **変数** — \`let\` と \`let mut\`（前回扱った）
-2. **メソッド** — Rust の文字列にはビルトインメソッドがあり、ある文字列が別の文字列で始まるかチェックするものがある。**std ドキュメントで探して**：[\`&str\` ドキュメント](https://doc.rust-lang.org/std/primitive.str.html)
+1. **変数** — \`let\` と \`let mut\`（前回扱いました）
+2. **メソッド** — Rust の文字列には組み込みメソッドがあり、ある文字列が別の文字列で始まるかをチェックするものもあります。**stdドキュメントから探してみてください**：[\`&str\` ドキュメント](https://doc.rust-lang.org/std/primitive.str.html)
 3. **条件分岐** — \`if\` / \`else\`
 
-Ethereum アドレスの **長さ** も知っておく必要あり。分からなければ調べる（ヒント：40 hex 文字 + \`0x\` プレフィックス）。
+Ethereum アドレスの **長さ** も把握しておく必要があります。分からなければ調べてみてください（ヒント：40 hex 文字 + \`0x\` プレフィックス）。
 
 ## 自分で書いてみる
 
@@ -401,15 +401,15 @@ fn main() {
 
 詰まったときの軽いヒント：
 
-- \`addr.\`〜 — \`&str\` のメソッドで、まさに名前そのものの動作をするものがある
+- \`addr.\`〜 — \`&str\` のメソッドの中に、名前のとおりに動くものがあります
 - \`addr.len()\` で文字列のバイト長が取れる
-- 2 つの条件は \`&&\` で繋ぐ
+- 2つの条件は \`&&\` でつなぐ
 
-**書いてみる前に答えを覗かない**。Rust の真価は「コンパイラが教えてくれる」こと。コンパイラに教えてもらってください。
+**自分で書いてみる前に答えを見ないでください**。Rust の真価は「コンパイラが教えてくれる」こと。コンパイラに教わってください。
 
 ## クイズ
 
-自分の版を書いて動かしたら、下のクイズへ。各問は具体的な Rust の慣用表現を問います — 自分で書いた経験があれば全問解けるはず。`,
+自分なりのコードを書いて動かしたら、下のクイズへ。各問は具体的なRustの慣用表現を問います — 自分で書いた経験があれば全問解けるはずです。`,
                   quizQuestions: [
                     {
                       question: '文字列 `address` が `"0x"` で始まっているかをチェックする Rust の式として正しいのは？',
@@ -420,7 +420,7 @@ fn main() {
                         '`address[0..2] == "0x"`',
                       ],
                       correctIndex: 1,
-                      explanation: '`starts_with` が標準の `&str` メソッド。`has_prefix` は存在しない。`contains` は文字列のどこかに含まれていれば true なので「先頭」のチェックにならない。`&str` の直接スライスは UTF-8 文字境界でないとパニックするので汎用チェックには危険。',
+                      explanation: '`starts_with` が標準の `&str` メソッドです。`has_prefix` は存在しません。`contains` は文字列のどこかに含まれていれば true を返すので、「先頭」かどうかのチェックにはなりません。`&str` を直接スライスする方法は、UTF-8 の文字境界でないとパニックするため、汎用的なチェックには危険です。',
                     },
                     {
                       question: 'Ethereum アドレス文字列の完全な妥当性チェックに必要なのは？',
@@ -431,7 +431,7 @@ fn main() {
                         '不要 — `&str` ではなく `Address` 型で受ければよい',
                       ],
                       correctIndex: 1,
-                      explanation: 'Ethereum アドレスは 40 hex 桁 (20 バイト) + `0x` プレフィックスで合計 42 文字。3 つすべて確認することでゴミ入力を弾ける。本番の Rust EVM コードでは `address.parse::<Address>()` で Alloy にパースさせるのが普通。',
+                      explanation: 'Ethereum アドレスは 40 hex 桁（20 バイト）+ `0x` プレフィックスで合計 42 文字。3 つすべてを確認することで、不正な入力を弾けます。本番の Rust EVM コードでは `address.parse::<Address>()` で Alloy にパースを任せるのが一般的です。',
                     },
                     {
                       question: 'Rust で `if condition { a } else { b }` を「式」として使えるのはなぜ重要？',
@@ -442,7 +442,7 @@ fn main() {
                         'borrow checker のために必須だから',
                       ],
                       correctIndex: 0,
-                      explanation: 'Rust は意図的に三項演算子を持たない。代わりに `if/else` 自体が値を返す式なので、`let x = if cond { a } else { b };` と書ける。言語を小さく、文法を一様に保つ設計。',
+                      explanation: 'Rust は意図的に三項演算子を持たせていません。代わりに `if/else` 自体が値を返す式なので、`let x = if cond { a } else { b };` と書けます。言語を小さく、文法を一様に保つための設計判断です。',
                     },
                     {
                       question: 'Alloy の `address!("0x...")` マクロが、ランタイムでパースする方法より優れている点は？',
@@ -453,7 +453,7 @@ fn main() {
                         'ABI バイト列を自動でエンコードする',
                       ],
                       correctIndex: 1,
-                      explanation: '`address!` はコンパイラ内で動くマクロ。コンパイル時に hex 数字と長さを検証する。1 桁タイポすればビルドが通らない — ユーザーがボタンを押した瞬間にランタイムエラー、よりずっと安全。',
+                      explanation: '`address!` はコンパイラ内で動くマクロで、コンパイル時に hex 数字と長さを検証します。1 桁でもタイポがあればビルドが通りません — ユーザーがボタンを押した瞬間にランタイムエラーが出るより、はるかに安全です。',
                     },
                     {
                       question: '`let mut x = 5;` と `let x = 5;` の違いは？',
@@ -464,7 +464,7 @@ fn main() {
                         '機能的な違いはない',
                       ],
                       correctIndex: 1,
-                      explanation: 'Rust の変数はデフォルトで不変。`mut` が再代入を許可する。シャドーイング（別の `let` で同名変数を再宣言）は `mut` とは独立しており、不変変数でもシャドーイングできる。',
+                      explanation: 'Rust の変数はデフォルトで不変で、`mut` が再代入を許可します。シャドーイング（別の `let` で同名変数を再宣言）は `mut` とは独立した仕組みで、不変変数でもシャドーイングできます。',
                     },
                   ],
                 },

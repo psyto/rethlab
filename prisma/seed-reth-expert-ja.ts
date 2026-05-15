@@ -1791,7 +1791,7 @@ Reth ベース chain に触れるもの (bridge、settlement layer、custom node
                   xpReward: 45,
                   content: `# op-stack-on-reth を読む — Reth ベース L2 の解剖
 
-Optimism は「Reth ベース L2」の正典です。その node コードは \`paradigmxyz/reth/crates/optimism/\` にあります。Tempo の node crate も同様の構造で公開済み ([\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo))、ここを読めれば向こうも読める。本レッスンの目的は、**ディレクトリ構造を自明にする** ことです。
+Optimism は「Reth ベース L2」の正典です。その node コードは \`paradigmxyz/reth/crates/optimism/\` にあります。Tempo の node crate も同様の構造で公開済み ([\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo))、ここを読めれば向こうも読める。本レッスンの目的は、**ディレクトリ構造を一目で読み解けるようにする** ことです。
 
 > 🛑 **スクロール前に予測。** 新しい Reth ベース L2 が node crate を出荷したとして、**そこに並ぶサブディレクトリを 5 つ** とそれぞれの担当を挙げてください。出てこなければ前レッスンに戻る。
 
@@ -1848,7 +1848,7 @@ Optimism は「Reth ベース L2」の正典です。その node コードは \`
 2. **\`chainspec/\`** — fork activation の一覧を声に出して読む
 3. **\`node/\`** — NodeBuilder composition を読み、どこがカスタマイズされているかを掴む
 4. **NodeBuilder で名前が出てきた順** に、各カスタマイズコンポーネント crate を読む
-5. **Tests** — 特に state-transition test。実際の振る舞いに対するコミットメントが符号化されている
+5. **Tests** — 特に state-transition test。実際の振る舞いに対するコミットメントがそこに刻まれている
 
 ステップ 3 が終わった時点で **何が違うか** はわかります。ステップ 4–5 は *どう違うか* を読む段階。
 
@@ -2211,7 +2211,7 @@ Tempo が sequencer モード block 生成に op-rbuilder を採用または拡�
 | **R&D testnet** | alphanet | 「Ethereum に EIP-X precompile があったら?」を試す遊び場 |
 | **本番 L1** | Tempo | Paradigm の決済レール |
 
-**下の層は上の層にしか依存しない** — これが構造的な不変量です。Tempo は reth を fork しません。reth の *上に* 建てます。
+**下の層 (table 上の後ろの行) は上の層にしか依存しない** — これが構造的な不変量です。Tempo は reth を fork しません。reth の *上に* 建てます。
 
 ## 2. alphanet — precompile R&D の遊び場
 
