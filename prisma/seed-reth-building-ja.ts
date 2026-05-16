@@ -168,6 +168,8 @@ Reth・Revm・Foundry のメンテナは全員、test-first か test-alongside �
 次のレッスン — *最小限の MEV Searcher を Rust で作る* — を一度通読する。次に、searcher のコードを書く前に、上の表の 1 行目のテストを先に書く。実装無しで fail させる。それから pass するまで作る。
 
 その順序 — テストが先、コードが後 — が gate。
+
+> **🧭 ここまでで進んだ場所:** 品質保証規律を tier の入口に据えた。TigerBeetle・Cloudflare・PostgreSQL が共通して採用している『テストで証明してから ship する』を、本 tier の 10 アプリすべてに一律で適用する。次のレッスンから建設開始 — MEV searcher が最初、test gate を実装の前に置く。
 `,
                 },
                 {
@@ -440,6 +442,8 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 - **L10** — HTTP 402 / MPP machine-payments エンドポイント (Tempo の payments スタック)
 
 各々が自己完結した ~200〜300 行の build、同じ predict / find-in-repo / anti-fluency スタイル。ターゲットユースケースに合うものから選ぶ。
+
+> **🧭 ここまでで進んだ場所:** **ネットワーク層 × 並行性層** のアプリケーションを ship した — event-driven pipeline（artemis の collector → strategy → executor）を MEV に当てはめ、test gate（forked-state arb 再現 + reorg 整合性）で正しさを担保。Kafka Streams や HFT order handler が ship しているのと同じ形。次のレッスンで **DB 層** へ移る: ExEx 駆動の reorg-aware インデクサ。
 `,
                 },
                 {
@@ -724,6 +728,8 @@ fixture は \`tests/fixtures/\` 配下に \`ExExNotification\` をシリアラ�
 \`\`\`youtube
 GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next generation indexing (Devcon 2024)
 \`\`\`
+
+> **🧭 ここまでで進んだ場所:** **DB 層** のアプリケーションを ship した — tidx のソースから OLTP + OLAP デュアルストレージ設計を読み解き、fixture chain replay の test gate で reorg ハンドリングまで担保。Snowflake や ClickHouse + Postgres の組み合わせが解いてきた問題の chain data 版。次のレッスンで **ネットワーク層** へ移る: \`extend_rpc_modules\` 経由のサーバサイド RPC 拡張。
 `,
                 },
                 {
@@ -1092,6 +1098,8 @@ async fn subscription_does_not_leak_on_disconnect() {
 \`\`\`
 
 レッスン完了の条件: (1) success path が pass、(2) 少なくとも 1 つのエラーコードテストが pass（型不正・範囲外・必須欠落のいずれか）、(3) subscription cleanup テストが pass。mainnet に対する \`cargo run\` ではこのどれの代替にもならない。
+
+> **🧭 ここまでで進んだ場所:** **ネットワーク層のサーバサイド拡張** を ship した — jsonrpsee による集約 + subscription を Reth の pool ストリームに配線し、in-process integration + エラーコード + subscription リーク検出テストで担保。GraphQL カスタムリゾルバや Postgres ストアドプロシージャと同じ問題を Reth RPC に当てはめた形。次のレッスンで **並行性 + 状態管理層** へ移る: wallet backend。
 
 `,
                 },
@@ -1606,6 +1614,8 @@ async fn no_nonce_gaps_under_concurrent_send() {
 \`\`\`youtube
 wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular toolkit (Foundry の tx パイプライン内で使われている同じ Alloy + Rust signer 機構)
 \`\`\`
+
+> **🧭 ここまでで進んだ場所:** **並行性 + 状態管理層の wallet backend** を ship した — signer pool、単調増加 nonce manager、send queue、replace-on-stuck、reorg を意識した watcher。Stripe payment intent や Kafka producer の冪等性と同じパターンを EVM tx に当てはめた形。次のレッスンで **認証層** へ移る: EIP-7702 による委任認可。
 `,
                 },
                 {
@@ -2009,6 +2019,8 @@ _k5fKlKBWV4 | EIP-7702: a technical deep dive — lightclient (Devcon SEA 2024)
 \`\`\`youtube
 K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — sponsor された tx を走らせるエンジン
 \`\`\`
+
+> **🧭 ここまでで進んだ場所:** **認証層** のアプリケーションを ship した — 7702 で委任認可を実装し、replay 防止とガス会計の正直さを test gate で担保。OAuth 2 や DocuSign の電子署名委任と同じ概念を、Ethereum 上でネイティブに表現した形。次のレッスンで **VM 層** へ移る: カスタム precompile による Foundry スタイル cheatcode。
 `,
                 },
                 {
@@ -2366,6 +2378,8 @@ contract MeasureGasDifferential is Test {
 \`\`\`youtube
 sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッスンが reverse-engineer した cheatcode パターン)
 \`\`\`
+
+> **🧭 ここまでで進んだ場所:** **VM 層の拡張機構** を ship した — 高アドレスに登録したカスタム precompile が VM から Rust 関数を呼ぶ形を、Solidity リファレンスとの differential fuzz で固めた。JNI や V8 native binding と同じパターンを Revm に当てはめた形。次のレッスンで **DB 層の consistent snapshot read** へ移る: fork した DEX 状態に対する swap aggregator。
 `,
                 },
                 {
@@ -2757,6 +2771,8 @@ async fn picks_best_when_v3_dominates() {
 \`\`\`
 
 QuoterV2 differential が pass するまでレッスンは **未完了**。数学が 50 bps 狂っていれば、全ユーザに静かに最適でないルートを推薦している。
+
+> **🧭 ここまでで進んだ場所:** **DB 層の consistent snapshot read** を DEX 状態に当てはめた aggregator を ship した — 全クオートが pin されたブロックで Revm fork した同じスナップショットを読み、QuoterV2 differential で 5 bps まで精度を担保。MVCC データベースの atomic な複数キー read と同じ形。次のレッスンは **capstone**: ネットワーク層 + コンパイラ層 + 認証層を統合する frontrun-resistant order router。
 
 `,
                 },
@@ -3217,6 +3233,8 @@ async fn respects_min_out() {
 8. **Frontrun-resistant order router (本レッスン)** — L1 / L4 / L5 / L7 を統合
 
 この先: L9 (validate-revm クロスクライアントハーネス) と L10 (HTTP 402 / MPP machine-payments エンドポイント)。swap-router の弧の外側に立つが、同じティアで ship される。
+
+> **🧭 ここまでで進んだ場所:** **ネットワーク層 + コンパイラ層 + 認証層の統合** を ship した — マルチソース入力 → simulation → 経路判断 → 適切な submission チャネル、これを benign / threat / slippage の E2E テスト群で固めた。HFT order router や CDN edge router と同じ形を、MEV 下の EVM トランザクションルーティングに当てはめたもの。次のレッスンで **VM 層の正しさ検証** へ移る: production provider に対する Revm の differential testing。
 `,
                 },
                 {
@@ -3538,6 +3556,8 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
 10. Machine-payments エンドポイント (HTTP 402 + MPP) — 上記の有料化レイヤ
 
 ターゲットの雇用主 / プロジェクトに最も近い build を選ぶ。Production ギャップを埋める。小さな public リポとして公開する。**それが会話に持っていく成果物。**
+
+> **🧭 ここまでで進んだ場所:** **コンパイラ / VM 層の正しさ検証** を ship した — Revm fork と production JSON-RPC provider の differential trace 比較を、ガス + 戻り data の一致と CREATE/CALL カバレッジを test gate として固めた。IEEE 754 準拠検証や TLS interop と同じ規律を Revm に当てはめた形。本 tier の他のアプリ (L1、L7、L8) はすべてこの検証層に依存している。次のレッスンで **ネットワーク層の支払いプロトコル** — HTTP 402 + MPP — を、本 tier 全体の上に乗せる有料化エッジとして見る。
 `,
                 },
                 {
@@ -3786,6 +3806,8 @@ async fn rejects_replayed_payment() {
 \`\`\`
 
 3 つすべてがエンドポイントをローカル起動した状態で pass するまで（payment leg は forked Tempo testnet か anvil で）、レッスンは **未完了**。replay テストで fail する 402 エンドポイントは、URL を見つけた誰かが来るのを待っている wallet drainer です。
+
+> **🧭 ここまでで進んだ場所:** **ネットワーク層の支払いプロトコル** を ship した — HTTP 402 challenge、micropayment receipt、replay 防止。TLS が HTTP を暗号で拡張したのと同じ抽象パターンを、決済に当てはめた形。これで本 tier 11 レッスンが完了 — systems-engineering スタックの各層（ネットワーク、DB、VM、認証、並行性）に対して、エンドツーエンドで構築され test gate で動作が証明されたアプリケーションが、それぞれ少なくともひとつ揃った。**本 tier の約束がここで履行された。**
 `,
                 },
               ],

@@ -317,6 +317,8 @@ Without scrolling:
 4. What does \`#[auto_impl(Box)]\` save you from writing?
 
 If any answer is shaky, scroll back. The next lesson is Reth's actual pipeline.
+
+> **🧭 Where you are now in the stack:** you've built the **database × concurrency layer's ETL pipeline abstraction** — \`Stage\`'s \`execute\` / \`unwind\` symmetry, explicit \`ExecInput\` / \`ExecOutput\`, \`poll_execute_ready\` for I/O readiness, \`auto_impl\` for \`Box\` dispatch. Same shape as Airflow / dbt / Kafka Streams pipelines, applied to chain sync. Next lesson walks the real 10-stage pipeline Reth ships with.
 `,
                 },
                 {
@@ -977,6 +979,8 @@ Without scrolling:
 4. Why is the API split into \`exex_init\` (sync) and \`exex\` (async future)?
 
 If any answer is shaky, scroll back. The next lesson reads the real minimal ExEx in detail.
+
+> **🧭 Where you are now in the stack:** you've built the **database layer's pub-sub + prune protocol** — 3-variant \`ExExNotification\`, \`FinishedHeight\` backpressure, stream pull, \`init/run\` split, \`install_exex\` injection. Same shape as Kafka consumer offset management and Postgres logical replication slots, applied to EVM chain sync. Next lesson reads the minimal ExEx's real source against this model.
 `,
                 },
                 {
@@ -1585,6 +1589,8 @@ Without scrolling:
 4. What does \`.launch()\` actually start?
 
 If any answer is shaky, scroll back. The next lesson tours the 6 components and what real chains do with them.
+
+> **🧭 Where you are now in the stack:** you've built the **node's assembly / DI layer** — typed builder of \`with_types\` → \`with_components\` → \`with_add_ons\` → \`launch\`, where you swap one component while defaults stay implicit. Rust's answer to the same problem Kubernetes operators and Spring containers solve: how to compose 6 subsystems without 6-of-everything boilerplate. Next lesson tours those 6 components.
 `,
                 },
                 {

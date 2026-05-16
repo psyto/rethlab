@@ -168,6 +168,8 @@ The Reth, Revm, and Foundry maintainers all work test-first or test-alongside. T
 Open the next lesson — *Build a Minimal MEV Searcher in Rust* — and read it through once. Then, before writing any searcher code, write the test from row 1 of the table above. Make it fail with no implementation. Then build until it passes.
 
 That order — test first, code second — is the gate.
+
+> **🧭 Where you are now in the stack:** QA discipline is now the tier's gate. The 'prove with tests before shipping' standard that TigerBeetle, Cloudflare, and PostgreSQL all enforce, applied uniformly to every one of this tier's 10 apps. Next lesson starts building — MEV searcher first, with the test gate in front of the implementation.
 `,
                 },
                 {
@@ -440,6 +442,8 @@ The full **Building with the Stack** tier ships ten lessons end to end. From her
 - **L10** — HTTP 402 / MPP machine-payments endpoint (Tempo's payments stack)
 
 Each is a self-contained ~200–300 line build with the same predict / find-in-repo / anti-fluency style. Pick the one that maps to your target use case.
+
+> **🧭 Where you are now in the stack:** you've shipped a **networking × concurrency** application — event-driven pipeline (artemis collectors → strategies → executors) applied to MEV, with the test gate (forked-state arb replay + reorg integrity) locking in correctness. Same shape Kafka Streams and HFT order handlers ship. Next lesson moves to the **database layer**: a reorg-aware indexer driven by ExEx.
 `,
                 },
                 {
@@ -724,6 +728,8 @@ The fixture lives under \`tests/fixtures/\` as a serialized \`ExExNotification\`
 \`\`\`youtube
 GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next generation indexing (Devcon 2024)
 \`\`\`
+
+> **🧭 Where you are now in the stack:** you've shipped a **database-layer** application — OLTP + OLAP dual-storage design read off tidx's source, with the fixture-chain-replay test gate locking in reorg handling. The same shape Snowflake and ClickHouse + Postgres combinations solve, applied to chain data. Next lesson moves to the **networking layer**: a server-side RPC extension via \`extend_rpc_modules\`.
 `,
                 },
                 {
@@ -1092,6 +1098,8 @@ async fn subscription_does_not_leak_on_disconnect() {
 \`\`\`
 
 The lesson is **not complete** until: (1) the success path test passes, (2) at least one error-code test passes (wrong type, out-of-range, missing param), (3) the subscription cleanup test passes. \`cargo run\` against mainnet doesn't substitute for any of these.
+
+> **🧭 Where you are now in the stack:** you've shipped a **networking-layer server-side extension** — jsonrpsee aggregation + subscription wired to a Reth pool stream, locked in with in-process integration + error-code + subscription-leak tests. Same shape GraphQL custom resolvers and Postgres stored procedures solve, applied to Reth RPC. Next lesson moves to the **concurrency + state-management layer**: a wallet backend.
 
 `,
                 },
@@ -1606,6 +1614,8 @@ The lesson is **not complete** until both pass. The wallet that fails (1) loses 
 \`\`\`youtube
 wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular toolkit (the same Alloy + Rust signer machinery, used inside Foundry's tx pipeline)
 \`\`\`
+
+> **🧭 Where you are now in the stack:** you've shipped the **concurrency + state-management layer's wallet backend** — signer pool, monotonic nonce manager, send queue, replace-on-stuck, watcher with reorg awareness. Same shape as Stripe payment intents and Kafka producer idempotence, applied to EVM transactions. Next lesson moves to the **authentication layer**: delegated authorization via EIP-7702.
 `,
                 },
                 {
@@ -2009,6 +2019,8 @@ _k5fKlKBWV4 | EIP-7702: a technical deep dive — lightclient (Devcon SEA 2024)
 \`\`\`youtube
 K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — the engine running your sponsored txs
 \`\`\`
+
+> **🧭 Where you are now in the stack:** you've shipped an **authentication-layer** application — delegated authorization implemented via 7702, with replay protection and gas-accounting honesty locked in by the test gate. Same concept as OAuth 2 and DocuSign signature delegation, expressed natively on Ethereum. Next lesson moves to the **VM layer**: a Foundry-style cheatcode via custom precompile.
 `,
                 },
                 {
@@ -2366,6 +2378,8 @@ Run \`forge test --match-test testFuzz_ -vvv\` with the default 256 fuzz iterati
 \`\`\`youtube
 sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (the cheatcode patterns this lesson reverse-engineers)
 \`\`\`
+
+> **🧭 Where you are now in the stack:** you've shipped a **VM-layer extension** — a custom precompile registered at a high address that dispatches into a Rust function, with differential fuzz against a Solidity reference locking in correctness. Same pattern as JNI and V8 native bindings, applied to Revm. Next lesson moves to the **database layer's consistent-snapshot read**: a swap aggregator over forked DEX state.
 `,
                 },
                 {
@@ -2757,6 +2771,8 @@ async fn picks_best_when_v3_dominates() {
 \`\`\`
 
 The lesson is **not complete** until the QuoterV2 differential passes. If your math is off by 50 bps, you're recommending suboptimal routes — silently — to every user.
+
+> **🧭 Where you are now in the stack:** you've shipped an aggregator that applies **database-layer consistent-snapshot read** to DEX state — every quote runs against the same Revm-forked snapshot at a pinned block, with QuoterV2 differential locking in precision to 5 bps. Same shape as MVCC databases' atomic multi-key read. Next lesson is the **capstone**: integrate networking + compiler + authentication layers into a frontrun-resistant order router.
 
 `,
                 },
@@ -3219,6 +3235,8 @@ Recap of what you've built up to this capstone:
 Still ahead: L9 (validate-revm cross-client harness) and L10 (HTTP 402 / MPP machine-payments endpoint). They sit outside the swap-router arc but ship in the same tier.
 
 Pick the one that interests your target employer / project most. Open the production gaps. Ship it as a small public repo. **That's the artifact you bring to a Paradigm / Tempo / serious-team conversation.**
+
+> **🧭 Where you are now in the stack:** you've shipped the **networking + compiler + authentication layer integration** — multi-source input → simulation → routing decision → submission channel, with benign / threat / slippage E2E tests as the gate. Same shape as HFT order routers and CDN edge routers, applied to EVM transaction routing under MEV. Next lesson moves to the **VM layer's correctness verification**: differential testing Revm against production providers.
 `,
                 },
                 {
@@ -3540,6 +3558,8 @@ Ten lessons covering everything from "I have an arbitrage idea" to "I can guaran
 10. Machine-payments endpoint (HTTP 402 + MPP) — the monetization layer on top of any of the above
 
 Pick the build that maps to your target employer / project most closely. Open the production gaps. Ship as a small public repo. **That's the artifact you bring to the conversation.**
+
+> **🧭 Where you are now in the stack:** you've shipped the **compiler / VM layer's correctness verification** — differential trace comparison of your Revm fork against a production JSON-RPC provider, with gas + return-data parity and CREATE/CALL coverage as the gate. Same discipline as IEEE 754 conformance and TLS interop, applied to Revm. Every other app in this tier (L1, L7, L8) depends on this verification layer. Next lesson moves to the **networking layer's payment protocol** — HTTP 402 + MPP — as the monetization edge on top of the whole tier.
 `,
                 },
                 {
@@ -3788,6 +3808,8 @@ async fn rejects_replayed_payment() {
 \`\`\`
 
 The lesson is **not complete** until all three pass against your endpoint running locally (with a forked Tempo testnet or anvil for the payment leg). A 402 endpoint that fails the replay test is a wallet-drainer waiting for someone to find your URL.
+
+> **🧭 Where you are now in the stack:** you've shipped the **networking-layer payment protocol** — HTTP 402 challenge, micropayment receipt, replay protection. Same abstraction pattern as TLS extending HTTP with crypto, applied to settlement. With this, the tier's 11 lessons are complete — every layer of the systems-engineering stack (networking, database, VM, authentication, concurrency) now has at least one application built end-to-end against it, with a test gate proving it works. **That's the tier's promise delivered.**
 `,
                 },
               ],

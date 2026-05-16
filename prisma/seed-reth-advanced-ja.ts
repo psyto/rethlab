@@ -317,6 +317,8 @@ impl<S: Stage<P>> Stage<P> for Box<S> {
 4. \`#[auto_impl(Box)]\` は何の手書きを省いてくれるか?
 
 どれか曖昧なら戻る。次のレッスンは Reth の本物のパイプラインです。
+
+> **🧭 ここまでで進んだ場所:** **DB 層 × 並行性層の ETL パイプライン抽象** を完成 — \`Stage\` の \`execute\` / \`unwind\` 対称性、明示的な \`ExecInput\` / \`ExecOutput\`、I/O 準備のための \`poll_execute_ready\`、\`Box\` ディスパッチのための \`auto_impl\`。Airflow・dbt・Kafka Streams パイプラインと同じ形が、チェーン同期に応用された。次のレッスンで Reth に同梱されている本物の 10 ステージパイプラインを巡る。
 `,
                 },
                 {
@@ -977,6 +979,8 @@ Reth は通知の push を始める前に、ExEx が生きていることを *�
 4. なぜ API は \`exex_init\`（同期）と \`exex\`（async future）に分かれているのか?
 
 どれか曖昧なら戻る。次のレッスンでは本物の最小 ExEx を詳細に読みます。
+
+> **🧭 ここまでで進んだ場所:** **DB 層の pub-sub + prune プロトコル** を完成 — 3 バリアント \`ExExNotification\`、\`FinishedHeight\` によるバックプレッシャ、ストリーム pull、\`init/run\` 分離、\`install_exex\` による注入。Kafka consumer offset 管理や Postgres 論理レプリケーションスロットと同じ形が、EVM チェーン同期に乗った。次のレッスンで最小 ExEx の本物のソースを、このモデルに突き合わせて読む。
 `,
                 },
                 {
@@ -1585,6 +1589,8 @@ let handle = builder
 4. \`.launch()\` が実際に起動するのは何?
 
 どれか曖昧なら戻る。次のレッスンでは 6 コンポーネントと、本物のチェーンが何を差し替えているかを巡ります。
+
+> **🧭 ここまでで進んだ場所:** **ノード全体の組み立て / DI 層** を完成 — \`with_types\` → \`with_components\` → \`with_add_ons\` → \`launch\` の typed builder で、デフォルトを暗黙のまま 1 コンポーネントだけ差し替えられる形になった。Kubernetes operator や Spring container が解いているのと同じ問題（6 つのサブシステムを、6 個ぶんのボイラープレートなしで合成する）への Rust 流の解答。次のレッスンで 6 つのコンポーネントを巡る。
 `,
                 },
                 {

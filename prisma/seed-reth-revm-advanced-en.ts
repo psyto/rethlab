@@ -270,6 +270,8 @@ Without scrolling, in your own words:
 4. What does \`U256::MAX.wrapping_add(U256::from(1))\` produce, and why does it matter?
 
 If any answer is shaky, scroll back. The next lesson refactors the body into a macro — you can't follow the refactor if you don't own the version we just built.
+
+> **🧭 Where you are now in the stack:** you've built one **VM-layer opcode** to functional parity with the real Revm source, in 4 lines that exercise \`IT: ITy\`, \`?Sized\`, in-place stack ops, and \`wrapping_add\`. Next lesson extracts the body into a macro — the boilerplate-reduction pattern CPython and the JVM have practiced for decades, EVM-flavored.
 `,
                 },
                 {
@@ -845,6 +847,8 @@ Without scrolling:
 4. Why a struct \`Instruction { fn_ }\` around the function pointer instead of a bare \`fn\`?
 
 Next lesson: now that you have the table, slot in your own opcode.
+
+> **🧭 Where you are now in the stack:** you've built the **VM-layer instruction dispatch** — 256-slot const table + \`Instruction<W,H>\` wrapper, O(1) dispatch guaranteed at compile time. Same shape as CPython's bytecode dispatcher and the JVM's interpreter tables. Next lesson inserts your own opcode into this table — the dispatch surface is the extension point.
 `,
                 },
                 {
@@ -1294,6 +1298,8 @@ Without scrolling:
 4. What does \`#[auto_impl(&mut, Box)]\` save you from writing?
 
 If any answer is shaky, scroll back. Next lesson: the read/write split.
+
+> **🧭 Where you are now in the stack:** you've built the **VM–DB seam** (read API) — 4 methods + associated \`Error\` + \`auto_impl\`. The same Revm now runs against an in-memory map, a remote JSON-RPC, MDBX, or a shard network without any of them touching the VM. Next lesson opens the read/write split — the design decision that lets \`Arc\` work and decouples eager vs lazy fetch.
 `,
                 },
                 {

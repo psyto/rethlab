@@ -801,7 +801,9 @@ Without scrolling, in your own words:
 
 If any answer is shaky, the lesson isn't done with you. Re-run the drill or re-read the buildup's Step 4 (\`root()\`).
 
-After this drill, you've shipped the same kind of code MEV pipelines and indexers use in production — observability layered on top of alloy without forking it. **Next chain: the \`Network\` abstraction.**`,
+After this drill, you've shipped the same kind of code MEV pipelines and indexers use in production — observability layered on top of alloy without forking it. **Next chain: the \`Network\` abstraction.**
+
+> **🧭 Where you are now in the stack:** you've built the **networking layer's client abstraction** from scratch — \`N: Network\` generic, \`root()\` indirection, Filler composition, \`auto_impl\`. Five pieces that turn one trait into an arbitrarily composable observability + filling tower. Next chain re-uses these same pieces to open up the chain dimension (Optimism, Polygon, future L2s).`,
                 },
                 {
                   title: 'Building the \`Network\` trait step by step',
@@ -1484,7 +1486,9 @@ Without scrolling, in your own words:
 3. The compiler rejects \`block_summary::<Optimism>(&eth_provider, ...)\`. Trace through: which trait bound is violated, and which associated type's mismatch produces the error?
 4. If you wanted to add Polygon zkEVM as a third chain, what would you write? (Hint: a new \`struct PolygonZkEvm; impl Network for PolygonZkEvm { ... }\`.)
 
-After this drill, you've shipped the same shape multi-chain tooling production indexers and explorers ship: one core function, generic over \`N: Network\`, specialized at compile time per chain. **Next chain: the \`Signer\` model — how alloy composes signing, gas, and nonce filling into layered Providers.**`,
+After this drill, you've shipped the same shape multi-chain tooling production indexers and explorers ship: one core function, generic over \`N: Network\`, specialized at compile time per chain. **Next chain: the \`Signer\` model — how alloy composes signing, gas, and nonce filling into layered Providers.**
+
+> **🧭 Where you are now in the stack:** you've built the **networking layer's chain abstraction** — 10 associated types with \`Send + Sync + 'static\` bounds, type-level dictionary, compile-time specialization. One \`Provider\` body now safely covers Ethereum, Optimism, and any future L2. Next chain switches dimension: from "which chain" to "who signs and how nonces / gas get filled."`,
                 },
                 {
                   title: 'Building the \`Signer\` trait step by step',
@@ -1752,6 +1756,8 @@ Without scrolling:
 4. The user code \`ProviderBuilder.wallet(signer)\` doesn't mention \`WalletFiller\` or \`Filler\` directly. How do those connect under the hood?
 
 If any answer is shaky, scroll back. The next lesson reads alloy's real \`Signer\` source + concrete impls.
+
+> **🧭 Where you are now in the stack:** you've built the **authentication layer's signer abstraction** — \`Signer\` for hashes, \`TxSigner<N>\` for tx envelopes, async/sync split for cloud vs local, and \`WalletFiller\` to graft signing into the FillProvider chain. The same user code now drives local keys, cloud KMS, and hardware wallets without any of them knowing about the others. Next lesson opens up the real implementations.
 `,
                 },
                 {
