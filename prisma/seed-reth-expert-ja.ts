@@ -1918,11 +1918,11 @@ Reth ではこれは: 実行中にプロセスを kill し再起動して DB が
                   xpReward: 60,
                   content: `# EVM プライバシー — Tempo Zones を読む
 
-> 🧭 **systems engineering スタックでの位置:** 3 つの層が交わる場所 — (1) **VM 層の暗号** (暗号化と ZK 検証のためのプリコンパイル)、(2) **分散システム層** (validium スタイルの L2 がベースチェーンに settle する)、(3) **ポリシー / アプリケーション層** (コンプライアンスの継承、プライベート RPC)。EVM におけるプライバシーは単一の機能ではない — 3 つの独立したダイヤルの設定であり、\`tempoxyz/zones\` は機関投資家系のチームが ship しつつあるひとつの具体的な設定。
+> 🧭 **systems engineering スタックでの位置:** 3 つの層が交わる場所 — (1) **VM 層の暗号** (暗号化と ZK 検証のためのプリコンパイル)、(2) **分散システム層** (validium スタイルの L2 がベースチェーンに決済される)、(3) **ポリシー / アプリケーション層** (コンプライアンスの継承、プライベート RPC)。EVM におけるプライバシーは単一の機能ではない — 3 つの独立したダイヤルの設定であり、\`tempoxyz/zones\` は機関投資家系のチームが出荷しつつあるひとつの具体的な設定。
 
 > 📌 **動く標的。** Tempo Zones は「現在も活発に開発中で、本番利用は推奨されない」段階。コントラクトのシグネチャ、ガスコスト、メソッド名は変わる可能性がある。以下に示すアーキテクチャ上の選択は安定して残るので、特定のバイトではなく **設計の形** を読むつもりで進む。
 
-プライバシーは crypto が最も語り、エンジニアが最も ship しないテーマ。多くの「EVM プライバシー」チュートリアルは shielded pool が *なにか* を説明する。本レッスンでは production 水準の設計のひとつ — Tempo Zones — の Rust ソースを実際に読み、そこから将来の任意の EVM プライバシースタック (Arc、Anomaly、Tempo 後継の世代) を読むための SE フレームワークを引き出す。
+プライバシーは crypto が最も語り、エンジニアが最も出荷しないテーマ。多くの「EVM プライバシー」チュートリアルは shielded pool が *なにか* を説明する。本レッスンでは production 水準の設計のひとつ — Tempo Zones — の Rust ソースを実際に読み、そこから将来の任意の EVM プライバシースタック (Arc、Anomaly、Tempo 後継の世代) を読むための SE フレームワークを引き出す。
 
 ## 1. プライバシーのトレードオフ空間 (3 つのダイヤル)
 
@@ -1952,7 +1952,7 @@ Zone とは、Tempo にアンカーされた **validium スタイルのプライ
 
 資金は Tempo 上の portal コントラクトでロックされる形で zone に入り、zone は同等量のトークンを mint する。ユーザは zone 上でプライベートに取引する。退出時には zone でトークンを burn し、シーケンサが withdrawal と証明をバッチで Tempo に提出し、portal からトークンが解放される。
 
-最も load-bearing な信頼宣言は、たった 1 文:
+最も中核的な信頼宣言は、たった 1 文:
 
 > *"Privacy protects against public observers on Tempo, not against the sequencer."*
 
@@ -1960,7 +1960,7 @@ Zone とは、Tempo にアンカーされた **validium スタイルのプライ
 
 ## 3. Chaum-Pedersen プリコンパイル — Rust ソースを読む
 
-\`tempoxyz/zones\` で \`crates/precompiles/src/chaum_pedersen.rs\` を開く。ファイルヘッダがほぼ全てを語っている:
+\`tempoxyz/zones\` の \`crates/precompiles/src/chaum_pedersen.rs\` を開く。ファイルヘッダがほぼ全てを語っている:
 
 \`\`\`rust
 //! Chaum-Pedersen DLOG equality proof verification precompile.
@@ -1999,7 +1999,7 @@ impl Precompile for ChaumPedersenVerify {
 //! SP1 prover guest (RISC-V) as well as in the zone node.
 \`\`\`
 
-これが立ち止まる価値のある SE 上の move。**プリコンパイルは、稼働中の zone ノードでも、SP1 zkVM の prover guest 内でも、同じソースから動く。** フォークも移植も別実装もない。同じコードがふたつのランタイムで動く — Inside REVM で \`auto_impl\` とトレイト抽象化を通じて学ぶのと同じパターンを、スタックの別の層に当てはめた形。
+これが立ち止まる価値のある SE 上の判断。**プリコンパイルは、稼働中の zone ノードでも、SP1 zkVM の prover guest 内でも、同じソースから動く。** フォークも移植も別実装もない。同じコードがふたつのランタイムで動く — Inside REVM で \`auto_impl\` とトレイト抽象化を通じて学ぶのと同じパターンを、スタックの別の層に当てはめた形。
 
 > 🛑 **読み進める前に予測。** Tempo はここで Groth16、Plonk、その他の汎用 ZK 証明系を使うこともできた。代わりに 1992 年のプロトコルで *単一の特定の主張* — 離散対数の等価性 — だけを証明する Chaum-Pedersen を選んだ。**この選択を正当化する SE 上のトレードオフはなにか?**
 
@@ -2055,9 +2055,9 @@ Tempo 側のログには \`(token, sender, amount, bouncebackRecipient)\` が公
 
 > 🛑 **予測。** なぜ Chaum-Pedersen 証明が必要なのか? なぜシーケンサに共有秘密を投げさせて信頼してはダメなのか?
 
-なぜなら証明がなければ、シーケンサは *任意の* 共有秘密を提示できてしまうから — 暗号文を別の受取人に復号する共有秘密を含めて — そしてそれを誰も検出できない。証明は共有秘密をシーケンサの公開鍵 (オンチェーン履歴に記録されており、ユーザが提供するものではない) に暗号的に結びつけるので、すり替えは検出可能になる。**シーケンサは liveness とデータ availability については信頼されるが、資金のリダイレクトについては信頼されない。** 異なる懸念に異なる信頼仮定を立てる — 「シーケンサ」を単一の信頼宣言に潰さない SE の規律。
+なぜなら証明がなければ、シーケンサは *任意の* 共有秘密を提示できてしまうから — 暗号文を別の受取人に復号する共有秘密を含めて — そしてそれを誰も検出できない。証明は共有秘密をシーケンサの公開鍵 (オンチェーン履歴に記録されており、ユーザが提供するものではない) に暗号的に結びつけるので、すり替えは検出可能になる。**シーケンサは liveness とデータ可用性については信頼されるが、資金のリダイレクトについては信頼されない。** 異なる懸念に異なる信頼仮定を立てる — 「シーケンサ」を単一の信頼宣言に潰さない SE の規律。
 
-ユーザが意図的に grief するために無効な暗号文を投げてきたら? Chaum-Pedersen 証明は通る (シーケンサは共有秘密を正しく導出した) が、GCM タグが失敗する。デポジットは Tempo 上の \`bouncebackRecipient\` にバウンスバックされる。**証明は「シーケンサが復号について嘘をついた」と「ユーザが無効な暗号文を投げた」を区別する** — 素朴な観察者には同じに見えるが、プロトコル上はまったく異なる対応が必要な 2 つの失敗モード。
+ユーザが意図的な妨害目的で無効な暗号文を投げてきたら? Chaum-Pedersen 証明は通る (シーケンサは共有秘密を正しく導出した) が、GCM タグが失敗する。デポジットは Tempo 上の \`bouncebackRecipient\` にバウンスバックされる。**証明は「シーケンサが復号について嘘をついた」と「ユーザが無効な暗号文を投げた」を区別する** — 素朴な観察者には同じに見えるが、プロトコル上はまったく異なる対応が必要な 2 つの失敗モード。
 
 ## 6. 証明系に依存しない検証器 — \`IVerifier\`
 
@@ -2092,7 +2092,7 @@ interface IVerifier {
 
 > 🛑 **予測。** なぜ state transition と証明バックエンドを分離するのか? なぜ portal コントラクト層で SP1 / Plonk / Groth16 を直接焼き込まないのか?
 
-証明系市場は速く動いている。UltraHonk、Honk、Boojum、RISC0、SP1、Jolt、Nova — SOTA は 12〜18 ヶ月ごとにシフトする。そして TEE ベースの検証 (Intel SGX、AMD SEV-SNP、Nitro) も、特定のコンプライアンス文脈で有効なバックエンド。portal コントラクト層に証明系を焼き込んだら、SOTA がシフトするたびに再デプロイが必要になる。**verifier をインタフェース化することで、Tempo は portal に手を入れずに証明バックエンドを差し替えられる。** ある層の動く部分 (証明バックエンド) は、別の層の動く部分 (settlement コントラクト) から isolate されているべき。これは Revm の \`Database\` トレイトと同じ SE 原則: 速く動く実装を、安定した抽象に結合させない。
+証明系市場は速く動いている。UltraHonk、Honk、Boojum、RISC0、SP1、Jolt、Nova — SOTA は 12〜18 ヶ月ごとにシフトする。そして TEE ベースの検証 (Intel SGX、AMD SEV-SNP、Nitro) も、特定のコンプライアンス文脈で有効なバックエンド。portal コントラクト層に証明系を焼き込んだら、SOTA がシフトするたびに再デプロイが必要になる。**verifier をインタフェース化することで、Tempo は portal に手を入れずに証明バックエンドを差し替えられる。** ある層の動く部分 (証明バックエンド) は、別の層の動く部分 (settlement コントラクト) から切り離されているべき。これは Revm の \`Database\` トレイトと同じ SE 原則: 速く動く実装を、安定した抽象に結合させない。
 
 deployment-modes セクションが 1 文で済むのもこの理由から:
 
@@ -2131,7 +2131,7 @@ reth-transaction-pool.workspace = true
 
 > 🛑 **予測。** なぜ Tempo Zones は Reth をフォークするのか? なぜノードをゼロから書かないのか?
 
-Reth は退屈な部分 — devp2p、MDBX ストレージ、staged sync、RPC スキャフォールド、トランザクションプール、コンセンサスインタフェース、ガス会計 — をおよそ 50,000 行以上で処理している。Tempo の実際の貢献 — つまり Tempo を特徴づける部分 — は、おそらく 3 つのカスタムプリコンパイル + プライベート RPC 修正 + カスタムブロック検証 + zone 固有のペイロードビルダー。**基盤は、書かずに済んだ全てを通じて自分の元を取る。** これは Hyperliquid、OP-Reth、Tempo がいずれも採用している SE 上の move: スタック全体ではなく、Reth との差分だけを書く。Inside Reth の SDK レッスンが仕組みを教え、本レッスンはその production 適用例を読んでいる。
+Reth は退屈な部分 — devp2p、MDBX ストレージ、staged sync、RPC スキャフォールド、トランザクションプール、コンセンサスインタフェース、ガス会計 — をおよそ 50,000 行以上で処理している。Tempo の実際の貢献 — つまり Tempo を特徴づける部分 — は、おそらく 3 つのカスタムプリコンパイル + プライベート RPC 修正 + カスタムブロック検証 + zone 固有のペイロードビルダー。**基盤は、書かずに済んだ全てを通じてその価値を返してくれる。** これは Hyperliquid、OP-Reth、Tempo がいずれも採用している SE 上の判断: スタック全体ではなく、Reth との差分だけを書く。Inside Reth の SDK レッスンが仕組みを教え、本レッスンはその production 適用例を読んでいる。
 
 ## 8. EVM レベルでのプライバシー実施 — RPC レベルではなく
 
@@ -2146,7 +2146,7 @@ Reth は退屈な部分 — devp2p、MDBX ストレージ、staged sync、RPC �
 
 > 🛑 **予測。** なぜ受取人のストレージスロットが「warm」か「cold」かに関係なく、transfer に固定で 100,000 ガスを課金するのか?
 
-ストレージスロットの warm 状態 (このトランザクション内でスロットが既に触られたか) は state を漏らす。フレッシュな受取人への transfer が 20k ガス、既存の受取人への transfer が 5k ガスなら、ガスコストを観察できる相手は事前の残高状態を推測できる。**固定ガスがこのサイドチャネルを閉じる。** 公開バイトコードの VM 上のプライバシーは、値を隠すだけでなく、観察可能なすべてのチャネル (タイミング、リソースコスト含む) を閉じることを意味する。同じ規律は定数時間の暗号実装 (Rust の \`subtle\` クレート、C の libsodium) でも同じ理由で現れる。
+ストレージスロットの warm 状態 (このトランザクション内でスロットが既に触られたか) は状態を漏らす。フレッシュな受取人への transfer が 20k ガス、既存の受取人への transfer が 5k ガスなら、ガスコストを観察できる相手は事前の残高状態を推測できる。**固定ガスがこのサイドチャネルを閉じる。** 公開バイトコードの VM 上のプライバシーは、値を隠すだけでなく、観察可能なすべてのチャネル (タイミング、リソースコスト含む) を閉じることを意味する。同じ規律は定数時間の暗号実装 (Rust の \`subtle\` クレート、C の libsodium) でも同じ理由で現れる。
 
 なぜ \`CREATE\` は無効化されているのか? 任意のコントラクトを書けば、EVM レベルのプライバシー制御を迂回する手段になりうるから。**EVM 層でのプライバシー実施は、EVM が信頼されたコードしか実行しない場合にだけ成立する。** プライバシー付き validium + EVM レベルの規律 + 制限されたデプロイは、一貫したパッケージ; どれかひとつでも外せば、プライバシーの主張は破綻する。
 
@@ -2156,11 +2156,11 @@ Tempo Zones を金融機関にとって読みやすくしている角度がこ�
 
 > *"Zones inherit compliance policies from Tempo automatically. Token issuers set transfer policies once on Tempo, and zones enforce them without any additional configuration."*
 
-機械的には: zone は Tempo のレジストリと同じアドレスに、読み取り専用の \`TIP403Registry\` プロキシをデプロイする。zone 側の TIP-20 transfer は、実行前に \`isAuthorized(policyId, from)\` と \`isAuthorized(policyId, to)\` をチェックする。プロキシは実際のポリシー state を \`TempoState.readTempoStorageSlot(...)\` 経由で Tempo から読む。発行者が Tempo 上でアドレスを凍結すると、zone は次の \`advanceTempo\` でその更新を含む Tempo ブロックを取り込んだ時点で凍結を継承する。
+機械的には: zone は Tempo のレジストリと同じアドレスに、読み取り専用の \`TIP403Registry\` プロキシをデプロイする。zone 側の TIP-20 transfer は、実行前に \`isAuthorized(policyId, from)\` と \`isAuthorized(policyId, to)\` をチェックする。プロキシは実際のポリシー状態を \`TempoState.readTempoStorageSlot(...)\` 経由で Tempo から読む。発行者が Tempo 上でアドレスを凍結すると、zone は次の \`advanceTempo\` でその更新を含む Tempo ブロックを取り込んだ時点で凍結を継承する。
 
 > 🛑 **予測。** 規制対象のステーブルコイン発行者が、制裁対象のアドレスを凍結したい。Tempo Zones がなければ、彼らはトークンが乗っているすべてのチェーンに凍結をプッシュする必要がある。Tempo Zones では、何が起きるか?
 
-Tempo の TIP-403 レジストリに 1 度凍結をプッシュすればよい。すべての zone が次のブロック (次の \`advanceTempo\` の後) で自動的に凍結を継承する。**コンプライアンス state は mainnet とすべての zone をまたぐ単一の共有リソース — 1 度書き、どこでも読む。** これが、機関投資家にとって「プライバシー + コンプライアンス」が矛盾語法ではなく一貫したプロダクトポジションになるアーキテクチャ上の性質。
+Tempo の TIP-403 レジストリに 1 度凍結をプッシュすればよい。すべての zone が次のブロック (次の \`advanceTempo\` の後) で自動的に凍結を継承する。**コンプライアンスの状態は mainnet とすべての zone をまたぐ単一の共有リソース — 1 度書き、どこでも読む。** これが、機関投資家にとって「プライバシー + コンプライアンス」が矛盾語法ではなく一貫したプロダクトポジションになるアーキテクチャ上の性質。
 
 ## 10. 3 ダイヤルのフレームワーク、埋め直し
 
@@ -2170,7 +2170,7 @@ Tempo の TIP-403 レジストリに 1 度凍結をプッシュすればよい�
 |---|---|---|
 | **信頼モデル** | シーケンサ信頼、平文は単一の主体に見える | コンプライアンス + 監査可能性 + 低い運用コスト |
 | **暗号** | プリコンパイル層に Chaum-Pedersen + AES-GCM、VM 層に汎用 ZK なし | 特定プリミティブは汎用 ZK より 25× 安い; HKDF は Solidity に残してプリコンパイル面を最小化 |
-| **DX** | 標準 EVM、カスタム DSL なし、コントラクトは \`depositEncrypted\` フローでプライバシーに opt-in | Solidity エンジニアは Noir や Cairo を学ばずに ship できる |
+| **DX** | 標準 EVM、カスタム DSL なし、コントラクトは \`depositEncrypted\` フローでプライバシーに opt-in | Solidity エンジニアは Noir や Cairo を学ばずに出荷できる |
 | **Settlement** | validium スタイルの portal + 証明系に依存しない IVerifier | 再デプロイなしで証明バックエンド (ZKVM または TEE) を差し替え可能 |
 | **コンプライアンス** | TIP-403 read-through プロキシでベースチェーンから継承 | mainnet と zone をまたぐポリシーの単一の真実 |
 
@@ -2184,7 +2184,7 @@ Tempo の TIP-403 レジストリに 1 度凍結をプッシュすればよい�
 - **Anomaly や他のステーブルコイン目的特化チェーン**: 位置取りは Tempo に近いが、ソースレベルで読める設計はまだ公開されていない
 - **Tempo の production 証明バックエンド選定**: スペックは証明系に依存しない; production の選択 (どの ZKVM か、TEE attestation か) は今後
 
-これらが公開されたら、上の 3 ダイヤルフレームワークがそれらを読むための道具になる。それが本レッスンの実際に持続する artifact — 動く Tempo のバイトそのものではなく、将来の任意の EVM プライバシースタックを読むためのフレームワーク。
+これらが公開されたら、上の 3 ダイヤルフレームワークがそれらを読むための道具になる。それが本レッスンの実際に持続する成果物 — 動く Tempo のバイトそのものではなく、将来の任意の EVM プライバシースタックを読むためのフレームワーク。
 
 ## 想起
 
@@ -2194,14 +2194,14 @@ Tempo の TIP-403 レジストリに 1 度凍結をプッシュすればよい�
 2. **AES-GCM はプリコンパイル化されているが HKDF はそうでない。なぜか?**
 3. **Tempo の verifier は \`IVerifier\` の背後に抽象化されている。これが、ハードコードされた prover では得られない何を可能にするか?**
 4. **\`CREATE\` が Zone で無効化されている理由は? これがなければどの性質が破綻するか?**
-5. **Tempo Zones は Reth をベースに使う。\`Cargo.toml\` から、moat と substrate の分割について何が読み取れるか?**
+5. **Tempo Zones は Reth をベースに使う。\`Cargo.toml\` から、独自部分 (moat) と基盤 (substrate) の分担について何が読み取れるか?**
 
 どれか曖昧なら、該当セクションを読み直す。
 
 ## 📂 開いておくべきソースリポ
 
 - [\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) — ケーススタディそのもの、特に \`specs/spec.md\` と \`crates/precompiles/src/\`
-- [\`paradigmxyz/reth\`](https://github.com/paradigmxyz/reth) — Tempo Zones がフォークする substrate
+- [\`paradigmxyz/reth\`](https://github.com/paradigmxyz/reth) — Tempo Zones がフォークする基盤
 - [\`bluealloy/revm\`](https://github.com/bluealloy/revm) — Zones プリコンパイルが乗るプリコンパイル機構
 - [\`AztecProtocol/aztec-packages\`](https://github.com/AztecProtocol/aztec-packages) — 対角の対比 (trustless、完全 ZK、カスタム DSL)
 - [\`Railgun-Community\`](https://github.com/Railgun-Community) — 中間の対比 (trustless、EVM 内 SNARKs、標準コントラクト)
