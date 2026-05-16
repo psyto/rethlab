@@ -34,7 +34,7 @@ export async function seedRethBeginnerJA(prisma: PrismaClient) {
                   xpReward: 20,
                   content: `# なぜReth・Revm・Alloyを学ぶのか
 
-> 🧭 **このレッスンの位置づけ:** Rust × Ethereum スタック全体を一望する地図 — どのプロジェクト（Reth・Revm・Alloy・Foundry）がどの層を担当しているかを掴むことで、以降のレッスンが頭の中で居場所を持つ。
+> 🧭 **このレッスンの位置づけ:** Rust × Ethereum スタック全体を一望する地図 — どのプロジェクト（Reth・Revm・Alloy・Foundry）がどの層を担当しているかを掴むことで、以降のレッスンが頭の中で居場所を持って収まる。
 
 近年、HyperliquidやTempoのような高性能チェーンが共通して採用しているのが、**Ethereum系のRust実装** — つまり **Reth / Revm / Alloy** です。
 
@@ -73,7 +73,7 @@ export async function seedRethBeginnerJA(prisma: PrismaClient) {
                   xpReward: 20,
                   content: `# Reth・Revm・Alloyの三つ巴
 
-> 🧭 **このレッスンの位置づけ:** Rust EVM スタックの 3 本柱と、それぞれの役割分担を導入する。ネットワーク層・VM 層・ツール層に分かれる以降のレッスンが、ここで引いた線を前提に進む。
+> 🧭 **このレッスンの位置づけ:** Rust EVM スタックの 3 本柱とそれぞれの役割分担を導入する。ネットワーク層・VM 層・ツール層に分かれる以降のレッスンが、ここで引いた線を前提に進む。
 
 3つの名前は混同されがちですが、役割はまったく違います。**「自動車を作る」** に例えるとシンプルです。
 
@@ -152,7 +152,7 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
                   xpReward: 15,
                   content: `# なぜSolanaではなくEthereum（Rust）なのか
 
-> 🧭 **このレッスンの位置づけ:** Solana との対比で、*Ethereum がどんな種類のシステムか* をはっきりさせる。以降に出てくる「なぜ X はこういう作りなのか?」という問いすべての、暗黙の前提を整える。
+> 🧭 **このレッスンの位置づけ:** Solana との対比で、*Ethereum がどんな種類のシステムか* をはっきりさせる。以降に出てくる「なぜ X はこういう作りなのか?」という問いすべての暗黙の前提を、ここで整える。
 
 「Solanaも高速で、しかもRustだから、わざわざRust EVMを学ぶ意味は？」とよく聞かれます。結論は **「目指す方向性次第」** ですが、判断軸を整理しておきましょう。
 

@@ -34,7 +34,7 @@ export async function seedRethFundamentalsJA(prisma: PrismaClient) {
                   xpReward: 25,
                   content: `# Rust：所有権と借用の5分入門
 
-> 🧭 **このレッスンの位置づけ:** ownership / borrowing は、スタックの並行性まわりすべての土台 — Reth の Tokio ランタイム、Revm の \`&mut\` 駆動実行、alloy の Send 境界を持つ Provider。ここで一度頭に入れておくと、以降の並行性レッスンが「新しいルール」に見えなくなる。
+> 🧭 **このレッスンの位置づけ:** ownership / borrowing は、スタックの並行性まわり全体の土台 — Reth の Tokio ランタイム、Revm の \`&mut\` 駆動の実行、alloy の Send 境界付き Provider。ここで一度頭に入れておけば、以降の並行性レッスンが「新しいルール」には見えなくなる。
 
 これからAlloyを書きはじめると、必ず突き当たるのが **所有権（ownership）** です。Rust最大の特徴であり、最初の壁。完璧に理解する必要はなく、**「コードを読んでいてルールが思い出せる」** 状態を目指しましょう。
 
@@ -145,7 +145,7 @@ let mut signer = PrivateKeySigner::random();
                   xpReward: 25,
                   content: `# Alloyの基本型と署名
 
-> 🧭 **このレッスンの位置づけ:** 型レベルのプリミティブ（\`Address\`・\`U256\`・\`B256\`）と署名面を導入する。以降のネットワーク層・認証層のレッスンが、これらを共通の語彙として再利用する。Rust EVM スタックでの基礎語彙。
+> 🧭 **このレッスンの位置づけ:** 型レベルのプリミティブ（\`Address\`・\`U256\`・\`B256\`）と署名 API を導入する。以降のネットワーク層・認証層のレッスンが、これらを共通の語彙として再利用する。Rust EVM スタックの基礎語彙。
 
 最初に **Alloy** を直接触ってみましょう。Alloyは「EthereumをRustで扱うための決定版ライブラリ群」で、Rethも内部でこれをフル活用しています。
 
@@ -267,7 +267,7 @@ Solidityも \`address\` 型を持ちますが、Rustの型システムはより�
                   xpReward: 25,
                   content: `# Rust：Result・Option・\`?\` 演算子
 
-> 🧭 **このレッスンの位置づけ:** \`Result\` と \`Option\` は、スタックの全層 — RPC エラー、EVM の halt、データベースミス — が「失敗を隠さずに表に出す」ための語彙。ここでまとめて頭に入れる。
+> 🧭 **このレッスンの位置づけ:** \`Result\` と \`Option\` は、スタックの全層 — RPC エラー、EVM の halt、DB のキー欠落 — が「失敗を隠さずに表に出す」ための語彙。ここでまとめて頭に入れておく。
 
 Alloyのコードを書くと、ほぼすべての行に \`.await?\` や \`.parse()?\` が出てきます。これは **Rustのエラーハンドリング** の構文です。
 
@@ -377,7 +377,7 @@ async fn main() -> eyre::Result<()> {
                   xpReward: 25,
                   content: `# Provider — ノードへ接続する
 
-> 🧭 **このレッスンの位置づけ:** **ネットワーク層のクライアントトレイト** に正面から触れる最初の機会 — Inside Alloy で後ほど内側を覗くのと同じ \`Provider\` トレイト。本レッスンでは表面の使い方を掴み、設計の中身は Inside Alloy の組み立て章で読む。
+> 🧭 **このレッスンの位置づけ:** **ネットワーク層のクライアントトレイト** に正面から触れる最初の機会 — Inside Alloy で後ほど内側を覗くのと同じ \`Provider\` トレイト。本レッスンでは外側からの使い方を掴み、設計の中身は Inside Alloy の組み立て章で読む。
 
 Alloyの **Provider** は「ノードへの窓口」です。これを通じてブロック番号・残高・トランザクション情報を取得します。
 
@@ -592,7 +592,7 @@ async fn main() -> eyre::Result<()> {
                   xpReward: 25,
                   content: `# EVMはスタックマシンだ
 
-> 🧭 **このレッスンの位置づけ:** EVM を **スタックマシン** として導入する。以降の VM 層レッスン（Revm 内部、opcode、ガス、precompile）はすべて、この建築上の前提に立つ。JVM や CPython VM と同じ設計を、ブロックチェーン合意のために制約したかたち。
+> 🧭 **このレッスンの位置づけ:** EVM を **スタックマシン** として導入する。以降の VM 層レッスン（Revm 内部、opcode、ガス、precompile）はすべて、この設計上の前提に立つ。JVM や CPython VM と同じ設計を、ブロックチェーンのコンセンサスのために制約したかたち。
 
 EVM（Ethereum Virtual Machine）は **スタックマシン** と呼ばれる仮想機械の一種です。レジスタや関数呼び出し規約を持たず、ほぼすべての計算を **スタック** の上で行います。
 
@@ -690,7 +690,7 @@ Revm の **本物の** \`add\` ソース — 中級ティアで一行ずつ分�
                   xpReward: 30,
                   content: `# クイズ：ミニEVMスタック
 
-> 🧭 **このレッスンの位置づけ:** **VM 層** に初めて手を触れる回 — スタックといくつかの opcode を備えたトイ EVM。Revm が EVM 全体へとスケールさせていくのと同じ設計の、種となる実装。
+> 🧭 **このレッスンの位置づけ:** **VM 層** に初めて手を動かす回 — スタックといくつかの opcode を備えたトイ EVM。Revm が EVM 全体へとスケールさせていくのと同じ設計の、種となる実装。
 
 Rust で小さな EVM 風スタックを 3 操作だけで作ります：
 
@@ -812,7 +812,7 @@ fn main() {
                   xpReward: 30,
                   content: `# Rust：async・トレイト・ジェネリクス
 
-> 🧭 **このレッスンの位置づけ:** async + トレイト + ジェネリクスの 3 つの交点で、Rust EVM スタック全体が動いている。Reth のパイプライン future、alloy の \`<N: Network>\` Provider、Revm の \`auto_impl\` トレイト — どれもこの交点の上に立つ。ここで一度頭に入れておく。
+> 🧭 **このレッスンの位置づけ:** async + トレイト + ジェネリクスの 3 つの交点で、Rust EVM スタック全体が動いている。Reth のパイプライン future、alloy の \`<N: Network>\` Provider、Revm の \`auto_impl\` トレイト — どれもこの交点の上に立っている。ここで一度まとめて頭に入れておく。
 
 Revmや Reth のコードを読む前に、**3つの言語機能** を押さえておきます。これがないとAlloy/Reth本体のコードはほぼ読めません。
 
@@ -950,7 +950,7 @@ async fn my_exex<Node: FullNodeComponents>(
                   xpReward: 25,
                   content: `# Revmという「実行エンジン」
 
-> 🧭 **このレッスンの位置づけ:** **VM 層のエンジン本体** に踏み込む回。Inside REVM で後ほど \`add\`・opcode テーブル・\`Database\` を内側から読む前の、全体像を掴むための章。
+> 🧭 **このレッスンの位置づけ:** **VM 層のエンジン本体** に踏み込む回。Inside REVM で後ほど \`add\`・opcode テーブル・\`Database\` を内側から読みに行く前に、ここで全体像を掴んでおく。
 
 ここまででAlloy（外側のRPC）と、EVMが「スタックマシン」であることを学びました。次の主役は **Revm** — 実際にOpcodeを実行する **エンジン** そのものです。
 
@@ -1022,7 +1022,7 @@ xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024)
                   xpReward: 35,
                   content: `# Foundry — Rust EVMツールチェイン
 
-> 🧭 **このレッスンの位置づけ:** Foundry は、Reth / Revm / Alloy の隣に立つ **ツール層** — 同じ Rust EVM スタックを、スマートコントラクト開発者向けに公開したもの。ノード側を目指す場合でも有用 — エコシステムがノードと話すときに使う共通インタフェースだから。
+> 🧭 **このレッスンの位置づけ:** Foundry は、Reth / Revm / Alloy と並ぶ **ツール層** — 同じ Rust EVM スタックを、スマートコントラクト開発者向けに公開したもの。ノード側を目指す場合でも有用 — エコシステムがノードと話すときの共通インタフェースだから。
 
 Reth（ノード）と Revm（エンジン）は見ました。**Rust EVM スタックの第3の柱** が **[Foundry](https://github.com/foundry-rs/foundry)** — Paradigm の Solidity 開発ツールチェインで、すべてが Revm の上に作られています。Rust EVM チェーンに触れる Solidity を書くなら、Foundry を毎日使うことになります。
 
