@@ -137,7 +137,7 @@ export const en = {
       learners: 'Learners',
     },
     sponsor: {
-      title: 'Free to learn — supporters keep it growing',
+      title: 'Open source curriculum — supporters keep it growing',
       subtitle: 'If RethLab helps you ship Rust, you can sponsor on GitHub or donate.',
       cta: 'Sponsor',
     },
@@ -308,7 +308,7 @@ export const en = {
     onX: 'Share on X',
     quizText: "Reading the real Reth, Revm, Alloy, and Foundry source line by line on @psyto's RethLab.",
     courseCompleteText: "Just finished a tier on @psyto's RethLab — walking the real Reth, Revm, Alloy, and Foundry source line by line.",
-    donateThanksText: "Just sponsored @psyto's RethLab — a free, source-grounded Rust Ethereum training program. Highly recommended.",
+    donateThanksText: "Just sponsored @psyto's RethLab — a source-grounded Rust Ethereum training program. Highly recommended.",
   },
   footer: {
     stayUpdated: 'Stay Updated',
@@ -325,7 +325,7 @@ export const en = {
   about: {
     title: 'About RethLab',
     subtitle: 'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — Reth, Revm, and Alloy implement all five in Rust. Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. RethLab walks you through 13 courses across 4 tiers — from EVM foundations, to reading Alloy/Revm/Reth source line by line, to architecting L1 consensus, to shipping ten production-grade apps.',
-    bio: '15+ years shipping mission-critical financial systems — core banking, retail deposits, mortgages, KYC, regulatory reporting — across Tokyo (Shinsei Bank), Bangalore (offshore dev), and Hong Kong (free English-learning email, 500K+ users). Now Head of Sales Engineering at SBI R3 Japan, focused on Solana enterprise adoption and real-world-asset tokenization, while building actively across Bitcoin, Ethereum, Solana, Hyperliquid, and Corda.\n\nI built RethLab because when I tried to learn Reth / Revm / Alloy / Foundry properly, I hit the gap the curriculum walks through: the docs are scattered, the source is dense, and there is no clear path from "I know some Rust" to "I can ship production EVM infrastructure." I learned by doing, then turned what worked into the curriculum I wish I\'d had — 13 courses across 4 tiers (Foundations / Source-Reading / L1 Architecture / Production), ~131 lessons. The Advanced tier treats what most curricula present as "blockchain magic" — BFT consensus, cross-chain bridges, sequencer & rollup architecture, P2P networking, validator operations — as standard distributed-systems / compiler / networking / concurrency engineering. The Expert tier ships ten end-to-end apps. Free forever, source-first.\n\nPersonally, I\'m interested in the teams shipping this stack — Paradigm and Tempo above all.',
+    bio: '15+ years shipping mission-critical financial systems — core banking, retail deposits, mortgages, KYC, regulatory reporting — across Tokyo (Shinsei Bank), Bangalore (offshore dev), and Hong Kong (free English-learning email, 500K+ users). Now Head of Sales Engineering at SBI R3 Japan, focused on Solana enterprise adoption and real-world-asset tokenization, while building actively across Bitcoin, Ethereum, Solana, Hyperliquid, and Corda.\n\nI built RethLab because when I tried to learn Reth / Revm / Alloy / Foundry properly, I hit the gap the curriculum walks through: the docs are scattered, the source is dense, and there is no clear path from "I know some Rust" to "I can ship production EVM infrastructure." I learned by doing, then turned what worked into the curriculum I wish I\'d had — 13 courses across 4 tiers (Foundations / Source-Reading / L1 Architecture / Production), ~131 lessons. The Advanced tier treats what most curricula present as "blockchain magic" — BFT consensus, cross-chain bridges, sequencer & rollup architecture, P2P networking, validator operations — as standard distributed-systems / compiler / networking / concurrency engineering. The Expert tier ships ten end-to-end apps. Source-first, openly published.\n\nPersonally, I\'m interested in the teams shipping this stack — Paradigm and Tempo above all.',
     background: {
       tradfi: 'Background',
       tradfiDetail: '15+ yrs of mission-critical FS at Shinsei Bank: core banking (Flexcube), retail deposits, mortgages, KYC/FATCA, Zengin payments, ATM. Backbase (Dutch Banking-as-a-Service unicorn) as PM.',
@@ -367,7 +367,7 @@ export const en = {
     loadCourse: 'Failed to load course. Please try again.',
   },
   page: {
-    launchBanner: 'Free · The emerging Rust EVM stack — what Hyperliquid, Tempo, and Paradigm ship on',
+    launchBanner: 'The emerging Rust EVM stack — what Hyperliquid, Tempo, and Paradigm ship on',
     whyRethLab: {
       title: 'Why RethLab?',
     },
