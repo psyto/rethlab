@@ -848,6 +848,8 @@ Without scrolling:
 
 Next lesson: now that you have the table, slot in your own opcode.
 
+> 🛣️ **The road not taken (Solana):** Solana programs don't dispatch through a table like this — they compile to **SBPF**, an eBPF-derived **register VM**. Operands live in registers (not on a stack), instructions are JIT-compiled into native code, and dispatch happens through the JIT-emitted control flow, not through a function-pointer table. EVM's stack-machine + table-dispatch choice keeps the bytecode tiny, the interpreter portable, and formal reasoning about execution tractable. Solana's register-VM + JIT choice optimizes for raw throughput and lets a single compiled program execute at near-native speed. Two valid VM-design answers; the choice between them is a tradeoff between provability + portability and runtime throughput.
+
 > **🧭 Where you are now in the stack:** you've built the **VM-layer instruction dispatch** — 256-slot const table + \`Instruction<W,H>\` wrapper, O(1) dispatch guaranteed at compile time. Same shape as CPython's bytecode dispatcher and the JVM's interpreter tables. Next lesson inserts your own opcode into this table — the dispatch surface is the extension point.
 `,
                 },
@@ -1298,6 +1300,8 @@ Without scrolling:
 4. What does \`#[auto_impl(&mut, Box)]\` save you from writing?
 
 If any answer is shaky, scroll back. Next lesson: the read/write split.
+
+> 🛣️ **The road not taken (Solana):** Solana's \`Database\`-equivalent has a different shape. Solana state is a flat map of accounts, each storing its own data blob — *not* a trie of slots within contracts. So Solana's "database trait" is account-keyed, with no \`storage(address, key)\` method: storage isn't an indirection layer, just an account field. The four-method shape you just built — \`basic\` / \`code_by_hash\` / \`storage\` / \`block_hash\` — is the trait-level fingerprint of EVM's "trie + per-contract storage" design choice. Different state models lead to different decoupling seams.
 
 > **🧭 Where you are now in the stack:** you've built the **VM–DB seam** (read API) — 4 methods + associated \`Error\` + \`auto_impl\`. The same Revm now runs against an in-memory map, a remote JSON-RPC, MDBX, or a shard network without any of them touching the VM. Next lesson opens the read/write split — the design decision that lets \`Arc\` work and decouples eager vs lazy fetch.
 `,
@@ -1792,6 +1796,8 @@ This is **optimistic concurrency control**: assume conflicts are rare, run in pa
 > 🛑 **Predict.** A block has 100 transactions. 90 of them are independent (different addresses, different storage slots). 10 of them are all sandwich-arb attempts on the same Uniswap pool. **What does block-stm do?**
 
 The 90 independent ones execute in parallel and commit cleanly on first pass. The 10 sandwich-arb ones all read and write the same pool state — they get speculatively executed in parallel, then 9 of them detect they used stale read sets and re-execute. After ~2 re-execution waves the 10 commit serially. Total wall-clock: ~1 parallel pass + 2 small re-execution waves, instead of 100 serial steps. **The conflicts cost you, but only proportionally.**
+
+> 🛣️ **The road not taken (Solana):** Solana solves the same throughput problem with the opposite bet. Every Solana transaction declares its read / write account set *upfront*, encoded in the tx message itself. The runtime (Banking Stage scheduler) then groups non-overlapping tx and runs them in parallel with **zero speculation and zero retry** — you never execute a tx whose dependencies are wrong, because the dependencies are known statically before execution. EVM's block-stm takes the opposite bet: keep the developer model permissive (no declared lock sets, contracts can touch arbitrary storage), and pay for it at the runtime layer with conflict tracking + re-execution. Two valid SE answers to the same problem; the choice between them is a tradeoff between developer ergonomics and runtime cost, not "right vs wrong."
 
 ## 3. Where this lives in the \`Database\` trait
 
