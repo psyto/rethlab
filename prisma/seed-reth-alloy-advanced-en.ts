@@ -8,7 +8,7 @@ export async function seedRethAlloyAdvancedEN(prisma: PrismaClient) {
       slug: 'alloy-advanced-en',
       title: 'Inside Alloy — Reading the Rust Ethereum Library',
       description:
-        'Read the alloy source line by line — the `Provider` trait, the `Network` trait, and the `Signer`/`Filler` traits. One of three independent Intermediate courses (Revm, Reth, Alloy) you can take in any order. Alloy is the foundation Reth and dapps build on, so this course pays back wherever you build Rust Ethereum code.',
+        'Read the alloy source line by line — the **networking + authentication layers** of the Rust EVM stack, via the `Provider`, `Network`, and `Signer`/`Filler` trait families. One of three independent Intermediate courses (Revm, Reth, Alloy) you can take in any order. Alloy is the foundation Reth and dapps build on, so this course pays back wherever you build Rust Ethereum code.',
       difficulty: 'INTERMEDIATE',
       duration: 120,
       xpReward: 340,

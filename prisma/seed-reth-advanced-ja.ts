@@ -8,7 +8,7 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
       slug: 'reth-advanced-ja',
       title: 'Inside Reth — シンク・拡張・SDK',
       description:
-        'Reth の本物のソースを読む: Staged Sync (10 ステージのパイプライン)、ExEx (Execution Extensions — インプロセスのインデクサ・MEV・リスクエンジン用)、Reth SDK (自前の App-chain を組み立てる)。3 つの独立した中級コース (Revm・Reth・Alloy) の 1 つ — `Database` トレイトと Revm 実行モデルへの慣れを前提にする箇所があるので、Inside Revm を先にやることを推奨。',
+        'Reth の本物のソースを読む — Rust EVM スタックの **DB + 分散システム + 並行性層**。Staged Sync (10 ステージの ETL パイプライン)、ExEx (Execution Extensions — インプロセスのインデクサ・MEV・リスクエンジン用)、Reth SDK (自前の App-chain を組み立てる)。3 つの独立した中級コース (Revm・Reth・Alloy) の 1 つ — `Database` トレイトと Revm 実行モデルへの慣れを前提にする箇所があるので、Inside Revm を先にやることを推奨。',
       difficulty: 'INTERMEDIATE',
       duration: 145,
       xpReward: 470,

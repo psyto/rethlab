@@ -8,7 +8,7 @@ export async function seedRethExpertJA(prisma: PrismaClient) {
       slug: 'reth-expert-ja',
       title: 'Reth Expert — 本番エンジニアリング',
       description:
-        'ハードコアな実装：プロファイリングとキャッシュ意識のRust、MDBXストレージ内部、Tokioランタイム、手続きマクロ、カスタムPrecompile、Merkle Patricia Trie、本番MEVパイプライン、zkEVM、独自Rethフォークの運用、そして拡張パターン経由で Reth ベース chain (op-stack、alphanet、Tempo) を読む。',
+        'Rust EVM スタックのすべての層をまたぐハードコアな実装: DB 層 (MDBX 内部、MPT)、並行性層 (Tokio ランタイム)、コンパイラ / VM 層 (カスタム Precompile、zkEVM、Tempo Zones を題材とする EVM プライバシー)、production エンジニアリング (プロファイリング、キャッシュ意識の Rust、本番 MEV パイプライン、手続きマクロ、differential fuzzing)。そして拡張パターン経由で Reth ベース chain (op-stack、alphanet、Tempo) を読み、独自 Reth フォークを出荷する。',
       difficulty: 'EXPERT',
       duration: 290,
       xpReward: 815,

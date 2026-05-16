@@ -8,7 +8,7 @@ export async function seedRethConsensusEngineeringEN(prisma: PrismaClient) {
       slug: 'reth-consensus-engineering-en',
       title: 'Consensus Engineering — Building L1 Consensus on Reth',
       description:
-        "The biggest gap between 'I can read reth' and 'I can ship an L1.' Consensus theory from scratch (BFT, safety/liveness, FLP), reading real Rust consensus engines (reth's Consensus trait, Malachite, bera-reth's Proof-of-Liquidity), and wiring custom consensus into a Reth-based chain. The course that prepares you to read HyperBFT and ship Tempo-class L1s.",
+        "The biggest gap between 'I can read reth' and 'I can ship an L1.' Consensus is the layer that **binds** the rest of the Rust EVM stack — database, VM, networking, concurrency — into a single chain. Consensus theory from scratch (BFT, safety/liveness, FLP), reading real Rust consensus engines (reth's Consensus trait, Malachite, bera-reth's Proof-of-Liquidity), and wiring custom consensus into a Reth-based chain. The course that prepares you to read HyperBFT and ship Tempo-class L1s.",
       difficulty: 'ADVANCED',
       duration: 220,
       xpReward: 650,

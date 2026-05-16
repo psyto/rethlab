@@ -8,7 +8,7 @@ export async function seedRethRevmAdvancedEN(prisma: PrismaClient) {
       slug: 'revm-advanced-en',
       title: 'Inside Revm — Reading the EVM Engine',
       description:
-        'Read the Revm interpreter line by line. Walk the real `add` opcode, custom opcodes, and the `Database` trait that supplies state. One of three independent Intermediate courses (Revm, Reth, Alloy) you can take in any order — though Revm gives you the type vocabulary the others assume.',
+        'Read the Revm interpreter line by line — the **compiler / VM layer** of the Rust EVM stack. Walk the real `add` opcode, custom opcodes, the `Database` trait that supplies state, parallel execution (block-stm), and the EVM-privacy precompiles design. One of three independent Intermediate courses (Revm, Reth, Alloy) you can take in any order — though Revm gives you the type vocabulary the others assume.',
       difficulty: 'INTERMEDIATE',
       duration: 120,
       xpReward: 340,

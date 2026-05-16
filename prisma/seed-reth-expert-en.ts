@@ -8,7 +8,7 @@ export async function seedRethExpertEN(prisma: PrismaClient) {
       slug: 'reth-expert-en',
       title: 'Reth Expert — Production Engineering',
       description:
-        'Hardcore systems work: profiling and cache-aware Rust, MDBX storage internals, Tokio runtime, procedural macros, custom precompiles, Merkle Patricia Trie, MEV in production, zkEVM, shipping a custom Reth fork, and reading Reth-based chains (op-stack, alphanet, Tempo) via the extension pattern.',
+        'Hardcore systems work across every layer of the Rust EVM stack: database (MDBX internals, MPT), concurrency (Tokio runtime), compiler / VM (custom precompiles, zkEVM, EVM privacy via Tempo Zones), and production engineering (profiling, cache-aware Rust, MEV pipelines, procedural macros, differential fuzzing). Plus shipping a custom Reth fork and reading Reth-based chains (op-stack, alphanet, Tempo) via the extension pattern.',
       difficulty: 'EXPERT',
       duration: 290,
       xpReward: 815,

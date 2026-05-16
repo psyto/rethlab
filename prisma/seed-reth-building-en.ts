@@ -8,7 +8,7 @@ export async function seedRethBuildingEN(prisma: PrismaClient) {
       slug: 'reth-building-en',
       title: 'Building with the Stack — Real-World Rust EVM Apps',
       description:
-        "Reading the source is the prerequisite. This tier is the payoff — ten working apps in Rust + Alloy + Revm: minimal MEV searcher, reorg-aware Postgres indexer (ExEx), custom RPC endpoint, wallet backend, EIP-7702 sponsor service, Foundry-style cheatcode, swap aggregator, a frontrun-resistant order router capstone that integrates them all, a cross-client validation harness, and an HTTP 402 / MPP machine-payments endpoint.",
+        "Reading the source is the prerequisite. This tier is the payoff — ten working apps in Rust + Alloy + Revm, with at least one for every layer of the systems-engineering stack: MEV searcher (network + concurrency), reorg-aware Postgres indexer via ExEx (DB), custom RPC endpoint (network), wallet backend (concurrency + state), EIP-7702 sponsor service (authentication), Foundry-style cheatcode via custom precompile (VM), swap aggregator over forked DEX state (DB consistent-snapshot), a frontrun-resistant order router capstone (network + VM + auth integration), a cross-client validation harness (VM correctness), and an HTTP 402 / MPP machine-payments endpoint (network payment protocol).",
       difficulty: 'EXPERT',
       duration: 420,
       xpReward: 100,
