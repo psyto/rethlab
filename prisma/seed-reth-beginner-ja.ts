@@ -29,7 +29,7 @@ export async function seedRethBeginnerJA(prisma: PrismaClient) {
                   title: 'なぜReth・Revm・Alloyを学ぶのか',
                   slug: 'why-rust-ethereum-stack-ja',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 2,
                   duration: 10,
                   xpReward: 20,
                   content: `# なぜReth・Revm・Alloyを学ぶのか
@@ -68,7 +68,7 @@ export async function seedRethBeginnerJA(prisma: PrismaClient) {
                   title: 'Reth・Revm・Alloyの三つ巴',
                   slug: 'three-pillars-ja',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 10,
                   xpReward: 20,
                   content: `# Reth・Revm・Alloyの三つ巴
@@ -147,7 +147,7 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
                   title: 'なぜSolanaではなくEthereum（Rust）なのか',
                   slug: 'why-not-solana-ja',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 4,
                   duration: 8,
                   xpReward: 15,
                   content: `# なぜSolanaではなくEthereum（Rust）なのか
@@ -192,7 +192,7 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
                   title: 'Solana / Anchor から Reth へ — 持ち越せるもの (Solana 経験が無ければスキップ)',
                   slug: 'solana-to-reth-ja',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 5,
                   duration: 12,
                   xpReward: 20,
                   content: `# Solana / Anchor から Reth へ — 持ち越せるもの (Solana 経験が無ければスキップ)
@@ -284,7 +284,7 @@ Solana のランタイムは優れていますが、Solana 専用です。Reth �
                   title: 'Reth vs Geth / Alloy vs ethers-rs — 置き換えの根拠',
                   slug: 'substitution-case-ja',
                   type: 'CONTENT',
-                  sortOrder: 5,
+                  sortOrder: 6,
                   duration: 10,
                   xpReward: 20,
                   content: `# Reth vs Geth / Alloy vs ethers-rs — 置き換えの根拠
@@ -413,10 +413,120 @@ Solidity しか読めない「Ethereum エンジニア」は市場が狭い。�
 
 ## 次に来るもの
 
-これがレッスン 0 — 全体の捉え方です。Module 0 の残りはこの地図を埋めていきます。どのプロジェクト（Reth・Revm・Alloy）がどのサブシステムを実装しているか、なぜチームが Geth / ethers-rs / Solana ではなくこのスタックを選ぶのか、Solidity や Solana の経験がどう持ち越せるのか。Module 0 を終えたら、Rust をセットアップしてソースを読み始めます。
+これがレッスン 0 — 全体の捉え方です。レッスン 1 では、Ethereum を一般的な systems engineering のインスタンスから区別する 4 つの力を名指して、この捉え方を鋭くします。Module 0 の残りはこの地図を埋めていきます。どのプロジェクト（Reth・Revm・Alloy）がどのサブシステムを実装しているか、なぜチームが Geth / ethers-rs / Solana ではなくこのスタックを選ぶのか、Solidity や Solana の経験がどう持ち越せるのか。Module 0 を終えたら、Rust をセットアップしてソースを読み始めます。
 
 ひとつだけ持って歩いてください。続くレッスンで「ブロックチェーン」「state」「コンセンサス」「ガス」という語が出てきたら、頭の中で systems engineering の等価物に置き換えてください。レッスンはあなたがその置き換えを済ませた前提で書かれています。**この捉え方こそが、ソースを読めるようにする鍵です。**
 `,
+                },
+                {
+                  title: '5 サブシステムの先へ — Ethereum を Ethereum たらしめる 4 つの力',
+                  slug: 'ethereum-adversarial-forces-ja',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 16,
+                  xpReward: 25,
+                  content: `# 5 サブシステムの先へ — Ethereum を Ethereum たらしめる 4 つの力
+
+前のレッスンでは on-ramp の捉え方を入れた: **Ethereum はデータベース + 分散システム + コンパイラ + ネットワーク + 並行ランタイムが、コンセンサスでひとつに束ねられたもの。** どの部品も systems engineering で長く研究された問題。「ブロックチェーン」は接着剤であって本質ではない。
+
+この捉え方は正しい出発点。Reth のソースを「魔法」と感じずに読めるようになるための入口。ただし意図的な単純化でもあって、これだけ持って Inside REVM / Inside Reth に進むと、Ethereum の設計選択が *なぜ* そう見えるのかを取り逃がす。
+
+Ethereum の *固有の* インスタンスを、一般的な systems engineering のインスタンス（例: PostgreSQL + Tokio + 自前 VM で動く web2 バックエンド）から区別する **4 つの力** がある。ここでロードしておく。それぞれは後のカリキュラムで具体的なレッスンとして出てくる; 本レッスンはその地図。
+
+## 力 1: 敵対的環境
+
+Paxos と Raft — 古典的な分散システムアルゴリズム — は、ノードが故障する（クラッシュ、遅延、ネットワーク分断）ことは想定するが、**悪意を持つことは想定しない**。これを Crash Fault Tolerance (CFT) と呼ぶ。本番の分散システム（Spanner、Kafka、etcd）の大半はこの世界で生きている: ノードは同じ会社が運用し、同じコードを走らせ、嘘をつくインセンティブがない。
+
+Ethereum はそうした前提を置けない。ノードは互いに信頼しない当事者が運用し、その一部は積極的に利益のためにシステムを破ろうとする。この世界の文献名は Byzantine Fault Tolerance (BFT) — そして BFT は CFT よりも *質的に* 難しい。PBFT (1999) が学術上のマイルストーンになったのは、まさに非同期ネットワーク下の BFT がほぼ不可能だと考えられていたから。
+
+敵対的環境こそが、Ethereum の設計が場所によって奇妙に見える単一の load-bearing な理由:
+
+- **ガスは単なる「CPU + メモリの計測」ではない。** DoS 防止機構そのもの。ガスが無料か計測されていなければ、攻撃者は無限ループする 1 トランザクションを投入してすべてのノードを止められる。Opcode ごとのガス価格は制御理論のフィードバックループ — 各操作の価格は、それを敵対的に実行するコストに対して校正される。
+- **Slashing は単なる懲罰ではない。** 信頼された権威なしにコンセンサスを成立させるための、経済的なセーフティネット。Double-sign したバリデータはステークした資本を失う — その損失は攻撃の利益を上回らなければ、システムは安全にならない。プロトコルに埋め込まれたゲーム理論であって、コードレベルのチェックではない。
+- **コンセンサスは「ハッシュ付きの Paxos」ではない。** Casper FFG + LMD-GHOST、HotStuff、Tendermint — モダンな BFT コンセンサスはどれも、古典的 Paxos が置かない経済的・タイミング上の前提を明示的に持っている。
+
+**crypto 外のアナロジー:** Visa のような決済ネットワークは標準的な分散システム基盤の上に乗っているが、加盟店とカード保有者が敵対的になりうると想定して、不正検知の層を上に追加する。Ethereum も同じ形 — ただし、不正検知の層がコンセンサスプロトコル *そのもの* で、別システムを上に乗せたわけではない。
+
+**カリキュラムでの出会い場所:** Consensus Engineering ティア（BFT、slashing、バリデータ経済）、Validator Operations ティア（slashing 検知、鍵管理）。
+
+## 力 2: 暗号学的検証可能性
+
+Ethereum の「データベース」は技術的には MDBX（MVCC 付きの B+tree）。しかし MDBX だけならただのキー・バリュー・ストア。Ethereum のデータベースを PostgreSQL のデプロイから根本的に分けているのは、ひとつの構造的な追加 — 暗号アキュムレータである Merkle Patricia Trie (MPT)。
+
+MPT のおかげで、すべてのアカウント、すべてのストレージスロット、すべてのコントラクトコード — 状態のすべての断片 — が、**state root** と呼ばれるたった 32 バイトのハッシュにひとつに束ねられる。その 32 バイトのハッシュと小さな Merkle proof があれば、第三者は **proof を渡した相手を信頼することなく、かつ自分でデータベースを持つことなく**、任意の単一の状態断片を検証できる。
+
+これが PostgreSQL との load-bearing な違い。PostgreSQL のデプロイは「Alice の残高は 100 だ」と告げてくれる — がそれを信じるには、データベース（あるいはその運用者）を信頼する必要がある。Ethereum は「Alice の残高は 100、1KB の proof を渡す、既に信頼している state root に照らして検証してくれ」と告げてくれる。信頼の置き場が運用者から暗号へ移る。
+
+ここで入れておく価値のある実務的な帰結:
+
+- **状態を変える操作は、同等の PostgreSQL の更新より高くつく。** MPT は変更のたびにルートまで再ハッシュが必要だ。これが \`SSTORE\` に 20,000 ガスかかる一方、\`MLOAD\` は 3 で済む理由。
+- **ライトクライアントが可能になる。** フルデータベースを持たないスマホサイズのクライアントでも、state root と proof さえあれば chain の状態を検証できる。MPT の構造的な性質。
+- **ステートレス検証が可能になる。** バリデータは全状態を抱える必要がなく、検証する各トランザクションの proof にアクセスできればよい。プロトコル研究のホットエリア。
+
+**crypto 外のアナロジー:** Git のコンテンツアドレス型ストレージ（すべての commit がツリーをハッシュで参照する）、ZFS の Merkle ツリー完全性チェック、IPFS のコンテンツアドレッシング。すべて同じアイデアの応用 — *データベースの内容が暗号的にコミットされているので、全体を持たずに任意の部分を証明できる*。
+
+**カリキュラムでの出会い場所:** Expert ティアの「Merkle Patricia Trie & 状態証明」、Cross-chain Bridges の light client、Stateless Ethereum。
+
+## 力 3: トランザクション順序付けが市場になる
+
+標準的な分散システム — Kafka、決済キュー、CDC パイプライン — では、トランザクション順序は実装の詳細。システムが順序（FIFO、partition key ベース、タイムスタンプ）を選び、それで終わり。
+
+Ethereum はこの前提を置けない。各ブロックには数百から数千のトランザクションが同じ希少リソース（ブロックスペース、ストレージスロット、AMM の流動性）を奪い合う。ブロック内で *どの* トランザクションが先に来るかには、直接的な金銭価値がある — 大きな swap の前に走らせる front-running、価格インパクトのある注文への sandwich 攻撃、DEX プール間のアービトラージ捕捉。この価値には名前がある: **MEV (Maximal Extractable Value)**。
+
+結果として、トランザクションの *順序付けそのもの* が独自の systems engineering の層になり、独自のパイプラインを持つ:
+
+- **Mempool** — トランザクションがここで待つ、見ている全員に見える
+- **Searcher** — mempool を走査して儲かる順序を探し、bundle を投入する
+- **Builder** — searcher の bundle と公開 mempool からブロックを組み立てる、合計手数料 + MEV を最大化する
+- **Relay** — builder とバリデータの間に座って、ブロックを配信する
+- **Validator** — 最も儲かるブロックを選び、署名して、提案する
+
+5 つの distinct なコンポーネント、それぞれが固有の性能特性、信頼前提、失敗モードを持つ。どれも 2015 年には存在しなかった。これらが生まれた理由は、敵対的環境（力 1）+ 公開された mempool + ブロックごとの希少リソース、によってトランザクション順序付けが経済的価値を持ったから。
+
+**crypto 外のアナロジー:** HFT のオーダールーティング（どの取引所にいつ送るか）、取引所のマッチングエンジン設計、広告オークションパイプライン（header bidding、プログラマティック広告交換所）。すべて *順序付けが意味を持ち、順序付ける者に力があり、順序付けが独自の最適化された層になる* という形。
+
+**カリキュラムでの出会い場所:** Building ティア（MEV searcher アプリ、frontrun-resistant order router の capstone）、Expert MEV in production。
+
+## 力 4: 無停止のシステム移行
+
+標準的な分散システムでは、スキーマ移行とルール変更は world を止め、移行を走らせ、再起動して扱う。Kafka クラスタは 2 分の degraded スループットを伴うローリングアップグレード。PostgreSQL はメンテナンスウィンドウ。厳格な 24/7 システムである Visa でさえ、ロールバックプランとともに数時間かけてアップグレードを協調する。
+
+Ethereum はそれができない。メンテナンスウィンドウを宣言できる単一の運用者は存在しない。Chain は 12 秒ごとにブロックを生み続け、その間にすべてのノード — 数千の独立した当事者が運用 — が同時に、ある特定のブロック高で新しいコンセンサスルールに切り替わらなければならない。これが **ゼロダウンタイムでのホットスワップ移行、互いに信頼しない運用者群をまたいで協調される**。
+
+仕組み: すべての Reth/Revm バージョンが、Ethereum のコンセンサスルールの全履歴を 1 つのバイナリ内に抱える。\`spec_id\`（あるいは等価物）と呼ばれるフィールドが、任意のブロック高でどのルールが適用されるかを選ぶ。Chain が新しいハードフォークの activation 高に到達すると、すべてのノードが同時にルールセットを切り替える。アップグレードしていないバリデータは canonical chain から脱落; アップグレードしたバリデータは続行する。
+
+これが Reth/Revm のソースに \`match spec_id\` や \`if hardfork >=\` の分岐がこれほど多い理由。コンセンサスに影響する振る舞いに触れるコード行は、その振る舞いをかつて変えたすべてのハードフォークについて知っていなければならない。コードが複雑に見えるのは、完全な歴史的仕様を抱えているから。
+
+**crypto 外のアナロジー:** 宇宙船のコンピュータファームウェアの更新（衛星に物理的に届かないので、飛行中にアップデートしなければならない）、電話網のプロトコルアップグレード（AT&T のアナログから SS7 への移行は、すべての通話がつながり続けたまま行われた）、Visa の支払いネットワークのハードフォーク（IC カード、コンタクトレス、トークン化 — すべて数百万台の加盟店端末を、ダウンタイムなしで協調的にアップグレード）。
+
+**カリキュラムでの出会い場所:** Expert ティアの「Custom ChainSpec — fork、genesis、precompile schedule」、「本番での Reth フォーク運用」。
+
+## 更新後のメンタルモデル
+
+両方のレッスンを持ち歩く:
+
+**5 サブシステム**（前のレッスン）:
+- データベース、分散システム、コンパイラ/VM、ネットワーク、並行ランタイム
+
+**4 つの力**（本レッスン）:
+- 敵対的環境、暗号学的検証可能性、トランザクション順序付けが市場になる、無停止のシステム移行
+
+5 サブシステムは *Ethereum が何でできているか* を教える。4 つの力は *なぜそれらのサブシステムがそう見えるか* を教える。
+
+Reth を読んでいて、一般的な SE のパターンに収まらないコード — 奇妙なガス価格定数、ストレージ書き込みのたびに走る Merkle 再ハッシュ、private orderflow を扱うペイロードビルダー、14 分岐の \`match spec_id\` — に出会ったとき、この 4 つの力のどれかが理由になっている。
+
+**両半分のモデルを持つと、Ethereum の固有性を「ブロックチェーンの魔法」として扱う必要がなくなる。** 5 サブシステムは SE の substrate を、4 つの力はそれを形作る制約を与える。両方そろえば、Reth/Revm/Alloy を — 「これは魔法だ」とも「ただのハッシュ付き Paxos」とも転ばずに — 読めるようになる。
+
+## 各力に再会する場所
+
+| 力 | カリキュラム上の具体的な接点 |
+| --- | --- |
+| **敵対的環境** | Consensus Engineering（BFT、バリデータ経済、slashing）、Validator Operations（slashing 検知、MPC 鍵） |
+| **暗号学的検証可能性** | Expert MPT のレッスン、Cross-chain Bridges の light client、Stateless Ethereum |
+| **トランザクション順序付けが市場になる** | Building ティア（MEV searcher、frontrun-resistant router の capstone）、Expert MEV in production |
+| **無停止のシステム移行** | Expert Custom ChainSpec、Expert Reth フォーク運用、Inside Revm / Inside Reth のハードフォーク関連コードパス |
+
+on-ramp の捉え方だけでも読み始めることはできる。この 4 つの力は、その捉え方を鋭くするためのもの。両レッスンとも意図的に短い — 中身の大半は、それぞれが指すコース側に住んでいる。`,
                 },
               ],
             },
