@@ -327,7 +327,7 @@ export const ja: TranslationKeys = {
   about: {
     title: 'RethLabについて',
     subtitle: 'Rust Ethereum Systems Engineering を体系化したトレーニングプログラム。Ethereum はデータベース + 分散システム + コンパイラ + ネットワーク + 並行ランタイムを、コンセンサスで束ねたもの — Reth・Revm・Alloy がその 5 つすべてを Rust で実装している。Hyperliquid が動いている基盤。Tempo がローンチした基盤。Paradigm が build した Reth・Revm・Foundry・Alloy。RethLab は 13 コース 4 ティアで、EVM の基礎から本番ソースの行単位読解、L1 アーキテクチャ設計、本番アプリ 10 本までを通します。',
-    bio: '15+ 年、金融機関のミッションクリティカルなシステム — コアバンキング、リテール預金、住宅ローン、KYC、規制対応 — を Tokyo (新生銀行)、Bangalore (オフショア開発)、Hong Kong (無料英語学習 E メール、50 万ユーザ超) で ship してきました。現在は SBI R3 Japan で Head of Sales Engineering として、Solana のエンタープライズ採用と RWA トークン化にフォーカスしています。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda すべてで active に build 中です。\n\nRethLab を作ったのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとしたとき、まさにこのカリキュラムが埋めようとしている穴にぶつかったからです — ドキュメントは散在し、ソースは難解で、「Rust が少し書ける」状態から「本番 EVM インフラを ship できる」状態までの明確な道筋がない。やりながら学び、効いた部分を「自分が欲しかったカリキュラム」として整理したのが RethLab です — 13 コース 4 ティア (基礎 / ソース読解 / L1 アーキテクチャ / 本番)、約 131 レッスン。Advanced ティアで consensus・cross-chain bridge・sequencer & rollup・P2P・validator 運用を扱い、Expert ティアで 10 本の動くアプリを end-to-end で ship します。永久無料・source-first。\n\n個人的には、このスタックを ship しているチーム — 特に Paradigm と Tempo — に興味があります。',
+    bio: '15+ 年、金融機関のミッションクリティカルなシステム — コアバンキング、リテール預金、住宅ローン、KYC、規制対応 — を Tokyo (新生銀行)、Bangalore (オフショア開発)、Hong Kong (無料英語学習 E メール、50 万ユーザ超) で ship してきました。現在は SBI R3 Japan で Head of Sales Engineering として、Solana のエンタープライズ採用と RWA トークン化にフォーカスしています。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda すべてで active に build 中です。\n\nRethLab を作ったのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとしたとき、まさにこのカリキュラムが埋めようとしている穴にぶつかったからです — ドキュメントは散在し、ソースは難解で、「Rust が少し書ける」状態から「本番 EVM インフラを ship できる」状態までの明確な道筋がない。やりながら学び、効いた部分を「自分が欲しかったカリキュラム」として整理したのが RethLab です — 13 コース 4 ティア (基礎 / ソース読解 / L1 アーキテクチャ / 本番)、約 131 レッスン。Advanced ティアでは、多くのカリキュラムが「ブロックチェーンの魔法」として扱う対象 — BFT コンセンサス、cross-chain bridge、sequencer & rollup、P2P、validator 運用 — を、分散システム / コンパイラ / ネットワーク / 並行性の標準的なエンジニアリングとして読み直す。Expert ティアでは、本番水準の動くアプリ 10 本を end-to-end で出荷する。永久無料・source-first。\n\n個人的には、このスタックを ship しているチーム — 特に Paradigm と Tempo — に興味があります。',
     background: {
       tradfi: '経歴',
       tradfiDetail: '新生銀行で 15+ 年、金融機関のミッションクリティカル開発に従事 — コアバンキング (Flexcube)、リテール預金、住宅ローン、KYC/FATCA、全銀、ATM。Backbase (オランダの Banking as a Service ユニコーン) で PM。',
@@ -340,13 +340,13 @@ export const ja: TranslationKeys = {
     },
     tech: {
       title: 'なぜこのスタックか？',
-      subtitle: 'Reth・Revm・Alloyは、本気のEthereumインフラにおける事実上の標準になりつつあります。',
-      signal: 'Reth: モジュラーなRust Ethereumクライアント — 高速な同期と低メモリ、多くのApp-chainの基盤。',
-      regime: 'Revm: ワールドクラスのRust製EVM — Reth・Foundry・OP-Reth・主要なzkVMの内部で利用。',
-      crossvenue: 'Alloy: 型安全なEthereumプリミティブ — `ethers-rs`の事実上の後継。',
-      liquidation: 'ExEx: RethのExecution Extensions — 実行ループにRustコードを直接フックできる。',
-      tilt: '組み合わせ: Alloyで任意のチェーンと通信し、Revmをプロセス内で動かし、Rethをノードオペレーターとして拡張。',
-      hyperlend: 'キャリア価値: このスタックを読めるインフラエンジニアは、Web3で最も需要の高い職種の一つ。',
+      subtitle: 'Ethereum はデータベース + 分散システム + コンパイラ + ネットワーク + 並行ランタイム。Reth・Revm・Alloy はその 5 つすべてを Rust で実装し、本気のインフラの事実上の標準になりつつある。',
+      signal: 'Reth — DB + 分散システム + 並行性の層。MDBX ストレージ、10 ステージの ETL 同期、devp2p ネットワーキング、validator 水準の Tokio ランタイム。多くの app-chain の基盤。',
+      regime: 'Revm — コンパイラ / VM 層。Rust 製の EVM インタプリタを Database トレイトで抽象化し、メモリ・MDBX・JSON-RPC・リモートシャード状態のどれの上でも動かす。Reth・Foundry・OP-Reth・主要な zkVM の内部で利用。',
+      crossvenue: 'Alloy — ネットワーク層 + 認証層。Provider・Network・Signer のトレイトファミリが、nonce / ガス / chain-id / 署名の filler を塔状に積み重ねる。ethers-rs の事実上の後継。',
+      liquidation: 'Foundry — 同じスタックのツール層。forge / cast / anvil はいずれも Revm の上で動く。Solidity エンジニアがテストに使うエンジンは、Reth がブロックを実行するのと同じエンジン。',
+      tilt: 'ExEx — Reth の DB 層 pub-sub + prune プロトコル。インプロセスのコンシューマが commit 済み状態の通知を受け、安全に prune できる地点を Reth に伝える。Postgres の論理レプリケーションと同じ構造。',
+      hyperlend: 'キャリア価値: このスタックをソースレベルで — DB・VM・ネットワーク・並行性のすべてを — 読めるエンジニアは、Web3 で最も需要の高い職種のひとつ。',
     },
     contact: '質問・コンテンツへのフィードバック・typo 報告は GitHub へ。カジュアルな会話や反応共有は X へ。',
     support: {
@@ -391,14 +391,14 @@ export const ja: TranslationKeys = {
     },
     about: {
       insightTitle: 'なぜ RethLab が存在するか',
-      insightDesc: '多くの EVM チュートリアルは「何が起きているか」を説明します。しかし Paradigm・Hyperliquid・Monad が雇うエンジニアは、実際にソースを読んでいる人たちです。RethLab はそのギャップを埋める — 本物の Reth・Revm・Alloy・Foundry のソースコードを行ごとに、設計の意図とともに歩く。クレートを開いたとき、すでに重要なコードを見たことがある状態にしておくのが目的。',
+      insightDesc: '多くの EVM チュートリアルは、何が起きているかを「ブロックチェーンの魔法」のように説明します。しかし Paradigm・Hyperliquid・Monad が雇うエンジニアは、Ethereum を systems engineering — データベース、コンパイラ、分散システム、ネットワークスタック、並行ランタイム — として扱い、それぞれの層を実装する Rust ソースを実際に読んでいる人たちです。RethLab はそのギャップを埋める — 本物の Reth・Revm・Alloy・Foundry のソースコードを行ごとに、設計の意図とともに歩く。クレートを開いたとき、すでに重要なコードを見たことがある状態にしておくのが目的。',
       whatsNext: '今後の展開',
       moreContent: 'コンテンツ追加',
-      moreContentDesc: 'Revmのより深い内部構造（Precompile、EOF）、Reth SDKの解説、ExExケーススタディ。',
+      moreContentDesc: 'VM 層のより深い内部 (Revm precompile、EOF ディスパッチ)、DB 層のウォークスルー (Reth SDK、ExEx ケーススタディ)、並列実行パターン (block-stm) — スタックの各層を、より厚く埋めていく。',
       multiLanguage: '多言語対応',
       multiLanguageDesc: '英語・日本語で提供。両言語で同等の内容をカバー。コミュニティ成長に合わせて他言語も計画中。',
       moreCourses: 'コース追加',
-      moreCoursesDesc: 'Rust Ethereumエコシステムの進化に合わせて、新しいOpcode、ExExパターン、新しいチェーンに関するレッスンを追加。',
+      moreCoursesDesc: 'スタックの各層が進化するたび — VM 層の新しい opcode、DB 層の新しい ExEx パターン、アーキテクチャ層の新しいチェーンや L2 — 新しいレッスンが続く。',
     },
   },
   time: {

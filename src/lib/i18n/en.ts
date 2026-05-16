@@ -325,7 +325,7 @@ export const en = {
   about: {
     title: 'About RethLab',
     subtitle: 'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — Reth, Revm, and Alloy implement all five in Rust. Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. RethLab walks you through 13 courses across 4 tiers — from EVM foundations, to reading Alloy/Revm/Reth source line by line, to architecting L1 consensus, to shipping ten production-grade apps.',
-    bio: '15+ years shipping mission-critical financial systems — core banking, retail deposits, mortgages, KYC, regulatory reporting — across Tokyo (Shinsei Bank), Bangalore (offshore dev), and Hong Kong (free English-learning email, 500K+ users). Now Head of Sales Engineering at SBI R3 Japan, focused on Solana enterprise adoption and real-world-asset tokenization, while building actively across Bitcoin, Ethereum, Solana, Hyperliquid, and Corda.\n\nI built RethLab because when I tried to learn Reth / Revm / Alloy / Foundry properly, I hit the gap the curriculum walks through: the docs are scattered, the source is dense, and there is no clear path from "I know some Rust" to "I can ship production EVM infrastructure." I learned by doing, then turned what worked into the curriculum I wish I\'d had — 13 courses across 4 tiers (Foundations / Source-Reading / L1 Architecture / Production), ~131 lessons. The Advanced tier covers consensus, cross-chain bridges, sequencer & rollup architecture, P2P networking, and validator operations. The Expert tier ships ten end-to-end apps. Free forever, source-first.\n\nPersonally, I\'m interested in the teams shipping this stack — Paradigm and Tempo above all.',
+    bio: '15+ years shipping mission-critical financial systems — core banking, retail deposits, mortgages, KYC, regulatory reporting — across Tokyo (Shinsei Bank), Bangalore (offshore dev), and Hong Kong (free English-learning email, 500K+ users). Now Head of Sales Engineering at SBI R3 Japan, focused on Solana enterprise adoption and real-world-asset tokenization, while building actively across Bitcoin, Ethereum, Solana, Hyperliquid, and Corda.\n\nI built RethLab because when I tried to learn Reth / Revm / Alloy / Foundry properly, I hit the gap the curriculum walks through: the docs are scattered, the source is dense, and there is no clear path from "I know some Rust" to "I can ship production EVM infrastructure." I learned by doing, then turned what worked into the curriculum I wish I\'d had — 13 courses across 4 tiers (Foundations / Source-Reading / L1 Architecture / Production), ~131 lessons. The Advanced tier treats what most curricula present as "blockchain magic" — BFT consensus, cross-chain bridges, sequencer & rollup architecture, P2P networking, validator operations — as standard distributed-systems / compiler / networking / concurrency engineering. The Expert tier ships ten end-to-end apps. Free forever, source-first.\n\nPersonally, I\'m interested in the teams shipping this stack — Paradigm and Tempo above all.',
     background: {
       tradfi: 'Background',
       tradfiDetail: '15+ yrs of mission-critical FS at Shinsei Bank: core banking (Flexcube), retail deposits, mortgages, KYC/FATCA, Zengin payments, ATM. Backbase (Dutch Banking-as-a-Service unicorn) as PM.',
@@ -338,13 +338,13 @@ export const en = {
     },
     tech: {
       title: 'Why This Stack?',
-      subtitle: 'Reth, Revm, and Alloy are quietly becoming the standard for serious Ethereum infrastructure.',
-      signal: 'Reth: Modular Rust Ethereum client — faster sync, lower memory, and the basis of many App-chains.',
-      regime: 'Revm: World-class Rust EVM — used inside Reth, Foundry, OP-Reth, and most zkVMs.',
-      crossvenue: 'Alloy: Type-safe Ethereum primitives — the modern replacement for ethers-rs.',
-      liquidation: 'ExEx: Reth Execution Extensions — hook directly into the execution loop in Rust.',
-      tilt: 'Compose: Use Alloy to talk to any chain, drive Revm in process, or extend Reth as a node operator.',
-      hyperlend: 'Career value: Infra engineers who can read this stack are some of the highest-paid in Web3.',
+      subtitle: 'Ethereum is a database + distributed system + compiler + networking + concurrency runtime. Reth, Revm, and Alloy implement all five in Rust — quietly becoming the standard for serious infrastructure.',
+      signal: 'Reth — DB + distributed-system + concurrency layers. MDBX storage, 10-stage ETL sync, devp2p networking, validator-grade Tokio runtime. The basis of many app-chains.',
+      regime: 'Revm — compiler / VM layer. Rust EVM interpreter abstracted over a Database trait, runs on memory, MDBX, JSON-RPC, or remote shard state. Inside Reth, Foundry, OP-Reth, and most zkVMs.',
+      crossvenue: 'Alloy — networking + authentication layers. Provider, Network, and Signer trait families that compose into a tower of fillers (nonce, gas, chain-id, signing). The modern replacement for ethers-rs.',
+      liquidation: 'Foundry — the tooling layer of the same stack. forge / cast / anvil all run on Revm. The engine Solidity engineers use to test is the same engine Reth executes blocks on.',
+      tilt: 'ExEx — Reth\'s DB-layer pub-sub + prune protocol. In-process consumers receive committed-state notifications and tell Reth when it\'s safe to prune. Same shape as Postgres logical replication.',
+      hyperlend: 'Career value: engineers who can read this stack at the source level — DB, VM, networking, concurrency — are some of the highest-paid in Web3.',
     },
     contact: 'Questions, content feedback, or typo reports go on GitHub. Casual chat or shoutouts on X.',
     support: {
@@ -389,14 +389,14 @@ export const en = {
     },
     about: {
       insightTitle: 'Why this exists',
-      insightDesc: "Most EVM tutorials describe what's happening. The kind of engineers Paradigm, Hyperliquid, and Monad hire have actually read the source. RethLab closes that gap by walking you through real Reth, Revm, Alloy, and Foundry source code — line by line, with the design intent — so by the time you open a crate, you've already seen its key code.",
+      insightDesc: "Most EVM tutorials describe what's happening as if it were blockchain magic. The kind of engineers Paradigm, Hyperliquid, and Monad hire treat Ethereum as systems engineering — a database, a compiler, a distributed system, a networking stack, a concurrency runtime — and have actually read the Rust source that implements each layer. RethLab closes that gap by walking you through real Reth, Revm, Alloy, and Foundry code line by line, with the design intent, so by the time you open a crate you've already seen its key code.",
       whatsNext: "What's Next",
       moreContent: 'More Content',
-      moreContentDesc: 'Deeper Revm internals (precompiles, EOF), Reth SDK walkthroughs, and ExEx case studies.',
+      moreContentDesc: 'Deeper VM-layer internals (Revm precompiles, EOF dispatch), DB-layer walkthroughs (Reth SDK, ExEx case studies), parallel-execution patterns (block-stm) — filling out each layer of the stack.',
       multiLanguage: 'Multi-Language',
       multiLanguageDesc: 'Available in English and Japanese, with parity across both. More languages planned as the community grows.',
       moreCourses: 'More Courses',
-      moreCoursesDesc: 'As the Rust Ethereum ecosystem evolves — new opcodes, new ExEx patterns, new chains — new lessons will follow.',
+      moreCoursesDesc: 'As each layer of the stack evolves — new opcodes at the VM layer, new ExEx patterns at the DB layer, new chains and L2s at the architecture layer — new lessons follow.',
     },
   },
   time: {
