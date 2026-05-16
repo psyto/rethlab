@@ -653,6 +653,210 @@ Now you can read what your macro is producing and pinpoint any wrong codegen.
 
 > Final check: explain in one sentence the difference between \`macro_rules!\` and a procedural macro. If your answer is just "one's older," go deeper — what does each operate on, and where does each run? **The Rust ecosystem is built on this distinction; without it, you can't read the code that builds your binary.**`,
                 },
+                {
+                  title: 'Tracing internals — how Reth observes itself',
+                  slug: 'tracing-internals-en',
+                  type: 'CONTENT',
+                  sortOrder: 4,
+                  duration: 20,
+                  xpReward: 45,
+                  content: `# Tracing internals — how Reth observes itself
+
+Performance tuning, debugging a deadlock, diagnosing why a stage suddenly stalls — all of these require **the node telling you what it's doing**. Reth's answer is \`tracing\`, the Rust ecosystem's structured-logging crate. Every interesting code path in Reth is instrumented with \`tracing\` spans and events, and the whole observability surface (logs, metrics, distributed tracing) is built on top of one consistent foundation. This lesson is how it works and how you extend it.
+
+> 📌 **Why this sits in Performance & Systems.** You can't optimize what you can't measure. \`tracing\` is the measurement layer. Every performance lesson that comes after this — flamegraphs, MDBX tuning, Tokio runtime work — assumes you can pull the right signal out of a running node, and that pulling is via \`tracing\`.
+
+## 1. The \`tracing\` crate's two primitives
+
+The whole ecosystem reduces to two ideas:
+
+- **Span** — a *region* of execution. "I am inside \`SenderRecoveryStage::execute\` for blocks 100..200." Spans nest; they capture context (block range, peer ID, request ID) that flows to every log line inside them.
+- **Event** — a *point-in-time* log line. "I just committed batch 17 with 12,000 senders." Events fire inside the currently-active span and inherit its context.
+
+In code:
+
+\`\`\`rust
+use tracing::{info, debug, instrument};
+
+#[instrument(skip(self, provider))]
+async fn execute(&mut self, provider: &Provider, input: ExecInput) -> Result<ExecOutput> {
+    let span = tracing::info_span!("execute", target = ?input.target);
+    let _enter = span.enter();
+
+    debug!("starting sender recovery");
+    let batches = self.compute_batches(input).await?;
+    info!(num_batches = batches.len(), "computed batches");
+
+    for batch in batches {
+        let _bspan = tracing::info_span!("batch", n = batch.id).entered();
+        process_batch(batch).await?;
+        info!("batch committed");
+    }
+    Ok(...)
+}
+\`\`\`
+
+\`#[instrument]\` is a procedural macro (the previous lesson covered the genre) that wraps the function body in a span automatically. \`info!\` and \`debug!\` emit events at different levels. **Every log line a Reth user ever sees comes from one of these two primitives.**
+
+## 2. Levels and the \`RUST_LOG\` filter
+
+Events have levels (\`error\`, \`warn\`, \`info\`, \`debug\`, \`trace\`). The user picks which levels to print at runtime via the \`RUST_LOG\` environment variable:
+
+\`\`\`bash
+# Show info+ globally, but debug+ for the stages module
+RUST_LOG=info,reth_stages=debug cargo run --bin reth -- node
+
+# Show everything from one specific module
+RUST_LOG=reth_exex=trace cargo run --bin reth -- node
+
+# Combine targets
+RUST_LOG=info,reth_stages=debug,reth_exex=trace,reth_network=warn
+\`\`\`
+
+The matching engine is \`EnvFilter\` (from \`tracing-subscriber\`). It matches against the **module path** of each event/span, which Rust derives from the crate + module hierarchy. \`reth_stages=debug\` means "for any event whose module path starts with \`reth_stages\`, show debug-level and above."
+
+> 🛑 **Predict.** You're debugging a sender-recovery stall in production. You don't want every log line — that floods the disk. You want only what \`SenderRecoveryStage\` emits. **What's the right \`RUST_LOG\`?**
+
+Approximately: \`RUST_LOG=warn,reth_stages::stages::sender_recovery=debug\` — warn level globally (catches anything critical from other modules), debug for the exact stage you're investigating. The module path comes from the file's location in the crate (\`reth-stages\` crate → \`stages\` module → \`sender_recovery\` sub-module). **Surgical filtering is the whole point.**
+
+## 3. The subscriber: where events go
+
+The \`tracing\` crate only *records* events. A separate **subscriber** (from \`tracing-subscriber\`) decides what to do with them:
+
+| Subscriber | What it does | When to use |
+| :--- | :--- | :--- |
+| **\`fmt\`** | Pretty-prints to stdout/stderr | Local development, CLI debugging |
+| **\`json\`** | Structured JSON output (one event per line) | Production log shipping (Datadog, Loki, ELK) |
+| **\`opentelemetry\`** | Exports to an OTLP collector | Distributed tracing across multiple services |
+| **Custom layer** | Hook into events, send to metrics / DB / pager | Building observability infrastructure |
+
+Reth's \`main\` initializes a subscriber early:
+
+\`\`\`rust
+use tracing_subscriber::{fmt, EnvFilter};
+
+tracing_subscriber::registry()
+    .with(EnvFilter::from_default_env())  // RUST_LOG honored
+    .with(fmt::layer())                    // pretty stdout
+    .init();
+\`\`\`
+
+The \`registry()\` + \`.with(...)\` pattern is composable. You can stack \`fmt\` (for humans) AND \`json\` (for log shipping) AND a metrics layer (for Prometheus counts) on the same event stream. Each layer sees every event and decides what to do.
+
+## 4. Spans and async — the part that bites
+
+The trick that makes \`tracing\` work across async boundaries: spans are \`Send\` and have lifetimes. When you \`.enter()\` a span, it activates *for the current thread*. If an async task suspends and resumes on a different thread, you need spans to follow.
+
+\`tracing\` solves this with **the \`Instrumented\` future wrapper** (used internally by \`#[instrument]\`):
+
+\`\`\`rust
+// Naive — span only active on first poll
+async fn naive(input: Input) {
+    let _span = tracing::info_span!("naive").entered();
+    do_thing(input).await;  // span dropped before await resumes!
+}
+
+// Correct — span lifetime tied to the future itself
+async fn correct(input: Input) {
+    async {
+        do_thing(input).await;
+    }.instrument(tracing::info_span!("correct")).await;
+}
+
+// Or just use the macro
+#[instrument]
+async fn easy(input: Input) {
+    do_thing(input).await;
+}
+\`\`\`
+
+**Forgetting this is the #1 \`tracing\` bug in Rust async code.** Your logs say "I started processing batch 17" and then nothing — because the span exited when the function suspended, and you never instrumented the suspended portion.
+
+> 🔍 **Find in repo.** Open Reth's source and search for \`#[instrument(\`. Notice it's used everywhere async work happens. Each \`#[instrument]\` annotation wraps the function's future so the span survives await points.
+
+## 5. The metrics integration
+
+Reth doesn't only emit logs — it also exposes Prometheus metrics. **Both come from the same \`tracing\` substrate.** The metrics layer subscribes to events at specific targets (e.g., \`reth_metrics=info\`) and translates them into counters / histograms.
+
+\`\`\`rust
+use tracing::info;
+use reth_metrics::metrics::counter;
+
+// Direct metric (preferred for hot paths)
+counter!("reth_blocks_processed").increment(1);
+
+// Via tracing (sampled by metrics layer)
+info!(target: "reth_metrics", block_number = block.number, "block processed");
+\`\`\`
+
+In production Reth deployments, you scrape \`http://node:9001/metrics\` with Prometheus, build Grafana dashboards on top, and alert on slow stages, peer disconnections, RPC error rates. **The instrumentation in source is what makes that dashboard possible.** Skip it and you can't see your node.
+
+## 6. Distributed tracing — when the node is one of many
+
+Reth integrates with [OpenTelemetry](https://opentelemetry.io/) for distributed tracing. When your indexer (built on ExEx) processes a notification that originated from the node, you want the trace span to **carry across the process boundary** so a single request shows up as one trace in Jaeger / Tempo / Datadog APM.
+
+Setup:
+
+\`\`\`rust
+use tracing_subscriber::prelude::*;
+use opentelemetry_otlp::WithExportConfig;
+
+let otlp_exporter = opentelemetry_otlp::new_pipeline()
+    .tracing()
+    .with_exporter(opentelemetry_otlp::new_exporter().tonic().with_endpoint("http://collector:4317"))
+    .install_batch(opentelemetry::runtime::Tokio)
+    .unwrap();
+
+tracing_subscriber::registry()
+    .with(EnvFilter::from_default_env())
+    .with(fmt::layer())
+    .with(tracing_opentelemetry::layer().with_tracer(otlp_exporter))  // ← OTel export
+    .init();
+\`\`\`
+
+Now every \`tracing\` span gets exported as an OTLP span. The OTLP collector aggregates spans from multiple processes (the Reth node + your downstream services) by trace ID. **You see the full request path across N processes in one Jaeger view.** This is how MEV teams trace a mempool-to-bundle pipeline that crosses 3+ services.
+
+## 7. The performance cost
+
+\`tracing\` is *not free*. Each event involves at minimum:
+
+- A check whether the event level passes the current filter
+- If yes, allocation of a structured event record
+- Dispatch to each subscriber layer
+
+For \`info\` and above, this is fine for the hottest production loop. **\`debug\` and \`trace\` are different** — leaving \`trace\` enabled in revm's interpreter loop will tank throughput by 10×+ because every opcode emits an event.
+
+The discipline:
+
+- **Hot path code uses \`trace!\` for the deepest detail.** Leave it off in production.
+- **Per-block / per-tx code uses \`debug!\` for normal operation diagnostics.** Enable selectively when investigating.
+- **Per-stage / per-batch code uses \`info!\`.** Always on in production.
+- **Errors and warnings use \`warn!\` / \`error!\`.** Always on.
+
+This level discipline is what makes \`tracing\` viable in a production high-throughput node. Get it wrong and your observability tool becomes a performance liability.
+
+> 🛑 **Predict.** You add \`debug!\` calls inside revm's \`add\` opcode "just for now." Mainnet sync slows by 30%. **Why? What level should those calls be?**
+
+Because \`debug\` is *not* statically compiled out — even if \`RUST_LOG\` disables it, the level check still happens for every event. In a function that runs millions of times per block, that check itself becomes a measurable cost. The calls should be \`trace!\`, which can be compiled out entirely via the \`max_level_*\` cargo features in production builds.
+
+## Drill
+
+1. **Run Reth with surgical filtering.** Boot \`reth node --dev\` with three different \`RUST_LOG\` settings: (a) \`info\`, (b) \`info,reth_stages=debug\`, (c) \`reth_exex=trace\`. **Observe how the output volume and content shifts.** 20 minutes.
+2. **Find an \`#[instrument]\` in source.** Open Reth, search \`#[instrument(\`. Pick one. Read the function. **What span fields does the macro auto-include? What does it skip via \`skip(...)\`?** 30 minutes.
+3. **Add a custom span to a small Rust program.** Use \`tracing\` + \`tracing-subscriber\` in a hello-world. Add \`#[instrument]\` on a function and observe the indented output. **Notice how spans nest.** 30 minutes.
+4. **Hit Reth's Prometheus endpoint.** With Reth running, \`curl http://localhost:9001/metrics\`. Find a metric whose label says "stage" or "sync" — that's a \`tracing\`-derived counter or histogram. Trace it back to the source event. 45 minutes.
+
+After this you can read every observability story in Reth's source, instrument your own custom stages / ExEx with the same idiom, and pull production diagnostics from a running node without changing code.
+
+> 🛑 **Final check.** In one sentence: why does Reth use \`tracing\` instead of plain \`println!\` everywhere? If your answer doesn't mention "structured, filterable, async-aware, with one substrate feeding logs + metrics + distributed traces," re-read §3 and §5 — that one-substrate property is the load-bearing decision.
+
+## 📺 Further reading
+
+- [\`tracing\` crate docs](https://docs.rs/tracing/latest/tracing/)
+- [\`tracing-subscriber\` patterns](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/)
+- [Tokio Console](https://github.com/tokio-rs/console) — interactive async-runtime inspector built on the same \`tracing\` substrate
+`,
+                },
               ],
             },
           },

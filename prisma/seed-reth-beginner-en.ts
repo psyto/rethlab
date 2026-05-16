@@ -277,6 +277,154 @@ This isn't a takedown of Solana. It's the observation that **the engineers who c
 You can either skip *Set Up Rust* and head straight to *Fundamentals* (Rust toolchain is yours already), or skim *Set Up Rust* to install Foundry / Anvil if you haven't seen those tools.
 `,
                 },
+                {
+                  title: 'Reth vs Geth / Alloy vs ethers-rs — the substitution case',
+                  slug: 'substitution-case-en',
+                  type: 'CONTENT',
+                  sortOrder: 4,
+                  duration: 10,
+                  xpReward: 20,
+                  content: `# Reth vs Geth / Alloy vs ethers-rs — the substitution case
+
+You've placed the projects on a map. Now the next-most-asked question: **why are teams actively migrating off the older alternatives?** Geth has run Ethereum for a decade. ethers-rs was the Rust Ethereum library for years. Yet new infrastructure is being built on Reth and Alloy. This lesson is why — substitution by substitution.
+
+## 1. Reth vs Geth
+
+Geth (Go-Ethereum) is the original execution client. It's run mainnet since 2015, holds ~40–50% of execution client share, and the team behind it is excellent. **Reth is not "Geth but better."** It's a different design that earns its place by what Geth structurally can't do.
+
+| Property | Geth | Reth | Why it matters |
+| :--- | :--- | :--- | :--- |
+| **Language** | Go | Rust | Cargo workspaces let you import revm as a library and use it standalone — Geth's execution engine is welded to the node and can't be reused. |
+| **Architecture** | Tightly coupled | Modular crates (revm, alloy, reth-stages, reth-network, reth-rpc, etc.) | You can fork *one* crate (e.g., custom executor) without forking the entire node — central to the App-chain / L1 fork pattern. |
+| **State storage** | LevelDB-based, evolving | MDBX (memory-mapped B+tree) | Stable read latency under heavy compaction. Geth has historically struggled with compaction stalls on archive nodes. |
+| **Execution engine** | go-ethereum's interpreter | revm (Rust, library-first) | revm is reused by Foundry, Hyperliquid's HyperEVM, every Rust-based MEV stack — Geth's interpreter has no consumers outside Geth itself. |
+| **Sync strategy** | Snap sync | Staged sync (10-stage pipeline) | Staged sync amortizes I/O across whole batches; faster initial sync and easier to extend with custom stages. |
+| **Extension API** | None publicly maintained | ExEx (Execution Extensions) — in-process Rust hooks | Build node-speed indexers, MEV bots, risk engines *inside* the node, no RPC round trips. Geth has nothing equivalent. |
+| **Chain forking** | Hard (entire fork-of-Geth) | Easy (Reth SDK: swap one component, keep the rest) | Hyperliquid's HyperEVM, Tempo, MegaETH, Base (OP-Reth), Berachain all use this pattern. |
+| **Reuse footprint** | Geth's code is used by Geth | Reth's components (revm, alloy, reth-* crates) are reused by 100+ projects | Every Rust EVM tool you'll touch is built on top of one of these crates. |
+
+> 🛑 **Predict.** A team wants to ship a payments-priority L1 with custom transaction ordering. Which client do they fork?
+
+They fork Reth — and they don't even fork the whole thing. They depend on Reth's crates and replace only the \`Pool\` and \`Payload\` components. With Geth they'd fork the whole codebase, accept the rebase tax forever, and inherit a 200K-line surface they don't want to maintain. This is exactly what Tempo does, and what every other Reth-based L1 in the table from the previous lesson does.
+
+**Reth wasn't built to dethrone Geth.** It was built to be the *substrate* the next generation of chains builds on. That's a different category.
+
+## 2. Alloy vs ethers-rs
+
+ethers-rs was *the* Rust Ethereum library from ~2020 to 2024. Then in mid-2024, ethers-rs's maintainer (Georgios Konstantopoulos / Paradigm) **deprecated it in favour of Alloy**. The migration wasn't gradual or aesthetic — it was a deliberate redesign with specific properties ethers-rs structurally couldn't deliver.
+
+| Property | ethers-rs | Alloy | Why it matters |
+| :--- | :--- | :--- | :--- |
+| **Modularity** | Monolithic crates | Many small crates (alloy-provider, alloy-network, alloy-primitives, alloy-signer, alloy-rpc-types, ...) | You pull in only what you need; Cargo bloat shrinks dramatically. |
+| **Async style** | \`async-trait\` (allocates Box per call) | Native async traits + ProviderCall (zero-cost) | Hot paths (MEV, RPC servers) measurably benefit from no per-call allocation. |
+| **Multi-chain** | Ethereum-only types | \`Network\` trait abstracts chain primitives | Same Provider code works on Ethereum, Optimism, custom L2s — Inside Alloy walks this. |
+| **Type ergonomics** | Bespoke types, separate from revm | Uses revm's \`Address\`, \`U256\`, \`B256\` directly | One set of types across alloy + revm + reth. No conversion boilerplate. |
+| **Wallet / signer composability** | Coupled to one Provider design | \`Signer\` + \`Filler\` traits compose via \`ProviderBuilder\` | Custom signing, nonce management, gas estimation layer cleanly. Inside Alloy's Signer chain teaches this. |
+| **Procedural macros (\`sol!\`)** | External crate, looser integration | First-class, used throughout alloy | Define Solidity types in Rust at compile time; no manual ABI structs. Used in every Rust Solidity-interop project. |
+| **Maintainership** | One person at Paradigm, time-limited | Funded Paradigm project + community | Active development, fast PR turnaround, clear roadmap. |
+
+> 🛑 **Predict.** You're writing a new MEV searcher in 2026. Why would you choose Alloy over ethers-rs?
+
+You'd choose Alloy because (a) you share types with revm (and your fork simulation lives in revm), (b) you can compose your own \`Signer\` with cloud KMS or hardware without rewriting the Provider, (c) your code runs on Optimism / Base / any Reth-based L2 with one type parameter change, and (d) ethers-rs no longer receives bug fixes from Paradigm. **Inertia is the only reason to stick with ethers-rs**, and inertia gets weaker every quarter.
+
+## 3. The pattern across both substitutions
+
+Geth and ethers-rs are not bad. They're products of an earlier moment in the Rust EVM ecosystem — when the priority was "make it work" rather than "make it composable across N downstream projects."
+
+**Reth and Alloy share a deliberate design choice: composability over completeness.** Both expose internal pieces as library crates that downstream projects can mix, match, and replace. Geth and ethers-rs were designed as products to be consumed; Reth and Alloy are designed as substrates to be extended.
+
+This is the structural reason the rest of this curriculum exists. **The lessons that come next — Inside Revm, Inside Reth, Inside Alloy — teach you to read the substrate.** Once you can read it, you can build on it. That's the leverage Geth and ethers-rs structurally couldn't offer.
+
+> 🛑 **Recall check.** In one sentence each:
+> - Why does a payments-priority L1 team fork Reth and not Geth?
+> - Why does a new MEV searcher pick Alloy over ethers-rs in 2026?
+
+If you can answer both without scrolling, you have the substitution model. If not, re-read the relevant table.
+
+## Next up
+
+The next lesson reframes the entire stack one more time — not chain-by-chain, but as **systems engineering**: database, distributed systems, compiler, networking, OS-style concurrency. After that, you've finished the orientation module and you'll be ready to set up Rust and start reading source.
+`,
+                },
+                {
+                  title: "Ethereum as systems engineering — the mental model you'll need",
+                  slug: 'ethereum-as-systems-engineering-en',
+                  type: 'CONTENT',
+                  sortOrder: 5,
+                  duration: 12,
+                  xpReward: 25,
+                  content: `# Ethereum as systems engineering — the mental model you'll need
+
+Most introductions to Ethereum treat it as **its own thing**: blockchain magic, special primitives, a parallel universe of crypto-specific terminology. That framing serves dapp tutorials. It's a poor frame for reading Reth, Revm, and Alloy source.
+
+**The frame that actually carries you through this curriculum**: Ethereum is **a database + a distributed system + a compiler + a networking stack + an OS-style concurrency runtime**, glued together by consensus. Each piece is a well-known systems-engineering problem with decades of literature. The "blockchain" part is the glue, not the substance.
+
+This lesson is the mental model you'll need to carry. Read it once, and every Reth / Revm / Alloy lesson after this lands on something familiar.
+
+## 1. The five subsystems
+
+Reth's source tree decomposes cleanly into five systems-engineering disciplines:
+
+| Subsystem | What it is | Where in Reth | Outside-Ethereum analog |
+| :--- | :--- | :--- | :--- |
+| **Database** | Persistent key-value store with snapshots, MVCC, crash recovery | \`reth-mdbx\` + \`reth-db\` (MDBX, a memory-mapped B+tree) | PostgreSQL's storage layer, RocksDB, LMDB |
+| **Distributed system** | Multi-node state machine reaching agreement under partial failure | Consensus integration, P2P state sync, gossip | Raft, Paxos, Bitcoin's longest-chain, Cassandra |
+| **Compiler / VM** | Bytecode interpreter; eventually a JIT/AOT compiler | revm (interpreter), revmc (JIT/AOT) | JVM, V8, CPython, LuaJIT |
+| **Networking stack** | Custom TCP-based gossip protocol with peer scoring and DoS resistance | \`reth-network\` (devp2p), libp2p in alternative chains | BGP, BitTorrent's tracker layer, IRC |
+| **Concurrency runtime** | Async I/O orchestration; thousands of in-flight tasks | Tokio (cooperatively scheduled futures) | Node.js's event loop, Go's goroutines, Erlang's BEAM |
+
+> 🛑 **Predict before scrolling.** Pick one bug class you've seen in production at any company: a race condition, a database deadlock, a TCP backpressure issue, a JIT miscompile. **Which Ethereum subsystem could it occur in?**
+
+All of them could occur, and all of them have. Reth's CI catches database compaction stalls (database problem), reorg-handling races (distributed system problem), opcode-pricing bugs (compiler problem), peer-eclipse attacks (networking problem), and task starvation under load (concurrency runtime problem). **The bug classes are not Ethereum-specific.** The techniques to find and fix them aren't either.
+
+## 2. Why this matters for reading source
+
+When you open \`reth-mdbx\` and see "B+tree with copy-on-write pages and MVCC snapshots," you should recognize that **as a database design choice with 50 years of literature behind it**. Not as "the weird way Ethereum stores state." MDBX exists in Reth because the engineering team picked it for the same reasons SQLite uses similar designs: stable read latency under heavy write load, crash safety, embedded use.
+
+When you open revm and see a stack-based interpreter that dispatches via a 256-slot function pointer table, you should recognize that **as a virtual-machine design choice from 1980s CPython and 1990s JVM literature**. Not as "EVM weirdness." The dispatch loop is faster than naive \`match\` for the same reason every interpreter built since 1990 uses some form of computed-goto or function-pointer table.
+
+When you open \`reth-network\` and see "peer scoring with eviction on bad behaviour," you should recognize that **as a BGP-era distributed-systems pattern**. Not as "Ethereum-specific anti-DoS."
+
+The reframing pays off everywhere. The lessons that follow do not say "this is OS scheduling theory applied to chain reorgs" out loud — but they're written knowing you have the frame.
+
+## 3. The skills that compound
+
+Because Ethereum is a composition of well-studied systems, the skills you build here **compound across the industry**:
+
+| Skill you build reading Reth | Where else it applies |
+| :--- | :--- |
+| MDBX / B+tree storage design | Any database engineering role (Snowflake, PlanetScale, Neon, MongoDB) |
+| Tokio async + backpressure | Every Rust networking project (Cloudflare, Discord, AWS internal services, Linkerd) |
+| revm interpreter loop | Any VM / language runtime work (TigerBeetle, custom DSLs, smart-contract VMs beyond EVM) |
+| Distributed-systems reasoning around reorgs | Database replication, consensus engineering, payment-rail design |
+| Profiling, flamegraphs, cache locality | Performance engineering at any high-throughput company |
+
+The "Ethereum engineer" who can only read Solidity has a narrow market. The systems engineer who happens to specialize in Ethereum has the *entire systems-engineering job market* as a fallback — and the Ethereum-specialist premium on top of it.
+
+> 🛑 **Predict.** A friend asks you "what does learning Reth actually buy me if Ethereum doesn't take off?" Sketch a 30-second answer.
+
+Roughly: "A Rust-fluent systems engineer who has shipped against MDBX, Tokio, and a real distributed system has every infra-engineering job in the broader industry as a fallback — TigerBeetle, Cloudflare, Discord, PlanetScale, Neon, every cloud database team. The Ethereum-specific knowledge is upside; the underlying skills are the floor."
+
+This is why the bet on Reth is not really a bet on Ethereum. It's a bet on **systems engineering as a discipline** — with Ethereum as a particularly interesting and lucrative application surface.
+
+## 4. The "magic" you should reject
+
+A few framings to actively *push back on* when you encounter them:
+
+- **"Smart contracts are special."** They're not. They are programs running on a VM. The VM happens to be deterministic and gas-metered. Replace "smart contract" with "program" in your head; the lessons read more clearly.
+- **"State is special."** It's not. It's a key-value store with snapshots. Replace "state" with "the database" in your head.
+- **"Consensus is special."** It's not. It's an algorithm with well-known trade-offs (latency vs. liveness vs. throughput) studied for 40+ years. Replace "consensus" with "the protocol the nodes use to agree" in your head.
+- **"Gas is special."** It's not. It's a resource budget with metering. Replace "gas" with "CPU and memory metering" in your head.
+
+The lessons that follow assume you've made these substitutions. They use "EVM" and "state" and "consensus" because the literature does, but they treat them as **instances of general systems-engineering problems**, not as magical Ethereum-specific phenomena.
+
+## You've finished orientation
+
+Module 0 — *Why the Rust Ethereum Stack* — is now complete. You've placed Reth, Revm, Alloy on the map; understood why teams substitute away from Geth and ethers-rs; thought about how Solidity / Solana skills carry over; and finally reframed the entire stack as systems engineering.
+
+The next module installs Rust and starts the hands-on portion. Then Fundamentals, then Bridge to Intermediate, then the source-reading tier — at which point the frame from this lesson stops being abstract and starts paying off in every file you read.
+`,
+                },
               ],
             },
           },

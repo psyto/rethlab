@@ -1742,10 +1742,146 @@ After drill 4 you've seen the full feedback loop: spec changes → tests generat
 `,
                 },
                 {
+                  title: 'Parallel execution — beyond the serial interpreter loop',
+                  slug: 'revm-parallel-execution-en',
+                  type: 'CONTENT',
+                  sortOrder: 14,
+                  duration: 24,
+                  xpReward: 50,
+                  content: `# Parallel execution — beyond the serial interpreter loop
+
+Every Inside Revm lesson so far has treated execution as serial: one transaction at a time, through the interpreter, then commit, then next. This is how Reth and revm ship today and how mainnet has worked for a decade. **It is also the single biggest performance ceiling on the EVM**, and a list of teams — Sei, Monad, MegaETH, Aptos (origin of the technique) — have shipped or are shipping parallel EVMs. Reth itself has experimental parallel-execution paths in the source tree. This lesson teaches you the model.
+
+> 📌 **Honest framing.** Parallel EVM is a *moving target*. The specific implementations differ across Sei, Monad, MegaETH, and Reth's experimental work. What stays constant — and what this lesson teaches — is the **block-stm** pattern (optimistic concurrency control with read/write conflict detection), plus how it maps onto the \`Database\` trait you've already walked.
+
+## 1. Why serial execution is the ceiling
+
+A block contains N transactions. The interpreter executes them one at a time because each tx might read state another tx wrote. If tx 5 reads slot \`X\` and tx 3 wrote slot \`X\`, you have to run 3 before 5.
+
+> 🛑 **Predict before scrolling.** A mainnet block has ~200 transactions. How many of them actually conflict with each other (i.e., one writes a slot another reads)? Take a guess as a percentage.
+
+Empirically: **roughly 10–20%** of mainnet transactions touch state another tx in the same block also touches. The rest are independent — DEX swaps on different pools, transfers to different accounts, oracle updates that nobody else reads in that block. **80% of the block is being executed serially for no semantic reason.** That gap is the prize parallel EVM goes for.
+
+## 2. The block-stm pattern (the dominant approach)
+
+Block-stm (block-level Software Transactional Memory) was introduced by Aptos for Move and ported to EVM by Sei, then adapted by Monad, MegaETH, and others. The core idea:
+
+\`\`\`
+1. Speculatively execute all N transactions in parallel (multiple workers).
+2. While each tx runs, record what it reads (read set) and what it writes (write set).
+3. After execution, validate in commit order:
+   - If tx i's read set overlaps any earlier tx j's write set (j < i, j committed after i started),
+     i used stale data → re-execute i.
+4. Repeat validation + re-execution until all N transactions are valid in serial order.
+\`\`\`
+
+This is **optimistic concurrency control**: assume conflicts are rare, run in parallel, fix the ones that actually conflict. The 80% non-conflicting case runs once in parallel. The 20% conflicting case re-runs serially. Net throughput: 3–8× depending on workload.
+
+> 🛑 **Predict.** A block has 100 transactions. 90 of them are independent (different addresses, different storage slots). 10 of them are all sandwich-arb attempts on the same Uniswap pool. **What does block-stm do?**
+
+The 90 independent ones execute in parallel and commit cleanly on first pass. The 10 sandwich-arb ones all read and write the same pool state — they get speculatively executed in parallel, then 9 of them detect they used stale read sets and re-execute. After ~2 re-execution waves the 10 commit serially. Total wall-clock: ~1 parallel pass + 2 small re-execution waves, instead of 100 serial steps. **The conflicts cost you, but only proportionally.**
+
+## 3. Where this lives in the \`Database\` trait
+
+Look back at the \`Database\` trait you walked in the Database chain:
+
+\`\`\`rust
+pub trait Database {
+    type Error: DBErrorMarker;
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
+    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
+    fn storage(&mut self, address: Address, key: StorageKey) -> Result<StorageValue, Self::Error>;
+    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error>;
+}
+\`\`\`
+
+In serial execution, the executor just calls these and gets values. **In parallel execution, every \`basic\` / \`storage\` call is also a read-set entry**, and every state mutation is a write-set entry. The block-stm scheduler wraps the standard \`Database\` with a tracking layer:
+
+\`\`\`rust
+pub struct TrackedDatabase<D: Database> {
+    inner: D,
+    read_set: HashSet<(Address, StorageKey)>,         // populated by storage()
+    read_accounts: HashSet<Address>,                  // populated by basic()
+    // write_set lives in the executor's journaling layer
+}
+
+impl<D: Database> Database for TrackedDatabase<D> {
+    type Error = D::Error;
+    fn storage(&mut self, addr: Address, key: StorageKey) -> Result<StorageValue, Self::Error> {
+        self.read_set.insert((addr, key));            // ← record the read
+        self.inner.storage(addr, key)                 // ← delegate to real source
+    }
+    // ... basic(), code_by_hash(), block_hash() similarly track
+}
+\`\`\`
+
+**This is why the \`Database\` trait shape pays off so heavily here.** The lesson that walked it didn't say "this is also the seam where parallel execution plugs in," but it is. Any code that depends on \`Database\` works in parallel as long as the wrapper tracks reads; no executor or interpreter rewrite required.
+
+> 🔍 **Find in repo.** Search [\`bluealloy/revm\`](https://github.com/bluealloy/revm) for \`parallel\` or \`stm\`. There's experimental code (often in a feature flag or separate crate) that does exactly this tracking-wrapper pattern. **Read 50 lines of it.** Notice how it composes with everything else you've walked.
+
+## 4. The hard parts
+
+Block-stm sounds easy in the abstract; the production complexity lives in:
+
+| Problem | What makes it hard |
+| :--- | :--- |
+| **Write set propagation** | tx i's writes need to be visible to tx j>i when re-executing j, but not to tx k that hasn't committed yet. Requires a versioned-storage layer (think MVCC). |
+| **Re-execution ordering** | After invalidation, re-execute in dependency order. A naive "re-run failed ones" loop can thrash if you re-execute in the wrong order. |
+| **Estimating read/write sets cheaply** | A tx's read set is only known *after* it executes. Pre-execution prediction (via static analysis or hints) is a research area. |
+| **Hot contracts** | All sandwich txs on the same pool form an unavoidable serialization. block-stm doesn't help; it just doesn't make it worse. The fix is at the application layer (multiple pools, AMM redesign). |
+| **Gas accounting** | Parallel execution costs more gas total (re-executions) than serial. Who pays? Schemes differ. |
+| **Determinism** | Multiple workers executing in parallel must produce the *exact same state root* every time. Race conditions in the tracker = consensus bug = chain split. |
+
+The last row is the consensus-critical one. Parallel EVM's bug surface is *huge* compared to serial; this is why production rollouts have been cautious.
+
+## 5. What different chains actually do
+
+- **Sei v2** (the first production EVM with block-stm): runs parallel by default. Their fork of revm includes the tracking-wrapper pattern from §3.
+- **Monad**: parallel execution from day one. Custom interpreter (not revm), but the read/write-set tracking model is similar.
+- **MegaETH**: parallel execution targeted, plus other optimizations (in-memory state, custom consensus).
+- **Reth**: experimental. The mainline interpreter is serial; parallel execution work exists in branches and crates (Compass is one such effort) but is not production default.
+- **Mainnet Ethereum**: serial. Parallel execution at the protocol layer is a long-running discussion (EIP-7960 family) but not active.
+
+> 🛑 **Predict.** Why is mainnet conservative about parallel execution while Sei / Monad / MegaETH ship it eagerly?
+
+Mainnet's conservatism is about *consensus risk* and *backward compatibility*. A bug in parallel execution affects every node simultaneously and could split the chain — and mainnet has $400B+ on it. New chains can ship aggressive parallel execution because their TVL starts low and they iterate fast. **The same code, same risk profile, different cost of failure.** This is why new L1s eat mainnet's lunch on raw throughput — they can take the bet mainnet can't.
+
+## 6. What this means for your career
+
+Parallel EVM is **the** active research and engineering frontier in 2026. Teams shipping it (Sei, Monad, MegaETH) are hiring aggressively for engineers who can read revm's tracking-wrapper, understand block-stm, and contribute to either the scheduler or the conflict-detection layer. **None of this work is possible without the Inside Revm + Inside Reth foundation you have now.**
+
+The path forward, if you want to make this your specialization:
+
+1. Read Sei's revm fork for the production block-stm pattern (open source)
+2. Read Aptos's original [block-stm paper](https://arxiv.org/abs/2203.06871) for the theoretical foundation
+3. Build a toy parallel executor against revm using the \`Database\` tracking pattern from §3 (a weekend project for someone with this curriculum's foundations)
+4. Contribute to Reth's experimental parallel work or apply to Sei / Monad / MegaETH
+
+## Drill
+
+1. **Read a real block-stm implementation.** Open Sei's [\`sei-protocol/revm\`](https://github.com/sei-protocol/revm) fork (or their parallel-EVM crate). Find the tracking-wrapper struct. Map its methods to the \`Database\` trait you walked. **30 minutes.**
+2. **Identify a parallelization-friendly block.** Open Etherscan, pick a recent mainnet block. Skim the tx list. Count how many touch unique contracts (independent) vs how many touch the top 3 contracts (likely conflicting). **What's your estimate of the parallel speedup ceiling for that block?** 30 minutes.
+3. **Read the original block-stm paper.** [arxiv:2203.06871](https://arxiv.org/abs/2203.06871). Skim sections 1, 3, 4. The Aptos model is for Move, but section 3's optimistic execution + validation diagram is the universal pattern. 45 minutes.
+4. **Sketch your own tracking wrapper.** In your fork of revm, write a \`TrackedDb\` that implements \`Database\` and prints every read. Run a small bytecode through it (like \`PUSH1 0x42 PUSH1 0x00 SSTORE STOP\` from earlier drills). **See exactly which reads happen.** This is the data block-stm uses to decide what conflicts. 1.5 hours.
+
+## Why this matters before the next lesson
+
+The next lesson covers JIT/AOT compilation via revmc. **Parallel and JIT are the two "beyond interpretation" frontiers** — they attack the same throughput ceiling from different angles (parallel: more cores, JIT: faster cores). Production high-performance EVMs (Sei, Monad, MegaETH) are starting to combine both. After both lessons you have the vocabulary to read either path's source and understand what trade-offs each team picked.
+
+> 🛑 **Final check.** In one sentence: why does the \`Database\` trait shape make parallel execution possible without rewriting the interpreter? If your answer doesn't mention "wrap with read/write tracking, executor unchanged," re-read §3 — that composability is the load-bearing piece.
+
+## 📺 Further reading
+
+- [Aptos block-stm paper (arxiv:2203.06871)](https://arxiv.org/abs/2203.06871) — the original
+- [Sei's parallel EVM technical post](https://blog.sei.io/) — production case study
+- Monad's blog — different architecture, similar principles
+`,
+                },
+                {
                   title: 'Beyond interpretation — JIT/AOT compilation with revmc',
                   slug: 'revm-jit-aot-revmc-en',
                   type: 'CONTENT',
-                  sortOrder: 14,
+                  sortOrder: 15,
                   duration: 16,
                   xpReward: 40,
                   content: `# Beyond interpretation — JIT/AOT compilation with revmc
@@ -1872,7 +2008,7 @@ This is the last content lesson of Inside Revm. The final quiz is next — and a
                   title: 'Inside Revm final quiz',
                   slug: 'revm-advanced-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 15,
+                  sortOrder: 16,
                   duration: 8,
                   xpReward: 25,
                   content: `# Inside Revm final quiz

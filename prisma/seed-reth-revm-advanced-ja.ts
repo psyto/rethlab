@@ -1743,10 +1743,146 @@ state test を *書く* ことは（普通は）無い — upstream で書かれ
 `,
                 },
                 {
+                  title: '並列実行 — 逐次インタープリターループの先へ',
+                  slug: 'revm-parallel-execution-ja',
+                  type: 'CONTENT',
+                  sortOrder: 14,
+                  duration: 24,
+                  xpReward: 50,
+                  content: `# 並列実行 — 逐次インタープリターループの先へ
+
+Inside Revm の全レッスンは execution を逐次として扱ってきた: 1 tx ずつインタープリターを通し、commit、次へ。これが Reth と revm が現状 ship している方法であり、mainnet が 10 年間動いてきた方法。**そしてこれが EVM 性能の最大の天井** でもある。Sei、Monad、MegaETH、Aptos（技法の起源）など、複数のチームが並列 EVM を ship 済みまたは ship 中。Reth 自身もソースツリーに実験的な並列実行パスがある。本レッスンはそのモデルを教える。
+
+> 📌 **正直な枠組み。** 並列 EVM は *動く標的*。Sei、Monad、MegaETH、Reth の実験的作業で具体的な実装は異なる。一定なのは — そして本レッスンが教えるのは — **block-stm** パターン（読み書き衝突検出付きの楽観的並行制御）と、これまで歩いてきた \`Database\` トレイトへのマッピング。
+
+## 1. なぜ逐次実行が天井なのか
+
+ブロックには N トランザクション。インタープリターはこれを 1 つずつ実行する。なぜなら、各 tx が別 tx の書き込んだ state を読む *かもしれない* から。tx 5 が slot \`X\` を読み、tx 3 が slot \`X\` に書いていれば、5 の前に 3 を走らせる必要がある。
+
+> 🛑 **スクロール前に予測。** mainnet ブロックには ~200 tx ある。そのうち実際に互いに衝突する（1 つが他の 1 つが読む slot に書く）のは何 % か? %% で推測。
+
+経験的には: **およそ 10〜20%** の mainnet tx が同じブロック内の他の tx が触れる state に触れる。残りは独立 — 別 pool の DEX swap、別アカウントへの transfer、誰もそのブロックで読まない oracle 更新。**ブロックの 80% は意味的な理由なしに逐次実行されている。** その gap が並列 EVM が狙う賞品。
+
+## 2. block-stm パターン（主流アプローチ）
+
+block-stm (block-level Software Transactional Memory) は Move 向けに Aptos が導入、Sei が EVM に移植、Monad、MegaETH 他が採用。中核の発想:
+
+\`\`\`
+1. N 個の tx を並列で投機実行（複数 worker）
+2. 各 tx 実行中、読んだもの（read set）と書いたもの（write set）を記録
+3. 実行後、commit 順で検証:
+   - tx i の read set が、より早い tx j (j < i、i 開始後に j が commit) の write set と重なるなら、
+     i は古いデータを使った → i を再実行
+4. N 個の tx が全部逐次順で valid になるまで検証と再実行を繰り返す
+\`\`\`
+
+これは **楽観的並行制御**: 衝突は稀だと仮定して並列で走らせ、実際に衝突したものだけ直す。衝突しない 80% は並列で 1 回走る。衝突する 20% は逐次で再実行。正味スループット: ワークロード次第で 3〜8 倍。
+
+> 🛑 **予測。** ブロックに 100 tx ある。90 個は独立（別アドレス、別ストレージスロット）。10 個は全部同じ Uniswap pool に対する sandwich-arb 試み。**block-stm は何をするか?**
+
+90 個の独立 tx は並列実行され、1 パス目で綺麗に commit。10 個の sandwich-arb は全部同じ pool state を読み書き — 投機並列実行され、9 つが古い read set を使ったと検出して再実行。~2 回の再実行波の後、10 個が逐次 commit。総 wall-clock: 1 並列パス + 2 つの小さな再実行波、100 逐次ステップではなく。**衝突はコストになるが、比例的にしか効かない。**
+
+## 3. これが \`Database\` トレイトのどこに住むか
+
+Database チェーンで歩いた \`Database\` トレイトを思い出す:
+
+\`\`\`rust
+pub trait Database {
+    type Error: DBErrorMarker;
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
+    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
+    fn storage(&mut self, address: Address, key: StorageKey) -> Result<StorageValue, Self::Error>;
+    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error>;
+}
+\`\`\`
+
+逐次実行では、executor がこれらを呼んで値を得るだけ。**並列実行では、\`basic\` / \`storage\` の各呼び出しが read-set entry でもあり**、各 state 変更が write-set entry になる。block-stm スケジューラは標準 \`Database\` を tracking 層でラップする:
+
+\`\`\`rust
+pub struct TrackedDatabase<D: Database> {
+    inner: D,
+    read_set: HashSet<(Address, StorageKey)>,         // storage() で記入
+    read_accounts: HashSet<Address>,                  // basic() で記入
+    // write_set は executor のジャーナリング層に住む
+}
+
+impl<D: Database> Database for TrackedDatabase<D> {
+    type Error = D::Error;
+    fn storage(&mut self, addr: Address, key: StorageKey) -> Result<StorageValue, Self::Error> {
+        self.read_set.insert((addr, key));            // ← read を記録
+        self.inner.storage(addr, key)                 // ← 実 source に委譲
+    }
+    // ... basic()、code_by_hash()、block_hash() も同様に track
+}
+\`\`\`
+
+**これが \`Database\` トレイトの形がここで重く報われる理由。** トレイトを歩いたレッスンは「これが並列実行が plug in する seam でもある」と言わなかったが、それが seam だ。\`Database\` に依存する任意のコードは、ラッパーが read を track する限り並列で動く; executor やインタープリターの書き換えは不要。
+
+> 🔍 **リポジトリで確認。** [\`bluealloy/revm\`](https://github.com/bluealloy/revm) で \`parallel\` または \`stm\` を検索。実験的コード（多くは feature flag 内または別 crate）がまさに §3 の tracking-wrapper パターンをやっている。**その 50 行を読む。** 歩いてきた他の全てとどう合成するかを観察。
+
+## 4. 難しい部分
+
+block-stm は抽象的には簡単に聞こえる; 本番の複雑さはここに住む:
+
+| 問題 | 何が難しいか |
+| :--- | :--- |
+| **Write set の伝播** | tx i の書き込みは tx j>i が再実行するときに見える必要があるが、まだ commit していない tx k には見えてはいけない。バージョン付き storage 層（MVCC を考える）が必要 |
+| **再実行順序** | 無効化後、依存順に再実行。素朴な「失敗したものを再実行」ループは順序を間違えると thrash する |
+| **Read/write set の安価な推定** | tx の read set は実行 *後* にしか分からない。事前予測（静的解析や hint 経由）は研究領域 |
+| **Hot コントラクト** | 同じ pool への全 sandwich tx は避けられない直列化を形成する。block-stm は助けない; 単に悪化させない。修正はアプリケーション層（複数 pool、AMM 再設計） |
+| **ガス会計** | 並列実行は逐次より総ガスが多い（再実行）。誰が払うか? スキームは異なる |
+| **決定論** | 並列実行する複数 worker は毎回 *正確に同じ state root* を生む必要がある。tracker の競合状態 = コンセンサスバグ = チェーン分裂 |
+
+最後の行がコンセンサスクリティカル。並列 EVM のバグ表面は逐次に比べて *膨大*; これが本番展開が慎重だった理由。
+
+## 5. 各チェーンが実際に何をしているか
+
+- **Sei v2**（block-stm の最初の本番 EVM）: デフォルトで並列実行。revm の fork に §3 の tracking-wrapper パターンが入っている
+- **Monad**: 初日から並列実行。独自インタープリター（revm ではない）だが、read/write set tracking モデルは類似
+- **MegaETH**: 並列実行ターゲット、その他の最適化（in-memory state、独自 consensus）
+- **Reth**: 実験的。本流インタープリターは逐次; 並列実行作業はブランチと crate（Compass がその 1 つ）に存在するが本番デフォルトではない
+- **mainnet Ethereum**: 逐次。プロトコル層での並列実行は長期議論（EIP-7960 系）だが active ではない
+
+> 🛑 **予測。** なぜ mainnet は並列実行に保守的で、Sei / Monad / MegaETH は積極的に ship するのか?
+
+mainnet の保守性は *コンセンサスリスク* と *後方互換性* について。並列実行のバグは全ノードに同時影響しチェーンを分裂させうる — そして mainnet には $400B+ が乗っている。新しいチェーンは TVL が低いところから始め速く iterate できるので積極的並列実行を ship できる。**同じコード、同じリスクプロファイル、異なる失敗コスト。** これが新 L1 が mainnet の昼食を raw throughput で食う理由 — mainnet が取れない賭けを彼らは取れる。
+
+## 6. キャリアにとっての意味
+
+並列 EVM は 2026 年の execution-layer の最も active な研究と工学のフロンティア。ship しているチーム（Sei、Monad、MegaETH）は revm の tracking-wrapper を読み、block-stm を理解し、スケジューラまたは衝突検出層に貢献できるエンジニアを積極的に採用している。**この作業はどれも、今あなたが持つ Inside Revm + Inside Reth の基礎なしでは不可能。**
+
+この specialization にしたいなら、進む道:
+
+1. Sei の revm fork を読んで本番 block-stm パターンを学ぶ（オープンソース）
+2. Aptos の元の [block-stm 論文](https://arxiv.org/abs/2203.06871) を読み理論的基礎を得る
+3. §3 の \`Database\` tracking パターンを使って revm に対する toy 並列 executor を build（このカリキュラム基礎があれば週末プロジェクト）
+4. Reth の実験的並列作業に貢献するか、Sei / Monad / MegaETH に応募
+
+## ドリル
+
+1. **本物の block-stm 実装を読む。** Sei の [\`sei-protocol/revm\`](https://github.com/sei-protocol/revm) fork（または並列 EVM crate）を開く。tracking-wrapper struct を見つける。そのメソッドを歩いた \`Database\` トレイトにマップする。**30 分。**
+2. **並列化に適したブロックを特定。** Etherscan を開き、最近の mainnet ブロックを 1 つ選ぶ。tx リストを skim する。ユニーク contract に触れるもの（独立）と上位 3 contract に触れるもの（衝突しそう）を数える。**そのブロックの並列スピードアップ天井の推定は?** 30 分。
+3. **元の block-stm 論文を読む。** [arxiv:2203.06871](https://arxiv.org/abs/2203.06871)。セクション 1、3、4 を skim。Aptos モデルは Move 向けだが、セクション 3 の楽観的実行 + 検証ダイアグラムが普遍パターン。45 分。
+4. **自分の tracking wrapper をスケッチ。** revm の fork で \`Database\` を実装する \`TrackedDb\` を書き、全 read を print する。小さなバイトコード（過去のドリルの \`PUSH1 0x42 PUSH1 0x00 SSTORE STOP\` など）を流す。**どの read が起きるかを正確に見る。** これが block-stm が衝突を決定するために使うデータ。1.5 時間。
+
+## なぜこれが次のレッスンの前に重要か
+
+次のレッスンは revmc 経由の JIT/AOT コンパイル。**並列と JIT は 2 つの「インタープリターの先」のフロンティア** — 同じスループットの天井に異なる角度から attack する（並列: より多くのコア、JIT: より速いコア）。本番の高性能 EVM（Sei、Monad、MegaETH）は両方を組み合わせ始めている。両レッスンの後、どちらの path のソースを読んでも各チームが選んだ trade-off を理解できる語彙が揃う。
+
+> 🛑 **最終チェック。** 一文で: なぜ \`Database\` トレイトの形が、インタープリターを書き換えずに並列実行を可能にするのか? 答えに「read/write tracking でラップ、executor は不変」が無いなら、§3 を読み直す — その合成性が load-bearing な部分。
+
+## 📺 関連リンク
+
+- [Aptos block-stm 論文 (arxiv:2203.06871)](https://arxiv.org/abs/2203.06871) — 起源
+- [Sei の並列 EVM 技術記事](https://blog.sei.io/) — 本番ケーススタディ
+- Monad ブログ — 異なるアーキテクチャ、類似原則
+`,
+                },
+                {
                   title: 'インタープリターの先へ — revmc による JIT/AOT コンパイル',
                   slug: 'revm-jit-aot-revmc-ja',
                   type: 'CONTENT',
-                  sortOrder: 14,
+                  sortOrder: 15,
                   duration: 16,
                   xpReward: 40,
                   content: `# インタープリターの先へ — revmc による JIT/AOT コンパイル
@@ -1873,7 +2009,7 @@ EVM-L1 エコシステム全体 (MegaETH、Reth フォーク系チェーン、Pa
                   title: 'Inside Revm ファイナルクイズ',
                   slug: 'revm-advanced-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 15,
+                  sortOrder: 16,
                   duration: 8,
                   xpReward: 25,
                   content: `# Inside Revm ファイナルクイズ

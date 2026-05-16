@@ -645,6 +645,210 @@ cargo expand --bin my_app
 
 > 最終チェック: \`macro_rules!\` と手続きマクロの違いを一文で。「片方が古い」だけなら深掘り — 各々が何を操作し、どこで走る? **Rust のエコシステムはこの区別の上に成り立っています。理解せずにバイナリを構築するコードは読めません。**`,
                 },
+                {
+                  title: 'Tracing 内部 — Reth は自分自身をどう観測しているか',
+                  slug: 'tracing-internals-ja',
+                  type: 'CONTENT',
+                  sortOrder: 4,
+                  duration: 20,
+                  xpReward: 45,
+                  content: `# Tracing 内部 — Reth は自分自身をどう観測しているか
+
+性能チューニング、デッドロックのデバッグ、stage が突然停止する理由の診断 — どれもノードが何をしているか **自身が教えてくれる** ことを必要とする。Reth の答えは \`tracing\`、Rust エコシステムの構造化ログ crate。Reth の興味深いコードパスはすべて \`tracing\` span と event で計装されており、観測可能性表面（ログ、メトリクス、分散トレース）全体が 1 つの一貫した基盤の上に build されている。本レッスンはその仕組みと拡張方法。
+
+> 📌 **なぜ Performance & Systems に置かれているか。** 計測できないものは最適化できない。\`tracing\` が計測層。続く全性能レッスン — flamegraph、MDBX チューニング、Tokio ランタイム作業 — は走っているノードから正しいシグナルを引き出せる前提で進み、その引き出しは \`tracing\` 経由。
+
+## 1. \`tracing\` crate の 2 プリミティブ
+
+エコシステム全体は 2 つの発想に還元される:
+
+- **Span** — 実行の *領域*。「私はブロック 100..200 について \`SenderRecoveryStage::execute\` の中にいる」。span は入れ子になる; 中の全ログ行に流れるコンテキスト（ブロック範囲、peer ID、リクエスト ID）を捉える
+- **Event** — *時点での* ログ行。「バッチ 17 を 12,000 sender でコミットした」。event は現在 active な span 内で発火し、そのコンテキストを継承する
+
+コードでは:
+
+\`\`\`rust
+use tracing::{info, debug, instrument};
+
+#[instrument(skip(self, provider))]
+async fn execute(&mut self, provider: &Provider, input: ExecInput) -> Result<ExecOutput> {
+    let span = tracing::info_span!("execute", target = ?input.target);
+    let _enter = span.enter();
+
+    debug!("starting sender recovery");
+    let batches = self.compute_batches(input).await?;
+    info!(num_batches = batches.len(), "computed batches");
+
+    for batch in batches {
+        let _bspan = tracing::info_span!("batch", n = batch.id).entered();
+        process_batch(batch).await?;
+        info!("batch committed");
+    }
+    Ok(...)
+}
+\`\`\`
+
+\`#[instrument]\` は手続きマクロ（前レッスンがそのジャンルをカバーした）で、関数本体を自動的に span でラップする。\`info!\` と \`debug!\` は異なるレベルで event を emit する。**Reth ユーザが見る全ログ行はこの 2 つのプリミティブの 1 つから来る。**
+
+## 2. レベルと \`RUST_LOG\` フィルタ
+
+Event はレベルを持つ（\`error\`、\`warn\`、\`info\`、\`debug\`、\`trace\`）。ユーザは実行時に \`RUST_LOG\` 環境変数でどのレベルを表示するか選ぶ:
+
+\`\`\`bash
+# グローバルに info+、stages モジュールは debug+
+RUST_LOG=info,reth_stages=debug cargo run --bin reth -- node
+
+# 特定モジュールの全部
+RUST_LOG=reth_exex=trace cargo run --bin reth -- node
+
+# ターゲット組み合わせ
+RUST_LOG=info,reth_stages=debug,reth_exex=trace,reth_network=warn
+\`\`\`
+
+マッチエンジンは \`EnvFilter\`（\`tracing-subscriber\` から）。各 event/span の **モジュールパス** に対してマッチし、Rust が crate + モジュール階層から派生させる。\`reth_stages=debug\` は「\`reth_stages\` で始まるモジュールパスを持つ任意の event について debug レベル以上を表示」を意味する。
+
+> 🛑 **予測。** 本番で sender-recovery の停止をデバッグしている。全ログ行は要らない — ディスクが溢れる。\`SenderRecoveryStage\` が emit するものだけ欲しい。**正しい \`RUST_LOG\` は?**
+
+おおよそ: \`RUST_LOG=warn,reth_stages::stages::sender_recovery=debug\` — グローバルに warn レベル（他モジュールからの致命的なものは捕まえる）、調査中のステージだけ debug。モジュールパスはファイルの crate 内位置から来る（\`reth-stages\` crate → \`stages\` モジュール → \`sender_recovery\` サブモジュール）。**外科的フィルタリングが要点。**
+
+## 3. Subscriber: event はどこへ行くか
+
+\`tracing\` crate は event を *記録* するだけ。別の **subscriber**（\`tracing-subscriber\` から）が何をするか決める:
+
+| Subscriber | 何をするか | いつ使うか |
+| :--- | :--- | :--- |
+| **\`fmt\`** | stdout/stderr に pretty-print | ローカル開発、CLI デバッグ |
+| **\`json\`** | 構造化 JSON 出力（1 行 1 event） | 本番ログ shipping (Datadog、Loki、ELK) |
+| **\`opentelemetry\`** | OTLP collector へ export | 複数サービスにまたがる分散トレーシング |
+| **カスタムレイヤー** | event を hook、メトリクス / DB / pager へ送る | 観測可能性インフラ構築 |
+
+Reth の \`main\` は subscriber を早期に初期化する:
+
+\`\`\`rust
+use tracing_subscriber::{fmt, EnvFilter};
+
+tracing_subscriber::registry()
+    .with(EnvFilter::from_default_env())  // RUST_LOG が効く
+    .with(fmt::layer())                    // pretty stdout
+    .init();
+\`\`\`
+
+\`registry()\` + \`.with(...)\` パターンは合成可能。\`fmt\`（人間用）と \`json\`（ログ shipping 用）と metrics 層（Prometheus カウント用）を同じ event ストリームに重ねられる。各レイヤーが全 event を見て何をするか決める。
+
+## 4. Span と async — 噛みつく部分
+
+\`tracing\` を async 境界を超えて動かす技: span は \`Send\` でライフタイムを持つ。span を \`.enter()\` すると *現在スレッドに対して* active になる。async タスクが suspend して別スレッドで resume すると、span は追従する必要がある。
+
+\`tracing\` はこれを **\`Instrumented\` future ラッパー**（\`#[instrument]\` が内部で使う）で解決:
+
+\`\`\`rust
+// 素朴 — span は最初の poll でのみ active
+async fn naive(input: Input) {
+    let _span = tracing::info_span!("naive").entered();
+    do_thing(input).await;  // await が resume する前に span が drop される！
+}
+
+// 正しい — span のライフタイムを future 自身に紐づける
+async fn correct(input: Input) {
+    async {
+        do_thing(input).await;
+    }.instrument(tracing::info_span!("correct")).await;
+}
+
+// またはマクロを使う
+#[instrument]
+async fn easy(input: Input) {
+    do_thing(input).await;
+}
+\`\`\`
+
+**これを忘れるのが Rust async コードにおける \`tracing\` バグの第 1 位。** ログが「バッチ 17 の処理を開始」と言って、その後何もない — 関数が suspend したときに span が exit し、suspend した部分を計装しなかったから。
+
+> 🔍 **リポジトリで確認。** Reth のソースを開いて \`#[instrument(\` を検索。async 作業が起きるところで使われている。各 \`#[instrument]\` annotation が関数の future をラップして span が await ポイントを生き残るようにしている。
+
+## 5. メトリクス統合
+
+Reth はログだけを emit しない — Prometheus メトリクスも公開する。**両方が同じ \`tracing\` 基盤から来る。** メトリクスレイヤーは特定 target（例: \`reth_metrics=info\`）の event を subscribe し、counter / histogram に翻訳する。
+
+\`\`\`rust
+use tracing::info;
+use reth_metrics::metrics::counter;
+
+// 直接メトリクス（hot path に推奨）
+counter!("reth_blocks_processed").increment(1);
+
+// tracing 経由（メトリクスレイヤーで sampling される）
+info!(target: "reth_metrics", block_number = block.number, "block processed");
+\`\`\`
+
+本番 Reth デプロイでは \`http://node:9001/metrics\` を Prometheus で scrape、Grafana ダッシュボードを構築、遅い stage、peer 切断、RPC エラー率にアラートを設定。**ソース内の計装がそのダッシュボードを可能にする。** スキップするとノードが見えない。
+
+## 6. 分散トレース — ノードが多くのうちの 1 つの時
+
+Reth は分散トレーシング向けに [OpenTelemetry](https://opentelemetry.io/) と統合する。ExEx 上に build したインデクサがノード由来の通知を処理するとき、単一リクエストが Jaeger / Tempo / Datadog APM で 1 つのトレースに現れるよう、トレース span が **プロセス境界をまたいで運ばれる** ことが望ましい。
+
+セットアップ:
+
+\`\`\`rust
+use tracing_subscriber::prelude::*;
+use opentelemetry_otlp::WithExportConfig;
+
+let otlp_exporter = opentelemetry_otlp::new_pipeline()
+    .tracing()
+    .with_exporter(opentelemetry_otlp::new_exporter().tonic().with_endpoint("http://collector:4317"))
+    .install_batch(opentelemetry::runtime::Tokio)
+    .unwrap();
+
+tracing_subscriber::registry()
+    .with(EnvFilter::from_default_env())
+    .with(fmt::layer())
+    .with(tracing_opentelemetry::layer().with_tracer(otlp_exporter))  // ← OTel export
+    .init();
+\`\`\`
+
+これで全 \`tracing\` span が OTLP span として export される。OTLP collector が複数プロセス（Reth ノード + 下流サービス）からの span を trace ID で集約する。**N プロセスにまたがる完全なリクエストパスが 1 つの Jaeger view で見える。** これが MEV チームが mempool-to-bundle パイプラインを 3+ サービスにまたがってトレースする方法。
+
+## 7. 性能コスト
+
+\`tracing\` は *無料ではない*。各 event は最低限:
+
+- 現在フィルタで event レベルが通るかのチェック
+- 通るなら構造化 event レコードの確保
+- 各 subscriber レイヤーへのディスパッチ
+
+\`info\` 以上では、最も hot な本番ループでもこれは OK。**\`debug\` と \`trace\` は別** — revm のインタープリターループで \`trace\` を有効のままにすると、各 opcode が event を emit するためスループットが 10×+ 落ちる。
+
+規律:
+
+- **Hot path コードは最深詳細に \`trace!\`。** 本番では off
+- **per-block / per-tx コードは通常運用診断に \`debug!\`。** 調査時に選択的に有効
+- **per-stage / per-batch コードは \`info!\`。** 本番で常時 on
+- **エラーと警告は \`warn!\` / \`error!\`。** 常時 on
+
+このレベル規律が本番高スループットノードで \`tracing\` を実用可能にする。間違えると観測ツールが性能負債になる。
+
+> 🛑 **予測。** revm の \`add\` opcode 内に「今のところ」\`debug!\` 呼び出しを追加。mainnet sync が 30% 遅くなった。**なぜ? それら呼び出しはどのレベルにすべきか?**
+
+\`debug\` は静的にコンパイル除外 *されない* — \`RUST_LOG\` が無効にしてもレベルチェックは各 event で起きる。1 ブロックあたり数百万回走る関数では、そのチェック自体が測定可能なコストになる。呼び出しは \`trace!\` にすべき; これは本番ビルドで cargo の \`max_level_*\` feature 経由で完全にコンパイル除外できる。
+
+## ドリル
+
+1. **外科的フィルタで Reth を起動。** 3 つの異なる \`RUST_LOG\` 設定で \`reth node --dev\` を起動: (a) \`info\`、(b) \`info,reth_stages=debug\`、(c) \`reth_exex=trace\`。**出力ボリュームと内容がどうシフトするか観察。** 20 分。
+2. **ソース内の \`#[instrument]\` を 1 つ見つける。** Reth を開き \`#[instrument(\` を検索。1 つ選ぶ。関数を読む。**マクロが自動含める span フィールドは何か? \`skip(...)\` で何を除外するか?** 30 分。
+3. **小さな Rust プログラムにカスタム span を追加。** hello-world に \`tracing\` + \`tracing-subscriber\` を使う。関数に \`#[instrument]\` を追加し、インデント出力を観察。**span がどう入れ子になるか観察。** 30 分。
+4. **Reth の Prometheus エンドポイントを叩く。** Reth が走っている状態で \`curl http://localhost:9001/metrics\`。「stage」または「sync」というラベルを持つメトリクスを見つける — それは \`tracing\` 由来の counter または histogram。ソース event まで辿る。45 分。
+
+この後、Reth のソース内の全観測可能性ストーリーを読め、自分のカスタム stage / ExEx を同じイディオムで計装でき、コード変更なしで走っているノードから本番診断を引き出せるようになる。
+
+> 🛑 **最終チェック。** 一文で: なぜ Reth はどこでも plain \`println!\` ではなく \`tracing\` を使うのか? 答えに「構造化、フィルタ可能、async-aware、1 つの基盤がログ + メトリクス + 分散トレースを feed」が無いなら、§3 と §5 を読み直す — その one-substrate 性質が load-bearing な判断。
+
+## 📺 関連リンク
+
+- [\`tracing\` crate docs](https://docs.rs/tracing/latest/tracing/)
+- [\`tracing-subscriber\` パターン](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/)
+- [Tokio Console](https://github.com/tokio-rs/console) — 同じ \`tracing\` 基盤の上に build された対話型 async ランタイムインスペクタ
+`,
+                },
               ],
             },
           },
