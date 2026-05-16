@@ -93,6 +93,8 @@ Inside Alloy を終えると、3 つの中級コースをすべて完了した�
                   xpReward: 25,
                   content: `# \`Provider\` トレイトをステップで組み立てる
 
+> 🧭 **systems engineering スタックでの位置:** クライアント側から見た **ネットワーク層**。JSON-RPC / HTTP / gRPC クライアントライブラリの設計問題そのもの — 「複数のトランスポート（HTTP、WS、IPC）と複数のチェーン（Ethereum、Optimism、L2）に対して、ひとつの一貫した API をどう提供するか」。Reqwest、tonic、OkHttp が悩んできたのと同じ形を、alloy が Ethereum RPC に適用したもの。
+
 Ethereum ノードと通信する Rust プログラム — MEV ボット、インデクサ、dapp バックエンド、Reth-SDK アプリ — は、すべて [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) の \`Provider\` トレイトを経由する。alloy では生の JSON-RPC を直接叩くことはなく、Ethereum との通信は必ずこの \`Provider\` に集約されている。\`crates/provider/src/provider/trait.rs\` を開くと、トレイトヘッダーはこんな形（抜粋）になっている:
 
 \`\`\`rust
@@ -810,6 +812,8 @@ let bal = provider.get_balance(addr).await?;
                   xpReward: 25,
                   content: `# \`Network\` トレイトをステップで組み立てる
 
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層のチェーン抽象** — ひとつのクライアントが「互換性のある複数のプロトコル」を話す必要が出てくる場面に普遍的に現れる、型システム設計の問題。gRPC が複数サービス間でメッセージ型を再利用するのも、データベースドライバが PostgreSQL / MySQL / SQLite に対して同じ接続 API を出すのも、根は同じ。\`Network\` は「Ethereum・Optimism・将来の任意の L2 で同じ API」のためにそれを応用したもの。
+
 Optimism のトランザクションは L1 \`mint\` フィールドを持つ。レシートには \`l1_fee\` と \`l1_block_number\` が乗る。Polygon zkEVM の tx エンベロープにはシーケンサ署名がある。各 L2 は独自の tx・レシート・ブロックの形を持つ — それでも同じ \`Provider\` API がそのすべてで動く。**どうやって?** \`Network\` を通してだ: alloy の *型レベル辞書*（1 つのトレイトで、その関連型が、あるチェーンが使うチェーン固有の型一式を選ぶ）。
 
 Provider チェーンでは \`Network\` をブラックボックスとして扱いました。本チェーンではその中身を開けていきます。
@@ -1490,6 +1494,8 @@ let s = block_summary::<Optimism, _>(&eth_provider, BlockId::latest()).await?;
                   duration: 10,
                   xpReward: 25,
                   content: `# \`Signer\` トレイトをステップごとに組み立てる
+
+> 🧭 **systems engineering スタックでの位置:** **暗号認証層の署名者抽象** — TLS や PKCS#11、SSH-agent が数十年前に解いてきた問題そのもの。「同じ呼び出し側コードが、ローカル秘密鍵・HSM・クラウド KMS・ハードウェアトークンを書き換えなしで切り替えて使えるか」。銀行・認証局・TLS スタックが歴史的に作ってきた抽象を、EVM 文脈に当てはめたのが alloy の \`Signer\`。
 
 MEV サーチャーは AWS KMS の鍵で署名する（クラウド鍵 — 秘密鍵は AWS の外に出ない）。トレジャリーのオペレータは Ledger で署名する（ハードウェアウォレット — 鍵は USB デバイス上にあり、毎回ボタン押下が要る）。テストスイートはプロセス内の生 secp256k1 バイトで署名する。**同じ alloy のアプリケーションコードが、この 3 つすべてを駆動できなければならない。** これが \`Signer\` トレイトの形を決めている制約だ。
 

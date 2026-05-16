@@ -103,6 +103,8 @@ After Inside Reth: head to **Inside Alloy** if you haven't yet — or move on to
                   xpReward: 25,
                   content: `# Building the \`Stage\` trait step by step
 
+> 🧭 **Where this lives in the systems-engineering stack:** the **database layer × concurrency layer**, intersected. Staged sync is the ETL-pipeline pattern from data engineering, applied to chain sync — each stage is independent but ordered, each one amortizes I/O across batches. Airflow DAGs, Kafka Streams topologies, and database backfills all wrestle with the same shape. Reth's pipeline is that pattern's chain-sync incarnation.
+
 Staged Sync is the spine of Reth. **It also looks intimidating** — the real \`Stage\` trait has 6 methods, async readiness, two-direction symmetry, and an \`auto_impl(Box)\` attribute. Walk it cold and you get six new ideas at once.
 
 This lesson builds the trait up from the simplest possible sync loop. By the end you'll have built every piece of:
@@ -795,6 +797,8 @@ async fn my_exex<Node: FullNodeComponents>(
                   xpReward: 25,
                   content: `# Building the ExEx API step by step
 
+> 🧭 **Where this lives in the systems-engineering stack:** the **database layer's pub-sub interface**, plus an **upstream pruning protocol**. Same problem PostgreSQL logical replication, Kafka consumer offset tracking, and CDC pipelines all solve — "let downstream consumers read committed events without forcing upstream to retain everything forever." ExEx is that pattern realized for Reth: in-process consumers that signal "I've finished reading up to height N" so the node can safely prune.
+
 **ExEx (Execution Extension)** is Reth's mechanism for injecting Rust code into the execution loop. With it you build node-speed indexers, MEV bots, and live risk engines — directly in the same process as the chain itself.
 
 But the API has 4 parts that look weighty: an init/run split, a notification *enum* with 3 variants, an event channel for pruning hints, and an install method on the node builder. Walk it cold and you get four ideas at once.
@@ -1351,6 +1355,8 @@ After this drill, you've shipped a reorg-safe node-speed indexer. **The same too
                   duration: 10,
                   xpReward: 25,
                   content: `# Building the node-builder API step by step
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **assembly / dependency-injection layer** for the whole node. Same problem Spring containers, Kubernetes operators, and Linux init systems all face — "let the user swap one component without rewriting the others, while keeping a default for everything they don't want to think about." The Reth SDK is that pattern expressed as a typed builder, applied to L1 / L2 construction.
 
 ExEx extends an existing Ethereum node. The **Reth SDK** lets you build *your own* App-chain in Rust by composing components. This is where "purpose-built EVM L1" stops being a thesis and starts being a binary you can compile.
 

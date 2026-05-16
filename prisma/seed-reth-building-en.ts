@@ -34,6 +34,8 @@ export async function seedRethBuildingEN(prisma: PrismaClient) {
                   xpReward: 35,
                   content: `# Test gate — every app in this tier ships with passing tests
 
+> 🧭 **Where this lives in the systems-engineering stack:** the **quality-assurance discipline** that every serious infra company runs by. TigerBeetle, Cloudflare, PostgreSQL — none of them ship code without a green test gate, and "I read it and it looked right" has never been an accepted answer. This tier holds your apps to the same bar.
+
 You spent four tiers reading source. From here on you build. The temptation, after months of reading, is to write code, read it back, satisfy yourself it looks right, and move on. **That is the failure mode this tier is engineered to prevent.**
 
 The rule for the rest of this tier: **a lesson is not complete until its test suite is green.** Not "I read the lesson, I built the thing, I think it works." Green tests, or you didn't ship it.
@@ -176,6 +178,8 @@ That order — test first, code second — is the gate.
                   duration: 45,
                   xpReward: 80,
                   content: `# Build a Minimal MEV Searcher in Rust
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **networking layer + concurrency runtime layer** combined. A searcher is an event-driven pipeline that pulls from multiple sources (mempool, new blocks) and dispatches actions — same shape as Kafka Streams topologies, Flink jobs, or HFT order-handling systems. \`artemis\` is that pattern applied to MEV.
 
 A greenfield "you'd structure your bot like this" walkthrough lies about the shape of production. Real searchers don't start from \`main.rs\`. They start from a **framework** — and the one to read is Paradigm's [\`artemis\`](https://github.com/paradigmxyz/artemis), the Rust MEV-bot framework Paradigm open-sourced and continues to dogfood.
 
@@ -446,6 +450,8 @@ Each is a self-contained ~200–300 line build with the same predict / find-in-r
                   duration: 45,
                   xpReward: 80,
                   content: `# Read a Real Production Indexer — Tempo's tidx
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **database layer**, specifically the OLTP + OLAP dual-storage problem. Every serious analytics platform — Snowflake's split engines, ClickHouse + PostgreSQL combinations, real-time data warehouses — picks where point-lookups and range-scans live separately. \`tidx\` is that pattern applied to chain data.
 
 Etherscan and Dune are indexers. Their architectures are not public. [\`tidx\`](https://github.com/tempoxyz/tidx) is — Tempo's production indexer for its EVM L1, open source, in active use. This lesson walks you through it. You'll see what they had to choose, what they got right, and what trade-offs are visible only by reading the source.
 
@@ -728,6 +734,8 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
                   duration: 40,
                   xpReward: 70,
                   content: `# Build a Custom RPC Endpoint on Reth
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **networking layer's server-side extension**. Same problem any database or service that exposes RPC faces — "let users add custom queries that run server-side rather than round-tripping raw data to clients." PostgreSQL stored procedures, GraphQL custom resolvers, gRPC service extensions all solve variations of this. Custom Reth RPC is that pattern for an Ethereum execution client.
 
 You need a single API call that returns a histogram of pending tx gas prices for your fee-bidding bot. The standard \`txpool_content\` returns *every pending tx in full* — hundreds of KB you'd reduce to 10 numbers anyway. The right move: add a server-side method that does the aggregation **inside the node** and ships back the histogram. ~50 lines of Rust. No Reth fork. Live on the same HTTP / WebSocket / IPC endpoints as the native namespaces (\`eth_*\`, \`net_*\`, \`debug_*\`, \`txpool_*\`, …).
 
@@ -1095,6 +1103,8 @@ The lesson is **not complete** until: (1) the success path test passes, (2) at l
                   duration: 45,
                   xpReward: 80,
                   content: `# Build a Wallet Backend in Rust
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **concurrency runtime + state-management layer**. Same problem every payment gateway, message queue, and database write coordinator solves — "many concurrent submissions, monotonically increasing per-tenant sequence numbers, retry-and-replace on stuck items." Stripe payment intents, Kafka producer idempotence, bank transfer queues all wrestle with the same shape. The wallet backend is that pattern for EVM transactions.
 
 A user clicks "Send" fifty times in a minute. Your wallet has to: pick the next *nonce* (the per-account counter Ethereum uses to order transactions) without colliding, sign with the right key, broadcast, watch the mempool, and — when gas spikes from 5 gwei to 80 gwei mid-flight — **bump the fee on stuck txs and replace them** so the user's session doesn't deadlock behind a single dust-priced transaction. Wallet UIs are the famous part. The send service behind them is the part teams actually wrestle with. ~250 lines of Rust below — signer pool, nonce manager, send queue, replace-on-stuck, confirm watcher.
 
@@ -1607,6 +1617,8 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
                   xpReward: 80,
                   content: `# Build a Minimal EIP-7702 Sponsor Service in Rust
 
+> 🧭 **Where this lives in the systems-engineering stack:** the **authentication layer**, specifically delegated authorization. Same concept as OAuth 2's "let one entity authorize actions on behalf of another," DocuSign's signature delegation, or any meta-transaction relayer. EIP-7702 + a sponsor service is that pattern expressed on Ethereum — Alice signs intent, the sponsor pays gas, the chain enforces the delegation cryptographically.
+
 Alice has an EOA (Externally Owned Account — a regular wallet keypair, not a smart contract). She wants to swap two tokens in one click without first holding ETH for gas, and without migrating to a smart-contract account. EIP-7702 (live on mainnet since the Pectra fork, March 2025) is how: she signs an off-chain *authorization* that says "for this transaction, treat my EOA as if it had this contract's code." A **sponsor** — your service — wraps that authorization in a transaction it pays gas for. Alice gets atomic batched calls, custom validation, session keys. Same address, same keys, no migration. ~200 lines of Rust below.
 
 > 📌 **Scope honesty.** We sponsor **single-user** EIP-7702 transactions: the user signs an authorization off-chain, posts it + their intended calls to our service, the service wraps it in a Type 4 transaction it pays for, submits, returns the hash. **Multi-user batching** (the "bundler" pattern, where you pack N users into one chain tx) is a one-loop extension covered in the drill. Account-abstraction policy logic — spending limits, session keys, recovery — is what your delegate contract decides; the sponsor just relays.
@@ -2008,6 +2020,8 @@ K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — the engine running y
                   xpReward: 80,
                   content: `# Build Your Own Foundry-Style Cheatcode in Rust
 
+> 🧭 **Where this lives in the systems-engineering stack:** the **compiler / VM layer's extension mechanism**. Same pattern as JNI (Java Native Interface), Python C extensions, V8 native bindings — "let the VM call out to native code via a stable ABI." Foundry cheatcodes are that pattern, EVM-flavored: a custom precompile at a magic address that the VM dispatches to a Rust function.
+
 When you write \`vm.deal(alice, 100 ether)\` in a Foundry test, **that's not an EVM opcode**. It's a Rust function — a *precompile* (a built-in contract whose code lives in the EVM engine, not on chain) — that Foundry installs at the magic address \`0x7109709E...\` and exposes to Solidity via the \`Vm.sol\` interface. Same for \`vm.warp()\`, \`vm.expectRevert()\`, the whole cheatcode surface. **You can ship your own.** This lesson builds \`cheats.measureGas(target, data)\` — a precompile that lets test authors measure sub-call gas without manual wrapping — using the exact pattern Foundry uses internally.
 
 > 📌 **Scope honesty.** We **don't** fork Foundry. We build the precompile + a minimal Revm-based test harness that loads it. The pattern (high-address precompile + Solidity ABI surface + test runner that wires it in) **is identical** to how Foundry adds cheatcodes — you just see all of it instead of inheriting an opaque framework.
@@ -2362,6 +2376,8 @@ sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (the cheatcode 
                   duration: 45,
                   xpReward: 80,
                   content: `# Build a Swap Aggregator: DEX State, Forked, in Rust
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **database layer's consistent-snapshot read**, applied to DEX state. Same problem MVCC databases solve — "read N values atomically, all from one consistent point in time." Forking mainnet at a pinned block gives every quote the same database snapshot to read from; the rest is per-DEX math on top of that consistent view.
 
 A user wants to swap 10,000 USDC for ETH. Uniswap V2 will give them 2.948 WETH. Sushi gives 2.946. Uniswap V3 gives 2.951. The aggregator's job: **fan out the same quote to every venue at the same instant, compare, pick the winner.** That's what 1inch, Paraswap, and 0x do under the hood. ~250 lines of Rust below: fork mainnet locally with Revm (so every quote reads the *same* atomic state), pull reserves from Uniswap V2 + Sushi + Uniswap V3, compute the output, pick the best.
 
@@ -2752,6 +2768,8 @@ The lesson is **not complete** until the QuoterV2 differential passes. If your m
                   duration: 60,
                   xpReward: 100,
                   content: `# Capstone — Build a Frontrun-Resistant Order Router
+
+> 🧭 **Where this lives in the systems-engineering stack:** **integration across networking + compiler + authentication layers**. Same shape as an HFT order router, a CDN edge router, or an API gateway with adaptive routing — "multi-source input, simulate the consequences, decide a path, dispatch through the right submission channel." The router is that pattern realized for EVM transaction routing under MEV adversaries.
 
 The capstone. Patterns from across the tier, integrated into one service. A user posts a swap intent (JSON). The router: quotes across DEXes (Lesson 7), watches the mempool for adversarial txs that would sandwich the swap (Lesson 1, inverted), simulates the threat in Revm to **measure** how much output the user would lose, sponsors gas via EIP-7702 (Lesson 5), and — when the threat score is high — submits through Flashbots Protect so the order never appears in the public mempool. When threat is low, public submission is fine and saves the bundler markup. **One service, four earlier lessons stitched in (L1, L4, L5, L7), one new piece: the decision layer.**
 
@@ -3212,6 +3230,8 @@ Pick the one that interests your target employer / project most. Open the produc
                   xpReward: 90,
                   content: `# Validate Your Revm Simulation Against a Production Provider
 
+> 🧭 **Where this lives in the systems-engineering stack:** the **compiler / VM layer's correctness verification** — specifically *differential testing* against a reference implementation. Same discipline that IEEE 754 floating-point conformance, TLS implementation interop, and POSIX certification all rely on: prove your implementation matches a trusted reference across a representative input set. This lesson is that practice applied to Revm vs production EVM clients.
+
 Your arb bot's Revm fork says the swap nets 2.95 WETH. The chain — running mostly Geth and Nethermind, since Reth is still only ~7-12% of execution-client share — actually delivers 2.93. **The bot just lost money to a bug in your simulation.** Every Revm-based system you built in this tier has the same exposure: the MEV searcher in L1 predicts arbs on Revm, the aggregator in L7 quotes on Revm, the capstone in L8 scores frontrun risk on Revm. If Revm disagrees with the Geth/Nethermind majority that actually runs mainnet, every one of those systems silently ships wrong answers. ~200 lines below build the cross-check.
 
 > 📌 **Scope honesty.** We diff Revm against a JSON-RPC provider for a single transaction's gas + return data. Production validation harnesses extend this to: full state-diff comparison via \`debug_traceTransaction\` prestate, statistical sampling across thousands of historical txs, hardfork-boundary regression tests, and CI integration. The kernel — *what does "they match" actually mean, and how do you check it cheaply?* — is the same.
@@ -3530,6 +3550,8 @@ Pick the build that maps to your target employer / project most closely. Open th
                   duration: 16,
                   xpReward: 40,
                   content: `# Machine payments — HTTP 402 and the Tempo MPP stack
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **networking layer's payment protocol** — HTTP semantics extended with cryptographic settlement. Same pattern as TLS extending HTTP with crypto, OAuth extending HTTP with delegated auth, or rate-limit headers extending HTTP with cost signaling. MPP is "HTTP + per-request settlement," a protocol layer designed for autonomous agents that need pay-per-call without accounts or API keys.
 
 Every paid API in 2026 forces the same dance. Sign up. Verify email. Provision an API key. Wire a billing account. Pre-commit to a plan. *Then* you can fetch one paid resource. For a human shipping a SaaS, fine. For an autonomous agent that needed *one* flight-status lookup *once*, the friction is the product — and the product is broken.
 

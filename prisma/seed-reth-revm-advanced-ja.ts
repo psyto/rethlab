@@ -93,6 +93,8 @@ Inside Revm の後: **Inside Reth** で Reth 固有の sync パイプライン +
                   xpReward: 20,
                   content: `# \`add\` をステップで組み立てる：シグネチャと本体
 
+> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層** の opcode レベル。CPython・JVM・LuaJIT が長年研究してきた問題そのもの — 「自明な命令を最少の Rust 命令で実装し、同じソースから traced / inspected / 本番ビルドを派生させる」。その系譜を EVM の \`ADD\` に当てはめたのが本レッスン。
+
 \`ADD\` は EVM の Opcode の中でいちばん単純な非自明: 数値を2つ pop して、和を push。週末に自作 EVM を書く人なら Rust 5行で済ませる。Revm は **4行** で済ませているが、その4行には型パラメータ2つを持つジェネリックシグネチャ、\`?Sized\` opt-out、スタックアンダーフローガードと分岐予測ヒントへ展開されるマクロ、そして代わりに使うと最初のオーバーフローでクライアントがメインネットから分岐する \`wrapping_add\` が詰まっている。
 
 [\`bluealloy/revm\`](https://github.com/bluealloy/revm) の本物のソース:
@@ -648,6 +650,8 @@ ADD が実行される様子を *見た* 後、「インタープリターはた
                   xpReward: 25,
                   content: `# 命令テーブルをステップで組み立てる
 
+> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層の命令ディスパッチ設計** — 1990 年以降に作られたすべてのインタープリターが採用してきた普遍パターン。関数ポインタテーブル、computed goto、threaded code — CPython・JVM・Lua・Erlang BEAM が同じ問題に取り組んできた（「1 byte を 1 つの関数呼び出しに、安く・決定的に変換する」）。本レッスンはそのパターンを EVM に当てはめたもの。
+
 > 📋 **読む前に想起。** 直前のレッスンからの3問。どれか曖昧なら「\`add\` をステップで組み立てる」やそのドリルに戻ってください — このレッスンは、答えが「自分の語彙」になっている前提で進みます。
 >
 > 1. Opcode 関数の型シグネチャ \`<IT: ITy, H: ?Sized>\` はコンパイル時に何をくれるか?
@@ -1125,6 +1129,8 @@ pub fn double_top<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
                   duration: 10,
                   xpReward: 25,
                   content: `# \`Database\` トレイトを組み立てる — 読み API
+
+> 🧭 **systems engineering スタックでの位置:** **VM / コンパイラ層とデータベース層の境目**。任意の組み込み計算エンジンが直面する同じ問題 — 「エンジンが『この値を渡してくれ』と問い合わせるとき、特定のストレージ実装と結合しないようにする」。JDBC、ODBC、LLVM の \`MemoryBuffer\` API、SQLite の VFS 層 — どれも同種の問題を解いてきた。Revm の \`Database\` トレイトは、その文法を EVM の状態アクセスに適用したもの。
 
 EVM が \`SLOAD\` を実行したとき、値はどこから来るのか? Revm からではない — Revm は **実行エンジン**であり、状態は持っていない。答えは \`Database\` というトレイト経由で来る。そして **このトレイトの実装が、Revm を何にでも繋ぐ方法**: テスト用のインメモリ Map、メインネットをフォークするリモート JSON-RPC ノード、本物の Reth クライアントの MDBX、エキゾチック L1 のシャード網。同じ4メソッドの形で、4種類のまったく異なるバックエンド。
 

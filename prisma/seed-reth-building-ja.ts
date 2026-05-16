@@ -34,6 +34,8 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
                   xpReward: 35,
                   content: `# Test gate — この tier では全アプリがテスト green で初めて完了
 
+> 🧭 **systems engineering スタックでの位置:** インフラ企業が共通して採用する **品質保証 (QA) の規律**。TigerBeetle、Cloudflare、PostgreSQL — 本気のインフラを ship しているチームで「読んでみたら正しそうだった」が答えになる組織はひとつもありません。このティアはあなたのアプリにも同じ基準を適用します。
+
 ここまでの 4 ティアではソースを **読んで** きました。ここから先は **作る**。読み続けたあとに陥りがちなのは、コードを書いて、自分で読み返して、「正しそうだ」と納得して次に進むことです。**この tier はその失敗モードを構造的に潰すために設計されています。**
 
 ここから先のルール：**テストスイートが green になるまでレッスンは完了ではない。** 「読んだ、作った、たぶん動く」では駄目。green か、未完了か、そのどちらか。
@@ -176,6 +178,8 @@ Reth・Revm・Foundry のメンテナは全員、test-first か test-alongside �
                   duration: 45,
                   xpReward: 80,
                   content: `# 最小限の MEV Searcher を Rust で作る
+
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層 + 並行性層** の組み合わせ。searcher は複数のソース（mempool・新ブロック）から pull してアクションを dispatch する event-driven パイプライン — Kafka Streams のトポロジ、Flink ジョブ、HFT のオーダーハンドリングシステムと同じ形。\`artemis\` はその発想を MEV に当てはめたもの。
 
 「あなたなら bot をこう組み立てる」という greenfield のウォークスルーは、production の本当の形を誤魔化してしまう。本物の searcher は \`main.rs\` から始めない。**フレームワーク** から始める — そして読むべきは Paradigm の [\`artemis\`](https://github.com/paradigmxyz/artemis)、Paradigm がオープンソース化し自社でも使い続けている Rust 製 MEV bot フレームワークです。
 
@@ -446,6 +450,8 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
                   duration: 45,
                   xpReward: 80,
                   content: `# 本物の Production Indexer を読む — Tempo の tidx
+
+> 🧭 **systems engineering スタックでの位置:** **データベース層**、特に OLTP + OLAP のデュアルストレージ問題。本気の分析プラットフォーム — Snowflake の分離型エンジン、ClickHouse + PostgreSQL の組み合わせ、リアルタイムデータウェアハウス — はどれも「point lookup と range scan を別々の場所に置く」設計を選んできた。\`tidx\` はその発想をチェーンデータに当てはめたもの。
 
 Etherscan も Dune も indexer です。そのアーキテクチャは公開されていません。[\`tidx\`](https://github.com/tempoxyz/tidx) は公開されている — Tempo の EVM L1 向け production indexer で、オープンソース、実運用中。本レッスンではこのコードを読み解きます。何を選び、何が当たっていて、ソースを読まないと見えないトレードオフはどこか — それを見る。
 
@@ -728,6 +734,8 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
                   duration: 40,
                   xpReward: 70,
                   content: `# Reth にカスタム RPC エンドポイントを足す
+
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層のサーバサイド拡張**。RPC を公開しているデータベース・サービスが共通して直面する問題 — 「クライアントに raw データをラウンドトリップさせる代わりに、サーバ側で走るカスタムクエリを足せるようにする」。PostgreSQL のストアドプロシージャ、GraphQL のカスタムリゾルバ、gRPC のサービス拡張 — どれも同種の問題。Reth のカスタム RPC はそれを Ethereum execution client に当てはめたもの。
 
 fee-bidding bot のために、pending tx の gas price ヒストグラムを 1 回の API 呼び出しで返してほしい。標準の \`txpool_content\` は *pending tx を全部フルで* 返す — 結局 10 個の数字にまとめるのに、数百 KB を転送することになる。正解の動きは、**ノード内で**集計してヒストグラムだけ返す独自メソッドを追加すること。Rust ~50 行。Reth fork なし。ネイティブネームスペース (\`eth_*\`、\`net_*\`、\`debug_*\`、\`txpool_*\` ...) と同じ HTTP / WebSocket / IPC エンドポイントで動き出す。
 
@@ -1095,6 +1103,8 @@ async fn subscription_does_not_leak_on_disconnect() {
                   duration: 45,
                   xpReward: 80,
                   content: `# Wallet Backend を Rust で作る
+
+> 🧭 **systems engineering スタックでの位置:** **並行性層 + 状態管理層** の応用。決済ゲートウェイ・メッセージキュー・データベース書き込みコーディネータが共通して解いてきた問題 — 「多数の並行投入、テナント単位の単調増加シーケンス番号、詰まったものへの retry / replace」。Stripe の payment intent、Kafka producer の冪等性、銀行の振込キュー — どれも同じ形と格闘している。wallet backend はそれを EVM トランザクションに当てはめたもの。
 
 ユーザーが 1 分間に「Send」を 50 回押す。あなたの wallet がやること: 次の *nonce* (アカウントごとのトランザクション順序を決めるカウンタ) を衝突なしに選び、正しい鍵で署名し、ブロードキャストし、mempool を監視し、そして — ガス価格が 5 gwei から 80 gwei へ急騰した時 — **詰まった tx の fee を引き上げて置換する**。これでユーザーのセッションが「捨て値で送ったたった 1 件」の後ろでデッドロックしない。Wallet UI が世間に知られている部分。背後の send service こそチームが実際に格闘する部分。以下、Rust ~250 行 — signer pool、nonce manager、send queue、replace-on-stuck、confirm watcher。
 
@@ -1607,6 +1617,8 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
                   xpReward: 80,
                   content: `# 最小限の EIP-7702 Sponsor サービスを Rust で作る
 
+> 🧭 **systems engineering スタックでの位置:** **認証層**、特に委任認可（delegated authorization）。OAuth 2 の「あるエンティティが別のエンティティに代わって action を認可する」、DocuSign の署名委任、任意の meta-transaction relayer と同じ概念。EIP-7702 + sponsor サービスはそれを Ethereum 上で表現したもの — Alice が intent に署名し、sponsor がガスを払い、チェーンが委任を暗号的に強制する。
+
 Alice は EOA (Externally Owned Account — スマートコントラクトではない、ただの鍵ペアのウォレット) を持っている。ETH を事前に保有せず、smart-contract アカウントへの移行もせずに、1 クリックで 2 つのトークンを swap したい。EIP-7702 (Pectra フォーク以降、2025 年 3 月から mainnet で稼働) がその手段: 「この tx の間、私の EOA をこのコントラクトのコードを持つかのように扱え」と命じる *authorization* に、彼女がオフチェーンで署名する。**Sponsor** — あなたのサービス — がその authorization を Type 4 トランザクションに包んでガスを払う。Alice は atomic な batched call、custom validation、session key を得る。同じアドレス、同じ鍵、移行なし。以下、Rust ~200 行。
 
 > 📌 **スコープの正直な開示。** **単一ユーザ** の EIP-7702 トランザクションを sponsor する: ユーザがオフチェーンで authorization に署名し、それと意図する call をサービスに POST、サービスがそれを Type 4 トランザクション (ガス支払い) で包んで submit、hash を返す。**マルチユーザバッチング** ("bundler" パターン、N ユーザを 1 つのチェーン tx に詰める) は drill で 1 ループの拡張として扱う。Account abstraction ポリシーロジック — 支出制限、セッションキー、リカバリ — は delegate コントラクトが決めることで、sponsor はリレーするだけ。
@@ -2008,6 +2020,8 @@ K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — sponsor された tx
                   xpReward: 80,
                   content: `# Foundry スタイルのカスタム cheatcode を Rust で作る
 
+> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層の拡張機構**。JNI (Java Native Interface)、Python の C extension、V8 のネイティブバインディングと同じパターン — 「VM が安定した ABI を通じてネイティブコードを呼び出せるようにする」。Foundry の cheatcode はそれを EVM 風味で実装したもの — マジックアドレスに置いたカスタム precompile が VM から Rust 関数に dispatch する。
+
 Foundry テストで \`vm.deal(alice, 100 ether)\` と書く時、**それは EVM opcode ではない**。Rust の関数 — *precompile* (EVM エンジンに組み込まれた「コードがチェーン上に存在しない」コントラクト) — を Foundry がマジックアドレス \`0x7109709E...\` にインストールし、\`Vm.sol\` インターフェース経由で Solidity から見えるようにしている。\`vm.warp()\`、\`vm.expectRevert()\` も全部同じ。**あなたも自前で出荷できる。** 本レッスンでは \`cheats.measureGas(target, data)\` を作る — Foundry が内部で使っているのと同じパターンで、テスト作者がサブコールのガスを手動でラップせずに測れる precompile を、だ。
 
 > 📌 **スコープの正直な開示。** Foundry を **fork しない**。precompile + それをロードする最小 Revm ベースのテストハーネスを作る。パターン (高アドレス precompile + Solidity ABI の表面 + それを組み込むテストランナー) **は同一** — Foundry が cheatcode を追加するのと同じパターン。ただし不透明なフレームワークを継承するのではなく全部見える形で。
@@ -2362,6 +2376,8 @@ sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッス�
                   duration: 45,
                   xpReward: 80,
                   content: `# Swap Aggregator を作る: DEX state を fork して、Rust で
+
+> 🧭 **systems engineering スタックでの位置:** **データベース層の consistent snapshot read** を DEX 状態に当てはめたもの。MVCC データベースが解いてきた問題と同じ — 「N 個の値を atomic に、同じ時点から read する」。mainnet を pin したブロックで fork すれば、全 quote が同じデータベーススナップショットを参照できる。残りは、その整合性のある view の上で DEX ごとに数学を回すだけ。
 
 ユーザが 10,000 USDC を ETH に swap したい。Uniswap V2 なら 2.948 WETH もらえる。Sushi なら 2.946。Uniswap V3 なら 2.951。Aggregator の仕事は: **同じクオートを全 venue に同じ瞬間にファンアウトし、比較し、勝者を選ぶこと。** これが 1inch、Paraswap、0x が裏でやっていること。以下、Rust ~250 行: Revm で mainnet をローカル fork し (全クオートが *同じ* atomic state を読むため)、Uniswap V2 + Sushi + Uniswap V3 から reserve を引き、出力を計算し、ベストを選ぶ。
 
@@ -2752,6 +2768,8 @@ QuoterV2 differential が pass するまでレッスンは **未完了**。数�
                   duration: 60,
                   xpReward: 100,
                   content: `# Capstone — Frontrun-Resistant Order Router を作る
+
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層 + コンパイラ層 + 認証層の統合**。HFT のオーダールータ、CDN のエッジルータ、適応的ルーティングを持つ API ゲートウェイと同じ形 — 「複数ソースから入力を受け、結果をシミュレートし、経路を選び、適切な投入チャネルへ dispatch する」。本 router はその発想を MEV 敵対者下の EVM トランザクションルーティングに当てはめたもの。
 
 キャップストーン。本ティアのあちこちのパターンを 1 つのサービスに統合する。ユーザが swap intent (JSON) を POST。Router がやることは: DEX 全体で quote する (Lesson 7)、mempool を監視して swap を sandwich する敵対 tx を探す (Lesson 1 の反転)、Revm で **その脅威をシミュレートしてユーザがどれだけ output を失うかを測る**、EIP-7702 でガスを sponsor する (Lesson 5)、そして — 脅威スコアが高ければ — Flashbots Protect 経由で submit する (注文は public mempool に一切現れない)。脅威が低ければ public submission で OK で、bundler のマージンも節約できる。**1 つのサービスで過去 4 レッスン (L1 / L4 / L5 / L7) を縫い合わせ、新規部分は決定レイヤー 1 つだけ。**
 
@@ -3210,6 +3228,8 @@ async fn respects_min_out() {
                   xpReward: 90,
                   content: `# Revm シミュレーションを Production Provider で検証する
 
+> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層の正しさ検証** — 特にリファレンス実装に対する *differential testing*。IEEE 754 浮動小数点の準拠検証、TLS 実装の interop、POSIX 認証 — どれも同じ規律に依拠している: 代表入力集合で自分の実装が信頼できるリファレンスと一致することを証明する。本レッスンはその技法を「Revm vs 本番 EVM クライアント」に当てはめたもの。
+
 あなたの arb bot の Revm fork は「この swap で 2.95 WETH 取れる」と言う。実際にチェーン (大半が Geth と Nethermind で、Reth は依然として execution client シェアの ~7-12% に過ぎない) で実行されると 2.93 しか届かない。**bot は自分のシミュレーションのバグで損を出した**。本ティアで作った Revm ベースのシステム全部に同じリスクがある: L1 の MEV searcher は Revm で arb を予測し、L7 の aggregator は Revm で quote を出し、L8 の capstone は Revm で frontrun リスクをスコアする。Revm が mainnet を実際に動かしている Geth/Nethermind の多数派と食い違えば、全部のシステムがサイレントに誤った答えを出荷することになる。以下の ~200 行でクロスチェックを作る。
 
 > 📌 **スコープの正直な開示。** Revm を JSON-RPC provider に対して、単一トランザクションのガス + 戻り data で diff する。production の検証ハーネスはこれを拡張する: \`debug_traceTransaction\` の prestate による完全な state-diff 比較、数千の歴史的 tx に対する統計的サンプリング、ハードフォーク境界の回帰テスト、CI 統合。カーネル — *「一致する」とはどういう意味で、それを安価にどう確認するか?* — は同じ。
@@ -3528,6 +3548,8 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
                   duration: 16,
                   xpReward: 40,
                   content: `# Machine Payments — HTTP 402 と Tempo MPP スタック
+
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層の支払いプロトコル** — HTTP セマンティクスを暗号的な決済で拡張したもの。TLS が HTTP を暗号で拡張したのと同じ、OAuth が HTTP を委任認可で拡張したのと同じ、rate-limit ヘッダがコスト信号で拡張したのと同じパターン。MPP は「HTTP + リクエスト単位の決済」を表現するプロトコル層で、アカウントや API キーなしで pay-per-call を必要とする自律 agent のために設計されている。
 
 2026 年の有料 API はどれも同じ手順を要求してきます。サインアップ、メール認証、API キー発行、請求アカウントの紐付け、プランの事前コミット。*そこまでやって初めて* 有料リソースを 1 つ取得できる。SaaS を提供する側にとっては問題ありません。しかしフライト状況を *1 回だけ* 取得したい自律 agent にとっては、その摩擦自体が製品体験 — そして体験は壊れています。
 

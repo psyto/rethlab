@@ -103,6 +103,8 @@ Inside Reth の後: **Inside Alloy**（未受講なら）か、手続きマク�
                   xpReward: 25,
                   content: `# \`Stage\` トレイトをステップで組み立てる
 
+> 🧭 **systems engineering スタックでの位置:** **データベース層と並行性層が交わる場所**。staged sync はデータエンジニアリングの ETL パイプライン設計をチェーン同期に当てはめたもの — 各 stage は独立しつつも順序があり、I/O をバッチ全体で償却する。Airflow の DAG、Kafka Streams のトポロジ、データベースのバックフィル — すべて同じ形と格闘している。Reth のパイプラインはその「チェーン同期版」。
+
 Staged Sync は Reth の背骨です。**そして、見た目は威圧的** — 本物の \`Stage\` トレイトは6つのメソッド、非同期の準備チェック、双方向の対称性、そして \`auto_impl(Box)\` 属性を抱えています。素のまま読むと、新しい概念が一度に6つ降ってきます。
 
 このレッスンでは、最も素朴な同期ループからこのトレイトを積み上げていきます。最後まで通せば、以下の全要素を自分の手で組み立てたことになります:
@@ -795,6 +797,8 @@ async fn my_exex<Node: FullNodeComponents>(
                   xpReward: 25,
                   content: `# ExEx API をステップで組み立てる
 
+> 🧭 **systems engineering スタックでの位置:** **データベース層の pub-sub インターフェース** と **上流への prune プロトコル** の組み合わせ。PostgreSQL の logical replication、Kafka consumer の offset 追跡、CDC パイプラインが共通して解いてきた問題 — 「下流コンシューマが commit 済みイベントを読めるようにしつつ、上流に永久保持を強いない」。ExEx はその発想を Reth に当てはめたもの — インプロセスの consumer が「N まで読み終えた」と伝え、ノードが安全に prune できるようにする。
+
 **ExEx（Execution Extension）** は Reth が提供する「実行ループに Rust コードを注入する」仕組みです。これでノード速度のインデクサ・MEV ボット・リアルタイムリスクエンジンを **チェーン本体と同じプロセス内で** 構築できます。
 
 ただ API には重そうな部分が4つあります: init/run の分割、3 つのバリアントを持つ通知 *enum*、prune ヒント用のイベントチャンネル、ノードビルダーへの install メソッド。素のまま読むと、4 つのアイデアが一度に降ってきます。
@@ -1351,6 +1355,8 @@ Holesky は時々 reorg を生成する。数時間動かす。
                   duration: 10,
                   xpReward: 25,
                   content: `# ノードビルダー API をステップで組み立てる
+
+> 🧭 **systems engineering スタックでの位置:** ノード全体の **組み立て / DI 層**。Spring のコンテナ、Kubernetes operator、Linux init system が共通して直面する問題 — 「ユーザがコンポーネントを 1 つだけ差し替えても、残りは触らずに済み、かつ触らないものにはデフォルトが効く」。Reth SDK はその発想を型付きビルダーとして表現し、L1 / L2 の構築に当てはめたもの。
 
 ExEx は既存の Ethereum ノードを拡張するもの。**Reth SDK** はコンポーネントを組み立てて *自前の* App-chain を Rust で構築できる仕組みです。「purpose-built EVM L1」という thesis が **コンパイル可能なバイナリ** に化けるのはここ。
 

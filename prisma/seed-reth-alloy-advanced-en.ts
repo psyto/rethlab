@@ -93,6 +93,8 @@ After Inside Alloy: you've completed all three Intermediate courses. **Expert** 
                   xpReward: 25,
                   content: `# Building the \`Provider\` trait step by step
 
+> 🧭 **Where this lives in the systems-engineering stack:** the **networking layer** seen from the client side. Same problem as designing a JSON-RPC / HTTP / gRPC client library — how do you expose one consistent API over many transports (HTTP, WS, IPC) and many chains (Ethereum, Optimism, L2s)? Reqwest, tonic, and OkHttp all wrestle with the same shape; alloy is that shape applied to Ethereum RPC.
+
 Every Rust program that talks to an Ethereum node — your MEV bot, your indexer, your dapp backend, your Reth-SDK app — routes through [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy)'s \`Provider\`. It's the single abstraction over RPC. Open \`crates/provider/src/provider/trait.rs\` and the trait header looks like this (excerpted):
 
 \`\`\`rust
@@ -810,6 +812,8 @@ After this drill, you've shipped the same kind of code MEV pipelines and indexer
                   xpReward: 25,
                   content: `# Building the \`Network\` trait step by step
 
+> 🧭 **Where this lives in the systems-engineering stack:** the **networking layer's chain abstraction** — a type-system design problem that shows up whenever one client needs to speak multiple wire-compatible protocols. gRPC reuses message types across services for the same reason; database drivers expose one connection API across PostgreSQL / MySQL / SQLite for the same reason. \`Network\` is that pattern applied to "the same API on Ethereum, Optimism, and any future L2."
+
 Optimism's transactions carry an L1 \`mint\` field. Their receipts carry \`l1_fee\` and \`l1_block_number\`. Polygon zkEVM's tx envelope has a sequencer signature. Each L2 has its own tx, receipt, and block shapes — but the same \`Provider\` API still works on all of them. **How?** Through \`Network\`: alloy's *type-level dictionary* (one trait whose associated types select the bundle of chain-specific shapes a given chain uses).
 
 The Provider chain treated \`Network\` as a black box. This chain opens it up.
@@ -1490,6 +1494,8 @@ After this drill, you've shipped the same shape multi-chain tooling production i
                   duration: 10,
                   xpReward: 25,
                   content: `# Building the \`Signer\` trait step by step
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **cryptographic-authentication layer's signer abstraction** — the same problem TLS / PKCS#11 / SSH-agent solved decades ago. How do you let the same caller use a local secret key, an HSM, a cloud KMS, or a hardware token without rewriting the caller? Banks, certificate authorities, and TLS stacks all built this abstraction; alloy's \`Signer\` is the EVM version.
 
 A MEV searcher signs with an AWS KMS key (cloud key — the private key never leaves AWS). A treasury operator signs with a Ledger (hardware wallet — key on a USB device, requires a button press). A test suite signs with raw secp256k1 bytes in process. **The same alloy application code has to drive all three.** That's the constraint that shapes the \`Signer\` trait.
 

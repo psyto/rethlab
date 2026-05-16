@@ -93,6 +93,8 @@ After Inside Revm: head to **Inside Reth** for the Reth-specific sync pipeline +
                   xpReward: 20,
                   content: `# Building \`add\` step by step: signature and body
 
+> 🧭 **Where this lives in the systems-engineering stack:** the **compiler / VM layer**, at the per-opcode level. The same problem CPython, JVM, and LuaJIT have written volumes about — "implement this trivial primitive in the fewest possible instructions, parameterized so the same source compiles into traced / inspected / production builds." This lesson is that lineage applied to EVM \`ADD\`.
+
 \`ADD\` is the simplest non-trivial EVM opcode: pop two numbers, push their sum. A weekend hobby EVM would do it in five lines of Rust. Revm does it in **four**, but those four lines hide a generic signature with two type parameters, a \`?Sized\` opt-out, a macro that compiles to a stack-underflow guard with a branch-prediction hint, and a \`wrapping_add\` whose alternative would fork your client off mainnet on the first overflow.
 
 Here's the real source from [\`bluealloy/revm\`](https://github.com/bluealloy/revm):
@@ -646,6 +648,8 @@ After this, you've read more EVM source than 99% of Solidity developers ever wil
                   xpReward: 25,
                   content: `# Building the instruction table step by step
 
+> 🧭 **Where this lives in the systems-engineering stack:** the **compiler / VM layer's instruction dispatch** — the universal pattern in every interpreter built since 1990. Function-pointer tables, computed gotos, threaded code — CPython, JVM, Lua, Erlang's BEAM all wrestle with the same problem ("turn one byte into one function call, cheaply, deterministically"). This lesson is that pattern realized for EVM.
+
 > 📋 **Recall before reading.** Three questions from the last lessons. If any are shaky, scroll back to *Building \`add\` step by step* or its drill — the rest of this lesson assumes the answers are vocabulary you own.
 >
 > 1. What does the type signature \`<IT: ITy, H: ?Sized>\` on an opcode function buy us at compile time?
@@ -1124,6 +1128,8 @@ After this drill, you've actually shipped a custom opcode in code. **More import
                   duration: 10,
                   xpReward: 25,
                   content: `# Building the \`Database\` trait — read API
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **seam between the VM / compiler layer and the database layer**. Same problem any embedded compute engine faces — "let the engine ask 'give me this value' without coupling to a specific storage backend." JDBC, ODBC, the LLVM \`MemoryBuffer\` API, SQLite's VFS layer all solve variations of this. The Revm \`Database\` trait is that pattern for EVM state access.
 
 When the EVM hits an \`SLOAD\`, where does the value come from? Not from Revm — Revm is the **execution engine** and doesn't own state. The answer comes through a trait called \`Database\`, and **implementing that trait is how you connect Revm to anything**: an in-memory map for tests, a remote JSON-RPC node to fork mainnet, MDBX for a real Reth client, a network of shards for an exotic L1. Same four-method shape, four wildly different backends.
 
