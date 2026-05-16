@@ -2431,7 +2431,7 @@ let provider = forked_provider_at(FORK_RPC, PINNED_BLOCK).await;
                   sortOrder: 14,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Inside Alloy 最終クイズ
+                  content: `# Inside Alloy ファイナルクイズ
 
 3 つのチェーンを横断する最終チェック: \`Provider\`、\`Network\`、\`Signer\`。
 
