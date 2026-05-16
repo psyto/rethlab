@@ -450,7 +450,9 @@ Sketch on paper:
 2. A slashing proof — what data is in it? Why is that data sufficient?
 3. The handshake from CL to EL when a new block arrives from the network
 
-> Final check: in two sentences, why is "Ethereum finality takes 13 minutes" not a bug — what does the 13 minutes buy us that 1-second BFT finality wouldn't? **If your answer doesn't include "validator decentralization at scale," re-read §1 of this lesson and §3 of last.**`,
+> Final check: in two sentences, why is "Ethereum finality takes 13 minutes" not a bug — what does the 13 minutes buy us that 1-second BFT finality wouldn't? **If your answer doesn't include "validator decentralization at scale," re-read §1 of this lesson and §3 of last.**
+
+> 🛣️ **The road not taken (Solana):** Solana's consensus is **Tower BFT + Proof-of-History (PoH)** — a fundamentally different bet from Gasper. Tower BFT is a PBFT variant where validator votes anchor to a *verifiable clock* (PoH — a SHA256 hash-chain that serves as a deterministic timeline). Validators don't agree on time first and then vote; PoH **is** the time, and votes reference points along it. The result: ~400ms finality vs Ethereum's ~13 minutes, at the cost of much higher validator hardware requirements and a single-leader-per-slot model (no per-slot committees, no ~1M validator pool). Gasper trades latency for permissionless validator participation at scale; Tower BFT trades validator-pool size for end-user latency. Both are valid BFT answers; the choice tracks what the chain optimizes for — open participation vs sub-second finality.`,
                 },
                 {
                   title: 'HotStuff and HyperBFT — the single-leader BFT family',

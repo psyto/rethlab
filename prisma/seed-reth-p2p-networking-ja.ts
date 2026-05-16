@@ -141,7 +141,9 @@ Hyperliquid の場合、独自の transport (HyperBFT 通信) は **execution �
 2. Reth の [\`crates/net/network\`](https://github.com/paradigmxyz/reth/tree/main/crates/net/network) をブラウズし、エントリポイントを見つける
 3. 自分の言葉でまとめる: 決済固有 gossip 用のカスタムサブプロトコルをどう追加するか?
 
-> 最終チェック: 一文で答えてみる。**bootnode** が解決する bootstrapping 問題とは何か? **答えに「peer を見つけるには peer が必要」というジレンマが含まれていなければ、§1 を読み直す**。`,
+> 最終チェック: 一文で答えてみる。**bootnode** が解決する bootstrapping 問題とは何か? **答えに「peer を見つけるには peer が必要」というジレンマが含まれていなければ、§1 を読み直す**。
+
+> 🛣️ **もう一つの道 (Solana):** Solana のブロック伝播は **Turbine** — gossip ではなく、ツリー型のブロードキャストプロトコル。リーダーが各ブロックを *shred* (小さなパケット) に分割し、決定論的なピアツリー経由で伝播する: 各 shred は devp2p の O(N) の gossip flooding ではなく、おおむね O(log N) ホップで全バリデータに到達する。結果: ブロックあたりの帯域浪費が大幅に下がるが、前提として全バリデータがほぼ対称的な高帯域接続を持つ必要がある。devp2p の gossip は帯域を浪費する (各バリデータが各 tx を複数回受信する) が、非対称なネットワーク状況や敵対的なピアにも優雅に耐える。Turbine は *良いピアでの規模あるスループット* を最適化する; devp2p は *悪いピアでも生き残ること* を最適化する。どちらもネットワーク層の有効な選択で、選択はチェーンがどんなバリデータネットワークを要求できるかに従う。`,
                 },
                 {
                   title: 'Reth の network crate を読む',

@@ -141,7 +141,9 @@ For Hyperliquid: their custom transport (HyperBFT communication) is **separate f
 2. Browse reth's [\`crates/net/network\`](https://github.com/paradigmxyz/reth/tree/main/crates/net/network) — find the entry point
 3. Identify: how would you add a custom sub-protocol for payment-specific gossip?
 
-> Final check: in one sentence, what's the bootstrapping problem solved by **bootnodes**? **If your answer doesn't reference "peers need peers to find peers," re-read §1.**`,
+> Final check: in one sentence, what's the bootstrapping problem solved by **bootnodes**? **If your answer doesn't reference "peers need peers to find peers," re-read §1.**
+
+> 🛣️ **The road not taken (Solana):** Solana's block propagation is **Turbine** — a tree-based broadcast protocol, not gossip. The leader splits each block into *shreds* (small packets) and propagates them via a deterministic peer tree: each shred reaches every validator in roughly O(log N) hops, vs devp2p's O(N) gossip flooding. The result: dramatically lower bandwidth waste per block, but the design assumes every validator has near-symmetric high-bandwidth connectivity. devp2p's gossip wastes bandwidth (every validator receives each tx multiple times) but tolerates wildly heterogeneous network conditions and adversarial peers gracefully. Turbine optimizes for *throughput-at-scale with good peers*; devp2p optimizes for *survivability with bad peers*. Both are valid network-layer choices; the choice tracks what kind of validator network the chain is willing to require.`,
                 },
                 {
                   title: "Reading reth's network crate",
