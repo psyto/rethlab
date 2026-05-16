@@ -86,7 +86,7 @@ export const en = {
       card3Desc: "Reth is still single-digit / low double-digit % of execution clients — Geth and Nethermind serve most of the chain you call into. RethLab teaches you to ship Revm-based code AND validate it against the non-Revm chains your code talks to in production (covered in the Building tier capstone). The talent gap is real precisely because the stack is still emerging.",
     },
     cta: {
-      title: 'Hyperliquid is hiring. Tempo is hiring. Paradigm-portfolio infra teams are hiring.',
+      title: 'Hyperliquid, Tempo, Paradigm are hiring.',
       description: "The Rust EVM stack is moving fast — Reth ships releases on a cadence most projects can't match, and the engineers who can read it are scarce. RethLab gives you the stack-reading depth plus eight portfolio-ready builds (MEV searcher, indexer, custom RPC, wallet backend, EIP-7702 sponsor, swap aggregator, frontrun-resistant router). The hires made in 2026 will be people who already showed up with these artifacts.",
       cta: 'Start',
     },
