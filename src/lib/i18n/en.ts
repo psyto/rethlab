@@ -109,27 +109,6 @@ export const en = {
         description: 'Build Execution Extensions, custom RPC methods, and learn how to extend Reth like the pros.',
       },
     },
-    paths: {
-      title: 'Training Path',
-      subtitle: 'Four learning paths, one outcome: read, extend, and ship custom Rust EVM infrastructure.',
-      fundamentals: {
-        title: 'Beginner',
-        description: 'Why the Rust Ethereum stack matters, environment setup, and your first Alloy script.',
-      },
-      tradingApi: {
-        title: 'Alloy & EVM Basics',
-        description: 'Addresses, signing, providers, and the EVM concepts you need before reading Revm code.',
-      },
-      defi: {
-        title: 'Revm Internals',
-        description: 'The interpreter, opcodes, gas accounting, and the Database trait that powers custom chains.',
-      },
-      security: {
-        title: 'Reth & ExEx',
-        description: 'Staged Sync, custom RPCs, and Execution Extensions — the path to production Rust EVM infra.',
-      },
-      courses: '{{count}} courses',
-    },
     stats: {
       courses: 'Courses',
       lessons: 'Lessons',

@@ -111,27 +111,6 @@ export const ja: TranslationKeys = {
         description: 'Execution Extensions (ExEx)、独自のRPCメソッド、そしてプロのようにRethを拡張する方法。',
       },
     },
-    paths: {
-      title: 'トレーニングパス',
-      subtitle: '4 つのパス、ひとつのアウトカム：Rust EVM スタックを読み・拡張し・本番に出せるようになる。',
-      fundamentals: {
-        title: '初級',
-        description: 'Rust Ethereumスタックがなぜ重要か、環境構築、最初のAlloyスクリプト。',
-      },
-      tradingApi: {
-        title: 'Alloy & EVM基礎',
-        description: 'アドレス、署名、Provider、そしてRevmコードを読む前に必要なEVMの概念。',
-      },
-      defi: {
-        title: 'Revm内部構造',
-        description: 'インタープリター、Opcode、ガス計算、カスタムチェーンを支える Database トレイト。',
-      },
-      security: {
-        title: 'Reth & ExEx',
-        description: 'Staged Sync、独自RPC、Execution Extensions — 実用的なRust EVMインフラへの道。',
-      },
-      courses: '{{count}} コース',
-    },
     stats: {
       courses: 'コース',
       lessons: 'レッスン',
