@@ -87,7 +87,7 @@ export const en = {
     },
     cta: {
       title: 'Hyperliquid, Tempo, Paradigm are hiring.',
-      description: "The Rust EVM stack is moving fast — Reth ships releases on a cadence most projects can't match, and the engineers who can read it are scarce. RethLab gives you the stack-reading depth plus eight portfolio-ready builds (MEV searcher, indexer, custom RPC, wallet backend, EIP-7702 sponsor, swap aggregator, frontrun-resistant router). The hires made in 2026 will be people who already showed up with these artifacts.",
+      description: "The Rust EVM stack is moving fast — Reth ships releases on a cadence most projects can't match, and the engineers who can read it are scarce. RethLab gives you the stack-reading depth plus ten portfolio-ready builds (MEV searcher, indexer, custom RPC, wallet backend, EIP-7702 sponsor, Foundry-style cheatcode, swap aggregator, frontrun-resistant router, cross-client validation harness, HTTP 402 / MPP machine-payments endpoint). The hires made in 2026 will be people who already showed up with these artifacts.",
       cta: 'Start',
     },
     features: {
@@ -111,7 +111,7 @@ export const en = {
     },
     paths: {
       title: 'Training Path',
-      subtitle: 'Five courses, one outcome: read, extend, and ship custom Rust EVM infrastructure.',
+      subtitle: 'Four learning paths, one outcome: read, extend, and ship custom Rust EVM infrastructure.',
       fundamentals: {
         title: 'Beginner',
         description: 'Why the Rust Ethereum stack matters, environment setup, and your first Alloy script.',
@@ -272,7 +272,7 @@ export const en = {
     },
     use: {
       title: 'What your support funds',
-      item1: 'Keeping the curriculum (6 courses, ~108 lessons) free and open for everyone',
+      item1: 'Keeping the curriculum (13 courses, ~131 lessons) free and open for everyone',
       item2: 'Keeping every lesson updated against upstream Reth / Revm / Alloy / Foundry',
       item3: 'Hosting, infrastructure, and translation work',
     },

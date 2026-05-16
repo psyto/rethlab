@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Rust Ethereum Systems Engineering',
-      subtitle: 'Ethereum はデータベース + 分散システム + コンパイラ + ネットワーク + 並行ランタイム — コンセンサスでひとつに結ばれた 5 つの systems engineering 分野です。Reth・Revm・Alloy が Rust でそれを実装する。HyperEVM (Hyperliquid)、Tempo (Stripe)、OP-Reth (Optimism / Base)、MegaETH、Berachain — 主要な Rust EVM L1 はすべて Reth fork。オープンソース、Rust 製、しかし読めるエンジニアはほとんどいない。RethLab は 13 コース 4 ティアで、EVM の基礎からソース読解、L1 アーキテクチャ設計、本番アプリ 10 本まで通します。',
+      subtitle: 'Ethereum はデータベース + 分散システム + コンパイラ + ネットワーク + 並行ランタイム — コンセンサスでひとつに結ばれた 5 つの systems engineering の層です。Reth・Revm・Alloy が Rust でそれを実装する。HyperEVM (Hyperliquid)、Tempo (Stripe)、OP-Reth (Optimism / Base)、MegaETH、Berachain — 主要な Rust EVM L1 はすべて Reth fork。オープンソース、Rust 製、しかし読めるエンジニアはほとんどいない。RethLab は 13 コース 4 ティアで、EVM の基礎からソース読解、L1 アーキテクチャ設計、本番アプリ 10 本まで通します。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -84,7 +84,7 @@ export const ja: TranslationKeys = {
       card1Desc: 'HyperEVM は Reth フォーク。Hyperliquid は中央集権取引所と競合するボリュームの perpetuals を、すべてこの Rust execution スタック上で捌いている。Reth が読めれば HyperEVM の内部も読める。',
       card2Title: 'Paradigm は ship し続ける',
       card2Desc: 'Reth、Revm、Foundry、Alloy — すべて Paradigm が build し、攻めの iteration を続けている (Frontiers 2025 では「Hyperoptimizing Reth」「The Future of Reth」が ship された)。Tempo は最新の Reth ベース app-chain。このスタックの cadence は、今のクリプトインフラで最も強いシグナル。',
-      card3Title: 'Emerging であって支配的ではない — まだ',
+      card3Title: 'Emerging で、まだ支配的ではない',
       card3Desc: 'Reth は execution client シェアでまだ一桁〜低い 2 桁 % — Geth と Nethermind が大半のチェーンを serve している。RethLab は Revm ベースのコードを ship する方法と、それを production で動いている non-Revm チェーンに対して検証する方法の両方を教える (Building tier に収録)。タレントギャップが現実なのは、まさにこのスタックがまだ emerging だから。',
     },
     cta: {
@@ -113,7 +113,7 @@ export const ja: TranslationKeys = {
     },
     paths: {
       title: 'トレーニングパス',
-      subtitle: '5 コース、ひとつのアウトカム：Rust EVM スタックを読み・拡張し・本番に出せるようになる。',
+      subtitle: '4 つのパス、ひとつのアウトカム：Rust EVM スタックを読み・拡張し・本番に出せるようになる。',
       fundamentals: {
         title: '初級',
         description: 'Rust Ethereumスタックがなぜ重要か、環境構築、最初のAlloyスクリプト。',
@@ -274,7 +274,7 @@ export const ja: TranslationKeys = {
     },
     use: {
       title: '寄付の使い道',
-      item1: '既存カリキュラム（6コース・約108レッスン）を全員に無料で提供し続けること',
+      item1: '既存カリキュラム（13 コース・約 131 レッスン）を全員に無料で提供し続けること',
       item2: '上流の Reth / Revm / Alloy / Foundry に対する各レッスンの随時更新',
       item3: 'ホスティング・インフラ・翻訳作業',
     },
