@@ -93,7 +93,7 @@ Inside Revm の後: **Inside Reth** で Reth 固有の sync パイプライン +
                   xpReward: 20,
                   content: `# \`add\` をステップで組み立てる：シグネチャと本体
 
-> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層** の opcode レベル。CPython・JVM・LuaJIT が長年研究してきた問題そのもの — 「自明な命令を最少の Rust 命令で実装しつつ、同じソースから traced / inspected / 本番ビルドを派生させる」。その系譜を EVM の \`ADD\` に当てはめるのが、本レッスン。
+> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層** の opcode レベル。CPython・JVM・LuaJIT が長年研究してきた問題そのもの — 「自明な命令を最少の Rust 命令で実装しつつ、同じソースからトレース・検査・本番の各ビルドを派生させる」。その系譜を EVM の \`ADD\` に当てはめるのが、本レッスン。
 
 \`ADD\` は EVM の Opcode の中でいちばん単純な非自明: 数値を2つ pop して、和を push。週末に自作 EVM を書く人なら Rust 5行で済ませる。Revm は **4行** で済ませているが、その4行には型パラメータ2つを持つジェネリックシグネチャ、\`?Sized\` opt-out、スタックアンダーフローガードと分岐予測ヒントへ展開されるマクロ、そして代わりに使うと最初のオーバーフローでクライアントがメインネットから分岐する \`wrapping_add\` が詰まっている。
 

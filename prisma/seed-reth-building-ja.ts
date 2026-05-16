@@ -34,7 +34,7 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
                   xpReward: 35,
                   content: `# Test gate — この tier では全アプリがテスト green で初めて完了
 
-> 🧭 **systems engineering スタックでの位置:** 本気のインフラを動かしているチームが共通して採用している **品質保証 (QA) の規律**。TigerBeetle、Cloudflare、PostgreSQL — 「読んだら正しそうだった」を答えにしている組織はひとつもない。本ティアは、あなたのアプリにも同じ基準を要求します。
+> 🧭 **systems engineering スタックでの位置:** 本気のインフラを動かしているチームが共通して採用している **品質保証 (QA) の規律**。TigerBeetle、Cloudflare、PostgreSQL — 「読んだら正しそうだった」を答えとしている組織はひとつもない。本ティアは、あなたのアプリにも同じ基準を要求します。
 
 ここまでの 4 ティアではソースを **読んで** きました。ここから先は **作る**。読み続けたあとに陥りがちなのは、コードを書いて、自分で読み返して、「正しそうだ」と納得して次に進むことです。**この tier はその失敗モードを構造的に潰すために設計されています。**
 
@@ -741,7 +741,7 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
                   xpReward: 70,
                   content: `# Reth にカスタム RPC エンドポイントを足す
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層のサーバサイド拡張**。RPC を公開しているデータベースやサービスが共通して直面する問題 — 「クライアントに raw データをラウンドトリップさせる代わりに、サーバ側で走るカスタムクエリを足せるようにする」。PostgreSQL のストアドプロシージャ、GraphQL のカスタムリゾルバ、gRPC のサービス拡張 — いずれも同種の問題。Reth のカスタム RPC は、その解法を Ethereum の execution client に持ち込んだもの。
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層のサーバサイド拡張**。RPC を公開しているデータベースやサービスが共通して直面する問題 — 「クライアントに生のデータをラウンドトリップさせる代わりに、サーバ側で走るカスタムクエリを足せるようにする」。PostgreSQL のストアドプロシージャ、GraphQL のカスタムリゾルバ、gRPC のサービス拡張 — いずれも同種の問題。Reth のカスタム RPC は、その解法を Ethereum の execution client に持ち込んだもの。
 
 fee-bidding bot のために、pending tx の gas price ヒストグラムを 1 回の API 呼び出しで返してほしい。標準の \`txpool_content\` は *pending tx を全部フルで* 返す — 結局 10 個の数字にまとめるのに、数百 KB を転送することになる。正解の動きは、**ノード内で**集計してヒストグラムだけ返す独自メソッドを追加すること。Rust ~50 行。Reth fork なし。ネイティブネームスペース (\`eth_*\`、\`net_*\`、\`debug_*\`、\`txpool_*\` ...) と同じ HTTP / WebSocket / IPC エンドポイントで動き出す。
 
@@ -2391,7 +2391,7 @@ sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッス�
                   xpReward: 80,
                   content: `# Swap Aggregator を作る: DEX state を fork して、Rust で
 
-> 🧭 **systems engineering スタックでの位置:** **DB 層の consistent snapshot read** を、DEX の状態に持ち込んだもの。MVCC データベースが解いてきた問題と同じ — 「N 個の値を atomic に、同じ時点から read する」。mainnet を pin したブロックで fork すれば、すべての quote が同じデータベーススナップショットを参照できる。あとは、その整合性のあるビューの上で、DEX ごとに数学を回すだけ。
+> 🧭 **systems engineering スタックでの位置:** **DB 層の consistent snapshot read** を、DEX の状態に持ち込んだもの。MVCC データベースが解いてきた問題と同じ — 「N 個の値を atomic に、同じ時点から read する」。mainnet を pin したブロックで fork すれば、すべての quote が同じデータベーススナップショットを参照できる。あとは、その整合性のあるビューの上で、DEX ごとに計算を回すだけ。
 
 ユーザが 10,000 USDC を ETH に swap したい。Uniswap V2 なら 2.948 WETH もらえる。Sushi なら 2.946。Uniswap V3 なら 2.951。Aggregator の仕事は: **同じクオートを全 venue に同じ瞬間にファンアウトし、比較し、勝者を選ぶこと。** これが 1inch、Paraswap、0x が裏でやっていること。以下、Rust ~250 行: Revm で mainnet をローカル fork し (全クオートが *同じ* atomic state を読むため)、Uniswap V2 + Sushi + Uniswap V3 から reserve を引き、出力を計算し、ベストを選ぶ。
 
@@ -3557,7 +3557,7 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
 
 ターゲットの雇用主 / プロジェクトに最も近い build を選ぶ。Production ギャップを埋める。小さな public リポとして公開する。**それが会話に持っていく成果物。**
 
-> **🧭 ここまでで積み上げたもの:** **コンパイラ / VM 層の正しさ検証** を出荷した — Revm fork と production JSON-RPC provider の differential trace 比較を、ガス + 戻り data の一致と CREATE / CALL のカバレッジでテストゲートとして固めた。IEEE 754 準拠検証や TLS interop と同じ規律を、Revm に持ち込んだかたち。本ティアの他のアプリ (L1、L7、L8) はすべて、この検証層に依存している。次のレッスンでは **ネットワーク層の支払いプロトコル** — HTTP 402 + MPP — を、本ティア全体の上に乗せる有料化エッジとして見る。
+> **🧭 ここまでで積み上げたもの:** **コンパイラ / VM 層の正しさ検証** を出荷した — Revm fork と production JSON-RPC provider の differential trace 比較を、ガス + 戻り値の一致と CREATE / CALL のカバレッジでテストゲートとして固めた。IEEE 754 準拠検証や TLS interop と同じ規律を、Revm に持ち込んだかたち。本ティアの他のアプリ (L1、L7、L8) はすべて、この検証層に依存している。次のレッスンでは **ネットワーク層の支払いプロトコル** — HTTP 402 + MPP — を、本ティア全体の上に乗せる有料化エッジとして見る。
 `,
                 },
                 {
