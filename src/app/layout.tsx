@@ -20,22 +20,24 @@ const baseUrl =
 
 export const metadata: Metadata = {
   title: {
-    default: 'RethLab — The school for Rust EVM L1 engineers',
+    default: 'RethLab — Rust Ethereum Systems Engineering',
     template: '%s | RethLab',
   },
   description:
-    'The school for Rust EVM L1 engineers. Hyperliquid, Tempo, and Berachain all run on Reth, Revm, Alloy, Foundry. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
+    'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — five systems-engineering disciplines implemented in Rust by Reth, Revm, and Alloy. HyperEVM, Tempo, OP-Reth, MegaETH, Berachain all build on it. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
   keywords: [
     'Reth',
     'Revm',
     'Alloy',
     'Rust Ethereum',
+    'Rust Ethereum Systems Engineering',
+    'Ethereum systems engineering',
     'EVM',
+    'EVM internals',
     'ExEx',
     'Execution Extensions',
     'Paradigm',
     'Rust blockchain',
-    'EVM internals',
     'RethLab',
     'psyto',
   ],
@@ -51,16 +53,16 @@ export const metadata: Metadata = {
     alternateLocale: 'ja_JP',
     url: baseUrl,
     siteName: 'RethLab',
-    title: 'RethLab — The school for Rust EVM L1 engineers',
+    title: 'RethLab — Rust Ethereum Systems Engineering',
     description:
-      'The school for Rust EVM L1 engineers. Hyperliquid, Tempo, and Berachain all run on Reth, Revm, Alloy, Foundry. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
+      'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — five systems-engineering disciplines implemented in Rust by Reth, Revm, and Alloy. HyperEVM, Tempo, OP-Reth, MegaETH, Berachain all build on it. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
     // images are auto-derived from app/opengraph-image.tsx (PNG, 1200x630)
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'RethLab — The school for Rust EVM L1 engineers',
+    title: 'RethLab — Rust Ethereum Systems Engineering',
     description:
-      'The school for Rust EVM L1 engineers. Hyperliquid, Tempo, and Berachain all run on Reth, Revm, Alloy, Foundry. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
+      'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — five systems-engineering disciplines implemented in Rust by Reth, Revm, and Alloy. HyperEVM, Tempo, OP-Reth, MegaETH, Berachain all build on it. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
     creator: '@psyto',
     site: '@psyto',
     // images are auto-derived from app/opengraph-image.tsx

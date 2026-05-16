@@ -29,7 +29,7 @@ export async function seedRethBeginnerEN(prisma: PrismaClient) {
                   title: 'Why learn Reth, Revm, and Alloy?',
                   slug: 'why-rust-ethereum-stack-en',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 1,
                   duration: 10,
                   xpReward: 20,
                   content: `# Why learn Reth, Revm, and Alloy?
@@ -66,7 +66,7 @@ By the end, you'll have "I know some Rust and I know what these projects do" —
                   title: 'Reth, Revm, Alloy — three pillars',
                   slug: 'three-pillars-en',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 2,
                   duration: 10,
                   xpReward: 20,
                   content: `# Reth, Revm, Alloy — three pillars
@@ -144,7 +144,7 @@ The next tier of this course (**Fundamentals**) starts by getting your hands on 
                   title: 'Why not just use Solana?',
                   slug: 'why-not-solana-en',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 8,
                   xpReward: 15,
                   content: `# Why not just use Solana?
@@ -189,7 +189,7 @@ Now that you can place these projects on a map, let's get Rust running on your m
                   title: 'From Solana / Anchor to Reth — what carries over (skip if not from Solana)',
                   slug: 'solana-to-reth-en',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 4,
                   duration: 12,
                   xpReward: 20,
                   content: `# From Solana / Anchor to Reth — what carries over (skip if not from Solana)
@@ -281,7 +281,7 @@ You can either skip *Set Up Rust* and head straight to *Fundamentals* (Rust tool
                   title: 'Reth vs Geth / Alloy vs ethers-rs — the substitution case',
                   slug: 'substitution-case-en',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 5,
                   duration: 10,
                   xpReward: 20,
                   content: `# Reth vs Geth / Alloy vs ethers-rs — the substitution case
@@ -343,14 +343,14 @@ If you can answer both without scrolling, you have the substitution model. If no
 
 ## Next up
 
-The next lesson reframes the entire stack one more time — not chain-by-chain, but as **systems engineering**: database, distributed systems, compiler, networking, OS-style concurrency. After that, you've finished the orientation module and you'll be ready to set up Rust and start reading source.
+With this lesson, Module 0 is complete: the systems-engineering frame from lesson 0, the project map (Reth / Revm / Alloy), the Solana / Solidity onramps, and now the substitution case. **Module 1 sets up Rust on your machine** so you can start reading source. The frame from lesson 0 starts paying off the moment you open the first \`alloy-rs/alloy\` file.
 `,
                 },
                 {
                   title: "Ethereum as systems engineering — the mental model you'll need",
                   slug: 'ethereum-as-systems-engineering-en',
                   type: 'CONTENT',
-                  sortOrder: 5,
+                  sortOrder: 0,
                   duration: 12,
                   xpReward: 25,
                   content: `# Ethereum as systems engineering — the mental model you'll need
@@ -418,11 +418,11 @@ A few framings to actively *push back on* when you encounter them:
 
 The lessons that follow assume you've made these substitutions. They use "EVM" and "state" and "consensus" because the literature does, but they treat them as **instances of general systems-engineering problems**, not as magical Ethereum-specific phenomena.
 
-## You've finished orientation
+## What comes next
 
-Module 0 — *Why the Rust Ethereum Stack* — is now complete. You've placed Reth, Revm, Alloy on the map; understood why teams substitute away from Geth and ethers-rs; thought about how Solidity / Solana skills carry over; and finally reframed the entire stack as systems engineering.
+This is lesson 0 — the frame. The rest of Module 0 fills in the map: which projects (Reth, Revm, Alloy) implement which subsystems, why teams pick this stack over Geth / ethers-rs / Solana, and how Solidity or Solana experience carries over. After Module 0 you set up Rust and start reading.
 
-The next module installs Rust and starts the hands-on portion. Then Fundamentals, then Bridge to Intermediate, then the source-reading tier — at which point the frame from this lesson stops being abstract and starts paying off in every file you read.
+Carry one thing forward: **whenever a future lesson uses "blockchain," "state," "consensus," or "gas," mentally substitute the systems-engineering equivalent.** The lessons are written knowing you've made that substitution. The frame is what makes the source readable.
 `,
                 },
               ],

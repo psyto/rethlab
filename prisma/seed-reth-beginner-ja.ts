@@ -29,7 +29,7 @@ export async function seedRethBeginnerJA(prisma: PrismaClient) {
                   title: 'なぜReth・Revm・Alloyを学ぶのか',
                   slug: 'why-rust-ethereum-stack-ja',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 1,
                   duration: 10,
                   xpReward: 20,
                   content: `# なぜReth・Revm・Alloyを学ぶのか
@@ -66,7 +66,7 @@ export async function seedRethBeginnerJA(prisma: PrismaClient) {
                   title: 'Reth・Revm・Alloyの三つ巴',
                   slug: 'three-pillars-ja',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 2,
                   duration: 10,
                   xpReward: 20,
                   content: `# Reth・Revm・Alloyの三つ巴
@@ -143,7 +143,7 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
                   title: 'なぜSolanaではなくEthereum（Rust）なのか',
                   slug: 'why-not-solana-ja',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 3,
                   duration: 8,
                   xpReward: 15,
                   content: `# なぜSolanaではなくEthereum（Rust）なのか
@@ -186,7 +186,7 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
                   title: 'Solana / Anchor から Reth へ — 持ち越せるもの (Solana 経験が無ければスキップ)',
                   slug: 'solana-to-reth-ja',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 4,
                   duration: 12,
                   xpReward: 20,
                   content: `# Solana / Anchor から Reth へ — 持ち越せるもの (Solana 経験が無ければスキップ)
@@ -278,7 +278,7 @@ Solana のランタイムは良いが Solana 固有。Reth は **多くのチェ
                   title: 'Reth vs Geth / Alloy vs ethers-rs — 置き換えの根拠',
                   slug: 'substitution-case-ja',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 5,
                   duration: 10,
                   xpReward: 20,
                   content: `# Reth vs Geth / Alloy vs ethers-rs — 置き換えの根拠
@@ -340,14 +340,14 @@ Geth と ethers-rs は悪くない。「N の下流プロジェクトをまた�
 
 ## 次へ
 
-次のレッスンは stack 全体をもう 1 度 reframe する — チェーン単位ではなく **systems engineering** として: データベース、分散システム、コンパイラ、ネットワーキング、OS スタイルの並行性。それを終えるとオリエンテーションモジュールが完了、Rust をセットアップしてソース読みを始める準備が整う。
+本レッスンで Module 0 は完了: レッスン 0 の systems-engineering 枠、プロジェクト map（Reth / Revm / Alloy）、Solana / Solidity onramp、そして本レッスンの substitution case。**Module 1 で Rust をマシンにセットアップ**、ソース読みを始められる状態にする。最初の \`alloy-rs/alloy\` ファイルを開いた瞬間から、レッスン 0 の枠が報われ始める。
 `,
                 },
                 {
                   title: 'Ethereum を systems engineering として読む — 必要なメンタルモデル',
                   slug: 'ethereum-as-systems-engineering-ja',
                   type: 'CONTENT',
-                  sortOrder: 5,
+                  sortOrder: 0,
                   duration: 12,
                   xpReward: 25,
                   content: `# Ethereum を systems engineering として読む — 必要なメンタルモデル
@@ -415,11 +415,11 @@ Solidity しか読めない「Ethereum エンジニア」は狭い市場を持�
 
 続くレッスンはこれら置換を済ませた前提で書かれている。「EVM」「state」「コンセンサス」を使うのは文献がそうしているから — だがそれらを **一般的 systems-engineering 問題のインスタンス** として扱い、魔法的 Ethereum 固有現象としては扱わない。
 
-## オリエンテーション完了
+## 次に来るもの
 
-Module 0 — *Why the Rust Ethereum Stack* — はこれで完了。Reth、Revm、Alloy を map に置き、なぜチームが Geth と ethers-rs から置き換えるかを理解し、Solidity / Solana スキルがどう持ち越せるかを考え、最後に stack 全体を systems engineering として reframe した。
+これがレッスン 0 — 枠。Module 0 の残りは map を埋める: どのプロジェクト（Reth、Revm、Alloy）がどのサブシステムを実装しているか、なぜチームが Geth / ethers-rs / Solana より この stack を選ぶか、Solidity や Solana の経験がどう持ち越せるか。Module 0 の後、Rust をセットアップしてソース読みを始める。
 
-次のモジュールは Rust をインストールしハンズオン部分を始める。続いて Fundamentals、中級への橋渡し、ソース読み tier — そこでこのレッスンの枠は抽象でなくなり、読む全ファイルで報われ始める。
+1 つだけ持ち歩く: **続く全レッスンで「ブロックチェーン」「state」「コンセンサス」「ガス」が出てきたら、頭の中で systems-engineering の等価物に置換する。** レッスンはあなたが置換を済ませた前提で書かれている。枠こそがソースを読めるようにする。
 `,
                 },
               ],

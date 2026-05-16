@@ -40,8 +40,8 @@ export const ja: TranslationKeys = {
   },
   landing: {
     hero: {
-      title: 'The school for Rust EVM L1 engineers',
-      subtitle: 'HyperEVM (Hyperliquid)。Tempo (Stripe)。OP-Reth (Optimism / Base)。MegaETH。Berachain。モダンな Rust EVM L1 の execution layer はすべて Reth fork — オープンソース、Rust 製、しかし読めるエンジニアはほとんどいない。RethLab は 13 コース 4 ティアで、EVM の基礎から、Alloy / Revm / Reth の本番ソースの行単位読解、L1 アーキテクチャ設計、10 本の動くアプリ開発まで通します。',
+      title: 'Rust Ethereum Systems Engineering',
+      subtitle: 'Ethereum は データベース + 分散システム + コンパイラ + ネットワーキングスタック + 並行ランタイム — コンセンサスで接着された 5 つの systems-engineering 分野で、Reth・Revm・Alloy が Rust で実装する。HyperEVM (Hyperliquid)、Tempo (Stripe)、OP-Reth (Optimism / Base)、MegaETH、Berachain — モダンな Rust EVM L1 はすべて Reth fork。オープンソース、Rust 製、しかし読めるエンジニアはほとんどいない。RethLab は 13 コース 4 ティアで、EVM の基礎・ソース読解・L1 アーキテクチャ設計・10 本の動くアプリ開発まで通します。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -156,7 +156,7 @@ export const ja: TranslationKeys = {
     },
     catalog: {
       title: 'コースカタログ',
-      subtitle: '初級からエキスパートまで、Rust Ethereum スタック（Reth・Revm・Alloy・Foundry）を段階的にマスターするコース。',
+      subtitle: '初級からエキスパートまで、Rust Ethereum Systems Engineering を 4 ティアで体系化: 基礎・Reth/Revm/Alloy のソース読解・L1 アーキテクチャ・本番アプリ。',
       searchPlaceholder: 'コースを検索...',
       noResults: 'フィルター条件に一致するコースが見つかりません。',
     },
@@ -326,7 +326,7 @@ export const ja: TranslationKeys = {
   },
   about: {
     title: 'RethLabについて',
-    subtitle: 'Rust EVM L1 エンジニアのための学校。Hyperliquid が動いている基盤。Tempo がローンチした基盤。Paradigm が build した — Reth・Revm・Foundry・Alloy。RethLab は 13 コース 4 ティアで、EVM の基礎・本番ソースの行単位読解・L1 アーキテクチャ設計・10 本の動くアプリ開発までを通すトレーニングプログラムです。',
+    subtitle: 'Rust Ethereum Systems Engineering。Ethereum は データベース + 分散システム + コンパイラ + ネットワーキング + 並行ランタイム — Reth・Revm・Alloy が 5 つすべてを Rust で実装する。Hyperliquid が動いている基盤。Tempo がローンチした基盤。Paradigm が build した — Reth・Revm・Foundry・Alloy。RethLab は 13 コース 4 ティアで、EVM の基礎・本番ソースの行単位読解・L1 アーキテクチャ設計・10 本の動くアプリ開発までを通すトレーニングプログラムです。',
     bio: '15+ 年、金融機関のミッションクリティカルなシステム — コアバンキング、リテール預金、住宅ローン、KYC、規制対応 — を Tokyo (新生銀行)、Bangalore (オフショア開発)、Hong Kong (無料英語学習 E メール、50 万ユーザ超) で ship してきました。現在は SBI R3 Japan で Head of Sales Engineering として、Solana のエンタープライズ採用と RWA トークン化にフォーカスしています。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda すべてで active に build 中です。\n\nRethLab を作ったのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとしたとき、まさにこのカリキュラムが埋めようとしている穴にぶつかったからです — ドキュメントは散在し、ソースは難解で、「Rust が少し書ける」状態から「本番 EVM インフラを ship できる」状態までの明確な道筋がない。やりながら学び、効いた部分を「自分が欲しかったカリキュラム」として整理したのが RethLab です — 13 コース 4 ティア (基礎 / ソース読解 / L1 アーキテクチャ / 本番)、約 131 レッスン。Advanced ティアで consensus・cross-chain bridge・sequencer & rollup・P2P・validator 運用を扱い、Expert ティアで 10 本の動くアプリを end-to-end で ship します。永久無料・source-first。\n\n個人的には、このスタックを ship しているチーム — 特に Paradigm と Tempo — に興味があります。',
     background: {
       tradfi: '経歴',
@@ -375,7 +375,7 @@ export const ja: TranslationKeys = {
     },
     tracks: {
       title: '4 ティア・13 コース: 基礎 → ソース読解 → 設計 → 本番',
-      subtitle: '4 ティアすべて修了すれば、Paradigm・Hyperliquid・Tempo が使う Rust EVM スタックを読み、設計し、運用できる。',
+      subtitle: '4 ティアすべて修了すれば、Paradigm・Hyperliquid・Tempo が使う Rust Ethereum Systems Engineering を読み、設計し、運用できる。',
       basicsDesc: 'Rust EVM スタックの基礎を 3 コースで固める。Rust と Alloy の準備、EVM の概念、バイト単位の dispatch loop。次のソース読解に向けた土台。',
       fundamentals: 'ファンダメンタルズ',
       fundamentalsDesc: 'Alloy・Revm・Reth の本番ソースを 1 行ずつ読む 3 コース。Provider/Network/Signer、interpreter 内部、Staged Sync と ExEx。任意の順で受講可。',
