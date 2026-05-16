@@ -34,6 +34,8 @@ export async function seedRethBeginnerJA(prisma: PrismaClient) {
                   xpReward: 20,
                   content: `# なぜReth・Revm・Alloyを学ぶのか
 
+> 🧭 **このレッスンの位置づけ:** Rust × Ethereum スタック全体を一望する地図 — どのプロジェクト（Reth・Revm・Alloy・Foundry）がどの層を担当しているかを掴むことで、以降のレッスンが頭の中で居場所を持つ。
+
 近年、HyperliquidやTempoのような高性能チェーンが共通して採用しているのが、**Ethereum系のRust実装** — つまり **Reth / Revm / Alloy** です。
 
 ## 何が「面白い」のか？
@@ -70,6 +72,8 @@ export async function seedRethBeginnerJA(prisma: PrismaClient) {
                   duration: 10,
                   xpReward: 20,
                   content: `# Reth・Revm・Alloyの三つ巴
+
+> 🧭 **このレッスンの位置づけ:** Rust EVM スタックの 3 本柱と、それぞれの役割分担を導入する。ネットワーク層・VM 層・ツール層に分かれる以降のレッスンが、ここで引いた線を前提に進む。
 
 3つの名前は混同されがちですが、役割はまったく違います。**「自動車を作る」** に例えるとシンプルです。
 
@@ -148,6 +152,8 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
                   xpReward: 15,
                   content: `# なぜSolanaではなくEthereum（Rust）なのか
 
+> 🧭 **このレッスンの位置づけ:** Solana との対比で、*Ethereum がどんな種類のシステムか* をはっきりさせる。以降に出てくる「なぜ X はこういう作りなのか?」という問いすべての、暗黙の前提を整える。
+
 「Solanaも高速で、しかもRustだから、わざわざRust EVMを学ぶ意味は？」とよく聞かれます。結論は **「目指す方向性次第」** ですが、判断軸を整理しておきましょう。
 
 ## 比較
@@ -190,6 +196,8 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
                   duration: 12,
                   xpReward: 20,
                   content: `# Solana / Anchor から Reth へ — 持ち越せるもの (Solana 経験が無ければスキップ)
+
+> 🧭 **このレッスンの位置づけ:** Solana / Anchor の経験から、何が引き継げて何が引き継げないかを概観する。分散システムの勘を別の場所で積んできた読者向けの、通り抜け用ガイド。
 
 > 📌 **対象。** 本レッスンは **Solana で ship した経験がある人向け** — Anchor プログラム、Jito MEV bot、Solana プログラムのテスト、Firedancer コントリビュータ、\`solana-program\` か \`anchor-lang\` を触ったことがある人。Solana を触ったことが無いなら、*Rust 環境を整える* に飛んでください。本レッスンに依存する後続レッスンはありません。
 
@@ -280,6 +288,8 @@ Solana のランタイムは優れていますが、Solana 専用です。Reth �
                   duration: 10,
                   xpReward: 20,
                   content: `# Reth vs Geth / Alloy vs ethers-rs — 置き換えの根拠
+
+> 🧭 **このレッスンの位置づけ:** スタックの各層で Rust が選ばれるとき、チームが実際にたどっている推論をケース単位で追う。このスタックが存在する理由を、抽象論ではなく実例で語る。
 
 プロジェクトの地図は前のレッスンで描きました。次に出てくる質問はこれです — **なぜチームは古い選択肢から積極的に移行しているのか?** Geth は 10 年間 Ethereum を走らせてきました。ethers-rs は長らく Rust Ethereum ライブラリの定番でした。それでも、新しいインフラは Reth と Alloy の上に作られています。その理由を、置き換え 1 件ずつ見ていきます。
 

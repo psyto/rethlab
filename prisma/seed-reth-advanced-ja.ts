@@ -103,7 +103,7 @@ Inside Reth の後: **Inside Alloy**（未受講なら）か、手続きマク�
                   xpReward: 25,
                   content: `# \`Stage\` トレイトをステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** **データベース層と並行性層が交わる場所**。staged sync はデータエンジニアリングの ETL パイプライン設計をチェーン同期に当てはめたもの — 各 stage は独立しつつも順序があり、I/O をバッチ全体で償却する。Airflow の DAG、Kafka Streams のトポロジ、データベースのバックフィル — すべて同じ形と格闘している。Reth のパイプラインはその「チェーン同期版」。
+> 🧭 **systems engineering スタックでの位置:** **DB 層と並行性層が交わる場所**。staged sync は、データエンジニアリングの ETL パイプライン設計をチェーン同期に持ち込んだもの — 各 stage は独立だが順序があり、I/O をバッチ全体で償却する。Airflow の DAG、Kafka Streams のトポロジ、データベースのバックフィル — どれも同じ構造と格闘している。Reth のパイプラインは、その「チェーン同期版」。
 
 Staged Sync は Reth の背骨です。**そして、見た目は威圧的** — 本物の \`Stage\` トレイトは6つのメソッド、非同期の準備チェック、双方向の対称性、そして \`auto_impl(Box)\` 属性を抱えています。素のまま読むと、新しい概念が一度に6つ降ってきます。
 
@@ -318,7 +318,7 @@ impl<S: Stage<P>> Stage<P> for Box<S> {
 
 どれか曖昧なら戻る。次のレッスンは Reth の本物のパイプラインです。
 
-> **🧭 ここまでで進んだ場所:** **DB 層 × 並行性層の ETL パイプライン抽象** を完成 — \`Stage\` の \`execute\` / \`unwind\` 対称性、明示的な \`ExecInput\` / \`ExecOutput\`、I/O 準備のための \`poll_execute_ready\`、\`Box\` ディスパッチのための \`auto_impl\`。Airflow・dbt・Kafka Streams パイプラインと同じ形が、チェーン同期に応用された。次のレッスンで Reth に同梱されている本物の 10 ステージパイプラインを巡る。
+> **🧭 ここまでで積み上げたもの:** **DB 層 × 並行性層の ETL パイプライン抽象** が完成 — \`Stage\` の \`execute\` / \`unwind\` 対称性、明示的な \`ExecInput\` / \`ExecOutput\`、I/O 準備のための \`poll_execute_ready\`、\`Box\` ディスパッチのための \`auto_impl\`。Airflow・dbt・Kafka Streams のパイプラインと同じ構造を、チェーン同期に持ち込んだかたち。次のレッスンでは、Reth に同梱されている本物の 10 ステージパイプラインを巡る。
 `,
                 },
                 {
@@ -799,7 +799,7 @@ async fn my_exex<Node: FullNodeComponents>(
                   xpReward: 25,
                   content: `# ExEx API をステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** **データベース層の pub-sub インターフェース** と **上流への prune プロトコル** の組み合わせ。PostgreSQL の logical replication、Kafka consumer の offset 追跡、CDC パイプラインが共通して解いてきた問題 — 「下流コンシューマが commit 済みイベントを読めるようにしつつ、上流に永久保持を強いない」。ExEx はその発想を Reth に当てはめたもの — インプロセスの consumer が「N まで読み終えた」と伝え、ノードが安全に prune できるようにする。
+> 🧭 **systems engineering スタックでの位置:** **DB 層の pub-sub インタフェース** と **上流への prune プロトコル** の組み合わせ。PostgreSQL の logical replication、Kafka consumer の offset 追跡、CDC パイプラインが共通して解いてきた問題 — 「下流コンシューマが commit 済みイベントを読めるようにしつつ、上流に永久保持を強いない」。ExEx は、その発想を Reth に持ち込んだもの — インプロセスのコンシューマが「N まで読み終えた」と伝え、ノードが安全に prune できるようにする。
 
 **ExEx（Execution Extension）** は Reth が提供する「実行ループに Rust コードを注入する」仕組みです。これでノード速度のインデクサ・MEV ボット・リアルタイムリスクエンジンを **チェーン本体と同じプロセス内で** 構築できます。
 
@@ -980,7 +980,7 @@ Reth は通知の push を始める前に、ExEx が生きていることを *�
 
 どれか曖昧なら戻る。次のレッスンでは本物の最小 ExEx を詳細に読みます。
 
-> **🧭 ここまでで進んだ場所:** **DB 層の pub-sub + prune プロトコル** を完成 — 3 バリアント \`ExExNotification\`、\`FinishedHeight\` によるバックプレッシャ、ストリーム pull、\`init/run\` 分離、\`install_exex\` による注入。Kafka consumer offset 管理や Postgres 論理レプリケーションスロットと同じ形が、EVM チェーン同期に乗った。次のレッスンで最小 ExEx の本物のソースを、このモデルに突き合わせて読む。
+> **🧭 ここまでで積み上げたもの:** **DB 層の pub-sub + prune プロトコル** が完成 — 3 バリアントの \`ExExNotification\`、\`FinishedHeight\` によるバックプレッシャ、ストリームの pull、\`init/run\` の分離、\`install_exex\` による注入。Kafka コンシューマの offset 管理や Postgres の論理レプリケーションスロットと同じ構造を、EVM チェーン同期に持ち込んだかたち。次のレッスンでは、最小 ExEx の本物のソースを、このモデルに突き合わせて読む。
 `,
                 },
                 {
@@ -1360,7 +1360,7 @@ Holesky は時々 reorg を生成する。数時間動かす。
                   xpReward: 25,
                   content: `# ノードビルダー API をステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** ノード全体の **組み立て / DI 層**。Spring のコンテナ、Kubernetes operator、Linux init system が共通して直面する問題 — 「ユーザがコンポーネントを 1 つだけ差し替えても、残りは触らずに済み、かつ触らないものにはデフォルトが効く」。Reth SDK はその発想を型付きビルダーとして表現し、L1 / L2 の構築に当てはめたもの。
+> 🧭 **systems engineering スタックでの位置:** ノード全体の **組み立て / DI 層**。Spring のコンテナ、Kubernetes operator、Linux init system が共通して直面する問題 — 「ユーザがコンポーネントを 1 つだけ差し替えても、残りには触らずに済み、触らないものにはデフォルトが効く」。Reth SDK は、その発想を型付きビルダーとして表現し、L1 / L2 の構築に持ち込んだもの。
 
 ExEx は既存の Ethereum ノードを拡張するもの。**Reth SDK** はコンポーネントを組み立てて *自前の* App-chain を Rust で構築できる仕組みです。「purpose-built EVM L1」という thesis が **コンパイル可能なバイナリ** に化けるのはここ。
 
@@ -1590,7 +1590,7 @@ let handle = builder
 
 どれか曖昧なら戻る。次のレッスンでは 6 コンポーネントと、本物のチェーンが何を差し替えているかを巡ります。
 
-> **🧭 ここまでで進んだ場所:** **ノード全体の組み立て / DI 層** を完成 — \`with_types\` → \`with_components\` → \`with_add_ons\` → \`launch\` の typed builder で、デフォルトを暗黙のまま 1 コンポーネントだけ差し替えられる形になった。Kubernetes operator や Spring container が解いているのと同じ問題（6 つのサブシステムを、6 個ぶんのボイラープレートなしで合成する）への Rust 流の解答。次のレッスンで 6 つのコンポーネントを巡る。
+> **🧭 ここまでで積み上げたもの:** **ノード全体の組み立て / DI 層** が完成 — \`with_types\` → \`with_components\` → \`with_add_ons\` → \`launch\` の typed builder で、デフォルトを暗黙のまま 1 コンポーネントだけ差し替えられるかたちになった。Kubernetes operator や Spring container が解いているのと同じ問題（6 つのサブシステムを、6 個ぶんのボイラープレートなしで合成する）への、Rust 流の解答。次のレッスンでは、6 つのコンポーネントを順に巡る。
 `,
                 },
                 {

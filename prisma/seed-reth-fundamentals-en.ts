@@ -34,6 +34,8 @@ export async function seedRethFundamentalsEN(prisma: PrismaClient) {
                   xpReward: 25,
                   content: `# Rust: ownership and borrowing in 5 minutes
 
+> 🧭 **Why this matters:** ownership / borrowing is the foundation under everything concurrency-shaped in the stack — Reth's Tokio runtime, Revm's \`&mut\`-driven execution, alloy's Send-bounded providers. Load it once here and the later concurrency lessons stop feeling like new rules.
+
 The first wall in Rust is **ownership**. You don't need to master it to read Alloy code — you need to **recognize the rules** when they show up.
 
 ## 1. Why ownership exists
@@ -142,6 +144,8 @@ You won't fully internalize ownership until you've fought a few compile errors. 
                   duration: 12,
                   xpReward: 25,
                   content: `# Alloy primitives and signing
+
+> 🧭 **Why this matters:** introduces the type-level primitives (\`Address\`, \`U256\`, \`B256\`) and the signature surface that every later networking-layer and authentication-layer lesson reuses. These types are the lingua franca of the Rust EVM stack.
 
 Time to touch **Alloy** directly. Alloy is the de facto Ethereum library suite for Rust, and Reth uses it everywhere.
 
@@ -264,6 +268,8 @@ Next up: \`Result\`, \`Option\`, and \`?\` — the error-handling vocabulary you
                   xpReward: 25,
                   content: `# Rust: Result, Option, and the \`?\` operator
 
+> 🧭 **Why this matters:** \`Result\` and \`Option\` are how every layer of the stack — RPC errors, EVM halts, database misses — talks about failure without hiding it. This lesson loads the vocabulary.
+
 Almost every line of Alloy code ends with \`.await?\` or \`.parse()?\`. Time to understand what \`?\` actually does.
 
 ## 1. No exceptions
@@ -369,6 +375,8 @@ Almost every line uses \`?\`. Mental model: **"keep going on success, send the e
                   duration: 12,
                   xpReward: 25,
                   content: `# Provider — connecting to a node
+
+> 🧭 **Why this matters:** your first proper look at the **networking layer's client trait** — the same \`Provider\` trait that the Inside Alloy tier opens up later. Read this for the surface; the buildup chain in Inside Alloy reads the design.
 
 A **Provider** is your gateway to a node. Block numbers, balances, transactions — everything goes through it.
 
@@ -581,6 +589,8 @@ Hints if you get stuck:
                   xpReward: 25,
                   content: `# The EVM is a stack machine
 
+> 🧭 **Why this matters:** introduces the EVM as a **stack machine** — the architectural premise every later VM-layer lesson (Revm internals, opcodes, gas, precompiles) is built on. Same shape as the JVM and CPython VM, restricted for blockchain consensus.
+
 The Ethereum Virtual Machine is a **stack machine**. It has no general registers and no calling conventions in the C sense — almost everything happens on a stack.
 
 ## The three "places"
@@ -673,6 +683,8 @@ Now build a tiny stack machine yourself in the next lesson.`,
                   duration: 15,
                   xpReward: 30,
                   content: `# Quiz: a mini EVM stack
+
+> 🧭 **Why this matters:** your first hands-on **VM-layer** build — a toy EVM with a stack + a few opcodes. The same shape Revm scales to all of EVM; this lesson is the seed.
 
 Build a tiny Rust EVM-style stack with three operations:
 
@@ -793,6 +805,8 @@ Once it works, mentally compare your design to the real Revm \`Stack\` from the 
                   duration: 15,
                   xpReward: 30,
                   content: `# Rust: async, traits, and generics
+
+> 🧭 **Why this matters:** async + traits + generics is the three-way intersection that the whole Rust EVM stack lives in. Reth's pipeline futures, alloy's \`<N: Network>\` providers, Revm's \`auto_impl\` traits — all here. Load this once.
 
 Three features you have to understand to read serious Alloy/Reth code.
 
@@ -930,6 +944,8 @@ Next: step into the Revm world itself.`,
                   xpReward: 25,
                   content: `# Revm — the execution engine
 
+> 🧭 **Why this matters:** opens the **VM-layer engine** itself. The Inside REVM tier later opens up \`add\`, the opcode table, and \`Database\`; this lesson gives you the shape before you go in.
+
 You've seen Alloy (the outer RPC layer) and now know the EVM is a stack machine. The next character is **Revm** — the engine that actually runs opcodes.
 
 ## Where Revm fits
@@ -999,6 +1015,8 @@ xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024)
                   duration: 18,
                   xpReward: 35,
                   content: `# Foundry — the Rust EVM toolchain
+
+> 🧭 **Why this matters:** Foundry is the **tooling layer** sitting next to Reth / Revm / Alloy — same Rust EVM stack, exposed for smart-contract developers. Useful even if your target is node-side work, because Foundry is how the rest of the ecosystem talks to your nodes.
 
 You've seen Reth (the node) and Revm (the engine). The **third pillar of the Rust EVM stack** is **[Foundry](https://github.com/foundry-rs/foundry)** — Paradigm's Solidity dev toolchain, every part of which is built on Revm. If you write Solidity that touches a Rust EVM chain, you'll use Foundry every day.
 
@@ -1150,6 +1168,8 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
                   duration: 25,
                   xpReward: 50,
                   content: `# Writing Tests with Foundry — \`forge test\` as a Production Skill
+
+> 🧭 **Why this matters:** introduces the **verification discipline** that the Building tier later holds you to. Tests are the executable spec; same standard the Reth / Revm / Foundry maintainers all hold themselves to.
 
 The previous lesson ran \`forge test\` and showed Revm spinning up underneath. This lesson teaches you to **write** tests that catch real bugs — the kind that ship with audited contracts, MEV searchers, and L2 sequencers.
 

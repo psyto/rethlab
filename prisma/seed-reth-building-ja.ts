@@ -34,7 +34,7 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
                   xpReward: 35,
                   content: `# Test gate — この tier では全アプリがテスト green で初めて完了
 
-> 🧭 **systems engineering スタックでの位置:** インフラ企業が共通して採用する **品質保証 (QA) の規律**。TigerBeetle、Cloudflare、PostgreSQL — 本気のインフラを ship しているチームで「読んでみたら正しそうだった」が答えになる組織はひとつもありません。このティアはあなたのアプリにも同じ基準を適用します。
+> 🧭 **systems engineering スタックでの位置:** 本気のインフラを動かしているチームが共通して採用している **品質保証 (QA) の規律**。TigerBeetle、Cloudflare、PostgreSQL — 「読んだら正しそうだった」を答えにしている組織はひとつもない。本ティアは、あなたのアプリにも同じ基準を要求します。
 
 ここまでの 4 ティアではソースを **読んで** きました。ここから先は **作る**。読み続けたあとに陥りがちなのは、コードを書いて、自分で読み返して、「正しそうだ」と納得して次に進むことです。**この tier はその失敗モードを構造的に潰すために設計されています。**
 
@@ -169,7 +169,7 @@ Reth・Revm・Foundry のメンテナは全員、test-first か test-alongside �
 
 その順序 — テストが先、コードが後 — が gate。
 
-> **🧭 ここまでで進んだ場所:** 品質保証規律を tier の入口に据えた。TigerBeetle・Cloudflare・PostgreSQL が共通して採用している『テストで証明してから ship する』を、本 tier の 10 アプリすべてに一律で適用する。次のレッスンから建設開始 — MEV searcher が最初、test gate を実装の前に置く。
+> **🧭 ここまでで積み上げたもの:** 品質保証の規律を、本ティアの入口に据えた。TigerBeetle・Cloudflare・PostgreSQL が共通して採用している「テストで証明してから出荷する」を、本ティアの 10 アプリすべてに一律で適用する。次のレッスンから建設開始 — MEV searcher が最初、テストゲートを実装の前に置く。
 `,
                 },
                 {
@@ -181,7 +181,7 @@ Reth・Revm・Foundry のメンテナは全員、test-first か test-alongside �
                   xpReward: 80,
                   content: `# 最小限の MEV Searcher を Rust で作る
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層 + 並行性層** の組み合わせ。searcher は複数のソース（mempool・新ブロック）から pull してアクションを dispatch する event-driven パイプライン — Kafka Streams のトポロジ、Flink ジョブ、HFT のオーダーハンドリングシステムと同じ形。\`artemis\` はその発想を MEV に当てはめたもの。
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層 + 並行性層** の組み合わせ。searcher は、複数のソース（mempool、新ブロック）から pull してアクションを dispatch する event-driven なパイプライン — Kafka Streams のトポロジ、Flink のジョブ、HFT のオーダーハンドリングと同じ構造。\`artemis\` は、その発想を MEV に持ち込んだもの。
 
 「あなたなら bot をこう組み立てる」という greenfield のウォークスルーは、production の本当の形を誤魔化してしまう。本物の searcher は \`main.rs\` から始めない。**フレームワーク** から始める — そして読むべきは Paradigm の [\`artemis\`](https://github.com/paradigmxyz/artemis)、Paradigm がオープンソース化し自社でも使い続けている Rust 製 MEV bot フレームワークです。
 
@@ -443,7 +443,7 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 各々が自己完結した ~200〜300 行の build、同じ predict / find-in-repo / anti-fluency スタイル。ターゲットユースケースに合うものから選ぶ。
 
-> **🧭 ここまでで進んだ場所:** **ネットワーク層 × 並行性層** のアプリケーションを ship した — event-driven pipeline（artemis の collector → strategy → executor）を MEV に当てはめ、test gate（forked-state arb 再現 + reorg 整合性）で正しさを担保。Kafka Streams や HFT order handler が ship しているのと同じ形。次のレッスンで **DB 層** へ移る: ExEx 駆動の reorg-aware インデクサ。
+> **🧭 ここまでで積み上げたもの:** **ネットワーク層 × 並行性層** のアプリケーションを出荷した — event-driven なパイプライン（artemis の collector → strategy → executor）を MEV に当てはめ、テストゲート（forked-state arb の再現 + reorg 整合性）で正しさを担保。Kafka Streams や HFT の order handler が動かしているのと同じ構造。次のレッスンでは **DB 層** に移る: ExEx 駆動の reorg-aware なインデクサ。
 `,
                 },
                 {
@@ -455,7 +455,7 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
                   xpReward: 80,
                   content: `# 本物の Production Indexer を読む — Tempo の tidx
 
-> 🧭 **systems engineering スタックでの位置:** **データベース層**、特に OLTP + OLAP のデュアルストレージ問題。本気の分析プラットフォーム — Snowflake の分離型エンジン、ClickHouse + PostgreSQL の組み合わせ、リアルタイムデータウェアハウス — はどれも「point lookup と range scan を別々の場所に置く」設計を選んできた。\`tidx\` はその発想をチェーンデータに当てはめたもの。
+> 🧭 **systems engineering スタックでの位置:** **DB 層**、特に OLTP + OLAP のデュアルストレージ問題。本気の分析プラットフォーム — Snowflake の分離型エンジン、ClickHouse + PostgreSQL の組み合わせ、リアルタイムデータウェアハウス — はいずれも「point lookup と range scan を別々の場所に置く」設計を選んできた。\`tidx\` は、その発想をチェーンデータに持ち込んだもの。
 
 Etherscan も Dune も indexer です。そのアーキテクチャは公開されていません。[\`tidx\`](https://github.com/tempoxyz/tidx) は公開されている — Tempo の EVM L1 向け production indexer で、オープンソース、実運用中。本レッスンではこのコードを読み解きます。何を選び、何が当たっていて、ソースを読まないと見えないトレードオフはどこか — それを見る。
 
@@ -729,7 +729,7 @@ fixture は \`tests/fixtures/\` 配下に \`ExExNotification\` をシリアラ�
 GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next generation indexing (Devcon 2024)
 \`\`\`
 
-> **🧭 ここまでで進んだ場所:** **DB 層** のアプリケーションを ship した — tidx のソースから OLTP + OLAP デュアルストレージ設計を読み解き、fixture chain replay の test gate で reorg ハンドリングまで担保。Snowflake や ClickHouse + Postgres の組み合わせが解いてきた問題の chain data 版。次のレッスンで **ネットワーク層** へ移る: \`extend_rpc_modules\` 経由のサーバサイド RPC 拡張。
+> **🧭 ここまでで積み上げたもの:** **DB 層** のアプリケーションを出荷した — tidx のソースから OLTP + OLAP のデュアルストレージ設計を読み解き、fixture chain replay のテストゲートで reorg ハンドリングまで担保。Snowflake や ClickHouse + Postgres の組み合わせが解いてきた問題の、チェーンデータ版。次のレッスンでは **ネットワーク層** に移る: \`extend_rpc_modules\` 経由のサーバサイド RPC 拡張。
 `,
                 },
                 {
@@ -741,7 +741,7 @@ GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next gene
                   xpReward: 70,
                   content: `# Reth にカスタム RPC エンドポイントを足す
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層のサーバサイド拡張**。RPC を公開しているデータベース・サービスが共通して直面する問題 — 「クライアントに raw データをラウンドトリップさせる代わりに、サーバ側で走るカスタムクエリを足せるようにする」。PostgreSQL のストアドプロシージャ、GraphQL のカスタムリゾルバ、gRPC のサービス拡張 — どれも同種の問題。Reth のカスタム RPC はそれを Ethereum execution client に当てはめたもの。
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層のサーバサイド拡張**。RPC を公開しているデータベースやサービスが共通して直面する問題 — 「クライアントに raw データをラウンドトリップさせる代わりに、サーバ側で走るカスタムクエリを足せるようにする」。PostgreSQL のストアドプロシージャ、GraphQL のカスタムリゾルバ、gRPC のサービス拡張 — いずれも同種の問題。Reth のカスタム RPC は、その解法を Ethereum の execution client に持ち込んだもの。
 
 fee-bidding bot のために、pending tx の gas price ヒストグラムを 1 回の API 呼び出しで返してほしい。標準の \`txpool_content\` は *pending tx を全部フルで* 返す — 結局 10 個の数字にまとめるのに、数百 KB を転送することになる。正解の動きは、**ノード内で**集計してヒストグラムだけ返す独自メソッドを追加すること。Rust ~50 行。Reth fork なし。ネイティブネームスペース (\`eth_*\`、\`net_*\`、\`debug_*\`、\`txpool_*\` ...) と同じ HTTP / WebSocket / IPC エンドポイントで動き出す。
 
@@ -1099,7 +1099,7 @@ async fn subscription_does_not_leak_on_disconnect() {
 
 レッスン完了の条件: (1) success path が pass、(2) 少なくとも 1 つのエラーコードテストが pass（型不正・範囲外・必須欠落のいずれか）、(3) subscription cleanup テストが pass。mainnet に対する \`cargo run\` ではこのどれの代替にもならない。
 
-> **🧭 ここまでで進んだ場所:** **ネットワーク層のサーバサイド拡張** を ship した — jsonrpsee による集約 + subscription を Reth の pool ストリームに配線し、in-process integration + エラーコード + subscription リーク検出テストで担保。GraphQL カスタムリゾルバや Postgres ストアドプロシージャと同じ問題を Reth RPC に当てはめた形。次のレッスンで **並行性 + 状態管理層** へ移る: wallet backend。
+> **🧭 ここまでで積み上げたもの:** **ネットワーク層のサーバサイド拡張** を出荷した — jsonrpsee による集約 + subscription を Reth の pool ストリームに配線し、in-process integration + エラーコード + subscription リーク検出のテストで担保。GraphQL のカスタムリゾルバや Postgres のストアドプロシージャが解いてきた問題を、Reth RPC に持ち込んだかたち。次のレッスンでは **並行性 + 状態管理層** に移る: wallet backend。
 
 `,
                 },
@@ -1112,7 +1112,7 @@ async fn subscription_does_not_leak_on_disconnect() {
                   xpReward: 80,
                   content: `# Wallet Backend を Rust で作る
 
-> 🧭 **systems engineering スタックでの位置:** **並行性層 + 状態管理層** の応用。決済ゲートウェイ・メッセージキュー・データベース書き込みコーディネータが共通して解いてきた問題 — 「多数の並行投入、テナント単位の単調増加シーケンス番号、詰まったものへの retry / replace」。Stripe の payment intent、Kafka producer の冪等性、銀行の振込キュー — どれも同じ形と格闘している。wallet backend はそれを EVM トランザクションに当てはめたもの。
+> 🧭 **systems engineering スタックでの位置:** **並行性層 + 状態管理層** の応用。決済ゲートウェイ・メッセージキュー・データベース書き込みコーディネータが共通して解いてきた問題 — 「多数の並行投入、テナント単位の単調増加シーケンス番号、詰まったものへの retry / replace」。Stripe の payment intent、Kafka producer の冪等性、銀行の振込キュー — どれも同じ構造と格闘している。wallet backend は、それを EVM トランザクションに持ち込んだもの。
 
 ユーザーが 1 分間に「Send」を 50 回押す。あなたの wallet がやること: 次の *nonce* (アカウントごとのトランザクション順序を決めるカウンタ) を衝突なしに選び、正しい鍵で署名し、ブロードキャストし、mempool を監視し、そして — ガス価格が 5 gwei から 80 gwei へ急騰した時 — **詰まった tx の fee を引き上げて置換する**。これでユーザーのセッションが「捨て値で送ったたった 1 件」の後ろでデッドロックしない。Wallet UI が世間に知られている部分。背後の send service こそチームが実際に格闘する部分。以下、Rust ~250 行 — signer pool、nonce manager、send queue、replace-on-stuck、confirm watcher。
 
@@ -1615,7 +1615,7 @@ async fn no_nonce_gaps_under_concurrent_send() {
 wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular toolkit (Foundry の tx パイプライン内で使われている同じ Alloy + Rust signer 機構)
 \`\`\`
 
-> **🧭 ここまでで進んだ場所:** **並行性 + 状態管理層の wallet backend** を ship した — signer pool、単調増加 nonce manager、send queue、replace-on-stuck、reorg を意識した watcher。Stripe payment intent や Kafka producer の冪等性と同じパターンを EVM tx に当てはめた形。次のレッスンで **認証層** へ移る: EIP-7702 による委任認可。
+> **🧭 ここまでで積み上げたもの:** **並行性 + 状態管理層の wallet backend** を出荷した — signer pool、単調増加 nonce manager、send queue、replace-on-stuck、reorg を意識した watcher。Stripe の payment intent や Kafka producer の冪等性と同じパターンを、EVM tx に持ち込んだかたち。次のレッスンでは **認証層** に移る: EIP-7702 による委任認可。
 `,
                 },
                 {
@@ -1627,7 +1627,7 @@ wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular
                   xpReward: 80,
                   content: `# 最小限の EIP-7702 Sponsor サービスを Rust で作る
 
-> 🧭 **systems engineering スタックでの位置:** **認証層**、特に委任認可（delegated authorization）。OAuth 2 の「あるエンティティが別のエンティティに代わって action を認可する」、DocuSign の署名委任、任意の meta-transaction relayer と同じ概念。EIP-7702 + sponsor サービスはそれを Ethereum 上で表現したもの — Alice が intent に署名し、sponsor がガスを払い、チェーンが委任を暗号的に強制する。
+> 🧭 **systems engineering スタックでの位置:** **認証層**、特に委任認可 (delegated authorization)。OAuth 2 の「あるエンティティが別のエンティティに代わって action を認可する」、DocuSign の署名委任、各種の meta-transaction relayer と同じ概念。EIP-7702 と sponsor サービスは、それを Ethereum 上で表現したもの — Alice が intent に署名し、sponsor がガスを払い、チェーンが委任を暗号的に強制する。
 
 Alice は EOA (Externally Owned Account — スマートコントラクトではない、ただの鍵ペアのウォレット) を持っている。ETH を事前に保有せず、smart-contract アカウントへの移行もせずに、1 クリックで 2 つのトークンを swap したい。EIP-7702 (Pectra フォーク以降、2025 年 3 月から mainnet で稼働) がその手段: 「この tx の間、私の EOA をこのコントラクトのコードを持つかのように扱え」と命じる *authorization* に、彼女がオフチェーンで署名する。**Sponsor** — あなたのサービス — がその authorization を Type 4 トランザクションに包んでガスを払う。Alice は atomic な batched call、custom validation、session key を得る。同じアドレス、同じ鍵、移行なし。以下、Rust ~200 行。
 
@@ -2020,7 +2020,7 @@ _k5fKlKBWV4 | EIP-7702: a technical deep dive — lightclient (Devcon SEA 2024)
 K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — sponsor された tx を走らせるエンジン
 \`\`\`
 
-> **🧭 ここまでで進んだ場所:** **認証層** のアプリケーションを ship した — 7702 で委任認可を実装し、replay 防止とガス会計の正直さを test gate で担保。OAuth 2 や DocuSign の電子署名委任と同じ概念を、Ethereum 上でネイティブに表現した形。次のレッスンで **VM 層** へ移る: カスタム precompile による Foundry スタイル cheatcode。
+> **🧭 ここまでで積み上げたもの:** **認証層** のアプリケーションを出荷した — 7702 で委任認可を実装し、replay 防止とガス会計の正直さをテストゲートで担保。OAuth 2 や DocuSign の電子署名委任と同じ概念を、Ethereum 上でネイティブに表現したかたち。次のレッスンでは **VM 層** に移る: カスタム precompile による Foundry スタイルの cheatcode。
 `,
                 },
                 {
@@ -2032,7 +2032,7 @@ K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — sponsor された tx
                   xpReward: 80,
                   content: `# Foundry スタイルのカスタム cheatcode を Rust で作る
 
-> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層の拡張機構**。JNI (Java Native Interface)、Python の C extension、V8 のネイティブバインディングと同じパターン — 「VM が安定した ABI を通じてネイティブコードを呼び出せるようにする」。Foundry の cheatcode はそれを EVM 風味で実装したもの — マジックアドレスに置いたカスタム precompile が VM から Rust 関数に dispatch する。
+> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層の拡張機構**。JNI (Java Native Interface)、Python の C extension、V8 のネイティブバインディングと同じパターン — 「VM が安定した ABI を通じてネイティブコードを呼び出せるようにする」。Foundry の cheatcode は、それを EVM 流に実装したもの — マジックアドレスに置いたカスタム precompile が、VM から Rust 関数へ dispatch する。
 
 Foundry テストで \`vm.deal(alice, 100 ether)\` と書く時、**それは EVM opcode ではない**。Rust の関数 — *precompile* (EVM エンジンに組み込まれた「コードがチェーン上に存在しない」コントラクト) — を Foundry がマジックアドレス \`0x7109709E...\` にインストールし、\`Vm.sol\` インターフェース経由で Solidity から見えるようにしている。\`vm.warp()\`、\`vm.expectRevert()\` も全部同じ。**あなたも自前で出荷できる。** 本レッスンでは \`cheats.measureGas(target, data)\` を作る — Foundry が内部で使っているのと同じパターンで、テスト作者がサブコールのガスを手動でラップせずに測れる precompile を、だ。
 
@@ -2379,7 +2379,7 @@ contract MeasureGasDifferential is Test {
 sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッスンが reverse-engineer した cheatcode パターン)
 \`\`\`
 
-> **🧭 ここまでで進んだ場所:** **VM 層の拡張機構** を ship した — 高アドレスに登録したカスタム precompile が VM から Rust 関数を呼ぶ形を、Solidity リファレンスとの differential fuzz で固めた。JNI や V8 native binding と同じパターンを Revm に当てはめた形。次のレッスンで **DB 層の consistent snapshot read** へ移る: fork した DEX 状態に対する swap aggregator。
+> **🧭 ここまでで積み上げたもの:** **VM 層の拡張機構** を出荷した — 高アドレスに登録したカスタム precompile が、VM から Rust 関数を呼ぶかたちを、Solidity リファレンスとの differential fuzz で固めた。JNI や V8 のネイティブバインディングと同じパターンを、Revm に持ち込んだかたち。次のレッスンでは **DB 層の consistent snapshot read** に移る: fork した DEX 状態に対する swap aggregator。
 `,
                 },
                 {
@@ -2391,7 +2391,7 @@ sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッス�
                   xpReward: 80,
                   content: `# Swap Aggregator を作る: DEX state を fork して、Rust で
 
-> 🧭 **systems engineering スタックでの位置:** **データベース層の consistent snapshot read** を DEX 状態に当てはめたもの。MVCC データベースが解いてきた問題と同じ — 「N 個の値を atomic に、同じ時点から read する」。mainnet を pin したブロックで fork すれば、全 quote が同じデータベーススナップショットを参照できる。残りは、その整合性のある view の上で DEX ごとに数学を回すだけ。
+> 🧭 **systems engineering スタックでの位置:** **DB 層の consistent snapshot read** を、DEX の状態に持ち込んだもの。MVCC データベースが解いてきた問題と同じ — 「N 個の値を atomic に、同じ時点から read する」。mainnet を pin したブロックで fork すれば、すべての quote が同じデータベーススナップショットを参照できる。あとは、その整合性のあるビューの上で、DEX ごとに数学を回すだけ。
 
 ユーザが 10,000 USDC を ETH に swap したい。Uniswap V2 なら 2.948 WETH もらえる。Sushi なら 2.946。Uniswap V3 なら 2.951。Aggregator の仕事は: **同じクオートを全 venue に同じ瞬間にファンアウトし、比較し、勝者を選ぶこと。** これが 1inch、Paraswap、0x が裏でやっていること。以下、Rust ~250 行: Revm で mainnet をローカル fork し (全クオートが *同じ* atomic state を読むため)、Uniswap V2 + Sushi + Uniswap V3 から reserve を引き、出力を計算し、ベストを選ぶ。
 
@@ -2772,7 +2772,7 @@ async fn picks_best_when_v3_dominates() {
 
 QuoterV2 differential が pass するまでレッスンは **未完了**。数学が 50 bps 狂っていれば、全ユーザに静かに最適でないルートを推薦している。
 
-> **🧭 ここまでで進んだ場所:** **DB 層の consistent snapshot read** を DEX 状態に当てはめた aggregator を ship した — 全クオートが pin されたブロックで Revm fork した同じスナップショットを読み、QuoterV2 differential で 5 bps まで精度を担保。MVCC データベースの atomic な複数キー read と同じ形。次のレッスンは **capstone**: ネットワーク層 + コンパイラ層 + 認証層を統合する frontrun-resistant order router。
+> **🧭 ここまでで積み上げたもの:** **DB 層の consistent snapshot read** を DEX 状態に持ち込んだ aggregator を出荷した — 全クオートが、pin したブロックで Revm fork した同じスナップショットを参照し、QuoterV2 differential で 5 bps まで精度を担保。MVCC データベースの atomic な複数キー read と同じ構造。次のレッスンは **capstone**: ネットワーク層 + コンパイラ層 + 認証層を統合する、frontrun-resistant な order router。
 
 `,
                 },
@@ -2785,7 +2785,7 @@ QuoterV2 differential が pass するまでレッスンは **未完了**。数�
                   xpReward: 100,
                   content: `# Capstone — Frontrun-Resistant Order Router を作る
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層 + コンパイラ層 + 認証層の統合**。HFT のオーダールータ、CDN のエッジルータ、適応的ルーティングを持つ API ゲートウェイと同じ形 — 「複数ソースから入力を受け、結果をシミュレートし、経路を選び、適切な投入チャネルへ dispatch する」。本 router はその発想を MEV 敵対者下の EVM トランザクションルーティングに当てはめたもの。
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層 + コンパイラ層 + 認証層の統合**。HFT のオーダールータ、CDN のエッジルータ、適応的ルーティングを持つ API ゲートウェイと同じ構造 — 「複数ソースから入力を受け、結果をシミュレートし、経路を選び、適切な投入チャネルへ dispatch する」。本 router は、その発想を MEV 敵対者下の EVM トランザクションルーティングに持ち込んだもの。
 
 キャップストーン。本ティアのあちこちのパターンを 1 つのサービスに統合する。ユーザが swap intent (JSON) を POST。Router がやることは: DEX 全体で quote する (Lesson 7)、mempool を監視して swap を sandwich する敵対 tx を探す (Lesson 1 の反転)、Revm で **その脅威をシミュレートしてユーザがどれだけ output を失うかを測る**、EIP-7702 でガスを sponsor する (Lesson 5)、そして — 脅威スコアが高ければ — Flashbots Protect 経由で submit する (注文は public mempool に一切現れない)。脅威が低ければ public submission で OK で、bundler のマージンも節約できる。**1 つのサービスで過去 4 レッスン (L1 / L4 / L5 / L7) を縫い合わせ、新規部分は決定レイヤー 1 つだけ。**
 
@@ -3234,7 +3234,7 @@ async fn respects_min_out() {
 
 この先: L9 (validate-revm クロスクライアントハーネス) と L10 (HTTP 402 / MPP machine-payments エンドポイント)。swap-router の弧の外側に立つが、同じティアで ship される。
 
-> **🧭 ここまでで進んだ場所:** **ネットワーク層 + コンパイラ層 + 認証層の統合** を ship した — マルチソース入力 → simulation → 経路判断 → 適切な submission チャネル、これを benign / threat / slippage の E2E テスト群で固めた。HFT order router や CDN edge router と同じ形を、MEV 下の EVM トランザクションルーティングに当てはめたもの。次のレッスンで **VM 層の正しさ検証** へ移る: production provider に対する Revm の differential testing。
+> **🧭 ここまでで積み上げたもの:** **ネットワーク層 + コンパイラ層 + 認証層の統合** を出荷した — マルチソース入力 → simulation → 経路判断 → 適切な submission チャネル、これを benign / threat / slippage の E2E テスト群で固めた。HFT の order router や CDN の edge router と同じ構造を、MEV 下の EVM トランザクションルーティングに持ち込んだかたち。次のレッスンでは **VM 層の正しさ検証** に移る: production provider に対する Revm の differential testing。
 `,
                 },
                 {
@@ -3246,7 +3246,7 @@ async fn respects_min_out() {
                   xpReward: 90,
                   content: `# Revm シミュレーションを Production Provider で検証する
 
-> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層の正しさ検証** — 特にリファレンス実装に対する *differential testing*。IEEE 754 浮動小数点の準拠検証、TLS 実装の interop、POSIX 認証 — どれも同じ規律に依拠している: 代表入力集合で自分の実装が信頼できるリファレンスと一致することを証明する。本レッスンはその技法を「Revm vs 本番 EVM クライアント」に当てはめたもの。
+> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層の正しさ検証** — 特にリファレンス実装に対する *differential testing*。IEEE 754 浮動小数点の準拠検証、TLS 実装の interop、POSIX 認証 — いずれも同じ規律に依拠している: 代表的な入力集合に対して、自分の実装が信頼できるリファレンスと一致することを証明する。本レッスンでは、その技法を「Revm vs 本番 EVM クライアント」に持ち込む。
 
 あなたの arb bot の Revm fork は「この swap で 2.95 WETH 取れる」と言う。実際にチェーン (大半が Geth と Nethermind で、Reth は依然として execution client シェアの ~7-12% に過ぎない) で実行されると 2.93 しか届かない。**bot は自分のシミュレーションのバグで損を出した**。本ティアで作った Revm ベースのシステム全部に同じリスクがある: L1 の MEV searcher は Revm で arb を予測し、L7 の aggregator は Revm で quote を出し、L8 の capstone は Revm で frontrun リスクをスコアする。Revm が mainnet を実際に動かしている Geth/Nethermind の多数派と食い違えば、全部のシステムがサイレントに誤った答えを出荷することになる。以下の ~200 行でクロスチェックを作る。
 
@@ -3557,7 +3557,7 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
 
 ターゲットの雇用主 / プロジェクトに最も近い build を選ぶ。Production ギャップを埋める。小さな public リポとして公開する。**それが会話に持っていく成果物。**
 
-> **🧭 ここまでで進んだ場所:** **コンパイラ / VM 層の正しさ検証** を ship した — Revm fork と production JSON-RPC provider の differential trace 比較を、ガス + 戻り data の一致と CREATE/CALL カバレッジを test gate として固めた。IEEE 754 準拠検証や TLS interop と同じ規律を Revm に当てはめた形。本 tier の他のアプリ (L1、L7、L8) はすべてこの検証層に依存している。次のレッスンで **ネットワーク層の支払いプロトコル** — HTTP 402 + MPP — を、本 tier 全体の上に乗せる有料化エッジとして見る。
+> **🧭 ここまでで積み上げたもの:** **コンパイラ / VM 層の正しさ検証** を出荷した — Revm fork と production JSON-RPC provider の differential trace 比較を、ガス + 戻り data の一致と CREATE / CALL のカバレッジでテストゲートとして固めた。IEEE 754 準拠検証や TLS interop と同じ規律を、Revm に持ち込んだかたち。本ティアの他のアプリ (L1、L7、L8) はすべて、この検証層に依存している。次のレッスンでは **ネットワーク層の支払いプロトコル** — HTTP 402 + MPP — を、本ティア全体の上に乗せる有料化エッジとして見る。
 `,
                 },
                 {
@@ -3569,7 +3569,7 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
                   xpReward: 40,
                   content: `# Machine Payments — HTTP 402 と Tempo MPP スタック
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層の支払いプロトコル** — HTTP セマンティクスを暗号的な決済で拡張したもの。TLS が HTTP を暗号で拡張したのと同じ、OAuth が HTTP を委任認可で拡張したのと同じ、rate-limit ヘッダがコスト信号で拡張したのと同じパターン。MPP は「HTTP + リクエスト単位の決済」を表現するプロトコル層で、アカウントや API キーなしで pay-per-call を必要とする自律 agent のために設計されている。
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層の支払いプロトコル** — HTTP のセマンティクスを、暗号的な決済で拡張したもの。TLS が HTTP を暗号で拡張したのと同じ、OAuth が HTTP を委任認可で拡張したのと同じ、rate-limit ヘッダがコスト信号で拡張したのと同じパターン。MPP は「HTTP + リクエスト単位の決済」を表現するプロトコル層で、アカウントも API キーも持たずに pay-per-call を必要とする自律エージェントのために設計されている。
 
 2026 年の有料 API はどれも同じ手順を要求してきます。サインアップ、メール認証、API キー発行、請求アカウントの紐付け、プランの事前コミット。*そこまでやって初めて* 有料リソースを 1 つ取得できる。SaaS を提供する側にとっては問題ありません。しかしフライト状況を *1 回だけ* 取得したい自律 agent にとっては、その摩擦自体が製品体験 — そして体験は壊れています。
 
@@ -3807,7 +3807,7 @@ async fn rejects_replayed_payment() {
 
 3 つすべてがエンドポイントをローカル起動した状態で pass するまで（payment leg は forked Tempo testnet か anvil で）、レッスンは **未完了**。replay テストで fail する 402 エンドポイントは、URL を見つけた誰かが来るのを待っている wallet drainer です。
 
-> **🧭 ここまでで進んだ場所:** **ネットワーク層の支払いプロトコル** を ship した — HTTP 402 challenge、micropayment receipt、replay 防止。TLS が HTTP を暗号で拡張したのと同じ抽象パターンを、決済に当てはめた形。これで本 tier 11 レッスンが完了 — systems-engineering スタックの各層（ネットワーク、DB、VM、認証、並行性）に対して、エンドツーエンドで構築され test gate で動作が証明されたアプリケーションが、それぞれ少なくともひとつ揃った。**本 tier の約束がここで履行された。**
+> **🧭 ここまでで積み上げたもの:** **ネットワーク層の支払いプロトコル** を出荷した — HTTP 402 の challenge、micropayment receipt、replay 防止。TLS が HTTP を暗号で拡張したのと同じ抽象パターンを、決済に持ち込んだかたち。これで本ティア 11 レッスンが完了 — systems engineering スタックの各層（ネットワーク、DB、VM、認証、並行性）に対して、エンドツーエンドで構築されテストゲートで動作が証明されたアプリケーションが、それぞれ少なくともひとつ揃った。**本ティアの約束が、ここで履行された。**
 `,
                 },
               ],

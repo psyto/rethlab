@@ -34,6 +34,8 @@ export async function seedRethBeginnerEN(prisma: PrismaClient) {
                   xpReward: 20,
                   content: `# Why learn Reth, Revm, and Alloy?
 
+> 🧭 **Why this matters:** this lesson maps the Rust × Ethereum stack at a glance — which projects (Reth, Revm, Alloy, Foundry) sit at which layer — so every later lesson has a home in your head.
+
 Take a look at the most performant chains being built today — Hyperliquid, Tempo, Monad, Berachain — and you'll find a common pattern: **a Rust implementation of the Ethereum stack**, namely **Reth, Revm, and Alloy**.
 
 ## What's the deal?
@@ -70,6 +72,8 @@ By the end, you'll have "I know some Rust and I know what these projects do" —
                   duration: 10,
                   xpReward: 20,
                   content: `# Reth, Revm, Alloy — three pillars
+
+> 🧭 **Why this matters:** introduces the three pillars of the Rust EVM stack and the role each one plays — the load-bearing distinction every later networking / VM / tooling lesson assumes.
 
 These three names get muddled all the time, but they play very different roles. The cleanest analogy: **building a car**.
 
@@ -149,6 +153,8 @@ The next tier of this course (**Fundamentals**) starts by getting your hands on 
                   xpReward: 15,
                   content: `# Why not just use Solana?
 
+> 🧭 **Why this matters:** clarifies *what kind of system* Ethereum is, by contrast with Solana — sets the unstated premise for every later "why is X this way?" decision in the stack.
+
 A reasonable question: "Solana is fast and also Rust — why bother with Rust EVM at all?"
 
 The honest answer is **it depends on what you want to build**, but here's the comparison.
@@ -193,6 +199,8 @@ Now that you can place these projects on a map, let's get Rust running on your m
                   duration: 12,
                   xpReward: 20,
                   content: `# From Solana / Anchor to Reth — what carries over (skip if not from Solana)
+
+> 🧭 **Why this matters:** surveys what transfers from Solana / Anchor experience and what doesn't. Useful as a transition primer if you bring distributed-systems intuition from elsewhere.
 
 > 📌 **Audience.** This lesson is **only useful if you've shipped on Solana** — Anchor program, Jito MEV bot, Solana program tests, Firedancer contributor, anything with \`solana-program\` or \`anchor-lang\`. If you've never touched Solana, skip to *Set Up Rust*. Nothing in the rest of the curriculum depends on this lesson.
 
@@ -285,6 +293,8 @@ You can either skip *Set Up Rust* and head straight to *Fundamentals* (Rust tool
                   duration: 10,
                   xpReward: 20,
                   content: `# Reth vs Geth / Alloy vs ethers-rs — the substitution case
+
+> 🧭 **Why this matters:** walks through the practical reasoning teams use to choose Rust at each stack layer — i.e. why this stack exists, told case-by-case rather than abstractly.
 
 You've placed the projects on a map. Now the next-most-asked question: **why are teams actively migrating off the older alternatives?** Geth has run Ethereum for a decade. ethers-rs was the Rust Ethereum library for years. Yet new infrastructure is being built on Reth and Alloy. This lesson is why — substitution by substitution.
 

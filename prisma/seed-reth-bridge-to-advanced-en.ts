@@ -34,6 +34,8 @@ export async function seedRethBridgeToAdvancedEN(prisma: PrismaClient) {
                   xpReward: 25,
                   content: `# From Solidity to bytecode — the dispatch loop
 
+> 🧭 **Why this matters:** opens the **VM layer's dispatch loop** — the for-loop at the heart of every EVM execution. Inside REVM's custom-opcodes-table lesson later opens up this same loop's table-of-function-pointers design.
+
 You've written Solidity. You've used Foundry to deploy and test. But what does the EVM **actually do** with your contract once it's deployed? This lesson takes you down one layer — to the bytes.
 
 This is the layer Intermediate lessons assume you already understand. Without it, the source of \`revm/crates/interpreter\` reads like noise.
@@ -208,6 +210,8 @@ RxL_1AfV7N4 | EVM: From Solidity to byte code, memory, and storage
                   xpReward: 25,
                   content: `# Memory, storage, and the world state
 
+> 🧭 **Why this matters:** introduces the **VM ↔ DB seam** — call-frame memory, contract storage, world state — that Inside REVM's \`Database\` trait later abstracts. Get the three storage tiers loaded before you read the trait.
+
 The dispatch loop showed you what an opcode *is*. Most opcodes touch one of four stores. This lesson walks through them — and through the world-state model that Solidity hides from you but Intermediate lessons assume you know.
 
 ## The four stores
@@ -362,6 +366,8 @@ When Intermediate lesson 3 shows you the \`Database\` trait, you'll recognize it
                   duration: 12,
                   xpReward: 25,
                   content: `# Gas accounting in depth, and call frames
+
+> 🧭 **Why this matters:** introduces the **VM's metering model** — gas, call frames, reverts. Same shape as a CPU's instruction-count budget + nested function frames, restricted for adversarial execution.
 
 You know "gas costs money." This lesson goes one level deeper — into where gas actually goes, and how a single transaction can trigger a tree of nested **call frames** with separate context.
 
@@ -533,6 +539,8 @@ When Intermediate lesson 5 (custom precompiles) talks about the gas pricing mode
                   xpReward: 25,
                   content: `# Blocks, receipts, and reorgs
 
+> 🧭 **Why this matters:** introduces the **distributed-systems layer** — blocks, receipts, reorgs. Same shape as database WAL + replication + conflict resolution, expressed through consensus. The ExEx / staged-sync lessons later all assume this model.
+
 You've worked with one transaction at a time. The chain operates at a different level: **blocks** of transactions, **receipts** of what they did, and the occasional **reorg** when the chain rewrites recent history.
 
 This is the layer Intermediate lessons on Reth's Staged Sync and ExEx assume you understand.
@@ -691,6 +699,8 @@ When Intermediate lesson 4 walks through the Stage trait and lesson 6 walks thro
                   duration: 18,
                   xpReward: 35,
                   content: `# Rust for Solidity engineers — the migration map
+
+> 🧭 **Why this matters:** maps Solidity intuition onto Rust idioms — the conceptual transition every Solidity engineer building tooling has to make. Cheaper to do here than mid-Inside-tier.
 
 If you've shipped Solidity, you already know everything you need to *care* about EVM behaviour. What's missing is **the Rust mental model that lets you read the engine that runs your contracts**. This lesson is the side-by-side translation table that closes the gap before the dense Rust lessons below.
 
@@ -893,6 +903,8 @@ After this lesson, the dense Rust below — generics, Arc, unsafe, macros — re
                   xpReward: 30,
                   content: `# Generics, trait bounds, ?Sized, dyn vs impl
 
+> 🧭 **Why this matters:** the abstraction toolkit (generics + trait bounds + \`?Sized\` + \`dyn\` vs \`impl\`) is exactly what alloy uses to make \`Provider\` work across chains, and what Revm uses to make \`Database\` work across backends. Loading this here turns the Inside tier from "magic" into "pattern."
+
 This is the lesson that lets you read \`pub fn add<IT: ITy, H: ?Sized>(...)\` without flinching. Reth and Revm source code is **dense with generics** — function signatures with three type parameters and trait bounds aren't unusual. This lesson goes through every piece of that machinery.
 
 ## Generics 101 — the basic shape
@@ -1092,6 +1104,8 @@ When Intermediate lesson 1 hits you with three type parameters and \`?Sized\` in
                   duration: 12,
                   xpReward: 25,
                   content: `# Shared ownership: Arc, Mutex, RwLock
+
+> 🧭 **Why this matters:** \`Arc\` / \`Mutex\` / channels are how Reth's pipeline shares state across Tokio tasks, and how Inside REVM's \`Database\` design lets multiple consumers share a backend. The shared-ownership toolkit underlies every concurrency-shaped piece of the stack.
 
 Rust's "one owner" rule is sharp — and helpful 90% of the time. The other 10%, you need **multiple parts of the program to hold the same value**, possibly across threads, possibly with mutation. That's what this lesson is about.
 
@@ -1624,6 +1638,8 @@ After that, pick a course and start.`,
                   duration: 6,
                   xpReward: 15,
                   content: `# How the source-reading courses work
+
+> 🧭 **Why this matters:** the gate into the Intermediate tier — sets the contract for what "reading the Rust EVM stack at the source level" actually demands. Use this to calibrate how much depth Inside Alloy / REVM / Reth will ask for.
 
 You're at the doorstep of the **Intermediate tier** — three independent courses (**Inside Revm**, **Inside Reth**, **Inside Alloy**) that all teach the same skill: **reading production Rust source line by line.** This short lesson explains how those courses are structured, so you can engage with the right mindset from lesson 1 — whichever course you start with.
 
