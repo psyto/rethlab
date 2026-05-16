@@ -1918,16 +1918,314 @@ After drill 5, you have the full mental model for shipping a Revm/Reth fork with
 - [\`paradigmxyz/revm-rs\` fuzzing harnesses](https://github.com/paradigmxyz/revm-rs) — reference implementations of the differential pattern
 - The historical [Geth Yellow Paper Test Suite](https://github.com/ethereum/tests) — for understanding test-corpus evolution
 
+`,
+                },
+                {
+                  title: 'EVM privacy — reading Tempo Zones',
+                  slug: 'evm-privacy-tempo-zones-en',
+                  type: 'CONTENT',
+                  sortOrder: 7,
+                  duration: 28,
+                  xpReward: 60,
+                  content: `# EVM privacy — reading Tempo Zones
+
+> 🧭 **Where this lives in the systems-engineering stack:** the intersection of three layers — (1) **VM-layer cryptography** (precompiles for encryption and zero-knowledge verification), (2) **distributed-systems layer** (validium-style L2 settlement back to a base chain), (3) **policy / application layer** (compliance inheritance, private RPC). Privacy on EVM isn't a single feature — it's a setting of three independent dials, and \`tempoxyz/zones\` is one specific setting being shipped by an institution-backed team.
+
+> 📌 **Moving target.** Tempo Zones is "actively under development, not recommended for production use." Specific contract signatures, gas costs, and method names may shift. The architectural choices below are what stays stable — read for the shape of the design, not the exact bytes.
+
+Privacy is the topic crypto talks about most and engineers ship the least. Most "EVM privacy" tutorials describe what a shielded pool *is*. This lesson reads the actual Rust source of one production-grade design — Tempo Zones — and uses it to derive the SE framework for reading any future EVM privacy stack (Arc, Anomaly, post-Tempo iterations).
+
+## 1. The privacy tradeoff space (three dials)
+
+Every EVM privacy design picks a setting on three independent dials:
+
+| Dial | Range | What it controls |
+|---|---|---|
+| **Trust model** | trustless ↔ operator-trusted | Who is allowed to see plaintext |
+| **Crypto primitives** | classical ↔ full ZK | What cryptography lives at the VM layer |
+| **DX surface** | custom DSL ↔ standard EVM | What contract authors have to learn |
+
+Three published designs occupy three different corners of this space:
+
+| Design | Trust | Crypto | DX |
+|---|---|---|---|
+| **Aztec L2** | trustless | full ZK (UltraHonk) | custom DSL (Noir) |
+| **Railgun** | trustless | SNARKs in EVM | standard contracts (shielded ERC-20 only) |
+| **Tempo Zones** | **sequencer-trusted** | classical (Chaum-Pedersen + AES-GCM) + pluggable proof | standard EVM execution |
+
+Tempo's bet is the load-bearing reading of this lesson: **institutions need compliance + low operating cost + standard EVM tooling more than they need cryptographic trustlessness.** Whether that bet pays off is a market question. The bet itself is a coherent SE choice — and the rest of this lesson reads how it's implemented.
+
+## 2. The Zones architecture in one paragraph
+
+A Zone is a **validium-style private L2** anchored to Tempo. The spec says it cleanly:
+
+> *"A Tempo Zone is a private execution environment anchored to Tempo. Inside a zone, balances, transfers, and transaction history are invisible to block explorers, indexers, and other users. Each zone is operated by a dedicated sequencer that is the sole block producer, settling back to Tempo through a proof-agnostic verification system."* — [zones spec](https://github.com/tempoxyz/zones/blob/main/specs/spec.md)
+
+Funds enter via deposits locked in a portal contract on Tempo, and the zone mints equivalent tokens. Users transact privately on the zone. To exit, tokens burn on the zone, the sequencer batches withdrawals + a proof, submits to Tempo, and tokens release from the portal.
+
+The load-bearing trust statement is one sentence:
+
+> *"Privacy protects against public observers on Tempo, not against the sequencer."*
+
+This is the single most important design choice in the entire stack. **Compare with Aztec, where the proving system is constructed so that no one — including the prover — sees plaintext.** Tempo trades that property for compliance, simplicity, and roughly 25× cheaper crypto. Whether that trade is right depends entirely on the use case; for regulated stablecoin issuers and payment rails, it is defensible. For anonymous self-custody, it is not.
+
+## 3. The Chaum-Pedersen precompile — reading the Rust source
+
+Open \`crates/precompiles/src/chaum_pedersen.rs\` in \`tempoxyz/zones\`. The file header tells you most of what you need:
+
+\`\`\`rust
+//! Chaum-Pedersen DLOG equality proof verification precompile.
+//!
+//! Registered at [\`CHAUM_PEDERSEN_VERIFY_ADDRESS\`] (\`0x1C00...0100\`).
+//!
+//! Verifies that the sequencer correctly derived the ECDH shared secret
+//! from the depositor's ephemeral public key, without revealing the
+//! sequencer's private key to the EVM.
+//!
+//! Uses the NCC-audited [\`k256\`] crate (v0.13.4) for secp256k1 operations.
+\`\`\`
+
+The precompile itself plugs straight into the standard Revm precompile machinery from Inside REVM:
+
+\`\`\`rust
+pub const CHAUM_PEDERSEN_VERIFY_ADDRESS: Address =
+    address!("0x1C00000000000000000000000000000000000100");
+
+const CP_VERIFY_GAS: u64 = 6_000;
+
+pub struct ChaumPedersenVerify;
+
+impl Precompile for ChaumPedersenVerify {
+    fn precompile_id(&self) -> &PrecompileId { &CP_PRECOMPILE_ID }
+    fn call(&self, input: PrecompileInput<'_>) -> PrecompileResult {
+        // decode verifyProof selector, verify, return bool
+    }
+}
+\`\`\`
+
+The crate is \`no_std\` — its \`lib.rs\` says it explicitly:
+
+\`\`\`rust
+//! This crate is \`no_std\` compatible so these precompiles can run inside the
+//! SP1 prover guest (RISC-V) as well as in the zone node.
+\`\`\`
+
+That is the SE move worth pausing on. **The precompile runs both in the live zone node and inside the SP1 zkVM prover guest, from the same source.** No fork, no port, no second implementation. Same code, two runtimes — exactly the pattern Inside REVM teaches with \`auto_impl\` and trait abstraction, applied at a different layer.
+
+> 🛑 **Predict before continuing.** Tempo could have used Groth16, Plonk, or any general-purpose ZK proving system here. Instead they chose Chaum-Pedersen, a 1992 protocol that proves a *single specific statement*: equality of discrete logarithms. **What is the SE tradeoff that justifies the choice?**
+
+Chaum-Pedersen is ~6,000 gas, ~50 lines of code, no trusted setup, no proving system to maintain. Groth16 verification would be ~150,000 gas + a multi-MB verification key + trusted setup ceremony + a proving system that needs upgrades as the SOTA shifts. **Tempo only needs to prove one thing — that the sequencer's ECDH derivation is correct — so they use a 1992 protocol that does exactly that, at a 25× gas discount.** Don't use a general tool when you need a specific one. The fact that this is *boring* crypto is the point: boring crypto is auditable crypto.
+
+## 4. The AES-GCM precompile — encryption at the VM level
+
+The companion precompile at \`0x1C00...0101\` does symmetric decryption. From the spec:
+
+| | |
+|---|---|
+| **Address** | \`0x1c00000000000000000000000000000000000101\` |
+| **Gas** | ~1,000 base + ~500 per 32 bytes of ciphertext |
+
+\`\`\`solidity
+function decrypt(
+    bytes32 key,
+    bytes12 nonce,
+    bytes calldata ciphertext,
+    bytes calldata aad,
+    bytes16 tag
+) external view returns (bytes memory plaintext, bool valid);
+\`\`\`
+
+The reason this is at the precompile layer and not pure-EVM is performance: AES-256-GCM in EVM bytecode is roughly 100× slower than a native implementation. The Tempo team only put primitives at the precompile layer where the speedup is dramatic. One revealing example: **HKDF-SHA256 (used to derive the AES key from the ECDH shared secret) is *not* a precompile.** From the spec:
+
+> *"HKDF-SHA256 key derivation (used to derive the AES key from the ECDH shared secret) is implemented in Solidity using the SHA256 precompile at \`0x02\`, keeping this precompile minimal."*
+
+> 🛑 **Predict.** Why precompile AES-GCM but not HKDF?
+
+HKDF is just iterated HMAC-SHA256, and SHA256 is already an EVM precompile at \`0x02\`. Implementing HKDF as Solidity that calls \`0x02\` is roughly the same speed as a dedicated precompile. AES is not. **Minimize precompile surface: only precompile what is actually expensive.** This is the same discipline behind the EVM precompile set itself (BN254, BLS, modexp, ecrecover, identity, sha256, ripemd160) — every precompile justifies its existence with a benchmark.
+
+## 5. The encrypted-deposit flow — putting both precompiles together
+
+Now you can read the actual privacy use case end-to-end. The user wants to deposit USDC into a Zone without revealing the on-Zone recipient.
+
+**On Tempo (public):**
+
+1. User generates an ephemeral keypair, runs ECDH with the sequencer's published public key → shared secret.
+2. User derives an AES-256 key from the shared secret using HKDF-SHA256.
+3. User encrypts \`(to || memo || padding)\` with AES-256-GCM → ciphertext + nonce + tag.
+4. User calls \`ZonePortal.depositEncrypted(token, amount, keyIndex, encryptedPayload, bouncebackRecipient)\`. The portal locks tokens and emits \`EncryptedDepositMade\`.
+
+The on-Tempo log reveals \`(token, sender, amount, bouncebackRecipient)\` — required for accounting and refund — but \`(to, memo)\` are encrypted.
+
+**On the Zone (private execution):**
+
+5. Sequencer observes the encrypted deposit, computes the actual shared secret (using its private key + the user's ephemeral pubkey), and generates a Chaum-Pedersen proof of correct derivation.
+6. Zone calls the **Chaum-Pedersen Verify precompile** with the sequencer's claimed shared secret + proof. If the proof checks, the sequencer demonstrably derived the right shared secret without revealing their private key.
+7. Zone runs HKDF-SHA256 in Solidity (using the standard \`0x02\` SHA256 precompile) to derive the AES key.
+8. Zone calls the **AES-GCM Decrypt precompile** with the AES key, nonce, ciphertext, and tag. If the GCM tag validates, the precompile returns the plaintext \`(to, memo)\`.
+9. Zone calls \`TIP20.mint(decryptedTo, amount)\`.
+
+> 🛑 **Predict.** Why is the Chaum-Pedersen proof necessary? Why not just have the sequencer post the shared secret and trust them?
+
+Because without the proof, the sequencer could substitute *any* shared secret — including one that decrypts the ciphertext to a different recipient — and no one could catch them. The proof binds the shared secret cryptographically to the sequencer's public key (which is recorded in onchain history, not user-supplied), so substitution is detectable. **The sequencer is trusted for liveness and data availability, but not trusted to redirect funds.** Different trust assumptions for different concerns — the SE discipline of *not* collapsing "the sequencer" into a single trust statement.
+
+And if the user submits garbage ciphertext (intentionally griefing)? The Chaum-Pedersen proof passes (sequencer derived shared secret correctly), but the GCM tag fails. The deposit bounces back to \`bouncebackRecipient\` on Tempo. **The proof distinguishes "sequencer lied about decryption" from "user submitted invalid ciphertext"** — two failure modes that look the same to a naive observer but require completely different protocol responses.
+
+## 6. The proof-agnostic verifier — \`IVerifier\`
+
+The settlement layer back to Tempo is where the proving system lives. The spec's design choice:
+
+> *"The proving system is proof-agnostic. The core is a pure state transition function that takes a witness, executes zone blocks, and outputs commitments for onchain verification. ... Any proving backend (ZKVM, TEE, or otherwise) can implement the interface."*
+
+The state transition function is a single \`no_std\` Rust function:
+
+\`\`\`rust
+pub fn prove_zone_batch(witness: BatchWitness) -> Result<BatchOutput, Error>
+\`\`\`
+
+And the on-Tempo verifier is an interface, not an implementation:
+
+\`\`\`solidity
+interface IVerifier {
+    function verify(
+        uint64 tempoBlockNumber,
+        uint64 anchorBlockNumber,
+        bytes32 anchorBlockHash,
+        uint64 expectedWithdrawalBatchIndex,
+        address sequencer,
+        BlockTransition calldata blockTransition,
+        DepositQueueTransition calldata depositQueueTransition,
+        bytes32 withdrawalQueueHash,
+        bytes calldata verifierConfig,
+        bytes calldata proof
+    ) external view returns (bool);
+}
+\`\`\`
+
+> 🛑 **Predict.** Why split state transition from proving backend? Why not bake in SP1 / Plonk / Groth16 at the portal contract layer?
+
+The proving market is moving fast. UltraHonk, Honk, Boojum, RISC0, SP1, Jolt, Nova — the SOTA shifts every 12-18 months. And TEE-based verification (Intel SGX, AMD SEV-SNP, Nitro) is also a viable backend for some compliance contexts. Locking in one proving system at the portal contract layer would force a redeploy every time the SOTA shifts. **By making the verifier an interface, Tempo can swap proving backends without touching the portal.** Moving parts at one layer (proving backend) should be isolated from moving parts at another layer (settlement contract). Same SE principle as the \`Database\` trait in Revm: don't couple a fast-moving implementation to a stable abstraction.
+
+This is also why the deployment-modes section is one line:
+
+> *"The state transition function runs in any backend that can execute the \`no_std\` Rust function. Examples include ZKVMs and TEE environments."*
+
+## 7. The Reth fork — \`Cargo.toml\` as the proof
+
+Open \`crates/tempo-zone/Cargo.toml\`. The very first line:
+
+\`\`\`toml
+[package]
+name = "zone"
+description = "Tempo Zone node - a lightweight L2 node built on reth"
+\`\`\`
+
+And the dependency block:
+
+\`\`\`toml
+# reth
+reth-basic-payload-builder.workspace = true
+reth-chainspec.workspace = true
+reth-evm.workspace = true
+reth-node-api.workspace = true
+reth-node-builder.workspace = true
+reth-payload-builder.workspace = true
+reth-revm.workspace = true
+reth-rpc.workspace = true
+reth-rpc-builder.workspace = true
+reth-storage-api.workspace = true
+reth-tasks.workspace = true
+reth-transaction-pool.workspace = true
+# ...
+\`\`\`
+
+This is exactly the Reth SDK pattern from Inside Reth (\`with_types\` / \`with_components\` / \`with_add_ons\` / \`launch\`), used in anger. Tempo Zones plugs custom precompiles (the \`zone-precompiles\` crate above), custom payload validation (privacy modifications), and a private RPC into a stock Reth node and gets a working L2.
+
+> 🛑 **Predict.** Why does Tempo Zones fork Reth instead of writing a node from scratch?
+
+Reth is roughly 50,000+ lines handling the boring parts: devp2p, MDBX storage, staged sync, RPC scaffolding, transaction pool, consensus interfaces, gas accounting. Tempo's actual contribution — the part that is distinctive — is maybe 3 custom precompiles + private RPC modifications + custom block validation + the zone-specific payload builder. **The substrate pays for itself in everything you don't have to re-implement.** This is the same SE move Hyperliquid, OP-Reth, and Tempo all make: write the delta from Reth, not the full stack. The Inside Reth SDK lesson teaches the mechanism; this lesson reads a real production application of it.
+
+## 8. EVM-level privacy enforcement — not RPC-level
+
+Quote the spec's "Privacy Modifications" section directly, because the choice it makes is non-obvious:
+
+> *"Zone execution differs from standard Tempo execution in three areas. These changes are enforced at the EVM level, not just at the RPC layer, so they apply to all code paths including user transactions, \`eth_call\` simulations, and prover re-execution."*
+
+The three modifications:
+- \`balanceOf(account)\` reverts unless \`msg.sender\` is the account owner or the sequencer.
+- All TIP-20 transfer operations charge a fixed 100,000 gas regardless of storage layout.
+- \`CREATE\` and \`CREATE2\` revert. The zone runs only predeploys.
+
+> 🛑 **Predict.** Why fixed 100,000 gas for transfers regardless of whether the recipient has a "warm" or "cold" storage slot?
+
+Storage-slot warmth (whether a slot has been touched in this tx) reveals state. If a transfer to a fresh recipient costs 20k gas and to an existing recipient costs 5k gas, an observer who can see the gas cost can infer prior balance state. **Fixed gas closes this side channel.** Privacy on a public-bytecode VM isn't just hiding values — it's closing all observable channels, including timing and resource cost. The same discipline shows up in constant-time crypto implementations (\`subtle\` crate in Rust, libsodium in C) for the same reason.
+
+And why is \`CREATE\` disabled? Because arbitrary contracts could be written to circumvent the EVM-level privacy controls. **Privacy enforcement at the EVM layer only works if the EVM only runs trusted code.** Validium with privacy + EVM-level discipline + restricted deployment is a coherent package; remove any one and the privacy claim breaks.
+
+## 9. The compliance angle — TIP-403 inheritance
+
+This is the angle that makes Tempo Zones legible to financial institutions. From the spec:
+
+> *"Zones inherit compliance policies from Tempo automatically. Token issuers set transfer policies once on Tempo, and zones enforce them without any additional configuration."*
+
+Mechanically: the zone deploys a read-only \`TIP403Registry\` proxy at the same address as Tempo's registry. Zone-side TIP-20 transfers check \`isAuthorized(policyId, from)\` and \`isAuthorized(policyId, to)\` before executing. The proxy reads the actual policy state from Tempo via \`TempoState.readTempoStorageSlot(...)\`. If the issuer freezes an address on Tempo, the zone inherits the freeze the next time \`advanceTempo\` imports a Tempo block containing the update.
+
+> 🛑 **Predict.** A regulated stablecoin issuer wants to freeze a sanctioned address. Without Tempo Zones, they would have to push the freeze to every chain their token lives on. With Tempo Zones, what happens?
+
+They push the freeze once to Tempo's TIP-403 registry. Every zone automatically inherits the freeze in its next block (after the next \`advanceTempo\`). **The compliance state is a single shared resource across mainnet and every zone — written once, read everywhere.** That is the architectural property that makes "privacy + compliance" a coherent product position for institutions, not an oxymoron.
+
+## 10. The 3-dial framework, refilled
+
+You can now re-read the original tradeoff table with concrete grounding:
+
+| Dial | Tempo Zones setting | Why |
+|---|---|---|
+| **Trust model** | sequencer-trusted, plaintext visible to one party | Compliance + auditability + low operating cost |
+| **Crypto** | Chaum-Pedersen + AES-GCM at precompile layer, no general ZK at VM | Specific primitives 25× cheaper than general ZK; HKDF stays in Solidity to minimize precompile surface |
+| **DX** | standard EVM, no custom DSL, contracts opt into privacy via \`depositEncrypted\` flow | Solidity engineers ship without learning Noir or Cairo |
+| **Settlement** | validium-style portal + proof-agnostic IVerifier | Pluggable proving backend (ZKVM or TEE) without redeploy |
+| **Compliance** | inherited from base chain via TIP-403 read-through proxy | Single source of truth for policy across mainnet + zones |
+
+A different design (Aztec, Railgun, future Arc) is a different setting of the same dials. The framework is what transfers; the specific design is one instance.
+
+## 11. The forward-looking gap
+
+What this lesson doesn't yet cover, because the source isn't public:
+
+- **Circle's Arc** (announced 2025-08): claims privacy support; design unpublished as of writing.
+- **Anomaly and other stablecoin-purpose-built chains**: position is similar to Tempo's; designs not yet readable at the source level.
+- **Tempo's production proving backend selection**: spec is proof-agnostic; production choice (which ZKVM, or TEE attestation) is forthcoming.
+
+When any of these publish, the 3-dial framework above is what you'll use to read them. That is the lesson's actual durable artifact — not the specific Tempo bytes, which will shift, but the framework for reading any future EVM privacy stack.
+
+## Recall
+
+Without scrolling:
+
+1. **What does Chaum-Pedersen prove, and why is it cheaper than Groth16 for this use case?**
+2. **Why is AES-GCM a precompile but HKDF is not?**
+3. **The Tempo verifier is abstracted behind \`IVerifier\`. What does this enable that a hard-coded prover wouldn't?**
+4. **Why is \`CREATE\` disabled on Zones? What property would break without that restriction?**
+5. **Tempo Zones uses Reth as a base. What does the \`Cargo.toml\` reveal about the moat-vs-substrate split?**
+
+If any answer is shaky, re-read the section referenced.
+
+## 📂 Source repos worth keeping open
+
+- [\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) — the case study, especially \`specs/spec.md\` and \`crates/precompiles/src/\`.
+- [\`paradigmxyz/reth\`](https://github.com/paradigmxyz/reth) — the substrate Tempo Zones forks.
+- [\`bluealloy/revm\`](https://github.com/bluealloy/revm) — for the precompile trait machinery the Zones precompiles plug into.
+- [\`AztecProtocol/aztec-packages\`](https://github.com/AztecProtocol/aztec-packages) — for the opposite-corner contrast (trustless, full ZK, custom DSL).
+- [\`Railgun-Community\`](https://github.com/Railgun-Community) — for the middle-corner contrast (trustless, SNARKs-in-EVM, standard contracts).
+
 ---
 
-**You've reached the end of Reth Expert.** The Building tier puts every testing pattern you've learned into production apps; the L1 Architect tier (Advanced) uses this same correctness discipline at the protocol design layer. The skills you've built across the test lessons are what separate "Revm code that runs" from "Revm code that's safe to ship as the heart of an L1."
-`,
+**You've reached the end of Reth Expert.** The Building tier puts every pattern from this course into production apps; the L1 Architect tier (Advanced) uses the same discipline at the protocol design layer. Across Expert you've read performance internals, MDBX storage, Tokio concurrency, proc macros, tracing, custom precompiles, MPT proofs, stateless execution, MEV in production, zkEVM, fork ops, differential fuzzing, and — with this lesson — production privacy stack design. That is the source-level vocabulary every team you'd want to work on this stack with is already using.`,
                 },
                 {
                   title: 'Expert quiz',
                   slug: 'expert-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 7,
+                  sortOrder: 8,
                   duration: 15,
                   xpReward: 50,
                   content: `# Expert quiz
