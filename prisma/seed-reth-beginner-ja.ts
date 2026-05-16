@@ -193,85 +193,83 @@ Reth は **唯一の Ethereum execution client ではなく**、まだ支配的�
 
 > 📌 **対象。** 本レッスンは **Solana で ship した経験がある人向け** — Anchor プログラム、Jito MEV bot、Solana プログラムのテスト、Firedancer コントリビュータ、\`solana-program\` か \`anchor-lang\` を触ったことがある人。Solana を触ったことが無いなら、*Rust 環境を整える* に飛んでください。本レッスンに依存する後続レッスンはありません。
 
-多くのカリキュラムは Solidity からの移行を前提にする。あなたはそうではなく、**根本的に違うランタイムモデル上の Rust** から来ている。本レッスンはその翻訳レイヤー。
+多くのカリキュラムは Solidity からの移行を前提にしますが、あなたはそうではなく、**まったく違うランタイムモデルの上で Rust を書いてきた** 立場です。本レッスンは、その経験を Reth 側に翻訳するレイヤーです。
 
-## 1. 持ち越せるもの（実は多い）
+## 1. 持ち越せるもの（実はかなり多い）
 
-Solana 側で築いた苦労した技は、**Rust EVM スタックでもすべて価値を保つ**:
+Solana で苦労して身につけたスキルは、**Rust EVM スタックでも価値をそのまま保ちます**。
 
-| Solana 由来のスキル | こちらでの着地 |
+| Solana で身についたスキル | こちらでの着地 |
 | :--- | :--- |
-| **Rust ownership / lifetimes / async** | 同じ。Solidity 移行者が必要とする「Rust オンボーディングの 3 週間」を skip できる |
-| **低レベルシステムコードを読む力** | Reth と Revm は \`solana-program\` より密だが、*読む規律* は同じ — 外から内へ、trait の形を信じ、テストで検証する |
-| **「自分が所有しないエンジン」のメンタルモデル** | Firedancer をパッチしたか Jito relayer のソースを読んだことがあるなら、Reth fork モデルは即座に読める |
-| **並列実行への慣れ** | Sealevel が並行ステート操作を考えさせた。Reth の stage パイプラインは異なる関心事を並行で走らせる; 筋肉は移植可能 |
-| **\`cargo\` ツールチェイン熟達** | 同じ。workspace、feature、macro デバッグの \`cargo expand\` — すべて |
+| **Rust の所有権 / ライフタイム / 非同期** | 同じです。Solidity から来た人が必要とする「Rust への 3 週間」を、あなたは飛ばせます。 |
+| **低レベルシステムコードを読む筋力** | Reth と Revm は \`solana-program\` より密ですが、*読み方の作法* は同じ — 外から内へ、トレイトの形を信じて、テストで答え合わせ。 |
+| **「自分が所有しないエンジン」を扱う感覚** | Firedancer にパッチを当てたり Jito の relayer を読んだ経験があれば、Reth の fork モデルはすぐ読めます。 |
+| **並列実行への馴染み** | Sealevel が並行な状態操作を考えさせてくれた経験は、Reth の stage パイプラインが関心事を並行に走らせる場面でそのまま効きます。 |
+| **\`cargo\` 周辺の手の速さ** | 同じです。workspace、feature、マクロデバッグの \`cargo expand\` — 全部そのまま。 |
 
-率直な構図: **あなたの Rust スキルは大半の EVM 側エンジニアが持っていない資産**。本カリキュラムの厳しいセクション — *中級への橋渡し* の Rust モジュール — はあなたにとってほぼ復習。
+率直に書くと、**あなたの Rust スキルは EVM 側のエンジニアの大半が持っていない資産** です。このカリキュラムでいちばん重い *中級への橋渡し* の Rust モジュールは、あなたにとってほぼ復習になります。
 
-## 2. 構造的に違うもの
+## 2. 構造的に違うところ
 
-実際に重要なモデルのギャップ:
+逆に、ここはモデルが本当に違う、という点です。
 
 | 概念 | Solana | Reth / EVM |
 | :--- | :--- | :--- |
-| **状態** | アカウント単位、事前宣言（account モデル） | コントラクト単位の storage、動的（slot キーの \`SLOAD\` / \`SSTORE\`） |
-| **並列性** | アカウント単位、ランタイムスケジュール（Sealevel） | ブロック内は逐次; ExEx / Reth SDK で並列コンポーネントを追加可能 |
-| **プログラム** | グローバルな 1 プログラム、アカウントを渡す | 各コントラクトが自分の bytecode と storage を持つ |
-| **計算単位** | tx あたり線形のガス類似予算 | EVM ガス、opcode ごとに非自明なコストカーブ |
-| **検証** | カスタム syscall 付き BPF VM | EOF + spec-tests 付き EVM |
-| **ウォレット / 署名者** | 終始 Ed25519 | 主に secp256k1、最終的には account abstraction で post-quantum へ |
+| **状態** | アカウント単位で事前宣言 (account モデル) | コントラクト単位のストレージ、slot キーの \`SLOAD\` / \`SSTORE\` で動的に |
+| **並列性** | アカウント単位、ランタイムがスケジュール (Sealevel) | ブロック内は逐次。ExEx / Reth SDK で並列コンポーネントを後付けできる |
+| **プログラム** | グローバルな 1 つのプログラムにアカウントを渡す | 各コントラクトが自分のバイトコードとストレージを持つ |
+| **計算予算** | tx あたり線形なガス類似の予算 | EVM ガス、opcode ごとに非自明なコストカーブ |
+| **検証** | カスタム syscall を持つ BPF VM | EOF + execution spec tests を持つ EVM |
+| **署名者** | 最初から最後まで Ed25519 | 基本は secp256k1、将来は account abstraction で耐量子へ |
 
-最大のメンタル反転: **storage はコントラクト単位、アカウント単位ではない**。Solana では状態を保持するアカウントを渡す; EVM では **コントラクトそのものが状態**。Inside Revm の \`Database\` トレイトに到達したら丁寧に読む — そのトレイトが「どの AccountInfo に触れるか」の EVM 側の答え。
+いちばん大きな発想の反転は、**ストレージがコントラクト単位であって、アカウント単位ではない** こと。Solana では状態を持つアカウントを渡しますが、EVM では **コントラクト自身が状態** です。Inside Revm の \`Database\` トレイトに到達したら丁寧に読んでください — そのトレイトが「どの AccountInfo に触れるか」に対する EVM 側の答えです。
 
-> 🛑 **予測。** Solana プログラムでユーザごとのカウンタを更新するものを書いた。EVM での等価ストレージはどう見える? データはどこに住む?
+たとえば、ユーザごとにカウンタを更新する Solana プログラムを書いたことがあるなら、EVM での等価形はコントラクト内部の \`mapping(address => uint256) counter\` です。コントラクトが slot キーを所有し、各ユーザのカウンタは \`keccak256(user_address . slot)\` に置かれます。Solana ならユーザごとに 1 アカウント、EVM なら全員ぶんを 1 コントラクトのストレージ trie に詰める — 同じ問題に対して、違うモデルでの解です。
 
-コントラクト内部の \`mapping(address => uint256) counter\`。コントラクトが slot キーを所有する; 各ユーザのカウンタは \`keccak256(user_address . slot)\` にある。Solana ならユーザごとに 1 アカウント; EVM では全部 1 コントラクトの storage trie に詰める。同じ問題、違うモデル。
+## 3. 2 つのスタックが交わる場所 — HyperEVM、Tempo
 
-## 3. 2 つのスタックが交わる場所: HyperEVM、Tempo
+次のチェーンは **Solana 流の性能を EVM のセマンティクスに持ち込むため** に作られています。Solana から移ってきたあなたにとって、自然な着地点です。
 
-これらのチェーンは **Solana スタイルのパフォーマンスを EVM セマンティクスに持ち込むため** に作られた。Solana 移行者にとって自然な着地点:
+- **HyperEVM (Hyperliquid)**: HyperBFT コンセンサスを持つ Reth fork。EVM バイトコードを、Solana 出身者が期待する性能水準で execution layer が走らせます。HyperEVM を読むことは、あなたの Solana 由来の性能感覚を EVM 側に持ち込むことです — これが Inside Reth + L1 Architect tier の準備内容です。
+- **Tempo**: Stripe が支える Reth ベースの決済チェーン。高スループットのステーブルコイン送金向けに設計されています。Solana の決済 rail 経験（Stripe が以前 Solana に統合していたのが前例）が、ほぼ翻訳なしで活きます。
+- **MegaETH**: もうひとつの Reth ベース高性能チェーン。Solana 風の UX を狙っています。
 
-- **HyperEVM (Hyperliquid)**: HyperBFT コンセンサスの Reth fork。EVM bytecode を Solana エンジニアが期待するパフォーマンスレベルで execution layer が走らせる。HyperEVM を読むことは、Solana のパフォーマンス直感を EVM 領域に持ち込むこと — これが Inside Reth + L1 Architect tier が準備する内容そのもの。
-- **Tempo**: Stripe バックの Reth ベース決済チェーン。高スループット stablecoin 送金向け設計。Solana の決済 rail 経験（Stripe の以前の Solana 統合が先行例）が直接翻訳できる。
-- **MegaETH**: 別の Reth ベース高性能チェーン、Solana 風 UX を追求。
+**Solana → Reth は格下げではありません。** チェーン専用のランタイムから、次世代の高性能 L1 / L2 が乗ろうとしている実行エンジンへの移籍です。Rust EVM スタックは、あなたのスキルが複利で効く場所です。
 
-**Solana → Reth は格下げではない。** チェーン固有ランタイムから、次世代の高性能 L1 / L2 が build している実行エンジンへの移行。Rust EVM スタックはあなたのスキルが複利で効く場所。
+## 4. 具体的な文化の違い — source-first か abstraction-first か
 
-## 4. 具体的な文化の違い: source-first vs abstraction-first
+Solana 出身者からよく聞く論点はここです。
 
-Solana エンジニアから一番多く聞く論点:
+- **Anchor**: 抽象が厚い。フレームワークが SVM を隠し、シリアライズを隠し、アカウント検証を隠します。\`#[derive(Accounts)]\` と書いて信じることが多い。何かが壊れたとき、本物の SVM 挙動までたどり着くのに時間がかかります。
+- **Firedancer / Jito**: source-first。C を読み、relayer を読み、パッチを当てて再ビルドする。文化は素晴らしいけれど、参加できる範囲が狭い（Firedancer のコントリビューション窓口は事実上閉じていて、Jito はオープンだが Solana 専用）。
+- **Reth / Revm / Foundry**: 設計の段階から source-first、しかも **開かれた** コントリビューション窓口を持っています。メンテナ自身が「ここを読んでカスタムノードを ship してください」というパターンを明示的に提示してきます。RethLab はこの文化の上に組まれています。
 
-- **Anchor**: 重い抽象。フレームワークが SVM を隠し、シリアライズを隠し、account 検証を隠す。\`#[derive(Accounts)]\` を書いて信じる。何かが壊れたとき、実際の SVM 挙動への道のりは長い。
-- **Firedancer / Jito**: source-first。C を読み、relayer を読み、パッチして再ビルドする。優れた文化、狭いアクセス（Firedancer のコントリビューション窓口は事実上閉じている; Jito はオープンだが Solana 固有）。
-- **Reth / Revm / Foundry**: 設計上 source-first、かつ **広い** コントリビューションアクセス。メンテナが「これを読んでカスタムノードを ship」のパターンを明示的に公開している。これが RethLab が build されている規律。
+Anchor の抽象が不透明に感じていた人にとって、RethLab はホームのように感じるはずです。Firedancer / Jito が楽しかったけれど応用範囲がもっと欲しかった人にとって、Rust EVM スタックはその拡大版です。
 
-Anchor の抽象が不透明に感じたなら、RethLab は home に感じる。Firedancer / Jito を楽しめたが応用範囲がもっと欲しかったなら、Rust EVM スタックがその拡大版。
+## 5. あなた向けに地図を引き直すと
 
-## 5. あなた向けにマップしたカリキュラム
+Rust の素地を踏まえて、流し読み・じっくり読みの目安は以下の通りです。
 
-Rust 背景を踏まえて、skip / 加速できるレッスンの率直な推奨:
-
-| セクション | 推奨 |
+| セクション | 読み方の目安 |
 | :--- | :--- |
-| **Beginner — *Rust 環境を整える*** | 流し読み。\`rustup\` は持っている |
-| **Fundamentals — Rust async / traits / generics** | 流し読み。持っている |
-| **Fundamentals — EVM 概念** | **丁寧に読む。** Solana モデルとの違いが現れる場所 |
-| **中級への橋渡し — EVM をバイト単位で** | **丁寧に読む。** Dispatch loop、ガス、コールフレーム — 全部新しい |
-| **中級への橋渡し — ソース読みのための Rust** | 流し読み。Generics、Arc、unsafe、macros — あなたにとっては復習 |
-| **Inside Revm / Inside Reth / Inside Alloy** | **丁寧に読む。** ご褒美 |
-| **L1 Architecture (Advanced) tier** | **来た理由。** 特に Consensus + Cross-Chain Bridges |
-| **Expert + Building** | アウトプット。読んだことを応用 |
+| **Beginner — *Rust 環境を整える*** | 流し読み。\`rustup\` はすでに入っているはず。 |
+| **Fundamentals — Rust 非同期 / トレイト / ジェネリクス** | 流し読み。これは持っている。 |
+| **Fundamentals — EVM 概念** | **じっくり読む。** Solana モデルとの差が現れる場所。 |
+| **中級への橋渡し — EVM をバイト単位で** | **じっくり読む。** dispatch loop、ガス、call frame — 全部新しい。 |
+| **中級への橋渡し — ソース読みのための Rust** | 流し読み。ジェネリクス、Arc、unsafe、マクロ — あなたには復習。 |
+| **Inside Revm / Inside Reth / Inside Alloy** | **じっくり読む。** ここが本題。 |
+| **L1 Architecture (Advanced) tier** | **来た目的のひとつ。** 特に Consensus と Cross-Chain Bridges。 |
+| **Expert + Building** | アウトプット。読んだことを実装に変える。 |
 
 ## 6. あなたが賭けているもの
 
-Solana のランタイムは良いが Solana 固有。Reth は **多くのチェーンの基板** — Hyperliquid、Tempo、OP-Reth、MegaETH、Berachain — その数は増え続けている。Rust EVM スタックはあなたのスキルがより広い L1 / L2 表面で複利になる場所、1 つのチェーンだけではなく。
+Solana のランタイムは優れていますが、Solana 専用です。Reth は **多くのチェーンが乗る基盤** で、Hyperliquid、Tempo、OP-Reth、MegaETH、Berachain — その数は増え続けています。Rust EVM スタックは、あなたのスキルが 1 つのチェーンではなく、より広い L1 / L2 全体で複利で効く場所です。
 
-これは Solana への takedown ではない。**Reth を読めるエンジニアは Solana プログラムを読めるエンジニアより希少で、Reth に賭けているチェーンは急速に成長している** という観察。あなたの Solana 育ちの Rust 直感は、Solidity からの移行者の誰よりも早くその希少人材ニッチに着地させる。
+これは Solana を貶しているわけではなく、**Reth を読めるエンジニアは Solana プログラムを読めるエンジニアより希少で、しかも Reth に賭けているチェーンが急速に増えている** という観察です。Solana で鍛えた Rust の直感は、Solidity から移ってくる人より早く、その希少人材のニッチにあなたを連れていってくれます。
 
 ## 次へ
 
-*Rust 環境を整える* を skip して直接 *Fundamentals* に向かう（Rust ツールチェインは既に持っている）か、Foundry / Anvil をまだ見ていないなら *Rust 環境を整える* を流し読みするか、どちらでも先に進めます。
+*Rust 環境を整える* を飛ばして直接 *Fundamentals* に向かっても構いません（Rust ツールチェーンはあなたが持っているはずです）。Foundry / Anvil をまだ触っていなければ、*Rust 環境を整える* を流し読みするのも手です。どちらの道でも先に進めます。
 `,
                 },
                 {
@@ -283,60 +281,52 @@ Solana のランタイムは良いが Solana 固有。Reth は **多くのチェ
                   xpReward: 20,
                   content: `# Reth vs Geth / Alloy vs ethers-rs — 置き換えの根拠
 
-プロジェクトを map に置いた。次に多い質問: **なぜチームは古い代替から能動的に移行しているのか?** Geth は 10 年間 Ethereum を走らせてきた。ethers-rs は何年もの間 Rust Ethereum ライブラリだった。それでも新インフラは Reth と Alloy 上に build されている。本レッスンはその理由を置き換えごとに示す。
+プロジェクトの地図は前のレッスンで描きました。次に出てくる質問はこれです — **なぜチームは古い選択肢から積極的に移行しているのか?** Geth は 10 年間 Ethereum を走らせてきました。ethers-rs は長らく Rust Ethereum ライブラリの定番でした。それでも、新しいインフラは Reth と Alloy の上に作られています。その理由を、置き換え 1 件ずつ見ていきます。
 
 ## 1. Reth vs Geth
 
-Geth (Go-Ethereum) は元祖 execution client。2015 年から mainnet を走らせ、execution client シェアの ~40〜50% を保ち、背後のチームは優秀。**Reth は「より良い Geth」ではない。** Geth が構造的にできないことで居場所を稼ぐ、異なる設計。
+Geth (Go-Ethereum) は元祖の execution client です。2015 年から mainnet を走らせ続け、現在も execution client シェアの 40〜50% を握り、開発チームは優秀です。**Reth は「より良い Geth」ではありません。** Geth が構造的にできないことで居場所を稼ぐ、別物の設計です。
 
 | 性質 | Geth | Reth | なぜ重要か |
 | :--- | :--- | :--- | :--- |
-| **言語** | Go | Rust | Cargo workspace で revm をライブラリとしてインポートして単独使用できる — Geth の execution engine はノードに溶接されていて再利用不可 |
-| **アーキテクチャ** | 強結合 | モジュラ crate (revm、alloy、reth-stages、reth-network、reth-rpc など) | ノード全体を fork せず *1 つの* crate（例: カスタム executor）を fork できる — App-chain / L1 fork パターンの中核 |
-| **State storage** | LevelDB ベース、進化中 | MDBX (memory-mapped B+tree) | 重い compaction 下でも読み取りレイテンシが安定。Geth は歴史的に archive node の compaction stall に苦戦 |
-| **Execution engine** | go-ethereum のインタープリター | revm (Rust、ライブラリ first) | revm は Foundry、Hyperliquid の HyperEVM、全 Rust ベース MEV stack に再利用されている — Geth のインタープリターは Geth 自身以外に消費者がない |
-| **同期戦略** | Snap sync | Staged sync (10 ステージパイプライン) | Staged sync は I/O をバッチ全体で償却; 初期同期が速く、カスタムステージで拡張しやすい |
-| **拡張 API** | 公的にメンテされた仕組み無し | ExEx (Execution Extensions) — インプロセス Rust hook | ノード *内側で* ノード速度のインデクサ・MEV ボット・リスクエンジンを build、RPC ラウンドトリップなし。Geth に等価なし |
-| **Chain fork** | 困難 (Geth 全体の fork) | 容易 (Reth SDK: 1 コンポーネント差し替え、残り保持) | Hyperliquid の HyperEVM、Tempo、MegaETH、Base (OP-Reth)、Berachain は全部このパターンを使う |
-| **再利用フットプリント** | Geth のコードは Geth が使う | Reth のコンポーネント (revm、alloy、reth-* crate) は 100+ プロジェクトに再利用されている | 触れる全 Rust EVM ツールはこれらの crate の上に build されている |
+| **言語** | Go | Rust | Cargo workspace で revm をライブラリとして単独で使えます。Geth の execution engine はノードに溶接されていて再利用できません。 |
+| **アーキテクチャ** | 強結合 | モジュラな crate (revm、alloy、reth-stages、reth-network、reth-rpc など) | ノード全体ではなく *1 つの* crate（たとえばカスタム executor）だけを fork できます — App-chain / L1 fork パターンの中核です。 |
+| **状態ストレージ** | LevelDB ベース、進化中 | MDBX (メモリマップ B+tree) | コンパクション負荷の下でも読み取りレイテンシが安定します。Geth は archive node のコンパクション停滞に長らく苦戦してきました。 |
+| **実行エンジン** | go-ethereum のインタープリター | revm (Rust、ライブラリ志向) | revm は Foundry、Hyperliquid の HyperEVM、Rust ベースの MEV スタックすべてに使い回されています。Geth のインタープリターには Geth 自身以外の消費者がいません。 |
+| **同期戦略** | Snap sync | Staged sync (10 段パイプライン) | バッチ全体で I/O を償却するため、初期同期が速く、カスタムステージで拡張もしやすい。 |
+| **拡張 API** | 公式にメンテされた仕組みなし | ExEx (Execution Extensions) — インプロセスの Rust フック | ノード *内側で* ノード速度のインデクサ・MEV ボット・リスクエンジンを動かせ、RPC を経由しません。Geth には等価物がありません。 |
+| **チェーン fork** | 困難 (Geth 全体を fork する必要) | 容易 (Reth SDK で 1 コンポーネントだけ差し替え) | Hyperliquid の HyperEVM、Tempo、MegaETH、Base (OP-Reth)、Berachain がこのパターンで作られています。 |
+| **再利用範囲** | Geth のコードは Geth が使う | revm、alloy、reth-* crate は 100 を超えるプロジェクトで再利用されている | あなたが触れる Rust EVM ツールはすべて、これらの crate のどれかの上に乗っています。 |
 
-> 🛑 **予測。** あるチームが独自トランザクション順序付けの payments-priority L1 を ship したい。どのクライアントを fork するか?
+決済優先の独自トランザクション順序付けを持つ L1 をチームが ship する場面を想像してみてください。fork するのは Reth で、それも全体ではありません。Reth の crate に依存したまま、\`Pool\` と \`Payload\` コンポーネントだけを差し替えます。Geth なら全コードベースを fork し、永遠に続くリベース税を払い、自分では触りたくない 20 万行のコードを抱え込むことになります。これがまさに Tempo がやっていることで、前のレッスンに並んだ Reth ベース L1 すべてが採用している形です。
 
-Reth を fork する — しかも全体は fork すらしない。Reth の crate に依存して \`Pool\` と \`Payload\` コンポーネントだけ差し替える。Geth なら全コードベースを fork し、永遠の rebase 税を受け入れ、メンテしたくない 200K 行表面を継承する。これがまさに Tempo がやっていることで、前レッスンの表の他の全 Reth ベース L1 がやっていること。
-
-**Reth は Geth を退位させるために build されたのではない。** 次世代のチェーンが build する *substrate* になるために build された。それは別カテゴリ。
+**Reth は Geth を退位させるために作られたのではありません。** 次世代のチェーンが上に乗る *基盤* になるために作られました。Reth と Geth はそもそも別カテゴリです。
 
 ## 2. Alloy vs ethers-rs
 
-ethers-rs は ~2020 から 2024 にかけて *the* Rust Ethereum ライブラリだった。そして 2024 年半ばに ethers-rs のメンテナ (Georgios Konstantopoulos / Paradigm) が **Alloy 移行に伴い deprecate**。移行は段階的でも美的理由でもなく — ethers-rs が構造的に届かない特定の性質を狙った意図的な再設計。
+ethers-rs は 2020 年から 2024 年にかけて、Rust Ethereum ライブラリの定番でした。そして 2024 年半ばに、ethers-rs のメンテナ（Georgios Konstantopoulos / Paradigm）が **Alloy への移行を進めるために ethers-rs を deprecate** しました。移行は段階的でも美的理由でもなく、ethers-rs が構造的に届かない性質を狙った意図的な再設計です。
 
 | 性質 | ethers-rs | Alloy | なぜ重要か |
 | :--- | :--- | :--- | :--- |
-| **モジュラリティ** | モノリシック crate | 多くの小 crate (alloy-provider、alloy-network、alloy-primitives、alloy-signer、alloy-rpc-types、...) | 必要なものだけ pull-in; Cargo 膨張が劇的に縮む |
-| **Async スタイル** | \`async-trait\`（呼び出しごとに Box 確保） | ネイティブ async trait + ProviderCall (zero-cost) | Hot path (MEV、RPC サーバ) は呼び出しごとの確保なしから測定可能に恩恵 |
-| **マルチチェーン** | Ethereum 専用型 | \`Network\` トレイトがチェーンプリミティブを抽象化 | 同じ Provider コードが Ethereum、Optimism、カスタム L2 で動く — Inside Alloy で歩く |
-| **型エルゴノミクス** | 独自型、revm と分離 | revm の \`Address\`、\`U256\`、\`B256\` を直接使う | alloy + revm + reth で 1 セットの型。変換ボイラープレート無し |
-| **Wallet / signer 合成性** | 1 つの Provider 設計に結合 | \`Signer\` + \`Filler\` トレイトが \`ProviderBuilder\` 経由で合成 | カスタム署名、nonce 管理、ガス推定をクリーンに重ねる。Inside Alloy の Signer チェーンで教える |
-| **手続きマクロ (\`sol!\`)** | 外部 crate、結合は緩い | first-class、alloy 全体で使われる | Solidity 型を Rust でコンパイル時に定義; 手書き ABI struct 無し。全 Rust Solidity 連携プロジェクトで使われる |
-| **メンテナンス** | Paradigm の 1 人、時間制限あり | 出資を受けた Paradigm プロジェクト + コミュニティ | 活発な開発、速い PR turnaround、明確な roadmap |
+| **モジュラ性** | モノリシックな crate | 細かい crate (alloy-provider、alloy-network、alloy-primitives、alloy-signer、alloy-rpc-types など) | 必要なものだけ依存に加えればよく、Cargo の依存ツリーが劇的に縮みます。 |
+| **非同期スタイル** | \`async-trait\`（呼び出しごとに Box を確保） | ネイティブな async trait + ProviderCall (確保なし) | ホットパス (MEV、RPC サーバ) では呼び出しごとの確保が消えるだけで体感差があります。 |
+| **マルチチェーン** | Ethereum 専用の型 | \`Network\` トレイトでチェーンプリミティブを抽象化 | 同じ Provider コードが Ethereum、Optimism、独自 L2 で動きます。Inside Alloy で詳しく歩きます。 |
+| **型のエルゴノミクス** | 独自型、revm とは別系列 | revm の \`Address\`、\`U256\`、\`B256\` をそのまま使う | alloy + revm + reth で型が一揃い。変換のためのボイラープレートが消えます。 |
+| **ウォレット / 署名者の合成** | 単一の Provider 設計に密結合 | \`Signer\` + \`Filler\` トレイトを \`ProviderBuilder\` で重ねる | 署名、nonce 管理、ガス推定を別々に組み立てて重ねられます。Inside Alloy の Signer 章で歩きます。 |
+| **手続きマクロ (\`sol!\`)** | 外部 crate、結合は緩い | 第一級、alloy 全体で使われる | Solidity 型を Rust 側でコンパイル時に定義でき、手書きの ABI struct が要りません。 |
+| **メンテナンス** | Paradigm 内の 1 人、時間も限定 | Paradigm が予算をつけ、コミュニティも参加 | 開発が活発で、PR の回りが速く、ロードマップも明確。 |
 
-> 🛑 **予測。** 2026 年に新 MEV searcher を書く。なぜ ethers-rs ではなく Alloy を選ぶか?
+2026 年に新しい MEV searcher を書く立場を想像してみてください。Alloy を選ぶ理由は次の 4 つです — (a) revm と型を共有できる（fork シミュレーションは revm で動く）、(b) クラウド KMS やハードウェアウォレットを独自 \`Signer\` として、Provider を書き換えずに差し込める、(c) 型パラメータを 1 つ変えるだけでコードが Optimism / Base / 任意の Reth ベース L2 で動く、(d) ethers-rs にはもう Paradigm からのバグ修正が来ない。**ethers-rs に残る理由は惰性だけ** で、その惰性も四半期ごとに弱まっていきます。
 
-Alloy を選ぶ理由は (a) revm と型を共有する（fork simulation は revm に住む）、(b) クラウド KMS かハードウェアで独自 \`Signer\` を Provider 書き換えなしで合成できる、(c) 1 つの型パラメータ変更でコードが Optimism / Base / 任意の Reth ベース L2 で動く、(d) ethers-rs はもう Paradigm からバグ修正を受けない。**惰性が ethers-rs に居続ける唯一の理由**、そして惰性は四半期ごとに弱くなる。
+## 3. 2 つの置き換えに共通するパターン
 
-## 3. 両置き換えに共通するパターン
+Geth と ethers-rs は悪くありません。Rust EVM エコシステムがまだ若かった頃の、「下流プロジェクトをまたいで合成できる」より「まず動かす」が優先された時代の産物です。
 
-Geth と ethers-rs は悪くない。「N の下流プロジェクトをまたいで合成可能にする」より「動くようにする」が優先だった、Rust EVM エコシステムの早期の瞬間の産物。
+**Reth と Alloy は同じ設計判断を共有しています — 完全性より合成性。** どちらも内部を crate として切り出し、下流のプロジェクトが混ぜて並べて差し替えられるようにしてあります。Geth と ethers-rs は完成品として使われる前提で設計され、Reth と Alloy は拡張される基盤として設計されました。
 
-**Reth と Alloy は意図的設計の選択を共有: 完全性より合成性。** どちらも内部ピースをライブラリ crate として露出し、下流プロジェクトが混ぜ、合わせ、置き換えできる。Geth と ethers-rs は消費される製品として設計された; Reth と Alloy は拡張される基盤として設計された。
+これが、このカリキュラムの残りが存在する構造的な理由です。**続く Inside Revm、Inside Reth、Inside Alloy は、その基盤を読むスキルを教えます。** 読めれば作れる。それが Geth と ethers-rs が構造的に提供できなかったレバレッジです。
 
-これがこのカリキュラム残りが存在する構造的理由。**次に来るレッスン — Inside Revm、Inside Reth、Inside Alloy — は基盤を読むスキルを教える。** 読めれば build できる。それが Geth と ethers-rs が構造的に提供できなかった leverage。
-
-> 🛑 **リコールチェック。** 各々を一文で:
-> - なぜ payments-priority L1 チームは Reth を fork し、Geth ではないのか?
-> - 2026 年の新 MEV searcher はなぜ Alloy を ethers-rs より選ぶのか?
-
-スクロールせずに両方答えられたら、置き換えモデルを持っている。できなければ該当の表を読み直す。
+このレッスンを終えたら、頭の中に 2 つの答えを残しておいてください: 決済優先の L1 チームが Geth ではなく Reth を fork する理由は何か、2026 年の新しい MEV searcher が ethers-rs ではなく Alloy を選ぶ理由は何か。どちらも上の表に答えがあります。
 
 ## 次へ
 
@@ -352,74 +342,70 @@ Geth と ethers-rs は悪くない。「N の下流プロジェクトをまた�
                   xpReward: 25,
                   content: `# Ethereum を systems engineering として読む — 必要なメンタルモデル
 
-ほとんどの Ethereum 入門は Ethereum を **それ自身のもの** として扱う: ブロックチェーンの魔法、特別なプリミティブ、crypto 固有用語の並行宇宙。その枠は dapp チュートリアルには役立つ。Reth、Revm、Alloy のソースを読むには貧弱な枠。
+ほとんどの Ethereum 入門は、Ethereum を **それ自体が独立した世界** として扱います。ブロックチェーンの魔法、特別なプリミティブ、暗号資産業界固有の用語が並ぶ並行宇宙。この捉え方は dapp チュートリアルには役立ちますが、Reth・Revm・Alloy のソースを読むには弱すぎます。
 
-**このカリキュラムを実際に通せる枠**: Ethereum は **データベース + 分散システム + コンパイラ + ネットワーキングスタック + OS スタイル並行ランタイム**、コンセンサスで接着されたもの。各ピースは数十年の文献を持つ既知の systems-engineering 問題。「ブロックチェーン」部分は接着剤であって実質ではない。
+このカリキュラムを通すために必要な捉え方はこちらです: **Ethereum は、データベース + 分散システム + コンパイラ + ネットワーク + 並行処理ランタイムが、コンセンサスでひとつに束ねられたもの。** どの部品も数十年の文献を持つ、よく研究された systems engineering の問題です。「ブロックチェーン」と呼ばれている部分は接着剤であって、本質ではありません。
 
-本レッスンは持って歩く必要のあるメンタルモデル。1 度読めば、続く全 Reth / Revm / Alloy レッスンが既知のものに着地する。
+この一枚の絵を持ち歩いてください。続く Reth / Revm / Alloy のすべてのレッスンが、すでに知っている何かの上に着地します。
 
 ## 1. 5 つのサブシステム
 
-Reth のソースツリーは 5 つの systems-engineering 分野にきれいに分解できる:
+Reth のソースツリーは、5 つの systems engineering 分野にきれいに分解できます。
 
-| サブシステム | 何か | Reth でどこに | Ethereum 外の類推 |
+| サブシステム | 中身 | Reth のどこに住むか | Ethereum 外の類例 |
 | :--- | :--- | :--- | :--- |
-| **データベース** | スナップショット、MVCC、クラッシュリカバリ付き永続 key-value store | \`reth-mdbx\` + \`reth-db\` (MDBX、メモリマップド B+tree) | PostgreSQL のストレージ層、RocksDB、LMDB |
-| **分散システム** | 部分故障下で合意に達する多ノード state machine | Consensus 統合、P2P state 同期、gossip | Raft、Paxos、Bitcoin の最長 chain、Cassandra |
-| **コンパイラ / VM** | バイトコードインタープリター; やがて JIT/AOT コンパイラ | revm (インタープリター)、revmc (JIT/AOT) | JVM、V8、CPython、LuaJIT |
-| **ネットワーキングスタック** | peer スコアリングと DoS 耐性付きの独自 TCP ベース gossip プロトコル | \`reth-network\` (devp2p)、代替チェーンでは libp2p | BGP、BitTorrent の tracker 層、IRC |
-| **並行ランタイム** | Async I/O オーケストレーション; 数千の in-flight task | Tokio (協調スケジュールされる future) | Node.js のイベントループ、Go の goroutine、Erlang の BEAM |
+| **データベース** | スナップショット・MVCC・クラッシュ復旧を備えた永続キー・バリュー・ストア | \`reth-mdbx\` + \`reth-db\` (MDBX、メモリマップ B+tree) | PostgreSQL のストレージ層、RocksDB、LMDB |
+| **分散システム** | 部分故障下で合意に達する多ノード状態機械 | コンセンサス統合、P2P 状態同期、ゴシップ | Raft、Paxos、Bitcoin の最長チェーン、Cassandra |
+| **コンパイラ / VM** | バイトコードインタープリター、やがて JIT/AOT コンパイラへ | revm (インタープリター)、revmc (JIT/AOT) | JVM、V8、CPython、LuaJIT |
+| **ネットワーク** | ピア評価と DoS 耐性を備えた独自 TCP ゴシッププロトコル | \`reth-network\` (devp2p)、代替チェーンでは libp2p | BGP、BitTorrent のトラッカー層、IRC |
+| **並行処理ランタイム** | 非同期 I/O のオーケストレーション、数千の同時実行タスク | Tokio (協調スケジュールの future) | Node.js のイベントループ、Go の goroutine、Erlang の BEAM |
 
-> 🛑 **スクロール前に予測。** 任意の会社で本番で見たバグクラスを 1 つ選ぶ: 競合状態、データベースデッドロック、TCP backpressure、JIT mis-compile。**それはどの Ethereum サブシステムで起こりうるか?**
+過去の現場で見たどんなバグクラス — 競合状態、データベースのデッドロック、TCP バックプレッシャー、JIT のコンパイル誤り — でも、Ethereum でそのまま起きます。実際に起きてきました。Reth の CI が捕まえるのは、データベースのコンパクション停滞、リオーグ処理の競合、opcode 価格付けのバグ、ピア排除攻撃、負荷下のタスク餓死。**バグの種類は Ethereum 固有ではありません。** 見つけ方も直し方も同じです。
 
-全部起こりうるし、実際に全部起きてきた。Reth の CI はデータベース compaction stall（データベース問題）、reorg 処理の race（分散システム問題）、opcode 価格バグ（コンパイラ問題）、peer-eclipse 攻撃（ネットワーキング問題）、負荷下での task starvation（並行ランタイム問題）を捕まえる。**バグクラスは Ethereum 固有ではない。** 見つけて直す技法も Ethereum 固有ではない。
+## 2. なぜソース読みでこの捉え方が効くか
 
-## 2. なぜソース読みでこれが重要か
+\`reth-mdbx\` を開いて「コピーオンライトのページと MVCC スナップショットを持つ B+tree」を見たら、それは **50 年の文献を背負ったデータベース設計** だと認識してください。「Ethereum が状態を奇妙に保存している」のではありません。Reth が MDBX を選んだ理由は、SQLite が類似の設計を選ぶ理由と同じ — 重い書き込み負荷下で読み取りレイテンシが安定する、クラッシュに強い、組み込みやすい、という工学的な選択です。
 
-\`reth-mdbx\` を開いて「copy-on-write ページと MVCC スナップショット付き B+tree」を見たとき、**50 年の文献を背後に持つデータベース設計選択** として認識すべき。「Ethereum が state を奇妙な方法で保存している」ではない。MDBX が Reth にいるのは、SQLite が類似設計を使うのと同じ理由をエンジニアリングチームが選んだから: 重い書き込み負荷下での安定読み取りレイテンシ、クラッシュ安全性、組み込み用途。
+revm を開いて「スタックベースのインタープリターが 256 個の関数ポインタテーブルでディスパッチする」のを見たら、それは **1980 年代の CPython と 1990 年代の JVM 文献から続く仮想マシン設計** です。「EVM 特有の奇妙さ」ではありません。素朴な \`match\` 文より速い理由は、1990 年以降に作られたすべてのインタープリターが何らかの計算 goto や関数ポインタテーブルを使う理由と同じです。
 
-revm を開いて 256 スロット関数ポインタテーブル経由でディスパッチするスタックベースインタープリターを見たとき、**1980 年代 CPython と 1990 年代 JVM 文献由来の仮想マシン設計選択** として認識すべき。「EVM の奇妙さ」ではない。ディスパッチループが素朴 \`match\` より速いのは、1990 年以降に build された全インタープリターが何らかの形の computed-goto または関数ポインタテーブルを使うのと同じ理由。
+\`reth-network\` を開いて「悪い振る舞いで切断するピア評価」を見たら、それは **BGP の時代から続く分散システムのパターン** です。「Ethereum 固有のアンチ DoS」ではありません。
 
-\`reth-network\` を開いて「悪い挙動で eviction する peer scoring」を見たとき、**BGP 時代の分散システムパターン** として認識すべき。「Ethereum 固有の anti-DoS」ではない。
+この捉え直しはあちこちで効きます。続くレッスンは「これは OS スケジューリング理論をリオーグに当てはめたもの」とは声に出して言いません — それでも、あなたがこの捉え方を持っている前提で書かれています。
 
-reframe はあちこちで報われる。続くレッスンは「これは reorg に適用された OS スケジューリング理論」と声に出して言わない — だがあなたがこの枠を持っている前提で書かれている。
+## 3. スキルが複利で効く
 
-## 3. 複利で増えるスキル
+Ethereum はよく研究されたシステムの合成です。だからこそ、ここで身につけるスキルは **業界をまたいで複利で効きます**。
 
-Ethereum がよく研究されたシステムの合成だからこそ、ここで build するスキルは **業界横断で複利**:
-
-| Reth を読んで build するスキル | 他にどこで効くか |
+| Reth を読んで身につくスキル | 他のどこで活きるか |
 | :--- | :--- |
-| MDBX / B+tree ストレージ設計 | 任意のデータベースエンジニアリング職 (Snowflake、PlanetScale、Neon、MongoDB) |
-| Tokio async + backpressure | 全 Rust ネットワーキングプロジェクト (Cloudflare、Discord、AWS 内部サービス、Linkerd) |
-| revm インタープリターループ | 任意の VM / 言語ランタイム作業 (TigerBeetle、独自 DSL、EVM 以外のスマートコントラクト VM) |
-| Reorg 周りの分散システム推論 | データベースレプリケーション、コンセンサスエンジニアリング、payment-rail 設計 |
-| プロファイリング、flamegraph、cache locality | 任意の高スループット企業の性能エンジニアリング |
+| MDBX / B+tree のストレージ設計 | データベース・エンジニアリング全般 (Snowflake、PlanetScale、Neon、MongoDB) |
+| Tokio 非同期 + バックプレッシャー | Rust ネットワーキングのすべて (Cloudflare、Discord、AWS 内部サービス、Linkerd) |
+| revm のインタープリターループ | VM・言語ランタイム全般 (TigerBeetle、独自 DSL、EVM 以外のスマートコントラクト VM) |
+| リオーグまわりの分散システム推論 | データベースレプリケーション、コンセンサス設計、決済 rail 設計 |
+| プロファイリング、フレームグラフ、キャッシュ局所性 | 高スループット企業の性能エンジニアリング全般 |
 
-Solidity しか読めない「Ethereum エンジニア」は狭い市場を持つ。Ethereum に専門化することになった systems エンジニアは *systems エンジニアリングの全求人市場* を fallback として持ち — その上に Ethereum 専門家プレミアムが乗る。
+Solidity しか読めない「Ethereum エンジニア」は市場が狭い。一方、たまたま Ethereum を専門にした systems エンジニアは、systems engineering の求人市場 *全体* を退路として確保したうえで、Ethereum 専門家としての上乗せも取れる立場にいます。
 
-> 🛑 **予測。** 友人が「Ethereum が伸びなかった場合、Reth を学ぶことは何を買ってくれるのか?」と聞く。30 秒の答えをスケッチする。
+仮に Ethereum 業界が伸びなかったとしても、MDBX・Tokio・本物の分散システムに対して ship した経験を持つ Rust エンジニアは、TigerBeetle、Cloudflare、Discord、PlanetScale、Neon、クラウドデータベース各社のインフラエンジニアリング職を選び放題です。Ethereum 固有の知識は上乗せ、systems の基礎スキルが土台 — この順序が成立しているのが、ここでの賭けの強さです。
 
-おおよそ: 「MDBX、Tokio、本物の分散システムに対して ship した Rust 流暢な systems エンジニアは、広い業界の全インフラエンジニアリング職を fallback として持つ — TigerBeetle、Cloudflare、Discord、PlanetScale、Neon、全クラウドデータベースチーム。Ethereum 固有知識は upside; 基礎スキルが floor。」
+つまり Reth への賭けは、本当は Ethereum への賭けではありません。**systems engineering という分野への賭け** で、Ethereum はその応用先のうち特に面白く、特に報酬の大きい一例にすぎません。
 
-これが Reth への賭けが本当は Ethereum への賭けではない理由。**systems engineering を分野として** の賭け — Ethereum は特に面白く儲かる応用表面。
+## 4. 退けるべき「魔法」の言い回し
 
-## 4. 拒否すべき「魔法」
+以下の枠付けに出会ったら、能動的に押し返してください。
 
-遭遇したら能動的に *押し戻す* べき枠:
+- **「スマートコントラクトは特別」** — 違います。VM 上で走るプログラムです。VM がたまたま決定的で、ガスを計測するだけ。「スマートコントラクト」を頭の中で「プログラム」に置き換えるとレッスンがすっきり読めます。
+- **「状態 (state) は特別」** — 違います。スナップショット付きのキー・バリュー・ストアです。「state」を頭の中で「データベース」に置き換えてください。
+- **「コンセンサスは特別」** — 違います。40 年以上研究されてきた、レイテンシ・ライブネス・スループットのトレードオフが既知のアルゴリズムです。「コンセンサス」を「ノードが合意するためのプロトコル」と置き換えてください。
+- **「ガスは特別」** — 違います。計測付きのリソース予算です。「ガス」を「CPU とメモリの計測」と置き換えてください。
 
-- **「スマートコントラクトは特別」** — 違う。VM 上で走るプログラム。VM がたまたま決定的でガス計測される。頭の中で「スマートコントラクト」を「プログラム」に置き換える; レッスンがより clear に読める
-- **「state は特別」** — 違う。スナップショット付き key-value store。頭の中で「state」を「データベース」に置き換える
-- **「コンセンサスは特別」** — 違う。40 年以上研究されたよく知られたトレードオフ（latency vs liveness vs throughput）のアルゴリズム。頭の中で「コンセンサス」を「ノードが合意するために使うプロトコル」に置き換える
-- **「ガスは特別」** — 違う。計測付きリソース予算。頭の中で「ガス」を「CPU とメモリ計測」に置き換える
-
-続くレッスンはこれら置換を済ませた前提で書かれている。「EVM」「state」「コンセンサス」を使うのは文献がそうしているから — だがそれらを **一般的 systems-engineering 問題のインスタンス** として扱い、魔法的 Ethereum 固有現象としては扱わない。
+続くレッスンはこの置き換えを済ませた前提で書かれています。「EVM」「state」「コンセンサス」という語は文献に合わせて使いますが、それらを **一般的な systems engineering の問題の具体例** として扱い、Ethereum 固有の魔法的な何かとしては扱いません。
 
 ## 次に来るもの
 
-これがレッスン 0 — 枠。Module 0 の残りは map を埋める: どのプロジェクト（Reth、Revm、Alloy）がどのサブシステムを実装しているか、なぜチームが Geth / ethers-rs / Solana より この stack を選ぶか、Solidity や Solana の経験がどう持ち越せるか。Module 0 の後、Rust をセットアップしてソース読みを始める。
+これがレッスン 0 — 全体の捉え方です。Module 0 の残りはこの地図を埋めていきます。どのプロジェクト（Reth・Revm・Alloy）がどのサブシステムを実装しているか、なぜチームが Geth / ethers-rs / Solana ではなくこのスタックを選ぶのか、Solidity や Solana の経験がどう持ち越せるのか。Module 0 を終えたら、Rust をセットアップしてソースを読み始めます。
 
-1 つだけ持ち歩く: **続く全レッスンで「ブロックチェーン」「state」「コンセンサス」「ガス」が出てきたら、頭の中で systems-engineering の等価物に置換する。** レッスンはあなたが置換を済ませた前提で書かれている。枠こそがソースを読めるようにする。
+ひとつだけ持って歩いてください。続くレッスンで「ブロックチェーン」「state」「コンセンサス」「ガス」という語が出てきたら、頭の中で systems engineering の等価物に置き換えてください。レッスンはあなたがその置き換えを済ませた前提で書かれています。**この捉え方こそが、ソースを読めるようにする鍵です。**
 `,
                 },
               ],

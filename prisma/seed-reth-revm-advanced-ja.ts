@@ -1626,17 +1626,17 @@ tx は「致命的な外部エラー」として中断する — revert とは�
                   xpReward: 45,
                   content: `# Revm 自身のテスト — state test、EOF test、execution-spec 準拠
 
-インタープリター、命令テーブル、Database トレイトを歩いてきた。**次は: Revm チームはどうやって「Revm が EVM を正しく実行する」ことを証明しているのか?** 答えは「読んでうなずいた」ではない。コンセンサスクリティカルなエンジン — バグ 1 つでチェーンが分裂する種類のソフトウェア — は別の基準で計られる。本レッスンはその基準が要求するテスト基盤を読む。
+ここまでインタープリター、命令テーブル、Database トレイトを歩いてきました。**次の問いは、Revm チームが「Revm が EVM を正しく実行する」ことをどうやって証明しているか** です。答えは「読んでうなずいた」ではありません。コンセンサスクリティカルなエンジン — バグが 1 つでもチェーンを分裂させかねないソフトウェア — は、別の基準で計られます。本レッスンはその基準が要求するテスト基盤を読み解きます。
 
 ## EVM 実装が通すべき 3 つのテスト面
 
 | テスト面 | 在処 | 何を証明するか |
 | :--- | :--- | :--- |
-| **State tests** ([\`ethereum/tests\`](https://github.com/ethereum/tests)) | 標準の、複数クライアント横断テストコーパス | 単一トランザクションが pre-state を正しい post-state へ遷移させ、ガスコストが正しいこと |
-| **EOF tests** ([\`ethereum/tests/EOFTests\`](https://github.com/ethereum/tests/tree/develop/EOFTests)) | EVM Object Format への準拠 | 新バイトコードコンテナフォーマット（validation、sub-container）が仕様通りに accept/reject すること |
-| **execution-spec-tests** ([\`ethereum/execution-spec-tests\`](https://github.com/ethereum/execution-spec-tests)) | 仕様から生成されるテスト群 | テストが *仕様から生成される* ので、pass = 構造的に仕様と一致 |
+| **State tests** ([\`ethereum/tests\`](https://github.com/ethereum/tests)) | 標準の、複数クライアントを横断するテストコーパス | 1 つのトランザクションが事前状態を正しい事後状態へ遷移させ、ガスコストも正しいこと |
+| **EOF tests** ([\`ethereum/tests/EOFTests\`](https://github.com/ethereum/tests/tree/develop/EOFTests)) | EVM Object Format への準拠テスト | 新しいバイトコードコンテナ形式（検証、サブコンテナ）が仕様通りに受理／拒否すること |
+| **execution-spec-tests** ([\`ethereum/execution-spec-tests\`](https://github.com/ethereum/execution-spec-tests)) | 仕様から生成されるテスト群 | テストが *仕様から生成* されているので、通過すること自体が仕様との一致を意味する |
 
-Revm は 3 つすべてを通す。**これが Reth・Hyperliquid の HyperEVM・Foundry・Tempo の中の engine として Revm を ship するに足る安全性を担保する。** この規律無しでは下流の全消費者がコンセンサスバグに晒される。
+Revm はこの 3 つすべてを通します。**これが Reth・Hyperliquid の HyperEVM・Foundry・Tempo の中身として Revm を ship する根拠** であり、この規律がなければ下流の消費者すべてがコンセンサスバグにさらされます。
 
 ## 1. State tests — 標準フォーマット
 
@@ -1751,9 +1751,9 @@ state test を *書く* ことは（普通は）無い — upstream で書かれ
                   xpReward: 50,
                   content: `# 並列実行 — 逐次インタープリターループの先へ
 
-Inside Revm の全レッスンは execution を逐次として扱ってきた: 1 tx ずつインタープリターを通し、commit、次へ。これが Reth と revm が現状 ship している方法であり、mainnet が 10 年間動いてきた方法。**そしてこれが EVM 性能の最大の天井** でもある。Sei、Monad、MegaETH、Aptos（技法の起源）など、複数のチームが並列 EVM を ship 済みまたは ship 中。Reth 自身もソースツリーに実験的な並列実行パスがある。本レッスンはそのモデルを教える。
+Inside Revm のこれまでのレッスンは、実行を逐次として扱ってきました — 1 つの tx をインタープリターに通し、コミットし、次へ。これが Reth と revm が現状で出荷している形であり、mainnet が 10 年間動いてきた形です。**そして、これが EVM の性能を縛る最大の天井** でもあります。Sei・Monad・MegaETH・Aptos（技法の起源）など複数のチームが並列 EVM を出荷済み、あるいは出荷中です。Reth 自身もソースツリーに実験的な並列実行パスを持っています。本レッスンでは、そのモデルを学びます。
 
-> 📌 **正直な枠組み。** 並列 EVM は *動く標的*。Sei、Monad、MegaETH、Reth の実験的作業で具体的な実装は異なる。一定なのは — そして本レッスンが教えるのは — **block-stm** パターン（読み書き衝突検出付きの楽観的並行制御）と、これまで歩いてきた \`Database\` トレイトへのマッピング。
+> 📌 **正直なところ。** 並列 EVM は *動く標的* です。Sei・Monad・MegaETH・Reth の実験的作業で実装の細部は異なります。共通して変わらず、本レッスンで学ぶのは — **block-stm** パターン（読み書きの衝突検出を伴う楽観的並行制御）と、これまで歩いてきた \`Database\` トレイトへのマッピング、の 2 点です。
 
 ## 1. なぜ逐次実行が天井なのか
 

@@ -1924,20 +1924,20 @@ cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
                   xpReward: 50,
                   content: `# Stage と ExEx のテスト — fixture chain・インプロセスノード・golden state
 
-\`Stage\` トレイト、ExEx API、NodeBuilder SDK を歩いてきた。**次は: Reth — そして Reth を拡張するアプリ — はどうやってこれらが動くことを検証するのか?** dev で「正しそうに見える」ノードコンポーネントは production で何千ユーザの状態を静かに破壊する。以下のパターンが Reth 自身の CI がそれを防ぐ方法であり、Building tier で出荷する全 ExEx ベースアプリがテストされるべき方法です。
+ここまでで \`Stage\` トレイト・ExEx API・NodeBuilder SDK を歩いてきました。**次の問いは、Reth — そして Reth を拡張するアプリ — がこれらの動作をどう検証しているか** です。dev 環境で「動いて見える」ノードコンポーネントは、本番で何千人ものユーザの状態を静かに壊します。以下のパターンが、Reth 自身の CI がそれを防いでいる方法であり、Building tier で出荷する ExEx ベースのアプリすべてがテストされるべき形です。
 
 ## Reth を拡張するアプリに必要な 2 つのテスト層
 
 | 層 | 何をテストするか | 何を起動するか |
 | :--- | :--- | :--- |
-| **Stage / ExEx ユニットテスト** | trait 実装を、与えられた canned chain イベントに対して単独で | 何も — 純 Rust + fixture |
-| **NodeBuilder integration テスト** | 自前コンポーネントを差した状態で組み立てたノード | Reth ノード全体をインプロセスで fixture または anvil チェーンに対して |
+| **Stage / ExEx のユニットテスト** | trait 実装単体に、用意したチェーンイベントを与える | 何も起動しない — 純 Rust + fixture |
+| **NodeBuilder の統合テスト** | 自前コンポーネントを差したノード全体 | Reth ノードをインプロセスで起動し、fixture か anvil チェーンに当てる |
 
-Reth 自身の crate は両方を使う。Production 拡張（\`tidx\`、MEV ExEx、独自 App-chain）も両方が必要。どちらかをスキップすると、あるクラスのバグが通り抜ける。
+Reth 自身の crate も両方を使っています。本番の拡張（\`tidx\`、MEV ExEx、独自 App-chain）でも両方が必要です。どちらかを省くと、特定クラスのバグが必ず通り抜けます。
 
-## 1. Stage ユニットテスト — 正典パターン
+## 1. Stage のユニットテスト — 標準パターン
 
-\`Stage\` 実装は 2 メソッド: \`execute\`（前進 sync）と \`unwind\`（reorg ロールバック）。両方とも、与えられたチェックポイントの staged DB 状態の純粋関数。ユニットテストパターン: temp DB を作り、pre-state を seed、\`execute\` を呼び post-state を assert; その後 \`unwind\` を呼びロールバックを assert。
+\`Stage\` の実装はメソッド 2 つ — \`execute\`（前進方向の同期）と \`unwind\`（reorg のロールバック）。どちらも、与えられたチェックポイントとステージ DB の状態に対する純粋関数です。ユニットテストの形は次の流れです: 一時 DB を作り、事前状態を流し込み、\`execute\` を呼んで事後状態を assert する。次に \`unwind\` を呼んで巻き戻しを assert する。
 
 \`\`\`rust
 use reth_provider::test_utils::create_test_provider_factory;

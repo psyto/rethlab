@@ -2269,17 +2269,17 @@ expected (), found
                   xpReward: 45,
                   content: `# alloy 消費者コードのテスト — anvil・Provider モック・トレイト差し替え
 
-\`Provider\`、\`Network\`、\`Signer\` トレイトの形を歩いてきた。**次は: それらに依存するコードをどうテストするか?** Building tier で作る全アプリ — MEV searcher、indexer、wallet backend、swap aggregator — が \`Provider\` をインスタンス化し、\`Signer\` で署名し、filler chain で fill する。実 RPC エンドポイントを立てずにそのコードをユニットテストできなければ、test gate は機能しない。本レッスンがその答え。
+ここまでで \`Provider\`・\`Network\`・\`Signer\` トレイトの形を一通り歩いてきました。**次の問いは、それらに依存するコードをどうテストするか** です。Building tier で作る全アプリ — MEV searcher、indexer、ウォレットバックエンド、swap aggregator — はすべて \`Provider\` をインスタンス化し、\`Signer\` で署名し、filler chain で穴を埋めます。実 RPC エンドポイントを立てずにそのコードをユニットテストできないと、test gate は機能しません。本レッスンがその答えです。
 
 ## alloy 消費者コードに対して書く 3 種類のテスト
 
-| テスト種別 | 使う Provider | コスト | いつ |
+| テスト種別 | 使う Provider | コスト | いつ使うか |
 | :--- | :--- | :--- | :--- |
-| **プログラマブル anvil** | 実 \`anvil\` インスタンスをインプロセスで起動 | ~50 ms 起動 | ほぼ常時 — anvil はユニットテストにも十分速い |
-| **Forked anvil** | pin したブロックの \`anvil --fork-url <RPC>\` | ~200 ms + RPC クォータ | 実 mainnet コントラクト状態が必要なとき |
-| **手書きトレイト差し替え** | \`impl Provider for ...\` した自作 struct | なし | レア — ロジックがチェーンセマンティクスに無関係なときのみ |
+| **プログラム制御の anvil** | \`anvil\` の本物のインスタンスをインプロセスで起動 | 起動 ~50 ms | ほぼ常時。anvil はユニットテストにも十分速い |
+| **fork した anvil** | ブロックを pin した \`anvil --fork-url <RPC>\` | ~200 ms + RPC クォータ | 実 mainnet のコントラクト状態が必要なとき |
+| **トレイトを自作で差し替える** | \`impl Provider for ...\` した自作 struct | なし | 稀。ロジックがチェーンセマンティクスに依存しないときに限る |
 
-テストの 9 割はプログラマブル anvil。残り 2 つは escape hatch。
+テストの 9 割はプログラム制御の anvil で済みます。残り 2 つは逃げ道として用意しておく形です。
 
 ## 1. プログラマブル anvil — 本番パターン
 
