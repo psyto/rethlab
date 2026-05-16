@@ -26,7 +26,7 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Test gate — この tier では全アプリがテスト green で初めて完了',
+                  title: 'テストゲート — このティアでは全アプリがテスト green で初めて完了',
                   slug: 'building-test-gate-ja',
                   type: 'CONTENT',
                   sortOrder: 0,

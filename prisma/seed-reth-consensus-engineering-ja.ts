@@ -1004,7 +1004,7 @@ loop {
 > 最終チェック: 一文で、Malachite が自分で書かずに済ませてくれるものは何か? **言葉にできなければ、組み込み準備の整った Rust BFT エンジンを持つ価値をまだ腹落ちさせていない**。`,
                 },
                 {
-                  title: 'bera-reth を読む — Proof-of-Liquidity をコンセンサスカスタマイズとして',
+                  title: 'bera-reth を読む — Proof-of-Liquidity をコンセンサスのカスタマイズとして',
                   slug: 'consensus-bera-reth-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
@@ -1239,7 +1239,7 @@ bera-reth を参照として学ぶ:
             lessons: {
               create: [
                 {
-                  title: 'NodeBuilder コンセンサススロット — カスタムコンセンサスを配線',
+                  title: 'NodeBuilder のコンセンサススロット — カスタムコンセンサスを配線',
                   slug: 'consensus-nodebuilder-slot-ja',
                   type: 'CONTENT',
                   sortOrder: 0,

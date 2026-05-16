@@ -1761,7 +1761,7 @@ pub trait TxSigner<Sig> {
 `,
                 },
                 {
-                  title: '実 \`Signer\` トレイト + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\` を読む',
+                  title: '本物の \`Signer\` トレイト + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\` を読む',
                   slug: 'alloy-signer-walkthrough-ja',
                   type: 'CONTENT',
                   sortOrder: 10,
@@ -2273,7 +2273,7 @@ expected (), found
 このドリルを終えた時点で、*完全な Provider / Network / Signer のトリオを通した署名済みトランザクション* を投入したことになる — dapp、MEV ボット、インデクサが本番で使っているのと同じ形だ。**Provider、Network、Signer のチェーンが完走。** 次はコースの最終クイズ。`,
                 },
                 {
-                  title: 'alloy 消費者コードのテスト — anvil・Provider モック・トレイト差し替え',
+                  title: 'alloy 利用側コードのテスト — anvil・Provider モック・トレイト差し替え',
                   slug: 'alloy-testing-ja',
                   type: 'CONTENT',
                   sortOrder: 13,
@@ -2425,7 +2425,7 @@ let provider = forked_provider_at(FORK_RPC, PINNED_BLOCK).await;
 `,
                 },
                 {
-                  title: 'Inside Alloy 最終クイズ',
+                  title: 'Inside Alloy ファイナルクイズ',
                   slug: 'alloy-advanced-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 14,

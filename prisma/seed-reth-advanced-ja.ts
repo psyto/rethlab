@@ -322,7 +322,7 @@ impl<S: Stage<P>> Stage<P> for Box<S> {
 `,
                 },
                 {
-                  title: 'Reth のパイプライン: 10ステージ、順番付き',
+                  title: 'Reth のパイプライン — 順序のある 10 ステージ',
                   slug: 'staged-sync-pipeline-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
