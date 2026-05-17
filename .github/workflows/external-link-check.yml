@@ -1,0 +1,85 @@
+name: External Link Check
+
+# Runs weekly to detect broken external (non-GitHub-blob) links in lesson content.
+# Opens an issue when one or more links 404 (typically because a blog post moved,
+# docs page got renamed, or external resource went offline).
+#
+# Companion to source-link-check.yml: that one watches upstream Reth/Revm/Alloy
+# source moves; this one watches everything else (EIPs, docs, blog posts, papers).
+#
+# Trigger manually with: gh workflow run "External Link Check"
+
+on:
+  schedule:
+    # Thursdays 09:00 UTC — offset from source-link-check (Mondays) to spread
+    # the issue-creation load across the week.
+    - cron: '0 9 * * 4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Check external links
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - id: check
+        name: Run link checker
+        run: npx tsx .github/scripts/check-external-links.ts | tee /tmp/external-link-report.txt
+        continue-on-error: true
+
+      - name: Open issue on failure
+        if: steps.check.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('/tmp/external-link-report.txt', 'utf8');
+            const today = new Date().toISOString().slice(0, 10);
+            const title = `External link check failed (${today})`;
+
+            // Avoid spamming: if an issue with the same title already exists, skip.
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'external-link-rot',
+            });
+            if (existing.some((i) => i.title === title)) {
+              console.log('Issue already open for today — skipping.');
+              return;
+            }
+
+            const body = [
+              'The weekly external-link check found one or more broken URLs',
+              'in lesson content. Likely a blog post moved, docs page renamed,',
+              'or external resource went offline.',
+              '',
+              'Full report:',
+              '',
+              '```',
+              report.slice(-5000),
+              '```',
+              '',
+              'Workflow run: ' + `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join('\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['external-link-rot'],
+            });
