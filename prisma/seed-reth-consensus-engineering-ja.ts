@@ -597,7 +597,7 @@ Tendermint との比較: Tendermint のほうが単純だが pipelining は積�
 ## 8. 読み物
 
 - [HotStuff 論文](https://arxiv.org/abs/1803.05069) — 2018 の原典
-- [Hyperliquid ホワイトペーパー](https://hyperliquid.gitbook.io/hyperliquid-docs/about-hyperliquid/consensus) — 公開情報
+- [Hyperliquid ホワイトペーパー](https://hyperliquid.gitbook.io/hyperliquid-docs/about-hyperliquid) — 公開情報
 - [DiemBFT 仕様](https://developers.diem.com/docs/technical-papers/the-diem-blockchain-paper/) — 本番 HotStuff variant (廃止プロジェクトだが公開文書あり)
 
 > 最終チェック: 一文で、Hyperliquid のような chain で HotStuff が PBFT より優れている理由は? **「速い」だけなら掘り下げる — 具体的な構造的変更を名指しで挙げる**。必要なら §2 を参照。`,

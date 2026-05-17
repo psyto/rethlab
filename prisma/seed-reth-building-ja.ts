@@ -1834,7 +1834,7 @@ Walk:
 - **\`SignedAuthorization::decode_2718\`** — ユーザが送った \`encoded_2718\` の逆操作。**1 往復、手動の byte いじりなし。**
 - **\`from = sponsor、to = user\`** — これがデザインの心臓部。tx は *sponsor から* 出る (ガス支払い、外側の envelope に署名) が、*user の EOA に向かう* (今や delegate であるかのように実行する)。tx を観察する誰もが Bob を発信者、Alice のアドレスを call ターゲットと見る — そして **ログは Alice のアドレスから出る**。delegate のコードを走らせているのがそのアドレスだからだ。
 - **\`with_authorization_list(vec![signed_auth])\`** — これを Type 4 にする 1 行。複数の \`SignedAuthorization\` をここに足せば、複数ユーザを 1 つの tx にバッチしていることになる (drill 3)。
-- **delegate の \`executeBatch\` は慣例であってプロトコル必須ではない。** 実運用される EIP-7702 delegate コントラクトの大半が似たようなメソッドを公開する ([Soneium](https://github.com/coinbase/sponsored-erc20) のパターン、OpenZeppelin の参照実装等を参照)。あなたの delegate が使う慣例を選ぶ。
+- **delegate の \`executeBatch\` は慣例であってプロトコル必須ではない。** 実運用される EIP-7702 delegate コントラクトの大半が似たようなメソッドを公開する (OpenZeppelin の参照実装等を参照)。あなたの delegate が使う慣例を選ぶ。
 
 > 🛑 **理解度チェック。** スクロールを戻さずに: Bob (sponsor) がこの tx を提出する時、**誰の nonce が増える** か? Bob、Alice、両方? ヒント: 外側の tx envelope に入るのはどの nonce か、authorization の \`nonce\` フィールドは何のためかを考えてみる。
 

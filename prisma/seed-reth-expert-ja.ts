@@ -1250,7 +1250,7 @@ witness はどこからか来なくてはならない。あらゆるステート
 - **リポジトリ:** [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress)
 - **対象チェーン:** Ethereum メインネット、完全検証。
 - **ディスク:** 14 GB (フル Reth の ~3 TB に対して)。
-- **Witness ソース:** \`--ress.enable\` で起動した任意の Reth フルノード。ress は専用 RLPx サブプロトコル \`ress\` でピアリングする — [Reth の \`crates/ress/protocol\`](https://github.com/paradigmxyz/reth/tree/main/crates/ress/protocol) 参照。
+- **Witness ソース:** \`--ress.enable\` で起動した任意の Reth フルノード。ress は専用 RLPx サブプロトコル \`ress\` でピアリングする — [Reth の \`crates/ress/protocol\`](https://github.com/paradigmxyz/ress) 参照。
 - **Witness フォーマット:** Merkle Patricia Trie の証明 (MPT レッスンで見たもの — \`AccountProof\` / \`StorageProof\` と同じ形)。
 - **バイトコード:** ステートフルピアから **オンデマンド** で取得 (\`GetBytecode\` メッセージ経由)。ress は見たものをキャッシュし、未取得分はピアから引く。
 - **検証フロー:** コンセンサスクライアントが \`NewPayload\` 送信 → ress が Reth ピアに witness と不足バイトコードを要求 → メモリ上で payload を検証 → \`PayloadStatus\` を返す。
@@ -1333,7 +1333,7 @@ stateless-validator しか読まなかったら、こう思い込んでしまう
 ## 追加で読むもの
 
 - [Paradigm ブログ: Stateless Reth Nodes](https://www.paradigm.xyz/2025/03/stateless-reth-nodes) — セクション 1 のユースケース整理はここ由来。
-- [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress) — README → \`bin/\` のエントリ → [\`paradigmxyz/reth/crates/ress/protocol\`](https://github.com/paradigmxyz/reth/tree/main/crates/ress/protocol) の RLPx サブプロトコル。
+- [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress) — README → \`bin/\` のエントリ → [\`paradigmxyz/reth/crates/ress/protocol\`](https://github.com/paradigmxyz/ress) の RLPx サブプロトコル。
 - [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) — README → \`crates/stateless-core/src/pipeline\` → \`crates/stateless-core/src/executor.rs\`。
 - [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) — MegaETH の witness フォーマットで MPT を置き換える authenticated KV store。`,
                 },
@@ -1904,7 +1904,7 @@ Reth ではこれは: 実行中にプロセスを kill し再起動して DB が
 ## 📺 関連リンク
 
 - [execution-spec-tests docs](https://eest.ethereum.org/) — spec-test フレームワーク
-- [\`paradigmxyz/revm-rs\` fuzzing harnesses](https://github.com/paradigmxyz/revm-rs) — differential パターンのリファレンス実装
+- [\`bluealloy/revm\` のテストクレート](https://github.com/bluealloy/revm) — differential パターンのリファレンス実装
 - 史的な [Geth Yellow Paper Test Suite](https://github.com/ethereum/tests) — テストコーパス進化を理解するため
 
 `,
@@ -2394,7 +2394,7 @@ Reth ベースの chain が典型的に override するスロット:
 
 「mainnet 出荷済み」→「R&D」の順:
 
-1. **\`crates/optimism/\`** in [paradigmxyz/reth](https://github.com/paradigmxyz/reth/tree/main/crates/optimism) — Optimism / Base / Mode / OP Stack。世界で最も本番運用された extension。
+1. **\`crates/optimism/\`** in [paradigmxyz/reth](https://github.com/paradigmxyz/reth) — Optimism / Base / Mode / OP Stack。世界で最も本番運用された extension。
 2. **[paradigmxyz/alphanet](https://github.com/paradigmxyz/alphanet)** — Paradigm 自身が運営する OP Stack 互換テストネット。mainnet に実装される前の custom precompile (EIP-7212 P-256 verify など) を試す場。
 3. **[SovaNetwork/sova-reth](https://github.com/SovaNetwork/sova-reth)** — Reth を Bitcoin の execution layer として動かす。
 4. **[SeismicSystems/seismic-reth](https://github.com/SeismicSystems/seismic-reth)** — 暗号化 tx 対応の Reth。
@@ -2433,7 +2433,7 @@ Optimism は「Reth ベース L2」の正典です。その node コードは \`
 
 ## 1. 見る場所
 
-ここを開く: [paradigmxyz/reth → crates/optimism/](https://github.com/paradigmxyz/reth/tree/main/crates/optimism)
+ここを開く: [paradigmxyz/reth → crates/optimism/](https://github.com/paradigmxyz/reth)
 
 ざっくり以下のような sub-crate が並んでいるはず (正確な名前は reth のバージョンで揺れるので、ソースで確認すること):
 
@@ -2757,7 +2757,7 @@ Reth エコシステムには複数の payload builder が存在します:
 | :--- | :--- | :--- |
 | Default Ethereum builder | \`crates/payload/builder/\` | Mainnet validator |
 | OP payload builder | \`crates/optimism/payload/\` | OP Stack sequencer |
-| **op-rbuilder** | [paradigmxyz/rbuilder](https://github.com/paradigmxyz/rbuilder) | OP Stack 向けの高性能な external block builder |
+| **op-rbuilder** | [flashbots/rbuilder](https://github.com/flashbots/rbuilder) | OP Stack 向けの高性能な external block builder |
 
 最初の 2 つは reth 本体に入っています。**op-rbuilder** は別 repo で、MEV と ordering policy にずっと積極的、複数の OP Stack chain が本番で使用しています。
 
@@ -2791,7 +2791,7 @@ Sequencer が取れる立場は 3 つ:
 
 ## 5. op-rbuilder — 本番グレードのリファレンス
 
-[paradigmxyz/rbuilder](https://github.com/paradigmxyz/rbuilder) は、Paradigm が OP Stack 向けに作った external builder。読む価値がある理由:
+[flashbots/rbuilder](https://github.com/flashbots/rbuilder) は、Paradigm が OP Stack 向けに作った external builder。読む価値がある理由:
 
 - **Bundle merging** が実装されている (private order flow + public mempool)
 - **Sealing strategy** (greedy、並列化可能なアルゴリズム)
@@ -2819,7 +2819,7 @@ Tempo が sequencer モード block 生成に op-rbuilder を採用または拡�
 3. **特定**: block の gas cap が強制されている箇所
 4. **特定**: 構築した block を sign / seal する関数
 
-そのあと [op-rbuilder の README](https://github.com/paradigmxyz/rbuilder) を読み、"external builder" モデルの考え方を掴んでください。
+そのあと [op-rbuilder の README](https://github.com/flashbots/op-rbuilder) を読み、"external builder" モデルの考え方を掴んでください。
 
 > 最終チェック: 1 文で、payload builder が **決定する** けれども executor は決定しないものは? 答えに "ordering" または "selection" が出てこないなら §3 を再読。`,
                 },

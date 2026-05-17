@@ -550,7 +550,7 @@ Tempo にとっては、大規模 incident 時の **outage は設計上の選択
 
 - [Ethereum hardfork リスト](https://ethereum.org/en/history/) — 各 fork がどう協調されたか
 - [Ethereum execution-apis EngineAPI](https://github.com/ethereum/execution-apis) — EL/CL が fork activation をどう協調するか
-- [Cosmos chain upgrade docs](https://docs.cosmos.network/v0.50/learn/advanced/upgrade)
+- [Cosmos chain upgrade docs](https://docs.cosmos.network/)
 
 > 最終チェック: 一文で、「全 validator が正確に同じ瞬間にアップグレードする」がなぜ hardfork のメンタルモデルとして誤りなのか説明できるか? **答えに「chain spec に組み込まれた height-gate ルール」が含まれていなければ §1-2 を再読すること**。`,
                 },

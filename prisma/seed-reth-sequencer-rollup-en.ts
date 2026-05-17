@@ -168,9 +168,9 @@ Building this from scratch is the next 4 lessons.
 
 ## 8. Reading list
 
-- [Optimism docs - Sequencer architecture](https://docs.optimism.io/builders/chain-operators/architecture)
-- [Vitalik on rollups](https://vitalik.ca/general/2021/01/05/rollup.html) — the foundational essay
-- [Paradigm on shared sequencing](https://www.paradigm.xyz/2023/11/shared-sequencer) — the future direction
+- [Optimism docs - Sequencer architecture](https://docs.optimism.io/op-stack/protocol/getting-started)
+- [Vitalik on rollups](https://vitalik.eth.limo/general/2021/01/05/rollup.html) — the foundational essay
+- [Astria docs — shared sequencer intro](https://docs.astria.org/overview/introduction) — the future direction
 
 ## 9. Practice
 
@@ -379,7 +379,7 @@ For Tempo: as a Paradigm-built L1, Tempo likely uses Ethereum DA initially. Swit
                   xpReward: 45,
                   content: `# Reading op-rbuilder — the Reth-based OP Stack sequencer
 
-If you spin up your own OP Stack chain today, the binary producing blocks is almost certainly [\`paradigmxyz/op-rbuilder\`](https://github.com/paradigmxyz/op-rbuilder) — Paradigm's Rust block builder for OP-derived rollups. Every Reth-based L2 either runs it directly or forks from it. It's the production reference for "sequencer on Reth," and it's the code you'd read if you wanted to understand what a real sequencer does once the marketing diagrams stop.
+If you spin up your own OP Stack chain today, the binary producing blocks is almost certainly [\`flashbots/op-rbuilder\`](https://github.com/flashbots/op-rbuilder) — Paradigm's Rust block builder for OP-derived rollups. Every Reth-based L2 either runs it directly or forks from it. It's the production reference for "sequencer on Reth," and it's the code you'd read if you wanted to understand what a real sequencer does once the marketing diagrams stop.
 
 > 🛑 **Predict before scrolling.** A sequencer must produce blocks every ~2s. **What's the bottleneck — execution speed (revm) or block building (selection + ordering)?** The answer matters because it tells you where optimization effort should go.
 
@@ -494,7 +494,7 @@ That's the sequencer loop in ~30 lines. The complexity in production op-rbuilder
 - MEV-aware ordering (prefer high-fee txs, sandwich-resistant ordering)
 - Gas estimation accuracy
 
-> 🔍 **Find in repo.** Open [op-rbuilder's payload builder source](https://github.com/paradigmxyz/op-rbuilder) and find the actual \`build_payload\` (or equivalent). **How does it handle the case where the parent block changes mid-build?**
+> 🔍 **Find in repo.** Open [op-rbuilder's payload builder source](https://github.com/flashbots/op-rbuilder) and find the actual \`build_payload\` (or equivalent). **How does it handle the case where the parent block changes mid-build?**
 
 ## 4. The MEV question — what does the sequencer extract?
 
@@ -543,7 +543,7 @@ The architectural pattern is the same as any OP Stack L2; the business logic on 
 
 ## 8. Reading list
 
-- [op-rbuilder repo](https://github.com/paradigmxyz/op-rbuilder)
+- [op-rbuilder repo](https://github.com/flashbots/op-rbuilder)
 - [Optimism sequencer spec](https://specs.optimism.io/protocol/derivation.html) — how the L2 chain is derived
 - [Paradigm rbuilder talk](https://www.youtube.com/watch?v=N6c0LE4Sgis) — design philosophy
 
@@ -708,7 +708,7 @@ Each step adds trust-minimization at the cost of complexity and operational over
 
 ## 10. Reading list
 
-- [Vitalik's fraud proof intro](https://vitalik.ca/general/2021/01/05/rollup.html)
+- [Vitalik's fraud proof intro](https://vitalik.eth.limo/general/2021/01/05/rollup.html)
 - [Cannon (OP Stack fraud proofs)](https://github.com/ethereum-optimism/optimism/tree/develop/cannon)
 - [SP1 (ZK proving)](https://github.com/succinctlabs/sp1)
 
@@ -1033,7 +1033,7 @@ The novel parts are in the application logic, not the consensus mechanics.
 
 ## 10. Reading list
 
-- [op-rbuilder](https://github.com/paradigmxyz/op-rbuilder)
+- [op-rbuilder](https://github.com/flashbots/op-rbuilder)
 - [op-batcher](https://github.com/ethereum-optimism/optimism/tree/develop/op-batcher)
 - [Astria sequencer](https://github.com/astriaorg/astria) — shared sequencer reference
 
@@ -1231,7 +1231,7 @@ Likely stays centralized for the foreseeable future. Their MEV model doesn't sui
 
 ## 10. Reading list
 
-- [Paradigm on shared sequencing](https://www.paradigm.xyz/2023/11/shared-sequencer) — design philosophy
+- [Astria docs — shared sequencer intro](https://docs.astria.org/overview/introduction) — design philosophy
 - [Espresso docs](https://docs.espressosys.com/)
 - [Astria](https://github.com/astriaorg/astria)
 

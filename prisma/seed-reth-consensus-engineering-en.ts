@@ -597,7 +597,7 @@ For each chain, identify the consensus family and one design choice:
 ## 8. Reading list
 
 - [HotStuff paper](https://arxiv.org/abs/1803.05069) — the original 2018
-- [Hyperliquid whitepaper](https://hyperliquid.gitbook.io/hyperliquid-docs/about-hyperliquid/consensus) — what's public
+- [Hyperliquid whitepaper](https://hyperliquid.gitbook.io/hyperliquid-docs/about-hyperliquid) — what's public
 - [DiemBFT spec](https://developers.diem.com/docs/technical-papers/the-diem-blockchain-paper/) — the production HotStuff variant (defunct project but public docs)
 
 > Final check: in one sentence, what makes HotStuff superior to PBFT for chains like Hyperliquid? **If your answer is just "faster," go deeper — name the specific structural change.** Reference §2 if needed.`,

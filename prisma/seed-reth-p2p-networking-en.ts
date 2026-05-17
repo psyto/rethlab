@@ -526,12 +526,12 @@ If you build a node that participates in HL's network, you'd need to understand 
 1. Sketch a 2-message protocol for "broadcast my merchant attestation"
 2. Identify: how does the allowlist prevent Sybil attacks?
 3. Think: what's the bandwidth cost of broadcasting 1000 messages/sec to 10 peers?
-4. Read [MEV-Boost spec](https://github.com/flashbots/mev-boost-spec) and find the relayer protocol
+4. Read [MEV-Boost spec](https://github.com/flashbots/mev-boost) and find the relayer protocol
 
 ## 10. Reading list
 
 - [reth network crate](https://github.com/paradigmxyz/reth/tree/main/crates/net)
-- [MEV-Boost docs](https://docs.flashbots.net/flashbots-mev-boost/architecture-overview)
+- [MEV-Boost docs](https://docs.flashbots.net/flashbots-mev-boost/introduction)
 - [libp2p tutorials](https://docs.libp2p.io/) — for understanding modular networking
 
 > Final check: in one sentence, why is "custom gossip" the natural extension for chain-specific applications like MEV markets and payment routing? **If your answer doesn't reference "default gossip is for canonical chain data only," re-read §1.**`,

@@ -550,7 +550,7 @@ For Tempo: this means **outages are by design** during big incidents. Better hal
 
 - [Ethereum hardfork list](https://ethereum.org/en/history/) — see how forks have been coordinated
 - [Ethereum execution-apis EngineAPI](https://github.com/ethereum/execution-apis) — how EL/CL coordinate fork activation
-- [Cosmos chain upgrade docs](https://docs.cosmos.network/v0.50/learn/advanced/upgrade)
+- [Cosmos chain upgrade docs](https://docs.cosmos.network/)
 
 > Final check: in one sentence, why is "all validators upgrade at the exact same time" the wrong mental model for a hardfork? **If your answer doesn't reference "height-gated rules in the chain spec," re-read §1-2.**`,
                 },

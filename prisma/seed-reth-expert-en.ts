@@ -1258,7 +1258,7 @@ Two production Rust stateless clients exist as of 2026. They were built by diffe
 - **Repo:** [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress)
 - **Target chain:** Ethereum mainnet, fully validating.
 - **Disk:** 14 GB (vs ~3 TB for full Reth).
-- **Witness source:** any full Reth node running with \`--ress.enable\`. Ress peers with it over a dedicated RLPx subprotocol named \`ress\` — see [\`crates/ress/protocol\` in Reth](https://github.com/paradigmxyz/reth/tree/main/crates/ress/protocol).
+- **Witness source:** any full Reth node running with \`--ress.enable\`. Ress peers with it over a dedicated RLPx subprotocol named \`ress\` — see [\`crates/ress/protocol\` in Reth](https://github.com/paradigmxyz/ress).
 - **Witness format:** Merkle Patricia Trie proofs (the format you saw in the MPT lesson — same \`AccountProof\` / \`StorageProof\` shape).
 - **Bytecode:** fetched from the stateful peer **on demand** (via a separate \`GetBytecode\` message). Ress caches what it has seen; missing entries pull from the peer.
 - **Validation flow:** consensus client sends \`NewPayload\` → ress requests witness + missing bytecode from a Reth peer → validates payload in memory → returns \`PayloadStatus\`.
@@ -1341,7 +1341,7 @@ If 1–4 are shaky, scroll back. If you can't argue 5, **you haven't internalize
 ## Further reading
 
 - [Paradigm blog: Stateless Reth Nodes](https://www.paradigm.xyz/2025/03/stateless-reth-nodes) — the use-case framing in Section 1 comes from here.
-- [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress) — README, then \`bin/\` entry point, then the RLPx subprotocol in [\`paradigmxyz/reth/crates/ress/protocol\`](https://github.com/paradigmxyz/reth/tree/main/crates/ress/protocol).
+- [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress) — README, then \`bin/\` entry point, then the RLPx subprotocol in [\`paradigmxyz/reth/crates/ress/protocol\`](https://github.com/paradigmxyz/ress).
 - [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) — README, then \`crates/stateless-core/src/pipeline\`, then \`crates/stateless-core/src/executor.rs\`.
 - [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) — the authenticated KV store that replaces the MPT in MegaETH's witness format.`,
                 },
@@ -1915,7 +1915,7 @@ After drill 5, you have the full mental model for shipping a Revm/Reth fork with
 ## 📺 Further reading
 
 - [execution-spec-tests docs](https://eest.ethereum.org/) — the spec-test framework
-- [\`paradigmxyz/revm-rs\` fuzzing harnesses](https://github.com/paradigmxyz/revm-rs) — reference implementations of the differential pattern
+- [\`bluealloy/revm\` test crates](https://github.com/bluealloy/revm) — reference implementations of the differential pattern
 - The historical [Geth Yellow Paper Test Suite](https://github.com/ethereum/tests) — for understanding test-corpus evolution
 
 `,
@@ -2405,7 +2405,7 @@ Everything else (P2P, MDBX storage, staged sync, ExEx, trie commitments) **comes
 
 Order them from "shipped to mainnet" → "R&D":
 
-1. **\`crates/optimism/\`** in [paradigmxyz/reth](https://github.com/paradigmxyz/reth/tree/main/crates/optimism) — Optimism / Base / Mode / OP Stack. The most production-tested extension on the planet.
+1. **\`crates/optimism/\`** in [paradigmxyz/reth](https://github.com/paradigmxyz/reth) — Optimism / Base / Mode / OP Stack. The most production-tested extension on the planet.
 2. **[paradigmxyz/alphanet](https://github.com/paradigmxyz/alphanet)** — Paradigm's own OP-Stack testnet for trying custom precompiles (EIP-7212 P-256 verify, etc.) before they exist on mainnet.
 3. **[SovaNetwork/sova-reth](https://github.com/SovaNetwork/sova-reth)** — Reth as a Bitcoin execution layer.
 4. **[SeismicSystems/seismic-reth](https://github.com/SeismicSystems/seismic-reth)** — Reth with encrypted transactions.
@@ -2444,7 +2444,7 @@ Optimism is the canonical "Reth-based L2." Its node code lives at \`paradigmxyz/
 
 ## 1. Where to look
 
-Browse: [paradigmxyz/reth → crates/optimism/](https://github.com/paradigmxyz/reth/tree/main/crates/optimism)
+Browse: [paradigmxyz/reth → crates/optimism/](https://github.com/paradigmxyz/reth)
 
 You will see subcrates roughly along these lines (exact names drift across reth versions — verify in source):
 
@@ -2768,7 +2768,7 @@ The reth ecosystem has multiple payload builders to study:
 | :--- | :--- | :--- |
 | Default Ethereum builder | \`crates/payload/builder/\` | Mainnet validators |
 | OP payload builder | \`crates/optimism/payload/\` | OP Stack sequencer |
-| **op-rbuilder** | [paradigmxyz/rbuilder](https://github.com/paradigmxyz/rbuilder) | High-perf external block builder for OP Stack |
+| **op-rbuilder** | [flashbots/rbuilder](https://github.com/flashbots/rbuilder) | High-perf external block builder for OP Stack |
 
 The first two are inside reth. **op-rbuilder** is a separate repo, more aggressive about MEV and ordering policy, and is the production builder several OP Stack chains use.
 
@@ -2802,7 +2802,7 @@ The choice ends up in the **payload builder's source code**, gated by feature fl
 
 ## 5. op-rbuilder — the production-grade reference
 
-[paradigmxyz/rbuilder](https://github.com/paradigmxyz/rbuilder) is the external builder Paradigm built for OP Stack. Worth studying because:
+[flashbots/rbuilder](https://github.com/flashbots/rbuilder) is the external builder Paradigm built for OP Stack. Worth studying because:
 
 - It implements **bundle merging** (private order flow + public mempool)
 - It supports **sealing strategies** (greedy, parallelizable algorithms)
@@ -2830,7 +2830,7 @@ Open \`crates/optimism/payload/\` and:
 3. **Identify** where the block gas cap is enforced
 4. **Find** the function that signs/seals the built block
 
-Then read [op-rbuilder's README](https://github.com/paradigmxyz/rbuilder) for the "external builder" model.
+Then read [op-rbuilder's README](https://github.com/flashbots/op-rbuilder) for the "external builder" model.
 
 > Final check: in one sentence, what does the payload builder **decide** that the executor does not? If your answer doesn't include the word "ordering" or "selection," go back and re-read section 3.`,
                 },

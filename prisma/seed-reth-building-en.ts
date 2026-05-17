@@ -1834,7 +1834,7 @@ Walk:
 - **\`SignedAuthorization::decode_2718\`** — the inverse of the \`encoded_2718\` the user sent. **One round-trip, no manual byte fiddling.**
 - **\`from = sponsor, to = user\`** — this is the heart of the design. The tx is *from the sponsor* (paying gas, signing the outer envelope) but *to the user's EOA* (which now executes as if it were the delegate). Anyone watching the tx sees Bob as initiator and Alice's address as the call target — and the **logs come from Alice's address** because that's the address running the delegate's code.
 - **\`with_authorization_list(vec![signed_auth])\`** — the line that makes this a Type 4. Add multiple \`SignedAuthorization\`s here and you're now batching multiple users into one tx (drill 3).
-- **The delegate's \`executeBatch\` is a convention, not a protocol mandate.** Most EIP-7702 delegate contracts in the wild expose a similar method (see [Soneium](https://github.com/coinbase/sponsored-erc20)'s pattern, OpenZeppelin's reference impl). Pick the convention your delegate uses.
+- **The delegate's \`executeBatch\` is a convention, not a protocol mandate.** Most EIP-7702 delegate contracts in the wild expose a similar method (see OpenZeppelin's reference impl). Pick the convention your delegate uses.
 
 > 🛑 **Anti-fluency check.** Without scrolling: when Bob (sponsor) submits this tx, **whose nonce increments**? Bob's, Alice's, both? Hint: think about which nonce is in the outer tx envelope vs. what the authorization's \`nonce\` field is for.
 

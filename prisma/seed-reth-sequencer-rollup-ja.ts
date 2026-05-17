@@ -168,9 +168,9 @@ OP Stack で chain を立ち上げる:
 
 ## 8. 読み物
 
-- [Optimism docs - Sequencer architecture](https://docs.optimism.io/builders/chain-operators/architecture)
-- [Vitalik on rollups](https://vitalik.ca/general/2021/01/05/rollup.html) — 基礎エッセイ
-- [Paradigm on shared sequencing](https://www.paradigm.xyz/2023/11/shared-sequencer) — 未来方向
+- [Optimism docs - Sequencer architecture](https://docs.optimism.io/op-stack/protocol/getting-started)
+- [Vitalik on rollups](https://vitalik.eth.limo/general/2021/01/05/rollup.html) — 基礎エッセイ
+- [Astria docs — shared sequencer intro](https://docs.astria.org/overview/introduction) — 未来方向
 
 ## 9. 練習
 
@@ -379,7 +379,7 @@ Tempo の場合: Paradigm 製の L1 として、Tempo は当初は Ethereum DA �
                   xpReward: 45,
                   content: `# op-rbuilder を読む — Reth ベースの OP Stack sequencer
 
-今日 OP Stack chain を立ち上げると、ブロック生成を担うバイナリはほぼ確実に [\`paradigmxyz/op-rbuilder\`](https://github.com/paradigmxyz/op-rbuilder) — OP 派生 rollup 向けに Paradigm が書いた Rust block builder になる。Reth ベースの L2 はそれをそのまま走らせるか、そこから fork する。「Reth 上の sequencer」の本番参照実装であり、マーケティング図解では見えない、実際の sequencer が何をしているのかを理解したければここを読むことになる。
+今日 OP Stack chain を立ち上げると、ブロック生成を担うバイナリはほぼ確実に [\`flashbots/op-rbuilder\`](https://github.com/flashbots/op-rbuilder) — OP 派生 rollup 向けに Paradigm が書いた Rust block builder になる。Reth ベースの L2 はそれをそのまま走らせるか、そこから fork する。「Reth 上の sequencer」の本番参照実装であり、マーケティング図解では見えない、実際の sequencer が何をしているのかを理解したければここを読むことになる。
 
 > 🛑 **スクロール前に予測。** Sequencer はおよそ 2 秒ごとにブロックを生成する必要がある。**ボトルネックはどちらか — 実行速度(revm)か、ブロック構築(選択 + 順序付け)か?** 答えがどこに最適化を集中させるべきかを決める。
 
@@ -494,7 +494,7 @@ async fn build_payload(
 - MEV を意識した順序付け(高 fee tx を優先、sandwich 耐性のある順序)
 - ガス推定の精度
 
-> 🔍 **リポで探す。** [op-rbuilder の payload builder source](https://github.com/paradigmxyz/op-rbuilder) を開いて、実際の \`build_payload\`(または相当する関数)を見つけよ。**構築中に parent ブロックが変わるケースをどう処理しているか?**
+> 🔍 **リポで探す。** [op-rbuilder の payload builder source](https://github.com/flashbots/op-rbuilder) を開いて、実際の \`build_payload\`(または相当する関数)を見つけよ。**構築中に parent ブロックが変わるケースをどう処理しているか?**
 
 ## 4. MEV の問題 — Sequencer は何を抽出するか
 
@@ -543,7 +543,7 @@ Tempo の sequencer(Paradigm が運用)はほぼ確実に次のような構成�
 
 ## 8. 読み物
 
-- [op-rbuilder repo](https://github.com/paradigmxyz/op-rbuilder)
+- [op-rbuilder repo](https://github.com/flashbots/op-rbuilder)
 - [Optimism sequencer spec](https://specs.optimism.io/protocol/derivation.html) — L2 chain がどう導出されるか
 - [Paradigm rbuilder talk](https://www.youtube.com/watch?v=N6c0LE4Sgis) — 設計哲学
 
@@ -708,7 +708,7 @@ Tempo Moderato が現時点で中央集権だとすると、分散化のパス�
 
 ## 10. 読み物
 
-- [Vitalik の fraud proof intro](https://vitalik.ca/general/2021/01/05/rollup.html)
+- [Vitalik の fraud proof intro](https://vitalik.eth.limo/general/2021/01/05/rollup.html)
 - [Cannon(OP Stack の fraud proof)](https://github.com/ethereum-optimism/optimism/tree/develop/cannon)
 - [SP1(ZK proving)](https://github.com/succinctlabs/sp1)
 
@@ -1033,7 +1033,7 @@ Tempo の sequencer(Paradigm が運用)はおそらく:
 
 ## 10. 読み物
 
-- [op-rbuilder](https://github.com/paradigmxyz/op-rbuilder)
+- [op-rbuilder](https://github.com/flashbots/op-rbuilder)
 - [op-batcher](https://github.com/ethereum-optimism/optimism/tree/develop/op-batcher)
 - [Astria sequencer](https://github.com/astriaorg/astria) — 共有 sequencer の参照実装
 
@@ -1231,7 +1231,7 @@ Tempo の sequencer とのやり取りがインタフェース上の接点にな
 
 ## 10. 読み物
 
-- [Paradigm on shared sequencing](https://www.paradigm.xyz/2023/11/shared-sequencer) — 設計哲学
+- [Astria docs — shared sequencer intro](https://docs.astria.org/overview/introduction) — 設計哲学
 - [Espresso docs](https://docs.espressosys.com/)
 - [Astria](https://github.com/astriaorg/astria)
 

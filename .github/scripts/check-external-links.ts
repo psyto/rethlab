@@ -51,11 +51,14 @@ const EXCLUDE_PATTERNS = [
   /^https:\/\/mpp\.dev\/api/,
   /^https:\/\/eth\.llamarpc\.com/,
   /^https:\/\/ethereum-rpc\.url/,
+  /^https:\/\/api\.hyperliquid\.xyz/,
+  /^https:\/\/aviationstack\.mpp\.tempo\.xyz/,
 
   // Sites with aggressive bot protection — false-positive 403/429 in CI but
   // resolve fine for humans. Trade-off: occasional real rot here goes uncaught.
   /^https:\/\/www\.coinbase\.com\/blog/,
   /^https:\/\/www\.coindesk\.com/,
+  /^https:\/\/crates\.io/,
 ];
 
 const CONCURRENCY = 8;

@@ -526,12 +526,12 @@ HL のネットワークに参加するノードを構築したいなら、彼�
 1. 「merchant attestation のブロードキャスト」用に、2 メッセージで済むプロトコルをスケッチする
 2. 自分で説明する: Allowlist は、どのような仕組みで Sybil 攻撃を防ぐのか?
 3. 計算してみる: 1 秒あたり 1000 メッセージを 10 peer にブロードキャストするときの帯域コストはどれくらいになるか?
-4. [MEV-Boost spec](https://github.com/flashbots/mev-boost-spec) を読み、relayer プロトコルの部分を見つける
+4. [MEV-Boost spec](https://github.com/flashbots/mev-boost) を読み、relayer プロトコルの部分を見つける
 
 ## 10. さらに読むなら
 
 - [reth network crate](https://github.com/paradigmxyz/reth/tree/main/crates/net)
-- [MEV-Boost docs](https://docs.flashbots.net/flashbots-mev-boost/architecture-overview)
+- [MEV-Boost docs](https://docs.flashbots.net/flashbots-mev-boost/introduction)
 - [libp2p tutorials](https://docs.libp2p.io/) — モジュラーなネットワーキングを理解するために
 
 > 最終チェック: 一文で答えてみる。なぜ「カスタム gossip」は、MEV マーケットや決済 routing のような chain 固有アプリにとって自然な拡張ポイントになるのか? **答えに「デフォルトの gossip は canonical chain data しか扱わない」という観点が含まれていなければ、§1 を読み直す**。`,

@@ -1655,7 +1655,7 @@ Revm runs all three. **Passing them is what makes Revm safe to ship as the engin
 
 ## 1. State tests — the standard format
 
-A state test is a JSON file. Open any one in [\`ethereum/tests/GeneralStateTests\`](https://github.com/ethereum/tests/tree/develop/GeneralStateTests). The shape:
+A state test is a JSON file. Open any one in [\`ethereum/tests/GeneralStateTests\`](https://github.com/ethereum/execution-spec-tests). The shape:
 
 \`\`\`json
 {
@@ -1877,7 +1877,7 @@ The path forward, if you want to make this your specialization:
 
 ## Drill
 
-1. **Read a real block-stm implementation.** Open Sei's [\`sei-protocol/revm\`](https://github.com/sei-protocol/revm) fork (or their parallel-EVM crate). Find the tracking-wrapper struct. Map its methods to the \`Database\` trait you walked. **30 minutes.**
+1. **Read a real block-stm implementation.** Open Sei's [\`sei-protocol/revm\`](https://github.com/sei-protocol/sei-chain) fork (or their parallel-EVM crate). Find the tracking-wrapper struct. Map its methods to the \`Database\` trait you walked. **30 minutes.**
 2. **Identify a parallelization-friendly block.** Open Etherscan, pick a recent mainnet block. Skim the tx list. Count how many touch unique contracts (independent) vs how many touch the top 3 contracts (likely conflicting). **What's your estimate of the parallel speedup ceiling for that block?** 30 minutes.
 3. **Read the original block-stm paper.** [arxiv:2203.06871](https://arxiv.org/abs/2203.06871). Skim sections 1, 3, 4. The Aptos model is for Move, but section 3's optimistic execution + validation diagram is the universal pattern. 45 minutes.
 4. **Sketch your own tracking wrapper.** In your fork of revm, write a \`TrackedDb\` that implements \`Database\` and prints every read. Run a small bytecode through it (like \`PUSH1 0x42 PUSH1 0x00 SSTORE STOP\` from earlier drills). **See exactly which reads happen.** This is the data block-stm uses to decide what conflicts. 1.5 hours.

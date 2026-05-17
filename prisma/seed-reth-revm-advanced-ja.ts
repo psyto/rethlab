@@ -1656,7 +1656,7 @@ Revm はこの 3 つすべてを通します。**これが Reth・Hyperliquid �
 
 ## 1. State tests — 標準フォーマット
 
-state test は JSON ファイル。[\`ethereum/tests/GeneralStateTests\`](https://github.com/ethereum/tests/tree/develop/GeneralStateTests) のどれかを開く。形:
+state test は JSON ファイル。[\`ethereum/tests/GeneralStateTests\`](https://github.com/ethereum/execution-spec-tests) のどれかを開く。形:
 
 \`\`\`json
 {
@@ -1878,7 +1878,7 @@ mainnet の保守性は *コンセンサスリスク* と *後方互換性* に�
 
 ## ドリル
 
-1. **本物の block-stm 実装を読む。** Sei の [\`sei-protocol/revm\`](https://github.com/sei-protocol/revm) fork（または並列 EVM crate）を開く。tracking-wrapper struct を見つける。そのメソッドを歩いた \`Database\` トレイトにマップする。**30 分。**
+1. **本物の block-stm 実装を読む。** Sei の [\`sei-protocol/revm\`](https://github.com/sei-protocol/sei-chain) fork（または並列 EVM crate）を開く。tracking-wrapper struct を見つける。そのメソッドを歩いた \`Database\` トレイトにマップする。**30 分。**
 2. **並列化に適したブロックを特定。** Etherscan を開き、最近の mainnet ブロックを 1 つ選ぶ。tx リストを skim する。ユニーク contract に触れるもの（独立）と上位 3 contract に触れるもの（衝突しそう）を数える。**そのブロックの並列スピードアップ天井の推定は?** 30 分。
 3. **元の block-stm 論文を読む。** [arxiv:2203.06871](https://arxiv.org/abs/2203.06871)。セクション 1、3、4 を skim。Aptos モデルは Move 向けだが、セクション 3 の楽観的実行 + 検証ダイアグラムが普遍パターン。45 分。
 4. **自分の tracking wrapper をスケッチ。** revm の fork で \`Database\` を実装する \`TrackedDb\` を書き、全 read を print する。小さなバイトコード（過去のドリルの \`PUSH1 0x42 PUSH1 0x00 SSTORE STOP\` など）を流す。**どの read が起きるかを正確に見る。** これが block-stm が衝突を決定するために使うデータ。1.5 時間。
