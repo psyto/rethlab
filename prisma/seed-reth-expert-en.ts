@@ -2222,10 +2222,412 @@ If any answer is shaky, re-read the section referenced.
 **You've reached the end of Reth Expert.** The Building tier puts every pattern from this course into production apps; the L1 Architect tier (Advanced) uses the same discipline at the protocol design layer. Across Expert you've read performance internals, MDBX storage, Tokio concurrency, proc macros, tracing, custom precompiles, MPT proofs, stateless execution, MEV in production, zkEVM, fork ops, differential fuzzing, and — with this lesson — production privacy stack design. That is the source-level vocabulary every team you'd want to work on this stack with is already using.`,
                 },
                 {
+                  title: 'Chaos engineering for Rust EVM nodes — break your own L1 before someone else does',
+                  slug: 'chaos-engineering-rust-evm-en',
+                  type: 'CONTENT',
+                  sortOrder: 8,
+                  duration: 28,
+                  xpReward: 60,
+                  content: `# Chaos engineering for Rust EVM nodes — break your own L1 before someone else does
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **reliability layer that sits across all the others**. Same problem Netflix's Chaos Monkey solved for microservices: passing tests under benign conditions doesn't prove your system survives partial failure. For an L1, the failure-mode space is wider (Byzantine peers, disk corruption, network partitions, validator clock drift) and the stakes are higher (silent state corruption can produce divergent forks that take days to recover from). This lesson pairs with the differential-fuzzing lesson as the other half of "is your code actually safe to ship?" — fuzzing checks correctness; chaos checks survival.
+
+> 📌 **Moving target.** The tools section references specific projects (Toxiproxy, chaosfs, libfaketime, etc.) — projects in this space move and APIs change. The patterns below stay stable; specific commands may need adjustment.
+
+Most teams shipping a custom Reth fork run the same test suite the upstream maintainers run and call it a day. That's wrong. Upstream tests verify that Reth behaves correctly on a *happy* network — every peer honest, every disk healthy, every clock accurate. Your fork is going to run in adversarial conditions: validator nodes get DoS'd, MDBX returns corrupt pages, clocks drift, peers send byzantine blocks. **Tests that don't deliberately break the system don't tell you what happens when the system breaks.**
+
+This lesson is about closing that gap.
+
+## 1. What differential fuzzing leaves out
+
+The Expert tier's differential fuzzing lesson covered the discipline of comparing your Revm fork against a reference EVM implementation across thousands of historical transactions. That answers: *"Does my implementation produce the same outputs as the reference under valid inputs?"*
+
+It doesn't answer:
+- What happens when a validator goes offline mid-round?
+- What happens when MDBX returns a corrupted page in the middle of a state-root computation?
+- What happens when an adversarial peer sends a block with a valid header but a corrupted body?
+- What happens when wall-clock time jumps backwards 30 seconds?
+
+Those questions belong to **chaos engineering**: deliberately injecting failures to discover failure modes before production does.
+
+Both disciplines are needed. Fuzzing catches the "wrong answer under correct inputs" bug class. Chaos catches the "right answer ceases to be possible under perturbed conditions" bug class. **Neither covers the other.**
+
+## 2. The 4 categories of chaos for L1 nodes
+
+Every chaos exercise for a Rust EVM node fits in one of these four buckets:
+
+| Category | What you inject | Real-world equivalent |
+|---|---|---|
+| **Network chaos** | Packet loss, latency spikes, partitions, peer-eviction storms | Cloud-region outage, BGP misconfiguration, DDoS |
+| **Disk chaos** | MDBX page corruption, write failures, latency spikes | Failing SSD, bit rot, filesystem bug |
+| **Time chaos** | Clock skew, NTP drift, monotonic-clock regressions | Server clock drift, leap seconds, virtualization clock skew |
+| **Byzantine chaos** | Adversarial peer sends invalid blocks, conflicting votes, lies about state | Malicious validator, compromised key, network MitM |
+
+Each category has its own tooling, its own failure-mode signatures, and its own response patterns. A complete chaos discipline exercises all four.
+
+## 3. Network chaos — \`tc\`, Toxiproxy, Pumba
+
+The simplest network chaos lives on the Linux side: \`tc\` (traffic control). To drop 30% of packets on a validator's P2P port:
+
+\`\`\`bash
+tc qdisc add dev eth0 root netem loss 30%
+\`\`\`
+
+To add 200ms of latency:
+
+\`\`\`bash
+tc qdisc add dev eth0 root netem delay 200ms
+\`\`\`
+
+For Docker-based testnets, **Pumba** wraps these into container-friendly commands:
+
+\`\`\`bash
+pumba netem --duration 5m loss --percent 30 my-reth-validator
+\`\`\`
+
+For application-level proxying with finer control (e.g., killing only one peer connection, not the whole interface), **Toxiproxy** lets you inject failures programmatically. The Reth node connects through Toxiproxy; you script the failure pattern.
+
+**The chaos exercise:** Spin up a 4-validator BFT testnet. Pick one validator. Inject 80% packet loss on its P2P port for 30 seconds.
+
+**What you're checking:**
+- Does the remaining 3-node quorum continue producing blocks? (BFT safety: yes, 3 of 4 is still ≥ 2f+1 for f=1)
+- When the dropped validator recovers, does it catch up cleanly? (Liveness: should resync without manual intervention)
+- Does the dropped validator get slashed for inactivity? (Policy: depends on your spec — verify expected behavior)
+
+**The bug class this finds:** assumptions that "all validators are reachable most of the time" baked into code paths that don't survive transient unreachability.
+
+## 4. Disk chaos — chaosfs, kernel fault injection
+
+Most teams don't test what happens when their database backend *lies*. **Chaosfs** (a FUSE filesystem that returns deliberately corrupted bytes for specific files) lets you find out.
+
+\`\`\`bash
+# Mount chaosfs over your MDBX data directory
+chaosfs --backend ./reth-data --mount ./reth-mdbx --corrupt-rate 0.001
+\`\`\`
+
+Now 0.1% of reads from MDBX return corrupted bytes. Run your Reth node against the mounted directory and observe.
+
+**What you're checking:**
+- Does Reth detect the corruption? (Checksums on MDBX pages should catch most cases.)
+- If it does, does it halt the node gracefully or silently serve bad state? (Silent corruption is the worst failure mode for an L1 — divergent forks across nodes.)
+- Does the corruption surface in release builds or only in debug builds?
+
+**The Linux kernel alternative:** \`fail/fail_injection\` lets you inject arbitrary failures into specific syscalls. To make every 100th \`read()\` fail:
+
+\`\`\`bash
+echo 1 > /sys/kernel/debug/fail_io_timeout/probability
+echo 100 > /sys/kernel/debug/fail_io_timeout/interval
+\`\`\`
+
+Wrap your Reth node start with \`LD_PRELOAD=fail-syscalls.so\` to make this active for that process only.
+
+**The bug class this finds:** code paths that assume MDBX read/write always succeeds, or that silent corruption doesn't happen.
+
+## 5. Time chaos — \`libfaketime\`, kernel time stretching
+
+Reth and Revm both make assumptions about time. Block timestamps. Reorg windows. Validator slot timing. Consensus timeouts. If your wall clock drifts 30 seconds or jumps backwards, things break.
+
+The simplest tool is \`libfaketime\`:
+
+\`\`\`bash
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libfaketime.so.1 FAKETIME=+30s reth node
+\`\`\`
+
+This makes the Reth process see the system clock as 30 seconds ahead of real time. Now spin up a testnet where one node has this drift active and observe.
+
+**What you're checking:**
+- Does the drifted validator produce blocks with timestamps the rest of the network rejects?
+- Does consensus stall while waiting for the drifted validator to catch up?
+- Does the drifted validator get slashed for proposing blocks "in the future"?
+
+**The harder case:** **monotonic-clock regressions**. Rust's \`Instant\` is guaranteed monotonic per-process, but on suspended/resumed VMs or migrated containers, you can see clock jumps. \`libfaketime\` doesn't simulate this; you need kernel time stretching or VM-level pause/resume.
+
+**The bug class this finds:** consensus or networking code that assumes time advances monotonically and uniformly across the network.
+
+## 6. Byzantine chaos — a deliberately misbehaving Reth fork
+
+The hardest chaos to inject is also the most important: a peer that's intentionally lying. The reliability question: *does your node detect and reject a peer that sends a block with a valid header but a state-root claim that's wrong by one byte?*
+
+You can't inject this via \`tc\` or chaosfs — the peer needs to be running Reth code that actively misbehaves. The standard pattern: build a small Reth fork that overrides the block-production code to insert specific bugs.
+
+\`\`\`rust
+// In your byzantine-reth fork: replace the standard payload builder with one that
+// proposes blocks with a single bit flipped in the state root.
+impl PayloadBuilder for ByzantinePayloadBuilder {
+    fn build(&self, attrs: PayloadAttributes) -> ExecutionPayload {
+        let mut block = self.honest.build(attrs);
+        block.state_root ^= 1; // flip one bit
+        block
+    }
+}
+\`\`\`
+
+Spin up a testnet where one validator runs this misbehaving fork.
+
+**What you're checking:**
+- Does the honest network reject the byzantine block within one slot?
+- Does the misbehaving validator get slashed (or whatever your spec mandates)?
+- Does honest nodes' state stay clean — no temporary "accepted then reverted" — under the byzantine input?
+
+**The bug class this finds:** trust assumptions that should have been validations. Every time you trust a peer-supplied value (block hash, transaction signature, state-trie node), there's an opportunity for a byzantine peer to lie. Your tests should include peers that do lie.
+
+## 7. The pattern — chaos as continuous practice
+
+A one-off chaos exercise finds the bugs you happened to inject. Continuous chaos finds the regressions you'd otherwise ship.
+
+Three levels of practice:
+
+- **Chaos in CI** — a subset of chaos exercises runs on every PR. Network loss + clock skew + disk fault on a 4-node testnet, every commit. Slow but catches regressions before merge.
+- **Game days** — quarterly half-day exercises where the team manually injects realistic failures into a staging chain. Finds both bugs *and* gaps in runbook documentation.
+- **Production chaos** — Netflix-style. Deliberately fail one production validator per week, in a controlled window. The most disciplined teams (Tempo, OP, Hyperliquid likely) do this. The lesson: production chaos isn't a tool, it's a culture — engineers have to be on call and ready to revert.
+
+## 8. What chaos engineering doesn't replace
+
+Three adjacent disciplines that all complement chaos:
+
+- **Differential fuzzing** — checks correctness on benign inputs (the Expert tier lesson). Chaos doesn't replace fuzzing because chaos exercises a small number of injected failures while fuzzing exercises a wide input space.
+- **Systems-code auditing** — finds latent design bugs by reading code (the next Expert lesson). Chaos doesn't replace auditing because chaos can only find bugs that show up under the failures you injected; auditing finds bugs that haven't been triggered yet.
+- **Formal verification** — proves invariants algebraically (out of scope for most teams). Chaos doesn't replace formal verification because chaos provides empirical confidence, not proof.
+
+The complete reliability triangle: **fuzzing (correctness) + chaos (resilience) + auditing (latent bugs)**.
+
+## Recall
+
+Without scrolling:
+
+1. **Differential fuzzing and chaos engineering each catch a different class of bug. Name the class each catches.**
+2. **You're testing a 4-validator BFT testnet. You drop one validator with 80% packet loss for 30 seconds. What three things should happen? What single thing should NOT happen?**
+3. **Silent disk corruption is "the worst possible failure mode for an L1." Why? What does "silent" mean here, and what's the cascading consequence?**
+4. **What does \`libfaketime\` simulate, and what important time-related failure mode does it NOT simulate?**
+5. **Why do you need a custom Reth fork for byzantine chaos rather than \`tc\` or \`chaosfs\`?**
+
+If any answer is shaky, re-read the section.
+
+## 📂 Repos and references worth keeping open
+
+- [tigerbeetle/tigerbeetle](https://github.com/tigerbeetle/tigerbeetle) — deterministic simulation testing, the highest-discipline chaos practice in the financial-systems world
+- [shopify/toxiproxy](https://github.com/Shopify/toxiproxy) — application-level network chaos
+- [alexei-led/pumba](https://github.com/alexei-led/pumba) — Docker container chaos
+- [wolfcw/libfaketime](https://github.com/wolfcw/libfaketime) — time chaos
+- [chaos-mesh/chaos-mesh](https://github.com/chaos-mesh/chaos-mesh) — Kubernetes chaos platform (cluster-level)
+
+---
+
+**🧭 Where you are now in the stack:** you've added chaos engineering to your toolkit. The next lesson covers the third pillar of the reliability triangle — **systems-code auditing**: finding latent design bugs that neither fuzzing nor chaos can catch because they haven't been triggered yet. Together, these three disciplines are what separate "Revm code that runs" from "Revm code that's safe to ship as the heart of an L1."`,
+                },
+                {
+                  title: 'Systems-code auditing — finding bugs in Reth / Revm / consensus impls',
+                  slug: 'systems-code-auditing-en',
+                  type: 'CONTENT',
+                  sortOrder: 9,
+                  duration: 28,
+                  xpReward: 60,
+                  content: `# Systems-code auditing — finding bugs in Reth / Revm / consensus impls
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **third pillar of the reliability triangle**. Differential fuzzing catches "wrong answer under correct inputs" bugs. Chaos engineering catches "right answer ceases to be possible under perturbed conditions" bugs. Auditing catches the bugs that haven't been triggered yet — latent design flaws that show up only under conditions no test happened to exercise. For systems code (not Solidity), the bug shapes are different — race conditions, state corruption, consensus invariant violations, \`unsafe\` block correctness, trust-boundary leaks. This lesson is about how to find them by reading.
+
+> 📌 **Scope honesty.** This is *systems-code* auditing — Reth / Revm / Rust consensus impls. **Not** smart-contract auditing (Solidity bugs, EVM exploits at the contract layer). The latter is well-covered elsewhere (Trail of Bits, Code4rena, Spearbit material); RethLab has no unique angle on contract auditing. Systems-code auditing is the angle nobody else covers, and where RethLab's source-first thesis pays off.
+
+You've shipped the differential fuzz harness. You've shipped chaos drills. The code passes both. Are you done?
+
+No. Both disciplines exercise the code by *running* it. Audit catches what running doesn't surface — code paths that haven't been exercised yet, invariants that work today but break under future modifications, trust assumptions that aren't validated. **Reading is its own discipline.**
+
+## 1. Why systems-code auditing is different from smart-contract auditing
+
+Smart-contract auditing has a well-known taxonomy: integer overflow, reentrancy, access-control bugs, oracle manipulation, flash-loan exploits. The bug-class library is finite and well-cataloged. The unit of bug is at the Solidity / EVM contract level.
+
+Systems-code auditing has a different taxonomy:
+- Race conditions (Tokio task interleavings that produce wrong state)
+- State corruption windows (non-atomic writes that interrupt in the wrong place)
+- Consensus invariant violations (safety/liveness assumptions silently broken)
+- \`unsafe\` block correctness (every \`unsafe\` is a soundness boundary)
+- Trust-boundary leaks (P2P peer trust, RPC auth bypass, signer trust)
+
+Different bug shapes, different mental models, different tools. The auditor of a Solidity contract and the auditor of a Reth fork are doing **different jobs**, even though both are called "auditing."
+
+This lesson covers the systems-code side. It's the audit that matters for a Tempo / OP / Hyperliquid fork.
+
+## 2. The 5 bug classes in the Rust EVM stack
+
+### 2.1 State corruption windows
+
+A "state corruption window" is a code path where state is partially updated when an unexpected interruption happens (process crash, MDBX write failure, panic in a downstream call). If the partial update isn't rolled back, the on-disk state becomes inconsistent.
+
+The audit question: **for every state mutation, what happens if execution stops mid-way?**
+
+Common patterns to look for:
+- Multi-step writes without a transaction wrapper
+- "Save then return" sequences where the save can fail silently
+- Caches updated before the underlying store is committed
+- Indexes updated separately from the data they index
+
+Reth's stage commit logic is the canonical example to audit. Every stage's \`execute\` should be paired with an \`unwind\` that perfectly undoes whatever \`execute\` did. The auditor reads both and asks: **is there any state mutation in \`execute\` that \`unwind\` doesn't undo?** If yes, that's a corruption window.
+
+### 2.2 Concurrency bugs
+
+Rust's type system prevents data races at compile time. It does not prevent *logic races* — situations where multiple Tokio tasks interleave in ways that produce wrong outputs.
+
+The audit question: **for every shared state, what's the contract on who modifies it and when?**
+
+Common patterns to look for:
+- \`Arc<Mutex<T>>\` held across \`await\` (deadlock risk; sometimes correctness risk)
+- Multiple tasks reading-then-writing the same \`Arc<AtomicU64>\` (TOCTOU)
+- Channel receivers that assume sender ordering preserves causality
+- \`tokio::spawn\` of a task that captures a stale snapshot of state
+
+Tools that help: \`loom\` (concurrency permutation testing), \`miri\` (UB detection under multi-threaded execution).
+
+### 2.3 Consensus invariant violations
+
+Every consensus protocol has explicit invariants (no two finalized blocks at the same height) and implicit ones (proposer rotation produces fair distribution, validator votes can't be replayed). When you fork or customize a consensus impl, these invariants are easy to silently violate.
+
+The audit question: **for every consensus-relevant code path, which invariant does it touch, and does this code path preserve it?**
+
+Common patterns to look for:
+- Vote processing that doesn't deduplicate by \`(validator, slot)\` — replay attack
+- Fork-choice code that assumes monotonic timestamps — fails on clock drift
+- Finality logic that doesn't check the 2f+1 quorum strictly — accepts under-quorum
+- Slashing-evidence handling that doesn't verify the signed-by-validator condition — false-positive slashing
+
+Auditing a HotStuff or Tendermint impl is heavy work — you need the protocol paper open in one window, the code in another, and a spreadsheet of "invariant X is preserved by code path Y."
+
+### 2.4 \`unsafe\` block correctness
+
+Every \`unsafe\` block in Rust is a security boundary. It opts out of the borrow checker's guarantees and asserts that the programmer manually maintained the safety invariants the compiler would have otherwise enforced.
+
+The audit question (3-part, for every \`unsafe\`):
+1. **What invariant is this \`unsafe\` block relying on?**
+2. **What conditions, present or future, could violate that invariant?**
+3. **How is the invariant verified — tests, types, code-comment proof?**
+
+If any answer is "I'm not sure," the \`unsafe\` block is an audit finding.
+
+Real example: Revm's stack operations sometimes use \`unsafe\` \`get_unchecked\` for performance. The invariant relied on is "stack depth was verified before this call." The condition that could violate it: a refactor that splits stack-depth verification from stack-access. The verification: tests that exercise underflow scenarios.
+
+Tools: \`cargo geiger\` counts \`unsafe\` blocks per crate. The audit isn't about reducing the count to zero — it's about ensuring each one has a clear, documented invariant.
+
+### 2.5 Trust-boundary leaks
+
+Every external input to a node is a trust boundary. The auditor maps every boundary and asks: **what's validated at the boundary, and what's silently trusted?**
+
+The four major trust boundaries in a Reth node:
+- **RPC** — clients can submit arbitrary requests. Auth, rate-limiting, payload validation should all be at this boundary.
+- **P2P** — peers send blocks, transactions, state-trie nodes. Each must be validated before being trusted.
+- **CLI / config** — node operator's config file. Less adversarial but still a boundary (typos in genesis hash, etc.).
+- **Engine API** — consensus client supplies block-execution requests. Should be validated against the consensus rules.
+
+Common bugs at each boundary:
+- RPC: missing auth on a privileged method (e.g., \`admin_addPeer\`)
+- P2P: accepting a peer's claim about state without verifying against the state root
+- CLI: not validating that a chainspec is internally consistent
+- Engine API: accepting a block that violates a hardfork rule the EL doesn't yet know about
+
+## 3. Reading a Reth PR — a worked example
+
+Auditing isn't always a separate review session. Reading every PR that touches consensus-affecting code IS auditing, if you read it with the right questions in mind.
+
+Worked example: imagine a Reth PR that refactors \`stage commit logic\` to add a new optimization — batch commit groups of stages together rather than one at a time.
+
+The questions to ask while reading:
+1. **What was the old \`execute → commit → unwind\` flow? What's the new one?**
+2. **For each new "batch commit," what state does it touch?**
+3. **What happens if the batch commit fails halfway?** Specifically: did the new code introduce a state corruption window?
+4. **Did \`unwind\` get updated to handle the batched case?** If not, that's the bug.
+5. **Are there tests for "execute partial-batch then crash then restart"?** If not, the test gap is itself a finding.
+
+This is what reading a PR for bugs looks like. The 5 questions are the same shape every time — just applied to whatever code area the PR changes.
+
+## 4. Auditing a consensus impl against its invariants
+
+A consensus implementation is auditable in a structured way: list the protocol's invariants, then for each invariant trace through code paths that affect it.
+
+Example: HotStuff has the safety invariant *"a correct replica will not vote for two conflicting blocks at the same height."* The audit:
+
+1. **Find every code path where the replica produces a vote.** Usually 1–3 places in the codebase.
+2. **For each, check what state is consulted before voting.** Specifically: is the validator's local "last voted block at height N" checked?
+3. **What persists this state across restarts?** If it's in-memory only, a restart-induced double-vote is a bug.
+4. **Is the check atomic with the vote emission?** If there's a window between "check" and "send vote," a concurrent code path could vote twice.
+
+Repeat for every invariant the protocol specifies. Tedious but mechanical.
+
+## 5. Tools for the systems-code auditor
+
+A small toolbox carries you a long way:
+
+| Tool | What it does | When to use |
+|---|---|---|
+| \`cargo audit\` | Checks for known CVEs in dependencies | Run on every CI; baseline hygiene |
+| \`cargo geiger\` | Counts \`unsafe\` blocks per crate | Use to scope your audit — which crates need the most \`unsafe\` review? |
+| \`kani\` | Model checker for Rust | Use on small \`unsafe\` blocks or critical functions; doesn't scale to whole programs |
+| \`loom\` | Concurrency permutation testing | Use on \`Arc<Mutex<T>>\`-heavy code paths; finds race conditions deterministically |
+| \`miri\` | UB detection at runtime | Run a subset of your tests under \`miri\` to detect undefined behavior in \`unsafe\` |
+| \`cargo clippy -- -W clippy::all\` | Lint-based bug finding | Baseline; catches common mistakes |
+| Manual review checklist | Apply the 5 bug classes above systematically | Always |
+
+None of these tools find bugs that the reviewer doesn't think to look for. **Tools amplify a careful auditor, they don't replace one.**
+
+## 6. The auditor's deliverable
+
+A systems-code audit produces a report. The industry-standard structure (used by Trail of Bits, Sigma Prime, OpenZeppelin, ConsenSys Diligence, Spearbit):
+
+For each finding:
+- **Severity** (Critical / High / Medium / Low / Informational)
+- **Title** (one-line summary)
+- **Location** (file and line numbers)
+- **Description** (what the bug is, in 2–3 sentences)
+- **Exploit / consequence** (what could happen if this bug is triggered)
+- **Recommendation** (what to change, specifically)
+- **Status** (Open / Acknowledged / Fixed)
+
+For the report as a whole:
+- **Executive summary** (1 page; what was audited, scope, top-line findings)
+- **Methodology** (how the audit was conducted)
+- **Findings** (the list above)
+- **Out-of-scope items** (what was deliberately not audited and why)
+
+Good audit reports are public. Read existing audits of Reth / Revm / Foundry / other Rust EVM components from Sigma Prime, OpenZeppelin, Spearbit — they're freely available, and the format is the same across firms.
+
+## 7. The reliability triangle, revisited
+
+Three reliability disciplines, each catching a different bug class:
+
+| Discipline | Catches | Misses |
+|---|---|---|
+| **Differential fuzzing** | Wrong answer under valid input | Failure modes; latent design bugs |
+| **Chaos engineering** | Right answer ceases under perturbed conditions | Bugs in code paths never injected; latent bugs |
+| **Systems-code auditing** | Latent design bugs in code paths not yet exercised | Bugs that need specific runtime triggers; unknown unknowns |
+
+The three together are the reliability bar a serious L1 team holds itself to. Ship none, and you ship known-broken code. Ship one or two, you ship code with known gaps. Ship all three, and you've earned the right to call your fork "production-grade."
+
+## Recall
+
+Without scrolling:
+
+1. **Smart-contract auditing and systems-code auditing are different jobs. Name three bug classes each catches that the other doesn't.**
+2. **For every \`unsafe\` block, you should ask 3 questions. What are they?**
+3. **Reth's stage \`execute\` and \`unwind\` should be perfectly symmetric. What's the audit question this symmetry implies?**
+4. **Loom and Miri serve different purposes. When do you reach for each?**
+5. **Why is "differential fuzzing + chaos engineering + auditing" the reliability bar, rather than any one or two of them?**
+
+If any answer is shaky, re-read the section.
+
+## 📂 Reference audits worth reading
+
+- [Sigma Prime — security audits](https://sigmaprime.io/security-audits/) — the closest industry reference for systems-code audit format
+- [Trail of Bits — publications](https://github.com/trailofbits/publications) — many Rust audits; good examples
+- [OpenZeppelin — security audits](https://blog.openzeppelin.com/security-audits/) — strong on consensus invariant analysis
+- [ConsenSys Diligence — audit reports](https://consensys.io/diligence/audits/) — broad coverage including infrastructure
+- [Spearbit — audit portfolio](https://github.com/spearbit/portfolio) — Rust / Solidity / consensus
+
+---
+
+**🧭 Where you are now in the stack:** the reliability triangle is complete. You have **differential fuzzing** (correctness), **chaos engineering** (resilience), and **systems-code auditing** (latent bugs). These three together — paired with the SE substrate (DB / VM / network / concurrency) and the 4 forces (adversarial / verifiable / ordered / live-migrating) — are the skill set that distinguishes "I can write Rust EVM code" from "I can ship Rust EVM code at a Hyperliquid / Tempo / OP-stack quality bar." The Building tier is where you apply all of this to real apps.`,
+                },
+                {
                   title: 'Expert quiz',
                   slug: 'expert-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 8,
+                  sortOrder: 10,
                   duration: 15,
                   xpReward: 50,
                   content: `# Expert quiz

@@ -2211,10 +2211,412 @@ Tempo の TIP-403 レジストリに 1 度凍結をプッシュすればよい�
 **Reth Expert の終わりに到達。** Building tier は本コースのすべてのパターンを production アプリで運用する; L1 Architect tier (Advanced) は同じ規律をプロトコル設計層で使う。Expert 全体を通じて、performance 内部、MDBX ストレージ、Tokio 並行性、proc macros、tracing、カスタムプリコンパイル、MPT 証明、stateless 実行、production MEV、zkEVM、フォーク運用、differential fuzzing、そして本レッスンで — production のプライバシースタック設計を読んできた。これが、このスタックの上で一緒に働きたいチームが既に共通言語として使っているソースレベルの語彙。`,
                 },
                 {
+                  title: 'Chaos engineering を Rust EVM ノードに — 誰かが壊す前に、自分で壊す',
+                  slug: 'chaos-engineering-rust-evm-ja',
+                  type: 'CONTENT',
+                  sortOrder: 8,
+                  duration: 28,
+                  xpReward: 60,
+                  content: `# Chaos engineering を Rust EVM ノードに — 誰かが壊す前に、自分で壊す
+
+> 🧭 **systems engineering スタックでの位置:** **他のすべての層を横断する信頼性層**。Netflix の Chaos Monkey がマイクロサービスに対して解いた問題と同じ — 良好な条件下でテストが通っても、部分的な故障下で生き残るとは限らない。L1 にとっては失敗モードの空間がさらに広く (Byzantine ピア、ディスク破損、ネットワーク分断、バリデータの時計ずれ)、賭け金もさらに大きい (サイレントな状態破損は分岐したフォークを生み、復旧に何日もかかる)。本レッスンは differential fuzzing のレッスンと対になる — fuzzing は正しさを検証し、chaos は生存を検証する。
+
+> 📌 **動く標的。** ツールセクションは Toxiproxy、chaosfs、libfaketime などの特定プロジェクトを参照する — このスペースのプロジェクトは動き、API も変わる。下に示すパターンは安定しているが、具体的なコマンドは調整が必要になることがある。
+
+カスタム Reth フォークを出荷しているチームの大半は、upstream のメンテナが回しているのと同じテストスイートを回して終わりにする。それは間違い。Upstream のテストが検証しているのは、Reth が *ハッピーな* ネットワーク (全ピア正直、全ディスク健全、全クロック正確) で正しく動くこと。あなたのフォークは敵対的な条件下で動くことになる — バリデータノードが DoS される、MDBX が破損したページを返す、クロックがずれる、ピアが byzantine ブロックを送る。**システムを意図的に壊さないテストは、システムが壊れたときに何が起きるかを教えてくれない。**
+
+本レッスンは、そのギャップを埋めることが目的。
+
+## 1. Differential fuzzing が取り逃がすもの
+
+Expert ティアの differential fuzzing のレッスンでは、Revm フォークを reference EVM 実装と数千の歴史的トランザクションで突き合わせる規律を扱った。それが答えるのは: *「私の実装は、有効な入力に対して reference と同じ出力を出すか?」*
+
+それが答えないのは:
+- バリデータがラウンドの途中で落ちたら、どうなる?
+- state-root の計算途中で MDBX が破損ページを返したら、どうなる?
+- 敵対的なピアが、有効なヘッダだが破損したボディを持つブロックを送ってきたら、どうなる?
+- wall-clock の時間が突然 30 秒戻ったら、どうなる?
+
+それらの質問は **chaos engineering** に属する: production が見つける前に、失敗モードを発見するために、意図的に故障を注入する規律。
+
+両方の規律が必要。Fuzzing は「正しい入力に対して間違った答えを返す」バグクラスを捕まえる。Chaos は「乱れた条件下で正しい答えが返らなくなる」バグクラスを捕まえる。**どちらも他方をカバーしない。**
+
+## 2. L1 ノードに対する chaos の 4 カテゴリ
+
+Rust EVM ノードに対するすべての chaos エクササイズは、以下の 4 つのバケットのいずれかに収まる:
+
+| カテゴリ | 何を注入するか | 現実世界の等価 |
+|---|---|---|
+| **Network chaos** | パケット損失、レイテンシスパイク、分断、ピア排除嵐 | クラウドリージョン障害、BGP 誤設定、DDoS |
+| **Disk chaos** | MDBX ページ破損、書き込み失敗、レイテンシスパイク | 故障する SSD、ビット腐敗、ファイルシステムのバグ |
+| **Time chaos** | クロックずれ、NTP ドリフト、単調クロックの逆行 | サーバクロックドリフト、閏秒、仮想化クロックずれ |
+| **Byzantine chaos** | 敵対的ピアが無効ブロック / 矛盾する投票 / 状態についての嘘を送る | 悪意あるバリデータ、鍵漏洩、ネットワーク MitM |
+
+各カテゴリにはそれぞれのツーリング、それぞれの失敗モードのシグネチャ、それぞれの対応パターンがある。完全な chaos の規律は、4 つすべてを exercise する。
+
+## 3. Network chaos — \`tc\`、Toxiproxy、Pumba
+
+最もシンプルな network chaos は Linux 側にある: \`tc\` (traffic control)。バリデータの P2P ポートで 30% のパケットを drop するには:
+
+\`\`\`bash
+tc qdisc add dev eth0 root netem loss 30%
+\`\`\`
+
+200ms のレイテンシを加えるには:
+
+\`\`\`bash
+tc qdisc add dev eth0 root netem delay 200ms
+\`\`\`
+
+Docker ベースのテストネットには、**Pumba** がこれらをコンテナフレンドリなコマンドにラップする:
+
+\`\`\`bash
+pumba netem --duration 5m loss --percent 30 my-reth-validator
+\`\`\`
+
+より細かい制御 (例: 1 つのピア接続だけを切る、インタフェース全体ではない) でアプリケーションレベルでプロキシを噛ませるには、**Toxiproxy** が失敗をプログラマブルに注入できる。Reth ノードは Toxiproxy を経由して接続し、失敗パターンをスクリプトで指定する。
+
+**Chaos エクササイズ:** 4 バリデータの BFT テストネットを立てる。1 つのバリデータを選ぶ。30 秒間、その P2P ポートに 80% のパケット損失を注入する。
+
+**確認すること:**
+- 残りの 3 ノード quorum がブロックを生成し続けるか? (BFT safety: yes、f=1 に対して 3 of 4 は依然として ≥ 2f+1)
+- 落ちたバリデータが復旧したとき、きれいにキャッチアップするか? (Liveness: 手動介入なしで再同期するはず)
+- 落ちたバリデータは inactivity でスラッシュされるか? (Policy: スペック次第 — 想定動作を検証する)
+
+**このクラスのバグが見つかる:** 「全バリデータがほぼ常時到達可能」という前提が、一時的な到達不能性で生き残れないコードパスに焼き込まれている。
+
+## 4. Disk chaos — chaosfs、カーネルの fault injection
+
+大半のチームは、データベースバックエンドが *嘘をついた* ときに何が起きるかをテストしない。**Chaosfs** (特定のファイルに対して意図的に破損したバイトを返す FUSE ファイルシステム) で確かめられる。
+
+\`\`\`bash
+# MDBX データディレクトリに chaosfs をマウントする
+chaosfs --backend ./reth-data --mount ./reth-mdbx --corrupt-rate 0.001
+\`\`\`
+
+これで MDBX からの 0.1% の read が破損したバイトを返す。マウントされたディレクトリに対して Reth ノードを走らせて観察する。
+
+**確認すること:**
+- Reth は破損を検出するか? (MDBX ページのチェックサムが大半のケースを捕まえるはず)
+- 検出する場合、ノードを優雅に停止させるか、サイレントに不正な state を serve するか? (サイレントな破損は L1 にとって最悪の失敗モード — ノード間で分岐したフォークが生まれる)
+- 破損は release ビルドで表面化するか、debug ビルドだけか?
+
+**Linux カーネルの代替:** \`fail/fail_injection\` で任意の syscall に任意の失敗を注入できる。100 回ごとに \`read()\` を失敗させるには:
+
+\`\`\`bash
+echo 1 > /sys/kernel/debug/fail_io_timeout/probability
+echo 100 > /sys/kernel/debug/fail_io_timeout/interval
+\`\`\`
+
+Reth ノードの起動を \`LD_PRELOAD=fail-syscalls.so\` でラップすれば、そのプロセスに対してのみ有効になる。
+
+**このクラスのバグが見つかる:** MDBX の read/write が常に成功する、あるいはサイレントな破損は起きないと仮定するコードパス。
+
+## 5. Time chaos — \`libfaketime\`、カーネルの時間ストレッチ
+
+Reth と Revm はどちらも、時間について仮定を置いている。ブロックタイムスタンプ、reorg window、バリデータのスロットタイミング、コンセンサスのタイムアウト。Wall clock が 30 秒ずれたり後ろに飛んだりすれば、いろいろなものが壊れる。
+
+最もシンプルなツールは \`libfaketime\`:
+
+\`\`\`bash
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libfaketime.so.1 FAKETIME=+30s reth node
+\`\`\`
+
+これで Reth プロセスは、システムクロックを実時間より 30 秒先に見るようになる。1 つのノードでこのドリフトを有効にしてテストネットを立ち上げ、観察する。
+
+**確認すること:**
+- ずれたバリデータは、ネットワークの残りが拒否するタイムスタンプを持つブロックを生成するか?
+- ずれたバリデータが追いつくのを待っている間、コンセンサスが止まるか?
+- ずれたバリデータは「未来の」ブロックを提案したことでスラッシュされるか?
+
+**より難しいケース:** **単調クロックの逆行**。Rust の \`Instant\` はプロセスごとに単調が保証されているが、サスペンド/レジュームされた VM や、マイグレーションされたコンテナでは、クロックジャンプが見える。\`libfaketime\` ではシミュレートできない; カーネルの時間ストレッチや VM レベルの pause/resume で行う必要がある。
+
+**このクラスのバグが見つかる:** 時間がネットワーク全体で単調かつ一様に進むことを仮定する consensus / networking コード。
+
+## 6. Byzantine chaos — 意図的に振る舞いを誤らせる Reth フォーク
+
+最も注入が難しい chaos は、同時に最も重要でもある: 意図的に嘘をついているピア。信頼性の問いはこうだ: *あなたのノードは、有効なヘッダだが state-root の主張が 1 バイトだけ間違っているブロックを送ってきたピアを、検出して拒否するか?*
+
+これは \`tc\` でも chaosfs でも注入できない — ピアが Reth コードを動かしていて、能動的に誤動作する必要がある。標準的なパターン: ブロック生成コードを上書きして特定のバグを挿入する小さな Reth フォークを作る。
+
+\`\`\`rust
+// byzantine-reth フォークで: 標準のペイロードビルダーを、
+// state root の 1 bit を反転させたブロックを提案するものに差し替える。
+impl PayloadBuilder for ByzantinePayloadBuilder {
+    fn build(&self, attrs: PayloadAttributes) -> ExecutionPayload {
+        let mut block = self.honest.build(attrs);
+        block.state_root ^= 1; // 1 bit 反転
+        block
+    }
+}
+\`\`\`
+
+このフォークを 1 つのバリデータで動かすテストネットを立てる。
+
+**確認すること:**
+- 正直なネットワークは、byzantine ブロックを 1 スロット以内に拒否するか?
+- 誤動作するバリデータはスラッシュされる (あるいはスペックが指定する通りの処分を受ける) か?
+- 正直なノードの state は綺麗なまま — byzantine 入力に対して一時的な「受理してから revert」が起きない — か?
+
+**このクラスのバグが見つかる:** 検証であるべきだったところに残っている信頼仮定。ピア供給の値 (ブロックハッシュ、トランザクション署名、state-trie ノード) を信頼するたびに、byzantine ピアが嘘をつく機会がある。あなたのテストには嘘をつくピアが含まれているべき。
+
+## 7. パターン — Chaos を継続的な実践として
+
+1 回限りの chaos エクササイズは、たまたま注入したバグを見つけるだけ。継続的な chaos は、放っておけば出荷していたであろう regression を見つける。
+
+3 つの実践レベル:
+
+- **CI 内の Chaos** — chaos エクササイズのサブセットが、すべての PR で走る。4 ノードテストネットで network loss + clock skew + disk fault を、毎コミット。遅いが、merge 前に regression を捕まえる。
+- **Game day** — 四半期ごとの半日のエクササイズで、チームが手作業で realistic な失敗を staging chain に注入する。バグも、runbook ドキュメントのギャップも見つかる。
+- **Production chaos** — Netflix スタイル。週 1 回、コントロールされたウィンドウで本番バリデータを意図的に 1 台落とす。最も規律のあるチーム (Tempo、OP、Hyperliquid あたり) はこれをやっているはず。教訓: production chaos はツールではなく文化 — エンジニアは on-call で revert の準備ができていなければならない。
+
+## 8. Chaos engineering が置き換えないもの
+
+Chaos を補完する 3 つの隣接する規律:
+
+- **Differential fuzzing** — 良好な入力での正しさをチェックする (Expert ティアのレッスン)。Chaos が fuzzing を置き換えないのは、chaos が小さな数の注入された失敗を exercise する一方、fuzzing は広い入力空間を exercise するから。
+- **Systems-code auditing** — コードを読むことで潜在的な設計バグを見つける (次の Expert レッスン)。Chaos が auditing を置き換えないのは、chaos は注入した失敗の下で表面化するバグしか見つけられないが、auditing はまだトリガされていないバグを見つけられるから。
+- **Formal verification** — 不変量を代数的に証明する (大半のチームにはスコープ外)。Chaos が formal verification を置き換えないのは、chaos が提供するのは経験的な信頼であって証明ではないから。
+
+完全な信頼性トライアングル: **fuzzing (正しさ) + chaos (耐性) + auditing (潜在的バグ)**。
+
+## 想起
+
+スクロールせずに:
+
+1. **Differential fuzzing と chaos engineering は、それぞれ異なるクラスのバグを捕まえる。それぞれが捕まえるクラスを挙げる。**
+2. **4 バリデータの BFT テストネットでテストしている。1 つのバリデータに 80% のパケット損失を 30 秒間注入する。**起きるべき** 3 つのことは何か? **起きるべきでない** 1 つのことは?**
+3. **サイレントなディスク破損は「L1 にとって最悪の失敗モード」。なぜか? ここで「サイレント」とは何を意味し、どんなカスケード的な帰結を生むか?**
+4. **\`libfaketime\` は何をシミュレートするか? また、シミュレートしない重要な時間関連の失敗モードは何か?**
+5. **Byzantine chaos のために、なぜ \`tc\` や \`chaosfs\` ではなく、カスタム Reth フォークが必要なのか?**
+
+どれか曖昧なら、該当セクションを読み直す。
+
+## 📂 開いておくべきリポと参考
+
+- [tigerbeetle/tigerbeetle](https://github.com/tigerbeetle/tigerbeetle) — deterministic simulation testing、金融系システム界で最も規律ある chaos 実践
+- [shopify/toxiproxy](https://github.com/Shopify/toxiproxy) — アプリケーションレベルの network chaos
+- [alexei-led/pumba](https://github.com/alexei-led/pumba) — Docker コンテナ chaos
+- [wolfcw/libfaketime](https://github.com/wolfcw/libfaketime) — time chaos
+- [chaos-mesh/chaos-mesh](https://github.com/chaos-mesh/chaos-mesh) — Kubernetes chaos プラットフォーム (クラスタレベル)
+
+---
+
+**🧭 ここまでで積み上げたもの:** あなたのツールキットに chaos engineering を加えた。次のレッスンでは、信頼性トライアングルの第 3 の柱を扱う — **systems-code auditing**: まだトリガされていないために fuzzing も chaos も捕まえられない、潜在的な設計バグを見つける規律。これら 3 つの規律をそろえれば、「動く Revm コード」と「L1 の心臓部として ship するのに安全な Revm コード」が区別できるようになる。`,
+                },
+                {
+                  title: 'Systems-code auditing — Reth / Revm / consensus 実装のバグを見つける',
+                  slug: 'systems-code-auditing-ja',
+                  type: 'CONTENT',
+                  sortOrder: 9,
+                  duration: 28,
+                  xpReward: 60,
+                  content: `# Systems-code auditing — Reth / Revm / consensus 実装のバグを見つける
+
+> 🧭 **systems engineering スタックでの位置:** **信頼性トライアングルの第 3 の柱**。Differential fuzzing は「正しい入力で間違った答え」のバグを捕まえる。Chaos engineering は「乱れた条件下で正しい答えが返らなくなる」バグを捕まえる。Auditing は、まだトリガされていないバグを捕まえる — 今は動くが、特定のテストが exercise したことがない条件下で表面化する潜在的設計欠陥。Systems code (Solidity ではない) では、バグの形が違う — レース条件、状態破損、コンセンサス不変量の違反、\`unsafe\` ブロックの正しさ、信頼境界からの漏れ。本レッスンは、それらを読むことで見つける方法について。
+
+> 📌 **スコープの正直な開示。** これは *systems-code* auditing — Reth / Revm / Rust 製の consensus 実装。スマートコントラクト auditing (Solidity のバグ、コントラクト層での EVM exploit) **ではない**。後者は他で十分カバーされている (Trail of Bits、Code4rena、Spearbit の資料); RethLab はコントラクト auditing について独自の角度を持たない。Systems-code auditing は誰も他がカバーしていない角度であり、RethLab のソースファースト thesis が活きる領域。
+
+Differential fuzz harness は ship した。Chaos drill は ship した。コードは両方に通る。これで完了か?
+
+違う。両方の規律は、コードを *走らせる* ことで exercise する。Audit は走らせるだけでは表面化しないものを捕まえる — まだ exercise されていないコードパス、今日は動くが将来の修正で壊れる不変量、validate されない trust 仮定。**読むことは、それ自体が独立した規律。**
+
+## 1. なぜ systems-code auditing はスマートコントラクト auditing と違うか
+
+スマートコントラクト auditing には well-known な分類がある: 整数オーバーフロー、reentrancy、アクセス制御のバグ、oracle 操作、flash-loan exploit。バグクラスのライブラリは有限でよく整理されている。バグの単位は Solidity / EVM コントラクトのレベル。
+
+Systems-code auditing には別の分類がある:
+- レース条件 (Tokio タスクの interleaving が誤った state を生む)
+- 状態破損のウィンドウ (非原子的な書き込みが、間違ったタイミングで中断される)
+- コンセンサス不変量の違反 (safety/liveness の仮定が静かに破られる)
+- \`unsafe\` ブロックの正しさ (すべての \`unsafe\` は soundness の境界)
+- 信頼境界からの漏れ (P2P ピア trust、RPC auth bypass、signer trust)
+
+異なるバグの形、異なる思考モデル、異なるツール。Solidity コントラクトの auditor と Reth フォークの auditor は、両方とも「auditing」と呼ばれていても、**別の仕事をしている**。
+
+本レッスンは systems-code 側を扱う。これが Tempo / OP / Hyperliquid のフォークに対して重要になる audit。
+
+## 2. Rust EVM スタックの 5 つのバグクラス
+
+### 2.1 状態破損のウィンドウ
+
+「状態破損のウィンドウ」とは、state が部分的に更新された段階で予期しない中断 (プロセスクラッシュ、MDBX 書き込み失敗、下流呼び出しの panic) が起きるコードパス。部分的な更新が rollback されないと、ディスク上の状態が不整合になる。
+
+Audit の問い: **すべての状態変更について、実行が途中で止まったら何が起きるか?**
+
+探すべき共通パターン:
+- トランザクションラッパなしの複数ステップ書き込み
+- 保存が静かに失敗しうる「保存 → return」シーケンス
+- 基盤ストアが commit される前に更新されるキャッシュ
+- 索引対象のデータと別個に更新されるインデックス
+
+Reth のステージ commit ロジックは audit すべき canonical な例。各ステージの \`execute\` は、\`execute\` がしたことを完全に undo する \`unwind\` と対になっているべき。Auditor は両方を読み、こう問う: **\`execute\` が行う state 変更で、\`unwind\` が undo しないものはないか?** あれば、それが破損のウィンドウ。
+
+### 2.2 並行性バグ
+
+Rust の型システムはコンパイル時にデータ競合を防ぐ。*論理競合* は防がない — 複数の Tokio タスクが interleave した結果、間違った出力を生む状況。
+
+Audit の問い: **すべての共有 state について、誰がいつそれを変更するかの契約は何か?**
+
+探すべき共通パターン:
+- \`await\` を跨いで保持される \`Arc<Mutex<T>>\` (デッドロックリスク; ときには正しさのリスク)
+- 同じ \`Arc<AtomicU64>\` を read-then-write する複数タスク (TOCTOU)
+- 送信側の順序が因果関係を保つと仮定する channel 受信側
+- state の古いスナップショットをキャプチャするタスクの \`tokio::spawn\`
+
+役に立つツール: \`loom\` (並行性順列テスト)、\`miri\` (マルチスレッド実行下での UB 検出)。
+
+### 2.3 コンセンサス不変量の違反
+
+すべてのコンセンサスプロトコルには明示的な不変量 (同じ高さに 2 つの finalize されたブロックがない) と暗黙の不変量 (提案者ローテーションは公平な分布を生む、バリデータの投票はリプレイできない) がある。コンセンサス実装をフォークやカスタマイズすると、これらの不変量を静かに違反するのは容易。
+
+Audit の問い: **すべての consensus 関連のコードパスについて、どの不変量に触れていて、このコードパスがそれを保つか?**
+
+探すべき共通パターン:
+- \`(validator, slot)\` で重複排除しない vote 処理 — リプレイ攻撃
+- 単調なタイムスタンプを仮定する fork-choice コード — クロックドリフトで壊れる
+- 2f+1 quorum を厳密にチェックしない finality ロジック — quorum 未満を受け入れる
+- 「バリデータが署名した」条件を verify しない slashing-evidence ハンドリング — 偽陽性 slashing
+
+HotStuff や Tendermint 実装の audit は重い作業 — プロトコル論文を 1 つのウィンドウで開き、コードを別のウィンドウで開き、「不変量 X は コードパス Y で保たれている」スプレッドシートを持つ必要がある。
+
+### 2.4 \`unsafe\` ブロックの正しさ
+
+Rust のすべての \`unsafe\` ブロックはセキュリティの境界。Borrow checker の保証をオプトアウトし、コンパイラなら強制したはずの安全性不変量をプログラマが手作業で維持したと主張する。
+
+Audit の問い (すべての \`unsafe\` に対して 3 部構成):
+1. **この \`unsafe\` ブロックはどの不変量に依拠しているか?**
+2. **現在または将来のどの条件で、その不変量が違反されうるか?**
+3. **不変量はどう verify されているか — テスト、型、コードコメントの証明?**
+
+どれかの答えが「分からない」なら、その \`unsafe\` ブロックは audit finding。
+
+実例: Revm のスタック操作は性能のために \`unsafe\` \`get_unchecked\` を使うことがある。依拠している不変量は「この呼び出しの前にスタック深さが verify された」。違反しうる条件: スタック深さの verification とスタックアクセスを分離する refactor。Verification 手段: アンダーフロー的シナリオを exercise するテスト。
+
+ツール: \`cargo geiger\` がクレートごとに \`unsafe\` ブロックを数える。Audit は数を 0 に減らすことではない — 各 \`unsafe\` が明確な、ドキュメント化された不変量を持つことを確認すること。
+
+### 2.5 信頼境界からの漏れ
+
+ノードへのすべての外部入力は信頼境界。Auditor はすべての境界をマップし、こう問う: **何が境界で検証され、何が黙って信頼されているか?**
+
+Reth ノードの 4 つの主要な信頼境界:
+- **RPC** — クライアントは任意のリクエストを submit できる。Auth、レートリミット、ペイロード検証はすべてこの境界に置かれるべき。
+- **P2P** — ピアはブロック、トランザクション、state-trie ノードを送ってくる。それぞれは信頼される前に検証されなければならない。
+- **CLI / config** — ノードオペレータの config ファイル。Adversarial 性は低いがそれでも境界 (genesis hash の typo など)。
+- **Engine API** — consensus client がブロック実行リクエストを供給する。Consensus rule に照らして検証されるべき。
+
+各境界での共通のバグ:
+- RPC: 特権メソッド (例: \`admin_addPeer\`) に認証が抜けている
+- P2P: state root に対して検証せずに、ピアの state についての主張を受け入れる
+- CLI: chainspec が内部一貫しているかを検証しない
+- Engine API: EL がまだ知らない hardfork rule に違反するブロックを受け入れる
+
+## 3. Reth PR を読む — 実例
+
+Auditing は常に独立した review session ではない。consensus に影響するコードに触れる *すべての PR* を、正しい問いを持って読むことが auditing。
+
+実例: Reth PR が \`stage commit ロジック\` を refactor して新しい最適化を加える — 1 つずつではなくステージのグループをバッチで commit するもの、と想定する。
+
+読みながら問うべきこと:
+1. **旧 \`execute → commit → unwind\` フローはどうだったか? 新フローは?**
+2. **新しい「バッチ commit」ごとに、どの state に触れるか?**
+3. **バッチ commit が途中で失敗したら何が起きるか?** 具体的には: 新コードは状態破損のウィンドウを導入したか?
+4. **\`unwind\` はバッチ化されたケースに対応するよう更新されたか?** 違うなら、それがバグ。
+5. **「partial-batch を execute、crash、restart」のテストはあるか?** なければ、テストギャップそのものが finding。
+
+PR をバグのために読むとはこういう形。5 つの問いはいつも同じ形 — 単に PR が変える code area に当てはめるだけ。
+
+## 4. コンセンサス実装をその不変量に照らして audit する
+
+コンセンサス実装は構造化された方法で auditable: プロトコルの不変量を列挙し、それぞれの不変量について影響するコードパスをたどる。
+
+例: HotStuff は safety 不変量 *「正しいレプリカは同じ高さの 2 つの矛盾するブロックには vote しない」* を持つ。Audit:
+
+1. **レプリカが vote を produce するすべてのコードパスを見つける。** 通常コードベース内で 1〜3 箇所。
+2. **それぞれについて、vote の前にどの state が consult されるかを確認する。** 具体的には: バリデータの local「高さ N で最後に vote したブロック」がチェックされるか?
+3. **何がこの state を再起動を跨いで永続化するか?** in-memory のみなら、再起動誘発の double-vote はバグ。
+4. **チェックは vote 送信と原子的か?** 「チェック」と「vote 送信」の間にウィンドウがあれば、並行コードパスが 2 回 vote しうる。
+
+プロトコルが指定するすべての不変量について繰り返す。退屈だが mechanical な作業。
+
+## 5. Systems-code auditor のためのツール
+
+小さな道具箱で十分カバーできる:
+
+| ツール | 何をするか | いつ使うか |
+|---|---|---|
+| \`cargo audit\` | 依存の既知の CVE をチェックする | すべての CI で走らせる; ベースラインの衛生 |
+| \`cargo geiger\` | クレートごとに \`unsafe\` ブロックを数える | Audit のスコーピングに使う — どのクレートが最も \`unsafe\` review が必要か? |
+| \`kani\` | Rust 用のモデルチェッカ | 小さな \`unsafe\` ブロックや critical な関数に使う; プログラム全体にはスケールしない |
+| \`loom\` | 並行性順列テスト | \`Arc<Mutex<T>>\` を多用するコードパスに使う; レース条件を決定論的に見つける |
+| \`miri\` | 実行時 UB 検出 | テストのサブセットを \`miri\` 下で走らせて \`unsafe\` 内の未定義動作を検出 |
+| \`cargo clippy -- -W clippy::all\` | Lint ベースのバグ探し | ベースライン; よくあるミスを捕まえる |
+| 手動 review チェックリスト | 上記の 5 つのバグクラスを体系的に適用 | 常に |
+
+これらのツールは、reviewer が探そうと思わないバグは見つけない。**ツールは慎重な auditor を増幅するもので、置き換えるものではない。**
+
+## 6. Auditor の deliverable
+
+Systems-code audit はレポートを produce する。業界標準の構造 (Trail of Bits、Sigma Prime、OpenZeppelin、ConsenSys Diligence、Spearbit が採用):
+
+各 finding について:
+- **Severity** (Critical / High / Medium / Low / Informational)
+- **Title** (1 行のサマリー)
+- **Location** (ファイルと行番号)
+- **Description** (バグが何か、2〜3 文で)
+- **Exploit / consequence** (バグが trigger されたら何が起こりうるか)
+- **Recommendation** (具体的に何を変えるか)
+- **Status** (Open / Acknowledged / Fixed)
+
+レポート全体について:
+- **Executive summary** (1 ページ; 何を audit したか、スコープ、トップレベルの findings)
+- **Methodology** (audit がどう実施されたか)
+- **Findings** (上のリスト)
+- **Out-of-scope items** (意図的に audit しなかったものとその理由)
+
+良い audit レポートは公開されている。Sigma Prime、OpenZeppelin、Spearbit による Reth / Revm / Foundry / その他の Rust EVM コンポーネントの既存 audit を読む — 無料で入手でき、フォーマットはファーム間で共通。
+
+## 7. 信頼性トライアングルを振り返る
+
+3 つの信頼性規律、それぞれが異なるバグクラスを捕まえる:
+
+| 規律 | 捕まえる | 見逃す |
+|---|---|---|
+| **Differential fuzzing** | 有効な入力で間違った答え | 失敗モード; 潜在的設計バグ |
+| **Chaos engineering** | 乱れた条件下で正しい答えが返らなくなる | 注入されなかったコードパスのバグ; 潜在的バグ |
+| **Systems-code auditing** | まだ exercise されていないコードパスの潜在的設計バグ | 特定のランタイム trigger が必要なバグ; unknown unknown |
+
+3 つあわせて、serious な L1 チームが自分に課す信頼性のバー。1 つも ship しなければ、既知の壊れたコードを ship したことになる。1 つか 2 つ ship したら、既知のギャップ付きでコードを ship したことになる。3 つすべて ship したら、自分のフォークを「production-grade」と呼ぶ資格を得たことになる。
+
+## 想起
+
+スクロールせずに:
+
+1. **スマートコントラクト auditing と systems-code auditing は別の仕事。それぞれが他方では捕まえないバグクラスを 3 つずつ挙げる。**
+2. **すべての \`unsafe\` ブロックについて、3 つの問いを問うべき。それは何か?**
+3. **Reth のステージ \`execute\` と \`unwind\` は完全に対称であるべき。この対称性が示唆する audit の問いは何か?**
+4. **Loom と Miri は異なる目的を持つ。それぞれをどんな時に使うか?**
+5. **なぜ「differential fuzzing + chaos engineering + auditing」が信頼性のバーであり、どれか 1 つか 2 つではないのか?**
+
+どれか曖昧なら、該当セクションを読み直す。
+
+## 📂 読む価値のある reference audit
+
+- [Sigma Prime — security audits](https://sigmaprime.io/security-audits/) — systems-code audit フォーマットに最も近い業界 reference
+- [Trail of Bits — publications](https://github.com/trailofbits/publications) — 多数の Rust 監査; 良い例
+- [OpenZeppelin — security audits](https://blog.openzeppelin.com/security-audits/) — コンセンサス不変量分析が強い
+- [ConsenSys Diligence — audit reports](https://consensys.io/diligence/audits/) — インフラ含む幅広いカバレッジ
+- [Spearbit — audit portfolio](https://github.com/spearbit/portfolio) — Rust / Solidity / consensus
+
+---
+
+**🧭 ここまでで積み上げたもの:** 信頼性トライアングルが完成。**differential fuzzing** (正しさ)、**chaos engineering** (耐性)、**systems-code auditing** (潜在的バグ) — 3 つそろった。SE substrate (DB / VM / network / 並行性) と 4 つの力 (敵対的環境 / 検証可能性 / 順序付け / 無停止移行) と組み合わせれば、「Rust EVM コードが書ける」と「Hyperliquid / Tempo / OP-stack 品質のバーで Rust EVM コードを ship できる」を分ける skill set がそろう。Building tier はそのすべてを実アプリに適用する場所。`,
+                },
+                {
                   title: 'Expertまとめクイズ',
                   slug: 'expert-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 8,
+                  sortOrder: 10,
                   duration: 15,
                   xpReward: 50,
                   content: `# Expertまとめクイズ
