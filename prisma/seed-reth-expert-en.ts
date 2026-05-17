@@ -2624,10 +2624,231 @@ If any answer is shaky, re-read the section.
 **🧭 Where you are now in the stack:** the reliability triangle is complete. You have **differential fuzzing** (correctness), **chaos engineering** (resilience), and **systems-code auditing** (latent bugs). These three together — paired with the SE substrate (DB / VM / network / concurrency) and the 4 forces (adversarial / verifiable / ordered / live-migrating) — are the skill set that distinguishes "I can write Rust EVM code" from "I can ship Rust EVM code at a Hyperliquid / Tempo / OP-stack quality bar." The Building tier is where you apply all of this to real apps.`,
                 },
                 {
+                  title: 'Open-source contributor workflow — getting Paradigm-quality PRs merged into Reth / Revm / Alloy',
+                  slug: 'oss-contributor-workflow-en',
+                  type: 'CONTENT',
+                  sortOrder: 10,
+                  duration: 28,
+                  xpReward: 60,
+                  content: `# Open-source contributor workflow — getting Paradigm-quality PRs merged into Reth / Revm / Alloy
+
+> 🧭 **Where this lives in the systems-engineering stack:** the **social-graph layer above the code**. Every other lesson in RethLab teaches you to read or write code. This one teaches you how the code you write becomes code that's running in production — which, for Reth / Revm / Alloy, requires getting through Paradigm's review bar. The technical skill of writing good code and the social skill of getting it merged are different, and getting good at the second one is what turns "I can read this stack" into "I'm a recognized contributor to this stack" — exactly the signal Paradigm / Tempo / Hyperliquid hire on. This lesson pairs with the systems-code auditing lesson: auditing teaches you what reviewers look for; this lesson teaches you how to write code that passes their review.
+
+> 📌 **Audience.** Written assuming you've read most of Inside Alloy / Revm / Reth and have a working Rust toolchain. If you haven't — the contributor-workflow concepts still apply, but the specific examples land harder once you've internalized the patterns those courses cover.
+
+Most engineers in crypto can write Rust code that compiles. Few can write Rust code that gets merged into Reth, Revm, or Alloy on the first review. The gap between those two is what this lesson closes.
+
+Why the gap matters: **Paradigm hires people whose work they recognize from the upstream PR queue.** Same for Tempo. Same for Hyperliquid. Not GitHub stars. Not Twitter posts. Actual merged PRs in projects they care about. The skills RethLab teaches across 13 courses are necessary; being recognizable on the upstream PR queue is what makes you hire-able into the teams whose work you study.
+
+This lesson is about being recognizable.
+
+## 1. Why this is its own skill
+
+You can be a brilliant systems engineer and still get your PRs ignored. The reasons:
+
+- Title is unclear; reviewers skip
+- Description doesn't say *why*; reviewers don't know how to evaluate
+- Commits aren't atomic; reviewers can't trust the diff
+- Code doesn't match upstream style; reviewers have to clean up
+- Tests don't exist or don't match the test conventions; reviewers have to write them
+- Response to feedback is defensive; reviewers move on to easier PRs
+
+Each one is small. Together they're the difference between "PR merged in 3 days" and "PR sits open for 6 months and then closes."
+
+The good news: every one of these is a learnable skill. Most engineers don't learn them because nobody explicitly teaches them. This lesson does.
+
+## 2. Read the room — upstream norms before you write a line
+
+Every project has implicit conventions you can't infer from reading code in isolation. Spend the first two weeks reading:
+
+- **CONTRIBUTING.md** — the official version of the rules
+- **The last 20 merged PRs** — what actually gets accepted (often differs from the official rules)
+- **The last 10 closed-without-merge PRs** — what doesn't (more informative)
+- **The maintainers' own recent PRs** — the gold standard for what counts as "good"
+- **Issues with \`good first issue\` label** — explicitly marked as suitable for newcomers
+- **The codebase's TODO / FIXME comments** — often "would-be PRs waiting for someone to write them"
+
+For Reth specifically:
+- \`paradigmxyz/reth\` CONTRIBUTING.md (read it; it's specific)
+- The Discord (\`#contributing\` channel)
+- Weekly office hours (announced in Discord)
+
+For Revm:
+- \`bluealloy/revm\` CONTRIBUTING.md
+- The maintainer's preferences are stricter than upstream Reth; read recent PRs to calibrate
+
+For Alloy:
+- Active project; conventions move; check recent PRs more frequently than docs
+
+The lurking time matters. Engineers who skip this step and start submitting PRs immediately get ignored — they don't know the room.
+
+## 3. Find the right first PR
+
+The first PR's job is not to make a big technical contribution. It's to **establish your existence in the project's social graph**. So pick something small.
+
+The escalation ladder:
+
+1. **Docs / README typo** — almost guaranteed merge. Establishes you as someone who reads carefully.
+2. **Test case addition** — covers an edge case the existing tests miss. Establishes you as someone who thinks about correctness.
+3. **Small bug fix** — for a \`good first issue\` labeled issue. Establishes you as someone who can navigate the codebase.
+4. **Small feature** — a useful but non-load-bearing addition. Establishes you as someone with judgment.
+5. **Architectural change** — only after the previous four. Without that history, you'll get ignored.
+
+The counter-pattern: starting with #5. Engineers who open their first PR with "I noticed subsystem X has design problem Y and here's a refactor" get ignored even when they're technically right. Reputation has to come first.
+
+## 4. Anatomy of a Paradigm-quality PR
+
+Pull up any merged PR from Reth's main contributors. Study its structure:
+
+**Title** — imperative form, tight scope. Bad: "Some improvements to staging." Good: "stages: fix unwind for SenderRecoveryStage on partial commit"
+
+**Description** — three sections:
+1. **What changed** — one paragraph, what the diff does
+2. **Why** — one paragraph, the motivation; cite issue numbers if applicable
+3. **How to verify** — explicit reviewer instructions: which tests to run, what behavior to check manually
+
+**Commits** — each one is a logical unit. A commit message tells the story of what changed and why. If you can't summarize a commit in one line, the commit is too big.
+
+**Code** — passes \`cargo fmt\` and \`cargo clippy -- -W clippy::all\`. Matches the project's existing patterns (look at neighboring files). No "improvements" to style that aren't part of the actual fix.
+
+**Tests** — new tests where new behavior, regression tests where bug fix. The naming convention matches the project (e.g., Reth uses \`tests/it/\` for integration tests, \`#[test]\` for unit). Failing tests should fail meaningfully ("expected X, got Y") not opaquely ("assertion failed").
+
+**Performance claims** — if you say "this is faster," include benchmark numbers. If you don't have benchmarks, don't claim performance.
+
+The pattern: every choice should be defensible. If a reviewer asks "why this way?", you should have an answer ready.
+
+## 5. The RFC pattern for non-trivial changes
+
+For anything bigger than a small fix, write an RFC (Request for Comments) before writing code. The disciplined version:
+
+**When to RFC:**
+- Changes affecting more than one crate
+- New public traits or types
+- Breaking API changes
+- New external dependencies
+- Anything touching consensus-affecting behavior
+
+**RFC structure (Reth's loose convention):**
+1. **Motivation** — what problem are you solving, why now
+2. **Design** — what you propose, with API sketches
+3. **Alternatives** — what else you considered and why you rejected them
+4. **Drawbacks** — honest list of what's worse about your proposal
+5. **Prior art** — how other Rust EVM projects (or non-EVM systems) handle this
+
+**Where to post:** a GitHub issue with the \`rfc\` label, or a forum post for the project (Reth has a forum thread structure).
+
+The discipline: you think hard about the design *before* writing 2000 lines of code that need to be redesigned after review. Most senior contributors RFC even when they could get away without — it forces clarity.
+
+**Reading recommendation:** find a recent merged RFC for Reth or Revm, read it, and notice how much of the work is in the "alternatives" and "drawbacks" sections.
+
+## 6. Write code that reads like upstream code
+
+The reviewer's hidden test: *"if I didn't know this PR was from a contributor, would I think it was written by the team?"*
+
+Code that passes this test:
+- Uses the same trait-first patterns the rest of the codebase uses (generic over \`N: Network\`, \`auto_impl\` where appropriate, builder pattern for configuration)
+- Doesn't introduce new abstractions just to be clever
+- Names types and functions the way neighboring code names them
+- Avoids \`unsafe\` unless there's a specific perf justification you can articulate
+- Uses the project's error types (\`eyre::Result\`, \`RethError\`, etc.) consistently with neighbors
+- Comments the *why*, not the *what*
+
+The auditor's mindset from the systems-code auditing lesson maps directly here. The questions an auditor asks ("what invariant does this assume?", "what happens on error?", "what scales?") are the same questions a reviewer asks. **Code that's easy to audit is code that's easy to review.**
+
+A pre-submission checklist:
+- Does my code match the surrounding style?
+- Are my tests in the right directory with the right naming?
+- Do my commits each tell a story?
+- Is my PR description specific enough that a reviewer can verify without running my code?
+- Have I anticipated and answered the 2–3 most likely reviewer questions?
+
+## 7. Communication patterns that get PRs merged
+
+Once your PR is up, your job is to make the reviewer's job easy.
+
+**Fast response pattern (good):**
+- Reviewer: "What about case X?"
+- You: "Good catch. Will add a test + fix." (within hours)
+- You: [push commit] (within 1–2 days)
+- Reviewer: ✓ merged
+
+**Slow response pattern (bad):**
+- Reviewer: "What about case X?"
+- You: [200-word defense of why your original design handles X correctly]
+- Reviewer: [doesn't engage, moves to easier PR]
+- 3 weeks later: PR closes for inactivity
+
+The pattern: **assume the reviewer is right by default.** If you disagree, ask "what would make this OK?" rather than re-arguing. Reviewers have many PRs to handle; they don't have bandwidth for long debates.
+
+**When reviewers disagree with each other** (happens in multi-maintainer projects): don't pick a side. Wait for them to align. If a week passes with no convergence, ping with "is there a way I can break the deadlock — split into two PRs? choose the simpler approach for now and revisit?"
+
+**When your PR sits:** ping once after 14 days. If no response, ping once more after 28 days. After that, the silence is the answer — your work isn't the maintainers' priority right now. Move on. Don't burn social capital nagging.
+
+## 8. The contributor's reputation arc
+
+**First PR (small fix, merged):** you exist in the social graph. Maintainers might not remember your name yet.
+
+**Five merged PRs:** maintainers recognize your handle. They start looking at your PRs more readily because past PRs were clean.
+
+**Ten merged PRs:** you're a known reliable contributor in some area. Maintainers might ping you on issues adjacent to your area.
+
+**Twenty merged PRs:** you're the unofficial expert on some piece of the codebase. New contributors get pointed at your past PRs as examples.
+
+**Fifty+ merged PRs:** you're effectively part of the team. Maintainers consult you on design decisions in your area. **This is the level at which Paradigm starts thinking about hiring you.**
+
+The arc is slow. Counter to most engineering advice, the "fast path" doesn't exist. The teams that hire from this stack hire from this arc; there's no shortcut.
+
+## 9. What NOT to do
+
+A non-exhaustive list of how to ensure your PRs get ignored:
+
+- **Drive-by PR** — open one, then disappear. Maintainers learn not to invest review time in contributors who won't be back.
+- **Auto-generated permission asks** — "Hi, would you be interested in a PR that adds X?" Just submit the PR; the answer is "show, don't ask."
+- **Refactor PRs as first contribution** — "I noticed your code uses pattern X, here's the same code using pattern Y." Without history, this reads as criticism, not contribution.
+- **Issues without research** — "Does Reth support feature X?" when the answer is in the docs or CONTRIBUTING.md.
+- **Defensive review responses** — see §7.
+- **Marketing posts about your PRs** — posting on Twitter "I just contributed to Reth!" before the PR merges. The maintainers see this. It reads as self-promotion before collaboration.
+
+## 10. Four sources to monitor
+
+To stay in the contributor flow without burning out:
+
+1. **Issue tracker** — filter to \`good first issue\` + \`help wanted\` labels. Subscribe to issues in areas you understand.
+2. **PR queue** — read open PRs (especially reviewed ones with active discussion). The review comments are free education.
+3. **Discord / Telegram** — low-stakes channels for "is this the right approach?" questions before opening a PR.
+4. **The codebase's TODO / FIXME comments** — these are often "would-be PRs waiting for someone to write them."
+
+Spend ~30 minutes per week on these. The information compounds.
+
+## Recall
+
+Without scrolling:
+
+1. **Why is the first PR's job NOT "make a big technical contribution"? What IS its job?**
+2. **A reviewer asks "what about case X?" There are two response patterns. Which one gets the PR merged, and why?**
+3. **When should you write an RFC before writing code? Name two triggers.**
+4. **The "would I think this was written by the team?" test is applied mentally by the reviewer. Name three things to check before submitting that get you to pass it.**
+5. **The reputation arc has 5 stages. At which stage does Paradigm start thinking about hiring? Why does that stage take years, not months?**
+
+If any answer is shaky, re-read the section.
+
+## 📂 References worth keeping open
+
+- [paradigmxyz/reth — CONTRIBUTING.md](https://github.com/paradigmxyz/reth/blob/main/CONTRIBUTING.md)
+- [bluealloy/revm — CONTRIBUTING.md](https://github.com/bluealloy/revm/blob/main/CONTRIBUTING.md)
+- [alloy-rs/alloy — CONTRIBUTING.md](https://github.com/alloy-rs/alloy/blob/main/CONTRIBUTING.md)
+- [Reth's recent merged PRs](https://github.com/paradigmxyz/reth/pulls?q=is%3Apr+is%3Amerged) — the calibration source
+- [Reth Discord](https://discord.gg/reth) — \`#contributing\` channel for the lurking phase
+
+---
+
+**🧭 Where you are now in the stack:** the systems-code auditing lesson taught you what reviewers look for. This lesson taught you how to write code that passes their review and how to navigate the social process around it. Together they're the two halves of "be the contributor Paradigm recognizes." With the SE substrate (5 layers), the 4 forces (adversarial / verifiable / ordered / live-migrating), the reliability triangle (fuzzing / chaos / auditing), and now the contributor workflow, you have the full skill set the teams shipping this stack actually hire on. **The rest is doing the work — show up to the PR queue regularly.**`,
+                },
+                {
                   title: 'Expert quiz',
                   slug: 'expert-quiz-en',
                   type: 'QUIZ',
-                  sortOrder: 10,
+                  sortOrder: 11,
                   duration: 15,
                   xpReward: 50,
                   content: `# Expert quiz

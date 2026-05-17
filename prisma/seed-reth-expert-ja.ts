@@ -2613,10 +2613,231 @@ Systems-code audit はレポートを produce する。業界標準の構造 (Tr
 **🧭 ここまでで積み上げたもの:** 信頼性トライアングルが完成。**differential fuzzing** (正しさ)、**chaos engineering** (耐性)、**systems-code auditing** (潜在的バグ) — 3 つそろった。SE substrate (DB / VM / network / 並行性) と 4 つの力 (敵対的環境 / 検証可能性 / 順序付け / 無停止移行) と組み合わせれば、「Rust EVM コードが書ける」と「Hyperliquid / Tempo / OP-stack 品質のバーで Rust EVM コードを ship できる」を分ける skill set がそろう。Building tier はそのすべてを実アプリに適用する場所。`,
                 },
                 {
+                  title: 'オープンソース貢献のワークフロー — Paradigm 品質の PR を Reth / Revm / Alloy に merge してもらう',
+                  slug: 'oss-contributor-workflow-ja',
+                  type: 'CONTENT',
+                  sortOrder: 10,
+                  duration: 28,
+                  xpReward: 60,
+                  content: `# オープンソース貢献のワークフロー — Paradigm 品質の PR を Reth / Revm / Alloy に merge してもらう
+
+> 🧭 **systems engineering スタックでの位置:** **コードの上に乗る社会的グラフの層**。RethLab の他のすべてのレッスンは、コードを読む、または書くことを教える。本レッスンは、書いたコードがどう本番で動くコードになるか — つまり Reth / Revm / Alloy にとっては、Paradigm のレビューバーを通すこと — を教える。良いコードを書く技術スキルと、それを merge してもらう社会スキルは別物で、後者を磨くことが「このスタックを読める」を「このスタックの認知された貢献者である」に変える — それが Paradigm / Tempo / Hyperliquid が採用シグナルとしているまさにそれ。本レッスンは systems-code auditing のレッスンと対になる: auditing はレビュアーが何を見るかを教え、本レッスンはそのレビューに通るコードの書き方を教える。
+
+> 📌 **対象。** Inside Alloy / Revm / Reth の大半を読了し、動く Rust toolchain を持っている前提で書かれている。まだの場合 — 貢献ワークフローの概念は依然として適用できるが、具体例はそれらのコースのパターンを内在化した後でより深く届く。
+
+Crypto 界の大半のエンジニアは、コンパイルする Rust コードを書ける。最初のレビューで Reth、Revm、Alloy に merge される Rust コードを書けるエンジニアは少ない。本レッスンが埋めるのは、その間のギャップ。
+
+なぜそのギャップが重要か: **Paradigm は upstream の PR queue で見覚えのある人を採用する。** Tempo も同じ。Hyperliquid も同じ。GitHub stars ではない。Twitter 投稿でもない。気にしているプロジェクトで実際に merge された PR を見ている。RethLab が 13 コースで教えるスキルは必要 — そのうえで upstream の PR queue で見覚えのある人になることが、学んでいる相手のチームに採用される条件。
+
+本レッスンは、見覚えのある人になる方法について。
+
+## 1. なぜこれが独立したスキルなのか
+
+優れた systems エンジニアでも、PR を無視されることはある。理由:
+
+- タイトルが不明瞭でレビュアーがスキップする
+- description が *なぜ* を言わないので、レビュアーが評価できない
+- commit が atomic でなく、レビュアーが diff を信頼できない
+- コードが upstream のスタイルに合っていないので、レビュアーが直さなければならない
+- テストがないか、テスト規約に合っていないので、レビュアーが書かなければならない
+- フィードバックへの反応が defensive で、レビュアーは easier な PR に移る
+
+それぞれは小さなこと。合わせると「PR が 3 日でマージ」と「PR が 6 ヶ月開いたまま、その後 close」の差になる。
+
+良いニュース: これらすべては学べるスキル。大半のエンジニアが学ばないのは、誰も明示的に教えないから。本レッスンが教える。
+
+## 2. 部屋を読む — 1 行書く前に upstream の規範を知る
+
+すべてのプロジェクトには、コードを単独で読んでも推測できない暗黙の規約がある。最初の 2 週間は読むことに使う:
+
+- **CONTRIBUTING.md** — 公式版のルール
+- **直近 20 件の merged PR** — 実際に accept されるもの (公式ルールと食い違うことが多い)
+- **直近 10 件の merge せずに close された PR** — accept されないもの (こちらの方が示唆的)
+- **メンテナ自身の最近の PR** — 「良い」の gold standard
+- **\`good first issue\` ラベルの issue** — 新参者に向くと明示されているもの
+- **コードベースの TODO / FIXME コメント** — しばしば「誰かが書くのを待っている would-be PR」
+
+Reth specifically:
+- \`paradigmxyz/reth\` の CONTRIBUTING.md (specific なので必読)
+- Discord (\`#contributing\` チャネル)
+- 週次の office hours (Discord で告知)
+
+Revm:
+- \`bluealloy/revm\` の CONTRIBUTING.md
+- メンテナの好みは upstream Reth より厳しい; 直近 PR を読んで校正する
+
+Alloy:
+- アクティブなプロジェクト; 規約が動く; docs より直近 PR を頻繁にチェックする
+
+このルーキング期間は重要。このステップをスキップして即 PR を投げ始めるエンジニアは無視される — 部屋の空気を知らないから。
+
+## 3. 最初の PR を正しく選ぶ
+
+最初の PR の仕事は大きな技術貢献ではない。**プロジェクトの社会的グラフに自分の存在を確立すること**。だから小さいものを選ぶ。
+
+エスカレーションの梯子:
+
+1. **Docs / README の typo** — ほぼ確実に merge される。注意深く読む人だと印象づける。
+2. **テストケースの追加** — 既存テストが見逃している edge case をカバーする。正しさを考える人だと印象づける。
+3. **小さなバグ修正** — \`good first issue\` ラベルが付いた issue に対する。コードベースを navigate できる人だと印象づける。
+4. **小さな機能追加** — 有用だが load-bearing ではない追加。判断力のある人だと印象づける。
+5. **アーキテクチャの変更** — 上の 4 つの後でなければ無理。その履歴なしには無視される。
+
+逆パターン: #5 から始めること。「X サブシステムに設計問題 Y があると気づきました、これは refactor です」で最初の PR を開くエンジニアは、技術的に正しくても無視される。評判が先。
+
+## 4. Paradigm 品質の PR の解剖
+
+Reth のメインコントリビュータが書いた merged PR を 1 つ開き、構造を研究する:
+
+**Title** — 命令形、スコープを狭く。悪い: "Some improvements to staging." 良い: "stages: fix unwind for SenderRecoveryStage on partial commit"
+
+**Description** — 3 セクション:
+1. **What changed** — 1 段落、diff が何をするか
+2. **Why** — 1 段落、動機; 該当する場合は issue 番号を引用
+3. **How to verify** — レビュアー向けの明示的な指示: どのテストを走らせるか、手動で何の挙動をチェックするか
+
+**Commits** — それぞれが論理的単位。Commit メッセージが「何が変わったか、なぜか」のストーリーを語る。Commit を 1 行で要約できなければ、commit が大きすぎる。
+
+**コード** — \`cargo fmt\` と \`cargo clippy -- -W clippy::all\` を通る。プロジェクトの既存パターンに合っている (隣接ファイルを見る)。実際の修正の一部ではない style の「改善」は入れない。
+
+**テスト** — 新しい挙動には新しいテスト、バグ修正には regression テスト。命名規約はプロジェクトに合わせる (例: Reth は integration テストに \`tests/it/\`、unit に \`#[test]\` を使う)。Failing テストは意味のある形で fail する (「expected X, got Y」)、不透明にではない (「assertion failed」)。
+
+**性能の主張** — 「これは速い」と言うなら、ベンチマーク数字を含める。ベンチマークがないなら、性能の主張はしない。
+
+パターン: すべての選択が正当化できるべき。レビュアーに「なぜこの方法?」と聞かれたら、答えが用意されているべき。
+
+## 5. 非自明な変更のための RFC パターン
+
+小さな修正より大きいものには、コードを書く前に RFC (Request for Comments) を書く。規律的な版:
+
+**いつ RFC するか:**
+- 複数 crate にまたがる変更
+- 新しい public trait や型
+- Breaking API 変更
+- 新しい外部依存
+- consensus に影響する挙動に触れるもの
+
+**RFC 構造 (Reth の緩い慣例):**
+1. **Motivation** — どんな問題を解いているか、なぜ今か
+2. **Design** — 何を提案するか、API スケッチ付き
+3. **Alternatives** — 他に何を考え、なぜ却下したか
+4. **Drawbacks** — 自分の提案の悪い点の正直なリスト
+5. **Prior art** — 他の Rust EVM プロジェクト (または非 EVM システム) はどう扱っているか
+
+**どこに投稿するか:** \`rfc\` ラベル付きの GitHub issue、またはプロジェクト用のフォーラム投稿 (Reth にはフォーラムスレッド構造がある)。
+
+規律: レビュー後に再設計が必要な 2000 行のコードを書く *前* に、設計について真剣に考える。シニアコントリビュータの大半は、なしで済む場合でも RFC する — 明確さを強制するから。
+
+**読書推奨:** Reth または Revm の最近 merged された RFC を見つけて読み、作業の多くが「alternatives」と「drawbacks」セクションにあることに気づく。
+
+## 6. Upstream コードのように読めるコードを書く
+
+レビュアーの隠れたテスト: *「この PR が contributor からだと知らなかったら、チームが書いたものと思うか?」*
+
+このテストに通るコード:
+- コードベースの残りが使うのと同じ trait-first パターンを使う (\`N: Network\` で generic、適切な場所で \`auto_impl\`、config 用の builder パターン)
+- clever であるために新しい抽象を導入しない
+- 隣接コードの命名に合わせて型と関数を命名する
+- 具体的な perf 正当化を明確に説明できる場合を除いて \`unsafe\` を避ける
+- プロジェクトのエラー型 (\`eyre::Result\`、\`RethError\` など) を隣接コードと一致して使う
+- *なぜ* をコメントする、*何が* ではなく
+
+Systems-code auditing レッスンで身につけた auditor のマインドセットがそのままここに写る。Auditor が問う質問 (「これはどんな不変量を仮定する?」「エラー時に何が起きる?」「スケールしたとき何が起きる?」) は、レビュアーが問う質問と同じ。**監査しやすいコードはレビューしやすいコード。**
+
+提出前チェックリスト:
+- 自分のコードは周囲のスタイルに合っているか?
+- テストは正しいディレクトリに、正しい命名で置かれているか?
+- Commit はそれぞれストーリーを語っているか?
+- PR description は、レビュアーが自分のコードを走らせなくても verify できる程度に specific か?
+- 最も可能性の高い 2〜3 個のレビュアーの質問を先回りして答えているか?
+
+## 7. PR を merge してもらうコミュニケーションパターン
+
+PR が上がったら、あなたの仕事はレビュアーの仕事を楽にすること。
+
+**速い応答パターン (良い):**
+- レビュアー: 「ケース X はどうか?」
+- あなた: 「指摘ありがとう。テスト追加と修正を入れる。」 (数時間以内)
+- あなた: [commit を push] (1〜2 日以内)
+- レビュアー: ✓ merge
+
+**遅い応答パターン (悪い):**
+- レビュアー: 「ケース X はどうか?」
+- あなた: [元の設計が X を正しく扱う 200 単語の defense]
+- レビュアー: [engage せず、easier な PR に移る]
+- 3 週間後: PR が inactivity で close
+
+パターン: **デフォルトでレビュアーが正しいと仮定する。** 同意しないなら、「これを OK にするには何が必要か?」と聞く方が、再議論より良い。レビュアーは多数の PR を扱う; 長い議論を相手にする余裕はない。
+
+**レビュアー同士で意見が分かれる場合** (multi-maintainer プロジェクトではある): 側を取らない。彼らが整合するのを待つ。1 週間 convergence なしなら、「deadlock を解く方法はあるか — 2 つの PR に split? 今は simpler approach を選んで後で見直す?」と ping する。
+
+**PR が止まった場合:** 14 日後に 1 度 ping。応答なしなら 28 日後にもう 1 度 ping。それ以降、沈黙が答え — メンテナの現在の優先順位ではない。次に進む。Social capital を nagging で焼かない。
+
+## 8. コントリビュータの reputation 弧
+
+**最初の PR (小さな修正、merged):** あなたは社会的グラフに存在する。メンテナはまだ名前を覚えていないかもしれない。
+
+**5 件 merged:** メンテナはあなたのハンドルを認識する。過去の PR が clean だったので、今後の PR を見やすくなる。
+
+**10 件 merged:** あなたはある領域で信頼できるコントリビュータとして知られる。メンテナがあなたの領域に隣接する issue であなたを ping するかもしれない。
+
+**20 件 merged:** あなたはコードベースのある部分について非公式の expert。新しいコントリビュータはあなたの過去の PR を例として指される。
+
+**50+ 件 merged:** あなたは実質チームの一部。メンテナはあなたの領域での設計判断であなたに相談する。**Paradigm が採用を考え始めるのはこのレベル。**
+
+弧は遅い。大半のエンジニアリングアドバイスに反して、「速い道」は存在しない。このスタックから採用するチームはこの弧から採用する; 近道はない。
+
+## 9. してはいけないこと
+
+PR を確実に無視させる方法の non-exhaustive リスト:
+
+- **Drive-by PR** — 1 つ開いて、消える。メンテナは戻ってこないコントリビュータにレビュー時間を投資しないことを学ぶ。
+- **Auto-generated permission asks** — 「こんにちは、X を追加する PR に興味ありますか?」単に PR を出す; 答えは「示せ、聞くな」。
+- **最初の貢献として refactor PR** — 「あなたのコードがパターン X を使っているのに気づいた、これは同じコードをパターン Y で書いたもの」。履歴なしには貢献ではなく批判として読まれる。
+- **リサーチなしの issue** — 「Reth は機能 X をサポートしますか?」答えが docs または CONTRIBUTING.md にあるとき。
+- **防御的なレビュー応答** — §7 を参照。
+- **PR の marketing posts** — PR が merge される前に Twitter で「Reth に contribute した!」と投稿。メンテナはそれを見る。協力の前に自己宣伝として読まれる。
+
+## 10. 監視すべき 4 つの情報源
+
+燃え尽きずにコントリビュータフローに留まるために:
+
+1. **Issue tracker** — \`good first issue\` + \`help wanted\` ラベルでフィルタ。理解できる領域の issue を subscribe する。
+2. **PR queue** — open な PR (特に active な議論がある reviewed なもの) を読む。レビューコメントは無料の教育。
+3. **Discord / Telegram** — PR を開く前の「これは正しい approach か?」の質問のための低リスクのチャネル。
+4. **コードベースの TODO / FIXME コメント** — しばしば「誰かが書くのを待っている would-be PR」。
+
+週 ~30 分をこれらに使う。情報は複利で効く。
+
+## 想起
+
+スクロールせずに:
+
+1. **最初の PR の仕事は「大きな技術貢献」ではない理由は? では仕事は何か?**
+2. **レビュアーが「ケース X はどうか?」と聞く。応答パターンが 2 つある。どちらが PR を merge させるか、なぜ?**
+3. **コードを書く前に RFC を書くべきなのはいつか? 2 つのトリガを挙げる。**
+4. **「チームが書いたものと思うか?」テストはレビュアーが心の中で適用する。そのテストに通るために、提出前にチェックすべき 3 つのことを挙げる。**
+5. **Reputation 弧は 5 段階。Paradigm が採用を考え始めるのはどの段階? その段階が月でなく年単位の時間がかかるのはなぜか?**
+
+どれか曖昧なら、該当セクションを読み直す。
+
+## 📂 開いておくべき参考資料
+
+- [paradigmxyz/reth — CONTRIBUTING.md](https://github.com/paradigmxyz/reth/blob/main/CONTRIBUTING.md)
+- [bluealloy/revm — CONTRIBUTING.md](https://github.com/bluealloy/revm/blob/main/CONTRIBUTING.md)
+- [alloy-rs/alloy — CONTRIBUTING.md](https://github.com/alloy-rs/alloy/blob/main/CONTRIBUTING.md)
+- [Reth の最近 merged された PR](https://github.com/paradigmxyz/reth/pulls?q=is%3Apr+is%3Amerged) — calibration ソース
+- [Reth Discord](https://discord.gg/reth) — ルーキング期間の \`#contributing\` チャネル
+
+---
+
+**🧭 ここまでで積み上げたもの:** systems-code auditing のレッスンでレビュアーが何を見るかを学んだ。本レッスンでそのレビューに通るコードを書き、その周りの社会的プロセスを navigate する方法を学んだ。2 つあわせて「Paradigm が認知するコントリビュータになる」の両半分。SE substrate (5 層)、4 つの力 (敵対的環境 / 検証可能性 / 順序付け / 無停止移行)、信頼性トライアングル (fuzzing / chaos / auditing)、そして今のコントリビュータワークフロー — これらを揃えれば、このスタックを ship しているチームが実際に採用シグナルとしているスキルセットが完成する。**残りは仕事をすること — 定期的に PR queue に現れる。**`,
+                },
+                {
                   title: 'Expertまとめクイズ',
                   slug: 'expert-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 10,
+                  sortOrder: 11,
                   duration: 15,
                   xpReward: 50,
                   content: `# Expertまとめクイズ
