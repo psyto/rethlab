@@ -1,304 +1,695 @@
-# Building OpenHL — L9 draft (JA)
+# OpenHL を作る — L9 draft (JA) — C2 build-along 書き直し
 
-> openhl SHA `0844d58` (Stage 7c) に対してドラフト。本レッスンが設計する trait は レッスン 1 (contract)、レッスン 7 (Engine API mapping)、レッスン 10 (Decided handler) でも cite されている — レッスン 9 は Module 4 の残りが build される設計根拠レッスンだ。
-> EN ミラー: `drafts/openhl_l9_en.md`。
-> Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
-> 20 分レッスン — レッスン 7/10 より長い、設計選択にはコードだけでなく根拠が要るからだ。
+> openhl SHA `d59d6cf` (Stage 6c — Node trait を実装、初の start_engine 呼び出しが動く) 基準。
+> コース: `building-openhl-consensus-ja` (track: `reth-l1-architect`, 10 コース中 6 番目)。
+> 注: L9 は「エンジンが起動する」マイルストーン。本レッスン後、`start_engine` が actor system を spawn し、クリーンに tear down する。L10-L15 で app loop、live Reth bridge、validate/commit パスを組み上げる。
 
 ---
 
-## L9 — `openhl-bridge-trait-ja`
+## L9 — `openhl-node-ja`
 
-- **Module:** 4 (配線 — consensus crate)、module 内 sortOrder 0
-- **Course-level sortOrder:** 8 (13 レッスン中の 9 番目)
-- **Duration:** 20 分
-- **XP reward:** 60
-- **Type:** CONTENT
+- **モジュール:** 4 (CL types), モジュール内 sortOrder 3
+- **コース全体 sortOrder:** 8 (16 レッスン中 9 番目)
+- **所要時間:** 55 分
+- **XP:** 100
+- **type:** CONTENT
 
 ### Content
 
 ````markdown
-# Contract を設計する — `ConsensusBridge` trait
+# レッスン 9 — `OpenHlNode` と初の `start_engine` 呼び出し
 
-> **現在地。** サブモジュール 4/5: *配線。* サブモジュール 2 と 3 では、Malachite と Reth という 2 つの半分を別々に見てきた。本サブモジュールはそれらが出会う場所を扱う。レッスン 9 (本レッスン) は 4 メッセージ contract を表現する Rust trait — なぜこの形をしているかという設計判断 — を扱う。レッスン 10 は commit 側のフロー (Malachite `Decided` → Reth `forkchoice_updated`)、レッスン 11 は propose 側の hot loop を walk する。レッスン 11 まで読み終える頃には、trait の各メソッドが `engine_app.rs` 上で具体的にどのパスを通って実行されるかが分かるようになる。
+## ゴール
 
-EVM の上に BFT をボルト止めするすべての chain は最終的にこの trait を書くことになる。HyperBFT がやった、Tempo がやった、すべての CometBFT 系 chain がやった。メソッド名は違うが、形は同じだ。問題は、レッスン 1 の 4 メッセージを明示し failure mode を名指して *意図的に* 書くか、「consensus が必要としたときに必要としたものから accrete する」かだ。
+このレッスンの終わりに:
 
-我々は意図的に書く。一度だけ。
+```bash
+cargo test -p openhl-consensus
+```
 
-> 🛑 **スクロール前に予測。** レッスン 1 で 4 メッセージを見た。レッスン 7 で Ethereum Engine API へのマッピングを見た。今: *Rust trait* はどう見えるべきか? 具体的に — async か blocking か? Owned 引数か borrowed か? エラー type 1 つか複数か? Trait メソッドのシグネチャは思っているより重要だ。
+…が **20 個のテストすべてに合格する** (L8 から 16 個 + Node impl の新規 4 個)。Capstone テスト:
 
-## 1. すべての BFT-L1 が最終的に書く trait
+```
+test node::tests::start_engine_smoke_spawns_and_kills ... ok
+```
 
-`crates/consensus/src/bridge.rs:11@0844d58` を開け。全体で 40 行:
+…が、自分のコードに対してフル Malachite actor system を spawn し、チャンネルハンドルが 1 回だけ利用可能であることを assert し、actor system をクリーンに tear down する — **約 0.02 秒で**。本レッスン後、エンジンは起動する。残るは `Channels<OpenHlContext>` から消費して bridge を駆動する application loop のみ。
+
+新規テスト 4 個がカバーするもの: private key file の往復、config が `ProposalOnly` payload + エフェメラルな listen address を produce すること、address 導出が L6 の runner と一致すること、`start_engine` を呼ぶ smoke test。
+
+## おさらい
+
+L8 完了時点で `openhl-consensus` crate には以下がある:
+
+```
+crates/consensus/src/lib.rs               — pub mod bridge, codec, context, signing, signing_provider, types
+crates/consensus/src/codec.rs             — OpenHlCodec (1 個本物 + 7 個 stub Codec impl, テスト 2 個)
+crates/consensus/src/signing_provider.rs  — SigningProvider<OpenHlContext>
+crates/consensus/src/context.rs           — Context<OpenHlContext>
+crates/consensus/src/types/               — 型ファイル 7 個
+```
+
+`cargo test -p openhl-consensus` でテスト 16 個が合格。`start_engine` が要求する trait bound は **型レベルでは** すべて満たしているが、まだ呼べない — `Node` impl も、config も、genesis も、private key file も、node handle もない。
+
+## 計画
+
+6 つやる:
+
+1. **`crates/consensus/Cargo.toml` に 5 個の依存を追加** — `informalsystems-malachitebft-app-channel`、`informalsystems-malachitebft-config`、signing-ed25519 に `serde` feature を有効化、`serde` と `tokio` をランタイム dep (dev だけでなく) に追加、`tempfile` を dev-dep に追加。
+2. **`crates/consensus/src/node.rs` を作成** — `OpenHlConfig` (impl `NodeConfig`)、`OpenHlGenesis` (unit struct)、`OpenHlPrivateKeyFile` (wire wrapper)、`OpenHlNodeHandle` (`start()` の戻り値)、`OpenHlNode` (メイン struct)、5 個の関連型と 12 個のメソッドを持つ `impl Node for OpenHlNode`。
+3. **`pub mod node;`** を `lib.rs` に配線。
+4. **ユニットテスト 4 個** を `node.rs` に追加。
+5. **実行** — `cargo test -p openhl-consensus` で 20 個合格。
+6. **凝視** — `start_engine_smoke_spawns_and_kills` が 0.02 秒で合格するのを。**自分のコードが動く BFT エンジンになる瞬間。**
+
+このレッスンが教えるのは **自分のコードと Malachite を結ぶブリッジパターン**。エンジンは他人が書いたもので、`Context` と `Codec` に対してジェネリック。spawn するには 5 つが必要: context インスタンス、node インスタンス (config、署名、address 導出を取るため)、config 値、codec 値、初期 height、validator set。`Node` trait は、Malachite が自分のコードからそれらを統一的に取れるようにする **handshake インターフェース**。一度 impl すれば、同じハンドシェイクに従う任意の chain で `start_engine` は動く。
+
+> 🛑 **予測してみよう。** スクロールする前に: なぜ Malachite は `OpenHlNode` 自身に config フィールドを持たせず、別の `OpenHlConfig` を要求するのか? ヒント: config の **所有者** と、いつ変わりうるかを考える。Node はプロセス起動時に 1 回作成されるが、設定 (listen address、value payload mode、value sync 設定) はシグナルでディスクから再ロードされうる。`OpenHlConfig` を `OpenHlNode` から分離することで、config は `Node::load_config()` 経由でロードできる — 再呼び出し可能で毎回新しい値を返す — node を再インスタンス化することなく。
+
+## 手順
+
+### Step 1: `crates/consensus/Cargo.toml` を更新
+
+`crates/consensus/Cargo.toml` を開く。L8 後の `[dependencies]` セクションは:
+
+```toml
+[dependencies]
+openhl-types = { workspace = true }
+async-trait  = { workspace = true }
+thiserror    = { workspace = true }
+eyre         = { workspace = true }
+
+informalsystems-malachitebft-core-types      = { workspace = true }
+informalsystems-malachitebft-core-driver     = { workspace = true }
+informalsystems-malachitebft-core-consensus  = { workspace = true }
+informalsystems-malachitebft-app             = { workspace = true }
+informalsystems-malachitebft-signing-ed25519 = { workspace = true, features = ["rand"] }
+bytes                                         = "1"
+rand                                          = "0.8"
+sha2                                          = "0.10"
+
+[dev-dependencies]
+tokio = { workspace = true }
+```
+
+これを次に置き換える:
+
+```toml
+[dependencies]
+openhl-types = { workspace = true }
+async-trait  = { workspace = true }
+thiserror    = { workspace = true }
+eyre         = { workspace = true }
+
+informalsystems-malachitebft-core-types      = { workspace = true }
+informalsystems-malachitebft-core-driver     = { workspace = true }
+informalsystems-malachitebft-core-consensus  = { workspace = true }
+informalsystems-malachitebft-app             = { workspace = true }
+informalsystems-malachitebft-app-channel     = { workspace = true }
+informalsystems-malachitebft-config          = { workspace = true }
+informalsystems-malachitebft-signing-ed25519 = { workspace = true, features = ["rand", "serde"] }
+bytes                                         = "1"
+rand                                          = "0.8"
+sha2                                          = "0.10"
+serde                                         = { workspace = true }
+tokio                                         = { workspace = true }
+
+[dev-dependencies]
+tokio    = { workspace = true }
+tempfile = "3"
+
+[lints]
+workspace = true
+```
+
+各新規依存の用途:
+
+- **`informalsystems-malachitebft-app-channel`** — 次に呼ぶ `start_engine()` 関数と、エンジン通信用に返される `Channels<Ctx>` 型を提供。
+- **`informalsystems-malachitebft-config`** — `OpenHlConfig` に埋め込む `ConsensusConfig`, `ValueSyncConfig`, `ValuePayload` 型。
+- **`signing-ed25519` の `serde` feature** — `OpenHlPrivateKeyFile` に `Serialize`/`Deserialize` を derive できるようにする (`PrivateKey` newtype が serializable である必要がある)。
+- **`serde`** (runtime dep) — `OpenHlConfig`, `OpenHlGenesis`, `OpenHlPrivateKeyFile` の `#[derive(Serialize, Deserialize)]` で使用。
+- **`tokio`** を dev-dep から dep へ移動 — `OpenHlNodeHandle` が `tokio::sync::Mutex` を持つ。
+- **`tempfile`** dev-dep — smoke test が node の home dir 用に temp ディレクトリを作る。
+
+これが 2 回目の重コンパイル。初回 `app-channel` + `config` 取得はさらに ~20 秒。
+
+### Step 2: `crates/consensus/src/node.rs` を作成 — import と `OpenHlConfig`
+
+Import から:
 
 ```rust
+//! `Node` trait implementation — describes our chain to Malachite's engine
+//! and provides the [`OpenHlNode::start`] entry point that calls
+//! `malachitebft_app_channel::start_engine` to spawn the actor system.
+
+use std::path::PathBuf;
+
+use async_trait::async_trait;
+use eyre::eyre;
+use informalsystems_malachitebft_app::node::{EngineHandle, Node, NodeConfig, NodeHandle};
+use informalsystems_malachitebft_app::types::Keypair;
+use informalsystems_malachitebft_app_channel::Channels;
+use informalsystems_malachitebft_config::{ConsensusConfig, ValueSyncConfig, ValuePayload};
+use informalsystems_malachitebft_core_types::Height as _;
+use informalsystems_malachitebft_signing_ed25519::{PrivateKey, PublicKey};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use tokio::sync::Mutex;
+
+use crate::codec::OpenHlCodec;
+use crate::context::OpenHlContext;
+use crate::signing_provider::OpenHlSigningProvider;
+use crate::types::{OpenHlAddress, OpenHlHeight, OpenHlValidatorSet};
+```
+
+このファイルが必要とする全表面。一度眺める価値: `Node`, `NodeConfig`, `NodeHandle` がこれから impl する 3 つの Malachite trait。`EngineHandle` + `Channels` が `start_engine` の戻り値。`ConsensusConfig` + `ValueSyncConfig` + `ValuePayload` が `OpenHlConfig` に埋め込む config 型。`Keypair` は libp2p の keypair 型。`PrivateKey`/`PublicKey` は L7 以来使っている Ed25519 型。`Sha256` は address 導出用。
+
+次に `OpenHlConfig`:
+
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OpenHlConfig {
+    pub moniker: String,
+    #[serde(flatten)]
+    pub consensus: ConsensusConfig,
+    pub value_sync: ValueSyncConfig,
+}
+
+impl OpenHlConfig {
+    #[must_use]
+    pub fn new(moniker: impl Into<String>) -> Self {
+        // OpenHL runs ProposalOnly (no streaming proposal parts) — must match
+        // our `Context::ProposalPart` shape.
+        let consensus = ConsensusConfig {
+            value_payload: ValuePayload::ProposalOnly,
+            ..ConsensusConfig::default()
+        };
+        Self {
+            moniker: moniker.into(),
+            consensus,
+            value_sync: ValueSyncConfig::default(),
+        }
+    }
+}
+
+impl NodeConfig for OpenHlConfig {
+    fn moniker(&self) -> &str {
+        &self.moniker
+    }
+    fn consensus(&self) -> &ConsensusConfig {
+        &self.consensus
+    }
+    fn value_sync(&self) -> &ValueSyncConfig {
+        &self.value_sync
+    }
+}
+```
+
+3 つのピース:
+
+- struct は `ConsensusConfig` + `ValueSyncConfig` をラップし、`moniker` (ログ用 validator のニックネーム) を追加。`consensus` の `#[serde(flatten)]` は consensus フィールドを親に inline する — ディスクへシリアライズ時、ユーザーには `[consensus]` セクションのキーが top level に見え、`consensus.` の下にネストされない。
+- `new()` は重要な選択を 1 つ強制する: `value_payload: ValuePayload::ProposalOnly`。これは **必ず** `Context::ProposalPart = OpenHlProposalPart` (unit struct) と合致しなければならない。誤って `ValuePayload::PartsOnly` を設定すると、エンジンはストリームされる proposal parts を期待し、unit-struct な `ProposalPart` はエンジンが送るものを満たせない。これは構築時に強制する方が後でデバッグするより簡単なタイプの不変条件。
+- `NodeConfig` impl は 3 個の自明な accessor。trait は、Malachite が親のレイアウトを知らずに sub-config を取り出せるようにあるだけ。
+
+### Step 3: `OpenHlGenesis` と `OpenHlPrivateKeyFile`
+
+次:
+
+```rust
+/// Genesis is a unit struct at v0 — the validator set is passed directly to
+/// `start_engine` rather than read from disk. When `OpenHL` grows a real
+/// on-disk genesis format this becomes the `load_genesis()` return.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct OpenHlGenesis;
+
+/// Wire-friendly wrapper around the raw 32-byte Ed25519 private key.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OpenHlPrivateKeyFile {
+    pub bytes: [u8; 32],
+}
+
+impl OpenHlPrivateKeyFile {
+    #[must_use]
+    pub fn from_private_key(sk: &PrivateKey) -> Self {
+        Self {
+            bytes: sk.inner().to_bytes(),
+        }
+    }
+
+    #[must_use]
+    pub fn into_private_key(self) -> PrivateKey {
+        PrivateKey::from(self.bytes)
+    }
+}
+
+impl std::fmt::Debug for OpenHlPrivateKeyFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenHlPrivateKeyFile")
+            .field("bytes", &"[redacted]")
+            .finish()
+    }
+}
+```
+
+2 つの型:
+
+- **`OpenHlGenesis`** — unit struct。v0 では genesis content がない (allocation なし、ブート時の precompile 登録なし — それらは Module 6 で)。Validator set は genesis ではなく `start_engine` 経由で直接渡す。OpenHL が real genesis format を持つようになったら、これが `load_genesis()` がデシリアライズする型になる。
+- **`OpenHlPrivateKeyFile`** — 32 バイトの private key の wire-friendly wrapper。`PrivateKey` 自体 (from `malachitebft_signing_ed25519`) はデフォルトで `Serialize`/`Deserialize` を impl していない; wrapper が impl し、`from_private_key` / `into_private_key` の変換は明示的。**手書き `Debug` impl** はバイトを redact する — `{:?}` で実 private key をログに出力するのは重大なセキュリティバグ。`[redacted]` トークンが慣習。
+
+> 🛑 **流暢さ警告。** 「なぜ `#[derive(Debug)]` ではダメ?」 **デフォルト derive される `Debug` は `[u8; 32]` の 32 バイト全部を print するから。** 誰かが `OpenHlPrivateKeyFile` を別の `Debug`-derive 構造体でラップしてログに出すと、key が stderr / log file / Sentry にリークする。`[redacted]` 付き手書き `Debug` なら、意図的に変更しない限りこれは起こりえない。**Private key はパスワードと同等に扱う — 絶対に print させない。**
+
+### Step 4: `OpenHlNodeHandle` — `start()` が返すもの
+
+```rust
+/// Handle returned by [`OpenHlNode::start`]. Owns the engine actor system
+/// and the channel handles for the (yet-to-be-implemented) app loop.
+pub struct OpenHlNodeHandle {
+    engine: EngineHandle,
+    channels: Mutex<Option<Channels<OpenHlContext>>>,
+}
+
+impl std::fmt::Debug for OpenHlNodeHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenHlNodeHandle")
+            .field("engine", &"<EngineHandle>")
+            .field("channels", &"<Channels>")
+            .finish()
+    }
+}
+
+impl OpenHlNodeHandle {
+    /// Take ownership of the engine→app message channels. Returns None on
+    /// the second call. L10 will consume from this to drive the bridge.
+    pub async fn take_channels(&self) -> Option<Channels<OpenHlContext>> {
+        self.channels.lock().await.take()
+    }
+}
+
 #[async_trait]
-pub trait ConsensusBridge: Send + Sync {
-    async fn build_payload(
-        &self,
-        parent: BlockHash,
-        attrs: PayloadAttrs,
-    ) -> Result<PayloadId, BridgeError>;
+impl NodeHandle<OpenHlContext> for OpenHlNodeHandle {
+    fn subscribe(&self) -> informalsystems_malachitebft_app::events::RxEvent<OpenHlContext> {
+        // No event subscription in Stage 6c — caller can't yet observe engine
+        // events. L10 wires the TxEvent from the engine to here.
+        informalsystems_malachitebft_app::events::TxEvent::new().subscribe()
+    }
 
-    async fn payload_ready(&self, id: PayloadId)
-        -> Result<ExecutedBlock, BridgeError>;
-
-    async fn validate_payload(&self, block: &ExecutedBlock)
-        -> Result<PayloadStatus, BridgeError>;
-
-    async fn commit(&self, block_hash: BlockHash)
-        -> Result<(), BridgeError>;
+    async fn kill(&self, _reason: Option<String>) -> eyre::Result<()> {
+        self.engine.actor.kill_and_wait(None).await?;
+        self.engine.handle.abort();
+        Ok(())
+    }
 }
 ```
 
-これが contract だ。Consensus に参加する他のすべての crate はこの trait を実装する (EVM crate、3 つの impl — `InMemoryEvmBridge`、`RethEvmBridge`、`LiveRethEvmBridge`) か、メソッドを call するために `Arc<dyn ConsensusBridge>` を持つ (consensus crate の runner と engine-app loop)。
+ハンドルは 2 つを所有する:
 
-本レッスンの残りは正当化だ。なぜこの 4 メソッド、このシグネチャ、このエラー type なのか? 各選択は何かを trade off する。レッスンの目的は trade を visible にして、偶然ではなく意図的に違う選択ができるようにすることだ。
+- **`engine: EngineHandle`** — spawn された actor system に対する Malachite のハンドル。`actor` (ractor の `ActorCell`) と `handle` (tokio task handle) を持つ。`kill()` は両方をクリーンに tear down する。
+- **`channels: Mutex<Option<Channels<OpenHlContext>>>`** — アプリケーション側のエンドポイント。エンジンが `AppMsg<OpenHlContext>` を我々に送り、我々が `AppReply<OpenHlContext>` を返す。`Mutex<Option<...>>` なのは、`take_channels()` が app loop に 1 回だけ渡せるようにするため — 2 回目の呼び出しは `None` を返し「もう消費済み」と知らせる。
 
-## 2. Async か blocking か?
+**なぜ `tokio::sync::Mutex` で `std::sync::Mutex` ではない?** `take_channels()` が `async` で、ロックが `.await` 境界を跨いで保持されるから。`std::sync::Mutex` は executor スレッド全体をブロックしてしまう; `tokio::sync::Mutex` は協調的に yield する。
 
-シグネチャを見よ: すべてのメソッドが `async` だ。これはタダではない。Rust では trait の `async fn` は長年のサーガだった (`#[async_trait]` マクロは workaround); async は全体に `Send + Sync` bound を強制する; sync から async を呼ぶには tokio handle が必要だ。
+`NodeHandle` impl はこの段階ではほぼ placeholder:
+- `subscribe()` は **新規** `TxEvent::subscribe()` を返す — producer が attach されていない空のイベントストリーム。L10 で本物を配線する。
+- `kill()` は本物 — actor cell を kill し tokio task を abort する。これが `start_engine_smoke_spawns_and_kills` で exercise されるもの。
 
-代替は blocking だった:
+### Step 5: `OpenHlNode` struct + `Node` impl
 
 ```rust
-pub trait ConsensusBridge: Send + Sync {
-    fn build_payload(&self, ...) -> Result<PayloadId, BridgeError>;
-    // ...
+#[derive(Clone, Debug)]
+pub struct OpenHlNode {
+    pub private_key: PrivateKey,
+    pub validator_set: OpenHlValidatorSet,
+    pub home_dir: PathBuf,
+    pub moniker: String,
+}
+
+impl OpenHlNode {
+    #[must_use]
+    pub fn new(
+        private_key: PrivateKey,
+        validator_set: OpenHlValidatorSet,
+        home_dir: PathBuf,
+        moniker: impl Into<String>,
+    ) -> Self {
+        Self {
+            private_key,
+            validator_set,
+            home_dir,
+            moniker: moniker.into(),
+        }
+    }
+}
+
+#[async_trait]
+impl Node for OpenHlNode {
+    type Context = OpenHlContext;
+    type Config = OpenHlConfig;
+    type Genesis = OpenHlGenesis;
+    type PrivateKeyFile = OpenHlPrivateKeyFile;
+    type SigningProvider = OpenHlSigningProvider;
+    type NodeHandle = OpenHlNodeHandle;
+
+    fn get_home_dir(&self) -> PathBuf {
+        self.home_dir.clone()
+    }
+
+    fn load_config(&self) -> eyre::Result<Self::Config> {
+        let mut cfg = OpenHlConfig::new(&self.moniker);
+        // Bind to an ephemeral port on localhost so tests and devnets don't
+        // step on each other. Real deployments override this in their config.
+        cfg.consensus.p2p.listen_addr = "/ip4/127.0.0.1/tcp/0"
+            .parse()
+            .map_err(|e| eyre!("invalid listen_addr: {e}"))?;
+        Ok(cfg)
+    }
+
+    fn get_address(&self, pk: &PublicKey) -> OpenHlAddress {
+        let digest = Sha256::digest(pk.as_bytes());
+        let mut addr = [0u8; 20];
+        addr.copy_from_slice(&digest[12..32]);
+        OpenHlAddress(addr)
+    }
+
+    fn get_public_key(&self, pk: &PrivateKey) -> PublicKey {
+        pk.public_key()
+    }
+
+    fn get_keypair(&self, pk: PrivateKey) -> Keypair {
+        Keypair::ed25519_from_bytes(pk.inner().to_bytes())
+            .expect("ed25519 private key is always 32 bytes")
+    }
+
+    fn load_private_key(&self, file: Self::PrivateKeyFile) -> PrivateKey {
+        file.into_private_key()
+    }
+
+    fn load_private_key_file(&self) -> eyre::Result<Self::PrivateKeyFile> {
+        Ok(OpenHlPrivateKeyFile::from_private_key(&self.private_key))
+    }
+
+    fn load_genesis(&self) -> eyre::Result<Self::Genesis> {
+        // Validator set is passed directly to start_engine; genesis carries
+        // nothing else at v0.
+        Ok(OpenHlGenesis)
+    }
+
+    fn get_signing_provider(&self, private_key: PrivateKey) -> Self::SigningProvider {
+        OpenHlSigningProvider::new(private_key)
+    }
+
+    async fn start(&self) -> eyre::Result<Self::NodeHandle> {
+        let cfg = self.load_config()?;
+        let validator_set = self.validator_set.clone();
+
+        let (channels, engine) = informalsystems_malachitebft_app_channel::start_engine(
+            OpenHlContext,
+            self.clone(),
+            cfg,
+            OpenHlCodec, // WAL
+            OpenHlCodec, // Network
+            Some(OpenHlHeight::INITIAL),
+            validator_set,
+        )
+        .await?;
+
+        Ok(OpenHlNodeHandle {
+            engine,
+            channels: Mutex::new(Some(channels)),
+        })
+    }
+
+    async fn run(self) -> eyre::Result<()> {
+        // L10 will consume from channels here and run the app loop.
+        Err(eyre!("OpenHlNode::run is not yet implemented (L10)"))
+    }
 }
 ```
 
-シグネチャが単純。`#[async_trait]` なし。Future pinning 問題なし。なぜこの道を行かなかったか?
+これが load-bearing なブロック。walk-through:
 
-| 考慮事項 | Async 勝 | Blocking 勝 |
-| :--- | :--- | :--- |
-| Reth の `BlockchainProvider` (sync) を呼ぶ | tied — どちらも動く | tied |
-| Reth の `EngineHandle::fork_choice_updated` (async) を呼ぶ | **async でなければならない** | `block_on` が必要 |
-| Malachite の tokio runtime 内 | thread block しない | 各 call が worker thread を block |
-| `run_engine_app` AppMsg loop | 自然 | spawn-blocking 体操が必要 |
-| Test double (in-memory state) | trivial — `Mutex` 持つだけ | trivial |
+**struct** は 4 つを持つ: private key、validator set、home dir、moniker。これらは config-reload では変わらない長命なフィールド。
 
-判断は 2 行目と 3 行目で決まる。Real Reth backend は async API (Engine API、payload builder service、network) を使い、我々の consensus 側は Malachite の tokio runtime で動く。Blocking にすると、AppMsg loop は bridge call のたびに spawn-blocking で worker thread を埋めることになる — 無駄が多く、エラーも起きやすく、負荷下では計測可能なほど遅い。
+**6 個の関連型** は各ハンドシェイクスロットの具象型を宣言する:
+- `Context = OpenHlContext` — Malachite が他をすべて typecheck するのに使う
+- `Config = OpenHlConfig` — `load_config()` の戻り値
+- `Genesis = OpenHlGenesis` — `load_genesis()` の戻り値
+- `PrivateKeyFile = OpenHlPrivateKeyFile` — `load_private_key_file()` の戻り値
+- `SigningProvider = OpenHlSigningProvider` — `get_signing_provider()` の戻り値
+- `NodeHandle = OpenHlNodeHandle` — `start()` の戻り値
 
-> 🛑 **反流暢性。** 「Async は blocking より柔軟なだけ、後から async にできる。」 **違う。** Blocking-trait から async-trait への移行は波及的な変更だ — すべての caller が切り替えを強いられる。Trait の各 async メソッドは `Send + Sync + 'static` 制約をコード全体に伝播させていく。**Async を早めに選ぶならコストごと受け入れる。逆に blocking で行くなら最後まで blocking で押し通す。中途半端な行ったり来たりが一番つらい。**
+**12 個のメソッド**:
 
-## 3. なぜ正確に 4 メソッドなのか (少なくも多くもなく)
+| メソッド | 目的 | 本体 |
+| - | - | - |
+| `get_home_dir` | Node がデータを保存する場所 | 構築時に渡された path を返す |
+| `load_config` | Config を作る (再呼出可) | `OpenHlConfig` を構築し、listen address をエフェメラル local にオーバーライド |
+| `get_address` | SHA-256 ハッシュ → 20 バイト address | 32 バイト digest の最後の 20 バイト |
+| `get_public_key` | SK から PK | `sk.public_key()` |
+| `get_keypair` | Ed25519 から libp2p Keypair | `ed25519_from_bytes` 経由で変換 |
+| `load_private_key` | File フォーマットを unwrap | `file.into_private_key()` |
+| `load_private_key_file` | PK を file フォーマットへ | `OpenHlPrivateKeyFile::from_private_key(...)` |
+| `load_genesis` | Genesis を読む | `OpenHlGenesis` を返す (unit struct、読むものなし) |
+| `get_signing_provider` | SigningProvider を構築 | `OpenHlSigningProvider::new(pk)` |
+| `start` | エンジン spawn | `start_engine` を 7 引数で呼び、戻り値を `OpenHlNodeHandle` にラップ |
+| `run` | App loop を回す | **L9 では未実装** — L10 を指すエラーを返す |
 
-4 メソッド。3 ではない。5 でもない。なぜこの数か?
+**`start()` メソッドがハイライト。** `start_engine` を以下で呼ぶ:
+- context (`OpenHlContext` — unit struct)
+- node 自身 (`self.clone()`)
+- config (`cfg`)
+- 2 個の codec 値 (WAL 用と Network 用 — 両方 `OpenHlCodec`)
+- 初期 height (`Some(OpenHlHeight::INITIAL)`)
+- validator set (`validator_set`)
 
-3 に collapse する誘惑:
+`start_engine` が返すもの: `(Channels<OpenHlContext>, EngineHandle)`。これらを `OpenHlNodeHandle` にラップして返す。
 
-- 「**`payload_ready` は `build_payload` の一部だ。`build_payload` がブロックを直接返せ。**」 説得力あり — メソッドが少ない、call site が単純。**違う。** そうすると レッスン 7 §4 の build-during-voting parallelism が死ぬ。Proposer の hot path が「build 待ち、その後 propose」になり、「すでに build されたものを propose」ではなくなる。Sub-second slot は不可能になる。
+**なぜ `run()` は未実装?** Malachite の `Node::run` は `start()` と app loop を 1 個の async future にまとめる想定だから。App loop は L10 まで存在しないので、L10 を指すエラーを返す。L10 完了後、`run()` は: `start()` を呼び、channels を取り、app loop を回し、終了を await、という形になる。
 
-- 「**`validate_payload` と `commit` をマージすべきだ。Validation が通ったら commit すれば。**」 ほとんどの call site が連続でやるので誘惑される。**違う。** Validator は height ごとに多数の candidate proposal を import するが (round-robin の proposer slot ごとに 1 つ)、commit するのは 1 つだけ — deciding value。Validation は speculative; commit は final。マージすると speculative state 変更を強制し、rollback machinery を意味し、はるかに複雑な EVM crate を意味する。
+> 🛑 **流暢さ警告。** 「なぜ `start()` は codec を 2 回取る?」 **エンジンが WAL 用と Network gossip 用に別々の codec スロットを持つから。** 別の型でもよい — 例えば WAL は bincode、Network は protobuf。我々のケースでは両方 `OpenHlCodec` だが、API は同じだと仮定しない。別々に渡すことで一方だけを swap できる。
 
-5 に拡張する誘惑:
-
-- 「**`notify_view_change(round)` を追加して EVM に round timeout を知らせよ。**」 もっともらしい — view change は real consensus event だ。**不要だ。** EVM は round について知る必要がない; decided block について知ればいい。Round 変更は CL 内部 state だ。`notify_view_change` を追加すると consensus 内部を execution に leak する — contract leak だ (レッスン 1 §5 参照)。
-
-- 「**`restream_proposal(hash)` を追加して bridge が stale proposal を re-broadcast できるように。**」 もっともらしい — Malachite の AppMsg loop には `RestreamProposal` variant がある。**不要だ。** Restreaming はネットワーク層の関心事だ: consensus crate の app loop が bridge 関与なしで直接 handle する (`engine_app.rs:96@0844d58` 参照)。Bridge は EL contract であり、一般的な consensus event sink ではない。
-
-4 メソッドは、contract leak を招かずに レッスン 7 マッピングを capture できる最小のセットだ (各メソッドが正確に 1 つの Ethereum Engine API call にマップする)。
-
-## 4. エラー semantics — Rejected、Syncing、Internal
-
-`crates/consensus/src/bridge.rs:33@0844d58` の `BridgeError`:
+### Step 6: `node.rs` を `lib.rs` に配線
 
 ```rust
-#[derive(Debug, Error)]
-pub enum BridgeError {
-    #[error("execution layer rejected payload: {0}")]
-    Rejected(String),
+//! Consensus layer — Malachite BFT.
 
-    #[error("execution layer is syncing")]
-    Syncing,
+pub mod bridge;
+pub mod codec;
+pub mod context;
+pub mod node;
+pub mod signing;
+pub mod signing_provider;
+pub mod types;
 
-    #[error("internal: {0}")]
-    Internal(#[from] eyre::Report),
+pub use context::OpenHlContext;
+```
+
+### Step 7: ユニットテストを 4 個追加
+
+`node.rs` の末尾:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::OpenHlValidator;
+    use rand::rngs::OsRng;
+
+    fn single_validator_node(home_dir: PathBuf) -> OpenHlNode {
+        let sk = PrivateKey::generate(OsRng);
+        let pk = sk.public_key();
+        let digest = Sha256::digest(pk.as_bytes());
+        let mut addr_bytes = [0u8; 20];
+        addr_bytes.copy_from_slice(&digest[12..32]);
+        let address = OpenHlAddress(addr_bytes);
+        let validator_set = OpenHlValidatorSet::new(vec![OpenHlValidator::new(address, pk, 1)]);
+        OpenHlNode::new(sk, validator_set, home_dir, "openhl-test")
+    }
+
+    #[test]
+    fn private_key_file_round_trips() {
+        let sk = PrivateKey::generate(OsRng);
+        let file = OpenHlPrivateKeyFile::from_private_key(&sk);
+        let restored = file.into_private_key();
+        assert_eq!(restored.inner().to_bytes(), sk.inner().to_bytes());
+    }
+
+    #[test]
+    fn load_config_sets_proposal_only_payload_and_ephemeral_listen_addr() {
+        let tmp = tempfile::tempdir().unwrap();
+        let node = single_validator_node(tmp.path().to_path_buf());
+        let cfg = node.load_config().unwrap();
+        assert_eq!(cfg.consensus.value_payload, ValuePayload::ProposalOnly);
+        // listen_addr should be /ip4/127.0.0.1/tcp/0 (ephemeral)
+        let listen_str = cfg.consensus.p2p.listen_addr.to_string();
+        assert!(
+            listen_str.starts_with("/ip4/127.0.0.1/tcp/0"),
+            "unexpected listen_addr: {listen_str}"
+        );
+    }
+
+    #[test]
+    fn get_address_matches_runner_derivation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let node = single_validator_node(tmp.path().to_path_buf());
+        let pk = node.private_key.public_key();
+        let addr1 = node.get_address(&pk);
+        // Same derivation as runner.rs (last 20 bytes of SHA-256(pubkey)).
+        let digest = Sha256::digest(pk.as_bytes());
+        let mut expected = [0u8; 20];
+        expected.copy_from_slice(&digest[12..32]);
+        assert_eq!(addr1, OpenHlAddress(expected));
+    }
+
+    /// Smoke test: spin up the actor system, get a handle back, kill cleanly.
+    /// Does NOT drive consensus — that's L10.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn start_engine_smoke_spawns_and_kills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let node = single_validator_node(tmp.path().to_path_buf());
+        let handle = match node.start().await {
+            Ok(h) => h,
+            Err(e) => panic!("start_engine failed: {e:?}"),
+        };
+        // Sanity-poke the channels handle is available exactly once.
+        assert!(handle.take_channels().await.is_some());
+        assert!(handle.take_channels().await.is_none());
+        handle.kill(None).await.unwrap();
+    }
 }
 ```
 
-3 variant。各々が specific な consensus 側応答にマップする:
+テスト 4 個:
 
-| Variant | 何を意味するか | Consensus 応答 |
-| :--- | :--- | :--- |
-| `Rejected(reason)` | EL がロジックを適用して no と決めた。Block が malformed、未知の parent を参照、EIP-1559 違反等。 | Proposal を Invalid として扱う; この値に nil 投票。次の round へ。 |
-| `Syncing` | EL はまだ答えられる state を持っていない — ネットワークの tip にキャッチアップ中だ。 | 待つ。Nil 投票しない (block が悪いかどうか分からない)。Backoff してリトライするか、もしくは timeout で抜ける。 |
-| `Internal(report)` | 本当に壊れている。DB 破損、EL panic、ファイル消失。 | **Chain を halt せよ。** エラーを上に propagate、大声でログ。安全に続行できない。 |
+1. **`private_key_file_round_trips`** — key を generate し、`OpenHlPrivateKeyFile` にラップ、unwrap、byte 等価を assert。Wire format が lossless であることを証明。
+2. **`load_config_sets_proposal_only_payload_and_ephemeral_listen_addr`** — node を構築し、`load_config()` を呼び、2 つを検証: `value_payload == ProposalOnly` (構築時に強制する不変条件) と `listen_addr` がエフェメラル local socket であること。Config drift を catch する。
+3. **`get_address_matches_runner_derivation`** — 同じ address を 2 通りで導出する (1 度は trait method 経由、1 度は SHA-256 ロジックを inline)。一致を assert。誰かが片方だけ変えたら検知する。
+4. **`start_engine_smoke_spawns_and_kills`** — capstone。`#[tokio::test(flavor = "multi_thread", worker_threads = 2)]` を使うのはエンジンが multi-threaded runtime を必要とするから (複数 actor を spawn)。手順: single-validator node を構築、`node.start().await` を呼ぶ、channels handle を poke (1 度目 `Some`、2 度目 `None`)、`kill()` を呼ぶ。**これが pass すれば、自分のコードが動く BFT エンジンになっている。**
 
-3 つは互換ではない。未知の parent (これは `Rejected` 相当) で `Internal` を返す bridge は、本来 nil 投票すべきところで chain を halt させる。Syncing 条件で `Rejected` を返す bridge は、本来答えを与えてくれたはずの peer から永久に fork する。
+Smoke test の wall-clock はおおよそ **0.02 秒**。大部分は libp2p がローカル listener を立ち上げる時間 — tcp/0 のエフェメラルポートでも、libp2p のネゴシエーションには固定コストがある。
 
-> 🛑 **反流暢性。** 「エラーはエラーだ。1 つの `Error` enum で十分。」 **違う。** Consensus コードでは、エラーの *カテゴリ* が chain が進むか、pause するか、halt するかを決定する。Collapse すると liveness にとって load-bearing な情報を失う。3 variant が最小だ。
+> 🛑 **流暢さ警告。** 「なぜ `flavor = 'multi_thread'`?」 **エンジンが複数 actor をそれぞれの task で spawn するから。** Single-threaded runtime は全部 1 スレッドで回せる — が、エンジン内部に single-thread だと deadlock する `block_on` パターンがある。Multi-thread runtime で回避。**API レベルでは見えないが、テスト失敗レベルでは致命的な詳細。**
 
-> 🛑 **予測。** 1 つ選べ: peer が parent block hash を我々の chain に持たない proposal を送ってきた。Bridge は `Rejected`、`Syncing`、`Internal` のどれを返すべきか?
+## テスト
 
-答えは **その parent を後から知る見込みがあるか** に依存する。Node が遅れていて parent が real (まだ sync していないだけ) → `Syncing`。Node が up to date でそんな block が存在しない → `Rejected`。Bridge は常にどちらのケースかを判別できない; 実務では production bridge は classify 前に provider の sync state を check する。
-
-`crates/evm/src/live_node.rs:68@0844d58` の `LiveRethEvmBridge::build_payload` では、現在のコードは provider に given hash の block がないとき `Rejected` を返す。**我々の provider が up to date だと仮定すれば** correct だ — single-validator mode では true (peer が我々より進んでいる可能性なし)、multi-node デプロイメントでは tighten が必要。
-
-## 5. Test double — canonical pattern としての `InMemoryEvmBridge`
-
-`ConsensusBridge` の impl は 3 つ、いずれも `crates/evm/src/` 配下に置かれている:
-
-- `InMemoryEvmBridge` (`in_memory.rs:14@0844d58`) — pure in-process state、Reth dep なし。Bridge call を高速で隔離したい unit test で使う。
-- `RethEvmBridge` (`engine.rs`) — real alloy `Header` + `B256` を使うが in-memory state。Mock と live の bridge。
-- `LiveRethEvmBridge` (`live_node.rs`) — real Reth `BlockchainProvider` + `EthBeaconConsensus` をラップ。Production-shape。
-
-パターン: **trait first、複数 impl、各々が「real」軸の異なる点に**。Unit test は最も安い impl を使い、integration test はリッチな impl、production は live impl。
-
-`InMemoryEvmBridge` は canonical test double だ。その `build_payload`:
-
-```rust
-async fn build_payload(
-    &self,
-    parent: BlockHash,
-    _attrs: PayloadAttrs,
-) -> Result<PayloadId, BridgeError> {
-    let mut s = self.state.lock().expect("state mutex poisoned");
-    let id = s.next_payload_id;
-    s.next_payload_id += 1;
-
-    let parent_number = s.chain.get(&parent.0).map_or(0, |b| b.number);
-    let number = parent_number + 1;
-
-    let mut hash_bytes = [0u8; 32];
-    hash_bytes[..8].copy_from_slice(&id.to_le_bytes());
-    hash_bytes[8..16].copy_from_slice(&number.to_le_bytes());
-
-    let block = ExecutedBlock {
-        hash: BlockHash(hash_bytes),
-        parent_hash: parent,
-        number,
-        state_root: [0u8; 32],
-    };
-    s.pending.insert(id, block);
-    Ok(PayloadId(id))
-}
+```bash
+cargo test -p openhl-consensus
 ```
 
-16 行。Reth なし、provider なし、validator なし。Block hash は real header から compute するのではなく `(payload_id, number)` から synthesize される。State root はゼロ。**そして trait は気にしない。**
+~20 秒後 (dep 変更後の初回コンパイル):
 
-それが test-double payoff だ: trait は EL contract が *何* かを表現し、*どう* 実装するかではない。Unit test は `run_single_validator(&InMemoryEvmBridge::new(), parent)` を microsecond で走らせられる; 同じ caller コードが production で signature 変更なしに `LiveRethEvmBridge` に対して走る。
+```
+running 20 tests
+test codec::tests::openhl_codec_satisfies_all_three_super_traits ... ok
+test codec::tests::proposal_part_round_trips ... ok
+test context::tests::height_increment_and_decrement ... ok
+test context::tests::new_prevote_and_precommit_have_distinct_types ... ok
+test context::tests::new_proposal_round_trips_fields ... ok
+test context::tests::select_proposer_round_robins_deterministically ... ok
+test context::tests::validator_set_is_sorted_by_power_then_address ... ok
+test node::tests::get_address_matches_runner_derivation ... ok
+test node::tests::load_config_sets_proposal_only_payload_and_ephemeral_listen_addr ... ok
+test node::tests::private_key_file_round_trips ... ok
+test signing::tests::vote_signature_is_field_sensitive ... ok
+test signing::tests::vote_signature_round_trips ... ok
+test signing_provider::tests::proposal_part_sign_verify_round_trips ... ok
+test signing_provider::tests::proposal_sign_verify_round_trips ... ok
+test signing_provider::tests::proposal_tamper_detected ... ok
+test signing_provider::tests::signature_from_one_provider_does_not_verify_under_another ... ok
+test signing_provider::tests::vote_extension_sign_verify_round_trips ... ok
+test signing_provider::tests::vote_sign_verify_round_trips ... ok
+test signing_provider::tests::vote_tamper_detected ... ok
+test node::tests::start_engine_smoke_spawns_and_kills ... ok
 
-> 🛑 **反流暢性。** 「Test double は常に嘘をつく。」 ほぼ true だが、正しい framing ではない。Test double はテストしている部分に contract を *narrow* する。`InMemoryEvmBridge` は「parent の上に child block を build する」という契約だけを忠実に impl している — real EVM 実行や hash 計算は意図的に省略しているだけで、それらは consensus test がテストしている対象ではない。
-
-## 6. Type ownership — なぜ contract type を `openhl-types` に置くか
-
-Trait のシグネチャを見よ:
-
-```rust
-async fn build_payload(&self, parent: BlockHash, attrs: PayloadAttrs)
-    -> Result<PayloadId, BridgeError>;
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-`BlockHash`、`PayloadAttrs`、`PayloadId` — これらは `openhl-consensus` や `openhl-evm` に定義されていない。`openhl-types` にある。なぜか?
+Smoke test は multi-thread runtime のセットアップで最後に走る。
 
-なぜなら **consensus crate と evm crate の両方がそれらの type を参照する必要がある** からだ — consensus は trait を call するために、evm は trait を impl するために。Type を `openhl-consensus` に置くと、`openhl-evm` は trait を impl するために `openhl-consensus` に依存する必要が出てくる。逆に `openhl-evm` に置くと、`openhl-consensus` が trait を call するために `openhl-evm` に依存する必要が出てくる。
+よくあるエラーと対処:
 
-どちらでもサイクルが発生する: A が B に依存、B が A に依存。Rust の crate graph は DAG だ; サイクルは compile error だ。Fix は **共有 type crate**: `openhl-consensus` と `openhl-evm` の両方が `openhl-types` に依存し、どちらも type 定義のために他方に依存しない。
+- **`error[E0432]: unresolved import 'informalsystems_malachitebft_app_channel'`** — Cargo.toml に `app-channel` がない。Step 1 を再確認。
+- **`error[E0277]: PrivateKey: Deserialize is not satisfied`** — `signing-ed25519` の `serde` feature が抜けている。Step 1 (`features = ["rand", "serde"]`) を再確認。
+- **smoke test が永久にハングする** — 普通は `flavor = "current_thread"` (`#[tokio::test]` のデフォルト) が原因。Step 7 を再確認: 属性は `#[tokio::test(flavor = "multi_thread", worker_threads = 2)]` でなければならない。
+- **`error: Keypair::ed25519_from_bytes expected mutable bytes`** — バージョン不一致。libp2p の `Keypair::ed25519_from_bytes` のシグネチャはバージョンによって変わる; workspace pin は `informalsystems-malachitebft-app` の re-export と揃える必要がある。
+- **`Address derivation does not match`** — `get_address` がテストの helper と一致しない。両方とも `SHA-256(pubkey)` の最後の 20 バイト — slice `[12..32]` — を使う必要がある。
 
-`ConsensusBridge` trait 自体は `openhl-consensus` に置かれている (consensus が contract を所有する側だからだ) が、trait の *語彙* は依存グラフの 1 つ下の層に置かれる。
+## 設計の振り返り
 
-このパターンは深刻な型システムを持つすべての レッスン 1 で現れる:
+3 つの load-bearing な決定:
 
-| Chain | Contract type が住む場所 | Trait が住む場所 |
-| :--- | :--- | :--- |
-| Ethereum (Reth) | `alloy-primitives`、`reth-primitives-traits` | `reth-engine-primitives`、`reth-rpc-api` |
-| Tendermint / CometBFT | `tendermint-proto` | 各種 consumer crate |
-| Malachite | `informalsystems-malachitebft-core-types` | `informalsystems-malachitebft-core-consensus` |
-| **OpenHL** | `openhl-types` | `openhl-consensus` |
+1. **`OpenHlNode` はハンドシェイクインターフェースであり、ランタイムではない。** Struct は長命なフィールド (key、validator set、home dir、moniker) を持つ。chain を **走らせ** ない。ランタイムは `OpenHlNodeHandle` (engine + channels) にあり、`start()` から返る。**構築と実行は別のライフサイクルステージ** なので、別の型に住む。
 
-同じ形。違う名前。
+2. **Address 導出は `get_address` に集約。** L6 のセットアップコードの runner で `SHA-256(pubkey)[12..32]` を使ったとき、**同じ導出** だった。テスト `get_address_matches_runner_derivation` がそれらが同一であることを assert するので、将来のリファクタで一方だけがサイレントに drift できない。**集約 + 検証テスト は重複に毎回勝つ。**
 
-## 7. この trait が *しない* こと
+3. **`run()` は次のレッスンを指すエラーを返す。** `unimplemented!()` (panic) や `todo!()` (これも panic) ではなく、`eyre::Result::Err("not yet implemented (L10)")` は **型安全な placeholder**。`run()` を呼ぶコードは「どこを見るべきか」を指すメッセージ付きで graceful に失敗する。**これはプルリク、コードレビュー、古いタブを越えて生き残るタイプのクラム。**
 
-Contract 設計で最も難しいのは何を残すかだ。`ConsensusBridge` が意図的に持たない 4 つのもの:
+## 答え合わせ
 
-1. **Transaction pool なし。** Real EL は mempool を持つ。Bridge に `submit_transaction(tx)` を expose できた。**しない。** Mempool は EL 内部の関心事; Consensus は EVM がどう block に入れる transaction を見つけるかを気にすべきではない。(real Reth では、payload builder が mempool アクセスを所有する; consensus は触れない。)
+```bash
+cd ~/code/openhl-reference
+git checkout d59d6cf
+diff -u ~/code/my-openhl/crates/consensus/src/node.rs ./crates/consensus/src/node.rs
+diff -u ~/code/my-openhl/crates/consensus/Cargo.toml ./crates/consensus/Cargo.toml
+diff -u ~/code/my-openhl/crates/consensus/src/lib.rs ./crates/consensus/src/lib.rs
+```
 
-2. **State クエリなし。** `get_balance(addr)` なし、`read_storage(addr, slot)` なし。**State は EL 専用の関心事だ。** Consensus が state を読む必要があるなら、何かが間違っている — consensus は block とその順序を知ればよく、内容は不要だ。
+`d59d6cf` の参照には 310 行の `node.rs` が含まれる。`Node` impl のメソッド (合計 12)、struct レイアウト、smoke test は厳密に一致するべき。Doc コメントと細かい言い回しは個人差可。
 
-3. **Subscription API なし。** `subscribe_decisions()` なし、`on_block_committed(callback)` なし。Bridge は同期 (well, async-await) request-response trait だ; EL は consensus にイベントを push しない。Consensus が decision を知りたければ、*それを作っている* — callback 不要。
+戻る:
 
-4. **Genesis/init メソッドなし。** `initialize_genesis(spec)` なし。Genesis は chain-spec の関心事で、node bootstrap で handle される (`OpenHlNode::start()` が `Genesis` から chain spec を読む — Module 5 領域)。Bridge は initialization ではなく steady-state operation のためだ。
+```bash
+git checkout main
+```
 
-これらの誘惑はそれぞれ real で、それぞれ trait を大きくしただろう。**最小 viable contract は正確に 4 メソッドだ。** 拡張に抵抗するのは design discipline だ。
+## よくある質問
 
-> 🛑 **予測。** 新しい contributor が主張: 「trait に `query_state(addr) -> StateView` を追加すべきだ — デバッグが楽になる。」 **なぜこれが間違いか?** ヒント: dep graph (§6) と consensus が決定を下すために何を知る必要があるかを考えよ。
+**Q: validator set が node の中にあるのに、なぜ `start_engine` は node と validator set の両方を要求する?**
+エンジンが node の内部に手を伸ばさないから。Node は多くのフィールド (path、moniker、key 等) を持つが、validator-set election には関係ない。`start_engine` が validator set を明示的に受け取るので、エンジンは自分の node の具体的なフィールドレイアウトを知らなくてもよい。`Node::load_config()` と同じ関心の分離の原則。
 
-答え: consensus は state を読む必要がない; 次の *block* を選ぶのであって次の *state* ではない。`query_state` を追加すると馬車を馬の前に置くことになり、EL 内部を CL crate に leak し、すべての impl (`InMemoryEvmBridge` 含む) にクエリ可能な state machine を維持する義務を負わせる。State クエリの正しい場所は EL crate 独自のデバッグインタフェースであり、consensus contract ではない。
+**Q: コンパイル時アサーションが証明しないものを smoke test は何を証明する?**
+L8 のコンパイル時アサーションは `OpenHlCodec: WalCodec + ConsensusCodec + SyncCodec` を証明した。Smoke test は **runtime** パス — actor spawning、channel allocation、libp2p binding、kill propagation — が end-to-end で実際に動くことを証明する。型安全性は必要条件だが十分条件ではない; テストは「spawn deadlock」「最初のメッセージでエンジンが panic する」など型では catch できないことを catch する。
 
-## 8. 練習
+**Q: `EngineHandle` と `NodeHandle` の違いは?**
+`EngineHandle` (Malachite から) は spawn された actor system への低レベルハンドル — actor cell、tokio task handle。`NodeHandle` (自分の trait) は Malachite が「これはまだ生きているか? イベントを subscribe してくれ。kill しろ。」と尋ねるための高レベル抽象。自分の `OpenHlNodeHandle` は `NodeHandle<OpenHlContext>` を impl し、内部に `EngineHandle` を持つ。2 層あり、扱うのは 1 つだけ。
 
-1. **2 つの stub bridge を見つけよ。** `crates/consensus/src/runner.rs` と `crates/consensus/src/engine_app.rs` の test module で inline `StubBridge` impl を見つけよ。なぜ *2 つ* (共有 1 つではなく) か? 各々が `InMemoryEvmBridge` に対して minimum で何を実装するか? (ヒント: 両 stub は `openhl-evm` を `openhl-consensus` の test-only dep として追加するより前に書かれた — それは §6 の dep cycle を作る。Inline stub は cycle を避ける。)
+**Q: なぜ `take_channels` は単に channels を削除せず `Option<Channels<...>>` を使う?**
+`take_channels` は **外側から** 呼ばれるから — app loop が消費したい。完全に削除するには mutable 参照かハンドル自体の move が必要。`Mutex<Option<...>>` なら app loop は共有参照 (`&self`) 経由で呼べ、channels を 1 度取得し、以降の呼び出しは `None` を見る — 「もう取った」というクリーンなシグナル。
 
-2. **Halt-vs-recover 監査。** `crates/evm/src/live_node.rs@0844d58` の `LiveRethEvmBridge` で各 `Err(BridgeError::...)` return を読め。それぞれが `Rejected`、`Syncing`、`Internal` のどれか identify せよ。それから check: consensus 側の caller (`runner.rs` または `engine_app.rs`) はその variant を §4 のテーブルが prescribe する方法で handle するか?
+## 次のレッスン (L10)
 
-3. **5 番目のメソッドを sketch せよ (そしてしない理由を発見せよ)。** Malachite の `RestreamProposal` AppMsg をサポートするため `restream_proposal(block_hash)` を追加すると仮定せよ。Trait 変更を sketch せよ。それから `engine_app.rs:96@0844d58` を読め — 現在のコードは `RestreamProposal` に何をするか? なぜ bridge は関与する必要がないか?
-
-> **最終チェック。** 1 文で、なぜ `validate_payload` は `ExecutedBlock` (owned) ではなく `&ExecutedBlock` (*borrowed* reference) を取るのか? 答えに「validation は block を consume すべきではない — consensus がまだ必要かもしれない」または「borrow は偶発的な ownership 移行に対する type-system 安全レールだ」が含まれていなければ、trait シグネチャを再読。
+エンジンが動く状態になった。だが — 致命的に — **エンジンが我々にメッセージを送っているのに我々は無視している**。Actor system は parked 状態で、app loop が `Channels<OpenHlContext>` から消費して `AppMsg::ProposeValue`, `AppMsg::Decided` などに応答するのを待っている。L10 で app loop を実装する: channel に対する `tokio::select` + state struct + エンジンメッセージを `InMemoryEvmBridge` にルートするハンドラ。L10 完了で `cargo test first_block_via_engine_actors` が full engine pipeline 経由で実 block を produce する。
 ````
 
 ---
 
-## Seed-file slot
+## Seed ファイルスロット
 
-レッスン 9 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consensus-ja`) に Module 4 の最初のレッスンとして (すでに drafted の レッスン 10 直前に) landing する:
+L9 は Module 4 (CL types) の sortOrder 3 に入る (L6, L7, L8 の後):
 
 ```typescript
-// Course.modules.create array:
 {
-  title: '配線 — consensus crate',
+  title: 'レッスン 9 — OpenHlNode と初の start_engine 呼び出し',
+  slug: 'openhl-node-ja',
+  type: 'CONTENT',
   sortOrder: 3,
-  lessons: { create: [
-    {
-      title: 'Contract を設計する — ConsensusBridge trait',
-      slug: 'openhl-bridge-trait-ja',
-      type: 'CONTENT',
-      sortOrder: 0,
-      duration: 20,
-      xpReward: 60,
-      content: `# Contract を設計する — \`ConsensusBridge\` trait\n\n...`  // L9 markdown
-    },
-    {
-      title: 'Malachite の Decided から Reth の forkchoice_updated へ',
-      slug: 'openhl-decided-to-fcu-ja',
-      type: 'CONTENT',
-      sortOrder: 1,
-      duration: 15,
-      xpReward: 40,
-      content: `# Malachite の \`Decided\` から Reth の \`forkchoice_updated\` へ ...`  // L10 markdown
-    },
-    // L11 (TBD)
-  ]}
-}
+  duration: 55,
+  xpReward: 100,
+  content: `# レッスン 9 — \`OpenHlNode\` と初の \`start_engine\` 呼び出し\n\n...`
+},
 ```
 
-## SHA pinning discipline
+## SHA pinning 規律
 
-すべての cite は SHA `0844d58` を pin する。レッスン 9 は珍しく citation-dense — design lesson だからだ; trait の形に関するすべての主張が実コードに anchor される:
+L9 が参照する openhl コミット (§答え合わせ):
+- `d59d6cf` (Stage 6c — Node trait を実装、初の start_engine 呼び出しが動く)
 
-- `crates/consensus/src/bridge.rs:11` — trait
-- `crates/consensus/src/bridge.rs:33` — BridgeError
-- `crates/evm/src/in_memory.rs:14` — InMemoryEvmBridge struct
-- `crates/evm/src/in_memory.rs:34` — InMemoryEvmBridge の trait impl
-- `crates/evm/src/live_node.rs:68` — LiveRethEvmBridge::build_payload
-- `crates/consensus/src/engine_app.rs:96` — RestreamProposal handler (Exercise 3 参照)
+これがエンジン起動マイルストーン。L8 で trait bound を満たし、L9 で値を提供して `start_engine` が動くことを証明する。
 
-Stage 7d が landing し `LiveRethEvmBridge::commit` が real `forkchoice_updated` call になるとき:
-- レッスン 9 の論点構造 (4 メソッド、3 エラー variant、共有 crate の type) は valid のまま
-- §4 の "halt-vs-recover" テーブルの `LiveRethEvmBridge::commit` cite は bump が必要
+## 翻訳セルフレビュー (paste 前)
 
-## Style review notes (self-critique before paste)
-
-- **レッスン 9 は設計上 20 分** — レッスン 7/10 より重い。8 section 構造 (レッスン 1/7/レッスン 10 の 7 section テンプレート vs) は意図的: §3 (なぜ 4 メソッドか) と §7 (trait が *しない* こと) が追加時間を正当化する design-rationale section だ。
-- **§4 の halt-vs-recover テーブルが本レッスンで最も leverage の高い段落。** 学習者が自分の bridge を実装するときに reference back する 1 つのものだ。レッスンの残りが切られても、このセクションは残せ。
-- **§6 の dep-graph 議論は Rust 固有だ。** JA への翻訳は care が必要 — 「依存グラフ」は動くが、cycle-as-compile-error のオチは違って land するかもしれない。Translator にフラグ。
-- **翻訳 policy は他の JA レッスンと同一**:
-  - `async`、`blocking`、`async_trait`、Rust trait/error type 関連の technical 用語は英語のまま。
-  - `Send + Sync`、`'static`、`#[async_trait]`、`Mutex` 等の Rust 固有 token は英語のまま。
-  - 🛑 callout: Predict → 予測、Anti-fluency → 反流暢性。
-  - File paths、function names、types は英語のまま。
-- **「contract」「leak」「liveness」「sink」「fall to a timeout」** は英語のまま — Rust/分散システム文脈で direct な訳がない多義的概念。
-- **未公開**: `course.isPublished: false` のまま。レッスン 11/12/レッスン 13 JA 翻訳が揃ってから一斉公開予定。
+- **「handshake」「ハンドシェイク」** はそのまま (専門語)。
+- **「multi-thread runtime」「actor system」「smoke test」** はそのまま。
+- **「load-bearing」「placeholder」「クラム (crumb)」** はそのまま (英語のニュアンスを保持)。
+- **「予測してみよう」「流暢さ警告」** は L4-L8 で確立した訳語と統一。
+- **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。
+- **長い表は EN と同じ列構成**。

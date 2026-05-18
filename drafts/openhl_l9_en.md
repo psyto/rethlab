@@ -1,316 +1,695 @@
-# Building OpenHL — L9 draft (EN)
+# Building OpenHL — L9 draft (EN) — C2 build-along rewrite
 
-> Drafted against openhl SHA `0844d58` (Stage 7c). The trait this lesson designs is also the one cited by L1 (the contract), L7 (Engine API mapping), and L10 (Decided handler) — so L9 is the design rationale lesson the rest of Module 4 builds on.
+> Drafted against openhl SHA `d59d6cf` (Stage 6c — implement Node trait, first start_engine call works).
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10).
-> 20-min lesson — longer than L7/L10 because design choices need rationale, not just code.
+> Note: L9 is the engine-boots milestone. After this lesson, `start_engine` spawns the actor system and tears it down cleanly. L10-L15 build out the app loop, the live Reth bridge, and the validate/commit paths.
 
 ---
 
-## L9 — `openhl-bridge-trait-en`
+## L9 — `openhl-node-en`
 
-- **Module:** 4 (Wiring it up — the consensus crate), sortOrder 0 within module
-- **Course-level sortOrder:** 8 (lesson 9 of 13)
-- **Duration:** 20 min
-- **XP reward:** 60
+- **Module:** 4 (CL types), sortOrder 3 within module
+- **Course-level sortOrder:** 8 (lesson 9 of 16)
+- **Duration:** 55 min
+- **XP reward:** 100
 - **Type:** CONTENT
 
 ### Content
 
 ````markdown
-# Designing the contract — the `ConsensusBridge` trait
+# Lesson 9 — `OpenHlNode` and the first `start_engine` call
 
-> **Where you are.** Sub-module 4 of 5: *Wiring it up.* Sub-modules 2 and 3 walked the two halves (Malachite and Reth) in isolation; this sub-module is where they meet. L9 (this lesson) is the Rust trait that captures the four-message contract — the design rationale for why the trait has the shape it has. L10 walks the commit-side flow (Malachite `Decided` → Reth `forkchoice_updated`). L11 walks the propose-side hot loop. By the end of L11 every method on the trait has a concrete runtime path through `engine_app.rs`.
+## Goal
 
-Every chain that bolts BFT onto an EVM ends up writing this trait. HyperBFT did it, Tempo did it, every CometBFT-based chain did it. The methods have different names; the shape is the same. The question is whether you write it deliberately — with the four messages from L1 explicit and the failure modes named — or whether it accretes from "whatever consensus needed when it needed it."
+By the end of this lesson:
 
-We're going to write it deliberately. Once.
+```bash
+cargo test -p openhl-consensus
+```
 
-> 🛑 **Predict before scrolling.** You've seen the four messages in L1. You've seen them mapped onto the Ethereum Engine API in L7. Now: what should the *Rust trait* look like? Specifically — async or blocking? Owned arguments or borrowed? One error type or many? Trait method signatures matter more than you think.
+…passes **20 tests** (16 from L8 + 4 new ones for the Node impl). The capstone test:
 
-## 1. The trait every BFT-L1 ends up writing
+```
+test node::tests::start_engine_smoke_spawns_and_kills ... ok
+```
 
-Open `crates/consensus/src/bridge.rs:11@0844d58`. The whole thing is 40 lines:
+…spawns the full Malachite actor system against your code, asserts the channel handle is available exactly once, and tears the actor system down cleanly — **in about 0.02 seconds**. After this lesson, the engine boots; the only thing missing is the application loop that consumes from `Channels<OpenHlContext>` and drives the bridge.
+
+The 4 new tests cover: private key file round-trip, config produces `ProposalOnly` payload + ephemeral listen address, address derivation matches what the runner used in L6, and the smoke test that calls `start_engine`.
+
+## Recap
+
+After L8 your `openhl-consensus` crate has:
+
+```
+crates/consensus/src/lib.rs               — pub mod bridge, codec, context, signing, signing_provider, types
+crates/consensus/src/codec.rs             — OpenHlCodec (1 real + 7 stub Codec impls, 2 tests)
+crates/consensus/src/signing_provider.rs  — SigningProvider<OpenHlContext>
+crates/consensus/src/context.rs           — Context<OpenHlContext>
+crates/consensus/src/types/               — 7 type files
+```
+
+`cargo test -p openhl-consensus` passes 16 tests. You've satisfied every trait bound `start_engine` requires *at the type level*, but you can't actually call it yet — there's no `Node` impl, no config, no genesis, no private key file, no node handle.
+
+## Plan
+
+Six things:
+
+1. **Add 5 more deps to `crates/consensus/Cargo.toml`** — `informalsystems-malachitebft-app-channel`, `informalsystems-malachitebft-config`, enable `serde` feature on signing-ed25519, add `serde` and `tokio` as runtime deps (not just dev), add `tempfile` as dev-dep.
+2. **Create `crates/consensus/src/node.rs`** with: `OpenHlConfig` (impl `NodeConfig`), `OpenHlGenesis` (unit struct), `OpenHlPrivateKeyFile` (wire wrapper), `OpenHlNodeHandle` (returned from `start()`), `OpenHlNode` (the main struct), and `impl Node for OpenHlNode` with 5 associated types and 12 methods.
+3. **Wire `pub mod node;`** into `lib.rs`.
+4. **Add 4 unit tests** to `node.rs`.
+5. **Run** `cargo test -p openhl-consensus` — 20 tests pass.
+6. **Stare at** `start_engine_smoke_spawns_and_kills` passing in 0.02 seconds. This is the moment your code becomes a running BFT engine.
+
+This lesson teaches **the bridge pattern between your code and Malachite**. The engine — written by someone else, generic over your `Context` and `Codec` — needs five things to spawn: an instance of your context, an instance of your node (to get config, signing, address derivation), a config value, a codec value, an initial height, and a validator set. The `Node` trait is the **handshake interface** that lets Malachite ask your code for those things uniformly. Once you implement it, `start_engine` works for any chain that follows the same handshake.
+
+> 🛑 **Predict.** Before scrolling: why does Malachite ask for a separate `OpenHlConfig` rather than just letting `OpenHlNode` carry its own config fields? Hint: think about who *owns* the config and when it can change. The node is created once at process startup, but configuration (listen address, value payload mode, value sync settings) might be reloaded from disk on signal. Separating `OpenHlConfig` from `OpenHlNode` lets the config be loaded via `Node::load_config()` — re-callable, returning a fresh value each time — without re-instantiating the node.
+
+## Walk-through
+
+### Step 1: Update `crates/consensus/Cargo.toml`
+
+Open `crates/consensus/Cargo.toml`. The current `[dependencies]` section (after L8) looks like:
+
+```toml
+[dependencies]
+openhl-types = { workspace = true }
+async-trait  = { workspace = true }
+thiserror    = { workspace = true }
+eyre         = { workspace = true }
+
+informalsystems-malachitebft-core-types      = { workspace = true }
+informalsystems-malachitebft-core-driver     = { workspace = true }
+informalsystems-malachitebft-core-consensus  = { workspace = true }
+informalsystems-malachitebft-app             = { workspace = true }
+informalsystems-malachitebft-signing-ed25519 = { workspace = true, features = ["rand"] }
+bytes                                         = "1"
+rand                                          = "0.8"
+sha2                                          = "0.10"
+
+[dev-dependencies]
+tokio = { workspace = true }
+```
+
+Replace it with:
+
+```toml
+[dependencies]
+openhl-types = { workspace = true }
+async-trait  = { workspace = true }
+thiserror    = { workspace = true }
+eyre         = { workspace = true }
+
+informalsystems-malachitebft-core-types      = { workspace = true }
+informalsystems-malachitebft-core-driver     = { workspace = true }
+informalsystems-malachitebft-core-consensus  = { workspace = true }
+informalsystems-malachitebft-app             = { workspace = true }
+informalsystems-malachitebft-app-channel     = { workspace = true }
+informalsystems-malachitebft-config          = { workspace = true }
+informalsystems-malachitebft-signing-ed25519 = { workspace = true, features = ["rand", "serde"] }
+bytes                                         = "1"
+rand                                          = "0.8"
+sha2                                          = "0.10"
+serde                                         = { workspace = true }
+tokio                                         = { workspace = true }
+
+[dev-dependencies]
+tokio    = { workspace = true }
+tempfile = "3"
+
+[lints]
+workspace = true
+```
+
+What each new dep is for:
+
+- **`informalsystems-malachitebft-app-channel`** — provides `start_engine()`, the function we're about to call, plus the `Channels<Ctx>` type returned to communicate with the engine.
+- **`informalsystems-malachitebft-config`** — `ConsensusConfig`, `ValueSyncConfig`, `ValuePayload` types we'll embed in `OpenHlConfig`.
+- **`serde` feature on `signing-ed25519`** — lets us derive `Serialize`/`Deserialize` on `OpenHlPrivateKeyFile`, which needs the `PrivateKey` newtype to be serializable.
+- **`serde`** (runtime dep) — used by `OpenHlConfig`, `OpenHlGenesis`, `OpenHlPrivateKeyFile` for `#[derive(Serialize, Deserialize)]`.
+- **`tokio`** moved from dev-dep to dep — `OpenHlNodeHandle` holds a `tokio::sync::Mutex`.
+- **`tempfile`** dev-dep — the smoke test creates a temp directory for the node's home dir.
+
+This is your second heavy compile. First time pulling in `app-channel` + `config` will take ~20 more seconds.
+
+### Step 2: Create `crates/consensus/src/node.rs` — imports and `OpenHlConfig`
+
+Start with imports:
 
 ```rust
+//! `Node` trait implementation — describes our chain to Malachite's engine
+//! and provides the [`OpenHlNode::start`] entry point that calls
+//! `malachitebft_app_channel::start_engine` to spawn the actor system.
+
+use std::path::PathBuf;
+
+use async_trait::async_trait;
+use eyre::eyre;
+use informalsystems_malachitebft_app::node::{EngineHandle, Node, NodeConfig, NodeHandle};
+use informalsystems_malachitebft_app::types::Keypair;
+use informalsystems_malachitebft_app_channel::Channels;
+use informalsystems_malachitebft_config::{ConsensusConfig, ValueSyncConfig, ValuePayload};
+use informalsystems_malachitebft_core_types::Height as _;
+use informalsystems_malachitebft_signing_ed25519::{PrivateKey, PublicKey};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use tokio::sync::Mutex;
+
+use crate::codec::OpenHlCodec;
+use crate::context::OpenHlContext;
+use crate::signing_provider::OpenHlSigningProvider;
+use crate::types::{OpenHlAddress, OpenHlHeight, OpenHlValidatorSet};
+```
+
+That's the full surface this file needs. Worth scanning once: `Node`, `NodeConfig`, `NodeHandle` are the three Malachite traits we'll implement. `EngineHandle` + `Channels` are what `start_engine` returns. `ConsensusConfig` + `ValueSyncConfig` + `ValuePayload` are the config types embedded in our `OpenHlConfig`. `Keypair` is libp2p's keypair type. `PrivateKey`/`PublicKey` are the Ed25519 types we've used since L7. `Sha256` is for address derivation.
+
+Now write `OpenHlConfig`:
+
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OpenHlConfig {
+    pub moniker: String,
+    #[serde(flatten)]
+    pub consensus: ConsensusConfig,
+    pub value_sync: ValueSyncConfig,
+}
+
+impl OpenHlConfig {
+    #[must_use]
+    pub fn new(moniker: impl Into<String>) -> Self {
+        // OpenHL runs ProposalOnly (no streaming proposal parts) — must match
+        // our `Context::ProposalPart` shape.
+        let consensus = ConsensusConfig {
+            value_payload: ValuePayload::ProposalOnly,
+            ..ConsensusConfig::default()
+        };
+        Self {
+            moniker: moniker.into(),
+            consensus,
+            value_sync: ValueSyncConfig::default(),
+        }
+    }
+}
+
+impl NodeConfig for OpenHlConfig {
+    fn moniker(&self) -> &str {
+        &self.moniker
+    }
+    fn consensus(&self) -> &ConsensusConfig {
+        &self.consensus
+    }
+    fn value_sync(&self) -> &ValueSyncConfig {
+        &self.value_sync
+    }
+}
+```
+
+Three pieces:
+
+- The struct wraps `ConsensusConfig` + `ValueSyncConfig` and adds a `moniker` (validator's nickname for logs). `#[serde(flatten)]` on `consensus` means the consensus fields are inlined into the parent — when serialized to disk, the user sees `[consensus]` section keys at the top level, not nested under `consensus.`.
+- `new()` enforces one critical choice: `value_payload: ValuePayload::ProposalOnly`. This *must* match our `Context::ProposalPart = OpenHlProposalPart` (the unit struct). If we accidentally set this to `ValuePayload::PartsOnly`, the engine would expect streamed proposal parts, and our unit-struct `ProposalPart` would never satisfy what the engine sends. This is the kind of invariant that's easier to enforce at construction than to debug later.
+- `NodeConfig` impl is three trivial accessors. The trait exists so Malachite can pull out the sub-configs without knowing the parent's layout.
+
+### Step 3: `OpenHlGenesis` and `OpenHlPrivateKeyFile`
+
+Next:
+
+```rust
+/// Genesis is a unit struct at v0 — the validator set is passed directly to
+/// `start_engine` rather than read from disk. When `OpenHL` grows a real
+/// on-disk genesis format this becomes the `load_genesis()` return.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct OpenHlGenesis;
+
+/// Wire-friendly wrapper around the raw 32-byte Ed25519 private key.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OpenHlPrivateKeyFile {
+    pub bytes: [u8; 32],
+}
+
+impl OpenHlPrivateKeyFile {
+    #[must_use]
+    pub fn from_private_key(sk: &PrivateKey) -> Self {
+        Self {
+            bytes: sk.inner().to_bytes(),
+        }
+    }
+
+    #[must_use]
+    pub fn into_private_key(self) -> PrivateKey {
+        PrivateKey::from(self.bytes)
+    }
+}
+
+impl std::fmt::Debug for OpenHlPrivateKeyFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenHlPrivateKeyFile")
+            .field("bytes", &"[redacted]")
+            .finish()
+    }
+}
+```
+
+Two types:
+
+- **`OpenHlGenesis`** — a unit struct. At v0 we have no genesis content (no allocations, no precompiles registered at boot — those come later in Module 6). The validator set is passed directly to `start_engine` rather than via genesis. When OpenHL adds a real genesis format, this becomes the type that `load_genesis()` deserializes.
+- **`OpenHlPrivateKeyFile`** — a wire-friendly wrapper around the 32-byte private key. `PrivateKey` itself (from `malachitebft_signing_ed25519`) doesn't implement `Serialize`/`Deserialize` by default; the wrapper does, and the conversions `from_private_key` / `into_private_key` are explicit. **The manual `Debug` impl** redacts the bytes — `{:?}` printing the actual private key in a log would be a serious security bug. The `[redacted]` token is the convention.
+
+> 🛑 **Anti-fluency.** "Why not just `#[derive(Debug)]`?" **Because the default derived `Debug` for `[u8; 32]` prints all 32 bytes.** If anyone ever wraps an `OpenHlPrivateKeyFile` in another `Debug`-derived struct and logs it, the key leaks into stderr / log files / Sentry. A manual `Debug` with `[redacted]` makes this impossible without conscious effort. **Treat private keys like passwords — never let them print.**
+
+### Step 4: `OpenHlNodeHandle` — what `start()` returns
+
+```rust
+/// Handle returned by [`OpenHlNode::start`]. Owns the engine actor system
+/// and the channel handles for the (yet-to-be-implemented) app loop.
+pub struct OpenHlNodeHandle {
+    engine: EngineHandle,
+    channels: Mutex<Option<Channels<OpenHlContext>>>,
+}
+
+impl std::fmt::Debug for OpenHlNodeHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenHlNodeHandle")
+            .field("engine", &"<EngineHandle>")
+            .field("channels", &"<Channels>")
+            .finish()
+    }
+}
+
+impl OpenHlNodeHandle {
+    /// Take ownership of the engine→app message channels. Returns None on
+    /// the second call. L10 will consume from this to drive the bridge.
+    pub async fn take_channels(&self) -> Option<Channels<OpenHlContext>> {
+        self.channels.lock().await.take()
+    }
+}
+
 #[async_trait]
-pub trait ConsensusBridge: Send + Sync {
-    async fn build_payload(
-        &self,
-        parent: BlockHash,
-        attrs: PayloadAttrs,
-    ) -> Result<PayloadId, BridgeError>;
+impl NodeHandle<OpenHlContext> for OpenHlNodeHandle {
+    fn subscribe(&self) -> informalsystems_malachitebft_app::events::RxEvent<OpenHlContext> {
+        // No event subscription in Stage 6c — caller can't yet observe engine
+        // events. L10 wires the TxEvent from the engine to here.
+        informalsystems_malachitebft_app::events::TxEvent::new().subscribe()
+    }
 
-    async fn payload_ready(&self, id: PayloadId)
-        -> Result<ExecutedBlock, BridgeError>;
-
-    async fn validate_payload(&self, block: &ExecutedBlock)
-        -> Result<PayloadStatus, BridgeError>;
-
-    async fn commit(&self, block_hash: BlockHash)
-        -> Result<(), BridgeError>;
+    async fn kill(&self, _reason: Option<String>) -> eyre::Result<()> {
+        self.engine.actor.kill_and_wait(None).await?;
+        self.engine.handle.abort();
+        Ok(())
+    }
 }
 ```
 
-That's the contract. Every other crate that participates in consensus either implements this trait (the EVM crate, with three different impls — `InMemoryEvmBridge`, `RethEvmBridge`, `LiveRethEvmBridge`) or holds an `Arc<dyn ConsensusBridge>` to call methods on it (the consensus crate's runner and engine-app loop).
+The handle owns two things:
 
-The rest of this lesson is justification. Why these four methods, in these signatures, with this error type? Each choice trades off something. The point of the lesson is to make the trades visible so you can make different ones on purpose, not by accident.
+- **`engine: EngineHandle`** — Malachite's handle to the spawned actor system. Has an `actor` (the ractor `ActorCell`) and a `handle` (the tokio task handle). `kill()` cleanly tears both down.
+- **`channels: Mutex<Option<Channels<OpenHlContext>>>`** — the application-side endpoints. The engine sends `AppMsg<OpenHlContext>` to us; we send `AppReply<OpenHlContext>` back. `Mutex<Option<...>>` so that `take_channels()` can hand them to the app loop exactly once — second call returns `None`, signaling "you've already consumed these."
 
-## 2. Async or blocking?
+**Why `tokio::sync::Mutex` rather than `std::sync::Mutex`?** Because `take_channels()` is `async` and the lock is held across an `.await` boundary. `std::sync::Mutex` would block the entire executor thread; `tokio::sync::Mutex` yields cooperatively.
 
-Looking at the signatures: every method is `async`. That's not free. In Rust, `async fn` in traits has been a multi-year saga (the `#[async_trait]` macro is a workaround); async forces `Send + Sync` bounds throughout; calling async from sync requires a tokio handle.
+The `NodeHandle` impl is mostly placeholder at this stage:
+- `subscribe()` returns a *fresh* `TxEvent::subscribe()` — an empty event stream with no producer attached. L10 will wire up the real one.
+- `kill()` is real — it kills the actor cell and aborts the tokio task. This is what `start_engine_smoke_spawns_and_kills` exercises.
 
-The alternative would have been blocking:
+### Step 5: `OpenHlNode` struct + `Node` impl
 
 ```rust
-pub trait ConsensusBridge: Send + Sync {
-    fn build_payload(&self, ...) -> Result<PayloadId, BridgeError>;
-    // ...
+#[derive(Clone, Debug)]
+pub struct OpenHlNode {
+    pub private_key: PrivateKey,
+    pub validator_set: OpenHlValidatorSet,
+    pub home_dir: PathBuf,
+    pub moniker: String,
+}
+
+impl OpenHlNode {
+    #[must_use]
+    pub fn new(
+        private_key: PrivateKey,
+        validator_set: OpenHlValidatorSet,
+        home_dir: PathBuf,
+        moniker: impl Into<String>,
+    ) -> Self {
+        Self {
+            private_key,
+            validator_set,
+            home_dir,
+            moniker: moniker.into(),
+        }
+    }
+}
+
+#[async_trait]
+impl Node for OpenHlNode {
+    type Context = OpenHlContext;
+    type Config = OpenHlConfig;
+    type Genesis = OpenHlGenesis;
+    type PrivateKeyFile = OpenHlPrivateKeyFile;
+    type SigningProvider = OpenHlSigningProvider;
+    type NodeHandle = OpenHlNodeHandle;
+
+    fn get_home_dir(&self) -> PathBuf {
+        self.home_dir.clone()
+    }
+
+    fn load_config(&self) -> eyre::Result<Self::Config> {
+        let mut cfg = OpenHlConfig::new(&self.moniker);
+        // Bind to an ephemeral port on localhost so tests and devnets don't
+        // step on each other. Real deployments override this in their config.
+        cfg.consensus.p2p.listen_addr = "/ip4/127.0.0.1/tcp/0"
+            .parse()
+            .map_err(|e| eyre!("invalid listen_addr: {e}"))?;
+        Ok(cfg)
+    }
+
+    fn get_address(&self, pk: &PublicKey) -> OpenHlAddress {
+        let digest = Sha256::digest(pk.as_bytes());
+        let mut addr = [0u8; 20];
+        addr.copy_from_slice(&digest[12..32]);
+        OpenHlAddress(addr)
+    }
+
+    fn get_public_key(&self, pk: &PrivateKey) -> PublicKey {
+        pk.public_key()
+    }
+
+    fn get_keypair(&self, pk: PrivateKey) -> Keypair {
+        Keypair::ed25519_from_bytes(pk.inner().to_bytes())
+            .expect("ed25519 private key is always 32 bytes")
+    }
+
+    fn load_private_key(&self, file: Self::PrivateKeyFile) -> PrivateKey {
+        file.into_private_key()
+    }
+
+    fn load_private_key_file(&self) -> eyre::Result<Self::PrivateKeyFile> {
+        Ok(OpenHlPrivateKeyFile::from_private_key(&self.private_key))
+    }
+
+    fn load_genesis(&self) -> eyre::Result<Self::Genesis> {
+        // Validator set is passed directly to start_engine; genesis carries
+        // nothing else at v0.
+        Ok(OpenHlGenesis)
+    }
+
+    fn get_signing_provider(&self, private_key: PrivateKey) -> Self::SigningProvider {
+        OpenHlSigningProvider::new(private_key)
+    }
+
+    async fn start(&self) -> eyre::Result<Self::NodeHandle> {
+        let cfg = self.load_config()?;
+        let validator_set = self.validator_set.clone();
+
+        let (channels, engine) = informalsystems_malachitebft_app_channel::start_engine(
+            OpenHlContext,
+            self.clone(),
+            cfg,
+            OpenHlCodec, // WAL
+            OpenHlCodec, // Network
+            Some(OpenHlHeight::INITIAL),
+            validator_set,
+        )
+        .await?;
+
+        Ok(OpenHlNodeHandle {
+            engine,
+            channels: Mutex::new(Some(channels)),
+        })
+    }
+
+    async fn run(self) -> eyre::Result<()> {
+        // L10 will consume from channels here and run the app loop.
+        Err(eyre!("OpenHlNode::run is not yet implemented (L10)"))
+    }
 }
 ```
 
-Simpler signatures. No `#[async_trait]`. No future-pinning issues. Why didn't we go this way?
+This is the load-bearing block. Walk through:
 
-| Consideration | Async wins | Blocking wins |
-| :--- | :--- | :--- |
-| Calling Reth's `BlockchainProvider` (which is sync) | tied — both work | tied |
-| Calling Reth's `EngineHandle::fork_choice_updated` (async) | **must be async** | requires `block_on` |
-| Inside Malachite's tokio runtime | no thread blocking | each call blocks a worker thread |
-| The `run_engine_app` AppMsg loop | natural | requires spawn-blocking gymnastics |
-| Test doubles (in-memory state) | trivial — just hold a `Mutex` | trivial |
+**The struct** carries four things: private key, validator set, home dir, moniker. These are the long-lived bits that don't change per-config-reload.
 
-The decision falls on the second and third rows. The real Reth backend uses async APIs (Engine API, payload builder service, network), and our consensus side runs in Malachite's tokio runtime. Going blocking means the entire AppMsg loop would be spawn-blocking on every bridge call — wasteful, error-prone, and observably slower under load.
+**The 6 associated types** declare the concrete types for each handshake slot:
+- `Context = OpenHlContext` — what Malachite uses to typecheck everything else
+- `Config = OpenHlConfig` — what `load_config()` returns
+- `Genesis = OpenHlGenesis` — what `load_genesis()` returns
+- `PrivateKeyFile = OpenHlPrivateKeyFile` — what `load_private_key_file()` returns
+- `SigningProvider = OpenHlSigningProvider` — what `get_signing_provider()` returns
+- `NodeHandle = OpenHlNodeHandle` — what `start()` returns
 
-> 🛑 **Anti-fluency.** "Async is just more flexible than blocking, you can always go async later." **No.** Going from blocking-trait to async-trait is a viral change — every caller has to switch. And every async method in a trait is constrained by `Send + Sync + 'static` propagating through your code. **Pick async early, accept the costs, or commit to blocking and never look back.**
+**The 12 methods**:
 
-## 3. Why exactly four methods (no fewer, no more)
+| Method | Purpose | Body |
+| - | - | - |
+| `get_home_dir` | Where the node stores its data | Returns the path passed at construction |
+| `load_config` | Build the config (re-callable) | Constructs `OpenHlConfig`, then overrides the listen address to ephemeral local |
+| `get_address` | SHA-256 hash → 20-byte address | Last 20 of the 32-byte digest |
+| `get_public_key` | PK from SK | `sk.public_key()` |
+| `get_keypair` | libp2p Keypair from Ed25519 | Convert via `ed25519_from_bytes` |
+| `load_private_key` | Unwrap the file format | `file.into_private_key()` |
+| `load_private_key_file` | Serialize PK to file format | `OpenHlPrivateKeyFile::from_private_key(...)` |
+| `load_genesis` | Read the genesis | Returns `OpenHlGenesis` (unit struct, nothing to read) |
+| `get_signing_provider` | Construct the SigningProvider | `OpenHlSigningProvider::new(pk)` |
+| `start` | Spawn the engine | Calls `start_engine` with 7 args, wraps return in `OpenHlNodeHandle` |
+| `run` | Run the app loop | **Unimplemented at L9** — returns error pointing to L10 |
 
-Four methods. Not three. Not five. Why this number?
+**The `start()` method is the highlight.** It calls `start_engine` with:
+- the context (`OpenHlContext` — a unit struct)
+- the node itself (`self.clone()`)
+- the config (`cfg`)
+- two codec values (one for WAL, one for Network — both `OpenHlCodec`)
+- the initial height (`Some(OpenHlHeight::INITIAL)`)
+- the validator set (`validator_set`)
 
-The temptation to collapse to three:
+What `start_engine` returns: `(Channels<OpenHlContext>, EngineHandle)`. We wrap these into `OpenHlNodeHandle` and return.
 
-- "**`payload_ready` is just part of `build_payload`. Make `build_payload` return the block directly.**" Compelling — fewer methods, simpler call sites. **Wrong.** Doing so kills the build-during-voting parallelism from L7 §4. The proposer's hot path becomes "wait for build, then propose" instead of "propose what was already built." Sub-second slots fall off the table.
+**Why is `run()` unimplemented?** Because Malachite's `Node::run` is meant to combine `start()` with the app loop into one async future. Since the app loop doesn't exist until L10, we return an error pointing to L10. Once L10 is done, `run()` will look like: call `start()`, take the channels, drive the app loop, await termination.
 
-- "**`validate_payload` and `commit` should merge. If validation passes, just commit.**" Tempting because most call sites do both back-to-back. **Wrong.** Validators import many candidate proposals per height (one per proposer slot in a round-robin) but commit only one — the deciding value. Validation is speculative; commit is final. Merging them forces speculative state changes, which means rollback machinery, which means a much more complex EVM crate.
+> 🛑 **Anti-fluency.** "Why does `start()` take the codec twice?" **Because the engine has separate codec slots for WAL and Network gossip.** They could be different types — e.g., your WAL might use bincode, your network might use protobuf. In our case both use the same `OpenHlCodec`, but the API doesn't assume they'll be the same. Passing them separately lets you swap one without the other.
 
-The temptation to expand to five:
-
-- "**Add `notify_view_change(round)` so the EVM knows when a round timed out.**" Plausible — view changes are a real consensus event. **Unnecessary.** The EVM doesn't need to know about rounds; it only needs to know about decided blocks. Round changes are CL-internal state. Adding `notify_view_change` leaks consensus internals into execution — a contract leak (see L1 §5).
-
-- "**Add `restream_proposal(hash)` so the bridge can re-broadcast a stale proposal.**" Plausible — Malachite's AppMsg loop has a `RestreamProposal` variant. **Unnecessary.** Restreaming is a network-layer concern: the consensus crate's app loop handles it directly (see `engine_app.rs:96@0844d58`) without bridge involvement. The bridge is the EL contract, not a general consensus event sink.
-
-Four methods is the minimum that captures the L7 mapping (each method maps onto exactly one Ethereum Engine API call) without inviting contract leaks.
-
-## 4. Error semantics — Rejected, Syncing, Internal
-
-`BridgeError` at `crates/consensus/src/bridge.rs:33@0844d58`:
+### Step 6: Wire `node.rs` into `lib.rs`
 
 ```rust
-#[derive(Debug, Error)]
-pub enum BridgeError {
-    #[error("execution layer rejected payload: {0}")]
-    Rejected(String),
+//! Consensus layer — Malachite BFT.
 
-    #[error("execution layer is syncing")]
-    Syncing,
+pub mod bridge;
+pub mod codec;
+pub mod context;
+pub mod node;
+pub mod signing;
+pub mod signing_provider;
+pub mod types;
 
-    #[error("internal: {0}")]
-    Internal(#[from] eyre::Report),
+pub use context::OpenHlContext;
+```
+
+### Step 7: Add 4 unit tests
+
+At the bottom of `node.rs`:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::OpenHlValidator;
+    use rand::rngs::OsRng;
+
+    fn single_validator_node(home_dir: PathBuf) -> OpenHlNode {
+        let sk = PrivateKey::generate(OsRng);
+        let pk = sk.public_key();
+        let digest = Sha256::digest(pk.as_bytes());
+        let mut addr_bytes = [0u8; 20];
+        addr_bytes.copy_from_slice(&digest[12..32]);
+        let address = OpenHlAddress(addr_bytes);
+        let validator_set = OpenHlValidatorSet::new(vec![OpenHlValidator::new(address, pk, 1)]);
+        OpenHlNode::new(sk, validator_set, home_dir, "openhl-test")
+    }
+
+    #[test]
+    fn private_key_file_round_trips() {
+        let sk = PrivateKey::generate(OsRng);
+        let file = OpenHlPrivateKeyFile::from_private_key(&sk);
+        let restored = file.into_private_key();
+        assert_eq!(restored.inner().to_bytes(), sk.inner().to_bytes());
+    }
+
+    #[test]
+    fn load_config_sets_proposal_only_payload_and_ephemeral_listen_addr() {
+        let tmp = tempfile::tempdir().unwrap();
+        let node = single_validator_node(tmp.path().to_path_buf());
+        let cfg = node.load_config().unwrap();
+        assert_eq!(cfg.consensus.value_payload, ValuePayload::ProposalOnly);
+        // listen_addr should be /ip4/127.0.0.1/tcp/0 (ephemeral)
+        let listen_str = cfg.consensus.p2p.listen_addr.to_string();
+        assert!(
+            listen_str.starts_with("/ip4/127.0.0.1/tcp/0"),
+            "unexpected listen_addr: {listen_str}"
+        );
+    }
+
+    #[test]
+    fn get_address_matches_runner_derivation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let node = single_validator_node(tmp.path().to_path_buf());
+        let pk = node.private_key.public_key();
+        let addr1 = node.get_address(&pk);
+        // Same derivation as runner.rs (last 20 bytes of SHA-256(pubkey)).
+        let digest = Sha256::digest(pk.as_bytes());
+        let mut expected = [0u8; 20];
+        expected.copy_from_slice(&digest[12..32]);
+        assert_eq!(addr1, OpenHlAddress(expected));
+    }
+
+    /// Smoke test: spin up the actor system, get a handle back, kill cleanly.
+    /// Does NOT drive consensus — that's L10.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn start_engine_smoke_spawns_and_kills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let node = single_validator_node(tmp.path().to_path_buf());
+        let handle = match node.start().await {
+            Ok(h) => h,
+            Err(e) => panic!("start_engine failed: {e:?}"),
+        };
+        // Sanity-poke the channels handle is available exactly once.
+        assert!(handle.take_channels().await.is_some());
+        assert!(handle.take_channels().await.is_none());
+        handle.kill(None).await.unwrap();
+    }
 }
 ```
 
-Three variants. Each maps to a specific consensus-side response:
+Four tests:
 
-| Variant | What it means | Consensus response |
-| :--- | :--- | :--- |
-| `Rejected(reason)` | The EL applied logic and decided no. The block is malformed, or refers to an unknown parent, or violates EIP-1559. | Treat the proposal as Invalid; vote nil on this value. Continue to next round. |
-| `Syncing` | The EL doesn't have the state to answer yet — it's catching up to the network's tip. | Wait. Don't vote nil (we don't know if the block is bad). Backoff and retry, or fall to a timeout. |
-| `Internal(report)` | Something is genuinely broken. Database corruption, EL panic, missing file. | **Halt the chain.** Propagate the error up, log loudly. We can't safely continue. |
+1. **`private_key_file_round_trips`** — generate a key, wrap in `OpenHlPrivateKeyFile`, unwrap, assert byte-equality. Proves the wire format is lossless.
+2. **`load_config_sets_proposal_only_payload_and_ephemeral_listen_addr`** — construct a node, call `load_config()`, verify two things: `value_payload == ProposalOnly` (the invariant we enforce at construction) and `listen_addr` is the ephemeral local socket. Catches accidental config drift.
+3. **`get_address_matches_runner_derivation`** — derive the same address two ways (once via the trait method, once by inlining the SHA-256 logic). Asserts they match. Catches accidental drift if someone changes one without the other.
+4. **`start_engine_smoke_spawns_and_kills`** — the capstone. Uses `#[tokio::test(flavor = "multi_thread", worker_threads = 2)]` because the engine needs the multi-threaded runtime (it spawns multiple actors). Steps: construct a single-validator node, call `node.start().await`, poke the channels handle (once `Some`, second time `None`), call `kill()`. **If this passes, your code is now a running BFT engine.**
 
-The three are not interchangeable. A bridge that returns `Internal` for an unknown parent (which is really `Rejected`) will halt the chain when it should just have voted nil. A bridge that returns `Rejected` for a syncing condition will permanently fork from peers who could have given them the answer.
+The smoke test is roughly **0.02 seconds** wall-clock. The bulk is libp2p setting up the local listener — even on a tcp/0 ephemeral port, libp2p's negotiation has a fixed cost.
 
-> 🛑 **Anti-fluency.** "Errors are errors. One `Error` enum is fine." **No.** In consensus code the *category* of error determines whether the chain advances, pauses, or halts. Collapsing them loses information that's load-bearing for liveness. Three variants is the minimum.
+> 🛑 **Anti-fluency.** "Why `flavor = 'multi_thread'`?" **Because the engine spawns multiple actors, each on its own task.** A single-threaded runtime can run them all on one thread — but the engine has internal `block_on` patterns that would deadlock under single-thread. Multi-thread runtime works around this. **This is the kind of detail that's invisible at the API level but lethal at the test-failure level.**
 
-> 🛑 **Predict.** Pick one: a peer sends us a proposal whose parent block hash isn't in our chain. Should the bridge return `Rejected`, `Syncing`, or `Internal`?
+## Test
 
-The answer depends on **whether we expect to learn about the parent**. If our node is behind and the parent is real (and we just haven't synced it yet) → `Syncing`. If our node is up to date and no such block exists → `Rejected`. The bridge can't always tell which case it's in; in practice production bridges check the sync state of their provider before classifying.
-
-In `LiveRethEvmBridge::build_payload` at `crates/evm/src/live_node.rs:68@0844d58`, the current code returns `Rejected` when the provider has no block with the given hash. That's correct **if we assume our provider is up to date** — true for single-validator mode (no peers can be ahead of us), would need tightening for multi-node deployments.
-
-## 5. Test doubles — `InMemoryEvmBridge` as the canonical pattern
-
-Three implementations of `ConsensusBridge` live in `crates/evm/src/`:
-
-- `InMemoryEvmBridge` (`in_memory.rs:14@0844d58`) — pure in-process state, no Reth deps. Used in unit tests where you want fast, isolated bridge calls.
-- `RethEvmBridge` (`engine.rs`) — uses real alloy `Header` + `B256`, but in-memory state. Bridge between mock and live.
-- `LiveRethEvmBridge` (`live_node.rs`) — wraps a real Reth `BlockchainProvider` + `EthBeaconConsensus`. Production-shape.
-
-The pattern: **trait first, multiple impls, each at a different point on the "real" axis.** Unit tests use the cheapest impl; integration tests use richer impls; production uses the live impl.
-
-`InMemoryEvmBridge` is the canonical test double. Its `build_payload`:
-
-```rust
-async fn build_payload(
-    &self,
-    parent: BlockHash,
-    _attrs: PayloadAttrs,
-) -> Result<PayloadId, BridgeError> {
-    let mut s = self.state.lock().expect("state mutex poisoned");
-    let id = s.next_payload_id;
-    s.next_payload_id += 1;
-
-    let parent_number = s.chain.get(&parent.0).map_or(0, |b| b.number);
-    let number = parent_number + 1;
-
-    let mut hash_bytes = [0u8; 32];
-    hash_bytes[..8].copy_from_slice(&id.to_le_bytes());
-    hash_bytes[8..16].copy_from_slice(&number.to_le_bytes());
-
-    let block = ExecutedBlock {
-        hash: BlockHash(hash_bytes),
-        parent_hash: parent,
-        number,
-        state_root: [0u8; 32],
-    };
-    s.pending.insert(id, block);
-    Ok(PayloadId(id))
-}
+```bash
+cargo test -p openhl-consensus
 ```
 
-Sixteen lines. No Reth, no provider, no validator. The block hash is synthesized from `(payload_id, number)` instead of computed from a real header. The state root is zero. **And the trait doesn't care.**
+After ~20 seconds (first compile after the dep changes):
 
-That's the test-double payoff: the trait expresses *what* the EL contract is, not *how* it's implemented. A unit test can run `run_single_validator(&InMemoryEvmBridge::new(), parent)` in microseconds; the same caller code runs against `LiveRethEvmBridge` in production with no signature changes.
+```
+running 20 tests
+test codec::tests::openhl_codec_satisfies_all_three_super_traits ... ok
+test codec::tests::proposal_part_round_trips ... ok
+test context::tests::height_increment_and_decrement ... ok
+test context::tests::new_prevote_and_precommit_have_distinct_types ... ok
+test context::tests::new_proposal_round_trips_fields ... ok
+test context::tests::select_proposer_round_robins_deterministically ... ok
+test context::tests::validator_set_is_sorted_by_power_then_address ... ok
+test node::tests::get_address_matches_runner_derivation ... ok
+test node::tests::load_config_sets_proposal_only_payload_and_ephemeral_listen_addr ... ok
+test node::tests::private_key_file_round_trips ... ok
+test signing::tests::vote_signature_is_field_sensitive ... ok
+test signing::tests::vote_signature_round_trips ... ok
+test signing_provider::tests::proposal_part_sign_verify_round_trips ... ok
+test signing_provider::tests::proposal_sign_verify_round_trips ... ok
+test signing_provider::tests::proposal_tamper_detected ... ok
+test signing_provider::tests::signature_from_one_provider_does_not_verify_under_another ... ok
+test signing_provider::tests::vote_extension_sign_verify_round_trips ... ok
+test signing_provider::tests::vote_sign_verify_round_trips ... ok
+test signing_provider::tests::vote_tamper_detected ... ok
+test node::tests::start_engine_smoke_spawns_and_kills ... ok
 
-> 🛑 **Anti-fluency.** "Test doubles always lie." Mostly true, but not the right framing. A test double *narrows* the contract to the part you're testing. `InMemoryEvmBridge` truthfully implements "build a child block on a parent" — it just declines to do real EVM execution or hash computation, because those aren't what the consensus tests are testing.
-
-## 6. Type ownership — why contract types live in `openhl-types`
-
-Look at the trait's signatures:
-
-```rust
-async fn build_payload(&self, parent: BlockHash, attrs: PayloadAttrs)
-    -> Result<PayloadId, BridgeError>;
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-`BlockHash`, `PayloadAttrs`, `PayloadId` — these aren't defined in `openhl-consensus` or `openhl-evm`. They're in `openhl-types`. Why?
+The smoke test runs last because of the multi-thread runtime setup.
 
-Because **the consensus crate and the evm crate both need to name them** — consensus to call the trait, evm to implement it. If the types lived in `openhl-consensus`, then `openhl-evm` would have to depend on `openhl-consensus` to implement the trait. If they lived in `openhl-evm`, then `openhl-consensus` would depend on `openhl-evm` to call the trait.
+Common errors and fixes:
 
-Either way you get a cycle: A depends on B, B depends on A. Rust's crate graph is a DAG; cycles are a compile error. The fix is the **shared types crate**: both `openhl-consensus` and `openhl-evm` depend on `openhl-types`, and neither depends on the other for type definitions.
+- **`error[E0432]: unresolved import 'informalsystems_malachitebft_app_channel'`** — Cargo.toml doesn't have `app-channel`. Re-check Step 1.
+- **`error[E0277]: PrivateKey: Deserialize is not satisfied`** — missing `serde` feature on `signing-ed25519`. Re-check Step 1 (`features = ["rand", "serde"]`).
+- **smoke test hangs forever** — usually `flavor = "current_thread"` (default for `#[tokio::test]`). Re-check Step 7: the attribute must be `#[tokio::test(flavor = "multi_thread", worker_threads = 2)]`.
+- **`error: Keypair::ed25519_from_bytes expected mutable bytes`** — version mismatch. The libp2p `Keypair::ed25519_from_bytes` signature changed across versions; the workspace pin should align with what `informalsystems-malachitebft-app` re-exports.
+- **`Address derivation does not match`** — your `get_address` doesn't match the helper in the test. Both must use the last 20 bytes of `SHA-256(pubkey)` — slice `[12..32]`.
 
-The `ConsensusBridge` trait itself lives in `openhl-consensus` (consensus owns the contract), but the trait's *vocabulary* lives one level lower in the dep graph.
+## Design reflection
 
-This pattern shows up at every L1 with a serious type system:
+Three load-bearing decisions encoded here:
 
-| Chain | Contract types live in | Trait lives in |
-| :--- | :--- | :--- |
-| Ethereum (Reth) | `alloy-primitives`, `reth-primitives-traits` | `reth-engine-primitives`, `reth-rpc-api` |
-| Tendermint / CometBFT | `tendermint-proto` | various consumer crates |
-| Malachite | `informalsystems-malachitebft-core-types` | `informalsystems-malachitebft-core-consensus` |
-| **OpenHL** | `openhl-types` | `openhl-consensus` |
+1. **`OpenHlNode` is the handshake interface, not the runtime.** The struct holds long-lived fields (key, validator set, home dir, moniker). It doesn't *run* the chain. The runtime lives in `OpenHlNodeHandle` (engine + channels), returned from `start()`. **Construction and execution are different lifecycle stages**, so they live in different types.
 
-Same shape. Different names.
+2. **Address derivation is centralized in `get_address`.** When you used `SHA-256(pubkey)[12..32]` in the runner back in L6 setup-code, that was *the same derivation*. The test `get_address_matches_runner_derivation` asserts they're identical, so future refactors can't silently drift one without the other. **Centralization with a verification test beats duplication every time.**
 
-## 7. What this trait DOESN'T do
+3. **`run()` returns an error pointing at the next lesson.** Rather than `unimplemented!()` (panics) or `todo!()` (also panics), an `eyre::Result::Err("not yet implemented (L10)")` is a *type-safe placeholder*. Code that calls `run()` gets a graceful failure with a message pointing at where to look. **This is the kind of crumb that survives across pull requests, code reviews, and stale tabs.**
 
-The hardest part of designing a contract is what you leave out. Four things `ConsensusBridge` deliberately doesn't have:
+## Answer key
 
-1. **No transaction pool.** A real EL has a mempool. We could expose `submit_transaction(tx)` on the bridge. **We don't.** The mempool is an EL-internal concern; consensus shouldn't care how the EVM finds transactions to put in blocks. (In real Reth, the payload builder owns mempool access; consensus never touches it.)
+```bash
+cd ~/code/openhl-reference
+git checkout d59d6cf
+diff -u ~/code/my-openhl/crates/consensus/src/node.rs ./crates/consensus/src/node.rs
+diff -u ~/code/my-openhl/crates/consensus/Cargo.toml ./crates/consensus/Cargo.toml
+diff -u ~/code/my-openhl/crates/consensus/src/lib.rs ./crates/consensus/src/lib.rs
+```
 
-2. **No state queries.** No `get_balance(addr)`, no `read_storage(addr, slot)`. **State is an EL-only concern.** If consensus needs to read state, it's doing the wrong thing — consensus only needs to know about blocks and their order, not their contents.
+The reference at `d59d6cf` includes 310 lines of `node.rs`. The `Node` impl methods (12 total), the struct layouts, and the smoke test should match closely. Doc comments and exact wording can vary.
 
-3. **No subscription API.** No `subscribe_decisions()` or `on_block_committed(callback)`. The bridge is a synchronous (well, async-await) request-response trait; the EL doesn't push events back to consensus. If consensus wants to know about decisions, it's *the one making them* — no callback needed.
+Return:
 
-4. **No genesis/init method.** No `initialize_genesis(spec)`. Genesis is a chain-spec concern, handled at node bootstrap (`OpenHlNode::start()` reads the chain spec from `Genesis` — Module 5 territory). The bridge is for steady-state operation, not initialization.
+```bash
+git checkout main
+```
 
-Each of these temptations is real, and each would have made the trait larger. **The minimum viable contract is exactly four methods.** Resisting expansion is a design discipline.
+## Common questions
 
-> 🛑 **Predict.** A new contributor argues: "We should add `query_state(addr) -> StateView` to the trait — it'd make debugging easier." **Why is this wrong?** Hint: think about the dep graph (§6) and what consensus needs to know to make decisions.
+**Q: Why does `start_engine` need both the node and the validator set when the validator set is already inside the node?**
+Because the engine doesn't reach into the node's internals. The node has many fields (path, moniker, key, etc.) that are not relevant to validator-set election. `start_engine` accepts the validator set explicitly so the engine doesn't need to know about your node's specific field layout. This is the same separation-of-concerns principle as `Node::load_config()`.
 
-The answer: consensus doesn't need to read state; it picks the next *block*, not the next *state*. Adding `query_state` puts the cart before the horse, leaks EL internals into the CL crate, and obligates every impl (including `InMemoryEvmBridge`) to maintain a queryable state machine. The right place for state queries is the EL crate's own debug interface, not the consensus contract.
+**Q: What does the smoke test prove that the compile-time assertions don't?**
+The compile-time assertions in L8 proved `OpenHlCodec: WalCodec + ConsensusCodec + SyncCodec`. The smoke test proves that the *runtime* path — actor spawning, channel allocation, libp2p binding, kill propagation — actually works end-to-end. Type-safety is necessary but not sufficient; the test catches things like "spawn deadlocks" or "the engine panics on first message" that types can't catch.
 
-## 8. Practice
+**Q: What's the difference between `EngineHandle` and `NodeHandle`?**
+`EngineHandle` (from Malachite) is the low-level handle to the spawned actor system — actor cell, tokio task handle. `NodeHandle` (your trait) is the high-level abstraction Malachite uses to ask "is this still alive? subscribe me to events. kill it." Your `OpenHlNodeHandle` impls `NodeHandle<OpenHlContext>` and internally holds the `EngineHandle`. Two layers; you only deal with one.
 
-1. **Find the two stub bridges.** In `crates/consensus/src/runner.rs` and `crates/consensus/src/engine_app.rs` test modules, find the inline `StubBridge` impls. Why are there *two* (not one shared)? What's the minimum each one implements vs `InMemoryEvmBridge`? (Hint: both stubs predate adding `openhl-evm` as a test-only dep of `openhl-consensus`, which would have created the dep cycle in §6. Inline stubs avoid the cycle.)
+**Q: Why does `take_channels` use `Option<Channels<...>>` instead of just removing the channels?**
+Because `take_channels` is called *from the outside* — the app loop wants to consume them. Removing them entirely would require either a mutable reference or moving the handle. `Mutex<Option<...>>` lets the app loop call it via shared reference (`&self`), grab the channels once, and find `None` on subsequent calls — a clean signal "you already took these."
 
-2. **Halt-vs-recover audit.** Read every `Err(BridgeError::...)` return in `LiveRethEvmBridge` at `crates/evm/src/live_node.rs@0844d58`. For each, identify whether it's `Rejected`, `Syncing`, or `Internal`. Then check: does the consensus-side caller (in `runner.rs` or `engine_app.rs`) handle that variant the way §4's table prescribes?
+## Next lesson (L10)
 
-3. **Sketch a fifth method (and discover why not).** Suppose you wanted to add `restream_proposal(block_hash)` to support Malachite's `RestreamProposal` AppMsg. Sketch the trait change. Then read `engine_app.rs:96@0844d58` — what does the current code do for `RestreamProposal`? Why doesn't the bridge need to be involved?
-
-> **Final check.** In one sentence, why does `validate_payload` take `&ExecutedBlock` (a *borrowed* reference) instead of `ExecutedBlock` (owned)? If your answer doesn't include "validation shouldn't consume the block — consensus may still need it" or "the borrow is a type-system safety rail against accidental ownership transfer," re-read the trait signature.
+You now have the engine running. But — critically — **the engine is sending you messages and you're ignoring them**. The actor system is parked, waiting for the app loop to consume from `Channels<OpenHlContext>` and respond to `AppMsg::ProposeValue`, `AppMsg::Decided`, etc. L10 implements the app loop: a `tokio::select` over the channel + a state struct + handlers that route engine messages to `InMemoryEvmBridge`. When L10 ships, `cargo test first_block_via_engine_actors` produces an actual block through the full engine pipeline.
 ````
 
 ---
 
 ## Seed-file slot
 
-L9 lands in `prisma/seed-reth-openhl-consensus-en.ts` (course `building-openhl-consensus-en`), as the first lesson of Module 4 (immediately before L10 which we already drafted):
+L9 lands in Module 4 (CL types) at sortOrder 3 (after L6, L7, L8):
 
 ```typescript
-// Course.modules.create array:
 {
-  title: 'Wiring it up — the consensus crate',
+  title: 'Lesson 9 — OpenHlNode and the first start_engine call',
+  slug: 'openhl-node-en',
+  type: 'CONTENT',
   sortOrder: 3,
-  lessons: { create: [
-    {
-      title: 'Designing the contract — the ConsensusBridge trait',
-      slug: 'openhl-bridge-trait-en',
-      type: 'CONTENT',
-      sortOrder: 0,
-      duration: 20,    // ← longer than L7/L10's 15 min
-      xpReward: 60,    // ← higher than L7/L10's 40 XP
-      content: `# Designing the contract — the \`ConsensusBridge\` trait\n\n...`  // L9 markdown
-    },
-    {
-      title: 'From Malachite Decided to Reth forkchoice_updated',
-      slug: 'openhl-decided-to-fcu-en',
-      type: 'CONTENT',
-      sortOrder: 1,
-      duration: 15,
-      xpReward: 40,
-      content: `# From Malachite \`Decided\` to Reth \`forkchoice_updated\` ...`  // L10 markdown
-    },
-    // L11: Proposer hot loop (TBD)
-  ]}
-}
+  duration: 55,
+  xpReward: 100,
+  content: `# Lesson 9 — \`OpenHlNode\` and the first \`start_engine\` call\n\n...`
+},
 ```
 
 ## SHA pinning discipline
 
-All cites pin SHA `0844d58`. L9 is unusually citation-dense because it's a design lesson — every claim about the trait's shape is grounded in the actual code at:
+L9 cites one openhl commit (§Answer key):
+- `d59d6cf` (Stage 6c — implement Node trait, first start_engine call works)
 
-- `crates/consensus/src/bridge.rs:11` — the trait
-- `crates/consensus/src/bridge.rs:33` — BridgeError
-- `crates/evm/src/in_memory.rs:14` — InMemoryEvmBridge struct
-- `crates/evm/src/in_memory.rs:34` — InMemoryEvmBridge's trait impl
-- `crates/evm/src/live_node.rs:68` — LiveRethEvmBridge::build_payload
-- `crates/consensus/src/engine_app.rs:96` — RestreamProposal handler (Exercise 3 reference)
-
-When Stage 7d lands and `LiveRethEvmBridge::commit` becomes a real `forkchoice_updated` call:
-- L9's argument structure (4 methods, 3 error variants, types in shared crate) stays valid
-- The `LiveRethEvmBridge::commit` cite in §4's "halt-vs-recover" table needs a bump
+This is the engine-boots milestone. L8 satisfied the trait bounds; L9 provides the values and proves `start_engine` works.
 
 ## Style review notes (self-critique before paste)
 
-- **L9 is 20 min by design** — heavier than L7/L10. The 8-section structure (vs the 7-section template of L1/L7/L10) is deliberate: §3 (why four methods) and §7 (what the trait doesn't do) are the design-rationale sections that justify the extra time. If either feels thin in review, fold §7's enumeration into §3 and drop to 7 sections.
-- **§4's halt-vs-recover table is the highest-leverage paragraph in the lesson.** It's the one thing learners will reference back to when implementing their own bridge. If the rest of the lesson gets cut, save this section.
-- **§5's "test double" framing** doubles as setup for Module 1 L4 (Context type implementation) — both lessons argue that "trait-first, multiple impls" is the right pattern for working with consensus protocols. Worth cross-referencing once both are drafted.
-- **§6's dep-graph argument** is Rust-specific. Translating to JA needs care — the term "依存グラフ" works but the cycle-as-compile-error punchline might land differently. Flag for the translator.
-- **Exercise 1 references "the inline StubBridge"** — currently these live in `runner.rs:316@0844d58` and `engine_app.rs:163@0844d58` (test modules). Worth verifying line numbers right before paste, since test-module locations shift more than production code.
-
-## Curriculum status
-
-Four lessons drafted as durable files:
-
-| Lesson | Module | File | Status |
-| --- | --- | --- | --- |
-| L1 — Contract between BFT and the EVM | 1 | `drafts/openhl_l1_en.md` | ✓ drafted |
-| L7 — Engine API | 3 | `drafts/openhl_l7_l10_en.md` | ✓ drafted |
-| L9 — Designing the ConsensusBridge | 4 | `drafts/openhl_l9_en.md` | ✓ drafted |
-| L10 — Decided → forkchoice | 4 | `drafts/openhl_l7_l10_en.md` | ✓ drafted |
-
-L9 + L10 are now a complete Module-4 pair. Module 1 has L1; Module 3 has L7. Remaining: L2, L3, L4, L5, L6, L8, L11, L12, L13 — 9 lessons, all anchored in current code at `0844d58`.
-
-Module 4 is the most teachable module right now — both lessons drafted, the AppMsg loop + trait + Decided handler form a coherent unit. Natural next pairs:
-- **L11 + L13** — proposer hot loop (`runner.rs`) + first block via engine (`engine_app.rs` integration test). Completes Module 4 / starts Module 5.
-- **L4 + L5** — Malachite Context types + the actor model. Mid-arc.
-- **L2 + L3** — the convergence lesson + Context introduction. Earlier in the arc.
+- **§Plan's "bridge pattern between your code and Malachite" callout** — this is the conceptual frame. Worth keeping as load-bearing.
+- **The 12-method table in Step 5** is the load-bearing artifact for trait orientation; without it readers will be lost in the wall of code.
+- **The smoke-test wall-clock callout (~0.02s)** is the kind of detail that grounds the "abstract trait" feeling into a real result. Worth keeping.
+- **§Anti-fluency about `flavor = 'multi_thread'`** anticipates the trap where the test hangs forever, which is the *exact* kind of failure that wastes hours.
+- **The private-key `[redacted]` Debug treatment** is the most "this would matter in production" callout — worth keeping verbose.
+- **§Design reflection's "centralization with a verification test"** is a generalizable principle, not just an OpenHL fact.
