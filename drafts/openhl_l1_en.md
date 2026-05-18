@@ -1,227 +1,517 @@
-# Building OpenHL — L1 draft (EN)
+# Building OpenHL — L1 draft (EN) — C2 build-along rewrite
 
-> Drafted against openhl SHA `0844d58` (Stage 7c). Originally written before Stage 6a when `bridge.rs` didn't yet exist as code; SHA pins added retroactively now that the cited file is live at `crates/consensus/src/bridge.rs:11`.
+> Drafted against openhl SHAs `75be9de` (Stage 1: workspace bootstrap) and `5fc7ca1` (Stage 2+3: Reth and Malachite pinned). This is the **first build-along lesson** — the reader writes the workspace skeleton from scratch.
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10).
-> First lesson of the arc — establishes the four-message contract every other lesson references.
 
 ---
 
-## L1 — `openhl-consensus-contract-en`
+## L1 — `openhl-workspace-en`
 
-- **Module:** 1 (The execution/consensus split), sortOrder 0 within module
-- **Course-level sortOrder:** 0 (lesson 1 of 13)
-- **Duration:** 15 min
-- **XP reward:** 40
+- **Module:** 1 (Foundations), sortOrder 0 within module
+- **Course-level sortOrder:** 0 (lesson 1 of 15)
+- **Duration:** 45 min
+- **XP reward:** 80
 - **Type:** CONTENT
 
 ### Content
 
 ````markdown
-# The contract between BFT and the EVM
+# Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)
 
-> **Where you are.** Sub-module 1 of 5: *The execution/consensus split.* L0 mapped the whole repo; this sub-module zooms into the seam between the two halves — what the four-message contract between Malachite (CL) and Reth (EL) actually is, and why every BFT-shape L1 ends up drawing this same line. L1 names the four messages; L2 explains why HL, Tempo, and CometBFT all converge on this shape.
+## Goal
 
-It's 3am. Your OpenHL devnet halted three blocks ago. The Malachite logs say `waiting for value`. The Reth logs say `engine idle`. Neither side is throwing an error. **Which one is broken?**
+By the end of this lesson, run from your `~/code/my-openhl/` directory:
 
-If you can't answer that question in 30 seconds, the bug isn't in either crate — it's in your mental model of how they talk. This lesson installs that model. By the end you'll know the four messages that cross between consensus and execution, what each one promises, and exactly which crate to blame when one of them goes missing.
-
-> 🛑 **Predict before scrolling.** Two services running in the same process: Malachite (BFT) and Reth (EVM). **Name as many messages as you can that must flow between them for a block to get produced and committed.** If you stop at "block goes from consensus to EVM," you don't have the contract yet.
-
-## 1. Why a contract at all
-
-A naïve L1 fuses consensus and execution into one giant module. State updates, signature verification, fork choice, vote tallying, mempool — all in one binary, all tangled. This is how most pre-2020 chains were written. It works. **It also costs you everything.**
-
-The cost lands in three places:
-
-| Cost | What you lose |
-| :--- | :--- |
-| **Swappability** | You can't change consensus without rewriting the EVM, and vice versa. HL goes from HyperBFT v1 to v2 without touching the matching engine because v1 and v2 honor the same contract. |
-| **Testability** | You cannot unit-test consensus without spinning up an EVM, or vice versa. Both halves are integration-test-only. |
-| **Debuggability** | At 3am, you cannot tell which side stalled. The crash dump is one ball of mud. |
-
-The contract is the cure. Once you've named the messages between the two halves, each half becomes a thing you can replace, mock, fuzz, and reason about in isolation. **The contract is the API. The code is implementation detail.**
-
-## 2. What BFT promises the EVM
-
-The consensus crate owes the execution crate exactly two things:
-
-1. **An ordered stream of committed blocks.** Every validator sees the same blocks in the same order. No gaps. No reorgs — in a classical BFT chain. Nakamoto chains promise something weaker, but you're not building one.
-2. **Validity assertions.** Each committed block was voted on by ≥ 2f+1 validators. If your EVM applies it and produces an invalid state, that's *your* bug, not consensus's.
-
-That's the entire contract from BFT's side. Notice what's *not* in there:
-
-- Not "the right transactions." (BFT doesn't know what your txs do.)
-- Not "the right state root." (BFT didn't compute state.)
-- Not "the canonical fork." (In BFT there *is* no fork — that's the point.)
-
-> 🛑 **Anti-fluency.** "Consensus picks the next state." **Wrong.** Consensus picks the next *block*. The state is whatever your EVM computes when it applies that block. If two validators disagree on the state, it's not a consensus bug — it's a determinism bug in execution.
-
-## 3. What the EVM promises BFT
-
-The execution crate owes the consensus crate exactly three things:
-
-1. **Deterministic execution.** Given block B applied to state S, every validator produces the same S'. No floating-point, no system time, no randomness, no map iteration order. Determinism is non-negotiable; one violation forks the chain.
-2. **Fast block assembly.** When consensus says "build me a block," execution returns one inside the propose-timeout budget (~300–500ms in HL, Tempo, OpenHL). Slower than that and the chain stalls.
-3. **Validity verification on import.** When a peer's proposal arrives, execution can answer: "would this execute cleanly?" *before* consensus commits it.
-
-> 🛑 **Predict.** Three EVM promises, one is far harder than the others. **Which one — and why does it bite teams that rolled their own L1 most often?** Think about the easiest source of nondeterminism to ship by accident.
-
-The answer is determinism. Every junior engineer eventually adds a `HashMap` iteration or a `SystemTime::now()` to "just log something" and forks the chain at 3am. Reth's API surface is paranoid about this for a reason; respect it.
-
-## 4. The four messages
-
-Here is the entire contract, in four messages:
-
-| Direction | Message | Sent when | Promise |
-| :--- | :--- | :--- | :--- |
-| CL → EL | `build_payload(parent, attrs)` | Validator becomes proposer for height N | "Build me a candidate block on top of `parent`." |
-| EL → CL | `payload_ready(block, state_root)` | Build completes before the propose deadline | "Here's the block. Use it as your proposal value." |
-| CL → EL | `validate_payload(block)` | A peer's proposal arrives | "Would this block execute cleanly? Answer VALID, INVALID, or SYNCING." |
-| CL → EL | `commit(block_hash)` | BFT reaches `Decided` for height N | "Finalize this block as the new head." |
-
-That's it. Three messages CL → EL, one EL → CL. **Every other interaction is a leak.**
-
-Three things in this table are worth seeing clearly:
-
-- **Validation and commit are separate.** Validators import many candidate blocks per height (one per proposer slot in a round-robin), execute each speculatively, and only commit one. Most teams collapse these into a single message and pay for it later when speculative execution becomes a refactor instead of a feature.
-- **`build_payload` returns nothing immediately.** It kicks off an async build job; the block arrives later via `payload_ready`. This is the "build during voting" trick — payload assembly overlaps with the previous block's votes, so propose has near-zero latency on the hot path.
-- **`commit` is fire-and-forget.** Once consensus says "this is final," execution must apply it. There is no "are you sure?" round-trip. If execution can't apply a committed block, the chain halts. That is the correct behavior — silently dropping a committed block is how you fork the world.
-
-## 5. Where the boundary lives in OpenHL code
-
-Concretely in our workspace:
-
-```
-crates/consensus/      ← speaks Malachite. Owns the four messages from the CL side.
-  src/bridge.rs        ← the ConsensusBridge trait — the typed cable across the boundary
-  src/runner.rs        ← issues build_payload + waits on payload_ready
-  src/engine_app.rs    ← issues validate_payload + commit (via the AppMsg loop)
-
-crates/evm/            ← speaks Reth. Owns the four messages from the EL side.
-  src/engine.rs        ← RethEvmBridge — early in-process impl using Reth types
-  src/live_node.rs     ← LiveRethEvmBridge — full impl against a real Reth node
+```bash
+cargo check --workspace
 ```
 
-The `ConsensusBridge` trait at `crates/consensus/src/bridge.rs:11@0844d58` is the contract, made textual:
+…and see `Finished` with no warnings other than "unused dependency" warnings. You'll have a Rust workspace with 10 empty library crates, one binary crate, Reth pinned as a git dependency, and Malachite pinned as a git dependency. **You will have written zero application logic** — that's L2 onwards. This lesson is about getting the dependency graph correct.
+
+The Reth compile graph alone is ~600 crates. The first `cargo check` will take 5-15 minutes depending on your machine. Plan accordingly. Subsequent checks are incremental and fast.
+
+## Recap
+
+You ran the L0 setup. You have:
+
+- `~/code/my-openhl/` — your workspace, currently a default `cargo init --lib` artifact
+- `~/code/openhl-reference/` — `psyto/openhl` cloned, `cargo check` passing
+
+This lesson edits files in `~/code/my-openhl/`. **Never** touch `openhl-reference/`.
+
+## Plan
+
+You'll do three things, in order:
+
+1. **Stage 1** — replace the default `cargo init --lib` output with a real workspace: 10 empty library crates, 1 binary crate, top-level `Cargo.toml` declaring all the workspace defaults. **Test**: `cargo check --workspace` succeeds with no external dependencies.
+2. **Stage 2** — pin Reth as a git dependency at a specific SHA, declared at the workspace level. **Test**: `cargo check --workspace` still succeeds (no crate uses Reth yet — we just verify the dep resolves).
+3. **Stage 3** — pin Malachite the same way. **Test**: `cargo check --workspace` still succeeds.
+
+Each stage is a real commit in `psyto/openhl`: `75be9de`, then `5fc7ca1`.
+
+The reason we set up the dep graph before writing application code: dependency resolution is the most common source of friction in a Rust workspace. Getting Reth + Malachite to compile cleanly together is non-trivial — they're both big crates with deep transitive dep trees. **If we deferred this to "later," we'd discover the conflicts in the middle of writing application code and have to backtrack.** Getting the deps right first means every subsequent lesson focuses on the lesson's actual topic, not yak-shaving dependencies.
+
+> 🛑 **Predict.** Before you scroll, sketch: how many `members` should the workspace Cargo.toml have, and what should they be? Hint: 10 library crates + 1 binary crate. You learned the 5 subsystems in L0 §3; what 10 crates implement them? (Look at L0 §4 if you need to.)
+
+## Walk-through
+
+### Step 1: Reset `~/code/my-openhl/`
+
+The L0 setup left a default cargo project there. We need to wipe it and start fresh:
+
+```bash
+cd ~/code/my-openhl
+rm Cargo.toml Cargo.lock src/lib.rs
+rmdir src
+```
+
+You should now have only `.git/` (from the initial cargo init) and nothing else visible:
+
+```bash
+ls -la
+# .  ..  .git
+```
+
+### Step 2: Write the top-level workspace Cargo.toml
+
+Create `Cargo.toml` at the root with this content. Type it; don't copy from the reference. Pay attention to each section.
+
+```toml
+[workspace]
+resolver = "3"
+members = [
+    "bin/openhl",
+    "crates/types",
+    "crates/codec",
+    "crates/clob",
+    "crates/oracle",
+    "crates/funding",
+    "crates/liquidation",
+    "crates/vault",
+    "crates/evm",
+    "crates/consensus",
+    "crates/node",
+]
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2024"
+rust-version = "1.95"
+license      = "MIT OR Apache-2.0"
+repository   = "https://github.com/yourusername/my-openhl"
+authors      = ["Your Name <you@example.com>"]
+
+[workspace.dependencies]
+# --- Internal crates ---
+openhl-types       = { path = "crates/types" }
+openhl-codec       = { path = "crates/codec" }
+openhl-clob        = { path = "crates/clob" }
+openhl-oracle      = { path = "crates/oracle" }
+openhl-funding     = { path = "crates/funding" }
+openhl-liquidation = { path = "crates/liquidation" }
+openhl-vault       = { path = "crates/vault" }
+openhl-evm         = { path = "crates/evm" }
+openhl-consensus   = { path = "crates/consensus" }
+openhl-node        = { path = "crates/node" }
+
+# --- Reth and Malachite — added in Steps 7 and 8 below ---
+
+# --- Shared utilities ---
+tokio              = { version = "1", features = ["full"] }
+async-trait        = "0.1"
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+thiserror          = "1"
+eyre               = "0.6"
+tracing            = "0.1"
+proptest           = "1"
+
+[workspace.lints.rust]
+unsafe_code                   = "forbid"
+missing_debug_implementations = "warn"
+unreachable_pub               = "warn"
+rust_2018_idioms              = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all      = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate      = "allow"
+missing_errors_doc      = "allow"
+missing_panics_doc      = "allow"
+
+[profile.release]
+opt-level     = 3
+lto           = "fat"
+codegen-units = 1
+strip         = "symbols"
+debug         = false
+panic         = "abort"
+
+[profile.dev]
+opt-level = 1
+debug     = true
+
+[profile.dev.package."*"]
+opt-level = 3
+```
+
+**Three load-bearing choices in this file:**
+
+1. **`resolver = "3"`**. The Cargo dep resolver version. Resolver 3 (the default in Rust 2024 edition) handles feature unification more strictly. Reth and Malachite both have complex feature flags; resolver 3 avoids subtle issues.
+2. **`unsafe_code = "forbid"` at the workspace level**. This forbids `unsafe` in every member crate. Reth depends on `unsafe` internally; we don't. Forbidding it at the application layer is the determinism rail from L0 §4 — if a pure state-machine crate ever wants `unsafe`, that's a code review smell.
+3. **`pedantic = "warn"` (clippy)**. Pedantic clippy lints catch a lot of subtle stuff. Some are noisy, hence the `module_name_repetitions`/etc. allowances at the bottom. Setting pedantic-warn up front means every commit lands clippy-clean.
+
+### Step 3: Add `rust-toolchain.toml` at the root
+
+Create `rust-toolchain.toml`:
+
+```toml
+[toolchain]
+channel    = "1.95.0"
+components = ["clippy", "rustfmt"]
+profile    = "minimal"
+```
+
+This pins the Rust version. When the reader (or CI) runs `cargo`, the toolchain is fetched and used automatically. Without this, different machines could build with different rustc versions and produce different artifacts — a determinism risk we don't want.
+
+### Step 4: Create the first library crate (`crates/types`) as a template
+
+We'll create one crate end-to-end, then replicate the pattern.
+
+```bash
+mkdir -p crates/types/src
+```
+
+Create `crates/types/Cargo.toml`:
+
+```toml
+[package]
+name         = "openhl-types"
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+authors      = { workspace = true }
+
+[dependencies]
+serde = { workspace = true }
+
+[lints]
+workspace = true
+```
+
+Create `crates/types/src/lib.rs`:
 
 ```rust
-// crates/consensus/src/bridge.rs
-#[async_trait]
-pub trait ConsensusBridge: Send + Sync {
-    async fn build_payload(
-        &self,
-        parent: BlockHash,
-        attrs: PayloadAttrs,
-    ) -> Result<PayloadId, BridgeError>;
+//! Shared primitives and CL/EL contract types.
+```
 
-    async fn payload_ready(
-        &self,
-        id: PayloadId,
-    ) -> Result<ExecutedBlock, BridgeError>;
+That's it. The crate is empty other than a module doc comment. Subsequent lessons fill it in.
 
-    async fn validate_payload(
-        &self,
-        block: &ExecutedBlock,
-    ) -> Result<PayloadStatus, BridgeError>;
+**Why `version = { workspace = true }` etc.?** This inherits from `[workspace.package]` in the root Cargo.toml. Every member crate has identical metadata — versioning, edition, license. Inheriting via `workspace = true` means a one-line bump to the workspace gets propagated. The alternative (per-crate `version = "0.1.0"`) duplicates 6 lines into 11 crates and is easy to drift out of sync.
 
-    async fn commit(
-        &self,
-        block_hash: BlockHash,
-    ) -> Result<(), BridgeError>;
+### Step 5: Create the other 9 library crates
+
+The pattern is the same as `crates/types`. For each, create:
+
+- `crates/<name>/Cargo.toml` (same shape, only `name` field differs)
+- `crates/<name>/src/lib.rs` (empty other than doc comment)
+
+The 9 remaining crates and their doc comments:
+
+| Crate | `name` | `lib.rs` doc comment |
+| - | - | - |
+| codec | `openhl-codec` | `//! Canonical encoding for consensus messages.` |
+| clob | `openhl-clob` | `//! CLOB matching engine — pure state machine.` |
+| oracle | `openhl-oracle` | `//! Mark price aggregation.` |
+| funding | `openhl-funding` | `//! Funding-rate calculation and settlement.` |
+| liquidation | `openhl-liquidation` | `//! Liquidation engine.` |
+| vault | `openhl-vault` | `//! Protocol-native vault primitive.` |
+| evm | `openhl-evm` | `//! EVM execution layer — Reth integration.` |
+| consensus | `openhl-consensus` | `//! Consensus layer — Malachite BFT.` |
+| node | `openhl-node` | `//! Node assembly: consensus + evm + clob.` |
+
+For `clob`, `oracle`, `funding`, `liquidation`, `vault`, `node`: the `[dependencies]` section can be empty (`[dependencies]` line followed by a blank `[lints]` block). For `codec`, `evm`, `consensus`: also empty initially — the actual dependencies land in later lessons when we write code that uses them.
+
+> 🛑 **Anti-fluency.** "Why not write all dependencies up front and avoid edits later?" **No.** A crate with an unused dependency is technical debt: it slows builds, confuses readers, and invites version conflicts. Add dependencies exactly when the code that needs them lands. The workspace `Cargo.toml` declares the *available* dependencies; each crate's `Cargo.toml` declares the *used* ones.
+
+### Step 6: Create `bin/openhl`
+
+The binary crate. It does nothing yet — just proves the workspace compiles.
+
+```bash
+mkdir -p bin/openhl/src
+```
+
+Create `bin/openhl/Cargo.toml`:
+
+```toml
+[package]
+name         = "openhl"
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+authors      = { workspace = true }
+
+[[bin]]
+name = "openhl"
+path = "src/main.rs"
+
+[dependencies]
+
+[lints]
+workspace = true
+```
+
+Create `bin/openhl/src/main.rs`:
+
+```rust
+fn main() {
+    println!("openhl v{}", env!("CARGO_PKG_VERSION"));
 }
 ```
 
-Read that trait carefully. **Every interaction between consensus and execution in OpenHL flows through one of those four methods.** If you find yourself reaching across the boundary another way — accessing a Reth DB handle from the consensus crate, or peeking at Malachite vote state from the EVM crate — you've broken the contract and you will pay for it in a forked devnet within the week.
+The `[[bin]]` section names the binary `openhl` and points it at `src/main.rs`. The `env!("CARGO_PKG_VERSION")` macro inlines the package version from `Cargo.toml` at compile time — useful for `openhl --version` later.
 
-> 🛑 **Anti-fluency.** "Reth *is* the consensus layer of OpenHL." **No.** Reth ships a `Consensus` trait, but it's a *block-validation hook* — parent-hash checks, gas-limit checks, EIP-1559 base-fee math. Not a BFT engine. Reth has no leader election, no votes, no view changes. The BFT engine is Malachite, sitting in `crates/consensus`, talking to Reth through the four messages above. Confuse the two and your architecture diagrams will be wrong forever.
+### Step 7: First `cargo check`
 
-## 6. Every BFT L1 draws this line in the same place
+```bash
+cd ~/code/my-openhl
+cargo check --workspace
+```
 
-This isn't OpenHL's invention. It's what every serious BFT L1 in production has converged on:
+Expected output:
 
-| Chain | CL side | EL side | Contract surface |
-| :--- | :--- | :--- | :--- |
-| **Ethereum** | Lighthouse, Prysm, Teku, Nimbus | Reth, Geth, Erigon | Engine API over JSON-RPC (`engine_newPayload`, `engine_forkchoiceUpdated`, `engine_getPayload`) |
-| **Hyperliquid** | HyperBFT | HyperCore + HyperEVM | Internal Rust trait (closed source) |
-| **Tempo** | Tempo BFT (CometBFT-derived) | Reth-based | In-process Rust trait |
-| **OpenHL** | Malachite | Reth | `ConsensusBridge` trait |
+```
+   Compiling openhl-types v0.1.0
+   Compiling openhl-codec v0.1.0
+   ...(all 10 crates plus openhl bin)...
+    Finished `dev` profile
+```
 
-Ethereum is the special case: the contract is over JSON-RPC because CL and EL are *separate processes*, often from different teams in different languages. HL, Tempo, and OpenHL all run CL and EL in one binary, so the contract is a Rust trait — but **the message surface is the same**. Same shape, different transport.
+Some `unused_imports` warnings are OK (we declared `serde` as a workspace dep but most crates don't use it yet). Hard errors are NOT OK — if you see one, the most common causes are:
 
-> 🛑 **Predict.** Ethereum's CL/EL split runs CL and EL as separate processes with a JSON-RPC wire format. OpenHL runs them as two crates in one binary with an in-process trait. **What does Ethereum gain from process separation that costs them — and OpenHL — what?** Think about who can replace which.
+- **Typo in a crate name in workspace.members or in a per-crate Cargo.toml.** Cargo will name the missing crate; fix the typo.
+- **Missing `src/lib.rs` for a library crate.** Each crate listed in workspace.members must have either `src/lib.rs` or `src/main.rs`.
+- **`[lints]` block but no `workspace = true` inside.** Each crate's `[lints]` must say `workspace = true` to inherit.
 
-Ethereum gains **client diversity**: four CLs, multiple ELs, no single-implementation risk if a bug takes one client down. It pays in latency (RPC overhead, ~5–15ms per call). OpenHL gains low-latency calls (microseconds, in-process) but ships as one binary. For a single-team L1 chasing sub-second finality, the trade is obviously right. And if OpenHL ever wants client diversity, the trait is small enough to expose over JSON-RPC later — the contract already exists.
+Resolve any errors before moving to Step 8.
 
-## 7. Practice
+### Step 8: Pin Reth as a workspace dependency
 
-1. **Re-derive the four messages without looking.** Write them down: direction, name, when sent, what each one promises. If you miss one, you don't have the contract internalized yet.
-2. **Find the contract leak.** Open `crates/consensus/src/bridge.rs` and `crates/evm/src/live_node.rs` at SHA `0844d58`. Read both files top to bottom. Identify any access from one crate into the other that does *not* flow through `ConsensusBridge`. There shouldn't be any. If you find one, file an issue.
-3. **Map to Ethereum.** For each of the four OpenHL messages, name the Ethereum Engine API method that corresponds.
-   *Cheat sheet:* `build_payload` + `payload_ready` ↔ `engine_forkchoiceUpdated` (with payload attrs) + `engine_getPayload`. `validate_payload` ↔ `engine_newPayload`. `commit` ↔ `engine_forkchoiceUpdated` with the new finalized hash.
+Edit the workspace `Cargo.toml`. Find the line:
 
-> **Final check:** in one sentence, why does "the EVM can just read the latest committed block from consensus's internal state" violate the contract — and what's the determinism failure mode it would cause? If your answer doesn't include "the EVM crate now depends on consensus internals and any change to those internals can fork the chain," re-read §5.
+```toml
+# --- Reth and Malachite — added in Steps 7 and 8 below ---
+```
+
+Replace it with:
+
+```toml
+# --- Reth (pinned to v2.2.0 release tag) ---
+# Bump in a dedicated PR. Always pin to a release-tag SHA, never main HEAD.
+reth-node-builder         = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-node-ethereum        = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-node-core            = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-tasks                = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-chainspec            = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-evm                  = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-ethereum-primitives  = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-engine-primitives    = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-payload-primitives   = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-provider             = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-storage-api          = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-consensus            = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-ethereum-consensus   = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-primitives-traits    = "0.3"
+alloy-primitives          = { version = "1.5", default-features = false }
+alloy-consensus           = { version = "2.0", default-features = false }
+alloy-genesis             = { version = "2.0", default-features = false }
+alloy-evm                 = { version = "0.34", default-features = false }
+alloy-rlp                 = { version = "0.3", default-features = false }
+```
+
+**Why this many Reth crates?** Reth is a multi-crate codebase. Different parts (the node builder, the EVM, the storage API, the consensus hook) live in different crates. We declare all the ones our later lessons will use at the workspace level so each consuming crate just references `reth-xxx = { workspace = true }` later.
+
+**Why pin to a SHA?** Reth has frequent breaking changes. Pinning to a release tag's SHA (here `88505c7f...` = v2.2.0) gives us a stable target. If we used `version = "2.2"` or a branch, our build could break when Reth releases an unrelated change.
+
+**Why pin to a release-tag SHA, not main HEAD?** Main HEAD can be broken at any moment. Release tags are tested and stable. The comment in the file (`# Bump in a dedicated PR. Always pin to a release-tag SHA, never main HEAD.`) is a process discipline note for future bumps.
+
+> 🛑 **Predict.** What happens to `cargo check --workspace` when you run it now? Pick one before scrolling:
+> - (a) Same as before — no change since no crate uses any Reth dep yet
+> - (b) Massively slower the first time — fetches and compiles ~600 transitive Reth deps
+> - (c) Errors out — Reth needs explicit configuration we haven't provided
+
+The answer is (b). Cargo's `workspace.dependencies` declarations cause **resolution** but not **compilation** of unused deps. However, `cargo check` does walk the dep graph and fetch the git source. That's the 5-15 minute first-run cost. The good news: subsequent runs use the cached source.
+
+Run it:
+
+```bash
+cargo check --workspace
+```
+
+Go make coffee. Come back. You should see:
+
+```
+    Updating git repository `https://github.com/paradigmxyz/reth`
+    Updating crates.io index
+...(lots of "Downloading" and "Compiling" lines)...
+    Finished `dev` profile [optimized + debuginfo] target(s) in 14m 23s
+```
+
+If it errors, the most common causes:
+
+- **alloy version conflict.** If you copy the workspace.deps block above but already have an older `alloy-primitives = "0.x"` declared, Cargo can't unify. Solution: bump all alloy versions to match `1.5` / `2.0` as shown.
+- **rustc version too old.** Reth v2.2.0 needs rustc 1.93+. The `rust-toolchain.toml` should have pinned `1.95.0` — verify with `rustc --version`.
+- **Network failure fetching git deps.** Re-run. Cargo's git fetch is occasionally flaky.
+
+### Step 9: Pin Malachite as a workspace dependency
+
+Append to the `[workspace.dependencies]` section:
+
+```toml
+# --- Malachite BFT (pinned to v0.5.0 release tag) ---
+# Note: crate names in the malachite repo are prefixed `informalsystems-malachitebft-*`.
+informalsystems-malachitebft-core-types      = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-core-consensus  = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-core-driver     = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55", features = ["std"] }
+informalsystems-malachitebft-engine          = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-app             = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-app-channel     = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-config          = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-codec           = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-signing-ed25519 = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+```
+
+**Crate-name oddity.** Malachite's repo (`informalsystems/malachite`) publishes its crates under the prefix `informalsystems-malachitebft-*`. We use the full prefixed names in Cargo.toml. In Rust source code we'll use `informalsystems_malachitebft_core_types::Context` (snake_case rename). The comment in the file documents this.
+
+**`features = ["std"]` on core-driver.** The driver crate has a `std` feature gate. We need standard library facilities (BTreeMap, HashMap, etc.), so we enable it explicitly. Other Malachite crates default to `std`, so no explicit feature is needed.
+
+Run cargo check again:
+
+```bash
+cargo check --workspace
+```
+
+This time the incremental Reth cache means only Malachite needs fetching/compiling. ~2-5 minutes typically.
+
+## Test
+
+After Step 9 finishes successfully:
+
+```bash
+cargo check --workspace 2>&1 | tail -5
+```
+
+Expected (the exact "x warnings" count and timing may differ):
+
+```
+    Finished `dev` profile [optimized + debuginfo] target(s) in 23.45s
+```
+
+You can also try:
+
+```bash
+cargo build --bin openhl
+./target/debug/openhl
+```
+
+Expected:
+
+```
+openhl v0.1.0
+```
+
+That's L1 done.
+
+## Design reflection
+
+Two load-bearing decisions you just encoded:
+
+1. **All external deps are declared at the workspace level**, not per-crate. Per-crate Cargo.toml entries say `reth-storage-api = { workspace = true }`, inheriting the version. This means a Reth version bump is a one-line change. The alternative (each crate declaring its own version) would cause every Cargo.toml in 11 crates to drift.
+
+2. **Reth and Malachite are git deps, not crates.io deps.** Both projects publish to crates.io, but with significantly different versioning cadence. Pinning to a specific commit SHA in the workspace is a deliberate trade-off: more friction for bumps, but absolute reproducibility. Production L1s pin like this for the same reason — you don't want your validators desyncing because two of them happened to fetch a different "0.5.x" patch from crates.io.
+
+These two decisions propagate: every later lesson assumes them. When you add `reth-storage-api = { workspace = true }` to a crate's `[dependencies]` in L11, Cargo finds the workspace-level pin and resolves correctly without you thinking about it.
+
+## Answer key
+
+Compare your workspace state to `psyto/openhl` at the Stage 2+3 commit:
+
+```bash
+cd ~/code/openhl-reference
+git checkout 5fc7ca1
+diff -ru ~/code/my-openhl/Cargo.toml ./Cargo.toml
+diff -ru ~/code/my-openhl/crates/types ./crates/types
+diff -ru ~/code/my-openhl/bin/openhl ./bin/openhl
+```
+
+Differences in `authors`, `repository`, and comment wording are fine. Differences in `members`, `workspace.dependencies` pin SHAs, `[workspace.lints]`, or profiles are not — re-read whichever step you skimmed.
+
+Return to main when you're done diffing:
+
+```bash
+git checkout main
+```
+
+## Common questions
+
+**Q: Should I commit my work to git?** Yes. Initialize git in `~/code/my-openhl/` and commit after each step or each lesson. The commit log becomes your own personal Stage history.
+
+```bash
+cd ~/code/my-openhl
+git init  # if you haven't
+git add .
+git commit -m "L1 — workspace + Reth + Malachite pinned"
+```
+
+**Q: Why so many "unused dependency" warnings?** Because each member crate's `[dependencies]` section is mostly empty. We declared deps at the workspace level so they're *available*, but no crate has `[dependencies]` populated yet. As lessons progress, crates pull in their needed deps and the warnings drop.
+
+**Q: My machine ran out of disk space.** The Reth + Malachite source trees plus their target/ cache can easily reach 10-15 GB. Add disk or move target/ to an external drive via `[build] target-dir = ...` in `.cargo/config.toml`.
+
+**Q: Can I parallelize fetching deps?** Cargo does this automatically. The "Updating git repository" steps run sequentially because each one writes to the same git cache. The "Compiling" steps fan out across cores. If yours is slow, check `cargo build -j $(nproc)`.
+
+## Next lesson (L2)
+
+You have a workspace that compiles. No application logic yet. In L2 we write the first application code — `openhl-types`'s `BlockHash`, `PayloadId`, `PayloadAttrs`, `ExecutedBlock`, and `PayloadStatus`. These are the **shared vocabulary** of the consensus↔EVM contract. After L2, the contract types compile and have basic tests. Then L3 writes the trait that uses them.
 ````
 
 ---
 
 ## Seed-file slot
 
-L1 lands in `prisma/seed-reth-openhl-consensus-en.ts` (course `building-openhl-consensus-en`), as the first lesson of Module 1:
+L1 lands in Module 1 (Foundations) at sortOrder 0:
 
 ```typescript
-// Course.modules.create array:
 {
-  title: 'The execution/consensus split',
+  title: 'Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)',
+  slug: 'openhl-workspace-en',
+  type: 'CONTENT',
   sortOrder: 0,
-  lessons: { create: [
-    {
-      title: 'The contract between BFT and the EVM',
-      slug: 'openhl-consensus-contract-en',
-      type: 'CONTENT',
-      sortOrder: 0,
-      duration: 15,
-      xpReward: 40,
-      content: `# The contract between BFT and the EVM\n\nIt's 3am. ...`  // L1 markdown
-    },
-    // L2: Where Hyperliquid, Tempo, and CometBFT-based chains converge (TBD)
-  ]}
+  duration: 45,
+  xpReward: 80,
+  content: `# Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)\n\n...`
 },
-// Module 2: Malachite as a library (TBD)
-// Module 3: Reth as a library — contains L7 (drafted, separate file)
-// Module 4: Wiring it up — contains L10 (drafted, separate file)
-// Module 5: Single-validator devnet (TBD)
 ```
 
 ## SHA pinning discipline
 
-Every `file:line@SHA` cite pins SHA `0844d58`. L1 has fewer cites than L7/L10 because the lesson is mostly conceptual (the contract design); the one anchored citation is the trait at `crates/consensus/src/bridge.rs:11`, which has been stable since Stage 6a (`13113db`) and is unchanged at `0844d58`.
+L1 references two openhl commits in §Answer key:
+- `75be9de` (Stage 1: bootstrap workspace)
+- `5fc7ca1` (Stage 2+3: pin Reth and Malachite)
 
-The trait is a load-bearing artifact for the whole course arc:
-- L1 introduces it as the contract
-- L7 maps each method onto the Ethereum Engine API
-- L9 walks through designing it
-- L10 cites the commit handler that exercises it
-
-A change to the trait surface invalidates all four lessons; cite by SHA so the invalidation is detectable.
+These SHAs may change if the openhl repo is rebased/squashed; if they do, this lesson's §Answer key needs an update. Otherwise the content is independent of openhl line-level changes.
 
 ## Style review notes (self-critique before paste)
 
-- **L1 was the lesson-format template.** L7 + L10 follow its cadence (3am hook → 7 sections → practice + final check). When updating any of them, keep the cadence consistent so the course reads as one voice.
-- **§5's "Where the boundary lives" table** initially listed paths that didn't exist (e.g., proposer.rs, validator.rs, sync.rs). Updated to match actual files at `0844d58`: bridge.rs, runner.rs, engine_app.rs, engine.rs, live_node.rs. If the file layout shifts again (e.g., when actor-engine work consolidates), this table needs to track.
-- **Exercise 2 references reading both files at SHA `0844d58`** — this is the strongest exercise of the three because it requires actually opening the code, and the "no contract leak" assertion is testable.
-- **JA mirror pending.** Per rethlab's bilingual policy, `openhl-consensus-contract-ja` needs a separate seed entry. Translation pass is a separate task — but L1 in particular benefits from JA early since it's the foundational lesson.
-
-## Where this leaves the curriculum
-
-Three lessons now drafted as durable files:
-
-| Lesson | File | Status |
-| --- | --- | --- |
-| L1 — Contract between BFT and the EVM | `drafts/openhl_l1_en.md` | ✓ drafted |
-| L7 — Engine API | `drafts/openhl_l7_l10_en.md` | ✓ drafted |
-| L10 — Decided → forkchoice | `drafts/openhl_l7_l10_en.md` | ✓ drafted |
-
-Remaining outlines (L2, L3, L4, L5, L6, L8, L9, L11, L12, L13): code exists for all of them at `0844d58`, so they're writeable when ready. Natural next pairs:
-- **L9 + L10** (designing the ConsensusBridge + the Decided handler) — L10 already cites L9's design, so writing L9 closes the loop.
-- **L4 + L5** (implementing Context types + the actor model) — both anchored in commits `784785b` (types) and `b7590df` (single-validator runner).
-- **L11 + L13** (proposer hot loop + first block via engine) — anchored in `708472c` (run_engine_app + first-block test).
+- **L1 is 45 min — longer than L0**. Justified because reader actually types code (~150 lines of TOML), waits 10-15 min for first `cargo check`, and reads multiple "why this choice" subsections. The 80 XP reflects this weight.
+- **The "predict" callout in §Plan** (sketch which 10 crates) is the first time the reader's L0 knowledge gets tested. If the reader can't recall, L0 §3-§4 is the answer.
+- **The "anti-fluency" callout in §5** ("why not declare all deps up front") is a real beginner trap. Junior Rust devs frequently over-declare dependencies because they think it's helpful. Don't soften this.
+- **The "first cargo check takes 5-15 min" warning** is essential — without it the reader thinks the command is hung and aborts. Set expectations early.
+- **The "what to expect when it errors" section in Step 7** covers the 3 most common bootstrap mistakes. If a reviewer says "what about X?" and X isn't there, add it — these are the points where the lesson loses readers.
+- **Step 5 leaves 9 crates as exercise** — show the pattern with `types`, list the rest as a table. This is a deliberate choice to keep the lesson length manageable. Junior readers may want all 10 walked; intermediates will find that boring.
+- **No JA mirror yet at first paste.** Translation pass next.

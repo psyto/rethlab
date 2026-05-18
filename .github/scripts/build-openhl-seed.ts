@@ -73,6 +73,7 @@ const EN: LocaleConfig = {
   },
   modules: {
     0: { title: 'Orientation', sortOrder: 0 },
+    1: { title: 'Foundations', sortOrder: 1 },
   },
   lessons: [
     {
@@ -85,6 +86,17 @@ const EN: LocaleConfig = {
       xpReward: 60,
       h1Marker: '# Build OpenHL — from `cargo init` to a single-validator devnet',
       startSignature: 'This is not a course you read. This is a course you **build**.',
+    },
+    {
+      draftFile: 'openhl_l1_en.md',
+      moduleNumber: 1,
+      sortOrder: 0,
+      title: 'Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)',
+      slug: 'openhl-workspace-en',
+      duration: 45,
+      xpReward: 80,
+      h1Marker: '# Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)',
+      startSignature: 'By the end of this lesson, run from your `~/code/my-openhl/` directory:',
     },
   ],
 };
@@ -106,6 +118,7 @@ const JA: LocaleConfig = {
   },
   modules: {
     0: { title: 'Orientation', sortOrder: 0 },
+    1: { title: 'Foundations', sortOrder: 1 },
   },
   lessons: [
     {
@@ -118,6 +131,17 @@ const JA: LocaleConfig = {
       xpReward: 60,
       h1Marker: '# OpenHL を自作する — `cargo init` から動く single-validator devnet まで',
       startSignature: 'これは「読む」コースではない。これは「**作る**」コースだ。',
+    },
+    {
+      draftFile: 'openhl_l1_ja.md',
+      moduleNumber: 1,
+      sortOrder: 0,
+      title: 'レッスン 1 — Workspace + Reth + Malachite (Stages 1-3)',
+      slug: 'openhl-workspace-ja',
+      duration: 45,
+      xpReward: 80,
+      h1Marker: '# レッスン 1 — Workspace + Reth + Malachite (Stages 1-3)',
+      startSignature: 'このレッスンの終わりに、`~/code/my-openhl/` ディレクトリで次を実行する:',
     },
   ],
 };
@@ -140,8 +164,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 20, // L0 only (build-along pilot)
-  xpReward: 60, // L0 only (build-along pilot)
+  duration: 65, // L0 (20) + L1 (45) — build-along pilot
+  xpReward: 140, // L0 (60) + L1 (80) — build-along pilot
   tags: ['reth', 'malachite', 'bft', 'evm', 'clob', 'l1', 'openhl', 'expert'],
   sortOrder: 600,
   isPublished: false,

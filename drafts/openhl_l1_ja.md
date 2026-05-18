@@ -1,215 +1,523 @@
-# Building OpenHL — L1 draft (JA)
+# Building OpenHL — L1 draft (JA) — C2 build-along rewrite
 
-> openhl SHA `0844d58` (Stage 7c) に対してドラフト。
+> openhl SHA `75be9de` (Stage 1: workspace bootstrap) と `5fc7ca1` (Stage 2+3: Reth と Malachite を pin) に対してドラフト。これは **最初の build-along レッスン** — 読者が workspace の骨格をゼロから書く。
 > EN ミラー: `drafts/openhl_l1_en.md`。
-> rethlab の chapter format に準拠 (3am hook → 🛑 予測/反流暢性 callout → 番号付きセクション → 練習 + 最終チェック)。
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
-> course arc の最初のレッスン — 他のすべてのレッスンが参照する 4 メッセージ contract を確立する。
 
 ---
 
-## L1 — `openhl-consensus-contract-ja`
+## L1 — `openhl-workspace-ja`
 
-- **Module:** 1 (execution/consensus split)、module 内 sortOrder 0
-- **Course-level sortOrder:** 0 (13 レッスン中の 1 番目)
-- **Duration:** 15 分
-- **XP reward:** 40
+- **Module:** 1 (Foundations)、module 内 sortOrder 0
+- **Course-level sortOrder:** 0 (15 レッスン中の 1 番目)
+- **Duration:** 45 分
+- **XP reward:** 80
 - **Type:** CONTENT
 
 ### Content
 
 ````markdown
-# BFT と EVM の contract
+# レッスン 1 — Workspace + Reth + Malachite (Stages 1-3)
 
-> **現在地。** サブモジュール 1/5: *execution/consensus split。* レッスン 0 はリポジトリ全体を俯瞰した。本サブモジュールは、その 2 つの半分の境目にズームインする — Malachite (CL) と Reth (EL) の間に置かれる 4 メッセージの contract が実際には何で、なぜ BFT 形のすべての L1 が同じ線を引くことになるのか。レッスン 1 は 4 メッセージに名前を与える; レッスン 2 はなぜ HL、Tempo、CometBFT が同じ形に収束するかを説明する。
+## ゴール
 
-午前 3 時。OpenHL の devnet が 3 ブロック前から停止している。Malachite のログは `waiting for value` と言う。Reth のログは `engine idle` と言う。どちらも error を投げていない。**どっちが壊れているのか?**
+このレッスンの終わりに、`~/code/my-openhl/` ディレクトリで次を実行する:
 
-この質問に 30 秒で答えられないなら、バグはどちらの crate にもない — 2 つがどう話しているかのメンタルモデル側にある。本レッスンはそのモデルをインストールする。読み終える頃には、consensus と execution の間を流れる 4 つのメッセージ、それぞれの promise、そしてどれかが消えたときにどちらの crate を責めればいいかが正確に分かるようになる。
-
-> 🛑 **スクロール前に予測。** 同一プロセス内で動く 2 サービス: Malachite (BFT) と Reth (EVM)。**ブロックが produce され commit されるまでに両者間を流れる必要があるメッセージを、思いつくだけ挙げよ。** 「ブロックが consensus から EVM に流れる」で止まったなら、contract はまだ手に入っていない。
-
-## 1. なぜ contract が必要か
-
-素朴な L1 は consensus と execution を 1 つの巨大モジュールに融合させる。State の更新、署名検証、fork choice、投票集計、mempool — すべて 1 つのバイナリに、すべて絡み合って。これは 2020 年以前のほとんどのチェーンの書き方だ。動く。**しかし、すべてを失うコストが伴う。**
-
-コストは 3 箇所に現れる:
-
-| コスト | 何を失うか |
-| :--- | :--- |
-| **Swappability** | EVM を書き直さずに consensus を変えられない、逆もしかり。HL は HyperBFT v1 から v2 へ移行する際 matching engine に触れずに済む — v1 と v2 が同じ contract を守るからだ。 |
-| **Testability** | EVM を起動せずに consensus を unit-test できない、逆もしかり。両側とも integration-test オンリーになる。 |
-| **Debuggability** | 午前 3 時にどちら側が stall したか分からない。クラッシュダンプは区別のつかない泥団子になる。 |
-
-Contract がその答えだ。両側のメッセージに名前を付けると、それぞれの側を単独で replace、mock、fuzz、reason できるようになる。**Contract が API である。コードは実装詳細だ。**
-
-## 2. BFT が EVM に約束するもの
-
-consensus crate が execution crate に負っているのは厳密に 2 つ:
-
-1. **Committed ブロックの ordered stream。** すべての validator が同じブロックを同じ順序で見る。Gap なし。Reorg なし — classical BFT chain においては。Nakamoto chain はもっと弱いものを約束するが、ここで作っているのはそれではない。
-2. **Validity assertions。** Commit された各ブロックは ≥ 2f+1 の validator によって投票された。EVM が適用して invalid な state を生成したら、それは *実装側* のバグであり consensus のバグではない。
-
-これが BFT 側から見た contract の全部だ。ここに *無い* ものに注意:
-
-- 「正しい transactions」ではない。(BFT は tx が何をするか知らない。)
-- 「正しい state root」ではない。(BFT は state を compute していない。)
-- 「正しい canonical fork」ではない。(BFT には fork *自体が* 存在しない — それが要点だ。)
-
-> 🛑 **反流暢性。** 「Consensus が次の state を選ぶ。」 **違う。** Consensus は次の *ブロック* を選ぶ。State はそのブロックを適用したときに EVM が compute するものだ。2 validator が state について意見が違う場合、それは consensus のバグではない — execution の determinism バグだ。
-
-## 3. EVM が BFT に約束するもの
-
-execution crate が consensus crate に負っているのは厳密に 3 つ:
-
-1. **Deterministic execution。** State S にブロック B を適用したとき、すべての validator が同じ S' を生成する。Floating-point なし、system time なし、randomness なし、map iteration order なし。Determinism は non-negotiable; 1 つの違反でチェーンが fork する。
-2. **Fast block assembly。** Consensus が「ブロックを build せよ」と言ったとき、execution は propose-timeout の予算内 (HL、Tempo、OpenHL では ~300–500ms) でブロックを返す。それより遅いとチェーンが stall する。
-3. **Import 時の validity verification。** Peer の proposal が到着したとき、execution は「これは問題なく execute するか?」を *commit 前に* 答えられる。
-
-> 🛑 **予測。** EVM の 3 つの promise のうち、1 つは他より遥かに難しい。**どれで、なぜ自前 L1 を書くチームを最も頻繁に噛むのか?** 偶然 ship してしまう nondeterminism の最も簡単なソースを考えよ。
-
-答えは determinism だ。すべての junior エンジニアは最終的に「ちょっとログ出すだけ」のために `HashMap` の iteration や `SystemTime::now()` を追加し、午前 3 時にチェーンを fork させる。Reth の API surface がこれについて paranoid なのには理由がある; 尊重せよ。
-
-## 4. 4 つのメッセージ
-
-これが contract の全部、4 つのメッセージで:
-
-| 方向 | メッセージ | 送信タイミング | Promise |
-| :--- | :--- | :--- | :--- |
-| CL → EL | `build_payload(parent, attrs)` | validator が height N の proposer になったとき | 「`parent` の上に candidate block を build せよ。」 |
-| EL → CL | `payload_ready(block, state_root)` | propose deadline 前に build が完了したとき | 「ブロックはこれだ。proposal value として使え。」 |
-| CL → EL | `validate_payload(block)` | peer の proposal が到着したとき | 「このブロックは問題なく execute するか? VALID / INVALID / SYNCING で答えよ。」 |
-| CL → EL | `commit(block_hash)` | height N で BFT が `Decided` に到達したとき | 「このブロックを new head として finalize せよ。」 |
-
-それだけだ。CL → EL 方向に 3、EL → CL 方向に 1。**他のあらゆる interaction は leak である。**
-
-このテーブルで明確に見るべきものが 3 つある:
-
-- **Validation と commit は分離されている。** Validator は height ごとに多数の candidate block を import し (round-robin の各 proposer slot あたり 1 つ)、それぞれを投機的に execute し、commit するのは 1 つだけだ。多くのチームはこれらを 1 つのメッセージに collapse してしまい、後になって speculative execution を feature として追加したくなったときに refactor の代償を払う。
-- **`build_payload` は即座に何も返さない。** Async build job を kick off するだけ; ブロックは後で `payload_ready` 経由で到着する。これが「build during voting」のトリック — payload assembly が前のブロックの投票と overlap するので、propose の hot path がほぼゼロ latency になる。
-- **`commit` は fire-and-forget。** consensus が「これは final だ」と言ったら、execution は適用しなければならない。「本当にいいんですか?」の round-trip は存在しない。Execution が committed block を適用できない場合、チェーンは halt する。それが正しい挙動だ — committed block を黙って drop するのが世界を fork させるやり方だ。
-
-## 5. OpenHL コードでの boundary の在処
-
-具体的に我々の workspace では:
-
-```
-crates/consensus/      ← Malachite を話す。CL 側から 4 メッセージを所有。
-  src/bridge.rs        ← ConsensusBridge trait — 境界を渡る typed cable
-  src/runner.rs        ← build_payload を発行し、payload_ready を待つ
-  src/engine_app.rs    ← validate_payload + commit を発行 (AppMsg ループ経由)
-
-crates/evm/            ← Reth を話す。EL 側から 4 メッセージを所有。
-  src/engine.rs        ← RethEvmBridge — Reth 型を使った early in-process impl
-  src/live_node.rs     ← LiveRethEvmBridge — real Reth node に対する full impl
+```bash
+cargo check --workspace
 ```
 
-`crates/consensus/src/bridge.rs:11@0844d58` の `ConsensusBridge` trait が、その contract を Rust trait の形で表現したものだ:
+…そして "unused dependency" の警告以外は warning なしで `Finished` を見られる状態にする。手元には、空のライブラリ crate が 10 個、binary crate が 1 個、Reth が SHA で pin された git 依存、Malachite が同じく SHA で pin された git 依存を持つ Rust workspace が出来上がっている。**アプリケーションロジックは 1 行も書いていない** — それは L2 以降だ。本レッスンは「依存グラフを正しく組む」ことに専念する。
+
+Reth のコンパイルグラフだけで ~600 crates ある。最初の `cargo check` はマシンによって 5-15 分かかる。そのつもりで進める。その後の check は incremental になって速い。
+
+## これまでの状態
+
+L0 のセットアップを済ませている前提だ。手元には:
+
+- `~/code/my-openhl/` — 自分の workspace、現状は `cargo init --lib` の default 出力
+- `~/code/openhl-reference/` — `psyto/openhl` を clone 済み、`cargo check` が通っている
+
+このレッスンの編集は **すべて** `~/code/my-openhl/` の中で行う。`openhl-reference/` には絶対に触れない。
+
+## これから build するもの
+
+3 つの段階を順に進める:
+
+1. **Stage 1** — `cargo init --lib` の default 出力を消し、real workspace に置き換える: 10 個の空ライブラリ crate、1 個の binary crate、workspace 全体のデフォルトを定義する top-level `Cargo.toml`。**テスト**: 外部依存なしで `cargo check --workspace` が通る。
+2. **Stage 2** — Reth を workspace レベルで SHA pin の git 依存として宣言する。**テスト**: `cargo check --workspace` が引き続き通る (どの crate も Reth をまだ使っていない — 依存が解決可能なことを確認するだけ)。
+3. **Stage 3** — Malachite を同じやり方で pin する。**テスト**: `cargo check --workspace` が引き続き通る。
+
+各 stage は `psyto/openhl` の実際の commit に対応する: `75be9de`、続いて `5fc7ca1`。
+
+**先にアプリケーションコードではなく依存グラフを組む理由**: Rust workspace で最も摩擦が多いのは依存解決だ。Reth と Malachite はどちらも巨大で transitive な依存ツリーが深い。**「あとでやる」にすると、アプリケーションコードを書いている最中に衝突を発見して巻き戻すことになる。** 先に依存を確定させておけば、その後のレッスンはレッスンの本題に集中できる。
+
+> 🛑 **予測。** スクロール前に sketch せよ: workspace の Cargo.toml に書く `members` は何個で、それぞれ何か? ヒント: 10 個のライブラリ crate + 1 個の binary crate。L0 §3 で 5 つのサブシステムを学んだ; それを実装するのは具体的に 10 個のうちのどの crate か? (必要なら L0 §4 を見返す。)
+
+## 手を動かす walk-through
+
+### Step 1: `~/code/my-openhl/` をリセット
+
+L0 のセットアップで default の cargo プロジェクトが残っている。これを消してまっさらから始める:
+
+```bash
+cd ~/code/my-openhl
+rm Cargo.toml Cargo.lock src/lib.rs
+rmdir src
+```
+
+これで `.git/` (初回 cargo init の名残) 以外には何も残っていない状態になる:
+
+```bash
+ls -la
+# .  ..  .git
+```
+
+### Step 2: Top-level workspace の Cargo.toml を書く
+
+ルートに `Cargo.toml` を作り、次の内容を入れる。コピーではなく、自分でタイプする。各セクションに注目しながら。
+
+```toml
+[workspace]
+resolver = "3"
+members = [
+    "bin/openhl",
+    "crates/types",
+    "crates/codec",
+    "crates/clob",
+    "crates/oracle",
+    "crates/funding",
+    "crates/liquidation",
+    "crates/vault",
+    "crates/evm",
+    "crates/consensus",
+    "crates/node",
+]
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2024"
+rust-version = "1.95"
+license      = "MIT OR Apache-2.0"
+repository   = "https://github.com/yourusername/my-openhl"
+authors      = ["Your Name <you@example.com>"]
+
+[workspace.dependencies]
+# --- 内部 crate ---
+openhl-types       = { path = "crates/types" }
+openhl-codec       = { path = "crates/codec" }
+openhl-clob        = { path = "crates/clob" }
+openhl-oracle      = { path = "crates/oracle" }
+openhl-funding     = { path = "crates/funding" }
+openhl-liquidation = { path = "crates/liquidation" }
+openhl-vault       = { path = "crates/vault" }
+openhl-evm         = { path = "crates/evm" }
+openhl-consensus   = { path = "crates/consensus" }
+openhl-node        = { path = "crates/node" }
+
+# --- Reth と Malachite — 下の Step 8 と Step 9 で追加 ---
+
+# --- 共通ユーティリティ ---
+tokio              = { version = "1", features = ["full"] }
+async-trait        = "0.1"
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+thiserror          = "1"
+eyre               = "0.6"
+tracing            = "0.1"
+proptest           = "1"
+
+[workspace.lints.rust]
+unsafe_code                   = "forbid"
+missing_debug_implementations = "warn"
+unreachable_pub               = "warn"
+rust_2018_idioms              = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all      = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate      = "allow"
+missing_errors_doc      = "allow"
+missing_panics_doc      = "allow"
+
+[profile.release]
+opt-level     = 3
+lto           = "fat"
+codegen-units = 1
+strip         = "symbols"
+debug         = false
+panic         = "abort"
+
+[profile.dev]
+opt-level = 1
+debug     = true
+
+[profile.dev.package."*"]
+opt-level = 3
+```
+
+**このファイルで本質的な選択が 3 つある:**
+
+1. **`resolver = "3"`**。Cargo の dep resolver のバージョン。Resolver 3 (Rust 2024 edition のデフォルト) は feature unification をより厳格に扱う。Reth と Malachite はどちらも複雑な feature flag を持っており、resolver 3 がそれらの微妙な衝突を避けてくれる。
+2. **workspace レベルでの `unsafe_code = "forbid"`**。これにより member crate すべてで `unsafe` が禁止される。Reth は内部で `unsafe` を使っているが、我々のアプリケーション層は使わない。アプリケーション層で禁止することが L0 §4 の determinism レールだ — pure state-machine crate が `unsafe` を欲しがった瞬間、それは code review の警告サインになる。
+3. **`pedantic = "warn"` (clippy)**。Pedantic な clippy lint は subtle な問題を多数キャッチする。ノイズになるルールもあるので、`module_name_repetitions` などを末尾で `allow` している。最初から pedantic を warn 設定にしておくと、すべての commit が clippy clean で land する。
+
+### Step 3: `rust-toolchain.toml` をルートに追加
+
+`rust-toolchain.toml` を作る:
+
+```toml
+[toolchain]
+channel    = "1.95.0"
+components = ["clippy", "rustfmt"]
+profile    = "minimal"
+```
+
+Rust のバージョンを pin する。読者 (および CI) が `cargo` を呼ぶと、自動的にこの toolchain が fetch されて使われる。これがないとマシンごとに違う rustc バージョンでビルドされて異なるアーティファクトを生む — 我々が望まない determinism risk だ。
+
+### Step 4: 最初のライブラリ crate (`crates/types`) をテンプレートとして作る
+
+1 つの crate を end-to-end で作り、そのパターンを残り 9 つに replicate する。
+
+```bash
+mkdir -p crates/types/src
+```
+
+`crates/types/Cargo.toml` を作る:
+
+```toml
+[package]
+name         = "openhl-types"
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+authors      = { workspace = true }
+
+[dependencies]
+serde = { workspace = true }
+
+[lints]
+workspace = true
+```
+
+`crates/types/src/lib.rs` を作る:
 
 ```rust
-// crates/consensus/src/bridge.rs
-#[async_trait]
-pub trait ConsensusBridge: Send + Sync {
-    async fn build_payload(
-        &self,
-        parent: BlockHash,
-        attrs: PayloadAttrs,
-    ) -> Result<PayloadId, BridgeError>;
+//! Shared primitives and CL/EL contract types.
+```
 
-    async fn payload_ready(
-        &self,
-        id: PayloadId,
-    ) -> Result<ExecutedBlock, BridgeError>;
+それだけだ。module doc comment 以外、crate は空。後続レッスンで中身を埋めていく。
 
-    async fn validate_payload(
-        &self,
-        block: &ExecutedBlock,
-    ) -> Result<PayloadStatus, BridgeError>;
+**なぜ `version = { workspace = true }` 等?** これでルート Cargo.toml の `[workspace.package]` から継承される。すべての member crate が同じメタデータ (version、edition、license) を持つ。`workspace = true` 経由で継承すれば、workspace を 1 行 bump するだけで全 crate に波及する。代わりに crate ごとに `version = "0.1.0"` を書くと、6 行 × 11 crate で重複が増え、drift しやすくなる。
 
-    async fn commit(
-        &self,
-        block_hash: BlockHash,
-    ) -> Result<(), BridgeError>;
+### Step 5: 残りの 9 個のライブラリ crate を作る
+
+パターンは `crates/types` と同じ。各 crate について次を作る:
+
+- `crates/<name>/Cargo.toml` (形は同じ、`name` フィールドだけ変える)
+- `crates/<name>/src/lib.rs` (doc comment だけ)
+
+残り 9 crate と doc comment:
+
+| Crate | `name` | `lib.rs` の doc comment |
+| - | - | - |
+| codec | `openhl-codec` | `//! Canonical encoding for consensus messages.` |
+| clob | `openhl-clob` | `//! CLOB matching engine — pure state machine.` |
+| oracle | `openhl-oracle` | `//! Mark price aggregation.` |
+| funding | `openhl-funding` | `//! Funding-rate calculation and settlement.` |
+| liquidation | `openhl-liquidation` | `//! Liquidation engine.` |
+| vault | `openhl-vault` | `//! Protocol-native vault primitive.` |
+| evm | `openhl-evm` | `//! EVM execution layer — Reth integration.` |
+| consensus | `openhl-consensus` | `//! Consensus layer — Malachite BFT.` |
+| node | `openhl-node` | `//! Node assembly: consensus + evm + clob.` |
+
+`clob`、`oracle`、`funding`、`liquidation`、`vault`、`node` については `[dependencies]` セクションは空でよい (`[dependencies]` 行のあとに空行、`[lints]` ブロック)。`codec`、`evm`、`consensus` も最初は空 — 実際の依存はそれを使うコードが land する後続レッスンで足す。
+
+> 🛑 **反流暢性。** 「最初に全部の依存を書いておけば後で編集しなくて済むのでは?」 **違う。** Unused dependency を持つ crate は技術的負債だ: ビルドを遅くし、reader を混乱させ、version conflict を招く。依存は **それを使うコードが land するタイミングで** 足す。workspace の `Cargo.toml` が *使える* 依存を宣言し、各 crate の `Cargo.toml` が *使う* 依存を宣言する、という階層構造。
+
+### Step 6: `bin/openhl` を作る
+
+Binary crate。まだ何もしない — workspace がコンパイル可能なことを確かめるだけ。
+
+```bash
+mkdir -p bin/openhl/src
+```
+
+`bin/openhl/Cargo.toml` を作る:
+
+```toml
+[package]
+name         = "openhl"
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+authors      = { workspace = true }
+
+[[bin]]
+name = "openhl"
+path = "src/main.rs"
+
+[dependencies]
+
+[lints]
+workspace = true
+```
+
+`bin/openhl/src/main.rs` を作る:
+
+```rust
+fn main() {
+    println!("openhl v{}", env!("CARGO_PKG_VERSION"));
 }
 ```
 
-この trait を注意深く読め。**OpenHL における consensus と execution の間のすべての interaction は、これら 4 メソッドのいずれかを流れる。** 境界を別の方法で越えようとしている自分に気づいたら — consensus crate から Reth DB handle にアクセスしたり、EVM crate から Malachite の vote state を覗き見したり — それが contract を破った瞬間だ。1 週間以内に forked devnet で代償を払うことになる。
+`[[bin]]` セクションで binary 名を `openhl`、エントリポイントを `src/main.rs` と宣言する。`env!("CARGO_PKG_VERSION")` マクロは Cargo.toml の version をコンパイル時に inline する — 後で `openhl --version` を実装するときに使える。
 
-> 🛑 **反流暢性。** 「Reth *が* OpenHL の consensus layer だ。」 **違う。** Reth は `Consensus` trait を ship しているが、それは *block-validation hook* だ — parent-hash check、gas-limit check、EIP-1559 base-fee math。BFT エンジンではない。Reth には leader election も投票も view change も無い。BFT エンジン本体は Malachite で、`crates/consensus` 配下に置かれており、上記 4 メッセージを通じて Reth とやり取りしている。これらを混同するとアーキテクチャ図が永久に間違いのままになる。
+### Step 7: 最初の `cargo check`
 
-## 6. 真面目な BFT L1 はすべて同じ場所に線を引いている
+```bash
+cd ~/code/my-openhl
+cargo check --workspace
+```
 
-これは OpenHL の発明ではない。production にある真面目な BFT L1 がすべて converge した先だ:
+期待する出力:
 
-| Chain | CL 側 | EL 側 | Contract surface |
-| :--- | :--- | :--- | :--- |
-| **Ethereum** | Lighthouse、Prysm、Teku、Nimbus | Reth、Geth、Erigon | JSON-RPC 経由の Engine API (`engine_newPayload`、`engine_forkchoiceUpdated`、`engine_getPayload`) |
-| **Hyperliquid** | HyperBFT | HyperCore + HyperEVM | 内部 Rust trait (closed source) |
-| **Tempo** | Tempo BFT (CometBFT-derived) | Reth-based | In-process Rust trait |
-| **OpenHL** | Malachite | Reth | `ConsensusBridge` trait |
+```
+   Compiling openhl-types v0.1.0
+   Compiling openhl-codec v0.1.0
+   ...(10 crate + openhl bin すべて)...
+    Finished `dev` profile
+```
 
-Ethereum は特殊例だ: contract が JSON-RPC 上にあるのは CL と EL が *別プロセス* で、しばしば異なる言語の異なるチームから来るからだ。HL、Tempo、OpenHL はすべて CL と EL を 1 バイナリで動かすので、contract は Rust trait — しかし **message surface は同じ**である。同じ形、違う transport。
+いくつかの `unused_imports` 警告は OK (`serde` を workspace の依存として宣言したが、ほとんどの crate がまだ使っていないため)。Hard error は OK ではない — 出た場合に多い原因:
 
-> 🛑 **予測。** Ethereum の CL/EL split は CL と EL を別プロセスで JSON-RPC wire format で動かす。OpenHL は 2 crate を 1 バイナリで in-process trait で動かす。**Ethereum が process separation から得るものは何か、そしてそれが Ethereum と OpenHL に何のコストを払わせるか?** 誰が何を replace できるかを考えよ。
+- **`workspace.members` または crate Cargo.toml の crate 名のタイプミス。** Cargo が見つからない crate 名を教えてくれるので、タイプミスを直す。
+- **library crate に `src/lib.rs` が無い。** `workspace.members` にリストされた crate はそれぞれ `src/lib.rs` か `src/main.rs` のどちらかが必要。
+- **`[lints]` ブロックがあるが中に `workspace = true` が無い。** 各 crate の `[lints]` は `workspace = true` と書かないと継承されない。
 
-Ethereum は **client diversity** を得る: 4 CL、複数 EL、1 client がバグでダウンしても single-implementation risk が無い。Latency でコストを払う (RPC overhead、1 call あたり ~5–15ms)。OpenHL は low-latency call を得る (in-process で microsecond) が、1 バイナリで ship する。Sub-second finality を狙う single-team L1 にとって、trade は明らかに正しい。そして OpenHL がいつか client diversity を望むなら、trait は十分小さいので後で JSON-RPC 経由で expose できる — contract はすでに存在する。
+エラーをすべて潰してから Step 8 に進む。
 
-## 7. 練習
+### Step 8: Reth を workspace の依存として pin する
 
-1. **4 つのメッセージを何も見ずに再導出せよ。** 書き出せ: 方向、名前、いつ送るか、それぞれが何を約束するか。1 つでも漏らしたら、contract はまだ internalize されていない。
-2. **Contract leak を見つけよ。** SHA `0844d58` で `crates/consensus/src/bridge.rs` と `crates/evm/src/live_node.rs` を開け。両ファイルを上から下まで読め。`ConsensusBridge` を *通らずに* 一方の crate からもう一方に access している箇所を identify せよ。あるべきではない。もし見つけたら issue を立てよ。
-3. **Ethereum にマップせよ。** OpenHL の 4 メッセージそれぞれに対応する Ethereum Engine API メソッドの名前を挙げよ。
-   *Cheat sheet:* `build_payload` + `payload_ready` ↔ `engine_forkchoiceUpdated` (with payload attrs) + `engine_getPayload`。`validate_payload` ↔ `engine_newPayload`。`commit` ↔ new finalized hash を持つ `engine_forkchoiceUpdated`。
+Workspace の `Cargo.toml` を編集する。次の行を見つけて:
 
-> **最終チェック:** 1 文で、なぜ「EVM は consensus の internal state から最新の committed block を読めばいい」が contract を破るのか — そしてそれが引き起こす determinism failure mode は何か? 答えに「EVM crate が consensus internals に依存するようになり、その internals への変更がチェーンを fork させ得る」が含まれなければ、§5 を再読。
+```toml
+# --- Reth と Malachite — 下の Step 8 と Step 9 で追加 ---
+```
+
+これを次に置き換える:
+
+```toml
+# --- Reth (v2.2.0 release tag に pin) ---
+# Bump は専用 PR で行う。release-tag SHA を必ず pin、main HEAD には絶対 pin しない。
+reth-node-builder         = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-node-ethereum        = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-node-core            = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-tasks                = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-chainspec            = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-evm                  = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-ethereum-primitives  = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-engine-primitives    = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-payload-primitives   = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-provider             = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-storage-api          = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-consensus            = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-ethereum-consensus   = { git = "https://github.com/paradigmxyz/reth", rev = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4" }
+reth-primitives-traits    = "0.3"
+alloy-primitives          = { version = "1.5", default-features = false }
+alloy-consensus           = { version = "2.0", default-features = false }
+alloy-genesis             = { version = "2.0", default-features = false }
+alloy-evm                 = { version = "0.34", default-features = false }
+alloy-rlp                 = { version = "0.3", default-features = false }
+```
+
+**なぜこんなに多くの Reth crate を?** Reth は multi-crate codebase だ。Node builder、EVM、storage API、consensus hook など、それぞれが別 crate に住む。後続レッスンが使う予定のものを workspace レベルで宣言しておくと、各消費 crate は `reth-xxx = { workspace = true }` と書くだけで済む。
+
+**なぜ SHA で pin するのか?** Reth は breaking change が頻繁にある。release tag の SHA (ここでは `88505c7f...` = v2.2.0) に pin することで安定したターゲットになる。`version = "2.2"` や branch に pin すると、Reth が無関係な変更をリリースしたときにビルドが壊れる可能性がある。
+
+**なぜ main HEAD ではなく release-tag SHA に pin するのか?** Main HEAD はいつでも壊れる可能性がある。Release tag はテストされた安定版だ。ファイル中のコメント (`# Bump は専用 PR で行う。release-tag SHA を必ず pin、main HEAD には絶対 pin しない。`) は将来 bump するときの process discipline メモだ。
+
+> 🛑 **予測。** いまの状態で `cargo check --workspace` を実行すると何が起こるか? スクロール前に 1 つ選べ:
+> - (a) 何も変わらない — まだどの crate も Reth の依存を使っていないから
+> - (b) 初回は劇的に遅くなる — Reth の transitive な ~600 crate を fetch + compile する
+> - (c) エラー — Reth は明示的な configuration が必要で、まだ与えていない
+
+答えは (b) だ。Cargo の `workspace.dependencies` 宣言は **resolution** を起こすが、未使用 deps の **compilation** は起こさない。しかし `cargo check` は依存グラフを walk して git source を fetch する。それが 5-15 分の初回コストだ。良いニュース: 以後の実行は cache が効く。
+
+実行する:
+
+```bash
+cargo check --workspace
+```
+
+コーヒーを淹れてくる。戻ってきたら次のように見えるはず:
+
+```
+    Updating git repository `https://github.com/paradigmxyz/reth`
+    Updating crates.io index
+...(大量の "Downloading" と "Compiling" 行)...
+    Finished `dev` profile [optimized + debuginfo] target(s) in 14m 23s
+```
+
+エラーが出た場合、多い原因:
+
+- **alloy のバージョン衝突。** 上の workspace.deps ブロックをコピーする前に、古い `alloy-primitives = "0.x"` を別途宣言している場合、Cargo が unify できない。解決: 全 alloy バージョンを上記の `1.5` / `2.0` に揃える。
+- **rustc バージョンが古い。** Reth v2.2.0 は rustc 1.93+ を要求する。`rust-toolchain.toml` が `1.95.0` を pin している。`rustc --version` で確認する。
+- **Git fetch のネットワーク失敗。** 再実行する。Cargo の git fetch はたまに flaky だ。
+
+### Step 9: Malachite を workspace の依存として pin する
+
+`[workspace.dependencies]` の末尾に追加する:
+
+```toml
+# --- Malachite BFT (v0.5.0 release tag に pin) ---
+# 注意: malachite repo の crate 名には `informalsystems-malachitebft-*` という prefix がついている。
+informalsystems-malachitebft-core-types      = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-core-consensus  = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-core-driver     = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55", features = ["std"] }
+informalsystems-malachitebft-engine          = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-app             = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-app-channel     = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-config          = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-codec           = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+informalsystems-malachitebft-signing-ed25519 = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
+```
+
+**Crate 名の特殊事情。** Malachite のリポ (`informalsystems/malachite`) は crate を `informalsystems-malachitebft-*` という prefix で publish している。Cargo.toml では full prefix の名前を使う。Rust ソースコードでは snake_case rename された形 (`informalsystems_malachitebft_core_types::Context`) で参照する。ファイルのコメントがこれを document している。
+
+**core-driver の `features = ["std"]`。** Driver crate には `std` という feature gate がある。標準ライブラリの facility (BTreeMap、HashMap 等) が必要なので、明示的に有効化する。他の Malachite crate はデフォルトで `std` 込みなので、feature 指定不要。
+
+再度 cargo check を実行する:
+
+```bash
+cargo check --workspace
+```
+
+今回は Reth の incremental cache が効いて、Malachite だけが fetch/compile される。典型的に 2-5 分。
+
+## テスト
+
+Step 9 が成功した後に:
+
+```bash
+cargo check --workspace 2>&1 | tail -5
+```
+
+期待値 (正確な warning 数や時間は環境次第):
+
+```
+    Finished `dev` profile [optimized + debuginfo] target(s) in 23.45s
+```
+
+binary も試せる:
+
+```bash
+cargo build --bin openhl
+./target/debug/openhl
+```
+
+期待値:
+
+```
+openhl v0.1.0
+```
+
+L1 完了。
+
+## 設計を振り返る
+
+このレッスンで encode した本質的な決定が 2 つ:
+
+1. **すべての外部依存は workspace レベルで宣言する**、crate ごとではなく。各 crate の Cargo.toml は `reth-storage-api = { workspace = true }` と書き、バージョンは workspace から継承する。Reth のバージョン bump は workspace を 1 行変えるだけで済む。代わりに各 crate が独自にバージョンを宣言する形にすると、11 crate の Cargo.toml がすべて drift するリスクが出る。
+
+2. **Reth と Malachite は git 依存、crates.io 依存ではない。** 両プロジェクトとも crates.io に publish しているが、バージョニングの cadence が大きく違う。Workspace で specific な commit SHA に pin することは意図的な trade-off: bump の摩擦は大きいが、再現性が絶対になる。Production の L1 はこのやり方を取る — 2 validator が偶然違う "0.5.x" patch を fetch したことが原因で desync する事態を絶対に避けたいからだ。
+
+この 2 つの決定は後続レッスンすべてに伝播する。L11 で crate の `[dependencies]` に `reth-storage-api = { workspace = true }` を追加するとき、Cargo は workspace レベルの pin を見つけて正しく解決する — そこを考えなくてよい状態になっている。
+
+## 答え合わせ
+
+自分の workspace を `psyto/openhl` の Stage 2+3 時点と比較する:
+
+```bash
+cd ~/code/openhl-reference
+git checkout 5fc7ca1
+diff -ru ~/code/my-openhl/Cargo.toml ./Cargo.toml
+diff -ru ~/code/my-openhl/crates/types ./crates/types
+diff -ru ~/code/my-openhl/bin/openhl ./bin/openhl
+```
+
+`authors`、`repository`、コメントの文言の違いは OK。`members`、`workspace.dependencies` の pin SHA、`[workspace.lints]`、profile の違いは NG — 該当する Step を読み返す。
+
+確認が終わったら main に戻す:
+
+```bash
+git checkout main
+```
+
+## よくある質問
+
+**Q: 自分の作業を git に commit すべき?** Yes。`~/code/my-openhl/` で git を init し、各 step または各レッスンごとに commit する。Commit log が自分用の Stage 履歴になる。
+
+```bash
+cd ~/code/my-openhl
+git init  # まだしていなければ
+git add .
+git commit -m "L1 — workspace + Reth + Malachite を pin"
+```
+
+**Q: "unused dependency" の warning が多いのはなぜ?** 各 member crate の `[dependencies]` セクションがほぼ空だから。Workspace レベルで依存を *利用可能* な状態にしたが、どの crate もまだ `[dependencies]` を埋めていない。レッスンが進んで各 crate が必要な依存を pull してくると、warning は減る。
+
+**Q: ディスクが足りなくなった。** Reth と Malachite の source tree + target/ cache で 10-15 GB に達することもある。ディスクを足すか、`.cargo/config.toml` で `[build] target-dir = ...` を別ドライブに向ける。
+
+**Q: 依存の fetch を並列化できる?** Cargo は自動的に並列化する。"Updating git repository" steps は git cache に書き込むので順次実行だが、"Compiling" steps はコアにまたがって並列化される。遅いと感じたら `cargo build -j $(nproc)` を確認する。
+
+## 次のレッスン (L2)
+
+Workspace がコンパイルされる状態になった。アプリケーションロジックはまだない。L2 では最初のアプリケーションコードを書く — `openhl-types` の `BlockHash`、`PayloadId`、`PayloadAttrs`、`ExecutedBlock`、`PayloadStatus`。これらは consensus↔EVM contract の **共通語彙** だ。L2 を終えると、contract type がコンパイルされ、基本的なテストが pass する状態になる。続く L3 でその type を使う trait を書く。
 ````
 
 ---
 
 ## Seed-file slot
 
-レッスン 1 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consensus-ja`) に landing する、Module 1 の最初のレッスンとして:
+L1 は Module 1 (Foundations) の sortOrder 0 に landing する:
 
 ```typescript
-// Course.modules.create array:
 {
-  title: 'Execution/consensus split',
+  title: 'レッスン 1 — Workspace + Reth + Malachite (Stages 1-3)',
+  slug: 'openhl-workspace-ja',
+  type: 'CONTENT',
   sortOrder: 0,
-  lessons: { create: [
-    {
-      title: 'BFT と EVM の contract',
-      slug: 'openhl-consensus-contract-ja',
-      type: 'CONTENT',
-      sortOrder: 0,
-      duration: 15,
-      xpReward: 40,
-      content: `# BFT と EVM の contract\n\n午前 3 時。 ...`  // L1 markdown
-    },
-    // L2: Hyperliquid、Tempo、CometBFT-based chain が converge する場所 (TBD)
-  ]}
+  duration: 45,
+  xpReward: 80,
+  content: `# レッスン 1 — Workspace + Reth + Malachite (Stages 1-3)\n\n...`
 },
 ```
 
 ## SHA pinning discipline
 
-すべての `file:line@SHA` cite は SHA `0844d58` を pin する。レッスン 1 は レッスン 7/10 より cite が少ない — レッスンが大部分 conceptual (contract design) だからだ; anchored citation は `crates/consensus/src/bridge.rs:11` の trait のみで、これは Stage 6a (`13113db`) 以来安定しており `0844d58` でも変わっていない。
+L1 が引用する openhl の commit は 2 つ (§答え合わせ で参照):
+- `75be9de` (Stage 1: workspace bootstrap)
+- `5fc7ca1` (Stage 2+3: Reth と Malachite を pin)
 
-この trait は course arc 全体にとって load-bearing な artifact だ:
-- レッスン 1 は contract として導入する
-- レッスン 7 は各メソッドを Ethereum Engine API にマップする
-- レッスン 9 は設計プロセスを walk する
-- レッスン 10 はそれを exercise する commit handler を cite する
-
-Trait surface への変更は 4 レッスンすべてを invalidate する; SHA で cite するので invalidation が detect 可能になる。
+これらの SHA は openhl のリポが rebase/squash されると変わる。変わった場合はこのレッスンの §答え合わせ を更新する必要がある。それ以外の点で、本レッスンの内容は openhl の line-level な変更からは独立している。
 
 ## Style review notes (self-critique before paste)
 
-- **レッスン 1 が lesson-format テンプレートだった。** レッスン 7 + レッスン 10 はその cadence (3am hook → 7 sections → practice + final check) に従う。どれかを更新するときは cadence を一貫させ、コースが 1 つの voice で読めるようにすること。
-- **§5 の "boundary の在処" テーブル** は最初 (proposer.rs、validator.rs、sync.rs といった) 存在しないパスを列挙していた。`0844d58` での実ファイル (bridge.rs、runner.rs、engine_app.rs、engine.rs、live_node.rs) と一致するよう更新済み。File layout が再シフトした場合 (例: actor-engine work が consolidate されたとき) はこのテーブルも追随が必要。
-- **Exercise 2 は両ファイルを SHA `0844d58` で読むよう指示する** — これは 3 つのうち最も強力なエクササイズ、コードを実際に開かせるし「contract leak なし」の主張は testable だからだ。
-- **翻訳 policy は レッスン 7/10 JA と同一**:
-  - Engine API 用語、Reth/Malachite 識別子、`bridge`、`commit`、`validator`、`consensus`、`execution`、`payload` は英語のまま。
-  - 🛑 callout: Predict → 予測、Anti-fluency → 反流暢性。
-  - File paths、function names、types は英語のまま。
-- **「contract」をカタカナ「コントラクト」にしない理由**: 本レッスンは API design 教育であり、英語の "contract" は API/プロトコル/型 contract という多義語として機能している。カタカナにすると "smart contract" との混同を読者に持ち込む。
-- **未公開**: `course.isPublished: false` のまま。レッスン 11/12/レッスン 13 JA 翻訳が揃ってから一斉公開予定。
+- **L1 は 45 分** — L0 (20 分) より長い。読者が実際に ~150 行の TOML をタイプし、初回 `cargo check` で 10-15 分待ち、複数の "なぜこの選択か" subsection を読むため。XP 80 はその重みを反映。
+- **§Plan の予測 callout** (どの 10 crate か sketch する) は読者の L0 知識が初めてテストされる場所。思い出せなければ L0 §3-§4 が答え。
+- **§5 の 反流暢性 callout** (「最初に全依存を書いたらいいのでは」) は real な beginner trap。Junior Rust 開発者は「便利だから」と過剰に依存を宣言する傾向がある。**Soften しない**。
+- **「最初の cargo check は 5-15 分かかる」警告** は不可欠 — これがないと読者はコマンドがハングしていると思って中断する。先に期待値をセットする。
+- **Step 7 の「エラーが出た場合に多い原因」セクション** は bootstrap で最もよく嵌る 3 ポイントを cover している。Reviewer から「X はどう?」と質問があって X が無い場合は追加 — そこが読者を失うポイント。
+- **Step 5 で残り 9 crate を演習として残す** — `types` でパターンを見せて、残りを表でリスト化。レッスンの長さを管理するための意図的な選択。Junior な読者は 10 個全部を walk してほしがるかもしれないが、中級者はそれを退屈に感じる。
+- **翻訳 policy**:
+  - Cargo / Rust の用語 (`workspace`、`resolver`、`feature`、`dependency`、`target`、`profile` 等) は英語のまま
+  - コードブロック、コマンド、TOML キーは英語のまま
+  - 🛑 callout: 予測 (Predict)、反流暢性 (Anti-fluency)
+  - 「依存」「依存グラフ」「依存解決」は日本語、「dependency」が文脈で必要な場合は併記
+  - 「resolver」「pin する」「fetch」「compile」「fork」「Stage」「commit」「workspace」は英語のまま — Rust エンジニアにとって直感的
