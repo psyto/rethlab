@@ -67,7 +67,7 @@ const EN: LocaleConfig = {
     slug: 'reth-openhl-consensus-en',
     title: 'Building OpenHL — Consensus Substrate',
     description:
-      "The L1 Architect tier's worked example: build a Hyperliquid-shape L1 (BFT consensus + EVM execution + CLOB matching engine) on Reth and Malachite. By the end you've followed every load-bearing piece — the four-message ConsensusBridge contract, Malachite's Context trait, Reth's NodeBuilder swap-slots, the proposer hot loop, custom EVM precompiles that read live orderbook state — through real code at psyto/openhl. The course where consensus theory becomes a running cargo binary.",
+      "OpenHL is the open-source reference implementation of Hyperliquid: in place of the closed-source HyperBFT / HyperCore / HyperEVM stack, it assembles the same shape of L1 on top of Reth (EVM execution) and Malachite (BFT consensus). This course is the L1 Architect tier's worked example, walking that build end to end. By the end you can read every load-bearing piece of a Hyperliquid-shape L1 (BFT consensus + EVM execution + CLOB matching engine) in the actual psyto/openhl code — the four-message ConsensusBridge contract that wires CL to EL, Malachite's Context trait, Reth's NodeBuilder pattern for swapping individual components, the proposer hot loop, and custom EVM precompiles that read live orderbook state. Not a course that just talks about consensus theory; one that takes you all the way to a running cargo binary.",
     track: 'reth-l1-architect',
     instructorName: 'RethLab',
   },
@@ -239,7 +239,7 @@ const JA: LocaleConfig = {
     slug: 'reth-openhl-consensus-ja',
     title: 'OpenHL を構築する — Consensus Substrate',
     description:
-      'L1 Architect tier の worked example: Reth と Malachite の上に Hyperliquid 形状の L1 (BFT consensus + EVM execution + CLOB matching engine) を構築する。読み終える頃には、load-bearing なすべての piece — 4 メッセージ ConsensusBridge contract、Malachite の Context trait、Reth の NodeBuilder swap-slot、proposer hot loop、live orderbook state を読むカスタム EVM precompile — を psyto/openhl の実コードを通じて追跡した。Consensus 理論が動く cargo バイナリになるコース。',
+      'OpenHL は Hyperliquid のオープンソース・リファレンス実装である。closed source な HyperBFT / HyperCore / HyperEVM スタックの代わりに、Reth (EVM 実行) と Malachite (BFT consensus) の上に同じ形の L1 を組み上げたもので、本コースはその構築過程を辿る L1 Architect tier の worked example だ。読み終える頃には、Hyperliquid 形の L1 (BFT consensus + EVM execution + CLOB matching engine) を支える load-bearing なすべての piece を `psyto/openhl` の実コードで読み解けるようになる — CL と EL を繋ぐ 4 メッセージの ConsensusBridge contract、Malachite の Context trait、Reth の NodeBuilder で必要な component だけを差し替えるパターン、proposer の hot loop、orderbook state を直接読むカスタム EVM precompile。コンセンサスの理論を読むだけのコースではない。理論を動く cargo バイナリにまで落とすところまで連れていくコースだ。',
     track: 'reth-l1-architect',
     instructorName: 'RethLab',
   },

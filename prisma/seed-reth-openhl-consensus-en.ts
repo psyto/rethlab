@@ -11,7 +11,7 @@ export async function seedRethOpenHlConsensusEN(prisma: PrismaClient) {
       slug: "reth-openhl-consensus-en",
       title: "Building OpenHL — Consensus Substrate",
       description:
-        "The L1 Architect tier's worked example: build a Hyperliquid-shape L1 (BFT consensus + EVM execution + CLOB matching engine) on Reth and Malachite. By the end you've followed every load-bearing piece — the four-message ConsensusBridge contract, Malachite's Context trait, Reth's NodeBuilder swap-slots, the proposer hot loop, custom EVM precompiles that read live orderbook state — through real code at psyto/openhl. The course where consensus theory becomes a running cargo binary.",
+        "OpenHL is the open-source reference implementation of Hyperliquid: in place of the closed-source HyperBFT / HyperCore / HyperEVM stack, it assembles the same shape of L1 on top of Reth (EVM execution) and Malachite (BFT consensus). This course is the L1 Architect tier's worked example, walking that build end to end. By the end you can read every load-bearing piece of a Hyperliquid-shape L1 (BFT consensus + EVM execution + CLOB matching engine) in the actual psyto/openhl code — the four-message ConsensusBridge contract that wires CL to EL, Malachite's Context trait, Reth's NodeBuilder pattern for swapping individual components, the proposer hot loop, and custom EVM precompiles that read live orderbook state. Not a course that just talks about consensus theory; one that takes you all the way to a running cargo binary.",
       difficulty: "EXPERT",
       duration: 195,
       xpReward: 560,

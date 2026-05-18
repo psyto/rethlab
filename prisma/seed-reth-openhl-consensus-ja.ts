@@ -11,7 +11,7 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
       slug: "reth-openhl-consensus-ja",
       title: "OpenHL を構築する — Consensus Substrate",
       description:
-        "L1 Architect tier の worked example: Reth と Malachite の上に Hyperliquid 形状の L1 (BFT consensus + EVM execution + CLOB matching engine) を構築する。読み終える頃には、load-bearing なすべての piece — 4 メッセージ ConsensusBridge contract、Malachite の Context trait、Reth の NodeBuilder swap-slot、proposer hot loop、live orderbook state を読むカスタム EVM precompile — を psyto/openhl の実コードを通じて追跡した。Consensus 理論が動く cargo バイナリになるコース。",
+        "OpenHL は Hyperliquid のオープンソース・リファレンス実装である。closed source な HyperBFT / HyperCore / HyperEVM スタックの代わりに、Reth (EVM 実行) と Malachite (BFT consensus) の上に同じ形の L1 を組み上げたもので、本コースはその構築過程を辿る L1 Architect tier の worked example だ。読み終える頃には、Hyperliquid 形の L1 (BFT consensus + EVM execution + CLOB matching engine) を支える load-bearing なすべての piece を `psyto/openhl` の実コードで読み解けるようになる — CL と EL を繋ぐ 4 メッセージの ConsensusBridge contract、Malachite の Context trait、Reth の NodeBuilder で必要な component だけを差し替えるパターン、proposer の hot loop、orderbook state を直接読むカスタム EVM precompile。コンセンサスの理論を読むだけのコースではない。理論を動く cargo バイナリにまで落とすところまで連れていくコースだ。",
       difficulty: "EXPERT",
       duration: 195,
       xpReward: 560,
