@@ -133,6 +133,17 @@ const EN: LocaleConfig = {
       h1Marker: '# Lesson 4 — `InMemoryEvmBridge` — first impl of the trait',
       startSignature: 'By the end of this lesson:',
     },
+    {
+      draftFile: 'openhl_l5_en.md',
+      moduleNumber: 3,
+      sortOrder: 1,
+      title: 'Lesson 5 — RethEvmBridge with real alloy types',
+      slug: 'openhl-reth-bridge-en',
+      duration: 40,
+      xpReward: 70,
+      h1Marker: '# Lesson 5 — `RethEvmBridge` with real alloy types',
+      startSignature: 'By the end of this lesson:',
+    },
   ],
 };
 
@@ -213,6 +224,17 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 4 — `InMemoryEvmBridge` — trait の最初の impl',
       startSignature: 'このレッスンの終わりに:',
     },
+    {
+      draftFile: 'openhl_l5_ja.md',
+      moduleNumber: 3,
+      sortOrder: 1,
+      title: 'レッスン 5 — real alloy 型を使う RethEvmBridge',
+      slug: 'openhl-reth-bridge-ja',
+      duration: 40,
+      xpReward: 70,
+      h1Marker: '# レッスン 5 — real alloy 型を使う `RethEvmBridge`',
+      startSignature: 'このレッスンの終わりに:',
+    },
   ],
 };
 
@@ -234,8 +256,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 165, // L0 (20) + L1 (45) + L2 (30) + L3 (30) + L4 (40) — build-along pilot
-  xpReward: 330, // L0 (60) + L1 (80) + L2 (60) + L3 (60) + L4 (70) — build-along pilot
+  duration: 205, // L0 (20) + L1 (45) + L2 (30) + L3 (30) + L4 (40) + L5 (40) — build-along pilot
+  xpReward: 400, // L0 (60) + L1 (80) + L2 (60) + L3 (60) + L4 (70) + L5 (70) — build-along pilot
   tags: ['reth', 'malachite', 'bft', 'evm', 'clob', 'l1', 'openhl', 'expert'],
   sortOrder: 600,
   isPublished: false,
