@@ -214,12 +214,12 @@ L13 を読み終える頃には、\`first_block_via_engine_actors\` 統合テス
 
 素朴な L1 は consensus と execution を 1 つの巨大モジュールに融合させる。State の更新、署名検証、fork choice、投票集計、mempool — すべて 1 つのバイナリに、すべて絡み合って。これは 2020 年以前のほとんどのチェーンの書き方だ。動く。**しかし、すべてを失うコストが伴う。**
 
-コストは 3 箇所に落ちる:
+コストは 3 箇所に現れる:
 
 | コスト | 何を失うか |
 | :--- | :--- |
-| **Swappability** | EVM を書き直さずに consensus を変えられない、逆もしかり。HL は HyperBFT v1 から v2 へ移行する際 matching engine に触れずに済む — v1 と v2 は同じ contract を honor するからだ。 |
-| **Testability** | EVM を起動せずに consensus を unit-test できない、逆もしかり。両半分とも integration-test オンリーになる。 |
+| **Swappability** | EVM を書き直さずに consensus を変えられない、逆もしかり。HL は HyperBFT v1 から v2 へ移行する際 matching engine に触れずに済む — v1 と v2 が同じ contract を守るからだ。 |
+| **Testability** | EVM を起動せずに consensus を unit-test できない、逆もしかり。両側とも integration-test オンリーになる。 |
 | **Debuggability** | 午前 3 時にどちら側が stall したか分からない。クラッシュダンプは区別のつかない泥団子になる。 |
 
 Contract がその答えだ。両側のメッセージに名前を付けると、それぞれの側を単独で replace、mock、fuzz、reason できるようになる。**Contract が API である。コードは実装詳細だ。**
@@ -245,7 +245,7 @@ execution crate が consensus crate に負っているのは厳密に 3 つ:
 
 1. **Deterministic execution。** State S にブロック B を適用したとき、すべての validator が同じ S' を生成する。Floating-point なし、system time なし、randomness なし、map iteration order なし。Determinism は non-negotiable; 1 つの違反でチェーンが fork する。
 2. **Fast block assembly。** Consensus が「ブロックを build せよ」と言ったとき、execution は propose-timeout の予算内 (HL、Tempo、OpenHL では ~300–500ms) でブロックを返す。それより遅いとチェーンが stall する。
-3. **Import 時の validity verification。** Peer の proposal が到着したとき、execution は「これは cleanly に execute するか?」を *commit 前に* 答えられる。
+3. **Import 時の validity verification。** Peer の proposal が到着したとき、execution は「これは問題なく execute するか?」を *commit 前に* 答えられる。
 
 > 🛑 **予測。** EVM の 3 つの promise のうち、1 つは他より遥かに難しい。**どれで、なぜ自前 L1 を書くチームを最も頻繁に噛むのか?** 偶然 ship してしまう nondeterminism の最も簡単なソースを考えよ。
 
@@ -259,16 +259,16 @@ execution crate が consensus crate に負っているのは厳密に 3 つ:
 | :--- | :--- | :--- | :--- |
 | CL → EL | \`build_payload(parent, attrs)\` | validator が height N の proposer になったとき | 「\`parent\` の上に candidate block を build せよ。」 |
 | EL → CL | \`payload_ready(block, state_root)\` | propose deadline 前に build が完了したとき | 「ブロックはこれだ。proposal value として使え。」 |
-| CL → EL | \`validate_payload(block)\` | peer の proposal が到着したとき | 「このブロックは cleanly に execute するか? VALID / INVALID / SYNCING で答えよ。」 |
+| CL → EL | \`validate_payload(block)\` | peer の proposal が到着したとき | 「このブロックは問題なく execute するか? VALID / INVALID / SYNCING で答えよ。」 |
 | CL → EL | \`commit(block_hash)\` | height N で BFT が \`Decided\` に到達したとき | 「このブロックを new head として finalize せよ。」 |
 
 それだけだ。CL → EL 方向に 3、EL → CL 方向に 1。**他のあらゆる interaction は leak である。**
 
 このテーブルで明確に見るべきものが 3 つある:
 
-- **Validation と commit は分離されている。** Validator は height ごとに多数の candidate block を import し (round-robin の各 proposer slot あたり 1 つ)、それぞれを speculatively に execute し、commit するのは 1 つだけだ。多くのチームはこれらを 1 つのメッセージに collapse し、後で speculative execution が feature ではなく refactor になったときに代償を払う。
+- **Validation と commit は分離されている。** Validator は height ごとに多数の candidate block を import し (round-robin の各 proposer slot あたり 1 つ)、それぞれを投機的に execute し、commit するのは 1 つだけだ。多くのチームはこれらを 1 つのメッセージに collapse してしまい、後になって speculative execution を feature として追加したくなったときに refactor の代償を払う。
 - **\`build_payload\` は即座に何も返さない。** Async build job を kick off するだけ; ブロックは後で \`payload_ready\` 経由で到着する。これが「build during voting」のトリック — payload assembly が前のブロックの投票と overlap するので、propose の hot path がほぼゼロ latency になる。
-- **\`commit\` は fire-and-forget。** consensus が「これは final だ」と言ったら、execution は適用しなければならない。「本当にいいんですか?」の round-trip は存在しない。Execution が committed block を適用できない場合、チェーンは halt する。それが正しい挙動だ — committed block を silently に drop するのが世界を fork させるやり方だ。
+- **\`commit\` は fire-and-forget。** consensus が「これは final だ」と言ったら、execution は適用しなければならない。「本当にいいんですか?」の round-trip は存在しない。Execution が committed block を適用できない場合、チェーンは halt する。それが正しい挙動だ — committed block を黙って drop するのが世界を fork させるやり方だ。
 
 ## 5. OpenHL コードでの boundary の在処
 
@@ -285,7 +285,7 @@ crates/evm/            ← Reth を話す。EL 側から 4 メッセージを所
   src/live_node.rs     ← LiveRethEvmBridge — real Reth node に対する full impl
 \`\`\`
 
-\`crates/consensus/src/bridge.rs:11@0844d58\` の \`ConsensusBridge\` trait が contract を textual に表現したものだ:
+\`crates/consensus/src/bridge.rs:11@0844d58\` の \`ConsensusBridge\` trait が、その contract を Rust trait の形で表現したものだ:
 
 \`\`\`rust
 // crates/consensus/src/bridge.rs
@@ -314,9 +314,9 @@ pub trait ConsensusBridge: Send + Sync {
 }
 \`\`\`
 
-この trait を注意深く読め。**OpenHL における consensus と execution の間のすべての interaction は、これら 4 メソッドのいずれかを流れる。** 境界を別の方法で渡って reach しようとしている自分に気づいたら — consensus crate から Reth DB handle にアクセスしたり、EVM crate から Malachite の vote state を覗き見したり — それは contract を破った瞬間であり、1 週間以内に forked devnet で代償を払うことになる。
+この trait を注意深く読め。**OpenHL における consensus と execution の間のすべての interaction は、これら 4 メソッドのいずれかを流れる。** 境界を別の方法で越えようとしている自分に気づいたら — consensus crate から Reth DB handle にアクセスしたり、EVM crate から Malachite の vote state を覗き見したり — それが contract を破った瞬間だ。1 週間以内に forked devnet で代償を払うことになる。
 
-> 🛑 **反流暢性。** 「Reth *が* OpenHL の consensus layer だ。」 **違う。** Reth は \`Consensus\` trait を ship しているが、それは *block-validation hook* だ — parent-hash check、gas-limit check、EIP-1559 base-fee math。BFT エンジンではない。Reth には leader election も投票も view change も無い。BFT エンジンは Malachite であり、\`crates/consensus\` に座って、上記 4 メッセージを通じて Reth と話している。これらを混同するとアーキテクチャ図が永久に間違いになる。
+> 🛑 **反流暢性。** 「Reth *が* OpenHL の consensus layer だ。」 **違う。** Reth は \`Consensus\` trait を ship しているが、それは *block-validation hook* だ — parent-hash check、gas-limit check、EIP-1559 base-fee math。BFT エンジンではない。Reth には leader election も投票も view change も無い。BFT エンジン本体は Malachite で、\`crates/consensus\` 配下に置かれており、上記 4 メッセージを通じて Reth とやり取りしている。これらを混同するとアーキテクチャ図が永久に間違いのままになる。
 
 ## 6. 真面目な BFT L1 はすべて同じ場所に線を引いている
 
@@ -377,17 +377,17 @@ Production の BFT L1 をどれか 1 つ取って、consensus 側のアーキテ
 
 BFT の promise は **safety** だ: 2 人の honest validator が同じ height について異なる値で decide することはない。これには corollary がある: **一度 decide されたら reorg は無い。** やり直しは無い。
 
-これが成り立つには、execution が *decided block に対して* deterministic でなければならない。Decided block を適用したすべての validator が同じ post-state に到達する必要がある。さもなくば、ブロック内容に同意したが効果には同意しなかった 2 validator が事実上 fork する — 同じブロック、異なる state — そして chain の safety 性質は silently に違反される。
+これが成り立つには、execution が *decided block に対して* deterministic でなければならない。Decided block を適用したすべての validator が同じ post-state に到達する必要がある。そうでなければ、ブロックの中身には同意したが効果には同意していない 2 validator が事実上 fork する — 同じブロック、異なる state — chain の safety 性質が誰にも気づかれないまま破られることになる。
 
-Optimistic execution はこれを subtle に undermine する。パターン:
+Optimistic execution はこれを subtle な形で undermine する。パターン:
 
 1. Validator が candidate block を受け取る (まだ decide されていない)
-2. Validator が speculatively に block を execute して state を compute する
+2. Validator が投機的に block を execute して state を compute する
 3. Validator は compute した state に基づいて投票
 4. 他の validator も同じことをする
 5. 投票を集約; 2/3+ なら decide
 
-問題は step 2 だ: 各 validator は自分の state で block を execute している。Pre-state が diverge していたら (以前の nondeterminism バグ、network partition 等で)、異なる post-state を compute して異なる投票をする。**Fork は投票中に起こる、後ではない。** そして BFT の safety promise はそれを catch しない — 投票は同じ block_hash で quorum に到達するかもしれないが、結果の state は disagree する。
+問題は step 2 だ: 各 validator は自分の state で block を execute している。Pre-state が分岐していたら (以前の nondeterminism バグ、network partition 等で)、異なる post-state を compute して異なる投票をする。**Fork は投票中に起こる、後ではない。** そして BFT の safety promise はそれを catch できない — 投票は同じ block_hash で quorum に到達するかもしれないが、結果の state は食い違ったままになる。
 
 Decide-first パターンはこれを sidestep する:
 
@@ -395,7 +395,7 @@ Decide-first パターンはこれを sidestep する:
 2. Bytes に投票する
 3. 一度 2/3+ commit すれば、決定は final
 4. *それから* 各 validator は bytes を state に適用する
-5. State が diverge したら、それは consensus バグではなく determinism バグ — chain は silently に fork するのではなく visible に halt する (state-root mismatch)
+5. State が分岐したら、それは consensus バグではなく determinism バグ — chain は黙って fork するのではなく、state-root mismatch という目に見える形で halt する
 
 > 🛑 **反流暢性。** 「Optimistic execution は BFT のパフォーマンス最適化に過ぎない。」 **違う。** Rollback machinery (投票が逆方向に行ったときの speculative execution を undo する) を要する *異なるパラダイム* であり、safety story を変える。**Major な BFT L1 で v1 から optimistic execution を採用しているものは無い。** 上位バージョン用に提案しているものはある (HotShot、Solana 系); ship したものは無い。
 
@@ -444,7 +444,7 @@ Decide-first パターンは openhl の設計を 3 つの方法で形作る:
 
 > 🛑 **予測。** スタートアップが「optimistic execution を持つ BFT chain」を提案 — decide-first に対して 2x スループットを主張する。**§1 のテーブルが露出しなかったアーキテクチャ commitment は何か?**
 
-答え: rollback 可能な EL に commit している — speculatively に execute されたブロックに対して consensus が反対投票したときに state を revert できる execution layer。Decide-first chain の EL より桁違いに複雑だ。**2x スループットの主張は本物だが、エンジニアリングの請求書は EL で発生する。** これを試みるほとんどのチームは ship する前に EL を 2 回書き直すことになる。
+答え: rollback 可能な EL を作ることに commit している — 投機的に execute されたブロックに対して consensus が反対投票したときに state を revert できる execution layer のことだ。Decide-first chain の EL より桁違いに複雑になる。**2x スループットの主張は本当だが、その請求書はエンジニアリング側 (具体的には EL) に回ってくる。** これを試みるほとんどのチームは ship する前に EL を 2 回書き直すことになる。
 
 ## 6. 練習
 
@@ -512,7 +512,7 @@ where
 }
 \`\`\`
 
-10 type、4 method。Doc comment 込みで全体は約 90 行。**この trait を読むことは、Malachite から見て自分の chain がどう見えるかを読むことそのものだ。**
+10 type、4 method。Doc comment 込みで全体は約 90 行。**この trait を読むことは、Malachite から見た自分の chain の姿を読むことそのものだ。**
 
 各 type への制約に注目: それぞれが自分の sub-trait (\`Address\`、\`Height\`、\`Proposal<Self>\` 等) を持ち、Malachite が期待する operation を定義している。§2 でこれらを inventory する。
 
@@ -529,7 +529,7 @@ where
 | \`Vote\` | Prevote または precommit | \`OpenHlVote { height, round, value_id, vote_type, address }\` |
 | \`ProposalPart\` | ストリームされる proposal piece (大きな value 用) | \`OpenHlProposalPart\` (unit struct; ProposalOnly mode) |
 | \`Extension\` | Precommit に付随するアプリケーションデータ | \`()\` (v0 では extension なし) |
-| \`SigningScheme\` | 署名がどう見えるか | \`malachitebft-signing-ed25519\` の \`Ed25519\` |
+| \`SigningScheme\` | 署名の形 (sign / verify / encode の取り決め) | \`malachitebft-signing-ed25519\` の \`Ed25519\` |
 
 各 row は \`crates/consensus/src/types/\` のファイルに対応する — それが構造だ: **1 概念につき 1 type、7 ファイル** (Address と Validator は \`validator.rs\` で共有; \`Extension\` は \`()\` なのでファイル不要; \`SigningScheme\` は Malachite が ship)。
 
@@ -717,9 +717,9 @@ pub fn new(mut validators: Vec<OpenHlValidator>) -> Self {
 }
 \`\`\`
 
-\`(voting_power desc, address asc)\` でソート。**このソート順は determinism にとって load-bearing だ。**
+\`(voting_power desc, address asc)\` でソート。**このソート順が determinism を成立させている肝心な部分だ。**
 
-理由: \`OpenHlContext::select_proposer\` は \`validator_set.get_by_index((height + round) % count)\` で proposer を選ぶ (L11 領域)。同じ validator set に対して 2 validator がソート順が違うと、同じ round で異なる proposer を選び、chain が fork する。
+理由: \`OpenHlContext::select_proposer\` は \`validator_set.get_by_index((height + round) % count)\` で proposer を選ぶ (L11 領域)。同じ validator set でも、2 validator のソート順が違えば、同じ round で異なる proposer を選んでしまい chain が fork する。
 
 CometBFT convention (openhl が継承) は \`voting_power desc, address asc\` だ。このソート + modulo 回転を使う chain は、address space が totally ordered である限り deterministic な proposer election を得る — それが \`Address: Ord\` が hard bound (§1) である理由だ。
 
@@ -851,7 +851,7 @@ L4 の hook が「40 行の trait impl で chain にアイデンティティが�
 
 Type 約 230 LOC + Context impl 90 LOC = Module 2 deliverable 全体で ~320 LOC。「40 行」の主張は trait impl 限定だった (struct そのものではない); より広い codebase はその ~8 倍に landing する。
 
-しかし load-bearing な決定の数は小さい: **どこにでも propagate する 2 つの設計選択。**
+ただし本質的な設計判断の数は少ない: **どこにでも propagate していく 2 つの選択がそれだ。**
 
 1. **CometBFT のソート convention** (\`voting_power desc, address asc\`) — すべての validator-set 構築に順序の合意を強制する
 2. **20-byte Ethereum address フォーマット** — chain genesis で固定; 後続のすべてがそれを仮定する
@@ -878,7 +878,7 @@ Type 約 230 LOC + Context impl 90 LOC = Module 2 deliverable 全体で ~320 LOC
 
 L3 は Malachite を「I/O を抜いた抽象 Tendermint アルゴリズム」と言った。本レッスンは I/O を *戻す* ものについてだ。**Consensus は時間を無視する state machine; engine がそれに時計を与える。**
 
-Malachite の protocol ロジックは synchronous な \`Driver\` struct に住む — pure state machine、timer なし、network なし、thread なし。\`malachitebft-engine\` crate がそれを actor system (\`ractor\` 経由) でラップし、real consensus が必要とする runtime context — timeout、network socket、WAL write、mempool access — を提供する。
+Malachite の protocol ロジックは synchronous な \`Driver\` struct の中に置かれている — pure state machine、timer なし、network なし、thread なし。\`malachitebft-engine\` crate がそれを actor system (\`ractor\` 経由) でラップし、real consensus が必要とする runtime context — timeout、network socket、WAL write、mempool access — を提供する。
 
 L4 の type は Malachite に *何が* この chain かを伝える。本レッスンは Malachite が *どう* それらの type を running node に変えるかについてだ。
 
@@ -907,7 +907,7 @@ L4 の type は Malachite に *何が* この chain かを伝える。本レッ�
 
 \`OpenHlNode::start()\` が \`start_engine\` を call するとき (openhl の Stage 6c → 6d)、engine は 5 つの actor を spawn する:
 
-| Actor | どこに住むか | 何を所有 |
+| Actor | 配置場所 | 何を所有 |
 | :--- | :--- | :--- |
 | **Consensus** | \`malachitebft-engine::consensus\` | \`Driver\` (state machine)、proposer-timeout タイマー、vote tallying |
 | **Network** | \`malachitebft-engine::network\` | libp2p socket、gossipsub topic 購読、peer discovery |
@@ -915,9 +915,9 @@ L4 の type は Malachite に *何が* この chain かを伝える。本レッ�
 | **Host** (connector) | \`malachitebft-app-channel::connector\` | エンジンと **アプリ側の** app loop の bridge (\`AppMsg\` イベント送信) |
 | **Sync** | \`malachitebft-engine::sync\` | Peer catch-up — 遅れているとき欠けたブロックを fetch |
 
-加えて我々自身の runtime concern:
+加えて我々自身の runtime 側の関心事:
 
-| Component | どこに住むか | 何を所有 |
+| Component | 配置場所 | 何を所有 |
 | :--- | :--- | :--- |
 | **\`run_engine_app\` loop** | \`crates/consensus/src/engine_app.rs:29@0844d58\` | \`AppMsg\` を受信、\`ConsensusBridge\` メソッドを call、reply |
 
@@ -965,7 +965,7 @@ Network actor は libp2p をラップする:
 - Incoming メッセージを decode して Consensus に forward
 - Peer discovery を handle
 
-Single-validator mode (peer なし) では、Network actor は依然として spawn する — libp2p が \`/ip4/127.0.0.1/tcp/0\` で listen し始める — が、inbound メッセージは無く、誰にも broadcast しない。**Single-validator mode では no-op になる**、これが \`OpenHlCodec\` の gossip stub (Stage 6b) が error を返してもうまくいく理由だ: 何もそれらを encode していない。
+Single-validator mode (peer なし) では、Network actor は依然として spawn する — libp2p が \`/ip4/127.0.0.1/tcp/0\` で listen し始める — が、inbound メッセージは到着せず、broadcast する相手もいない。**Single-validator mode では実質 no-op だ。** これが \`OpenHlCodec\` の gossip stub (Stage 6b) が error を返してもうまくいく理由だ: そもそも encode を要求する側がいない。
 
 WAL actor は crash recovery のために consensus メッセージをディスクに書く:
 
@@ -990,7 +990,7 @@ Malachite は 3 つの \`ValuePayload\` mode をサポートする (L4 §5 で�
 
 **openhl はこれを完全に skip する** (\`ProposalOnly\`)、そのため \`AppMsg::ReceivedProposalPart\` は我々には絶対に fire しない。しかし大きな proposal を持つ chain 用に openhl を fork するなら (例: 10MB の pending fill を value が carry する CLOB chain)、stream-reassembly path を実装する必要がある。
 
-注意すべき gotcha: **part-streaming コードは \`malachitebft-engine::util::streaming\` に住む**、app loop ではない。\`ConsensusConfig::value_payload\` で configure する; engine が残りを handle する。**書くのは streaming コードではない; value-reassembly ロジックだ。**
+注意すべき gotcha: **part-streaming コードは \`malachitebft-engine::util::streaming\` に置かれている** — アプリ側の loop ではない。\`ConsensusConfig::value_payload\` で configure すれば、残りは engine が handle する。**書くのは streaming コードではない; value-reassembly ロジックだ。**
 
 ## 7. 練習
 
@@ -1155,7 +1155,7 @@ NodeBuilder パターンは openhl を 3 つのことに対して future-proof �
                   xpReward: 40,
                   content: `# Engine API — \`forkchoice_updated\` と \`new_payload\` が実際に何をしているか
 
-午前 3 時。同じマシン上の 2 つのサービス — Reth プロセスと Lighthouse プロセス — が、**正確に 2 つの RPC メソッド** だけをやり取りしている。これが Ethereum の consensus layer と execution layer の間の会話のすべてだ。この 2 つのメソッドに名前を付け、openhl の実コードでそれらを trace し、実際の validator がそれらを honestly に実装することを強制するさまを見たとき、なぜ HL や Tempo のようなチェーンが Ethereum の 12 秒に対してサブ秒 finality を提供できるかが理解できるようになる。
+午前 3 時。同じマシン上の 2 つのサービス — Reth プロセスと Lighthouse プロセス — が、**正確に 2 つの RPC メソッド** だけをやり取りしている。これが Ethereum の consensus layer と execution layer の間の会話のすべてだ。この 2 つのメソッドに名前を付け、openhl の実コードでそれらを trace し、実際の validator が「真っ当な実装でなければ通さない」と強制してくるさまを目にしたとき、なぜ HL や Tempo のようなチェーンが Ethereum の 12 秒に対してサブ秒 finality を提供できるかが分かるようになる。
 
 > 🛑 **スクロール前に予測。** 2 つのメソッド、3 つの forkchoice ポインタ (head/safe/finalized)、1 つの payload-build hint、1 つの validation result。それぞれのメソッドが何を入力に取り何を返すかを紙に sketch してみよ。後で実際の spec と、\`crates/evm/src/live_node.rs:68@0844d58\` のコードに照らし合わせて検証する。
 
@@ -1290,7 +1290,7 @@ let header = Header {
 };
 \`\`\`
 
-Base-fee 計算は、Reth の validator が base-fee を *verify* するために使う同じヘルパー (\`ChainSpec::next_block_base_fee\`) を call する。**構築によって** 両者は一致する — 偶然ではない。
+Base-fee 計算は、Reth の validator が base-fee を *verify* するために使うのと同じヘルパー (\`ChainSpec::next_block_base_fee\`) を call している。**仕組み上** 両者は一致する — 偶然ではない。
 
 > 🛑 **反流暢性。** 「\`validate_payload\` は後で実装するよ。」 **順番が違う。** Validation を先にやる。なぜなら real validation こそが real construction を強制するからだ。\`build_payload\` を permissive validator (またはまったく validator なし) に対して実装すると、見た目は問題ないが、real node が validate しようとしたときに 3 層下で失敗する header を ship することになる。
 
@@ -1344,7 +1344,7 @@ forkchoiceUpdated(state{head=parent}, Some(attrs)) → PayloadId
 
 Step 2-5 が wall clock を支配する。**Step 4 (real EVM execution) は通常 full block で 50-300ms かかる**; step 5 (state root) がさらに 50-150ms 追加。
 
-\`EthereumPayloadBuilder\` は \`reth_ethereum::node::EthereumPayloadBuilder\` (Reth v2.2.0 source の \`reth-ethereum-payload-builder\` から) に住む。\`reth-payload-builder\` の \`PayloadBuilder\` trait を impl する。**上記の各 step は我々のコードではなく Reth のコードの中だ。**
+\`EthereumPayloadBuilder\` は Reth v2.2.0 の \`reth-ethereum-payload-builder\` crate に置かれており、\`reth_ethereum::node::EthereumPayloadBuilder\` から re-export されている。\`reth-payload-builder\` の \`PayloadBuilder\` trait を impl する。**上記の各 step を実装しているのは我々のコードではなく Reth のコードの中だ。**
 
 ## 2. Transaction 選択 — \`Pool::best_transactions\`
 
@@ -1361,7 +1361,7 @@ Pool が除外するもの:
 
 **Pool は mempool-aware だ。** Peer が broadcast したがまだ含まれていない txn、RPC 経由で submit されたローカル txn を知っている; すべてを priority queue で track している。
 
-> 🛑 **反流暢性。** 「Payload building は順番に transaction を実行するだけだ。」 **違う。** どの transaction を含めるか — そしてどの順番で — の *選択* が仕事の半分だ。Ordering ポリシーは fee revenue、transaction fairness、(重要なことに) MEV opportunity を決定する。**Ordering ポリシーの変更は chain が行える最も consequential なカスタマイズの 1 つだ。**
+> 🛑 **反流暢性。** 「Payload building は順番に transaction を実行するだけだ。」 **違う。** どの transaction を含めるか — そしてどの順番で並べるか — の *選択* が仕事の半分だ。Ordering ポリシーは fee 収入、transaction fairness、そして (重要なことに) MEV opportunity を決定する。**Ordering ポリシーの変更は、chain が下せる中で最も影響範囲の大きいカスタマイズ判断の 1 つだ。**
 
 ## 3. State root 計算 — execution が数字になる場所
 
@@ -1440,7 +1440,7 @@ L11 §5 は「まだ使っていない async trick」を導入した:
 
 > 「Round-decided 時に \`build_payload(...)\` を kick off して、EL に前の round の投票ウィンドウ全部を block assembly に使わせよ。」
 
-今、何が amortize されているかが見える。§1 のテーブルの expensive operation (step 2-5: pull、order、execute、state root) は full mainnet-shape block で累積 100-400ms かかる。これらが前の round の投票 *中* に走れば (vote 伝播は常に少なくとも 200-500ms かかる)、propose hot path は「キャッシュ済み payload を fetch」に落ちる — microsecond、何百ms ではなく。
+これで何が amortize されているかが見えてくる。§1 のテーブルの expensive operation (step 2-5: pull、order、execute、state root) は full mainnet-shape block で累積 100-400ms かかる。これらが前の round の投票 *中* に走っていれば (vote 伝播は常に少なくとも 200-500ms かかる)、propose 時の hot path は「キャッシュ済み payload を fetch するだけ」で済む — マイクロ秒のオーダーであって、数百ミリ秒ではない。
 
 これが **the** パフォーマンス最適化で、HL、Tempo、openhl が real EVM execution をしながらサブ秒 slot を動かせる理由だ。**これなしにはサブ秒 slot は得られない。** 空 EVM を動かす (\`0844d58\` の openhl のように real tx を execute しない) か、execution を投票ウィンドウに対して並列化するかだ。
 
@@ -1536,9 +1536,9 @@ pub trait ConsensusBridge: Send + Sync {
 | \`run_engine_app\` AppMsg loop | 自然 | spawn-blocking 体操が必要 |
 | Test double (in-memory state) | trivial — \`Mutex\` 持つだけ | trivial |
 
-決定は 2 行目と 3 行目で落ちる。Real Reth backend は async API (Engine API、payload builder service、network) を使い、我々の consensus 側は Malachite の tokio runtime で動く。Blocking にすると、AppMsg loop 全体がすべての bridge call で spawn-blocking になる — 無駄、エラーが起きやすく、負荷下で observably 遅い。
+判断は 2 行目と 3 行目で決まる。Real Reth backend は async API (Engine API、payload builder service、network) を使い、我々の consensus 側は Malachite の tokio runtime で動く。Blocking にすると、AppMsg loop は bridge call のたびに spawn-blocking で worker thread を埋めることになる — 無駄が多く、エラーも起きやすく、負荷下では計測可能なほど遅い。
 
-> 🛑 **反流暢性。** 「Async は blocking より柔軟なだけ、後から async にできる。」 **違う。** Blocking-trait から async-trait への移行は viral な変更だ — すべての caller が切り替える必要がある。Trait の各 async メソッドは \`Send + Sync + 'static\` 制約をコードに伝播させる。**Async を早めに pick して、コストを受け入れろ。さもなくば blocking に commit して二度と振り返るな。**
+> 🛑 **反流暢性。** 「Async は blocking より柔軟なだけ、後から async にできる。」 **違う。** Blocking-trait から async-trait への移行は波及的な変更だ — すべての caller が切り替えを強いられる。Trait の各 async メソッドは \`Send + Sync + 'static\` 制約をコード全体に伝播させていく。**Async を早めに選ぶならコストごと受け入れる。逆に blocking で行くなら最後まで blocking で押し通す。中途半端な行ったり来たりが一番つらい。**
 
 ## 3. なぜ正確に 4 メソッドなのか (少なくも多くもなく)
 
@@ -1581,7 +1581,7 @@ pub enum BridgeError {
 | Variant | 何を意味するか | Consensus 応答 |
 | :--- | :--- | :--- |
 | \`Rejected(reason)\` | EL がロジックを適用して no と決めた。Block が malformed、未知の parent を参照、EIP-1559 違反等。 | Proposal を Invalid として扱う; この値に nil 投票。次の round へ。 |
-| \`Syncing\` | EL はまだ答えられる state を持っていない — ネットワークの tip にキャッチアップ中だ。 | 待つ。Nil 投票しない (block が悪いかどうか分からない)。Backoff してリトライ、または timeout に落ちる。 |
+| \`Syncing\` | EL はまだ答えられる state を持っていない — ネットワークの tip にキャッチアップ中だ。 | 待つ。Nil 投票しない (block が悪いかどうか分からない)。Backoff してリトライするか、もしくは timeout で抜ける。 |
 | \`Internal(report)\` | 本当に壊れている。DB 破損、EL panic、ファイル消失。 | **Chain を halt せよ。** エラーを上に propagate、大声でログ。安全に続行できない。 |
 
 3 つは互換ではない。未知の parent (これは \`Rejected\` 相当) で \`Internal\` を返す bridge は、本来 nil 投票すべきところで chain を halt させる。Syncing 条件で \`Rejected\` を返す bridge は、本来答えを与えてくれたはずの peer から永久に fork する。
@@ -1596,7 +1596,7 @@ pub enum BridgeError {
 
 ## 5. Test double — canonical pattern としての \`InMemoryEvmBridge\`
 
-\`ConsensusBridge\` の 3 つの impl が \`crates/evm/src/\` に住む:
+\`ConsensusBridge\` の impl は 3 つ、いずれも \`crates/evm/src/\` 配下に置かれている:
 
 - \`InMemoryEvmBridge\` (\`in_memory.rs:14@0844d58\`) — pure in-process state、Reth dep なし。Bridge call を高速で隔離したい unit test で使う。
 - \`RethEvmBridge\` (\`engine.rs\`) — real alloy \`Header\` + \`B256\` を使うが in-memory state。Mock と live の bridge。
@@ -1638,9 +1638,9 @@ async fn build_payload(
 
 それが test-double payoff だ: trait は EL contract が *何* かを表現し、*どう* 実装するかではない。Unit test は \`run_single_validator(&InMemoryEvmBridge::new(), parent)\` を microsecond で走らせられる; 同じ caller コードが production で signature 変更なしに \`LiveRethEvmBridge\` に対して走る。
 
-> 🛑 **反流暢性。** 「Test double は常に嘘をつく。」 ほぼ true だが、正しい framing ではない。Test double はテストしている部分に contract を *narrow* する。\`InMemoryEvmBridge\` は「parent の上に child block を build する」を truthfully に impl する — real EVM 実行や hash 計算は declined するだけだ、それらが consensus test がテストしているものではないからだ。
+> 🛑 **反流暢性。** 「Test double は常に嘘をつく。」 ほぼ true だが、正しい framing ではない。Test double はテストしている部分に contract を *narrow* する。\`InMemoryEvmBridge\` は「parent の上に child block を build する」という契約だけを忠実に impl している — real EVM 実行や hash 計算は意図的に省略しているだけで、それらは consensus test がテストしている対象ではない。
 
-## 6. Type ownership — なぜ contract type は \`openhl-types\` に住むか
+## 6. Type ownership — なぜ contract type を \`openhl-types\` に置くか
 
 Trait のシグネチャを見よ:
 
@@ -1651,11 +1651,11 @@ async fn build_payload(&self, parent: BlockHash, attrs: PayloadAttrs)
 
 \`BlockHash\`、\`PayloadAttrs\`、\`PayloadId\` — これらは \`openhl-consensus\` や \`openhl-evm\` に定義されていない。\`openhl-types\` にある。なぜか?
 
-なぜなら **consensus crate と evm crate の両方が name する必要がある** からだ — consensus は trait を call するため、evm は trait を impl するため。Type が \`openhl-consensus\` に住むと、\`openhl-evm\` は trait を impl するため \`openhl-consensus\` に依存する必要がある。\`openhl-evm\` に住むと、\`openhl-consensus\` が trait を call するため \`openhl-evm\` に依存する必要がある。
+なぜなら **consensus crate と evm crate の両方がそれらの type を参照する必要がある** からだ — consensus は trait を call するために、evm は trait を impl するために。Type を \`openhl-consensus\` に置くと、\`openhl-evm\` は trait を impl するために \`openhl-consensus\` に依存する必要が出てくる。逆に \`openhl-evm\` に置くと、\`openhl-consensus\` が trait を call するために \`openhl-evm\` に依存する必要が出てくる。
 
 どちらでもサイクルが発生する: A が B に依存、B が A に依存。Rust の crate graph は DAG だ; サイクルは compile error だ。Fix は **共有 type crate**: \`openhl-consensus\` と \`openhl-evm\` の両方が \`openhl-types\` に依存し、どちらも type 定義のために他方に依存しない。
 
-\`ConsensusBridge\` trait 自体は \`openhl-consensus\` に住む (consensus が contract を所有) が、trait の *語彙* は dep graph の 1 つ下に住む。
+\`ConsensusBridge\` trait 自体は \`openhl-consensus\` に置かれている (consensus が contract を所有する側だからだ) が、trait の *語彙* は依存グラフの 1 つ下の層に置かれる。
 
 このパターンは深刻な型システムを持つすべての L1 で現れる:
 
@@ -1705,7 +1705,7 @@ Contract 設計で最も難しいのは何を残すかだ。\`ConsensusBridge\` 
                   xpReward: 40,
                   content: `# Malachite の \`Decided\` から Reth の \`forkchoice_updated\` へ
 
-午前 3 時。バリデータが今しがた block 17 の決定的 precommit に署名した。Malachite が \`Decided\` を emit する。EL はそこに座って待っている。**チェーンが block 18 に進むまでに、どの順番で、何が起こる必要があるか?**
+午前 3 時。バリデータが今しがた block 17 の決定的 precommit に署名した。Malachite が \`Decided\` を emit する。EL はその瞬間、待ち状態のまま結果を受け取ろうとしている。**チェーンが block 18 に進むまでに、どんな順番で、何が起こる必要があるか?**
 
 「\`bridge.commit(hash)\` を呼ぶだけ」と答えたなら、読み進めてほしい。**呼び出すこと自体より、順番のほうが重要だ。**
 
@@ -1817,7 +1817,7 @@ openhl の現在の実装では \`Next::Start\` のみを使用する。\`bridge
 
 Production 形の \`Restart\` 使用は infrastructure 層の recovery (state 復元、WAL replay) と組み合わせて再試行することになる。Stage 7d の commit パスにおける WAL 統合は、そのパターンが landed する場所だ。
 
-## 6. Stage 7d — \`commit\` が Reth に honestly に届く
+## 6. Stage 7d — \`commit\` が Reth に届く (現時点の honest な範囲で)
 
 Stage 7c は動作する \`commit\` の stub を与えてくれた: ブリッジ自身の \`HashMap\` に header を書き、\`head\` を進め、\`Ok\` を返す。Stage 7d はその stub を Reth の in-process Engine API に対する実際の \`forkchoiceUpdated\` に変える — 望まない caller を一切壊さずに。
 
@@ -1856,7 +1856,7 @@ async fn commit(&self, block_hash: BlockHash) -> Result<(), BridgeError> {
 
 3 つ気付くべきこと:
 
-**ローカル先、engine 後。** bridge 自身の \`HashMap\` は tight な critical section の *中で* 更新される。それから lock を drop し、その後で engine に reach する。順番が load-bearing だ: もし engine call が panic したり hang したりしても、bridge 自身のチェーンビューはすでに consistent な状態にある。handle を install していないテストはそのまま動作する — \`engine_handle: None\` が後半を short-circuit する。
+**ローカル先、engine 後。** bridge 自身の \`HashMap\` は短い critical section の *内側で* 更新される。lock を release してから、ようやく engine 側を呼びに行く。この順番が肝心だ: もし engine call が panic したり hang したりしても、bridge 自身のチェーンビューはその時点ですでに consistent になっている。handle を install していないテストはこの後半を一切通らないので、何も壊れずに従来どおり動く — \`engine_handle: None\` の場合に後半が short-circuit するからだ。
 
 **3 つの hash、1 つの値。** §3 の collapse の具体化: \`head = safe = finalized = hash\`。BFT には justification ステップがないので justification と finality の間に drift は存在しない — 決定が finalization そのものだからだ。Casper-FFG client ではこれら 3 つが通常異なるブロックになる、対比される。
 
@@ -2036,11 +2036,11 @@ Time:  t=0       t=200ms        t=400ms                   t=propose
            voting 中に kick off)        block を fetch するだけ)
 \`\`\`
 
-\`build_payload\` は早期に call される — 前 round の decided block が分かった瞬間に — EL は round の投票時間を次のブロックの並列 assembly に費やせる。\`payload_ready\` が call される頃にはブロックがそこに座っている。Propose 時の critical path は「準備された payload を fetch + reply を送信」に減る — ミリ秒ではなくマイクロ秒だ。
+\`build_payload\` は早めに call される — 前 round の decided block が分かった瞬間に — そのため EL は round の投票時間を、次のブロックを並行して assembly する時間に充てられる。\`payload_ready\` が call される頃には、ブロックはすでに組み上がって待機している状態だ。Propose 時の critical path は「準備済みの payload を fetch して reply を送る」だけに縮む — マイクロ秒のオーダーであって、ミリ秒ではない。
 
 これが L7 §4 の **build-during-voting** 最適化だ。**今日の openhl コードはこれをしない** — \`AppMsg::GetValue\` arm は同じハンドラ内で \`build_payload\` と \`payload_ready\` を連続で call する。テストモードでは問題ない (どれもマイクロ秒だ)。Production では「\`build_payload\` を round-decided 時に kick off、\`payload_ready\` を propose 時に await」に変える必要がある。
 
-Trait surface はこれをすでにサポートする — 4 メソッド split が API だ。Async 最適化のための実装作業は bridge の外に住む: AppMsg loop が \`GetValue\` が来る前に \`build_payload\` を call することを学ぶ必要がある。
+Trait surface はすでにこれを支えるように設計されている — 4 メソッドの split がその API だ。Async 最適化のための実装作業は bridge の外側にある: AppMsg loop の側が、\`GetValue\` が来るより前に \`build_payload\` を call できるように書き直される必要がある。
 
 > 🛑 **反流暢性。** 「\`build_payload\` と \`payload_ready\` は今日常に一緒に call されるから 1 つのメソッドに collapse できる。」 **違う。** 今日一緒に call される事実が我々が最終的に直すバグだ — trait は fix を *可能にする* よう形作られている。メソッドを collapse すると同期設計を永久に lock-in する。
 
@@ -2151,7 +2151,7 @@ fn single_validator_node(home_dir: PathBuf) -> OpenHlNode {
 
 Bona-fide な BFT chain は \`f\` byzantine fault を許容するには \`n ≥ 3f + 1\` validator が必要だ。最小の非自明 set は \`n = 4, f = 1\`。なぜ single-validator (\`n = 1, f = 0\`) で動くのか?
 
-動くのは **quorum 閾値が vacuously に easy になる** からだ: 2/3 の 1 validator はまあ 1 validator だ。我々が唯一の voter だから常に quorum を持つ。Byzantine fault が attack する対象がない — 反対する他の validator がいない。
+これが成り立つのは **quorum 閾値がほぼ自動的に満たされてしまう** からだ: 1 validator の 2/3 は、結局のところ 1 validator 自身だ。投票者が自分しかいないので、quorum は常に成立する。Byzantine fault が攻撃すべき対象もそもそも存在しない — 意見が食い違う他の validator がいないからだ。
 
 \`OpenHlContext::select_proposer\` の round-robin (L4 §3 領域) は single-validator では定数関数になる: 我々が常に proposer だ。すべての prevote、precommit、commit certificate は正確に 1 つの署名を持つ — 我々のものだ。
 
@@ -2241,7 +2241,7 @@ Port 0 は「OS が ephemeral port を選ぶ」を意味する — テストに�
                   xpReward: 30,
                   content: `# 最初のブロック — openhl を走らせ、tick するのを見る
 
-テスト出力に \`decided_hash = BlockHash([0x42; 32])\` が見えたら、**本コースのすべての概念が正しく compose されたのだ**。これから wire でそれがどう見えるかを読む。
+テスト出力に \`decided_hash = BlockHash([0x42; 32])\` が見えたら、**本コースのすべての概念が正しく組み合わさって動いたという証拠だ**。本レッスンではその様子が wire 上でどう現れるかを読み解いていく。
 
 これがコースの最終レッスンだ。前の 12 が piece を build した — contract (L1)、Context (L3-L5)、Reth 統合 (L6-L8)、bridge 配線 (L9-L11)、bootstrap (L12)。L13 はそれらを一緒に走らせ trace を読む。
 
@@ -2393,7 +2393,7 @@ INFO  consensus: starting height=2
 
 1. **自分の run を trace せよ。** \`RUST_LOG=info\` と \`--nocapture\` でテストを走らせ。各ログ行を本コースのセクションにマップせよ。マップしない行: issue を立てよ。(数行あるかもしれない — production logging は curriculum coverage を outpace することがある。)
 2. **Failure mode を予測せよ。** 走らせずに、Decided arm の \`reply.send(Next::Start(...))\` 行を削除したら \`cargo test first_block_via_engine_actors\` が何をするか予測せよ。それから走らせて confirm せよ。
-3. **2-validator stall。** §5 の実験 2 を実装せよ。Chain は stall する — stall するときトレースがどう見えるか観察せよ。Silence 前の最後のログ行は何か?
+3. **2-validator stall。** §5 の実験 2 を実装せよ。Chain は stall する — stall に陥っていく過程でトレースがどう変化するかを観察せよ。沈黙する直前の最後のログ行は何か?
 
 > **最終チェック。** 1 文で、*「テストが pass した」* と *「production で chain が動く」* の違いは何か? 答えに「adversarial condition 下の liveness」または「テストは passing-necessary であり sufficient ではない」が含まれていなければ、§5 の反流暢性 callout を再読。
 

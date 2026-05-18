@@ -85,7 +85,7 @@ fn single_validator_node(home_dir: PathBuf) -> OpenHlNode {
 
 Bona-fide な BFT chain は `f` byzantine fault を許容するには `n ≥ 3f + 1` validator が必要だ。最小の非自明 set は `n = 4, f = 1`。なぜ single-validator (`n = 1, f = 0`) で動くのか?
 
-動くのは **quorum 閾値が vacuously に easy になる** からだ: 2/3 の 1 validator はまあ 1 validator だ。我々が唯一の voter だから常に quorum を持つ。Byzantine fault が attack する対象がない — 反対する他の validator がいない。
+これが成り立つのは **quorum 閾値がほぼ自動的に満たされてしまう** からだ: 1 validator の 2/3 は、結局のところ 1 validator 自身だ。投票者が自分しかいないので、quorum は常に成立する。Byzantine fault が攻撃すべき対象もそもそも存在しない — 意見が食い違う他の validator がいないからだ。
 
 `OpenHlContext::select_proposer` の round-robin (L4 §3 領域) は single-validator では定数関数になる: 我々が常に proposer だ。すべての prevote、precommit、commit certificate は正確に 1 つの署名を持つ — 我々のものだ。
 
@@ -183,7 +183,7 @@ Port 0 は「OS が ephemeral port を選ぶ」を意味する — テストに�
 ````markdown
 # 最初のブロック — openhl を走らせ、tick するのを見る
 
-テスト出力に `decided_hash = BlockHash([0x42; 32])` が見えたら、**本コースのすべての概念が正しく compose されたのだ**。これから wire でそれがどう見えるかを読む。
+テスト出力に `decided_hash = BlockHash([0x42; 32])` が見えたら、**本コースのすべての概念が正しく組み合わさって動いたという証拠だ**。本レッスンではその様子が wire 上でどう現れるかを読み解いていく。
 
 これがコースの最終レッスンだ。前の 12 が piece を build した — contract (L1)、Context (L3-L5)、Reth 統合 (L6-L8)、bridge 配線 (L9-L11)、bootstrap (L12)。L13 はそれらを一緒に走らせ trace を読む。
 
@@ -335,7 +335,7 @@ INFO  consensus: starting height=2
 
 1. **自分の run を trace せよ。** `RUST_LOG=info` と `--nocapture` でテストを走らせ。各ログ行を本コースのセクションにマップせよ。マップしない行: issue を立てよ。(数行あるかもしれない — production logging は curriculum coverage を outpace することがある。)
 2. **Failure mode を予測せよ。** 走らせずに、Decided arm の `reply.send(Next::Start(...))` 行を削除したら `cargo test first_block_via_engine_actors` が何をするか予測せよ。それから走らせて confirm せよ。
-3. **2-validator stall。** §5 の実験 2 を実装せよ。Chain は stall する — stall するときトレースがどう見えるか観察せよ。Silence 前の最後のログ行は何か?
+3. **2-validator stall。** §5 の実験 2 を実装せよ。Chain は stall する — stall に陥っていく過程でトレースがどう変化するかを観察せよ。沈黙する直前の最後のログ行は何か?
 
 > **最終チェック。** 1 文で、*「テストが pass した」* と *「production で chain が動く」* の違いは何か? 答えに「adversarial condition 下の liveness」または「テストは passing-necessary であり sufficient ではない」が含まれていなければ、§5 の反流暢性 callout を再読。
 

@@ -21,7 +21,7 @@
 ````markdown
 # Engine API — `forkchoice_updated` と `new_payload` が実際に何をしているか
 
-午前 3 時。同じマシン上の 2 つのサービス — Reth プロセスと Lighthouse プロセス — が、**正確に 2 つの RPC メソッド** だけをやり取りしている。これが Ethereum の consensus layer と execution layer の間の会話のすべてだ。この 2 つのメソッドに名前を付け、openhl の実コードでそれらを trace し、実際の validator がそれらを honestly に実装することを強制するさまを見たとき、なぜ HL や Tempo のようなチェーンが Ethereum の 12 秒に対してサブ秒 finality を提供できるかが理解できるようになる。
+午前 3 時。同じマシン上の 2 つのサービス — Reth プロセスと Lighthouse プロセス — が、**正確に 2 つの RPC メソッド** だけをやり取りしている。これが Ethereum の consensus layer と execution layer の間の会話のすべてだ。この 2 つのメソッドに名前を付け、openhl の実コードでそれらを trace し、実際の validator が「真っ当な実装でなければ通さない」と強制してくるさまを目にしたとき、なぜ HL や Tempo のようなチェーンが Ethereum の 12 秒に対してサブ秒 finality を提供できるかが分かるようになる。
 
 > 🛑 **スクロール前に予測。** 2 つのメソッド、3 つの forkchoice ポインタ (head/safe/finalized)、1 つの payload-build hint、1 つの validation result。それぞれのメソッドが何を入力に取り何を返すかを紙に sketch してみよ。後で実際の spec と、`crates/evm/src/live_node.rs:68@0844d58` のコードに照らし合わせて検証する。
 
@@ -156,7 +156,7 @@ let header = Header {
 };
 ```
 
-Base-fee 計算は、Reth の validator が base-fee を *verify* するために使う同じヘルパー (`ChainSpec::next_block_base_fee`) を call する。**構築によって** 両者は一致する — 偶然ではない。
+Base-fee 計算は、Reth の validator が base-fee を *verify* するために使うのと同じヘルパー (`ChainSpec::next_block_base_fee`) を call している。**仕組み上** 両者は一致する — 偶然ではない。
 
 > 🛑 **反流暢性。** 「`validate_payload` は後で実装するよ。」 **順番が違う。** Validation を先にやる。なぜなら real validation こそが real construction を強制するからだ。`build_payload` を permissive validator (またはまったく validator なし) に対して実装すると、見た目は問題ないが、real node が validate しようとしたときに 3 層下で失敗する header を ship することになる。
 
@@ -213,7 +213,7 @@ CI link-check workflow (`.github/workflows/openhl-cite-check.yml`) は L7 JA の
   - 🛑 callout: Predict → 予測、Anti-fluency → 反流暢性 (consensus-engineering JA の確立した訳)。
   - File paths、function names、types は英語のまま。
 - **Section 6 (validator forces honesty)** は EN 版で「the most pedagogically valuable moment in openhl's history」と書かれている。JA では「pedagogically valuable」を「pedagogically valuable」のまま英語で残す案もあったが、結果的に「もっとも pedagogically valuable な瞬間」とミックスした。読者の register が技術者なので、「教育的価値の高い」より「pedagogically valuable」が直感的。
-- **「By construction, they agree」** を「**構築によって** 両者は一致する」と訳した。「by construction」は型理論/形式手法系の用語で、JA でも英語フレーズで残しても通じるが、ここでは強調記号で囲んで意味を伝えた。
+- **「By construction, they agree」** を「**仕組み上** 両者は一致する」と訳した。「by construction」は型理論/形式手法系の用語で英語のまま残す手もあるが、ここでは技術 reader にも自然に読める「仕組み上」を採用した。
 - **L10 JA との重複コードブロック** (例えば `ConsensusBridge` trait の 4 メソッド) は意図的に同一の英文コードを保持。読者が L7 と L10 を行き来したときに同じ trait を再認識できる。
 - **L7 EN は 15 分予算の上限近い** (≈1450 word + 表 + コードブロック) という EN レビュー notes と同じ問題が JA でも生じる。日本語の方が情報密度が高いので、実時間としては 14 分前後に収まる見込み。
 - **未公開**: L10 EN/JA、L7 EN、そして本 L7 JA ともに `course.isPublished: false` のまま。L11/L12/L13 JA 翻訳が揃ってから一斉公開予定。

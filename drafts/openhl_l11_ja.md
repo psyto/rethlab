@@ -3,7 +3,7 @@
 > openhl SHA `0844d58` (Stage 7c) に対してドラフト。L9 (trait の設計) と L10 (Decided handler) と並んで Module 4 を閉じる。
 > EN ミラー: `drafts/openhl_l11_en.md`。
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
-> 元の outline は `crates/consensus/src/proposer.rs` を cite していた — そのファイルは landing しなかった; proposer ロジックは `crates/consensus/src/engine_app.rs:65@0844d58` (`AppMsg::GetValue` arm) に住む。レッスンを実コードに合わせて更新済み。
+> 元の outline は `crates/consensus/src/proposer.rs` を cite していた — そのファイルは結局 land せず、proposer ロジックは `crates/consensus/src/engine_app.rs:65@0844d58` (`AppMsg::GetValue` arm) に置かれている。レッスンを実コードに合わせて更新済み。
 
 ---
 
@@ -134,11 +134,11 @@ Time:  t=0       t=200ms        t=400ms                   t=propose
            voting 中に kick off)        block を fetch するだけ)
 ```
 
-`build_payload` は早期に call される — 前 round の decided block が分かった瞬間に — EL は round の投票時間を次のブロックの並列 assembly に費やせる。`payload_ready` が call される頃にはブロックがそこに座っている。Propose 時の critical path は「準備された payload を fetch + reply を送信」に減る — ミリ秒ではなくマイクロ秒だ。
+`build_payload` は早めに call される — 前 round の decided block が分かった瞬間に — そのため EL は round の投票時間を、次のブロックを並行して assembly する時間に充てられる。`payload_ready` が call される頃には、ブロックはすでに組み上がって待機している状態だ。Propose 時の critical path は「準備済みの payload を fetch して reply を送る」だけに縮む — マイクロ秒のオーダーであって、ミリ秒ではない。
 
 これが L7 §4 の **build-during-voting** 最適化だ。**今日の openhl コードはこれをしない** — `AppMsg::GetValue` arm は同じハンドラ内で `build_payload` と `payload_ready` を連続で call する。テストモードでは問題ない (どれもマイクロ秒だ)。Production では「`build_payload` を round-decided 時に kick off、`payload_ready` を propose 時に await」に変える必要がある。
 
-Trait surface はこれをすでにサポートする — 4 メソッド split が API だ。Async 最適化のための実装作業は bridge の外に住む: AppMsg loop が `GetValue` が来る前に `build_payload` を call することを学ぶ必要がある。
+Trait surface はすでにこれを支えるように設計されている — 4 メソッドの split がその API だ。Async 最適化のための実装作業は bridge の外側にある: AppMsg loop の側が、`GetValue` が来るより前に `build_payload` を call できるように書き直される必要がある。
 
 > 🛑 **反流暢性。** 「`build_payload` と `payload_ready` は今日常に一緒に call されるから 1 つのメソッドに collapse できる。」 **違う。** 今日一緒に call される事実が我々が最終的に直すバグだ — trait は fix を *可能にする* よう形作られている。メソッドを collapse すると同期設計を永久に lock-in する。
 

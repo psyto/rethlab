@@ -33,12 +33,12 @@
 
 素朴な L1 は consensus と execution を 1 つの巨大モジュールに融合させる。State の更新、署名検証、fork choice、投票集計、mempool — すべて 1 つのバイナリに、すべて絡み合って。これは 2020 年以前のほとんどのチェーンの書き方だ。動く。**しかし、すべてを失うコストが伴う。**
 
-コストは 3 箇所に落ちる:
+コストは 3 箇所に現れる:
 
 | コスト | 何を失うか |
 | :--- | :--- |
-| **Swappability** | EVM を書き直さずに consensus を変えられない、逆もしかり。HL は HyperBFT v1 から v2 へ移行する際 matching engine に触れずに済む — v1 と v2 は同じ contract を honor するからだ。 |
-| **Testability** | EVM を起動せずに consensus を unit-test できない、逆もしかり。両半分とも integration-test オンリーになる。 |
+| **Swappability** | EVM を書き直さずに consensus を変えられない、逆もしかり。HL は HyperBFT v1 から v2 へ移行する際 matching engine に触れずに済む — v1 と v2 が同じ contract を守るからだ。 |
+| **Testability** | EVM を起動せずに consensus を unit-test できない、逆もしかり。両側とも integration-test オンリーになる。 |
 | **Debuggability** | 午前 3 時にどちら側が stall したか分からない。クラッシュダンプは区別のつかない泥団子になる。 |
 
 Contract がその答えだ。両側のメッセージに名前を付けると、それぞれの側を単独で replace、mock、fuzz、reason できるようになる。**Contract が API である。コードは実装詳細だ。**
@@ -64,7 +64,7 @@ execution crate が consensus crate に負っているのは厳密に 3 つ:
 
 1. **Deterministic execution。** State S にブロック B を適用したとき、すべての validator が同じ S' を生成する。Floating-point なし、system time なし、randomness なし、map iteration order なし。Determinism は non-negotiable; 1 つの違反でチェーンが fork する。
 2. **Fast block assembly。** Consensus が「ブロックを build せよ」と言ったとき、execution は propose-timeout の予算内 (HL、Tempo、OpenHL では ~300–500ms) でブロックを返す。それより遅いとチェーンが stall する。
-3. **Import 時の validity verification。** Peer の proposal が到着したとき、execution は「これは cleanly に execute するか?」を *commit 前に* 答えられる。
+3. **Import 時の validity verification。** Peer の proposal が到着したとき、execution は「これは問題なく execute するか?」を *commit 前に* 答えられる。
 
 > 🛑 **予測。** EVM の 3 つの promise のうち、1 つは他より遥かに難しい。**どれで、なぜ自前 L1 を書くチームを最も頻繁に噛むのか?** 偶然 ship してしまう nondeterminism の最も簡単なソースを考えよ。
 
@@ -78,16 +78,16 @@ execution crate が consensus crate に負っているのは厳密に 3 つ:
 | :--- | :--- | :--- | :--- |
 | CL → EL | `build_payload(parent, attrs)` | validator が height N の proposer になったとき | 「`parent` の上に candidate block を build せよ。」 |
 | EL → CL | `payload_ready(block, state_root)` | propose deadline 前に build が完了したとき | 「ブロックはこれだ。proposal value として使え。」 |
-| CL → EL | `validate_payload(block)` | peer の proposal が到着したとき | 「このブロックは cleanly に execute するか? VALID / INVALID / SYNCING で答えよ。」 |
+| CL → EL | `validate_payload(block)` | peer の proposal が到着したとき | 「このブロックは問題なく execute するか? VALID / INVALID / SYNCING で答えよ。」 |
 | CL → EL | `commit(block_hash)` | height N で BFT が `Decided` に到達したとき | 「このブロックを new head として finalize せよ。」 |
 
 それだけだ。CL → EL 方向に 3、EL → CL 方向に 1。**他のあらゆる interaction は leak である。**
 
 このテーブルで明確に見るべきものが 3 つある:
 
-- **Validation と commit は分離されている。** Validator は height ごとに多数の candidate block を import し (round-robin の各 proposer slot あたり 1 つ)、それぞれを speculatively に execute し、commit するのは 1 つだけだ。多くのチームはこれらを 1 つのメッセージに collapse し、後で speculative execution が feature ではなく refactor になったときに代償を払う。
+- **Validation と commit は分離されている。** Validator は height ごとに多数の candidate block を import し (round-robin の各 proposer slot あたり 1 つ)、それぞれを投機的に execute し、commit するのは 1 つだけだ。多くのチームはこれらを 1 つのメッセージに collapse してしまい、後になって speculative execution を feature として追加したくなったときに refactor の代償を払う。
 - **`build_payload` は即座に何も返さない。** Async build job を kick off するだけ; ブロックは後で `payload_ready` 経由で到着する。これが「build during voting」のトリック — payload assembly が前のブロックの投票と overlap するので、propose の hot path がほぼゼロ latency になる。
-- **`commit` は fire-and-forget。** consensus が「これは final だ」と言ったら、execution は適用しなければならない。「本当にいいんですか?」の round-trip は存在しない。Execution が committed block を適用できない場合、チェーンは halt する。それが正しい挙動だ — committed block を silently に drop するのが世界を fork させるやり方だ。
+- **`commit` は fire-and-forget。** consensus が「これは final だ」と言ったら、execution は適用しなければならない。「本当にいいんですか?」の round-trip は存在しない。Execution が committed block を適用できない場合、チェーンは halt する。それが正しい挙動だ — committed block を黙って drop するのが世界を fork させるやり方だ。
 
 ## 5. OpenHL コードでの boundary の在処
 
@@ -104,7 +104,7 @@ crates/evm/            ← Reth を話す。EL 側から 4 メッセージを所
   src/live_node.rs     ← LiveRethEvmBridge — real Reth node に対する full impl
 ```
 
-`crates/consensus/src/bridge.rs:11@0844d58` の `ConsensusBridge` trait が contract を textual に表現したものだ:
+`crates/consensus/src/bridge.rs:11@0844d58` の `ConsensusBridge` trait が、その contract を Rust trait の形で表現したものだ:
 
 ```rust
 // crates/consensus/src/bridge.rs
@@ -133,9 +133,9 @@ pub trait ConsensusBridge: Send + Sync {
 }
 ```
 
-この trait を注意深く読め。**OpenHL における consensus と execution の間のすべての interaction は、これら 4 メソッドのいずれかを流れる。** 境界を別の方法で渡って reach しようとしている自分に気づいたら — consensus crate から Reth DB handle にアクセスしたり、EVM crate から Malachite の vote state を覗き見したり — それは contract を破った瞬間であり、1 週間以内に forked devnet で代償を払うことになる。
+この trait を注意深く読め。**OpenHL における consensus と execution の間のすべての interaction は、これら 4 メソッドのいずれかを流れる。** 境界を別の方法で越えようとしている自分に気づいたら — consensus crate から Reth DB handle にアクセスしたり、EVM crate から Malachite の vote state を覗き見したり — それが contract を破った瞬間だ。1 週間以内に forked devnet で代償を払うことになる。
 
-> 🛑 **反流暢性。** 「Reth *が* OpenHL の consensus layer だ。」 **違う。** Reth は `Consensus` trait を ship しているが、それは *block-validation hook* だ — parent-hash check、gas-limit check、EIP-1559 base-fee math。BFT エンジンではない。Reth には leader election も投票も view change も無い。BFT エンジンは Malachite であり、`crates/consensus` に座って、上記 4 メッセージを通じて Reth と話している。これらを混同するとアーキテクチャ図が永久に間違いになる。
+> 🛑 **反流暢性。** 「Reth *が* OpenHL の consensus layer だ。」 **違う。** Reth は `Consensus` trait を ship しているが、それは *block-validation hook* だ — parent-hash check、gas-limit check、EIP-1559 base-fee math。BFT エンジンではない。Reth には leader election も投票も view change も無い。BFT エンジン本体は Malachite で、`crates/consensus` 配下に置かれており、上記 4 メッセージを通じて Reth とやり取りしている。これらを混同するとアーキテクチャ図が永久に間違いのままになる。
 
 ## 6. 真面目な BFT L1 はすべて同じ場所に線を引いている
 
@@ -205,7 +205,7 @@ Trait surface への変更は 4 レッスンすべてを invalidate する; SHA 
 ## Style review notes (self-critique before paste)
 
 - **L1 が lesson-format テンプレートだった。** L7 + L10 はその cadence (3am hook → 7 sections → practice + final check) に従う。どれかを更新するときは cadence を一貫させ、コースが 1 つの voice で読めるようにすること。
-- **§5 の "boundary がどこに住むか" テーブル** は最初 (proposer.rs、validator.rs、sync.rs といった) 存在しないパスを列挙していた。`0844d58` での実ファイル (bridge.rs、runner.rs、engine_app.rs、engine.rs、live_node.rs) と一致するよう更新済み。File layout が再シフトした場合 (例: actor-engine work が consolidate されたとき) はこのテーブルも追随が必要。
+- **§5 の "boundary の在処" テーブル** は最初 (proposer.rs、validator.rs、sync.rs といった) 存在しないパスを列挙していた。`0844d58` での実ファイル (bridge.rs、runner.rs、engine_app.rs、engine.rs、live_node.rs) と一致するよう更新済み。File layout が再シフトした場合 (例: actor-engine work が consolidate されたとき) はこのテーブルも追随が必要。
 - **Exercise 2 は両ファイルを SHA `0844d58` で読むよう指示する** — これは 3 つのうち最も強力なエクササイズ、コードを実際に開かせるし「contract leak なし」の主張は testable だからだ。
 - **翻訳 policy は L7/L10 JA と同一**:
   - Engine API 用語、Reth/Malachite 識別子、`bridge`、`commit`、`validator`、`consensus`、`execution`、`payload` は英語のまま。

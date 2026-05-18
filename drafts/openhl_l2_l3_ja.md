@@ -1,6 +1,6 @@
 # Building OpenHL — L2 + L3 draft (JA)
 
-> openhl SHA `0844d58` (Stage 7c) に対してドラフト。L2 は Module 1 を閉じる (L1 = contract と pair); L3 は Module 2 を開く (L4 と L5 と pair)。両者は「なぜこのアーキテクチャか」と「ではそれを与えてくれるライブラリに会おう」の seam に座る。
+> openhl SHA `0844d58` (Stage 7c) に対してドラフト。L2 は Module 1 を閉じる (L1 = contract と pair); L3 は Module 2 を開く (L4 と L5 と pair)。両者は「なぜこのアーキテクチャか」と「ではそれを与えてくれるライブラリを見ていこう」の境目に位置する。
 > EN ミラー: `drafts/openhl_l2_l3_en.md`。
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
 
@@ -43,17 +43,17 @@ Production の BFT L1 をどれか 1 つ取って、consensus 側のアーキテ
 
 BFT の promise は **safety** だ: 2 人の honest validator が同じ height について異なる値で decide することはない。これには corollary がある: **一度 decide されたら reorg は無い。** やり直しは無い。
 
-これが成り立つには、execution が *decided block に対して* deterministic でなければならない。Decided block を適用したすべての validator が同じ post-state に到達する必要がある。さもなくば、ブロック内容に同意したが効果には同意しなかった 2 validator が事実上 fork する — 同じブロック、異なる state — そして chain の safety 性質は silently に違反される。
+これが成り立つには、execution が *decided block に対して* deterministic でなければならない。Decided block を適用したすべての validator が同じ post-state に到達する必要がある。そうでなければ、ブロックの中身には同意したが効果には同意していない 2 validator が事実上 fork する — 同じブロック、異なる state — chain の safety 性質が誰にも気づかれないまま破られることになる。
 
-Optimistic execution はこれを subtle に undermine する。パターン:
+Optimistic execution はこれを subtle な形で undermine する。パターン:
 
 1. Validator が candidate block を受け取る (まだ decide されていない)
-2. Validator が speculatively に block を execute して state を compute する
+2. Validator が投機的に block を execute して state を compute する
 3. Validator は compute した state に基づいて投票
 4. 他の validator も同じことをする
 5. 投票を集約; 2/3+ なら decide
 
-問題は step 2 だ: 各 validator は自分の state で block を execute している。Pre-state が diverge していたら (以前の nondeterminism バグ、network partition 等で)、異なる post-state を compute して異なる投票をする。**Fork は投票中に起こる、後ではない。** そして BFT の safety promise はそれを catch しない — 投票は同じ block_hash で quorum に到達するかもしれないが、結果の state は disagree する。
+問題は step 2 だ: 各 validator は自分の state で block を execute している。Pre-state が分岐していたら (以前の nondeterminism バグ、network partition 等で)、異なる post-state を compute して異なる投票をする。**Fork は投票中に起こる、後ではない。** そして BFT の safety promise はそれを catch できない — 投票は同じ block_hash で quorum に到達するかもしれないが、結果の state は食い違ったままになる。
 
 Decide-first パターンはこれを sidestep する:
 
@@ -61,7 +61,7 @@ Decide-first パターンはこれを sidestep する:
 2. Bytes に投票する
 3. 一度 2/3+ commit すれば、決定は final
 4. *それから* 各 validator は bytes を state に適用する
-5. State が diverge したら、それは consensus バグではなく determinism バグ — chain は silently に fork するのではなく visible に halt する (state-root mismatch)
+5. State が分岐したら、それは consensus バグではなく determinism バグ — chain は黙って fork するのではなく、state-root mismatch という目に見える形で halt する
 
 > 🛑 **反流暢性。** 「Optimistic execution は BFT のパフォーマンス最適化に過ぎない。」 **違う。** Rollback machinery (投票が逆方向に行ったときの speculative execution を undo する) を要する *異なるパラダイム* であり、safety story を変える。**Major な BFT L1 で v1 から optimistic execution を採用しているものは無い。** 上位バージョン用に提案しているものはある (HotShot、Solana 系); ship したものは無い。
 
@@ -110,7 +110,7 @@ Decide-first パターンは openhl の設計を 3 つの方法で形作る:
 
 > 🛑 **予測。** スタートアップが「optimistic execution を持つ BFT chain」を提案 — decide-first に対して 2x スループットを主張する。**§1 のテーブルが露出しなかったアーキテクチャ commitment は何か?**
 
-答え: rollback 可能な EL に commit している — speculatively に execute されたブロックに対して consensus が反対投票したときに state を revert できる execution layer。Decide-first chain の EL より桁違いに複雑だ。**2x スループットの主張は本物だが、エンジニアリングの請求書は EL で発生する。** これを試みるほとんどのチームは ship する前に EL を 2 回書き直すことになる。
+答え: rollback 可能な EL を作ることに commit している — 投機的に execute されたブロックに対して consensus が反対投票したときに state を revert できる execution layer のことだ。Decide-first chain の EL より桁違いに複雑になる。**2x スループットの主張は本当だが、その請求書はエンジニアリング側 (具体的には EL) に回ってくる。** これを試みるほとんどのチームは ship する前に EL を 2 回書き直すことになる。
 
 ## 6. 練習
 
@@ -177,7 +177,7 @@ where
 }
 ```
 
-10 type、4 method。Doc comment 込みで全体は約 90 行。**この trait を読むことは、Malachite から見て自分の chain がどう見えるかを読むことそのものだ。**
+10 type、4 method。Doc comment 込みで全体は約 90 行。**この trait を読むことは、Malachite から見た自分の chain の姿を読むことそのものだ。**
 
 各 type への制約に注目: それぞれが自分の sub-trait (`Address`、`Height`、`Proposal<Self>` 等) を持ち、Malachite が期待する operation を定義している。§2 でこれらを inventory する。
 
@@ -194,7 +194,7 @@ where
 | `Vote` | Prevote または precommit | `OpenHlVote { height, round, value_id, vote_type, address }` |
 | `ProposalPart` | ストリームされる proposal piece (大きな value 用) | `OpenHlProposalPart` (unit struct; ProposalOnly mode) |
 | `Extension` | Precommit に付随するアプリケーションデータ | `()` (v0 では extension なし) |
-| `SigningScheme` | 署名がどう見えるか | `malachitebft-signing-ed25519` の `Ed25519` |
+| `SigningScheme` | 署名の形 (sign / verify / encode の取り決め) | `malachitebft-signing-ed25519` の `Ed25519` |
 
 各 row は `crates/consensus/src/types/` のファイルに対応する — それが構造だ: **1 概念につき 1 type、7 ファイル** (Address と Validator は `validator.rs` で共有; `Extension` は `()` なのでファイル不要; `SigningScheme` は Malachite が ship)。
 

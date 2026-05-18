@@ -79,9 +79,9 @@ pub trait ConsensusBridge: Send + Sync {
 | `run_engine_app` AppMsg loop | 自然 | spawn-blocking 体操が必要 |
 | Test double (in-memory state) | trivial — `Mutex` 持つだけ | trivial |
 
-決定は 2 行目と 3 行目で落ちる。Real Reth backend は async API (Engine API、payload builder service、network) を使い、我々の consensus 側は Malachite の tokio runtime で動く。Blocking にすると、AppMsg loop 全体がすべての bridge call で spawn-blocking になる — 無駄、エラーが起きやすく、負荷下で observably 遅い。
+判断は 2 行目と 3 行目で決まる。Real Reth backend は async API (Engine API、payload builder service、network) を使い、我々の consensus 側は Malachite の tokio runtime で動く。Blocking にすると、AppMsg loop は bridge call のたびに spawn-blocking で worker thread を埋めることになる — 無駄が多く、エラーも起きやすく、負荷下では計測可能なほど遅い。
 
-> 🛑 **反流暢性。** 「Async は blocking より柔軟なだけ、後から async にできる。」 **違う。** Blocking-trait から async-trait への移行は viral な変更だ — すべての caller が切り替える必要がある。Trait の各 async メソッドは `Send + Sync + 'static` 制約をコードに伝播させる。**Async を早めに pick して、コストを受け入れろ。さもなくば blocking に commit して二度と振り返るな。**
+> 🛑 **反流暢性。** 「Async は blocking より柔軟なだけ、後から async にできる。」 **違う。** Blocking-trait から async-trait への移行は波及的な変更だ — すべての caller が切り替えを強いられる。Trait の各 async メソッドは `Send + Sync + 'static` 制約をコード全体に伝播させていく。**Async を早めに選ぶならコストごと受け入れる。逆に blocking で行くなら最後まで blocking で押し通す。中途半端な行ったり来たりが一番つらい。**
 
 ## 3. なぜ正確に 4 メソッドなのか (少なくも多くもなく)
 
@@ -124,7 +124,7 @@ pub enum BridgeError {
 | Variant | 何を意味するか | Consensus 応答 |
 | :--- | :--- | :--- |
 | `Rejected(reason)` | EL がロジックを適用して no と決めた。Block が malformed、未知の parent を参照、EIP-1559 違反等。 | Proposal を Invalid として扱う; この値に nil 投票。次の round へ。 |
-| `Syncing` | EL はまだ答えられる state を持っていない — ネットワークの tip にキャッチアップ中だ。 | 待つ。Nil 投票しない (block が悪いかどうか分からない)。Backoff してリトライ、または timeout に落ちる。 |
+| `Syncing` | EL はまだ答えられる state を持っていない — ネットワークの tip にキャッチアップ中だ。 | 待つ。Nil 投票しない (block が悪いかどうか分からない)。Backoff してリトライするか、もしくは timeout で抜ける。 |
 | `Internal(report)` | 本当に壊れている。DB 破損、EL panic、ファイル消失。 | **Chain を halt せよ。** エラーを上に propagate、大声でログ。安全に続行できない。 |
 
 3 つは互換ではない。未知の parent (これは `Rejected` 相当) で `Internal` を返す bridge は、本来 nil 投票すべきところで chain を halt させる。Syncing 条件で `Rejected` を返す bridge は、本来答えを与えてくれたはずの peer から永久に fork する。
@@ -139,7 +139,7 @@ pub enum BridgeError {
 
 ## 5. Test double — canonical pattern としての `InMemoryEvmBridge`
 
-`ConsensusBridge` の 3 つの impl が `crates/evm/src/` に住む:
+`ConsensusBridge` の impl は 3 つ、いずれも `crates/evm/src/` 配下に置かれている:
 
 - `InMemoryEvmBridge` (`in_memory.rs:14@0844d58`) — pure in-process state、Reth dep なし。Bridge call を高速で隔離したい unit test で使う。
 - `RethEvmBridge` (`engine.rs`) — real alloy `Header` + `B256` を使うが in-memory state。Mock と live の bridge。
@@ -181,9 +181,9 @@ async fn build_payload(
 
 それが test-double payoff だ: trait は EL contract が *何* かを表現し、*どう* 実装するかではない。Unit test は `run_single_validator(&InMemoryEvmBridge::new(), parent)` を microsecond で走らせられる; 同じ caller コードが production で signature 変更なしに `LiveRethEvmBridge` に対して走る。
 
-> 🛑 **反流暢性。** 「Test double は常に嘘をつく。」 ほぼ true だが、正しい framing ではない。Test double はテストしている部分に contract を *narrow* する。`InMemoryEvmBridge` は「parent の上に child block を build する」を truthfully に impl する — real EVM 実行や hash 計算は declined するだけだ、それらが consensus test がテストしているものではないからだ。
+> 🛑 **反流暢性。** 「Test double は常に嘘をつく。」 ほぼ true だが、正しい framing ではない。Test double はテストしている部分に contract を *narrow* する。`InMemoryEvmBridge` は「parent の上に child block を build する」という契約だけを忠実に impl している — real EVM 実行や hash 計算は意図的に省略しているだけで、それらは consensus test がテストしている対象ではない。
 
-## 6. Type ownership — なぜ contract type は `openhl-types` に住むか
+## 6. Type ownership — なぜ contract type を `openhl-types` に置くか
 
 Trait のシグネチャを見よ:
 
@@ -194,11 +194,11 @@ async fn build_payload(&self, parent: BlockHash, attrs: PayloadAttrs)
 
 `BlockHash`、`PayloadAttrs`、`PayloadId` — これらは `openhl-consensus` や `openhl-evm` に定義されていない。`openhl-types` にある。なぜか?
 
-なぜなら **consensus crate と evm crate の両方が name する必要がある** からだ — consensus は trait を call するため、evm は trait を impl するため。Type が `openhl-consensus` に住むと、`openhl-evm` は trait を impl するため `openhl-consensus` に依存する必要がある。`openhl-evm` に住むと、`openhl-consensus` が trait を call するため `openhl-evm` に依存する必要がある。
+なぜなら **consensus crate と evm crate の両方がそれらの type を参照する必要がある** からだ — consensus は trait を call するために、evm は trait を impl するために。Type を `openhl-consensus` に置くと、`openhl-evm` は trait を impl するために `openhl-consensus` に依存する必要が出てくる。逆に `openhl-evm` に置くと、`openhl-consensus` が trait を call するために `openhl-evm` に依存する必要が出てくる。
 
 どちらでもサイクルが発生する: A が B に依存、B が A に依存。Rust の crate graph は DAG だ; サイクルは compile error だ。Fix は **共有 type crate**: `openhl-consensus` と `openhl-evm` の両方が `openhl-types` に依存し、どちらも type 定義のために他方に依存しない。
 
-`ConsensusBridge` trait 自体は `openhl-consensus` に住む (consensus が contract を所有) が、trait の *語彙* は dep graph の 1 つ下に住む。
+`ConsensusBridge` trait 自体は `openhl-consensus` に置かれている (consensus が contract を所有する側だからだ) が、trait の *語彙* は依存グラフの 1 つ下の層に置かれる。
 
 このパターンは深刻な型システムを持つすべての L1 で現れる:
 

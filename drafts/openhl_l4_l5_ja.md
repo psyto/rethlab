@@ -102,9 +102,9 @@ pub fn new(mut validators: Vec<OpenHlValidator>) -> Self {
 }
 ```
 
-`(voting_power desc, address asc)` でソート。**このソート順は determinism にとって load-bearing だ。**
+`(voting_power desc, address asc)` でソート。**このソート順が determinism を成立させている肝心な部分だ。**
 
-理由: `OpenHlContext::select_proposer` は `validator_set.get_by_index((height + round) % count)` で proposer を選ぶ (L11 領域)。同じ validator set に対して 2 validator がソート順が違うと、同じ round で異なる proposer を選び、chain が fork する。
+理由: `OpenHlContext::select_proposer` は `validator_set.get_by_index((height + round) % count)` で proposer を選ぶ (L11 領域)。同じ validator set でも、2 validator のソート順が違えば、同じ round で異なる proposer を選んでしまい chain が fork する。
 
 CometBFT convention (openhl が継承) は `voting_power desc, address asc` だ。このソート + modulo 回転を使う chain は、address space が totally ordered である限り deterministic な proposer election を得る — それが `Address: Ord` が hard bound (§1) である理由だ。
 
@@ -236,7 +236,7 @@ L4 の hook が「40 行の trait impl で chain にアイデンティティが�
 
 Type 約 230 LOC + Context impl 90 LOC = Module 2 deliverable 全体で ~320 LOC。「40 行」の主張は trait impl 限定だった (struct そのものではない); より広い codebase はその ~8 倍に landing する。
 
-しかし load-bearing な決定の数は小さい: **どこにでも propagate する 2 つの設計選択。**
+ただし本質的な設計判断の数は少ない: **どこにでも propagate していく 2 つの選択がそれだ。**
 
 1. **CometBFT のソート convention** (`voting_power desc, address asc`) — すべての validator-set 構築に順序の合意を強制する
 2. **20-byte Ethereum address フォーマット** — chain genesis で固定; 後続のすべてがそれを仮定する
@@ -270,7 +270,7 @@ Type 約 230 LOC + Context impl 90 LOC = Module 2 deliverable 全体で ~320 LOC
 
 L3 は Malachite を「I/O を抜いた抽象 Tendermint アルゴリズム」と言った。本レッスンは I/O を *戻す* ものについてだ。**Consensus は時間を無視する state machine; engine がそれに時計を与える。**
 
-Malachite の protocol ロジックは synchronous な `Driver` struct に住む — pure state machine、timer なし、network なし、thread なし。`malachitebft-engine` crate がそれを actor system (`ractor` 経由) でラップし、real consensus が必要とする runtime context — timeout、network socket、WAL write、mempool access — を提供する。
+Malachite の protocol ロジックは synchronous な `Driver` struct の中に置かれている — pure state machine、timer なし、network なし、thread なし。`malachitebft-engine` crate がそれを actor system (`ractor` 経由) でラップし、real consensus が必要とする runtime context — timeout、network socket、WAL write、mempool access — を提供する。
 
 L4 の type は Malachite に *何が* この chain かを伝える。本レッスンは Malachite が *どう* それらの type を running node に変えるかについてだ。
 
@@ -299,7 +299,7 @@ L4 の type は Malachite に *何が* この chain かを伝える。本レッ�
 
 `OpenHlNode::start()` が `start_engine` を call するとき (openhl の Stage 6c → 6d)、engine は 5 つの actor を spawn する:
 
-| Actor | どこに住むか | 何を所有 |
+| Actor | 配置場所 | 何を所有 |
 | :--- | :--- | :--- |
 | **Consensus** | `malachitebft-engine::consensus` | `Driver` (state machine)、proposer-timeout タイマー、vote tallying |
 | **Network** | `malachitebft-engine::network` | libp2p socket、gossipsub topic 購読、peer discovery |
@@ -307,9 +307,9 @@ L4 の type は Malachite に *何が* この chain かを伝える。本レッ�
 | **Host** (connector) | `malachitebft-app-channel::connector` | エンジンと **アプリ側の** app loop の bridge (`AppMsg` イベント送信) |
 | **Sync** | `malachitebft-engine::sync` | Peer catch-up — 遅れているとき欠けたブロックを fetch |
 
-加えて我々自身の runtime concern:
+加えて我々自身の runtime 側の関心事:
 
-| Component | どこに住むか | 何を所有 |
+| Component | 配置場所 | 何を所有 |
 | :--- | :--- | :--- |
 | **`run_engine_app` loop** | `crates/consensus/src/engine_app.rs:29@0844d58` | `AppMsg` を受信、`ConsensusBridge` メソッドを call、reply |
 
@@ -357,7 +357,7 @@ Network actor は libp2p をラップする:
 - Incoming メッセージを decode して Consensus に forward
 - Peer discovery を handle
 
-Single-validator mode (peer なし) では、Network actor は依然として spawn する — libp2p が `/ip4/127.0.0.1/tcp/0` で listen し始める — が、inbound メッセージは無く、誰にも broadcast しない。**Single-validator mode では no-op になる**、これが `OpenHlCodec` の gossip stub (Stage 6b) が error を返してもうまくいく理由だ: 何もそれらを encode していない。
+Single-validator mode (peer なし) では、Network actor は依然として spawn する — libp2p が `/ip4/127.0.0.1/tcp/0` で listen し始める — が、inbound メッセージは到着せず、broadcast する相手もいない。**Single-validator mode では実質 no-op だ。** これが `OpenHlCodec` の gossip stub (Stage 6b) が error を返してもうまくいく理由だ: そもそも encode を要求する側がいない。
 
 WAL actor は crash recovery のために consensus メッセージをディスクに書く:
 
@@ -382,7 +382,7 @@ Malachite は 3 つの `ValuePayload` mode をサポートする (L4 §5 で最�
 
 **openhl はこれを完全に skip する** (`ProposalOnly`)、そのため `AppMsg::ReceivedProposalPart` は我々には絶対に fire しない。しかし大きな proposal を持つ chain 用に openhl を fork するなら (例: 10MB の pending fill を value が carry する CLOB chain)、stream-reassembly path を実装する必要がある。
 
-注意すべき gotcha: **part-streaming コードは `malachitebft-engine::util::streaming` に住む**、app loop ではない。`ConsensusConfig::value_payload` で configure する; engine が残りを handle する。**書くのは streaming コードではない; value-reassembly ロジックだ。**
+注意すべき gotcha: **part-streaming コードは `malachitebft-engine::util::streaming` に置かれている** — アプリ側の loop ではない。`ConsensusConfig::value_payload` で configure すれば、残りは engine が handle する。**書くのは streaming コードではない; value-reassembly ロジックだ。**
 
 ## 7. 練習
 

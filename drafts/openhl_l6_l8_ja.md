@@ -195,7 +195,7 @@ forkchoiceUpdated(state{head=parent}, Some(attrs)) → PayloadId
 
 Step 2-5 が wall clock を支配する。**Step 4 (real EVM execution) は通常 full block で 50-300ms かかる**; step 5 (state root) がさらに 50-150ms 追加。
 
-`EthereumPayloadBuilder` は `reth_ethereum::node::EthereumPayloadBuilder` (Reth v2.2.0 source の `reth-ethereum-payload-builder` から) に住む。`reth-payload-builder` の `PayloadBuilder` trait を impl する。**上記の各 step は我々のコードではなく Reth のコードの中だ。**
+`EthereumPayloadBuilder` は Reth v2.2.0 の `reth-ethereum-payload-builder` crate に置かれており、`reth_ethereum::node::EthereumPayloadBuilder` から re-export されている。`reth-payload-builder` の `PayloadBuilder` trait を impl する。**上記の各 step を実装しているのは我々のコードではなく Reth のコードの中だ。**
 
 ## 2. Transaction 選択 — `Pool::best_transactions`
 
@@ -212,7 +212,7 @@ Pool が除外するもの:
 
 **Pool は mempool-aware だ。** Peer が broadcast したがまだ含まれていない txn、RPC 経由で submit されたローカル txn を知っている; すべてを priority queue で track している。
 
-> 🛑 **反流暢性。** 「Payload building は順番に transaction を実行するだけだ。」 **違う。** どの transaction を含めるか — そしてどの順番で — の *選択* が仕事の半分だ。Ordering ポリシーは fee revenue、transaction fairness、(重要なことに) MEV opportunity を決定する。**Ordering ポリシーの変更は chain が行える最も consequential なカスタマイズの 1 つだ。**
+> 🛑 **反流暢性。** 「Payload building は順番に transaction を実行するだけだ。」 **違う。** どの transaction を含めるか — そしてどの順番で並べるか — の *選択* が仕事の半分だ。Ordering ポリシーは fee 収入、transaction fairness、そして (重要なことに) MEV opportunity を決定する。**Ordering ポリシーの変更は、chain が下せる中で最も影響範囲の大きいカスタマイズ判断の 1 つだ。**
 
 ## 3. State root 計算 — execution が数字になる場所
 
@@ -291,7 +291,7 @@ L11 §5 は「まだ使っていない async trick」を導入した:
 
 > 「Round-decided 時に `build_payload(...)` を kick off して、EL に前の round の投票ウィンドウ全部を block assembly に使わせよ。」
 
-今、何が amortize されているかが見える。§1 のテーブルの expensive operation (step 2-5: pull、order、execute、state root) は full mainnet-shape block で累積 100-400ms かかる。これらが前の round の投票 *中* に走れば (vote 伝播は常に少なくとも 200-500ms かかる)、propose hot path は「キャッシュ済み payload を fetch」に落ちる — microsecond、何百ms ではなく。
+これで何が amortize されているかが見えてくる。§1 のテーブルの expensive operation (step 2-5: pull、order、execute、state root) は full mainnet-shape block で累積 100-400ms かかる。これらが前の round の投票 *中* に走っていれば (vote 伝播は常に少なくとも 200-500ms かかる)、propose 時の hot path は「キャッシュ済み payload を fetch するだけ」で済む — マイクロ秒のオーダーであって、数百ミリ秒ではない。
 
 これが **the** パフォーマンス最適化で、HL、Tempo、openhl が real EVM execution をしながらサブ秒 slot を動かせる理由だ。**これなしにはサブ秒 slot は得られない。** 空 EVM を動かす (`0844d58` の openhl のように real tx を execute しない) か、execution を投票ウィンドウに対して並列化するかだ。
 
@@ -316,7 +316,7 @@ ConsensusBridge trait の `build_payload` (start) と `payload_ready` (fetch) �
 
 ## Seed-file slot
 
-L6 と L8 が Module 3 で L7 の両側に座る:
+L6 と L8 が Module 3 で L7 の両側に配置される:
 
 ```typescript
 // Course.modules.create array:

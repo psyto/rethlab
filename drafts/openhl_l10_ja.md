@@ -20,7 +20,7 @@
 ````markdown
 # Malachite の `Decided` から Reth の `forkchoice_updated` へ
 
-午前 3 時。バリデータが今しがた block 17 の決定的 precommit に署名した。Malachite が `Decided` を emit する。EL はそこに座って待っている。**チェーンが block 18 に進むまでに、どの順番で、何が起こる必要があるか?**
+午前 3 時。バリデータが今しがた block 17 の決定的 precommit に署名した。Malachite が `Decided` を emit する。EL はその瞬間、待ち状態のまま結果を受け取ろうとしている。**チェーンが block 18 に進むまでに、どんな順番で、何が起こる必要があるか?**
 
 「`bridge.commit(hash)` を呼ぶだけ」と答えたなら、読み進めてほしい。**呼び出すこと自体より、順番のほうが重要だ。**
 
@@ -132,7 +132,7 @@ openhl の現在の実装では `Next::Start` のみを使用する。`bridge.co
 
 Production 形の `Restart` 使用は infrastructure 層の recovery (state 復元、WAL replay) と組み合わせて再試行することになる。Stage 7d の commit パスにおける WAL 統合は、そのパターンが landed する場所だ。
 
-## 6. Stage 7d — `commit` が Reth に honestly に届く
+## 6. Stage 7d — `commit` が Reth に届く (現時点の honest な範囲で)
 
 Stage 7c は動作する `commit` の stub を与えてくれた: ブリッジ自身の `HashMap` に header を書き、`head` を進め、`Ok` を返す。Stage 7d はその stub を Reth の in-process Engine API に対する実際の `forkchoiceUpdated` に変える — 望まない caller を一切壊さずに。
 
@@ -171,7 +171,7 @@ async fn commit(&self, block_hash: BlockHash) -> Result<(), BridgeError> {
 
 3 つ気付くべきこと:
 
-**ローカル先、engine 後。** bridge 自身の `HashMap` は tight な critical section の *中で* 更新される。それから lock を drop し、その後で engine に reach する。順番が load-bearing だ: もし engine call が panic したり hang したりしても、bridge 自身のチェーンビューはすでに consistent な状態にある。handle を install していないテストはそのまま動作する — `engine_handle: None` が後半を short-circuit する。
+**ローカル先、engine 後。** bridge 自身の `HashMap` は短い critical section の *内側で* 更新される。lock を release してから、ようやく engine 側を呼びに行く。この順番が肝心だ: もし engine call が panic したり hang したりしても、bridge 自身のチェーンビューはその時点ですでに consistent になっている。handle を install していないテストはこの後半を一切通らないので、何も壊れずに従来どおり動く — `engine_handle: None` の場合に後半が short-circuit するからだ。
 
 **3 つの hash、1 つの値。** §3 の collapse の具体化: `head = safe = finalized = hash`。BFT には justification ステップがないので justification と finality の間に drift は存在しない — 決定が finalization そのものだからだ。Casper-FFG client ではこれら 3 つが通常異なるブロックになる、対比される。
 
