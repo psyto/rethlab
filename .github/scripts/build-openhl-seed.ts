@@ -72,13 +72,25 @@ const EN: LocaleConfig = {
     instructorName: 'RethLab',
   },
   modules: {
-    1: { title: 'The execution/consensus split', sortOrder: 0 },
-    2: { title: 'Malachite as a library', sortOrder: 1 },
-    3: { title: 'Reth as a library', sortOrder: 2 },
-    4: { title: 'Wiring it up — the consensus crate', sortOrder: 3 },
-    5: { title: 'Single-validator devnet', sortOrder: 4 },
+    0: { title: 'Orientation', sortOrder: 0 },
+    1: { title: 'The execution/consensus split', sortOrder: 1 },
+    2: { title: 'Malachite as a library', sortOrder: 2 },
+    3: { title: 'Reth as a library', sortOrder: 3 },
+    4: { title: 'Wiring it up — the consensus crate', sortOrder: 4 },
+    5: { title: 'Single-validator devnet', sortOrder: 5 },
   },
   lessons: [
+    {
+      draftFile: 'openhl_l0_en.md',
+      moduleNumber: 0,
+      sortOrder: 0,
+      title: 'OpenHL at a glance — repo, subsystems, build arc',
+      slug: 'openhl-orientation-en',
+      duration: 15,
+      xpReward: 40,
+      h1Marker: '# OpenHL at a glance — repo, subsystems, build arc',
+      startSignature: 'Hyperliquid moved $300B+ of perp volume in 2025',
+    },
     {
       draftFile: 'openhl_l1_en.md',
       moduleNumber: 1,
@@ -244,13 +256,25 @@ const JA: LocaleConfig = {
     instructorName: 'RethLab',
   },
   modules: {
-    1: { title: 'Execution/consensus split', sortOrder: 0 },
-    2: { title: 'ライブラリとしての Malachite', sortOrder: 1 },
-    3: { title: 'ライブラリとしての Reth', sortOrder: 2 },
-    4: { title: '配線 — consensus crate', sortOrder: 3 },
-    5: { title: 'Single-validator devnet', sortOrder: 4 },
+    0: { title: 'Orientation', sortOrder: 0 },
+    1: { title: 'Execution/consensus split', sortOrder: 1 },
+    2: { title: 'ライブラリとしての Malachite', sortOrder: 2 },
+    3: { title: 'ライブラリとしての Reth', sortOrder: 3 },
+    4: { title: '配線 — consensus crate', sortOrder: 4 },
+    5: { title: 'Single-validator devnet', sortOrder: 5 },
   },
   lessons: [
+    {
+      draftFile: 'openhl_l0_ja.md',
+      moduleNumber: 0,
+      sortOrder: 0,
+      title: 'OpenHL の全体像 — repo、subsystem、Build arc',
+      slug: 'openhl-orientation-ja',
+      duration: 15,
+      xpReward: 40,
+      h1Marker: '# OpenHL の全体像 — repo、subsystem、Build arc',
+      startSignature: 'Hyperliquid は 2025 年に $300B+ の perp 取引量を完全クローズドソース',
+    },
     {
       draftFile: 'openhl_l1_ja.md',
       moduleNumber: 1,
@@ -421,8 +445,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 195, // sum of lesson durations
-  xpReward: 560, // sum of lesson XP rewards
+  duration: 210, // sum of lesson durations (L0..L13 = 15 + 195)
+  xpReward: 600, // sum of lesson XP rewards (L0..L13 = 40 + 560)
   tags: ['reth', 'malachite', 'bft', 'evm', 'clob', 'l1', 'openhl', 'expert'],
   sortOrder: 600,
   isPublished: false,
