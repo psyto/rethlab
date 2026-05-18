@@ -26,6 +26,7 @@ import { seedRethP2PNetworkingJA } from './seed-reth-p2p-networking-ja';
 import { seedRethValidatorOpsEN } from './seed-reth-validator-ops-en';
 import { seedRethValidatorOpsJA } from './seed-reth-validator-ops-ja';
 import { seedRethOpenHlConsensusEN } from './seed-reth-openhl-consensus-en';
+import { seedRethOpenHlConsensusJA } from './seed-reth-openhl-consensus-ja';
 
 const prisma = new PrismaClient();
 
@@ -119,9 +120,10 @@ async function main() {
   await seedRethValidatorOpsJA(prisma);
   console.log('  Seeded Validator Operations (EN + JA)');
 
-  console.log('\nSeeding Building OpenHL course (EN only — JA pending translation)...');
+  console.log('\nSeeding Building OpenHL courses (EN + JA, both isPublished=false)...');
   await seedRethOpenHlConsensusEN(prisma);
-  console.log('  Seeded Building OpenHL — Consensus Substrate (EN)');
+  await seedRethOpenHlConsensusJA(prisma);
+  console.log('  Seeded Building OpenHL — Consensus Substrate (EN + JA)');
 
   const courseCount = await prisma.course.count();
   const moduleCount = await prisma.module.count();

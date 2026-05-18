@@ -1592,7 +1592,7 @@ That's the Reth side. In openhl's in-process variant, it's just \`bridge.commit(
 
 ## 4. The Decided handler, walked
 
-Here's the actual Decided arm of openhl's app loop at \`crates/consensus/src/engine_app.rs:119@0844d58\`:
+Here's the actual Decided arm of openhl's app loop at \`crates/consensus/src/engine_app.rs:119@0cac571\`:
 
 \`\`\`rust
 AppMsg::Decided {
@@ -1621,7 +1621,7 @@ Five steps. In order:
 
 1. **Extract the decided hash.** \`certificate.value_id\` is the \`BlockHash\` BFT just irreversibly committed to. We have nothing to do with the decision — it's already made.
 
-2. **Commit through the bridge.** \`bridge.commit(hash).await?\` propagates the decision to the EL. In the current Stage 7c code this is a stub; in Stage 7d it becomes a real \`forkchoiceUpdated\` call. **If this returns an error, we propagate it — the chain halts.** That's the correct behavior; we just had a decision and our EL refused to apply it. **Better to halt than to silently fork.**
+2. **Commit through the bridge.** \`bridge.commit(hash).await?\` propagates the decision to the EL. As of Stage 7d (commit \`0cac571\`) this fires a real \`forkchoiceUpdated\` against Reth's in-process Engine API — see §6 for the body. **If this returns an error, we propagate it — the chain halts.** That's the correct behavior; we just had a decision and our EL refused to apply it. **Better to halt than to silently fork.**
 
 3. **Update our tracking.** \`decided.push(hash)\` for the caller's view; \`current_parent = hash\` so the next \`build_payload\` knows what to build on.
 
@@ -1644,35 +1644,99 @@ In openhl's current implementation we only use \`Next::Start\`. If \`bridge.comm
 
 Production-shape \`Restart\` use would be paired with infrastructure-level recovery (state restoration, WAL replay) before re-attempting. The WAL integration in Stage 7d's commit path is where that pattern would land.
 
-## 6. The path forward — what 7d does
+## 6. Stage 7d — \`commit\` reaches Reth, honestly
 
-Stage 7c gave us a working \`commit\` stub. Stage 7d will turn it into a real \`forkchoiceUpdated\` call against Reth's in-process Engine API handle. The shape of the call doesn't change:
+Stage 7c gave us a working \`commit\` stub: write the header into the bridge's own \`HashMap\`, advance \`head\`, return \`Ok\`. Stage 7d turns that stub into a real \`forkchoiceUpdated\` against Reth's in-process Engine API — without breaking any caller that doesn't want it.
+
+The actual \`commit\` body at \`crates/evm/src/live_node.rs:301@0cac571\`:
 
 \`\`\`rust
 async fn commit(&self, block_hash: BlockHash) -> Result<(), BridgeError> {
     let hash = B256::from(block_hash.0);
-    let state = ForkchoiceState {
-        head_block_hash: hash,
-        safe_block_hash: hash,
-        finalized_block_hash: hash,
+    let header = {
+        let mut s = self.state.lock().expect("state mutex poisoned");
+        let header = s
+            .pending
+            .values()
+            .find(|(h, _, _)| *h == hash)
+            .map(|(_, h, _)| h.clone())
+            .ok_or_else(|| {
+                BridgeError::Rejected(format!("commit for unknown hash {hash}"))
+            })?;
+        s.chain.insert(hash, header.clone());
+        s.head = Some(hash);
+        header
     };
-    self.engine_handle
-        .fork_choice_updated(state, None)
-        .await
-        .map_err(|e| BridgeError::Internal(eyre!("forkchoice: {e}")))?;
+
+    if let Some(handle) = &self.engine_handle {
+        let state = ForkchoiceState {
+            head_block_hash: hash,
+            safe_block_hash: hash,
+            finalized_block_hash: hash,
+        };
+        let _ = handle.fork_choice_updated(state, None).await;
+    }
+
     Ok(())
 }
 \`\`\`
 
-That's the entire 7d delta. The three-hashes-collapse is preserved (because BFT). The async asymmetry from L7 is gone here (no payload attrs — we're just advancing fork-choice, not starting a new build).
+Three things to notice:
+
+**Local first, engine second.** The bridge's own \`HashMap\` is updated *inside* a tight critical section. Then we drop the lock and only afterwards reach for the engine. The order is load-bearing: if the engine call panics or hangs, the bridge's own view of the chain is already consistent. Tests that don't install a handle keep working — \`engine_handle: None\` short-circuits the second half.
+
+**Three hashes, one value.** §3's collapse made concrete: \`head = safe = finalized = hash\`. No drift between justification and finality because there's no justification step in BFT — the decision *is* the finalization. Compare to a Casper-FFG client where these three are usually different blocks.
+
+**\`let _ = ... .await\`.** The engine's response is deliberately discarded. Why?
+
+> 🛑 **Predict.** What does Reth's engine return when openhl sends \`forkchoiceUpdated(hash)\` for a \`hash\` it has never seen via \`newPayload\`? Three options: \`VALID\`, \`INVALID\`, \`SYNCING\`. Which, and why?
+
+The answer is \`SYNCING\`. Reth doesn't have the block in its database — openhl built the header inside the bridge, never asked Reth to execute it, never produced an \`ExecutionPayload\` for \`engine_newPayload\`. Reth correctly responds: "I'm not on this chain; I don't know what you're talking about; assume I'm syncing."
+
+That's the **honest-scoping flag** for Stage 7d. The wire is connected — the call reaches the engine, the engine responds, we don't deadlock or panic. But the engine's response is not *useful* yet, because we don't have a real payload to validate against. The next staging chunk (post-Module-3, once CLOB fills are encoded as EVM transactions) will pair \`commit\` with a prior \`newPayload(payload)\` so that by the time forkchoice arrives, the engine already knows the block.
+
+The handle install path lives at \`crates/evm/src/live_node.rs:118@0cac571\`:
+
+\`\`\`rust
+#[must_use]
+pub fn with_engine_handle(
+    mut self,
+    handle: ConsensusEngineHandle<EthEngineTypes>,
+) -> Self {
+    self.engine_handle = Some(handle);
+    self
+}
+\`\`\`
+
+Builder-style because the bridge is constructed before the Reth node finishes launching — you can't pass the handle to \`new()\`. The integration test at \`crates/evm/src/live_node.rs:691@0cac571\` shows the actual hand-off:
+
+\`\`\`rust
+let handle = NodeBuilder::new(node_config)
+    .testing_node(runtime)
+    .with_types::<EthereumNode>()
+    .with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))
+    .with_add_ons(EthereumAddOns::default())
+    .launch()
+    .await?;
+
+let engine_handle = handle.node.add_ons_handle.beacon_engine_handle.clone();
+
+let bridge = LiveRethEvmBridge::new(handle.node.provider.clone(), chain_spec)
+    .with_engine_handle(engine_handle);
+\`\`\`
+
+The handle is plucked out of the launched node's \`add_ons_handle.beacon_engine_handle\`. That field exists because we composed with \`EthereumAddOns::default()\`; without it the field wouldn't be present and \`with_engine_handle\` would have nothing to install.
 
 > 🛑 **Anti-fluency.** "Decided and committed are the same thing." **No.** *Decided* is BFT's claim that 2/3+1 of validators agreed. *Committed* is the EL's confirmation that it actually applied the block. Both must happen for the chain to advance. Collapse them into one concept and you'll skip the bridge call entirely, ending up with consensus that decides on blocks the EL refuses to apply.
+
+> 🛑 **Anti-fluency.** "The engine returning SYNCING means Stage 7d is broken." **No.** SYNCING means the engine doesn't have the block — which is *correct* given we never sent it one. The bug would be if SYNCING surprised us; instead, we expect it, document it, and gate it behind the next stage's \`newPayload\` integration.
 
 ## 7. Practice
 
 1. **Trace the three pointers.** After block 5 is decided in openhl, what are the three Forkchoice hashes openhl sends to Reth? Compare to what Ethereum mainnet would send if block 5 was its head but block 3 was its latest finalized.
-2. **Find the halt condition.** What error from \`bridge.commit\` would prevent step 4 from running? In \`crates/evm/src/live_node.rs:181@0844d58\`, identify which conditions return \`Ok(())\` and which return \`Err\`.
-3. **Sketch the Restart use.** If \`bridge.commit\` returned an error meaning "the proposer's value won't apply cleanly, but the next try should work", how would the Decided handler change? Sketch the diff to switch to \`Next::Restart\`.
+2. **Find the halt condition.** What error from \`bridge.commit\` would prevent step 4 from running? In \`crates/evm/src/live_node.rs:301@0cac571\`, identify which conditions return \`Ok(())\` and which return \`Err\`. (Hint: only one branch returns \`Err\` — and it's the same one Stage 7c already had.)
+3. **Why discard the engine's response?** §6's \`commit\` writes \`let _ = handle.fork_choice_updated(...)\`. Imagine the next stage encodes CLOB fills as EVM transactions and adds a \`newPayload\` call before this \`forkchoiceUpdated\`. Rewrite the body to (a) call \`newPayload(payload)\` first, (b) check the returned \`PayloadStatus\`, (c) only forkchoice-update if \`PayloadStatus::Valid\`. What \`BridgeError\` would you produce on \`Invalid\`? On \`Syncing\`?
+4. **Sketch the Restart use.** If \`bridge.commit\` returned an error meaning "the proposer's value won't apply cleanly, but the next try should work", how would the Decided handler change? Sketch the diff to switch to \`Next::Restart\`.
 
 > **Final check.** In one sentence, why does openhl wait for the application's reply (step 4) before advancing to the next height, instead of advancing immediately on \`Decided\`? If your answer doesn't mention "the EL might refuse" or "preventing the CL from getting ahead," re-read §4 step 2.`,
                 },
