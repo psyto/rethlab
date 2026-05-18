@@ -110,6 +110,17 @@ const EN: LocaleConfig = {
       h1Marker: '# Lesson 2 — Shared contract types in `openhl-types`',
       startSignature: 'By the end of this lesson:',
     },
+    {
+      draftFile: 'openhl_l3_en.md',
+      moduleNumber: 2,
+      sortOrder: 1,
+      title: 'Lesson 3 — The ConsensusBridge trait',
+      slug: 'openhl-bridge-trait-en',
+      duration: 30,
+      xpReward: 60,
+      h1Marker: '# Lesson 3 — The `ConsensusBridge` trait',
+      startSignature: 'By the end of this lesson:',
+    },
   ],
 };
 
@@ -167,6 +178,17 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 2 — `openhl-types` の共通 contract type',
       startSignature: 'このレッスンの終わりに:',
     },
+    {
+      draftFile: 'openhl_l3_ja.md',
+      moduleNumber: 2,
+      sortOrder: 1,
+      title: 'レッスン 3 — ConsensusBridge trait',
+      slug: 'openhl-bridge-trait-ja',
+      duration: 30,
+      xpReward: 60,
+      h1Marker: '# レッスン 3 — `ConsensusBridge` trait',
+      startSignature: 'このレッスンの終わりに:',
+    },
   ],
 };
 
@@ -188,8 +210,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 95, // L0 (20) + L1 (45) + L2 (30) — build-along pilot
-  xpReward: 200, // L0 (60) + L1 (80) + L2 (60) — build-along pilot
+  duration: 125, // L0 (20) + L1 (45) + L2 (30) + L3 (30) — build-along pilot
+  xpReward: 260, // L0 (60) + L1 (80) + L2 (60) + L3 (60) — build-along pilot
   tags: ['reth', 'malachite', 'bft', 'evm', 'clob', 'l1', 'openhl', 'expert'],
   sortOrder: 600,
   isPublished: false,
