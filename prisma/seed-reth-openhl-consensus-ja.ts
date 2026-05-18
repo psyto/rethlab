@@ -39,7 +39,7 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
 
 午前 3 時。OpenHL の devnet が 3 ブロック前から停止している。Malachite のログは \`waiting for value\` と言う。Reth のログは \`engine idle\` と言う。どちらも error を投げていない。**どっちが壊れているのか?**
 
-この質問に 30 秒で答えられないなら、バグはどちらの crate にも無い — お前のメンタルモデルにある。2 つがどう話しているかのモデルだ。本レッスンはそのモデルをインストールする。読み終える頃には、consensus と execution の間を流れる 4 つのメッセージ、それぞれの promise、そしてどれかが消えたときにどちらの crate を責めればいいかが正確に分かるようになる。
+この質問に 30 秒で答えられないなら、バグはどちらの crate にもない — 2 つがどう話しているかのメンタルモデル側にある。本レッスンはそのモデルをインストールする。読み終える頃には、consensus と execution の間を流れる 4 つのメッセージ、それぞれの promise、そしてどれかが消えたときにどちらの crate を責めればいいかが正確に分かるようになる。
 
 > 🛑 **スクロール前に予測。** 同一プロセス内で動く 2 サービス: Malachite (BFT) と Reth (EVM)。**ブロックが produce され commit されるまでに両者間を流れる必要があるメッセージを、思いつくだけ挙げよ。** 「ブロックが consensus から EVM に流れる」で止まったなら、contract はまだ手に入っていない。
 
@@ -53,7 +53,7 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
 | :--- | :--- |
 | **Swappability** | EVM を書き直さずに consensus を変えられない、逆もしかり。HL は HyperBFT v1 から v2 へ移行する際 matching engine に触れずに済む — v1 と v2 は同じ contract を honor するからだ。 |
 | **Testability** | EVM を起動せずに consensus を unit-test できない、逆もしかり。両半分とも integration-test オンリーになる。 |
-| **Debuggability** | 午前 3 時にどちら側が stall したか分からない。クラッシュダンプはひとかたまりの泥である。 |
+| **Debuggability** | 午前 3 時にどちら側が stall したか分からない。クラッシュダンプは区別のつかない泥団子になる。 |
 
 Contract が cure である。2 半部間のメッセージに名前を付けると、それぞれの半分は単独で replace、mock、fuzz、reason できるものになる。**Contract が API である。コードは実装詳細だ。**
 
@@ -61,12 +61,12 @@ Contract が cure である。2 半部間のメッセージに名前を付ける
 
 consensus crate が execution crate に負っているのは厳密に 2 つ:
 
-1. **Committed ブロックの ordered stream。** すべての validator が同じブロックを同じ順序で見る。Gap なし。Reorg なし — classical BFT chain においては。Nakamoto chain はもっと弱いものを約束するが、お前はそれを作っているわけではない。
-2. **Validity assertions。** Commit された各ブロックは ≥ 2f+1 の validator によって投票された。お前の EVM が適用して invalid な state を生成したら、それは *お前の* バグであり consensus のバグではない。
+1. **Committed ブロックの ordered stream。** すべての validator が同じブロックを同じ順序で見る。Gap なし。Reorg なし — classical BFT chain においては。Nakamoto chain はもっと弱いものを約束するが、ここで作っているのはそれではない。
+2. **Validity assertions。** Commit された各ブロックは ≥ 2f+1 の validator によって投票された。EVM が適用して invalid な state を生成したら、それは *実装側* のバグであり consensus のバグではない。
 
 これが BFT 側から見た contract の全部だ。ここに *無い* ものに注意:
 
-- 「正しい transactions」ではない。(BFT はお前の tx が何をするか知らない。)
+- 「正しい transactions」ではない。(BFT は tx が何をするか知らない。)
 - 「正しい state root」ではない。(BFT は state を compute していない。)
 - 「正しい canonical fork」ではない。(BFT には fork *自体が* 存在しない — それが要点だ。)
 
@@ -147,7 +147,7 @@ pub trait ConsensusBridge: Send + Sync {
 }
 \`\`\`
 
-この trait を注意深く読め。**OpenHL における consensus と execution の間のすべての interaction は、これら 4 メソッドのいずれかを流れる。** 境界を別の方法で渡って reach しようとしている自分に気づいたら — consensus crate から Reth DB handle にアクセスしたり、EVM crate から Malachite の vote state を覗き見したり — お前は contract を破ったし、1 週間以内に forked devnet で代償を払うことになる。
+この trait を注意深く読め。**OpenHL における consensus と execution の間のすべての interaction は、これら 4 メソッドのいずれかを流れる。** 境界を別の方法で渡って reach しようとしている自分に気づいたら — consensus crate から Reth DB handle にアクセスしたり、EVM crate から Malachite の vote state を覗き見したり — それは contract を破った瞬間であり、1 週間以内に forked devnet で代償を払うことになる。
 
 > 🛑 **反流暢性。** 「Reth *が* OpenHL の consensus layer だ。」 **違う。** Reth は \`Consensus\` trait を ship しているが、それは *block-validation hook* だ — parent-hash check、gas-limit check、EIP-1559 base-fee math。BFT エンジンではない。Reth には leader election も投票も view change も無い。BFT エンジンは Malachite であり、\`crates/consensus\` に座って、上記 4 メッセージを通じて Reth と話している。これらを混同するとアーキテクチャ図が永久に間違いになる。
 
@@ -405,23 +405,23 @@ fn new_precommit(...) -> Self::Vote;
 
 \`Proposal\` type が (height, round, value, pol_round, address) を超える追加フィールドを持つなら、\`new_proposal\` impl に含められる。Malachite はそれらを見ない — chain 固有だ。
 
-## 4. お前に残されたもの
+## 4. 実装側に残されたもの
 
 Malachite が protocol を与える。**与えない:**
 
 | 関心事 | 誰が所有するか |
 | :--- | :--- |
-| Address の選択 | お前 (chain の identity スキーム) |
-| Validator set の構築 | お前 (genesis + slashing ロジック) |
-| Propose する値の選択 | お前 (bridge 経由の \`build_payload\`) |
-| 値の validation | お前 (bridge 経由の \`validate_payload\`) |
-| メッセージの signing | お前 (\`SigningProvider\` impl — L4 §7) |
+| Address の選択 | 実装側 (chain の identity スキーム) |
+| Validator set の構築 | 実装側 (genesis + slashing ロジック) |
+| Propose する値の選択 | 実装側 (bridge 経由の \`build_payload\`) |
+| 値の validation | 実装側 (bridge 経由の \`validate_payload\`) |
+| メッセージの signing | 実装側 (\`SigningProvider\` impl — L4 §7) |
 | Network gossip | エンジン actor system (libp2p) |
 | 永続化 (WAL) | エンジン actor system |
-| Decided block の storage | お前 (EL state) |
-| Mempool | お前 (EL transaction pool) |
+| Decided block の storage | 実装側 (EL state) |
+| Mempool | 実装側 (EL transaction pool) |
 
-Split は意図的だ。**Malachite が小さい** のは consensus アルゴリズムだけを所有するからだ。Chain 固有のすべて — address、signing、payload assembly、storage — はお前のものだ。
+Split は意図的だ。**Malachite が小さい** のは consensus アルゴリズムだけを所有するからだ。Chain 固有のすべて — address、signing、payload assembly、storage — はすべて実装側に残される。
 
 > 🛑 **予測。** チームが openhl を fork して新しい chain を作る。違う address フォーマット (Ethereum 形式の 20-byte ではなく Solana 形式の 32-byte address) が欲しい。**何ファイル触るか?**
 
@@ -437,36 +437,36 @@ Split は意図的だ。**Malachite が小さい** のは consensus アルゴリ
 fn process(&mut self, input: Input<Ctx>) -> Result<Vec<Output<Ctx>>, Error<Ctx>>
 \`\`\`
 
-\`Input<Ctx>\` と \`Output<Ctx>\` enum は \`Context\` で parameterize される。Variant がお前の type を carry する:
+\`Input<Ctx>\` と \`Output<Ctx>\` enum は \`Context\` で parameterize される。Variant が自分の type を carry する:
 
 - \`Input::Proposal(SignedProposal<Ctx>, Validity)\` — proposal が到着した。\`SignedProposal\` は \`Ctx::Proposal\` に対して generic。
-- \`Output::Vote(Ctx::Vote)\` — この vote を broadcast せよ。お前の \`OpenHlVote\` が戻ってくる。
+- \`Output::Vote(Ctx::Vote)\` — この vote を broadcast せよ。\`OpenHlVote\` が戻ってくる。
 - \`Output::Decide(Round, Ctx::Proposal)\` — consensus がこの proposal で decide した。
 
-**\`Driver\` 自体はお前の type が存在しないかのように読める。** \`Ctx::Address\`、\`Ctx::Vote\`、\`Ctx::Proposal\` を traffic する — \`OpenHlAddress\`、\`OpenHlVote\`、\`OpenHlProposal\` を扱うことは一度もない。Protocol 全体が type-parametric だ。
+**\`Driver\` 自体は自分の type が存在しないかのように読める。** 流通するのは \`Ctx::Address\`、\`Ctx::Vote\`、\`Ctx::Proposal\` — \`OpenHlAddress\`、\`OpenHlVote\`、\`OpenHlProposal\` に触れることは一度もない。Protocol 全体が type-parametric だ。
 
 なぜこれが重要か? **Tendermint protocol 全体が 1 つのコードであり、それを使うすべての chain にまたがって一度 debug される。** Cosmos chain、openhl、Tempo、その他が Malachite (または概念的等価物) を使うとき、全員がアルゴリズム自体への bug fix の恩恵を受ける。BFT を re-implement する必要のある chain は無い。
 
-> 🛑 **反流暢性。** 「各 BFT chain が自分の consensus を実装する。」 **違う。** 各 chain は自分の *type* と *I/O* を実装する。アルゴリズムは family にまたがって共有される — 時には文字通り (同じライブラリを使う chain)、時には概念的に (HotStuff variant は同じ state machine に converge する)。**L1 architect としてのお前の仕事は type と I/O であり、アルゴリズムではない。**
+> 🛑 **反流暢性。** 「各 BFT chain が自分の consensus を実装する。」 **違う。** 各 chain は自分の *type* と *I/O* を実装する。アルゴリズムは family にまたがって共有される — 時には文字通り (同じライブラリを使う chain)、時には概念的に (HotStuff variant は同じ state machine に converge する)。**L1 architect の仕事は type と I/O であり、アルゴリズムではない。**
 
 ## 6. 練習
 
 1. **Type を inventory せよ。** コードを見ずに、\`Context\` の 10 個の associated type と各々が chain で何を表すかをリストせよ。それから \`crates/consensus/src/context.rs:19@0844d58\` を開いてリストを check せよ。
 2. **Solana-address 実験。** \`OpenHlAddress\` が \`[u8; 20]\` ではなく \`[u8; 32]\` だったら何が変わるかを sketch せよ。変わるファイル (ヒント: 1 つだけ) と変わらないファイル (ヒント: ほとんど) を identify せよ。
-3. **Driver を見つけよ。** \`crates/consensus/src/runner.rs:34-83@0844d58\` (\`run_single_validator\` の始まり) を読め。お前の \`OpenHlContext\` type が現れる場所と Malachite 内部 type が現れる場所を identify せよ。Seam はどこか?
+3. **Driver を見つけよ。** \`crates/consensus/src/runner.rs:34-83@0844d58\` (\`run_single_validator\` の始まり) を読め。自分の \`OpenHlContext\` type が現れる場所と Malachite 内部 type が現れる場所を identify せよ。Seam はどこか?
 
 > **最終チェック。** 1 文で、なぜ Malachite の \`Context\` は単なる generic parameter (\`Driver<Address, Height, Value, ...>\`) ではなく *associated type* を使うのか? 答えに「associated type は chain あたり 1 セットの type を lock-in する — generic だと caller が mix-and-match できてしまい、determinism invariant を破る」が含まれていなければ、§3 を再読。`,
                 },
                 {
-                  title: "お前が実装するもの — proposal、validator、vote、signing",
+                  title: "実装するもの — proposal、validator、vote、signing",
                   slug: "openhl-malachite-impl-ja",
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 20,
                   xpReward: 60,
-                  content: `# お前が実装するもの — proposal、validator、vote、signing
+                  content: `# 実装するもの — proposal、validator、vote、signing
 
-L3 は 10 個の type に名前を付けた。次にそれらを書く。**40 行の trait impl で、お前の chain にアイデンティティが生まれる。** 練習はほぼ機械的だ — 各 sub-trait の surface は小さい — がその 40 行に encode された選択は、後続レッスンすべてが参照するものだ。
+L3 は 10 個の type に名前を付けた。次にそれらを書く。**40 行の trait impl で chain にアイデンティティが生まれる。** 練習はほぼ機械的だ — 各 sub-trait の surface は小さい — がその 40 行に encode された選択は、後続レッスンすべてが参照するものだ。
 
 > 🛑 **スクロール前に予測。** SHA \`0844d58\` で \`crates/consensus/src/types/\` を開け。ファイルを読まずに、10 個の Context sub-type それぞれに対して期待する *trait bound* を sketch せよ。ヒント: Malachite が必要とする operation を考えよ (sort のための address 比較、VoteKeeper lookup のための value hash、ログ用の height display)。
 
@@ -592,7 +592,7 @@ pub struct OpenHlVote {
 
 Nil 投票は Tendermint が proposal の欠落や invalid を扱う方法だ; round はそれでも終了しなければならない。
 
-両 type とも単純な accessor 関数で各々の sub-trait を impl する — それぞれ 20 行。我々が書くのは *protocol* (Malachite が所有する) ではなく、*protocol が traffic する type* だ。
+両 type とも単純な accessor 関数で各々の sub-trait を impl する — それぞれ 20 行。我々が書くのは *protocol* (Malachite が所有する) ではなく、*protocol がやり取りする type* だ。
 
 ## 5. \`ProposalPart\` — 使わない streaming type
 
@@ -711,7 +711,7 @@ L3 は Malachite を「I/O を抜いた抽象 Tendermint アルゴリズム」�
 
 Malachite の protocol ロジックは synchronous な \`Driver\` struct に住む — pure state machine、timer なし、network なし、thread なし。\`malachitebft-engine\` crate がそれを actor system (\`ractor\` 経由) でラップし、real consensus が必要とする runtime context — timeout、network socket、WAL write、mempool access — を提供する。
 
-L4 の type は Malachite に *何が* お前の chain かを伝える。本レッスンは Malachite が *どう* それらの type を running node に変えるかについてだ。
+L4 の type は Malachite に *何が* この chain かを伝える。本レッスンは Malachite が *どう* それらの type を running node に変えるかについてだ。
 
 > 🛑 **スクロール前に予測。** Consensus protocol は timeout (round-change、propose) のスケジューリング、network メッセージの受信、WAL への書き込み、application への decision 通知が必要だ。これらの tokio ベースアーキテクチャを sketch せよ。§2 で Malachite が実際にやっていることと比較する。
 
@@ -743,7 +743,7 @@ L4 の type は Malachite に *何が* お前の chain かを伝える。本レ�
 | **Consensus** | \`malachitebft-engine::consensus\` | \`Driver\` (state machine)、proposer-timeout タイマー、vote tallying |
 | **Network** | \`malachitebft-engine::network\` | libp2p socket、gossipsub topic 購読、peer discovery |
 | **Wal** | \`malachitebft-engine::wal\` | ディスク上 consensus メッセージの append-only log (\`get_home_dir()/wal\`) |
-| **Host** (connector) | \`malachitebft-app-channel::connector\` | エンジンと **お前の** app loop の bridge (\`AppMsg\` イベント送信) |
+| **Host** (connector) | \`malachitebft-app-channel::connector\` | エンジンと **アプリ側の** app loop の bridge (\`AppMsg\` イベント送信) |
 | **Sync** | \`malachitebft-engine::sync\` | Peer catch-up — 遅れているとき欠けたブロックを fetch |
 
 加えて我々自身の runtime concern:
@@ -808,7 +808,7 @@ Single-validator mode では WAL write は起こるが replay されない (テ�
 
 > 🛑 **予測。** Round の途中で openhl を再起動するとどうなるか (vote 投じ後、round 決定前)?
 
-WAL なし: 再起動時、engine は前の vote を覚えていない。Peer が「お前は値 X に投票した」と覚えていて、再起動時にお前が値 Y に投票したら、お前は equivocate した — production BFT chain では slashable な offense だ。WAL あり: 再起動時、engine は前の vote を replay し、お前が X に投票したことを見て、Y への投票を拒否する。**WAL が single-machine consensus が restart にまたがる self-equivocation を回避する方法だ。**
+WAL なし: 再起動時、engine は前の vote を覚えていない。Peer が「このノードは値 X に投票した」と覚えているのに、再起動後 Y に投票したら、equivocate したことになる — production BFT chain では slashable な offense だ。WAL あり: 再起動時、engine は前の vote を replay し、X に投票した事実を見つけて Y への投票を拒否する。**WAL が single-machine consensus において restart にまたがる self-equivocation を回避する仕組みだ。**
 
 ## 6. Malachite gotcha 1 つ — proposal-part streaming
 
@@ -821,7 +821,7 @@ Malachite は 3 つの \`ValuePayload\` mode をサポートする (L4 §5 で�
 
 **openhl はこれを完全に skip する** (\`ProposalOnly\`)、そのため \`AppMsg::ReceivedProposalPart\` は我々には絶対に fire しない。しかし大きな proposal を持つ chain 用に openhl を fork するなら (例: 10MB の pending fill を value が carry する CLOB chain)、stream-reassembly path を実装する必要がある。
 
-注意すべき gotcha: **part-streaming コードは \`malachitebft-engine::util::streaming\` に住む**、app loop ではない。\`ConsensusConfig::value_payload\` で configure する; engine が残りを handle する。**お前は streaming コードを書かない; value-reassembly ロジックを書く。**
+注意すべき gotcha: **part-streaming コードは \`malachitebft-engine::util::streaming\` に住む**、app loop ではない。\`ConsensusConfig::value_payload\` で configure する; engine が残りを handle する。**書くのは streaming コードではない; value-reassembly ロジックだ。**
 
 ## 7. 練習
 
@@ -971,7 +971,7 @@ NodeBuilder パターンは openhl を 3 つのことに対して future-proof �
 
 1. **Slot を identify せよ。** §2 のテーブルから、9 つの component カテゴリと openhl が各々を replace するかを名指せ。何も見ずに、後続モジュールで replace を検討するであろう 4 つを書き出せ。
 2. **Fork の誘惑を見つけよ。** openhl リポで \`reth-*-builder::*\`、\`reth-storage-api\`、\`reth-consensus\`、\`reth-chainspec\`、または alloy より *深い* Reth crate パスを import しているコードを検索せよ。**深い import は「trait surface が expose していないものが必要だった」のサインだ。** これは我々のカスタマイズについて何を示唆するか?
-3. **カスタム EVM 実験。** openhl がカスタム EVM opcode を欲しがると仮定 (real Module 3 領域)。\`crates/evm/src/reth_node.rs\` への diff を sketch せよ: どの \`EthereumNode\` slot を replace し、お前のカスタム type はどの trait を impl するか?
+3. **カスタム EVM 実験。** openhl がカスタム EVM opcode を欲しがると仮定 (real Module 3 領域)。\`crates/evm/src/reth_node.rs\` への diff を sketch せよ: どの \`EthereumNode\` slot を replace し、自分のカスタム type はどの trait を impl するか?
 
 > **最終チェック。** 1 文で、なぜ \`NodeBuilder::new(config).node(EthereumNode::default())\` は \`git clone reth && edit main.rs\` より良いパターンか? 答えに「upstream-trackable」または「codebase 全体を fork せずに component を swap」が含まれていなければ、§1 を再読。`,
                 },
@@ -1261,7 +1261,7 @@ openhl の CLOB 統合計画:
 
 ここで openhl が *generic EVM* ではなく *perp DEX* になる。Mechanical な部分 — 1 つの Reth component を replace すること — は小さい (L6 の NodeBuilder パターン in action)。興味深い部分は CLOB matching ロジック自体で、これは rethlab コースの Module 2 だ。
 
-**L8 はモジュール間の bridge だ。** 学習者に伝える: 「お前は consensus substrate を mastered した; EVM payload パイプラインが Module 2 が plug in する場所だ。」
+**L8 はモジュール間の bridge だ。** 学習者に伝える: 「consensus substrate は master した; EVM payload パイプラインが Module 2 の plug in する場所だ。」
 
 ## 6. L11 の async-trick、具体化
 
@@ -1338,7 +1338,7 @@ pub trait ConsensusBridge: Send + Sync {
 
 これが contract だ。Consensus に参加する他のすべての crate はこの trait を実装する (EVM crate、3 つの impl — \`InMemoryEvmBridge\`、\`RethEvmBridge\`、\`LiveRethEvmBridge\`) か、メソッドを call するために \`Arc<dyn ConsensusBridge>\` を持つ (consensus crate の runner と engine-app loop)。
 
-本レッスンの残りは正当化だ。なぜこの 4 メソッド、このシグネチャ、このエラー type なのか? 各選択は何かを trade off する。レッスンの目的は trade を visible にして、お前が偶然ではなく意図的に違う選択をできるようにすることだ。
+本レッスンの残りは正当化だ。なぜこの 4 メソッド、このシグネチャ、このエラー type なのか? 各選択は何かを trade off する。レッスンの目的は trade を visible にして、偶然ではなく意図的に違う選択ができるようにすることだ。
 
 ## 2. Async か blocking か?
 
@@ -1383,7 +1383,7 @@ pub trait ConsensusBridge: Send + Sync {
 
 - 「**\`restream_proposal(hash)\` を追加して bridge が stale proposal を re-broadcast できるように。**」 もっともらしい — Malachite の AppMsg loop には \`RestreamProposal\` variant がある。**不要だ。** Restreaming はネットワーク層の関心事だ: consensus crate の app loop が bridge 関与なしで直接 handle する (\`engine_app.rs:96@0844d58\` 参照)。Bridge は EL contract であり、一般的な consensus event sink ではない。
 
-4 メソッドは contract leak を招かずに L7 マッピングを capture する最小だ (各メソッドが正確に 1 つの Ethereum Engine API call にマップする)。
+4 メソッドは、contract leak を招かずに L7 マッピングを capture できる最小のセットだ (各メソッドが正確に 1 つの Ethereum Engine API call にマップする)。
 
 ## 4. エラー semantics — Rejected、Syncing、Internal
 
@@ -1411,13 +1411,13 @@ pub enum BridgeError {
 | \`Syncing\` | EL はまだ答えられる state を持っていない — ネットワークの tip にキャッチアップ中だ。 | 待つ。Nil 投票しない (block が悪いかどうか分からない)。Backoff してリトライ、または timeout に落ちる。 |
 | \`Internal(report)\` | 本当に壊れている。DB 破損、EL panic、ファイル消失。 | **Chain を halt せよ。** エラーを上に propagate、大声でログ。安全に続行できない。 |
 
-3 つは互換ではない。未知の parent (これは \`Rejected\` 相当) で \`Internal\` を返す bridge は、本来 nil 投票すべきところで chain を halt させる。Syncing 条件で \`Rejected\` を返す bridge は、答えを与えられた peer から永久に fork する。
+3 つは互換ではない。未知の parent (これは \`Rejected\` 相当) で \`Internal\` を返す bridge は、本来 nil 投票すべきところで chain を halt させる。Syncing 条件で \`Rejected\` を返す bridge は、本来答えを与えてくれたはずの peer から永久に fork する。
 
 > 🛑 **反流暢性。** 「エラーはエラーだ。1 つの \`Error\` enum で十分。」 **違う。** Consensus コードでは、エラーの *カテゴリ* が chain が進むか、pause するか、halt するかを決定する。Collapse すると liveness にとって load-bearing な情報を失う。3 variant が最小だ。
 
 > 🛑 **予測。** 1 つ選べ: peer が parent block hash を我々の chain に持たない proposal を送ってきた。Bridge は \`Rejected\`、\`Syncing\`、\`Internal\` のどれを返すべきか?
 
-答えは **parent について学ぶ可能性があるか** に依存する。Node が遅れていて parent が real (まだ sync していないだけ) → \`Syncing\`。Node が up to date でそんな block が存在しない → \`Rejected\`。Bridge は常にどちらのケースかを判別できない; 実務では production bridge は provider の sync state を classify 前に check する。
+答えは **その parent を後から知る見込みがあるか** に依存する。Node が遅れていて parent が real (まだ sync していないだけ) → \`Syncing\`。Node が up to date でそんな block が存在しない → \`Rejected\`。Bridge は常にどちらのケースかを判別できない; 実務では production bridge は classify 前に provider の sync state を check する。
 
 \`crates/evm/src/live_node.rs:68@0844d58\` の \`LiveRethEvmBridge::build_payload\` では、現在のコードは provider に given hash の block がないとき \`Rejected\` を返す。**我々の provider が up to date だと仮定すれば** correct だ — single-validator mode では true (peer が我々より進んでいる可能性なし)、multi-node デプロイメントでは tighten が必要。
 
@@ -1749,15 +1749,15 @@ Handle は launched node の \`add_ons_handle.beacon_engine_handle\` から pluc
                   xpReward: 40,
                   content: `# ブロックを produce する — Malachite proposer → Reth payload → broadcast
 
-午前 3 時。Malachite の leader election 関数が今しがた、お前を height 47、round 0 の proposer に選んだ。お前には **400 ミリ秒** ある — ブロックを produce し、peer に broadcast し、prevote 収集を開始するまで。時計はすでに動いている。
+午前 3 時。Malachite の leader election 関数が今しがた、このノードを height 47、round 0 の proposer に選んだ。残り時間は **400 ミリ秒** — ブロックを produce し、peer に broadcast し、prevote 収集を開始するまで。時計はすでに動いている。
 
-そのミリ秒はどこに消えるのか? 予算のうち 200µs はお前のコード、50ms は Reth、100ms はネットワーク伝播 (proposer がどんなに頑張っても縮められない) — どれがどれか? 本レッスンは openhl の実コード経由で proposer hot path を trace し、重要な瞬間に名前を付ける。
+そのミリ秒はどこに消えるのか? 予算のうち 200µs はアプリ側のコード、50ms は Reth、100ms はネットワーク伝播 (proposer がどんなに頑張っても縮められない) — どれがどれか? 本レッスンは openhl の実コード経由で proposer hot path を trace し、重要な瞬間に名前を付ける。
 
-> 🛑 **スクロール前に予測。** お前は height N の proposer だ。お前のコードがこれを知る瞬間から proposal を broadcast するまでに、起こる必要があるアクションをすべて順番に名指せ。ヒント: 少なくとも 5 つあり、そのうち 1 つは「synchronously に起こる必要がない」だ。
+> 🛑 **スクロール前に予測。** 自分は height N の proposer だとせよ。コードがこれを知る瞬間から proposal を broadcast するまでに、起こる必要があるアクションをすべて順番に名指せ。ヒント: 少なくとも 5 つあり、そのうち 1 つは「synchronously に起こる必要がない」だ。
 
 ## 1. Hot path、名指し
 
-openhl の \`run_engine_app\` ループが consensus engine から \`AppMsg::GetValue\` を見るとき、エンジンが言っているのは: 「お前の slot だ。Propose するブロックを build せよ。」
+openhl の \`run_engine_app\` ループが consensus engine から \`AppMsg::GetValue\` を見るとき、エンジンが言っているのは: 「いま自分の番だ。Propose するブロックを build せよ。」
 
 bridge より上から trace する:
 
@@ -1913,7 +1913,7 @@ Trait surface はこれをすでにサポートする — 4 メソッド split �
                   xpReward: 30,
                   content: `# Bootstrap — genesis、key、single-node config
 
-お前は module 1-4 のすべての概念をインストールした。Contract (L1) を読め、Engine API (L7) を trace し、bridge (L9) を設計し、decided block (L10) を commit し、proposer として 1 つ produce (L11) できる。**さあ bootstrap する。** 最小の runnable openhl はどう見えるか — 1 validator、1 node、peer なし? そしてなぜそれが「toy」が実際にこれまで build してきたものすべての real test なのか?
+module 1-4 のすべての概念はインストール済みだ。Contract (L1) を読み、Engine API (L7) を trace し、bridge (L9) を設計し、decided block (L10) を commit し、proposer として 1 つ produce (L11) できる。**さあ bootstrap する。** 最小の runnable openhl はどう見えるか — 1 validator、1 node、peer なし? そしてなぜその「toy」が実際にこれまで build してきたものすべての real test なのか?
 
 > 🛑 **スクロール前に予測。** 1 validator devnet を動かしたい。構築する必要のある artifact をリストせよ (まだコードを書かず — 列挙のみ)。ヒント: 正確に 4 つあり、SHA \`0844d58\` ですでに 3 つが存在する。
 
@@ -2155,8 +2155,8 @@ assert_eq!(
 
 平易な日本語で:
 1. **正確に 1 つの decision が出た** — ゼロではなく (chain halt せず)、2 でもなく (\`stop_after_decisions = 1\` の early-return が正しく動いた)。
-2. **Bridge が consensus が合意した hash を commit した** — L10 の commit path が実際に発火したことを証明。
-3. **Decided hash が \`build_payload\` が produce したものと一致する** — L11 の propose path が、Malachite の signing + broadcast + voting を経由して Decided として戻ってくるまで intact に round-trip した値を produce したことを証明。
+2. **Consensus が合意した hash を bridge が commit した** — L10 の commit path が実際に発火したことを証明。
+3. **Decided hash は \`build_payload\` が produce したものと一致する** — L11 の propose path が produce した値が、Malachite の signing + broadcast + voting を経由して Decided として戻ってくるまで原型を保ったまま round-trip したことを証明。
 
 これが本コースの **end-to-end check** だ。3 つすべてが pass すれば、L1 から L12 までのすべてのレッスンが順番に execute したことになる。
 
@@ -2189,7 +2189,7 @@ INFO  consensus: committed via bridge: <hash>
 INFO  consensus: starting height=2
 \`\`\`
 
-各行は本コースの 1 文にマップする。**このトレースを 1 度読め。** お前が学んだ各層について「chain が実際に何をするか」の答えだ。
+各行は本コースの 1 文にマップする。**このトレースを 1 度読め。** これまでに学んだ各層について「chain が実際に何をするか」の答えだ。
 
 ## 5. 次に壊すもの
 
@@ -2224,7 +2224,7 @@ INFO  consensus: starting height=2
 
 ---
 
-**おめでとう** — お前は *Building OpenHL — Consensus Substrate* を完了した。L1 Architect tier の次のコースは Module 2 (CLOB matching engine) から始まる、real transaction が初めて system に入る場所だ。`,
+**おめでとう** — これで *Building OpenHL — Consensus Substrate* を完了した。L1 Architect tier の次のコースは Module 2 (CLOB matching engine) から始まる、real transaction が初めて system に入る場所だ。`,
                 },
               ],
             },

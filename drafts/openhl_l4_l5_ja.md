@@ -18,9 +18,9 @@
 ### Content
 
 ````markdown
-# お前が実装するもの — proposal、validator、vote、signing
+# 実装するもの — proposal、validator、vote、signing
 
-L3 は 10 個の type に名前を付けた。次にそれらを書く。**40 行の trait impl で、お前の chain にアイデンティティが生まれる。** 練習はほぼ機械的だ — 各 sub-trait の surface は小さい — がその 40 行に encode された選択は、後続レッスンすべてが参照するものだ。
+L3 は 10 個の type に名前を付けた。次にそれらを書く。**40 行の trait impl で chain にアイデンティティが生まれる。** 練習はほぼ機械的だ — 各 sub-trait の surface は小さい — がその 40 行に encode された選択は、後続レッスンすべてが参照するものだ。
 
 > 🛑 **スクロール前に予測。** SHA `0844d58` で `crates/consensus/src/types/` を開け。ファイルを読まずに、10 個の Context sub-type それぞれに対して期待する *trait bound* を sketch せよ。ヒント: Malachite が必要とする operation を考えよ (sort のための address 比較、VoteKeeper lookup のための value hash、ログ用の height display)。
 
@@ -146,7 +146,7 @@ pub struct OpenHlVote {
 
 Nil 投票は Tendermint が proposal の欠落や invalid を扱う方法だ; round はそれでも終了しなければならない。
 
-両 type とも単純な accessor 関数で各々の sub-trait を impl する — それぞれ 20 行。我々が書くのは *protocol* (Malachite が所有する) ではなく、*protocol が traffic する type* だ。
+両 type とも単純な accessor 関数で各々の sub-trait を impl する — それぞれ 20 行。我々が書くのは *protocol* (Malachite が所有する) ではなく、*protocol がやり取りする type* だ。
 
 ## 5. `ProposalPart` — 使わない streaming type
 
@@ -272,7 +272,7 @@ L3 は Malachite を「I/O を抜いた抽象 Tendermint アルゴリズム」�
 
 Malachite の protocol ロジックは synchronous な `Driver` struct に住む — pure state machine、timer なし、network なし、thread なし。`malachitebft-engine` crate がそれを actor system (`ractor` 経由) でラップし、real consensus が必要とする runtime context — timeout、network socket、WAL write、mempool access — を提供する。
 
-L4 の type は Malachite に *何が* お前の chain かを伝える。本レッスンは Malachite が *どう* それらの type を running node に変えるかについてだ。
+L4 の type は Malachite に *何が* この chain かを伝える。本レッスンは Malachite が *どう* それらの type を running node に変えるかについてだ。
 
 > 🛑 **スクロール前に予測。** Consensus protocol は timeout (round-change、propose) のスケジューリング、network メッセージの受信、WAL への書き込み、application への decision 通知が必要だ。これらの tokio ベースアーキテクチャを sketch せよ。§2 で Malachite が実際にやっていることと比較する。
 
@@ -304,7 +304,7 @@ L4 の type は Malachite に *何が* お前の chain かを伝える。本レ�
 | **Consensus** | `malachitebft-engine::consensus` | `Driver` (state machine)、proposer-timeout タイマー、vote tallying |
 | **Network** | `malachitebft-engine::network` | libp2p socket、gossipsub topic 購読、peer discovery |
 | **Wal** | `malachitebft-engine::wal` | ディスク上 consensus メッセージの append-only log (`get_home_dir()/wal`) |
-| **Host** (connector) | `malachitebft-app-channel::connector` | エンジンと **お前の** app loop の bridge (`AppMsg` イベント送信) |
+| **Host** (connector) | `malachitebft-app-channel::connector` | エンジンと **アプリ側の** app loop の bridge (`AppMsg` イベント送信) |
 | **Sync** | `malachitebft-engine::sync` | Peer catch-up — 遅れているとき欠けたブロックを fetch |
 
 加えて我々自身の runtime concern:
@@ -369,7 +369,7 @@ Single-validator mode では WAL write は起こるが replay されない (テ�
 
 > 🛑 **予測。** Round の途中で openhl を再起動するとどうなるか (vote 投じ後、round 決定前)?
 
-WAL なし: 再起動時、engine は前の vote を覚えていない。Peer が「お前は値 X に投票した」と覚えていて、再起動時にお前が値 Y に投票したら、お前は equivocate した — production BFT chain では slashable な offense だ。WAL あり: 再起動時、engine は前の vote を replay し、お前が X に投票したことを見て、Y への投票を拒否する。**WAL が single-machine consensus が restart にまたがる self-equivocation を回避する方法だ。**
+WAL なし: 再起動時、engine は前の vote を覚えていない。Peer が「このノードは値 X に投票した」と覚えているのに、再起動後 Y に投票したら、equivocate したことになる — production BFT chain では slashable な offense だ。WAL あり: 再起動時、engine は前の vote を replay し、X に投票した事実を見つけて Y への投票を拒否する。**WAL が single-machine consensus において restart にまたがる self-equivocation を回避する仕組みだ。**
 
 ## 6. Malachite gotcha 1 つ — proposal-part streaming
 
@@ -382,7 +382,7 @@ Malachite は 3 つの `ValuePayload` mode をサポートする (L4 §5 で最�
 
 **openhl はこれを完全に skip する** (`ProposalOnly`)、そのため `AppMsg::ReceivedProposalPart` は我々には絶対に fire しない。しかし大きな proposal を持つ chain 用に openhl を fork するなら (例: 10MB の pending fill を value が carry する CLOB chain)、stream-reassembly path を実装する必要がある。
 
-注意すべき gotcha: **part-streaming コードは `malachitebft-engine::util::streaming` に住む**、app loop ではない。`ConsensusConfig::value_payload` で configure する; engine が残りを handle する。**お前は streaming コードを書かない; value-reassembly ロジックを書く。**
+注意すべき gotcha: **part-streaming コードは `malachitebft-engine::util::streaming` に住む**、app loop ではない。`ConsensusConfig::value_payload` で configure する; engine が残りを handle する。**書くのは streaming コードではない; value-reassembly ロジックだ。**
 
 ## 7. 練習
 
@@ -408,13 +408,13 @@ L4 と L5 が Module 2 を閉じる (L3 はすでに drafted 済み):
   lessons: { create: [
     // L3: Malachite が与えてくれるもの (openhl_l2_l3_ja.md ですでに drafted)
     {
-      title: 'お前が実装するもの — proposal、validator、vote、signing',
+      title: '実装するもの — proposal、validator、vote、signing',
       slug: 'openhl-malachite-impl-ja',
       type: 'CONTENT',
       sortOrder: 1,
       duration: 20,    // ← L9 の 20 分と並ぶ (arc 内で最重)
       xpReward: 60,    // ← L9 の 60 XP と並ぶ
-      content: `# お前が実装するもの — proposal、validator、vote、signing\n\n...`  // L4 markdown
+      content: `# 実装するもの — proposal、validator、vote、signing\n\n...`  // L4 markdown
     },
     {
       title: 'malachitebft-engine の actor model',

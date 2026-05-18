@@ -52,7 +52,7 @@ pub trait ConsensusBridge: Send + Sync {
 
 これが contract だ。Consensus に参加する他のすべての crate はこの trait を実装する (EVM crate、3 つの impl — `InMemoryEvmBridge`、`RethEvmBridge`、`LiveRethEvmBridge`) か、メソッドを call するために `Arc<dyn ConsensusBridge>` を持つ (consensus crate の runner と engine-app loop)。
 
-本レッスンの残りは正当化だ。なぜこの 4 メソッド、このシグネチャ、このエラー type なのか? 各選択は何かを trade off する。レッスンの目的は trade を visible にして、お前が偶然ではなく意図的に違う選択をできるようにすることだ。
+本レッスンの残りは正当化だ。なぜこの 4 メソッド、このシグネチャ、このエラー type なのか? 各選択は何かを trade off する。レッスンの目的は trade を visible にして、偶然ではなく意図的に違う選択ができるようにすることだ。
 
 ## 2. Async か blocking か?
 
@@ -97,7 +97,7 @@ pub trait ConsensusBridge: Send + Sync {
 
 - 「**`restream_proposal(hash)` を追加して bridge が stale proposal を re-broadcast できるように。**」 もっともらしい — Malachite の AppMsg loop には `RestreamProposal` variant がある。**不要だ。** Restreaming はネットワーク層の関心事だ: consensus crate の app loop が bridge 関与なしで直接 handle する (`engine_app.rs:96@0844d58` 参照)。Bridge は EL contract であり、一般的な consensus event sink ではない。
 
-4 メソッドは contract leak を招かずに L7 マッピングを capture する最小だ (各メソッドが正確に 1 つの Ethereum Engine API call にマップする)。
+4 メソッドは、contract leak を招かずに L7 マッピングを capture できる最小のセットだ (各メソッドが正確に 1 つの Ethereum Engine API call にマップする)。
 
 ## 4. エラー semantics — Rejected、Syncing、Internal
 
@@ -125,13 +125,13 @@ pub enum BridgeError {
 | `Syncing` | EL はまだ答えられる state を持っていない — ネットワークの tip にキャッチアップ中だ。 | 待つ。Nil 投票しない (block が悪いかどうか分からない)。Backoff してリトライ、または timeout に落ちる。 |
 | `Internal(report)` | 本当に壊れている。DB 破損、EL panic、ファイル消失。 | **Chain を halt せよ。** エラーを上に propagate、大声でログ。安全に続行できない。 |
 
-3 つは互換ではない。未知の parent (これは `Rejected` 相当) で `Internal` を返す bridge は、本来 nil 投票すべきところで chain を halt させる。Syncing 条件で `Rejected` を返す bridge は、答えを与えられた peer から永久に fork する。
+3 つは互換ではない。未知の parent (これは `Rejected` 相当) で `Internal` を返す bridge は、本来 nil 投票すべきところで chain を halt させる。Syncing 条件で `Rejected` を返す bridge は、本来答えを与えてくれたはずの peer から永久に fork する。
 
 > 🛑 **反流暢性。** 「エラーはエラーだ。1 つの `Error` enum で十分。」 **違う。** Consensus コードでは、エラーの *カテゴリ* が chain が進むか、pause するか、halt するかを決定する。Collapse すると liveness にとって load-bearing な情報を失う。3 variant が最小だ。
 
 > 🛑 **予測。** 1 つ選べ: peer が parent block hash を我々の chain に持たない proposal を送ってきた。Bridge は `Rejected`、`Syncing`、`Internal` のどれを返すべきか?
 
-答えは **parent について学ぶ可能性があるか** に依存する。Node が遅れていて parent が real (まだ sync していないだけ) → `Syncing`。Node が up to date でそんな block が存在しない → `Rejected`。Bridge は常にどちらのケースかを判別できない; 実務では production bridge は provider の sync state を classify 前に check する。
+答えは **その parent を後から知る見込みがあるか** に依存する。Node が遅れていて parent が real (まだ sync していないだけ) → `Syncing`。Node が up to date でそんな block が存在しない → `Rejected`。Bridge は常にどちらのケースかを判別できない; 実務では production bridge は classify 前に provider の sync state を check する。
 
 `crates/evm/src/live_node.rs:68@0844d58` の `LiveRethEvmBridge::build_payload` では、現在のコードは provider に given hash の block がないとき `Rejected` を返す。**我々の provider が up to date だと仮定すれば** correct だ — single-validator mode では true (peer が我々より進んでいる可能性なし)、multi-node デプロイメントでは tighten が必要。
 

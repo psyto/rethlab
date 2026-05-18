@@ -20,7 +20,7 @@
 ````markdown
 # Bootstrap — genesis、key、single-node config
 
-お前は module 1-4 のすべての概念をインストールした。Contract (L1) を読め、Engine API (L7) を trace し、bridge (L9) を設計し、decided block (L10) を commit し、proposer として 1 つ produce (L11) できる。**さあ bootstrap する。** 最小の runnable openhl はどう見えるか — 1 validator、1 node、peer なし? そしてなぜそれが「toy」が実際にこれまで build してきたものすべての real test なのか?
+module 1-4 のすべての概念はインストール済みだ。Contract (L1) を読み、Engine API (L7) を trace し、bridge (L9) を設計し、decided block (L10) を commit し、proposer として 1 つ produce (L11) できる。**さあ bootstrap する。** 最小の runnable openhl はどう見えるか — 1 validator、1 node、peer なし? そしてなぜその「toy」が実際にこれまで build してきたものすべての real test なのか?
 
 > 🛑 **スクロール前に予測。** 1 validator devnet を動かしたい。構築する必要のある artifact をリストせよ (まだコードを書かず — 列挙のみ)。ヒント: 正確に 4 つあり、SHA `0844d58` ですでに 3 つが存在する。
 
@@ -270,8 +270,8 @@ assert_eq!(
 
 平易な日本語で:
 1. **正確に 1 つの decision が出た** — ゼロではなく (chain halt せず)、2 でもなく (`stop_after_decisions = 1` の early-return が正しく動いた)。
-2. **Bridge が consensus が合意した hash を commit した** — L10 の commit path が実際に発火したことを証明。
-3. **Decided hash が `build_payload` が produce したものと一致する** — L11 の propose path が、Malachite の signing + broadcast + voting を経由して Decided として戻ってくるまで intact に round-trip した値を produce したことを証明。
+2. **Consensus が合意した hash を bridge が commit した** — L10 の commit path が実際に発火したことを証明。
+3. **Decided hash は `build_payload` が produce したものと一致する** — L11 の propose path が produce した値が、Malachite の signing + broadcast + voting を経由して Decided として戻ってくるまで原型を保ったまま round-trip したことを証明。
 
 これが本コースの **end-to-end check** だ。3 つすべてが pass すれば、L1 から L12 までのすべてのレッスンが順番に execute したことになる。
 
@@ -304,7 +304,7 @@ INFO  consensus: committed via bridge: <hash>
 INFO  consensus: starting height=2
 ```
 
-各行は本コースの 1 文にマップする。**このトレースを 1 度読め。** お前が学んだ各層について「chain が実際に何をするか」の答えだ。
+各行は本コースの 1 文にマップする。**このトレースを 1 度読め。** これまでに学んだ各層について「chain が実際に何をするか」の答えだ。
 
 ## 5. 次に壊すもの
 
@@ -339,7 +339,7 @@ INFO  consensus: starting height=2
 
 ---
 
-**おめでとう** — お前は *Building OpenHL — Consensus Substrate* を完了した。L1 Architect tier の次のコースは Module 2 (CLOB matching engine) から始まる、real transaction が初めて system に入る場所だ。
+**おめでとう** — これで *Building OpenHL — Consensus Substrate* を完了した。L1 Architect tier の次のコースは Module 2 (CLOB matching engine) から始まる、real transaction が初めて system に入る場所だ。
 ````
 
 ---

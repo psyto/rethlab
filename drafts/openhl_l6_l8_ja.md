@@ -141,7 +141,7 @@ NodeBuilder パターンは openhl を 3 つのことに対して future-proof �
 
 1. **Slot を identify せよ。** §2 のテーブルから、9 つの component カテゴリと openhl が各々を replace するかを名指せ。何も見ずに、後続モジュールで replace を検討するであろう 4 つを書き出せ。
 2. **Fork の誘惑を見つけよ。** openhl リポで `reth-*-builder::*`、`reth-storage-api`、`reth-consensus`、`reth-chainspec`、または alloy より *深い* Reth crate パスを import しているコードを検索せよ。**深い import は「trait surface が expose していないものが必要だった」のサインだ。** これは我々のカスタマイズについて何を示唆するか?
-3. **カスタム EVM 実験。** openhl がカスタム EVM opcode を欲しがると仮定 (real Module 3 領域)。`crates/evm/src/reth_node.rs` への diff を sketch せよ: どの `EthereumNode` slot を replace し、お前のカスタム type はどの trait を impl するか?
+3. **カスタム EVM 実験。** openhl がカスタム EVM opcode を欲しがると仮定 (real Module 3 領域)。`crates/evm/src/reth_node.rs` への diff を sketch せよ: どの `EthereumNode` slot を replace し、自分のカスタム type はどの trait を impl するか?
 
 > **最終チェック。** 1 文で、なぜ `NodeBuilder::new(config).node(EthereumNode::default())` は `git clone reth && edit main.rs` より良いパターンか? 答えに「upstream-trackable」または「codebase 全体を fork せずに component を swap」が含まれていなければ、§1 を再読。
 ````
@@ -281,7 +281,7 @@ openhl の CLOB 統合計画:
 
 ここで openhl が *generic EVM* ではなく *perp DEX* になる。Mechanical な部分 — 1 つの Reth component を replace すること — は小さい (L6 の NodeBuilder パターン in action)。興味深い部分は CLOB matching ロジック自体で、これは rethlab コースの Module 2 だ。
 
-**L8 はモジュール間の bridge だ。** 学習者に伝える: 「お前は consensus substrate を mastered した; EVM payload パイプラインが Module 2 が plug in する場所だ。」
+**L8 はモジュール間の bridge だ。** 学習者に伝える: 「consensus substrate は master した; EVM payload パイプラインが Module 2 の plug in する場所だ。」
 
 ## 6. L11 の async-trick、具体化
 

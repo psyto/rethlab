@@ -290,11 +290,11 @@ const JA: LocaleConfig = {
       draftFile: 'openhl_l4_l5_ja.md',
       moduleNumber: 2,
       sortOrder: 1,
-      title: 'お前が実装するもの — proposal、validator、vote、signing',
+      title: '実装するもの — proposal、validator、vote、signing',
       slug: 'openhl-malachite-impl-ja',
       duration: 20,
       xpReward: 60,
-      h1Marker: '# お前が実装するもの — proposal、validator、vote、signing',
+      h1Marker: '# 実装するもの — proposal、validator、vote、signing',
       startSignature: 'L3 は 10 個の type に名前を付けた。次にそれらを書く。',
     },
     {
@@ -376,7 +376,7 @@ const JA: LocaleConfig = {
       h1Marker:
         '# ブロックを produce する — Malachite proposer → Reth payload → broadcast',
       startSignature:
-        '午前 3 時。Malachite の leader election 関数が今しがた、お前を height 47',
+        '午前 3 時。Malachite の leader election 関数が今しがた、このノードを height 47',
     },
     {
       draftFile: 'openhl_l12_l13_ja.md',
@@ -387,7 +387,7 @@ const JA: LocaleConfig = {
       duration: 10,
       xpReward: 30,
       h1Marker: '# Bootstrap — genesis、key、single-node config',
-      startSignature: 'お前は module 1-4 のすべての概念をインストールした。',
+      startSignature: 'module 1-4 のすべての概念はインストール済みだ。',
     },
     {
       draftFile: 'openhl_l12_l13_ja.md',

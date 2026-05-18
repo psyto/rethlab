@@ -237,23 +237,23 @@ fn new_precommit(...) -> Self::Vote;
 
 `Proposal` type が (height, round, value, pol_round, address) を超える追加フィールドを持つなら、`new_proposal` impl に含められる。Malachite はそれらを見ない — chain 固有だ。
 
-## 4. お前に残されたもの
+## 4. 実装側に残されたもの
 
 Malachite が protocol を与える。**与えない:**
 
 | 関心事 | 誰が所有するか |
 | :--- | :--- |
-| Address の選択 | お前 (chain の identity スキーム) |
-| Validator set の構築 | お前 (genesis + slashing ロジック) |
-| Propose する値の選択 | お前 (bridge 経由の `build_payload`) |
-| 値の validation | お前 (bridge 経由の `validate_payload`) |
-| メッセージの signing | お前 (`SigningProvider` impl — L4 §7) |
+| Address の選択 | 実装側 (chain の identity スキーム) |
+| Validator set の構築 | 実装側 (genesis + slashing ロジック) |
+| Propose する値の選択 | 実装側 (bridge 経由の `build_payload`) |
+| 値の validation | 実装側 (bridge 経由の `validate_payload`) |
+| メッセージの signing | 実装側 (`SigningProvider` impl — L4 §7) |
 | Network gossip | エンジン actor system (libp2p) |
 | 永続化 (WAL) | エンジン actor system |
-| Decided block の storage | お前 (EL state) |
-| Mempool | お前 (EL transaction pool) |
+| Decided block の storage | 実装側 (EL state) |
+| Mempool | 実装側 (EL transaction pool) |
 
-Split は意図的だ。**Malachite が小さい** のは consensus アルゴリズムだけを所有するからだ。Chain 固有のすべて — address、signing、payload assembly、storage — はお前のものだ。
+Split は意図的だ。**Malachite が小さい** のは consensus アルゴリズムだけを所有するからだ。Chain 固有のすべて — address、signing、payload assembly、storage — はすべて実装側に残される。
 
 > 🛑 **予測。** チームが openhl を fork して新しい chain を作る。違う address フォーマット (Ethereum 形式の 20-byte ではなく Solana 形式の 32-byte address) が欲しい。**何ファイル触るか?**
 
@@ -269,23 +269,23 @@ Split は意図的だ。**Malachite が小さい** のは consensus アルゴリ
 fn process(&mut self, input: Input<Ctx>) -> Result<Vec<Output<Ctx>>, Error<Ctx>>
 ```
 
-`Input<Ctx>` と `Output<Ctx>` enum は `Context` で parameterize される。Variant がお前の type を carry する:
+`Input<Ctx>` と `Output<Ctx>` enum は `Context` で parameterize される。Variant が自分の type を carry する:
 
 - `Input::Proposal(SignedProposal<Ctx>, Validity)` — proposal が到着した。`SignedProposal` は `Ctx::Proposal` に対して generic。
-- `Output::Vote(Ctx::Vote)` — この vote を broadcast せよ。お前の `OpenHlVote` が戻ってくる。
+- `Output::Vote(Ctx::Vote)` — この vote を broadcast せよ。`OpenHlVote` が戻ってくる。
 - `Output::Decide(Round, Ctx::Proposal)` — consensus がこの proposal で decide した。
 
-**`Driver` 自体はお前の type が存在しないかのように読める。** `Ctx::Address`、`Ctx::Vote`、`Ctx::Proposal` を traffic する — `OpenHlAddress`、`OpenHlVote`、`OpenHlProposal` を扱うことは一度もない。Protocol 全体が type-parametric だ。
+**`Driver` 自体は自分の type が存在しないかのように読める。** 流通するのは `Ctx::Address`、`Ctx::Vote`、`Ctx::Proposal` — `OpenHlAddress`、`OpenHlVote`、`OpenHlProposal` に触れることは一度もない。Protocol 全体が type-parametric だ。
 
 なぜこれが重要か? **Tendermint protocol 全体が 1 つのコードであり、それを使うすべての chain にまたがって一度 debug される。** Cosmos chain、openhl、Tempo、その他が Malachite (または概念的等価物) を使うとき、全員がアルゴリズム自体への bug fix の恩恵を受ける。BFT を re-implement する必要のある chain は無い。
 
-> 🛑 **反流暢性。** 「各 BFT chain が自分の consensus を実装する。」 **違う。** 各 chain は自分の *type* と *I/O* を実装する。アルゴリズムは family にまたがって共有される — 時には文字通り (同じライブラリを使う chain)、時には概念的に (HotStuff variant は同じ state machine に converge する)。**L1 architect としてのお前の仕事は type と I/O であり、アルゴリズムではない。**
+> 🛑 **反流暢性。** 「各 BFT chain が自分の consensus を実装する。」 **違う。** 各 chain は自分の *type* と *I/O* を実装する。アルゴリズムは family にまたがって共有される — 時には文字通り (同じライブラリを使う chain)、時には概念的に (HotStuff variant は同じ state machine に converge する)。**L1 architect の仕事は type と I/O であり、アルゴリズムではない。**
 
 ## 6. 練習
 
 1. **Type を inventory せよ。** コードを見ずに、`Context` の 10 個の associated type と各々が chain で何を表すかをリストせよ。それから `crates/consensus/src/context.rs:19@0844d58` を開いてリストを check せよ。
 2. **Solana-address 実験。** `OpenHlAddress` が `[u8; 20]` ではなく `[u8; 32]` だったら何が変わるかを sketch せよ。変わるファイル (ヒント: 1 つだけ) と変わらないファイル (ヒント: ほとんど) を identify せよ。
-3. **Driver を見つけよ。** `crates/consensus/src/runner.rs:34-83@0844d58` (`run_single_validator` の始まり) を読め。お前の `OpenHlContext` type が現れる場所と Malachite 内部 type が現れる場所を identify せよ。Seam はどこか?
+3. **Driver を見つけよ。** `crates/consensus/src/runner.rs:34-83@0844d58` (`run_single_validator` の始まり) を読め。自分の `OpenHlContext` type が現れる場所と Malachite 内部 type が現れる場所を identify せよ。Seam はどこか?
 
 > **最終チェック。** 1 文で、なぜ Malachite の `Context` は単なる generic parameter (`Driver<Address, Height, Value, ...>`) ではなく *associated type* を使うのか? 答えに「associated type は chain あたり 1 セットの type を lock-in する — generic だと caller が mix-and-match できてしまい、determinism invariant を破る」が含まれていなければ、§3 を再読。
 ````
@@ -349,10 +349,10 @@ L4 (per-type walk) が landing するときは `crates/consensus/src/types/*.rs`
 
 ## Style review notes (self-critique before paste)
 
-- **L2 は珍しく comparative lesson として frame されている。** コースの大部分は「これが我々のコード」だ。L2 は「なぜすべての chain が我々のコードのように見えるか」。異なる論調 — Module 1 の残りの「お前のコード、歩く」よりも consensus-engineering コースのトーンに近い。Reviewer がこれを jarring と感じたら、§5 (「openhl が継承するもの」) に openhl 固有の cite を増やすことで soften する; 現在は主に forward-reference になっている。
+- **L2 は珍しく comparative lesson として frame されている。** コースの大部分は「これが我々のコード」だ。L2 は「なぜすべての chain が我々のコードのように見えるか」。異なる論調 — Module 1 の残りの「自分のコード、歩く」よりも consensus-engineering コースのトーンに近い。Reviewer がこれを jarring と感じたら、§5 (「openhl が継承するもの」) に openhl 固有の cite を増やすことで soften する; 現在は主に forward-reference になっている。
 - **L2 §1 のテーブル** が load-bearing artifact。Reviewer が拡張/縮小を望むなら、column 数が parameter — 現在の 3 列形式 (chain、family、いつ実行) が minimum。Bloat なしで 4 列目 (犠牲) を追加可能。
 - **L3 §2 の「10 type、1 type 1 ファイル」フレーミング** は L4 への critical setup。L4 は読者がファイル構造を知っていると仮定する; L3 がそれを導入する。L4 が再構成するなら (例: validator と validator_set を 1 type にマージ)、L3 も parallel に更新が必要。
-- **L3 §5 の「Driver はお前の type が存在しないかのように読める」** は本レッスンで最も深い洞察。Review で削るな — parametricity-as-design-discipline が landing する瞬間だ。
+- **L3 §5 の「Driver は自分の type が存在しないかのように読める」** は本レッスンで最も深い洞察。Review で削るな — parametricity-as-design-discipline が landing する瞬間だ。
 - **翻訳 policy は L1/L7/L10 JA と同一**:
   - 「associated type」「parametric」「factory」「state machine」「runtime」等は英語のまま (Rust trait/型理論の technical 用語)。
   - 「fire-and-forget」「optimistic」「decide-first」「reorg」「forcing function」等のパターン名・概念名は英語のまま。

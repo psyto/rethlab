@@ -20,15 +20,15 @@
 ````markdown
 # ブロックを produce する — Malachite proposer → Reth payload → broadcast
 
-午前 3 時。Malachite の leader election 関数が今しがた、お前を height 47、round 0 の proposer に選んだ。お前には **400 ミリ秒** ある — ブロックを produce し、peer に broadcast し、prevote 収集を開始するまで。時計はすでに動いている。
+午前 3 時。Malachite の leader election 関数が今しがた、このノードを height 47、round 0 の proposer に選んだ。残り時間は **400 ミリ秒** — ブロックを produce し、peer に broadcast し、prevote 収集を開始するまで。時計はすでに動いている。
 
-そのミリ秒はどこに消えるのか? 予算のうち 200µs はお前のコード、50ms は Reth、100ms はネットワーク伝播 (proposer がどんなに頑張っても縮められない) — どれがどれか? 本レッスンは openhl の実コード経由で proposer hot path を trace し、重要な瞬間に名前を付ける。
+そのミリ秒はどこに消えるのか? 予算のうち 200µs はアプリ側のコード、50ms は Reth、100ms はネットワーク伝播 (proposer がどんなに頑張っても縮められない) — どれがどれか? 本レッスンは openhl の実コード経由で proposer hot path を trace し、重要な瞬間に名前を付ける。
 
-> 🛑 **スクロール前に予測。** お前は height N の proposer だ。お前のコードがこれを知る瞬間から proposal を broadcast するまでに、起こる必要があるアクションをすべて順番に名指せ。ヒント: 少なくとも 5 つあり、そのうち 1 つは「synchronously に起こる必要がない」だ。
+> 🛑 **スクロール前に予測。** 自分は height N の proposer だとせよ。コードがこれを知る瞬間から proposal を broadcast するまでに、起こる必要があるアクションをすべて順番に名指せ。ヒント: 少なくとも 5 つあり、そのうち 1 つは「synchronously に起こる必要がない」だ。
 
 ## 1. Hot path、名指し
 
-openhl の `run_engine_app` ループが consensus engine から `AppMsg::GetValue` を見るとき、エンジンが言っているのは: 「お前の slot だ。Propose するブロックを build せよ。」
+openhl の `run_engine_app` ループが consensus engine から `AppMsg::GetValue` を見るとき、エンジンが言っているのは: 「いま自分の番だ。Propose するブロックを build せよ。」
 
 bridge より上から trace する:
 

@@ -23,7 +23,7 @@
 
 午前 3 時。OpenHL の devnet が 3 ブロック前から停止している。Malachite のログは `waiting for value` と言う。Reth のログは `engine idle` と言う。どちらも error を投げていない。**どっちが壊れているのか?**
 
-この質問に 30 秒で答えられないなら、バグはどちらの crate にも無い — お前のメンタルモデルにある。2 つがどう話しているかのモデルだ。本レッスンはそのモデルをインストールする。読み終える頃には、consensus と execution の間を流れる 4 つのメッセージ、それぞれの promise、そしてどれかが消えたときにどちらの crate を責めればいいかが正確に分かるようになる。
+この質問に 30 秒で答えられないなら、バグはどちらの crate にもない — 2 つがどう話しているかのメンタルモデル側にある。本レッスンはそのモデルをインストールする。読み終える頃には、consensus と execution の間を流れる 4 つのメッセージ、それぞれの promise、そしてどれかが消えたときにどちらの crate を責めればいいかが正確に分かるようになる。
 
 > 🛑 **スクロール前に予測。** 同一プロセス内で動く 2 サービス: Malachite (BFT) と Reth (EVM)。**ブロックが produce され commit されるまでに両者間を流れる必要があるメッセージを、思いつくだけ挙げよ。** 「ブロックが consensus から EVM に流れる」で止まったなら、contract はまだ手に入っていない。
 
@@ -37,7 +37,7 @@
 | :--- | :--- |
 | **Swappability** | EVM を書き直さずに consensus を変えられない、逆もしかり。HL は HyperBFT v1 から v2 へ移行する際 matching engine に触れずに済む — v1 と v2 は同じ contract を honor するからだ。 |
 | **Testability** | EVM を起動せずに consensus を unit-test できない、逆もしかり。両半分とも integration-test オンリーになる。 |
-| **Debuggability** | 午前 3 時にどちら側が stall したか分からない。クラッシュダンプはひとかたまりの泥である。 |
+| **Debuggability** | 午前 3 時にどちら側が stall したか分からない。クラッシュダンプは区別のつかない泥団子になる。 |
 
 Contract が cure である。2 半部間のメッセージに名前を付けると、それぞれの半分は単独で replace、mock、fuzz、reason できるものになる。**Contract が API である。コードは実装詳細だ。**
 
@@ -45,12 +45,12 @@ Contract が cure である。2 半部間のメッセージに名前を付ける
 
 consensus crate が execution crate に負っているのは厳密に 2 つ:
 
-1. **Committed ブロックの ordered stream。** すべての validator が同じブロックを同じ順序で見る。Gap なし。Reorg なし — classical BFT chain においては。Nakamoto chain はもっと弱いものを約束するが、お前はそれを作っているわけではない。
-2. **Validity assertions。** Commit された各ブロックは ≥ 2f+1 の validator によって投票された。お前の EVM が適用して invalid な state を生成したら、それは *お前の* バグであり consensus のバグではない。
+1. **Committed ブロックの ordered stream。** すべての validator が同じブロックを同じ順序で見る。Gap なし。Reorg なし — classical BFT chain においては。Nakamoto chain はもっと弱いものを約束するが、ここで作っているのはそれではない。
+2. **Validity assertions。** Commit された各ブロックは ≥ 2f+1 の validator によって投票された。EVM が適用して invalid な state を生成したら、それは *実装側* のバグであり consensus のバグではない。
 
 これが BFT 側から見た contract の全部だ。ここに *無い* ものに注意:
 
-- 「正しい transactions」ではない。(BFT はお前の tx が何をするか知らない。)
+- 「正しい transactions」ではない。(BFT は tx が何をするか知らない。)
 - 「正しい state root」ではない。(BFT は state を compute していない。)
 - 「正しい canonical fork」ではない。(BFT には fork *自体が* 存在しない — それが要点だ。)
 
@@ -131,7 +131,7 @@ pub trait ConsensusBridge: Send + Sync {
 }
 ```
 
-この trait を注意深く読め。**OpenHL における consensus と execution の間のすべての interaction は、これら 4 メソッドのいずれかを流れる。** 境界を別の方法で渡って reach しようとしている自分に気づいたら — consensus crate から Reth DB handle にアクセスしたり、EVM crate から Malachite の vote state を覗き見したり — お前は contract を破ったし、1 週間以内に forked devnet で代償を払うことになる。
+この trait を注意深く読め。**OpenHL における consensus と execution の間のすべての interaction は、これら 4 メソッドのいずれかを流れる。** 境界を別の方法で渡って reach しようとしている自分に気づいたら — consensus crate から Reth DB handle にアクセスしたり、EVM crate から Malachite の vote state を覗き見したり — それは contract を破った瞬間であり、1 週間以内に forked devnet で代償を払うことになる。
 
 > 🛑 **反流暢性。** 「Reth *が* OpenHL の consensus layer だ。」 **違う。** Reth は `Consensus` trait を ship しているが、それは *block-validation hook* だ — parent-hash check、gas-limit check、EIP-1559 base-fee math。BFT エンジンではない。Reth には leader election も投票も view change も無い。BFT エンジンは Malachite であり、`crates/consensus` に座って、上記 4 メッセージを通じて Reth と話している。これらを混同するとアーキテクチャ図が永久に間違いになる。
 
