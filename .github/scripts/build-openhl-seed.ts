@@ -74,6 +74,7 @@ const EN: LocaleConfig = {
   modules: {
     0: { title: 'Orientation', sortOrder: 0 },
     1: { title: 'Foundations', sortOrder: 1 },
+    2: { title: 'Contract types', sortOrder: 2 },
   },
   lessons: [
     {
@@ -98,6 +99,17 @@ const EN: LocaleConfig = {
       h1Marker: '# Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)',
       startSignature: 'By the end of this lesson, run from your `~/code/my-openhl/` directory:',
     },
+    {
+      draftFile: 'openhl_l2_en.md',
+      moduleNumber: 2,
+      sortOrder: 0,
+      title: 'Lesson 2 — Shared contract types in openhl-types',
+      slug: 'openhl-contract-types-en',
+      duration: 30,
+      xpReward: 60,
+      h1Marker: '# Lesson 2 — Shared contract types in `openhl-types`',
+      startSignature: 'By the end of this lesson:',
+    },
   ],
 };
 
@@ -119,6 +131,7 @@ const JA: LocaleConfig = {
   modules: {
     0: { title: 'Orientation', sortOrder: 0 },
     1: { title: 'Foundations', sortOrder: 1 },
+    2: { title: 'Contract types', sortOrder: 2 },
   },
   lessons: [
     {
@@ -143,6 +156,17 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 1 — Workspace + Reth + Malachite (Stages 1-3)',
       startSignature: 'このレッスンの終わりに、`~/code/my-openhl/` ディレクトリで次を実行する:',
     },
+    {
+      draftFile: 'openhl_l2_ja.md',
+      moduleNumber: 2,
+      sortOrder: 0,
+      title: 'レッスン 2 — openhl-types の共通 contract type',
+      slug: 'openhl-contract-types-ja',
+      duration: 30,
+      xpReward: 60,
+      h1Marker: '# レッスン 2 — `openhl-types` の共通 contract type',
+      startSignature: 'このレッスンの終わりに:',
+    },
   ],
 };
 
@@ -164,8 +188,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 65, // L0 (20) + L1 (45) — build-along pilot
-  xpReward: 140, // L0 (60) + L1 (80) — build-along pilot
+  duration: 95, // L0 (20) + L1 (45) + L2 (30) — build-along pilot
+  xpReward: 200, // L0 (60) + L1 (80) + L2 (60) — build-along pilot
   tags: ['reth', 'malachite', 'bft', 'evm', 'clob', 'l1', 'openhl', 'expert'],
   sortOrder: 600,
   isPublished: false,
