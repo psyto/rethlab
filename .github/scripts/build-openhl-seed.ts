@@ -76,6 +76,7 @@ const EN: LocaleConfig = {
     1: { title: 'Foundations', sortOrder: 1 },
     2: { title: 'Contract types', sortOrder: 2 },
     3: { title: 'EL test double', sortOrder: 3 },
+    4: { title: 'CL types', sortOrder: 4 },
   },
   lessons: [
     {
@@ -144,6 +145,17 @@ const EN: LocaleConfig = {
       h1Marker: '# Lesson 5 — `RethEvmBridge` with real alloy types',
       startSignature: 'By the end of this lesson:',
     },
+    {
+      draftFile: 'openhl_l6_en.md',
+      moduleNumber: 4,
+      sortOrder: 0,
+      title: 'Lesson 6 — OpenHlContext and the 10 Malachite sub-types',
+      slug: 'openhl-malachite-context-en',
+      duration: 50,
+      xpReward: 90,
+      h1Marker: '# Lesson 6 — `OpenHlContext` and the 10 Malachite sub-types',
+      startSignature: 'By the end of this lesson:',
+    },
   ],
 };
 
@@ -167,6 +179,7 @@ const JA: LocaleConfig = {
     1: { title: 'Foundations', sortOrder: 1 },
     2: { title: 'Contract types', sortOrder: 2 },
     3: { title: 'EL test double', sortOrder: 3 },
+    4: { title: 'CL types', sortOrder: 4 },
   },
   lessons: [
     {
@@ -235,6 +248,17 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 5 — real alloy 型を使う `RethEvmBridge`',
       startSignature: 'このレッスンの終わりに:',
     },
+    {
+      draftFile: 'openhl_l6_ja.md',
+      moduleNumber: 4,
+      sortOrder: 0,
+      title: 'レッスン 6 — OpenHlContext と Malachite の 10 sub-type',
+      slug: 'openhl-malachite-context-ja',
+      duration: 50,
+      xpReward: 90,
+      h1Marker: '# レッスン 6 — `OpenHlContext` と Malachite の 10 sub-type',
+      startSignature: 'このレッスンの終わりに:',
+    },
   ],
 };
 
@@ -256,8 +280,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 205, // L0 (20) + L1 (45) + L2 (30) + L3 (30) + L4 (40) + L5 (40) — build-along pilot
-  xpReward: 400, // L0 (60) + L1 (80) + L2 (60) + L3 (60) + L4 (70) + L5 (70) — build-along pilot
+  duration: 255, // L0 (20) + L1 (45) + L2 (30) + L3 (30) + L4 (40) + L5 (40) + L6 (50) — build-along pilot
+  xpReward: 490, // L0 (60) + L1 (80) + L2 (60) + L3 (60) + L4 (70) + L5 (70) + L6 (90) — build-along pilot
   tags: ['reth', 'malachite', 'bft', 'evm', 'clob', 'l1', 'openhl', 'expert'],
   sortOrder: 600,
   isPublished: false,
