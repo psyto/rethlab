@@ -79,6 +79,7 @@ const EN: LocaleConfig = {
     4: { title: 'CL types', sortOrder: 4 },
     5: { title: 'Engine integration', sortOrder: 5 },
     6: { title: 'Live Reth', sortOrder: 6 },
+    7: { title: 'Capstone', sortOrder: 7 },
   },
   lessons: [
     {
@@ -235,6 +236,28 @@ const EN: LocaleConfig = {
       h1Marker: "# Lesson 13 — `validate_payload` runs Reth's `EthBeaconConsensus`",
       startSignature: 'By the end of this lesson:',
     },
+    {
+      draftFile: 'openhl_l14_en.md',
+      moduleNumber: 6,
+      sortOrder: 3,
+      title: "Lesson 14 — commit drives Reth's Engine API forkchoice",
+      slug: 'openhl-commit-forkchoice-en',
+      duration: 50,
+      xpReward: 90,
+      h1Marker: "# Lesson 14 — `commit` drives Reth's Engine API forkchoice",
+      startSignature: 'By the end of this lesson:',
+    },
+    {
+      draftFile: 'openhl_l15_en.md',
+      moduleNumber: 7,
+      sortOrder: 0,
+      title: "Lesson 15 — What you built, what's still stub, where to go next",
+      slug: 'openhl-capstone-en',
+      duration: 25,
+      xpReward: 60,
+      h1Marker: "# Lesson 15 — What you built, what's still stub, where to go next",
+      startSignature: 'Over 14 lessons you went from `cargo init`',
+    },
   ],
 };
 
@@ -261,6 +284,7 @@ const JA: LocaleConfig = {
     4: { title: 'CL types', sortOrder: 4 },
     5: { title: 'Engine integration', sortOrder: 5 },
     6: { title: 'Live Reth', sortOrder: 6 },
+    7: { title: 'Capstone', sortOrder: 7 },
   },
   lessons: [
     {
@@ -417,6 +441,28 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 13 — `validate_payload` が Reth の `EthBeaconConsensus` を走らせる',
       startSignature: 'このレッスンの終わりに:',
     },
+    {
+      draftFile: 'openhl_l14_ja.md',
+      moduleNumber: 6,
+      sortOrder: 3,
+      title: 'レッスン 14 — commit が Reth の Engine API forkchoice を駆動する',
+      slug: 'openhl-commit-forkchoice-ja',
+      duration: 50,
+      xpReward: 90,
+      h1Marker: '# レッスン 14 — `commit` が Reth の Engine API forkchoice を駆動する',
+      startSignature: 'このレッスンの終わりに:',
+    },
+    {
+      draftFile: 'openhl_l15_ja.md',
+      moduleNumber: 7,
+      sortOrder: 0,
+      title: 'レッスン 15 — 作ったもの、まだ stub のもの、次に行く先',
+      slug: 'openhl-capstone-ja',
+      duration: 25,
+      xpReward: 60,
+      h1Marker: '# レッスン 15 — 作ったもの、まだ stub のもの、次に行く先',
+      startSignature: '14 レッスンで、空ディレクトリの `cargo init` から、',
+    },
   ],
 };
 
@@ -438,8 +484,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 585, // L0..L12 total 530 + L13 (55) — build-along pilot
-  xpReward: 1120, // L0..L12 total 1020 + L13 (100) — build-along pilot
+  duration: 660, // L0..L14 total 635 + L15 (25) — build-along pilot complete
+  xpReward: 1270, // L0..L14 total 1210 + L15 (60) — build-along pilot complete
   tags: ['reth', 'malachite', 'bft', 'evm', 'clob', 'l1', 'openhl', 'expert'],
   sortOrder: 600,
   isPublished: false,

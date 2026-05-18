@@ -1,0 +1,216 @@
+# OpenHL を作る — L15 draft (JA) — C2 build-along 書き直し
+
+> openhl SHA は cite しない — このレッスンは recap と roadmap であって新規コードではない。
+> コース: `building-openhl-consensus-ja` (track: `reth-l1-architect`, 10 コース中 6 番目)。
+> コース最終レッスン。
+
+---
+
+## L15 — `openhl-capstone-ja`
+
+- **モジュール:** 7 (Capstone — 最終レッスン用の新規モジュール)
+- **モジュール sortOrder:** 7
+- **コース全体 sortOrder:** 14 (コース上で見えるレッスンの 15 個目; Module 4 がレッスン 4 つで、L8/L9 をコース途中で split したので番号は 15)
+- **所要時間:** 25 分
+- **XP:** 60
+- **type:** CONTENT
+
+### Content
+
+````markdown
+# レッスン 15 — 作ったもの、まだ stub のもの、次に行く先
+
+## 作ったシステム
+
+14 レッスンで、空ディレクトリの `cargo init` から、real Reth EL を通じて real block を ~0.02 秒で decide する single-validator BFT chain まで来た。Workspace は今こう見える:
+
+```
+~/code/my-openhl/
+├── Cargo.toml                          ← reth-* 16 個、malachite 8 個、すべて SHA pin
+├── bin/openhl/                         ← (stub バイナリ — production 配線は将来コース)
+├── crates/
+│   ├── types/                          L2:  CL↔EL 共通 contract 型
+│   │   └── src/lib.rs                  BlockHash, PayloadId, PayloadAttrs,
+│   │                                   ExecutedBlock, PayloadStatus
+│   ├── evm/                            EL 側 (test double → live Reth)
+│   │   ├── src/bridges/
+│   │   │   ├── in_memory.rs            L4:  InMemoryEvmBridge (HashMap state)
+│   │   │   └── reth.rs                 L5:  RethEvmBridge (alloy 型, real hash_slow)
+│   │   ├── src/reth_node.rs            L11: bootstrap 証明 (test-only)
+│   │   └── src/live_node.rs            L12-L14: LiveRethEvmBridge<P>
+│   │                                   - L12: BlockNumReader 経由の parent lookup
+│   │                                   - L13: EthBeaconConsensus validate
+│   │                                   - L14: ConsensusEngineHandle forkchoice
+│   └── consensus/                      CL 側 (フル BFT engine)
+│       ├── src/bridge.rs               L3:  ConsensusBridge trait
+│       ├── src/types/                  L6:  10 個の Malachite Context sub-type
+│       ├── src/context.rs              L6:  Context<OpenHlContext> impl
+│       ├── src/signing.rs              L7:  vote/proposal の canonical encoding
+│       ├── src/signing_provider.rs     L7:  SigningProvider<OpenHlContext>
+│       ├── src/codec.rs                L8:  OpenHlCodec (real 1 個 + stub 7 個 Codec impl)
+│       ├── src/node.rs                 L9:  OpenHlNode + start_engine
+│       └── src/engine_app.rs           L10: run_engine_app (AppMsg ルーティング)
+```
+
+合計約 **40-50 ソースファイル**。Workspace テスト: 38 個合格。
+
+## 4 つの `ConsensusBridge` メソッド — 全部 live
+
+各行はコース後のメソッドの最終状態:
+
+| メソッド | 最初の impl | Live impl | 今到達する real Reth コード |
+| - | - | - | - |
+| `build_payload` | L4 (in-memory) | L13 | `HeaderProvider::sealed_header_by_hash`, `ChainSpec::next_block_base_fee` (validator と同じヘルパー) |
+| `payload_ready` | L4 (in-memory) | L13 | (Reth call なし — 設計上 bridge の pending map) |
+| `validate_payload` | L4 (stub Valid) | L13 | `EthBeaconConsensus::validate_header_against_parent` (4 sub-check: number / timestamp / gas-limit / EIP-1559 base fee) |
+| `commit` | L4 (HashMap insert) | L14 | `ConsensusEngineHandle::fork_choice_updated` via in-process Engine API |
+
+Bridge は Reth のストレージ層 (`HeaderProvider`)、Reth の chain config (`ChainSpec`)、Reth の consensus validator (`EthBeaconConsensus`)、Reth の engine actor (`ConsensusEngineHandle`) と話す。これは CL クライアントが触る Reth の public surface のほとんど。
+
+## まだ placeholder のもの
+
+このコースは **動く single-validator chain** を ship した。まだないものを正直に call out する。以下の各項目は意図的な scope cut であって偶然ではない:
+
+### 1. Engine `newPayload` 統合
+
+**ステータス**: 欠落。
+
+`commit` は `ForkchoiceUpdated` を送り、Reth の engine はマッチする block body がないため `SYNCING` で応答する。`VALID` に進めるには:
+
+- `build_payload` の出力を real `ExecutionPayload` (トランザクションリスト付き、空でも) として encode する。
+- `fork_choice_updated` 呼び出しの **前に** `handle.new_payload(payload).await` 経由で送る。
+- レスポンスチェーンを合わせる: `newPayload → VALID` → `forkchoice → VALID` → canonical head が advance。
+
+ブロッカーは、payload に入れる EVM-executable トランザクションをまだ持っていないこと。OpenHL の matching engine (CLOB) は **fills** を produce する、EVM トランザクションではない。Fills を EVM トランザクション (または precompile call) にラップするのが本コース後の次の大きな作業 — 多分 openhl build arc の Module 2 全部。
+
+### 2. Real `Codec` impl
+
+**ステータス**: real 1 個 (`OpenHlProposalPart` — 空バイト)、stub 7 個 (`CodecStub` error を返す)。
+
+Single-validator モードでは、gossip メッセージ (`SignedConsensusMsg`, `LivenessMsg`, `StreamMessage`)、WAL writes (`ProposedValue`)、peer sync (`Status`, `Request`, `Response`) の codec は **決して fire しない**。2 番目の validator を追加した瞬間、すべての cross-validator メッセージがこれら stub のどれかに当たる。
+
+拡張するには: wire format (protobuf, borsh, JSON) を選び、各型の encode/decode を書く。Malachite の `code/crates/test/src/codec/` が ~400 行の手書き protobuf で canonical reference。
+
+### 3. Multi-validator gossip
+
+**ステータス**: 一度も exercise していない。
+
+`OpenHlNode` はすでに libp2p (`/ip4/127.0.0.1/tcp/0`) を configure する。Untested:
+- 2 個の `OpenHlNode` instance が互いを discover する。
+- ネットワーク partition 下での vote propagation。
+- Vote-extension exchange。
+- 遅れた validator の sync。
+
+Codec stub (#2) が real になり N=2 node が共有 chain spec に対して立ち上がれば、multi-validator integration test が次の自然なステップ。
+
+### 4. 永続 WAL
+
+**ステータス**: エフェメラル tempdir。
+
+すべてのテストが `tempfile::tempdir()` を使うので MDBX state は各 run 後に消える。Production には再起動を生き残る configurable `home_dir` が必要。追加は機械的 (path を `OpenHlNode::new` 経由で route するだけ)、だが **crash recovery** の検証 (commit 途中で node を kill、再起動、chain head が正しいことを assert) には real WAL codec impl と特に chaos-engineering 形の Test Plan が必要。
+
+### 5. Slashing + double-sign detection
+
+**ステータス**: なし。
+
+Production BFT chain は validator の不正挙動 (同じ高さで異なる block 2 個を sign、同じ round で 2 回 vote) を track する。Malachite は `LivenessMsg` にこれ用のフックがある; OpenHL は配線していない。**Slashing なしの multi-validator chain は testnet には fine、value を扱うネットワークには危険。**
+
+### 6. Custom Hyperliquid-shape 挙動
+
+**ステータス**: vanilla Ethereum。
+
+「openhl-shape」chain の要点は、Hyperliquid を generic EVM と区別する precompile と CLOB 駆動の payload assembly。Stage 8 (CLOB matching engine、fills-into-payload) と Stage 9 (custom precompile、`clob_place_order` write path) は `psyto/openhl` に住むが、ここではカバーしない。将来コースの自然な Module 2。
+
+## Production-readiness チェックリスト
+
+「テストが pass する」から「real value を任せていい」までの作業:
+
+- [ ] 7 個の Codec stub すべてを real protobuf/borsh/JSON impl で置き換え。
+- [ ] `engine_newPayload` 統合で engine が bridge の canonical chain view にマッチするように。
+- [ ] N=2+ node 共有 chainspec に対する multi-validator integration test が合格。
+- [ ] WAL crash-recovery test (commit 途中で kill、再起動、chain head 検証)。
+- [ ] Production デプロイ用に永続 `home_dir` (tempdir ではない) を configure。
+- [ ] Engine `SYNCING`/`VALID`/`INVALID` レスポンスを `tracing::warn` / structured field でログ、discard しない。
+- [ ] Slashing/double-sign フックを配線・unit test。
+- [ ] Key rotation 手順 (chain restart 時の Ed25519 key swap、runtime ではなく)。
+- [ ] 運用テレメトリ: round duration、payload build latency、validate failure の Prometheus metric。
+- [ ] パフォーマンスベースライン: 連続負荷下の blocks-per-second (smoke test だけではなく)。
+- [ ] Canonical encoding format の独立セキュリティレビュー (L7 のバイトレイアウトは **wire spec の一部**)。
+- [ ] 部分的ネットワーク partition 下の proposer manipulation の脅威モデル。
+
+このコースのコードを production chain に fork するなら、このリストを long-pole 作業として扱うこと — ほとんどはコース自体より難しい。
+
+## 14 レッスン前にはできなかった、今できること
+
+- **real EL に対してフル Rust BFT engine を bootstrap する。** 「mocked EL で」ではなく、「Go への FFI で」でもない — 同じ Rust workspace で `EthereumNode` を実際に走らせる。
+- **producer/validator の自己整合性について推論する。** 同じ artifact の builder と validator があるとき、source of truth を共有しなければならない。`chain_spec.next_block_base_fee` が `build_payload` と `validate_payload` の両方を駆動するパターンを見た。
+- **incremental-stub パターンを適用する。** Trait bound が surface area を強制する; 一度に全部埋められないなら、明確な failure mode で stub する。L8 の `CodecStub("SignedConsensusMsg<OpenHlContext>")` がモデル。
+- **2 つの汎用インフラを配線する。** Reth と Malachite は別チームが別の sensibility で書いた。Handshake interface (`Node` trait, `ConsensusBridge` trait) がそれらを composable にした。将来コースは他のインフラで同じパターンを使う。
+- **プロトコルエラーと運用エラーを区別する。** `BridgeError::Rejected` vs `BridgeError::Internal`。`PayloadStatus::Invalid` vs 伝播。会話レベルが重要。
+- **live read が起きたことを証明するテストを書く。** L12 の `assert_eq!(block.number, 1)` が load-bearing チェックだった — 他のものだと in-memory fallback がすり抜ける。
+
+## 次に行く先
+
+rethlab 内:
+- **Reth Expert** (track `reth-l1-architect`, course 7+) — `BlockExecutor`、state-root verification、MDBX 内部の deep dive。`validate_payload` に実際にトランザクションを実行させたくなったら自然に次。
+- **Reth Consensus Engineering** — slashing、vote extension、fault tolerance を深くカバー。Multi-validator gossip が動いた後に行く場所。
+
+rethlab 外:
+- **`psyto/openhl` Stages 8-9** — CLOB と custom precompile。Source code は public repo に; walkthrough コースはまだなし。
+- **Malachite spec docs** (`informalsystems/malachite`) — `core-types` crate の doc を読み通す。半分は既に馴染みがある; もう半分が multi-validator に必要なもの。
+- **Real Reth full node** — `paradigmxyz/reth` を clone、`cargo run --bin reth -- node --chain dev` を走らせる。L11 の `EthereumNode::default()` は同じもの、consensus 層を引いたもの。Surface を比較する。
+
+## クロージングノート
+
+Consensus と EVM crate を合わせて約 1,400 行の Rust、加えて ~250 行の integration test を書いた。そのコードは **動く single-validator Hyperliquid-shape L1**。Production-ready ではない; である必要もない。**手にあるのは、scope について正直で、すべての load-bearing 決定が visible で、次の capability への extensible interface が 1 つ離れた基盤。**
+
+L1 の最も難しい部分は engine を書くことではない — Malachite がほとんどやってくれ、我々は配線しただけ。最も難しい部分は、自分のコードが何ができ何ができないかについて正直であること、そして「できる」側を証明するテストを書くこと。本コースのすべてのレッスンが happy-path assertion と negative-path assertion を持っていた。「テストが pass する」から「システムが動く」への鍛錬がそれ。
+
+これを使って何か作りに行こう。
+````
+
+---
+
+## Seed ファイルスロット
+
+L15 は新規 Module 7 (Capstone) sortOrder 7 に開く:
+
+```typescript
+modules: {
+  0: { title: 'Orientation', sortOrder: 0 },
+  1: { title: 'Foundations', sortOrder: 1 },
+  2: { title: 'Contract types', sortOrder: 2 },
+  3: { title: 'EL test double', sortOrder: 3 },
+  4: { title: 'CL types', sortOrder: 4 },
+  5: { title: 'Engine integration', sortOrder: 5 },
+  6: { title: 'Live Reth', sortOrder: 6 },
+  7: { title: 'Capstone', sortOrder: 7 },  // 新規
+},
+```
+
+```typescript
+{
+  title: 'レッスン 15 — 作ったもの、まだ stub のもの、次に行く先',
+  slug: 'openhl-capstone-ja',
+  type: 'CONTENT',
+  sortOrder: 0,
+  duration: 25,
+  xpReward: 60,
+  content: `# レッスン 15 — 作ったもの、まだ stub のもの、次に行く先\n\n...`
+},
+```
+
+## SHA pinning 規律
+
+L15 は特定の openhl SHA を cite しない — L1 (`75be9de`) から L14 (`0cac571`) までの旅を要約する。レッスンの主要 artifact は概念的 (system map、production checklist、roadmap) でコードではない。
+
+## 翻訳セルフレビュー (paste 前)
+
+- **「load-bearing」「source of truth」「surface area」** は専門語そのまま。
+- **「incremental-stub」「side-effect-after-success」** はそのまま。
+- **「victory lap」は意訳せず削除**、代わりに「クロージングノート」だけにした (日本語で violence lap は意味通らないし不要)。
+- **「punch list」「long-pole」** は「作業」「long-pole 作業」 — 専門語をカタカナ + 説明で。
+- **「chaos engineering」** はそのまま (Netflix 由来の慣用語)。
+- **「Hyperliquid-shape」** は英語のまま (Hyperliquid 自体が固有名詞)。
+- **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。
+- **§Closing note の口調** — warm だが overly motivational ではない、技術職人に届くトーンを意識。
