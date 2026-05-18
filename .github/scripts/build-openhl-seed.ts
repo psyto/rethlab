@@ -75,6 +75,7 @@ const EN: LocaleConfig = {
     0: { title: 'Orientation', sortOrder: 0 },
     1: { title: 'Foundations', sortOrder: 1 },
     2: { title: 'Contract types', sortOrder: 2 },
+    3: { title: 'EL test double', sortOrder: 3 },
   },
   lessons: [
     {
@@ -121,6 +122,17 @@ const EN: LocaleConfig = {
       h1Marker: '# Lesson 3 — The `ConsensusBridge` trait',
       startSignature: 'By the end of this lesson:',
     },
+    {
+      draftFile: 'openhl_l4_en.md',
+      moduleNumber: 3,
+      sortOrder: 0,
+      title: 'Lesson 4 — InMemoryEvmBridge — first impl of the trait',
+      slug: 'openhl-in-memory-bridge-en',
+      duration: 40,
+      xpReward: 70,
+      h1Marker: '# Lesson 4 — `InMemoryEvmBridge` — first impl of the trait',
+      startSignature: 'By the end of this lesson:',
+    },
   ],
 };
 
@@ -143,6 +155,7 @@ const JA: LocaleConfig = {
     0: { title: 'Orientation', sortOrder: 0 },
     1: { title: 'Foundations', sortOrder: 1 },
     2: { title: 'Contract types', sortOrder: 2 },
+    3: { title: 'EL test double', sortOrder: 3 },
   },
   lessons: [
     {
@@ -189,6 +202,17 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 3 — `ConsensusBridge` trait',
       startSignature: 'このレッスンの終わりに:',
     },
+    {
+      draftFile: 'openhl_l4_ja.md',
+      moduleNumber: 3,
+      sortOrder: 0,
+      title: 'レッスン 4 — InMemoryEvmBridge — trait の最初の impl',
+      slug: 'openhl-in-memory-bridge-ja',
+      duration: 40,
+      xpReward: 70,
+      h1Marker: '# レッスン 4 — `InMemoryEvmBridge` — trait の最初の impl',
+      startSignature: 'このレッスンの終わりに:',
+    },
   ],
 };
 
@@ -210,8 +234,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 125, // L0 (20) + L1 (45) + L2 (30) + L3 (30) — build-along pilot
-  xpReward: 260, // L0 (60) + L1 (80) + L2 (60) + L3 (60) — build-along pilot
+  duration: 165, // L0 (20) + L1 (45) + L2 (30) + L3 (30) + L4 (40) — build-along pilot
+  xpReward: 330, // L0 (60) + L1 (80) + L2 (60) + L3 (60) + L4 (70) — build-along pilot
   tags: ['reth', 'malachite', 'bft', 'evm', 'clob', 'l1', 'openhl', 'expert'],
   sortOrder: 600,
   isPublished: false,
