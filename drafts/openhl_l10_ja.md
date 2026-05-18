@@ -76,7 +76,7 @@ forkchoiceUpdated(ForkchoiceState {
 }, None)
 ```
 
-これが Reth 側。openhl の in-process variant では、L7 でマッピングした trait の `bridge.commit(decided_hash)` ただそれだけだ。
+これが Reth 側。openhl の in-process variant では、レッスン 7 でマッピングした trait の `bridge.commit(decided_hash)` ただそれだけだ。
 
 ## 4. Decided ハンドラ、歩く
 
@@ -268,4 +268,4 @@ EN ミラーと同じ SHA `0cac571` を pin する。`file:line@SHA` cite は EN
   - 「Anti-fluency」→「反流暢性」(consensus-engineering JA で確立した訳)
 - **§6 は EN と同様に最長セクション** (≈700 字 + コード)。15 分予算の上限近いが、Stage 7d 全体の "なぜ SYNCING で OK か" のロジックが分離できないので bundled のままにする。
 - **L7 の JA mirror は別タスク**: L7 は Stage 7c の validator-forcing moment に anchor されており、SHA `0844d58` で固定された歴史的コンテキストを持つ。L10 とは独立に翻訳できるので、別ファイル (`openhl_l7_ja.md`) として後で出す。
-- **未公開**: L10 EN ミラーが `course.isPublished: false` のままなので、JA seed エントリ追加時もデフォルトで非公開にする。L11/L12/L13 の JA 翻訳が揃ってから一斉公開するのがクリーン。
+- **未公開**: レッスン 10 EN ミラーが `course.isPublished: false` のままなので、JA seed エントリ追加時もデフォルトで非公開にする。レッスン 11/12/レッスン 13 の JA 翻訳が揃ってから一斉公開するのがクリーン。

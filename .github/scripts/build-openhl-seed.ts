@@ -319,7 +319,7 @@ const JA: LocaleConfig = {
       duration: 20,
       xpReward: 60,
       h1Marker: '# 実装するもの — proposal、validator、vote、signing',
-      startSignature: 'L3 は 10 個の type に名前を付けた。次にそれらを書く。',
+      startSignature: 'レッスン 3 は 10 個の type に名前を付けた。次にそれらを書く。',
     },
     {
       draftFile: 'openhl_l4_l5_ja.md',
@@ -331,7 +331,7 @@ const JA: LocaleConfig = {
       xpReward: 40,
       h1Marker: '# `malachitebft-engine` の actor model',
       startSignature:
-        'L3 は Malachite を「I/O を抜いた抽象 Tendermint アルゴリズム」と言った。',
+        'レッスン 3 は Malachite を「I/O を抜いた抽象 Tendermint アルゴリズム」と言った。',
     },
     {
       draftFile: 'openhl_l6_l8_ja.md',
@@ -365,7 +365,7 @@ const JA: LocaleConfig = {
       duration: 15,
       xpReward: 40,
       h1Marker: '# ブロックはどこから来るか — Reth 内の payload 構築',
-      startSignature: '`forkchoice_updated(parent, attrs)` (L7 の request) と',
+      startSignature: '`forkchoice_updated(parent, attrs)` (レッスン 7 の request) と',
     },
     {
       draftFile: 'openhl_l9_ja.md',

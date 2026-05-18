@@ -1,6 +1,6 @@
 # Building OpenHL — L4 + L5 draft (JA)
 
-> openhl SHA `0844d58` (Stage 7c) に対してドラフト。Module 2 (ライブラリとしての Malachite) を閉じる。L4 は残るレッスンの中で最も重い — 10 個の Context sub-type それぞれを詳しく walk する。L5 は Malachite の protocol state machine を実行可能エンジンに変える actor model を導入する。
+> openhl SHA `0844d58` (Stage 7c) に対してドラフト。Module 2 (ライブラリとしての Malachite) を閉じる。レッスン 4 は残るレッスンの中で最も重い — 10 個の Context sub-type それぞれを詳しく walk する。レッスン 5 は Malachite の protocol state machine を実行可能エンジンに変える actor model を導入する。
 > EN ミラー: `drafts/openhl_l4_l5_en.md`。
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
 
@@ -13,14 +13,14 @@
 - **Duration:** 20 分
 - **XP reward:** 60
 - **Type:** CONTENT
-- コース内で最も重いレッスン (L9 の 20/60 と並ぶ)。
+- コース内で最も重いレッスン (レッスン 9 の 20/60 と並ぶ)。
 
 ### Content
 
 ````markdown
 # 実装するもの — proposal、validator、vote、signing
 
-L3 は 10 個の type に名前を付けた。次にそれらを書く。**40 行の trait impl で chain にアイデンティティが生まれる。** 練習はほぼ機械的だ — 各 sub-trait の surface は小さい — がその 40 行に encode された選択は、後続レッスンすべてが参照するものだ。
+レッスン 3 は 10 個の type に名前を付けた。次にそれらを書く。**40 行の trait impl で chain にアイデンティティが生まれる。** 練習はほぼ機械的だ — 各 sub-trait の surface は小さい — がその 40 行に encode された選択は、後続レッスンすべてが参照するものだ。
 
 > 🛑 **スクロール前に予測。** SHA `0844d58` で `crates/consensus/src/types/` を開け。ファイルを読まずに、10 個の Context sub-type それぞれに対して期待する *trait bound* を sketch せよ。ヒント: Malachite が必要とする operation を考えよ (sort のための address 比較、VoteKeeper lookup のための value hash、ログ用の height display)。
 
@@ -104,7 +104,7 @@ pub fn new(mut validators: Vec<OpenHlValidator>) -> Self {
 
 `(voting_power desc, address asc)` でソート。**このソート順が determinism を成立させている肝心な部分だ。**
 
-理由: `OpenHlContext::select_proposer` は `validator_set.get_by_index((height + round) % count)` で proposer を選ぶ (L11 領域)。同じ validator set でも、2 validator のソート順が違えば、同じ round で異なる proposer を選んでしまい chain が fork する。
+理由: `OpenHlContext::select_proposer` は `validator_set.get_by_index((height + round) % count)` で proposer を選ぶ (レッスン 11 領域)。同じ validator set でも、2 validator のソート順が違えば、同じ round で異なる proposer を選んでしまい chain が fork する。
 
 CometBFT convention (openhl が継承) は `voting_power desc, address asc` だ。このソート + modulo 回転を使う chain は、address space が totally ordered である限り deterministic な proposer election を得る — それが `Address: Ord` が hard bound (§1) である理由だ。
 
@@ -163,7 +163,7 @@ impl ProposalPart<OpenHlContext> for OpenHlProposalPart {
 
 Unit struct。`is_first = is_last = true` (単一 part が唯一の part)。
 
-なぜこの type が存在するのか? Malachite は 3 つの `ValuePayload` mode をサポートする (L5 §6 領域):
+なぜこの type が存在するのか? Malachite は 3 つの `ValuePayload` mode をサポートする (レッスン 5 §6 領域):
 - `ProposalOnly` — 全 value が `Proposal` メッセージにある。**openhl はこれを使う。**
 - `PartsOnly` — value は chunk で stream される; `Proposal` がそれらを参照する。
 - `ProposalAndParts` — 両方。
@@ -221,7 +221,7 @@ impl SigningProvider<OpenHlContext> for OpenHlSigningProvider {
 
 ## 8. 40 行の主張、検証
 
-L4 の hook が「40 行の trait impl で chain にアイデンティティが生まれる」と主張した。足し算しよう:
+レッスン 4 の hook が「40 行の trait impl で chain にアイデンティティが生まれる」と主張した。足し算しよう:
 
 | ファイル | 行数 | 何を impl したか |
 | :--- | :--- | :--- |
@@ -268,11 +268,11 @@ Type 約 230 LOC + Context impl 90 LOC = Module 2 deliverable 全体で ~320 LOC
 ````markdown
 # `malachitebft-engine` の actor model
 
-L3 は Malachite を「I/O を抜いた抽象 Tendermint アルゴリズム」と言った。本レッスンは I/O を *戻す* ものについてだ。**Consensus は時間を無視する state machine; engine がそれに時計を与える。**
+レッスン 3 は Malachite を「I/O を抜いた抽象 Tendermint アルゴリズム」と言った。本レッスンは I/O を *戻す* ものについてだ。**Consensus は時間を無視する state machine; engine がそれに時計を与える。**
 
 Malachite の protocol ロジックは synchronous な `Driver` struct の中に置かれている — pure state machine、timer なし、network なし、thread なし。`malachitebft-engine` crate がそれを actor system (`ractor` 経由) でラップし、real consensus が必要とする runtime context — timeout、network socket、WAL write、mempool access — を提供する。
 
-L4 の type は Malachite に *何が* この chain かを伝える。本レッスンは Malachite が *どう* それらの type を running node に変えるかについてだ。
+レッスン 4 の type は Malachite に *何が* この chain かを伝える。本レッスンは Malachite が *どう* それらの type を running node に変えるかについてだ。
 
 > 🛑 **スクロール前に予測。** Consensus protocol は timeout (round-change、propose) のスケジューリング、network メッセージの受信、WAL への書き込み、application への decision 通知が必要だ。これらの tokio ベースアーキテクチャを sketch せよ。§2 で Malachite が実際にやっていることと比較する。
 
@@ -329,7 +329,7 @@ pub struct Channels<Ctx: Context> {
 
 3 channel:
 
-1. **`consensus`** — engine が我々に何かを聞いてくる。`AppMsg::GetValue`、`AppMsg::Decided`、その他すべて (L11 / L13 で walk した)。
+1. **`consensus`** — engine が我々に何かを聞いてくる。`AppMsg::GetValue`、`AppMsg::Decided`、その他すべて (レッスン 11 / レッスン 13 で walk した)。
 2. **`network`** — 我々が network actor に何かを伝える。主な使い道は 2 つ: `PublishProposalPart` (streaming proposal 用; openhl は使わない) と `BroadcastConsensusMsg` (vote 転送用)。
 3. **`events`** — 外部 observer (metrics、ログ、downstream consumer) 向けの read-only イベントストリーム。
 
@@ -373,7 +373,7 @@ WAL なし: 再起動時、engine は前の vote を覚えていない。Peer �
 
 ## 6. Malachite gotcha 1 つ — proposal-part streaming
 
-Malachite は 3 つの `ValuePayload` mode をサポートする (L4 §5 で最後に登場):
+Malachite は 3 つの `ValuePayload` mode をサポートする (レッスン 4 §5 で最後に登場):
 - `ProposalOnly` — 値が 1 つの `Proposal` メッセージに収まる。openhl はこれを使う。
 - `PartsOnly` — 値が chunk で stream される。
 - `ProposalAndParts` — 両方。
@@ -398,7 +398,7 @@ Malachite は 3 つの `ValuePayload` mode をサポートする (L4 §5 で最�
 
 ## Seed-file slot
 
-L4 と L5 が Module 2 を閉じる (L3 はすでに drafted 済み):
+レッスン 4 と レッスン 5 が Module 2 を閉じる (レッスン 3 はすでに drafted 済み):
 
 ```typescript
 // Course.modules.create array:
@@ -412,8 +412,8 @@ L4 と L5 が Module 2 を閉じる (L3 はすでに drafted 済み):
       slug: 'openhl-malachite-impl-ja',
       type: 'CONTENT',
       sortOrder: 1,
-      duration: 20,    // ← L9 の 20 分と並ぶ (arc 内で最重)
-      xpReward: 60,    // ← L9 の 60 XP と並ぶ
+      duration: 20,    // ← レッスン 9 の 20 分と並ぶ (arc 内で最重)
+      xpReward: 60,    // ← レッスン 9 の 60 XP と並ぶ
       content: `# 実装するもの — proposal、validator、vote、signing\n\n...`  // L4 markdown
     },
     {
@@ -431,7 +431,7 @@ L4 と L5 が Module 2 を閉じる (L3 はすでに drafted 済み):
 
 ## SHA pinning discipline
 
-すべての cite は SHA `0844d58` を pin する。L4 は cite-dense (per-type walk):
+すべての cite は SHA `0844d58` を pin する。レッスン 4 は cite-dense (per-type walk):
 
 - `crates/consensus/src/types/address.rs:7` — `OpenHlAddress` struct と impl
 - `crates/consensus/src/types/validator.rs:21,42` — `Validator` impl、`ValidatorSet::new` のソート
@@ -439,20 +439,20 @@ L4 と L5 が Module 2 を閉じる (L3 はすでに drafted 済み):
 - `crates/consensus/src/signing_provider.rs:18` — `OpenHlSigningProvider` struct
 - `crates/consensus/src/context.rs:29,32` — `type SigningScheme = Ed25519`、`select_proposer`
 
-L5 は構造的に cite が軽い (actor topology はより conceptual):
+レッスン 5 は構造的に cite が軽い (actor topology はより conceptual):
 
 - `crates/consensus/src/engine_app.rs:29` — `run_engine_app`
 - `crates/consensus/src/runner.rs:34` — `run_single_validator`
 
 ## Style review notes (self-critique before paste)
 
-- **L4 は 20 分/60 XP** — L9 と同じ weight class。L9 と並んでコース内の 2 つの「実際に build するために必要なすべてを深いコード walk と共に教える」レッスンだ。
-- **L4 §3 の「ソート順は load-bearing」反流暢性** はコース全体で最も leverage が高い段落の 1 つだ。**カットしない。**
-- **L5 §6 (proposal-part streaming gotcha)** はレッスンが長くなるなら cut 可能 — openhl が使わない機能についてだ。しかし openhl を異なる chain 用に fork する人には pedagogically valuable だ。
-- **翻訳 policy は L1/L2/L3/L7/L10 JA と同一**:
+- **レッスン 4 は 20 分/60 XP** — レッスン 9 と同じ weight class。レッスン 9 と並んでコース内の 2 つの「実際に build するために必要なすべてを深いコード walk と共に教える」レッスンだ。
+- **レッスン 4 §3 の「ソート順は load-bearing」反流暢性** はコース全体で最も leverage が高い段落の 1 つだ。**カットしない。**
+- **レッスン 5 §6 (proposal-part streaming gotcha)** はレッスンが長くなるなら cut 可能 — openhl が使わない機能についてだ。しかし openhl を異なる chain 用に fork する人には pedagogically valuable だ。
+- **翻訳 policy は レッスン 1/2/レッスン 3/7/レッスン 10 JA と同一**:
   - Trait 名、Rust の型理論用語、Malachite API は英語のまま。
   - 🛑 callout: Predict → 予測、Anti-fluency → 反流暢性。
   - File paths、function names、types は英語のまま。
 - **「actor」のカタカナ化を避けた理由**: ractor、ABCI 等の technical 文脈で「actor」は OS/concurrency 系の固有概念名であり、英語のままのほうが Erlang/Akka/ractor の参照先と直結する。
 - **「godclass」「seam」「gotcha」「parametric」** などは英語のまま — Rust/OO エンジニアにとってその表記が直感的。
-- **未公開**: `course.isPublished: false` のまま。L11/L12/L13 JA 翻訳が揃ってから一斉公開予定。
+- **未公開**: `course.isPublished: false` のまま。レッスン 11/12/レッスン 13 JA 翻訳が揃ってから一斉公開予定。

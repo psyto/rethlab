@@ -1,6 +1,6 @@
 # Building OpenHL — L6 + L8 draft (JA)
 
-> openhl SHA `0844d58` (Stage 7c) に対してドラフト。Module 3 (ライブラリとしての Reth) を閉じる。L6 は「Reth を fork しない、configure する」をセットアップする — openhl が Reth をライブラリとして再利用できる NodeBuilder パターン。L8 は Module 2 の CLOB が最終的に plug in する payload-building パイプラインを walk する。
+> openhl SHA `0844d58` (Stage 7c) に対してドラフト。Module 3 (ライブラリとしての Reth) を閉じる。レッスン 6 は「Reth を fork しない、configure する」をセットアップする — openhl が Reth をライブラリとして再利用できる NodeBuilder パターン。レッスン 8 は Module 2 の CLOB が最終的に plug in する payload-building パイプラインを walk する。
 > EN ミラー: `drafts/openhl_l6_l8_en.md`。
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
 
@@ -19,7 +19,7 @@
 ````markdown
 # Geth 形を捨てた Reth — NodeBuilder と component
 
-> **現在地。** サブモジュール 3/5: *ライブラリとしての Reth。* サブモジュール 2 は Malachite (CL 側) だった。本サブモジュールでは Reth (EL 側) を扱う。L6 (本レッスン) は `NodeBuilder` パターンを説明する — リポジトリ全体を fork するのではなく個別の component を差し替える設計のこと。L7 は Engine API の surface — 4 メッセージを EL の視点から見たときの形を扱う。L8 では Reth の `PayloadBuilderService` がブロックを組み立てるときに実際に何をしているのかを walk する。
+> **現在地。** サブモジュール 3/5: *ライブラリとしての Reth。* サブモジュール 2 は Malachite (CL 側) だった。本サブモジュールでは Reth (EL 側) を扱う。レッスン 6 (本レッスン) は `NodeBuilder` パターンを説明する — リポジトリ全体を fork するのではなく個別の component を差し替える設計のこと。レッスン 7 は Engine API の surface — 4 メッセージを EL の視点から見たときの形を扱う。レッスン 8 では Reth の `PayloadBuilderService` がブロックを組み立てるときに実際に何をしているのかを walk する。
 
 **Reth を fork しない。configure する。** 初めて Reth に近づくチームは `git clone paradigmxyz/reth` に手を伸ばし、`bin/reth/src/main.rs` を編集し、即座に技術的負債を積み上げる — upstream の bump 1 回ごとに merge conflict だ。
 
@@ -86,8 +86,8 @@ Reth の MDBX-backed storage、BlockchainProvider、mempool、networking stack�
 | Component | なぜ replace | openhl のどこ |
 | :--- | :--- | :--- |
 | **Consensus** (`Consensus` trait) | Reth のデフォルトは Ethereum の PoW/PoS gadget; 我々は Malachite を使う | 暗黙的 — Reth の `Consensus` trait に engage しない; Malachite が chain を外部から駆動 |
-| **EngineApi transport** | Reth デフォルトは JSON-RPC; 我々は in-process Rust trait | openhl の JSON-RPC engine API の代わりに `ConsensusBridge` (L1/L7/L9) |
-| **PayloadBuilder** | Module 2 の CLOB がカスタム transaction ordering を必要とする | v0 ではまだ replace されていない — 何が変わるかは L8 を参照 |
+| **EngineApi transport** | Reth デフォルトは JSON-RPC; 我々は in-process Rust trait | openhl の JSON-RPC engine API の代わりに `ConsensusBridge` (レッスン 1/7/レッスン 9) |
+| **PayloadBuilder** | Module 2 の CLOB がカスタム transaction ordering を必要とする | v0 ではまだ replace されていない — 何が変わるかは レッスン 8 を参照 |
 
 Replace されない *もの* に注意: EVM、storage engine、mempool、RPC。**openhl は stock Reth の 90%** で、consensus と engine transport が swap out されている。Stock EVM semantics 上のカスタム consensus chain には正しい比率だ。
 
@@ -121,7 +121,7 @@ async fn launch_and_check() -> Result<()> {
 行ごとに読め:
 
 1. **`Runtime::test()`** — テスト用の軽量 tokio runtime (real デプロイは long-running tokio runtime を使う)
-2. **`dev_chain_spec()`** — chain ID 2600、dev genesis (L12 で walk した)
+2. **`dev_chain_spec()`** — chain ID 2600、dev genesis (レッスン 12 で walk した)
 3. **`NodeConfig::test().dev().with_chain(chain_spec)`** — Reth の "dev mode" preset + 我々の chain spec。`dev()` は peer discovery を disable し、debugging conveniences を有効にする; production が使うものではない。
 4. **`NodeBuilder::new(node_config).testing_node(runtime).node(EthereumNode::default())`** — API の心臓部。**我々は `EthereumNode::default()` を使っている** — Reth の stock 構成、全 component がデフォルト。カスタマイズするには `.node(EthereumNode::default())` を `.node(OpenHlEthereumNode::new())` 等にスワップする。
 5. **`.launch_with_debug_capabilities().await?`** — 全 actor を spawn、listen を start、DB を open。
@@ -164,15 +164,15 @@ NodeBuilder パターンは openhl を 3 つのことに対して future-proof �
 ````markdown
 # ブロックはどこから来るか — Reth 内の payload 構築
 
-`forkchoice_updated(parent, attrs)` (L7 の request) と `getPayload(id)` (L7 の fetch) の間で、**Reth がブロックを assemble する**。その間隔で何が起こるか — そして openhl 固有の seam がどこに行くか — を知ることが、ship する chain と謎の stall をする chain の違いだ。
+`forkchoice_updated(parent, attrs)` (レッスン 7 の request) と `getPayload(id)` (レッスン 7 の fetch) の間で、**Reth がブロックを assemble する**。その間隔で何が起こるか — そして openhl 固有の seam がどこに行くか — を知ることが、ship する chain と謎の stall をする chain の違いだ。
 
-本レッスンは Reth の `PayloadBuilderService` (L11 の "async trick" セクションが forward reference した production-shape の payload assembly) を walk し、openhl が現在代わりに何をしているか (空ヘッダを synthesize) を名指し、Module 2 の CLOB がどこに plug in するかを preview する。
+本レッスンは Reth の `PayloadBuilderService` (レッスン 11 の "async trick" セクションが forward reference した production-shape の payload assembly) を walk し、openhl が現在代わりに何をしているか (空ヘッダを synthesize) を名指し、Module 2 の CLOB がどこに plug in するかを preview する。
 
 > 🛑 **スクロール前に予測。** CL が「payload を build せよ」と言う瞬間から EL が「state root X のブロックがここに」と言う瞬間まで、Reth が走らせるすべての operation を名指せ。ヒント: 少なくとも 4 つある、そのうち 1 つが他より latency で支配する。
 
 ## 1. ライフサイクル、request からブロックまで
 
-L7 からの Engine API call:
+レッスン 7 からの Engine API call:
 
 ```
 forkchoiceUpdated(state{head=parent}, Some(attrs)) → PayloadId
@@ -224,9 +224,9 @@ Step 4 (transaction 実行済み) の後、EVM は state diff を持つ: 修正�
 
 これが **expensive な部分**だ。~1000 account を touch する full mainnet block の新しい trie root 計算には、parent state がどれだけ cache されているかにもよるが 100ms+ かかる。
 
-State root は `validate_header_against_parent` が check *しない* (できない — execution していない) が `validate_block_post_execution` が check するものだ。**同じブロックに対して異なる state root を compute する 2 validator は determinism バグを持つ** (L2 §2 領域)。これが state-root mismatch が chain fork の代表的な failure mode である理由だ。
+State root は `validate_header_against_parent` が check *しない* (できない — execution していない) が `validate_block_post_execution` が check するものだ。**同じブロックに対して異なる state root を compute する 2 validator は determinism バグを持つ** (レッスン 2 §2 領域)。これが state-root mismatch が chain fork の代表的な failure mode である理由だ。
 
-Reth の trie 計算は高度に最適化されている — state diff が十分大きいときコアにまたがって hash 計算を並列化する。**Reth を fork しない理由の 1 つ** (L6 §3) は、すべてこれを diminishing returns で再現することになるからだ。
+Reth の trie 計算は高度に最適化されている — state diff が十分大きいときコアにまたがって hash 計算を並列化する。**Reth を fork しない理由の 1 つ** (レッスン 6 §3) は、すべてこれを diminishing returns で再現することになるからだ。
 
 ## 4. openhl が現在何をしているか (vs production-shape)
 
@@ -263,13 +263,13 @@ let hash = header.hash_slow();
 | 6. Header を assemble | `EthereumPayloadBuilder` | 完了 — ほぼデフォルトフィールド |
 | 7. 結果をキャッシュ | PayloadBuilderService | In-memory HashMap |
 
-**7 step のうち 5 つが skip されている。** これは SHA `0844d58` の openhl がまだ real transaction を produce していないからだ — CLOB (openhl の Module 2) がそれらの source だ。そのモジュールが ship するまで、bridge はヘッダレベル validation (L7 §6 — validator-forcing-honesty moment) は通るが実際の transaction を含まない空ヘッダを synthesize する。
+**7 step のうち 5 つが skip されている。** これは SHA `0844d58` の openhl がまだ real transaction を produce していないからだ — CLOB (openhl の Module 2) がそれらの source だ。そのモジュールが ship するまで、bridge はヘッダレベル validation (レッスン 7 §6 — validator-forcing-honesty moment) は通るが実際の transaction を含まない空ヘッダを synthesize する。
 
 7 step パイプラインが重要なのは、**production-shape の PayloadBuilder を swap in することが Module 2 の最初のステージ** だからだ。CLOB が fills を produce し始めると、それらが transaction になり、bridge は real builder を使い始める。
 
 ## 5. openhl がどこに plug in するか — Module 2 の preview
 
-Module 2 への L8 forward reference:
+Module 2 への レッスン 8 forward reference:
 
 > *"OpenHL が後で CLOB-fill transaction を注入する場所"*
 
@@ -278,16 +278,16 @@ openhl の CLOB 統合計画:
 1. **CLOB エンジン** (`crates/clob/src/`) が chain 実行中に matched fill を produce
 2. **各 fill が transaction になる** — EVM 経由の buyer-seller 間の account 転送
 3. **Transaction pool** がこれらの fill をユーザ submit の txn と並んで受信
-4. **カスタム `PayloadBuilder`** (L6 §4 の EthereumPayloadBuilder slot を replace) が payload-assembly order でユーザ tx より CLOB fill を優先
+4. **カスタム `PayloadBuilder`** (レッスン 6 §4 の EthereumPayloadBuilder slot を replace) が payload-assembly order でユーザ tx より CLOB fill を優先
 5. **標準 Reth state 計算が走る** — 新しい state root はユーザ tx と CLOB fill の両方を反映
 
-ここで openhl が *generic EVM* ではなく *perp DEX* になる。Mechanical な部分 — 1 つの Reth component を replace すること — は小さい (L6 の NodeBuilder パターン in action)。興味深い部分は CLOB matching ロジック自体で、これは rethlab コースの Module 2 だ。
+ここで openhl が *generic EVM* ではなく *perp DEX* になる。Mechanical な部分 — 1 つの Reth component を replace すること — は小さい (レッスン 6 の NodeBuilder パターン in action)。興味深い部分は CLOB matching ロジック自体で、これは rethlab コースの Module 2 だ。
 
-**L8 はモジュール間の bridge だ。** 学習者に伝える: 「consensus substrate は master した; EVM payload パイプラインが Module 2 の plug in する場所だ。」
+**レッスン 8 はモジュール間の bridge だ。** 学習者に伝える: 「consensus substrate は master した; EVM payload パイプラインが Module 2 の plug in する場所だ。」
 
-## 6. L11 の async-trick、具体化
+## 6. レッスン 11 の async-trick、具体化
 
-L11 §5 は「まだ使っていない async trick」を導入した:
+レッスン 11 §5 は「まだ使っていない async trick」を導入した:
 
 > 「Round-decided 時に `build_payload(...)` を kick off して、EL に前の round の投票ウィンドウ全部を block assembly に使わせよ。」
 
@@ -307,7 +307,7 @@ ConsensusBridge trait の `build_payload` (start) と `payload_ready` (fetch) �
 
 ---
 
-**おめでとう** — これは *Building OpenHL — Consensus Substrate* の最後のレッスンだ。Contract (L1)、convergence (L2)、ライブラリとしての Malachite (L3 + L4 + L5)、ライブラリとしての Reth (L6 + L7 + L8)、wiring (L9 + L10 + L11)、devnet (L12 + L13) をカバーした。
+**おめでとう** — これは *Building OpenHL — Consensus Substrate* の最後のレッスンだ。Contract (レッスン 1)、convergence (レッスン 2)、ライブラリとしての Malachite (レッスン 3 + レッスン 4 + レッスン 5)、ライブラリとしての Reth (レッスン 6 + レッスン 7 + レッスン 8)、wiring (レッスン 9 + レッスン 10 + レッスン 11)、devnet (レッスン 12 + レッスン 13) をカバーした。
 
 **rethlab L1 Architect トラックの Module 2 は openhl の CLOB matching engine から始まる** — そこで最初の real transaction が chain に入り、§5 の preview が Module 2 の最初のレッスンになる。
 ````
@@ -316,7 +316,7 @@ ConsensusBridge trait の `build_payload` (start) と `payload_ready` (fetch) �
 
 ## Seed-file slot
 
-L6 と L8 が Module 3 で L7 の両側に配置される:
+レッスン 6 と レッスン 8 が Module 3 で レッスン 7 の両側に配置される:
 
 ```typescript
 // Course.modules.create array:
@@ -357,26 +357,26 @@ L6 と L8 が Module 3 で L7 の両側に配置される:
 
 ## SHA pinning discipline
 
-すべての cite は SHA `0844d58` を pin する。L6 が参照するもの:
+すべての cite は SHA `0844d58` を pin する。レッスン 6 が参照するもの:
 - `crates/evm/src/reth_node.rs:74@0844d58` — Stage 7a で書いた dev-node bootstrap 関数
 - Reth source path で `NodeBuilder`、`EthereumNode` (line ではなく名前で cite — trait surface が spec)
 
-L8 が参照するもの:
+レッスン 8 が参照するもの:
 - `crates/evm/src/live_node.rs:68@0844d58` — `LiveRethEvmBridge::build_payload`
 - `crates/consensus/src/engine_app.rs:65-82@0844d58` — `AppMsg::GetValue` arm
 - Reth source path で `EthereumPayloadBuilder`、`PayloadBuilderService` (名前指定、行番号なし)
 
 ## Style review notes (self-critique before paste)
 
-- **L6 の反流暢性 callout** (「我々の chain は trait surface には custom すぎる」) は high-leverage。Reth に近づくチームのほとんどはこの道にいる。カットや soften しない。
-- **L6 §2 の component-category テーブル** は lesson 内最も reference 可能な artifact。
-- **L8 §1 の 7 step パイプライン** は load-bearing argument。
-- **L8 §4 の比較テーブル** (「openhl vs production Reth」) は lesson にしては珍しく self-critical で、7 step のうち 5 が "skipped" と示している。次のモジュールの作業を visible にする framing なので削らない。
-- **L8 の締めの「おめでとう」** はこれをコースの最終レッスンとして扱う。
-- **翻訳 policy は L1/L2/L3/L4/L5/L7/L10 JA と同一**:
+- **レッスン 6 の反流暢性 callout** (「我々の chain は trait surface には custom すぎる」) は high-leverage。Reth に近づくチームのほとんどはこの道にいる。カットや soften しない。
+- **レッスン 6 §2 の component-category テーブル** は lesson 内最も reference 可能な artifact。
+- **レッスン 8 §1 の 7 step パイプライン** は load-bearing argument。
+- **レッスン 8 §4 の比較テーブル** (「openhl vs production Reth」) は lesson にしては珍しく self-critical で、7 step のうち 5 が "skipped" と示している。次のモジュールの作業を visible にする framing なので削らない。
+- **レッスン 8 の締めの「おめでとう」** はこれをコースの最終レッスンとして扱う。
+- **翻訳 policy は レッスン 1/2/レッスン 3/4/レッスン 5/7/レッスン 10 JA と同一**:
   - `NodeBuilder`、`EthereumNode`、Reth component 名は英語のまま。
   - Reth の trait 名 (`Database`、`BlockchainProvider`、`TransactionPool`、`ConfigureEvm`、`PayloadBuilder`、`Consensus`) は英語のまま。
   - 🛑 callout: Predict → 予測、Anti-fluency → 反流暢性。
   - File paths、function names、types は英語のまま。
 - **「fork」「slot」「seam」** は英語のまま — JA でカタカナ化すると意味が薄れる technical 用語。
-- **未公開**: `course.isPublished: false` のまま。L9/L11/L12/L13 JA 翻訳が揃ってから一斉公開予定。
+- **未公開**: `course.isPublished: false` のまま。レッスン 9/11/レッスン 12/13 JA 翻訳が揃ってから一斉公開予定。

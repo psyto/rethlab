@@ -21,7 +21,7 @@
 ````markdown
 # BFT と EVM の contract
 
-> **現在地。** サブモジュール 1/5: *execution/consensus split。* L0 はリポジトリ全体を俯瞰した。本サブモジュールは、その 2 つの半分の境目にズームインする — Malachite (CL) と Reth (EL) の間に置かれる 4 メッセージの contract が実際には何で、なぜ BFT 形のすべての L1 が同じ線を引くことになるのか。L1 は 4 メッセージに名前を与える; L2 はなぜ HL、Tempo、CometBFT が同じ形に収束するかを説明する。
+> **現在地。** サブモジュール 1/5: *execution/consensus split。* レッスン 0 はリポジトリ全体を俯瞰した。本サブモジュールは、その 2 つの半分の境目にズームインする — Malachite (CL) と Reth (EL) の間に置かれる 4 メッセージの contract が実際には何で、なぜ BFT 形のすべての L1 が同じ線を引くことになるのか。レッスン 1 は 4 メッセージに名前を与える; レッスン 2 はなぜ HL、Tempo、CometBFT が同じ形に収束するかを説明する。
 
 午前 3 時。OpenHL の devnet が 3 ブロック前から停止している。Malachite のログは `waiting for value` と言う。Reth のログは `engine idle` と言う。どちらも error を投げていない。**どっちが壊れているのか?**
 
@@ -168,7 +168,7 @@ Ethereum は **client diversity** を得る: 4 CL、複数 EL、1 client がバ�
 
 ## Seed-file slot
 
-L1 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consensus-ja`) に landing する、Module 1 の最初のレッスンとして:
+レッスン 1 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consensus-ja`) に landing する、Module 1 の最初のレッスンとして:
 
 ```typescript
 // Course.modules.create array:
@@ -192,24 +192,24 @@ L1 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consen
 
 ## SHA pinning discipline
 
-すべての `file:line@SHA` cite は SHA `0844d58` を pin する。L1 は L7/L10 より cite が少ない — レッスンが大部分 conceptual (contract design) だからだ; anchored citation は `crates/consensus/src/bridge.rs:11` の trait のみで、これは Stage 6a (`13113db`) 以来安定しており `0844d58` でも変わっていない。
+すべての `file:line@SHA` cite は SHA `0844d58` を pin する。レッスン 1 は レッスン 7/10 より cite が少ない — レッスンが大部分 conceptual (contract design) だからだ; anchored citation は `crates/consensus/src/bridge.rs:11` の trait のみで、これは Stage 6a (`13113db`) 以来安定しており `0844d58` でも変わっていない。
 
 この trait は course arc 全体にとって load-bearing な artifact だ:
-- L1 は contract として導入する
-- L7 は各メソッドを Ethereum Engine API にマップする
-- L9 は設計プロセスを walk する
-- L10 はそれを exercise する commit handler を cite する
+- レッスン 1 は contract として導入する
+- レッスン 7 は各メソッドを Ethereum Engine API にマップする
+- レッスン 9 は設計プロセスを walk する
+- レッスン 10 はそれを exercise する commit handler を cite する
 
 Trait surface への変更は 4 レッスンすべてを invalidate する; SHA で cite するので invalidation が detect 可能になる。
 
 ## Style review notes (self-critique before paste)
 
-- **L1 が lesson-format テンプレートだった。** L7 + L10 はその cadence (3am hook → 7 sections → practice + final check) に従う。どれかを更新するときは cadence を一貫させ、コースが 1 つの voice で読めるようにすること。
+- **レッスン 1 が lesson-format テンプレートだった。** レッスン 7 + レッスン 10 はその cadence (3am hook → 7 sections → practice + final check) に従う。どれかを更新するときは cadence を一貫させ、コースが 1 つの voice で読めるようにすること。
 - **§5 の "boundary の在処" テーブル** は最初 (proposer.rs、validator.rs、sync.rs といった) 存在しないパスを列挙していた。`0844d58` での実ファイル (bridge.rs、runner.rs、engine_app.rs、engine.rs、live_node.rs) と一致するよう更新済み。File layout が再シフトした場合 (例: actor-engine work が consolidate されたとき) はこのテーブルも追随が必要。
 - **Exercise 2 は両ファイルを SHA `0844d58` で読むよう指示する** — これは 3 つのうち最も強力なエクササイズ、コードを実際に開かせるし「contract leak なし」の主張は testable だからだ。
-- **翻訳 policy は L7/L10 JA と同一**:
+- **翻訳 policy は レッスン 7/10 JA と同一**:
   - Engine API 用語、Reth/Malachite 識別子、`bridge`、`commit`、`validator`、`consensus`、`execution`、`payload` は英語のまま。
   - 🛑 callout: Predict → 予測、Anti-fluency → 反流暢性。
   - File paths、function names、types は英語のまま。
 - **「contract」をカタカナ「コントラクト」にしない理由**: 本レッスンは API design 教育であり、英語の "contract" は API/プロトコル/型 contract という多義語として機能している。カタカナにすると "smart contract" との混同を読者に持ち込む。
-- **未公開**: `course.isPublished: false` のまま。L11/L12/L13 JA 翻訳が揃ってから一斉公開予定。
+- **未公開**: `course.isPublished: false` のまま。レッスン 11/12/レッスン 13 JA 翻訳が揃ってから一斉公開予定。

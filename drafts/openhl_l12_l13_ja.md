@@ -20,9 +20,9 @@
 ````markdown
 # Bootstrap — genesis、key、single-node config
 
-> **現在地。** サブモジュール 5/5: *Single-validator devnet。* サブモジュール 1-4 は概念の機構を組み立ててきた。本サブモジュールは、その機構を実際に起動する段階だ。L12 (本レッスン) では bootstrap に必要な 4 つの artifact (keypair、validator set、ChainSpec、home dir) と、それらをまとめる `OpenHlNode` のコンストラクタを扱う。L13 は実行可能な v0 milestone — engine の actor system を通じて 1 ブロック分の合意を駆動する統合テスト。L13 を読み終える頃には、L0 以降に出てきたすべての概念が実 Rust コードとしてコンパイルされ、実際に走った状態になる。
+> **現在地。** サブモジュール 5/5: *Single-validator devnet。* サブモジュール 1-4 は概念の機構を組み立ててきた。本サブモジュールは、その機構を実際に起動する段階だ。レッスン 12 (本レッスン) では bootstrap に必要な 4 つの artifact (keypair、validator set、ChainSpec、home dir) と、それらをまとめる `OpenHlNode` のコンストラクタを扱う。レッスン 13 は実行可能な v0 milestone — engine の actor system を通じて 1 ブロック分の合意を駆動する統合テスト。レッスン 13 を読み終える頃には、レッスン 0 以降に出てきたすべての概念が実 Rust コードとしてコンパイルされ、実際に走った状態になる。
 
-module 1-4 のすべての概念はインストール済みだ。Contract (L1) を読み、Engine API (L7) を trace し、bridge (L9) を設計し、decided block (L10) を commit し、proposer として 1 つ produce (L11) できる。**さあ bootstrap する。** 最小の runnable openhl はどう見えるか — 1 validator、1 node、peer なし? そしてなぜその「toy」が実際にこれまで build してきたものすべての real test なのか?
+module 1-4 のすべての概念はインストール済みだ。Contract (レッスン 1) を読み、Engine API (レッスン 7) を trace し、bridge (レッスン 9) を設計し、decided block (レッスン 10) を commit し、proposer として 1 つ produce (レッスン 11) できる。**さあ bootstrap する。** 最小の runnable openhl はどう見えるか — 1 validator、1 node、peer なし? そしてなぜその「toy」が実際にこれまで build してきたものすべての real test なのか?
 
 > 🛑 **スクロール前に予測。** 1 validator devnet を動かしたい。構築する必要のある artifact をリストせよ (まだコードを書かず — 列挙のみ)。ヒント: 正確に 4 つあり、SHA `0844d58` ですでに 3 つが存在する。
 
@@ -77,7 +77,7 @@ fn single_validator_node(home_dir: PathBuf) -> OpenHlNode {
 }
 ```
 
-8 行。Keypair を generate、Ethereum 形式 address を derive (`SHA-256(pubkey)` の最後の 20 byte — L4 §1 参照)、`voting_power = 1` の 1 要素 validator set にラップ、node を instantiate。
+8 行。Keypair を generate、Ethereum 形式 address を derive (`SHA-256(pubkey)` の最後の 20 byte — レッスン 4 §1 参照)、`voting_power = 1` の 1 要素 validator set にラップ、node を instantiate。
 
 これが **最小 chain だ。** Module 1-4 のすべて — Context impl、bridge、engine actor、Reth 統合 — がこの単一 struct に対して動く。
 
@@ -87,7 +87,7 @@ Bona-fide な BFT chain は `f` byzantine fault を許容するには `n ≥ 3f 
 
 これが成り立つのは **quorum 閾値がほぼ自動的に満たされてしまう** からだ: 1 validator の 2/3 は、結局のところ 1 validator 自身だ。投票者が自分しかいないので、quorum は常に成立する。Byzantine fault が攻撃すべき対象もそもそも存在しない — 意見が食い違う他の validator がいないからだ。
 
-`OpenHlContext::select_proposer` の round-robin (L4 §3 領域) は single-validator では定数関数になる: 我々が常に proposer だ。すべての prevote、precommit、commit certificate は正確に 1 つの署名を持つ — 我々のものだ。
+`OpenHlContext::select_proposer` の round-robin (レッスン 4 §3 領域) は single-validator では定数関数になる: 我々が常に proposer だ。すべての prevote、precommit、commit certificate は正確に 1 つの署名を持つ — 我々のものだ。
 
 > 🛑 **反流暢性。** 「Single-validator は偽 consensus、何も証明しない。」 **違う。** Single-validator は *real* consensus を degenerate validator set に対して走らせている。すべての piece が exercise される:
 > - `OpenHlContext` trait surface (proposer election、proposal 構築、vote signing)
@@ -185,7 +185,7 @@ Port 0 は「OS が ephemeral port を選ぶ」を意味する — テストに�
 
 テスト出力に `decided_hash = BlockHash([0x42; 32])` が見えたら、**本コースのすべての概念が正しく組み合わさって動いたという証拠だ**。本レッスンではその様子が wire 上でどう現れるかを読み解いていく。
 
-これがコースの最終レッスンだ。前の 12 が piece を build した — contract (L1)、Context (L3-L5)、Reth 統合 (L6-L8)、bridge 配線 (L9-L11)、bootstrap (L12)。L13 はそれらを一緒に走らせ trace を読む。
+これがコースの最終レッスンだ。前の 12 が piece を build した — contract (レッスン 1)、Context (レッスン 3〜5)、Reth 統合 (レッスン 6〜8)、bridge 配線 (レッスン 9〜11)、bootstrap (レッスン 12)。レッスン 13 はそれらを一緒に走らせ trace を読む。
 
 > 🛑 **スクロール前に予測。** `first_block_via_engine_actors` を走らせて assertion failure を得たとイメージせよ: `decided[0]` が build したものと違う。コードを見ずに、何が悪かった可能性のあること 5 つを *最も可能性が高い順に* リストせよ。Sketch を実際のフローに対して trace する。
 
@@ -272,10 +272,10 @@ assert_eq!(
 
 平易な日本語で:
 1. **正確に 1 つの decision が出た** — ゼロではなく (chain halt せず)、2 でもなく (`stop_after_decisions = 1` の early-return が正しく動いた)。
-2. **Consensus が合意した hash を bridge が commit した** — L10 の commit path が実際に発火したことを証明。
-3. **Decided hash は `build_payload` が produce したものと一致する** — L11 の propose path が produce した値が、Malachite の signing + broadcast + voting を経由して Decided として戻ってくるまで原型を保ったまま round-trip したことを証明。
+2. **Consensus が合意した hash を bridge が commit した** — レッスン 10 の commit path が実際に発火したことを証明。
+3. **Decided hash は `build_payload` が produce したものと一致する** — レッスン 11 の propose path が produce した値が、Malachite の signing + broadcast + voting を経由して Decided として戻ってくるまで原型を保ったまま round-trip したことを証明。
 
-これが本コースの **end-to-end check** だ。3 つすべてが pass すれば、L1 から L12 までのすべてのレッスンが順番に execute したことになる。
+これが本コースの **end-to-end check** だ。3 つすべてが pass すれば、レッスン 1 から レッスン 12 までのすべてのレッスンが順番に execute したことになる。
 
 ## 4. Trace 出力を読む
 
@@ -316,7 +316,7 @@ INFO  consensus: starting height=2
 
 2. **Second validator を追加せよ。** `single_validator_node` を変更して 2 keypair を生成し両方を validator set に入れる、ただし 1 node だけを走らせる。テストは何をするか? (ヒント: 2 番目の validator は node を持たない、vote が決して到着しない。単一稼動 node は 1/2 voting power = 50% を持ち、2/3 閾値を下回る。Chain は stall する。**これが正しい挙動** — BFT は validator が存在することではなく、voting power の少なくとも 2/3 から実際の vote を要求する。)
 
-3. **Bridge を壊せ。** `StubBridge::commit` が `BridgeError::Internal(eyre!("oops"))` を返すよう作れ。再実行。何が起こるか? (ヒント: `run_engine_app` がエラーを propagate、spawned task が `Err` を返す、テストは propagation chain で panic する。**L9 §4 の halt-the-chain 挙動 in action。**)
+3. **Bridge を壊せ。** `StubBridge::commit` が `BridgeError::Internal(eyre!("oops"))` を返すよう作れ。再実行。何が起こるか? (ヒント: `run_engine_app` がエラーを propagate、spawned task が `Err` を返す、テストは propagation chain で panic する。**レッスン 9 §4 の halt-the-chain 挙動 in action。**)
 
 > 🛑 **反流暢性。** 「テストが pass すれば production で chain が動く。」 **完全には正しくない。** テストは 4 メッセージ contract の *correctness*、actor 配線、trait impl を exercise する。Exercise *しない*: ネットワーク遅延下の liveness、byzantine validator、partial state からの sync、負荷下の gossip 伝播、real Reth payload assembly with mempool。それらは別 scale の integration test だ。**First-block テストは passing necessary condition だが、production readiness の sufficient condition ではない。**
 
@@ -348,7 +348,7 @@ INFO  consensus: starting height=2
 
 ## Seed-file slot
 
-L12 と L13 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consensus-ja`) に Module 5 として landing する:
+レッスン 12 と レッスン 13 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consensus-ja`) に Module 5 として landing する:
 
 ```typescript
 // Course.modules.create array:
@@ -380,19 +380,19 @@ L12 と L13 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-open
 
 ## SHA pinning discipline
 
-すべての cite は SHA `0844d58` を pin する。L12+L13 は特に cite-dense — 「すべてを結ぶ」レッスンだからだ — ほぼすべての prior lesson のコードを参照する:
+すべての cite は SHA `0844d58` を pin する。レッスン 12+レッスン 13 は特に cite-dense — 「すべてを結ぶ」レッスンだからだ — ほぼすべての prior lesson のコードを参照する:
 
-- L12 cite: `node.rs:34, 144, 249`、`validator.rs:42`、`reth_node.rs:35`
-- L13 cite: `engine_app.rs:246` (テスト)、加えて loop の各 AppMsg arm への暗黙参照
+- レッスン 12 cite: `node.rs:34, 144, 249`、`validator.rs:42`、`reth_node.rs:35`
+- レッスン 13 cite: `engine_app.rs:246` (テスト)、加えて loop の各 AppMsg arm への暗黙参照
 
-`bin/openhl` placeholder が real entry point になったら (Module 1 実装作業の後)、L12 §6 Practice exercise 3 と L13 §1 は両方更新が必要。§5 の "next to break" 実験は regardless で valid のまま。
+`bin/openhl` placeholder が real entry point になったら (Module 1 実装作業の後)、レッスン 12 §6 Practice exercise 3 と レッスン 13 §1 は両方更新が必要。§5 の "next to break" 実験は regardless で valid のまま。
 
 ## Style review notes (self-critique before paste)
 
-- **L13 §4 のトレース出力は approximate だ。** `RUST_LOG=info` が何を示すかを sketch した; 実際の出力は Malachite のロギング構造に依存し違うかもしれない。レッスンを finalize する前に `--nocapture` でテストを走らせ、*real* トレースを capture して bullet を実ログ行に match させる価値がある。
-- **L13 の締めの「おめでとう」行** はこれをコースの最終レッスンとして扱う。
-- **L12 §3 の反流暢性 callout** (「single-validator は偽 consensus」) は L12 で最も leverage が高い段落だ。コース全体を earned に感じさせる reframing — すべてのレッスンが real な機構を trivial topology 上で exercise する。**Review でこの段落をカットしない。**
-- **L13 §5 の実験** は pedagogically rich だ。各々が異なる側面を教える (timeout、voting power 閾値、halt-the-chain)。
+- **レッスン 13 §4 のトレース出力は approximate だ。** `RUST_LOG=info` が何を示すかを sketch した; 実際の出力は Malachite のロギング構造に依存し違うかもしれない。レッスンを finalize する前に `--nocapture` でテストを走らせ、*real* トレースを capture して bullet を実ログ行に match させる価値がある。
+- **レッスン 13 の締めの「おめでとう」行** はこれをコースの最終レッスンとして扱う。
+- **レッスン 12 §3 の反流暢性 callout** (「single-validator は偽 consensus」) は レッスン 12 で最も leverage が高い段落だ。コース全体を earned に感じさせる reframing — すべてのレッスンが real な機構を trivial topology 上で exercise する。**Review でこの段落をカットしない。**
+- **レッスン 13 §5 の実験** は pedagogically rich だ。各々が異なる側面を教える (timeout、voting power 閾値、halt-the-chain)。
 - **翻訳 policy は他の JA レッスンと同一**:
   - `OpenHlNode`、`OpenHlConfig`、`ValuePayload::ProposalOnly` 等の API type は英語のまま。
   - `tempfile::tempdir()`、`PathBuf`、Rust import path は英語のまま。

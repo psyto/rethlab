@@ -1,6 +1,6 @@
 # Building OpenHL — L11 draft (JA)
 
-> openhl SHA `0844d58` (Stage 7c) に対してドラフト。L9 (trait の設計) と L10 (Decided handler) と並んで Module 4 を閉じる。
+> openhl SHA `0844d58` (Stage 7c) に対してドラフト。レッスン 9 (trait の設計) と レッスン 10 (Decided handler) と並んで Module 4 を閉じる。
 > EN ミラー: `drafts/openhl_l11_en.md`。
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
 > 元の outline は `crates/consensus/src/proposer.rs` を cite していた — そのファイルは結局 land せず、proposer ロジックは `crates/consensus/src/engine_app.rs:65@0844d58` (`AppMsg::GetValue` arm) に置かれている。レッスンを実コードに合わせて更新済み。
@@ -60,7 +60,7 @@ Malachite のデフォルト `ConsensusConfig` の timeout は **propose timeout
 
 Production で expensive な行は **mempool から実際の payload を assemble する** ことだ — Reth の payload builder が transaction を pick、execute、state を compute する。そこに 100-400ms が住む。それ以外はオーバーヘッドだ。
 
-> 🛑 **反流暢性。** 「自分の番のときに同期的に payload を build すればいい — それが最も単純な設計だ。」 **production では違う。** 同期 build は propose 予算のほとんどを、もっと早くできた仕事に費やしてしまう。4 メソッド `ConsensusBridge` trait (L9) はまさにこの async 最適化を可能にするために存在する。§5 でどうやるか見る。
+> 🛑 **反流暢性。** 「自分の番のときに同期的に payload を build すればいい — それが最も単純な設計だ。」 **production では違う。** 同期 build は propose 予算のほとんどを、もっと早くできた仕事に費やしてしまう。4 メソッド `ConsensusBridge` trait (レッスン 9) はまさにこの async 最適化を可能にするために存在する。§5 でどうやるか見る。
 
 ## 3. Proposer のコード、walked
 
@@ -95,7 +95,7 @@ AppMsg::GetValue {
 
 4. **`LocallyProposedValue` でラップ。** Malachite の app-channel はこの type を local に build された proposal の contract handoff として使う。`(height, round, value)` の struct だ。`Proposal` を直接構築するのではない — それは consensus actor の仕事だ。
 
-5. **Reply oneshot 経由で送信。** `reply.send(lpv)` は `tokio::sync::oneshot` channel だ。Engine actor は oneshot の反対側で block して待っている。**送らないと Malachite が stall する** (L10 の `Decided` reply と同じ halt パターン)。`is_err()` で warning を送る — `send` が失敗する唯一の方法は receiver がすでに drop されていることだからだ — engine が timeout して先に進んだ意味だ。
+5. **Reply oneshot 経由で送信。** `reply.send(lpv)` は `tokio::sync::oneshot` channel だ。Engine actor は oneshot の反対側で block して待っている。**送らないと Malachite が stall する** (レッスン 10 の `Decided` reply と同じ halt パターン)。`is_err()` で warning を送る — `send` が失敗する唯一の方法は receiver がすでに drop されていることだからだ — engine が timeout して先に進んだ意味だ。
 
 > 🛑 **予測。** Step 5 の `reply.send(...)` が engine の propose timeout 発火 *後* に起こるとどうなる?
 
@@ -105,7 +105,7 @@ AppMsg::GetValue {
 
 ## 4. `LocallyProposedValue` — consensus が実際に受け取るもの
 
-我々は Malachite `Proposal` を直接構築しない。`LocallyProposedValue::new(height, round, value)` を構築する。Malachite の Consensus actor が我々の値を取り、`OpenHlContext::new_proposal` (L4 領域) 経由で `Proposal` を build、`SigningProvider` (Stage 6a) 経由で sign、署名済み Proposal を Network actor に gossip 用に渡す。
+我々は Malachite `Proposal` を直接構築しない。`LocallyProposedValue::new(height, round, value)` を構築する。Malachite の Consensus actor が我々の値を取り、`OpenHlContext::new_proposal` (レッスン 4 領域) 経由で `Proposal` を build、`SigningProvider` (Stage 6a) 経由で sign、署名済み Proposal を Network actor に gossip 用に渡す。
 
 我々はそれら 4 操作のどれもしない。Trait split は意図的だ: 我々は *値選択* (どのブロックを propose するか) を所有し、Malachite は *proposal 構築* (wire 形式)、*signing*、*broadcast* を所有する。
 
@@ -116,7 +116,7 @@ AppMsg::GetValue {
 | Sign | `OpenHlSigningProvider` (Stage 6a) | Validator-key-specific — 我々だけが key を持つ |
 | Broadcast | Malachite Network actor | Network-layer concern — gossipsub topic 管理 |
 
-これが L1 §5 が 4 メッセージ contract で名指した同じ separation-of-concerns だ: bridge は「EVM が何をするか」を所有; Malachite は「consensus が何をするか」を所有; SigningProvider は「我々の validator の key が何をするか」を所有。各部分は隔離してデバッグできる程度に小さい。
+これが レッスン 1 §5 が 4 メッセージ contract で名指した同じ separation-of-concerns だ: bridge は「EVM が何をするか」を所有; Malachite は「consensus が何をするか」を所有; SigningProvider は「我々の validator の key が何をするか」を所有。各部分は隔離してデバッグできる程度に小さい。
 
 ## 5. 我々がまだ使っていない async trick
 
@@ -136,7 +136,7 @@ Time:  t=0       t=200ms        t=400ms                   t=propose
 
 `build_payload` は早めに call される — 前 round の decided block が分かった瞬間に — そのため EL は round の投票時間を、次のブロックを並行して assembly する時間に充てられる。`payload_ready` が call される頃には、ブロックはすでに組み上がって待機している状態だ。Propose 時の critical path は「準備済みの payload を fetch して reply を送る」だけに縮む — マイクロ秒のオーダーであって、ミリ秒ではない。
 
-これが L7 §4 の **build-during-voting** 最適化だ。**今日の openhl コードはこれをしない** — `AppMsg::GetValue` arm は同じハンドラ内で `build_payload` と `payload_ready` を連続で call する。テストモードでは問題ない (どれもマイクロ秒だ)。Production では「`build_payload` を round-decided 時に kick off、`payload_ready` を propose 時に await」に変える必要がある。
+これが レッスン 7 §4 の **build-during-voting** 最適化だ。**今日の openhl コードはこれをしない** — `AppMsg::GetValue` arm は同じハンドラ内で `build_payload` と `payload_ready` を連続で call する。テストモードでは問題ない (どれもマイクロ秒だ)。Production では「`build_payload` を round-decided 時に kick off、`payload_ready` を propose 時に await」に変える必要がある。
 
 Trait surface はすでにこれを支えるように設計されている — 4 メソッドの split がその API だ。Async 最適化のための実装作業は bridge の外側にある: AppMsg loop の側が、`GetValue` が来るより前に `build_payload` を call できるように書き直される必要がある。
 
@@ -155,7 +155,7 @@ Trait surface はすでにこれを支えるように設計されている — 4
 
 そのリストの step 1 で我々は終わりだ。Proposer から見れば、下流の pipeline 全体は opaque だ — actor フレームワークが handle する。
 
-これが L11 のレッスンを具体化したものだ: **proposer のコードが小さいのは contract が well-designed だからだ。** Malachite が consensus protocol を handle; 我々が application-specific な「どの値を propose するか」を handle; bridge が EL-specific な「どう build するか」を handle する。
+これが レッスン 11 のレッスンを具体化したものだ: **proposer のコードが小さいのは contract が well-designed だからだ。** Malachite が consensus protocol を handle; 我々が application-specific な「どの値を propose するか」を handle; bridge が EL-specific な「どう build するか」を handle する。
 
 ## 7. 練習
 
@@ -163,7 +163,7 @@ Trait surface はすでにこれを支えるように設計されている — 4
 
 2. **Timeout 無視行を見つけよ。** `engine_app.rs:65@0844d58` で、`AppMsg::GetValue` destructure は `timeout: _` を持つ。`timeout` や別フィールドを `_` で破棄する他のすべての AppMsg variant を見つけよ。それらは load-bearing か? (ヒント: ほとんどは fine — 全フィールドが必要なわけではない — が、1-2 個は production gap かもしれない。)
 
-3. **Async 最適化を sketch せよ。** 今日の `AppMsg::GetValue` ハンドラは sync (build + ready 連続)。代わりに毎 `AppMsg::Decided` 直後に `build_payload` を call、結果の `PayloadId` を `(next_height, round=0)` で keyed して保存するよう diff を sketch せよ。それから `GetValue` は単に `payload_ready` + `reply.send` になる。これは L10 §5 の `Next::Restart` とどう interact するか?
+3. **Async 最適化を sketch せよ。** 今日の `AppMsg::GetValue` ハンドラは sync (build + ready 連続)。代わりに毎 `AppMsg::Decided` 直後に `build_payload` を call、結果の `PayloadId` を `(next_height, round=0)` で keyed して保存するよう diff を sketch せよ。それから `GetValue` は単に `payload_ready` + `reply.send` になる。これは レッスン 10 §5 の `Next::Restart` とどう interact するか?
 
 > **最終チェック。** 1 文で、なぜ openhl の proposer コードは `Proposal` を直接構築せず、`LocallyProposedValue` を返して Malachite に `Proposal` を build させるのか? 答えに「separation of concerns: application は値選択を所有、consensus は proposal 構築を所有」または「on-wire `Proposal` 形式は application ではなく consensus protocol で固定」が含まれていなければ、§4 を再読。
 ````
@@ -172,7 +172,7 @@ Trait surface はすでにこれを支えるように設計されている — 4
 
 ## Seed-file slot
 
-L11 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consensus-ja`) に Module 4 の 3 番目のレッスン (すでに drafted の L9 と L10 の後) として landing する:
+レッスン 11 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consensus-ja`) に Module 4 の 3 番目のレッスン (すでに drafted の レッスン 9 と レッスン 10 の後) として landing する:
 
 ```typescript
 // Course.modules.create array:
@@ -195,11 +195,11 @@ L11 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-conse
 }
 ```
 
-**Module 4 は drafts directory で完成:** L9 + L10 + L11 = 3 of 3 lessons drafted。~50 分の teaching、~140 XP。
+**Module 4 は drafts directory で完成:** レッスン 9 + レッスン 10 + レッスン 11 = 3 of 3 lessons drafted。~50 分の teaching、~140 XP。
 
 ## SHA pinning discipline
 
-すべての cite は SHA `0844d58` を pin する。L11 は line-anchored cite が L9 より少ない — レッスンは 12 行のコードブロック (`engine_app.rs:65-82@0844d58`) に focus するからだ; レッスンのほとんどはそのブロックの *予算* と *separation of concerns* についてで、他のコードについてではない。
+すべての cite は SHA `0844d58` を pin する。レッスン 11 は line-anchored cite が レッスン 9 より少ない — レッスンは 12 行のコードブロック (`engine_app.rs:65-82@0844d58`) に focus するからだ; レッスンのほとんどはそのブロックの *予算* と *separation of concerns* についてで、他のコードについてではない。
 
 注意が必要な 1 cite: `engine_app.rs:65@0844d58` (GetValue arm)。§5 の async 最適化が landing するとき (おそらく Module 5 または Stage 8 変更)、このレッスンの §3 と §5 は両方更新が必要 — §3 を新しい構造に反映、§5 から「まだ使っていない」を削除。
 
@@ -207,10 +207,10 @@ L11 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-conse
 
 - **§5 はレッスンの最強の pedagogical move だ。** 学習者に、現在のコードが trait が支えるよう設計されたとおりに *意図的に* 不完全であることを示す。**繰り返す価値のある教えのテクニック: 将来のために設計し、より単純なものを ship し、gap を読者に visible にせよ。**
 - **§2 の予算テーブル** は典型 mainnet の数字を持つ (Reth payload assembly 100-400ms)。これらは公開 Reth ベンチマークからの estimate; レッスンが公開される前に sanity check すべき。
-- **Exercise 3 が `Next::Restart` を参照** — これは L10 §5 への forward reference。L10 が Restart の扱いを変えるならこの exercise も並列に更新が必要。
+- **Exercise 3 が `Next::Restart` を参照** — これは レッスン 10 §5 への forward reference。レッスン 10 が Restart の扱いを変えるならこの exercise も並列に更新が必要。
 - **翻訳 policy は他の JA レッスンと同一**:
   - `LocallyProposedValue`、`AppMsg::GetValue`、`OpenHlContext` 等の Malachite/openhl API type は英語のまま。
   - `oneshot`、`tokio::sync`、ractor 関連の concurrency 用語は英語のまま。
   - 「hot path」「budget」「critical path」「kick off」「async trick」等のパフォーマンス用語は英語のまま。
   - 🛑 callout: Predict → 予測、Anti-fluency → 反流暢性。
-- **未公開**: `course.isPublished: false` のまま。L12/L13 JA 翻訳が揃ってから一斉公開予定。
+- **未公開**: `course.isPublished: false` のまま。レッスン 12/13 JA 翻訳が揃ってから一斉公開予定。

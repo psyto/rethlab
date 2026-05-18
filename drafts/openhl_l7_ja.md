@@ -2,7 +2,7 @@
 
 > openhl SHA `0844d58` (Stage 7c — `validate_payload` が Reth の `EthBeaconConsensus` を駆動する) に対してドラフト。
 > EN ミラー: `drafts/openhl_l7_l10_en.md` の L7 セクション。
-> L7 は Stage 7c の validator-forcing moment に anchor されているため、L10 (Stage 7d、SHA `0cac571`) とは独立に SHA `0844d58` で固定される。
+> レッスン 7 は Stage 7c の validator-forcing moment に anchor されているため、レッスン 10 (Stage 7d、SHA `0cac571`) とは独立に SHA `0844d58` で固定される。
 > rethlab の chapter format に準拠 (3am hook → 🛑 予測/反流暢性 callout → 番号付きセクション → 練習 + 最終チェック)。
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
 
@@ -160,7 +160,7 @@ Base-fee 計算は、Reth の validator が base-fee を *verify* するため�
 
 > 🛑 **反流暢性。** 「`validate_payload` は後で実装するよ。」 **順番が違う。** Validation を先にやる。なぜなら real validation こそが real construction を強制するからだ。`build_payload` を permissive validator (またはまったく validator なし) に対して実装すると、見た目は問題ないが、real node が validate しようとしたときに 3 層下で失敗する header を ship することになる。
 
-これが L7 のレッスンを具体化したものだ: Engine API は受動的な形ではない。**Active な discipline (規律)** である。Reth の validator が spec そのものであり、その上のすべては validator のルールに従わなければならない。
+これが レッスン 7 のレッスンを具体化したものだ: Engine API は受動的な形ではない。**Active な discipline (規律)** である。Reth の validator が spec そのものであり、その上のすべては validator のルールに従わなければならない。
 
 ## 7. 練習
 
@@ -175,7 +175,7 @@ Base-fee 計算は、Reth の validator が base-fee を *verify* するため�
 
 ## Seed-file slot
 
-EN seed `prisma/seed-reth-openhl-consensus-en.ts` と並んで、JA バージョンは `prisma/seed-reth-openhl-consensus-ja.ts` に landing する (まだ未作成 — L11/L12/L13 の JA 翻訳が揃ったあとに generator スクリプトで一括生成する)。Module 構造は EN と同一:
+EN seed `prisma/seed-reth-openhl-consensus-en.ts` と並んで、JA バージョンは `prisma/seed-reth-openhl-consensus-ja.ts` に landing する (まだ未作成 — レッスン 11/12/レッスン 13 の JA 翻訳が揃ったあとに generator スクリプトで一括生成する)。Module 構造は EN と同一:
 
 ```typescript
 {
@@ -199,21 +199,21 @@ EN seed `prisma/seed-reth-openhl-consensus-en.ts` と並んで、JA バージョ
 
 ## SHA pinning discipline
 
-L7 JA の `file:line@SHA` cite は SHA `0844d58` (Stage 7c HEAD) で pin する — EN ミラーと同一。L7 のコンテンツは validator-forcing moment という *歴史的瞬間* に anchor されており、SHA を前に進めるとそのレッスンが教えている瞬間が obscure になる。これは L10 (Stage 7d で advancing) とは異なる policy で、L7+L10 EN ミラーの末尾の "SHA pinning discipline" セクションで明示している:
+レッスン 7 JA の `file:line@SHA` cite は SHA `0844d58` (Stage 7c HEAD) で pin する — EN ミラーと同一。レッスン 7 のコンテンツは validator-forcing moment という *歴史的瞬間* に anchor されており、SHA を前に進めるとそのレッスンが教えている瞬間が obscure になる。これは レッスン 10 (Stage 7d で advancing) とは異なる policy で、レッスン 7+レッスン 10 EN ミラーの末尾の "SHA pinning discipline" セクションで明示している:
 
-- L7 (EN/JA both) → SHA `0844d58` で frozen
-- L10 (EN/JA both) → 各ステージで bump (現在 `0cac571`)
+- レッスン 7 (EN/JA both) → SHA `0844d58` で frozen
+- レッスン 10 (EN/JA both) → 各ステージで bump (現在 `0cac571`)
 
-CI link-check workflow (`.github/workflows/openhl-cite-check.yml`) は L7 JA の 3 つの cite を `0844d58` に対して resolve する。EN/JA で同一 cite を共有しているので、SHA bump が起きたら EN/JA を lockstep で更新する。
+CI link-check workflow (`.github/workflows/openhl-cite-check.yml`) は レッスン 7 JA の 3 つの cite を `0844d58` に対して resolve する。EN/JA で同一 cite を共有しているので、SHA bump が起きたら EN/JA を lockstep で更新する。
 
 ## Style review notes (self-critique before paste)
 
-- **L10 JA と完全に同じ翻訳 policy**:
+- **レッスン 10 JA と完全に同じ翻訳 policy**:
   - Engine API 用語 (`forkchoiceUpdated`、`newPayload`、`getPayload`、`PayloadAttributes`、`ForkchoiceState` 等) は英語のまま。Reth/Ethereum のドキュメントを後で読むときの cognitive bridge が直接になる。
   - 🛑 callout: Predict → 予測、Anti-fluency → 反流暢性 (consensus-engineering JA の確立した訳)。
   - File paths、function names、types は英語のまま。
 - **Section 6 (validator forces honesty)** は EN 版で「the most pedagogically valuable moment in openhl's history」と書かれている。JA では「pedagogically valuable」を「pedagogically valuable」のまま英語で残す案もあったが、結果的に「もっとも pedagogically valuable な瞬間」とミックスした。読者の register が技術者なので、「教育的価値の高い」より「pedagogically valuable」が直感的。
 - **「By construction, they agree」** を「**仕組み上** 両者は一致する」と訳した。「by construction」は型理論/形式手法系の用語で英語のまま残す手もあるが、ここでは技術 reader にも自然に読める「仕組み上」を採用した。
-- **L10 JA との重複コードブロック** (例えば `ConsensusBridge` trait の 4 メソッド) は意図的に同一の英文コードを保持。読者が L7 と L10 を行き来したときに同じ trait を再認識できる。
-- **L7 EN は 15 分予算の上限近い** (≈1450 word + 表 + コードブロック) という EN レビュー notes と同じ問題が JA でも生じる。日本語の方が情報密度が高いので、実時間としては 14 分前後に収まる見込み。
-- **未公開**: L10 EN/JA、L7 EN、そして本 L7 JA ともに `course.isPublished: false` のまま。L11/L12/L13 JA 翻訳が揃ってから一斉公開予定。
+- **レッスン 10 JA との重複コードブロック** (例えば `ConsensusBridge` trait の 4 メソッド) は意図的に同一の英文コードを保持。読者が レッスン 7 と レッスン 10 を行き来したときに同じ trait を再認識できる。
+- **レッスン 7 EN は 15 分予算の上限近い** (≈1450 word + 表 + コードブロック) という EN レビュー notes と同じ問題が JA でも生じる。日本語の方が情報密度が高いので、実時間としては 14 分前後に収まる見込み。
+- **未公開**: レッスン 10 EN/JA、レッスン 7 EN、そして本 レッスン 7 JA ともに `course.isPublished: false` のまま。レッスン 11/12/レッスン 13 JA 翻訳が揃ってから一斉公開予定。

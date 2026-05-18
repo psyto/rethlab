@@ -1,6 +1,6 @@
 # Building OpenHL — L2 + L3 draft (JA)
 
-> openhl SHA `0844d58` (Stage 7c) に対してドラフト。L2 は Module 1 を閉じる (L1 = contract と pair); L3 は Module 2 を開く (L4 と L5 と pair)。両者は「なぜこのアーキテクチャか」と「ではそれを与えてくれるライブラリを見ていこう」の境目に位置する。
+> openhl SHA `0844d58` (Stage 7c) に対してドラフト。レッスン 2 は Module 1 を閉じる (レッスン 1 = contract と pair); レッスン 3 は Module 2 を開く (レッスン 4 と レッスン 5 と pair)。両者は「なぜこのアーキテクチャか」と「ではそれを与えてくれるライブラリを見ていこう」の境目に位置する。
 > EN ミラー: `drafts/openhl_l2_l3_en.md`。
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
 
@@ -81,13 +81,13 @@ Bitcoin はこれの代償を払う:
 - Bounded validator set なし (3f+1 制約なし)
 - Partition 下での liveness (両側が mining を続け、再結合時に reconcile する)
 
-これが L2 テーブルの最初の 2 row が払う trade だ。**BFT より良いとか悪いとかではない — 違う問題のためのものだ。** Sub-second finality を最適化する chain (HL、Tempo、openhl) には BFT が勝つ; permissionless miner を最適化する chain (Bitcoin) には Nakamoto が勝つ。
+これが レッスン 2 テーブルの最初の 2 row が払う trade だ。**BFT より良いとか悪いとかではない — 違う問題のためのものだ。** Sub-second finality を最適化する chain (HL、Tempo、openhl) には BFT が勝つ; permissionless miner を最適化する chain (Bitcoin) には Nakamoto が勝つ。
 
 ## 4. ETH 2.0 のハイブリッド — microcosm における forcing function
 
 Ethereum の post-merge アーキテクチャは興味深い中間ケースだ: head で LMD-GHOST (Nakamoto 形式の fork-choice) を、finality で Casper FFG (BFT 形式) を動かす。EL は optimistic に execute する; CL の Casper は ~13 分後にブロックを finalize する。
 
-これが機能するのは EL/CL split (L1 §6 が convergence point として名指したもの) が各層に fit する consensus family を使わせるからだ:
+これが機能するのは EL/CL split (レッスン 1 §6 が convergence point として名指したもの) が各層に fit する consensus family を使わせるからだ:
 
 - CL は BFT 形式の finality を得る (chain が fork から復帰できるように)
 - EL は Nakamoto 形式の柔軟性を保つ (optimistic state を produce し続けられるように)
@@ -100,9 +100,9 @@ Ethereum の post-merge アーキテクチャは興味深い中間ケースだ: 
 
 Decide-first パターンは openhl の設計を 3 つの方法で形作る:
 
-1. **`commit` は fire-and-forget** (L1 §4)。撤回するものが無いから「本当にいいのか?」round-trip も無い。EL が知る頃には決定はすでに permanent だ。
+1. **`commit` は fire-and-forget** (レッスン 1 §4)。撤回するものが無いから「本当にいいのか?」round-trip も無い。EL が知る頃には決定はすでに permanent だ。
 
-2. **`validate_payload` が存在する** (L1 §3、L7 §3)。Validator は peer から proposal を受け取り、投票 *前に* EL に executability を check させる。これが decide-first chain における optimistic-execution-equivalent だ: post-state を speculate しないが、proposal が commit に値する程度に well-formed かを check は *する*。
+2. **`validate_payload` が存在する** (レッスン 1 §3、レッスン 7 §3)。Validator は peer から proposal を受け取り、投票 *前に* EL に executability を check させる。これが decide-first chain における optimistic-execution-equivalent だ: post-state を speculate しないが、proposal が commit に値する程度に well-formed かを check は *する*。
 
 3. **Reorg machinery なし** (本レッスン)。EL は committed block を undo する必要が一度もない。State 成長は monotonic; canonical chain は append-only だ。Reth の reorg サポートは未使用のまま残る。
 
@@ -114,11 +114,11 @@ Decide-first パターンは openhl の設計を 3 つの方法で形作る:
 
 ## 6. 練習
 
-1. **コードで convergence を見つけよ。** CometBFT 系チェーンのリポを開け (例: `cometbft/cometbft` 自体、または Osmosis 等の downstream)。Consensus が「decide する」場所と application が「execute する」場所を locate せよ。openhl の `crates/consensus/src/engine_app.rs:119@0844d58` (L10 で walk する `AppMsg::Decided` arm) と比較せよ。
+1. **コードで convergence を見つけよ。** CometBFT 系チェーンのリポを開け (例: `cometbft/cometbft` 自体、または Osmosis 等の downstream)。Consensus が「decide する」場所と application が「execute する」場所を locate せよ。openhl の `crates/consensus/src/engine_app.rs:119@0844d58` (レッスン 10 で walk する `AppMsg::Decided` arm) と比較せよ。
 2. **Trade を名指せ。** Bitcoin は optimistic execution を使う。**なぜこれが Bitcoin にとって safe か?** ヒント: Bitcoin における「decision」が何を意味するか — それはいつ不可逆になるかを考えよ。
 3. **ハイブリッドケース。** Ethereum 2.0 の LMD-GHOST + Casper ハイブリッドは EL に reorg サポートを要求する。これが現れる場所を Reth で 1 箇所見つけよ (`reth-provider` で `block_indices`、`reorg`、`revert_state` を検索)。
 
-> **最終チェック。** 1 文で、なぜ decide-first-execute-after パターンが 4 メッセージ contract (L1 §4) に `validate_payload` と `commit` を *別* メソッドとして持たせることを *強制* するか? 答えに「validation は speculative; commit は final; これらは異なる protocol moment で起こる」が含まれていなければ、§2 を再読。
+> **最終チェック。** 1 文で、なぜ decide-first-execute-after パターンが 4 メッセージ contract (レッスン 1 §4) に `validate_payload` と `commit` を *別* メソッドとして持たせることを *強制* するか? 答えに「validation は speculative; commit は final; これらは異なる protocol moment で起こる」が含まれていなければ、§2 を再読。
 ````
 
 ---
@@ -136,7 +136,7 @@ Decide-first パターンは openhl の設計を 3 つの方法で形作る:
 ````markdown
 # Malachite が与えてくれるもの — `Context` trait
 
-> **現在地。** サブモジュール 2/5: *ライブラリとしての Malachite。* サブモジュール 1 で 4 メッセージの contract に名前を付けた。consensus 側と execution 側がその contract 越しに話すという構造が頭に入った状態だ。本サブモジュールは consensus 側を扱う。L3 (本レッスン) で Malachite の `Context` trait — ライブラリが要求してくる型レベルの API surface — を導入する。L4 は実装すべき 10 個の sub-type を walk する。L5 は、そのアルゴリズムを実稼働可能な engine に変える actor system を説明する。
+> **現在地。** サブモジュール 2/5: *ライブラリとしての Malachite。* サブモジュール 1 で 4 メッセージの contract に名前を付けた。consensus 側と execution 側がその contract 越しに話すという構造が頭に入った状態だ。本サブモジュールは consensus 側を扱う。レッスン 3 (本レッスン) で Malachite の `Context` trait — ライブラリが要求してくる型レベルの API surface — を導入する。レッスン 4 は実装すべき 10 個の sub-type を walk する。レッスン 5 は、そのアルゴリズムを実稼働可能な engine に変える actor system を説明する。
 
 Malachite は 10 個の associated type と 4 個のメソッドを持つ 1 つの trait だ。**10 個の type に名前を付けたら、自分の chain に名前を付けたことになる。** これは比喩ではない — consensus エンジンはそれらの type に対して parametric であり、各メソッドのシグネチャはそれらから derive される。正しい type を選べば Malachite はそれらの上で consensus を駆動する。
 
@@ -211,7 +211,7 @@ crates/consensus/src/types/
 
 (Address と key は `validator.rs` に同居; `Extension` は `()` なのでファイル不要; `SigningScheme` は Malachite が ship するので impl 不要。)
 
-L4 が各ファイルを詳しく walk する。今のところ: **これら 10 type が存在することを知っていることが、Malachite が何かを知ることの半分だ。** もう半分は 4 メソッド (§3)。
+レッスン 4 が各ファイルを詳しく walk する。今のところ: **これら 10 type が存在することを知っていることが、Malachite が何かを知ることの半分だ。** もう半分は 4 メソッド (§3)。
 
 > 🛑 **反流暢性。** 「Malachite は Tendermint だ。」 **ほぼ違う。** Malachite は *抽象* Tendermint アルゴリズム — state machine、proposal-vote-precommit の dance、3f+1 quorum math — で、I/O を抜いたものだ。実際の CometBFT 実装は I/O (libp2p、ABCI、mempool、ネットワーク) を所有する; Malachite はアルゴリズムだけを所有する。**この分離が openhl に CometBFT の runtime 全部を継承せず Malachite を使わせる。**
 
@@ -249,7 +249,7 @@ Malachite が protocol を与える。**与えない:**
 | Validator set の構築 | 実装側 (genesis + slashing ロジック) |
 | Propose する値の選択 | 実装側 (bridge 経由の `build_payload`) |
 | 値の validation | 実装側 (bridge 経由の `validate_payload`) |
-| メッセージの signing | 実装側 (`SigningProvider` impl — L4 §7) |
+| メッセージの signing | 実装側 (`SigningProvider` impl — レッスン 4 §7) |
 | Network gossip | エンジン actor system (libp2p) |
 | 永続化 (WAL) | エンジン actor system |
 | Decided block の storage | 実装側 (EL state) |
@@ -281,7 +281,7 @@ fn process(&mut self, input: Input<Ctx>) -> Result<Vec<Output<Ctx>>, Error<Ctx>>
 
 なぜこれが重要か? **Tendermint protocol 全体が 1 つのコードであり、それを使うすべての chain にまたがって一度 debug される。** Cosmos chain、openhl、Tempo、その他が Malachite (または概念的等価物) を使うとき、全員がアルゴリズム自体への bug fix の恩恵を受ける。BFT を re-implement する必要のある chain は無い。
 
-> 🛑 **反流暢性。** 「各 BFT chain が自分の consensus を実装する。」 **違う。** 各 chain は自分の *type* と *I/O* を実装する。アルゴリズムは family にまたがって共有される — 時には文字通り (同じライブラリを使う chain)、時には概念的に (HotStuff variant は同じ state machine に converge する)。**L1 architect の仕事は type と I/O であり、アルゴリズムではない。**
+> 🛑 **反流暢性。** 「各 BFT chain が自分の consensus を実装する。」 **違う。** 各 chain は自分の *type* と *I/O* を実装する。アルゴリズムは family にまたがって共有される — 時には文字通り (同じライブラリを使う chain)、時には概念的に (HotStuff variant は同じ state machine に converge する)。**レッスン 1 architect の仕事は type と I/O であり、アルゴリズムではない。**
 
 ## 6. 練習
 
@@ -296,7 +296,7 @@ fn process(&mut self, input: Input<Ctx>) -> Result<Vec<Output<Ctx>>, Error<Ctx>>
 
 ## Seed-file slot
 
-L2 は Module 1 の 2 番目のレッスンとして (L1 の直後に) landing する; L3 は Module 2 を開く:
+レッスン 2 は Module 1 の 2 番目のレッスンとして (レッスン 1 の直後に) landing する; レッスン 3 は Module 2 を開く:
 
 ```typescript
 // Course.modules.create array:
@@ -338,26 +338,26 @@ L2 は Module 1 の 2 番目のレッスンとして (L1 の直後に) landing �
 
 ## SHA pinning discipline
 
-すべての cite は SHA `0844d58` を pin する。L2 はコード cite が軽い (conceptual/comparative なレッスン) が、要所では pin している:
-- `crates/consensus/src/engine_app.rs:119` — L10 が walk する Decided arm (L2 Practice exercise 1 から参照)
+すべての cite は SHA `0844d58` を pin する。レッスン 2 はコード cite が軽い (conceptual/comparative なレッスン) が、要所では pin している:
+- `crates/consensus/src/engine_app.rs:119` — レッスン 10 が walk する Decided arm (レッスン 2 Practice exercise 1 から参照)
 
-L3 は cite-dense (trait 導入レッスン):
+レッスン 3 は cite-dense (trait 導入レッスン):
 - `crates/consensus/src/context.rs:19` — `OpenHlContext` impl
 - `crates/consensus/src/context.rs:32` — `select_proposer` の round-robin
 - `crates/consensus/src/types/*.rs` — type ごとのモジュール (個別の line number ではなくパターンとして参照)
 - `crates/consensus/src/runner.rs:34` — `run_single_validator` Driver setup
 
-L4 (per-type walk) が landing するときは `crates/consensus/src/types/*.rs` の各ファイル内の specific な line number を cite すべき。L3 はディレクトリ構造のみで十分。
+レッスン 4 (per-type walk) が landing するときは `crates/consensus/src/types/*.rs` の各ファイル内の specific な line number を cite すべき。レッスン 3 はディレクトリ構造のみで十分。
 
 ## Style review notes (self-critique before paste)
 
-- **L2 は珍しく comparative lesson として frame されている。** コースの大部分は「これが我々のコード」だ。L2 は「なぜすべての chain が我々のコードのように見えるか」。異なる論調 — Module 1 の残りの「自分のコード、歩く」よりも consensus-engineering コースのトーンに近い。Reviewer がこれを jarring と感じたら、§5 (「openhl が継承するもの」) に openhl 固有の cite を増やすことで soften する; 現在は主に forward-reference になっている。
-- **L2 §1 のテーブル** が load-bearing artifact。Reviewer が拡張/縮小を望むなら、column 数が parameter — 現在の 3 列形式 (chain、family、いつ実行) が minimum。Bloat なしで 4 列目 (犠牲) を追加可能。
-- **L3 §2 の「10 type、1 type 1 ファイル」フレーミング** は L4 への critical setup。L4 は読者がファイル構造を知っていると仮定する; L3 がそれを導入する。L4 が再構成するなら (例: validator と validator_set を 1 type にマージ)、L3 も parallel に更新が必要。
-- **L3 §5 の「Driver は自分の type が存在しないかのように読める」** は本レッスンで最も深い洞察。Review で削るな — parametricity-as-design-discipline が landing する瞬間だ。
-- **翻訳 policy は L1/L7/L10 JA と同一**:
+- **レッスン 2 は珍しく comparative lesson として frame されている。** コースの大部分は「これが我々のコード」だ。レッスン 2 は「なぜすべての chain が我々のコードのように見えるか」。異なる論調 — Module 1 の残りの「自分のコード、歩く」よりも consensus-engineering コースのトーンに近い。Reviewer がこれを jarring と感じたら、§5 (「openhl が継承するもの」) に openhl 固有の cite を増やすことで soften する; 現在は主に forward-reference になっている。
+- **レッスン 2 §1 のテーブル** が load-bearing artifact。Reviewer が拡張/縮小を望むなら、column 数が parameter — 現在の 3 列形式 (chain、family、いつ実行) が minimum。Bloat なしで 4 列目 (犠牲) を追加可能。
+- **レッスン 3 §2 の「10 type、1 type 1 ファイル」フレーミング** は レッスン 4 への critical setup。レッスン 4 は読者がファイル構造を知っていると仮定する; レッスン 3 がそれを導入する。レッスン 4 が再構成するなら (例: validator と validator_set を 1 type にマージ)、レッスン 3 も parallel に更新が必要。
+- **レッスン 3 §5 の「Driver は自分の type が存在しないかのように読める」** は本レッスンで最も深い洞察。Review で削るな — parametricity-as-design-discipline が landing する瞬間だ。
+- **翻訳 policy は レッスン 1/7/レッスン 10 JA と同一**:
   - 「associated type」「parametric」「factory」「state machine」「runtime」等は英語のまま (Rust trait/型理論の technical 用語)。
   - 「fire-and-forget」「optimistic」「decide-first」「reorg」「forcing function」等のパターン名・概念名は英語のまま。
   - 🛑 callout: Predict → 予測、Anti-fluency → 反流暢性。
-- **L3 §3 のメソッド名「factory 関数」** は英語混在だが、JA でも「ファクトリ関数」より「factory 関数」のほうが Rust エンジニアには直感的。
-- **未公開**: `course.isPublished: false` のまま。L11/L12/L13 JA 翻訳が揃ってから一斉公開予定。
+- **レッスン 3 §3 のメソッド名「factory 関数」** は英語混在だが、JA でも「ファクトリ関数」より「factory 関数」のほうが Rust エンジニアには直感的。
+- **未公開**: `course.isPublished: false` のまま。レッスン 11/12/レッスン 13 JA 翻訳が揃ってから一斉公開予定。

@@ -1,6 +1,6 @@
 # Building OpenHL — L0 draft (JA)
 
-> openhl SHA `0844d58` (Stage 7c) に対してドラフト。Orientation レッスン — 他のレッスンが前提とする地図。L1-L13 を draft 後に追加 — preview で「本コースの 3am hook は openhl の前提知識なしには刺さらない」ことが判明したため。
+> openhl SHA `0844d58` (Stage 7c) に対してドラフト。Orientation レッスン — 他のレッスンが前提とする地図。レッスン 1〜13 を draft 後に追加 — preview で「本コースの 3am hook は openhl の前提知識なしには刺さらない」ことが判明したため。
 > EN ミラー: `drafts/openhl_l0_en.md`。
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
 
@@ -139,13 +139,13 @@ Pure state machine の crate (`types`、`codec`、`clob`、`oracle`、`funding`�
 
 | 本コースのサブモジュール | レッスン | 読み終えて分かること |
 | :--- | :--- | :--- |
-| **1. execution/consensus split** | L1、L2 | なぜすべての BFT-L1 が CL と EL の間に 4 メッセージの contract を置くのか。なぜ HL/Tempo/CometBFT が同じ形に収束するのか。 |
-| **2. ライブラリとしての Malachite** | L3、L4、L5 | Malachite が提供するもの (`Context` trait)、自分で実装すべきもの (10 個の sub-type と `SigningProvider`)、プロトコルの state machine を実稼働可能なエンジンに変える actor model。 |
-| **3. ライブラリとしての Reth** | L6、L7、L8 | なぜ Reth を fork するのではなく configure するのか (`NodeBuilder` の slot)。Consensus と execution がやり取りする Engine API の surface。Reth の `PayloadBuilderService` がブロックを組み立てる仕組み。 |
-| **4. 配線** | L9、L10、L11 | `ConsensusBridge` trait の設計判断。Malachite の `Decided` から Reth の `forkchoice_updated` への流れ。`engine_app.rs` における proposer の hot path。 |
-| **5. Single-validator devnet** | L12、L13 | Bootstrap (genesis、鍵、single-node config)。actor system を通じて 1 ブロック分の合意を 0.02 秒で走らせる統合テスト — v0 milestone。 |
+| **1. execution/consensus split** | レッスン 1、2 | なぜすべての BFT-L1 が CL と EL の間に 4 メッセージの contract を置くのか。なぜ HL/Tempo/CometBFT が同じ形に収束するのか。 |
+| **2. ライブラリとしての Malachite** | レッスン 3、4、レッスン 5 | Malachite が提供するもの (`Context` trait)、自分で実装すべきもの (10 個の sub-type と `SigningProvider`)、プロトコルの state machine を実稼働可能なエンジンに変える actor model。 |
+| **3. ライブラリとしての Reth** | レッスン 6、7、レッスン 8 | なぜ Reth を fork するのではなく configure するのか (`NodeBuilder` の slot)。Consensus と execution がやり取りする Engine API の surface。Reth の `PayloadBuilderService` がブロックを組み立てる仕組み。 |
+| **4. 配線** | レッスン 9、10、レッスン 11 | `ConsensusBridge` trait の設計判断。Malachite の `Decided` から Reth の `forkchoice_updated` への流れ。`engine_app.rs` における proposer の hot path。 |
+| **5. Single-validator devnet** | レッスン 12、13 | Bootstrap (genesis、鍵、single-node config)。actor system を通じて 1 ブロック分の合意を 0.02 秒で走らせる統合テスト — v0 milestone。 |
 
-L13 を読み終える頃には、`first_block_via_engine_actors` 統合テスト (`crates/consensus/src/engine_app.rs:246@0844d58`) が real Reth と real Malachite を end-to-end で駆動し、decided block を 1 つ produce する状態に到達する。**これが openhl Module 1 の v0 milestone** であり、本コースが連れていく最終地点だ。
+レッスン 13 を読み終える頃には、`first_block_via_engine_actors` 統合テスト (`crates/consensus/src/engine_app.rs:246@0844d58`) が real Reth と real Malachite を end-to-end で駆動し、decided block を 1 つ produce する状態に到達する。**これが openhl Module 1 の v0 milestone** であり、本コースが連れていく最終地点だ。
 
 ## 7. 残りのコースの読み方
 
@@ -172,7 +172,7 @@ L13 を読み終える頃には、`first_block_via_engine_actors` 統合テス�
 
 ## Seed-file slot
 
-L0 は新規の Module 0 (「Orientation」、sortOrder 0) に landing する。他の全 module の sortOrder は +1 される:
+レッスン 0 は新規の Module 0 (「Orientation」、sortOrder 0) に landing する。他の全 module の sortOrder は +1 される:
 
 ```typescript
 // Course.modules.create array:
@@ -208,18 +208,18 @@ L0 は新規の Module 0 (「Orientation」、sortOrder 0) に landing する。
 
 ## SHA pinning discipline
 
-L0 は EN ミラー同様 `openhl@0844d58` を pin する。Cite される surface:
+レッスン 0 は EN ミラー同様 `openhl@0844d58` を pin する。Cite される surface:
 - `README.md` (§1 の「Open-source reference implementation...」文)
 - `docs/architecture.md` (§3 の 5 サブシステム分解、§4 の pure/I-O テーブル)
 - `crates/consensus/src/engine_app.rs:246@0844d58` (§6 の v0 milestone テスト)
 
-`README.md` / `docs/architecture.md` の形が変われば L0 の §1-§5 も追随が必要。`engine_app.rs:246` cite は CI cite-check が line-number drift をキャッチする; prose の引用はゆるい。
+`README.md` / `docs/architecture.md` の形が変われば レッスン 0 の §1-§5 も追随が必要。`engine_app.rs:246` cite は CI cite-check が line-number drift をキャッチする; prose の引用はゆるい。
 
 ## Style review notes (self-critique before paste)
 
-- **L0 は他レッスンと違って `3am` シナリオで始まらない** — マーケットファクト hook (「Hyperliquid が 2025 年に $300B を処理した」) で始まる。意図的だ: `3am` hook は読者が何が走っているかを知って初めて land する。L0 はそれを可能にするためのレッスンであり、ここで `3am` を使うと循環する。
+- **レッスン 0 は他レッスンと違って `3am` シナリオで始まらない** — マーケットファクト hook (「Hyperliquid が 2025 年に $300B を処理した」) で始まる。意図的だ: `3am` hook は読者が何が走っているかを知って初めて land する。レッスン 0 はそれを可能にするためのレッスンであり、ここで `3am` を使うと循環する。
 - **§3 の ASCII 図** は load-bearing なリファレンスアーティファクトだ。後続のすべてのレッスンがこの図上に位置づけられる。Reviewer が引き締めを望むなら、**図はカットせず**、周りの prose を削れ。
-- **§5 の「本コースは Module 1 のみをカバーする」行** は L13 の「Module 2 は次のコース」framing を成立させる orientation だ。これがないと L13 で読者は文脈で「Module 2」が何を意味するか分からない。
+- **§5 の「本コースは Module 1 のみをカバーする」行** は レッスン 13 の「Module 2 は次のコース」framing を成立させる orientation だ。これがないと レッスン 13 で読者は文脈で「Module 2」が何を意味するか分からない。
 - **§6 のテーブルは §5 の openhl Build arc テーブルとネーミング上 conflict する。** 両方とも「Module 1-5」を使うが意味が違う (openhl 全体 vs 本コース内)。§6 で明示的に区別している; reviewer が混乱と感じれば、本コースのサブモジュールを「Part 1-5」または「Section 1-5」にリネームする — course-wide rename で 13 既存レッスンすべてに触れる。Reviewer の flag があるまで保留。
 - **翻訳 policy は他の JA レッスンと同一**:
   - 「Hyperliquid-shape」「load-bearing」「Build arc」「subsystem」「primitive」「substrate」「fork」「clean-room」「dual-use」「compound」「first-class」等は英語のまま。

@@ -1,9 +1,9 @@
 # Building OpenHL — L9 draft (JA)
 
-> openhl SHA `0844d58` (Stage 7c) に対してドラフト。本レッスンが設計する trait は L1 (contract)、L7 (Engine API mapping)、L10 (Decided handler) でも cite されている — L9 は Module 4 の残りが build される設計根拠レッスンだ。
+> openhl SHA `0844d58` (Stage 7c) に対してドラフト。本レッスンが設計する trait は レッスン 1 (contract)、レッスン 7 (Engine API mapping)、レッスン 10 (Decided handler) でも cite されている — レッスン 9 は Module 4 の残りが build される設計根拠レッスンだ。
 > EN ミラー: `drafts/openhl_l9_en.md`。
 > Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
-> 20 分レッスン — L7/L10 より長い、設計選択にはコードだけでなく根拠が要るからだ。
+> 20 分レッスン — レッスン 7/10 より長い、設計選択にはコードだけでなく根拠が要るからだ。
 
 ---
 
@@ -20,13 +20,13 @@
 ````markdown
 # Contract を設計する — `ConsensusBridge` trait
 
-> **現在地。** サブモジュール 4/5: *配線。* サブモジュール 2 と 3 では、Malachite と Reth という 2 つの半分を別々に見てきた。本サブモジュールはそれらが出会う場所を扱う。L9 (本レッスン) は 4 メッセージ contract を表現する Rust trait — なぜこの形をしているかという設計判断 — を扱う。L10 は commit 側のフロー (Malachite `Decided` → Reth `forkchoice_updated`)、L11 は propose 側の hot loop を walk する。L11 まで読み終える頃には、trait の各メソッドが `engine_app.rs` 上で具体的にどのパスを通って実行されるかが分かるようになる。
+> **現在地。** サブモジュール 4/5: *配線。* サブモジュール 2 と 3 では、Malachite と Reth という 2 つの半分を別々に見てきた。本サブモジュールはそれらが出会う場所を扱う。レッスン 9 (本レッスン) は 4 メッセージ contract を表現する Rust trait — なぜこの形をしているかという設計判断 — を扱う。レッスン 10 は commit 側のフロー (Malachite `Decided` → Reth `forkchoice_updated`)、レッスン 11 は propose 側の hot loop を walk する。レッスン 11 まで読み終える頃には、trait の各メソッドが `engine_app.rs` 上で具体的にどのパスを通って実行されるかが分かるようになる。
 
-EVM の上に BFT をボルト止めするすべての chain は最終的にこの trait を書くことになる。HyperBFT がやった、Tempo がやった、すべての CometBFT 系 chain がやった。メソッド名は違うが、形は同じだ。問題は、L1 の 4 メッセージを明示し failure mode を名指して *意図的に* 書くか、「consensus が必要としたときに必要としたものから accrete する」かだ。
+EVM の上に BFT をボルト止めするすべての chain は最終的にこの trait を書くことになる。HyperBFT がやった、Tempo がやった、すべての CometBFT 系 chain がやった。メソッド名は違うが、形は同じだ。問題は、レッスン 1 の 4 メッセージを明示し failure mode を名指して *意図的に* 書くか、「consensus が必要としたときに必要としたものから accrete する」かだ。
 
 我々は意図的に書く。一度だけ。
 
-> 🛑 **スクロール前に予測。** L1 で 4 メッセージを見た。L7 で Ethereum Engine API へのマッピングを見た。今: *Rust trait* はどう見えるべきか? 具体的に — async か blocking か? Owned 引数か borrowed か? エラー type 1 つか複数か? Trait メソッドのシグネチャは思っているより重要だ。
+> 🛑 **スクロール前に予測。** レッスン 1 で 4 メッセージを見た。レッスン 7 で Ethereum Engine API へのマッピングを見た。今: *Rust trait* はどう見えるべきか? 具体的に — async か blocking か? Owned 引数か borrowed か? エラー type 1 つか複数か? Trait メソッドのシグネチャは思っているより重要だ。
 
 ## 1. すべての BFT-L1 が最終的に書く trait
 
@@ -89,17 +89,17 @@ pub trait ConsensusBridge: Send + Sync {
 
 3 に collapse する誘惑:
 
-- 「**`payload_ready` は `build_payload` の一部だ。`build_payload` がブロックを直接返せ。**」 説得力あり — メソッドが少ない、call site が単純。**違う。** そうすると L7 §4 の build-during-voting parallelism が死ぬ。Proposer の hot path が「build 待ち、その後 propose」になり、「すでに build されたものを propose」ではなくなる。Sub-second slot は不可能になる。
+- 「**`payload_ready` は `build_payload` の一部だ。`build_payload` がブロックを直接返せ。**」 説得力あり — メソッドが少ない、call site が単純。**違う。** そうすると レッスン 7 §4 の build-during-voting parallelism が死ぬ。Proposer の hot path が「build 待ち、その後 propose」になり、「すでに build されたものを propose」ではなくなる。Sub-second slot は不可能になる。
 
 - 「**`validate_payload` と `commit` をマージすべきだ。Validation が通ったら commit すれば。**」 ほとんどの call site が連続でやるので誘惑される。**違う。** Validator は height ごとに多数の candidate proposal を import するが (round-robin の proposer slot ごとに 1 つ)、commit するのは 1 つだけ — deciding value。Validation は speculative; commit は final。マージすると speculative state 変更を強制し、rollback machinery を意味し、はるかに複雑な EVM crate を意味する。
 
 5 に拡張する誘惑:
 
-- 「**`notify_view_change(round)` を追加して EVM に round timeout を知らせよ。**」 もっともらしい — view change は real consensus event だ。**不要だ。** EVM は round について知る必要がない; decided block について知ればいい。Round 変更は CL 内部 state だ。`notify_view_change` を追加すると consensus 内部を execution に leak する — contract leak だ (L1 §5 参照)。
+- 「**`notify_view_change(round)` を追加して EVM に round timeout を知らせよ。**」 もっともらしい — view change は real consensus event だ。**不要だ。** EVM は round について知る必要がない; decided block について知ればいい。Round 変更は CL 内部 state だ。`notify_view_change` を追加すると consensus 内部を execution に leak する — contract leak だ (レッスン 1 §5 参照)。
 
 - 「**`restream_proposal(hash)` を追加して bridge が stale proposal を re-broadcast できるように。**」 もっともらしい — Malachite の AppMsg loop には `RestreamProposal` variant がある。**不要だ。** Restreaming はネットワーク層の関心事だ: consensus crate の app loop が bridge 関与なしで直接 handle する (`engine_app.rs:96@0844d58` 参照)。Bridge は EL contract であり、一般的な consensus event sink ではない。
 
-4 メソッドは、contract leak を招かずに L7 マッピングを capture できる最小のセットだ (各メソッドが正確に 1 つの Ethereum Engine API call にマップする)。
+4 メソッドは、contract leak を招かずに レッスン 7 マッピングを capture できる最小のセットだ (各メソッドが正確に 1 つの Ethereum Engine API call にマップする)。
 
 ## 4. エラー semantics — Rejected、Syncing、Internal
 
@@ -200,7 +200,7 @@ async fn build_payload(&self, parent: BlockHash, attrs: PayloadAttrs)
 
 `ConsensusBridge` trait 自体は `openhl-consensus` に置かれている (consensus が contract を所有する側だからだ) が、trait の *語彙* は依存グラフの 1 つ下の層に置かれる。
 
-このパターンは深刻な型システムを持つすべての L1 で現れる:
+このパターンは深刻な型システムを持つすべての レッスン 1 で現れる:
 
 | Chain | Contract type が住む場所 | Trait が住む場所 |
 | :--- | :--- | :--- |
@@ -244,7 +244,7 @@ Contract 設計で最も難しいのは何を残すかだ。`ConsensusBridge` �
 
 ## Seed-file slot
 
-L9 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consensus-ja`) に Module 4 の最初のレッスンとして (すでに drafted の L10 直前に) landing する:
+レッスン 9 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consensus-ja`) に Module 4 の最初のレッスンとして (すでに drafted の レッスン 10 直前に) landing する:
 
 ```typescript
 // Course.modules.create array:
@@ -277,7 +277,7 @@ L9 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consen
 
 ## SHA pinning discipline
 
-すべての cite は SHA `0844d58` を pin する。L9 は珍しく citation-dense — design lesson だからだ; trait の形に関するすべての主張が実コードに anchor される:
+すべての cite は SHA `0844d58` を pin する。レッスン 9 は珍しく citation-dense — design lesson だからだ; trait の形に関するすべての主張が実コードに anchor される:
 
 - `crates/consensus/src/bridge.rs:11` — trait
 - `crates/consensus/src/bridge.rs:33` — BridgeError
@@ -287,12 +287,12 @@ L9 は `prisma/seed-reth-openhl-consensus-ja.ts` (course `building-openhl-consen
 - `crates/consensus/src/engine_app.rs:96` — RestreamProposal handler (Exercise 3 参照)
 
 Stage 7d が landing し `LiveRethEvmBridge::commit` が real `forkchoice_updated` call になるとき:
-- L9 の論点構造 (4 メソッド、3 エラー variant、共有 crate の type) は valid のまま
+- レッスン 9 の論点構造 (4 メソッド、3 エラー variant、共有 crate の type) は valid のまま
 - §4 の "halt-vs-recover" テーブルの `LiveRethEvmBridge::commit` cite は bump が必要
 
 ## Style review notes (self-critique before paste)
 
-- **L9 は設計上 20 分** — L7/L10 より重い。8 section 構造 (L1/L7/L10 の 7 section テンプレート vs) は意図的: §3 (なぜ 4 メソッドか) と §7 (trait が *しない* こと) が追加時間を正当化する design-rationale section だ。
+- **レッスン 9 は設計上 20 分** — レッスン 7/10 より重い。8 section 構造 (レッスン 1/7/レッスン 10 の 7 section テンプレート vs) は意図的: §3 (なぜ 4 メソッドか) と §7 (trait が *しない* こと) が追加時間を正当化する design-rationale section だ。
 - **§4 の halt-vs-recover テーブルが本レッスンで最も leverage の高い段落。** 学習者が自分の bridge を実装するときに reference back する 1 つのものだ。レッスンの残りが切られても、このセクションは残せ。
 - **§6 の dep-graph 議論は Rust 固有だ。** JA への翻訳は care が必要 — 「依存グラフ」は動くが、cycle-as-compile-error のオチは違って land するかもしれない。Translator にフラグ。
 - **翻訳 policy は他の JA レッスンと同一**:
@@ -301,4 +301,4 @@ Stage 7d が landing し `LiveRethEvmBridge::commit` が real `forkchoice_update
   - 🛑 callout: Predict → 予測、Anti-fluency → 反流暢性。
   - File paths、function names、types は英語のまま。
 - **「contract」「leak」「liveness」「sink」「fall to a timeout」** は英語のまま — Rust/分散システム文脈で direct な訳がない多義的概念。
-- **未公開**: `course.isPublished: false` のまま。L11/L12/L13 JA 翻訳が揃ってから一斉公開予定。
+- **未公開**: `course.isPublished: false` のまま。レッスン 11/12/レッスン 13 JA 翻訳が揃ってから一斉公開予定。
