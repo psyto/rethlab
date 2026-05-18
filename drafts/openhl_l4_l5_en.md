@@ -162,7 +162,7 @@ impl ProposalPart<OpenHlContext> for OpenHlProposalPart {
 
 A unit struct. `is_first = is_last = true` (a single part is the only part).
 
-Why does this type even exist? Malachite supports three `ValuePayload` modes (L9 territory):
+Why does this type even exist? Malachite supports three `ValuePayload` modes (L5 §6 territory):
 - `ProposalOnly` — entire value is in the `Proposal` message. **openhl uses this.**
 - `PartsOnly` — value is streamed in chunks; `Proposal` references them.
 - `ProposalAndParts` — both.
@@ -245,7 +245,7 @@ Change either and the whole consensus implementation has to be reviewed. The oth
 ## 9. Practice
 
 1. **Trace the bounds, no peeking.** For each of the ten Context associated types, list the trait bounds Malachite requires (use the §1 table after you've sketched). Compare to your prediction.
-2. **The Solana-address experiment.** Suppose `OpenHlAddress` was `[u8; 32]` instead of `[u8; 20]`. Which files at `crates/consensus/src/@0844d58` would compile-error? (Hint: only one if you're disciplined — `address.rs` itself. The propagation should be invisible to other files.)
+2. **The Solana-address experiment.** Suppose `OpenHlAddress` was `[u8; 32]` instead of `[u8; 20]`. Which files at `crates/consensus/src/` (at SHA `0844d58`) would compile-error? (Hint: only one if you're disciplined — `address.rs` itself. The propagation should be invisible to other files.)
 3. **The signing-scheme swap.** Sketch the diff to switch `type SigningScheme = Ed25519` to a hypothetical `Bls12_381` impl. Which lines change? Which lines stay? (Hint: more lines stay than change.)
 4. **The validator-set sort-order leak.** Read `OpenHlContext::select_proposer` at `crates/consensus/src/context.rs:32@0844d58`. **What goes wrong if two validators sort their validator sets differently?** Sketch the chain divergence scenario.
 
@@ -352,7 +352,7 @@ Compare to `run_single_validator` at `crates/consensus/src/runner.rs:34@0844d58`
 The Network actor wraps libp2p:
 
 - Manages the gossipsub topic for consensus messages
-- Encodes outgoing votes/proposals via the `ConsensusCodec` (Stage 6b → currently stubs, see L9 §4)
+- Encodes outgoing votes/proposals via the `ConsensusCodec` (Stage 6b → currently stub impls; see the openhl `crates/consensus/src/codec.rs` source for the stub set)
 - Decodes incoming messages and forwards them to Consensus
 - Handles peer discovery
 

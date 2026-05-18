@@ -193,7 +193,7 @@ Notice the constraints on the types: each has its own sub-trait (`Address`, `Hei
 | `Extension` | Application data attached to precommits | `()` (no extensions at v0) |
 | `SigningScheme` | What signatures look like | `Ed25519` from `malachitebft-signing-ed25519` |
 
-Each row maps to one file in `crates/consensus/src/types/` — that's the structure: **one type per file, ten files per chain.**
+Each row maps to a file in `crates/consensus/src/types/` — that's the structure: **one type per concept, seven files** (Address-and-Validator share `validator.rs`; `Extension` is `()` so no file; `SigningScheme` is shipped by Malachite).
 
 ```
 crates/consensus/src/types/
@@ -208,7 +208,7 @@ crates/consensus/src/types/
 
 (Address-and-key together in `validator.rs`; `Extension` is `()` so no file needed; `SigningScheme` is shipped by Malachite, so no impl required.)
 
-L4 walks each file in detail. For now: **knowing these ten types exist is half of knowing what Malachite is.** The other half is the four methods (§4).
+L4 walks each file in detail. For now: **knowing these ten types exist is half of knowing what Malachite is.** The other half is the four methods (§3).
 
 > 🛑 **Anti-fluency.** "Malachite is Tendermint." **Almost wrong.** Malachite is the *abstract* Tendermint algorithm — the state machine, the proposal-vote-precommit dance, the 3f+1 quorum math — with the I/O ripped out. The actual CometBFT implementation owns I/O (libp2p, ABCI, mempool, network); Malachite owns just the algorithm. **That separation is what lets openhl use Malachite without inheriting CometBFT's whole runtime.**
 
@@ -246,7 +246,7 @@ Malachite gives you the protocol. **It does NOT give you:**
 | Building validator sets | You (genesis + slashing logic) |
 | Picking values to propose | You (`build_payload` via the bridge) |
 | Validating values | You (`validate_payload` via the bridge) |
-| Signing messages | You (`SigningProvider` impl — L9 §4) |
+| Signing messages | You (`SigningProvider` impl — L4 §7) |
 | Network gossip | The engine actor system (libp2p) |
 | Persistence (WAL) | The engine actor system |
 | Storage of decided blocks | You (EL state) |

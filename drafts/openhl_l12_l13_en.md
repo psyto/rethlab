@@ -209,10 +209,14 @@ async fn first_block_via_engine_actors() {
         .await.expect("timed out").expect("panicked").expect("returned err");
 
     assert_eq!(decisions.len(), 1, "expected exactly one decided block");
+    let decided_hash = decisions[0];
+
+    let committed = bridge_for_check.committed.lock().unwrap().clone();
+    assert_eq!(committed, vec![decided_hash], "bridge must commit decided hash");
     assert_eq!(
-        *bridge_for_check.committed.lock().unwrap(),
-        vec![decisions[0]],
-        "bridge must commit decided hash",
+        *bridge_for_check.last_built.lock().unwrap(),
+        Some(decided_hash),
+        "decided hash must match what we built",
     );
 
     handle.kill(None).await.unwrap();

@@ -16,7 +16,7 @@
 
 ### Content
 
-```markdown
+````markdown
 # The Engine API — what `forkchoice_updated` and `new_payload` actually do
 
 It's 3am. Two services on the same machine — a Reth process and a Lighthouse process — are exchanging exactly **two RPC methods**. That's the whole conversation between Ethereum's consensus layer and execution layer. Once you've named those two methods, traced them through openhl's actual code, and watched a real validator force them to be implemented honestly, you'll understand why a chain like HL or Tempo can offer sub-second finality where Ethereum offers 12 seconds.
@@ -167,7 +167,7 @@ This is the L7 lesson made concrete: the Engine API isn't a passive shape. It's 
 3. **Validator-forcing.** Read `LiveRethEvmBridge::build_payload` at `crates/evm/src/live_node.rs:68@0844d58`. Identify which fields are set non-trivially (not from `Default`). For each, name which `EthBeaconConsensus` sub-check would have failed if you'd left it at default.
 
 > **Final check.** In one sentence, why does openhl need TWO functions (`build_payload` + `payload_ready`) where you might naively expect one? If your answer doesn't include "build-during-voting parallelism" or "the proposer's hot-path latency," re-read §4.
-```
+````
 
 ---
 
@@ -181,7 +181,7 @@ This is the L7 lesson made concrete: the Engine API isn't a passive shape. It's 
 
 ### Content
 
-```markdown
+````markdown
 # From Malachite `Decided` to Reth `forkchoice_updated`
 
 It's 3am. Your validator just signed the deciding precommit on block 17. Malachite emits `Decided`. Your EL is sitting there. **What needs to happen, in what order, before the chain advances to block 18?**
@@ -327,7 +327,7 @@ That's the entire 7d delta. The three-hashes-collapse is preserved (because BFT)
 3. **Sketch the Restart use.** If `bridge.commit` returned an error meaning "the proposer's value won't apply cleanly, but the next try should work", how would the Decided handler change? Sketch the diff to switch to `Next::Restart`.
 
 > **Final check.** In one sentence, why does openhl wait for the application's reply (step 4) before advancing to the next height, instead of advancing immediately on `Decided`? If your answer doesn't mention "the EL might refuse" or "preventing the CL from getting ahead," re-read §4 step 2.
-```
+````
 
 ---
 

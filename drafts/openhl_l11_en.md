@@ -41,7 +41,7 @@ Trace from above-the-bridge:
 | 6 | Malachite Consensus actor | Receives the value, calls `OpenHlContext::new_proposal` | <100µs (signing) |
 | 7 | Malachite Network actor | Gossips proposal via libp2p | network-bound |
 
-Steps 3–5 are ours. Steps 1–2 and 6–7 are Malachite. **The entire proposer hot path that we control is twelve lines of code.**
+Steps 3–5 are ours. Steps 1–2 and 6–7 are Malachite. **The entire proposer hot path that we control is sixteen lines of code.**
 
 ## 2. Where the milliseconds go
 
@@ -84,7 +84,7 @@ AppMsg::GetValue {
 }
 ```
 
-Twelve lines. Five logical steps:
+Sixteen lines. Five logical steps:
 
 1. **Build payload attributes.** `default_attrs()` returns a `PayloadAttrs { timestamp: 0, fee_recipient: [0u8; 20], prev_randao: [0u8; 32] }`. In production these would come from somewhere — chain config, validator settings, the previous block's randao reveal. At v0 they're constants because no part of the chain logic depends on them yet.
 
