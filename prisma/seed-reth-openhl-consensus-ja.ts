@@ -55,7 +55,7 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
 | **Testability** | EVM を起動せずに consensus を unit-test できない、逆もしかり。両半分とも integration-test オンリーになる。 |
 | **Debuggability** | 午前 3 時にどちら側が stall したか分からない。クラッシュダンプは区別のつかない泥団子になる。 |
 
-Contract が cure である。2 半部間のメッセージに名前を付けると、それぞれの半分は単独で replace、mock、fuzz、reason できるものになる。**Contract が API である。コードは実装詳細だ。**
+Contract がその答えだ。両側のメッセージに名前を付けると、それぞれの側を単独で replace、mock、fuzz、reason できるようになる。**Contract が API である。コードは実装詳細だ。**
 
 ## 2. BFT が EVM に約束するもの
 
