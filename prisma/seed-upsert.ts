@@ -49,6 +49,8 @@ import { seedRethP2PNetworkingEN } from './seed-reth-p2p-networking-en';
 import { seedRethP2PNetworkingJA } from './seed-reth-p2p-networking-ja';
 import { seedRethValidatorOpsEN } from './seed-reth-validator-ops-en';
 import { seedRethValidatorOpsJA } from './seed-reth-validator-ops-ja';
+import { seedRethOpenHlConsensusEN } from './seed-reth-openhl-consensus-en';
+import { seedRethOpenHlConsensusJA } from './seed-reth-openhl-consensus-ja';
 
 const prisma = new PrismaClient();
 
@@ -80,6 +82,8 @@ const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethP2PNetworkingJA,
   seedRethValidatorOpsEN,
   seedRethValidatorOpsJA,
+  seedRethOpenHlConsensusEN,
+  seedRethOpenHlConsensusJA,
 ];
 
 // Capture seed data without writing to DB
