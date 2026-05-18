@@ -20,6 +20,8 @@
 ````markdown
 # Bootstrap — genesis、key、single-node config
 
+> **現在地。** サブモジュール 5/5: *Single-validator devnet。* サブモジュール 1-4 は概念の機構を組み立ててきた。本サブモジュールは、その機構を実際に起動する段階だ。L12 (本レッスン) では bootstrap に必要な 4 つの artifact (keypair、validator set、ChainSpec、home dir) と、それらをまとめる `OpenHlNode` のコンストラクタを扱う。L13 は実行可能な v0 milestone — engine の actor system を通じて 1 ブロック分の合意を駆動する統合テスト。L13 を読み終える頃には、L0 以降に出てきたすべての概念が実 Rust コードとしてコンパイルされ、実際に走った状態になる。
+
 module 1-4 のすべての概念はインストール済みだ。Contract (L1) を読み、Engine API (L7) を trace し、bridge (L9) を設計し、decided block (L10) を commit し、proposer として 1 つ produce (L11) できる。**さあ bootstrap する。** 最小の runnable openhl はどう見えるか — 1 validator、1 node、peer なし? そしてなぜその「toy」が実際にこれまで build してきたものすべての real test なのか?
 
 > 🛑 **スクロール前に予測。** 1 validator devnet を動かしたい。構築する必要のある artifact をリストせよ (まだコードを書かず — 列挙のみ)。ヒント: 正確に 4 つあり、SHA `0844d58` ですでに 3 つが存在する。
@@ -325,7 +327,7 @@ INFO  consensus: starting height=2
 - **Module 2 — CLOB matching engine** — real transaction を追加: マッチされた fill を produce する deterministic orderbook。`LiveRethEvmBridge::validate_payload` が実際に block body を execute する初の時 (今日のテストは空ブロックを validate)。
 - **Module 3 — Core↔EVM precompile** — EVM に CLOB state を読ませるカスタム REVM precompile。Orderbook (off-EVM) と EVM を bridge する。
 - **Module 4 — Funding、oracle、liquidation** — settlement loop。Chain が perp DEX に見える場所。
-- **Module 5 — Vault primitive** — first-class on-chain object、Kodiak 系の strategy が app contract ではなく protocol-native になる。
+- **Module 5 — Vault primitive** — first-class な on-chain オブジェクト。auto-compounding、delta-neutral、funding-capture などの vault 戦略が app contract ではなく protocol-native になる。
 
 本コースの trait surface は Module 2-5 で変わらない。**4 メッセージは 4 メッセージのままだ。** 変わるのは EL crate が `build_payload` (real transaction) と `validate_payload` (state に対する real execution) の内部ですることだ。
 

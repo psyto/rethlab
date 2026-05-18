@@ -37,11 +37,11 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
                   xpReward: 40,
                   content: `# OpenHL の全体像 — repo、subsystem、Build arc
 
-Hyperliquid は 2025 年に $300B+ の perp 取引量を完全クローズドソースのスタックで処理した — HyperBFT consensus、HyperCore matching engine、HyperEVM execution。Rust の public reference はどこにも存在しない。**\`openhl\` は、そのスタックのオープンソース版がどう見えるかを示すものだ。**
+Hyperliquid は 2025 年に $300B+ の perp 取引量を完全クローズドソースのスタック — HyperBFT consensus、HyperCore matching engine、HyperEVM execution — の上で処理した。公開された Rust 実装はどこにも存在しない。**\`openhl\` は、そのスタックをオープンソースで実装するとどうなるかを示すリファレンスだ。**
 
-このレッスンに続く 13 レッスンは、すでに \`openhl\` が何か、コードがどこに住むか、各レッスンが数ヶ月にわたる build のどこに座るかを知っている前提で書かれている。**本レッスンはその地図だ。** 一度しっかり読んでおけば、後のレッスンの理解速度が上がる。
+このレッスンに続く 13 レッスンは、すでに \`openhl\` が何か、コードがどこに配置されているか、各レッスンが数ヶ月にわたる build のどの位置にあるかを把握している前提で書かれている。**本レッスンはその地図だ。** ここでしっかり読んでおけば、後のレッスンが格段に読みやすくなる。
 
-> 🛑 **スクロール前に予測。** Hyperliquid 形の L1 について読み進めることになる。スクロールせずに、このクラスの L1 に対して 5 ボックスのアーキテクチャ図を sketch してみよ。ヒント: 小さな contract を介して話す 2 つの半分 + I/O 側の半分が compose する 3 つの pure subsystem。
+> 🛑 **スクロール前に予測。** これから Hyperliquid 形の L1 を読み解いていく。先に進む前に、このクラスの L1 のアーキテクチャを 5 つの箱で紙に sketch してみよ。ヒント: 小さな contract を介して通信する 2 つの層 + I/O 側の層が compose する 3 つの pure subsystem。
 
 ## 1. OpenHL とは何か
 
@@ -49,29 +49,29 @@ Hyperliquid は 2025 年に $300B+ の perp 取引量を完全クローズドソ
 
 > An open-source reference implementation of a Hyperliquid-shape L1: BFT consensus + EVM execution + a CLOB matching engine, with first-class vault primitives.
 
-(Hyperliquid 形の L1 — BFT consensus + EVM execution + CLOB matching engine、first-class な vault primitive 付き — のオープンソース・リファレンス実装)
+訳すと「Hyperliquid 形 L1 のオープンソース・リファレンス実装。BFT consensus、EVM execution、CLOB matching engine の 3 本柱に加えて、first-class な vault primitive を備える」。
 
-この 1 文に load-bearing な要素が 3 つある:
+この 1 文には押さえるべき要点が 3 つある:
 
 | フレーズ | 何を commit しているか |
 | :--- | :--- |
 | 「Open-source reference implementation」 | すべてが GitHub の \`psyto/openhl\` に存在、MIT + Apache-2.0 dual-license。Private repo も内部 fork もない。 |
 | 「Hyperliquid-shape L1」 | Hyperliquid のクローンではない。同じ *アーキテクチャの形* — 同じ 5 サブシステムが同じ関係で並ぶ — だが、HL のプロプライエタリコードの port ではなく、Reth + Malachite の上に書かれた clean-room な Rust 実装だ。 |
-| 「First-class vault primitives」 | Vault はアプリ層の後付けではない。チェーンプリミティブだ — Kodiak / Yogi のような strategy は直接これに対して compose する。 |
+| 「First-class vault primitives」 | Vault はアプリ層の後付けではない。チェーンのプリミティブとして組み込まれている — auto-compounding、delta-neutral、funding-rate-capture 等の戦略が、custody や会計をゼロから実装するスマートコントラクトを書く代わりに、直接 vault primitive に対して compose できる。 |
 
-\`openhl\` は rethlab L1 Architect tier の worked example の住処でもある。本コースのすべての概念が、\`file:line@SHA\` cite で pin できる commit の実 Rust コードに対応する — そして cite は CI が確認する。
+\`openhl\` は rethlab L1 Architect tier の worked example が実装される場所でもある。本コースで扱うすべての概念が、\`file:line@SHA\` 形式で pin できる commit の実 Rust コードに対応する — そして cite が壊れていないかを CI が確認する。
 
-> 🛑 **反流暢性。** 「OpenHL は Hyperliquid の fork だ。」 **違う。** Fork なら Hyperliquid のソースを import して上から patch することになる。\`openhl\` は *clean-room* 実装だ: 同じアーキテクチャと同じ外部挙動を、public ライブラリ (Reth、Malachite) と Hyperliquid の public ドキュメントを読んだ人間によって組み上げたもの。この区別はライセンス的にも (HL の IP に触れない)、教育的にも (clean-room とは、説明可能な first principles から構築されたコードだということ) 重要だ。
+> 🛑 **反流暢性。** 「OpenHL は Hyperliquid の fork だ。」 **違う。** Fork なら Hyperliquid のソースを import して上から patch することになる。\`openhl\` は *clean-room* 実装だ: 同じアーキテクチャと同じ外部挙動を、Reth と Malachite という公開ライブラリと、Hyperliquid が公開しているドキュメントだけを参照して組み上げたもの。この区別はライセンス上 (HL の IP に触れない) と教育上 (clean-room とは、説明可能な first principles から構築されたコードだということ) の両方で重要だ。
 
 ## 2. なぜ存在するか
 
-理由は 2 つ、どちらも load-bearing だ:
+理由は 2 つ、どちらも本質的だ:
 
-1. **エコシステム向けのオープンな substrate。** HL 形の app (vault product、market-maker bot、structured-product DEX) はすべて、HL のクローズドスタックを信用するか、自分で substrate を再構築するかを強いられている。\`openhl\` がその substrate だ — public で fork 可能。
+1. **エコシステムのためのオープンな substrate。** HL 形のアプリ (vault プロダクト、market-maker bot、structured-product DEX) はどれも、HL のクローズドスタックを信用するか、自分で substrate を作り直すかの二択を強いられている。\`openhl\` がその substrate にあたる — 公開済みで fork 可能。
 
-2. **教えられる codebase。** BFT-L1 の教材のほとんどはアルゴリズムで止まる (ホワイトボード上の Tendermint、prevote/precommit の矢印)。\`openhl\` はその先に行く: \`cargo build\` でコンパイルされる real Rust workspace で、load-bearing なすべての piece が \`file:line\` で cite でき、\`cargo test\` で実行できる。rethlab L1 Architect tier が、この codebase をコースに変える worked-example surface だ。
+2. **教材として読めるコードベース。** BFT-L1 の教材の多くはアルゴリズム解説で止まる (ホワイトボード上の Tendermint、prevote/precommit の矢印)。\`openhl\` はその先まで踏み込む: \`cargo build\` でコンパイルされる実 Rust workspace で、本質的な piece はすべて \`file:line\` で cite でき、\`cargo test\` で実行できる。rethlab L1 Architect tier は、このコードベースを worked example として題材化したコース群だ。
 
-Dual-use が compound する。コード投資が 2 つの output を生む: 動く L1 substrate **と** 13 レッスンの教材アーティファクト。OSS のサイドプロジェクトはたいてい片方しか選ばない。
+この dual-use 構造の効果は複利で効いてくる。1 つのコード投資が 2 つの output を生む: 動く L1 substrate と、13 レッスンの教材アーティファクト。OSS のサイドプロジェクトはたいてい片方しか選ばない。
 
 ## 3. 5 つのサブシステム
 
@@ -100,9 +100,9 @@ Dual-use が compound する。コード投資が 2 つの output を生む: 動
       └─────────────┘  └──────────────┘  └─────────────┘
 \`\`\`
 
-2 つの半分、3 つの pure state machine、半分同士の間に 1 つの contract。**これがアーキテクチャの全部だ。** Codebase の他のすべては、この 5 つの箱のどれかの実装詳細だ。
+2 つの層、3 つの pure state machine、層と層を繋ぐ 1 つの contract。**これがアーキテクチャの全体像だ。** コードベースの他のすべては、この 5 つの箱のいずれかに属する実装詳細にすぎない。
 
-CL/EL split は Ethereum の形 (Lighthouse / Reth split、Engine API contract) を意図的に借りたものだ。3 つの pure state machine は HL 固有: Ethereum のような汎用 L1 には存在しないが、HL 形の L1 が perp DEX であるためにはこの 3 つすべてが必要になる。
+CL/EL の二層構造は Ethereum (Lighthouse / Reth split、Engine API contract) の形を意図的に借りたものだ。一方、3 つの pure state machine は HL 固有: Ethereum のような汎用 L1 には存在しないが、HL 形の L1 が perp DEX として機能するためにはこの 3 つすべてが必要になる。
 
 ## 4. 10 個の crate
 
@@ -124,18 +124,18 @@ crates/
 └── node/          consensus + evm + clob を Node::run() に組み立て — Module 1
 \`\`\`
 
-Pure state machine の crate (\`types\`、\`codec\`、\`clob\`、\`oracle\`、\`funding\`、\`liquidation\`、\`vault\`) は I/O を持たない。\`proptest\` でテスト、ケースあたりマイクロ秒、構築によって deterministic。I/O crate (\`evm\`、\`consensus\`、\`node\`) は外界と話す。
+Pure state machine の crate (\`types\`、\`codec\`、\`clob\`、\`oracle\`、\`funding\`、\`liquidation\`、\`vault\`) は I/O を一切持たない。\`proptest\` でテストし、ケースあたりマイクロ秒で回り、構造上 deterministic だ。I/O 側の crate (\`evm\`、\`consensus\`、\`node\`) が外界とのやり取りを引き受ける。
 
 | Crate グループ | I/O? | テスト方法 |
 | :--- | :--- | :--- |
 | Pure state machine (7 crate) | なし | unit + proptest、ケースあたりマイクロ秒 |
 | I/O 境界 (3 crate) | あり | 統合テスト、devnet replay |
 
-> 🛑 **反流暢性。** 「Pure / I-O split はコードスタイルの好みだ。」 **違う。** マルチバリデータの state が divergence するのを防ぐ determinism レールだ。Pure crate は \`SystemTime::now\`、\`HashMap\` の iteration order、\`rand\`、その他のホスト依存挙動を絶対に call しない — 1 LSB でも 2 validator が disagree すればチェーンが fork するからだ。Split は code review + \`unsafe_code = "forbid"\` で強制される; スタイルの選択として扱うと、最初の hardfork-sensitive 操作で fork するチェーンを ship することになる。
+> 🛑 **反流暢性。** 「Pure / I-O split はコードスタイルの好みだ。」 **違う。** マルチバリデータの state が分岐するのを防ぐための determinism レールだ。Pure crate は \`SystemTime::now\`、\`HashMap\` の iteration 順序、\`rand\`、その他ホスト依存の挙動を絶対に呼ばない — 1 LSB でも 2 validator の結果がずれれば、その瞬間チェーンが fork する。Split は code review と \`unsafe_code = "forbid"\` で強制されている。スタイルの選択として扱った場合、最初の hardfork-sensitive な処理が走った瞬間に fork するチェーンを ship することになる。
 
 ## 5. Build arc
 
-\`openhl\` は 5 つの module で ship する、それぞれ動くコードと **対応する rethlab コース** の両方を ship する。README より:
+\`openhl\` は 5 つの module に分けて出荷される。各 module で動くコードが ship され、それに対応する rethlab コースもセットで公開される。README より:
 
 | # | Module | 触れる crate | Land するもの |
 | - | --- | --- | --- |
@@ -143,45 +143,45 @@ Pure state machine の crate (\`types\`、\`codec\`、\`clob\`、\`oracle\`、\`
 | 2 | CLOB matching engine | \`clob\`、\`types\`、\`codec\` | Real transaction がチェーンに入る。EVM block に実際の fill が含まれる。 |
 | 3 | Core ↔ EVM precompile | \`evm\`、\`clob\` | スマートコントラクトが live な orderbook state を読める。 |
 | 4 | Funding、oracle、liquidation | \`funding\`、\`oracle\`、\`liquidation\` | Perp の決済ループ。チェーンが perp DEX に見える。 |
-| 5 | Protocol-native vault primitive | \`vault\` | Kodiak/Yogi 系の strategy がチェーンプリミティブになる。 |
+| 5 | Protocol-native vault primitive | \`vault\` | auto-compounding、delta-neutral 等の vault 戦略が、アプリ層のコントラクトではなくチェーンのプリミティブになる。 |
 
-**本コースは Module 1 のみをカバーする。** Module 2-5 はそれぞれ L1 Architect tier 内の独立したコースになる。本コースを終えれば substrate が手に入る; Module 1+2+3 を終えれば動く perp DEX が、5 つすべてを終えれば openhl 全体が build できる。
+**本コースが扱うのは Module 1 だけだ。** Module 2-5 はそれぞれ L1 Architect tier 内の別コースとして提供される。本コースを終えれば substrate が手に入る。Module 1+2+3 まで終えれば動く perp DEX、5 つすべてを終えれば openhl 全体が組み上がる。
 
-> 🛑 **予測。** なぜ Module 1 が Module 2 (CLOB) より先に ship するのか? 「openhl を面白くしている」のは orderbook なのに。**ヒント: その下に consensus substrate がないと \`validate_payload\` は何も validate するものがない。**
+> 🛑 **予測。** 「openhl を面白くしている」のは orderbook なのに、なぜ Module 1 が Module 2 (CLOB) より先に ship するのか? **ヒント: その下に consensus substrate がなければ、\`validate_payload\` は validate する対象を何も持たない。**
 
-答え: CLOB は pure state machine だ; output として fill を produce する。しかし fill が意味を持つのは、それを順序付ける consensus と、それを transaction として適用する EVM があってこそだ。Module 1 が CLOB の plug-in 先になる substrate を build する; それがなければ CLOB は \`cargo test\` のアーティファクトでしかなく、チェーンではない。Build 順序が dependency 順序に従う — Module 1 が先なのは、Module 2-5 がすべてその \`ConsensusBridge\` に依存するからだ。
+答え: CLOB は pure state machine で、output として fill を produce する。しかしその fill が意味を持つのは、fill を順序付ける consensus と、fill を transaction として適用する EVM が下に揃っていてこそだ。Module 1 で CLOB が後から plug in する substrate を build する。それがない段階の CLOB は \`cargo test\` のアーティファクトでしかなく、まだチェーンではない。Build 順序は依存順序に従う — Module 1 が先頭に来るのは、Module 2-5 がすべて Module 1 の \`ConsensusBridge\` に依存するからだ。
 
-## 6. 本コースの行き先 — 13 レッスンを 5 つに分けて
+## 6. 本コースの構成 — 13 レッスンを 5 つに分けて
 
-本コースの 13 レッスンは Module 1 (「Consensus substrate」) を 5 つの内部チャンクに分けてカバーする。各チャンクは *本コースの* サブモジュールであり、上の openhl Build arc の Module 1-5 と混同しないこと。
+本コースの 13 レッスンは、Module 1 (「Consensus substrate」) を 5 つの内部チャンクに分けて扱う。各チャンクはあくまで *本コース内* のサブモジュールであり、上の openhl Build arc 全体の Module 1-5 とは別物なので混同しないこと。
 
-| 本コースのサブモジュール | レッスン | 終えると分かること |
+| 本コースのサブモジュール | レッスン | 読み終えて分かること |
 | :--- | :--- | :--- |
-| **1. execution/consensus split** | L1、L2 | なぜすべての BFT-L1 が CL と EL の間に 4 メッセージ contract を持つのか。なぜ HL/Tempo/CometBFT が全部同じ形に converge するのか。 |
-| **2. ライブラリとしての Malachite** | L3、L4、L5 | Malachite が与えるもの (\`Context\` trait)、自分が実装するもの (10 sub-type + \`SigningProvider\`)、protocol state machine を running engine に変える actor model。 |
-| **3. ライブラリとしての Reth** | L6、L7、L8 | なぜ Reth を fork しないか — configure する (\`NodeBuilder\` slot)。Consensus と execution がやり取りする Engine API surface。Reth の \`PayloadBuilderService\` がブロックを assemble する仕組み。 |
-| **4. 配線** | L9、L10、L11 | \`ConsensusBridge\` trait の設計。Malachite \`Decided\` から Reth \`forkchoice_updated\` へ。\`engine_app.rs\` の proposer hot path。 |
-| **5. Single-validator devnet** | L12、L13 | Bootstrap (genesis、key、single-node config)。Actor system 経由で完全なブロックを 0.02 秒で駆動する統合テスト — v0 milestone。 |
+| **1. execution/consensus split** | L1、L2 | なぜすべての BFT-L1 が CL と EL の間に 4 メッセージの contract を置くのか。なぜ HL/Tempo/CometBFT が同じ形に収束するのか。 |
+| **2. ライブラリとしての Malachite** | L3、L4、L5 | Malachite が提供するもの (\`Context\` trait)、自分で実装すべきもの (10 個の sub-type と \`SigningProvider\`)、プロトコルの state machine を実稼働可能なエンジンに変える actor model。 |
+| **3. ライブラリとしての Reth** | L6、L7、L8 | なぜ Reth を fork するのではなく configure するのか (\`NodeBuilder\` の slot)。Consensus と execution がやり取りする Engine API の surface。Reth の \`PayloadBuilderService\` がブロックを組み立てる仕組み。 |
+| **4. 配線** | L9、L10、L11 | \`ConsensusBridge\` trait の設計判断。Malachite の \`Decided\` から Reth の \`forkchoice_updated\` への流れ。\`engine_app.rs\` における proposer の hot path。 |
+| **5. Single-validator devnet** | L12、L13 | Bootstrap (genesis、鍵、single-node config)。actor system を通じて 1 ブロック分の合意を 0.02 秒で走らせる統合テスト — v0 milestone。 |
 
-L13 を終える頃には、\`first_block_via_engine_actors\` 統合テスト (\`crates/consensus/src/engine_app.rs:246@0844d58\`) が real Reth + real Malachite を end-to-end で駆動し、1 つの decided block を produce する。**これが openhl Module 1 の v0 milestone**、そして本コースが連れていく最終地点だ。
+L13 を読み終える頃には、\`first_block_via_engine_actors\` 統合テスト (\`crates/consensus/src/engine_app.rs:246@0844d58\`) が real Reth と real Malachite を end-to-end で駆動し、decided block を 1 つ produce する状態に到達する。**これが openhl Module 1 の v0 milestone** であり、本コースが連れていく最終地点だ。
 
 ## 7. 残りのコースの読み方
 
-最初に flag しておくべきパターン 3 つ:
+最初に押さえておくべきパターンが 3 つある:
 
-1. **3am hook。** すべてのレッスンが debug シナリオで始まる (page された、何かが壊れた、N 秒で原因を見つけろ)。シナリオは読者がすでに \`openhl\` をメンタル上で running させていることを前提とする; 本レッスンがそれらの hook を land させるための準備だ。Hook が disorienting に感じたら §3 (アーキテクチャ図) に戻れ。
+1. **3am hook。** すべてのレッスンが debug シナリオで始まる (page された、何かが壊れた、原因を N 秒で特定しろ)。シナリオは、読者の頭の中で \`openhl\` がすでに動いていることを前提にする; 本レッスンはその前提を成立させるための準備だ。Hook で迷子になったら §3 (アーキテクチャ図) に戻ること。
 
-2. **\`🛑\` callout。** 2 種類: **予測** (答えを読む前に sketch する pause) と **反流暢性** (よくある間違った直感を名指しで callout する)。両方とも、止まって engage する価値がある。
+2. **\`🛑\` callout。** 2 種類ある: **予測** (答えを読む前に sketch する一時停止) と **反流暢性** (よくある誤った直感を名指しで指摘する)。どちらも、立ち止まって考える価値がある。
 
-3. **\`file:line@SHA\` cite。** すべてのコード参照は特定の openhl commit に pin されている、\`git checkout 0844d58\` (またはレッスンが cite する SHA) でレッスンが描写するのと exact 同じコードを読める。CI が push ごとにこの cite を確認する。
+3. **\`file:line@SHA\` cite。** すべてのコード参照は特定の openhl commit に pin されている。\`git checkout 0844d58\` (またはレッスンが cite する SHA) すれば、レッスンが説明しているのとまったく同じコードが手元で読める。push のたびに CI が cite を verify する。
 
-これで残りのコースに入る準備ができた。
+これで残りのコースに進む準備ができた。
 
 ## 8. 練習
 
-1. **ソースを読め。** \`https://github.com/psyto/openhl\` を開き、\`README.md\` を end-to-end で読め、続いて \`docs/architecture.md\`。両方とも 1 画面に収まる。
-2. **アーキテクチャを sketch せよ。** 読み返さずに、§3 の 5 サブシステム図を紙に描け。各箱を実装する crate にラベルを付けよ。§4 のツリーと比較せよ。
-3. **Build-arc の edge を 1 つ trace せよ。** Module 2 (CLOB) を選べ。Module 1 から何を依存し、Module 3 に何を deliver するか? (ヒント: §5 のテーブルが部分的な答え、残りはアーキテクチャに暗黙にある。)
+1. **ソースを読め。** \`https://github.com/psyto/openhl\` を開き、\`README.md\` を最初から最後まで読み、続けて \`docs/architecture.md\` を読む。両方とも 1 画面に収まる短さだ。
+2. **アーキテクチャを sketch せよ。** 読み返さずに、§3 の 5 サブシステム図を紙に描き起こせ。各箱を実装している crate のラベルも付けること。終わったら §4 のツリーと突き合わせる。
+3. **Build-arc の依存を 1 つ trace せよ。** Module 2 (CLOB) を取り上げ、Module 1 から何を受け取り、Module 3 に何を渡すかを書き出せ。(ヒント: §5 のテーブルが部分的に答えている。残りはアーキテクチャを丁寧に見ていけば分かる。)
 
 > **最終チェック。** 1 文で、なぜ「Hyperliquid 形」が openhl にとって正しい framing で、「Hyperliquid クローン」や「Hyperliquid fork」が正しくないのか? 答えに「同じアーキテクチャ、clean-room 実装、プロプライエタリコードに触れていない」が含まれていなければ、§1 を再読。`,
                 },
@@ -201,6 +201,8 @@ L13 を終える頃には、\`first_block_via_engine_actors\` 統合テスト (\
                   duration: 15,
                   xpReward: 40,
                   content: `# BFT と EVM の contract
+
+> **現在地。** サブモジュール 1/5: *execution/consensus split。* L0 はリポジトリ全体を俯瞰した。本サブモジュールは、その 2 つの半分の境目にズームインする — Malachite (CL) と Reth (EL) の間に置かれる 4 メッセージの contract が実際には何で、なぜ BFT 形のすべての L1 が同じ線を引くことになるのか。L1 は 4 メッセージに名前を与える; L2 はなぜ HL、Tempo、CometBFT が同じ形に収束するかを説明する。
 
 午前 3 時。OpenHL の devnet が 3 ブロック前から停止している。Malachite のログは \`waiting for value\` と言う。Reth のログは \`engine idle\` と言う。どちらも error を投げていない。**どっちが壊れているのか?**
 
@@ -468,6 +470,8 @@ Decide-first パターンは openhl の設計を 3 つの方法で形作る:
                   duration: 15,
                   xpReward: 40,
                   content: `# Malachite が与えてくれるもの — \`Context\` trait
+
+> **現在地。** サブモジュール 2/5: *ライブラリとしての Malachite。* サブモジュール 1 で 4 メッセージの contract に名前を付けた。consensus 側と execution 側がその contract 越しに話すという構造が頭に入った状態だ。本サブモジュールは consensus 側を扱う。L3 (本レッスン) で Malachite の \`Context\` trait — ライブラリが要求してくる型レベルの API surface — を導入する。L4 は実装すべき 10 個の sub-type を walk する。L5 は、そのアルゴリズムを実稼働可能な engine に変える actor system を説明する。
 
 Malachite は 10 個の associated type と 4 個のメソッドを持つ 1 つの trait だ。**10 個の type に名前を付けたら、自分の chain に名前を付けたことになる。** これは比喩ではない — consensus エンジンはそれらの type に対して parametric であり、各メソッドのシグネチャはそれらから derive される。正しい type を選べば Malachite はそれらの上で consensus を駆動する。
 
@@ -1014,6 +1018,8 @@ Malachite は 3 つの \`ValuePayload\` mode をサポートする (L4 §5 で�
                   xpReward: 40,
                   content: `# Geth 形を捨てた Reth — NodeBuilder と component
 
+> **現在地。** サブモジュール 3/5: *ライブラリとしての Reth。* サブモジュール 2 は Malachite (CL 側) だった。本サブモジュールでは Reth (EL 側) を扱う。L6 (本レッスン) は \`NodeBuilder\` パターンを説明する — リポジトリ全体を fork するのではなく個別の component を差し替える設計のこと。L7 は Engine API の surface — 4 メッセージを EL の視点から見たときの形を扱う。L8 では Reth の \`PayloadBuilderService\` がブロックを組み立てるときに実際に何をしているのかを walk する。
+
 **Reth を fork しない。configure する。** 初めて Reth に近づくチームは \`git clone paradigmxyz/reth\` に手を伸ばし、\`bin/reth/src/main.rs\` を編集し、即座に技術的負債を積み上げる — upstream の bump 1 回ごとに merge conflict だ。
 
 正しい道は \`reth-node-builder::NodeBuilder\` だ。Component (consensus engine、payload builder、block validator) をスワップしつつ、それ以外 (DB、mempool、RPC、network) を Reth のデフォルトのまま使える fluent API だ。結果: openhl の \`LiveRethEvmBridge\` は fork を維持せずに real Reth node に対して動く。
@@ -1470,6 +1476,8 @@ ConsensusBridge trait の \`build_payload\` (start) と \`payload_ready\` (fetch
                   duration: 20,
                   xpReward: 60,
                   content: `# Contract を設計する — \`ConsensusBridge\` trait
+
+> **現在地。** サブモジュール 4/5: *配線。* サブモジュール 2 と 3 では、Malachite と Reth という 2 つの半分を別々に見てきた。本サブモジュールはそれらが出会う場所を扱う。L9 (本レッスン) は 4 メッセージ contract を表現する Rust trait — なぜこの形をしているかという設計判断 — を扱う。L10 は commit 側のフロー (Malachite \`Decided\` → Reth \`forkchoice_updated\`)、L11 は propose 側の hot loop を walk する。L11 まで読み終える頃には、trait の各メソッドが \`engine_app.rs\` 上で具体的にどのパスを通って実行されるかが分かるようになる。
 
 EVM の上に BFT をボルト止めするすべての chain は最終的にこの trait を書くことになる。HyperBFT がやった、Tempo がやった、すべての CometBFT 系 chain がやった。メソッド名は違うが、形は同じだ。問題は、L1 の 4 メッセージを明示し failure mode を名指して *意図的に* 書くか、「consensus が必要としたときに必要としたものから accrete する」かだ。
 
@@ -2078,6 +2086,8 @@ Trait surface はこれをすでにサポートする — 4 メソッド split �
                   xpReward: 30,
                   content: `# Bootstrap — genesis、key、single-node config
 
+> **現在地。** サブモジュール 5/5: *Single-validator devnet。* サブモジュール 1-4 は概念の機構を組み立ててきた。本サブモジュールは、その機構を実際に起動する段階だ。L12 (本レッスン) では bootstrap に必要な 4 つの artifact (keypair、validator set、ChainSpec、home dir) と、それらをまとめる \`OpenHlNode\` のコンストラクタを扱う。L13 は実行可能な v0 milestone — engine の actor system を通じて 1 ブロック分の合意を駆動する統合テスト。L13 を読み終える頃には、L0 以降に出てきたすべての概念が実 Rust コードとしてコンパイルされ、実際に走った状態になる。
+
 module 1-4 のすべての概念はインストール済みだ。Contract (L1) を読み、Engine API (L7) を trace し、bridge (L9) を設計し、decided block (L10) を commit し、proposer として 1 つ produce (L11) できる。**さあ bootstrap する。** 最小の runnable openhl はどう見えるか — 1 validator、1 node、peer なし? そしてなぜその「toy」が実際にこれまで build してきたものすべての real test なのか?
 
 > 🛑 **スクロール前に予測。** 1 validator devnet を動かしたい。構築する必要のある artifact をリストせよ (まだコードを書かず — 列挙のみ)。ヒント: 正確に 4 つあり、SHA \`0844d58\` ですでに 3 つが存在する。
@@ -2375,7 +2385,7 @@ INFO  consensus: starting height=2
 - **Module 2 — CLOB matching engine** — real transaction を追加: マッチされた fill を produce する deterministic orderbook。\`LiveRethEvmBridge::validate_payload\` が実際に block body を execute する初の時 (今日のテストは空ブロックを validate)。
 - **Module 3 — Core↔EVM precompile** — EVM に CLOB state を読ませるカスタム REVM precompile。Orderbook (off-EVM) と EVM を bridge する。
 - **Module 4 — Funding、oracle、liquidation** — settlement loop。Chain が perp DEX に見える場所。
-- **Module 5 — Vault primitive** — first-class on-chain object、Kodiak 系の strategy が app contract ではなく protocol-native になる。
+- **Module 5 — Vault primitive** — first-class な on-chain オブジェクト。auto-compounding、delta-neutral、funding-capture などの vault 戦略が app contract ではなく protocol-native になる。
 
 本コースの trait surface は Module 2-5 で変わらない。**4 メッセージは 4 メッセージのままだ。** 変わるのは EL crate が \`build_payload\` (real transaction) と \`validate_payload\` (state に対する real execution) の内部ですることだ。
 

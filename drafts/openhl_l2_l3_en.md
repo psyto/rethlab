@@ -135,6 +135,8 @@ The answer: they're committing to a rollback-capable EL — an execution layer t
 ````markdown
 # What Malachite gives you — the `Context` trait
 
+> **Where you are.** Sub-module 2 of 5: *Malachite as a library.* Sub-module 1 named the four-message contract; you now know there's a consensus side and an execution side that talk through it. This sub-module is the CL side. L3 (this lesson) introduces Malachite's `Context` trait — the type-level API surface the library asks you to fill in. L4 walks the ten sub-types you implement. L5 explains the actor system that turns the algorithm into a running engine.
+
 Malachite is one trait with ten associated types and four methods. **Once you've named the ten types, you've named your chain.** That's not metaphor — the consensus engine is parametric over those types, and every method's signature is derived from them. Pick the right types and Malachite drives consensus on them.
 
 > 🛑 **Predict before scrolling.** A BFT consensus protocol needs to know about addresses, heights, values, votes, validators, and signatures. Sketch a Rust trait with associated types for each. We'll compare yours to Malachite's `Context` in §1, then look at openhl's concrete impl at `crates/consensus/src/context.rs:19@0844d58`.

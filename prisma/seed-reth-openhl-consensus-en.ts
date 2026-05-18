@@ -55,7 +55,7 @@ Three things in that one sentence are load-bearing:
 | :--- | :--- |
 | "Open-source reference implementation" | Everything is on GitHub at \`psyto/openhl\`, MIT + Apache-2.0 dual-licensed. No private repos, no internal forks. |
 | "Hyperliquid-shape L1" | Not a Hyperliquid clone. Same *architectural shape* — the same five subsystems in the same relationship — but a clean-room Rust impl on Reth + Malachite, not a port of HL's proprietary code. |
-| "First-class vault primitives" | Vaults aren't an app-layer afterthought. They're a chain primitive — strategies like Kodiak / Yogi compose directly against them. |
+| "First-class vault primitives" | Vaults aren't an app-layer afterthought. They're a chain primitive — auto-compounding, delta-neutral, funding-rate-capture, and similar strategies compose directly against them rather than being smart contracts that have to reinvent custody and accounting. |
 
 \`openhl\` is also where the rethlab L1 Architect tier's worked example lives. Every concept in this course corresponds to real Rust code at the commit you can pin via \`file:line@SHA\` cites — and the cites are checked by CI.
 
@@ -141,7 +141,7 @@ Pure state-machine crates (\`types\`, \`codec\`, \`clob\`, \`oracle\`, \`funding
 | 2 | CLOB matching engine | \`clob\`, \`types\`, \`codec\` | Real transactions enter the chain. EVM blocks contain actual fills. |
 | 3 | Core ↔ EVM precompiles | \`evm\`, \`clob\` | Smart contracts can read live orderbook state. |
 | 4 | Funding, oracle, liquidations | \`funding\`, \`oracle\`, \`liquidation\` | Perp settlement loop. Chain looks like a perp DEX. |
-| 5 | Protocol-native vault primitive | \`vault\` | Kodiak/Yogi-style strategies become chain primitives. |
+| 5 | Protocol-native vault primitive | \`vault\` | Auto-compounding, delta-neutral, and similar vault strategies become chain primitives instead of app-layer contracts. |
 
 **This course covers Module 1 only.** Modules 2-5 each become their own rethlab course in the L1 Architect tier. When you finish this course you have the substrate; when you finish Modules 1+2+3 you have a functional perp DEX; when you finish all five you've built openhl.
 
@@ -199,6 +199,8 @@ Now the rest of the course makes sense to enter.
                   duration: 15,
                   xpReward: 40,
                   content: `# The contract between BFT and the EVM
+
+> **Where you are.** Sub-module 1 of 5: *The execution/consensus split.* L0 mapped the whole repo; this sub-module zooms into the seam between the two halves — what the four-message contract between Malachite (CL) and Reth (EL) actually is, and why every BFT-shape L1 ends up drawing this same line. L1 names the four messages; L2 explains why HL, Tempo, and CometBFT all converge on this shape.
 
 It's 3am. Your OpenHL devnet halted three blocks ago. The Malachite logs say \`waiting for value\`. The Reth logs say \`engine idle\`. Neither side is throwing an error. **Which one is broken?**
 
@@ -466,6 +468,8 @@ The answer: they're committing to a rollback-capable EL — an execution layer t
                   duration: 15,
                   xpReward: 40,
                   content: `# What Malachite gives you — the \`Context\` trait
+
+> **Where you are.** Sub-module 2 of 5: *Malachite as a library.* Sub-module 1 named the four-message contract; you now know there's a consensus side and an execution side that talk through it. This sub-module is the CL side. L3 (this lesson) introduces Malachite's \`Context\` trait — the type-level API surface the library asks you to fill in. L4 walks the ten sub-types you implement. L5 explains the actor system that turns the algorithm into a running engine.
 
 Malachite is one trait with ten associated types and four methods. **Once you've named the ten types, you've named your chain.** That's not metaphor — the consensus engine is parametric over those types, and every method's signature is derived from them. Pick the right types and Malachite drives consensus on them.
 
@@ -1012,6 +1016,8 @@ The gotcha to watch for: **the part-streaming code lives in \`malachitebft-engin
                   xpReward: 40,
                   content: `# Reth without the geth-shape — NodeBuilder and components
 
+> **Where you are.** Sub-module 3 of 5: *Reth as a library.* Sub-module 2 was Malachite (the CL side); this sub-module is Reth (the EL side). L6 (this lesson) explains the \`NodeBuilder\` pattern — why you swap individual components rather than fork the whole repo. L7 is the Engine API surface — the shape of the four messages from the EL's perspective. L8 walks what Reth's \`PayloadBuilderService\` actually does when it assembles a block.
+
 **You don't fork Reth. You configure it.** Most teams approaching Reth for the first time reach for \`git clone paradigmxyz/reth\`, edit \`bin/reth/src/main.rs\`, and immediately accrue technical debt — every upstream bump becomes a merge conflict.
 
 The correct path is \`reth-node-builder::NodeBuilder\`. It's a fluent API that lets you swap out components (consensus engine, payload builder, block validator) while keeping everything else (DB, mempool, RPC, network) at Reth's default. The result: openhl's \`LiveRethEvmBridge\` runs against a real Reth node *without* maintaining a fork.
@@ -1468,6 +1474,8 @@ The ConsensusBridge trait's split between \`build_payload\` (start) and \`payloa
                   duration: 20,
                   xpReward: 60,
                   content: `# Designing the contract — the \`ConsensusBridge\` trait
+
+> **Where you are.** Sub-module 4 of 5: *Wiring it up.* Sub-modules 2 and 3 walked the two halves (Malachite and Reth) in isolation; this sub-module is where they meet. L9 (this lesson) is the Rust trait that captures the four-message contract — the design rationale for why the trait has the shape it has. L10 walks the commit-side flow (Malachite \`Decided\` → Reth \`forkchoice_updated\`). L11 walks the propose-side hot loop. By the end of L11 every method on the trait has a concrete runtime path through \`engine_app.rs\`.
 
 Every chain that bolts BFT onto an EVM ends up writing this trait. HyperBFT did it, Tempo did it, every CometBFT-based chain did it. The methods have different names; the shape is the same. The question is whether you write it deliberately — with the four messages from L1 explicit and the failure modes named — or whether it accretes from "whatever consensus needed when it needed it."
 
@@ -2076,6 +2084,8 @@ This is the L11 lesson made concrete: **the proposer's code is small because the
                   xpReward: 30,
                   content: `# Bootstrapping — genesis, keys, the single-node config
 
+> **Where you are.** Sub-module 5 of 5: *Single-validator devnet.* Sub-modules 1–4 built the conceptual machinery; this sub-module turns it on. L12 (this lesson) is the four artifacts you need to bootstrap (keypair, validator set, ChainSpec, home dir) and the \`OpenHlNode\` constructor that bundles them. L13 is the runnable v0 milestone — an integration test that drives one full block through the engine actor system. By the end of L13, every concept from L0 onward has compiled and executed against real Rust code.
+
 You've installed every concept in modules 1–4. You can read the contract (L1), trace the Engine API (L7), design the bridge (L9), commit a decided block (L10), produce one as proposer (L11). **Now we bootstrap.** What does the smallest possible runnable openhl look like — one validator, one node, no peers? And why is that "toy" actually a real test of everything we've built?
 
 > 🛑 **Predict before scrolling.** You want to run a one-validator devnet. List the artifacts you need to construct (not write code yet — just enumerate). Hint: there are exactly four, and three of them already exist at SHA \`0844d58\`.
@@ -2373,7 +2383,7 @@ This course (Module 1 of openhl) builds the consensus substrate. Modules 2–5 b
 - **Module 2 — CLOB matching engine** — adds real transactions: a deterministic orderbook that produces matched fills. The first time \`LiveRethEvmBridge::validate_payload\` actually executes a block body (the test today validates empty blocks).
 - **Module 3 — Core↔EVM precompiles** — custom REVM precompiles that let the EVM read CLOB state. Bridges the orderbook (off-EVM) and the EVM.
 - **Module 4 — Funding, oracle, liquidations** — settlement loop. Where the chain looks like a perp DEX.
-- **Module 5 — Vault primitive** — first-class on-chain object so Kodiak-style strategies are protocol-native, not app contracts.
+- **Module 5 — Vault primitive** — first-class on-chain object so vault strategies (auto-compounding, delta-neutral, funding-capture, etc.) are protocol-native, not app contracts.
 
 The trait surface from this course doesn't change in modules 2–5. **The four messages stay four messages.** What changes is what the EL crate does inside \`build_payload\` (real transactions) and \`validate_payload\` (real execution against state).
 

@@ -19,6 +19,8 @@
 ````markdown
 # Bootstrapping — genesis, keys, the single-node config
 
+> **Where you are.** Sub-module 5 of 5: *Single-validator devnet.* Sub-modules 1–4 built the conceptual machinery; this sub-module turns it on. L12 (this lesson) is the four artifacts you need to bootstrap (keypair, validator set, ChainSpec, home dir) and the `OpenHlNode` constructor that bundles them. L13 is the runnable v0 milestone — an integration test that drives one full block through the engine actor system. By the end of L13, every concept from L0 onward has compiled and executed against real Rust code.
+
 You've installed every concept in modules 1–4. You can read the contract (L1), trace the Engine API (L7), design the bridge (L9), commit a decided block (L10), produce one as proposer (L11). **Now we bootstrap.** What does the smallest possible runnable openhl look like — one validator, one node, no peers? And why is that "toy" actually a real test of everything we've built?
 
 > 🛑 **Predict before scrolling.** You want to run a one-validator devnet. List the artifacts you need to construct (not write code yet — just enumerate). Hint: there are exactly four, and three of them already exist at SHA `0844d58`.
@@ -324,7 +326,7 @@ This course (Module 1 of openhl) builds the consensus substrate. Modules 2–5 b
 - **Module 2 — CLOB matching engine** — adds real transactions: a deterministic orderbook that produces matched fills. The first time `LiveRethEvmBridge::validate_payload` actually executes a block body (the test today validates empty blocks).
 - **Module 3 — Core↔EVM precompiles** — custom REVM precompiles that let the EVM read CLOB state. Bridges the orderbook (off-EVM) and the EVM.
 - **Module 4 — Funding, oracle, liquidations** — settlement loop. Where the chain looks like a perp DEX.
-- **Module 5 — Vault primitive** — first-class on-chain object so Kodiak-style strategies are protocol-native, not app contracts.
+- **Module 5 — Vault primitive** — first-class on-chain object so vault strategies (auto-compounding, delta-neutral, funding-capture, etc.) are protocol-native, not app contracts.
 
 The trait surface from this course doesn't change in modules 2–5. **The four messages stay four messages.** What changes is what the EL crate does inside `build_payload` (real transactions) and `validate_payload` (real execution against state).
 

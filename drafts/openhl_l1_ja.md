@@ -21,6 +21,8 @@
 ````markdown
 # BFT と EVM の contract
 
+> **現在地。** サブモジュール 1/5: *execution/consensus split。* L0 はリポジトリ全体を俯瞰した。本サブモジュールは、その 2 つの半分の境目にズームインする — Malachite (CL) と Reth (EL) の間に置かれる 4 メッセージの contract が実際には何で、なぜ BFT 形のすべての L1 が同じ線を引くことになるのか。L1 は 4 メッセージに名前を与える; L2 はなぜ HL、Tempo、CometBFT が同じ形に収束するかを説明する。
+
 午前 3 時。OpenHL の devnet が 3 ブロック前から停止している。Malachite のログは `waiting for value` と言う。Reth のログは `engine idle` と言う。どちらも error を投げていない。**どっちが壊れているのか?**
 
 この質問に 30 秒で答えられないなら、バグはどちらの crate にもない — 2 つがどう話しているかのメンタルモデル側にある。本レッスンはそのモデルをインストールする。読み終える頃には、consensus と execution の間を流れる 4 つのメッセージ、それぞれの promise、そしてどれかが消えたときにどちらの crate を責めればいいかが正確に分かるようになる。

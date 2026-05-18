@@ -19,6 +19,8 @@
 ````markdown
 # Reth without the geth-shape — NodeBuilder and components
 
+> **Where you are.** Sub-module 3 of 5: *Reth as a library.* Sub-module 2 was Malachite (the CL side); this sub-module is Reth (the EL side). L6 (this lesson) explains the `NodeBuilder` pattern — why you swap individual components rather than fork the whole repo. L7 is the Engine API surface — the shape of the four messages from the EL's perspective. L8 walks what Reth's `PayloadBuilderService` actually does when it assembles a block.
+
 **You don't fork Reth. You configure it.** Most teams approaching Reth for the first time reach for `git clone paradigmxyz/reth`, edit `bin/reth/src/main.rs`, and immediately accrue technical debt — every upstream bump becomes a merge conflict.
 
 The correct path is `reth-node-builder::NodeBuilder`. It's a fluent API that lets you swap out components (consensus engine, payload builder, block validator) while keeping everything else (DB, mempool, RPC, network) at Reth's default. The result: openhl's `LiveRethEvmBridge` runs against a real Reth node *without* maintaining a fork.

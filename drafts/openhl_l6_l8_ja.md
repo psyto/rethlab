@@ -19,6 +19,8 @@
 ````markdown
 # Geth 形を捨てた Reth — NodeBuilder と component
 
+> **現在地。** サブモジュール 3/5: *ライブラリとしての Reth。* サブモジュール 2 は Malachite (CL 側) だった。本サブモジュールでは Reth (EL 側) を扱う。L6 (本レッスン) は `NodeBuilder` パターンを説明する — リポジトリ全体を fork するのではなく個別の component を差し替える設計のこと。L7 は Engine API の surface — 4 メッセージを EL の視点から見たときの形を扱う。L8 では Reth の `PayloadBuilderService` がブロックを組み立てるときに実際に何をしているのかを walk する。
+
 **Reth を fork しない。configure する。** 初めて Reth に近づくチームは `git clone paradigmxyz/reth` に手を伸ばし、`bin/reth/src/main.rs` を編集し、即座に技術的負債を積み上げる — upstream の bump 1 回ごとに merge conflict だ。
 
 正しい道は `reth-node-builder::NodeBuilder` だ。Component (consensus engine、payload builder、block validator) をスワップしつつ、それ以外 (DB、mempool、RPC、network) を Reth のデフォルトのまま使える fluent API だ。結果: openhl の `LiveRethEvmBridge` は fork を維持せずに real Reth node に対して動く。

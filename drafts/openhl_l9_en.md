@@ -19,6 +19,8 @@
 ````markdown
 # Designing the contract — the `ConsensusBridge` trait
 
+> **Where you are.** Sub-module 4 of 5: *Wiring it up.* Sub-modules 2 and 3 walked the two halves (Malachite and Reth) in isolation; this sub-module is where they meet. L9 (this lesson) is the Rust trait that captures the four-message contract — the design rationale for why the trait has the shape it has. L10 walks the commit-side flow (Malachite `Decided` → Reth `forkchoice_updated`). L11 walks the propose-side hot loop. By the end of L11 every method on the trait has a concrete runtime path through `engine_app.rs`.
+
 Every chain that bolts BFT onto an EVM ends up writing this trait. HyperBFT did it, Tempo did it, every CometBFT-based chain did it. The methods have different names; the shape is the same. The question is whether you write it deliberately — with the four messages from L1 explicit and the failure modes named — or whether it accretes from "whatever consensus needed when it needed it."
 
 We're going to write it deliberately. Once.

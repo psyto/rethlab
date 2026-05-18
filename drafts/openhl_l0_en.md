@@ -36,7 +36,7 @@ Three things in that one sentence are load-bearing:
 | :--- | :--- |
 | "Open-source reference implementation" | Everything is on GitHub at `psyto/openhl`, MIT + Apache-2.0 dual-licensed. No private repos, no internal forks. |
 | "Hyperliquid-shape L1" | Not a Hyperliquid clone. Same *architectural shape* — the same five subsystems in the same relationship — but a clean-room Rust impl on Reth + Malachite, not a port of HL's proprietary code. |
-| "First-class vault primitives" | Vaults aren't an app-layer afterthought. They're a chain primitive — strategies like Kodiak / Yogi compose directly against them. |
+| "First-class vault primitives" | Vaults aren't an app-layer afterthought. They're a chain primitive — auto-compounding, delta-neutral, funding-rate-capture, and similar strategies compose directly against them rather than being smart contracts that have to reinvent custody and accounting. |
 
 `openhl` is also where the rethlab L1 Architect tier's worked example lives. Every concept in this course corresponds to real Rust code at the commit you can pin via `file:line@SHA` cites — and the cites are checked by CI.
 
@@ -122,7 +122,7 @@ Pure state-machine crates (`types`, `codec`, `clob`, `oracle`, `funding`, `liqui
 | 2 | CLOB matching engine | `clob`, `types`, `codec` | Real transactions enter the chain. EVM blocks contain actual fills. |
 | 3 | Core ↔ EVM precompiles | `evm`, `clob` | Smart contracts can read live orderbook state. |
 | 4 | Funding, oracle, liquidations | `funding`, `oracle`, `liquidation` | Perp settlement loop. Chain looks like a perp DEX. |
-| 5 | Protocol-native vault primitive | `vault` | Kodiak/Yogi-style strategies become chain primitives. |
+| 5 | Protocol-native vault primitive | `vault` | Auto-compounding, delta-neutral, and similar vault strategies become chain primitives instead of app-layer contracts. |
 
 **This course covers Module 1 only.** Modules 2-5 each become their own rethlab course in the L1 Architect tier. When you finish this course you have the substrate; when you finish Modules 1+2+3 you have a functional perp DEX; when you finish all five you've built openhl.
 

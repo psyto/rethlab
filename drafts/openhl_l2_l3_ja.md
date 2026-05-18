@@ -136,6 +136,8 @@ Decide-first パターンは openhl の設計を 3 つの方法で形作る:
 ````markdown
 # Malachite が与えてくれるもの — `Context` trait
 
+> **現在地。** サブモジュール 2/5: *ライブラリとしての Malachite。* サブモジュール 1 で 4 メッセージの contract に名前を付けた。consensus 側と execution 側がその contract 越しに話すという構造が頭に入った状態だ。本サブモジュールは consensus 側を扱う。L3 (本レッスン) で Malachite の `Context` trait — ライブラリが要求してくる型レベルの API surface — を導入する。L4 は実装すべき 10 個の sub-type を walk する。L5 は、そのアルゴリズムを実稼働可能な engine に変える actor system を説明する。
+
 Malachite は 10 個の associated type と 4 個のメソッドを持つ 1 つの trait だ。**10 個の type に名前を付けたら、自分の chain に名前を付けたことになる。** これは比喩ではない — consensus エンジンはそれらの type に対して parametric であり、各メソッドのシグネチャはそれらから derive される。正しい type を選べば Malachite はそれらの上で consensus を駆動する。
 
 > 🛑 **スクロール前に予測。** BFT consensus プロトコルは address、height、value、vote、validator、signature について知る必要がある。それぞれについて associated type を持つ Rust trait を sketch せよ。§1 で Malachite の `Context` と比較し、`crates/consensus/src/context.rs:19@0844d58` の openhl の concrete impl を見る。

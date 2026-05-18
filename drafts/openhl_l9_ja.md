@@ -20,6 +20,8 @@
 ````markdown
 # Contract を設計する — `ConsensusBridge` trait
 
+> **現在地。** サブモジュール 4/5: *配線。* サブモジュール 2 と 3 では、Malachite と Reth という 2 つの半分を別々に見てきた。本サブモジュールはそれらが出会う場所を扱う。L9 (本レッスン) は 4 メッセージ contract を表現する Rust trait — なぜこの形をしているかという設計判断 — を扱う。L10 は commit 側のフロー (Malachite `Decided` → Reth `forkchoice_updated`)、L11 は propose 側の hot loop を walk する。L11 まで読み終える頃には、trait の各メソッドが `engine_app.rs` 上で具体的にどのパスを通って実行されるかが分かるようになる。
+
 EVM の上に BFT をボルト止めするすべての chain は最終的にこの trait を書くことになる。HyperBFT がやった、Tempo がやった、すべての CometBFT 系 chain がやった。メソッド名は違うが、形は同じだ。問題は、L1 の 4 メッセージを明示し failure mode を名指して *意図的に* 書くか、「consensus が必要としたときに必要としたものから accrete する」かだ。
 
 我々は意図的に書く。一度だけ。

@@ -19,6 +19,8 @@
 ````markdown
 # The contract between BFT and the EVM
 
+> **Where you are.** Sub-module 1 of 5: *The execution/consensus split.* L0 mapped the whole repo; this sub-module zooms into the seam between the two halves — what the four-message contract between Malachite (CL) and Reth (EL) actually is, and why every BFT-shape L1 ends up drawing this same line. L1 names the four messages; L2 explains why HL, Tempo, and CometBFT all converge on this shape.
+
 It's 3am. Your OpenHL devnet halted three blocks ago. The Malachite logs say `waiting for value`. The Reth logs say `engine idle`. Neither side is throwing an error. **Which one is broken?**
 
 If you can't answer that question in 30 seconds, the bug isn't in either crate — it's in your mental model of how they talk. This lesson installs that model. By the end you'll know the four messages that cross between consensus and execution, what each one promises, and exactly which crate to blame when one of them goes missing.
