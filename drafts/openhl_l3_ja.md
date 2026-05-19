@@ -2,7 +2,7 @@
 
 > openhl SHA `13113db` (Stage 4: ConsensusBridge trait + CL/EL contract types) に対してドラフト。L2 がこの commit の type 部分を扱った; L3 が trait 部分を扱う。
 > EN ミラー: `drafts/openhl_l3_en.md`。
-> Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
+> Course: `building-openhl-consensus-ja` (track: `reth-l1-architect`, course #6 of 10)。
 
 ---
 
@@ -29,7 +29,7 @@ cargo check -p openhl-consensus
 
 …が pass する。`openhl-consensus` crate に 4 メッセージ `ConsensusBridge` trait — consensus が call する型付き API surface、執行 (execution) が impl する — が入った状態になる。**Impl はまだない** (L4 から始まる); trait とそれに紐づく error type だけ。これがコンパイルされた時点で contract が型レベルで完全に定義され、後続レッスンはすべて「この trait method の中身を書く」「この trait の method を call する」のどちらかになる。
 
-## これまでの状態
+## おさらい
 
 L2 を終えた時点:
 
@@ -49,7 +49,7 @@ crates/consensus/Cargo.toml:
   [dependencies]   ← 空
 ```
 
-## これから build するもの
+## 計画
 
 3 つのことをする:
 
@@ -59,7 +59,7 @@ crates/consensus/Cargo.toml:
 
 この trait は **コース全体で最も参照されるアーティファクト** だ。L4 で impl する (`InMemoryEvmBridge`)。L5 でもう一度 impl する (`RethEvmBridge`)。L9 で actor pipeline から call する。L11-L13 で 3 度目の impl (`LiveRethEvmBridge`)。**いま書く signature が下流すべてに伝播する。**
 
-> 🛑 **予測。** もう一度 4 つのメソッド名を見る: `build_payload`、`payload_ready`、`validate_payload`、`commit`。**3 つは CL → EL (consensus が execution を呼ぶ); 1 つは EL → CL (execution が応答する)。どれが EL → CL 方向で、なぜか?** ヒント: そのメソッドの *戻り値* を consensus 側がどう待っているかを考える。
+> 🛑 **予測してみよう。** もう一度 4 つのメソッド名を見る: `build_payload`、`payload_ready`、`validate_payload`、`commit`。**3 つは CL → EL (consensus が execution を呼ぶ); 1 つは EL → CL (execution が応答する)。どれが EL → CL 方向で、なぜか?** ヒント: そのメソッドの *戻り値* を consensus 側がどう待っているかを考える。
 
 ## 手を動かす walk-through
 
@@ -154,7 +154,7 @@ pub trait ConsensusBridge: Send + Sync {
 
 **`: Send + Sync`** は super-trait bound。`ConsensusBridge` を impl するすべての type は `Send` (thread 境界をまたいで move 可能) かつ `Sync` (複数 thread から参照可能) でなければならない、と宣言している。bridge は `Arc<dyn ConsensusBridge>` で actor task 間で共有されるからこれが必要 — actor は別 thread に住み得る。
 
-> 🛑 **反流暢性。** 「macro なしで `async fn` を直接書けないのか?」 **Rust 1.75 以降は書けるが caveat がある。** Native な async-fn-in-trait は返される future に自動で `Send` bound を付けてくれず、native async fn を持つ trait の `dyn Trait` には粗い部分が残る。`#[async_trait]` は退屈だが動く解決策。Native feature が成熟したら (おそらく 1.95-2025+)、見直せる。今は macro で行く。
+> 🛑 **流暢さ警告。** 「macro なしで `async fn` を直接書けないのか?」 **Rust 1.75 以降は書けるが caveat がある。** Native な async-fn-in-trait は返される future に自動で `Send` bound を付けてくれず、native async fn を持つ trait の `dyn Trait` には粗い部分が残る。`#[async_trait]` は退屈だが動く解決策。Native feature が成熟したら (おそらく 1.95-2025+)、見直せる。今は macro で行く。
 
 ### Step 4: 4 つの method signature を理解する
 
@@ -347,7 +347,7 @@ L3 が引用する openhl commit (§答え合わせ で参照):
 
 - **L3 は 30 分で L2 と同じ長さ。** コード量は ~45 行と少ないが、理解密度は高い。trait の各行に設計判断がある。
 - **Step 3-4-5 でファイルを部分ごとに walk する。** 意図的。L1 (TOML/Cargo) と L2 (5 type 定義) を経て読者はコードブロックを流し読みしがちになる。区切って解説することで各設計判断に engage させる。
-- **Step 3 の反流暢性 callout** (「macro なしで async fn を書けないか?」) は Rust 1.75+ を知っている読者が trade-off を理解していない場合への対処。
+- **Step 3 の流暢さ警告 callout** (「macro なしで async fn を書けないか?」) は Rust 1.75+ を知っている読者が trade-off を理解していない場合への対処。
 - **§設計を振り返る で「trait のメソッド数は BFT 構造で決まる」を強調**。レッスン中で最も meta な主張で、land させる価値が最も高い。
 - **「よくある質問」の Q3** (メソッド名のリネーム) は学習者が嵌るパターンを先回りしている。「build_payload は冗長」と思って `build` にすると、後で Ethereum Engine API mapping が見えなくなる。
 - **翻訳 policy は L1/L2 JA と同一**:
@@ -355,5 +355,5 @@ L3 が引用する openhl commit (§答え合わせ で参照):
   - Cargo の用語 (`workspace = true`、`[dependencies]`) は英語のまま
   - `#[async_trait]`、`#[derive(Error)]`、`#[from]` 等のマクロ呼び出しは英語のまま
   - コード、ファイルパス、コマンドは英語のまま
-  - 🛑 callout: 予測 (Predict)、反流暢性 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)
   - 「contract」「fork」「leak」「polymorphism」等は英語のまま (CS/SE の確立した語彙)

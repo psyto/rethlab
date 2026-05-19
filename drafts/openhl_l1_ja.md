@@ -2,7 +2,7 @@
 
 > openhl SHA `75be9de` (Stage 1: workspace bootstrap) と `5fc7ca1` (Stage 2+3: Reth と Malachite を pin) に対してドラフト。これは **最初の build-along レッスン** — 読者が workspace の骨格をゼロから書く。
 > EN ミラー: `drafts/openhl_l1_en.md`。
-> Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
+> Course: `building-openhl-consensus-ja` (track: `reth-l1-architect`, course #6 of 10)。
 
 ---
 
@@ -31,7 +31,7 @@ cargo check --workspace
 
 Reth のコンパイルグラフだけで ~600 crates ある。最初の `cargo check` はマシンによって 5-15 分かかる。そのつもりで進める。その後の check は incremental になって速い。
 
-## これまでの状態
+## おさらい
 
 L0 のセットアップを済ませている前提だ。手元には:
 
@@ -40,7 +40,7 @@ L0 のセットアップを済ませている前提だ。手元には:
 
 このレッスンの編集は **すべて** `~/code/my-openhl/` の中で行う。`openhl-reference/` には絶対に触れない。
 
-## これから build するもの
+## 計画
 
 3 つの段階を順に進める:
 
@@ -52,7 +52,7 @@ L0 のセットアップを済ませている前提だ。手元には:
 
 **先にアプリケーションコードではなく依存グラフを組む理由**: Rust workspace で最も摩擦が多いのは依存解決だ。Reth と Malachite はどちらも巨大で transitive な依存ツリーが深い。**「あとでやる」にすると、アプリケーションコードを書いている最中に衝突を発見して巻き戻すことになる。** 先に依存を確定させておけば、その後のレッスンはレッスンの本題に集中できる。
 
-> 🛑 **予測。** スクロール前に sketch せよ: workspace の Cargo.toml に書く `members` は何個で、それぞれ何か? ヒント: 10 個のライブラリ crate + 1 個の binary crate。L0 §3 で 5 つのサブシステムを学んだ; それを実装するのは具体的に 10 個のうちのどの crate か? (必要なら L0 §4 を見返す。)
+> 🛑 **予測してみよう。** スクロール前に sketch せよ: workspace の Cargo.toml に書く `members` は何個で、それぞれ何か? ヒント: 10 個のライブラリ crate + 1 個の binary crate。L0 §3 で 5 つのサブシステムを学んだ; それを実装するのは具体的に 10 個のうちのどの crate か? (必要なら L0 §4 を見返す。)
 
 ## 手を動かす walk-through
 
@@ -236,7 +236,7 @@ workspace = true
 
 `clob`、`oracle`、`funding`、`liquidation`、`vault`、`node` については `[dependencies]` セクションは空でよい (`[dependencies]` 行のあとに空行、`[lints]` ブロック)。`codec`、`evm`、`consensus` も最初は空 — 実際の依存はそれを使うコードが land する後続レッスンで足す。
 
-> 🛑 **反流暢性。** 「最初に全部の依存を書いておけば後で編集しなくて済むのでは?」 **違う。** Unused dependency を持つ crate は技術的負債だ: ビルドを遅くし、reader を混乱させ、version conflict を招く。依存は **それを使うコードが land するタイミングで** 足す。workspace の `Cargo.toml` が *使える* 依存を宣言し、各 crate の `Cargo.toml` が *使う* 依存を宣言する、という階層構造。
+> 🛑 **流暢さ警告。** 「最初に全部の依存を書いておけば後で編集しなくて済むのでは?」 **違う。** Unused dependency を持つ crate は技術的負債だ: ビルドを遅くし、reader を混乱させ、version conflict を招く。依存は **それを使うコードが land するタイミングで** 足す。workspace の `Cargo.toml` が *使える* 依存を宣言し、各 crate の `Cargo.toml` が *使う* 依存を宣言する、という階層構造。
 
 ### Step 6: `bin/openhl` を作る
 
@@ -342,7 +342,7 @@ alloy-rlp                 = { version = "0.3", default-features = false }
 
 **なぜ main HEAD ではなく release-tag SHA に pin するのか?** Main HEAD はいつでも壊れる可能性がある。Release tag はテストされた安定版だ。ファイル中のコメント (`# Bump は専用 PR で行う。release-tag SHA を必ず pin、main HEAD には絶対 pin しない。`) は将来 bump するときの process discipline メモだ。
 
-> 🛑 **予測。** いまの状態で `cargo check --workspace` を実行すると何が起こるか? スクロール前に 1 つ選べ:
+> 🛑 **予測してみよう。** いまの状態で `cargo check --workspace` を実行すると何が起こるか? スクロール前に 1 つ選べ:
 > - (a) 何も変わらない — まだどの crate も Reth の依存を使っていないから
 > - (b) 初回は劇的に遅くなる — Reth の transitive な ~600 crate を fetch + compile する
 > - (c) エラー — Reth は明示的な configuration が必要で、まだ与えていない
@@ -511,13 +511,13 @@ L1 が引用する openhl の commit は 2 つ (§答え合わせ で参照):
 
 - **L1 は 45 分** — L0 (20 分) より長い。読者が実際に ~150 行の TOML をタイプし、初回 `cargo check` で 10-15 分待ち、複数の "なぜこの選択か" subsection を読むため。XP 80 はその重みを反映。
 - **§Plan の予測 callout** (どの 10 crate か sketch する) は読者の L0 知識が初めてテストされる場所。思い出せなければ L0 §3-§4 が答え。
-- **§5 の 反流暢性 callout** (「最初に全依存を書いたらいいのでは」) は real な beginner trap。Junior Rust 開発者は「便利だから」と過剰に依存を宣言する傾向がある。**Soften しない**。
+- **§5 の 流暢さ警告 callout** (「最初に全依存を書いたらいいのでは」) は real な beginner trap。Junior Rust 開発者は「便利だから」と過剰に依存を宣言する傾向がある。**Soften しない**。
 - **「最初の cargo check は 5-15 分かかる」警告** は不可欠 — これがないと読者はコマンドがハングしていると思って中断する。先に期待値をセットする。
 - **Step 7 の「エラーが出た場合に多い原因」セクション** は bootstrap で最もよく嵌る 3 ポイントを cover している。Reviewer から「X はどう?」と質問があって X が無い場合は追加 — そこが読者を失うポイント。
 - **Step 5 で残り 9 crate を演習として残す** — `types` でパターンを見せて、残りを表でリスト化。レッスンの長さを管理するための意図的な選択。Junior な読者は 10 個全部を walk してほしがるかもしれないが、中級者はそれを退屈に感じる。
 - **翻訳 policy**:
   - Cargo / Rust の用語 (`workspace`、`resolver`、`feature`、`dependency`、`target`、`profile` 等) は英語のまま
   - コードブロック、コマンド、TOML キーは英語のまま
-  - 🛑 callout: 予測 (Predict)、反流暢性 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)
   - 「依存」「依存グラフ」「依存解決」は日本語、「dependency」が文脈で必要な場合は併記
   - 「resolver」「pin する」「fetch」「compile」「fork」「Stage」「commit」「workspace」は英語のまま — Rust エンジニアにとって直感的

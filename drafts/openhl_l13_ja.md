@@ -2,7 +2,7 @@
 
 > openhl SHA `0844d58` (Stage 7c — `validate_payload` が Reth の `EthBeaconConsensus` を走らせる) 基準。
 > コース: `building-openhl-consensus-ja` (track: `reth-l1-architect`, 10 コース中 6 番目)。
-> 注: L13 で bridge の両側が production-shape を強制される — `build_payload` は real Reth-shape header を合成し、`validate_payload` は Reth の real validator を走らせる。両者が **合意** しなければならない、つまりこれが production EIP-1559 数式、post-merge invariant、gas-limit drift ルールに触れる最初のレッスン。
+> 注: L13 で bridge の両側が production-shape を強制される — `build_payload` は real Reth-shape header を合成し、`validate_payload` は Reth の real validator を走らせる。両者が **合意** しなければならない。つまり本レッスンが、production EIP-1559 数式、post-merge invariant、gas-limit drift ルールに触れる最初のレッスン。
 
 ---
 

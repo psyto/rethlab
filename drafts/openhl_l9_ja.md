@@ -60,7 +60,7 @@ crates/consensus/src/types/               — 型ファイル 7 個
 3. **`pub mod node;`** を `lib.rs` に配線。
 4. **ユニットテスト 4 個** を `node.rs` に追加。
 5. **実行** — `cargo test -p openhl-consensus` で 20 個合格。
-6. **凝視** — `start_engine_smoke_spawns_and_kills` が 0.02 秒で合格するのを。**自分のコードが動く BFT エンジンになる瞬間。**
+6. **じっくり見届ける** — `start_engine_smoke_spawns_and_kills` が 0.02 秒で合格するところを。**自分のコードが動く BFT エンジンになる瞬間。**
 
 このレッスンが教えるのは **自分のコードと Malachite を結ぶブリッジパターン**。エンジンは他人が書いたもので、`Context` と `Codec` に対してジェネリック。spawn するには 5 つが必要: context インスタンス、node インスタンス (config、署名、address 導出を取るため)、config 値、codec 値、初期 height、validator set。`Node` trait は、Malachite が自分のコードからそれらを統一的に取れるようにする **handshake インターフェース**。一度 impl すれば、同じハンドシェイクに従う任意の chain で `start_engine` は動く。
 
@@ -621,7 +621,7 @@ Smoke test は multi-thread runtime のセットアップで最後に走る。
 
 2. **Address 導出は `get_address` に集約。** L6 のセットアップコードの runner で `SHA-256(pubkey)[12..32]` を使ったとき、**同じ導出** だった。テスト `get_address_matches_runner_derivation` がそれらが同一であることを assert するので、将来のリファクタで一方だけがサイレントに drift できない。**集約 + 検証テスト は重複に毎回勝つ。**
 
-3. **`run()` は次のレッスンを指すエラーを返す。** `unimplemented!()` (panic) や `todo!()` (これも panic) ではなく、`eyre::Result::Err("not yet implemented (L10)")` は **型安全な placeholder**。`run()` を呼ぶコードは「どこを見るべきか」を指すメッセージ付きで graceful に失敗する。**これはプルリク、コードレビュー、古いタブを越えて生き残るタイプのクラム。**
+3. **`run()` は次のレッスンを指すエラーを返す。** `unimplemented!()` (panic) や `todo!()` (これも panic) ではなく、`eyre::Result::Err("not yet implemented (L10)")` は **型安全な placeholder**。`run()` を呼ぶコードは「どこを見るべきか」を指すメッセージ付きで graceful に失敗する。**これはプルリク、コードレビュー、放置されたタブを越えて生き残るタイプの目印。**
 
 ## 答え合わせ
 
@@ -689,7 +689,7 @@ L9 が参照する openhl コミット (§答え合わせ):
 
 - **「handshake」「ハンドシェイク」** はそのまま (専門語)。
 - **「multi-thread runtime」「actor system」「smoke test」** はそのまま。
-- **「load-bearing」「placeholder」「クラム (crumb)」** はそのまま (英語のニュアンスを保持)。
+- **「load-bearing」「placeholder」** はそのまま (英語のニュアンスを保持)。「crumb」は「目印」と訳出。
 - **「予測してみよう」「流暢さ警告」** は L4-L8 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。
 - **長い表は EN と同じ列構成**。

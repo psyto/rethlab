@@ -2,7 +2,7 @@
 
 > openhl SHA `784785b` (Stage 6 prep: Implement Malachite Context for OpenHlContext) に対してドラフト。本レッスンは **コースで最大のレッスン** — 8 つの新規ファイルで Malachite の 10 個の Context sub-trait と中央 Context binding を実装する。
 > EN ミラー: `drafts/openhl_l6_en.md`。
-> Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
+> Course: `building-openhl-consensus-ja` (track: `reth-l1-architect`, course #6 of 10)。
 
 ---
 
@@ -33,7 +33,7 @@ cargo test -p openhl-consensus
 
 これは **コースで最も長いレッスン** — 8 新規ファイル、~330 行。各ファイルは小さいが数が多い。必要なら 2 回に分ける前提で。
 
-## これまでの状態
+## おさらい
 
 L5 を終えた時点で workspace に両方の `ConsensusBridge` impl があるが、consensus crate 自体には L3 の trait しかない。Malachite 統合はまだない:
 
@@ -47,7 +47,7 @@ crates/consensus/Cargo.toml:
 
 ここに Malachite を配線していく。
 
-## これから build するもの
+## 計画
 
 (以下の順で) build する:
 
@@ -67,7 +67,7 @@ crates/consensus/Cargo.toml:
 
 これらの型の shape が **すべての後続レッスンに伝播する**。L7 (SigningProvider) が `OpenHlVote` と `OpenHlProposal` に署名。L8 (Codec) がそれらを encode。L9 (run_engine_app) が `OpenHlContext` で parameterize された AppMsg を処理。**ここで encode する設計判断は後 8 つのレッスンに伝播する。**
 
-> 🛑 **予測。** 上の型リストを見る。10 個の型のうち 2 つは特別に注目すべき — load-bearing な決定を encode しているから:
+> 🛑 **予測してみよう。** 上の型リストを見る。10 個の型のうち 2 つは特別に注目すべき — load-bearing な決定を encode しているから:
 > - `OpenHlValidatorSet` の **specific なソート順** — 全 validator が同じソートに合意する必要がある
 > - `OpenHlContext::select_proposer` の **specific なアルゴリズム**
 >
@@ -231,7 +231,7 @@ impl Value for OpenHlValue {
 
 `OpenHlValue` は `BlockHash` (L2 から) をラップ。`Value::Id` associated type は vote に乗るもの — consensus は full value に投票せず、value の *identifier* (hash) に投票する。ここでは `Id = BlockHash` なので、value と ID が同じデータになっている。
 
-> 🛑 **反流暢性。** 「`Value` を直接 `BlockHash` にすればいいのでは — なぜラップ?」 **`Value` trait に独自の bound があるから**。Specifically `Value: Clone + Debug + Eq + Ord + Send + Sync` + `Value::Id` associated type の bound。`OpenHlValue` をラッパーにすることで、`BlockHash` を変えずに「value とは何か」を独立に進化させられる。Module 2 (CLOB) で `BlockHash` に無いフィールド (例: off-EVM fills のリスト) を足す可能性が高い。
+> 🛑 **流暢さ警告。** 「`Value` を直接 `BlockHash` にすればいいのでは — なぜラップ?」 **`Value` trait に独自の bound があるから**。Specifically `Value: Clone + Debug + Eq + Ord + Send + Sync` + `Value::Id` associated type の bound。`OpenHlValue` をラッパーにすることで、`BlockHash` を変えずに「value とは何か」を独立に進化させられる。Module 2 (CLOB) で `BlockHash` に無いフィールド (例: off-EVM fills のリスト) を足す可能性が高い。
 
 3 つ書いたら `cargo check -p openhl-consensus` を走らせる。pass するはず。
 
@@ -332,7 +332,7 @@ validators.sort_by(|a, b| {
 
 他の BFT chain (CometBFT、すべての Cosmos chain) も全く同じソートを使う。convention に従うのは便利のためだけでなく — chain を BFT canon と同じ入力 set に対して *同一に挙動* させるためだ。
 
-> 🛑 **反流暢性。** 「power 降順 + address 昇順、なぜ両方昇順ではダメ?」 **stake が高い validator は proportionally に多く propose すべきだから** — `(height + round) % count` は index 全体で uniform なので、power が高い validator が低い index に来て多く proposer-elect されるのはソートの性質だ。Tiebreaker (address 昇順) は安定 deterministic な選択; 任意の total ordering でよいが、CometBFT が address 昇順を選んだので合わせる。
+> 🛑 **流暢さ警告。** 「power 降順 + address 昇順、なぜ両方昇順ではダメ?」 **stake が高い validator は proportionally に多く propose すべきだから** — `(height + round) % count` は index 全体で uniform なので、power が高い validator が低い index に来て多く proposer-elect されるのはソートの性質だ。Tiebreaker (address 昇順) は安定 deterministic な選択; 任意の total ordering でよいが、CometBFT が address 昇順を選んだので合わせる。
 
 ### Step 5: メッセージ型を書く — `proposal.rs`、`proposal_part.rs`、`vote.rs`
 
@@ -845,13 +845,13 @@ L6 が引用する openhl commit (§答え合わせ で参照):
 ## Style review notes (self-critique before paste)
 
 - **L6 は 50 分 — コース最長のレッスン。** 8 新規ファイル、~330 行。各ファイル個別には小さいが、数が duration を生む。
-- **§ これから build するもの の予測 callout** で readers がコードに会う前に 2 つの load-bearing 決定 (ValidatorSet sort + select_proposer algorithm) に focus させる。この 2 つの divergence だけが chain を fork させる。
+- **§計画 の予測してみよう callout** で readers がコードに会う前に 2 つの load-bearing 決定 (ValidatorSet sort + select_proposer algorithm) に focus させる。この 2 つの divergence だけが chain を fork させる。
 - **Step 4 の「単一で最も load-bearing なファイル」フレーミング** がレッスンの最重要 framing。これが無いと readers が sort comparator を boilerplate として skim する。
-- **Step 3 の反流暢性 (なぜ OpenHlValue が BlockHash を wrap するか)** は L4/L5 の test-double-vs-real-type パターンの別形 — ラッパーが進化を独立に起こせる。
+- **Step 3 の流暢さ警告 (なぜ OpenHlValue が BlockHash を wrap するか)** は L4/L5 の test-double-vs-real-type パターンの別形 — ラッパーが進化を独立に起こせる。
 - **walk-through が多くの sub-file に分かれる** (simple 3 + complex 1 + message 3 + context 1)。意図的: 各ファイルが独自の設計根拠を持ち、複雑性で group することで自然な breath を提供する。
 - **5 テストは minimum だが load-bearing 決定をカバーする**: sort 順、決定的 proposer 選択、message round-trip、vote-type 区別、height 算術。各テストが 1 つの設計判断の regression guard。
 - **翻訳 policy は L1-L5 JA と同一**:
   - Malachite trait 名 (`Context`、`Address`、`Height`、`Value`、`Validator` 等) は英語のまま
   - Rust の syntax (impl、trait、struct、newtype、derive、async、Send、Sync) は英語のまま
   - 数学/CS 用語 (`load-bearing`、`canonical`、`monotonic`、`deterministic`、`round-trip`、`tiebreaker`) は英語のまま
-  - 🛑 callout: 予測 (Predict)、反流暢性 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)

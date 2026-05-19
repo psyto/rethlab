@@ -2,7 +2,7 @@
 
 > openhl SHA `3b43586` (Stage 5a: InMemoryEvmBridge — ConsensusBridge の最初の impl) に対してドラフト。これがコースで **最初の ConsensusBridge impl** だ。
 > EN ミラー: `drafts/openhl_l4_en.md`。
-> Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
+> Course: `building-openhl-consensus-ja` (track: `reth-l1-architect`, course #6 of 10)。
 
 ---
 
@@ -29,7 +29,7 @@ cargo test -p openhl-evm
 
 …が in-memory bridge の build → ready → commit フローをカバーする 5 テストで pass する。L3 の `ConsensusBridge` の **最初の具象 implementation** が手元にある状態 — EVM のふりをして fake block を `Mutex<HashMap>` に保存し、Reth を立ち上げずに trait を exercise させる test double。Consensus crate の後続テストでこれを使う; L8/L9 の runner と engine_app も同様。
 
-## これまでの状態
+## おさらい
 
 L3 を終えた時点:
 
@@ -43,7 +43,7 @@ crates/evm/Cargo.toml          — 空 [dependencies]
 
 `cargo check --workspace` が pass; `cargo test -p openhl-evm` は 0 テスト実行。
 
-## これから build するもの
+## 計画
 
 4 つのことをする:
 
@@ -54,7 +54,7 @@ crates/evm/Cargo.toml          — 空 [dependencies]
 
 これが初めて書く Rust の impl だ。ここで encode するパターンは繰り返される: L5 の `RethEvmBridge` も同じスケルトンを使い、L11+ の `LiveRethEvmBridge` もそうだ。**State 管理パターン (Mutex<State> + pending vs chain map) もそれらの impl に伝播する。**
 
-> 🛑 **予測。** スクロール前に: test double の `build_payload` が **fake する** ものは何で、**実際にできる** ものは何か? ヒント: EVM は走らせられないが、できること: `PayloadId` を割り当てる、block number をインクリメントする、hash を synthesize する、pending block を覚える。Fake vs real の区別は L5 + L11 で意味を持つ。
+> 🛑 **予測してみよう。** スクロール前に: test double の `build_payload` が **fake する** ものは何で、**実際にできる** ものは何か? ヒント: EVM は走らせられないが、できること: `PayloadId` を割り当てる、block number をインクリメントする、hash を synthesize する、pending block を覚える。Fake vs real の区別は L5 + L11 で意味を持つ。
 
 ## 手を動かす walk-through
 
@@ -184,7 +184,7 @@ impl ConsensusBridge for InMemoryEvmBridge {
 5. **`ExecutedBlock` を build** し `pending` に stash する。block は parent_hash、number、hash、ゼロ state_root を持つ (EVM を走らせていない)。
 6. **`Ok(PayloadId(id))` を返す**。
 
-> 🛑 **反流暢性。** 「`BlockHash` に real cryptographic hash を使うべきでは。」 **違う** — これは test double。Real hashing は EVM を走らせて post-state root を compute する必要があり、それを避けるために test double を使っている。Synthesize した hash は `BlockHash` の *uniqueness* 要求を満たすが、*cryptographic-commitment* 要求は満たさない、これでよい — unit test として。Module 1 L11+ (LiveRethEvmBridge) が real hashing をするが、それは Reth が仕事をするから。
+> 🛑 **流暢さ警告。** 「`BlockHash` に real cryptographic hash を使うべきでは。」 **違う** — これは test double。Real hashing は EVM を走らせて post-state root を compute する必要があり、それを避けるために test double を使っている。Synthesize した hash は `BlockHash` の *uniqueness* 要求を満たすが、*cryptographic-commitment* 要求は満たさない、これでよい — unit test として。Module 1 L11+ (LiveRethEvmBridge) が real hashing をするが、それは Reth が仕事をするから。
 
 ### Step 5: `payload_ready` を impl
 
@@ -470,12 +470,12 @@ L4 が引用する openhl commit (§答え合わせ で参照):
 
 - **L4 は 40 分** — 最初に reader が意味のある impl (~120 行) を書く。9 step に分けて各々消化しやすくする。
 - **§Step 4 で `build_payload` を 6 sub-point で walk する。** これがレッスンの pedagogical core — reader が idiomatic Rust で Mutex 取得、単調 ID 割り当て、parent lookup、hash synthesize の姿を学ぶ。**圧縮しない**。
-- **Step 4 の反流暢性 callout** (「real cryptographic hash を使うべき」) は over-engineering の trap を name で指摘する。Test double に何時間も無駄にする。
+- **Step 4 の流暢さ警告 callout** (「real cryptographic hash を使うべき」) は over-engineering の trap を name で指摘する。Test double に何時間も無駄にする。
 - **5 テストが right thing をテストする**: round-trip、validation、commit、monotonicity、error path。この impl にとって「正しい数」のテスト — 少なすぎるとバグを見逃し、多すぎると busywork。
 - **§設計を振り返る の「データフローの形が伝播」 point** が最も重要な meta-lesson。Reader は test double を書いているが、パターンは production impl に survive する — trait の polymorphism payoff。
 - **翻訳 policy は L1/L2/L3 JA と同一**:
   - Rust の syntax (impl、trait、Mutex、HashMap、async fn 等) は英語のまま
   - `#[async_trait]`、`#[must_use]`、`#[tokio::test]` 等の attribute は英語のまま
   - コード、ファイルパス、コマンド、Cargo.toml syntax は英語のまま
-  - 🛑 callout: 予測 (Predict)、反流暢性 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)
   - 「poison する」「synthesize する」「lookup する」「clone する」は英語動詞の JA 化で OK

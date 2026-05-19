@@ -2,7 +2,7 @@
 
 > openhl SHA `c938321` (Stage 5b: RethEvmBridge — Reth/alloy 型に対する ConsensusBridge 実装) に対してドラフト。本レッスンで初めて alloy を workspace dep として使い、実コードから呼ぶ。
 > EN ミラー: `drafts/openhl_l5_en.md`。
-> Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
+> Course: `building-openhl-consensus-ja` (track: `reth-l1-architect`, course #6 of 10)。
 
 ---
 
@@ -31,7 +31,7 @@ cargo test -p openhl-evm
 
 **自分のコードが alloy / Reth 型に初めて触れるレッスン**だ。「テスト用は合成、production-shape は real 型」というパターンはコースを通して繰り返される; ここできれいに学ぶと L11+ で時間を節約できる。
 
-## これまでの状態
+## おさらい
 
 L4 を終えた時点:
 
@@ -43,7 +43,7 @@ crates/evm/Cargo.toml       — 3 deps (openhl-consensus、openhl-types、async-
 
 `cargo test -p openhl-evm` が 5/5 pass。
 
-## これから build するもの
+## 計画
 
 6 つのことをする:
 
@@ -56,7 +56,7 @@ crates/evm/Cargo.toml       — 3 deps (openhl-consensus、openhl-types、async-
 
 key step は #2 — **内部 state の形が変わる**。L4 は `ExecutedBlock` を直接保存していた。L5 は `(B256, Header)` を保存する: alloy-native な型で、`ExecutedBlock` への変換は trait boundary でだけ行う。**alloy 型が source of truth、`ExecutedBlock` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — `LiveRethEvmBridge` は同じ「内部 vs 境界」split を保ったまま、その後ろに real Reth provider を追加する。
 
-> 🛑 **予測。** L4 の `InMemoryEvmBridge` は hash を `(id, number)` から合成した。L5 の `RethEvmBridge` は `header.hash_slow()` を呼ぶ — real RLP encoding + Keccak-256。**この違いで testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
+> 🛑 **予測してみよう。** L4 の `InMemoryEvmBridge` は hash を `(id, number)` から合成した。L5 の `RethEvmBridge` は `header.hash_slow()` を呼ぶ — real RLP encoding + Keccak-256。**この違いで testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
 
 ## 手を動かす walk-through
 
@@ -208,7 +208,7 @@ impl ConsensusBridge for RethEvmBridge {
 
 **この block hash は real だ。** header のどのフィールドが call 間で 1 byte でも変われば、結果の hash が異なる。L4 の合成 hash にはこの性質がなかった; L5 の hash にはある。Step 9 のテストがこれを証明する。
 
-> 🛑 **反流暢性。** 「`hash` を `header` とは別に保存した方がきれい — タプルじゃなくて。」 **やろうと思えばできる、`State` にフィールドが 1 つ増えるだけ。だがタプルは関係を捉える — この hash は、ちょうどこの header の hash だ、と。** 別々に持つと、header を変更したのに hash の recompute を忘れるバグを招く。タプルにすることで両者が不可分になる。
+> 🛑 **流暢さ警告。** 「`hash` を `header` とは別に保存した方がきれい — タプルじゃなくて。」 **やろうと思えばできる、`State` にフィールドが 1 つ増えるだけ。だがタプルは関係を捉える — この hash は、ちょうどこの header の hash だ、と。** 別々に持つと、header を変更したのに hash の recompute を忘れるバグを招く。タプルにすることで両者が不可分になる。
 
 ### Step 5: `payload_ready`、`validate_payload`、`commit` を impl
 
@@ -293,7 +293,7 @@ fn to_executed_block(hash: B256, header: &Header) -> ExecutedBlock {
 
 **なぜ 1 つの大きな変換関数ではなく 3 つに分けるのか?** 各々が 1 つのことをするから。`to_b256` と `from_b256` は pure な型変換 (ロジックなし)。`to_executed_block` は `Header` のどのフィールドが `ExecutedBlock` のどのフィールドに mapping するかを知っている。分けることで各ヘルパーが明らかに正しい形になる。
 
-> 🛑 **反流暢性。** 「`B256` も `BlockHash` も `[u8; 32]` を wrap している。`transmute` で変換できないか?」 **やめてくれ。** Byte layout は同一だが、型は型システム上は別物 — それが point だ。変換関数が境界の場所を document する。将来 `BlockHash` が追加の metadata (例: checksum) を持つようになったら、`transmute` はバグになる; `to_b256` は更新すべき場所になる。
+> 🛑 **流暢さ警告。** 「`B256` も `BlockHash` も `[u8; 32]` を wrap している。`transmute` で変換できないか?」 **やめてくれ。** Byte layout は同一だが、型は型システム上は別物 — それが point だ。変換関数が境界の場所を document する。将来 `BlockHash` が追加の metadata (例: checksum) を持つようになったら、`transmute` はバグになる; `to_b256` は更新すべき場所になる。
 
 ### Step 7: `engine` を crate に組み込む
 
@@ -518,7 +518,7 @@ L5 が引用する openhl commit (§答え合わせ で参照):
 ## Style review notes (self-critique before paste)
 
 - **L5 は 40 分** — コード量は L4 と同程度だが、alloy 型概念を学ぶ。
-- **§これから build するもの の「内部 vs trait-boundary」split の説明** が最重要 meta lesson。L11+ で拡張されるパターン。圧縮しない。
+- **§計画 の「内部 vs trait-boundary」split の説明** が最重要 meta lesson。L11+ で拡張されるパターン。圧縮しない。
 - **Step 4 の walk-through は密** — `hash_slow()`、`Default::default()`、alloy newtype 変換、`find` 内 closure パターン。読者が alloy idiom に初めて出会うレッスンなのでペーシングが重要。
 - **Hash divergence test** がレッスンの pedagogical hook — 読者が L4 の予想を裏切る「real hashing」を目撃する。
 - **§設計を振り返る の「タプルが両者を bind」point** は小さいが重要。新人 Rust 開発者は関連する値を別フィールドに置いて一方の update を忘れがち。
@@ -527,4 +527,4 @@ L5 が引用する openhl commit (§答え合わせ で参照):
   - alloy/Reth 型名 (`Header`、`B256`、`Address`、`SealedHeader` 等) は英語のまま
   - `hash_slow`、`Default::default()`、`#[async_trait]` 等は英語のまま
   - 「source of truth」「production-shape」「materialize する」等は英語のまま
-  - 🛑 callout: 予測 (Predict)、反流暢性 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)

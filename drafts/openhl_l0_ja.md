@@ -2,7 +2,7 @@
 
 > openhl SHA `0844d58` (Stage 7c) に対してドラフト。本コースは **build-along 版**で、読者がレッスンごとにコードを書き、最終的に動く single-validator devnet を手元に得る。以前の reading-focused 版は git tag `pre-c2-rewrite-2026-05-18` で保存されている。
 > EN ミラー: `drafts/openhl_l0_en.md`。
-> Course: `building-openhl-consensus-en` (track: `reth-l1-architect`, course #6 of 10)。
+> Course: `building-openhl-consensus-ja` (track: `reth-l1-architect`, course #6 of 10)。
 
 ---
 
@@ -66,8 +66,8 @@ Hyperliquid は 2025 年に $300B+ の perp 取引量を完全クローズドソ
 すべてのレッスンが同じ形をしている:
 
 1. **ゴール。** 「本レッスン終了時、`cargo test <name>` が pass する」。そのテストは今は pass しない。それを pass させるのが本レッスンの仕事。
-2. **これまでの状態。** workspace の現状。前のレッスンで build した部分。今時点で通っているテスト一覧。
-3. **これから build するもの。** 何を足すか。openhl メンテナがオリジナルで実装したときに下した設計判断。
+2. **おさらい。** workspace の現状。前のレッスンで build した部分。今時点で通っているテスト一覧。
+3. **計画。** 何を足すか。openhl メンテナがオリジナルで実装したときに下した設計判断。
 4. **手を動かす walk-through。** ステップごとのコード。書く、保存する、各ステップ後に `cargo check` を走らせる。
 5. **テスト。** `cargo test <name>` を走らせる。pass するはず。pass しない場合の典型的なミス。
 6. **設計を振り返る。** このレッスンで encode した load-bearing な判断のうち、後で参照する重要なもの 1-2 個。
@@ -115,7 +115,7 @@ cargo check  # 初回は時間がかかる — Reth は大きい
 
 `openhl-reference` 側で `cargo check` が pass すれば toolchain は正しい。次に進める。pass しない場合は toolchain version をまず直す — そのリポの `rust-toolchain.toml` が Rust 1.95.0 を pin している。
 
-> 🛑 **反流暢性。** 「`openhl-reference` を直接編集すればいい。」 **違う。** あのリポは答え合わせであって自分の workspace ではない。read-only として扱うこと。`my-openhl/` への編集は自分のコード; `openhl-reference/` への編集は混乱の元 — どれが自分が書いたコードでどれが元からあったコードか分からなくなる。
+> 🛑 **流暢さ警告。** 「`openhl-reference` を直接編集すればいい。」 **違う。** あのリポは答え合わせであって自分の workspace ではない。read-only として扱うこと。`my-openhl/` への編集は自分のコード; `openhl-reference/` への編集は混乱の元 — どれが自分が書いたコードでどれが元からあったコードか分からなくなる。
 
 ## 6. 15 レッスンの地図
 
@@ -154,7 +154,7 @@ diff -ru ~/code/my-openhl/crates/types ./crates/types
 
 自分のコードは細かい点 (空白、変数名、コメントの言い回し) で違って当然だ。重要なのは型、シグネチャ、制御フローが等価であること。そこが大きく食い違うようなら、レッスンが land していない — 設計を振り返るセクションを再読して調整する。
 
-> 🛑 **反流暢性。** 「答え合わせから直接 type した方が早い。」 **違う、それが一番悪い道だ。** `openhl-reference` から copy すれば 30 分で終わるが、学べることは何もない。レッスンの説明に従って自分で type し、レッスンが描写している摩擦に当たり、結果として答え合わせのコードと一致する状態に着地する — それが本来の道だ。一致するのは **証拠** であり、目的ではない。
+> 🛑 **流暢さ警告。** 「答え合わせから直接 type した方が早い。」 **違う、それが一番悪い道だ。** `openhl-reference` から copy すれば 30 分で終わるが、学べることは何もない。レッスンの説明に従って自分で type し、レッスンが描写している摩擦に当たり、結果として答え合わせのコードと一致する状態に着地する — それが本来の道だ。一致するのは **証拠** であり、目的ではない。
 
 ## 8. セットアップ確認 — 本レッスンの実際の演習
 
@@ -203,12 +203,12 @@ L0 自体には `file:line@SHA` cite はない — pure orientation なので。
 - **L0 は 20 分 (旧版より長い)** だが、build-along では setup + 15 レッスンの地図 + 答え合わせ作法 + 練習として実際のコマンド実行があるため、reading 版より練習要素が増える。XP 60 はその反映。
 - **3am hook ではなく、行動志向の hook で開く** — 「14 レッスンで build する」と冒頭で約束する形に変更。3am hook は L1-L14 で読者が自分のコードをデバッグするときに復活する。
 - **§5 (セットアップ) が最初の action**。L1 に進む前に setup を済ませてもらわないと、L1 で詰まる。L0 の最終演習は「3 つのコマンドを走らせて pass を確認」。
-- **§7 の反流暢性 callout** (「答え合わせから copy するな」) が最も重要な行動規範。これがないと読者は copy して何も学ばない。**強調を維持**。
+- **§7 の流暢さ警告 callout** (「答え合わせから copy するな」) が最も重要な行動規範。これがないと読者は copy して何も学ばない。**強調を維持**。
 - **§6 の 15 レッスンの地図** は読者が最も頻繁に参照するアーティファクト。レッスンタイトルや test 名を後で変更したら、ここも sync させる必要がある。
 - **以前の reading-focused 内容は git history に保存済み** — タグ `pre-c2-rewrite-2026-05-18` で復元可能。需要があれば後で「Companion guide」として復活させられる。
 - **翻訳 policy は他の JA レッスンと同一**:
   - Rust/Cargo 用語、Reth/Malachite 識別子は英語のまま
-  - 🛑 callout: 反流暢性 (anti-fluency) で統一
+  - 🛑 callout: 流暢さ警告 (anti-fluency) で統一
   - File paths、function names、types は英語のまま
 - **「自作する」を採用** (「構築する」ではなく) — build-along のニュアンスを直接伝えるため。レッスンタイトルでも統一。
 - **「reading-focused」「build-along」「pure state machine」等は英語のまま** — 直訳が tech reader にとって不自然になるため。

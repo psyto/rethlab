@@ -64,7 +64,7 @@ crates/consensus/src/bridge.rs            — ConsensusBridge trait + InMemoryEv
 2. **`crates/consensus/src/engine_app.rs` を作成** — `B: ConsensusBridge` に対してジェネリックな async 関数 `run_engine_app<B>` と `default_attrs()` ヘルパー。routing logic 約 130 行。
 3. **`pub mod engine_app;`** を `lib.rs` に配線。
 4. **integration test `first_block_via_engine_actors`** と `StubBridge` test fixture (`ConsensusBridge` を同期的にインメモリで impl) を追加。
-5. **実行** — `cargo test -p openhl-consensus first_block_via_engine_actors` が ~0.02 秒で合格。**凝視する。**
+5. **実行** — `cargo test -p openhl-consensus first_block_via_engine_actors` が ~0.02 秒で合格。**じっくり見届けよう。**
 
 このレッスンが教えるのは **actor-message-loop パターン**。ほとんどの consensus engine (CometBFT、Hotstuff、Aura) は **何らかの** 「application interface」を持つが、形は様々: callback、gRPC service、FFI バインディング。Malachite のアプローチは型付きメッセージの `tokio::mpsc` チャネル — 強型、async-native、チャネルごとに single-threaded。`run_engine_app` はそれらメッセージの **consumer**; engine actor は **producer**。**このパターンを理解すれば、どの chain フレームワークの「application interface」もそのバリアントに帰着する。**
 
