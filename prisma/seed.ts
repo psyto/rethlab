@@ -27,6 +27,8 @@ import { seedRethValidatorOpsEN } from './seed-reth-validator-ops-en';
 import { seedRethValidatorOpsJA } from './seed-reth-validator-ops-ja';
 import { seedRethOpenHlConsensusEN } from './seed-reth-openhl-consensus-en';
 import { seedRethOpenHlConsensusJA } from './seed-reth-openhl-consensus-ja';
+import { seedRethOpenHlClobEN } from './seed-reth-openhl-clob-en';
+import { seedRethOpenHlClobJA } from './seed-reth-openhl-clob-ja';
 
 const prisma = new PrismaClient();
 
@@ -124,6 +126,9 @@ async function main() {
   await seedRethOpenHlConsensusEN(prisma);
   await seedRethOpenHlConsensusJA(prisma);
   console.log('  Seeded Building OpenHL — Consensus Substrate (EN + JA)');
+  await seedRethOpenHlClobEN(prisma);
+  await seedRethOpenHlClobJA(prisma);
+  console.log('  Seeded Building OpenHL — CLOB matching engine (EN + JA)');
 
   const courseCount = await prisma.course.count();
   const moduleCount = await prisma.module.count();
