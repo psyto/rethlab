@@ -83,7 +83,7 @@ mod tests {
 
 > 🛑 **考えてみよう。** スクロールする前に: 9 個のうちどれが、`submit_limit::Buy` が ask を **降順** (最高値先) に walk するバグで失敗する? ヒント: 「best ask 先」を specifically assert するテストを考える。
 
-(答え: `buy_market_takes_best_ask`。`r.fills[0].price == Price(100)` と `r.fills[1].price == Price(105)` — best-first を assert する。降順 walk なら `[105, 100]` を produce する。**Hand-trace テストは randomized テストも catch するが、より安く directional バグを catch する。**)
+(答え: `buy_market_takes_best_ask`。`r.fills[0].price == Price(100)` と `r.fills[1].price == Price(105)` — best-first を assert する。降順 walk なら `[105, 100]` を produce する。**Directional バグは randomized テストでも catch できるが、hand-trace テストならより安く catch できる。**)
 
 ## 手順
 
@@ -138,7 +138,7 @@ let order = Order {
 
 **引数順序が重要**: `limit` で `(id, account, side, price, qty)`、`market` で `(id, account, side, qty)`。1 回覚える; どのテストでも同じ慣習を使う。`id` を先にすると、テストが時間順に読める (`limit(1, ...)` が最初の order、`limit(2, ...)` が 2 番目)。
 
-> 🛑 **やりがちな勘違い。** 「Builder パターンを使う — `OrderBuilder::new().id(1).account(100).side(Buy).qty(10).limit_price(100).build()`」。 **5-field struct リテラルより冗長で、目的を defeat する。** Builder が活きるのは field が optional または widely varying なとき; ここでは全 order が全 5 field を持ち全部必須。positional 引数の 5-arg 関数は書くのが速く、call site で読むのが速く、reader に Order が何を必要とするか即座に伝える。
+> 🛑 **やりがちな勘違い。** 「Builder パターンを使う — `OrderBuilder::new().id(1).account(100).side(Buy).qty(10).limit_price(100).build()`」。 **5-field struct リテラルより冗長で、本末転倒。** Builder が活きるのは field が optional または widely varying なとき; ここでは全 order が全 5 field を持ち全部必須。positional 引数の 5-arg 関数は書くのが速く、call site で読むのが速く、reader に Order が何を必要とするか即座に伝える。
 
 ### Step 2: Test 1 — `empty_book_has_no_best_prices`
 
@@ -391,7 +391,7 @@ test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 2. **9 個のテストは有限で defensible なセット。** 各テストが特定の invariant に対応: empty-book、resting、walks-levels、respects-limit、FIFO、partial-market、cancel-found、cancel-not-found、no-cross。100 個書かない。**Invariant のリストは短く明確; カバレッジは invariant ごと、テスト数ごとではない。**
 
-3. **`book_does_not_cross_after_match` が最後に配置されている。** テストはアルファベット順で走るので、このテストの **ソース順序** での配置は実行順に影響しない。だが **読む** 順序 (上から下に file を scan するメンテナ) では、最重要テストが最も目立つ。**ソースレイアウトが最重要に関する優先度シグナルを encode する。**
+3. **`book_does_not_cross_after_match` が最後に配置されている。** テストはアルファベット順で走るので、このテストの **ソース順序** での配置は実行順に影響しない。だが **読む** 順序 (上から下に file を scan するメンテナ) では、最重要テストが最も目立つ。**ソース上のレイアウト自体が「何が最重要か」の優先度シグナルを encode する。**
 
 ## 答え合わせ
 

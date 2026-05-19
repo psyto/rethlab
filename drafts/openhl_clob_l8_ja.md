@@ -271,7 +271,7 @@ Invariant: `total_in = 2 * total_filled + total_market_unfilled + resting_qty`�
 
 **`prop_assert_eq!` (`assert_eq!` ではない) が重要** — proptest が「テスト失敗」を「システムエラーで panic」と区別する必要がある。`prop_assert_eq!` が failure を proptest の shrinking 機構に報告し、それが最小反例を見つけようとする。
 
-> 🛑 **やりがちな勘違い。** 「`total_in = 2 * total_filled + ...` がおかしい — なぜ double-count?」 **marketplace では fill が **2 つの unit** を伴う — buyer の意図 1 個と seller の意図 1 個。** Maker が 5 オファーし taker が 5 取ると、engine は 10 unit の「マッチング需要」を見ている: 各 side から 5 個。2 つが size 5 の Fill にまとまったが、entered したときは 10 個の個別な taker-or-maker-unit だった。**Invariant は **個別の taker/maker 意図** を数える、unique unit ではなく。**
+> 🛑 **やりがちな勘違い。** 「`total_in = 2 * total_filled + ...` がおかしい — なぜ double-count?」 **marketplace では fill が **2 つの unit** を伴う — buyer の意図 1 個と seller の意図 1 個。** Maker が 5 オファーし taker が 5 取ると、engine は 10 unit の「マッチング需要」を見ている: 各 side から 5 個。2 つが size 5 の Fill にまとまったが、entered したときは 10 個の個別な taker-or-maker-unit だった。**Invariant が数えるのは個別の taker/maker 意図であって、unique な unit ではない。**
 
 ### Step 5: 2 つ目の invariant — `no_crossed_book`
 
@@ -379,7 +379,7 @@ Body:
 > - Sync barrier なしで order を非同期処理する `tokio::task` を spawn。
 > - `f64` field を保存し、その bit に依存。
 >
-> どれもコンパイルが通り、`no_crossed_book` を pass し、未来の contributor が導入したときだけ失敗する — `determinism` がここで catch する。**これが 6 ヶ月後の自分から自分を守るテスト。**
+> どれもコンパイルが通り、`no_crossed_book` を pass し、未来の contributor が導入したときだけ失敗する — `determinism` がここで catch する。**6 ヶ月後の自分から今の自分を守るテスト。**
 
 ## テスト
 

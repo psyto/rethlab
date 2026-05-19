@@ -156,7 +156,7 @@ L6 が明示的に O(1) index ではなくシンプルさを選んだ。openhl �
 
 最も難しい部分は matching ロジックを書くことではなかった — L4 の submit_limit は構造を理解すれば 60 行。**最も難しい部分は determinism property** — 可能な submit のすべての順序付けにわたって engine が同じ答えを produce することを確実にすること。L8 proptest がテストしようと思わなかったバグを catch し、それが build した engine が consensus に plug して safe である理由。
 
-Correct だが non-deterministic な matching engine は consensus を壊す。Deterministic なものは devnet から mainnet への移行を生き残るコード。
+Correct だが non-deterministic な matching engine は consensus を壊す。Deterministic なものこそ、devnet から mainnet への移行を生き残れるコード。
 
 これを使って何か作りに行こう。
 ````

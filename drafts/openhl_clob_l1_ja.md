@@ -159,7 +159,7 @@ doc コメントで 3 つ注目する点:
 - **`OrderId` は caller-allocated** — book が ID を生成しない、caller が生成する。これで book が pure-stateless に保たれる: `submit_order` は (book, order) の関数で、(book, order, generator-state) ではない。
 - **`Price`/`Qty` は minor unit** — USDC のような 6-decimal token では `Price(1_000_000)` が $1.00 を表す。Matching engine に `f64` は **存在しない**。**お金の計算で float は禁止。**
 
-> 🛑 **やりがちな勘違い。** 「便利のために `pub fn from_dollars(d: f64) -> Price` メソッドを追加しよう。」 **ダメ、f64 の精度の罠を engine に持ち込むことになる。** `Price(1_000_000)` が wire format。User 向けツールが `from_dollars` をやりたければ、自分の境界で integer 乗算をして bridge に integer-typed Price を渡す。Matching engine は float を見ない。
+> 🛑 **やりがちな勘違い。** 「便利のために `pub fn from_dollars(d: f64) -> Price` メソッドを追加しよう。」 **ダメ、f64 の精度問題を engine に持ち込むことになる。** `Price(1_000_000)` が wire format。User 向けツールが `from_dollars` をやりたければ、自分の境界で integer 乗算をして bridge に integer-typed Price を渡す。Matching engine は float を見ない。
 
 ### Step 4: `Side` enum と `opposite()` ヘルパー
 
@@ -185,7 +185,7 @@ impl Side {
 
 variant 2 個。`opposite()` メソッドは今 1 行だが、後で load-bearing になる: taker order が来たとき book の **反対側** を walk して流動性を探す。Buy taker は ask を walk; Sell taker は bid を walk。**ルールを `opposite()` に 1 回 encode することで、book コードを読むときどっち側を walk するか忘れない。**
 
-`#[derive(PartialOrd, Ord)]` が **ない** のは意図的。「Buy は Sell より小さい?」は無意味。trait を抜くことで、caller が `if side < Side::Sell` を偶発的に書いて意図しない順序 (declaration 順なので `Buy < Sell`) を得るのを防ぐ。
+`#[derive(PartialOrd, Ord)]` が **ない** のは意図的。「Buy は Sell より小さい?」は無意味。trait を抜くことで、caller が `if side < Side::Sell` を偶発的に書いてしまい、declaration 順 (`Buy < Sell`) という意図しない順序づけが効いてしまうのを防ぐ。
 
 > 🛑 **やりがちな勘違い。** 「bool でいいんじゃない? `is_buy: bool` でバイト節約。」 **call site で意味が失われる。** `submit_order(order, true)` は読み手にゴミに見える; `submit_order(order, Side::Buy)` は明らか。enum vs bool の 1 バイトのコストは、bool の可読性コストに比べたら無視できる。**名前を持つものは enum、on/off 以上の名前を持たないものだけ bool。**
 

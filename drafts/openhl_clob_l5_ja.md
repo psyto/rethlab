@@ -65,7 +65,7 @@ fn match_at_level(taker: &Order, price: Price, ...) -> Fill { ... }
 
 新規型なし、新規ヘルパーなし。L4 の `match_at_level` をそのまま再利用。
 
-レッスンが短いのは **L5 が L4 の大部分の作業の後に残ったもの** だから。構造パターンは同じ; 違いが「market order」が「limit order」と semantic にどう違うかを作る。
+レッスンが短いのは **L5 が L4 の大部分の作業の後に残ったもの** だから。構造パターンは同じ; 違うのは「market order」と「limit order」の意味的な差分。
 
 > 🛑 **考えてみよう。** スクロールする前に: ask が `{ Price(100): [O_a (30 units)] }` で、50 unit の Market buy が arrive したとする。Fill は何で、`FillResult::remaining_qty` には何が入る? 対比: 同じ開始 book、ただし price 100 で 50 unit の Limit buy。**残り 20 unit は各ケースでどこに行く?**
 
@@ -226,7 +226,7 @@ mod smoke {
 
 `cargo test -p openhl-clob smoke` で走らせる。両方 pass するはず。**それから smoke module を削除する** — L7-L8 に real なテストスイート。
 
-2 つの smoke test の対比は L5 のレッスン本質の minicapsule: **matching 後に残ったものは fill が produce されたかどうかに関わらず破棄される**。Market order 後の book 状態は、消費された liquidity を引いた book 状態そのもの — resting order が追加されない。
+2 つの smoke test の対比は L5 のレッスン本質の要約 (ミニ版): **matching 後に残ったものは fill が produce されたかどうかに関わらず破棄される**。Market order 後の book 状態は、消費された liquidity を引いた book 状態そのもの — resting order が追加されない。
 
 よくあるエラーと対処:
 

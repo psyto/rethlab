@@ -128,7 +128,7 @@ L9 のコメントが明示的にここを指す。これが変更場所。
 
 `std::mem::take(...)` 式全体が **lock 下の単一 atomic 操作** — 他の caller が「半 drain 状態」を見ることはない。`pending_fills` は full または空、決して mid-drain ではない。
 
-> 🛑 **やりがちな勘違い。** 「`collect` して別途 clear すれば、`let drained = guard.iter().copied().collect::<Vec<_>>(); guard.clear();` のように?」 **できる — caller に対する結果は同じ。** だが: (a) `iter().copied().collect()` が O(N) copy 仕事 + O(N) clear 仕事、`mem::take` の O(1) pointer swap に対し; (b) 2 step 版には `pending_fill_count()` を読んでいる誰かが既に collect 済みなのに古い count を見る窓がある。`mem::take` は外側から atomic。**One-shot swap は速くより correct。**
+> 🛑 **やりがちな勘違い。** 「`collect` して別途 clear すれば、`let drained = guard.iter().copied().collect::<Vec<_>>(); guard.clear();` のように?」 **できる — caller に対する結果は同じ。** だが: (a) `iter().copied().collect()` が O(N) copy 仕事 + O(N) clear 仕事、`mem::take` の O(1) pointer swap に対し; (b) 2 step 版には `pending_fill_count()` を読んでいる誰かが既に collect 済みなのに古い count を見る窓がある。`mem::take` は外側から atomic。**One-shot の swap のほうが速く、より correct。**
 
 ### Step 3: 他に何も変わっていないことを verify
 
@@ -193,7 +193,7 @@ grep -n "Vec::new()" crates/evm/src/live_node.rs
 
 1. **Submit ではなく build_payload で drain。** Submit は `pending_fills` に push する; `build_payload` だけがそれを空にする。意図的 — **fill が、それが組み立てられた payload でグループ化される**、来た順序ではない。下流の payload-consumer が「前の payload と今の payload の間に起きた fill のこの batch」という coherent な view を得る。Submit 時に drain すると、bridge がどの fill がどの payload と一緒に行くかを track するサイドチャンネルが必要 — state が増え、帳簿管理が増える。
 
-2. **`std::mem::take` が正しい primitive。** O(1)、lock 下で atomic、意図 (「全部取って default を残す」) を signal する。代替 — `collect::<Vec<_>>(...drain(..))` + 明示的 clear — は O(N) で半 drain 窓がある。**標準ライブラリの primitive を知ることで、より遅いまたはバグのあるバージョンを発明することから自分を守る。**
+2. **`std::mem::take` が正しい primitive。** O(1)、lock 下で atomic、意図 (「全部取って default を残す」) を signal する。代替 — `collect::<Vec<_>>(...drain(..))` + 明示的 clear — は O(N) で半 drain 窓がある。**標準ライブラリの primitive を知っておくこと自体が、より遅くてバグの多い自前版を発明してしまう事故から自分を守る。**
 
 3. **Drain は forward-only。** Payload N が (前回 build_payload 呼び出し) と (今回呼び出し) の間に produce された fill を attach する。以前の payload は、後で arrive した fill で更新されない。これが chain の意味論と一致: block が build されたら、その content は frozen。**Buffer-then-drain shape が、明示的なグループ化メカニズムを必要とせずに「この block に何があるか」を encode する。**
 

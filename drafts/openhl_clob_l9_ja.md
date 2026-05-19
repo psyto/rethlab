@@ -255,7 +255,7 @@ impl<P> LiveRethEvmBridge<P> {
 
 3 メソッドすべてが `&self` を取ることに注意。内部 `Mutex` が重い lifting をする; public API が「shared 参照 + interior mutability」、まさに async コードが必要とするもの (複数の async task が `&LiveRethEvmBridge` を同時に保持できる)。
 
-> 🛑 **やりがちな勘違い。** 「`submit_order` が `&mut self` ではなく `&self` を取るのは?」 **Bridge を、order を同時に submit したい async task 間で共有する必要があるから。** Matching engine (実際に mutate するコード) が `Mutex` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制するので、この mutation は安全」と受け入れる。`submit_order` が `&mut self` を取ると、`Arc<RwLock<LiveRethEvmBridge>>` が必要になり、submit ごとに bridge 全体を lock する — パフォーマンスが悪化し API が変。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
+> 🛑 **やりがちな勘違い。** 「`submit_order` が `&mut self` ではなく `&self` を取るのは?」 **Bridge を、order を同時に submit したい async task 間で共有する必要があるから。** Matching engine (実際に mutate するコード) が `Mutex` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制するので、この mutation は安全」と受け入れる。`submit_order` が `&mut self` を取ると、`Arc<RwLock<LiveRethEvmBridge>>` が必要になり、submit ごとに bridge 全体を lock する — パフォーマンスが悪化し、API の形も適切でない。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
 
 ### Step 7: destructuring を波及更新
 

@@ -98,7 +98,7 @@ cargo test -p openhl-evm --release 2>&1 | tail -10
 
 それらが pass すれば start point として正しい。pass しなければまず course 6 を完了させる。
 
-> 🛑 **やりがちな勘違い。** 「`git clone psyto/openhl` してそのコードベースに対して course 7 を進めればいい」。 **やれるが、摩擦を逃すことになる。** 本コースは build-along: matching engine を `my-openhl/` でゼロから書き、reference に対して diff する。`openhl-reference` で start すると course 6 §7 で論じた「答え合わせから type する」モードに逆戻りする。
+> 🛑 **やりがちな勘違い。** 「`git clone psyto/openhl` してそのコードベースに対して course 7 を進めればいい」。 **やれるが、摩擦という学びを取りこぼす。** 本コースは build-along: matching engine を `my-openhl/` でゼロから書き、reference に対して diff する。`openhl-reference` で start すると course 6 §7 で論じた「答え合わせから type する」モードに逆戻りする。
 
 ## 5. 12 レッスンの全体マップ
 
@@ -133,7 +133,7 @@ diff -u ~/code/my-openhl/crates/clob/src/types.rs ./crates/clob/src/types.rs
 
 meaningfully にマッチする — 同じ型、同じ制御フロー。空白と命名は違ってよい。
 
-> 🛑 **やりがちな勘違い。** 「CLOB の仕組みはもう知っているから L9 まで飛ばして bridge 統合だけ学べばいい」。 **やれるが、L1-L8 はエンジンを後で改変するときに効く設計判断を encode している。** 逆順 bid、price level 内の FIFO、cancel-then-cleanup invariant — どれも自分で build しないと明らかにならない。L1-L8 をスキップするとコードは読めるが安全に変更できない。
+> 🛑 **やりがちな勘違い。** 「CLOB の仕組みはもう知っているから L9 まで飛ばして bridge 統合だけ学べばいい」。 **やれるが、L1-L8 が encode している設計判断は、エンジンを後で改変するときに効いてくる。** 逆順 bid、price level 内の FIFO、cancel-then-cleanup invariant — どれも自分で build しないと明らかにならない。L1-L8 をスキップするとコードは読めるが安全に変更できない。
 
 ## 7. セットアップ確認 — 実際の L0 演習
 
@@ -154,7 +154,7 @@ cd ~/code/openhl-reference && git log --oneline | grep -E "(55a9dff|428cc26)"
 
 3 つ全部 pass すれば L1 に進む準備 OK。
 
-> **最終チェック。** 本コースが course 6 になかった何を追加するのか、1 文で言える? もし答えに「committed block に流れる fill を produce する matching engine」が入っていなければ §1 を読み直す。
+> **最終チェック。** 本コースが course 6 になかった何を追加するのか、1 文で言える? 答えに「fill を produce する matching engine、その fill が committed block に流れる」のような要素が入っていなければ §1 を読み直す。
 ````
 
 ---

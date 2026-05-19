@@ -99,7 +99,7 @@ L10 完了時点、`LiveRethEvmBridge` は:
 - **`#[tokio::test(flavor = "multi_thread", worker_threads = 4)]`** — course 6 の integration test と同じ。Reth の `EthereumNode` がバックグラウンド task をいくつか spawn する (RPC、payload builder 等) ので multi-threaded tokio runtime が必要。4 worker setup でそれらに余裕を与える。
 - **`use openhl_clob::{AccountId, OrderId, OrderType, Price, Qty, Side};`** — L1 の newtype セットから必要な型を import。`Order` と `Fill` 型は `mod tests` の冒頭の `super::*` で既に scope にある。
 
-> 🛑 **やりがちな勘違い。** 「これらの型を `mod tests` のトップではなくテスト関数内で import するのは?」 **テストの依存をテストサイトで visible に保つため。** 将来の reader がこのテストをデバッグしているとき、関連型を一目で見られる。コストはこれらが必要な test ごとに 1 `use` statement; 利益は各テストが self-contained なシナリオとして読めること。Real source コード (`mod tests` の外) のテストでは、トップに import を置く — だが test は特別: システムが何をするかのドキュメンテーション、inline import がドキュメンテーションをタイトにする。
+> 🛑 **やりがちな勘違い。** 「これらの型を `mod tests` のトップではなくテスト関数内で import するのは?」 **テストの依存をテストサイトで visible に保つため。** 将来の reader がこのテストをデバッグしているとき、関連型を一目で見られる。コストはこれらが必要な test ごとに 1 `use` statement; 利益は各テストが self-contained なシナリオとして読めること。Real source コード (`mod tests` の外) のテストでは、トップに import を置く — だが test は特別: システムが何をするかのドキュメンテーション、inline import がドキュメントを引き締める。
 
 ### Step 2: Reth node を bootstrap
 

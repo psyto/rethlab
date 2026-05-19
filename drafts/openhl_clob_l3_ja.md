@@ -263,7 +263,7 @@ EOF
 
 - **`error[E0277]: 'BTreeMap<Reverse<Price>, ...>' is not 'Default'`** — `BTreeMap<K, V>` は `K: Ord` を要求し、`Reverse<T>` は `T: Ord` を要求する。L1 で `Price: Ord` derive 済みなので動く。L1 で `Price` に `Ord` を derive し忘れていれば derive chain がここで壊れる。
 - **`error[E0599]: no method named 'len' for `VecDeque<RestingOrder>`** — `depth_bid`/`depth_ask` の typo。メソッドは `VecDeque::len`、`.len()` 直接または `VecDeque::len(deque_ref)` でアクセス。
-- **`error[E0382]: borrow of moved value: `rp`** in `best_bid` — `&Reverse<Price>` 参照に対する `.map(|rp| rp.0)` で、closure が `rp: &Reverse<Price>` を受け取り、`rp.0` は `Price` を値で返す (`Reverse<Price>: Copy` のため、`Price: Copy` だから)。これが error なら `Price` が `Copy` ではない — L1 の derive リストを確認。
+- **`error[E0382]: borrow of moved value: `rp`** in `best_bid` — `&Reverse<Price>` 参照に対する `.map(|rp| rp.0)` で、closure が `rp: &Reverse<Price>` を受け取り、`rp.0` は `Price` を値で返す (`Reverse<Price>: Copy` だから — それは `Price: Copy` だから)。これが error なら `Price` が `Copy` ではない — L1 の derive リストを確認。
 - **`error: cannot find type 'RestingOrder' in module 'book'`** 外側から — `RestingOrder` は private。意図的。
 
 ## 設計の振り返り
@@ -305,7 +305,7 @@ git checkout main
 できる — だが `side` と `order_type` を無駄に運ぶ (side は既に map で分かる、resting Market order は矛盾)。Trim は小さいが、「resting Market order を construct できない」という **型レベル保証** が無料で手に入る。
 
 **Q: なぜ BTreeMap field が private?**
-caller が map を直接 modify すべきでなく、`submit` / `cancel` (L4+ / L6) を通すべきだから — それらが「空 queue を map に残さない」のような invariant を維持する。`book.asks.insert(price, VecDeque::new())` を呼べてしまうと、`best_ask()` が返す phantom な空 price level が作れる。Encapsulation がそれを防ぐ。
+caller が map を直接 modify すべきでなく、`submit` / `cancel` (L4+ / L6) を通すべきだから — それらが「空 queue を map に残さない」のような invariant を維持する。`book.asks.insert(price, VecDeque::new())` を呼べてしまうと、空の price level (phantom) が作れてしまい、`best_ask()` がそれを返す。Encapsulation がそれを防ぐ。
 
 ## 次のレッスン (L4)
 

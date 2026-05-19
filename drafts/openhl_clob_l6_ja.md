@@ -231,7 +231,7 @@ mod smoke {
 
 2. **O(n) linear scan は v0 で fine。** 本番取引所は何千、何万の resting order を持つ。v0 openhl で数百なら scan はマイクロ秒。`HashMap<OrderId, (Side, Price)>` index を追加すれば cancel は O(1) になるが、加わるもの: BTreeMap と同期を保つ second data structure、追加メモリ、追加 cache pressure。**Profile に出てこないものは最適化しない。** openhl が v0 scale を超えたら index を追加; それまでは scan が正しい形。
 
-3. **Cancel は `bool` を返す、`Option<RestingOrder>` や `Result<(), CancelError>` ではない。** 削除した order を返すと `RestingOrder` を expose する (L3 で意図的に private 型にした)。`Result` を返すと caller に「見つからない」ケースを error として handle させる — が cancellation の冪等性は機能でありバグではない (cancel を 2 回呼ぶのは安全であるべき)。`bool` が「仕事をしたかしなかったか」をクリーンに言う、内部を漏らさず error-handling を強制せず。**何が起きたかについて正直な最小の return 形を選ぶ。**
+3. **Cancel は `bool` を返す、`Option<RestingOrder>` や `Result<(), CancelError>` ではない。** 削除した order を返すと `RestingOrder` を expose する (L3 で意図的に private 型にした)。`Result` を返すと caller に「見つからない」ケースを error として handle させる — が cancellation の冪等性は機能でありバグではない (cancel を 2 回呼ぶのは安全であるべき)。`bool` が「仕事をしたかしなかったか」をクリーンに言う、内部を漏らさず error-handling を強制せず。**何が起きたかを正直に表す、最小の return 形を選ぶ。**
 
 ## 答え合わせ
 

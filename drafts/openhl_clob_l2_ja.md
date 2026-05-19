@@ -153,7 +153,7 @@ doc コメント中の 3 つ、L3+ のコードが依存する:
 
 1. **`fills` は execution 順序**。Market buy が ask level を 3 個 walk すると、fills[0] が最安マッチ、fills[1] が次、fills[2] が最高。Replay determinism にこの順序が重要 (L8 の proptest が assert する)。
 2. **`remaining_qty` は rest しなかった taker quantity のみ**。Market order の remainder 100 = 100 unit がどの価格でもマッチできなかった (book が流動性切れ) を意味する。Limit order の remainder 0 でも fill しなかった残りがあり得る — だがその残りは **今 book にある** (resting order として)、return 値の中ではない。
-3. **`total_filled` はヘルパー、stored field ではない**。fill に対する O(N) sum。cache しないのは、(a) caller が「fill したか?」を聞くだけなら通常 `Vec::len()` が必要、(b) 実際の quantity total は test/inspection コードでしか必要なく、そこでは O(N) は問題にならないから。
+3. **`total_filled` はヘルパー、stored field ではない**。fill 全体の O(N) 合計。cache しないのは、(a) caller が「fill したか?」を聞くだけなら通常 `Vec::len()` が必要、(b) 実際の quantity total は test/inspection コードでしか必要なく、そこでは O(N) は問題にならないから。
 
 > 🛑 **やりがちな勘違い。** 「`remaining_qty` を別 field ではなく per-fill data の一部にしたら?」 **submit ごとに remainder は最大 1 個で、どの fill にも紐付かない** — それは **fill されなかった** 部分。`Fill` に入れると、すべての fill に無意味な 0 を運ばせるか、それを保持するためだけの「phantom fill」エントリが必要になる。`FillResult` に別 field として置くのが正しい形。
 
@@ -222,7 +222,7 @@ git checkout main
 **Q: なぜ `Order` は `Copy` だが `FillResult` は違う?**
 `Order` は 5 field、全部 `Copy` (`u64` の newtype + 小さい enum)。合計 ~48 バイト — memcpy が安価。`FillResult` は heap 割り当て される `Vec<Fill>` を所有; コピーには allocator 呼び出しが必要。`Copy` は `=` が single bit-blit な型のみ。Trait が意味を反映する。
 
-**Q: なぜ `Fill` に `qty: Qty` で、ただの `u64` ではない?**
+**Q: なぜ `Fill` の `qty` は `Qty` で、ただの `u64` ではないのか?**
 Engine の残りとの一貫性。すべての quantity は `Qty` 型; ここで `u64` を混ぜると境界で変換が強制される (そして忘れるリスク)。Newtype の規律は engine 単位、struct 単位ではない。
 
 **Q: `FillResult` で `Box<[Fill]>` を使ったら?**

@@ -94,7 +94,7 @@ impl Book {
 
 `todo!()` がここでは正しい placeholder: Market order が submit されたら runtime で clear なメッセージで panic するが、コンパイルは clean。L5 で real な `self.submit_market(order)` 呼び出しに置き換える。
 
-> 🛑 **やりがちな勘違い。** 「Submit() を 1 つの大きな match に matching ロジックを各 arm に入れてインラインで書けばいい?」 **そうすると `submit_limit` と `submit_market` が dispatcher の match arm の中に隠れる。** 2 つの効果: (1) public method `submit` が 100+ 行になり一目で読みづらい; (2) 各パスのテストが難しくなる (test は `Book::submit` を import するが、特定パスを exercise するために `order_type` を正しく設定した `Order` を construct する必要)。`submit_limit` / `submit_market` を named function として外に出すと addressable で testable になる。
+> 🛑 **やりがちな勘違い。** 「Submit() を 1 つの大きな match にして、matching ロジックを各 arm にインラインで書けばいい?」 **そうすると `submit_limit` と `submit_market` が dispatcher の match arm の中に隠れる。** 2 つの効果: (1) public method `submit` が 100+ 行になり一目で読みづらい; (2) 各パスのテストが難しくなる (test は `Book::submit` を import するが、特定パスを exercise するために `order_type` を正しく設定した `Order` を construct する必要)。`submit_limit` / `submit_market` を named function として外に出すと addressable で testable になる。
 
 ### Step 2: `submit_limit` 本体を書き始める
 
@@ -174,7 +174,7 @@ Sell ブランチは **構造的に同一** だが反転:
 
 **「構造的同一性」が load-bearing な観察。** Buy と Sell は互いの mirror image。両者とも反対側を best-first で walk; 両者とも price が limit をクリアする間マッチ; 両者とも空になった level を pop。違いは触る BTreeMap と比較の方向だけ。Buy ブランチが分かれば Sell ブランチも分かる。
 
-> 🛑 **やりがちな勘違い。** 「Buy/Sell を parameterize して 1 度だけループを書けないか?」 **できる — だがコストに見合わない。** 完全 generic 版は BTreeMap (`Reverse<Price>` vs `Price`)、比較演算子 (`>` vs `<`)、key (`bids` vs `asks`) を抽象化する必要がある。節約は ~30 行の duplication、コストは Rust で最も敵対的な generic-bound パズルの 1 つ。**Duplication は安く、abstraction-budget は貴重。実際に勝つところに使う。**
+> 🛑 **やりがちな勘違い。** 「Buy/Sell を parameterize して 1 度だけループを書けないか?」 **できる — だがコストに見合わない。** 完全 generic 版は BTreeMap (`Reverse<Price>` vs `Price`)、比較演算子 (`>` vs `<`)、key (`bids` vs `asks`) を抽象化する必要がある。節約は ~30 行の duplication、コストは Rust で最も敵対的な generic-bound パズルの 1 つ。**Duplication は安く、abstraction-budget は貴重。実際に効くところに使う。**
 
 ### Step 3: rest-the-remainder ロジックを追加
 
@@ -220,7 +220,7 @@ Sell ブランチは **構造的に同一** だが反転:
 5. **`FillResult { fills, remaining_qty: Qty(0) }`** — caller にゼロ `remaining_qty` を返す。**これが L2 の `FillResult` doc が約束した load-bearing な意味論**: rest する Limit order は **ゼロ remaining と言う**。Remainder は book にあり、return 値の中ではない。
 6. **両方のブランチ** (`if` と `else`) が `Qty(0)` remaining を返す。`else` ブランチは完全 fill ケース (taker が 100% マッチ; rest なし、remaining なし)。2 つのブランチは異なる理由で同じ return 値を produce する。
 
-> 🛑 **やりがちな勘違い。** 「rest する Limit order がなぜ resting amount ではなく `remaining_qty: Qty(0)` を返す? Caller は book にいくら乗ったか知りたいかも」。 **`FillResult` は **matching** の結果で、book の状態ではないから。** Resting amount を知りたい caller は call 後に `best_bid()` や `depth_bid()` を query できる。「book が新しい resting liquidity をこれだけ受け取った」と「matcher が place できなかった taker quantity がこれだけ残った」を混同すると意味論が曖昧になる。**Return は何が起きたかを描く、book 状態は何があるかを描く。Separate concerns。**
+> 🛑 **やりがちな勘違い。** 「rest する Limit order がなぜ resting amount ではなく `remaining_qty: Qty(0)` を返す? Caller は book にいくら乗ったか知りたいかも」。 **`FillResult` は **matching** の結果で、book の状態ではないから。** Resting amount を知りたい caller は call 後に `best_bid()` や `depth_bid()` を query できる。「book が新しい resting liquidity をこれだけ受け取った」と「matcher が place できなかった taker quantity がこれだけ残った」を混同すると意味論が曖昧になる。**Return は何が起きたかを表す、book 状態は何があるかを表す。Separate concerns。**
 
 ### Step 4: `match_at_level()` ヘルパーを書く
 

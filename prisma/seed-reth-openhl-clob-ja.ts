@@ -117,7 +117,7 @@ cargo test -p openhl-evm --release 2>&1 | tail -10
 
 それらが pass すれば start point として正しい。pass しなければまず course 6 を完了させる。
 
-> 🛑 **やりがちな勘違い。** 「\`git clone psyto/openhl\` してそのコードベースに対して course 7 を進めればいい」。 **やれるが、摩擦を逃すことになる。** 本コースは build-along: matching engine を \`my-openhl/\` でゼロから書き、reference に対して diff する。\`openhl-reference\` で start すると course 6 §7 で論じた「答え合わせから type する」モードに逆戻りする。
+> 🛑 **やりがちな勘違い。** 「\`git clone psyto/openhl\` してそのコードベースに対して course 7 を進めればいい」。 **やれるが、摩擦という学びを取りこぼす。** 本コースは build-along: matching engine を \`my-openhl/\` でゼロから書き、reference に対して diff する。\`openhl-reference\` で start すると course 6 §7 で論じた「答え合わせから type する」モードに逆戻りする。
 
 ## 5. 12 レッスンの全体マップ
 
@@ -152,7 +152,7 @@ diff -u ~/code/my-openhl/crates/clob/src/types.rs ./crates/clob/src/types.rs
 
 meaningfully にマッチする — 同じ型、同じ制御フロー。空白と命名は違ってよい。
 
-> 🛑 **やりがちな勘違い。** 「CLOB の仕組みはもう知っているから L9 まで飛ばして bridge 統合だけ学べばいい」。 **やれるが、L1-L8 はエンジンを後で改変するときに効く設計判断を encode している。** 逆順 bid、price level 内の FIFO、cancel-then-cleanup invariant — どれも自分で build しないと明らかにならない。L1-L8 をスキップするとコードは読めるが安全に変更できない。
+> 🛑 **やりがちな勘違い。** 「CLOB の仕組みはもう知っているから L9 まで飛ばして bridge 統合だけ学べばいい」。 **やれるが、L1-L8 が encode している設計判断は、エンジンを後で改変するときに効いてくる。** 逆順 bid、price level 内の FIFO、cancel-then-cleanup invariant — どれも自分で build しないと明らかにならない。L1-L8 をスキップするとコードは読めるが安全に変更できない。
 
 ## 7. セットアップ確認 — 実際の L0 演習
 
@@ -173,7 +173,7 @@ cd ~/code/openhl-reference && git log --oneline | grep -E "(55a9dff|428cc26)"
 
 3 つ全部 pass すれば L1 に進む準備 OK。
 
-> **最終チェック。** 本コースが course 6 になかった何を追加するのか、1 文で言える? もし答えに「committed block に流れる fill を produce する matching engine」が入っていなければ §1 を読み直す。`,
+> **最終チェック。** 本コースが course 6 になかった何を追加するのか、1 文で言える? 答えに「fill を produce する matching engine、その fill が committed block に流れる」のような要素が入っていなければ §1 を読み直す。`,
                 },
               ],
             },
@@ -333,7 +333,7 @@ doc コメントで 3 つ注目する点:
 - **\`OrderId\` は caller-allocated** — book が ID を生成しない、caller が生成する。これで book が pure-stateless に保たれる: \`submit_order\` は (book, order) の関数で、(book, order, generator-state) ではない。
 - **\`Price\`/\`Qty\` は minor unit** — USDC のような 6-decimal token では \`Price(1_000_000)\` が $1.00 を表す。Matching engine に \`f64\` は **存在しない**。**お金の計算で float は禁止。**
 
-> 🛑 **やりがちな勘違い。** 「便利のために \`pub fn from_dollars(d: f64) -> Price\` メソッドを追加しよう。」 **ダメ、f64 の精度の罠を engine に持ち込むことになる。** \`Price(1_000_000)\` が wire format。User 向けツールが \`from_dollars\` をやりたければ、自分の境界で integer 乗算をして bridge に integer-typed Price を渡す。Matching engine は float を見ない。
+> 🛑 **やりがちな勘違い。** 「便利のために \`pub fn from_dollars(d: f64) -> Price\` メソッドを追加しよう。」 **ダメ、f64 の精度問題を engine に持ち込むことになる。** \`Price(1_000_000)\` が wire format。User 向けツールが \`from_dollars\` をやりたければ、自分の境界で integer 乗算をして bridge に integer-typed Price を渡す。Matching engine は float を見ない。
 
 ### Step 4: \`Side\` enum と \`opposite()\` ヘルパー
 
@@ -359,7 +359,7 @@ impl Side {
 
 variant 2 個。\`opposite()\` メソッドは今 1 行だが、後で load-bearing になる: taker order が来たとき book の **反対側** を walk して流動性を探す。Buy taker は ask を walk; Sell taker は bid を walk。**ルールを \`opposite()\` に 1 回 encode することで、book コードを読むときどっち側を walk するか忘れない。**
 
-\`#[derive(PartialOrd, Ord)]\` が **ない** のは意図的。「Buy は Sell より小さい?」は無意味。trait を抜くことで、caller が \`if side < Side::Sell\` を偶発的に書いて意図しない順序 (declaration 順なので \`Buy < Sell\`) を得るのを防ぐ。
+\`#[derive(PartialOrd, Ord)]\` が **ない** のは意図的。「Buy は Sell より小さい?」は無意味。trait を抜くことで、caller が \`if side < Side::Sell\` を偶発的に書いてしまい、declaration 順 (\`Buy < Sell\`) という意図しない順序づけが効いてしまうのを防ぐ。
 
 > 🛑 **やりがちな勘違い。** 「bool でいいんじゃない? \`is_buy: bool\` でバイト節約。」 **call site で意味が失われる。** \`submit_order(order, true)\` は読み手にゴミに見える; \`submit_order(order, Side::Buy)\` は明らか。enum vs bool の 1 バイトのコストは、bool の可読性コストに比べたら無視できる。**名前を持つものは enum、on/off 以上の名前を持たないものだけ bool。**
 
@@ -654,7 +654,7 @@ doc コメント中の 3 つ、L3+ のコードが依存する:
 
 1. **\`fills\` は execution 順序**。Market buy が ask level を 3 個 walk すると、fills[0] が最安マッチ、fills[1] が次、fills[2] が最高。Replay determinism にこの順序が重要 (L8 の proptest が assert する)。
 2. **\`remaining_qty\` は rest しなかった taker quantity のみ**。Market order の remainder 100 = 100 unit がどの価格でもマッチできなかった (book が流動性切れ) を意味する。Limit order の remainder 0 でも fill しなかった残りがあり得る — だがその残りは **今 book にある** (resting order として)、return 値の中ではない。
-3. **\`total_filled\` はヘルパー、stored field ではない**。fill に対する O(N) sum。cache しないのは、(a) caller が「fill したか?」を聞くだけなら通常 \`Vec::len()\` が必要、(b) 実際の quantity total は test/inspection コードでしか必要なく、そこでは O(N) は問題にならないから。
+3. **\`total_filled\` はヘルパー、stored field ではない**。fill 全体の O(N) 合計。cache しないのは、(a) caller が「fill したか?」を聞くだけなら通常 \`Vec::len()\` が必要、(b) 実際の quantity total は test/inspection コードでしか必要なく、そこでは O(N) は問題にならないから。
 
 > 🛑 **やりがちな勘違い。** 「\`remaining_qty\` を別 field ではなく per-fill data の一部にしたら?」 **submit ごとに remainder は最大 1 個で、どの fill にも紐付かない** — それは **fill されなかった** 部分。\`Fill\` に入れると、すべての fill に無意味な 0 を運ばせるか、それを保持するためだけの「phantom fill」エントリが必要になる。\`FillResult\` に別 field として置くのが正しい形。
 
@@ -723,7 +723,7 @@ git checkout main
 **Q: なぜ \`Order\` は \`Copy\` だが \`FillResult\` は違う?**
 \`Order\` は 5 field、全部 \`Copy\` (\`u64\` の newtype + 小さい enum)。合計 ~48 バイト — memcpy が安価。\`FillResult\` は heap 割り当て される \`Vec<Fill>\` を所有; コピーには allocator 呼び出しが必要。\`Copy\` は \`=\` が single bit-blit な型のみ。Trait が意味を反映する。
 
-**Q: なぜ \`Fill\` に \`qty: Qty\` で、ただの \`u64\` ではない?**
+**Q: なぜ \`Fill\` の \`qty\` は \`Qty\` で、ただの \`u64\` ではないのか?**
 Engine の残りとの一貫性。すべての quantity は \`Qty\` 型; ここで \`u64\` を混ぜると境界で変換が強制される (そして忘れるリスク)。Newtype の規律は engine 単位、struct 単位ではない。
 
 **Q: \`FillResult\` で \`Box<[Fill]>\` を使ったら?**
@@ -998,7 +998,7 @@ EOF
 
 - **\`error[E0277]: 'BTreeMap<Reverse<Price>, ...>' is not 'Default'\`** — \`BTreeMap<K, V>\` は \`K: Ord\` を要求し、\`Reverse<T>\` は \`T: Ord\` を要求する。L1 で \`Price: Ord\` derive 済みなので動く。L1 で \`Price\` に \`Ord\` を derive し忘れていれば derive chain がここで壊れる。
 - **\`error[E0599]: no method named 'len' for \`VecDeque<RestingOrder>\`** — \`depth_bid\`/\`depth_ask\` の typo。メソッドは \`VecDeque::len\`、\`.len()\` 直接または \`VecDeque::len(deque_ref)\` でアクセス。
-- **\`error[E0382]: borrow of moved value: \`rp\`** in \`best_bid\` — \`&Reverse<Price>\` 参照に対する \`.map(|rp| rp.0)\` で、closure が \`rp: &Reverse<Price>\` を受け取り、\`rp.0\` は \`Price\` を値で返す (\`Reverse<Price>: Copy\` のため、\`Price: Copy\` だから)。これが error なら \`Price\` が \`Copy\` ではない — L1 の derive リストを確認。
+- **\`error[E0382]: borrow of moved value: \`rp\`** in \`best_bid\` — \`&Reverse<Price>\` 参照に対する \`.map(|rp| rp.0)\` で、closure が \`rp: &Reverse<Price>\` を受け取り、\`rp.0\` は \`Price\` を値で返す (\`Reverse<Price>: Copy\` だから — それは \`Price: Copy\` だから)。これが error なら \`Price\` が \`Copy\` ではない — L1 の derive リストを確認。
 - **\`error: cannot find type 'RestingOrder' in module 'book'\`** 外側から — \`RestingOrder\` は private。意図的。
 
 ## 設計の振り返り
@@ -1040,7 +1040,7 @@ git checkout main
 できる — だが \`side\` と \`order_type\` を無駄に運ぶ (side は既に map で分かる、resting Market order は矛盾)。Trim は小さいが、「resting Market order を construct できない」という **型レベル保証** が無料で手に入る。
 
 **Q: なぜ BTreeMap field が private?**
-caller が map を直接 modify すべきでなく、\`submit\` / \`cancel\` (L4+ / L6) を通すべきだから — それらが「空 queue を map に残さない」のような invariant を維持する。\`book.asks.insert(price, VecDeque::new())\` を呼べてしまうと、\`best_ask()\` が返す phantom な空 price level が作れる。Encapsulation がそれを防ぐ。
+caller が map を直接 modify すべきでなく、\`submit\` / \`cancel\` (L4+ / L6) を通すべきだから — それらが「空 queue を map に残さない」のような invariant を維持する。\`book.asks.insert(price, VecDeque::new())\` を呼べてしまうと、空の price level (phantom) が作れてしまい、\`best_ask()\` がそれを返す。Encapsulation がそれを防ぐ。
 
 ## 次のレッスン (L4)
 
@@ -1131,7 +1131,7 @@ impl Book {
 
 \`todo!()\` がここでは正しい placeholder: Market order が submit されたら runtime で clear なメッセージで panic するが、コンパイルは clean。L5 で real な \`self.submit_market(order)\` 呼び出しに置き換える。
 
-> 🛑 **やりがちな勘違い。** 「Submit() を 1 つの大きな match に matching ロジックを各 arm に入れてインラインで書けばいい?」 **そうすると \`submit_limit\` と \`submit_market\` が dispatcher の match arm の中に隠れる。** 2 つの効果: (1) public method \`submit\` が 100+ 行になり一目で読みづらい; (2) 各パスのテストが難しくなる (test は \`Book::submit\` を import するが、特定パスを exercise するために \`order_type\` を正しく設定した \`Order\` を construct する必要)。\`submit_limit\` / \`submit_market\` を named function として外に出すと addressable で testable になる。
+> 🛑 **やりがちな勘違い。** 「Submit() を 1 つの大きな match にして、matching ロジックを各 arm にインラインで書けばいい?」 **そうすると \`submit_limit\` と \`submit_market\` が dispatcher の match arm の中に隠れる。** 2 つの効果: (1) public method \`submit\` が 100+ 行になり一目で読みづらい; (2) 各パスのテストが難しくなる (test は \`Book::submit\` を import するが、特定パスを exercise するために \`order_type\` を正しく設定した \`Order\` を construct する必要)。\`submit_limit\` / \`submit_market\` を named function として外に出すと addressable で testable になる。
 
 ### Step 2: \`submit_limit\` 本体を書き始める
 
@@ -1211,7 +1211,7 @@ Sell ブランチは **構造的に同一** だが反転:
 
 **「構造的同一性」が load-bearing な観察。** Buy と Sell は互いの mirror image。両者とも反対側を best-first で walk; 両者とも price が limit をクリアする間マッチ; 両者とも空になった level を pop。違いは触る BTreeMap と比較の方向だけ。Buy ブランチが分かれば Sell ブランチも分かる。
 
-> 🛑 **やりがちな勘違い。** 「Buy/Sell を parameterize して 1 度だけループを書けないか?」 **できる — だがコストに見合わない。** 完全 generic 版は BTreeMap (\`Reverse<Price>\` vs \`Price\`)、比較演算子 (\`>\` vs \`<\`)、key (\`bids\` vs \`asks\`) を抽象化する必要がある。節約は ~30 行の duplication、コストは Rust で最も敵対的な generic-bound パズルの 1 つ。**Duplication は安く、abstraction-budget は貴重。実際に勝つところに使う。**
+> 🛑 **やりがちな勘違い。** 「Buy/Sell を parameterize して 1 度だけループを書けないか?」 **できる — だがコストに見合わない。** 完全 generic 版は BTreeMap (\`Reverse<Price>\` vs \`Price\`)、比較演算子 (\`>\` vs \`<\`)、key (\`bids\` vs \`asks\`) を抽象化する必要がある。節約は ~30 行の duplication、コストは Rust で最も敵対的な generic-bound パズルの 1 つ。**Duplication は安く、abstraction-budget は貴重。実際に効くところに使う。**
 
 ### Step 3: rest-the-remainder ロジックを追加
 
@@ -1257,7 +1257,7 @@ Sell ブランチは **構造的に同一** だが反転:
 5. **\`FillResult { fills, remaining_qty: Qty(0) }\`** — caller にゼロ \`remaining_qty\` を返す。**これが L2 の \`FillResult\` doc が約束した load-bearing な意味論**: rest する Limit order は **ゼロ remaining と言う**。Remainder は book にあり、return 値の中ではない。
 6. **両方のブランチ** (\`if\` と \`else\`) が \`Qty(0)\` remaining を返す。\`else\` ブランチは完全 fill ケース (taker が 100% マッチ; rest なし、remaining なし)。2 つのブランチは異なる理由で同じ return 値を produce する。
 
-> 🛑 **やりがちな勘違い。** 「rest する Limit order がなぜ resting amount ではなく \`remaining_qty: Qty(0)\` を返す? Caller は book にいくら乗ったか知りたいかも」。 **\`FillResult\` は **matching** の結果で、book の状態ではないから。** Resting amount を知りたい caller は call 後に \`best_bid()\` や \`depth_bid()\` を query できる。「book が新しい resting liquidity をこれだけ受け取った」と「matcher が place できなかった taker quantity がこれだけ残った」を混同すると意味論が曖昧になる。**Return は何が起きたかを描く、book 状態は何があるかを描く。Separate concerns。**
+> 🛑 **やりがちな勘違い。** 「rest する Limit order がなぜ resting amount ではなく \`remaining_qty: Qty(0)\` を返す? Caller は book にいくら乗ったか知りたいかも」。 **\`FillResult\` は **matching** の結果で、book の状態ではないから。** Resting amount を知りたい caller は call 後に \`best_bid()\` や \`depth_bid()\` を query できる。「book が新しい resting liquidity をこれだけ受け取った」と「matcher が place できなかった taker quantity がこれだけ残った」を混同すると意味論が曖昧になる。**Return は何が起きたかを表す、book 状態は何があるかを表す。Separate concerns。**
 
 ### Step 4: \`match_at_level()\` ヘルパーを書く
 
@@ -1473,7 +1473,7 @@ fn match_at_level(taker: &Order, price: Price, ...) -> Fill { ... }
 
 新規型なし、新規ヘルパーなし。L4 の \`match_at_level\` をそのまま再利用。
 
-レッスンが短いのは **L5 が L4 の大部分の作業の後に残ったもの** だから。構造パターンは同じ; 違いが「market order」が「limit order」と semantic にどう違うかを作る。
+レッスンが短いのは **L5 が L4 の大部分の作業の後に残ったもの** だから。構造パターンは同じ; 違うのは「market order」と「limit order」の意味的な差分。
 
 > 🛑 **考えてみよう。** スクロールする前に: ask が \`{ Price(100): [O_a (30 units)] }\` で、50 unit の Market buy が arrive したとする。Fill は何で、\`FillResult::remaining_qty\` には何が入る? 対比: 同じ開始 book、ただし price 100 で 50 unit の Limit buy。**残り 20 unit は各ケースでどこに行く?**
 
@@ -1634,7 +1634,7 @@ mod smoke {
 
 \`cargo test -p openhl-clob smoke\` で走らせる。両方 pass するはず。**それから smoke module を削除する** — L7-L8 に real なテストスイート。
 
-2 つの smoke test の対比は L5 のレッスン本質の minicapsule: **matching 後に残ったものは fill が produce されたかどうかに関わらず破棄される**。Market order 後の book 状態は、消費された liquidity を引いた book 状態そのもの — resting order が追加されない。
+2 つの smoke test の対比は L5 のレッスン本質の要約 (ミニ版): **matching 後に残ったものは fill が produce されたかどうかに関わらず破棄される**。Market order 後の book 状態は、消費された liquidity を引いた book 状態そのもの — resting order が追加されない。
 
 よくあるエラーと対処:
 
@@ -1913,7 +1913,7 @@ mod smoke {
 
 2. **O(n) linear scan は v0 で fine。** 本番取引所は何千、何万の resting order を持つ。v0 openhl で数百なら scan はマイクロ秒。\`HashMap<OrderId, (Side, Price)>\` index を追加すれば cancel は O(1) になるが、加わるもの: BTreeMap と同期を保つ second data structure、追加メモリ、追加 cache pressure。**Profile に出てこないものは最適化しない。** openhl が v0 scale を超えたら index を追加; それまでは scan が正しい形。
 
-3. **Cancel は \`bool\` を返す、\`Option<RestingOrder>\` や \`Result<(), CancelError>\` ではない。** 削除した order を返すと \`RestingOrder\` を expose する (L3 で意図的に private 型にした)。\`Result\` を返すと caller に「見つからない」ケースを error として handle させる — が cancellation の冪等性は機能でありバグではない (cancel を 2 回呼ぶのは安全であるべき)。\`bool\` が「仕事をしたかしなかったか」をクリーンに言う、内部を漏らさず error-handling を強制せず。**何が起きたかについて正直な最小の return 形を選ぶ。**
+3. **Cancel は \`bool\` を返す、\`Option<RestingOrder>\` や \`Result<(), CancelError>\` ではない。** 削除した order を返すと \`RestingOrder\` を expose する (L3 で意図的に private 型にした)。\`Result\` を返すと caller に「見つからない」ケースを error として handle させる — が cancellation の冪等性は機能でありバグではない (cancel を 2 回呼ぶのは安全であるべき)。\`bool\` が「仕事をしたかしなかったか」をクリーンに言う、内部を漏らさず error-handling を強制せず。**何が起きたかを正直に表す、最小の return 形を選ぶ。**
 
 ## 答え合わせ
 
@@ -2031,7 +2031,7 @@ mod tests {
 
 > 🛑 **考えてみよう。** スクロールする前に: 9 個のうちどれが、\`submit_limit::Buy\` が ask を **降順** (最高値先) に walk するバグで失敗する? ヒント: 「best ask 先」を specifically assert するテストを考える。
 
-(答え: \`buy_market_takes_best_ask\`。\`r.fills[0].price == Price(100)\` と \`r.fills[1].price == Price(105)\` — best-first を assert する。降順 walk なら \`[105, 100]\` を produce する。**Hand-trace テストは randomized テストも catch するが、より安く directional バグを catch する。**)
+(答え: \`buy_market_takes_best_ask\`。\`r.fills[0].price == Price(100)\` と \`r.fills[1].price == Price(105)\` — best-first を assert する。降順 walk なら \`[105, 100]\` を produce する。**Directional バグは randomized テストでも catch できるが、hand-trace テストならより安く catch できる。**)
 
 ## 手順
 
@@ -2086,7 +2086,7 @@ let order = Order {
 
 **引数順序が重要**: \`limit\` で \`(id, account, side, price, qty)\`、\`market\` で \`(id, account, side, qty)\`。1 回覚える; どのテストでも同じ慣習を使う。\`id\` を先にすると、テストが時間順に読める (\`limit(1, ...)\` が最初の order、\`limit(2, ...)\` が 2 番目)。
 
-> 🛑 **やりがちな勘違い。** 「Builder パターンを使う — \`OrderBuilder::new().id(1).account(100).side(Buy).qty(10).limit_price(100).build()\`」。 **5-field struct リテラルより冗長で、目的を defeat する。** Builder が活きるのは field が optional または widely varying なとき; ここでは全 order が全 5 field を持ち全部必須。positional 引数の 5-arg 関数は書くのが速く、call site で読むのが速く、reader に Order が何を必要とするか即座に伝える。
+> 🛑 **やりがちな勘違い。** 「Builder パターンを使う — \`OrderBuilder::new().id(1).account(100).side(Buy).qty(10).limit_price(100).build()\`」。 **5-field struct リテラルより冗長で、本末転倒。** Builder が活きるのは field が optional または widely varying なとき; ここでは全 order が全 5 field を持ち全部必須。positional 引数の 5-arg 関数は書くのが速く、call site で読むのが速く、reader に Order が何を必要とするか即座に伝える。
 
 ### Step 2: Test 1 — \`empty_book_has_no_best_prices\`
 
@@ -2339,7 +2339,7 @@ test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 2. **9 個のテストは有限で defensible なセット。** 各テストが特定の invariant に対応: empty-book、resting、walks-levels、respects-limit、FIFO、partial-market、cancel-found、cancel-not-found、no-cross。100 個書かない。**Invariant のリストは短く明確; カバレッジは invariant ごと、テスト数ごとではない。**
 
-3. **\`book_does_not_cross_after_match\` が最後に配置されている。** テストはアルファベット順で走るので、このテストの **ソース順序** での配置は実行順に影響しない。だが **読む** 順序 (上から下に file を scan するメンテナ) では、最重要テストが最も目立つ。**ソースレイアウトが最重要に関する優先度シグナルを encode する。**
+3. **\`book_does_not_cross_after_match\` が最後に配置されている。** テストはアルファベット順で走るので、このテストの **ソース順序** での配置は実行順に影響しない。だが **読む** 順序 (上から下に file を scan するメンテナ) では、最重要テストが最も目立つ。**ソース上のレイアウト自体が「何が最重要か」の優先度シグナルを encode する。**
 
 ## 答え合わせ
 
@@ -2643,7 +2643,7 @@ Invariant: \`total_in = 2 * total_filled + total_market_unfilled + resting_qty\`
 
 **\`prop_assert_eq!\` (\`assert_eq!\` ではない) が重要** — proptest が「テスト失敗」を「システムエラーで panic」と区別する必要がある。\`prop_assert_eq!\` が failure を proptest の shrinking 機構に報告し、それが最小反例を見つけようとする。
 
-> 🛑 **やりがちな勘違い。** 「\`total_in = 2 * total_filled + ...\` がおかしい — なぜ double-count?」 **marketplace では fill が **2 つの unit** を伴う — buyer の意図 1 個と seller の意図 1 個。** Maker が 5 オファーし taker が 5 取ると、engine は 10 unit の「マッチング需要」を見ている: 各 side から 5 個。2 つが size 5 の Fill にまとまったが、entered したときは 10 個の個別な taker-or-maker-unit だった。**Invariant は **個別の taker/maker 意図** を数える、unique unit ではなく。**
+> 🛑 **やりがちな勘違い。** 「\`total_in = 2 * total_filled + ...\` がおかしい — なぜ double-count?」 **marketplace では fill が **2 つの unit** を伴う — buyer の意図 1 個と seller の意図 1 個。** Maker が 5 オファーし taker が 5 取ると、engine は 10 unit の「マッチング需要」を見ている: 各 side から 5 個。2 つが size 5 の Fill にまとまったが、entered したときは 10 個の個別な taker-or-maker-unit だった。**Invariant が数えるのは個別の taker/maker 意図であって、unique な unit ではない。**
 
 ### Step 5: 2 つ目の invariant — \`no_crossed_book\`
 
@@ -2751,7 +2751,7 @@ Body:
 > - Sync barrier なしで order を非同期処理する \`tokio::task\` を spawn。
 > - \`f64\` field を保存し、その bit に依存。
 >
-> どれもコンパイルが通り、\`no_crossed_book\` を pass し、未来の contributor が導入したときだけ失敗する — \`determinism\` がここで catch する。**これが 6 ヶ月後の自分から自分を守るテスト。**
+> どれもコンパイルが通り、\`no_crossed_book\` を pass し、未来の contributor が導入したときだけ失敗する — \`determinism\` がここで catch する。**6 ヶ月後の自分から今の自分を守るテスト。**
 
 ## テスト
 
@@ -3096,7 +3096,7 @@ impl<P> LiveRethEvmBridge<P> {
 
 3 メソッドすべてが \`&self\` を取ることに注意。内部 \`Mutex\` が重い lifting をする; public API が「shared 参照 + interior mutability」、まさに async コードが必要とするもの (複数の async task が \`&LiveRethEvmBridge\` を同時に保持できる)。
 
-> 🛑 **やりがちな勘違い。** 「\`submit_order\` が \`&mut self\` ではなく \`&self\` を取るのは?」 **Bridge を、order を同時に submit したい async task 間で共有する必要があるから。** Matching engine (実際に mutate するコード) が \`Mutex\` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制するので、この mutation は安全」と受け入れる。\`submit_order\` が \`&mut self\` を取ると、\`Arc<RwLock<LiveRethEvmBridge>>\` が必要になり、submit ごとに bridge 全体を lock する — パフォーマンスが悪化し API が変。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
+> 🛑 **やりがちな勘違い。** 「\`submit_order\` が \`&mut self\` ではなく \`&self\` を取るのは?」 **Bridge を、order を同時に submit したい async task 間で共有する必要があるから。** Matching engine (実際に mutate するコード) が \`Mutex\` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制するので、この mutation は安全」と受け入れる。\`submit_order\` が \`&mut self\` を取ると、\`Arc<RwLock<LiveRethEvmBridge>>\` が必要になり、submit ごとに bridge 全体を lock する — パフォーマンスが悪化し、API の形も適切でない。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
 
 ### Step 7: destructuring を波及更新
 
@@ -3377,7 +3377,7 @@ L9 のコメントが明示的にここを指す。これが変更場所。
 
 \`std::mem::take(...)\` 式全体が **lock 下の単一 atomic 操作** — 他の caller が「半 drain 状態」を見ることはない。\`pending_fills\` は full または空、決して mid-drain ではない。
 
-> 🛑 **やりがちな勘違い。** 「\`collect\` して別途 clear すれば、\`let drained = guard.iter().copied().collect::<Vec<_>>(); guard.clear();\` のように?」 **できる — caller に対する結果は同じ。** だが: (a) \`iter().copied().collect()\` が O(N) copy 仕事 + O(N) clear 仕事、\`mem::take\` の O(1) pointer swap に対し; (b) 2 step 版には \`pending_fill_count()\` を読んでいる誰かが既に collect 済みなのに古い count を見る窓がある。\`mem::take\` は外側から atomic。**One-shot swap は速くより correct。**
+> 🛑 **やりがちな勘違い。** 「\`collect\` して別途 clear すれば、\`let drained = guard.iter().copied().collect::<Vec<_>>(); guard.clear();\` のように?」 **できる — caller に対する結果は同じ。** だが: (a) \`iter().copied().collect()\` が O(N) copy 仕事 + O(N) clear 仕事、\`mem::take\` の O(1) pointer swap に対し; (b) 2 step 版には \`pending_fill_count()\` を読んでいる誰かが既に collect 済みなのに古い count を見る窓がある。\`mem::take\` は外側から atomic。**One-shot の swap のほうが速く、より correct。**
 
 ### Step 3: 他に何も変わっていないことを verify
 
@@ -3442,7 +3442,7 @@ grep -n "Vec::new()" crates/evm/src/live_node.rs
 
 1. **Submit ではなく build_payload で drain。** Submit は \`pending_fills\` に push する; \`build_payload\` だけがそれを空にする。意図的 — **fill が、それが組み立てられた payload でグループ化される**、来た順序ではない。下流の payload-consumer が「前の payload と今の payload の間に起きた fill のこの batch」という coherent な view を得る。Submit 時に drain すると、bridge がどの fill がどの payload と一緒に行くかを track するサイドチャンネルが必要 — state が増え、帳簿管理が増える。
 
-2. **\`std::mem::take\` が正しい primitive。** O(1)、lock 下で atomic、意図 (「全部取って default を残す」) を signal する。代替 — \`collect::<Vec<_>>(...drain(..))\` + 明示的 clear — は O(N) で半 drain 窓がある。**標準ライブラリの primitive を知ることで、より遅いまたはバグのあるバージョンを発明することから自分を守る。**
+2. **\`std::mem::take\` が正しい primitive。** O(1)、lock 下で atomic、意図 (「全部取って default を残す」) を signal する。代替 — \`collect::<Vec<_>>(...drain(..))\` + 明示的 clear — は O(N) で半 drain 窓がある。**標準ライブラリの primitive を知っておくこと自体が、より遅くてバグの多い自前版を発明してしまう事故から自分を守る。**
 
 3. **Drain は forward-only。** Payload N が (前回 build_payload 呼び出し) と (今回呼び出し) の間に produce された fill を attach する。以前の payload は、後で arrive した fill で更新されない。これが chain の意味論と一致: block が build されたら、その content は frozen。**Buffer-then-drain shape が、明示的なグループ化メカニズムを必要とせずに「この block に何があるか」を encode する。**
 
@@ -3581,7 +3581,7 @@ L10 完了時点、\`LiveRethEvmBridge\` は:
 - **\`#[tokio::test(flavor = "multi_thread", worker_threads = 4)]\`** — course 6 の integration test と同じ。Reth の \`EthereumNode\` がバックグラウンド task をいくつか spawn する (RPC、payload builder 等) ので multi-threaded tokio runtime が必要。4 worker setup でそれらに余裕を与える。
 - **\`use openhl_clob::{AccountId, OrderId, OrderType, Price, Qty, Side};\`** — L1 の newtype セットから必要な型を import。\`Order\` と \`Fill\` 型は \`mod tests\` の冒頭の \`super::*\` で既に scope にある。
 
-> 🛑 **やりがちな勘違い。** 「これらの型を \`mod tests\` のトップではなくテスト関数内で import するのは?」 **テストの依存をテストサイトで visible に保つため。** 将来の reader がこのテストをデバッグしているとき、関連型を一目で見られる。コストはこれらが必要な test ごとに 1 \`use\` statement; 利益は各テストが self-contained なシナリオとして読めること。Real source コード (\`mod tests\` の外) のテストでは、トップに import を置く — だが test は特別: システムが何をするかのドキュメンテーション、inline import がドキュメンテーションをタイトにする。
+> 🛑 **やりがちな勘違い。** 「これらの型を \`mod tests\` のトップではなくテスト関数内で import するのは?」 **テストの依存をテストサイトで visible に保つため。** 将来の reader がこのテストをデバッグしているとき、関連型を一目で見られる。コストはこれらが必要な test ごとに 1 \`use\` statement; 利益は各テストが self-contained なシナリオとして読めること。Real source コード (\`mod tests\` の外) のテストでは、トップに import を置く — だが test は特別: システムが何をするかのドキュメンテーション、inline import がドキュメントを引き締める。
 
 ### Step 2: Reth node を bootstrap
 
@@ -3983,7 +3983,7 @@ L6 が明示的に O(1) index ではなくシンプルさを選んだ。openhl �
 
 最も難しい部分は matching ロジックを書くことではなかった — L4 の submit_limit は構造を理解すれば 60 行。**最も難しい部分は determinism property** — 可能な submit のすべての順序付けにわたって engine が同じ答えを produce することを確実にすること。L8 proptest がテストしようと思わなかったバグを catch し、それが build した engine が consensus に plug して safe である理由。
 
-Correct だが non-deterministic な matching engine は consensus を壊す。Deterministic なものは devnet から mainnet への移行を生き残るコード。
+Correct だが non-deterministic な matching engine は consensus を壊す。Deterministic なものこそ、devnet から mainnet への移行を生き残れるコード。
 
 これを使って何か作りに行こう。`,
                 },
