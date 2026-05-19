@@ -29,6 +29,8 @@ import { seedRethOpenHlConsensusEN } from './seed-reth-openhl-consensus-en';
 import { seedRethOpenHlConsensusJA } from './seed-reth-openhl-consensus-ja';
 import { seedRethOpenHlClobEN } from './seed-reth-openhl-clob-en';
 import { seedRethOpenHlClobJA } from './seed-reth-openhl-clob-ja';
+import { seedRethOpenHlPrecompilesEN } from './seed-reth-openhl-precompiles-en';
+import { seedRethOpenHlPrecompilesJA } from './seed-reth-openhl-precompiles-ja';
 
 const prisma = new PrismaClient();
 
@@ -129,6 +131,9 @@ async function main() {
   await seedRethOpenHlClobEN(prisma);
   await seedRethOpenHlClobJA(prisma);
   console.log('  Seeded Building OpenHL — CLOB matching engine (EN + JA)');
+  await seedRethOpenHlPrecompilesEN(prisma);
+  await seedRethOpenHlPrecompilesJA(prisma);
+  console.log('  Seeded Building OpenHL — Precompiles (EN + JA)');
 
   const courseCount = await prisma.course.count();
   const moduleCount = await prisma.module.count();
