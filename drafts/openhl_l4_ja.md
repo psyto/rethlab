@@ -54,7 +54,7 @@ crates/evm/Cargo.toml          — 空 [dependencies]
 
 これが初めて書く Rust の impl だ。ここで encode するパターンは繰り返される: L5 の `RethEvmBridge` も同じスケルトンを使い、L11+ の `LiveRethEvmBridge` もそうだ。**State 管理パターン (Mutex<State> + pending vs chain map) もそれらの impl に伝播する。**
 
-> 🛑 **予測してみよう。** スクロール前に: test double の `build_payload` が **fake する** ものは何で、**実際にできる** ものは何か? ヒント: EVM は走らせられないが、できること: `PayloadId` を割り当てる、block number をインクリメントする、hash を synthesize する、pending block を覚える。Fake vs real の区別は L5 + L11 で意味を持つ。
+> 🛑 **考えてみよう。** スクロール前に: test double の `build_payload` が **fake する** ものは何で、**実際にできる** ものは何か? ヒント: EVM は走らせられないが、できること: `PayloadId` を割り当てる、block number をインクリメントする、hash を synthesize する、pending block を覚える。Fake vs real の区別は L5 + L11 で意味を持つ。
 
 ## 手を動かす walk-through
 
@@ -477,5 +477,5 @@ L4 が引用する openhl commit (§答え合わせ で参照):
   - Rust の syntax (impl、trait、Mutex、HashMap、async fn 等) は英語のまま
   - `#[async_trait]`、`#[must_use]`、`#[tokio::test]` 等の attribute は英語のまま
   - コード、ファイルパス、コマンド、Cargo.toml syntax は英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)
+  - 🛑 callout: 考えてみよう (Predict)、やりがちな勘違い (Anti-fluency)
   - 「poison する」「synthesize する」「lookup する」「clone する」は英語動詞の JA 化で OK

@@ -60,7 +60,7 @@ crates/consensus/src/context.rs — OpenHlContext + Context impl + テスト 5 �
 - **Canonical encoding** — 型付きメッセージを、すべての validator が同一に計算する確定的なバイト列に変換する。署名は **構造体** ではなく **バイト列** にコミットする。フィールドの encoding が変わると署名が検証できなくなる。
 - **Trait 同士の配線** — Malachite の `SigningProvider` は、`signing.rs` の低レベル署名ロジックを **ラップする** trait。Provider は実行時状態 (鍵) を持ち、状態を持たない純粋関数に処理を委譲する。これは `ConsensusBridge` (trait) vs `InMemoryEvmBridge` (それを impl する構造体) と同じ分離パターン。
 
-> 🛑 **予測してみよう。** スクロールする前に: `Vote` の canonical encoding は、どのフィールドを含む必要があるか? ヒント: 署名が何にコミットしているかを考える。コンセンサスにとって意味のある違いがある 2 つの vote について、その signing bytes が異なっていなければ、片方に対する有効な署名が、もう片方に対しても検証できてしまう。攻撃者は vote を replay または swap できる。
+> 🛑 **考えてみよう。** スクロールする前に: `Vote` の canonical encoding は、どのフィールドを含む必要があるか? ヒント: 署名が何にコミットしているかを考える。コンセンサスにとって意味のある違いがある 2 つの vote について、その signing bytes が異なっていなければ、片方に対する有効な署名が、もう片方に対しても検証できてしまう。攻撃者は vote を replay または swap できる。
 
 ## 手順
 
@@ -662,4 +662,4 @@ L7 が参照する openhl コミット (§答え合わせ):
 - **「forkchoice」「fork」** は専門用語としてそのまま。
 - **「sign/verify ペア」「sign/verify ラウンドトリップ」** はそのまま (専門語)。
 - **タイトル/コードコメントは英語のまま** (オープンソース実装に英語のままコピーされる前提)。
-- **「予測してみよう」「やりがちな勘違い」** は L4-L6 で確立した訳語と統一。
+- **「考えてみよう」「やりがちな勘違い」** は L4-L6 で確立した訳語と統一。

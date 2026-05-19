@@ -68,7 +68,7 @@ crates/consensus/src/bridge.rs            — ConsensusBridge trait + InMemoryEv
 
 このレッスンが教えるのは **actor-message-loop パターン**。ほとんどの consensus engine (CometBFT、Hotstuff、Aura) は **何らかの** 「application interface」を持つが、形は様々: callback、gRPC service、FFI バインディング。Malachite のアプローチは型付きメッセージの `tokio::mpsc` チャネル — 強型、async-native、チャネルごとに single-threaded。`run_engine_app` はそれらメッセージの **consumer**; engine actor は **producer**。**このパターンを理解すれば、どの chain フレームワークの「application interface」もそのバリアントに帰着する。**
 
-> 🛑 **予測してみよう。** スクロールする前に: engine が `AppMsg::GetValue` (「次の block を propose しろ」) を送るとき、app はなぜ `BlockHash` だけでなく `LocallyProposedValue(height, round, value)` で reply するのか? ヒント: engine が rest-of-consensus を通じて wire する value は、commit する value。hash だけ送ったら、engine は他の validator に proposal の内容を gossip したり certificate に含めたりする手段がない。**ラップが value を BFT machine 内で first-class にする。**(我々の single-validator devnet では他の validator は gossip を受け取らないが — engine は自分が solo で走っていることを **知らない**。)
+> 🛑 **考えてみよう。** スクロールする前に: engine が `AppMsg::GetValue` (「次の block を propose しろ」) を送るとき、app はなぜ `BlockHash` だけでなく `LocallyProposedValue(height, round, value)` で reply するのか? ヒント: engine が rest-of-consensus を通じて wire する value は、commit する value。hash だけ送ったら、engine は他の validator に proposal の内容を gossip したり certificate に含めたりする手段がない。**ラップが value を BFT machine 内で first-class にする。**(我々の single-validator devnet では他の validator は gossip を受け取らないが — engine は自分が solo で走っていることを **知らない**。)
 
 ## 手順
 
@@ -283,7 +283,7 @@ Engine は「height H で value が decide された — certificate がこれ�
 4. **exit 条件チェック** — `stop_after_decisions` に達したら `Next::Start(next_height, ...)` で reply (engine が hang しないように) して return。**これがテストを 0.02 秒でクリーンに exit させる。**
 5. **そうでなければ** `Next::Start(next_height, validator_set)` で reply — 「はい、次の height で続けてください、validator set はこれ」 — して loop。
 
-> 🛑 **予測してみよう。** Exit path なのになぜ reply を送る? **`oneshot::Sender::send` が、reply を待っている engine actor を unblock する唯一の方法だから。** 単に `return Ok(decided)` すると、engine actor は今 drop された sender に対して `await` で stuck になり、tear-down が遅くなる (やがて `kill_and_wait` がクリーンアップする)。先に reply すれば engine actor は自然に終了し、`handle.kill(None)` は inevitable を確認するだけ。
+> 🛑 **考えてみよう。** Exit path なのになぜ reply を送る? **`oneshot::Sender::send` が、reply を待っている engine actor を unblock する唯一の方法だから。** 単に `return Ok(decided)` すると、engine actor は今 drop された sender に対して `await` で stuck になり、tear-down が遅くなる (やがて `kill_and_wait` がクリーンアップする)。先に reply すれば engine actor は自然に終了し、`handle.kill(None)` は inevitable を確認するだけ。
 
 ### Step 6: その他 7 arm — stub と no-op
 
@@ -635,5 +635,5 @@ L10 が参照する openhl コミット (§答え合わせ):
 - **「app loop」「engine」「bridge」** はそのまま (専門語)。
 - **「routing」「ルーティング」** は混在 — 文脈で読みやすい方を選択。
 - **「value-payload mode」「ProposalOnly モード」** はそのまま (Malachite の用語)。
-- **「予測してみよう」「やりがちな勘違い」** は L4-L9 で確立した訳語と統一。
+- **「考えてみよう」「やりがちな勘違い」** は L4-L9 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。

@@ -56,7 +56,7 @@ crates/evm/Cargo.toml       — 3 deps (openhl-consensus、openhl-types、async-
 
 key step は #2 — **内部 state の形が変わる**。L4 は `ExecutedBlock` を直接保存していた。L5 は `(B256, Header)` を保存する: alloy-native な型で、`ExecutedBlock` への変換は trait boundary でだけ行う。**alloy 型が source of truth、`ExecutedBlock` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — `LiveRethEvmBridge` は同じ「内部 vs 境界」split を保ったまま、その後ろに real Reth provider を追加する。
 
-> 🛑 **予測してみよう。** L4 の `InMemoryEvmBridge` は hash を `(id, number)` から合成した。L5 の `RethEvmBridge` は `header.hash_slow()` を呼ぶ — real RLP encoding + Keccak-256。**この違いで testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
+> 🛑 **考えてみよう。** L4 の `InMemoryEvmBridge` は hash を `(id, number)` から合成した。L5 の `RethEvmBridge` は `header.hash_slow()` を呼ぶ — real RLP encoding + Keccak-256。**この違いで testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
 
 ## 手を動かす walk-through
 
@@ -527,4 +527,4 @@ L5 が引用する openhl commit (§答え合わせ で参照):
   - alloy/Reth 型名 (`Header`、`B256`、`Address`、`SealedHeader` 等) は英語のまま
   - `hash_slow`、`Default::default()`、`#[async_trait]` 等は英語のまま
   - 「source of truth」「production-shape」「materialize する」等は英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)
+  - 🛑 callout: 考えてみよう (Predict)、やりがちな勘違い (Anti-fluency)

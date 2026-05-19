@@ -67,7 +67,7 @@ crates/consensus/                — フル BFT engine + run_engine_app
 
 このレッスンが教えるのは **provider-に対してジェネリックなパターン**、bridge を isolation で testable にする。`LiveRethEvmBridge<P>` は `P: BlockNumReader + Clone + Sync + 'static` に対してジェネリック。Production では `P` は live node の `BlockchainProvider`。テストでは `P` は決定的な `(hash → number)` マッピングを返す `MockProvider` でもよい。**Bridge 自体はどちらか気にしない** — ただ `provider.block_number(...)` を呼ぶ。これは L10 の `run_engine_app<B: ConsensusBridge>` と同じパターン: 具象型ではなく trait に依存する。
 
-> 🛑 **予測してみよう。** スクロールする前に: `build_payload` が live provider から読むのに、なぜ `LiveRethEvmBridge` は依然として `pending`, `chain`, `head` フィールドを持つ内部 `Mutex<State>` を保持する? ヒント: `build_payload` は `PayloadId` を返し、engine は後で `payload_ready(id)` を呼んで実際の block を fetch する。Pending 状態がこれら 2 つの呼び出しを橋渡しする — Reth の payload-builder は block を組み立てるのに 10-50ms かかり、engine が待つ間 bridge は **結果** をどこかに保持する必要がある。**L13 でこのインメモリ pending 状態を Reth の実 payload-builder に置き換える。** 今のところは build-then-fetch shape が動くことを証明する placeholder。
+> 🛑 **考えてみよう。** スクロールする前に: `build_payload` が live provider から読むのに、なぜ `LiveRethEvmBridge` は依然として `pending`, `chain`, `head` フィールドを持つ内部 `Mutex<State>` を保持する? ヒント: `build_payload` は `PayloadId` を返し、engine は後で `payload_ready(id)` を呼んで実際の block を fetch する。Pending 状態がこれら 2 つの呼び出しを橋渡しする — Reth の payload-builder は block を組み立てるのに 10-50ms かかり、engine が待つ間 bridge は **結果** をどこかに保持する必要がある。**L13 でこのインメモリ pending 状態を Reth の実 payload-builder に置き換える。** 今のところは build-then-fetch shape が動くことを証明する placeholder。
 
 ## 手順
 
@@ -549,5 +549,5 @@ L12 が参照する openhl コミット (§答え合わせ):
 - **「load-bearing」「provider」「bridge」** は専門語として英語のまま保持。
 - **「generic-over-trait」「protocol vs operational failure」** はそのまま (ニュアンス保持)。
 - **「happy path」「negative path」「sad path」** は英語のまま (CS / QA 慣用語)。
-- **「予測してみよう」「やりがちな勘違い」** は L4-L11 で確立した訳語と統一。
+- **「考えてみよう」「やりがちな勘違い」** は L4-L11 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。

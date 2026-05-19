@@ -67,7 +67,7 @@ crates/consensus/Cargo.toml:
 
 これらの型の shape が **すべての後続レッスンに伝播する**。L7 (SigningProvider) が `OpenHlVote` と `OpenHlProposal` に署名。L8 (Codec) がそれらを encode。L9 (run_engine_app) が `OpenHlContext` で parameterize された AppMsg を処理。**ここで encode する設計判断は後 8 つのレッスンに伝播する。**
 
-> 🛑 **予測してみよう。** 上の型リストを見る。10 個の型のうち 2 つは特別に注目すべき — load-bearing な決定を encode しているから:
+> 🛑 **考えてみよう。** 上の型リストを見る。10 個の型のうち 2 つは特別に注目すべき — load-bearing な決定を encode しているから:
 > - `OpenHlValidatorSet` の **specific なソート順** — 全 validator が同じソートに合意する必要がある
 > - `OpenHlContext::select_proposer` の **specific なアルゴリズム**
 >
@@ -845,7 +845,7 @@ L6 が引用する openhl commit (§答え合わせ で参照):
 ## Style review notes (self-critique before paste)
 
 - **L6 は 50 分 — コース最長のレッスン。** 8 新規ファイル、~330 行。各ファイル個別には小さいが、数が duration を生む。
-- **§計画 の予測してみよう callout** で readers がコードに会う前に 2 つの load-bearing 決定 (ValidatorSet sort + select_proposer algorithm) に focus させる。この 2 つの divergence だけが chain を fork させる。
+- **§計画 の考えてみよう callout** で readers がコードに会う前に 2 つの load-bearing 決定 (ValidatorSet sort + select_proposer algorithm) に focus させる。この 2 つの divergence だけが chain を fork させる。
 - **Step 4 の「単一で最も load-bearing なファイル」フレーミング** がレッスンの最重要 framing。これが無いと readers が sort comparator を boilerplate として skim する。
 - **Step 3 のやりがちな勘違い (なぜ OpenHlValue が BlockHash を wrap するか)** は L4/L5 の test-double-vs-real-type パターンの別形 — ラッパーが進化を独立に起こせる。
 - **walk-through が多くの sub-file に分かれる** (simple 3 + complex 1 + message 3 + context 1)。意図的: 各ファイルが独自の設計根拠を持ち、複雑性で group することで自然な breath を提供する。
@@ -854,4 +854,4 @@ L6 が引用する openhl commit (§答え合わせ で参照):
   - Malachite trait 名 (`Context`、`Address`、`Height`、`Value`、`Validator` 等) は英語のまま
   - Rust の syntax (impl、trait、struct、newtype、derive、async、Send、Sync) は英語のまま
   - 数学/CS 用語 (`load-bearing`、`canonical`、`monotonic`、`deterministic`、`round-trip`、`tiebreaker`) は英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)
+  - 🛑 callout: 考えてみよう (Predict)、やりがちな勘違い (Anti-fluency)

@@ -52,7 +52,7 @@ L0 のセットアップを済ませている前提だ。手元には:
 
 **先にアプリケーションコードではなく依存グラフを組む理由**: Rust workspace で最も摩擦が多いのは依存解決だ。Reth と Malachite はどちらも巨大で transitive な依存ツリーが深い。**「あとでやる」にすると、アプリケーションコードを書いている最中に衝突を発見して巻き戻すことになる。** 先に依存を確定させておけば、その後のレッスンはレッスンの本題に集中できる。
 
-> 🛑 **予測してみよう。** スクロール前に sketch せよ: workspace の Cargo.toml に書く `members` は何個で、それぞれ何か? ヒント: 10 個のライブラリ crate + 1 個の binary crate。L0 §3 で 5 つのサブシステムを学んだ; それを実装するのは具体的に 10 個のうちのどの crate か? (必要なら L0 §4 を見返す。)
+> 🛑 **考えてみよう。** スクロール前に sketch せよ: workspace の Cargo.toml に書く `members` は何個で、それぞれ何か? ヒント: 10 個のライブラリ crate + 1 個の binary crate。L0 §3 で 5 つのサブシステムを学んだ; それを実装するのは具体的に 10 個のうちのどの crate か? (必要なら L0 §4 を見返す。)
 
 ## 手を動かす walk-through
 
@@ -342,7 +342,7 @@ alloy-rlp                 = { version = "0.3", default-features = false }
 
 **なぜ main HEAD ではなく release-tag SHA に pin するのか?** Main HEAD はいつでも壊れる可能性がある。Release tag はテストされた安定版だ。ファイル中のコメント (`# Bump は専用 PR で行う。release-tag SHA を必ず pin、main HEAD には絶対 pin しない。`) は将来 bump するときの process discipline メモだ。
 
-> 🛑 **予測してみよう。** いまの状態で `cargo check --workspace` を実行すると何が起こるか? スクロール前に 1 つ選べ:
+> 🛑 **考えてみよう。** いまの状態で `cargo check --workspace` を実行すると何が起こるか? スクロール前に 1 つ選べ:
 > - (a) 何も変わらない — まだどの crate も Reth の依存を使っていないから
 > - (b) 初回は劇的に遅くなる — Reth の transitive な ~600 crate を fetch + compile する
 > - (c) エラー — Reth は明示的な configuration が必要で、まだ与えていない
@@ -518,6 +518,6 @@ L1 が引用する openhl の commit は 2 つ (§答え合わせ で参照):
 - **翻訳 policy**:
   - Cargo / Rust の用語 (`workspace`、`resolver`、`feature`、`dependency`、`target`、`profile` 等) は英語のまま
   - コードブロック、コマンド、TOML キーは英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)
+  - 🛑 callout: 考えてみよう (Predict)、やりがちな勘違い (Anti-fluency)
   - 「依存」「依存グラフ」「依存解決」は日本語、「dependency」が文脈で必要な場合は併記
   - 「resolver」「pin する」「fetch」「compile」「fork」「Stage」「commit」「workspace」は英語のまま — Rust エンジニアにとって直感的

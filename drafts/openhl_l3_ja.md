@@ -59,7 +59,7 @@ crates/consensus/Cargo.toml:
 
 この trait は **コース全体で最も参照されるアーティファクト** だ。L4 で impl する (`InMemoryEvmBridge`)。L5 でもう一度 impl する (`RethEvmBridge`)。L9 で actor pipeline から call する。L11-L13 で 3 度目の impl (`LiveRethEvmBridge`)。**いま書く signature が下流すべてに伝播する。**
 
-> 🛑 **予測してみよう。** もう一度 4 つのメソッド名を見る: `build_payload`、`payload_ready`、`validate_payload`、`commit`。**3 つは CL → EL (consensus が execution を呼ぶ); 1 つは EL → CL (execution が応答する)。どれが EL → CL 方向で、なぜか?** ヒント: そのメソッドの *戻り値* を consensus 側がどう待っているかを考える。
+> 🛑 **考えてみよう。** もう一度 4 つのメソッド名を見る: `build_payload`、`payload_ready`、`validate_payload`、`commit`。**3 つは CL → EL (consensus が execution を呼ぶ); 1 つは EL → CL (execution が応答する)。どれが EL → CL 方向で、なぜか?** ヒント: そのメソッドの *戻り値* を consensus 側がどう待っているかを考える。
 
 ## 手を動かす walk-through
 
@@ -355,5 +355,5 @@ L3 が引用する openhl commit (§答え合わせ で参照):
   - Cargo の用語 (`workspace = true`、`[dependencies]`) は英語のまま
   - `#[async_trait]`、`#[derive(Error)]`、`#[from]` 等のマクロ呼び出しは英語のまま
   - コード、ファイルパス、コマンドは英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)
+  - 🛑 callout: 考えてみよう (Predict)、やりがちな勘違い (Anti-fluency)
   - 「contract」「fork」「leak」「polymorphism」等は英語のまま (CS/SE の確立した語彙)

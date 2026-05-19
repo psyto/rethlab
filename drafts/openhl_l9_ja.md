@@ -64,7 +64,7 @@ crates/consensus/src/types/               — 型ファイル 7 個
 
 このレッスンが教えるのは **自分のコードと Malachite を結ぶブリッジパターン**。エンジンは他人が書いたもので、`Context` と `Codec` に対してジェネリック。spawn するには 5 つが必要: context インスタンス、node インスタンス (config、署名、address 導出を取るため)、config 値、codec 値、初期 height、validator set。`Node` trait は、Malachite が自分のコードからそれらを統一的に取れるようにする **handshake インターフェース**。一度 impl すれば、同じハンドシェイクに従う任意の chain で `start_engine` は動く。
 
-> 🛑 **予測してみよう。** スクロールする前に: なぜ Malachite は `OpenHlNode` 自身に config フィールドを持たせず、別の `OpenHlConfig` を要求するのか? ヒント: config の **所有者** と、いつ変わりうるかを考える。Node はプロセス起動時に 1 回作成されるが、設定 (listen address、value payload mode、value sync 設定) はシグナルでディスクから再ロードされうる。`OpenHlConfig` を `OpenHlNode` から分離することで、config は `Node::load_config()` 経由でロードできる — 再呼び出し可能で毎回新しい値を返す — node を再インスタンス化することなく。
+> 🛑 **考えてみよう。** スクロールする前に: なぜ Malachite は `OpenHlNode` 自身に config フィールドを持たせず、別の `OpenHlConfig` を要求するのか? ヒント: config の **所有者** と、いつ変わりうるかを考える。Node はプロセス起動時に 1 回作成されるが、設定 (listen address、value payload mode、value sync 設定) はシグナルでディスクから再ロードされうる。`OpenHlConfig` を `OpenHlNode` から分離することで、config は `Node::load_config()` 経由でロードできる — 再呼び出し可能で毎回新しい値を返す — node を再インスタンス化することなく。
 
 ## 手順
 
@@ -690,6 +690,6 @@ L9 が参照する openhl コミット (§答え合わせ):
 - **「handshake」「ハンドシェイク」** はそのまま (専門語)。
 - **「multi-thread runtime」「actor system」「smoke test」** はそのまま。
 - **「load-bearing」「placeholder」** はそのまま (英語のニュアンスを保持)。「crumb」は「目印」と訳出。
-- **「予測してみよう」「やりがちな勘違い」** は L4-L8 で確立した訳語と統一。
+- **「考えてみよう」「やりがちな勘違い」** は L4-L8 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。
 - **長い表は EN と同じ列構成**。

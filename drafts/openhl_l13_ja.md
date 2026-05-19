@@ -71,7 +71,7 @@ pub struct LiveRethEvmBridge<P> {
 
 このレッスンが教えるのは **producer-consumer の自己整合性パターン**。同じ artifact の builder と validator がある場合、**両者は同じルールを使わなければならない**。`build_payload` が 1 つの base-fee 公式を使い `validate_payload` が別のを使うなら、すべての block が validation に失敗する。これを確保する方法は **両方を同じソースから導出すること** — ここでは `ChainSpec`。`ChainSpec::next_block_base_fee()` が build に使われ、`EthBeaconConsensus::validate_against_parent_eip1559_base_fee` の中で同じヘルパーが check に使われる。**Source-of-truth の共有がシステムを自己整合にする。**
 
-> 🛑 **予測してみよう。** スクロールする前に: なぜ `EthBeaconConsensus::validate_header_against_parent` は parent の **full** sealed header (gas_limit、timestamp、base_fee_per_gas、すべて) を必要とするが、`BlockNumReader::block_number` は `u64` しか返さない? ヒント: Reth の validator が走らせる 4 つの sub-check を考える。Number monotonicity は parent.number だけでいい。Timestamp monotonicity は parent.timestamp が必要。Gas-limit drift は parent.gas_limit が必要。EIP-1559 base fee は parent.base_fee_per_gas + parent.gas_used + parent.gas_limit が必要。**Validate する瞬間に、header 全体が必要 — number だけではない。** だから L13 で trait bound を `BlockNumReader` から **加えて** `HeaderProvider<Header = Header>` に拡張する。
+> 🛑 **考えてみよう。** スクロールする前に: なぜ `EthBeaconConsensus::validate_header_against_parent` は parent の **full** sealed header (gas_limit、timestamp、base_fee_per_gas、すべて) を必要とするが、`BlockNumReader::block_number` は `u64` しか返さない? ヒント: Reth の validator が走らせる 4 つの sub-check を考える。Number monotonicity は parent.number だけでいい。Timestamp monotonicity は parent.timestamp が必要。Gas-limit drift は parent.gas_limit が必要。EIP-1559 base fee は parent.base_fee_per_gas + parent.gas_used + parent.gas_limit が必要。**Validate する瞬間に、header 全体が必要 — number だけではない。** だから L13 で trait bound を `BlockNumReader` から **加えて** `HeaderProvider<Header = Header>` に拡張する。
 
 ## 手順
 
@@ -553,5 +553,5 @@ L13 が参照する openhl コミット (§答え合わせ):
 - **「source of truth」「source-of-truth」** はそのまま (DDD/データエンジ慣用)。
 - **「short-circuiting」「orchestration」「fallthrough」** はそのまま (専門語)。
 - **「monotonicity」「monotonic」** はそのまま (数学/CS 慣用)。
-- **「予測してみよう」「やりがちな勘違い」** は L4-L12 で確立した訳語と統一。
+- **「考えてみよう」「やりがちな勘違い」** は L4-L12 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。

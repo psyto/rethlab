@@ -67,7 +67,7 @@ bin/openhl/             — 空のバイナリ stub
 
 このレッスンが教えるのは **依存共存の検証パターン**。大きなインフラ crate 2 つに依存する (我々の場合 Reth と Malachite) 場合、衝突が判明するのは integration コードを書いてから — その時点で、**動くべき** だが compile しないコードに大量投資済み。**検証パターンは、integration を書く前に、両方を同時に exercise する最小のテストを書くこと。** Test が pass すれば両 dep が resolve・link する。失敗すれば失敗が即座に visible になり、blast radius が小さい。
 
-> 🛑 **予測してみよう。** スクロールする前に: なぜゴールコマンドで bootstrap test を `--release` でマークする? ヒント: compile time とその支配要因を考える。Reth の MDBX bindings + libp2p + alloy + rocksdb 系ストレージスタックは **巨大** — debug mode の初回コンパイルは ~2:34、release も同程度だが結果バイナリが大幅に高速。Test 自体は bootstrap と chain-ID チェックだけなので、**初回コンパイル後** は fast compile より fast runtime が欲しい。初回 cold ビルド後は `--release` で走る。
+> 🛑 **考えてみよう。** スクロールする前に: なぜゴールコマンドで bootstrap test を `--release` でマークする? ヒント: compile time とその支配要因を考える。Reth の MDBX bindings + libp2p + alloy + rocksdb 系ストレージスタックは **巨大** — debug mode の初回コンパイルは ~2:34、release も同程度だが結果バイナリが大幅に高速。Test 自体は bootstrap と chain-ID チェックだけなので、**初回コンパイル後** は fast compile より fast runtime が欲しい。初回 cold ビルド後は `--release` で走る。
 
 ## 手順
 
@@ -467,6 +467,6 @@ L11 が参照する openhl コミット (§答え合わせ):
 - **「load-bearing」「dependency-coexistence」「bootstrap」** は専門語として英語のまま保持。
 - **「stale」「blast radius」「validation」** はそのまま (ニュアンス保持)。
 - **「post-merge」「hardfork」「Shanghai」** は Ethereum 専門語そのまま。
-- **「予測してみよう」「やりがちな勘違い」** は L4-L10 で確立した訳語と統一。
+- **「考えてみよう」「やりがちな勘違い」** は L4-L10 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。
 - **「インフラ」「サブシステム」** はカタカナ (一般定着語)。

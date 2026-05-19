@@ -82,7 +82,7 @@ pub struct LiveRethEvmBridge<P> {
 
 Step 2 が失敗してもログするが伝播しない — Step 1 はすでに起きたから、roll back すると不整合状態に陥る。**成功の **後** に続く副作用は、成功を **gate する** 副作用とは異なる。**
 
-> 🛑 **予測してみよう。** スクロールする前に: なぜテストは `commit().await.expect(...)` が成功することだけを assert し、Reth の canonical chain head が動いたことは assert しない? ヒント: `build_payload` の出力に何が欠けているか考える。Engine に渡す `ExecutedBlock` は header だけ — トランザクションなし、receipt なし、state root なし。Reth の engine は canonical chain を advance するために **実際の block body** が必要。`engine_newPayload` を先に送らないと、`fork_choice_updated` は `SYNCING` (「この block をまだ知らない、body を fetch しろ」) を返す。Wire は接続されている; データは違う。**L14 は接続を証明する; payload execution は将来コースに先送り。**
+> 🛑 **考えてみよう。** スクロールする前に: なぜテストは `commit().await.expect(...)` が成功することだけを assert し、Reth の canonical chain head が動いたことは assert しない? ヒント: `build_payload` の出力に何が欠けているか考える。Engine に渡す `ExecutedBlock` は header だけ — トランザクションなし、receipt なし、state root なし。Reth の engine は canonical chain を advance するために **実際の block body** が必要。`engine_newPayload` を先に送らないと、`fork_choice_updated` は `SYNCING` (「この block をまだ知らない、body を fetch しろ」) を返す。Wire は接続されている; データは違う。**L14 は接続を証明する; payload execution は将来コースに先送り。**
 
 ## 手順
 
@@ -514,5 +514,5 @@ L14 が参照する openhl コミット (§答え合わせ):
 - **「source of truth」「downstream」「primary store」** はそのまま (DDD/データエンジ慣用)。
 - **「fork choice」「forkchoice」** はそのまま (Ethereum 用語)。
 - **「SYNCING」「VALID」「INVALID」** は Engine API レスポンス名そのまま。
-- **「予測してみよう」「やりがちな勘違い」** は L4-L13 で確立した訳語と統一。
+- **「考えてみよう」「やりがちな勘違い」** は L4-L13 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。

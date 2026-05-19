@@ -243,7 +243,7 @@ L0 のセットアップを済ませている前提だ。手元には:
 
 **先にアプリケーションコードではなく依存グラフを組む理由**: Rust workspace で最も摩擦が多いのは依存解決だ。Reth と Malachite はどちらも巨大で transitive な依存ツリーが深い。**「あとでやる」にすると、アプリケーションコードを書いている最中に衝突を発見して巻き戻すことになる。** 先に依存を確定させておけば、その後のレッスンはレッスンの本題に集中できる。
 
-> 🛑 **予測してみよう。** スクロール前に sketch せよ: workspace の Cargo.toml に書く \`members\` は何個で、それぞれ何か? ヒント: 10 個のライブラリ crate + 1 個の binary crate。L0 §3 で 5 つのサブシステムを学んだ; それを実装するのは具体的に 10 個のうちのどの crate か? (必要なら L0 §4 を見返す。)
+> 🛑 **考えてみよう。** スクロール前に sketch せよ: workspace の Cargo.toml に書く \`members\` は何個で、それぞれ何か? ヒント: 10 個のライブラリ crate + 1 個の binary crate。L0 §3 で 5 つのサブシステムを学んだ; それを実装するのは具体的に 10 個のうちのどの crate か? (必要なら L0 §4 を見返す。)
 
 ## 手を動かす walk-through
 
@@ -533,7 +533,7 @@ alloy-rlp                 = { version = "0.3", default-features = false }
 
 **なぜ main HEAD ではなく release-tag SHA に pin するのか?** Main HEAD はいつでも壊れる可能性がある。Release tag はテストされた安定版だ。ファイル中のコメント (\`# Bump は専用 PR で行う。release-tag SHA を必ず pin、main HEAD には絶対 pin しない。\`) は将来 bump するときの process discipline メモだ。
 
-> 🛑 **予測してみよう。** いまの状態で \`cargo check --workspace\` を実行すると何が起こるか? スクロール前に 1 つ選べ:
+> 🛑 **考えてみよう。** いまの状態で \`cargo check --workspace\` を実行すると何が起こるか? スクロール前に 1 つ選べ:
 > - (a) 何も変わらない — まだどの crate も Reth の依存を使っていないから
 > - (b) 初回は劇的に遅くなる — Reth の transitive な ~600 crate を fetch + compile する
 > - (c) エラー — Reth は明示的な configuration が必要で、まだ与えていない
@@ -738,7 +738,7 @@ L1 が終わって、workspace は次の状態にある:
 
 この 5 つの type が CL↔EL contract の **共通語彙** だ。consensus crate と evm crate の両方がこれらを import する。3 番目の crate \`openhl-types\` に置く — \`openhl-consensus\` でも \`openhl-evm\` でもない場所に — 理由は §設計を振り返る で説明する。
 
-> 🛑 **予測してみよう。** 上の表の 5 type を見る。**なぜ \`PayloadStatus\` が enum (3 variant) であって \`bool\` ではないのか?** ヒント: EL が各 answer を返したとき consensus node は何をすべきかを考える。3 つの違う action があり、2 つではない。
+> 🛑 **考えてみよう。** 上の表の 5 type を見る。**なぜ \`PayloadStatus\` が enum (3 variant) であって \`bool\` ではないのか?** ヒント: EL が各 answer を返したとき consensus node は何をすべきかを考える。3 つの違う action があり、2 つではない。
 
 ## 手を動かす walk-through
 
@@ -1062,7 +1062,7 @@ crates/consensus/Cargo.toml:
 
 この trait は **コース全体で最も参照されるアーティファクト** だ。L4 で impl する (\`InMemoryEvmBridge\`)。L5 でもう一度 impl する (\`RethEvmBridge\`)。L9 で actor pipeline から call する。L11-L13 で 3 度目の impl (\`LiveRethEvmBridge\`)。**いま書く signature が下流すべてに伝播する。**
 
-> 🛑 **予測してみよう。** もう一度 4 つのメソッド名を見る: \`build_payload\`、\`payload_ready\`、\`validate_payload\`、\`commit\`。**3 つは CL → EL (consensus が execution を呼ぶ); 1 つは EL → CL (execution が応答する)。どれが EL → CL 方向で、なぜか?** ヒント: そのメソッドの *戻り値* を consensus 側がどう待っているかを考える。
+> 🛑 **考えてみよう。** もう一度 4 つのメソッド名を見る: \`build_payload\`、\`payload_ready\`、\`validate_payload\`、\`commit\`。**3 つは CL → EL (consensus が execution を呼ぶ); 1 つは EL → CL (execution が応答する)。どれが EL → CL 方向で、なぜか?** ヒント: そのメソッドの *戻り値* を consensus 側がどう待っているかを考える。
 
 ## 手を動かす walk-through
 
@@ -1374,7 +1374,7 @@ crates/evm/Cargo.toml          — 空 [dependencies]
 
 これが初めて書く Rust の impl だ。ここで encode するパターンは繰り返される: L5 の \`RethEvmBridge\` も同じスケルトンを使い、L11+ の \`LiveRethEvmBridge\` もそうだ。**State 管理パターン (Mutex<State> + pending vs chain map) もそれらの impl に伝播する。**
 
-> 🛑 **予測してみよう。** スクロール前に: test double の \`build_payload\` が **fake する** ものは何で、**実際にできる** ものは何か? ヒント: EVM は走らせられないが、できること: \`PayloadId\` を割り当てる、block number をインクリメントする、hash を synthesize する、pending block を覚える。Fake vs real の区別は L5 + L11 で意味を持つ。
+> 🛑 **考えてみよう。** スクロール前に: test double の \`build_payload\` が **fake する** ものは何で、**実際にできる** ものは何か? ヒント: EVM は走らせられないが、できること: \`PayloadId\` を割り当てる、block number をインクリメントする、hash を synthesize する、pending block を覚える。Fake vs real の区別は L5 + L11 で意味を持つ。
 
 ## 手を動かす walk-through
 
@@ -1808,7 +1808,7 @@ crates/evm/Cargo.toml       — 3 deps (openhl-consensus、openhl-types、async-
 
 key step は #2 — **内部 state の形が変わる**。L4 は \`ExecutedBlock\` を直接保存していた。L5 は \`(B256, Header)\` を保存する: alloy-native な型で、\`ExecutedBlock\` への変換は trait boundary でだけ行う。**alloy 型が source of truth、\`ExecutedBlock\` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — \`LiveRethEvmBridge\` は同じ「内部 vs 境界」split を保ったまま、その後ろに real Reth provider を追加する。
 
-> 🛑 **予測してみよう。** L4 の \`InMemoryEvmBridge\` は hash を \`(id, number)\` から合成した。L5 の \`RethEvmBridge\` は \`header.hash_slow()\` を呼ぶ — real RLP encoding + Keccak-256。**この違いで testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
+> 🛑 **考えてみよう。** L4 の \`InMemoryEvmBridge\` は hash を \`(id, number)\` から合成した。L5 の \`RethEvmBridge\` は \`header.hash_slow()\` を呼ぶ — real RLP encoding + Keccak-256。**この違いで testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
 
 ## 手を動かす walk-through
 
@@ -2308,7 +2308,7 @@ crates/consensus/Cargo.toml:
 
 これらの型の shape が **すべての後続レッスンに伝播する**。L7 (SigningProvider) が \`OpenHlVote\` と \`OpenHlProposal\` に署名。L8 (Codec) がそれらを encode。L9 (run_engine_app) が \`OpenHlContext\` で parameterize された AppMsg を処理。**ここで encode する設計判断は後 8 つのレッスンに伝播する。**
 
-> 🛑 **予測してみよう。** 上の型リストを見る。10 個の型のうち 2 つは特別に注目すべき — load-bearing な決定を encode しているから:
+> 🛑 **考えてみよう。** 上の型リストを見る。10 個の型のうち 2 つは特別に注目すべき — load-bearing な決定を encode しているから:
 > - \`OpenHlValidatorSet\` の **specific なソート順** — 全 validator が同じソートに合意する必要がある
 > - \`OpenHlContext::select_proposer\` の **specific なアルゴリズム**
 >
@@ -3110,7 +3110,7 @@ crates/consensus/src/context.rs — OpenHlContext + Context impl + テスト 5 �
 - **Canonical encoding** — 型付きメッセージを、すべての validator が同一に計算する確定的なバイト列に変換する。署名は **構造体** ではなく **バイト列** にコミットする。フィールドの encoding が変わると署名が検証できなくなる。
 - **Trait 同士の配線** — Malachite の \`SigningProvider\` は、\`signing.rs\` の低レベル署名ロジックを **ラップする** trait。Provider は実行時状態 (鍵) を持ち、状態を持たない純粋関数に処理を委譲する。これは \`ConsensusBridge\` (trait) vs \`InMemoryEvmBridge\` (それを impl する構造体) と同じ分離パターン。
 
-> 🛑 **予測してみよう。** スクロールする前に: \`Vote\` の canonical encoding は、どのフィールドを含む必要があるか? ヒント: 署名が何にコミットしているかを考える。コンセンサスにとって意味のある違いがある 2 つの vote について、その signing bytes が異なっていなければ、片方に対する有効な署名が、もう片方に対しても検証できてしまう。攻撃者は vote を replay または swap できる。
+> 🛑 **考えてみよう。** スクロールする前に: \`Vote\` の canonical encoding は、どのフィールドを含む必要があるか? ヒント: 署名が何にコミットしているかを考える。コンセンサスにとって意味のある違いがある 2 つの vote について、その signing bytes が異なっていなければ、片方に対する有効な署名が、もう片方に対しても検証できてしまう。攻撃者は vote を replay または swap できる。
 
 ## 手順
 
@@ -3728,7 +3728,7 @@ crates/consensus/src/context.rs            — OpenHlContext + Context impl
 
 このレッスンが教えるのは、**ある impl の詳細以上に効いてくる 1 つのパターン**: **明確な失敗モードを持たせて trait メソッドを stub する**。大きな trait bound を満たす必要があるが、対象メソッドが hot path にない場合、stub にできる。stub のエラーメッセージには「何が呼ばれたか」を載せ、読み手が次に何を実装すべきか分かるようにする。これは **型レベルのインクリメンタル開発** — codec を全部一度に実装する必要はない、コンパイルが通るだけ提供しておき、実際に呼ばれたところで loud にエラーを返す。
 
-> 🛑 **予測してみよう。** スクロールする前に: なぜ Malachite は、single-validator devnet で送るネットワークがないのに、エンジンがネットワーク・メッセージのエンコード方法を知っていることを強制するのか? ヒント: trait bound は **型** に関するもので、**runtime 挙動** に関するものではない。エンジンは自分の codec に対してジェネリックなのは、devnet では gossip しない validator も multi-validator デプロイでは gossip するから。Codec スロットが要求されるのは、エンジンがピアがあるかどうかを知らないから。impl が完全である必要がないのは、テストでは gossip コードパスがそもそも実行されないから。
+> 🛑 **考えてみよう。** スクロールする前に: なぜ Malachite は、single-validator devnet で送るネットワークがないのに、エンジンがネットワーク・メッセージのエンコード方法を知っていることを強制するのか? ヒント: trait bound は **型** に関するもので、**runtime 挙動** に関するものではない。エンジンは自分の codec に対してジェネリックなのは、devnet では gossip しない validator も multi-validator デプロイでは gossip するから。Codec スロットが要求されるのは、エンジンがピアがあるかどうかを知らないから。impl が完全である必要がないのは、テストでは gossip コードパスがそもそも実行されないから。
 
 ## 手順
 
@@ -4128,7 +4128,7 @@ crates/consensus/src/types/               — 型ファイル 7 個
 
 このレッスンが教えるのは **自分のコードと Malachite を結ぶブリッジパターン**。エンジンは他人が書いたもので、\`Context\` と \`Codec\` に対してジェネリック。spawn するには 5 つが必要: context インスタンス、node インスタンス (config、署名、address 導出を取るため)、config 値、codec 値、初期 height、validator set。\`Node\` trait は、Malachite が自分のコードからそれらを統一的に取れるようにする **handshake インターフェース**。一度 impl すれば、同じハンドシェイクに従う任意の chain で \`start_engine\` は動く。
 
-> 🛑 **予測してみよう。** スクロールする前に: なぜ Malachite は \`OpenHlNode\` 自身に config フィールドを持たせず、別の \`OpenHlConfig\` を要求するのか? ヒント: config の **所有者** と、いつ変わりうるかを考える。Node はプロセス起動時に 1 回作成されるが、設定 (listen address、value payload mode、value sync 設定) はシグナルでディスクから再ロードされうる。\`OpenHlConfig\` を \`OpenHlNode\` から分離することで、config は \`Node::load_config()\` 経由でロードできる — 再呼び出し可能で毎回新しい値を返す — node を再インスタンス化することなく。
+> 🛑 **考えてみよう。** スクロールする前に: なぜ Malachite は \`OpenHlNode\` 自身に config フィールドを持たせず、別の \`OpenHlConfig\` を要求するのか? ヒント: config の **所有者** と、いつ変わりうるかを考える。Node はプロセス起動時に 1 回作成されるが、設定 (listen address、value payload mode、value sync 設定) はシグナルでディスクから再ロードされうる。\`OpenHlConfig\` を \`OpenHlNode\` から分離することで、config は \`Node::load_config()\` 経由でロードできる — 再呼び出し可能で毎回新しい値を返す — node を再インスタンス化することなく。
 
 ## 手順
 
@@ -4788,7 +4788,7 @@ crates/consensus/src/bridge.rs            — ConsensusBridge trait + InMemoryEv
 
 このレッスンが教えるのは **actor-message-loop パターン**。ほとんどの consensus engine (CometBFT、Hotstuff、Aura) は **何らかの** 「application interface」を持つが、形は様々: callback、gRPC service、FFI バインディング。Malachite のアプローチは型付きメッセージの \`tokio::mpsc\` チャネル — 強型、async-native、チャネルごとに single-threaded。\`run_engine_app\` はそれらメッセージの **consumer**; engine actor は **producer**。**このパターンを理解すれば、どの chain フレームワークの「application interface」もそのバリアントに帰着する。**
 
-> 🛑 **予測してみよう。** スクロールする前に: engine が \`AppMsg::GetValue\` (「次の block を propose しろ」) を送るとき、app はなぜ \`BlockHash\` だけでなく \`LocallyProposedValue(height, round, value)\` で reply するのか? ヒント: engine が rest-of-consensus を通じて wire する value は、commit する value。hash だけ送ったら、engine は他の validator に proposal の内容を gossip したり certificate に含めたりする手段がない。**ラップが value を BFT machine 内で first-class にする。**(我々の single-validator devnet では他の validator は gossip を受け取らないが — engine は自分が solo で走っていることを **知らない**。)
+> 🛑 **考えてみよう。** スクロールする前に: engine が \`AppMsg::GetValue\` (「次の block を propose しろ」) を送るとき、app はなぜ \`BlockHash\` だけでなく \`LocallyProposedValue(height, round, value)\` で reply するのか? ヒント: engine が rest-of-consensus を通じて wire する value は、commit する value。hash だけ送ったら、engine は他の validator に proposal の内容を gossip したり certificate に含めたりする手段がない。**ラップが value を BFT machine 内で first-class にする。**(我々の single-validator devnet では他の validator は gossip を受け取らないが — engine は自分が solo で走っていることを **知らない**。)
 
 ## 手順
 
@@ -5003,7 +5003,7 @@ Engine は「height H で value が decide された — certificate がこれ�
 4. **exit 条件チェック** — \`stop_after_decisions\` に達したら \`Next::Start(next_height, ...)\` で reply (engine が hang しないように) して return。**これがテストを 0.02 秒でクリーンに exit させる。**
 5. **そうでなければ** \`Next::Start(next_height, validator_set)\` で reply — 「はい、次の height で続けてください、validator set はこれ」 — して loop。
 
-> 🛑 **予測してみよう。** Exit path なのになぜ reply を送る? **\`oneshot::Sender::send\` が、reply を待っている engine actor を unblock する唯一の方法だから。** 単に \`return Ok(decided)\` すると、engine actor は今 drop された sender に対して \`await\` で stuck になり、tear-down が遅くなる (やがて \`kill_and_wait\` がクリーンアップする)。先に reply すれば engine actor は自然に終了し、\`handle.kill(None)\` は inevitable を確認するだけ。
+> 🛑 **考えてみよう。** Exit path なのになぜ reply を送る? **\`oneshot::Sender::send\` が、reply を待っている engine actor を unblock する唯一の方法だから。** 単に \`return Ok(decided)\` すると、engine actor は今 drop された sender に対して \`await\` で stuck になり、tear-down が遅くなる (やがて \`kill_and_wait\` がクリーンアップする)。先に reply すれば engine actor は自然に終了し、\`handle.kill(None)\` は inevitable を確認するだけ。
 
 ### Step 6: その他 7 arm — stub と no-op
 
@@ -5376,7 +5376,7 @@ bin/openhl/             — 空のバイナリ stub
 
 このレッスンが教えるのは **依存共存の検証パターン**。大きなインフラ crate 2 つに依存する (我々の場合 Reth と Malachite) 場合、衝突が判明するのは integration コードを書いてから — その時点で、**動くべき** だが compile しないコードに大量投資済み。**検証パターンは、integration を書く前に、両方を同時に exercise する最小のテストを書くこと。** Test が pass すれば両 dep が resolve・link する。失敗すれば失敗が即座に visible になり、blast radius が小さい。
 
-> 🛑 **予測してみよう。** スクロールする前に: なぜゴールコマンドで bootstrap test を \`--release\` でマークする? ヒント: compile time とその支配要因を考える。Reth の MDBX bindings + libp2p + alloy + rocksdb 系ストレージスタックは **巨大** — debug mode の初回コンパイルは ~2:34、release も同程度だが結果バイナリが大幅に高速。Test 自体は bootstrap と chain-ID チェックだけなので、**初回コンパイル後** は fast compile より fast runtime が欲しい。初回 cold ビルド後は \`--release\` で走る。
+> 🛑 **考えてみよう。** スクロールする前に: なぜゴールコマンドで bootstrap test を \`--release\` でマークする? ヒント: compile time とその支配要因を考える。Reth の MDBX bindings + libp2p + alloy + rocksdb 系ストレージスタックは **巨大** — debug mode の初回コンパイルは ~2:34、release も同程度だが結果バイナリが大幅に高速。Test 自体は bootstrap と chain-ID チェックだけなので、**初回コンパイル後** は fast compile より fast runtime が欲しい。初回 cold ビルド後は \`--release\` で走る。
 
 ## 手順
 
@@ -5789,7 +5789,7 @@ crates/consensus/                — フル BFT engine + run_engine_app
 
 このレッスンが教えるのは **provider-に対してジェネリックなパターン**、bridge を isolation で testable にする。\`LiveRethEvmBridge<P>\` は \`P: BlockNumReader + Clone + Sync + 'static\` に対してジェネリック。Production では \`P\` は live node の \`BlockchainProvider\`。テストでは \`P\` は決定的な \`(hash → number)\` マッピングを返す \`MockProvider\` でもよい。**Bridge 自体はどちらか気にしない** — ただ \`provider.block_number(...)\` を呼ぶ。これは L10 の \`run_engine_app<B: ConsensusBridge>\` と同じパターン: 具象型ではなく trait に依存する。
 
-> 🛑 **予測してみよう。** スクロールする前に: \`build_payload\` が live provider から読むのに、なぜ \`LiveRethEvmBridge\` は依然として \`pending\`, \`chain\`, \`head\` フィールドを持つ内部 \`Mutex<State>\` を保持する? ヒント: \`build_payload\` は \`PayloadId\` を返し、engine は後で \`payload_ready(id)\` を呼んで実際の block を fetch する。Pending 状態がこれら 2 つの呼び出しを橋渡しする — Reth の payload-builder は block を組み立てるのに 10-50ms かかり、engine が待つ間 bridge は **結果** をどこかに保持する必要がある。**L13 でこのインメモリ pending 状態を Reth の実 payload-builder に置き換える。** 今のところは build-then-fetch shape が動くことを証明する placeholder。
+> 🛑 **考えてみよう。** スクロールする前に: \`build_payload\` が live provider から読むのに、なぜ \`LiveRethEvmBridge\` は依然として \`pending\`, \`chain\`, \`head\` フィールドを持つ内部 \`Mutex<State>\` を保持する? ヒント: \`build_payload\` は \`PayloadId\` を返し、engine は後で \`payload_ready(id)\` を呼んで実際の block を fetch する。Pending 状態がこれら 2 つの呼び出しを橋渡しする — Reth の payload-builder は block を組み立てるのに 10-50ms かかり、engine が待つ間 bridge は **結果** をどこかに保持する必要がある。**L13 でこのインメモリ pending 状態を Reth の実 payload-builder に置き換える。** 今のところは build-then-fetch shape が動くことを証明する placeholder。
 
 ## 手順
 
@@ -6300,7 +6300,7 @@ pub struct LiveRethEvmBridge<P> {
 
 このレッスンが教えるのは **producer-consumer の自己整合性パターン**。同じ artifact の builder と validator がある場合、**両者は同じルールを使わなければならない**。\`build_payload\` が 1 つの base-fee 公式を使い \`validate_payload\` が別のを使うなら、すべての block が validation に失敗する。これを確保する方法は **両方を同じソースから導出すること** — ここでは \`ChainSpec\`。\`ChainSpec::next_block_base_fee()\` が build に使われ、\`EthBeaconConsensus::validate_against_parent_eip1559_base_fee\` の中で同じヘルパーが check に使われる。**Source-of-truth の共有がシステムを自己整合にする。**
 
-> 🛑 **予測してみよう。** スクロールする前に: なぜ \`EthBeaconConsensus::validate_header_against_parent\` は parent の **full** sealed header (gas_limit、timestamp、base_fee_per_gas、すべて) を必要とするが、\`BlockNumReader::block_number\` は \`u64\` しか返さない? ヒント: Reth の validator が走らせる 4 つの sub-check を考える。Number monotonicity は parent.number だけでいい。Timestamp monotonicity は parent.timestamp が必要。Gas-limit drift は parent.gas_limit が必要。EIP-1559 base fee は parent.base_fee_per_gas + parent.gas_used + parent.gas_limit が必要。**Validate する瞬間に、header 全体が必要 — number だけではない。** だから L13 で trait bound を \`BlockNumReader\` から **加えて** \`HeaderProvider<Header = Header>\` に拡張する。
+> 🛑 **考えてみよう。** スクロールする前に: なぜ \`EthBeaconConsensus::validate_header_against_parent\` は parent の **full** sealed header (gas_limit、timestamp、base_fee_per_gas、すべて) を必要とするが、\`BlockNumReader::block_number\` は \`u64\` しか返さない? ヒント: Reth の validator が走らせる 4 つの sub-check を考える。Number monotonicity は parent.number だけでいい。Timestamp monotonicity は parent.timestamp が必要。Gas-limit drift は parent.gas_limit が必要。EIP-1559 base fee は parent.base_fee_per_gas + parent.gas_used + parent.gas_limit が必要。**Validate する瞬間に、header 全体が必要 — number だけではない。** だから L13 で trait bound を \`BlockNumReader\` から **加えて** \`HeaderProvider<Header = Header>\` に拡張する。
 
 ## 手順
 
@@ -6821,7 +6821,7 @@ pub struct LiveRethEvmBridge<P> {
 
 Step 2 が失敗してもログするが伝播しない — Step 1 はすでに起きたから、roll back すると不整合状態に陥る。**成功の **後** に続く副作用は、成功を **gate する** 副作用とは異なる。**
 
-> 🛑 **予測してみよう。** スクロールする前に: なぜテストは \`commit().await.expect(...)\` が成功することだけを assert し、Reth の canonical chain head が動いたことは assert しない? ヒント: \`build_payload\` の出力に何が欠けているか考える。Engine に渡す \`ExecutedBlock\` は header だけ — トランザクションなし、receipt なし、state root なし。Reth の engine は canonical chain を advance するために **実際の block body** が必要。\`engine_newPayload\` を先に送らないと、\`fork_choice_updated\` は \`SYNCING\` (「この block をまだ知らない、body を fetch しろ」) を返す。Wire は接続されている; データは違う。**L14 は接続を証明する; payload execution は将来コースに先送り。**
+> 🛑 **考えてみよう。** スクロールする前に: なぜテストは \`commit().await.expect(...)\` が成功することだけを assert し、Reth の canonical chain head が動いたことは assert しない? ヒント: \`build_payload\` の出力に何が欠けているか考える。Engine に渡す \`ExecutedBlock\` は header だけ — トランザクションなし、receipt なし、state root なし。Reth の engine は canonical chain を advance するために **実際の block body** が必要。\`engine_newPayload\` を先に送らないと、\`fork_choice_updated\` は \`SYNCING\` (「この block をまだ知らない、body を fetch しろ」) を返す。Wire は接続されている; データは違う。**L14 は接続を証明する; payload execution は将来コースに先送り。**
 
 ## 手順
 

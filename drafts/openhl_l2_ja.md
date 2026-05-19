@@ -69,7 +69,7 @@ L1 が終わって、workspace は次の状態にある:
 
 この 5 つの type が CL↔EL contract の **共通語彙** だ。consensus crate と evm crate の両方がこれらを import する。3 番目の crate `openhl-types` に置く — `openhl-consensus` でも `openhl-evm` でもない場所に — 理由は §設計を振り返る で説明する。
 
-> 🛑 **予測してみよう。** 上の表の 5 type を見る。**なぜ `PayloadStatus` が enum (3 variant) であって `bool` ではないのか?** ヒント: EL が各 answer を返したとき consensus node は何をすべきかを考える。3 つの違う action があり、2 つではない。
+> 🛑 **考えてみよう。** 上の表の 5 type を見る。**なぜ `PayloadStatus` が enum (3 variant) であって `bool` ではないのか?** ヒント: EL が各 answer を返したとき consensus node は何をすべきかを考える。3 つの違う action があり、2 つではない。
 
 ## 手を動かす walk-through
 
@@ -379,5 +379,5 @@ L2 が引用する openhl commit (§答え合わせ で参照):
   - Rust の syntax 用語 (newtype、type alias、derive、trait、struct、enum、Copy、Clone、Hash、Display、Debug、Serialize、Deserialize 等) は英語のまま
   - Cargo の用語 (`[dependencies]`、`[dev-dependencies]`、`workspace`、`crate`) は英語のまま
   - コードブロック、ファイルパス、command は英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)
+  - 🛑 callout: 考えてみよう (Predict)、やりがちな勘違い (Anti-fluency)
   - 「fork する」「stall する」「commit する」「derive する」は英語動詞の JA 化で OK (tech-JA で確立済み)
