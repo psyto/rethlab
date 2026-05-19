@@ -154,7 +154,7 @@ pub trait ConsensusBridge: Send + Sync {
 
 **`: Send + Sync`** は super-trait bound。`ConsensusBridge` を impl するすべての type は `Send` (thread 境界をまたいで move 可能) かつ `Sync` (複数 thread から参照可能) でなければならない、と宣言している。bridge は `Arc<dyn ConsensusBridge>` で actor task 間で共有されるからこれが必要 — actor は別 thread に住み得る。
 
-> 🛑 **流暢さ警告。** 「macro なしで `async fn` を直接書けないのか?」 **Rust 1.75 以降は書けるが caveat がある。** Native な async-fn-in-trait は返される future に自動で `Send` bound を付けてくれず、native async fn を持つ trait の `dyn Trait` には粗い部分が残る。`#[async_trait]` は退屈だが動く解決策。Native feature が成熟したら (おそらく 1.95-2025+)、見直せる。今は macro で行く。
+> 🛑 **やりがちな勘違い。** 「macro なしで `async fn` を直接書けないのか?」 **Rust 1.75 以降は書けるが caveat がある。** Native な async-fn-in-trait は返される future に自動で `Send` bound を付けてくれず、native async fn を持つ trait の `dyn Trait` には粗い部分が残る。`#[async_trait]` は退屈だが動く解決策。Native feature が成熟したら (おそらく 1.95-2025+)、見直せる。今は macro で行く。
 
 ### Step 4: 4 つの method signature を理解する
 
@@ -347,7 +347,7 @@ L3 が引用する openhl commit (§答え合わせ で参照):
 
 - **L3 は 30 分で L2 と同じ長さ。** コード量は ~45 行と少ないが、理解密度は高い。trait の各行に設計判断がある。
 - **Step 3-4-5 でファイルを部分ごとに walk する。** 意図的。L1 (TOML/Cargo) と L2 (5 type 定義) を経て読者はコードブロックを流し読みしがちになる。区切って解説することで各設計判断に engage させる。
-- **Step 3 の流暢さ警告 callout** (「macro なしで async fn を書けないか?」) は Rust 1.75+ を知っている読者が trade-off を理解していない場合への対処。
+- **Step 3 のやりがちな勘違い callout** (「macro なしで async fn を書けないか?」) は Rust 1.75+ を知っている読者が trade-off を理解していない場合への対処。
 - **§設計を振り返る で「trait のメソッド数は BFT 構造で決まる」を強調**。レッスン中で最も meta な主張で、land させる価値が最も高い。
 - **「よくある質問」の Q3** (メソッド名のリネーム) は学習者が嵌るパターンを先回りしている。「build_payload は冗長」と思って `build` にすると、後で Ethereum Engine API mapping が見えなくなる。
 - **翻訳 policy は L1/L2 JA と同一**:
@@ -355,5 +355,5 @@ L3 が引用する openhl commit (§答え合わせ で参照):
   - Cargo の用語 (`workspace = true`、`[dependencies]`) は英語のまま
   - `#[async_trait]`、`#[derive(Error)]`、`#[from]` 等のマクロ呼び出しは英語のまま
   - コード、ファイルパス、コマンドは英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)
   - 「contract」「fork」「leak」「polymorphism」等は英語のまま (CS/SE の確立した語彙)

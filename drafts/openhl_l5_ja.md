@@ -208,7 +208,7 @@ impl ConsensusBridge for RethEvmBridge {
 
 **この block hash は real だ。** header のどのフィールドが call 間で 1 byte でも変われば、結果の hash が異なる。L4 の合成 hash にはこの性質がなかった; L5 の hash にはある。Step 9 のテストがこれを証明する。
 
-> 🛑 **流暢さ警告。** 「`hash` を `header` とは別に保存した方がきれい — タプルじゃなくて。」 **やろうと思えばできる、`State` にフィールドが 1 つ増えるだけ。だがタプルは関係を捉える — この hash は、ちょうどこの header の hash だ、と。** 別々に持つと、header を変更したのに hash の recompute を忘れるバグを招く。タプルにすることで両者が不可分になる。
+> 🛑 **やりがちな勘違い。** 「`hash` を `header` とは別に保存した方がきれい — タプルじゃなくて。」 **やろうと思えばできる、`State` にフィールドが 1 つ増えるだけ。だがタプルは関係を捉える — この hash は、ちょうどこの header の hash だ、と。** 別々に持つと、header を変更したのに hash の recompute を忘れるバグを招く。タプルにすることで両者が不可分になる。
 
 ### Step 5: `payload_ready`、`validate_payload`、`commit` を impl
 
@@ -293,7 +293,7 @@ fn to_executed_block(hash: B256, header: &Header) -> ExecutedBlock {
 
 **なぜ 1 つの大きな変換関数ではなく 3 つに分けるのか?** 各々が 1 つのことをするから。`to_b256` と `from_b256` は pure な型変換 (ロジックなし)。`to_executed_block` は `Header` のどのフィールドが `ExecutedBlock` のどのフィールドに mapping するかを知っている。分けることで各ヘルパーが明らかに正しい形になる。
 
-> 🛑 **流暢さ警告。** 「`B256` も `BlockHash` も `[u8; 32]` を wrap している。`transmute` で変換できないか?」 **やめてくれ。** Byte layout は同一だが、型は型システム上は別物 — それが point だ。変換関数が境界の場所を document する。将来 `BlockHash` が追加の metadata (例: checksum) を持つようになったら、`transmute` はバグになる; `to_b256` は更新すべき場所になる。
+> 🛑 **やりがちな勘違い。** 「`B256` も `BlockHash` も `[u8; 32]` を wrap している。`transmute` で変換できないか?」 **やめてくれ。** Byte layout は同一だが、型は型システム上は別物 — それが point だ。変換関数が境界の場所を document する。将来 `BlockHash` が追加の metadata (例: checksum) を持つようになったら、`transmute` はバグになる; `to_b256` は更新すべき場所になる。
 
 ### Step 7: `engine` を crate に組み込む
 
@@ -527,4 +527,4 @@ L5 が引用する openhl commit (§答え合わせ で参照):
   - alloy/Reth 型名 (`Header`、`B256`、`Address`、`SealedHeader` 等) は英語のまま
   - `hash_slow`、`Default::default()`、`#[async_trait]` 等は英語のまま
   - 「source of truth」「production-shape」「materialize する」等は英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)

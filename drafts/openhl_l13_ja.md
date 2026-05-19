@@ -99,7 +99,7 @@ reth-primitives-traits    = "0.3"
 - **`reth-ethereum-consensus`** — `EthBeaconConsensus<ChainSpec>` を提供 — Reth の post-merge Ethereum 用 production header validator。
 - **`reth-primitives-traits` (crates.io `0.3` から)** — `SealedHeader` を提供、`Header` とその hash をペアにするラッパー。**これは crates.io から、git ではない** — stable foundation crate として spin out された。
 
-> 🛑 **流暢さ警告。** 「なぜ `reth-primitives-traits` だけ crates.io、他は git-pin?」 **`reth-primitives-traits` は Reth の中で public Rust エコシステム crate として **stabilize** された部分だから。** 他の crate (alloy、foundry、custom L2) も全部これに依存している。Git SHA で pin すると、crates.io から import している人すべてとバージョン衝突する — そして皆 crates.io から import している。**Git-pin reth-* dep は主に Reth の「内部」表面; `reth-primitives-traits` は **外部** 表面。**
+> 🛑 **やりがちな勘違い。** 「なぜ `reth-primitives-traits` だけ crates.io、他は git-pin?」 **`reth-primitives-traits` は Reth の中で public Rust エコシステム crate として **stabilize** された部分だから。** 他の crate (alloy、foundry、custom L2) も全部これに依存している。Git SHA で pin すると、crates.io から import している人すべてとバージョン衝突する — そして皆 crates.io から import している。**Git-pin reth-* dep は主に Reth の「内部」表面; `reth-primitives-traits` は **外部** 表面。**
 
 ### Step 2: `crates/evm/Cargo.toml` を更新
 
@@ -296,7 +296,7 @@ L12 からの 3 つの変更:
    - `base_fee_per_gas = next_base_fee` — `chain_spec.next_block_base_fee(...)` で計算、validator が使うのと **同じヘルパー**。
    - `..Default::default()` — 他すべて (gas_used、transactions_root など) はゼロのまま。将来 stage のフル実行検証では意味があるが、header-against-parent ではない。
 
-> 🛑 **流暢さ警告。** 「なぜ build は EIP-1559 数式を inline でやらず `chain_spec.next_block_base_fee(parent, timestamp)` を呼ぶ?」 **Validator が **同じ** call をするから。** 数式を手書きしたら、公式が変わるたびに自分の impl を Reth のと sync しなければならない (変わる — Cancun は `BASE_FEE_MAX_CHANGE_DENOMINATOR` を変えた、将来の fork も微調整する)。**Chain spec のヘルパーを呼ぶことで、自分の builder は永遠に validator と合意することが保証される — chain spec が知っていて自分の builder が知らない hardfork も含めて。**
+> 🛑 **やりがちな勘違い。** 「なぜ build は EIP-1559 数式を inline でやらず `chain_spec.next_block_base_fee(parent, timestamp)` を呼ぶ?」 **Validator が **同じ** call をするから。** 数式を手書きしたら、公式が変わるたびに自分の impl を Reth のと sync しなければならない (変わる — Cancun は `BASE_FEE_MAX_CHANGE_DENOMINATOR` を変えた、将来の fork も微調整する)。**Chain spec のヘルパーを呼ぶことで、自分の builder は永遠に validator と合意することが保証される — chain spec が知っていて自分の builder が知らない hardfork も含めて。**
 
 ### Step 6: `validate_payload` を rewrite
 
@@ -361,7 +361,7 @@ L12 からの 3 つの変更:
 
 どれかが fail すると、validator は `Err(...)` を返す。特定の error は伝播しない — この層では engine は「valid か否か」を知るだけでよい。将来のデバッグでは error 型をログできる。
 
-> 🛑 **流暢さ警告。** 「なぜ `Err(_)` を `PayloadStatus::Invalid` にマップして `BridgeError::Internal` ではない?」 **Validation 失敗は protocol レベルのシグナルで、運用失敗ではないから。** 「この block はルールを満たさない」は validator が **そのために存在する** こと — 答えであって crash ではない。`BridgeError::Internal` は上に伝播して engine app loop を kill する。`PayloadStatus::Invalid` は engine を継続させ、block を拒否された proposal として扱う。**Error の型を会話レベルに合わせる。**
+> 🛑 **やりがちな勘違い。** 「なぜ `Err(_)` を `PayloadStatus::Invalid` にマップして `BridgeError::Internal` ではない?」 **Validation 失敗は protocol レベルのシグナルで、運用失敗ではないから。** 「この block はルールを満たさない」は validator が **そのために存在する** こと — 答えであって crash ではない。`BridgeError::Internal` は上に伝播して engine app loop を kill する。`PayloadStatus::Invalid` は engine を継続させ、block を拒否された proposal として扱う。**Error の型を会話レベルに合わせる。**
 
 ### Step 7: テスト更新 — 2 個の新規 assertion
 
@@ -553,5 +553,5 @@ L13 が参照する openhl コミット (§答え合わせ):
 - **「source of truth」「source-of-truth」** はそのまま (DDD/データエンジ慣用)。
 - **「short-circuiting」「orchestration」「fallthrough」** はそのまま (専門語)。
 - **「monotonicity」「monotonic」** はそのまま (数学/CS 慣用)。
-- **「予測してみよう」「流暢さ警告」** は L4-L12 で確立した訳語と統一。
+- **「予測してみよう」「やりがちな勘違い」** は L4-L12 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。

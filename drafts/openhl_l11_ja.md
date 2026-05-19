@@ -108,7 +108,7 @@ alloy-genesis             = { version = "2.0", default-features = false }
 
 **Reth SHA `88505c7f...` は v2.2.0 release tag** — L1 で `reth-evm`, `reth-evm-ethereum` などに使ったのと同じ SHA。**main HEAD ではなく release-tag SHA に pin することが不変条件。** Reth のバンプは専用 PR で行う。
 
-> 🛑 **流暢さ警告。** 「crates.io に v2.2.0 が publish されているのに、なぜ SHA pin?」 **Reth の crates.io への release cadence が GitHub より数週間から数ヶ月遅れているから。** v2.2.0 git tag が最新の test 済みバイナリ。Publish された crate はしばしばより古い。Git+SHA pin なら maintainer が v2.2.0 と stamp した正確な commit が得られる、stale な crates.io upload からのサプライズなしで。これは高速進化するインフラ crate の標準プラクティス。
+> 🛑 **やりがちな勘違い。** 「crates.io に v2.2.0 が publish されているのに、なぜ SHA pin?」 **Reth の crates.io への release cadence が GitHub より数週間から数ヶ月遅れているから。** v2.2.0 git tag が最新の test 済みバイナリ。Publish された crate はしばしばより古い。Git+SHA pin なら maintainer が v2.2.0 と stamp した正確な commit が得られる、stale な crates.io upload からのサプライズなしで。これは高速進化するインフラ crate の標準プラクティス。
 
 ### Step 2: `crates/evm/Cargo.toml` を更新
 
@@ -255,7 +255,7 @@ Test モジュール内:
 
 JSON は `serde_json::from_str(...)` で `Genesis` に parse され、`genesis.into()` で `ChainSpec` に変換される (alloy-genesis が impl 提供)。`Arc::new(...)` なのは node が `Arc<ChainSpec>` として保持し、複数のサブシステムで共有するから。
 
-> 🛑 **流暢さ警告。** 「なぜ Rust で `ChainSpec` を直接構築せず raw JSON 文字列?」 **Reth の `ChainSpec` builder には 50+ フィールドと複雑な内部 invariant があるから。** プログラマチックに構築するということは、最近のフォークごとに必要なフィールドに追いつくこと。`Genesis` deserializer 経由で JSON から構築すると、Reth 自身の型システムにデフォルトと validity を強制させられる。**JSON フォーマットはどのみち chain の外部インターフェース** — production chain はすべて同じ JSON 形を使う (`reth-chainspec/res/genesis/mainnet.json` を見よ)。
+> 🛑 **やりがちな勘違い。** 「なぜ Rust で `ChainSpec` を直接構築せず raw JSON 文字列?」 **Reth の `ChainSpec` builder には 50+ フィールドと複雑な内部 invariant があるから。** プログラマチックに構築するということは、最近のフォークごとに必要なフィールドに追いつくこと。`Genesis` deserializer 経由で JSON から構築すると、Reth 自身の型システムにデフォルトと validity を強制させられる。**JSON フォーマットはどのみち chain の外部インターフェース** — production chain はすべて同じ JSON 形を使う (`reth-chainspec/res/genesis/mainnet.json` を見よ)。
 
 ### Step 5: `launch_and_check` ヘルパー
 
@@ -306,7 +306,7 @@ Walk-through:
 6. **`node.chain_spec().chain.id()` の assertion** — 最もシンプルな「node が正しく起動した?」チェック。Live `BlockchainProvider` から chain ID を fetch できれば、node は boot した。
 7. **`node_exit_future: _`** — この future を await **しない**。Await すると node のシャットダウンを待ってブロックする (kill されるまで永遠に発生しない)。代わりに関数末で `NodeHandle` を drop し、runtime にバックグラウンドタスクを tear down させる。
 
-> 🛑 **流暢さ警告。** 「`NodeConfig::test().dev()` は実際何を disable する?」 **重要なのは: libp2p Kademlia 経由の peer discovery とフル mempool gossip プロトコル。** Non-test、non-dev node は peer に dial を試み、chain を sync し、libp2p リクエストに応答する。我々のテストではそのいずれも実行しない — node は完全に isolated。これが essential なのは、chain ID (2600) がどの public network とも一致しないので、peer への dial は timeout か拒否されるから。
+> 🛑 **やりがちな勘違い。** 「`NodeConfig::test().dev()` は実際何を disable する?」 **重要なのは: libp2p Kademlia 経由の peer discovery とフル mempool gossip プロトコル。** Non-test、non-dev node は peer に dial を試み、chain を sync し、libp2p リクエストに応答する。我々のテストではそのいずれも実行しない — node は完全に isolated。これが essential なのは、chain ID (2600) がどの public network とも一致しないので、peer への dial は timeout か拒否されるから。
 
 ### Step 6: テスト本体
 
@@ -467,6 +467,6 @@ L11 が参照する openhl コミット (§答え合わせ):
 - **「load-bearing」「dependency-coexistence」「bootstrap」** は専門語として英語のまま保持。
 - **「stale」「blast radius」「validation」** はそのまま (ニュアンス保持)。
 - **「post-merge」「hardfork」「Shanghai」** は Ethereum 専門語そのまま。
-- **「予測してみよう」「流暢さ警告」** は L4-L10 で確立した訳語と統一。
+- **「予測してみよう」「やりがちな勘違い」** は L4-L10 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。
 - **「インフラ」「サブシステム」** はカタカナ (一般定着語)。

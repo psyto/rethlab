@@ -236,7 +236,7 @@ workspace = true
 
 `clob`、`oracle`、`funding`、`liquidation`、`vault`、`node` については `[dependencies]` セクションは空でよい (`[dependencies]` 行のあとに空行、`[lints]` ブロック)。`codec`、`evm`、`consensus` も最初は空 — 実際の依存はそれを使うコードが land する後続レッスンで足す。
 
-> 🛑 **流暢さ警告。** 「最初に全部の依存を書いておけば後で編集しなくて済むのでは?」 **違う。** Unused dependency を持つ crate は技術的負債だ: ビルドを遅くし、reader を混乱させ、version conflict を招く。依存は **それを使うコードが land するタイミングで** 足す。workspace の `Cargo.toml` が *使える* 依存を宣言し、各 crate の `Cargo.toml` が *使う* 依存を宣言する、という階層構造。
+> 🛑 **やりがちな勘違い。** 「最初に全部の依存を書いておけば後で編集しなくて済むのでは?」 **違う。** Unused dependency を持つ crate は技術的負債だ: ビルドを遅くし、reader を混乱させ、version conflict を招く。依存は **それを使うコードが land するタイミングで** 足す。workspace の `Cargo.toml` が *使える* 依存を宣言し、各 crate の `Cargo.toml` が *使う* 依存を宣言する、という階層構造。
 
 ### Step 6: `bin/openhl` を作る
 
@@ -511,13 +511,13 @@ L1 が引用する openhl の commit は 2 つ (§答え合わせ で参照):
 
 - **L1 は 45 分** — L0 (20 分) より長い。読者が実際に ~150 行の TOML をタイプし、初回 `cargo check` で 10-15 分待ち、複数の "なぜこの選択か" subsection を読むため。XP 80 はその重みを反映。
 - **§Plan の予測 callout** (どの 10 crate か sketch する) は読者の L0 知識が初めてテストされる場所。思い出せなければ L0 §3-§4 が答え。
-- **§5 の 流暢さ警告 callout** (「最初に全依存を書いたらいいのでは」) は real な beginner trap。Junior Rust 開発者は「便利だから」と過剰に依存を宣言する傾向がある。**Soften しない**。
+- **§5 の やりがちな勘違い callout** (「最初に全依存を書いたらいいのでは」) は real な beginner trap。Junior Rust 開発者は「便利だから」と過剰に依存を宣言する傾向がある。**Soften しない**。
 - **「最初の cargo check は 5-15 分かかる」警告** は不可欠 — これがないと読者はコマンドがハングしていると思って中断する。先に期待値をセットする。
 - **Step 7 の「エラーが出た場合に多い原因」セクション** は bootstrap で最もよく嵌る 3 ポイントを cover している。Reviewer から「X はどう?」と質問があって X が無い場合は追加 — そこが読者を失うポイント。
 - **Step 5 で残り 9 crate を演習として残す** — `types` でパターンを見せて、残りを表でリスト化。レッスンの長さを管理するための意図的な選択。Junior な読者は 10 個全部を walk してほしがるかもしれないが、中級者はそれを退屈に感じる。
 - **翻訳 policy**:
   - Cargo / Rust の用語 (`workspace`、`resolver`、`feature`、`dependency`、`target`、`profile` 等) は英語のまま
   - コードブロック、コマンド、TOML キーは英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)
   - 「依存」「依存グラフ」「依存解決」は日本語、「dependency」が文脈で必要な場合は併記
   - 「resolver」「pin する」「fetch」「compile」「fork」「Stage」「commit」「workspace」は英語のまま — Rust エンジニアにとって直感的

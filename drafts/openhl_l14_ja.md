@@ -187,7 +187,7 @@ pub struct LiveRethEvmBridge<P> {
 
 `State` は変わらず。
 
-> 🛑 **流暢さ警告。** 「なぜ `engine_handle` が `Option<...>` で常に必須ではない?」 **`LiveRethEvmBridge` のすべての consumer が Reth を bootstrap する production node ではないから。** Unit test (L12、L13) は provider に対する bridge だけが欲しい; 動く engine は要らない。Engine handle を全 caller に強制すると、(a) 全 test がフル node を bootstrap するか、(b) 構築が難しい no-op「fake handle」型が必要。`Option` なら同じ struct が両世界に仕える: test は `None` を渡す、production は `Some(handle)` を渡す。**型レベルの optionality が漏れる API surface を避ける方法。**
+> 🛑 **やりがちな勘違い。** 「なぜ `engine_handle` が `Option<...>` で常に必須ではない?」 **`LiveRethEvmBridge` のすべての consumer が Reth を bootstrap する production node ではないから。** Unit test (L12、L13) は provider に対する bridge だけが欲しい; 動く engine は要らない。Engine handle を全 caller に強制すると、(a) 全 test がフル node を bootstrap するか、(b) 構築が難しい no-op「fake handle」型が必要。`Option` なら同じ struct が両世界に仕える: test は `None` を渡す、production は `Some(handle)` を渡す。**型レベルの optionality が漏れる API surface を避ける方法。**
 
 ### Step 4: `new()` を更新し、builder メソッドを追加
 
@@ -299,7 +299,7 @@ Load-bearing な変更。L13 の `commit` を置き換える:
 
 **L14 では 3 つすべての response が同じコードパスに導く: continue。** ローカル bookkeeping はすでに起きた。
 
-> 🛑 **流暢さ警告。** 「`INVALID` で error を返さず engine のレスポンスを discard するのはなぜ?」 **Bridge のローカル state が consensus 層の source of truth で、Reth のではないから。** Reth が `INVALID` と言ってローカル state を roll back すると、Malachite に「実はその decided block は存在しない」と告げることになり、chain を break する。この層での不一致への正しい応答は **大声でログする** こと **operator にアラートする** こと — だが consensus commit を decode roll back しない。**Reth の chain の view は consensus の下流であり、逆ではない。**
+> 🛑 **やりがちな勘違い。** 「`INVALID` で error を返さず engine のレスポンスを discard するのはなぜ?」 **Bridge のローカル state が consensus 層の source of truth で、Reth のではないから。** Reth が `INVALID` と言ってローカル state を roll back すると、Malachite に「実はその decided block は存在しない」と告げることになり、chain を break する。この層での不一致への正しい応答は **大声でログする** こと **operator にアラートする** こと — だが consensus commit を decode roll back しない。**Reth の chain の view は consensus の下流であり、逆ではない。**
 
 ### Step 6: テスト更新 (rename + engine 配線追加)
 
@@ -401,7 +401,7 @@ L13 の既存 test `live_bridge_builds_on_real_genesis` を開く。既存テス
 5. **`commit(block.hash).await.expect("commit failed")`** — メイン assertion。**engine が返したものは check しない** — `commit` が `Ok(())` を返すだけ。Engine の SYNCING レスポンスは Step 5 で `commit` 内で discard される。
 6. **Negative case 維持** — unknown hash は依然 `BridgeError::Rejected`。Bridge が engine パスに到達する前に bail するので engine パスは fire しない。
 
-> 🛑 **流暢さ警告。** 「`launch_with_debug_capabilities` を使って add_ons_handle がそこにあると願えばいいんじゃ?」 **ダメ — 異なる launch パスは異なる handle shape を produce する。** `launch_with_debug_capabilities` は debug RPC 付き `NodeHandle` を返すが add_ons を expose しない。明示的 builder chain (`.with_types().with_components().with_add_ons().launch()`) が `add_ons_handle` をくれる形。**どの launch パスがどの handle shape を produce するかを知ることは、特定のフィールドが必要になるまで invisible な詳細。**
+> 🛑 **やりがちな勘違い。** 「`launch_with_debug_capabilities` を使って add_ons_handle がそこにあると願えばいいんじゃ?」 **ダメ — 異なる launch パスは異なる handle shape を produce する。** `launch_with_debug_capabilities` は debug RPC 付き `NodeHandle` を返すが add_ons を expose しない。明示的 builder chain (`.with_types().with_components().with_add_ons().launch()`) が `add_ons_handle` をくれる形。**どの launch パスがどの handle shape を produce するかを知ることは、特定のフィールドが必要になるまで invisible な詳細。**
 
 ## テスト
 
@@ -514,5 +514,5 @@ L14 が参照する openhl コミット (§答え合わせ):
 - **「source of truth」「downstream」「primary store」** はそのまま (DDD/データエンジ慣用)。
 - **「fork choice」「forkchoice」** はそのまま (Ethereum 用語)。
 - **「SYNCING」「VALID」「INVALID」** は Engine API レスポンス名そのまま。
-- **「予測してみよう」「流暢さ警告」** は L4-L13 で確立した訳語と統一。
+- **「予測してみよう」「やりがちな勘違い」** は L4-L13 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。

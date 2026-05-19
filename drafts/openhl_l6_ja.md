@@ -231,7 +231,7 @@ impl Value for OpenHlValue {
 
 `OpenHlValue` は `BlockHash` (L2 から) をラップ。`Value::Id` associated type は vote に乗るもの — consensus は full value に投票せず、value の *identifier* (hash) に投票する。ここでは `Id = BlockHash` なので、value と ID が同じデータになっている。
 
-> 🛑 **流暢さ警告。** 「`Value` を直接 `BlockHash` にすればいいのでは — なぜラップ?」 **`Value` trait に独自の bound があるから**。Specifically `Value: Clone + Debug + Eq + Ord + Send + Sync` + `Value::Id` associated type の bound。`OpenHlValue` をラッパーにすることで、`BlockHash` を変えずに「value とは何か」を独立に進化させられる。Module 2 (CLOB) で `BlockHash` に無いフィールド (例: off-EVM fills のリスト) を足す可能性が高い。
+> 🛑 **やりがちな勘違い。** 「`Value` を直接 `BlockHash` にすればいいのでは — なぜラップ?」 **`Value` trait に独自の bound があるから**。Specifically `Value: Clone + Debug + Eq + Ord + Send + Sync` + `Value::Id` associated type の bound。`OpenHlValue` をラッパーにすることで、`BlockHash` を変えずに「value とは何か」を独立に進化させられる。Module 2 (CLOB) で `BlockHash` に無いフィールド (例: off-EVM fills のリスト) を足す可能性が高い。
 
 3 つ書いたら `cargo check -p openhl-consensus` を走らせる。pass するはず。
 
@@ -332,7 +332,7 @@ validators.sort_by(|a, b| {
 
 他の BFT chain (CometBFT、すべての Cosmos chain) も全く同じソートを使う。convention に従うのは便利のためだけでなく — chain を BFT canon と同じ入力 set に対して *同一に挙動* させるためだ。
 
-> 🛑 **流暢さ警告。** 「power 降順 + address 昇順、なぜ両方昇順ではダメ?」 **stake が高い validator は proportionally に多く propose すべきだから** — `(height + round) % count` は index 全体で uniform なので、power が高い validator が低い index に来て多く proposer-elect されるのはソートの性質だ。Tiebreaker (address 昇順) は安定 deterministic な選択; 任意の total ordering でよいが、CometBFT が address 昇順を選んだので合わせる。
+> 🛑 **やりがちな勘違い。** 「power 降順 + address 昇順、なぜ両方昇順ではダメ?」 **stake が高い validator は proportionally に多く propose すべきだから** — `(height + round) % count` は index 全体で uniform なので、power が高い validator が低い index に来て多く proposer-elect されるのはソートの性質だ。Tiebreaker (address 昇順) は安定 deterministic な選択; 任意の total ordering でよいが、CometBFT が address 昇順を選んだので合わせる。
 
 ### Step 5: メッセージ型を書く — `proposal.rs`、`proposal_part.rs`、`vote.rs`
 
@@ -847,11 +847,11 @@ L6 が引用する openhl commit (§答え合わせ で参照):
 - **L6 は 50 分 — コース最長のレッスン。** 8 新規ファイル、~330 行。各ファイル個別には小さいが、数が duration を生む。
 - **§計画 の予測してみよう callout** で readers がコードに会う前に 2 つの load-bearing 決定 (ValidatorSet sort + select_proposer algorithm) に focus させる。この 2 つの divergence だけが chain を fork させる。
 - **Step 4 の「単一で最も load-bearing なファイル」フレーミング** がレッスンの最重要 framing。これが無いと readers が sort comparator を boilerplate として skim する。
-- **Step 3 の流暢さ警告 (なぜ OpenHlValue が BlockHash を wrap するか)** は L4/L5 の test-double-vs-real-type パターンの別形 — ラッパーが進化を独立に起こせる。
+- **Step 3 のやりがちな勘違い (なぜ OpenHlValue が BlockHash を wrap するか)** は L4/L5 の test-double-vs-real-type パターンの別形 — ラッパーが進化を独立に起こせる。
 - **walk-through が多くの sub-file に分かれる** (simple 3 + complex 1 + message 3 + context 1)。意図的: 各ファイルが独自の設計根拠を持ち、複雑性で group することで自然な breath を提供する。
 - **5 テストは minimum だが load-bearing 決定をカバーする**: sort 順、決定的 proposer 選択、message round-trip、vote-type 区別、height 算術。各テストが 1 つの設計判断の regression guard。
 - **翻訳 policy は L1-L5 JA と同一**:
   - Malachite trait 名 (`Context`、`Address`、`Height`、`Value`、`Validator` 等) は英語のまま
   - Rust の syntax (impl、trait、struct、newtype、derive、async、Send、Sync) は英語のまま
   - 数学/CS 用語 (`load-bearing`、`canonical`、`monotonic`、`deterministic`、`round-trip`、`tiebreaker`) は英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)

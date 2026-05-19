@@ -121,7 +121,7 @@ pub struct CodecStub(pub &'static str);
 
 `OpenHlCodec` は unit struct — 状態なし。Malachite の codec は純粋関数。レシーバが存在するのは trait dispatch のためだけ。`CodecStub` は 8 個の Codec impl が共有するエラー型。`&'static str` フィールドは、codec が未実装の型の名前を保持する。未実装パスが **実際に** fire したとき、エラーメッセージが何を書くべきかを教えてくれる。
 
-> 🛑 **流暢さ警告。** 「なぜ `CodecStub` は enum (stub ごとに variant) ではなく `&'static str` を持つ struct なのか?」 **新しい stub を追加するたびに 2 箇所編集する必要が出るから** — enum 定義と各呼び出し側。`&'static str` 引数は拡張可能で、新しい `Codec<T>` impl の stub も型名リテラルを渡すだけで作れる、enum 変更不要。トレードオフ: 型安全性が下がる (任意の文字列を渡せる) が、`T` 自体は trait 表面が縛っているので、文字列は人間向けラベル扱いで十分。
+> 🛑 **やりがちな勘違い。** 「なぜ `CodecStub` は enum (stub ごとに variant) ではなく `&'static str` を持つ struct なのか?」 **新しい stub を追加するたびに 2 箇所編集する必要が出るから** — enum 定義と各呼び出し側。`&'static str` 引数は拡張可能で、新しい `Codec<T>` impl の stub も型名リテラルを渡すだけで作れる、enum 変更不要。トレードオフ: 型安全性が下がる (任意の文字列を渡せる) が、`T` 自体は trait 表面が縛っているので、文字列は人間向けラベル扱いで十分。
 
 ### Step 3: 唯一の本物 impl — `ProposalPart`
 
@@ -256,7 +256,7 @@ impl Codec<Response<OpenHlContext>> for OpenHlCodec {
 - **WAL (crash recovery)** — `ProposedValue`。エンジンは proposal を crash recovery のためにディスクに書く。我々はインプロセステストで動かすので fire しない。
 - **Sync (peer catch-up)** — `Status`, `Request`, `Response`。Validator が遅れたとき、peer に過去 block を送ってもらうために尋ねる。Peer がいない = 遅れない = sync しない。
 
-> 🛑 **流暢さ警告。** 「`#[derive(Serialize, Deserialize)]` を付けて bincode で済ませばよいのでは?」 **一部はそうできる。** が、これら型の多くはジェネリック、`Box<dyn Trait>` フィールド、または serde が簡単には扱えない要素を含む。Malachite の `test` crate のリファレンス実装は ~400 行の手書き Protobuf encoding でこれらを全部捌いている。Stub アプローチはその作業を今は省く。実ネットワークや永続 WAL が必要になったとき、protobuf や borsh 実装をここで 1 メソッドずつ swap する。
+> 🛑 **やりがちな勘違い。** 「`#[derive(Serialize, Deserialize)]` を付けて bincode で済ませばよいのでは?」 **一部はそうできる。** が、これら型の多くはジェネリック、`Box<dyn Trait>` フィールド、または serde が簡単には扱えない要素を含む。Malachite の `test` crate のリファレンス実装は ~400 行の手書き Protobuf encoding でこれらを全部捌いている。Stub アプローチはその作業を今は省く。実ネットワークや永続 WAL が必要になったとき、protobuf や borsh 実装をここで 1 メソッドずつ swap する。
 
 ### Step 5: テストモジュールを追加
 
@@ -299,7 +299,7 @@ mod tests {
 - **`openhl_codec_satisfies_all_three_super_traits`** — これはテストの体裁の **コンパイル時** アサーション。`WalCodec<Ctx>`, `ConsensusCodec<Ctx>`, `SyncCodec<Ctx>` は Malachite の super-trait — 適切な `Codec<T>` 構成 impl をすべて持っていれば自動的に満たされる。3 つの `assert_*` 関数は、bound を強制的にコンパイラにチェックさせるためだけに存在する。1 個でも `Codec<T>` impl が抜けていれば、これは **コンパイルが通らず**、runtime ではなくコンパイル時に失敗する。Runtime テスト本体は no-op。検証は型チェック時に発生する。
 - **`proposal_part_round_trips`** — 1 つだけの **本物** codec impl を exercise する。空の `ProposalPart` を encode、結果バイトを decode、等価性を assert。これが本物 impl が動くことを証明する。7 個の stub は runtime でテストしないのは、もし誰かが呼んだらエラー返して panic-via-error する設計だから。
 
-> 🛑 **流暢さ警告。** 「なぜテストは空なのに pass する?」 **アサーションが型チェッカーにあり、runtime ではないから。** `assert_wal_codec::<OpenHlCodec>()` と書くと、Rust はコンパイル時に `OpenHlCodec: WalCodec<OpenHlContext>` をチェックしなければならない。Bound が失敗すればファイルがコンパイルできず、`cargo test` は **コンパイルエラー** を報告する、テスト失敗ではない。これは Rust の一般的なパターン: 検証したい bound を持つ関数を呼ぶことで、runtime チェックをコンパイルチェックに変換する。
+> 🛑 **やりがちな勘違い。** 「なぜテストは空なのに pass する?」 **アサーションが型チェッカーにあり、runtime ではないから。** `assert_wal_codec::<OpenHlCodec>()` と書くと、Rust はコンパイル時に `OpenHlCodec: WalCodec<OpenHlContext>` をチェックしなければならない。Bound が失敗すればファイルがコンパイルできず、`cargo test` は **コンパイルエラー** を報告する、テスト失敗ではない。これは Rust の一般的なパターン: 検証したい bound を持つ関数を呼ぶことで、runtime チェックをコンパイルチェックに変換する。
 
 ### Step 6: codec を `lib.rs` に配線
 
@@ -439,6 +439,6 @@ L8 が参照する openhl コミット (§答え合わせ):
 - **「stub」「stub する」** はそのまま (動詞化して許容)。
 - **「fire する」「fire しない」** はそのまま (呼ばれる/トリガーされるの意味で技術コミュニティで定着)。
 - **「hot path」** は専門用語としてそのまま。
-- **「予測してみよう」「流暢さ警告」** は L4-L7 で確立した訳語と統一。
+- **「予測してみよう」「やりがちな勘違い」** は L4-L7 で確立した訳語と統一。
 - **「codec スロット」** — slot は「枠」とも訳せるが、エンジンが要求する型パラメータの場所という意味で「スロット」のままが分かりやすい。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。

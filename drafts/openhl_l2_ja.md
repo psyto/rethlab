@@ -148,7 +148,7 @@ pub struct PayloadId(pub u64);
 
 ここに `PartialOrd, Ord` は無い。Block hash は順序付けが必要 (ソート用); payload ID は不要 (`build_payload` と `payload_ready` の間で受け渡す不透明 token に過ぎない)。
 
-> 🛑 **流暢さ警告。** 「なぜ `u64` をそのまま使わないのか? PayloadId はただの数字だ。」 **Newtype が footgun を防ぐから。** `u64` を直接使うと `build_payload(..., some_random_u64)` と書けてしまい、Cargo は捕捉しない。`PayloadId(u64)` なら compiler が `PayloadId(some_random_u64)` と明示的に書くことを強制し、意図が見えるようになる。コストは construction ごとに余分な `(...)` 1 個; 利益はコード中のすべての payload ID が「証明可能に payload ID である」状態になること、誰かのタイプミスの integer が紛れ込まない。
+> 🛑 **やりがちな勘違い。** 「なぜ `u64` をそのまま使わないのか? PayloadId はただの数字だ。」 **Newtype が footgun を防ぐから。** `u64` を直接使うと `build_payload(..., some_random_u64)` と書けてしまい、Cargo は捕捉しない。`PayloadId(u64)` なら compiler が `PayloadId(some_random_u64)` と明示的に書くことを強制し、意図が見えるようになる。コストは construction ごとに余分な `(...)` 1 個; 利益はコード中のすべての payload ID が「証明可能に payload ID である」状態になること、誰かのタイプミスの integer が紛れ込まない。
 
 ### Step 6: `PayloadAttrs` を追加
 
@@ -372,12 +372,12 @@ L2 が引用する openhl commit (§答え合わせ で参照):
 
 - **L2 は 30 分で L1 (45 分) より短い**。TOML/Cargo まわりの作業が減り、Rust の type 設計と derive の理解に集中する。XP 60 はその反映。
 - **Step 4 の「なぜ 10 個も trait derive するのか」サブ説明** が最も leverage が高い段落。新人 Rust 開発者は over-derive (または under-derive) するが理由を知らない。Derive を 1 つずつ walk すると、その後のパターンが見える。
-- **Step 5 の流暢さ警告 callout** (「なぜ `u64` をそのまま使わないのか?」) は newtype パターンの教えを具体化したもの。Junior Rust 開発者は plain `u64` に reach しがちで、この callout がコストを名指す。
+- **Step 5 のやりがちな勘違い callout** (「なぜ `u64` をそのまま使わないのか?」) は newtype パターンの教えを具体化したもの。Junior Rust 開発者は plain `u64` に reach しがちで、この callout がコストを名指す。
 - **Unit test は 4 ケースの簡単なもの**で、網羅的でない。読者に *何か pass するもの* を渡すのが目的で、type 定義の網羅的検証 (それは proptest の領域) が目的ではない。テストはまた `Display`/`Clone`/`PartialEq`/`Serialize` が実際に動くことを示すのにも有用。
 - **Step 9 の `serde_json` dev-dep 追加** は読者がはまる小さな footgun — テストを書いて走らせると "serde_json not found" になる。Q&A エントリで対応しているが、Step 9 で先に言及するのもありかもしれない。
 - **翻訳 policy**:
   - Rust の syntax 用語 (newtype、type alias、derive、trait、struct、enum、Copy、Clone、Hash、Display、Debug、Serialize、Deserialize 等) は英語のまま
   - Cargo の用語 (`[dependencies]`、`[dev-dependencies]`、`workspace`、`crate`) は英語のまま
   - コードブロック、ファイルパス、command は英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)
   - 「fork する」「stall する」「commit する」「derive する」は英語動詞の JA 化で OK (tech-JA で確立済み)

@@ -187,7 +187,7 @@ impl<P> LiveRethEvmBridge<P> {
 - **`LiveRethEvmBridge<P>`** は provider を value で保持し、build/commit の bookkeeping のために `Mutex<State>` を持つ。**`P` に対してジェネリック** — 具象 provider 型は焼き付けない。
 - **`State`** は `InMemoryEvmBridge` (L4) が持っていたものをミラー — `next_payload_id` カウンタ、`pending` マップ (payload_id → fetch 待ちの built header)、`chain` マップ (commit 履歴)、`head` ポインタ。L13-L15 でこれらの各々を live Reth 構造で置き換える。
 
-> 🛑 **流暢さ警告。** 「なぜ `provider` を `State` の中に入れて mutex を 1 つにしない?」 **`BlockNumReader` 実装は普通 `Sync + Clone` — 多数の async task で同時共有されるように作られているから。** Provider を mutex の中に入れると、すべての `block_number` lookup が直列化される。外に置くことで、`build_payload` への並行呼び出しが (安価な) state lock を奪い合っても、互いの (高コストかもしれない) provider read を block しない。**Lock は変更されるものを守る、読まれるものではない。**
+> 🛑 **やりがちな勘違い。** 「なぜ `provider` を `State` の中に入れて mutex を 1 つにしない?」 **`BlockNumReader` 実装は普通 `Sync + Clone` — 多数の async task で同時共有されるように作られているから。** Provider を mutex の中に入れると、すべての `block_number` lookup が直列化される。外に置くことで、`build_payload` への並行呼び出しが (安価な) state lock を奪い合っても、互いの (高コストかもしれない) provider read を block しない。**Lock は変更されるものを守る、読まれるものではない。**
 
 ### Step 5: `ConsensusBridge` impl — `build_payload` が live read
 
@@ -246,7 +246,7 @@ Trait bound `P: BlockNumReader + Clone + Sync + 'static` が契約: hash→numbe
 
 3. **Header 合成**。`number = parent_number + 1` (live read 由来)、`parent_hash = parent_b256`、engine が渡した attrs で child `Header` を build。`header.hash_slow()` で hash 計算。`(id → (hash, header))` マッピングを `pending` に格納。
 
-> 🛑 **流暢さ警告。** 「なぜ parent lookup は `Result<u64, _>` ではなく `Result<Option<u64>, _>`?」 **「provider がこの hash を見つけられなかった」と「provider が crash した」は別の failure mode で、consumer は別扱いすべきだから。** 欠けている hash は **プロトコル** 問題 (「知らないものに対して build を要求された」 — 悪意ある peer または stale message)。Provider error は **運用** 問題 (「我々の DB が壊れた」 — 運用アラート)。2 層 `Result<Option<...>>` で caller が区別できる — そして各を別の `BridgeError` variant にマップする (`Rejected` vs. `Internal`)。
+> 🛑 **やりがちな勘違い。** 「なぜ parent lookup は `Result<u64, _>` ではなく `Result<Option<u64>, _>`?」 **「provider がこの hash を見つけられなかった」と「provider が crash した」は別の failure mode で、consumer は別扱いすべきだから。** 欠けている hash は **プロトコル** 問題 (「知らないものに対して build を要求された」 — 悪意ある peer または stale message)。Provider error は **運用** 問題 (「我々の DB が壊れた」 — 運用アラート)。2 層 `Result<Option<...>>` で caller が区別できる — そして各を別の `BridgeError` variant にマップする (`Rejected` vs. `Internal`)。
 
 ### Step 6: `payload_ready` + `commit` の stub
 
@@ -437,7 +437,7 @@ mod tests {
 4. **Happy path**: real genesis hash 上に payload を build、`payload_ready` 経由で fetch、`parent_hash == genesis_hash` と `number == 1` を assert。**これが live read が起きたことの証明** — もしインメモリ合成だったら、parent_hash は渡したもの (正しい) になるが `number` は我々が選ぶ何でもありえた。`1` が出るのは `provider.block_number(genesis_hash)` が `Some(0)` を返したからのみ。
 5. **Negative path**: `BlockHash([0xee; 32])` は chain が見たことのない fabricated hash。`build_payload` は `BridgeError::Rejected` を返さなければならない。`matches!(err, BridgeError::Rejected(_))` が exhaustive check — 他の error variant ならテスト失敗。
 
-> 🛑 **流暢さ警告。** 「なぜ negative path をそもそもテストする?」 **Rejection をテストしないテストは happy path が動くことしか証明しない — bridge が偶然インメモリ state に fallback して任意の parent に対して child block を produce するバグを catch できない。** ガベージな parent 上にサイレントに build する bridge はコンパイルが通り、happy path は pass し、consensus は破損した高さで嬉々として block を commit する。Negative path が live read が実際に load-bearing であることを証明する。
+> 🛑 **やりがちな勘違い。** 「なぜ negative path をそもそもテストする?」 **Rejection をテストしないテストは happy path が動くことしか証明しない — bridge が偶然インメモリ state に fallback して任意の parent に対して child block を produce するバグを catch できない。** ガベージな parent 上にサイレントに build する bridge はコンパイルが通り、happy path は pass し、consensus は破損した高さで嬉々として block を commit する。Negative path が live read が実際に load-bearing であることを証明する。
 
 ## テスト
 
@@ -549,5 +549,5 @@ L12 が参照する openhl コミット (§答え合わせ):
 - **「load-bearing」「provider」「bridge」** は専門語として英語のまま保持。
 - **「generic-over-trait」「protocol vs operational failure」** はそのまま (ニュアンス保持)。
 - **「happy path」「negative path」「sad path」** は英語のまま (CS / QA 慣用語)。
-- **「予測してみよう」「流暢さ警告」** は L4-L11 で確立した訳語と統一。
+- **「予測してみよう」「やりがちな勘違い」** は L4-L11 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。

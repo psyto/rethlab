@@ -241,7 +241,7 @@ Engine から「height H、round R で value を propose しろ、timeout T」�
 
 `build_payload` と `payload_ready` の `?` 演算子は `BridgeError` を `eyre::Result` に伝播する。EL が build 途中で crash したら、app loop はエラーを返し、テストは loud に失敗する。
 
-> 🛑 **流暢さ警告。** 「なぜ `GetValue` は `OpenHlValue` だけでなく `LocallyProposedValue` で reply するのか?」 **Engine は我々が propose したものを **gossip** する必要があるから、ローカルで使うだけでなく。** `LocallyProposedValue` は「この value を **我々が** height H round R で propose した」と言う型付きラッパー。Multi-validator モードでは engine はこれを `Proposal` として peer に送る。Single-validator モードでは peer がない — が、API は分岐しないので、ラッパーを honor する。
+> 🛑 **やりがちな勘違い。** 「なぜ `GetValue` は `OpenHlValue` だけでなく `LocallyProposedValue` で reply するのか?」 **Engine は我々が propose したものを **gossip** する必要があるから、ローカルで使うだけでなく。** `LocallyProposedValue` は「この value を **我々が** height H round R で propose した」と言う型付きラッパー。Multi-validator モードでは engine はこれを `Proposal` として peer に送る。Single-validator モードでは peer がない — が、API は分岐しないので、ラッパーを honor する。
 
 ### Step 5: `Decided` arm — block が final になる瞬間
 
@@ -512,7 +512,7 @@ mod tests {
   6. **3 つを assert**: decisions がちょうど 1 個、bridge がその hash を commit、bridge がその hash を build。これらが揃って完全なパイプラインを証明: engine → app → bridge → engine → app。
   7. クリーンアップに `handle.kill(None)`。
 
-> 🛑 **流暢さ警告。** 「L9 の smoke test は 2 だったのに、なぜここで `worker_threads = 4`?」 **Integration test の方が並行に actor をより多く回すから。** Smoke test は spawn + kill だけ、メッセージを produce しなかった。Integration test は `run_engine_app` task (consume + reply) + bridge の async fn 呼び出し + 複数の内部 engine actor を走らせる。4 スレッドあれば全員に余裕がある。少ないと contention (遅い) や deadlock (hang)。4 が余裕。
+> 🛑 **やりがちな勘違い。** 「L9 の smoke test は 2 だったのに、なぜここで `worker_threads = 4`?」 **Integration test の方が並行に actor をより多く回すから。** Smoke test は spawn + kill だけ、メッセージを produce しなかった。Integration test は `run_engine_app` task (consume + reply) + bridge の async fn 呼び出し + 複数の内部 engine actor を走らせる。4 スレッドあれば全員に余裕がある。少ないと contention (遅い) や deadlock (hang)。4 が余裕。
 
 ## テスト
 
@@ -635,5 +635,5 @@ L10 が参照する openhl コミット (§答え合わせ):
 - **「app loop」「engine」「bridge」** はそのまま (専門語)。
 - **「routing」「ルーティング」** は混在 — 文脈で読みやすい方を選択。
 - **「value-payload mode」「ProposalOnly モード」** はそのまま (Malachite の用語)。
-- **「予測してみよう」「流暢さ警告」** は L4-L9 で確立した訳語と統一。
+- **「予測してみよう」「やりがちな勘違い」** は L4-L9 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。

@@ -256,7 +256,7 @@ impl std::fmt::Debug for OpenHlPrivateKeyFile {
 - **`OpenHlGenesis`** — unit struct。v0 では genesis content がない (allocation なし、ブート時の precompile 登録なし — それらは Module 6 で)。Validator set は genesis ではなく `start_engine` 経由で直接渡す。OpenHL が real genesis format を持つようになったら、これが `load_genesis()` がデシリアライズする型になる。
 - **`OpenHlPrivateKeyFile`** — 32 バイトの private key の wire-friendly wrapper。`PrivateKey` 自体 (from `malachitebft_signing_ed25519`) はデフォルトで `Serialize`/`Deserialize` を impl していない; wrapper が impl し、`from_private_key` / `into_private_key` の変換は明示的。**手書き `Debug` impl** はバイトを redact する — `{:?}` で実 private key をログに出力するのは重大なセキュリティバグ。`[redacted]` トークンが慣習。
 
-> 🛑 **流暢さ警告。** 「なぜ `#[derive(Debug)]` ではダメ?」 **デフォルト derive される `Debug` は `[u8; 32]` の 32 バイト全部を print するから。** 誰かが `OpenHlPrivateKeyFile` を別の `Debug`-derive 構造体でラップしてログに出すと、key が stderr / log file / Sentry にリークする。`[redacted]` 付き手書き `Debug` なら、意図的に変更しない限りこれは起こりえない。**Private key はパスワードと同等に扱う — 絶対に print させない。**
+> 🛑 **やりがちな勘違い。** 「なぜ `#[derive(Debug)]` ではダメ?」 **デフォルト derive される `Debug` は `[u8; 32]` の 32 バイト全部を print するから。** 誰かが `OpenHlPrivateKeyFile` を別の `Debug`-derive 構造体でラップしてログに出すと、key が stderr / log file / Sentry にリークする。`[redacted]` 付き手書き `Debug` なら、意図的に変更しない限りこれは起こりえない。**Private key はパスワードと同等に扱う — 絶対に print させない。**
 
 ### Step 4: `OpenHlNodeHandle` — `start()` が返すもの
 
@@ -465,7 +465,7 @@ impl Node for OpenHlNode {
 
 **なぜ `run()` は未実装?** Malachite の `Node::run` は `start()` と app loop を 1 個の async future にまとめる想定だから。App loop は L10 まで存在しないので、L10 を指すエラーを返す。L10 完了後、`run()` は: `start()` を呼び、channels を取り、app loop を回し、終了を await、という形になる。
 
-> 🛑 **流暢さ警告。** 「なぜ `start()` は codec を 2 回取る?」 **エンジンが WAL 用と Network gossip 用に別々の codec スロットを持つから。** 別の型でもよい — 例えば WAL は bincode、Network は protobuf。我々のケースでは両方 `OpenHlCodec` だが、API は同じだと仮定しない。別々に渡すことで一方だけを swap できる。
+> 🛑 **やりがちな勘違い。** 「なぜ `start()` は codec を 2 回取る?」 **エンジンが WAL 用と Network gossip 用に別々の codec スロットを持つから。** 別の型でもよい — 例えば WAL は bincode、Network は protobuf。我々のケースでは両方 `OpenHlCodec` だが、API は同じだと仮定しない。別々に渡すことで一方だけを swap できる。
 
 ### Step 6: `node.rs` を `lib.rs` に配線
 
@@ -567,7 +567,7 @@ mod tests {
 
 Smoke test の wall-clock はおおよそ **0.02 秒**。大部分は libp2p がローカル listener を立ち上げる時間 — tcp/0 のエフェメラルポートでも、libp2p のネゴシエーションには固定コストがある。
 
-> 🛑 **流暢さ警告。** 「なぜ `flavor = 'multi_thread'`?」 **エンジンが複数 actor をそれぞれの task で spawn するから。** Single-threaded runtime は全部 1 スレッドで回せる — が、エンジン内部に single-thread だと deadlock する `block_on` パターンがある。Multi-thread runtime で回避。**API レベルでは見えないが、テスト失敗レベルでは致命的な詳細。**
+> 🛑 **やりがちな勘違い。** 「なぜ `flavor = 'multi_thread'`?」 **エンジンが複数 actor をそれぞれの task で spawn するから。** Single-threaded runtime は全部 1 スレッドで回せる — が、エンジン内部に single-thread だと deadlock する `block_on` パターンがある。Multi-thread runtime で回避。**API レベルでは見えないが、テスト失敗レベルでは致命的な詳細。**
 
 ## テスト
 
@@ -690,6 +690,6 @@ L9 が参照する openhl コミット (§答え合わせ):
 - **「handshake」「ハンドシェイク」** はそのまま (専門語)。
 - **「multi-thread runtime」「actor system」「smoke test」** はそのまま。
 - **「load-bearing」「placeholder」** はそのまま (英語のニュアンスを保持)。「crumb」は「目印」と訳出。
-- **「予測してみよう」「流暢さ警告」** は L4-L8 で確立した訳語と統一。
+- **「予測してみよう」「やりがちな勘違い」** は L4-L8 で確立した訳語と統一。
 - **タイトル/コードコメントは英語のまま** (OSS 実装にコピーされる前提)。
 - **長い表は EN と同じ列構成**。

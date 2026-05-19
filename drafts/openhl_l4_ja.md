@@ -184,7 +184,7 @@ impl ConsensusBridge for InMemoryEvmBridge {
 5. **`ExecutedBlock` を build** し `pending` に stash する。block は parent_hash、number、hash、ゼロ state_root を持つ (EVM を走らせていない)。
 6. **`Ok(PayloadId(id))` を返す**。
 
-> 🛑 **流暢さ警告。** 「`BlockHash` に real cryptographic hash を使うべきでは。」 **違う** — これは test double。Real hashing は EVM を走らせて post-state root を compute する必要があり、それを避けるために test double を使っている。Synthesize した hash は `BlockHash` の *uniqueness* 要求を満たすが、*cryptographic-commitment* 要求は満たさない、これでよい — unit test として。Module 1 L11+ (LiveRethEvmBridge) が real hashing をするが、それは Reth が仕事をするから。
+> 🛑 **やりがちな勘違い。** 「`BlockHash` に real cryptographic hash を使うべきでは。」 **違う** — これは test double。Real hashing は EVM を走らせて post-state root を compute する必要があり、それを避けるために test double を使っている。Synthesize した hash は `BlockHash` の *uniqueness* 要求を満たすが、*cryptographic-commitment* 要求は満たさない、これでよい — unit test として。Module 1 L11+ (LiveRethEvmBridge) が real hashing をするが、それは Reth が仕事をするから。
 
 ### Step 5: `payload_ready` を impl
 
@@ -470,12 +470,12 @@ L4 が引用する openhl commit (§答え合わせ で参照):
 
 - **L4 は 40 分** — 最初に reader が意味のある impl (~120 行) を書く。9 step に分けて各々消化しやすくする。
 - **§Step 4 で `build_payload` を 6 sub-point で walk する。** これがレッスンの pedagogical core — reader が idiomatic Rust で Mutex 取得、単調 ID 割り当て、parent lookup、hash synthesize の姿を学ぶ。**圧縮しない**。
-- **Step 4 の流暢さ警告 callout** (「real cryptographic hash を使うべき」) は over-engineering の trap を name で指摘する。Test double に何時間も無駄にする。
+- **Step 4 のやりがちな勘違い callout** (「real cryptographic hash を使うべき」) は over-engineering の trap を name で指摘する。Test double に何時間も無駄にする。
 - **5 テストが right thing をテストする**: round-trip、validation、commit、monotonicity、error path。この impl にとって「正しい数」のテスト — 少なすぎるとバグを見逃し、多すぎると busywork。
 - **§設計を振り返る の「データフローの形が伝播」 point** が最も重要な meta-lesson。Reader は test double を書いているが、パターンは production impl に survive する — trait の polymorphism payoff。
 - **翻訳 policy は L1/L2/L3 JA と同一**:
   - Rust の syntax (impl、trait、Mutex、HashMap、async fn 等) は英語のまま
   - `#[async_trait]`、`#[must_use]`、`#[tokio::test]` 等の attribute は英語のまま
   - コード、ファイルパス、コマンド、Cargo.toml syntax は英語のまま
-  - 🛑 callout: 予測してみよう (Predict)、流暢さ警告 (Anti-fluency)
+  - 🛑 callout: 予測してみよう (Predict)、やりがちな勘違い (Anti-fluency)
   - 「poison する」「synthesize する」「lookup する」「clone する」は英語動詞の JA 化で OK

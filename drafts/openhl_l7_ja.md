@@ -129,7 +129,7 @@ pub fn vote_signing_bytes(v: &OpenHlVote) -> Vec<u8> {
 
 **なぜ little-endian?** x86 / ARM ホストでの慣習。**なぜ tag バイトを付ける?** `NilOrVal::Nil` は 1 バイト (tag 0) なのに対し、`NilOrVal::Val` は 33 バイト (tag 1 + 32 バイトのハッシュ) になる。Tag があるからパーサがどちらか判別できる。**なぜ validator address を含める?** Vote は **どの** vote かだけでなく **誰の** vote かも問う。同じ proposal に対して 100 人の validator が vote すれば、それぞれ別の signing-bytes 文字列が生成される。
 
-> 🛑 **流暢さ警告。** 「`bincode::serialize(v)` で結果に署名するだけじゃダメ?」 **ダメ。** 既製のシリアライゼーション形式はライブラリのバージョンが上がると変わりうる — 今日署名するものと明日署名するものが、struct は同一でも違ってしまう可能性がある。**Canonical** encoding は自分が 1 バイト単位でコントロールするもの。本番 chain は encoding を protobuf スキーマで定義するか、ここのように手書きで定義する。どちらにせよ、encoding は chain の wire format spec の一部になる。
+> 🛑 **やりがちな勘違い。** 「`bincode::serialize(v)` で結果に署名するだけじゃダメ?」 **ダメ。** 既製のシリアライゼーション形式はライブラリのバージョンが上がると変わりうる — 今日署名するものと明日署名するものが、struct は同一でも違ってしまう可能性がある。**Canonical** encoding は自分が 1 バイト単位でコントロールするもの。本番 chain は encoding を protobuf スキーマで定義するか、ここのように手書きで定義する。どちらにせよ、encoding は chain の wire format spec の一部になる。
 
 ### Step 3: `OpenHlProposal` の canonical encoding を書く
 
@@ -398,7 +398,7 @@ impl SigningProvider<OpenHlContext> for OpenHlSigningProvider {
 - **`sign_proposal_part` / `verify_signed_proposal_part`** — **空バイトに署名する。** なぜか? `OpenHlProposalPart` は unit struct で、コミットすべきデータが存在しない。空ペイロードに署名しても valid な Ed25519 署名は生成される (private key 単独で確定的)。検証は「はい、この provider がこの署名を作った」を確認する。署名に情報量はないが、trait 表面は満たされる。
 - **`sign_vote_extension` / `verify_signed_vote_extension`** — proposal_part と同じ。Vote extension は `()` (v0 では未使用) なので空バイトに署名する。
 
-> 🛑 **流暢さ警告。** 「空バイトに署名するのは何か違う気がする — 意味あるの?」 **意味は、持っていないデータにコミットすることなく trait 表面を満たすこと。** Malachite エンジンは実行時にこれらメソッドを呼ぶ。panic したり Error を返したらエンジンがクラッシュする。空バイトに署名して valid な署名を返すことで、「はい、これは我々からの本物の署名です。ただし、メッセージの残りの部分以上に追加でコミットしているデータはありません」と言える。これら機能を使う本番 chain は実データを入れる。我々は入れないが、trait 表面はそのまま保たれる。
+> 🛑 **やりがちな勘違い。** 「空バイトに署名するのは何か違う気がする — 意味あるの?」 **意味は、持っていないデータにコミットすることなく trait 表面を満たすこと。** Malachite エンジンは実行時にこれらメソッドを呼ぶ。panic したり Error を返したらエンジンがクラッシュする。空バイトに署名して valid な署名を返すことで、「はい、これは我々からの本物の署名です。ただし、メッセージの残りの部分以上に追加でコミットしているデータはありません」と言える。これら機能を使う本番 chain は実データを入れる。我々は入れないが、trait 表面はそのまま保たれる。
 
 ### Step 9: `signing_provider.rs` にテストを 7 個追加
 
@@ -662,4 +662,4 @@ L7 が参照する openhl コミット (§答え合わせ):
 - **「forkchoice」「fork」** は専門用語としてそのまま。
 - **「sign/verify ペア」「sign/verify ラウンドトリップ」** はそのまま (専門語)。
 - **タイトル/コードコメントは英語のまま** (オープンソース実装に英語のままコピーされる前提)。
-- **「予測してみよう」「流暢さ警告」** は L4-L6 で確立した訳語と統一。
+- **「予測してみよう」「やりがちな勘違い」** は L4-L6 で確立した訳語と統一。
