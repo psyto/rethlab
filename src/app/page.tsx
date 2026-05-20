@@ -28,7 +28,10 @@ const stagger = {
 export default function LandingPage() {
   const { t, formatT } = useLocale();
 
-  const tracks = [
+  // 2-axis model: 4 source-reading tiers (difficulty ladder) + 1 build-along
+  // project series. Visually split so users see the two formats are different
+  // entry points, not a 5th difficulty level.
+  const sourceReadingTracks = [
     {
       title: t('courses.categories.beginner'),
       description: t('page.tracks.basicsDesc'),
@@ -61,6 +64,9 @@ export default function LandingPage() {
       difficulty: t('courses.difficulty.expert'),
       color: 'from-orange-500/20 to-red-500/20',
     },
+  ];
+
+  const buildAlongTracks = [
     {
       title: t('courses.categories.diyPerp'),
       description: t('page.tracks.diyPerpDesc'),
@@ -296,31 +302,80 @@ export default function LandingPage() {
             </p>
           </motion.div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {tracks.map((track, i) => (
-              <motion.div
-                key={i}
-                className={`group relative overflow-hidden rounded-xl border border-border bg-gradient-to-br ${track.color} p-5 transition-all hover:border-primary/50`}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.08 }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/50">
-                    <track.icon className="h-4.5 w-4.5 text-foreground" />
+          {/* Section 1: Source-Reading (4 difficulty tiers) */}
+          <div className="mt-10">
+            <div className="mb-4 flex items-center gap-2">
+              <h3 className="font-mono text-xs uppercase tracking-widest text-primary">
+                {t('page.tracks.sourceReadingHeader')}
+              </h3>
+              <span className="text-xs text-muted-foreground">
+                {t('page.tracks.sourceReadingSubheader')}
+              </span>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {sourceReadingTracks.map((track, i) => (
+                <motion.div
+                  key={i}
+                  className={`group relative overflow-hidden rounded-xl border border-border bg-gradient-to-br ${track.color} p-5 transition-all hover:border-primary/50`}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.08 }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/50">
+                      <track.icon className="h-4.5 w-4.5 text-foreground" />
+                    </div>
+                    <span className="rounded-full bg-background/50 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      {track.difficulty}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-background/50 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    {track.difficulty}
-                  </span>
-                </div>
-                <h3 className="mt-3 text-base font-semibold">{track.title}</h3>
-                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{track.description}</p>
-                <div className="mt-3 text-[11px] text-muted-foreground/70">
-                  {formatT('page.tracks.courseCount', { count: String(track.courses) })}
-                </div>
-              </motion.div>
-            ))}
+                  <h3 className="mt-3 text-base font-semibold">{track.title}</h3>
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{track.description}</p>
+                  <div className="mt-3 text-[11px] text-muted-foreground/70">
+                    {formatT('page.tracks.courseCount', { count: String(track.courses) })}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 2: Build-Along (project series) */}
+          <div className="mt-10">
+            <div className="mb-4 flex items-center gap-2">
+              <h3 className="font-mono text-xs uppercase tracking-widest text-pink-400">
+                {t('page.tracks.buildAlongHeader')}
+              </h3>
+              <span className="text-xs text-muted-foreground">
+                {t('page.tracks.buildAlongSubheader')}
+              </span>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {buildAlongTracks.map((track, i) => (
+                <motion.div
+                  key={i}
+                  className={`group relative overflow-hidden rounded-xl border border-border bg-gradient-to-br ${track.color} p-5 transition-all hover:border-primary/50`}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.08 }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/50">
+                      <track.icon className="h-4.5 w-4.5 text-foreground" />
+                    </div>
+                    <span className="rounded-full bg-background/50 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      {track.difficulty}
+                    </span>
+                  </div>
+                  <h3 className="mt-3 text-base font-semibold">{track.title}</h3>
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{track.description}</p>
+                  <div className="mt-3 text-[11px] text-muted-foreground/70">
+                    {formatT('page.tracks.courseCount', { count: String(track.courses) })}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
 
           <div className="mt-10 text-center">

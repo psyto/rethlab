@@ -359,7 +359,11 @@ export const en = {
       title: 'Why RethLab?',
     },
     tracks: {
-      title: '17 Courses: 4 Source-Reading Tiers + DIY Perp Build-Along',
+      title: '17 Courses Across Two Formats',
+      sourceReadingHeader: 'Source-Reading',
+      sourceReadingSubheader: '13 courses across 4 difficulty tiers — read production Rust EVM source line by line',
+      buildAlongHeader: 'Build-Along',
+      buildAlongSubheader: '4 courses where you construct your own Hyperliquid implementation from scratch',
       subtitle: 'Finish all four tiers and you can read, design, and ship Rust Ethereum Systems Engineering at the standard used by Paradigm, Hyperliquid, and Tempo.',
       basicsDesc: 'Three courses that ground you in the Rust EVM stack. Rust and Alloy setup, EVM concepts, byte-level dispatch loop. The foundation for the source-reading tier.',
       fundamentals: 'Fundamentals',

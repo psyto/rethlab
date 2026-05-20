@@ -361,7 +361,11 @@ export const ja: TranslationKeys = {
       title: 'なぜRethLab？',
     },
     tracks: {
-      title: '17 コース: ソース読解 4 ティア + DIY Perp ビルドアロング',
+      title: '17 コース・2 つのフォーマット',
+      sourceReadingHeader: 'ソース読解',
+      sourceReadingSubheader: '4 つの難易度ティアにわたる 13 コース — 本番 Rust EVM ソースを 1 行ずつ読む',
+      buildAlongHeader: 'ビルドアロング',
+      buildAlongSubheader: '4 コースで、Hyperliquid のオープンソース実装を一から自作',
       subtitle: '4 ティアすべて修了すれば、Paradigm・Hyperliquid・Tempo が使う Rust Ethereum Systems Engineering を読み、設計し、運用できる。',
       basicsDesc: 'Rust EVM スタックの基礎を 3 コースで固める。Rust と Alloy の準備、EVM の概念、バイト単位の dispatch loop。次のソース読解に向けた土台。',
       fundamentals: 'ファンダメンタルズ',
