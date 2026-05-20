@@ -61,14 +61,20 @@ This is a serious training program — not a casual tutorial.
 
 ### DIY Perp — build your own Hyperliquid-shape L1
 
-A separate track from the source-reading tiers. Four courses walk through constructing a perpetual DEX from `cargo init` on an empty directory, with [`psyto/openhl`](https://github.com/psyto/openhl) as the byte-identical reference implementation. Each lesson states what concept you'll grasp, lists the file edits, and ends with `cargo test` against the version-pinned openhl stage.
+**Hyperliquid is the largest perpetual DEX by volume, and its entire stack is closed source.** HyperBFT consensus, the HyperCore matching engine, and HyperEVM execution — none of it is published. If you want to read how an L1 like that actually works, line by line, there has been nothing to read.
 
-| Course | Focus | Highlight |
-| :--- | :--- | :--- |
-| **Build OpenHL — Consensus** | Wire real Reth (EVM) and real Malachite (BFT) into one Rust workspace that drives blocks end-to-end | 16 lessons. Final lesson: `cargo test first_block_via_engine_actors` produces a single-validator round in ~0.02 s against code you wrote yourself |
-| **Build OpenHL — CLOB** | Add a price-time-priority matching engine and wire its fills into consensus-committed blocks | 13 lessons. The CLOB is a pure state machine; the bridge integration pushes fills through `LiveRethEvmBridge::build_payload` into committed payloads |
-| **Build OpenHL — Precompiles** | Connect the CLOB to smart contracts via custom EVM precompiles at `0x...0c1b` (read) and `0x...0c1c` (write) | 12 lessons. The `EvmFactory` "swap one slot" pattern, process-global `CLOB_STATE`, fill-sink routing back to the bridge |
-| **Build OpenHL — Funding** | Build the perpetual-funding state machine: a deterministic fixed-point pipeline gated by an interval clock that enforces no-catch-up semantics | 12 lessons. `RATE_SCALE = 1e9` parts-per-billion, saturate-not-panic philosophy, balanced-book zero-sum proptest |
+[`psyto/openhl`](https://github.com/psyto/openhl) is the **open reference implementation** of a Hyperliquid-shape L1: a Rust workspace that wires real Reth (EVM execution) into real Malachite (BFT consensus) and adds three pure state-machine subsystems on top — a CLOB matching engine, funding/oracle/liquidation, and a protocol-native vault primitive. The CL/EL boundary is exactly four messages (`build_payload`, `payload_ready`, `validate_payload`, `commit`); the state machines are I/O-free and deterministic, validated by proptest at microseconds per case. See the [openhl architecture doc](https://github.com/psyto/openhl/blob/main/docs/architecture.md) for the full design.
+
+The DIY Perp track in rethlab is the **build-along course series** for openhl. You start from `cargo init` on an empty directory and reach a runnable Hyperliquid-shape L1 over four courses, with openhl as the byte-identical answer key — each lesson pins to a specific openhl commit SHA and ends with `git diff` against that revision as the verification step.
+
+| rethlab course | openhl module | Lessons | What you ship + highlight |
+| :--- | :--- | :--- | :--- |
+| **Build OpenHL — Consensus** | Module 1: Consensus substrate | 16 | Real Reth (EVM) + real Malachite (BFT) producing blocks end-to-end. Final lesson: `cargo test first_block_via_engine_actors` runs a single-validator round in ~0.02 s against code you wrote yourself |
+| **Build OpenHL — CLOB** | Module 2: CLOB matching engine | 13 | Pure-state price-time-priority matching engine. Bridge integration pushes fills through `LiveRethEvmBridge::build_payload` into consensus-committed payloads |
+| **Build OpenHL — Precompiles** | Module 3: Core ↔ EVM precompiles | 12 | Smart contracts read CLOB state and place orders via custom EVM precompiles at `0x...0c1b` (read) and `0x...0c1c` (write). The `EvmFactory` "swap one slot" pattern, process-global `CLOB_STATE`, fill-sink routing back to the bridge |
+| **Build OpenHL — Funding** | Module 4 (partial): Funding state machine | 12 | Deterministic fixed-point funding math (`RATE_SCALE = 1e9` parts-per-billion) gated by an interval clock with no-catch-up semantics. Saturate-not-panic philosophy, balanced-book zero-sum proptest |
+
+Modules 4 (oracle + liquidations integration) and 5 (vault primitive) are still openhl work-in-progress — the matching rethlab courses will land when the reference code does.
 
 **Total: 17 courses (× EN + JA), 51 modules, ~204 lessons per locale (408 lesson records in DB).**
 
