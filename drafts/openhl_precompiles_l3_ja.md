@@ -20,14 +20,26 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **テストのスコープ = バグの局所化** — unit test 3 つを段階的なスコープで構成 (関数本体 → registry 登録 → registry dispatch) するので、失敗するとどの層が壊れているかが直接わかる。
+- **extend-not-replace の dual assertion** — `CLOB_READ_BEST_BID` が登録されていることと、`0x...01` の ECDSA recover が **同時に** 残っていることの両方を check することで、単一 assertion なら見逃す silent-replace バグを捕まえる。
+- **`NodeBuilder.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))`** — explicit-builder の経路。スロット 1 つだけ差し替えて、他の Reth default は全部継承する。「fork しない、configure する」という性質をコードに落とした形。
+- **`Precompile::execute` 経由の dispatch と直接呼び出しの違い** — dispatch test は `Precompile::new(...)` の配線 (関数ポインタ、id、address) が正しいことを証明する — 関数本体の挙動とは別の関心事だ。
+- **integration test は配線の assertion であって、挙動の assertion ではない** — 「`NodeBuilder` + `OpenHlExecutorBuilder` + `EthereumAddOns` がクリーンに合成される」と「precompile が正しいバイトを返す」は別の関心事 (後者は unit test の責務)。
+
+検証：
 
 ```bash
 cargo test -p openhl-evm reth_dev_node_with_openhl_executor --release
 cargo test -p openhl-evm --lib precompiles
 ```
 
-…どちらも pass する。**新規テストを 4 個** 書く:
+…どちらも pass する。
+
+具体的な変更:
+
+**新規テストを 4 個** 書く:
 
 - **`crates/evm/src/reth_node.rs` に integration test を 1 つ** — `reth_dev_node_with_openhl_executor`。デフォルト executor の代わりに `OpenHlExecutorBuilder` を差し込んだ Reth node を bootstrap する。`EvmFactory` + `ExecutorBuilder` の合成が clean に spawn することを検証する。
 - **`crates/evm/src/precompiles/mod.rs` に unit test を 3 つ**:

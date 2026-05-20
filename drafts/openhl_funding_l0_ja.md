@@ -31,7 +31,7 @@
 
 理解するもの：
 
-- 浮動小数点演算が consensus システムで chain fork ハザードになる理由。
+- 浮動小数点演算が consensus システムでチェーン分岐を招く理由。
 - Hyperliquid funding-rate の形：divisor + cap 付きで premium → rate → settlement。
 - `RATE_SCALE = 1_000_000_000`（parts-per-billion）でスケールした固定小数点整数を使えば、consensus リスクなしに 9 桁の精度が得られる仕組み。
 - 純粋な state machine + saturating arithmetic が consensus 中核の数学に対して正しい形である理由。
@@ -45,7 +45,7 @@
 
 Consensus L1 では、各 validator が他の validator と*完全に同じ* funding rate を計算しなければならない。2 つの validator が rate の最下位ビット 1 つでも食い違えば、チェーンは fork する。
 
-Float 演算は以下の軸で異なるビットパターンを生む：
+浮動小数点演算は以下の軸で異なるビットパターンを生む：
 - **コンパイラ** — LLVM が FMA（fused multiply-add）を、ある CPU では emit し別の CPU では split に分解することがある。
 - **CPU** — 丸めモードが異なる、denormal の扱いも異なる。
 - **演算順** — `(a * b) + c` と `a * b + c` は同じに見える IR にコンパイルされても、最適化後の LSB が異なることがある。

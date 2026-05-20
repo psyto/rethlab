@@ -22,7 +22,15 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **builder と validator が単一の真実を共有する** — `ChainSpec::next_block_base_fee` は builder が base fee を埋めるのに使うヘルパーで、`EthBeaconConsensus` が検証に使うのも同じヘルパーだ。算数の重複なし、hardfork 越しの drift リスクなし。Consensus-critical な build/validate ペアでは必ずこれを真似る。
+- **validator が builder に誠実さを強制する** — validator が走り出したら builder は手抜きできない。parent から gas_limit をコピー (1/1024 drift bound)、正しい EIP-1559 base fee、difficulty ゼロ (post-merge)、単調増加 timestamp。すべて機械的にチェックされる。
+- **validator の reject は crash ではなく通常動作** — validator が「malformed だ」と答えるのは `PayloadStatus::Invalid` であって `Err` ではない。Error を status に map することで engine が走り続け、次の proposal を選べる。DB エラーだけが `BridgeError::Internal` に escalate する。
+- **trait bound は incremental に広がる** — L12 は `BlockNumReader`、L13 は `BlockNumReader + HeaderProvider` を要求する。レッスンごとに新しい capability surface を露出する。Trait bound は spec — bridge が Reth surface のどこを要求するかをそのまま文書化する。
+- **`SealedHeader` は hash を cache する** — `Header` + 事前計算した `B256` を wrap することで、`.hash()` のたびに 500 byte を Keccak し直すコストを避ける。validator throughput では効くパターンだ。我々のテストでは μs オーダーだが、形として正しい。
+
+検証:
 
 ```bash
 cargo test -p openhl-evm live_bridge_builds_on_real_genesis --release
@@ -34,13 +42,13 @@ cargo test -p openhl-evm live_bridge_builds_on_real_genesis --release
 test live_node::tests::live_bridge_builds_on_real_genesis ... ok
 ```
 
-中身の変化:
-- 今 build したばかりの block に対する `bridge.validate_payload(block)` は `PayloadStatus::Valid` を返す — Reth の **real** validator (`EthBeaconConsensus::validate_header_against_parent`) が承認したからだ。
-- `bridge.validate_payload(block_with_unknown_hash)` は `PayloadStatus::Invalid` を返す — validate する header が無いからだ。
+今 build したばかりの block に対する `bridge.validate_payload(block)` は `PayloadStatus::Valid` を返す — Reth の **real** validator (`EthBeaconConsensus::validate_header_against_parent`) が承認したからだ。`bridge.validate_payload(block_with_unknown_hash)` は `PayloadStatus::Invalid` を返す — validate する header が無いからだ。
 
-これを動かすために **`build_payload` は production-shape の header を produce するように変えなければならなかった** — gas_limit を parent からコピーし (1/1024 drift bound)、next_block_base_fee を chain spec 経由で計算し (validator が使うのと同じヘルパー)、difficulty をゼロにし (post-merge invariant)、attrs が古いときは timestamp を `parent.timestamp + 1` に snap する。**Validator が builder に誠実さを強制する形だ。**
+具体的な変更:
 
-新規 workspace dep が 3 個 + 新規 evm production dep が 4 個 + `live_node.rs` の rewrite で約 141 行の変更になる。**ファイルの shape は変わらない** — 同じ struct、同じ `ConsensusBridge` impl だ。変わるのは `validate_payload` が **何をするか** だ。
+- 新規 workspace dep 3 個 + 新規 evm production dep 4 個 (`reth-consensus`、`reth-ethereum-consensus`、`reth-chainspec`、`alloy-eips`)。
+- `crates/evm/src/live_node.rs` — 約 141 行変更。新規 struct field `chain_spec: Arc<ChainSpec>` と `validator: EthBeaconConsensus<ChainSpec>`。`build_payload` は production-shape の header を produce するようになる (parent 由来 gas_limit、`next_block_base_fee`、`difficulty: U256::ZERO`、snap した timestamp)。`validate_payload` は `EthBeaconConsensus::validate_header_against_parent` を呼ぶように書き直される。
+- **ファイルの shape は変わらない** — 同じ struct、同じ `ConsensusBridge` impl だ。変わるのは `validate_payload` が **何をするか** だ。
 
 ## おさらい
 

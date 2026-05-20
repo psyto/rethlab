@@ -21,13 +21,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The precompile represents an on-chain caller** — when test code writes directly to `book.lock().submit(...)`, that simulates the bridge (off-chain). When `place_order` writes to the book, that simulates an EVM transaction (on-chain). L8 is the moment EVM execution starts mutating CLOB state.
+- **Two precompiles, one Arc, shared state = round-trip** — both precompiles read/write through `CLOB_STATE`, so a write via `0x...0c1c` is immediately visible to a read via `0x...0c1b`. The L4 architecture was designed for exactly this moment.
+- **Schema-first means behavior-second is small** — L7 wrote ~70 lines (constants, atomic, parser, registration, tests). L8 adds ~7 lines (the submit call + binding renames + test extensions). Locking the contract first compressed the behavior change.
+- **Side-effect testing requires holding a handle** — L7's malformed-input test couldn't check the book because it didn't keep a reference. L8 fixes that with `let book = Arc::new(...); install_clob(book.clone());`. The clone is the difference between testing returns and testing state.
+- **`_result` vs `_` as future-intent markers** — `_result` says "I see this value, don't use it yet, expect future use." `_` (bare) says "I'm explicitly not using this." L8 binds to `_result`; L9 renames to `fills`.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-…passes 46 tests, same count as L7 — but with a one-line addition to `place_order` and two test changes, the precompile **actually writes to the book**:
+…passes 46 tests, same count as L7.
+
+Specific changes:
+
+With a one-line addition to `place_order` and two test changes, the precompile **actually writes to the book**:
 
 - **One line added** to `place_order` — `clob.lock().submit(Order { ... })` between order_id allocation and encoding.
 - **L7's `_` prefixes dropped** from `_account_id` / `_price_value` / `_side` — they're used now.

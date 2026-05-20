@@ -20,13 +20,26 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The shared vocabulary crate** — why `BlockHash`, `PayloadId`, etc. live in `openhl-types` and not in `openhl-consensus` or `openhl-evm`. Rust forbids dependency cycles, so a CL↔EL split forces a neutral third crate that both sides import.
+- **The newtype pattern** — wrapping `[u8; 32]` as `BlockHash([u8; 32])` instead of using a type alias. The compiler then refuses to substitute a random byte array where a block hash is expected.
+- **Three-valued payload status** — why `PayloadStatus` is `Valid / Invalid / Syncing` instead of `bool`. A `Syncing` node treated as `Invalid` forks permanently from peers that could have helped it catch up.
+- **Custom `Display` over default `Debug`** — why every contract type that appears in logs needs a human-readable `0xab12…` rendering. Logs are a debugger's primary tool; readable output is not optional.
+
+Verification:
 
 ```bash
 cargo test -p openhl-types
 ```
 
-…passes 4 tests covering the 5 contract primitives you wrote. The `openhl-types` crate becomes the **shared vocabulary** that consensus and EVM both depend on — the only crate either side imports for these types. No application logic yet; just data definitions that the contract trait (L3) will reference.
+…passes 4 tests covering the 5 contract primitives you wrote. No application logic yet; just data definitions that the contract trait (L3) will reference.
+
+Specific changes:
+
+- `crates/types/src/lib.rs` gains 5 types — `BlockHash`, `PayloadId`, `PayloadAttrs`, `PayloadStatus`, `ExecutedBlock` — plus a `Display` impl on `BlockHash`.
+- 4 unit tests added: hex display, status equality, executed-block clone, serde round-trip.
+- The `openhl-types` crate becomes the **shared vocabulary** that consensus and EVM both depend on.
 
 ## Recap
 

@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **REVM's `PrecompileFn` signature `fn(&[u8], u64, u64) -> PrecompileResult`** — a function pointer (not closure), with three fixed args (input, gas_limit, reservoir); your precompile must conform exactly because the registry stores function pointers.
+- **Solidity ABI's 32-byte slot layout** — `(uint256, uint256)` is 64 bytes total, big-endian, low-order byte at index 31/63 — matching this at the wire format means a Solidity contract can `abi.decode` your output directly.
+- **Hardcoded stub as a wiring-vs-content split** — returning `(100, 10)` (not `unimplemented!()`) lets L3 test the *reachability* of the precompile in isolation from "does it return the right data" (L4-L6's job).
+- **`extend-not-replace` via `base.clone()`** — wrapping the standard precompile set means ECDSA recovery / SHA-256 / etc. stay registered; a fresh `Precompiles::default()` would silently delete them.
+- **`pub` const for the address, private const for gas cost** — callers need to *call* the precompile (need the address); the EVM dispatches gas internally (callers don't need the cost). Visibility matches API surface.
+
+Verification:
 
 ```bash
 cargo check -p openhl-evm
 ```
 
-…still compiles. Your `precompiles/mod.rs` is now the **full Stage 9a version**:
+…still compiles.
+
+Specific changes:
+
+Your `precompiles/mod.rs` is now the **full Stage 9a version**:
 
 - A constant `CLOB_READ_BEST_BID: Address = 0x...0c1b` — the precompile's address.
 - A constant `CLOB_BASE_GAS_COST: u64 = 500` — minimum gas charged per precompile call.

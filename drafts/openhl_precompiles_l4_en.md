@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **`PrecompileFn` is a function pointer, not a closure → process-global state is the workaround** — REVM's `fn(&[u8], u64, u64) -> PrecompileResult` can't capture environment, so shared state has to live in a `static` the function reads at call time.
+- **`RwLock<Option<Arc<Mutex<T>>>>` — different locks for different access patterns** — outer `RwLock` distinguishes installed-vs-uninstalled (rare write); inner `Mutex` protects the matching engine (frequent write). A single `Mutex<Option<...>>` would serialize all reads through one bottleneck.
+- **`Arc<Mutex<Book>>` for shared ownership across the bridge/precompile boundary** — the bridge and the precompile are different "callers" but must see the same `Book`; `Arc` is how Rust expresses "more than one owner, same data."
+- **Install-replaces-not-errors** — tests need to install/uninstall repeatedly, so silent replacement is a feature, not a bug. Production paths only call install once.
+- **Plumbing-without-current as an incremental shape** — L4 connects the wires (static, install fn, bridge field type) but leaves `read_best_bid` hardcoded; L5 closes the switch. Splitting plumbing from behavior lets each lesson have one verifiable change.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-…still passes (42 tests including L3's 4 new ones). You'll have **added the plumbing** for live CLOB state without yet changing what `read_best_bid` returns:
+…still passes (42 tests including L3's 4 new ones).
+
+Specific changes:
+
+You'll have **added the plumbing** for live CLOB state without yet changing what `read_best_bid` returns:
 
 - **2 new methods** on `Book` (in `crates/clob/src/book.rs`): `best_bid_with_qty()` and `best_ask_with_qty()` returning `Option<(Price, Qty)>`.
 - **A module-level `static CLOB_STATE`** in `precompiles/mod.rs` holding `Option<Arc<Mutex<Book>>>`.

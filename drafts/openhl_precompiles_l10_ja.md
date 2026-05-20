@@ -21,13 +21,25 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **integration test は unit test が捕まえられない配線バグを捕まえる** — unit test は各部品を単独で構築するので、`with_components(...executor(OpenHlExecutorBuilder))` のタイポや `EthereumAddOns` 適用が外れる regression は unit test を green に保ったまま production を壊す。integration test 1 つ = 配線の assertion。
+- **cross-module test には `pub(crate)` が適切な可視性** — `place_order` を `pub` にすると API が漏れる、`#[cfg(test) pub(crate)]` は無意味な ceremony。`pub(crate)` は「crate 内なら誰でも、外からは不可」を表現する。
+- **inline テスト calldata > DRY なヘルパー** — 手書きの `[u8; 128]` に byte 位置のコメントを添えれば、ABI レイアウトが callsite から見える。システムレベルの正しさを示すテストでは、すべての byte 位置が learnable な artifact であるべき (helper は隠してしまう)。
+- **canonical な構成: integration test 1 つ + unit test 多数** — 各部品には narrow なテスト、合成には wide なテスト 1 つ。失敗の局所化は unit test が担い、配線の保証は integration test が担う。
+- **正直な deferred: RPC roundtrip は openhl ではなく Reth の責務** — JSON-RPC → eth_call → revm dispatch を testing するのは openhl ではなく Reth の検証になる。「openhl が Reth に正しく接続される」のスコープには「Reth の RPC サーバーが動く」は含まれない。
+
+検証：
 
 ```bash
 cargo test -p openhl-evm --release bridge_against_custom_evm
 ```
 
-…新しい integration test `bridge_against_custom_evm_node_shares_clob_with_precompile` を 1 つ通る。このテストは Stage 9a-9c+ で触ったすべてを 1 箇所でやる：
+…新しい integration test `bridge_against_custom_evm_node_shares_clob_with_precompile` を 1 つ通る。
+
+具体的な変更：
+
+このテストは Stage 9a-9c+ で触ったすべてを 1 箇所でやる：
 
 1. **Reth を bootstrap する** — `OpenHlExecutorBuilder` 付きで（CLOB precompile 2 つを登録したカスタム EVM 込み）。
 2. **`LiveRethEvmBridge` を構築する** — そのノードの provider に対して。bridge の `new()` が `install_clob` と `install_fill_sink` を呼ぶ。

@@ -11,11 +11,11 @@ export async function seedRethOpenHlPrecompilesJA(prisma: PrismaClient) {
       slug: "building-openhl-precompiles-ja",
       title: "OpenHL Precompile を作る — CLOB state をスマートコントラクトに接続する",
       description:
-        "L1 Architect トラックの 10 コース中 8 番目。openhl ベースの build-along コースの 3 つ目。`building-openhl-clob` から続く: course 7 end state の workspace (LiveRethEvmBridge に統合された CLOB matching engine、fill が並行リストとして蓄積) から始め、reader は smart contract が CLOB state を read する custom EVM precompile (`clob_read_best_bid`) と order を place する precompile (`clob_place_order`) を追加する。終了状態: smart contract call が precompile 経由で order を発注、既存 book state とマッチ、結果の fill が bridge を通じて流れる。openhl Stage 9 (9a-9e、6 commits ~860 LOC) をカバー: EvmFactory パターン、registry ベースの precompile dispatch、Arc-shared CLOB state、calldata decoding、fill-sink を bridge に route。範囲外: fill を block body の EVM-executable transaction として encode (future course)、funding state machine (course 9)。",
+        "`building-openhl-clob` で構築した CLOB を、カスタム EVM precompile 経由でスマートコントラクトに接続する。スマートコントラクトは well-known な precompile アドレスからマッチングエンジンを read/write でき、生まれた fill は bridge を経由して次の payload に乗る。DIY Perp シリーズの 3 つ目のコース。",
       difficulty: "EXPERT",
       duration: 400,
       xpReward: 820,
-      track: "reth-l1-architect",
+      track: "diy-perp",
       tags,
       isPublished: false,
       sortOrder: 800,
@@ -204,13 +204,24 @@ cd ~/code/openhl-reference && git log --oneline | grep -E "(1761d4d|b635ef7|a882
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **\`EvmFactory\` + \`ExecutorBuilder\` という Reth の「スロット 1 つを差し替える」シーム** — Reth が構築するすべての EVM (payload build、block validation、eth_call RPC、debug RPC) は 1 つの factory を経由するので、custom precompile を一度登録すればすべての経路に伝播する。
+- **\`alloy-evm\` (抽象トレイト) と \`reth-evm\` (具体的な配線) の役割分担** — 両方が必要な理由：トレイト層は EVM が *何か* を表現し、executor 層は Reth がそれを *どう動かすか* を表現する。
+- **spec ごとの \`Precompiles\` を \`OnceLock\` でキャッシュ** — precompile セットの構築は重い (address の hash 化)、\`create_evm\` はホットパス、なので各 hardfork 層のセットを 1 度だけ作り \`&'static\` として共有する。
+- **シグネチャだけ固定した stub による incremental construction** — passthrough の \`openhl_precompiles(base) -> Precompiles\` は factory を *今* 配線可能にしておき、本体は L2 で埋める。callsite の書き換えは発生しない。
+
+検証：
 
 \`\`\`bash
 cargo check -p openhl-evm
 \`\`\`
 
-上記の実行結果がクリーンにコンパイル。\`crates/evm/src/\` 配下に **新規モジュールが 2 個** 増える:
+上記の実行結果がクリーンにコンパイル。
+
+具体的な変更:
+
+\`crates/evm/src/\` 配下に **新規モジュールが 2 個** 増える:
 
 - **\`openhl_evm.rs\`** — \`OpenHlEvmFactory\` (Reth の \`EvmFactory\` スロット) + \`OpenHlExecutorBuilder\` (Reth の \`ExecutorBuilder\` スロット)、加えて \`OnceLock\` 経由の hardfork ごとの precompile dispatch。約 80 LOC。
 - **\`precompiles/mod.rs\`** — \`openhl_precompiles(base) -> Precompiles\` の **stub**、ひとまずただの passthrough。L2 で本物の read precompile を埋める。
@@ -652,13 +663,25 @@ factory は配線できたが、precompile モジュールは passthrough のま
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **REVM の \`PrecompileFn\` シグネチャ \`fn(&[u8], u64, u64) -> PrecompileResult\`** — 関数ポインタ (closure ではない)、3 つの引数 (input、gas_limit、reservoir) は固定。registry は関数ポインタを保持するので、precompile はこの形に正確に従う必要がある。
+- **Solidity ABI の 32-byte slot レイアウト** — \`(uint256, uint256)\` は合計 64 バイト、big-endian、低位バイトは index 31/63 — wire format でこれに合わせれば Solidity コントラクトがそのまま \`abi.decode\` できる。
+- **hardcode された stub が「配線テスト」と「内容テスト」を分割する道具** — \`(100, 10)\` を返す (\`unimplemented!()\` ではなく) ことで、L3 は precompile の **到達可能性** だけを単独で検証できる。「正しい値を返すか」(L4-L6 の責務) と分離される。
+- **\`base.clone()\` による extend-not-replace** — 標準の precompile セットを wrap することで ECDSA recovery / SHA-256 などが登録された状態を保てる。新規に \`Precompiles::default()\` を作ってしまうと、これらが silently 消えてしまう。
+- **address は \`pub\` const、gas cost は private const** — 呼び出し側は precompile を *call* する必要がある (address が必要)。gas は EVM が内部で処理する (caller は cost を知る必要がない)。可視性は API surface に対応する。
+
+検証：
 
 \`\`\`bash
 cargo check -p openhl-evm
 \`\`\`
 
-…も引き続きコンパイルが通る。\`precompiles/mod.rs\` がついに **Stage 9a の完成版** になる:
+…も引き続きコンパイルが通る。
+
+具体的な変更:
+
+\`precompiles/mod.rs\` がついに **Stage 9a の完成版** になる:
 
 - 定数 \`CLOB_READ_BEST_BID: Address = 0x...0c1b\` — precompile の address。
 - 定数 \`CLOB_BASE_GAS_COST: u64 = 500\` — precompile call ごとの最小 gas 料金。
@@ -920,14 +943,26 @@ precompile は登録されたが、まだ **テストされていない**。L3 �
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **テストのスコープ = バグの局所化** — unit test 3 つを段階的なスコープで構成 (関数本体 → registry 登録 → registry dispatch) するので、失敗するとどの層が壊れているかが直接わかる。
+- **extend-not-replace の dual assertion** — \`CLOB_READ_BEST_BID\` が登録されていることと、\`0x...01\` の ECDSA recover が **同時に** 残っていることの両方を check することで、単一 assertion なら見逃す silent-replace バグを捕まえる。
+- **\`NodeBuilder.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))\`** — explicit-builder の経路。スロット 1 つだけ差し替えて、他の Reth default は全部継承する。「fork しない、configure する」という性質をコードに落とした形。
+- **\`Precompile::execute\` 経由の dispatch と直接呼び出しの違い** — dispatch test は \`Precompile::new(...)\` の配線 (関数ポインタ、id、address) が正しいことを証明する — 関数本体の挙動とは別の関心事だ。
+- **integration test は配線の assertion であって、挙動の assertion ではない** — 「\`NodeBuilder\` + \`OpenHlExecutorBuilder\` + \`EthereumAddOns\` がクリーンに合成される」と「precompile が正しいバイトを返す」は別の関心事 (後者は unit test の責務)。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-evm reth_dev_node_with_openhl_executor --release
 cargo test -p openhl-evm --lib precompiles
 \`\`\`
 
-…どちらも pass する。**新規テストを 4 個** 書く:
+…どちらも pass する。
+
+具体的な変更:
+
+**新規テストを 4 個** 書く:
 
 - **\`crates/evm/src/reth_node.rs\` に integration test を 1 つ** — \`reth_dev_node_with_openhl_executor\`。デフォルト executor の代わりに \`OpenHlExecutorBuilder\` を差し込んだ Reth node を bootstrap する。\`EvmFactory\` + \`ExecutorBuilder\` の合成が clean に spawn することを検証する。
 - **\`crates/evm/src/precompiles/mod.rs\` に unit test を 3 つ**:
@@ -1260,13 +1295,25 @@ precompile が登録され、callable であることまで証明できた。だ
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **\`PrecompileFn\` は関数ポインタであって closure ではない → process-global state が回避策** — REVM の \`fn(&[u8], u64, u64) -> PrecompileResult\` は環境を capture できないので、共有 state は \`static\` に置き、関数が呼び出し時にそこを読む形にする。
+- **\`RwLock<Option<Arc<Mutex<T>>>>\` — アクセスパターンが違えばロックの種類も違う** — 外側の \`RwLock\` は installed/uninstalled の区別 (write は稀) を担当し、内側の \`Mutex\` は matching engine (write は頻繁) を保護する。\`Mutex<Option<...>>\` 1 個でやろうとすると、すべての read が 1 箇所のボトルネックを通ることになる。
+- **\`Arc<Mutex<Book>>\` で bridge/precompile 境界を超えて所有を共有** — bridge と precompile は別々の「caller」だが、同じ \`Book\` を見る必要がある。\`Arc\` は「所有者は複数、データは同じ」を表現する Rust の道具。
+- **install は replace するだけで error にしない** — テストでは install/uninstall を繰り返す必要があるので、silent な replacement は機能であってバグではない。production の経路では install を 1 回しか呼ばない。
+- **「配線したが電流は流さない」という incremental な形** — L4 は配線 (static、install 関数、bridge フィールドの型) を繋ぐが \`read_best_bid\` はまだハードコードのまま。switch を入れるのは L5。配線と挙動を分離することで、各レッスンが verifiable な変更を 1 つだけ持てる。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-上記の実行結果が引き続き通る（L3 で追加した 4 つを含む 42 tests）。**\`read_best_bid\` が返す値はまだ変えずに**、live CLOB state を流すための**配管だけ**を仕込みます：
+上記の実行結果が引き続き通る（L3 で追加した 4 つを含む 42 tests）。
+
+具体的な変更：
+
+**\`read_best_bid\` が返す値はまだ変えずに**、live CLOB state を流すための**配管だけ**を仕込みます：
 
 - **\`Book\` に新メソッドを 2 つ**（\`crates/clob/src/book.rs\`）：\`best_bid_with_qty()\` / \`best_ask_with_qty()\`。それぞれ \`Option<(Price, Qty)>\` を返す。
 - **\`precompiles/mod.rs\` にモジュールレベルの \`static CLOB_STATE\`**：\`Option<Arc<Mutex<Book>>>\` を保持する。
@@ -1635,13 +1682,25 @@ static storage はもっともシンプルなライフタイム — プログラ
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **未インストール時に zero を返す = 「未初期化な storage slot」のセマンティクス** — Solidity コントラクトは \`STATICCALL\` の zero を「liquidity なし」と自然に処理して trade を控える。error にすると boot 中のすべての transaction が revert する。
+- **constant-time な precompile = gas 課金で state を漏らさない** — CLOB が未インストールのときだけ gas 課金を減らすと、attacker が gas を測って validator の state を推測できる。\`CLOB_BASE_GAS_COST\` を一定に保ち、precompile の挙動の見た目を一様にする。
+- **\`cargo test\` は並列実行 → process-global で競合 → serializer が必要** — \`CLOB_STATE\` を触るテストが 2 個になった瞬間、並列実行下で global が \`Some(clob_A)\` と \`None\` の間を flap する。\`Mutex<()>\` を \`TEST_SERIALIZER\` として置くのが解決策。
+- **\`TEST_SERIALIZER\` は crate ではなくモジュールごと** — 直列化のスコープは、実際に必要なテストだけに狭める。\`CLOB_STATE\` を触らないテストにコストを払わせない。
+- **uninstall は test の *先頭*、終わりではない** — panic したテストは cleanup を走らせない。次のテストの先頭で reset するのが safety net になる。テスト末尾の uninstall は飾り。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-上記の実行結果が引き続き通る（42 tests）。ただし内部では、precompile が **live state を読む** ようになっている — ハードコード値ではなく：
+上記の実行結果が引き続き通る（42 tests）。
+
+具体的な変更：
+
+ただし内部では、precompile が **live state を読む** ようになっている — ハードコード値ではなく：
 
 - **\`read_best_bid\` の本体を差し替える** — \`let mut out = vec![0, 0, ..., 100, 0, 0, ..., 10]\` のハードコードを捨て、\`if let Some((price, qty)) = current_best_bid() { ... out に書き込む ... }\` に変える。CLOB 未インストールなら 64-byte の zero を返す（「未初期化 perp market」のセマンティクスに合わせる）。
 - **L3 の \`read_best_bid_returns_hardcoded_price_and_qty\` テストを rename** して \`read_best_bid_returns_zero_when_no_clob_installed\` に。形は同じだが、100/10 ではなく zero を assert する。
@@ -1978,13 +2037,25 @@ git checkout main
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **read チェーンを end-to-end で繋ぐ** — \`CLOB に bid を発注 → bridge が Mutex 経由で書き込み → precompile が global 経由で read → 64-byte ABI に encode → 呼び出し元に返す\`。チェーン全体を一度に exercise する最初のテスト。
+- **敵対的 (adversarial) なテストデータ > ランダムなテストデータ** — 「best bid 実装が正しい」ことと「たまたま正しく動いている」ことを区別するために、order 2 個を意図的に選ぶ — 250 価格 qty 7 (*正しい*答え) と、240 価格 qty 99 (iteration order を間違えたら取ってしまう、larger-qty の罠)。50 個のランダム order より価値が高い。
+- **dispatch test と behavior test を分割する** — L5 では \`Precompile::execute\` 経由で関数が到達可能なことを示した。L6 では \`read_best_bid\` を直接呼び、関数が live state を読むことを示す。dispatch と behavior をひとつのテストに混ぜると、失敗時のデバッグが難しくなる。
+- **assertion メッセージは未来の保守者のためのドキュメント** — \`"best bid is the 250 order, not 240"\` は次のエンジニアに「どの概念的不変条件が壊れているか」を伝える。素の \`left=240 right=250\` は値しか伝えない。
+- **L4-L6 を貫く one-thing-at-a-time** — 配管 (L4) → 差し替え (L5) → 通電 (L6)。各レッスンに verifiable な変更が 1 つだけ。混ぜると、中間段階で何か壊れたときのデバッグが格段に難しくなる。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-上記の実行結果が 43 tests を通る（1 つ新規）。新しいテストは \`read_best_bid_returns_live_state_when_clob_installed\`。ここまで全テストが寸止めにしてきたことを、ついにやる：**既知の bid を持つ CLOB を install し、precompile を呼び、出力 bytes がその bid の price と qty を encode していることを観測する。**
+上記の実行結果が 43 tests を通る（1 つ新規）。
+
+具体的な変更：
+
+新しいテストは \`read_best_bid_returns_live_state_when_clob_installed\`。ここまで全テストが寸止めにしてきたことを、ついにやる：**既知の bid を持つ CLOB を install し、precompile を呼び、出力 bytes がその bid の price と qty を encode していることを観測する。**
 
 これがマイルストーンだ。フルチェーン — \`CLOB に bid を発注 → ブリッジが Mutex 経由で書き込み → precompile が global 経由で read → 64-byte の ABI に encode → 呼び出し元に返す\` — がついに end-to-end で exercise される。L6 後：
 
@@ -2312,13 +2383,25 @@ L7 で Module 3（Write precompile）が始まる。L2 と対になる形だ：�
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **schema-first 設計 — calldata レイアウトが public な契約で、behavior より先にロックする** — \`0x...0c1c\` に precompile を露出させた瞬間からコントラクトが呼んでくる。L7 で入力 layout を固定すれば、L8 で behavior を変えても caller を壊さない。
+- **128-byte ABI 入力 = 32-byte slot 4 個** — Solidity ABI は scalar を 32-byte word に詰める。\`u64\` は右端 8 バイトに入る (\`[0; 24] + [u64 BE]\`)。4 word = \`account_id\` / \`side\` / \`price\` / \`qty\`。
+- **precompile は panic ではなく soft fail する** — 不正な入力 (4 つの rejection path) は sentinel \`0\` を返し、transaction を revert しない。呼び出し側コントラクトは EVM-level error ではなく、分岐可能な値を受け取る。
+- **\`AtomicU64::fetch_add(1, Relaxed)\` による ID 採番** — ID には uniqueness が必要 (atomic でこれを保証) だが、他の state との同期不変条件は不要 (Book は自前の Mutex を持つ)。invariant が要求しないなら軽い memory ordering を選ぶ。
+- **sentinel \`0\` には \`NEXT_ORDER_ID\` が 1 始まりであることが必須** — ID が 0 始まりだと、最初に発行される ID が「rejected」と区別できなくなる。1 から始めれば sentinel に曖昧さがなくなる。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-上記の実行結果が 46 tests を通る（3 つ新規）。CLOB の **書き込みパス** は、precompile が登録され、calldata のパースが実装され、rejection path が検証された状態になる：
+上記の実行結果が 46 tests を通る（3 つ新規）。
+
+具体的な変更：
+
+CLOB の **書き込みパス** は、precompile が登録され、calldata のパースが実装され、rejection path が検証された状態になる：
 
 - **新規 precompile \`0x...0c1c\`** — \`CLOB_PLACE_ORDER\` を \`CLOB_READ_BEST_BID\` と並べて登録する。
 - **128-byte ABI-aligned な入力レイアウト** を decode する：\`account_id\` / \`side\` / \`price\` / \`qty\`。
@@ -2760,13 +2843,25 @@ L8 は 1 行のコードと、テスト数個ぶんの作業だ。その 1 行�
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **precompile は on-chain な caller を代表する** — テストコードが \`book.lock().submit(...)\` を直接呼ぶのは bridge (off-chain) の模倣。\`place_order\` が book に書き込むのは EVM transaction (on-chain) の模倣。L8 は EVM 実行が CLOB state を mutate し始める瞬間だ。
+- **precompile 2 つ・Arc 1 つ・共有 state = ラウンドトリップ成立** — 両方の precompile が \`CLOB_STATE\` を介して read/write するので、\`0x...0c1c\` 経由の write が即座に \`0x...0c1b\` 経由の read から見える。L4 のアーキテクチャはまさにこの瞬間のために設計されていた。
+- **schema-first だから behavior-second は小さい** — L7 では ~70 行 (定数、atomic、parser、registration、tests) を書いた。L8 では ~7 行 (submit 呼び出し + binding rename + テスト拡張) だけ。先に契約を固定したので、挙動の追加が圧縮されている。
+- **side-effect のテストには handle を保持する必要がある** — L7 の malformed-input テストは book を check できなかった (参照を保持していなかったから)。L8 では \`let book = Arc::new(...); install_clob(book.clone());\` で修正する。clone することが「戻り値のテスト」と「state のテスト」を分ける鍵だ。
+- **\`_result\` と \`_\` の future-intent としての使い分け** — \`_result\` は「値は見えるが今は使わない、将来使う予定」、\`_\` (素) は「明示的に使わない」。L8 では \`_result\` に bind し、L9 で \`fills\` に改名する。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-上記の実行結果が 46 tests を通る — L7 と同じテスト数だ。だが \`place_order\` に 1 行を加え、テスト 2 つを変更することで、precompile が **本当に book に書く** ようになる：
+上記の実行結果が 46 tests を通る — L7 と同じテスト数だ。
+
+具体的な変更：
+
+\`place_order\` に 1 行を加え、テスト 2 つを変更することで、precompile が **本当に book に書く** ようになる：
 
 - **\`place_order\` に 1 行追加** — order_id の割り当てと encoding の間に \`clob.lock().submit(Order { ... })\` を挟む。
 - **L7 で付けた \`_\` 接頭辞を外す** — \`_account_id\` / \`_price_value\` / \`_side\` を実際に使うようになる。
@@ -3158,13 +3253,25 @@ L9 では、L8 の doc コメントに残した「fill を捨てている」と�
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **shared-buffer パターンは一般化する** — L4 で導入した「\`Arc<Mutex<T>>\` + process-global」パターンを fill にそのまま再利用する。一度プリミティブが置かれれば、追加の共有 state は 1 バッファあたり ~20 行で済む。L4 の抽象化が複利で効いてくる。
+- **直交した global = 直交したテスト setup** — \`CLOB_STATE\` と \`FILL_SINK\` を 1 つの global にまとめると、すべてのテストが両方を install する必要が出る。global を分けておけば、test が exercise する分だけ install すれば良い (composable)。
+- **common case の early-out は free** — \`if !submit_result.fills.is_empty()\` で、order が交差せず resting に回る場合 (主流のケース) の lock 取得をスキップする。hot path に分岐 1 つ追加するだけで \`RwLock\` の取得を節約できる。
+- **sink に push する前に \`drop(book)\` — 外側のロックを取る前に内側のロックを離す** — Book と sink の両方を同時に保持すると、lock ordering の hazard ができる。明示的に Book guard を drop することで、ロック取得を厳密に逐次にする。
+- **doc コメント = 借金トラッカー** — L8 の「fills are discarded」doc コメントは load-bearing だった：未来の読者に「意図的なギャップで oversight ではない」ことを伝えていた。L9 はそのギャップを閉じ、doc も更新する。ドキュメント化されたギャップは半分修正済み、未文書化のギャップは invisible debt。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-上記の実行結果が 47 tests を通る（1 つ新規）。L8 の doc コメントで述べた「fill を捨てている」というギャップが閉じる：
+上記の実行結果が 47 tests を通る（1 つ新規）。
+
+具体的な変更：
+
+L8 の doc コメントで述べた「fill を捨てている」というギャップが閉じる：
 
 - **\`FILL_SINK\` static を追加** — \`CLOB_STATE\` と対になる位置に置き、\`Option<Arc<Mutex<Vec<Fill>>>>\` を保持する。
 - **モジュール関数 \`install_fill_sink\` / \`uninstall_fill_sink\`** を追加 — どちらも public で、\`install_clob\` / \`uninstall_clob\` パターンをそのまま鏡写しにする。
@@ -3595,13 +3702,25 @@ L10 はいよいよ **コースレベルのマイルストーン** だ：Stage 9
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **integration test は unit test が捕まえられない配線バグを捕まえる** — unit test は各部品を単独で構築するので、\`with_components(...executor(OpenHlExecutorBuilder))\` のタイポや \`EthereumAddOns\` 適用が外れる regression は unit test を green に保ったまま production を壊す。integration test 1 つ = 配線の assertion。
+- **cross-module test には \`pub(crate)\` が適切な可視性** — \`place_order\` を \`pub\` にすると API が漏れる、\`#[cfg(test) pub(crate)]\` は無意味な ceremony。\`pub(crate)\` は「crate 内なら誰でも、外からは不可」を表現する。
+- **inline テスト calldata > DRY なヘルパー** — 手書きの \`[u8; 128]\` に byte 位置のコメントを添えれば、ABI レイアウトが callsite から見える。システムレベルの正しさを示すテストでは、すべての byte 位置が learnable な artifact であるべき (helper は隠してしまう)。
+- **canonical な構成: integration test 1 つ + unit test 多数** — 各部品には narrow なテスト、合成には wide なテスト 1 つ。失敗の局所化は unit test が担い、配線の保証は integration test が担う。
+- **正直な deferred: RPC roundtrip は openhl ではなく Reth の責務** — JSON-RPC → eth_call → revm dispatch を testing するのは openhl ではなく Reth の検証になる。「openhl が Reth に正しく接続される」のスコープには「Reth の RPC サーバーが動く」は含まれない。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-evm --release bridge_against_custom_evm
 \`\`\`
 
-…新しい integration test \`bridge_against_custom_evm_node_shares_clob_with_precompile\` を 1 つ通る。このテストは Stage 9a-9c+ で触ったすべてを 1 箇所でやる：
+…新しい integration test \`bridge_against_custom_evm_node_shares_clob_with_precompile\` を 1 つ通る。
+
+具体的な変更：
+
+このテストは Stage 9a-9c+ で触ったすべてを 1 箇所でやる：
 
 1. **Reth を bootstrap する** — \`OpenHlExecutorBuilder\` 付きで（CLOB precompile 2 つを登録したカスタム EVM 込み）。
 2. **\`LiveRethEvmBridge\` を構築する** — そのノードの provider に対して。bridge の \`new()\` が \`install_clob\` と \`install_fill_sink\` を呼ぶ。

@@ -22,7 +22,16 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **local-first、engine-second の commit 順序** — bridge の `chain: HashMap` が consensus layer の真実の source だ。local を先に commit して engine への通知を後にすることで、engine 呼び出しが失敗しても consensus commit を rollback する羽目にはならない (rollback は safety 違反だ)。一般化すると「primary store 先、secondary index/replica 後」のパターン。
+- **test ergonomics のための `Option<EngineHandle>`** — optional でなければ、全 unit test が real node を bootstrap して engine handle を作る羽目になる。`Option` にすることでテストは `None` で local path、integration test は `Some(handle)` で両 path を exercise できる。型レベルの optionality がインフラを全テストに強制するのを防ぐ。
+- **engine 応答は意図的に破棄する** — マッチする `engine_newPayload` を先に送っていない以上、今は `SYNCING` が正解応答だ。これをエラー扱いすると、すべての caller が「L14 は部分統合」を知らなければならなくなる。破棄しておけば API は正直なまま: 「local commit は完了、下流通知は best-effort」と言える。
+- **3-field `ForkchoiceState` の崩し** — mainnet は head / safe / finalized を区別する (即時 / 32-slot / 64+-slot checkpoint)。v0 single-validator OpenHL には区別がない — 全 commit が final なので、3 つとも同じ hash を入れる。形は multi-validator OpenHL への forward-compat のため保つ。
+- **`add_ons_handle.beacon_engine_handle` が in-process Engine API** — 外部 CL client (Lighthouse、Prysm) が JSON-RPC で叩く `engine_*` メソッドを backing しているのと同じ handle だ。我々は in-process でショートカットしているが、surface は同一。
+- **4 つの `ConsensusBridge` メソッドすべてが real Reth に到達する** — このレッスンでループが閉じる。`build_payload` / `payload_ready` / `validate_payload` / `commit` すべてが real Reth コードパスに到達する。
+
+検証:
 
 ```bash
 cargo test -p openhl-evm commit_sends_forkchoice_to_engine_when_handle_installed --release
@@ -37,12 +46,14 @@ cargo test -p openhl-evm commit_sends_forkchoice_to_engine_when_handle_installed
 | `validate_payload` | Block を check | `EthBeaconConsensus::validate_header_against_parent` |
 | **`commit`** | Block を canonical にする | **`ConsensusEngineHandle::fork_choice_updated`** |
 
-中身の変化:
-- `LiveRethEvmBridge` に新規の optional フィールド `engine_handle: Option<ConsensusEngineHandle<EthEngineTypes>>` を追加する。
-- 新規 builder メソッド `with_engine_handle()` と introspection 用の `has_engine_handle()` を追加する。
-- `commit()` が **2 つのこと** をするようになる: (1) ローカル bookkeeping (L13 から変わらず)、続いて (2) engine handle がインストールされていれば Reth の in-process Engine API に `ForkchoiceUpdated` を fire する。
-
 **Engine は今のところ `SYNCING` を返す — そしてこの段階ではそれが正しい。** まだマッチする `engine_newPayload` 呼び出しを送っていないからだ (それには EVM-executable なトランザクション body が必要で、本コースの範囲外だ)。Wire は接続される。payload-execution の alignment は、fills が EVM トランザクションになってからの作業になる。
+
+具体的な変更:
+
+- `LiveRethEvmBridge` に新規 optional フィールド `engine_handle: Option<ConsensusEngineHandle<EthEngineTypes>>` を追加する。
+- 新規 builder メソッド `with_engine_handle()` (`#[must_use]`) と introspection 用の `has_engine_handle()` を追加する。
+- `commit()` が **2 つのこと** をするようになる: (1) ローカル bookkeeping (L13 から変わらず)、続いて (2) engine handle がインストールされていれば Reth の in-process Engine API に `ForkchoiceUpdated` を fire し応答は破棄する。
+- 新規 integration test が `EthereumNode` を bootstrap し、`add_ons_handle.beacon_engine_handle` を bridge にインストールし、local commit と forkchoice 経路の両方が fire することを assert する。
 
 ## おさらい
 

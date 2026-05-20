@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Order of operations preserves units** — divide first, *then* clamp. The cap is `4%/interval` so it must bind at the rate level. Clamp-then-divide would silently turn the cap into `cap/divisor` (e.g., `0.5%/interval` with HL defaults), invisibly weakening the spec.
+- **Symmetric clamp via `.clamp(-cap, cap)`** — Rust's built-in `i64::clamp` reads top-to-bottom and applies both sides at once; the common bug pattern is `min(raw, cap)` (positive only) leaving the negative side unclamped.
+- **Defensive `.abs()` at the API boundary** — accepting `FundingRate(-40_000_000)` as a cap and treating it as magnitude is one less footgun for callers who reasonably expect either sign to work. ~1 ns cost, real safety.
+- **Edge cases that fall out naturally beat explicit branches** — `cap == 0` produces `FundingRate(0)` without a special-case because `clamp(0, 0) = 0`. No extra code path means no extra path to test.
+- **No proptest where there's no property** — `compute_rate` is "divide and clamp"; there's no algebraic invariant for proptest to shine on. Hand-traced tests cover the distinct input regions; resist forcing a proptest where there isn't one.
+
+Verification:
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…passes 10 tests (5 from L4-L5 + 5 new). `compute.rs` gains:
+…passes 10 tests (5 from L4-L5 + 5 new).
+
+Specific changes:
+
+`compute.rs` gains:
 
 - **`compute_rate(premium, params) -> FundingRate`** — turns a raw premium into a per-interval rate by dividing by `params.divisor` and clamping to `±params.rate_cap`.
 - **5 unit tests** covering: the divisor effect, the positive cap clamp, the negative cap clamp, the disabled-when-divisor-zero case, the disabled-when-cap-zero case.

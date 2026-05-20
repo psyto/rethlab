@@ -20,13 +20,24 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **`EvmFactory` + `ExecutorBuilder` as Reth's "swap one slot" seam** — every EVM that Reth constructs (payload build, block validation, eth_call RPC, debug RPC) goes through one factory, so registering custom precompiles once propagates everywhere.
+- **`alloy-evm` (abstract traits) vs `reth-evm` (concrete wiring)** — why both deps are required: the trait layer expresses what an EVM *is*, the executor layer expresses how Reth *runs* it.
+- **Per-spec `OnceLock` caching of `Precompiles`** — building a precompile set is expensive (hashing addresses), `create_evm` is hot, so each hardfork tier's set is constructed once and shared as `&'static`.
+- **Stub-with-stable-signature as an incremental-construction tactic** — the passthrough `openhl_precompiles(base) -> Precompiles` lets the factory wire up *now* while L2 fills the body later, with no call-site rewrites.
+
+Verification:
 
 ```bash
 cargo check -p openhl-evm
 ```
 
-…compiles cleanly. You'll have **two new modules** in `crates/evm/src/`:
+…compiles cleanly.
+
+Specific changes:
+
+You'll have **two new modules** in `crates/evm/src/`:
 
 - **`openhl_evm.rs`** — `OpenHlEvmFactory` (Reth's `EvmFactory` slot) + `OpenHlExecutorBuilder` (Reth's `ExecutorBuilder` slot) + per-hardfork precompile dispatch via `OnceLock`. About 80 LOC.
 - **`precompiles/mod.rs`** — a **stub** `openhl_precompiles(base) -> Precompiles` that passes through unchanged. L2 fills in the actual read precompile.

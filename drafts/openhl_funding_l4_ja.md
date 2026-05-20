@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **整数幅は入力ではなく*中間値*のレンジで選ぶ** — `mark` も `index` も `u64` だが、`(mark - index) * RATE_SCALE` は最悪 ~1.8e28 になりうる。i128 中間値は選択肢ではなく必須で、しかも upcast を引き算の*前に*入れることで符号が保たれる。
+- **割る前に掛ければ精度が残る** — `(mark - index) / index` を整数で先に計算すると、100% 未満の premium はすべてゼロに丸められる。先に `RATE_SCALE` を掛けて分数を i128 マグニチュードに変換し、その後で割れば意味のある整数が残る。
+- **`u64` での引き算が王道の符号バグ** — `MarkPrice(99) - IndexPrice(100)` は `u64` で `u64::MAX` に wrap し、本来「小さな負」であるべき premium が「巨大な正」になる。`i128::from(...)` upcast がこの引き算を代数的に正しくする。
+- **Oracle 欠損時の graceful degradation** — `index == 0` のときは `Premium(0)` を返し、エラーにしない。Funding は bridge 経由で balance update として流れる。`Err` を返すと無関係な payload も含めて transaction failure として表面化してしまう。信号がないなら「ゼロを返す」が正解。
+- **テストコメントは紙の上の数学** — assertion の隣に `// (101-100) * 1e9 / 100 = 10_000_000` と書いておけば、将来このコードを debug する人は「テストの著者を信じる」のではなく「数式に対して assertion を検証する」ことができる。
+
+検証：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-上記の実行結果が unit test 4 つを通る。`openhl-funding` crate は「型定義だけ」の状態から「型定義 + 最初の数学のピース」へと進む：
+上記の実行結果が unit test 4 つを通る。
+
+具体的な変更:
+
+`openhl-funding` crate は「型定義だけ」の状態から「型定義 + 最初の数学のピース」へと進む：
 
 - **`crates/funding/src/compute.rs`** — 新規ファイル。module doc と関数 2 つを置く：
   - `compute_premium(mark, index) -> Premium` — `(mark - index) / index` を導出し、`RATE_SCALE` スケールで返す。

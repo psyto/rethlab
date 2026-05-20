@@ -20,13 +20,26 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Test-double-first impl strategy** — why we write a fake EVM before touching Reth. The trait is exercised end-to-end without 600 transitive deps; downstream consensus tests (L9/L10) can run in 0.02s instead of 2.7s.
+- **`Mutex<State>` for interior mutability** — wrapping a private `State` struct in a single `Mutex` to satisfy the `Send + Sync` bound from L3. Locking once per method is fine for test code and propagates structurally to `LiveRethEvmBridge` in L12+.
+- **`pending` vs `chain` map split** — speculative builds and canonical commits are different lifecycles. Encoding the split here forces every later impl to respect the same data flow (build is speculative; commit is final).
+- **`async_trait` impl ergonomics** — what `#[async_trait]` on the `impl` block requires (lifetimes, `Self: Send + Sync`), and why `async fn` in trait methods is still desugared via the macro in stable Rust.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm
 ```
 
-…passes 5 tests covering build → ready → commit flows of the in-memory bridge. You have the first **concrete implementation** of `ConsensusBridge` from L3 — a test double that pretends to be an EVM, stores fake blocks in a `Mutex<HashMap>`, and lets you exercise the trait without spinning up Reth. The consensus crate's later tests will use this; so will the future runner and engine_app code in L8/L9.
+…passes 5 tests covering build → ready → commit flows of the in-memory bridge. You have the first **concrete implementation** of `ConsensusBridge` from L3 — a test double that pretends to be an EVM, stores fake blocks, and lets you exercise the trait without spinning up Reth.
+
+Specific changes:
+
+- 3 dependencies + 1 dev-dependency added to `crates/evm/Cargo.toml`: `openhl-consensus`, `openhl-types`, `async-trait`, and `tokio` (dev).
+- `crates/evm/src/in_memory.rs` — new file with `InMemoryEvmBridge` struct, private `State`, `Mutex<State>`, the 4-method `impl ConsensusBridge`, a `hex_short` helper, and 5 unit tests.
+- `crates/evm/src/lib.rs` — wires `pub mod in_memory; pub use InMemoryEvmBridge;`.
 
 ## Recap
 

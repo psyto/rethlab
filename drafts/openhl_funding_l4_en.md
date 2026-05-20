@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Pick integer width by the intermediate range, not the inputs** — `mark` and `index` are `u64`, but `(mark - index) * RATE_SCALE` can hit ~1.8e28; i128 intermediates are non-optional, and the upcasts go in *before* the subtraction so signs survive.
+- **Multiply before divide preserves precision** — `(mark - index) / index` in integer math rounds to zero for any sub-100% premium; scaling by `RATE_SCALE` first turns the fraction into i128 magnitude, then the divide produces a meaningful integer.
+- **Subtraction in `u64` is the canonical sign bug** — `MarkPrice(99) - IndexPrice(100)` wraps to `u64::MAX` and produces a huge positive premium when truth is a small negative one. The `i128::from(...)` upcast is what makes the subtraction algebraically correct.
+- **Graceful degradation for missing oracle** — `index == 0` returns `Premium(0)` instead of erroring. Funding propagates through the bridge as balance updates; an `Err` would surface as a transaction failure on unrelated payloads. Zero is the right answer when there's no signal to drive a rate.
+- **Test comments as paper math** — `// (101-100) * 1e9 / 100 = 10_000_000` next to the assertion lets any future debugger verify the test against the formula, not against the test author's promise.
+
+Verification:
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…passes 4 unit tests. The `openhl-funding` crate goes from "all type definitions" to "type definitions + first piece of math":
+…passes 4 unit tests.
+
+Specific changes:
+
+The `openhl-funding` crate goes from "all type definitions" to "type definitions + first piece of math":
 
 - **`crates/funding/src/compute.rs`** — new file with the module doc + 2 functions:
   - `compute_premium(mark, index) -> Premium` — derives `(mark - index) / index`, scaled by `RATE_SCALE`.

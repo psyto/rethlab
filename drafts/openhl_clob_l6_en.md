@@ -20,19 +20,28 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **`BTreeMap::retain` does "mutate + drop empty entry" in one closure** — the same callback both removes the matching order from a queue *and* returns whether to keep the level. One pass; the empty-level invariant from `submit` is maintained automatically.
+- **O(n) linear scan is the right v0 choice** — adding `HashMap<OrderId, (Side, Price)>` for O(1) cancel adds a second data structure to keep in sync, extra memory, extra cache pressure. Don't optimize what doesn't show up in profiling; add the index when the scan does.
+- **`bool` return is the smallest honest shape** — `Option<RestingOrder>` would leak the private `RestingOrder` type from L3; `Result<(), CancelError>` would force callers to treat "not found" as an error, but cancellation idempotency (calling cancel twice is safe) is a feature.
+- **The empty-level cleanup is what keeps `best_bid` honest** — if `retain` left a phantom empty queue at price 100, `best_bid()` would report 100 even with zero liquidity, and the next sell would match at a phantom price. The cleanup is the same invariant `submit` enforces; `cancel` must enforce it too.
+
+Verification:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-…still compiles. You'll have one new method on `Book`:
+…still compiles.
+
+Specific changes:
+
+You'll have one new method on `Book`:
 
 - **`cancel(&mut self, order_id: OrderId) -> bool`** — searches both bid and ask sides for an order with the given id, removes it if found, drops the price level if cancellation leaves it empty. Returns `true` if removed, `false` if not found.
 
-About 25 LOC. The interesting idiom is **`BTreeMap::retain`** — a single call that traverses every queue, conditionally mutates it, and drops the entry if a closure returns `false`. That handles both the "remove the order" and "drop the empty level" steps in one pass.
-
-After L6, the matching engine is **functionally complete**. Submit (Limit + Market) + cancel = the full v0 surface. L7 starts the test suite.
+About 25 LOC. After L6, the matching engine is **functionally complete**. Submit (Limit + Market) + cancel = the full v0 surface. L7 starts the test suite.
 
 ## Recap
 

@@ -20,13 +20,23 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **Market = Limit から price check と rest 処理を抜いたもの** — L4 と同じ walk-while-crossing loop だが、`price <= limit` ガードがなく、`rest_unfilled_remainder()` もない。意味的差分は *存在しないコード* にあるので、boolean フラグでパラメタ化すると両方の本体が読めなくなる。
+- **Fill 価格は常に maker の価格** — Market order は価格を持たない。Book が提示する価格を受け入れる。「価格発見」とは、taker の要求ではなく best bid と best ask のスプレッドが価格を決めるという規則そのものを指す。
+- **同じ戻り型、異なる契約** — `FillResult::remaining_qty` は Limit では「rest した分」(常に `Qty(0)`)、Market では「破棄した分」(実際の残量) を意味する。型は同じ、`FillResult` の doc が両方の解釈を明示している。
+- **「何も起きなかった」はエラーではなく有効な結果** — 空 ask book に対する Market buy は `FillResult { fills: vec![], remaining_qty: order.qty }` を返す。残量をどう扱うかは caller の判断、engine は `Result` を投げない。
+- **L4 の `match_at_level` helper をそのまま再利用** — 「maker が部分 fill」と「maker が完全消費」を 1 本の汎用パスで扱う。L5 では fast path も special case も足さない。
+
+検証:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-上記の実行結果が引き続きコンパイルし、`submit()` dispatcher が Market order で panic しないようになる。書くもの:
+上記の実行結果が引き続きコンパイルし、`submit()` dispatcher が Market order で panic しないようになる。
+
+具体的な変更:
 
 - **`submit_market()`** — Market order の matcher。L4 の `submit_limit` と構造的に同じだが、**鍵となる差が 2 つ**:
   1. **Price check なし** — Market order は任意の価格で取る。

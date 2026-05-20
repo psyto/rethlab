@@ -20,13 +20,26 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Why exactly four methods** — `build_payload / payload_ready / validate_payload / commit` is determined by the BFT round structure (propose → vote → decide), not language preference. Collapsing build/ready kills build-during-voting; adding a fifth leaks consensus internals into the EL.
+- **`#[async_trait]` and `Send + Sync` bounds** — what `async_trait` actually desugars to (boxed futures with object-safety), and why `: Send + Sync` is a compile-time guarantee that any `Arc<dyn ConsensusBridge>` shared between Malachite actors stays sound.
+- **The three-error taxonomy** — `Rejected / NotReady / Internal` map to three distinct consensus responses (vote-against / wait / halt). One stringy variant would force the consensus side to parse strings; many variants would leak EL internals.
+- **Trait-as-contract programming** — once this file compiles, every later lesson is either "implement this method" or "call this method." L4-L5 are impls; L10-L14 are callers. The shape of the codebase from here on is set.
+
+Verification:
 
 ```bash
 cargo check -p openhl-consensus
 ```
 
-…passes. The `openhl-consensus` crate now contains the four-message `ConsensusBridge` trait — the typed API surface that consensus calls into and execution implements. **No impls yet** (those start in L4); just the trait and its associated error type. Once this compiles, the contract is fully defined at the type level, and every later lesson is "fill in this trait method" or "use a method on this trait."
+…passes. The `openhl-consensus` crate now contains the four-message `ConsensusBridge` trait — the typed API surface that consensus calls into and execution implements. **No impls yet** (those start in L4); just the trait and its associated error type.
+
+Specific changes:
+
+- 4 dependencies added to `crates/consensus/Cargo.toml`: `openhl-types`, `async-trait`, `thiserror`, `eyre`.
+- `crates/consensus/src/bridge.rs` — new file with the `ConsensusBridge` trait (4 async methods) and `BridgeError` enum (3 variants).
+- `crates/consensus/src/lib.rs` — wires `pub mod bridge;`.
 
 ## Recap
 

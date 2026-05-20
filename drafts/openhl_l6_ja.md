@@ -21,7 +21,15 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **両側の trait contract** — L3 の `ConsensusBridge` は *自分が所有* し execution が実装する trait だった。Malachite の `Context` は *Malachite が所有* し自分が実装する trait だ。インターフェイスの両方向が型レベルでそろう。
+- **Context associated-type パターン** — 単一の `OpenHlContext;` 空 struct が 10 個の sub-type (`Address`、`Height`、`Value`、`Validator`、`Vote`、…) に名前を付ける仕組み。state を一切持たない type-family idiom が、Malachite を chain-generic にしている。
+- **型システムが強制する不変条件** — `OpenHlValidatorSet::new()` が構築時に sort することで「未 sort な set」が表現不能になる。下流の method はすべて sort 済みを前提にしてよい。compiler が見張ってくれる。
+- **決定的な proposer 選択** — stake で sort 済みの set に対する `(height + round) % count`。全 validator が同一に検証できる最も単純な決定的アルゴリズム。洗練 (random beacon、rotation rule) は同じ trait surface の裏に隠せる。
+- **signing key の `PartialOrd / Ord`** — Malachite 内部のコレクションのために `OpenHlValidator` が total order を持つ必要がある理由、Ed25519 公開鍵がその ordering を無料で与えてくれる仕組み。
+
+検証:
 
 ```bash
 cargo test -p openhl-consensus
@@ -29,9 +37,14 @@ cargo test -p openhl-consensus
 
 上記の実行結果が **5 つのテスト** で pass する: validator-set のソート順、決定的な proposer 選択、proposal のフィールド round-trip、vote-type の区別 (prevote vs precommit)、height の算術。Chain が Malachite の `Context` trait を満たす状態になる — これは Malachite がブロックの上で consensus を駆動するために必要な、型レベルの API surface だ。
 
-**L3 は自分が所有する trait** だった (`ConsensusBridge` — consensus 側から呼ばれ、execution 側が実装する)。**L6 は Malachite が所有する trait** — 自分で impl して、Malachite の `Driver` から呼ばれる。両者を合わせて、consensus crate の bidirectional な surface が完成する。
-
 これは **コースで最も長いレッスン** だ — 新規ファイル 8 個、約 330 行。各ファイルは小さいが数が多い。必要なら 2 回に分けるつもりで進めてよい。
+
+具体的な変更:
+
+- `crates/consensus/Cargo.toml` に Malachite 依存 2 つ + dev-dep 1 つ追加: `informalsystems-malachitebft-core-types`、`informalsystems-malachitebft-signing-ed25519`、`rand` (dev)。
+- `crates/consensus/src/types/` — 7 つの type ファイル (`address.rs`、`height.rs`、`value.rs`、`validator.rs`、`proposal.rs`、`proposal_part.rs`、`vote.rs`) と `mod.rs`。
+- `crates/consensus/src/context.rs` — `OpenHlContext` 空 struct と `impl Context for OpenHlContext` (4 つの factory method)。
+- `crates/consensus/src/lib.rs` — `pub mod context; pub mod types;` を配線する。
 
 ## おさらい
 

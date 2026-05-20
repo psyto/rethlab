@@ -22,7 +22,15 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **bootstrap-only test も一級の成果物** — このレッスンのテストは Reth を spin up して chain ID を読む以外何もしない。ビジネスロジックが何もない段階で依存解決と runtime bootstrap の regression を捕まえる。これが失敗したら L12-L15 は何ひとつ動かない。
+- **Reth と Malachite の coexistence 証明** — Rust L1 エコシステム最大級の 2 つの crate tree が、同一の tokio runtime を共有して 1 つの workspace に同居する。ここで追加する dev-dep は単一の SHA-coherent な依存閉包に解決する。
+- **production-dep は薄く、dev-dep は厚く** — `crates/evm/Cargo.toml` は production dep を 6 個 (L5 から変わらず) に保ちつつ dev-dep を 11 個に増やす。`openhl-evm` を使う下流 crate は libp2p / MDBX / rpc を引き込まず、テストバイナリだけが引き込む。
+- **`NodeConfig::test().dev()` のセマンティクス** — `test()` = ephemeral tempdir + ephemeral port + peer discovery 無し。`dev()` = 単一 block producer モード、mempool gossip 無し。組み合わせると CI 上で再現可能な完全 isolated な dev/test 環境になる。
+- **なぜ chain ID 2600 か** — Reth の upstream `custom-dev-node` example と一致し、public chain とも衝突しない。数字自体に OpenHL 的な意味はなく、diff を取れるよう example と合わせるための調整値だ。
+
+検証:
 
 ```bash
 cargo test -p openhl-evm reth_dev_node_bootstraps --release
@@ -36,10 +44,12 @@ test reth_node::tests::reth_dev_node_bootstraps ... ok
 
 上記の実行結果が、フルな Reth `EthereumNode` v2.2.0 (MDBX ストレージ、payload builder、mempool、RPC stub、フルスタック) を ~2.7 秒で **spin up し**、provider に chain ID を query して結果を assert する。**これは、Reth と Malachite — L1 リファレンス実装で最大級のインフラ 2 つ — が 1 つの workspace で衝突なく共存することの証明だ。**
 
-やったことのまとめ:
-- workspace 依存を 4 個追加 (`reth-node-core`、`reth-tasks`、`reth-provider`、`alloy-genesis`)
-- `crates/evm/Cargo.toml` に dev-dependency を 8 個追加 (test-only — production scope は変わらない)
-- `crates/evm/src/reth_node.rs` を作成 (~100 行、test モジュールのみ)
+具体的な変更:
+
+- root `Cargo.toml` に workspace 依存を 4 個追加: `reth-node-core`、`reth-tasks`、`reth-provider`、`alloy-genesis`。
+- `crates/evm/Cargo.toml` に dev-dependency を 8 個追加 (Reth の node-builder/ethereum の test-utils variant + サポート crate) — test-only、production scope は変わらない。
+- `crates/evm/src/reth_node.rs` — 新規ファイル (~100 行)、test module のみ。dev chain spec を組み、`NodeBuilder::testing_node` 経由で `EthereumNode` を launch し、provider が応答することを確認する。
+- `crates/evm/src/lib.rs` — `mod reth_node;` を test-cfg のみで配線する。
 
 Production コードは無し。Bridge への変更も無し。L12 で live-bridge コードを書き始める前に、**dependency tree が resolve することを検証する** だけだ。
 

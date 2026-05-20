@@ -21,13 +21,25 @@
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **単項マイナス 1 つが符号規約全体を担う** — `-delta_unscaled` で「market 中心（longs が支払う）」から「account 中心（`Notional` 正 = 受取）」へ flip する。符号反転点が 2 箇所あればバグの表面積も 2 倍になる。1 箇所に集約するのが契約。
+- **保存則を proptest で pin する** — balanced book の settlement 合計は、saturation を踏まない範囲では「ちょうど」ゼロ。`-x/d = -(x/d)`（正の `d` で）が整数除算でも成立するからだ。Funding は再配分するだけで quote currency を生成も破壊もしない。
+- **Flat position は filter する、エラーにしない** — `size == 0` は黙ってドロップする。`Result<Vec<Settlement>, FlatPositionError>` を返したら、呼び出し側に「異常ではない条件」を扱わせることになる。Flat position は*想定内*の状態であって例外ではない。
+- **最も制限の少ない引数型を受け取る** — `positions: &[Position]`（スライス借用）なら呼び出し側が所有権を保持し、tick 間で再利用できる。`Vec<Position>` を要求すると毎回 clone を強制してしまう。
+- **Proptest のレンジは property が*厳密に*成立するように選ぶ** — `size in 1..1M` で i128 積が `saturating_mul` の clamp 閾値を踏まないようにする。レンジを広げると「合計 == 0」を「`sum.abs() < epsilon`」に弱める必要が出てくる — それは不変条件ではなく願望の property になってしまう。
+
+検証：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-上記の実行結果が 15 テストを通る（L4-L6 で書いた 10 + 新規 5）。`compute.rs` には最後の pure 関数が加わる：
+上記の実行結果が 15 テストを通る（L4-L6 で書いた 10 + 新規 5）。
+
+具体的な変更:
+
+`compute.rs` には最後の pure 関数が加わる：
 
 - **`apply_funding(positions, mark, rate) -> Vec<Settlement>`** — rate をすべての non-flat な position に適用し、マッチごとに settlement を生む。~25 行。
 - **手書きトレース unit test 4 つ**：

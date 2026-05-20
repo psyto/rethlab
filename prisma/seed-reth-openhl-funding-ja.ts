@@ -11,11 +11,11 @@ export async function seedRethOpenHlFundingJA(prisma: PrismaClient) {
       slug: "building-openhl-funding-ja",
       title: "OpenHL Funding を作る — 永久先物 funding state machine",
       description:
-        "L1 Architect トラックの 10 コース中 9 番目。openhl ベースの build-along コースの 4 つ目。永久先物の funding 支払いを駆動する純粋な state machine を構築：固定小数点での premium 算出、divisor+cap の rate 計算、position snapshot への適用、interval ごとに 1 回 + catch-up なしの不変条件を持つ tick gating clock。終了状態：22 tests 通る（20 手書き + 2 proptest — premium の antisymmetry と balanced-book zero-sum をカバー）。openhl Stage 8b (~635 LOC、types.rs / compute.rs / clock.rs) をカバー。Funding crate は純粋な state — まだ bridge や vault に配線されていない。その統合は次の L1 Architect コース（Funding, oracle, liquidations）。",
+        "永久先物 funding の state machine を構築する。固定小数点で deterministic な数学パイプライン (premium → rate → settlement) を、no-catch-up セマンティクスを強制する interval clock で gate する。Pure state で I/O なし — bridge への統合は後続のコースで扱う。DIY Perp シリーズの 4 つ目のコース。",
       difficulty: "EXPERT",
       duration: 355,
       xpReward: 730,
-      track: "reth-l1-architect",
+      track: "diy-perp",
       tags,
       isPublished: false,
       sortOrder: 900,
@@ -50,7 +50,7 @@ export async function seedRethOpenHlFundingJA(prisma: PrismaClient) {
 
 理解するもの：
 
-- 浮動小数点演算が consensus システムで chain fork ハザードになる理由。
+- 浮動小数点演算が consensus システムでチェーン分岐を招く理由。
 - Hyperliquid funding-rate の形：divisor + cap 付きで premium → rate → settlement。
 - \`RATE_SCALE = 1_000_000_000\`（parts-per-billion）でスケールした固定小数点整数を使えば、consensus リスクなしに 9 桁の精度が得られる仕組み。
 - 純粋な state machine + saturating arithmetic が consensus 中核の数学に対して正しい形である理由。
@@ -64,7 +64,7 @@ export async function seedRethOpenHlFundingJA(prisma: PrismaClient) {
 
 Consensus L1 では、各 validator が他の validator と*完全に同じ* funding rate を計算しなければならない。2 つの validator が rate の最下位ビット 1 つでも食い違えば、チェーンは fork する。
 
-Float 演算は以下の軸で異なるビットパターンを生む：
+浮動小数点演算は以下の軸で異なるビットパターンを生む：
 - **コンパイラ** — LLVM が FMA（fused multiply-add）を、ある CPU では emit し別の CPU では split に分解することがある。
 - **CPU** — 丸めモードが異なる、denormal の扱いも異なる。
 - **演算順** — \`(a * b) + c\` と \`a * b + c\` は同じに見える IR にコンパイルされても、最適化後の LSB が異なることがある。
@@ -182,13 +182,22 @@ git checkout cd94137
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **Float が consensus で動かない理由** — FMA、丸めモード、denormal の扱いがコンパイラ / CPU ごとに違い、rate の LSB 1 bit のズレが chain fork に直結する。
+- **\`RATE_SCALE = 1e9\` が i64 スイートスポットである理由** — parts-per-billion なら 9 桁の精度を保ちつつ、積の中間値でも i64 まで 11 桁のヘッドルームが残る。\`1e6\` では精度不足、\`1e12\` ではヘッドルーム不足。
+- **Crate scaffold の起点** — 空の \`lib.rs\` を \`pub mod\` 1 つと re-export 1 つで「実 crate」に変える手順、そして \`pub mod\` 宣言は対応ファイルを作るタイミングで足すという原則。
+- **「一度決めたら変えない」定数の置き方** — \`RATE_SCALE\` は consensus state であって調整パラメータではない。Doc コメントの配置と post-deployment immutable 扱いの理由。
+
+検証：
 
 \`\`\`bash
 cargo build -p openhl-funding
 \`\`\`
 
-上記の実行結果がコンパイルを通る。\`openhl-funding\` crate には以下が入る：
+上記の実行結果がコンパイルを通る。
+
+具体的な変更:
 
 - **Cargo.toml** に \`openhl-clob\` 依存を配線（後で \`AccountId\` が必要になるが、今入れておけば L3 で驚かずに済む）。加えて \`[dev-dependencies]\` ブロックで \`proptest\` を準備（L4 / L7 で使う）。
 - **\`src/types.rs\`** — 新規作成。module doc と \`pub const RATE_SCALE: i64 = 1_000_000_000\` のみ。
@@ -436,13 +445,25 @@ L2 では「money type」を 4 つ追加する — \`MarkPrice\`、\`IndexPrice\
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **Newtype による引数順バグ防止** — \`u64\` を \`MarkPrice\` と \`IndexPrice\` という別型でラップすると、\`compute_premium(index, mark)\` が production まで届く invisible bug ではなくコンパイルエラーになる。
+- **型エイリアスは「型」ではない** — \`type MarkPrice = u64\` はドキュメントであって安全性ではない。引数を入れ替えてもコンパイルは通る。別アイデンティティが必要なら \`struct MarkPrice(pub u64)\` を選ぶ。
+- **内部フィールドを \`pub\` にする理由** — このレッスンの newtype はクロスフィード防止が目的で、値の検証が目的ではない。\`pub\` にしておけば \`compute.rs\` の演算が \`mark.0\` のままで書ける（\`mark.value()\` 経由にならない）。検証はこの crate の仕事ではない。
+- **符号の有無はドメインの意味で決める** — \`MarkPrice\` / \`IndexPrice\` が \`u64\` なのは「負の価格 = 上流の不変条件違反」だから。\`Premium\` / \`Notional\` が \`i64\` なのは方向もデータの一部だから。
+- **符号規約は型定義の doc コメントに pin する** — \`Premium\` の定義に「正 = mark > index、longs が shorts に支払う」と書いてあることが、下流のすべての consumer にとっての single point of truth になる。
+
+検証：
 
 \`\`\`bash
 cargo build -p openhl-funding
 \`\`\`
 
-上記の実行結果が引き続きコンパイルを通る。\`types.rs\` は \`RATE_SCALE\` だけだった状態から、\`RATE_SCALE\` + 4 つの newtype を持つ状態へと育つ：
+上記の実行結果が引き続きコンパイルを通る。
+
+具体的な変更:
+
+\`types.rs\` は \`RATE_SCALE\` だけだった状態から、\`RATE_SCALE\` + 4 つの newtype を持つ状態へと育つ：
 
 - **\`MarkPrice(pub u64)\`** — 永久先物の mark price を最小単位で持つ。価格は負になりえないので unsigned。
 - **\`IndexPrice(pub u64)\`** — オフチェーン oracle の参照価格。形は同じだが*意味*は別。
@@ -651,13 +672,25 @@ L3 では型 roster を完成させる：\`FundingRate(i64)\`、\`PositionSize(i
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **同じ形、別の役割 = 別の型** — \`FundingRate\` と \`Premium\` はどちらも \`RATE_SCALE\` スケールの \`i64\` だが、premium が「生の dislocation」、rate が「divisor + clamp 後の出力」だ。別型にすることで pipeline を型レベルで強制できる — \`compute_rate\` を通っていない premium を \`apply_funding\` に渡せない。
+- **方向 + 大きさを 1 つの符号付き整数で表す** — \`PositionSize(i64)\` で long / short / flat を 1 フィールドに収め、enum + magnitude ペアにしない。サイズも小さく、演算も速く、シンプル。符号規約は doc コメントに置く。
+- **スナップショット型 vs stateful なエンティティ** — \`Position\` は \`(account, size)\` だけを持ち、entry price も PnL も履歴も意図的に持たない。owning layer が幅広い state を持ち、funding crate は狭いスナップショットを処理するだけ。doc コメントが ownership 契約を明示する。
+- **Parameter-object パターン** — \`interval_secs\` / \`rate_cap\` / \`divisor\` を \`FundingParams\` にまとめると、config が拡張されても呼び出し箇所が安定する。positional 引数だと新パラメータごとに全呼び出し箇所が壊れる。struct ならフィールドを足すだけでシグネチャが変わらない。
+- **HL デフォルトの算術を解きほぐす** — \`divisor: 8\` は「tick ごとに premium / 8」を意味する。24 hourly interval と 4% cap のもとでは、最悪日次支払いを縛るのは divisor ではなく cap。Cap は oracle dislocation に対する保険ポリシーだ。
+
+検証：
 
 \`\`\`bash
 cargo build -p openhl-funding
 \`\`\`
 
-上記の実行結果が引き続きコンパイルを通り、rustdoc warning もゼロになる。\`types.rs\` が**完成**する — Stage 8b の roster 9 型すべてが揃う：
+上記の実行結果が引き続きコンパイルを通り、rustdoc warning もゼロになる。
+
+具体的な変更:
+
+\`types.rs\` が**完成**する — Stage 8b の roster 9 型すべてが揃う：
 
 - **\`FundingRate(pub i64)\`** — divisor と cap を適用した後の per-interval rate。\`Premium\` と同じスケール。
 - **\`PositionSize(pub i64)\`** — 符号付き：正 = long、負 = short、ゼロ = flat。
@@ -973,13 +1006,25 @@ L4 では \`compute.rs\` を始める。ファイルを作って、module doc �
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **整数幅は入力ではなく*中間値*のレンジで選ぶ** — \`mark\` も \`index\` も \`u64\` だが、\`(mark - index) * RATE_SCALE\` は最悪 ~1.8e28 になりうる。i128 中間値は選択肢ではなく必須で、しかも upcast を引き算の*前に*入れることで符号が保たれる。
+- **割る前に掛ければ精度が残る** — \`(mark - index) / index\` を整数で先に計算すると、100% 未満の premium はすべてゼロに丸められる。先に \`RATE_SCALE\` を掛けて分数を i128 マグニチュードに変換し、その後で割れば意味のある整数が残る。
+- **\`u64\` での引き算が王道の符号バグ** — \`MarkPrice(99) - IndexPrice(100)\` は \`u64\` で \`u64::MAX\` に wrap し、本来「小さな負」であるべき premium が「巨大な正」になる。\`i128::from(...)\` upcast がこの引き算を代数的に正しくする。
+- **Oracle 欠損時の graceful degradation** — \`index == 0\` のときは \`Premium(0)\` を返し、エラーにしない。Funding は bridge 経由で balance update として流れる。\`Err\` を返すと無関係な payload も含めて transaction failure として表面化してしまう。信号がないなら「ゼロを返す」が正解。
+- **テストコメントは紙の上の数学** — assertion の隣に \`// (101-100) * 1e9 / 100 = 10_000_000\` と書いておけば、将来このコードを debug する人は「テストの著者を信じる」のではなく「数式に対して assertion を検証する」ことができる。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-上記の実行結果が unit test 4 つを通る。\`openhl-funding\` crate は「型定義だけ」の状態から「型定義 + 最初の数学のピース」へと進む：
+上記の実行結果が unit test 4 つを通る。
+
+具体的な変更:
+
+\`openhl-funding\` crate は「型定義だけ」の状態から「型定義 + 最初の数学のピース」へと進む：
 
 - **\`crates/funding/src/compute.rs\`** — 新規ファイル。module doc と関数 2 つを置く：
   - \`compute_premium(mark, index) -> Premium\` — \`(mark - index) / index\` を導出し、\`RATE_SCALE\` スケールで返す。
@@ -1292,13 +1337,25 @@ L5 では新しい関数は追加しない。代わりに overflow 哲学を深�
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **Saturate-not-panic-not-wrap は consensus で許される唯一の overflow** — panic は validator を halt させ network から fork off する。Wrap はコンパイラバージョンによって挙動が変わり、「定義されているが間違った」値を生む。Saturate ならすべての validator が同じ bounded value に到達する。Consensus liveness を保てる他の選択肢はない。
+- **符号を意識した saturation override** — \`i64::try_from\` は失敗を報告するが方向は教えない。\`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })\` の closure が方向を復元する。\`i64::MAX\` 固定にすると \`i128::MIN\` が正に flip して符号が静かに壊れる。
+- **手書きトレースと proptest は補完関係であって冗長ではない** — proptest のランダムサンプリングは \`i128::MAX\`（2^129 のうちの 1 点）にまず当たらない。境界は手書きでしか pin できない。Proptest は interior の property に強く、手書きは corner に強い。
+- **テストすべきは「実際に成立する不変条件」であって「願望の property」ではない** — 素朴な antisymmetry は magnitude も等しくあれと書きたくなるが、整数除算がそれを壊す。「符号が逆」という weaker な property をテストし、丸めの caveat を test コメントに残す。
+- **\`checked_mul\` + \`Result\` で本当に解決するわけではない理由** — error は最終的に bridge に届くが、bridge が取れる現実的な選択肢は「revert（fork）」「skip（silent inconsistency）」「cap で settle」の 3 つしかない。最後のものは saturate がそのまま実現してくれる挙動だ。
+
+新規関数なし、新規テストコードは ~5 行。**メンタルモデルこそがレッスンの本体だ。**
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-上記の実行結果が 5 テストを通る（L4 で書いた 4 つ + 新規 proptest 1 つ）。Crate に加わるのは：
+上記の実行結果が 5 テストを通る（L4 で書いた 4 つ + 新規 proptest 1 つ）。
+
+具体的な変更:
 
 - **コードベース初の proptest** — \`premium_is_antisymmetric_in_mark_index\`。\`mark\` と \`index\` を入れ替えると premium の符号が反転する（mark = index のときは両方ともゼロ）という property だ。テスト実行 1 回あたり 256 のランダム入力を投げる。
 
@@ -1308,8 +1365,6 @@ cargo test -p openhl-funding
 2. **wrap = チェーン fork である理由。** コンパイラバージョンや build flag が異なる 2 つの validator は、同じ overflow 地点で*別々に* wrap しうる。誤った値が正しい値から乖離する。
 3. **saturate が bounded behavior である理由。** すべての validator が同じ入力に対して同じ saturated 値に合意する。Fork は起きない。
 4. **\`saturate_i128_to_i64\` の境界ケース。** \`i128::MAX → i64::MAX\`、\`i128::MIN → i64::MIN\`。\`unwrap_or\` の closure が \`i64::MAX\` 固定ではなく、なぜ符号に依存する必要があるか。
-
-新規関数なし、新規テストコードは ~5 行。**メンタルモデルこそがレッスンの本体だ。**
 
 ## おさらい
 
@@ -1592,13 +1647,25 @@ L6 では \`compute_rate\` を追加する — \`Premium\` と \`FundingParams\`
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **演算順が単位を決める** — 先に割って、*それから* clamp する。Cap は \`4%/interval\` なので rate レベルで bind する必要がある。Clamp-then-divide だと cap の実効値が \`cap/divisor\`（HL デフォルトなら \`0.5%/interval\`）にすり替わり、仕様が静かに弱められる。
+- **\`.clamp(-cap, cap)\` で対称クランプ** — 標準の \`i64::clamp\` が両側を一度に処理する。よくあるバグは \`min(raw, cap)\` のように正側だけ clamp して負側を見落とすパターン。\`.clamp\` を使えばそれが構造的に防げる。
+- **API 境界での defensive \`.abs()\`** — \`FundingRate(-40_000_000)\` を「絶対値」として受け入れることで、呼び出し側のフットガンを 1 つ減らせる。コストは ~1 ns、効果は実質的。
+- **自然に成立する edge case は明示分岐より強い** — \`cap == 0\` は \`clamp(0, 0) = 0\` から自動的に \`FundingRate(0)\` を生む。特例コードを書かない = テストすべきコードパスが増えない。
+- **Property がないところに proptest を強引に書かない** — \`compute_rate\` は「割って clamp」だけで、proptest が活きるような代数的不変条件がない。手書きトレースで input region をカバーすれば十分。Property がないところに proptest を書く必要はない。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-上記の実行結果が 10 テストを通る（L4-L5 で書いた 5 つ + 新規 5 つ）。\`compute.rs\` に加わるのは：
+上記の実行結果が 10 テストを通る（L4-L5 で書いた 5 つ + 新規 5 つ）。
+
+具体的な変更:
+
+\`compute.rs\` に加わるのは：
 
 - **\`compute_rate(premium, params) -> FundingRate\`** — 生 premium を \`params.divisor\` で割り、\`±params.rate_cap\` に clamp して per-interval rate を生む関数。
 - **unit test 5 つ** — divisor の効果、正側 cap での clamp、負側 cap での clamp、divisor=0 での無効化、cap=0 での無効化をカバーする。
@@ -1869,13 +1936,25 @@ L7 では \`apply_funding\` を追加する — 3 つ目で最後の pure 関数
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **単項マイナス 1 つが符号規約全体を担う** — \`-delta_unscaled\` で「market 中心（longs が支払う）」から「account 中心（\`Notional\` 正 = 受取）」へ flip する。符号反転点が 2 箇所あればバグの表面積も 2 倍になる。1 箇所に集約するのが契約。
+- **保存則を proptest で pin する** — balanced book の settlement 合計は、saturation を踏まない範囲では「ちょうど」ゼロ。\`-x/d = -(x/d)\`（正の \`d\` で）が整数除算でも成立するからだ。Funding は再配分するだけで quote currency を生成も破壊もしない。
+- **Flat position は filter する、エラーにしない** — \`size == 0\` は黙ってドロップする。\`Result<Vec<Settlement>, FlatPositionError>\` を返したら、呼び出し側に「異常ではない条件」を扱わせることになる。Flat position は*想定内*の状態であって例外ではない。
+- **最も制限の少ない引数型を受け取る** — \`positions: &[Position]\`（スライス借用）なら呼び出し側が所有権を保持し、tick 間で再利用できる。\`Vec<Position>\` を要求すると毎回 clone を強制してしまう。
+- **Proptest のレンジは property が*厳密に*成立するように選ぶ** — \`size in 1..1M\` で i128 積が \`saturating_mul\` の clamp 閾値を踏まないようにする。レンジを広げると「合計 == 0」を「\`sum.abs() < epsilon\`」に弱める必要が出てくる — それは不変条件ではなく願望の property になってしまう。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-上記の実行結果が 15 テストを通る（L4-L6 で書いた 10 + 新規 5）。\`compute.rs\` には最後の pure 関数が加わる：
+上記の実行結果が 15 テストを通る（L4-L6 で書いた 10 + 新規 5）。
+
+具体的な変更:
+
+\`compute.rs\` には最後の pure 関数が加わる：
 
 - **\`apply_funding(positions, mark, rate) -> Vec<Settlement>\`** — rate をすべての non-flat な position に適用し、マッチごとに settlement を生む。~25 行。
 - **手書きトレース unit test 4 つ**：
@@ -2238,13 +2317,26 @@ L8 では \`crates/funding/src/clock.rs\` を作成する — 新モジュール
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **Pure 関数の上に discrete event loop を載せる** — Clock の仕事は「正しいタイミングで数学を呼ぶ」「間違ったタイミングでは呼ばない」の 2 つだけだ。Module 2 の数学はそのまま、Clock は*いつ*を足すレイヤーであって*何を*計算するかは変えない。
+- **常に返すより \`Option<FundingTick>\`** — \`None\` が「state 変化なし」を安く伝える。呼び出し側は \`if let Some(tick) = clock.tick(...)\` と書けばよい。常に何かを返す形にすると \`if !tick.settlements.is_empty()\` のような曖昧なチェックを書く羽目になる（settlements が空でも「fire したが position がなかった」のか「そもそも fire していない」のか区別できない）。
+- **レイヤード composition、再実装しない** — \`tick()\` は \`compute_premium → compute_rate → apply_funding\` を順に呼ぶだけで、それぞれの中身は知らない。「数学が計算する、clock が gate する」という責任分離をファイルレベルで実現している。
+- **テレメトリのために中間値を露出する** — \`FundingTick\` には \`settlements\` だけでなく \`premium\` と \`rate\` も載せる。「tick 12345 の rate は 0.125% でした」とログしたい observer はこれを直接読める。再計算は乖離の温床。
+- **Module doc で契約を約束し、コードとテストでそれを守る** — \`clock.rs\` の冒頭で 2 つの不変条件（at-most-one-per-interval、no-catch-up）をコードより先に宣言する。L8 が構造を作り、L9 と L10 がテスト側で不変条件を強制する。理由を確認できる場所は doc、コード、テストの 3 箇所。
+- **契約上シングルスレッド** — 並行性は呼び出し側の責任、データ構造の責任ではない。\`last_settled_at\` を \`AtomicU64\` にしても、このレイヤーで存在しない直列化問題のために複雑性を足すだけだ。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-上記の実行結果が 18 テストを通る（L4-L7 で書いた 15 + 新規 3）。Crate には**3 つ目で最後のモジュール**が加わる：
+上記の実行結果が 18 テストを通る（L4-L7 で書いた 15 + 新規 3）。
+
+具体的な変更:
+
+Crate には**3 つ目で最後のモジュール**が加わる：
 
 - **\`crates/funding/src/clock.rs\`** — 新規ファイル。module doc、構造体 2 つ、impl ブロック 1 つを置く：
   - **\`FundingClock\`** — \`params: FundingParams\` と \`last_settled_at: u64\` を保持する。funding tick の間で持ち越す state だ。
@@ -2668,13 +2760,25 @@ L9 では \`clock.rs\` にテストを 3 つ追加し、**interval-gating 不変
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **単一呼び出しテストは挙動を、複数呼び出しテストは state machine を検証する** — L8 で確認したのは guard が一度だけ \`Some\` を返せること。L9 の \`second_tick_requires_another_full_interval\` で確認するのは guard が fire した*後にも再び engage する*こと。1 度だけ fire して以降 gate しない buggy 実装を捕まえるには 3 連続呼び出しが必要。
+- **Composition テストが配線ミスを捕まえる** — 各ステップが unit test 済みでも、ステップ間の配線は別の関心事だ。\`tick()\` が \`apply_funding\` を \`compute_rate\` より先に呼ぶかもしれないし、\`mark\` を期待する場所に \`index\` を渡すかもしれない。\`premium_drives_settlement_signs\` のような full composition test が、unit test では捕まえられないバグを拾う。
+- **不変条件は通過する各レイヤーで再検証する** — \`compute_rate\` の cap は L6 で unit test 済みだが、\`capped_rate_when_premium_extreme\` で \`tick()\` 経由でも再検証する。Mid-call で \`params.rate_cap\` を上書きするような配線バグは、下層のテストをすり抜ける。
+- **境界テストはペアで：just-before と exactly-at** — \`now == last_settled_at + interval - 1\`（none）と \`now == last_settled_at + interval\`（fire）が標準ペア。両方向で guard 条件の off-by-one を捕まえる。\`+1\` を追加しても、別クラスのバグは捕まえられない。
+- **失敗は state を変えない** — \`tick()\` が \`None\` を返したとき \`last_settled_at\` は不変。3 連続呼び出し（fire / gated / fire）の 3 回目の成功時刻からこの副不変条件が読み取れる。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-上記の実行結果が 21 テストを通る（L4-L8 で書いた 18 + 新規 3）。**新しいプロダクションコードはない。** 新規テスト 3 つで、複数 operation にわたる clock の semantics カバレッジを深掘りする：
+上記の実行結果が 21 テストを通る（L4-L8 で書いた 18 + 新規 3）。
+
+具体的な変更:
+
+**新しいプロダクションコードはない。** 新規テスト 3 つで、複数 operation にわたる clock の semantics カバレッジを深掘りする：
 
 - **\`premium_drives_settlement_signs\`** — 数学の full composition が clock を流れる。mark > index → 正の premium → settlement の符号が一致する。
 - **\`second_tick_requires_another_full_interval\`** — Interval-gating が tick 間でも持続する。成功した tick が、clock を永久に unlock してしまうわけではない。
@@ -2903,13 +3007,25 @@ L10 では Module 3 を **no-catch-up 不変条件**で閉じる：マイルス�
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **No-catch-up は公平性の不変条件** — 10 interval 分のギャップ後は 1 度だけ settle して \`now\` へ advance する。10 tick を replay してはいけない。現在のスナップショットで 10 回 replay すると、ギャップ中に close できなかった負け側に 10 倍の懲罰が集中する。Funding の目的は equilibration であって遡及的な強制ではない。
+- **\`now\` へ advance する、\`last_settled + interval\` ではなく** — deadline は実際の settlement 時刻にリセットされ、数学的に「次の整列点」にはならない。Clock は missed interval を完全に忘れる。これがこのテストで pin する設計判断。
+- **同じ \`now\` での second tick は state machine の最も厳しいテスト** — 2 つの呼び出しの間で時間は経過していない、変わったのは clock の内部 state だけだ。Late tick で \`last_settled_at\` を更新し忘れる実装をすべて捕まえる。
+- **Catch-up ポリシーは clock の外に置く** — Catch-up が必要な呼び出し側は、中間時点のスナップショットで \`tick()\` を繰り返し呼ぶ wrapper を書けばよい。Clock 自身は過去の state にアクセスできないからこれはできない。プリミティブはミニマルに、ポリシーは呼び出し側に。
+- **設計哲学はドキュメント、コード、テストの 3 箇所に住む** — Module doc が不変条件を約束し、\`tick()\` の \`self.last_settled_at = now\` 行がそれを強制し、\`no_catchup_after_long_gap\` がそれを証明する。各所が別の読者に対応する。
+
+検証：
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-上記の実行結果が 22 テストを通る（L4-L9 で書いた 21 + 新規 1）。新規テストは **\`no_catchup_after_long_gap\`** — validator が複数 interval を見逃したときの挙動について、openhl の設計判断を pin するマイルストーンテストだ。
+上記の実行結果が 22 テストを通る（L4-L9 で書いた 21 + 新規 1）。
+
+具体的な変更:
+
+新規テストは **\`no_catchup_after_long_gap\`** — validator が複数 interval を見逃したときの挙動について、openhl の設計判断を pin するマイルストーンテストだ。
 
 L10 後の状態：
 - \`crates/funding/\` が **Stage 8b（\`cd94137\`）と byte-identical**。

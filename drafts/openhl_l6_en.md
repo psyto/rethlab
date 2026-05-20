@@ -20,7 +20,15 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The two-sided trait contract** — L3's `ConsensusBridge` is the trait *you own*, implemented by execution. Malachite's `Context` is the trait *Malachite owns*, implemented by you. Both directions of the interface are now type-level.
+- **The Context associated-type pattern** — how a single `OpenHlContext;` empty struct names 10 sub-types (`Address`, `Height`, `Value`, `Validator`, `Vote`, …) without holding any state. This is the type-family idiom that lets Malachite be chain-generic.
+- **Type-system-enforced invariants** — `OpenHlValidatorSet::new()` sorts at construction so an unsorted set is unrepresentable. Every method downstream can assume sorted order without re-checking. The compiler does the policing.
+- **Deterministic proposer election** — `(height + round) % count` against a stake-sorted set. The simplest deterministic algorithm that every validator can verify identically; sophistication (random beacons, rotation rules) lives behind the same trait surface.
+- **`PartialOrd / Ord` on signing keys** — why `OpenHlValidator` must be totally ordered for Malachite's internal collections, and how Ed25519 public keys give you that ordering for free.
+
+Verification:
 
 ```bash
 cargo test -p openhl-consensus
@@ -28,9 +36,14 @@ cargo test -p openhl-consensus
 
 …passes **5 tests** covering: validator-set sort order, deterministic proposer election, proposal field round-trip, vote-type distinction (prevote vs precommit), and height arithmetic. Your chain now satisfies Malachite's `Context` trait — the type-level API surface Malachite needs to drive consensus over your chain's blocks.
 
-**L3 was the trait you own** (`ConsensusBridge`, called by consensus, implemented by execution). **L6 is the trait Malachite owns** — implemented by you, called by Malachite's `Driver`. Both traits together make the consensus crate's bidirectional surface complete.
-
 This is the **largest lesson in the course** — 8 new files, ~330 lines. Each file is small but the count is high. Plan for two sittings if needed.
+
+Specific changes:
+
+- 2 Malachite deps + 1 dev-dep added to `crates/consensus/Cargo.toml`: `informalsystems-malachitebft-core-types`, `informalsystems-malachitebft-signing-ed25519`, `rand` (dev).
+- `crates/consensus/src/types/` — 7 type files (`address.rs`, `height.rs`, `value.rs`, `validator.rs`, `proposal.rs`, `proposal_part.rs`, `vote.rs`) plus `mod.rs`.
+- `crates/consensus/src/context.rs` — `OpenHlContext` empty struct + `impl Context for OpenHlContext` with the 4 factory methods.
+- `crates/consensus/src/lib.rs` — wires `pub mod context; pub mod types;`.
 
 ## Recap
 

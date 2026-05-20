@@ -22,7 +22,16 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Local-first, engine-second commit ordering** — the bridge's `chain: HashMap` is the consensus layer's source of truth. Committing locally first and notifying the engine second means a failed engine call never forces a rollback of a consensus commit (which would violate safety). This generalizes: primary store first, secondary indexes/replicas after.
+- **`Option<EngineHandle>` for test ergonomics** — without optionality, every unit test would need to bootstrap a real node just to get a non-test engine handle. With `Option`, tests pass `None` for the local path and `Some(handle)` for the integration path. Type-level optionality avoids forcing infrastructure into every test.
+- **Engine response is intentionally discarded** — `SYNCING` is the expected response right now because no matching `engine_newPayload` was sent first. Treating `SYNCING` as an error would force every caller to know L14 is partial. Discarding keeps the API honest: "commit completed locally; downstream notification was best-effort."
+- **The three-field `ForkchoiceState` collapse** — mainnet distinguishes head / safe / finalized (instant / 32-slot / 64+-slot checkpoints). v0 single-validator OpenHL has no such distinction — every commit is final, so all three fields take the same hash. The shape is preserved for forward compat with multi-validator OpenHL.
+- **`add_ons_handle.beacon_engine_handle` is the in-process Engine API** — the same handle that backs the network-facing JSON-RPC `engine_*` methods that external CL clients (Lighthouse, Prysm) would use. We're taking the in-process shortcut, but the surface is identical.
+- **All four `ConsensusBridge` methods now hit real Reth** — this lesson closes the loop. `build_payload` / `payload_ready` / `validate_payload` / `commit` all reach real Reth code paths.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm commit_sends_forkchoice_to_engine_when_handle_installed --release
@@ -37,12 +46,14 @@ cargo test -p openhl-evm commit_sends_forkchoice_to_engine_when_handle_installed
 | `validate_payload` | Check the block | `EthBeaconConsensus::validate_header_against_parent` |
 | **`commit`** | Make the block canonical | **`ConsensusEngineHandle::fork_choice_updated`** |
 
-What changes inside:
-- New optional field `engine_handle: Option<ConsensusEngineHandle<EthEngineTypes>>` on `LiveRethEvmBridge`.
-- New builder method `with_engine_handle()` and introspection `has_engine_handle()`.
-- `commit()` now does **two things**: (1) local bookkeeping (unchanged from L13), then (2) if an engine handle is installed, fire a `ForkchoiceUpdated` to Reth's in-process Engine API.
-
 **Engine returns `SYNCING` for now — and that's correct at this stage.** We're not yet sending matching `engine_newPayload` calls (that needs EVM-executable transaction bodies, which are out of scope for this course). The wire is connected; payload-execution alignment is the next chunk of work after fills become EVM transactions.
+
+Specific changes:
+
+- New optional field `engine_handle: Option<ConsensusEngineHandle<EthEngineTypes>>` on `LiveRethEvmBridge`.
+- New builder method `with_engine_handle()` (`#[must_use]`) and introspection `has_engine_handle()`.
+- `commit()` now does **two things**: (1) local bookkeeping (unchanged from L13), then (2) if an engine handle is installed, fire a `ForkchoiceUpdated` to Reth's in-process Engine API and discard the response.
+- New integration test that bootstraps `EthereumNode`, installs `add_ons_handle.beacon_engine_handle` on the bridge, and asserts both the local commit and the forkchoice path fire.
 
 ## Recap
 

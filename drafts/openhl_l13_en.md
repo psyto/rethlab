@@ -22,7 +22,15 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The builder and validator share one source of truth** — `ChainSpec::next_block_base_fee` is the same helper *both* the builder uses to set base fee *and* `EthBeaconConsensus` uses to verify it. No duplicated math; no risk of drift across hardforks. This is the pattern to copy any time you have a build/validate pair in consensus-critical code.
+- **The validator forces the builder to be honest** — once the validator runs, the builder can no longer cut corners. Producing headers with gas_limit copied from parent (1/1024 drift bound), correct EIP-1559 base fee, zero difficulty (post-merge), monotonic timestamps — every one of those is now mechanically checked.
+- **Validator-rejection is normal, not a crash** — a validator answering "no, this is malformed" maps to `PayloadStatus::Invalid`, not an `Err`. Mapping the error to a status keeps the engine running so it can pick the next proposal. Only DB errors escalate to `BridgeError::Internal`.
+- **Trait bounds widen incrementally** — L12 needed `BlockNumReader`; L13 needs `BlockNumReader + HeaderProvider`. Each lesson exposes a new capability surface. Trait bounds are spec: they document exactly what Reth surface the bridge requires.
+- **`SealedHeader` caches the hash** — wrapping `Header` + precomputed `B256` avoids re-Keccak-hashing 500 bytes on every `.hash()` call. Matters at validator-throughput rates; here it's microseconds, but the pattern is correct.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm live_bridge_builds_on_real_genesis --release
@@ -34,13 +42,13 @@ cargo test -p openhl-evm live_bridge_builds_on_real_genesis --release
 test live_node::tests::live_bridge_builds_on_real_genesis ... ok
 ```
 
-What changes inside:
-- `bridge.validate_payload(block)` for the block we just built returns `PayloadStatus::Valid` — because Reth's *real* validator (`EthBeaconConsensus::validate_header_against_parent`) approved it.
-- `bridge.validate_payload(block_with_unknown_hash)` returns `PayloadStatus::Invalid` — because we have no header to validate.
+`bridge.validate_payload(block)` for the block we just built returns `PayloadStatus::Valid` because Reth's *real* validator (`EthBeaconConsensus::validate_header_against_parent`) approved it. `bridge.validate_payload(block_with_unknown_hash)` returns `PayloadStatus::Invalid` because we have no header to validate.
 
-For this to work, **`build_payload` had to start producing production-shape headers** — copying gas_limit from parent (1/1024 drift bound), computing next_block_base_fee via the chain spec (the same helper the validator uses), zeroing difficulty (post-merge invariant), snapping timestamp to `parent.timestamp + 1` if attrs came in stale. **The validator forces the builder to be honest.**
+Specific changes:
 
-The 3 new workspace deps + 4 new evm production deps + the rewrite of `live_node.rs` are about 141 lines changed. **The shape of the file doesn't change** — same struct, same `ConsensusBridge` impl. What changes is what `validate_payload` *does*.
+- 3 new workspace deps + 4 new evm production deps (`reth-consensus`, `reth-ethereum-consensus`, `reth-chainspec`, `alloy-eips`).
+- `crates/evm/src/live_node.rs` — ~141 lines changed. New struct fields `chain_spec: Arc<ChainSpec>` and `validator: EthBeaconConsensus<ChainSpec>`. `build_payload` now produces production-shape headers (parent-derived gas_limit, `next_block_base_fee`, `difficulty: U256::ZERO`, snapped timestamp). `validate_payload` is rewritten to call `EthBeaconConsensus::validate_header_against_parent`.
+- **The shape of the file doesn't change** — same struct, same `ConsensusBridge` impl. What changes is what `validate_payload` *does*.
 
 ## Recap
 

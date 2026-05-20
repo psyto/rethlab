@@ -20,15 +20,29 @@
 
 ## Goal
 
-By the end of this lesson, run from your `~/code/my-openhl/` directory:
+Concepts you'll grasp in this lesson:
+
+- **Dependency-graph-first workflow** — why getting Reth + Malachite to coexist *before* writing any application code prevents mid-course backtracking when transitive conflicts surface.
+- **Workspace-level dep declaration** — declaring every external dep once at the root `Cargo.toml` and inheriting via `{ workspace = true }`, so a Reth version bump is a one-line change instead of an 11-crate sweep.
+- **Git-SHA pinning vs. crates.io** — why production L1s pin Reth and Malachite to commit SHAs, not semver ranges; absolute reproducibility beats convenience when validators must agree byte-for-byte.
+- **The 10-crate + 1-bin layout** — how OpenHL's 5 subsystems (types, codec, clob, consensus, evm, …) map onto a flat `crates/` directory plus one `bin/openhl` entry point.
+
+Verification:
 
 ```bash
 cargo check --workspace
 ```
 
-…and see `Finished` with no warnings other than "unused dependency" warnings. You'll have a Rust workspace with 10 empty library crates, one binary crate, Reth pinned as a git dependency, and Malachite pinned as a git dependency. **You will have written zero application logic** — that's L2 onwards. This lesson is about getting the dependency graph correct.
+…run from your `~/code/my-openhl/` directory, returns `Finished` with no warnings other than "unused dependency" warnings. **You will have written zero application logic** — that's L2 onwards.
 
 The Reth compile graph alone is ~600 crates. The first `cargo check` will take 5-15 minutes depending on your machine. Plan accordingly. Subsequent checks are incremental and fast.
+
+Specific changes:
+
+- 10 empty library crates and one binary crate scaffolded under `crates/` and `bin/openhl/`.
+- Root `Cargo.toml` declares `members`, workspace defaults, and `[workspace.dependencies]`.
+- Reth pinned as a git dependency at a specific SHA, declared at the workspace level.
+- Malachite pinned the same way.
 
 ## Recap
 

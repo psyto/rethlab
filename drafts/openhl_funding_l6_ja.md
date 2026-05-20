@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **演算順が単位を決める** — 先に割って、*それから* clamp する。Cap は `4%/interval` なので rate レベルで bind する必要がある。Clamp-then-divide だと cap の実効値が `cap/divisor`（HL デフォルトなら `0.5%/interval`）にすり替わり、仕様が静かに弱められる。
+- **`.clamp(-cap, cap)` で対称クランプ** — 標準の `i64::clamp` が両側を一度に処理する。よくあるバグは `min(raw, cap)` のように正側だけ clamp して負側を見落とすパターン。`.clamp` を使えばそれが構造的に防げる。
+- **API 境界での defensive `.abs()`** — `FundingRate(-40_000_000)` を「絶対値」として受け入れることで、呼び出し側のフットガンを 1 つ減らせる。コストは ~1 ns、効果は実質的。
+- **自然に成立する edge case は明示分岐より強い** — `cap == 0` は `clamp(0, 0) = 0` から自動的に `FundingRate(0)` を生む。特例コードを書かない = テストすべきコードパスが増えない。
+- **Property がないところに proptest を強引に書かない** — `compute_rate` は「割って clamp」だけで、proptest が活きるような代数的不変条件がない。手書きトレースで input region をカバーすれば十分。Property がないところに proptest を書く必要はない。
+
+検証：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-上記の実行結果が 10 テストを通る（L4-L5 で書いた 5 つ + 新規 5 つ）。`compute.rs` に加わるのは：
+上記の実行結果が 10 テストを通る（L4-L5 で書いた 5 つ + 新規 5 つ）。
+
+具体的な変更:
+
+`compute.rs` に加わるのは：
 
 - **`compute_rate(premium, params) -> FundingRate`** — 生 premium を `params.divisor` で割り、`±params.rate_cap` に clamp して per-interval rate を生む関数。
 - **unit test 5 つ** — divisor の効果、正側 cap での clamp、負側 cap での clamp、divisor=0 での無効化、cap=0 での無効化をカバーする。

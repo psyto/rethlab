@@ -21,19 +21,29 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Stub-as-trait-satisfier** — incremental development at the type level. Writing 4-line stubs that name what's unimplemented beats writing 50-line protobuf encoders for paths the engine never exercises. The stub fires loudly if Malachite ever does call it.
+- **Sub-trait blanket impls** — `WalCodec / ConsensusCodec / SyncCodec` are automatic once you implement the right `Codec<T>` constituents. A `static_assertions::assert_impl_all!` test verifies the blanket impls fire and the compile-time bound is real.
+- **Where the codec belongs in the crate graph** — codec lives in `openhl-consensus`, not `openhl-types`, because it depends on Malachite's `informalsystems-malachitebft-app` (libp2p, ractor). Putting it in `types/` would force every downstream crate that wants `BlockHash` to pull libp2p too.
+- **Wire format vs. canonical signing format** — L7's canonical encoding is *what gets signed*; L8's codec is *what gets sent over the wire*. They overlap but aren't the same: wire format adds framing, versioning, length prefixes — none of which the signature covers.
+- **Why one real codec is enough at L8** — only `ProposalPart` round-trips in our single-validator devnet. The other 7 are gossip / sync / WAL paths that don't fire until you add peers or recover from a crash.
+
+Verification:
 
 ```bash
 cargo test -p openhl-consensus
 ```
 
-…passes **16 tests** (14 from L7 + 2 new ones for the codec). You'll have one new file:
-
-- **`crates/consensus/src/codec.rs`** — `OpenHlCodec` struct with 8 `Codec<T>` impls. One real (for `ProposalPart`), seven are *stubs* that return a clear error if invoked.
+…passes **16 tests** (14 from L7 + 2 new ones for the codec). The 2 new tests are: a compile-time assertion that `OpenHlCodec` satisfies all three super-traits, and a runtime round-trip test for `ProposalPart`.
 
 You also unblock a much heavier dependency: `informalsystems-malachitebft-app` pulls in libp2p, ractor, and the rest of the engine surface — your first compile after this will take ~38 seconds. The investment buys you the actor system you'll spawn in L9.
 
-The 2 new tests are: a compile-time assertion that `OpenHlCodec` satisfies all three super-traits (`WalCodec`, `ConsensusCodec`, `SyncCodec`), and a runtime round-trip test for `ProposalPart`.
+Specific changes:
+
+- `crates/consensus/Cargo.toml` adds `informalsystems-malachitebft-app` + `static_assertions` (dev).
+- `crates/consensus/src/codec.rs` — new file with `OpenHlCodec` struct, `CodecStub` error type, 8 `Codec<T>` impls (1 real for `ProposalPart`, 7 stubs), 2 unit tests.
+- `crates/consensus/src/lib.rs` — wires `pub mod codec;`.
 
 ## Recap
 

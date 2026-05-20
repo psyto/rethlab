@@ -20,18 +20,28 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **canonical encoding は consensus-critical** — 署名対象になる byte layout が *chain の spec の一部* であり、`serde::Serialize` から derive してはいけない理由。serde のバージョンが異なる validator 同士は同じ vote から異なる byte を作って異なるものに署名し、fork する。
+- **stateful provider で wrap された純粋関数** — `sign_vote(vote, &sk)` は free function (テストはこれを直接呼ぶ)、`OpenHlSigningProvider` は key を保持して `sp.sign_vote(vote)` を Malachite に提供する。1 つのロジックを 2 つの呼び出し方で。
+- **署名検証失敗による改ざん検出** — Ed25519 は何が改ざんされたかを *知らない*。単に verify が失敗するだけだ。vote の 1 byte を flip して verification が失敗することを確認するテストは、canonical encoding が consensus-relevant なフィールドを漏れなくカバーしている証明になる。
+- **型システムによる公開鍵 / 秘密鍵の分離** — Ed25519 は `sign` を `PrivateKey` にしか持たせない。公開鍵で署名しようとしたら compiler が拒否する。
+- **未使用機能への空 byte 署名** — trait surface が要求するが chain が使わない feature (vote extension、proposal part) に対しては、確定的な空データに署名することで contract を honor しつつデータをでっちあげない。
+
+検証:
 
 ```bash
 cargo test -p openhl-consensus
 ```
 
-上記の実行結果が **14 個のテストすべてに合格する** (L6 の Context impl から 5 個 + 署名と SigningProvider の新規 9 個)。Malachite が chain に Ed25519 署名を組み込むために必要な 2 つのファイルが揃う:
+上記の実行結果が **14 個のテストすべてに合格する** (L6 の Context impl から 5 個 + 署名と SigningProvider の新規 9 個)。9 個の新規テストがカバーするもの: 4 種類すべての署名対象型 (vote、proposal、proposal_part、vote_extension) についての sign/verify ラウンドトリップ、vote と proposal の改ざん検出、別 provider が作った署名の検証拒否。
 
-- **`crates/consensus/src/signing.rs`** — vote と proposal の canonical byte encoding、および低レベルの sign/verify 関数
-- **`crates/consensus/src/signing_provider.rs`** — validator の private key を保持し、Malachite の `SigningProvider<OpenHlContext>` trait を実装する `OpenHlSigningProvider` 構造体
+具体的な変更:
 
-9 個の新規テストがカバーするもの: 4 種類すべての署名対象型 (vote、proposal、proposal_part、vote_extension) についての sign/verify ラウンドトリップ、vote と proposal の改ざん検出、別 provider が作った署名の検証拒否。
+- `crates/consensus/src/signing.rs` — `OpenHlVote` と `OpenHlProposal` の canonical byte encoding、低レベルの `sign_vote / sign_proposal / verify_vote` 関数、`VerifierLike` shim、unit test 2 個。
+- `crates/consensus/src/signing_provider.rs` — `PrivateKey` を保持する `OpenHlSigningProvider`、8 method (4 sign/verify pair) の `impl SigningProvider<OpenHlContext>`、unit test 7 個。
+- `crates/consensus/src/lib.rs` — `pub mod signing; pub mod signing_provider;` を配線する。
+- Cargo.toml 変更なし (`informalsystems-malachitebft-signing-ed25519` 依存は L6 で入った)。
 
 ## おさらい
 

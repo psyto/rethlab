@@ -11,11 +11,11 @@ export async function seedRethOpenHlClobEN(prisma: PrismaClient) {
       slug: "building-openhl-clob-en",
       title: "Build OpenHL CLOB — adding the matching engine",
       description:
-        "Course 7 of 10 in the L1 Architect track. Continues the openhl-based build-along arc from `building-openhl-consensus`: starting from a workspace that has the consensus substrate (live Reth + Malachite, single-validator BFT producing blocks in 0.02s), the reader adds the CLOB matching engine and wires its fills into committed blocks. End state: `cargo test clob_fills_flow_into_payload` passes — a real fill produced by the price-time-priority matching engine flows through `LiveRethEvmBridge::build_payload` and lands in a consensus-committed payload. Covers openhl Stage 8a (701 LOC, pure state machine) + Stage 8d (171 LOC, bridge integration). Out of scope: custom EVM precompiles (course 8), funding state machine (course 9).",
+        "Add a price-time-priority matching engine to the consensus substrate from `building-openhl-consensus`. Build the CLOB as a pure state machine, then wire its fills through the bridge into consensus-committed blocks. The second course in the DIY Perp series.",
       difficulty: "EXPERT",
       duration: 365,
       xpReward: 800,
-      track: "reth-l1-architect",
+      track: "diy-perp",
       tags,
       isPublished: false,
       sortOrder: 700,
@@ -195,13 +195,24 @@ If all three pass, you're ready for L1.
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Newtype-as-type-safety** — wrapping \`u64\` in \`AccountId\` / \`OrderId\` / \`Price\` / \`Qty\` turns argument-swap bugs into compile errors instead of silent runtime mis-credits.
+- **Integer-only money math** — \`Price\` and \`Qty\` are \`u64\`-backed, never \`f64\`; float intermediates would break the engine's exact-integer invariants (e.g. "fills conserve quantity") at the boundaries.
+- **Struct-style enum variants for named roles** — \`OrderType::Limit { price }\` reads more clearly than \`Limit(Price)\` at every pattern match site, because the field has a *name*, not just a position.
+- **Field-level vs. record-level types as a layering strategy** — atomic types belong in L1 so every later lesson reuses them; record types (\`Order\`, \`Fill\`) layer on top in L2.
+
+Verification:
 
 \`\`\`bash
 cargo check -p openhl-clob
 \`\`\`
 
-…compiles cleanly. You'll have one new crate (\`crates/clob/\`) registered in the workspace, with a single file \`src/types.rs\` containing the **atomic, field-level types** the matching engine uses:
+…compiles cleanly.
+
+Specific changes:
+
+You'll have one new crate (\`crates/clob/\`) registered in the workspace, with a single file \`src/types.rs\` containing the **atomic, field-level types** the matching engine uses:
 
 - **4 newtypes over \`u64\`** — \`AccountId\`, \`OrderId\`, \`Price\`, \`Qty\` — for type-safety against accidental swaps.
 - **\`Side\` enum** (\`Buy\` | \`Sell\`) with an \`opposite()\` helper.
@@ -522,13 +533,24 @@ You have the field-level types — the atomic pieces. L2 builds the **record-lev
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Self-contained messages cross module boundaries cleanly** — \`Fill\` carries both \`maker_order_id\` AND \`maker_account\` even though one could be derived from the other; this decouples Fill consumers (precompiles, payload assembly) from the engine's internal index.
+- **Separating "fills" from "remainder" is a type-level decision** — \`FillResult { fills, remaining_qty }\` makes a submit's two distinct outputs explicit, instead of overloading \`Vec<Fill>\` with a phantom remainder entry.
+- **Compute, don't cache, for derived totals** — \`total_filled()\` is a method, not a field; caching would force every fill-list mutation to keep a counter in sync, while computing on demand keeps \`FillResult\` a pure data record.
+- **\`Copy\` reflects semantics, not convenience** — \`Order\` (5 small fields, ~48 bytes) is \`Copy\`; \`FillResult\` (owns a \`Vec<Fill>\`) is not. \`Copy\` only fits when \`=\` is one bit-blit.
+
+Verification:
 
 \`\`\`bash
 cargo check -p openhl-clob
 \`\`\`
 
-…still compiles. You'll have **3 record types** in \`crates/clob/src/types.rs\`, built from L1's newtypes:
+…still compiles.
+
+Specific changes:
+
+You'll have **3 record types** in \`crates/clob/src/types.rs\`, built from L1's newtypes:
 
 - **\`Order\`** — the input to the matching engine (id, account, side, qty, order_type).
 - **\`Fill\`** — the output of a single match between a maker and a taker (maker_order_id, taker_order_id, maker_account, taker_account, price, qty).
@@ -756,21 +778,30 @@ The type vocabulary is complete. L3 introduces the **matching state machine** �
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Two \`BTreeMap\`s are the entire matching-engine state** — no order-id index, no best-price cache, no per-side counters. Everything else is derived. Optimizations layer on top later without changing the core model.
+- **\`Reverse<Price>\` makes the iterator walk bids highest-first** — by flipping \`Ord::cmp\` at the *key* type, both sides can use \`BTreeMap::iter().next()\` uniformly. One type asymmetry buys symmetric matching code.
+- **\`RestingOrder\` trims \`Order\` to make impossible states unrepresentable** — a resting order has no \`side\` (we know it from which map it's in) and no \`order_type\` (Market never rests). Type design as constraint engineering.
+- **\`VecDeque\` over \`Vec\` for FIFO queues** — \`Vec::remove(0)\` shifts every element (O(n)); \`VecDeque::pop_front()\` is O(1). Price-time priority requires fast pop-front *and* fast push-back.
+
+Verification:
 
 \`\`\`bash
 cargo check -p openhl-clob
 \`\`\`
 
-…still compiles. You'll have a new file \`crates/clob/src/book.rs\` containing:
+…still compiles.
+
+Specific changes:
+
+You'll have a new file \`crates/clob/src/book.rs\` containing:
 
 - **\`Book\` struct** — two \`BTreeMap\`s (bids + asks), each mapping a price level to a \`VecDeque\` of resting orders.
 - **\`RestingOrder\` struct** — what a single order looks like once it's resting on the book (trimmed from \`Order\`).
 - **\`new()\` constructor** + 4 read-only accessors (\`best_bid\`, \`best_ask\`, \`depth_bid\`, \`depth_ask\`).
 
 **No matching logic yet** — \`submit\` lands in L4 + L5, \`cancel\` in L6. This lesson is about building the data structure correctly so the matching logic can be a few lines on top of it.
-
-The single load-bearing idea: **\`Reverse<Price>\` as a \`BTreeMap\` key** makes the natural-order iterator walk bids highest-first. Once you see why that works, the rest of the matching code becomes obvious.
 
 ## Recap
 
@@ -1058,13 +1089,25 @@ You have the data structure. L4 puts the first matching logic on top of it — \
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Buy and Sell are structural mirrors, not generic abstractions** — the Buy branch walks asks ascending; Sell walks bids descending. Two near-identical functions read more clearly than one fully-generic helper with boolean-flag puzzles inside.
+- **Walk-while-crossing is the matching engine's core loop** — \`while remaining > 0 && best_opposite_price crosses limit { match_at_level; advance/drop level }\`. Once you see this shape, market orders in L5 fall out as "the same loop minus the price check."
+- **Empty-queue invariant must be maintained on every mutation** — \`if queue.is_empty() { remove(price) }\` after each match. If an empty queue is left in the map, \`best_bid()\` lies and the no-crossed-book invariant breaks.
+- **Return value describes what happened to the call; book state describes what is** — \`FillResult::remaining_qty\` is \`Qty(0)\` for Limit (whatever didn't fill went to rest); to know the rested remainder, query \`best_bid\` / \`depth_bid\` separately. Don't mix the two contracts.
+- **\`match_at_level\` as a free function names its scope** — no \`self\`; it operates on data the caller has already extracted (queue + remaining). Function signature is documentation.
+
+Verification:
 
 \`\`\`bash
 cargo check -p openhl-clob
 \`\`\`
 
-…still compiles. Your \`Book\` can now accept **Limit orders** (Buy + Sell) and produce real \`Fill\`s. Market orders are still \`todo!()\` — that's L5.
+…still compiles.
+
+Specific changes:
+
+Your \`Book\` can now accept **Limit orders** (Buy + Sell) and produce real \`Fill\`s. Market orders are still \`todo!()\` — that's L5.
 
 What you'll write:
 
@@ -1429,13 +1472,23 @@ L5 is shorter than L4 because most of the work (\`match_at_level\`, the dispatch
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Market = Limit minus the price check minus the rest step** — same walk-while-crossing loop from L4, but without the \`price <= limit\` guard and without \`rest_unfilled_remainder()\`. The semantic difference is in the *missing* code, which is why parameterizing the two with boolean flags would make both bodies harder to read.
+- **Fill price is always the maker's price** — Market orders don't supply a price; they accept what the book offers. "Price discovery" *is* the rule that the spread between best bid and best ask sets the price, not the taker's demand.
+- **One return type, two contracts** — \`FillResult::remaining_qty\` means "rested" for Limit (always \`Qty(0)\`) and "discarded" for Market (the actual leftover). The type is identical; the doc on \`FillResult\` names both interpretations.
+- **"Nothing happened" is a valid result, not an error** — Market buy against an empty asks book returns \`FillResult { fills: vec![], remaining_qty: order.qty }\`. The caller decides what to do with the leftover; the engine doesn't surface a \`Result\`.
+- **Same \`match_at_level\` helper, reused unchanged** — L4's helper handles "maker partially filled" and "maker fully consumed" as one general path; L5 needed no fast paths, no special cases.
+
+Verification:
 
 \`\`\`bash
 cargo check -p openhl-clob
 \`\`\`
 
-…still compiles, and the \`submit()\` dispatcher no longer panics on Market orders. You'll have written:
+…still compiles, and the \`submit()\` dispatcher no longer panics on Market orders.
+
+Specific changes:
 
 - **\`submit_market()\`** — the Market-order matcher. Structurally similar to \`submit_limit\` from L4, but with **two key differences**:
   1. **No price check** — Market orders take whatever's available at any price.
@@ -1703,19 +1756,28 @@ The matching engine handles **submit**. It can't handle **cancel** yet — a use
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **\`BTreeMap::retain\` does "mutate + drop empty entry" in one closure** — the same callback both removes the matching order from a queue *and* returns whether to keep the level. One pass; the empty-level invariant from \`submit\` is maintained automatically.
+- **O(n) linear scan is the right v0 choice** — adding \`HashMap<OrderId, (Side, Price)>\` for O(1) cancel adds a second data structure to keep in sync, extra memory, extra cache pressure. Don't optimize what doesn't show up in profiling; add the index when the scan does.
+- **\`bool\` return is the smallest honest shape** — \`Option<RestingOrder>\` would leak the private \`RestingOrder\` type from L3; \`Result<(), CancelError>\` would force callers to treat "not found" as an error, but cancellation idempotency (calling cancel twice is safe) is a feature.
+- **The empty-level cleanup is what keeps \`best_bid\` honest** — if \`retain\` left a phantom empty queue at price 100, \`best_bid()\` would report 100 even with zero liquidity, and the next sell would match at a phantom price. The cleanup is the same invariant \`submit\` enforces; \`cancel\` must enforce it too.
+
+Verification:
 
 \`\`\`bash
 cargo check -p openhl-clob
 \`\`\`
 
-…still compiles. You'll have one new method on \`Book\`:
+…still compiles.
+
+Specific changes:
+
+You'll have one new method on \`Book\`:
 
 - **\`cancel(&mut self, order_id: OrderId) -> bool\`** — searches both bid and ask sides for an order with the given id, removes it if found, drops the price level if cancellation leaves it empty. Returns \`true\` if removed, \`false\` if not found.
 
-About 25 LOC. The interesting idiom is **\`BTreeMap::retain\`** — a single call that traverses every queue, conditionally mutates it, and drops the entry if a closure returns \`false\`. That handles both the "remove the order" and "drop the empty level" steps in one pass.
-
-After L6, the matching engine is **functionally complete**. Submit (Limit + Market) + cancel = the full v0 surface. L7 starts the test suite.
+About 25 LOC. After L6, the matching engine is **functionally complete**. Submit (Limit + Market) + cancel = the full v0 surface. L7 starts the test suite.
 
 ## Recap
 
@@ -1969,13 +2031,25 @@ The matching engine compiles. **What it can't do**: prove it works. L7 starts th
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Coverage by invariant, not by count** — the 9 tests aren't "9 arbitrary scenarios"; each corresponds to a distinct invariant (empty-book, resting, walks-levels, respects-limit, FIFO time priority, partial-market, cancel-found, cancel-not-found, no-cross). The list of invariants is short and well-defined; that's why 9 is a defensible number.
+- **Hand-traced unit tests are the oracle for proptests (L8)** — when a property test fails with a random 25-action sequence, you debug against a hand-traced test that isolates one invariant. Proptests are the amplifier; unit tests are the foundation.
+- **Helper functions over builder patterns** — \`limit(...)\` and \`market(...)\` with positional args are the cheapest abstraction that removes repetition without adding indirection. Builder patterns would add ceremony for tests that need ~5 lines each.
+- **Source layout encodes priority** — placing \`book_does_not_cross_after_match\` last in source order signals to a maintainer scanning the file: this is the load-bearing safety property. Tests run alphabetically; source order is for humans.
+- **\`assert_eq!\` over \`assert!(a == b)\`** — \`assert_eq!\` prints both sides on failure; the actual-value diagnostic is what makes test debugging fast.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-clob
 \`\`\`
 
-…passes **9 tests**. You'll have a new \`#[cfg(test)] mod tests\` block at the bottom of \`book.rs\` containing:
+…passes **9 tests**.
+
+Specific changes:
+
+You'll have a new \`#[cfg(test)] mod tests\` block at the bottom of \`book.rs\` containing:
 
 - **2 helper functions** — \`limit(...)\` and \`market(...)\` — that construct \`Order\` structs with sensible defaults so the test bodies don't repeat the 5-field struct literal everywhere.
 - **9 hand-traced scenarios** — each tests a specific invariant the matching engine should maintain.
@@ -2393,13 +2467,23 @@ You have 9 hand-traced tests. **They cover specific scenarios you thought of.** 
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Determinism is the load-bearing property for consensus chains** — a correct-but-non-deterministic matching engine breaks consensus (validators replay the same actions, see different fills, fail to agree). A deterministic-but-incorrect engine is repairable; a non-deterministic one is not. The \`determinism\` invariant protects the chain's safety.
+- **Property tests find bugs in scenarios you didn't think of** — 9 hand-traced tests cover what you anticipated. 256 cases × 3 properties = 768 random sequences cover the long tail (e.g. "submit 17 limits, then market against an empty side"). Shrinking automatically reduces a failing 25-action sequence to the minimal counterexample.
+- **Conservation, safety, replayability as the three orthogonal invariants** — \`qty_conservation\` (no quantity invented or lost), \`no_crossed_book\` (best_bid < best_ask always), \`determinism\` (same input → same output). These are the universal CLOB invariants any matching engine must satisfy.
+- **\`proptest\` belongs in \`[dev-dependencies]\`, not \`[dependencies]\`** — property tests run during \`cargo test\`, never in production. Putting it in \`[dependencies]\` would force every \`openhl-clob\` consumer to compile proptest.
+- **The \`Action\` enum is a simplified intermediate for generators** — proptest combinators work most easily with primitive types; the strategies emit raw \`u64\`s, and the test body wraps them in newtypes before calling \`submit\`. Newtype discipline holds at the API boundary, not inside the generator.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-clob
 \`\`\`
 
-…passes **12 tests** (9 unit + 3 proptest invariants), with each proptest running **256 cases** each = **768 random scenarios**. You'll have written:
+…passes **12 tests** (9 unit + 3 proptest invariants), with each proptest running **256 cases** each = **768 random scenarios**.
+
+Specific changes:
 
 - **One new dev-dep** — \`proptest = { workspace = true }\` in \`crates/clob/Cargo.toml\`.
 - **A new \`#[cfg(test)] mod prop_tests\` block** at the bottom of \`book.rs\`, containing:
@@ -2862,13 +2946,23 @@ The matching engine is fully tested. **It's not yet integrated with consensus.**
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The CLOB lives *next to* the bridge, not *inside* the Reth EVM** — \`clob: Mutex<Book>\` is a field on \`LiveRethEvmBridge\`, alongside \`provider\` and \`state\`. Fills become a parallel data lane that rides along with each payload; they aren't yet EVM transactions (that's course 8's precompiles). This is the architectural shape of "CLOB on top of EVM."
+- **Lock granularity: two \`Mutex\`es, not one** — \`clob\` and \`pending_fills\` are mutated at different times by different callers. Splitting locks means a thread reading \`pending_fill_count\` doesn't block submitters touching the book. Lock granularity matters when contention is on the hot path.
+- **Interior mutability + \`&self\` is the idiomatic shape for async-shared state** — \`submit_order(&self, ...)\` lets the bridge be wrapped in \`Arc\` and shared across tasks without a top-level \`RwLock<Bridge>\` that would serialize everything.
+- **APIs that lock should never hand references back through the lock** — \`payload_fills\` returns \`Vec<Fill>\` (cloned), not \`&[Fill]\`, because returning a borrow would force the caller to hold the lock guard for the slice's lifetime — instant deadlock with anything else that wants the lock.
+- **Empty-\`Vec\` placeholder is more discoverable than a TODO comment** — \`build_payload\` inserts \`Vec::new()\` until L10 swaps in \`std::mem::take(...)\`. Readers see exactly where the missing functionality lives; a comment would rot.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-…still passes (38 tests from course 6 + 1 new test from L9). The bridge now **owns** a CLOB matching engine. You'll have written:
+…still passes (38 tests from course 6 + 1 new test from L9). The bridge now **owns** a CLOB matching engine.
+
+Specific changes:
 
 - **One new workspace dep** — \`openhl-clob = { workspace = true }\` in \`crates/evm/Cargo.toml\`.
 - **Two new fields** on \`LiveRethEvmBridge\`: \`clob: Mutex<Book>\` and \`pending_fills: Mutex<Vec<Fill>>\`.
@@ -3270,13 +3364,25 @@ The bridge has a CLOB and fills accumulate. **Payloads built via \`build_payload
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **\`std::mem::take\` is O(1) — a pointer swap, not element copying** — for a \`Vec<Fill>\` with 1000 entries, \`mem::take\` swaps the (ptr, len, cap) triple in one assignment; \`drain(..).collect()\` is O(N) with iterator overhead. Knowing the stdlib primitive saves you from inventing slower versions.
+- **Drain at \`build_payload\`, not at \`submit\`** — fills get grouped by *which payload they ride in*, not by submission order. If we drained at submit time, the bridge would need a side-channel to track payload assignment. Buffer-then-drain encodes the grouping for free.
+- **Forward-only drain mirrors block immutability** — payload N gets the fills accumulated between the previous \`build_payload\` and now. Earlier payloads are not retroactively updated. This is the same semantics as committed blocks: once built, frozen.
+- **Two short locks beat one long lock when operations are independent** — we lock \`state\` to compute the payload ID, *briefly* lock \`pending_fills\` for the swap, then continue under \`state\`'s lock to insert. The \`pending_fills\` mutex isn't held during the heavy work.
+- **The lost-fill failure mode is real but acceptable for v0** — if \`build_payload\` errors *after* the drain, the fills are gone from \`pending_fills\` but never made it into a payload. Production hardening would add a recovery queue; v0 single-validator devnet accepts the risk.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-…still passes 38 tests. **One small change in \`build_payload\`** — about 8 lines — replaces L9's \`Vec::new()\` placeholder with \`std::mem::take(...)\`, so each new payload drains every fill the CLOB has accumulated since the last \`build_payload\` call.
+…still passes 38 tests.
+
+Specific changes:
+
+**One small change in \`build_payload\`** — about 8 lines — replaces L9's \`Vec::new()\` placeholder with \`std::mem::take(...)\`, so each new payload drains every fill the CLOB has accumulated since the last \`build_payload\` call.
 
 The drain is **forward-only**: once a fill is attached to payload N, it's gone from \`pending_fills\` and will not appear in payload N+1. This is the data-flow promise the bridge makes to its consumers — each payload owns exactly one snapshot of fills, taken at build time.
 
@@ -3503,13 +3609,23 @@ After L11, you have a single integration test that exercises the entire Course 7
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **End-to-end integration testing against a real Reth node** — bootstrap an \`EthereumNode\`, wire \`LiveRethEvmBridge\`, exercise the full submit→buffer→drain pipeline. This is the test that proves the L1-L10 sequence holds together end-to-end, not just per-component.
+- **One thorough integration test beats three narrow ones when bootstrap is expensive** — spinning up a real Reth node takes seconds. Three separate tests (each bootstrapping) would triple that cost; one scenario that verifies submit, drain, and forward-only-ness covers all three invariants in one node lifetime.
+- **The forward-only assertion is what makes this a *real* integration test** — "submit produces fill" and "build drains" are obvious from unit tests. Checking that the earlier (empty) payload was *not* retroactively updated is what tests the bridge's per-payload snapshot mechanism specifically. Without it, this would be a unit test in disguise.
+- **Fill price = maker's price, demonstrated end-to-end** — maker bid @ 100, taker sell @ 100, fill @ 100. The price-time priority rule from L4-L5 holds across the full integration boundary. Submitting in the opposite order (sell first, then crossing buy) would produce the same fill — order of submission is time priority within a level, not which side rests.
+- **\`launch_with_debug_capabilities()\` vs \`launch()\` with add-ons** — debug-capabilities setup is shorter and includes the provider but skips engine-API wiring. We don't need the engine handle here (no forkchoice driven during the test); we just need the provider for parent lookups.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm clob_fills_flow_into_payload --release
 \`\`\`
 
 …passes. **This is the milestone of Course 7.** A real fill, produced by the matching engine you built in L1-L8, flows through \`LiveRethEvmBridge::submit_order\` → \`pending_fills\` buffer → \`LiveRethEvmBridge::build_payload\` drain → into a payload that consensus would commit. The test exercises **every piece** of the integration from L9-L10 against a **live Reth node**.
+
+Specific changes:
 
 You'll have written one new test:
 

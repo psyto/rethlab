@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Schema-first design — the calldata layout is the public contract, locked before behavior** — once the precompile is exposed at `0x...0c1c`, contracts will call it. Lock the input layout in L7 so L8's behavior change doesn't break callers.
+- **128-byte ABI input as four 32-byte slots** — Solidity ABI packs each scalar into a 32-byte word; `u64` lives in the rightmost 8 bytes (`[0; 24] + [u64 BE]`). Four words = `account_id`, `side`, `price`, `qty`.
+- **Precompiles fail soft, not panic** — malformed input (4 rejection paths) returns sentinel `0`, never reverts the transaction. The calling contract gets back a value it can branch on, instead of an EVM-level error.
+- **`AtomicU64::fetch_add(1, Relaxed)` for ID allocation** — IDs need uniqueness (atomic guarantees that) but no synchronization invariant with other state (the Book has its own Mutex). Pick the lighter memory ordering when no invariant requires more.
+- **Sentinel `0` requires `NEXT_ORDER_ID` to start at 1** — if IDs started at 0, the first allocated ID would be indistinguishable from "rejected." Starting at 1 makes the sentinel unambiguous.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-…passes 46 tests (3 new). The CLOB's **write path** has its precompile registered, calldata parsing implemented, and rejection paths verified:
+…passes 46 tests (3 new).
+
+Specific changes:
+
+The CLOB's **write path** has its precompile registered, calldata parsing implemented, and rejection paths verified:
 
 - **New precompile at `0x...0c1c`** — `CLOB_PLACE_ORDER`, registered alongside `CLOB_READ_BEST_BID`.
 - **128-byte ABI-aligned input layout** decoded: `account_id`, `side`, `price`, `qty`.

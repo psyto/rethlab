@@ -20,13 +20,23 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Market = Limit minus the price check minus the rest step** — same walk-while-crossing loop from L4, but without the `price <= limit` guard and without `rest_unfilled_remainder()`. The semantic difference is in the *missing* code, which is why parameterizing the two with boolean flags would make both bodies harder to read.
+- **Fill price is always the maker's price** — Market orders don't supply a price; they accept what the book offers. "Price discovery" *is* the rule that the spread between best bid and best ask sets the price, not the taker's demand.
+- **One return type, two contracts** — `FillResult::remaining_qty` means "rested" for Limit (always `Qty(0)`) and "discarded" for Market (the actual leftover). The type is identical; the doc on `FillResult` names both interpretations.
+- **"Nothing happened" is a valid result, not an error** — Market buy against an empty asks book returns `FillResult { fills: vec![], remaining_qty: order.qty }`. The caller decides what to do with the leftover; the engine doesn't surface a `Result`.
+- **Same `match_at_level` helper, reused unchanged** — L4's helper handles "maker partially filled" and "maker fully consumed" as one general path; L5 needed no fast paths, no special cases.
+
+Verification:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-…still compiles, and the `submit()` dispatcher no longer panics on Market orders. You'll have written:
+…still compiles, and the `submit()` dispatcher no longer panics on Market orders.
+
+Specific changes:
 
 - **`submit_market()`** — the Market-order matcher. Structurally similar to `submit_limit` from L4, but with **two key differences**:
   1. **No price check** — Market orders take whatever's available at any price.

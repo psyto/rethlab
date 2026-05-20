@@ -21,13 +21,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Integration tests catch wiring bugs unit tests can't** — unit tests build each piece in isolation, so a typo in `with_components(...executor(OpenHlExecutorBuilder))` or a regression in `EthereumAddOns` application would leave unit tests green while breaking production. One integration test = wiring assertion.
+- **`pub(crate)` is the right visibility for cross-module tests** — widening `place_order` to `pub` leaks the API; `#[cfg(test) pub(crate)]` adds ceremony for no benefit. `pub(crate)` says "inside this crate, anyone; outside, no one."
+- **Inlined test calldata > DRY helper** — hand-built `[u8; 128]` with byte-position comments makes the ABI layout visible at the call site. For tests proving system-level correctness, every byte position should be a learnable artifact; helpers hide.
+- **Canonical mix: one integration test + many unit tests** — pieces have their own narrow tests; composition has one wide test. Failure localization comes from unit tests; wiring guarantees come from the integration test.
+- **The honest deferred: RPC roundtrip is Reth's responsibility, not openhl's** — testing JSON-RPC → eth_call → revm dispatch would validate Reth, not openhl. The scope of "openhl plugs into Reth correctly" doesn't include "Reth's RPC server works."
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm --release bridge_against_custom_evm
 ```
 
-…passes a single new integration test, `bridge_against_custom_evm_node_shares_clob_with_precompile`. The test does everything Stages 9a-9c+ touched, all in one place:
+…passes a single new integration test, `bridge_against_custom_evm_node_shares_clob_with_precompile`.
+
+Specific changes:
+
+The test does everything Stages 9a-9c+ touched, all in one place:
 
 1. **Bootstrap Reth** with `OpenHlExecutorBuilder` — the custom EVM with both CLOB precompiles registered.
 2. **Construct `LiveRethEvmBridge`** against that node's provider — the bridge's `new()` calls `install_clob` and `install_fill_sink`.

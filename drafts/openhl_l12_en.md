@@ -22,7 +22,15 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Generic over `P: BlockNumReader`, not concrete on `BlockchainProvider`** — the bridge declares exactly the one Reth capability it needs. The concrete provider has 30+ trait bounds you'd otherwise have to thread through every call site; the generic narrows the surface and makes mock testing trivial.
+- **Happy/negative pair as minimal honest validation** — happy alone misses silent fallback to in-memory state; negative alone misses a bridge that always rejects. Both must be load-bearing for "the bridge talks to Reth" to be a true claim.
+- **`Result<Option<u64>>` distinguishes operational from protocol failures** — DB-call failure → `BridgeError::Internal` (alert); unknown-hash → `BridgeError::Rejected` (vote nil, move on). Errors carry semantics, not just messages.
+- **Refusing unknown parents is a safety property** — if the consensus engine proposes building on a hash the live chain has never seen, the bridge must refuse. This is the rule that prevents a malicious or buggy proposer from steering the EL into a forked subtree.
+- **Two bridges as integration milestones** — `RethEvmBridge` (L5, alloy-only) and `LiveRethEvmBridge` (L12, live provider) both stay in the codebase. They represent two stages of integration, not duplicate implementations.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm live_bridge_builds_on_real_genesis --release
@@ -38,7 +46,11 @@ Happy path: boot `EthereumNode`, query its `BlockchainProvider` for the real gen
 
 Negative path: call `build_payload(BlockHash([0xee; 32]), attrs)`. The provider doesn't know that hash, so the bridge returns `BridgeError::Rejected`. **Refusing to build on a parent the live chain has never seen is what makes the bridge safe to wire into consensus.**
 
-The new file: **`crates/evm/src/live_node.rs`** (~227 lines) — `LiveRethEvmBridge<P>` generic over `P: BlockNumReader`. `build_payload` is real; `payload_ready` reads from in-memory pending state; `validate_payload` + `commit` stay stubbed for L14-L15.
+Specific changes:
+
+- `crates/evm/src/live_node.rs` — new file (~227 lines). `LiveRethEvmBridge<P>` generic over `P: BlockNumReader + Clone + Sync + 'static`. `build_payload` is real (queries the live provider); `payload_ready` reads from in-memory pending state; `validate_payload` + `commit` stay stubbed for L13-L14.
+- `crates/evm/Cargo.toml` adds the production deps needed by the generic bound.
+- `crates/evm/src/lib.rs` — wires `pub mod live_node;`.
 
 ## Recap
 

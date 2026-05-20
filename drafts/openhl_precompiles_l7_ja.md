@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **schema-first 設計 — calldata レイアウトが public な契約で、behavior より先にロックする** — `0x...0c1c` に precompile を露出させた瞬間からコントラクトが呼んでくる。L7 で入力 layout を固定すれば、L8 で behavior を変えても caller を壊さない。
+- **128-byte ABI 入力 = 32-byte slot 4 個** — Solidity ABI は scalar を 32-byte word に詰める。`u64` は右端 8 バイトに入る (`[0; 24] + [u64 BE]`)。4 word = `account_id` / `side` / `price` / `qty`。
+- **precompile は panic ではなく soft fail する** — 不正な入力 (4 つの rejection path) は sentinel `0` を返し、transaction を revert しない。呼び出し側コントラクトは EVM-level error ではなく、分岐可能な値を受け取る。
+- **`AtomicU64::fetch_add(1, Relaxed)` による ID 採番** — ID には uniqueness が必要 (atomic でこれを保証) だが、他の state との同期不変条件は不要 (Book は自前の Mutex を持つ)。invariant が要求しないなら軽い memory ordering を選ぶ。
+- **sentinel `0` には `NEXT_ORDER_ID` が 1 始まりであることが必須** — ID が 0 始まりだと、最初に発行される ID が「rejected」と区別できなくなる。1 から始めれば sentinel に曖昧さがなくなる。
+
+検証：
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-上記の実行結果が 46 tests を通る（3 つ新規）。CLOB の **書き込みパス** は、precompile が登録され、calldata のパースが実装され、rejection path が検証された状態になる：
+上記の実行結果が 46 tests を通る（3 つ新規）。
+
+具体的な変更：
+
+CLOB の **書き込みパス** は、precompile が登録され、calldata のパースが実装され、rejection path が検証された状態になる：
 
 - **新規 precompile `0x...0c1c`** — `CLOB_PLACE_ORDER` を `CLOB_READ_BEST_BID` と並べて登録する。
 - **128-byte ABI-aligned な入力レイアウト** を decode する：`account_id` / `side` / `price` / `qty`。

@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **未インストール時に zero を返す = 「未初期化な storage slot」のセマンティクス** — Solidity コントラクトは `STATICCALL` の zero を「liquidity なし」と自然に処理して trade を控える。error にすると boot 中のすべての transaction が revert する。
+- **constant-time な precompile = gas 課金で state を漏らさない** — CLOB が未インストールのときだけ gas 課金を減らすと、attacker が gas を測って validator の state を推測できる。`CLOB_BASE_GAS_COST` を一定に保ち、precompile の挙動の見た目を一様にする。
+- **`cargo test` は並列実行 → process-global で競合 → serializer が必要** — `CLOB_STATE` を触るテストが 2 個になった瞬間、並列実行下で global が `Some(clob_A)` と `None` の間を flap する。`Mutex<()>` を `TEST_SERIALIZER` として置くのが解決策。
+- **`TEST_SERIALIZER` は crate ではなくモジュールごと** — 直列化のスコープは、実際に必要なテストだけに狭める。`CLOB_STATE` を触らないテストにコストを払わせない。
+- **uninstall は test の *先頭*、終わりではない** — panic したテストは cleanup を走らせない。次のテストの先頭で reset するのが safety net になる。テスト末尾の uninstall は飾り。
+
+検証：
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-上記の実行結果が引き続き通る（42 tests）。ただし内部では、precompile が **live state を読む** ようになっている — ハードコード値ではなく：
+上記の実行結果が引き続き通る（42 tests）。
+
+具体的な変更：
+
+ただし内部では、precompile が **live state を読む** ようになっている — ハードコード値ではなく：
 
 - **`read_best_bid` の本体を差し替える** — `let mut out = vec![0, 0, ..., 100, 0, 0, ..., 10]` のハードコードを捨て、`if let Some((price, qty)) = current_best_bid() { ... out に書き込む ... }` に変える。CLOB 未インストールなら 64-byte の zero を返す（「未初期化 perp market」のセマンティクスに合わせる）。
 - **L3 の `read_best_bid_returns_hardcoded_price_and_qty` テストを rename** して `read_best_bid_returns_zero_when_no_clob_installed` に。形は同じだが、100/10 ではなく zero を assert する。

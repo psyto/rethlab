@@ -57,8 +57,8 @@ const EN: LocaleConfig = {
     slug: 'building-openhl-funding-en',
     title: 'Build OpenHL Funding — perpetual funding state machine',
     description:
-      "Course 9 of 10 in the L1 Architect track. Fourth of the openhl-based build-along courses. Builds the pure state machine that drives perpetual-contract funding payments: a fixed-point premium derivation, a divisor+cap rate calculator, position-snapshot application, and a tick-gating clock with at-most-one-per-interval + no-catch-up invariants. End state: 22 tests pass (20 hand-traced + 2 proptest covering premium antisymmetry and balanced-book zero-sum). Covers openhl Stage 8b (~635 LOC across types.rs / compute.rs / clock.rs). The funding crate is pure state — not yet wired into bridge or vault; that integration is the next L1 Architect course (Funding, oracle, liquidations).",
-    track: 'reth-l1-architect',
+      "Build the perpetual-funding state machine — a deterministic fixed-point pipeline (premium → rate → settlement) gated by an interval clock that enforces no-catch-up semantics. Pure state, no I/O; the integration into the bridge belongs to a later course. The fourth course in the DIY Perp series.",
+    track: 'diy-perp',
     instructorName: 'RethLab',
   },
   modules: {
@@ -89,7 +89,7 @@ const EN: LocaleConfig = {
       duration: 25,
       xpReward: 50,
       h1Marker: '# Lesson 1 — `RATE_SCALE` — the constant that defends consensus',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_funding_l2_en.md',
@@ -100,7 +100,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# Lesson 2 — Money types — newtypes for prices, premiums, and notional',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_funding_l3_en.md',
@@ -111,7 +111,7 @@ const EN: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# Lesson 3 — Position types — finishing the roster + HL defaults',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_funding_l4_en.md',
@@ -122,7 +122,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# Lesson 4 — `compute_premium` — first math, first tests',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_funding_l5_en.md',
@@ -133,7 +133,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# Lesson 5 — Overflow philosophy + the first proptest',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_funding_l6_en.md',
@@ -144,7 +144,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# Lesson 6 — `compute_rate` — divisor + cap',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_funding_l7_en.md',
@@ -155,7 +155,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# Lesson 7 — `apply_funding` — sign convention + zero-sum proptest',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_funding_l8_en.md',
@@ -166,7 +166,7 @@ const EN: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# Lesson 8 — `FundingClock` — the discrete event loop',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_funding_l9_en.md',
@@ -177,7 +177,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# Lesson 9 — Interval-gating invariant — three deeper tests',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_funding_l10_en.md',
@@ -188,7 +188,7 @@ const EN: LocaleConfig = {
       duration: 25,
       xpReward: 50,
       h1Marker: '# Lesson 10 — No-catch-up invariant — the design philosophy in one test',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_funding_l11_en.md',
@@ -199,7 +199,7 @@ const EN: LocaleConfig = {
       duration: 20,
       xpReward: 40,
       h1Marker: "# Lesson 11 — Capstone — what you built, what's deferred, what comes next",
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'You can sketch the funding pipeline',
     },
   ],
 };
@@ -215,8 +215,8 @@ const JA: LocaleConfig = {
     slug: 'building-openhl-funding-ja',
     title: 'OpenHL Funding を作る — 永久先物 funding state machine',
     description:
-      'L1 Architect トラックの 10 コース中 9 番目。openhl ベースの build-along コースの 4 つ目。永久先物の funding 支払いを駆動する純粋な state machine を構築：固定小数点での premium 算出、divisor+cap の rate 計算、position snapshot への適用、interval ごとに 1 回 + catch-up なしの不変条件を持つ tick gating clock。終了状態：22 tests 通る（20 手書き + 2 proptest — premium の antisymmetry と balanced-book zero-sum をカバー）。openhl Stage 8b (~635 LOC、types.rs / compute.rs / clock.rs) をカバー。Funding crate は純粋な state — まだ bridge や vault に配線されていない。その統合は次の L1 Architect コース（Funding, oracle, liquidations）。',
-    track: 'reth-l1-architect',
+      '永久先物 funding の state machine を構築する。固定小数点で deterministic な数学パイプライン (premium → rate → settlement) を、no-catch-up セマンティクスを強制する interval clock で gate する。Pure state で I/O なし — bridge への統合は後続のコースで扱う。DIY Perp シリーズの 4 つ目のコース。',
+    track: 'diy-perp',
     instructorName: 'RethLab',
   },
   modules: {
@@ -247,7 +247,7 @@ const JA: LocaleConfig = {
       duration: 25,
       xpReward: 50,
       h1Marker: '# レッスン 1 — `RATE_SCALE` — consensus を守る定数',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_funding_l2_ja.md',
@@ -258,7 +258,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 2 — Money 型 — price、premium、notional の newtype',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_funding_l3_ja.md',
@@ -269,7 +269,7 @@ const JA: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# レッスン 3 — Position 型 — roster 完成 + HL デフォルト',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_funding_l4_ja.md',
@@ -280,7 +280,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 4 — `compute_premium` — 最初の数学、最初のテスト',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_funding_l5_ja.md',
@@ -291,7 +291,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 5 — Overflow 哲学 + 最初の proptest',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_funding_l6_ja.md',
@@ -302,7 +302,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 6 — `compute_rate` — divisor + cap',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_funding_l7_ja.md',
@@ -313,7 +313,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 7 — `apply_funding` — 符号規約 + zero-sum proptest',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_funding_l8_ja.md',
@@ -324,7 +324,7 @@ const JA: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# レッスン 8 — `FundingClock` — discrete event loop',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_funding_l9_ja.md',
@@ -335,7 +335,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 9 — Interval-gating 不変条件 — 3 つの deeper test',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_funding_l10_ja.md',
@@ -346,7 +346,7 @@ const JA: LocaleConfig = {
       duration: 25,
       xpReward: 50,
       h1Marker: '# レッスン 10 — No-catch-up 不変条件 — 1 テストで設計哲学',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_funding_l11_ja.md',
@@ -357,7 +357,7 @@ const JA: LocaleConfig = {
       duration: 20,
       xpReward: 40,
       h1Marker: '# レッスン 11 — Capstone — 築いたもの、先送りしたもの、次にくるもの',
-      startSignature: 'このレッスンを終えると：',
+      startSignature: 'Funding pipeline を記憶からホワイトボードに',
     },
   ],
 };

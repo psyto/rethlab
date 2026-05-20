@@ -11,11 +11,11 @@ export async function seedRethOpenHlFundingEN(prisma: PrismaClient) {
       slug: "building-openhl-funding-en",
       title: "Build OpenHL Funding — perpetual funding state machine",
       description:
-        "Course 9 of 10 in the L1 Architect track. Fourth of the openhl-based build-along courses. Builds the pure state machine that drives perpetual-contract funding payments: a fixed-point premium derivation, a divisor+cap rate calculator, position-snapshot application, and a tick-gating clock with at-most-one-per-interval + no-catch-up invariants. End state: 22 tests pass (20 hand-traced + 2 proptest covering premium antisymmetry and balanced-book zero-sum). Covers openhl Stage 8b (~635 LOC across types.rs / compute.rs / clock.rs). The funding crate is pure state — not yet wired into bridge or vault; that integration is the next L1 Architect course (Funding, oracle, liquidations).",
+        "Build the perpetual-funding state machine — a deterministic fixed-point pipeline (premium → rate → settlement) gated by an interval clock that enforces no-catch-up semantics. Pure state, no I/O; the integration into the bridge belongs to a later course. The fourth course in the DIY Perp series.",
       difficulty: "EXPERT",
       duration: 355,
       xpReward: 730,
-      track: "reth-l1-architect",
+      track: "diy-perp",
       tags,
       isPublished: false,
       sortOrder: 900,
@@ -182,13 +182,22 @@ Onward to L1, where we set up the \`RATE_SCALE\` constant and the fixed-point sc
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Why floats can't run in consensus** — FMA, rounding modes, denormals all diverge across compilers/CPUs; a single LSB disagreement on a rate forks the chain.
+- **Why \`RATE_SCALE = 1e9\` is the sweet spot for fixed-point in i64** — parts-per-billion gives 9 decimal digits of precision while keeping 11 orders of magnitude of i64 headroom for products; \`1e6\` loses precision, \`1e12\` loses headroom.
+- **The crate scaffolding move** — turning an empty \`lib.rs\` into a real crate with one \`pub mod\` and one re-export — and why module declarations land only when the file exists.
+- **The "set once, never change" constant** — \`RATE_SCALE\` is consensus state, not a tunable; doc-comment placement and immutability matter.
+
+Verification:
 
 \`\`\`bash
 cargo build -p openhl-funding
 \`\`\`
 
-…compiles. The \`openhl-funding\` crate now has:
+…compiles.
+
+Specific changes:
 
 - **Cargo.toml** wiring an \`openhl-clob\` dependency (we'll need \`AccountId\` from there later, but the dep goes in now so it's not a surprise at L3) and a \`[dev-dependencies]\` block ready for \`proptest\` (used at L4 / L7).
 - **\`src/types.rs\`** — newly created, containing the module doc + \`pub const RATE_SCALE: i64 = 1_000_000_000\`. Nothing else yet.
@@ -436,13 +445,25 @@ L2 adds the four "money types" — \`MarkPrice\`, \`IndexPrice\`, \`Premium\`, \
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Newtype pattern as argument-order bug prevention** — wrapping \`u64\` in \`MarkPrice\` and \`IndexPrice\` makes \`compute_premium(index, mark)\` a compile error rather than a silently inverted premium in production.
+- **Type aliases are not types** — \`type MarkPrice = u64\` is documentation, not safety; the compiler still accepts swapped args. Use \`struct MarkPrice(pub u64)\` when you need distinct identities.
+- **Why the inner field is \`pub\`** — newtypes here exist to prevent cross-feeding, not to validate values. Public field keeps arithmetic ergonomic (\`mark.0\` over \`mark.value()\`); validation isn't this crate's job.
+- **Signed vs unsigned by domain meaning** — \`MarkPrice\` / \`IndexPrice\` are \`u64\` (negative price = upstream invariant violation); \`Premium\` / \`Notional\` are \`i64\` (direction is part of the data).
+- **Sign conventions belong in doc comments at the type definition** — "positive when mark > index, longs pay shorts" pinned at \`Premium\`'s definition is the single point of truth for every downstream consumer.
+
+Verification:
 
 \`\`\`bash
 cargo build -p openhl-funding
 \`\`\`
 
-…still compiles. \`types.rs\` grows from \`RATE_SCALE\` alone to \`RATE_SCALE\` + four newtypes:
+…still compiles.
+
+Specific changes:
+
+\`types.rs\` grows from \`RATE_SCALE\` alone to \`RATE_SCALE\` + four newtypes:
 
 - **\`MarkPrice(pub u64)\`** — perpetual mark price in minor units. Unsigned because prices can't be negative.
 - **\`IndexPrice(pub u64)\`** — off-chain oracle reference price. Same shape, different *meaning*.
@@ -651,13 +672,25 @@ L3 finishes the type roster: \`FundingRate(i64)\`, \`PositionSize(i64)\`, \`Posi
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Same shape, different role = separate types** — \`FundingRate\` and \`Premium\` are both \`i64\` scaled by \`RATE_SCALE\`, but a premium is the raw dislocation and a rate is the post-divisor-post-clamp output. Keeping them distinct enforces the pipeline at the type level: you can't \`apply_funding\` a premium that hasn't been through \`compute_rate\`.
+- **Single signed integer for direction + magnitude** — \`PositionSize(i64)\` encodes long / short / flat in one field instead of an enum + magnitude pair. Smaller, faster, simpler math; the sign convention lives in the doc comment.
+- **Snapshot types vs stateful entities** — \`Position\` carries only \`(account, size)\`, deliberately omitting entry price, PnL, history. The owning layer keeps wide state; the funding crate processes narrow snapshots. The doc comment makes the ownership contract explicit.
+- **Parameter-object pattern** — bundling \`interval_secs\`, \`rate_cap\`, \`divisor\` into \`FundingParams\` preserves call-site stability when config grows. Positional args break every call site at every new parameter; a struct adds fields without touching signatures.
+- **HL-default arithmetic decoded** — \`divisor: 8\` means "premium / 8 per tick"; with 24 hourly intervals and a 4% cap, the worst-case daily payment is bounded by the cap (not the divisor). The cap is the insurance policy against oracle dislocations.
+
+Verification:
 
 \`\`\`bash
 cargo build -p openhl-funding
 \`\`\`
 
-…still compiles, with zero rustdoc warnings. \`types.rs\` is **complete** — all nine types from Stage 8b's roster are in place:
+…still compiles, with zero rustdoc warnings.
+
+Specific changes:
+
+\`types.rs\` is **complete** — all nine types from Stage 8b's roster are in place:
 
 - **\`FundingRate(pub i64)\`** — per-interval rate after divisor + cap. Same scale as \`Premium\`.
 - **\`PositionSize(pub i64)\`** — signed: positive = long, negative = short, zero = flat.
@@ -973,13 +1006,25 @@ L4 starts \`compute.rs\`. We create the file with the module doc + \`compute_pre
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Pick integer width by the intermediate range, not the inputs** — \`mark\` and \`index\` are \`u64\`, but \`(mark - index) * RATE_SCALE\` can hit ~1.8e28; i128 intermediates are non-optional, and the upcasts go in *before* the subtraction so signs survive.
+- **Multiply before divide preserves precision** — \`(mark - index) / index\` in integer math rounds to zero for any sub-100% premium; scaling by \`RATE_SCALE\` first turns the fraction into i128 magnitude, then the divide produces a meaningful integer.
+- **Subtraction in \`u64\` is the canonical sign bug** — \`MarkPrice(99) - IndexPrice(100)\` wraps to \`u64::MAX\` and produces a huge positive premium when truth is a small negative one. The \`i128::from(...)\` upcast is what makes the subtraction algebraically correct.
+- **Graceful degradation for missing oracle** — \`index == 0\` returns \`Premium(0)\` instead of erroring. Funding propagates through the bridge as balance updates; an \`Err\` would surface as a transaction failure on unrelated payloads. Zero is the right answer when there's no signal to drive a rate.
+- **Test comments as paper math** — \`// (101-100) * 1e9 / 100 = 10_000_000\` next to the assertion lets any future debugger verify the test against the formula, not against the test author's promise.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 4 unit tests. The \`openhl-funding\` crate goes from "all type definitions" to "type definitions + first piece of math":
+…passes 4 unit tests.
+
+Specific changes:
+
+The \`openhl-funding\` crate goes from "all type definitions" to "type definitions + first piece of math":
 
 - **\`crates/funding/src/compute.rs\`** — new file with the module doc + 2 functions:
   - \`compute_premium(mark, index) -> Premium\` — derives \`(mark - index) / index\`, scaled by \`RATE_SCALE\`.
@@ -1292,13 +1337,25 @@ L5 doesn't add a new function. Instead, it does a deep dive on the overflow phil
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Saturate-not-panic-not-wrap as the only consensus-safe overflow** — panic halts the validator and forks it off the network; wrap can differ across compiler versions and produce divergent-but-defined values; saturate gives every validator the same bounded value. There are no other options that preserve consensus liveness.
+- **Sign-aware saturation override** — \`i64::try_from\` reports failure but not direction. The \`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })\` closure recovers the direction; a fixed \`i64::MAX\` override would flip \`i128::MIN\` to positive and silently corrupt sign.
+- **Hand-traced tests vs proptests are complementary, not redundant** — proptest random sampling will never hit \`i128::MAX\` (one point out of 2^129); boundary cases must be hand-traced. Proptest excels at interior properties; hand-traced tests pin the corners.
+- **Test the property that's actually invariant, not the aspirational one** — naive antisymmetry would require equal magnitudes both ways, but integer division breaks that. We test the weaker "signs are opposite" property and document the rounding caveat in the test comment.
+- **Why \`checked_mul\` + \`Result\` doesn't actually solve it** — the error has to propagate to the bridge, whose only real options are "revert (fork)", "skip (silent inconsistency)", or "settle at the cap" — and the last is exactly what saturate produces without propagation.
+
+No new function. ~5 lines of new test code. **The mental model is the lesson.**
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 5 tests (4 from L4 + 1 new proptest). The crate gains:
+…passes 5 tests (4 from L4 + 1 new proptest).
+
+Specific changes:
 
 - **The first proptest in the codebase** — \`premium_is_antisymmetric_in_mark_index\`. Swapping \`mark\` and \`index\` flips the sign of the premium (or both are zero when they're equal). 256 random inputs per test run.
 
@@ -1308,8 +1365,6 @@ But the larger payload of this lesson is **conceptual, not code**. We walk throu
 2. **Why wrap = chain fork.** Two validators with different compiler versions or build flags can wrap *differently* at the same overflow point. Wrong values diverge from correct values.
 3. **Why saturate is bounded behavior.** All validators agree on the saturated value at the same input. No fork.
 4. **\`saturate_i128_to_i64\` boundary cases.** \`i128::MAX → i64::MAX\`, \`i128::MIN → i64::MIN\`. Why the \`unwrap_or\` closure depends on sign, not just \`i64::MAX\`.
-
-No new function. ~5 lines of new test code. **The mental model is the lesson.**
 
 ## Recap
 
@@ -1592,13 +1647,25 @@ L6 adds \`compute_rate\` — the function that takes a \`Premium\` and \`Funding
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Order of operations preserves units** — divide first, *then* clamp. The cap is \`4%/interval\` so it must bind at the rate level. Clamp-then-divide would silently turn the cap into \`cap/divisor\` (e.g., \`0.5%/interval\` with HL defaults), invisibly weakening the spec.
+- **Symmetric clamp via \`.clamp(-cap, cap)\`** — Rust's built-in \`i64::clamp\` reads top-to-bottom and applies both sides at once; the common bug pattern is \`min(raw, cap)\` (positive only) leaving the negative side unclamped.
+- **Defensive \`.abs()\` at the API boundary** — accepting \`FundingRate(-40_000_000)\` as a cap and treating it as magnitude is one less footgun for callers who reasonably expect either sign to work. ~1 ns cost, real safety.
+- **Edge cases that fall out naturally beat explicit branches** — \`cap == 0\` produces \`FundingRate(0)\` without a special-case because \`clamp(0, 0) = 0\`. No extra code path means no extra path to test.
+- **No proptest where there's no property** — \`compute_rate\` is "divide and clamp"; there's no algebraic invariant for proptest to shine on. Hand-traced tests cover the distinct input regions; resist forcing a proptest where there isn't one.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 10 tests (5 from L4-L5 + 5 new). \`compute.rs\` gains:
+…passes 10 tests (5 from L4-L5 + 5 new).
+
+Specific changes:
+
+\`compute.rs\` gains:
 
 - **\`compute_rate(premium, params) -> FundingRate\`** — turns a raw premium into a per-interval rate by dividing by \`params.divisor\` and clamping to \`±params.rate_cap\`.
 - **5 unit tests** covering: the divisor effect, the positive cap clamp, the negative cap clamp, the disabled-when-divisor-zero case, the disabled-when-cap-zero case.
@@ -1869,13 +1936,25 @@ L7 adds \`apply_funding\` — the third and final pure function. It takes a slic
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **One unary minus carries the sign convention** — \`-delta_unscaled\` flips from market-centric ("longs pay") to account-centric (\`Notional\` positive = receives). Two sign-flip points would double the surface area for bugs; one is the contract.
+- **Conservation law as a proptest** — balanced books sum to zero exactly within the no-saturation regime, because integer division preserves \`-x/d = -(x/d)\` for positive \`d\`. Funding redistributes; it doesn't create or destroy quote currency.
+- **Filter, don't error, for flat positions** — \`size == 0\` accounts are silently dropped; returning a \`Result<Vec<Settlement>, FlatPositionError>\` would force callers to handle a non-condition. Flat positions are *expected*, not exceptional.
+- **Accept the least-restrictive type** — \`positions: &[Position]\` (slice borrow) lets callers retain ownership and re-use the list across ticks; \`Vec<Position>\` would force a clone per call.
+- **Pick proptest ranges so the property holds *exactly*** — bounding \`size in 1..1M\` keeps the i128 products below \`saturating_mul\`'s clamp threshold. A wider range would force weakening "sum == 0" to "sum.abs() < epsilon" — an aspirational property instead of an invariant.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 15 tests (10 from L4-L6 + 5 new). \`compute.rs\` gains the final pure function:
+…passes 15 tests (10 from L4-L6 + 5 new).
+
+Specific changes:
+
+\`compute.rs\` gains the final pure function:
 
 - **\`apply_funding(positions, mark, rate) -> Vec<Settlement>\`** — applies the rate to every non-flat position and produces a settlement per match. ~25 lines.
 - **4 hand-traced unit tests**:
@@ -2238,13 +2317,26 @@ L8 creates \`crates/funding/src/clock.rs\` — a new module — with the \`Fundi
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Discrete event loop over a pure function** — the clock's job is to call the math at the right times and not call it at the wrong times. The math itself is unchanged from Module 2; the clock adds *when*, not *what*.
+- **\`Option<FundingTick>\` over always-return** — \`None\` cheaply signals "no state change" without forcing callers to inspect the tick. \`if let Some(tick) = clock.tick(...)\` is the natural shape; always-return would force \`if !tick.settlements.is_empty()\` checks that don't even capture the right meaning.
+- **Layered composition without reimplementation** — \`tick()\` chains \`compute_premium → compute_rate → apply_funding\`; it knows the order, not the contents. Math computes, clock gates — separation of concerns at the file level.
+- **Surface intermediates for telemetry** — \`FundingTick\` carries \`premium\` and \`rate\` even though only \`settlements\` drives state. Observers that want to log "rate at tick 12345 was 0.125%" read them directly; recomputing invites divergence.
+- **Promise the contract in the module doc; defend it in code and tests** — both invariants (at-most-one-per-interval, no-catch-up) are named at the top of \`clock.rs\` before any code appears. L8 establishes structure; L9 + L10 enforce the invariants test-side. Three places to find the rationale: doc, code, test.
+- **Single-threaded by contract** — concurrency belongs to the caller, not the data structure. \`AtomicU64\` for \`last_settled_at\` would add complexity for a serialization problem that doesn't actually exist at this layer.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 18 tests (15 from L4-L7 + 3 new). The crate gains its **third and final module**:
+…passes 18 tests (15 from L4-L7 + 3 new).
+
+Specific changes:
+
+The crate gains its **third and final module**:
 
 - **\`crates/funding/src/clock.rs\`** — new file with the module doc + 2 structs + 1 impl block:
   - **\`FundingClock\`** — owns \`params: FundingParams\` and \`last_settled_at: u64\`. The state across funding ticks.
@@ -2668,13 +2760,25 @@ The lesson is mostly about *testing* and the *interval-gating* invariant. **L10 
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Single-call tests verify behavior; multi-call tests verify state machines** — L8 confirmed the guard can return \`Some\` once. L9's \`second_tick_requires_another_full_interval\` confirms the guard *re-engages* after firing. A buggy implementation could fire once and never gate again; you need three sequential calls to catch that.
+- **Composition tests catch wiring errors** — even when every step is unit-tested, the wiring between steps is a separate concern. \`tick()\` could call \`apply_funding\` before \`compute_rate\`, or pass \`index\` where \`mark\` is expected. A full math composition test (\`premium_drives_settlement_signs\`) catches what unit tests can't.
+- **Invariants must be re-verified at every layer they traverse** — \`compute_rate\`'s cap is unit-tested in L6, but \`capped_rate_when_premium_extreme\` re-verifies it through \`tick()\`. A wiring bug (e.g., overwriting \`params.rate_cap\` mid-call) would slip past lower-layer tests.
+- **Boundary tests as pairs: just-before and exactly-at** — \`now == last_settled_at + interval - 1\` (none) and \`now == last_settled_at + interval\` (fires) is the standard pair. Both directions catch off-by-one in the guard condition. Adding \`+1\` doesn't catch a different class of bug.
+- **Failure leaves state unchanged** — when \`tick()\` returns \`None\`, \`last_settled_at\` stays put. Three sequential calls (fire, gated, fire) reveal this sub-invariant by the success time of the third call.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 21 tests (18 from L4-L8 + 3 new). **No new production code.** The three new tests deepen our coverage of clock semantics across multiple operations:
+…passes 21 tests (18 from L4-L8 + 3 new).
+
+Specific changes:
+
+**No new production code.** The three new tests deepen our coverage of clock semantics across multiple operations:
 
 - **\`premium_drives_settlement_signs\`** — full math composition flows through the clock. mark > index → positive premium → settlement signs match.
 - **\`second_tick_requires_another_full_interval\`** — interval-gating is persistent across ticks. A successful tick doesn't permanently unlock the clock.
@@ -2903,13 +3007,25 @@ L10 closes Module 3 with the **no-catch-up invariant**: the milestone test \`no_
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **No-catch-up as a fairness invariant** — after a 10-interval gap, settle *once* and advance to \`now\`; don't replay 10 ticks. Replaying with the current snapshot pummels the losing side 10x for time they couldn't have closed during. Funding's purpose is equilibration, not retroactive enforcement.
+- **Advance to \`now\`, not to \`last_settled + interval\`** — the deadline resets to the actual settlement timestamp, not to a mathematically next-aligned one. The clock forgets missed intervals entirely; this is the design choice the test pins.
+- **Same-\`now\` second-tick is the strictest possible state-machine test** — no time elapses between the two calls; only the clock's internal state has changed. Catches all implementations that fail to update \`last_settled_at\` on a late tick.
+- **Catch-up policy lives outside the clock** — a caller wanting catch-up writes a wrapper that calls \`tick()\` repeatedly with snapshots at intermediate historical timestamps. The clock can't do this; it doesn't have access to historical state. The primitive stays minimal; policy stays in the caller.
+- **Design philosophy lives in three places: doc, code, test** — module doc names the invariant, \`tick()\`'s \`self.last_settled_at = now\` line enforces it, \`no_catchup_after_long_gap\` proves it. Each location handles a different reader.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 22 tests (21 from L4-L9 + 1 new). The new test is **\`no_catchup_after_long_gap\`** — the milestone test that pins openhl's design choice on what happens when a validator misses multiple intervals.
+…passes 22 tests (21 from L4-L9 + 1 new).
+
+Specific changes:
+
+The new test is **\`no_catchup_after_long_gap\`** — the milestone test that pins openhl's design choice on what happens when a validator misses multiple intervals.
 
 After L10:
 - \`crates/funding/\` is **byte-identical to Stage 8b** (\`cd94137\`).

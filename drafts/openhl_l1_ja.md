@@ -21,15 +21,29 @@
 
 ## ゴール
 
-このレッスンの終わりに、`~/code/my-openhl/` ディレクトリで次を実行する:
+このレッスンで掴む概念:
+
+- **依存グラフ先行のワークフロー** — アプリケーションコードを書き始める *前* に Reth と Malachite を共存させる理由。transitive な衝突がコース途中で噴き出して巻き戻すリスクを潰す。
+- **workspace レベルでの依存宣言** — 外部依存を root の `Cargo.toml` に 1 度だけ書き、各 crate 側は `{ workspace = true }` で継承する。Reth のバージョン bump が 11 crate スイープではなく 1 行修正で済む。
+- **Git SHA pin vs. crates.io** — production L1 が Reth と Malachite を semver range ではなく commit SHA に固定する理由。validators がバイト単位で一致する必要がある以上、再現性は利便性に勝る。
+- **10 crate + 1 bin のレイアウト** — OpenHL の 5 つのサブシステム (types, codec, clob, consensus, evm, …) が flat な `crates/` と単一の `bin/openhl` にどう対応するか。
+
+検証:
 
 ```bash
 cargo check --workspace
 ```
 
-上記の実行結果が "unused dependency" 警告以外は warning なしで `Finished` と表示される状態にする。手元には、空のライブラリ crate を 10 個、binary crate を 1 個、SHA で pin された Reth の git 依存、同じく SHA で pin された Malachite の git 依存を持つ Rust workspace が出来上がる。**アプリケーションロジックは 1 行も書かない** — それは L2 以降だ。本レッスンは「依存グラフを正しく組む」ことに専念する。
+`~/code/my-openhl/` ディレクトリで上記の実行結果が "unused dependency" 警告以外は warning なしで `Finished` と表示される。**アプリケーションロジックは 1 行も書かない** — それは L2 以降だ。
 
 Reth のコンパイルグラフだけで ~600 crates ある。最初の `cargo check` はマシンによって 5-15 分かかる。そのつもりで進める。以降の check は incremental が効いて速くなる。
+
+具体的な変更:
+
+- 空のライブラリ crate を 10 個、binary crate を 1 個、`crates/` と `bin/openhl/` 配下に scaffold する。
+- root `Cargo.toml` に `members`、workspace defaults、`[workspace.dependencies]` を宣言する。
+- Reth を workspace レベルで SHA pin の git 依存として宣言する。
+- Malachite を同じやり方で pin する。
 
 ## おさらい
 

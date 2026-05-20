@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **`std::mem::take` is O(1) — a pointer swap, not element copying** — for a `Vec<Fill>` with 1000 entries, `mem::take` swaps the (ptr, len, cap) triple in one assignment; `drain(..).collect()` is O(N) with iterator overhead. Knowing the stdlib primitive saves you from inventing slower versions.
+- **Drain at `build_payload`, not at `submit`** — fills get grouped by *which payload they ride in*, not by submission order. If we drained at submit time, the bridge would need a side-channel to track payload assignment. Buffer-then-drain encodes the grouping for free.
+- **Forward-only drain mirrors block immutability** — payload N gets the fills accumulated between the previous `build_payload` and now. Earlier payloads are not retroactively updated. This is the same semantics as committed blocks: once built, frozen.
+- **Two short locks beat one long lock when operations are independent** — we lock `state` to compute the payload ID, *briefly* lock `pending_fills` for the swap, then continue under `state`'s lock to insert. The `pending_fills` mutex isn't held during the heavy work.
+- **The lost-fill failure mode is real but acceptable for v0** — if `build_payload` errors *after* the drain, the fills are gone from `pending_fills` but never made it into a payload. Production hardening would add a recovery queue; v0 single-validator devnet accepts the risk.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-…still passes 38 tests. **One small change in `build_payload`** — about 8 lines — replaces L9's `Vec::new()` placeholder with `std::mem::take(...)`, so each new payload drains every fill the CLOB has accumulated since the last `build_payload` call.
+…still passes 38 tests.
+
+Specific changes:
+
+**One small change in `build_payload`** — about 8 lines — replaces L9's `Vec::new()` placeholder with `std::mem::take(...)`, so each new payload drains every fill the CLOB has accumulated since the last `build_payload` call.
 
 The drain is **forward-only**: once a fill is attached to payload N, it's gone from `pending_fills` and will not appear in payload N+1. This is the data-flow promise the bridge makes to its consumers — each payload owns exactly one snapshot of fills, taken at build time.
 

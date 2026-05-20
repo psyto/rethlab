@@ -20,13 +20,22 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Why floats can't run in consensus** — FMA, rounding modes, denormals all diverge across compilers/CPUs; a single LSB disagreement on a rate forks the chain.
+- **Why `RATE_SCALE = 1e9` is the sweet spot for fixed-point in i64** — parts-per-billion gives 9 decimal digits of precision while keeping 11 orders of magnitude of i64 headroom for products; `1e6` loses precision, `1e12` loses headroom.
+- **The crate scaffolding move** — turning an empty `lib.rs` into a real crate with one `pub mod` and one re-export — and why module declarations land only when the file exists.
+- **The "set once, never change" constant** — `RATE_SCALE` is consensus state, not a tunable; doc-comment placement and immutability matter.
+
+Verification:
 
 ```bash
 cargo build -p openhl-funding
 ```
 
-…compiles. The `openhl-funding` crate now has:
+…compiles.
+
+Specific changes:
 
 - **Cargo.toml** wiring an `openhl-clob` dependency (we'll need `AccountId` from there later, but the dep goes in now so it's not a surprise at L3) and a `[dev-dependencies]` block ready for `proptest` (used at L4 / L7).
 - **`src/types.rs`** — newly created, containing the module doc + `pub const RATE_SCALE: i64 = 1_000_000_000`. Nothing else yet.

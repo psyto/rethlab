@@ -20,13 +20,24 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **`EvmFactory` + `ExecutorBuilder` という Reth の「スロット 1 つを差し替える」シーム** — Reth が構築するすべての EVM (payload build、block validation、eth_call RPC、debug RPC) は 1 つの factory を経由するので、custom precompile を一度登録すればすべての経路に伝播する。
+- **`alloy-evm` (抽象トレイト) と `reth-evm` (具体的な配線) の役割分担** — 両方が必要な理由：トレイト層は EVM が *何か* を表現し、executor 層は Reth がそれを *どう動かすか* を表現する。
+- **spec ごとの `Precompiles` を `OnceLock` でキャッシュ** — precompile セットの構築は重い (address の hash 化)、`create_evm` はホットパス、なので各 hardfork 層のセットを 1 度だけ作り `&'static` として共有する。
+- **シグネチャだけ固定した stub による incremental construction** — passthrough の `openhl_precompiles(base) -> Precompiles` は factory を *今* 配線可能にしておき、本体は L2 で埋める。callsite の書き換えは発生しない。
+
+検証：
 
 ```bash
 cargo check -p openhl-evm
 ```
 
-上記の実行結果がクリーンにコンパイル。`crates/evm/src/` 配下に **新規モジュールが 2 個** 増える:
+上記の実行結果がクリーンにコンパイル。
+
+具体的な変更:
+
+`crates/evm/src/` 配下に **新規モジュールが 2 個** 増える:
 
 - **`openhl_evm.rs`** — `OpenHlEvmFactory` (Reth の `EvmFactory` スロット) + `OpenHlExecutorBuilder` (Reth の `ExecutorBuilder` スロット)、加えて `OnceLock` 経由の hardfork ごとの precompile dispatch。約 80 LOC。
 - **`precompiles/mod.rs`** — `openhl_precompiles(base) -> Precompiles` の **stub**、ひとまずただの passthrough。L2 で本物の read precompile を埋める。

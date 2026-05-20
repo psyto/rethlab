@@ -21,13 +21,26 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **なぜちょうど 4 メソッドか** — `build_payload / payload_ready / validate_payload / commit` の 4 つは BFT round 構造 (propose → vote → decide) によって決まるもので、言語の好みではない。build/ready を 1 つにまとめると build-during-voting が消える。5 つ目を足すと consensus 内部が EL に漏れる。
+- **`#[async_trait]` と `Send + Sync` bound** — `async_trait` が実際に何に desugar されるか (boxed futures + object-safety)、そして `: Send + Sync` が Malachite actor 間で共有される `Arc<dyn ConsensusBridge>` の soundness をコンパイル時に保証する仕組み。
+- **3 つの error 分類** — `Rejected / NotReady / Internal` が 3 種類の consensus 応答 (反対 vote / 待つ / 停止) に対応する。1 つの string variant にすると consensus 側が string を parse する羽目になり、variant を増やすと EL 内部が漏れる。
+- **Trait-as-contract プログラミング** — このファイルがコンパイルされた瞬間、以降のレッスンはすべて「この method を実装する」か「この method を呼ぶ」のどちらかになる。L4-L5 は impl、L10-L14 は caller。ここから先の codebase の形が決まる。
+
+検証:
 
 ```bash
 cargo check -p openhl-consensus
 ```
 
-上記の実行結果が pass する。`openhl-consensus` crate に 4 メッセージの `ConsensusBridge` trait — consensus が呼び、execution が実装する型付き API surface — が入る。**impl はまだない** (L4 から始まる)。trait とそれに紐づく error type だけだ。これがコンパイルされた時点で contract が型レベルで完全に定義され、後続レッスンはすべて「この trait method の中身を書く」か「この trait の method を呼ぶ」かのどちらかになる。
+上記の実行結果が pass する。`openhl-consensus` crate に 4 メッセージの `ConsensusBridge` trait — consensus が呼び、execution が実装する型付き API surface — が入る。**impl はまだない** (L4 から始まる)。trait とそれに紐づく error type だけだ。
+
+具体的な変更:
+
+- `crates/consensus/Cargo.toml` に 4 つの依存追加: `openhl-types`、`async-trait`、`thiserror`、`eyre`。
+- `crates/consensus/src/bridge.rs` — 新規ファイル、`ConsensusBridge` trait (4 つの async method) と `BridgeError` enum (3 variant) を含む。
+- `crates/consensus/src/lib.rs` — `pub mod bridge;` を配線する。
 
 ## おさらい
 

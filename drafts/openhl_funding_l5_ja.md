@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **Saturate-not-panic-not-wrap は consensus で許される唯一の overflow** — panic は validator を halt させ network から fork off する。Wrap はコンパイラバージョンによって挙動が変わり、「定義されているが間違った」値を生む。Saturate ならすべての validator が同じ bounded value に到達する。Consensus liveness を保てる他の選択肢はない。
+- **符号を意識した saturation override** — `i64::try_from` は失敗を報告するが方向は教えない。`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })` の closure が方向を復元する。`i64::MAX` 固定にすると `i128::MIN` が正に flip して符号が静かに壊れる。
+- **手書きトレースと proptest は補完関係であって冗長ではない** — proptest のランダムサンプリングは `i128::MAX`（2^129 のうちの 1 点）にまず当たらない。境界は手書きでしか pin できない。Proptest は interior の property に強く、手書きは corner に強い。
+- **テストすべきは「実際に成立する不変条件」であって「願望の property」ではない** — 素朴な antisymmetry は magnitude も等しくあれと書きたくなるが、整数除算がそれを壊す。「符号が逆」という weaker な property をテストし、丸めの caveat を test コメントに残す。
+- **`checked_mul` + `Result` で本当に解決するわけではない理由** — error は最終的に bridge に届くが、bridge が取れる現実的な選択肢は「revert（fork）」「skip（silent inconsistency）」「cap で settle」の 3 つしかない。最後のものは saturate がそのまま実現してくれる挙動だ。
+
+新規関数なし、新規テストコードは ~5 行。**メンタルモデルこそがレッスンの本体だ。**
+
+検証：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-上記の実行結果が 5 テストを通る（L4 で書いた 4 つ + 新規 proptest 1 つ）。Crate に加わるのは：
+上記の実行結果が 5 テストを通る（L4 で書いた 4 つ + 新規 proptest 1 つ）。
+
+具体的な変更:
 
 - **コードベース初の proptest** — `premium_is_antisymmetric_in_mark_index`。`mark` と `index` を入れ替えると premium の符号が反転する（mark = index のときは両方ともゼロ）という property だ。テスト実行 1 回あたり 256 のランダム入力を投げる。
 
@@ -36,8 +48,6 @@ cargo test -p openhl-funding
 2. **wrap = チェーン fork である理由。** コンパイラバージョンや build flag が異なる 2 つの validator は、同じ overflow 地点で*別々に* wrap しうる。誤った値が正しい値から乖離する。
 3. **saturate が bounded behavior である理由。** すべての validator が同じ入力に対して同じ saturated 値に合意する。Fork は起きない。
 4. **`saturate_i128_to_i64` の境界ケース。** `i128::MAX → i64::MAX`、`i128::MIN → i64::MIN`。`unwrap_or` の closure が `i64::MAX` 固定ではなく、なぜ符号に依存する必要があるか。
-
-新規関数なし、新規テストコードは ~5 行。**メンタルモデルこそがレッスンの本体だ。**
 
 ## おさらい
 

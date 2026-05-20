@@ -20,21 +20,30 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Two `BTreeMap`s are the entire matching-engine state** — no order-id index, no best-price cache, no per-side counters. Everything else is derived. Optimizations layer on top later without changing the core model.
+- **`Reverse<Price>` makes the iterator walk bids highest-first** — by flipping `Ord::cmp` at the *key* type, both sides can use `BTreeMap::iter().next()` uniformly. One type asymmetry buys symmetric matching code.
+- **`RestingOrder` trims `Order` to make impossible states unrepresentable** — a resting order has no `side` (we know it from which map it's in) and no `order_type` (Market never rests). Type design as constraint engineering.
+- **`VecDeque` over `Vec` for FIFO queues** — `Vec::remove(0)` shifts every element (O(n)); `VecDeque::pop_front()` is O(1). Price-time priority requires fast pop-front *and* fast push-back.
+
+Verification:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-…still compiles. You'll have a new file `crates/clob/src/book.rs` containing:
+…still compiles.
+
+Specific changes:
+
+You'll have a new file `crates/clob/src/book.rs` containing:
 
 - **`Book` struct** — two `BTreeMap`s (bids + asks), each mapping a price level to a `VecDeque` of resting orders.
 - **`RestingOrder` struct** — what a single order looks like once it's resting on the book (trimmed from `Order`).
 - **`new()` constructor** + 4 read-only accessors (`best_bid`, `best_ask`, `depth_bid`, `depth_ask`).
 
 **No matching logic yet** — `submit` lands in L4 + L5, `cancel` in L6. This lesson is about building the data structure correctly so the matching logic can be a few lines on top of it.
-
-The single load-bearing idea: **`Reverse<Price>` as a `BTreeMap` key** makes the natural-order iterator walk bids highest-first. Once you see why that works, the rest of the matching code becomes obvious.
 
 ## Recap
 

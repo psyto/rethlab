@@ -21,13 +21,25 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **read チェーンを end-to-end で繋ぐ** — `CLOB に bid を発注 → bridge が Mutex 経由で書き込み → precompile が global 経由で read → 64-byte ABI に encode → 呼び出し元に返す`。チェーン全体を一度に exercise する最初のテスト。
+- **敵対的 (adversarial) なテストデータ > ランダムなテストデータ** — 「best bid 実装が正しい」ことと「たまたま正しく動いている」ことを区別するために、order 2 個を意図的に選ぶ — 250 価格 qty 7 (*正しい*答え) と、240 価格 qty 99 (iteration order を間違えたら取ってしまう、larger-qty の罠)。50 個のランダム order より価値が高い。
+- **dispatch test と behavior test を分割する** — L5 では `Precompile::execute` 経由で関数が到達可能なことを示した。L6 では `read_best_bid` を直接呼び、関数が live state を読むことを示す。dispatch と behavior をひとつのテストに混ぜると、失敗時のデバッグが難しくなる。
+- **assertion メッセージは未来の保守者のためのドキュメント** — `"best bid is the 250 order, not 240"` は次のエンジニアに「どの概念的不変条件が壊れているか」を伝える。素の `left=240 right=250` は値しか伝えない。
+- **L4-L6 を貫く one-thing-at-a-time** — 配管 (L4) → 差し替え (L5) → 通電 (L6)。各レッスンに verifiable な変更が 1 つだけ。混ぜると、中間段階で何か壊れたときのデバッグが格段に難しくなる。
+
+検証：
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-上記の実行結果が 43 tests を通る（1 つ新規）。新しいテストは `read_best_bid_returns_live_state_when_clob_installed`。ここまで全テストが寸止めにしてきたことを、ついにやる：**既知の bid を持つ CLOB を install し、precompile を呼び、出力 bytes がその bid の price と qty を encode していることを観測する。**
+上記の実行結果が 43 tests を通る（1 つ新規）。
+
+具体的な変更：
+
+新しいテストは `read_best_bid_returns_live_state_when_clob_installed`。ここまで全テストが寸止めにしてきたことを、ついにやる：**既知の bid を持つ CLOB を install し、precompile を呼び、出力 bytes がその bid の price と qty を encode していることを観測する。**
 
 これがマイルストーンだ。フルチェーン — `CLOB に bid を発注 → ブリッジが Mutex 経由で書き込み → precompile が global 経由で read → 64-byte の ABI に encode → 呼び出し元に返す` — がついに end-to-end で exercise される。L6 後：
 

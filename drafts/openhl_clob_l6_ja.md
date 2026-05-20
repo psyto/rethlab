@@ -20,19 +20,28 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **`BTreeMap::retain` が「mutate + 空 entry を drop」を 1 closure でこなす** — 同じ callback が queue から該当 order を削除し、かつ level を残すかどうかも返す。1 pass で済み、`submit` 由来の空 level 不変条件が自動で維持される。
+- **O(n) 線形 scan は v0 で正しい選択** — O(1) cancel のために `HashMap<OrderId, (Side, Price)>` を持つと、`BTreeMap` と同期させる第 2 のデータ構造、追加メモリ、追加 cache 圧が発生する。プロファイルで見えていないものを最適化しない。Scan が見えてきたら index を入れる。
+- **`bool` 戻り値が「最小の正直な形」** — `Option<RestingOrder>` は L3 で private にした `RestingOrder` を漏らす。`Result<(), CancelError>` は「見つからない」をエラー扱いに強制するが、cancel の冪等性 (2 回呼んでも安全) はバグではなく機能。
+- **空 level 掃除が `best_bid` の正直さを保つ** — もし `retain` が price 100 に空 queue を残せば、流動性がゼロなのに `best_bid()` は 100 を返し、次の sell は幻の価格でマッチしてしまう。`submit` が守るのと同じ不変条件を `cancel` も守らねばならない。
+
+検証:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-上記の実行結果が引き続きコンパイルする。`Book` に新規メソッド 1 個:
+上記の実行結果が引き続きコンパイルする。
+
+具体的な変更:
+
+`Book` に新規メソッド 1 個:
 
 - **`cancel(&mut self, order_id: OrderId) -> bool`** — bid と ask の両 side で指定 id の order を検索し、見つかれば削除し、cancellation で level が空になれば level を drop する。削除したら `true`、見つからなければ `false` を返す。
 
-約 25 LOC。興味深いイディオムは **`BTreeMap::retain`** — map の全 queue を 1 回 traverse し、条件付きで mutate し、closure が `false` を返した entry を drop する単一呼び出し。「order 削除」と「空 level drop」の両ステップを 1 pass で扱える。
-
-L6 後、matching engine は **機能的に完成** する。Submit (Limit + Market) + cancel が v0 のフル表面となる。L7 でテストスイートに入る。
+約 25 LOC。L6 後、matching engine は **機能的に完成** する。Submit (Limit + Market) + cancel が v0 のフル表面となる。L7 でテストスイートに入る。
 
 ## おさらい
 

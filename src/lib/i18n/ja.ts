@@ -132,6 +132,7 @@ export const ja: TranslationKeys = {
       intermediate: '中級',
       advanced: '上級',
       expert: 'エキスパート',
+      diyPerp: 'DIY Perp',
     },
     catalog: {
       title: 'コースカタログ',
@@ -361,6 +362,8 @@ export const ja: TranslationKeys = {
       hyperliquid: '上級',
       hyperliquidDesc: 'L1 を architect する 5 コース。BFT コンセンサス、cross-chain bridge、sequencer & rollup、P2P ネットワーキング、validator 運用。Hyperliquid・Tempo クラスへの設計力。',
       expertDesc: '本番運用とアプリ開発の 2 コース。Reth Expert で性能、MDBX、Tokio、本番 MEV、zkEVM、Reth フォーク運用。Building with the Stack で MEV searcher・indexer・wallet・order router・HTTP 402 machine-payments エンドポイントなど動くアプリ 10 本。',
+      diyPerpDesc: 'Hyperliquid シェイプの永久先物 DEX を一から作る 4 コースの実装シリーズ。Consensus、CLOB マッチングエンジン、カスタム EVM precompile、funding state machine を順に構築する。各レッスンで `psyto/openhl` を答え合わせの参照実装として使う。',
+      diyPerpTag: 'プロジェクト',
       hlDev: 'Reth開発者',
       hlDevDesc: 'RethのStaged Sync、独自RPCメソッド、ExEx、そしてApp-chain構築のためのReth SDK。',
       beginner: '初級',

@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **Buy と Sell は構造的なミラー、generic 抽象ではない** — Buy 分岐は ask を昇順に walk、Sell は bid を降順に walk。ほぼ同形の 2 関数の方が、boolean フラグでパズル化した generic helper より読みやすい。
+- **「クロスする限り walk する」が matching engine の core loop** — `while remaining > 0 && 反対側の best 価格が limit をクロス { match_at_level; level を進める/外す }`。この形が見えると、L5 の market order は「同じ loop から price check を抜いただけ」になる。
+- **空 queue 不変条件は変更のたびに維持する** — 各 match の後で `if queue.is_empty() { remove(price) }`。空 queue を map に残すと `best_bid()` が嘘をつき、no-crossed-book 不変条件が壊れる。
+- **戻り値は「呼び出しで何が起きたか」、book 状態は「今どうあるか」を表す** — Limit の `FillResult::remaining_qty` は常に `Qty(0)` (fill しなかった分は rest した)。Rest した残量を知りたければ `best_bid` / `depth_bid` を別途問い合わせる。2 つの契約を混ぜない。
+- **`match_at_level` を free function にして scope を名指す** — `self` を取らない。caller が既に取り出したデータ (queue + remaining) を操作する。関数 signature がドキュメント。
+
+検証:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-上記の実行結果が引き続きコンパイルする。`Book` が **Limit order** (Buy + Sell) を受け付け、real `Fill` を produce できるようになる。Market order はまだ `todo!()` のまま — それは L5 で扱う。
+上記の実行結果が引き続きコンパイルする。
+
+具体的な変更:
+
+`Book` が **Limit order** (Buy + Sell) を受け付け、real `Fill` を produce できるようになる。Market order はまだ `todo!()` のまま — それは L5 で扱う。
 
 書くもの:
 

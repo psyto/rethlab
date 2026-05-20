@@ -22,7 +22,15 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **`BlockchainProvider` に concrete に依存せず `P: BlockNumReader` に generic** — bridge が必要とする Reth の capability を *ちょうど 1 つ* に宣言する。Concrete な provider は 30 個以上の trait bound を背負っていて、それを全 caller に流すのは負担。Generic は surface を絞り、mock test も自明にしてくれる。
+- **honest な validation の最小単位としての happy/negative pair** — happy だけだと in-memory への silent fallback を見逃す。Negative だけだと「常に reject する bridge」を見逃す。「bridge は Reth と対話する」を真の主張にするには両方が load-bearing でなければならない。
+- **`Result<Option<u64>>` が運用エラーとプロトコルエラーを区別する** — DB call の失敗 → `BridgeError::Internal` (アラート)、未知の hash → `BridgeError::Rejected` (nil に vote して進む)。エラーはメッセージだけでなく意味を運ぶ。
+- **未知の親の拒否は安全性プロパティ** — consensus engine が live chain の見たことない hash の上に build しろと言ってきたら、bridge は拒否しなければならない。これが、悪意ある / バグった proposer が EL を fork subtree に誘導することを防ぐルールだ。
+- **integration milestone としての 2 つの bridge** — `RethEvmBridge` (L5、alloy のみ) と `LiveRethEvmBridge` (L12、live provider) は両方 codebase に残る。重複実装ではなく integration の 2 段階を表す。
+
+検証:
 
 ```bash
 cargo test -p openhl-evm live_bridge_builds_on_real_genesis --release
@@ -38,7 +46,11 @@ Happy path: `EthereumNode` を boot し、その `BlockchainProvider` に real �
 
 Negative path: `build_payload(BlockHash([0xee; 32]), attrs)` を呼ぶ。Provider はその hash を知らないので、bridge は `BridgeError::Rejected` を返す。**Live chain が見たことのない parent に対して build を拒否することで、bridge を consensus に配線しても安全になる。**
 
-新規ファイル: **`crates/evm/src/live_node.rs`** (~227 行) — `LiveRethEvmBridge<P>` は `P: BlockNumReader` に対してジェネリックになっている。`build_payload` は real だ。`payload_ready` はインメモリの pending 状態を読む。`validate_payload` と `commit` は L14-L15 まで stub のままだ。
+具体的な変更:
+
+- `crates/evm/src/live_node.rs` — 新規ファイル (~227 行)。`LiveRethEvmBridge<P>` は `P: BlockNumReader + Clone + Sync + 'static` に generic。`build_payload` は real (live provider を query する)。`payload_ready` はインメモリの pending 状態を読む。`validate_payload` と `commit` は L13-L14 まで stub のままだ。
+- `crates/evm/Cargo.toml` に generic bound が要求する production dep を追加。
+- `crates/evm/src/lib.rs` — `pub mod live_node;` を配線する。
 
 ## おさらい
 

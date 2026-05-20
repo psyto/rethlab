@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The shared-buffer pattern generalizes** — L4's `Arc<Mutex<T>>` + process-global pattern for CLOB state is reused 1:1 for fills. Once the primitive is in place, additional shared state costs ~20 lines per buffer. The L4 abstraction pays compound interest.
+- **Orthogonal globals = orthogonal test setup** — bundling `CLOB_STATE` and `FILL_SINK` into one global would force every test to install both. Two separate globals keep test setup composable; only install what your test actually exercises.
+- **Early-out on the common case is free** — `if !submit_result.fills.is_empty()` skips lock acquisition when the order rests without crossing (the dominant case). One branch in the hot path saves an `RwLock` acquisition.
+- **`drop(book)` before pushing to the sink — release the inner lock before taking the outer one** — holding both locks (Book + sink) at once would create a lock-ordering hazard. Explicitly dropping the Book guard keeps lock acquisition strictly sequential.
+- **Doc-comment-as-debt-tracker** — L8's "fills are discarded" doc comment was load-bearing: it told future readers "deliberate gap, not oversight." L9 closes the gap and updates the doc. A documented gap is half-fixed; an undocumented gap is invisible debt.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-…passes 47 tests (1 new). The "fills are discarded" gap from L8's doc comment is closed:
+…passes 47 tests (1 new).
+
+Specific changes:
+
+The "fills are discarded" gap from L8's doc comment is closed:
 
 - **`FILL_SINK` static added** — parallel to `CLOB_STATE`, holds `Option<Arc<Mutex<Vec<Fill>>>>`.
 - **`install_fill_sink` / `uninstall_fill_sink` module fns** — public, mirror the `install_clob` / `uninstall_clob` pattern.

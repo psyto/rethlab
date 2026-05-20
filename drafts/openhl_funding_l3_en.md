@@ -21,13 +21,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Same shape, different role = separate types** — `FundingRate` and `Premium` are both `i64` scaled by `RATE_SCALE`, but a premium is the raw dislocation and a rate is the post-divisor-post-clamp output. Keeping them distinct enforces the pipeline at the type level: you can't `apply_funding` a premium that hasn't been through `compute_rate`.
+- **Single signed integer for direction + magnitude** — `PositionSize(i64)` encodes long / short / flat in one field instead of an enum + magnitude pair. Smaller, faster, simpler math; the sign convention lives in the doc comment.
+- **Snapshot types vs stateful entities** — `Position` carries only `(account, size)`, deliberately omitting entry price, PnL, history. The owning layer keeps wide state; the funding crate processes narrow snapshots. The doc comment makes the ownership contract explicit.
+- **Parameter-object pattern** — bundling `interval_secs`, `rate_cap`, `divisor` into `FundingParams` preserves call-site stability when config grows. Positional args break every call site at every new parameter; a struct adds fields without touching signatures.
+- **HL-default arithmetic decoded** — `divisor: 8` means "premium / 8 per tick"; with 24 hourly intervals and a 4% cap, the worst-case daily payment is bounded by the cap (not the divisor). The cap is the insurance policy against oracle dislocations.
+
+Verification:
 
 ```bash
 cargo build -p openhl-funding
 ```
 
-…still compiles, with zero rustdoc warnings. `types.rs` is **complete** — all nine types from Stage 8b's roster are in place:
+…still compiles, with zero rustdoc warnings.
+
+Specific changes:
+
+`types.rs` is **complete** — all nine types from Stage 8b's roster are in place:
 
 - **`FundingRate(pub i64)`** — per-interval rate after divisor + cap. Same scale as `Premium`.
 - **`PositionSize(pub i64)`** — signed: positive = long, negative = short, zero = flat.

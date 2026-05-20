@@ -20,21 +20,30 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **`BTreeMap` 2 個が matching engine の状態のすべて** — order-id の index も、best-price のキャッシュも、片側ごとの counter も持たない。それ以外はすべて派生値。最適化はコア model を変えずに後から重ねられる。
+- **`Reverse<Price>` で iterator が bid を highest-first で walk する** — *key 型* の `Ord::cmp` を反転させることで、両 side が `BTreeMap::iter().next()` で統一的に動く。型側の非対称性 1 つで matching コードの対称性が買える。
+- **`RestingOrder` は `Order` を trim して「不可能な状態」を表現不能にする** — resting order に `side` は不要 (どちらの map に居るかで分かる)、`order_type` も不要 (Market は rest しない)。型設計 = 制約のエンジニアリング。
+- **FIFO queue は `Vec` ではなく `VecDeque`** — `Vec::remove(0)` は全要素を shift する (O(n))。`VecDeque::pop_front()` は O(1)。Price-time priority は push-back と pop-front の両方が速くないと成立しない。
+
+検証:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-上記の実行結果が引き続きコンパイルする。新規ファイル `crates/clob/src/book.rs` に以下が入る:
+上記の実行結果が引き続きコンパイルする。
+
+具体的な変更:
+
+新規ファイル `crates/clob/src/book.rs` に以下が入る:
 
 - **`Book` struct** — `BTreeMap` 2 個 (bids + asks)。それぞれ price level を resting order の `VecDeque` にマップする。
 - **`RestingOrder` struct** — book に rest している order の形 (`Order` から trim したもの)。
 - **`new()` コンストラクタ** と read-only accessor 4 個 (`best_bid`, `best_ask`, `depth_bid`, `depth_ask`)。
 
 **matching ロジックはまだ書かない** — `submit` は L4 + L5、`cancel` は L6 で扱う。本レッスンの目的は、後続の matching ロジックが少ない行数で済むようにデータ構造を正しく組むこと。
-
-唯一の load-bearing なアイデア: **`Reverse<Price>` を `BTreeMap` の key にする** ことで、natural-order iterator が bid を highest-first で walk するようにする。これが見えれば、残りの matching コードは自明になる。
 
 ## おさらい
 

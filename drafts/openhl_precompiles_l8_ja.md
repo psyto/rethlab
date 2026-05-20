@@ -21,13 +21,25 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **precompile は on-chain な caller を代表する** — テストコードが `book.lock().submit(...)` を直接呼ぶのは bridge (off-chain) の模倣。`place_order` が book に書き込むのは EVM transaction (on-chain) の模倣。L8 は EVM 実行が CLOB state を mutate し始める瞬間だ。
+- **precompile 2 つ・Arc 1 つ・共有 state = ラウンドトリップ成立** — 両方の precompile が `CLOB_STATE` を介して read/write するので、`0x...0c1c` 経由の write が即座に `0x...0c1b` 経由の read から見える。L4 のアーキテクチャはまさにこの瞬間のために設計されていた。
+- **schema-first だから behavior-second は小さい** — L7 では ~70 行 (定数、atomic、parser、registration、tests) を書いた。L8 では ~7 行 (submit 呼び出し + binding rename + テスト拡張) だけ。先に契約を固定したので、挙動の追加が圧縮されている。
+- **side-effect のテストには handle を保持する必要がある** — L7 の malformed-input テストは book を check できなかった (参照を保持していなかったから)。L8 では `let book = Arc::new(...); install_clob(book.clone());` で修正する。clone することが「戻り値のテスト」と「state のテスト」を分ける鍵だ。
+- **`_result` と `_` の future-intent としての使い分け** — `_result` は「値は見えるが今は使わない、将来使う予定」、`_` (素) は「明示的に使わない」。L8 では `_result` に bind し、L9 で `fills` に改名する。
+
+検証：
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-上記の実行結果が 46 tests を通る — L7 と同じテスト数だ。だが `place_order` に 1 行を加え、テスト 2 つを変更することで、precompile が **本当に book に書く** ようになる：
+上記の実行結果が 46 tests を通る — L7 と同じテスト数だ。
+
+具体的な変更：
+
+`place_order` に 1 行を加え、テスト 2 つを変更することで、precompile が **本当に book に書く** ようになる：
 
 - **`place_order` に 1 行追加** — order_id の割り当てと encoding の間に `clob.lock().submit(Order { ... })` を挟む。
 - **L7 で付けた `_` 接頭辞を外す** — `_account_id` / `_price_value` / `_side` を実際に使うようになる。

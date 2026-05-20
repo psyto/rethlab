@@ -20,15 +20,27 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Production-shape internal types behind a contract surface** — storing `(B256, Header)` internally while the trait returns `ExecutedBlock`. Conversion happens only at the trait boundary, so alloy can evolve without breaking the contract. This is exactly what `LiveRethEvmBridge` (L12+) reuses.
+- **Real RLP hashing via `Header::hash_slow()`** — why `hash_slow` is named "slow" (recomputes on every call, no cache), what RLP encoding is at the byte level, and how alloy enforces this is the same hash an Ethereum node would compute.
+- **Hash-and-header binding via tuple storage** — `(B256, Header)` as one stored unit, not two separate fields. Separating them invites the bug where a mutation desyncs the cached hash from the header it describes.
+- **Two impls of one trait** — `InMemoryEvmBridge` and `RethEvmBridge` share the trait surface but differ in fidelity. This is the polymorphism Rust gives you for free once the trait is right; the same shape extends to a third impl in L12.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm
 ```
 
-…passes **9 tests** (5 from L4's `InMemoryEvmBridge` + 4 new ones for `RethEvmBridge`). The new bridge is structurally identical to L4's, but it stores `alloy_consensus::Header` (the real Ethereum header struct) instead of synthesized blocks, and computes block hashes via `Header::hash_slow()` (real RLP-encoded SHA-256) instead of fabricated bytes.
+…passes **9 tests** (5 from L4's `InMemoryEvmBridge` + 4 new ones for `RethEvmBridge`). **This is the first time your code touches alloy/Reth types.** The pattern of "synthesized for tests, real types for production-shape" repeats throughout the course; learning it cleanly here saves time in L11+.
 
-**This is the first time your code touches alloy/Reth types.** The pattern of "synthesized for tests, real types for production-shape" repeats throughout the course; learning it cleanly here saves time in L11+.
+Specific changes:
+
+- 2 alloy deps added to `crates/evm/Cargo.toml`: `alloy-primitives` (for `B256`, `Address`) and `alloy-consensus` (for `Header`).
+- `crates/evm/src/engine.rs` — new file with `RethEvmBridge` struct, private `State` storing `Header`, and `impl ConsensusBridge for RethEvmBridge` with all 4 methods + 4 unit tests.
+- Three small conversion helpers — `to_b256`, `from_b256`, `to_executed_block` — bridge alloy types to contract types only at the trait boundary.
+- `crates/evm/src/lib.rs` — wires `pub mod engine; pub use engine::RethEvmBridge;`.
 
 ## Recap
 

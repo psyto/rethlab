@@ -130,6 +130,7 @@ export const en = {
       intermediate: 'Intermediate',
       advanced: 'Advanced',
       expert: 'Expert',
+      diyPerp: 'DIY Perp',
     },
     catalog: {
       title: 'Course Catalog',
@@ -359,6 +360,8 @@ export const en = {
       hyperliquid: 'Advanced',
       hyperliquidDesc: 'Five courses on architecting an L1: BFT consensus, cross-chain bridges, sequencer & rollup architecture, P2P networking, validator operations. The design skills behind Hyperliquid- and Tempo-class chains.',
       expertDesc: 'Two courses for production and app engineering. Reth Expert covers performance, MDBX, Tokio, MEV, zkEVM, and Reth fork ops. Building with the Stack ships ten runnable apps — MEV searcher, indexer, wallet backend, order router, an HTTP 402 machine-payments endpoint, and more.',
+      diyPerpDesc: 'Build your own Hyperliquid-shape perpetual DEX from scratch. Four build-along courses cover consensus, the CLOB matching engine, custom EVM precompiles, and the funding state machine — each lesson diffed against `psyto/openhl` as the answer key.',
+      diyPerpTag: 'Project',
       hlDev: 'Reth Devs',
       hlDevDesc: 'Reth Staged Sync, custom RPC methods, ExEx, and the Reth SDK for building App-chains.',
       beginner: 'Beginner',

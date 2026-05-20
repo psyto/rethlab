@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **単一呼び出しテストは挙動を、複数呼び出しテストは state machine を検証する** — L8 で確認したのは guard が一度だけ `Some` を返せること。L9 の `second_tick_requires_another_full_interval` で確認するのは guard が fire した*後にも再び engage する*こと。1 度だけ fire して以降 gate しない buggy 実装を捕まえるには 3 連続呼び出しが必要。
+- **Composition テストが配線ミスを捕まえる** — 各ステップが unit test 済みでも、ステップ間の配線は別の関心事だ。`tick()` が `apply_funding` を `compute_rate` より先に呼ぶかもしれないし、`mark` を期待する場所に `index` を渡すかもしれない。`premium_drives_settlement_signs` のような full composition test が、unit test では捕まえられないバグを拾う。
+- **不変条件は通過する各レイヤーで再検証する** — `compute_rate` の cap は L6 で unit test 済みだが、`capped_rate_when_premium_extreme` で `tick()` 経由でも再検証する。Mid-call で `params.rate_cap` を上書きするような配線バグは、下層のテストをすり抜ける。
+- **境界テストはペアで：just-before と exactly-at** — `now == last_settled_at + interval - 1`（none）と `now == last_settled_at + interval`（fire）が標準ペア。両方向で guard 条件の off-by-one を捕まえる。`+1` を追加しても、別クラスのバグは捕まえられない。
+- **失敗は state を変えない** — `tick()` が `None` を返したとき `last_settled_at` は不変。3 連続呼び出し（fire / gated / fire）の 3 回目の成功時刻からこの副不変条件が読み取れる。
+
+検証：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-上記の実行結果が 21 テストを通る（L4-L8 で書いた 18 + 新規 3）。**新しいプロダクションコードはない。** 新規テスト 3 つで、複数 operation にわたる clock の semantics カバレッジを深掘りする：
+上記の実行結果が 21 テストを通る（L4-L8 で書いた 18 + 新規 3）。
+
+具体的な変更:
+
+**新しいプロダクションコードはない。** 新規テスト 3 つで、複数 operation にわたる clock の semantics カバレッジを深掘りする：
 
 - **`premium_drives_settlement_signs`** — 数学の full composition が clock を流れる。mark > index → 正の premium → settlement の符号が一致する。
 - **`second_tick_requires_another_full_interval`** — Interval-gating が tick 間でも持続する。成功した tick が、clock を永久に unlock してしまうわけではない。

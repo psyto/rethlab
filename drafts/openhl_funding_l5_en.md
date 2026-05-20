@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Saturate-not-panic-not-wrap as the only consensus-safe overflow** — panic halts the validator and forks it off the network; wrap can differ across compiler versions and produce divergent-but-defined values; saturate gives every validator the same bounded value. There are no other options that preserve consensus liveness.
+- **Sign-aware saturation override** — `i64::try_from` reports failure but not direction. The `unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })` closure recovers the direction; a fixed `i64::MAX` override would flip `i128::MIN` to positive and silently corrupt sign.
+- **Hand-traced tests vs proptests are complementary, not redundant** — proptest random sampling will never hit `i128::MAX` (one point out of 2^129); boundary cases must be hand-traced. Proptest excels at interior properties; hand-traced tests pin the corners.
+- **Test the property that's actually invariant, not the aspirational one** — naive antisymmetry would require equal magnitudes both ways, but integer division breaks that. We test the weaker "signs are opposite" property and document the rounding caveat in the test comment.
+- **Why `checked_mul` + `Result` doesn't actually solve it** — the error has to propagate to the bridge, whose only real options are "revert (fork)", "skip (silent inconsistency)", or "settle at the cap" — and the last is exactly what saturate produces without propagation.
+
+No new function. ~5 lines of new test code. **The mental model is the lesson.**
+
+Verification:
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…passes 5 tests (4 from L4 + 1 new proptest). The crate gains:
+…passes 5 tests (4 from L4 + 1 new proptest).
+
+Specific changes:
 
 - **The first proptest in the codebase** — `premium_is_antisymmetric_in_mark_index`. Swapping `mark` and `index` flips the sign of the premium (or both are zero when they're equal). 256 random inputs per test run.
 
@@ -36,8 +48,6 @@ But the larger payload of this lesson is **conceptual, not code**. We walk throu
 2. **Why wrap = chain fork.** Two validators with different compiler versions or build flags can wrap *differently* at the same overflow point. Wrong values diverge from correct values.
 3. **Why saturate is bounded behavior.** All validators agree on the saturated value at the same input. No fork.
 4. **`saturate_i128_to_i64` boundary cases.** `i128::MAX → i64::MAX`, `i128::MIN → i64::MIN`. Why the `unwrap_or` closure depends on sign, not just `i64::MAX`.
-
-No new function. ~5 lines of new test code. **The mental model is the lesson.**
 
 ## Recap
 

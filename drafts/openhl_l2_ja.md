@@ -21,13 +21,26 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **共通語彙 crate (shared vocabulary crate)** — `BlockHash`、`PayloadId` などが `openhl-consensus` でも `openhl-evm` でもなく `openhl-types` に住む理由。Rust は依存ループを許さないので、CL↔EL split は両側が import する中立な第三 crate を強制する。
+- **Newtype パターン** — type alias ではなく `BlockHash([u8; 32])` で wrap する意味。compiler が「ただの 32 byte 配列」を `BlockHash` の場所に代入することを拒否してくれる。
+- **三状態の payload status** — なぜ `PayloadStatus` が `bool` ではなく `Valid / Invalid / Syncing` の三値か。`Syncing` を `Invalid` として扱うと、追いつけたはずの peer から永続的に fork する。
+- **デフォルト `Debug` ではなく custom `Display`** — ログに出る contract type には `0xab12…` 形式の人間可読な表示が要る理由。ログはデバッガの主戦場であり、可読性は optional ではない。
+
+検証:
 
 ```bash
 cargo test -p openhl-types
 ```
 
-上記の実行結果が 5 つの contract primitive をカバーする 4 つのテストで pass する。`openhl-types` crate が consensus と EVM の両方が依存する **共通語彙** になる — これらの type のために両側が import する唯一の crate だ。アプリケーションロジックはまだない。L3 で contract trait が参照するデータ定義を、ここで整えておく。
+上記の実行結果が 5 つの contract primitive をカバーする 4 つのテストで pass する。アプリケーションロジックはまだない。L3 で contract trait が参照するデータ定義を、ここで整えておく。
+
+具体的な変更:
+
+- `crates/types/src/lib.rs` に 5 つの type を追加 — `BlockHash`、`PayloadId`、`PayloadAttrs`、`PayloadStatus`、`ExecutedBlock` — および `BlockHash` への `Display` impl。
+- 4 つの unit test を追加: hex display、status equality、executed-block clone、serde round-trip。
+- `openhl-types` crate が consensus と EVM の両方が依存する **共通語彙** になる。
 
 ## おさらい
 

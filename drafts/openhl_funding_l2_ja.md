@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **Newtype による引数順バグ防止** — `u64` を `MarkPrice` と `IndexPrice` という別型でラップすると、`compute_premium(index, mark)` が production まで届く invisible bug ではなくコンパイルエラーになる。
+- **型エイリアスは「型」ではない** — `type MarkPrice = u64` はドキュメントであって安全性ではない。引数を入れ替えてもコンパイルは通る。別アイデンティティが必要なら `struct MarkPrice(pub u64)` を選ぶ。
+- **内部フィールドを `pub` にする理由** — このレッスンの newtype はクロスフィード防止が目的で、値の検証が目的ではない。`pub` にしておけば `compute.rs` の演算が `mark.0` のままで書ける（`mark.value()` 経由にならない）。検証はこの crate の仕事ではない。
+- **符号の有無はドメインの意味で決める** — `MarkPrice` / `IndexPrice` が `u64` なのは「負の価格 = 上流の不変条件違反」だから。`Premium` / `Notional` が `i64` なのは方向もデータの一部だから。
+- **符号規約は型定義の doc コメントに pin する** — `Premium` の定義に「正 = mark > index、longs が shorts に支払う」と書いてあることが、下流のすべての consumer にとっての single point of truth になる。
+
+検証：
 
 ```bash
 cargo build -p openhl-funding
 ```
 
-上記の実行結果が引き続きコンパイルを通る。`types.rs` は `RATE_SCALE` だけだった状態から、`RATE_SCALE` + 4 つの newtype を持つ状態へと育つ：
+上記の実行結果が引き続きコンパイルを通る。
+
+具体的な変更:
+
+`types.rs` は `RATE_SCALE` だけだった状態から、`RATE_SCALE` + 4 つの newtype を持つ状態へと育つ：
 
 - **`MarkPrice(pub u64)`** — 永久先物の mark price を最小単位で持つ。価格は負になりえないので unsigned。
 - **`IndexPrice(pub u64)`** — オフチェーン oracle の参照価格。形は同じだが*意味*は別。

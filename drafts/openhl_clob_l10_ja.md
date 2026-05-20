@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **`std::mem::take` は O(1) — 要素コピーではなくポインタの swap** — 1000 個の `Vec<Fill>` でも `mem::take` は (ptr, len, cap) を 1 代入で入れ替える。`drain(..).collect()` は O(N) で iterator のオーバーヘッドもある。標準ライブラリの primitive を知っていると、より遅い実装を自前で書かずに済む。
+- **Drain は `submit` ではなく `build_payload` で行う** — Fill は「どの payload に乗るか」でグループ化する。Submit 順ではない。Submit 時に drain すると bridge が payload 割り当てを別チャネルで追う必要が出る。「Buffer して drain」のパターンがそのグループ化を無料で実現する。
+- **Forward-only drain は block の不変性を反映している** — Payload N は「前回の `build_payload` から今まで」に蓄積した fill を受け取る。以前の payload は遡って更新されない。Commit 済みブロックと同じ意味論 — 一度組んだら凍結する。
+- **独立な操作なら短い lock 2 つの方が長い lock 1 つよりも良い** — `state` を取って payload ID を計算し、`pending_fills` を *短時間* 取って swap し、その後 `state` lock のまま挿入を続ける。`pending_fills` の mutex は重い処理の間は持たない。
+- **「Fill が失われる」失敗モードは現実だが v0 では許容** — `build_payload` が drain 後にエラーで戻ると、fill は `pending_fills` から消えたが payload にも入っていない状態になる。Production では recovery queue を足して保護する。V0 の single-validator devnet ではそのリスクを許容する。
+
+検証:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-…で引き続き 38 テストが pass する。**`build_payload` への小さな変更** — 約 8 行 — で L9 の `Vec::new()` placeholder を `std::mem::take(...)` に置き換え、新しい payload ごとに前回の `build_payload` 呼び出し以降に CLOB が蓄積した fill をすべて drain する。
+…で引き続き 38 テストが pass する。
+
+具体的な変更:
+
+**`build_payload` への小さな変更** — 約 8 行 — で L9 の `Vec::new()` placeholder を `std::mem::take(...)` に置き換え、新しい payload ごとに前回の `build_payload` 呼び出し以降に CLOB が蓄積した fill をすべて drain する。
 
 Drain は **forward-only**: fill が payload N に attach された時点で `pending_fills` から消え、payload N+1 には現れない。これが bridge が consumer に対して行う data-flow の約束 — 各 payload が build 時点で取られた fill snapshot を 1 つ所有する。
 

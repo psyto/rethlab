@@ -20,13 +20,23 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **Determinism は consensus chain の load-bearing property** — 正しいが非決定的な matching engine は consensus を壊す (validator が同じ action を replay しても異なる fill を見て合意できない)。決定的だが間違っている engine は修正可能、非決定的な engine は不可。`determinism` invariant が chain の安全性を守る。
+- **Property test は自分が思いつかなかったシナリオの bug を見つける** — 9 個の hand-trace は予想できた範囲を覆う。256 case × 3 property = 768 random sequence が裾野 (例: 「limit を 17 個 submit してから空 side に market」) を覆う。Shrink で fail した 25-action sequence が最小反例まで自動で縮む。
+- **Conservation、safety、replayability の直交する 3 不変条件** — `qty_conservation` (量が生まれず消えない)、`no_crossed_book` (常に best_bid < best_ask)、`determinism` (同じ入力 → 同じ出力)。どんな matching engine も満たすべき普遍的な CLOB 不変条件。
+- **`proptest` は `[dev-dependencies]` であって `[dependencies]` ではない** — property test は `cargo test` 時にのみ走り、production では使わない。`[dependencies]` に入れると `openhl-clob` の全消費者に proptest のコンパイルを強制してしまう。
+- **`Action` enum は generator 用の simplified intermediate** — proptest combinator は primitive 型で最も書きやすい。Strategy は生の `u64` を吐き、テスト本体が `submit` を呼ぶ前に newtype で wrap する。Newtype 規律は API 境界で効かせ、generator 内部には入れない。
+
+検証:
 
 ```bash
 cargo test -p openhl-clob
 ```
 
-上記の実行結果が **12 個のテスト** (unit 9 + proptest invariant 3) に合格し、各 proptest が **256 case** ずつ走る = **768 ランダムシナリオ**。書くもの:
+上記の実行結果が **12 個のテスト** (unit 9 + proptest invariant 3) に合格し、各 proptest が **256 case** ずつ走る = **768 ランダムシナリオ**。
+
+具体的な変更:
 
 - **新規 dev-dep 1 個** — `crates/clob/Cargo.toml` に `proptest = { workspace = true }`。
 - **新規 `#[cfg(test)] mod prop_tests` block** を `book.rs` の末尾に:

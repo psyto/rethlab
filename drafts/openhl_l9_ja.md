@@ -21,7 +21,16 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **runtime ではなく handshake 用 interface としての `Node`** — `OpenHlNode` は長命な設定 (key、validator set、home dir、moniker) を保持し、engine を *構築* する。実際に走っている actor system は `start()` が返す `OpenHlNodeHandle` の中にある。構築と実行は別ライフサイクルで、別の型に住む。
+- **actor system spawn の surface** — `start_engine` が実際に何をするか (ractor cell の spawn、libp2p バインド、`Channels<OpenHlContext>` 確保)、なぜ `EngineHandle` を返すか、`OpenHlNodeHandle` がそれを `NodeHandle<OpenHlContext>` trait のためにどう wrap するか。
+- **`Mutex<Option<Channels>>` の take-once セマンティクス** — channel handle がちょうど 1 回しか取り出せない理由。L10 の app loop がそれを消費し、以降の呼び出しは `None` を返す。所有権が移動した、というクリーンなシグナルになる。
+- **address 導出の集中管理** — `SHA-256(pubkey)[12..32]` を *1 箇所* (`get_address`) にだけ書き、L6 runner の helper と一致することを test で assert する。集中化 + 検証テストはファイル間の silent な drift を防ぐ。
+- **`todo!()` ではなく型安全な placeholder** — `run()` は panic ではなく `Err("not yet implemented (L10)")` を返す。これを呼んだコードは grace に失敗し、次のレッスンへの pointer 付きで止まる。PR や stale な tab を跨いでも生き延びるパンくずだ。
+- **smoke test が必要な理由** — L8 のコンパイル時 `assert_impl_all!` は codec が trait を満たすことを証明した。Smoke test は *runtime* path — spawn、channel allocation、libp2p バインド、kill 伝播 — が end-to-end で動くことを証明する。型は必要だが十分ではない。
+
+検証:
 
 ```bash
 cargo test -p openhl-consensus
@@ -35,7 +44,11 @@ test node::tests::start_engine_smoke_spawns_and_kills ... ok
 
 上記の実行結果が、自分のコードに対してフルな Malachite actor system を spawn し、チャンネルハンドルが 1 回だけ利用可能であることを assert し、actor system をクリーンに tear down する — **約 0.02 秒で**。本レッスン後、エンジンは起動する。残るは `Channels<OpenHlContext>` から消費して bridge を駆動する application loop だけだ。
 
-新規テスト 4 個がカバーするもの: private key file の往復、config が `ProposalOnly` payload とエフェメラルな listen address を produce すること、address 導出が L6 の runner と一致すること、`start_engine` を呼ぶ smoke test。
+具体的な変更:
+
+- `crates/consensus/Cargo.toml` に 1 dep 追加: `informalsystems-malachitebft-app-channel`。
+- `crates/consensus/src/node.rs` — 新規ファイル (~310 行)、`OpenHlNode`、`OpenHlConfig`、`OpenHlGenesis`、`OpenHlPrivateKeyFile`、`OpenHlNodeHandle`、`impl Node for OpenHlNode` (5 associated type、12 method)、unit test 4 個 (private-key 往復、config defaults、address 導出、`start_engine` smoke) を含む。
+- `crates/consensus/src/lib.rs` — `pub mod node;` を配線する。
 
 ## おさらい
 

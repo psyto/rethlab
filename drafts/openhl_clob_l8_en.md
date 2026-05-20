@@ -20,13 +20,23 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Determinism is the load-bearing property for consensus chains** — a correct-but-non-deterministic matching engine breaks consensus (validators replay the same actions, see different fills, fail to agree). A deterministic-but-incorrect engine is repairable; a non-deterministic one is not. The `determinism` invariant protects the chain's safety.
+- **Property tests find bugs in scenarios you didn't think of** — 9 hand-traced tests cover what you anticipated. 256 cases × 3 properties = 768 random sequences cover the long tail (e.g. "submit 17 limits, then market against an empty side"). Shrinking automatically reduces a failing 25-action sequence to the minimal counterexample.
+- **Conservation, safety, replayability as the three orthogonal invariants** — `qty_conservation` (no quantity invented or lost), `no_crossed_book` (best_bid < best_ask always), `determinism` (same input → same output). These are the universal CLOB invariants any matching engine must satisfy.
+- **`proptest` belongs in `[dev-dependencies]`, not `[dependencies]`** — property tests run during `cargo test`, never in production. Putting it in `[dependencies]` would force every `openhl-clob` consumer to compile proptest.
+- **The `Action` enum is a simplified intermediate for generators** — proptest combinators work most easily with primitive types; the strategies emit raw `u64`s, and the test body wraps them in newtypes before calling `submit`. Newtype discipline holds at the API boundary, not inside the generator.
+
+Verification:
 
 ```bash
 cargo test -p openhl-clob
 ```
 
-…passes **12 tests** (9 unit + 3 proptest invariants), with each proptest running **256 cases** each = **768 random scenarios**. You'll have written:
+…passes **12 tests** (9 unit + 3 proptest invariants), with each proptest running **256 cases** each = **768 random scenarios**.
+
+Specific changes:
 
 - **One new dev-dep** — `proptest = { workspace = true }` in `crates/clob/Cargo.toml`.
 - **A new `#[cfg(test)] mod prop_tests` block** at the bottom of `book.rs`, containing:

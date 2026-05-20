@@ -22,7 +22,15 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Bootstrap-only tests are first-class artifacts** — this lesson's test does nothing except spin up Reth and read its chain ID. It catches dependency-resolution and runtime-bootstrap regressions before any business logic exists. If this test fails, nothing in L12-L15 can possibly work.
+- **Reth and Malachite coexistence proof** — two of the largest crate trees in the Rust L1 ecosystem live in one workspace using the same tokio runtime. The dev-deps you add here resolve to a single SHA-coherent dependency closure.
+- **Production-deps slim, dev-deps thick** — `crates/evm/Cargo.toml` keeps 6 production deps (unchanged from L5) but gains 11 dev-deps. Downstream crates using `openhl-evm` don't pull libp2p/MDBX/rpc; only the test binary does.
+- **`NodeConfig::test().dev()` semantics** — `test()` = ephemeral tempdir + ephemeral ports + no peer discovery. `dev()` = single-block-producer mode, no mempool gossip. Combined: a fully isolated dev/test environment, repeatable in CI.
+- **Why chain ID 2600** — matches Reth's upstream `custom-dev-node` example and doesn't collide with any public chain. The number itself has no OpenHL semantic meaning; it's a coordination convention with the Reth example you can diff against.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm reth_dev_node_bootstraps --release
@@ -36,10 +44,12 @@ test reth_node::tests::reth_dev_node_bootstraps ... ok
 
 …that **spins up a full Reth `EthereumNode` v2.2.0** (MDBX storage, payload builder, mempool, RPC stub, the whole stack) in ~2.7 seconds, queries its provider for the chain ID, and asserts the result. **This is your proof that Reth and Malachite — the two largest pieces of infra in an L1 reference impl — coexist in one workspace without conflict.**
 
-What you'll have done:
-- Added 4 new workspace deps (`reth-node-core`, `reth-tasks`, `reth-provider`, `alloy-genesis`)
-- Added 8 new dev-dependencies to `crates/evm/Cargo.toml` (test-only — production scope unchanged)
-- Created `crates/evm/src/reth_node.rs` (~100 lines, test module only)
+Specific changes:
+
+- 4 new workspace deps added to root `Cargo.toml`: `reth-node-core`, `reth-tasks`, `reth-provider`, `alloy-genesis`.
+- 8 new dev-dependencies added to `crates/evm/Cargo.toml` (test-utils variants of Reth's node-builder/ethereum + their support crates) — test-only, production scope unchanged.
+- `crates/evm/src/reth_node.rs` — new file (~100 lines), test module only. Builds a dev chain spec, launches `EthereumNode` via `NodeBuilder::testing_node`, verifies the provider responds.
+- `crates/evm/src/lib.rs` — wires `mod reth_node;` (test-cfg only).
 
 No production code. No bridge changes. Just **validation that the dependency tree resolves** before we start writing the live-bridge code in L12.
 

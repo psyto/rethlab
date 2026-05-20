@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Uninstalled-returns-zero is "uninitialised storage slot" semantics** — Solidity contracts naturally handle a zero from `STATICCALL` as "no liquidity" and decline to trade. Erroring instead would revert every transaction during boot.
+- **Constant-time precompile = gas charging shouldn't leak state** — charging less gas when no CLOB is installed would let attackers measure gas to detect validator state. A flat `CLOB_BASE_GAS_COST` keeps the precompile's wall-clock-shape uniform.
+- **`cargo test` runs in parallel → process-globals race → need a serializer** — once two tests touch the same `CLOB_STATE`, parallel execution makes the global flap between `Some(clob_A)` and `None` within one test's lifetime. A `Mutex<()>` named `TEST_SERIALIZER` is the fix.
+- **`TEST_SERIALIZER` is per-module, not per-crate** — narrow the serialization to the tests that actually need it; tests that don't touch `CLOB_STATE` shouldn't pay the cost.
+- **Uninstall at *start* of test, not end** — panicked tests skip their cleanup code; the next test's start-of-test reset is the safety net. End-of-test uninstall is decoration.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-…still passes (42 tests). But internally, the precompile now reads **live state** instead of hardcoded values:
+…still passes (42 tests).
+
+Specific changes:
+
+But internally, the precompile now reads **live state** instead of hardcoded values:
 
 - **`read_best_bid` body swapped** — drops the `let mut out = vec![0, 0, ..., 100, 0, 0, ..., 10]` hardcode in favor of `if let Some((price, qty)) = current_best_bid() { ... write into out ... }`. No CLOB installed → 64 zero bytes (matches "uninitialised perp market" semantic).
 - **L3's `read_best_bid_returns_hardcoded_price_and_qty` test renamed** to `read_best_bid_returns_zero_when_no_clob_installed` — same shape, asserts zero instead of 100/10.

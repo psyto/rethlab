@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Coverage by invariant, not by count** — the 9 tests aren't "9 arbitrary scenarios"; each corresponds to a distinct invariant (empty-book, resting, walks-levels, respects-limit, FIFO time priority, partial-market, cancel-found, cancel-not-found, no-cross). The list of invariants is short and well-defined; that's why 9 is a defensible number.
+- **Hand-traced unit tests are the oracle for proptests (L8)** — when a property test fails with a random 25-action sequence, you debug against a hand-traced test that isolates one invariant. Proptests are the amplifier; unit tests are the foundation.
+- **Helper functions over builder patterns** — `limit(...)` and `market(...)` with positional args are the cheapest abstraction that removes repetition without adding indirection. Builder patterns would add ceremony for tests that need ~5 lines each.
+- **Source layout encodes priority** — placing `book_does_not_cross_after_match` last in source order signals to a maintainer scanning the file: this is the load-bearing safety property. Tests run alphabetically; source order is for humans.
+- **`assert_eq!` over `assert!(a == b)`** — `assert_eq!` prints both sides on failure; the actual-value diagnostic is what makes test debugging fast.
+
+Verification:
 
 ```bash
 cargo test -p openhl-clob
 ```
 
-…passes **9 tests**. You'll have a new `#[cfg(test)] mod tests` block at the bottom of `book.rs` containing:
+…passes **9 tests**.
+
+Specific changes:
+
+You'll have a new `#[cfg(test)] mod tests` block at the bottom of `book.rs` containing:
 
 - **2 helper functions** — `limit(...)` and `market(...)` — that construct `Order` structs with sensible defaults so the test bodies don't repeat the 5-field struct literal everywhere.
 - **9 hand-traced scenarios** — each tests a specific invariant the matching engine should maintain.

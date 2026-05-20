@@ -20,13 +20,23 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **End-to-end integration testing against a real Reth node** — bootstrap an `EthereumNode`, wire `LiveRethEvmBridge`, exercise the full submit→buffer→drain pipeline. This is the test that proves the L1-L10 sequence holds together end-to-end, not just per-component.
+- **One thorough integration test beats three narrow ones when bootstrap is expensive** — spinning up a real Reth node takes seconds. Three separate tests (each bootstrapping) would triple that cost; one scenario that verifies submit, drain, and forward-only-ness covers all three invariants in one node lifetime.
+- **The forward-only assertion is what makes this a *real* integration test** — "submit produces fill" and "build drains" are obvious from unit tests. Checking that the earlier (empty) payload was *not* retroactively updated is what tests the bridge's per-payload snapshot mechanism specifically. Without it, this would be a unit test in disguise.
+- **Fill price = maker's price, demonstrated end-to-end** — maker bid @ 100, taker sell @ 100, fill @ 100. The price-time priority rule from L4-L5 holds across the full integration boundary. Submitting in the opposite order (sell first, then crossing buy) would produce the same fill — order of submission is time priority within a level, not which side rests.
+- **`launch_with_debug_capabilities()` vs `launch()` with add-ons** — debug-capabilities setup is shorter and includes the provider but skips engine-API wiring. We don't need the engine handle here (no forkchoice driven during the test); we just need the provider for parent lookups.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm clob_fills_flow_into_payload --release
 ```
 
 …passes. **This is the milestone of Course 7.** A real fill, produced by the matching engine you built in L1-L8, flows through `LiveRethEvmBridge::submit_order` → `pending_fills` buffer → `LiveRethEvmBridge::build_payload` drain → into a payload that consensus would commit. The test exercises **every piece** of the integration from L9-L10 against a **live Reth node**.
+
+Specific changes:
 
 You'll have written one new test:
 

@@ -21,13 +21,25 @@
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **同じ形、別の役割 = 別の型** — `FundingRate` と `Premium` はどちらも `RATE_SCALE` スケールの `i64` だが、premium が「生の dislocation」、rate が「divisor + clamp 後の出力」だ。別型にすることで pipeline を型レベルで強制できる — `compute_rate` を通っていない premium を `apply_funding` に渡せない。
+- **方向 + 大きさを 1 つの符号付き整数で表す** — `PositionSize(i64)` で long / short / flat を 1 フィールドに収め、enum + magnitude ペアにしない。サイズも小さく、演算も速く、シンプル。符号規約は doc コメントに置く。
+- **スナップショット型 vs stateful なエンティティ** — `Position` は `(account, size)` だけを持ち、entry price も PnL も履歴も意図的に持たない。owning layer が幅広い state を持ち、funding crate は狭いスナップショットを処理するだけ。doc コメントが ownership 契約を明示する。
+- **Parameter-object パターン** — `interval_secs` / `rate_cap` / `divisor` を `FundingParams` にまとめると、config が拡張されても呼び出し箇所が安定する。positional 引数だと新パラメータごとに全呼び出し箇所が壊れる。struct ならフィールドを足すだけでシグネチャが変わらない。
+- **HL デフォルトの算術を解きほぐす** — `divisor: 8` は「tick ごとに premium / 8」を意味する。24 hourly interval と 4% cap のもとでは、最悪日次支払いを縛るのは divisor ではなく cap。Cap は oracle dislocation に対する保険ポリシーだ。
+
+検証：
 
 ```bash
 cargo build -p openhl-funding
 ```
 
-上記の実行結果が引き続きコンパイルを通り、rustdoc warning もゼロになる。`types.rs` が**完成**する — Stage 8b の roster 9 型すべてが揃う：
+上記の実行結果が引き続きコンパイルを通り、rustdoc warning もゼロになる。
+
+具体的な変更:
+
+`types.rs` が**完成**する — Stage 8b の roster 9 型すべてが揃う：
 
 - **`FundingRate(pub i64)`** — divisor と cap を適用した後の per-interval rate。`Premium` と同じスケール。
 - **`PositionSize(pub i64)`** — 符号付き：正 = long、負 = short、ゼロ = flat。

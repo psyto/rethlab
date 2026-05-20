@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Buy and Sell are structural mirrors, not generic abstractions** — the Buy branch walks asks ascending; Sell walks bids descending. Two near-identical functions read more clearly than one fully-generic helper with boolean-flag puzzles inside.
+- **Walk-while-crossing is the matching engine's core loop** — `while remaining > 0 && best_opposite_price crosses limit { match_at_level; advance/drop level }`. Once you see this shape, market orders in L5 fall out as "the same loop minus the price check."
+- **Empty-queue invariant must be maintained on every mutation** — `if queue.is_empty() { remove(price) }` after each match. If an empty queue is left in the map, `best_bid()` lies and the no-crossed-book invariant breaks.
+- **Return value describes what happened to the call; book state describes what is** — `FillResult::remaining_qty` is `Qty(0)` for Limit (whatever didn't fill went to rest); to know the rested remainder, query `best_bid` / `depth_bid` separately. Don't mix the two contracts.
+- **`match_at_level` as a free function names its scope** — no `self`; it operates on data the caller has already extracted (queue + remaining). Function signature is documentation.
+
+Verification:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-…still compiles. Your `Book` can now accept **Limit orders** (Buy + Sell) and produce real `Fill`s. Market orders are still `todo!()` — that's L5.
+…still compiles.
+
+Specific changes:
+
+Your `Book` can now accept **Limit orders** (Buy + Sell) and produce real `Fill`s. Market orders are still `todo!()` — that's L5.
 
 What you'll write:
 

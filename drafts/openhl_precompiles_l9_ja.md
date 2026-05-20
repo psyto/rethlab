@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **shared-buffer パターンは一般化する** — L4 で導入した「`Arc<Mutex<T>>` + process-global」パターンを fill にそのまま再利用する。一度プリミティブが置かれれば、追加の共有 state は 1 バッファあたり ~20 行で済む。L4 の抽象化が複利で効いてくる。
+- **直交した global = 直交したテスト setup** — `CLOB_STATE` と `FILL_SINK` を 1 つの global にまとめると、すべてのテストが両方を install する必要が出る。global を分けておけば、test が exercise する分だけ install すれば良い (composable)。
+- **common case の early-out は free** — `if !submit_result.fills.is_empty()` で、order が交差せず resting に回る場合 (主流のケース) の lock 取得をスキップする。hot path に分岐 1 つ追加するだけで `RwLock` の取得を節約できる。
+- **sink に push する前に `drop(book)` — 外側のロックを取る前に内側のロックを離す** — Book と sink の両方を同時に保持すると、lock ordering の hazard ができる。明示的に Book guard を drop することで、ロック取得を厳密に逐次にする。
+- **doc コメント = 借金トラッカー** — L8 の「fills are discarded」doc コメントは load-bearing だった：未来の読者に「意図的なギャップで oversight ではない」ことを伝えていた。L9 はそのギャップを閉じ、doc も更新する。ドキュメント化されたギャップは半分修正済み、未文書化のギャップは invisible debt。
+
+検証：
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-上記の実行結果が 47 tests を通る（1 つ新規）。L8 の doc コメントで述べた「fill を捨てている」というギャップが閉じる：
+上記の実行結果が 47 tests を通る（1 つ新規）。
+
+具体的な変更：
+
+L8 の doc コメントで述べた「fill を捨てている」というギャップが閉じる：
 
 - **`FILL_SINK` static を追加** — `CLOB_STATE` と対になる位置に置き、`Option<Arc<Mutex<Vec<Fill>>>>` を保持する。
 - **モジュール関数 `install_fill_sink` / `uninstall_fill_sink`** を追加 — どちらも public で、`install_clob` / `uninstall_clob` パターンをそのまま鏡写しにする。

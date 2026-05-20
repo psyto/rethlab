@@ -57,8 +57,8 @@ const EN: LocaleConfig = {
     slug: 'building-openhl-clob-en',
     title: 'Build OpenHL CLOB — adding the matching engine',
     description:
-      "Course 7 of 10 in the L1 Architect track. Continues the openhl-based build-along arc from `building-openhl-consensus`: starting from a workspace that has the consensus substrate (live Reth + Malachite, single-validator BFT producing blocks in 0.02s), the reader adds the CLOB matching engine and wires its fills into committed blocks. End state: `cargo test clob_fills_flow_into_payload` passes — a real fill produced by the price-time-priority matching engine flows through `LiveRethEvmBridge::build_payload` and lands in a consensus-committed payload. Covers openhl Stage 8a (701 LOC, pure state machine) + Stage 8d (171 LOC, bridge integration). Out of scope: custom EVM precompiles (course 8), funding state machine (course 9).",
-    track: 'reth-l1-architect',
+      "Add a price-time-priority matching engine to the consensus substrate from `building-openhl-consensus`. Build the CLOB as a pure state machine, then wire its fills through the bridge into consensus-committed blocks. The second course in the DIY Perp series.",
+    track: 'diy-perp',
     instructorName: 'RethLab',
   },
   modules: {
@@ -90,7 +90,7 @@ const EN: LocaleConfig = {
       duration: 25,
       xpReward: 60,
       h1Marker: '# Lesson 1 — CLOB newtypes, `Side`, `OrderType`',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l2_en.md',
@@ -101,7 +101,7 @@ const EN: LocaleConfig = {
       duration: 20,
       xpReward: 50,
       h1Marker: '# Lesson 2 — `Order`, `Fill`, `FillResult`',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l3_en.md',
@@ -112,7 +112,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# Lesson 3 — The `Book` struct and the `Reverse<Price>` trick',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l4_en.md',
@@ -123,7 +123,7 @@ const EN: LocaleConfig = {
       duration: 45,
       xpReward: 80,
       h1Marker: '# Lesson 4 — `submit` for Limit orders + `match_at_level`',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l5_en.md',
@@ -134,7 +134,7 @@ const EN: LocaleConfig = {
       duration: 25,
       xpReward: 60,
       h1Marker: '# Lesson 5 — `submit_market` — orders that take any price',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l6_en.md',
@@ -145,7 +145,7 @@ const EN: LocaleConfig = {
       duration: 20,
       xpReward: 50,
       h1Marker: '# Lesson 6 — `cancel` — pulling an order off the book',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l7_en.md',
@@ -156,7 +156,7 @@ const EN: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# Lesson 7 — 9 hand-traced unit tests',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l8_en.md',
@@ -167,7 +167,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# Lesson 8 — 3 proptest invariants: 768 random scenarios',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l9_en.md',
@@ -178,7 +178,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 70,
       h1Marker: '# Lesson 9 — `LiveRethEvmBridge` gets a CLOB + `submit_order`',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l10_en.md',
@@ -189,7 +189,7 @@ const EN: LocaleConfig = {
       duration: 25,
       xpReward: 50,
       h1Marker: '# Lesson 10 — `build_payload` drains pending fills',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l11_en.md',
@@ -200,7 +200,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 70,
       h1Marker: '# Lesson 11 — `clob_fills_flow_into_payload` — the milestone test',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_clob_l12_en.md',
@@ -227,8 +227,8 @@ const JA: LocaleConfig = {
     slug: 'building-openhl-clob-ja',
     title: 'OpenHL CLOB を作る — matching engine を追加する',
     description:
-      'L1 Architect トラックの 10 コース中 7 番目。openhl ベースの build-along アークを `building-openhl-consensus` から続ける: consensus substrate (live Reth + Malachite、0.02 秒で block を produce する single-validator BFT) を持つ workspace から始め、reader が CLOB matching engine を追加して、その fill を committed block に配線する。終了状態: `cargo test clob_fills_flow_into_payload` が pass する — price-time-priority matching engine が produce した real fill が `LiveRethEvmBridge::build_payload` を通って consensus-committed payload に着地する。openhl Stage 8a (701 LOC、pure state machine) + Stage 8d (171 LOC、bridge integration) をカバー。範囲外: custom EVM precompile (course 8)、funding state machine (course 9)。',
-    track: 'reth-l1-architect',
+      '`building-openhl-consensus` で構築した consensus substrate に、price-time priority のマッチングエンジンを追加する。CLOB を純粋な state machine として実装し、その fill を bridge 経由で consensus にコミットされたブロックまで配線する。DIY Perp シリーズの 2 つ目のコース。',
+    track: 'diy-perp',
     instructorName: 'RethLab',
   },
   modules: {
@@ -260,7 +260,7 @@ const JA: LocaleConfig = {
       duration: 25,
       xpReward: 60,
       h1Marker: '# レッスン 1 — CLOB の newtype、`Side`、`OrderType`',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l2_ja.md',
@@ -271,7 +271,7 @@ const JA: LocaleConfig = {
       duration: 20,
       xpReward: 50,
       h1Marker: '# レッスン 2 — `Order`、`Fill`、`FillResult`',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l3_ja.md',
@@ -282,7 +282,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 3 — `Book` struct と `Reverse<Price>` トリック',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l4_ja.md',
@@ -293,7 +293,7 @@ const JA: LocaleConfig = {
       duration: 45,
       xpReward: 80,
       h1Marker: '# レッスン 4 — Limit order 用 `submit` + `match_at_level`',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l5_ja.md',
@@ -304,7 +304,7 @@ const JA: LocaleConfig = {
       duration: 25,
       xpReward: 60,
       h1Marker: '# レッスン 5 — `submit_market` — 任意の価格を取る order',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l6_ja.md',
@@ -315,7 +315,7 @@ const JA: LocaleConfig = {
       duration: 20,
       xpReward: 50,
       h1Marker: '# レッスン 6 — `cancel` — order を book から引き抜く',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l7_ja.md',
@@ -326,7 +326,7 @@ const JA: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# レッスン 7 — hand-trace された unit test 9 個',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l8_ja.md',
@@ -337,7 +337,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 8 — proptest invariant 3 個: 768 ランダムシナリオ',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l9_ja.md',
@@ -348,7 +348,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 70,
       h1Marker: '# レッスン 9 — `LiveRethEvmBridge` に CLOB + `submit_order` を持たせる',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l10_ja.md',
@@ -359,7 +359,7 @@ const JA: LocaleConfig = {
       duration: 25,
       xpReward: 50,
       h1Marker: '# レッスン 10 — `build_payload` が pending fill を drain する',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l11_ja.md',
@@ -370,7 +370,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 70,
       h1Marker: '# レッスン 11 — `clob_fills_flow_into_payload` — マイルストーンテスト',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_clob_l12_ja.md',

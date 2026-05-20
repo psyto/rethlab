@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **網羅は本数ではなく invariant 単位** — 9 個のテストは「9 個の任意のシナリオ」ではない。それぞれが別個の invariant に対応する (empty-book、resting、walks-levels、respects-limit、FIFO time priority、partial-market、cancel-found、cancel-not-found、no-cross)。Invariant の一覧が短く明確だからこそ 9 が defensible な数になる。
+- **Hand-trace された unit test が proptest (L8) の oracle になる** — proptest が乱数 25-action sequence で fail したら、invariant を 1 つだけ切り出した hand-trace テストでデバッグする。Proptest は amplifier、unit test は土台。
+- **Builder pattern より helper 関数** — 位置引数の `limit(...)` / `market(...)` は重複を取り除く最安の抽象。Builder pattern は ~5 行で済むテストには儀式的すぎる。
+- **ソース順序が優先度を表す** — `book_does_not_cross_after_match` を最後に置くのは maintainer に対して「これが load-bearing な safety property」というシグナル。テスト実行はアルファベット順、ソース順序は人間向け。
+- **`assert!(a == b)` より `assert_eq!`** — `assert_eq!` は失敗時に両辺を出す。実際の値が見えるのがデバッグ速度を決める。
+
+検証:
 
 ```bash
 cargo test -p openhl-clob
 ```
 
-上記の実行結果が **テスト 9 個** に合格する。`book.rs` の末尾に新規 `#[cfg(test)] mod tests` block を置く:
+上記の実行結果が **テスト 9 個** に合格する。
+
+具体的な変更:
+
+`book.rs` の末尾に新規 `#[cfg(test)] mod tests` block を置く:
 
 - **ヘルパー関数 2 個** — `limit(...)` と `market(...)`。テスト本体で 5 field の struct リテラルを繰り返さずに済むよう、適切なデフォルトで `Order` を構築する。
 - **hand-trace されたシナリオ 9 個** — それぞれ matching engine が維持すべき特定の invariant をテストする。

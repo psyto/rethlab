@@ -21,13 +21,25 @@
 
 ## ゴール
 
-このレッスンを終えると：
+このレッスンで掴む概念:
+
+- **No-catch-up は公平性の不変条件** — 10 interval 分のギャップ後は 1 度だけ settle して `now` へ advance する。10 tick を replay してはいけない。現在のスナップショットで 10 回 replay すると、ギャップ中に close できなかった負け側に 10 倍の懲罰が集中する。Funding の目的は equilibration であって遡及的な強制ではない。
+- **`now` へ advance する、`last_settled + interval` ではなく** — deadline は実際の settlement 時刻にリセットされ、数学的に「次の整列点」にはならない。Clock は missed interval を完全に忘れる。これがこのテストで pin する設計判断。
+- **同じ `now` での second tick は state machine の最も厳しいテスト** — 2 つの呼び出しの間で時間は経過していない、変わったのは clock の内部 state だけだ。Late tick で `last_settled_at` を更新し忘れる実装をすべて捕まえる。
+- **Catch-up ポリシーは clock の外に置く** — Catch-up が必要な呼び出し側は、中間時点のスナップショットで `tick()` を繰り返し呼ぶ wrapper を書けばよい。Clock 自身は過去の state にアクセスできないからこれはできない。プリミティブはミニマルに、ポリシーは呼び出し側に。
+- **設計哲学はドキュメント、コード、テストの 3 箇所に住む** — Module doc が不変条件を約束し、`tick()` の `self.last_settled_at = now` 行がそれを強制し、`no_catchup_after_long_gap` がそれを証明する。各所が別の読者に対応する。
+
+検証：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-上記の実行結果が 22 テストを通る（L4-L9 で書いた 21 + 新規 1）。新規テストは **`no_catchup_after_long_gap`** — validator が複数 interval を見逃したときの挙動について、openhl の設計判断を pin するマイルストーンテストだ。
+上記の実行結果が 22 テストを通る（L4-L9 で書いた 21 + 新規 1）。
+
+具体的な変更:
+
+新規テストは **`no_catchup_after_long_gap`** — validator が複数 interval を見逃したときの挙動について、openhl の設計判断を pin するマイルストーンテストだ。
 
 L10 後の状態：
 - `crates/funding/` が **Stage 8b（`cd94137`）と byte-identical**。

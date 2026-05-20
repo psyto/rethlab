@@ -21,13 +21,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **No-catch-up as a fairness invariant** — after a 10-interval gap, settle *once* and advance to `now`; don't replay 10 ticks. Replaying with the current snapshot pummels the losing side 10x for time they couldn't have closed during. Funding's purpose is equilibration, not retroactive enforcement.
+- **Advance to `now`, not to `last_settled + interval`** — the deadline resets to the actual settlement timestamp, not to a mathematically next-aligned one. The clock forgets missed intervals entirely; this is the design choice the test pins.
+- **Same-`now` second-tick is the strictest possible state-machine test** — no time elapses between the two calls; only the clock's internal state has changed. Catches all implementations that fail to update `last_settled_at` on a late tick.
+- **Catch-up policy lives outside the clock** — a caller wanting catch-up writes a wrapper that calls `tick()` repeatedly with snapshots at intermediate historical timestamps. The clock can't do this; it doesn't have access to historical state. The primitive stays minimal; policy stays in the caller.
+- **Design philosophy lives in three places: doc, code, test** — module doc names the invariant, `tick()`'s `self.last_settled_at = now` line enforces it, `no_catchup_after_long_gap` proves it. Each location handles a different reader.
+
+Verification:
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…passes 22 tests (21 from L4-L9 + 1 new). The new test is **`no_catchup_after_long_gap`** — the milestone test that pins openhl's design choice on what happens when a validator misses multiple intervals.
+…passes 22 tests (21 from L4-L9 + 1 new).
+
+Specific changes:
+
+The new test is **`no_catchup_after_long_gap`** — the milestone test that pins openhl's design choice on what happens when a validator misses multiple intervals.
 
 After L10:
 - `crates/funding/` is **byte-identical to Stage 8b** (`cd94137`).

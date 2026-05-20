@@ -20,13 +20,26 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Discrete event loop over a pure function** — the clock's job is to call the math at the right times and not call it at the wrong times. The math itself is unchanged from Module 2; the clock adds *when*, not *what*.
+- **`Option<FundingTick>` over always-return** — `None` cheaply signals "no state change" without forcing callers to inspect the tick. `if let Some(tick) = clock.tick(...)` is the natural shape; always-return would force `if !tick.settlements.is_empty()` checks that don't even capture the right meaning.
+- **Layered composition without reimplementation** — `tick()` chains `compute_premium → compute_rate → apply_funding`; it knows the order, not the contents. Math computes, clock gates — separation of concerns at the file level.
+- **Surface intermediates for telemetry** — `FundingTick` carries `premium` and `rate` even though only `settlements` drives state. Observers that want to log "rate at tick 12345 was 0.125%" read them directly; recomputing invites divergence.
+- **Promise the contract in the module doc; defend it in code and tests** — both invariants (at-most-one-per-interval, no-catch-up) are named at the top of `clock.rs` before any code appears. L8 establishes structure; L9 + L10 enforce the invariants test-side. Three places to find the rationale: doc, code, test.
+- **Single-threaded by contract** — concurrency belongs to the caller, not the data structure. `AtomicU64` for `last_settled_at` would add complexity for a serialization problem that doesn't actually exist at this layer.
+
+Verification:
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…passes 18 tests (15 from L4-L7 + 3 new). The crate gains its **third and final module**:
+…passes 18 tests (15 from L4-L7 + 3 new).
+
+Specific changes:
+
+The crate gains its **third and final module**:
 
 - **`crates/funding/src/clock.rs`** — new file with the module doc + 2 structs + 1 impl block:
   - **`FundingClock`** — owns `params: FundingParams` and `last_settled_at: u64`. The state across funding ticks.

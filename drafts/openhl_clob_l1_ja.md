@@ -20,13 +20,24 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **型安全性としての newtype** — `u64` を `AccountId` / `OrderId` / `Price` / `Qty` で wrap すると、引数の swap バグが runtime の暗黙の誤計上ではなくコンパイルエラーに変わる。
+- **整数のみの金銭計算** — `Price` と `Qty` は `u64` ベースで、`f64` は使わない。Float の中間値は境界で engine の厳密整数 invariant (例: 「fill は数量を保存する」) を壊す。
+- **役割に名前を付ける struct-style enum variant** — `OrderType::Limit { price }` は `Limit(Price)` より全ての pattern match 箇所で明瞭。位置ではなく field に *名前* があるため。
+- **Field-level 型と record-level 型の階層化戦略** — atomic な型は L1 に置き、以降の全レッスンが再利用する。Record 型 (`Order`、`Fill`) は L2 でその上に重ねる。
+
+検証:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-上記の実行結果がクリーンにコンパイルする。新規 crate (`crates/clob/`) が workspace に登録され、`src/types.rs` 1 ファイルに matching engine が使う **atomic な field-level 型** が入る:
+上記の実行結果がクリーンにコンパイルする。
+
+具体的な変更:
+
+新規 crate (`crates/clob/`) が workspace に登録され、`src/types.rs` 1 ファイルに matching engine が使う **atomic な field-level 型** が入る:
 
 - **`u64` を wrap する newtype 4 個** — `AccountId`、`OrderId`、`Price`、`Qty`。偶発的な swap を型レベルで防ぐため。
 - **`Side` enum** (`Buy` | `Sell`) と `opposite()` ヘルパー。

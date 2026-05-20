@@ -22,7 +22,16 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **`AppMsg` ルーティングループ** — Malachite engine が単一の channel に `ConsensusReady / GetValidatorSet / StartedRound / GetValue / Decided / …` を流してくる。App loop は `while let Some(msg) = recv().await` で各 variant に match し、`oneshot::Sender` に reply するか bridge を駆動するかのどちらかをやる。これが Malachite と EL を繋ぐ *唯一* の糊だ。
+- **bridge に対する generic な多相性** — `run_engine_app<B: ConsensusBridge>` は `StubBridge`、`InMemoryEvmBridge`、`RethEvmBridge`、そしてやがて `LiveRethEvmBridge` でも動く。ルーティング関数 1 つに対して backend 4 つ。L3 の trait surface がここで効いてくる。
+- **test ergonomics としての `stop_after_decisions`** — production の validator は `usize::MAX` を渡す。テストは `1` を渡す。「関数が有限状態でテスト可能であるためにだけ」存在する引数は正当な API 設計だ。test ergonomics は API 表面に値する。
+- **reply channel が途中で閉じうる** — 我々が reply する前に engine actor が死ぬと `oneshot::Sender::send()` が err する。propagate ではなく `tracing::warn!` でログを残すのが正解 — propagate は本物のエラーをノイズで隠す。operator はログから調査できる。
+- **channel と event-stream のメッセージフローの違い** — `channels.consensus.recv()` は *命令的* メッセージ (reply 必要)、`subscribe()` は *broadcast* な通知 (reply 不要)。L10 の app loop は前者だけを扱う。
+- **この層で integration > unit な理由** — engine の `AppMsg` arm は決まった順序で届く。その順序を fake するより real engine を 1 block 分だけ回すほうが安い。Integration test のほうが書くコストが低く、証明できる範囲も広い。
+
+検証:
 
 ```bash
 cargo test -p openhl-consensus
@@ -36,9 +45,11 @@ test engine_app::tests::first_block_via_engine_actors ... ok
 
 上記の実行結果が Malachite actor system を spawn し、そこに real な consensus round を駆動し、engine が decide した hash を bridge が正確に commit したことを assert する。**Wall-clock: 0.02 秒。** これが「engine が boot する」から「engine が block を produce する」へ移るマイルストーンだ。
 
-新規ファイルは 1 つ:
+具体的な変更:
 
-- **`crates/consensus/src/engine_app.rs`** — app loop。`Channels<OpenHlContext>::consensus` から `AppMsg<OpenHlContext>` を読み、各 variant をルーティングする: bridge 経由で payload を build し、`GetValue` に `LocallyProposedValue` で reply し、bridge 経由で decided value を commit し、decided hash のリストを返す。
+- `crates/consensus/src/engine_app.rs` — 新規ファイル (~282 行)。`run_engine_app<B: ConsensusBridge + 'static>` が `Channels<OpenHlContext>::consensus` から `AppMsg<OpenHlContext>` を読み、12 個の message arm (substantive 5 + trivial 7) を dispatch し、decided hash のリストを返す。
+- 同ファイル内に `StubBridge` test fixture と `first_block_via_engine_actors` integration test。
+- `crates/consensus/src/lib.rs` — `pub mod engine_app;` を配線する。
 
 ## おさらい
 

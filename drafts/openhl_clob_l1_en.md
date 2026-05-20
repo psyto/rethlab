@@ -20,13 +20,24 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Newtype-as-type-safety** — wrapping `u64` in `AccountId` / `OrderId` / `Price` / `Qty` turns argument-swap bugs into compile errors instead of silent runtime mis-credits.
+- **Integer-only money math** — `Price` and `Qty` are `u64`-backed, never `f64`; float intermediates would break the engine's exact-integer invariants (e.g. "fills conserve quantity") at the boundaries.
+- **Struct-style enum variants for named roles** — `OrderType::Limit { price }` reads more clearly than `Limit(Price)` at every pattern match site, because the field has a *name*, not just a position.
+- **Field-level vs. record-level types as a layering strategy** — atomic types belong in L1 so every later lesson reuses them; record types (`Order`, `Fill`) layer on top in L2.
+
+Verification:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-…compiles cleanly. You'll have one new crate (`crates/clob/`) registered in the workspace, with a single file `src/types.rs` containing the **atomic, field-level types** the matching engine uses:
+…compiles cleanly.
+
+Specific changes:
+
+You'll have one new crate (`crates/clob/`) registered in the workspace, with a single file `src/types.rs` containing the **atomic, field-level types** the matching engine uses:
 
 - **4 newtypes over `u64`** — `AccountId`, `OrderId`, `Price`, `Qty` — for type-safety against accidental swaps.
 - **`Side` enum** (`Buy` | `Sell`) with an `opposite()` helper.

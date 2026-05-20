@@ -67,8 +67,8 @@ const EN: LocaleConfig = {
     slug: 'reth-openhl-consensus-en',
     title: 'Build OpenHL — from `cargo init` to a single-validator devnet',
     description:
-      "OpenHL is the open-source reference implementation of Hyperliquid (HyperBFT consensus + HyperCore matching engine + HyperEVM execution, all closed source). This is the build-along course for openhl's Module 1 (the consensus substrate): starting from `cargo init` on an empty directory, you write code lesson by lesson and end with a Rust workspace that drives a real BFT consensus round end-to-end through real Reth and real Malachite. By the last lesson, `cargo test first_block_via_engine_actors` produces a passing single-validator round in ~0.02 seconds against code you wrote yourself, with `psyto/openhl` as the answer key. This course covers openhl Build arc Module 1 only — the substrate — not Modules 2-5 (CLOB, precompiles, settlement, vault), which become their own rethlab courses later.",
-    track: 'reth-l1-architect',
+      "Build the consensus substrate for an HL-shape L1 from scratch — wire real Reth (EVM) and real Malachite (BFT) into a single Rust workspace that produces blocks end-to-end. The reference implementation is `psyto/openhl`. The first course in the DIY Perp series.",
+    track: 'diy-perp',
     instructorName: 'RethLab',
   },
   modules: {
@@ -102,7 +102,7 @@ const EN: LocaleConfig = {
       duration: 45,
       xpReward: 80,
       h1Marker: '# Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)',
-      startSignature: 'By the end of this lesson, run from your `~/code/my-openhl/` directory:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l2_en.md',
@@ -113,7 +113,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# Lesson 2 — Shared contract types in `openhl-types`',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l3_en.md',
@@ -124,7 +124,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# Lesson 3 — The `ConsensusBridge` trait',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l4_en.md',
@@ -135,7 +135,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 70,
       h1Marker: '# Lesson 4 — `InMemoryEvmBridge` — first impl of the trait',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l5_en.md',
@@ -146,7 +146,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 70,
       h1Marker: '# Lesson 5 — `RethEvmBridge` with real alloy types',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l6_en.md',
@@ -157,7 +157,7 @@ const EN: LocaleConfig = {
       duration: 50,
       xpReward: 90,
       h1Marker: '# Lesson 6 — `OpenHlContext` and the 10 Malachite sub-types',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l7_en.md',
@@ -168,7 +168,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# Lesson 7 — `OpenHlSigningProvider` and canonical encoding',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l8_en.md',
@@ -179,7 +179,7 @@ const EN: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# Lesson 8 — `OpenHlCodec` — codec slot the engine demands',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l9_en.md',
@@ -190,7 +190,7 @@ const EN: LocaleConfig = {
       duration: 55,
       xpReward: 100,
       h1Marker: '# Lesson 9 — `OpenHlNode` and the first `start_engine` call',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l10_en.md',
@@ -201,7 +201,7 @@ const EN: LocaleConfig = {
       duration: 55,
       xpReward: 100,
       h1Marker: '# Lesson 10 — `run_engine_app` and the first block through the actor pipeline',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l11_en.md',
@@ -212,7 +212,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# Lesson 11 — Booting a live Reth `EthereumNode` in your workspace',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l12_en.md',
@@ -223,7 +223,7 @@ const EN: LocaleConfig = {
       duration: 50,
       xpReward: 100,
       h1Marker: '# Lesson 12 — `LiveRethEvmBridge` reads parents from the real chain',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l13_en.md',
@@ -234,7 +234,7 @@ const EN: LocaleConfig = {
       duration: 55,
       xpReward: 100,
       h1Marker: "# Lesson 13 — `validate_payload` runs Reth's `EthBeaconConsensus`",
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l14_en.md',
@@ -245,7 +245,7 @@ const EN: LocaleConfig = {
       duration: 50,
       xpReward: 90,
       h1Marker: "# Lesson 14 — `commit` drives Reth's Engine API forkchoice",
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_l15_en.md',
@@ -272,8 +272,8 @@ const JA: LocaleConfig = {
     slug: 'reth-openhl-consensus-ja',
     title: 'OpenHL を自作する — `cargo init` から動く single-validator devnet まで',
     description:
-      'OpenHL は Hyperliquid (HyperBFT consensus、HyperCore matching engine、HyperEVM execution、すべてクローズドソース) のオープンソース・リファレンス実装である。本コースは openhl Module 1 (consensus substrate) を自分で build するための build-along コース: 空ディレクトリで `cargo init` するところから始め、レッスンごとにコードを書き、最終的には実 Reth と実 Malachite の上で BFT consensus を end-to-end で 1 ラウンド走らせる Rust workspace を手にする。最終レッスンを終える頃には、自分で書いたコードに対して `cargo test first_block_via_engine_actors` が約 0.02 秒で pass する。答え合わせ用のリファレンスは `psyto/openhl`。本コースが扱うのは openhl Build arc Module 1 (substrate) のみで、Module 2-5 (CLOB、precompile、settlement、vault) は後続の rethlab コースに分けて扱う。',
-    track: 'reth-l1-architect',
+      'HL シェイプ L1 の consensus substrate を一から構築する。実 Reth (EVM) と実 Malachite (BFT) を 1 つの Rust workspace に組み込んで、ブロックを end-to-end で生成するところまで進める。リファレンス実装は `psyto/openhl`。DIY Perp シリーズの最初のコース。',
+    track: 'diy-perp',
     instructorName: 'RethLab',
   },
   modules: {
@@ -307,7 +307,7 @@ const JA: LocaleConfig = {
       duration: 45,
       xpReward: 80,
       h1Marker: '# レッスン 1 — Workspace + Reth + Malachite (Stages 1-3)',
-      startSignature: 'このレッスンの終わりに、`~/code/my-openhl/` ディレクトリで次を実行する:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l2_ja.md',
@@ -318,7 +318,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 2 — `openhl-types` の共通 contract type',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l3_ja.md',
@@ -329,7 +329,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 3 — `ConsensusBridge` trait',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l4_ja.md',
@@ -340,7 +340,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 70,
       h1Marker: '# レッスン 4 — `InMemoryEvmBridge` — trait の最初の impl',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l5_ja.md',
@@ -351,7 +351,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 70,
       h1Marker: '# レッスン 5 — real alloy 型を使う `RethEvmBridge`',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l6_ja.md',
@@ -362,7 +362,7 @@ const JA: LocaleConfig = {
       duration: 50,
       xpReward: 90,
       h1Marker: '# レッスン 6 — `OpenHlContext` と Malachite の 10 sub-type',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l7_ja.md',
@@ -373,7 +373,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 7 — `OpenHlSigningProvider` と canonical encoding',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l8_ja.md',
@@ -384,7 +384,7 @@ const JA: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# レッスン 8 — `OpenHlCodec` — エンジンが要求する codec スロット',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l9_ja.md',
@@ -395,7 +395,7 @@ const JA: LocaleConfig = {
       duration: 55,
       xpReward: 100,
       h1Marker: '# レッスン 9 — `OpenHlNode` と初の `start_engine` 呼び出し',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l10_ja.md',
@@ -406,7 +406,7 @@ const JA: LocaleConfig = {
       duration: 55,
       xpReward: 100,
       h1Marker: '# レッスン 10 — `run_engine_app` と actor pipeline 経由の最初のブロック',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l11_ja.md',
@@ -417,7 +417,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 11 — workspace で live Reth `EthereumNode` を boot する',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l12_ja.md',
@@ -428,7 +428,7 @@ const JA: LocaleConfig = {
       duration: 50,
       xpReward: 100,
       h1Marker: '# レッスン 12 — `LiveRethEvmBridge` が real chain から parent を読む',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l13_ja.md',
@@ -439,7 +439,7 @@ const JA: LocaleConfig = {
       duration: 55,
       xpReward: 100,
       h1Marker: '# レッスン 13 — `validate_payload` が Reth の `EthBeaconConsensus` を走らせる',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l14_ja.md',
@@ -450,7 +450,7 @@ const JA: LocaleConfig = {
       duration: 50,
       xpReward: 90,
       h1Marker: '# レッスン 14 — `commit` が Reth の Engine API forkchoice を駆動する',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_l15_ja.md',

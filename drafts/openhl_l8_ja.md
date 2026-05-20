@@ -21,19 +21,29 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **stub による trait 充足** — 型レベルの incremental development。Malachite が呼ばないコードパスに 50 行の protobuf encoder を書くより、未実装を名乗る 4 行 stub のほうが正しい。万一呼ばれたら大声でエラーになる。
+- **sub-trait の blanket impl** — `WalCodec / ConsensusCodec / SyncCodec` は適切な `Codec<T>` 構成要素を実装すれば自動で付いてくる。`static_assertions::assert_impl_all!` テストが blanket impl の発火とコンパイル時 bound の実在を検証する。
+- **codec が crate graph 上どこに住むか** — codec は `openhl-types` ではなく `openhl-consensus` に置く。Malachite の `informalsystems-malachitebft-app` (libp2p、ractor) に依存するからだ。`types/` に置くと、`BlockHash` だけ欲しい下流 crate まで libp2p を引きずる。
+- **wire format vs. canonical signing format** — L7 の canonical encoding は *署名される対象*、L8 の codec は *ネットワークに流れるもの*。重なる部分はあるが同じではない。wire format には framing、versioning、length prefix が乗り、それらに署名は及ばない。
+- **L8 で 1 個の real codec で足りる理由** — 単一 validator devnet では `ProposalPart` しか round-trip しない。残り 7 つは peer を増やすか crash recovery しない限り発火しない gossip / sync / WAL パスだ。
+
+検証:
 
 ```bash
 cargo test -p openhl-consensus
 ```
 
-上記の実行結果が **16 個のテストすべてに合格する** (L7 から 14 個 + codec の新規 2 個)。新規ファイルは 1 つ:
-
-- **`crates/consensus/src/codec.rs`** — `OpenHlCodec` 構造体と 8 個の `Codec<T>` impl。1 個は本物 (`ProposalPart` 用)、7 個は呼ばれたら明確なエラーを返す *stub* だ。
+上記の実行結果が **16 個のテストすべてに合格する** (L7 から 14 個 + codec の新規 2 個)。新規テストは 2 個: `OpenHlCodec` が 3 つの super-trait を満たすことを示すコンパイル時アサーション、および `ProposalPart` の runtime ラウンドトリップテスト。
 
 ここでもうひとつ unblock されるものがある: `informalsystems-malachitebft-app` が libp2p、ractor、その他エンジン表面のすべてを引き込んでくる。これ以降の初回コンパイルは ~38 秒かかる。投資の見返りは L9 で spawn する actor system だ。
 
-新規テストは 2 個: `OpenHlCodec` が 3 つの super-trait (`WalCodec`、`ConsensusCodec`、`SyncCodec`) を満たすことを示すコンパイル時アサーション、および `ProposalPart` の runtime ラウンドトリップテスト。
+具体的な変更:
+
+- `crates/consensus/Cargo.toml` に `informalsystems-malachitebft-app` + `static_assertions` (dev) を追加。
+- `crates/consensus/src/codec.rs` — 新規ファイル、`OpenHlCodec` 構造体、`CodecStub` エラー型、8 個の `Codec<T>` impl (1 個は `ProposalPart` 用 real、7 個は stub)、unit test 2 個。
+- `crates/consensus/src/lib.rs` — `pub mod codec;` を配線する。
 
 ## おさらい
 

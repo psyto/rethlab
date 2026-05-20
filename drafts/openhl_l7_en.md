@@ -20,18 +20,28 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Canonical encoding is consensus-critical** — why the byte layout that goes into a signature is *part of the chain's spec*, not derived from `serde::Serialize`. Two validators with different serde versions would produce different bytes for the same vote, sign different things, and fork.
+- **Pure functions wrapped by a stateful provider** — `sign_vote(vote, &sk)` is a free function (tests call it directly); `OpenHlSigningProvider` holds the key and exposes `sp.sign_vote(vote)` for Malachite. One logic, two call sites.
+- **Tamper detection via signature failure** — Ed25519 doesn't *know* what's tampered; it just fails to verify. The test that flips a byte in a vote then expects verification to fail is how you prove canonical encoding covers every consensus-relevant field.
+- **Type-system separation of public/private keys** — Ed25519 puts `sign` on `PrivateKey` only, never on `PublicKey`. The compiler refuses to let you sign with the public key.
+- **Empty-bytes signatures for unused features** — when the trait surface requires sign methods for features you don't use (vote extensions, proposal parts), signing deterministic empty data honors the contract without committing to data you don't have.
+
+Verification:
 
 ```bash
 cargo test -p openhl-consensus
 ```
 
-…passes **14 tests** (5 from L6's Context impl + 9 new ones for signing and the SigningProvider). You'll have the two files Malachite needs to plug Ed25519 signing into our chain:
+…passes **14 tests** (5 from L6's Context impl + 9 new ones for signing and the SigningProvider). The 9 new tests cover: round-trip sign/verify for each of the 4 signable types (vote, proposal, proposal_part, vote_extension), tamper detection on votes and proposals, and cross-provider verification rejection.
 
-- **`crates/consensus/src/signing.rs`** — canonical byte encoding for votes and proposals, plus low-level sign/verify functions
-- **`crates/consensus/src/signing_provider.rs`** — `OpenHlSigningProvider` struct that holds the validator's private key and implements Malachite's `SigningProvider<OpenHlContext>` trait
+Specific changes:
 
-The 9 new tests cover: round-trip sign/verify for each of the 4 signable types (vote, proposal, proposal_part, vote_extension), tamper detection on votes and proposals, and cross-provider verification rejection.
+- `crates/consensus/src/signing.rs` — canonical byte encoding for `OpenHlVote` and `OpenHlProposal`, low-level `sign_vote / sign_proposal / verify_vote` functions, `VerifierLike` shim, 2 unit tests.
+- `crates/consensus/src/signing_provider.rs` — `OpenHlSigningProvider` struct holding a `PrivateKey`, `impl SigningProvider<OpenHlContext>` with 8 methods (4 sign/verify pairs), 7 unit tests.
+- `crates/consensus/src/lib.rs` — wires `pub mod signing; pub mod signing_provider;`.
+- No Cargo.toml changes (the `informalsystems-malachitebft-signing-ed25519` dep came in at L6).
 
 ## Recap
 

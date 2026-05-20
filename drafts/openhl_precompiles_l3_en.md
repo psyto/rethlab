@@ -20,14 +20,26 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Test scope = bug localization** — three unit tests in increasing scope (function body → registry registration → registry dispatch) so a failure points to exactly which layer is broken.
+- **The extend-not-replace dual assertion** — checking *both* that `CLOB_READ_BEST_BID` is present AND that ECDSA recover at `0x...01` is still present catches the silent-replace bug that a single-assertion test would let through.
+- **`NodeBuilder.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))`** — the explicit-builder path that swaps one slot while inheriting all other Reth defaults; this is the "configure, don't fork" property in code.
+- **`Precompile::execute` vs direct function call** — the dispatch test proves the `Precompile::new(...)` wiring is correct (right function pointer, right id, right address) independent of whether the function body is right.
+- **Integration test = wiring assertion, not behavior assertion** — proving `NodeBuilder` + `OpenHlExecutorBuilder` + `EthereumAddOns` compose cleanly is a different concern from "does the precompile read the right bytes" (unit tests cover that).
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm reth_dev_node_with_openhl_executor --release
 cargo test -p openhl-evm --lib precompiles
 ```
 
-…both pass. You'll have written **4 new tests** total:
+…both pass.
+
+Specific changes:
+
+You'll have written **4 new tests** total:
 
 - **1 integration test** in `crates/evm/src/reth_node.rs` — `reth_dev_node_with_openhl_executor`. Bootstraps a Reth node with `OpenHlExecutorBuilder` swapped in for the default executor. Validates that the `EvmFactory` + `ExecutorBuilder` composition spawns cleanly.
 - **3 unit tests** in `crates/evm/src/precompiles/mod.rs`:

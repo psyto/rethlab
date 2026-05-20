@@ -21,13 +21,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The full read chain end-to-end** — `bid placed on CLOB → bridge writes through Mutex → precompile reads via global → encodes 64-byte ABI → returns to caller`. This is the first test that exercises the whole chain in one shot.
+- **Adversarial test data > random test data** — two orders chosen specifically to distinguish a correct best-bid implementation from a coincidentally-correct one (one at price 250 qty 7 = the *correct* answer; one at price 240 qty 99 = the larger-qty trap a buggy iteration order would return). Two orders, not 50.
+- **Partitioning dispatch tests from behavior tests** — L5 proved the function is reachable through `Precompile::execute`; L6 proves the function reads live state by calling `read_best_bid` directly. A test that bundles dispatch + behavior together is harder to debug when it fails.
+- **Assertion messages as documentation for future maintainers** — `"best bid is the 250 order, not 240"` tells the next engineer the conceptual invariant being violated, where a bare `left=240 right=250` only tells them the values.
+- **One-thing-at-a-time across L4-L6** — plumbing (L4) → swap (L5) → exercise (L6). Each lesson has one verifiable change; mixing them would make debugging much harder when something breaks at an intermediate stage.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-…passes 43 tests (one new). The new test is `read_best_bid_returns_live_state_when_clob_installed`. It does what every prior test has stopped short of: **install a CLOB with a known bid, call the precompile, observe that the precompile's output bytes encode the bid's price and qty.**
+…passes 43 tests (one new).
+
+Specific changes:
+
+The new test is `read_best_bid_returns_live_state_when_clob_installed`. It does what every prior test has stopped short of: **install a CLOB with a known bid, call the precompile, observe that the precompile's output bytes encode the bid's price and qty.**
 
 This is the milestone. The full chain — `bid placed on CLOB → bridge writes through Mutex → precompile reads via global → encodes 64-byte ABI → returns to caller` — is finally exercised end-to-end. After L6:
 

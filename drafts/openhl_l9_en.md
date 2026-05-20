@@ -21,7 +21,16 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **`Node` as handshake interface, not runtime** — `OpenHlNode` holds long-lived configuration (key, validator set, home dir, moniker) and *constructs* the engine. The actual running actor system lives in `OpenHlNodeHandle`, returned from `start()`. Construction and execution are different lifecycle stages, in different types.
+- **The actor-system spawn surface** — what `start_engine` actually does (spawns ractor cells, binds libp2p, allocates a `Channels<OpenHlContext>`), why it returns an `EngineHandle`, and how `OpenHlNodeHandle` wraps it to satisfy the `NodeHandle<OpenHlContext>` trait.
+- **`Mutex<Option<Channels>>` take-once semantics** — why the channel handle is takeable exactly once. The app loop (L10) consumes them; subsequent calls return `None`, a clean signal that ownership has transferred.
+- **Centralized address derivation** — `SHA-256(pubkey)[12..32]` lives in one place (`get_address`), and a test asserts it matches the helper used in L6's runner. Centralization + a verification test prevents silent drift across files.
+- **Type-safe placeholders over `todo!()`** — `run()` returns `Err("not yet implemented (L10)")` instead of panicking. Code that calls it fails gracefully with a pointer to the next lesson, surviving across PRs and stale tabs.
+- **Why the smoke test is necessary** — L8's compile-time `assert_impl_all!` proved the codec satisfies the trait. The smoke test proves the *runtime* path — spawn, channel allocation, libp2p binding, kill propagation — actually works end-to-end. Types are necessary but not sufficient.
+
+Verification:
 
 ```bash
 cargo test -p openhl-consensus
@@ -35,7 +44,11 @@ test node::tests::start_engine_smoke_spawns_and_kills ... ok
 
 …spawns the full Malachite actor system against your code, asserts the channel handle is available exactly once, and tears the actor system down cleanly — **in about 0.02 seconds**. After this lesson, the engine boots; the only thing missing is the application loop that consumes from `Channels<OpenHlContext>` and drives the bridge.
 
-The 4 new tests cover: private key file round-trip, config produces `ProposalOnly` payload + ephemeral listen address, address derivation matches what the runner used in L6, and the smoke test that calls `start_engine`.
+Specific changes:
+
+- 1 dep added to `crates/consensus/Cargo.toml`: `informalsystems-malachitebft-app-channel`.
+- `crates/consensus/src/node.rs` — new file (~310 lines) with `OpenHlNode`, `OpenHlConfig`, `OpenHlGenesis`, `OpenHlPrivateKeyFile`, `OpenHlNodeHandle`, the `impl Node for OpenHlNode` (5 associated types, 12 methods), and 4 unit tests (private-key round-trip, config defaults, address derivation, `start_engine` smoke).
+- `crates/consensus/src/lib.rs` — wires `pub mod node;`.
 
 ## Recap
 

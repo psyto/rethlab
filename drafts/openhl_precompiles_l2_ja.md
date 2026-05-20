@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **REVM の `PrecompileFn` シグネチャ `fn(&[u8], u64, u64) -> PrecompileResult`** — 関数ポインタ (closure ではない)、3 つの引数 (input、gas_limit、reservoir) は固定。registry は関数ポインタを保持するので、precompile はこの形に正確に従う必要がある。
+- **Solidity ABI の 32-byte slot レイアウト** — `(uint256, uint256)` は合計 64 バイト、big-endian、低位バイトは index 31/63 — wire format でこれに合わせれば Solidity コントラクトがそのまま `abi.decode` できる。
+- **hardcode された stub が「配線テスト」と「内容テスト」を分割する道具** — `(100, 10)` を返す (`unimplemented!()` ではなく) ことで、L3 は precompile の **到達可能性** だけを単独で検証できる。「正しい値を返すか」(L4-L6 の責務) と分離される。
+- **`base.clone()` による extend-not-replace** — 標準の precompile セットを wrap することで ECDSA recovery / SHA-256 などが登録された状態を保てる。新規に `Precompiles::default()` を作ってしまうと、これらが silently 消えてしまう。
+- **address は `pub` const、gas cost は private const** — 呼び出し側は precompile を *call* する必要がある (address が必要)。gas は EVM が内部で処理する (caller は cost を知る必要がない)。可視性は API surface に対応する。
+
+検証：
 
 ```bash
 cargo check -p openhl-evm
 ```
 
-…も引き続きコンパイルが通る。`precompiles/mod.rs` がついに **Stage 9a の完成版** になる:
+…も引き続きコンパイルが通る。
+
+具体的な変更:
+
+`precompiles/mod.rs` がついに **Stage 9a の完成版** になる:
 
 - 定数 `CLOB_READ_BEST_BID: Address = 0x...0c1b` — precompile の address。
 - 定数 `CLOB_BASE_GAS_COST: u64 = 500` — precompile call ごとの最小 gas 料金。

@@ -9,6 +9,7 @@ import {
   Boxes,
   Code2,
   CheckCircle2,
+  Hammer,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -59,6 +60,14 @@ export default function LandingPage() {
       courses: 2,
       difficulty: t('courses.difficulty.expert'),
       color: 'from-orange-500/20 to-red-500/20',
+    },
+    {
+      title: t('courses.categories.diyPerp'),
+      description: t('page.tracks.diyPerpDesc'),
+      icon: Hammer,
+      courses: 4,
+      difficulty: t('page.tracks.diyPerpTag'),
+      color: 'from-pink-500/20 to-rose-500/20',
     },
   ];
 

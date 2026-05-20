@@ -57,8 +57,8 @@ const EN: LocaleConfig = {
     slug: 'building-openhl-precompiles-en',
     title: 'Build OpenHL Precompiles — connecting CLOB state to smart contracts',
     description:
-      "Course 8 of 10 in the L1 Architect track. Third of the openhl-based build-along courses. Continues from `building-openhl-clob`: starting from the workspace at the end of course 7 (CLOB matching engine integrated into LiveRethEvmBridge, fills accumulate as a parallel list), the reader adds custom EVM precompiles that let smart contracts read CLOB state (`clob_read_best_bid`) and place orders (`clob_place_order`). End state: a smart contract call places an order via precompile, matches against existing book state, and the resulting fill flows back through the bridge. Covers openhl Stage 9 (9a-9e, ~860 LOC across 6 commits): EvmFactory pattern, registry-based precompile dispatch, Arc-shared CLOB state, calldata decoding, fill-sink routing back to bridge. Out of scope: encoding fills as EVM-executable transactions in the block body (future course), funding state machine (course 9).",
-    track: 'reth-l1-architect',
+      "Connect the CLOB from `building-openhl-clob` to smart contracts via custom EVM precompiles. Smart contracts gain read and write access to the matching engine at well-known precompile addresses, and the resulting fills route back through the bridge into the next payload. The third course in the DIY Perp series.",
+    track: 'diy-perp',
     instructorName: 'RethLab',
   },
   modules: {
@@ -90,7 +90,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# Lesson 1 — `OpenHlEvmFactory` — hooking into every EVM creation',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_precompiles_l2_en.md',
@@ -101,7 +101,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# Lesson 2 — `clob_read_best_bid` — the first real precompile',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_precompiles_l3_en.md',
@@ -112,7 +112,7 @@ const EN: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# Lesson 3 — NodeBuilder wiring + registry callability tests',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_precompiles_l4_en.md',
@@ -123,7 +123,7 @@ const EN: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# Lesson 4 — `install_clob()` — bridging EVM state to the matching engine',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_precompiles_l5_en.md',
@@ -134,7 +134,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# Lesson 5 — `read_best_bid` reads the wire — swap to `current_best_bid()`',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_precompiles_l6_en.md',
@@ -145,7 +145,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# Lesson 6 — Module 2 milestone — proving the round-trip',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_precompiles_l7_en.md',
@@ -156,7 +156,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# Lesson 7 — `clob_place_order` — calldata decoding scaffold',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_precompiles_l8_en.md',
@@ -167,7 +167,7 @@ const EN: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# Lesson 8 — `book.submit(...)` — the write path goes live',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_precompiles_l9_en.md',
@@ -178,7 +178,7 @@ const EN: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# Lesson 9 — `install_fill_sink` — fills flow back to the bridge',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_precompiles_l10_en.md',
@@ -189,7 +189,7 @@ const EN: LocaleConfig = {
       duration: 45,
       xpReward: 90,
       h1Marker: '# Lesson 10 — Course milestone — the full stack in a real Reth node',
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'Concepts you\'ll grasp in this lesson',
     },
     {
       draftFile: 'openhl_precompiles_l11_en.md',
@@ -200,7 +200,7 @@ const EN: LocaleConfig = {
       duration: 20,
       xpReward: 40,
       h1Marker: "# Lesson 11 — Capstone — what you built, what's deferred, what comes next",
-      startSignature: 'By the end of this lesson:',
+      startSignature: 'You can sketch the EVM ↔ CLOB architecture',
     },
   ],
 };
@@ -216,8 +216,8 @@ const JA: LocaleConfig = {
     slug: 'building-openhl-precompiles-ja',
     title: 'OpenHL Precompile を作る — CLOB state をスマートコントラクトに接続する',
     description:
-      'L1 Architect トラックの 10 コース中 8 番目。openhl ベースの build-along コースの 3 つ目。`building-openhl-clob` から続く: course 7 end state の workspace (LiveRethEvmBridge に統合された CLOB matching engine、fill が並行リストとして蓄積) から始め、reader は smart contract が CLOB state を read する custom EVM precompile (`clob_read_best_bid`) と order を place する precompile (`clob_place_order`) を追加する。終了状態: smart contract call が precompile 経由で order を発注、既存 book state とマッチ、結果の fill が bridge を通じて流れる。openhl Stage 9 (9a-9e、6 commits ~860 LOC) をカバー: EvmFactory パターン、registry ベースの precompile dispatch、Arc-shared CLOB state、calldata decoding、fill-sink を bridge に route。範囲外: fill を block body の EVM-executable transaction として encode (future course)、funding state machine (course 9)。',
-    track: 'reth-l1-architect',
+      '`building-openhl-clob` で構築した CLOB を、カスタム EVM precompile 経由でスマートコントラクトに接続する。スマートコントラクトは well-known な precompile アドレスからマッチングエンジンを read/write でき、生まれた fill は bridge を経由して次の payload に乗る。DIY Perp シリーズの 3 つ目のコース。',
+    track: 'diy-perp',
     instructorName: 'RethLab',
   },
   modules: {
@@ -249,7 +249,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 1 — `OpenHlEvmFactory` — すべての EVM 生成にフックする',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_precompiles_l2_ja.md',
@@ -260,7 +260,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 2 — `clob_read_best_bid` — 最初の real precompile',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_precompiles_l3_ja.md',
@@ -271,7 +271,7 @@ const JA: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# レッスン 3 — NodeBuilder 配線 + registry callability test',
-      startSignature: 'このレッスンの終わりに:',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_precompiles_l4_ja.md',
@@ -282,7 +282,7 @@ const JA: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# レッスン 4 — `install_clob()` — EVM の state をマッチングエンジンに橋渡しする',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_precompiles_l5_ja.md',
@@ -293,7 +293,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 5 — `read_best_bid` が配線を読む — `current_best_bid()` に差し替え',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_precompiles_l6_ja.md',
@@ -304,7 +304,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 6 — Module 2 マイルストーン — ラウンドトリップを証明する',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_precompiles_l7_ja.md',
@@ -315,7 +315,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 7 — `clob_place_order` — calldata デコード scaffold',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_precompiles_l8_ja.md',
@@ -326,7 +326,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 8 — `book.submit(...)` — 書き込みパスが live になる',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_precompiles_l9_ja.md',
@@ -337,7 +337,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 9 — `install_fill_sink` — fill を bridge に戻す',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_precompiles_l10_ja.md',
@@ -348,7 +348,7 @@ const JA: LocaleConfig = {
       duration: 45,
       xpReward: 90,
       h1Marker: '# レッスン 10 — コースマイルストーン — 実際の Reth ノード内でフルスタック',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンで掴む概念',
     },
     {
       draftFile: 'openhl_precompiles_l11_ja.md',
@@ -359,7 +359,7 @@ const JA: LocaleConfig = {
       duration: 20,
       xpReward: 40,
       h1Marker: '# レッスン 11 — Capstone — 築いたもの、先送りしたもの、次にくるもの',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'EVM ↔ CLOB のアーキテクチャを、記憶から',
     },
   ],
 };

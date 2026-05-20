@@ -22,7 +22,16 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The `AppMsg` routing loop** — Malachite's engine sends `ConsensusReady / GetValidatorSet / StartedRound / GetValue / Decided / …` over a single channel. The app loop is a `while let Some(msg) = recv().await` matching each variant and either replying via `oneshot::Sender` or driving the bridge. This is the *only* glue between Malachite and your EL.
+- **Generic-over-bridge polymorphism** — `run_engine_app<B: ConsensusBridge>` works for `StubBridge`, `InMemoryEvmBridge`, `RethEvmBridge`, and (eventually) `LiveRethEvmBridge`. One routing function, four backends. The trait surface from L3 pays off here.
+- **`stop_after_decisions` as test ergonomics** — production validators run `usize::MAX`. Tests pass `1`. A parameter that exists *only* so the function is finite-state-testable is a legitimate API choice; test ergonomics deserve API surface.
+- **Reply channels can close mid-flight** — when an engine actor dies before we reply, the `oneshot::Sender::send()` errors. Logging via `tracing::warn!` (not propagating) is correct: propagating would mask actual errors with noise; the operator can still investigate via logs.
+- **Channel vs. event-stream message flow** — `channels.consensus.recv()` carries *imperative* messages that need replies; `subscribe()` carries *broadcast* notifications. The app loop only deals with the former in L10.
+- **Why integration > unit tests at this layer** — engine `AppMsg` arms arrive in a specific order. Faking that order is more work than spinning up the real engine for one block. The integration test is cheaper and proves more.
+
+Verification:
 
 ```bash
 cargo test -p openhl-consensus
@@ -36,9 +45,11 @@ test engine_app::tests::first_block_via_engine_actors ... ok
 
 …spawns the Malachite actor system, drives a real consensus round through it, asserts the bridge committed exactly the hash the engine decided on. **Wall-clock: 0.02 seconds.** This is the milestone where your code stops being "the engine boots" and becomes "the engine produces blocks."
 
-You'll have one new file:
+Specific changes:
 
-- **`crates/consensus/src/engine_app.rs`** — the app loop. Reads `AppMsg<OpenHlContext>` from `Channels<OpenHlContext>::consensus`, routes each variant: builds payloads through the bridge, replies with `LocallyProposedValue` to `GetValue`, commits decided values through the bridge, returns the list of decided hashes.
+- `crates/consensus/src/engine_app.rs` — new file (~282 lines). The `run_engine_app<B: ConsensusBridge + 'static>` loop reads `AppMsg<OpenHlContext>` from `Channels<OpenHlContext>::consensus`, dispatches 12 message arms (5 substantive + 7 trivial), and returns the list of decided hashes.
+- `StubBridge` test fixture + the `first_block_via_engine_actors` integration test live in the same file.
+- `crates/consensus/src/lib.rs` — wires `pub mod engine_app;`.
 
 ## Recap
 

@@ -11,11 +11,11 @@ export async function seedRethOpenHlPrecompilesEN(prisma: PrismaClient) {
       slug: "building-openhl-precompiles-en",
       title: "Build OpenHL Precompiles — connecting CLOB state to smart contracts",
       description:
-        "Course 8 of 10 in the L1 Architect track. Third of the openhl-based build-along courses. Continues from `building-openhl-clob`: starting from the workspace at the end of course 7 (CLOB matching engine integrated into LiveRethEvmBridge, fills accumulate as a parallel list), the reader adds custom EVM precompiles that let smart contracts read CLOB state (`clob_read_best_bid`) and place orders (`clob_place_order`). End state: a smart contract call places an order via precompile, matches against existing book state, and the resulting fill flows back through the bridge. Covers openhl Stage 9 (9a-9e, ~860 LOC across 6 commits): EvmFactory pattern, registry-based precompile dispatch, Arc-shared CLOB state, calldata decoding, fill-sink routing back to bridge. Out of scope: encoding fills as EVM-executable transactions in the block body (future course), funding state machine (course 9).",
+        "Connect the CLOB from `building-openhl-clob` to smart contracts via custom EVM precompiles. Smart contracts gain read and write access to the matching engine at well-known precompile addresses, and the resulting fills route back through the bridge into the next payload. The third course in the DIY Perp series.",
       difficulty: "EXPERT",
       duration: 400,
       xpReward: 820,
-      track: "reth-l1-architect",
+      track: "diy-perp",
       tags,
       isPublished: false,
       sortOrder: 800,
@@ -204,13 +204,24 @@ If all three pass, you're ready for L1.
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **\`EvmFactory\` + \`ExecutorBuilder\` as Reth's "swap one slot" seam** — every EVM that Reth constructs (payload build, block validation, eth_call RPC, debug RPC) goes through one factory, so registering custom precompiles once propagates everywhere.
+- **\`alloy-evm\` (abstract traits) vs \`reth-evm\` (concrete wiring)** — why both deps are required: the trait layer expresses what an EVM *is*, the executor layer expresses how Reth *runs* it.
+- **Per-spec \`OnceLock\` caching of \`Precompiles\`** — building a precompile set is expensive (hashing addresses), \`create_evm\` is hot, so each hardfork tier's set is constructed once and shared as \`&'static\`.
+- **Stub-with-stable-signature as an incremental-construction tactic** — the passthrough \`openhl_precompiles(base) -> Precompiles\` lets the factory wire up *now* while L2 fills the body later, with no call-site rewrites.
+
+Verification:
 
 \`\`\`bash
 cargo check -p openhl-evm
 \`\`\`
 
-…compiles cleanly. You'll have **two new modules** in \`crates/evm/src/\`:
+…compiles cleanly.
+
+Specific changes:
+
+You'll have **two new modules** in \`crates/evm/src/\`:
 
 - **\`openhl_evm.rs\`** — \`OpenHlEvmFactory\` (Reth's \`EvmFactory\` slot) + \`OpenHlExecutorBuilder\` (Reth's \`ExecutorBuilder\` slot) + per-hardfork precompile dispatch via \`OnceLock\`. About 80 LOC.
 - **\`precompiles/mod.rs\`** — a **stub** \`openhl_precompiles(base) -> Precompiles\` that passes through unchanged. L2 fills in the actual read precompile.
@@ -653,13 +664,25 @@ The factory is wired but the precompile module is a passthrough — Reth's stand
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **REVM's \`PrecompileFn\` signature \`fn(&[u8], u64, u64) -> PrecompileResult\`** — a function pointer (not closure), with three fixed args (input, gas_limit, reservoir); your precompile must conform exactly because the registry stores function pointers.
+- **Solidity ABI's 32-byte slot layout** — \`(uint256, uint256)\` is 64 bytes total, big-endian, low-order byte at index 31/63 — matching this at the wire format means a Solidity contract can \`abi.decode\` your output directly.
+- **Hardcoded stub as a wiring-vs-content split** — returning \`(100, 10)\` (not \`unimplemented!()\`) lets L3 test the *reachability* of the precompile in isolation from "does it return the right data" (L4-L6's job).
+- **\`extend-not-replace\` via \`base.clone()\`** — wrapping the standard precompile set means ECDSA recovery / SHA-256 / etc. stay registered; a fresh \`Precompiles::default()\` would silently delete them.
+- **\`pub\` const for the address, private const for gas cost** — callers need to *call* the precompile (need the address); the EVM dispatches gas internally (callers don't need the cost). Visibility matches API surface.
+
+Verification:
 
 \`\`\`bash
 cargo check -p openhl-evm
 \`\`\`
 
-…still compiles. Your \`precompiles/mod.rs\` is now the **full Stage 9a version**:
+…still compiles.
+
+Specific changes:
+
+Your \`precompiles/mod.rs\` is now the **full Stage 9a version**:
 
 - A constant \`CLOB_READ_BEST_BID: Address = 0x...0c1b\` — the precompile's address.
 - A constant \`CLOB_BASE_GAS_COST: u64 = 500\` — minimum gas charged per precompile call.
@@ -921,14 +944,26 @@ The precompile is registered but **untested**. L3 wires the executor builder int
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Test scope = bug localization** — three unit tests in increasing scope (function body → registry registration → registry dispatch) so a failure points to exactly which layer is broken.
+- **The extend-not-replace dual assertion** — checking *both* that \`CLOB_READ_BEST_BID\` is present AND that ECDSA recover at \`0x...01\` is still present catches the silent-replace bug that a single-assertion test would let through.
+- **\`NodeBuilder.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))\`** — the explicit-builder path that swaps one slot while inheriting all other Reth defaults; this is the "configure, don't fork" property in code.
+- **\`Precompile::execute\` vs direct function call** — the dispatch test proves the \`Precompile::new(...)\` wiring is correct (right function pointer, right id, right address) independent of whether the function body is right.
+- **Integration test = wiring assertion, not behavior assertion** — proving \`NodeBuilder\` + \`OpenHlExecutorBuilder\` + \`EthereumAddOns\` compose cleanly is a different concern from "does the precompile read the right bytes" (unit tests cover that).
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm reth_dev_node_with_openhl_executor --release
 cargo test -p openhl-evm --lib precompiles
 \`\`\`
 
-…both pass. You'll have written **4 new tests** total:
+…both pass.
+
+Specific changes:
+
+You'll have written **4 new tests** total:
 
 - **1 integration test** in \`crates/evm/src/reth_node.rs\` — \`reth_dev_node_with_openhl_executor\`. Bootstraps a Reth node with \`OpenHlExecutorBuilder\` swapped in for the default executor. Validates that the \`EvmFactory\` + \`ExecutorBuilder\` composition spawns cleanly.
 - **3 unit tests** in \`crates/evm/src/precompiles/mod.rs\`:
@@ -1261,13 +1296,25 @@ The precompile is registered and proven callable, but it returns **hardcoded val
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **\`PrecompileFn\` is a function pointer, not a closure → process-global state is the workaround** — REVM's \`fn(&[u8], u64, u64) -> PrecompileResult\` can't capture environment, so shared state has to live in a \`static\` the function reads at call time.
+- **\`RwLock<Option<Arc<Mutex<T>>>>\` — different locks for different access patterns** — outer \`RwLock\` distinguishes installed-vs-uninstalled (rare write); inner \`Mutex\` protects the matching engine (frequent write). A single \`Mutex<Option<...>>\` would serialize all reads through one bottleneck.
+- **\`Arc<Mutex<Book>>\` for shared ownership across the bridge/precompile boundary** — the bridge and the precompile are different "callers" but must see the same \`Book\`; \`Arc\` is how Rust expresses "more than one owner, same data."
+- **Install-replaces-not-errors** — tests need to install/uninstall repeatedly, so silent replacement is a feature, not a bug. Production paths only call install once.
+- **Plumbing-without-current as an incremental shape** — L4 connects the wires (static, install fn, bridge field type) but leaves \`read_best_bid\` hardcoded; L5 closes the switch. Splitting plumbing from behavior lets each lesson have one verifiable change.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-…still passes (42 tests including L3's 4 new ones). You'll have **added the plumbing** for live CLOB state without yet changing what \`read_best_bid\` returns:
+…still passes (42 tests including L3's 4 new ones).
+
+Specific changes:
+
+You'll have **added the plumbing** for live CLOB state without yet changing what \`read_best_bid\` returns:
 
 - **2 new methods** on \`Book\` (in \`crates/clob/src/book.rs\`): \`best_bid_with_qty()\` and \`best_ask_with_qty()\` returning \`Option<(Price, Qty)>\`.
 - **A module-level \`static CLOB_STATE\`** in \`precompiles/mod.rs\` holding \`Option<Arc<Mutex<Book>>>\`.
@@ -1636,13 +1683,25 @@ The plumbing is installed but the precompile still ignores it. L5 swaps \`read_b
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Uninstalled-returns-zero is "uninitialised storage slot" semantics** — Solidity contracts naturally handle a zero from \`STATICCALL\` as "no liquidity" and decline to trade. Erroring instead would revert every transaction during boot.
+- **Constant-time precompile = gas charging shouldn't leak state** — charging less gas when no CLOB is installed would let attackers measure gas to detect validator state. A flat \`CLOB_BASE_GAS_COST\` keeps the precompile's wall-clock-shape uniform.
+- **\`cargo test\` runs in parallel → process-globals race → need a serializer** — once two tests touch the same \`CLOB_STATE\`, parallel execution makes the global flap between \`Some(clob_A)\` and \`None\` within one test's lifetime. A \`Mutex<()>\` named \`TEST_SERIALIZER\` is the fix.
+- **\`TEST_SERIALIZER\` is per-module, not per-crate** — narrow the serialization to the tests that actually need it; tests that don't touch \`CLOB_STATE\` shouldn't pay the cost.
+- **Uninstall at *start* of test, not end** — panicked tests skip their cleanup code; the next test's start-of-test reset is the safety net. End-of-test uninstall is decoration.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-…still passes (42 tests). But internally, the precompile now reads **live state** instead of hardcoded values:
+…still passes (42 tests).
+
+Specific changes:
+
+But internally, the precompile now reads **live state** instead of hardcoded values:
 
 - **\`read_best_bid\` body swapped** — drops the \`let mut out = vec![0, 0, ..., 100, 0, 0, ..., 10]\` hardcode in favor of \`if let Some((price, qty)) = current_best_bid() { ... write into out ... }\`. No CLOB installed → 64 zero bytes (matches "uninitialised perp market" semantic).
 - **L3's \`read_best_bid_returns_hardcoded_price_and_qty\` test renamed** to \`read_best_bid_returns_zero_when_no_clob_installed\` — same shape, asserts zero instead of 100/10.
@@ -1979,13 +2038,25 @@ The wire is hot but no test exercises the round-trip. L6 adds \`read_best_bid_re
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The full read chain end-to-end** — \`bid placed on CLOB → bridge writes through Mutex → precompile reads via global → encodes 64-byte ABI → returns to caller\`. This is the first test that exercises the whole chain in one shot.
+- **Adversarial test data > random test data** — two orders chosen specifically to distinguish a correct best-bid implementation from a coincidentally-correct one (one at price 250 qty 7 = the *correct* answer; one at price 240 qty 99 = the larger-qty trap a buggy iteration order would return). Two orders, not 50.
+- **Partitioning dispatch tests from behavior tests** — L5 proved the function is reachable through \`Precompile::execute\`; L6 proves the function reads live state by calling \`read_best_bid\` directly. A test that bundles dispatch + behavior together is harder to debug when it fails.
+- **Assertion messages as documentation for future maintainers** — \`"best bid is the 250 order, not 240"\` tells the next engineer the conceptual invariant being violated, where a bare \`left=240 right=250\` only tells them the values.
+- **One-thing-at-a-time across L4-L6** — plumbing (L4) → swap (L5) → exercise (L6). Each lesson has one verifiable change; mixing them would make debugging much harder when something breaks at an intermediate stage.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-…passes 43 tests (one new). The new test is \`read_best_bid_returns_live_state_when_clob_installed\`. It does what every prior test has stopped short of: **install a CLOB with a known bid, call the precompile, observe that the precompile's output bytes encode the bid's price and qty.**
+…passes 43 tests (one new).
+
+Specific changes:
+
+The new test is \`read_best_bid_returns_live_state_when_clob_installed\`. It does what every prior test has stopped short of: **install a CLOB with a known bid, call the precompile, observe that the precompile's output bytes encode the bid's price and qty.**
 
 This is the milestone. The full chain — \`bid placed on CLOB → bridge writes through Mutex → precompile reads via global → encodes 64-byte ABI → returns to caller\` — is finally exercised end-to-end. After L6:
 
@@ -2313,13 +2384,25 @@ L7 starts Module 3 (Write precompile). It mirrors L2: a new precompile address (
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Schema-first design — the calldata layout is the public contract, locked before behavior** — once the precompile is exposed at \`0x...0c1c\`, contracts will call it. Lock the input layout in L7 so L8's behavior change doesn't break callers.
+- **128-byte ABI input as four 32-byte slots** — Solidity ABI packs each scalar into a 32-byte word; \`u64\` lives in the rightmost 8 bytes (\`[0; 24] + [u64 BE]\`). Four words = \`account_id\`, \`side\`, \`price\`, \`qty\`.
+- **Precompiles fail soft, not panic** — malformed input (4 rejection paths) returns sentinel \`0\`, never reverts the transaction. The calling contract gets back a value it can branch on, instead of an EVM-level error.
+- **\`AtomicU64::fetch_add(1, Relaxed)\` for ID allocation** — IDs need uniqueness (atomic guarantees that) but no synchronization invariant with other state (the Book has its own Mutex). Pick the lighter memory ordering when no invariant requires more.
+- **Sentinel \`0\` requires \`NEXT_ORDER_ID\` to start at 1** — if IDs started at 0, the first allocated ID would be indistinguishable from "rejected." Starting at 1 makes the sentinel unambiguous.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-…passes 46 tests (3 new). The CLOB's **write path** has its precompile registered, calldata parsing implemented, and rejection paths verified:
+…passes 46 tests (3 new).
+
+Specific changes:
+
+The CLOB's **write path** has its precompile registered, calldata parsing implemented, and rejection paths verified:
 
 - **New precompile at \`0x...0c1c\`** — \`CLOB_PLACE_ORDER\`, registered alongside \`CLOB_READ_BEST_BID\`.
 - **128-byte ABI-aligned input layout** decoded: \`account_id\`, \`side\`, \`price\`, \`qty\`.
@@ -2761,13 +2844,25 @@ L8 is one-line plus tests. The line: \`clob.lock().expect("...").submit(Order { 
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The precompile represents an on-chain caller** — when test code writes directly to \`book.lock().submit(...)\`, that simulates the bridge (off-chain). When \`place_order\` writes to the book, that simulates an EVM transaction (on-chain). L8 is the moment EVM execution starts mutating CLOB state.
+- **Two precompiles, one Arc, shared state = round-trip** — both precompiles read/write through \`CLOB_STATE\`, so a write via \`0x...0c1c\` is immediately visible to a read via \`0x...0c1b\`. The L4 architecture was designed for exactly this moment.
+- **Schema-first means behavior-second is small** — L7 wrote ~70 lines (constants, atomic, parser, registration, tests). L8 adds ~7 lines (the submit call + binding renames + test extensions). Locking the contract first compressed the behavior change.
+- **Side-effect testing requires holding a handle** — L7's malformed-input test couldn't check the book because it didn't keep a reference. L8 fixes that with \`let book = Arc::new(...); install_clob(book.clone());\`. The clone is the difference between testing returns and testing state.
+- **\`_result\` vs \`_\` as future-intent markers** — \`_result\` says "I see this value, don't use it yet, expect future use." \`_\` (bare) says "I'm explicitly not using this." L8 binds to \`_result\`; L9 renames to \`fills\`.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-…passes 46 tests, same count as L7 — but with a one-line addition to \`place_order\` and two test changes, the precompile **actually writes to the book**:
+…passes 46 tests, same count as L7.
+
+Specific changes:
+
+With a one-line addition to \`place_order\` and two test changes, the precompile **actually writes to the book**:
 
 - **One line added** to \`place_order\` — \`clob.lock().submit(Order { ... })\` between order_id allocation and encoding.
 - **L7's \`_\` prefixes dropped** from \`_account_id\` / \`_price_value\` / \`_side\` — they're used now.
@@ -3159,13 +3254,25 @@ L9 closes the "fills are discarded" gap from L8's doc comment. Add a \`FILL_SINK
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The shared-buffer pattern generalizes** — L4's \`Arc<Mutex<T>>\` + process-global pattern for CLOB state is reused 1:1 for fills. Once the primitive is in place, additional shared state costs ~20 lines per buffer. The L4 abstraction pays compound interest.
+- **Orthogonal globals = orthogonal test setup** — bundling \`CLOB_STATE\` and \`FILL_SINK\` into one global would force every test to install both. Two separate globals keep test setup composable; only install what your test actually exercises.
+- **Early-out on the common case is free** — \`if !submit_result.fills.is_empty()\` skips lock acquisition when the order rests without crossing (the dominant case). One branch in the hot path saves an \`RwLock\` acquisition.
+- **\`drop(book)\` before pushing to the sink — release the inner lock before taking the outer one** — holding both locks (Book + sink) at once would create a lock-ordering hazard. Explicitly dropping the Book guard keeps lock acquisition strictly sequential.
+- **Doc-comment-as-debt-tracker** — L8's "fills are discarded" doc comment was load-bearing: it told future readers "deliberate gap, not oversight." L9 closes the gap and updates the doc. A documented gap is half-fixed; an undocumented gap is invisible debt.
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-…passes 47 tests (1 new). The "fills are discarded" gap from L8's doc comment is closed:
+…passes 47 tests (1 new).
+
+Specific changes:
+
+The "fills are discarded" gap from L8's doc comment is closed:
 
 - **\`FILL_SINK\` static added** — parallel to \`CLOB_STATE\`, holds \`Option<Arc<Mutex<Vec<Fill>>>>\`.
 - **\`install_fill_sink\` / \`uninstall_fill_sink\` module fns** — public, mirror the \`install_clob\` / \`uninstall_clob\` pattern.
@@ -3596,13 +3703,25 @@ L10 is the **course-level milestone**: the Stage 9d integration test \`bridge_ag
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Integration tests catch wiring bugs unit tests can't** — unit tests build each piece in isolation, so a typo in \`with_components(...executor(OpenHlExecutorBuilder))\` or a regression in \`EthereumAddOns\` application would leave unit tests green while breaking production. One integration test = wiring assertion.
+- **\`pub(crate)\` is the right visibility for cross-module tests** — widening \`place_order\` to \`pub\` leaks the API; \`#[cfg(test) pub(crate)]\` adds ceremony for no benefit. \`pub(crate)\` says "inside this crate, anyone; outside, no one."
+- **Inlined test calldata > DRY helper** — hand-built \`[u8; 128]\` with byte-position comments makes the ABI layout visible at the call site. For tests proving system-level correctness, every byte position should be a learnable artifact; helpers hide.
+- **Canonical mix: one integration test + many unit tests** — pieces have their own narrow tests; composition has one wide test. Failure localization comes from unit tests; wiring guarantees come from the integration test.
+- **The honest deferred: RPC roundtrip is Reth's responsibility, not openhl's** — testing JSON-RPC → eth_call → revm dispatch would validate Reth, not openhl. The scope of "openhl plugs into Reth correctly" doesn't include "Reth's RPC server works."
+
+Verification:
 
 \`\`\`bash
 cargo test -p openhl-evm --release bridge_against_custom_evm
 \`\`\`
 
-…passes a single new integration test, \`bridge_against_custom_evm_node_shares_clob_with_precompile\`. The test does everything Stages 9a-9c+ touched, all in one place:
+…passes a single new integration test, \`bridge_against_custom_evm_node_shares_clob_with_precompile\`.
+
+Specific changes:
+
+The test does everything Stages 9a-9c+ touched, all in one place:
 
 1. **Bootstrap Reth** with \`OpenHlExecutorBuilder\` — the custom EVM with both CLOB precompiles registered.
 2. **Construct \`LiveRethEvmBridge\`** against that node's provider — the bridge's \`new()\` calls \`install_clob\` and \`install_fill_sink\`.

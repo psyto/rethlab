@@ -20,13 +20,23 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **The CLOB lives *next to* the bridge, not *inside* the Reth EVM** — `clob: Mutex<Book>` is a field on `LiveRethEvmBridge`, alongside `provider` and `state`. Fills become a parallel data lane that rides along with each payload; they aren't yet EVM transactions (that's course 8's precompiles). This is the architectural shape of "CLOB on top of EVM."
+- **Lock granularity: two `Mutex`es, not one** — `clob` and `pending_fills` are mutated at different times by different callers. Splitting locks means a thread reading `pending_fill_count` doesn't block submitters touching the book. Lock granularity matters when contention is on the hot path.
+- **Interior mutability + `&self` is the idiomatic shape for async-shared state** — `submit_order(&self, ...)` lets the bridge be wrapped in `Arc` and shared across tasks without a top-level `RwLock<Bridge>` that would serialize everything.
+- **APIs that lock should never hand references back through the lock** — `payload_fills` returns `Vec<Fill>` (cloned), not `&[Fill]`, because returning a borrow would force the caller to hold the lock guard for the slice's lifetime — instant deadlock with anything else that wants the lock.
+- **Empty-`Vec` placeholder is more discoverable than a TODO comment** — `build_payload` inserts `Vec::new()` until L10 swaps in `std::mem::take(...)`. Readers see exactly where the missing functionality lives; a comment would rot.
+
+Verification:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-…still passes (38 tests from course 6 + 1 new test from L9). The bridge now **owns** a CLOB matching engine. You'll have written:
+…still passes (38 tests from course 6 + 1 new test from L9). The bridge now **owns** a CLOB matching engine.
+
+Specific changes:
 
 - **One new workspace dep** — `openhl-clob = { workspace = true }` in `crates/evm/Cargo.toml`.
 - **Two new fields** on `LiveRethEvmBridge`: `clob: Mutex<Book>` and `pending_fills: Mutex<Vec<Fill>>`.

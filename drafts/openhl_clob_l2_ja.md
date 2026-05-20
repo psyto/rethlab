@@ -20,13 +20,24 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **自己完結した message は module 境界を綺麗に越える** — `Fill` は `maker_order_id` と `maker_account` の両方を持つ。一方が他方から導出できても、この冗長性で Fill 消費者 (precompile、payload 組み立て) を engine 内部 index から切り離す。
+- **「fill 群」と「残り」を分けるのは型レベルの判断** — `FillResult { fills, remaining_qty }` は submit の 2 つの異なる出力を明示する。`Vec<Fill>` に「残り」を擬似 entry として埋め込むより明瞭。
+- **派生値はキャッシュせず算出する** — `total_filled()` は method、field ではない。キャッシュすると fill 群を変更するたびに counter 同期が必要になるが、都度計算すれば `FillResult` は pure data record のまま。
+- **`Copy` は便利さではなく意味論を反映する** — `Order` (5 小 field、約 48 バイト) は `Copy`。`FillResult` は `Vec<Fill>` を所有するので非 `Copy`。`Copy` は `=` が 1 回の bit-blit で済む型のみ。
+
+検証:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-上記の実行結果が引き続きコンパイルする。`crates/clob/src/types.rs` に L1 の newtype から build した **record 型 3 個** が入る:
+上記の実行結果が引き続きコンパイルする。
+
+具体的な変更:
+
+`crates/clob/src/types.rs` に L1 の newtype から build した **record 型 3 個** が入る:
 
 - **`Order`** — matching engine への入力 (id、account、side、qty、order_type)。
 - **`Fill`** — maker と taker の間で発生した 1 match の出力 (maker_order_id、taker_order_id、maker_account、taker_account、price、qty)。

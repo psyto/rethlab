@@ -20,13 +20,25 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンで掴む概念：
+
+- **`PrecompileFn` は関数ポインタであって closure ではない → process-global state が回避策** — REVM の `fn(&[u8], u64, u64) -> PrecompileResult` は環境を capture できないので、共有 state は `static` に置き、関数が呼び出し時にそこを読む形にする。
+- **`RwLock<Option<Arc<Mutex<T>>>>` — アクセスパターンが違えばロックの種類も違う** — 外側の `RwLock` は installed/uninstalled の区別 (write は稀) を担当し、内側の `Mutex` は matching engine (write は頻繁) を保護する。`Mutex<Option<...>>` 1 個でやろうとすると、すべての read が 1 箇所のボトルネックを通ることになる。
+- **`Arc<Mutex<Book>>` で bridge/precompile 境界を超えて所有を共有** — bridge と precompile は別々の「caller」だが、同じ `Book` を見る必要がある。`Arc` は「所有者は複数、データは同じ」を表現する Rust の道具。
+- **install は replace するだけで error にしない** — テストでは install/uninstall を繰り返す必要があるので、silent な replacement は機能であってバグではない。production の経路では install を 1 回しか呼ばない。
+- **「配線したが電流は流さない」という incremental な形** — L4 は配線 (static、install 関数、bridge フィールドの型) を繋ぐが `read_best_bid` はまだハードコードのまま。switch を入れるのは L5。配線と挙動を分離することで、各レッスンが verifiable な変更を 1 つだけ持てる。
+
+検証：
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-上記の実行結果が引き続き通る（L3 で追加した 4 つを含む 42 tests）。**`read_best_bid` が返す値はまだ変えずに**、live CLOB state を流すための**配管だけ**を仕込みます：
+上記の実行結果が引き続き通る（L3 で追加した 4 つを含む 42 tests）。
+
+具体的な変更：
+
+**`read_best_bid` が返す値はまだ変えずに**、live CLOB state を流すための**配管だけ**を仕込みます：
 
 - **`Book` に新メソッドを 2 つ**（`crates/clob/src/book.rs`）：`best_bid_with_qty()` / `best_ask_with_qty()`。それぞれ `Option<(Price, Qty)>` を返す。
 - **`precompiles/mod.rs` にモジュールレベルの `static CLOB_STATE`**：`Option<Arc<Mutex<Book>>>` を保持する。

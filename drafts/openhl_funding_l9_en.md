@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Single-call tests verify behavior; multi-call tests verify state machines** — L8 confirmed the guard can return `Some` once. L9's `second_tick_requires_another_full_interval` confirms the guard *re-engages* after firing. A buggy implementation could fire once and never gate again; you need three sequential calls to catch that.
+- **Composition tests catch wiring errors** — even when every step is unit-tested, the wiring between steps is a separate concern. `tick()` could call `apply_funding` before `compute_rate`, or pass `index` where `mark` is expected. A full math composition test (`premium_drives_settlement_signs`) catches what unit tests can't.
+- **Invariants must be re-verified at every layer they traverse** — `compute_rate`'s cap is unit-tested in L6, but `capped_rate_when_premium_extreme` re-verifies it through `tick()`. A wiring bug (e.g., overwriting `params.rate_cap` mid-call) would slip past lower-layer tests.
+- **Boundary tests as pairs: just-before and exactly-at** — `now == last_settled_at + interval - 1` (none) and `now == last_settled_at + interval` (fires) is the standard pair. Both directions catch off-by-one in the guard condition. Adding `+1` doesn't catch a different class of bug.
+- **Failure leaves state unchanged** — when `tick()` returns `None`, `last_settled_at` stays put. Three sequential calls (fire, gated, fire) reveal this sub-invariant by the success time of the third call.
+
+Verification:
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…passes 21 tests (18 from L4-L8 + 3 new). **No new production code.** The three new tests deepen our coverage of clock semantics across multiple operations:
+…passes 21 tests (18 from L4-L8 + 3 new).
+
+Specific changes:
+
+**No new production code.** The three new tests deepen our coverage of clock semantics across multiple operations:
 
 - **`premium_drives_settlement_signs`** — full math composition flows through the clock. mark > index → positive premium → settlement signs match.
 - **`second_tick_requires_another_full_interval`** — interval-gating is persistent across ticks. A successful tick doesn't permanently unlock the clock.

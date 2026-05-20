@@ -20,13 +20,24 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Self-contained messages cross module boundaries cleanly** — `Fill` carries both `maker_order_id` AND `maker_account` even though one could be derived from the other; this decouples Fill consumers (precompiles, payload assembly) from the engine's internal index.
+- **Separating "fills" from "remainder" is a type-level decision** — `FillResult { fills, remaining_qty }` makes a submit's two distinct outputs explicit, instead of overloading `Vec<Fill>` with a phantom remainder entry.
+- **Compute, don't cache, for derived totals** — `total_filled()` is a method, not a field; caching would force every fill-list mutation to keep a counter in sync, while computing on demand keeps `FillResult` a pure data record.
+- **`Copy` reflects semantics, not convenience** — `Order` (5 small fields, ~48 bytes) is `Copy`; `FillResult` (owns a `Vec<Fill>`) is not. `Copy` only fits when `=` is one bit-blit.
+
+Verification:
 
 ```bash
 cargo check -p openhl-clob
 ```
 
-…still compiles. You'll have **3 record types** in `crates/clob/src/types.rs`, built from L1's newtypes:
+…still compiles.
+
+Specific changes:
+
+You'll have **3 record types** in `crates/clob/src/types.rs`, built from L1's newtypes:
 
 - **`Order`** — the input to the matching engine (id, account, side, qty, order_type).
 - **`Fill`** — the output of a single match between a maker and a taker (maker_order_id, taker_order_id, maker_account, taker_account, price, qty).

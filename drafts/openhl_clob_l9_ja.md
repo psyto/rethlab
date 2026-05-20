@@ -20,13 +20,23 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **CLOB は Reth EVM の *中* ではなく bridge の *横* に置く** — `clob: Mutex<Book>` は `LiveRethEvmBridge` のフィールドで、`provider` や `state` と並ぶ。Fill は payload に併走する parallel データレーンとなり、まだ EVM transaction ではない (それは course 8 の precompile で扱う)。これが「CLOB を EVM の上に乗せる」アーキテクチャの形。
+- **Lock 粒度: `Mutex` は 1 つではなく 2 つ** — `clob` と `pending_fills` は別タイミングで別 caller に変更される。Lock を分けると `pending_fill_count` を読むスレッドが book を触る submitter をブロックしない。Contention がホットパスに乗ると lock 粒度が効いてくる。
+- **Interior mutability + `&self` が async 共有 state の idiomatic な形** — `submit_order(&self, ...)` だから bridge を `Arc` で wrap して task 間で共有できる。トップに `RwLock<Bridge>` を載せると全アクセスが直列化してしまう。
+- **Lock を取る API は lock 越しに参照を返してはならない** — `payload_fills` は `&[Fill]` ではなく `Vec<Fill>` (clone) を返す。Borrow を返すと caller がスライスの lifetime 分 lock guard を抱え続け、同じ lock を欲しがる他者と即デッドロックする。
+- **空 `Vec` placeholder は TODO コメントより見つけやすい** — `build_payload` は L10 が `std::mem::take(...)` に差し替えるまで `Vec::new()` を入れる。読者は欠けている機能の場所を正確に見られる。コメントは腐る。
+
+検証:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-上記の実行結果が引き続き pass する (course 6 由来の 38 テスト + L9 の new test なし、合計依然 38)。Bridge が CLOB matching engine を **所有** するようになる。書くもの:
+上記の実行結果が引き続き pass する (course 6 由来の 38 テスト + L9 の new test なし、合計依然 38)。Bridge が CLOB matching engine を **所有** するようになる。
+
+具体的な変更:
 
 - **新規 workspace dep 1 個** — `crates/evm/Cargo.toml` に `openhl-clob = { workspace = true }` を追加。
 - **`LiveRethEvmBridge` に新規フィールド 2 個** — `clob: Mutex<Book>` と `pending_fills: Mutex<Vec<Fill>>`。

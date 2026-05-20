@@ -21,13 +21,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **One unary minus carries the sign convention** — `-delta_unscaled` flips from market-centric ("longs pay") to account-centric (`Notional` positive = receives). Two sign-flip points would double the surface area for bugs; one is the contract.
+- **Conservation law as a proptest** — balanced books sum to zero exactly within the no-saturation regime, because integer division preserves `-x/d = -(x/d)` for positive `d`. Funding redistributes; it doesn't create or destroy quote currency.
+- **Filter, don't error, for flat positions** — `size == 0` accounts are silently dropped; returning a `Result<Vec<Settlement>, FlatPositionError>` would force callers to handle a non-condition. Flat positions are *expected*, not exceptional.
+- **Accept the least-restrictive type** — `positions: &[Position]` (slice borrow) lets callers retain ownership and re-use the list across ticks; `Vec<Position>` would force a clone per call.
+- **Pick proptest ranges so the property holds *exactly*** — bounding `size in 1..1M` keeps the i128 products below `saturating_mul`'s clamp threshold. A wider range would force weakening "sum == 0" to "sum.abs() < epsilon" — an aspirational property instead of an invariant.
+
+Verification:
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…passes 15 tests (10 from L4-L6 + 5 new). `compute.rs` gains the final pure function:
+…passes 15 tests (10 from L4-L6 + 5 new).
+
+Specific changes:
+
+`compute.rs` gains the final pure function:
 
 - **`apply_funding(positions, mark, rate) -> Vec<Settlement>`** — applies the rate to every non-flat position and produces a settlement per match. ~25 lines.
 - **4 hand-traced unit tests**:

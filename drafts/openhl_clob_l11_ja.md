@@ -20,13 +20,23 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **Real Reth node に対する end-to-end な統合テスト** — `EthereumNode` を bootstrap し、`LiveRethEvmBridge` を組み、submit→buffer→drain の全パイプラインを exercise する。L1-L10 の連鎖が個別コンポーネントを越えて end-to-end で成立することを証明するテスト。
+- **Bootstrap が高価なときは 1 本の徹底した統合テストが 3 本の narrow なテストに勝る** — Real Reth node を起動するのに数秒かかる。Bootstrap を 3 回繰り返せばコストも 3 倍。1 シナリオで submit、drain、forward-only の 3 不変条件をまとめて検証する方が安い。
+- **Forward-only assertion こそがこれを *本物の* 統合テストにする** — 「submit が fill を produce する」「build が drain する」は unit test でも自明。以前の (空) payload が遡って更新されていないことを check するからこそ bridge の payload ごと snapshot メカニズムを特に検証している。これがないと unit test の偽装でしかない。
+- **Fill 価格 = maker の価格を end-to-end で示す** — maker bid @ 100、taker sell @ 100、fill @ 100。L4-L5 で確立した price-time priority の規則が統合境界を越えても成立する。Sell を先に submit して buy で crossing しても同じ fill が出る — submit 順序は同一 level 内の time priority であって、どちらが rest するかを決めるものではない。
+- **`launch_with_debug_capabilities()` と add-on 付き `launch()` の使い分け** — Debug-capabilities setup は短く、provider は得られるが engine-API 配線はしない。本テストでは engine handle は不要 (forkchoice を駆動しない)、parent lookup 用の provider だけが要る。
+
+検証:
 
 ```bash
 cargo test -p openhl-evm clob_fills_flow_into_payload --release
 ```
 
 上記の実行結果が pass する。**これが Course 7 のマイルストーン。** L1-L8 で build した matching engine が produce する real fill が、`LiveRethEvmBridge::submit_order` → `pending_fills` buffer → `LiveRethEvmBridge::build_payload` drain → consensus が commit する payload、という流れで流れていく。テストでは L9-L10 の統合の **すべての piece** を **live Reth node** に対して exercise する。
+
+具体的な変更:
 
 書く新規テストは 1 個:
 

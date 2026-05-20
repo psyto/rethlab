@@ -21,13 +21,26 @@
 
 ## ゴール
 
-このレッスンの終わりに:
+このレッスンで掴む概念:
+
+- **テストダブル先行の実装戦略** — Reth に触れる前に fake EVM を書く理由。trait を end-to-end で exercise するのに 600 個の transitive dep を待つ必要がなく、下流の consensus test (L9/L10) を 2.7s ではなく 0.02s で回せる。
+- **内部可変性のための `Mutex<State>`** — L3 で要求された `Send + Sync` bound を満たすため、private `State` struct を単一の `Mutex` で包む。method ごとに 1 回 lock するパターンはテストコードでは十分で、L12+ の `LiveRethEvmBridge` にも構造的に伝播する。
+- **`pending` と `chain` map の分離** — 投機的な build と canonical な commit はライフサイクルが異なる。ここで分離を encode しておくと、以降の impl すべてが同じデータフローを尊重する (build は投機、commit は確定)。
+- **`async_trait` の impl ergonomics** — `#[async_trait]` を `impl` block に付けたとき何が要求されるか (lifetime、`Self: Send + Sync`)、stable Rust で trait の `async fn` がいまだに macro 経由で desugar される理由。
+
+検証:
 
 ```bash
 cargo test -p openhl-evm
 ```
 
-上記の実行結果が in-memory bridge の build → ready → commit フローをカバーする 5 つのテストで pass する。L3 の `ConsensusBridge` の **最初の具象 implementation** が手元にある状態になる — EVM のふりをして fake block を `Mutex<HashMap>` に保存し、Reth を立ち上げずに trait を exercise する test double だ。Consensus crate の後続テストでこれを使う。L8/L9 の runner と engine_app も同様。
+上記の実行結果が in-memory bridge の build → ready → commit フローをカバーする 5 つのテストで pass する。L3 の `ConsensusBridge` の **最初の具象 implementation** が手元にある状態になる — EVM のふりをして fake block を保存し、Reth を立ち上げずに trait を exercise する test double だ。
+
+具体的な変更:
+
+- `crates/evm/Cargo.toml` に 3 dependency + 1 dev-dependency 追加: `openhl-consensus`、`openhl-types`、`async-trait`、`tokio` (dev)。
+- `crates/evm/src/in_memory.rs` — 新規ファイル、`InMemoryEvmBridge` struct、private `State`、`Mutex<State>`、4 method の `impl ConsensusBridge`、`hex_short` helper、5 unit test を含む。
+- `crates/evm/src/lib.rs` — `pub mod in_memory; pub use InMemoryEvmBridge;` を配線する。
 
 ## おさらい
 

@@ -20,13 +20,25 @@
 
 ## Goal
 
-By the end of this lesson:
+Concepts you'll grasp in this lesson:
+
+- **Newtype pattern as argument-order bug prevention** — wrapping `u64` in `MarkPrice` and `IndexPrice` makes `compute_premium(index, mark)` a compile error rather than a silently inverted premium in production.
+- **Type aliases are not types** — `type MarkPrice = u64` is documentation, not safety; the compiler still accepts swapped args. Use `struct MarkPrice(pub u64)` when you need distinct identities.
+- **Why the inner field is `pub`** — newtypes here exist to prevent cross-feeding, not to validate values. Public field keeps arithmetic ergonomic (`mark.0` over `mark.value()`); validation isn't this crate's job.
+- **Signed vs unsigned by domain meaning** — `MarkPrice` / `IndexPrice` are `u64` (negative price = upstream invariant violation); `Premium` / `Notional` are `i64` (direction is part of the data).
+- **Sign conventions belong in doc comments at the type definition** — "positive when mark > index, longs pay shorts" pinned at `Premium`'s definition is the single point of truth for every downstream consumer.
+
+Verification:
 
 ```bash
 cargo build -p openhl-funding
 ```
 
-…still compiles. `types.rs` grows from `RATE_SCALE` alone to `RATE_SCALE` + four newtypes:
+…still compiles.
+
+Specific changes:
+
+`types.rs` grows from `RATE_SCALE` alone to `RATE_SCALE` + four newtypes:
 
 - **`MarkPrice(pub u64)`** — perpetual mark price in minor units. Unsigned because prices can't be negative.
 - **`IndexPrice(pub u64)`** — off-chain oracle reference price. Same shape, different *meaning*.
