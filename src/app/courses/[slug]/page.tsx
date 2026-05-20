@@ -144,6 +144,39 @@ export default function CourseDetailPage() {
             <h1 className="mt-3 text-3xl font-bold sm:text-4xl">{course.title}</h1>
             <p className="mt-4 text-lg text-muted-foreground">{course.description}</p>
 
+            {/* DIY Perp series overview — shown on all 4 openhl courses */}
+            {course.track === 'diy-perp' && (
+              <div className="mt-6 rounded-xl border border-pink-500/20 bg-pink-500/5 p-5">
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-pink-400">
+                  {t('courses.diyPerpSeries.title')}
+                </h2>
+                <p className="text-sm leading-relaxed text-foreground/80">
+                  {t('courses.diyPerpSeries.intro')}
+                </p>
+                <p className="mt-3 text-sm leading-relaxed text-foreground/80">
+                  {t('courses.diyPerpSeries.mapping')}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                  <a
+                    href="https://github.com/psyto/openhl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-pink-400 hover:underline"
+                  >
+                    {t('courses.diyPerpSeries.openhlLinkText')}
+                  </a>
+                  <a
+                    href="https://github.com/psyto/openhl/blob/main/docs/architecture.md"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-pink-400 hover:underline"
+                  >
+                    {t('courses.diyPerpSeries.architectureLinkText')}
+                  </a>
+                </div>
+              </div>
+            )}
+
             <div className="mt-6 flex flex-wrap gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <Clock className="h-4 w-4" />

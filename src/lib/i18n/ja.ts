@@ -134,6 +134,13 @@ export const ja: TranslationKeys = {
       expert: 'エキスパート',
       diyPerp: 'DIY Perp',
     },
+    diyPerpSeries: {
+      title: 'DIY Perp シリーズについて',
+      intro: 'Hyperliquid は取引量で世界最大の永久先物 DEX で、そのスタック（HyperBFT consensus、HyperCore マッチングエンジン、HyperEVM execution）はすべてクローズドソース。`psyto/openhl` はそのオープンソース・リファレンス実装 — 実 Reth (EVM) と実 Malachite (BFT) を 1 つの Rust workspace に組み込み、その上に CLOB・funding・vault の pure state machine を載せた構成。CL/EL の境界はわずか 4 メッセージで、各 state machine は I/O フリーで決定的。',
+      mapping: 'DIY Perp シリーズは openhl の build-along コース群。`cargo init` から始め、Consensus → CLOB → Precompiles → Funding の 4 コースを通じて、Hyperliquid シェイプの L1 を完成させる。各レッスンは openhl の特定 commit SHA に pin され、その revision との `git diff` が答え合わせ。',
+      openhlLinkText: 'psyto/openhl',
+      architectureLinkText: 'アーキテクチャ概要 →',
+    },
     catalog: {
       title: 'コースカタログ',
       subtitle: '初級からエキスパートまで、Rust Ethereum Systems Engineering を 4 ティアで体系化: 基礎・Reth/Revm/Alloy のソース読解・L1 アーキテクチャ・本番アプリ。',
