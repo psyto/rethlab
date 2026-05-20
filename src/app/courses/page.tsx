@@ -61,39 +61,33 @@ export default function CourseCatalogPage() {
         </div>
       )}
 
-      {/* Course Grid */}
-      {courses && (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {courses.map((course) => {
-            // Prefer server-side enrollment progress when available;
-            // otherwise compute from localStorage so anonymous users still
-            // see how far they've gotten.
-            const localCompleted = course.lessonSlugs.filter((s) =>
-              localCompletion.isCompleted(s)
-            ).length;
-            const localProgress =
-              course.totalLessons > 0
-                ? Math.round((localCompleted / course.totalLessons) * 100)
-                : 0;
-            const displayProgress =
-              course.userProgress !== undefined
-                ? course.userProgress
-                : localCompleted > 0
-                  ? localProgress
-                  : undefined;
-            return (
+      {/* Course Grid — split into Source-Reading + Build-Along sections,
+          matching the two-format model used on the landing page. */}
+      {courses && (() => {
+        const renderCard = (course: typeof courses[number]) => {
+          const localCompleted = course.lessonSlugs.filter((s) =>
+            localCompletion.isCompleted(s)
+          ).length;
+          const localProgress =
+            course.totalLessons > 0
+              ? Math.round((localCompleted / course.totalLessons) * 100)
+              : 0;
+          const displayProgress =
+            course.userProgress !== undefined
+              ? course.userProgress
+              : localCompleted > 0
+                ? localProgress
+                : undefined;
+          return (
             <Link
               key={course.id}
               href={`/courses/${course.slug}`}
               className="group rounded-2xl border border-border bg-card transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5"
             >
-              {/* Thumbnail placeholder */}
               <div className="flex h-40 items-center justify-center rounded-t-2xl bg-fabrknt-gradient-subtle">
                 <BookOpen className="h-12 w-12 text-muted-foreground/30" />
               </div>
-
               <div className="p-5">
-                {/* Track badge (DIY Perp) takes precedence over difficulty badge */}
                 {course.track && TRACK_COLORS[course.track] ? (
                   <span
                     className={cn(
@@ -113,15 +107,12 @@ export default function CourseCatalogPage() {
                     {t(`courses.difficulty.${course.difficulty.toLowerCase()}`)}
                   </span>
                 )}
-
                 <h3 className="mt-3 text-lg font-semibold group-hover:text-primary transition-colors">
                   {course.title}
                 </h3>
                 <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">
                   {course.description}
                 </p>
-
-                {/* Meta */}
                 <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5" />
@@ -132,8 +123,6 @@ export default function CourseCatalogPage() {
                     {course.totalLessons} {t('courses.detail.lessons').toLowerCase()}
                   </span>
                 </div>
-
-                {/* Progress bar (server enrollment OR local progress) */}
                 {displayProgress !== undefined && (
                   <div className="mt-3">
                     <div className="flex items-center justify-between text-xs">
@@ -152,17 +141,55 @@ export default function CourseCatalogPage() {
                 )}
               </div>
             </Link>
-            );
-          })}
-        </div>
-      )}
+          );
+        };
 
-      {courses && courses.length === 0 && (
-        <div className="py-20 text-center">
-          <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/30" />
-          <p className="mt-4 text-muted-foreground">{t('courses.catalog.noResults')}</p>
-        </div>
-      )}
+        const buildAlong = courses.filter((c) => c.track === 'diy-perp');
+        const sourceReading = courses.filter((c) => c.track !== 'diy-perp');
+
+        return (
+          <>
+            {sourceReading.length > 0 && (
+              <div className="mb-12">
+                <div className="mb-4 flex items-center gap-2">
+                  <h2 className="font-mono text-xs uppercase tracking-widest text-primary">
+                    {t('page.tracks.sourceReadingHeader')}
+                  </h2>
+                  <span className="text-xs text-muted-foreground">
+                    {t('page.tracks.sourceReadingSubheader')}
+                  </span>
+                </div>
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {sourceReading.map(renderCard)}
+                </div>
+              </div>
+            )}
+
+            {buildAlong.length > 0 && (
+              <div className="mb-12">
+                <div className="mb-4 flex items-center gap-2">
+                  <h2 className="font-mono text-xs uppercase tracking-widest text-pink-400">
+                    {t('page.tracks.buildAlongHeader')}
+                  </h2>
+                  <span className="text-xs text-muted-foreground">
+                    {t('page.tracks.buildAlongSubheader')}
+                  </span>
+                </div>
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {buildAlong.map(renderCard)}
+                </div>
+              </div>
+            )}
+
+            {courses.length === 0 && (
+              <div className="py-20 text-center">
+                <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/30" />
+                <p className="mt-4 text-muted-foreground">{t('courses.catalog.noResults')}</p>
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }
