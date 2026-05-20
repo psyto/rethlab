@@ -37,14 +37,20 @@ After finishing the program, you'll be able to:
 
 This is a serious training program — not a casual tutorial.
 
-## The 6 courses
+## The course catalog
+
+**17 courses split across two pedagogical modes**: source-reading + skill progression (Reth stack, 13 courses), and project build-alongs (DIY Perp, 4 courses).
+
+### Reth stack — source-first courses
 
 | Course | Focus | Highlight |
 | :--- | :--- | :--- |
 | **Beginner** | Why Rust EVM matters, environment setup | First Rust program, three-pillar overview |
 | **Fundamentals** | Alloy + EVM internals + **Foundry** | Real `sign_message.rs`, real Provider, real Revm Stack, forge/cast/anvil |
 | **Bridge to Advanced** | EVM at the bytes level (dispatch loop, world state, gas, call frames, reorgs) + intermediate Rust (generics, ?Sized, dyn, Arc, unsafe, macros) | Smooth tutorial bridge for Solidity-native developers — closes the gap before source-walking begins |
-| **Advanced** | Revm interpreter, Database trait, Reth Staged Sync, ExEx, Reth SDK | Reading the actual ADD opcode, custom opcodes, NodeBuilder for App-chains. Active-learning style — Predict / Find-in-repo / Anti-fluency prompts throughout |
+| **Reth + Alloy Advanced** | Alloy Provider/Network/Signer at production scale | Reading real `eth_call` paths through Alloy types, custom signer impls |
+| **Reth + Revm Advanced** | Revm interpreter and Database trait, line by line | Reading the actual ADD opcode, custom opcodes, the `Database` interface |
+| **Advanced** | Reth Staged Sync, ExEx, Reth SDK, NodeBuilder for App-chains | Predict / Find-in-repo / Anti-fluency prompts throughout |
 | **Expert** | Performance engineering, MDBX, Tokio internals, procedural macros, custom precompiles, MPT, MEV pipelines, zkEVM, production fork ops, **Reth-based chains** (op-stack, alphanet, Tempo) via the extension pattern | Foundry cheatcodes as precompiles, real Steel zkVM guest, MEV decoding from `op-bridge`, reading op-stack-on-reth and predicting Tempo's node-crate shape |
 | **Building with the Stack** | Real-world apps in Rust + Alloy + Revm — the payoff for reading the source | L1: minimal MEV searcher. L2: reorg-aware Postgres indexer via ExEx. L3: custom RPC via `extend_rpc_modules`. L4: wallet backend (signer pool + nonce mgr + replace-on-stuck). L5: EIP-7702 sponsor (Type 4 tx + paymaster). L6: Foundry-style cheatcode (custom precompile + harness). L7: swap aggregator (Revm fork + cross-venue quotes). **L8 Capstone**: frontrun-resistant order router that integrates everything above. L9: cross-client validation harness (validate Revm sims against a production Geth-served provider) |
 | **Consensus Engineering** | The L1 architect tier — what reading reth doesn't teach. BFT theory (FLP, 3f+1, safety/liveness), real consensus code (reth's `Consensus` trait, Malachite, bera-reth's Proof-of-Liquidity), wiring custom consensus on Reth, validator economics + slashing | M1: BFT problem, 3 families (PoW/PoS/BFT), Ethereum PoS, HotStuff/HyperBFT. M2: reading reth `Consensus`, Malachite, bera-reth. M3: NodeBuilder wiring, minimal single-leader BFT, validator economics |
@@ -53,7 +59,18 @@ This is a serious training program — not a casual tutorial.
 | **P2P Networking Internals** | The network layer every blockchain depends on. devp2p vs libp2p, peer discovery (Kademlia/ENR), RLPx, eth/68 sub-protocol, reading reth's network crate, custom gossip for MEV/private orderflow/sequencer coordination | M1: P2P fundamentals (devp2p, discv5, eth/68), reading reth's network crate, building custom gossip (MEV-Boost-style on Reth) |
 | **Validator Operations** | The operational layer between consensus code and production. Key management (HSM, MPC, threshold signatures), slashing detection/prevention, coordinated hardforks | M1: key management, slashing detection, hot upgrades — the skills that turn working consensus into a production L1 that doesn't lose operators' stake |
 
-**Total: 12 courses (6 × EN + JA), 20 modules, 110 lessons.**
+### DIY Perp — build your own Hyperliquid-shape L1
+
+A separate track from the source-reading tiers. Four courses walk through constructing a perpetual DEX from `cargo init` on an empty directory, with [`psyto/openhl`](https://github.com/psyto/openhl) as the byte-identical reference implementation. Each lesson states what concept you'll grasp, lists the file edits, and ends with `cargo test` against the version-pinned openhl stage.
+
+| Course | Focus | Highlight |
+| :--- | :--- | :--- |
+| **Build OpenHL — Consensus** | Wire real Reth (EVM) and real Malachite (BFT) into one Rust workspace that drives blocks end-to-end | 16 lessons. Final lesson: `cargo test first_block_via_engine_actors` produces a single-validator round in ~0.02 s against code you wrote yourself |
+| **Build OpenHL — CLOB** | Add a price-time-priority matching engine and wire its fills into consensus-committed blocks | 13 lessons. The CLOB is a pure state machine; the bridge integration pushes fills through `LiveRethEvmBridge::build_payload` into committed payloads |
+| **Build OpenHL — Precompiles** | Connect the CLOB to smart contracts via custom EVM precompiles at `0x...0c1b` (read) and `0x...0c1c` (write) | 12 lessons. The `EvmFactory` "swap one slot" pattern, process-global `CLOB_STATE`, fill-sink routing back to the bridge |
+| **Build OpenHL — Funding** | Build the perpetual-funding state machine: a deterministic fixed-point pipeline gated by an interval clock that enforces no-catch-up semantics | 12 lessons. `RATE_SCALE = 1e9` parts-per-billion, saturate-not-panic philosophy, balanced-book zero-sum proptest |
+
+**Total: 17 courses (× EN + JA), 51 modules, ~204 lessons per locale (408 lesson records in DB).**
 
 All courses are free. Reading every lesson works without an account. Anonymous visitors get **browser-local completion tracking** (lesson checkmarks + per-course progress bars persisted in `localStorage`); sign-in adds cross-device sync, XP, and a profile page.
 
@@ -83,7 +100,7 @@ cp .env.example .env
 # STRIPE_SECRET_KEY (test key OK for dev), and
 # NEXT_PUBLIC_GITHUB_SPONSORS_URL
 
-# Push schema and seed all 110 lessons
+# Push schema and seed all courses
 npx prisma db push
 npx prisma db seed
 
@@ -95,7 +112,12 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ### What `db seed` does
 
-The seeder lives in `prisma/seed.ts` and pulls from 12 individual course files (`prisma/seed-reth-{beginner,fundamentals,bridge-to-advanced,advanced,expert,building}-{en,ja}.ts`). It clears all course tables and re-creates 12 courses / 20 modules / 110 lessons in one shot.
+The seeder lives in `prisma/seed.ts` and pulls from 17 generated course files (`prisma/seed-reth-*-{en,ja}.ts`). It clears all course tables and re-creates 17 courses / 51 modules / 204 lessons per locale (408 lesson records combined) in one shot.
+
+Two pedagogical formats live in those seeds:
+
+- **Reth stack courses** — markdown bodies are inlined directly in `prisma/seed-reth-{beginner,fundamentals,...}-{en,ja}.ts`. Edit those files to update lesson content.
+- **DIY Perp build-along courses** — markdown bodies live in `drafts/openhl_{consensus,clob,precompiles,funding}_l<N>_{en,ja}.md`. The `prisma/seed-reth-openhl-*-{en,ja}.ts` files are **auto-generated** from those drafts by builder scripts under `.github/scripts/build-openhl-*-seed.ts`. To edit a build-along lesson, edit the markdown draft and re-run the relevant builder.
 
 Lesson URLs key on the **slug** (stable across reseeds), not the database CUID, so a full reseed never breaks shared links.
 
@@ -118,12 +140,26 @@ rethlab/
 ├── prisma/
 │   ├── schema.prisma                          # User, Course, Module, Lesson, ...
 │   ├── seed.ts                                # Top-level orchestrator
-│   ├── seed-reth-beginner-{en,ja}.ts          # 7 lessons each
-│   ├── seed-reth-fundamentals-{en,ja}.ts      # 11 lessons each (incl. Foundry)
-│   ├── seed-reth-bridge-to-advanced-{en,ja}.ts # 8 lessons each
-│   ├── seed-reth-advanced-{en,ja}.ts          # 10 lessons each (incl. orientation)
-│   ├── seed-reth-expert-{en,ja}.ts            # 10 lessons each
-│   └── seed-reth-building-{en,ja}.ts          # 9 lessons each (capstone tier)
+│   ├── seed-upsert.ts                         # Upsert-by-slug (preserves user data)
+│   ├── seed-reth-beginner-{en,ja}.ts          # Reth stack courses — markdown
+│   ├── seed-reth-fundamentals-{en,ja}.ts      #   bodies inlined directly here.
+│   ├── seed-reth-{bridge-to-advanced,alloy-advanced,revm-advanced,
+│   │              advanced,expert,building,consensus-engineering,
+│   │              cross-chain-bridges,sequencer-rollup,p2p-networking,
+│   │              validator-ops}-{en,ja}.ts
+│   └── seed-reth-openhl-{consensus,clob,precompiles,funding}-{en,ja}.ts
+│                                              # DIY Perp courses — auto-generated
+│                                              # from drafts/ by .github/scripts/
+├── drafts/
+│   └── openhl_{l<N>,clob_l<N>,precompiles_l<N>,funding_l<N>}_{en,ja}.md
+│                                              # Build-along lesson markdown drafts.
+│                                              # Edit these, then re-run the builder.
+├── .github/
+│   └── scripts/
+│       ├── build-openhl-seed.ts               # Build seed-reth-openhl-consensus
+│       ├── build-openhl-clob-seed.ts          # Build seed-reth-openhl-clob
+│       ├── build-openhl-precompiles-seed.ts
+│       └── build-openhl-funding-seed.ts
 ├── src/
 │   ├── app/                                   # Next.js App Router pages
 │   │   ├── courses/                           # Course catalog + detail + lesson pages
@@ -174,17 +210,30 @@ Lesson URLs are slug-based (`/courses/<course-slug>/lessons/<lesson-slug>`) and 
 
 ## Contributing
 
-The course content is in `prisma/seed-reth-*-{en,ja}.ts`. Each lesson is a single string of Markdown (with optional Mermaid blocks). To add or modify content:
+Two workflows depending on which kind of course you're editing:
 
-1. Edit the relevant seed file
-2. `npx prisma db seed` (re-seeds everything; or use the admin endpoint with `mode=add` to preserve user data)
+**Reth stack courses** — markdown bodies are inlined in `prisma/seed-reth-*-{en,ja}.ts`. To add or modify content:
+
+1. Edit the relevant seed file directly
+2. `npm run seed:upsert` (preserves user enrollments and progress; safe for content updates after launch)
 3. Refresh the browser
 
 When adding a lesson that references real source code, please use the same shape as existing lessons:
 
 > **real source excerpt (with GitHub deep-link) → line-by-line walkthrough → design intent → drill**
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full lesson-authoring style guide, including Mermaid diagram conventions.
+**DIY Perp build-along courses** — lesson bodies live in `drafts/openhl_*_{en,ja}.md`; the `prisma/seed-reth-openhl-*-{en,ja}.ts` files are auto-generated. To add or modify content:
+
+1. Edit the markdown draft in `drafts/`
+2. Re-run the builder, e.g. `npx tsx .github/scripts/build-openhl-funding-seed.ts --locale=ja`
+3. `npm run seed:upsert`
+4. Refresh the browser
+
+Build-along lessons follow a different structure than source-reading lessons:
+
+> **Goal (concepts you'll grasp + verification + specific changes) → Recap → Plan → Walk-through → Test → Design reflection → Answer key (diff against openhl reference SHA) → Common questions**
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full lesson-authoring style guide for both workflows.
 
 ---
 

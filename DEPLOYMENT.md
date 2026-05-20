@@ -82,7 +82,7 @@ The build runs `prisma generate && prisma db push --accept-data-loss && next bui
 
 ## 6. Seed the courses (one-time)
 
-After the first deploy, the database has empty tables. Load the 12 courses / 110 lessons via the admin endpoint:
+After the first deploy, the database has empty tables. Load the 17 courses / ~204 lessons per locale (408 records combined) via the admin endpoint:
 
 ```bash
 curl -X POST "https://rethlab.vercel.app/api/admin/seed?key=$AUTH_SECRET&mode=full"
@@ -153,7 +153,11 @@ When you've verified the donation flow with `sk_test_...` end-to-end (test card 
 
 - **Code changes**: push to `main` → Vercel auto-deploys.
 - **Schema changes**: edit `prisma/schema.prisma` → next deploy runs `prisma db push --accept-data-loss` automatically.
-- **Course content changes**: edit `prisma/seed-reth-*-{en,ja}.ts`, then pick one of:
+- **Course content changes**:
+  - **Reth stack courses** — edit `prisma/seed-reth-{tier}-{en,ja}.ts` directly.
+  - **DIY Perp build-along courses** — edit `drafts/openhl_*_{en,ja}.md`, then re-run the builder (`npx tsx .github/scripts/build-openhl-{consensus,clob,precompiles,funding}-seed.ts [--locale=ja]`) to regenerate the corresponding `prisma/seed-reth-openhl-*-{en,ja}.ts`.
+
+  Then pick one of:
   - **Upsert (recommended for content updates after launch)** — updates all courses/modules/lessons by stable keys; **preserves users, enrollments, lesson progress, XP, streak days**. Use this whenever you've edited an existing lesson body and don't want to wipe user data.
     ```bash
     vercel env pull .env.production.local --environment production

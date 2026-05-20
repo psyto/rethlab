@@ -82,7 +82,11 @@ Each lesson exists in EN and JA. When you change one, **change the other** in th
 
 ## Adding or editing lessons
 
-Lesson content lives in `prisma/seed-reth-{tier}-{lang}.ts`. Each lesson is a Prisma `lesson.create` entry whose `content` field is a Markdown string.
+Two workflows depending on the course's pedagogical format.
+
+### Reth stack courses (source-reading)
+
+Lesson content lives in `prisma/seed-reth-{tier}-{lang}.ts`. Each lesson is a Prisma `lesson.create` entry whose `content` field is a Markdown string — edited inline in the seed file.
 
 ```ts
 {
@@ -98,6 +102,47 @@ Lesson content lives in `prisma/seed-reth-{tier}-{lang}.ts`. Each lesson is a Pr
 `,
 }
 ```
+
+After editing, run `npm run seed:upsert` (preserves user data) or `npx prisma db seed` (full reseed).
+
+### DIY Perp build-along courses (project construction)
+
+The 4 openhl courses (consensus, clob, precompiles, funding) use a different pattern. Lesson bodies live in **markdown drafts** under `drafts/`, and the seed files are **auto-generated** by builder scripts. To edit:
+
+1. Edit `drafts/openhl_{l<N>,clob_l<N>,precompiles_l<N>,funding_l<N>}_{en,ja}.md`. Each draft file wraps the lesson body in a ` ```` markdown ... ```` ` fence; the builder extracts the fenced block.
+2. Re-run the builder for that course, e.g.:
+   ```bash
+   npx tsx .github/scripts/build-openhl-funding-seed.ts
+   npx tsx .github/scripts/build-openhl-funding-seed.ts --locale=ja
+   ```
+3. `npm run seed:upsert` to apply.
+
+Each builder uses three matching fields per lesson — `draftFile`, `h1Marker`, `startSignature` — to find the right fenced block in the draft. If you change the H1 or the opening line of the body, update the matching field in the builder.
+
+Build-along lessons follow a 3-part Goal section convention introduced after extensive UX review:
+
+```markdown
+## Goal
+
+Concepts you'll grasp in this lesson:
+
+- **[Concept 1]** — 1-line explanation
+- **[Concept 2]** — 1-line explanation
+
+Verification:
+
+```bash
+cargo test -p openhl-funding
+```
+
+…passes 5 tests (4 from L4 + 1 new proptest).
+
+Specific changes:
+
+- **`src/types.rs`** — adds `MarkPrice`, `IndexPrice`, ...
+```
+
+The Goal opens with **semantic learning outcomes**, not mechanical verification — the cargo command moves to a "Verification" subsection. This split was applied across all 4 openhl courses; new build-along lessons should follow the same structure.
 
 ### Slugs
 
@@ -177,10 +222,13 @@ Less helpful:
 If you're adding a new specialization (e.g., "Parallel EVM" or "Hyperliquid Internals"):
 
 1. Pick lessons that map to **one real codebase or whitepaper** each. Don't write content unanchored to a primary source.
-2. Stay at 8–10 lessons per course. More than that and the tier loses focus.
-3. Update `prisma/seed.ts` to call your new seeder.
-4. Update `src/app/api/admin/seed/route.ts` to include it.
-5. Update the home page tracks card count.
+2. Stay at 8–10 lessons per course for source-reading tiers, or 10–15 lessons for build-along projects.
+3. Decide the format up front:
+   - **Source-reading**: inline markdown in `prisma/seed-reth-<tier>-{en,ja}.ts`. Best for "read this code, understand it" content.
+   - **Build-along project**: markdown drafts in `drafts/<project>_l<N>_{en,ja}.md`, builder script under `.github/scripts/build-<project>-seed.ts`, byte-identical reference implementation pinned per lesson via a SHA. Best for "build this from scratch" content.
+4. Update `prisma/seed.ts` and `prisma/seed-upsert.ts` to register your new seeder.
+5. Update `src/app/api/admin/seed/route.ts` to include it.
+6. If the new tier is a *project* category (like DIY Perp) rather than a difficulty tier, add a track key to `src/lib/i18n/{en,ja}.ts` (`courses.categories.<yourTrack>` and `page.tracks.<yourTrack>Desc`) and add a card to `src/app/page.tsx`.
 
 Open an RFC issue first if the new tier touches more than ~15 lessons — coordination saves rework.
 
