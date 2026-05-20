@@ -488,7 +488,7 @@ const COURSE_SHARED = {
   xpReward: 1270, // L0..L14 total 1210 + L15 (60) — build-along pilot complete
   tags: ['reth', 'malachite', 'bft', 'evm', 'clob', 'l1', 'openhl', 'expert'],
   sortOrder: 600,
-  isPublished: false,
+  isPublished: true,
 };
 
 function escapeForTemplateLiteral(s: string): string {

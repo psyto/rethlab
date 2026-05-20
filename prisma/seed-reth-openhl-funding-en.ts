@@ -17,7 +17,7 @@ export async function seedRethOpenHlFundingEN(prisma: PrismaClient) {
       xpReward: 730,
       track: "diy-perp",
       tags,
-      isPublished: false,
+      isPublished: true,
       sortOrder: 900,
       locale: "en",
       instructorName: "RethLab",

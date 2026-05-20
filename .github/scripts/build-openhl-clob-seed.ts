@@ -408,7 +408,7 @@ const COURSE_SHARED = {
   xpReward: 800, // L0..L11 total 750 + L12 (50) — course 7 complete
   tags: ['reth', 'malachite', 'clob', 'matching-engine', 'evm', 'l1', 'openhl', 'expert'],
   sortOrder: 700,
-  isPublished: false,
+  isPublished: true,
 };
 
 function escapeForTemplateLiteral(s: string): string {

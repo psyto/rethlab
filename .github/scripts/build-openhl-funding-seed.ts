@@ -384,7 +384,7 @@ const COURSE_SHARED = {
   xpReward: 730, // L0..L10 total 690 + L11 (40)
   tags: ['reth', 'evm', 'funding', 'perpetual', 'l1', 'openhl', 'expert'],
   sortOrder: 900,
-  isPublished: false,
+  isPublished: true,
 };
 
 function escapeForTemplateLiteral(s: string): string {

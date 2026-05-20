@@ -386,7 +386,7 @@ const COURSE_SHARED = {
   xpReward: 820, // L0..L10 total 780 + L11 (40)
   tags: ['reth', 'evm', 'precompile', 'clob', 'l1', 'openhl', 'expert'],
   sortOrder: 800,
-  isPublished: false,
+  isPublished: true,
 };
 
 function escapeForTemplateLiteral(s: string): string {

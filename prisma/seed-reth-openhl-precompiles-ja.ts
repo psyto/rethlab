@@ -17,7 +17,7 @@ export async function seedRethOpenHlPrecompilesJA(prisma: PrismaClient) {
       xpReward: 820,
       track: "diy-perp",
       tags,
-      isPublished: false,
+      isPublished: true,
       sortOrder: 800,
       locale: "ja",
       instructorName: "RethLab",
