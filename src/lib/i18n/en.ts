@@ -39,7 +39,7 @@ export const en = {
   landing: {
     hero: {
       title: 'Rust Ethereum Systems Engineering',
-      subtitle: "Ethereum is a database + distributed system + compiler + networking stack + concurrency runtime — five systems-engineering disciplines glued by consensus, implemented in Rust by Reth, Revm, and Alloy. HyperEVM (Hyperliquid), Tempo (Stripe), OP-Reth (Optimism / Base), MegaETH, Berachain — every modern Rust EVM L1 is a Reth fork. Open source, in Rust, and almost nobody can read it. RethLab walks you through 13 courses across 4 tiers — EVM foundations, source-reading, L1 architecture, ten production apps.",
+      subtitle: "Ethereum is a database + distributed system + compiler + networking stack + concurrency runtime — five systems-engineering disciplines glued by consensus, implemented in Rust by Reth, Revm, and Alloy. HyperEVM (Hyperliquid), Tempo (Stripe), OP-Reth (Optimism / Base), MegaETH, Berachain — every modern Rust EVM L1 is a Reth fork. Open source, in Rust, and almost nobody can read it. RethLab walks you through 13 source-reading courses across 4 tiers — EVM foundations through ten production apps — plus DIY Perp, a 4-course build-along where you construct your own Hyperliquid-shape L1 from scratch.",
       cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -134,7 +134,7 @@ export const en = {
     },
     catalog: {
       title: 'Course Catalog',
-      subtitle: 'From beginner to expert — Rust Ethereum Systems Engineering across 4 tiers: foundations, source-reading of Reth / Revm / Alloy, L1 architecture, production apps.',
+      subtitle: 'From beginner to expert across 4 tiers (foundations, source-reading of Reth / Revm / Alloy, L1 architecture, production apps), plus DIY Perp — a 4-course build-along where you construct your own Hyperliquid-shape L1 from scratch.',
       searchPlaceholder: 'Search courses...',
       noResults: 'No courses found matching your filters.',
     },
@@ -259,7 +259,7 @@ export const en = {
     },
     use: {
       title: 'What your support funds',
-      item1: 'Keeping the curriculum (13 courses, ~131 lessons) free and open for everyone',
+      item1: 'Keeping the curriculum (17 courses, ~200+ lessons) free and open for everyone',
       item2: 'Keeping every lesson updated against upstream Reth / Revm / Alloy / Foundry',
       item3: 'Hosting, infrastructure, and translation work',
     },
@@ -311,8 +311,8 @@ export const en = {
   },
   about: {
     title: 'About RethLab',
-    subtitle: 'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — Reth, Revm, and Alloy implement all five in Rust. Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. RethLab walks you through 13 courses across 4 tiers — from EVM foundations, to reading Alloy/Revm/Reth source line by line, to architecting L1 consensus, to shipping ten production-grade apps.',
-    bio: '15+ years shipping mission-critical financial systems — core banking, retail deposits, mortgages, KYC, regulatory reporting — across Tokyo (Shinsei Bank), Bangalore (offshore dev), and Hong Kong (free English-learning email, 500K+ users). Now Head of Sales Engineering at SBI R3 Japan, focused on Solana enterprise adoption and real-world-asset tokenization, while building actively across Bitcoin, Ethereum, Solana, Hyperliquid, and Corda.\n\nI built RethLab because when I tried to learn Reth / Revm / Alloy / Foundry properly, I hit the gap the curriculum walks through: the docs are scattered, the source is dense, and there is no clear path from "I know some Rust" to "I can ship production EVM infrastructure." I learned by doing, then turned what worked into the curriculum I wish I\'d had — 13 courses across 4 tiers (Foundations / Source-Reading / L1 Architecture / Production), ~131 lessons. The Advanced tier treats what most curricula present as "blockchain magic" — BFT consensus, cross-chain bridges, sequencer & rollup architecture, P2P networking, validator operations — as standard distributed-systems / compiler / networking / concurrency engineering. The Expert tier ships ten end-to-end apps. Source-first, openly published.\n\nPersonally, I\'m interested in the teams shipping this stack — Paradigm and Tempo above all.',
+    subtitle: 'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — Reth, Revm, and Alloy implement all five in Rust. Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. RethLab walks you through 13 source-reading courses across 4 tiers — from EVM foundations, to reading Alloy/Revm/Reth source line by line, to architecting L1 consensus, to shipping ten production-grade apps — plus DIY Perp, a 4-course build-along where you construct your own Hyperliquid-shape L1 from scratch (`psyto/openhl` as the byte-identical reference).',
+    bio: '15+ years shipping mission-critical financial systems — core banking, retail deposits, mortgages, KYC, regulatory reporting — across Tokyo (Shinsei Bank), Bangalore (offshore dev), and Hong Kong (free English-learning email, 500K+ users). Now Head of Sales Engineering at SBI R3 Japan, focused on Solana enterprise adoption and real-world-asset tokenization, while building actively across Bitcoin, Ethereum, Solana, Hyperliquid, and Corda.\n\nI built RethLab because when I tried to learn Reth / Revm / Alloy / Foundry properly, I hit the gap the curriculum walks through: the docs are scattered, the source is dense, and there is no clear path from "I know some Rust" to "I can ship production EVM infrastructure." I learned by doing, then turned what worked into the curriculum I wish I\'d had — 17 courses total, ~200+ lessons. 13 source-reading courses are organized across 4 tiers (Foundations / Source-Reading / L1 Architecture / Production); the Advanced tier treats what most curricula present as "blockchain magic" — BFT consensus, cross-chain bridges, sequencer & rollup architecture, P2P networking, validator operations — as standard distributed-systems / compiler / networking / concurrency engineering, and the Expert tier ships ten end-to-end apps. On top of that, the DIY Perp series is a 4-course build-along where you construct your own Hyperliquid-shape L1 from scratch, with my open-source reference implementation [`psyto/openhl`](https://github.com/psyto/openhl) as the byte-identical answer key per lesson. Source-first, openly published.\n\nPersonally, I\'m interested in the teams shipping this stack — Paradigm and Tempo above all.',
     background: {
       tradfi: 'Background',
       tradfiDetail: '15+ yrs of mission-critical FS at Shinsei Bank: core banking (Flexcube), retail deposits, mortgages, KYC/FATCA, Zengin payments, ATM. Backbase (Dutch Banking-as-a-Service unicorn) as PM.',
@@ -359,7 +359,7 @@ export const en = {
       title: 'Why RethLab?',
     },
     tracks: {
-      title: '13 Courses Across 4 Tiers: Foundations → Source → Architecture → Production',
+      title: '17 Courses: 4 Source-Reading Tiers + DIY Perp Build-Along',
       subtitle: 'Finish all four tiers and you can read, design, and ship Rust Ethereum Systems Engineering at the standard used by Paradigm, Hyperliquid, and Tempo.',
       basicsDesc: 'Three courses that ground you in the Rust EVM stack. Rust and Alloy setup, EVM concepts, byte-level dispatch loop. The foundation for the source-reading tier.',
       fundamentals: 'Fundamentals',
