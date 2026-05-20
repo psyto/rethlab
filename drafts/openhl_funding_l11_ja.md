@@ -21,14 +21,14 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンを終えると：
 
-- Funding pipeline を記憶からホワイトボードに描ける：`(mark, index)` → premium → rate → settlements、clock で gate される。
-- 5 つの先送り項目を名指し（oracle 統合、balance 更新、liquidation、multi-market funding、funding-as-EVM-event）、それぞれが `crates/funding/` の範囲外の理由を説明できる。
-- 4 つの拡張が将来コースのどこに来るかを描ける。
-- この state machine を永久先物 DEX に配線する準備ができる。
+- Funding pipeline を記憶からホワイトボードに描けるようになる：`(mark, index)` → premium → rate → settlements、それを clock で gate する形だ。
+- 先送りした 5 項目（oracle 統合、balance 更新、liquidation、multi-market funding、funding-as-EVM-event）を名指しでき、それぞれがなぜ `crates/funding/` の守備範囲外なのかを説明できるようになる。
+- 4 つの拡張が将来のどのコースに位置づけられるかを描けるようになる。
+- この state machine を永久先物 DEX に配線する準備が整う。
 
-**このレッスンにコードなし。** メンタルモデルだけ。
+**このレッスンにコードはない。** メンタルモデルだけだ。
 
 ## Pipeline、1 枚の図で
 
@@ -69,119 +69,119 @@
    ╚═══════════════════════════════════════════════════════╝
 ```
 
-上から下：価格 in、settlement out。Clock が pipeline 全体を「十分時間経過したか？」gate でラップ。
+上から下へ：価格を入力、settlement を出力。pipeline 全体を、clock が「十分な時間が経過したか？」の gate でラップする。
 
 ## 各モジュールが届けたもの
 
-**Module 1 (Determinism + 型、L1-L3)** — 固定小数点語彙：
+**Module 1（Determinism + 型、L1-L3）** — 固定小数点の語彙：
 
-- `RATE_SCALE = 1_000_000_000`（ppb）：load-bearing 定数。
-- 9 newtype：`MarkPrice`、`IndexPrice`、`Premium`、`FundingRate`、`Notional`、`PositionSize`、`Position`、`Settlement`、`FundingParams`。
-- `hyperliquid_default()`：3600s interval、±4% cap、divisor 8。
-- **学び**：Newtype が引数順バグをコンパイル時に防ぐ、符号規約が定義場所の doc コメントに住む。
+- `RATE_SCALE = 1_000_000_000`（ppb）：load-bearing な定数。
+- 9 つの newtype：`MarkPrice`、`IndexPrice`、`Premium`、`FundingRate`、`Notional`、`PositionSize`、`Position`、`Settlement`、`FundingParams`。
+- `hyperliquid_default()`：3600 秒 interval、±4% cap、divisor 8。
+- **学び**：Newtype のおかげで引数順バグをコンパイル時に防げる。符号規約は、その型の定義場所の doc コメントに置く。
 
-**Module 2 (純粋な compute、L4-L7)** — Stateless 数学：
+**Module 2（純粋な compute、L4-L7）** — Stateless な数学：
 
-- `compute_premium(mark, index) → Premium` — `index == 0` で graceful、i128 中間値、saturate。
-- `compute_rate(premium, params) → FundingRate` — divide-then-clamp、cap に defensive `.abs()`。
-- `apply_funding(positions, mark, rate) → Vec<Settlement>` — 単項マイナスで longs-pay-shorts、flat position フィルタ。
-- `saturate_i128_to_i64`：3 行 private helper、型境界での唯一の safety net。
-- **15 テスト**：13 手書きトレース + 2 proptest（antisymmetry、balanced-book zero-sum）。
-- **学び**：panic-vs-wrap-vs-saturate の 3 方向設計テンション、saturation が唯一の consensus-safe 選択。
+- `compute_premium(mark, index) → Premium` — `index == 0` で graceful、i128 中間値、saturate する。
+- `compute_rate(premium, params) → FundingRate` — divide してから clamp、cap には defensive な `.abs()`。
+- `apply_funding(positions, mark, rate) → Vec<Settlement>` — 単項マイナスで longs-pay-shorts を表現、flat position はフィルタする。
+- `saturate_i128_to_i64`：3 行の private helper。型境界での唯一の safety net。
+- **テスト 15 個**：手書きトレース 13 + proptest 2（antisymmetry、balanced-book zero-sum）。
+- **学び**：panic / wrap / saturate という 3 方向の設計テンション、その中で saturation だけが consensus-safe な選択。
 
-**Module 3 (Clock state machine、L8-L10)** — Discrete event loop：
+**Module 3（Clock state machine、L8-L10）** — Discrete event loop：
 
-- `FundingClock` + `FundingTick` + `tick()`。
-- 7 テストでカバー：guard semantics、境界ケース、interval 持続、no-catch-up。
-- **学び**：Composition テストが配線エラーを捕まえる、state machine が multi-call テストを必要とする、設計哲学が doc コメント + テスト + レッスン散文に住む、決して 1 箇所だけにではない。
+- `FundingClock` と `FundingTick`、`tick()`。
+- 7 つのテストでカバー：guard の semantics、境界ケース、interval 持続、no-catch-up。
+- **学び**：Composition テストが配線ミスを捕まえる。state machine は multi-call のテストを必要とする。設計哲学は doc コメント、テスト、レッスンの散文の 3 箇所に置く — 1 箇所だけに留めてはいけない。
 
 ## 正直に先送り
 
-`crates/funding/` がやらない 5 つ。それぞれ実際のプロダクションギャップ、この crate を pure state machine に保つため*意図的に先送り*。
+`crates/funding/` がやらないことが 5 つある。いずれも現実のプロダクションギャップだが、この crate を pure な state machine に保つために*意図的に先送り*している。
 
 ### 1. Oracle 統合
 
-**現状**：`compute_premium` が `mark: MarkPrice, index: IndexPrice` を入力として取る。
+**現状**：`compute_premium` は `mark: MarkPrice, index: IndexPrice` を入力として受け取る。
 
-**ないもの**：それらの価格を*取得する*方法。呼び出し側が CLOB から mark を取得（`clob.best_bid_with_qty()` mid-price のような何か経由）、外部 oracle から index を取得（Pyth、Chainlink、validator-attested feed）。
+**ないもの**：これらの価格を*取得する*方法。呼び出し側は mark を CLOB から（`clob.best_bid_with_qty()` の mid-price のような形で）、index を外部 oracle から（Pyth、Chainlink、validator-attested な feed など）取得する必要がある。
 
-**先送りの理由**：Oracle plumbing は独自の discipline — staleness チェック、deviation circuit breaker、multi-source aggregation、validator-set サインオフ。Funding crate にバンドルすると 2 つの無関係な関心を結合。**Bridge layer（将来コース）が oracle を `tick()` に配線。**
+**先送りの理由**：Oracle の plumbing には独自のディシプリンが要る — staleness チェック、deviation circuit breaker、複数ソースの aggregation、validator-set 側のサインオフなどだ。これを funding crate にバンドルすると、無関係な 2 つの関心事を結合してしまう。**Bridge レイヤー（将来のコース）が oracle を `tick()` に配線する。**
 
-**いつ見直す**：Funding crate を `LiveRethEvmBridge` に配線するとき。Bridge の payload-building コードが `clock.tick(...)` 呼び出しの*直前に*最新の mark/index を read する。
+**いつ見直すか**：Funding crate を `LiveRethEvmBridge` に配線するときだ。Bridge の payload 構築コードが、`clock.tick(...)` の呼び出しの*直前に*最新の mark / index を読み込む形になる。
 
 ### 2. Balance 更新
 
-**現状**：`tick()` が `Vec<Settlement>` を返す — `(account, delta)` ペアのリスト。
+**現状**：`tick()` は `Vec<Settlement>` を返す — `(account, delta)` ペアのリストだ。
 
-**ないもの**：それらの delta をアカウント balance に*適用する*メカニズム。
+**ないもの**：その delta をアカウント balance に*適用する*メカニズム。
 
-**先送りの理由**：Balance state は EVM storage（または bridge が維持する別の store）に住む。Funding crate は意図的に storage-free — 計算する、永続化しない。**Bridge が `Vec<Settlement>` を取り、balance-update transaction を emit するか直接 state mutation する。**
+**先送りの理由**：Balance の state は EVM storage（あるいは bridge が維持する別ストア）に置かれる。Funding crate は意図的に storage-free だ — 計算するだけで、永続化はしない。**Bridge が `Vec<Settlement>` を受け取り、balance を更新するトランザクションを emit するか、state を直接 mutate する。**
 
-**いつ見直す**：Oracle 統合と同じ。Bridge layer が settlement が balance に出会う場所。
+**いつ見直すか**：Oracle 統合と同じタイミングだ。Bridge レイヤーが settlement と balance が出会う場所になる。
 
 ### 3. Liquidation
 
-**現状**：アカウントの balance を任意に負に押せる settlement。
+**現状**：Settlement は、アカウントの balance を任意に負まで押し込みうる。
 
-**ないもの**：アカウントが funding 支払いを吸収する*能力*があるかのチェック、もしくはそうでないときの処理ロジック。
+**ないもの**：アカウントが funding の支払いを吸収*できる*かのチェックや、できないときの処理ロジック。
 
-**先送りの理由**：Liquidation は独自の不変条件（insurance fund、ADL waterfall、mark-price trigger）を持つ別の state machine。Funding と結ぶと 2 つの cadence を conflate（funding は hourly、liquidation は per-block）。**Liquidation は独自の crate であるべき。**
+**先送りの理由**：Liquidation は独自の不変条件（insurance fund、ADL waterfall、mark-price トリガー）を持つ別の state machine だ。Funding と結びつけると、2 つの cadence を conflate してしまう（funding は時間単位、liquidation はブロック単位だ）。**Liquidation は独立した crate にすべきだ。**
 
-**いつ見直す**：Balance 更新の後。Bridge が balance が負になるのを見る、*それから* liquidation engine が kick in。
+**いつ見直すか**：Balance 更新の後だ。Bridge が balance の負転を観測し、*そこで*はじめて liquidation エンジンが起動する。
 
 ### 4. Multi-market funding
 
-**現状**：単一マーケットに対する単一 `FundingClock`。
+**現状**：単一マーケットに対する `FundingClock` が 1 つ。
 
-**ないもの**：複数の永久先物マーケット（BTC-USD、ETH-USD、SOL-USD 等、潜在的に異なる interval や cap）にわたる funding を管理する方法。
+**ないもの**：複数の永久先物マーケット（BTC-USD、ETH-USD、SOL-USD、さらには interval や cap が異なる可能性もある）にまたがって funding を管理する方法。
 
-**先送りの理由**：Multi-market 設計は素直 — マーケットあたり 1 つの `FundingClock`、すべて bridge layer の `HashMap<MarketId, FundingClock>` で管理。Crate がマーケット多重性を知る必要なし、ただ*1 つ*に対して正しい必要。
+**先送りの理由**：Multi-market な設計は素直だ — マーケット 1 つにつき `FundingClock` 1 つを置き、bridge レイヤーの `HashMap<MarketId, FundingClock>` でまとめて管理すればよい。Crate 側がマーケットの多重性を知る必要はなく、*1 つ*のマーケットに対して正しければそれで十分だ。
 
-**いつ見直す**：openhl が 2 つ目のマーケットを追加するとき。**おそらくこの crate の一部としては決して** — 多重化は上の責任。
+**いつ見直すか**：openhl が 2 つ目のマーケットを追加するときだ。**おそらく、この crate の一部としてではない** — 多重化は上位レイヤーの責任だ。
 
 ### 5. EVM event としての funding
 
-**現状**：`tick()` から返される `Vec<Settlement>` としての settlement。
+**現状**：Settlement は `tick()` から `Vec<Settlement>` として返ってくる。
 
-**ないもの**：スマートコントラクトが funding tick を*観測*する方法。Funding に反応したいコントラクト（例：「funding が X% を超えたら auto-deleverage」）が event として subscribe できない。
+**ないもの**：スマートコントラクトが funding tick を*観測する*方法。Funding に反応したいコントラクト（例：「funding が X% を超えたら auto-deleverage する」）が、イベントとして購読する手段がない。
 
-**先送りの理由**：非 EVM コードから EVM event を emit するには plumbing が必要 — bridge が各 `Settlement` を `EvmLog` に変換して次のブロックに inject する必要。**Bridge-layer 関心、state-machine 関心ではない。**
+**先送りの理由**：非 EVM コードから EVM event を emit するには plumbing が必要だ — bridge が各 `Settlement` を `EvmLog` に変換して次のブロックに inject する処理を担うことになる。**bridge レイヤーの関心事であって、state-machine の関心事ではない。**
 
-**いつ見直す**：Event ベースの funding 観測を要求する具体的なコントラクトユースケースがあるとき。**それまで、telemetry は bridge layer でできる。**
+**いつ見直すか**：Event ベースで funding を観測したい具体的なコントラクトユースケースが出てきたときだ。**それまでは telemetry を bridge レイヤーで行えばよい。**
 
 ## 次に来るもの
 
-このコース後に出荷できる 4 つの拡張：
+このコースの後に出荷できる拡張が 4 つある：
 
 ### Extension 1: Oracle adapter（2-3 日）
 
-1 つ以上の source（Pyth、Chainlink、validator-signed）から index 価格を pull、staleness チェック付きで aggregate、`fn current_index_price() -> Option<IndexPrice>` を露出する小さな `crates/oracle/`。Bridge が `clock.tick(...)` の直前にこれを呼ぶ。**難しい部分は staleness threshold の選択、コードは素直。**
+1 つ以上のソース（Pyth、Chainlink、validator-signed なフィードなど）から index 価格を pull し、staleness チェック付きで aggregate し、`fn current_index_price() -> Option<IndexPrice>` を公開する小さな `crates/oracle/`。Bridge は `clock.tick(...)` の直前にこれを呼ぶ。**難しいのは staleness threshold をどう決めるかであって、コード自体は素直だ。**
 
-### Extension 2: Bridge 側 funding tick（1 週間）
+### Extension 2: Bridge 側の funding tick（1 週間）
 
-`FundingClock` を `LiveRethEvmBridge` に配線。Bridge が clock インスタンスを所有、mark を CLOB から read、index を oracle から read、永久先物 position store から position を取得、`tick()` を呼ぶ、結果の settlement を balance に適用。**ほとんどが plumbing 作業、funding crate は self-contained。**
+`FundingClock` を `LiveRethEvmBridge` に配線する。Bridge が clock インスタンスを保持し、mark を CLOB から、index を oracle から読み、永久先物 position ストアから position を取得し、`tick()` を呼び出して、得られた settlement を balance に適用する。**作業のほとんどは plumbing で、funding crate 自体は self-contained のままだ。**
 
-### Extension 3: Liquidation engine（3-4 週間）
+### Extension 3: Liquidation エンジン（3-4 週間）
 
-Funding-tick 後の balance を監視、under-margined アカウントを識別、insurance fund / ADL waterfall を通して route する別の `crates/liquidation/`。**大きな設計議論：insurance fund サイジング、partial liquidation、MEV protection。** これは独自のコース。
+Funding-tick 後の balance を監視し、under-margined なアカウントを識別し、insurance fund / ADL waterfall を通じて処理を route する独立した `crates/liquidation/`。**大きな設計論点が並ぶ：insurance fund のサイジング、partial liquidation、MEV protection など。** これは独立した 1 コースになる規模だ。
 
 ### Extension 4: Multi-market manager（1 週間）
 
-`HashMap<MarketId, FundingClock>` + per-market position store を維持する `crates/markets/`。Bridge が正しい cadence でマーケットあたり funding tick を dispatch。**概念的に simple、価値はマーケットごとの isolation。**
+`HashMap<MarketId, FundingClock>` とマーケットごとの position ストアを抱える `crates/markets/`。Bridge が正しい cadence でマーケットごとの funding tick を dispatch する。**コンセプトとしては単純で、価値はマーケットごとの isolation を得られる点にある。**
 
-## コース完了 — 内在化したこと
+## コース完了 — 内面化したこと
 
-永久先物 funding を超えて一般化する 5 つのスキル：
+永久先物 funding を超えて一般化できるスキルが 5 つある：
 
-1. **Consensus システムの固定小数点演算。** Validator 間で数値 state を共有する必要がある任意の時 — funding、fee、oracle 価格、vesting schedule — 符号付き整数 + scale 定数を使う。**`RATE_SCALE = 1e9` がパターン、定数値が variable。**
+1. **Consensus システムにおける固定小数点演算。** Validator 間で数値 state を共有する必要があるあらゆる場面 — funding、fee、oracle 価格、vesting schedule など — で、符号付き整数 + スケール定数を使う。**`RATE_SCALE = 1e9` はパターンで、定数の具体値はケースごとに変わる、ということだ。**
 
-2. **Consensus-safe overflow 戦略としての saturation。** Panic = halt 経由のチェーン fork。Wrap = wrong value 経由のチェーン fork。Saturate = bounded、validator 間で consistent。**任意の consensus-critical 数学に対して saturate が唯一の選択。**
+2. **Consensus-safe な overflow 戦略としての saturation。** Panic は halt 経由の chain fork、wrap は誤った値経由の chain fork を生む。Saturate は bounded で、しかも validator 間で consistent だ。**Consensus-critical な数学に対しては、saturate が唯一の選択肢だ。**
 
-3. **意味的区別のための Newtype パターン。** `MarkPrice` と `IndexPrice` は両方 `u64` をラップするが、異なる概念。Newtype が引数順バグをコンパイル時に防ぐ、doc コメントが符号規約を運ぶ。**Newtype あたり 5 行、バグクラス全体を防ぐ。**
+3. **意味的な区別を入れるための newtype パターン。** `MarkPrice` も `IndexPrice` も `u64` をラップしているが、別の概念だ。Newtype のおかげで引数順バグはコンパイル時に防げ、符号規約は doc コメントが運ぶ。**newtype 1 つあたり 5 行で、バグクラス全体を防げる。**
 
-4. **層化コードのための Composition テスト。** 各 layer（`compute_premium`、`compute_rate`、`apply_funding`）が個別にテストされるが、層化自体が別の関心。**`tick()` テストが composition を verify、unit テストが piece を verify。両方が必要。**
+4. **レイヤー化されたコードのための composition テスト。** 各レイヤー（`compute_premium`、`compute_rate`、`apply_funding`）は個別にテストされるが、レイヤー化そのものは別の関心事だ。**`tick()` のテストが composition を検証し、unit テストが個々のピースを検証する。両方が必要だ。**
 
-5. **設計哲学がコード + doc + テスト + 散文に住む。** No-catch-up 不変条件が `clock.rs` の module doc で名指され、`tick()` の実装で強制され、`no_catchup_after_long_gap` で verify され、このコースで説明された。**理由付けを 4 箇所で見つけられる、理由付けが個別ピースが変わっても survive する。**
+5. **設計哲学はコードと doc とテストと散文に分散させる。** No-catch-up 不変条件は `clock.rs` の module doc で名指され、`tick()` の実装で強制され、`no_catchup_after_long_gap` で検証され、このコースで説明された。**理由付けを 4 箇所で見つけられる。個々のピースが変わっても、理由付け自体は生き残る。**
 
 ## このコースが L1 Architect track のどこに位置するか
 
@@ -193,11 +193,11 @@ Funding-tick 後の balance を監視、under-margined アカウントを識別�
 
 **Course 8**（openhl-precompiles）：カスタム precompile 経由の EVM ↔ CLOB ブリッジ。
 
-**Course 9（このコース）**：Funding state machine。**Pure state、I/O なし — course 8 の bridge plumbing への対比。**
+**Course 9（このコース）**：Funding state machine。**pure な state、I/O なし — course 8 の bridge plumbing と対をなす位置づけだ。**
 
-**Course 10**（openhl-bridge-integration — 将来）：funding + oracle + liquidation を `LiveRethEvmBridge` に配線。これが courses 6-9 のすべてが runnable perp DEX に compose する場所。
+**Course 10**（openhl-bridge-integration — 将来）：funding、oracle、liquidation を `LiveRethEvmBridge` に配線する。ここで courses 6-9 のすべてが、動作する perp DEX として組み上がる。
 
-L1 Architect track の 90% を踏破した。**このコースのパターン（固定小数点、saturation、composition テスト）が残り作業全体に applied。**
+L1 Architect track の 90% を踏破したことになる。**このコースで身につけたパターン（固定小数点、saturation、composition テスト）は、残りの作業すべてに当てはまる。**
 
 ## 最終答え合わせ
 
@@ -207,7 +207,7 @@ git checkout cd94137
 diff -u ~/code/my-openhl/crates/funding/ ./crates/funding/ --recursive
 ```
 
-L11 後、**`crates/funding/` ディレクトリ全体が Stage 8b と byte-identical** に一致するはず。1 commit（3 ファイルにわたって ~635 LOC）を手で再現した — 各行がなぜそこにあるかを完全に理解した上で。**Crate が standalone でコンパイル、テストが standalone で pass、`openhl-clob`（`AccountId` 用）以外の外部依存なし。**
+L11 後、**`crates/funding/` ディレクトリ全体が Stage 8b と byte-identical** に一致するはずだ。3 ファイルにまたがる ~635 LOC の 1 commit を、各行が*なぜ*そこにあるのかを完全に理解した上で手で再現した、ということだ。**Crate は standalone でコンパイルが通り、テストも standalone で pass する。外部依存は `openhl-clob`（`AccountId` 用）以外にない。**
 
 戻す：
 
@@ -217,15 +217,15 @@ git checkout main
 
 ## あなたがこれを出荷した
 
-22 テスト pass。3 ソースファイル。プロダクション Rust ~635 LOC。Funding state machine が：
-- 符号付き固定小数点精度で deterministic な premium/rate/settlement 数学を計算する；
-- Pathological 入力で panic でなく saturate する；
-- Configurable interval で settlement を gate する；
-- 長 gap 後の catch-up を拒否する（数学を公平性と整合させる哲学的選択）。
+22 テスト pass、ソースファイル 3 つ、プロダクション Rust ~635 LOC。Funding state machine ができることは：
+- 符号付き固定小数点の精度で、deterministic な premium / rate / settlement の数学を計算する。
+- Pathological な入力に対しては panic ではなく saturate する。
+- Configurable な interval で settlement を gate する。
+- 長い gap の後の catch-up は拒否する（数学を公平性に揃えるための哲学的な選択だ）。
 
-**それが HL シェイプ永久先物 funding メカニズム全体、任意の Rust トレーディングシステムに drop in できる crate で。** 次に誰かに「永久先物 funding はどう動く？」と聞かれたら — この crate を見せて。
+**これで、HL シェイプの永久先物 funding メカニズム一式が手に入った。しかも、任意の Rust トレーディングシステムに drop in できる crate という形でだ。** 次に誰かから「永久先物 funding はどう動くの？」と聞かれたら — この crate を見せればいい。
 
-永久先物を作りに行こう。
+それでは、永久先物を作りに行こう。
 ````
 
 ---

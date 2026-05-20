@@ -27,47 +27,47 @@ cargo test -p openhl-evm reth_dev_node_with_openhl_executor --release
 cargo test -p openhl-evm --lib precompiles
 ```
 
-…両方 pass。**新規テスト 4 個** を書く:
+…どちらも pass する。**新規テストを 4 個** 書く:
 
-- **integration test 1 個** を `crates/evm/src/reth_node.rs` に — `reth_dev_node_with_openhl_executor`。デフォルト executor の代わりに `OpenHlExecutorBuilder` を swap した Reth node を bootstrap する。`EvmFactory` + `ExecutorBuilder` 合成が clean に spawn することを validate。
-- **unit test 3 個** を `crates/evm/src/precompiles/mod.rs` に:
-  - `read_best_bid_returns_hardcoded_price_and_qty` — 直接関数 call test。
-  - `openhl_precompiles_registers_clob_address` — **extend-not-replace** invariant。
-  - `registered_precompile_is_invokable_via_registry` — full registry-dispatch test (REVM が内部で使うパス)。
+- **`crates/evm/src/reth_node.rs` に integration test を 1 つ** — `reth_dev_node_with_openhl_executor`。デフォルト executor の代わりに `OpenHlExecutorBuilder` を差し込んだ Reth node を bootstrap する。`EvmFactory` + `ExecutorBuilder` の合成が clean に spawn することを検証する。
+- **`crates/evm/src/precompiles/mod.rs` に unit test を 3 つ**:
+  - `read_best_bid_returns_hardcoded_price_and_qty` — 関数を直接呼ぶテスト。
+  - `openhl_precompiles_registers_clob_address` — **extend-not-replace** の不変条件を確認。
+  - `registered_precompile_is_invokable_via_registry` — registry 経由の dispatch をフルに通すテスト (REVM が内部で使うパスと同じ)。
 
-**これが Module 1 のマイルストーンレッスン。** L3 後、custom EVM + precompile は compile-clean なだけでなく、EVM 実行から到達可能であることが証明された。Module 2-4 が **content** (live state、write path、bridge 統合) を build する; Module 1 は **配管** を set up した。
+**これが Module 1 のマイルストーンレッスン。** L3 を終えれば、custom EVM + precompile がコンパイル可能であるだけでなく、EVM 実行から到達可能であることまで証明される。Module 2-4 で **中身** (live state、write path、bridge 統合) を組み立てる — Module 1 は **配管** を整えるところまでだ。
 
 ## おさらい
 
-L2 後:
+L2 後の状態:
 
 - `openhl_evm.rs` に `OpenHlEvmFactory` + `OpenHlExecutorBuilder` (L1)。
 - `precompiles/mod.rs` に `CLOB_READ_BEST_BID` + `read_best_bid` + `openhl_precompiles` (L2)。
-- `cargo check -p openhl-evm` が pass。
+- `cargo check -p openhl-evm` が pass する。
 
-**まだ何もこのコードを invoke していない。** L3 で配管が動くことを証明する 4 つのテストを書く。
+**だが、まだこのコードを呼び出しているものがない。** L3 では「配管が動くこと」を証明する 4 つのテストを書く。
 
 ## 計画
 
-5 つやる:
+やることは 5 つ:
 
-1. **`reth_node.rs` の import を更新** — `EthereumAddOns` (`with_add_ons(...)` に必要) と `crate::OpenHlExecutorBuilder` (配線する型) を追加。
-2. **`reth_dev_node_with_openhl_executor` integration test を追加** — course 6 の `reth_dev_node_bootstraps` と同じ shape、だが explicit-builder path で `.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))` を使う。
-3. **`#[cfg(test)] mod tests` を `precompiles/mod.rs` に追加** — unit test 3 個。
-4. **両 test path を run** — integration test が pass、unit test 3 個が pass。
-5. **他に何も壊れていないことを verify** — `cargo test -p openhl-evm --release` で course 6 + course 7 のすべての先行テストが green。
+1. **`reth_node.rs` の import を更新** — `EthereumAddOns` (`with_add_ons(...)` で必要) と `crate::OpenHlExecutorBuilder` (配線対象の型) を追加する。
+2. **integration test `reth_dev_node_with_openhl_executor` を追加** — course 6 の `reth_dev_node_bootstraps` と同じ形だが、explicit-builder の経路で `.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))` を使う。
+3. **`precompiles/mod.rs` に `#[cfg(test)] mod tests` を追加** — unit test 3 個。
+4. **両方のテストパスを走らせる** — integration test と unit test 3 個が pass する。
+5. **他に壊れていないことを検証** — `cargo test -p openhl-evm --release` で course 6 + course 7 の既存テストが全部 green であること。
 
-3 個の unit test が 3 つの異なる concern をカバー:
+unit test 3 個は、それぞれ別の関心事をカバーする:
 
-| Test | Concern | 失敗したらバグの場所 |
+| Test | カバーする関心事 | 失敗したらバグはどこか |
 | - | - | - |
 | `read_best_bid_returns_hardcoded_price_and_qty` | 関数 body が正しい (正しいバイトを書く) | L2 の `read_best_bid` 実装 |
-| `openhl_precompiles_registers_clob_address` | Extend-not-replace invariant | L2 の `openhl_precompiles` body — おそらく間違った `clone()` または `extend(...)` semantics |
-| `registered_precompile_is_invokable_via_registry` | Registry 経由の EVM dispatch path が動く | `Precompile::new(...)` call shape、`PrecompileId`、または registration ordering |
+| `openhl_precompiles_registers_clob_address` | extend-not-replace の不変条件 | L2 の `openhl_precompiles` の body — 多分 `clone()` か `extend(...)` の意味取り違え |
+| `registered_precompile_is_invokable_via_registry` | registry 経由の EVM dispatch パスが動く | `Precompile::new(...)` の呼び方、`PrecompileId`、もしくは登録順 |
 
-> 🛑 **考えてみよう。** スクロールする前に: なぜ `openhl_precompiles_registers_clob_address` が **両方** `CLOB_READ_BEST_BID` AND `0x...01` の ECDSA recover が extended set に存在することを assert する? 最初の assertion だけで十分に見える — 我々が register した、なぜ ECDSA がまだあることを check?
+> 🛑 **考えてみよう。** スクロールする前に: なぜ `openhl_precompiles_registers_clob_address` は、`CLOB_READ_BEST_BID` だけでなく `0x...01` の ECDSA recover **も** extended set に存在することを assert するのか? 最初の assertion だけで十分に見える — 自分で登録したのだから、ECDSA がまだあることまでチェックする必要があるのか?
 
-(答え: テストが **extend-not-replace** invariant を強制するから。`openhl_precompiles` が誤って base を clone して extend する代わりに fresh な `Precompiles` set を作ったら、`CLOB_READ_BEST_BID` は依然存在するが、標準 Ethereum precompile (ECDSA recover、SHA-256 等) は **消える**。Base set は wrapper が preserve しなければならない load-bearing なものの 1 つ。ECDSA recover なしでは、signature を verify するコントラクトが revert する。**Dual assertion が silent-replace バグを catch する。**)
+(答え: このテストは **extend-not-replace** の不変条件を強制したいからだ。仮に `openhl_precompiles` が、base を clone して extend するのではなく、誤って新規の `Precompiles` セットを作ってしまった場合、`CLOB_READ_BEST_BID` は依然として存在するが、標準の Ethereum precompile (ECDSA recover、SHA-256 など) は **消える**。base set は wrapper が必ず保持しなければならない load-bearing な部分の 1 つだ。ECDSA recover がなければ、署名検証をするコントラクトは revert してしまう。**dual assertion が silent-replace バグを捕まえる。**)
 
 ## 手順
 
@@ -85,17 +85,17 @@ use reth_node_ethereum::EthereumNode;
 use reth_node_ethereum::{node::EthereumAddOns, EthereumNode};
 ```
 
-`OpenHlExecutorBuilder` の import も追加。`use` block の直後、`dev_chain_spec()` の前:
+`OpenHlExecutorBuilder` の import も追加する。`use` ブロックの直後、`dev_chain_spec()` の前に:
 
 ```rust
 use crate::OpenHlExecutorBuilder;
 ```
 
-2 つの import が必要なのは、`EthereumAddOns` が `.with_add_ons(...)` に必要 (explicit-builder path が `add_ons` 引数を要求、customize しなくても)、`OpenHlExecutorBuilder` が swap する型だから。
+import が 2 つ必要なのは、`EthereumAddOns` が `.with_add_ons(...)` で必要 (explicit-builder の経路では、カスタマイズしない場合でも `add_ons` 引数が要求される) で、`OpenHlExecutorBuilder` が差し込み対象の型だから。
 
-### Step 2: `reth_dev_node_with_openhl_executor` integration test を追加
+### Step 2: integration test `reth_dev_node_with_openhl_executor` を追加
 
-`reth_node.rs` の `mod tests` block に、既存 `reth_dev_node_bootstraps` test の後に append:
+`reth_node.rs` の `mod tests` ブロックの末尾、既存の `reth_dev_node_bootstraps` test の後ろに追記する:
 
 ```rust
     /// Stage 9a: prove that `NodeBuilder` accepts `OpenHlExecutorBuilder` in
@@ -133,7 +133,7 @@ use crate::OpenHlExecutorBuilder;
     }
 ```
 
-Course 6 の `reth_dev_node_bootstraps` テストと比較 — 同じセットアップパターンだが、1 つ重要な行が違う:
+course 6 の `reth_dev_node_bootstraps` テストと見比べてみる — セットアップパターンは同じだが、肝心の 1 行が違う:
 
 ```rust
 // course 6:
@@ -146,15 +146,15 @@ Course 6 の `reth_dev_node_bootstraps` テストと比較 — 同じセット�
 .launch()
 ```
 
-Course-6 path は `.node(...)` を使う、これは shorthand — 事前構築された node spec を取る。Course-8 path は explicit builder を使う: **`OpenHlExecutorBuilder` を swap、他のすべての component (network、payload pool、RPC handler) をデフォルトに保つ。** これが「Reth を fork せず configure する」property。
+course 6 の経路は `.node(...)` を使う — これは shorthand で、事前構築済みの node spec を受け取る。course 8 の経路は explicit な builder を使う: **`OpenHlExecutorBuilder` だけを差し替え、他のコンポーネント (network、payload pool、RPC handler) はデフォルトに保つ。** これが「Reth を fork せずに configure できる」という性質そのもの。
 
-`.executor(OpenHlExecutorBuilder)` chain が load-bearing な部分。`EthereumNode::components()` がデフォルト `ComponentsBuilder` を返す; `.executor(...)` が 1 つの slot を override。残りの slot (network、payload、pool 等) はデフォルトから来る。**1 slot を swap、他はすべて inherit。**
+load-bearing なのは `.executor(OpenHlExecutorBuilder)` のチェーン。`EthereumNode::components()` がデフォルトの `ComponentsBuilder` を返し、`.executor(...)` でそのうち 1 スロットだけを上書きする。残りのスロット (network、payload、pool など) はデフォルトのまま。**1 スロットを差し替え、残りはすべて継承。**
 
-> 🛑 **やりがちな勘違い。** 「executor を inline で書ける — `.executor(my_closure)` で `OpenHlExecutorBuilder` struct を全部 build しなくても」。 **`ExecutorBuilder` trait が Reth の `ComponentsBuilder` が受け入れる契約。** Closure も同じ trait (`impl ExecutorBuilder<Node>`) を満たさなければならず、それを inline で書くのは厄介。Struct が存在するのは trait が API surface だから; この特定の hook には closure が悪い fit。
+> 🛑 **やりがちな勘違い。** 「`OpenHlExecutorBuilder` の struct を作らなくても、`.executor(my_closure)` で executor を inline に書けばいいのでは?」 — **Reth の `ComponentsBuilder` が受け入れる契約は `ExecutorBuilder` trait の方だ。** closure も同じ trait (`impl ExecutorBuilder<Node>`) を満たさなければならず、これを inline で書くのは扱いづらい。struct が存在するのは trait が API surface だから — このフックには closure は合わない。
 
-### Step 3: `mod tests` block を `precompiles/mod.rs` に追加
+### Step 3: `precompiles/mod.rs` に `mod tests` ブロックを追加
 
-`crates/evm/src/precompiles/mod.rs` を開く。ファイル末尾 (`openhl_precompiles` の後) に append:
+`crates/evm/src/precompiles/mod.rs` を開いて、ファイル末尾 (`openhl_precompiles` の後ろ) に追記する:
 
 ```rust
 #[cfg(test)]
@@ -224,15 +224,15 @@ mod tests {
 }
 ```
 
-**Scope を増しながら** 3 つの test:
+**scope を少しずつ広げていく** 3 つのテストだ:
 
-- **`read_best_bid_returns_hardcoded_price_and_qty`** — 関数を直接 `(empty_input, gas_limit=100_000, reservoir=0)` で call。バイト長、decoded price、decoded qty、消費 gas を assert。**最も狭い scope** — 関数のみ、registry なし、EVM なし。
-- **`openhl_precompiles_registers_clob_address`** — `openhl_precompiles(Precompiles::cancun())` を call、我々の address AND 標準 ECDSA recover address の両方が extended set にあることを check。**Extend-not-replace invariant** が load-bearing な assertion: buggy wrapper が base set を extend する代わりに replace するかもしれない。
-- **`registered_precompile_is_invokable_via_registry`** — `.get(&CLOB_READ_BEST_BID)` で registry から precompile を extract、その `.execute(...)` メソッドを call。**Full dispatch path** — REVM が `STATICCALL` で内部使用するのと同じコード。
+- **`read_best_bid_returns_hardcoded_price_and_qty`** — 関数を `(empty_input, gas_limit=100_000, reservoir=0)` で直接呼ぶ。バイト長、decode された price、decode された qty、消費 gas を assert する。**最も狭い scope** — 関数だけ、registry も EVM もなし。
+- **`openhl_precompiles_registers_clob_address`** — `openhl_precompiles(Precompiles::cancun())` を呼び、自前の address と標準 ECDSA recover address の **両方** が extended set にあることを確認する。load-bearing な assertion は **extend-not-replace の不変条件** だ: バグった wrapper は base set を extend する代わりに replace してしまう可能性がある。
+- **`registered_precompile_is_invokable_via_registry`** — `.get(&CLOB_READ_BEST_BID)` で registry から precompile を取り出し、その `.execute(...)` メソッドを呼ぶ。**dispatch パスのフル版** で、REVM が `STATICCALL` で内部的に使うのと同じコード。
 
-`alloy_primitives::U256` import が 64-byte response の decode に必要。`U256::from_be_slice(&bytes[..])` が 32-byte big-endian slice を U256 値に decode する。
+`alloy_primitives::U256` の import は、64-byte の response を decode するために必要。`U256::from_be_slice(&bytes[..])` が 32-byte の big-endian slice を U256 に decode する。
 
-> 🛑 **やりがちな勘違い。** 「3 番目のテストは redundant — 関数が動く (test 1) し address が register された (test 2) なら、registry 経由 invocation は動くはず」。 **そうとは限らない。** Test 2 は `address.contains(&...)` が true を返すことだけを check。Registry から関数 lookup への dispatch は別 — REVM は内部で `.get(&address)` をして `.execute(...)` を呼ぶ。**`Precompile::new(...)` の配線のバグ (間違った関数ポインタ、型ミスマッチ) が test 1 と 2 を pass し test 3 を fail する。** Dispatch test が real なバグクラスを catch する。
+> 🛑 **やりがちな勘違い。** 「3 つ目のテストは冗長では? 関数が動き (test 1)、address が登録され (test 2) ているなら、registry 経由の invocation も動くはずでは?」 — **そうとは限らない。** test 2 は `address.contains(&...)` が true を返すことしかチェックしていない。registry から関数を引いて dispatch する経路は別物で、REVM は内部で `.get(&address)` してから `.execute(...)` を呼ぶ。**`Precompile::new(...)` の配線にバグがある場合 (関数ポインタが間違っている、型が合わないなど)、test 1 と 2 は通っても test 3 は落ちる。** dispatch テストが実在するバグのクラスを捕まえる。
 
 ### Step 4: テストを実行
 
@@ -240,7 +240,7 @@ mod tests {
 cargo test -p openhl-evm reth_dev_node_with_openhl_executor --release
 ```
 
-~30 秒後 (新テストでの初回 incremental build):
+~30 秒ほど (新テスト導入後の初回 incremental build):
 
 ```
 running 1 test
@@ -249,7 +249,7 @@ test reth_node::tests::reth_dev_node_with_openhl_executor ... ok
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-それから unit test:
+続いて unit test:
 
 ```bash
 cargo test -p openhl-evm --lib precompiles
@@ -264,11 +264,11 @@ test precompiles::tests::registered_precompile_is_invokable_via_registry ... ok
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-`--lib` が unit test を library 内で走らせる (`tests/` 内の integration test ではなく)。`--lib` なしだと `cargo test precompiles` が integration test 名パターンともマッチしようとする。
+`--lib` は library 内の unit test を走らせるフラグ (`tests/` 配下の integration test ではなく)。これがないと `cargo test precompiles` が integration test の名前パターンともマッチしようとする。
 
-### Step 5: 他に何も壊れていないことを verify
+### Step 5: 他に壊れていないことを確認
 
-Full suite:
+フルスイート:
 
 ```bash
 cargo test -p openhl-evm --release
@@ -283,25 +283,25 @@ running 42 tests
 test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-**`openhl-evm` で 42 個 pass** (course 6+7 から 39 + 新 unit test 3 + 新 integration test 1 — `--lib` と integration test が名前パターンを share するので exact count は変わる)。All prior tests still green。
+**`openhl-evm` で 42 個 pass** する (course 6+7 の 39 個 + 新規 unit test 3 個 + 新規 integration test 1 個 — `--lib` と integration test で名前パターンが被るので、実際のカウントは多少ずれる)。既存テストはすべて green のままだ。
 
 よくあるエラーと対処:
 
-- **Integration test が `with_components` not found で失敗** — 新テストが shorthand `.node(...)` の代わりに `with_components` を使う。Shorthand を完全に置き換えたか確認、追加しただけではないこと。
-- **`error[E0277]: 'EthereumAddOns' is not a 'NodeAddOns'`** — import path が間違い。`reth_node_ethereum::EthereumAddOns` だけでなく `reth_node_ethereum::node::EthereumAddOns` (path に `node::`) を使う。
-- **`assert!(extended.contains(&ecrecover))` が失敗** — `openhl_precompiles` body が base を clone する代わりに fresh な `Precompiles` set を作った。L2 Step 4 を再確認: `let mut precompiles = base.clone(); precompiles.extend(...); precompiles` であるべき。**`let precompiles = Precompiles::default(); precompiles.extend(...)` ではない。**
-- **`result.gas_used` が `CLOB_BASE_GAS_COST` とマッチしない** — 定数が `read_best_bid` が charge する値と違う。L2 Step 3 を再確認: `PrecompileOutput::new(CLOB_BASE_GAS_COST, ...)` — 両方が同じ定数を参照する必要。
-- **Test `registered_precompile_is_invokable_via_registry` が panic** — L2 の `openhl_precompiles` での `Precompile::new(...)` call が間違い (例: 間違った関数ポインタや引数順)。3 引数 shape を再確認: `(PrecompileId, Address, fn)`。
+- **integration test が「`with_components` not found」で落ちる** — 新テストでは shorthand の `.node(...)` ではなく `with_components` を使う。shorthand を完全に差し替えたか確認する (追加しただけの状態になっていないか)。
+- **`error[E0277]: 'EthereumAddOns' is not a 'NodeAddOns'`** — import パスが間違っている。`reth_node_ethereum::EthereumAddOns` ではなく、`reth_node_ethereum::node::EthereumAddOns` (パスに `node::` を含む) を使う。
+- **`assert!(extended.contains(&ecrecover))` が落ちる** — `openhl_precompiles` の body が base を clone するのではなく、新規の `Precompiles` セットを作ってしまっている。L2 の Step 4 を見直す。`let mut precompiles = base.clone(); precompiles.extend(...); precompiles` の形であるべきで、**`let precompiles = Precompiles::default(); precompiles.extend(...)` ではない。**
+- **`result.gas_used` が `CLOB_BASE_GAS_COST` と一致しない** — 定数の値が、`read_best_bid` が課金する値と食い違っている。L2 の Step 3 を見直す: `PrecompileOutput::new(CLOB_BASE_GAS_COST, ...)` の形で、両方が同じ定数を参照している必要がある。
+- **`registered_precompile_is_invokable_via_registry` が panic** — L2 の `openhl_precompiles` における `Precompile::new(...)` の呼び方が間違っている (関数ポインタや引数の並び順が違うなど)。3 引数の形 `(PrecompileId, Address, fn)` を再確認する。
 
 ## 設計の振り返り
 
-3 つの load-bearing な決定:
+要となる決定が 3 つ:
 
-1. **Scope を増しながらのテスト。** 3 unit test が最も狭い (関数 body) から expand outward (registry registration → registry dispatch) で開始する。1 つが失敗すると、どの層が壊れているか正確に分かる。**Test scope = バグ localization。**
+1. **scope を広げながらテストする。** unit test 3 つは最も狭いところ (関数 body) から始めて、外側 (registry の登録 → registry 経由 dispatch) へ広げていく。どれか 1 つが落ちたとき、どの層が壊れているかを正確に特定できる。**テストの scope = バグの局在化。**
 
-2. **Extend-not-replace check が dual assertion。** `extended.contains(CLOB_READ_BEST_BID)` 単独の passing test では wrapper が catastrophically wrong でないことを証明しない — base set を **replace する** buggy wrapper も pass する。ECDSA recover **も** ある assertion が silent-replace バグを catch する。**1 つの assertion は間違った理由で pass しうる; 2 つの dual はそうできない。**
+2. **extend-not-replace のチェックは dual assertion で行う。** `extended.contains(CLOB_READ_BEST_BID)` だけが通っても、wrapper が壊滅的に間違っていないことの証明にはならない — base set を **replace してしまう** バグ wrapper でも通ってしまう。ECDSA recover **も** 残っていることを assert することで、silent-replace バグを捕まえられる。**1 つの assertion は間違った理由で pass し得るが、2 つの dual はそうはいかない。**
 
-3. **Integration test は precompile を invoke しない。** Full RPC roundtrip は Solidity コントラクトのデプロイが必要 — それは Reth-RPC のテスト surface、precompile のテストではない。Module-1 マイルストーンは「EvmFactory + ExecutorBuilder が clean に spawn」。Unit test (Step 3) が precompile 挙動をカバー; integration test が assembly をカバー。**2 つの test、異なる scope、別々に対処。**
+3. **integration test は precompile を invoke しない。** RPC でフルにラウンドトリップさせるには Solidity コントラクトの deploy が必要になる — それは Reth-RPC のテスト範囲であって、precompile のテストではない。Module 1 のマイルストーンは「EvmFactory + ExecutorBuilder が clean に spawn する」こと。precompile の挙動は unit test (Step 3) で、組み立て側は integration test で押さえる。**2 つのテスト、それぞれの scope、別々に対処する。**
 
 ## 答え合わせ
 
@@ -312,9 +312,9 @@ diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/prec
 diff -u ~/code/my-openhl/crates/evm/src/reth_node.rs ./crates/evm/src/reth_node.rs
 ```
 
-L3 後、コードが `2ba97c6` の参照とマッチ — Stage 9a の NodeBuilder 配線と Stage 9e の 3 unit test が両方ある。Doc コメントの言い回しのみ異なるかも。
+L3 後、コードは `2ba97c6` の参照と一致する — Stage 9a の NodeBuilder 配線と Stage 9e の unit test 3 個が両方揃っている状態。違いは doc コメントの言い回し程度。
 
-戻る:
+main に戻る:
 
 ```bash
 git checkout main
@@ -322,24 +322,24 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ `EthereumNode::default()` ではなく `EthereumNode::components()` を使う?**
-`default()` は事前構築された node spec を返す、個別 component を swap できない。`components()` は `ComponentsBuilder` を返し、`.executor(...)`、`.network(...)`、`.payload(...)` 等を chainable methods として expose する。**1 つ以上の slot を swap する必要があるとき `components()` を使う; すべてを as-is で受け入れるなら `default()`。**
+**Q: `EthereumNode::default()` ではなく `EthereumNode::components()` を使うのはなぜ?**
+`default()` は事前構築済みの node spec を返すもので、個別のコンポーネントは差し替えられない。`components()` は `ComponentsBuilder` を返し、`.executor(...)` / `.network(...)` / `.payload(...)` などを chainable なメソッドとして提供する。**スロットを 1 つでも差し替えたいなら `components()`、すべてそのままでよいなら `default()`。**
 
-**Q: `Precompile::execute(&[], 100_000, 0)` は内部で実際何をする?**
-`Precompile` 型の public dispatch メソッド。内部で stored function pointer (我々の `read_best_bid`) を提供された引数で call する。Smart contract が precompile の address を `STATICCALL` するとき REVM がこの同じメソッドを使う — EVM が precompile registry で address を lookup、`&Precompile` を取得、`.execute(input, gas_limit, reservoir)` を call。
+**Q: `Precompile::execute(&[], 100_000, 0)` は内部で実際に何をしている?**
+`Precompile` 型の public な dispatch メソッドだ。内部で保持している関数ポインタ (今回は `read_best_bid`) を、与えられた引数で呼ぶ。スマートコントラクトが precompile の address を `STATICCALL` するとき、REVM はこれと同じメソッドを使う — EVM が precompile registry で address を引いて `&Precompile` を取得し、`.execute(input, gas_limit, reservoir)` を呼ぶ。
 
 **Q: なぜ integration test に `--release` が必要?**
-速度のため。`--release` がテスト runtime を ~5 秒 (debug) から ~1 秒に削減する、optimization を有効にすることで。他の unit test は小さすぎて debug オーバーヘッドが無視できる。
+速度のため。`--release` で最適化を有効にすると、テストの実行時間が debug の ~5 秒から ~1 秒程度に縮む。他の unit test は十分小さいので、debug のオーバーヘッドは無視できる。
 
-**Q: `.with_add_ons(EthereumAddOns::default())` をスキップできる?**
-できない — `NodeBuilder` の build chain が全 "slot" を埋めることを要求、デフォルトでも。スキップすると compile time に失敗。Explicit な `EthereumAddOns::default()` が曖昧さなく「デフォルトを使う」と言う。
+**Q: `.with_add_ons(EthereumAddOns::default())` は省略できる?**
+できない — `NodeBuilder` の build チェーンは、デフォルトでよくても全 "slot" を埋めることを要求する。省略すると compile 時に失敗する。`EthereumAddOns::default()` を明示することで、曖昧さなく「デフォルトを使う」と言える。
 
-**Q: なぜ integration test が `unwrap()` chain ではなく `Result<()>` と `async` block を使う?**
-より良い error reporting のため。`NodeBuilder` chain 内で何かが失敗すれば、`?` 演算子が error を outer `result` に伝播し、末尾の `panic!` が `{e:?}` を print するので失敗原因が visible。`.unwrap()` だと original error chain なしの generic panic を得る。
+**Q: integration test で `unwrap()` のチェーンではなく `Result<()>` と `async` ブロックを使っているのはなぜ?**
+エラー報告の質を上げるため。`NodeBuilder` チェーン中で何かが失敗したら、`?` がエラーを外側の `result` に伝播し、末尾の `panic!` が `{e:?}` で原因を表示してくれるので、何が落ちたかが見える。`.unwrap()` 直書きだと、元のエラーチェーンを失った generic な panic になる。
 
 ## 次のレッスン (L4)
 
-Precompile が register され callable と証明されたが、**hardcoded 値** を返す。L4 で **live CLOB state** を precompile に配線開始 — bridge が `Arc<Mutex<Book>>` を precompile モジュールに inject できるよう `install_clob()` を追加、`openhl_precompiles` が shared state を受け取るよう更新。L4 後、precompile は real データを返す **能力がある**; L5 で実際に shared book から read する。
+precompile が登録され、callable であることまで証明できた。だが返しているのは **hardcoded な値** だ。L4 では precompile に **live な CLOB state** を配線し始める — `install_clob()` を追加して bridge から `Arc<Mutex<Book>>` を precompile モジュールに inject できるようにし、`openhl_precompiles` が shared state を受け取れるよう更新する。L4 を終えると、precompile は本物のデータを返す **能力を持つ** ようになる。実際に shared book から read するのは L5。
 ````
 
 ---

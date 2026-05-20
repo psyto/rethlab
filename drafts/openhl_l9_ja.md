@@ -27,15 +27,15 @@
 cargo test -p openhl-consensus
 ```
 
-…が **20 個のテストすべてに合格する** (L8 から 16 個 + Node impl の新規 4 個)。Capstone テスト:
+上記の実行結果が **20 個のテストすべてに合格する** (L8 から 16 個 + Node impl の新規 4 個)。Capstone テスト:
 
 ```
 test node::tests::start_engine_smoke_spawns_and_kills ... ok
 ```
 
-…が、自分のコードに対してフル Malachite actor system を spawn し、チャンネルハンドルが 1 回だけ利用可能であることを assert し、actor system をクリーンに tear down する — **約 0.02 秒で**。本レッスン後、エンジンは起動する。残るは `Channels<OpenHlContext>` から消費して bridge を駆動する application loop のみ。
+上記の実行結果が、自分のコードに対してフルな Malachite actor system を spawn し、チャンネルハンドルが 1 回だけ利用可能であることを assert し、actor system をクリーンに tear down する — **約 0.02 秒で**。本レッスン後、エンジンは起動する。残るは `Channels<OpenHlContext>` から消費して bridge を駆動する application loop だけだ。
 
-新規テスト 4 個がカバーするもの: private key file の往復、config が `ProposalOnly` payload + エフェメラルな listen address を produce すること、address 導出が L6 の runner と一致すること、`start_engine` を呼ぶ smoke test。
+新規テスト 4 個がカバーするもの: private key file の往復、config が `ProposalOnly` payload とエフェメラルな listen address を produce すること、address 導出が L6 の runner と一致すること、`start_engine` を呼ぶ smoke test。
 
 ## おさらい
 
@@ -49,22 +49,22 @@ crates/consensus/src/context.rs           — Context<OpenHlContext>
 crates/consensus/src/types/               — 型ファイル 7 個
 ```
 
-`cargo test -p openhl-consensus` でテスト 16 個が合格。`start_engine` が要求する trait bound は **型レベルでは** すべて満たしているが、まだ呼べない — `Node` impl も、config も、genesis も、private key file も、node handle もない。
+`cargo test -p openhl-consensus` でテスト 16 個が合格する。`start_engine` が要求する trait bound は **型レベルでは** すべて満たしているが、まだ呼べない — `Node` impl も、config も、genesis も、private key file も、node handle も無いからだ。
 
 ## 計画
 
 6 つやる:
 
-1. **`crates/consensus/Cargo.toml` に 5 個の依存を追加** — `informalsystems-malachitebft-app-channel`、`informalsystems-malachitebft-config`、signing-ed25519 に `serde` feature を有効化、`serde` と `tokio` をランタイム dep (dev だけでなく) に追加、`tempfile` を dev-dep に追加。
-2. **`crates/consensus/src/node.rs` を作成** — `OpenHlConfig` (impl `NodeConfig`)、`OpenHlGenesis` (unit struct)、`OpenHlPrivateKeyFile` (wire wrapper)、`OpenHlNodeHandle` (`start()` の戻り値)、`OpenHlNode` (メイン struct)、5 個の関連型と 12 個のメソッドを持つ `impl Node for OpenHlNode`。
-3. **`pub mod node;`** を `lib.rs` に配線。
-4. **ユニットテスト 4 個** を `node.rs` に追加。
-5. **実行** — `cargo test -p openhl-consensus` で 20 個合格。
-6. **じっくり見届ける** — `start_engine_smoke_spawns_and_kills` が 0.02 秒で合格するところを。**自分のコードが動く BFT エンジンになる瞬間。**
+1. **`crates/consensus/Cargo.toml` に 5 個の依存を追加する** — `informalsystems-malachitebft-app-channel` と `informalsystems-malachitebft-config`、signing-ed25519 に `serde` feature を有効化、`serde` と `tokio` をランタイム dep (dev だけでなく) に追加、`tempfile` を dev-dep に追加。
+2. **`crates/consensus/src/node.rs` を作成する** — `OpenHlConfig` (impl `NodeConfig`)、`OpenHlGenesis` (unit struct)、`OpenHlPrivateKeyFile` (wire wrapper)、`OpenHlNodeHandle` (`start()` の戻り値)、`OpenHlNode` (メイン struct)、そして 5 個の関連型と 12 個のメソッドを持つ `impl Node for OpenHlNode`。
+3. **`pub mod node;`** を `lib.rs` に配線する。
+4. **ユニットテストを 4 個** `node.rs` に追加する。
+5. **実行** — `cargo test -p openhl-consensus` で 20 個合格する。
+6. **じっくり見届ける** — `start_engine_smoke_spawns_and_kills` が 0.02 秒で合格するところを。**自分のコードが動く BFT エンジンになる瞬間だ。**
 
-このレッスンが教えるのは **自分のコードと Malachite を結ぶブリッジパターン**。エンジンは他人が書いたもので、`Context` と `Codec` に対してジェネリック。spawn するには 5 つが必要: context インスタンス、node インスタンス (config、署名、address 導出を取るため)、config 値、codec 値、初期 height、validator set。`Node` trait は、Malachite が自分のコードからそれらを統一的に取れるようにする **handshake インターフェース**。一度 impl すれば、同じハンドシェイクに従う任意の chain で `start_engine` は動く。
+このレッスンが教えるのは **自分のコードと Malachite を結ぶブリッジパターン** だ。エンジンは他人が書いたもので、`Context` と `Codec` に対してジェネリックだ。spawn するには 5 つが必要だ: context インスタンス、node インスタンス (config、署名、address 導出を取るため)、config 値、codec 値、初期 height、validator set。`Node` trait は、Malachite が自分のコードからそれらを統一的に取り出すための **handshake インターフェース** だ。一度 impl してしまえば、同じハンドシェイクに従う任意の chain で `start_engine` が動くようになる。
 
-> 🛑 **考えてみよう。** スクロールする前に: なぜ Malachite は `OpenHlNode` 自身に config フィールドを持たせず、別の `OpenHlConfig` を要求するのか? ヒント: config の **所有者** と、いつ変わりうるかを考える。Node はプロセス起動時に 1 回作成されるが、設定 (listen address、value payload mode、value sync 設定) はシグナルでディスクから再ロードされうる。`OpenHlConfig` を `OpenHlNode` から分離することで、config は `Node::load_config()` 経由でロードできる — 再呼び出し可能で毎回新しい値を返す — node を再インスタンス化することなく。
+> 🛑 **考えてみよう。** スクロールする前に: なぜ Malachite は `OpenHlNode` 自身に config フィールドを持たせず、別途 `OpenHlConfig` を要求するのか? ヒント: config の **所有者** と、いつ変わりうるかを考えてみる。Node はプロセス起動時に 1 回作成されるが、設定 (listen address、value payload mode、value sync 設定) はシグナルを受けてディスクから再ロードされうる。`OpenHlConfig` を `OpenHlNode` から分離しておけば、config は `Node::load_config()` 経由でロードでき — 再呼び出し可能で毎回新しい値を返せる — node を再インスタンス化せずに済む。
 
 ## 手順
 
@@ -124,14 +124,14 @@ workspace = true
 
 各新規依存の用途:
 
-- **`informalsystems-malachitebft-app-channel`** — 次に呼ぶ `start_engine()` 関数と、エンジン通信用に返される `Channels<Ctx>` 型を提供。
-- **`informalsystems-malachitebft-config`** — `OpenHlConfig` に埋め込む `ConsensusConfig`, `ValueSyncConfig`, `ValuePayload` 型。
-- **`signing-ed25519` の `serde` feature** — `OpenHlPrivateKeyFile` に `Serialize`/`Deserialize` を derive できるようにする (`PrivateKey` newtype が serializable である必要がある)。
-- **`serde`** (runtime dep) — `OpenHlConfig`, `OpenHlGenesis`, `OpenHlPrivateKeyFile` の `#[derive(Serialize, Deserialize)]` で使用。
-- **`tokio`** を dev-dep から dep へ移動 — `OpenHlNodeHandle` が `tokio::sync::Mutex` を持つ。
-- **`tempfile`** dev-dep — smoke test が node の home dir 用に temp ディレクトリを作る。
+- **`informalsystems-malachitebft-app-channel`** — このあと呼ぶ `start_engine()` 関数と、エンジン通信用に返される `Channels<Ctx>` 型を提供する。
+- **`informalsystems-malachitebft-config`** — `OpenHlConfig` に埋め込む `ConsensusConfig`、`ValueSyncConfig`、`ValuePayload` 型を提供する。
+- **`signing-ed25519` の `serde` feature** — `OpenHlPrivateKeyFile` に `Serialize`/`Deserialize` を derive できるようにするためだ (`PrivateKey` newtype が serializable である必要がある)。
+- **`serde`** (runtime dep) — `OpenHlConfig`、`OpenHlGenesis`、`OpenHlPrivateKeyFile` の `#[derive(Serialize, Deserialize)]` で使う。
+- **`tokio`** を dev-dep から dep へ移動 — `OpenHlNodeHandle` が `tokio::sync::Mutex` を持つからだ。
+- **`tempfile`** dev-dep — smoke test が node の home dir 用に temp ディレクトリを作るためだ。
 
-これが 2 回目の重コンパイル。初回 `app-channel` + `config` 取得はさらに ~20 秒。
+これが 2 回目の重いコンパイルになる。初回の `app-channel` + `config` 取得でさらに ~20 秒かかる。
 
 ### Step 2: `crates/consensus/src/node.rs` を作成 — import と `OpenHlConfig`
 
@@ -162,7 +162,7 @@ use crate::signing_provider::OpenHlSigningProvider;
 use crate::types::{OpenHlAddress, OpenHlHeight, OpenHlValidatorSet};
 ```
 
-このファイルが必要とする全表面。一度眺める価値: `Node`, `NodeConfig`, `NodeHandle` がこれから impl する 3 つの Malachite trait。`EngineHandle` + `Channels` が `start_engine` の戻り値。`ConsensusConfig` + `ValueSyncConfig` + `ValuePayload` が `OpenHlConfig` に埋め込む config 型。`Keypair` は libp2p の keypair 型。`PrivateKey`/`PublicKey` は L7 以来使っている Ed25519 型。`Sha256` は address 導出用。
+このファイルに必要な全表面だ。一度眺める価値がある: `Node`、`NodeConfig`、`NodeHandle` がこれから impl する 3 つの Malachite trait。`EngineHandle` + `Channels` が `start_engine` の戻り値。`ConsensusConfig` + `ValueSyncConfig` + `ValuePayload` が `OpenHlConfig` に埋め込む config 型。`Keypair` は libp2p の keypair 型。`PrivateKey`/`PublicKey` は L7 以来使っている Ed25519 型。`Sha256` は address 導出用だ。
 
 次に `OpenHlConfig`:
 
@@ -207,9 +207,9 @@ impl NodeConfig for OpenHlConfig {
 
 3 つのピース:
 
-- struct は `ConsensusConfig` + `ValueSyncConfig` をラップし、`moniker` (ログ用 validator のニックネーム) を追加。`consensus` の `#[serde(flatten)]` は consensus フィールドを親に inline する — ディスクへシリアライズ時、ユーザーには `[consensus]` セクションのキーが top level に見え、`consensus.` の下にネストされない。
-- `new()` は重要な選択を 1 つ強制する: `value_payload: ValuePayload::ProposalOnly`。これは **必ず** `Context::ProposalPart = OpenHlProposalPart` (unit struct) と合致しなければならない。誤って `ValuePayload::PartsOnly` を設定すると、エンジンはストリームされる proposal parts を期待し、unit-struct な `ProposalPart` はエンジンが送るものを満たせない。これは構築時に強制する方が後でデバッグするより簡単なタイプの不変条件。
-- `NodeConfig` impl は 3 個の自明な accessor。trait は、Malachite が親のレイアウトを知らずに sub-config を取り出せるようにあるだけ。
+- struct は `ConsensusConfig` と `ValueSyncConfig` をラップし、`moniker` (ログ用の validator ニックネーム) を追加する。`consensus` の `#[serde(flatten)]` は consensus フィールドを親に inline する — ディスクへシリアライズしたとき、ユーザーには `[consensus]` セクションのキーが top level に見え、`consensus.` の下にネストされなくなる。
+- `new()` は重要な選択を 1 つ強制する: `value_payload: ValuePayload::ProposalOnly`。これは `Context::ProposalPart = OpenHlProposalPart` (unit struct) と **必ず** 合致しなければならない。誤って `ValuePayload::PartsOnly` を設定すると、エンジンはストリームされる proposal parts を期待するが、unit-struct の `ProposalPart` ではエンジンが送るものを満たせない。これは、後でデバッグするより構築時に強制するほうが簡単な種類の不変条件だ。
+- `NodeConfig` impl は 3 個の自明な accessor。trait は、Malachite が親のレイアウトを知らずに sub-config を取り出せるようにするためだけに存在する。
 
 ### Step 3: `OpenHlGenesis` と `OpenHlPrivateKeyFile`
 
@@ -253,10 +253,10 @@ impl std::fmt::Debug for OpenHlPrivateKeyFile {
 
 2 つの型:
 
-- **`OpenHlGenesis`** — unit struct。v0 では genesis content がない (allocation なし、ブート時の precompile 登録なし — それらは Module 6 で)。Validator set は genesis ではなく `start_engine` 経由で直接渡す。OpenHL が real genesis format を持つようになったら、これが `load_genesis()` がデシリアライズする型になる。
-- **`OpenHlPrivateKeyFile`** — 32 バイトの private key の wire-friendly wrapper。`PrivateKey` 自体 (from `malachitebft_signing_ed25519`) はデフォルトで `Serialize`/`Deserialize` を impl していない; wrapper が impl し、`from_private_key` / `into_private_key` の変換は明示的。**手書き `Debug` impl** はバイトを redact する — `{:?}` で実 private key をログに出力するのは重大なセキュリティバグ。`[redacted]` トークンが慣習。
+- **`OpenHlGenesis`** — unit struct。v0 では genesis に乗せるコンテンツがない (allocation なし、ブート時の precompile 登録なし — それらは Module 6 で扱う)。Validator set は genesis ではなく `start_engine` 経由で直接渡す。OpenHL が real な genesis format を持つようになったら、これが `load_genesis()` がデシリアライズする型になる。
+- **`OpenHlPrivateKeyFile`** — 32 バイトの private key の wire-friendly wrapper だ。`PrivateKey` 自体 (`malachitebft_signing_ed25519` 由来) はデフォルトで `Serialize`/`Deserialize` を impl していない。wrapper が impl し、`from_private_key` / `into_private_key` での変換は明示的に行う。**手書きの `Debug` impl** はバイトを redact する — `{:?}` で実 private key がログに出てしまうのは重大なセキュリティバグだ。`[redacted]` トークンが慣習になっている。
 
-> 🛑 **やりがちな勘違い。** 「なぜ `#[derive(Debug)]` ではダメ?」 **デフォルト derive される `Debug` は `[u8; 32]` の 32 バイト全部を print するから。** 誰かが `OpenHlPrivateKeyFile` を別の `Debug`-derive 構造体でラップしてログに出すと、key が stderr / log file / Sentry にリークする。`[redacted]` 付き手書き `Debug` なら、意図的に変更しない限りこれは起こりえない。**Private key はパスワードと同等に扱う — 絶対に print させない。**
+> 🛑 **やりがちな勘違い。** 「なぜ `#[derive(Debug)]` ではダメなのか?」 **デフォルトで derive される `Debug` は `[u8; 32]` の 32 バイト全部を print するからだ。** 誰かが `OpenHlPrivateKeyFile` を別の `Debug`-derive 構造体でラップしてログに出すと、key が stderr / log file / Sentry にリークする。`[redacted]` 付きの手書き `Debug` なら、意図的に変更しない限りこれは起こりえない。**Private key はパスワードと同等に扱い、絶対に print させない。**
 
 ### Step 4: `OpenHlNodeHandle` — `start()` が返すもの
 
@@ -304,13 +304,13 @@ impl NodeHandle<OpenHlContext> for OpenHlNodeHandle {
 ハンドルは 2 つを所有する:
 
 - **`engine: EngineHandle`** — spawn された actor system に対する Malachite のハンドル。`actor` (ractor の `ActorCell`) と `handle` (tokio task handle) を持つ。`kill()` は両方をクリーンに tear down する。
-- **`channels: Mutex<Option<Channels<OpenHlContext>>>`** — アプリケーション側のエンドポイント。エンジンが `AppMsg<OpenHlContext>` を我々に送り、我々が `AppReply<OpenHlContext>` を返す。`Mutex<Option<...>>` なのは、`take_channels()` が app loop に 1 回だけ渡せるようにするため — 2 回目の呼び出しは `None` を返し「もう消費済み」と知らせる。
+- **`channels: Mutex<Option<Channels<OpenHlContext>>>`** — アプリケーション側のエンドポイント。エンジンが `AppMsg<OpenHlContext>` を送ってきて、こちらが `AppReply<OpenHlContext>` を返す。`Mutex<Option<...>>` にしているのは、`take_channels()` で app loop に 1 回だけ渡せるようにするためだ — 2 回目の呼び出しは `None` を返して「もう消費済み」と知らせる。
 
-**なぜ `tokio::sync::Mutex` で `std::sync::Mutex` ではない?** `take_channels()` が `async` で、ロックが `.await` 境界を跨いで保持されるから。`std::sync::Mutex` は executor スレッド全体をブロックしてしまう; `tokio::sync::Mutex` は協調的に yield する。
+**なぜ `std::sync::Mutex` ではなく `tokio::sync::Mutex` を使うのか?** `take_channels()` が `async` で、ロックが `.await` 境界をまたいで保持されるからだ。`std::sync::Mutex` だと executor スレッド全体をブロックしてしまう。`tokio::sync::Mutex` は協調的に yield する。
 
-`NodeHandle` impl はこの段階ではほぼ placeholder:
-- `subscribe()` は **新規** `TxEvent::subscribe()` を返す — producer が attach されていない空のイベントストリーム。L10 で本物を配線する。
-- `kill()` は本物 — actor cell を kill し tokio task を abort する。これが `start_engine_smoke_spawns_and_kills` で exercise されるもの。
+`NodeHandle` impl はこの段階ではほぼ placeholder だ:
+- `subscribe()` は **新規** の `TxEvent::subscribe()` を返す — producer が attach されていない空のイベントストリームだ。L10 で本物を配線する。
+- `kill()` は本物だ — actor cell を kill し、tokio task を abort する。これが `start_engine_smoke_spawns_and_kills` で exercise される。
 
 ### Step 5: `OpenHlNode` struct + `Node` impl
 
@@ -425,11 +425,11 @@ impl Node for OpenHlNode {
 }
 ```
 
-これが load-bearing なブロック。walk-through:
+これが load-bearing なブロックだ。順に見ていく:
 
-**struct** は 4 つを持つ: private key、validator set、home dir、moniker。これらは config-reload では変わらない長命なフィールド。
+**struct** は 4 つを持つ: private key、validator set、home dir、moniker。これらは config-reload では変わらない長命なフィールドだ。
 
-**6 個の関連型** は各ハンドシェイクスロットの具象型を宣言する:
+**6 個の関連型** は、各ハンドシェイクスロットの具象型を宣言する:
 - `Context = OpenHlContext` — Malachite が他をすべて typecheck するのに使う
 - `Config = OpenHlConfig` — `load_config()` の戻り値
 - `Genesis = OpenHlGenesis` — `load_genesis()` の戻り値
@@ -453,7 +453,7 @@ impl Node for OpenHlNode {
 | `start` | エンジン spawn | `start_engine` を 7 引数で呼び、戻り値を `OpenHlNodeHandle` にラップ |
 | `run` | App loop を回す | **L9 では未実装** — L10 を指すエラーを返す |
 
-**`start()` メソッドがハイライト。** `start_engine` を以下で呼ぶ:
+**`start()` メソッドがハイライトだ。** `start_engine` を以下で呼ぶ:
 - context (`OpenHlContext` — unit struct)
 - node 自身 (`self.clone()`)
 - config (`cfg`)
@@ -461,11 +461,11 @@ impl Node for OpenHlNode {
 - 初期 height (`Some(OpenHlHeight::INITIAL)`)
 - validator set (`validator_set`)
 
-`start_engine` が返すもの: `(Channels<OpenHlContext>, EngineHandle)`。これらを `OpenHlNodeHandle` にラップして返す。
+`start_engine` の戻り値は `(Channels<OpenHlContext>, EngineHandle)` だ。これらを `OpenHlNodeHandle` にラップして返す。
 
-**なぜ `run()` は未実装?** Malachite の `Node::run` は `start()` と app loop を 1 個の async future にまとめる想定だから。App loop は L10 まで存在しないので、L10 を指すエラーを返す。L10 完了後、`run()` は: `start()` を呼び、channels を取り、app loop を回し、終了を await、という形になる。
+**なぜ `run()` は未実装なのか?** Malachite の `Node::run` は `start()` と app loop を 1 個の async future にまとめる想定だからだ。App loop は L10 まで存在しないので、L10 を指すエラーを返しておく。L10 完了後の `run()` は、`start()` を呼び、channels を取り、app loop を回して終了を await する、という形になる。
 
-> 🛑 **やりがちな勘違い。** 「なぜ `start()` は codec を 2 回取る?」 **エンジンが WAL 用と Network gossip 用に別々の codec スロットを持つから。** 別の型でもよい — 例えば WAL は bincode、Network は protobuf。我々のケースでは両方 `OpenHlCodec` だが、API は同じだと仮定しない。別々に渡すことで一方だけを swap できる。
+> 🛑 **やりがちな勘違い。** 「なぜ `start()` は codec を 2 回取るのか?」 **エンジンが WAL 用と Network gossip 用に別々の codec スロットを持つからだ。** 別の型でも構わない — 例えば WAL は bincode、Network は protobuf でもよい。こちらのケースでは両方 `OpenHlCodec` だが、API は同一だと仮定しない。別々に渡すことで、一方だけを差し替えられる。
 
 ### Step 6: `node.rs` を `lib.rs` に配線
 
@@ -560,14 +560,14 @@ mod tests {
 
 テスト 4 個:
 
-1. **`private_key_file_round_trips`** — key を generate し、`OpenHlPrivateKeyFile` にラップ、unwrap、byte 等価を assert。Wire format が lossless であることを証明。
-2. **`load_config_sets_proposal_only_payload_and_ephemeral_listen_addr`** — node を構築し、`load_config()` を呼び、2 つを検証: `value_payload == ProposalOnly` (構築時に強制する不変条件) と `listen_addr` がエフェメラル local socket であること。Config drift を catch する。
-3. **`get_address_matches_runner_derivation`** — 同じ address を 2 通りで導出する (1 度は trait method 経由、1 度は SHA-256 ロジックを inline)。一致を assert。誰かが片方だけ変えたら検知する。
-4. **`start_engine_smoke_spawns_and_kills`** — capstone。`#[tokio::test(flavor = "multi_thread", worker_threads = 2)]` を使うのはエンジンが multi-threaded runtime を必要とするから (複数 actor を spawn)。手順: single-validator node を構築、`node.start().await` を呼ぶ、channels handle を poke (1 度目 `Some`、2 度目 `None`)、`kill()` を呼ぶ。**これが pass すれば、自分のコードが動く BFT エンジンになっている。**
+1. **`private_key_file_round_trips`** — key を generate し、`OpenHlPrivateKeyFile` にラップ、unwrap し、byte 等価を assert する。Wire format が lossless であることを証明する。
+2. **`load_config_sets_proposal_only_payload_and_ephemeral_listen_addr`** — node を構築し、`load_config()` を呼び、2 つを検証する: `value_payload == ProposalOnly` (構築時に強制した不変条件) と、`listen_addr` がエフェメラルな local socket であること。Config drift を catch する。
+3. **`get_address_matches_runner_derivation`** — 同じ address を 2 通りで導出する (1 度は trait method 経由、1 度は SHA-256 ロジックを inline で書く)。両者が一致することを assert する。誰かが片方だけ変えたら検知できる。
+4. **`start_engine_smoke_spawns_and_kills`** — capstone だ。`#[tokio::test(flavor = "multi_thread", worker_threads = 2)]` を使うのは、エンジンが multi-threaded runtime を要求する (複数 actor を spawn する) からだ。手順は次のとおり: single-validator node を構築し、`node.start().await` を呼び、channels handle を poke (1 度目で `Some`、2 度目で `None`)、`kill()` を呼ぶ。**これが pass すれば、自分のコードが動く BFT エンジンになっている。**
 
-Smoke test の wall-clock はおおよそ **0.02 秒**。大部分は libp2p がローカル listener を立ち上げる時間 — tcp/0 のエフェメラルポートでも、libp2p のネゴシエーションには固定コストがある。
+Smoke test の wall-clock はおおよそ **0.02 秒**。大部分は libp2p がローカル listener を立ち上げる時間だ — tcp/0 のエフェメラルポートでも、libp2p のネゴシエーションには固定コストがある。
 
-> 🛑 **やりがちな勘違い。** 「なぜ `flavor = 'multi_thread'`?」 **エンジンが複数 actor をそれぞれの task で spawn するから。** Single-threaded runtime は全部 1 スレッドで回せる — が、エンジン内部に single-thread だと deadlock する `block_on` パターンがある。Multi-thread runtime で回避。**API レベルでは見えないが、テスト失敗レベルでは致命的な詳細。**
+> 🛑 **やりがちな勘違い。** 「なぜ `flavor = 'multi_thread'` なのか?」 **エンジンが複数 actor をそれぞれの task として spawn するからだ。** Single-threaded runtime でも 1 スレッドに全部回せる — だが、エンジン内部に single-thread だと deadlock する `block_on` パターンがある。Multi-thread runtime で回避する。**API レベルでは見えないが、テスト失敗レベルでは致命的な詳細だ。**
 
 ## テスト
 
@@ -603,25 +603,25 @@ test node::tests::start_engine_smoke_spawns_and_kills ... ok
 test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-Smoke test は multi-thread runtime のセットアップで最後に走る。
+Smoke test は multi-thread runtime のセットアップが入るので、最後に走る。
 
 よくあるエラーと対処:
 
-- **`error[E0432]: unresolved import 'informalsystems_malachitebft_app_channel'`** — Cargo.toml に `app-channel` がない。Step 1 を再確認。
+- **`error[E0432]: unresolved import 'informalsystems_malachitebft_app_channel'`** — Cargo.toml に `app-channel` が無い。Step 1 を再確認。
 - **`error[E0277]: PrivateKey: Deserialize is not satisfied`** — `signing-ed25519` の `serde` feature が抜けている。Step 1 (`features = ["rand", "serde"]`) を再確認。
-- **smoke test が永久にハングする** — 普通は `flavor = "current_thread"` (`#[tokio::test]` のデフォルト) が原因。Step 7 を再確認: 属性は `#[tokio::test(flavor = "multi_thread", worker_threads = 2)]` でなければならない。
-- **`error: Keypair::ed25519_from_bytes expected mutable bytes`** — バージョン不一致。libp2p の `Keypair::ed25519_from_bytes` のシグネチャはバージョンによって変わる; workspace pin は `informalsystems-malachitebft-app` の re-export と揃える必要がある。
-- **`Address derivation does not match`** — `get_address` がテストの helper と一致しない。両方とも `SHA-256(pubkey)` の最後の 20 バイト — slice `[12..32]` — を使う必要がある。
+- **smoke test が永久にハングする** — 普通は `flavor = "current_thread"` (`#[tokio::test]` のデフォルト) が原因だ。Step 7 を再確認: 属性は `#[tokio::test(flavor = "multi_thread", worker_threads = 2)]` でなければならない。
+- **`error: Keypair::ed25519_from_bytes expected mutable bytes`** — バージョン不一致だ。libp2p の `Keypair::ed25519_from_bytes` のシグネチャはバージョンによって変わる。workspace pin は `informalsystems-malachitebft-app` の re-export と揃える必要がある。
+- **`Address derivation does not match`** — `get_address` がテストの helper と一致していない。両方とも `SHA-256(pubkey)` の最後の 20 バイト (slice `[12..32]`) を使う必要がある。
 
 ## 設計の振り返り
 
 3 つの load-bearing な決定:
 
-1. **`OpenHlNode` はハンドシェイクインターフェースであり、ランタイムではない。** Struct は長命なフィールド (key、validator set、home dir、moniker) を持つ。chain を **走らせ** ない。ランタイムは `OpenHlNodeHandle` (engine + channels) にあり、`start()` から返る。**構築と実行は別のライフサイクルステージ** なので、別の型に住む。
+1. **`OpenHlNode` はハンドシェイクインターフェースであって、ランタイムではない。** struct は長命なフィールド (key、validator set、home dir、moniker) を持つ。chain を **走らせ** たりはしない。ランタイムは `OpenHlNodeHandle` (engine + channels) にあり、`start()` から返る。**構築と実行は別のライフサイクルステージ** なので、別の型に住まわせる。
 
-2. **Address 導出は `get_address` に集約。** L6 のセットアップコードの runner で `SHA-256(pubkey)[12..32]` を使ったとき、**同じ導出** だった。テスト `get_address_matches_runner_derivation` がそれらが同一であることを assert するので、将来のリファクタで一方だけがサイレントに drift できない。**集約 + 検証テスト は重複に毎回勝つ。**
+2. **Address 導出は `get_address` に集約する。** L6 のセットアップコードで runner が `SHA-256(pubkey)[12..32]` を使ったときと **同じ導出** だ。テスト `get_address_matches_runner_derivation` が両者の同一性を assert するので、将来のリファクタで一方だけがサイレントに drift することはない。**集約 + 検証テスト は重複に毎回勝つ。**
 
-3. **`run()` は次のレッスンを指すエラーを返す。** `unimplemented!()` (panic) や `todo!()` (これも panic) ではなく、`eyre::Result::Err("not yet implemented (L10)")` は **型安全な placeholder**。`run()` を呼ぶコードは「どこを見るべきか」を指すメッセージ付きで graceful に失敗する。**これはプルリク、コードレビュー、放置されたタブを越えて生き残るタイプの目印。**
+3. **`run()` は次のレッスンを指すエラーを返す。** `unimplemented!()` (panic) や `todo!()` (これも panic) ではなく、`eyre::Result::Err("not yet implemented (L10)")` を返すのは **型安全な placeholder** だ。`run()` を呼ぶコードは、「どこを見るべきか」を指すメッセージ付きで graceful に失敗する。**これはプルリク、コードレビュー、放置されたタブを越えて生き残るタイプの目印だ。**
 
 ## 答え合わせ
 
@@ -633,7 +633,7 @@ diff -u ~/code/my-openhl/crates/consensus/Cargo.toml ./crates/consensus/Cargo.to
 diff -u ~/code/my-openhl/crates/consensus/src/lib.rs ./crates/consensus/src/lib.rs
 ```
 
-`d59d6cf` の参照には 310 行の `node.rs` が含まれる。`Node` impl のメソッド (合計 12)、struct レイアウト、smoke test は厳密に一致するべき。Doc コメントと細かい言い回しは個人差可。
+`d59d6cf` の参照には 310 行の `node.rs` が含まれる。`Node` impl のメソッド (合計 12)、struct レイアウト、smoke test は厳密に一致するはず。Doc コメントと細かい言い回しは個人差があってよい。
 
 戻る:
 
@@ -643,21 +643,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: validator set が node の中にあるのに、なぜ `start_engine` は node と validator set の両方を要求する?**
-エンジンが node の内部に手を伸ばさないから。Node は多くのフィールド (path、moniker、key 等) を持つが、validator-set election には関係ない。`start_engine` が validator set を明示的に受け取るので、エンジンは自分の node の具体的なフィールドレイアウトを知らなくてもよい。`Node::load_config()` と同じ関心の分離の原則。
+**Q: validator set が node の中にあるのに、なぜ `start_engine` は node と validator set の両方を要求するのか?**
+エンジンが node の内部に手を伸ばさないようにしているからだ。Node は多くのフィールド (path、moniker、key など) を持つが、validator-set election にはそれらは関係ない。`start_engine` が validator set を明示的に受け取れば、エンジンは node の具体的なフィールドレイアウトを知らずに済む。`Node::load_config()` と同じ関心の分離の原則だ。
 
-**Q: コンパイル時アサーションが証明しないものを smoke test は何を証明する?**
-L8 のコンパイル時アサーションは `OpenHlCodec: WalCodec + ConsensusCodec + SyncCodec` を証明した。Smoke test は **runtime** パス — actor spawning、channel allocation、libp2p binding、kill propagation — が end-to-end で実際に動くことを証明する。型安全性は必要条件だが十分条件ではない; テストは「spawn deadlock」「最初のメッセージでエンジンが panic する」など型では catch できないことを catch する。
+**Q: コンパイル時アサーションが証明しないことを、smoke test は何を証明するのか?**
+L8 のコンパイル時アサーションは `OpenHlCodec: WalCodec + ConsensusCodec + SyncCodec` を証明した。Smoke test は **runtime** パス — actor spawning、channel allocation、libp2p binding、kill propagation — が end-to-end で実際に動くことを証明する。型安全性は必要条件だが十分条件ではない。テストは「spawn deadlock」や「最初のメッセージでエンジンが panic する」など、型では catch できないことを catch する。
 
 **Q: `EngineHandle` と `NodeHandle` の違いは?**
-`EngineHandle` (Malachite から) は spawn された actor system への低レベルハンドル — actor cell、tokio task handle。`NodeHandle` (自分の trait) は Malachite が「これはまだ生きているか? イベントを subscribe してくれ。kill しろ。」と尋ねるための高レベル抽象。自分の `OpenHlNodeHandle` は `NodeHandle<OpenHlContext>` を impl し、内部に `EngineHandle` を持つ。2 層あり、扱うのは 1 つだけ。
+`EngineHandle` (Malachite 由来) は、spawn された actor system への低レベルハンドルだ — actor cell と tokio task handle を持つ。`NodeHandle` (自前の trait) は、Malachite が「これはまだ生きているか? イベントを subscribe してくれ。kill しろ」と尋ねるための高レベル抽象だ。自前の `OpenHlNodeHandle` は `NodeHandle<OpenHlContext>` を impl し、内部に `EngineHandle` を持つ。2 層あるが、扱うのは 1 つだけだ。
 
-**Q: なぜ `take_channels` は単に channels を削除せず `Option<Channels<...>>` を使う?**
-`take_channels` は **外側から** 呼ばれるから — app loop が消費したい。完全に削除するには mutable 参照かハンドル自体の move が必要。`Mutex<Option<...>>` なら app loop は共有参照 (`&self`) 経由で呼べ、channels を 1 度取得し、以降の呼び出しは `None` を見る — 「もう取った」というクリーンなシグナル。
+**Q: なぜ `take_channels` は単に channels を削除せず、`Option<Channels<...>>` を使うのか?**
+`take_channels` は **外側から** 呼ばれるからだ — app loop が消費したい。完全に削除するには mutable 参照かハンドル自体の move が必要になる。`Mutex<Option<...>>` なら app loop は共有参照 (`&self`) 経由で呼べ、channels を 1 度取得し、以降の呼び出しは `None` を見る — 「もう取った」というクリーンなシグナルになる。
 
 ## 次のレッスン (L10)
 
-エンジンが動く状態になった。だが — 致命的に — **エンジンが我々にメッセージを送っているのに我々は無視している**。Actor system は parked 状態で、app loop が `Channels<OpenHlContext>` から消費して `AppMsg::ProposeValue`, `AppMsg::Decided` などに応答するのを待っている。L10 で app loop を実装する: channel に対する `tokio::select` + state struct + エンジンメッセージを `InMemoryEvmBridge` にルートするハンドラ。L10 完了で `cargo test first_block_via_engine_actors` が full engine pipeline 経由で実 block を produce する。
+エンジンは動く状態になった。だが — 致命的に — **エンジンがメッセージを送ってきているのに、こちらは無視している。** Actor system は parked 状態で、app loop が `Channels<OpenHlContext>` から消費し、`AppMsg::ProposeValue` や `AppMsg::Decided` などに応答するのを待っている。L10 で app loop を実装する: channel に対する `tokio::select` + state struct + エンジンメッセージを `InMemoryEvmBridge` にルートするハンドラ。L10 完了で、`cargo test first_block_via_engine_actors` がフルな engine pipeline 経由で実 block を produce する。
 ````
 
 ---

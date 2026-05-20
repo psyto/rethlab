@@ -26,23 +26,23 @@
 cargo test -p openhl-evm --release
 ```
 
-…が 47 tests を通る（1 新規）。L8 の doc コメントで述べた「fill が discard される」ギャップが閉じる：
+上記の実行結果が 47 tests を通る（1 つ新規）。L8 の doc コメントで述べた「fill を捨てている」というギャップが閉じる：
 
-- **`FILL_SINK` static を追加** — `CLOB_STATE` と並行、`Option<Arc<Mutex<Vec<Fill>>>>` を保持。
-- **`install_fill_sink` / `uninstall_fill_sink` モジュール関数** — public、`install_clob` / `uninstall_clob` パターンをミラー。
-- **`place_order` を拡張** — `let submit_result = book.submit(...)`（前は `_result`）。`drop(book)` の後、sink が install されていれば**生まれた fill を push** する。
-- **`LiveRethEvmBridge::pending_fills`** が `Mutex<Vec<Fill>>` から `Arc<Mutex<Vec<Fill>>>` に変わる。Bridge の `new()` が `install_fill_sink(Arc::clone(&pending_fills))` を `install_clob` と並んで呼ぶ。
-- **新しい unit test** `place_order_routes_fills_to_installed_sink` — maker/taker のクロスを実行、sink が fill を受け取ることを検証。
+- **`FILL_SINK` static を追加** — `CLOB_STATE` と対になる位置に置き、`Option<Arc<Mutex<Vec<Fill>>>>` を保持する。
+- **モジュール関数 `install_fill_sink` / `uninstall_fill_sink`** を追加 — どちらも public で、`install_clob` / `uninstall_clob` パターンをそのまま鏡写しにする。
+- **`place_order` を拡張** — `let submit_result = book.submit(...)`（以前は `_result`）に変え、`drop(book)` のあとで、sink が install されていれば **生まれた fill を push する**。
+- **`LiveRethEvmBridge::pending_fills`** を `Mutex<Vec<Fill>>` から `Arc<Mutex<Vec<Fill>>>` に変更する。bridge の `new()` が `install_clob` と並んで `install_fill_sink(Arc::clone(&pending_fills))` を呼ぶ。
+- **新しい unit test** `place_order_routes_fills_to_installed_sink` を追加 — maker/taker のクロスを実行し、sink が fill を受け取ることを検証する。
 
-L9 の後、precompile と bridge はもはや**書き込み側で独立**ではない。EVM 経由で発注された order が生む fill は、bridge 側の `submit_order` が書く同じ `pending_fills` キューに流れる。次の `build_payload` がそれを見る。
+L9 を終えると、precompile と bridge はもはや **書き込み側でも独立ではない**。EVM 経由で発注された order が生んだ fill は、bridge 側の `submit_order` が書き込むのと同じ `pending_fills` キューに流れる。次の `build_payload` がそれを拾う。
 
 ## おさらい
 
-L8 で Stage 9c proper を閉じた：`place_order` が book に書くようになり、`place_order → read_best_bid` ラウンドトリップが証明された。だが L8 の doc コメントはギャップを名指した：
+L8 で Stage 9c 本体を閉じた：`place_order` が book に書き込むようになり、`place_order → read_best_bid` のラウンドトリップが証明された。だが L8 の doc コメントは、残されたギャップを次のように明示している：
 
 > Side note: the fills returned by `Book::submit` are discarded here. Production-shape integration would route them through the bridge's `pending_fills` so they reach the next `build_payload`.
 
-そのギャップは意図的 — Stage 9c は diff を集中させるためそれなしで出した。Stage 9c+ がそれを閉じる。
+このギャップは意図的なものだ — Stage 9c は diff を集中させるために、あえてこれを伴わずに出荷した。それを閉じるのが Stage 9c+ だ。
 
 ## プラン
 
@@ -59,9 +59,9 @@ L8 で Stage 9c proper を閉じた：`place_order` が book に書くように�
 6. **`pending_fills` フィールド型を変更** — `Mutex<Vec<Fill>>` から `Arc<Mutex<Vec<Fill>>>` へ。
 7. **`new()` を更新** — `pending_fills` を Arc として bind、既存の `install_clob` の隣で `install_fill_sink(Arc::clone(&pending_fills))` を呼ぶ。
 
-> 🛑 **考えてみよう。** スクロール前に — `book.submit(...)` を呼んで返り値の fill を*捨てる* precompile（`place_order`）はすでにある。それらの fill が bridge に届くようにするために：(a) precompile が bridge を直接*呼ぶ*、(b) bridge が fill を*ポーリング*しに来る、(c) precompile が push する共有バッファを install する、の 3 つが考えられる。**なぜ (c) — 共有バッファパターン — がこれまで作ってきたアーキテクチャからほぼ強制されるか？** ヒント：(a) と (b) が何を「知っている」必要があるかを考える。
+> 🛑 **考えてみよう。** スクロールする前に — `book.submit(...)` を呼んで、その戻り値の fill を *捨てる* precompile（`place_order`）はすでにある。これらの fill を bridge に届けるためのアプローチは、ざっと 3 つ考えられる：(a) precompile が bridge を直接 *呼ぶ*、(b) bridge が fill を *ポーリング* しに来る、(c) precompile が push する共有バッファを install する。**なぜ (c) — 共有バッファのパターン — が、これまで組んできたアーキテクチャからほぼ強制されるのか?** ヒント：(a) と (b) がそれぞれ何を「知っている」必要があるかを考える。
 
-（答え：**Precompile は `fn` pointer であり、bridge への参照をキャプチャできない。** (a) は precompile に `&Bridge` を何らかの方法で渡す必要があり、これは `CLOB_STATE` global で解決したのと同じ「関数ポインタはキャプチャできない」問題。(b) は bridge が「ポーリングすべきだ」と知る必要 — 関心の分離違反。(c) は同じパターン：bridge がバッファを所有、precompile が global 経由で見る。**共有 CLOB state のアーキテクチャが整えば、共有 fill state は自然な拡張。**）
+（答え：**precompile は `fn` ポインタで、bridge への参照をキャプチャできない。** (a) は precompile に何らかの方法で `&Bridge` を渡す必要があるが、これは `CLOB_STATE` global で解決したのと同じ「関数ポインタはクロージャをキャプチャできない」問題だ。(b) は bridge が「ポーリングすべき」と知っている必要があり、関心の分離に反する。(c) は同じパターンになる：bridge がバッファを所有し、precompile は global 経由でそれを見る。**共有 CLOB state のアーキテクチャができている以上、共有 fill state はその自然な拡張だ。**）
 
 ## 手順
 
@@ -79,9 +79,9 @@ use openhl_clob::{AccountId, Book, Order, OrderId, OrderType, Price, Qty, Side};
 use openhl_clob::{AccountId, Book, Fill, Order, OrderId, OrderType, Price, Qty, Side};
 ```
 
-`Fill` は course 7 の `crates/clob/src/lib.rs` で定義された value 型。`price: Price` と `qty: Qty` のフィールドを持つ（その他 `maker_order_id`、`taker_order_id` 等もあるかもしれないが、下のテストで inspect するのは `price` と `qty` だけ）。Copy 可能なので、受け渡しは安価。
+`Fill` は course 7 の `crates/clob/src/lib.rs` で定義した値型だ。`price: Price` と `qty: Qty` のフィールドを持つ（他にも `maker_order_id` / `taker_order_id` などがあるかもしれないが、後のテストで参照するのは `price` と `qty` だけ）。Copy 可能なので、受け渡しは安価だ。
 
-`crates/evm/src/live_node.rs` では `Fill` は既に import 済み（既存の `pending_fills` フィールドで使われている）。ここではまだ変更なし。
+`crates/evm/src/live_node.rs` ではすでに `Fill` を import 済み（既存の `pending_fills` フィールドで使っている）なので、こちらは今は変更しない。
 
 ### Step 2: `FILL_SINK` + install/uninstall 関数を追加
 
@@ -110,15 +110,15 @@ pub fn uninstall_fill_sink() {
 }
 ```
 
-Static は `CLOB_STATE` の正確な構造的並行：
-- `CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>>` — 外側の install/uninstall ロック、内側の Book ロック。
-- `FILL_SINK: RwLock<Option<Arc<Mutex<Vec<Fill>>>>>` — 外側の install/uninstall ロック、内側のバッファロック。
+この static は `CLOB_STATE` と構造的に正確な並びになっている：
+- `CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>>` — 外側が install/uninstall 用のロック、内側が Book のロック。
+- `FILL_SINK: RwLock<Option<Arc<Mutex<Vec<Fill>>>>>` — 外側が install/uninstall 用のロック、内側がバッファのロック。
 
-同じライフサイクル、同じロック層化の理由（L4 §設計の振り返り 2）：稀な install/uninstall write には `RwLock`、頻繁なバッファ write には `Mutex`。
+ライフサイクルもロックの階層化の理由（L4 の「設計の振り返り 2」）も同じだ：install/uninstall は稀な write なので `RwLock`、バッファへの書き込みは頻繁な write なので `Mutex`、という構成。
 
-`install_fill_sink` と `uninstall_fill_sink` は CLOB 版をミラー：1 行の body、両方 `pub fn`。Doc コメントがライフサイクル（「`LiveRethEvmBridge::new` による」）を名指すので、コードを辿る読者は誰が呼ぶ予定かを知る。
+`install_fill_sink` と `uninstall_fill_sink` は CLOB 版のミラーだ：body は 1 行、いずれも `pub fn`。doc コメントでライフサイクル（「`LiveRethEvmBridge::new` から呼ばれる」）を明示してあるので、コードを追う読者は呼び出し側の予定を把握できる。
 
-> 🛑 **やりがちな勘違い。** 「CLOB と fill-sink を 1 つの global に束ねたら？例：`CLOB_STATE: Option<(Arc<Mutex<Book>>, Arc<Mutex<Vec<Fill>>>)>`」 **インストールのタイミング要件が違うから。** `read_best_bid` だけ exercise するテストは fill sink を install する必要がない。束ねると毎テストで両方を提供する羽目になる。**Global を直交に保てば、各テストが触るものだけ install できる。** 2 つの static のコストは記号的（uninstalled なら zero-runtime-cost）。利得は per-test 合成可能性。
+> 🛑 **やりがちな勘違い。** 「CLOB と fill-sink を 1 つの global にまとめてはどうか? たとえば `CLOB_STATE: Option<(Arc<Mutex<Book>>, Arc<Mutex<Vec<Fill>>>)>` のように」 — **install のタイミング要件が異なるからだ。** `read_best_bid` だけを exercise するテストは fill sink を install する必要がない。束ねると、毎テストで両方を準備しないといけなくなる。**global を直交に保てば、各テストは触るものだけを install できる。** static が 2 つあるコストは名前空間上のものだけで、uninstalled なら実行時コストはゼロだ。利得はテストごとの合成可能性。
 
 ### Step 3: `place_order` を fill push まで拡張
 
@@ -170,17 +170,17 @@ L8 の body：
     out[24..32].copy_from_slice(&order_id_val.to_be_bytes());
 ```
 
-3 つの変化：
+変化は 3 つ：
 
-1. **`_result` → `submit_result`。** L8 の設計振り返り（「`_result` は将来意図のマーカー」）の通り、今がその将来。アンダースコアが消える、binding が使われる。
-2. **`if !submit_result.fills.is_empty()` 早期回避。** Order が cross せず rest したとき（fill 生まず）、lock 取得をスキップ。Resting limit の一般ケース → fill-sink トラフィックなし。
-3. **`sink_state.as_ref().map(|sink| sink.lock()...extend(...))` パターン。** `current_best_bid` の read パターン（L4 Step 4）と同じ形：外側の read ロックを短く保持して内側の Arc にアクセス、次に内側の Mutex を取得。
+1. **`_result` から `submit_result` へ。** L8 の設計振り返り（「`_result` は将来の意図を示すマーカー」）で予告したとおり、いまがその「将来」だ。underscore が外れ、binding が実際に使われる。
+2. **`if !submit_result.fills.is_empty()` による早期回避。** order が cross せず rest しただけのとき（fill を生まないとき）、ロック取得をスキップする。limit を rest させる一般ケース → fill-sink トラフィックなし、となる。
+3. **`sink_state.as_ref().map(|sink| sink.lock()...extend(...))` パターン。** `current_best_bid` の read パターン（L4 の Step 4）と同じ形だ：外側の read ロックは短く保持して内側の Arc にアクセスし、続いて内側の Mutex を取得する。
 
-**`submit_result.fills.iter().copied()`** — `Fill` は `Copy` なので `.iter().copied()` で所有 fill のイテレータが得られる。`.into_iter()` より安価 — `submit_result` の他のフィールドを消費したくないから。**Copy で iterate するとソースが intact のまま。**
+**`submit_result.fills.iter().copied()`** — `Fill` は `Copy` なので、`.iter().copied()` で所有権付き fill の iterator が得られる。`.into_iter()` より安価 — `submit_result` の他のフィールドを消費したくないからだ。**Copy 経由で iterate すれば、ソースは無傷のまま保てる。**
 
-> 🛑 **考えてみよう。** `if !submit_result.fills.is_empty()` の guard を見る。これを外したら（無条件に FILL_SINK の read ロックを取って `as_ref()` を check）、挙動は変わる？
+> 🛑 **考えてみよう。** `if !submit_result.fills.is_empty()` の guard に注目してほしい。これを外して、無条件に FILL_SINK の read ロックを取って `as_ref()` をチェックする形にしたら、挙動は変わるか?
 
-（答え：**挙動は同じだが、fill なしのケースで性能が落ちる。** 限り注文を rest した毎 `place_order` 呼び出し — 一般ケース — が FILL_SINK の read ロックを取って何も push しないことを確認するだけになる。Guard はそれを短絡。**一般ケースの早期回避はタダで得られる勝利。** これは hot path — 不要な lock 取得のコストは積み重なる。）
+（答え：**挙動は同じだが、fill なしのケースで性能が落ちる。** 一般ケース — limit を rest させただけの `place_order` 呼び出し — のたびに、FILL_SINK の read ロックを取り、結局何も push しないことを確認するだけ、という処理を毎回繰り返すことになる。guard はそれを短絡してくれる。**一般ケースを早期に回避できるなら、それはタダで得られる勝利だ。** ここは hot path — 不要なロック取得のコストはじわじわ積み上がる。）
 
 ### Step 4: `place_order` doc コメントを更新
 
@@ -204,10 +204,10 @@ L8 の末尾段落：
 /// `read_best_bid`) but won't reach a payload.
 ```
 
-2 つ名指したこと：
+明示したのは 2 点：
 
-1. **「何が変わったか」の行** — 「Stage 9c+ (this commit)」。6 ヶ月後に読者がこの doc を読むと、どのバージョンのコードが何をしているか分かる。
-2. **Fallback セマンティクス** — 「sink が install されていなくても fill は生み出される」。テスト隔離に決定的：L8 のラウンドトリップテスト（sink を install しない）でも `place_order_then_read_best_bid_round_trips` が動くのは、sink の有無に関わらず fill が Book に届くから。**Fallback を doc に名指せば、fill を気にしないテストが sink を install せずに `place_order` を満たせる。**
+1. **「何が変わったか」を示す行** — 「Stage 9c+ (this commit)」。半年後にこの doc を読む人にも、どのバージョンのコードが何をしているかが分かる。
+2. **fallback セマンティクス** — 「sink が install されていなくても fill 自体は生まれる」。テスト分離の観点で決定的に重要だ。L8 のラウンドトリップテスト（sink を install しない）でも `place_order_then_read_best_bid_round_trips` が動くのは、sink の有無に関わらず fill が Book に届くからだ。**この fallback を doc で明示しておけば、fill を気にしないテストは sink を install せずに `place_order` だけで済ませられる。**
 
 ### Step 5: Unit test を追加
 
@@ -249,21 +249,21 @@ L8 の末尾段落：
     }
 ```
 
-テストの形：
+テストの形は次のとおり：
 
-1. **Setup** — `TEST_SERIALIZER` + CLOB と sink の両方を install。`sink`（Arc クローン）を inspect 用に保持。
-2. **Resting maker** — Buy @ 100、何もクロスしない（book は空）。**Zero fills**。Sink は空のまま。
-3. **Crossing taker** — Sell @ 100、resting Buy にクロス。Maker が book を出て、taker が full match → **ちょうど 1 つの Fill**。
-4. **Sink を inspect** — `clone()` で Vec を出してから assert（Mutex を保持しないで assert する）。Length、price、qty を検証。
-5. **Cleanup** — install 順の逆で両方 uninstall。
+1. **Setup** — `TEST_SERIALIZER` を取得し、CLOB と sink の両方を install する。`sink`（Arc クローン）は inspect 用に保持しておく。
+2. **resting maker** — Buy @ 100。何ともクロスしない（book は空）。**fill は 0 個**で、sink は空のまま。
+3. **crossing taker** — Sell @ 100。resting Buy にクロスする。maker が book から消え、taker は完全にマッチ → **fill がちょうど 1 つ** 生まれる。
+4. **sink を inspect** — `clone()` で Vec を取り出してから assert する（Mutex を握ったまま assert しない）。長さ、price、qty を検証する。
+5. **後始末** — install したのと逆の順で両方を uninstall する。
 
-**なぜ maker + taker のペア、単一 submit ではない？** `Book::submit` は新 order が既存 order と*クロス*したときのみ fill を生む。空 book への単独 submit は zero fill を生む。Routing logic をテストするには**少なくとも 1 つの fill が実際 route される必要**。Maker が rest、taker がクロス → 1 fill — 最小テストデータ。
+**なぜ単一の submit ではなく、maker + taker のペアにするのか?** `Book::submit` は、新規 order が既存 order と *クロス* したときにしか fill を生まない。空の book への単独 submit は fill を 0 個しか生まない。routing logic をテストするためには、**少なくとも 1 つの fill が実際に routing されている必要がある**。maker が rest し、taker がクロスする → fill 1 つ、というのが最小テストデータだ。
 
-> 🛑 **やりがちな勘違い。** 「Marketable Buy を、resting Sell がある book に submit するのでテストできないの？」 **できる、等価。Maker-Buy/Taker-Sell を選ぶのはそれが標準的な order-book 例だから。** 2 つ目が 1 つ目に対して marketable ならどっち向きでも動く。Pedagogical な要点は「クロスする 2 つの order が 1 つの fill を生む」 — 価格方向は incidental。
+> 🛑 **やりがちな勘違い。** 「marketable な Buy を、resting Sell のある book に submit してテストすればよいのでは?」 — **できる、等価だ。Maker-Buy / Taker-Sell を選んでいるのは、それが order-book の標準的な例だから。** 2 つ目の order が 1 つ目に対して marketable であれば、向きはどちらでも構わない。教育上のポイントは「クロスする 2 つの order が fill を 1 つ生む」ことで、価格方向は副次的だ。
 
-> 🛑 **考えてみよう。** CLOB は install するが sink は install せずクロスする order を発注したらどうなる？ ヒント：L8 の既存 `place_order_then_read_best_bid_round_trips` テストを見る。
+> 🛑 **考えてみよう。** CLOB は install するが sink は install せずに、クロスする order を発注したらどうなるか? ヒント：L8 の既存テスト `place_order_then_read_best_bid_round_trips` を見てみる。
 
-（答え：**Book 内で fill は生み出されるが、どこにも push されない — precompile の `if !submit_result.fills.is_empty()` guard は当たるが、`FILL_SINK.read()` は `None` を返すので内側ブロックが実行されない。** Order の book への on/off は正しく起きる。bridge への*流れ*だけが欠ける。これが doc コメントで名指した「単独テストでまだ動く」性質。L8 のラウンドトリップテストは sink を install しないが正しい best-bid 挙動を観測 — これに依存している。）
+（答え：**Book 内では fill が生まれるが、どこにも push されない** — precompile の `if !submit_result.fills.is_empty()` guard は当たる一方、`FILL_SINK.read()` は `None` を返すので、内側のブロックが実行されない。order が book に乗ったり外れたりする挙動は正しく起きる。欠けるのは bridge への *流れ* だけだ。これが doc コメントで明示した「単独テストでもなお動く」という性質だ。L8 のラウンドトリップテストは sink を install しないが、正しい best-bid 挙動を観測できる — その挙動はこの性質に依存している。）
 
 ### Step 6: `live_node.rs` — pending_fills を Arc に
 
@@ -297,7 +297,7 @@ pub struct LiveRethEvmBridge<P> {
 }
 ```
 
-Doc コメントがアーキテクチャの対称性を説明 — `pending_fills` と `clob` は両方とも shared-Arc パターン。型を辿って `Arc` を見た人は global がそこを指していることも知る。
+doc コメントでアーキテクチャの対称性を説明している — `pending_fills` も `clob` もどちらも shared-Arc パターンに従う。型を辿って `Arc` を見た人は、global がそこを指していることも併せて把握できる。
 
 ### Step 7: `LiveRethEvmBridge::new` を更新
 
@@ -353,13 +353,13 @@ Doc コメントがアーキテクチャの対称性を説明 — `pending_fills
     }
 ```
 
-3 つの変化：
+変化は 3 つ：
 
-1. **`let pending_fills = Arc::new(Mutex::new(Vec::new()));`** — Arc をローカル束縛、上の `let clob = ...` と同じ形。
-2. **`crate::precompiles::install_fill_sink(Arc::clone(&pending_fills));`** — precompile モジュールと Arc を共有。`install_clob` をミラー。
-3. **Struct literal の `pending_fills,`**（`Mutex::new(Vec::new())` をインラインで書かない） — ローカルを使うだけ。
+1. **`let pending_fills = Arc::new(Mutex::new(Vec::new()));`** — Arc をローカルに束縛する。上の `let clob = ...` と同じ形だ。
+2. **`crate::precompiles::install_fill_sink(Arc::clone(&pending_fills));`** — precompile モジュールと Arc を共有する。`install_clob` のミラー。
+3. **struct literal は `pending_fills,`** で済む（`Mutex::new(Vec::new())` をインラインで書かない） — ローカル変数をそのまま使えばよい。
 
-`self.pending_fills` を使う他の call site（例：`pending_fill_count()`、`build_payload` での drain）は引き続き動く — `Arc<Mutex<T>>` は `&Mutex<T>` に deref するので `self.pending_fills.lock()` は変更不要。L4 で `clob` を Arc 化したとき `submit_order` を動かし続けたのと同じ coercion。
+`self.pending_fills` を使う他の call site（`pending_fill_count()` や、`build_payload` での drain など）は引き続き動く — `Arc<Mutex<T>>` は `&Mutex<T>` に deref されるので、`self.pending_fills.lock()` のままで構わない。L4 で `clob` を Arc にしたときに `submit_order` がそのまま動き続けたのと同じ coercion だ。
 
 ## テスト
 
@@ -401,15 +401,15 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out
 
 ## 設計の振り返り
 
-4 点：
+立ち止まりたいポイントが 4 つ：
 
-1. **共有バッファパターンは一般化する。** L4 で CLOB に `Arc<Mutex<T>>` + プロセスグローバルパターンを導入。L9 がそれを fill に再利用。**アーキテクチャの primitive が整えば、bridge と precompile の間で共有する追加の state はバッファあたり ~20 行のコード。** L4 の抽象化への投資が複利で回る。
+1. **共有バッファのパターンは一般化する。** L4 で CLOB に対して「`Arc<Mutex<T>>` + プロセスグローバル」のパターンを導入し、L9 ではそれを fill に再利用した。**アーキテクチャの primitive がいったん揃えば、bridge と precompile の間で共有する追加 state は、バッファあたり ~20 行で済む。** L4 で抽象化に投資した分が複利で効いてくる。
 
-2. **異なる state はインストールライフタイムが異なる — 別々に保つ。** CLOB と FILL_SINK を 1 つの global に束ねると毎テストで両方を install しなければならない。直交な global = 直交な test setup。**テストが主な consumer のとき、関連 state の凝集度より直交なライフサイクル合成可能性のほうが重要。**
+2. **state ごとに install のライフタイムが違うなら、別々に分けておく。** CLOB と FILL_SINK を 1 つの global にまとめてしまうと、テストごとに両方を install しなければならなくなる。直交な global は、直交なテスト setup を可能にする。**テストが主な consumer になる場面では、関連 state の凝集度より、ライフサイクルを直交に合成できることのほうが重要だ。**
 
-3. **一般ケースの早期回避はタダ。** `if !submit_result.fills.is_empty()` がクロスせず rest した order の lock 取得をスキップ — 最も一般的なケース。Guard が hot path に分岐 1 つを足し、fill が空のとき RwLock 取得を節約。**Hot path で最も安価な最適化はしばしば支配的なケースの早期回避。**
+3. **一般ケースの早期回避はタダで効く。** `if !submit_result.fills.is_empty()` のおかげで、クロスせずに rest しただけの order — 最も多いケース — ではロック取得をスキップできる。guard は hot path に分岐を 1 つ足すだけだが、fill が空のときに RwLock の取得を節約できる。**hot path でもっとも安価な最適化は、たいていの場合「支配的なケースの早期回避」だ。**
 
-4. **フラグは doc コメントの中。** L8 の doc の「Side note: fills are discarded」は load-bearing — 将来の読者に「これは意図的なギャップで、見落としではない」と伝えた。L9 がギャップを閉じて doc を更新。**Doc 化されたギャップは半分修正、無 doc のギャップは見えない技術負債。**
+4. **フラグは doc コメントの中に置く。** L8 の doc の「Side note: fills are discarded」は load-bearing だった — 将来の読者に「これは意図的なギャップで、見落としではない」と伝えるための行だ。L9 でそのギャップを閉じ、doc も更新する。**ドキュメント化されたギャップは半分直したも同然、ドキュメント化されていないギャップは見えない技術負債になる。**
 
 ## 答え合わせ
 
@@ -430,21 +430,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: `place_order` が同時に呼ばれて両方とも fill を生むとどうなる？**
-両スレッドが FILL_SINK の read ロックを取得（非排他、OK）。両方とも同じ Arc 包みのバッファへの参照を得る。各々が内側 Mutex を `.lock()` — その取得がシリアライズ。**1 スレッドの fill が先に着く、次にもう 1 つ。順序は `submit` 呼び出し順に一致。何も失われない。** 標準 Mutex セマンティクス。
+**Q: `place_order` が同時に呼ばれて、両方とも fill を生んだらどうなる?**
+両方のスレッドが FILL_SINK の read ロックを取る（非排他なので OK）。どちらも同じ Arc に包まれたバッファへの参照を得る。それぞれが内側の Mutex を `.lock()` — そこで取得がシリアライズされる。**先に到着したスレッドの fill が入り、次にもう一方の fill が入る。順序は `submit` の呼び出し順と一致し、何も失われない。** 標準的な Mutex のセマンティクスのとおりだ。
 
-**Q: `place_order_routes_fills_to_installed_sink` がもっとシンプルなシナリオでなく maker-taker クロスをテストするのは？**
-Routing をテストするには fill が要るから。`Book::submit` は order が何もクロスしないとき 0 fill を返す — routing block を全く exercise しない。**Maker-taker のペアが fill を生む最小テストデータ。** よりシンプルなシナリオは routing logic を完全にスキップする。
+**Q: なぜ `place_order_routes_fills_to_installed_sink` は、もっと単純なシナリオではなく maker-taker のクロスでテストするのか?**
+routing をテストするには fill が必要だからだ。`Book::submit` は、order が何ともクロスしないときには fill を 0 個しか返さない — その場合、routing のブロックを exercise できない。**maker-taker のペアが、fill を生む最小のテストデータだ。** これより単純なシナリオでは、routing のロジックをまるごとスキップしてしまう。
 
-**Q: `submit_result` って厳密には何？ `Vec<Fill>` だけ？**
-`Book::submit` が返す struct（course 7 の CLOB crate で定義）。少なくとも `.fills: Vec<Fill>` フィールドがあり、その他もあるかも（`order_id_assigned`、`resting_qty` 等）。L9 では `.fills` だけ必要。残りは v0 では未使用。
+**Q: `submit_result` の正体は何か? `Vec<Fill>` だけ?**
+`Book::submit` が返す struct だ（course 7 の CLOB crate で定義した）。少なくとも `.fills: Vec<Fill>` というフィールドを持ち、他にもフィールド（`order_id_assigned` や `resting_qty` など）があるかもしれない。L9 で必要なのは `.fills` だけで、残りは v0 では未使用だ。
 
-**Q: Bridge の `build_payload` が `pending_fills` を drain するとき、両ソースの fill を原子的に drain する？**
-イエス。`pending_fills` は 1 つのバッファ（1 つの Mutex）— fill が `bridge.submit_order`（bridge 内の呼び出し）から来ても `place_order`（FILL_SINK 経由）から来ても変わらない。`build_payload` が `self.pending_fills.lock().unwrap().drain(..)` を呼ぶと、前回の drain 以降に push された全 fill を得る — EVM 発注も bridge 発注も、時系列で交互。**統一されたキュー = 統一された drain。**
+**Q: bridge の `build_payload` が `pending_fills` を drain するとき、両ソースの fill を原子的に drain するのか?**
+イエス。`pending_fills` は単一のバッファ（Mutex も 1 つ）だ — fill が `bridge.submit_order`（bridge 内部の呼び出し）由来か `place_order`（FILL_SINK 経由）由来かは関係ない。`build_payload` が `self.pending_fills.lock().unwrap().drain(..)` を呼ぶと、前回の drain 以降に push されたすべての fill が得られる — EVM 経由の発注も bridge 経由の発注も、時系列で交互に並ぶ形で含まれる。**統一されたキューには統一された drain で十分。**
 
 ## 次のレッスン（L10）
 
-L10 は**コースレベルのマイルストーン**：Stage 9d integration test `bridge_against_custom_evm_node_shares_clob_with_precompile`。`OpenHlExecutorBuilder` で Reth ノードを bootstrap、そのノードの provider に対して `LiveRethEvmBridge` を構築、`bridge.submit_order` で order を発注、`current_best_bid` で観測、次に **precompile 経由で `place_order` を呼んで** `bridge.pending_fill_count()` がインクリメントすることを検証。これが**すべて** — Module 1 の EVM bootstrap、Module 2 の read precompile、Module 3 の write precompile、Module 4 の FILL_SINK — が実際の Reth プロセス内で噛み合う証明。L10 後、openhl リファレンス実装は Stage 9d を閉じる。
+L10 はいよいよ **コースレベルのマイルストーン** だ：Stage 9d の integration test `bridge_against_custom_evm_node_shares_clob_with_precompile`。`OpenHlExecutorBuilder` で Reth ノードを bootstrap し、そのノードの provider に対して `LiveRethEvmBridge` を構築する。`bridge.submit_order` で order を発注し、`current_best_bid` で観測する。続いて **precompile 経由で `place_order` を呼び**、`bridge.pending_fill_count()` がインクリメントすることを検証する。これが **すべての要素** — Module 1 の EVM bootstrap、Module 2 の read precompile、Module 3 の write precompile、Module 4 の FILL_SINK — が、実際の Reth プロセス内で噛み合うことの証明になる。L10 を終えれば、openhl のリファレンス実装は Stage 9d を閉じる。
 ````
 
 ---

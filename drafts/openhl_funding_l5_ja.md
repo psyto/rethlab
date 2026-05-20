@@ -20,46 +20,46 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンを終えると：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…が 5 テストを通る（L4 から 4 + 新規 proptest 1）。Crate が得るもの：
+上記の実行結果が 5 テストを通る（L4 で書いた 4 つ + 新規 proptest 1 つ）。Crate に加わるのは：
 
-- **コードベース初の proptest** — `premium_is_antisymmetric_in_mark_index`。`mark` と `index` を swap すると premium の符号が反転する（mark = index のときは両方ゼロ）。Test run あたり 256 ランダム入力。
+- **コードベース初の proptest** — `premium_is_antisymmetric_in_mark_index`。`mark` と `index` を入れ替えると premium の符号が反転する（mark = index のときは両方ともゼロ）という property だ。テスト実行 1 回あたり 256 のランダム入力を投げる。
 
-だがこのレッスンのより大きな積荷は **conceptual、コードではない**。歩く内容：
+ただしこのレッスンの本丸は**コードではなく概念**の方だ。歩いていくのは：
 
-1. **なぜ panic = チェーン fork。** Panic した validator は halt、残りの validator はそれなしで前進。State が divergent。
-2. **なぜ wrap = チェーン fork。** 異なるコンパイラバージョンや build flag を持つ 2 validator が同じ overflow ポイントで*異なって*wrap しうる。Wrong value が correct value から divergent。
-3. **なぜ saturate は bounded behavior。** 全 validator が同じ input で同じ saturated value に合意。Fork なし。
-4. **`saturate_i128_to_i64` 境界ケース。** `i128::MAX → i64::MAX`、`i128::MIN → i64::MIN`。なぜ `unwrap_or` の closure が符号に依存するか、`i64::MAX` だけでなく。
+1. **panic = チェーン fork である理由。** Panic した validator は halt し、残りの validator はそれなしで前進する。State が乖離する。
+2. **wrap = チェーン fork である理由。** コンパイラバージョンや build flag が異なる 2 つの validator は、同じ overflow 地点で*別々に* wrap しうる。誤った値が正しい値から乖離する。
+3. **saturate が bounded behavior である理由。** すべての validator が同じ入力に対して同じ saturated 値に合意する。Fork は起きない。
+4. **`saturate_i128_to_i64` の境界ケース。** `i128::MAX → i64::MAX`、`i128::MIN → i64::MIN`。`unwrap_or` の closure が `i64::MAX` 固定ではなく、なぜ符号に依存する必要があるか。
 
-新関数なし。新テストコード ~5 行。**メンタルモデルがレッスン。**
+新規関数なし、新規テストコードは ~5 行。**メンタルモデルこそがレッスンの本体だ。**
 
 ## おさらい
 
-L4 後：
-- `compute_premium` が `i128` 中間値で符号付き premium を計算。
-- `saturate_i128_to_i64` が overflow を i64 境界に clamp。
-- 4 手書きトレーステストが関数の挙動を normal input で pin。
+L4 後の状態：
+- `compute_premium` が `i128` 中間値を使って符号付き premium を計算する。
+- `saturate_i128_to_i64` が overflow を i64 境界に clamp する。
+- 手書きトレーステスト 4 つが、normal な入力に対する関数の挙動を pin している。
 
-L4 のテストは pathological 入力（例：`MarkPrice(u64::MAX)`）を exercise せず、saturate helper を境界で exercise しない。L5 は両ギャップを哲学 + proptest で探る。
+L4 のテストでは pathological な入力（例：`MarkPrice(u64::MAX)`）を exercise していないし、saturate helper を境界で exercise してもいない。L5 では、その両ギャップを哲学と proptest で埋めにいく。
 
 ## プラン
 
-2 つの編集：
+編集は 2 つ：
 
-1. **`use proptest::prelude::*;` import を追加** — `compute.rs` のテストモジュールに。
-2. **`proptest! { ... }` ブロックを append** — antisymmetry property 付き。
+1. **`compute.rs` のテストモジュールに `use proptest::prelude::*;` を追加**する。
+2. **antisymmetry property を持つ `proptest! { ... }` ブロックを追加**する。
 
-プロダクションコード変更なし。
+プロダクションコードの変更はない。
 
-> 🛑 **考えてみよう。** スクロール前に — `compute_premium` の panic は validator を halt する。**なぜこれが単一ノード障害でなくチェーン fork？** ヒント：1 つが halt したとき他の validator が何をしているか考える。
+> 🛑 **考えてみよう。** スクロール前に — `compute_premium` で panic が起きれば validator は halt する。**なぜそれが単一ノード障害ではなく chain fork になるのか？** ヒント：1 つが halt したとき、他の validator が何をしているかを考えよ。
 
-（答え：**他の validator は halt したものなしで前進する。** Funding tick はすべての validator で deterministic な state update を生む。1 つが halt すると、network の quorum（典型的に 2/3+）が継続する。Halt した validator が reboot するまでに、chain head は何ブロックも先。Halt した validator は sync できない — halt block での local state が network の view と disagree。**Halt が history の 2 バージョンを生む：「panic 入力で」と「network の進んだ state で」。Validator は実質自分を network から fork off した。** Saturate は対照的に validator を lockstep のまま保つ。）
+（答え：**他の validator は、halt したノードを置き去りに前進していくからだ。** Funding tick はすべての validator で deterministic な state update を生む。1 つが halt しても、network の quorum（典型的には 2/3 以上）はそのまま動き続ける。Halt した validator が再起動する頃には、chain head は何ブロックも先に進んでいる。Halt した validator は sync できない — halt したブロックでの local state が network 側の view と食い違うからだ。**Halt によって history が 2 つに分かれる：「panic を踏んだ入力での history」と「network が進めた state での history」だ。Validator は事実上、自ら network から fork off したことになる。** これに対して saturate は、validator 同士を lockstep のまま保ってくれる。）
 
 ## 手順
 
@@ -73,9 +73,9 @@ L4 のテストは pathological 入力（例：`MarkPrice(u64::MAX)`）を exerc
 let scaled = diff * i128::from(RATE_SCALE);  // debug で overflow に panic
 ```
 
-Debug build で整数 overflow は panic。Panic を踏むスレッドは halt、validator の funding tick なら、validator の state machine は前進を止める。**ネットワークの残りは気づかず継続。** Halt した validator が restart するとき、panic block での world-view が network のものと一致しない。その時点以降、追加ブロックを検証できない — 計算したことのない state を参照していると見える。
+Debug build では整数 overflow が panic する。panic を踏んだスレッドは halt し、それが validator の funding tick だった場合、validator の state machine は前進を止める。**ネットワークの残りはそれに気づかずに進み続ける。** halt した validator を再起動した時点で、panic を踏んだブロックでの world-view は network 側のものと一致しない。それ以降、新しいブロックを検証できなくなる — 自分が計算した覚えのない state を参照しているように見えるからだ。
 
-実質：**1 validator が gone、だが不在は自分だけを破壊、ネットワークではない。** チェーンは 2 つの valid history を生むことで fork するのでなく、panic した validator が consensus から永久に落ちることで fork する。
+要するに：**validator 1 台がいなくなった、しかし不在によって壊れるのは自分自身だけで、ネットワーク側ではない。** チェーンが「2 つの valid な history を生む」形で fork するのではなく、panic した validator が consensus から永久に脱落するという形で fork する。
 
 #### Wrap（release build の `*`）
 
@@ -83,11 +83,11 @@ Debug build で整数 overflow は panic。Panic を踏むスレッドは halt�
 let scaled = diff * i128::from(RATE_SCALE);  // release で silent に wrap
 ```
 
-Release build で `*` は panic せず wrap。結果は `(diff * RATE_SCALE).wrapping_rem(2^128)` — *定義された*値だが、数学的に正しくない。
+Release build では `*` は panic せず wrap する。結果は `(diff * RATE_SCALE).wrapping_rem(2^128)` — 値としては*定義済み*だが、数学的には正しくない。
 
-**ハザード**：異なるコンパイラ最適化を持つ 2 validator が*異なって* wrap しうる。Compiler は associativity rule で operation を re-order できる、`(a * b) * c` と `a * (b * c)` は中間 overflow が異なるとき異なる wrap 結果を生みうる。両 validator が偶然同じに wrap しても、*wrong* value がこの tick で settle されるすべてのアカウントに伝播する。**全 validator が間違った答えに合意。** その後 raw input から funding を再計算する下流 client が disagree する。チェーンがレイヤー間の不整合で fork する。
+**ここでのハザード**：コンパイラの最適化が異なる 2 つの validator が、同じ overflow 地点で*別々の wrap 結果*を出しうる。コンパイラは結合則のもとで演算を並べ替えられるので、`(a * b) * c` と `a * (b * c)` が「中間で overflow が起きるか否か」次第で異なる wrap 結果になりうる。仮に両 validator が偶然同じように wrap したとしても、*誤った*値がその tick で settle されるすべてのアカウントに伝播する。**全 validator が間違った答えに合意してしまう。** さらに後段で raw input から funding を再計算する下流クライアントは、結果が一致しないと指摘する。レイヤー間の不整合でチェーンが fork する。
 
-*Release build* で wrap は silent — log なし、warning なし、event なし。**検出が最も難しいバグクラス：間違っているが consistent。**
+しかも *release build* での wrap は silent だ — log もなければ warning もない、イベントすら出ない。**検出が最も難しいクラスのバグ — 間違っているが consistent な結果が出る、というやつだ。**
 
 #### Saturate（我々が選んだ挙動）
 
@@ -95,11 +95,11 @@ Release build で `*` は panic せず wrap。結果は `(diff * RATE_SCALE).wra
 let scaled = diff.saturating_mul(i128::from(RATE_SCALE));  // i128::MAX/MIN に clamp
 ```
 
-Saturation は型境界で定義された値を生む：正 overflow で `i128::MAX`、負で `i128::MIN`。**`saturating_mul` を持つ全 validator が同じ値を生む。** Fork なし。
+Saturation は型境界で定義された値を生む：正方向に overflow すれば `i128::MAX`、負方向なら `i128::MIN` だ。**`saturating_mul` を持つすべての validator が、入力に対して同じ値を出す。** Fork は起きない。
 
-Saturation での*funding rate* は実質 cap（`saturate_i128_to_i64` がさらに i64 に clamp した後）。経済的帰結：極端な oracle dislocation が premium を saturation ポイント越しに押すと、最大 rate での支払いを生む、panic でも wrap でもなく。**挙動が gracefully degrade する。**
+Saturation のもとでは*funding rate* が事実上 cap される（`saturate_i128_to_i64` がさらに i64 へ clamp した後の値だ）。経済的な帰結としては、極端な oracle dislocation で premium が saturation の閾値を超えるような場面でも、panic や wrap ではなく最大 rate での支払いが発生する形になる。**挙動が gracefully degrade する。**
 
-> 🛑 **やりがちな勘違い。** 「`checked_mul` を使って error を返せばいい？」 **Yes、だが問題を caller に押し付ける。** `Result<Premium, OverflowError>` が `compute_rate`、`apply_funding`、clock を通って上に伝播する — 最終的に bridge へ、bridge は何をするか決めなければならない。Bridge の選択肢は (a) block を revert（チェーン fork）、(b) funding tick をスキップ（silent state 不整合）、(c) cap で settle する。**「cap で settle する」結果は saturation が直接実現する、error を伝播せずに。**
+> 🛑 **やりがちな勘違い。** 「`checked_mul` を使ってエラーを返せばよくないか？」 **可能だが、問題を呼び出し側に押し付けるだけだ。** `Result<Premium, OverflowError>` が `compute_rate`、`apply_funding`、clock を経由して上へ伝播し、最終的に bridge にまで届く。そして bridge は何をするか決める必要に迫られる。Bridge の選択肢は (a) ブロックを revert する（chain fork）、(b) funding tick をスキップする（silent な state 不整合）、(c) cap で settle する、のいずれかだ。**「cap で settle する」結果は saturation が直接実現できる — エラーを伝播させる必要すらない。**
 
 ### Step 2: `saturate_i128_to_i64` 境界ケース
 
@@ -111,21 +111,21 @@ fn saturate_i128_to_i64(v: i128) -> i64 {
 }
 ```
 
-3 つの入力 regime：
+入力の regime は 3 つ：
 
-| 入力 | `try_from` 結果 | `unwrap_or` が生む |
+| 入力 | `try_from` の結果 | `unwrap_or` が返す値 |
 |---|---|---|
-| `v` が i64 に収まる | `Ok(v as i64)` | `v as i64`（override しない） |
-| `v > i64::MAX` | `Err(...)` | `i64::MAX`（`v > 0` なので） |
-| `v < i64::MIN` | `Err(...)` | `i64::MIN`（`v ≤ 0` なので） |
+| `v` が i64 に収まる | `Ok(v as i64)` | `v as i64`（override されない） |
+| `v > i64::MAX` | `Err(...)` | `i64::MAX`（`v > 0` だから） |
+| `v < i64::MIN` | `Err(...)` | `i64::MIN`（`v ≤ 0` だから） |
 
-**なぜ `unwrap_or` の中で符号チェック？** `try_from` は overflow がどの方向に行ったかを教えない — ただ「収まらない」と言う。Overflow ごとに固定値（例：`i64::MAX`）を返したら、`i128::MIN` が `i64::MIN` でなく `i64::MAX` に saturate する — 符号が反転する。`if v > 0` テストが方向を回復する。
+**`unwrap_or` の中で符号チェックを行う理由は？** `try_from` は overflow がどちらの方向に起きたかを教えてくれず、「収まりません」としか言わないからだ。もし overflow に対して固定値（例：`i64::MAX`）を返すと、`i128::MIN` も `i64::MIN` ではなく `i64::MAX` に saturate されてしまい、符号が反転する。`if v > 0` のテストが、その方向情報を回復してくれる。
 
-> 🛑 **考えてみよう。** `saturate_i128_to_i64(0)` は何を返す？
+> 🛑 **考えてみよう。** `saturate_i128_to_i64(0)` は何を返すか。
 
-（答え：**`0`。** `i64::try_from(0_i128)` は `Ok(0)` を返す。`unwrap_or` 分岐は発火しない。**Saturation は in-range 値に対して no-op。** これは下の proptest に重要 — ランダム `(mark, index)` ペアのほとんどは i64 に快適に収まる premium を生み、saturate helper はそれらに対して invisible。）
+（答え：**`0`。** `i64::try_from(0_i128)` は `Ok(0)` を返す。`unwrap_or` 側の分岐は発火しない。**Saturation は in-range の値に対しては no-op だ。** これは下に出てくる proptest にとって重要なポイントになる — ランダムな `(mark, index)` ペアのほとんどは i64 に余裕で収まる premium を生むので、saturate helper はそれらに対して invisible になる。）
 
-> 🛑 **やりがちな勘違い。** 「境界を明示的にテストする — property-based test がそれをカバーしないの？」 **ランダムサンプリングではおそらくしない。** Proptest のデフォルト戦略は入力空間にわたって uniform に値を生成。`i128::MAX` は 2^129 値中の単一ポイント、ランダムに当たる確率は実質ゼロ。**境界テストは手書きトレースが必要** — generator が random walk で届かない特定の値を target するから。
+> 🛑 **やりがちな勘違い。** 「境界を明示的にテストする必要があるのか — property-based テストでカバーされないのか？」 **ランダムサンプリングではまずカバーされない。** Proptest のデフォルト戦略は入力空間に対して uniform に値を生成する。`i128::MAX` は 2^129 通りの値のうちのただ 1 点なので、ランダムに当たる確率は実質ゼロだ。**境界テストには手書きトレースが要る** — generator のランダムウォークでは届かない特定の値を狙い撃ちする必要があるからだ。
 
 ### Step 3: テストモジュールに proptest サポートを追加
 
@@ -160,13 +160,13 @@ mod tests {
 }
 ```
 
-3 点：
+注目点は 3 つ：
 
-1. **`use openhl_clob::AccountId;`** — `pos` helper に必要。L4 のテストでは使わないが、L5 の proptest に使う（実はこの proptest 自身は不要だが、L7 の apply_funding テストが必要、テストモジュールの import を安定化するために今追加）。
+1. **`use openhl_clob::AccountId;`** — `pos` helper に必要だ。L4 のテストでは使わない。L5 の proptest 自体でも実は不要だが、L7 の apply_funding テストで必要になるので、テストモジュールの import を安定化させるために今のうちに入れておく。
 2. **`use proptest::prelude::*;`** — `proptest!`、`prop_assert_eq!`、`prop_assert!`、strategy combinator（`1u64..1_000_000`）を scope に持ち込む。
-3. **`fn pos(account: u64, size: i64) -> Position`** — `Position` を構築する小さな helper。L7 で使う。Imports/helper セクションを安定化するため今追加。
+3. **`fn pos(account: u64, size: i64) -> Position`** — `Position` を構築する小さな helper。L7 で使う。import / helper セクションを安定化させるため、今のうちに追加する。
 
-**Boilerplate を安定化、テストを iterate。** L1 の dep と L4 の `use` ブロックと同じロジック — 後で必要なものを今追加して、per-lesson diff を実際の新規部分に集中させる。
+**Boilerplate を先に安定化させ、テストを iterate する。** L1 の dep と L4 の `use` ブロックでも同じ理屈だった — 後で必要になるものを先に入れて、レッスンごとの diff を本当に新しい部分に集中させる、という方針だ。
 
 ### Step 4: Antisymmetry proptest を追加
 
@@ -197,25 +197,25 @@ mod tests {
     }
 ```
 
-いくつかの proptest 固有要素：
+proptest 固有の要素は以下：
 
-- **`proptest! { ... }`** — テスト関数をラップするマクロ。このブロック内で、`#[test]` 関数が generator 付きの property test として扱われる。
-- **`mark in 1u64..1_000_000`** — **戦略**。`mark` は `[1, 1_000_000)` の値からサンプルされる。デフォルトは test run あたり 256 ケース（~256 ランダム `(mark, index)` ペア）。
-- **`prop_assert_eq!` と `prop_assert!`** — proptest のアサーションマクロ。単一ケースで `assert_eq!` / `assert!` と同じ効果だが、proptest は失敗で input を shrink するために独自のマクロが必要（*最小*の failing ケースを見つける）。
+- **`proptest! { ... }`** — テスト関数をラップするマクロ。このブロック内では、`#[test]` 関数が generator 付きの property test として扱われる。
+- **`mark in 1u64..1_000_000`** — **戦略**だ。`mark` は `[1, 1_000_000)` の範囲からサンプルされる。デフォルトは test run あたり 256 ケース（つまり ~256 個のランダムな `(mark, index)` ペア）。
+- **`prop_assert_eq!` と `prop_assert!`** — proptest のアサーションマクロだ。単一ケースとして見れば `assert_eq!` / `assert!` と同等だが、proptest は失敗時に入力を shrink して*最小*の失敗ケースを探すため、専用のマクロが必要になる。
 
-なぜこの property？
+なぜこの property を選ぶのか。
 
-「Antisymmetry」の素朴版は：`compute_premium(MarkPrice(M), IndexPrice(I))` と `compute_premium(MarkPrice(I), IndexPrice(M))` が**同じ規模、反対符号**の結果を持つべき。だが整数除算はゼロに向けて丸めるので、cross-comparison `|a| / M == |b| / I` は厳密に成り立たない — off-by-one の rounding asymmetry がある。
+「antisymmetry」の素朴版はこうだ：`compute_premium(MarkPrice(M), IndexPrice(I))` と `compute_premium(MarkPrice(I), IndexPrice(M))` は**同じ規模で反対の符号**の結果を返すべきだ。だが整数除算はゼロに向かって丸めるので、`|a| / M == |b| / I` の cross-comparison は厳密には成り立たない — rounding 由来の off-by-one な非対称性があるからだ。
 
-**Proptest は弱い property をテストする：符号が反対（または両方ゼロ）。** Mark = index のとき両 premium がゼロ。Mark ≠ index のとき、1 つが正、1 つが負。
+**そこで proptest では弱めた property をテストする：符号が反対（または両方ゼロ）であること。** Mark = index のときは両方の premium がゼロ、Mark ≠ index のときは一方が正、もう一方が負になる。
 
-**コメントがなぜ弱めたかを説明する。** この property を見て「規模も等しいべきでは？」と思う将来の読者は、rounding caveat が場所に documented されているのを見る。**整数算術下で実際に成り立たない aspirational property は、testing failure を待っている。** 実際に invariant な property をテスト。
+**コメントには、なぜ property を弱めたかも書いてある。** 将来この property を読んで「規模も等しいべきでは？」と思った読者は、rounding 由来の caveat がその場で documentation されているのを見つけられる。**整数算術のもとで実際には成り立たない aspirational な property は、テスト失敗を呼び込むだけだ。** 実際に invariant な property をテストすること。
 
-> 🛑 **やりがちな勘違い。** 「テスト fixture で `f64` を使って期待規模を厳密計算すれば？」 **テストが `f64` 計算の expectation を `i64` 計算の actual に対して assert することになる — 2 つは LSB で disagree する。** 決定的整数コードを非決定的 float expectation と比較するテストは信頼できない。**プロダクション算術と同じドメインでテスト算術を保つ。**
+> 🛑 **やりがちな勘違い。** 「テスト fixture で `f64` を使って期待規模を厳密に計算すればよいのでは？」 **それは `f64` 計算の期待値を `i64` 計算の実測値に対して assert することになる — 両者は LSB レベルで一致しない。** 決定的な整数コードを非決定的な float の期待値と比較するテストは、信頼できない。**テスト側の算術も、本番側の算術と同じドメインに留める。**
 
-> 🛑 **考えてみよう。** 戦略が `0u64..1_000_000` でなく `1u64..1_000_000` を使う（ゼロを除外）のはなぜ？
+> 🛑 **考えてみよう。** 戦略で `0u64..1_000_000` ではなく `1u64..1_000_000` を使い、ゼロを除外しているのはなぜか。
 
-（答え：**`index == 0` が `Premium(0)` 早期 return ケースで、L4 で手書きトレース unit test 済み。** Proptest に 0 を含めると：(a) 両方ゼロのときに「符号が反対」を assert して property を破る、もしくは (b) proptest 内でゼロを特殊扱いしてテストを複雑化する。ゼロを除外すれば property がクリーン。**Proptest は interesting range を exercise すべき、trivial-or-already-tested 範囲ではない。**）
+（答え：**`index == 0` は `Premium(0)` の早期 return ケースで、L4 の手書きトレース unit test で既にカバー済みだからだ。** Proptest に 0 を含めると、(a) 両方ゼロのときに「符号が反対」を assert して property が破れる、もしくは (b) proptest 内でゼロを特別扱いしてテストを複雑にする、のいずれかになる。ゼロを除外すれば property がクリーンに保てる。**Proptest は interesting な範囲を exercise すべきで、trivial か既にテスト済みの範囲ではない。**）
 
 ### Step 5: テストを実行
 
@@ -243,36 +243,36 @@ test compute::tests::premium_zero_when_mark_equals_index ... ok
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-5 テスト全 green。Proptest が 256 ランダム `(mark, index)` ペアを run、全 256 が antisymmetry property を満たす。
+5 テストすべてが green になる。proptest は 256 個のランダムな `(mark, index)` ペアを実行し、全 256 ケースで antisymmetry property が満たされる。
 
-Proptest の verbosity を見たいなら env var をセット：
+proptest の出力を詳しく見たい場合は環境変数を設定する：
 
 ```bash
 PROPTEST_VERBOSE=1 cargo test -p openhl-funding premium_is_antisymmetric
 ```
 
-「passed 256 cases」や failure 時の「shrunk to mark=X index=Y」 — 最小 counterexample — などのログが見える。
+「passed 256 cases」のメッセージや、失敗時の「shrunk to mark=X index=Y」 — 最小の counterexample — などのログが確認できる。
 
 よくあるエラー：
 
-- **`error: macro 'proptest' is not used`** — `use proptest::prelude::*` でなく `use proptest::*` を import した。マクロは `prelude` に住む。
-- **`prop_assert_eq!` を `assert_eq!` に typo** — 通常関数では動くが `proptest!` 内では適切な shrinking のため prop_* variant が必要。テストは pass するが failure 時に最小例まで shrink しない。
-- **`signs are opposite` が fail** — 通常 proptest が `mark == index` を else 分岐に偶発的に含めた。if/else 分割を verify：`if mark == index { both zero } else { opposite signs }`。
-- **`signum() == -b.0.signum()` で `b.0 == 0` のとき proptest が panic** — 等しくない mark/index で compute_premium がゼロを生むときに起きる（例：整数数学がゼロに丸める非常に小さい input）。`1u64..1_000_000` range がこれを避ける、tighter range は当たる。
+- **`error: macro 'proptest' is not used`** — `use proptest::prelude::*` ではなく `use proptest::*` を import した場合だ。マクロは `prelude` に置かれている。
+- **`prop_assert_eq!` を `assert_eq!` と typo** — 通常の関数なら動くが、`proptest!` の中では適切な shrinking のために `prop_*` 系を使う必要がある。テスト自体は pass するものの、失敗時に最小例まで shrink されない。
+- **「signs are opposite」が失敗する** — 通常、proptest が `mark == index` を誤って else 分岐に流してしまっている。if / else の分割を確認すること：`if mark == index { both zero } else { opposite signs }`。
+- **`signum() == -b.0.signum()` で `b.0 == 0` のときに proptest が panic** — mark と index が異なるのに compute_premium がゼロを返す状況で起きる（例：整数数学でゼロに丸まる非常に小さな入力）。`1u64..1_000_000` の range ならこれを避けられる。range をもっと狭めると当たる場合がある。
 
 ## 設計の振り返り
 
-このレッスンに焼き込まれた決定 5 つ：
+このレッスンに焼き込んだ決定は 5 つ：
 
-1. **Saturate が consensus で唯一の bounded-behavior overflow オプション。** Panic = halt 経由のチェーン fork。Wrap = 間違っているが consistent な値経由のチェーン fork。Saturate = 全 validator で同じ値、gracefully degrade。**Consensus の liveness を保つ他のオプションはない。**
+1. **Consensus 上で bounded behavior を提供する overflow オプションは saturate だけ。** Panic は halt 経由の chain fork、wrap は「間違っているが consistent」な値による chain fork を生む。Saturate なら全 validator が同じ値を出し、gracefully degrade する。**Consensus の liveness を保つ選択肢は他にない。**
 
-2. **実際に invariant な property をテスト、aspirational なものではない。** 素朴 antisymmetry は規模が等しいことを要求する、整数 rounding がそれを壊す。弱い property（反対符号）をテストし、rounding caveat をテストコメントで documentation する。**Aspirational テストは production で fail、invariant テストは開発で fail。**
+2. **テストするのは aspirational な property ではなく、実際に invariant な property。** 素朴な antisymmetry は規模が一致することを要求するが、整数の rounding でそれは破れる。だから弱めた property（符号が反対）をテストし、rounding 由来の caveat はテストコメントで documentation する。**Aspirational なテストは production で失敗し、invariant なテストは開発で失敗する。**
 
-3. **Test モジュール boilerplate を早期に安定化。** `use proptest::prelude::*`、`use openhl_clob::AccountId`、`pos` helper を今追加すると、テストモジュールの imports が L6 / L7 まで stable に。**Boilerplate の churn は per-lesson diff の実態を obscure する。**
+3. **テストモジュールの boilerplate は早めに安定化させる。** `use proptest::prelude::*`、`use openhl_clob::AccountId`、`pos` helper を今のうちに足しておけば、テストモジュールの import は L6 / L7 まで安定する。**Boilerplate の churn は、レッスンごとの diff の本質を覆い隠してしまう。**
 
-4. **`saturate_i128_to_i64` の `unwrap_or` closure が符号に依存。** 固定 override は負 overflow を正に flip する。Saturate helper を慎重に読むと closure が*defensive* でなく*必要*な理由が明らかになる。
+4. **`saturate_i128_to_i64` の `unwrap_or` の closure は符号に依存させる。** 固定値の override では、負方向の overflow を正に flip してしまう。Saturate helper を丁寧に読めば、closure が*念のため*ではなく*必要だから*そうなっていると分かる。
 
-5. **Proptest range からゼロを除外** — ゼロケースは既に手書きトレース unit test、proptest に含めると property の複雑化が必要。**手書きトレーステストが境界ケースを pin、proptest が interior の property を pin。** 補完的、冗長ではない。
+5. **proptest の範囲からゼロを除外する** — ゼロのケースは既に手書きトレースの unit test でカバー済みであり、proptest に含めると property を余計に複雑化することになる。**手書きトレースは境界ケースを pin し、proptest は内部の property を pin する。** 互いに補完的であって、冗長ではない。
 
 ## 答え合わせ
 
@@ -293,21 +293,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: Proptest は実際に何ケース実行する？**
-デフォルトは test invocation あたり 256。`PROPTEST_CASES=N cargo test` で configurable。Shrinker が failure 発見後に counterexample を最小化するため追加ケースを実行することがある。**256 ランダムペアで、antisymmetry property が CI を遅くせずに input 空間の意味あるサンプルに対して exercise される。**
+**Q: proptest は実際に何ケース実行するのか？**
+デフォルトはテスト実行 1 回あたり 256 ケース。`PROPTEST_CASES=N cargo test` で変更できる。Shrinker が failure 発見後に counterexample を最小化するため、追加のケースを実行することもある。**256 個のランダムペアで、antisymmetry property は CI を重くせずに input 空間の意味あるサンプルに対して exercise される。**
 
-**Q: より強いカバレッジのため 10,000 ケースに増やせる？**
-できるが、closed form を持つ property には marginal benefit がすぐ落ちる。Antisymmetry は probabilistic property ではない — 成り立つか成り立たないか。256 ケースが実装がテスト範囲で正しいことの高い confidence を提供。**Adversarial input を持つ property（例：crypto）にはより多くのケースが欲しい、純粋数学 property には 256 で十分。**
+**Q: もっと強いカバレッジのために 10,000 ケースに増やせるか？**
+できる。だが closed form を持つ property に関しては、ケース数を増やしたところで limit利得はすぐに頭打ちになる。Antisymmetry は確率的な property ではなく、成り立つか成り立たないかのどちらかだ。256 ケースもあれば、実装がテスト範囲で正しいという高い信頼が得られる。**Adversarial な入力が絡む property（例：crypto）ならケース数を増やす価値があるが、純粋数学的な property には 256 で十分だ。**
 
-**Q: `proptest` でなく `quickcheck` を使えば？**
-両方とも Rust の property-testing crate、両方とも動く。`proptest` はより強い shrinking（より小さい counterexample を見つける）と better strategy composition（range の `in` 構文）を持つ。openhl workspace は consensus crate のテストで既に proptest を引いているので、marginal cost はゼロ。**1 つ選んで stick する、コードベース中盤での切り替えは違うものを最初に選ぶより高コスト。**
+**Q: `proptest` ではなく `quickcheck` を使えばよいのでは？**
+どちらも Rust の property-testing crate であり、どちらでも動く。`proptest` は shrinking が強く（より小さい counterexample を見つける）、strategy の合成（range に対する `in` 構文）も書きやすい。openhl workspace は consensus crate のテストで既に proptest を引いているので、限界コストはゼロだ。**一つに決めたら貫く。コードベースの途中で乗り換えるコストは、最初に違う方を選ぶより高い。**
 
 **Q: `saturating_mul` と `saturate_i128_to_i64` の関係は？**
-`saturating_mul` は `i128`（と他の整数）の built-in メソッドで、型自身の範囲内で saturated 積を生む。`saturate_i128_to_i64` は user-defined helper で、`i128` を `i64` 範囲に clamp する。異なる境界に対応：`saturating_mul` は in-type overflow を防ぐ、`saturate_i128_to_i64` は cross-type narrowing を防ぐ。**両方必要、数学が i128（積用）と i64（保存用）両方を使うから。**
+`saturating_mul` は `i128`（や他の整数型）の組み込みメソッドで、その型自身の範囲内で saturated な積を生む。`saturate_i128_to_i64` はユーザ定義の helper で、`i128` を `i64` の範囲に clamp する。対応している境界が違う：`saturating_mul` は型内 overflow を防ぐもの、`saturate_i128_to_i64` は型をまたいだ narrowing を防ぐものだ。**両方とも必要だ — 数学が積のために i128 を、保存のために i64 を、どちらも使うからだ。**
 
 ## 次のレッスン（L6）
 
-L6 で `compute_rate` を追加 — `Premium` と `FundingParams` を取って `FundingRate` を生む関数。関数は ~10 行だが 3 つの決定を encode：(a) `divisor == 0` で `FundingRate(0)` を返す（funding 無効化）、(b) divisor が clamp 前に premium を減らす、(c) `rate_cap` が絶対値を clamp（負 cap と正 cap が同じ `params.rate_cap` を共有）。レッスンは divisor、両側 cap、無効化-funding ケースをカバーする 4 unit test も追加。L6 後、3 つの pure-compute 関数のうち 2 つが完了。
+L6 では `compute_rate` を追加する — `Premium` と `FundingParams` を受け取って `FundingRate` を返す関数だ。関数は ~10 行だが、設計判断を 3 つ encode する：(a) `divisor == 0` のとき `FundingRate(0)` を返す（funding 無効化）、(b) divisor が clamp の*前*に premium を縮める、(c) `rate_cap` が絶対値で clamp する（負 cap と正 cap が同じ `params.rate_cap` を共有する）。レッスンには divisor、両側 cap、funding 無効化ケースをカバーする unit test 4 つも加える。L6 を終えた時点で、3 つの pure-compute 関数のうち 2 つが完成する。
 ````
 
 ---

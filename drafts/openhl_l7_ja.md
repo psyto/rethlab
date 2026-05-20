@@ -26,12 +26,12 @@
 cargo test -p openhl-consensus
 ```
 
-…が **14 個のテストすべてに合格する** (L6 の Context impl から 5 個 + 署名と SigningProvider の新規 9 個)。Malachite が Ed25519 署名を chain に組み込むのに必要な 2 つのファイルが揃う:
+上記の実行結果が **14 個のテストすべてに合格する** (L6 の Context impl から 5 個 + 署名と SigningProvider の新規 9 個)。Malachite が chain に Ed25519 署名を組み込むために必要な 2 つのファイルが揃う:
 
 - **`crates/consensus/src/signing.rs`** — vote と proposal の canonical byte encoding、および低レベルの sign/verify 関数
 - **`crates/consensus/src/signing_provider.rs`** — validator の private key を保持し、Malachite の `SigningProvider<OpenHlContext>` trait を実装する `OpenHlSigningProvider` 構造体
 
-9 個の新規テストがカバーするもの: 4 種類すべての署名対象型 (vote, proposal, proposal_part, vote_extension) について sign/verify ラウンドトリップ、vote と proposal の改ざん検出、別 provider 間の署名検証拒否。
+9 個の新規テストがカバーするもの: 4 種類すべての署名対象型 (vote、proposal、proposal_part、vote_extension) についての sign/verify ラウンドトリップ、vote と proposal の改ざん検出、別 provider が作った署名の検証拒否。
 
 ## おさらい
 
@@ -43,24 +43,24 @@ crates/consensus/src/types/   — 7 個の型ファイル + mod.rs
 crates/consensus/src/context.rs — OpenHlContext + Context impl + テスト 5 個
 ```
 
-`cargo test -p openhl-consensus` でテスト 5 個が合格する。**署名はまだ一切存在しない** — vote と proposal は構築できるが、コードベース内のどこにもそれらに対して署名を生成・検証する処理がない。
+`cargo test -p openhl-consensus` でテスト 5 個が合格する。**署名はまだ一切存在しない** — vote と proposal は構築できるが、コードベース中のどこにも、それらに対して署名を生成したり検証したりする処理がない。
 
 ## 計画
 
 5 つやる:
 
-1. **`crates/consensus/src/signing.rs` を作成** — `OpenHlVote` と `OpenHlProposal` の canonical byte encoding 関数、低レベルの `sign_vote` / `sign_proposal` / `verify_vote` 関数、`VerifierLike` trait shim、ユニットテスト 2 個。
-2. **`crates/consensus/src/signing_provider.rs` を作成** — `PrivateKey` を保持する `OpenHlSigningProvider` 構造体、8 メソッドの `impl SigningProvider<OpenHlContext>` (4 つの sign/verify ペア)、ユニットテスト 7 個。
-3. **両モジュールを `lib.rs` に配線** — `pub mod signing; pub mod signing_provider;` を追加。
-4. **Cargo.toml の変更なし** — `informalsystems-malachitebft-signing-ed25519` は L6 で `rand` feature 付きで追加済み、追加要件なし。
-5. **実行** — `cargo test -p openhl-consensus` で 14 個全部合格。
+1. **`crates/consensus/src/signing.rs` を作成する** — `OpenHlVote` と `OpenHlProposal` の canonical byte encoding 関数、低レベルの `sign_vote` / `sign_proposal` / `verify_vote` 関数、`VerifierLike` trait shim、ユニットテスト 2 個。
+2. **`crates/consensus/src/signing_provider.rs` を作成する** — `PrivateKey` を保持する `OpenHlSigningProvider` 構造体、8 メソッドの `impl SigningProvider<OpenHlContext>` (4 つの sign/verify ペア)、ユニットテスト 7 個。
+3. **両モジュールを `lib.rs` に配線する** — `pub mod signing; pub mod signing_provider;` を追加。
+4. **Cargo.toml の変更なし** — `informalsystems-malachitebft-signing-ed25519` は L6 で `rand` feature 付きで追加済み。追加要件はない。
+5. **実行** — `cargo test -p openhl-consensus` で 14 個全部合格する。
 
-このレッスンが教えるのは **2 つのパターン**:
+このレッスンが教えるのは **2 つのパターン** だ:
 
-- **Canonical encoding** — 型付きメッセージを、すべての validator が同一に計算する確定的なバイト列に変換する。署名は **構造体** ではなく **バイト列** にコミットする。フィールドの encoding が変わると署名が検証できなくなる。
-- **Trait 同士の配線** — Malachite の `SigningProvider` は、`signing.rs` の低レベル署名ロジックを **ラップする** trait。Provider は実行時状態 (鍵) を持ち、状態を持たない純粋関数に処理を委譲する。これは `ConsensusBridge` (trait) vs `InMemoryEvmBridge` (それを impl する構造体) と同じ分離パターン。
+- **Canonical encoding** — 型付きメッセージを、すべての validator が同一に計算できる確定的なバイト列に変換する。署名は **構造体** ではなく **バイト列** にコミットする。フィールドの encoding が変わると、署名が検証できなくなる。
+- **Trait 同士の配線** — Malachite の `SigningProvider` は、`signing.rs` の低レベル署名ロジックを **ラップする** trait だ。Provider は実行時状態 (鍵) を持ち、処理を状態を持たない純粋関数に委譲する。これは `ConsensusBridge` (trait) と `InMemoryEvmBridge` (それを impl する構造体) と同じ分離パターンだ。
 
-> 🛑 **考えてみよう。** スクロールする前に: `Vote` の canonical encoding は、どのフィールドを含む必要があるか? ヒント: 署名が何にコミットしているかを考える。コンセンサスにとって意味のある違いがある 2 つの vote について、その signing bytes が異なっていなければ、片方に対する有効な署名が、もう片方に対しても検証できてしまう。攻撃者は vote を replay または swap できる。
+> 🛑 **考えてみよう。** スクロールする前に: `Vote` の canonical encoding はどのフィールドを含む必要があるか? ヒント: 署名が何にコミットしているかを考える。コンセンサスにとって意味のある違いがある 2 つの vote について、もし signing bytes が同一になっていれば、片方に対する有効な署名がもう片方にも通ってしまう。攻撃者は vote を replay したり swap したりできる。
 
 ## 手順
 
@@ -114,7 +114,7 @@ pub fn vote_signing_bytes(v: &OpenHlVote) -> Vec<u8> {
 }
 ```
 
-この関数は `OpenHlVote` をバイト列に変換する。**署名はこのバイト列にコミットする。** 悪意ある actor が `Vote` のどのフィールドを変えても、signing bytes が変わり、署名検証が失敗し、改ざんされた vote はすべての validator に拒否される。
+この関数は `OpenHlVote` をバイト列に変換する。**署名はこのバイト列にコミットする。** 悪意ある actor が `Vote` のどのフィールドを変えても signing bytes が変わり、署名検証が失敗し、改ざんされた vote はすべての validator に拒否される。
 
 バイトレイアウトを確認:
 
@@ -127,9 +127,9 @@ pub fn vote_signing_bytes(v: &OpenHlVote) -> Vec<u8> {
 | 18..50 (Val の場合) | `value_id` 本体 | BlockHash の 32 バイト |
 | 18..38 OR 50..70 | `address` | 20 バイト |
 
-**なぜ little-endian?** x86 / ARM ホストでの慣習。**なぜ tag バイトを付ける?** `NilOrVal::Nil` は 1 バイト (tag 0) なのに対し、`NilOrVal::Val` は 33 バイト (tag 1 + 32 バイトのハッシュ) になる。Tag があるからパーサがどちらか判別できる。**なぜ validator address を含める?** Vote は **どの** vote かだけでなく **誰の** vote かも問う。同じ proposal に対して 100 人の validator が vote すれば、それぞれ別の signing-bytes 文字列が生成される。
+**なぜ little-endian?** x86 / ARM ホストでの慣習だからだ。**なぜ tag バイトを付ける?** `NilOrVal::Nil` は 1 バイト (tag 0)、`NilOrVal::Val` は 33 バイト (tag 1 + 32 バイトのハッシュ) になる。Tag があるので、パーサがどちらか判別できる。**なぜ validator address を含めるのか?** Vote は **どの** vote かだけでなく **誰の** vote かも表すからだ。同じ proposal に対して 100 人の validator が vote すれば、それぞれ別の signing-bytes 文字列が生成される。
 
-> 🛑 **やりがちな勘違い。** 「`bincode::serialize(v)` で結果に署名するだけじゃダメ?」 **ダメ。** 既製のシリアライゼーション形式はライブラリのバージョンが上がると変わりうる — 今日署名するものと明日署名するものが、struct は同一でも違ってしまう可能性がある。**Canonical** encoding は自分が 1 バイト単位でコントロールするもの。本番 chain は encoding を protobuf スキーマで定義するか、ここのように手書きで定義する。どちらにせよ、encoding は chain の wire format spec の一部になる。
+> 🛑 **やりがちな勘違い。** 「`bincode::serialize(v)` の結果に署名するだけではダメか?」 **ダメだ。** 既製のシリアライゼーション形式は、ライブラリのバージョンが上がると変わりうる — 今日署名するものと明日署名するものが、struct は同一でも違ってしまう可能性がある。**canonical** encoding は自分で 1 バイト単位までコントロールするものだ。本番 chain では encoding を protobuf スキーマで定義するか、ここのように手書きで定義する。どちらにせよ encoding は chain の wire format spec の一部になる。
 
 ### Step 3: `OpenHlProposal` の canonical encoding を書く
 
@@ -159,9 +159,9 @@ Proposal のレイアウト:
 | 48..56 | `pol_round` | i64 LE (proof-of-lock round) |
 | 56..76 | `address` | 20 バイト |
 
-**`vote_signing_bytes` との違いに注目:** Proposal の value は `NilOrVal` でラップされず、無条件で `BlockHash`。Proposal は必ず value を運ぶ。Nil を propose することはない。
+**`vote_signing_bytes` との違いに注目。** Proposal の value は `NilOrVal` でラップされず、無条件で `BlockHash` だ。Proposal は必ず value を運ぶので、Nil を propose することはない。
 
-**`p.value.0.0` が奇妙に見える。** `.0` アクセスを 2 段つないでいる。最初は `OpenHlValue(BlockHash)` から `BlockHash` を取り出し、次は `BlockHash([u8; 32])` から `[u8; 32]` を取り出す。newtype の層ごとに `.0` が必要。煩わしいが明示的。
+**`p.value.0.0` は奇妙に見える。** `.0` アクセスを 2 段重ねている。最初は `OpenHlValue(BlockHash)` から `BlockHash` を取り出し、次に `BlockHash([u8; 32])` から `[u8; 32]` を取り出す。newtype の層ごとに `.0` が必要だ。煩わしいが明示的になる。
 
 ### Step 4: `sign_vote` と `sign_proposal` 関数を追加
 
@@ -182,9 +182,9 @@ pub fn sign_proposal(
 }
 ```
 
-どちらもメッセージの所有権を取り (通常の呼び出し側は渡したら以降使わないので)、canonical bytes を生成し、Ed25519 で署名し、`SignedMessage` でラップする。`SignedMessage::new(msg, sig)` は Malachite の標準ペアリング — 署名されたものはすべて `SignedMessage` としてエンジン内を流れる。
+どちらもメッセージの所有権を取り (通常、呼び出し側は渡したら以降は使わないので)、canonical bytes を生成し、Ed25519 で署名し、`SignedMessage` でラップする。`SignedMessage::new(msg, sig)` は Malachite の標準ペアリングで、署名されたものはすべて `SignedMessage` としてエンジン内を流れる。
 
-`crate::OpenHlContext` は L6 で作った `OpenHlContext`。Malachite の `SignedMessage` は context 型と inner message 型に対してジェネリック。
+`crate::OpenHlContext` は L6 で作った `OpenHlContext` だ。Malachite の `SignedMessage` は context 型と inner message 型に対してジェネリックになっている。
 
 ### Step 5: `verify_vote` 関数と `VerifierLike` trait を追加
 
@@ -218,8 +218,8 @@ fn round_to_i64(r: Round) -> i64 {
 
 3 つのピース:
 
-- **`verify_vote`** — `sign_vote` の逆。Canonical bytes を再計算し、public key の verify メソッドを呼び、true/false を返す。
-- **`VerifierLike` trait** — 「Ed25519 署名を検証できる何か」に対する小さな抽象。理由: Malachite の `PublicKey` は `signature::Verifier` trait 経由で検証を提供しているが、自分の API の利用者にその trait を import させたくない。`VerifierLike` は自前の trait で、`signature::Verifier` への橋渡し impl を 1 つだけ提供する。**呼び出し側からは 1 つの trait に見え、裏で canonical な方に委譲する。**
+- **`verify_vote`** — `sign_vote` の逆だ。Canonical bytes を再計算し、public key の verify メソッドを呼び、true/false を返す。
+- **`VerifierLike` trait** — 「Ed25519 署名を検証できる何か」に対する小さな抽象だ。理由は次のとおり: Malachite の `PublicKey` は `signature::Verifier` trait 経由で検証を提供しているが、こちらの API の利用者にその trait を import させたくない。`VerifierLike` は自前の trait で、`signature::Verifier` への橋渡し impl を 1 つだけ提供する。**呼び出し側からは 1 つの trait に見え、裏で canonical な方に委譲する。**
 - **`round_to_i64`** — 1 行ヘルパー。`Round` は Malachite の `i64` wrapper で、`.as_i64()` メソッドで中身を取れる。このヘルパーで包むと呼び出し側が読みやすくなる。
 
 ### Step 6: `signing.rs` にテストを 2 個追加
@@ -274,7 +274,7 @@ mod tests {
 - **`vote_signature_round_trips`** — Vote に署名し、検証する。合格。
 - **`vote_signature_is_field_sensitive`** — Vote に署名し、コピーの 1 フィールドを変更し、変更後のコピーに対して検証する。失敗するべき。
 
-2 つ目は **load-bearing** なテスト。**Canonical encoding が、意味のあるすべてのフィールドに対して敏感である** ことを証明する。encoding が壊れていた (例: `value_id` をバイト列に含め忘れた) 場合、tampered.value_id は異なるが signing bytes は同じになるため、テストは「改ざんされた vote が検証を通った」と失敗する。
+2 つ目は **load-bearing** なテストだ。**canonical encoding が意味のあるすべてのフィールドに対して敏感である** ことを証明する。encoding が壊れていた (例: `value_id` をバイト列に含め忘れた) 場合、tampered.value_id は異なるが signing bytes は同じになるので、「改ざんされた vote が検証を通った」とテストは失敗する。
 
 ### Step 7: `crates/consensus/src/signing_provider.rs` を作成
 
@@ -315,9 +315,9 @@ impl OpenHlSigningProvider {
 }
 ```
 
-構造体は `PrivateKey` を保持する。コンストラクタは外から鍵を受け取る (通常はディスクや環境変数から)。`public_key()` は対応する public key をオンデマンドで導出する — Ed25519 では public key は private key からスカラー乗算で導出可能で、ミリ秒オーダー。
+構造体は `PrivateKey` を保持する。コンストラクタは外から鍵を受け取る (通常はディスクや環境変数から)。`public_key()` は対応する public key をオンデマンドで導出する — Ed25519 では private key からスカラー乗算で public key を導出でき、ミリ秒オーダーで済む。
 
-`use` ブロックは `signing.rs` から低レベル関数を `as sign_X_with` リネーム付きで import する。**なぜリネーム?** `SigningProvider` trait に `sign_vote` と `sign_proposal` という名前のメソッドがあり、自前ヘルパーを名前衝突なしで呼びたいから。`_with` サフィックスは「これは trait メソッドが委譲する先の実装関数」を表す慣習。
+`use` ブロックは `signing.rs` から低レベル関数を `as sign_X_with` のリネーム付きで import する。**なぜリネームするのか?** `SigningProvider` trait に `sign_vote` と `sign_proposal` という名前のメソッドがあり、自前ヘルパーを名前衝突なしで呼びたいからだ。`_with` サフィックスは「これは trait メソッドが委譲する先の実装関数」を表す慣習。
 
 ### Step 8: `SigningProvider` trait を実装 — 4 つの sign/verify ペア
 
@@ -393,12 +393,12 @@ impl SigningProvider<OpenHlContext> for OpenHlSigningProvider {
 
 メソッド 8 個、ペア 4 つ:
 
-- **`sign_vote` / `verify_signed_vote`** — `signing::sign_vote` に委譲 / public key の `verify` を `vote_signing_bytes` 付きで呼ぶ。標準。
+- **`sign_vote` / `verify_signed_vote`** — `signing::sign_vote` に委譲 / public key の `verify` を `vote_signing_bytes` 付きで呼ぶ。標準的な形だ。
 - **`sign_proposal` / `verify_signed_proposal`** — 同じパターン。
-- **`sign_proposal_part` / `verify_signed_proposal_part`** — **空バイトに署名する。** なぜか? `OpenHlProposalPart` は unit struct で、コミットすべきデータが存在しない。空ペイロードに署名しても valid な Ed25519 署名は生成される (private key 単独で確定的)。検証は「はい、この provider がこの署名を作った」を確認する。署名に情報量はないが、trait 表面は満たされる。
-- **`sign_vote_extension` / `verify_signed_vote_extension`** — proposal_part と同じ。Vote extension は `()` (v0 では未使用) なので空バイトに署名する。
+- **`sign_proposal_part` / `verify_signed_proposal_part`** — **空バイトに署名する。** なぜか? `OpenHlProposalPart` は unit struct で、コミットすべきデータが存在しないからだ。空ペイロードに署名しても valid な Ed25519 署名は生成される (private key だけで確定的)。検証は「はい、この provider がこの署名を作った」を確認する。署名に情報量はないが、trait 表面は満たされる。
+- **`sign_vote_extension` / `verify_signed_vote_extension`** — proposal_part と同じ。Vote extension は `()` (v0 では未使用) なので、空バイトに署名する。
 
-> 🛑 **やりがちな勘違い。** 「空バイトに署名するのは何か違う気がする — 意味あるの?」 **意味は、持っていないデータにコミットすることなく trait 表面を満たすこと。** Malachite エンジンは実行時にこれらメソッドを呼ぶ。panic したり Error を返したらエンジンがクラッシュする。空バイトに署名して valid な署名を返すことで、「はい、これは我々からの本物の署名です。ただし、メッセージの残りの部分以上に追加でコミットしているデータはありません」と言える。これら機能を使う本番 chain は実データを入れる。我々は入れないが、trait 表面はそのまま保たれる。
+> 🛑 **やりがちな勘違い。** 「空バイトに署名するのは何か違う気がする — 意味があるのか?」 **意味は、持っていないデータにコミットすることなく trait 表面を満たすことだ。** Malachite エンジンは実行時にこれらのメソッドを呼ぶ。panic したり Error を返したらエンジンがクラッシュする。空バイトに署名して valid な署名を返すことで、「はい、これはこちらからの本物の署名です。ただし、メッセージの残りの部分以上に追加でコミットしているデータはありません」と言えるわけだ。これらの機能を使う本番 chain は実データを入れる。こちらは入れないが、trait 表面はそのまま保たれる。
 
 ### Step 9: `signing_provider.rs` にテストを 7 個追加
 
@@ -512,7 +512,7 @@ mod tests {
 | `vote_extension_sign_verify_round_trips` | vote_extension で同じ。 |
 | `signature_from_one_provider_does_not_verify_under_another` | 暗号学的セキュリティ — 別の鍵が作る署名は交換不可能。 |
 
-最後のテストが **load-bearing なセキュリティ保証**: 署名は特定の鍵に紐付く。これがなければ、誰でも別の validator の有効な署名を再利用して偽造できてしまう。
+最後のテストは **load-bearing なセキュリティ保証** だ: 署名は特定の鍵に紐付く。これがなければ、誰でも別の validator の有効な署名を再利用して偽造できてしまう。
 
 ### Step 10: 両モジュールを `lib.rs` に配線
 
@@ -542,7 +542,7 @@ pub mod types;
 pub use context::OpenHlContext;
 ```
 
-`pub mod signing;` と `pub mod signing_provider;` でモジュールを公開。この層では再エクスポートは不要 — 呼び出し側はフルパスで import する。
+`pub mod signing;` と `pub mod signing_provider;` でモジュールを公開する。この層では再エクスポートは不要だ — 呼び出し側はフルパスで import する。
 
 ## テスト
 
@@ -575,19 +575,19 @@ test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 よくあるエラーと対処:
 
 - **`cannot find function 'sign_vote' in module 'super::signing'`** — `lib.rs` に `pub mod signing;` を追加し忘れている。Step 10 を再確認。
-- **`error: trait 'SigningProvider' not implemented for 'OpenHlSigningProvider' — missing method 'sign_vote_extension'`** — 8 メソッド (sign 4 + verify 4) すべてが必須。一部しか実装していないと trait が満たされない。不足分を追加。
-- **`error: type alias 'Extension' is `()` so methods take `ext: ()`** — impl が `ext: ()` (verify では `_ext: &()`) を使っていることを確認。`Extension` のような placeholder ではない。
-- **`vote_tamper_detected` テストが逆に失敗する** — Canonical encoding が `value_id` (または別フィールド) をバイト列に含めていない可能性。Step 2 を再確認 — 構造体の意味のあるフィールドはすべてバイト列に寄与しなければならない。
+- **`error: trait 'SigningProvider' not implemented for 'OpenHlSigningProvider' — missing method 'sign_vote_extension'`** — 8 つのメソッド (sign 4 + verify 4) すべてが必須だ。一部しか実装していないと trait を満たせない。不足分を追加する。
+- **`error: type alias 'Extension' is `()` so methods take `ext: ()`** — impl が `ext: ()` (verify では `_ext: &()`) を使っているか確認する。`Extension` のような placeholder ではない。
+- **`vote_tamper_detected` テストが逆に失敗する** — Canonical encoding が `value_id` (または別フィールド) をバイト列に含めていない可能性がある。Step 2 を再確認 — 構造体の意味のあるフィールドはすべてバイト列に寄与しなければならない。
 
 ## 設計の振り返り
 
 3 つの load-bearing な決定:
 
-1. **Canonical encoding は `signing.rs` にあり、`serde::Serialize` から導出しない。** `signing.rs` が自分でコントロールするバイトレベルレイアウトを定義する。なぜか? `serde` のバージョンは Rust edition 更新やライブラリアップグレードで変わりうるが、署名されたメッセージは異なるバイナリバージョンを走らせている可能性のある validator 間でラウンドトリップしなければならない。Encoding をライブラリ詳細ではなくコード (ライブラリ依存ではない) に固定すると、wire format は chain の spec の一部になる。
+1. **Canonical encoding は `signing.rs` 側に置き、`serde::Serialize` からは導出しない。** `signing.rs` で自分がコントロールするバイトレベルレイアウトを定義する。なぜか? `serde` のバージョンは Rust edition 更新やライブラリアップグレードで変わりうるが、署名されたメッセージは、異なるバイナリバージョンを走らせている可能性のある validator 間でラウンドトリップしなければならない。Encoding をライブラリの詳細ではなく自分のコードに固定しておけば、wire format は chain の spec の一部になる。
 
-2. **`SigningProvider` は純粋関数 `sign_vote` をラップし、鍵を状態として持つ。** `sign_vote` を `OpenHlSigningProvider` のメソッドにすることもできた。分離することで、**テスト** や **内部コード** は `sign_vote(vote, &sk)` を直接呼べ (鍵を引数で渡す)、**Malachite エンジン** は trait メソッド `sp.sign_vote(vote)` を使える (provider が保持する鍵にバインド)。**同じロジックが両方のユースケースを重複なく提供する。**
+2. **`SigningProvider` は純粋関数 `sign_vote` をラップし、鍵を状態として持つ。** `sign_vote` を `OpenHlSigningProvider` のメソッドにすることもできた。分離することで、**テスト** や **内部コード** は `sign_vote(vote, &sk)` を直接呼び (鍵を引数で渡す)、**Malachite エンジン** は trait メソッド `sp.sign_vote(vote)` を使える (provider が保持する鍵にバインドされている)。**同じロジックを、重複なく両方のユースケースに提供できる。**
 
-3. **ProposalPart と Extension の空バイト署名。** Trait 表面がメソッドを要求するが、chain がその機能を使わない場合、空データに対する確定的で検証可能な署名を提供する。これは、持っていないデータにコミットすることなく trait を honor する。これら機能を使う本番 chain は実データを入れる。我々は入れないが、どちらの場合もエンジンはクラッシュしない。
+3. **ProposalPart と Extension の空バイト署名。** Trait 表面がメソッドを要求するが、chain がその機能を使わない場合は、空データに対する確定的で検証可能な署名を提供する。これで、持っていないデータにコミットすることなく trait を honor できる。これらの機能を使う本番 chain は実データを入れる。こちらは入れないが、どちらの場合もエンジンはクラッシュしない。
 
 ## 答え合わせ
 
@@ -599,9 +599,9 @@ diff -u ~/code/my-openhl/crates/consensus/src/signing_provider.rs ./crates/conse
 diff -u ~/code/my-openhl/crates/consensus/src/lib.rs ./crates/consensus/src/lib.rs
 ```
 
-Doc コメントの文言には個人差が出てよい。Canonical encoding のバイト順、SigningProvider trait impl (特に何に委譲しているか)、テストパターンが厳密に一致していること。
+Doc コメントの文言には個人差が出てよい。Canonical encoding のバイト順、SigningProvider trait impl (特に何に委譲しているか)、テストパターンは厳密に一致するはず。
 
-`9e810a7` の参照には後のレッスンで追加する追加ファイル (`runner.rs` の変更) も含まれる。このレッスンでは signing 関連ファイルだけ diff する。
+`9e810a7` の参照には、後のレッスンで追加するファイル (`runner.rs` の変更) も含まれる。このレッスンでは signing 関連ファイルだけを diff する。
 
 戻る:
 
@@ -611,21 +611,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: Nil vote の場合 `vote_signing_bytes` は `vote_type` を含めないのか?**
-含める — `vote_type` は `value_id` が Nil でも Val でも常に 1 バイト (0 または 1)。条件分岐は `value_id` のためだけ (Nil なら tag 1 バイト、Val なら tag 1 バイト + ハッシュ 32 バイト)。
+**Q: Nil vote の場合、`vote_signing_bytes` は `vote_type` を含めないのか?**
+含める — `vote_type` は `value_id` が Nil でも Val でも常に 1 バイト (0 または 1) になる。条件分岐は `value_id` のためだけにある (Nil なら tag 1 バイト、Val なら tag 1 バイト + ハッシュ 32 バイト)。
 
 **Q: 誤って public key で署名してしまうことはあるか?**
-ない — Ed25519 は型で分離している: `PrivateKey::sign(&[u8]) -> Signature` は存在するが、`PublicKey::sign` は存在しない。型システムが取り違えを防ぐ。
+ない — Ed25519 は型で分離されている: `PrivateKey::sign(&[u8]) -> Signature` は存在するが、`PublicKey::sign` は存在しない。型システムが取り違えを防いでくれる。
 
-**Q: ある validator の vote_signing_bytes が別の validator のと食い違うと何が起きる?**
-両者が同じ proposal に vote する最初の round で chain が fork する。Validator A の署名は A 自身の encoding で検証成功。Validator B が同じ vote を別 encoding で読むと、署名検証失敗で vote を拒否。同じ選挙について別々の集計結果を生み、別々の決定 value につながる。**だから encoding は spec の一部であり、実装の詳細ではない。**
+**Q: ある validator の vote_signing_bytes が別の validator のものと食い違うと何が起きるか?**
+両者が同じ proposal に vote する最初の round で chain が fork する。Validator A の署名は A 自身の encoding で検証成功する。Validator B が同じ vote を別の encoding で読むと、署名検証に失敗して vote を拒否する。同じ選挙について別々の集計結果が生まれ、別々の決定 value につながる。**だからこそ encoding は spec の一部であって、実装の詳細ではない。**
 
 **Q: なぜ `OpenHlSigningProvider` は `Clone` を impl しないのか?**
-Private key のコピーは明示的に行いたい — `let sp_copy = sp.clone();` は事故的に書きやすい。本当にコピーが必要なら `OpenHlSigningProvider::new(self.private_key.clone())` を使う。`Clone` を切ることで private key の複製はまれで可視になる。
+Private key のコピーは明示的に行いたいからだ — `let sp_copy = sp.clone();` は事故的に書きやすい。本当にコピーが必要なら `OpenHlSigningProvider::new(self.private_key.clone())` を使う。`Clone` を切っておけば、private key の複製はまれで可視な操作になる。
 
 ## 次のレッスン (L8)
 
-署名表面が完成した。Malachite が provider にメッセージへの署名を依頼でき、検証はラウンドトリップする。しかし **Malachite はまだネットワーク越しの会話の仕方を知らない** — validator 間で vote を送るには encoding/decoding が必要。L8 では `OpenHlCodec` を実装する: ネットワーク転送、write-ahead logging、state sync のためにメモリ内型とバイト列を相互変換する trait。L8 終了後、エンジン起動に必要なものはすべて揃う (codec + signing + context + node config); 同じレッスンで `OpenHlNode` を配線し、`start_engine` が動くことを証明する。
+署名の表面が完成した。Malachite から provider にメッセージへの署名を依頼でき、検証はラウンドトリップする。しかし **Malachite はまだネットワーク越しの会話の仕方を知らない** — validator 間で vote を送るには encoding/decoding が必要だ。L8 では `OpenHlCodec` を実装する: ネットワーク転送、write-ahead logging、state sync のために、メモリ内型とバイト列を相互変換する trait だ。L8 終了後にはエンジン起動に必要なものがすべて揃う (codec + signing + context + node config)。同じレッスンで `OpenHlNode` を配線し、`start_engine` が動くことを証明する。
 ````
 
 ---

@@ -26,7 +26,7 @@
 cargo test -p openhl-clob
 ```
 
-…が **12 個のテスト** (unit 9 + proptest invariant 3) に合格し、各 proptest が **256 case** ずつ走る = **768 ランダムシナリオ**。書くもの:
+上記の実行結果が **12 個のテスト** (unit 9 + proptest invariant 3) に合格し、各 proptest が **256 case** ずつ走る = **768 ランダムシナリオ**。書くもの:
 
 - **新規 dev-dep 1 個** — `crates/clob/Cargo.toml` に `proptest = { workspace = true }`。
 - **新規 `#[cfg(test)] mod prop_tests` block** を `book.rs` の末尾に:
@@ -34,39 +34,39 @@ cargo test -p openhl-clob
   - 3 個の generator strategy — `arb_side`、`arb_action`、`arb_actions` — random で valid な action sequence を produce する。
   - 3 個の `proptest!` block — `qty_conservation`、`no_crossed_book`、`determinism`。
 
-L8 後、matching engine は **多くの random ordering** にわたって invariant が成立する **property-level 証明** を持つ — L7 の 9 個の hand-trace シナリオだけではない。
+L8 後、matching engine は **多くの random ordering** にわたって invariant が成立するという **property-level の証明** を手にする — L7 の 9 個の hand-trace シナリオだけではなく。
 
 ## おさらい
 
 L7 完了時点:
 
-- 9 個の hand-trace unit test が pass。
-- 各テストが specific シナリオの specific invariant をテスト。
+- hand-trace unit test 9 個が pass。
+- 各テストが specific なシナリオで specific な invariant をテストしている。
 
-**L7 がテストしないもの**: random sequence。例えば 17 limit を submit、3 個を cancel、Market を submit したときだけ trigger するバグなら、L7 の 9 個では多分見逃す。そのシナリオを自分で思いつくか (難しい — バグはテストしようと思わない場所に隠れる)、または **多数のシナリオ** を自動でテストする必要がある。L8 が後者。
+**L7 がテストしないもの**: random sequence。たとえば 17 個の limit を submit して 3 個を cancel し、さらに Market を submit したときだけ trigger するバグは、L7 の 9 個ではほぼ確実に見逃す。そのシナリオを自分で思いつくか (難しい — バグはテストしようと思わない場所に隠れる)、それとも **多数のシナリオ** を自動でテストするか。L8 では後者をやる。
 
 ## 計画
 
-3 つ:
+3 つやる:
 
-1. **`proptest` を dev-dep として `crates/clob/Cargo.toml` に追加**。`proptest` は既に workspace dep (既存 rethlab L1 Architect 階層の `consensus` での proposer-election test で使用); 使うことを宣言するだけ。
-2. **新規 `mod prop_tests` block** を `book.rs` の既存 `mod tests` の下に追加。新規モジュール内:
-   - `Action` enum (property test が exercise する操作の subset — 今は SubmitLimit + SubmitMarket のみ; cancel は follow-up)。
-   - Random `Action` sequence の generator strategy。
-   - Invariant ごとに 1 つの `proptest!` block — 3 個。
+1. **`proptest` を dev-dep として `crates/clob/Cargo.toml` に追加する**。`proptest` は既に workspace dep として宣言されている (既存 rethlab L1 Architect 階層の `consensus` の proposer-election test で使用済み) ので、使うことを宣言するだけでよい。
+2. **`book.rs` の既存 `mod tests` の下に新規 `mod prop_tests` block を追加する**。新規モジュール内には次を入れる:
+   - `Action` enum (property test が exercise する操作のサブセット — 今は SubmitLimit + SubmitMarket のみ。cancel は follow-up で扱う)。
+   - random な `Action` sequence の generator strategy。
+   - invariant ごとに 1 つの `proptest!` block — 計 3 個。
 3. **`cargo test -p openhl-clob`** — 12 個 pass (unit 9 + prop 3)。
 
 3 つの invariant:
 
 - **`qty_conservation`**: book に入る合計 quantity = 合計 filled + 合計 resting (「お金の計算が保存される」property)。
-- **`no_crossed_book`**: `best_bid < best_ask` が常に成立 — test 9 が hand-trace した safety property を今ランダムテスト。
-- **`determinism`**: 同じ action sequence が同じ fills + 同じ book state を毎回 produce する。**これが chain の safety が依存する replayability property。**
+- **`no_crossed_book`**: `best_bid < best_ask` が常に成立する — test 9 で hand-trace した safety property を、今度はランダムテストする。
+- **`determinism`**: 同じ action sequence が毎回同じ fills と同じ book state を produce する。**これが chain の safety が依存する replayability property。**
 
-Proptest がどれかで反例を見つけたら、失敗 input を最小に **自動 shrink** する。それが example より property の load-bearing な利点。
+Proptest がどれかで反例を見つけたら、失敗 input を最小に **自動 shrink** してくれる。これが example よりも property の load-bearing な利点。
 
-> 🛑 **考えてみよう。** スクロールする前に: `submit_limit::Buy` が時々 (例えば 1%) ask を best-first ではなく **random** 順に walk するバグがあったら。3 invariant のどれが最速に catch する? どれが最も informative に catch する?
+> 🛑 **考えてみよう。** スクロールする前に: `submit_limit::Buy` が時折 (たとえば 1% の確率で) ask を best-first ではなく **random** 順に walk してしまうバグがあったとする。3 invariant のうち、どれが最も速く catch するか? どれが最も informative に catch するか?
 
-(答え: `qty_conservation` は間接的に catch する — 十分なケースで間違った walk 順が、hand math が期待する price と異なる matched price を produce する。`no_crossed_book` は直接 catch: 最安 ask を先に取らない buy は cheaper ask を book に残し、次にその ask より上の bid が来ると cross する。`determinism` は **毎回** catch する、各 run が異なる「random」walk 順を選ぶので、同じ input の 2 run が異なる fill を produce する。**`determinism` が consensus chain の load-bearing property** — これなしでは validator が合意しない。)
+(答え: `qty_conservation` は間接的に catch する — 十分なケースで、間違った walk 順が hand math の期待と異なる matched price を produce する。`no_crossed_book` は直接 catch する: 最安 ask を先に取らない buy は cheaper ask を book に残してしまい、次にその ask より上の bid が来た瞬間に cross する。`determinism` は **毎回** catch する — 各 run が異なる「random」walk 順を選ぶので、同じ input の 2 run が異なる fill を produce する。**`determinism` こそが consensus chain の load-bearing property** — これがなければ validator が合意できない。)
 
 ## 手順
 
@@ -101,9 +101,9 @@ proptest = { workspace = true }
 workspace = true
 ```
 
-`proptest` は workspace `Cargo.toml` で既に宣言されている (workspace に追加する必要はない — L1 Architect の最初のコースから workspace dep)。`[dev-dependencies]` block で test build 時のみ利用可能、production build には含まれない。
+`proptest` は workspace `Cargo.toml` で既に宣言されている (workspace に追加する必要はない — L1 Architect の最初のコースから workspace dep として入っている)。`[dev-dependencies]` block に置けば test build 時のみ利用可能になり、production build には含まれない。
 
-> 🛑 **やりがちな勘違い。** 「`[dependencies]` に入れて non-test コードでも使えるようにする?」 **そうすると `openhl-clob` のすべての consumer が `proptest` を runtime dependency として持つ。** スマートコントラクト、validator、indexer — どれも matching engine を **使う** のに property test インフラを必要としない。`[dev-dependencies]` が規律: テストインフラは必要なところにしか住まない。
+> 🛑 **やりがちな勘違い。** 「`[dependencies]` に入れて non-test コードでも使えるようにすればよいのでは?」 **そうすると `openhl-clob` のすべての consumer が `proptest` を runtime dependency として抱えることになる。** スマートコントラクト、validator、indexer — どれも matching engine を **使う** のに property test インフラを必要としない。`[dev-dependencies]` の規律で、テストインフラは必要なところにしか入れないようにする。
 
 ### Step 2: `Action` enum で `mod prop_tests` をセットアップ
 
@@ -134,9 +134,9 @@ mod prop_tests {
     }
 ```
 
-`Action` enum は **proptest が random に generate するものを simplified に表現したもの**。各 variant が、real な `Book::submit` 呼び出しが必要とする raw `u64` を持つ (後で newtype でラップ)。今は variant 2 個 — Limit と Market submit。Cancel action はまだなし; openhl の follow-up stage で追加。
+`Action` enum は **proptest が random に generate するものを simplified に表現したもの**。各 variant は、real な `Book::submit` 呼び出しが必要とする raw `u64` を保持する (後で newtype でラップする)。今のところ variant は 2 個 — Limit と Market submit。Cancel action はまだ追加しない。openhl の follow-up stage で追加する。
 
-**なぜ action を enum でモデル化?** Property test が action の **sequence** を generate する必要があり、各 action は N 種類のどれかになりうるから。Enum がその variability を捉える。Proptest の strategy combinator (`prop_oneof!`、`prop::collection::vec` 等) は enum とよく動く。
+**なぜ action を enum でモデル化するのか?** Property test は action の **sequence** を generate する必要があり、各 action は N 種類のどれかになり得るから。Enum がその variability を捉えてくれる。Proptest の strategy combinator (`prop_oneof!`、`prop::collection::vec` 等) は enum とよくなじむ。
 
 ### Step 3: Strategy を書く
 
@@ -178,15 +178,15 @@ mod prop_tests {
     }
 ```
 
-3 つの strategy、build up していく:
+3 つの strategy を build up していく:
 
-- **`arb_side()`** — uniform に Buy または Sell を選ぶ。`prop_oneof![Just(...), Just(...)]` が proptest の「これらリテラルの 1 つ」combinator。
-- **`arb_action(id)`** — 固定 `id` で random `Action` を生成。Limit 分岐は `(account, qty, side, price)` を range で生成; Market 分岐は `(account, qty, side)`。重み: `3 => limit_action, 1 => market_action` — Limit action が Market の 3 倍頻繁、realistic な order-book usage を反映。
-- **`arb_actions()`** — 長さ 1..30 の random `Vec<Action>` を生成。`.prop_flat_map` パターンが少し奇妙: まず u64 vec を生成して **長さを決め**、それから各 position を `arb_action(i+1)` にマップして order ID を increment する。コツは `arb_actions` が strictly-increasing な order ID で sequence を produce すること (book での collision を回避)。
+- **`arb_side()`** — uniform に Buy または Sell を選ぶ。`prop_oneof![Just(...), Just(...)]` が proptest の「これらリテラルのどれか 1 つ」combinator。
+- **`arb_action(id)`** — 固定 `id` で random な `Action` を生成する。Limit 分岐は `(account, qty, side, price)` を range で生成し、Market 分岐は `(account, qty, side)` を生成する。重みは `3 => limit_action, 1 => market_action` — Limit action を Market の 3 倍の頻度にして、現実的な order-book usage を反映している。
+- **`arb_actions()`** — 長さ 1..30 の random `Vec<Action>` を生成する。`.prop_flat_map` パターンは少し奇妙だ: まず u64 vec を生成して **長さを決め**、それから各 position を `arb_action(i+1)` にマップして order ID を increment する。ポイントは、`arb_actions` が strictly-increasing な order ID を持つ sequence を produce すること (book での collision を避けるため)。
 
-**なぜ range (`1..=200` for account、`50..=150` for price) を使う?** Proptest を **plausible** なシナリオに biased するため。`0..=u64::MAX` range なら proptest はほぼ extreme outlier (account_id = 18_446_744_073_709_551_614) を generate する。Realistic range が real trading に見えるシナリオを produce する: account 1-200、price 50-150、quantity 1-20。Matching engine のバグは normal-looking sequence に最も隠れやすい。
+**range (`1..=200` for account、`50..=150` for price) を使う理由は?** Proptest を **plausible** なシナリオへバイアスするため。`0..=u64::MAX` の range にすると、proptest はほとんどの場合 extreme outlier (account_id = 18_446_744_073_709_551_614 等) を generate する。現実的な range にすれば、real trading に見えるシナリオが produce される: account 1-200、price 50-150、quantity 1-20。Matching engine のバグは、normal-looking な sequence に最も隠れやすい。
 
-> 🛑 **やりがちな勘違い。** 「広い range = 多いカバレッジ = 良い」。 **広い range = 役に立たないテストが多い。** 99.99% の確率で `qty = u64::MAX - 1` の order を generate するのは normal matching ロジックを exercise しない; overflow 境界ケースを exercise する。両方とも興味深いが、**簡単なバグを安く先に見つけたい**。Range を plausible 値に絞ると、proptest が予算を real production traffic が exercise する matching path に使う。
+> 🛑 **やりがちな勘違い。** 「広い range = カバレッジが多い = 良い」。 **広い range = 役に立たないテストが多い。** 99.99% の確率で `qty = u64::MAX - 1` の order を generate しても、normal な matching ロジックは exercise されず、overflow 境界ケースばかり exercise されてしまう。両方とも興味深いが、**簡単なバグを安く先に見つけたい**。Range を plausible な値に絞れば、proptest が予算を real production traffic が exercise する matching path に使ってくれる。
 
 ### Step 4: 1 つ目の invariant — `qty_conservation`
 
@@ -257,21 +257,21 @@ Strategy の下に append:
 
 Invariant: `total_in = 2 * total_filled + total_market_unfilled + resting_qty`。
 
-なぜ `2 *`? **fill は maker から 1 unit AND taker から 1 unit を消費するので、fill_qty の 1 unit が `total_in` に 2 回現れる** — maker が submit されたとき 1 回、taker が arrive したとき 1 回。計算:
+`2 *` が付くのはなぜか? **fill は maker から 1 unit と taker から 1 unit を消費するので、fill_qty の 1 unit が `total_in` に 2 回現れる** — maker が submit されたとき 1 回、taker が arrive したとき 1 回。計算:
 
 | Action | `total_in` | 最後に残るもの |
 | - | - | - |
-| Limit 10 unit を submit、完全 rest | +10 | 10 unit resting |
+| Limit 10 unit を submit し、完全 rest | +10 | 10 unit resting |
 | Market 10 unit を submit、liquidity なし | +10 | 10 unit 破棄 (fill なし) |
-| Limit 10 unit を submit、5 unit ask とマッチ | +10 | 5 unit fill (各 side から 1 つ)、5 unit が rest として残る |
+| Limit 10 unit を submit、5 unit の ask とマッチ | +10 | 5 unit fill (各 side から 1 つずつ)、5 unit が rest として残る |
 
-5 unit fill する場合、つまり: maker が 5 をオファー (既に `total_in`)、taker が 5 を取る (これも `total_in`)。Fill した 5 unit が `total_in` に 10 として現れる — 各 side から 1 回。**だから `2 * total_filled`。**
+5 unit fill する場合を考える: maker が 5 をオファーし (既に `total_in` に計上済み)、taker が 5 を取る (これも `total_in` に計上される)。Fill した 5 unit が `total_in` に 10 として現れる — 各 side から 1 回ずつ。**だから `2 * total_filled` になる。**
 
-**`#![proptest_config(ProptestConfig { cases: 256, .. })]` 行が `proptest!` block の冒頭** にあり、各テストを 256 回走らせる。Invariant 3 個 × 256 case = 768 ランダムシナリオ。
+**`proptest!` block の冒頭にある `#![proptest_config(ProptestConfig { cases: 256, .. })]` 行** が各テストを 256 回走らせる。Invariant 3 個 × 256 case = 768 ランダムシナリオ。
 
-**`prop_assert_eq!` (`assert_eq!` ではない) が重要** — proptest が「テスト失敗」を「システムエラーで panic」と区別する必要がある。`prop_assert_eq!` が failure を proptest の shrinking 機構に報告し、それが最小反例を見つけようとする。
+**`prop_assert_eq!` (`assert_eq!` ではない) が重要** — proptest が「テスト失敗」と「システムエラーで panic」を区別する必要があるから。`prop_assert_eq!` なら failure を proptest の shrinking 機構に報告し、最小反例を見つけようとしてくれる。
 
-> 🛑 **やりがちな勘違い。** 「`total_in = 2 * total_filled + ...` がおかしい — なぜ double-count?」 **marketplace では fill が **2 つの unit** を伴う — buyer の意図 1 個と seller の意図 1 個。** Maker が 5 オファーし taker が 5 取ると、engine は 10 unit の「マッチング需要」を見ている: 各 side から 5 個。2 つが size 5 の Fill にまとまったが、entered したときは 10 個の個別な taker-or-maker-unit だった。**Invariant が数えるのは個別の taker/maker 意図であって、unique な unit ではない。**
+> 🛑 **やりがちな勘違い。** 「`total_in = 2 * total_filled + ...` はおかしい — なぜ double-count するのか?」 **marketplace では fill が **2 つの unit** を伴う — buyer の意図 1 個と seller の意図 1 個。** Maker が 5 オファーし taker が 5 取ると、engine は 10 unit の「マッチング需要」を見ている: 各 side から 5 個。2 つが size 5 の Fill 1 つにまとまったが、entered したときには 10 個の個別の taker-or-maker-unit だった。**この invariant が数えるのは個別の taker/maker 意図であって、unique な unit ではない。**
 
 ### Step 5: 2 つ目の invariant — `no_crossed_book`
 
@@ -311,17 +311,17 @@ Invariant: `total_in = 2 * total_filled + total_market_unfilled + resting_qty`�
         }
 ```
 
-Body:
+Body の流れ:
 
-1. **各 action ごと** に order を submit。
-2. **各 submit 後** に `book.best_bid() < book.best_ask()` (両方存在するなら) を check。
-3. **どこかで `best_bid >= best_ask`** になったらテスト失敗 — book が cross。
+1. **各 action ごと** に order を submit する。
+2. **各 submit 後** に `book.best_bid() < book.best_ask()` (両方存在する場合) を check する。
+3. **どこかで `best_bid >= best_ask`** になればテスト失敗 — book が cross したことになる。
 
-これは **L7 の `book_does_not_cross_after_match` と同じ invariant** だが random sequence に対してテスト。L7 が **1 つ** のシナリオで invariant が成立することを証明; L8 が **256 randomized** シナリオで成立することを証明。
+これは **L7 の `book_does_not_cross_after_match` と同じ invariant** だが、random sequence に対してテストする。L7 では **1 つ** のシナリオで invariant が成立することを証明したが、L8 では **256 個の randomized** シナリオで成立することを証明する。
 
-`prop_assert!(b < a, "...")` macro が format string を含む — proptest 失敗時、cross した実際の bid/ask 値がエラーメッセージに表示される。プレーンな `assert!(b < a)` より informative。
+`prop_assert!(b < a, "...")` macro は format string を取れる — proptest 失敗時、cross した実際の bid/ask 値がエラーメッセージに表示される。プレーンな `assert!(b < a)` よりも informative。
 
-> 🛑 **やりがちな勘違い。** 「Property test が hand-trace test が見逃した failure を見つけたら?」 **それがまさに point。** Hand-trace test は specific シナリオを verify; proptest が general invariant を verify。Proptest がバグを見つけたら、shrinking phase が最小 failing case を produce する — それを **永久的な regression test として hand-trace suite に追加する**。**Proptest がバグを見つけ、hand-trace test がそれが戻ってこないようにする。**
+> 🛑 **やりがちな勘違い。** 「Property test が hand-trace test の見逃した failure を見つけたらどうする?」 **まさにそれが狙い。** Hand-trace test は specific なシナリオを verify し、proptest が general な invariant を verify する。Proptest がバグを見つけたら、shrinking phase が最小 failing case を produce してくれる — それを **永続的な regression test として hand-trace suite に追加する**。**Proptest がバグを見つけ、hand-trace test がそれを二度と戻らせない。**
 
 ### Step 6: 3 つ目の invariant — `determinism`
 
@@ -365,21 +365,21 @@ Body:
 
 この invariant は、action sequence を fresh `Book` に適用し end state の 5-tuple を返す helper closure `run` を定義する: `(best_bid, best_ask, depth_bid, depth_ask, all_fills_in_order)`。
 
-それから: `prop_assert_eq!(run(&actions), run(&actions))`。
+そして: `prop_assert_eq!(run(&actions), run(&actions))`。
 
-**同じ input の 2 run が同じ output を produce しなければならない。** Matching engine に何らかの non-determinism — randomness、HashMap iteration 順、スレッディング race — があれば、このテストが catch する。
+**同じ input の 2 run が同じ output を produce しなければならない。** Matching engine に何らかの non-determinism — randomness、HashMap iteration 順、スレッディング race — が紛れ込んでいれば、このテストが catch する。
 
-**なぜこれが最重要 property**: consensus chain は、すべての validator が同じ input から同じ fill を計算することに依存する。1 validator の matching engine が別の validator と異なる fill を produce すると、validator は block について合意できず、chain が fork する。**Determinism が load-bearing property** — `no_crossed_book` は correctness だが、determinism は **agreement** について。Correct だが non-deterministic な engine が consensus を壊す; deterministic だが incorrect な engine は少なくとも修復可能。
+**これが最重要 property である理由**: consensus chain は、すべての validator が同じ input から同じ fill を計算することに依存している。1 人の validator の matching engine が別の validator と異なる fill を produce すれば、validator は block について合意できず、chain が fork する。**Determinism こそが load-bearing property** — `no_crossed_book` は correctness の話だが、determinism は **agreement** の話。Correct だが non-deterministic な engine は consensus を壊すのに対し、deterministic だが incorrect な engine は少なくとも修復可能。
 
-**`Action::SubmitLimit { id, account, side, price, qty }` の destructuring で `*id`、`*account` 等を使う** のは、`actions` が `&[Action]` として borrow され、各 field が borrowed `&u64` だから。`*` で deref して value を得る。
+**`Action::SubmitLimit { id, account, side, price, qty }` の destructuring で `*id`、`*account` 等を使う** のは、`actions` が `&[Action]` として borrow されていて、各 field が borrowed `&u64` だから。`*` で deref して value を取り出す。
 
-> 🛑 **やりがちな勘違い。** 「Determinism は trivial に true に見える — ただの関数適用」。 **trivial に見えるが、小さなミスがそれを壊す。** このテストが **失敗する** non-determinism のソース:
+> 🛑 **やりがちな勘違い。** 「Determinism は trivial に true に見える — ただの関数適用ではないか」。 **trivial に見えるが、小さなミスがそれを壊す。** このテストが **失敗する** non-determinism の発生源としては:
 > - `bids`/`asks` に `BTreeMap` の代わりに `HashMap` を使う (HashMap iteration がランダム化される)。
-> - Telemetry 用に `submit` 内で `std::time::Instant::now()` 呼び出しを追加。
-> - Sync barrier なしで order を非同期処理する `tokio::task` を spawn。
-> - `f64` field を保存し、その bit に依存。
+> - Telemetry 用に `submit` 内で `std::time::Instant::now()` 呼び出しを追加する。
+> - Sync barrier なしで order を非同期処理する `tokio::task` を spawn する。
+> - `f64` field を保存し、その bit 表現に依存する。
 >
-> どれもコンパイルが通り、`no_crossed_book` を pass し、未来の contributor が導入したときだけ失敗する — `determinism` がここで catch する。**6 ヶ月後の自分から今の自分を守るテスト。**
+> どれもコンパイルが通り、`no_crossed_book` を pass してしまい、未来の contributor が導入したときに初めて失敗する — それを `determinism` がここで catch する。**6 ヶ月後の自分から今の自分を守るテスト。**
 
 ## テスト
 
@@ -407,33 +407,33 @@ test tests::resting_limit_creates_bid_or_ask ... ok
 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-総実行時間: **数秒**。Proptest がテストごとに 256 case 走らせ、各 case が小さい in-memory matching simulation、合計コストが 10 秒未満。
+総実行時間は **数秒**。Proptest がテストごとに 256 case 走らせるが、各 case は小さな in-memory matching simulation なので、合計コストは 10 秒未満で済む。
 
-どれかの prop test が失敗すれば:
+どれかの prop test が失敗すると、次のように出る:
 
 ```
 proptest: Saving this and future failures in /Users/.../proptest-regressions/...
 proptest: If this test was expected to be flaky, ...
 ```
 
-Proptest が **失敗 input を file にキャッシュ** する (`proptest-regressions/` 配下)。以降の run は最初にキャッシュ input を再テストするので、バグを見つけて修正したら毎回同じ最小反例で verify される。Regressions file を git に add する (小さい)。
+Proptest は **失敗 input を file にキャッシュ** する (`proptest-regressions/` 配下)。以降の run は最初にキャッシュ input を再テストするので、バグを見つけて修正したら毎回同じ最小反例で verify される。Regressions file は git に add しておく (小さい)。
 
 よくあるエラーと対処:
 
 - **`error: cannot find macro 'proptest' in this scope`** — `mod prop_tests` で `use proptest::prelude::*;` が抜けている。Step 2 を再確認。
-- **`error: trait 'Strategy' not satisfied`** — generator 関数の return type が `impl Strategy<Value = T>` ではない。`prop_oneof![Just(...)]` が `Just` 内の型に対して `impl Strategy<Value = T>` を返す; `.prop_map(...)` を chain すると value type が変わるかも。生成する値と `Strategy<Value = ...>` 型が一致することを確認。
-- **`prop_assert_eq` で合計が一致せず失敗** — `total_in` accumulator が間違っている。各 submit で order の `qty` を `total_in` に追加、fill quantity ではない。Step 4 を再確認 — submit 時にのみ sum、fill 時にはしない。
-- **Determinism 失敗** — どこかに HashMap、`time::Instant`、何らかの non-deterministic primitive を導入した可能性。L1-L7 のコードに対する最近の diff を check; バグは non-deterministic primitive が追加された箇所。
+- **`error: trait 'Strategy' not satisfied`** — generator 関数の return type が `impl Strategy<Value = T>` になっていない。`prop_oneof![Just(...)]` は `Just` 内の型に対して `impl Strategy<Value = T>` を返すが、`.prop_map(...)` を chain すると value type が変わることがある。生成する値と `Strategy<Value = ...>` 型が一致しているか確認。
+- **`prop_assert_eq` で合計が一致せず失敗** — `total_in` accumulator が間違っている。各 submit で order の `qty` を `total_in` に加える (fill quantity ではなく)。Step 4 を再確認 — sum は submit 時のみで、fill 時には行わない。
+- **Determinism 失敗** — どこかに HashMap、`time::Instant`、何らかの non-deterministic primitive を導入した可能性がある。L1-L7 のコードに対する最近の diff を確認 — バグは non-deterministic primitive が追加された場所にある。
 
 ## 設計の振り返り
 
 3 つの load-bearing な決定:
 
-1. **Proptest は dev-dep、runtime dep ではない。** Property test は `cargo test` で走る、production では走らない。`[dependencies]` に置くと `openhl-clob` のすべての consumer が proptest をコンパイル + link する羽目になる。`[dev-dependencies]` 規律が production dependency graph をクリーンに保つ。
+1. **Proptest は dev-dep であって runtime dep ではない。** Property test は `cargo test` で走り、production では走らない。`[dependencies]` に置くと `openhl-clob` のすべての consumer が proptest をコンパイル + link する羽目になる。`[dev-dependencies]` の規律で production dependency graph をクリーンに保つ。
 
-2. **Action enum は simplified な中間表現。** 各 variant が raw `u64` を持つ、`OrderId(u64)` / `AccountId(u64)` newtype-wrap 版ではない。**Proptest strategy が raw 値を generate し、test body が `submit` を呼ぶ前に newtype でラップする。** 意図的 — proptest の combinator が primitive 型で最も easily に動き、`as u64` ergonomics が boilerplate を節約する。Newtype 強制は test generator 内ではなく API 境界 (`submit` 呼び出し) で起こる。
+2. **Action enum は simplified な中間表現。** 各 variant は raw `u64` を保持し、`OrderId(u64)` / `AccountId(u64)` 風に newtype でラップしない。**Proptest strategy が raw 値を generate し、test body が `submit` を呼ぶ前に newtype でラップする。** 意図的 — proptest の combinator は primitive 型と最もスムーズに動くし、`as u64` の ergonomics で boilerplate を節約できる。Newtype の強制は test generator 内ではなく API 境界 (`submit` 呼び出し) で行う。
 
-3. **`determinism` が consensus の load-bearing property。** Correct だが non-deterministic な matching engine が consensus を壊す; deterministic だが incorrect な engine は修復可能。Non-determinism を catch するテストが chain の safety を守る。**Property を「何をテストするか」ではなく「何を守るか」で命名・優先順位付けする規律。**
+3. **`determinism` が consensus の load-bearing property。** Correct だが non-deterministic な matching engine は consensus を壊すのに対し、deterministic だが incorrect な engine は修復可能。Non-determinism を catch するテストが chain の safety を守る。**Property は「何をテストするか」ではなく「何を守るか」で命名・優先順位付けする — その規律が肝。**
 
 ## 答え合わせ
 
@@ -454,21 +454,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ `cases: 256`、`1024` や `100` ではなく?**
-バランス。256 case × 3 property × ~10ms per case ≈ 8 秒 — `cargo test` で毎回走らせるのに十分速い。1024 case なら 30+ 秒、dev iteration の摩擦になる。100 case なら稀なバグを見逃すリスク。**Cheap に走れるが common バグを catch するのに十分な case count を選ぶ。**
+**Q: なぜ `cases: 256` なのか? `1024` や `100` ではダメか?**
+バランスの問題。256 case × 3 property × ~10ms per case ≈ 8 秒 — `cargo test` で毎回走らせるのに十分速い。1024 case なら 30 秒超になり、dev iteration の摩擦になる。100 case では稀なバグを見逃すリスクがある。**安く走らせられて、common なバグを catch できる程度の case count を選ぶ。**
 
-**Q: なぜ proptest action に `cancel` がない?**
-Cancel action が determinism + conservation property を複雑にする: cancel 後、どの order ID が生きているか track する必要がある。「submit-only sequence」simplification で 3 invariant が tractable になる。Cancel-aware property の追加は follow-up; 既存 3 invariant が最高価値、先に正しく get する。
+**Q: なぜ proptest action に `cancel` を入れていないのか?**
+Cancel action は determinism と conservation property を複雑にする: cancel 後、どの order ID が生きているかを track する必要が出てくる。「submit-only sequence」に simplify することで、3 つの invariant が tractable になる。Cancel-aware property は follow-up で追加すればよい。既存の 3 invariant が最も価値の高いところなので、まずそこを正しく押さえる。
 
-**Q: Proptest が失敗 input を見つけたら何が起きる?**
-**Shrinking phase** に入る。失敗 input から開始し、proptest が依然失敗する最小の subset / 最小値を見つけようとする。我々のテストケース generator (`Vec<Action>` を produce) では、shrinking が 25-action sequence を 3-action sequence に reduce してまだバグを再現するかもしれない。最小 sequence がデバッグ対象 — original input よりずっと簡単。
+**Q: Proptest が失敗 input を見つけたらどうなるか?**
+**Shrinking phase** に入る。失敗 input から始めて、proptest がまだ失敗する最小の subset / 最小値を探す。本コースのテストケース generator (`Vec<Action>` を produce) では、shrinking で 25-action sequence が 3-action sequence まで縮んでバグを再現することもある。デバッグ対象はその最小 sequence — original input よりはるかに扱いやすい。
 
-**Q: `arb_actions` を Limit order のみに produce させられる?**
-できる — `arb_action` の `prop_oneof![3 => limit_action, 1 => market_action]` を `prop_oneof![1 => limit_action]` に変更 (または `prop_oneof` なしで `limit_action` を直接 return)。我々が持つ invariant では Market order が **有用** (discard-remainder path を exercise) だが、Limit-only flow に focus したければできる。**Proptest strategy は composable。**
+**Q: `arb_actions` に Limit order だけを produce させられるか?**
+できる — `arb_action` の `prop_oneof![3 => limit_action, 1 => market_action]` を `prop_oneof![1 => limit_action]` に変える (あるいは `prop_oneof` を外して `limit_action` を直接 return する)。今ある invariant では Market order が **有用** (discard-remainder path を exercise する) だが、Limit-only flow に focus したければ可能。**Proptest strategy は composable。**
 
 ## 次のレッスン (L9)
 
-Matching engine が完全にテストされた。**まだ consensus と統合されていない。** L9 が Module 4 (Bridge integration) を開始: `LiveRethEvmBridge` に `Book` + `pending_fills` field を追加、order を CLOB にルーティングし結果 Fill を buffer に蓄積する `submit_order` method を追加。L9 後、bridge が matching engine を所有する; L10 が `build_payload` で buffer を drain する。
+Matching engine の徹底的なテストが完了した。**まだ consensus とは統合されていない。** L9 から Module 4 (Bridge integration) に入る: `LiveRethEvmBridge` に `Book` + `pending_fills` field を追加し、order を CLOB にルーティングして結果の Fill を buffer に蓄積する `submit_order` method を追加する。L9 後、bridge が matching engine を所有するようになる。L10 では `build_payload` で buffer を drain する。
 ````
 
 ---

@@ -26,40 +26,40 @@
 cargo test -p openhl-evm --release
 ```
 
-…が引き続き通る（42 tests）。ただし内部では、precompile はもう**live state を読む** — ハードコード値ではなく：
+上記の実行結果が引き続き通る（42 tests）。ただし内部では、precompile が **live state を読む** ようになっている — ハードコード値ではなく：
 
-- **`read_best_bid` 本体を差し替え** — `let mut out = vec![0, 0, ..., 100, 0, 0, ..., 10]` のハードコードを捨て、`if let Some((price, qty)) = current_best_bid() { ... out に書き込む ... }` に。CLOB 未インストール → 64-byte の zero（「未初期化 perp market」セマンティクスに一致）。
-- **L3 の `read_best_bid_returns_hardcoded_price_and_qty` テストを rename** → `read_best_bid_returns_zero_when_no_clob_installed`。形は同じ、100/10 でなく zero をアサート。
-- **L3 の `registered_precompile_is_invokable_via_registry` を更新** — 同じロジック。ただしまず CLOB を uninstall して zero output を期待。
-- **新規 `static TEST_SERIALIZER: Mutex<()>` をテストモジュール先頭に追加** — `CLOB_STATE` を触るテストはまずこのロックを取る。並列 `cargo test` だと global が競合するため。
+- **`read_best_bid` の本体を差し替える** — `let mut out = vec![0, 0, ..., 100, 0, 0, ..., 10]` のハードコードを捨て、`if let Some((price, qty)) = current_best_bid() { ... out に書き込む ... }` に変える。CLOB 未インストールなら 64-byte の zero を返す（「未初期化 perp market」のセマンティクスに合わせる）。
+- **L3 の `read_best_bid_returns_hardcoded_price_and_qty` テストを rename** して `read_best_bid_returns_zero_when_no_clob_installed` に。形は同じだが、100/10 ではなく zero を assert する。
+- **L3 の `registered_precompile_is_invokable_via_registry` を更新** — ロジックは同じだが、まず CLOB を uninstall してから zero output を期待する形にする。
+- **テストモジュールの先頭に `static TEST_SERIALIZER: Mutex<()>` を新規追加** — `CLOB_STATE` を触るテストは、まずこのロックを取る。並列 `cargo test` だと global で競合するからだ。
 
-course-7 + L3 の callability テストは引き続き通る。アサーションだけ変わる。**大きな証明 — 「live CLOB データが EVM 出力までラウンドトリップする」 — は L6 の仕事。** L5 は差し替え。L6 が end-to-end の動作を実証。
+course 7 と L3 の callability テストは引き続き通る。assertion だけが変わる。**大きな証明 — 「live な CLOB データが EVM の出力までラウンドトリップする」 — は L6 の仕事。** L5 は差し替えにとどめ、L6 で end-to-end の挙動を実証する。
 
 ## おさらい
 
-L4 終了時点：
+L4 終了時点の状態：
 
-- `Book` に `best_bid_with_qty` / `best_ask_with_qty`。
-- `precompiles/mod.rs` に `CLOB_STATE` static + 3 つのモジュール関数。
+- `Book` に `best_bid_with_qty` / `best_ask_with_qty` を追加済み。
+- `precompiles/mod.rs` に `CLOB_STATE` static とモジュール関数 3 つがある。
 - `LiveRethEvmBridge::new` が `install_clob(Arc::clone(&clob))` を呼ぶ。
-- **だが `read_best_bid` はまだハードコードの `(100, 10)` を返す** — 配管は誰も使っていない。
+- **にもかかわらず `read_best_bid` はまだハードコードの `(100, 10)` を返している** — 配管は誰も使っていない。
 
-L5 でついに使う。
+L5 でようやくその配管を使う。
 
 ## プラン
 
-`crates/evm/src/precompiles/mod.rs` に 4 つの編集：
+`crates/evm/src/precompiles/mod.rs` に対する編集が 4 つ：
 
-1. **`read_best_bid` 本体を差し替え** — `current_best_bid()` を呼んで、`Some` のときだけ非ゼロ byte を書き込む。
-2. **関数のドキュメントコメントを更新** — ハードコード文言を消し、「no bid または CLOB 未インストールなら 0」セマンティクスに置き換え。
-3. **テストモジュールに `static TEST_SERIALIZER: Mutex<()>` を追加。**
-4. **L3 最初のテストを rename + 書き換え** + **L3 最後のテストを更新** — 両方 `CLOB_STATE` を触るので両方 serializer ロックを取り、まず `uninstall_clob()` を呼ぶ。
+1. **`read_best_bid` の本体を差し替え** — `current_best_bid()` を呼び、`Some` のときだけ非ゼロのバイトを書き込む。
+2. **関数のドキュメントコメントを更新** — ハードコード前提の記述を消し、「bid なし、または CLOB 未インストールなら 0」というセマンティクスに置き換える。
+3. **テストモジュールに `static TEST_SERIALIZER: Mutex<()>` を追加する。**
+4. **L3 の最初のテストを rename + 書き換え** し、**L3 の最後のテストを更新** する — どちらも `CLOB_STATE` を触るので、両方とも serializer ロックを取り、まず `uninstall_clob()` を呼ぶようにする。
 
-モジュールレベルのシグネチャは変わらない。registry テスト（`openhl_precompiles_registers_clob_address`）は `CLOB_STATE` を触らないのでそのまま。
+モジュールレベルのシグネチャは変わらない。registry テスト（`openhl_precompiles_registers_clob_address`）は `CLOB_STATE` を触らないので、そのままにしておく。
 
-> 🛑 **考えてみよう。** スクロール前に — `cargo test` はデフォルトで**並列実行**（典型的には logical CPU 1 つにつき 1 スレッド）。我々のテスト 2 つが `CLOB_STATE` を read or write する。**serialize しないとどんな failure mode が出る？** ヒント：「あるテストが `None` を期待しているときに、瞬間的に `Some(clob_A)` になりうる」状況を想像してみる。
+> 🛑 **考えてみよう。** スクロールする前に — `cargo test` はデフォルトで **並列実行** される（典型的には論理 CPU 1 つにつき 1 スレッド）。今あるテストのうち 2 つが `CLOB_STATE` を read/write する。**直列化しなかった場合、どんな失敗モードが出るか?** ヒント：あるテストが `None` を期待している瞬間に、`Some(clob_A)` が一瞬だけ見えてしまう、という状況を想像してみる。
 
-（答え：**flaky test**。テスト A が CLOB を install、テスト B は「CLOB なし → zero output」を assert したい — でも B が A の `install_clob` と `uninstall_clob` の間に走ったら、B は A の CLOB を見て間違った値を assert する。失敗率はテストスケジューリング次第 — 時々 0%、時々 30%。CI がランダムに flake する。`TEST_SERIALIZER` mutex パターンはこれらのテストを 1 つずつ走らせて race を排除。**コスト：0.0 秒（これらのテストはマイクロ秒で終わる）。便益：deterministic な CI。**）
+（答え：**flaky test になる**。テスト A が CLOB を install し、テスト B が「CLOB なし → zero output」を assert したい — だが B が、A の `install_clob` と `uninstall_clob` の間に走ってしまえば、B は A の CLOB を見て間違った値を assert することになる。失敗率はテストのスケジューリング次第で、0% のこともあれば 30% のこともある。CI がランダムに flake する。`TEST_SERIALIZER` の mutex パターンは、これらのテストを 1 つずつ走らせて race を排除する。**コストは 0.0 秒（これらのテストはマイクロ秒で終わる）、利得は deterministic な CI。**）
 
 ## 手順
 
@@ -97,15 +97,15 @@ fn read_best_bid(_input: &[u8], _gas_limit: u64, _reservoir: u64) -> PrecompileR
 }
 ```
 
-3 つの変化：
+変化は次のとおり：
 
-- **`let mut out = vec![0u8; 64]`** — 同じ出発点、全 zero。
-- **`if let Some((price, qty)) = current_best_bid()`** — global を read。`None` なら body を short-circuit、`out` は zero のまま。
-- **`out[24..32].copy_from_slice(&price.0.to_be_bytes())`** — `Price` は `u64` をラップ。`to_be_bytes()` は `[u8; 8]` を返す。その 8 bytes を 32-byte word の**最後の 8 bytes** (position 24..32) にコピー。先頭 24 bytes は zero — それが u64 値の big-endian u256 エンコーディング。
-- **qty も同じく `out[56..64]`** — 2 つ目の 32-byte word、最後の 8 bytes。
+- **`let mut out = vec![0u8; 64]`** — 出発点は同じく全ゼロ。
+- **`if let Some((price, qty)) = current_best_bid()`** — global を read する。`None` ならボディを short-circuit し、`out` は zero のままにする。
+- **`out[24..32].copy_from_slice(&price.0.to_be_bytes())`** — `Price` は `u64` のラップ型。`to_be_bytes()` は `[u8; 8]` を返す。その 8 バイトを 32-byte word の **最後の 8 バイト**（position 24..32）にコピーする。先頭 24 バイトはゼロ — これが u64 値の big-endian u256 エンコーディング。
+- **qty も同様に `out[56..64]` へ** — 2 つ目の 32-byte word の最後の 8 バイト。
 - **ハードコードの `out[31] = 100` と `out[63] = 10` は消える。**
 
-> 🛑 **やりがちな勘違い。** 「明快さのために `U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)` でいい？」 **一時的な `[u8; 32]` を allocate してから byte-by-byte でコピー**する。直接 `out[24..32].copy_from_slice(&price.0.to_be_bytes())` なら output buffer に直接書き込んで中間 allocation なし。**同じ結果、半分の仕事。** Precompile は hot path — マイクロ秒が積み重なる。
+> 🛑 **やりがちな勘違い。** 「明快さのために `U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)` でいいのでは?」 — それだと **一時的な `[u8; 32]` を allocate してから byte-by-byte でコピー** することになる。直接 `out[24..32].copy_from_slice(&price.0.to_be_bytes())` と書けば、output buffer に直接書き込んで中間 allocation を挟まない。**結果は同じだが、仕事は半分。** precompile は hot path で、マイクロ秒の積み重ねが効いてくる。
 
 ### Step 2: ドキュメントコメントを更新
 
@@ -138,7 +138,7 @@ live state 版に置き換え：
 /// never error — gas accounting is the EVM's responsibility.
 ```
 
-「0 if no bid or no CLOB installed」が肝 — メインネットコントラクトが対応せねばならない API 契約を明文化。**スマートコントラクトは「未インストール」と「empty book」を見分けられない** — 両方とも zero。これは意図的。区別したいなら別経路で liveness を check すべし。
+「0 if no bid or no CLOB installed」が肝 — メインネットのコントラクトが対応しなければならない API 契約を明文化している。**スマートコントラクトからは「未インストール」と「empty book」を見分けられない** — どちらも zero を返す。これは意図的だ。区別したい場合は、別の経路で liveness をチェックすればよい。
 
 ### Step 3: テストモジュールに `TEST_SERIALIZER` を追加
 
@@ -150,15 +150,15 @@ live state 版に置き換え：
 static TEST_SERIALIZER: Mutex<()> = Mutex::new(());
 ```
 
-1 行。素の `Mutex<()>`（payload が unit 型 — 値は見ない、ロックだけ）。`CLOB_STATE` を触る各テストは冒頭で：
+1 行で済む。素の `Mutex<()>` だ（payload は unit 型 — 中身の値は見ず、ロックだけが目的）。`CLOB_STATE` を触る各テストは、冒頭で次のように書く：
 
 ```rust
 let _g = TEST_SERIALIZER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 ```
 
-`unwrap_or_else(PoisonError::into_inner)` パターンが**死活** — これがないと panic したテスト 1 つで mutex が poison し、以降の全テストが `PoisonError` で落ちる。poison から復旧することで「このテストは 1 回 panic した」を「このテストは 1 回 panic したが後続は走る」に変える。復旧したガードも排他アクセスを与える。Poison は signal であって permanent disability ではない。
+`unwrap_or_else(PoisonError::into_inner)` パターンが **死活問題** だ — これがないと、テストが 1 つ panic しただけで mutex が poison し、以降の全テストが `PoisonError` で落ちる。poison から復旧することで「このテストは 1 度 panic した」を「このテストは 1 度 panic したが、後続は走る」に変える。復旧したガードもちゃんと排他アクセスを与えてくれる。poison はシグナルであって、永久の障害ではない。
 
-> 🛑 **やりがちな勘違い。** 「`serial_test` crate の `#[serial]` でいいんじゃ？」 **使えるが、1 個の mutex で済む話に対して dev-dep を増やす。** `serial_test` は proc-macro、属性パース、hash-keyed lock map に手を出す。1 つの global を触る 4 つのテストには、1 行の `static Mutex<()>` がちょうどよい。**複数 global を異なるロック partition で管理したくなったら crate に手を出せばよい — それ以前にはやらない。**
+> 🛑 **やりがちな勘違い。** 「`serial_test` crate の `#[serial]` でいいのでは?」 — **使えるが、mutex 1 つで済む話に対して dev-dep を増やすことになる。** `serial_test` は proc-macro、属性のパース、hash-keyed な lock map に手を出す。global を 1 つ触るテスト 4 つに対しては、1 行の `static Mutex<()>` がちょうどよい。**複数の global を別々のロック partition で管理したくなったら crate を導入すればよい — それ以前にやる必要はない。**
 
 ### Step 4: L3 最初のテストを更新（rename + 書き換え）
 
@@ -199,15 +199,15 @@ fn read_best_bid_returns_zero_when_no_clob_installed() {
 }
 ```
 
-L3 との 5 つの差分：
+L3 との差分は 5 つ：
 
-1. **Rename** — 関数名が新セマンティクスを記述。
-2. **Doc コメント書き換え** — 「uninstalled = zero」セマンティクスを説明。
-3. **1 行目: `TEST_SERIALIZER` を取得。**
-4. **2 行目: `uninstall_clob()`。** なぜ？ 前のテストが CLOB を install して clean up し忘れた、もしくは前回の test run が state を残した可能性があるから。`uninstall_clob()` は idempotent — 常に呼んで安全 — そして既知の出発状態を保証する。
-5. **アサーション変更** — `U256::from(100u64)` / `U256::from(10u64)` でなく `U256::ZERO`。gas check はそのまま（何を返すかに関わらず precompile は同じ gas を課金）。
+1. **Rename** — 関数名が新しいセマンティクスを表すように変える。
+2. **doc コメントの書き換え** — 「uninstalled = zero」のセマンティクスを説明する。
+3. **1 行目で `TEST_SERIALIZER` を取得する。**
+4. **2 行目で `uninstall_clob()` を呼ぶ。** なぜか? 前のテストが CLOB を install したまま clean up し忘れている、あるいは前回の test run の state が残っている、という可能性があるからだ。`uninstall_clob()` は idempotent なので常に呼んで安全で、既知の出発状態を保証してくれる。
+5. **assertion の変更** — `U256::from(100u64)` / `U256::from(10u64)` ではなく `U256::ZERO`。gas check はそのまま（何を返そうと precompile は同じ gas を課金する）。
 
-> 🛑 **やりがちな勘違い。** 「`uninstall_clob()` を毎テスト先頭で呼ぶのは、既に未インストールなら無駄では？」 **`uninstall_clob` は `*CLOB_STATE.write().expect(...) = None`** — 1 つの取得→解放、マイクロ秒。代替は共有 init 順を持つ global「test setup」関数 — はるかに大きな労力でわずかな節約。**Global state を扱うときの Rust テストの定石は「明示的な per-test reset」。**
+> 🛑 **やりがちな勘違い。** 「すでに未インストールなら、毎回 `uninstall_clob()` を呼ぶのは無駄なのでは?」 — **`uninstall_clob` の実体は `*CLOB_STATE.write().expect(...) = None`** だ。lock を 1 回取って戻すだけ、マイクロ秒の話だ。代替案は、初期化順を共有する global な「test setup」関数を作ること — 労力ばかり大きく、節約はわずかだ。**global state を扱うときの Rust テストの定石は「test ごとに明示的にリセットする」こと。**
 
 ### Step 5: L3 最後のテストを更新
 
@@ -260,13 +260,13 @@ fn registered_precompile_is_invokable_via_registry() {
 }
 ```
 
-L3 との 3 つの差分：
+L3 との差分は 3 つ：
 
-1. **`TEST_SERIALIZER` + `uninstall_clob` で開始** — テスト 1 と同じパターン。
-2. **Doc コメント** — 追加（L3 にはなかった）。なぜ unit test と並べてこのテストが存在するのか説明。
-3. **`assert_eq!(price, U256::ZERO)`** — `U256::from(100u64)` から変更。
+1. **冒頭で `TEST_SERIALIZER` を取って `uninstall_clob` を呼ぶ** — 1 つ目のテストと同じパターン。
+2. **doc コメントを追加**（L3 にはなかった）。なぜこのテストが unit test と並んで存在するのかを説明する。
+3. **`assert_eq!(price, U256::ZERO)`** — `U256::from(100u64)` から変更する。
 
-真ん中のテスト（`openhl_precompiles_registers_clob_address`）は `CLOB_STATE` を触らない — registry membership だけチェック。**serializer + uninstall を追加してはいけない** — 不要な serialization で微妙な slowdown。
+真ん中のテスト（`openhl_precompiles_registers_clob_address`）は `CLOB_STATE` を触らない — registry membership をチェックするだけだ。**serializer や uninstall を加えてはいけない** — 不要な直列化で、地味に遅くなるだけだ。
 
 ## テスト
 
@@ -283,11 +283,11 @@ running 42 tests
 test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-L4 と同じ test 数（42）。違うのは：
-- precompile を触る 4 つのテストのうち 2 つが `TEST_SERIALIZER` 経由で **serialize** される。
-- 修正済みの 2 つのテストは `(100, 10)` でなく **zero output** を assert。
+テスト数は L4 と同じ 42 個。違いは次のとおり：
+- precompile を触る 4 つのテストのうち 2 つが、`TEST_SERIALIZER` 経由で **直列化** される。
+- 修正済みの 2 つのテストは `(100, 10)` ではなく **zero output** を assert する。
 
-serializer が何を防いでいるか直感したいなら：
+serializer が何を防いでいるかを体感したいなら：
 
 ```bash
 # 一時的に両テストから `let _g = TEST_SERIALIZER.lock()...` の行を削除。
@@ -298,25 +298,25 @@ for i in $(seq 1 20); do
 done
 ```
 
-時々失敗するはず — スケジューリング次第。終わったら戻す。
+スケジューリング次第で、時々失敗するはず。確認できたら元に戻す。
 
 よくあるエラーと対処：
 
-- **`unused import: Order, OrderId, OrderType, Side`** — L3 のハードコードテストでは使われていた（L5 の zero-output テストでは不要）。**残しておく** — L6 で live-state テストが使う。1 レッスンの unused warning は無害。
-  - もし `#[cfg(test)] mod tests` に `use openhl_clob::{...};` が網羅して入っていれば、残しておく。L6 で必要。
-- **`error[E0599]: no method named 'lock' found for struct 'Mutex<()>'`** — `Mutex` を別の場所（例：`tokio::sync::Mutex`）から import している。テストモジュールの `use super::*;` で親モジュールから `std::sync::Mutex` が入ってくるはず。
-- **1 回通ったあと失敗 — `PoisonError`** — 1 つのテストが `TEST_SERIALIZER` 保持中に panic した。`unwrap_or_else(PoisonError::into_inner)` パターンがこれを復旧する。両テストで正確にこの形になっているか確認。
-- **個別に走らせると通る、並列だと落ちる** — `TEST_SERIALIZER` が実際には適用されていない。`let _g = TEST_SERIALIZER.lock().unwrap_or_else(...)` が**最初の文**（`uninstall_clob()` の前）であることを確認。`_g` が途中で drop されると（例：shadow される）テストの途中でロックが解放される。
+- **`unused import: Order, OrderId, OrderType, Side`** — L3 のハードコードテストでは使っていたが、L5 の zero-output テストでは要らない。**残しておくこと** — L6 の live-state テストで使う。1 レッスンぶんの unused warning は無害だ。
+  - `#[cfg(test)] mod tests` に `use openhl_clob::{...};` がまとめて入っていれば、そのまま残す。L6 で必要になる。
+- **`error[E0599]: no method named 'lock' found for struct 'Mutex<()>'`** — `Mutex` を別の場所（たとえば `tokio::sync::Mutex`）から import している。テストモジュールの `use super::*;` で、親モジュールから `std::sync::Mutex` が入ってくるはずだ。
+- **1 回通ったあとに `PoisonError` で失敗** — どこかのテストが `TEST_SERIALIZER` を保持したまま panic した。`unwrap_or_else(PoisonError::into_inner)` パターンが復旧してくれる。両テストでこの形になっているか確認する。
+- **個別なら通るが、並列だと落ちる** — `TEST_SERIALIZER` が実際には効いていない。`let _g = TEST_SERIALIZER.lock().unwrap_or_else(...)` が **最初の文** （`uninstall_clob()` の前）にあることを確認する。`_g` が途中で drop されてしまうと（たとえば shadow されると）、テストの途中でロックが解放されてしまう。
 
 ## 設計の振り返り
 
-ここに焼き込んだ重要な決定 3 つ：
+ここに焼き込んだ重要な決定が 3 つ：
 
-1. **未インストール CLOB は zero を返し、エラーにしない。** メインネット相当は「未初期化 storage slot は zero を返す」 — Solidity コントラクトが自然に処理する。エラーにすると、bootstrap 中（ブリッジが CLOB を install する前）に precompile が呼ばれたら transaction が revert する。Zero を返せば gracefully に degrade — コントラクトは「流動性なし」と見て trade を控える。それが正しい挙動。
+1. **CLOB 未インストール時は zero を返し、エラーにはしない。** メインネット相当の挙動は「未初期化 storage slot は zero を返す」だ — Solidity コントラクトはこれを自然に処理してくれる。エラーにしてしまうと、bootstrap 中（ブリッジが CLOB を install する前）に precompile が呼ばれたときに transaction が revert してしまう。zero を返せば gracefully に degrade する — コントラクトは「流動性なし」と判断して trade を控える。これが正しい挙動だ。
 
-2. **`TEST_SERIALIZER` はモジュール単位、global ではない。** `CLOB_STATE` を触らない `live_node.rs` のテストはこれと serialize すべきでない。モジュールローカル mutex で partition を狭く保つ。
+2. **`TEST_SERIALIZER` はモジュール単位にとどめ、global にはしない。** `CLOB_STATE` を触らない `live_node.rs` のテストは、これと直列化すべきではない。モジュールローカルな mutex で、partition を狭く保つ。
 
-3. **テストは末尾でなく先頭で `uninstall_clob()` を呼ぶ。** なぜ対称的でない？ **Panic したテストは cleanup コードを走らせない**から。テスト中 panic すれば CLOB が install されたまま残る。次のテストの「start-of-test reset」が拾う。Live-state テスト（L6）では末尾でも uninstall するが、それは明快さのため — safety net は start-of-test reset。
+3. **テストの先頭で `uninstall_clob()` を呼ぶ — 末尾ではなく。** 対称的にしないのはなぜか? **panic したテストは cleanup コードを走らせないから** だ。テスト中に panic すると、CLOB は install されたまま残る。次のテストの「テスト開始時のリセット」がそれを拾う。L6 の live-state テストでは末尾でも uninstall するが、それは明快さのためであって、安全網は「テスト開始時のリセット」のほうだ。
 
 ## 答え合わせ
 
@@ -326,7 +326,7 @@ git checkout b635ef7
 diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/precompiles/mod.rs
 ```
 
-L5 終了時点であなたのコードは Stage 9b に**かなり近い** — 同じ `read_best_bid` 本体、同じ `TEST_SERIALIZER`、同じ 2 つの更新テスト。残る差分：Stage 9b には `read_best_bid_returns_live_state_when_clob_installed` もある — L6 で追加。
+L5 を終えた時点で、あなたのコードは Stage 9b に **かなり近い** — `read_best_bid` の本体も、`TEST_SERIALIZER` も、更新済みの 2 つのテストも揃っている。残る差分は、Stage 9b にある `read_best_bid_returns_live_state_when_clob_installed` だ — これは L6 で追加する。
 
 戻す：
 
@@ -336,21 +336,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ `read_best_bid` は CLOB 未インストール時に gas を減らさない？**
-条件付きで `current_best_bid()` が `None` なら少ない gas を返す、にできる。が、それは実装詳細を露出する — 攻撃者は gas を測ってあなたの validator が CLOB を install したかを検出できる。一律の `CLOB_BASE_GAS_COST` 課金が標準的「constant-time precompile」パターン。**Gas 課金は state を leak すべきでない。**
+**Q: CLOB 未インストール時に `read_best_bid` の gas を減らさないのはなぜ?**
+条件分岐で `current_best_bid()` が `None` のときに少ない gas を返す、という設計もありうる。だがそれは実装詳細を漏らす — 攻撃者は gas 消費量を計測することで、validator が CLOB を install したかどうかを判別できてしまう。一律で `CLOB_BASE_GAS_COST` を課金するのが、定石の「constant-time precompile」パターンだ。**gas 課金から state を漏らしてはいけない。**
 
-**Q: `u64::to_be_bytes()` と `U256::to_be_bytes::<32>()` の違い？**
-`u64::to_be_bytes()` は `[u8; 8]` — 8 bytes。`U256::to_be_bytes::<32>()` は `[u8; 32]` — 左 zero-padding した 32 bytes。**我々のケース（8-byte source 値、32-byte destination）では、source 形状の 8 bytes を destination の右端 8 bytes にコピーしたい。** それが `out[24..32].copy_from_slice(&u64_bytes)`。U256 版だと 32 bytes 全部コピー（うち 24 bytes は zero） — 同じ結果、4 倍の仕事。
+**Q: `u64::to_be_bytes()` と `U256::to_be_bytes::<32>()` の違いは?**
+`u64::to_be_bytes()` は `[u8; 8]` — 8 バイトを返す。`U256::to_be_bytes::<32>()` は `[u8; 32]` — 左を zero パディングした 32 バイトを返す。**今回のように、source が 8 バイトの値で destination が 32 バイトの場合、source の 8 バイトを destination の右端 8 バイトにコピーしたい。** それを実現するのが `out[24..32].copy_from_slice(&u64_bytes)` だ。U256 版を使うと 32 バイトすべて（うち 24 バイトは zero）をコピーすることになる — 同じ結果に 4 倍の仕事をかけている。
 
-**Q: `TEST_SERIALIZER` があっても flake する？**
-通常の `cargo test` 実行では、しない。Mutex が 2 つの test スレッドが `CLOB_STATE` の修正途中を観測することを防ぐ。それでも flake する edge case：(a) `current_best_bid` 内で panic して mutex が poison（`into_inner` で復旧）、(b) テストモジュール外のコードが `CLOB_STATE` に書き込む（`reth_node.rs` の integration test がいずれ触り始めたら問題 — まだ触っていない）。
+**Q: `TEST_SERIALIZER` があっても flake することはあるか?**
+通常の `cargo test` 実行ではしない。Mutex が、2 つのテストスレッドから `CLOB_STATE` の途中状態を観測することを防いでくれる。それでも flake しうるエッジケース：(a) `current_best_bid` の中で panic して mutex が poison する（`into_inner` で復旧する）、(b) テストモジュール外のコードが `CLOB_STATE` に書き込む（`reth_node.rs` の integration test がいずれそれをやり始めたら問題になるが、今はやっていない）。
 
-**Q: 単に precompile の input bytes を通して CLOB を渡せばいいんじゃ？**
-Smart contract は `staticcall(gas, addr, input, output)` で precompile を呼ぶ。Input は contract が組み立てた calldata — **node operator が** CLOB pointer を挿し込む方法はない。Precompile の input bytes は user-controlled であって node-controlled ではない。Process-global state こそが node operator が持つ唯一の注入点。
+**Q: precompile の input bytes を経由して CLOB を渡せばいいだけでは?**
+スマートコントラクトは `staticcall(gas, addr, input, output)` で precompile を呼ぶ。input はコントラクト側が組み立てた calldata だ — **ノードオペレータが** CLOB のポインタを差し込む手段はない。precompile の input bytes は user-controlled であって node-controlled ではないからだ。process-global な state こそが、ノードオペレータに残された唯一の注入点になる。
 
 ## 次のレッスン（L6）
 
-配線は通ったが、ラウンドトリップを exercise する test がまだない。L6 で `read_best_bid_returns_live_state_when_clob_installed` を追加：既知の bid を持つ CLOB を install、precompile を呼ぶ、その bid が output bytes にラウンドトリップすることを検証。証明 — `Solidity contract → STATICCALL → EVM dispatch → REVM precompile registry → 我々の関数 → live Book lock → encoded を返す → contract が real data を見る` — ついに end-to-end で実証。これが **Module 2 のマイルストーン**。
+配線は通ったが、ラウンドトリップを exercise するテストはまだない。L6 で `read_best_bid_returns_live_state_when_clob_installed` を追加する：既知の bid を持つ CLOB を install し、precompile を呼び、その bid が output bytes までラウンドトリップしてくることを検証する。これにより `Solidity contract → STATICCALL → EVM dispatch → REVM precompile registry → 自分の関数 → live な Book lock → エンコードして返す → コントラクトが本物のデータを見る` というチェーンが、ついに end-to-end で実証される。これが **Module 2 のマイルストーン** だ。
 ````
 
 ---

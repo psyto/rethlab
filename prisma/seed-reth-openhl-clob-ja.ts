@@ -37,11 +37,11 @@ export async function seedRethOpenHlClobJA(prisma: PrismaClient) {
                   xpReward: 50,
                   content: `# OpenHL CLOB を作る — substrate の上に matching engine を載せる
 
-前コース (\`building-openhl-consensus\`) は、real Reth EVM を通じて 0.02 秒で block を decide する single-validator BFT chain で終わった。**ただし decide していたのは空の block。** トランザクションなし、マッチングなし、価格発見なし。
+前コース (\`building-openhl-consensus\`) は、real Reth EVM を通じて 0.02 秒で block を decide する single-validator BFT chain で終わった。**ただし decide していたのは空の block。** トランザクションもマッチングも価格発見もない。
 
-本コースで **CLOB matching engine** を追加する — 「HYPE を $25 で 10 個買いたい」と「HYPE を $25 で 5 個売りたい」を real fill に変換する Hyperliquid の核。Stage 8a (701 行) が pure state machine を build、Stage 8d (171 行) が bridge に配線して、commit された block が matching engine の produce した fill を運ぶようになる。
+本コースで **CLOB matching engine** を追加する — 「HYPE を $25 で 10 個買いたい」と「HYPE を $25 で 5 個売りたい」を real fill に変換する Hyperliquid の核。Stage 8a (701 行) で pure state machine を build し、Stage 8d (171 行) で bridge に配線する。これで commit された block が matching engine の produce した fill を運ぶようになる。
 
-本コース終了時、\`cargo test clob_fills_flow_into_payload\` が pass する — real fill が matching engine から \`LiveRethEvmBridge::build_payload\` を通って payload に流れ、それを consensus が commit する。
+本コース終了時には \`cargo test clob_fills_flow_into_payload\` が pass する — real fill が matching engine から \`LiveRethEvmBridge::build_payload\` を通って payload に流れ、それを consensus が commit する。
 
 ## 1. 終了時に手にするもの
 
@@ -51,15 +51,15 @@ export async function seedRethOpenHlClobJA(prisma: PrismaClient) {
 - **\`Book\` + \`Order\` + \`Fill\` 型** — CEX が「order book」と呼ぶものに対応。
 - **テスト 12 個合格**: hand-trace されたシナリオ 9 個 (空の book、FIFO 優先、market order の流動性枯渇、partial fill、cancel、マッチ後の no-crossed-book) + proptest invariant 3 個 (256 ケース × 3 = 768 ランダムシナリオ — quantity conservation、no-crossed-book always、determinism = replayability)。
 
-そして \`crates/evm/\` に新規 integration test:
+加えて \`crates/evm/\` に新規 integration test:
 
-- **\`clob_fills_flow_into_payload\`** — real Reth node を bootstrap、bridge の CLOB に maker bid + crossing taker sell を submit、結果の fill が次の \`build_payload\` 出力に現れることを assert、そして **過去の payload は遡って fill されない** ことを assert (drain semantics は forward-only)。
+- **\`clob_fills_flow_into_payload\`** — real Reth node を bootstrap し、bridge の CLOB に maker bid + crossing taker sell を submit し、結果の fill が次の \`build_payload\` 出力に現れることを assert、さらに **過去の payload に遡って fill が attach されない** ことを assert (drain semantics は forward-only)。
 
 終了時には次ができるようになる:
 
-- なぜ price-time-priority CLOB が on-chain 永久 (perp) 取引所の canonical な構造なのか説明できる
-- fill を buffer する matching engine (本コースで作るもの) vs 同期的に emit する matching engine のトレードオフを推論できる
-- matching logic をゼロから再現できる — そしてコードのどこに手を入れれば stop order、post-only order、pro-rata matching 等が追加できるか分かる状態で改変できる
+- price-time-priority CLOB が on-chain 永久 (perp) 取引所の canonical な構造である理由を説明できる
+- fill を buffer する matching engine (本コースで作るもの) と同期的に emit する matching engine のトレードオフを推論できる
+- matching logic をゼロから再現でき、stop order、post-only order、pro-rata matching 等を追加したい場合にコードのどこに手を入れればよいか把握した上で改変できる
 
 ## 2. 終了時にも手にしないもの
 
@@ -70,23 +70,23 @@ export async function seedRethOpenHlClobJA(prisma: PrismaClient) {
 - fill を EVM-executable トランザクションとして encode (= openhl 自体の Stage 9 より先の future work)
 - Liquidation、mark-vs-index pricing、レバレッジ上限
 
-本コース終了時、**fill を produce して committed block に運ぶ動く matching engine** は手に入るが、その fill はまだ parallel list — スマートコントラクトから読める Ethereum トランザクションとしては実行できない。それを足すのが course 8 (custom EVM precompile)。
+本コース終了時には **fill を produce して committed block に運ぶ動く matching engine** が手に入るが、その fill はまだ parallel list — スマートコントラクトから読める Ethereum トランザクションとしては実行できない。これを足すのが course 8 (custom EVM precompile)。
 
-これは honest scoping。実行配線なしの CLOB engine は半分の物語、残り半分 (precompile) は course 8。
+これは honest scoping。実行配線なしの CLOB engine は物語の半分でしかなく、残り半分 (precompile) は course 8 で扱う。
 
 ## 3. 前提
 
 必要なもの:
 
 - **\`building-openhl-consensus\` 完了** — または同等の course 6 end state の workspace。\`crates/evm/src/live_node.rs\` に \`LiveRethEvmBridge<P>\` が \`provider\`、\`chain_spec\`、\`validator\`、optional な \`engine_handle\` フィールド付きで存在すること。なければまず course 6 を完了させる。
-- **Rust 1.95+**、course 6 と同じ。
-- **\`BTreeMap\`、\`VecDeque\`、\`Reverse<T>\`、proptest に慣れていること。** 「natural ordering」「最高値から walk するための reverse-ordering trick」が初耳なら、まず \`std::collections::BTreeMap\` のドキュメントを軽く読む。
+- **Rust 1.95+** — course 6 と同じ。
+- **\`BTreeMap\`、\`VecDeque\`、\`Reverse<T>\`、proptest に慣れていること。** 「natural ordering」や「最高値から walk するための reverse-ordering trick」が初耳なら、まず \`std::collections::BTreeMap\` のドキュメントを軽く読んでおく。
 
 不要なもの:
 
 - 過去の matching-engine 経験 (データ構造はゼロから build する)
 - 過去の order book 読解スキル (テストシナリオが各ステップを walk する)
-- Multi-validator セットアップ (依然 single-validator)
+- Multi-validator セットアップ (引き続き single-validator)
 
 ## 4. セットアップ確認 (今やる)
 
@@ -115,9 +115,9 @@ cargo test -p openhl-evm --release 2>&1 | tail -10
 # - commit_sends_forkchoice_to_engine_when_handle_installed (course 6 L14)
 \`\`\`
 
-それらが pass すれば start point として正しい。pass しなければまず course 6 を完了させる。
+これらが pass すれば start point として正しい。pass しなければ、まず course 6 を完了させる。
 
-> 🛑 **やりがちな勘違い。** 「\`git clone psyto/openhl\` してそのコードベースに対して course 7 を進めればいい」。 **やれるが、摩擦という学びを取りこぼす。** 本コースは build-along: matching engine を \`my-openhl/\` でゼロから書き、reference に対して diff する。\`openhl-reference\` で start すると course 6 §7 で論じた「答え合わせから type する」モードに逆戻りする。
+> 🛑 **やりがちな勘違い。** 「\`git clone psyto/openhl\` してそのコードベースに対して course 7 を進めればいい」。 **やれなくはないが、摩擦から得られるはずの学びを取りこぼす。** 本コースは build-along — matching engine を \`my-openhl/\` でゼロから書き、reference に対して diff する。\`openhl-reference\` から start すると course 6 §7 で論じた「答え合わせを写経する」モードに逆戻りする。
 
 ## 5. 12 レッスンの全体マップ
 
@@ -137,7 +137,7 @@ cargo test -p openhl-evm --release 2>&1 | tail -10
 | **L11** | Bridge 統合 | \`clob_fills_flow_into_payload\` integration test | **フルパイプラインテスト pass** |
 | **L12** | Capstone | 振り返り、次は何か (course 8 で precompile) | (テストなし — 振り返り) |
 
-**L11 がマイルストーン。** L11 を終えると、matching engine が produce した fill が BFT engine を通って real block に流れる。L12 は「まだ何が足りないか」を named する (fill がスマートコントラクトから読めない — それは course 8)。
+**L11 がマイルストーン。** L11 を終えると、matching engine が produce した fill が BFT engine を通って real block に流れる。L12 は「まだ何が足りないか」を明示する (fill がスマートコントラクトから読めない — それは course 8)。
 
 ## 6. 答え合わせの規律 (course 6 と同じ)
 
@@ -150,13 +150,13 @@ diff -u ~/code/my-openhl/crates/clob/src/types.rs ./crates/clob/src/types.rs
 # (など)
 \`\`\`
 
-meaningfully にマッチする — 同じ型、同じ制御フロー。空白と命名は違ってよい。
+本質的な部分が一致していればよい — 同じ型、同じ制御フロー。空白や命名は違ってよい。
 
-> 🛑 **やりがちな勘違い。** 「CLOB の仕組みはもう知っているから L9 まで飛ばして bridge 統合だけ学べばいい」。 **やれるが、L1-L8 が encode している設計判断は、エンジンを後で改変するときに効いてくる。** 逆順 bid、price level 内の FIFO、cancel-then-cleanup invariant — どれも自分で build しないと明らかにならない。L1-L8 をスキップするとコードは読めるが安全に変更できない。
+> 🛑 **やりがちな勘違い。** 「CLOB の仕組みはもう知っているから L9 まで飛ばして bridge 統合だけ学べばいい」。 **やれなくはないが、L1-L8 で encode される設計判断は、エンジンを後で改変するときに効いてくる。** 逆順 bid、price level 内の FIFO、cancel-then-cleanup invariant — どれも自分で build しなければ腹落ちしない。L1-L8 をスキップするとコードは読めても安全に変更できなくなる。
 
 ## 7. セットアップ確認 — 実際の L0 演習
 
-L1 に進む前に、以下を全部走らせて pass を確認:
+L1 に進む前に、以下をすべて走らせて pass することを確認:
 
 \`\`\`bash
 # 1. Rust バージョン
@@ -171,9 +171,9 @@ cd ~/code/openhl-reference && git log --oneline | grep -E "(55a9dff|428cc26)"
 # 期待: 両 SHA が現れる
 \`\`\`
 
-3 つ全部 pass すれば L1 に進む準備 OK。
+3 つすべて pass すれば L1 に進む準備 OK。
 
-> **最終チェック。** 本コースが course 6 になかった何を追加するのか、1 文で言える? 答えに「fill を produce する matching engine、その fill が committed block に流れる」のような要素が入っていなければ §1 を読み直す。`,
+> **最終チェック。** 本コースが course 6 になかった何を追加するのか、1 文で言えるか? 答えに「fill を produce する matching engine、その fill が committed block に流れる」といった要素が入っていなければ §1 を読み直す。`,
                 },
               ],
             },
@@ -200,14 +200,14 @@ cd ~/code/openhl-reference && git log --oneline | grep -E "(55a9dff|428cc26)"
 cargo check -p openhl-clob
 \`\`\`
 
-…がクリーンにコンパイルする。新規 crate (\`crates/clob/\`) が workspace に登録され、\`src/types.rs\` 1 ファイルに matching engine が使う **atomic な field-level 型** が入る:
+上記の実行結果がクリーンにコンパイルする。新規 crate (\`crates/clob/\`) が workspace に登録され、\`src/types.rs\` 1 ファイルに matching engine が使う **atomic な field-level 型** が入る:
 
-- **\`u64\` を wrap する newtype を 4 個** — \`AccountId\`、\`OrderId\`、\`Price\`、\`Qty\` — 偶発的な swap に対する型安全性のため。
+- **\`u64\` を wrap する newtype 4 個** — \`AccountId\`、\`OrderId\`、\`Price\`、\`Qty\`。偶発的な swap を型レベルで防ぐため。
 - **\`Side\` enum** (\`Buy\` | \`Sell\`) と \`opposite()\` ヘルパー。
 - **\`OrderType\` enum** — \`Limit { price }\` または \`Market\`。
 - **\`OrderId\`、\`Price\`、\`Qty\` への \`Display\` impl** — debug 出力が自然に読めるように (\`"#42"\`、\`"1000000"\` 等)。
 
-Record 型はまだなし (L2)。Book もまだなし (L3 以降)。本レッスンは土台 — 以降の全レッスンがここで build する型を使う。
+Record 型はまだ作らない (L2)。Book もまだ作らない (L3 以降)。本レッスンは土台 — 以降の全レッスンがここで build する型を使う。
 
 ## おさらい
 
@@ -220,7 +220,7 @@ crates/consensus/         — フル BFT engine (Context, signing, codec, node, 
 bin/openhl/               — stub バイナリ
 \`\`\`
 
-\`cargo test\` で workspace 全体 ~38 個合格。\`LiveRethEvmBridge::commit\` が \`ForkchoiceUpdated\` を Reth に送る。**ただし \`build_payload\` は空 block を produce する** — 中に入れるものがない。
+\`cargo test\` で workspace 全体 ~38 個合格。\`LiveRethEvmBridge::commit\` が \`ForkchoiceUpdated\` を Reth に送る。**ただし \`build_payload\` が produce するのは空 block** — 中身に入れるものがない。
 
 ## 計画
 
@@ -228,13 +228,13 @@ bin/openhl/               — stub バイナリ
 
 1. **\`crates/clob/\` ディレクトリを作成** — \`Cargo.toml\` と \`src/\`。
 2. **\`crates/clob/\` を workspace に登録** — ルート \`Cargo.toml\` の \`[workspace.members]\` に追加。
-3. **\`openhl-clob\` を workspace dependency に追加** — ルート \`Cargo.toml\` で、他 crate が依存できるように。
-4. **\`src/types.rs\` を書く** — newtype 4 個、\`Side\`、\`OrderType\`、\`Display\` impl。**Record 型はまだなし** (L2)。
-5. **\`pub mod types;\` + re-export を \`src/lib.rs\` に配線** — crate の public API を型に。
+3. **\`openhl-clob\` を workspace dependency に追加** — 他 crate が依存できるようにルート \`Cargo.toml\` に書く。
+4. **\`src/types.rs\` を書く** — newtype 4 個、\`Side\`、\`OrderType\`、\`Display\` impl。**Record 型はまだ書かない** (L2)。
+5. **\`pub mod types;\` と re-export を \`src/lib.rs\` に配線** — crate の public API を型として公開。
 
-このレッスンが短いのは型が短いから。重要なのはコードではなく **設計判断** (なぜ raw \`u64\` でなく newtype か、なぜ \`Limit\` が価格を struct field として運ぶか、\`Qty\` の単位は何か)。
+このレッスンが短いのは型が短いから。重要なのはコードではなく **設計判断** (なぜ raw \`u64\` ではなく newtype か、なぜ \`Limit\` が価格を struct field として運ぶのか、\`Qty\` の単位は何か)。
 
-> 🛑 **考えてみよう。** スクロールする前に: 同じ \`u64\` を wrap する newtype が 4 個 (\`AccountId(u64)\`、\`OrderId(u64)\`、\`Price(u64)\`、\`Qty(u64)\`) 並んでいるとき、各 newtype が防ぐ **1 つのバグ** は何か — raw \`u64\` を使うと通り抜けるバグ? ヒント: \`(u64, u64, u64)\` を取る関数を考える。誰かがその引数を間違った順序で呼ぶ場面を想像する。**newtype パターンの主な役割は、argument-swap バグを compile error に変えること。**
+> 🛑 **考えてみよう。** スクロールする前に: 同じ \`u64\` を wrap する newtype が 4 個 (\`AccountId(u64)\`、\`OrderId(u64)\`、\`Price(u64)\`、\`Qty(u64)\`) 並んでいるとき、各 newtype が防ぐ **1 つのバグ** は何か — raw \`u64\` を使うと通り抜けるバグ。ヒント: \`(u64, u64, u64)\` を取る関数を考えて、誰かがその引数を間違った順序で呼ぶ場面を想像する。**newtype パターンの主な役割は、argument-swap バグを compile error に変えること。**
 
 ## 手順
 
@@ -263,11 +263,11 @@ authors      = { workspace = true }
 workspace = true
 \`\`\`
 
-依存なし。CLOB matching engine は純粋データ + 純粋ロジックで、この段階では \`serde\` も要らない (Stage 8b が funding 用に追加するが、今は不要)。
+依存なし。CLOB matching engine は純粋データ + 純粋ロジックなので、この段階では \`serde\` も要らない (Stage 8b が funding 用に追加するが、今は不要)。
 
 ### Step 2: Workspace に登録
 
-ルート \`Cargo.toml\` を開く。\`[workspace] members = [...]\` を見つけ、リストに \`"crates/clob"\` を追加。既存の順序を保つ (アルファベット順または挿入順どちらでもよい):
+ルート \`Cargo.toml\` を開く。\`[workspace] members = [...]\` を見つけ、リストに \`"crates/clob"\` を追加。既存の順序は保つ (アルファベット順でも挿入順でもよい):
 
 \`\`\`toml
 [workspace]
@@ -281,7 +281,7 @@ members = [
 ]
 \`\`\`
 
-同じルート \`Cargo.toml\` で、\`[workspace.dependencies]\` を見つけ、\`openhl-clob\` のパスエントリを追加:
+同じルート \`Cargo.toml\` で \`[workspace.dependencies]\` を見つけ、\`openhl-clob\` のパスエントリを追加:
 
 \`\`\`toml
 [workspace.dependencies]
@@ -292,7 +292,7 @@ openhl-evm       = { path = "crates/evm" }
 openhl-consensus = { path = "crates/consensus" }
 \`\`\`
 
-これで \`openhl-clob\` が欲しい crate は自分の \`Cargo.toml\` で \`openhl-clob = { workspace = true }\` と宣言できる。L9 で bridge が CLOB を consume するときに使う。
+これで \`openhl-clob\` を欲しい crate は自分の \`Cargo.toml\` で \`openhl-clob = { workspace = true }\` と宣言できるようになる。L9 で bridge が CLOB を consume するときに使う。
 
 ### Step 3: Newtype を書く
 
@@ -325,15 +325,15 @@ pub struct Price(pub u64);
 pub struct Qty(pub u64);
 \`\`\`
 
-4 つの構造体、各 1 行、すべて \`u64\` を wrap。**7 個の derive は 4 型すべてで同一** — 意図的。newtype パターンが効くのは、型が \`u64\` と **同じ操作** を持つが、型システムが両者の混在を **拒否する** から。
+4 つの構造体、各 1 行、すべて \`u64\` を wrap。**7 個の derive は 4 型すべてで同一** — 意図的。newtype パターンが効くのは、型が \`u64\` と **同じ操作** を持ちつつ、型システムが両者の混在を **拒否する** から。
 
-doc コメントで 3 つ注目する点:
+doc コメントで注目する点が 3 つ:
 
-- **\`AccountId\` は opaque** — CLOB は chain が EVM address、ed25519 pubkey、sequential integer のどれを使うか知らない。ただ equality で比較するだけ。Chain 統合 (course 8 の precompile、最終的に production node コード) が \`AccountId(...)\` を chain が欲しい何かにマップする。
-- **\`OrderId\` は caller-allocated** — book が ID を生成しない、caller が生成する。これで book が pure-stateless に保たれる: \`submit_order\` は (book, order) の関数で、(book, order, generator-state) ではない。
-- **\`Price\`/\`Qty\` は minor unit** — USDC のような 6-decimal token では \`Price(1_000_000)\` が $1.00 を表す。Matching engine に \`f64\` は **存在しない**。**お金の計算で float は禁止。**
+- **\`AccountId\` は opaque** — CLOB は chain が EVM address、ed25519 pubkey、sequential integer のどれを使うかを知らない。equality で比較するだけ。chain 統合 (course 8 の precompile、最終的には production node コード) が \`AccountId(...)\` を chain が欲しい何かにマップする。
+- **\`OrderId\` は caller-allocated** — book は ID を生成せず、caller が生成する。これで book が pure-stateless に保たれる: \`submit_order\` は (book, order) の関数であり、(book, order, generator-state) ではない。
+- **\`Price\`/\`Qty\` は minor unit** — USDC のような 6-decimal token では \`Price(1_000_000)\` が $1.00 を表す。Matching engine の中に \`f64\` は **存在しない**。**お金の計算に float は持ち込まない。**
 
-> 🛑 **やりがちな勘違い。** 「便利のために \`pub fn from_dollars(d: f64) -> Price\` メソッドを追加しよう。」 **ダメ、f64 の精度問題を engine に持ち込むことになる。** \`Price(1_000_000)\` が wire format。User 向けツールが \`from_dollars\` をやりたければ、自分の境界で integer 乗算をして bridge に integer-typed Price を渡す。Matching engine は float を見ない。
+> 🛑 **やりがちな勘違い。** 「便利のために \`pub fn from_dollars(d: f64) -> Price\` メソッドを追加しよう。」 **ダメ、f64 の精度問題を engine に持ち込むことになる。** \`Price(1_000_000)\` が wire format。User 向けツールで \`from_dollars\` をやりたければ、ツール側の境界で integer 乗算をして bridge には integer-typed Price を渡す。Matching engine は float に触れない。
 
 ### Step 4: \`Side\` enum と \`opposite()\` ヘルパー
 
@@ -357,11 +357,11 @@ impl Side {
 }
 \`\`\`
 
-variant 2 個。\`opposite()\` メソッドは今 1 行だが、後で load-bearing になる: taker order が来たとき book の **反対側** を walk して流動性を探す。Buy taker は ask を walk; Sell taker は bid を walk。**ルールを \`opposite()\` に 1 回 encode することで、book コードを読むときどっち側を walk するか忘れない。**
+variant 2 個。\`opposite()\` メソッドは今のところ 1 行だが、後で load-bearing になる: taker order が来たとき book の **反対側** を walk して流動性を探すから。Buy taker は ask を walk し、Sell taker は bid を walk する。**ルールを \`opposite()\` に 1 度だけ encode しておけば、book コードを読むときどちらの side を walk するか忘れない。**
 
-\`#[derive(PartialOrd, Ord)]\` が **ない** のは意図的。「Buy は Sell より小さい?」は無意味。trait を抜くことで、caller が \`if side < Side::Sell\` を偶発的に書いてしまい、declaration 順 (\`Buy < Sell\`) という意図しない順序づけが効いてしまうのを防ぐ。
+\`#[derive(PartialOrd, Ord)]\` を **付けない** のは意図的。「Buy は Sell より小さい?」は無意味な問いだから。trait を抜くことで、caller が \`if side < Side::Sell\` を偶発的に書いて declaration 順 (\`Buy < Sell\`) という意図しない順序付けが効いてしまうのを防ぐ。
 
-> 🛑 **やりがちな勘違い。** 「bool でいいんじゃない? \`is_buy: bool\` でバイト節約。」 **call site で意味が失われる。** \`submit_order(order, true)\` は読み手にゴミに見える; \`submit_order(order, Side::Buy)\` は明らか。enum vs bool の 1 バイトのコストは、bool の可読性コストに比べたら無視できる。**名前を持つものは enum、on/off 以上の名前を持たないものだけ bool。**
+> 🛑 **やりがちな勘違い。** 「bool でいいのでは? \`is_buy: bool\` でバイト節約。」 **call site で意味が失われる。** \`submit_order(order, true)\` は読み手にとってゴミに見えるが、\`submit_order(order, Side::Buy)\` なら一目瞭然。enum vs bool の 1 バイトのコストは、bool の可読性コストに比べれば無視できる。**名前のあるものは enum、on/off 以外の名前を持たないものだけ bool。**
 
 ### Step 5: \`OrderType\` enum
 
@@ -383,9 +383,9 @@ variant 2 個:
 - **\`Limit { price: Price }\`** — struct スタイルの enum variant。Order に価格があり、at-or-better でマッチできなければ残りが book に rest する。
 - **\`Market\`** — unit variant。価格なし、任意の価格で利用可能な流動性を取り、残りは破棄。
 
-\`Limit { price: Price }\` を tuple スタイル \`Limit(Price)\` でなく struct スタイルにしたのは意図的。コードが \`order.order_type\` をパターンマッチするとき、\`Limit { price }\` で field 名 \`price\` がパターンに入る。tuple は \`Limit(p)\` と書かせて \`p\` の意味を覚えさせる。**Named field が型を self-documenting にする。**
+\`Limit { price: Price }\` を tuple スタイル \`Limit(Price)\` ではなく struct スタイルにしたのは意図的。コードが \`order.order_type\` をパターンマッチするとき、\`Limit { price }\` だと field 名 \`price\` がパターンに入る。tuple では \`Limit(p)\` と書いて \`p\` の意味を覚えておかなければならない。**Named field が型を self-documenting にする。**
 
-> 🛑 **やりがちな勘違い。** 「\`Stop\`、\`StopLimit\`、\`Iceberg\`、\`Post-Only\` も足しておけば?」 **engine がまだ必要としていないし、未使用 variant は技術負債。** Limit + Market が L7-L8 の spot-trading テストシナリオをカバーする最小セット。openhl が Stop order を必要とするとき (おそらく perp 領域、course 9 以降)、メンテナがそのとき variant を追加し、その時点でマッチングロジック、book ロジック、テストシナリオがすべて同時に更新される。**使う直前に型を追加し、それ以前にしない。**
+> 🛑 **やりがちな勘違い。** 「\`Stop\`、\`StopLimit\`、\`Iceberg\`、\`Post-Only\` も足しておけば?」 **engine がまだ必要としていないし、未使用 variant は技術負債になる。** Limit + Market が L7-L8 の spot-trading テストシナリオをカバーする最小セット。openhl が Stop order を必要とする時点 (おそらく perp 領域、course 9 以降) でメンテナが variant を追加すれば、その時点でマッチングロジック、book ロジック、テストシナリオがすべて同時に更新される。**型は使う直前に追加する、それ以前には追加しない。**
 
 ### Step 6: User-facing な newtype 3 個に \`Display\` impl
 
@@ -411,9 +411,9 @@ impl fmt::Display for Qty {
 }
 \`\`\`
 
-\`Display\` impl 3 個。**\`AccountId\` に Display がない** のは意図的。AccountId は opaque な ID; print したいなら、生の \`u64\` ではなく chain 統合のマッピングが返す real address を print したいはず。\`Display\` を抜くと caller が明示的にせざるを得なくなる (例: \`format!("{}", a.0)\` または「chain の address renderer 経由で render」)。
+\`Display\` impl 3 個。**\`AccountId\` に Display を付けない** のは意図的。AccountId は opaque な ID なので、print したいなら生の \`u64\` ではなく chain 統合のマッピングが返す real address を print したいはず。\`Display\` を抜くと caller が明示的に扱わざるを得なくなる (例: \`format!("{}", a.0)\` または「chain の address renderer 経由で render」)。
 
-\`OrderId\` は \`"#42"\` として format するのでテスト出力が自然 (\`fill from #1 to #2\`)。Price と Qty は単なる数値値 — だが \`Display\` impl があれば \`.0\` を書かずに \`format!\` / \`println!\` で使える。
+\`OrderId\` は \`"#42"\` として format されるのでテスト出力が自然になる (\`fill from #1 to #2\`)。Price と Qty は単なる数値だが、\`Display\` impl があれば \`.0\` を書かずに \`format!\` / \`println!\` で使える。
 
 ### Step 7: 型を \`lib.rs\` に配線
 
@@ -430,9 +430,9 @@ pub mod types;
 pub use types::*;
 \`\`\`
 
-body 3 行 + doc コメント。\`pub use types::*\` で型を crate ルートで re-export するので、caller は \`use openhl_clob::types::{Order, Side}\` ではなく \`use openhl_clob::{Order, Side}\` と書ける — 短い形をどこでも使う。
+body 3 行 + doc コメント。\`pub use types::*\` で型を crate ルートで re-export するので、caller は \`use openhl_clob::types::{Order, Side}\` ではなく \`use openhl_clob::{Order, Side}\` と書ける — どこでも短い形を使う。
 
-\`book\` モジュールは L3 で来る; 今は \`pub mod types;\` 1 行。
+\`book\` モジュールは L3 で追加する。今は \`pub mod types;\` の 1 行のみ。
 
 ## テスト
 
@@ -455,7 +455,7 @@ workspace 全体に影響がないことを確認:
 cargo check --workspace
 \`\`\`
 
-クリーンに完了するはず。新規 crate に依存する物がまだないので何にも影響しない。
+クリーンに完了するはず。新規 crate に依存するものがまだないので、何にも影響しない。
 
 よくあるエラーと対処:
 
@@ -468,11 +468,11 @@ cargo check --workspace
 
 3 つの load-bearing な決定:
 
-1. **Newtype が argument-swap バグを compile time に防ぐ。** \`submit(book, account: u64, price: u64, qty: u64)\` のコードは、3 個の \`u64\` を任意の順序で渡してもコンパイルが通る。\`submit(book, AccountId, Price, Qty)\` のコードは間違った型を compile time に拒否する。コストは余分な \`.0\` deref 2 個、利益は書けないバグ。
+1. **Newtype が argument-swap バグを compile time に防ぐ。** \`submit(book, account: u64, price: u64, qty: u64)\` の形だと、3 つの \`u64\` をどの順序で渡してもコンパイルが通る。\`submit(book, AccountId, Price, Qty)\` の形なら間違った型を compile time に拒否できる。コストは \`.0\` deref が数個増えるだけで、利益は書きようがないバグ。
 
-2. **お金の計算は integer、float ではない。** \`Price\` と \`Qty\` は \`u64\` ベース。\`Price::from_f64\` は存在しない。価格を "$1.00" として表示したい人は、engine の **外** の rendering 境界で integer-to-decimal 変換をする。Matching engine の invariant (例: 「fill 合計は数量を常に保存する」) は exact-integer invariant。float 中間値を導入したら壊れる。
+2. **お金の計算は integer であって float ではない。** \`Price\` と \`Qty\` は \`u64\` ベース。\`Price::from_f64\` は存在しない。価格を "$1.00" として表示したいなら、engine の **外** の rendering 境界で integer-to-decimal 変換をする。Matching engine の invariant (例: 「fill 合計は常に数量を保存する」) は exact-integer invariant — float 中間値を導入した瞬間に壊れる。
 
-3. **\`OrderType::Limit { price }\` で \`Limit(Price)\` ではない。** 後で \`match order.order_type { Limit { price } => ..., Market => ... }\` と書くとき、\`price\` binding が役割を明らかにする。tuple スタイル enum variant が正しいのは variant が「ある 1 物の wrapper」のとき; struct スタイルが正しいのは field に **名前** があるとき。ここでは名前がある (\`price\`) ので struct スタイルが勝つ。
+3. **\`OrderType::Limit { price }\` であって \`Limit(Price)\` ではない。** 後で \`match order.order_type { Limit { price } => ..., Market => ... }\` と書くとき、\`price\` binding が役割を明らかにしてくれる。tuple スタイル enum variant が正しいのは variant が「ある 1 物の wrapper」であるとき。struct スタイルが正しいのは field に **名前** があるとき。ここでは名前がある (\`price\`) ので struct スタイルに分がある。
 
 ## 答え合わせ
 
@@ -495,20 +495,20 @@ git checkout main
 ## よくある質問
 
 **Q: なぜ \`AccountId\`、\`OrderId\`、\`Price\`、\`Qty\` がすべて \`Copy\`?**
-中身は \`u64\` — 8 バイト、heap なし。\`Copy\` をマークすると、engine が \`.clone()\` を書かずに value で自由に渡せる。Trait bound は runtime ではゼロコスト。
+中身は \`u64\` — 8 バイト、heap なし。\`Copy\` をマークすると、engine が \`.clone()\` を書かずに value で自由に渡せるようになる。Trait bound は runtime ではゼロコスト。
 
-**Q: なぜこれら型に \`Hash\`?**
-将来の用途: O(1) cancel-by-id (レッスン L6) のための \`HashMap<OrderId, RestingOrder>\`。今 \`Hash\` を足しておけば、後で derive cascade の churn が起こらない。
+**Q: なぜこれらの型に \`Hash\`?**
+将来の用途を見据えて: O(1) cancel-by-id (レッスン L6) のための \`HashMap<OrderId, RestingOrder>\`。今 \`Hash\` を足しておけば、後で derive cascade の churn が起こらない。
 
-**Q: なぜ \`Side: PartialOrd + Ord\` でない?**
-「Buy は Sell より小さい?」が無意味な質問だから。\`Ord\` を derive すると、caller が \`if side < Side::Sell { ... }\` を書いて、Rust が最初に列挙した variant (ここでは Buy) を取る — だがこれは declaration 順の artifact で、semantically な意味ではない。trait を抜くと caller は \`match\` か \`==\` を強制される。
+**Q: なぜ \`Side\` に \`PartialOrd + Ord\` を付けないのか?**
+「Buy は Sell より小さい?」が無意味な質問だから。\`Ord\` を derive すると、caller が \`if side < Side::Sell { ... }\` を書けるようになり、Rust が最初に列挙した variant (ここでは Buy) を採用する — だがこれは declaration 順の artifact であって semantic な意味ではない。trait を抜けば caller は \`match\` か \`==\` の使用を強制される。
 
 **Q: なぜ \`opposite()\` に \`#[must_use]\`?**
-\`side.opposite();\` (結果を assign しない) がほぼ確実にバグだから — \`opposite()\` は新しい \`Side\` を返す、mutate しない。\`#[must_use]\` でそれを warning にする。返り値が唯一の目的の関数すべてで良いプラクティス。
+\`side.opposite();\` (結果を assign しない) がほぼ確実にバグだから — \`opposite()\` は新しい \`Side\` を返すだけで mutate しない。\`#[must_use]\` でそれを warning として浮き上がらせる。返り値が唯一の目的の関数すべてで良いプラクティス。
 
 ## 次のレッスン (L2)
 
-Field-level 型 — atomic な部品 — がそろった。L2 ではそれらを組み合わせる **record-level 型** を build する: \`Order\` (matching engine への入力)、\`Fill\` (出力)、\`FillResult\` (fills と remaining-quantity 情報を bundle する wrapper)。L2 完了後、型の語彙が完成する; L3 以降がこれらの型を使って実際の matching state machine を build する。`,
+Field-level 型 — atomic な部品 — がそろった。L2 ではそれらを組み合わせる **record-level 型** を build する: \`Order\` (matching engine への入力)、\`Fill\` (出力)、\`FillResult\` (fills と remaining-quantity 情報を bundle する wrapper)。L2 完了後、型の語彙が完成する。L3 以降ではこれらの型を使って実際の matching state machine を build していく。`,
                 },
                 {
                   title: "レッスン 2 — Order、Fill、FillResult",
@@ -527,13 +527,13 @@ Field-level 型 — atomic な部品 — がそろった。L2 ではそれらを
 cargo check -p openhl-clob
 \`\`\`
 
-…依然コンパイルする。\`crates/clob/src/types.rs\` に L1 の newtype から build した **record 型 3 個** が入る:
+上記の実行結果が引き続きコンパイルする。\`crates/clob/src/types.rs\` に L1 の newtype から build した **record 型 3 個** が入る:
 
 - **\`Order\`** — matching engine への入力 (id、account、side、qty、order_type)。
-- **\`Fill\`** — maker と taker の間の 1 match の出力 (maker_order_id、taker_order_id、maker_account、taker_account、price、qty)。
+- **\`Fill\`** — maker と taker の間で発生した 1 match の出力 (maker_order_id、taker_order_id、maker_account、taker_account、price、qty)。
 - **\`FillResult\`** — submit の return ラッパー: \`fills: Vec<Fill>\` + \`remaining_qty: Qty\` + \`total_filled()\` ヘルパー。
 
-これで **型の語彙** が完成する。L3 以降はこれらの型を使って matching state machine を build する。
+これで **型の語彙** が完成する。L3 以降はこれらの型を使って matching state machine を build していく。
 
 ## おさらい
 
@@ -550,19 +550,19 @@ pub enum OrderType { Limit { price: Price }, Market }
 // + OrderId, Price, Qty への Display impl
 \`\`\`
 
-約 65 行。\`cargo check -p openhl-clob\` が pass。**足りないもの**: これらを組み合わせる型 — order がどう見えるか、fill がどう見えるか、engine が submit 後に何を返すか。L2 がちょうどそのギャップを埋める。
+約 65 行。\`cargo check -p openhl-clob\` が pass する。**足りないもの**: これらを組み合わせる型 — order がどう見えるか、fill がどう見えるか、engine が submit 後に何を返すか。L2 でちょうどそのギャップを埋める。
 
 ## 計画
 
-同じ \`types.rs\` に record を 3 個追加:
+同じ \`types.rs\` に record を 3 個追加する:
 
-1. **\`Order\`** — 5 field、すべて L1 の型から。Matching engine が 1 つの \`Order\` を取り、1 つの \`FillResult\` を返す。
-2. **\`Fill\`** — 6 field、maker + taker を明示的に名付ける。**両方** maker_order_id と maker_account を保存するのは、chain 統合 (course 8) が account を credit/debit するから。
-3. **\`FillResult\`** — fill 群 + マッチも rest もしなかった残りを集める。\`total_filled()\` ヘルパー付きで、caller が iterate せずに「いくらマッチしたか?」を尋ねられる。
+1. **\`Order\`** — 5 field、すべて L1 の型を使う。Matching engine が 1 つの \`Order\` を取り、1 つの \`FillResult\` を返す。
+2. **\`Fill\`** — 6 field、maker と taker を明示的に名付ける。maker_order_id と maker_account の **両方** を保存するのは、chain 統合 (course 8) が account を credit/debit するため。
+3. **\`FillResult\`** — fill 群と、マッチも rest もしなかった残りを集める。\`total_filled()\` ヘルパー付きで、caller が iterate せずに「いくらマッチしたか?」を尋ねられる。
 
 新規依存なし。\`types.rs\` の外でのコード変更なし。コード ~35 行。
 
-> 🛑 **考えてみよう。** スクロールする前に: \`Fill\` は **両方** \`maker_order_id\` と \`maker_account\` を運ぶ。なぜ重複? Maker の \`OrderId\` で account を lookup できれば十分なのでは? ヒント: \`Fill\` を consume する側は誰か。Chain の \`clob_place_order\` precompile (course 8) は balance を credit する — account が直接必要。\`OrderId → AccountId\` の lookup は precompile に order book の内部 index への参照を持たせる必要がある。**両方を Fill 自体に持たせると consumer が engine の内部 state から decouple される。** Message passing vs. shared state の発想。
+> 🛑 **考えてみよう。** スクロールする前に: \`Fill\` は \`maker_order_id\` と \`maker_account\` の **両方** を運ぶ。なぜ重複させるのか? Maker の \`OrderId\` で account を lookup できれば十分なのでは? ヒント: \`Fill\` を consume する側は誰か。Chain の \`clob_place_order\` precompile (course 8) は balance を credit する — account が直接必要。\`OrderId → AccountId\` の lookup を許すと、precompile が order book の内部 index への参照を保持しなければならない。**両方を Fill 自体に持たせることで consumer が engine の内部 state から decouple される。** Message passing と shared state の発想の違い。
 
 ## 手順
 
@@ -582,16 +582,16 @@ pub struct Order {
 }
 \`\`\`
 
-5 field。**全部 \`Copy\`** — Order は 8 (OrderId) + 8 (AccountId) + 1 (Side) + 8 (Qty) + 16 (OrderType — discriminant + Price) = 41 バイト。padding 込みで約 48 バイト。値渡しで自由に渡せる小ささ。通常コードで \`Box<Order>\` や \`&Order\` は不要。
+5 field。**全部 \`Copy\`** — Order は 8 (OrderId) + 8 (AccountId) + 1 (Side) + 8 (Qty) + 16 (OrderType — discriminant + Price) = 41 バイト。padding 込みで約 48 バイト。値渡しで自由に渡せる小ささだ。通常コードで \`Box<Order>\` や \`&Order\` を使う必要はない。
 
 field 順序には意味がある:
-- **\`id\` 最初** — 最も使われる field (lookup、equality、debug)。
+- **\`id\` を最初に** — 最も使われる field (lookup、equality、debug)。
 - **\`account\`** — 誰が発注したか。
 - **\`side\`** — Buy か Sell か。
 - **\`qty\`** — いくら。
-- **\`order_type\` 最後** — 最も複雑な field (enum)、dispatch を制御する field (Limit vs Market が L4-L5 で別の matching ロジックを起こす)。
+- **\`order_type\` を最後に** — 最も複雑な field (enum) で、dispatch を制御する field (Limit と Market が L4-L5 で別の matching ロジックを起動する)。
 
-> 🛑 **やりがちな勘違い。** 「\`order_type\` は冗長 — \`OrderType::Limit { price }\` が price を運ぶなら、\`price: Price\` を直接 \`Order\` に置けばいいのでは?」 **Market order に price がないから。** \`price: Price\` を Order に置くと、すべての Market order に意味のない placeholder price を運ばせる羽目になり、それを至るところで ignore しなければならない。enum は「price があるか、ないか」をちょうど 1 回 encode する。**\`Option<Price>\` でも動くが「Market」タグを失う** — \`OrderType\` が正しい形なのは、区別に **名前** があるから (presence/absence ではない)。
+> 🛑 **やりがちな勘違い。** 「\`order_type\` は冗長では — \`OrderType::Limit { price }\` が price を運ぶなら、\`price: Price\` を直接 \`Order\` に置けばいいのでは?」 **Market order には price がないから。** \`price: Price\` を Order に置くと、すべての Market order に意味のない placeholder price を持たせる羽目になり、それを至るところで ignore しなければならない。enum なら「price があるか、ないか」をちょうど 1 回 encode できる。**\`Option<Price>\` でも動くが「Market」というタグを失う** — \`OrderType\` が正しい形なのは、区別に **名前** がある (presence/absence ではない) から。
 
 ### Step 2: \`Fill\` を追加
 
@@ -610,16 +610,16 @@ pub struct Fill {
 }
 \`\`\`
 
-6 field。Maker-vs-taker の区別が matching engine コードで最重要の概念:
+6 field。Maker-vs-taker の区別は matching engine コードで最も重要な概念:
 
-- **Maker** = 既に book に rest していた order。流動性を「作った (made)」側; 経済的により良い deal を得る (real exchange では通常 rebate)。
-- **Taker** = 流動性を消費して入ってきた order。Spread を払う; real exchange では fee を払う。
+- **Maker** = 既に book に rest していた order。流動性を「作った (made)」側で、経済的に良い deal を得る (real exchange では通常 rebate)。
+- **Taker** = 流動性を消費して入ってきた order。Spread を払う側で、real exchange では fee を払う。
 
-各 \`Fill\` は 1 つの match ペアを表す。1 つの taker order が **複数の Fill** を produce することがある (例: market buy が ask 側を上に walk して resting ask を順に食べる)。
+各 \`Fill\` は 1 つの match ペアを表す。1 つの taker order が **複数の Fill** を produce することもある (例: market buy が ask 側を上に walk して resting ask を順に食べる)。
 
-**\`price\` は maker の価格** — taker が book を hit するとき、taker の limit ではなく maker の resting 価格でマッチする。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格); buyer が勝つ。これが「price-time priority」の動作。
+**\`price\` は maker の価格** — taker が book を hit するとき、taker の limit ではなく maker の resting 価格でマッチする。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格)。buyer が勝つわけだ。これが「price-time priority」の挙動。
 
-> 🛑 **やりがちな勘違い。** 「account ID を両方保存するのは冗長に見える — 各 \`Fill\` は consumer 時に \`OrderId\` から account を lookup できる」。 **ダメ — そのためには consumer が book の \`HashMap<OrderId, RestingOrder>\` への参照を保持し、book が先に進んだ後も生かさなければならない。** Fill は match 時に emit され非同期に consume される (我々の場合、後で commit される payload に drain される)。Book がその間に maker order を cancel していたら、\`OrderId → AccountId\` lookup は \`None\` を返し、consumer は詰む。**Self-contained な Fill ならその問題はない。**
+> 🛑 **やりがちな勘違い。** 「両方の account ID を保存するのは冗長に見える — 各 \`Fill\` は consume 時に \`OrderId\` から account を lookup できる」。 **ダメ — そのためには consumer が book の \`HashMap<OrderId, RestingOrder>\` への参照を保持し、book が先に進んだ後も生かしておかなければならない。** Fill は match 時に emit され非同期に consume される (本コースでは後で commit される payload に drain される)。Book がその間に maker order を cancel していたら、\`OrderId → AccountId\` lookup は \`None\` を返し、consumer は詰む。**Self-contained な Fill ならその問題は起きない。**
 
 ### Step 3: \`FillResult\` + \`total_filled()\` ヘルパー
 
@@ -648,19 +648,19 @@ impl FillResult {
 }
 \`\`\`
 
-**\`FillResult\` は \`Copy\` でない** — heap 割り当て される \`Vec<Fill>\` を所有する。test とデバッグパスのために \`Clone\`、engine は値で return する (happy path で clone 不要)。
+**\`FillResult\` は \`Copy\` ではない** — heap 割り当てされる \`Vec<Fill>\` を所有するから。test とデバッグパスのために \`Clone\` を付け、engine は値で return する (happy path で clone は不要)。
 
-doc コメント中の 3 つ、L3+ のコードが依存する:
+doc コメント中の 3 点に L3+ のコードが依存する:
 
-1. **\`fills\` は execution 順序**。Market buy が ask level を 3 個 walk すると、fills[0] が最安マッチ、fills[1] が次、fills[2] が最高。Replay determinism にこの順序が重要 (L8 の proptest が assert する)。
-2. **\`remaining_qty\` は rest しなかった taker quantity のみ**。Market order の remainder 100 = 100 unit がどの価格でもマッチできなかった (book が流動性切れ) を意味する。Limit order の remainder 0 でも fill しなかった残りがあり得る — だがその残りは **今 book にある** (resting order として)、return 値の中ではない。
-3. **\`total_filled\` はヘルパー、stored field ではない**。fill 全体の O(N) 合計。cache しないのは、(a) caller が「fill したか?」を聞くだけなら通常 \`Vec::len()\` が必要、(b) 実際の quantity total は test/inspection コードでしか必要なく、そこでは O(N) は問題にならないから。
+1. **\`fills\` は execution 順序**。Market buy が ask level を 3 個 walk すると、fills[0] が最安マッチ、fills[1] が次、fills[2] が最高となる。Replay determinism にこの順序が重要 (L8 の proptest で assert する)。
+2. **\`remaining_qty\` は rest しなかった taker quantity のみ**。Market order の remainder 100 は「100 unit がどの価格でもマッチできなかった (book が流動性切れ)」を意味する。Limit order でも remainder が 0 だが fill しなかった残りがあり得る — ただしその残りは **今 book にある** (resting order として) のであって、return 値の中にあるわけではない。
+3. **\`total_filled\` はヘルパーであって stored field ではない**。fill 全体に対する O(N) 合計。cache しない理由は、(a) caller が「fill したか?」を聞くだけなら通常 \`Vec::len()\` で済む、(b) 実際の quantity total は test/inspection コードでしか必要にならず、そこでは O(N) が問題にならない、から。
 
-> 🛑 **やりがちな勘違い。** 「\`remaining_qty\` を別 field ではなく per-fill data の一部にしたら?」 **submit ごとに remainder は最大 1 個で、どの fill にも紐付かない** — それは **fill されなかった** 部分。\`Fill\` に入れると、すべての fill に無意味な 0 を運ばせるか、それを保持するためだけの「phantom fill」エントリが必要になる。\`FillResult\` に別 field として置くのが正しい形。
+> 🛑 **やりがちな勘違い。** 「\`remaining_qty\` を別 field ではなく per-fill data の一部にしたら?」 **submit ごとに remainder は最大 1 つで、どの fill にも紐付かない** — **fill されなかった** 部分そのものだから。\`Fill\` に入れると、すべての fill に無意味な 0 を運ばせるか、保持するためだけの「phantom fill」エントリを作る羽目になる。\`FillResult\` に別 field として置くのが正しい形。
 
 ### Step 4: \`lib.rs\` がまだすべて re-export していることを確認
 
-L1 の \`lib.rs\` で \`pub use types::*;\` と書いた。その \`*\` が今追加した 3 つの新規型を自動的に拾う — edit 不要。簡単に確認:
+L1 の \`lib.rs\` で \`pub use types::*;\` と書いた。その \`*\` が今追加した 3 つの新規型を自動的に拾う — edit は不要。一応確認しておく:
 
 \`\`\`rust
 // crates/clob/src/lib.rs (変更不要)
@@ -668,7 +668,7 @@ pub mod types;
 pub use types::*;
 \`\`\`
 
-もし \`lib.rs\` が \`pub use types::{AccountId, OrderId, ...};\` のような個別 re-export なら、新規 3 個を追加する必要がある。**だが \`*\` を L1 で setup したので不要。**
+もし \`lib.rs\` が \`pub use types::{AccountId, OrderId, ...};\` のような個別 re-export であれば、新規 3 個を追加する必要がある。**だが L1 で \`*\` を setup したので不要。**
 
 ## テスト
 
@@ -676,15 +676,15 @@ pub use types::*;
 cargo check -p openhl-clob
 \`\`\`
 
-依然コンパイル。出力は L1 と同じ (新規 warning や error なし、check されるコードが少し増えただけ)。
+引き続きコンパイルが通る。出力は L1 と同じ (新規 warning も error もなく、check されるコードが少し増えただけ)。
 
-将来 \`crates/evm/Cargo.toml\` の視点で型が visible であることを軽くサニティテストできる。まだ dep 追加はしない (それは L9)、だが型が public であることは証明できる:
+将来 \`crates/evm/Cargo.toml\` の視点で型が見えていることを軽くサニティテストできる。まだ dep は追加しない (それは L9 で行う) が、型が public であることは確認できる:
 
 \`\`\`bash
 cargo doc -p openhl-clob --no-deps --open
 \`\`\`
 
-レンダリングされた doc を browse する。"Structs" の下に \`AccountId\`/\`OrderId\`/\`Price\`/\`Qty\` と並んで \`Order\`、\`Fill\`、\`FillResult\` が見えるはず。\`total_filled\` は \`FillResult\` のメソッドの下に。
+レンダリングされた doc を browse する。"Structs" の下に \`AccountId\`/\`OrderId\`/\`Price\`/\`Qty\` と並んで \`Order\`、\`Fill\`、\`FillResult\` が見えるはず。\`total_filled\` は \`FillResult\` のメソッドの下に出てくる。
 
 よくあるエラーと対処:
 
@@ -696,11 +696,11 @@ cargo doc -p openhl-clob --no-deps --open
 
 3 つの load-bearing な決定:
 
-1. **\`Fill\` は self-contained。** Order book の内部 index があれば片方からもう片方を導出できるのに、maker_order_id と maker_account を両方保存する。これが Fill の consumer (precompile、payload assembly、chain 統合) を engine の内部データ構造から decouple する。**self-contained メッセージは live state への参照より module 境界を越えやすい。**
+1. **\`Fill\` は self-contained。** Order book の内部 index があれば片方からもう片方を導出できるのに、maker_order_id と maker_account を両方保存している。これにより Fill の consumer (precompile、payload assembly、chain 統合) が engine の内部データ構造から decouple される。**self-contained なメッセージは、live state への参照よりも module 境界を越えやすい。**
 
-2. **\`FillResult\` は「fills」と「remainder」を分ける。** Submit は 0 個以上の fill と 0 か 1 個の remainder を produce する。1 つの \`Vec<Fill>\` でモデルすると、remainder のために「phantom fill」が必要になるか、それを検出する特殊ケースロジックが必要になる。2-field record が型に仕事をさせる。
+2. **\`FillResult\` は「fills」と「remainder」を分ける。** Submit は 0 個以上の fill と 0 か 1 個の remainder を produce する。1 つの \`Vec<Fill>\` でモデル化すると、remainder のために「phantom fill」を作るか、それを検出する特殊ケースロジックが必要になる。2-field record にすることで型に仕事をさせている。
 
-3. **\`total_filled()\` は computed、cached ではない。** Cache するとすべての fill-list 変更がカウンタを update する羽目になる — error-prone。On-demand 計算で \`FillResult\` を derived state のない純粋データ record に保つ。O(N) コストは N が通常 1-3 (single fill が最頻、market order が 10 level 食べるのは稀) なので無視可能。
+3. **\`total_filled()\` は computed であって cached ではない。** Cache するとすべての fill-list 変更でカウンタを update する羽目になり、error-prone になる。On-demand 計算なら \`FillResult\` を derived state のない純粋データ record に保てる。O(N) コストは N が通常 1-3 (single fill が最頻で、market order が 10 level 食べるのは稀) なので無視できる。
 
 ## 答え合わせ
 
@@ -720,21 +720,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ \`Order\` は \`Copy\` だが \`FillResult\` は違う?**
-\`Order\` は 5 field、全部 \`Copy\` (\`u64\` の newtype + 小さい enum)。合計 ~48 バイト — memcpy が安価。\`FillResult\` は heap 割り当て される \`Vec<Fill>\` を所有; コピーには allocator 呼び出しが必要。\`Copy\` は \`=\` が single bit-blit な型のみ。Trait が意味を反映する。
+**Q: なぜ \`Order\` は \`Copy\` で \`FillResult\` はそうでないのか?**
+\`Order\` は 5 field すべてが \`Copy\` (\`u64\` の newtype + 小さい enum)。合計 ~48 バイトで memcpy が安価。\`FillResult\` は heap 割り当てされる \`Vec<Fill>\` を所有するので、コピーには allocator 呼び出しが必要。\`Copy\` は \`=\` が single bit-blit になる型にのみ付ける。Trait が意味を反映するわけだ。
 
 **Q: なぜ \`Fill\` の \`qty\` は \`Qty\` で、ただの \`u64\` ではないのか?**
-Engine の残りとの一貫性。すべての quantity は \`Qty\` 型; ここで \`u64\` を混ぜると境界で変換が強制される (そして忘れるリスク)。Newtype の規律は engine 単位、struct 単位ではない。
+Engine の他の部分と一貫させるため。すべての quantity は \`Qty\` 型なので、ここで \`u64\` を混ぜると境界で変換が強制される (そして忘れるリスクが出る)。Newtype の規律は engine 単位で適用するもので、struct 単位ではない。
 
-**Q: \`FillResult\` で \`Box<[Fill]>\` を使ったら?**
-できる、「これ以上 push しない」ケースではメモリ効率が少し良い。だが \`Vec<Fill>\` は \`submit_order\` がインクリメンタルに build するもの (match ごとに push); 最後に \`Box<[Fill]>\` に変換すると 1 個余分な allocation。Profile で重要と分かるまで \`Vec\` がシンプルな選択。
+**Q: \`FillResult\` で \`Box<[Fill]>\` を使ったらどうか?**
+できる。「これ以上 push しない」ケースでは少しメモリ効率が良い。ただし \`Vec<Fill>\` は \`submit_order\` がインクリメンタルに build するもの (match ごとに push) なので、最後に \`Box<[Fill]>\` に変換すると余分な allocation が 1 つ増える。Profile で問題と分かるまでは \`Vec\` がシンプルな選択。
 
 **Q: Fill の \`qty\` が 0 だったら? それは valid Fill か?**
-違う — L4-L5 の matching engine は zero-qty Fill を決して produce しない (「0 unit マッチした」= 「マッチしなかった」と同じ意味になる)。型システムはこれを強制しない; engine の invariant が強制する。L7-L8 の test が regression を catch する。
+valid ではない — L4-L5 の matching engine は zero-qty Fill を決して produce しない (「0 unit マッチした」=「マッチしなかった」と意味的に同じ)。型システムはこれを強制しないが、engine の invariant が強制する。L7-L8 のテストが regression を catch する。
 
 ## 次のレッスン (L3)
 
-型の語彙が完成した。L3 では **matching state machine** を導入する — resting bid/ask order を保持する \`Book\` 構造体、book を inspect するヘルパーメソッド (\`best_bid\`、\`best_ask\`、accessor)。\`submit\` ロジックはまだなし (L4)、データ構造と bid を最高値から walk するための \`Reverse<Price>\` トリックのみ。`,
+型の語彙が完成した。L3 では **matching state machine** を導入する — resting bid/ask order を保持する \`Book\` 構造体と、book を inspect するヘルパーメソッド (\`best_bid\`、\`best_ask\`、accessor)。\`submit\` ロジックはまだ書かない (L4 で扱う)。データ構造と、bid を最高値から walk するための \`Reverse<Price>\` トリックだけを導入する。`,
                 },
               ],
             },
@@ -761,21 +761,21 @@ Engine の残りとの一貫性。すべての quantity は \`Qty\` 型; ここ�
 cargo check -p openhl-clob
 \`\`\`
 
-…依然コンパイルする。新規ファイル \`crates/clob/src/book.rs\` に以下が入る:
+上記の実行結果が引き続きコンパイルする。新規ファイル \`crates/clob/src/book.rs\` に以下が入る:
 
-- **\`Book\` struct** — 2 つの \`BTreeMap\` (bids + asks)、それぞれ price level を resting order の \`VecDeque\` にマップ。
-- **\`RestingOrder\` struct** — book に rest している order の形 (\`Order\` から trim)。
-- **\`new()\` コンストラクタ** + read-only accessor 4 個 (\`best_bid\`, \`best_ask\`, \`depth_bid\`, \`depth_ask\`)。
+- **\`Book\` struct** — \`BTreeMap\` 2 個 (bids + asks)。それぞれ price level を resting order の \`VecDeque\` にマップする。
+- **\`RestingOrder\` struct** — book に rest している order の形 (\`Order\` から trim したもの)。
+- **\`new()\` コンストラクタ** と read-only accessor 4 個 (\`best_bid\`, \`best_ask\`, \`depth_bid\`, \`depth_ask\`)。
 
-**まだ matching ロジックなし** — \`submit\` は L4 + L5、\`cancel\` は L6。本レッスンは、後続の matching ロジックが少ない行数で済むようにデータ構造を正しく build することが目的。
+**matching ロジックはまだ書かない** — \`submit\` は L4 + L5、\`cancel\` は L6 で扱う。本レッスンの目的は、後続の matching ロジックが少ない行数で済むようにデータ構造を正しく組むこと。
 
-唯一の load-bearing なアイデア: **\`Reverse<Price>\` を \`BTreeMap\` の key にする** ことで natural-order iterator が bid を highest-first で walk する。これが見えれば、残りの matching コードは自明になる。
+唯一の load-bearing なアイデア: **\`Reverse<Price>\` を \`BTreeMap\` の key にする** ことで、natural-order iterator が bid を highest-first で walk するようにする。これが見えれば、残りの matching コードは自明になる。
 
 ## おさらい
 
-L2 完了時点で \`crates/clob/src/types.rs\` は完成 (~109 行): newtype 4 個、\`Side\`、\`OrderType\`、\`Order\`、\`Fill\`、\`FillResult\`、\`Display\` impl。
+L2 完了時点で \`crates/clob/src/types.rs\` は完成している (~109 行): newtype 4 個、\`Side\`、\`OrderType\`、\`Order\`、\`Fill\`、\`FillResult\`、\`Display\` impl。
 
-\`crates/clob/src/lib.rs\` は \`pub use types::*\` でそれらすべてを re-export している。**\`book\` モジュールはまだない** — 本レッスンで作る。
+\`crates/clob/src/lib.rs\` は \`pub use types::*\` でそれらすべてを re-export している。**\`book\` モジュールはまだ存在しない** — 本レッスンで作る。
 
 ## 計画
 
@@ -783,13 +783,13 @@ L2 完了時点で \`crates/clob/src/types.rs\` は完成 (~109 行): newtype 4 
 
 1. **\`crates/clob/src/book.rs\` を作成。**
 2. **\`Book\` struct を書く** — \`bids: BTreeMap<Reverse<Price>, VecDeque<RestingOrder>>\` と \`asks: BTreeMap<Price, VecDeque<RestingOrder>>\`。
-3. **\`RestingOrder\` struct を書く** — \`Order\` から trim (side なし、order_type なし、qty は縮む)。
-4. **\`Book::new()\`** + accessor メソッド 4 個を追加。
+3. **\`RestingOrder\` struct を書く** — \`Order\` から trim したもの (side なし、order_type なし、qty は縮む)。
+4. **\`Book::new()\`** と accessor メソッド 4 個を追加。
 5. **\`pub mod book;\`** を \`lib.rs\` に配線。
 
-Accessor は \`Option<Price>\` または \`usize\` を返す — BTreeMap の形に対する純粋な read 操作。興味深い設計判断は **map key 型** と \`RestingOrder\` が \`Order\` から何を残し何を落とすか。
+Accessor は \`Option<Price>\` または \`usize\` を返す — BTreeMap の形に対する純粋な read 操作。興味深い設計判断は **map key 型** と、\`RestingOrder\` が \`Order\` から何を残し何を落とすか、の 2 点。
 
-> 🛑 **考えてみよう。** スクロールする前に: \`BTreeMap\` は key を **natural order** (小さい順) で iterate する。**ask** (最安価格を最初に欲しい) には \`BTreeMap<Price, _>\` が完璧 — natural order がそのまま最安先に walk する。**bid** には **最高価格を最初に** 欲しい — だが natural order は最安先に walk する。**カスタム comparator を書かずに BTreeMap を最高先に walk させる最も安価な方法は?** ヒント: 「u64 の ordering を反転する」を型として考える。
+> 🛑 **考えてみよう。** スクロールする前に: \`BTreeMap\` は key を **natural order** (小さい順) で iterate する。**ask** (最安価格を最初に欲しい) には \`BTreeMap<Price, _>\` が完璧 — natural order がそのまま最安先に walk する。**bid** は **最高価格を最初に** 欲しいが、natural order は最安先に walk する。**カスタム comparator を書かずに BTreeMap を最高先に walk させる最も安価な方法は?** ヒント: 「u64 の ordering を反転する」を型として考える。
 
 ## 手順
 
@@ -814,14 +814,14 @@ use crate::types::{
 };
 \`\`\`
 
-注目するべき点:
+注目すべき点:
 
 - **\`core::cmp::Reverse\`** — 任意の \`Ord\` 型の ordering を反転する wrapper。\`Reverse(Price(100))\` は \`Reverse(Price(200))\` **より大きい** と比較される (Reverse が underlying な比較を反転するため)。
 - **\`BTreeMap\`** — sorted map。Iteration は key を昇順 (= **natural order** = \`Ord::cmp\` が「小さい順」と言う順) で walk する。Insert/remove/lookup はすべて O(log n)。
-- **\`VecDeque\`** — 両端 queue。価格 level 内の「time priority」に使う: 新規 order は \`push_back\` (列の最後尾)、マッチした order は \`pop_front\` (列の先頭から fill)。
-- **L1 + L2 のすべての型** — 本レッスンで直接使わないもの (\`Fill\`、\`FillResult\`、\`Side\` 等) も含む。最終的な import リストに合わせて今 import する; L4-L6 の matching コードで全部使う。
+- **\`VecDeque\`** — 両端 queue。価格 level 内の「time priority」に使う: 新規 order は \`push_back\` (列の末尾) し、マッチした order は \`pop_front\` (列の先頭から fill) する。
+- **L1 + L2 のすべての型** — 本レッスンで直接使わないもの (\`Fill\`、\`FillResult\`、\`Side\` 等) も含む。最終的な import リストに合わせて今のうちに import しておく。L4-L6 の matching コードですべて使う。
 
-> 🛑 **やりがちな勘違い。** 「\`BTreeMap\` ではなく \`HashMap\` を使えばいい? Hash lookup は O(1) で BTreeMap の O(log n) より速い」。 **lookup だけでなく、価格順に iterate する。** 「best bid」を見つける = 「最高価格の bid」。HashMap には「次のソート済み key」概念がない; 全 key を scan (O(n)) して最大を見つける必要がある。BTreeMap の sorted iteration は best を O(1) lookup (\`keys().next()\`) でくれる — それが matching を安くする。
+> 🛑 **やりがちな勘違い。** 「\`BTreeMap\` ではなく \`HashMap\` を使えばいいのでは? Hash lookup は O(1) で BTreeMap の O(log n) より速い」。 **lookup だけでなく、価格順に iterate する必要がある。** 「best bid」を見つけるとは「最高価格の bid」を見つけること。HashMap には「次のソート済み key」という概念がなく、全 key を scan (O(n)) して最大を見つけるしかない。BTreeMap の sorted iteration なら best を O(1) lookup (\`keys().next()\`) で得られる — これが matching を安くしている。
 
 ### Step 2: \`Book\` struct を書く
 
@@ -837,16 +837,16 @@ pub struct Book {
 }
 \`\`\`
 
-Matching engine の状態全体が **2 つの BTreeMap**。それだけ。Order-id index なし、別の「best price」cache なし (BTreeMap が既に best を O(1) でくれる)、tick-size table なし。
+Matching engine の状態全体が **BTreeMap 2 個** に収まる。それだけだ。Order-id index も、別の「best price」cache も (BTreeMap が既に best を O(1) で返してくれる)、tick-size table もない。
 
-Bids と asks の非対称性 — \`Reverse<Price>\` vs. \`Price\` — は奇妙に見えるが、これが load-bearing なトリック:
+Bids と asks の非対称性 — \`Reverse<Price>\` vs. \`Price\` — は奇妙に見えるが、これこそが load-bearing なトリック:
 
-- **Asks: \`BTreeMap<Price, _>\`。** Natural-order key で iteration が \`Price(99)\`, \`Price(100)\`, \`Price(101)\`, ... と進む。最安 ask を欲しい buy-taker は \`asks.keys().next()\` → \`Price(99)\` を読む。Best-first。
-- **Bids: \`BTreeMap<Reverse<Price>, _>\`。** \`Reverse<Price>(p)\` の natural order は **p の降順**: \`Reverse(Price(101))\` が \`Reverse(Price(100))\` より前、\`Reverse(Price(100))\` が \`Reverse(Price(99))\` より前。最高 bid を欲しい sell-taker は \`bids.keys().next()\` → \`Reverse(Price(101))\` を読む。Best-first。
+- **Asks: \`BTreeMap<Price, _>\`。** Natural-order key で iteration が \`Price(99)\`, \`Price(100)\`, \`Price(101)\`, ... と進む。最安 ask が欲しい buy-taker は \`asks.keys().next()\` → \`Price(99)\` を読む。Best-first。
+- **Bids: \`BTreeMap<Reverse<Price>, _>\`。** \`Reverse<Price>(p)\` の natural order は **p の降順** になる: \`Reverse(Price(101))\` が \`Reverse(Price(100))\` より前、\`Reverse(Price(100))\` が \`Reverse(Price(99))\` より前。最高 bid が欲しい sell-taker は \`bids.keys().next()\` → \`Reverse(Price(101))\` を読む。Best-first。
 
-**両側ともに \`keys().next()\` で best price を取る。** これが型非対称性を正当化する API 対称性。\`Reverse\` なしだと bid lookup が \`keys().next_back()\` (BTreeMap iterator の逆方向) になり、matching コードが side 間で非対称になる — 混乱しやすく、間違えやすい。
+**どちらの side も \`keys().next()\` で best price を取れる。** これが型の非対称性を正当化する API の対称性だ。\`Reverse\` なしだと bid lookup が \`keys().next_back()\` (BTreeMap iterator の逆方向) になり、matching コードが side 間で非対称になる — 混乱しやすく、間違えやすい。
 
-\`#[derive(Default)]\` は \`Book::new()\` (次のステップ) が単に \`Self::default()\` で済むため — コンストラクタで \`BTreeMap::new()\` を 4 回書く必要なし。\`BTreeMap\` の Default は空 map; \`Book\` 全体の \`Default\` も同様。
+\`#[derive(Default)]\` を付けるのは \`Book::new()\` (次のステップ) を \`Self::default()\` だけで済ませるため。コンストラクタで \`BTreeMap::new()\` を 4 回書かなくてよい。\`BTreeMap\` の Default は空 map なので、\`Book\` 全体の \`Default\` も同様になる。
 
 ### Step 3: \`RestingOrder\` struct を書く
 
@@ -864,15 +864,15 @@ struct RestingOrder {
 }
 \`\`\`
 
-field 3 個、**pub ではない** (内部型 — caller が \`RestingOrder\` を直接触らない)。
+field 3 個、**pub ではない** (内部型なので、caller が \`RestingOrder\` を直接触らない)。
 
 \`Order\` から落としたもの:
 
-- **\`side\`** — 削除。RestingOrder の側はどちらの map に入っているか (bids vs. asks) で分かる。2 回保存するのは冗長で error-prone。
-- **\`order_type\`** — 削除。Resting order は定義上常に Limit order (Market order は決して rest しない — 取れる分だけ取って残りは破棄)。\`order_type\` を保存すると \`OrderType::Market\` の \`RestingOrder\` を作れてしまうが、それは無意味。
-- **\`qty\` は残る** — だが **時間と共に縮む**、部分 fill される度に。L4 の submit コードが、maker が taker の qty の 100% 未満を食ったときに \`RestingOrder.qty\` を直接 mutate する。
+- **\`side\`** — 削除。RestingOrder の side はどちらの map に入っているか (bids か asks か) で分かる。2 回保存するのは冗長で error-prone。
+- **\`order_type\`** — 削除。Resting order は定義上常に Limit order になる (Market order は決して rest しない — 取れる分だけ取って残りは破棄するから)。\`order_type\` を保存すると \`OrderType::Market\` の \`RestingOrder\` を作れてしまうが、それは無意味。
+- **\`qty\` は残す** — ただし **部分 fill される度に時間と共に縮む**。L4 の submit コードは、maker が taker の qty の 100% 未満しか食わなかったときに \`RestingOrder.qty\` を直接 mutate する。
 
-> 🛑 **やりがちな勘違い。** 「Original の \`Order\` を book に保存して \`qty\` を modify すればいい?」 **\`Order\` は \`Copy\` (field 5 個、すべて stack-safe) で、Copy field を mutate するのは注意深い reviewer にバグに見える。** 具体的には、\`Order\` が queue 内に保存されていると、matching コードが \`*order_in_queue.qty.0 -= fill_qty.0\` のように書く — だがこれは \`Copy\` で安く clone できるはずのデータを mutate している。\`RestingOrder\` を別型にすることで「これが mutate される」という性質を明示する: caller は \`RestingOrder.qty\` が縮むことを知っている、\`RestingOrder\` がそのために **ある** から。
+> 🛑 **やりがちな勘違い。** 「元の \`Order\` を book に保存して \`qty\` を modify すればよいのでは?」 **\`Order\` は \`Copy\` (field 5 個、すべて stack-safe) であり、Copy field を mutate するのは注意深い reviewer の目にバグとして映る。** 具体的には、\`Order\` が queue 内に保存されていると、matching コードが \`*order_in_queue.qty.0 -= fill_qty.0\` のように書くことになる — だがこれは \`Copy\` で安く clone できるはずのデータを mutate していることになる。\`RestingOrder\` を別型にすることで「これは mutate される」という性質を明示する: \`RestingOrder\` がそのために **ある** 以上、caller は \`RestingOrder.qty\` が縮むことを当然と思う。
 
 ### Step 4: \`new()\` と accessor 4 個を追加
 
@@ -909,14 +909,14 @@ impl Book {
 
 メソッド 5 個、すべて \`#[must_use]\`:
 
-- **\`new()\`** — \`Self::default()\`。\`Book { bids: BTreeMap::new(), asks: BTreeMap::new() }\` と書けるが、\`#[derive(Default)]\` が均一に処理する。
-- **\`best_bid()\`** — \`keys().next()\` が natural-order の最小 key を返す。Bids は \`Reverse<Price>\` を使うので、その key は最高 price を wrap する。\`.map(|rp| rp.0)\` で unwrap — \`rp.0\` が \`Reverse\` wrapper を剥がす。
-- **\`best_ask()\`** — 同じパターン、ただし key が \`Price\` 直接。\`keys().next()\` が最小 \`Price\` を返し、\`.copied()\` で値として取り出す (なしだと \`Option<&Price>\` になる)。
-- **\`depth_bid()\` / \`depth_ask()\`** — 全 price level にわたる queue 長の合計。Inspection 用、テストとデバッグで使う。
+- **\`new()\`** — \`Self::default()\`。\`Book { bids: BTreeMap::new(), asks: BTreeMap::new() }\` と書いてもいいが、\`#[derive(Default)]\` が均一に処理してくれる。
+- **\`best_bid()\`** — \`keys().next()\` が natural-order の最小 key を返す。Bids は \`Reverse<Price>\` を使うので、その key は最高 price を wrap する。\`.map(|rp| rp.0)\` で unwrap する — \`rp.0\` が \`Reverse\` wrapper を剥がす。
+- **\`best_ask()\`** — 同じパターン。ただし key が \`Price\` そのもの。\`keys().next()\` が最小 \`Price\` を返し、\`.copied()\` で値として取り出す (これがないと \`Option<&Price>\` になる)。
+- **\`depth_bid()\` / \`depth_ask()\`** — 全 price level にわたる queue 長の合計。Inspection 用で、テストとデバッグで使う。
 
-**なぜ best が \`Option<Price>\`?** Book が空のとき、best price は存在しない。\`Option::None\` が正しい答え; \`Price(0)\` や \`Price(u64::MAX)\` を返すと caller が偶発的に real price として扱う可能性がある。型が空ケースのハンドリングを強制する。
+**なぜ best を \`Option<Price>\` にするのか?** Book が空のとき、best price は存在しないから。\`Option::None\` が正しい答え。\`Price(0)\` や \`Price(u64::MAX)\` を返すと、caller が誤って real price として扱う恐れがある。型が空ケースのハンドリングを強制してくれる。
 
-> 🛑 **やりがちな勘違い。** 「\`depth_bid\` は O(n) — 遅い」。 **テストと inspection でしか呼ばれず、そこでは O(n) は問題ない。** Matching engine 本体は \`depth_bid\` を決して呼ばない — \`keys().next()\` と \`front()\` を O(1)/O(log n) で walk する。\`depth_bid\` が hot path にあるなら counter を追加して push/pop ごとに bump するだろう; だがそうではないので、しない。
+> 🛑 **やりがちな勘違い。** 「\`depth_bid\` は O(n) — 遅い」。 **テストと inspection でしか呼ばないので、そこでは O(n) は問題にならない。** Matching engine 本体は \`depth_bid\` を決して呼ばない — \`keys().next()\` と \`front()\` を O(1)/O(log n) で walk するだけだ。\`depth_bid\` が hot path にあるなら counter を追加して push/pop ごとに bump するが、そうではないのでやらない。
 
 ### Step 5: \`lib.rs\` に配線
 
@@ -933,7 +933,7 @@ pub mod types;
 pub use types::*;
 \`\`\`
 
-新規モジュールに **1 行**、public な \`Book\` 型に **1 re-export** を追加:
+新規モジュールに **1 行**、public な \`Book\` 型に **re-export 1 個** を追加:
 
 \`\`\`rust
 //! Pure-Rust CLOB (central limit order book) matching engine for openhl.
@@ -948,9 +948,9 @@ pub use book::Book;
 pub use types::*;
 \`\`\`
 
-順序は意図的: \`book\` がアルファベット順で先、\`types\` が次。Rust crate の import は通常 crate-level module をアルファベット順にすると読みやすい。
+順序は意図的: \`book\` がアルファベット順で先、\`types\` が次。Rust crate の import は、通常 crate-level module をアルファベット順に並べると読みやすい。
 
-**\`Book\` のみ re-export、\`RestingOrder\` はしない。** \`RestingOrder\` は内部 queue 要素; matching engine の外から誰も construct したり read したりすべきでない。\`book.rs\` 内で \`pub struct\` でなく \`struct\` のまま保つことでそれを明示する。Compiler が「このモジュールの外で誰も RestingOrder を触らない」を強制する。
+**\`Book\` のみ re-export し、\`RestingOrder\` はしない。** \`RestingOrder\` は内部 queue 要素であり、matching engine の外から誰も construct したり read したりすべきではない。\`book.rs\` 内で \`pub struct\` ではなく \`struct\` のままにしておけば、その意図が明示される。Compiler が「このモジュールの外で誰も RestingOrder を触らない」を強制してくれる。
 
 ## テスト
 
@@ -960,21 +960,21 @@ cargo check -p openhl-clob
 
 期待: clean compile、warning なし。
 
-**unused import** の warning が出るかもしれない — L3 では \`book.rs\` が \`Fill\`, \`FillResult\`, \`Order\`, \`OrderType\`, \`Qty\`, \`Side\` を import するがまだ使わないから:
+**unused import** の warning が出るかもしれない — L3 では \`book.rs\` が \`Fill\`, \`FillResult\`, \`Order\`, \`OrderType\`, \`Qty\`, \`Side\` を import するが、まだ使っていないため:
 
 \`\`\`
 warning: unused import: \`Fill, FillResult, Order, OrderType, Qty, Side\`
  --> crates/clob/src/book.rs:11:5
 \`\`\`
 
-**ハンドリングの 2 つの選択肢:**
+**対処の選択肢が 2 つ:**
 
-1. **今は warning を抑制** — use 文の上に \`#[allow(unused_imports)]\` を追加。L4 が全部使い始めたら削除。
-2. **今は未使用 import をコメントアウト** — L4-L6 で必要に応じて uncomment。
+1. **今は warning を抑制する** — use 文の上に \`#[allow(unused_imports)]\` を追加。L4 ですべて使い始めたら削除。
+2. **今は未使用 import をコメントアウトする** — L4-L6 で必要に応じて uncomment。
 
-SHA \`55a9dff\` の参照は import を全部保つ (ファイルがその SHA で完成しているから)。Build-along では選択 1 が参照に近い; 選択 2 は warning が気になるなら綺麗。どちらでも fine。
+SHA \`55a9dff\` の参照は import をすべて残している (ファイルがその SHA で完成しているため)。Build-along では選択 1 のほうが参照に近いが、warning が気になるなら選択 2 のほうが綺麗。どちらでも問題ない。
 
-構造がコンパイルできることのクイックサニティテスト:
+構造がコンパイルできることをクイックにサニティチェックする:
 
 \`\`\`bash
 cat > /tmp/book_test.rs <<'EOF'
@@ -992,7 +992,7 @@ fn main() {
 EOF
 \`\`\`
 
-走らせる必要はない; 型がコンパイルできるだけでよい。\`cargo check -p openhl-clob\` が clean なら OK。
+走らせる必要はない。型がコンパイルできさえすればよい。\`cargo check -p openhl-clob\` が clean なら OK。
 
 よくあるエラーと対処:
 
@@ -1005,11 +1005,11 @@ EOF
 
 3 つの load-bearing な決定:
 
-1. **Matching engine の状態は 2 つの BTreeMap。** Order-id index なし、best-price cache なし、side ごとの counter なし。他はすべてその 2 map から導出される。将来の最適化 (例: O(1) cancel のための \`HashMap<OrderId, (Side, Price)>\`) は core data model を変えずに追加できる。**操作をサポートする最も単純な表現で始め、profile が要求したら最適化する。**
+1. **Matching engine の状態は BTreeMap 2 個。** Order-id index も、best-price cache も、side ごとの counter もない。他のものはすべてその 2 map から導出される。将来の最適化 (例: O(1) cancel のための \`HashMap<OrderId, (Side, Price)>\`) は core data model を変えずに追加できる。**操作をサポートする最も単純な表現から始め、profile が要求したら最適化する。**
 
-2. **Bids に \`Reverse<Price>\` を使うのは、matching コードの複雑さを節約する型レベルトリック。** これなしだと、book を walk するすべての場所で分岐が必要: 「ask なら \`next\`、bid なら \`next_back\`」。Bids に \`Reverse<Price>\` を使うことで、両側が \`next\` で uniform。**呼び出し側で 1 つの対称 API は、データ定義の 1 つの型非対称性に値する。**
+2. **Bids に \`Reverse<Price>\` を使うのは、matching コードの複雑さを節約する型レベルトリック。** これがないと、book を walk するすべての場所で「ask なら \`next\`、bid なら \`next_back\`」という分岐が必要になる。Bids に \`Reverse<Price>\` を使うことで、両 side とも \`next\` で uniform に walk できる。**呼び出し側で 1 つの対称的な API を得られるなら、データ定義の 1 つの型の非対称性は十分払う価値がある。**
 
-3. **\`RestingOrder\` を \`Order\` から trim することで invariant を encode する。** Resting order は side を持たない (どの map にあるかで分かる) し \`order_type\` を持たない (Market order は決して rest しない)。これらの field を \`RestingOrder\` から取り除くと、不可能な状態が表現不可能になる。**型設計 = 制約エンジニアリング。**
+3. **\`RestingOrder\` を \`Order\` から trim することで invariant を encode する。** Resting order は side を持たないし (どの map にあるかで分かる)、\`order_type\` も持たない (Market order は決して rest しないから)。これらの field を \`RestingOrder\` から取り除けば、不可能な状態が表現不可能になる。**型設計とは制約エンジニアリングのこと。**
 
 ## 答え合わせ
 
@@ -1020,7 +1020,7 @@ diff -u ~/code/my-openhl/crates/clob/src/book.rs ./crates/clob/src/book.rs
 diff -u ~/code/my-openhl/crates/clob/src/lib.rs ./crates/clob/src/lib.rs
 \`\`\`
 
-L3 後、自分の \`book.rs\` は参照の **最初の ~45 行** (struct 定義 + \`new()\` + accessor 4 個)。この SHA の参照には \`submit\` (~100 LOC、L4 + L5)、\`cancel\` (~25 LOC、L6)、\`match_at_level\` ヘルパー (~30 LOC、L4) もある。これらは後続レッスンで追加。
+L3 後、自分の \`book.rs\` は参照の **最初の ~45 行** (struct 定義 + \`new()\` + accessor 4 個) に相当する。この SHA の参照には \`submit\` (~100 LOC、L4 + L5)、\`cancel\` (~25 LOC、L6)、\`match_at_level\` ヘルパー (~30 LOC、L4) もあるが、これらは後続レッスンで追加する。
 
 戻る:
 
@@ -1031,20 +1031,20 @@ git checkout main
 ## よくある質問
 
 **Q: なぜ \`Vec\` ではなく \`VecDeque\`?**
-高速な push-back **と** 高速な pop-front の両方が必要だから。\`Vec::remove(0)\` は全要素を左にシフト — O(n)。\`VecDeque::pop_front()\` は O(1)。FIFO queue は常に \`VecDeque\` (または real ringbuffer) を使う — \`Vec\` を front から shift しない。
+高速な push-back **と** 高速な pop-front の両方が必要だから。\`Vec::remove(0)\` は全要素を左にシフトするので O(n) だが、\`VecDeque::pop_front()\` は O(1)。FIFO queue には常に \`VecDeque\` (または真の ringbuffer) を使う — \`Vec\` を front から shift してはいけない。
 
-**Q: \`Reverse\` は内部で実際何をしている?**
-\`Ord::cmp\` の方向を反転する。\`Reverse(a).cmp(&Reverse(b)) == b.cmp(&a)\`。それだけ。\`BTreeMap\` は sort 時に key の \`Ord\` impl を query する; key を \`Reverse\` でラップすると、\`BTreeMap\` は \`Reverse(higher)\` を \`Reverse(lower)\` より「小さい」と思い、それに従って walk する。
+**Q: \`Reverse\` は内部で実際に何をしている?**
+\`Ord::cmp\` の方向を反転する。\`Reverse(a).cmp(&Reverse(b)) == b.cmp(&a)\`。それだけだ。\`BTreeMap\` は sort 時に key の \`Ord\` impl を query する。key を \`Reverse\` でラップすると、\`BTreeMap\` は \`Reverse(higher)\` を \`Reverse(lower)\` より「小さい」と判断し、それに従って walk する。
 
-**Q: \`RestingOrder\` を単に \`Order\` にしたら?**
-できる — だが \`side\` と \`order_type\` を無駄に運ぶ (side は既に map で分かる、resting Market order は矛盾)。Trim は小さいが、「resting Market order を construct できない」という **型レベル保証** が無料で手に入る。
+**Q: \`RestingOrder\` をただの \`Order\` にしたらどうか?**
+できる — ただし \`side\` と \`order_type\` を無駄に運ぶことになる (side は map で既に分かるし、resting Market order は矛盾)。Trim は小さいが、「resting Market order を construct できない」という **型レベル保証** が無料で手に入る。
 
-**Q: なぜ BTreeMap field が private?**
-caller が map を直接 modify すべきでなく、\`submit\` / \`cancel\` (L4+ / L6) を通すべきだから — それらが「空 queue を map に残さない」のような invariant を維持する。\`book.asks.insert(price, VecDeque::new())\` を呼べてしまうと、空の price level (phantom) が作れてしまい、\`best_ask()\` がそれを返す。Encapsulation がそれを防ぐ。
+**Q: なぜ BTreeMap field を private にするのか?**
+caller が map を直接 modify すべきではなく、必ず \`submit\` / \`cancel\` (L4+ / L6) を通すべきだから。それらが「空 queue を map に残さない」といった invariant を維持する。\`book.asks.insert(price, VecDeque::new())\` を呼べてしまうと、空の price level (phantom) が作れてしまい、\`best_ask()\` がそれを返してしまう。Encapsulation でこれを防ぐ。
 
 ## 次のレッスン (L4)
 
-データ構造が揃った。L4 はその上に最初の matching ロジックを乗せる — Limit Buy order の \`submit\`。Reader は ask を最安から walk し、limit 以下で match し、fill しなかった残りを rest する \`Buy\` ブランチを書く。Body ~60 LOC + L4-L5 両方で使う \`match_at_level\` ヘルパー。L4 後、最も一般的なシナリオ (limit buy が resting ask を cross する) で matching engine が real \`Fill\` を produce する。`,
+データ構造が揃った。L4 ではその上に最初の matching ロジックを乗せる — Limit Buy order の \`submit\` を書く。Reader は ask を最安から walk し、limit 以下で match し、fill しなかった残りを rest させる \`Buy\` ブランチを書くことになる。本体 ~60 LOC と、L4-L5 の両方で使う \`match_at_level\` ヘルパー。L4 後、最も一般的なシナリオ (limit buy が resting ask を cross する) で matching engine が real \`Fill\` を produce するようになる。`,
                 },
                 {
                   title: "レッスン 4 — Limit order 用 submit + match_at_level",
@@ -1063,15 +1063,15 @@ caller が map を直接 modify すべきでなく、\`submit\` / \`cancel\` (L4
 cargo check -p openhl-clob
 \`\`\`
 
-…依然コンパイルする。\`Book\` が **Limit order** (Buy + Sell) を受け付け、real \`Fill\` を produce できる。Market order はまだ \`todo!()\` — L5。
+上記の実行結果が引き続きコンパイルする。\`Book\` が **Limit order** (Buy + Sell) を受け付け、real \`Fill\` を produce できるようになる。Market order はまだ \`todo!()\` のまま — それは L5 で扱う。
 
 書くもの:
 
 - **\`submit()\`** — \`order.order_type\` に基づいて \`submit_limit\` または \`submit_market\` にルーティングする dispatch メソッド。
-- **\`submit_limit()\`** — 本体: book の反対側を walk し、limit price に対して at-or-better でマッチし、fill しなかった残りを book に rest させる。
+- **\`submit_limit()\`** — 本体: book の反対側を walk し、limit price に対して at-or-better でマッチさせ、fill しなかった残りを book に rest させる。
 - **\`match_at_level()\`** — \`submit_limit\` (および L5 の \`submit_market\`) から呼ばれる private ヘルパー。単一 price level で実際の fill を行い、maker queue と taker の remaining quantity の両方を mutate する。
 
-L4 後、\`book.rs\` は **~150 行**。Buy + Sell の Limit order が両方動く; Market はまだ \`todo!\` で panic する。
+L4 後、\`book.rs\` は **~150 行** になる。Buy + Sell の Limit order がどちらも動く。Market はまだ \`todo!\` で panic する。
 
 ## おさらい
 
@@ -1094,21 +1094,21 @@ impl Book {
 }
 \`\`\`
 
-**order を入れる方法がない。** L4 がそこを直す。
+**order を入れる方法がない。** L4 でそこを直す。
 
 ## 計画
 
 すべて \`crates/clob/src/book.rs\` に追加する 3 つ:
 
-1. **\`submit()\` dispatcher** — \`OrderType\` に対する 1 つの \`match\`。Limit → \`submit_limit\`; Market → 今は \`todo!()\`。
-2. **\`submit_limit()\` 本体** — 約 60 行。Buy は ask を昇順 walk、\`ask_price <= limit\` の間マッチ。Sell は bid を降順 walk、\`bid_price >= limit\` の間マッチ。Fill しなかった残りが book に rest する (\`RestingOrder\` として entry)。
-3. **\`match_at_level()\` ヘルパー** — 約 25 行。Queue 先頭の maker を pop または shrink、1 つの \`Fill\` を返す、taker の \`remaining\` を mutate する。
+1. **\`submit()\` dispatcher** — \`OrderType\` に対する 1 つの \`match\`。Limit → \`submit_limit\`、Market → 今は \`todo!()\`。
+2. **\`submit_limit()\` 本体** — 約 60 行。Buy は ask を昇順 walk し、\`ask_price <= limit\` の間マッチする。Sell は bid を降順 walk し、\`bid_price >= limit\` の間マッチする。Fill しなかった残りは book に rest させる (\`RestingOrder\` として entry)。
+3. **\`match_at_level()\` ヘルパー** — 約 25 行。Queue 先頭の maker を pop または shrink し、1 つの \`Fill\` を返し、taker の \`remaining\` を mutate する。
 
-これが **matching engine の大部分**。L5 で Market を追加する (Market は \`submit_limit\` から price check を除き、resting step を除いたもの)。L6 で cancel を追加。**Matching engine の core が本レッスン。**
+これが **matching engine の大部分**。L5 で Market を追加する (Market は \`submit_limit\` から price check と resting step を除いたもの)。L6 で cancel を追加する。**Matching engine の core が本レッスンの中身。**
 
-> 🛑 **考えてみよう。** スクロールする前に: price 100 の Limit Buy order が ask を最安から walk する。Ask が \`{ Price(98): [O_a], Price(99): [O_b, O_c], Price(101): [O_d] }\` のようなとき。Buyer は 50 unit 買いたく、各 resting order は 30 unit。**Fill はどの順序で発生する? Trade 後の book の最終状態は?** ヒント: \`keys().next()\` から ask を walk し、満たされるか next level が limit を超えるまで各 level でマッチする。
+> 🛑 **考えてみよう。** スクロールする前に: price 100 の Limit Buy order が ask を最安から walk するとする。Ask が \`{ Price(98): [O_a], Price(99): [O_b, O_c], Price(101): [O_d] }\` のような状態で、buyer は 50 unit 買いたく、各 resting order は 30 unit。**Fill はどの順序で発生するか? Trade 後の book の最終状態は?** ヒント: \`keys().next()\` から ask を walk し、満たされるか next level が limit を超えるまで各 level でマッチする。
 
-(答え: fill は \`[Fill@98 で 30、Fill@99 で 20]\`。Trade 後、\`O_a\` は消える、\`O_b\` は 10 unit 残る、\`O_c\` は 30 unit のまま、\`O_d\` は 30 unit のまま。Buyer は limit より少なく払った (98 + 99 vs 100) — それが「at-or-better」ルール。)
+(答え: fill は \`[Fill@98 で 30、Fill@99 で 20]\`。Trade 後、\`O_a\` は消え、\`O_b\` は 10 unit 残り、\`O_c\` は 30 unit のまま、\`O_d\` も 30 unit のまま。Buyer は limit より少なく払った (98 + 99 vs 100) — これが「at-or-better」ルール。)
 
 ## 手順
 
@@ -1127,11 +1127,11 @@ impl Book {
     }
 \`\`\`
 
-本体 3 行。Dispatcher は意図的に小さい — matching ロジックはすべて \`submit_limit\` と (将来) \`submit_market\` に住む。**Dispatcher の唯一の仕事は型駆動のルーティング**、matching ではない。
+本体 3 行。Dispatcher は意図的に小さくしてある — matching ロジックはすべて \`submit_limit\` と (将来の) \`submit_market\` に置く。**Dispatcher の唯一の仕事は型駆動のルーティング**であって、matching そのものではない。
 
-\`todo!()\` がここでは正しい placeholder: Market order が submit されたら runtime で clear なメッセージで panic するが、コンパイルは clean。L5 で real な \`self.submit_market(order)\` 呼び出しに置き換える。
+\`todo!()\` はここでは正しい placeholder。Market order が submit されると runtime で clear なメッセージで panic するが、コンパイルは clean に通る。L5 で real な \`self.submit_market(order)\` 呼び出しに置き換える。
 
-> 🛑 **やりがちな勘違い。** 「Submit() を 1 つの大きな match にして、matching ロジックを各 arm にインラインで書けばいい?」 **そうすると \`submit_limit\` と \`submit_market\` が dispatcher の match arm の中に隠れる。** 2 つの効果: (1) public method \`submit\` が 100+ 行になり一目で読みづらい; (2) 各パスのテストが難しくなる (test は \`Book::submit\` を import するが、特定パスを exercise するために \`order_type\` を正しく設定した \`Order\` を construct する必要)。\`submit_limit\` / \`submit_market\` を named function として外に出すと addressable で testable になる。
+> 🛑 **やりがちな勘違い。** 「Submit() を 1 つの大きな match にして、matching ロジックを各 arm にインラインで書けばいいのでは?」 **そうすると \`submit_limit\` と \`submit_market\` が dispatcher の match arm の中に隠れる。** 効果は 2 つ: (1) public method \`submit\` が 100+ 行になり一目で読みづらい、(2) 各 path のテストが難しくなる (test は \`Book::submit\` を import するが、特定 path を exercise するために \`order_type\` を正しく設定した \`Order\` を construct する必要がある)。\`submit_limit\` / \`submit_market\` を named function として外に出すと、addressable で testable になる。
 
 ### Step 2: \`submit_limit\` 本体を書き始める
 
@@ -1197,21 +1197,21 @@ impl Book {
 
 これが matching loop。注意深く読む。Buy ブランチ:
 
-1. **無限ループ、条件で break。** Exit は 3 つ: (a) taker が完全に fill、(b) この side で book が空、(c) 最安 ask が limit より高い。
-2. **\`self.asks.keys().next().copied()\`** — 最安 ask 価格。\`&Price\` ではなく \`Price\` 値が欲しいので \`.copied()\`。
+1. **無限ループを条件付き break で抜ける。** Exit は 3 つ: (a) taker が完全に fill した、(b) この side で book が空、(c) 最安 ask が limit より高い。
+2. **\`self.asks.keys().next().copied()\`** — 最安 ask 価格。\`&Price\` ではなく \`Price\` 値が欲しいので \`.copied()\` する。
 3. **\`if best_price > limit_price { break }\`** — at-or-better ルール。Ask に \`limit_price\` 以上は払わない。
-4. **\`self.asks.get_mut(&best_price).expect(...)\`** — その価格の queue。**\`.expect\` は安全** — \`best_price\` を \`keys().next()\` から取ったばかりで、level は確実に存在する。Expect message が invariant を文書化する。
-5. **\`match_at_level(&order, best_price, queue, &mut remaining)\`** — 実際のマッチを行う。次にこのヘルパーを書く; 今は \`Fill\` を返し、\`queue\` (maker が完全 fill なら pop) と \`remaining\` (fill 数量を引く) の両方を mutate することを知っておく。
-6. **\`if queue.is_empty() { self.asks.remove(&best_price) }\`** — \`match_at_level\` が queue を空にしたなら、level を drop して \`best_ask()\` が \`depth_ask()\` と整合性を保つ。(空 queue を map に残すと、\`best_ask()\` がその level の価格を返すが order はそこにない。)
+4. **\`self.asks.get_mut(&best_price).expect(...)\`** — その価格の queue。**\`.expect\` は安全** — \`best_price\` を \`keys().next()\` から取ったばかりなので、level は確実に存在する。Expect message が invariant を文書化する。
+5. **\`match_at_level(&order, best_price, queue, &mut remaining)\`** — 実際のマッチを行う。このヘルパーは次に書く。今のところは、\`Fill\` を返し、\`queue\` (maker が完全 fill なら pop する) と \`remaining\` (fill 数量を引く) の両方を mutate することを覚えておけばよい。
+6. **\`if queue.is_empty() { self.asks.remove(&best_price) }\`** — \`match_at_level\` が queue を空にしたなら、level を drop して \`best_ask()\` を \`depth_ask()\` と整合させる。(空 queue を map に残すと、\`best_ask()\` がその level の価格を返すが、order はそこにない。)
 
-Sell ブランチは **構造的に同一** だが反転:
-- \`asks\` ではなく \`bids\` を walk。
-- key が \`Reverse<Price>\` なので \`best_rev.0\` で unwrap。
-- 比較は \`best_price < limit_price\` (sell at-or-better = limit 以上で sell)。
+Sell ブランチは **構造的に同一** だが反転している:
+- \`asks\` ではなく \`bids\` を walk する。
+- key が \`Reverse<Price>\` なので \`best_rev.0\` で unwrap する。
+- 比較は \`best_price < limit_price\` (sell の at-or-better は limit 以上で売る)。
 
-**「構造的同一性」が load-bearing な観察。** Buy と Sell は互いの mirror image。両者とも反対側を best-first で walk; 両者とも price が limit をクリアする間マッチ; 両者とも空になった level を pop。違いは触る BTreeMap と比較の方向だけ。Buy ブランチが分かれば Sell ブランチも分かる。
+**「構造的同一性」が load-bearing な観察。** Buy と Sell は互いの mirror image。どちらも反対側を best-first で walk し、どちらも price が limit をクリアする間マッチし、どちらも空になった level を pop する。違いは触る BTreeMap と比較の方向だけ。Buy ブランチが分かれば Sell ブランチも分かる。
 
-> 🛑 **やりがちな勘違い。** 「Buy/Sell を parameterize して 1 度だけループを書けないか?」 **できる — だがコストに見合わない。** 完全 generic 版は BTreeMap (\`Reverse<Price>\` vs \`Price\`)、比較演算子 (\`>\` vs \`<\`)、key (\`bids\` vs \`asks\`) を抽象化する必要がある。節約は ~30 行の duplication、コストは Rust で最も敵対的な generic-bound パズルの 1 つ。**Duplication は安く、abstraction-budget は貴重。実際に効くところに使う。**
+> 🛑 **やりがちな勘違い。** 「Buy/Sell を parameterize して、ループを 1 度だけ書けないか?」 **できる — だがコストに見合わない。** 完全 generic 版は BTreeMap (\`Reverse<Price>\` vs \`Price\`)、比較演算子 (\`>\` vs \`<\`)、key (\`bids\` vs \`asks\`) を抽象化する必要がある。節約できるのは ~30 行の duplication、払うコストは Rust で最も手強い generic-bound パズルの 1 つ。**Duplication は安く、abstraction の予算は貴重。実際に効くところに使う。**
 
 ### Step 3: rest-the-remainder ロジックを追加
 
@@ -1251,13 +1251,13 @@ Sell ブランチは **構造的に同一** だが反転:
 注意深く読む:
 
 1. **\`if remaining.0 > 0\`** — taker にまだ fill されていない quantity がある。Limit order ではその quantity が book に乗る (Market order は L5 で代わりに破棄する)。
-2. **\`RestingOrder\` を construct** — side と order_type は落とす (どの map に push するかで encode される)、id + account + remaining qty を残す。
-3. **\`self.bids.entry(Reverse(limit_price)).or_default().push_back(resting)\`** — Buy order の fill しなかった残り。\`entry\` + \`or_default\` は BTreeMap の「なければ insert、いずれにせよ mutable ref を取る」イディオム。\`Reverse(limit_price)\` が L3 で bids に選んだ key の形。
+2. **\`RestingOrder\` を construct する** — side と order_type は落とす (どの map に push するかで encode される) — id + account + remaining qty だけを残す。
+3. **\`self.bids.entry(Reverse(limit_price)).or_default().push_back(resting)\`** — Buy order の fill しなかった残り。\`entry\` + \`or_default\` は BTreeMap の「なければ insert、いずれにせよ mutable ref を取る」イディオム。\`Reverse(limit_price)\` は L3 で bids に選んだ key の形。
 4. **\`self.asks.entry(limit_price).or_default().push_back(resting)\`** — Sell の対称形。
-5. **\`FillResult { fills, remaining_qty: Qty(0) }\`** — caller にゼロ \`remaining_qty\` を返す。**これが L2 の \`FillResult\` doc が約束した load-bearing な意味論**: rest する Limit order は **ゼロ remaining と言う**。Remainder は book にあり、return 値の中ではない。
-6. **両方のブランチ** (\`if\` と \`else\`) が \`Qty(0)\` remaining を返す。\`else\` ブランチは完全 fill ケース (taker が 100% マッチ; rest なし、remaining なし)。2 つのブランチは異なる理由で同じ return 値を produce する。
+5. **\`FillResult { fills, remaining_qty: Qty(0) }\`** — caller にゼロ \`remaining_qty\` を返す。**これが L2 の \`FillResult\` doc が約束した load-bearing な意味論**: rest する Limit order は **ゼロ remaining と申告する**。Remainder は book にあって、return 値の中にはない。
+6. **両方のブランチ** (\`if\` と \`else\`) が \`Qty(0)\` remaining を返す。\`else\` ブランチは完全 fill ケース (taker が 100% マッチし、rest も remaining もない)。2 つのブランチは異なる理由で同じ return 値を produce する。
 
-> 🛑 **やりがちな勘違い。** 「rest する Limit order がなぜ resting amount ではなく \`remaining_qty: Qty(0)\` を返す? Caller は book にいくら乗ったか知りたいかも」。 **\`FillResult\` は **matching** の結果で、book の状態ではないから。** Resting amount を知りたい caller は call 後に \`best_bid()\` や \`depth_bid()\` を query できる。「book が新しい resting liquidity をこれだけ受け取った」と「matcher が place できなかった taker quantity がこれだけ残った」を混同すると意味論が曖昧になる。**Return は何が起きたかを表す、book 状態は何があるかを表す。Separate concerns。**
+> 🛑 **やりがちな勘違い。** 「rest する Limit order が、resting amount ではなく \`remaining_qty: Qty(0)\` を返すのはなぜか? Caller は book にいくら乗ったか知りたいかも」。 **\`FillResult\` は **matching** の結果であって、book の状態ではないから。** Resting amount を知りたい caller は call 後に \`best_bid()\` や \`depth_bid()\` を query すればよい。「book が新しい resting liquidity をこれだけ受け取った」と「matcher が place できなかった taker quantity がこれだけ残った」を混ぜると意味論が曖昧になる。**Return value は何が起きたかを表し、book 状態は何があるかを表す。関心事を分離する。**
 
 ### Step 4: \`match_at_level()\` ヘルパーを書く
 
@@ -1297,18 +1297,18 @@ fn match_at_level(
 }
 \`\`\`
 
-これが **実際のマッチ** — real work を行う最小の関数。読む:
+これが **実際のマッチ** — real work を行う最小の関数。順に読む:
 
-1. **\`queue.front_mut().expect(...)\`** — queue 先頭の maker。Time priority は最初に置かれた order が最初にマッチすることを意味する。\`submit_limit\` が level の存在を確認した後にしか \`match_at_level\` を呼ばないので \`expect\` は安全。
-2. **\`fill_qty = min(maker.qty, remaining)\`** — 2 つの小さい方をマッチ。Maker が 30 unit で taker がまだ 50 必要なら fill は 30 (maker は完全消費)。Maker が 30 で taker が 10 だけ必要なら fill は 10 (maker は 20 残る)。
-3. **\`Fill\` を build** — order ID 両方と account ID 両方を保存 (L2 の設計判断: self-contained Fills)。
-4. **\`maker.qty.0 -= fill_qty.0\`** — maker を縮める。**これは RestingOrder 内なら安全だが Order 内ではおかしい mutation** (L3 の anti-fluency callout — RestingOrder はちょうどこの種の mutation を明示するために存在する)。
-5. **\`remaining.0 -= fill_qty.0\`** — taker の outstanding quantity を縮める。Caller (\`submit_limit\`) が \`&mut Qty\` 引数経由でこれを見る。
-6. **\`if maker.qty.0 == 0 { queue.pop_front() }\`** — maker が完全消費されたら pop する。\`submit_limit\` の outer loop の次の iteration がこの queue を再度 check する — 今空なら level 自体が drop される。
+1. **\`queue.front_mut().expect(...)\`** — queue 先頭の maker。Time priority とは「最初に置かれた order が最初にマッチする」ことなので、これでよい。\`submit_limit\` は level の存在を確認した後にしか \`match_at_level\` を呼ばないので \`expect\` は安全。
+2. **\`fill_qty = min(maker.qty, remaining)\`** — 2 つの小さい方をマッチさせる。Maker が 30 unit で taker がまだ 50 必要なら fill は 30 (maker は完全消費)。Maker が 30 で taker が 10 だけ必要なら fill は 10 (maker は 20 残る)。
+3. **\`Fill\` を build** — order ID 両方と account ID 両方を保存する (L2 の設計判断: self-contained Fills)。
+4. **\`maker.qty.0 -= fill_qty.0\`** — maker を縮める。**これは RestingOrder 内なら安全だが、Order 内では違和感のある mutation** (L3 の anti-fluency callout — RestingOrder はちょうどこの種の mutation を明示するために存在する)。
+5. **\`remaining.0 -= fill_qty.0\`** — taker の outstanding quantity を縮める。Caller (\`submit_limit\`) が \`&mut Qty\` 引数経由でこれを観測する。
+6. **\`if maker.qty.0 == 0 { queue.pop_front() }\`** — maker が完全消費されたら pop する。\`submit_limit\` の outer loop の次の iteration でこの queue を再度 check し、空になっていれば level 自体が drop される。
 
-**なぜ Book のメソッドではなく free function?** \`self\` へのアクセスが不要だから。単一 queue (\`submit_limit\` が既に mutable ref を持っている) と単一 \`remaining\` counter にしか触らない。Free function にすることでその scope を反映: \`Book\` 全体は関与しない。
+**なぜ Book のメソッドではなく free function なのか?** \`self\` へのアクセスが不要だから。単一 queue (\`submit_limit\` が既に mutable ref を持っている) と単一 \`remaining\` counter にしか触らない。Free function にすることで scope の狭さを反映している: \`Book\` 全体は関与しない。
 
-> 🛑 **やりがちな勘違い。** 「\`expect("empty queue")\` panic はリスキーに見える。Queue が **実際に** 空だったら?」 **関数は空 queue で呼ばれないはず — それが \`submit_limit\` の invariant。** 具体的には、\`submit_limit\` は \`keys().next()\` が \`Some(price)\` を返した後にしか \`match_at_level\` を呼ばない、それが level (そして queue) に少なくとも 1 要素あることを保証する。空 queue で \`match_at_level\` が呼ばれたなら、それは \`submit_limit\` のバグ、\`match_at_level\` のバグではない — そして \`expect\` がバグを clear なメッセージ付きの panic として surface する、\`Option::None\` のサイレント伝播ではなく。**内部 invariant を信頼する; \`expect\` で assert する。**
+> 🛑 **やりがちな勘違い。** 「\`expect("empty queue")\` の panic はリスキーに見える。Queue が **実際に** 空だったら?」 **この関数は空 queue で呼ばれないことが \`submit_limit\` の invariant。** 具体的には、\`submit_limit\` は \`keys().next()\` が \`Some(price)\` を返した後にしか \`match_at_level\` を呼ばず、それが level (そして queue) に少なくとも 1 要素あることを保証する。空 queue で \`match_at_level\` が呼ばれたとしたら、それは \`submit_limit\` のバグであって \`match_at_level\` のバグではない — そして \`expect\` が \`Option::None\` のサイレント伝播ではなく、clear なメッセージ付きの panic としてバグを surface する。**内部 invariant は信頼し、\`expect\` で assert する。**
 
 ## テスト
 
@@ -1316,9 +1316,9 @@ fn match_at_level(
 cargo check -p openhl-clob
 \`\`\`
 
-クリーンにコンパイルするはず。L3 の unused-import warning (\`Fill\`、\`FillResult\`、\`Order\`、\`OrderType\`、\`Qty\`、\`Side\`) は今消えるはず — \`submit_limit\` と \`match_at_level\` がすべてを使う。
+クリーンにコンパイルするはず。L3 の unused-import warning (\`Fill\`、\`FillResult\`、\`Order\`、\`OrderType\`、\`Qty\`、\`Side\`) はここで消えるはず — \`submit_limit\` と \`match_at_level\` がすべてを使うから。
 
-Matching ロジックをサニティチェックするためのテストはまだない (L7-L8)、\`src/lib.rs\` に一時的に書ける:
+Matching ロジックをサニティチェックするためのテストはまだない (それは L7-L8)。\`src/lib.rs\` に一時的に書ける:
 
 \`\`\`rust
 #[cfg(test)]
@@ -1360,7 +1360,7 @@ mod smoke {
 
 \`cargo test -p openhl-clob buy_crosses_resting_ask\` で走らせる。Pass すれば Limit Buy + Limit Sell ロジックは正しい。
 
-**L5 に進む前にこの smoke test を削除する** — real なテストスイートは L7-L8 で proper な hand-trace シナリオ + proptest と共に来る。上の smoke test は L4 がコンパイルして **走る** ことを verify するためだけ。L5 のために \`src/lib.rs\` を clean に保つ。
+**L5 に進む前にこの smoke test は削除する** — real なテストスイートは L7-L8 で proper な hand-trace シナリオと proptest を伴って入る。上の smoke test は L4 がコンパイルして **走る** ことを verify するためだけのもの。L5 のために \`src/lib.rs\` を clean に保っておく。
 
 よくあるエラーと対処:
 
@@ -1373,11 +1373,11 @@ mod smoke {
 
 3 つの load-bearing な決定:
 
-1. **Buy と Sell は構造的 mirror。** Buy ブランチは ask を昇順 walk; Sell ブランチは bid を降順 walk。Generics で abstract しようとしなかった — duplication が abstraction tax より安かった。**構造的に同一な 2 関数は 1 つの完全 generic 関数より読みやすい。**
+1. **Buy と Sell は構造的に mirror。** Buy ブランチは ask を昇順 walk し、Sell ブランチは bid を降順 walk する。Generics で abstract する選択はしなかった — duplication のほうが abstraction tax より安いから。**構造的に同一な関数 2 つのほうが、完全 generic な 1 関数より読みやすい。**
 
-2. **\`match_at_level\` は free function、method ではない。** \`self\` 不要。Free function にすることで、book 全体ではなく caller が既に extract したデータ (queue + remaining) に対して動作することを文書化する。**関数 signature が文書: scope を name する。**
+2. **\`match_at_level\` は free function であって method ではない。** \`self\` は要らない。Free function にすることで、book 全体ではなく caller が既に extract したデータ (queue + remaining) に対して動作することを文書化している。**関数 signature が文書として scope を名指す。**
 
-3. **Resting Limit order の \`remaining_qty: Qty(0)\` は意図的。** Caller は「これだけマッチした; 私には残りなし」と見る。Resting remainder について知りたければ \`best_bid\` / \`depth_bid\` で book に query する — book-state メソッド。**Return 値は call で起きたことを描く; book 状態は何があるかを描く。混ぜない。**
+3. **Resting Limit order の \`remaining_qty: Qty(0)\` は意図的。** Caller には「これだけマッチした、こちらに残りはない」と見える。Resting remainder を知りたければ \`best_bid\` / \`depth_bid\` で book に query すればよい — そちらは book-state メソッド。**Return 値は call で起きたことを描き、book 状態は何があるかを描く。混ぜない。**
 
 ## 答え合わせ
 
@@ -1397,25 +1397,25 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ \`match_at_level\` の \`taker\` は \`&Order\` 参照だが \`queue\` は \`&mut VecDeque<RestingOrder>\`?**
-\`match_at_level\` は \`taker\` から read する (\`Fill\` に field を copy するだけ) が \`queue\` に write する (先頭要素を pop または shrink) から。関数 signature が使用法を反映: read-only に \`&\`、mutating に \`&mut\`。Compiler が強制する — 参照型が許さないので \`taker\` を偶発的に mutate できない。
+**Q: なぜ \`match_at_level\` の \`taker\` は \`&Order\` 参照で、\`queue\` は \`&mut VecDeque<RestingOrder>\` なのか?**
+\`match_at_level\` は \`taker\` から read するだけ (\`Fill\` に field を copy する) だが、\`queue\` に write する (先頭要素を pop または shrink する) から。関数 signature が使い方を反映する: read-only には \`&\`、mutating には \`&mut\`。Compiler が強制してくれる — 参照型が許さないので \`taker\` を偶発的に mutate することはできない。
 
-**Q: 価格 level が存在するが queue が空だったらどうなる?**
-それはバグ。Invariant は「map の各 key は非空 queue に対応する」。\`submit_limit\` がこれを各 match 後に \`if queue.is_empty() { self.asks.remove(&best_price) }\` で強制する — なので空 queue が残ることはない。空 queue を見たら、queue を mutate した後で空 check しなかった場所を探す。
+**Q: 価格 level が存在するのに queue が空だったらどうなる?**
+それはバグ。「map の各 key は非空 queue に対応する」が invariant。\`submit_limit\` が各 match 後に \`if queue.is_empty() { self.asks.remove(&best_price) }\` でこれを強制するので、空 queue が残ることはない。もし空 queue を見たら、queue を mutate した後に空チェックしなかった場所を探す。
 
-**Q: \`BTreeMap::pop_first()\` を使って best level を 1 回の呼び出しで取得 + 削除しないのは?**
-2 つの理由。(1) \`pop_first\` は無条件で level を削除するが、いつもそうしたいわけではない — マッチ後に level に order が残ることがある (maker が部分 fill、他が後ろに並ぶ)。(2) \`pop_first\` は Rust 1.66 で stabilize されたが、\`get_mut\` + 条件付き \`remove\` のマッチパターンが「いくらか消費、もしかしたら level drop」のフローには自然に読める。
+**Q: \`BTreeMap::pop_first()\` で best level を 1 回の呼び出しで取得+削除しないのはなぜか?**
+理由は 2 つ。(1) \`pop_first\` は無条件で level を削除するが、必ずしもそうしたいわけではない — マッチ後に level に order が残ることがある (maker が部分 fill し、後ろに他の order が並んでいる場合)。(2) \`pop_first\` は Rust 1.66 で stabilize したが、「いくらか消費し、必要なら level を drop する」というフローには \`get_mut\` + 条件付き \`remove\` のマッチパターンが自然に読める。
 
-**Q: 「taker が maker をぴったりマッチ」のための fast path はある?**
-ない、必要もない。General path (\`min(maker.qty, remaining)\` + shrink-or-pop) が「exact match」を general の特殊ケースとして扱う。Special-case branch を追加すると test 対象のコードパスが増え、性能向上は marginal; 性能が重要なら profile が先。
+**Q: 「taker が maker をぴったりマッチ」のための fast path はあるか?**
+ない、必要もない。General path (\`min(maker.qty, remaining)\` + shrink-or-pop) が「exact match」を general の特殊ケースとして扱ってくれる。Special-case branch を追加すると test 対象のコードパスが増え、性能向上は marginal。性能が重要なら profile が先。
 
 ## 次のレッスン (L5)
 
-Limit order が動く。**Market order はまだ \`todo!()\`。** L5 で matching engine を完成させる:
-- \`submit()\` 内の \`todo!()\` を \`self.submit_market(order)\` に置き換え
-- \`submit_market()\` を書く — \`submit_limit\` から **price check なし** (Market は任意の価格を取る) かつ **remainder を rest させない** (Market は残りを破棄)。
+Limit order が動くようになった。**Market order はまだ \`todo!()\` のまま。** L5 で matching engine を完成させる:
+- \`submit()\` 内の \`todo!()\` を \`self.submit_market(order)\` に置き換える。
+- \`submit_market()\` を書く — \`submit_limit\` から **price check を抜き** (Market は任意の価格を取る)、**remainder を rest させない** (Market は残りを破棄する) もの。
 
-L5 は L4 より短い、大部分の作業 (\`match_at_level\`、dispatcher) が済んでいる。L5 終了時に両方の order type で動く完全な matching engine がある。`,
+L5 は L4 より短い。大部分の作業 (\`match_at_level\`、dispatcher) は済んでいるから。L5 終了時には両方の order type で動く完全な matching engine が手に入る。`,
                 },
                 {
                   title: "レッスン 5 — submit_market — 任意の価格を取る order",
@@ -1434,14 +1434,14 @@ L5 は L4 より短い、大部分の作業 (\`match_at_level\`、dispatcher) �
 cargo check -p openhl-clob
 \`\`\`
 
-…依然コンパイルし、\`submit()\` dispatcher が Market order で panic しない。書くもの:
+上記の実行結果が引き続きコンパイルし、\`submit()\` dispatcher が Market order で panic しないようになる。書くもの:
 
-- **\`submit_market()\`** — Market order の matcher。L4 の \`submit_limit\` と構造的に同じだが、**2 つの key な差**:
+- **\`submit_market()\`** — Market order の matcher。L4 の \`submit_limit\` と構造的に同じだが、**鍵となる差が 2 つ**:
   1. **Price check なし** — Market order は任意の価格で取る。
-  2. **rest-the-remainder なし** — Market order はマッチしなかった quantity を破棄; 残りは \`FillResult::remaining_qty\` で返る。
-- **\`submit()\` dispatcher を更新** — L4 の \`todo!("Market orders land in L5")\` を \`self.submit_market(order)\` に置き換える。
+  2. **rest-the-remainder なし** — Market order はマッチしなかった quantity を破棄する。残りは \`FillResult::remaining_qty\` で返す。
+- **\`submit()\` dispatcher を更新する** — L4 の \`todo!("Market orders land in L5")\` を \`self.submit_market(order)\` に置き換える。
 
-L5 後、matching engine は **完成**。Limit と Market の両方が real fill を produce する。L6 で \`cancel\` を追加; L7-L8 で engine の invariant が成り立つことを証明するテストスイートを追加。
+L5 後、matching engine は **完成** する。Limit と Market の両方が real fill を produce するようになる。L6 で \`cancel\` を追加し、L7-L8 で engine の invariant が成り立つことを証明するテストスイートを追加する。
 
 ## おさらい
 
@@ -1462,22 +1462,22 @@ fn submit_limit(&mut self, order: Order, limit_price: Price) -> FillResult {
 fn match_at_level(taker: &Order, price: Price, ...) -> Fill { ... }
 \`\`\`
 
-\`book.submit(market_order)\` を呼ぶと \`todo!\` で panic する。L5 がそれを直す。
+\`book.submit(market_order)\` を呼ぶと \`todo!\` で panic する。L5 でそれを直す。
 
 ## 計画
 
-\`crates/clob/src/book.rs\` への 2 つの変更:
+\`crates/clob/src/book.rs\` への変更 2 つ:
 
-1. **\`submit_market()\` を追加** — \`submit_limit()\` の下に。Buy/Sell の 2 ブランチ、それぞれ \`submit_limit\` のループとほぼ同じだが limit-price 比較 **なし**。
-2. **\`submit()\` を編集** — panic ではなく \`submit_market\` に dispatch する。
+1. **\`submit_market()\` を追加する** — \`submit_limit()\` の下に書く。Buy/Sell の 2 ブランチで、それぞれ \`submit_limit\` のループとほぼ同じだが limit-price 比較が **ない**。
+2. **\`submit()\` を編集する** — panic ではなく \`submit_market\` に dispatch するように変える。
 
-新規型なし、新規ヘルパーなし。L4 の \`match_at_level\` をそのまま再利用。
+新規型なし、新規ヘルパーなし。L4 の \`match_at_level\` をそのまま再利用する。
 
-レッスンが短いのは **L5 が L4 の大部分の作業の後に残ったもの** だから。構造パターンは同じ; 違うのは「market order」と「limit order」の意味的な差分。
+レッスンが短いのは、**L4 の大部分の作業を終えた後に L5 として残ったもの** だから。構造パターンは同じで、違うのは「market order」と「limit order」の意味的な差分。
 
-> 🛑 **考えてみよう。** スクロールする前に: ask が \`{ Price(100): [O_a (30 units)] }\` で、50 unit の Market buy が arrive したとする。Fill は何で、\`FillResult::remaining_qty\` には何が入る? 対比: 同じ開始 book、ただし price 100 で 50 unit の Limit buy。**残り 20 unit は各ケースでどこに行く?**
+> 🛑 **考えてみよう。** スクロールする前に: ask が \`{ Price(100): [O_a (30 units)] }\` で、50 unit の Market buy が arrive したとする。Fill はどうなり、\`FillResult::remaining_qty\` には何が入るか? 対比: 同じ開始 book で price 100、50 unit の Limit buy が来た場合は? **残り 20 unit は各ケースでどこに行くか?**
 
-(答え: Market ケース → fill \`[30 @ 100]\`、\`remaining_qty = 20\` (fill しなかった部分は破棄 — caller には見えるが book に乗らない)。Limit ケース → fill \`[30 @ 100]\`、\`remaining_qty = 0\` (20 unit が price 100 の新規 bid として book に rest)。**同じ fill、leftover の運命が違う。**)
+(答え: Market ケース → fill \`[30 @ 100]\`、\`remaining_qty = 20\` (fill しなかった部分は破棄され、caller には見えるが book には乗らない)。Limit ケース → fill \`[30 @ 100]\`、\`remaining_qty = 0\` (20 unit が price 100 の新規 bid として book に rest する)。**同じ fill、だが leftover の運命が違う。**)
 
 ## 手順
 
@@ -1534,16 +1534,16 @@ fn match_at_level(taker: &Order, price: Price, ...) -> Fill { ... }
 
 \`submit_limit\` と side-by-side で比較する。差分:
 
-| 何 | \`submit_limit\` | \`submit_market\` |
+| 項目 | \`submit_limit\` | \`submit_market\` |
 | - | - | - |
 | Loop 内の price check | \`if best_price > limit_price { break }\` (Buy) | **なし** — 任意の価格で取る |
 | Loop 内の price check | \`if best_price < limit_price { break }\` (Sell) | **なし** — 任意の価格で取る |
 | Loop 後の rest-the-remainder | \`if remaining.0 > 0 { ... push_back(resting) ... }\` | **なし** — leftover は破棄 |
 | Return の \`remaining_qty\` | 常に \`Qty(0)\` (rested または完全 fill) | \`remaining\` (matching 後に残ったもの) |
 
-差分の全部。**Loop の形は同じ、check 2 個削除、return 値 1 個変更。**
+差分はこれで全部。**Loop の形は同じで、check を 2 個削り、return 値を 1 個変えるだけ。**
 
-> 🛑 **やりがちな勘違い。** 「Market Buy に \`limit_price = Price(u64::MAX)\`、Market Sell に \`Price(0)\` で \`submit_limit\` を呼べば?」 **price-check elimination には効くが、rest-the-remainder ロジックを排除しない。** \`u64::MAX\` limit の Market order は依然として fill しなかった qty を \`u64::MAX\` で rest しようとする — 最高可能価格で phantom resting bid を作る。挙動が間違う: 完全 fill しなかった Market buy が \`u64::MAX\` 価格の bid を book に置き、それが入ってくる sell を即座にマッチする。**2 つの関数、2 つの意味論、別々に保つ。**
+> 🛑 **やりがちな勘違い。** 「Market Buy に \`limit_price = Price(u64::MAX)\`、Market Sell に \`Price(0)\` を渡して \`submit_limit\` を呼べばよいのでは?」 **price-check elimination には効くが、rest-the-remainder ロジックを排除しない。** \`u64::MAX\` limit の Market order は、fill しなかった qty を \`u64::MAX\` で rest しようとする — つまり最高可能価格で phantom resting bid を作ってしまう。挙動が間違う: 完全 fill しなかった Market buy が \`u64::MAX\` 価格の bid を book に置き、それが入ってきた sell を即座にマッチしてしまう。**2 つの関数、2 つの意味論、別々に保つ。**
 
 ### Step 2: \`submit()\` dispatcher を更新
 
@@ -1569,7 +1569,7 @@ pub fn submit(&mut self, order: Order) -> FillResult {
 }
 \`\`\`
 
-1 行変更。Dispatcher の役割は広がっていない — 依然「型駆動のルーティング、arm ごとに 1 行」。実装は専用 method に住む。
+1 行変更。Dispatcher の役割は広がっていない — 依然「型駆動のルーティング、arm ごとに 1 行」のまま。実装は専用 method に置く。
 
 ## テスト
 
@@ -1577,7 +1577,7 @@ pub fn submit(&mut self, order: Order) -> FillResult {
 cargo check -p openhl-clob
 \`\`\`
 
-Clean。Unused function の warning なし (\`book.rs\` で宣言された全関数に少なくとも 1 caller がいる — \`submit_market\` は \`submit\` から呼ばれ、private \`submit_*\` methods は \`Book\` 内から呼ばれ、\`match_at_level\` は両 submit から呼ばれる)。
+Clean。Unused function の warning も出ない (\`book.rs\` で宣言された全関数に少なくとも 1 つの caller がいる — \`submit_market\` は \`submit\` から呼ばれ、private な \`submit_*\` methods は \`Book\` 内から呼ばれ、\`match_at_level\` は両 submit から呼ばれる)。
 
 Smoke test (L4 と同じく、後で削除):
 
@@ -1632,9 +1632,9 @@ mod smoke {
 }
 \`\`\`
 
-\`cargo test -p openhl-clob smoke\` で走らせる。両方 pass するはず。**それから smoke module を削除する** — L7-L8 に real なテストスイート。
+\`cargo test -p openhl-clob smoke\` で走らせる。両方 pass するはず。**そのあと smoke module は削除する** — real なテストスイートは L7-L8 で作る。
 
-2 つの smoke test の対比は L5 のレッスン本質の要約 (ミニ版): **matching 後に残ったものは fill が produce されたかどうかに関わらず破棄される**。Market order 後の book 状態は、消費された liquidity を引いた book 状態そのもの — resting order が追加されない。
+2 つの smoke test の対比は L5 のレッスン本質の要約 (ミニ版) になっている: **matching 後に残ったものは fill が produce されたかどうかに関わらず破棄される**。Market order 後の book 状態は、消費された liquidity を引いた book 状態そのもの — resting order は追加されない。
 
 よくあるエラーと対処:
 
@@ -1647,11 +1647,11 @@ mod smoke {
 
 3 つの load-bearing な決定:
 
-1. **\`submit_limit\` と \`submit_market\` は別々の関数、parameterize しない。** Loop が 80% 同一でも、semantic な差 (leftover が rest するか破棄されるか?) は **欠けている** コードにある、そこにある コードではない。Parameterize すると \`rest_remainder: bool\` や \`enforce_price: bool\` のような boolean flag が必要 — 関数本体が branchy なパズルになる。**明確な分離が 2 つの意味論を独立に読みやすくする。**
+1. **\`submit_limit\` と \`submit_market\` は別々の関数として書き、parameterize しない。** Loop が 80% 同一でも、semantic な差 (leftover を rest させるか破棄するか) は **欠けている** コードにあるのであって、そこにあるコードにあるのではない。Parameterize すると \`rest_remainder: bool\` や \`enforce_price: bool\` のような boolean flag が必要になり、関数本体が branchy なパズルになる。**明確な分離があってこそ、2 つの意味論を独立に読みやすくなる。**
 
-2. **\`FillResult::remaining_qty\` は order type で意味が違う。** Limit には常に \`Qty(0)\` (rested または完全 match)。Market には実際の unfilled 残り。**型は同じ、契約は違う。** これが OK なのは \`FillResult\` の field doc (L2) が両方の解釈を明示的に named するから。
+2. **\`FillResult::remaining_qty\` は order type で意味が変わる。** Limit では常に \`Qty(0)\` (rested か完全 match)。Market では実際の unfilled 残り。**型は同じ、契約は違う。** これが許されるのは、\`FillResult\` の field doc (L2) が両方の解釈を明示的に named しているから。
 
-3. **空 book の Market order はエラーではなく clean に返る。** 空 asks book に対する Market buy は \`FillResult { fills: vec![], remaining_qty: order.qty }\` を返す。エラーなし。これが正しいデフォルト: caller がマッチを依頼、できるだけ (0) マッチ、leftover を報告。**「何も起きなかった」は valid な結果であるべき、エラーではなく。**
+3. **空 book の Market order はエラーではなく clean に返る。** 空 asks book に対する Market buy は \`FillResult { fills: vec![], remaining_qty: order.qty }\` を返す。エラーなし。これが正しいデフォルト: caller がマッチを依頼し、できるだけ (0 個でも) マッチさせ、leftover を報告する。**「何も起きなかった」はエラーではなく valid な結果であるべき。**
 
 ## 答え合わせ
 
@@ -1672,24 +1672,24 @@ git checkout main
 ## よくある質問
 
 **Q: 空 book の Market order が clean に返るユースケースは?**
-本番 matching engine ではよくある: thin な market が open し、fill 間で orderbook が一時的に空になり、Market order が arrive する。正しい挙動は「0 fill を produce、full remainder を報告、caller が何をするか決める」。Caller が後で retry、Limit に切り替え、ユーザーにエラーを surface — だが matching engine 自体は決めない。
+本番 matching engine ではよくある: thin な market が open し、fill の合間に orderbook が一時的に空になり、そこに Market order が arrive する。正しい挙動は「0 fill を produce、full remainder を報告、何をするかは caller が決める」だ。Caller は後で retry したり、Limit に切り替えたり、ユーザーにエラーを surface したりする — だが matching engine 自体はそれを決めない。
 
-**Q: Market に自分の price がないのに、なぜ maker の resting price を使う?**
-Fill 価格は常に **resting** order の価格 (maker の)。Market order は price を supply しない; book がオファーするものを受け入れる。**「価格発見」が market を market にする** — buyer が price を決めるのではなく、best bid と best ask のスプレッドが決める。
+**Q: Market は自分の価格を持たないのに、なぜ maker の resting price を使うのか?**
+Fill 価格は常に **resting** order の価格 (maker の) になる。Market order は価格を supply せず、book がオファーするものを受け入れる。**「価格発見」こそが market を market たらしめる** — buyer が価格を決めるのではなく、best bid と best ask のスプレッドが決める。
 
-**Q: Market order がゼロ quantity の Fill を produce できる?**
-できない。\`match_at_level\` は \`fill_qty = min(maker.qty, remaining)\` を計算する。これがゼロになるには、\`maker.qty\` か \`remaining\` のどちらかがゼロでなければならない。両方の invariant が維持される: \`submit_market\` は \`remaining == 0\` の瞬間 loop を抜ける、maker queue は zero-qty resting order を持たない (matching コードが qty を縮め、ゼロに当たったら maker を pop する)。なので \`match_at_level\` は両方がゼロで呼ばれない。
+**Q: Market order がゼロ quantity の Fill を produce することはあるか?**
+ない。\`match_at_level\` は \`fill_qty = min(maker.qty, remaining)\` を計算する。これがゼロになるには \`maker.qty\` か \`remaining\` のどちらかがゼロでなければならない。invariant が両方を維持してくれる: \`submit_market\` は \`remaining == 0\` になった瞬間 loop を抜けるし、maker queue に zero-qty resting order が残ることもない (matching コードが qty を縮めてゼロに当たったら maker を pop するため)。そのため \`match_at_level\` が両方ゼロで呼ばれることはない。
 
-**Q: 複数 price level に対する partial fill は?**
-Market order はこれを自然に扱う。Ask \`{99: [30 units], 100: [30 units], 101: [50 units]}\` に対する 100-unit Market buy は 3 つの fill を produce する (30 @ 99、30 @ 100、40 @ 101)。Loop の各 iteration が next-best level の front に対して \`match_at_level\` を呼ぶ; \`remaining == 0\` または book が枯渇するまで loop が続く。**multiple-level を walk する挙動は crossing Limit order と同じ。**
+**Q: 複数 price level にまたがる partial fill は?**
+Market order はこれを自然に扱える。Ask \`{99: [30 units], 100: [30 units], 101: [50 units]}\` に対する 100-unit Market buy は 3 つの fill を produce する (30 @ 99、30 @ 100、40 @ 101)。Loop の各 iteration が next-best level の front に対して \`match_at_level\` を呼び、\`remaining == 0\` になるか book が枯渇するまで loop が続く。**多 level を walk する挙動は crossing Limit order と同じ。**
 
 ## 次のレッスン (L6)
 
-Matching engine は **submit** を扱う。まだ **cancel** を扱えない — fill される前に自分の resting order を削除したいユーザーが何もできない。L6 で \`cancel(order_id) -> bool\` を追加する:
+Matching engine は **submit** を扱えるようになった。だが **cancel** はまだできない — fill される前に自分の resting order を削除したいユーザーが何もできない。L6 で \`cancel(order_id) -> bool\` を追加する:
 
 - bids と asks の両方を linear scan して order を見つける。
-- 今は O(n)、n は総 resting order 数。O(1) index 追加の議論は openhl の later stage で。
-- 重要: cancel が level を空にしたら drop する (\`submit\` が \`if queue.is_empty() { self.asks.remove(...) }\` で維持する同じ invariant)。`,
+- 今は O(n) (n は総 resting order 数)。O(1) index 追加の議論は openhl の後段の stage で扱う。
+- 重要: cancel が level を空にしたら drop すること (\`submit\` が \`if queue.is_empty() { self.asks.remove(...) }\` で維持しているのと同じ invariant)。`,
                 },
                 {
                   title: "レッスン 6 — cancel — order を book から引き抜く",
@@ -1708,13 +1708,13 @@ Matching engine は **submit** を扱う。まだ **cancel** を扱えない —
 cargo check -p openhl-clob
 \`\`\`
 
-…依然コンパイルする。\`Book\` に新規メソッド 1 個:
+上記の実行結果が引き続きコンパイルする。\`Book\` に新規メソッド 1 個:
 
-- **\`cancel(&mut self, order_id: OrderId) -> bool\`** — bid と ask の両側で指定 id の order を検索、見つかれば削除、cancellation で level が空になれば level を drop。削除したら \`true\`、見つからなければ \`false\` を返す。
+- **\`cancel(&mut self, order_id: OrderId) -> bool\`** — bid と ask の両 side で指定 id の order を検索し、見つかれば削除し、cancellation で level が空になれば level を drop する。削除したら \`true\`、見つからなければ \`false\` を返す。
 
-約 25 LOC。興味深いイディオムは **\`BTreeMap::retain\`** — map の全 queue を 1 回 traverse し、条件付きで mutate し、closure が \`false\` を返した entry を drop する単一呼び出し。「order 削除」と「空 level drop」の両ステップを 1 pass で扱う。
+約 25 LOC。興味深いイディオムは **\`BTreeMap::retain\`** — map の全 queue を 1 回 traverse し、条件付きで mutate し、closure が \`false\` を返した entry を drop する単一呼び出し。「order 削除」と「空 level drop」の両ステップを 1 pass で扱える。
 
-L6 後、matching engine は **機能的に完成**。Submit (Limit + Market) + cancel = v0 のフル表面。L7 がテストスイートを開始する。
+L6 後、matching engine は **機能的に完成** する。Submit (Limit + Market) + cancel が v0 のフル表面となる。L7 でテストスイートに入る。
 
 ## おさらい
 
@@ -1732,27 +1732,27 @@ impl Book {
 }
 \`\`\`
 
-足りないもの: resting order を **削除** する方法。ユーザーが Limit Buy at 100 を submit して book に rest した場合、今のところそれを取り外す方法がない。L6 でそれを追加する。
+足りないのは resting order を **削除** する手段。ユーザーが Limit Buy at 100 を submit して book に rest している状態でも、今のところそれを取り外す方法がない。L6 でこれを追加する。
 
 ## 計画
 
-1 method、1 file。\`crates/clob/src/book.rs\` で、既存の \`impl Book\` block に \`cancel\` を追加:
+method 1 個、file 1 個。\`crates/clob/src/book.rs\` で、既存の \`impl Book\` block に \`cancel\` を追加する:
 
-1. **bid から検索** — \`BTreeMap::retain\` の closure が queue から該当 order を削除し、queue が空でないか報告。
+1. **bid から検索する** — \`BTreeMap::retain\` の closure が queue から該当 order を削除し、queue が空でないか報告する。
 2. **bid で見つかれば** 即座に \`true\` を返す。
-3. **そうでなければ ask を同じ方法で検索**。
+3. **そうでなければ ask を同じ方法で検索する**。
 4. **\`found\` を返す** (ask で見つかれば true、どこにも見つからなければ false)。
 
 トリックは \`retain\`。同じ closure で **2 つの仕事** をする:
 
-- **Queue を mutate** (id が一致する order を削除)。
-- **BTreeMap entry を drop するか signal** (\`!queue.is_empty()\` を返す)。
+- **Queue を mutate する** (id が一致する order を削除する)。
+- **BTreeMap entry を drop するかどうかを signal する** (\`!queue.is_empty()\` を返す)。
 
-\`retain\` は各 (key, value) pair で closure を呼び、closure が \`false\` を返したら pair を削除する。Queue-mutation と空 check return を組み合わせることで、「削除 + 空 level cleanup」invariant が無料で得られる。
+\`retain\` は各 (key, value) pair で closure を呼び、closure が \`false\` を返した pair を削除する。Queue-mutation と空 check return を組み合わせることで、「削除 + 空 level cleanup」の invariant が無料で得られる。
 
-> 🛑 **考えてみよう。** スクロールする前に: ユーザーが price 100 で 50 unit の Limit Buy を submit (完全 rest)、それからその order id で Cancel を submit。Cancel 後、**\`best_bid()\` は何を返すべきか?** ヒント: cancellation 後にその price level が map にまだ存在するかを考える。
+> 🛑 **考えてみよう。** スクロールする前に: ユーザーが price 100 で 50 unit の Limit Buy を submit し (完全 rest し)、それからその order id で Cancel を submit するとする。Cancel 後、**\`best_bid()\` は何を返すべきか?** ヒント: cancellation 後にその price level が map にまだ残っているかを考える。
 
-(答え: \`None\`。order が price 100 の唯一だったので、cancel すると queue が空になり、\`retain\` が level を map から drop し、\`bids.keys().next()\` が \`None\` を返し、\`best_bid()\` が \`None\` を返す。**空 level cleanup が \`best_bid\` を「実際に liquidity が存在するか」について正直に保つ。**)
+(答え: \`None\`。order が price 100 で唯一のものだったので、cancel すると queue が空になり、\`retain\` が level を map から drop し、\`bids.keys().next()\` が \`None\` を返し、\`best_bid()\` が \`None\` を返す。**空 level cleanup によって \`best_bid\` が「実際に liquidity が存在するか」について正直であり続ける。**)
 
 ## 手順
 
@@ -1791,22 +1791,22 @@ impl Book {
 注意深く読む:
 
 1. **\`let mut found = false\`** — local flag。Order を見つけて削除した瞬間 \`true\` になる。
-2. **\`self.bids.retain(|_, queue| { ... })\`** — \`retain\` がすべての (\`Reverse<Price>\`, \`VecDeque<RestingOrder>\`) pair を walk する。Closure が \`queue\` を mutate して \`bool\` を返す: \`false\` なら entry を drop、\`true\` なら保持。
-3. **\`if !found && let Some(pos) = queue.iter().position(|o| o.id == order_id)\`** — まだ見つけていない場合のみ検索。\`iter().position()\` は \`Option<usize>\` を返す — 述語に一致する最初の要素の index。\`if let\` と組み合わせるのが「index が存在すれば何かする」の Rust 慣用イディオム。
-4. **\`queue.remove(pos)\`** — \`VecDeque::remove(index)\` がその index の要素を取り出す。\`Option<T>\` (削除された要素) を返すが、ここでは無視。**\`VecDeque::remove\` は O(n)** — 後続要素を 1 slot 左にシフトする。数百 order の queue ならマイクロ秒オーダー。
-5. **\`found = true\`** — flag を立てて以降の level がスキャンされないようにする。**これが load-bearing な最適化** — order が見つかった後も、残りの level を walk する (以前の cancellation で残った空 queue を check するため) が、残りの各 queue 内の linear scan はスキップ。
-6. **\`!queue.is_empty()\`** — return 値。Queue が今空 (最後の order を削除したばかり、または他の理由で空) なら \`false\` を返して \`retain\` に entry を drop させる。そうでなければ \`true\` を返して保持。
-7. **\`if found { return true }\`** — short-circuit。bid で既に見つけて削除したら、ask を検索する必要なし。
-8. **\`self.asks.retain(...)\`** — ask に対する同じロジック。Closure 本体は同一 (key の違いなし — 両 map とも \`VecDeque<RestingOrder>\` を value にする)。
-9. **\`found\`** — 最終 return。bid で見つかれば既に \`true\` を return 済み、ask で見つかれば \`found\` が \`true\` になりそれを返す、どちらでもなければ \`found\` は \`false\` のまま。
+2. **\`self.bids.retain(|_, queue| { ... })\`** — \`retain\` がすべての (\`Reverse<Price>\`, \`VecDeque<RestingOrder>\`) pair を walk する。Closure が \`queue\` を mutate して \`bool\` を返す: \`false\` なら entry を drop し、\`true\` なら保持する。
+3. **\`if !found && let Some(pos) = queue.iter().position(|o| o.id == order_id)\`** — まだ見つけていない場合のみ検索する。\`iter().position()\` は \`Option<usize>\` を返す — 述語に一致する最初の要素の index。\`if let\` と組み合わせるのが「index が存在すれば何かする」の Rust 慣用イディオム。
+4. **\`queue.remove(pos)\`** — \`VecDeque::remove(index)\` がその index の要素を取り出す。返り値の \`Option<T>\` (削除された要素) はここでは無視する。**\`VecDeque::remove\` は O(n)** — 後続要素を 1 slot 左にシフトする。数百 order の queue ならマイクロ秒オーダー。
+5. **\`found = true\`** — flag を立てて以降の level がスキャンされないようにする。**これが load-bearing な最適化** — order が見つかった後も残りの level を walk する (以前の cancellation で残った空 queue を check するため) が、残り各 queue 内の linear scan はスキップする。
+6. **\`!queue.is_empty()\`** — return 値。Queue が空 (最後の order を削除したばかり、または別の理由で空) なら \`false\` を返して \`retain\` に entry を drop させる。そうでなければ \`true\` を返して保持させる。
+7. **\`if found { return true }\`** — short-circuit。bid で既に見つけて削除したなら、ask を検索する必要はない。
+8. **\`self.asks.retain(...)\`** — ask に対する同じロジック。Closure 本体は同一 (key の違いはない — 両 map とも value は \`VecDeque<RestingOrder>\`)。
+9. **\`found\`** — 最終 return。bid で見つかった場合は既に \`true\` を return 済み。ask で見つかれば \`found\` が \`true\` になりそれを返す。どちらでもなければ \`found\` は \`false\` のまま。
 
-> 🛑 **やりがちな勘違い。** 「BTreeMap を iterate して entry を見つけて order を削除、それからもう一度 iterate して空 level を drop すればいい」。 **2 pass は無駄、さらに悪いことに invariant が 2 箇所に分かれる。** \`retain\` なら「order 削除」と「空 level drop」の決定が両方 1 closure に encode される。「order を削除した」と「level が空かを check した」の間にデータ構造が inconsistent な状態の窓がない。**1 closure、2 仕事、1 invariant。**
+> 🛑 **やりがちな勘違い。** 「BTreeMap を iterate して entry を見つけて order を削除し、もう一度 iterate して空 level を drop すればよい」。 **2 pass は無駄。さらに悪いことに、invariant が 2 箇所に分散する。** \`retain\` なら「order 削除」と「空 level drop」の判断が両方 1 closure に encode される。「order を削除した」と「level が空かを check した」の間に、データ構造が inconsistent な状態になる窓がない。**1 closure、2 つの仕事、1 つの invariant。**
 
 ### Step 2: 新規 method が両 branch を通ることを verify
 
 \`cargo check -p openhl-clob\` がクリーンにコンパイルするはず。警告なし。
 
-以前のレッスンからの unused-import warning は全部消えるはず — \`cancel\` は新規 import を導入しない (使うもの全部、\`OrderId\` + \`VecDeque::remove\` + BTreeMap 表面、既に scope 内)。
+以前のレッスンからの unused-import warning もすべて消えるはず — \`cancel\` は新規 import を導入せず、使うもの (\`OrderId\`、\`VecDeque::remove\`、BTreeMap の表面) はすべて既に scope 内にあるから。
 
 \`if let && pattern\` 構文が Rust バージョンで OK か verify したい場合 (1.65+ で stable):
 
@@ -1826,7 +1826,7 @@ if !found {
 }
 \`\`\`
 
-同じ挙動、2 行余分、\`let && let\` chain なし。
+挙動は同じ。2 行増えるが \`let && let\` chain は使わない。
 
 ## テスト
 
@@ -1834,7 +1834,7 @@ if !found {
 cargo check -p openhl-clob
 \`\`\`
 
-Clean。Matching engine が機能的に完成 — \`book.rs\` に \`new\`、4 つの accessor、\`submit\` (Limit と Market 両 path)、\`cancel\`。\`todo!()\` が残らない。
+Clean。Matching engine がここで機能的に完成 — \`book.rs\` には \`new\`、accessor 4 個、\`submit\` (Limit と Market 両 path)、\`cancel\` が入る。\`todo!()\` は残っていない。
 
 Smoke test (L4/L5 と同じく、後で削除):
 
@@ -1896,24 +1896,24 @@ mod smoke {
 }
 \`\`\`
 
-\`cargo test -p openhl-clob smoke\`。3 つすべて pass するはず。**それから smoke module を削除する** — L7 が real なテストスイートを持つ。
+\`cargo test -p openhl-clob smoke\` で走らせる。3 つすべて pass するはず。**そのあと smoke module は削除する** — real なテストスイートは L7 で入れる。
 
 よくあるエラーと対処:
 
-- **\`error: 'retain' has no method named 'retain' on BTreeMap<...>\`** — typo か wrong version。\`BTreeMap::retain\` は Rust 1.53 から stable。\`rustc --version\` を check。
-- **\`error: 'position' has no method named 'position'\`** — \`iter().position()\` は \`Iterator\` trait のメソッド、\`std\` で default scope 内。\`queue.position(|o| ...)\` (\`iter()\` なし) と書いたなら compile しない。\`queue.iter().position(...)\` を使う。
-- **Cancel が true を返すが \`best_bid()\` がまだ cancel された order の price を見せる** — \`retain\` closure が \`!queue.is_empty()\` を正しく返していない。多分 \`true\` を無条件で返している。Closure 本体の最後の式を check。
-- **\`cancel\` が間違った order を削除** — \`position\` 述語が間違った field を check している。比較は \`o.id == order_id\` (OrderId でマッチ) であるべき、\`o.account == order_id\` などではない。
+- **\`error: 'retain' has no method named 'retain' on BTreeMap<...>\`** — typo か Rust バージョンが古い。\`BTreeMap::retain\` は Rust 1.53 以降で stable。\`rustc --version\` を確認。
+- **\`error: 'position' has no method named 'position'\`** — \`iter().position()\` は \`Iterator\` trait のメソッドで、\`std\` の default scope に入っている。\`queue.position(|o| ...)\` (\`iter()\` なし) と書くと compile しない。\`queue.iter().position(...)\` を使う。
+- **Cancel が true を返すのに \`best_bid()\` がまだ cancel された order の price を見せる** — \`retain\` closure が \`!queue.is_empty()\` を正しく返していない。おそらく \`true\` を無条件で返している。Closure 本体の最後の式を確認。
+- **\`cancel\` が間違った order を削除する** — \`position\` 述語が間違った field を check している。比較は \`o.id == order_id\` (OrderId でマッチ) であるべきで、\`o.account == order_id\` などではない。
 
 ## 設計の振り返り
 
 3 つの load-bearing な決定:
 
-1. **「削除 + cleanup」を \`retain\` で組み合わせる。** 2 つの別操作が 1 closure pass で完了: queue を mutate し、entry を drop するか決める。これが \`retain\` の正確なユースケース。代替 (iterate-then-cleanup、または \`BTreeMap::iter_mut\` + 手動で空 key 収集) は invariant をより多くのコードに分散させる。**自分の操作に正確に一致するメソッドが存在すれば、それを使う。**
+1. **「削除 + cleanup」を \`retain\` で組み合わせる。** 2 つの別操作を 1 closure pass で済ませる: queue を mutate し、entry を drop するか決める。これがまさに \`retain\` のユースケース。代替 (iterate-then-cleanup や、\`BTreeMap::iter_mut\` + 手動で空 key 収集) は invariant をより多くのコードに分散させてしまう。**自分の操作にぴったり合うメソッドがあるなら、それを使う。**
 
-2. **O(n) linear scan は v0 で fine。** 本番取引所は何千、何万の resting order を持つ。v0 openhl で数百なら scan はマイクロ秒。\`HashMap<OrderId, (Side, Price)>\` index を追加すれば cancel は O(1) になるが、加わるもの: BTreeMap と同期を保つ second data structure、追加メモリ、追加 cache pressure。**Profile に出てこないものは最適化しない。** openhl が v0 scale を超えたら index を追加; それまでは scan が正しい形。
+2. **O(n) linear scan は v0 では fine。** 本番取引所は何千、何万の resting order を持つ。v0 の openhl で数百なら scan はマイクロ秒で済む。\`HashMap<OrderId, (Side, Price)>\` index を追加すれば cancel は O(1) になるが、その代わりに BTreeMap と同期を保つ second data structure、追加メモリ、追加 cache pressure を抱えることになる。**Profile に出てこないものは最適化しない。** openhl が v0 scale を超えたら index を追加すればよい — それまでは scan が正しい形。
 
-3. **Cancel は \`bool\` を返す、\`Option<RestingOrder>\` や \`Result<(), CancelError>\` ではない。** 削除した order を返すと \`RestingOrder\` を expose する (L3 で意図的に private 型にした)。\`Result\` を返すと caller に「見つからない」ケースを error として handle させる — が cancellation の冪等性は機能でありバグではない (cancel を 2 回呼ぶのは安全であるべき)。\`bool\` が「仕事をしたかしなかったか」をクリーンに言う、内部を漏らさず error-handling を強制せず。**何が起きたかを正直に表す、最小の return 形を選ぶ。**
+3. **Cancel は \`bool\` を返す。\`Option<RestingOrder>\` や \`Result<(), CancelError>\` ではない。** 削除した order を返すと \`RestingOrder\` を expose することになる (L3 で意図的に private 型にした)。\`Result\` を返すと caller に「見つからない」ケースを error として handle させることになるが、cancellation の冪等性は機能でありバグではない (cancel を 2 回呼べることが安全であるべき)。\`bool\` なら「仕事をしたかしなかったか」をクリーンに伝えられる — 内部を漏らさず、error-handling を強制せずに済む。**何が起きたかを正直に表す、最小の return 形を選ぶ。**
 
 ## 答え合わせ
 
@@ -1923,7 +1923,7 @@ git checkout 55a9dff
 diff -u ~/code/my-openhl/crates/clob/src/book.rs ./crates/clob/src/book.rs
 \`\`\`
 
-L6 後、\`book.rs\` は \`55a9dff\` の参照と **機能的に同一**。残る違いは doc コメント / 空白と末尾のテストモジュール — L7-L8 で参照が持つ 9 unit test + 3 proptest invariant を追加する。
+L6 後、\`book.rs\` は \`55a9dff\` の参照と **機能的に同一** になる。残る違いは doc コメントや空白、それと末尾のテストモジュールだけ — L7-L8 で参照が持つ unit test 9 個 + proptest invariant 3 個を追加していく。
 
 戻る:
 
@@ -1933,21 +1933,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: \`retain\` で空 level を cleanup しないコストは?**
-最終的に \`best_bid()\` が、その level に order が存在しないのに価格を返す。それから「best」をわずかに下回る Sell limit が phantom 価格でマッチし、ゼロ quantity に対して fill し (\`match_at_level\` が奇妙に handle する)、engine の invariant が drift する。空 level cleanup は \`submit\` が既に維持している invariant; \`cancel\` も維持する必要がある。
+**Q: \`retain\` で空 level を cleanup しないとどんなコストがあるか?**
+最終的に \`best_bid()\` が、その level に order が存在しないのに価格を返してしまう。すると「best」をわずかに下回る Sell limit が phantom 価格でマッチし、ゼロ quantity に対して fill が起き (\`match_at_level\` が奇妙な扱いをする)、engine の invariant が drift する。空 level cleanup は \`submit\` が既に維持している invariant なので、\`cancel\` も維持する必要がある。
 
-**Q: closure 内の \`if !found &&\` ガードが必要なのはなぜ?**
-これがないと、\`retain\` が見つけて以前の level から削除した後も全 level をスキャンする。マッチは最大 1 回 (order は \`OrderId\` で unique)、なので \`found\` flag は correctness fix というより最適化。だが: 最初のマッチで \`found = true\` を設定すると、以降の level が \`iter().position()\` 呼び出しをスキップ、それが各 level の O(k) 仕事。**Early-out による最適化。**
+**Q: closure 内の \`if !found &&\` ガードはなぜ必要か?**
+これがないと、\`retain\` が見つけて以前の level から削除した後も全 level をスキャンしてしまう。マッチは最大 1 回 (\`OrderId\` で unique なので) なので、\`found\` flag は correctness fix というより最適化に近い。ただし、最初のマッチで \`found = true\` を設定すれば、以降の level で \`iter().position()\` 呼び出し (各 level の O(k) 仕事) をスキップできる。**Early-out のための最適化。**
 
-**Q: 2 つの異なる order が同じ \`OrderId\` を持っていたら?**
-\`cancel\` は最初に見つけた方を削除する (probably bid から、先に scan されるから)。Matching engine は book 内で \`OrderId\` が unique と仮定する — caller の責任。L1 の newtype + \`pub u64\` field 設計が caller の仕事にしている: caller が ID を構築し、unique 性を owns する。
+**Q: 2 つの異なる order が同じ \`OrderId\` を持っていたらどうなるか?**
+\`cancel\` は最初に見つけた方を削除する (おそらく bid 側 — 先に scan されるため)。Matching engine は book 内で \`OrderId\` が unique であることを仮定する — それを保証するのは caller の責任。L1 の newtype + \`pub u64\` field 設計がこれを caller の仕事にしている: caller が ID を構築し、unique 性を所有する。
 
-**Q: 各 VecDeque で \`position\` を使い、\`(Reverse<Price>, position)\` を得て、\`retain\` の外で削除すれば?**
-Position を見つけるために BTreeMap を immutably borrow し、削除するために mutably borrow する必要がある。Rust の borrow checker は position の \`clone()\` なしでそれを拒否する。\`retain\` アプローチが mutable borrow を全期間保持する — シンプル。
+**Q: 各 VecDeque で \`position\` を使って \`(Reverse<Price>, position)\` を得て、\`retain\` の外で削除するのはどうか?**
+position を見つけるために BTreeMap を immutably borrow し、削除するために mutably borrow する必要があり、Rust の borrow checker は position を \`clone()\` しないとそれを拒否する。\`retain\` アプローチなら mutable borrow を全期間保持できる — シンプル。
 
 ## 次のレッスン (L7)
 
-Matching engine がコンパイルする。**できないこと**: 動くことを証明する。L7 がテストモジュールを開始する — 期待するシナリオをカバーする hand-trace された unit test 9 個: 空 book マッチング、price level 内の FIFO time priority、market order の liquidity 枯渇、複数 price level にわたる partial fill、cancel + 再 submit、マッチ後の no-crossed-book invariant。各 test が engine の 1 つの specific path を walk する; 合わせて、これまで build した matching ロジックの regression suite になる。`,
+Matching engine がコンパイルできる。**できていないこと**: 動くことを証明する。L7 でテストモジュールを始める — 期待するシナリオをカバーする hand-trace 済み unit test 9 個: 空 book マッチング、price level 内の FIFO time priority、market order の liquidity 枯渇、複数 price level にわたる partial fill、cancel と再 submit、マッチ後の no-crossed-book invariant。各 test が engine の specific な 1 path を walk し、合わせるとここまで build した matching ロジックの regression suite になる。`,
                 },
               ],
             },
@@ -1974,12 +1974,12 @@ Matching engine がコンパイルする。**できないこと**: 動くこと�
 cargo test -p openhl-clob
 \`\`\`
 
-…が **テスト 9 個** に合格する。\`book.rs\` の末尾に新規 \`#[cfg(test)] mod tests\` block:
+上記の実行結果が **テスト 9 個** に合格する。\`book.rs\` の末尾に新規 \`#[cfg(test)] mod tests\` block を置く:
 
-- **ヘルパー関数 2 個** — \`limit(...)\` と \`market(...)\` — テスト本体で 5 field の struct リテラルを繰り返さないよう、適切なデフォルトで \`Order\` を構築する。
+- **ヘルパー関数 2 個** — \`limit(...)\` と \`market(...)\`。テスト本体で 5 field の struct リテラルを繰り返さずに済むよう、適切なデフォルトで \`Order\` を構築する。
 - **hand-trace されたシナリオ 9 個** — それぞれ matching engine が維持すべき特定の invariant をテストする。
 
-9 個のテストは **regression safety net**。誰か (またはあなた) が \`submit_limit\`、\`submit_market\`、\`cancel\` にバグを入れたら、少なくとも 1 つのテストが catch する。合わせて、L4-L6 で書いた matching ロジックが **実際に動く** ことの load-bearing な証明。
+9 個のテストは **regression safety net**。誰か (あるいは自分) が \`submit_limit\`、\`submit_market\`、\`cancel\` にバグを入れた瞬間、少なくとも 1 つのテストが catch する。合わせて、L4-L6 で書いた matching ロジックが **実際に動く** ことの load-bearing な証明になる。
 
 ## おさらい
 
@@ -1999,11 +1999,11 @@ impl Book {
 }
 \`\`\`
 
-\`cargo check -p openhl-clob\` がクリーン。**だが engine が正しいことの証明がない。** すべてのマッチがサイレントに間違っているかもしれない; コンパイル以上の何も assert していない。L7 がそれを直す。
+\`cargo check -p openhl-clob\` がクリーン。**ただし engine が正しいことの証明はない。** すべてのマッチがサイレントに間違っているかもしれない — 今は compile が通ること以上に何も assert していない。L7 でそこを直す。
 
 ## 計画
 
-\`crates/clob/src/book.rs\` の末尾、\`fn match_at_level\` の後、\`impl Book\` の **外** に追加する 1 つの block:
+\`crates/clob/src/book.rs\` の末尾、\`fn match_at_level\` の後、\`impl Book\` の **外** に block を 1 つ追加する:
 
 \`\`\`rust
 #[cfg(test)]
@@ -2025,13 +2025,13 @@ mod tests {
 }
 \`\`\`
 
-それだけ。新規型なし、\`Book\` の新規 method なし。テスト 9 個 + ヘルパー 2 個。
+それだけ。新規型もなし、\`Book\` の新規 method もなし。テスト 9 個 + ヘルパー 2 個。
 
-9 個のテストは **複雑さ順** に並ぶ: 最もシンプルな invariant (空 book に price なし) で始まり、最も強い invariant (マッチ後に book が cross しない — 整形 orderbook をゴミから区別する **safety property**) で終わる。
+9 個のテストは **複雑さ順** に並べる: 最もシンプルな invariant (空 book に price なし) で始まり、最も強い invariant (マッチ後に book が cross しない — 整形 orderbook をゴミから区別する **safety property**) で終わる。
 
-> 🛑 **考えてみよう。** スクロールする前に: 9 個のうちどれが、\`submit_limit::Buy\` が ask を **降順** (最高値先) に walk するバグで失敗する? ヒント: 「best ask 先」を specifically assert するテストを考える。
+> 🛑 **考えてみよう。** スクロールする前に: 9 個のうちどれが、\`submit_limit::Buy\` が ask を **降順** (最高値先) に walk するバグで失敗するか? ヒント: 「best ask 先」を明示的に assert しているテストを考える。
 
-(答え: \`buy_market_takes_best_ask\`。\`r.fills[0].price == Price(100)\` と \`r.fills[1].price == Price(105)\` — best-first を assert する。降順 walk なら \`[105, 100]\` を produce する。**Directional バグは randomized テストでも catch できるが、hand-trace テストならより安く catch できる。**)
+(答え: \`buy_market_takes_best_ask\`。\`r.fills[0].price == Price(100)\` と \`r.fills[1].price == Price(105)\` で best-first を assert している。降順 walk なら \`[105, 100]\` を produce してしまう。**Directional バグは randomized テストでも catch できるが、hand-trace テストならより安く catch できる。**)
 
 ## 手順
 
@@ -2070,7 +2070,7 @@ mod tests {
 }
 \`\`\`
 
-ヘルパー関数 2 個。なしでは各テスト本体で次のように:
+ヘルパー関数 2 個。これがないと、各テスト本体で次のように書くことになる:
 
 \`\`\`rust
 let order = Order {
@@ -2082,11 +2082,11 @@ let order = Order {
 };
 \`\`\`
 
-…order ごとに 5 行の boilerplate。\`limit(1, 100, Side::Sell, 100, 5)\` なら 1 行。ヘルパーは raw \`u64\` を取り適切な newtype でラップする; それだけ。
+…order ごとに 5 行の boilerplate になる。\`limit(1, 100, Side::Sell, 100, 5)\` なら 1 行で済む。ヘルパーは raw \`u64\` を取り適切な newtype でラップするだけ。
 
-**引数順序が重要**: \`limit\` で \`(id, account, side, price, qty)\`、\`market\` で \`(id, account, side, qty)\`。1 回覚える; どのテストでも同じ慣習を使う。\`id\` を先にすると、テストが時間順に読める (\`limit(1, ...)\` が最初の order、\`limit(2, ...)\` が 2 番目)。
+**引数順序が重要**: \`limit\` は \`(id, account, side, price, qty)\`、\`market\` は \`(id, account, side, qty)\`。一度覚えれば、どのテストでも同じ慣習で書ける。\`id\` を先頭に置くと、テストが時間順に読める (\`limit(1, ...)\` が最初の order、\`limit(2, ...)\` が 2 番目)。
 
-> 🛑 **やりがちな勘違い。** 「Builder パターンを使う — \`OrderBuilder::new().id(1).account(100).side(Buy).qty(10).limit_price(100).build()\`」。 **5-field struct リテラルより冗長で、本末転倒。** Builder が活きるのは field が optional または widely varying なとき; ここでは全 order が全 5 field を持ち全部必須。positional 引数の 5-arg 関数は書くのが速く、call site で読むのが速く、reader に Order が何を必要とするか即座に伝える。
+> 🛑 **やりがちな勘違い。** 「Builder パターンを使う — \`OrderBuilder::new().id(1).account(100).side(Buy).qty(10).limit_price(100).build()\`」。 **5-field struct リテラルより冗長で、本末転倒。** Builder が活きるのは field が optional だったり広く変動したりするとき。ここでは全 order が全 5 field を持ち、すべて必須。positional 引数の 5-arg 関数なら書くのも読むのも速いし、Order が何を必要とするかを reader に即座に伝えられる。
 
 ### Step 2: Test 1 — \`empty_book_has_no_best_prices\`
 
@@ -2103,9 +2103,9 @@ let order = Order {
     }
 \`\`\`
 
-最もシンプルなテスト: 新しく構築された \`Book\` は price なし、depth ゼロ。**これが失敗するなら \`Book::new()\` か accessor ロジックに何か壊れている。** 以降の全テストがこれに依存する — \`new()\` がゴミ状態を返すなら他は何も意味をなさない。
+最もシンプルなテスト: 新しく構築された \`Book\` は price がなく、depth がゼロ。**これが失敗するなら \`Book::new()\` か accessor ロジックのどこかが壊れている。** 以降の全テストがこれに依存する — \`new()\` がゴミ状態を返すなら他のどれも意味をなさない。
 
-\`assert_eq!(book.best_bid(), None)\` は trivial に見えるが価値のあるテスト。Accessor が \`Some(Price(0))\` を返した可能性 (default-construction バグ)。\`None\` が明示的な「liquidity が存在しない」signal。
+\`assert_eq!(book.best_bid(), None)\` は trivial に見えるが価値のあるテスト。Accessor が \`Some(Price(0))\` を返してしまう可能性 (default-construction バグ) があるからだ。\`None\` が「liquidity が存在しない」を明示的に signal する。
 
 ### Step 3: Test 2 — \`resting_limit_creates_bid_or_ask\`
 
@@ -2124,13 +2124,13 @@ let order = Order {
     }
 \`\`\`
 
-空 book に Buy Limit @ 90 が入る → fill なし、bid として rest。Sell Limit @ 100 が入る → fill なし (bid 90、ask 欲しいのは 100、cross なし)、ask として rest。
+空 book に Buy Limit @ 90 が入る → fill なし、bid として rest する。Sell Limit @ 100 が入る → fill なし (bid 90、ask が欲しいのは 100 なので cross しない)、ask として rest する。
 
-各 submit ごとの 2 つの assertion がキー:
-- **\`r.fills.is_empty()\`** — マッチなし、反対側に何もなかったから。
+submit ごとに鍵となる assertion が 2 つ:
+- **\`r.fills.is_empty()\`** — 反対側に何もなかったのでマッチなし。
 - **\`book.best_bid() == Some(Price(90))\`** — resting order が accessor で観察可能。
 
-これが L4 の「rest-the-remainder」パスの実証。
+これが L4 の「rest-the-remainder」パスの実証になる。
 
 ### Step 4: Test 3 — \`buy_market_takes_best_ask\`
 
@@ -2152,14 +2152,14 @@ let order = Order {
     }
 \`\`\`
 
-セットアップ: resting ask 2 個、価格 100 (5 unit) と 105 (5 unit)。8 unit の Market buy が arrive。期待マッチング:
-- Price 100 (最安) から 5 取る、残り 3 unit。
-- Price 105 (次最安) から 3 取る。
+セットアップ: resting ask 2 個、価格 100 (5 unit) と 105 (5 unit)。8 unit の Market buy が arrive する。期待マッチング:
+- Price 100 (最安) から 5 取り、残り 3 unit。
+- Price 105 (次に安い) から 3 取る。
 - 合計 fill: 8。Remaining: 0。
 
-Assert がこれを encode: best-first 順序で 2 fill、\`remaining_qty == 0\` (Market 完全 fill)、ask @ 105 は依然 2 unit depth。
+Assert がこれを encode する: best-first 順で fill 2 つ、\`remaining_qty == 0\` (Market が完全 fill)、ask @ 105 は依然 2 unit depth が残る。
 
-**このテストが catch するもの** ask walk の directional バグ ("best first" を test) + 「空 level drop」invariant (100 価格 level が完全消費後に消える、105 level は depth 減って残る)。
+**このテストが catch するもの**: ask walk の directional バグ ("best first" をテスト) と、「空 level drop」invariant (価格 100 の level が完全消費後に消え、105 level は depth が減って残る)。
 
 ### Step 5: Test 4 — \`limit_buy_walks_asks_within_price\`
 
@@ -2181,16 +2181,16 @@ Assert がこれを encode: best-first 順序で 2 fill、\`remaining_qty == 0\`
     }
 \`\`\`
 
-Test 3 と同じ開始 book (ask が 100 と 105)。だが今度は incoming order が 10 unit の **Limit Buy @ 103**。
+Test 3 と同じ開始 book (ask が 100 と 105)。ただし今度は incoming order が 10 unit の **Limit Buy @ 103**。
 
 期待:
-- 100 価格 ask は at-or-better (100 ≤ 103) — 5 unit マッチ。
-- 105 価格 ask は at-or-better **でない** (105 > 103) — マッチ停止。
-- 残り 5 unit が 103 で新しい bid として rest。
+- 価格 100 の ask は at-or-better (100 ≤ 103) — 5 unit マッチ。
+- 価格 105 の ask は at-or-better **ではない** (105 > 103) — マッチ停止。
+- 残り 5 unit が 103 で新しい bid として rest する。
 
-Test 3 との違いは **limit price check** が walk を早く止めること。Test 3 の Market buy は 100 を walk し続けた (Market は任意の価格を取る); test 4 の Limit buy は 103 で止まる。
+Test 3 との違いは、**limit price check** が walk を早く止める点。Test 3 の Market buy は 100 を walk し続けた (Market は任意の価格を取る) が、test 4 の Limit buy は 103 で止まる。
 
-これら 2 つのテストが合わせて、L4 の price-check ロジックが両方向で動くことを証明: Market (check なし、全部 walk) と Limit (check あり、limit で止まる)。
+この 2 つのテストを合わせると、L4 の price-check ロジックが両方向で動くことを証明できる: Market (check なし、全部 walk する) と Limit (check あり、limit で止まる)。
 
 ### Step 6: Test 5 — \`price_time_priority_within_level\`
 
@@ -2210,15 +2210,15 @@ Test 3 との違いは **limit price check** が walk を早く止めること�
     }
 \`\`\`
 
-**同じ price** (100) で 2 個の resting Sell、提出順に: order 1、それから order 2。7 unit の Market buy が arrive。
+**同じ price** (100) に resting Sell が 2 個、提出順は order 1、その後 order 2。7 unit の Market buy が arrive する。
 
 期待:
-- Order 1 (最初に place) が最初に fill — 5 unit。
-- Order 2 (2 番目に place) が次に fill — 2 unit。
+- Order 1 (最初に place された方) が最初に fill — 5 unit。
+- Order 2 (2 番目に place された方) が次に fill — 2 unit。
 
-これが「price-time priority」の **time priority** の半分。Price level 内では order が FIFO — first in が first out。L3 で選んだ \`VecDeque<RestingOrder>\` がこれを \`push_back\` (新規 order が後尾) + \`pop_front\` (マッチした order が先頭から) で自然に実装する。
+これが「price-time priority」のうち **time priority** の半分。Price level 内では order が FIFO で並び、first in が first out になる。L3 で選んだ \`VecDeque<RestingOrder>\` がこれを \`push_back\` (新規 order を末尾に) と \`pop_front\` (マッチした order を先頭から) で自然に実装している。
 
-**このテストが失敗する** のは、誤って \`Vec<RestingOrder>\` を使い \`Vec::remove(0)\` した場合 (まだ正しいが queue を shift する — マッチごとに O(n))、または \`push_back\` の代わりに \`VecDeque::push_front\` を使った場合 (newest-first、price-anti-time-priority になる)。
+**このテストが失敗する** のは、誤って \`Vec<RestingOrder>\` を使って \`Vec::remove(0)\` した場合 (結果は正しいが queue を shift するためマッチごとに O(n) になる) や、\`push_back\` の代わりに \`VecDeque::push_front\` を使った場合 (newest-first になり、price-anti-time-priority になる)。
 
 ### Step 7: Test 6, 7, 8 — Market with leftover, cancel, cancel-unknown
 
@@ -2253,13 +2253,13 @@ Test 3 との違いは **limit price check** が walk を早く止めること�
     }
 \`\`\`
 
-短いので 3 テストを 1 step に:
+短いので 3 テストを 1 step にまとめる:
 
-- **Test 6 (\`market_with_insufficient_liquidity_returns_remaining\`)**: 3 unit の単一 ask、10 unit の Market buy — L5 の「Market が remainder を破棄」意味論を exercise。\`remaining_qty == 7\` (unfilled 部分)。Book は後で空。
-- **Test 7 (\`cancel_removes_resting_order\`)**: resting bid、それから cancel。\`cancel\` が \`true\` を返し、depth が 0 になり、\`best_bid()\` が \`None\` を返す (L6 の空 level cleanup) を verify。
-- **Test 8 (\`cancel_unknown_returns_false\`)**: 一度も submit していない OrderId を cancel。\`false\` を返し、book は不変 (空 book には何もないから当然)。
+- **Test 6 (\`market_with_insufficient_liquidity_returns_remaining\`)**: 3 unit の単一 ask、10 unit の Market buy — L5 の「Market が remainder を破棄する」意味論を exercise する。\`remaining_qty == 7\` (unfilled 部分)。Book は後で空になる。
+- **Test 7 (\`cancel_removes_resting_order\`)**: resting bid を作り、それを cancel する。\`cancel\` が \`true\` を返すこと、depth が 0 になること、\`best_bid()\` が \`None\` を返すこと (L6 の空 level cleanup) を verify する。
+- **Test 8 (\`cancel_unknown_returns_false\`)**: 一度も submit していない OrderId を cancel する。\`false\` を返し、book は不変であることを verify (空 book には何もないので当然)。
 
-Test 7 + 8 のペアは \`cancel\` のバグのクラスを catch する: \`cancel\` が \`true\` を無差別に返したら test 8 が catch、有効な cancel に \`false\` を返したら test 7 が catch。**成功 path + 失敗 path を一緒に check するテスト** は片方だけより robust。
+Test 7 と 8 のペアは \`cancel\` のバグの一群を catch する: \`cancel\` が \`true\` を無差別に返したら test 8 が catch し、有効な cancel に \`false\` を返したら test 7 が catch する。**成功 path と失敗 path をセットで check するテスト** は、片方だけよりも robust。
 
 ### Step 8: Test 9 — \`book_does_not_cross_after_match\`
 
@@ -2284,20 +2284,20 @@ Test 7 + 8 のペアは \`cancel\` のバグのクラスを catch する: \`canc
     }
 \`\`\`
 
-**no-crossed-book invariant**: 常に \`best_bid < best_ask\` (またはどちらか side が空)。Crossed book — \`best_bid >= best_ask\` — はマッチすべき buy と sell が共存していることを意味する。**Soundness 違反**: matching engine が何らかの方法で衝突すべき 2 つの order を book に共存させた。
+**no-crossed-book invariant**: 常に \`best_bid < best_ask\` が成り立つ (またはどちらか side が空)。Crossed book — \`best_bid >= best_ask\` — はマッチすべき buy と sell が共存している状態のこと。**Soundness 違反**: matching engine が何らかの形で衝突すべき 2 つの order を book に共存させてしまったということ。
 
 このテストのセットアップ:
-1. Sell @ 100、Buy @ 95 → spread = (95, 100)、cross なし。\`bid < ask\` を assert。
-2. Incoming Buy @ 100 → 100 価格 ask とちょうどマッチ (5 unit → 5 unit)、rest する leftover なし。
+1. Sell @ 100、Buy @ 95 → spread = (95, 100)、cross なし。\`bid < ask\` を assert する。
+2. Incoming Buy @ 100 → 価格 100 の ask とちょうどマッチ (5 unit ↔ 5 unit)、rest する leftover はない。
 3. 最終状態: ask は消失 (消費)、bid は依然 95 (order 2 は untouched)。
 
 最終 assert:
 - \`best_bid() == Some(Price(95))\` — order 2 はまだ resting。
-- \`best_ask() == None\` — order 1 の ask は完全消費。
+- \`best_ask() == None\` — order 1 の ask は完全に消費されている。
 
-**これが最強テストである理由**: no-crossed-book invariant が orderbook を **正しい** ものにする。Cross する book は起こるべきトレードが起こっていない取引を見せる — matching engine の根本的失敗。これが pass すれば、engine が safety property を維持する **証拠** (証明ではない — それは L8 の proptest) を持つ。
+**これが最強のテストである理由**: no-crossed-book invariant こそが orderbook を **正しい** ものにしている。Cross する book は、起こるべきトレードが起こっていない取引所を見せていることになる — matching engine としての根本的失敗。これが pass すれば、engine が safety property を維持しているという **証拠** が得られる (証明ではない — それは L8 の proptest で行う)。
 
-> 🛑 **やりがちな勘違い。** 「9 個ではなく 100 個の unit test を書けばいい? カバレッジが多い方が良い」。 **多いテストは、同じ path を exercise するならカバレッジが多いことにならない。** 9 個は **異なる invariant** を exercise するように選ばれた: empty-book、resting、market-walks-levels、limit-respects-price、time-priority、partial-market、cancel-found、cancel-not-found、no-cross。それぞれが他 8 個がテストしない property をテストする。**「buy crosses ask」を全部 exercise する 100 個のテストは、99 個の冗長テスト。**
+> 🛑 **やりがちな勘違い。** 「9 個ではなく 100 個の unit test を書けばよい? カバレッジは多い方がよい」。 **多くのテストでも同じ path を exercise しているなら、カバレッジが増えたことにはならない。** この 9 個は **異なる invariant** を exercise するように選んである: empty-book、resting、market-walks-levels、limit-respects-price、time-priority、partial-market、cancel-found、cancel-not-found、no-cross。それぞれが他 8 個ではテストできない property をテストする。**「buy crosses ask」をひたすら exercise する 100 個のテストは、99 個が冗長。**
 
 ## テスト
 
@@ -2322,24 +2322,24 @@ test tests::resting_limit_creates_bid_or_ask ... ok
 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-テストはアルファベット順で走る (Rust のデフォルト)。9 個すべて pass。
+テストはアルファベット順で走る (Rust のデフォルト)。9 個すべて pass する。
 
 よくあるエラーと対処:
 
-- **\`error: cannot find function 'limit' in this scope\`** test 内 — \`fn limit(...)\` が \`mod tests\` block の外にある。\`use super::*;\` 行の後、内側に移動する。
-- **\`assertion failed: r.fills[0].price == Price(100)\`** で失敗 — \`Price(105)\` を得た。バグは \`submit_market\` か \`submit_limit\` — 間違った方向に walk している。\`keys().next()\` 呼び出しを check: ask には最安先が欲しい; bid (\`Reverse<Price>\` 付き) には最高先が欲しい (key が \`Reverse<Price>\` なら \`keys().next()\` が与える)。
-- **\`assertion failed: r.fills[0].maker_order_id == OrderId(1)\`** in \`price_time_priority_within_level\` — \`OrderId(2)\` を得た、つまり後で submit した order が先にマッチした。Queue が LIFO で動いている。\`submit_limit\` の rest path を check: \`push_back\` (FIFO) するべき、\`push_front\` (LIFO) ではない。
-- **\`assertion failed: book.depth_ask() == 0\`** in \`market_with_insufficient_liquidity_returns_remaining\` — ask が cleanup されていない。\`submit_market\` の loop が \`if queue.is_empty() { self.asks.remove(&best_price) }\` step (または Sell ケースの bid 等価) を欠いている。
+- **test 内で \`error: cannot find function 'limit' in this scope\`** — \`fn limit(...)\` が \`mod tests\` block の外にある。\`use super::*;\` 行の後、block 内に移動する。
+- **\`assertion failed: r.fills[0].price == Price(100)\`** で失敗 — \`Price(105)\` を得た。バグは \`submit_market\` か \`submit_limit\` で、間違った方向に walk している。\`keys().next()\` 呼び出しを確認: ask は最安先、bid (\`Reverse<Price>\` 付き) は最高先が欲しい (key が \`Reverse<Price>\` なら \`keys().next()\` がそれを返してくれる)。
+- **\`price_time_priority_within_level\` で \`assertion failed: r.fills[0].maker_order_id == OrderId(1)\`** — \`OrderId(2)\` が来た。つまり後で submit した order が先にマッチしている = Queue が LIFO になっている。\`submit_limit\` の rest path を確認: \`push_back\` (FIFO) すべきで、\`push_front\` (LIFO) ではない。
+- **\`market_with_insufficient_liquidity_returns_remaining\` で \`assertion failed: book.depth_ask() == 0\`** — ask が cleanup されていない。\`submit_market\` の loop で \`if queue.is_empty() { self.asks.remove(&best_price) }\` step (または Sell ケースの bid 等価) が抜けている。
 
 ## 設計の振り返り
 
 3 つの load-bearing な決定:
 
-1. **Builder パターンや struct リテラルよりヘルパー関数。** \`limit(...)\` と \`market(...)\` は 5 引数 / 4 引数の関数で positional 引数。書くのが速く、読むのが速く、ドキュメント不要 (関数名 + 引数位置で self-explanatory)。**正しい抽象量は「繰り返しを除く分だけ」。**
+1. **Builder パターンや struct リテラルよりヘルパー関数を選んだ。** \`limit(...)\` と \`market(...)\` は 5 引数 / 4 引数の関数で positional 引数。書くのも読むのも速く、ドキュメント不要 (関数名と引数位置で self-explanatory)。**正しい抽象量は「繰り返しを取り除く分だけ」。**
 
-2. **9 個のテストは有限で defensible なセット。** 各テストが特定の invariant に対応: empty-book、resting、walks-levels、respects-limit、FIFO、partial-market、cancel-found、cancel-not-found、no-cross。100 個書かない。**Invariant のリストは短く明確; カバレッジは invariant ごと、テスト数ごとではない。**
+2. **9 個のテストは有限で defensible なセット。** 各テストが特定の invariant に対応する: empty-book、resting、walks-levels、respects-limit、FIFO、partial-market、cancel-found、cancel-not-found、no-cross。100 個書く必要はない。**Invariant のリストは短く明確であるべきで、カバレッジは invariant 単位で測るもの。テスト数ではない。**
 
-3. **\`book_does_not_cross_after_match\` が最後に配置されている。** テストはアルファベット順で走るので、このテストの **ソース順序** での配置は実行順に影響しない。だが **読む** 順序 (上から下に file を scan するメンテナ) では、最重要テストが最も目立つ。**ソース上のレイアウト自体が「何が最重要か」の優先度シグナルを encode する。**
+3. **\`book_does_not_cross_after_match\` を最後に配置している。** テストはアルファベット順で走るので、このテストの **ソース順序** での位置は実行順に影響しない。だが **読む** 順序 (上から下に file を scan するメンテナの視線) では、最重要テストが最も目立つ位置に来る。**ソース上のレイアウト自体が「何が最重要か」の優先度シグナルを encode する。**
 
 ## 答え合わせ
 
@@ -2359,27 +2359,27 @@ git checkout main
 
 ## よくある質問
 
-**Q: ヘルパーが \`pub limit\` \`pub market\` ではなく \`limit\` \`market\` なのは?**
-\`mod tests\` block に private だから。他のモジュールがテスト Order を construct する必要がない。Private に保つのが正しい encapsulation: テストは自由に使えるが、test ヘルパーが \`openhl-clob\` の public API に漏れない。
+**Q: ヘルパーが \`pub limit\` / \`pub market\` ではなく \`limit\` / \`market\` なのはなぜか?**
+\`mod tests\` block に private なものだから。他のモジュールがテスト用の Order を construct する必要はない。Private に保っておくのが正しい encapsulation: テストは自由に使えるが、test ヘルパーが \`openhl-clob\` の public API に漏れることはない。
 
-**Q: テストをパラメータ化して、例えば「任意の incoming order に対して book invariant が成り立つ」property test にすべき?**
-L8 がそれを exactly やる — 768 ランダムシナリオを exercise する 3 個の proptest invariant。だが proptest は hand-trace テストを oracle に依存する: proptest が失敗したとき、isolate できる小さい hand-trace テストが欲しい。**Hand-trace unit test が基礎、proptest が amplifier。**
+**Q: テストをパラメータ化して、たとえば「任意の incoming order に対して book invariant が成り立つ」という property test にすべきか?**
+L8 でまさにそれをやる — 768 ランダムシナリオを exercise する proptest invariant 3 個。ただし proptest は hand-trace テストを oracle として依存する。proptest が失敗したときに、それを isolate できる小さな hand-trace テストが欲しいから。**Hand-trace unit test が基礎、proptest がそれを amplify する役。**
 
 **Q: Sell-side limit order のテストは?**
-良い質問。9 個のテストは buy-side シナリオに focus しているのは、trace するのが直感的だから (「ask を最安先 walk」は「bid を最高先 walk」より visualizable)。Sell-side テストは correctness に必須ではない、**もし** \`submit_limit::Sell\` が \`submit_limit::Buy\` の構造的 mirror なら (L4 で確立)。Paranoid ならいくつか sell-side テストを追加 — このセットの test 3、4、5 を mirror する。
+良い質問。9 個のテストが buy-side シナリオに focus しているのは、trace するのが直感的だから (「ask を最安先で walk」は「bid を最高先で walk」よりイメージしやすい)。Sell-side テストは correctness 上必須ではない — **もし** \`submit_limit::Sell\` が \`submit_limit::Buy\` の構造的 mirror なら (L4 で確立済み)。心配なら sell-side テストをいくつか追加すればよい — このセットの test 3、4、5 を mirror すればよい。
 
-**Q: なぜ \`assert!\` ではなく \`assert_eq!\`?**
-\`assert_eq!(a, b)\` は失敗時に両方の値を print、\`assert!(a == b)\` は値なしの「left == right」だけを print。Test デバッグでは、engine が produce した実際の値を知ることが重要。比較が equality なら \`assert_eq!\` が厳密に良い。
+**Q: なぜ \`assert!\` ではなく \`assert_eq!\` を使うのか?**
+\`assert_eq!(a, b)\` は失敗時に両方の値を print してくれるが、\`assert!(a == b)\` は値なしの「left == right」だけを print する。Test デバッグでは、engine が produce した実際の値を知ることが重要。比較が equality なら \`assert_eq!\` が厳密に優れている。
 
 ## 次のレッスン (L8)
 
-Hand-trace されたテスト 9 個。**思いついた specific シナリオをカバーする。** L8 が **proptest invariant 3 個** を追加する — 任意の submit+cancel action sequence に対して成立する property:
+Hand-trace されたテスト 9 個。**思いついた specific シナリオをカバーするものだ。** L8 で **proptest invariant 3 個** を追加する — 任意の submit+cancel action sequence に対して成立する property:
 
 - **\`qty_conservation\`**: book に入る合計 quantity = 合計 filled + 合計 resting。
-- **\`no_crossed_book\`**: \`best_bid < best_ask\` が常に成立 (test 9 が hand-trace した safety property を今ランダムテスト)。
-- **\`determinism\`**: 同じ action sequence が同じ fills + 同じ book state を produce する。
+- **\`no_crossed_book\`**: \`best_bid < best_ask\` が常に成立する (test 9 で hand-trace した safety property を今度はランダムテストする)。
+- **\`determinism\`**: 同じ action sequence が同じ fills と同じ book state を produce する。
 
-256 ランダムケース × 3 invariant = 768 ランダムシナリオ。どれか 1 個でも invariant に違反すると、proptest が **失敗 sequence を最小反例に自動的に shrink する**。それが example より property の load-bearing な利点。`,
+256 ランダムケース × 3 invariant = 768 ランダムシナリオ。どれか 1 個でも invariant に違反すれば、proptest が **失敗 sequence を最小反例に自動的に shrink する**。それが example よりも property の load-bearing な利点。`,
                 },
                 {
                   title: "レッスン 8 — proptest invariant 3 個: 768 ランダムシナリオ",
@@ -2398,7 +2398,7 @@ Hand-trace されたテスト 9 個。**思いついた specific シナリオを
 cargo test -p openhl-clob
 \`\`\`
 
-…が **12 個のテスト** (unit 9 + proptest invariant 3) に合格し、各 proptest が **256 case** ずつ走る = **768 ランダムシナリオ**。書くもの:
+上記の実行結果が **12 個のテスト** (unit 9 + proptest invariant 3) に合格し、各 proptest が **256 case** ずつ走る = **768 ランダムシナリオ**。書くもの:
 
 - **新規 dev-dep 1 個** — \`crates/clob/Cargo.toml\` に \`proptest = { workspace = true }\`。
 - **新規 \`#[cfg(test)] mod prop_tests\` block** を \`book.rs\` の末尾に:
@@ -2406,39 +2406,39 @@ cargo test -p openhl-clob
   - 3 個の generator strategy — \`arb_side\`、\`arb_action\`、\`arb_actions\` — random で valid な action sequence を produce する。
   - 3 個の \`proptest!\` block — \`qty_conservation\`、\`no_crossed_book\`、\`determinism\`。
 
-L8 後、matching engine は **多くの random ordering** にわたって invariant が成立する **property-level 証明** を持つ — L7 の 9 個の hand-trace シナリオだけではない。
+L8 後、matching engine は **多くの random ordering** にわたって invariant が成立するという **property-level の証明** を手にする — L7 の 9 個の hand-trace シナリオだけではなく。
 
 ## おさらい
 
 L7 完了時点:
 
-- 9 個の hand-trace unit test が pass。
-- 各テストが specific シナリオの specific invariant をテスト。
+- hand-trace unit test 9 個が pass。
+- 各テストが specific なシナリオで specific な invariant をテストしている。
 
-**L7 がテストしないもの**: random sequence。例えば 17 limit を submit、3 個を cancel、Market を submit したときだけ trigger するバグなら、L7 の 9 個では多分見逃す。そのシナリオを自分で思いつくか (難しい — バグはテストしようと思わない場所に隠れる)、または **多数のシナリオ** を自動でテストする必要がある。L8 が後者。
+**L7 がテストしないもの**: random sequence。たとえば 17 個の limit を submit して 3 個を cancel し、さらに Market を submit したときだけ trigger するバグは、L7 の 9 個ではほぼ確実に見逃す。そのシナリオを自分で思いつくか (難しい — バグはテストしようと思わない場所に隠れる)、それとも **多数のシナリオ** を自動でテストするか。L8 では後者をやる。
 
 ## 計画
 
-3 つ:
+3 つやる:
 
-1. **\`proptest\` を dev-dep として \`crates/clob/Cargo.toml\` に追加**。\`proptest\` は既に workspace dep (既存 rethlab L1 Architect 階層の \`consensus\` での proposer-election test で使用); 使うことを宣言するだけ。
-2. **新規 \`mod prop_tests\` block** を \`book.rs\` の既存 \`mod tests\` の下に追加。新規モジュール内:
-   - \`Action\` enum (property test が exercise する操作の subset — 今は SubmitLimit + SubmitMarket のみ; cancel は follow-up)。
-   - Random \`Action\` sequence の generator strategy。
-   - Invariant ごとに 1 つの \`proptest!\` block — 3 個。
+1. **\`proptest\` を dev-dep として \`crates/clob/Cargo.toml\` に追加する**。\`proptest\` は既に workspace dep として宣言されている (既存 rethlab L1 Architect 階層の \`consensus\` の proposer-election test で使用済み) ので、使うことを宣言するだけでよい。
+2. **\`book.rs\` の既存 \`mod tests\` の下に新規 \`mod prop_tests\` block を追加する**。新規モジュール内には次を入れる:
+   - \`Action\` enum (property test が exercise する操作のサブセット — 今は SubmitLimit + SubmitMarket のみ。cancel は follow-up で扱う)。
+   - random な \`Action\` sequence の generator strategy。
+   - invariant ごとに 1 つの \`proptest!\` block — 計 3 個。
 3. **\`cargo test -p openhl-clob\`** — 12 個 pass (unit 9 + prop 3)。
 
 3 つの invariant:
 
 - **\`qty_conservation\`**: book に入る合計 quantity = 合計 filled + 合計 resting (「お金の計算が保存される」property)。
-- **\`no_crossed_book\`**: \`best_bid < best_ask\` が常に成立 — test 9 が hand-trace した safety property を今ランダムテスト。
-- **\`determinism\`**: 同じ action sequence が同じ fills + 同じ book state を毎回 produce する。**これが chain の safety が依存する replayability property。**
+- **\`no_crossed_book\`**: \`best_bid < best_ask\` が常に成立する — test 9 で hand-trace した safety property を、今度はランダムテストする。
+- **\`determinism\`**: 同じ action sequence が毎回同じ fills と同じ book state を produce する。**これが chain の safety が依存する replayability property。**
 
-Proptest がどれかで反例を見つけたら、失敗 input を最小に **自動 shrink** する。それが example より property の load-bearing な利点。
+Proptest がどれかで反例を見つけたら、失敗 input を最小に **自動 shrink** してくれる。これが example よりも property の load-bearing な利点。
 
-> 🛑 **考えてみよう。** スクロールする前に: \`submit_limit::Buy\` が時々 (例えば 1%) ask を best-first ではなく **random** 順に walk するバグがあったら。3 invariant のどれが最速に catch する? どれが最も informative に catch する?
+> 🛑 **考えてみよう。** スクロールする前に: \`submit_limit::Buy\` が時折 (たとえば 1% の確率で) ask を best-first ではなく **random** 順に walk してしまうバグがあったとする。3 invariant のうち、どれが最も速く catch するか? どれが最も informative に catch するか?
 
-(答え: \`qty_conservation\` は間接的に catch する — 十分なケースで間違った walk 順が、hand math が期待する price と異なる matched price を produce する。\`no_crossed_book\` は直接 catch: 最安 ask を先に取らない buy は cheaper ask を book に残し、次にその ask より上の bid が来ると cross する。\`determinism\` は **毎回** catch する、各 run が異なる「random」walk 順を選ぶので、同じ input の 2 run が異なる fill を produce する。**\`determinism\` が consensus chain の load-bearing property** — これなしでは validator が合意しない。)
+(答え: \`qty_conservation\` は間接的に catch する — 十分なケースで、間違った walk 順が hand math の期待と異なる matched price を produce する。\`no_crossed_book\` は直接 catch する: 最安 ask を先に取らない buy は cheaper ask を book に残してしまい、次にその ask より上の bid が来た瞬間に cross する。\`determinism\` は **毎回** catch する — 各 run が異なる「random」walk 順を選ぶので、同じ input の 2 run が異なる fill を produce する。**\`determinism\` こそが consensus chain の load-bearing property** — これがなければ validator が合意できない。)
 
 ## 手順
 
@@ -2473,9 +2473,9 @@ proptest = { workspace = true }
 workspace = true
 \`\`\`
 
-\`proptest\` は workspace \`Cargo.toml\` で既に宣言されている (workspace に追加する必要はない — L1 Architect の最初のコースから workspace dep)。\`[dev-dependencies]\` block で test build 時のみ利用可能、production build には含まれない。
+\`proptest\` は workspace \`Cargo.toml\` で既に宣言されている (workspace に追加する必要はない — L1 Architect の最初のコースから workspace dep として入っている)。\`[dev-dependencies]\` block に置けば test build 時のみ利用可能になり、production build には含まれない。
 
-> 🛑 **やりがちな勘違い。** 「\`[dependencies]\` に入れて non-test コードでも使えるようにする?」 **そうすると \`openhl-clob\` のすべての consumer が \`proptest\` を runtime dependency として持つ。** スマートコントラクト、validator、indexer — どれも matching engine を **使う** のに property test インフラを必要としない。\`[dev-dependencies]\` が規律: テストインフラは必要なところにしか住まない。
+> 🛑 **やりがちな勘違い。** 「\`[dependencies]\` に入れて non-test コードでも使えるようにすればよいのでは?」 **そうすると \`openhl-clob\` のすべての consumer が \`proptest\` を runtime dependency として抱えることになる。** スマートコントラクト、validator、indexer — どれも matching engine を **使う** のに property test インフラを必要としない。\`[dev-dependencies]\` の規律で、テストインフラは必要なところにしか入れないようにする。
 
 ### Step 2: \`Action\` enum で \`mod prop_tests\` をセットアップ
 
@@ -2506,9 +2506,9 @@ mod prop_tests {
     }
 \`\`\`
 
-\`Action\` enum は **proptest が random に generate するものを simplified に表現したもの**。各 variant が、real な \`Book::submit\` 呼び出しが必要とする raw \`u64\` を持つ (後で newtype でラップ)。今は variant 2 個 — Limit と Market submit。Cancel action はまだなし; openhl の follow-up stage で追加。
+\`Action\` enum は **proptest が random に generate するものを simplified に表現したもの**。各 variant は、real な \`Book::submit\` 呼び出しが必要とする raw \`u64\` を保持する (後で newtype でラップする)。今のところ variant は 2 個 — Limit と Market submit。Cancel action はまだ追加しない。openhl の follow-up stage で追加する。
 
-**なぜ action を enum でモデル化?** Property test が action の **sequence** を generate する必要があり、各 action は N 種類のどれかになりうるから。Enum がその variability を捉える。Proptest の strategy combinator (\`prop_oneof!\`、\`prop::collection::vec\` 等) は enum とよく動く。
+**なぜ action を enum でモデル化するのか?** Property test は action の **sequence** を generate する必要があり、各 action は N 種類のどれかになり得るから。Enum がその variability を捉えてくれる。Proptest の strategy combinator (\`prop_oneof!\`、\`prop::collection::vec\` 等) は enum とよくなじむ。
 
 ### Step 3: Strategy を書く
 
@@ -2550,15 +2550,15 @@ mod prop_tests {
     }
 \`\`\`
 
-3 つの strategy、build up していく:
+3 つの strategy を build up していく:
 
-- **\`arb_side()\`** — uniform に Buy または Sell を選ぶ。\`prop_oneof![Just(...), Just(...)]\` が proptest の「これらリテラルの 1 つ」combinator。
-- **\`arb_action(id)\`** — 固定 \`id\` で random \`Action\` を生成。Limit 分岐は \`(account, qty, side, price)\` を range で生成; Market 分岐は \`(account, qty, side)\`。重み: \`3 => limit_action, 1 => market_action\` — Limit action が Market の 3 倍頻繁、realistic な order-book usage を反映。
-- **\`arb_actions()\`** — 長さ 1..30 の random \`Vec<Action>\` を生成。\`.prop_flat_map\` パターンが少し奇妙: まず u64 vec を生成して **長さを決め**、それから各 position を \`arb_action(i+1)\` にマップして order ID を increment する。コツは \`arb_actions\` が strictly-increasing な order ID で sequence を produce すること (book での collision を回避)。
+- **\`arb_side()\`** — uniform に Buy または Sell を選ぶ。\`prop_oneof![Just(...), Just(...)]\` が proptest の「これらリテラルのどれか 1 つ」combinator。
+- **\`arb_action(id)\`** — 固定 \`id\` で random な \`Action\` を生成する。Limit 分岐は \`(account, qty, side, price)\` を range で生成し、Market 分岐は \`(account, qty, side)\` を生成する。重みは \`3 => limit_action, 1 => market_action\` — Limit action を Market の 3 倍の頻度にして、現実的な order-book usage を反映している。
+- **\`arb_actions()\`** — 長さ 1..30 の random \`Vec<Action>\` を生成する。\`.prop_flat_map\` パターンは少し奇妙だ: まず u64 vec を生成して **長さを決め**、それから各 position を \`arb_action(i+1)\` にマップして order ID を increment する。ポイントは、\`arb_actions\` が strictly-increasing な order ID を持つ sequence を produce すること (book での collision を避けるため)。
 
-**なぜ range (\`1..=200\` for account、\`50..=150\` for price) を使う?** Proptest を **plausible** なシナリオに biased するため。\`0..=u64::MAX\` range なら proptest はほぼ extreme outlier (account_id = 18_446_744_073_709_551_614) を generate する。Realistic range が real trading に見えるシナリオを produce する: account 1-200、price 50-150、quantity 1-20。Matching engine のバグは normal-looking sequence に最も隠れやすい。
+**range (\`1..=200\` for account、\`50..=150\` for price) を使う理由は?** Proptest を **plausible** なシナリオへバイアスするため。\`0..=u64::MAX\` の range にすると、proptest はほとんどの場合 extreme outlier (account_id = 18_446_744_073_709_551_614 等) を generate する。現実的な range にすれば、real trading に見えるシナリオが produce される: account 1-200、price 50-150、quantity 1-20。Matching engine のバグは、normal-looking な sequence に最も隠れやすい。
 
-> 🛑 **やりがちな勘違い。** 「広い range = 多いカバレッジ = 良い」。 **広い range = 役に立たないテストが多い。** 99.99% の確率で \`qty = u64::MAX - 1\` の order を generate するのは normal matching ロジックを exercise しない; overflow 境界ケースを exercise する。両方とも興味深いが、**簡単なバグを安く先に見つけたい**。Range を plausible 値に絞ると、proptest が予算を real production traffic が exercise する matching path に使う。
+> 🛑 **やりがちな勘違い。** 「広い range = カバレッジが多い = 良い」。 **広い range = 役に立たないテストが多い。** 99.99% の確率で \`qty = u64::MAX - 1\` の order を generate しても、normal な matching ロジックは exercise されず、overflow 境界ケースばかり exercise されてしまう。両方とも興味深いが、**簡単なバグを安く先に見つけたい**。Range を plausible な値に絞れば、proptest が予算を real production traffic が exercise する matching path に使ってくれる。
 
 ### Step 4: 1 つ目の invariant — \`qty_conservation\`
 
@@ -2629,21 +2629,21 @@ Strategy の下に append:
 
 Invariant: \`total_in = 2 * total_filled + total_market_unfilled + resting_qty\`。
 
-なぜ \`2 *\`? **fill は maker から 1 unit AND taker から 1 unit を消費するので、fill_qty の 1 unit が \`total_in\` に 2 回現れる** — maker が submit されたとき 1 回、taker が arrive したとき 1 回。計算:
+\`2 *\` が付くのはなぜか? **fill は maker から 1 unit と taker から 1 unit を消費するので、fill_qty の 1 unit が \`total_in\` に 2 回現れる** — maker が submit されたとき 1 回、taker が arrive したとき 1 回。計算:
 
 | Action | \`total_in\` | 最後に残るもの |
 | - | - | - |
-| Limit 10 unit を submit、完全 rest | +10 | 10 unit resting |
+| Limit 10 unit を submit し、完全 rest | +10 | 10 unit resting |
 | Market 10 unit を submit、liquidity なし | +10 | 10 unit 破棄 (fill なし) |
-| Limit 10 unit を submit、5 unit ask とマッチ | +10 | 5 unit fill (各 side から 1 つ)、5 unit が rest として残る |
+| Limit 10 unit を submit、5 unit の ask とマッチ | +10 | 5 unit fill (各 side から 1 つずつ)、5 unit が rest として残る |
 
-5 unit fill する場合、つまり: maker が 5 をオファー (既に \`total_in\`)、taker が 5 を取る (これも \`total_in\`)。Fill した 5 unit が \`total_in\` に 10 として現れる — 各 side から 1 回。**だから \`2 * total_filled\`。**
+5 unit fill する場合を考える: maker が 5 をオファーし (既に \`total_in\` に計上済み)、taker が 5 を取る (これも \`total_in\` に計上される)。Fill した 5 unit が \`total_in\` に 10 として現れる — 各 side から 1 回ずつ。**だから \`2 * total_filled\` になる。**
 
-**\`#![proptest_config(ProptestConfig { cases: 256, .. })]\` 行が \`proptest!\` block の冒頭** にあり、各テストを 256 回走らせる。Invariant 3 個 × 256 case = 768 ランダムシナリオ。
+**\`proptest!\` block の冒頭にある \`#![proptest_config(ProptestConfig { cases: 256, .. })]\` 行** が各テストを 256 回走らせる。Invariant 3 個 × 256 case = 768 ランダムシナリオ。
 
-**\`prop_assert_eq!\` (\`assert_eq!\` ではない) が重要** — proptest が「テスト失敗」を「システムエラーで panic」と区別する必要がある。\`prop_assert_eq!\` が failure を proptest の shrinking 機構に報告し、それが最小反例を見つけようとする。
+**\`prop_assert_eq!\` (\`assert_eq!\` ではない) が重要** — proptest が「テスト失敗」と「システムエラーで panic」を区別する必要があるから。\`prop_assert_eq!\` なら failure を proptest の shrinking 機構に報告し、最小反例を見つけようとしてくれる。
 
-> 🛑 **やりがちな勘違い。** 「\`total_in = 2 * total_filled + ...\` がおかしい — なぜ double-count?」 **marketplace では fill が **2 つの unit** を伴う — buyer の意図 1 個と seller の意図 1 個。** Maker が 5 オファーし taker が 5 取ると、engine は 10 unit の「マッチング需要」を見ている: 各 side から 5 個。2 つが size 5 の Fill にまとまったが、entered したときは 10 個の個別な taker-or-maker-unit だった。**Invariant が数えるのは個別の taker/maker 意図であって、unique な unit ではない。**
+> 🛑 **やりがちな勘違い。** 「\`total_in = 2 * total_filled + ...\` はおかしい — なぜ double-count するのか?」 **marketplace では fill が **2 つの unit** を伴う — buyer の意図 1 個と seller の意図 1 個。** Maker が 5 オファーし taker が 5 取ると、engine は 10 unit の「マッチング需要」を見ている: 各 side から 5 個。2 つが size 5 の Fill 1 つにまとまったが、entered したときには 10 個の個別の taker-or-maker-unit だった。**この invariant が数えるのは個別の taker/maker 意図であって、unique な unit ではない。**
 
 ### Step 5: 2 つ目の invariant — \`no_crossed_book\`
 
@@ -2683,17 +2683,17 @@ Invariant: \`total_in = 2 * total_filled + total_market_unfilled + resting_qty\`
         }
 \`\`\`
 
-Body:
+Body の流れ:
 
-1. **各 action ごと** に order を submit。
-2. **各 submit 後** に \`book.best_bid() < book.best_ask()\` (両方存在するなら) を check。
-3. **どこかで \`best_bid >= best_ask\`** になったらテスト失敗 — book が cross。
+1. **各 action ごと** に order を submit する。
+2. **各 submit 後** に \`book.best_bid() < book.best_ask()\` (両方存在する場合) を check する。
+3. **どこかで \`best_bid >= best_ask\`** になればテスト失敗 — book が cross したことになる。
 
-これは **L7 の \`book_does_not_cross_after_match\` と同じ invariant** だが random sequence に対してテスト。L7 が **1 つ** のシナリオで invariant が成立することを証明; L8 が **256 randomized** シナリオで成立することを証明。
+これは **L7 の \`book_does_not_cross_after_match\` と同じ invariant** だが、random sequence に対してテストする。L7 では **1 つ** のシナリオで invariant が成立することを証明したが、L8 では **256 個の randomized** シナリオで成立することを証明する。
 
-\`prop_assert!(b < a, "...")\` macro が format string を含む — proptest 失敗時、cross した実際の bid/ask 値がエラーメッセージに表示される。プレーンな \`assert!(b < a)\` より informative。
+\`prop_assert!(b < a, "...")\` macro は format string を取れる — proptest 失敗時、cross した実際の bid/ask 値がエラーメッセージに表示される。プレーンな \`assert!(b < a)\` よりも informative。
 
-> 🛑 **やりがちな勘違い。** 「Property test が hand-trace test が見逃した failure を見つけたら?」 **それがまさに point。** Hand-trace test は specific シナリオを verify; proptest が general invariant を verify。Proptest がバグを見つけたら、shrinking phase が最小 failing case を produce する — それを **永久的な regression test として hand-trace suite に追加する**。**Proptest がバグを見つけ、hand-trace test がそれが戻ってこないようにする。**
+> 🛑 **やりがちな勘違い。** 「Property test が hand-trace test の見逃した failure を見つけたらどうする?」 **まさにそれが狙い。** Hand-trace test は specific なシナリオを verify し、proptest が general な invariant を verify する。Proptest がバグを見つけたら、shrinking phase が最小 failing case を produce してくれる — それを **永続的な regression test として hand-trace suite に追加する**。**Proptest がバグを見つけ、hand-trace test がそれを二度と戻らせない。**
 
 ### Step 6: 3 つ目の invariant — \`determinism\`
 
@@ -2737,21 +2737,21 @@ Body:
 
 この invariant は、action sequence を fresh \`Book\` に適用し end state の 5-tuple を返す helper closure \`run\` を定義する: \`(best_bid, best_ask, depth_bid, depth_ask, all_fills_in_order)\`。
 
-それから: \`prop_assert_eq!(run(&actions), run(&actions))\`。
+そして: \`prop_assert_eq!(run(&actions), run(&actions))\`。
 
-**同じ input の 2 run が同じ output を produce しなければならない。** Matching engine に何らかの non-determinism — randomness、HashMap iteration 順、スレッディング race — があれば、このテストが catch する。
+**同じ input の 2 run が同じ output を produce しなければならない。** Matching engine に何らかの non-determinism — randomness、HashMap iteration 順、スレッディング race — が紛れ込んでいれば、このテストが catch する。
 
-**なぜこれが最重要 property**: consensus chain は、すべての validator が同じ input から同じ fill を計算することに依存する。1 validator の matching engine が別の validator と異なる fill を produce すると、validator は block について合意できず、chain が fork する。**Determinism が load-bearing property** — \`no_crossed_book\` は correctness だが、determinism は **agreement** について。Correct だが non-deterministic な engine が consensus を壊す; deterministic だが incorrect な engine は少なくとも修復可能。
+**これが最重要 property である理由**: consensus chain は、すべての validator が同じ input から同じ fill を計算することに依存している。1 人の validator の matching engine が別の validator と異なる fill を produce すれば、validator は block について合意できず、chain が fork する。**Determinism こそが load-bearing property** — \`no_crossed_book\` は correctness の話だが、determinism は **agreement** の話。Correct だが non-deterministic な engine は consensus を壊すのに対し、deterministic だが incorrect な engine は少なくとも修復可能。
 
-**\`Action::SubmitLimit { id, account, side, price, qty }\` の destructuring で \`*id\`、\`*account\` 等を使う** のは、\`actions\` が \`&[Action]\` として borrow され、各 field が borrowed \`&u64\` だから。\`*\` で deref して value を得る。
+**\`Action::SubmitLimit { id, account, side, price, qty }\` の destructuring で \`*id\`、\`*account\` 等を使う** のは、\`actions\` が \`&[Action]\` として borrow されていて、各 field が borrowed \`&u64\` だから。\`*\` で deref して value を取り出す。
 
-> 🛑 **やりがちな勘違い。** 「Determinism は trivial に true に見える — ただの関数適用」。 **trivial に見えるが、小さなミスがそれを壊す。** このテストが **失敗する** non-determinism のソース:
+> 🛑 **やりがちな勘違い。** 「Determinism は trivial に true に見える — ただの関数適用ではないか」。 **trivial に見えるが、小さなミスがそれを壊す。** このテストが **失敗する** non-determinism の発生源としては:
 > - \`bids\`/\`asks\` に \`BTreeMap\` の代わりに \`HashMap\` を使う (HashMap iteration がランダム化される)。
-> - Telemetry 用に \`submit\` 内で \`std::time::Instant::now()\` 呼び出しを追加。
-> - Sync barrier なしで order を非同期処理する \`tokio::task\` を spawn。
-> - \`f64\` field を保存し、その bit に依存。
+> - Telemetry 用に \`submit\` 内で \`std::time::Instant::now()\` 呼び出しを追加する。
+> - Sync barrier なしで order を非同期処理する \`tokio::task\` を spawn する。
+> - \`f64\` field を保存し、その bit 表現に依存する。
 >
-> どれもコンパイルが通り、\`no_crossed_book\` を pass し、未来の contributor が導入したときだけ失敗する — \`determinism\` がここで catch する。**6 ヶ月後の自分から今の自分を守るテスト。**
+> どれもコンパイルが通り、\`no_crossed_book\` を pass してしまい、未来の contributor が導入したときに初めて失敗する — それを \`determinism\` がここで catch する。**6 ヶ月後の自分から今の自分を守るテスト。**
 
 ## テスト
 
@@ -2779,33 +2779,33 @@ test tests::resting_limit_creates_bid_or_ask ... ok
 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-総実行時間: **数秒**。Proptest がテストごとに 256 case 走らせ、各 case が小さい in-memory matching simulation、合計コストが 10 秒未満。
+総実行時間は **数秒**。Proptest がテストごとに 256 case 走らせるが、各 case は小さな in-memory matching simulation なので、合計コストは 10 秒未満で済む。
 
-どれかの prop test が失敗すれば:
+どれかの prop test が失敗すると、次のように出る:
 
 \`\`\`
 proptest: Saving this and future failures in /Users/.../proptest-regressions/...
 proptest: If this test was expected to be flaky, ...
 \`\`\`
 
-Proptest が **失敗 input を file にキャッシュ** する (\`proptest-regressions/\` 配下)。以降の run は最初にキャッシュ input を再テストするので、バグを見つけて修正したら毎回同じ最小反例で verify される。Regressions file を git に add する (小さい)。
+Proptest は **失敗 input を file にキャッシュ** する (\`proptest-regressions/\` 配下)。以降の run は最初にキャッシュ input を再テストするので、バグを見つけて修正したら毎回同じ最小反例で verify される。Regressions file は git に add しておく (小さい)。
 
 よくあるエラーと対処:
 
 - **\`error: cannot find macro 'proptest' in this scope\`** — \`mod prop_tests\` で \`use proptest::prelude::*;\` が抜けている。Step 2 を再確認。
-- **\`error: trait 'Strategy' not satisfied\`** — generator 関数の return type が \`impl Strategy<Value = T>\` ではない。\`prop_oneof![Just(...)]\` が \`Just\` 内の型に対して \`impl Strategy<Value = T>\` を返す; \`.prop_map(...)\` を chain すると value type が変わるかも。生成する値と \`Strategy<Value = ...>\` 型が一致することを確認。
-- **\`prop_assert_eq\` で合計が一致せず失敗** — \`total_in\` accumulator が間違っている。各 submit で order の \`qty\` を \`total_in\` に追加、fill quantity ではない。Step 4 を再確認 — submit 時にのみ sum、fill 時にはしない。
-- **Determinism 失敗** — どこかに HashMap、\`time::Instant\`、何らかの non-deterministic primitive を導入した可能性。L1-L7 のコードに対する最近の diff を check; バグは non-deterministic primitive が追加された箇所。
+- **\`error: trait 'Strategy' not satisfied\`** — generator 関数の return type が \`impl Strategy<Value = T>\` になっていない。\`prop_oneof![Just(...)]\` は \`Just\` 内の型に対して \`impl Strategy<Value = T>\` を返すが、\`.prop_map(...)\` を chain すると value type が変わることがある。生成する値と \`Strategy<Value = ...>\` 型が一致しているか確認。
+- **\`prop_assert_eq\` で合計が一致せず失敗** — \`total_in\` accumulator が間違っている。各 submit で order の \`qty\` を \`total_in\` に加える (fill quantity ではなく)。Step 4 を再確認 — sum は submit 時のみで、fill 時には行わない。
+- **Determinism 失敗** — どこかに HashMap、\`time::Instant\`、何らかの non-deterministic primitive を導入した可能性がある。L1-L7 のコードに対する最近の diff を確認 — バグは non-deterministic primitive が追加された場所にある。
 
 ## 設計の振り返り
 
 3 つの load-bearing な決定:
 
-1. **Proptest は dev-dep、runtime dep ではない。** Property test は \`cargo test\` で走る、production では走らない。\`[dependencies]\` に置くと \`openhl-clob\` のすべての consumer が proptest をコンパイル + link する羽目になる。\`[dev-dependencies]\` 規律が production dependency graph をクリーンに保つ。
+1. **Proptest は dev-dep であって runtime dep ではない。** Property test は \`cargo test\` で走り、production では走らない。\`[dependencies]\` に置くと \`openhl-clob\` のすべての consumer が proptest をコンパイル + link する羽目になる。\`[dev-dependencies]\` の規律で production dependency graph をクリーンに保つ。
 
-2. **Action enum は simplified な中間表現。** 各 variant が raw \`u64\` を持つ、\`OrderId(u64)\` / \`AccountId(u64)\` newtype-wrap 版ではない。**Proptest strategy が raw 値を generate し、test body が \`submit\` を呼ぶ前に newtype でラップする。** 意図的 — proptest の combinator が primitive 型で最も easily に動き、\`as u64\` ergonomics が boilerplate を節約する。Newtype 強制は test generator 内ではなく API 境界 (\`submit\` 呼び出し) で起こる。
+2. **Action enum は simplified な中間表現。** 各 variant は raw \`u64\` を保持し、\`OrderId(u64)\` / \`AccountId(u64)\` 風に newtype でラップしない。**Proptest strategy が raw 値を generate し、test body が \`submit\` を呼ぶ前に newtype でラップする。** 意図的 — proptest の combinator は primitive 型と最もスムーズに動くし、\`as u64\` の ergonomics で boilerplate を節約できる。Newtype の強制は test generator 内ではなく API 境界 (\`submit\` 呼び出し) で行う。
 
-3. **\`determinism\` が consensus の load-bearing property。** Correct だが non-deterministic な matching engine が consensus を壊す; deterministic だが incorrect な engine は修復可能。Non-determinism を catch するテストが chain の safety を守る。**Property を「何をテストするか」ではなく「何を守るか」で命名・優先順位付けする規律。**
+3. **\`determinism\` が consensus の load-bearing property。** Correct だが non-deterministic な matching engine は consensus を壊すのに対し、deterministic だが incorrect な engine は修復可能。Non-determinism を catch するテストが chain の safety を守る。**Property は「何をテストするか」ではなく「何を守るか」で命名・優先順位付けする — その規律が肝。**
 
 ## 答え合わせ
 
@@ -2826,21 +2826,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ \`cases: 256\`、\`1024\` や \`100\` ではなく?**
-バランス。256 case × 3 property × ~10ms per case ≈ 8 秒 — \`cargo test\` で毎回走らせるのに十分速い。1024 case なら 30+ 秒、dev iteration の摩擦になる。100 case なら稀なバグを見逃すリスク。**Cheap に走れるが common バグを catch するのに十分な case count を選ぶ。**
+**Q: なぜ \`cases: 256\` なのか? \`1024\` や \`100\` ではダメか?**
+バランスの問題。256 case × 3 property × ~10ms per case ≈ 8 秒 — \`cargo test\` で毎回走らせるのに十分速い。1024 case なら 30 秒超になり、dev iteration の摩擦になる。100 case では稀なバグを見逃すリスクがある。**安く走らせられて、common なバグを catch できる程度の case count を選ぶ。**
 
-**Q: なぜ proptest action に \`cancel\` がない?**
-Cancel action が determinism + conservation property を複雑にする: cancel 後、どの order ID が生きているか track する必要がある。「submit-only sequence」simplification で 3 invariant が tractable になる。Cancel-aware property の追加は follow-up; 既存 3 invariant が最高価値、先に正しく get する。
+**Q: なぜ proptest action に \`cancel\` を入れていないのか?**
+Cancel action は determinism と conservation property を複雑にする: cancel 後、どの order ID が生きているかを track する必要が出てくる。「submit-only sequence」に simplify することで、3 つの invariant が tractable になる。Cancel-aware property は follow-up で追加すればよい。既存の 3 invariant が最も価値の高いところなので、まずそこを正しく押さえる。
 
-**Q: Proptest が失敗 input を見つけたら何が起きる?**
-**Shrinking phase** に入る。失敗 input から開始し、proptest が依然失敗する最小の subset / 最小値を見つけようとする。我々のテストケース generator (\`Vec<Action>\` を produce) では、shrinking が 25-action sequence を 3-action sequence に reduce してまだバグを再現するかもしれない。最小 sequence がデバッグ対象 — original input よりずっと簡単。
+**Q: Proptest が失敗 input を見つけたらどうなるか?**
+**Shrinking phase** に入る。失敗 input から始めて、proptest がまだ失敗する最小の subset / 最小値を探す。本コースのテストケース generator (\`Vec<Action>\` を produce) では、shrinking で 25-action sequence が 3-action sequence まで縮んでバグを再現することもある。デバッグ対象はその最小 sequence — original input よりはるかに扱いやすい。
 
-**Q: \`arb_actions\` を Limit order のみに produce させられる?**
-できる — \`arb_action\` の \`prop_oneof![3 => limit_action, 1 => market_action]\` を \`prop_oneof![1 => limit_action]\` に変更 (または \`prop_oneof\` なしで \`limit_action\` を直接 return)。我々が持つ invariant では Market order が **有用** (discard-remainder path を exercise) だが、Limit-only flow に focus したければできる。**Proptest strategy は composable。**
+**Q: \`arb_actions\` に Limit order だけを produce させられるか?**
+できる — \`arb_action\` の \`prop_oneof![3 => limit_action, 1 => market_action]\` を \`prop_oneof![1 => limit_action]\` に変える (あるいは \`prop_oneof\` を外して \`limit_action\` を直接 return する)。今ある invariant では Market order が **有用** (discard-remainder path を exercise する) だが、Limit-only flow に focus したければ可能。**Proptest strategy は composable。**
 
 ## 次のレッスン (L9)
 
-Matching engine が完全にテストされた。**まだ consensus と統合されていない。** L9 が Module 4 (Bridge integration) を開始: \`LiveRethEvmBridge\` に \`Book\` + \`pending_fills\` field を追加、order を CLOB にルーティングし結果 Fill を buffer に蓄積する \`submit_order\` method を追加。L9 後、bridge が matching engine を所有する; L10 が \`build_payload\` で buffer を drain する。`,
+Matching engine の徹底的なテストが完了した。**まだ consensus とは統合されていない。** L9 から Module 4 (Bridge integration) に入る: \`LiveRethEvmBridge\` に \`Book\` + \`pending_fills\` field を追加し、order を CLOB にルーティングして結果の Fill を buffer に蓄積する \`submit_order\` method を追加する。L9 後、bridge が matching engine を所有するようになる。L10 では \`build_payload\` で buffer を drain する。`,
                 },
               ],
             },
@@ -2867,15 +2867,15 @@ Matching engine が完全にテストされた。**まだ consensus と統合さ
 cargo test -p openhl-evm --release
 \`\`\`
 
-…依然 pass する (course 6 から 38 テスト + L9 の new test なし、依然 38)。Bridge が CLOB matching engine を **所有** する。書くもの:
+上記の実行結果が引き続き pass する (course 6 由来の 38 テスト + L9 の new test なし、合計依然 38)。Bridge が CLOB matching engine を **所有** するようになる。書くもの:
 
-- **新規 workspace dep 1 個** — \`crates/evm/Cargo.toml\` に \`openhl-clob = { workspace = true }\`。
+- **新規 workspace dep 1 個** — \`crates/evm/Cargo.toml\` に \`openhl-clob = { workspace = true }\` を追加。
 - **\`LiveRethEvmBridge\` に新規フィールド 2 個** — \`clob: Mutex<Book>\` と \`pending_fills: Mutex<Vec<Fill>>\`。
-- **より広い pending tuple** — \`pending: HashMap<u64, (B256, Header)>\` が \`HashMap<u64, (B256, Header, Vec<Fill>)>\` になる。3 番目の要素が payload ごとの fill リスト。
-- **新規メソッド 3 個** — \`submit_order(&self, order: Order) -> FillResult\`、\`payload_fills(id) -> Option<Vec<Fill>>\` (inspection)、\`pending_fill_count() -> usize\` (inspection)。
-- **波及更新** — \`build_payload\`、\`payload_ready\`、\`validate_payload\`、\`commit\` での pending tuple の destructuring すべてを 3-tuple pattern に。
+- **pending tuple を拡張** — \`pending: HashMap<u64, (B256, Header)>\` を \`HashMap<u64, (B256, Header, Vec<Fill>)>\` に変える。3 番目の要素が payload ごとの fill リスト。
+- **新規メソッド 3 個** — \`submit_order(&self, order: Order) -> FillResult\`、\`payload_fills(id) -> Option<Vec<Fill>>\` (inspection 用)、\`pending_fill_count() -> usize\` (inspection 用)。
+- **波及更新** — \`build_payload\`、\`payload_ready\`、\`validate_payload\`、\`commit\` での pending tuple の destructuring をすべて 3-tuple pattern に揃える。
 
-**\`build_payload\` はまだ \`pending_fills\` を drain しない** — 今は空の \`Vec<Fill>\` を挿入する。L10 で drain を実装する。L9 後、order を submit でき、fill が \`pending_fills\` に蓄積するのが見えるが、bridge の payload が fill を運ばない。**L10 がそのギャップを閉じ、L11 がそれを証明する integration test を書く。**
+**\`build_payload\` はまだ \`pending_fills\` を drain しない** — 今は空の \`Vec<Fill>\` を挿入する。drain の実装は L10 で行う。L9 後、order を submit でき、fill が \`pending_fills\` に蓄積していく様子も観察できるようになるが、bridge の payload はまだ fill を運ばない。**L10 でそのギャップを閉じ、L11 でそれを証明する integration test を書く。**
 
 ## おさらい
 
@@ -2889,25 +2889,25 @@ crates/evm/src/live_node.rs             — LiveRethEvmBridge<P>
 crates/consensus/                       — フル BFT engine
 \`\`\`
 
-\`cargo test -p openhl-evm\` で 38 個 pass。**CLOB は存在し、bridge も存在する、だが互いに知らない。** L9 で bridge を CLOB に配線する。
+\`cargo test -p openhl-evm\` で 38 個 pass する。**CLOB も bridge もそれぞれ存在するが、互いを知らない状態。** L9 で bridge を CLOB に配線する。
 
 ## 計画
 
-\`crates/evm/\` 内で 6 つ (実際は 7 step):
+\`crates/evm/\` 内で 6 項目 (実際の手順は 7 step):
 
-1. **\`openhl-clob = { workspace = true }\`** を \`crates/evm/Cargo.toml\` の \`[dependencies]\` に追加。
-2. **Import を追加** — \`crates/evm/src/live_node.rs\` に \`use openhl_clob::{Book, Fill, FillResult, Order};\`。
-3. **\`clob\` + \`pending_fills\` フィールドを追加** — \`LiveRethEvmBridge<P>\` struct に。
-4. **\`pending\` を 3-tuple に変更** — \`State\` struct で。
-5. **\`new()\` を更新** — 新フィールドを初期化。
-6. **メソッド 3 個を追加** — \`impl<P> LiveRethEvmBridge<P>\` block に \`submit_order\`、\`payload_fills\`、\`pending_fill_count\`。
-7. **destructuring を波及更新** — \`build_payload\`、\`payload_ready\`、\`validate_payload\`、\`commit\` を新 3-tuple shape にマッチ。\`build_payload\` は今は空 \`Vec<Fill>\` を挿入。
+1. **\`openhl-clob = { workspace = true }\`** を \`crates/evm/Cargo.toml\` の \`[dependencies]\` に追加する。
+2. **Import を追加する** — \`crates/evm/src/live_node.rs\` に \`use openhl_clob::{Book, Fill, FillResult, Order};\` を入れる。
+3. **\`clob\` + \`pending_fills\` フィールドを追加する** — \`LiveRethEvmBridge<P>\` struct に。
+4. **\`pending\` を 3-tuple に変更する** — \`State\` struct 側。
+5. **\`new()\` を更新する** — 新フィールドを初期化する。
+6. **メソッド 3 個を追加する** — \`impl<P> LiveRethEvmBridge<P>\` block に \`submit_order\`、\`payload_fills\`、\`pending_fill_count\` を追加。
+7. **destructuring を波及更新する** — \`build_payload\`、\`payload_ready\`、\`validate_payload\`、\`commit\` を新しい 3-tuple shape にマッチさせる。\`build_payload\` は今のところ空の \`Vec<Fill>\` を挿入しておく。
 
-Step 7 は退屈に聞こえるが機械的: \`(hash, header)\` または \`(h, _)\` を書いた場所すべてが \`(hash, header, fills)\` または \`(h, _, _)\` になる。Compiler が各場所をクリアなエラーで教える。
+Step 7 は退屈に聞こえるが機械的な作業: \`(hash, header)\` や \`(h, _)\` を書いた場所すべてが \`(hash, header, fills)\` または \`(h, _, _)\` になる。Compiler が各場所をクリアなエラーで教えてくれる。
 
-> 🛑 **考えてみよう。** スクロールする前に: L9 後、\`bridge.submit_order(order)\` を呼べ、\`bridge.pending_fill_count()\` で fill が蓄積するのが見える。それから \`bridge.build_payload(parent, attrs)\` を呼ぶと、新しく build した payload に対する \`bridge.payload_fills(id)\` は何を返す? ヒント: §Step 7 を注意深く読む。
+> 🛑 **考えてみよう。** スクロールする前に: L9 後、\`bridge.submit_order(order)\` を呼べるようになり、\`bridge.pending_fill_count()\` で fill が蓄積していく様子が観察できる。そこで \`bridge.build_payload(parent, attrs)\` を呼ぶと、新しく build された payload に対する \`bridge.payload_fills(id)\` は何を返すか? ヒント: §Step 7 を注意深く読む。
 
-(答え: \`Some(vec![])\` — 空 fill リスト。L9 はデータフローを配線するが、\`build_payload\` はまだ drain せず空 Vec を挿入する。L10 の「build 時に drain」変更が、これを \`Some(vec![fill_a, fill_b, ...])\` にする。)
+(答え: \`Some(vec![])\` — 空の fill リスト。L9 はデータフローを配線するが、\`build_payload\` はまだ drain せず空 Vec を挿入する。L10 の「build 時に drain」変更で、これが \`Some(vec![fill_a, fill_b, ...])\` になる。)
 
 ## 手順
 
@@ -2924,7 +2924,7 @@ async-trait              = { workspace = true }
 # ... rest unchanged ...
 \`\`\`
 
-\`openhl-clob\` は workspace \`Cargo.toml\` に既に宣言済み (path entry を L1 で追加)。\`[dependencies]\` entry は「この特定 crate がそれを使う」と言う。
+\`openhl-clob\` は workspace \`Cargo.toml\` に既に宣言済み (path entry を L1 で追加した)。\`[dependencies]\` entry は「この特定 crate がそれを使う」ことを宣言する役割を果たす。
 
 ### Step 2: \`live_node.rs\` に import を追加
 
@@ -2941,9 +2941,9 @@ use openhl_types::{BlockHash, ExecutedBlock, PayloadAttrs, PayloadId, PayloadSta
 // ... rest unchanged ...
 \`\`\`
 
-4 つの型を pull in: \`Book\` (matching engine)、\`Fill\` (output)、\`FillResult\` (\`Book::submit\` の wrapper)、\`Order\` (submit の input)。
+4 つの型を pull in する: \`Book\` (matching engine)、\`Fill\` (output)、\`FillResult\` (\`Book::submit\` の wrapper)、\`Order\` (submit の input)。
 
-モジュールレベルの doc comment も新 stage を ack するように更新。ファイル冒頭の既存 \`//! Stage 7X\` コメントブロックを探す:
+モジュールレベルの doc comment も新しい stage を反映するように更新する。ファイル冒頭の既存 \`//! Stage 7X\` コメントブロックを探す:
 
 \`\`\`rust
 //! Stage 7a: parent lookups go through the live node's provider via the
@@ -2956,7 +2956,7 @@ use openhl_types::{BlockHash, ExecutedBlock, PayloadAttrs, PayloadId, PayloadSta
 //! consensus engine ...
 \`\`\`
 
-…どこか妥当な場所 (7c と 7d の間で fine) に新規 Stage 8d block を挿入:
+…どこか妥当な場所 (7c と 7d の間でも構わない) に新規 Stage 8d block を挿入する:
 
 \`\`\`rust
 //! Stage 8d: the bridge now owns a CLOB matching engine. \`submit_order\` routes
@@ -2968,11 +2968,11 @@ use openhl_types::{BlockHash, ExecutedBlock, PayloadAttrs, PayloadId, PayloadSta
 //! wiring exists; encoding is downstream.
 \`\`\`
 
-これがメタドキュメンテーション — 誰かが 6 ヶ月後にファイルを読むとき、staging comment が map になる。
+これがメタドキュメントの役割を果たす — 6 ヶ月後に誰かがファイルを読んだとき、staging comment が地図になる。
 
 ### Step 3: \`LiveRethEvmBridge\` にフィールド追加
 
-Struct 定義を見つける。\`validator\` と \`state\` の間にフィールド 2 個を追加:
+Struct 定義を見つけ、\`validator\` と \`state\` の間にフィールド 2 個を追加する:
 
 \`\`\`rust
 #[derive(Debug)]
@@ -2987,12 +2987,12 @@ pub struct LiveRethEvmBridge<P> {
 }
 \`\`\`
 
-\`Mutex\` でラップされた 2 フィールド。なぜ両方 \`Mutex\`?
+\`Mutex\` でラップされたフィールドが 2 個。両方を \`Mutex\` にする理由は次の通り:
 
-- **\`clob: Mutex<Book>\`** — matching engine。\`Book\` 自体は内部的に thread-safe ではない; \`Mutex\` でラップすると複数の caller が同時に order を submit できる (engine app loop に統合されると bridge は \`Arc<LiveRethEvmBridge>\` で共有される)。
-- **\`pending_fills: Mutex<Vec<Fill>>\`** — \`submit_order\` が fill を push し、(L10 の) \`build_payload\` が drain する buffer。\`clob\` と別 \`Mutex\` なのは、2 つが異なる時間に mutate するから: submit は matching するために \`clob\` の lock を短く保持、それから append のために \`pending_fills\` の lock を短く保持。別 lock により、2 つの submit が submit → push の full chain を直列化しない。
+- **\`clob: Mutex<Book>\`** — matching engine。\`Book\` 自体は内部的に thread-safe ではない。\`Mutex\` でラップすれば、複数の caller が同時に order を submit できる (engine app loop に統合された後、bridge は \`Arc<LiveRethEvmBridge>\` で共有される)。
+- **\`pending_fills: Mutex<Vec<Fill>>\`** — \`submit_order\` が fill を push し、(L10 の) \`build_payload\` が drain する buffer。\`clob\` と別の \`Mutex\` にしているのは、2 つが異なるタイミングで mutate するから: submit は matching のために \`clob\` の lock を短時間保持し、その後 append のために \`pending_fills\` の lock を短時間保持する。lock を分けることで、2 つの submit が submit → push の全 chain を直列化しなくて済む。
 
-> 🛑 **やりがちな勘違い。** 「1 個の \`Mutex<(Book, Vec<Fill>)>\` ではなく 2 個の \`Mutex\` なのは?」 **Lock 粒度。** 1 個の mutex が両方を覆うと、submit ごとに matching 仕事 AND fill-buffer mutation の両方で lock を保持する。Submit せずに \`pending_fill_count\` を読む将来のコード (例: L10 の \`build_payload\` drain、デバッグツール) が、submit-in-progress で block する。2 個の mutex は read が write contention を bypass できる。**コストは余分な \`Mutex::new\` 呼び出し数個; 利益はより良い並行スループット。**
+> 🛑 **やりがちな勘違い。** 「\`Mutex<(Book, Vec<Fill>)>\` 1 個ではなく \`Mutex\` 2 個にする理由は?」 **Lock 粒度。** 1 個の mutex で両方を覆うと、submit ごとに matching 作業と fill-buffer mutation の両方で lock を保持することになる。submit せずに \`pending_fill_count\` を読みたい将来のコード (たとえば L10 の \`build_payload\` drain やデバッグツール) が、submit-in-progress で block されてしまう。\`Mutex\` を 2 個にすれば、read が write contention を bypass できる。**コストは余分な \`Mutex::new\` 呼び出しが数個増える程度。利益は並行スループットの改善。**
 
 ### Step 4: \`pending\` tuple を変更
 
@@ -3008,7 +3008,7 @@ struct State {
 }
 \`\`\`
 
-\`pending\` の value 型を 3-tuple に変更、3 番目要素を \`Vec<Fill>\` に:
+\`pending\` の value 型を 3-tuple に変更し、3 番目要素を \`Vec<Fill>\` にする:
 
 \`\`\`rust
 #[derive(Debug, Default)]
@@ -3022,13 +3022,13 @@ struct State {
 }
 \`\`\`
 
-\`chain\` は \`HashMap<B256, Header>\` のまま、commit された block はここで fill を track する必要なし — fill は commit の下流。(Production コードは fill をどこかに persist する; それは本コース範囲外。)
+\`chain\` は \`HashMap<B256, Header>\` のまま据え置く。commit された block はここで fill を track する必要がない — fill は commit の下流に流れていく。(Production コードでは fill をどこかに persist することになるが、それは本コースの範囲外。)
 
-**新しい doc コメントがレッスンの一部。** 3 番目要素が存在する **理由** を説明 — \`submit_order\` → \`pending_fills\` → \`build_payload\` drain → \`pending\` map の payload ごとの \`Vec<Fill>\`、というデータフロー。
+**新しい doc コメント自体がレッスンの一部。** 3 番目要素が存在する **理由** を説明する — \`submit_order\` → \`pending_fills\` → \`build_payload\` drain → \`pending\` map の payload ごとの \`Vec<Fill>\` というデータフローを残しておく。
 
 ### Step 5: \`new()\` を更新
 
-現在の \`new()\` は 4 フィールドを初期化。変更後は 6 個。更新:
+現在の \`new()\` は 4 フィールドを初期化している。変更後は 6 個になる。更新:
 
 \`\`\`rust
 impl<P> LiveRethEvmBridge<P> {
@@ -3047,7 +3047,7 @@ impl<P> LiveRethEvmBridge<P> {
     }
 \`\`\`
 
-新規フィールド初期化 2 個。\`Book::new()\` は L3 のヘルパー (workspace が配線されているので \`openhl_clob::Book::new()\` がここで呼べる)。空の fill buffer に \`Vec::new()\`。
+新規フィールドの初期化が 2 個。\`Book::new()\` は L3 で書いたヘルパー (workspace が配線されているので、ここで \`openhl_clob::Book::new()\` が呼べる)。空の fill buffer には \`Vec::new()\` を使う。
 
 ### Step 6: 新メソッド 3 個を追加
 
@@ -3088,19 +3088,19 @@ impl<P> LiveRethEvmBridge<P> {
     }
 \`\`\`
 
-3 メソッド、3 つの意図:
+メソッド 3 個、それぞれの意図は次の通り:
 
-- **\`submit_order\`** — **write** path。\`&self\` を取る (\`&mut self\` ではない)、内部 mutability via \`Mutex\` が shared 参照で bridge を mutate できるようにする。\`clob\` を lock、\`book.submit\` を呼ぶ、\`FillResult\` を受け取る。Fill が produce されたら、\`pending_fills\` を lock して append。\`FillResult\` を return して caller に何が起きたか知らせる。
-- **\`payload_fills\`** — **inspection** path。指定 \`PayloadId\` に対して \`Option<Vec<Fill>>\` を返す。Id が pending にない場合 \`None\`、ある場合 (空の可能性あり) \`Some(vec)\`。Doc コメントが、これが test-and-debug メソッドであることを明示 — production コードは fill を transaction-encoding pipeline 経由でルートする。
-- **\`pending_fill_count\`** — 小さい debugging ヘルパー。Buffer で drain 待ちの fill 数。「Cross する 2 order を submit、count == 1 を期待」のようなテストに有用。
+- **\`submit_order\`** — **write** path。\`&self\` を取る (\`&mut self\` ではない)。\`Mutex\` 経由の interior mutability によって、shared 参照で bridge を mutate できる。\`clob\` を lock し、\`book.submit\` を呼び、\`FillResult\` を受け取る。Fill が produce されたら、\`pending_fills\` を lock して append する。\`FillResult\` を return して caller に何が起きたかを知らせる。
+- **\`payload_fills\`** — **inspection** path。指定 \`PayloadId\` に対して \`Option<Vec<Fill>>\` を返す。Id が pending にない場合は \`None\`、ある場合は \`Some(vec)\` (空の可能性あり)。Doc コメントで、これが test-and-debug 用のメソッドであることを明示する — production コードは fill を transaction-encoding pipeline 経由で route する。
+- **\`pending_fill_count\`** — 小さな debugging ヘルパー。Buffer で drain 待ちの fill 数を返す。「Cross する 2 order を submit、count == 1 を期待」といったテストで有用。
 
-3 メソッドすべてが \`&self\` を取ることに注意。内部 \`Mutex\` が重い lifting をする; public API が「shared 参照 + interior mutability」、まさに async コードが必要とするもの (複数の async task が \`&LiveRethEvmBridge\` を同時に保持できる)。
+3 メソッドすべてが \`&self\` を取る点に注目。内部の \`Mutex\` が重い処理を担い、public API としては「shared 参照 + interior mutability」になる — まさに async コードが必要とする形 (複数の async task が \`&LiveRethEvmBridge\` を同時に保持できる)。
 
-> 🛑 **やりがちな勘違い。** 「\`submit_order\` が \`&mut self\` ではなく \`&self\` を取るのは?」 **Bridge を、order を同時に submit したい async task 間で共有する必要があるから。** Matching engine (実際に mutate するコード) が \`Mutex\` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制するので、この mutation は安全」と受け入れる。\`submit_order\` が \`&mut self\` を取ると、\`Arc<RwLock<LiveRethEvmBridge>>\` が必要になり、submit ごとに bridge 全体を lock する — パフォーマンスが悪化し、API の形も適切でない。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
+> 🛑 **やりがちな勘違い。** 「\`submit_order\` が \`&mut self\` ではなく \`&self\` を取るのはなぜか?」 **order を同時に submit したい async task 間で bridge を共有する必要があるから。** Matching engine (実際に mutate するコード) は \`Mutex\` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制しているから、この mutation は安全」と受け入れる。\`submit_order\` が \`&mut self\` を取るなら \`Arc<RwLock<LiveRethEvmBridge>>\` が必要になり、submit ごとに bridge 全体を lock することになる — パフォーマンスが悪化し、API の形としても適切でない。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
 
 ### Step 7: destructuring を波及更新
 
-ここが退屈だが機械的な部分。pending tuple は今 3 要素; pattern match する場所すべてが知る必要がある。合計 5 site:
+ここからは退屈だが機械的な作業。pending tuple は 3 要素になったので、pattern match する場所すべてをそれに合わせる必要がある。合計 5 サイト:
 
 **Site 1: \`build_payload\`** — \`s.pending.insert(id, ...)\` を検索。現在:
 
@@ -3118,7 +3118,7 @@ s.pending.insert(id, (hash, header, Vec::new()));    // 今は空 Vec<Fill>; L10
 Ok(PayloadId(id))
 \`\`\`
 
-**\`Vec::new()\` が placeholder。** L10 が \`std::mem::take(&mut *self.pending_fills.lock()...)\` に置き換える。
+**\`Vec::new()\` は placeholder。** L10 で \`std::mem::take(&mut *self.pending_fills.lock()...)\` に置き換える。
 
 **Site 2: \`payload_ready\`** — \`s.pending.get(&n).cloned()\` を検索。現在:
 
@@ -3140,23 +3140,23 @@ let (hash, header, _fills) = s
     .ok_or_else(|| BridgeError::Rejected(format!("unknown payload id {n}")))?;
 \`\`\`
 
-\`_fills\` binding が新しい 3 番目要素を catch するが使わない — \`payload_ready\` は \`ExecutedBlock\` を返し、fill を直接必要としない。\`_\` 接頭辞が compiler に「存在は知っている、必要なし」と伝える。
+\`_fills\` binding が新しい 3 番目要素を catch するが使わない — \`payload_ready\` は \`ExecutedBlock\` を返すだけで、fill を直接必要としないからだ。\`_\` 接頭辞で compiler に「存在は認識しているが使わない」と伝える。
 
-**Site 3: \`validate_payload\`** — \`let header = { ... }\` block 内、\`.find(|(h, _)| *h == block_hash)\` を検索:
+**Site 3: \`validate_payload\`** — \`let header = { ... }\` block 内で \`.find(|(h, _)| *h == block_hash)\` を検索する:
 
 \`\`\`rust
 .find(|(h, _)| *h == block_hash)
 .map(|(_, h)| h.clone())
 \`\`\`
 
-両 closure を 3 要素 pattern に更新:
+両方の closure を 3 要素 pattern に更新する:
 
 \`\`\`rust
 .find(|(h, _, _)| *h == block_hash)
 .map(|(_, h, _)| h.clone())
 \`\`\`
 
-**Site 4: \`commit\`** — 同じ \`.find(|(h, _)| *h == hash)\` パターンを検索、同様に変更:
+**Site 4: \`commit\`** — 同じ \`.find(|(h, _)| *h == hash)\` パターンを検索し、同様に変更する:
 
 \`\`\`rust
 let header = s
@@ -3167,11 +3167,11 @@ let header = s
     .ok_or_else(|| ...)?;
 \`\`\`
 
-**Site 5: \`payload_fills\`** (Step 6 でちょうど追加した新メソッド) — 既に \`.map(|(_, _, fills)| fills.clone())\` 行で 3 要素 pattern を使う。変更不要。
+**Site 5: \`payload_fills\`** (Step 6 で追加したばかりの新メソッド) — 既に \`.map(|(_, _, fills)| fills.clone())\` の行で 3 要素 pattern を使っているので、変更不要。
 
-5 site すべて。\`cargo check -p openhl-evm\` を走らせる — 見逃せば compiler が「pattern matches against tuple of length 2 but expected 3」エラーで教える。
+合計 5 サイト。\`cargo check -p openhl-evm\` を走らせる — 見逃しがあれば compiler が「pattern matches against tuple of length 2 but expected 3」エラーで教えてくれる。
 
-> 🛑 **やりがちな勘違い。** 「\`pending\` の 3 番目を fill がある payload にだけ \`Vec<Fill>\` 、例えば \`(B256, Header, Option<Vec<Fill>>)\` にしたら?」 **できるが、より悪い。** \`Vec<Fill>\` は既に「0 個以上の fill」を表現する — 空 vec が自然な「fill なし」ケース。\`Option<Vec<Fill>>\` は consumer site ごとに余分な unwrap step を追加し、meaningful なメモリ節約にもならない (空 Vec が 24 バイト vs Option の 32 バイト — 無視できる)。**内部型が自然な empty state を既に持っているなら、Option ラッパーを追加しない。**
+> 🛑 **やりがちな勘違い。** 「\`pending\` の 3 番目要素を、fill がある payload にだけ持たせる形にしたら? たとえば \`(B256, Header, Option<Vec<Fill>>)\` のように」。 **できるが、かえって悪い。** \`Vec<Fill>\` は既に「0 個以上の fill」を表現できる — 空 vec が自然な「fill なし」ケース。\`Option<Vec<Fill>>\` にすると consumer サイトごとに余分な unwrap step が増え、meaningful なメモリ節約にもならない (空 Vec が 24 バイトに対し Option は 32 バイト — 無視できる)。**内部型が自然な empty state を既に持っているなら、Option ラッパーは追加しない。**
 
 ## テスト
 
@@ -3187,9 +3187,9 @@ cargo test -p openhl-evm --release
 test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-Course 6 のテストすべて依然 pass。L9 は新規テストを追加しない — 新機能 (submit_order 等) は L11 の integration test で exercise する。L9 の変更は **構造的** — bridge が新フィールドとメソッドを持つが、既存のテスト面はそれらに触れないので、それらのテストが動き続ける。
+Course 6 のテストはすべて引き続き pass する。L9 では新規テストを追加しない — 新機能 (submit_order 等) は L11 の integration test で exercise する。L9 の変更は **構造的** なもの — bridge に新しいフィールドとメソッドが入るが、既存のテスト面はそれらに触れないので、そのテストはそのまま動き続ける。
 
-新メソッドが正しく配線されたか quick sanity check できる:
+新メソッドが正しく配線されたかをクイックにサニティチェックできる:
 
 \`\`\`rust
 // 既存の live_bridge_builds_on_real_genesis test または新規 smoke test 内で:
@@ -3197,7 +3197,7 @@ let bridge = LiveRethEvmBridge::new(handle.node.provider.clone(), chain_spec);
 assert_eq!(bridge.pending_fill_count(), 0); // fresh bridge では空
 \`\`\`
 
-これが pass するはず。Matching path はまだテストしない (L11) — 新メソッドがコンパイルし、fresh bridge で 0 を返すだけ。
+これが pass するはず。Matching path はまだテストしない (それは L11)。ここでは新メソッドがコンパイルでき、fresh bridge で 0 を返すことだけ確認する。
 
 よくあるエラーと対処:
 
@@ -3210,11 +3210,11 @@ assert_eq!(bridge.pending_fill_count(), 0); // fresh bridge では空
 
 3 つの load-bearing な決定:
 
-1. **1 個ではなく 2 個の \`Mutex\`。** Bridge の CLOB 状態と fill buffer は異なる関心事で異なる時間に mutate する。Lock を分割すると並行 submit が不要に block し合わない。**Lock 粒度は contention が hot path 上にあるときに重要。**
+1. **\`Mutex\` 1 個ではなく 2 個にした。** Bridge の CLOB 状態と fill buffer は別々の関心事で、別々のタイミングで mutate する。Lock を分割しておけば、並行 submit が不必要に互いを block し合わなくて済む。**Lock 粒度は、contention が hot path 上にあるときに重要になる。**
 
-2. **\`submit_order\` は \`&self\` を取る。** Interior mutability via \`Mutex\` が shared 参照で bridge を mutate できるようにする。Bridge は \`Arc\` でラップされ async task 間で共有される; メソッドが \`&mut self\` を取ると、トップで \`RwLock<Bridge>\` が必要になり、すべての access を 1 つのグローバル lock で直列化する。**内部 \`Mutex\` + \`&self\` API が async-shared state の idiomatic な Rust パターン。**
+2. **\`submit_order\` は \`&self\` を取る。** \`Mutex\` 経由の interior mutability によって、shared 参照で bridge を mutate できる。Bridge は \`Arc\` でラップされ async task 間で共有される。メソッドが \`&mut self\` を取ると、外側に \`RwLock<Bridge>\` が必要になり、すべての access を 1 つのグローバル lock で直列化することになる。**内部 \`Mutex\` + \`&self\` API が、async-shared state に対する idiomatic な Rust パターン。**
 
-3. **\`build_payload\` の空 \`Vec<Fill>\` placeholder。** L9 が構造を配線; L10 がそれを機能的にする。Placeholder を残すのは honest scoping — reader は欠けている機能がどこにあるか正確に見える。**\`Vec::new()\` placeholder は将来の TODO コメントより discoverable。**
+3. **\`build_payload\` に空の \`Vec<Fill>\` placeholder を残した。** L9 では構造を配線するに留め、L10 でそれを機能的にする。Placeholder を残すのは honest scoping — reader には欠けている機能がどこにあるかが正確に見える。**\`Vec::new()\` placeholder のほうが、将来用の TODO コメントよりも discoverable。**
 
 ## 答え合わせ
 
@@ -3225,14 +3225,14 @@ diff -u ~/code/my-openhl/crates/evm/src/live_node.rs ./crates/evm/src/live_node.
 diff -u ~/code/my-openhl/crates/evm/Cargo.toml ./crates/evm/Cargo.toml
 \`\`\`
 
-L9 後、コードは 428cc26 の full 変更セットの途中にいる — フィールドとメソッドは入ったが、\`build_payload\` がまだ drain せず (L10)、integration test がない (L11)。Diff は以下を見せるはず:
+L9 後、コードは 428cc26 の full 変更セットの途中にある — フィールドとメソッドは入っているが、\`build_payload\` はまだ drain せず (L10 で対応)、integration test もまだない (L11 で対応)。Diff は次のような状態になるはず:
 - ✅ \`clob\` + \`pending_fills\` フィールド (参照と一致)
 - ✅ \`submit_order\`、\`payload_fills\`、\`pending_fill_count\` メソッド (参照と一致)
 - ✅ \`pending\` の 3-tuple (参照と一致)
-- ❌ \`build_payload\` が依然 \`Vec::new()\` を挿入 — 参照は \`std::mem::take(...)\` を使う
-- ❌ \`clob_fills_flow_into_payload\` integration test なし — 参照にある
+- ❌ \`build_payload\` が依然 \`Vec::new()\` を挿入している — 参照は \`std::mem::take(...)\` を使う
+- ❌ \`clob_fills_flow_into_payload\` integration test がない — 参照には存在する
 
-\`❌\` 項目が L10 + L11 で着地する。
+\`❌\` 項目は L10 + L11 で揃う。
 
 戻る:
 
@@ -3242,21 +3242,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: \`submit_order\` が \`clob\` を lock、終え、別途 \`pending_fills\` を lock するのは — 両方を同時に持たないのは?**
-\`pending_fills\` の append が matching の **結果** に依存、matching の中間状態には依存しないから。\`book.submit(order)\` が return した後、\`FillResult\` は所有データ — \`clob\` の lock を release し、result を安全に処理できる。両 lock を保持すると、無関係な \`pending_fills\` 操作 (例: 他の caller が \`pending_fill_count\` を読む) を correctness 利益なしに直列化する。
+**Q: \`submit_order\` が \`clob\` を lock してから別途 \`pending_fills\` を lock するのはなぜか? 両方を同時に保持しないのは?**
+\`pending_fills\` の append が依存しているのは matching の **結果** であって、matching の中間状態ではないから。\`book.submit(order)\` が return した時点で \`FillResult\` は所有データなので、\`clob\` の lock を release してから result を安全に処理できる。両 lock を保持してしまうと、無関係な \`pending_fills\` 操作 (たとえば別の caller が \`pending_fill_count\` を読むなど) を correctness 上の利益なしに直列化することになる。
 
-**Q: \`payload_fills\` が \`&[Fill]\` (borrowed) ではなく \`Vec<Fill>\` (clone) を返すのは?**
-\`&[Fill]\` を返すと caller が slice のライフタイム中 \`state\` Mutex の lock guard を保持する必要があり — lock を欲しがる他のものすべてを deadlock させる。Vec を clone するのは \`payload_fills\` 呼び出しごとに 1 allocation で、稀にしか呼ばれない inspection メソッドには問題ない。**Lock する API は決して参照を lock 経由で返してはいけない。**
+**Q: \`payload_fills\` が \`&[Fill]\` (borrowed) ではなく \`Vec<Fill>\` (clone) を返すのはなぜか?**
+\`&[Fill]\` を返すと caller が slice のライフタイム中ずっと \`state\` Mutex の lock guard を保持しなければならず、lock を欲しがる他のすべてが deadlock してしまうから。Vec を clone するのは \`payload_fills\` 呼び出しごとに allocation 1 個増えるだけで、稀にしか呼ばれない inspection メソッドなら問題ない。**Lock を取る API は、決して lock 越しの参照を返してはいけない。**
 
-**Q: \`clob\` フィールドを \`Mutex<Book>\` ではなく \`Arc<Mutex<Book>>\` にできる?**
-できる — openhl の Stage 9 (後) が実際にこれをする、CLOB をその state を読む custom EVM precompile と共有する必要があるから。Stage 8d ではプレーン \`Mutex<Book>\` で十分。\`Mutex<T>\` から \`Arc<Mutex<T>>\` への変更は機械的 — 1 箇所をラップ、いくつかの \`.lock()\` site を \`.lock().expect(...)\`-on-arc に変更。**Arc ラップは実際に sharing が必要になるまで遅らせる。**
+**Q: \`clob\` フィールドを \`Mutex<Book>\` ではなく \`Arc<Mutex<Book>>\` にできるか?**
+できる — openhl の Stage 9 (もっと後) では実際にそうする。state を読む custom EVM precompile と CLOB を共有する必要が出てくるからだ。Stage 8d ではプレーンな \`Mutex<Book>\` で十分。\`Mutex<T>\` から \`Arc<Mutex<T>>\` への変更は機械的なもの — 1 箇所をラップし、いくつかの \`.lock()\` サイトを arc 経由の \`.lock().expect(...)\` に変えるだけ。**Arc ラップは、実際に sharing が必要になるまで遅らせる。**
 
-**Q: \`pending_fills.lock()\` が poisoned mutex で panic したら?**
-Panic が \`submit_order\` 経由で上に伝播し、それを呼んだ task をクラッシュさせる。Rust では、スレッドが lock 保持中に panic すると mutex poisoning が起きる。\`book.submit(order)\` のような synchronous body では、panic は稀 (唯一のソースは明示的な \`unwrap()\`、OOM、stack overflow)。起きた場合、bridge はどのみち inconsistent state にある — panic を伝播するのが正しい動作。**\`.expect("mutex poisoned")\` は tripwire であり、recovery path ではない。**
+**Q: \`pending_fills.lock()\` が poisoned mutex で panic したらどうなるか?**
+Panic が \`submit_order\` 経由で上に伝播し、それを呼んだ task がクラッシュする。Rust では、スレッドが lock を保持したまま panic すると mutex poisoning が起きる。\`book.submit(order)\` のような synchronous body では panic は稀 (発生源としては明示的な \`unwrap()\`、OOM、stack overflow くらい)。起きた場合、bridge はどのみち inconsistent state にあるので、panic を伝播させるのが正しい動作。**\`.expect("mutex poisoned")\` は tripwire であって、recovery path ではない。**
 
 ## 次のレッスン (L10)
 
-Bridge が CLOB を持ち、fill が蓄積する。**\`build_payload\` 経由で build された payload がまだその fill を運ばない** — placeholder の \`Vec::new()\` がギャップ。L10 が placeholder を \`std::mem::take(&mut *pending_fills.lock(...))\` に置き換え、新しい payload ごとに蓄積した fill をすべて drain する。L10 後、\`bridge.payload_fills(id)\` が最後の build 以降に produce された実際の fill を返し、\`bridge.pending_fill_count()\` が 0 にリセットされる。L11 が end-to-end test を書き、この drain 意味論が forward-only である (以前の payload が retroactively fill されない) ことを証明する。`,
+Bridge が CLOB を持ち、fill が蓄積するようになった。**ただし \`build_payload\` 経由で build された payload はまだ fill を運ばない** — placeholder の \`Vec::new()\` がギャップになっている。L10 で placeholder を \`std::mem::take(&mut *pending_fills.lock(...))\` に置き換え、新しい payload ごとに蓄積した fill をすべて drain する。L10 後、\`bridge.payload_fills(id)\` が最後の build 以降に produce された実際の fill を返し、\`bridge.pending_fill_count()\` が 0 にリセットされるようになる。L11 で end-to-end test を書き、この drain 意味論が forward-only である (以前の payload に遡って fill が attach されない) ことを証明する。`,
                 },
                 {
                   title: "レッスン 10 — build_payload が pending fill を drain する",
@@ -3275,11 +3275,11 @@ Bridge が CLOB を持ち、fill が蓄積する。**\`build_payload\` 経由で
 cargo test -p openhl-evm --release
 \`\`\`
 
-…依然 38 テスト pass する。**\`build_payload\` への小さな変更** — 約 8 行 — が L9 の \`Vec::new()\` placeholder を \`std::mem::take(...)\` に置き換え、新しい payload ごとに前回の \`build_payload\` 呼び出し以降に CLOB が蓄積した fill すべてを drain する。
+…で引き続き 38 テストが pass する。**\`build_payload\` への小さな変更** — 約 8 行 — で L9 の \`Vec::new()\` placeholder を \`std::mem::take(...)\` に置き換え、新しい payload ごとに前回の \`build_payload\` 呼び出し以降に CLOB が蓄積した fill をすべて drain する。
 
-Drain は **forward-only**: fill が payload N に attach されたら \`pending_fills\` から消え、payload N+1 には現れない。これが bridge が consumer に対してする data-flow promise — 各 payload が build 時点で取られた fill snapshot 1 つを所有する。
+Drain は **forward-only**: fill が payload N に attach された時点で \`pending_fills\` から消え、payload N+1 には現れない。これが bridge が consumer に対して行う data-flow の約束 — 各 payload が build 時点で取られた fill snapshot を 1 つ所有する。
 
-L10 は短い (focused な 1 変更)。L11 で full pipeline を exercise する integration test を書く。
+L10 は短い (focused な変更が 1 箇所だけ)。L11 で full pipeline を exercise する integration test を書く。
 
 ## おさらい
 
@@ -3296,9 +3296,9 @@ pub fn payload_fills(&self, id: PayloadId) -> Option<Vec<Fill>>  // fill を rea
 pub fn pending_fill_count(&self) -> usize                  // count を read
 \`\`\`
 
-Order を submit できる。Fill が \`pending_fills\` に蓄積する。\`pending_fill_count()\` が buffer サイズを報告する。**だが \`build_payload\` は buffer を無視する** — pending tuple の 3 番目要素として \`Vec::new()\` を挿入。なので \`payload_fills(id)\` は buffer に entry があっても \`Some(vec![])\` を返す。
+Order を submit できる。Fill が \`pending_fills\` に蓄積していく。\`pending_fill_count()\` が buffer サイズを報告する。**だが \`build_payload\` は buffer を無視している** — pending tuple の 3 番目要素として \`Vec::new()\` を挿入しているからだ。そのため \`payload_fills(id)\` は、buffer に entry があっても \`Some(vec![])\` を返してしまう。
 
-L10 がそのギャップを閉じる。
+L10 でそのギャップを閉じる。
 
 ## 計画
 
@@ -3308,7 +3308,7 @@ L10 がそのギャップを閉じる。
 s.pending.insert(id, (hash, header, Vec::new()));
 \`\`\`
 
-…が:
+上記の実行結果が:
 
 \`\`\`rust
 let drained_fills = std::mem::take(
@@ -3320,11 +3320,11 @@ let drained_fills = std::mem::take(
 s.pending.insert(id, (hash, header, drained_fills));
 \`\`\`
 
-…に変わる。レッスン全体。コード 8 行。興味深いのは **\`std::mem::take\` が何をするか** と **forward-only drain 意味論が欲しい理由**。
+…に変わる。レッスン全体でコードは 8 行。興味深いのは **\`std::mem::take\` が何をするか** と、**forward-only な drain 意味論を選ぶ理由**。
 
-> 🛑 **考えてみよう。** スクロールする前に: \`std::mem::take(&mut v)\` は \`v\` の内容の所有権を取り、\`v\` を \`Default::default()\` に置き換える。\`Vec<Fill>\` の場合、vector の内容を全部得て、\`v\` が空 \`Vec<Fill>\` になる。**1 つ質問:** 代わりに \`v.drain(..).collect::<Vec<_>>()\` で同じ効果を出せる? 実用上の違いは何か?
+> 🛑 **考えてみよう。** スクロールする前に: \`std::mem::take(&mut v)\` は \`v\` の内容の所有権を奪い、\`v\` を \`Default::default()\` に置き換える。\`Vec<Fill>\` の場合、vector の中身をまるごと取り出し、\`v\` は空の \`Vec<Fill>\` になる。**問題が 1 つ:** 代わりに \`v.drain(..).collect::<Vec<_>>()\` で同じ効果を出せるか? 実用上の違いは何か?
 
-(答え: \`drain(..)\` は要素を 1 個ずつ取り除き iterator を返す。\`mem::take\` は \`Vec<Fill>\` 全体を値で swap する — pointer swap 1 回、要素ごとの仕事なし。N fill の Vec で \`drain\` は O(N) + iterator オーバーヘッド、\`mem::take\` は O(1) constant time。**\`mem::take\` は「全部取って default にリセット」に対してより速くより明確。**)
+(答え: \`drain(..)\` は要素を 1 つずつ取り除く iterator を返す。\`mem::take\` は \`Vec<Fill>\` 全体を値で swap する — pointer swap 1 回で済み、要素ごとの仕事はない。N fill の Vec に対して \`drain\` は O(N) + iterator のオーバーヘッドだが、\`mem::take\` は O(1) constant time。**「全部取って default にリセット」をやるなら \`mem::take\` のほうが速く、意図も明確。**)
 
 ## 手順
 
@@ -3339,7 +3339,7 @@ s.pending.insert(id, (hash, header, drained_fills));
     }
 \`\`\`
 
-L9 のコメントが明示的にここを指す。これが変更場所。
+L9 のコメントが明示的にここを指している。これが変更場所。
 
 ### Step 2: drain で置き換え
 
@@ -3365,23 +3365,23 @@ L9 のコメントが明示的にここを指す。これが変更場所。
     }
 \`\`\`
 
-新しい statement 2 個: \`let drained_fills\` block と修正された insert。コメントは意図的 — 将来の reader に **drain-on-build 意味論** を文書化する。
+新しい statement が 2 個: \`let drained_fills\` block と修正後の insert。コメントは意図的に書いている — 将来の reader に **drain-on-build 意味論** を文書化する役目がある。
 
-新コードを注意深く walk:
+新しいコードを注意深く読む:
 
-1. **\`self.pending_fills.lock()\`** — mutex を acquire。\`LockResult<MutexGuard<Vec<Fill>>>\` を返す。\`.expect("pending_fills mutex poisoned")\` が結果を unwrap (poisoned mutex に対する \`expect\` は fine — L9 の設計の振り返り参照)。
-2. **\`.lock().expect(...)\`** が \`MutexGuard<Vec<Fill>>\` を返す。\`MutexGuard\` は \`Deref<Target = Vec<Fill>>\` だが \`DerefMut\` も持つ。Vec の所有権を取るには \`&mut Vec<Fill>\` が必要、それを \`&mut *guard\` で得る。
-3. **\`std::mem::take(&mut *guard)\`** が swap を行う: Vec の heap-pointer + len + capacity が MutexGuard から \`drained_fills\` 変数に move する; MutexGuard の Vec が \`Vec::default()\` (= \`Vec::new()\` — allocation なしの空 Vec) に置き換わる。
-4. **MutexGuard が block 式の末尾で drop** — lock が release。
-5. **\`s.pending.insert(id, (hash, header, drained_fills))\`** が fill の snapshot を新 payload と共に保存。**pending_fills buffer は今空、次の submit ラウンドに準備完了。**
+1. **\`self.pending_fills.lock()\`** — mutex を acquire する。\`LockResult<MutexGuard<Vec<Fill>>>\` を返す。\`.expect("pending_fills mutex poisoned")\` が結果を unwrap する (poisoned mutex に対する \`expect\` で問題ない — L9 の設計の振り返り参照)。
+2. **\`.lock().expect(...)\`** が \`MutexGuard<Vec<Fill>>\` を返す。\`MutexGuard\` は \`Deref<Target = Vec<Fill>>\` だが \`DerefMut\` も持っている。Vec の所有権を取るには \`&mut Vec<Fill>\` が必要で、それを \`&mut *guard\` で得る。
+3. **\`std::mem::take(&mut *guard)\`** が swap を行う: Vec の heap-pointer + len + capacity が MutexGuard から \`drained_fills\` 変数に move し、MutexGuard 側の Vec は \`Vec::default()\` (= \`Vec::new()\` — allocation なしの空 Vec) に置き換わる。
+4. **MutexGuard が block 式の末尾で drop される** — lock が release される。
+5. **\`s.pending.insert(id, (hash, header, drained_fills))\`** で fill の snapshot を新 payload と共に保存する。**pending_fills buffer は今は空で、次の submit ラウンドに備える。**
 
-\`std::mem::take(...)\` 式全体が **lock 下の単一 atomic 操作** — 他の caller が「半 drain 状態」を見ることはない。\`pending_fills\` は full または空、決して mid-drain ではない。
+\`std::mem::take(...)\` 式全体が **lock 下の atomic 操作** になっている — 他の caller が「半分 drain された状態」を見ることはない。\`pending_fills\` は full か空のどちらかで、mid-drain にはならない。
 
-> 🛑 **やりがちな勘違い。** 「\`collect\` して別途 clear すれば、\`let drained = guard.iter().copied().collect::<Vec<_>>(); guard.clear();\` のように?」 **できる — caller に対する結果は同じ。** だが: (a) \`iter().copied().collect()\` が O(N) copy 仕事 + O(N) clear 仕事、\`mem::take\` の O(1) pointer swap に対し; (b) 2 step 版には \`pending_fill_count()\` を読んでいる誰かが既に collect 済みなのに古い count を見る窓がある。\`mem::take\` は外側から atomic。**One-shot の swap のほうが速く、より correct。**
+> 🛑 **やりがちな勘違い。** 「\`collect\` して別途 clear すればよいのでは — \`let drained = guard.iter().copied().collect::<Vec<_>>(); guard.clear();\` のように」。 **できる — caller から見える結果は同じ。** だが: (a) \`iter().copied().collect()\` は O(N) の copy 作業 + O(N) の clear 作業がかかる (\`mem::take\` の O(1) の pointer swap と比べて) し、(b) 2 step 版では、\`pending_fill_count()\` を読んでいる誰かが既に collect 済みなのに古い count を見てしまう窓ができる。\`mem::take\` は外側から見て atomic。**One-shot の swap のほうが速く、より correct。**
 
 ### Step 3: 他に何も変わっていないことを verify
 
-\`cargo check -p openhl-evm\` を走らせる。今修正した行だけが異なってコンパイルされ、波及効果なし、他のテストが壊れていないはず。\`build_payload\` の signature は変わらない (依然 \`async fn ... -> Result<PayloadId, BridgeError>\`)、なので caller は気づかない。
+\`cargo check -p openhl-evm\` を走らせる。修正したばかりの行だけが異なる状態でコンパイルが通り、波及効果はなく、他のテストも壊れていないはず。\`build_payload\` の signature は変わらない (引き続き \`async fn ... -> Result<PayloadId, BridgeError>\`) ので、caller 側はこの変更に気づかない。
 
 「fill が本当に動いているか」のメンタルテストが欲しいなら:
 
@@ -3401,7 +3401,7 @@ let id2 = bridge.build_payload(...).await.unwrap();  // 今度は空 drain
 assert_eq!(bridge.payload_fills(id2), Some(vec![]));  // retroactive fill なし
 \`\`\`
 
-これが L11 の integration test が大まかにやることだが、real Reth node bootstrap に対して実行される。L10 は基礎機構を動かすだけ。
+これが L11 の integration test が大まかにやることだ。ただし L11 では real な Reth node を bootstrap した上で実行する。L10 は基礎の機構を動くようにするだけ。
 
 ## テスト
 
@@ -3417,9 +3417,9 @@ cargo test -p openhl-evm --release
 test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-Course 6 の既存テストすべて依然 pass。L9 + L10 の変更は構造的 — matching engine は既存テストで exercise されない (L11 で来る)、だが以前動いていたものはすべて動き続ける。
+Course 6 の既存テストはすべて引き続き pass する。L9 + L10 の変更は構造的なもの — matching engine は既存テストで exercise されない (それは L11) が、これまで動いていたものはすべて動き続ける。
 
-変更が効いたかを quick \`grep\` で確認:
+変更が効いているかを quick に \`grep\` で確認する:
 
 \`\`\`bash
 grep -n "std::mem::take" crates/evm/src/live_node.rs
@@ -3440,11 +3440,11 @@ grep -n "Vec::new()" crates/evm/src/live_node.rs
 
 3 つの load-bearing な決定:
 
-1. **Submit ではなく build_payload で drain。** Submit は \`pending_fills\` に push する; \`build_payload\` だけがそれを空にする。意図的 — **fill が、それが組み立てられた payload でグループ化される**、来た順序ではない。下流の payload-consumer が「前の payload と今の payload の間に起きた fill のこの batch」という coherent な view を得る。Submit 時に drain すると、bridge がどの fill がどの payload と一緒に行くかを track するサイドチャンネルが必要 — state が増え、帳簿管理が増える。
+1. **Submit 時ではなく build_payload で drain する。** Submit は \`pending_fills\` に push するだけで、buffer を空にするのは \`build_payload\` のみ。意図的だ — **fill は組み立てられた payload 単位でグループ化される** ものであって、到着順にグループ化されるものではない。下流の payload-consumer は「前回の payload と今回の payload の間に起きた fill の batch」という coherent な view を得る。Submit 時に drain してしまうと、bridge がどの fill がどの payload と一緒に行くかを track するサイドチャンネルを別途持つ必要が出てくる — 状態が増え、帳簿管理が増える。
 
-2. **\`std::mem::take\` が正しい primitive。** O(1)、lock 下で atomic、意図 (「全部取って default を残す」) を signal する。代替 — \`collect::<Vec<_>>(...drain(..))\` + 明示的 clear — は O(N) で半 drain 窓がある。**標準ライブラリの primitive を知っておくこと自体が、より遅くてバグの多い自前版を発明してしまう事故から自分を守る。**
+2. **\`std::mem::take\` が正しい primitive。** O(1)、lock 下で atomic、意図 (「全部取って default を残す」) を明確に signal する。代替の \`collect::<Vec<_>>(...drain(..))\` + 明示的 clear は O(N) で、半 drain 状態の窓もできる。**標準ライブラリの primitive を知っておくことが、より遅くバグの多い自前版を再発明してしまう事故から自分を守る。**
 
-3. **Drain は forward-only。** Payload N が (前回 build_payload 呼び出し) と (今回呼び出し) の間に produce された fill を attach する。以前の payload は、後で arrive した fill で更新されない。これが chain の意味論と一致: block が build されたら、その content は frozen。**Buffer-then-drain shape が、明示的なグループ化メカニズムを必要とせずに「この block に何があるか」を encode する。**
+3. **Drain は forward-only。** Payload N には、(前回の build_payload 呼び出し) と (今回の呼び出し) の間に produce された fill が attach される。以前の payload は、後で arrive した fill で更新されない。これは chain の意味論と一致している: block が build されたら、その content は frozen。**Buffer-then-drain の形が、明示的なグループ化メカニズムを使わずに「この block に何があるか」を encode する。**
 
 ## 答え合わせ
 
@@ -3454,7 +3454,7 @@ git checkout 428cc26
 diff -u ~/code/my-openhl/crates/evm/src/live_node.rs ./crates/evm/src/live_node.rs
 \`\`\`
 
-L10 後、bridge コードは \`428cc26\` と **機能的に等価** (doc コメント以外)。参照との唯一の差は integration test — \`clob_fills_flow_into_payload\` がコードにまだない。それが L11。
+L10 後、bridge コードは \`428cc26\` と **機能的に等価** (doc コメント以外) になる。参照との唯一の差は integration test — \`clob_fills_flow_into_payload\` がコードにまだない。それが L11 で扱うところ。
 
 戻る:
 
@@ -3464,32 +3464,32 @@ git checkout main
 
 ## よくある質問
 
-**Q: \`pending_fills\` に多くの fill (例えば 1000 個) があったら?**
-\`std::mem::take\` は依然 O(1)。Vec 自体が heap allocation を所有する; \`mem::take\` は (pointer, length, capacity) triple を swap する。要素ごとの仕事なし。下流の consumer が最終的に 1000 fill を iterate するが、それは consumer のコストで drain のではない。
+**Q: \`pending_fills\` に大量の fill (たとえば 1000 個) があったらどうなる?**
+\`std::mem::take\` は依然 O(1)。Vec 自体が heap allocation を所有しており、\`mem::take\` は (pointer, length, capacity) の triple を swap するだけだから。要素ごとの仕事はない。下流の consumer が最終的に 1000 fill を iterate することになるが、それは consumer のコストであって drain のコストではない。
 
-**Q: 2 つの \`build_payload\` 呼び出しが race して両方とも full fill set を持っていると考えたら?**
-ない、\`std::mem::take\` が \`MutexGuard\` 下にあるから。Lock が保持されている間、他のスレッドは lock を acquire できない。最初の build_payload が full set を得る; 2 番目は空 Vec を得る (最初のが \`Vec::default()\` で置き換えたから)。**Mutex が drain を直列化する。**
+**Q: 2 つの \`build_payload\` 呼び出しが race して、両方とも full fill set を持つことはないのか?**
+ない。\`std::mem::take\` が \`MutexGuard\` の下で実行されているから。Lock が保持されている間、他のスレッドは lock を acquire できない。最初の build_payload が full set を得て、2 番目は空 Vec を得る (最初の呼び出しが \`Vec::default()\` で置き換えているため)。**Mutex が drain を直列化する。**
 
 **Q: \`build_payload\` が drain **後** に error したら?**
-Fill は \`pending_fills\` から消えたが payload には入らなかった。実質的に失われる — submitted されたが committed されていない。**これは real なバグクラス**、production code が handle するべき (例: build_payload の残りをやる前に drain した fill を recovery queue に保存)。我々の v0 single-validator devnet では failure path が稀なので loss を受け入れる; production hardening は下流の仕事。
+Fill は \`pending_fills\` から消えたが payload には入らなかったことになる — 実質的に失われる (submit されたが commit されていない)。**これは real なバグクラスで**、production コードでは handle すべき (たとえば build_payload の残処理を行う前に、drain した fill を recovery queue に保存するなど)。本コースの v0 single-validator devnet では failure path が稀なので loss を許容する。production hardening は下流の仕事。
 
-**Q: \`drained_fills\` が \`state\` lock 内ではなく — 別途 lock されるのは?**
-\`pending_fills\` と \`state\` が別々の mutex だから (L9 設計判断)。最初に \`state\` を lock (新しい payload ID を計算)、それから briefly \`pending_fills\` を lock (swap のためだけ)、それから state lock を使って \`pending\` に insert を続ける。**操作が独立しているとき、2 つの短い lock が 1 つの長い lock より良い。**
+**Q: \`drained_fills\` を \`state\` lock 内ではなく、別の lock で取るのはなぜ?**
+\`pending_fills\` と \`state\` が別々の mutex だから (L9 の設計判断)。まず \`state\` を lock し (新しい payload ID を計算するため)、次に \`pending_fills\` を短く lock し (swap のためだけ)、そのまま state lock を使って \`pending\` への insert を続ける。**操作が独立しているなら、長い lock 1 つよりも短い lock 2 つのほうがよい。**
 
 ## 次のレッスン (L11)
 
-Bridge にデータフローがある。**end-to-end で動くことをまだ証明していない。** L11 で \`clob_fills_flow_into_payload\` integration test を書く:
+Bridge にデータフローが通った。**ただし end-to-end で動くことはまだ証明していない。** L11 で \`clob_fills_flow_into_payload\` integration test を書く:
 
-1. Real Reth \`EthereumNode\` を bootstrap (course 6 と同じパターン)。
-2. Live provider で \`LiveRethEvmBridge\` を construct。
-3. 空 book で \`build_payload\` を呼ぶ — fill が attach されていないことを verify (\`payload_fills\` が \`Some(vec![])\` を返す)。
-4. Maker BID @ 100、それから crossing taker SELL @ 100 を submit — fill が produce される。
-5. \`pending_fill_count == 1\` を verify。
-6. 次の payload を build — fill が drain され AND attach されることを verify。
-7. \`pending_fill_count == 0\` を verify。
-8. 以前の (pre-orders) payload が retroactively fill されなかったことを verify (drain は forward-only)。
+1. Real Reth \`EthereumNode\` を bootstrap する (course 6 と同じパターン)。
+2. Live provider で \`LiveRethEvmBridge\` を construct する。
+3. 空 book で \`build_payload\` を呼ぶ — fill が attach されていないことを verify する (\`payload_fills\` が \`Some(vec![])\` を返す)。
+4. Maker BID @ 100、続いて crossing taker SELL @ 100 を submit する — fill が produce される。
+5. \`pending_fill_count == 1\` を verify する。
+6. 次の payload を build する — fill が drain され、なおかつ attach されることを verify する。
+7. \`pending_fill_count == 0\` を verify する。
+8. 以前の (pre-orders) payload が retroactively fill されなかったことを verify する (drain は forward-only)。
 
-L11 後、Course 7 の pipeline 全体を exercise する 1 つの integration test がある。**それが「動く CLOB-integrated bridge を build した」マイルストーン。**`,
+L11 後、Course 7 の pipeline 全体を exercise する integration test が 1 個揃う。**それが「動く CLOB-integrated bridge を build した」というマイルストーン。**`,
                 },
                 {
                   title: "レッスン 11 — clob_fills_flow_into_payload — マイルストーンテスト",
@@ -3508,22 +3508,22 @@ L11 後、Course 7 の pipeline 全体を exercise する 1 つの integration t
 cargo test -p openhl-evm clob_fills_flow_into_payload --release
 \`\`\`
 
-…が pass する。**これが Course 7 のマイルストーン。** L1-L8 で build した matching engine が produce する real fill が、\`LiveRethEvmBridge::submit_order\` → \`pending_fills\` buffer → \`LiveRethEvmBridge::build_payload\` drain → consensus が commit する payload に流れる。テストは L9-L10 の統合の **すべての piece** を **live Reth node** に対して exercise する。
+上記の実行結果が pass する。**これが Course 7 のマイルストーン。** L1-L8 で build した matching engine が produce する real fill が、\`LiveRethEvmBridge::submit_order\` → \`pending_fills\` buffer → \`LiveRethEvmBridge::build_payload\` drain → consensus が commit する payload、という流れで流れていく。テストでは L9-L10 の統合の **すべての piece** を **live Reth node** に対して exercise する。
 
-書く新規テスト 1 個:
+書く新規テストは 1 個:
 
-- **\`clob_fills_flow_into_payload\`** — ~100 LOC。Real \`EthereumNode\` を bootstrap、8 step シナリオで 8 assertion を exercise する。
+- **\`clob_fills_flow_into_payload\`** — ~100 LOC。Real \`EthereumNode\` を bootstrap し、8 step のシナリオで 8 個の assertion を exercise する。
 
 テストシナリオ:
 
-1. order なしで空 payload を build → fill が attach されていないことを verify。
-2. maker bid @ 100 を submit → rest する (即座の fill なし) ことを verify。
-3. crossing taker sell @ 100 を submit → ちょうど 1 fill produce、buffered されることを verify。
-4. 次の payload を build → fill が drain されることを verify。
-5. \`pending_fill_count\` が 0 にリセットされることを verify。
-6. 以前の (空) payload を再 check → drain が **forward-only** だったことを verify (retroactive fill なし)。
+1. order なしで空 payload を build → fill が attach されていないことを verify する。
+2. maker bid @ 100 を submit → rest する (即座の fill なし) ことを verify する。
+3. crossing taker sell @ 100 を submit → ちょうど 1 fill が produce されて buffer されることを verify する。
+4. 次の payload を build → fill が drain されることを verify する。
+5. \`pending_fill_count\` が 0 にリセットされることを verify する。
+6. 以前の (空) payload を再 check → drain が **forward-only** だったことを verify する (retroactive な fill がない)。
 
-L11 後、Course 7 の mainline は完成。L12 で capstone でラップアップする。
+L11 後、Course 7 の mainline は完成する。L12 で capstone としてラップアップする。
 
 ## おさらい
 
@@ -3533,26 +3533,26 @@ L10 完了時点、\`LiveRethEvmBridge\` は:
 - \`submit_order\`、\`payload_fills\`、\`pending_fill_count\` メソッドを持つ (L9)。
 - \`build_payload\` が \`pending_fills\` を新 payload の 3 番目 tuple 要素に drain する (L10)。
 
-**まだ end-to-end で動くことを証明していない。** L11 がその証明を書く。
+**ただし end-to-end で動くことはまだ証明していない。** L11 でその証明を書く。
 
 ## 計画
 
-\`crates/evm/src/live_node.rs\` の既存 \`#[cfg(test)] mod tests\` block に 1 テスト追加。テスト:
+\`crates/evm/src/live_node.rs\` の既存 \`#[cfg(test)] mod tests\` block にテストを 1 個追加する。テストの内容:
 
-1. **Reth node を bootstrap** — course 6 の \`live_bridge_builds_on_real_genesis\` test と同じパターン。Parent lookup に provider が必要。
-2. **\`LiveRethEvmBridge::new(provider, chain_spec)\` を construct** — 注: 今回は \`with_engine_handle\` なし。Forkchoice を駆動する必要なし; matching pipeline は engine_handle に依存しない。
-3. **空の初期状態を assert** — \`pending_fill_count() == 0\`。
-4. **空 payload を build** (order まだ submit していない) — \`payload_fills(id)\` が \`Some(vec![])\` を返すことを verify。
-5. **maker を submit** — \`Order { id: 1, side: Buy, qty: 10, OrderType::Limit { price: 100 } }\`。Rest する、即座の fill なしを verify。
-6. **crossing taker を submit** — \`Order { id: 2, side: Sell, qty: 10, OrderType::Limit { price: 100 } }\`。1 fill produce を verify。
-7. **次の payload を build** — \`payload_fills(next_id) == Some([the_fill])\` を verify。
-8. **drain 意味論を verify** — \`pending_fill_count() == 0\`、そして **以前の** payload の fill が依然空 (retroactive update なし)。
+1. **Reth node を bootstrap する** — course 6 の \`live_bridge_builds_on_real_genesis\` test と同じパターン。Parent lookup のために provider が必要。
+2. **\`LiveRethEvmBridge::new(provider, chain_spec)\` を construct する** — 注: 今回は \`with_engine_handle\` を付けない。Forkchoice を駆動する必要がないし、matching pipeline は engine_handle に依存しないから。
+3. **空の初期状態を assert する** — \`pending_fill_count() == 0\`。
+4. **空 payload を build する** (まだ order を submit していない) — \`payload_fills(id)\` が \`Some(vec![])\` を返すことを verify する。
+5. **maker を submit する** — \`Order { id: 1, side: Buy, qty: 10, OrderType::Limit { price: 100 } }\`。rest し、即座の fill がないことを verify する。
+6. **crossing taker を submit する** — \`Order { id: 2, side: Sell, qty: 10, OrderType::Limit { price: 100 } }\`。1 fill が produce されることを verify する。
+7. **次の payload を build する** — \`payload_fills(next_id) == Some([the_fill])\` を verify する。
+8. **drain 意味論を verify する** — \`pending_fill_count() == 0\`、そして **以前の** payload の fill が依然空のまま (retroactive な update がない)。
 
-これが Course 7 が build したすべての integration test。
+これが Course 7 で build するすべての integration test。
 
-> 🛑 **考えてみよう。** スクロールする前に: maker bid が price 100、qty 10。Taker が Sell @ price 100、qty 10。**結果の fill price は 100? 違うかも?** 2 つの order が exact 同じ価格で cross するとき、fill price を決めるルールは何?
+> 🛑 **考えてみよう。** スクロールする前に: maker bid が price 100、qty 10。Taker が Sell @ price 100、qty 10 で来る。**結果の fill price は 100? それとも違うのか?** 2 つの order が同じ価格で cross するとき、fill price を決めるルールは何か?
 
-(答え: fill は **maker の** 価格で起きる — このケースでは \`Price(100)\`。L4 から: 「fill 価格は常に **resting** order の価格 (maker の)。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格); buyer が勝つ」。両 order が同じ価格でも同じルールが適用 — maker が 100 で rest、taker が 100 でマッチ。**「price-time priority」ルールは: maker 価格 (price priority) + price level 内で first-come (time priority)。ここでは time priority disambiguation 不要、maker が 100 で唯一の order だから。**)
+(答え: fill は **maker の** 価格で起きる — このケースでは \`Price(100)\`。L4 から: 「fill 価格は常に **resting** order の価格 (maker の)。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格)。buyer が勝つ」。両 order が同じ価格でも同じルールが適用される — maker が 100 で rest し、taker が 100 でマッチする。**「price-time priority」ルールは「maker の価格 (price priority) + 同じ price level 内では first-come (time priority)」。ここでは time priority の disambiguation は不要 — maker が 100 で唯一の order だから。**)
 
 ## 手順
 
@@ -3576,12 +3576,12 @@ L10 完了時点、\`LiveRethEvmBridge\` は:
     }
 \`\`\`
 
-テストヘッダーで注目する 2 つ:
+テストヘッダーで注目すべきポイントが 2 つ:
 
-- **\`#[tokio::test(flavor = "multi_thread", worker_threads = 4)]\`** — course 6 の integration test と同じ。Reth の \`EthereumNode\` がバックグラウンド task をいくつか spawn する (RPC、payload builder 等) ので multi-threaded tokio runtime が必要。4 worker setup でそれらに余裕を与える。
-- **\`use openhl_clob::{AccountId, OrderId, OrderType, Price, Qty, Side};\`** — L1 の newtype セットから必要な型を import。\`Order\` と \`Fill\` 型は \`mod tests\` の冒頭の \`super::*\` で既に scope にある。
+- **\`#[tokio::test(flavor = "multi_thread", worker_threads = 4)]\`** — course 6 の integration test と同じ。Reth の \`EthereumNode\` はバックグラウンドで task をいくつか spawn する (RPC、payload builder 等) ので、multi-threaded tokio runtime が必要になる。4 worker のセットアップで余裕を持たせている。
+- **\`use openhl_clob::{AccountId, OrderId, OrderType, Price, Qty, Side};\`** — L1 の newtype セットから必要な型を import する。\`Order\` と \`Fill\` は \`mod tests\` 冒頭の \`super::*\` で既に scope に入っている。
 
-> 🛑 **やりがちな勘違い。** 「これらの型を \`mod tests\` のトップではなくテスト関数内で import するのは?」 **テストの依存をテストサイトで visible に保つため。** 将来の reader がこのテストをデバッグしているとき、関連型を一目で見られる。コストはこれらが必要な test ごとに 1 \`use\` statement; 利益は各テストが self-contained なシナリオとして読めること。Real source コード (\`mod tests\` の外) のテストでは、トップに import を置く — だが test は特別: システムが何をするかのドキュメンテーション、inline import がドキュメントを引き締める。
+> 🛑 **やりがちな勘違い。** 「これらの型を \`mod tests\` のトップではなくテスト関数内で import するのはなぜか?」 **テストの依存をテストサイトで visible に保つため。** 将来の reader がこのテストをデバッグするとき、関連型を一目で見られる。コストはこれらが必要な test ごとに \`use\` statement が 1 個増えること、利益は各テストが self-contained なシナリオとして読めること。real source コード (\`mod tests\` の外) のテストではトップに import を置くが、test は特別 — システムが何をするかのドキュメントなので、inline import がそのドキュメント性を引き締める。
 
 ### Step 2: Reth node を bootstrap
 
@@ -3603,9 +3603,9 @@ L10 完了時点、\`LiveRethEvmBridge\` は:
             .expect("launch failed");
 \`\`\`
 
-これは course 6 の \`live_bridge_builds_on_real_genesis\` テストと **同じパターン**。\`launch_with_debug_capabilities()\` を使う (\`.with_add_ons(EthereumAddOns::default()).launch()\` ではなく) のは、今回 engine handle が不要だから — CLOB-to-payload データフローをテストしている、commit-to-forkchoice ではない。
+これは course 6 の \`live_bridge_builds_on_real_genesis\` テストと **同じパターン**。\`launch_with_debug_capabilities()\` を使う (\`.with_add_ons(EthereumAddOns::default()).launch()\` ではない) のは、今回 engine handle が不要だから — テストしているのは CLOB-to-payload のデータフローであって、commit-to-forkchoice ではない。
 
-\`Runtime::test()\`、\`dev_chain_spec()\`、\`NodeConfig::test().dev()\`、builder chain はすべて course 6 L11/L12 から。リフレッシュが必要なら test モジュール内を上にスクロール。
+\`Runtime::test()\`、\`dev_chain_spec()\`、\`NodeConfig::test().dev()\`、builder chain はすべて course 6 L11/L12 で扱ったもの。リフレッシュが必要なら test モジュール内を上にスクロールする。
 
 ### Step 3: genesis hash を pull + bridge を construct
 
@@ -3619,9 +3619,9 @@ L10 完了時点、\`LiveRethEvmBridge\` は:
         let bridge = LiveRethEvmBridge::new(node.provider.clone(), chain_spec);
 \`\`\`
 
-2 行。最初は provider から live genesis block hash を pull (course 6 L12 と同じ)。2 番目は bridge を construct — **末尾に \`.with_engine_handle(...)\` chain なし** に注意。気にするフィールド (\`clob\`、\`pending_fills\`) は \`engine_handle\` から独立。
+2 行。最初は provider から live genesis block hash を pull する (course 6 L12 と同じ)。2 番目は bridge を construct する — **末尾に \`.with_engine_handle(...)\` の chain がない** 点に注意。今回気にするフィールド (\`clob\`、\`pending_fills\`) は \`engine_handle\` から独立しているから。
 
-\`node.provider.clone()\` は安価、\`node.provider\` が内部で \`Arc\`-backed だから。
+\`node.provider.clone()\` は安価。\`node.provider\` が内部で \`Arc\`-backed だから。
 
 ### Step 4: 空の初期状態を assert
 
@@ -3630,7 +3630,7 @@ L10 完了時点、\`LiveRethEvmBridge\` は:
         assert_eq!(bridge.pending_fill_count(), 0);
 \`\`\`
 
-最もシンプルな check。\`new()\` 後、\`pending_fills: Mutex::new(Vec::new())\` が空。\`pending_fill_count()\` がその length を読む。**この assertion が失敗するなら**、L9 の \`new()\` が \`pending_fills\` を正しく初期化していない。
+最もシンプルな check。\`new()\` の直後、\`pending_fills: Mutex::new(Vec::new())\` は空。\`pending_fill_count()\` がその length を読む。**この assertion が失敗するなら**、L9 の \`new()\` が \`pending_fills\` を正しく初期化していない。
 
 ### Step 5: 空 payload を build (まだ order なし)
 
@@ -3651,11 +3651,11 @@ L10 完了時点、\`LiveRethEvmBridge\` は:
         assert!(empty_fills.is_empty(), "no orders submitted yet, fills must be empty");
 \`\`\`
 
-Genesis を parent として \`build_payload\` を呼ぶ。Bridge が L10 の \`std::mem::take\` を \`pending_fills\` に対して call — 空なので、drain が \`Vec::new()\` を返す。結果の payload に空 fill。
+Genesis を parent として \`build_payload\` を呼ぶ。Bridge が L10 の \`std::mem::take\` を \`pending_fills\` に対して call するが、buffer は空なので drain は \`Vec::new()\` を返す。結果の payload に attach される fill も空になる。
 
-返された \`PayloadId\` を \`empty_id\` に bind するのは、**Step 7 で この payload の fill を後で re-check** して drain が forward-only であることを証明するため。
+返された \`PayloadId\` を \`empty_id\` に bind しておくのは、**Step 7 でこの payload の fill を後から re-check** し、drain が forward-only であることを証明するため。
 
-\`attrs.clone()\` は下の 2 番目の \`build_payload\` 呼び出しで \`attrs\` を再利用するから。両 payload が同じ attrs (timestamp 1、ゼロ fee_recipient、ゼロ prev_randao) を使う、シンプルにするため — production code では各 payload が fresh timestamp を持つ。
+\`attrs.clone()\` を使うのは、後で 2 番目の \`build_payload\` 呼び出しで \`attrs\` を再利用するから。両 payload が同じ attrs (timestamp 1、ゼロ fee_recipient、ゼロ prev_randao) を使うのはシンプルさのため — production code では各 payload が fresh な timestamp を持つことになる。
 
 ### Step 6: maker + taker を submit、fill を verify
 
@@ -3686,19 +3686,19 @@ Genesis を parent として \`build_payload\` を呼ぶ。Bridge が L10 の \`
         assert_eq!(bridge.pending_fill_count(), 1, "fill buffered in pending");
 \`\`\`
 
-2 order、2 submit、4 assertion。
+order 2 個、submit 2 回、assertion 4 個。
 
-**1 番目 submit (maker)**:
-- \`submit_order(maker)\` が \`book.submit(maker)\` を call。Book が空なので、maker が price 100 の bid として rest する。
-- \`maker_result.fills.is_empty()\` — 即座の fill なし (book に cross する ask なし)。
-- \`pending_fill_count() == 0\` — buffered なし、マッチなし。
+**1 番目の submit (maker)**:
+- \`submit_order(maker)\` が \`book.submit(maker)\` を call する。Book は空なので、maker は price 100 の bid として rest する。
+- \`maker_result.fills.is_empty()\` — 即座の fill はない (cross できる ask が book にない)。
+- \`pending_fill_count() == 0\` — buffer もマッチもなし。
 
-**2 番目 submit (taker)**:
-- \`submit_order(taker)\` が 100 の resting bid に対してマッチ。マッチが 1 fill を produce (10 unit @ 100、order 1 から order 2 へ)。
-- \`taker_result.fills.len() == 1\` — matcher が fill を返した。
-- \`pending_fill_count() == 1\` — fill が \`submit_order\` の post-match append (L9 Step 6 の \`if !result.fills.is_empty() { ... }\` block) で \`pending_fills\` に push された。
+**2 番目の submit (taker)**:
+- \`submit_order(taker)\` が 100 の resting bid に対してマッチする。マッチで 1 fill が produce される (10 unit @ 100、order 1 から order 2 へ)。
+- \`taker_result.fills.len() == 1\` — matcher が fill を返してきた。
+- \`pending_fill_count() == 1\` — \`submit_order\` の post-match append (L9 Step 6 の \`if !result.fills.is_empty() { ... }\` block) で fill が \`pending_fills\` に push されている。
 
-**maker_result + taker_result ペアがテストの instrumentation**。両方を check することで verify する: (a) maker が本当に rest した (何かに偶発的に cross しなかった)、(b) taker が本当に cross した (偶発的に rest しなかった)。
+**maker_result と taker_result のペアがテストの instrumentation の役割を果たす**。両方を check することで verify できる: (a) maker が本当に rest したこと (何かに偶発的に cross しなかった)、(b) taker が本当に cross したこと (偶発的に rest しなかった)。
 
 ### Step 7: 次の payload を build、drain + drain 意味論を verify
 
@@ -3729,22 +3729,22 @@ Genesis を parent として \`build_payload\` を呼ぶ。Bridge が L10 の \`
     }
 \`\`\`
 
-3 セットの assertion:
+assertion のセットが 3 つ:
 
-**1 番目セット (drain 自体)**: \`build_payload\` が再度 call される — 同じ parent (genesis) + 同じ attrs。L10 の \`std::mem::take\` が走り、\`pending_fills\` の fill を取る。Fill が新 payload の 3 番目 tuple 要素に保存される。\`payload_fills(next_id)\` が \`Some(vec![the_fill])\` を返す。Check:
-- \`next_fills.len() == 1\` — ちょうど 1 fill、0 でなく (drain が fire しなかった)、2 でもなく (spurious fill なし)。
+**1 番目のセット (drain 自体)**: \`build_payload\` を再度 call する — 同じ parent (genesis) + 同じ attrs で。L10 の \`std::mem::take\` が走り、\`pending_fills\` の fill を取り出す。Fill は新 payload の 3 番目 tuple 要素に保存される。\`payload_fills(next_id)\` が \`Some(vec![the_fill])\` を返す。確認内容:
+- \`next_fills.len() == 1\` — fill がちょうど 1 個。0 ではなく (drain が走らなかった証拠)、2 でもなく (spurious な fill がない)。
 - \`next_fills[0].price == Price(100)\` — maker の価格 (price priority)。
-- \`next_fills[0].qty == Qty(10)\` — 両 side の完全 fill。
-- \`next_fills[0].maker_order_id == OrderId(1)\` — maker が order 1 (resting bid)。
-- \`next_fills[0].taker_order_id == OrderId(2)\` — taker が order 2 (cross する sell)。
+- \`next_fills[0].qty == Qty(10)\` — 両 side が完全 fill。
+- \`next_fills[0].maker_order_id == OrderId(1)\` — maker は order 1 (resting bid)。
+- \`next_fills[0].taker_order_id == OrderId(2)\` — taker は order 2 (cross する sell)。
 
-**2 番目セット (drain が buffer を空にした)**: \`pending_fill_count() == 0\` — drain が buffer を \`Vec::default()\` に置き換えた。\`mem::take\` の atomicity の後半。
+**2 番目のセット (drain が buffer を空にした)**: \`pending_fill_count() == 0\` — drain が buffer を \`Vec::default()\` に置き換えた。これが \`mem::take\` の atomicity の後半部分。
 
-**3 番目セット (forward-only)**: \`payload_fills(empty_id)\` — **最初の** payload の fill。**2 番目の payload に drain したにもかかわらず**、最初の payload の保存 fill は build されたときから *unchanged*。これが L11 の load-bearing assertion: **drain が以前の payload を retroactively modify しない**。
+**3 番目のセット (forward-only)**: \`payload_fills(empty_id)\` — **最初の** payload の fill を見る。**2 番目の payload に drain したにもかかわらず**、最初の payload に保存された fill は build されたときから *unchanged* のまま。これが L11 の load-bearing assertion: **drain は以前の payload を retroactively modify しない**。
 
-各 payload が build の瞬間の fill snapshot。Retroactively 最初の payload を drain したら (これがバグになる)、テストはここで失敗する。
+各 payload は build された瞬間の fill snapshot を持つ。Retroactively に最初の payload を drain してしまったら (これがバグになる)、テストはここで失敗する。
 
-> 🛑 **やりがちな勘違い。** 「テストが \`payload_fills(empty_id)\` を \`payload_fills(next_id)\` の **後** に check するのは? \`empty_id\` を先に check できる?」 **順序が重要、time-invariance をテストしているから。** \`next_id\` を先に check するのは、\`next_id\` が 1 fill を持ち \`pending_fill_count\` が 0 であることを **確立** するため。それから \`empty_id\` を check して、\`next_id\` の drain が \`empty_id\` に届かなかったことを **証明** する。\`empty_id\` を先に check すると、「空 payload に fill なし」だけ証明する — Step 5 から既に知っている。Drain の後 check することで、「以前の payload が **後の drain が起きた後も** 依然 fill なし」を証明する。**time-invariance を証明するとき、assertion の時間順序が重要。**
+> 🛑 **やりがちな勘違い。** 「テストが \`payload_fills(empty_id)\` を \`payload_fills(next_id)\` の **後** に check しているのはなぜか? \`empty_id\` を先に check できるのでは?」 **順序が重要なのは、time-invariance をテストしているから。** \`next_id\` を先に check するのは、まず \`next_id\` が 1 fill を持ち、\`pending_fill_count\` が 0 であることを **確立** するため。そのあとで \`empty_id\` を check し、\`next_id\` の drain が \`empty_id\` に波及しなかったことを **証明** する。\`empty_id\` を先に check してしまうと、「空 payload に fill がない」しか証明できない — それは Step 5 から既に分かっている。Drain の後に check することで、「以前の payload は **後の drain が起きた後でも** 依然 fill がない」を証明できる。**time-invariance を証明するときには、assertion の時間順序が重要になる。**
 
 ## テスト
 
@@ -3767,27 +3767,27 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 cargo test -p openhl-evm --release
 \`\`\`
 
-39 個 pass (course 6 の 38 + L11 の 1)。
+39 個 pass する (course 6 の 38 + L11 の 1)。
 
-テストは wall-clock 約 2.5 秒 (Reth node bootstrap + 2 個の小さい \`build_payload\` + 数個の CLOB submit)。ほとんどが Reth bootstrap; 実際の matching + drain はマイクロ秒。
+テストは wall-clock で約 2.5 秒 (Reth node bootstrap + 小さな \`build_payload\` 2 個 + CLOB submit 数個)。ほとんどが Reth bootstrap の時間で、実際の matching + drain はマイクロ秒オーダー。
 
 よくあるエラーと対処:
 
-- **\`assert!(empty_fills.is_empty())\` 失敗** — bridge が \`pending_fills\` を空に初期化していない。L9 Step 5 を check: \`pending_fills: Mutex::new(Vec::new())\`。
-- **\`assert_eq!(taker_result.fills.len(), 1)\` が 0 で失敗** — order が実際 cross していない。Maker が \`Side::Buy\` で taker が \`Side::Sell\` (またはその逆) を確認、両方とも price 100。よくあるバグ: 両 order が \`Side::Buy\`、その場合 2 番目 order がマッチしない — それも rest する。
-- **\`assert_eq!(next_fills.len(), 1)\` が 0 で失敗** — L10 の drain が動いていない。\`build_payload\` が \`std::mem::take(&mut *self.pending_fills.lock()...)\` を call し、result を insert することを check — \`Vec::new()\` ではなく。
-- **\`assert!(empty_fills_again.is_empty())\` 失敗** — drain が retroactively 以前の payload を modify している。\`std::mem::take\` (新 payload にしか書かない) ではあまりないが、誤って \`pending_fills.clone()\` を使い original を mutate したら起こりうる。
-- **テストが「provider has no genesis」で panic** — テストロジックに到達する前に node bootstrap が失敗。\`dev_chain_spec()\` が valid な genesis を produce していることを check。\`cargo test -p openhl-evm live_bridge_builds_on_real_genesis\` を先に走らせて Reth setup が動くことを verify。
+- **\`assert!(empty_fills.is_empty())\` が失敗** — bridge が \`pending_fills\` を空に初期化していない。L9 Step 5 を確認: \`pending_fills: Mutex::new(Vec::new())\`。
+- **\`assert_eq!(taker_result.fills.len(), 1)\` が 0 で失敗** — order が実際には cross していない。Maker が \`Side::Buy\` で taker が \`Side::Sell\` (またはその逆) で、両方とも price 100 になっているか確認。よくあるバグ: 両 order が \`Side::Buy\` になっており、2 番目の order がマッチせずに rest している。
+- **\`assert_eq!(next_fills.len(), 1)\` が 0 で失敗** — L10 の drain が動いていない。\`build_payload\` が \`std::mem::take(&mut *self.pending_fills.lock()...)\` を call し、その結果を insert していること (\`Vec::new()\` を直接 insert していないこと) を確認。
+- **\`assert!(empty_fills_again.is_empty())\` が失敗** — drain が retroactively に以前の payload を modify している。\`std::mem::take\` (新 payload にしか書かない) では普通起きないが、誤って \`pending_fills.clone()\` を使って original を mutate していると発生し得る。
+- **テストが「provider has no genesis」で panic** — テストロジックに到達する前に node bootstrap が失敗している。\`dev_chain_spec()\` が valid な genesis を produce していることを確認。\`cargo test -p openhl-evm live_bridge_builds_on_real_genesis\` を先に走らせて Reth セットアップが動くことを verify する。
 
 ## 設計の振り返り
 
 3 つの load-bearing な決定:
 
-1. **テストが 1 つのシナリオで 3 つの pipeline stage すべてを verify する。** \`submit_order\` が動く (Step 6)、\`build_payload\` が drain する (Step 7 の 1 番目 assertion セット)、forward-only invariant が成立する (Step 7 の最後の assertion)。1 シナリオ、3 property。これを 3 テストに分割すると、各々が node を bootstrap する必要がある — 遅い。**複数 invariant をカバーする 1 つの徹底した integration test が、3 つの narrow なテストより安い。**
+1. **テスト 1 つのシナリオで 3 つの pipeline stage すべてを verify する。** \`submit_order\` が動くこと (Step 6)、\`build_payload\` が drain すること (Step 7 の 1 番目の assertion セット)、forward-only invariant が成立すること (Step 7 の最後の assertion)。1 シナリオで 3 property を見る。これを 3 つのテストに分割すると、それぞれで node を bootstrap する必要があり遅くなる。**複数の invariant をカバーする徹底した integration test 1 個のほうが、narrow な 3 つのテストより安上がり。**
 
-2. **forward-only check がこれを real な integration test にする。** 最初の 2 check (submit が fill produce、build が drain) は unit test から obvious。Forward-only check は **bridge が必要** — それが bridge の per-payload snapshot 機構が honest であることをテストする。Production code が「完全性のため」古い payload に fill を書き戻したかもしれない; L11 がそのバグを catch する。
+2. **forward-only check があるからこそ、これが real な integration test になる。** 最初の 2 つの check (submit が fill を produce する、build が drain する) は unit test からも明らか。Forward-only check は **bridge を必要とする** — bridge の per-payload snapshot 機構が honest であることをテストするから。Production コードが「完全性のため」と称して古い payload に fill を書き戻すバグを入れる可能性があるが、L11 がそれを catch する。
 
-3. **2 payload が同じ parent (genesis) を使うのは意図的。** Production では、2 番目の \`build_payload\` が genesis ではなく最初の decided block を parent にする。このテストでは、何も commit する必要なし — drain timing をデモするのに 2 つの payload が必要なだけ。Genesis を parent として再利用するとテストがシンプルになり、verify する内容 (drain mechanism、commit flow ではない) が変わらない。
+3. **2 つの payload が同じ parent (genesis) を使うのは意図的。** Production では、2 番目の \`build_payload\` は genesis ではなく最初の decided block を parent にする。このテストでは何も commit する必要がない — drain timing をデモするには payload が 2 つあれば十分だから。Genesis を parent として再利用すればテストがシンプルになり、verify する内容 (drain メカニズム、commit flow ではない) は変わらない。
 
 ## 答え合わせ
 
@@ -3797,7 +3797,7 @@ git checkout 428cc26
 diff -u ~/code/my-openhl/crates/evm/src/live_node.rs ./crates/evm/src/live_node.rs
 \`\`\`
 
-L11 後、\`live_node.rs\` が \`428cc26\` の参照と **機能的に完成** マッチ。差異は doc コメントの言い回しのみ。
+L11 後、\`live_node.rs\` は \`428cc26\` の参照と **機能的に完全に** マッチする。差は doc コメントの言い回しだけ。
 
 戻る:
 
@@ -3807,27 +3807,27 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜここでは \`launch_with_debug_capabilities()\` で、course 6 L14 では \`launch()\` (\`.with_add_ons(...)\` 付き)?**
-テスト目標が違う。Course 6 L14 が \`commit → forkchoice_updated\` をテスト — engine handle が必要で、それは AddOns に住む。L11 が CLOB → payload をテスト — engine handle 不要、provider のみ。\`launch_with_debug_capabilities()\` が provider を含むが engine API 配線をスキップする短いセットアップ。
+**Q: なぜここでは \`launch_with_debug_capabilities()\` を使い、course 6 L14 では \`launch()\` (\`.with_add_ons(...)\` 付き) を使ったのか?**
+テスト目標が違うから。Course 6 L14 では \`commit → forkchoice_updated\` をテストするので engine handle が必要で、engine handle は AddOns 経由で入る。L11 では CLOB → payload をテストするので engine handle は不要で、provider があればよい。\`launch_with_debug_capabilities()\` は provider を含むが engine API の配線をスキップする短いセットアップ。
 
-**Q: このテストが見逃す worst-case fill シナリオは?**
-1 submit あたり複数 fill (例: 一度に 3 price level を cross する Market buy)。L7 の unit test (specifically \`buy_market_takes_best_ask\`) がそのパスを matching-engine レベルでカバー; L11 は single-fill ケースのみを exercise してテストを focus に保つ。L11 に multi-fill ケースを追加するのは 2 行変更 (異なる qty 値) だが、証明する内容は変わらない。
+**Q: このテストが見逃す worst-case な fill シナリオは?**
+1 回の submit で複数 fill が出るケース (たとえば一度に 3 つの price level を cross する Market buy)。これは L7 の unit test (具体的には \`buy_market_takes_best_ask\`) が matching-engine レベルでカバーしている。L11 では single-fill ケースのみを exercise してテストを focus に保つ。L11 に multi-fill ケースを追加するのは 2 行 (qty の値を変える) で済むが、証明する内容自体は変わらない。
 
-**Q: テストが他のテストと並行に走れる?**
-Yes — \`#[tokio::test]\` がテストを自分の runtime で走らせ、bridge + node インスタンスがテストにローカル。共有グローバル state なし。\`worker_threads = 4\` 設定はテストごと、workspace 全体ではない。
+**Q: このテストは他のテストと並行に走らせられるか?**
+走らせられる — \`#[tokio::test]\` がテストを自分の runtime で走らせ、bridge と node インスタンスはテストにローカル。共有のグローバル state はない。\`worker_threads = 4\` の設定はテスト単位であって、workspace 全体ではない。
 
-**Q: なぜ maker を先に submit、taker を 2 番目? その逆ではなく?**
-典型的な matching-engine の narrative との対称性: 「maker が rest した、taker が cross した」。順序が *time priority* で意味を持つ (level 内で first-in が最初に fill)、だが *どちらの side が rest するか* では意味を持たない。SELL を先に submit すれば、それが ask として rest する; それから同じ価格で BUY を submit すれば、BUY が cross する。結果は同じ fill。**テスト名「fills flow into payload」はデータ path について、操作の順序ではない。**
+**Q: なぜ maker を先に submit し、taker を 2 番目に? 逆ではダメか?**
+典型的な matching-engine の語り口との対称性のため: 「maker が rest して、taker が cross した」。順序は *time priority* の意味では効く (level 内では first-in が最初に fill する) が、*どちらの side が rest するか* には意味を持たない。SELL を先に submit すればそれが ask として rest し、その後で同じ価格に BUY を submit すれば BUY が cross する。結果は同じ fill になる。**テスト名「fills flow into payload」が指すのはデータの path であって、操作の順序ではない。**
 
 ## 次のレッスン (L12)
 
-Real Reth-backed bridge に統合された動く CLOB がある。**L12 は capstone** — 新規コードなし、ただ:
+Real Reth-backed bridge に統合された動く CLOB が手に入った。**L12 は capstone** — 新規コードはなく、以下を扱う:
 - 11 レッスンの recap。
-- 再現した openhl Stage 8 + 8d 機能のリスト。
-- まだ scope-cut のもの (course 8 の precompile、course 9 の funding、ある future course の EVM tx encoding)。
-- 続けたいなら次のステップ (psyto/openhl Stage 9 source code、Module 3+ build arc)。
+- 再現した openhl Stage 8 + 8d の機能リスト。
+- まだ scope-cut しているもの (course 8 の precompile、course 9 の funding、ある future course での EVM tx encoding)。
+- 続けたい場合の次のステップ (psyto/openhl Stage 9 のソース、Module 3 以降の build arc)。
 
-リフレクションレッスン、~15 分。それで Course 7 が完成。`,
+リフレクション中心のレッスンで、~15 分。これで Course 7 が完成する。`,
                 },
               ],
             },
@@ -3848,7 +3848,7 @@ Real Reth-backed bridge に統合された動く CLOB がある。**L12 は caps
 
 ## 作ったシステム
 
-11 レッスンで、Course 6 で build した substrate に **CLOB matching engine** を追加し、その fill を commit された payload に配線した。Workspace は今:
+11 レッスンを通じて、Course 6 で build した substrate に **CLOB matching engine** を追加し、その fill を commit された payload に配線した。Workspace は今こうなっている:
 
 \`\`\`
 ~/code/my-openhl/
@@ -3865,24 +3865,24 @@ Real Reth-backed bridge に統合された動く CLOB がある。**L12 は caps
 └── ... course 6 から変わらず ...
 \`\`\`
 
-合計約 **15 新規 test**: hand-trace された unit test 9 個 (L7) + proptest invariant 3 個 (L8、768 ランダムシナリオ) + integration test 1 個 (L11)。Workspace テスト数: 39 (course 6 の 38 + L11 の \`clob_fills_flow_into_payload\`)。
+合計で約 **新規テスト 15 個**: hand-trace 済み unit test 9 個 (L7) + proptest invariant 3 個 (L8、768 ランダムシナリオ) + integration test 1 個 (L11)。Workspace のテスト数は 39 個 (course 6 の 38 + L11 の \`clob_fills_flow_into_payload\`)。
 
 ## Matching engine が何をするか
 
-Price-time priority CLOB。**操作 2 つ**: submit (新規 order が take または rest) と cancel (resting order を消す)。**1 つの観察可能な結果**: 各 \`submit\` が \`FillResult\` をマッチした fill リストと共に返す。
+Price-time priority CLOB。**操作は 2 つ**: submit (新規 order が take するか rest する) と cancel (resting order を消す)。**観察可能な結果は 1 つ**: 各 \`submit\` が \`FillResult\` をマッチした fill リストと共に返す。
 
-| 操作 | Public method | 内部で何が変わる |
+| 操作 | Public method | 内部で何が変わるか |
 | - | - | - |
-| Limit order を submit | \`Book::submit(order)\` (\`OrderType::Limit\` 経由) | 反対側を price 以下/以上で walk、resting order とマッチ、未 fill 残りを rest |
-| Market order を submit | \`Book::submit(order)\` (\`OrderType::Market\` 経由) | 反対側を任意の価格で walk、マッチ、未 fill 残りを破棄 |
-| Resting order を cancel | \`Book::cancel(order_id)\` | 両 side を linear scan、order 削除、level が空なら drop |
+| Limit order を submit | \`Book::submit(order)\` (\`OrderType::Limit\` 経由) | 反対側を price 以下/以上で walk し、resting order とマッチし、未 fill な残りを rest させる |
+| Market order を submit | \`Book::submit(order)\` (\`OrderType::Market\` 経由) | 反対側を任意の価格で walk し、マッチし、未 fill な残りを破棄する |
+| Resting order を cancel | \`Book::cancel(order_id)\` | 両 side を linear scan し、order を削除し、level が空なら drop する |
 | Inspect | \`best_bid\`, \`best_ask\`, \`depth_bid\`, \`depth_ask\` | read-only |
 
-Matching は **構築上 deterministic**。Submit ごとに、同じ input と同じ事前 book 状態に対して同じ fill を produce する — それが L8 proptest invariant (\`determinism\`) で 256 ランダムシーケンスが exercise する。
+Matching は **構築上 deterministic**。Submit ごとに、同じ input と同じ事前 book 状態に対して同じ fill を produce する — これを L8 の proptest invariant (\`determinism\`) が 256 個のランダムシーケンスで exercise している。
 
 ## Bridge 統合
 
-Course 6 の \`LiveRethEvmBridge\` が **2 フィールド** (\`clob\`、\`pending_fills\`) と **3 メソッド** (\`submit_order\`、\`payload_fills\`、\`pending_fill_count\`) を獲得した。データフロー:
+Course 6 の \`LiveRethEvmBridge\` が **フィールド 2 個** (\`clob\`、\`pending_fills\`) と **メソッド 3 個** (\`submit_order\`、\`payload_fills\`、\`pending_fill_count\`) を獲得した。データフロー:
 
 \`\`\`
 submit_order(order)              build_payload(parent, attrs)
@@ -3899,91 +3899,91 @@ submit_order(order)              build_payload(parent, attrs)
   caller に FillResult を return
 \`\`\`
 
-Submit が push、build が drain。Drain は **forward-only**: 各 payload が build 時の fill snapshot を所有; 以前の payload が retroactively fill されない。**L11 の integration test がこれを real Reth node に対して end-to-end で証明する**。
+Submit が push、build が drain する。Drain は **forward-only**: 各 payload は build 時点の fill snapshot を所有し、以前の payload に retroactively fill が attach されることはない。**L11 の integration test がこれを real Reth node に対して end-to-end で証明している。**
 
 ## 11 レッスン前にはできなかった、今できること
 
-- **Rust でゼロから price-time priority matching engine を build する** — そしてなぜ \`BTreeMap<Reverse<Price>, ...>\` が bid の正しい shape か、なぜ \`VecDeque\` が level ごとの queue の正しい shape か、cancel の O(n) scan が O(1) index に対してどんなトレードオフを持つかを理解する。
-- **Pure-state-machine determinism について推論する** — \`determinism\` proptest が chain が依存する種類の invariant で、それを encode した。
-- **既存の async-shared bridge にサブシステムを統合する** — \`Mutex<T>\` による interior mutability と \`&self\` メソッドが async task 下の共有 state に対する idiomatic な Rust パターン。それを適用した。
-- **openhl Stage 8a + 8d ソースを読み**、\`book.rs\` + bridge の CLOB 関連コードのすべての行を説明できる。
-- **Matching engine を変更する** — 新しい order type (Stop、Iceberg、Post-Only) を追加し、\`submit_limit\`/\`submit_market\` のどこに着地するか知っている。
+- **Rust でゼロから price-time priority matching engine を build する** — そして、なぜ \`BTreeMap<Reverse<Price>, ...>\` が bid の正しい shape なのか、なぜ \`VecDeque\` が level ごとの queue の正しい shape なのか、cancel の O(n) scan が O(1) index に対してどんなトレードオフを持つのかを理解する。
+- **Pure-state-machine の determinism について推論する** — \`determinism\` proptest は chain が依存する種類の invariant であり、それを自分で encode した。
+- **既存の async-shared bridge にサブシステムを統合する** — \`Mutex<T>\` による interior mutability と \`&self\` メソッドが、async task 下の共有 state に対する idiomatic な Rust パターン。それを適用した。
+- **openhl Stage 8a + 8d のソースを読み**、\`book.rs\` と bridge の CLOB 関連コードのすべての行を説明できる。
+- **Matching engine を変更する** — 新しい order type (Stop、Iceberg、Post-Only) を追加するとき、\`submit_limit\`/\`submit_market\` のどこに着地させればよいか把握できる。
 
 ## まだ placeholder のもの
 
-このコースは bridge に統合された動く matching engine を ship した。Honest scoping — ここにないもの:
+本コースでは bridge に統合された動く matching engine を ship した。Honest scoping として、本コースに **含まれていない** ものは以下:
 
 ### 1. EVM-executable transaction encoding
 
 **ステータス**: 未着手。
 
-Payload に attach された fill は依然並行 \`Vec<Fill>\`、block body のトランザクションではない。Reth の \`BlockExecutor\` がそれを見ない。進めるには: 各 \`Fill\` を EVM トランザクションとして encode (おそらく state を update する custom precompile を call)。それが Module 3 領域 — **course 8** の領域。
+Payload に attach された fill は依然として parallel な \`Vec<Fill>\` であり、block body のトランザクションではない。Reth の \`BlockExecutor\` はそれを見ない。進めるには、各 \`Fill\` を EVM トランザクションとして encode する必要がある (おそらく state を update する custom precompile を call する形で)。それは Module 3 の領域 — つまり **course 8** の領域。
 
 ### 2. Custom EVM precompile
 
 **ステータス**: 未着手。
 
-スマートコントラクトが CLOB state を **読む** (例: 「best bid は?」) には precompile が必要。外部アカウントが **オンチェーントランザクション経由で order を発注する** にはもう 1 つの precompile が必要。openhl Stage 9 が両方を持つ (\`clob_read_best_bid\`、\`clob_place_order\`)。**Course 8** がこれを build。
+スマートコントラクトが CLOB state を **読む** (たとえば「best bid は?」) には precompile が必要。外部アカウントが **on-chain トランザクション経由で order を発注する** には、もう 1 つの precompile が必要。openhl Stage 9 はその両方を持つ (\`clob_read_best_bid\`、\`clob_place_order\`)。これを build するのが **course 8**。
 
 ### 3. Funding rate state machine
 
 **ステータス**: 未着手。
 
-Perp DEX は funding rate 計算 (mark vs. index、定期 rebalancing) が必要。openhl Stage 8b が state machine を持つ。**Course 9** がこれを build。
+Perp DEX には funding rate 計算 (mark vs. index、定期 rebalancing) が必要。openhl Stage 8b が state machine を持っている。これを build するのが **course 9**。
 
 ### 4. 複数 market
 
 **ステータス**: 暗黙の単一 market。
 
-現在の \`Book\` は 1 orderbook。Real perp exchange は多数を持つ (HYPE/USDC、BTC/USDC、ETH/USDC 等)。拡張するには: bridge で \`HashMap<MarketId, Book>\`。機械的変更; openhl Stage 8 にまだない。
+現在の \`Book\` は orderbook 1 個。Real な perp exchange は多数の orderbook を持つ (HYPE/USDC、BTC/USDC、ETH/USDC 等)。拡張するなら bridge で \`HashMap<MarketId, Book>\` を持てばよい。機械的な変更だが、openhl Stage 8 にはまだない。
 
 ### 5. 永続 CLOB state
 
 **ステータス**: in-memory のみ。
 
-Bridge を再起動するとすべての resting order が消える。Production は snapshot/load (または chain state からの完全 event-sourcing) が必要。現在の openhl stage では扱われていない; 最終的な hardening 作業。
+Bridge を再起動するとすべての resting order が消える。Production では snapshot/load (または chain state からの完全な event-sourcing) が必要。現在の openhl stage では扱われておらず、最終的な hardening 作業として残っている。
 
 ### 6. Cancel-by-id index
 
 **ステータス**: O(n) linear scan。
 
-L6 が明示的に O(1) index ではなくシンプルさを選んだ。openhl が book あたり ~10k order を超えてスケールすると、cancel scan が意味を持つようになる。\`HashMap<OrderId, (Side, Price)>\` を追加すれば cancel が O(1) になる — 小さな機械的変更、profile が要求するまで deferred。
+L6 では明示的に、O(1) index ではなくシンプルさを選んだ。openhl が book あたり ~10k order を超えてスケールするようになれば、cancel scan が意味を持ち始める。\`HashMap<OrderId, (Side, Price)>\` を追加すれば cancel が O(1) になる — 小さな機械的変更だが、profile が要求するまでは deferred。
 
 ## Production-readiness チェックリスト
 
-この matching engine + bridge を real testnet に持っていきたければ:
+この matching engine + bridge を real testnet に持っていきたいなら:
 
-- [ ] **EVM-encoded fill** — 各 \`Fill\` をトランザクションとしてラップ、BlockExecutor に route して state 実行 + state-root 計算。
-- [ ] **Custom EVM precompile** — コントラクト読み取り用 \`clob_read_best_bid\`、chain-driven submit 用 \`clob_place_order\`。
-- [ ] **Multi-market サポート** — \`HashMap<MarketId, Book>\` と market ごとの submit/cancel path。
-- [ ] **永続 state** — Book を disk に snapshot + 再起動時に replay、または chain history から完全再構築。
-- [ ] **Cancel index** — \`HashMap<OrderId, (Side, Price)>\` を追加して cancel を O(1) に。
-- [ ] **Order-id 衝突チェック** — \`submit\` は今 caller が unique OrderId を割り当てると信頼。Production は duplicate を検出 + 拒否する必要がある。
-- [ ] **Pre-trade リスクチェック** — アカウントを maintenance margin 以下に置く order は matching 前に拒否すべき。
+- [ ] **EVM-encoded fill** — 各 \`Fill\` をトランザクションとしてラップし、BlockExecutor に route して state 実行と state-root 計算を行う。
+- [ ] **Custom EVM precompile** — コントラクト読み取り用の \`clob_read_best_bid\`、chain-driven な submit 用の \`clob_place_order\`。
+- [ ] **Multi-market サポート** — \`HashMap<MarketId, Book>\` と、market ごとの submit/cancel path。
+- [ ] **永続 state** — Book を disk に snapshot + 再起動時に replay する、もしくは chain history から完全に再構築する。
+- [ ] **Cancel index** — \`HashMap<OrderId, (Side, Price)>\` を追加して cancel を O(1) にする。
+- [ ] **Order-id 衝突チェック** — \`submit\` は現状、caller が unique な OrderId を割り当てることを信頼している。Production では duplicate を検出して拒否する必要がある。
+- [ ] **Pre-trade リスクチェック** — アカウントを maintenance margin 以下に追い込む order は matching 前に拒否すべき。
 - [ ] **Telemetry** — order スループット、fill latency、depth-of-book メトリクスのカウンター。
-- [ ] **Multi-validator agreement** — single-validator devnet は 2 validator が異なる fill 順序を produce するケースを隠す。Proptest の \`determinism\` がローカル証明; multi-validator integration test がネットワーク証明。
-- [ ] **Liquidation engine** — アカウントのマージンが maintenance を下回ったとき、ポジションを強制 close。Course 9 領域。
+- [ ] **Multi-validator agreement** — single-validator devnet では、2 validator が異なる fill 順序を produce するケースが見えない。Proptest の \`determinism\` はローカルでの証明にすぎず、multi-validator integration test がネットワーク上での証明になる。
+- [ ] **Liquidation engine** — アカウントのマージンが maintenance を下回ったときに、ポジションを強制 close する。Course 9 の領域。
 
-このリストは意図的に matching engine 自体より長い。**動く matching engine は基礎であり、製品ではない。**
+このリストは意図的に matching engine 自体より長い。**動く matching engine は基礎であって、製品ではない。**
 
 ## 次に行く先
 
 **rethlab 内**:
-- **Course 8 — Custom EVM precompile** (ship 時) — openhl Stage 9 の \`clob_read_best_bid\` + \`clob_place_order\`。
+- **Course 8 — Custom EVM precompile** (ship した時点で) — openhl Stage 9 の \`clob_read_best_bid\` + \`clob_place_order\`。
 - **Course 9 — Funding state machine** — openhl Stage 8b。
 
 **rethlab 外**:
-- **\`psyto/openhl\` Stage 9 ソース** — full custom-EVM build が public repo にある。Bridge を理解したら \`crates/evm/src/precompiles.rs\` を読む。
-- **参考用 production matching engine** — Project Serum (Solana CLOB、archived だが public)、dYdX v4 (Cosmos-based perp DEX、public)。Data structure を比較。
-- **Property-based testing 文献** — proptest の doc + Hughes/Claessen の QuickCheck 論文。L8 の invariant は保守的; もっと多くできる。
+- **\`psyto/openhl\` Stage 9 ソース** — full custom-EVM build が public repo にある。Bridge を理解したら \`crates/evm/src/precompiles.rs\` を読むとよい。
+- **参考用の production matching engine** — Project Serum (Solana CLOB、archived だが public)、dYdX v4 (Cosmos-based perp DEX、public)。データ構造を比較してみる価値がある。
+- **Property-based testing の文献** — proptest の doc と Hughes/Claessen の QuickCheck 論文。L8 の invariant は保守的に絞ってあるので、もっと多く追加できる。
 
 ## クロージングノート
 
-5 ソースファイル (\`types.rs\` + \`book.rs\` + bridge 追加) にわたって約 **800 行の Rust** を書いた。そのコードは *real Reth-backed bridge に配線された動く CLOB matching engine*。Production-ready ではない; である必要もない。
+ソースファイル 5 個 (\`types.rs\` + \`book.rs\` + bridge への追加) にわたって約 **800 行の Rust** を書いた。そのコードは *real Reth-backed bridge に配線された動く CLOB matching engine* だ。Production-ready ではないし、本コースで production-ready にする必要もない。
 
-最も難しい部分は matching ロジックを書くことではなかった — L4 の submit_limit は構造を理解すれば 60 行。**最も難しい部分は determinism property** — 可能な submit のすべての順序付けにわたって engine が同じ答えを produce することを確実にすること。L8 proptest がテストしようと思わなかったバグを catch し、それが build した engine が consensus に plug して safe である理由。
+最も難しい部分は matching ロジックを書くこと自体ではなかった — L4 の submit_limit は構造が理解できれば 60 行で済む。**最も難しいのは determinism property** — 可能な submit の任意の順序付けに対して engine が同じ答えを produce することを保証すること。L8 の proptest が、テストしようと思わなかったバグを catch してくれる。そして、それこそが build した engine を consensus に plug しても safe である理由になる。
 
-Correct だが non-deterministic な matching engine は consensus を壊す。Deterministic なものこそ、devnet から mainnet への移行を生き残れるコード。
+Correct だが non-deterministic な matching engine は consensus を壊す。Deterministic なものこそが、devnet から mainnet への移行を生き残るコードになる。
 
 これを使って何か作りに行こう。`,
                 },

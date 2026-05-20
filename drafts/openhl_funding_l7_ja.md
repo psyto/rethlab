@@ -21,47 +21,47 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンを終えると：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…が 15 テストを通る（L4-L6 から 10 + 新規 5）。`compute.rs` が最後の pure 関数を得る：
+上記の実行結果が 15 テストを通る（L4-L6 で書いた 10 + 新規 5）。`compute.rs` には最後の pure 関数が加わる：
 
-- **`apply_funding(positions, mark, rate) -> Vec<Settlement>`** — rate を全 non-flat position に適用、マッチごとに settlement を生む。~25 行。
-- **4 手書きトレース unit test**：
+- **`apply_funding(positions, mark, rate) -> Vec<Settlement>`** — rate をすべての non-flat な position に適用し、マッチごとに settlement を生む。~25 行。
+- **手書きトレース unit test 4 つ**：
   - `apply_funding_skips_flat_positions`
   - `apply_funding_longs_pay_shorts_when_rate_positive`
   - `apply_funding_shorts_pay_longs_when_rate_negative`
   - `apply_funding_returns_empty_on_zero_rate`
-- **1 proptest** — `balanced_book_settlements_sum_to_zero` — 任意の equal-and-opposite position pair で settlement の合計はゼロ。**Funding の根本保存則：再配分する、生成も破壊もしない。**
+- **proptest 1 つ** — `balanced_book_settlements_sum_to_zero` — 等しく逆向きの position ペアであれば、settlement の合計は常にゼロになる、というもの。**Funding の根本的な保存則だ：再配分するだけで、生成も破壊もしない。**
 
-このレッスンで **Module 2 が閉じる**。3 つの pure 関数（`compute_premium`、`compute_rate`、`apply_funding`）すべて配置済み。Module 3（clock state machine）が L8 で開始。
+このレッスンで **Module 2 が閉じる**。3 つの pure 関数（`compute_premium`、`compute_rate`、`apply_funding`）がすべて揃う。Module 3（clock state machine）は L8 で始まる。
 
-教育の焦点は**符号規約**（longs-pay-shorts）、特にコードが*どう*表現するか：`delta_unscaled` の前の `-` 1 つ。1 文字が符号契約全体を担う。
+教育上の焦点は**符号規約**（longs-pay-shorts）、特にコードが*どう*それを表現するかにある：`delta_unscaled` の前に置く `-` 1 文字。たった 1 文字が符号契約全体を担う。
 
 ## おさらい
 
-L6 後：
+L6 後の状態：
 - `compute_premium` → `Premium`
 - `compute_rate` → `FundingRate`
-- 10 テスト pass、proptest 1 pass
-- `saturate_i128_to_i64` のユーザは 1 つ（`compute_premium`）
+- 10 テスト pass、proptest 1 つも pass。
+- `saturate_i128_to_i64` のユーザは 1 つだけ（`compute_premium`）。
 
-L7 で pipeline の最終段を配線 — rate を per-account settlement にする — saturate helper の 2 つ目のユーザを追加。
+L7 では pipeline の最終段を配線する — rate をアカウントごとの settlement に落とし込む段だ。同時に、saturate helper の 2 番目のユーザも追加することになる。
 
 ## プラン
 
-3 つの編集：
+編集は 3 つ：
 
-1. **`compute.rs` に `apply_funding` を append** — `compute_rate` の後、`saturate_i128_to_i64` の前。
-2. **既存の `mod tests` ブロックに 4 unit test + 1 proptest を append**。
-3. **`lib.rs` を更新** — `apply_funding` を re-export に追加。
+1. **`compute.rs` に `apply_funding` を追加**する — `compute_rate` の後、`saturate_i128_to_i64` の前に置く。
+2. **既存の `mod tests` ブロックに、unit test 4 つと proptest 1 つを追加**する。
+3. **`lib.rs` を更新**する — `apply_funding` を re-export に加える。
 
-> 🛑 **考えてみよう。** スクロール前に — `size: PositionSize(i64)`（正 = long、負 = short）と `rate: FundingRate(i64)`（正 = longs pay shorts）がある。素朴な積 `size × rate` は long が正 rate ワールドにいると正。**だが long の settlement delta は*負*であるべき（longs pays）。** 符号 flip を encode する最もクリーンな方法は？
+> 🛑 **考えてみよう。** スクロール前に — `size: PositionSize(i64)`（正 = long、負 = short）と `rate: FundingRate(i64)`（正 = longs が shorts に支払う）がある。素朴に `size × rate` を計算すると、long が正の rate の世界にいるときに値は正になる。**だが long の settlement delta は*負*であるべきだ（longs が支払う側だからだ）。** 符号反転を一番きれいに encode する方法は何か。
 
-（答え：**積の前に `-` 1 つ。** `delta = -(size × mark × rate / RATE_SCALE)`。積 `size × rate` は「magnitude × payment-flow の方向」を自然に encode するが、`Notional` の符号規約は「アカウント中心」（正 = 受取、負 = 支払）。`-` が market 中心から account 中心へ flip する。**単項マイナス 1 つが規約全体を担う。** コードを読む誰もが `-` を見て規約がその時点で意図的に逆転されたと知る。）
+（答え：**積の前に `-` を 1 つ付ければよい。** `delta = -(size × mark × rate / RATE_SCALE)`。積 `size × rate` は「magnitude × payment-flow の方向」を自然に encode するが、`Notional` の符号規約は「アカウント中心」（正 = 受取、負 = 支払い）だ。`-` がそれを市場中心からアカウント中心へとフリップしてくれる。**単項マイナス 1 つが規約全体を担う。** コードを読む人は、その `-` を見て「ここで規約が意図的に反転されている」と分かる。）
 
 ## 手順
 
@@ -109,31 +109,31 @@ pub fn apply_funding(
 }
 ```
 
-~25 行。6 つの動く部分：
+~25 行、動く部分は 6 つ：
 
-1. **`if rate.0 == 0 { return Vec::new(); }`** — zero-rate ファストパス。Allocation なし、作業なし。契約を反映：rate ゼロは「適用する funding なし」を意味する。Boot 中や oracle 故障で典型。
+1. **`if rate.0 == 0 { return Vec::new(); }`** — zero-rate のファストパス。allocation も作業もなし。契約をそのまま反映する：rate がゼロ = 適用すべき funding なし、ということだ。boot 中や oracle 故障時に典型的な状況だ。
 
-2. **`Vec::with_capacity(positions.len())`** — output capacity を事前 allocate。Flat position をフィルタしうるが、input length が良い上限。**Push しながら re-allocate を回避。** 小さな最適化、hot path で重要。
+2. **`Vec::with_capacity(positions.len())`** — 出力の capacity を事前確保する。Flat position は後でフィルタされうるが、input の長さは良い上限になる。**push しながら再アロケートが走るのを防ぐ。** 小さな最適化だが、hot path では効いてくる。
 
-3. **`if pos.size.0 == 0 { continue; }`** — Flat position をスキップ。経済的エクスポージャなし、settle するとゼロ delta が出力を汚染。**Flat position があるとき output 長と input 長が異なる、と契約。**
+3. **`if pos.size.0 == 0 { continue; }`** — Flat な position をスキップする。経済的エクスポージャがないので、settle してもゼロ delta が出力を汚すだけだ。**Flat position があると、output の長さと input の長さは一致しない、というのが契約だ。**
 
-4. **`i128::from(pos.size.0).saturating_mul(i128::from(mark.0))`** — notional の積。`size * mark` は大きな position と大きな mark で `i64::MAX` を超えうる（例：position `1e18` × mark `1e10` = `1e28`、i64 を遥かに超える）。**i128 + saturating_mul：`compute_premium` と同じ defensive レシピ。**
+4. **`i128::from(pos.size.0).saturating_mul(i128::from(mark.0))`** — notional の積。`size * mark` は、position が大きく mark も大きい場合に `i64::MAX` を超えうる（例：position `1e18` × mark `1e10` = `1e28` で、i64 をはるかに超える）。**i128 + saturating_mul：`compute_premium` と同じ defensive なレシピだ。**
 
-5. **`notional.saturating_mul(i128::from(rate.0))`** — 次の積。今 `size × mark × rate` を全部 i128 で持つ。この段階でも i128 が pathological 入力で saturate しうる。
+5. **`notional.saturating_mul(i128::from(rate.0))`** — 次の積。これで `size × mark × rate` をすべて i128 で持てる。この段階でも pathological な入力に対しては i128 が saturate しうる。
 
-6. **`-delta_unscaled / i128::from(RATE_SCALE)`** — 最終 scaling + 符号 flip。`RATE_SCALE` での除算が rate の per-billion scaling を undo。**先頭の `-` が符号規約。**
+6. **`-delta_unscaled / i128::from(RATE_SCALE)`** — 最終的なスケーリングと符号反転。`RATE_SCALE` での除算が rate に施した per-billion スケーリングを打ち消す。**先頭の `-` が符号規約を担う。**
 
-その後 `saturate_i128_to_i64(delta_scaled)` で i64（Notional の内部型）に clip、`Settlement` を push。
+その後 `saturate_i128_to_i64(delta_scaled)` で i64（Notional の内部型）に clip し、`Settlement` を push する。
 
-> 🛑 **考えてみよう。** なぜ関数は `positions: Vec<Position>`（owned vec）でなく `positions: &[Position]`（スライス）を取る？
+> 🛑 **考えてみよう。** この関数が `positions: Vec<Position>`（owned vec）ではなく `positions: &[Position]`（スライス）を受け取る理由は何か。
 
-（答え：**呼び出し側が position リストを所有して tick 間で再利用する。** 所有権を取ると呼び出し側が毎呼び出し前に clone する必要がある。Slice 借用はゼロコスト、呼び出し側が所有権を保持。**関数が使える最小制限の型を受ける** — iteration だけ要るなら Vec でなく slice。）
+（答え：**呼び出し側が position リストを所有していて、tick をまたいで再利用するからだ。** 所有権を奪う形にすると、呼び出し側は毎回呼び出す前に clone する必要が出てくる。Slice の借用はコストゼロで、呼び出し側は所有権を保持できる。**関数が使える型のうち、最も制約の弱いものを受け取る** — iteration だけで足りるなら、Vec ではなく slice にする。）
 
-> 🛑 **やりがちな勘違い。** 「ループでなく `positions.iter().filter(...).map(...).collect()` を使えば？」 **動く、より idiomatic Rust。** Stage 8b が imperative ループを使うのは中間計算が別々の `let` binding のとき追いやすいから。関数チェーン `positions.iter().filter(|p| p.size.0 != 0).map(|pos| { let notional = ...; Settlement { ... } }).collect()` も同様に動く。**Idiom より可読性 — チームがデバッグしやすい形を選ぶ。**
+> 🛑 **やりがちな勘違い。** 「ループでなく `positions.iter().filter(...).map(...).collect()` を使えばよくないか？」 **動くし、Rust としてはより idiomatic だ。** Stage 8b で imperative なループを採っているのは、中間計算を別々の `let` binding として置く方が追いやすいからだ。関数チェーン `positions.iter().filter(|p| p.size.0 != 0).map(|pos| { let notional = ...; Settlement { ... } }).collect()` も同じく動く。**idiom より可読性を優先する** — チームがデバッグしやすい形を選ぶ、ということだ。
 
 ### Step 2: 符号規約を歩く
 
-符号 flip が関数中最も微妙な部分。両方向に追っていく。
+符号反転は関数中もっとも微妙な部分だ。両方向に追っていく。
 
 **正 rate、long position：**
 - `size.0 = +100`、`mark.0 = 100`、`rate.0 = 1_000_000`（0.1%）
@@ -156,9 +156,9 @@ pub fn apply_funding(
 - `delta_scaled = -(-10_000_000_000) / 1_000_000_000 = 10`
 - `Notional(+10)` → 「long が 10 受け取る」 ✓
 
-**`delta_unscaled` の前の `-` 1 つが 4 ケースすべての符号規約を一貫に担う。** これなしだと longs が支払うべきところで受け取り、逆も同様。**1 文字、1 設計決定。**
+**`delta_unscaled` の前の `-` 1 つが、4 ケースすべてで符号規約を一貫して担う。** これがないと、longs が支払うべき場面で受け取ってしまい、逆も然りだ。**1 文字に 1 つの設計判断を込めている。**
 
-> 🛑 **やりがちな勘違い。** 「`-` なしで delta を計算して「市場 delta」と呼び、ストレージ層で flip すれば？」 **符号 flip ポイント 2 つはバグの可能性を 2 倍にする。** 数学層で「アカウント中心」を 1 度 encode すれば、下流のすべて（bridge、balance、telemetry）が一貫した規約で `Notional` を読む。**単一変換ポイントはテストする surface area の半分。**
+> 🛑 **やりがちな勘違い。** 「`-` を付けずに「市場 delta」として計算しておき、ストレージ層で反転すればよくない？」 **符号反転ポイントを 2 つ持つと、バグの可能性が 2 倍になる。** 数学レイヤーで一度だけ「アカウント中心」を encode しておけば、下流（bridge、balance、telemetry）はすべて統一された規約で `Notional` を読める。**変換ポイントを 1 つに絞れば、テストすべき surface area が半分になる。**
 
 ### Step 3: 4 unit test を追加
 
@@ -201,17 +201,17 @@ pub fn apply_funding(
     }
 ```
 
-4 テスト、各々挙動を pin：
+テストは 4 つ、それぞれ挙動を pin する：
 
-1. **`apply_funding_skips_flat_positions`** — 入力 3 position、2 つ flat。出力 1。フィルタセマンティクス確認。**生存 settlement のアカウントが non-flat 入力 position と一致することも確認。**
+1. **`apply_funding_skips_flat_positions`** — 入力 position 3 つ、うち 2 つが flat。出力は 1 つ。フィルタの semantics を確認する。**生き残った settlement のアカウントが、non-flat な入力 position と一致することも確認している。**
 
-2. **`apply_funding_longs_pay_shorts_when_rate_positive`** — 標準シナリオ。Mark 100 で long position 100、rate 0.1% → delta -10（long が支払う）。Short position -50 → delta +5（short が受け取る、サイズ半分なので magnitude 半分）。**非対称 magnitude が delta が `|size|` でスケールすることを証明、ただ符号でなく。**
+2. **`apply_funding_longs_pay_shorts_when_rate_positive`** — 標準的なシナリオ。Mark 100 で long position 100、rate 0.1% → delta -10（long が支払う）。Short position -50 → delta +5（short が受け取る、サイズが半分なので magnitude も半分）。**非対称な magnitude を使うことで、delta が `|size|` でスケールすること（符号だけでなく）も証明している。**
 
-3. **`apply_funding_shorts_pay_longs_when_rate_negative`** — 同じ position、逆 rate。Long が今度は +10 受け取る、short が -5 支払う。**符号規約が symmetric であることを確認。**
+3. **`apply_funding_shorts_pay_longs_when_rate_negative`** — 同じ position に対して rate を反転させたケース。今度は long が +10 受け取り、short が -5 支払う。**符号規約が対称であることを確認している。**
 
-4. **`apply_funding_returns_empty_on_zero_rate`** — fast-path。非空 position、ゼロ rate → 空出力。**早期 return が per-position 作業の前に走ることを確認。**
+4. **`apply_funding_returns_empty_on_zero_rate`** — fast-path のケース。position は空ではないがゼロ rate → 空の出力。**早期 return が position ごとの処理より前に走ることを確認している。**
 
-`pos(account, size)` helper は L5 のテストモジュール setup で追加済み。ここで自由に使う。
+`pos(account, size)` helper は L5 のテストモジュール setup で追加済みなので、ここで自由に使える。
 
 ### Step 4: Balanced-book zero-sum proptest を追加
 
@@ -245,19 +245,19 @@ pub fn apply_funding(
         }
 ```
 
-**Zero-sum property が funding の根本保存則。** Balanced book — equal size の short ごとに long 1 つ — はちょうど再配分すべき。Shorts が集合的に receive する量と longs が集合的に pay する量が等しい、quote currency は生成も破壊もされない。
+**Zero-sum property は funding の根本的な保存則だ。** Balanced book — 同じサイズの short 1 つにつき long 1 つ — では、ちょうど再配分が起きるはずだ。Shorts が集合として受け取る量と longs が集合として支払う量が等しく、quote currency は生成も破壊もされない。
 
-Proptest がこれを exercise：
-- ランダムに `size`（1 から 1M）、`mark`（1 から 1M）、`rate`（-10M から +10M ppb、つまり -1% から +1%）**生成**。
-- Balanced book を**構築**：account 1 が long `size`、account 2 が short `size`。
-- **Funding を適用**。Rate がゼロなら出力空（settlement なし）。それ以外なら 2 settlement。
-- Delta の合計が 0 であることを **assert**。
+proptest はこれを exercise する：
+- `size`（1 から 1M）、`mark`（1 から 1M）、`rate`（-10M から +10M ppb、つまり -1% から +1%）をランダムに**生成**する。
+- Balanced book を**構築**する：account 1 が long `size`、account 2 が short `size`。
+- **Funding を適用**する。Rate がゼロなら出力は空（settlement なし）、そうでなければ settlement が 2 つ生まれる。
+- delta の合計が 0 であることを **assert** する。
 
-> 🛑 **考えてみよう。** なぜ `size` を full i64 範囲でなく `1i64..1_000_000` に bound？
+> 🛑 **考えてみよう。** `size` を full i64 範囲ではなく `1i64..1_000_000` に絞っているのはなぜか。
 
-（答え：**非常に大きな `size` や `mark` で i128 中間値が saturate しうる。** `i128::saturating_mul` が clip すると、ラウンドトリップ計算 `(size * mark * rate / RATE_SCALE)` が情報を失う — long の saturated 値が short の saturated 値の正確な負にならず、zero-sum property が破れる。**1M bound が saturation の起こらない regime に入力を保つ。** 現実 production proptest はもっと wide にできるが saturation 用 tolerance を加える必要、我々は単純な「no saturation regime」アプローチを選んだ。）
+（答え：**`size` や `mark` が極端に大きいと、i128 中間値が saturate しうるからだ。** `i128::saturating_mul` が clip すると、ラウンドトリップの計算 `(size * mark * rate / RATE_SCALE)` が情報を失う — long 側の saturate 後の値が short 側の saturate 後の値のちょうど負にならず、zero-sum property が壊れる。**1M の上限を置けば、入力を saturation の起きない領域に留められる。** 現実の production proptest はもっと広い範囲を取れるが、その場合は saturation のための tolerance を加える必要がある。今回はもっと単純な「saturation の起きない領域だけ」のアプローチを選んだ。）
 
-> 🛑 **やりがちな勘違い。** 「整数除算 rounding 用に `== 0` でなく `sum.abs() < 1` をテストすればよくない？」 **選んだ入力範囲内で property は厳密に成り立つ。** `size_long == -size_short` だから、i128 積が除算前に互いの厳密な負、`RATE_SCALE` で割っても変わらない（整数除算はゼロに向けて丸める、`-x / d == -(x / d)` が任意の符号付き `x` と正 `d` に成り立つ）。**範囲内で厳密 zero-sum、tolerance 不要。**
+> 🛑 **やりがちな勘違い。** 「整数除算の rounding に備えて `== 0` ではなく `sum.abs() < 1` をテストすればよくないか？」 **選んだ入力範囲のもとでは、property は厳密に成り立つ。** `size_long == -size_short` なので、除算前の i128 の積は互いに厳密な負、`RATE_SCALE` で割っても関係は維持される（整数除算はゼロに向かって丸めるので、任意の符号付き `x` と正の `d` に対して `-x / d == -(x / d)` が成り立つからだ）。**範囲内では厳密に zero-sum であり、tolerance は不要だ。**
 
 ### Step 5: `lib.rs` を更新
 
@@ -273,7 +273,7 @@ pub use compute::{compute_premium, compute_rate};
 pub use compute::{apply_funding, compute_premium, compute_rate};
 ```
 
-アルファベット順。**Module 2 の 3 つの pure 関数すべてがクレートルートで re-export 済み。** 呼び出し側は `compute::` 経由なしで使える。
+アルファベット順だ。**これで Module 2 の 3 つの pure 関数がすべてクレートルートで re-export されたことになる。** 呼び出し側は `compute::` を経由せずに使える。
 
 ### Step 6: テストを実行
 
@@ -300,26 +300,26 @@ test compute::tests::premium_is_antisymmetric_in_mark_index ... ok
 test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-**15 テスト全 green。** Rustdoc warning は 1 つだけ（`FundingClock` — L8 で解決）。**Module 2 が閉じる。**
+**15 テストすべてが green。** rustdoc warning は 1 つだけだ（`FundingClock` — L8 で解決する）。**これで Module 2 が閉じる。**
 
 よくあるエラー：
 
-- **どこでも `delta == 0`** — `delta_unscaled` の前の `-` を忘れた。符号 flip なしだと longs と shorts が同じ符号 delta を得る（`pos.size` が既に符号を運ぶから）、longs と shorts が両方支払う/両方受け取る、互いに対立しない。Unit test がすぐ捕まえる。
-- **Long が支払う、short が支払う**（両方負 delta） — `pos.size` が signed であることを見逃した。素朴な `size * mark * rate`（upcast なし）は動くかもしれないが符号追跡が脆弱。`i128::from(pos.size.0)` で符号を乗算を通して保つ。
-- **`size = 100_000, mark = 100_000` で proptest 失敗** — `size * mark = 1e10`、その後 `× rate = 1e16` — i128 範囲内。Property は成立するはず。失敗するなら符号 flip を確認：long と short が反対符号 + 等規模 delta を生む必要。
-- **`assertion failed: s[0].delta == Notional(-10)` が `Notional(10)`** — `delta_unscaled` を正しく設定したが先頭の `-` を忘れた。「longs pay = 負 delta」規約が flip を要求。
+- **どこでも `delta == 0` になる** — `delta_unscaled` の前の `-` を忘れた場合。符号反転がないと、longs と shorts が同じ符号の delta を得てしまう（`pos.size` 自体が既に符号を担っているからだ）。longs と shorts が両方とも支払い、あるいは両方とも受け取る形になってしまい、相殺しなくなる。Unit test がすぐ捕まえてくれる。
+- **long も short も支払う**（両方が負の delta） — `pos.size` が signed であることを見落とした場合。素朴な `size * mark * rate`（upcast なし）でも動くことはあるが、符号追跡が脆い。`i128::from(pos.size.0)` を経由して、乗算の中で符号を保ち続ける必要がある。
+- **`size = 100_000, mark = 100_000` で proptest が失敗** — `size * mark = 1e10`、その後 `× rate = 1e16` — i128 の範囲内だ。Property は成立するはずなので、失敗するなら符号反転を確認すること：long と short が反対符号 + 等しい規模の delta を生む必要がある。
+- **`assertion failed: s[0].delta == Notional(-10)` だが `Notional(10)` が出る** — `delta_unscaled` の式は正しいが、先頭の `-` を忘れた場合。「longs pay = 負の delta」という規約が、その反転を要求する。
 
 ## 設計の振り返り
 
-このレッスンに焼き込まれた決定 4 つ：
+このレッスンに焼き込んだ決定は 4 つ：
 
-1. **単一の単項マイナスが符号規約全体を担う。** `-delta_unscaled` で「longs pay」を encode することで、規約が市場中心と account 中心セマンティクスの境界で 1 箇所に保たれる。**符号 flip ポイント 2 つはバグの surface area を 2 倍にする。**
+1. **単項マイナス 1 つが符号規約全体を担う。** `-delta_unscaled` で「longs pay」を encode することで、規約は市場中心とアカウント中心の semantics 境界の 1 箇所だけに集約される。**符号反転ポイントを 2 つに増やすと、バグの surface area が 2 倍になる。**
 
-2. **Filter する、error にしない。** Flat position は silent にフィルタされる。`Result<Vec<Settlement>, FlatPositionError>` を返さない — flat position は*想定されたもの*（この tick 前に閉じたアカウント）。**「flat position なし」property は呼び出し側が気にすれば verify できる前提条件、我々は単に drop する。**
+2. **エラーにせず、フィルタする。** Flat position は silent にフィルタする。`Result<Vec<Settlement>, FlatPositionError>` のような形は返さない — flat position は*想定された状態*（この tick より前に閉じられたアカウント）だからだ。**「flat position が混じっていない」という property は、気になる呼び出し側が事前に検証すれば済む。こちら側は単に drop する。**
 
-3. **Slice 入力、owned 出力。** `&[Position]` で呼び出し側が所有権を保持、`Vec<Settlement>` で呼び出し側が以前持っていなかった owned data を返す。**関数は参照を消費し値を生む、pure transformation。**
+3. **入力は slice、出力は owned。** `&[Position]` を取ることで呼び出し側に所有権を残し、`Vec<Settlement>` を返すことで呼び出し側がそれまで持っていなかった owned data を渡せる。**関数が参照を消費して値を生む、pure な変換だ。**
 
-4. **Proptest range が saturation regime を避ける。** `size in 1..1M` で i128 積を `saturating_mul` の clamp threshold 下に保つ。この範囲で property は*厳密に*成立、broaden すると property を弱める必要。**Property を厳密に真にする proptest range を選ぶ、近似でなく。**
+4. **proptest の範囲を saturation regime から避ける。** `size in 1..1M` のように絞ることで、i128 の積を `saturating_mul` の clamp 閾値より下に保つ。この範囲では property が*厳密に*成り立つ。範囲を広げると property を弱める必要が出てくる。**proptest の範囲は、property を近似でなく厳密に真にできるように選ぶ。**
 
 ## 答え合わせ
 
@@ -330,11 +330,11 @@ diff -u ~/code/my-openhl/crates/funding/src/compute.rs ./crates/funding/src/comp
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 ```
 
-L7 後：
-- **compute.rs** が Stage 8b と**完全**一致。3 pure 関数すべて、helper すべて、テストすべて、proptest すべて。
-- **lib.rs** が `apply_funding`、`compute_premium`、`compute_rate` を re-export。残るギャップは `pub mod clock;` とその re-export — L8。
+L7 後の状態：
+- **compute.rs** が Stage 8b と**完全に**一致する。3 つの pure 関数すべて、helper すべて、テストすべて、proptest すべてが揃う。
+- **lib.rs** が `apply_funding`、`compute_premium`、`compute_rate` を re-export している。残るギャップは `pub mod clock;` とその re-export — L8 で埋める。
 
-**Module 2 完了。** Module 3 が L8 で開始。
+**Module 2 完了。** Module 3 は L8 で始まる。
 
 戻す：
 
@@ -344,32 +344,32 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ output がアカウント順ソートでなく入力順を保つ？**
-Determinism。ソートは順序選択を強要、入力順保持は関数の挙動を入力から trivially predictable にする。**ソート出力が必要な呼び出し側は結果をソートできる、必要ない呼び出し側はコストを払わない。** デフォルトで最安挙動が勝つ。
+**Q: 出力をアカウント順にソートせず、入力順を保つのはなぜか？**
+Determinism のためだ。ソートはソート順の選択を強要するが、入力順を保つほうが、関数の挙動が入力から自明に予測可能になる。**ソートされた出力が必要な呼び出し側は自分でソートすればよく、不要な呼び出し側はコストを払わずに済む。** デフォルトとして最も安価な挙動を採る、ということだ。
 
-**Q: 現実的入力で `notional × rate` の桁は？**
-`size = 1M`、`mark = 1M`、`rate = 1e7`（RATE_SCALE の 1% = interval ごとに 1%）で：`notional = 1e12`、`delta_unscaled = 1e19`。これは `i64::MAX`（~9.2e18）の直近で、「合理的」入力で既に saturation regime にいる。**現実 deployment に i128 中間値は optional ではない。**
+**Q: 現実的な入力では `notional × rate` の桁数はどれくらいになるか？**
+`size = 1M`、`mark = 1M`、`rate = 1e7`（RATE_SCALE の 1% = interval あたり 1%）で計算すると `notional = 1e12`、`delta_unscaled = 1e19` になる。これは `i64::MAX`（~9.2e18）のすぐ近くで、「合理的」と言える入力ですでに saturation regime に届きうる。**現実のデプロイで i128 中間値は optional ではない。**
 
-**Q: `apply_funding` の saturation 挙動のテストがないのは？**
-Saturation ケースは*helper 経由で*テスト済み（`saturate_i128_to_i64` の境界挙動は L5 で探求）。同じ境界を関数呼び出しで再テストするのは冗長。**Helper を 1 度テスト、それ以外はそれを信頼する。** 完全性のため composition test（`size = u64::MAX, mark = u64::MAX, rate = i64::MAX`）を追加する価値があるかもしれないが、Stage 8b は選ばなかった — saturation 保証は helper から来る、helper はテスト済み。
+**Q: `apply_funding` の saturation 挙動のテストがないのはなぜか？**
+Saturation ケースは*helper を通じて*すでにテスト済みだからだ（`saturate_i128_to_i64` の境界挙動は L5 で探っている）。同じ境界を関数呼び出し越しに再テストするのは冗長になる。**Helper を 1 度テストしたら、あとはそれを信用する。** 念のため composition test（`size = u64::MAX, mark = u64::MAX, rate = i64::MAX` のような）を足す価値はあるかもしれないが、Stage 8b では採用していない — saturation の保証は helper から来ており、その helper はテスト済みだ。
 
-**Q: `apply_funding` を巨大 position リストで `parallel_iter` にできる？**
-`rayon` でできる。V0 では position リストは多くて数千アカウント（HL の現実のユーザ数、単一マーケットあたり）。並列化オーバーヘッドが作業を超える。**Tick ごとに 10K+ position で rayon が payoff する。** Production トラフィックが要求するまで先送り。
+**Q: 巨大な position リストに対して `apply_funding` を `parallel_iter` 化できるか？**
+できる、`rayon` を使えばよい。ただし V0 では position リストはせいぜい数千アカウント（HL の現実のユーザ数、1 マーケットあたり）規模で、並列化のオーバーヘッドが処理量を上回る。**tick あたり 10K+ position まで増えれば rayon が payoff してくる。** Production のトラフィックが要求するまで、これは先送りでよい。
 
-## Module 2 マイルストーン — 築いたもの
+## Module 2 マイルストーン — 築き上げたもの
 
-L7 後：
-- **3 pure 関数**：`compute_premium`、`compute_rate`、`apply_funding`。
-- **1 private helper**：`saturate_i128_to_i64`。
-- **15 テスト**：9 手書きトレース + 2 proptest（antisymmetry、zero-sum）。
-- **`compute.rs` ~150 行**（テスト除く）。
-- Module 2 が clock 以外のすべてで **Stage 8b と byte-identical**。
+L7 後の状態：
+- **pure 関数 3 つ**：`compute_premium`、`compute_rate`、`apply_funding`。
+- **private helper 1 つ**：`saturate_i128_to_i64`。
+- **テスト 15 個**：手書きトレース 13 個 + proptest 2 個（antisymmetry、zero-sum）。
+- **`compute.rs` は ~150 行**（テストを除く）。
+- Module 2 で書いた部分は、clock 以外のすべてが **Stage 8b と byte-identical** だ。
 
-Crate は今 `(positions, mark, index, params)` タプルから fully-determined `Vec<Settlement>` を生む。**数学は完了。** Module 3 がこれを tick-gating state でラップする — いつ計算するか、いつスキップするか、いつ settle するか。
+Crate は今や `(positions, mark, index, params)` のタプルから、完全に決定論的に `Vec<Settlement>` を生む。**数学は完成した。** Module 3 では、これを tick-gating の state でラップする — いつ計算し、いつスキップし、いつ settle するか、を担う部分だ。
 
 ## 次のレッスン（L8）
 
-L8 で `crates/funding/src/clock.rs` を作成 — 新モジュール — `FundingClock` 構造体 + `FundingTick` 出力型付き。`tick()` の最初のバージョン追加：「十分時間が経過したか？」guard の後ろで `compute_premium` + `compute_rate` + `apply_funding` を組み合わせる関数。**Clock は pure 数学を正しい cadence で呼ぶ discrete event loop。** L8 のテストは単純な sanity テスト、*不変条件*（at-most-one-per-interval、no-catch-up）は L9 と L10 で独自のレッスンを得る。
+L8 では `crates/funding/src/clock.rs` を作成する — 新モジュールで、`FundingClock` 構造体と `FundingTick` 出力型を持つ。最初のバージョンの `tick()` も追加する：「十分な時間が経過したか？」の guard の背後で、`compute_premium`、`compute_rate`、`apply_funding` を組み合わせる関数だ。**Clock は pure な数学を正しい cadence で呼び出す discrete event loop だ。** L8 のテストは単純な sanity テストだけで、*不変条件*（interval ごとに最多 1 回、no-catch-up）は L9 と L10 でそれぞれ独立したレッスンを受け持つ。
 ````
 
 ---

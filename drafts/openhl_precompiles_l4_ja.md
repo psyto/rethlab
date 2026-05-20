@@ -26,14 +26,14 @@
 cargo test -p openhl-evm --release
 ```
 
-…が引き続き通る（L3 で追加した 4 つを含む 42 tests）。**`read_best_bid` が返す値はまだ変えずに**、live CLOB state を流すための**配管だけ**を仕込みます：
+上記の実行結果が引き続き通る（L3 で追加した 4 つを含む 42 tests）。**`read_best_bid` が返す値はまだ変えずに**、live CLOB state を流すための**配管だけ**を仕込みます：
 
-- **`Book` に 2 つの新メソッド**（`crates/clob/src/book.rs`）：`best_bid_with_qty()` / `best_ask_with_qty()`。それぞれ `Option<(Price, Qty)>` を返す。
-- **`precompiles/mod.rs` にモジュールレベルの `static CLOB_STATE`**：`Option<Arc<Mutex<Book>>>` を保持。
-- **`precompiles/mod.rs` に 3 つの新モジュール関数**：`install_clob` / `uninstall_clob` / `current_best_bid`。
-- **`LiveRethEvmBridge` のフィールド型変更**：`clob: Mutex<Book>` を `clob: Arc<Mutex<Book>>` に。`new()` の中で `install_clob(clob.clone())` を呼ぶ。
+- **`Book` に新メソッドを 2 つ**（`crates/clob/src/book.rs`）：`best_bid_with_qty()` / `best_ask_with_qty()`。それぞれ `Option<(Price, Qty)>` を返す。
+- **`precompiles/mod.rs` にモジュールレベルの `static CLOB_STATE`**：`Option<Arc<Mutex<Book>>>` を保持する。
+- **`precompiles/mod.rs` に新しいモジュール関数を 3 つ**：`install_clob` / `uninstall_clob` / `current_best_bid`。
+- **`LiveRethEvmBridge` のフィールド型を変更**：`clob: Mutex<Book>` を `clob: Arc<Mutex<Book>>` へ。`new()` の中で `install_clob(clob.clone())` を呼ぶ。
 
-**`read_best_bid` 本体は変更しません** — 引き続きハードコードの `(100, 10)` を返します。L5 で live state に差し替えます。L4 の仕事は配管を**通せる状態にする**こと（まだ通しません）。
+**`read_best_bid` の本体には手を加えない** — 引き続きハードコードの `(100, 10)` を返す。live state への差し替えは L5。L4 の仕事は、配管を**通せる状態にする**こと（実際に通すのはまだ先）。
 
 ## おさらい
 
@@ -44,24 +44,24 @@ L3 終了時点（Module 1 完了時点）：
 - `LiveRethEvmBridge::new()` は `clob: Mutex::new(Book::new())` を作る — 誰とも共有していない所有。
 - `read_best_bid` はハードコード。
 
-**ブリッジと precompile は互いの存在を知りません。** precompile はハードコード値を返し、ブリッジの CLOB は EVM 実行から見えません。L4 ではこの 2 つをプロセスグローバルなハンドルで繋ぎます。
+**ブリッジと precompile はお互いの存在を知らない。** precompile はハードコード値を返し、ブリッジの CLOB は EVM 実行からは見えない。L4 ではこの 2 つを、プロセスグローバルなハンドルで繋ぐ。
 
 ## プラン
 
 6 ステップ：
 
-1. **`best_bid_with_qty` + `best_ask_with_qty` を `Book` に追加**。既存の `best_bid()` は価格だけを返す。新メソッドは `(price, summed_qty_at_that_level)` — その価格レベルの FIFO キュー内の数量合計 — を返す。precompile が 2 値レスポンスを返すために必要。
-2. **`precompiles/mod.rs` の imports を更新** — `openhl_clob::Book` と `std::sync::{Arc, Mutex, RwLock}` を追加。
-3. **モジュールレベルの `static CLOB_STATE` を追加** — `RwLock<Option<Arc<Mutex<Book>>>>`。`RwLock`（`Mutex` ではなく）にする理由は、precompile からの read は install からの write より圧倒的に多いから。
-4. **3 つのモジュール関数を追加** — `pub fn install_clob(...)`, `pub fn uninstall_clob()`, `pub fn current_best_bid() -> Option<...>`。ブリッジから呼べるよう public。
-5. **ブリッジの `clob` フィールド型を `Mutex<Book>` → `Arc<Mutex<Book>>`** に変更。`new()` で `install_clob(clob.clone())` を呼んで、precompile がブリッジと同じ `Book` を見るようにする。
-6. **`read_best_bid` は触らない** — まだハードコード値を返す。L5 で `current_best_bid()` に差し替え。
+1. **`Book` に `best_bid_with_qty` と `best_ask_with_qty` を追加**。既存の `best_bid()` は価格だけを返すが、新メソッドは `(price, summed_qty_at_that_level)` — その価格レベルの FIFO キュー内にある数量の合計 — を返す。precompile が 2 値レスポンスを返すために必要だ。
+2. **`precompiles/mod.rs` の import を更新** — `openhl_clob::Book` と `std::sync::{Arc, Mutex, RwLock}` を追加する。
+3. **モジュールレベルの `static CLOB_STATE` を追加** — `RwLock<Option<Arc<Mutex<Book>>>>`。`Mutex` ではなく `RwLock` にするのは、precompile からの read が install からの write より圧倒的に多いから。
+4. **モジュール関数を 3 つ追加** — `pub fn install_clob(...)` / `pub fn uninstall_clob()` / `pub fn current_best_bid() -> Option<...>`。ブリッジから呼べるよう public にする。
+5. **ブリッジの `clob` フィールド型を `Mutex<Book>` から `Arc<Mutex<Book>>` に変更**。`new()` で `install_clob(clob.clone())` を呼び、precompile がブリッジと同じ `Book` を見るようにする。
+6. **`read_best_bid` には触らない** — 引き続きハードコード値を返す。`current_best_bid()` への差し替えは L5。
 
-L4 終了時点では、ブリッジと precompile の間の**配線は存在する**が、**まだ電流は流れていない**。precompile は live CLOB を無視したまま。L5 で初めて読みに行きます。
+L4 を終えた時点で、ブリッジと precompile の間の**配線は存在する**が、**まだ電流は流れていない**。precompile は live な CLOB を無視したままだ。実際に読みに行くのは L5。
 
-> 🛑 **考えてみよう。** スクロール前に考えてください — REVM の `PrecompileFn` は `fn(&[u8], u64, u64) -> PrecompileResult` で、**関数ポインタ**であって `Fn` クロージャではありません。つまり環境をキャプチャできません（`move |...| { ... }` が書けない）。**だとすれば、precompile に instance ごとの state を渡す唯一の方法は？** ヒント：「引数として渡されない関数間で可変な共有 state を扱う」ための Rust の典型パターンを 2 つ思い浮かべてください。
+> 🛑 **考えてみよう。** スクロールする前に考えてみてほしい — REVM の `PrecompileFn` は `fn(&[u8], u64, u64) -> PrecompileResult` で、**関数ポインタ**であって `Fn` クロージャではない。つまり環境をキャプチャできない（`move |...| { ... }` が書けない）。**だとすれば、precompile にインスタンスごとの state を渡す唯一の方法は何か?** ヒント：「引数として渡せない関数間で、可変な共有 state を扱う」ための Rust の定石パターンを 2 つ思い浮かべる。
 
-（答え：プロセスグローバル storage。`Arc<Mutex<Book>>` を precompile 関数に**引数として渡す**ことはできない — 関数ポインタのシグネチャは固定。だから precompile は `static` 変数からその共有 state を読む。ブリッジが `install_clob` で static に書き込み、precompile が `current_best_bid()` で読む。これは関数ポインタのシグネチャがクロージャキャプチャを許さないときの定石パターン。**トレードオフ：プロセスあたり CLOB は 1 つ。** 単一バリデータの openhl では受容可能。REVM の将来バージョンで関数ポインタ制約が緩めば変わるかも。）
+（答え：プロセスグローバルな storage。`Arc<Mutex<Book>>` を precompile 関数に**引数として渡す**ことはできない — 関数ポインタのシグネチャは固定だから。なので precompile は `static` 変数からその共有 state を読む。ブリッジが `install_clob` で static に書き込み、precompile が `current_best_bid()` で読む。これは関数ポインタのシグネチャがクロージャキャプチャを許さないときの定石だ。**トレードオフ：プロセスあたり CLOB は 1 つに固定される。** 単一バリデータの openhl ではこれで十分受け入れられる。将来 REVM 側で関数ポインタの制約が緩めば、別の手も取れるようになるかもしれない。）
 
 ## 手順
 
@@ -91,11 +91,11 @@ L4 終了時点では、ブリッジと precompile の間の**配線は存在す
     }
 ```
 
-既存の `best_bid()` は `Option<Price>` のみ。新メソッドはその価格 **+ そのレベルに resting する数量合計** — その best price の FIFO キュー内の全注文の数量合計 — を返します。
+既存の `best_bid()` は `Option<Price>` だけを返す。新メソッドはその価格に加えて **そのレベルに rest している数量の合計** — best price の FIFO キュー内にある全注文の数量を足し上げたもの — を返す。
 
-これが precompile が必要とする形。Solidity 側の戻り値シグネチャは `(price: u256, qty: u256)`。precompile は 64-byte レスポンスを埋めるために両方の値が必要。
+これが precompile が必要とする形だ。Solidity 側の戻り値シグネチャは `(price: u256, qty: u256)`。precompile は 64-byte レスポンスを埋めるために両方の値を必要とする。
 
-> 🛑 **やりがちな勘違い。** 「precompile が `best_bid()` と `depth_bid()` を別々に呼べばよくない？」 **`depth_bid()` は全 bids にわたる注文の数を返すのであって、best level の qty ではありません。** 別のメトリクスです。`best_bid_with_qty()` こそが precompile の契約形 — 「最良価格はいくらで、その価格にどれだけ流動性があるか」 — に合った形。
+> 🛑 **やりがちな勘違い。** 「`best_bid()` と `depth_bid()` を precompile から別々に呼べば済むのでは?」 — **`depth_bid()` が返すのは全 bid にわたる注文の本数で、best level の qty ではない。** 別のメトリクスだ。`best_bid_with_qty()` こそが precompile の契約 — 「最良価格はいくらで、その価格にどれだけ流動性があるか」 — に合致した形になる。
 
 ### Step 2: `precompiles/mod.rs` の imports を更新
 
@@ -115,11 +115,11 @@ use openhl_clob::Book;
 use std::sync::{Arc, Mutex, RwLock};
 ```
 
-3 つの新しい型が入ってくる：
-- **`Book`** — 共有するマッチングエンジン state。
-- **`Arc`** — atomic な参照カウントハンドル。ブリッジと precompile の両方が 1 つずつ持つ。
+新しく入ってくる型は次のとおり：
+- **`Book`** — 共有するマッチングエンジンの state。
+- **`Arc`** — atomic な参照カウント付きハンドル。ブリッジと precompile が 1 つずつ保持する。
 - **`Mutex`** — `Book` 本体を守る（course 7 のブリッジパターン）。
-- **`RwLock`** — `Option<...>`（共有 `Arc<Mutex<Book>>` のラッパ）を守る。**Read（precompile 呼び出しごと）は write（プロセスあたり 1 回の install）より圧倒的に多い**ので `RwLock` で並行 read を許容。
+- **`RwLock`** — `Option<...>`（共有する `Arc<Mutex<Book>>` のラッパ）を守る。**read（precompile 呼び出しのたび）は write（プロセスあたり 1 回の install）より圧倒的に多い** ので、`RwLock` で並行 read を許容する。
 
 ### Step 3: モジュールレベルの `static CLOB_STATE` を追加
 
@@ -135,17 +135,17 @@ imports の下、関数の前に：
 static CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>> = RwLock::new(None);
 ```
 
-1 行で多くを語っています：
+1 行に多くが詰まっている：
 
-- **`static CLOB_STATE`** — プロセスグローバル。プログラムのライフタイム全体で生きる。
-- **`RwLock<...>`** — 外側のロック。「CLOB がインストールされているか？」と「CLOB の中身は？」を分離。
+- **`static CLOB_STATE`** — プロセスグローバル。プログラムのライフタイム全体にわたって生きる。
+- **`RwLock<...>`** — 外側のロック。「CLOB がインストールされているか?」と「CLOB の中身は?」を分離する。
 - **`Option<...>`** — ブリッジが CLOB を install する前は `None`、install 後は `Some(Arc<Mutex<Book>>)`。
-- **`Arc<Mutex<Book>>`** — 共有ハンドル。ブリッジが 1 Arc、この static が 1 Arc 持つ。ブリッジが `Book` を変更すれば（`clob.lock().submit(...)`）、precompile から同じ変更が見える（`clob.lock().best_bid_with_qty()`）。
-- **`RwLock::new(None)`** — `const fn` なのでコンパイル時に評価される。ランタイム初期化レースがそもそも起こりえない。
+- **`Arc<Mutex<Book>>`** — 共有ハンドル。Arc はブリッジが 1 つ、この static が 1 つ持つ。ブリッジが `Book` を変更すれば（`clob.lock().submit(...)`）、その変更は precompile からも見える（`clob.lock().best_bid_with_qty()`）。
+- **`RwLock::new(None)`** — `const fn` なのでコンパイル時に評価される。実行時の初期化レースはそもそも発生し得ない。
 
-ドキュメントコメントがレッスンの肝 — `None` は「未インストール」状態であり、エラーではなく zero bytes を返すことを明示。メインネットで未初期化の perp market を読む契約はゼロ値を見る — その挙動と一致させる。
+ドキュメントコメントが本レッスンの肝 — `None` は「未インストール」状態を表し、エラーではなく zero bytes を返すことを明示している。メインネットで未初期化の perp market を読む契約はゼロ値を見る — その挙動と揃える。
 
-> 🛑 **やりがちな勘違い。** 「`lazy_static!` や `OnceLock` を使えばいいんじゃ？」 **使えますが、過度に制約されます。** `OnceLock` は 1 回だけ set 可能 — でも `install_clob` はテスト隔離のために再呼び出し可能にしたい。`lazy_static!` は unsafe な初期化トリックが要る — Rust 1.63 以降の `static RwLock<...> = RwLock::new(None)` ならそれが要らない。素の `static RwLock<...>` こそ 2024 年の最もクリーンなイディオム。
+> 🛑 **やりがちな勘違い。** 「`lazy_static!` や `OnceLock` を使えばいいのでは?」 — **使えるが、制約が強すぎる。** `OnceLock` は 1 回しか set できない — だがこちらでは、テスト分離のために `install_clob` を何度も呼び直せるようにしたい。`lazy_static!` は unsafe な初期化トリックが必要 — Rust 1.63 以降の `static RwLock<...> = RwLock::new(None)` ならそれが不要になる。素の `static RwLock<...>` が 2024 年時点で最もクリーンなイディオムだ。
 
 ### Step 4: 3 つのモジュール関数を追加
 
@@ -183,11 +183,11 @@ pub fn current_best_bid() -> Option<(openhl_clob::Price, openhl_clob::Qty)> {
 
 3 つとも `pub` にする理由：
 
-- **`install_clob`** — ブリッジが `new()` で呼ぶ。直前の install を**置き換える** — 同じ Arc を 2 回呼べば idempotent。`*CLOB_STATE.write().expect(...) = Some(clob)` は「write lock 取得 → 値 set → release」の典型イディオム。
-- **`uninstall_clob`** — テスト用が典型。テスト setup で install / 後始末で uninstall。Production では稀。
-- **`current_best_bid`** — EVM 経由でなく直接テストできるよう露出。流れ：write lock → read lock → option deref → mutex lock → `best_bid_with_qty()`。**3 つのロック**を経由して 1 値を読む — 高くつくように見えるが各々マイクロ秒オーダー、しかも reads は `RwLock` 下で並行可能。
+- **`install_clob`** — ブリッジが `new()` から呼ぶ。直前の install を**置き換える** — 同じ Arc で 2 回呼んでも idempotent。`*CLOB_STATE.write().expect(...) = Some(clob)` は「write lock を取る → 値を set → release」の典型イディオム。
+- **`uninstall_clob`** — 主にテスト用。テストの setup で install、teardown で uninstall。production で呼ぶことは稀。
+- **`current_best_bid`** — EVM を経由せず直接テストできるよう露出させる。流れは write lock → read lock → option を deref → mutex を lock → `best_bid_with_qty()`。**ロックを 3 段**通って 1 つの値を読む — コストが高そうに見えるが各々マイクロ秒単位で、しかも read は `RwLock` の下で並行に走れる。
 
-> 🛑 **やりがちな勘違い。** 「1 read に 3 ロックは無駄じゃ？」 **ロックはそれぞれ別の目的を持っています。** `RwLock` は installed-vs-uninstalled を分離（write 衝突は稀）。`Mutex<Book>` はマッチングエンジン state を守る（write 衝突は頻繁だがミリ秒）。1 つのロックに統合したら、全 read + write がそのロックで一様に直列化される — 並行性は遥かに悪化。**多層ロックは多層の関心事を反映している。**
+> 🛑 **やりがちな勘違い。** 「1 回の read に 3 つもロックを取るのは無駄では?」 — **3 つのロックはそれぞれ別の目的を持っている。** `RwLock` は installed か uninstalled かを分離する（write 競合は稀）。`Mutex<Book>` はマッチングエンジンの state を守る（write 競合は頻繁だがミリ秒単位）。1 つのロックに統合してしまうと、全 read と write がそのロックで一様に直列化される — 並行性は遥かに悪化する。**多層のロックは多層の関心事を反映している。**
 
 ### Step 5: `LiveRethEvmBridge::clob` を `Arc<Mutex<Book>>` に変更
 
@@ -264,17 +264,17 @@ impl<P> LiveRethEvmBridge<P> {
     }
 ```
 
-3 つの変更：
+変更は 3 点：
 
-1. **`let clob = Arc::new(...)`** — Arc をローカル束縛。`install_clob` 用と struct 内用で 2 回使うため。
-2. **`crate::precompiles::install_clob(Arc::clone(&clob))`** — precompile モジュールと Arc を共有。**`Arc::clone(&clob)` は refcount をインクリメント** — ブリッジと static の両方が強参照を持つ。
-3. **struct リテラル内の `clob,`** — `clob` のみ（フィールド名とローカル名が同じ）。
+1. **`let clob = Arc::new(...)`** — Arc をローカルに束縛する。`install_clob` 用と struct 内用で 2 回使うため。
+2. **`crate::precompiles::install_clob(Arc::clone(&clob))`** — precompile モジュールと Arc を共有する。**`Arc::clone(&clob)` で refcount がインクリメントされる** — ブリッジと static の両方が強参照を保持する形になる。
+3. **struct リテラル内では `clob,` のみ** — フィールド名とローカル名が同じなので shorthand が効く。
 
-`precompiles` は `crates/evm/` の private モジュールだが `install_clob` は `pub fn` — crate 内なら `crate::precompiles::install_clob` でアクセス可能。
+`precompiles` は `crates/evm/` の private モジュールだが、`install_clob` は `pub fn` なので、crate 内からなら `crate::precompiles::install_clob` で呼べる。
 
-### Step 6: 他の壊れた箇所がないか確認
+### Step 6: 他に壊れた箇所がないか確認
 
-`live_node.rs` の他のコードが `clob: Mutex<Book>` 前提で書かれていないか確認 — `Arc<Mutex<Book>>` 前提のみのはず。`self.clob.lock()` の呼び出しを探す。動きます — `Arc<Mutex<Book>>` は `Mutex<Book>` に deref coercion されるので、`self.clob.lock()` は変更不要。
+`live_node.rs` の他のコードが `clob: Mutex<Book>` を前提に書かれていないかを確認する — どこも `Arc<Mutex<Book>>` 前提で問題ないはず。`self.clob.lock()` の呼び出しを探してみる。問題なく動く — `Arc<Mutex<Book>>` は `Mutex<Book>` への deref coercion が効くので、`self.clob.lock()` のままで構わない。
 
 `clob` が使われている他の箇所：
 - `submit_order(&self, order: Order)` — `self.clob.lock()` を使用。動く（Arc が内側の Mutex に deref）。
@@ -297,9 +297,9 @@ running 42 tests
 test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-L3 のテストは全部 green のまま。注意：**L3 の unit tests は今もハードコード値**（`U256::from(100u64)`, `U256::from(10u64)`）**を期待**しています — 我々はまだ `read_best_bid` を変えていないから。配管は通したが、`read_best_bid` を流れる値はまだハードコード。
+L3 のテストはすべて green のまま。注意：**L3 の unit test は依然としてハードコード値**（`U256::from(100u64)` / `U256::from(10u64)`）**を期待している**。まだ `read_best_bid` を変更していないからだ。配管は通したが、`read_best_bid` を流れる値はまだハードコードのまま。
 
-配管が実際に効いているか sanity check したければ（L5 で本体を差し替える前に）、ワンオフを書いてもよい：
+配管が実際に効いているか sanity check したい場合は（L5 で本体を差し替える前に）、使い捨てのテストを書いてもよい：
 
 ```rust
 #[cfg(test)]
@@ -327,7 +327,7 @@ mod smoke {
 }
 ```
 
-実行：`cargo test -p openhl-evm current_best_bid_reflects_installed_clob`。通るはず。**確認できたら消す** — L5 以降が本物のテストセットを持つ。
+実行：`cargo test -p openhl-evm current_best_bid_reflects_installed_clob`。通るはずだ。**確認できたら消す** — L5 以降で本物のテストセットを揃える。
 
 よくあるエラーと対処：
 
@@ -338,13 +338,13 @@ mod smoke {
 
 ## 設計の振り返り
 
-ここに焼き込んだ重要な決定 3 つ：
+ここに焼き込んだ重要な決定が 3 つ：
 
-1. **関数ポインタのシグネチャ制約に対する定石は process-global state。** REVM の `PrecompileFn = fn(...) -> PrecompileResult` は関数ポインタであってクロージャではない。state をキャプチャできない。残る選択肢：(a) 関数引数として受け取る（REVM API 変更が必要）、(b) process-global から読む。我々は (b)。**コスト：プロセスあたり CLOB 1 つ。** 単一バリデータ deployment なら OK、マルチテナントなら REVM API 変更が必要。
+1. **関数ポインタのシグネチャ制約に対する定石は process-global な state。** REVM の `PrecompileFn = fn(...) -> PrecompileResult` は関数ポインタであってクロージャではないので、state をキャプチャできない。選択肢は (a) 関数引数として受け取る（REVM API の変更が必要）、(b) process-global から読む — のどちらか。今回は (b) を取った。**コストはプロセスあたり CLOB が 1 つになること。** 単一バリデータの deployment なら問題ないが、マルチテナントには REVM API の変更が必要だ。
 
-2. **外側の Option には `RwLock`、内側の `Book` には `Mutex`。** 外側のロックは installed-vs-uninstalled を分離（write は稀）。内側のロックはマッチングエンジン state を守る（write 頻繁 — submit ごと）。アクセスパターンごとに異なるロック型。`Mutex<Option<Arc<Mutex<Book>>>>` 一発なら全 read が 1 つのボトルネックを通る。
+2. **外側の Option には `RwLock`、内側の `Book` には `Mutex`。** 外側のロックは installed か uninstalled かを分離する（write は稀）。内側のロックはマッチングエンジンの state を守る（write は submit のたびに発生して頻繁）。アクセスパターンが違えばロックの型も変える。1 つの `Mutex<Option<Arc<Mutex<Book>>>>` に統合してしまうと、すべての read が 1 つのボトルネックを通ることになる。
 
-3. **`install_clob` は置き換え、エラーにしない。** 異なる CLOB で 2 回呼ぶと黙って 1 つ目を置き換える。検知して panic させてもよいが、production パスは 1 回しか呼ばない。テストは install/uninstall を繰り返す。**置き換えはテストにとってバグでなく機能。** ドキュメントコメントで明示。
+3. **`install_clob` は黙って置き換える設計で、エラーにはしない。** 別の CLOB で 2 回呼ばれた場合、最初のものを黙って置き換える。検知して panic させる手もあるが、production パスでは 1 回しか呼ばれない一方で、テストは install/uninstall を繰り返す。**置き換え挙動はテストにとってバグではなく機能だ。** ドキュメントコメントで明示してある。
 
 ## 答え合わせ
 
@@ -356,11 +356,11 @@ diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/prec
 diff -u ~/code/my-openhl/crates/evm/src/live_node.rs ./crates/evm/src/live_node.rs
 ```
 
-L4 終了時点ではあなたのコードは Stage 9b に**部分的に**一致：新メソッド、static、3 関数、ブリッジのフィールド変更まで。残る差分は：
-- `read_best_bid` がまだハードコード（L5 で差し替え）。
-- L3 の unit tests がまだハードコード値を期待（L5 で更新）。
+L4 を終えた時点では、あなたのコードは Stage 9b に**部分的に**一致する：新メソッド、static、関数 3 つ、ブリッジのフィールド変更まで。残る差分は：
+- `read_best_bid` がまだハードコードのまま（差し替えは L5）。
+- L3 の unit test がまだハードコード値を期待している（更新は L5）。
 
-戻す：
+main に戻す：
 
 ```bash
 git checkout main
@@ -368,21 +368,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ `CLOB_STATE` は `&'static` で、ヒープ割り当てではない？**
-Static storage は最もシンプルなライフタイム — プログラム開始から終了まで。ヒープ割り当て（`Box::leak` など）でも動くがランタイム allocation コストと複雑度が増える。「プログラム開始から終了まで存在」が欲しい場合 — まさに我々のケース — `static` が正しい道具。
+**Q: なぜ `CLOB_STATE` は `&'static` なのか? ヒープ割り当てではダメか?**
+static storage はもっともシンプルなライフタイム — プログラム開始から終了まで生きる。ヒープ割り当て（`Box::leak` など）でも動くが、ランタイムの allocation コストと複雑さが増える。「プログラム開始から終了までずっと存在してほしい」というケース — まさに今回 — では `static` が正しい道具だ。
 
-**Q: `LiveRethEvmBridge` が並行テストなどで 2 個作られたら？**
-2 つ目の `install_clob` 呼び出しが 1 つ目を置き換える。**両ブリッジが global 経由で 2 つ目の CLOB を共有することになる。** だからテストは serialization が必要（L5 で導入）。Production deployment はブリッジを 1 つだけ作る — 問題にならない。
+**Q: 並行テストなどで `LiveRethEvmBridge` が 2 個作られたら?**
+2 回目の `install_clob` が 1 回目を置き換える。**結果として両方のブリッジが、global 経由で 2 つ目の CLOB を共有することになる。** だからテストでは直列化が必要だ（L5 で導入する）。production deployment ではブリッジを 1 つしか作らないので、問題にはならない。
 
-**Q: `current_best_bid` は `Option<...>` でなく `Result<...>` でもいい？**
-できる — `Err(NoClobInstalled)` を `None` の代わりに返してもよい。だが precompile は「CLOB 未インストール」と「CLOB インストール済みだが空」を区別する必要がない — 両方ともゼロを返すべき。`Option` は両ケースを `None` に潰す。`Result` だと precompile が分岐処理を強いられる — 利得なし。
+**Q: `current_best_bid` は `Option<...>` ではなく `Result<...>` を返してもいい?**
+できる — `None` の代わりに `Err(NoClobInstalled)` を返すこともできる。だが precompile としては「CLOB 未インストール」と「CLOB はあるが空」を区別する必要がない — どちらの場合もゼロを返すべきだからだ。`Option` ならその 2 ケースを `None` に潰せる。`Result` にすると precompile に余計な分岐を強いることになり、利得はない。
 
-**Q: `current_best_bid` 内で `book.lock()` が panic したら？**
-`.expect("clob mutex poisoned")` が panic し、`current_best_bid` → `read_best_bid` → REVM の dispatch まで伝播。REVM はこれを fatal precompile error として扱い EVM を halt（おそらく transaction 全体を revert）。**これが正しい挙動** — poisoned Mutex は別スレッドがロック保持中に crash したことを意味し、不整合な state で走り続けるより abort のほうがマシ。
+**Q: `current_best_bid` の中で `book.lock()` が panic したら?**
+`.expect("clob mutex poisoned")` が panic し、`current_best_bid` → `read_best_bid` → REVM の dispatch まで伝播する。REVM はこれを致命的な precompile エラーとして扱い、EVM を halt させる（おそらく transaction 全体を revert する）。**これが正しい挙動だ** — poisoned な Mutex は、別のスレッドがロックを保持したまま crash したことを意味する。不整合な state で走り続けるくらいなら abort するほうがましだ。
 
 ## 次のレッスン（L5）
 
-配管は通したが precompile はまだ無視している。L5 は `read_best_bid` の本体を `current_best_bid()` 呼び出しに差し替え。L3 のテストを CLOB 未 install 時に zero output を期待するように更新。並行テストが global state を競合しないよう `TEST_SERIALIZER` を追加。L5 後、`read_best_bid` は live state を読む — ただしラウンドトリップを実行するテストは、あなたがインラインで書く smoke test だけ。L6 でラウンドトリップテストを正式化する。
+配線は通したが、precompile はまだそれを無視している。L5 では `read_best_bid` の本体を `current_best_bid()` 呼び出しに差し替える。L3 のテストは、CLOB 未インストール時に zero output を期待する形に更新する。並行テストが global state で競合しないよう、`TEST_SERIALIZER` を導入する。L5 を終えると `read_best_bid` は live な state を読むようになる — ただし、ラウンドトリップを実行するテストは、自分でインラインに書く smoke test だけだ。L6 でラウンドトリップテストを正式に追加する。
 ````
 
 ---

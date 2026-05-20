@@ -23,12 +23,12 @@
 
 このレッスンが終わると：
 
-- EVM ↔ CLOB アーキテクチャを記憶からホワイトボードに描ける。
-- v0 で先送りした 4 項目を名指し、それぞれが範囲外の理由を説明できる（RPC ラウンドトリップ、マルチバリデータ OrderIds、transaction-scoped ロールバック、staticcall mutation 拒否）。
-- 4 つの拡張がどこに来るかを描ける（best_ask precompile、depth precompile、clob_cancel_order、fill を EVM event として）。
-- 自分の Reth ベース L1 でカスタム precompile を出荷する準備ができる。
+- EVM ↔ CLOB のアーキテクチャを、記憶からホワイトボードに描ける。
+- v0 で先送りした 4 項目（RPC ラウンドトリップ、マルチバリデータでの OrderId、transaction-scoped なロールバック、staticcall での mutation 拒否）を名指し、それぞれが範囲外である理由を説明できる。
+- 拡張がどこに足されるかを 4 つ描ける（best_ask precompile、depth precompile、clob_cancel_order、fill を EVM event として出す機構）。
+- 自分の Reth ベースの L1 でカスタム precompile を出荷する準備ができている。
 
-**このレッスンにコードなし。** メンタルモデルだけ。
+**このレッスンにコードはなし。** メンタルモデルだけだ。
 
 ## アーキテクチャ、1 枚の図で
 
@@ -70,135 +70,135 @@
               └─────────────────────────────────────┘
 ```
 
-上から下：bridge がデータを所有、precompile モジュールがプロセスグローバル handle で露出、EVM が precompile に call を dispatch、Solidity コントラクトが `ecrecover` を叩くように同じアドレスを叩く。
+上から下：bridge がデータを所有し、precompile モジュールがプロセスグローバルな handle で公開し、EVM が precompile への call を dispatch する。Solidity コントラクトは、`ecrecover` を叩くのと同じ感覚で同じアドレスを叩く。
 
-下から上：スマートコントラクトが `STATICCALL(0x...0c1b)` を発行。Reth EVM が precompile registry でアドレスを検索 → `read_best_bid` に dispatch → `CLOB_STATE` から read → これが bridge の `submit_order` が書く同じ `Arc<Mutex<Book>>`。**翻訳レイヤーなし。シリアライゼーション往復なし。メモリだけ。**
+下から上：スマートコントラクトが `STATICCALL(0x...0c1b)` を発行する。Reth の EVM が precompile registry でアドレスを引き、`read_best_bid` に dispatch し、`CLOB_STATE` から read する — そしてそれは、bridge の `submit_order` が書き込んでいるのと同じ `Arc<Mutex<Book>>` だ。**翻訳レイヤなし。シリアライゼーションの往復なし。メモリだけ。**
 
 ## 各モジュールが届けたもの
 
-**Module 1 (Custom EVM bootstrap, L1-L3)** — プラガブルなシーム：
+**Module 1（Custom EVM bootstrap, L1-L3）** — プラガブルなシーム：
 
-- `OpenHlEvmFactory` が `alloy_evm::EvmFactory` を実装 — Reth の「スロットを 1 つ swap」カスタム EVM インターフェース。
-- `OpenHlExecutorBuilder` が `reth_node_builder::ExecutorBuilder` を実装 — NodeBuilder plug-in の形。
-- `openhl_precompiles(base)` が Reth の標準 precompile set を hardfork ごとにカスタムアドレスで拡張（`OnceLock` キャッシュ）。
-- Reth が `.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))` で我々の EVM で boot。
+- `OpenHlEvmFactory` が `alloy_evm::EvmFactory` を実装 — Reth の「1 スロットだけ差し替える」カスタム EVM インターフェース。
+- `OpenHlExecutorBuilder` が `reth_node_builder::ExecutorBuilder` を実装 — NodeBuilder の plug-in 形式。
+- `openhl_precompiles(base)` が Reth の標準 precompile セットを、hardfork ごとに自分のアドレスを足して拡張する（`OnceLock` でキャッシュ）。
+- Reth が `.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))` で、こちらの EVM 付きで boot する。
 
-**Module 2 (Read precompile, L4-L6)** — スマートコントラクトが live CLOB state を read：
+**Module 2（Read precompile, L4-L6）** — スマートコントラクトが live な CLOB state を read できる：
 
-- `CLOB_READ_BEST_BID` を `0x...0c1b` に — empty calldata、64-byte ABI-encoded `(price, qty)` を返す。
-- `CLOB_STATE` global：`RwLock<Option<Arc<Mutex<Book>>>>` — bridge の Book へのプロセスグローバル handle。
-- `install_clob` / `uninstall_clob` / `current_best_bid` — ライフサイクルと read プリミティブ。
-- テスト証明済み：uninstalled で zero output、installed で live values、registry 経由で dispatch 呼び出し可能。
+- `CLOB_READ_BEST_BID` を `0x...0c1b` に登録 — 空 calldata を受け取り、64-byte ABI-encoded な `(price, qty)` を返す。
+- `CLOB_STATE` global：`RwLock<Option<Arc<Mutex<Book>>>>`、bridge の Book へのプロセスグローバルな handle。
+- `install_clob` / `uninstall_clob` / `current_best_bid` — ライフサイクルと read プリミティブを提供する。
+- テストで証明済み：uninstalled なら zero output、installed なら live な値、registry 経由の dispatch でも呼び出し可能。
 
-**Module 3 (Write precompile, L7-L8)** — スマートコントラクトが CLOB に write：
+**Module 3（Write precompile, L7-L8）** — スマートコントラクトが CLOB に write できる：
 
-- `CLOB_PLACE_ORDER` を `0x...0c1c` に — 128-byte ABI-aligned calldata `(account, side, price, qty)`、32-byte `(order_id)` を返す。
-- `NEXT_ORDER_ID: AtomicU64` — wait-free ID 割り当て、1 から開始で `0` = rejected sentinel。
-- Rejection path：短い input、無効 side byte、qty=0、CLOB 未インストール。
-- テスト証明済み：rejection で book は touch されない、有効 input は正しく cross、2-precompile ラウンドトリップが動く。
+- `CLOB_PLACE_ORDER` を `0x...0c1c` に登録 — 128-byte の ABI-aligned な calldata `(account, side, price, qty)` を受け取り、32-byte の `(order_id)` を返す。
+- `NEXT_ORDER_ID: AtomicU64` — wait-free な ID 割り当て。1 から開始し、`0` は rejected sentinel として使う。
+- rejection path：入力長不足、無効な side byte、qty=0、CLOB 未インストール。
+- テストで証明済み：rejection 時に book は触られない、有効な入力は正しくクロスする、precompile 2 つでのラウンドトリップが成立する。
 
-**Module 4 (Bridge integration, L9-L10)** — Fill が bridge に戻る：
+**Module 4（Bridge integration, L9-L10）** — fill が bridge に戻る：
 
-- `FILL_SINK` global：`RwLock<Option<Arc<Mutex<Vec<Fill>>>>>` — `CLOB_STATE` と並行構造。
-- `LiveRethEvmBridge::new()` が所有する Arc から両 global にインストール。
-- `place_order` が fill を sink に push（installed なら） — bridge 側の `submit_order` と同じ drain で次の `build_payload` に届く。
-- Integration test が実際の Reth プロセスでフルチェーンを証明：合計 48 tests（47 unit + 1 integration）。
+- `FILL_SINK` global：`RwLock<Option<Arc<Mutex<Vec<Fill>>>>>` — `CLOB_STATE` と並ぶ構造。
+- `LiveRethEvmBridge::new()` が自身が所有する Arc を、両方の global に install する。
+- `place_order` は（sink が install されていれば）fill を sink に push し、bridge 側の `submit_order` と同じ drain を通って次の `build_payload` に届く。
+- integration test が、実際の Reth プロセス内でフルチェーンを証明する：合計 48 tests（unit 47 + integration 1）。
 
 ## 正直に先送り
 
-V0 がやらない 4 つ。それぞれ実際のプロダクションギャップ。それぞれコードでドキュメント化された上で*意図的に*先送りした。
+v0 でやっていない 4 項目だ。どれも実際のプロダクションギャップにあたる。いずれもコード側でドキュメント化した上で *意図的に* 先送りした。
 
-### 1. RPC `eth_call` ラウンドトリップ
+### 1. RPC `eth_call` のラウンドトリップ
 
-**証明したこと**：Rust から直接 `place_order(...)` と `current_best_bid()` を呼ぶ動作、precompile が `openhl_precompiles()` で Reth EVM に登録されること。
+**証明したこと**：Rust から直接 `place_order(...)` や `current_best_bid()` を呼んで動くこと、そして precompile が `openhl_precompiles()` で Reth の EVM に登録されること。
 
-**証明していないこと**：JSON-RPC 経由で `staticcall(0x...0c1b, "")` を呼ぶ Solidity コントラクトが実際に我々の関数に届くこと。そのパスは Reth の RPC server、transaction simulation、EVM dispatch を含む — Reth が正しく扱うと信頼する配線。
+**証明していないこと**：JSON-RPC 経由で `staticcall(0x...0c1b, "")` を呼ぶ Solidity コントラクトが、実際にこちらの関数まで届くこと。そのパスは Reth の RPC サーバ、transaction simulation、EVM dispatch を含む — そこは Reth が正しく扱ってくれることを信用して任せる部分だ。
 
-**先送りの理由**：このテストは主に Reth を validate するもので openhl ではない。我々の crate と Reth の統合境界は `openhl_precompiles()` — それが正しければ残りは Reth の責任。
+**先送りの理由**：このテストは主に Reth を validate するものになり、openhl を validate するものにはならないからだ。こちらの crate と Reth の統合境界は `openhl_precompiles()` — そこさえ正しければ、残りは Reth の責任だ。
 
-**いつ見直す**：Reth を大幅に fork する、もしくは precompile registry インターフェースが変わるメジャーバージョン境界をアップグレードするとき。
+**いつ見直すか**：Reth を大幅に fork するとき、または precompile registry インターフェースが変わるメジャーバージョンをアップグレードするとき。
 
-### 2. マルチバリデータ deterministic OrderIds
+### 2. マルチバリデータでの deterministic な OrderId
 
-**現状**：`NEXT_ORDER_ID: AtomicU64`、1 から開始するプロセスグローバルカウンタ。
+**現状**：`NEXT_ORDER_ID: AtomicU64`、1 から始まるプロセスグローバルなカウンタ。
 
-**問題**：このコードを 2 つの validator で走らせると各自のカウンタを持つ。Validator A が`OrderId(5)` をある EVM call に、validator B が*同じ* call に `OrderId(11)` を割り当てる。**Book が silent に分岐。** エラーなし、crash なし — read が異なる値を返すまでネットワーク全体で不整合 state。
+**問題**：このコードを 2 つの validator で走らせると、それぞれが自分のカウンタを持つ。Validator A が `OrderId(5)` をある EVM call に割り当て、Validator B は *同じ* call に `OrderId(11)` を割り当てる、ということが起こる。**book が静かに分岐する。** エラーも crash も出ない — read が異なる値を返すまで、ネットワーク全体で state が食い違ったままになる。
 
-**先送りの理由**：openhl v0 は single-validator。OrderIds のマルチバリデータコンセンサスは (a) EVM call 自体から deterministic な ID 導出（例：`keccak(tx_hash, call_index)`）、もしくは (b) block-scoped 共有 state から ID を読む、のどちらか。
+**先送りの理由**：openhl v0 は single-validator 前提だからだ。OrderId のマルチバリデータコンセンサスを取るには、(a) EVM call 自体から deterministic に ID を導出する（例：`keccak(tx_hash, call_index)`）か、(b) block-scoped な共有 state から ID を読む、のどちらかが必要になる。
 
-**いつ見直す**：マルチバリデータ deployment 前。**これはネットワーク分岐バグが起きるのを待っているだけ。** `NEXT_ORDER_ID` の doc コメントが static の定義場所でこれを名指すので、将来のコード読者は制約を見る。
+**いつ見直すか**：マルチバリデータ deployment の前。**これはネットワーク分岐バグの種そのもの。** `NEXT_ORDER_ID` の doc コメントで static の定義場所からこれを名指してあるので、将来コードを読む人もこの制約に気づける。
 
-### 3. Transaction-scoped state shadowing（revert ロールバック）
+### 3. Transaction-scoped な state shadowing（revert によるロールバック）
 
-**現状**：`place_order` が precompile 実行中*即座に* Book を mutate。
+**現状**：`place_order` は precompile 実行中に *即座に* Book を mutate する。
 
-**問題**：EVM transaction が後で revert した場合（`place_order` 成功後）、book mutation はロールバックされない。EVM の通常の storage セマンティクスは transaction と一緒に revert する — だが我々の Book は EVM storage の外、プロセスグローバル Arc に住む。
+**問題**：`place_order` 成功後に EVM transaction が revert すると、book 側の mutation はロールバックされない。EVM の通常の storage セマンティクスでは transaction と一緒に revert するが、こちらの Book は EVM storage の外、プロセスグローバルな Arc の中に住んでいるためだ。
 
-**先送りの理由**：Storage shadowing は (a) Book mutation を journal して revert で replay する、もしくは (b) EVM 実行中はマッチングエンジンを「virtual」モードで走らせ transaction 成功で commit する、のどちらかが必要。両方とも non-trivial。openhl v0 は punt。
+**先送りの理由**：storage shadowing を実現するには、(a) Book の mutation を journal しておいて revert 時に replay する、もしくは (b) EVM 実行中はマッチングエンジンを「virtual」モードで動かし、transaction が成功したら commit する、のどちらかが必要だ。どちらも non-trivial。openhl v0 では punt する。
 
-**いつ見直す**：プロダクショントラフィックに「order を発注した後に途中で fail しうるコントラクト」が含まれるとき。**Single-actor シナリオ（1 つのマッチングコントラクト、外部コンポーザビリティなし）なら問題なし。DeFi コンポーザビリティシナリオなら絶対に問題。**
+**いつ見直すか**：プロダクションのトラフィックに「order 発注後に途中で fail しうるコントラクト」が混ざってきたとき。**single-actor のシナリオ（マッチングコントラクトが 1 つ、外部とのコンポーザビリティなし）なら問題はない。DeFi のコンポーザビリティシナリオなら絶対に問題になる。**
 
-### 4. `staticcall` mutation 拒否
+### 4. `staticcall` での mutation 拒否
 
-**現状**：`place_order` は呼ばれ方に関わらず Book に書く。
+**現状**：`place_order` は、呼ばれ方を問わず Book に書き込む。
 
-**問題**：Solidity の `staticcall` は read-only アクセスを enforce するはず — だが EVM は static-call フラグを我々の precompile に渡さない。コントラクトは `STATICCALL(0x...0c1c, ...)` でき、我々は喜んで book を mutate、コントラクトの read-only セマンティクスへの期待を破る。
+**問題**：Solidity の `staticcall` は read-only なアクセスを強制するはずだが、EVM は static-call フラグをこちらの precompile には渡してこない。コントラクトが `STATICCALL(0x...0c1c, ...)` を発行することは可能で、こちらは何の抵抗もなく book を mutate してしまう — コントラクト側の read-only 期待を裏切る形だ。
 
-**先送りの理由**：REVM の `PrecompileFn` signature は `fn(&[u8], u64, u64) -> PrecompileResult`。「これは staticcall か？」フラグは第 3 引数にない（それは gas reservoir）。追加のコンテキストを通す必要があり、REVM 修正（fork）か上流 API 待ち。
+**先送りの理由**：REVM の `PrecompileFn` シグネチャは `fn(&[u8], u64, u64) -> PrecompileResult` で、「これは staticcall か?」のフラグは第 3 引数には入っていない（そこは gas reservoir）。追加のコンテキストを通す必要があり、REVM の修正（fork）か上流 API の対応待ちになる。
 
-**いつ見直す**：セキュリティ監査がこれを実際の攻撃 vector としてフラグするとき。**攻撃シナリオは contrived** — ほとんどのコントラクトは既知の write precompile を `STATICCALL` しない — だが慎重な監査者は名指す。
+**いつ見直すか**：セキュリティ監査が、これを実際の攻撃 vector としてフラグしたとき。**攻撃シナリオは多少作為的** — write precompile として知られているものをわざわざ `STATICCALL` するコントラクトはまずない — だが、慎重な監査者なら必ず指摘する。
 
 ## 次に来るもの
 
-このコース後に出荷できる 4 つの拡張、複雑度順。
+このコースの後で出荷できる拡張を、複雑度順に 4 つ挙げる。
 
 ### Extension 1: `best_ask` precompile（1 日）
 
-`read_best_bid` を sell 側にミラー。同じ形、逆方向。新アドレス（`0x...0c1d`？）、新関数 1 つ、テストコード ~30 行。**`read_best_bid` への構造的並行で、ほぼ機械的に作れる。**
+`read_best_bid` を sell 側に鏡写しにするだけ。形は同じ、方向だけ逆。新しいアドレス（`0x...0c1d` あたり?）、新しい関数 1 つ、テストコード ~30 行で済む。**`read_best_bid` と構造的に並ぶので、ほぼ機械的に作れる。**
 
 ### Extension 2: `clob_depth_at_price` precompile（2-3 日）
 
-`(side, price)` calldata を取り、その価格レベルで rest する合計 qty を返す。Market order 発注前にスリッページを推定したいコントラクトに有用。`Book::depth_at_price()` メソッドと新 precompile を追加。**概念的に似ているが calldata layout に input parameter を含む拡張。**
+`(side, price)` の calldata を受け取り、その価格レベルで rest している qty の合計を返す。market order を発注する前にスリッページを見積もりたいコントラクトに便利だ。`Book::depth_at_price()` メソッドと、対応する新しい precompile を足す。**概念的には類似だが、calldata レイアウトに入力パラメータを含む点が新しい拡張ポイント。**
 
 ### Extension 3: `clob_cancel_order` precompile（1 週間）
 
-`(order_id, account)` calldata を取り、order が caller のものなら book から削除。成功/失敗を返す。**認可問題が追加** — caller が order を発注したアカウントだとどう検証する？ EVM call の `msg.sender` は precompile を呼んだコントラクト、元アカウントではない。**`keccak(account_id, signature)` スキーム、もしくは事前登録された認可マッピングが必要。** アカウントモデルを決めるまで認可設計は先送り。
+`(order_id, account)` の calldata を受け取り、その order が caller のものなら book から削除する。成功/失敗を返す。**ここで認可の問題が出てくる** — caller がその order を発注したアカウント本人だと、どう検証するか? EVM call の `msg.sender` は precompile を呼び出したコントラクトであって、元のアカウントではない。**`keccak(account_id, signature)` のスキーム、または事前登録された認可マッピングのどちらかが必要。** アカウントモデルが固まるまでは、認可設計を先送りする。
 
-### Extension 4: Fill を EVM event として（2 週間）
+### Extension 4: fill を EVM event として出す（2 週間）
 
-現在 fill は `bridge.pending_fills` に届き、payload-built block に attach される。**スマートコントラクトはそれを観測できない。** Fill を EVM event として emit すれば、下流コントラクトが `eth_getLogs` / event filter で subscribe できる — ERC-20 transfer の subscribe と同じ。
+現状、fill は `bridge.pending_fills` に届き、payload に積まれて block に attach される。**スマートコントラクトからは観測できない。** fill を EVM event として emit すれば、下流のコントラクトが `eth_getLogs` や event filter で subscribe できる — ERC-20 transfer を subscribe するのと同じ要領で。
 
-**メカニズム**：`place_order` 末尾で各 fill を Solidity-ABI-encoded event として encode、`revm::interpreter::Interpreter::add_log(...)` を呼ぶ（もしくは EVM バージョンの相当物）。Event を emit するコントラクトは precompile 自身（アドレス `0x...0c1c`）。
+**仕組み**：`place_order` の末尾で各 fill を Solidity ABI-encoded な event として encode し、`revm::interpreter::Interpreter::add_log(...)` を呼ぶ（あるいは現在の EVM バージョンの相当 API を）。event を emit するコントラクトとしては precompile 自身（アドレス `0x...0c1c`）が振る舞う。
 
-**複雑度**：Precompile は通常 event を emit しない。この revm API は awkward — `PrecompileFn` signature の拡張が必要かも、つまり小さな revm fork。**High-impact、high-friction。** 明確なプロダクト需要があるまで先送り。
+**複雑度**：precompile は通常 event を emit しない。この revm API は扱いづらい — `PrecompileFn` のシグネチャを拡張する必要があり、結果として revm の小さな fork が必要になる可能性がある。**インパクトは大きい一方、摩擦も大きい。** 明確なプロダクト需要が出るまで先送りする。
 
 ## コース完了 — 内在化したこと
 
-このコースで練習したスキルは CLOB precompile を超えて一般化する：
+このコースで練習したスキルは、CLOB precompile を超えて一般化する：
 
-1. **カスタム EVM の「スロットを 1 つ swap」パターン。** Reth の EVM に自分の dispatch を plug-in したいとき — カスタム opcode、カスタム transaction 検証、カスタム gas pricing — パスは同じ：`EvmFactory` + `ExecutorBuilder` + `.with_components(...)`。
+1. **カスタム EVM の「スロットを 1 つ差し替える」パターン。** Reth の EVM に独自の dispatch を plug-in したいとき — カスタム opcode、カスタムな transaction 検証、カスタム gas pricing など — 道筋は同じだ：`EvmFactory` + `ExecutorBuilder` + `.with_components(...)`。
 
-2. **Precompile state のプロセスグローバル Arc パターン。** REVM の関数ポインタ signature ではクロージャは使えない。プロセスグローバル storage が唯一の選択肢。**パターンは複利**：1 つの共有 state（CLOB）があれば、追加（fill sink）は機械的。
+2. **precompile state のための「プロセスグローバル Arc」パターン。** REVM の関数ポインタシグネチャではクロージャが使えないので、プロセスグローバルな storage が唯一の選択肢になる。**このパターンは複利で効く** — 共有 state を 1 つ（CLOB）作っておけば、もう 1 つ（fill sink）を足すのはほぼ機械的だ。
 
-3. **Schema-first プロトコル設計。** 実装（L8）の前に calldata layout（L7）を固めれば、schema に対してビルドされたコントラクトは実装の進化で壊れない。**契約は schema、関数 body ではない。**
+3. **schema-first なプロトコル設計。** 実装（L8）より先に calldata layout（L7）を固めれば、schema を前提にビルドされたコントラクトは実装の進化で壊れない。**契約は schema にあり、関数 body にはない。**
 
-4. **敵対的テストデータ。** 「best = 最高価格、最大数量ではない」を証明する 2 つの異なる価格 order。Fill を流す maker + taker。各テスト値が正しさを偶然から分離すべき。
+4. **敵対的テストデータ。** 「best = 最高価格であって最大数量ではない」を証明するための、価格の異なる 2 つの order。fill を流すための maker + taker。各テスト値は「正しさを偶然から切り分ける」役割を果たすべきだ。
 
-5. **Documentation での正直な scoping。** 各先送り項目を関連コード site の doc コメントで名指す。**将来の読者がギャップと理由を 1 箇所で見る。** Documented でないギャップは見えない技術負債。
+5. **ドキュメント上で正直に scope を切ること。** 先送りした項目を、関連するコード site の doc コメントで名指す。**将来の読者は、ギャップとその理由を 1 箇所で読める。** ドキュメント化されていないギャップは、見えない技術負債になる。
 
-## このコースが L1 Architect track のどこに位置するか
+## このコースが L1 Architect トラックのどこに位置するか
 
 **Course 1-5**（Reth internals）：Reth の pipeline、payload building、NodeBuilder、evm crate、RPC。
 
-**Course 6-7**（consensus + CLOB）：openhl 特有の機構 — Malachite コンセンサス統合、次にマッチングエンジン。
+**Course 6-7**（consensus + CLOB）：openhl 固有の機構 — Malachite コンセンサス統合に続いて、マッチングエンジン。
 
-**Course 8（このコース）**：カスタム precompile で EVM ↔ CLOB を橋渡し。**Reth のプラガブル EVM シームに触れる最初のコース。**
+**Course 8（このコース）**：カスタム precompile で EVM ↔ CLOB を橋渡しする。**Reth のプラガブルな EVM シームに触れる最初のコース。**
 
-**Course 9**（funding state machine）：Perpetuals 特有 — CLOB を perp DEX にする funding rate 機構。Course 8 の precompile パターンの上に構築。
+**Course 9**（funding state machine）：perpetual 固有の機構 — CLOB を perp DEX に変える funding rate 機構。Course 8 の precompile パターンの上に積み上がる。
 
-**Course 10**（capstone — フル openhl deployment）：1-9 のすべてを取り、実行可能な openhl node + サンプルトレーディングコントラクトを出荷。
+**Course 10**（capstone — openhl のフル deployment）：1-9 すべてを総動員し、実行可能な openhl ノードとサンプルトレーディングコントラクトを出荷する。
 
-L1 Architect track の 80% を踏破した。**ここで学んだパターンが残りすべての基礎。**
+L1 Architect トラックの 80% を踏破した。**ここで学んだパターンが、残りすべての基礎になる。**
 
 ## 最終答え合わせ
 
@@ -208,19 +208,19 @@ git checkout d19ba1b
 diff -u ~/code/my-openhl/crates/evm/ ./crates/evm/ --recursive
 ```
 
-L11 後、**`crates/evm/` ディレクトリ全体が byte-identical** に openhl の Stage 9c+ HEAD と一致するはず。5 commit（9a、9b、9c、9c+、9d）を手で再現した — 各行がなぜそこにあるかを完全に理解した上で。
+L11 を終えると、**`crates/evm/` ディレクトリ全体が、openhl の Stage 9c+ HEAD と byte-identical** に一致するはずだ。5 つの commit（9a、9b、9c、9c+、9d）を手で再現したことになる — しかも、各行がなぜそこにあるかを完全に理解した上で。
 
-戻す：
+main に戻す：
 
 ```bash
 git checkout main
 ```
 
-## あなたがこれを出荷した
+## あなたが出荷したもの
 
-47 unit test。1 integration test。2 つのカスタム precompile。2 つのプロセスグローバル。1 つの EvmFactory。1 つの ExecutorBuilder。~600 行のプロダクション Rust コード。スマートコントラクトが同じノードで動くマッチングエンジンを read/write できる — `ecrecover` と BLS12-381 を扱うのと同じ EVM dispatch を通して。
+unit test 47 個。integration test 1 個。カスタム precompile 2 つ。プロセスグローバル 2 つ。EvmFactory 1 つ、ExecutorBuilder 1 つ。プロダクション Rust コード ~600 行。スマートコントラクトは、同じノード上で動くマッチングエンジンを read/write できるようになった — `ecrecover` や BLS12-381 を扱うのと同じ EVM dispatch を通して。
 
-**それが Reth の上に構築されたカスタム L1 トレーディングプリミティブ。** さあ出荷を。
+**これが Reth の上に構築したカスタム L1 トレーディングプリミティブだ。** さあ出荷していこう。
 ````
 
 ---

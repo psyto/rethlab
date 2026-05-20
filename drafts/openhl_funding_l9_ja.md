@@ -20,40 +20,40 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンを終えると：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…が 21 テストを通る（L4-L8 から 18 + 新規 3）。**新プロダクションコードなし。** 3 つの新テストが複数 operation にわたる clock セマンティクスのカバレッジを深める：
+上記の実行結果が 21 テストを通る（L4-L8 で書いた 18 + 新規 3）。**新しいプロダクションコードはない。** 新規テスト 3 つで、複数 operation にわたる clock の semantics カバレッジを深掘りする：
 
-- **`premium_drives_settlement_signs`** — full 数学 composition が clock を流れる。mark > index → 正 premium → settlement の符号が一致。
-- **`second_tick_requires_another_full_interval`** — Interval-gating が tick 間で persistent。成功 tick が clock を永久 unlock しない。
-- **`capped_rate_when_premium_extreme`** — `compute_rate` の cap 挙動が `tick()` 経由で正しく surface。Layer が semantics を失わず compose。
+- **`premium_drives_settlement_signs`** — 数学の full composition が clock を流れる。mark > index → 正の premium → settlement の符号が一致する。
+- **`second_tick_requires_another_full_interval`** — Interval-gating が tick 間でも持続する。成功した tick が、clock を永久に unlock してしまうわけではない。
+- **`capped_rate_when_premium_extreme`** — `compute_rate` の cap 挙動が `tick()` 経由でも正しく surface する。レイヤーを重ねても semantics が失われない。
 
-教育の焦点は**複数 operation にわたる不変条件**、1 度だけではない。L8 のテストが guard が*1 度*動くことを verify。L9 のテストが*tick 間*で動くこと、layered composition が微妙なバグを導入しないことを verify。
+教育上の焦点は、**1 度きりではなく複数 operation にわたって成り立つ不変条件**だ。L8 のテストでは guard が*1 度*機能することを検証した。L9 のテストでは、それが*tick 間*でも機能すること、そしてレイヤーを重ねた composition が微妙なバグを持ち込まないことを検証する。
 
 ## おさらい
 
-L8 後：
-- `FundingClock` が存在、`tick()` が `Option<FundingTick>` を返す。
-- 3 サニティテストが確認：guard 動作、境界 fire、空 positions でも advance。
-- 3 Module 2 関数すべてが `tick()` 経由で compose。
+L8 後の状態：
+- `FundingClock` が存在し、`tick()` は `Option<FundingTick>` を返す。
+- サニティテスト 3 つで、guard の動作、境界での fire、空の positions でも advance すること、を確認済み。
+- Module 2 の関数 3 つすべてが `tick()` 経由で compose されている。
 
-L8 のテストは clock を*最多 1 度*走らせる。L9 が clock を複数呼び出しで、非自明な入力で exercise、**不変条件が単一 operation を超えて成立する**ことを validate。
+L8 のテストはどれも clock を*高々 1 回*しか走らせない。L9 では clock を複数回呼び出し、非自明な入力で exercise しながら、**不変条件が単一 operation を超えて成立する**ことを検証する。
 
 ## プラン
 
-1 ファイル編集：
+ファイル編集は 1 つ：
 
-1. **`crates/funding/src/clock.rs` に 3 テストを append** — 既存の `#[cfg(test)] mod tests` ブロック内、L8 の 3 サニティテストの後。
+1. **`crates/funding/src/clock.rs` にテストを 3 つ追加**する — 既存の `#[cfg(test)] mod tests` ブロック内、L8 のサニティテスト 3 つの後ろに置く。
 
-プロダクションコードなし、`lib.rs` 変更なし、L8 が既に追加した以上の import なし。
+プロダクションコードの変更はなし、`lib.rs` の変更もなし、L8 で既に追加した以上の import も要らない。
 
-> 🛑 **考えてみよう。** スクロール前に — L8 の `first_tick_at_exact_interval_fires` テストは `tick(1_003_600, ...)` を 1 度発火し `Some` を返したと assert。なぜそれだけでは interval-gating 不変条件を verify するのに不十分？
+> 🛑 **考えてみよう。** スクロール前に — L8 の `first_tick_at_exact_interval_fires` テストでは、`tick(1_003_600, ...)` を 1 度呼んで `Some` が返ることを assert している。**それだけでは、なぜ interval-gating 不変条件の検証として不十分なのか？**
 
-（答え：**1 度の成功 tick は guard が `Some` を*返しうる*と言う。Guard が後で*再 engage* するとは言わない。** バグのある実装は最初の interval boundary で fire してから二度と gate しないかも — `1_003_600` 以降の全 `tick()` が時間に関わらず `Some` を返す。「interval ごとに最多 1 settlement」不変条件は、別の full interval が経過するまで second tick が拒否されることをテストする必要。**単一 operation テストが挙動を verify、複数 operation テストが state machine を verify。**）
+（答え：**1 度の成功 tick が示すのは、guard が `Some` を*返しうる*ということだけだ。その guard が後で*再び engage* するかどうかは何も示さない。** バグのある実装では、最初の interval 境界で fire してから二度と gate しなくなるかもしれない — `1_003_600` 以降のすべての `tick()` が、時間に関係なく `Some` を返してしまう、というケースだ。「interval ごとに最多 1 settlement」の不変条件を検証するには、別の full interval が経過するまで second tick が拒否されることを確認する必要がある。**単一 operation のテストは挙動を、複数 operation のテストは state machine を検証する。**）
 
 ## 手順
 
@@ -84,17 +84,17 @@ L8 のテストは clock を*最多 1 度*走らせる。L9 が clock を複数�
     }
 ```
 
-これが clock の**完全な数学 composition テスト**。すべての Module 2 関数が順番に exercise される：
+これが clock の**完全な数学 composition テスト**だ。Module 2 の関数がすべて順番に exercise される：
 
 1. `compute_premium(MarkPrice(101), IndexPrice(100))` → `Premium(10_000_000)`（1% premium）。
-2. `compute_rate(Premium(10_000_000), hyperliquid_default)` → `FundingRate(1_250_000)`（divisor 8 後 0.125%）。
+2. `compute_rate(Premium(10_000_000), hyperliquid_default)` → `FundingRate(1_250_000)`（divisor 8 のあと 0.125%）。
 3. `apply_funding(&[Pos(1, 100), Pos(2, -100)], MarkPrice(101), FundingRate(1_250_000))` → `[Settlement(-12), Settlement(+12)]`。
 
-**5 行のブロックコメントが紙の数学。** このテストをデバッグする誰でも手で算術 verify できる：`100 × 101 × 1_250_000 = 12_625_000_000`。`RATE_SCALE = 1_000_000_000` で割る（整数 rounding zero 方向）と `12`。`apply_funding` の符号 flip で long が `-12`、short が `+12`。**コメントが documentation、テストが spec。**
+**5 行のブロックコメントは、そのまま紙の上の数学だ。** このテストをデバッグする人は誰でも、手で算術を検証できる：`100 × 101 × 1_250_000 = 12_625_000_000`。これを `RATE_SCALE = 1_000_000_000` で割る（整数除算なのでゼロ方向に丸まる）と `12`。`apply_funding` の符号反転で、long は `-12`、short は `+12` になる。**コメントが documentation、テストが spec として働く。**
 
-**各ステップが個別にテスト済みなのにこのテストが存在する理由は？** Composition が独自の関心だから。`tick()` が間違った順で間違った関数を呼びうる — 例：`compute_rate` の前に `apply_funding`、`mark` を期待しているところに `index` を渡す。**Composition テストが unit テストの見逃す配線エラーを捕まえる。**
+**各ステップが既に個別にテストされているのに、なぜこのテストが必要なのか？** Composition 自体が独立した関心事だからだ。`tick()` が間違った順序で間違った関数を呼ぶ可能性がある — 例えば `compute_rate` の前に `apply_funding` を呼んでしまったり、`mark` を期待している箇所に `index` を渡してしまったり、といったことが起こりうる。**Composition テストは、unit テストでは見逃される配線ミスを捕まえてくれる。**
 
-> 🛑 **やりがちな勘違い。** 「このテストは `apply_funding` のテストを duplicate する。Per-account アサーションを落として `out.rate` だけチェックすべき？」 **No。** このテストの要点は*composition*。`apply_funding` のテストが pass するが `premium_drives_settlement_signs` が fail するなら、バグは `tick()` が呼び出しを配線する方法 — `apply_funding` の中ではない。**各 layer に独自の composition テストが必要。** 3 layer 深いなら最低 3 composition テスト。
+> 🛑 **やりがちな勘違い。** 「このテストは `apply_funding` のテストと重複している。アカウントごとのアサーションは落として、`out.rate` だけ確認すべきでは？」 **だめだ。** このテストの要点は*composition*にある。`apply_funding` のテストは pass するのに `premium_drives_settlement_signs` だけ fail するなら、バグは `tick()` が呼び出しを配線するやり方にあって、`apply_funding` の中にはない。**レイヤーごとに独自の composition テストが必要だ。** 3 レイヤー深ければ、最低 3 つの composition テストが必要になる。
 
 ### Step 2: `second_tick_requires_another_full_interval` を追加
 
@@ -121,24 +121,24 @@ L8 のテストは clock を*最多 1 度*走らせる。L9 が clock を複数�
     }
 ```
 
-**3 tick call、3 アサーション。** 構造が story を語る：
+**tick 呼び出し 3 回、アサーション 3 つ。** 構造そのものが story を語っている：
 
-1. **`1_003_600` の最初の tick** — fire（L8 の境界ケース）。この後 `last_settled_at = 1_003_600`。
-2. **`1_007_199` の 2 つ目の tick** — `1_007_199 - 1_003_600 = 3599`。Interval の 1 秒不足。`None` を返す。
-3. **`1_007_200` の 3 つ目の tick** — `1_007_200 - 1_003_600 = 3600`。ちょうど interval。`Some` を返す。
+1. **`1_003_600` での最初の tick** — fire する（L8 の境界ケース）。これ以降 `last_settled_at = 1_003_600`。
+2. **`1_007_199` での 2 つ目の tick** — `1_007_199 - 1_003_600 = 3599`、interval に 1 秒足りない。`None` を返す。
+3. **`1_007_200` での 3 つ目の tick** — `1_007_200 - 1_003_600 = 3600`、ちょうど interval。`Some` を返す。
 
-**テストする不変条件**：「Interval guard が成功 tick ごとに再 engage する」。`genesis_time` に対してだけチェックする（`last_settled_at` でなく）素朴な実装は `1_003_600` 以降の全 tick で fire する — このテストがそれを捕まえる。
+**ここで検証している不変条件**：「Interval guard は、成功した tick ごとに再 engage する」。`last_settled_at` ではなく `genesis_time` に対してだけチェックするような素朴な実装だと、`1_003_600` 以降のすべての tick で fire してしまう — このテストでそれを捕まえる。
 
-**最小 counterexample**：L8 の `first_tick_at_exact_interval_fires` と L9 の `second_tick_requires_another_full_interval` の間で verify されている唯一のことは、`last_settled_at` が*gating reference* であり、`genesis_time` ではないこと。**3 call が state-machine 持続性をテストする最小。**
+**最小の counterexample**：L8 の `first_tick_at_exact_interval_fires` と L9 の `second_tick_requires_another_full_interval` を組み合わせて初めて、「gating の基準は `last_settled_at` であって `genesis_time` ではない」ことが検証される。**state machine の持続性を確かめるには、3 回の呼び出しが最小構成だ。**
 
-> 🛑 **考えてみよう。** 上の 3 tick それぞれの後の `clock.last_settled_at()` は？
+> 🛑 **考えてみよう。** 上の各 tick の後で `clock.last_settled_at()` はそれぞれどうなるか。
 
 （答え：
 - Tick 1（成功）後：`1_003_600`。
 - Tick 2（None — gated）後：変化なし、まだ `1_003_600`。
 - Tick 3（成功）後：`1_007_200`。
 
-**Clock が gated call で advance しない。** これが interval-gating 不変条件の 2 つ目の部分：失敗で state は変わらない。テストは tick 2 後の `last_settled_at` を明示的に assert しないが、tick 3 がちょうど `1_003_600 + 3600` で成功することが含意する。）
+**Clock は gated な呼び出しでは advance しない。** これが interval-gating 不変条件のもう 1 つの側面で、失敗時には state を変化させない、ということだ。テスト自体は tick 2 後の `last_settled_at` を明示的には assert していないが、tick 3 がちょうど `1_003_600 + 3600` で成功することがそれを暗黙に保証している。）
 
 ### Step 3: `capped_rate_when_premium_extreme` を追加
 
@@ -159,14 +159,14 @@ L8 のテストは clock を*最多 1 度*走らせる。L9 が clock を複数�
     }
 ```
 
-**`compute_rate` の cap が `tick()` 経由で呼ばれたとき正しく clamp することをテスト。** 数学：
+**`tick()` 経由で呼ばれたときも、`compute_rate` の cap が正しく clamp として効くことを検証する。** 数学：
 
 1. `compute_premium(MarkPrice(200), IndexPrice(100))` → `Premium(1_000_000_000)`（100% premium）。
 2. `compute_rate(Premium(1_000_000_000), {divisor=8, cap=40M})` → raw = `1_000_000_000 / 8 = 125_000_000`。`±40_000_000` に clamp → `FundingRate(40_000_000)`。
 
-**`compute_rate` のテストが既に clamping をカバーするのに、なぜこのテストが存在する？** `tick()` が rate を適用前に unwrap・fiddle・bypass しないことを知る必要があるから。**Cap が clock を変化なく surface する。**
+**`compute_rate` のテストが既に clamping をカバーしているのに、なぜこのテストが必要なのか？** `tick()` 側で rate を unwrap したり、いじったり、bypass したりしないことを確認する必要があるからだ。**Cap が clock を経由しても変化せずに surface することを示す。**
 
-微妙な配線バグ — 例：`compute_rate(premium, FundingParams { rate_cap: FundingRate(0), ..params })` — はこのテストを破る（cap ゼロ → rate ゼロ → settlement なし）。**Composition テストが unit テストにできないことを捕まえる。**
+微妙な配線バグ — 例：`compute_rate(premium, FundingParams { rate_cap: FundingRate(0), ..params })` のようなもの — は、このテストで壊れる（cap ゼロ → rate ゼロ → settlement なし）。**Composition テストは、unit テストでは拾えないものを捕まえる。**
 
 ### Step 4: テストを実行
 
@@ -189,25 +189,25 @@ test clock::tests::second_tick_requires_another_full_interval ... ok
 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-**21 テスト全 green。** うち 6 つが今 `clock::tests` に住む（L8 から 3 + L9 から 3）。
+**21 テストすべて green。** うち 6 つが `clock::tests` に置かれている（L8 で 3 つ + L9 で 3 つ）。
 
 よくあるエラー：
 
-- **`premium_drives_settlement_signs` が `Notional(-13)` か `Notional(-11)` で fail** — rounding の off-by-one。数学を再確認：`100 × 101 × 1_250_000 = 12_625_000_000`。`1_000_000_000` で割ると `12.625`。整数除算がゼロに向けて truncate → `12`。符号 flip → `-12`。違う数字なら `*`（debug overflow で panic）、`saturating_mul`、`wrapping_mul` のどれを使っているか確認。
-- **`second_tick_requires_another_full_interval` が second tick で fail** — guard が `last_settled_at` でなく `genesis_time` と比較している。L8 のコードを再読：guard は `now < self.last_settled_at.saturating_add(...)`、*`now < self.params.genesis_time + ...` ではない*。
-- **`capped_rate_when_premium_extreme` が `FundingRate(125_000_000)` を返す** — `compute_rate` が clamp していない。L6 を再確認：`raw.clamp(-cap, cap)` 行があるはず。
+- **`premium_drives_settlement_signs` が `Notional(-13)` あるいは `Notional(-11)` で失敗する** — rounding の off-by-one だ。数学を再確認しよう：`100 × 101 × 1_250_000 = 12_625_000_000`。`1_000_000_000` で割ると `12.625`、整数除算はゼロ方向に truncate するので `12`、符号反転で `-12` だ。これと違う数値が出るなら、`*`（debug で overflow すると panic）、`saturating_mul`、`wrapping_mul` のどれを使っているかを確認すること。
+- **`second_tick_requires_another_full_interval` が second tick で失敗する** — guard が `last_settled_at` ではなく `genesis_time` と比較している場合だ。L8 のコードを読み直そう：guard は `now < self.last_settled_at.saturating_add(...)` であって、*`now < self.params.genesis_time + ...` ではない*。
+- **`capped_rate_when_premium_extreme` が `FundingRate(125_000_000)` を返す** — `compute_rate` で clamp が効いていない場合だ。L6 を再確認すること：`raw.clamp(-cap, cap)` の行があるはずだ。
 
 ## 設計の振り返り
 
-このレッスンに焼き込まれた決定 4 つ：
+このレッスンに焼き込んだ決定は 4 つ：
 
-1. **Composition テストが配線エラーを捕まえる。** 各ステップが unit-test されていても、ステップ間の配線は別の関心。**3 ステップ pipeline は最低 3 composition テスト（各ステップの正しい配置に 1 つ）+ multi-step composition テスト 1 つが必要。** `premium_drives_settlement_signs` が後者。
+1. **Composition テストが配線ミスを捕まえる。** 各ステップが unit-test されていても、ステップ間の配線は別の関心事だ。**3 ステップの pipeline には、最低でも composition テストが必要だ — 各ステップの配置に 1 つずつ、加えてマルチステップの composition テストを 1 つ。** `premium_drives_settlement_signs` が後者にあたる。
 
-2. **State machine は multi-call テストが必要。** 単一 operation が偶然に不変条件を満たすことがある、複数 operation だけが state machine が一貫に強制するかを確認。**`first_tick_at_exact_interval_fires` だけでは不十分なので `second_tick_requires_another_full_interval` が存在。**
+2. **State machine には multi-call テストが必要。** 単一 operation で偶然に不変条件を満たしてしまうことがあり、それを排除して「state machine が一貫して強制しているか」を確認できるのは複数 operation だけだ。**`first_tick_at_exact_interval_fires` だけでは足りないからこそ `second_tick_requires_another_full_interval` が存在する。**
 
-3. **各 gate で境界テスト。** Inclusive 境界（`now == last_settled_at + interval`）と exclusive 境界（`now == last_settled_at + interval - 1`）両方をテスト必要。**1 秒不足と 1 秒経過後が標準ペア。**
+3. **各 gate で境界テストを行う。** inclusive な境界（`now == last_settled_at + interval`）と exclusive な境界（`now == last_settled_at + interval - 1`）の両方をテストする必要がある。**1 秒手前と 1 秒後の組が標準ペアだ。**
 
-4. **各 layer の不変条件にそれぞれ surface テスト。** `compute_rate` テストが cap clamp を証明。`tick` テストが cap が composition で*生存*することを証明。**Composition が semantics を失いうる、不変条件が trav する各 layer で verify。**
+4. **各レイヤーの不変条件には、それぞれ surface テストを置く。** `compute_rate` のテストは cap clamp を証明する。`tick` のテストは、その cap が composition のもとでも*生き残る*ことを証明する。**Composition は semantics を失わせうるので、不変条件が経由する各レイヤーで検証する。**
 
 ## 答え合わせ
 
@@ -228,21 +228,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: `second_tick_requires_another_full_interval` がなぜ `+3601` もテストしない？**
-`+3600` ちょうど*と* `+3599` 一緒で境界両側を pin するから。`+3601` は `+3600` より少し多いだけ — 同じ方向。**境界 2 ケース（直前と ちょうど）で十分。** 追加ケースは別のバグクラスを捕まえない。
+**Q: なぜ `second_tick_requires_another_full_interval` は `+3601` をテストしないのか？**
+`+3600` ちょうど*と* `+3599` を組み合わせれば境界の両側を pin できるからだ。`+3601` は `+3600` より少し多いだけで、同じ方向の話でしかない。**境界の 2 ケース（直前とちょうど）で十分**で、追加ケースが別のバグクラスを捕まえてくれるわけではない。
 
-**Q: 「genesis vs last_settled_at」バグを proptest で捕まえられた？**
-できる — `t2 < t1 + interval` のランダム `(t1, t2)` ペアが second tick で `None` を生むべき。だが手書きトレーステストが意図を明確にする：「`t1` の tick の後、`t1 + 3599` の次の tick が gated」。Proptest は property に excel、手書きトレーステストは名前付き scenario に excel。**State-machine 挙動は通常 scenario。**
+**Q: 「genesis vs last_settled_at」のバグを proptest で捕まえられないか？**
+捕まえられる — `t2 < t1 + interval` を満たすランダムな `(t1, t2)` ペアで second tick が `None` を返すべき、という形にすればよい。ただし、手書きトレースのテストの方が意図がはっきりする：「`t1` で tick が成功した後、`t1 + 3599` の次の tick は gate される」。Proptest は property に強く、手書きトレースは名前付きのシナリオに強い。**state machine の挙動は通常シナリオ寄りだ。**
 
-**Q: テストになぜ 3 つ目の tick を、例えば +7200（first から 2 interval）に含めない？**
-情報を加えないから。`+3600` の 2 つ目の tick が既に clock が正しい cadence で fire することを確立、3 つ目は同じことの繰り返し。**テストは verify するもので distinguish すべき**、繰り返しを足すのでなく。
+**Q: なぜ 3 つ目の tick として、例えば +7200（最初から 2 interval 後）を含めないのか？**
+情報量が増えないからだ。`+3600` での 2 つ目の tick で「clock が正しい cadence で fire する」ことは既に立証している。3 つ目は同じことを繰り返すだけだ。**テストは検証するもので区別をつけるべきで**、繰り返しを足すべきではない。
 
-**Q: テスト author が `genesis_time = 0`（`1_000_000` でなく）にしていたら？**
-数学は同一、だがテストは less helpful。`1_000_000`（と対応する `1_003_600` 等）を使うと「clock が 3600 秒 advance」パターンが全アサーションで見える。**テストデータは readable であるべき、正しいだけでなく。**
+**Q: テスト作者が `genesis_time = 0`（`1_000_000` ではなく）を使っていたらどうなる？**
+数学は同じだが、テストの読みやすさが落ちる。`1_000_000`（とそれに対応する `1_003_600` 等）を使うと、すべてのアサーションから「clock が 3600 秒 advance する」パターンが視認できる。**テストデータは正しいだけでなく、読みやすくあるべきだ。**
 
 ## 次のレッスン（L10）
 
-L10 で Module 3 を **no-catch-up 不変条件**で閉じる：マイルストーンテスト `no_catchup_after_long_gap`。シナリオ：validator が 10 時間のダウンタイム後 reboot、`now - last_settled_at = 36000`（10 interval）。素朴な期待は「10 tick を replay して catch up」かも、だが設計選択は **1 度 settle して `now` に advance**。レッスンが catch-up がなぜ tick スキップより悪いかを説明、テストが設計選択が enforced されることを確認。**1 テスト、1 不変条件、設計哲学が action で。**
+L10 では Module 3 を **no-catch-up 不変条件**で閉じる：マイルストーンテストの `no_catchup_after_long_gap` を扱う。シナリオは「validator が 10 時間のダウンタイムを経て reboot し、`now - last_settled_at = 36000`（10 interval）になっている」状態だ。素朴には「10 tick を replay して追いつく」と考えがちだが、今回の設計判断は **1 度だけ settle して `now` まで advance する**だ。レッスンでは「catch-up がなぜ tick スキップより悪いのか」を説明し、テストでその設計判断が enforce されていることを確認する。**テスト 1 つ、不変条件 1 つ、設計哲学を行動で示す。**
 ````
 
 ---

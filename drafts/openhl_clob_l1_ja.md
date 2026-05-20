@@ -26,14 +26,14 @@
 cargo check -p openhl-clob
 ```
 
-…がクリーンにコンパイルする。新規 crate (`crates/clob/`) が workspace に登録され、`src/types.rs` 1 ファイルに matching engine が使う **atomic な field-level 型** が入る:
+上記の実行結果がクリーンにコンパイルする。新規 crate (`crates/clob/`) が workspace に登録され、`src/types.rs` 1 ファイルに matching engine が使う **atomic な field-level 型** が入る:
 
-- **`u64` を wrap する newtype を 4 個** — `AccountId`、`OrderId`、`Price`、`Qty` — 偶発的な swap に対する型安全性のため。
+- **`u64` を wrap する newtype 4 個** — `AccountId`、`OrderId`、`Price`、`Qty`。偶発的な swap を型レベルで防ぐため。
 - **`Side` enum** (`Buy` | `Sell`) と `opposite()` ヘルパー。
 - **`OrderType` enum** — `Limit { price }` または `Market`。
 - **`OrderId`、`Price`、`Qty` への `Display` impl** — debug 出力が自然に読めるように (`"#42"`、`"1000000"` 等)。
 
-Record 型はまだなし (L2)。Book もまだなし (L3 以降)。本レッスンは土台 — 以降の全レッスンがここで build する型を使う。
+Record 型はまだ作らない (L2)。Book もまだ作らない (L3 以降)。本レッスンは土台 — 以降の全レッスンがここで build する型を使う。
 
 ## おさらい
 
@@ -46,7 +46,7 @@ crates/consensus/         — フル BFT engine (Context, signing, codec, node, 
 bin/openhl/               — stub バイナリ
 ```
 
-`cargo test` で workspace 全体 ~38 個合格。`LiveRethEvmBridge::commit` が `ForkchoiceUpdated` を Reth に送る。**ただし `build_payload` は空 block を produce する** — 中に入れるものがない。
+`cargo test` で workspace 全体 ~38 個合格。`LiveRethEvmBridge::commit` が `ForkchoiceUpdated` を Reth に送る。**ただし `build_payload` が produce するのは空 block** — 中身に入れるものがない。
 
 ## 計画
 
@@ -54,13 +54,13 @@ bin/openhl/               — stub バイナリ
 
 1. **`crates/clob/` ディレクトリを作成** — `Cargo.toml` と `src/`。
 2. **`crates/clob/` を workspace に登録** — ルート `Cargo.toml` の `[workspace.members]` に追加。
-3. **`openhl-clob` を workspace dependency に追加** — ルート `Cargo.toml` で、他 crate が依存できるように。
-4. **`src/types.rs` を書く** — newtype 4 個、`Side`、`OrderType`、`Display` impl。**Record 型はまだなし** (L2)。
-5. **`pub mod types;` + re-export を `src/lib.rs` に配線** — crate の public API を型に。
+3. **`openhl-clob` を workspace dependency に追加** — 他 crate が依存できるようにルート `Cargo.toml` に書く。
+4. **`src/types.rs` を書く** — newtype 4 個、`Side`、`OrderType`、`Display` impl。**Record 型はまだ書かない** (L2)。
+5. **`pub mod types;` と re-export を `src/lib.rs` に配線** — crate の public API を型として公開。
 
-このレッスンが短いのは型が短いから。重要なのはコードではなく **設計判断** (なぜ raw `u64` でなく newtype か、なぜ `Limit` が価格を struct field として運ぶか、`Qty` の単位は何か)。
+このレッスンが短いのは型が短いから。重要なのはコードではなく **設計判断** (なぜ raw `u64` ではなく newtype か、なぜ `Limit` が価格を struct field として運ぶのか、`Qty` の単位は何か)。
 
-> 🛑 **考えてみよう。** スクロールする前に: 同じ `u64` を wrap する newtype が 4 個 (`AccountId(u64)`、`OrderId(u64)`、`Price(u64)`、`Qty(u64)`) 並んでいるとき、各 newtype が防ぐ **1 つのバグ** は何か — raw `u64` を使うと通り抜けるバグ? ヒント: `(u64, u64, u64)` を取る関数を考える。誰かがその引数を間違った順序で呼ぶ場面を想像する。**newtype パターンの主な役割は、argument-swap バグを compile error に変えること。**
+> 🛑 **考えてみよう。** スクロールする前に: 同じ `u64` を wrap する newtype が 4 個 (`AccountId(u64)`、`OrderId(u64)`、`Price(u64)`、`Qty(u64)`) 並んでいるとき、各 newtype が防ぐ **1 つのバグ** は何か — raw `u64` を使うと通り抜けるバグ。ヒント: `(u64, u64, u64)` を取る関数を考えて、誰かがその引数を間違った順序で呼ぶ場面を想像する。**newtype パターンの主な役割は、argument-swap バグを compile error に変えること。**
 
 ## 手順
 
@@ -89,11 +89,11 @@ authors      = { workspace = true }
 workspace = true
 ```
 
-依存なし。CLOB matching engine は純粋データ + 純粋ロジックで、この段階では `serde` も要らない (Stage 8b が funding 用に追加するが、今は不要)。
+依存なし。CLOB matching engine は純粋データ + 純粋ロジックなので、この段階では `serde` も要らない (Stage 8b が funding 用に追加するが、今は不要)。
 
 ### Step 2: Workspace に登録
 
-ルート `Cargo.toml` を開く。`[workspace] members = [...]` を見つけ、リストに `"crates/clob"` を追加。既存の順序を保つ (アルファベット順または挿入順どちらでもよい):
+ルート `Cargo.toml` を開く。`[workspace] members = [...]` を見つけ、リストに `"crates/clob"` を追加。既存の順序は保つ (アルファベット順でも挿入順でもよい):
 
 ```toml
 [workspace]
@@ -107,7 +107,7 @@ members = [
 ]
 ```
 
-同じルート `Cargo.toml` で、`[workspace.dependencies]` を見つけ、`openhl-clob` のパスエントリを追加:
+同じルート `Cargo.toml` で `[workspace.dependencies]` を見つけ、`openhl-clob` のパスエントリを追加:
 
 ```toml
 [workspace.dependencies]
@@ -118,7 +118,7 @@ openhl-evm       = { path = "crates/evm" }
 openhl-consensus = { path = "crates/consensus" }
 ```
 
-これで `openhl-clob` が欲しい crate は自分の `Cargo.toml` で `openhl-clob = { workspace = true }` と宣言できる。L9 で bridge が CLOB を consume するときに使う。
+これで `openhl-clob` を欲しい crate は自分の `Cargo.toml` で `openhl-clob = { workspace = true }` と宣言できるようになる。L9 で bridge が CLOB を consume するときに使う。
 
 ### Step 3: Newtype を書く
 
@@ -151,15 +151,15 @@ pub struct Price(pub u64);
 pub struct Qty(pub u64);
 ```
 
-4 つの構造体、各 1 行、すべて `u64` を wrap。**7 個の derive は 4 型すべてで同一** — 意図的。newtype パターンが効くのは、型が `u64` と **同じ操作** を持つが、型システムが両者の混在を **拒否する** から。
+4 つの構造体、各 1 行、すべて `u64` を wrap。**7 個の derive は 4 型すべてで同一** — 意図的。newtype パターンが効くのは、型が `u64` と **同じ操作** を持ちつつ、型システムが両者の混在を **拒否する** から。
 
-doc コメントで 3 つ注目する点:
+doc コメントで注目する点が 3 つ:
 
-- **`AccountId` は opaque** — CLOB は chain が EVM address、ed25519 pubkey、sequential integer のどれを使うか知らない。ただ equality で比較するだけ。Chain 統合 (course 8 の precompile、最終的に production node コード) が `AccountId(...)` を chain が欲しい何かにマップする。
-- **`OrderId` は caller-allocated** — book が ID を生成しない、caller が生成する。これで book が pure-stateless に保たれる: `submit_order` は (book, order) の関数で、(book, order, generator-state) ではない。
-- **`Price`/`Qty` は minor unit** — USDC のような 6-decimal token では `Price(1_000_000)` が $1.00 を表す。Matching engine に `f64` は **存在しない**。**お金の計算で float は禁止。**
+- **`AccountId` は opaque** — CLOB は chain が EVM address、ed25519 pubkey、sequential integer のどれを使うかを知らない。equality で比較するだけ。chain 統合 (course 8 の precompile、最終的には production node コード) が `AccountId(...)` を chain が欲しい何かにマップする。
+- **`OrderId` は caller-allocated** — book は ID を生成せず、caller が生成する。これで book が pure-stateless に保たれる: `submit_order` は (book, order) の関数であり、(book, order, generator-state) ではない。
+- **`Price`/`Qty` は minor unit** — USDC のような 6-decimal token では `Price(1_000_000)` が $1.00 を表す。Matching engine の中に `f64` は **存在しない**。**お金の計算に float は持ち込まない。**
 
-> 🛑 **やりがちな勘違い。** 「便利のために `pub fn from_dollars(d: f64) -> Price` メソッドを追加しよう。」 **ダメ、f64 の精度問題を engine に持ち込むことになる。** `Price(1_000_000)` が wire format。User 向けツールが `from_dollars` をやりたければ、自分の境界で integer 乗算をして bridge に integer-typed Price を渡す。Matching engine は float を見ない。
+> 🛑 **やりがちな勘違い。** 「便利のために `pub fn from_dollars(d: f64) -> Price` メソッドを追加しよう。」 **ダメ、f64 の精度問題を engine に持ち込むことになる。** `Price(1_000_000)` が wire format。User 向けツールで `from_dollars` をやりたければ、ツール側の境界で integer 乗算をして bridge には integer-typed Price を渡す。Matching engine は float に触れない。
 
 ### Step 4: `Side` enum と `opposite()` ヘルパー
 
@@ -183,11 +183,11 @@ impl Side {
 }
 ```
 
-variant 2 個。`opposite()` メソッドは今 1 行だが、後で load-bearing になる: taker order が来たとき book の **反対側** を walk して流動性を探す。Buy taker は ask を walk; Sell taker は bid を walk。**ルールを `opposite()` に 1 回 encode することで、book コードを読むときどっち側を walk するか忘れない。**
+variant 2 個。`opposite()` メソッドは今のところ 1 行だが、後で load-bearing になる: taker order が来たとき book の **反対側** を walk して流動性を探すから。Buy taker は ask を walk し、Sell taker は bid を walk する。**ルールを `opposite()` に 1 度だけ encode しておけば、book コードを読むときどちらの side を walk するか忘れない。**
 
-`#[derive(PartialOrd, Ord)]` が **ない** のは意図的。「Buy は Sell より小さい?」は無意味。trait を抜くことで、caller が `if side < Side::Sell` を偶発的に書いてしまい、declaration 順 (`Buy < Sell`) という意図しない順序づけが効いてしまうのを防ぐ。
+`#[derive(PartialOrd, Ord)]` を **付けない** のは意図的。「Buy は Sell より小さい?」は無意味な問いだから。trait を抜くことで、caller が `if side < Side::Sell` を偶発的に書いて declaration 順 (`Buy < Sell`) という意図しない順序付けが効いてしまうのを防ぐ。
 
-> 🛑 **やりがちな勘違い。** 「bool でいいんじゃない? `is_buy: bool` でバイト節約。」 **call site で意味が失われる。** `submit_order(order, true)` は読み手にゴミに見える; `submit_order(order, Side::Buy)` は明らか。enum vs bool の 1 バイトのコストは、bool の可読性コストに比べたら無視できる。**名前を持つものは enum、on/off 以上の名前を持たないものだけ bool。**
+> 🛑 **やりがちな勘違い。** 「bool でいいのでは? `is_buy: bool` でバイト節約。」 **call site で意味が失われる。** `submit_order(order, true)` は読み手にとってゴミに見えるが、`submit_order(order, Side::Buy)` なら一目瞭然。enum vs bool の 1 バイトのコストは、bool の可読性コストに比べれば無視できる。**名前のあるものは enum、on/off 以外の名前を持たないものだけ bool。**
 
 ### Step 5: `OrderType` enum
 
@@ -209,9 +209,9 @@ variant 2 個:
 - **`Limit { price: Price }`** — struct スタイルの enum variant。Order に価格があり、at-or-better でマッチできなければ残りが book に rest する。
 - **`Market`** — unit variant。価格なし、任意の価格で利用可能な流動性を取り、残りは破棄。
 
-`Limit { price: Price }` を tuple スタイル `Limit(Price)` でなく struct スタイルにしたのは意図的。コードが `order.order_type` をパターンマッチするとき、`Limit { price }` で field 名 `price` がパターンに入る。tuple は `Limit(p)` と書かせて `p` の意味を覚えさせる。**Named field が型を self-documenting にする。**
+`Limit { price: Price }` を tuple スタイル `Limit(Price)` ではなく struct スタイルにしたのは意図的。コードが `order.order_type` をパターンマッチするとき、`Limit { price }` だと field 名 `price` がパターンに入る。tuple では `Limit(p)` と書いて `p` の意味を覚えておかなければならない。**Named field が型を self-documenting にする。**
 
-> 🛑 **やりがちな勘違い。** 「`Stop`、`StopLimit`、`Iceberg`、`Post-Only` も足しておけば?」 **engine がまだ必要としていないし、未使用 variant は技術負債。** Limit + Market が L7-L8 の spot-trading テストシナリオをカバーする最小セット。openhl が Stop order を必要とするとき (おそらく perp 領域、course 9 以降)、メンテナがそのとき variant を追加し、その時点でマッチングロジック、book ロジック、テストシナリオがすべて同時に更新される。**使う直前に型を追加し、それ以前にしない。**
+> 🛑 **やりがちな勘違い。** 「`Stop`、`StopLimit`、`Iceberg`、`Post-Only` も足しておけば?」 **engine がまだ必要としていないし、未使用 variant は技術負債になる。** Limit + Market が L7-L8 の spot-trading テストシナリオをカバーする最小セット。openhl が Stop order を必要とする時点 (おそらく perp 領域、course 9 以降) でメンテナが variant を追加すれば、その時点でマッチングロジック、book ロジック、テストシナリオがすべて同時に更新される。**型は使う直前に追加する、それ以前には追加しない。**
 
 ### Step 6: User-facing な newtype 3 個に `Display` impl
 
@@ -237,9 +237,9 @@ impl fmt::Display for Qty {
 }
 ```
 
-`Display` impl 3 個。**`AccountId` に Display がない** のは意図的。AccountId は opaque な ID; print したいなら、生の `u64` ではなく chain 統合のマッピングが返す real address を print したいはず。`Display` を抜くと caller が明示的にせざるを得なくなる (例: `format!("{}", a.0)` または「chain の address renderer 経由で render」)。
+`Display` impl 3 個。**`AccountId` に Display を付けない** のは意図的。AccountId は opaque な ID なので、print したいなら生の `u64` ではなく chain 統合のマッピングが返す real address を print したいはず。`Display` を抜くと caller が明示的に扱わざるを得なくなる (例: `format!("{}", a.0)` または「chain の address renderer 経由で render」)。
 
-`OrderId` は `"#42"` として format するのでテスト出力が自然 (`fill from #1 to #2`)。Price と Qty は単なる数値値 — だが `Display` impl があれば `.0` を書かずに `format!` / `println!` で使える。
+`OrderId` は `"#42"` として format されるのでテスト出力が自然になる (`fill from #1 to #2`)。Price と Qty は単なる数値だが、`Display` impl があれば `.0` を書かずに `format!` / `println!` で使える。
 
 ### Step 7: 型を `lib.rs` に配線
 
@@ -256,9 +256,9 @@ pub mod types;
 pub use types::*;
 ```
 
-body 3 行 + doc コメント。`pub use types::*` で型を crate ルートで re-export するので、caller は `use openhl_clob::types::{Order, Side}` ではなく `use openhl_clob::{Order, Side}` と書ける — 短い形をどこでも使う。
+body 3 行 + doc コメント。`pub use types::*` で型を crate ルートで re-export するので、caller は `use openhl_clob::types::{Order, Side}` ではなく `use openhl_clob::{Order, Side}` と書ける — どこでも短い形を使う。
 
-`book` モジュールは L3 で来る; 今は `pub mod types;` 1 行。
+`book` モジュールは L3 で追加する。今は `pub mod types;` の 1 行のみ。
 
 ## テスト
 
@@ -281,7 +281,7 @@ workspace 全体に影響がないことを確認:
 cargo check --workspace
 ```
 
-クリーンに完了するはず。新規 crate に依存する物がまだないので何にも影響しない。
+クリーンに完了するはず。新規 crate に依存するものがまだないので、何にも影響しない。
 
 よくあるエラーと対処:
 
@@ -294,11 +294,11 @@ cargo check --workspace
 
 3 つの load-bearing な決定:
 
-1. **Newtype が argument-swap バグを compile time に防ぐ。** `submit(book, account: u64, price: u64, qty: u64)` のコードは、3 個の `u64` を任意の順序で渡してもコンパイルが通る。`submit(book, AccountId, Price, Qty)` のコードは間違った型を compile time に拒否する。コストは余分な `.0` deref 2 個、利益は書けないバグ。
+1. **Newtype が argument-swap バグを compile time に防ぐ。** `submit(book, account: u64, price: u64, qty: u64)` の形だと、3 つの `u64` をどの順序で渡してもコンパイルが通る。`submit(book, AccountId, Price, Qty)` の形なら間違った型を compile time に拒否できる。コストは `.0` deref が数個増えるだけで、利益は書きようがないバグ。
 
-2. **お金の計算は integer、float ではない。** `Price` と `Qty` は `u64` ベース。`Price::from_f64` は存在しない。価格を "$1.00" として表示したい人は、engine の **外** の rendering 境界で integer-to-decimal 変換をする。Matching engine の invariant (例: 「fill 合計は数量を常に保存する」) は exact-integer invariant。float 中間値を導入したら壊れる。
+2. **お金の計算は integer であって float ではない。** `Price` と `Qty` は `u64` ベース。`Price::from_f64` は存在しない。価格を "$1.00" として表示したいなら、engine の **外** の rendering 境界で integer-to-decimal 変換をする。Matching engine の invariant (例: 「fill 合計は常に数量を保存する」) は exact-integer invariant — float 中間値を導入した瞬間に壊れる。
 
-3. **`OrderType::Limit { price }` で `Limit(Price)` ではない。** 後で `match order.order_type { Limit { price } => ..., Market => ... }` と書くとき、`price` binding が役割を明らかにする。tuple スタイル enum variant が正しいのは variant が「ある 1 物の wrapper」のとき; struct スタイルが正しいのは field に **名前** があるとき。ここでは名前がある (`price`) ので struct スタイルが勝つ。
+3. **`OrderType::Limit { price }` であって `Limit(Price)` ではない。** 後で `match order.order_type { Limit { price } => ..., Market => ... }` と書くとき、`price` binding が役割を明らかにしてくれる。tuple スタイル enum variant が正しいのは variant が「ある 1 物の wrapper」であるとき。struct スタイルが正しいのは field に **名前** があるとき。ここでは名前がある (`price`) ので struct スタイルに分がある。
 
 ## 答え合わせ
 
@@ -321,20 +321,20 @@ git checkout main
 ## よくある質問
 
 **Q: なぜ `AccountId`、`OrderId`、`Price`、`Qty` がすべて `Copy`?**
-中身は `u64` — 8 バイト、heap なし。`Copy` をマークすると、engine が `.clone()` を書かずに value で自由に渡せる。Trait bound は runtime ではゼロコスト。
+中身は `u64` — 8 バイト、heap なし。`Copy` をマークすると、engine が `.clone()` を書かずに value で自由に渡せるようになる。Trait bound は runtime ではゼロコスト。
 
-**Q: なぜこれら型に `Hash`?**
-将来の用途: O(1) cancel-by-id (レッスン L6) のための `HashMap<OrderId, RestingOrder>`。今 `Hash` を足しておけば、後で derive cascade の churn が起こらない。
+**Q: なぜこれらの型に `Hash`?**
+将来の用途を見据えて: O(1) cancel-by-id (レッスン L6) のための `HashMap<OrderId, RestingOrder>`。今 `Hash` を足しておけば、後で derive cascade の churn が起こらない。
 
-**Q: なぜ `Side: PartialOrd + Ord` でない?**
-「Buy は Sell より小さい?」が無意味な質問だから。`Ord` を derive すると、caller が `if side < Side::Sell { ... }` を書いて、Rust が最初に列挙した variant (ここでは Buy) を取る — だがこれは declaration 順の artifact で、semantically な意味ではない。trait を抜くと caller は `match` か `==` を強制される。
+**Q: なぜ `Side` に `PartialOrd + Ord` を付けないのか?**
+「Buy は Sell より小さい?」が無意味な質問だから。`Ord` を derive すると、caller が `if side < Side::Sell { ... }` を書けるようになり、Rust が最初に列挙した variant (ここでは Buy) を採用する — だがこれは declaration 順の artifact であって semantic な意味ではない。trait を抜けば caller は `match` か `==` の使用を強制される。
 
 **Q: なぜ `opposite()` に `#[must_use]`?**
-`side.opposite();` (結果を assign しない) がほぼ確実にバグだから — `opposite()` は新しい `Side` を返す、mutate しない。`#[must_use]` でそれを warning にする。返り値が唯一の目的の関数すべてで良いプラクティス。
+`side.opposite();` (結果を assign しない) がほぼ確実にバグだから — `opposite()` は新しい `Side` を返すだけで mutate しない。`#[must_use]` でそれを warning として浮き上がらせる。返り値が唯一の目的の関数すべてで良いプラクティス。
 
 ## 次のレッスン (L2)
 
-Field-level 型 — atomic な部品 — がそろった。L2 ではそれらを組み合わせる **record-level 型** を build する: `Order` (matching engine への入力)、`Fill` (出力)、`FillResult` (fills と remaining-quantity 情報を bundle する wrapper)。L2 完了後、型の語彙が完成する; L3 以降がこれらの型を使って実際の matching state machine を build する。
+Field-level 型 — atomic な部品 — がそろった。L2 ではそれらを組み合わせる **record-level 型** を build する: `Order` (matching engine への入力)、`Fill` (出力)、`FillResult` (fills と remaining-quantity 情報を bundle する wrapper)。L2 完了後、型の語彙が完成する。L3 以降ではこれらの型を使って実際の matching state machine を build していく。
 ````
 
 ---

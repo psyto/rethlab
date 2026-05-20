@@ -18,11 +18,11 @@
 ````markdown
 # OpenHL CLOB を作る — substrate の上に matching engine を載せる
 
-前コース (`building-openhl-consensus`) は、real Reth EVM を通じて 0.02 秒で block を decide する single-validator BFT chain で終わった。**ただし decide していたのは空の block。** トランザクションなし、マッチングなし、価格発見なし。
+前コース (`building-openhl-consensus`) は、real Reth EVM を通じて 0.02 秒で block を decide する single-validator BFT chain で終わった。**ただし decide していたのは空の block。** トランザクションもマッチングも価格発見もない。
 
-本コースで **CLOB matching engine** を追加する — 「HYPE を $25 で 10 個買いたい」と「HYPE を $25 で 5 個売りたい」を real fill に変換する Hyperliquid の核。Stage 8a (701 行) が pure state machine を build、Stage 8d (171 行) が bridge に配線して、commit された block が matching engine の produce した fill を運ぶようになる。
+本コースで **CLOB matching engine** を追加する — 「HYPE を $25 で 10 個買いたい」と「HYPE を $25 で 5 個売りたい」を real fill に変換する Hyperliquid の核。Stage 8a (701 行) で pure state machine を build し、Stage 8d (171 行) で bridge に配線する。これで commit された block が matching engine の produce した fill を運ぶようになる。
 
-本コース終了時、`cargo test clob_fills_flow_into_payload` が pass する — real fill が matching engine から `LiveRethEvmBridge::build_payload` を通って payload に流れ、それを consensus が commit する。
+本コース終了時には `cargo test clob_fills_flow_into_payload` が pass する — real fill が matching engine から `LiveRethEvmBridge::build_payload` を通って payload に流れ、それを consensus が commit する。
 
 ## 1. 終了時に手にするもの
 
@@ -32,15 +32,15 @@
 - **`Book` + `Order` + `Fill` 型** — CEX が「order book」と呼ぶものに対応。
 - **テスト 12 個合格**: hand-trace されたシナリオ 9 個 (空の book、FIFO 優先、market order の流動性枯渇、partial fill、cancel、マッチ後の no-crossed-book) + proptest invariant 3 個 (256 ケース × 3 = 768 ランダムシナリオ — quantity conservation、no-crossed-book always、determinism = replayability)。
 
-そして `crates/evm/` に新規 integration test:
+加えて `crates/evm/` に新規 integration test:
 
-- **`clob_fills_flow_into_payload`** — real Reth node を bootstrap、bridge の CLOB に maker bid + crossing taker sell を submit、結果の fill が次の `build_payload` 出力に現れることを assert、そして **過去の payload は遡って fill されない** ことを assert (drain semantics は forward-only)。
+- **`clob_fills_flow_into_payload`** — real Reth node を bootstrap し、bridge の CLOB に maker bid + crossing taker sell を submit し、結果の fill が次の `build_payload` 出力に現れることを assert、さらに **過去の payload に遡って fill が attach されない** ことを assert (drain semantics は forward-only)。
 
 終了時には次ができるようになる:
 
-- なぜ price-time-priority CLOB が on-chain 永久 (perp) 取引所の canonical な構造なのか説明できる
-- fill を buffer する matching engine (本コースで作るもの) vs 同期的に emit する matching engine のトレードオフを推論できる
-- matching logic をゼロから再現できる — そしてコードのどこに手を入れれば stop order、post-only order、pro-rata matching 等が追加できるか分かる状態で改変できる
+- price-time-priority CLOB が on-chain 永久 (perp) 取引所の canonical な構造である理由を説明できる
+- fill を buffer する matching engine (本コースで作るもの) と同期的に emit する matching engine のトレードオフを推論できる
+- matching logic をゼロから再現でき、stop order、post-only order、pro-rata matching 等を追加したい場合にコードのどこに手を入れればよいか把握した上で改変できる
 
 ## 2. 終了時にも手にしないもの
 
@@ -51,23 +51,23 @@
 - fill を EVM-executable トランザクションとして encode (= openhl 自体の Stage 9 より先の future work)
 - Liquidation、mark-vs-index pricing、レバレッジ上限
 
-本コース終了時、**fill を produce して committed block に運ぶ動く matching engine** は手に入るが、その fill はまだ parallel list — スマートコントラクトから読める Ethereum トランザクションとしては実行できない。それを足すのが course 8 (custom EVM precompile)。
+本コース終了時には **fill を produce して committed block に運ぶ動く matching engine** が手に入るが、その fill はまだ parallel list — スマートコントラクトから読める Ethereum トランザクションとしては実行できない。これを足すのが course 8 (custom EVM precompile)。
 
-これは honest scoping。実行配線なしの CLOB engine は半分の物語、残り半分 (precompile) は course 8。
+これは honest scoping。実行配線なしの CLOB engine は物語の半分でしかなく、残り半分 (precompile) は course 8 で扱う。
 
 ## 3. 前提
 
 必要なもの:
 
 - **`building-openhl-consensus` 完了** — または同等の course 6 end state の workspace。`crates/evm/src/live_node.rs` に `LiveRethEvmBridge<P>` が `provider`、`chain_spec`、`validator`、optional な `engine_handle` フィールド付きで存在すること。なければまず course 6 を完了させる。
-- **Rust 1.95+**、course 6 と同じ。
-- **`BTreeMap`、`VecDeque`、`Reverse<T>`、proptest に慣れていること。** 「natural ordering」「最高値から walk するための reverse-ordering trick」が初耳なら、まず `std::collections::BTreeMap` のドキュメントを軽く読む。
+- **Rust 1.95+** — course 6 と同じ。
+- **`BTreeMap`、`VecDeque`、`Reverse<T>`、proptest に慣れていること。** 「natural ordering」や「最高値から walk するための reverse-ordering trick」が初耳なら、まず `std::collections::BTreeMap` のドキュメントを軽く読んでおく。
 
 不要なもの:
 
 - 過去の matching-engine 経験 (データ構造はゼロから build する)
 - 過去の order book 読解スキル (テストシナリオが各ステップを walk する)
-- Multi-validator セットアップ (依然 single-validator)
+- Multi-validator セットアップ (引き続き single-validator)
 
 ## 4. セットアップ確認 (今やる)
 
@@ -96,9 +96,9 @@ cargo test -p openhl-evm --release 2>&1 | tail -10
 # - commit_sends_forkchoice_to_engine_when_handle_installed (course 6 L14)
 ```
 
-それらが pass すれば start point として正しい。pass しなければまず course 6 を完了させる。
+これらが pass すれば start point として正しい。pass しなければ、まず course 6 を完了させる。
 
-> 🛑 **やりがちな勘違い。** 「`git clone psyto/openhl` してそのコードベースに対して course 7 を進めればいい」。 **やれるが、摩擦という学びを取りこぼす。** 本コースは build-along: matching engine を `my-openhl/` でゼロから書き、reference に対して diff する。`openhl-reference` で start すると course 6 §7 で論じた「答え合わせから type する」モードに逆戻りする。
+> 🛑 **やりがちな勘違い。** 「`git clone psyto/openhl` してそのコードベースに対して course 7 を進めればいい」。 **やれなくはないが、摩擦から得られるはずの学びを取りこぼす。** 本コースは build-along — matching engine を `my-openhl/` でゼロから書き、reference に対して diff する。`openhl-reference` から start すると course 6 §7 で論じた「答え合わせを写経する」モードに逆戻りする。
 
 ## 5. 12 レッスンの全体マップ
 
@@ -118,7 +118,7 @@ cargo test -p openhl-evm --release 2>&1 | tail -10
 | **L11** | Bridge 統合 | `clob_fills_flow_into_payload` integration test | **フルパイプラインテスト pass** |
 | **L12** | Capstone | 振り返り、次は何か (course 8 で precompile) | (テストなし — 振り返り) |
 
-**L11 がマイルストーン。** L11 を終えると、matching engine が produce した fill が BFT engine を通って real block に流れる。L12 は「まだ何が足りないか」を named する (fill がスマートコントラクトから読めない — それは course 8)。
+**L11 がマイルストーン。** L11 を終えると、matching engine が produce した fill が BFT engine を通って real block に流れる。L12 は「まだ何が足りないか」を明示する (fill がスマートコントラクトから読めない — それは course 8)。
 
 ## 6. 答え合わせの規律 (course 6 と同じ)
 
@@ -131,13 +131,13 @@ diff -u ~/code/my-openhl/crates/clob/src/types.rs ./crates/clob/src/types.rs
 # (など)
 ```
 
-meaningfully にマッチする — 同じ型、同じ制御フロー。空白と命名は違ってよい。
+本質的な部分が一致していればよい — 同じ型、同じ制御フロー。空白や命名は違ってよい。
 
-> 🛑 **やりがちな勘違い。** 「CLOB の仕組みはもう知っているから L9 まで飛ばして bridge 統合だけ学べばいい」。 **やれるが、L1-L8 が encode している設計判断は、エンジンを後で改変するときに効いてくる。** 逆順 bid、price level 内の FIFO、cancel-then-cleanup invariant — どれも自分で build しないと明らかにならない。L1-L8 をスキップするとコードは読めるが安全に変更できない。
+> 🛑 **やりがちな勘違い。** 「CLOB の仕組みはもう知っているから L9 まで飛ばして bridge 統合だけ学べばいい」。 **やれなくはないが、L1-L8 で encode される設計判断は、エンジンを後で改変するときに効いてくる。** 逆順 bid、price level 内の FIFO、cancel-then-cleanup invariant — どれも自分で build しなければ腹落ちしない。L1-L8 をスキップするとコードは読めても安全に変更できなくなる。
 
 ## 7. セットアップ確認 — 実際の L0 演習
 
-L1 に進む前に、以下を全部走らせて pass を確認:
+L1 に進む前に、以下をすべて走らせて pass することを確認:
 
 ```bash
 # 1. Rust バージョン
@@ -152,9 +152,9 @@ cd ~/code/openhl-reference && git log --oneline | grep -E "(55a9dff|428cc26)"
 # 期待: 両 SHA が現れる
 ```
 
-3 つ全部 pass すれば L1 に進む準備 OK。
+3 つすべて pass すれば L1 に進む準備 OK。
 
-> **最終チェック。** 本コースが course 6 になかった何を追加するのか、1 文で言える? 答えに「fill を produce する matching engine、その fill が committed block に流れる」のような要素が入っていなければ §1 を読み直す。
+> **最終チェック。** 本コースが course 6 になかった何を追加するのか、1 文で言えるか? 答えに「fill を produce する matching engine、その fill が committed block に流れる」といった要素が入っていなければ §1 を読み直す。
 ````
 
 ---

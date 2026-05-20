@@ -26,13 +26,13 @@
 cargo check -p openhl-clob
 ```
 
-…依然コンパイルする。`crates/clob/src/types.rs` に L1 の newtype から build した **record 型 3 個** が入る:
+上記の実行結果が引き続きコンパイルする。`crates/clob/src/types.rs` に L1 の newtype から build した **record 型 3 個** が入る:
 
 - **`Order`** — matching engine への入力 (id、account、side、qty、order_type)。
-- **`Fill`** — maker と taker の間の 1 match の出力 (maker_order_id、taker_order_id、maker_account、taker_account、price、qty)。
+- **`Fill`** — maker と taker の間で発生した 1 match の出力 (maker_order_id、taker_order_id、maker_account、taker_account、price、qty)。
 - **`FillResult`** — submit の return ラッパー: `fills: Vec<Fill>` + `remaining_qty: Qty` + `total_filled()` ヘルパー。
 
-これで **型の語彙** が完成する。L3 以降はこれらの型を使って matching state machine を build する。
+これで **型の語彙** が完成する。L3 以降はこれらの型を使って matching state machine を build していく。
 
 ## おさらい
 
@@ -49,19 +49,19 @@ pub enum OrderType { Limit { price: Price }, Market }
 // + OrderId, Price, Qty への Display impl
 ```
 
-約 65 行。`cargo check -p openhl-clob` が pass。**足りないもの**: これらを組み合わせる型 — order がどう見えるか、fill がどう見えるか、engine が submit 後に何を返すか。L2 がちょうどそのギャップを埋める。
+約 65 行。`cargo check -p openhl-clob` が pass する。**足りないもの**: これらを組み合わせる型 — order がどう見えるか、fill がどう見えるか、engine が submit 後に何を返すか。L2 でちょうどそのギャップを埋める。
 
 ## 計画
 
-同じ `types.rs` に record を 3 個追加:
+同じ `types.rs` に record を 3 個追加する:
 
-1. **`Order`** — 5 field、すべて L1 の型から。Matching engine が 1 つの `Order` を取り、1 つの `FillResult` を返す。
-2. **`Fill`** — 6 field、maker + taker を明示的に名付ける。**両方** maker_order_id と maker_account を保存するのは、chain 統合 (course 8) が account を credit/debit するから。
-3. **`FillResult`** — fill 群 + マッチも rest もしなかった残りを集める。`total_filled()` ヘルパー付きで、caller が iterate せずに「いくらマッチしたか?」を尋ねられる。
+1. **`Order`** — 5 field、すべて L1 の型を使う。Matching engine が 1 つの `Order` を取り、1 つの `FillResult` を返す。
+2. **`Fill`** — 6 field、maker と taker を明示的に名付ける。maker_order_id と maker_account の **両方** を保存するのは、chain 統合 (course 8) が account を credit/debit するため。
+3. **`FillResult`** — fill 群と、マッチも rest もしなかった残りを集める。`total_filled()` ヘルパー付きで、caller が iterate せずに「いくらマッチしたか?」を尋ねられる。
 
 新規依存なし。`types.rs` の外でのコード変更なし。コード ~35 行。
 
-> 🛑 **考えてみよう。** スクロールする前に: `Fill` は **両方** `maker_order_id` と `maker_account` を運ぶ。なぜ重複? Maker の `OrderId` で account を lookup できれば十分なのでは? ヒント: `Fill` を consume する側は誰か。Chain の `clob_place_order` precompile (course 8) は balance を credit する — account が直接必要。`OrderId → AccountId` の lookup は precompile に order book の内部 index への参照を持たせる必要がある。**両方を Fill 自体に持たせると consumer が engine の内部 state から decouple される。** Message passing vs. shared state の発想。
+> 🛑 **考えてみよう。** スクロールする前に: `Fill` は `maker_order_id` と `maker_account` の **両方** を運ぶ。なぜ重複させるのか? Maker の `OrderId` で account を lookup できれば十分なのでは? ヒント: `Fill` を consume する側は誰か。Chain の `clob_place_order` precompile (course 8) は balance を credit する — account が直接必要。`OrderId → AccountId` の lookup を許すと、precompile が order book の内部 index への参照を保持しなければならない。**両方を Fill 自体に持たせることで consumer が engine の内部 state から decouple される。** Message passing と shared state の発想の違い。
 
 ## 手順
 
@@ -81,16 +81,16 @@ pub struct Order {
 }
 ```
 
-5 field。**全部 `Copy`** — Order は 8 (OrderId) + 8 (AccountId) + 1 (Side) + 8 (Qty) + 16 (OrderType — discriminant + Price) = 41 バイト。padding 込みで約 48 バイト。値渡しで自由に渡せる小ささ。通常コードで `Box<Order>` や `&Order` は不要。
+5 field。**全部 `Copy`** — Order は 8 (OrderId) + 8 (AccountId) + 1 (Side) + 8 (Qty) + 16 (OrderType — discriminant + Price) = 41 バイト。padding 込みで約 48 バイト。値渡しで自由に渡せる小ささだ。通常コードで `Box<Order>` や `&Order` を使う必要はない。
 
 field 順序には意味がある:
-- **`id` 最初** — 最も使われる field (lookup、equality、debug)。
+- **`id` を最初に** — 最も使われる field (lookup、equality、debug)。
 - **`account`** — 誰が発注したか。
 - **`side`** — Buy か Sell か。
 - **`qty`** — いくら。
-- **`order_type` 最後** — 最も複雑な field (enum)、dispatch を制御する field (Limit vs Market が L4-L5 で別の matching ロジックを起こす)。
+- **`order_type` を最後に** — 最も複雑な field (enum) で、dispatch を制御する field (Limit と Market が L4-L5 で別の matching ロジックを起動する)。
 
-> 🛑 **やりがちな勘違い。** 「`order_type` は冗長 — `OrderType::Limit { price }` が price を運ぶなら、`price: Price` を直接 `Order` に置けばいいのでは?」 **Market order に price がないから。** `price: Price` を Order に置くと、すべての Market order に意味のない placeholder price を運ばせる羽目になり、それを至るところで ignore しなければならない。enum は「price があるか、ないか」をちょうど 1 回 encode する。**`Option<Price>` でも動くが「Market」タグを失う** — `OrderType` が正しい形なのは、区別に **名前** があるから (presence/absence ではない)。
+> 🛑 **やりがちな勘違い。** 「`order_type` は冗長では — `OrderType::Limit { price }` が price を運ぶなら、`price: Price` を直接 `Order` に置けばいいのでは?」 **Market order には price がないから。** `price: Price` を Order に置くと、すべての Market order に意味のない placeholder price を持たせる羽目になり、それを至るところで ignore しなければならない。enum なら「price があるか、ないか」をちょうど 1 回 encode できる。**`Option<Price>` でも動くが「Market」というタグを失う** — `OrderType` が正しい形なのは、区別に **名前** がある (presence/absence ではない) から。
 
 ### Step 2: `Fill` を追加
 
@@ -109,16 +109,16 @@ pub struct Fill {
 }
 ```
 
-6 field。Maker-vs-taker の区別が matching engine コードで最重要の概念:
+6 field。Maker-vs-taker の区別は matching engine コードで最も重要な概念:
 
-- **Maker** = 既に book に rest していた order。流動性を「作った (made)」側; 経済的により良い deal を得る (real exchange では通常 rebate)。
-- **Taker** = 流動性を消費して入ってきた order。Spread を払う; real exchange では fee を払う。
+- **Maker** = 既に book に rest していた order。流動性を「作った (made)」側で、経済的に良い deal を得る (real exchange では通常 rebate)。
+- **Taker** = 流動性を消費して入ってきた order。Spread を払う側で、real exchange では fee を払う。
 
-各 `Fill` は 1 つの match ペアを表す。1 つの taker order が **複数の Fill** を produce することがある (例: market buy が ask 側を上に walk して resting ask を順に食べる)。
+各 `Fill` は 1 つの match ペアを表す。1 つの taker order が **複数の Fill** を produce することもある (例: market buy が ask 側を上に walk して resting ask を順に食べる)。
 
-**`price` は maker の価格** — taker が book を hit するとき、taker の limit ではなく maker の resting 価格でマッチする。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格); buyer が勝つ。これが「price-time priority」の動作。
+**`price` は maker の価格** — taker が book を hit するとき、taker の limit ではなく maker の resting 価格でマッチする。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格)。buyer が勝つわけだ。これが「price-time priority」の挙動。
 
-> 🛑 **やりがちな勘違い。** 「account ID を両方保存するのは冗長に見える — 各 `Fill` は consumer 時に `OrderId` から account を lookup できる」。 **ダメ — そのためには consumer が book の `HashMap<OrderId, RestingOrder>` への参照を保持し、book が先に進んだ後も生かさなければならない。** Fill は match 時に emit され非同期に consume される (我々の場合、後で commit される payload に drain される)。Book がその間に maker order を cancel していたら、`OrderId → AccountId` lookup は `None` を返し、consumer は詰む。**Self-contained な Fill ならその問題はない。**
+> 🛑 **やりがちな勘違い。** 「両方の account ID を保存するのは冗長に見える — 各 `Fill` は consume 時に `OrderId` から account を lookup できる」。 **ダメ — そのためには consumer が book の `HashMap<OrderId, RestingOrder>` への参照を保持し、book が先に進んだ後も生かしておかなければならない。** Fill は match 時に emit され非同期に consume される (本コースでは後で commit される payload に drain される)。Book がその間に maker order を cancel していたら、`OrderId → AccountId` lookup は `None` を返し、consumer は詰む。**Self-contained な Fill ならその問題は起きない。**
 
 ### Step 3: `FillResult` + `total_filled()` ヘルパー
 
@@ -147,19 +147,19 @@ impl FillResult {
 }
 ```
 
-**`FillResult` は `Copy` でない** — heap 割り当て される `Vec<Fill>` を所有する。test とデバッグパスのために `Clone`、engine は値で return する (happy path で clone 不要)。
+**`FillResult` は `Copy` ではない** — heap 割り当てされる `Vec<Fill>` を所有するから。test とデバッグパスのために `Clone` を付け、engine は値で return する (happy path で clone は不要)。
 
-doc コメント中の 3 つ、L3+ のコードが依存する:
+doc コメント中の 3 点に L3+ のコードが依存する:
 
-1. **`fills` は execution 順序**。Market buy が ask level を 3 個 walk すると、fills[0] が最安マッチ、fills[1] が次、fills[2] が最高。Replay determinism にこの順序が重要 (L8 の proptest が assert する)。
-2. **`remaining_qty` は rest しなかった taker quantity のみ**。Market order の remainder 100 = 100 unit がどの価格でもマッチできなかった (book が流動性切れ) を意味する。Limit order の remainder 0 でも fill しなかった残りがあり得る — だがその残りは **今 book にある** (resting order として)、return 値の中ではない。
-3. **`total_filled` はヘルパー、stored field ではない**。fill 全体の O(N) 合計。cache しないのは、(a) caller が「fill したか?」を聞くだけなら通常 `Vec::len()` が必要、(b) 実際の quantity total は test/inspection コードでしか必要なく、そこでは O(N) は問題にならないから。
+1. **`fills` は execution 順序**。Market buy が ask level を 3 個 walk すると、fills[0] が最安マッチ、fills[1] が次、fills[2] が最高となる。Replay determinism にこの順序が重要 (L8 の proptest で assert する)。
+2. **`remaining_qty` は rest しなかった taker quantity のみ**。Market order の remainder 100 は「100 unit がどの価格でもマッチできなかった (book が流動性切れ)」を意味する。Limit order でも remainder が 0 だが fill しなかった残りがあり得る — ただしその残りは **今 book にある** (resting order として) のであって、return 値の中にあるわけではない。
+3. **`total_filled` はヘルパーであって stored field ではない**。fill 全体に対する O(N) 合計。cache しない理由は、(a) caller が「fill したか?」を聞くだけなら通常 `Vec::len()` で済む、(b) 実際の quantity total は test/inspection コードでしか必要にならず、そこでは O(N) が問題にならない、から。
 
-> 🛑 **やりがちな勘違い。** 「`remaining_qty` を別 field ではなく per-fill data の一部にしたら?」 **submit ごとに remainder は最大 1 個で、どの fill にも紐付かない** — それは **fill されなかった** 部分。`Fill` に入れると、すべての fill に無意味な 0 を運ばせるか、それを保持するためだけの「phantom fill」エントリが必要になる。`FillResult` に別 field として置くのが正しい形。
+> 🛑 **やりがちな勘違い。** 「`remaining_qty` を別 field ではなく per-fill data の一部にしたら?」 **submit ごとに remainder は最大 1 つで、どの fill にも紐付かない** — **fill されなかった** 部分そのものだから。`Fill` に入れると、すべての fill に無意味な 0 を運ばせるか、保持するためだけの「phantom fill」エントリを作る羽目になる。`FillResult` に別 field として置くのが正しい形。
 
 ### Step 4: `lib.rs` がまだすべて re-export していることを確認
 
-L1 の `lib.rs` で `pub use types::*;` と書いた。その `*` が今追加した 3 つの新規型を自動的に拾う — edit 不要。簡単に確認:
+L1 の `lib.rs` で `pub use types::*;` と書いた。その `*` が今追加した 3 つの新規型を自動的に拾う — edit は不要。一応確認しておく:
 
 ```rust
 // crates/clob/src/lib.rs (変更不要)
@@ -167,7 +167,7 @@ pub mod types;
 pub use types::*;
 ```
 
-もし `lib.rs` が `pub use types::{AccountId, OrderId, ...};` のような個別 re-export なら、新規 3 個を追加する必要がある。**だが `*` を L1 で setup したので不要。**
+もし `lib.rs` が `pub use types::{AccountId, OrderId, ...};` のような個別 re-export であれば、新規 3 個を追加する必要がある。**だが L1 で `*` を setup したので不要。**
 
 ## テスト
 
@@ -175,15 +175,15 @@ pub use types::*;
 cargo check -p openhl-clob
 ```
 
-依然コンパイル。出力は L1 と同じ (新規 warning や error なし、check されるコードが少し増えただけ)。
+引き続きコンパイルが通る。出力は L1 と同じ (新規 warning も error もなく、check されるコードが少し増えただけ)。
 
-将来 `crates/evm/Cargo.toml` の視点で型が visible であることを軽くサニティテストできる。まだ dep 追加はしない (それは L9)、だが型が public であることは証明できる:
+将来 `crates/evm/Cargo.toml` の視点で型が見えていることを軽くサニティテストできる。まだ dep は追加しない (それは L9 で行う) が、型が public であることは確認できる:
 
 ```bash
 cargo doc -p openhl-clob --no-deps --open
 ```
 
-レンダリングされた doc を browse する。"Structs" の下に `AccountId`/`OrderId`/`Price`/`Qty` と並んで `Order`、`Fill`、`FillResult` が見えるはず。`total_filled` は `FillResult` のメソッドの下に。
+レンダリングされた doc を browse する。"Structs" の下に `AccountId`/`OrderId`/`Price`/`Qty` と並んで `Order`、`Fill`、`FillResult` が見えるはず。`total_filled` は `FillResult` のメソッドの下に出てくる。
 
 よくあるエラーと対処:
 
@@ -195,11 +195,11 @@ cargo doc -p openhl-clob --no-deps --open
 
 3 つの load-bearing な決定:
 
-1. **`Fill` は self-contained。** Order book の内部 index があれば片方からもう片方を導出できるのに、maker_order_id と maker_account を両方保存する。これが Fill の consumer (precompile、payload assembly、chain 統合) を engine の内部データ構造から decouple する。**self-contained メッセージは live state への参照より module 境界を越えやすい。**
+1. **`Fill` は self-contained。** Order book の内部 index があれば片方からもう片方を導出できるのに、maker_order_id と maker_account を両方保存している。これにより Fill の consumer (precompile、payload assembly、chain 統合) が engine の内部データ構造から decouple される。**self-contained なメッセージは、live state への参照よりも module 境界を越えやすい。**
 
-2. **`FillResult` は「fills」と「remainder」を分ける。** Submit は 0 個以上の fill と 0 か 1 個の remainder を produce する。1 つの `Vec<Fill>` でモデルすると、remainder のために「phantom fill」が必要になるか、それを検出する特殊ケースロジックが必要になる。2-field record が型に仕事をさせる。
+2. **`FillResult` は「fills」と「remainder」を分ける。** Submit は 0 個以上の fill と 0 か 1 個の remainder を produce する。1 つの `Vec<Fill>` でモデル化すると、remainder のために「phantom fill」を作るか、それを検出する特殊ケースロジックが必要になる。2-field record にすることで型に仕事をさせている。
 
-3. **`total_filled()` は computed、cached ではない。** Cache するとすべての fill-list 変更がカウンタを update する羽目になる — error-prone。On-demand 計算で `FillResult` を derived state のない純粋データ record に保つ。O(N) コストは N が通常 1-3 (single fill が最頻、market order が 10 level 食べるのは稀) なので無視可能。
+3. **`total_filled()` は computed であって cached ではない。** Cache するとすべての fill-list 変更でカウンタを update する羽目になり、error-prone になる。On-demand 計算なら `FillResult` を derived state のない純粋データ record に保てる。O(N) コストは N が通常 1-3 (single fill が最頻で、market order が 10 level 食べるのは稀) なので無視できる。
 
 ## 答え合わせ
 
@@ -219,21 +219,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ `Order` は `Copy` だが `FillResult` は違う?**
-`Order` は 5 field、全部 `Copy` (`u64` の newtype + 小さい enum)。合計 ~48 バイト — memcpy が安価。`FillResult` は heap 割り当て される `Vec<Fill>` を所有; コピーには allocator 呼び出しが必要。`Copy` は `=` が single bit-blit な型のみ。Trait が意味を反映する。
+**Q: なぜ `Order` は `Copy` で `FillResult` はそうでないのか?**
+`Order` は 5 field すべてが `Copy` (`u64` の newtype + 小さい enum)。合計 ~48 バイトで memcpy が安価。`FillResult` は heap 割り当てされる `Vec<Fill>` を所有するので、コピーには allocator 呼び出しが必要。`Copy` は `=` が single bit-blit になる型にのみ付ける。Trait が意味を反映するわけだ。
 
 **Q: なぜ `Fill` の `qty` は `Qty` で、ただの `u64` ではないのか?**
-Engine の残りとの一貫性。すべての quantity は `Qty` 型; ここで `u64` を混ぜると境界で変換が強制される (そして忘れるリスク)。Newtype の規律は engine 単位、struct 単位ではない。
+Engine の他の部分と一貫させるため。すべての quantity は `Qty` 型なので、ここで `u64` を混ぜると境界で変換が強制される (そして忘れるリスクが出る)。Newtype の規律は engine 単位で適用するもので、struct 単位ではない。
 
-**Q: `FillResult` で `Box<[Fill]>` を使ったら?**
-できる、「これ以上 push しない」ケースではメモリ効率が少し良い。だが `Vec<Fill>` は `submit_order` がインクリメンタルに build するもの (match ごとに push); 最後に `Box<[Fill]>` に変換すると 1 個余分な allocation。Profile で重要と分かるまで `Vec` がシンプルな選択。
+**Q: `FillResult` で `Box<[Fill]>` を使ったらどうか?**
+できる。「これ以上 push しない」ケースでは少しメモリ効率が良い。ただし `Vec<Fill>` は `submit_order` がインクリメンタルに build するもの (match ごとに push) なので、最後に `Box<[Fill]>` に変換すると余分な allocation が 1 つ増える。Profile で問題と分かるまでは `Vec` がシンプルな選択。
 
 **Q: Fill の `qty` が 0 だったら? それは valid Fill か?**
-違う — L4-L5 の matching engine は zero-qty Fill を決して produce しない (「0 unit マッチした」= 「マッチしなかった」と同じ意味になる)。型システムはこれを強制しない; engine の invariant が強制する。L7-L8 の test が regression を catch する。
+valid ではない — L4-L5 の matching engine は zero-qty Fill を決して produce しない (「0 unit マッチした」=「マッチしなかった」と意味的に同じ)。型システムはこれを強制しないが、engine の invariant が強制する。L7-L8 のテストが regression を catch する。
 
 ## 次のレッスン (L3)
 
-型の語彙が完成した。L3 では **matching state machine** を導入する — resting bid/ask order を保持する `Book` 構造体、book を inspect するヘルパーメソッド (`best_bid`、`best_ask`、accessor)。`submit` ロジックはまだなし (L4)、データ構造と bid を最高値から walk するための `Reverse<Price>` トリックのみ。
+型の語彙が完成した。L3 では **matching state machine** を導入する — resting bid/ask order を保持する `Book` 構造体と、book を inspect するヘルパーメソッド (`best_bid`、`best_ask`、accessor)。`submit` ロジックはまだ書かない (L4 で扱う)。データ構造と、bid を最高値から walk するための `Reverse<Price>` トリックだけを導入する。
 ````
 
 ---

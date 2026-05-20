@@ -26,15 +26,15 @@
 cargo test -p openhl-evm --release
 ```
 
-…依然 pass する (course 6 から 38 テスト + L9 の new test なし、依然 38)。Bridge が CLOB matching engine を **所有** する。書くもの:
+上記の実行結果が引き続き pass する (course 6 由来の 38 テスト + L9 の new test なし、合計依然 38)。Bridge が CLOB matching engine を **所有** するようになる。書くもの:
 
-- **新規 workspace dep 1 個** — `crates/evm/Cargo.toml` に `openhl-clob = { workspace = true }`。
+- **新規 workspace dep 1 個** — `crates/evm/Cargo.toml` に `openhl-clob = { workspace = true }` を追加。
 - **`LiveRethEvmBridge` に新規フィールド 2 個** — `clob: Mutex<Book>` と `pending_fills: Mutex<Vec<Fill>>`。
-- **より広い pending tuple** — `pending: HashMap<u64, (B256, Header)>` が `HashMap<u64, (B256, Header, Vec<Fill>)>` になる。3 番目の要素が payload ごとの fill リスト。
-- **新規メソッド 3 個** — `submit_order(&self, order: Order) -> FillResult`、`payload_fills(id) -> Option<Vec<Fill>>` (inspection)、`pending_fill_count() -> usize` (inspection)。
-- **波及更新** — `build_payload`、`payload_ready`、`validate_payload`、`commit` での pending tuple の destructuring すべてを 3-tuple pattern に。
+- **pending tuple を拡張** — `pending: HashMap<u64, (B256, Header)>` を `HashMap<u64, (B256, Header, Vec<Fill>)>` に変える。3 番目の要素が payload ごとの fill リスト。
+- **新規メソッド 3 個** — `submit_order(&self, order: Order) -> FillResult`、`payload_fills(id) -> Option<Vec<Fill>>` (inspection 用)、`pending_fill_count() -> usize` (inspection 用)。
+- **波及更新** — `build_payload`、`payload_ready`、`validate_payload`、`commit` での pending tuple の destructuring をすべて 3-tuple pattern に揃える。
 
-**`build_payload` はまだ `pending_fills` を drain しない** — 今は空の `Vec<Fill>` を挿入する。L10 で drain を実装する。L9 後、order を submit でき、fill が `pending_fills` に蓄積するのが見えるが、bridge の payload が fill を運ばない。**L10 がそのギャップを閉じ、L11 がそれを証明する integration test を書く。**
+**`build_payload` はまだ `pending_fills` を drain しない** — 今は空の `Vec<Fill>` を挿入する。drain の実装は L10 で行う。L9 後、order を submit でき、fill が `pending_fills` に蓄積していく様子も観察できるようになるが、bridge の payload はまだ fill を運ばない。**L10 でそのギャップを閉じ、L11 でそれを証明する integration test を書く。**
 
 ## おさらい
 
@@ -48,25 +48,25 @@ crates/evm/src/live_node.rs             — LiveRethEvmBridge<P>
 crates/consensus/                       — フル BFT engine
 ```
 
-`cargo test -p openhl-evm` で 38 個 pass。**CLOB は存在し、bridge も存在する、だが互いに知らない。** L9 で bridge を CLOB に配線する。
+`cargo test -p openhl-evm` で 38 個 pass する。**CLOB も bridge もそれぞれ存在するが、互いを知らない状態。** L9 で bridge を CLOB に配線する。
 
 ## 計画
 
-`crates/evm/` 内で 6 つ (実際は 7 step):
+`crates/evm/` 内で 6 項目 (実際の手順は 7 step):
 
-1. **`openhl-clob = { workspace = true }`** を `crates/evm/Cargo.toml` の `[dependencies]` に追加。
-2. **Import を追加** — `crates/evm/src/live_node.rs` に `use openhl_clob::{Book, Fill, FillResult, Order};`。
-3. **`clob` + `pending_fills` フィールドを追加** — `LiveRethEvmBridge<P>` struct に。
-4. **`pending` を 3-tuple に変更** — `State` struct で。
-5. **`new()` を更新** — 新フィールドを初期化。
-6. **メソッド 3 個を追加** — `impl<P> LiveRethEvmBridge<P>` block に `submit_order`、`payload_fills`、`pending_fill_count`。
-7. **destructuring を波及更新** — `build_payload`、`payload_ready`、`validate_payload`、`commit` を新 3-tuple shape にマッチ。`build_payload` は今は空 `Vec<Fill>` を挿入。
+1. **`openhl-clob = { workspace = true }`** を `crates/evm/Cargo.toml` の `[dependencies]` に追加する。
+2. **Import を追加する** — `crates/evm/src/live_node.rs` に `use openhl_clob::{Book, Fill, FillResult, Order};` を入れる。
+3. **`clob` + `pending_fills` フィールドを追加する** — `LiveRethEvmBridge<P>` struct に。
+4. **`pending` を 3-tuple に変更する** — `State` struct 側。
+5. **`new()` を更新する** — 新フィールドを初期化する。
+6. **メソッド 3 個を追加する** — `impl<P> LiveRethEvmBridge<P>` block に `submit_order`、`payload_fills`、`pending_fill_count` を追加。
+7. **destructuring を波及更新する** — `build_payload`、`payload_ready`、`validate_payload`、`commit` を新しい 3-tuple shape にマッチさせる。`build_payload` は今のところ空の `Vec<Fill>` を挿入しておく。
 
-Step 7 は退屈に聞こえるが機械的: `(hash, header)` または `(h, _)` を書いた場所すべてが `(hash, header, fills)` または `(h, _, _)` になる。Compiler が各場所をクリアなエラーで教える。
+Step 7 は退屈に聞こえるが機械的な作業: `(hash, header)` や `(h, _)` を書いた場所すべてが `(hash, header, fills)` または `(h, _, _)` になる。Compiler が各場所をクリアなエラーで教えてくれる。
 
-> 🛑 **考えてみよう。** スクロールする前に: L9 後、`bridge.submit_order(order)` を呼べ、`bridge.pending_fill_count()` で fill が蓄積するのが見える。それから `bridge.build_payload(parent, attrs)` を呼ぶと、新しく build した payload に対する `bridge.payload_fills(id)` は何を返す? ヒント: §Step 7 を注意深く読む。
+> 🛑 **考えてみよう。** スクロールする前に: L9 後、`bridge.submit_order(order)` を呼べるようになり、`bridge.pending_fill_count()` で fill が蓄積していく様子が観察できる。そこで `bridge.build_payload(parent, attrs)` を呼ぶと、新しく build された payload に対する `bridge.payload_fills(id)` は何を返すか? ヒント: §Step 7 を注意深く読む。
 
-(答え: `Some(vec![])` — 空 fill リスト。L9 はデータフローを配線するが、`build_payload` はまだ drain せず空 Vec を挿入する。L10 の「build 時に drain」変更が、これを `Some(vec![fill_a, fill_b, ...])` にする。)
+(答え: `Some(vec![])` — 空の fill リスト。L9 はデータフローを配線するが、`build_payload` はまだ drain せず空 Vec を挿入する。L10 の「build 時に drain」変更で、これが `Some(vec![fill_a, fill_b, ...])` になる。)
 
 ## 手順
 
@@ -83,7 +83,7 @@ async-trait              = { workspace = true }
 # ... rest unchanged ...
 ```
 
-`openhl-clob` は workspace `Cargo.toml` に既に宣言済み (path entry を L1 で追加)。`[dependencies]` entry は「この特定 crate がそれを使う」と言う。
+`openhl-clob` は workspace `Cargo.toml` に既に宣言済み (path entry を L1 で追加した)。`[dependencies]` entry は「この特定 crate がそれを使う」ことを宣言する役割を果たす。
 
 ### Step 2: `live_node.rs` に import を追加
 
@@ -100,9 +100,9 @@ use openhl_types::{BlockHash, ExecutedBlock, PayloadAttrs, PayloadId, PayloadSta
 // ... rest unchanged ...
 ```
 
-4 つの型を pull in: `Book` (matching engine)、`Fill` (output)、`FillResult` (`Book::submit` の wrapper)、`Order` (submit の input)。
+4 つの型を pull in する: `Book` (matching engine)、`Fill` (output)、`FillResult` (`Book::submit` の wrapper)、`Order` (submit の input)。
 
-モジュールレベルの doc comment も新 stage を ack するように更新。ファイル冒頭の既存 `//! Stage 7X` コメントブロックを探す:
+モジュールレベルの doc comment も新しい stage を反映するように更新する。ファイル冒頭の既存 `//! Stage 7X` コメントブロックを探す:
 
 ```rust
 //! Stage 7a: parent lookups go through the live node's provider via the
@@ -115,7 +115,7 @@ use openhl_types::{BlockHash, ExecutedBlock, PayloadAttrs, PayloadId, PayloadSta
 //! consensus engine ...
 ```
 
-…どこか妥当な場所 (7c と 7d の間で fine) に新規 Stage 8d block を挿入:
+…どこか妥当な場所 (7c と 7d の間でも構わない) に新規 Stage 8d block を挿入する:
 
 ```rust
 //! Stage 8d: the bridge now owns a CLOB matching engine. `submit_order` routes
@@ -127,11 +127,11 @@ use openhl_types::{BlockHash, ExecutedBlock, PayloadAttrs, PayloadId, PayloadSta
 //! wiring exists; encoding is downstream.
 ```
 
-これがメタドキュメンテーション — 誰かが 6 ヶ月後にファイルを読むとき、staging comment が map になる。
+これがメタドキュメントの役割を果たす — 6 ヶ月後に誰かがファイルを読んだとき、staging comment が地図になる。
 
 ### Step 3: `LiveRethEvmBridge` にフィールド追加
 
-Struct 定義を見つける。`validator` と `state` の間にフィールド 2 個を追加:
+Struct 定義を見つけ、`validator` と `state` の間にフィールド 2 個を追加する:
 
 ```rust
 #[derive(Debug)]
@@ -146,12 +146,12 @@ pub struct LiveRethEvmBridge<P> {
 }
 ```
 
-`Mutex` でラップされた 2 フィールド。なぜ両方 `Mutex`?
+`Mutex` でラップされたフィールドが 2 個。両方を `Mutex` にする理由は次の通り:
 
-- **`clob: Mutex<Book>`** — matching engine。`Book` 自体は内部的に thread-safe ではない; `Mutex` でラップすると複数の caller が同時に order を submit できる (engine app loop に統合されると bridge は `Arc<LiveRethEvmBridge>` で共有される)。
-- **`pending_fills: Mutex<Vec<Fill>>`** — `submit_order` が fill を push し、(L10 の) `build_payload` が drain する buffer。`clob` と別 `Mutex` なのは、2 つが異なる時間に mutate するから: submit は matching するために `clob` の lock を短く保持、それから append のために `pending_fills` の lock を短く保持。別 lock により、2 つの submit が submit → push の full chain を直列化しない。
+- **`clob: Mutex<Book>`** — matching engine。`Book` 自体は内部的に thread-safe ではない。`Mutex` でラップすれば、複数の caller が同時に order を submit できる (engine app loop に統合された後、bridge は `Arc<LiveRethEvmBridge>` で共有される)。
+- **`pending_fills: Mutex<Vec<Fill>>`** — `submit_order` が fill を push し、(L10 の) `build_payload` が drain する buffer。`clob` と別の `Mutex` にしているのは、2 つが異なるタイミングで mutate するから: submit は matching のために `clob` の lock を短時間保持し、その後 append のために `pending_fills` の lock を短時間保持する。lock を分けることで、2 つの submit が submit → push の全 chain を直列化しなくて済む。
 
-> 🛑 **やりがちな勘違い。** 「1 個の `Mutex<(Book, Vec<Fill>)>` ではなく 2 個の `Mutex` なのは?」 **Lock 粒度。** 1 個の mutex が両方を覆うと、submit ごとに matching 仕事 AND fill-buffer mutation の両方で lock を保持する。Submit せずに `pending_fill_count` を読む将来のコード (例: L10 の `build_payload` drain、デバッグツール) が、submit-in-progress で block する。2 個の mutex は read が write contention を bypass できる。**コストは余分な `Mutex::new` 呼び出し数個; 利益はより良い並行スループット。**
+> 🛑 **やりがちな勘違い。** 「`Mutex<(Book, Vec<Fill>)>` 1 個ではなく `Mutex` 2 個にする理由は?」 **Lock 粒度。** 1 個の mutex で両方を覆うと、submit ごとに matching 作業と fill-buffer mutation の両方で lock を保持することになる。submit せずに `pending_fill_count` を読みたい将来のコード (たとえば L10 の `build_payload` drain やデバッグツール) が、submit-in-progress で block されてしまう。`Mutex` を 2 個にすれば、read が write contention を bypass できる。**コストは余分な `Mutex::new` 呼び出しが数個増える程度。利益は並行スループットの改善。**
 
 ### Step 4: `pending` tuple を変更
 
@@ -167,7 +167,7 @@ struct State {
 }
 ```
 
-`pending` の value 型を 3-tuple に変更、3 番目要素を `Vec<Fill>` に:
+`pending` の value 型を 3-tuple に変更し、3 番目要素を `Vec<Fill>` にする:
 
 ```rust
 #[derive(Debug, Default)]
@@ -181,13 +181,13 @@ struct State {
 }
 ```
 
-`chain` は `HashMap<B256, Header>` のまま、commit された block はここで fill を track する必要なし — fill は commit の下流。(Production コードは fill をどこかに persist する; それは本コース範囲外。)
+`chain` は `HashMap<B256, Header>` のまま据え置く。commit された block はここで fill を track する必要がない — fill は commit の下流に流れていく。(Production コードでは fill をどこかに persist することになるが、それは本コースの範囲外。)
 
-**新しい doc コメントがレッスンの一部。** 3 番目要素が存在する **理由** を説明 — `submit_order` → `pending_fills` → `build_payload` drain → `pending` map の payload ごとの `Vec<Fill>`、というデータフロー。
+**新しい doc コメント自体がレッスンの一部。** 3 番目要素が存在する **理由** を説明する — `submit_order` → `pending_fills` → `build_payload` drain → `pending` map の payload ごとの `Vec<Fill>` というデータフローを残しておく。
 
 ### Step 5: `new()` を更新
 
-現在の `new()` は 4 フィールドを初期化。変更後は 6 個。更新:
+現在の `new()` は 4 フィールドを初期化している。変更後は 6 個になる。更新:
 
 ```rust
 impl<P> LiveRethEvmBridge<P> {
@@ -206,7 +206,7 @@ impl<P> LiveRethEvmBridge<P> {
     }
 ```
 
-新規フィールド初期化 2 個。`Book::new()` は L3 のヘルパー (workspace が配線されているので `openhl_clob::Book::new()` がここで呼べる)。空の fill buffer に `Vec::new()`。
+新規フィールドの初期化が 2 個。`Book::new()` は L3 で書いたヘルパー (workspace が配線されているので、ここで `openhl_clob::Book::new()` が呼べる)。空の fill buffer には `Vec::new()` を使う。
 
 ### Step 6: 新メソッド 3 個を追加
 
@@ -247,19 +247,19 @@ impl<P> LiveRethEvmBridge<P> {
     }
 ```
 
-3 メソッド、3 つの意図:
+メソッド 3 個、それぞれの意図は次の通り:
 
-- **`submit_order`** — **write** path。`&self` を取る (`&mut self` ではない)、内部 mutability via `Mutex` が shared 参照で bridge を mutate できるようにする。`clob` を lock、`book.submit` を呼ぶ、`FillResult` を受け取る。Fill が produce されたら、`pending_fills` を lock して append。`FillResult` を return して caller に何が起きたか知らせる。
-- **`payload_fills`** — **inspection** path。指定 `PayloadId` に対して `Option<Vec<Fill>>` を返す。Id が pending にない場合 `None`、ある場合 (空の可能性あり) `Some(vec)`。Doc コメントが、これが test-and-debug メソッドであることを明示 — production コードは fill を transaction-encoding pipeline 経由でルートする。
-- **`pending_fill_count`** — 小さい debugging ヘルパー。Buffer で drain 待ちの fill 数。「Cross する 2 order を submit、count == 1 を期待」のようなテストに有用。
+- **`submit_order`** — **write** path。`&self` を取る (`&mut self` ではない)。`Mutex` 経由の interior mutability によって、shared 参照で bridge を mutate できる。`clob` を lock し、`book.submit` を呼び、`FillResult` を受け取る。Fill が produce されたら、`pending_fills` を lock して append する。`FillResult` を return して caller に何が起きたかを知らせる。
+- **`payload_fills`** — **inspection** path。指定 `PayloadId` に対して `Option<Vec<Fill>>` を返す。Id が pending にない場合は `None`、ある場合は `Some(vec)` (空の可能性あり)。Doc コメントで、これが test-and-debug 用のメソッドであることを明示する — production コードは fill を transaction-encoding pipeline 経由で route する。
+- **`pending_fill_count`** — 小さな debugging ヘルパー。Buffer で drain 待ちの fill 数を返す。「Cross する 2 order を submit、count == 1 を期待」といったテストで有用。
 
-3 メソッドすべてが `&self` を取ることに注意。内部 `Mutex` が重い lifting をする; public API が「shared 参照 + interior mutability」、まさに async コードが必要とするもの (複数の async task が `&LiveRethEvmBridge` を同時に保持できる)。
+3 メソッドすべてが `&self` を取る点に注目。内部の `Mutex` が重い処理を担い、public API としては「shared 参照 + interior mutability」になる — まさに async コードが必要とする形 (複数の async task が `&LiveRethEvmBridge` を同時に保持できる)。
 
-> 🛑 **やりがちな勘違い。** 「`submit_order` が `&mut self` ではなく `&self` を取るのは?」 **Bridge を、order を同時に submit したい async task 間で共有する必要があるから。** Matching engine (実際に mutate するコード) が `Mutex` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制するので、この mutation は安全」と受け入れる。`submit_order` が `&mut self` を取ると、`Arc<RwLock<LiveRethEvmBridge>>` が必要になり、submit ごとに bridge 全体を lock する — パフォーマンスが悪化し、API の形も適切でない。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
+> 🛑 **やりがちな勘違い。** 「`submit_order` が `&mut self` ではなく `&self` を取るのはなぜか?」 **order を同時に submit したい async task 間で bridge を共有する必要があるから。** Matching engine (実際に mutate するコード) は `Mutex` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制しているから、この mutation は安全」と受け入れる。`submit_order` が `&mut self` を取るなら `Arc<RwLock<LiveRethEvmBridge>>` が必要になり、submit ごとに bridge 全体を lock することになる — パフォーマンスが悪化し、API の形としても適切でない。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
 
 ### Step 7: destructuring を波及更新
 
-ここが退屈だが機械的な部分。pending tuple は今 3 要素; pattern match する場所すべてが知る必要がある。合計 5 site:
+ここからは退屈だが機械的な作業。pending tuple は 3 要素になったので、pattern match する場所すべてをそれに合わせる必要がある。合計 5 サイト:
 
 **Site 1: `build_payload`** — `s.pending.insert(id, ...)` を検索。現在:
 
@@ -277,7 +277,7 @@ s.pending.insert(id, (hash, header, Vec::new()));    // 今は空 Vec<Fill>; L10
 Ok(PayloadId(id))
 ```
 
-**`Vec::new()` が placeholder。** L10 が `std::mem::take(&mut *self.pending_fills.lock()...)` に置き換える。
+**`Vec::new()` は placeholder。** L10 で `std::mem::take(&mut *self.pending_fills.lock()...)` に置き換える。
 
 **Site 2: `payload_ready`** — `s.pending.get(&n).cloned()` を検索。現在:
 
@@ -299,23 +299,23 @@ let (hash, header, _fills) = s
     .ok_or_else(|| BridgeError::Rejected(format!("unknown payload id {n}")))?;
 ```
 
-`_fills` binding が新しい 3 番目要素を catch するが使わない — `payload_ready` は `ExecutedBlock` を返し、fill を直接必要としない。`_` 接頭辞が compiler に「存在は知っている、必要なし」と伝える。
+`_fills` binding が新しい 3 番目要素を catch するが使わない — `payload_ready` は `ExecutedBlock` を返すだけで、fill を直接必要としないからだ。`_` 接頭辞で compiler に「存在は認識しているが使わない」と伝える。
 
-**Site 3: `validate_payload`** — `let header = { ... }` block 内、`.find(|(h, _)| *h == block_hash)` を検索:
+**Site 3: `validate_payload`** — `let header = { ... }` block 内で `.find(|(h, _)| *h == block_hash)` を検索する:
 
 ```rust
 .find(|(h, _)| *h == block_hash)
 .map(|(_, h)| h.clone())
 ```
 
-両 closure を 3 要素 pattern に更新:
+両方の closure を 3 要素 pattern に更新する:
 
 ```rust
 .find(|(h, _, _)| *h == block_hash)
 .map(|(_, h, _)| h.clone())
 ```
 
-**Site 4: `commit`** — 同じ `.find(|(h, _)| *h == hash)` パターンを検索、同様に変更:
+**Site 4: `commit`** — 同じ `.find(|(h, _)| *h == hash)` パターンを検索し、同様に変更する:
 
 ```rust
 let header = s
@@ -326,11 +326,11 @@ let header = s
     .ok_or_else(|| ...)?;
 ```
 
-**Site 5: `payload_fills`** (Step 6 でちょうど追加した新メソッド) — 既に `.map(|(_, _, fills)| fills.clone())` 行で 3 要素 pattern を使う。変更不要。
+**Site 5: `payload_fills`** (Step 6 で追加したばかりの新メソッド) — 既に `.map(|(_, _, fills)| fills.clone())` の行で 3 要素 pattern を使っているので、変更不要。
 
-5 site すべて。`cargo check -p openhl-evm` を走らせる — 見逃せば compiler が「pattern matches against tuple of length 2 but expected 3」エラーで教える。
+合計 5 サイト。`cargo check -p openhl-evm` を走らせる — 見逃しがあれば compiler が「pattern matches against tuple of length 2 but expected 3」エラーで教えてくれる。
 
-> 🛑 **やりがちな勘違い。** 「`pending` の 3 番目を fill がある payload にだけ `Vec<Fill>` 、例えば `(B256, Header, Option<Vec<Fill>>)` にしたら?」 **できるが、より悪い。** `Vec<Fill>` は既に「0 個以上の fill」を表現する — 空 vec が自然な「fill なし」ケース。`Option<Vec<Fill>>` は consumer site ごとに余分な unwrap step を追加し、meaningful なメモリ節約にもならない (空 Vec が 24 バイト vs Option の 32 バイト — 無視できる)。**内部型が自然な empty state を既に持っているなら、Option ラッパーを追加しない。**
+> 🛑 **やりがちな勘違い。** 「`pending` の 3 番目要素を、fill がある payload にだけ持たせる形にしたら? たとえば `(B256, Header, Option<Vec<Fill>>)` のように」。 **できるが、かえって悪い。** `Vec<Fill>` は既に「0 個以上の fill」を表現できる — 空 vec が自然な「fill なし」ケース。`Option<Vec<Fill>>` にすると consumer サイトごとに余分な unwrap step が増え、meaningful なメモリ節約にもならない (空 Vec が 24 バイトに対し Option は 32 バイト — 無視できる)。**内部型が自然な empty state を既に持っているなら、Option ラッパーは追加しない。**
 
 ## テスト
 
@@ -346,9 +346,9 @@ cargo test -p openhl-evm --release
 test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-Course 6 のテストすべて依然 pass。L9 は新規テストを追加しない — 新機能 (submit_order 等) は L11 の integration test で exercise する。L9 の変更は **構造的** — bridge が新フィールドとメソッドを持つが、既存のテスト面はそれらに触れないので、それらのテストが動き続ける。
+Course 6 のテストはすべて引き続き pass する。L9 では新規テストを追加しない — 新機能 (submit_order 等) は L11 の integration test で exercise する。L9 の変更は **構造的** なもの — bridge に新しいフィールドとメソッドが入るが、既存のテスト面はそれらに触れないので、そのテストはそのまま動き続ける。
 
-新メソッドが正しく配線されたか quick sanity check できる:
+新メソッドが正しく配線されたかをクイックにサニティチェックできる:
 
 ```rust
 // 既存の live_bridge_builds_on_real_genesis test または新規 smoke test 内で:
@@ -356,7 +356,7 @@ let bridge = LiveRethEvmBridge::new(handle.node.provider.clone(), chain_spec);
 assert_eq!(bridge.pending_fill_count(), 0); // fresh bridge では空
 ```
 
-これが pass するはず。Matching path はまだテストしない (L11) — 新メソッドがコンパイルし、fresh bridge で 0 を返すだけ。
+これが pass するはず。Matching path はまだテストしない (それは L11)。ここでは新メソッドがコンパイルでき、fresh bridge で 0 を返すことだけ確認する。
 
 よくあるエラーと対処:
 
@@ -369,11 +369,11 @@ assert_eq!(bridge.pending_fill_count(), 0); // fresh bridge では空
 
 3 つの load-bearing な決定:
 
-1. **1 個ではなく 2 個の `Mutex`。** Bridge の CLOB 状態と fill buffer は異なる関心事で異なる時間に mutate する。Lock を分割すると並行 submit が不要に block し合わない。**Lock 粒度は contention が hot path 上にあるときに重要。**
+1. **`Mutex` 1 個ではなく 2 個にした。** Bridge の CLOB 状態と fill buffer は別々の関心事で、別々のタイミングで mutate する。Lock を分割しておけば、並行 submit が不必要に互いを block し合わなくて済む。**Lock 粒度は、contention が hot path 上にあるときに重要になる。**
 
-2. **`submit_order` は `&self` を取る。** Interior mutability via `Mutex` が shared 参照で bridge を mutate できるようにする。Bridge は `Arc` でラップされ async task 間で共有される; メソッドが `&mut self` を取ると、トップで `RwLock<Bridge>` が必要になり、すべての access を 1 つのグローバル lock で直列化する。**内部 `Mutex` + `&self` API が async-shared state の idiomatic な Rust パターン。**
+2. **`submit_order` は `&self` を取る。** `Mutex` 経由の interior mutability によって、shared 参照で bridge を mutate できる。Bridge は `Arc` でラップされ async task 間で共有される。メソッドが `&mut self` を取ると、外側に `RwLock<Bridge>` が必要になり、すべての access を 1 つのグローバル lock で直列化することになる。**内部 `Mutex` + `&self` API が、async-shared state に対する idiomatic な Rust パターン。**
 
-3. **`build_payload` の空 `Vec<Fill>` placeholder。** L9 が構造を配線; L10 がそれを機能的にする。Placeholder を残すのは honest scoping — reader は欠けている機能がどこにあるか正確に見える。**`Vec::new()` placeholder は将来の TODO コメントより discoverable。**
+3. **`build_payload` に空の `Vec<Fill>` placeholder を残した。** L9 では構造を配線するに留め、L10 でそれを機能的にする。Placeholder を残すのは honest scoping — reader には欠けている機能がどこにあるかが正確に見える。**`Vec::new()` placeholder のほうが、将来用の TODO コメントよりも discoverable。**
 
 ## 答え合わせ
 
@@ -384,14 +384,14 @@ diff -u ~/code/my-openhl/crates/evm/src/live_node.rs ./crates/evm/src/live_node.
 diff -u ~/code/my-openhl/crates/evm/Cargo.toml ./crates/evm/Cargo.toml
 ```
 
-L9 後、コードは 428cc26 の full 変更セットの途中にいる — フィールドとメソッドは入ったが、`build_payload` がまだ drain せず (L10)、integration test がない (L11)。Diff は以下を見せるはず:
+L9 後、コードは 428cc26 の full 変更セットの途中にある — フィールドとメソッドは入っているが、`build_payload` はまだ drain せず (L10 で対応)、integration test もまだない (L11 で対応)。Diff は次のような状態になるはず:
 - ✅ `clob` + `pending_fills` フィールド (参照と一致)
 - ✅ `submit_order`、`payload_fills`、`pending_fill_count` メソッド (参照と一致)
 - ✅ `pending` の 3-tuple (参照と一致)
-- ❌ `build_payload` が依然 `Vec::new()` を挿入 — 参照は `std::mem::take(...)` を使う
-- ❌ `clob_fills_flow_into_payload` integration test なし — 参照にある
+- ❌ `build_payload` が依然 `Vec::new()` を挿入している — 参照は `std::mem::take(...)` を使う
+- ❌ `clob_fills_flow_into_payload` integration test がない — 参照には存在する
 
-`❌` 項目が L10 + L11 で着地する。
+`❌` 項目は L10 + L11 で揃う。
 
 戻る:
 
@@ -401,21 +401,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: `submit_order` が `clob` を lock、終え、別途 `pending_fills` を lock するのは — 両方を同時に持たないのは?**
-`pending_fills` の append が matching の **結果** に依存、matching の中間状態には依存しないから。`book.submit(order)` が return した後、`FillResult` は所有データ — `clob` の lock を release し、result を安全に処理できる。両 lock を保持すると、無関係な `pending_fills` 操作 (例: 他の caller が `pending_fill_count` を読む) を correctness 利益なしに直列化する。
+**Q: `submit_order` が `clob` を lock してから別途 `pending_fills` を lock するのはなぜか? 両方を同時に保持しないのは?**
+`pending_fills` の append が依存しているのは matching の **結果** であって、matching の中間状態ではないから。`book.submit(order)` が return した時点で `FillResult` は所有データなので、`clob` の lock を release してから result を安全に処理できる。両 lock を保持してしまうと、無関係な `pending_fills` 操作 (たとえば別の caller が `pending_fill_count` を読むなど) を correctness 上の利益なしに直列化することになる。
 
-**Q: `payload_fills` が `&[Fill]` (borrowed) ではなく `Vec<Fill>` (clone) を返すのは?**
-`&[Fill]` を返すと caller が slice のライフタイム中 `state` Mutex の lock guard を保持する必要があり — lock を欲しがる他のものすべてを deadlock させる。Vec を clone するのは `payload_fills` 呼び出しごとに 1 allocation で、稀にしか呼ばれない inspection メソッドには問題ない。**Lock する API は決して参照を lock 経由で返してはいけない。**
+**Q: `payload_fills` が `&[Fill]` (borrowed) ではなく `Vec<Fill>` (clone) を返すのはなぜか?**
+`&[Fill]` を返すと caller が slice のライフタイム中ずっと `state` Mutex の lock guard を保持しなければならず、lock を欲しがる他のすべてが deadlock してしまうから。Vec を clone するのは `payload_fills` 呼び出しごとに allocation 1 個増えるだけで、稀にしか呼ばれない inspection メソッドなら問題ない。**Lock を取る API は、決して lock 越しの参照を返してはいけない。**
 
-**Q: `clob` フィールドを `Mutex<Book>` ではなく `Arc<Mutex<Book>>` にできる?**
-できる — openhl の Stage 9 (後) が実際にこれをする、CLOB をその state を読む custom EVM precompile と共有する必要があるから。Stage 8d ではプレーン `Mutex<Book>` で十分。`Mutex<T>` から `Arc<Mutex<T>>` への変更は機械的 — 1 箇所をラップ、いくつかの `.lock()` site を `.lock().expect(...)`-on-arc に変更。**Arc ラップは実際に sharing が必要になるまで遅らせる。**
+**Q: `clob` フィールドを `Mutex<Book>` ではなく `Arc<Mutex<Book>>` にできるか?**
+できる — openhl の Stage 9 (もっと後) では実際にそうする。state を読む custom EVM precompile と CLOB を共有する必要が出てくるからだ。Stage 8d ではプレーンな `Mutex<Book>` で十分。`Mutex<T>` から `Arc<Mutex<T>>` への変更は機械的なもの — 1 箇所をラップし、いくつかの `.lock()` サイトを arc 経由の `.lock().expect(...)` に変えるだけ。**Arc ラップは、実際に sharing が必要になるまで遅らせる。**
 
-**Q: `pending_fills.lock()` が poisoned mutex で panic したら?**
-Panic が `submit_order` 経由で上に伝播し、それを呼んだ task をクラッシュさせる。Rust では、スレッドが lock 保持中に panic すると mutex poisoning が起きる。`book.submit(order)` のような synchronous body では、panic は稀 (唯一のソースは明示的な `unwrap()`、OOM、stack overflow)。起きた場合、bridge はどのみち inconsistent state にある — panic を伝播するのが正しい動作。**`.expect("mutex poisoned")` は tripwire であり、recovery path ではない。**
+**Q: `pending_fills.lock()` が poisoned mutex で panic したらどうなるか?**
+Panic が `submit_order` 経由で上に伝播し、それを呼んだ task がクラッシュする。Rust では、スレッドが lock を保持したまま panic すると mutex poisoning が起きる。`book.submit(order)` のような synchronous body では panic は稀 (発生源としては明示的な `unwrap()`、OOM、stack overflow くらい)。起きた場合、bridge はどのみち inconsistent state にあるので、panic を伝播させるのが正しい動作。**`.expect("mutex poisoned")` は tripwire であって、recovery path ではない。**
 
 ## 次のレッスン (L10)
 
-Bridge が CLOB を持ち、fill が蓄積する。**`build_payload` 経由で build された payload がまだその fill を運ばない** — placeholder の `Vec::new()` がギャップ。L10 が placeholder を `std::mem::take(&mut *pending_fills.lock(...))` に置き換え、新しい payload ごとに蓄積した fill をすべて drain する。L10 後、`bridge.payload_fills(id)` が最後の build 以降に produce された実際の fill を返し、`bridge.pending_fill_count()` が 0 にリセットされる。L11 が end-to-end test を書き、この drain 意味論が forward-only である (以前の payload が retroactively fill されない) ことを証明する。
+Bridge が CLOB を持ち、fill が蓄積するようになった。**ただし `build_payload` 経由で build された payload はまだ fill を運ばない** — placeholder の `Vec::new()` がギャップになっている。L10 で placeholder を `std::mem::take(&mut *pending_fills.lock(...))` に置き換え、新しい payload ごとに蓄積した fill をすべて drain する。L10 後、`bridge.payload_fills(id)` が最後の build 以降に produce された実際の fill を返し、`bridge.pending_fill_count()` が 0 にリセットされるようになる。L11 で end-to-end test を書き、この drain 意味論が forward-only である (以前の payload に遡って fill が attach されない) ことを証明する。
 ````
 
 ---

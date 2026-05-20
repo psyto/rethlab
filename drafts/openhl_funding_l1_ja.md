@@ -20,44 +20,44 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンを終えると：
 
 ```bash
 cargo build -p openhl-funding
 ```
 
-…がコンパイルされる。`openhl-funding` crate に以下：
+上記の実行結果がコンパイルを通る。`openhl-funding` crate には以下が入る：
 
-- **Cargo.toml** が `openhl-clob` 依存を配線（後で `AccountId` が必要だが今入れておけば L3 で驚かない）+ `[dev-dependencies]` ブロックに `proptest` 準備（L4 / L7 で使う）。
-- **`src/types.rs`** — 新規作成、module doc + `pub const RATE_SCALE: i64 = 1_000_000_000`。それだけ。
-- **`src/lib.rs`** — 空だったのを `pub mod types;` + クレートルートに `RATE_SCALE` re-export。
+- **Cargo.toml** に `openhl-clob` 依存を配線（後で `AccountId` が必要になるが、今入れておけば L3 で驚かずに済む）。加えて `[dev-dependencies]` ブロックで `proptest` を準備（L4 / L7 で使う）。
+- **`src/types.rs`** — 新規作成。module doc と `pub const RATE_SCALE: i64 = 1_000_000_000` のみ。
+- **`src/lib.rs`** — 空だったところに `pub mod types;` と、クレートルートでの `RATE_SCALE` re-export を追加。
 
-それだけ。**定数 1 つ、crate 全体で最も重要な定数。** 残り 10 レッスンの全 rate、全 premium、全 settlement は `RATE_SCALE` を基準に表現される。これを正しく設定すれば残りの数学は素直、間違えれば validator が fork する。
+これだけだ。**定数 1 つ、しかも crate 全体で最も重要な定数。** 残り 10 レッスンの rate も premium も settlement も、すべて `RATE_SCALE` を基準に表現される。ここを正しく設定すれば残りの数学は素直に進む。間違えれば validator が fork する。
 
-L1 にテストはない — `RATE_SCALE` は値であって挙動ではない。L2 で最初の money type が最初のテストを得る。
+L1 にテストはない — `RATE_SCALE` は値であって挙動ではないからだ。L2 で最初の money type に最初のテストが付く。
 
 ## おさらい
 
-L0 後：
+L0 後の状態：
 - Funding 支払いがなぜ存在するか理解した（mark/index ドリフトの補正）。
-- Float がなぜ consensus 分岐ハザードか理解した。
-- Funding crate scaffold（Cargo.toml + 空の `src/lib.rs`）が Stage 8b 前から workspace にあった。
+- Float がなぜ consensus fork ハザードになるか理解した。
+- Funding crate の scaffold（Cargo.toml と空の `src/lib.rs`）は Stage 8b 以前から workspace に存在していた。
 
-L1 で空の crate を 1 つの public な値を持つ実 crate にする。
+L1 では、空だったこの crate を「public な値を 1 つ持つ実 crate」へと変える。
 
 ## プラン
 
-3 つの編集：
+編集は 3 つ：
 
-1. **`crates/funding/Cargo.toml`** — `openhl-clob = { path = "../clob" }` を `[dependencies]` に追加、新規 `[dev-dependencies]` ブロックを `proptest` 付きで追加。
-2. **`crates/funding/src/types.rs` を作成** — determinism の理由を説明する module doc + `RATE_SCALE` 定数。
-3. **`crates/funding/src/lib.rs`** — 空だった。crate doc + `pub mod types;` + `pub use types::RATE_SCALE;` re-export を追加。
+1. **`crates/funding/Cargo.toml`** — `[dependencies]` に `openhl-clob = { path = "../clob" }` を追加し、`proptest` 入りの新規 `[dev-dependencies]` ブロックを追加。
+2. **`crates/funding/src/types.rs` を作成** — determinism の理由を説明する module doc と `RATE_SCALE` 定数。
+3. **`crates/funding/src/lib.rs`** — 空だったので、crate doc、`pub mod types;`、`pub use types::RATE_SCALE;` の re-export を追加。
 
 以上。コンパイル、グリーン、次へ。
 
-> 🛑 **考えてみよう。** スクロール前に — `RATE_SCALE` は `1_000_000_000` = `1e9` = parts-per-billion。なぜ `1_000_000`（parts-per-million、6 桁）でなく、なぜ `1_000_000_000_000`（parts-per-trillion、12 桁）でないか？ ヒント：どんな範囲の rate を表現する必要があり、i64 がどれだけ保持できるかを考える。
+> 🛑 **考えてみよう。** スクロール前に — `RATE_SCALE` は `1_000_000_000` = `1e9` = parts-per-billion だ。なぜ `1_000_000`（parts-per-million、6 桁）でも、`1_000_000_000_000`（parts-per-trillion、12 桁）でもないのか。ヒント：表現すべき rate の範囲と、i64 にどれだけの値が収まるかを考えよ。
 
-（答え：**i64 max は ~9.2e18。** `RATE_SCALE = 1e9` で、`1e18` の raw 値は `1e9`（10 億）を表す。Funding rate は 10 億のレンジは不要 — 典型的に interval ごとに `0.0001` から `0.04` 程度。**`RATE_SCALE = 1e9` で 9 桁の精度 + 巨大なヘッドルーム**：`40_000_000`（`0.04`、HL のキャップ）は `i64::MAX` から 11 桁下。`1e12`（parts-per-trillion）にすれば精度は得るがヘッドルームを失う — `1e12` スケールの値 2 つの積に `i256` が要る。`1e6` だと実質的なヘッドルームを節約せず、funding rate が `0.0001%` = `10` ppb のとき意味ある精度を失う。**`1e9` が i64 での固定小数点 rate のスイートスポット。**）
+（答え：**i64 max は ~9.2e18。** `RATE_SCALE = 1e9` のとき、raw 値 `1e18` は `1e9`（10 億）を表す。Funding rate に 10 億のレンジは要らない — 典型的には interval ごとに `0.0001` から `0.04` 程度だ。**`RATE_SCALE = 1e9` なら 9 桁の精度に加えて巨大なヘッドルームが手に入る**：`40_000_000`（`0.04`、HL のキャップ）は `i64::MAX` から 11 桁下にある。`1e12`（parts-per-trillion）にすれば精度は上がるがヘッドルームを失う — `1e12` スケールの値 2 つの積を扱うには `i256` が必要になる。一方 `1e6` では実質的なヘッドルームの節約にならない上、funding rate が `0.0001%` = `10` ppb のときに意味のある精度を失う。**`1e9` こそが i64 での固定小数点 rate のスイートスポットだ。**）
 
 ## 手順
 
@@ -103,16 +103,16 @@ proptest = { workspace = true }
 workspace = true
 ```
 
-2 つの変更：
+変更は 2 点：
 
-1. **`openhl-clob = { path = "../clob" }`** を `[dependencies]` に。Funding crate は `openhl-clob` の `AccountId` が必要（L3 の `Position` で登場）。今 dep を入れておけば L3 で diff が集中する。**コスト：~0** — path dep の宣言は最初の `use` まで何も recompile しない。
-2. **`[dev-dependencies]` ブロック** に `proptest`。L4（premium antisymmetry test）と L7（balanced-book zero-sum）で使う。同じロジック：今宣言、後で使う。Production build は proptest を含まない。
+1. **`openhl-clob = { path = "../clob" }`** を `[dependencies]` に追加する。Funding crate は `openhl-clob` の `AccountId` を必要とする（L3 の `Position` で登場）。今ここで dep を入れておけば、L3 での diff が集中する。**コストはほぼゼロ** — path dep を宣言しただけでは、最初の `use` が現れるまで recompile は走らない。
+2. **`[dev-dependencies]` ブロック**に `proptest` を追加する。L4（premium antisymmetry test）と L7（balanced-book zero-sum）で使う。同じ理屈で「今宣言、後で使う」とする。Production build には proptest は含まれない。
 
-> 🛑 **やりがちな勘違い。** 「テストでも使うから `openhl-clob` を dev-dependency にしてもよくない？」 **production code が `openhl_clob::AccountId` を `Position` で使うから、test だけじゃない。** `AccountId` が test only なら dev-dep。Production 型シグネチャの一部なので普通の dep にする必要がある。Dev-deps は「テストが pull するが production が全く触らない」もののみ。
+> 🛑 **やりがちな勘違い。** 「テストでしか使わないなら `openhl-clob` も dev-dependency でよくない？」 **テストだけではない — production コードが `Position` で `openhl_clob::AccountId` を使う。** もし `AccountId` がテスト専用なら dev-dep でよかった。だが production の型シグネチャの一部なので、通常の dep にする必要がある。Dev-deps は「テストが pull するが production は一切触らない」ものに限定するべきだ。
 
 ### Step 2: `src/types.rs` を作成
 
-`crates/funding/src/types.rs` を作成。このファイルはまだ存在しない — このレッスンで新規。初期内容：
+`crates/funding/src/types.rs` を作成する。このファイルはまだ存在しない — このレッスンで新規に作る。初期内容は以下：
 
 ```rust
 //! Core types for the funding state machine.
@@ -137,18 +137,18 @@ workspace = true
 pub const RATE_SCALE: i64 = 1_000_000_000;
 ```
 
-この 15 行のファイルで注目する 4 点：
+この 15 行のファイルで注目すべきは 4 点：
 
-1. **Module doc に「Why fixed-point integers, not floats」セクション。** これが crate 全体の load-bearing な理由付け。6 ヶ月後に `types.rs` を読む次のエンジニアは、この説明を最上部で見る必要がある — コミットメッセージに埋もれているのでなく。
-2. **`[`FundingRate`]` と `[`Premium`]` のクロス参照。** これらの型はまだ存在しない（L2 / L3）。L1 ビルド中 rustdoc がリンク切れ warning を出す。**Warning を許容する** — L2/L3 で型を追加すれば解決する。Warning ゼロにしたいなら `[`FundingRate`]` でなく `[FundingRate]`（バックティックなし）でプレーンに書く — だがクロス参照スタイルがソースの慣習。
-3. **`pub const RATE_SCALE: i64 = 1_000_000_000`** — `u64` でなく `i64`。Rate と premium は*符号付き*（longs 支払い = 正の premium、shorts 支払い = 負）。符号付き整数なら `compute.rs` の演算で符号チェック不要、`i128` 中間値が積を自然に吸収する。
-4. **Doc が `1.0` = `100%` と言う。** これは会計単位の決定。`RATE_SCALE` 生値（1e9）は interval ごとに 100% の funding rate を意味する。`40_000_000` は 4%。`1_000_000` は 0.1%。**「1 単位 notional の parts-per-billion」として読む。**
+1. **Module doc に「Why fixed-point integers, not floats」セクションを置いている。** これが crate 全体の load-bearing な理由付けだ。6 ヶ月後に `types.rs` を読む次のエンジニアにとって、この説明はファイル最上部にあるべきもの — コミットメッセージの中に埋もれていてはいけない。
+2. **`[`FundingRate`]` と `[`Premium`]` へのクロス参照。** これらの型はまだ存在しない（L2 / L3 で追加する）。L1 のビルド中、rustdoc はリンク切れ warning を出す。**warning は受け入れる** — L2/L3 で型を追加すれば解決する。Warning をゼロにしたければ `[`FundingRate`]` でなく `[FundingRate]`（バックティックなし）と書いてもよいが、クロス参照スタイルがソースの慣習だ。
+3. **`pub const RATE_SCALE: i64 = 1_000_000_000`** — `u64` でなく `i64` を使う。Rate と premium は*符号付き*だからだ（longs 支払い = 正の premium、shorts 支払い = 負）。符号付き整数を使えば `compute.rs` の演算で符号チェックは不要になり、`i128` 中間値が積を自然に吸収してくれる。
+4. **Doc が `1.0` = `100%` と明記している。** これは会計単位の決定だ。`RATE_SCALE` の生値（1e9）は interval ごとに 100% の funding rate を意味する。`40_000_000` は 4%、`1_000_000` は 0.1%。**「1 単位 notional に対する parts-per-billion」として読めばよい。**
 
-> 🛑 **やりがちな勘違い。** 「`f64` を使って validator 間で共有する前に結果を丸めればよくない？」 **No が 2 つの理由。** (1) 中間計算が最終の丸めより先に divergent。その時点で被害は出ている。(2) 「N 桁に丸める」自体が float ops で、丸め挙動が異なる。**Float 非決定性からの脱出ハッチで整数より単純なものはない。**
+> 🛑 **やりがちな勘違い。** 「`f64` を使って、validator 間で共有する前に結果を丸めればよくない？」 **だめだ、理由は 2 つある。** (1) 中間計算は最終の丸めより先に発散する。その時点で被害は出ている。(2) 「N 桁に丸める」自体が float 演算で、丸め挙動が処理系ごとに異なる。**Float の非決定性からの脱出口として、整数より単純なものはない。**
 
 ### Step 3: `src/lib.rs` を更新
 
-`crates/funding/src/lib.rs` を開く。現在は空（`e69de29` blob）。これに置き換え：
+`crates/funding/src/lib.rs` を開く。現状は空（`e69de29` blob）だ。以下に置き換える：
 
 ```rust
 //! `openhl-funding` — funding-rate state machine.
@@ -177,18 +177,18 @@ pub mod types;
 pub use types::RATE_SCALE;
 ```
 
-L11 終了時点版と比べて欠けているもの：`pub mod clock`、`pub mod compute`、残りの `pub use types::{...}` re-export。それらは L4-L10 でモジュールを追加するたびに来る。**L1 lib.rs はコンパイルする最小限。**
+L11 終了時点の版と比べて欠けているもの：`pub mod clock`、`pub mod compute`、そして残りの `pub use types::{...}` re-export。これらは L4-L10 でモジュールを追加するたびに足していく。**L1 の lib.rs はコンパイルが通る最小限の形だ。**
 
-クレートレベル doc（`//! ...`）が説明：
-- これは純粋な state machine。I/O なし。
-- 1 段落の HL funding recap — context なしに crate root に landing した読者向け。
-- 統合がどこで起きるか（ここでなく bridge）。
+クレートレベル doc（`//! ...`）が伝えるのは：
+- これは純粋な state machine であり、I/O は持たない。
+- 1 段落の HL funding おさらい — 文脈なしに crate root にたどり着いた読者向け。
+- 統合がどこで起きるか（ここではなく bridge 側）。
 
-クロス参照 `[`FundingClock`]` は L8 が追加するまで壊れている。types.rs のクロス参照と同じ扱い。
+クロス参照 `[`FundingClock`]` は L8 で追加するまでリンク切れのままだ。types.rs のクロス参照と同じ扱いでよい。
 
-> 🛑 **考えてみよう。** ここに `pub mod compute;` を書いたが `compute.rs` を作らなかったらどうなる？ ヒント：`pub mod foo;` が実際に何をするか考える。
+> 🛑 **考えてみよう。** ここに `pub mod compute;` と書いたのに `compute.rs` を作らなかったらどうなるか。ヒント：`pub mod foo;` が実際に何をするかを考えよ。
 
-（答え：**コンパイルエラー。** `pub mod compute;` はコンパイラに「同じディレクトリの `compute.rs` または `compute/mod.rs` を探せ」と告げる。どちらもなければ `error[E0583]: file not found for module 'compute'`。だから `pub mod` 宣言は*各ファイルを作るタイミングで*追加する — 一度にすべてではなく。）
+（答え：**コンパイルエラーになる。** `pub mod compute;` はコンパイラに「同じディレクトリの `compute.rs` または `compute/mod.rs` を探せ」と告げる宣言だ。どちらもなければ `error[E0583]: file not found for module 'compute'` が出る。だから `pub mod` 宣言は*該当ファイルを作るタイミングで*追加する — 一度にまとめて追加するのではなく。）
 
 ### Step 4: コンパイル
 
@@ -206,23 +206,23 @@ warning: unresolved link to `FundingClock`
     Finished `dev` profile [unoptimized + debuginfo] in 0.5s
 ```
 
-3 つの rustdoc warning（unresolved link）。期待通り — リンクされた型は L2/L3（types.rs）と L8（clock.rs）で来る。**3 つすべて L11 までに解決する。** `#[allow(rustdoc::broken_intra_doc_links)]` で抑制しないこと — 「まだ X が要る」というインジケータとして有用。
+rustdoc の warning が 3 つ（unresolved link）出る。これは期待通り — リンク先の型は L2/L3（types.rs）と L8（clock.rs）で順次追加される。**L11 までに 3 つすべて解決する。** `#[allow(rustdoc::broken_intra_doc_links)]` で抑制してはいけない — 「まだ X を足す必要がある」というインジケータとして有用だからだ。
 
 よくあるエラー：
 
-- **`error[E0463]: can't find crate for 'openhl_clob'`** — Cargo.toml の `openhl-clob = { path = "../clob" }` 行を忘れた。L1 コードで `openhl_clob` を使わないが、L3 を先取りして `use openhl_clob::AccountId` を types.rs に dep なしで入れたらこれが出る。
-- **`error[E0583]: file not found for module 'clock'`** または `'compute'` — `pub mod clock;` を lib.rs に先取り追加。削除する。L8 で戻す。
-- **`error: failed to parse manifest`** — Cargo.toml の syntax。`[dev-dependencies]` ブロックを `[dev-dependences]` と typo していないかチェック。
+- **`error[E0463]: can't find crate for 'openhl_clob'`** — Cargo.toml の `openhl-clob = { path = "../clob" }` 行を忘れた場合。L1 のコード自体は `openhl_clob` を使わないが、L3 を先取りして `use openhl_clob::AccountId` を dep なしで types.rs に入れるとこのエラーが出る。
+- **`error[E0583]: file not found for module 'clock'`** や `'compute'` — `pub mod clock;` を先取りして lib.rs に追加した場合。削除して、L8 で改めて戻せばよい。
+- **`error: failed to parse manifest`** — Cargo.toml の syntax エラー。`[dev-dependencies]` ブロックを `[dev-dependences]` と typo していないか確認すること。
 
 ## 設計の振り返り
 
-このレッスンに焼き込まれた決定 3 つ：
+このレッスンに焼き込んだ決定は 3 つ：
 
-1. **`RATE_SCALE = 1e9` は u64 でなく i64。** Rate が signed なので signed。`compute.rs` の演算は `i128` 中間値で積を吸収する。`u64` は何の利得もなく符号処理を複雑化する。
+1. **`RATE_SCALE = 1e9` は u64 ではなく i64 にした。** Rate が符号付きだから符号付きにしている。`compute.rs` の演算は `i128` 中間値で積を吸収する。`u64` にしても何の利点もなく、符号処理を複雑にするだけだ。
 
-2. **Module doc コメントは理由付け、チュートリアルではない。** 「Why fixed-point integers, not floats」段落がこの設計が*なぜ*存在するかを説明。6 ヶ月後に `types.rs` に landing する読者には*なぜ*が必要 — *どう*はコード自体にある。**Doc コメントは将来の読者が問う質問を先回りしたとき価値を生む。**
+2. **Module doc コメントは理由付けであって、チュートリアルではない。** 「Why fixed-point integers, not floats」の段落で、この設計が*なぜ*存在するのかを説明している。6 ヶ月後に `types.rs` にたどり着いた読者に必要なのは*なぜ*の部分だ — *どう*はコード自体に書いてある。**Doc コメントは、将来の読者が問うであろう質問を先回りしたときに初めて価値を生む。**
 
-3. **`pub use types::RATE_SCALE` をクレートルートに。** 呼び出し側は `use openhl_funding::types::RATE_SCALE;` でなく `use openhl_funding::RATE_SCALE;` と書ける。短いパスが canonical、モジュールパスは内部。**呼び出し側が実際に使うものはクレートルートで re-export。**
+3. **`pub use types::RATE_SCALE` をクレートルートに置く。** 呼び出し側は `use openhl_funding::types::RATE_SCALE;` ではなく `use openhl_funding::RATE_SCALE;` と書ける。短いパスが canonical、モジュールパスは内部用だ。**呼び出し側が実際に使うものは、すべてクレートルートで re-export する。**
 
 ## 答え合わせ
 
@@ -234,10 +234,10 @@ diff -u ~/code/my-openhl/crates/funding/src/types.rs ./crates/funding/src/types.
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 ```
 
-L1 後：
-- **Cargo.toml** が Stage 8b と完全一致。
-- **types.rs** が Stage 8b の types.rs の*最初 ~30 行*に一致 — module doc + `RATE_SCALE`。それ以下（型定義）は L2/L3。
-- **lib.rs** が Stage 8b の lib.rs より短い — `pub mod types;` + 1 つの `pub use` だけ。他の module 宣言と re-export は後のレッスン。
+L1 後の状態：
+- **Cargo.toml** が Stage 8b と完全一致する。
+- **types.rs** が Stage 8b の types.rs の*最初の ~30 行*と一致する — module doc と `RATE_SCALE` まで。それ以降の型定義は L2/L3 で追加する。
+- **lib.rs** は Stage 8b の lib.rs より短い — `pub mod types;` と `pub use` 1 つだけ。他のモジュール宣言と re-export は後のレッスンで追加する。
 
 戻す：
 
@@ -247,21 +247,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: L1 にテストがないのに `[dev-dependencies] proptest` を今宣言する理由は？**
-Cargo.toml が単一の diff target だから。L4 で proptest を追加すると Cargo.toml を 2 回触ることになる。L1 で 1 回だけやればこのレッスン後にファイルが変わらない。**Cargo.toml の安定性は小さな unused dep 宣言の価値がある。**
+**Q: L1 にテストがないのに `[dev-dependencies] proptest` を今宣言するのはなぜ？**
+Cargo.toml の diff を 1 箇所に集中させたいからだ。L4 で proptest を追加すると Cargo.toml を 2 回触ることになる。L1 でまとめて済ませれば、このレッスン以降このファイルは変わらない。**Cargo.toml の安定性は、小さな unused dep 宣言を抱える価値がある。**
 
-**Q: 「parts-per-billion」解釈は実際どうなる？**
-Funding rate の生値 `1_250_000` は `0.00125`（interval ごとに 0.125%）。「1,000,000,000 のうち 1,250,000」 — つまり 0.125%。HL の 1 日 8 回 settlement と 4% cap で、実際に見る値の範囲は `±40_000_000` raw = `±4%/interval` = 最悪ケース `±32%/day`。**すべて i64 で快適に表現可能。**
+**Q: 「parts-per-billion」解釈は実際どう読むのか？**
+Funding rate の生値 `1_250_000` は `0.00125`（interval ごとに 0.125%）を意味する。つまり「1,000,000,000 分の 1,250,000」 = 0.125% だ。HL の 1 日 8 回 settlement と 4% cap のもとでは、実際に見る値の範囲は `±40_000_000` raw = `±4%/interval` = 最悪ケースで `±32%/day`。**すべて i64 で余裕を持って表現できる。**
 
-**Q: 後で `RATE_SCALE` を変えて consumer を壊さずに済むか？**
-**No。** `RATE_SCALE` はチェーン consensus 定数。永続化された全 balance、全歴史的 settlement、全テストフィクスチャが `RATE_SCALE = 1e9` で calibrated。変更には coordinated network upgrade が必要。**Deployment 後は immutable と扱う。** だからクレート開始時に一度、`const` で設定する。
+**Q: 後から `RATE_SCALE` を変えて、consumer を壊さずに済むか？**
+**無理だ。** `RATE_SCALE` はチェーンの consensus 定数だ。永続化済みのすべての balance、過去すべての settlement、すべてのテストフィクスチャが `RATE_SCALE = 1e9` を前提に calibrate されている。変更には coordinated な network upgrade が必要になる。**デプロイ後は immutable として扱うべきだ。** だからこそクレート開始時に一度だけ、`const` として設定する。
 
-**Q: なぜ `RATE_SCALE` のテストがない？**
-何を assert する？ `assert_eq!(RATE_SCALE, 1_000_000_000)` は同義反復 — 定数を自分自身と比較。定数の意味は*他の*コードがどう使うかで生きる。**L2 の最初の money type が最初の意味あるテストを得る。**
+**Q: `RATE_SCALE` のテストがないのはなぜ？**
+何を assert すればいい？ `assert_eq!(RATE_SCALE, 1_000_000_000)` は同義反復にすぎない — 定数を自分自身と比較しているだけだ。定数の意味は*他の*コードでの使われ方を通じて生きる。**最初の意味あるテストは、L2 で最初の money type に付くことになる。**
 
 ## 次のレッスン（L2）
 
-L2 で 4 つの「money type」を追加 — `MarkPrice`、`IndexPrice`、`Premium`、`Notional`。それぞれがプリミティブをラップする newtype。教育の焦点が「なぜ固定小数点」から「なぜ newtype」へシフト：偶然のクロスフィード防止（例：`MarkPrice` 期待のところに `IndexPrice` を渡す）。4 つの型が `types.rs` に ~30 行を追加して、残りの型（L3）が従う newtype パターンを実証する。
+L2 では「money type」を 4 つ追加する — `MarkPrice`、`IndexPrice`、`Premium`、`Notional`。それぞれプリミティブをラップする newtype だ。教育の焦点は「なぜ固定小数点か」から「なぜ newtype か」へとシフトする：偶発的なクロスフィードを防ぐためだ（例：`MarkPrice` を期待している箇所に `IndexPrice` を渡してしまうケース）。この 4 型が `types.rs` に ~30 行を追加し、残りの型（L3）が踏襲する newtype パターンの実例となる。
 ````
 
 ---

@@ -27,7 +27,7 @@
 cargo test -p openhl-evm
 ```
 
-…が in-memory bridge の build → ready → commit フローをカバーする 5 テストで pass する。L3 の `ConsensusBridge` の **最初の具象 implementation** が手元にある状態 — EVM のふりをして fake block を `Mutex<HashMap>` に保存し、Reth を立ち上げずに trait を exercise させる test double。Consensus crate の後続テストでこれを使う; L8/L9 の runner と engine_app も同様。
+上記の実行結果が in-memory bridge の build → ready → commit フローをカバーする 5 つのテストで pass する。L3 の `ConsensusBridge` の **最初の具象 implementation** が手元にある状態になる — EVM のふりをして fake block を `Mutex<HashMap>` に保存し、Reth を立ち上げずに trait を exercise する test double だ。Consensus crate の後続テストでこれを使う。L8/L9 の runner と engine_app も同様。
 
 ## おさらい
 
@@ -47,14 +47,14 @@ crates/evm/Cargo.toml          — 空 [dependencies]
 
 4 つのことをする:
 
-1. **`crates/evm/Cargo.toml` に 3 つの依存と 1 つの dev-dependency を追加**: `openhl-consensus` (trait と error type 用)、`openhl-types` (contract type 用)、`async-trait` (`#[async_trait]` macro 用)、dev-dep に `tokio` (テスト関数を `#[tokio::test]` にするため)。
-2. **`crates/evm/src/in_memory.rs` を作成** — `InMemoryEvmBridge` struct、`Mutex` に持たせる private な `State` struct、4 つの async method すべてを提供する `impl ConsensusBridge for InMemoryEvmBridge` block、`hex_short` ヘルパー、`#[cfg(test)] mod tests` (5 テスト)。
+1. **`crates/evm/Cargo.toml` に依存を 3 つと dev-dependency を 1 つ追加する**: `openhl-consensus` (trait と error type 用)、`openhl-types` (contract type 用)、`async-trait` (`#[async_trait]` macro 用)、dev-dep に `tokio` (テスト関数を `#[tokio::test]` にするため)。
+2. **`crates/evm/src/in_memory.rs` を作成する** — `InMemoryEvmBridge` struct、`Mutex` に持たせる private な `State` struct、4 つの async method すべてを提供する `impl ConsensusBridge for InMemoryEvmBridge` block、`hex_short` ヘルパー、`#[cfg(test)] mod tests` (5 テスト)。
 3. **`in_memory` を crate に組み込む** — `crates/evm/src/lib.rs` に `pub mod in_memory; pub use in_memory::InMemoryEvmBridge;` を追加。
-4. **`cargo test -p openhl-evm` を実行** — 5 テストが pass するのを見届ける。
+4. **`cargo test -p openhl-evm` を実行** — 5 つのテストが pass するのを見届ける。
 
-これが初めて書く Rust の impl だ。ここで encode するパターンは繰り返される: L5 の `RethEvmBridge` も同じスケルトンを使い、L11+ の `LiveRethEvmBridge` もそうだ。**State 管理パターン (Mutex<State> + pending vs chain map) もそれらの impl に伝播する。**
+これが Rust の impl を初めて書く場面だ。ここで encode するパターンは繰り返される: L5 の `RethEvmBridge` も同じスケルトンを使い、L11+ の `LiveRethEvmBridge` も同様だ。**State 管理パターン (Mutex<State> + pending vs chain map) もそれらの impl に伝播する。**
 
-> 🛑 **考えてみよう。** スクロール前に: test double の `build_payload` が **fake する** ものは何で、**実際にできる** ものは何か? ヒント: EVM は走らせられないが、できること: `PayloadId` を割り当てる、block number をインクリメントする、hash を synthesize する、pending block を覚える。Fake vs real の区別は L5 + L11 で意味を持つ。
+> 🛑 **考えてみよう。** スクロールする前に: test double の `build_payload` が **fake する** ものは何で、**実際にできる** ものは何か? ヒント: EVM は走らせられないが、できることはある — `PayloadId` を割り当てる、block number をインクリメントする、hash を synthesize する、pending block を覚える。Fake vs real の区別は L5 と L11 で意味を持つ。
 
 ## 手を動かす walk-through
 
@@ -75,11 +75,11 @@ tokio = { workspace = true }
 4 つ:
 
 - **`openhl-consensus`** — impl から `bridge::{ConsensusBridge, BridgeError}` を参照するため
-- **`openhl-types`** — `BlockHash`、`PayloadId` 等を使うため
+- **`openhl-types`** — `BlockHash`、`PayloadId` などを使うため
 - **`async-trait`** — impl block の `#[async_trait]` attribute 用
 - **`tokio` (dev)** — async test 関数の `#[tokio::test]` 用
 
-`cargo check -p openhl-evm` は引き続き pass する — まだ使っていない依存を宣言しただけ。
+`cargo check -p openhl-evm` は引き続き pass する — まだ使っていない依存を宣言しただけだからだ。
 
 ### Step 2: ファイルを作成
 
@@ -127,20 +127,20 @@ impl InMemoryEvmBridge {
 }
 ```
 
-各フィールドの役割を walk:
+各フィールドの役割を walk する:
 
-**`InMemoryEvmBridge`** — public struct。フィールド 1 つ: `state: Mutex<State>`。Mutex が type を `Send + Sync` にする (thread 間で safely 共有可能)、これは trait が要求する。Mutable なものはすべて mutex の内側に置く。
+**`InMemoryEvmBridge`** — public struct。フィールドは 1 つ: `state: Mutex<State>`。Mutex が type を `Send + Sync` にし (thread 間で safely 共有可能)、これは trait が要求する性質だ。Mutable なものはすべて mutex の内側に置く。
 
 **`State`** (private) — 3 つの bookkeeping:
 
-- `next_payload_id: u64` — 単調カウンタ。`build_payload` のたびにインクリメントして、その前の値を返り値の `PayloadId` に使う。
-- `pending: HashMap<u64, ExecutedBlock>` — `build_payload` が produce したが `commit` が accept していない block。`PayloadId` で key する。
-- `chain: HashMap<[u8; 32], ExecutedBlock>` — commit 済み block。生の 32-byte hash で key する (`BlockHash` newtype ではなく — lookup 時に `.0` accessor を省ける)。
+- `next_payload_id: u64` — 単調カウンタ。`build_payload` のたびにインクリメントし、その前の値を返り値の `PayloadId` に使う。
+- `pending: HashMap<u64, ExecutedBlock>` — `build_payload` が produce したが `commit` がまだ accept していない block。`PayloadId` を key にする。
+- `chain: HashMap<[u8; 32], ExecutedBlock>` — commit 済み block。生の 32-byte hash を key にする (`BlockHash` newtype ではなく — lookup 時に `.0` accessor を省ける)。
 - `head: Option<BlockHash>` — 最も最近 commit された hash。何も commit していなければ `None`。
 
-`pending` と `chain` を分けるのが重要: `commit(hash)` が呼ばれた時点で、その block は (前の `build_payload` から) すでに `pending` にある。`commit` は pending → chain に移し、`head` を更新する。real EL が in-flight payload buffer と finalized chain の両方を持つ構造と同じだ。
+`pending` と `chain` を分けるのが重要だ: `commit(hash)` が呼ばれた時点で、その block は (前の `build_payload` から) すでに `pending` にある。`commit` は pending → chain に移し、`head` を更新する。real EL が in-flight payload buffer と finalized chain の両方を持つ構造と同じだ。
 
-**`impl InMemoryEvmBridge::new`** — constructor。`#[must_use]` は clippy へのヒント: caller が `InMemoryEvmBridge::new();` を bind せずに書いたら、ほぼ間違いなくバグ。
+**`impl InMemoryEvmBridge::new`** — constructor。`#[must_use]` は clippy へのヒント: caller が `InMemoryEvmBridge::new();` を bind せずに書いたら、ほぼ間違いなくバグだ。
 
 ### Step 4: `ConsensusBridge` を impl — `build_payload`
 
@@ -175,16 +175,16 @@ impl ConsensusBridge for InMemoryEvmBridge {
     // ...続く
 ```
 
-順を追って:
+順を追って見ていく:
 
-1. **`self.state.lock().expect("state mutex poisoned")`** — mutex を取得する。`.expect` は `PoisonError` ケースをカバー: 前の holder が lock を持ったまま panic して、state が indeterminate なまま残った状態。正しい動作は自分も panic すること (poisoned な state machine から続けるのは unsafe)。文字列は debug 出力で lock を識別するためのもの。
-2. **`id = s.next_payload_id; s.next_payload_id += 1;`** — fresh な payload ID を割り当てる。単調、再利用なし。DB の sequence と同じ。
-3. **`s.chain.get(&parent.0).map_or(0, |b| b.number)`** — parent block の number を見つける。その parent を commit したことがなければ (例: テストの genesis hash)、0 にデフォルト (子は block 1 になる)。`.0` は `BlockHash` newtype を unwrap して内側の `[u8; 32]` を取り出す。
-4. **`(id, number)` から hash を synthesize** — 最初の 8 byte が `id.to_le_bytes()`、次の 8 byte が `number.to_le_bytes()`、残りはゼロ。なぜ real hashing でないか? test double だから; hash は build ごとに unique であればよい。`(id, number)` は構造上 unique なので、synthesize された hash もそう。
-5. **`ExecutedBlock` を build** し `pending` に stash する。block は parent_hash、number、hash、ゼロ state_root を持つ (EVM を走らせていない)。
-6. **`Ok(PayloadId(id))` を返す**。
+1. **`self.state.lock().expect("state mutex poisoned")`** — mutex を取得する。`.expect` は `PoisonError` ケースをカバーする: 前の holder が lock を持ったまま panic し、state が indeterminate なまま残っている状態だ。正しい動作は自分も panic すること (poisoned な state machine から続けるのは unsafe)。文字列は debug 出力で lock を識別するためのもの。
+2. **`id = s.next_payload_id; s.next_payload_id += 1;`** — fresh な payload ID を割り当てる。単調で、再利用はしない。DB の sequence と同じだ。
+3. **`s.chain.get(&parent.0).map_or(0, |b| b.number)`** — parent block の number を見つける。その parent を commit したことがなければ (例: テストの genesis hash)、デフォルトで 0 を返す (子は block 1 になる)。`.0` は `BlockHash` newtype を unwrap して内側の `[u8; 32]` を取り出す。
+4. **`(id, number)` から hash を synthesize** — 最初の 8 byte が `id.to_le_bytes()`、次の 8 byte が `number.to_le_bytes()`、残りはゼロ。なぜ real hashing でないのか? test double だからだ。hash は build ごとに unique でありさえすればよい。`(id, number)` は構造上 unique なので、synthesize された hash もそうなる。
+5. **`ExecutedBlock` を build して** `pending` に stash する。block は parent_hash、number、hash、そしてゼロの state_root を持つ (EVM を走らせていないため)。
+6. **`Ok(PayloadId(id))` を返す。**
 
-> 🛑 **やりがちな勘違い。** 「`BlockHash` に real cryptographic hash を使うべきでは。」 **違う** — これは test double。Real hashing は EVM を走らせて post-state root を compute する必要があり、それを避けるために test double を使っている。Synthesize した hash は `BlockHash` の *uniqueness* 要求を満たすが、*cryptographic-commitment* 要求は満たさない、これでよい — unit test として。Module 1 L11+ (LiveRethEvmBridge) が real hashing をするが、それは Reth が仕事をするから。
+> 🛑 **やりがちな勘違い。** 「`BlockHash` に real cryptographic hash を使うべきでは。」 **違う** — これは test double だ。Real hashing は EVM を走らせて post-state root を compute する必要があり、それを避けるために test double を使っている。Synthesize した hash は `BlockHash` の *uniqueness* 要求を満たすが、*cryptographic-commitment* 要求は満たさない — unit test としてはそれでよい。Module 1 L11+ (LiveRethEvmBridge) では real hashing をするが、それは Reth が仕事をするからだ。
 
 ### Step 5: `payload_ready` を impl
 
@@ -201,9 +201,9 @@ impl ConsensusBridge for InMemoryEvmBridge {
     }
 ```
 
-`pending` を ID で lookup する。見つかったら clone (caller が ownership を欲しがる; pending は block がまだ commit されていなくて caller が再度問い合わせる場合に備えて copy を残す)。見つからなければ descriptive な message で `Rejected` error を返す。
+`pending` を ID で lookup する。見つかれば clone する (caller は ownership を欲しがるが、block がまだ commit されていなくて caller が再度問い合わせる場合に備えて、pending には copy を残しておく)。見つからなければ、descriptive な message とともに `Rejected` error を返す。
 
-注意: `payload_ready` が impl 内で唯一の read-only — そう書きかけたが、これは read-only だ (mutation なし)。`let s = self.state.lock()` には `mut` 不要 — `.get()` を呼ぶだけで、insert や remove は無いから。
+注意: `payload_ready` は impl 内で唯一の read-only メソッドだ (mutation なし)。`let s = self.state.lock()` に `mut` は要らない — `.get()` を呼ぶだけで、insert も remove もしないからだ。
 
 ### Step 6: `validate_payload` を impl
 
@@ -216,9 +216,9 @@ impl ConsensusBridge for InMemoryEvmBridge {
     }
 ```
 
-この impl で一番単純なもの。Test double なので — どんな block も valid と assert する。Real validation (L12) で `EthBeaconConsensus::validate_header_against_parent` を actual parent に対して走らせる。今は `Valid` を返すことで consensus tests が動く。
+この impl の中で一番単純なもの。test double なので、どんな block も valid と assert する。Real validation (L12) では `EthBeaconConsensus::validate_header_against_parent` を actual parent に対して走らせる。今は `Valid` を返すことで consensus tests を動かせる。
 
-**重要: `_block` (leading underscore)。** compiler に「この引数を意図的に使わない」と伝える。Underscore 無しだと `unused_variables` warning が出る; あれば抑制される。
+**重要: `_block` (leading underscore)。** compiler に「この引数を意図的に使わない」と伝える。Underscore 無しだと `unused_variables` warning が出る。付けると抑制される。
 
 ### Step 7: `commit` を impl
 
@@ -243,14 +243,14 @@ impl ConsensusBridge for InMemoryEvmBridge {
 
 流れ:
 
-1. State を write 用に lock。
-2. `pending.values()` の中から `block_hash` に一致する block を探す。value 経由で iterate する理由: `pending` は `PayloadId` で key しているので、hash で block を探すには scan が必要。(real impl で O(1) の hash→block lookup を持つなら、2 番目の index を持つ。test double では O(n) scan で OK。)
-3. 見つからなければ short hex hash で `Rejected` error を返す。
-4. 見つかれば `chain` (hash bytes で key) に insert して `head` を更新。
+1. State を write 用に lock する。
+2. `pending.values()` の中から `block_hash` に一致する block を探す。value 経由で iterate する理由: `pending` は `PayloadId` を key にしているので、hash で block を探すには scan が必要だからだ。(real impl で O(1) の hash→block lookup が欲しければ、2 番目の index を持つ。test double では O(n) scan で OK。)
+3. 見つからなければ short hex hash 付きで `Rejected` error を返す。
+4. 見つかれば `chain` (key は hash bytes) に insert して `head` を更新する。
 
-`pending` から remove しないことに注意 — commit 後、block は両方の map に居続ける。Real impl は `pending.remove(&id)` するかもしれないが、test では関係ない。
+`pending` から remove しない点に注意 — commit 後、block は両方の map に残り続ける。Real impl は `pending.remove(&id)` するかもしれないが、test では関係ない。
 
-`hex_short` ヘルパーが次のセクション:
+`hex_short` ヘルパーは次のセクション:
 
 ```rust
 fn hex_short(bytes: &[u8; 32]) -> String {
@@ -263,7 +263,7 @@ fn hex_short(bytes: &[u8; 32]) -> String {
 }
 ```
 
-最初の 8 byte を 0x prefix 付きの hex 文字列に — ログ 1 行に収まる短さ。`write!(&mut s, ...)` 呼び出しには file 先頭の `use std::fmt::Write as _;` が必要 (Step 3 で追加済み)。`as _` rename は trait を *method 用に* import しつつ、`Write` という名前で namespace を汚染しない。
+最初の 8 byte を 0x prefix 付きの hex 文字列にする — ログ 1 行に収まる短さだ。`write!(&mut s, ...)` 呼び出しには file 先頭の `use std::fmt::Write as _;` が必要 (Step 3 で追加済み)。`as _` rename は trait を *method 用に* import しつつ、`Write` という名前で namespace を汚染しない。
 
 ### Step 8: `in_memory` を crate に組み込む
 
@@ -283,7 +283,7 @@ pub mod in_memory;
 pub use in_memory::InMemoryEvmBridge;
 ```
 
-`pub mod in_memory;` で module を expose。`pub use in_memory::InMemoryEvmBridge;` で struct を crate root に re-export し、downstream crate が `use openhl_evm::InMemoryEvmBridge;` と書ける (`use openhl_evm::in_memory::InMemoryEvmBridge;` ではなく)。
+`pub mod in_memory;` で module を expose する。`pub use in_memory::InMemoryEvmBridge;` で struct を crate root に re-export し、downstream crate が `use openhl_evm::InMemoryEvmBridge;` と書けるようにする (`use openhl_evm::in_memory::InMemoryEvmBridge;` ではなく)。
 
 ### Step 9: Unit test を追加
 
@@ -370,7 +370,7 @@ mod tests {
 | `build_on_committed_parent_increments_number` | Number の単調性: parent block 1 の上に build → block 2。 |
 | `commit_unknown_hash_errors` | Pending に無い hash の commit は `BridgeError::Rejected` を返す。 |
 
-`#[tokio::test]` は `#[test]` の async 対応版。test 用に tokio runtime をセットアップし、async 本体を await する。
+`#[tokio::test]` は `#[test]` の async 対応版だ。test 用に tokio runtime をセットアップし、async 本体を await する。
 
 ## テスト
 
@@ -391,20 +391,20 @@ test in_memory::tests::validate_returns_valid ... ok
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-よくあるエラーと修正:
+よくあるエラーと対処:
 
-- **`Mutex<HashMap<u64, ExecutedBlock>>` が `Default` を auto-derive しない。** 待って、する — `Mutex<T>` も `HashMap<K, V>` も `Default` を derive する。これが出るなら、`BTreeMap` (これも Default あり) か別の Default なしの type を書いたかも。`HashMap` に戻す。
-- **`use std::fmt::Write as _;` が実際は使われていない** — clippy が warning する。`Write` trait は `hex_short` 内で `write!` macro 経由で使われる; warning は macro 展開が import を見ていないことを意味する。`use` が module 先頭にあるか確認 (関数内ではなく)。
+- **`Mutex<HashMap<u64, ExecutedBlock>>` が `Default` を auto-derive しない。** 実際にはする — `Mutex<T>` も `HashMap<K, V>` も `Default` を derive する。これが出るなら、別の Default なしの type (例えば `BTreeMap` 以外) を書いたかもしれない。`HashMap` に戻す。
+- **`use std::fmt::Write as _;` が実際は使われていない、と clippy が warning する。** `Write` trait は `hex_short` 内で `write!` macro 経由で使われている。warning は macro 展開が import を見ていない可能性を示す。`use` が module 先頭 (関数内ではない) にあるか確認する。
 - **`#[tokio::test]` not found** — `tokio` が `[dev-dependencies]` に無い。Step 1 を再確認。
-- **`block.number == 1` を assert するテストで `0` が返る。** `let number = parent_number + 1;` の `+ 1` を書き忘れた。
+- **`block.number == 1` を assert するテストで `0` が返る。** `let number = parent_number + 1;` の `+ 1` を書き忘れている。
 
 ## 設計を振り返る
 
 このレッスンで encode した本質的な決定が 2 つ:
 
-1. **State は `Mutex<State>` の裏に置く。** これが `InMemoryEvmBridge` を thread-safe にする — そして `Send + Sync` にする。代替 (lock-free、atomic-only mutation) は test double にしては遥かに複雑。Lock は contention が低いとき (test code) や critical section が短いとき (real code) なら fine。このパターンは L11+ の `LiveRethEvmBridge` にも伝播する — 同じ `Mutex<State>` の形をしている。
+1. **State は `Mutex<State>` の裏に置く。** これが `InMemoryEvmBridge` を thread-safe にし、`Send + Sync` を満たさせる。代替 (lock-free、atomic-only mutation) は test double としては遥かに複雑だ。Lock は contention が低い (test code) か critical section が短い (real code) なら問題ない。このパターンは L11+ の `LiveRethEvmBridge` にも伝播する — 同じ `Mutex<State>` の形をしている。
 
-2. **`pending` と `chain` を分けた map にする。** Real EL でも同じ split がある — 現在 build 中の payload と canonical chain に commit された block。Test double にこれを encode することで、**データフローの形** が production impl に carry over する。1 つの combined map にすると「build = commit」を含意してしまう — 違う。Build は speculative、commit が final。
+2. **`pending` と `chain` を別の map にする。** Real EL でも同じ split がある — 現在 build 中の payload と、canonical chain に commit された block。Test double にこれを encode することで、**データフローの形** が production impl に carry over する。1 つの combined map にすると「build = commit」を含意してしまうが、これは違う。Build は speculative、commit が final だ。
 
 ## 答え合わせ
 
@@ -416,7 +416,7 @@ diff -u ~/code/my-openhl/crates/evm/Cargo.toml ./crates/evm/Cargo.toml
 diff -u ~/code/my-openhl/crates/evm/src/lib.rs ./crates/evm/src/lib.rs
 ```
 
-テスト順、doc-comment の言い回し、exact な debug message format に違いがあっても OK。struct の形、`Mutex<State>` パターン、4 method impl のロジックは近く一致するはず。
+テスト順、doc-comment の言い回し、exact な debug message format は違っていて OK。struct の形、`Mutex<State>` パターン、4 つの method impl のロジックはほぼ一致するはず。
 
 main に戻す:
 
@@ -427,20 +427,20 @@ git checkout main
 ## よくある質問
 
 **Q: `commit_advances_head_and_records_block` が "mutex poisoned" で panic する。**
-最もよくある原因は、別のテストが同じ impl 内で lock を持ったまま panic し、state が poisoned のままになったこと。Cargo はデフォルトで test を並列実行する; 本当の問題と確信したら `cargo test -p openhl-evm -- --test-threads=1` で逐次実行する。(我々のケースではほぼ test コードのバグだ — 各テストが `InMemoryEvmBridge::new()` を作るので shared state は無い。)
+最もよくある原因は、別のテストが同じ impl 内で lock を持ったまま panic し、state が poisoned のまま残ったことだ。Cargo はデフォルトで test を並列実行する。本当の問題だと確信したら `cargo test -p openhl-evm -- --test-threads=1` で逐次実行する。(このケースではほぼ test コードのバグだろう — 各テストが `InMemoryEvmBridge::new()` を新たに作るので shared state は無いはずだ。)
 
 **Q: `pending` を `HashMap<u64, _>` ではなく `HashMap<PayloadId, _>` にすべき?**
-どちらでも動く。openhl convention は storage layer で内側の type (`u64`) を使い、lookup 内での wrap/unwrap を避ける。Public API はまだ `PayloadId` を使う。trade-off: `HashMap<PayloadId, _>` で type safety を得る代わりに lookup ごとに `.0` accessor が必要。`HashMap<u64, _>` で storage layer の type safety を諦めるが noise を避ける。好み; `u64` を選んだ。
+どちらでも動く。openhl の convention は、storage layer で内側の type (`u64`) を使い、lookup 内での wrap/unwrap を避けることだ。Public API では依然 `PayloadId` を使う。trade-off は次のとおり: `HashMap<PayloadId, _>` で type safety を得る代わりに、lookup ごとに `.0` accessor が必要になる。`HashMap<u64, _>` なら storage layer の type safety は諦めるが、noise は避けられる。好みの問題で、こちらは `u64` を選んだ。
 
-**Q: `hex_short` がなぜ最初の 8 byte だけ? 全部じゃない理由は?**
-ログを短くする必要があるから。Full 32-byte hex は 64 文字 — ログ行を食う。最初の 8 byte (16 hex 文字 + "0x") で dev/test シナリオでは block を identify するのに十分。Production ログでは full hash を使う; ヘルパーを変える。
+**Q: `hex_short` はなぜ最初の 8 byte だけで、全部ではないのか?**
+ログを短く保つ必要があるからだ。Full 32-byte hex は 64 文字 — ログ行を食う。最初の 8 byte (16 hex 文字 + "0x") で、dev/test シナリオでは block を identify するのに十分。Production ログでは full hash を使えばよい。ヘルパーを差し替える。
 
 **Q: テストは pass するが `unused_imports` で clippy warning が出る。**
-import が実際にコード中で使われているか確認する。Boilerplate に `std::fmt::Write as _` がある — `hex_short` 内でだけ使われる。`hex_short` を書いていなければ unused。ヘルパーを追加するか import を消す。
+import が実際にコード中で使われているか確認する。Boilerplate に `std::fmt::Write as _` がある — `hex_short` 内でだけ使われる。`hex_short` を書いていなければ unused になる。ヘルパーを追加するか、import を消す。
 
 ## 次のレッスン (L5)
 
-動作する `ConsensusBridge` impl が手元にあるが、Reth を一切使っていない。L5 で次の impl を書く: `RethEvmBridge`。Same trait、しかし `ExecutedBlock` は real `alloy_consensus::Header` から build される (synthesize ではなく)、`BlockHash` は Reth の `Header::hash_slow` で hash された real `B256`。State はまだ in-memory (live Reth provider なし) だが、**型は real**。これが toy 型 (L4) と live 統合 (L11+) の間の bridge だ。
+動作する `ConsensusBridge` impl は手元にあるが、Reth はまだ一切使っていない。L5 で次の impl を書く: `RethEvmBridge`。同じ trait だが、`ExecutedBlock` は real な `alloy_consensus::Header` から build され (合成ではなく)、`BlockHash` は Reth の `Header::hash_slow` で hash された real な `B256` になる。State はまだ in-memory (live Reth provider なし) だが、**型は real だ。** これが toy 型 (L4) と live 統合 (L11+) を橋渡しする。
 ````
 
 ---

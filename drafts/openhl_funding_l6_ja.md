@@ -20,41 +20,41 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンを終えると：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…が 10 テストを通る（L4-L5 から 5 + 新規 5）。`compute.rs` が得るもの：
+上記の実行結果が 10 テストを通る（L4-L5 で書いた 5 つ + 新規 5 つ）。`compute.rs` に加わるのは：
 
-- **`compute_rate(premium, params) -> FundingRate`** — 生 premium を `params.divisor` で割り、`±params.rate_cap` に clamp して per-interval rate にする。
-- **5 unit test** — divisor 効果、正 cap clamp、負 cap clamp、divisor=0 で無効化、cap=0 で無効化をカバー。
+- **`compute_rate(premium, params) -> FundingRate`** — 生 premium を `params.divisor` で割り、`±params.rate_cap` に clamp して per-interval rate を生む関数。
+- **unit test 5 つ** — divisor の効果、正側 cap での clamp、負側 cap での clamp、divisor=0 での無効化、cap=0 での無効化をカバーする。
 
-L6 後、`compute.rs` の 3 つの pure 関数のうち 2 つが完了。**残るは `apply_funding` のみ** — L7。
+L6 が終われば、`compute.rs` の 3 つの pure 関数のうち 2 つが揃う。**残るは `apply_funding` だけ** — L7 で扱う。
 
-教育の焦点は**演算順**：divide *してから* clamp。順を逆にすると rate cap の意味が完全に変わる — 入れやすく検出が難しい off-by-one 設計バグの一種。
+教育上の焦点は**演算順**だ：割って*から* clamp する。順序を逆にすると rate cap の意味が完全に変わってしまう — 紛れ込みやすく見つけにくい、off-by-one 系の設計バグだ。
 
 ## おさらい
 
-L5 後：
+L5 後の状態：
 - `compute_premium` が mark/index から符号付き premium を生む。
-- Antisymmetry proptest が 256 ランダムペアを exercise。
-- `saturate_i128_to_i64` 配置済み、だが今まで `compute_premium` だけが使用。
+- Antisymmetry proptest が 256 個のランダムペアを exercise している。
+- `saturate_i128_to_i64` は配置済みだが、これまで使っているのは `compute_premium` だけ。
 
-L6 で 2 つ目の pure 関数を追加。`compute_rate` は `compute_premium` より短い（overflow 体操なし — 処理する値が既に i64 に収まる）が独自の設計決定セットを encode。
+L6 では 2 つ目の pure 関数を追加する。`compute_rate` は `compute_premium` より短い（overflow 対策の体操がない — 扱う値が既に i64 に収まっているからだ）が、独自の設計判断セットを encode する。
 
 ## プラン
 
-3 つの編集：
+編集は 3 つ：
 
-1. **`compute.rs` に `compute_rate` を append** — body 10 行、`compute_premium` の後ろ（`saturate_i128_to_i64` の前）。
-2. **既存の `mod tests` ブロックに 5 unit test を append**。
-3. **`lib.rs` を更新** — `compute_rate` を `pub use compute::{...}` re-export に追加。
+1. **`compute.rs` に `compute_rate` を追加**する — body は 10 行、`compute_premium` の後ろ（`saturate_i128_to_i64` の前）に置く。
+2. **既存の `mod tests` ブロックに unit test を 5 つ追加**する。
+3. **`lib.rs` を更新**する — `compute_rate` を `pub use compute::{...}` の re-export に加える。
 
-> 🛑 **考えてみよう。** スクロール前に — `raw_rate = premium / divisor` を計算してから `±cap` に clamp する。**先に clamp してから割ったらどう変わる？** ヒント：cap がどの単位かを考える。
+> 🛑 **考えてみよう。** スクロール前に — まず `raw_rate = premium / divisor` を計算し、それから `±cap` に clamp するのが今回の方針だ。**順序を逆にして、先に clamp してから割るとどう変わるか？** ヒント：cap の単位を考えよ。
 
-（答え：**先に clamp すると cap が「最大 premium」を意味するようになる、「最大 rate」ではなく。** `cap = 4%/interval`、`divisor = 8` で、premium を `±4%` に clamp してから割ると最大 *rate* は `0.5%/interval` になる。我々のアプローチ（先に割って rate レベルで clamp）だと cap が真に `4%/interval` で bind する。**Cap の単位は出力の単位に合わせる必要がある。** Premium と rate は両方 `RATE_SCALE` でスケール、数値的に似て見える — だが意味は違う。Divisor がどちらを cap しているかを変える。）
+（答え：**先に clamp すると、cap が「最大 rate」ではなく「最大 premium」を意味するようになってしまう。** `cap = 4%/interval`、`divisor = 8` のとき、premium を `±4%` に clamp してから割ると最大 *rate* は `0.5%/interval` になる。今回のアプローチ（先に割って rate レベルで clamp）なら、cap がそのまま `4%/interval` で bind する。**Cap の単位は出力の単位に合わせる必要がある。** Premium と rate はどちらも `RATE_SCALE` でスケーリングされているので数値的には似て見えるが、意味は別物だ。Divisor が、cap が何を縛っているのかを変えてしまう。）
 
 ## 手順
 
@@ -80,34 +80,34 @@ pub fn compute_rate(premium: Premium, params: FundingParams) -> FundingRate {
 }
 ```
 
-Body 10 行。4 つの動く部分：
+Body は 10 行、動く部分は 4 つ：
 
-1. **`if params.divisor == 0 { return FundingRate(0); }`** — funding-disabled 早期 exit。これなしだと `premium.0 / i64::from(params.divisor)` 行が panic（ゼロ除算）。**Divisor がゼロのときの唯一の安全な対応は guard。**
+1. **`if params.divisor == 0 { return FundingRate(0); }`** — funding 無効化のための早期 return。これがないと `premium.0 / i64::from(params.divisor)` の行でゼロ除算 panic が起きる。**divisor がゼロのときに安全な対応は guard 一択だ。**
 
-2. **`premium.0 / i64::from(params.divisor)`** — 除算。`premium.0` は `i64`、`divisor` は `u32`。`i64::from(u32)` がロスレスに widen（任意の u32 値が i64 に収まる）。`i64 / i64` が i64 商を生む。**結果は clamp 前の「生」per-interval rate。**
+2. **`premium.0 / i64::from(params.divisor)`** — 除算。`premium.0` は `i64`、`divisor` は `u32` だ。`i64::from(u32)` がロスレスに widen する（u32 のあらゆる値が i64 に収まる）。`i64 / i64` で i64 の商が得られる。**結果が clamp 前の「生」per-interval rate になる。**
 
-3. **`let cap = params.rate_cap.0.abs();`** — cap を絶対値として抽出。`params.rate_cap` は `FundingRate(i64)`、ユーザが負の値を渡した*かもしれない*。Cap の符号は気にしない — 規模を気にする。**Cap は幅、位置ではない。**
+3. **`let cap = params.rate_cap.0.abs();`** — cap を絶対値として取り出す。`params.rate_cap` は `FundingRate(i64)` なので、ユーザが負の値を渡してくる*可能性がある*。Cap の符号は気にしない — 気にするのは規模だ。**Cap は「幅」であって「位置」ではない。**
 
-4. **`raw.clamp(-cap, cap)`** — symmetric clamp。`i64::clamp(min, max)` は `raw < min` なら `min`、`raw > max` なら `max`、それ以外なら `raw` を返す。**Rust 組み込み API、manual `if/else` チェーン不要。**
+4. **`raw.clamp(-cap, cap)`** — 対称的に clamp する。`i64::clamp(min, max)` は `raw < min` なら `min`、`raw > max` なら `max`、それ以外なら `raw` を返す。**Rust 組み込みの API なので、手書きの `if/else` チェーンは要らない。**
 
-> 🛑 **やりがちな勘違い。** 「Cap に `.abs()` を付ける意味は？ ユーザに正の cap を渡すよう要求すれば？」 **できるが、defensive abs はランタイム検証より安価。** 「負の cap」もしくは「絶対 cap、どちらの符号も許す」と思って `FundingRate(-40_000_000)` を渡したユーザは `FundingRate(40_000_000)` と同じ挙動を得る。コストは `.abs()` 呼び出し 1 つ（~1ns）、メリットは footgun 1 つ削減。**`.abs()` は API での「cap にはどちらの符号も受ける、magnitude として解釈する」と言うのと等価。**
+> 🛑 **やりがちな勘違い。** 「Cap に `.abs()` を付ける意味は？ ユーザに正の cap を渡せと要求すれば済まないか？」 **できるが、defensive な abs のほうが実行時バリデーションより安く済む。** 「負の cap」あるいは「絶対 cap、符号はどちらでも可」のつもりで `FundingRate(-40_000_000)` を渡したユーザは、`FundingRate(40_000_000)` と同じ挙動を得る。コストは `.abs()` の呼び出し 1 回（~1ns）、得られるのは footgun を 1 つ減らせることだ。**`.abs()` を入れることは、API 上で「cap はどちらの符号も受け入れる、magnitude として解釈する」と表明しているのと等価だ。**
 
-> 🛑 **やりがちな勘違い。** 「`params.rate_cap == 0` も特殊ケースとして扱うべきでは？」 **不要 — 自然に落ちる。** `cap == 0` のとき `clamp(-0, 0)` は任意の入力に対して `0` を生む。結果は `FundingRate(0)`、これが我々が望む disabled-funding セマンティクス。**Edge case が自然に処理されるコードは、明示的 edge-case 分岐を持つコードより良い。**
+> 🛑 **やりがちな勘違い。** 「`params.rate_cap == 0` も特殊ケースとして扱うべきでは？」 **不要だ — 自然に処理される。** `cap == 0` のとき `clamp(-0, 0)` は入力に関わらず `0` を返す。結果は `FundingRate(0)` で、これがまさに我々が望む funding 無効化のセマンティクスだ。**Edge case が自然に処理されるコードのほうが、明示的に edge case 分岐を書くコードより良い。**
 
-### Step 2: なぜ先に割るか
+### Step 2: なぜ先に割るのか
 
-順序が重要。2 つの代替：
+順序が重要だ。代替案は 2 つ：
 
-**A) 我々のアプローチ：割ってから clamp**
+**A) 今回のアプローチ：割ってから clamp**
 
 ```rust
 let raw = premium / divisor;
 let capped = raw.clamp(-cap, cap);
 ```
 
-- Cap が*rate*レベルで bind。
-- `cap = 4%/interval` は「単一 interval で 4% 以上支払わない」を意味。
-- Premium 100% / divisor 8 → raw 12.5%、4% に clamp。
+- Cap は*rate*レベルで bind する。
+- `cap = 4%/interval` の意味は「1 つの interval で 4% を超えて支払わない」となる。
+- Premium 100% / divisor 8 → raw 12.5%、それを 4% に clamp。
 
 **B) 逆：clamp してから割る**
 
@@ -116,15 +116,15 @@ let capped_premium = premium.clamp(-cap, cap);
 let raw = capped_premium / divisor;
 ```
 
-- Cap が*premium*レベルで bind。
-- `cap = 4%` は「単一 premium reading が 4% を超えない」を意味。
-- Premium 100% が 4% に clamp、その後 8 で割って最終 rate 0.5%。
+- Cap は*premium*レベルで bind する。
+- `cap = 4%` の意味は「1 つの premium 観測値が 4% を超えない」となる。
+- Premium 100% を 4% に clamp してから 8 で割り、最終 rate は 0.5% になる。
 
-**アプローチ A が我々が欲しいもの。** アプローチ B だと cap が事実上 `0.5%/interval`（rate_cap を divisor で割ったもの）になり、docstring が約束しているものではない。
+**欲しいのはアプローチ A だ。** アプローチ B だと cap は事実上 `0.5%/interval`（rate_cap を divisor で割った値）になってしまい、docstring が約束している内容と合わない。
 
-> 🛑 **考えてみよう。** `params.hyperliquid_default()`（divisor=8、cap=4%）で premium `RATE_SCALE`（100% dislocation）から生まれる最大 rate は？
+> 🛑 **考えてみよう。** `params.hyperliquid_default()`（divisor=8、cap=4%）のもとで、premium が `RATE_SCALE`（100% の dislocation）のときに生まれる最大 rate はいくらか。
 
-（答え：**`FundingRate(40_000_000)` = 4%/interval。** 歩いていく：premium.0 = 1_000_000_000（RATE_SCALE）。raw = 1_000_000_000 / 8 = 125_000_000（12.5%/interval）。cap = 40_000_000（4%）。125_000_000 に対する clamp(-40_000_000, 40_000_000) → 40_000_000。**Cap が仕事をする。** アプローチ B と比較：clamped_premium = cap 40_000_000 で clamp(1_000_000_000) → 40_000_000。raw = 40_000_000 / 8 = 5_000_000（0.5%）。Spec を大きく下回る。）
+（答え：**`FundingRate(40_000_000)` = 4%/interval。** 順に計算する：premium.0 = 1_000_000_000（RATE_SCALE）、raw = 1_000_000_000 / 8 = 125_000_000（12.5%/interval）、cap = 40_000_000（4%）。125_000_000 に対する clamp(-40_000_000, 40_000_000) は 40_000_000 を返す。**cap がきちんと仕事をする。** アプローチ B と比較してみよう：clamped_premium = clamp(1_000_000_000, -40_000_000, 40_000_000) = 40_000_000、raw = 40_000_000 / 8 = 5_000_000（0.5%）。spec を大きく下回ってしまう。）
 
 ### Step 3: 5 unit test を追加
 
@@ -172,21 +172,21 @@ let raw = capped_premium / divisor;
     }
 ```
 
-5 テスト、それぞれ特定の挙動を pin：
+テストは 5 つ、それぞれが特定の挙動を pin する：
 
-1. **`rate_divides_premium_by_divisor`** — normal ケース。Premium 1%（10_000_000 ppb）、divisor 8 → rate 0.125%（1_250_000 ppb）。期待値は紙の数学 `10_000_000 / 8 = 1_250_000`。除算の off-by-one を捕まえる。
+1. **`rate_divides_premium_by_divisor`** — normal なケース。Premium 1%（10_000_000 ppb）、divisor 8 → rate 0.125%（1_250_000 ppb）。期待値は紙の上の数学 `10_000_000 / 8 = 1_250_000` から導ける。除算の off-by-one を捕まえる。
 
-2. **`rate_clamps_at_positive_cap`** — Clamp が起きるのは premium が cap 超えの生 rate を生むとき。Premium 100% → raw 12.5% → 4% に clamp。**Catches：「clamp を忘れた」バグ。**
+2. **`rate_clamps_at_positive_cap`** — clamp が起きるのは、premium が cap を超える生 rate を生むときだ。Premium 100% → raw 12.5% → 4% に clamp。**「clamp を書き忘れた」バグを捕まえる。**
 
-3. **`rate_clamps_at_negative_cap`** — #2 の負側 symmetric。Premium -100% → raw -12.5% → -4% に clamp。**Catches：「正側だけ clamp した」バグ。** これは現実のバグパターン — `raw.clamp(-cap, cap)` でなく `min(raw, cap)` を書いて負側を見逃す。
+3. **`rate_clamps_at_negative_cap`** — #2 の負側対称版。Premium -100% → raw -12.5% → -4% に clamp。**「正側だけ clamp した」バグを捕まえる。** これは現実によくあるバグパターンで、`raw.clamp(-cap, cap)` の代わりに `min(raw, cap)` を書いて負側を見落とすケースだ。
 
-4. **`rate_zero_when_divisor_is_zero`** — divisor 経由の disabled-funding ケース。非ゼロ premium でも `divisor = 0` で関数が zero を返す。**Catches：ゼロ除算 guard を忘れた。** Guard なしだと debug モードでこのテストが panic する。
+4. **`rate_zero_when_divisor_is_zero`** — divisor 経由で funding 無効化するケース。premium が非ゼロでも、`divisor = 0` のとき関数はゼロを返す。**ゼロ除算 guard を書き忘れたケースを捕まえる。** Guard がないと、debug モードではこのテストが panic する。
 
-5. **`rate_zero_when_cap_is_zero_funding_disabled`** — cap 経由の disabled-funding ケース。`rate_cap = 0` で clamp が `[0, 0]`、任意の生 rate が 0 に clamp。**Catches：clamp(0, 0) が 0 を返す以外の何かをすると仮定。** 「cap == 0 に特殊ケースなし」アプローチが動くことも確認。
+5. **`rate_zero_when_cap_is_zero_funding_disabled`** — cap 経由で funding 無効化するケース。`rate_cap = 0` のとき clamp が `[0, 0]` になり、任意の生 rate が 0 に clamp される。**「clamp(0, 0) は 0 以外を返す」と勘違いするケースを捕まえる。** 「cap == 0 を特殊ケースとして扱わない」というアプローチが動くことも確認している。
 
-> 🛑 **考えてみよう。** `params.rate_cap = FundingRate(-40_000_000)`（負 cap）にしてテスト 2 を run したら何が起きる？
+> 🛑 **考えてみよう。** `params.rate_cap = FundingRate(-40_000_000)`（負の cap）にしてテスト 2 を実行したら何が起きるか。
 
-（答え：**同じ結果 — `FundingRate(40_000_000)`。** `.abs()` が magnitude を抽出するから。同じ絶対値の負 cap と正 cap が同じ挙動を生む。**「負 cap」は silent に受け入れられる。** これが defensive abs の効能 — ユーザはどちらでも合理的な挙動を得る。）
+（答え：**結果は同じ — `FundingRate(40_000_000)` になる。** `.abs()` が magnitude を取り出すからだ。絶対値が同じ負 cap と正 cap は、同じ挙動を生む。**「負の cap」は silent に受け入れられる。** これが defensive な abs のご利益だ — どちらを渡されてもユーザは合理的な挙動を得られる。）
 
 ### Step 4: `lib.rs` を更新
 
@@ -202,7 +202,7 @@ pub use compute::compute_premium;
 pub use compute::{compute_premium, compute_rate};
 ```
 
-Public API に 2 つの関数。**アルファベット順維持** — `compute_premium` が `compute_rate` の前。L7 で `apply_funding` が来てパターンが続く。
+これで public API に関数が 2 つ並ぶ。**アルファベット順を維持する** — `compute_premium` が `compute_rate` の前だ。L7 で `apply_funding` が加わってもパターンは同じだ。
 
 ### Step 5: テストを実行
 
@@ -228,26 +228,26 @@ test compute::tests::rate_zero_when_divisor_is_zero ... ok
 test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-10 テスト全 green。Rate テスト + premium テスト + proptest。
+10 テストすべてが green になる。rate テスト、premium テスト、proptest すべてが通る。
 
 よくあるエラー：
 
-- **`rate_zero_when_divisor_is_zero` で panic** — 早期 return guard を忘れた。`premium.0 / 0` は Rust で算術 panic。関数先頭に `if params.divisor == 0 { return FundingRate(0); }` を追加。
-- **`rate_clamps_at_negative_cap` で `assertion failed: left=-125000000 right=-40000000`** — `raw.clamp(-cap, cap)` でなく `raw.min(cap).max(-cap)` を書いて min/max 順を間違えた。`.clamp(min, max)` が canonical Rust idiom、それを使う。
-- **`rate_divides_premium_by_divisor` で `assertion failed: left=0 right=1_250_000`** — `premium.0 / i64::from(params.divisor)` でなく `premium.0 / params.divisor`（mixed type）を書いた。エラーは実はコンパイルエラー（`u32 vs i64` mismatch）、`as i64` と typo するとコンパイルするが truncate しうる。`i64::from(...)` を使う。
-- **`lib.rs` re-export で `error: cannot find function 'compute_rate'`** — `compute_rate` を re-export に追加したが関数定義していない。`compute.rs` に関数 body を実際に追加したか確認。
+- **`rate_zero_when_divisor_is_zero` で panic** — 早期 return の guard を書き忘れた場合だ。`premium.0 / 0` は Rust では算術 panic になる。関数の先頭に `if params.divisor == 0 { return FundingRate(0); }` を追加すること。
+- **`rate_clamps_at_negative_cap` で `assertion failed: left=-125000000 right=-40000000`** — `raw.clamp(-cap, cap)` の代わりに `raw.min(cap).max(-cap)` と書いて min / max の順序を間違えた場合だ。canonical な Rust の書き方は `.clamp(min, max)` — これを使うこと。
+- **`rate_divides_premium_by_divisor` で `assertion failed: left=0 right=1_250_000`** — `premium.0 / i64::from(params.divisor)` ではなく `premium.0 / params.divisor`（型混在）と書いた場合だ。本来はコンパイルエラー（`u32 vs i64` の不一致）になるが、`as i64` と typo するとコンパイルは通って truncate しうる。`i64::from(...)` を使うこと。
+- **`lib.rs` の re-export で `error: cannot find function 'compute_rate'`** — `compute_rate` を re-export に加えたものの、関数本体を書き忘れた場合だ。`compute.rs` に関数 body を実際に追加したか確認すること。
 
 ## 設計の振り返り
 
-このレッスンに焼き込まれた決定 4 つ：
+このレッスンに焼き込んだ決定は 4 つ：
 
-1. **先に割って、それから clamp。** Cap が*rate*レベル（出力）で bind する、*premium*レベル（入力）ではない。順を逆にすると cap を divisor で実質的に割って、silent に弱める。**単位が異なるとき演算順が重要。**
+1. **先に割って、その後 clamp する。** Cap を bind するのは*rate*レベル（出力側）で、*premium*レベル（入力側）ではない。順序を逆にすると cap を実質的に divisor で割ったのと同じことになり、silent に弱まる。**単位が違うときは演算順が決定的に重要だ。**
 
-2. **Cap に `.abs()`。** ユーザが負の cap を渡すことへの defensive、安価（~1ns）で footgun を削除。**API 境界での defensive idiom はコスト分の価値がある。**
+2. **Cap には `.abs()` を付ける。** ユーザが負の cap を渡してきても対応できる defensive な処理で、コストは安く（~1ns）footgun を 1 つ減らせる。**API 境界での defensive idiom は、そのコストに見合う価値がある。**
 
-3. **明示的 min/max でなく `clamp(-cap, cap)`。** Rust 組み込み `.clamp` が `raw.max(-cap).min(cap)` より短く idiomatic でエラー prone でない。**Stdlib API が合えば使う、合わないときだけカスタムコードに手を出す。**
+3. **手書きの min/max ではなく `clamp(-cap, cap)` を使う。** Rust 組み込みの `.clamp` は `raw.max(-cap).min(cap)` より短く、idiomatic で、間違えにくい。**stdlib の API でまかなえるなら使う、まかなえないときだけカスタムコードに手を出す。**
 
-4. **`cap == 0` に特殊ケースなし。** Clamp から自然に落ちる：`clamp(-0, 0)` は `0` を返す。**自然に処理される edge case は明示的分岐の edge case より良い。** 明示的分岐はテストするコードパスを増やす、自然な処理は自動的にカバーされる。
+4. **`cap == 0` を特殊ケースとして扱わない。** Clamp から自然に正しい結果が落ちる：`clamp(-0, 0)` は `0` を返す。**Edge case が自然に処理されるコードのほうが、明示的な分岐を持つ edge case のコードより良い。** 明示的な分岐はテストすべきコードパスを増やすが、自然な処理ならそれが自動的にカバーされる。
 
 ## 答え合わせ
 
@@ -270,21 +270,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: どうせ `i64` に widen するなら `params.divisor` がなぜ `u32`？**
-Widening は単一の `i64::from(u32)` 呼び出し — マシンコードで no-op コスト。`u32` ストレージの利点は bit コスト（`FundingParams` は `Copy`、小さいほうが良い）と semantic 明快さ（divisor が `-1` や `u64::MAX` は意味不明、`u32::MAX` は ~40 億、十分なヘッドルーム）。**`u32` が意図を documentation：「これは小さい正カウント」。**
+**Q: どうせ `i64` に widen するのに、`params.divisor` がなぜ `u32` なのか？**
+Widening は `i64::from(u32)` の呼び出し 1 つで済むからだ — マシンコード上は no-op だ。`u32` で保存することのメリットは、ビットコストの節約（`FundingParams` は `Copy` で、小さい方がよい）と意味的な明快さ（divisor が `-1` や `u64::MAX` では意味不明だが、`u32::MAX` は ~40 億で十分なヘッドルームがある）にある。**`u32` を選ぶこと自体が「これは小さな正のカウントだ」という意図の documentation になる。**
 
-**Q: `compute_rate` で overflow しうる？**
-除算 `premium / divisor` は値を成長させない — 正整数除算が小さい magnitude を生む。`clamp(-cap, cap)` が `cap` の i64 値を超えて成長しない。**`compute_rate` 内で overflow 不可能。** `compute_premium` と違って i128 中間値不要。
+**Q: `compute_rate` で overflow しうるか？**
+しない。除算 `premium / divisor` は値を大きくしない — 正の整数除算は magnitude を小さくするだけだ。`clamp(-cap, cap)` も `cap` の i64 値を超えて成長することはない。**`compute_rate` 内で overflow は起こらない。** `compute_premium` と違って i128 中間値も不要だ。
 
-**Q: `rate_cap > i64::MAX / 2` ならどう？ Symmetric clamp は動く？**
-`i64::MIN` への `.abs()` は panic する（`i64::MIN` の magnitude に正の `i64` なし）。`rate_cap.0 == i64::MIN` で `.abs()` が panic する。Stage 8b はこれを guard しない — ユーザ提供 `FundingParams` の問題。現実 deployment は `40_000_000`（`i64::MAX / 2` を遥かに下回る）のような値を使う、実際にエッジに届かない。**Defensive `saturating_abs()` はこれを扱う、Stage 8b はやらない。**
+**Q: `rate_cap > i64::MAX / 2` のときはどうなるか？ 対称な clamp は機能するのか？**
+`i64::MIN` に対する `.abs()` は panic する（`i64::MIN` の magnitude を表せる正の `i64` 値が存在しないからだ）。だから `rate_cap.0 == i64::MIN` のときは `.abs()` が panic する。Stage 8b ではこれを guard していない — ユーザ提供の `FundingParams` 側の問題として扱う。現実のデプロイでは `40_000_000`（`i64::MAX / 2` よりはるかに小さい）のような値を使うため、このエッジには届かない。**defensive な `saturating_abs()` を入れれば対応できるが、Stage 8b では採用していない。**
 
-**Q: `compute_rate` の proptest がない理由は？**
-明らかな代数的 property がない。「Divide and clamp」には proptest が輝く antisymmetry、可換性、その他の不変条件がない。5 手書きトレーステストが入力領域（normal divide、正 clamp、負 clamp、divisor 0、cap 0）をうまくカバー。**Proptest は property に最適、手書きトレーステストは distinct な入力領域に最適。** Property がないところに proptest を強制しない。
+**Q: `compute_rate` の proptest がないのはなぜか？**
+明らかな代数的 property が見当たらないからだ。「Divide and clamp」には proptest が輝くような antisymmetry や可換性、その他の不変条件がない。代わりに手書きトレーステスト 5 つで入力領域（通常の除算、正側 clamp、負側 clamp、divisor 0、cap 0）をきれいにカバーしている。**proptest は property に向き、手書きトレースは個別の入力領域に向く。** property がない場所に無理に proptest を当てる必要はない。
 
 ## 次のレッスン（L7）
 
-L7 で `apply_funding` を追加 — 3 つ目で最後の pure 関数。`Position` のスライス、`MarkPrice`、`FundingRate` を取り、`Vec<Settlement>`（非 flat position あたり 1 つ）を返す。関数は ~25 行だが*longs-pay-shorts*符号規約を encode、**balanced-book zero-sum** proptest を含む — equal-and-opposite position のセットに対して、settlement delta の合計はゼロ（funding は再配分、quote currency を生成も破壊もしない）。Crate 2 つ目の proptest、Module 2 を閉じる。
+L7 では `apply_funding` を追加する — 3 つ目で最後の pure 関数だ。`Position` のスライスと `MarkPrice`、`FundingRate` を受け取り、`Vec<Settlement>`（非 flat な position 1 つにつき 1 つ）を返す。関数は ~25 行だが、*longs-pay-shorts* の符号規約を encode し、**balanced-book zero-sum** の proptest を伴う — 等しく逆向きの position の集合に対して、settlement delta の合計はゼロになる（funding は再配分するだけで、quote currency を生成も破壊もしない）。Crate 2 つ目の proptest であり、これで Module 2 が閉じる。
 ````
 
 ---

@@ -21,50 +21,50 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンを終えると：
 
 ```bash
 cargo build -p openhl-funding
 ```
 
-…が引き続きコンパイル、rustdoc warning ゼロ。`types.rs` が**完成** — Stage 8b の roster 9 型すべてが配置：
+上記の実行結果が引き続きコンパイルを通り、rustdoc warning もゼロになる。`types.rs` が**完成**する — Stage 8b の roster 9 型すべてが揃う：
 
-- **`FundingRate(pub i64)`** — divisor + cap 後の per-interval rate。`Premium` と同じスケール。
+- **`FundingRate(pub i64)`** — divisor と cap を適用した後の per-interval rate。`Premium` と同じスケール。
 - **`PositionSize(pub i64)`** — 符号付き：正 = long、負 = short、ゼロ = flat。
-- **`Position { account, size }`** — アカウントごとのスナップショット。`openhl_clob::AccountId` 依存を発火。
-- **`Settlement { account, delta }`** — `apply_funding` の出力：誰が支払う/受け取る、いくら。
-- **`FundingParams { interval_secs, rate_cap, divisor }`** + `hyperliquid_default()` — HL シェイプのデフォルト付きネットワークレベル設定。
+- **`Position { account, size }`** — アカウントごとのスナップショット。ここで `openhl_clob::AccountId` 依存が初めて発火する。
+- **`Settlement { account, delta }`** — `apply_funding` の出力：誰がいくら支払うか / 受け取るか。
+- **`FundingParams { interval_secs, rate_cap, divisor }`** と `hyperliquid_default()` — HL シェイプのデフォルトを伴うネットワークレベル設定。
 
-これで **Module 1** が閉じる。L3 後：
-- 全型定義済み、まだ挙動なし。
-- Rustdoc クロス参照が解決（「unresolved link」warning なし）。
-- Crate は純粋な data-types ライブラリ — ドキュメントとして有用、まだ数学はしない。
+これで **Module 1** が閉じる。L3 後の状態：
+- すべての型が定義済み、挙動はまだない。
+- Rustdoc のクロス参照が解決済み（「unresolved link」warning なし）。
+- Crate は純粋な data-types ライブラリ — ドキュメントとしては有用だが、まだ数学は何もしない。
 
-**Module 2 (L4-L7) で純粋な compute を開始** — `compute_premium`、`compute_rate`、`apply_funding`。最初のテストもそこに来る。
+**Module 2 (L4-L7) では純粋な compute を始める** — `compute_premium`、`compute_rate`、`apply_funding`。最初のテストもそこで登場する。
 
-このレッスンの教育要点は **parameter-object パターン**と HL デフォルトの根拠。なぜ 3 つのパラメータを `FundingParams` 構造体にまとめる、positional 引数で渡さないか？ なぜ 1 時間間隔、なぜ 4% cap、なぜ divisor 8？
+このレッスンの教育的な要点は、**parameter-object パターン**と HL デフォルトの根拠だ。なぜ 3 つのパラメータを `FundingParams` 構造体にまとめるのか、なぜ positional 引数で渡さないのか。そしてなぜ 1 時間間隔、なぜ 4% cap、なぜ divisor 8 なのか。
 
 ## おさらい
 
-L2 後：
+L2 後の状態：
 - 4 つの money newtype（`MarkPrice`、`IndexPrice`、`Premium`、`Notional`）が定義済み。
-- `types.rs` が module doc + `RATE_SCALE` + 4 型。
-- `lib.rs` が 5 つの名前を re-export（定数 + 4 型）。
-- 未解決 rustdoc warning が 2 つ残る（`FundingRate`、`FundingClock`）。
+- `types.rs` には module doc、`RATE_SCALE`、4 型が入っている。
+- `lib.rs` が 5 つの名前を re-export している（定数 + 4 型）。
+- rustdoc warning が 2 つ残っている（`FundingRate`、`FundingClock`）。
 
-L3 で 5 型を追加（型 roster を閉じる）+ `openhl_clob::AccountId` import。
+L3 では 5 型を追加して型 roster を閉じ、`openhl_clob::AccountId` の import も入れる。
 
 ## プラン
 
-3 つの編集：
+編集は 3 つ：
 
-1. **`crates/funding/src/types.rs`** — 先頭に `openhl_clob::AccountId` import を追加、5 つの型定義（`FundingRate`、`PositionSize`、`Position`、`Settlement`、`FundingParams` + `hyperliquid_default`）を append。
-2. **`crates/funding/src/lib.rs`** — re-export を 9 名前全部を含むよう拡張。
-3. **検証**：`cargo build -p openhl-funding` が **warning ゼロ**でコンパイル。
+1. **`crates/funding/src/types.rs`** — 先頭に `openhl_clob::AccountId` の import を追加し、5 つの型定義（`FundingRate`、`PositionSize`、`Position`、`Settlement`、`FundingParams` と `hyperliquid_default`）を追加する。
+2. **`crates/funding/src/lib.rs`** — re-export を 9 つの名前すべてを含むよう拡張する。
+3. **検証**：`cargo build -p openhl-funding` が **warning ゼロ**でコンパイルを通る。
 
-> 🛑 **考えてみよう。** スクロール前に — 今から `FundingParams { interval_secs: u64, rate_cap: FundingRate, divisor: u32 }` を定義する、`compute_rate(premium, interval_secs, rate_cap, divisor)` でなく。**なぜこの 3 値を struct にまとめる？** ヒント：`compute_rate` の call site がいくつあり、後で 4 つ目のパラメータを追加したら何が起きるかを考える。
+> 🛑 **考えてみよう。** スクロール前に — これから `FundingParams { interval_secs: u64, rate_cap: FundingRate, divisor: u32 }` を定義する。`compute_rate(premium, interval_secs, rate_cap, divisor)` ではない。**なぜこの 3 値を struct にまとめるのか？** ヒント：`compute_rate` の呼び出し箇所がいくつあるか、そして後から 4 つ目のパラメータを追加したらどうなるかを考えよ。
 
-（答え：**Parameter-object パターンが call site の安定性を config 進化を跨いで保つ。** `compute_rate(premium, params)` は positional 引数 1 + struct 1。後で `min_settlement_threshold` を funding config に追加するとき、関数シグネチャは `compute_rate(premium, params)` のまま — `FundingParams` 構造体だけが成長。Positional 版 `compute_rate(premium, interval, cap, divisor)` だと新パラメータごとに全 call site が壊れる。今 < 5 call site（clock + テスト）なら cost は控えめ、成熟したコードベースの 50+ なら parameter object が必須。**安定したグループの値を一緒にバンドルする、グループ自体がドメイン概念のとき** — 「funding 設定」がそういう概念の 1 つ。）
+（答え：**Parameter-object パターンが、config の進化をまたいで呼び出し箇所の安定性を保つからだ。** `compute_rate(premium, params)` は positional 引数 1 つ + struct 1 つの形になる。後から `min_settlement_threshold` を funding config に追加するときも、関数シグネチャは `compute_rate(premium, params)` のままだ — 成長するのは `FundingParams` 構造体だけ。一方 positional 版の `compute_rate(premium, interval, cap, divisor)` だと、新しいパラメータを追加するたびにすべての呼び出し箇所が壊れる。呼び出し箇所が 5 未満（clock とテスト）なら今のコストは控えめだが、成熟したコードベースで 50 を超えるようになると parameter object は必須だ。**安定したグループ値はまとめてバンドルする — そのグループ自体がドメイン概念のときに**。「funding 設定」はまさにそういう概念の一つだ。）
 
 ## 手順
 
@@ -76,9 +76,9 @@ L3 で 5 型を追加（型 roster を閉じる）+ `openhl_clob::AccountId` imp
 use openhl_clob::AccountId;
 ```
 
-この import は L1 の Cargo.toml で設定済み（`openhl-clob = { path = "../clob" }` dep）。`Position` と `Settlement` が `AccountId` を struct field type として参照するのでここで発火。
+この import は L1 で Cargo.toml に dep（`openhl-clob = { path = "../clob" }`）を設定した時点で準備済みだ。`Position` と `Settlement` が `AccountId` を struct のフィールド型として参照するので、ここで初めて使われる。
 
-> 🛑 **やりがちな勘違い。** 「呼び出し側が `openhl-clob` から import せずに済むよう、`openhl-funding` から `AccountId` を re-export すべき？」 **No — それは我々のものではない。** `AccountId` は `openhl-clob` の型で、呼び出し側は定義場所から import すべき。`openhl-funding` 経由で re-export すると同じ物に 2 つの import path（`openhl_clob::AccountId` vs `openhl_funding::AccountId`）ができ、依存関係を obscure する。**自分の型は re-export する、呼び出し側が依存物の型は直接 import させる。**
+> 🛑 **やりがちな勘違い。** 「呼び出し側が `openhl-clob` から import せずに済むよう、`openhl-funding` から `AccountId` を re-export すべきでは？」 **だめだ — `AccountId` は我々の型ではない。** `AccountId` は `openhl-clob` 側の型なので、呼び出し側は定義元から import すべきだ。`openhl-funding` 経由で re-export してしまうと、同じ型に対して 2 つの import path（`openhl_clob::AccountId` と `openhl_funding::AccountId`）ができてしまい、依存関係が不透明になる。**自前の型は re-export する、依存先の型は呼び出し側に直接 import させる。**
 
 ### Step 2: `Premium` の後ろに `FundingRate` を append
 
@@ -91,9 +91,9 @@ use openhl_clob::AccountId;
 pub struct FundingRate(pub i64);
 ```
 
-`FundingRate` は構造的に `Premium` と同一 — 同じ `i64`、同じ derive。**型エイリアスでなく別の型である理由は、funding pipeline で異なる概念を表すから。** Premium は*生*の mark/index dislocation、rate は divisor + clamp 後に positions に*適用*される。Premium を消費するコード（`compute_rate`）は rate（post-processed）を受け入れるべきでない、rate を消費するコード（`apply_funding`）は premium（まだ clamp されていない）を受け入れるべきでない。
+`FundingRate` は構造的には `Premium` と同一だ — 同じ `i64`、同じ derive。**型エイリアスではなく別の型にしているのは、funding pipeline 上で異なる概念を表すからだ。** Premium は*生*の mark/index dislocation、rate は divisor と clamp を適用した後に position へ*適用される*もの。Premium を消費するコード（`compute_rate`）は rate（post-processed なもの）を受け取るべきではないし、rate を消費するコード（`apply_funding`）は premium（まだ clamp されていないもの）を受け取るべきではない。
 
-**同じ形、違う役割、別の型。** これが newtype パターンが `MarkPrice` vs `IndexPrice` でやっていることそのもの。
+**同じ形、違う役割、別の型。** newtype パターンが `MarkPrice` と `IndexPrice` でやっているのと、まったく同じ話だ。
 
 ### Step 3: `PositionSize` を append
 
@@ -107,19 +107,19 @@ pub struct FundingRate(pub i64);
 pub struct PositionSize(pub i64);
 ```
 
-1 つの符号付き整数が 3 状態を運ぶ：long（`> 0`）、short（`< 0`）、flat（`== 0`）。2 フィールド表現と比較：
+符号付き整数 1 つで 3 状態を運ぶ：long（`> 0`）、short（`< 0`）、flat（`== 0`）。2 フィールド表現と比べてみよう：
 
 ```rust
-// 冗長な代替 — 我々が使うものではない：
+// 採用しない冗長な代替案：
 pub struct PositionSize {
     pub direction: Direction,  // Long, Short, Flat
     pub magnitude: u64,
 }
 ```
 
-符号付き整数表現は**より小さく**（8 バイト vs ~16+）、**より速く**（hot path で enum dispatch なし）、**数学レイヤーで単純**（`size.0` で乗算するだけ、符号が自然に伝播）。トレードオフ：内部値の符号が implicit。Doc コメントが明示：*「正 = long、負 = short、ゼロ = flat」*。
+符号付き整数表現のほうが**小さく**（8 バイト対 ~16 バイト以上）、**速く**（hot path で enum dispatch が要らない）、**数学レイヤーが単純**になる（`size.0` を乗算に使うだけで符号が自然に伝播する）。トレードオフは、内部値の符号が implicit になることだ。それは doc コメントで明示する：*「正 = long、負 = short、ゼロ = flat」*。
 
-**「Accounts with zero size aren't included in settlement snapshots」というノートは load-bearing。** `apply_funding` がゼロサイズ position をフィルタする — 経済的エクスポージャがないので、settle してもゼロ delta が noise を増やすだけ。L7 でそのフィルタを見る。
+**「Accounts with zero size aren't included in settlement snapshots」のノートは load-bearing だ。** `apply_funding` はゼロサイズの position をフィルタする — 経済的エクスポージャがないので、settle してもゼロ delta が出力にノイズを増やすだけだ。このフィルタは L7 で実物を見る。
 
 ### Step 4: `Position` を append
 
@@ -135,15 +135,15 @@ pub struct Position {
 }
 ```
 
-2 つのフィールド、両方 public。`account` で settlement 出力がどのバランスをクレジット/デビットすべきか分かる。`size` で rate-application 数学が delta を計算できる。
+フィールドは 2 つ、両方とも public。`account` のおかげで settlement 出力がどの balance を credit / debit すべきかが分かる。`size` のおかげで rate を適用する数学が delta を計算できる。
 
-**重要：`entry_price` なし、`realized_pnl` なし、`unrealized_pnl` なし。** Funding state machine は position がどう open されたか、PnL がどうかを知る必要はない — *現在のサイズ*を*現在の rate* に対して掛けるだけ。**スナップショットが単純なほど、上流でスナップショットを作るのが楽。**
+**重要なのは、`entry_price` も `realized_pnl` も `unrealized_pnl` も持たないこと。** Funding state machine は position がどう open されたか、PnL がどうなっているかを知る必要がない — *現在のサイズ*に*現在の rate* を掛けるだけだからだ。**スナップショットがシンプルなほど、上流でスナップショットを作るのも楽になる。**
 
-> 🛑 **やりがちな勘違い。** 「先物の損益計算のため `Position` は entry price も持つべきでは？」 **No — それは owning layer の仕事。** Vault や clearing layer が entry price を追跡、unrealized PnL を計算、等。Funding crate はそれの下流：*現在*の position のスナップショットを受け、*現在*の funding を適用する。**スナップショット型は narrow に保つ、owning layer がすべてを含む wider な型を持てばよい。**
+> 🛑 **やりがちな勘違い。** 「先物の損益計算のため `Position` も entry price を持つべきでは？」 **だめだ — それは owning layer の仕事だ。** Vault や clearing layer が entry price を追跡し、unrealized PnL を計算する。Funding crate はその下流にいる：*現在*の position のスナップショットを受け取って、*現在*の funding を適用する。**スナップショット型は narrow に保てばよい。owning layer が全部を含む wider な型を持っていればそれでいい。**
 
-Doc コメントが ownership 境界を明示：*「never owns or mutates them. The owning layer is responsible...」* — これが funding crate と呼び出し側の契約。
+Doc コメントで ownership 境界も明示している：*「never owns or mutates them. The owning layer is responsible...」* — これが funding crate と呼び出し側の契約だ。
 
-`Position` に `Default` なし — `AccountId::default()` は `AccountId(0)` で、ほとんどのアカウントシステムで reserved/sentinel。**Entity-identity-bearing 構造体の偶発的なデフォルト構築を許してはいけない。**
+`Position` に `Default` は付けない — `AccountId::default()` は `AccountId(0)` になるが、これは多くのアカウントシステムで reserved / sentinel として使われる。**entity の identity を担う struct には、偶発的なデフォルト構築を許してはいけない。**
 
 ### Step 5: `Settlement` を append
 
@@ -158,11 +158,11 @@ pub struct Settlement {
 }
 ```
 
-`Settlement` は `apply_funding` の出力型：非 flat position あたり 1 つ。アカウント ID を運ぶ（bridge が誰か知るため）、delta を運ぶ（bridge がいくらか知るため）。
+`Settlement` は `apply_funding` の出力型で、非 flat な position 1 つにつき 1 つ生成する。アカウント ID（bridge が誰の分かを知るため）と delta（bridge がいくらかを知るため）を運ぶ。
 
-**なぜ `Settlement` が position 順インデックスでなく `account` を再度運ぶ？** `apply_funding` がゼロサイズ position をフィルタするので、入力 position リストと出力 settlement リストの*長さが異なる*。Position 順インデックスは呼び出し側がどの position が非ゼロだったか覚えるよう要求する、出力でアカウント ID を運ぶことで分離できる。
+**`Settlement` が position の順序インデックスではなく `account` を再度持つのはなぜか？** `apply_funding` がゼロサイズの position をフィルタするため、入力 position リストと出力 settlement リストでは*長さが異なる*からだ。位置インデックスを使うと、どの position が非ゼロだったかを呼び出し側が覚えておかねばならなくなる。出力にアカウント ID を持たせれば、その依存を切り離せる。
 
-**これが parallel-array vs struct-array トレードオフ** — Stage 8b は struct-array を選んだ。コストは settlement あたり冗長な `AccountId` 1 つ、メリットは呼び出し側がインデックス対応を維持する必要がない。
+**これは parallel-array と struct-array のトレードオフ**で、Stage 8b では struct-array を選んだ。コストは settlement あたり冗長な `AccountId` が 1 つ増えること、メリットは呼び出し側がインデックスの対応関係を管理せずに済むことだ。
 
 ### Step 6: `FundingParams` + `hyperliquid_default` を append
 
@@ -202,25 +202,25 @@ impl FundingParams {
 }
 ```
 
-3 フィールド、すべて `pub` — newtype と同じ理由（`compute_rate` がすべて直接必要）。
+フィールドは 3 つ、すべて `pub` — newtype と同じ理由だ（`compute_rate` がすべて直接必要とする）。
 
 #### 各 HL デフォルトの理由
 
-- **`interval_secs: 3600`** — 1 時間。HL は毎時 settle、Binance Futures は 8 時間ごと。1 時間 cadence は basis dislocate のときトレーダーが funding 圧力を素早く感じる程度に短く、block time noise が支配しない程度に長い。
-- **`rate_cap: FundingRate(40_000_000)`** — 4%/interval。1 日 24 interval で最悪 `±96%/day`、下の divisor で実効最悪はずっと低い。Cap は oracle 騒動への*保険ポリシー*：indexを 50% 一時的に動かせる攻撃者は 1 tick で longs から 50% 抜けない。
-- **`divisor: 8`** — 1 日 8 settlement（HL の spec）、だが **24** 個の 1 時間 interval にまたがって適用。Doc コメントの算術が load-bearing nuance：`(premium / 8) × 24 hours = 3 × premium/day`。**HL の cap は divisor 単体が意味するより厳しい** — divisor が cadence を設定、cap が最悪ケースの支払いを bind。
+- **`interval_secs: 3600`** — 1 時間。HL は毎時 settle、Binance Futures は 8 時間ごとだ。1 時間という cadence は、basis が dislocate したときにトレーダーが funding 圧力をすばやく感じ取れる程度に短く、block time noise に支配されない程度に長い。
+- **`rate_cap: FundingRate(40_000_000)`** — 4%/interval。1 日 24 interval なので最悪 `±96%/day`、ただし下にある divisor の効果で実効最悪値はずっと低くなる。Cap は oracle 異常への*保険*として効く：index を一時的に 50% 動かせる攻撃者でも、1 tick で longs から 50% を抜くことはできない。
+- **`divisor: 8`** — 1 日 8 settlement（HL の spec）、ただし **24** 個の 1 時間 interval にまたがって適用される。Doc コメントの算術に load-bearing な含意がある：`(premium / 8) × 24 hours = 3 × premium/day`。**HL の cap は divisor 単体から導かれる値より厳しい** — divisor が cadence を、cap が最悪ケースの支払いを bind する。
 
-> 🛑 **考えてみよう。** HL デフォルトでの実効最悪日次支払いは？ ヒント：`rate_cap = 4%/hour`、1 日の interval = 24、だが divisor は 8。
+> 🛑 **考えてみよう。** HL デフォルトでの実効最悪日次支払いはいくらか。ヒント：`rate_cap = 4%/hour`、1 日の interval = 24、ただし divisor は 8 だ。
 
-（答え：**毎 interval が cap に当たる場合 `±96%/day`。** Cap の 4%/*interval* は divisor に関わらず適用される。Divisor は clamp の*前*の per-interval rate にだけ影響する。だから premium が大きすぎて post-divisor rate が 4% を超えると、毎時 4% に clamp、時給 24 回 × 4% = 1 日 96%。実際には、持続的に 4%/interval を clamp させる premium は pathological — HL は歴史的に oracle outage 中にのみそれを見た。**Cap は保険コストの floor、典型的な funding 規模ではない。**）
+（答え：**毎 interval が cap に当たる場合 `±96%/day` になる。** 4%/*interval* の cap は divisor に依らず適用される。Divisor が影響するのは clamp の*前*の per-interval rate だけだ。だから premium が大きすぎて post-divisor rate が 4% を超えるときは毎時 4% に clamp され、24 回 × 4% = 1 日 96% となる。実際には、4%/interval で持続的に clamp し続けるほどの premium は pathological だ — HL の歴史でも oracle outage の最中にしか観測されていない。**Cap は保険コストの floor を定めるもので、典型的な funding 規模を示すものではない。**）
 
-#### `hyperliquid_default` に `const fn` の理由
+#### `hyperliquid_default` に `const fn` を使う理由
 
-`const fn` で `static DEFAULT: FundingParams = FundingParams::hyperliquid_default();` を書ける、compile-time 定数が欲しいなら。コストはゼロ（定数の no-arg constructor）、メリットはオプションを保持。
+`const fn` にしておけば、コンパイル時定数が欲しい場面で `static DEFAULT: FundingParams = FundingParams::hyperliquid_default();` と書ける。コストはゼロ（引数なしの定数コンストラクタ）、メリットは選択肢を残せること。
 
-#### `#[must_use]` の理由
+#### `#[must_use]` を付ける理由
 
-`#[must_use]` は呼び出し側が `hyperliquid_default()` を呼んで結果を捨てたら warning を出す。**目的が値を生むこと自体である関数で、結果を捨てるのは常にバグ** — warning が「assign し忘れた」ミスのクラスを捕まえる。
+`#[must_use]` を付けておけば、呼び出し側が `hyperliquid_default()` を呼んで結果を捨てたときに warning が出る。**そもそも値を生むこと自体が目的の関数で、結果を捨てるのは常にバグだ** — この warning が「代入し忘れ」クラスのミスを捕まえてくれる。
 
 ### Step 7: `lib.rs` re-export を更新
 
@@ -239,7 +239,7 @@ pub use types::{
 };
 ```
 
-アルファベット順維持。合計 10 名前（9 型 + `RATE_SCALE`）。呼び出し側は `use openhl_funding::{FundingParams, Position};` 等と `types` モジュール経由せずに書ける。
+アルファベット順を維持する。合計 10 名前（9 型と `RATE_SCALE`）。呼び出し側は `use openhl_funding::{FundingParams, Position};` のように、`types` モジュールを経由せずに書ける。
 
 ### Step 8: コンパイル
 
@@ -255,27 +255,27 @@ warning: unresolved link to `FundingClock`
     Finished `dev` profile [unoptimized + debuginfo] in 0.4s
 ```
 
-**Rustdoc warning が 1 つ残る**（L0 で 3、L1 でも 3、L2 で 2、L3 で 1）。最後の未解決リンクは `FundingClock` — L8 で解決。
+**Rustdoc warning は 1 つに減る**（L0 で 3、L1 でも 3、L2 で 2、L3 で 1）。残る未解決リンクは `FundingClock` だけだ — L8 で解決する。
 
-実際 — rustdoc の link 解決挙動次第で、各 doc コメントの `[FundingRate]` と `[Premium]` クロス参照は今すべて解決するかも（それらの型は今存在する）。`cargo doc -p openhl-funding --no-deps` で確認。正確な warning 数は異なるかも。
+実際のところ、rustdoc のリンク解決挙動次第では、各 doc コメントの `[FundingRate]` や `[Premium]` クロス参照は今すべて解決するかもしれない（これらの型は今存在するからだ）。`cargo doc -p openhl-funding --no-deps` で確認できる。正確な warning 数は環境によって異なる場合がある。
 
 よくあるエラー：
 
-- **`error[E0432]: unresolved import 'openhl_clob::AccountId'`** — Cargo.toml の dep がない。L1 の `[dependencies]` ブロックに `openhl-clob = { path = "../clob" }` があるか再確認。
-- **`Settlement` での `error: cannot find type 'Notional' in this scope`** — ローカル型を import していない。`Notional` は同じモジュール内、`use` 不要、だが型名は正確に綴る必要がある。
-- **`hyperliquid_default` での `error: function calls are not allowed in const fn`** — `FundingRate::from(40_000_000)` 等を書いた。Tuple-struct リテラル `FundingRate(40_000_000)` を直接使う。
+- **`error[E0432]: unresolved import 'openhl_clob::AccountId'`** — Cargo.toml に dep が入っていない場合。L1 の `[dependencies]` ブロックに `openhl-clob = { path = "../clob" }` があるか再確認すること。
+- **`Settlement` で `error: cannot find type 'Notional' in this scope`** — ローカル型の名前を間違えた場合。`Notional` は同じモジュール内なので `use` は不要だが、型名を正確に綴る必要がある。
+- **`hyperliquid_default` で `error: function calls are not allowed in const fn`** — `FundingRate::from(40_000_000)` のような書き方をした場合。tuple-struct リテラル `FundingRate(40_000_000)` をそのまま使うこと。
 
 ## 設計の振り返り
 
-このレッスンに焼き込まれた決定 4 つ：
+このレッスンに焼き込んだ決定は 4 つ：
 
-1. **`FundingRate` は `Premium` と同一の形でも別の型。** Newtype パターンが pipeline ステージを強制 — premium が `compute_rate` を通らずに positions に適用されることはありえない。**同じ形だが違う役割が newtype の canonical なユースケース。**
+1. **`FundingRate` は `Premium` と形が同じでも別の型にする。** Newtype パターンが pipeline のステージを強制してくれる — premium が `compute_rate` を通らずに position に適用されることはありえない。**「形は同じだが役割が違う」は newtype の canonical なユースケースだ。**
 
-2. **`PositionSize` は単一の符号付き整数、direction + magnitude ではない。** より小さく、より速く、数学が単純 — そして doc コメントが符号規約の契約。**数学がどうせ使う最も dense な表現を選ぶ。**
+2. **`PositionSize` は direction + magnitude ではなく、符号付き整数 1 つにする。** より小さく、より速く、数学が単純になる — そして符号規約の契約は doc コメントが担う。**どうせ数学が使うことになる、最も dense な表現を選べばよい。**
 
-3. **`Position` はスナップショット型、stateful entity ではない。** Entry price なし、PnL なし、history なし — `(account, size)` のみ。Owning layer が state を追跡、funding crate がスナップショットを処理。**下流型は narrow、上流型は wide。**
+3. **`Position` はスナップショット型であり、stateful entity ではない。** Entry price も PnL も history もない — `(account, size)` だけだ。State を追跡するのは owning layer、スナップショットを処理するのが funding crate だ。**下流の型は narrow に、上流の型は wide に。**
 
-4. **`FundingParams` が単位で変わる config をバンドル。** 常に一緒に旅する 3 値、後でバンドルを拡張しても call site は壊れない。**グループ自体がドメイン概念のとき parameter object。**
+4. **`FundingParams` は単位として変化する config をまとめてバンドルする。** 常に一緒に動く 3 値であり、後でバンドルを拡張しても呼び出し箇所は壊れない。**グループ自体がドメイン概念であるときに parameter object を使う。**
 
 ## 答え合わせ
 
@@ -286,11 +286,11 @@ diff -u ~/code/my-openhl/crates/funding/src/types.rs ./crates/funding/src/types.
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 ```
 
-L3 後：
-- **types.rs** が Stage 8b と**完全**一致 — 9 型すべて + `RATE_SCALE` + `hyperliquid_default`。
-- **lib.rs** が完全な型 re-export 持つ、`compute` / `clock` re-export だけが欠ける。
+L3 後の状態：
+- **types.rs** が Stage 8b と**完全に**一致する — 9 型すべてと `RATE_SCALE`、`hyperliquid_default` まで。
+- **lib.rs** には完全な型の re-export が入る。欠けているのは `compute` / `clock` の re-export だけだ。
 
-**Module 1 完了。** L4 から `compute.rs` へシフト — これらの型の上の純粋関数、テスト付き。
+**Module 1 完了。** L4 からは `compute.rs` へとシフトする — これらの型の上に乗る純粋関数とそのテストだ。
 
 戻す：
 
@@ -300,29 +300,29 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ `FundingParams::divisor` は `u64` でなく `u32`？**
-HL の divisor は 8。他の設定は 24（毎時を divisor として 1 度）や 1（1 日 1 度の settlement）に行くかも。Pathological 値でも `u32::MAX`（~40 億）から十分下。**`u32` で「十分すぎ」、`u64` の半分のビットコスト** — そして `compute_rate` がどうせ除算で `i64` に widen する。小さな最適化、だが `Copy` 型は得をする。
+**Q: `FundingParams::divisor` がなぜ `u64` でなく `u32` なのか？**
+HL の divisor は 8 だ。他の設定でも 24（毎時 settle で divisor として 1 回扱う）や 1（1 日 1 回の settlement）あたりに収まる。pathological な値でも `u32::MAX`（~40 億）よりずっと下にある。**`u32` で「十二分」、しかも `u64` の半分のビットコストで済む** — そもそも `compute_rate` の除算ではどうせ `i64` に widen する。小さな最適化ではあるが、`Copy` 型では効いてくる。
 
-**Q: `FundingParams` はコンストラクタでフィールド検証すべき？**
-誘惑的 — `interval_secs == 0` を拒否（division-by-zero か permanent gating の原因）？ `divisor == 0` を拒否？ Stage 8b は選ばなかった：コンストラクタでの検証は呼び出し側の input handling とは*別の*検証ポイントを意味し、2 つの間の divergence がバグ源になる。**Input 検証の単一情報源：呼び出し側。** とはいえ `compute_rate` は `divisor == 0` を「funding 無効化」として扱う — defensive default、validation ではない。
+**Q: `FundingParams` のコンストラクタでフィールド検証をすべきか？**
+誘惑にかられる — `interval_secs == 0`（ゼロ除算や permanent gating の原因）を拒否するか？ `divisor == 0` も拒否するか？ Stage 8b ではどちらも採らなかった：コンストラクタでの検証は、呼び出し側の input 検証とは*別の*検証ポイントを作ることになり、両者の食い違いがバグの温床になる。**入力検証の単一情報源は呼び出し側に置く。** ただし `compute_rate` は `divisor == 0` を「funding 無効化」として扱う — これは defensive default であって、validation ではない。
 
-**Q: `Position` が `Eq` を derive するが `Default` を derive しないのは？**
-`Eq` はテストで position を比較するため（possibly 上流の dedup ロジックでも）。`Default` だと `Position { account: AccountId(0), size: PositionSize(0) }` で意味不明（`AccountId(0)` は典型的に sentinel）。**Default は sensible な値を生むべき、できないなら derive を省く。**
+**Q: `Position` が `Eq` を derive するのに `Default` を derive しないのはなぜか？**
+`Eq` はテストで position を比較するため（場合によっては上流の dedup ロジックでも）必要だ。一方 `Default` を付けると `Position { account: AccountId(0), size: PositionSize(0) }` という意味不明な値が生まれる（`AccountId(0)` は典型的に sentinel として使われる）。**Default は意味のある値を生むべきで、それができないなら derive しない。**
 
-**Q: `Position` と `Settlement` は冗長では — 両方 `account` + value field を持つ？**
-似て見えるが、ライフサイクルの異なるステージにある。`Position` は `apply_funding` の*入力*、`Settlement` はその*出力*。Owning layer が `Position` を渡して `Settlement` を受け取る。**Type レベルでの区別が settlement を position として偶発再適用するのを防ぐ。**
+**Q: `Position` と `Settlement` は冗長では — 両方とも `account` + 値フィールドを持っている？**
+似て見えるが、ライフサイクル上のステージが違う。`Position` は `apply_funding` の*入力*、`Settlement` はその*出力*だ。Owning layer が `Position` を渡し、`Settlement` を受け取る。**型レベルで区別しておくことで、settlement を position として誤って再適用してしまう事故を防げる。**
 
-## Module 1 マイルストーン — 築いたもの
+## Module 1 マイルストーン — 築き上げたもの
 
-L3 後：
-- 9 newtype + 1 struct-with-method（`FundingParams`）。
-- Stage 8b と完全一致の `types.rs` ~110 行。
-- Funding について語る完全な vocabulary — 数学 pipeline の全値（premium、rate、settlement、position）が型を持つ。
-- まだ挙動ゼロ。**Modules 2-3 が挙動を追加。**
+L3 後の状態：
+- 9 newtype と、メソッド付き struct が 1 つ（`FundingParams`）。
+- Stage 8b と完全一致する `types.rs`、~110 行。
+- Funding を語るための完全な語彙 — 数学 pipeline 上のすべての値（premium、rate、settlement、position）に型が付いた。
+- 挙動はまだゼロ。**Modules 2-3 で挙動を追加していく。**
 
 ## 次のレッスン（L4）
 
-L4 で `compute.rs` を開始。ファイルを作成、module doc + `compute_premium` 関数 — crate 最初の数学。関数は 8 行だが 3 つの設計決定を encode：(a) `index == 0` を error でなく `Premium(0)` を返して扱う；(b) 引き算 × scale で overflow を避けるため `i128` 中間値を使う；(c) wrap でなく `i64` に saturate して戻す。レッスンは最初の unit test 4 つも追加 — premium-zero-when-equal、premium-positive/negative ケース、`index == 0` saturation テスト。**Crate 最初のテスト。**
+L4 では `compute.rs` を始める。ファイルを作って、module doc と `compute_premium` 関数を入れる — crate 最初の数学だ。関数は 8 行だが、設計判断を 3 つ encode する：(a) `index == 0` をエラーにせず `Premium(0)` を返す形で扱う、(b) 引き算 × scale の overflow を避けるため `i128` 中間値を使う、(c) wrap させずに `i64` へ saturate して戻す。最初の unit test も 4 つ追加する — premium-zero-when-equal、premium-positive / negative ケース、`index == 0` での saturation テスト。**Crate 最初のテストだ。**
 ````
 
 ---

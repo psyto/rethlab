@@ -26,18 +26,18 @@
 cargo check -p openhl-evm
 ```
 
-…がクリーンにコンパイル。`crates/evm/src/` に **新規モジュール 2 個**:
+上記の実行結果がクリーンにコンパイル。`crates/evm/src/` 配下に **新規モジュールが 2 個** 増える:
 
-- **`openhl_evm.rs`** — `OpenHlEvmFactory` (Reth の `EvmFactory` スロット) + `OpenHlExecutorBuilder` (Reth の `ExecutorBuilder` スロット) + `OnceLock` 経由の hardfork ごとの precompile dispatch。約 80 LOC。
-- **`precompiles/mod.rs`** — **stub** の `openhl_precompiles(base) -> Precompiles`、そのまま passthrough。L2 で実 read precompile を埋める。
+- **`openhl_evm.rs`** — `OpenHlEvmFactory` (Reth の `EvmFactory` スロット) + `OpenHlExecutorBuilder` (Reth の `ExecutorBuilder` スロット)、加えて `OnceLock` 経由の hardfork ごとの precompile dispatch。約 80 LOC。
+- **`precompiles/mod.rs`** — `openhl_precompiles(base) -> Precompiles` の **stub**、ひとまずただの passthrough。L2 で本物の read precompile を埋める。
 
-新規依存 **5 個** も追加 (workspace 1 + crate 4 — `reth-node-api` の新規 git-pin dep 含む)。
+加えて **依存も 5 個追加** (workspace 1 + crate 4 — このうち `reth-node-api` は新規の git-pin 依存)。
 
-L1 後、custom EVM **構造** が end-to-end で存在する。Reth が factory 経由で EVM instance を construct でき、factory の仕事 (custom precompile を register) はまだ何もしない、L2 がそれら precompile を定義するから。
+L1 が終わると、custom EVM の **構造** が end-to-end で存在することになる。Reth は factory 経由で EVM instance を construct でき、factory 自体の仕事 (custom precompile の登録) はまだ何もしない — それら precompile を定義するのは L2 だから。
 
 ## おさらい
 
-Course 7 完了時点で `crates/evm/src/` には:
+Course 7 完了時点の `crates/evm/src/`:
 
 ```
 crates/evm/src/
@@ -46,23 +46,23 @@ crates/evm/src/
 └── live_node.rs                L12-L14 (c6) + L9-L11 (c7): LiveRethEvmBridge<P>
 ```
 
-`cargo test -p openhl-evm clob_fills_flow_into_payload --release` が pass。Bridge が CLOB を所有し、`build_payload` 経由で fill を route する。**だが bridge の Reth node 内で走る smart contract は CLOB を見られない** — L1 が閉じ始めるギャップ。
+`cargo test -p openhl-evm clob_fills_flow_into_payload --release` は pass する。Bridge が CLOB を所有し、`build_payload` 経由で fill を route する。**しかし bridge の Reth node 内で動くスマートコントラクトからは CLOB が見えない** — L1 はそのギャップを閉じ始めるレッスンだ。
 
 ## 計画
 
-7 つやる:
+やることは 7 つ:
 
-1. **`alloy-evm = "0.34"`** を workspace `Cargo.toml` に追加。これは public な `alloy-evm` crate (Reth に git-pin されていない)、`EvmFactory`、`Database`、`EvmEnv` 等を提供する。
-2. **`crates/evm/Cargo.toml` に 4 dep 追加**: `reth-evm`、`reth-evm-ethereum`、`reth-node-api` (新規 git dep — 同じ SHA)、そして `reth-node-builder` を `[dev-dependencies]` から `[dependencies]` へ昇格。
+1. **`alloy-evm = "0.34"`** を workspace の `Cargo.toml` に追加。これは public な `alloy-evm` crate (Reth に git-pin されていない) で、`EvmFactory` / `Database` / `EvmEnv` 等を提供する。
+2. **`crates/evm/Cargo.toml` に依存を 4 つ追加**: `reth-evm`、`reth-evm-ethereum`、`reth-node-api` (新規 git dep — 同じ SHA)、そして `reth-node-builder` を `[dev-dependencies]` から `[dependencies]` へ昇格。
 3. **`crates/evm/src/openhl_evm.rs` を作成** — `OpenHlEvmFactory` + `OpenHlExecutorBuilder` + `precompiles_for(spec)`。
-4. **`crates/evm/src/precompiles/mod.rs` を作成** — passthrough stub。
+4. **`crates/evm/src/precompiles/mod.rs` を作成** — passthrough の stub。
 5. **`pub mod openhl_evm; mod precompiles;`** を `crates/evm/src/lib.rs` に配線。
-6. **`OpenHlEvmFactory` と `OpenHlExecutorBuilder` を crate root に re-export** — L3 の NodeBuilder 統合のため。
-7. **`cargo check -p openhl-evm`** — clean。
+6. **`OpenHlEvmFactory` と `OpenHlExecutorBuilder` を crate root に re-export** — L3 の NodeBuilder 統合で使うため。
+7. **`cargo check -p openhl-evm`** が clean に通ること。
 
-これが course 8 で **依存最重量** のレッスン。Scaffold がコンパイルしたら、L2 が実 precompile content を追加; L3 で NodeBuilder に配線、precompile が EVM 実行から到達可能かをテスト。
+これが course 8 で **依存追加が最も重い** レッスン。scaffold がコンパイルしたら、L2 で本物の precompile を埋め、L3 で NodeBuilder に配線して precompile が EVM 実行から到達可能かをテストする。
 
-> 🛑 **考えてみよう。** スクロールする前に: Reth の `EvmFactory` は trait — なぜ Reth が 1 つの EVM instance を construct して再利用するのではなく、factory が必要? ヒント: chain 内で EVM transaction を **実行する** code path を考える。Block validation (validate_payload)、payload assembly (build_payload)、eth_call RPC、debug RPC — どれも fresh な EVM instance を自分の database snapshot で作る。**Factory が存在するのは Reth が多数の EVM を作るから**、1 つではなく。
+> 🛑 **考えてみよう。** スクロールする前に — Reth の `EvmFactory` は trait だ。なぜ Reth は 1 つの EVM instance を construct して使い回すのではなく、factory を必要とするのか? ヒント: チェーンで EVM transaction を **実行する** コードパスを思い浮かべる。Block validation (validate_payload)、payload assembly (build_payload)、eth_call RPC、debug RPC — どれも自分の database snapshot で新しい EVM instance を作る。**Factory がある理由は、Reth が EVM を 1 つではなく多数作るからだ。**
 
 ## 手順
 
@@ -81,13 +81,13 @@ alloy-genesis             = { version = "2.0", default-features = false }
 alloy-evm                 = { version = "0.34", default-features = false }
 ```
 
-`alloy-evm` は public な alloy crate、REVM の抽象を trait レベルで提供 (`EvmFactory`、`Database`、`EvmEnv`)。stable crates.io 依存で Reth に git-pin されていない — `alloy-genesis` や `alloy-rpc-types-engine` と同じ status。
+`alloy-evm` は public な alloy crate で、REVM の抽象を trait レベル (`EvmFactory` / `Database` / `EvmEnv`) で提供する。crates.io の stable 依存であり、Reth に git-pin されていない — `alloy-genesis` や `alloy-rpc-types-engine` と同じ扱いだ。
 
-> 🛑 **やりがちな勘違い。** 「`alloy-evm` と `reth-evm` は同じもの — どちらか選ぶ」。 **違う、別の層。** `alloy-evm` は任意の EVM 実装が満たせる **抽象** trait (`EvmFactory`、`Database` 等) を提供。`reth-evm` は Reth の **具体** 実装、それらの trait を block-executor pipeline に配線する。両方 import する: factory 定義に抽象、executor 配線に具体。
+> 🛑 **やりがちな勘違い。** 「`alloy-evm` と `reth-evm` は同じもので、どちらかを選べばいい」 — **違う、別の層だ。** `alloy-evm` は任意の EVM 実装が満たせる **抽象** trait (`EvmFactory`、`Database` など) を提供する。`reth-evm` は Reth の **具体** 実装で、それらの trait を block-executor pipeline に配線する。今回は両方 import する: factory 定義には抽象を、executor 配線には具体を使う。
 
 ### Step 2: `crates/evm/Cargo.toml` を更新
 
-`crates/evm/Cargo.toml` を開く。Course 7 L9 + course 6 L12 後、`[dependencies]` セクションには 12 entry。4 個追加 (3 個 new + 1 昇格):
+`crates/evm/Cargo.toml` を開く。Course 7 L9 + course 6 L12 後の `[dependencies]` セクションには 12 個のエントリがある。ここに 4 つ追加する (新規 3 つ + 昇格 1 つ):
 
 ```toml
 [dependencies]
@@ -114,7 +114,7 @@ reth-node-builder        = { workspace = true }                                 
 alloy-evm                = { workspace = true }                                                                                          # NEW
 ```
 
-`reth-node-builder` が `[dev-dependencies]` から `[dependencies]` に移動 — production コード (`OpenHlExecutorBuilder`) が今これを使う。`[dev-dependencies]` から行を削除:
+`reth-node-builder` は `[dev-dependencies]` から `[dependencies]` に昇格する — production コード (`OpenHlExecutorBuilder`) がこれを使い始めるため。`[dev-dependencies]` 側の行は削除:
 
 ```toml
 [dev-dependencies]
@@ -129,13 +129,13 @@ tempfile             = "3"
 # reth-node-builder ここから削除 — 今は production dep
 ```
 
-**`reth-node-api` は 1 回限りの直接 git dep** (workspace 経由ではない)。Workspace `Cargo.toml` がそれを宣言しない; git+rev を直接 inline 宣言する。意図的: `reth-node-api` は 1 個の crate (`openhl-evm`) でしか使われず、workspace の残りには必要ない。Workspace dep に昇格すると、全 crate の build graph がそれを知る必要が出る。
+**`reth-node-api` だけは workspace 経由ではなく、1 回限りの直接 git dep として宣言する。** workspace の `Cargo.toml` には宣言を置かず、git+rev を inline で書く。これは意図的だ — `reth-node-api` を使う crate は `openhl-evm` だけで、workspace の他の部分には不要。workspace dep に昇格させると、すべての crate の build graph がこれを把握する羽目になる。
 
-> 🛑 **やりがちな勘違い。** 「すべての Reth dep は workspace dep にすべき — それがパターン」。 **必ずしも違う。** Workspace dep が有用なのは、複数 crate が同じ dep を同じバージョンで必要とするとき。1 個の crate しか必要としないなら inline 宣言の方がクリーン — workspace-level Cargo.toml のエントリが少なく、reader に対して間接化が少ない。`reth-node-api` は openhl-evm のみ; それに応じて扱う。
+> 🛑 **やりがちな勘違い。** 「Reth 関連の依存はすべて workspace dep にすべき、それがパターンだ」 — **必ずしもそうではない。** workspace dep が有用なのは、複数の crate が同じ依存を同じバージョンで必要とする場合。1 つの crate でしか必要としないなら、inline 宣言のほうがクリーンだ — workspace-level の Cargo.toml にエントリが増えず、読み手にとって間接参照も減る。`reth-node-api` は openhl-evm でしか使わないので、それに合わせて扱う。
 
 ### Step 3: `crates/evm/src/precompiles/mod.rs` (stub) を作成
 
-`openhl_evm.rs` を書く前に、precompile モジュールを存在させる必要がある (`openhl_evm.rs` がそこから import するため)。Directory + file を作成:
+`openhl_evm.rs` を書く前に、precompile モジュールが存在している必要がある (`openhl_evm.rs` がそこから import するため)。ディレクトリとファイルを作る:
 
 ```bash
 mkdir -p crates/evm/src/precompiles
@@ -167,15 +167,15 @@ pub fn openhl_precompiles(base: &Precompiles) -> Precompiles {
 }
 ```
 
-Body 3 行。関数は `Precompiles` set (現在 hardfork に対する Reth のデフォルト) を取り、そのまま返す。**L2 が実 `clob_read_best_bid` を `base` と `return` の間に挿入する。**
+body は 3 行。関数は `Precompiles` set (現在の hardfork に対する Reth のデフォルト) を受け取って、そのまま返す。**L2 でこの `base` と `return` の間に本物の `clob_read_best_bid` を挿入する。**
 
-関数 signature は EVM factory が依存する **stable contract**。L2-L11 がこの関数の **content** を変更するが、`openhl_precompiles(base: Precompiles) -> Precompiles` は全体を通して同じ shape を保つ。
+この関数のシグネチャは EVM factory が依存する **安定した契約**。L2-L11 でこの関数の **中身** は変わっていくが、`openhl_precompiles(base: Precompiles) -> Precompiles` という shape はずっと変わらない。
 
-> 🛑 **やりがちな勘違い。** 「空関数は無駄なコード — L1 + L2 を統合する」。 **passthrough は precompile ロジックを追加する前に **構造がコンパイルすることを証明する**。** L1 + L2 を 1 レッスンとして書き、precompile 登録が壊れていたら、reader は factory 配線と precompile 登録のどちらが原因か分からない。レッスンを分割すると failure mode が別々に addressable になる。
+> 🛑 **やりがちな勘違い。** 「空の関数なんて無駄なコードだから、L1 と L2 は統合してしまえばいい」 — **passthrough は precompile ロジックを足す前に「構造がコンパイルすること」を証明するために存在する。** L1 と L2 を 1 レッスンにまとめて書いてしまうと、precompile 登録が壊れたときに、読み手は factory の配線が原因か precompile 登録が原因か切り分けられない。レッスンを分けることで、失敗モードが別々に診断できるようになる。
 
 ### Step 4: `crates/evm/src/openhl_evm.rs` を作成
 
-メインファイル。ファイル冒頭:
+これがメインファイル。冒頭:
 
 ```rust
 //! `OpenHlEvmFactory` + `OpenHlExecutorBuilder` — Reth's `ConfigureEvm` slot,
@@ -211,14 +211,14 @@ use std::sync::OnceLock;
 use crate::precompiles::openhl_precompiles;
 ```
 
-20 ほどの import。多くは `alloy-evm` の re-export 経由の REVM 内部。Scan する価値あり、暗記する必要なし:
+import は 20 個ほど。多くは `alloy-evm` の re-export 経由で来る REVM 内部の型だ。一通り眺める価値はあるが、暗記する必要はない:
 
-- **`EvmFactory`** — 実装する trait。Reth は EVM instance が必要なたびに factory の `create_evm` を call する。
+- **`EvmFactory`** — 実装する trait。Reth は EVM instance が必要になるたびに、factory の `create_evm` を呼ぶ。
 - **`ExecutorBuilder`** — `OpenHlExecutorBuilder` に実装する trait。Reth の `NodeBuilder` がこれを使って EVM config を construct する。
-- **`Precompiles`** — REVM の precompiled contract コレクション。我々はこれに追加する。
-- **`OnceLock`** — std の once-init primitive。Per-spec の precompile セットを cache する。
+- **`Precompiles`** — REVM の precompiled contract コレクション。ここに追加する形になる。
+- **`OnceLock`** — std の once-init primitive。spec ごとの precompile セットをキャッシュするのに使う。
 
-次に factory struct:
+次は factory の struct:
 
 ```rust
 /// EVM factory that registers openhl's custom precompiles on every EVM
@@ -264,17 +264,17 @@ impl EvmFactory for OpenHlEvmFactory {
 }
 ```
 
-8 個の associated type は scaffold — どの `EvmFactory` impl も必要で、多くは Reth のデフォルトと同じ。**興味深い部分は `create_evm`。** 5 step:
+8 個の associated type は scaffold だ — どの `EvmFactory` 実装にも必要で、多くは Reth のデフォルトと同じ。**面白いのは `create_evm` のほう。** 5 ステップ:
 
-1. **`Context::mainnet()`** — REVM の「Ethereum mainnet」プリセット (gas 定数等)。
-2. **`.with_db(db)` + `.with_cfg(input.cfg_env)` + `.with_block(input.block_env)`** — 渡された database、config、block env をインストール。
+1. **`Context::mainnet()`** — REVM の「Ethereum mainnet」プリセット (gas 定数など) を取る。
+2. **`.with_db(db)` + `.with_cfg(input.cfg_env)` + `.with_block(input.block_env)`** — 渡された database、config、block env を差し込む。
 3. **`.build_mainnet_with_inspector(NoOpInspector {})`** — no-op inspector (tracing なし) で EVM を construct。
-4. **`.with_precompiles(PrecompilesMap::from_static(precompiles_for(spec)))`** — **precompile をインストール**。`precompiles_for(spec)` が現在 Ethereum hardfork に対する正しい precompile セットを返す。
+4. **`.with_precompiles(PrecompilesMap::from_static(precompiles_for(spec)))`** — **precompile をインストール**。`precompiles_for(spec)` が現在の Ethereum hardfork に対する正しい precompile セットを返す。
 5. **`EthEvm::new(evm, false)`** — Reth の EthEvm 型でラップ。
 
-`create_evm_with_inspector` は同じ path に no-op の代わりに custom inspector。ほとんどの caller は `create_evm` を使う; inspector variant は debug RPC 用。
+`create_evm_with_inspector` は同じパスを、no-op の代わりに custom inspector でたどる。ほとんどの caller は `create_evm` を使い、inspector 版は debug RPC 用だ。
 
-> 🛑 **やりがちな勘違い。** 「factory が `db: DB` を generic に取るのは? 具体的な `RevmDatabase` の方がシンプル」。 **Reth は context によって多くの異なる database snapshot 型を使うから。** Block validation は live MDBX state を使う; eth_call RPC は履歴 snapshot を使う; debug RPC は in-memory overlay を使うかも。Factory はそれら全部で動かなければならない。Generic over `DB: Database` が、具体型にコミットせずそれを表現する方法。
+> 🛑 **やりがちな勘違い。** 「factory が `db: DB` を generic で取っているのはなぜ? 具体型の `RevmDatabase` のほうがシンプルだ」 — **Reth はコンテキストごとに別々の database snapshot 型を使うからだ。** Block validation は live な MDBX state を使い、eth_call RPC は履歴 snapshot を使い、debug RPC は in-memory overlay を使うこともある。Factory はそれら全部で動かなければならない。`DB: Database` で generic にすることが、具体型にコミットせずにそれを表現する手段だ。
 
 ### Step 5: `precompiles_for(spec)` ヘルパーを追加
 
@@ -305,19 +305,19 @@ fn precompiles_for(spec: SpecId) -> &'static Precompiles {
 }
 ```
 
-各 Ethereum hardfork が異なる標準 precompile セットを持つ (ECDSA recovery、SHA-256、ModExp、EC-pairing 等)。Cancun が blob 用の point evaluation precompile を追加。Prague がさらに追加予定。**Wrapper の `openhl_precompiles` が、現在 active な base set に custom precompile を注入する。**
+各 Ethereum hardfork ごとに標準 precompile セットが異なる (ECDSA recovery、SHA-256、ModExp、EC-pairing など)。Cancun では blob 用の point evaluation precompile が追加され、Prague でさらに追加される予定だ。**この wrapper の `openhl_precompiles` が、現在 active な base set にカスタム precompile を差し込む。**
 
-3 個の `OnceLock`、hardfork 階層ごと:
+`OnceLock` は hardfork 階層ごとに 3 つ用意する:
 
-- **`PRAGUE`** — Prague + Osaka をカバー (Osaka が当面 Prague の precompile を継承)。
+- **`PRAGUE`** — Prague + Osaka をカバー (Osaka は当面 Prague の precompile を継承する)。
 - **`CANCUN`** — Cancun。
-- **`FALLBACK`** — Berlin/London/Paris/Shanghai、`EthPrecompiles::new(spec)` を使って Reth がその spec に対して正しいと考えるセットを取得。
+- **`FALLBACK`** — Berlin/London/Paris/Shanghai。`EthPrecompiles::new(spec)` を使って、Reth がその spec に対して正しいと判断するセットを取得する。
 
-**なぜ `OnceLock` で per call 計算ではない?** `Precompiles` は HashMap ベースの構造で、construct コストが高い (全 precompile address を hashing)。Spec ごとに 1 回計算 + cache が、Reth の custom-evm 例が示す最適化の 1 つ。Caching が重要なのは、`create_evm` が **非常に** 頻繁に call されるから — 毎 RPC eth_call、毎 block validation、毎 block build。
+**`OnceLock` を使い、call ごとに計算しないのはなぜか?** `Precompiles` は HashMap ベースの構造で、construct コストが高い (precompile address を全部 hashing する)。spec ごとに 1 回だけ計算してキャッシュする — これは Reth の custom-evm 例にも示されている定石の最適化だ。キャッシュが効くのは `create_evm` が **非常に** 頻繁に呼ばれるからで、毎 RPC eth_call、毎 block validation、毎 block build で走る。
 
 ### Step 6: `OpenHlExecutorBuilder` を追加
 
-`openhl_evm.rs` 末尾:
+`openhl_evm.rs` の末尾に:
 
 ```rust
 /// Executor builder that swaps in `OpenHlEvmFactory` while keeping all other
@@ -341,15 +341,15 @@ where
 }
 ```
 
-10 行。`ExecutorBuilder` trait は Reth の hook、`EthereumNode` が使う EVM config を swap する。Associated type `EVM = EthEvmConfig<ChainSpec, OpenHlEvmFactory>` が「Reth 標準の EthEvmConfig を使うが、我々の factory でパラメータ化する」と言う。`build_evm` がその config を construct する。
+10 行。`ExecutorBuilder` trait は Reth が用意した hook で、`EthereumNode` が使う EVM config を差し替えるためのもの。associated type の `EVM = EthEvmConfig<ChainSpec, OpenHlEvmFactory>` は「Reth 標準の EthEvmConfig を使うが、こちらの factory でパラメータ化する」という意味だ。`build_evm` がその config を construct する。
 
-Trait bound `Node: FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>` がこの builder が動く node の種類を制約する — Ethereum mainnet primitive、我々の `ChainSpec`。より exotic なもの (Optimism、OP Stack) はこれらの bound を満たさない; 意図的。
+trait bound `Node: FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>` は、この builder が動作する node の種類を制約する — Ethereum mainnet primitive、こちらの `ChainSpec`。Optimism や OP Stack のような exotic なものはこの bound を満たさない。意図的にそうしている。
 
-**両 struct の `#[non_exhaustive]`** が、後で field を追加してもブレーキング API change にならないようにする。今は unit struct; openhl がいずれ configuration を運ばせる必要が出ても、この属性で consumer が `OpenHlExecutorBuilder {}` リテラルで construct できない。
+**両 struct に付けた `#[non_exhaustive]`** は、後でフィールドを追加しても破壊的な API 変更にならないようにするためのもの。今は unit struct だが、いずれ openhl が configuration を持たせる必要が出ても、この属性のおかげで consumer は `OpenHlExecutorBuilder {}` リテラルで construct できない。
 
 ### Step 7: `crates/evm/src/lib.rs` に配線
 
-`crates/evm/src/lib.rs` を開く。現在は前コースの bridges + reth_node + live_node モジュールがある。2 行追加:
+`crates/evm/src/lib.rs` を開く。現状は前コースの bridges + reth_node + live_node モジュールが並んでいる。ここに 2 行追加する:
 
 ```rust
 //! ... existing module doc ...
@@ -366,11 +366,11 @@ pub use openhl_evm::{OpenHlEvmFactory, OpenHlExecutorBuilder};  // NEW
 // ... existing re-exports ...
 ```
 
-2 つの変更:
-- **`pub mod openhl_evm`** — consumer に visible。
-- **`mod precompiles`** — internal、外部に公開しない。Smart contract は **address で** precompile を call する; `openhl-evm` の consumer は `openhl_precompiles` を直接 import する必要なし。
+変更は 2 点:
+- **`pub mod openhl_evm`** — consumer から見えるようにする。
+- **`mod precompiles`** — 内部用にとどめ、外部には公開しない。スマートコントラクトは precompile を **address で** 呼ぶので、`openhl-evm` の consumer が `openhl_precompiles` を直接 import する必要はない。
 
-末尾の re-export (`pub use openhl_evm::{OpenHlEvmFactory, OpenHlExecutorBuilder}`) が consumer code から 2 型を `openhl_evm::OpenHlEvmFactory` としてアクセス可能にする。L3 の NodeBuilder 統合がこれらを使う。
+末尾の re-export (`pub use openhl_evm::{OpenHlEvmFactory, OpenHlExecutorBuilder}`) は、これら 2 つの型を consumer 側から `openhl_evm::OpenHlEvmFactory` としてアクセスできるようにするためのもの。L3 の NodeBuilder 統合で使う。
 
 ## テスト
 
@@ -378,41 +378,41 @@ pub use openhl_evm::{OpenHlEvmFactory, OpenHlExecutorBuilder};  // NEW
 cargo check -p openhl-evm
 ```
 
-初回 run は遅い — `alloy-evm` + 新 Reth crate が non-trivial なコードを引き込む。~30-60 秒予期。以降の run は cache 使用。
+初回ビルドは遅い — `alloy-evm` と新しい Reth crate がそれなりの量のコードを引き込むため、30-60 秒は見ておく。2 回目以降はキャッシュが効く。
 
-期待:
+期待される出力:
 
 ```
    Compiling openhl-evm v0.1.0 (.../crates/evm)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 32.45s
 ```
 
-警告なし (import list は長いが各 item が使われる)。エラーなし。
+警告は出ない (import 一覧は長いが、すべて使われている)。エラーもない。
 
-既存テストスイートも他に何も壊れていないことを確認:
+既存のテストスイートが他に壊れていないことも確認する:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-39 個依然 pass。新モジュールにはまだテストなし — L3 が最初のものを追加。
+39 個は引き続き pass する。新モジュールにはまだテストがない — 最初のテストは L3 で追加する。
 
 よくあるエラーと対処:
 
-- **`error[E0432]: unresolved import 'reth_node_api'`** — inline git dep が追加されていない。Step 2 を再確認。
-- **`error[E0277]: 'EvmFactory' is not implemented for 'OpenHlEvmFactory'` (ある associated type で)** — 8 個の associated type のどれかに typo。`1761d4d` の参照と比較。最一般: `type Spec = SpecId` vs `type Spec = u64` 等。
-- **`error[E0282]: type annotations needed for 'PrecompilesMap'`** — `PrecompilesMap::from_static` が generic を返す; call site が型を知る必要。我々の場合 `with_precompiles(...)` 呼び出しが推論を提供。Compiler が文句を言ったら、import を二重チェック。
-- **`unused import: 'openhl_precompiles'`** — 関数は `precompiles_for` の closure で参照される。この warning を見たら、`openhl_precompiles(Precompiles::prague())` の代わりに `Precompiles::prague()` を直接書いたかも。各 base set を `openhl_precompiles(...)` でラップ。
+- **`error[E0432]: unresolved import 'reth_node_api'`** — inline git dep の追加忘れ。Step 2 を確認する。
+- **`error[E0277]: 'EvmFactory' is not implemented for 'OpenHlEvmFactory'` (associated type のどれかで発生)** — 8 個の associated type のどこかにタイポがある。`1761d4d` の参照と突き合わせる。よくあるのは `type Spec = SpecId` を `type Spec = u64` と書いてしまうケースなど。
+- **`error[E0282]: type annotations needed for 'PrecompilesMap'`** — `PrecompilesMap::from_static` が generic を返すので、call site が型を知っている必要がある。ここでは `with_precompiles(...)` 呼び出しが推論材料を提供する。compiler が文句を言うなら import を見直す。
+- **`unused import: 'openhl_precompiles'`** — この関数は `precompiles_for` の closure 内で参照する。この warning が出るなら、`openhl_precompiles(Precompiles::prague())` の代わりに `Precompiles::prague()` を直接書いてしまっている可能性がある。各 base set を `openhl_precompiles(...)` で包むこと。
 
 ## 設計の振り返り
 
-3 つの load-bearing な決定:
+要となる決定が 3 つ:
 
-1. **Factory パターンが Reth の「多数の EVM instance」現実とマッチ。** Reth は 1 つの EVM を construct して再利用しない — 各 RPC call、各 block validation、各 payload build で fresh な EVM を作る。`EvmFactory` trait が「すべての EVM 生成」に 1 箇所でフックする方法。**1 factory、多数の EVM、どこでも一貫した precompile 登録。**
+1. **Factory パターンが「Reth は EVM instance を多数作る」という現実に噛み合う。** Reth は 1 つの EVM を construct して使い回すわけではなく、RPC call ごと、block validation ごと、payload build ごとに新しい EVM を作る。`EvmFactory` trait は「すべての EVM 生成」を 1 箇所でフックする手段だ。**factory は 1 つ、EVM は多数、precompile 登録はどこでも一貫。**
 
-2. **Spec ごとの `OnceLock` が正しい caching shape。** `Precompiles` セットの構築は non-trivial (address の hashing、fn の insertion)。`create_evm` call ごとにやるのは cycle の無駄。Per-spec caching が各 hardfork 階層 (Prague、Cancun、fallback) を 1 度だけ construct する。`OnceLock` が thread-safe な lazy init を保証。
+2. **Spec ごとの `OnceLock` がキャッシュとして正しい形。** `Precompiles` セットの構築は軽くない (address の hashing、関数の insertion)。これを `create_evm` 呼び出しのたびにやるのは無駄。spec ごとにキャッシュすれば、hardfork 階層 (Prague、Cancun、fallback) ごとに 1 回だけ construct すれば済む。`OnceLock` がスレッドセーフな lazy 初期化を保証してくれる。
 
-3. **`openhl_precompiles` の passthrough stub が L1 を isolated に保つ。** 関数は正しい signature で存在; まだ何もしない。L2 が body を埋める。**正しい signature を持つ stub は契約**: caller (factory) が今配線でき、実装は call site を変えずに後から land できる。これが rewrite を必要としない incremental construction。
+3. **`openhl_precompiles` の passthrough stub が L1 を孤立させる。** 関数は正しいシグネチャで存在するが、まだ何もしない。本体は L2 で埋める。**正しいシグネチャを持つ stub は契約として機能する**: caller (factory) は今すぐ配線でき、実装は call site を変えずに後で着地できる。これが書き直しを伴わない incremental な構築のやり方だ。
 
 ## 答え合わせ
 
@@ -424,16 +424,16 @@ diff -u ~/code/my-openhl/crates/evm/Cargo.toml ./crates/evm/Cargo.toml
 diff -u ~/code/my-openhl/Cargo.toml ./Cargo.toml
 ```
 
-`1761d4d` の参照は **full** な `precompiles/mod.rs` (Stage 9a の read precompile) を持つ。Stub 版はそれと異なる:
+`1761d4d` の参照には **完全版** の `precompiles/mod.rs` (Stage 9a の read precompile) が入っている。stub 版とは差が出る:
 
 ```bash
 diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/precompiles/mod.rs
 # 期待: stub は参照より大幅に短い; 参照に大きな追加として差が見える。L2 が欠けている content を追加。
 ```
 
-`openhl_evm.rs` は厳密にマッチするはず (factory 構造は同一; doc コメントの言い回しだけ違うかも)。
+`openhl_evm.rs` は厳密に一致するはず (factory の構造は同一; doc コメントの言い回しが違う程度)。
 
-戻る:
+main に戻る:
 
 ```bash
 git checkout main
@@ -441,21 +441,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: precompile モジュールが `mod precompiles` (private) で `pub mod openhl_evm` なのは?**
-`OpenHlEvmFactory` は consumer が必要とする public API (L3 の NodeBuilder 統合が使う) だが、`openhl_precompiles` は `openhl_evm.rs` 内部だけで consume される実装詳細。precompile モジュールを private に保つことが API leakage を防ぐ; caller は自分で precompile セットを construct や modify すべきでない。
+**Q: precompile モジュールを `mod precompiles` (private) にして、`pub mod openhl_evm` だけにしているのはなぜ?**
+`OpenHlEvmFactory` は consumer が必要とする public API (L3 の NodeBuilder 統合で使う) だが、`openhl_precompiles` は `openhl_evm.rs` の内部でだけ消費される実装詳細だ。precompile モジュールを private に保つことで API の漏出を防ぐ — caller が自分で precompile セットを construct したり改変したりすべきではない。
 
-**Q: `Precompiles::from_static` と `Precompiles::default` の違い?**
-`from_static` は `&'static Precompiles` 参照を取る — つまり precompile セットは cache して再利用するもの。`default` は新規 (空) `Precompiles` instance を構築する。`create_evm` が `from_static` を使うのは、`OnceLock`-cache されたセットが `'static` だから。Caching + static 参照 = EVM 生成ごとの allocation なし。
+**Q: `Precompiles::from_static` と `Precompiles::default` の違いは?**
+`from_static` は `&'static Precompiles` の参照を取る — つまり precompile セットは「キャッシュして使い回すもの」という前提だ。`default` は新規の (空の) `Precompiles` インスタンスを作る。`create_evm` が `from_static` を使うのは、`OnceLock` でキャッシュされたセットが `'static` だから。キャッシュ + static 参照 = EVM 生成ごとの allocation がゼロ、ということになる。
 
-**Q: なぜ `PRAGUE` が `OSAKA` もカバー?**
-Osaka (Prague の次の hardfork 案) は参照 SHA 時点で新規標準 precompile を導入しない。Osaka が最終的に新 precompile を追加したら、この match arm が別々の `OSAKA` と `PRAGUE` ブランチに分割される。それまでは同じ `OnceLock` を共有するのが正しい。
+**Q: なぜ `PRAGUE` が `OSAKA` もカバーするのか?**
+Osaka (Prague の次に予定されている hardfork) は、参照 SHA 時点では新たな標準 precompile を導入しない。Osaka で新規 precompile が追加されたタイミングで、この match arm を `OSAKA` と `PRAGUE` の別ブランチに分割すればよい。それまでは同じ `OnceLock` を共有するのが正しい。
 
-**Q: `OpenHlExecutorBuilder` は `Clone` が必要?**
-Trait は `Clone` を要求しないが、`#[derive(Clone, Copy)]` は安価 (zero-sized な unit struct)、Reth のパターンとマッチ。後で struct に field を追加するなら、API の ergonomic のために `Clone` を保つべき。
+**Q: `OpenHlExecutorBuilder` に `Clone` は必要?**
+trait は `Clone` を要求しないが、`#[derive(Clone, Copy)]` は安価 (中身のない unit struct なので zero-sized) で、Reth のパターンともマッチする。後で struct にフィールドを足すことになっても、API の使い勝手のために `Clone` は維持しておくのがよい。
 
 ## 次のレッスン (L2)
 
-Factory は配線されたが precompile モジュールは passthrough — Reth 標準 precompile がインストールされ、余分なものなし。L2 が最初の **real** precompile を追加: address `0x...0c1b` の `clob_read_best_bid`。今は hardcoded 値を返す (openhl Stage 9a と同じアプローチ)。L4-L5 が live CLOB state に配線; このレッスンは関数を定義し、register し、registry 経由で到達可能にするだけ。
+factory は配線できたが、precompile モジュールは passthrough のまま — Reth 標準の precompile だけがインストールされ、追加分はゼロ。L2 で最初の **本物の** precompile を追加する: address `0x...0c1b` の `clob_read_best_bid` だ。当面は hardcoded 値を返す (openhl Stage 9a と同じやり方)。live な CLOB state に配線するのは L4-L5。L2 では関数を定義し、登録し、registry 経由で到達可能にするところまでをやる。
 ````
 
 ---

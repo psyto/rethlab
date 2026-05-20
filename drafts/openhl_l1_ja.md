@@ -27,9 +27,9 @@
 cargo check --workspace
 ```
 
-…そして "unused dependency" の警告以外は warning なしで `Finished` を見られる状態にする。手元には、空のライブラリ crate が 10 個、binary crate が 1 個、Reth が SHA で pin された git 依存、Malachite が同じく SHA で pin された git 依存を持つ Rust workspace が出来上がっている。**アプリケーションロジックは 1 行も書いていない** — それは L2 以降だ。本レッスンは「依存グラフを正しく組む」ことに専念する。
+上記の実行結果が "unused dependency" 警告以外は warning なしで `Finished` と表示される状態にする。手元には、空のライブラリ crate を 10 個、binary crate を 1 個、SHA で pin された Reth の git 依存、同じく SHA で pin された Malachite の git 依存を持つ Rust workspace が出来上がる。**アプリケーションロジックは 1 行も書かない** — それは L2 以降だ。本レッスンは「依存グラフを正しく組む」ことに専念する。
 
-Reth のコンパイルグラフだけで ~600 crates ある。最初の `cargo check` はマシンによって 5-15 分かかる。そのつもりで進める。その後の check は incremental になって速い。
+Reth のコンパイルグラフだけで ~600 crates ある。最初の `cargo check` はマシンによって 5-15 分かかる。そのつもりで進める。以降の check は incremental が効いて速くなる。
 
 ## おさらい
 
@@ -38,27 +38,27 @@ L0 のセットアップを済ませている前提だ。手元には:
 - `~/code/my-openhl/` — 自分の workspace、現状は `cargo init --lib` の default 出力
 - `~/code/openhl-reference/` — `psyto/openhl` を clone 済み、`cargo check` が通っている
 
-このレッスンの編集は **すべて** `~/code/my-openhl/` の中で行う。`openhl-reference/` には絶対に触れない。
+本レッスンの編集は **すべて** `~/code/my-openhl/` 内で行う。`openhl-reference/` には絶対に触れない。
 
 ## 計画
 
 3 つの段階を順に進める:
 
-1. **Stage 1** — `cargo init --lib` の default 出力を消し、real workspace に置き換える: 10 個の空ライブラリ crate、1 個の binary crate、workspace 全体のデフォルトを定義する top-level `Cargo.toml`。**テスト**: 外部依存なしで `cargo check --workspace` が通る。
-2. **Stage 2** — Reth を workspace レベルで SHA pin の git 依存として宣言する。**テスト**: `cargo check --workspace` が引き続き通る (どの crate も Reth をまだ使っていない — 依存が解決可能なことを確認するだけ)。
+1. **Stage 1** — `cargo init --lib` の default 出力を消し、real workspace に置き換える: 空のライブラリ crate を 10 個、binary crate を 1 個、workspace 全体のデフォルトを定義する top-level `Cargo.toml`。**テスト**: 外部依存なしで `cargo check --workspace` が通る。
+2. **Stage 2** — Reth を workspace レベルで SHA pin の git 依存として宣言する。**テスト**: `cargo check --workspace` が引き続き通る (まだどの crate も Reth を使っていない — 依存が解決可能なことを確認するだけ)。
 3. **Stage 3** — Malachite を同じやり方で pin する。**テスト**: `cargo check --workspace` が引き続き通る。
 
 各 stage は `psyto/openhl` の実際の commit に対応する: `75be9de`、続いて `5fc7ca1`。
 
-**先にアプリケーションコードではなく依存グラフを組む理由**: Rust workspace で最も摩擦が多いのは依存解決だ。Reth と Malachite はどちらも巨大で transitive な依存ツリーが深い。**「あとでやる」にすると、アプリケーションコードを書いている最中に衝突を発見して巻き戻すことになる。** 先に依存を確定させておけば、その後のレッスンはレッスンの本題に集中できる。
+**アプリケーションコードより先に依存グラフを組む理由**: Rust workspace で最も摩擦が多いのは依存解決だ。Reth も Malachite も巨大で、transitive な依存ツリーが深い。**「あとでやる」と決めると、アプリケーションコードを書いている最中に衝突に気付いて巻き戻すことになる。** 先に依存を確定させておけば、その後のレッスンはレッスン本来の主題に集中できる。
 
-> 🛑 **考えてみよう。** スクロール前に sketch せよ: workspace の Cargo.toml に書く `members` は何個で、それぞれ何か? ヒント: 10 個のライブラリ crate + 1 個の binary crate。L0 §3 で 5 つのサブシステムを学んだ; それを実装するのは具体的に 10 個のうちのどの crate か? (必要なら L0 §4 を見返す。)
+> 🛑 **考えてみよう。** スクロールする前に sketch せよ: workspace の Cargo.toml に書く `members` は何個で、それぞれ何か? ヒント: ライブラリ crate 10 個 + binary crate 1 個。L0 §3 で 5 つのサブシステムを学んだ。それを実装するのは具体的に 10 個のうちのどの crate か? (必要なら L0 §4 を見返す。)
 
 ## 手を動かす walk-through
 
 ### Step 1: `~/code/my-openhl/` をリセット
 
-L0 のセットアップで default の cargo プロジェクトが残っている。これを消してまっさらから始める:
+L0 のセットアップで default の cargo プロジェクトが残っている。これを消して、まっさらの状態から始める:
 
 ```bash
 cd ~/code/my-openhl
@@ -75,7 +75,7 @@ ls -la
 
 ### Step 2: Top-level workspace の Cargo.toml を書く
 
-ルートに `Cargo.toml` を作り、次の内容を入れる。コピーではなく、自分でタイプする。各セクションに注目しながら。
+ルートに `Cargo.toml` を作り、次の内容を入れる。コピーではなく、各セクションに注目しながら自分でタイプする。
 
 ```toml
 [workspace]
@@ -159,9 +159,9 @@ opt-level = 3
 
 **このファイルで本質的な選択が 3 つある:**
 
-1. **`resolver = "3"`**。Cargo の dep resolver のバージョン。Resolver 3 (Rust 2024 edition のデフォルト) は feature unification をより厳格に扱う。Reth と Malachite はどちらも複雑な feature flag を持っており、resolver 3 がそれらの微妙な衝突を避けてくれる。
-2. **workspace レベルでの `unsafe_code = "forbid"`**。これにより member crate すべてで `unsafe` が禁止される。Reth は内部で `unsafe` を使っているが、我々のアプリケーション層は使わない。アプリケーション層で禁止することが L0 §4 の determinism レールだ — pure state-machine crate が `unsafe` を欲しがった瞬間、それは code review の警告サインになる。
-3. **`pedantic = "warn"` (clippy)**。Pedantic な clippy lint は subtle な問題を多数キャッチする。ノイズになるルールもあるので、`module_name_repetitions` などを末尾で `allow` している。最初から pedantic を warn 設定にしておくと、すべての commit が clippy clean で land する。
+1. **`resolver = "3"`**。Cargo の dep resolver のバージョン。Resolver 3 (Rust 2024 edition のデフォルト) は feature unification をより厳格に扱う。Reth も Malachite も複雑な feature flag を持っており、resolver 3 が微妙な衝突を避けてくれる。
+2. **workspace レベルでの `unsafe_code = "forbid"`**。これで member crate すべてで `unsafe` が禁止される。Reth は内部で `unsafe` を使っているが、こちらのアプリケーション層では使わない。アプリケーション層で禁止することが L0 §4 の determinism レールだ — pure state-machine crate が `unsafe` を欲しがった瞬間、それは code review の警告サインになる。
+3. **`pedantic = "warn"` (clippy)**。Pedantic な clippy lint は subtle な問題を多数捕まえる。ノイズになるルールもあるので、`module_name_repetitions` などを末尾で `allow` している。最初から pedantic を warn にしておけば、すべての commit が clippy clean で land する。
 
 ### Step 3: `rust-toolchain.toml` をルートに追加
 
@@ -174,11 +174,11 @@ components = ["clippy", "rustfmt"]
 profile    = "minimal"
 ```
 
-Rust のバージョンを pin する。読者 (および CI) が `cargo` を呼ぶと、自動的にこの toolchain が fetch されて使われる。これがないとマシンごとに違う rustc バージョンでビルドされて異なるアーティファクトを生む — 我々が望まない determinism risk だ。
+Rust のバージョンを pin する。読者 (および CI) が `cargo` を呼ぶと、自動的にこの toolchain が fetch されて使われる。これがないとマシンごとに違う rustc バージョンでビルドされ、別々のアーティファクトを生んでしまう — 避けたい determinism risk だ。
 
 ### Step 4: 最初のライブラリ crate (`crates/types`) をテンプレートとして作る
 
-1 つの crate を end-to-end で作り、そのパターンを残り 9 つに replicate する。
+まず 1 つの crate を end-to-end で作り、そのパターンを残りの 9 つに展開する。
 
 ```bash
 mkdir -p crates/types/src
@@ -209,16 +209,16 @@ workspace = true
 //! Shared primitives and CL/EL contract types.
 ```
 
-それだけだ。module doc comment 以外、crate は空。後続レッスンで中身を埋めていく。
+これだけだ。module doc comment 以外、crate は空。中身は後続レッスンで埋めていく。
 
-**なぜ `version = { workspace = true }` 等?** これでルート Cargo.toml の `[workspace.package]` から継承される。すべての member crate が同じメタデータ (version、edition、license) を持つ。`workspace = true` 経由で継承すれば、workspace を 1 行 bump するだけで全 crate に波及する。代わりに crate ごとに `version = "0.1.0"` を書くと、6 行 × 11 crate で重複が増え、drift しやすくなる。
+**なぜ `version = { workspace = true }` などを使うのか?** これでルート Cargo.toml の `[workspace.package]` から継承される。すべての member crate が同じメタデータ (version、edition、license) を持つ。`workspace = true` 経由で継承すれば、workspace を 1 行 bump するだけで全 crate に波及する。代わりに crate ごとに `version = "0.1.0"` を書くと、6 行 × 11 crate で重複が増え、drift しやすくなる。
 
 ### Step 5: 残りの 9 個のライブラリ crate を作る
 
 パターンは `crates/types` と同じ。各 crate について次を作る:
 
 - `crates/<name>/Cargo.toml` (形は同じ、`name` フィールドだけ変える)
-- `crates/<name>/src/lib.rs` (doc comment だけ)
+- `crates/<name>/src/lib.rs` (doc comment のみ)
 
 残り 9 crate と doc comment:
 
@@ -234,13 +234,13 @@ workspace = true
 | consensus | `openhl-consensus` | `//! Consensus layer — Malachite BFT.` |
 | node | `openhl-node` | `//! Node assembly: consensus + evm + clob.` |
 
-`clob`、`oracle`、`funding`、`liquidation`、`vault`、`node` については `[dependencies]` セクションは空でよい (`[dependencies]` 行のあとに空行、`[lints]` ブロック)。`codec`、`evm`、`consensus` も最初は空 — 実際の依存はそれを使うコードが land する後続レッスンで足す。
+`clob`、`oracle`、`funding`、`liquidation`、`vault`、`node` については `[dependencies]` セクションは空でよい (`[dependencies]` 行のあとに空行、続いて `[lints]` ブロック)。`codec`、`evm`、`consensus` も最初は空 — 実際の依存は、それを使うコードが land する後続レッスンで足す。
 
-> 🛑 **やりがちな勘違い。** 「最初に全部の依存を書いておけば後で編集しなくて済むのでは?」 **違う。** Unused dependency を持つ crate は技術的負債だ: ビルドを遅くし、reader を混乱させ、version conflict を招く。依存は **それを使うコードが land するタイミングで** 足す。workspace の `Cargo.toml` が *使える* 依存を宣言し、各 crate の `Cargo.toml` が *使う* 依存を宣言する、という階層構造。
+> 🛑 **やりがちな勘違い。** 「最初に全部の依存を書いておけば後で編集しなくて済むのでは?」 **違う。** Unused dependency を持つ crate は技術的負債だ: ビルドを遅くし、reader を混乱させ、version conflict を招く。依存は **それを使うコードが land するタイミングで** 足す。workspace の `Cargo.toml` で *使える* 依存を宣言し、各 crate の `Cargo.toml` で *実際に使う* 依存を宣言する、という階層構造になっている。
 
 ### Step 6: `bin/openhl` を作る
 
-Binary crate。まだ何もしない — workspace がコンパイル可能なことを確かめるだけ。
+Binary crate。まだ何もしない — workspace がコンパイル可能であることを確かめるだけ。
 
 ```bash
 mkdir -p bin/openhl/src
@@ -276,7 +276,7 @@ fn main() {
 }
 ```
 
-`[[bin]]` セクションで binary 名を `openhl`、エントリポイントを `src/main.rs` と宣言する。`env!("CARGO_PKG_VERSION")` マクロは Cargo.toml の version をコンパイル時に inline する — 後で `openhl --version` を実装するときに使える。
+`[[bin]]` セクションで binary 名を `openhl`、エントリポイントを `src/main.rs` と宣言する。`env!("CARGO_PKG_VERSION")` マクロは Cargo.toml の version をコンパイル時に inline する — 後で `openhl --version` を実装するときに役立つ。
 
 ### Step 7: 最初の `cargo check`
 
@@ -294,11 +294,11 @@ cargo check --workspace
     Finished `dev` profile
 ```
 
-いくつかの `unused_imports` 警告は OK (`serde` を workspace の依存として宣言したが、ほとんどの crate がまだ使っていないため)。Hard error は OK ではない — 出た場合に多い原因:
+いくつかの `unused_imports` 警告は OK (`serde` を workspace の依存として宣言したが、ほとんどの crate がまだ使っていないため)。Hard error は許容できない — 出た場合に多い原因:
 
-- **`workspace.members` または crate Cargo.toml の crate 名のタイプミス。** Cargo が見つからない crate 名を教えてくれるので、タイプミスを直す。
+- **`workspace.members` または crate Cargo.toml の crate 名にタイプミス。** Cargo が見つからない crate 名を教えてくれるので、タイプミスを直す。
 - **library crate に `src/lib.rs` が無い。** `workspace.members` にリストされた crate はそれぞれ `src/lib.rs` か `src/main.rs` のどちらかが必要。
-- **`[lints]` ブロックがあるが中に `workspace = true` が無い。** 各 crate の `[lints]` は `workspace = true` と書かないと継承されない。
+- **`[lints]` ブロックはあるが中に `workspace = true` が無い。** 各 crate の `[lints]` は `workspace = true` と書かないと継承されない。
 
 エラーをすべて潰してから Step 8 に進む。
 
@@ -336,18 +336,18 @@ alloy-evm                 = { version = "0.34", default-features = false }
 alloy-rlp                 = { version = "0.3", default-features = false }
 ```
 
-**なぜこんなに多くの Reth crate を?** Reth は multi-crate codebase だ。Node builder、EVM、storage API、consensus hook など、それぞれが別 crate に住む。後続レッスンが使う予定のものを workspace レベルで宣言しておくと、各消費 crate は `reth-xxx = { workspace = true }` と書くだけで済む。
+**なぜこんなに多くの Reth crate を?** Reth は multi-crate codebase だ。Node builder、EVM、storage API、consensus hook など、それぞれが別 crate に住んでいる。後続レッスンで使う予定のものを workspace レベルで宣言しておけば、各消費側 crate は `reth-xxx = { workspace = true }` と書くだけで済む。
 
-**なぜ SHA で pin するのか?** Reth は breaking change が頻繁にある。release tag の SHA (ここでは `88505c7f...` = v2.2.0) に pin することで安定したターゲットになる。`version = "2.2"` や branch に pin すると、Reth が無関係な変更をリリースしたときにビルドが壊れる可能性がある。
+**なぜ SHA で pin するのか?** Reth は breaking change が頻繁にある。release tag の SHA (ここでは `88505c7f...` = v2.2.0) に pin すれば安定したターゲットになる。`version = "2.2"` や branch に pin すると、Reth が無関係な変更をリリースしたときにビルドが壊れる可能性がある。
 
-**なぜ main HEAD ではなく release-tag SHA に pin するのか?** Main HEAD はいつでも壊れる可能性がある。Release tag はテストされた安定版だ。ファイル中のコメント (`# Bump は専用 PR で行う。release-tag SHA を必ず pin、main HEAD には絶対 pin しない。`) は将来 bump するときの process discipline メモだ。
+**なぜ main HEAD ではなく release-tag SHA に pin するのか?** Main HEAD はいつでも壊れる可能性がある。Release tag はテストされた安定版だ。ファイル中のコメント (`# Bump は専用 PR で行う。release-tag SHA を必ず pin、main HEAD には絶対 pin しない。`) は将来 bump するときの process discipline メモになる。
 
 > 🛑 **考えてみよう。** いまの状態で `cargo check --workspace` を実行すると何が起こるか? スクロール前に 1 つ選べ:
 > - (a) 何も変わらない — まだどの crate も Reth の依存を使っていないから
 > - (b) 初回は劇的に遅くなる — Reth の transitive な ~600 crate を fetch + compile する
 > - (c) エラー — Reth は明示的な configuration が必要で、まだ与えていない
 
-答えは (b) だ。Cargo の `workspace.dependencies` 宣言は **resolution** を起こすが、未使用 deps の **compilation** は起こさない。しかし `cargo check` は依存グラフを walk して git source を fetch する。それが 5-15 分の初回コストだ。良いニュース: 以後の実行は cache が効く。
+答えは (b) だ。Cargo の `workspace.dependencies` 宣言は **resolution** を起こすが、未使用 deps の **compilation** は起こさない。しかし `cargo check` は依存グラフを walk して git source を fetch する。それが 5-15 分の初回コストだ。良いニュース: 以降は cache が効く。
 
 実行する:
 
@@ -364,9 +364,9 @@ cargo check --workspace
     Finished `dev` profile [optimized + debuginfo] target(s) in 14m 23s
 ```
 
-エラーが出た場合、多い原因:
+エラーが出た場合、よくある原因:
 
-- **alloy のバージョン衝突。** 上の workspace.deps ブロックをコピーする前に、古い `alloy-primitives = "0.x"` を別途宣言している場合、Cargo が unify できない。解決: 全 alloy バージョンを上記の `1.5` / `2.0` に揃える。
+- **alloy のバージョン衝突。** 上の workspace.deps ブロックをコピーする前に古い `alloy-primitives = "0.x"` を別途宣言していると、Cargo が unify できない。解決: 全 alloy バージョンを上記の `1.5` / `2.0` に揃える。
 - **rustc バージョンが古い。** Reth v2.2.0 は rustc 1.93+ を要求する。`rust-toolchain.toml` が `1.95.0` を pin している。`rustc --version` で確認する。
 - **Git fetch のネットワーク失敗。** 再実行する。Cargo の git fetch はたまに flaky だ。
 
@@ -388,9 +388,9 @@ informalsystems-malachitebft-codec           = { git = "https://github.com/infor
 informalsystems-malachitebft-signing-ed25519 = { git = "https://github.com/informalsystems/malachite", rev = "9ef02b33c4ded5fe3e072631d86448658680fe55" }
 ```
 
-**Crate 名の特殊事情。** Malachite のリポ (`informalsystems/malachite`) は crate を `informalsystems-malachitebft-*` という prefix で publish している。Cargo.toml では full prefix の名前を使う。Rust ソースコードでは snake_case rename された形 (`informalsystems_malachitebft_core_types::Context`) で参照する。ファイルのコメントがこれを document している。
+**Crate 名の特殊事情。** Malachite のリポ (`informalsystems/malachite`) は crate を `informalsystems-malachitebft-*` という prefix 付きで publish している。Cargo.toml では full prefix の名前を使う。Rust ソースコードでは snake_case に rename された形 (`informalsystems_malachitebft_core_types::Context`) で参照する。ファイル中のコメントがこれを document している。
 
-**core-driver の `features = ["std"]`。** Driver crate には `std` という feature gate がある。標準ライブラリの facility (BTreeMap、HashMap 等) が必要なので、明示的に有効化する。他の Malachite crate はデフォルトで `std` 込みなので、feature 指定不要。
+**core-driver の `features = ["std"]`。** Driver crate には `std` という feature gate がある。標準ライブラリの facility (BTreeMap、HashMap など) が必要なので、明示的に有効化する。他の Malachite crate はデフォルトで `std` 込みなので、feature 指定は不要。
 
 再度 cargo check を実行する:
 
@@ -398,7 +398,7 @@ informalsystems-malachitebft-signing-ed25519 = { git = "https://github.com/infor
 cargo check --workspace
 ```
 
-今回は Reth の incremental cache が効いて、Malachite だけが fetch/compile される。典型的に 2-5 分。
+今回は Reth の incremental cache が効いて、Malachite だけが fetch/compile される。だいたい 2-5 分。
 
 ## テスト
 
@@ -433,11 +433,11 @@ L1 完了。
 
 このレッスンで encode した本質的な決定が 2 つ:
 
-1. **すべての外部依存は workspace レベルで宣言する**、crate ごとではなく。各 crate の Cargo.toml は `reth-storage-api = { workspace = true }` と書き、バージョンは workspace から継承する。Reth のバージョン bump は workspace を 1 行変えるだけで済む。代わりに各 crate が独自にバージョンを宣言する形にすると、11 crate の Cargo.toml がすべて drift するリスクが出る。
+1. **すべての外部依存は crate ごとではなく workspace レベルで宣言する。** 各 crate の Cargo.toml は `reth-storage-api = { workspace = true }` と書き、バージョンは workspace から継承する。これで Reth のバージョン bump は workspace を 1 行変えるだけで済む。代わりに各 crate が独自にバージョンを宣言する形にすると、11 crate の Cargo.toml がすべて drift するリスクが出る。
 
-2. **Reth と Malachite は git 依存、crates.io 依存ではない。** 両プロジェクトとも crates.io に publish しているが、バージョニングの cadence が大きく違う。Workspace で specific な commit SHA に pin することは意図的な trade-off: bump の摩擦は大きいが、再現性が絶対になる。Production の L1 はこのやり方を取る — 2 validator が偶然違う "0.5.x" patch を fetch したことが原因で desync する事態を絶対に避けたいからだ。
+2. **Reth と Malachite は git 依存、crates.io 依存ではない。** 両プロジェクトとも crates.io に publish しているが、バージョニングの cadence が大きく違う。Workspace で specific な commit SHA に pin するのは意図的な trade-off だ: bump の摩擦は大きいが、再現性が絶対になる。Production の L1 はこのやり方を取る — 2 つの validator が偶然違う "0.5.x" patch を fetch して desync する事態を絶対に避けたいからだ。
 
-この 2 つの決定は後続レッスンすべてに伝播する。L11 で crate の `[dependencies]` に `reth-storage-api = { workspace = true }` を追加するとき、Cargo は workspace レベルの pin を見つけて正しく解決する — そこを考えなくてよい状態になっている。
+この 2 つの決定は後続レッスンすべてに伝播する。L11 で crate の `[dependencies]` に `reth-storage-api = { workspace = true }` を追加するとき、Cargo は workspace レベルの pin を見つけて正しく解決する — そこを意識しなくてよい状態になっている。
 
 ## 答え合わせ
 
@@ -451,7 +451,7 @@ diff -ru ~/code/my-openhl/crates/types ./crates/types
 diff -ru ~/code/my-openhl/bin/openhl ./bin/openhl
 ```
 
-`authors`、`repository`、コメントの文言の違いは OK。`members`、`workspace.dependencies` の pin SHA、`[workspace.lints]`、profile の違いは NG — 該当する Step を読み返す。
+`authors`、`repository`、コメントの文言は違っていて OK。`members`、`workspace.dependencies` の pin SHA、`[workspace.lints]`、profile が違うのは NG — 該当する Step を読み返す。
 
 確認が終わったら main に戻す:
 
@@ -461,7 +461,7 @@ git checkout main
 
 ## よくある質問
 
-**Q: 自分の作業を git に commit すべき?** Yes。`~/code/my-openhl/` で git を init し、各 step または各レッスンごとに commit する。Commit log が自分用の Stage 履歴になる。
+**Q: 自分の作業を git に commit すべき?** Yes。`~/code/my-openhl/` で git を init し、各 step または各レッスンごとに commit する。Commit log が自分用の Stage 履歴として残る。
 
 ```bash
 cd ~/code/my-openhl
@@ -470,15 +470,15 @@ git add .
 git commit -m "L1 — workspace + Reth + Malachite を pin"
 ```
 
-**Q: "unused dependency" の warning が多いのはなぜ?** 各 member crate の `[dependencies]` セクションがほぼ空だから。Workspace レベルで依存を *利用可能* な状態にしたが、どの crate もまだ `[dependencies]` を埋めていない。レッスンが進んで各 crate が必要な依存を pull してくると、warning は減る。
+**Q: "unused dependency" の warning が多いのはなぜ?** 各 member crate の `[dependencies]` セクションがほぼ空だから。Workspace レベルで依存を *利用可能* な状態にしたが、どの crate もまだ `[dependencies]` を埋めていない。レッスンが進み、各 crate が必要な依存を pull してくれば warning は減っていく。
 
 **Q: ディスクが足りなくなった。** Reth と Malachite の source tree + target/ cache で 10-15 GB に達することもある。ディスクを足すか、`.cargo/config.toml` で `[build] target-dir = ...` を別ドライブに向ける。
 
-**Q: 依存の fetch を並列化できる?** Cargo は自動的に並列化する。"Updating git repository" steps は git cache に書き込むので順次実行だが、"Compiling" steps はコアにまたがって並列化される。遅いと感じたら `cargo build -j $(nproc)` を確認する。
+**Q: 依存の fetch を並列化できる?** Cargo は自動的に並列化する。"Updating git repository" のステップは git cache に書き込むので順次実行だが、"Compiling" のステップはコアをまたいで並列化される。遅いと感じたら `cargo build -j $(nproc)` を確認する。
 
 ## 次のレッスン (L2)
 
-Workspace がコンパイルされる状態になった。アプリケーションロジックはまだない。L2 では最初のアプリケーションコードを書く — `openhl-types` の `BlockHash`、`PayloadId`、`PayloadAttrs`、`ExecutedBlock`、`PayloadStatus`。これらは consensus↔EVM contract の **共通語彙** だ。L2 を終えると、contract type がコンパイルされ、基本的なテストが pass する状態になる。続く L3 でその type を使う trait を書く。
+Workspace がコンパイルされる状態になった。アプリケーションロジックはまだない。L2 では最初のアプリケーションコードを書く — `openhl-types` の `BlockHash`、`PayloadId`、`PayloadAttrs`、`ExecutedBlock`、`PayloadStatus`。これらは consensus↔EVM contract の **共通語彙** だ。L2 を終えると contract type がコンパイルされ、基本的なテストが pass する状態になる。続く L3 では、その type を使う trait を書く。
 ````
 
 ---

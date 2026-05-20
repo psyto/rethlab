@@ -20,45 +20,45 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンを終えると：
 
 ```bash
 cargo test -p openhl-funding
 ```
 
-…が 4 unit test を通る。`openhl-funding` crate が「全型定義」から「型定義 + 最初の数学のピース」に：
+上記の実行結果が unit test 4 つを通る。`openhl-funding` crate は「型定義だけ」の状態から「型定義 + 最初の数学のピース」へと進む：
 
-- **`crates/funding/src/compute.rs`** — 新ファイル、module doc + 2 関数：
-  - `compute_premium(mark, index) -> Premium` — `(mark - index) / index` を導出、`RATE_SCALE` スケール。
-  - `saturate_i128_to_i64(v) -> i64` — clamp helper（private）。3 行。
-- **`compute.rs` の `#[cfg(test)] mod tests` ブロックに 4 つの手書きトレース unit test**：
+- **`crates/funding/src/compute.rs`** — 新規ファイル。module doc と関数 2 つを置く：
+  - `compute_premium(mark, index) -> Premium` — `(mark - index) / index` を導出し、`RATE_SCALE` スケールで返す。
+  - `saturate_i128_to_i64(v) -> i64` — clamp helper（private）、3 行。
+- **`compute.rs` の `#[cfg(test)] mod tests` ブロックに、手書きトレース unit test を 4 つ追加**する：
   - `premium_zero_when_mark_equals_index`
   - `premium_positive_when_mark_above_index`
   - `premium_negative_when_mark_below_index`
   - `premium_saturates_to_zero_when_index_is_zero`
-- **`crates/funding/src/lib.rs`** — `pub mod compute;` 追加 + `compute_premium` を re-export。
+- **`crates/funding/src/lib.rs`** — `pub mod compute;` の追加と、`compute_premium` の re-export を行う。
 
-これが**実際の数学**を持つ最初のレッスン。今後、すべてのコード変更がアカウント間で静かに wealth を shift させる可能性がある。手書きトレーステストが期待出力を、紙の数学で検証できる特定の入力値に pin する。
+これが**実際の数学**を持つ最初のレッスンだ。これ以降、コード変更のたびにアカウント間で wealth が静かに移ってしまう可能性が出てくる。手書きトレースのテストは、期待出力を「紙の上の数学で検証できる特定の入力値」に pin する役割を果たす。
 
 ## おさらい
 
-L3 後：
-- 9 型 + `RATE_SCALE` が `types.rs` に — Stage 8b の完全な型 roster。
-- まだ挙動ゼロ。Crate はコンパイルするが何もしない。
+L3 後の状態：
+- 9 型と `RATE_SCALE` が `types.rs` に揃っている — Stage 8b の完全な型 roster だ。
+- 挙動はまだゼロ。Crate はコンパイルが通るだけで、何もしない。
 
-L4 で最初の関数を導入。関数は短い（body ~10 行）が 3 つの設計決定を encode：`index == 0` の grace ful 扱い、overflow safety のための `i128` 中間値、wrap/panic でなく saturation。
+L4 で最初の関数を導入する。関数は短い（body は ~10 行）が、設計判断を 3 つ encode する：`index == 0` の graceful な扱い、overflow safety のための `i128` 中間値、wrap や panic ではなく saturation を選ぶこと、の 3 点だ。
 
 ## プラン
 
-3 つの編集：
+編集は 3 つ：
 
-1. **`crates/funding/src/compute.rs` を作成** — module doc + imports + `compute_premium` + private `saturate_i128_to_i64` helper。
-2. **`#[cfg(test)] mod tests` を `compute.rs` に追加**、4 つの手書きトレース unit test 付き。
-3. **`crates/funding/src/lib.rs` を更新** — `pub mod compute;` 宣言追加 + クレートルートで `compute_premium` を re-export。
+1. **`crates/funding/src/compute.rs` を作成**する — module doc、imports、`compute_premium`、private な `saturate_i128_to_i64` helper を入れる。
+2. **`compute.rs` に `#[cfg(test)] mod tests` を追加**し、手書きトレース unit test を 4 つ入れる。
+3. **`crates/funding/src/lib.rs` を更新**する — `pub mod compute;` 宣言を追加し、クレートルートで `compute_premium` を re-export する。
 
-> 🛑 **考えてみよう。** スクロール前に — `(mark - index) * RATE_SCALE / index` を計算する。`mark` と `index` は両方 `u64`、最大 ~1.8e19 まで。`RATE_SCALE` は `1e9`。*中間*積 `(mark - index) * RATE_SCALE` の最大サイズは？ どの型に収まる必要がある？
+> 🛑 **考えてみよう。** スクロール前に — `(mark - index) * RATE_SCALE / index` を計算する場合を考える。`mark` と `index` はどちらも `u64` で、最大 ~1.8e19 まで取りうる。`RATE_SCALE` は `1e9` だ。*中間*積 `(mark - index) * RATE_SCALE` の最大サイズはいくらか。どの型に収まる必要があるか。
 
-（答え：**`u64::MAX * 1e9` が `i64` を 10 桁オーバーフロー。** 最悪ケース `mark = u64::MAX`、`index = 0`（これは別に扱う）、もしくは `mark = u64::MAX`、`index = 1` → `(u64::MAX - 1) * 1e9 ≈ 1.8e28`。`i64::MAX` は ~9.2e18、中間値に `i128` が必要。`index` で割った後は i64 範囲に戻る — だが除算は乗算の*後*でなければならないので、中間値は i128 に収まる必要がある。**積には i128 が必須。Saturation は最終結果が i64 を超える稀なケースを扱う。**）
+（答え：**`u64::MAX * 1e9` は `i64` を 10 桁オーバーフローする。** 最悪ケースは `mark = u64::MAX`、`index = 0`（これは別途処理する）か、`mark = u64::MAX`、`index = 1` のとき → `(u64::MAX - 1) * 1e9 ≈ 1.8e28`。`i64::MAX` は ~9.2e18 なので、中間値には `i128` が必要だ。`index` で割った後は i64 範囲に戻る — だが除算は乗算の*後*に行う必要があるので、中間値が i128 に収まることが必須となる。**積には i128 が必須。Saturation は、最終結果が i64 を超える稀なケースを扱う。**）
 
 ## 手順
 
@@ -84,13 +84,13 @@ use crate::types::{
 };
 ```
 
-2 点：
+注目点は 2 つ：
 
-**Module doc が 3 関数をプレビューするが、L4 では 1 つだけ出荷する。** クロス参照 `[compute_rate]` と `[apply_funding]` は L6 と L7 まで壊れている。**Warning を許容** — L1/L2 で `[FundingRate]` クロス参照を増分解決させたのと同じ。
+**Module doc では 3 関数をプレビューしているが、L4 で出荷するのはそのうち 1 つだけだ。** クロス参照 `[compute_rate]` と `[apply_funding]` は L6 / L7 までリンク切れのままだ。**warning は許容する** — L1 / L2 で `[FundingRate]` クロス参照を増分的に解決させていったのと同じ方針だ。
 
-**`use` 文が L4 ではまだ全部使わない型を import する。** `FundingParams`、`FundingRate`、`Notional`、`Position`、`Settlement` は L6/L7 の関数に必要。今 import しておけば L4 後 import block が安定 — L1 の `[dev-dependencies] proptest` と同じロジック。**Boilerplate は早期に安定化、ロジックを iterate する。**
+**`use` 文では、L4 ではまだ使わない型も import する。** `FundingParams`、`FundingRate`、`Notional`、`Position`、`Settlement` は L6 / L7 の関数で必要になる。今 import しておけば、L4 以降は import ブロックが安定する — L1 で `[dev-dependencies]` に proptest を先に入れたのと同じ理屈だ。**Boilerplate は早めに安定化させ、ロジックを iterate する。**
 
-> 🛑 **やりがちな勘違い。** 「L4-L6 の間 unused-import warning を抑えるべき？」 **Unused-import warning は*コンパイラ*が unused と見るアイテムで発火、rustdoc が参照するアイテムではない。** L7 までに `FundingRate`、`Notional` 等を使うので、コンパイラは文句を言わない — 同じモジュール内で後で使われる `use` 宣言を見ている。Warning を出すのは rustdoc クロス参照 `[compute_rate]` と `[apply_funding]` のみで、L6/L7 で解決される。
+> 🛑 **やりがちな勘違い。** 「L4-L6 の間、unused-import の warning を抑えるべきでは？」 **Unused-import warning は*コンパイラ*が unused と判断したアイテムで発火するもので、rustdoc が参照するアイテムでは発火しない。** L7 までに `FundingRate` や `Notional` などはすべて使うので、コンパイラは文句を言わない — 同じモジュール内で後ろの方で使われている `use` 宣言を見ているからだ。warning を出すのは rustdoc のクロス参照 `[compute_rate]` と `[apply_funding]` だけで、これらは L6 / L7 で解決される。
 
 ### Step 2: `compute_premium` を追加
 
@@ -119,19 +119,19 @@ pub fn compute_premium(mark: MarkPrice, index: IndexPrice) -> Premium {
 }
 ```
 
-Body 10 行。4 つの動く部分：
+Body は 10 行、動く部分は 4 つ：
 
-1. **`index == 0` での早期 return。** Zero index は「oracle がまだ price を配信していない」（boot state）または「アセットに spot reference がない」を意味する。**どちらのケースも zero funding を生むべき** — index がないとき計算する意味ある (mark - index) がない。`Premium(0)` を返すのは graceful degradation、error なら bridge を通って transaction レベルの失敗として伝播 — 一時的な oracle 問題への wrong response。
+1. **`index == 0` での早期 return。** Zero index は「oracle がまだ価格を配信していない」（boot state）か、「アセットに spot reference がない」のどちらかを意味する。**どちらのケースでも zero funding を返すべきだ** — index がない以上、意味のある `(mark - index)` を計算する余地がない。`Premium(0)` を返すのは graceful degradation だ。エラーにしてしまうと bridge を経由してトランザクションレベルの失敗として伝播し、無関係な処理までブロックしてしまう — 一時的な oracle 問題への対応としては誤りだ。
 
-2. **`i128::from(mark.0) - i128::from(index.0)`。** 両 operand が引き算の*前*に `i128` に upcast。**`u64` 2 つの引き算は `mark < index` で underflow** — 結果が負数でなく `u64::MAX` 近くにラップする。符号付き i128 への upcast で引き算を代数的に正しくする。
+2. **`i128::from(mark.0) - i128::from(index.0)`。** 両 operand を引き算の*前*に `i128` に upcast する。**`u64` 同士の引き算は `mark < index` で underflow する** — 結果が負数になるのではなく、`u64::MAX` 近くまでラップしてしまう。符号付き i128 に upcast することで、引き算が代数的に正しく振る舞うようになる。
 
-3. **`diff.saturating_mul(i128::from(RATE_SCALE))`。** 乗算は普通の `*` でなく `saturating_mul`。最悪ケース（`mark` が `u64::MAX` 近く、`index` が非常に小さい）、積が `i128::MAX` に近づく — 普通の乗算なら overflow する。`saturating_mul` は panic でなく `i128::MAX` / `i128::MIN` に clamp。
+3. **`diff.saturating_mul(i128::from(RATE_SCALE))`。** 乗算には普通の `*` ではなく `saturating_mul` を使う。最悪ケース（`mark` が `u64::MAX` に近く、`index` が非常に小さい場合）では、積が `i128::MAX` に近づく — 普通の乗算では overflow する。`saturating_mul` なら panic せず `i128::MAX` / `i128::MIN` に clamp する。
 
-4. **`scaled / i128::from(index.0)`。** 除算は乗算の*後*。**先に割ると precision を失う** — `(mark - index) / index` の整数数学は 1.0 未満の premium 全部（使える範囲全部！）に対して 0 を生む。先に `RATE_SCALE` を掛けることで小数桁を整数 magnitude として保持、それから割って scale 済み premium が生まれる。
+4. **`scaled / i128::from(index.0)`。** 除算は乗算の*後*に行う。**先に割ると精度を失う** — `(mark - index) / index` を整数演算で素直に計算すると、1.0 未満の premium はすべて（つまり実用範囲のすべてが！）0 になってしまう。先に `RATE_SCALE` を掛けることで、小数桁を整数の magnitude として保持できる。その上で割ることで、スケール済みの premium が得られる。
 
-それから `saturate_i128_to_i64` で `Premium` の i64 範囲に clip して戻す。
+最後に `saturate_i128_to_i64` を使い、`Premium` の i64 範囲に clip して戻す。
 
-> 🛑 **やりがちな勘違い。** 「`(mark - index).saturating_mul(RATE_SCALE) / index` を u64 で計算すればいいのでは？」 **No — 引き算が問題。** `MarkPrice(99) - IndexPrice(100)` を `u64` で計算すると underflow → `u64::MAX - 0` にラップ。それは小さな*負*の数でなく巨大な*正*の数。結果は小さな*負*の premium が真実のときに巨大な*正*の premium になる。**符号が重要、符号付き演算が必須。**
+> 🛑 **やりがちな勘違い。** 「`(mark - index).saturating_mul(RATE_SCALE) / index` を u64 で計算すればいいのでは？」 **だめだ — 引き算が問題になる。** `MarkPrice(99) - IndexPrice(100)` を `u64` で計算すると underflow し、`u64::MAX - 0` 近くにラップしてしまう。それは小さな*負*の数ではなく巨大な*正*の数だ。結果として、本来は小さな*負*の premium であるべきところに巨大な*正*の premium が出る。**符号が肝心であり、符号付き演算が必須だ。**
 
 ### Step 3: `saturate_i128_to_i64` helper を追加
 
@@ -147,15 +147,15 @@ fn saturate_i128_to_i64(v: i128) -> i64 {
 }
 ```
 
-Body 3 行。**`i64::try_from(v)` は `Result` を返す** — `v` が i64 に収まれば `Ok(value)`、そうでなければ `Err`。`unwrap_or(...)` が `Err` ケースの default を提供：overflow が正なら `i64::MAX`、負なら `i64::MIN` に clamp。
+Body は 3 行。**`i64::try_from(v)` は `Result` を返す** — `v` が i64 に収まれば `Ok(value)`、収まらなければ `Err` だ。`unwrap_or(...)` が `Err` ケースの default を提供する：overflow が正方向なら `i64::MAX`、負方向なら `i64::MIN` に clamp する。
 
-この関数は**モジュール private**（`pub fn` でなく `fn`）。呼び出し側は不要 — `MarkPrice` / `IndexPrice` を入れ、`Premium` を受け取り、saturation は裏で起きる。Private にすることで偶発的誤用を防ぎ、public surface をクリーンに保つ。
+この関数は**モジュール private**（`pub fn` ではなく `fn`）にする。呼び出し側からは見せる必要がない — 呼び出し側は `MarkPrice` / `IndexPrice` を渡して `Premium` を受け取るだけで、saturation は裏で勝手に行われる。private にしておけば偶発的な誤用を防ぎつつ、public surface もクリーンに保てる。
 
-L7 の `apply_funding` がこの helper の 2 つ目の caller になる。だから helper であって `compute_premium` 内に inline されない。
+L7 の `apply_funding` がこの helper の 2 番目の caller になる。だからこそ `compute_premium` 内に inline せず、helper として独立させている。
 
-> 🛑 **考えてみよう。** テスト `assert_eq!(saturate_i128_to_i64(i128::MAX), ???)` は何を期待する？
+> 🛑 **考えてみよう。** テスト `assert_eq!(saturate_i128_to_i64(i128::MAX), ???)` は何を期待するか。
 
-（答え：**`i64::MAX`。** `i128::MAX` は ~1.7e38、`i64::MAX`（~9.2e18）を遥かに超える。`i64::try_from(i128::MAX)` は失敗、`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })` が `v > 0` なので closure を評価、`i64::MAX` を返す。負側も対称：`i128::MIN` は `i64::MIN` に clamp。）
+（答え：**`i64::MAX`。** `i128::MAX` は ~1.7e38 で、`i64::MAX`（~9.2e18）を遥かに超える。`i64::try_from(i128::MAX)` は失敗し、`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })` の closure が評価される。`v > 0` なので `i64::MAX` が返る。負側も対称的で、`i128::MIN` は `i64::MIN` に clamp される。）
 
 ### Step 4: テストモジュール + 4 unit test を追加
 
@@ -193,19 +193,19 @@ mod tests {
 }
 ```
 
-4 つの手書きトレーステスト。各々短いが、それぞれ特定の*意味*を pin する：
+手書きトレースのテストが 4 つ。それぞれ短いが、特定の*意味*を pin する：
 
-1. **`premium_zero_when_mark_equals_index`** — symmetry ケース。Mark = index は dislocation なしを意味する。数学は素直：`(100 - 100) * 1e9 / 100 = 0`。これは formula の off-by-one や sign-flip を捕まえる。
+1. **`premium_zero_when_mark_equals_index`** — 対称ケース。Mark = index は dislocation がないことを意味する。数学は素直で `(100 - 100) * 1e9 / 100 = 0`。式の off-by-one や符号反転を捕まえる。
 
-2. **`premium_positive_when_mark_above_index`** — longs-overpaying ケース。Mark 101 > Index 100 → 正の premium。期待値 `10_000_000` は紙の数学：`(101-100) * 1e9 / 100 = 1e9 / 100 = 1e7 = 10_000_000`。**Ppb で：1% premium。** これは反転した符号規約を捕まえる。
+2. **`premium_positive_when_mark_above_index`** — longs が overpay するケース。Mark 101 > Index 100 → 正の premium。期待値 `10_000_000` は紙の上の数学から導ける：`(101-100) * 1e9 / 100 = 1e9 / 100 = 1e7 = 10_000_000`。**ppb で表現すれば 1% premium。** 符号規約が反転していると、ここで引っかかる。
 
-3. **`premium_negative_when_mark_below_index`** — shorts-overpaying ケース。Mark 99 < Index 100 → 負の premium。テスト 2 と同じ規模、反対の符号。**「u64 で引き算 → underflow」バグを特に捕まえる。**
+3. **`premium_negative_when_mark_below_index`** — shorts が overpay するケース。Mark 99 < Index 100 → 負の premium。テスト 2 と同じ規模で符号だけ反対。**「u64 で引き算して underflow する」バグをピンポイントで捕まえる。**
 
-4. **`premium_saturates_to_zero_when_index_is_zero`** — graceful-degradation ケース。期待出力は `Premium(0)`、panic や error ではない。**早期 return guard を「単純化のため」削除した人を捕まえる。**
+4. **`premium_saturates_to_zero_when_index_is_zero`** — graceful-degradation ケース。期待出力は `Premium(0)` — panic でもエラーでもない。**「単純化のため」と称して早期 return の guard を削った人を捕まえる。**
 
-テスト 2 のコメント `// mark 101, index 100 → premium = 1/100 = 0.01 → 10_000_000 ppb` は **紙の数学をテストに書いたもの**。これを将来デバッグする誰でも、アサーションが正しいかを手で検証できる — テスト作者が正しくやったと信じる必要なし。
+テスト 2 のコメント `// mark 101, index 100 → premium = 1/100 = 0.01 → 10_000_000 ppb` は、**紙の上の数学をそのままテストに書き写したもの**だ。将来このテストをデバッグする人は誰でも、テスト作者が正しく書いたと信じる必要なく、アサーションを手で検証できる。
 
-> 🛑 **やりがちな勘違い。** 「`MarkPrice(u64::MAX)` や `IndexPrice(1)` のような edge case をテストすべき？」 **Yes、だが L5 で。** それらは saturation-edge テスト — `saturate_i128_to_i64` helper を境界で exercise する、L5 のメイン pedagogical focus。**L4 のテストは normal-input semantics を pin する、L5 が pathological-input 挙動を pin する。** 両方のテストクラスが重要、レッスンで分離すれば per-lesson scope がタイト。
+> 🛑 **やりがちな勘違い。** 「`MarkPrice(u64::MAX)` や `IndexPrice(1)` のような edge case もテストすべきでは？」 **やるべきだ、ただし L5 で。** これらは saturation の境界テスト — `saturate_i128_to_i64` helper を境界で exercise するもので、L5 のメインの教育的フォーカスだ。**L4 のテストは normal-input の semantics を pin し、L5 は pathological-input の挙動を pin する。** どちらのテストクラスも重要だが、レッスンで分けておけばレッスン単位のスコープを引き締められる。
 
 ### Step 5: `lib.rs` を更新
 
@@ -239,11 +239,11 @@ pub use types::{
 };
 ```
 
-2 つの変更：
-- `pub mod compute;` — 新モジュールを宣言。
-- `pub use compute::compute_premium;` — 関数をクレートルートで re-export。呼び出し側は `use openhl_funding::compute::compute_premium;` でなく `use openhl_funding::compute_premium;` と書ける。
+変更は 2 点：
+- `pub mod compute;` — 新モジュールを宣言する。
+- `pub use compute::compute_premium;` — 関数をクレートルートで re-export する。これで呼び出し側は `use openhl_funding::compute::compute_premium;` ではなく `use openhl_funding::compute_premium;` と書ける。
 
-**モジュール宣言はアルファベット順**（`compute` が `types` の前）。`pub use` も同じ順序。長い re-export ブロックでは consistency が重要。
+**モジュール宣言はアルファベット順**にする（`compute` が `types` の前）。`pub use` も同じ順序だ。長い re-export ブロックでは整合性が効いてくる。
 
 ### Step 6: テストを実行
 
@@ -270,26 +270,26 @@ test compute::tests::premium_zero_when_mark_equals_index ... ok
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-**4 テストが通る。** Crate 初の green run。3 つの rustdoc warning は期待通り（`compute_rate`/`apply_funding`/`FundingClock` — L6/L7/L8 で解決）。
+**4 テストが通る。** Crate 初の green run だ。rustdoc warning が 3 つ出るのは期待通り（`compute_rate` / `apply_funding` / `FundingClock` — それぞれ L6 / L7 / L8 で解決される）。
 
 よくあるエラー：
 
-- **Positive テストでの `assertion failed: left=0 right=10_000_000`** — `compute_premium` の `* RATE_SCALE` ステップが欠けている。Scaling なしの整数除算 `(101 - 100) / 100` は 0 に丸まる。
-- **Negative テストでの `assertion failed: left=18446744073709541616 right=-10_000_000`** — 引き算を `i128` に upcast でなく `u64` でやった。巨大な正数は `u64::MAX + (99 - 100)` の underflow ラップ。**両 operand に `i128::from(...)` upcast を追加。**
-- **テストで panic** — `saturating_mul` でなく普通の `*` を使った。Debug build で普通の乗算は overflow で panic。`saturating_mul` に切り替え。
-- **`error: cannot find function 'saturate_i128_to_i64'`** — helper が `compute_premium` の下に同じファイルで定義されている。Caller の上に動かすか、下のまま残す — Rust はモジュール内の宣言順を気にしない。
+- **positive テストで `assertion failed: left=0 right=10_000_000`** — `compute_premium` の `* RATE_SCALE` ステップが抜けている場合だ。スケーリングなしの整数除算 `(101 - 100) / 100` は 0 に丸まる。
+- **negative テストで `assertion failed: left=18446744073709541616 right=-10_000_000`** — 引き算を `i128` への upcast なしに `u64` で行った場合だ。巨大な正の数は `u64::MAX + (99 - 100)` という underflow ラップの結果だ。**両 operand に `i128::from(...)` の upcast を追加すること。**
+- **テストで panic** — `saturating_mul` ではなく普通の `*` を使った場合だ。Debug build では普通の乗算が overflow で panic する。`saturating_mul` に切り替えること。
+- **`error: cannot find function 'saturate_i128_to_i64'`** — helper が同じファイルの `compute_premium` の下にある場合だ。呼び出し元の上に動かしてもいいし、下のままにしてもいい — Rust はモジュール内の宣言順を気にしない。
 
 ## 設計の振り返り
 
-このレッスンに焼き込まれた決定 4 つ：
+このレッスンに焼き込んだ決定は 4 つ：
 
-1. **`index == 0` は `Premium(0)` を返す、error ではない。** Oracle が利用不可のときの graceful degradation。Error は bridge を通って transaction 失敗として伝播し、無関係の payload 作業をブロックする。Zero が「rate を駆動する情報がない」への正しい答え。
+1. **`index == 0` のときは `Premium(0)` を返す、エラーにはしない。** Oracle が使えないときの graceful degradation だ。エラーにすると bridge を経由してトランザクション失敗として伝播し、無関係な payload の処理までブロックしてしまう。「rate を駆動する情報がない」状態への正しい答えはゼロだ。
 
-2. **`i128` 中間値、`u64` を絶対使わない。** 引き算は負になりうる、乗算は `u64::MAX` を超えうる。両演算とも符号付きでより wide な算術が必要。**Input 範囲でなく*中間値*範囲で整数 width を選ぶ。**
+2. **中間値は `i128` を使い、`u64` は絶対に使わない。** 引き算は負になりうるし、乗算は `u64::MAX` を超えうる。どちらの演算でも符号付き かつ より wide な算術が必要だ。**整数幅は入力の範囲ではなく、*中間値*の範囲を見て選ぶ。**
 
-3. **`saturating_mul`、`*` ではない。** 乗算中の overflow は panic（debug）か wrap（release）。両方とも saturation より悪い：panic = halt 経由のチェーン fork、wrap = wrong value 経由のチェーン fork。**Consensus 中核の数学に対して saturation は唯一の bounded-behavior オプション。**
+3. **乗算は `*` ではなく `saturating_mul` を使う。** 乗算中の overflow は panic（debug）か wrap（release）になる。どちらも saturation より悪い：panic = halt 経由の chain fork、wrap = 誤った値経由の chain fork だ。**Consensus 中核の数学で bounded behavior を得る唯一の選択肢が saturation だ。**
 
-4. **テストコメントが紙の数学。** アサーションの隣の `// (101-100) * 1e9 / 100 = 10_000_000` が、将来のデバッガがアサーションを*formula に対して*検証できるようにする — テスト作者の約束に対してでなく。**テストはドキュメンテーション、そのコメントがドキュメント body。**
+4. **テストコメントは紙の上の数学そのもの。** アサーション横の `// (101-100) * 1e9 / 100 = 10_000_000` のおかげで、将来のデバッガがアサーションを*式に照らして*検証できる — テスト作者の約束を信じる必要はない。**テストはドキュメンテーションでもあり、そのコメントがドキュメンテーションの本文だ。**
 
 ## 答え合わせ
 
@@ -312,21 +312,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: `compute_premium` がなぜ危険なステップだけでなくどこでも `i128` を使う？**
-`i128::from(u64)` 変換は無料（ただの zero-extend）。全計算を `i128` でやることが 1 つのメンタルモデル — 「この関数は i128 算術を使う」 — vs 混合モデル「ここは u64、そこは i128」。**統一 width はゼロコストで可読性の勝利。** 最終の i64 への saturation だけが何らかの semantic 重みを持つ唯一の変換。
+**Q: `compute_premium` で危ないステップだけでなく、なぜどこでも `i128` を使うのか？**
+`i128::from(u64)` 変換はタダだからだ（ただの zero-extend）。全計算を `i128` で行えば「この関数は i128 算術を使う」という統一されたメンタルモデルになる — 「ここは u64、そこは i128」と混在させるよりずっと素直だ。**統一された width はコストゼロで、可読性は得しかない。** semantic な重みを持つ変換は、最終的に i64 へ saturate する箇所だけだ。
 
-**Q: `RATE_SCALE` をなぜ `RATE_SCALE as i128` でなく `i128::from(RATE_SCALE)` で upcast する？**
-`from` は idiomatic で non-truncating な変換。`as i128` でもここは動く（`i64 → i128` は truncate しない）が、`from` が意図を documentation する：「これは widening で reinterpretation ではない」。**Widening には `from` を使う、truncation が起きえないと検証済みなら `as` だけを使う。** `as i128` を読む将来のエンジニアは safety を verify する必要がある、`from` は変換が safe であることを documentation する。
+**Q: `RATE_SCALE` の upcast に `RATE_SCALE as i128` ではなく `i128::from(RATE_SCALE)` を使うのはなぜか？**
+`from` が idiomatic かつ non-truncating な変換だからだ。ここでは `as i128` でも動く（`i64 → i128` で truncate は起きない）が、`from` を使うことで「これは widening であって reinterpretation ではない」と意図を documentation できる。**Widening には `from` を使う。truncation が起きないことを検証済みのときだけ `as` を使う。** `as i128` を読んだ将来のエンジニアは safety を自分で検証する必要があるが、`from` を読めば変換が safe だと一目で分かる。
 
-**Q: Helper はなぜ `clamp_to_i64` でなく `saturate_i128_to_i64` という名前？**
-「Saturate」は「型境界で clamp」の確立用語 — `u64::saturating_mul`、`i128::saturating_sub` と同じ単語。**標準語彙を使うことで関数の挙動がどの Rust 開発者にも明らか。** 「Clamp」はユーザ定義 bound のいずれも意味しうる、「saturate」は型境界 clamping を特に意味する。
+**Q: なぜ helper の名前が `clamp_to_i64` ではなく `saturate_i128_to_i64` なのか？**
+「Saturate」は「型境界で clamp する」を表す確立した用語だからだ — `u64::saturating_mul`、`i128::saturating_sub` と同じ単語だ。**標準語彙を使えば、関数の挙動がどの Rust 開発者にも一目で伝わる。** 「Clamp」だとユーザ定義の境界も含む任意の clamping を意味しうるが、「saturate」は型境界での clamping を特定的に指す。
 
-**Q: `compute_premium` は `pub` でなく `pub(crate)` であるべき？**
-`pub` は外部 caller（course 10 の bridge integration、もしくは funding state を telemetry のためにクエリする外部 observer）が必要。`pub(crate)` はそれを禁じる。**関数は public API の一部。** `saturate_i128_to_i64` が実装詳細、`compute_premium` が契約。
+**Q: `compute_premium` は `pub` ではなく `pub(crate)` にすべきでは？**
+`pub` でないと外部の caller（course 10 の bridge integration や、funding state を telemetry のために問い合わせる外部 observer）が呼べないからだ。`pub(crate)` ではそれが禁じられる。**この関数は public API の一部だ。** `saturate_i128_to_i64` が実装の詳細、`compute_premium` が契約だ。
 
 ## 次のレッスン（L5）
 
-L5 では新関数は追加しない。代わりに overflow 哲学の deep dive：なぜ saturation が consensus 中核数学に唯一受け入れられる挙動か、代替がどう見えるか、なぜそれらがチェーンを fork するか、`saturate_i128_to_i64` の境界が pathological 入力でどう振る舞うか。レッスンは proptest 1 つ（`premium_is_antisymmetric_in_mark_index`） — mark と index を入れ替えると premium の符号が反転する property — も追加。**Crate 初の proptest。**
+L5 では新しい関数は追加しない。代わりに overflow 哲学を深掘りする：consensus 中核の数学に対して saturation だけが唯一許容される挙動である理由、代替案がどう見えるか、それらがなぜチェーンを fork させるか、そして `saturate_i128_to_i64` が pathological 入力で境界においてどう振る舞うか。レッスンには proptest を 1 つ追加する（`premium_is_antisymmetric_in_mark_index`） — mark と index を入れ替えると premium の符号が反転するという property だ。**Crate 初の proptest だ。**
 ````
 
 ---

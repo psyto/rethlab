@@ -35,12 +35,12 @@ test live_node::tests::live_bridge_builds_on_real_genesis ... ok
 ```
 
 中身の変化:
-- 今 build した block に対する `bridge.validate_payload(block)` は `PayloadStatus::Valid` を返す — Reth の **real** validator (`EthBeaconConsensus::validate_header_against_parent`) が承認したから。
-- `bridge.validate_payload(block_with_unknown_hash)` は `PayloadStatus::Invalid` を返す — validate する header がないから。
+- 今 build したばかりの block に対する `bridge.validate_payload(block)` は `PayloadStatus::Valid` を返す — Reth の **real** validator (`EthBeaconConsensus::validate_header_against_parent`) が承認したからだ。
+- `bridge.validate_payload(block_with_unknown_hash)` は `PayloadStatus::Invalid` を返す — validate する header が無いからだ。
 
-これを動かすために、**`build_payload` は production-shape header を produce し始めなければならなかった** — gas_limit を parent からコピー (1/1024 drift bound)、next_block_base_fee を chain spec 経由で計算 (validator が使うのと同じヘルパー)、difficulty をゼロに (post-merge invariant)、attrs が古かった場合 timestamp を `parent.timestamp + 1` に snap。**Validator が builder に誠実であることを強制する。**
+これを動かすために **`build_payload` は production-shape の header を produce するように変えなければならなかった** — gas_limit を parent からコピーし (1/1024 drift bound)、next_block_base_fee を chain spec 経由で計算し (validator が使うのと同じヘルパー)、difficulty をゼロにし (post-merge invariant)、attrs が古いときは timestamp を `parent.timestamp + 1` に snap する。**Validator が builder に誠実さを強制する形だ。**
 
-3 個の新規 workspace dep + 4 個の新規 evm production dep + `live_node.rs` の rewrite で約 141 行の変更。**ファイルの shape は変わらない** — 同じ struct、同じ `ConsensusBridge` impl。変わるのは `validate_payload` が **何をするか**。
+新規 workspace dep が 3 個 + 新規 evm production dep が 4 個 + `live_node.rs` の rewrite で約 141 行の変更になる。**ファイルの shape は変わらない** — 同じ struct、同じ `ConsensusBridge` impl だ。変わるのは `validate_payload` が **何をするか** だ。
 
 ## おさらい
 
@@ -53,25 +53,25 @@ pub struct LiveRethEvmBridge<P> {
 }
 ```
 
-`build_payload` は parent number を live provider から読むが、ほとんどデフォルトフィールドの header を合成する。`validate_payload` は stub: `Ok(PayloadStatus::Valid)`。Integration test は build/fetch を happy/negative path で exercise するのみ — validation は決して走らない。
+`build_payload` は parent number を live provider から読むものの、ほとんどデフォルトフィールドの header を合成している。`validate_payload` は stub で `Ok(PayloadStatus::Valid)` を返す。Integration test は build/fetch を happy/negative path で exercise するだけで、validation は一度も走らない。
 
-`cargo test` で workspace 全体 37 個合格。**Bridge は自分自身と合意しているが、まだ Reth の valid block の概念と合意することを強制されていない。**
+`cargo test` で workspace 全体 37 個が合格する。**Bridge は自分自身と合意しているが、Reth の「valid block」の概念とまだ合意することを強制されていない。**
 
 ## 計画
 
 7 つやる:
 
-1. **3 個の workspace dep を追加**: `reth-consensus` (`HeaderValidator` trait)、`reth-ethereum-consensus` (具象 `EthBeaconConsensus`)、`reth-primitives-traits` (`SealedHeader`)。
-2. **`crates/evm/Cargo.toml` を更新** — `reth-chainspec` を dev-dep から production dep へ昇格、3 個の新規 production dep を追加。
-3. **`LiveRethEvmBridge` に 2 個の新規フィールド** を追加: `chain_spec: Arc<ChainSpec>` と `validator: EthBeaconConsensus<ChainSpec>`。`new()` を chain spec を受け取るように更新。
-4. **`P` の trait bound を拡張** — 今は `HeaderProvider<Header = Header>` も (parent の full sealed header を fetch するため)。
-5. **`build_payload` をアップグレード** — parent の full `SealedHeader` を pull、next_block_base_fee を計算、gas_limit をコピー、difficulty をゼロに、timestamp monotonicity を強制。
-6. **`validate_payload` を rewrite** — pending/chain から自分の header を見つけ、provider から parent sealed を fetch、`validator.validate_header_against_parent` を走らせる。
-7. **テストに 2 個の新規 assertion を追加** — 今 build した block で `Valid`、unknown hash で `Invalid`。
+1. **3 個の workspace dep を追加する**: `reth-consensus` (`HeaderValidator` trait)、`reth-ethereum-consensus` (具象 `EthBeaconConsensus`)、`reth-primitives-traits` (`SealedHeader`)。
+2. **`crates/evm/Cargo.toml` を更新する** — `reth-chainspec` を dev-dep から production dep へ昇格させ、3 個の新規 production dep を追加する。
+3. **`LiveRethEvmBridge` に新規フィールドを 2 個** 追加する: `chain_spec: Arc<ChainSpec>` と `validator: EthBeaconConsensus<ChainSpec>`。`new()` を chain spec を受け取る形に更新する。
+4. **`P` の trait bound を拡張する** — 今は `HeaderProvider<Header = Header>` も要求する (parent の full な sealed header を fetch するため)。
+5. **`build_payload` をアップグレードする** — parent の full な `SealedHeader` を pull し、next_block_base_fee を計算し、gas_limit をコピーし、difficulty をゼロにし、timestamp monotonicity を強制する。
+6. **`validate_payload` を rewrite する** — pending/chain から自分の header を見つけ、provider から parent sealed を fetch し、`validator.validate_header_against_parent` を走らせる。
+7. **テストに新規 assertion を 2 個追加する** — 今 build した block で `Valid`、unknown hash で `Invalid`。
 
-このレッスンが教えるのは **producer-consumer の自己整合性パターン**。同じ artifact の builder と validator がある場合、**両者は同じルールを使わなければならない**。`build_payload` が 1 つの base-fee 公式を使い `validate_payload` が別のを使うなら、すべての block が validation に失敗する。これを確保する方法は **両方を同じソースから導出すること** — ここでは `ChainSpec`。`ChainSpec::next_block_base_fee()` が build に使われ、`EthBeaconConsensus::validate_against_parent_eip1559_base_fee` の中で同じヘルパーが check に使われる。**Source-of-truth の共有がシステムを自己整合にする。**
+このレッスンが教えるのは **producer-consumer の自己整合性パターン** だ。同じ artifact の builder と validator がいる場合、**両者は同じルールを使わなければならない**。`build_payload` が 1 つの base-fee 公式を使い、`validate_payload` が別の公式を使うと、すべての block が validation に失敗する。これを保証する方法は、**両方を同じソースから導出すること** — ここでは `ChainSpec` だ。`ChainSpec::next_block_base_fee()` が build に使われ、`EthBeaconConsensus::validate_against_parent_eip1559_base_fee` の中で同じヘルパーが check に使われる。**Source-of-truth の共有が、システムを自己整合にする。**
 
-> 🛑 **考えてみよう。** スクロールする前に: なぜ `EthBeaconConsensus::validate_header_against_parent` は parent の **full** sealed header (gas_limit、timestamp、base_fee_per_gas、すべて) を必要とするが、`BlockNumReader::block_number` は `u64` しか返さない? ヒント: Reth の validator が走らせる 4 つの sub-check を考える。Number monotonicity は parent.number だけでいい。Timestamp monotonicity は parent.timestamp が必要。Gas-limit drift は parent.gas_limit が必要。EIP-1559 base fee は parent.base_fee_per_gas + parent.gas_used + parent.gas_limit が必要。**Validate する瞬間に、header 全体が必要 — number だけではない。** だから L13 で trait bound を `BlockNumReader` から **加えて** `HeaderProvider<Header = Header>` に拡張する。
+> 🛑 **考えてみよう。** スクロールする前に: なぜ `EthBeaconConsensus::validate_header_against_parent` は parent の **full** な sealed header (gas_limit、timestamp、base_fee_per_gas、すべて) を必要とするのに、`BlockNumReader::block_number` は `u64` しか返さないのか? ヒント: Reth の validator が走らせる 4 つの sub-check を考える。Number monotonicity は parent.number だけで足りる。Timestamp monotonicity には parent.timestamp が必要だ。Gas-limit drift には parent.gas_limit が必要。EIP-1559 base fee には parent.base_fee_per_gas + parent.gas_used + parent.gas_limit が必要だ。**Validate する瞬間には header 全体が必要で、number だけでは足りない。** だからこそ L13 で trait bound を `BlockNumReader` から **加えて** `HeaderProvider<Header = Header>` まで拡張する。
 
 ## 手順
 
@@ -95,11 +95,11 @@ reth-primitives-traits    = "0.3"
 
 3 個の dep、3 つの役割:
 
-- **`reth-consensus`** — `HeaderValidator` trait を定義。`EthBeaconConsensus` がこれを impl。この trait 経由で `.validate_header_against_parent(...)` を呼ぶ。
-- **`reth-ethereum-consensus`** — `EthBeaconConsensus<ChainSpec>` を提供 — Reth の post-merge Ethereum 用 production header validator。
-- **`reth-primitives-traits` (crates.io `0.3` から)** — `SealedHeader` を提供、`Header` とその hash をペアにするラッパー。**これは crates.io から、git ではない** — stable foundation crate として spin out された。
+- **`reth-consensus`** — `HeaderValidator` trait を定義する。`EthBeaconConsensus` がこれを impl する。この trait 経由で `.validate_header_against_parent(...)` を呼ぶ。
+- **`reth-ethereum-consensus`** — `EthBeaconConsensus<ChainSpec>` を提供する — Reth の post-merge Ethereum 用 production header validator だ。
+- **`reth-primitives-traits` (crates.io `0.3` から)** — `SealedHeader` を提供する。`Header` とその hash をペアにするラッパーだ。**これは crates.io 由来であって、git ではない** — stable foundation crate として spin out された。
 
-> 🛑 **やりがちな勘違い。** 「なぜ `reth-primitives-traits` だけ crates.io、他は git-pin?」 **`reth-primitives-traits` は Reth の中で public Rust エコシステム crate として **stabilize** された部分だから。** 他の crate (alloy、foundry、custom L2) も全部これに依存している。Git SHA で pin すると、crates.io から import している人すべてとバージョン衝突する — そして皆 crates.io から import している。**Git-pin reth-* dep は主に Reth の「内部」表面; `reth-primitives-traits` は **外部** 表面。**
+> 🛑 **やりがちな勘違い。** 「なぜ `reth-primitives-traits` だけ crates.io で、他は git-pin なのか?」 **`reth-primitives-traits` が、Reth の中で public Rust エコシステム crate として **stabilize** された部分だからだ。** 他の crate (alloy、foundry、custom L2) もすべてこれに依存している。Git SHA で pin すると、crates.io から import している全員とバージョン衝突する — そして皆 crates.io から import している。**Git-pin reth-* dep は主に Reth の「内部」表面で、`reth-primitives-traits` は **外部** 表面だ。**
 
 ### Step 2: `crates/evm/Cargo.toml` を更新
 
@@ -137,7 +137,7 @@ serde_json           = { workspace = true }
 tempfile             = "3"
 ```
 
-**なぜ `reth-chainspec` が今 production**: bridge が struct 内に `Arc<ChainSpec>` を保持する。それは production-visible なフィールドなので、型も production-visible dep でなければならない。
+**`reth-chainspec` が今 production な理由**: bridge が struct 内に `Arc<ChainSpec>` を保持するからだ。production-visible なフィールドなので、その型も production-visible な dep でなければならない。
 
 ### Step 3: `live_node.rs` の import + struct を更新
 
@@ -158,14 +158,14 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};                                        // CHANGED: + Arc
 ```
 
-5 個の新規型:
-- `ChainSpec` — Reth の chain configuration、構築時に渡す。
+新規の型 5 個:
+- `ChainSpec` — Reth の chain configuration。構築時に渡す。
 - `EthChainSpec` — `ChainSpec` に `next_block_base_fee` メソッドを与える trait。
-- `HeaderValidator` — `validate_header_against_parent` を持つ trait。`EthBeaconConsensus` がこれを impl。
-- `EthBeaconConsensus` — Reth の production post-merge header validator。
-- `SealedHeader` — `(Header, hash)` ペア。
+- `HeaderValidator` — `validate_header_against_parent` を持つ trait。`EthBeaconConsensus` がこれを impl する。
+- `EthBeaconConsensus` — Reth の production な post-merge header validator。
+- `SealedHeader` — `(Header, hash)` のペア。
 
-変更された import 2 つ: `HeaderProvider` (`sealed_header_by_hash` 用)、`Arc` (chain spec を共有するため)。
+変更された import が 2 つ: `HeaderProvider` (`sealed_header_by_hash` 用) と `Arc` (chain spec を共有するため)。
 
 次に struct が 2 つフィールドを増やす:
 
@@ -201,9 +201,9 @@ impl<P> LiveRethEvmBridge<P> {
 }
 ```
 
-`State` は変わらず — 同じ `next_payload_id`、`pending`、`chain`、`head`。
+`State` は変わらない — 同じ `next_payload_id`、`pending`、`chain`、`head` だ。
 
-`chain_spec()` accessor を追加するのは、テストと将来の production caller が欲しがるから (例: ある高さで active な hardfork を chain spec に尋ねる)。`&Arc<ChainSpec>` 経由で expose し、caller が自分の参照を持ちたければ clone できる。
+`chain_spec()` accessor を追加するのは、テストや将来の production caller が欲しがるからだ (例: ある高さで active な hardfork を chain spec に尋ねたい場合)。`&Arc<ChainSpec>` 経由で expose しておけば、caller は自分の参照が欲しいときに clone できる。
 
 ### Step 4: `P` の trait bound を拡張
 
@@ -217,15 +217,15 @@ where
 {
 ```
 
-`HeaderProvider<Header = Header>` — provider は number だけでなく、full `Header` オブジェクトを serve しなければならない。Associated-type binding `Header = Header` は「provider の Header 型は **我々の** alloy Header 型」と言う。別の Reth バージョンは `HeaderProvider` を別の header 型でパラメータ化する可能性がある (例: Optimism); 我々のは mainnet Ethereum のに制約する。
+`HeaderProvider<Header = Header>` — provider は number だけでなく full な `Header` オブジェクトを serve しなければならない。Associated-type binding `Header = Header` は「provider の Header 型は **こちらの** alloy Header 型だ」と宣言する。別の Reth バージョンは `HeaderProvider` を別の header 型でパラメータ化することがある (例: Optimism)。こちらは mainnet Ethereum のものに制約する。
 
-**`BlockNumReader` は今ある意味冗長** (full header をくれる物は number もくれる)、が明示的に残す理由:
-- L12 はちょうど `BlockNumReader` 用に書いた — 残すことが L12→L13 の進行を文書化する
-- 将来の caller は number だけ必要なコードパスにより狭い bound を望むかも
+**`BlockNumReader` は今や冗長** だが (full header をくれる物は number もくれる)、明示的に残す理由は:
+- L12 でちょうど `BlockNumReader` 用に書いた — 残しておくことで L12→L13 の進行を文書化できる
+- 将来の caller は、number だけ必要なコードパスにより狭い bound を望むかもしれない
 
 ### Step 5: `build_payload` をアップグレード — production-shape header
 
-これが load-bearing な変更。新しい `build_payload`:
+これが load-bearing な変更だ。新しい `build_payload`:
 
 ```rust
     async fn build_payload(
@@ -286,21 +286,21 @@ where
 
 L12 からの 3 つの変更:
 
-1. **`block_number` ではなく `sealed_header_by_hash`。** 今 full parent header が必要、number だけではない。Error マッピングは同じ: `Err(provider_err)` → `Internal`、`Ok(None)` → `Rejected`。
+1. **`block_number` ではなく `sealed_header_by_hash` を使う。** 今は full parent header が必要で、number だけでは足りない。Error マッピングは同じだ: `Err(provider_err)` → `Internal`、`Ok(None)` → `Rejected`。
 
-2. **`our_timestamp = attrs.timestamp.max(parent_header.timestamp + 1)`。** Timestamp は厳密に monotonic でなければならない。Engine が `attrs.timestamp = 5` と `parent.timestamp = 100` を渡したら、`101` (parent + 1) を使う。これが古い clock データが `validate_payload` を即座に fail させるのを防ぐ。
+2. **`our_timestamp = attrs.timestamp.max(parent_header.timestamp + 1)`。** Timestamp は厳密に monotonic でなければならない。Engine が `attrs.timestamp = 5` と `parent.timestamp = 100` を渡してきたら、`101` (parent + 1) を使う。これで古い clock データが `validate_payload` を即座に fail させるのを防げる。
 
-3. **Header 構築に 4 つの慎重に選ばれたフィールド** が増えた (L12 から):
+3. **Header 構築に慎重に選んだフィールドが 4 つ** 増えた (L12 から):
    - `gas_limit = parent_header.gas_limit` — コピーすることで 1/1024 drift check が自明に満たされる。
    - `difficulty = U256::ZERO` — post-merge invariant。非ゼロ値はすべて validator を fail させる。
-   - `base_fee_per_gas = next_base_fee` — `chain_spec.next_block_base_fee(...)` で計算、validator が使うのと **同じヘルパー**。
-   - `..Default::default()` — 他すべて (gas_used、transactions_root など) はゼロのまま。将来 stage のフル実行検証では意味があるが、header-against-parent ではない。
+   - `base_fee_per_gas = next_base_fee` — `chain_spec.next_block_base_fee(...)` で計算する。validator が使うのと **同じヘルパー** だ。
+   - `..Default::default()` — 他すべて (gas_used、transactions_root など) はゼロのまま。将来の stage でフル実行検証をするときには意味があるが、header-against-parent では意味を持たない。
 
-> 🛑 **やりがちな勘違い。** 「なぜ build は EIP-1559 数式を inline でやらず `chain_spec.next_block_base_fee(parent, timestamp)` を呼ぶ?」 **Validator が **同じ** call をするから。** 数式を手書きしたら、公式が変わるたびに自分の impl を Reth のと sync しなければならない (変わる — Cancun は `BASE_FEE_MAX_CHANGE_DENOMINATOR` を変えた、将来の fork も微調整する)。**Chain spec のヘルパーを呼ぶことで、自分の builder は永遠に validator と合意することが保証される — chain spec が知っていて自分の builder が知らない hardfork も含めて。**
+> 🛑 **やりがちな勘違い。** 「なぜ build 側で EIP-1559 数式を inline でやらず、`chain_spec.next_block_base_fee(parent, timestamp)` を呼ぶのか?」 **Validator が **同じ** call をするからだ。** 数式を手書きすると、公式が変わるたびに自前 impl を Reth のものと sync しなければならない (実際に変わる — Cancun は `BASE_FEE_MAX_CHANGE_DENOMINATOR` を変えた。将来の fork も微調整するだろう)。**Chain spec のヘルパーを呼べば、自分の builder が永遠に validator と合意することが保証される — chain spec が知っていて自分の builder が知らない hardfork も含めて。**
 
 ### Step 6: `validate_payload` を rewrite
 
-もう一つの load-bearing な変更。Stub を次で置き換える:
+もう一つの load-bearing な変更だ。Stub を次で置き換える:
 
 ```rust
     async fn validate_payload(
@@ -348,24 +348,24 @@ L12 からの 3 つの変更:
 
 4 フェーズ:
 
-1. **Header lookup** — `block.hash` 用の自分の header を `pending` (just-built) または `chain` (already-committed) で見つける。見つからなければ → `Invalid`。Single-validator モードでは、validate するすべての block は **我々が** build したものなので、それら 2 つの map のどちらかにある。
+1. **Header lookup** — `block.hash` 用の自分の header を `pending` (just-built) または `chain` (already-committed) から見つける。見つからなければ → `Invalid`。Single-validator モードでは、validate するすべての block は **こちらが** build したものなので、その 2 つの map のどちらかにあるはずだ。
 2. **Parent lookup via live provider** — `sealed_header_by_hash(parent_hash)`。見つからなければ → `Invalid`。Provider が error なら → `BridgeError::Internal`。
-3. **`SealedHeader` で wrap** — `SealedHeader::new(header, block_hash)` が header と hash を再計算なしでペアにする。
-4. **Validator を走らせる** — `validator.validate_header_against_parent(&our_sealed, &parent_sealed)` は `Result<(), ConsensusError>` を返す。`Ok(())` → `PayloadStatus::Valid`、任意の `Err(_)` → `PayloadStatus::Invalid` にマップ。
+3. **`SealedHeader` で wrap する** — `SealedHeader::new(header, block_hash)` が header と hash を再計算なしでペアにする。
+4. **Validator を走らせる** — `validator.validate_header_against_parent(&our_sealed, &parent_sealed)` は `Result<(), ConsensusError>` を返す。`Ok(())` を `PayloadStatus::Valid` に、任意の `Err(_)` を `PayloadStatus::Invalid` にマップする。
 
-**Reth が内部で走らせる 4 つの sub-check** (自分で書く必要はないが、知っておく価値あり):
+**Reth が内部で走らせる 4 つの sub-check** (自分で書く必要はないが、知っておく価値はある):
 - `validate_against_parent_hash_number` — block.number == parent.number + 1
 - `validate_against_parent_timestamp` — header.timestamp > parent.timestamp
 - `validate_against_parent_gas_limit` — gas_limit が parent から 1/1024 以内
 - `validate_against_parent_eip1559_base_fee` — base_fee_per_gas が EIP-1559 公式に一致
 
-どれかが fail すると、validator は `Err(...)` を返す。特定の error は伝播しない — この層では engine は「valid か否か」を知るだけでよい。将来のデバッグでは error 型をログできる。
+どれかが fail すると validator は `Err(...)` を返す。具体的な error は伝播しない — この層では engine は「valid か否か」だけ分かればよい。将来のデバッグでは error 型をログできる。
 
-> 🛑 **やりがちな勘違い。** 「なぜ `Err(_)` を `PayloadStatus::Invalid` にマップして `BridgeError::Internal` ではない?」 **Validation 失敗は protocol レベルのシグナルで、運用失敗ではないから。** 「この block はルールを満たさない」は validator が **そのために存在する** こと — 答えであって crash ではない。`BridgeError::Internal` は上に伝播して engine app loop を kill する。`PayloadStatus::Invalid` は engine を継続させ、block を拒否された proposal として扱う。**Error の型を会話レベルに合わせる。**
+> 🛑 **やりがちな勘違い。** 「なぜ `Err(_)` を `BridgeError::Internal` ではなく `PayloadStatus::Invalid` にマップするのか?」 **Validation 失敗は protocol レベルのシグナルで、運用失敗ではないからだ。** 「この block はルールを満たさない」は、validator が **そのために存在する** こと — 答えであって、crash ではない。`BridgeError::Internal` は上に伝播して engine app loop を kill する。`PayloadStatus::Invalid` は engine を継続させ、block を拒否された proposal として扱わせる。**Error の型を会話レベルに合わせる。**
 
 ### Step 7: テスト更新 — 2 個の新規 assertion
 
-テストは新しい bridge constructor 呼び出し (今は chain_spec を取る) と 2 個の `validate_payload` assertion を得る:
+テストには、新しい bridge constructor の呼び出し (今は chain_spec を取る) と、`validate_payload` の assertion が 2 つ追加される:
 
 ```rust
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -436,8 +436,8 @@ L12 からの 3 つの変更:
 
 2 個の新規ブロック:
 
-- **`build_payload` 後の `validate_payload(&block)`** — 今 build した block は validate されなければならない。**これが load-bearing な assertion** — build と validate がルールに合意していることを証明する。EIP-1559 公式を間違えたら、difficulty が非ゼロだったら、gas_limit が drift したら、これは fail する。
-- **`validate_payload(&unknown_block)`** — hash が pending/chain にない block は `Invalid` を返す。Lookup fallthrough をテスト。
+- **`build_payload` 後の `validate_payload(&block)`** — 今 build した block は validate されなければならない。**これが load-bearing な assertion** で、build と validate がルールに合意していることを証明する。EIP-1559 公式を間違えたら、difficulty が非ゼロだったら、gas_limit が drift したら、これは fail する。
+- **`validate_payload(&unknown_block)`** — hash が pending/chain に無い block は `Invalid` を返す。Lookup の fallthrough をテストする。
 
 ## テスト
 
@@ -454,7 +454,7 @@ test live_node::tests::live_bridge_builds_on_real_genesis ... ok
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-Test runtime: 依然 ~2.4 秒 — Reth bootstrap が支配的、`validate_payload` は < 1ms を追加。
+Test runtime: 依然 ~2.4 秒 — Reth bootstrap が支配的で、`validate_payload` は 1ms 未満しか追加されない。
 
 Full suite:
 
@@ -462,28 +462,28 @@ Full suite:
 cargo test
 ```
 
-…workspace 全体 37 個合格するはず (テスト数は変わらず — 既存テストが assertion を増やしただけ)。
+…workspace 全体 37 個が合格するはず (テスト数は変わらず — 既存テストに assertion を増やしただけだ)。
 
 よくあるエラーと対処:
 
-- **`assert_eq!(status, PayloadStatus::Valid)` が fail** — 最も多い問題。`build_payload` が `EthBeaconConsensus` が拒否する header を produce している。可能性のある原因:
-  - `difficulty: U256::ZERO` を忘れた — デフォルトは非ゼロ、post-merge check が fail。
-  - `gas_limit: parent_header.gas_limit` を忘れた — デフォルトはゼロ、parent から 1/1024 以上 drift。
-  - base_fee 計算間違い — `chain_spec.next_block_base_fee(parent, timestamp)` を使うべき。
-  - Timestamp が parent より厳密に大きくない — `our_timestamp = attrs.timestamp.max(parent_header.timestamp + 1)` を強制すべき。
-- **`error[E0277]: HeaderProvider not satisfied`** — workspace の `reth-storage-api` SHA が `reth-provider` と一致しない。すべての reth-* git-pin dep は同じ SHA を共有しなければならない。
-- **`error[E0277]: HeaderValidator is not in scope`** — `use reth_consensus::HeaderValidator` を忘れた。Trait はメソッドを呼ぶために scope に入っている必要がある。
-- **`error: 'next_block_base_fee' not found on ChainSpec`** — `use reth_chainspec::EthChainSpec` を忘れた。`next_block_base_fee` は `ChainSpec` 自体ではなく `EthChainSpec` 拡張 trait 上にある。
+- **`assert_eq!(status, PayloadStatus::Valid)` が fail する** — 最も多い問題だ。`build_payload` が `EthBeaconConsensus` の拒否する header を produce している。可能性のある原因:
+  - `difficulty: U256::ZERO` を忘れている — デフォルトは非ゼロで、post-merge check が fail する。
+  - `gas_limit: parent_header.gas_limit` を忘れている — デフォルトはゼロで、parent から 1/1024 以上 drift する。
+  - base_fee の計算間違い — `chain_spec.next_block_base_fee(parent, timestamp)` を使うべきだ。
+  - Timestamp が parent より厳密に大きくない — `our_timestamp = attrs.timestamp.max(parent_header.timestamp + 1)` を強制する必要がある。
+- **`error[E0277]: HeaderProvider not satisfied`** — workspace の `reth-storage-api` SHA が `reth-provider` と一致していない。すべての reth-* git-pin dep が同じ SHA を共有しなければならない。
+- **`error[E0277]: HeaderValidator is not in scope`** — `use reth_consensus::HeaderValidator` を忘れている。Trait はメソッドを呼ぶために scope に入っている必要がある。
+- **`error: 'next_block_base_fee' not found on ChainSpec`** — `use reth_chainspec::EthChainSpec` を忘れている。`next_block_base_fee` は `ChainSpec` 自体ではなく `EthChainSpec` 拡張 trait の上にある。
 
 ## 設計の振り返り
 
 3 つの load-bearing な決定:
 
-1. **builder と validator が source of truth を共有する。** `ChainSpec::next_block_base_fee` が次 block の base fee を build するもの; `EthBeaconConsensus::validate_against_parent_eip1559_base_fee` が同じヘルパーを呼んで check する。**重複した数式なし、hardfork 間の drift リスクなし。** これは build/validate ペアがあるたびにコピーするパターン。
+1. **builder と validator が source of truth を共有する。** `ChainSpec::next_block_base_fee` が次 block の base fee を build する側、`EthBeaconConsensus::validate_against_parent_eip1559_base_fee` が同じヘルパーを呼んで check する側だ。**重複した数式が無く、hardfork 間の drift リスクも無い。** これは build/validate ペアがあるたびに使うべきパターンだ。
 
-2. **validator の error は `Invalid` になり、伝播しない。** Validator が「いいえ、これは malformed」と答えるのは crash ではなく **通常** パス。その `Err(_)` を `PayloadStatus::Invalid` にマップすると engine は走り続け、次の proposal を選べる。運用失敗 (DB error) は依然 `BridgeError::Internal` 経由でエスカレート。
+2. **validator の error は `Invalid` になり、伝播しない。** Validator が「いいえ、これは malformed だ」と答えるのは crash ではなく **通常の** パスだ。その `Err(_)` を `PayloadStatus::Invalid` にマップすれば、engine は走り続け、次の proposal を選べる。運用失敗 (DB error) は依然 `BridgeError::Internal` 経由でエスカレートする。
 
-3. **`P` の trait bound は incrementally 広がる。** L12 は `BlockNumReader` が必要だった; L13 は `BlockNumReader + HeaderProvider` が必要。各レッスンが新しい capability surface を露出する。**Trait bound は spec — 自分の implementation が何を要求するかを consumer に正確に伝える。**
+3. **`P` の trait bound は段階的に広がる。** L12 では `BlockNumReader` が必要で、L13 では `BlockNumReader + HeaderProvider` が必要だ。各レッスンが新しい capability surface を露出していく。**Trait bound は spec だ — 自分の実装が何を要求するかを consumer に正確に伝える。**
 
 ## 答え合わせ
 
@@ -495,7 +495,7 @@ diff -u ~/code/my-openhl/crates/evm/Cargo.toml ./crates/evm/Cargo.toml
 diff -u ~/code/my-openhl/crates/evm/src/live_node.rs ./crates/evm/src/live_node.rs
 ```
 
-`0844d58` の参照には `live_node.rs` に L12 から ~141 行の変更が含まれる。新しい struct フィールド、アップグレードされた `build_payload`、rewrite された `validate_payload`、新しい test assertion は厳密に一致するべき。Doc コメントの言い回しは個人差可。
+`0844d58` の参照には、`live_node.rs` に対する L12 からの ~141 行の変更が含まれる。新しい struct フィールド、アップグレードされた `build_payload`、rewrite された `validate_payload`、新しい test assertion は厳密に一致するはずだ。Doc コメントの言い回しは個人差があってよい。
 
 戻る:
 
@@ -505,21 +505,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ 4 つの sub-check (`validate_against_parent_hash_number` など) を手動で走らせない?**
-できる — すべて `EthBeaconConsensus` 上で `pub`。だが `validate_header_against_parent` は 4 つを順序に走らせ、正しい引数形と適切な short-circuiting を提供する。**Orchestration を再実装することは、trait メソッドが防ぐためにある error-prone な仕事。** ボーナス: 将来の Reth バージョンが 5 つ目の check を追加するかもしれない; orchestrating method を呼ぶことで無料で拾える。
+**Q: なぜ 4 つの sub-check (`validate_against_parent_hash_number` など) を手動で走らせないのか?**
+できる — すべて `EthBeaconConsensus` 上で `pub` だ。だが `validate_header_against_parent` は 4 つを順序通りに走らせ、正しい引数形と適切な short-circuiting を提供してくれる。**Orchestration を再実装することは、trait メソッドが防ぐためにある error-prone な仕事だ。** おまけ: 将来の Reth バージョンが 5 つ目の check を追加するかもしれない。orchestrating method を呼んでおけば、無料で拾える。
 
-**Q: `SealedHeader::new(header, hash)` は tuple として保持するのと何が違う?**
-キャッシュ。`SealedHeader` は hash を保存するので、後続の `.hash()` 呼び出しが再計算しない (Keccak over ~500 bytes — 高 block rate では意味がある)。Tuple は再計算を強制する。**ネットワーク端でしばらく重要になる最適化** — 毎秒数千 block を処理する場所; 我々の test ではマイクロ秒の節約。
+**Q: `SealedHeader::new(header, hash)` は tuple として保持するのと何が違うのか?**
+キャッシュだ。`SealedHeader` は hash を保存するので、後続の `.hash()` 呼び出しで再計算しない (Keccak over ~500 bytes — 高い block rate では意味がある)。Tuple なら再計算を強いられる。**ネットワーク端でしばらく重要になる最適化だ** — 毎秒数千 block を処理する場所では効いてくる。こちらの test ではマイクロ秒の節約程度。
 
-**Q: なぜテストは `dev_chain_spec()` が `Arc<ChainSpec>` を返すのに `chain_spec.clone()` を使う?**
-`Arc<T>` を clone すると refcount を increment する; 下位の `ChainSpec` データはコピーしない。3 つの参照が必要: 1 つは `NodeConfig` 内、1 つは `LiveRethEvmBridge::new` に渡す、1 つは将来の用途用。各 `.clone()` は atomic increment だけ — ナノ秒単位。
+**Q: なぜテストは `dev_chain_spec()` が `Arc<ChainSpec>` を返しているのに `chain_spec.clone()` を呼ぶのか?**
+`Arc<T>` を clone すると refcount を increment するだけで、下位の `ChainSpec` データはコピーしないからだ。3 つの参照が必要になる: 1 つは `NodeConfig` 内、1 つは `LiveRethEvmBridge::new` に渡す、1 つは将来の用途用。各 `.clone()` は atomic increment だけ — ナノ秒単位だ。
 
-**Q: `dev_chain_spec()` ではなく `chain_spec: Arc::new(ChainSpec::default())` を渡すと何が起きる?**
-Validator と chain がどの hardfork が active か合意しない。`ChainSpec::default()` は最小限の Ethereum mainnet shape; live node は `dev_chain_spec()` (chainId 2600、すべての fork が 0) で構築された。Validator が内部で走らせる `EthChainSpec::is_fork_active_at_timestamp(...)` check で発散する。**同じ chain_spec を node と bridge の両方に渡す** — それが contract。
+**Q: `dev_chain_spec()` ではなく `chain_spec: Arc::new(ChainSpec::default())` を渡すと何が起きるのか?**
+Validator と chain が、どの hardfork が active かについて合意しなくなる。`ChainSpec::default()` は最小限の Ethereum mainnet shape だが、live node は `dev_chain_spec()` (chainId 2600、すべての fork が 0) で構築されている。Validator が内部で走らせる `EthChainSpec::is_fork_active_at_timestamp(...)` check で発散する。**同じ chain_spec を node と bridge の両方に渡す** — それが contract だ。
 
 ## 次のレッスン (L14)
 
-4 つの `ConsensusBridge` メソッドのうち 2 つは live Reth に当たる。**3 つ目 — `commit` — はまだ in-process `chain: HashMap` に hash を記録している。** L14 (最後の大レッスン) でこれを real **Engine API forkchoice update** に置き換える、Reth が production で block を commit するために使う JSON-RPC call。L14 完了後、我々の bridge は他のどの Ethereum CL client (Lighthouse、Prysm、Teku) も produce する同じ wire-format アクションを produce する。**L15 がそれから capstone** — 1 ページの再キャップ、「構築したすべて」図、optional な production-readiness チェックリスト (block bodies、gossip codec、real WAL)。
+4 つの `ConsensusBridge` メソッドのうち 2 つは live な Reth に到達するようになった。**3 つ目 — `commit` — はまだ in-process な `chain: HashMap` に hash を記録するだけだ。** L14 (最後の大きなレッスン) で、これを real な **Engine API forkchoice update** に置き換える — Reth が production で block を commit するときに使う JSON-RPC call だ。L14 完了後、こちらの bridge は他のどの Ethereum CL client (Lighthouse、Prysm、Teku) も produce する同じ wire-format アクションを produce する。**L15 はそれを受けた capstone** だ — 1 ページの再キャップ、「構築したすべて」図、optional な production-readiness チェックリスト (block bodies、gossip codec、real WAL)。
 ````
 
 ---

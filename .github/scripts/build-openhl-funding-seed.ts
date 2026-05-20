@@ -247,7 +247,7 @@ const JA: LocaleConfig = {
       duration: 25,
       xpReward: 50,
       h1Marker: '# レッスン 1 — `RATE_SCALE` — consensus を守る定数',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
     {
       draftFile: 'openhl_funding_l2_ja.md',
@@ -258,7 +258,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 2 — Money 型 — price、premium、notional の newtype',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
     {
       draftFile: 'openhl_funding_l3_ja.md',
@@ -269,7 +269,7 @@ const JA: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# レッスン 3 — Position 型 — roster 完成 + HL デフォルト',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
     {
       draftFile: 'openhl_funding_l4_ja.md',
@@ -280,7 +280,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 4 — `compute_premium` — 最初の数学、最初のテスト',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
     {
       draftFile: 'openhl_funding_l5_ja.md',
@@ -291,7 +291,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 5 — Overflow 哲学 + 最初の proptest',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
     {
       draftFile: 'openhl_funding_l6_ja.md',
@@ -302,7 +302,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 6 — `compute_rate` — divisor + cap',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
     {
       draftFile: 'openhl_funding_l7_ja.md',
@@ -313,7 +313,7 @@ const JA: LocaleConfig = {
       duration: 40,
       xpReward: 80,
       h1Marker: '# レッスン 7 — `apply_funding` — 符号規約 + zero-sum proptest',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
     {
       draftFile: 'openhl_funding_l8_ja.md',
@@ -324,7 +324,7 @@ const JA: LocaleConfig = {
       duration: 35,
       xpReward: 70,
       h1Marker: '# レッスン 8 — `FundingClock` — discrete event loop',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
     {
       draftFile: 'openhl_funding_l9_ja.md',
@@ -335,7 +335,7 @@ const JA: LocaleConfig = {
       duration: 30,
       xpReward: 60,
       h1Marker: '# レッスン 9 — Interval-gating 不変条件 — 3 つの deeper test',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
     {
       draftFile: 'openhl_funding_l10_ja.md',
@@ -346,7 +346,7 @@ const JA: LocaleConfig = {
       duration: 25,
       xpReward: 50,
       h1Marker: '# レッスン 10 — No-catch-up 不変条件 — 1 テストで設計哲学',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
     {
       draftFile: 'openhl_funding_l11_ja.md',
@@ -357,7 +357,7 @@ const JA: LocaleConfig = {
       duration: 20,
       xpReward: 40,
       h1Marker: '# レッスン 11 — Capstone — 築いたもの、先送りしたもの、次にくるもの',
-      startSignature: 'このレッスンが終わると：',
+      startSignature: 'このレッスンを終えると：',
     },
   ],
 };

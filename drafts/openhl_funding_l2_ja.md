@@ -20,44 +20,44 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンを終えると：
 
 ```bash
 cargo build -p openhl-funding
 ```
 
-…が引き続きコンパイルされる。`types.rs` が `RATE_SCALE` だけから `RATE_SCALE` + 4 つの newtype に成長：
+上記の実行結果が引き続きコンパイルを通る。`types.rs` は `RATE_SCALE` だけだった状態から、`RATE_SCALE` + 4 つの newtype を持つ状態へと育つ：
 
-- **`MarkPrice(pub u64)`** — 永久先物の mark price、最小単位。価格は負になりえないので unsigned。
-- **`IndexPrice(pub u64)`** — オフチェーンオラクル参照価格。同じ形、違う*意味*。
-- **`Premium(pub i64)`** — 符号付き `(mark - index) / index`、`RATE_SCALE` スケール。Longs が overpay のとき正。
-- **`Notional(pub i64)`** — 符号付き quote-currency delta。正 = アカウント受取、負 = 支払い。
+- **`MarkPrice(pub u64)`** — 永久先物の mark price を最小単位で持つ。価格は負になりえないので unsigned。
+- **`IndexPrice(pub u64)`** — オフチェーン oracle の参照価格。形は同じだが*意味*は別。
+- **`Premium(pub i64)`** — 符号付き `(mark - index) / index` を `RATE_SCALE` スケールで持つ。Longs が overpay のとき正。
+- **`Notional(pub i64)`** — 符号付き quote-currency delta。正 = アカウントの受取、負 = 支払い。
 
-それぞれ `Copy + Default + PartialEq + Eq + PartialOrd + Ord + Hash + Debug`。まだテストなし — これらの型はラッパー以上の挙動を持たない。**L4 の `compute_premium` がこれらの型をバグを含みうるコードで初めて exercise するレッスン。**
+それぞれに `Copy + Default + PartialEq + Eq + PartialOrd + Ord + Hash + Debug` を付ける。テストはまだない — ラッパー以上の挙動を持たないからだ。**L4 の `compute_premium` が、これらの型がバグを含みうるコードで exercise される最初のレッスンになる。**
 
-このレッスンの教育要点は数学ではない — **newtype パターン**。なぜ `u64` を直接使わずラップするか？ L2 がその答えを 4 つの具体型で実演する。
+このレッスンの教育上の要点は数学ではない — **newtype パターン**だ。なぜ `u64` を直接使わずにラップするのか。L2 ではその答えを、4 つの具体的な型で実演する。
 
 ## おさらい
 
-L1 後：
-- `RATE_SCALE = 1_000_000_000` が load-bearing 定数。
-- `types.rs` が module doc + `RATE_SCALE` で存在。
-- `lib.rs` がクレートルートで `RATE_SCALE` を re-export。
+L1 後の状態：
+- `RATE_SCALE = 1_000_000_000` が load-bearing な定数として置かれている。
+- `types.rs` には module doc と `RATE_SCALE` がある。
+- `lib.rs` がクレートルートで `RATE_SCALE` を re-export している。
 
-L2 で `types.rs` を実際の型の最初の半分（「money」の半分）で埋める。L3 が後半（position、settlement、params）を埋める。
+L2 では `types.rs` を、実際の型の前半（「money」側の半分）で埋めていく。後半（position、settlement、params）は L3 で埋める。
 
 ## プラン
 
-2 つの編集：
+編集は 2 つ：
 
-1. **`crates/funding/src/types.rs`** — `RATE_SCALE` の後ろに 4 つの newtype を append。Doc コメントが各型の役割 + encode する不変条件を説明。
-2. **`crates/funding/src/lib.rs`** — `pub use types::{...}` 行を 4 つの新型を re-export するよう拡張。
+1. **`crates/funding/src/types.rs`** — `RATE_SCALE` の後ろに 4 つの newtype を追加する。Doc コメントで各型の役割と encode する不変条件を説明する。
+2. **`crates/funding/src/lib.rs`** — `pub use types::{...}` 行を、新しい 4 型も re-export するよう拡張する。
 
-それだけ。`compute.rs` なし、`clock.rs` なし、テストなし。**純粋な型定義。**
+これだけ。`compute.rs` も `clock.rs` もテストもない。**純粋な型定義のみだ。**
 
-> 🛑 **考えてみよう。** スクロール前に — 今から `pub struct MarkPrice(pub u64);` を定義する。なぜ内部フィールドが `pub`？ Private にして `#[must_use] pub fn new(v: u64) -> Self` コンストラクタにしたらどうなる？ ヒント：`compute.rs` の呼び出し側が何を必要とするかを考える。
+> 🛑 **考えてみよう。** スクロール前に — これから `pub struct MarkPrice(pub u64);` を定義する。内部フィールドを `pub` にしている理由は何か。private にして `#[must_use] pub fn new(v: u64) -> Self` コンストラクタを置いたらどうなるか。ヒント：`compute.rs` の呼び出し側が何を必要とするかを考えよ。
 
-（答え：**`compute.rs` の呼び出し側が生値で演算する必要がある** — `i128::from(mark.0) - i128::from(index.0)`。フィールドを private + `.value()` getter にすると、どこでも `mark.0` でなく `mark.value()` を要求する。**`pub` 内部フィールドは、純粋にクロスフィードを防ぐためだけに存在する newtype に対する openhl 慣習** — 検証なし、型システム以上の不変条件なし。`clob::Price(pub u64)` と `clob::Qty(pub u64)` を比較 — 同じ形、同じ理由。**Newtype の仕事は `compute_premium(index, mark)` を型エラーにすること、値を検証することではない。**）
+（答え：**`compute.rs` の呼び出し側が生値で演算する必要があるからだ** — `i128::from(mark.0) - i128::from(index.0)` のように。フィールドを private にして `.value()` getter を置くと、どこでも `mark.0` の代わりに `mark.value()` を書く羽目になる。**`pub` な内部フィールドは、クロスフィード防止のためだけに存在する newtype に対する openhl の慣習だ** — 検証なし、型システム以上の不変条件なし。`clob::Price(pub u64)` や `clob::Qty(pub u64)` と比べてみてほしい — 同じ形、同じ理由だ。**Newtype の仕事は `compute_premium(index, mark)` を型エラーにすることであって、値を検証することではない。**）
 
 ## 手順
 
@@ -94,35 +94,35 @@ pub struct Premium(pub i64);
 pub struct Notional(pub i64);
 ```
 
-4 つの型、各 ~5 行。各々に焼き込まれたものを順に：
+4 つの型、それぞれ ~5 行。1 つずつ、何が焼き込まれているかを見ていく：
 
-#### `MarkPrice(pub u64)` — 符号付き価格に反対する立場
+#### `MarkPrice(pub u64)` — 符号付き価格を採らない立場
 
-なぜ `i64` でなく `u64`？ Funding 数学に*負の価格*は意味を持たないから。Spot や perp 価格がゼロを下回るのは、funding crate に到達してはいけないシステム不変条件違反 — もし到達したら、正しい対応は「上流レイヤーが壊れている、停止して調査」、「負の価格に対して funding を計算する」ではない。
+なぜ `i64` ではなく `u64` なのか。Funding の数学において*負の価格*は意味を持たないからだ。Spot や perp の価格がゼロを下回るのは、funding crate に到達してはならないシステム不変条件違反だ — もし到達したら、正しい対応は「上流レイヤーが壊れている、停止して調査」であって、「負の価格に対して funding を計算する」ではない。
 
-Doc がそれを明示：*「zero or negative price would be a system invariant violation handled upstream, not here」*。ここに線を引くのが正しい。**Funding crate は入力が well-formed と信頼する、再検証しない。** どこでも再検証はよくある over-engineering の間違い。Funding crate の仕事は数学であって入力サニタイゼーションではない。
+Doc にもこれを明記してある：*「zero or negative price would be a system invariant violation handled upstream, not here」*。ここに線を引くのが正しい。**Funding crate は入力が well-formed であることを信頼し、再検証はしない。** どこでも再検証するのは典型的な over-engineering だ。Funding crate の仕事は数学であって、入力のサニタイズではない。
 
-> 🛑 **やりがちな勘違い。** 「せめて `MarkPrice(0)` でエラーを返すべきでは？」 **No。** `MarkPrice(0)` は「genuinely zero spot price を持つアセット」（極端 tail、稀だが現実）か「オラクルがまだ価格を配信していない」（boot state）のどちらかでありえる。Compute_premium が後者を明示的に扱う（`index == 0` のとき `Premium(0)` を返す）。前者は十分稀で、正しい行動は zero funding を settle すること — それが `compute_premium` が自然に生むもの。**Error path 不要。**
+> 🛑 **やりがちな勘違い。** 「せめて `MarkPrice(0)` ではエラーを返すべきでは？」 **不要だ。** `MarkPrice(0)` は「本当にゼロの spot price を持つアセット」（極端な tail、稀だが現実にはある）か、「oracle がまだ価格を配信していない」（boot state）かのどちらかでありうる。後者は `compute_premium` が明示的に扱う（`index == 0` のときは `Premium(0)` を返す）。前者は十分稀で、正しい挙動は zero funding を settle することだ — それは `compute_premium` が自然に生む結果でもある。**エラーパスは要らない。**
 
-#### `IndexPrice(pub u64)` — 同じ形、違う*意味*
+#### `IndexPrice(pub u64)` — 同じ形、別の*意味*
 
-`IndexPrice` は構造的に `MarkPrice` と同一。同じフィールド、同じ derive、同じ範囲。**違いは純粋に型システム上のもの。** 関数シグネチャ `compute_premium(mark: MarkPrice, index: IndexPrice) -> Premium` は `compute_premium(IndexPrice(100), MarkPrice(100))` をコンパイル時に拒否する。Newtype なしだと両引数が `u64`、引数順バグは静かに反転した premium を生む。
+`IndexPrice` は構造的には `MarkPrice` と同一だ。同じフィールド、同じ derive、同じ範囲。**違いは純粋に型システム上のものでしかない。** 関数シグネチャ `compute_premium(mark: MarkPrice, index: IndexPrice) -> Premium` は、`compute_premium(IndexPrice(100), MarkPrice(100))` をコンパイル時に拒否する。Newtype なしだと両引数とも `u64` で、引数順のバグが静かに反転した premium を生んでしまう。
 
-**これが newtype パターンの存在意義そのもの。** 型あたり ~5 行のコストで、*production まで invisible だったはずのバグクラス*を防ぐ。
+**これこそが newtype パターンの存在意義そのものだ。** 型あたり ~5 行のコストで、*production に出るまで見えなかったはずのバグクラス*を防げる。
 
-> 🛑 **やりがちな勘違い。** 「型エイリアスでよくない？ `type MarkPrice = u64; type IndexPrice = u64;`」 **No — 型エイリアスは新しい型を作らない**、既存の型をリネームするだけ。`type MarkPrice = u64` と `type IndexPrice = u64` は両方 `u64`、`compute_premium(some_index, some_mark)` が静かにコンパイルする。**型エイリアスは documentation、安全性ではない。** 可読性が落ちる長いジェネリック型に使う（`type FillSink = Arc<Mutex<Vec<Fill>>>`） — 意味的に異なる値を区別するためではない。
+> 🛑 **やりがちな勘違い。** 「型エイリアスでよくない？ `type MarkPrice = u64; type IndexPrice = u64;`」 **だめだ — 型エイリアスは新しい型を作らない**、既存の型をリネームするだけだ。`type MarkPrice = u64` と `type IndexPrice = u64` はどちらも `u64` のままで、`compute_premium(some_index, some_mark)` は静かにコンパイルが通る。**型エイリアスは documentation のためのものであって、安全性のためのものではない。** 可読性が落ちる長いジェネリック型（`type FillSink = Arc<Mutex<Vec<Fill>>>` など）に使うもので、意味的に異なる値を区別するためのものではない。
 
 #### `Premium(pub i64)` — なぜ符号付きか
 
-Mark < index のとき premium は負になりうる（shorts が overpay）。符号付き表現は残りの数学を明示的な符号処理なしで流れさせる：`compute_premium` が符号付き数を返す、`compute_rate` がそれを除算 + clamp、`apply_funding` が settlement に乗算。**どこの時点でも「これはどっち向き？」をチェックする必要がない** — 符号が答えを運ぶ。
+Mark < index のとき premium は負になりうる（shorts が overpay している状態）。符号付き表現にしておけば、残りの数学を明示的な符号処理なしで流せる：`compute_premium` が符号付きの値を返し、`compute_rate` がそれを割って clamp し、`apply_funding` が settlement に掛ける。**どの段階でも「これはどっち向きか？」をチェックする必要はない** — 符号が答えを運んでくれる。
 
-Doc が言う：*「Sign convention: positive when mark > index (longs are overpaying, funding will be positive → longs pay shorts)」*。これは load-bearing な行。下流コードを読む人はこの規約を覚える必要がある。**符号規約を名指す doc コメントが、「正しい数学」と「毎回再導出する必要のある数学」を分ける。**
+Doc にはこう書いてある：*「Sign convention: positive when mark > index (longs are overpaying, funding will be positive → longs pay shorts)」*。これは load-bearing な一文だ。下流のコードを読む人は、この規約を覚えておく必要がある。**符号規約を明示する doc コメントが、「正しい数学」と「毎回導出し直す必要のある数学」を分ける。**
 
 #### `Notional(pub i64)` — *アカウント*視点で符号付きの quote-currency delta
 
-`Notional` は単一の settlement での単一アカウントの quote balance への変化を表す。符号規約：*正 = アカウント受取、負 = アカウント支払い*。だから正の funding rate でロングポジションは `Notional(負)`、ショートポジションは `Notional(正)` を生む。
+`Notional` は、ある settlement における単一アカウントの quote balance の変化量を表す。符号規約は*正 = アカウントの受取、負 = アカウントの支払い*。だから正の funding rate のもとでは、long position は `Notional(負)` を、short position は `Notional(正)` を生む。
 
-**符号はアカウント視点**、市場視点ではない。これは bridge integration レイヤー（course 10）で重要になる — `Notional(-12)` が「このアカウントの quote balance から 12 を引く」になる。Market 中心の符号なら bridge が適用前にフリップする必要がある。
+**符号はアカウント視点**であって、市場視点ではない。これは bridge integration レイヤー（course 10）で効いてくる — `Notional(-12)` がそのまま「このアカウントの quote balance から 12 を引く」になる。市場中心の符号にしていたら、bridge が適用前に符号を反転させる必要が出てくる。
 
 ### Step 2: `lib.rs` re-export を更新
 
@@ -138,21 +138,21 @@ pub use types::RATE_SCALE;
 pub use types::{IndexPrice, MarkPrice, Notional, Premium, RATE_SCALE};
 ```
 
-import はアルファベット順 — Stage 8b の lib.rs と同じ。呼び出し側は：
+import はアルファベット順にする — Stage 8b の lib.rs に揃える形だ。これで呼び出し側は：
 
 ```rust
 use openhl_funding::{MarkPrice, IndexPrice};
 ```
 
-と書ける。これでなく：
+と書ける。次のように書く必要はない：
 
 ```rust
 use openhl_funding::types::{MarkPrice, IndexPrice};
 ```
 
-**呼び出し側が実際に使うものはすべてクレートルートで re-export。** モジュールパスは内部。
+**呼び出し側が実際に使うものは、すべてクレートルートで re-export する。** モジュールパスは内部用だ。
 
-> 🛑 **やりがちな勘違い。** 「`pub use types::*` で全部 re-export すれば？」 **できる、だが内部型リストが public API surface に漏れる。** 今 `types.rs` に 4 つの型がある。将来 `internal_FillSinkCachedView` のような private helper を追加して `pub` 修飾を忘れたら、`pub use types::*` が静かにそれを露出させる。**Explicit re-export が public API のチェックリスト。** 各 re-export 名が意図的な決定。
+> 🛑 **やりがちな勘違い。** 「`pub use types::*` で全部まとめて re-export すれば？」 **可能だが、内部型のリストがそのまま public API の surface に漏れる。** 今 `types.rs` には 4 型しかない。将来 `internal_FillSinkCachedView` のような private helper を追加して `pub` を付け忘れた瞬間、`pub use types::*` が静かにそれを公開してしまう。**Explicit な re-export は public API のチェックリストでもある。** re-export する名前 1 つ 1 つが意図的な決定になる。
 
 ### Step 3: コンパイル
 
@@ -169,23 +169,23 @@ warning: unresolved link to `FundingClock`
     Finished `dev` profile [unoptimized + debuginfo] in 0.4s
 ```
 
-Rustdoc warning が 2 つに（L1 の 3 つから減少）。`RATE_SCALE` の doc の `[Premium]` リンクが解決、`[FundingRate]` と `[FundingClock]` リンクはまだ未解決。**期待通りの進捗** — L3 が `FundingRate` を追加して 2 つ目の warning を解消する。
+Rustdoc warning は 2 つに減る（L1 では 3 つだった）。`RATE_SCALE` の doc にある `[Premium]` リンクが解決し、`[FundingRate]` と `[FundingClock]` のリンクはまだ未解決のままだ。**進捗としては期待通り** — L3 で `FundingRate` を追加すれば 2 つ目の warning も消える。
 
 よくあるエラー：
 
-- **`error[E0381]: missing field 'value' in initializer of MarkPrice`** — 内部フィールドの `pub` を忘れて `MarkPrice(pub u64)` でなく `MarkPrice { value: u64 }` と書いた。openhl 慣習通り tuple-struct 形式を使う。
-- **`error[E0277]: 'i64' is not 'u64'`** — `Premium(pub i64)` でなく `Premium(pub u64)` と書いた。Premium は符号付き、内部型をチェック。
-- **Derive が欠ける** — derive の 1 つを忘れた。完全な集合は `Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash`。`Default` は L4 fixture builder の一部が `MarkPrice::default()` を使うので必要。
+- **`error[E0381]: missing field 'value' in initializer of MarkPrice`** — 内部フィールドに `pub` を付け忘れた、もしくは `MarkPrice(pub u64)` ではなく `MarkPrice { value: u64 }` と書いた場合。openhl の慣習通り tuple-struct 形式を使うこと。
+- **`error[E0277]: 'i64' is not 'u64'`** — `Premium(pub i64)` ではなく `Premium(pub u64)` と書いてしまった場合。Premium は符号付き、内部型を確認すること。
+- **derive が足りない** — derive のどれかを書き忘れた場合。完全な集合は `Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash`。`Default` は L4 の fixture builder の一部が `MarkPrice::default()` を使うために必要だ。
 
 ## 設計の振り返り
 
-このレッスンに焼き込まれた決定 3 つ：
+このレッスンに焼き込んだ決定は 3 つ：
 
-1. **生プリミティブや型エイリアスでなく newtype パターン。** 型あたり ~5 行のコストで、見えない引数順バグを compile time で防ぐ。**高コストバグクラスへの安価な保険。**
+1. **生プリミティブや型エイリアスではなく newtype パターンを採る。** 型あたり ~5 行のコストで、見えない引数順バグをコンパイル時に防げる。**高コストなバグクラスに対する安価な保険だ。**
 
-2. **公開内部フィールド（`pub u64`）。** 検証はこの crate の仕事ではない、クロスフィード防止が仕事。内部フィールドが `pub` なのは `compute.rs` で演算を ergonomic に保つため。**Newtype は型混乱から守る、悪い値からではない。**
+2. **内部フィールドを公開する（`pub u64`）。** 検証はこの crate の仕事ではなく、クロスフィード防止が仕事だからだ。内部フィールドを `pub` にしてあるのは、`compute.rs` での演算を ergonomic に保つためだ。**Newtype が守るのは型の取り違えからであって、値の不正からではない。**
 
-3. **符号規約は型定義の doc コメントに住む。** 「Mark > index で正、longs が shorts に支払う」 — `Premium` の doc のこの文が符号規約の単一情報源。すべての consumer がそれに依存。**符号規約は数値型のうち最も誤記憶されやすい部分 — 定義場所の doc に pin する。**
+3. **符号規約は型定義の doc コメントに置く。** 「Mark > index で正、longs が shorts に支払う」 — `Premium` の doc にあるこの一文が、符号規約の単一情報源だ。すべての consumer がここに依存する。**符号規約は数値型の中で最も記憶違いが起きやすい部分 — 定義場所の doc に pin しておく。**
 
 ## 答え合わせ
 
@@ -196,9 +196,9 @@ diff -u ~/code/my-openhl/crates/funding/src/types.rs ./crates/funding/src/types.
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 ```
 
-L2 後：
-- **types.rs** が Stage 8b の `Notional` まで一致（最初の 4 newtype）。次の型 — `FundingRate`、`PositionSize`、`Position`、`Settlement`、`FundingParams` — は L3。
-- **lib.rs** に 4 型の re-export。Stage 8b の完全な re-export はあと 5 つの名前を加える（`FundingParams`、`FundingRate`、`Notional` は既にある、`Position`、`PositionSize`、`Settlement`）。全部 L3。
+L2 後の状態：
+- **types.rs** が Stage 8b の `Notional` までと一致する（最初の 4 newtype）。次の型 — `FundingRate`、`PositionSize`、`Position`、`Settlement`、`FundingParams` — は L3 で追加する。
+- **lib.rs** には 4 型の re-export が入る。Stage 8b の完全な re-export はあと 5 つの名前を追加することになる（`FundingParams`、`FundingRate` は新規、`Notional` は既にある、`Position`、`PositionSize`、`Settlement` も新規）。すべて L3 で追加する。
 
 戻す：
 
@@ -208,21 +208,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ `MarkPrice` / `IndexPrice` は `u64` だが `Premium` / `Notional` は `i64`？**
-価格は常に正だから（負の価格はシステム不変条件違反）、**だが premium と notional は負になりうる**。Mark < index のとき premium は負。アカウントが支払うとき（vs 受け取る）notional delta は負。符号付き整数が両方向を自然に表現する、符号なしだと別の「方向」フィールドか型のペアが必要。
+**Q: なぜ `MarkPrice` / `IndexPrice` は `u64` で、`Premium` / `Notional` は `i64` なのか？**
+価格は常に正だからだ（負の価格はシステム不変条件違反になる）。**一方で premium と notional は負になりうる。** Mark < index のとき premium は負になり、アカウントが（受け取るのでなく）支払うとき notional delta は負になる。符号付き整数は両方向を自然に表現できる。符号なしだと、別途「方向」フィールドや型のペアが必要になってしまう。
 
-**Q: これらの型に `Default` がある理由は？ デフォルト値がいつ有用？**
-`Default::default()` は `MarkPrice(0)`、`Premium(0)` 等を返す。Test fixture で有用：`let mark: MarkPrice = Default::default();` は `MarkPrice(0)` より短い。これらの型を使う containing struct に `#[derive(Default)]` を可能にする。**安価な derive、挙動コストなし。**
+**Q: これらの型に `Default` を付ける理由は？ デフォルト値がいつ役に立つのか？**
+`Default::default()` は `MarkPrice(0)` や `Premium(0)` などを返す。テストの fixture で便利だ：`let mark: MarkPrice = Default::default();` は `MarkPrice(0)` より短く書ける。これらの型を内部に持つ struct で `#[derive(Default)]` も可能になる。**安価な derive で、挙動上のコストはない。**
 
-**Q: `Premium` と `Notional` は `Add` / `Sub` / `Mul` を実装すべき？**
-誘惑的 — `Premium(5) + Premium(3) == Premium(8)` は綺麗。だが Stage 8b は実装しないことを選んだ：`compute.rs` の数学演算は overflow safety のため `i128` に upcast する必要がある、`Premium` に `Add` を提供すると呼び出し側がそれを i128 ダンスなしで使う誘惑が出る。**Crate の API 契約は：内部フィールドで明示的な i128 upcast 付きで演算する。** 型に演算 op がないほうがその契約を強制しやすい。
+**Q: `Premium` と `Notional` に `Add` / `Sub` / `Mul` を実装すべきでは？**
+誘惑的ではある — `Premium(5) + Premium(3) == Premium(8)` は綺麗だ。だが Stage 8b では実装しないことを選んだ：`compute.rs` の数学演算は overflow 対策で `i128` への upcast を要求する。`Premium` に `Add` を実装すると、呼び出し側が i128 ダンスなしで使ってしまう誘惑が生まれてしまう。**この crate の API 契約は「内部フィールドを取り出して明示的に i128 へ upcast してから演算する」だ。** 型に演算オペレータがないほうが、その契約を強制しやすい。
 
-**Q: なぜこれらの型のテストがない？**
-何を assert する？ `assert_eq!(MarkPrice(100), MarkPrice(100))` は `PartialEq`（derive）をテストする。`assert_eq!(MarkPrice(100).0, 100)` は pub フィールド（言語機能）をテストする。**プリミティブをラップするだけの newtype に testable な挙動はない。** L4 の `compute_premium` でこれらの型がバグを含みうるコードに参加し始める。
+**Q: なぜこれらの型のテストがないのか？**
+何を assert すればいい？ `assert_eq!(MarkPrice(100), MarkPrice(100))` は `PartialEq`（derive）のテストにしかならない。`assert_eq!(MarkPrice(100).0, 100)` は pub フィールド（言語機能そのもの）のテストにしかならない。**プリミティブをラップしただけの newtype には、テスト可能な挙動が存在しない。** L4 の `compute_premium` から、これらの型がバグを含みうるコードに登場し始める。
 
 ## 次のレッスン（L3）
 
-L3 で型の roster を完成：`FundingRate(i64)`、`PositionSize(i64)`、`Position { account, size }`、`Settlement { account, delta }`、`FundingParams { interval_secs, rate_cap, divisor }`。教育の焦点が「newtype パターン」から「パラメータオブジェクトパターン」（`FundingParams`）と **HL スタイルのデフォルト** — なぜ 1 日 8 settlement、なぜ 4% cap — にシフト。`Position` 構造体が L1 の Cargo.toml で設定した `openhl_clob` の `AccountId` 依存を導入する。
+L3 では型 roster を完成させる：`FundingRate(i64)`、`PositionSize(i64)`、`Position { account, size }`、`Settlement { account, delta }`、`FundingParams { interval_secs, rate_cap, divisor }`。教育の焦点は「newtype パターン」から「パラメータオブジェクトパターン」（`FundingParams`）と **HL スタイルのデフォルト** — 1 日 8 settlement の理由、4% cap の理由 — へとシフトする。`Position` 構造体は、L1 の Cargo.toml で設定した `openhl_clob` の `AccountId` 依存を実際に使い始める箇所でもある。
 ````
 
 ---

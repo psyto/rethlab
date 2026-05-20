@@ -381,7 +381,7 @@ const JA: LocaleConfig = {
       duration: 15,
       xpReward: 50,
       h1Marker: '# レッスン 12 — 作ったもの、まだ stub のもの、次に行く先',
-      startSignature: '11 レッスンで、Course 6 で build した substrate に',
+      startSignature: 'Course 6 で build した substrate に',
     },
   ],
 };

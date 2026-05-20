@@ -461,7 +461,7 @@ const JA: LocaleConfig = {
       duration: 25,
       xpReward: 60,
       h1Marker: '# レッスン 15 — 作ったもの、まだ stub のもの、次に行く先',
-      startSignature: '14 レッスンで、空ディレクトリの `cargo init` から、',
+      startSignature: '空ディレクトリの `cargo init` から、',
     },
   ],
 };

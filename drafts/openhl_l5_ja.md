@@ -27,9 +27,9 @@
 cargo test -p openhl-evm
 ```
 
-…が **9 テスト** (L4 の `InMemoryEvmBridge` の 5 つ + 新規 4 つ) で pass する。新 bridge は L4 と構造的には同じだが、合成した block ではなく `alloy_consensus::Header` (Ethereum の real な header struct) を保存し、block hash を `Header::hash_slow()` (本物の RLP encoding + Keccak-256) で計算する — fabricate した byte ではなく。
+上記の実行結果が **9 つのテスト** (L4 の `InMemoryEvmBridge` の 5 つ + 新規 4 つ) で pass する。新 bridge は L4 と構造的には同じだが、合成した block ではなく `alloy_consensus::Header` (Ethereum の real な header struct) を保存し、block hash も fabricate した byte ではなく `Header::hash_slow()` (本物の RLP encoding + Keccak-256) で計算する。
 
-**自分のコードが alloy / Reth 型に初めて触れるレッスン**だ。「テスト用は合成、production-shape は real 型」というパターンはコースを通して繰り返される; ここできれいに学ぶと L11+ で時間を節約できる。
+**自分のコードが alloy / Reth 型に初めて触れるレッスン** だ。「テスト用は合成、production-shape は real 型」というパターンはコース全体を通して繰り返される。ここできれいに身につけておくと L11+ で時間を節約できる。
 
 ## おさらい
 
@@ -47,16 +47,16 @@ crates/evm/Cargo.toml       — 3 deps (openhl-consensus、openhl-types、async-
 
 6 つのことをする:
 
-1. **`crates/evm/Cargo.toml` に alloy 依存を 2 つ追加**: `alloy-primitives` (`B256`、`Address` 用) と `alloy-consensus` (`Header` 用)。L1 で workspace deps にすでに pin 済み。
-2. **`crates/evm/src/engine.rs` を作成** — `RethEvmBridge` struct、private な `State` struct (合成 `ExecutedBlock` ではなく `Header` を保存)、`impl ConsensusBridge for RethEvmBridge` block。
-3. **型変換ヘルパー 3 つ** (`to_b256`、`from_b256`、`to_executed_block`) — trait の `BlockHash` と内部の `B256` + `Header` の橋渡し。
-4. **Unit test 4 つ** — そのうち 1 つは「real hashing が動く」を証明 (header のフィールドを変えると hash が変わる)。
-5. **`engine` を crate に組み込む** — `lib.rs` に `pub mod engine;` + re-export を追加。
-6. **`cargo test -p openhl-evm` を実行** — 9 テストすべて pass する。
+1. **`crates/evm/Cargo.toml` に alloy 依存を 2 つ追加する**: `alloy-primitives` (`B256`、`Address` 用) と `alloy-consensus` (`Header` 用)。L1 ですでに workspace deps に pin 済みだ。
+2. **`crates/evm/src/engine.rs` を作成する** — `RethEvmBridge` struct、private な `State` struct (合成した `ExecutedBlock` ではなく `Header` を保存する)、`impl ConsensusBridge for RethEvmBridge` block。
+3. **型変換ヘルパーを 3 つ** (`to_b256`、`from_b256`、`to_executed_block`) — trait の `BlockHash` と内部の `B256` + `Header` を橋渡しする。
+4. **Unit test を 4 つ** — うち 1 つは「real hashing が動く」を証明する (header のフィールドを変えると hash が変わる)。
+5. **`engine` を crate に組み込む** — `lib.rs` に `pub mod engine;` と re-export を追加。
+6. **`cargo test -p openhl-evm` を実行** — 9 つのテストすべてが pass する。
 
-key step は #2 — **内部 state の形が変わる**。L4 は `ExecutedBlock` を直接保存していた。L5 は `(B256, Header)` を保存する: alloy-native な型で、`ExecutedBlock` への変換は trait boundary でだけ行う。**alloy 型が source of truth、`ExecutedBlock` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — `LiveRethEvmBridge` は同じ「内部 vs 境界」split を保ったまま、その後ろに real Reth provider を追加する。
+鍵となる step は #2 — **内部 state の形が変わる。** L4 は `ExecutedBlock` を直接保存していた。L5 は `(B256, Header)` を保存する: alloy-native な型で、`ExecutedBlock` への変換は trait boundary でだけ行う。**alloy 型が source of truth で、`ExecutedBlock` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — `LiveRethEvmBridge` は同じ「内部 vs 境界」split を保ったまま、その後ろに real な Reth provider を追加する。
 
-> 🛑 **考えてみよう。** L4 の `InMemoryEvmBridge` は hash を `(id, number)` から合成した。L5 の `RethEvmBridge` は `header.hash_slow()` を呼ぶ — real RLP encoding + Keccak-256。**この違いで testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
+> 🛑 **考えてみよう。** L4 の `InMemoryEvmBridge` は hash を `(id, number)` から合成していた。L5 の `RethEvmBridge` は `header.hash_slow()` を呼ぶ — real な RLP encoding + Keccak-256 だ。**この違いによって testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
 
 ## 手を動かす walk-through
 
@@ -82,7 +82,7 @@ alloy-primitives = { workspace = true }
 alloy-consensus  = { workspace = true }
 ```
 
-両方とも `workspace.dependencies` から継承する (L1 でセットアップ済み)。`alloy-primitives` が `B256` (32-byte hash の newtype) と `Address` (20-byte address の newtype) を提供。`alloy-consensus` が `Header` (Ethereum block header struct、全フィールド入り) を提供。
+両方とも `workspace.dependencies` から継承する (L1 でセットアップ済み)。`alloy-primitives` が `B256` (32-byte hash の newtype) と `Address` (20-byte address の newtype) を提供する。`alloy-consensus` が `Header` (Ethereum block header struct、全フィールド入り) を提供する。
 
 実行:
 
@@ -90,7 +90,7 @@ alloy-consensus  = { workspace = true }
 cargo check -p openhl-evm
 ```
 
-pass するはず — 依存は available、まだ何も使っていない。
+pass するはず — 依存は available になっているが、まだ何も使っていない。
 
 ### Step 2: `crates/evm/src/engine.rs` を作成
 
@@ -120,8 +120,8 @@ use std::sync::Mutex;
 
 L4 と比べて新しい import:
 
-- `alloy_consensus::Header` — Ethereum の canonical な block header struct (~20 フィールド: parent_hash、number、timestamp、beneficiary、gas_limit、base_fee、state_root 等)
-- `alloy_primitives::{Address, B256}` — address 型 (20 byte) と hash 型 (32 byte)。両方とも byte 配列の newtype で L2 の `BlockHash` と同じ形 — だが alloy 側から来ていて、Ethereum Rust エコシステム全体の convention になっている。
+- `alloy_consensus::Header` — Ethereum の canonical な block header struct (~20 フィールド: parent_hash、number、timestamp、beneficiary、gas_limit、base_fee、state_root など)
+- `alloy_primitives::{Address, B256}` — address 型 (20 byte) と hash 型 (32 byte)。どちらも byte 配列の newtype で、L2 の `BlockHash` と同じ形をしている — ただし alloy 側から来ており、Ethereum Rust エコシステム全体の convention になっている。
 
 ### Step 3: struct を追加
 
@@ -155,9 +155,9 @@ L4 の `InMemoryEvmBridge` と同じ shape だが、**`State` 内の型が違う
 | `chain` | `HashMap<[u8; 32], ExecutedBlock>` | `HashMap<B256, Header>` |
 | `head` | `Option<BlockHash>` | `Option<B256>` |
 
-**なぜ `Header` 単体ではなく `(B256, Header)` を保存するのか?** `Header::hash_slow()` が expensive だから — header 全体を RLP encode して Keccak-256 を走らせる。Insert 時に 1 度 hash を計算してタプルに cache すれば、`pending.get(id)` は再 hashing なしで両方返せる。Hash は `chain` の lookup key (および `commit` の lookup criterion) になるので、用意しておきたい。
+**なぜ `Header` 単体ではなく `(B256, Header)` を保存するのか?** `Header::hash_slow()` が expensive だからだ — header 全体を RLP encode して Keccak-256 を走らせる。Insert 時に 1 度 hash を計算してタプルに cache しておけば、`pending.get(id)` で再 hashing なしに両方を返せる。Hash は `chain` の lookup key (および `commit` の lookup criterion) にもなるので、用意しておきたい。
 
-**なぜ `chain` の key と `head` に `[u8; 32]` ではなく `B256` を使うのか?** alloy-native な空間にいるから — `Header` を持つ時点で自然な hash 型は `B256`。`[u8; 32]` を使うとあちこちで `.0` accessor が必要になる。`BlockHash` への変換は trait boundary を越えるときだけ、ヘルパー関数で行う (Step 6)。
+**なぜ `chain` の key と `head` に `[u8; 32]` ではなく `B256` を使うのか?** alloy-native な空間にいるからだ — `Header` を持っている時点で自然な hash 型は `B256` になる。`[u8; 32]` を使うとあちこちで `.0` accessor が必要になる。`BlockHash` への変換は trait boundary を越えるときだけ、ヘルパー関数で行う (Step 6)。
 
 ### Step 4: `build_payload` を impl — 初めての real hashing
 
@@ -191,24 +191,24 @@ impl ConsensusBridge for RethEvmBridge {
     // ...続く
 ```
 
-順を追って:
+順を追って見ていく:
 
-1. **`to_b256(parent)`** — trait の `BlockHash` を alloy の `B256` に変換 (どちらも 32 byte、byte 単位の reinterpretation のみ)。ヘルパーは Step 6。
-2. **Parent number を `chain` から lookup** — key は今や `B256`、`[u8; 32]` ではない。Map の lookup 型は `B256`; `&parent_hash` (a `&B256`) をそのまま渡す、unwrap 不要。
-3. **Payload ID 割り当て** — L4 と同じ。
-4. **`Header` を build** — フィールドのうち設定するもの以外はデフォルト:
+1. **`to_b256(parent)`** — trait の `BlockHash` を alloy の `B256` に変換する (どちらも 32 byte、byte 単位の reinterpretation のみ)。ヘルパーは Step 6 で書く。
+2. **Parent number を `chain` から lookup** — key は今や `B256` であって `[u8; 32]` ではない。Map の lookup 型が `B256` なので、`&parent_hash` (a `&B256`) をそのまま渡せばよい。unwrap は要らない。
+3. **Payload ID を割り当てる** — L4 と同じ。
+4. **`Header` を build する** — 設定するフィールド以外はデフォルト:
    - `parent_hash` — trait input の alloy `B256`
    - `number` — parent + 1
    - `timestamp` — `PayloadAttrs` から
    - `beneficiary: Address::from(attrs.fee_recipient)` — `[u8; 20]` を alloy の `Address` newtype に変換
    - `mix_hash: B256::from(attrs.prev_randao)` — `[u8; 32]` を `B256` に変換
-   - `..Default::default()` — 残りの全フィールドを zero/default で埋める (state_root、gas_limit 等)
-5. **`header.hash_slow()`** — **本物の hash 計算**。`Header` 全体 (defaulted フィールド込み ~20 個) を RLP encode し、Keccak-256 を走らせて `B256` を produce する。"slow" は convention の名前 — `hash_fast` は header struct に hash が pre-cache されている場合に存在するが、今は該当しない。
-6. **`(hash, header)` を pending に insert** (payload ID を key に)。ID を return。
+   - `..Default::default()` — 残りの全フィールドを zero/default で埋める (state_root、gas_limit など)
+5. **`header.hash_slow()`** — **本物の hash 計算**。`Header` 全体 (defaulted フィールド込みで約 20 個) を RLP encode し、Keccak-256 を走らせて `B256` を produce する。"slow" は convention の名前 — `hash_fast` は header struct に hash が pre-cache されている場合に存在するが、ここでは該当しない。
+6. **`(hash, header)` を payload ID を key に pending に insert** し、ID を return する。
 
-**この block hash は real だ。** header のどのフィールドが call 間で 1 byte でも変われば、結果の hash が異なる。L4 の合成 hash にはこの性質がなかった; L5 の hash にはある。Step 9 のテストがこれを証明する。
+**この block hash は real だ。** header のどのフィールドであれ、call 間で 1 byte でも変われば、結果の hash は異なる。L4 の合成 hash にはこの性質がなかった。L5 の hash にはある。Step 9 のテストでこれを証明する。
 
-> 🛑 **やりがちな勘違い。** 「`hash` を `header` とは別に保存した方がきれい — タプルじゃなくて。」 **やろうと思えばできる、`State` にフィールドが 1 つ増えるだけ。だがタプルは関係を捉える — この hash は、ちょうどこの header の hash だ、と。** 別々に持つと、header を変更したのに hash の recompute を忘れるバグを招く。タプルにすることで両者が不可分になる。
+> 🛑 **やりがちな勘違い。** 「`hash` を `header` とは別に保存した方がきれい — タプルではなく。」 **やろうと思えばできる、`State` のフィールドが 1 つ増えるだけだ。だが、タプルは「この hash はちょうどこの header の hash だ」という関係を捉える。** 別々に持つと、header を変更したのに hash の recompute を忘れるというバグを招く。タプルにすれば両者が不可分になる。
 
 ### Step 5: `payload_ready`、`validate_payload`、`commit` を impl
 
@@ -252,9 +252,9 @@ impl ConsensusBridge for RethEvmBridge {
 
 **`payload_ready`** はタプルを pending から clone して取り出し、`to_executed_block` (Step 6) を呼んで trait の return type を内部の `(B256, Header)` から materialize する。
 
-**`validate_payload`** はまだ stub。Live Reth provider に対する real validation は L12 で land する; いまは structural に accept。
+**`validate_payload`** はまだ stub だ。Live Reth provider に対する real validation は L12 で land する。今は structural に accept しておく。
 
-**`commit`** は L4 と同じ流れだが型置換:
+**`commit`** は L4 と同じ流れだが、型が置き換わっている:
 - `to_b256(block_hash)` で trait の `BlockHash` を `B256` に変換
 - `pending.values()` の中で hash が一致するタプルを探す
 - header を `chain` に insert (key は `B256`)
@@ -289,11 +289,11 @@ fn to_executed_block(hash: B256, header: &Header) -> ExecutedBlock {
 
 - **`to_b256`** — `BlockHash → B256`。`.0` で内側の `[u8; 32]` を取り出し、`B256::from` に渡す。
 - **`from_b256`** — `B256 → BlockHash`。内側の bytes を newtype で wrap する。
-- **`to_executed_block`** — trait の `ExecutedBlock` を内部の `(B256, Header)` から materialize。header からフィールドを引いて (`parent_hash`、`number`)、cache した hash を使う。
+- **`to_executed_block`** — 内部の `(B256, Header)` から trait の `ExecutedBlock` を materialize する。header からフィールド (`parent_hash`、`number`) を引いて、cache した hash を使う。
 
-**なぜ 1 つの大きな変換関数ではなく 3 つに分けるのか?** 各々が 1 つのことをするから。`to_b256` と `from_b256` は pure な型変換 (ロジックなし)。`to_executed_block` は `Header` のどのフィールドが `ExecutedBlock` のどのフィールドに mapping するかを知っている。分けることで各ヘルパーが明らかに正しい形になる。
+**なぜ 1 つの大きな変換関数ではなく 3 つに分けるのか?** 各々が 1 つのことだけをするからだ。`to_b256` と `from_b256` は pure な型変換 (ロジックなし)。`to_executed_block` は `Header` のどのフィールドが `ExecutedBlock` のどのフィールドに mapping するかを知っている。分けておけば、各ヘルパーが明らかに正しい形になる。
 
-> 🛑 **やりがちな勘違い。** 「`B256` も `BlockHash` も `[u8; 32]` を wrap している。`transmute` で変換できないか?」 **やめてくれ。** Byte layout は同一だが、型は型システム上は別物 — それが point だ。変換関数が境界の場所を document する。将来 `BlockHash` が追加の metadata (例: checksum) を持つようになったら、`transmute` はバグになる; `to_b256` は更新すべき場所になる。
+> 🛑 **やりがちな勘違い。** 「`B256` も `BlockHash` も `[u8; 32]` を wrap している。`transmute` で変換できないか?」 **やめてくれ。** Byte layout は同一だが、型システム上は別物 — それが point だ。変換関数が境界の場所を document する。将来 `BlockHash` が追加の metadata (例: checksum) を持つようになったら、`transmute` はバグになる。一方 `to_b256` は更新すべき場所として残る。
 
 ### Step 7: `engine` を crate に組み込む
 
@@ -319,7 +319,7 @@ pub use engine::RethEvmBridge;
 pub use in_memory::InMemoryEvmBridge;
 ```
 
-`pub mod engine;` で module を expose。`pub use engine::RethEvmBridge;` で型を crate root に re-export。
+`pub mod engine;` で module を expose する。`pub use engine::RethEvmBridge;` で型を crate root に re-export する。
 
 ### Step 8: コンパイル確認
 
@@ -410,7 +410,7 @@ mod tests {
 | `build_on_committed_parent_increments_number` | Number 単調性、L4 と同じ。 |
 | `commit_unknown_hash_errors` | 未知 hash の commit は `BridgeError::Rejected` を返す。 |
 
-**key となる新テストは最初のもの**。`Header` の 1 フィールド (`timestamp`) を変えて、結果の hash が異なることを assert する。これが hashing が real であることを証明する — alloy が実際に RLP encode + Keccak-256 する。L4 の `(id, number)` ベースの合成 hash はこのテストに落ちた (same parent + same number → same synthesized hash regardless of timestamp)。
+**鍵となる新テストは最初のものだ。** `Header` の 1 フィールド (`timestamp`) を変えて、結果の hash が異なることを assert する。これが hashing が real であることを証明する — alloy が実際に RLP encode + Keccak-256 をしている。L4 の `(id, number)` ベースの合成 hash はこのテストには通らなかった (same parent + same number → same synthesized hash、timestamp は無視される)。
 
 ## テスト
 
@@ -435,23 +435,23 @@ test in_memory::tests::validate_returns_valid ... ok
 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-L5 の 4 テストが L4 の 5 テストと並んで pass する — **両 impl が同じ trait を満たしている**。L8/L9 で書く同じ `ConsensusBridge` consumer コードがどちらに対しても動く。
+L5 の 4 テストが L4 の 5 テストと並んで pass する — **両 impl が同じ trait を満たしている。** L8/L9 で書く同じ `ConsensusBridge` consumer コードが、どちらに対しても動く。
 
-よくあるエラーと修正:
+よくあるエラーと対処:
 
-- **`Header::hash_slow()` の return type 違い** — `let hash: BlockHash = header.hash_slow();` と書くと落ちる。`hash_slow()` は `B256` を返す; `from_b256` で変換する。
-- **`assert_ne!(block.hash, block2.hash)` が落ちる** — `..Default::default()` まわりの問題かもしれない。`Header` を `..Default::default()` で終えているか? それが無いと all-zeros + same-timestamp で hash が等しくなる可能性。
-- **`B256::from(attrs.fee_recipient)` がエラー** — `fee_recipient` は `[u8; 20]`、`B256` は `[u8; 32]`。正しい変換は `Address::from(attrs.fee_recipient)`。
+- **`Header::hash_slow()` の return type 違い** — `let hash: BlockHash = header.hash_slow();` と書くと落ちる。`hash_slow()` は `B256` を返す。`from_b256` で変換する。
+- **`assert_ne!(block.hash, block2.hash)` が落ちる** — `..Default::default()` まわりの問題かもしれない。`Header` を `..Default::default()` で終えているか? それが無いと、all-zeros + same-timestamp で hash が等しくなる可能性がある。
+- **`B256::from(attrs.fee_recipient)` がエラー** — `fee_recipient` は `[u8; 20]`、`B256` は `[u8; 32]`。正しい変換は `Address::from(attrs.fee_recipient)` だ。
 
 ## 設計を振り返る
 
 このレッスンで encode した本質的な決定が 3 つ:
 
-1. **内部型は alloy-native、trait 型は contract の serialization。** State は `(B256, Header)` を保存。Trait は `ExecutedBlock` を返す。変換はちょうど trait boundary でだけ起こる (`to_executed_block`)。これにより alloy が型を進化させても trait を壊さず — 変換ヘルパーだけが更新される。**production-shape の内部型を contract から decouple することが、L11+ で `LiveRethEvmBridge` に同じ trait を再利用させる。**
+1. **内部型は alloy-native、trait 型は contract の serialization。** State は `(B256, Header)` を保存する。Trait は `ExecutedBlock` を返す。変換は trait boundary でだけ起こる (`to_executed_block`)。これにより alloy が型を進化させても trait は壊れず、変換ヘルパーだけを更新すればよくなる。**production-shape の内部型を contract から decouple したことが、L11+ で `LiveRethEvmBridge` が同じ trait を再利用できる理由だ。**
 
-2. **`(B256, Header)` のタプルで、別フィールドではなく。** hash は *ちょうどこの header の hash* だ。別々に保存すると header の変更が cache hash と desync するバグを招く。タプルが両者を bind する。
+2. **別フィールドではなく `(B256, Header)` のタプルで保持する。** hash は *ちょうどこの header の hash* だ。別々に保存すると、header の変更で cache hash が desync するバグを招く。タプルが両者を不可分にする。
 
-3. **小さな変換ヘルパー 3 つ、1 つの大きな関数ではなく。** `to_b256` と `from_b256` は pure な型橋渡し; `to_executed_block` がフィールド mapping を知る。分けることで各ヘルパーが明らかに正しく、将来の変更も局所化する。
+3. **1 つの大きな関数ではなく、小さな変換ヘルパー 3 つに分ける。** `to_b256` と `from_b256` は pure な型橋渡しで、`to_executed_block` がフィールド mapping を知る。分けておけば、各ヘルパーが明らかに正しい形になり、将来の変更も局所化する。
 
 ## 答え合わせ
 
@@ -463,9 +463,9 @@ diff -u ~/code/my-openhl/crates/evm/src/lib.rs ./crates/evm/src/lib.rs
 diff -u ~/code/my-openhl/crates/evm/Cargo.toml ./crates/evm/Cargo.toml
 ```
 
-doc comment や error message の variation は OK。struct 型、helper signature、4 method impl の logic は近く一致するはず。
+doc comment や error message の variation は OK。struct 型、helper signature、4 つの method impl のロジックはほぼ一致するはず。
 
-リファレンスの `c938321` 時点の Cargo.toml には `reth-ethereum-primitives` も列挙されている (`engine.rs` 内では使われない)。後のレッスンのための forward-declared dep; L5 では省略する。両方とも正しい。
+リファレンスの `c938321` 時点の Cargo.toml には `reth-ethereum-primitives` も列挙されている (`engine.rs` 内では使われない)。後のレッスン用に forward-declared された dep だ。L5 では省略する。どちらも正しい。
 
 main に戻す:
 
@@ -475,21 +475,21 @@ git checkout main
 
 ## よくある質問
 
-**Q: なぜ bridge impl が *2 つ* — InMemoryEvmBridge と RethEvmBridge — 同じロジックなのに?**
-ロジックは同じだが **型が違う**。`InMemoryEvmBridge` は合成型 (高速 unit test 用)。`RethEvmBridge` は alloy 型 (alloy interop を validate するテスト用)。後で `LiveRethEvmBridge` は alloy 型 AND live Reth provider を使う。Step ごとに production fidelity が上がりつつ、trait surface は安定。
+**Q: 同じロジックなのに、なぜ bridge impl が *2 つ* (InMemoryEvmBridge と RethEvmBridge) 必要なのか?**
+ロジックは同じだが **型が違う**。`InMemoryEvmBridge` は合成型 (高速 unit test 用)。`RethEvmBridge` は alloy 型 (alloy interop を validate するテスト用)。後の `LiveRethEvmBridge` は alloy 型 と live Reth provider の両方を使う。Step ごとに production fidelity が上がりつつ、trait surface は安定したままだ。
 
-**Q: `Header` が ~20 フィールドあるのに、なぜ 4 つしか set しないのか?**
-未設定フィールドは `Default::default()` で埋まる: `state_root = B256::ZERO`、`gas_limit = 0`、`base_fee_per_gas = None` 等。v0 では EVM が走っていないので real な `state_root` は計算できない; zero を受け入れる。Production コード (L11+) はこれらを live Reth provider から計算する。
+**Q: `Header` は約 20 フィールドあるのに、なぜ 4 つしか set しないのか?**
+未設定フィールドは `Default::default()` で埋まる: `state_root = B256::ZERO`、`gas_limit = 0`、`base_fee_per_gas = None` など。v0 では EVM が走っていないので real な `state_root` は計算できない。zero を受け入れる。Production コード (L11+) ではこれらを live Reth provider から計算する。
 
 **Q: alloy の `hash_slow` と `hash_fast` の違いは?**
-`Header` に `hash_fast` メソッドは無い。命名 convention: 値を再計算するメソッドは "slow"、pre-cache された値を返すメソッドは "fast"。`Header` には pre-cache された hash が無いので `hash_slow` のみ。alloy の一部の型 (例: `SealedHeader`) は hash を持ち、`.hash()` を "fast" 版として offer する。
+`Header` に `hash_fast` メソッドは無い。命名 convention は次のとおりだ: 値を再計算するメソッドは "slow"、pre-cache された値を返すメソッドは "fast"。`Header` には pre-cache された hash が無いので `hash_slow` のみ。alloy の一部の型 (例: `SealedHeader`) は hash を持ち、`.hash()` を "fast" 版として提供する。
 
-**Q: `cargo update` で最新の alloy を取るべき?**
-不要 — workspace が alloy を specific バージョンに pin している (`alloy-primitives = "1.5"`、`alloy-consensus = "2.0"`)。`cargo update` は単にそれらが解決可能か verify するだけ; bump はしない。alloy を bump するには: root `Cargo.toml` の `workspace.dependencies` を編集し、それから `cargo update` で lock file を refresh。
+**Q: `cargo update` で最新の alloy を取るべきか?**
+不要 — workspace が alloy を specific バージョンに pin している (`alloy-primitives = "1.5"`、`alloy-consensus = "2.0"`)。`cargo update` はそれらが解決可能かを verify するだけで、bump はしない。alloy を bump するには、root `Cargo.toml` の `workspace.dependencies` を編集し、そのあと `cargo update` で lock file を refresh する。
 
 ## 次のレッスン (L6)
 
-`ConsensusBridge` impl を 2 つ書いた — 合成版と real alloy 型版。両方とも consensus 側 test コードから使える (L8 から書き始める)。だがその前に L6 で consensus 側に進む: Malachite の `Context` trait — Malachite を使う任意の chain に Malachite が要求する型レベル API surface — を実装する。Associated type 10 個、factory method 4 個。L6 を終えると、自分の chain が「`Address` 型は何、`Height` 型は何、`Value` 型は何」を Malachite に答えられるようになる。これが contract の **もう半分**: L3 が自分の所有する trait だったのに対し、L6 は Malachite が所有する trait。
+`ConsensusBridge` impl を 2 つ書いた — 合成版と real alloy 型版。両方とも consensus 側の test コードから使える (L8 から書き始める)。だがその前に、L6 で consensus 側に進む: Malachite の `Context` trait — Malachite を使う任意の chain に対して Malachite が要求する型レベル API surface — を実装する。Associated type 10 個、factory method 4 個だ。L6 を終えると、自分の chain は「`Address` 型は何か、`Height` 型は何か、`Value` 型は何か」を Malachite に答えられるようになる。これが contract の **もう半分** だ。L3 は自分が所有する trait だったのに対し、L6 は Malachite が所有する trait になる。
 ````
 
 ---
