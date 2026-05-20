@@ -14,6 +14,10 @@ const DIFFICULTY_COLORS = {
   EXPERT: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
 };
 
+const TRACK_COLORS: Record<string, string> = {
+  'diy-perp': 'bg-pink-500/10 text-pink-400 border-pink-500/20',
+};
+
 export default function CourseCatalogPage() {
   const { t, locale } = useLocale();
   const [search, setSearch] = useState('');
@@ -89,15 +93,26 @@ export default function CourseCatalogPage() {
               </div>
 
               <div className="p-5">
-                {/* Difficulty badge */}
-                <span
-                  className={cn(
-                    'inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                    DIFFICULTY_COLORS[course.difficulty]
-                  )}
-                >
-                  {t(`courses.difficulty.${course.difficulty.toLowerCase()}`)}
-                </span>
+                {/* Track badge (DIY Perp) takes precedence over difficulty badge */}
+                {course.track && TRACK_COLORS[course.track] ? (
+                  <span
+                    className={cn(
+                      'inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                      TRACK_COLORS[course.track]
+                    )}
+                  >
+                    {course.track === 'diy-perp' ? t('courses.categories.diyPerp') : course.track}
+                  </span>
+                ) : (
+                  <span
+                    className={cn(
+                      'inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                      DIFFICULTY_COLORS[course.difficulty]
+                    )}
+                  >
+                    {t(`courses.difficulty.${course.difficulty.toLowerCase()}`)}
+                  </span>
+                )}
 
                 <h3 className="mt-3 text-lg font-semibold group-hover:text-primary transition-colors">
                   {course.title}

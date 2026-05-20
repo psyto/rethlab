@@ -37,6 +37,10 @@ const DIFFICULTY_COLORS = {
   EXPERT: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
 };
 
+const TRACK_COLORS: Record<string, string> = {
+  'diy-perp': 'bg-pink-500/10 text-pink-400 border-pink-500/20',
+};
+
 export default function CourseDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -118,14 +122,25 @@ export default function CourseDetailPage() {
         <div className="lg:col-span-2">
           {/* Course header */}
           <div>
-            <span
-              className={cn(
-                'inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                DIFFICULTY_COLORS[course.difficulty]
-              )}
-            >
-              {t(`courses.difficulty.${course.difficulty.toLowerCase()}`)}
-            </span>
+            {course.track && TRACK_COLORS[course.track] ? (
+              <span
+                className={cn(
+                  'inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                  TRACK_COLORS[course.track]
+                )}
+              >
+                {course.track === 'diy-perp' ? t('courses.categories.diyPerp') : course.track}
+              </span>
+            ) : (
+              <span
+                className={cn(
+                  'inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                  DIFFICULTY_COLORS[course.difficulty]
+                )}
+              >
+                {t(`courses.difficulty.${course.difficulty.toLowerCase()}`)}
+              </span>
+            )}
             <h1 className="mt-3 text-3xl font-bold sm:text-4xl">{course.title}</h1>
             <p className="mt-4 text-lg text-muted-foreground">{course.description}</p>
 
