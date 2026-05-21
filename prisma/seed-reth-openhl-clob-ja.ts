@@ -4084,31 +4084,31 @@ L6 では明示的に、O(1) index ではなくシンプルさを選んだ。ope
 
 ## 市場構造: あなたが本当に作ったもの
 
-11 レッスンを費やして **price-time-priority CLOB** を作った。次に進む前に、その選択を perp DEX 設計の広い landscape に位置づけておく価値がある — CLOB は 3 つある選択肢のうちの 1 つにすぎず、最近の RWA perps 論争がトレードオフを異常にクリアにしてくれている。
+11 レッスンを費やして **price-time-priority CLOB** を作った。次に進む前に、その選択を perp DEX 設計の広い landscape に位置づけておく価値がある — CLOB は 3 つある選択肢のうちの 1 つにすぎず、最近の RWA perps 論争がトレードオフをとりわけクリアにしてくれている。
 
 **3 つのモデル。**
 
-- **CLOB (作ったもの)**: market maker が resting order を置き、taker がそれを cross する。価格はこの venue 上で需給が出会うことによって決まる。Per-market な MM 経済性: どの銘柄も、在庫リスクを引き受けてくれる誰かによる継続的な quoting が必要。Retail flow が銘柄ごとの quoting を採算化できるほど存在する場合に機能する。
+- **CLOB (作ったもの)**: market maker が resting order を置き、taker がそれと約定する。価格はこの venue 上で需給が出会うことによって決まる。Per-market な MM 経済性: どの銘柄も、在庫リスクを引き受けてくれる誰かによる継続的な quoting が必要。Retail flow が銘柄ごとの quoting を採算化できるほど存在する場合に機能する。
 - **RFQ (Variational、Paradigm)**: taker が quote を request し、dealer が just-in-time に応じ、dealer は primary venue (CME、NYSE、または別の CLOB) で hedge する。価格は source venue から *持ってくる* — そこに hedging cost と dealer margin が乗る。Dealer が 24 時間継続的に quote を維持しなくてよい (request されたときだけ quote すればよい) ので、long tail でも unit economics が成立する。
-- **AMM (GMX、dYdX v3 vAMM 時代)**: 流動性を curve に集約し、トレーダーが curve に対して動く。最初は資本効率が良いが、tail では残酷。Perp では今は relevance が落ちているが、設計ポイントとして押さえておく価値はある。
+- **AMM (GMX、dYdX v3 vAMM 時代)**: 流動性を curve に集約し、トレーダーが curve に沿って取引する。最初は資本効率が良いが、tail では破綻する。Perp での重要性は今では低下しているが、設計ポイントとして押さえておく価値はある。
 
 **CLOB が勝つ場所と勝たない場所。**
 
 CLOB が price discovery venue になるのは、*そこにローカルな需給が存在する場合に限る*。BTC、ETH、SOL、HYPE — TradFi の意味での「primary venue」を持たない資産 — については、Hyperliquid 上の CLOB が真に価格を決めている。一方で WTI、NVDA、SPY の perp は、NYSE/NYMEX 取引時間中は CLOB であっても primary 市場の arbitrage shadow にすぎない。RFQ も同じ。RWA については、両モデルとも primary 時間中に真の price discovery をしているわけではない — どちらも CME や NYSE order book の downstream consumer だ。
 
-Cold-start の非対称性は構造的なものだ。CLOB は銘柄ごとに継続的に quoting してくれる market maker を必要とする。200 個の RWA ticker があり、そのうち 10 個にしか retail flow が無いとすれば、残り 190 個は quote が無いか、heavily subsidized な quote しか得られず、ニュース 1 本で吹き飛ぶ薄い板になる。RFQ はこれを回避する — dealer は需要があるときだけ quote するので、銘柄あたりの idle な quoting cost が無い。
+Cold-start の非対称性は構造的なものだ。CLOB は銘柄ごとに継続的に quoting してくれる market maker を必要とする。200 銘柄の RWA があり、そのうち 10 銘柄にしか retail flow が無いとすれば、残り 190 銘柄は quote が無いか、厚く補助された quote しか得られず、ニュース 1 本で吹き飛ぶ薄い板になる。RFQ はこれを回避する — dealer は需要があるときだけ quote するので、銘柄ごとに idle 時の quoting コストが発生しない。
 
 **「Last look」の話。**
 
-よくある主張に「RFQ には last look (dealer が quote request を reject できる) があるが CLOB には無い」というのがある。半分正しい。CLOB では、market maker は taker が hit するより速く quote を cancel できる — HL の matching docs で **cancel prioritization** と呼ばれている挙動だ。Adverse な taker を見た MM は、cross が commit される前に quote を pull できる。形は違うが、経済的な意味は同じ。
+よくある主張に「RFQ には last look (dealer が quote request を reject できる) があるが CLOB には無い」というのがある。半分正しい。CLOB では、market maker は taker が hit するより速く quote を cancel できる — HL の matching docs で **cancel prioritization** と呼ばれている挙動だ。自分にとって不利な taker を見た MM は、cross が commit される前に quote を引っ込められる。形は違うが、経済的な意味は同じ。
 
-あなたが作った CLOB は cancel prioritization を実装していない — \`submit_limit\` と \`cancel\` は \`pending_actions\` で first-come-first-served になる。Production の HL ではそうではない: cancel が衝突する submit より前に並び替えられ、MM に effective な last look が与えられる。**もし追加したくなったら、変更箇所は BFT engine の ordering rule であって、matching engine ではない。**
+あなたが作った CLOB は cancel prioritization を実装していない — \`submit_limit\` と \`cancel\` は \`pending_actions\` で first-come-first-served になる。Production の HL ではそうではない: cancel が衝突する submit より前に並び替えられ、MM に実質的な last look が与えられる。**もし追加したくなったら、変更箇所は BFT engine の ordering rule であって、matching engine ではない。**
 
-**あなたが作ったもの、それが座る位置。**
+**あなたが作ったもの、その位置づけ。**
 
-あなたが作ったのは、HL が **crypto-native の top tier 銘柄** を pricing するために使っている engine だ。これは real で economically significant な market slice。RWA perp の long tail を pricing する engine *ではない* — その flow は RFQ の方が構造的に向いている。Dealer が銘柄ごとに板を bootstrapping せずに CME と NYSE の depth を mainline できるからだ。
+あなたが作ったのは、HL が **crypto-native の top tier 銘柄** を pricing するために使っている engine だ。これは現実に存在し、経済的に重要な market slice。RWA perp の long tail を pricing する engine *ではない* — その flow は RFQ の方が構造的に向いている。Dealer が銘柄ごとに板を bootstrapping せずに CME と NYSE の depth に直接アクセスできるからだ。
 
-Builder にとって興味深い問いは「CLOB か RFQ か」ではなく、「どの asset class のどの slice を、どの liquidity source で」だ。HyperBFT の上に乗った CLOB に、smart contract から板に route できる custom precompile を組み合わせる — これは crypto-native perp の top tier には正しいアーキテクチャ。それ以外には、設計空間がまだ開いている。
+Builder にとって興味深い問いは「CLOB か RFQ か」ではなく、「どの asset class のどの slice を、どの liquidity source で」だ。HyperBFT の上に乗った CLOB に、smart contract から板にルーティングできる custom precompile を組み合わせる — これは crypto-native perp の top tier には正しいアーキテクチャ。それ以外には、設計余地はまだ広く残っている。
 
 ## 次に行く先
 
