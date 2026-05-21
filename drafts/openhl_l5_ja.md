@@ -68,7 +68,7 @@ crates/evm/Cargo.toml       — 3 deps (openhl-consensus、openhl-types、async-
 
 鍵となる step は #2 — **内部 state の形が変わる。** L4 は `ExecutedBlock` を直接保存していた。L5 は `(B256, Header)` を保存する: alloy-native な型で、`ExecutedBlock` への変換は trait boundary でだけ行う。**alloy 型が source of truth で、`ExecutedBlock` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — `LiveRethEvmBridge` は同じ「内部 vs 境界」split を保ったまま、その後ろに 実際の Reth provider を追加する。
 
-> 🛑 **考えてみよう。** L4 の `InMemoryEvmBridge` は hash を `(id, number)` から合成していた。L5 の `RethEvmBridge` は `header.hash_slow()` を呼ぶ — 実際の RLP encoding + Keccak-256 だ。**この違いによって testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
+> 🛑 **考えてみよう。** L4 の `InMemoryEvmBridge` は hash を `(id, number)` から合成していた。L5 の `RethEvmBridge` は `header.hash_slow()` を呼ぶ — 本物の RLP encoding + Keccak-256 だ。**この違いによって testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
 
 ## 手を動かす walk-through
 

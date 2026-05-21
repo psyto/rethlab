@@ -43,7 +43,7 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
 
 Hyperliquid は 2025 年に $300B+ の perp 取引量を、完全クローズドソースのスタック — HyperBFT consensus、HyperCore matching engine、HyperEVM execution — の上で処理した。公開された Rust 実装はどこにもない。**OpenHL はそのスタックをオープンソースで実装したもの** であり、本コースでは openhl Module 1 の substrate を自分の手で組み上げる。
 
-**なぜ CLOB なのか？** Hyperliquid が price-time-priority 板マッチングを選んだのは、ターゲット市場 — crypto-native perps の top tier — に、板が真の price discovery を行えるだけの retail flow が継続的に存在するから。RFQ 系（Variational、Paradigm）は dealer が just-in-time で quote し primary venue で hedge することで long tail を取り、AMM 系（GMX 世代）は cold-start のために tail のリスク経済性を犠牲にする。これから作るのは、CLOB が正しい答えである市場の slice に対する engine。設計トレードオフの深堀りは Course 7（CLOB）の capstone で行う — いまはこの設計コンテキストだけで十分。
+**なぜ CLOB なのか？** Hyperliquid が price-time-priority 板マッチングを選んだのは、ターゲット市場 — crypto-native perps の top tier — に、板で真の price discovery が成立するだけの retail flow が継続的にあるから。RFQ 系（Variational、Paradigm）は dealer が just-in-time に quote を出し、primary venue で hedge することで long tail を取り、AMM 系（GMX 世代）は cold-start を取る代わりに、tail（裾野銘柄）の経済性を犠牲にする。これから作るのは、CLOB が正しい答えである市場セグメントに対する engine。設計トレードオフの掘り下げは Course 7（CLOB）の capstone で行う — いまはこの設計コンテキストを押さえておけば十分。
 
 ## 1. コース終了時点で手元にあるもの
 
@@ -1875,7 +1875,7 @@ crates/evm/Cargo.toml       — 3 deps (openhl-consensus、openhl-types、async-
 
 鍵となる step は #2 — **内部 state の形が変わる。** L4 は \`ExecutedBlock\` を直接保存していた。L5 は \`(B256, Header)\` を保存する: alloy-native な型で、\`ExecutedBlock\` への変換は trait boundary でだけ行う。**alloy 型が source of truth で、\`ExecutedBlock\` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — \`LiveRethEvmBridge\` は同じ「内部 vs 境界」split を保ったまま、その後ろに 実際の Reth provider を追加する。
 
-> 🛑 **考えてみよう。** L4 の \`InMemoryEvmBridge\` は hash を \`(id, number)\` から合成していた。L5 の \`RethEvmBridge\` は \`header.hash_slow()\` を呼ぶ — 実際の RLP encoding + Keccak-256 だ。**この違いによって testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
+> 🛑 **考えてみよう。** L4 の \`InMemoryEvmBridge\` は hash を \`(id, number)\` から合成していた。L5 の \`RethEvmBridge\` は \`header.hash_slow()\` を呼ぶ — 本物の RLP encoding + Keccak-256 だ。**この違いによって testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
 
 ## 手を動かす walk-through
 

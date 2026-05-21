@@ -25,7 +25,7 @@
 
 Hyperliquid は 2025 年に $300B+ の perp 取引量を、完全クローズドソースのスタック — HyperBFT consensus、HyperCore matching engine、HyperEVM execution — の上で処理した。公開された Rust 実装はどこにもない。**OpenHL はそのスタックをオープンソースで実装したもの** であり、本コースでは openhl Module 1 の substrate を自分の手で組み上げる。
 
-**なぜ CLOB なのか？** Hyperliquid が price-time-priority 板マッチングを選んだのは、ターゲット市場 — crypto-native perps の top tier — に、板が真の price discovery を行えるだけの retail flow が継続的に存在するから。RFQ 系（Variational、Paradigm）は dealer が just-in-time で quote し primary venue で hedge することで long tail を取り、AMM 系（GMX 世代）は cold-start のために tail のリスク経済性を犠牲にする。これから作るのは、CLOB が正しい答えである市場の slice に対する engine。設計トレードオフの深堀りは Course 7（CLOB）の capstone で行う — いまはこの設計コンテキストだけで十分。
+**なぜ CLOB なのか？** Hyperliquid が price-time-priority 板マッチングを選んだのは、ターゲット市場 — crypto-native perps の top tier — に、板で真の price discovery が成立するだけの retail flow が継続的にあるから。RFQ 系（Variational、Paradigm）は dealer が just-in-time に quote を出し、primary venue で hedge することで long tail を取り、AMM 系（GMX 世代）は cold-start を取る代わりに、tail（裾野銘柄）の経済性を犠牲にする。これから作るのは、CLOB が正しい答えである市場セグメントに対する engine。設計トレードオフの掘り下げは Course 7（CLOB）の capstone で行う — いまはこの設計コンテキストを押さえておけば十分。
 
 ## 1. コース終了時点で手元にあるもの
 
