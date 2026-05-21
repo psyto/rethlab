@@ -133,6 +133,7 @@ export const ja: TranslationKeys = {
       advanced: '上級',
       expert: 'エキスパート',
       diyPerp: 'DIY Perp',
+      concept: '概念',
     },
     diyPerpSeries: {
       title: 'DIY Perp シリーズについて',
