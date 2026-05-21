@@ -74,7 +74,9 @@ The DIY Perp track in rethlab is the **build-along course series** for openhl. Y
 | **Build OpenHL — Precompiles** | Module 3: Core ↔ EVM precompiles | 12 | Smart contracts read CLOB state and place orders via custom EVM precompiles at `0x...0c1b` (read) and `0x...0c1c` (write). The `EvmFactory` "swap one slot" pattern, process-global `CLOB_STATE`, fill-sink routing back to the bridge |
 | **Build OpenHL — Funding** | Module 4 (partial): Funding state machine | 12 | Deterministic fixed-point funding math (`RATE_SCALE = 1e9` parts-per-billion) gated by an interval clock with no-catch-up semantics. Saturate-not-panic philosophy, balanced-book zero-sum proptest |
 
-Modules 4 (oracle + liquidations integration) and 5 (vault primitive) are still openhl work-in-progress — the matching rethlab courses will land when the reference code does.
+**In progress** — Build OpenHL — Liquidation, mapped to openhl Module 4 (Liquidation engine). Stage 10a (margin math) [shipped in openhl](https://github.com/psyto/openhl/commit/22eedf9): Hyperliquid-shape margin model with the 4-state classification (Safe / AtRisk / Liquidatable / Underwater), and the leveraged-regime non-monotonicity in `margin_ratio` (with the proptest that surfaces it). Insurance fund (Stage 10b) and multi-account scanner (Stage 10c) still pending. Course drafts L0 + L1 written; full course publishes when L2–L4 drafts land.
+
+Module 4 oracle integration and Module 5 vault primitive are still openhl work-in-progress — the matching rethlab courses land when the reference code does.
 
 **Total: 17 courses (× EN + JA), 51 modules, ~204 lessons per locale (408 lesson records in DB).**
 
@@ -157,9 +159,12 @@ rethlab/
 │                                              # DIY Perp courses — auto-generated
 │                                              # from drafts/ by .github/scripts/
 ├── drafts/
-│   └── openhl_{l<N>,clob_l<N>,precompiles_l<N>,funding_l<N>}_{en,ja}.md
+│   └── openhl_{l<N>,clob_l<N>,precompiles_l<N>,funding_l<N>,liquidation_l<N>}_{en,ja}.md
 │                                              # Build-along lesson markdown drafts.
 │                                              # Edit these, then re-run the builder.
+│                                              # `liquidation_l<N>` is the next course
+│                                              # in progress — its builder lands once
+│                                              # L2-L4 drafts are written.
 ├── .github/
 │   └── scripts/
 │       ├── build-openhl-seed.ts               # Build seed-reth-openhl-consensus
