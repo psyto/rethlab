@@ -2,7 +2,6 @@
 
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math).
 
-````markdown
 ## L1 — `openhl-liquidation-margin-scale-en`
 
 **Stage**: Stage 10a — `22eedf9`
@@ -13,6 +12,7 @@
 
 ---
 
+````markdown
 # Lesson 1 — `MARGIN_SCALE` + `LiquidationParams` — the dials on the risk engine
 
 ## Goal

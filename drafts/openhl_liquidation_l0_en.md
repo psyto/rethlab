@@ -4,7 +4,6 @@
 > This course is **course 10 of the DIY Perp series**, the 5th build-along
 > after consensus, clob, precompiles, and funding.
 
-````markdown
 ## L0 — `openhl-liquidation-orientation-en`
 
 **Stage**: Stage 10a (margin math, pure compute) — `22eedf9`
@@ -15,6 +14,7 @@
 
 ---
 
+````markdown
 # Build OpenHL Liquidation — perpetual position liquidation engine
 
 ## What you'll build

@@ -3,7 +3,6 @@
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math) 以降に対するドラフト。
 > 本コースは **DIY Perp シリーズの 10 番目のコース**、consensus / clob / precompiles / funding に続く 5 つ目の build-along。
 
-````markdown
 ## L0 — `openhl-liquidation-orientation-ja`
 
 **Stage**: Stage 10a (margin math、pure compute) — `22eedf9`
@@ -14,6 +13,7 @@
 
 ---
 
+````markdown
 # OpenHL Liquidation を作る — 永久先物ポジション liquidation エンジン
 
 ## 何を作るか

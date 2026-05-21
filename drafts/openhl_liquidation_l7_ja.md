@@ -2,7 +2,6 @@
 
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math) に対するドラフト。
 
-````markdown
 ## L7 — `openhl-liquidation-close-order-spec-ja`
 
 **Stage**: Stage 10a — `22eedf9`
@@ -13,6 +12,7 @@
 
 ---
 
+````markdown
 # レッスン 7 — `close_order_spec` — Stage 10a の最後の関数
 
 ## ゴール

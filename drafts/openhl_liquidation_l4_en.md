@@ -2,7 +2,6 @@
 
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math).
 
-````markdown
 ## L4 — `openhl-liquidation-notional-pnl-en`
 
 **Stage**: Stage 10a — `22eedf9`
@@ -13,6 +12,7 @@
 
 ---
 
+````markdown
 # Lesson 4 — `notional_value` + `unrealized_pnl` — the signed-multiplication trick
 
 ## Goal

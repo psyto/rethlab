@@ -2,7 +2,6 @@
 
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math).
 
-````markdown
 ## L6 — `openhl-liquidation-margin-health-en`
 
 **Stage**: Stage 10a — `22eedf9`
@@ -13,6 +12,7 @@
 
 ---
 
+````markdown
 # Lesson 6 — `margin_health` — the classification cascade and boundary semantics
 
 ## Goal

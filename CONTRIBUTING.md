@@ -107,9 +107,9 @@ After editing, run `npm run seed:upsert` (preserves user data) or `npx prisma db
 
 ### DIY Perp build-along courses (project construction)
 
-The openhl courses (consensus, clob, precompiles, funding; liquidation in progress) use a different pattern. Lesson bodies live in **markdown drafts** under `drafts/`, and the seed files are **auto-generated** by builder scripts. To edit:
+The openhl courses (consensus, clob, precompiles, funding, liquidation) use a different pattern. Lesson bodies live in **markdown drafts** under `drafts/`, and the seed files are **auto-generated** by builder scripts. To edit:
 
-1. Edit `drafts/openhl_{l<N>,clob_l<N>,precompiles_l<N>,funding_l<N>,liquidation_l<N>}_{en,ja}.md`. Each draft file wraps the lesson body in a ` ```` markdown ... ```` ` fence; the builder extracts the fenced block. `liquidation_l<N>` drafts exist now (L0 + L1); its builder script lands once L2-L4 are written.
+1. Edit `drafts/openhl_{l<N>,clob_l<N>,precompiles_l<N>,funding_l<N>,liquidation_l<N>}_{en,ja}.md`. Each draft file wraps the lesson body in a ` ```` markdown ... ```` ` fence; the builder extracts the fenced block.
 2. Re-run the builder for that course, e.g.:
    ```bash
    npx tsx .github/scripts/build-openhl-funding-seed.ts

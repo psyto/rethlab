@@ -2,7 +2,6 @@
 
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math) に対するドラフト。
 
-````markdown
 ## L5 — `openhl-liquidation-equity-ratio-ja`
 
 **Stage**: Stage 10a — `22eedf9`
@@ -13,6 +12,7 @@
 
 ---
 
+````markdown
 # レッスン 5 — `account_equity` + `margin_ratio` — そして最初のメンタルモデルを壊す proptest
 
 ## ゴール

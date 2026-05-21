@@ -2,7 +2,6 @@
 
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math) に対するドラフト。
 
-````markdown
 ## L3 — `openhl-liquidation-snapshot-spec-ja`
 
 **Stage**: Stage 10a — `22eedf9`
@@ -13,6 +12,7 @@
 
 ---
 
+````markdown
 # レッスン 3 — `AccountSnapshot` + `CloseOrderSpec` — エンジンの入出力型
 
 ## ゴール

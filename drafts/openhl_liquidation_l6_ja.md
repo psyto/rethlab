@@ -2,7 +2,6 @@
 
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math) に対するドラフト。
 
-````markdown
 ## L6 — `openhl-liquidation-margin-health-ja`
 
 **Stage**: Stage 10a — `22eedf9`
@@ -13,6 +12,7 @@
 
 ---
 
+````markdown
 # レッスン 6 — `margin_health` — 分類カスケードと境界セマンティクス
 
 ## ゴール

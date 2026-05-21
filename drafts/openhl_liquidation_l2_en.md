@@ -2,7 +2,6 @@
 
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math).
 
-````markdown
 ## L2 — `openhl-liquidation-margin-types-en`
 
 **Stage**: Stage 10a — `22eedf9`
@@ -13,6 +12,7 @@
 
 ---
 
+````markdown
 # Lesson 2 — `MarginRatio` + `MarginHealth` — the classification types the engine returns
 
 ## Goal

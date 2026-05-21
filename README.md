@@ -39,7 +39,7 @@ This is a serious training program — not a casual tutorial.
 
 ## The course catalog
 
-**17 courses split across two pedagogical modes**: source-reading + skill progression (Reth stack, 13 courses), and project build-alongs (DIY Perp, 4 courses).
+**18 courses split across two pedagogical modes**: source-reading + skill progression (Reth stack, 13 courses), and project build-alongs (DIY Perp, 5 courses).
 
 ### Reth stack — source-first courses
 
@@ -73,12 +73,11 @@ The DIY Perp track in rethlab is the **build-along course series** for openhl. Y
 | **Build OpenHL — CLOB** | Module 2: CLOB matching engine | 13 | Pure-state price-time-priority matching engine. Bridge integration pushes fills through `LiveRethEvmBridge::build_payload` into consensus-committed payloads |
 | **Build OpenHL — Precompiles** | Module 3: Core ↔ EVM precompiles | 12 | Smart contracts read CLOB state and place orders via custom EVM precompiles at `0x...0c1b` (read) and `0x...0c1c` (write). The `EvmFactory` "swap one slot" pattern, process-global `CLOB_STATE`, fill-sink routing back to the bridge |
 | **Build OpenHL — Funding** | Module 4 (partial): Funding state machine | 12 | Deterministic fixed-point funding math (`RATE_SCALE = 1e9` parts-per-billion) gated by an interval clock with no-catch-up semantics. Saturate-not-panic philosophy, balanced-book zero-sum proptest |
-
-**In progress** — Build OpenHL — Liquidation, mapped to openhl Module 4 (Liquidation engine). Stage 10a (margin math) [shipped in openhl](https://github.com/psyto/openhl/commit/22eedf9): Hyperliquid-shape margin model with the 4-state classification (Safe / AtRisk / Liquidatable / Underwater), and the leveraged-regime non-monotonicity in `margin_ratio` (with the proptest that surfaces it). Insurance fund (Stage 10b) and multi-account scanner (Stage 10c) still pending. Course drafts L0 + L1 written; full course publishes when L2–L4 drafts land.
+| **Build OpenHL — Liquidation** | Module 4 (partial): Liquidation engine | 8 (Stage 10a) | Pure-compute margin engine with 4-state classification (Safe / AtRisk / Liquidatable / Underwater) and the leveraged-regime non-monotonicity discovery: write the proptest, watch it fail, trace the failure, refine with `prop_assume!`. Stage 10a [shipped in openhl](https://github.com/psyto/openhl/commit/22eedf9). Lessons for Stage 10b (insurance fund) and 10c (multi-account scanner) will land when those openhl sub-stages do. |
 
 Module 4 oracle integration and Module 5 vault primitive are still openhl work-in-progress — the matching rethlab courses land when the reference code does.
 
-**Total: 17 courses (× EN + JA), 51 modules, ~204 lessons per locale (408 lesson records in DB).**
+**Total: 18 courses (× EN + JA), 54 modules, 212 lessons per locale (424 lesson records in DB).**
 
 All courses are free. Reading every lesson works without an account. Anonymous visitors get **browser-local completion tracking** (lesson checkmarks + per-course progress bars persisted in `localStorage`); sign-in adds cross-device sync, XP, and a profile page.
 
@@ -120,12 +119,12 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ### What `db seed` does
 
-The seeder lives in `prisma/seed.ts` and pulls from 17 generated course files (`prisma/seed-reth-*-{en,ja}.ts`). It clears all course tables and re-creates 17 courses / 51 modules / 204 lessons per locale (408 lesson records combined) in one shot.
+The seeder lives in `prisma/seed.ts` and pulls from 18 generated course files (`prisma/seed-reth-*-{en,ja}.ts`). It clears all course tables and re-creates 18 courses / 54 modules / 212 lessons per locale (424 lesson records combined) in one shot.
 
 Two pedagogical formats live in those seeds:
 
 - **Reth stack courses** — markdown bodies are inlined directly in `prisma/seed-reth-{beginner,fundamentals,...}-{en,ja}.ts`. Edit those files to update lesson content.
-- **DIY Perp build-along courses** — markdown bodies live in `drafts/openhl_{consensus,clob,precompiles,funding}_l<N>_{en,ja}.md`. The `prisma/seed-reth-openhl-*-{en,ja}.ts` files are **auto-generated** from those drafts by builder scripts under `.github/scripts/build-openhl-*-seed.ts`. To edit a build-along lesson, edit the markdown draft and re-run the relevant builder.
+- **DIY Perp build-along courses** — markdown bodies live in `drafts/openhl_{consensus,clob,precompiles,funding,liquidation}_l<N>_{en,ja}.md`. The `prisma/seed-reth-openhl-*-{en,ja}.ts` files are **auto-generated** from those drafts by builder scripts under `.github/scripts/build-openhl-*-seed.ts`. To edit a build-along lesson, edit the markdown draft and re-run the relevant builder.
 
 Lesson URLs key on the **slug** (stable across reseeds), not the database CUID, so a full reseed never breaks shared links.
 
@@ -155,22 +154,20 @@ rethlab/
 │   │              advanced,expert,building,consensus-engineering,
 │   │              cross-chain-bridges,sequencer-rollup,p2p-networking,
 │   │              validator-ops}-{en,ja}.ts
-│   └── seed-reth-openhl-{consensus,clob,precompiles,funding}-{en,ja}.ts
+│   └── seed-reth-openhl-{consensus,clob,precompiles,funding,liquidation}-{en,ja}.ts
 │                                              # DIY Perp courses — auto-generated
 │                                              # from drafts/ by .github/scripts/
 ├── drafts/
 │   └── openhl_{l<N>,clob_l<N>,precompiles_l<N>,funding_l<N>,liquidation_l<N>}_{en,ja}.md
 │                                              # Build-along lesson markdown drafts.
 │                                              # Edit these, then re-run the builder.
-│                                              # `liquidation_l<N>` is the next course
-│                                              # in progress — its builder lands once
-│                                              # L2-L4 drafts are written.
 ├── .github/
 │   └── scripts/
 │       ├── build-openhl-seed.ts               # Build seed-reth-openhl-consensus
 │       ├── build-openhl-clob-seed.ts          # Build seed-reth-openhl-clob
 │       ├── build-openhl-precompiles-seed.ts
-│       └── build-openhl-funding-seed.ts
+│       ├── build-openhl-funding-seed.ts
+│       └── build-openhl-liquidation-seed.ts
 ├── src/
 │   ├── app/                                   # Next.js App Router pages
 │   │   ├── courses/                           # Course catalog + detail + lesson pages

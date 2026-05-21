@@ -2,7 +2,6 @@
 
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math).
 
-````markdown
 ## L5 — `openhl-liquidation-equity-ratio-en`
 
 **Stage**: Stage 10a — `22eedf9`
@@ -13,6 +12,7 @@
 
 ---
 
+````markdown
 # Lesson 5 — `account_equity` + `margin_ratio` — and the proptest that breaks your first mental model
 
 ## Goal

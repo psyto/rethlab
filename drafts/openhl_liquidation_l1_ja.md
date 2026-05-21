@@ -2,7 +2,6 @@
 
 > openhl SHA `22eedf9` (Stage 10a — liquidation margin math) に対するドラフト。
 
-````markdown
 ## L1 — `openhl-liquidation-margin-scale-ja`
 
 **Stage**: Stage 10a — `22eedf9`
@@ -13,6 +12,7 @@
 
 ---
 
+````markdown
 # レッスン 1 — `MARGIN_SCALE` + `LiquidationParams` — リスクエンジンのダイヤル
 
 ## ゴール

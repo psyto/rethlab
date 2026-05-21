@@ -33,6 +33,8 @@ import { seedRethOpenHlPrecompilesEN } from './seed-reth-openhl-precompiles-en';
 import { seedRethOpenHlPrecompilesJA } from './seed-reth-openhl-precompiles-ja';
 import { seedRethOpenHlFundingEN } from './seed-reth-openhl-funding-en';
 import { seedRethOpenHlFundingJA } from './seed-reth-openhl-funding-ja';
+import { seedRethOpenHlLiquidationEN } from './seed-reth-openhl-liquidation-en';
+import { seedRethOpenHlLiquidationJA } from './seed-reth-openhl-liquidation-ja';
 
 const prisma = new PrismaClient();
 
@@ -139,6 +141,9 @@ async function main() {
   await seedRethOpenHlFundingEN(prisma);
   await seedRethOpenHlFundingJA(prisma);
   console.log('  Seeded Building OpenHL — Funding (EN + JA)');
+  await seedRethOpenHlLiquidationEN(prisma);
+  await seedRethOpenHlLiquidationJA(prisma);
+  console.log('  Seeded Building OpenHL — Liquidation (EN + JA)');
 
   const courseCount = await prisma.course.count();
   const moduleCount = await prisma.module.count();
