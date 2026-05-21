@@ -22,10 +22,10 @@
 
 このレッスンで掴む概念:
 
-- **`std::mem::take` は O(1) — 要素コピーではなくポインタの swap** — 1000 個の `Vec<Fill>` でも `mem::take` は (ptr, len, cap) を 1 代入で入れ替える。`drain(..).collect()` は O(N) で iterator のオーバーヘッドもある。標準ライブラリの primitive を知っていると、より遅い実装を自前で書かずに済む。
-- **Drain は `submit` ではなく `build_payload` で行う** — Fill は「どの payload に乗るか」でグループ化する。Submit 順ではない。Submit 時に drain すると bridge が payload 割り当てを別チャネルで追う必要が出る。「Buffer して drain」のパターンがそのグループ化を無料で実現する。
+- **`std::mem::take` は O(1) — 要素コピーではなくポインタの swap** — 1000 個の `Vec<Fill>` でも `mem::take` は (ptr, len, cap) を 1 代入で入れ替える。`drain(..).collect()` は O(N) で、iterator のオーバーヘッドもある。標準ライブラリの primitive を知っていれば、より遅い実装を自前で書かずに済む。
+- **Drain は `submit` ではなく `build_payload` で行う** — Fill は「どの payload に乗るか」でグループ化する。Submit 順ではない。Submit 時に drain すると、bridge が payload 割り当てを別チャネルで追う必要が出てくる。「Buffer して drain」のパターンが、そのグループ化を無料で実現する。
 - **Forward-only drain は block の不変性を反映している** — Payload N は「前回の `build_payload` から今まで」に蓄積した fill を受け取る。以前の payload は遡って更新されない。Commit 済みブロックと同じ意味論 — 一度組んだら凍結する。
-- **独立な操作なら短い lock 2 つの方が長い lock 1 つよりも良い** — `state` を取って payload ID を計算し、`pending_fills` を *短時間* 取って swap し、その後 `state` lock のまま挿入を続ける。`pending_fills` の mutex は重い処理の間は持たない。
+- **独立な操作なら、長い lock 1 つより短い lock 2 つのほうがよい** — `state` を取って payload ID を計算し、`pending_fills` を *短時間* 取って swap し、その後 `state` lock のまま挿入を続ける。`pending_fills` の mutex は重い処理の間は保持しない。
 - **「Fill が失われる」失敗モードは現実だが v0 では許容** — `build_payload` が drain 後にエラーで戻ると、fill は `pending_fills` から消えたが payload にも入っていない状態になる。Production では recovery queue を足して保護する。V0 の single-validator devnet ではそのリスクを許容する。
 
 検証:
@@ -164,7 +164,7 @@ let id2 = bridge.build_payload(...).await.unwrap();  // 今度は空 drain
 assert_eq!(bridge.payload_fills(id2), Some(vec![]));  // retroactive fill なし
 ```
 
-これが L11 の integration test が大まかにやることだ。ただし L11 では real な Reth node を bootstrap した上で実行する。L10 は基礎の機構を動くようにするだけ。
+これが L11 の integration test が大まかにやることだ。ただし L11 では実際の Reth node を bootstrap した上で実行する。L10 は基礎の機構を動くようにするだけ。
 
 ## テスト
 
@@ -207,7 +207,7 @@ grep -n "Vec::new()" crates/evm/src/live_node.rs
 
 2. **`std::mem::take` が正しい primitive。** O(1)、lock 下で atomic、意図 (「全部取って default を残す」) を明確に signal する。代替の `collect::<Vec<_>>(...drain(..))` + 明示的 clear は O(N) で、半 drain 状態の窓もできる。**標準ライブラリの primitive を知っておくことが、より遅くバグの多い自前版を再発明してしまう事故から自分を守る。**
 
-3. **Drain は forward-only。** Payload N には、(前回の build_payload 呼び出し) と (今回の呼び出し) の間に produce された fill が attach される。以前の payload は、後で arrive した fill で更新されない。これは chain の意味論と一致している: block が build されたら、その content は frozen。**Buffer-then-drain の形が、明示的なグループ化メカニズムを使わずに「この block に何があるか」を encode する。**
+3. **Drain は forward-only。** Payload N には、(前回の build_payload 呼び出し) と (今回の呼び出し) の間に生成された fill が attach される。以前の payload は、後で arrive した fill で更新されない。これは chain の意味論と一致している: block が build されたら、その content は frozen。**Buffer-then-drain の形が、明示的なグループ化メカニズムを使わずに「この block に何があるか」を encode する。**
 
 ## 答え合わせ
 
@@ -234,7 +234,7 @@ git checkout main
 ない。`std::mem::take` が `MutexGuard` の下で実行されているから。Lock が保持されている間、他のスレッドは lock を acquire できない。最初の build_payload が full set を得て、2 番目は空 Vec を得る (最初の呼び出しが `Vec::default()` で置き換えているため)。**Mutex が drain を直列化する。**
 
 **Q: `build_payload` が drain **後** に error したら?**
-Fill は `pending_fills` から消えたが payload には入らなかったことになる — 実質的に失われる (submit されたが commit されていない)。**これは real なバグクラスで**、production コードでは handle すべき (たとえば build_payload の残処理を行う前に、drain した fill を recovery queue に保存するなど)。本コースの v0 single-validator devnet では failure path が稀なので loss を許容する。production hardening は下流の仕事。
+Fill は `pending_fills` から消えたが payload には入らなかったことになる — 実質的に失われる (submit されたが commit されていない)。**これは現実に起こりうるバグクラスで**、production コードでは handle すべき (たとえば build_payload の残処理を行う前に、drain した fill を recovery queue に保存するなど)。本コースの v0 single-validator devnet では failure path が稀なので loss を許容する。production hardening は下流の仕事。
 
 **Q: `drained_fills` を `state` lock 内ではなく、別の lock で取るのはなぜ?**
 `pending_fills` と `state` が別々の mutex だから (L9 の設計判断)。まず `state` を lock し (新しい payload ID を計算するため)、次に `pending_fills` を短く lock し (swap のためだけ)、そのまま state lock を使って `pending` への insert を続ける。**操作が独立しているなら、長い lock 1 つよりも短い lock 2 つのほうがよい。**
@@ -243,10 +243,10 @@ Fill は `pending_fills` から消えたが payload には入らなかったこ�
 
 Bridge にデータフローが通った。**ただし end-to-end で動くことはまだ証明していない。** L11 で `clob_fills_flow_into_payload` integration test を書く:
 
-1. Real Reth `EthereumNode` を bootstrap する (course 6 と同じパターン)。
+1. 実 Reth `EthereumNode` を bootstrap する (course 6 と同じパターン)。
 2. Live provider で `LiveRethEvmBridge` を construct する。
 3. 空 book で `build_payload` を呼ぶ — fill が attach されていないことを verify する (`payload_fills` が `Some(vec![])` を返す)。
-4. Maker BID @ 100、続いて crossing taker SELL @ 100 を submit する — fill が produce される。
+4. Maker BID @ 100、続いて crossing taker SELL @ 100 を submit する — 約定が生成される。
 5. `pending_fill_count == 1` を verify する。
 6. 次の payload を build する — fill が drain され、なおかつ attach されることを verify する。
 7. `pending_fill_count == 0` を verify する。

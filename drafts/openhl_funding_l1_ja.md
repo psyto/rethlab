@@ -22,10 +22,10 @@
 
 このレッスンで掴む概念:
 
-- **Float が consensus で動かない理由** — FMA、丸めモード、denormal の扱いがコンパイラ / CPU ごとに違い、rate の LSB 1 bit のズレが chain fork に直結する。
-- **`RATE_SCALE = 1e9` が i64 スイートスポットである理由** — parts-per-billion なら 9 桁の精度を保ちつつ、積の中間値でも i64 まで 11 桁のヘッドルームが残る。`1e6` では精度不足、`1e12` ではヘッドルーム不足。
-- **Crate scaffold の起点** — 空の `lib.rs` を `pub mod` 1 つと re-export 1 つで「実 crate」に変える手順、そして `pub mod` 宣言は対応ファイルを作るタイミングで足すという原則。
-- **「一度決めたら変えない」定数の置き方** — `RATE_SCALE` は consensus state であって調整パラメータではない。Doc コメントの配置と post-deployment immutable 扱いの理由。
+- **Float が consensus で動かない理由** — FMA、丸めモード、denormal の扱いはコンパイラと CPU ごとに振る舞いが異なり、rate の LSB 1 bit のズレがそのまま chain fork に直結する。
+- **`RATE_SCALE = 1e9` が i64 のスイートスポットである理由** — parts-per-billion なら 9 桁の精度を保ちながら、積の中間値でも i64 まで 11 桁のヘッドルームが残る。`1e6` では精度不足、`1e12` ではヘッドルーム不足。
+- **Crate scaffold の出発点** — 空の `lib.rs` を `pub mod` 宣言 1 つと re-export 1 つで「実 crate」へ変える手順。そして `pub mod` 宣言は対応するファイルを作るタイミングで足す、という原則。
+- **「一度決めたら変えない」定数の置き方** — `RATE_SCALE` は consensus state であって調整パラメータではない。Doc コメントを置く場所と、デプロイ後を immutable として扱う理由。
 
 検証：
 
@@ -37,7 +37,7 @@ cargo build -p openhl-funding
 
 具体的な変更:
 
-- **Cargo.toml** に `openhl-clob` 依存を配線（後で `AccountId` が必要になるが、今入れておけば L3 で驚かずに済む）。加えて `[dev-dependencies]` ブロックで `proptest` を準備（L4 / L7 で使う）。
+- **Cargo.toml** に `openhl-clob` 依存を追加（後で `AccountId` が必要になるが、今入れておけば L3 で驚かずに済む）。加えて `[dev-dependencies]` ブロックで `proptest` を準備（L4 / L7 で使う）。
 - **`src/types.rs`** — 新規作成。module doc と `pub const RATE_SCALE: i64 = 1_000_000_000` のみ。
 - **`src/lib.rs`** — 空だったところに `pub mod types;` と、クレートルートでの `RATE_SCALE` re-export を追加。
 

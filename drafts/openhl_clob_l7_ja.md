@@ -22,11 +22,11 @@
 
 このレッスンで掴む概念:
 
-- **網羅は本数ではなく invariant 単位** — 9 個のテストは「9 個の任意のシナリオ」ではない。それぞれが別個の invariant に対応する (empty-book、resting、walks-levels、respects-limit、FIFO time priority、partial-market、cancel-found、cancel-not-found、no-cross)。Invariant の一覧が短く明確だからこそ 9 が defensible な数になる。
-- **Hand-trace された unit test が proptest (L8) の oracle になる** — proptest が乱数 25-action sequence で fail したら、invariant を 1 つだけ切り出した hand-trace テストでデバッグする。Proptest は amplifier、unit test は土台。
+- **網羅は本数ではなく invariant 単位** — 9 個のテストは「9 個の任意のシナリオ」ではない。それぞれが別個の invariant に対応する (empty-book、resting、walks-levels、respects-limit、FIFO time priority、partial-market、cancel-found、cancel-not-found、no-cross)。Invariant の一覧が短く明確だからこそ、9 という数が正当化できる。
+- **Hand-trace された unit test が proptest (L8) の oracle になる** — proptest が乱数 25-action sequence で fail したら、invariant を 1 つだけ切り出した hand-trace テストでデバッグする。Proptest は増幅器、unit test は土台。
 - **Builder pattern より helper 関数** — 位置引数の `limit(...)` / `market(...)` は重複を取り除く最安の抽象。Builder pattern は ~5 行で済むテストには儀式的すぎる。
-- **ソース順序が優先度を表す** — `book_does_not_cross_after_match` を最後に置くのは maintainer に対して「これが load-bearing な safety property」というシグナル。テスト実行はアルファベット順、ソース順序は人間向け。
-- **`assert!(a == b)` より `assert_eq!`** — `assert_eq!` は失敗時に両辺を出す。実際の値が見えるのがデバッグ速度を決める。
+- **ソース順序が優先度を表す** — `book_does_not_cross_after_match` を最後に置くのは、maintainer に対して「これが load-bearing な safety property」というシグナル。テスト実行はアルファベット順、ソース順序は人間向け。
+- **`assert!(a == b)` より `assert_eq!`** — `assert_eq!` は失敗時に両辺を出す。実際の値が見えるかどうかがデバッグ速度を決める。
 
 検証:
 
@@ -93,9 +93,9 @@ mod tests {
 
 9 個のテストは **複雑さ順** に並べる: 最もシンプルな invariant (空 book に price なし) で始まり、最も強い invariant (マッチ後に book が cross しない — 整形 orderbook をゴミから区別する **safety property**) で終わる。
 
-> 🛑 **考えてみよう。** スクロールする前に: 9 個のうちどれが、`submit_limit::Buy` が ask を **降順** (最高値先) に walk するバグで失敗するか? ヒント: 「best ask 先」を明示的に assert しているテストを考える。
+> 🛑 **考えてみよう。** スクロールする前に: 9 個のうちどれが、`submit_limit::Buy` が ask を **降順** (最高値先) に辿るバグで失敗するか? ヒント: 「best ask 先」を明示的に assert しているテストを考える。
 
-(答え: `buy_market_takes_best_ask`。`r.fills[0].price == Price(100)` と `r.fills[1].price == Price(105)` で best-first を assert している。降順 walk なら `[105, 100]` を produce してしまう。**Directional バグは randomized テストでも catch できるが、hand-trace テストならより安く catch できる。**)
+(答え: `buy_market_takes_best_ask`。`r.fills[0].price == Price(100)` と `r.fills[1].price == Price(105)` で best-first を assert している。降順に辿るバグだと `[105, 100]` を生成してしまう。**Directional バグは randomized テストでも catch できるが、hand-trace テストならより安く catch できる。**)
 
 ## 手順
 
@@ -188,7 +188,7 @@ let order = Order {
     }
 ```
 
-空 book に Buy Limit @ 90 が入る → fill なし、bid として rest する。Sell Limit @ 100 が入る → fill なし (bid 90、ask が欲しいのは 100 なので cross しない)、ask として rest する。
+空 book に Buy Limit @ 90 が入る → 約定なし、bid として rest する。Sell Limit @ 100 が入る → 約定なし (bid 90、ask が欲しいのは 100 なので cross しない)、ask として rest する。
 
 submit ごとに鍵となる assertion が 2 つ:
 - **`r.fills.is_empty()`** — 反対側に何もなかったのでマッチなし。
@@ -221,9 +221,9 @@ submit ごとに鍵となる assertion が 2 つ:
 - Price 105 (次に安い) から 3 取る。
 - 合計 fill: 8。Remaining: 0。
 
-Assert がこれを encode する: best-first 順で fill 2 つ、`remaining_qty == 0` (Market が完全 fill)、ask @ 105 は依然 2 unit depth が残る。
+Assert がこれを encode する: best-first 順で約定 2 つ、`remaining_qty == 0` (Market が完全に約定)、ask @ 105 は依然 2 unit depth が残る。
 
-**このテストが catch するもの**: ask walk の directional バグ ("best first" をテスト) と、「空 level drop」invariant (価格 100 の level が完全消費後に消え、105 level は depth が減って残る)。
+**このテストが catch するもの**: ask 走査の directional バグ ("best first" をテスト) と、「空 level drop」invariant (価格 100 の level が完全消費後に消え、105 level は depth が減って残る)。
 
 ### Step 5: Test 4 — `limit_buy_walks_asks_within_price`
 
@@ -252,9 +252,9 @@ Test 3 と同じ開始 book (ask が 100 と 105)。ただし今度は incoming 
 - 価格 105 の ask は at-or-better **ではない** (105 > 103) — マッチ停止。
 - 残り 5 unit が 103 で新しい bid として rest する。
 
-Test 3 との違いは、**limit price check** が walk を早く止める点。Test 3 の Market buy は 100 を walk し続けた (Market は任意の価格を取る) が、test 4 の Limit buy は 103 で止まる。
+Test 3 との違いは、**limit price check** が走査を早く止める点。Test 3 の Market buy は 100 を辿り続けた (Market は任意の価格を取る) が、test 4 の Limit buy は 103 で止まる。
 
-この 2 つのテストを合わせると、L4 の price-check ロジックが両方向で動くことを証明できる: Market (check なし、全部 walk する) と Limit (check あり、limit で止まる)。
+この 2 つのテストを合わせると、L4 の price-check ロジックが両方向で動くことを証明できる: Market (check なし、全部辿る) と Limit (check あり、limit で止まる)。
 
 ### Step 6: Test 5 — `price_time_priority_within_level`
 
@@ -277,8 +277,8 @@ Test 3 との違いは、**limit price check** が walk を早く止める点。
 **同じ price** (100) に resting Sell が 2 個、提出順は order 1、その後 order 2。7 unit の Market buy が arrive する。
 
 期待:
-- Order 1 (最初に place された方) が最初に fill — 5 unit。
-- Order 2 (2 番目に place された方) が次に fill — 2 unit。
+- Order 1 (最初に place された方) が最初に約定 — 5 unit。
+- Order 2 (2 番目に place された方) が次に約定 — 2 unit。
 
 これが「price-time priority」のうち **time priority** の半分。Price level 内では order が FIFO で並び、first in が first out になる。L3 で選んだ `VecDeque<RestingOrder>` がこれを `push_back` (新規 order を末尾に) と `pop_front` (マッチした order を先頭から) で自然に実装している。
 
@@ -391,7 +391,7 @@ test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 よくあるエラーと対処:
 
 - **test 内で `error: cannot find function 'limit' in this scope`** — `fn limit(...)` が `mod tests` block の外にある。`use super::*;` 行の後、block 内に移動する。
-- **`assertion failed: r.fills[0].price == Price(100)`** で失敗 — `Price(105)` を得た。バグは `submit_market` か `submit_limit` で、間違った方向に walk している。`keys().next()` 呼び出しを確認: ask は最安先、bid (`Reverse<Price>` 付き) は最高先が欲しい (key が `Reverse<Price>` なら `keys().next()` がそれを返してくれる)。
+- **`assertion failed: r.fills[0].price == Price(100)`** で失敗 — `Price(105)` を得た。バグは `submit_market` か `submit_limit` で、間違った方向に辿っている。`keys().next()` 呼び出しを確認: ask は最安先、bid (`Reverse<Price>` 付き) は最高先が欲しい (key が `Reverse<Price>` なら `keys().next()` がそれを返してくれる)。
 - **`price_time_priority_within_level` で `assertion failed: r.fills[0].maker_order_id == OrderId(1)`** — `OrderId(2)` が来た。つまり後で submit した order が先にマッチしている = Queue が LIFO になっている。`submit_limit` の rest path を確認: `push_back` (FIFO) すべきで、`push_front` (LIFO) ではない。
 - **`market_with_insufficient_liquidity_returns_remaining` で `assertion failed: book.depth_ask() == 0`** — ask が cleanup されていない。`submit_market` の loop で `if queue.is_empty() { self.asks.remove(&best_price) }` step (または Sell ケースの bid 等価) が抜けている。
 
@@ -430,10 +430,10 @@ git checkout main
 L8 でまさにそれをやる — 768 ランダムシナリオを exercise する proptest invariant 3 個。ただし proptest は hand-trace テストを oracle として依存する。proptest が失敗したときに、それを isolate できる小さな hand-trace テストが欲しいから。**Hand-trace unit test が基礎、proptest がそれを amplify する役。**
 
 **Q: Sell-side limit order のテストは?**
-良い質問。9 個のテストが buy-side シナリオに focus しているのは、trace するのが直感的だから (「ask を最安先で walk」は「bid を最高先で walk」よりイメージしやすい)。Sell-side テストは correctness 上必須ではない — **もし** `submit_limit::Sell` が `submit_limit::Buy` の構造的 mirror なら (L4 で確立済み)。心配なら sell-side テストをいくつか追加すればよい — このセットの test 3、4、5 を mirror すればよい。
+良い質問。9 個のテストが buy-side シナリオに focus しているのは、trace するのが直感的だから (「ask を最安先で辿る」は「bid を最高先で辿る」よりイメージしやすい)。Sell-side テストは correctness 上必須ではない — **もし** `submit_limit::Sell` が `submit_limit::Buy` の構造的 mirror なら (L4 で確立済み)。心配なら sell-side テストをいくつか追加すればよい — このセットの test 3、4、5 を mirror すればよい。
 
 **Q: なぜ `assert!` ではなく `assert_eq!` を使うのか?**
-`assert_eq!(a, b)` は失敗時に両方の値を print してくれるが、`assert!(a == b)` は値なしの「left == right」だけを print する。Test デバッグでは、engine が produce した実際の値を知ることが重要。比較が equality なら `assert_eq!` が厳密に優れている。
+`assert_eq!(a, b)` は失敗時に両方の値を print してくれるが、`assert!(a == b)` は値なしの「left == right」だけを print する。Test デバッグでは、engine が生成した実際の値を知ることが重要。比較が equality なら `assert_eq!` が厳密に優れている。
 
 ## 次のレッスン (L8)
 
@@ -441,7 +441,7 @@ Hand-trace されたテスト 9 個。**思いついた specific シナリオを
 
 - **`qty_conservation`**: book に入る合計 quantity = 合計 filled + 合計 resting。
 - **`no_crossed_book`**: `best_bid < best_ask` が常に成立する (test 9 で hand-trace した safety property を今度はランダムテストする)。
-- **`determinism`**: 同じ action sequence が同じ fills と同じ book state を produce する。
+- **`determinism`**: 同じ action sequence が同じ約定列と同じ book state を生成する。
 
 256 ランダムケース × 3 invariant = 768 ランダムシナリオ。どれか 1 個でも invariant に違反すれば、proptest が **失敗 sequence を最小反例に自動的に shrink する**。それが example よりも property の load-bearing な利点。
 ````

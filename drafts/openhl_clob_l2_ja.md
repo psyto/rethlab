@@ -22,10 +22,10 @@
 
 このレッスンで掴む概念:
 
-- **自己完結した message は module 境界を綺麗に越える** — `Fill` は `maker_order_id` と `maker_account` の両方を持つ。一方が他方から導出できても、この冗長性で Fill 消費者 (precompile、payload 組み立て) を engine 内部 index から切り離す。
-- **「fill 群」と「残り」を分けるのは型レベルの判断** — `FillResult { fills, remaining_qty }` は submit の 2 つの異なる出力を明示する。`Vec<Fill>` に「残り」を擬似 entry として埋め込むより明瞭。
-- **派生値はキャッシュせず算出する** — `total_filled()` は method、field ではない。キャッシュすると fill 群を変更するたびに counter 同期が必要になるが、都度計算すれば `FillResult` は pure data record のまま。
-- **`Copy` は便利さではなく意味論を反映する** — `Order` (5 小 field、約 48 バイト) は `Copy`。`FillResult` は `Vec<Fill>` を所有するので非 `Copy`。`Copy` は `=` が 1 回の bit-blit で済む型のみ。
+- **自己完結した message は module 境界をきれいに越える** — `Fill` は `maker_order_id` と `maker_account` の両方を持つ。一方は他方から導出できるが、この冗長性のおかげで Fill の消費者 (precompile、payload 組み立て) を engine 内部の index から切り離せる。
+- **「約定の集合」と「残量」を分けるのは型レベルの判断** — `FillResult { fills, remaining_qty }` は submit の異なる 2 つの出力を明示する。`Vec<Fill>` に残量を擬似 entry として埋め込むより明瞭。
+- **派生値はキャッシュせず算出する** — `total_filled()` は method であって field ではない。キャッシュすると約定集合を変更するたびに counter の同期が必要になるが、都度計算すれば `FillResult` を pure data record のまま保てる。
+- **`Copy` は便利さではなく意味論を反映する** — `Order` (5 つの小 field、約 48 バイト) は `Copy`。`FillResult` は `Vec<Fill>` を所有するので非 `Copy`。`Copy` を付けるのは `=` が 1 回の bit-blit で済む型のみ。
 
 検証:
 
@@ -122,12 +122,12 @@ pub struct Fill {
 
 6 field。Maker-vs-taker の区別は matching engine コードで最も重要な概念:
 
-- **Maker** = 既に book に rest していた order。流動性を「作った (made)」側で、経済的に良い deal を得る (real exchange では通常 rebate)。
-- **Taker** = 流動性を消費して入ってきた order。Spread を払う側で、real exchange では fee を払う。
+- **Maker** = 既に book に rest していた order。流動性を「作った (made)」側で、経済的に良い deal を得る (実際の取引所では通常 rebate)。
+- **Taker** = 流動性を消費して入ってきた order。Spread を払う側で、実際の取引所では fee を払う。
 
-各 `Fill` は 1 つの match ペアを表す。1 つの taker order が **複数の Fill** を produce することもある (例: market buy が ask 側を上に walk して resting ask を順に食べる)。
+各 `Fill` は 1 つの match ペアを表す。1 つの taker order が **複数の Fill** を生成することもある (例: market buy が ask 側を上に向かって走査し、resting ask を順に食べる)。
 
-**`price` は maker の価格** — taker が book を hit するとき、taker の limit ではなく maker の resting 価格でマッチする。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格)。buyer が勝つわけだ。これが「price-time priority」の挙動。
+**`price` は maker の価格** — taker が book を hit するとき、taker の limit ではなく maker の resting 価格でマッチする。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で約定する (maker の価格)。buyer が勝つわけだ。これが「price-time priority」の挙動。
 
 > 🛑 **やりがちな勘違い。** 「両方の account ID を保存するのは冗長に見える — 各 `Fill` は consume 時に `OrderId` から account を lookup できる」。 **ダメ — そのためには consumer が book の `HashMap<OrderId, RestingOrder>` への参照を保持し、book が先に進んだ後も生かしておかなければならない。** Fill は match 時に emit され非同期に consume される (本コースでは後で commit される payload に drain される)。Book がその間に maker order を cancel していたら、`OrderId → AccountId` lookup は `None` を返し、consumer は詰む。**Self-contained な Fill ならその問題は起きない。**
 
@@ -162,11 +162,11 @@ impl FillResult {
 
 doc コメント中の 3 点に L3+ のコードが依存する:
 
-1. **`fills` は execution 順序**。Market buy が ask level を 3 個 walk すると、fills[0] が最安マッチ、fills[1] が次、fills[2] が最高となる。Replay determinism にこの順序が重要 (L8 の proptest で assert する)。
-2. **`remaining_qty` は rest しなかった taker quantity のみ**。Market order の remainder 100 は「100 unit がどの価格でもマッチできなかった (book が流動性切れ)」を意味する。Limit order でも remainder が 0 だが fill しなかった残りがあり得る — ただしその残りは **今 book にある** (resting order として) のであって、return 値の中にあるわけではない。
-3. **`total_filled` はヘルパーであって stored field ではない**。fill 全体に対する O(N) 合計。cache しない理由は、(a) caller が「fill したか?」を聞くだけなら通常 `Vec::len()` で済む、(b) 実際の quantity total は test/inspection コードでしか必要にならず、そこでは O(N) が問題にならない、から。
+1. **`fills` は execution 順序**。Market buy が ask level を 3 個走査すると、fills[0] が最安マッチ、fills[1] が次、fills[2] が最高となる。Replay determinism にこの順序が重要 (L8 の proptest で assert する)。
+2. **`remaining_qty` は rest しなかった taker quantity のみ**。Market order の remainder 100 は「100 unit がどの価格でもマッチできなかった (book が流動性切れ)」を意味する。Limit order でも remainder が 0 だが約定しなかった残りがあり得る — ただしその残りは **今 book にある** (resting order として) のであって、return 値の中にあるわけではない。
+3. **`total_filled` はヘルパーであって stored field ではない**。約定全体に対する O(N) 合計。cache しない理由は、(a) caller が「約定したか?」を聞くだけなら通常 `Vec::len()` で済む、(b) 実際の quantity total は test/inspection コードでしか必要にならず、そこでは O(N) が問題にならない、から。
 
-> 🛑 **やりがちな勘違い。** 「`remaining_qty` を別 field ではなく per-fill data の一部にしたら?」 **submit ごとに remainder は最大 1 つで、どの fill にも紐付かない** — **fill されなかった** 部分そのものだから。`Fill` に入れると、すべての fill に無意味な 0 を運ばせるか、保持するためだけの「phantom fill」エントリを作る羽目になる。`FillResult` に別 field として置くのが正しい形。
+> 🛑 **やりがちな勘違い。** 「`remaining_qty` を別 field ではなく per-fill data の一部にしたら?」 **submit ごとに remainder は最大 1 つで、どの約定にも紐付かない** — **約定しなかった** 部分そのものだから。`Fill` に入れると、すべての約定に無意味な 0 を運ばせるか、保持するためだけの「phantom fill」エントリを作る羽目になる。`FillResult` に別 field として置くのが正しい形。
 
 ### Step 4: `lib.rs` がまだすべて re-export していることを確認
 
@@ -200,7 +200,7 @@ cargo doc -p openhl-clob --no-deps --open
 
 - **`error[E0277]: 'FillResult' doesn't implement 'Copy'`** — `FillResult` に `#[derive(Copy)]` をつけた。**Copy にできない** のは内部の `Vec<Fill>` のため。derive から `Copy` を外し、`Clone` だけ残す。
 - **`error[E0599]: no method named 'total_filled' for ...`** — ヘルパーを `impl FillResult { ... }` の外に書いた。関数は impl ブロック内が必要。
-- **`warning: field 'X' is never read`** — field を書いたが test/usage が参照していない。**今は無視** — L3+ が全部使う。Matching engine にまだ consumer がない。
+- **`warning: field 'X' is never read`** — field を書いたが test/usage が参照していない。**今は無視** — L3+ がすべて使う。Matching engine にまだ consumer がない。
 
 ## 設計の振り返り
 
@@ -208,9 +208,9 @@ cargo doc -p openhl-clob --no-deps --open
 
 1. **`Fill` は self-contained。** Order book の内部 index があれば片方からもう片方を導出できるのに、maker_order_id と maker_account を両方保存している。これにより Fill の consumer (precompile、payload assembly、chain 統合) が engine の内部データ構造から decouple される。**self-contained なメッセージは、live state への参照よりも module 境界を越えやすい。**
 
-2. **`FillResult` は「fills」と「remainder」を分ける。** Submit は 0 個以上の fill と 0 か 1 個の remainder を produce する。1 つの `Vec<Fill>` でモデル化すると、remainder のために「phantom fill」を作るか、それを検出する特殊ケースロジックが必要になる。2-field record にすることで型に仕事をさせている。
+2. **`FillResult` は「fills」と「remainder」を分ける。** Submit は 0 個以上の fill と 0 か 1 個の remainder を生成する。1 つの `Vec<Fill>` でモデル化すると、remainder のために「phantom fill」を作るか、それを検出する特殊ケースロジックが必要になる。2-field record にすることで型に仕事をさせている。
 
-3. **`total_filled()` は computed であって cached ではない。** Cache するとすべての fill-list 変更でカウンタを update する羽目になり、error-prone になる。On-demand 計算なら `FillResult` を derived state のない純粋データ record に保てる。O(N) コストは N が通常 1-3 (single fill が最頻で、market order が 10 level 食べるのは稀) なので無視できる。
+3. **`total_filled()` は computed であって cached ではない。** Cache するとすべての約定リスト変更でカウンタを update する羽目になり、error-prone になる。On-demand 計算なら `FillResult` を derived state のない純粋データ record に保てる。O(N) コストは N が通常 1-3 (single 約定が最頻で、market order が 10 level 食べるのは稀) なので無視できる。
 
 ## 答え合わせ
 
@@ -240,11 +240,11 @@ Engine の他の部分と一貫させるため。すべての quantity は `Qty`
 できる。「これ以上 push しない」ケースでは少しメモリ効率が良い。ただし `Vec<Fill>` は `submit_order` がインクリメンタルに build するもの (match ごとに push) なので、最後に `Box<[Fill]>` に変換すると余分な allocation が 1 つ増える。Profile で問題と分かるまでは `Vec` がシンプルな選択。
 
 **Q: Fill の `qty` が 0 だったら? それは valid Fill か?**
-valid ではない — L4-L5 の matching engine は zero-qty Fill を決して produce しない (「0 unit マッチした」=「マッチしなかった」と意味的に同じ)。型システムはこれを強制しないが、engine の invariant が強制する。L7-L8 のテストが regression を catch する。
+valid ではない — L4-L5 の matching engine は zero-qty Fill を決して生成しない (「0 unit マッチした」=「マッチしなかった」と意味的に同じ)。型システムはこれを強制しないが、engine の invariant が強制する。L7-L8 のテストが regression を catch する。
 
 ## 次のレッスン (L3)
 
-型の語彙が完成した。L3 では **matching state machine** を導入する — resting bid/ask order を保持する `Book` 構造体と、book を inspect するヘルパーメソッド (`best_bid`、`best_ask`、accessor)。`submit` ロジックはまだ書かない (L4 で扱う)。データ構造と、bid を最高値から walk するための `Reverse<Price>` トリックだけを導入する。
+型の語彙が完成した。L3 では **matching state machine** を導入する — resting bid/ask order を保持する `Book` 構造体と、book を inspect するヘルパーメソッド (`best_bid`、`best_ask`、accessor)。`submit` ロジックはまだ書かない (L4 で扱う)。データ構造と、bid を最高値から順に辿るための `Reverse<Price>` トリックだけを導入する。
 ````
 
 ---

@@ -16,17 +16,17 @@
 ### Content
 
 ````markdown
-# レッスン 3 — NodeBuilder 配線 + registry callability test
+# レッスン 3 — NodeBuilder への組み込み + registry callability test
 
 ## ゴール
 
 このレッスンで掴む概念:
 
-- **テストのスコープ = バグの局所化** — unit test 3 つを段階的なスコープで構成 (関数本体 → registry 登録 → registry dispatch) するので、失敗するとどの層が壊れているかが直接わかる。
-- **extend-not-replace の dual assertion** — `CLOB_READ_BEST_BID` が登録されていることと、`0x...01` の ECDSA recover が **同時に** 残っていることの両方を check することで、単一 assertion なら見逃す silent-replace バグを捕まえる。
-- **`NodeBuilder.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))`** — explicit-builder の経路。スロット 1 つだけ差し替えて、他の Reth default は全部継承する。「fork しない、configure する」という性質をコードに落とした形。
-- **`Precompile::execute` 経由の dispatch と直接呼び出しの違い** — dispatch test は `Precompile::new(...)` の配線 (関数ポインタ、id、address) が正しいことを証明する — 関数本体の挙動とは別の関心事だ。
-- **integration test は配線の assertion であって、挙動の assertion ではない** — 「`NodeBuilder` + `OpenHlExecutorBuilder` + `EthereumAddOns` がクリーンに合成される」と「precompile が正しいバイトを返す」は別の関心事 (後者は unit test の責務)。
+- **テストのスコープ = バグの局所化。** unit test 3 つを段階的なスコープで構成 (関数本体 → registry 登録 → registry dispatch) するため、失敗すればどの層が壊れているかが直接わかる。
+- **extend-not-replace の dual assertion。** `CLOB_READ_BEST_BID` が登録されていることと、`0x...01` の ECDSA recover が **同時に** 残っていることの両方をチェックすることで、単一 assertion なら見逃す silent-replace バグを捕まえる。
+- **`NodeBuilder.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))`。** explicit-builder の経路。スロット 1 つだけ差し替え、他の Reth default はすべて継承する。「fork しない、configure する」という性質をコードに落とし込んだ形。
+- **`Precompile::execute` 経由の dispatch と直接呼び出しの違い。** dispatch test は `Precompile::new(...)` の組み込み (関数ポインタ、id、address) が正しいことを証明する — 関数本体の挙動とは別の関心事。
+- **integration test は組み込みの assertion であって、挙動の assertion ではない。** 「`NodeBuilder` + `OpenHlExecutorBuilder` + `EthereumAddOns` がクリーンに合成される」と「precompile が正しいバイトを返す」は別の関心事 (後者は unit test の責務)。
 
 検証：
 
@@ -47,7 +47,7 @@ cargo test -p openhl-evm --lib precompiles
   - `openhl_precompiles_registers_clob_address` — **extend-not-replace** の不変条件を確認。
   - `registered_precompile_is_invokable_via_registry` — registry 経由の dispatch をフルに通すテスト (REVM が内部で使うパスと同じ)。
 
-**これが Module 1 のマイルストーンレッスン。** L3 を終えれば、custom EVM + precompile がコンパイル可能であるだけでなく、EVM 実行から到達可能であることまで証明される。Module 2-4 で **中身** (live state、write path、bridge 統合) を組み立てる — Module 1 は **配管** を整えるところまでだ。
+**これが Module 1 のマイルストーンレッスン。** L3 を終えれば、custom EVM + precompile がコンパイル可能であるだけでなく、EVM 実行から到達可能であることまで証明される。Module 2-4 で **中身** (live state、write path、bridge 統合) を組み立てる — Module 1 は **配管** を整えるところまで。
 
 ## おさらい
 
@@ -63,7 +63,7 @@ L2 後の状態:
 
 やることは 5 つ:
 
-1. **`reth_node.rs` の import を更新** — `EthereumAddOns` (`with_add_ons(...)` で必要) と `crate::OpenHlExecutorBuilder` (配線対象の型) を追加する。
+1. **`reth_node.rs` の import を更新** — `EthereumAddOns` (`with_add_ons(...)` で必要) と `crate::OpenHlExecutorBuilder` (組み込み対象の型) を追加する。
 2. **integration test `reth_dev_node_with_openhl_executor` を追加** — course 6 の `reth_dev_node_bootstraps` と同じ形だが、explicit-builder の経路で `.with_components(EthereumNode::components().executor(OpenHlExecutorBuilder))` を使う。
 3. **`precompiles/mod.rs` に `#[cfg(test)] mod tests` を追加** — unit test 3 個。
 4. **両方のテストパスを走らせる** — integration test と unit test 3 個が pass する。
@@ -244,7 +244,7 @@ mod tests {
 
 `alloy_primitives::U256` の import は、64-byte の response を decode するために必要。`U256::from_be_slice(&bytes[..])` が 32-byte の big-endian slice を U256 に decode する。
 
-> 🛑 **やりがちな勘違い。** 「3 つ目のテストは冗長では? 関数が動き (test 1)、address が登録され (test 2) ているなら、registry 経由の invocation も動くはずでは?」 — **そうとは限らない。** test 2 は `address.contains(&...)` が true を返すことしかチェックしていない。registry から関数を引いて dispatch する経路は別物で、REVM は内部で `.get(&address)` してから `.execute(...)` を呼ぶ。**`Precompile::new(...)` の配線にバグがある場合 (関数ポインタが間違っている、型が合わないなど)、test 1 と 2 は通っても test 3 は落ちる。** dispatch テストが実在するバグのクラスを捕まえる。
+> 🛑 **やりがちな勘違い。** 「3 つ目のテストは冗長では? 関数が動き (test 1)、address が登録され (test 2) ているなら、registry 経由の invocation も動くはずでは?」 — **そうとは限らない。** test 2 は `address.contains(&...)` が true を返すことしかチェックしていない。registry から関数を引いて dispatch する経路は別物で、REVM は内部で `.get(&address)` してから `.execute(...)` を呼ぶ。**`Precompile::new(...)` の組み込みにバグがある場合 (関数ポインタが間違っている、型が合わないなど)、test 1 と 2 は通っても test 3 は落ちる。** dispatch テストが実在するバグのクラスを捕まえる。
 
 ### Step 4: テストを実行
 
@@ -324,7 +324,7 @@ diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/prec
 diff -u ~/code/my-openhl/crates/evm/src/reth_node.rs ./crates/evm/src/reth_node.rs
 ```
 
-L3 後、コードは `2ba97c6` の参照と一致する — Stage 9a の NodeBuilder 配線と Stage 9e の unit test 3 個が両方揃っている状態。違いは doc コメントの言い回し程度。
+L3 後、コードは `2ba97c6` の参照と一致する — Stage 9a の NodeBuilder 統合と Stage 9e の unit test 3 個が両方揃っている状態。違いは doc コメントの言い回し程度。
 
 main に戻る:
 
@@ -351,7 +351,7 @@ git checkout main
 
 ## 次のレッスン (L4)
 
-precompile が登録され、callable であることまで証明できた。だが返しているのは **hardcoded な値** だ。L4 では precompile に **live な CLOB state** を配線し始める — `install_clob()` を追加して bridge から `Arc<Mutex<Book>>` を precompile モジュールに inject できるようにし、`openhl_precompiles` が shared state を受け取れるよう更新する。L4 を終えると、precompile は本物のデータを返す **能力を持つ** ようになる。実際に shared book から read するのは L5。
+precompile が登録され、callable であることまで証明できた。だが返しているのは **hardcoded な値** だ。L4 では precompile に **live な CLOB state** を接続し始める — `install_clob()` を追加して bridge から `Arc<Mutex<Book>>` を precompile モジュールに inject できるようにし、`openhl_precompiles` が shared state を受け取れるよう更新する。L4 を終えると、precompile は本物のデータを返す **能力を持つ** ようになる。実際に shared book から read するのは L5。
 ````
 
 ---
@@ -362,13 +362,13 @@ L3 は Module 1 (Custom EVM bootstrap) sortOrder 2 に入る:
 
 ```typescript
 {
-  title: 'レッスン 3 — NodeBuilder 配線 + registry callability test',
+  title: 'レッスン 3 — NodeBuilder への組み込み + registry callability test',
   slug: 'openhl-precompiles-node-wiring-ja',
   type: 'CONTENT',
   sortOrder: 2,
   duration: 35,
   xpReward: 70,
-  content: `# レッスン 3 — NodeBuilder 配線 + registry callability test\n\n...`
+  content: `# レッスン 3 — NodeBuilder への組み込み + registry callability test\n\n...`
 },
 ```
 

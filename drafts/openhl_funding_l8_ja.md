@@ -22,12 +22,12 @@
 
 このレッスンで掴む概念:
 
-- **Pure 関数の上に discrete event loop を載せる** — Clock の仕事は「正しいタイミングで数学を呼ぶ」「間違ったタイミングでは呼ばない」の 2 つだけだ。Module 2 の数学はそのまま、Clock は*いつ*を足すレイヤーであって*何を*計算するかは変えない。
-- **常に返すより `Option<FundingTick>`** — `None` が「state 変化なし」を安く伝える。呼び出し側は `if let Some(tick) = clock.tick(...)` と書けばよい。常に何かを返す形にすると `if !tick.settlements.is_empty()` のような曖昧なチェックを書く羽目になる（settlements が空でも「fire したが position がなかった」のか「そもそも fire していない」のか区別できない）。
-- **レイヤード composition、再実装しない** — `tick()` は `compute_premium → compute_rate → apply_funding` を順に呼ぶだけで、それぞれの中身は知らない。「数学が計算する、clock が gate する」という責任分離をファイルレベルで実現している。
-- **テレメトリのために中間値を露出する** — `FundingTick` には `settlements` だけでなく `premium` と `rate` も載せる。「tick 12345 の rate は 0.125% でした」とログしたい observer はこれを直接読める。再計算は乖離の温床。
-- **Module doc で契約を約束し、コードとテストでそれを守る** — `clock.rs` の冒頭で 2 つの不変条件（at-most-one-per-interval、no-catch-up）をコードより先に宣言する。L8 が構造を作り、L9 と L10 がテスト側で不変条件を強制する。理由を確認できる場所は doc、コード、テストの 3 箇所。
-- **契約上シングルスレッド** — 並行性は呼び出し側の責任、データ構造の責任ではない。`last_settled_at` を `AtomicU64` にしても、このレイヤーで存在しない直列化問題のために複雑性を足すだけだ。
+- **Pure 関数の上に discrete event loop を載せる** — Clock の仕事は「正しいタイミングで数学を呼ぶ」「間違ったタイミングでは呼ばない」の 2 つだけだ。Module 2 の数学はそのままで、Clock は*いつ*を足すレイヤーであって、*何を*計算するかには手を入れない。
+- **常に値を返すのではなく `Option<FundingTick>` を返す** — `None` だけで「state は変化していない」を安価に伝えられる。呼び出し側は `if let Some(tick) = clock.tick(...)` と書けばよい。常に何かを返す形にすると `if !tick.settlements.is_empty()` のような曖昧なチェックを書く羽目になる（settlements が空でも「fire したが position がなかった」のか「そもそも fire していない」のか区別できない）。
+- **レイヤード composition、再実装はしない** — `tick()` は `compute_premium → compute_rate → apply_funding` を順に呼ぶだけで、それぞれの中身は知らない。「数学が計算する、clock が gate する」という責任分離を、ファイルレベルでそのまま体現している。
+- **テレメトリのために中間値を出力に出す** — `FundingTick` には `settlements` だけでなく `premium` と `rate` も載せる。「tick 12345 の rate は 0.125% だった」とログに残したい observer はこれを直接読めばよい。再計算は乖離の温床だ。
+- **Module doc で契約を約束し、コードとテストでそれを守る** — `clock.rs` の冒頭で 2 つの不変条件（at-most-one-per-interval、no-catch-up）をコードより先に宣言する。L8 が構造を作り、L9 と L10 がテスト側で不変条件を強制する。理由を確認できる場所は doc、コード、テストの 3 箇所だ。
+- **契約上シングルスレッドにする** — 並行性は呼び出し側の責任であって、データ構造の責任ではない。`last_settled_at` を `AtomicU64` にしても、このレイヤーで存在しない直列化問題のために複雑性を足すだけだ。
 
 検証：
 
@@ -63,7 +63,7 @@ L7 後の状態：
 - `compute.rs` が Stage 8b と byte-identical。
 - Crate は funding の*数学*を計算できるが、まだ*いつ*それを適用するかは知らない。
 
-L8 ではその「いつ」を配線する。Clock は数学を正しいタイミングで呼ぶ薄いレイヤーだ — そして決定的に重要なのは、*間違った*タイミングでは呼ば*ない*ことだ。
+L8 ではその「いつ」を組み立てる。Clock は数学を正しいタイミングで呼ぶ薄いレイヤーだ — そして決定的に重要なのは、*間違った*タイミングでは呼ば*ない*ことだ。
 
 ## プラン
 

@@ -23,10 +23,10 @@
 
 このレッスンで掴む概念:
 
-- **共通語彙 crate (shared vocabulary crate)** — `BlockHash`、`PayloadId` などが `openhl-consensus` でも `openhl-evm` でもなく `openhl-types` に住む理由。Rust は依存ループを許さないので、CL↔EL split は両側が import する中立な第三 crate を強制する。
-- **Newtype パターン** — type alias ではなく `BlockHash([u8; 32])` で wrap する意味。compiler が「ただの 32 byte 配列」を `BlockHash` の場所に代入することを拒否してくれる。
-- **三状態の payload status** — なぜ `PayloadStatus` が `bool` ではなく `Valid / Invalid / Syncing` の三値か。`Syncing` を `Invalid` として扱うと、追いつけたはずの peer から永続的に fork する。
-- **デフォルト `Debug` ではなく custom `Display`** — ログに出る contract type には `0xab12…` 形式の人間可読な表示が要る理由。ログはデバッガの主戦場であり、可読性は optional ではない。
+- **共通語彙 crate (shared vocabulary crate)。** `BlockHash`、`PayloadId` などが `openhl-consensus` でも `openhl-evm` でもなく `openhl-types` に住む理由。Rust は依存ループを許さないので、CL↔EL split は両側が import する中立な第三 crate を強制する。
+- **Newtype パターン。** type alias ではなく `BlockHash([u8; 32])` で wrap する意味。compiler が「ただの 32 byte 配列」を `BlockHash` の場所に代入することを拒否してくれる。
+- **三状態の payload status。** `PayloadStatus` が `bool` ではなく `Valid / Invalid / Syncing` の三値である理由。`Syncing` を `Invalid` として扱うと、本来追いつけたはずの peer から永続的に fork する。
+- **デフォルト `Debug` ではなく custom `Display` を使う理由。** ログに出る contract 型には `0xab12…` 形式の人間可読な表示が要る。ログはデバッガの主戦場であり、可読性は optional ではない。
 
 検証:
 
@@ -227,7 +227,7 @@ pub struct ExecutedBlock {
 
 ここに **無い** もの (意図的):
 
-- transaction list — Module 2 (CLOB) で transaction が land する。v0 は空ブロックを produce する
+- transaction list — Module 2 (CLOB) で transaction が land する。v0 は空ブロックを 生成する
 - receipts list — 同様
 - logs bloom — 同様
 - difficulty / mix hash — post-merge のデフォルト
@@ -342,7 +342,7 @@ git checkout main
 ## よくある質問
 
 **Q: `BlockHash::Display` のテストが失敗する — 「2+64 文字期待、X 文字」。**
-おそらく `write!(f, "{b:02x}")` (2 hex digits、zero-padded) ではなく `write!(f, "{b:x}")` (single hex digit) を書いている。Byte value 0x05 の場合、`{b:x}` は `"5"` を produce するが `{b:02x}` は `"05"` を produce する。テストは 1 byte あたり 2 文字を期待している。
+おそらく `write!(f, "{b:02x}")` (2 hex digits、zero-padded) ではなく `write!(f, "{b:x}")` (single hex digit) を書いている。Byte value 0x05 の場合、`{b:x}` は `"5"` を 生成するが `{b:02x}` は `"05"` を 生成する。テストは 1 byte あたり 2 文字を期待している。
 
 **Q: `ExecutedBlock` を `Copy` にできるか?**
 今の形ではできない — production では `Vec<...>` (transaction list) を含むようになり、`Vec` は `Copy` ではないからだ。v0 では fixed-size フィールドだけなので *理論的には* Copy にできるが、後で外す手間を避けるために意図的に derive しない。フィールドが byte 列だけならクローンも安いので、必要な call site で明示的に `.clone()` すればよい。

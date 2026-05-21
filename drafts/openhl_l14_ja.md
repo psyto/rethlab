@@ -9,7 +9,7 @@
 ## L14 — `openhl-commit-forkchoice-ja`
 
 - **モジュール:** 6 (Live Reth)
-- **モジュール sortOrder:** 3 (L13 の validator 配線の後)
+- **モジュール sortOrder:** 3 (L13 の validator 接続の後)
 - **コース全体 sortOrder:** 13 (16 レッスン中 14 番目)
 - **所要時間:** 50 分
 - **XP:** 90
@@ -24,12 +24,12 @@
 
 このレッスンで掴む概念:
 
-- **local-first、engine-second の commit 順序** — bridge の `chain: HashMap` が consensus layer の真実の source だ。local を先に commit して engine への通知を後にすることで、engine 呼び出しが失敗しても consensus commit を rollback する羽目にはならない (rollback は safety 違反だ)。一般化すると「primary store 先、secondary index/replica 後」のパターン。
-- **test ergonomics のための `Option<EngineHandle>`** — optional でなければ、全 unit test が real node を bootstrap して engine handle を作る羽目になる。`Option` にすることでテストは `None` で local path、integration test は `Some(handle)` で両 path を exercise できる。型レベルの optionality がインフラを全テストに強制するのを防ぐ。
-- **engine 応答は意図的に破棄する** — マッチする `engine_newPayload` を先に送っていない以上、今は `SYNCING` が正解応答だ。これをエラー扱いすると、すべての caller が「L14 は部分統合」を知らなければならなくなる。破棄しておけば API は正直なまま: 「local commit は完了、下流通知は best-effort」と言える。
-- **3-field `ForkchoiceState` の崩し** — mainnet は head / safe / finalized を区別する (即時 / 32-slot / 64+-slot checkpoint)。v0 single-validator OpenHL には区別がない — 全 commit が final なので、3 つとも同じ hash を入れる。形は multi-validator OpenHL への forward-compat のため保つ。
-- **`add_ons_handle.beacon_engine_handle` が in-process Engine API** — 外部 CL client (Lighthouse、Prysm) が JSON-RPC で叩く `engine_*` メソッドを backing しているのと同じ handle だ。我々は in-process でショートカットしているが、surface は同一。
-- **4 つの `ConsensusBridge` メソッドすべてが real Reth に到達する** — このレッスンでループが閉じる。`build_payload` / `payload_ready` / `validate_payload` / `commit` すべてが real Reth コードパスに到達する。
+- **local-first、engine-second の commit 順序。** bridge の `chain: HashMap` が consensus layer の真実の source だ。local を先に commit して engine への通知を後にすることで、engine 呼び出しが失敗しても consensus commit を rollback する羽目にはならない (rollback は safety 違反だ)。一般化すると「primary store が先、secondary index/replica は後」というパターン。
+- **test ergonomics のための `Option<EngineHandle>`。** optional にしておかないと、すべての unit test が実 node を bootstrap して engine handle を作る羽目になる。`Option` にすることで、テストは `None` を渡してローカル path だけを、integration test は `Some(handle)` を渡して両方の path を exercise できる。型レベルの optionality が、インフラを全テストに強制することを防いでくれる。
+- **engine 応答は意図的に破棄する。** マッチする `engine_newPayload` を先に送っていない以上、現時点では `SYNCING` が正解応答だ。これをエラー扱いすると、すべての caller が「L14 は部分統合」であることを知らなければならなくなる。破棄しておけば API は正直なまま: 「ローカル commit は完了、下流通知は best-effort」と言える。
+- **3 フィールドの `ForkchoiceState` の崩し方。** mainnet は head / safe / finalized を区別する (即時 / 32-slot / 64+-slot checkpoint)。v0 single-validator OpenHL には区別がない — 全 commit が final なので、3 つとも同じ hash を入れる。形は multi-validator OpenHL への forward-compat のために保っておく。
+- **`add_ons_handle.beacon_engine_handle` が in-process Engine API。** 外部 CL client (Lighthouse、Prysm) が JSON-RPC で叩く `engine_*` メソッドを backing しているのと同じ handle だ。こちらは in-process でショートカットしているが、surface は同一。
+- **4 つの `ConsensusBridge` メソッドすべてが実際の Reth に到達する。** このレッスンでループが閉じる。`build_payload` / `payload_ready` / `validate_payload` / `commit` すべてが実際の Reth コードパスに到達する。
 
 検証:
 
@@ -46,7 +46,7 @@ cargo test -p openhl-evm commit_sends_forkchoice_to_engine_when_handle_installed
 | `validate_payload` | Block を check | `EthBeaconConsensus::validate_header_against_parent` |
 | **`commit`** | Block を canonical にする | **`ConsensusEngineHandle::fork_choice_updated`** |
 
-**Engine は今のところ `SYNCING` を返す — そしてこの段階ではそれが正しい。** まだマッチする `engine_newPayload` 呼び出しを送っていないからだ (それには EVM-executable なトランザクション body が必要で、本コースの範囲外だ)。Wire は接続される。payload-execution の alignment は、fills が EVM トランザクションになってからの作業になる。
+**Engine は今のところ `SYNCING` を返す — そしてこの段階ではそれが正しい。** まだマッチする `engine_newPayload` 呼び出しを送っていないからだ (それには EVM-executable なトランザクション body が必要で、本コースの範囲外だ)。Wire は接続される。payload-execution の alignment は、約定 (fill) が EVM トランザクションになってからの作業になる。
 
 具体的な変更:
 
@@ -68,7 +68,7 @@ pub struct LiveRethEvmBridge<P> {
 }
 ```
 
-`build_payload`、`payload_ready`、`validate_payload` はすべて live な Reth に対して走る。`commit` は依然として、新しい head を `state.chain` (in-process な `HashMap`) に記録し、`state.head` を更新するだけだ。**ローカルのみ** だ。Live な Reth node に query する RPC クライアントから見ると、head は依然 genesis に見える — consensus engine は、こちらが何を decide したかを知らない。
+`build_payload`、`payload_ready`、`validate_payload` はすべて live な Reth に対して走る。`commit` は依然として、新しい head を `state.chain` (in-process な `HashMap`) に記録し、`state.head` を更新するだけだ。**ローカルのみ** だ。Live な Reth node に query する RPC クライアントから見ると、head は依然 genesis に見える — consensus engine は、こちらが何を確定させたかを知らない。
 
 `cargo test` で workspace 全体 37 個が合格する。**Bridge は canonical chain を知っているが、Reth は知らない。**
 
@@ -81,7 +81,7 @@ pub struct LiveRethEvmBridge<P> {
 3. **`live_node.rs` の import と struct を更新する** — 新規フィールド `engine_handle: Option<ConsensusEngineHandle<EthEngineTypes>>` を加える。
 4. **Builder メソッドを追加する** — `with_engine_handle()` は self を consume して handle をインストールする。`has_engine_handle()` は `const fn` accessor。
 5. **`commit()` を rewrite する** — まずローカル bookkeeping (変わらず) を行い、engine handle がインストールされていれば best-effort で `ForkchoiceUpdated` を送る。
-6. **integration test を追加する** — `EthereumNode` を bootstrap し、`add_ons_handle.beacon_engine_handle` を pull し、`with_engine_handle()` 経由で配線し、commit パスを exercise する。
+6. **integration test を追加する** — `EthereumNode` を bootstrap し、`add_ons_handle.beacon_engine_handle` を pull し、`with_engine_handle()` 経由で接続し、commit パスを exercise する。
 
 このレッスンが教えるのは **成功後の副作用パターン** だ。Bridge のローカル bookkeeping が consensus 層の **source of truth** で、他の何かが起こる前に成功しなければならない。Engine API 呼び出しは **副作用** だ: 有用ではある (下流の RPC クライアントが新しい head を見られる) が、その失敗で commit を roll back すべきではない。パターンは:
 
@@ -248,7 +248,7 @@ impl<P> LiveRethEvmBridge<P> {
 3 個の新規メソッド:
 
 - **`with_engine_handle()`** — consume-and-return-self builder だ。`mut self` パラメータが所有権を取り、mutate して return する。canonical な Rust の「builder method」パターン。**`#[must_use]`** にしているのは、返り値を bind し忘れる (例: `bridge.with_engine_handle(h);`) と、修正された bridge がサイレントに drop されてしまうからだ。
-- **`has_engine_handle()`** — `const fn` accessor。Test と assertion 用だ (「配線が実際に効いたか?」)。`const` にしているのは、`Option::is_some()` チェックが runtime 計算を必要としないからだ。
+- **`has_engine_handle()`** — `const fn` accessor。Test と assertion 用だ (「接続が実際に効いたか?」)。`const` にしているのは、`Option::is_some()` チェックが runtime 計算を必要としないからだ。
 - **`new()` 初期化** — 唯一の変更は `engine_handle: None` だ。Handle が欲しい caller は `LiveRethEvmBridge::new(p, c).with_engine_handle(h)` を使う。
 
 ### Step 5: `commit()` を rewrite — ローカル先、engine は best-effort
@@ -312,7 +312,7 @@ Load-bearing な変更だ。L13 の `commit` を置き換える:
 
 > 🛑 **やりがちな勘違い。** 「`INVALID` で error を返さず、engine のレスポンスを discard するのはなぜか?」 **Bridge のローカル state が consensus 層の source of truth であって、Reth ではないからだ。** Reth が `INVALID` と言ったからといってローカル state を roll back すると、Malachite に「実はその decided block は存在しない」と告げることになり、chain が壊れる。この層での不一致に対する正しい応答は **大きな声でログする** こと、**operator にアラートする** ことであって、consensus commit を roll back することではない。**Reth の chain の view は consensus の下流であり、逆ではない。**
 
-### Step 6: テスト更新 (rename + engine 配線追加)
+### Step 6: テスト更新 (rename + engine 接続を追加)
 
 L13 の既存テスト `live_bridge_builds_on_real_genesis` を開く。既存テストを修正するのではなく、新規テストを **追加** する — L12/L13 のテストは依然として証明していることを証明し続け、別テストを追加することで新しい挙動を isolated に保つ。
 
@@ -408,11 +408,11 @@ L13 の既存テスト `live_bridge_builds_on_real_genesis` を開く。既存�
 1. **`with_types::<EthereumNode>()` + `with_components(...)` + `with_add_ons(EthereumAddOns::default())`** — 明示的な builder パスだ。`launch_with_debug_capabilities` (L11-L13) は `add_ons_handle` を expose しないショートカット。Beacon engine handle を pull するには、この明示的な形が必要だ。
 2. **`handle.node.add_ons_handle.beacon_engine_handle.clone()`** — Engine handle は add_ons の中にある。内部的には `Arc` ベースの handle で、clone は安価だ。
 3. **`.with_engine_handle(engine_handle)`** — 新規 builder メソッド。これが無いと `commit` はローカル bookkeeping だけを行う。あると `commit` が forkchoice も fire する。
-4. **`assert!(bridge.has_engine_handle())`** — 配線の guard。`with_engine_handle()` にバグがあれば、テストの残りが走る前に catch できる。
+4. **`assert!(bridge.has_engine_handle())`** — 接続の guard。`with_engine_handle()` にバグがあれば、テストの残りが走る前に catch できる。
 5. **`commit(block.hash).await.expect("commit failed")`** — メインの assertion。**engine が返したものは check しない** — `commit` が `Ok(())` を返すかどうかだけを見る。Engine の SYNCING レスポンスは Step 5 で `commit` 内で discard される。
 6. **Negative case を維持する** — unknown hash は依然として `BridgeError::Rejected` を返す。Bridge が engine パスに到達する前に bail するので、engine パスは fire しない。
 
-> 🛑 **やりがちな勘違い。** 「`launch_with_debug_capabilities` を使って、add_ons_handle がそこにあると願えばいいのでは?」 **ダメだ — launch パスが違えば handle の shape も違ってくる。** `launch_with_debug_capabilities` は debug RPC 付きの `NodeHandle` を返すが、add_ons を expose しない。`add_ons_handle` をくれるのは明示的な builder chain (`.with_types().with_components().with_add_ons().launch()`) の方だ。**どの launch パスがどの handle shape を produce するかという知識は、特定のフィールドが必要になるまでは見えない詳細だ。**
+> 🛑 **やりがちな勘違い。** 「`launch_with_debug_capabilities` を使って、add_ons_handle がそこにあると願えばいいのでは?」 **ダメだ — launch パスが違えば handle の shape も違ってくる。** `launch_with_debug_capabilities` は debug RPC 付きの `NodeHandle` を返すが、add_ons を expose しない。`add_ons_handle` をくれるのは明示的な builder chain (`.with_types().with_components().with_add_ons().launch()`) の方だ。**どの launch パスがどの handle shape を生成するかという知識は、特定のフィールドが必要になるまでは見えない詳細だ。**
 
 ## テスト
 

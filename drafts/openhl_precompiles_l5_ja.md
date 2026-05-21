@@ -1,6 +1,6 @@
 # Building OpenHL Precompiles — L5 draft (JA) — build-along
 
-> openhl SHA `b635ef7`（Stage 9b — CLOB read precompile に live CLOB state を配線）に対するドラフト。
+> openhl SHA `b635ef7`（Stage 9b — CLOB read precompile に live CLOB state を接続）に対するドラフト。
 > コース: `building-openhl-precompiles-ja`（track: `reth-l1-architect`）。
 
 ---
@@ -16,17 +16,17 @@
 ### Content
 
 ````markdown
-# レッスン 5 — `read_best_bid` が配線を読む — `current_best_bid()` に差し替え
+# レッスン 5 — `read_best_bid` がライブ状態を読む — `current_best_bid()` に差し替え
 
 ## ゴール
 
-このレッスンで掴む概念：
+このレッスンで掴む概念:
 
-- **未インストール時に zero を返す = 「未初期化な storage slot」のセマンティクス** — Solidity コントラクトは `STATICCALL` の zero を「liquidity なし」と自然に処理して trade を控える。error にすると boot 中のすべての transaction が revert する。
-- **constant-time な precompile = gas 課金で state を漏らさない** — CLOB が未インストールのときだけ gas 課金を減らすと、attacker が gas を測って validator の state を推測できる。`CLOB_BASE_GAS_COST` を一定に保ち、precompile の挙動の見た目を一様にする。
-- **`cargo test` は並列実行 → process-global で競合 → serializer が必要** — `CLOB_STATE` を触るテストが 2 個になった瞬間、並列実行下で global が `Some(clob_A)` と `None` の間を flap する。`Mutex<()>` を `TEST_SERIALIZER` として置くのが解決策。
-- **`TEST_SERIALIZER` は crate ではなくモジュールごと** — 直列化のスコープは、実際に必要なテストだけに狭める。`CLOB_STATE` を触らないテストにコストを払わせない。
-- **uninstall は test の *先頭*、終わりではない** — panic したテストは cleanup を走らせない。次のテストの先頭で reset するのが safety net になる。テスト末尾の uninstall は飾り。
+- **未インストール時に zero を返す = 「未初期化な storage slot」のセマンティクス。** Solidity コントラクトは `STATICCALL` の zero を「liquidity なし」と自然に解釈し、trade を控える。error にすると boot 中のすべての transaction が revert する。
+- **constant-time な precompile = gas 課金で state を漏らさない。** CLOB が未インストールのときだけ gas 課金を減らすと、attacker が gas を測って validator の state を推測できる。`CLOB_BASE_GAS_COST` を一定に保ち、precompile の振る舞いの見え方を一様にする。
+- **`cargo test` は並列実行 → プロセスグローバルで競合 → serializer が必要。** `CLOB_STATE` を触るテストが 2 個になった瞬間、並列実行下で global が `Some(clob_A)` と `None` の間を flap する。`Mutex<()>` を `TEST_SERIALIZER` として置くのが解決策。
+- **`TEST_SERIALIZER` は crate ではなくモジュールごと。** 直列化のスコープは、実際に必要なテストだけに狭める。`CLOB_STATE` を触らないテストにコストを払わせない。
+- **uninstall はテストの *先頭*、終わりではない。** panic したテストは cleanup を走らせない。次のテストの先頭で reset するのが safety net になる。テスト末尾の uninstall は飾り。
 
 検証：
 
@@ -362,7 +362,7 @@ git checkout main
 
 ## 次のレッスン（L6）
 
-配線は通ったが、ラウンドトリップを exercise するテストはまだない。L6 で `read_best_bid_returns_live_state_when_clob_installed` を追加する：既知の bid を持つ CLOB を install し、precompile を呼び、その bid が output bytes までラウンドトリップしてくることを検証する。これにより `Solidity contract → STATICCALL → EVM dispatch → REVM precompile registry → 自分の関数 → live な Book lock → エンコードして返す → コントラクトが本物のデータを見る` というチェーンが、ついに end-to-end で実証される。これが **Module 2 のマイルストーン** だ。
+接続は通ったが、ラウンドトリップを exercise するテストはまだない。L6 で `read_best_bid_returns_live_state_when_clob_installed` を追加する：既知の bid を持つ CLOB を install し、precompile を呼び、その bid が output bytes までラウンドトリップしてくることを検証する。これにより `Solidity contract → STATICCALL → EVM dispatch → REVM precompile registry → 自分の関数 → live な Book lock → エンコードして返す → コントラクトが本物のデータを見る` というチェーンが、ついに end-to-end で実証される。これが **Module 2 のマイルストーン** だ。
 ````
 
 ---
@@ -373,13 +373,13 @@ L5 は Module 2 (Read precompile) の sortOrder 1 に入る：
 
 ```typescript
 {
-  title: 'レッスン 5 — read_best_bid が配線を読む — current_best_bid() に差し替え',
+  title: 'レッスン 5 — read_best_bid がライブ状態を読む — current_best_bid() に差し替え',
   slug: 'openhl-precompiles-swap-to-live-ja',
   type: 'CONTENT',
   sortOrder: 1,
   duration: 40,
   xpReward: 80,
-  content: `# レッスン 5 — \`read_best_bid\` が配線を読む — \`current_best_bid()\` に差し替え\n\n...`
+  content: `# レッスン 5 — \`read_best_bid\` がライブ状態を読む — \`current_best_bid()\` に差し替え\n\n...`
 },
 ```
 
@@ -389,7 +389,7 @@ L5 は `b635ef7`（Stage 9b）を引用。L5 終了時点であなたのコー�
 
 ## Style review notes (self-critique before paste)
 
-- **§プランの「配線は通ったがラウンドトリップを exercise する test がない」** が L5/L6 を分けた理由をフレーミング — L5 は差し替えと test 機構、L6 は証明。
+- **§プランの「接続は通ったがラウンドトリップを exercise する test がない」** が L5/L6 を分けた理由をフレーミング — L5 は差し替えと test 機構、L6 は証明。
 - **§考えてみよう（並列テスト race）** が `TEST_SERIALIZER` パターンを正当化。test 隔離経験がない読者には具体的な failure mode が要る。
 - **§Step 1 の `out[24..32]` vs `U256::to_be_bytes::<32>()`** が「hot path に正しい」と「明快さに正しい」を区別。
 - **§Step 3 の `unwrap_or_else(PoisonError::into_inner)`** が poisoned mutex で `unwrap()` という典型ミスを先回り。

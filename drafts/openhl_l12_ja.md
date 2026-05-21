@@ -24,11 +24,11 @@
 
 このレッスンで掴む概念:
 
-- **`BlockchainProvider` に concrete に依存せず `P: BlockNumReader` に generic** — bridge が必要とする Reth の capability を *ちょうど 1 つ* に宣言する。Concrete な provider は 30 個以上の trait bound を背負っていて、それを全 caller に流すのは負担。Generic は surface を絞り、mock test も自明にしてくれる。
-- **honest な validation の最小単位としての happy/negative pair** — happy だけだと in-memory への silent fallback を見逃す。Negative だけだと「常に reject する bridge」を見逃す。「bridge は Reth と対話する」を真の主張にするには両方が load-bearing でなければならない。
-- **`Result<Option<u64>>` が運用エラーとプロトコルエラーを区別する** — DB call の失敗 → `BridgeError::Internal` (アラート)、未知の hash → `BridgeError::Rejected` (nil に vote して進む)。エラーはメッセージだけでなく意味を運ぶ。
-- **未知の親の拒否は安全性プロパティ** — consensus engine が live chain の見たことない hash の上に build しろと言ってきたら、bridge は拒否しなければならない。これが、悪意ある / バグった proposer が EL を fork subtree に誘導することを防ぐルールだ。
-- **integration milestone としての 2 つの bridge** — `RethEvmBridge` (L5、alloy のみ) と `LiveRethEvmBridge` (L12、live provider) は両方 codebase に残る。重複実装ではなく integration の 2 段階を表す。
+- **`BlockchainProvider` の具象型ではなく `P: BlockNumReader` に generic にする。** bridge が必要とする Reth の capability を *ちょうど 1 つ* に宣言する。具象 provider は 30 個以上の trait bound を背負っていて、それを全 caller に流すのは負担。Generic は surface を絞り、mock test も自明にしてくれる。
+- **honest な validation の最小単位としての happy/negative ペア。** happy だけだと in-memory への silent fallback を見逃す。negative だけだと「常に reject する bridge」を見逃す。「bridge は Reth と対話している」を真の主張にするには両方が load-bearing でなければならない。
+- **`Result<Option<u64>>` が運用エラーとプロトコルエラーを区別する。** DB call の失敗 → `BridgeError::Internal` (アラート)、未知の hash → `BridgeError::Rejected` (nil に投票して進む)。エラーはメッセージだけでなく意味も運ぶ。
+- **未知の親の拒否は安全性プロパティ。** consensus engine が live chain の見たことない hash の上に build しろと言ってきたら、bridge は拒否しなければならない。これが、悪意ある proposer や壊れた proposer が EL を fork subtree に誘導することを防ぐルールだ。
+- **integration の段階を示す 2 つの bridge。** `RethEvmBridge` (L5、alloy のみ) と `LiveRethEvmBridge` (L12、live provider) は両方とも codebase に残る。重複実装ではなく、integration の 2 段階を表している。
 
 検証:
 
@@ -44,13 +44,13 @@ test live_node::tests::live_bridge_builds_on_real_genesis ... ok
 
 Happy path: `EthereumNode` を boot し、その `BlockchainProvider` に real な genesis hash を query し、provider を `LiveRethEvmBridge` に渡し、`build_payload(genesis_hash, attrs)` を呼ぶ。結果の child block は `number = 1` と `parent_hash = genesis` を持つ — どちらも **live provider 由来** であって、メモリ内の合成ではない。
 
-Negative path: `build_payload(BlockHash([0xee; 32]), attrs)` を呼ぶ。Provider はその hash を知らないので、bridge は `BridgeError::Rejected` を返す。**Live chain が見たことのない parent に対して build を拒否することで、bridge を consensus に配線しても安全になる。**
+Negative path: `build_payload(BlockHash([0xee; 32]), attrs)` を呼ぶ。Provider はその hash を知らないので、bridge は `BridgeError::Rejected` を返す。**Live chain が見たことのない parent に対して build を拒否することで、bridge を consensus に接続しても安全になる。**
 
 具体的な変更:
 
 - `crates/evm/src/live_node.rs` — 新規ファイル (~227 行)。`LiveRethEvmBridge<P>` は `P: BlockNumReader + Clone + Sync + 'static` に generic。`build_payload` は real (live provider を query する)。`payload_ready` はインメモリの pending 状態を読む。`validate_payload` と `commit` は L13-L14 まで stub のままだ。
 - `crates/evm/Cargo.toml` に generic bound が要求する production dep を追加。
-- `crates/evm/src/lib.rs` — `pub mod live_node;` を配線する。
+- `crates/evm/src/lib.rs` — `pub mod live_node;` を組み込む。
 
 ## おさらい
 
@@ -64,7 +64,7 @@ crates/evm/src/reth_node.rs      — bootstrap-only smoke test
 crates/consensus/                — フル BFT engine + run_engine_app
 ```
 
-`cargo test` で workspace 全体 36 個が合格する。**Reth は boot し、Malachite は block を produce するが、互いに会話していない。** `RethEvmBridge` は parent lookup にインプロセス state を使う。`LiveRethEvmBridge` はまだ存在しない。
+`cargo test` で workspace 全体 36 個が合格する。**Reth は boot し、Malachite は block を 生成するが、互いに会話していない。** `RethEvmBridge` は parent lookup にインプロセス state を使う。`LiveRethEvmBridge` はまだ存在しない。
 
 ## 計画
 
@@ -73,7 +73,7 @@ crates/consensus/                — フル BFT engine + run_engine_app
 1. **`reth-storage-api` を workspace レベルで追加する** — `BlockNumReader` trait surface を提供する crate だ。これに対してジェネリックにする。
 2. **`crates/evm/Cargo.toml` を更新する** — `eyre` を dev-dep から production dep へ昇格させ (`BridgeError::Internal` のメッセージ構築で使う)、`reth-storage-api` を production dep として追加する。
 3. **`crates/evm/src/live_node.rs` を作成する** — `LiveRethEvmBridge<P>` struct と `ConsensusBridge` impl (`build_payload` は live、他は stub)。
-4. **`pub mod live_node;`** を `crates/evm/src/lib.rs` に配線する (今回は production-visible で、**`#[cfg(test)]` ではない**)。
+4. **`pub mod live_node;`** を `crates/evm/src/lib.rs` に組み込む (今回は production-visible で、**`#[cfg(test)]` ではない**)。
 5. **integration test `live_bridge_builds_on_real_genesis`** を追加する — real node を bootstrap して、happy と negative の両方の path を assert する。
 6. **実行** — `cargo test -p openhl-evm live_bridge_builds_on_real_genesis --release` が ~2.4 秒で合格する。
 
@@ -251,7 +251,7 @@ Trait bound `P: BlockNumReader + Clone + Sync + 'static` が契約だ: hash→nu
 
 1. **Live read** (load-bearing な行)。`self.provider.block_number(parent_b256)` は `Result<Option<u64>, _>` を返す:
    - `Ok(Some(n))` — provider は parent を知っており、number は `n`。続行する。
-   - `Ok(None)` — provider は parent を知らない。`BridgeError::Rejected` を返す。**これが、bridge を consensus に配線しても安全にする要因だ** — live chain が見たことのない parent に対しては build しない。
+   - `Ok(None)` — provider は parent を知らない。`BridgeError::Rejected` を返す。**これが、bridge を consensus に接続しても安全にする要因だ** — live chain が見たことのない parent に対しては build しない。
    - `Err(e)` — provider が失敗した (DB 破損、deadlock、何でも)。`BridgeError::Internal` を返す。
 
 2. **State allocation**。Mutex を lock し、next ID を取って increment する。高速で、lock 下に I/O は無い。
@@ -310,7 +310,7 @@ Trait bound `P: BlockNumReader + Clone + Sync + 'static` が契約だ: hash→nu
 - **`validate_payload`** は `Ok(PayloadStatus::Valid)` を返す — 文字通り「常に valid」な stub だ。コメントが、real execution が入る場所として L14 (Stage 7c) を名指ししている。**Visible な stub は技術負債ではなく、進捗マーカーだ。**
 - **`commit`** は block を `chain` に記録して `head` を更新する。L4 と同じ shape。コメントが、forkchoice が入る場所として L15 (Stage 7d) を名指ししている。
 
-### Step 7: `live_node.rs` を `lib.rs` に配線
+### Step 7: `live_node.rs` を `lib.rs` に組み込む
 
 `crates/evm/src/lib.rs` を開く。L11 ではこうだった:
 
@@ -449,7 +449,7 @@ mod tests {
 4. **Happy path**: real な genesis hash の上に payload を build し、`payload_ready` 経由で fetch して、`parent_hash == genesis_hash` と `number == 1` を assert する。**これが live read が起きたことの証明だ。** もしインメモリ合成だったら、parent_hash は渡したもの (これは正しい) になるが、`number` は任意の値でありえた。`1` が出るのは、`provider.block_number(genesis_hash)` が `Some(0)` を返したときだけだ。
 5. **Negative path**: `BlockHash([0xee; 32])` は chain が見たことのない fabricated hash だ。`build_payload` は `BridgeError::Rejected` を返さなければならない。`matches!(err, BridgeError::Rejected(_))` が exhaustive な check になる — 他の error variant が来たらテスト失敗だ。
 
-> 🛑 **やりがちな勘違い。** 「なぜ negative path までテストするのか?」 **Rejection をテストしないテストは、happy path が動くことしか証明できない — bridge が偶然インメモリ state に fallback して任意の parent に対して child block を produce するバグを catch できない。** ガベージな parent の上にサイレントに build する bridge は、コンパイルが通り、happy path は pass し、consensus は破損した高さの block を嬉々として commit してしまう。Negative path こそが、live read が実際に load-bearing であることを証明する。
+> 🛑 **やりがちな勘違い。** 「なぜ negative path までテストするのか?」 **Rejection をテストしないテストは、happy path が動くことしか証明できない — bridge が偶然インメモリ state に fallback して任意の parent に対して child block を 生成するバグを catch できない。** ガベージな parent の上にサイレントに build する bridge は、コンパイルが通り、happy path は pass し、consensus は破損した高さの block を嬉々として commit してしまう。Negative path こそが、live read が実際に load-bearing であることを証明する。
 
 ## テスト
 
@@ -528,7 +528,7 @@ git checkout main
 
 ## 次のレッスン (L13)
 
-Bridge は `build_payload` で Reth から読むようになった。だが `pending` HashMap はまだインプロセス合成のままだ — engine が「propose する次の block」を尋ねてきたら、こちらは自分で作った header を返している。**L13 で `pending` を Reth の実 `PayloadBuilder` に置き換える** — Reth が JSON-RPC `engine_getPayloadV4` call で block を組み立てるのと同じ機構だ。L13 完了で、bridge は real な Ethereum tooling が受け入れる block を produce するようになる (フルな transaction list、receipt、gas usage、state root)。これが「bridge が Reth のストレージと会話する」から「bridge が Reth の実行パイプラインと完全に統合される」への移行だ。
+Bridge は `build_payload` で Reth から読むようになった。だが `pending` HashMap はまだインプロセス合成のままだ — engine が「propose する次の block」を尋ねてきたら、こちらは自分で作った header を返している。**L13 で `pending` を Reth の実 `PayloadBuilder` に置き換える** — Reth が JSON-RPC `engine_getPayloadV4` call で block を組み立てるのと同じ機構だ。L13 完了で、bridge は real な Ethereum tooling が受け入れる block を 生成するようになる (フルな transaction list、receipt、gas usage、state root)。これが「bridge が Reth のストレージと会話する」から「bridge が Reth の実行パイプラインと完全に統合される」への移行だ。
 ````
 
 ---

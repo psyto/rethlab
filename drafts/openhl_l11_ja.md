@@ -2,7 +2,7 @@
 
 > openhl SHA `e6b4ebb` (Stage 7a — live Reth EthereumNode が workspace で boot する) 基準。
 > コース: `building-openhl-consensus-ja` (track: `reth-l1-architect`, 10 コース中 6 番目)。
-> 注: L11 は Module 6 (Live Reth) を開く。これは **依存検証マイルストーン** — L12-L15 で `LiveRethEvmBridge` を配線する前に、Reth v2.2.0 と Malachite v0.5.0 が 1 workspace で共存することを証明する。
+> 注: L11 は Module 6 (Live Reth) を開く。これは **依存検証マイルストーン** — L12-L15 で `LiveRethEvmBridge` を組み込む前に、Reth v2.2.0 と Malachite v0.5.0 が 1 workspace で共存することを証明する。
 
 ---
 
@@ -24,11 +24,11 @@
 
 このレッスンで掴む概念:
 
-- **bootstrap-only test も一級の成果物** — このレッスンのテストは Reth を spin up して chain ID を読む以外何もしない。ビジネスロジックが何もない段階で依存解決と runtime bootstrap の regression を捕まえる。これが失敗したら L12-L15 は何ひとつ動かない。
-- **Reth と Malachite の coexistence 証明** — Rust L1 エコシステム最大級の 2 つの crate tree が、同一の tokio runtime を共有して 1 つの workspace に同居する。ここで追加する dev-dep は単一の SHA-coherent な依存閉包に解決する。
-- **production-dep は薄く、dev-dep は厚く** — `crates/evm/Cargo.toml` は production dep を 6 個 (L5 から変わらず) に保ちつつ dev-dep を 11 個に増やす。`openhl-evm` を使う下流 crate は libp2p / MDBX / rpc を引き込まず、テストバイナリだけが引き込む。
-- **`NodeConfig::test().dev()` のセマンティクス** — `test()` = ephemeral tempdir + ephemeral port + peer discovery 無し。`dev()` = 単一 block producer モード、mempool gossip 無し。組み合わせると CI 上で再現可能な完全 isolated な dev/test 環境になる。
-- **なぜ chain ID 2600 か** — Reth の upstream `custom-dev-node` example と一致し、public chain とも衝突しない。数字自体に OpenHL 的な意味はなく、diff を取れるよう example と合わせるための調整値だ。
+- **bootstrap-only test も一級の成果物。** このレッスンのテストは Reth を spin up して chain ID を読む以外何もしない。ビジネスロジックが何もない段階で、依存解決と runtime bootstrap の regression を捕まえる。これが失敗したら L12-L15 は何ひとつ動かない。
+- **Reth と Malachite の共存を証明する。** Rust L1 エコシステム最大級の 2 つの crate tree が、同一の tokio runtime を共有して 1 つの workspace に同居する。ここで追加する dev-dep は単一の SHA-coherent な依存閉包に解決する。
+- **production-dep は薄く、dev-dep は厚く。** `crates/evm/Cargo.toml` は production dep を 6 個 (L5 から変わらず) に保ちつつ、dev-dep を 11 個に増やす。`openhl-evm` を使う下流 crate は libp2p / MDBX / rpc を引き込まず、テストバイナリだけが引き込む。
+- **`NodeConfig::test().dev()` のセマンティクス。** `test()` = ephemeral tempdir + ephemeral port + peer discovery 無し。`dev()` = 単一 block producer モード、mempool gossip 無し。組み合わせると、CI 上で再現可能な完全に isolated な dev/test 環境になる。
+- **なぜ chain ID は 2600 なのか。** Reth の upstream `custom-dev-node` example と一致し、public chain とも衝突しない。数字自体に OpenHL 的な意味はなく、diff を取れるよう example と合わせるための調整値だ。
 
 検証:
 
@@ -49,7 +49,7 @@ test reth_node::tests::reth_dev_node_bootstraps ... ok
 - root `Cargo.toml` に workspace 依存を 4 個追加: `reth-node-core`、`reth-tasks`、`reth-provider`、`alloy-genesis`。
 - `crates/evm/Cargo.toml` に dev-dependency を 8 個追加 (Reth の node-builder/ethereum の test-utils variant + サポート crate) — test-only、production scope は変わらない。
 - `crates/evm/src/reth_node.rs` — 新規ファイル (~100 行)、test module のみ。dev chain spec を組み、`NodeBuilder::testing_node` 経由で `EthereumNode` を launch し、provider が応答することを確認する。
-- `crates/evm/src/lib.rs` — `mod reth_node;` を test-cfg のみで配線する。
+- `crates/evm/src/lib.rs` — `mod reth_node;` を test-cfg のみで組み込む。
 
 Production コードは無し。Bridge への変更も無し。L12 で live-bridge コードを書き始める前に、**dependency tree が resolve することを検証する** だけだ。
 
@@ -64,7 +64,7 @@ crates/consensus/       — フル BFT engine: Context, signing, codec, node, en
 bin/openhl/             — 空のバイナリ stub
 ```
 
-`cargo test` で workspace 全体が 35 個合格する (consensus 21 + evm 14)。Engine は `InMemoryEvmBridge` 経由で real block を produce する。**ただし EL はまだ placeholder だ。** `RethEvmBridge` は存在する (L5) が、実際には Reth を呼ばない — alloy 型を使って hash を計算するだけだ。
+`cargo test` で workspace 全体が 35 個合格する (consensus 21 + evm 14)。Engine は `InMemoryEvmBridge` 経由で real block を 生成する。**ただし EL はまだ placeholder だ。** `RethEvmBridge` は存在する (L5) が、実際には Reth を呼ばない — alloy 型を使って hash を計算するだけだ。
 
 ## 計画
 
@@ -73,7 +73,7 @@ bin/openhl/             — 空のバイナリ stub
 1. **workspace レベルで依存を 4 個追加する** — `Cargo.toml` に `reth-node-core`、`reth-tasks`、`reth-provider`、`alloy-genesis` を追加。すべて L1 以来使ってきたのと同じ Reth SHA に pin する。
 2. **`crates/evm/Cargo.toml` に dev-dependency を 8 個追加する** (Reth の node-builder/ethereum の test-utils variant とサポート crate)。
 3. **`crates/evm/src/reth_node.rs` を作成する** — dev chain spec を build し、`NodeBuilder::testing_node` で `EthereumNode` を launch し、provider が応答することを検証する test モジュール。
-4. **`mod reth_node;`** を `crates/evm/src/lib.rs` に配線する (test-cfg のみ — production scope をクリーンに保つ)。
+4. **`mod reth_node;`** を `crates/evm/src/lib.rs` に組み込む (test-cfg のみ — production scope をクリーンに保つ)。
 
 このレッスンが教えるのは **依存共存の検証パターン** だ。大きなインフラ crate を 2 つ (今回は Reth と Malachite) に依存する場合、衝突は integration コードを書いて初めて判明する — その時点では、**動くはずなのに** コンパイルできないコードに大量投資済みになっている。**検証パターンは、integration を書く前に、両方を同時に exercise する最小のテストを書くことだ。** Test が pass すれば両方の dep が resolve・link される。失敗すれば失敗が即座に visible になり、blast radius が小さくて済む。
 
@@ -335,7 +335,7 @@ JSON は `serde_json::from_str(...)` で `Genesis` に parse され、`genesis.i
 
 `flavor = "multi_thread", worker_threads = 4` は L10 の integration test と同じセットアップだ。Reth の内部タスク (MDBX commit、payload builder、RPC handler、network service) はすべて自分のスレッドを欲しがる。4 つあれば contention なく余裕がある。
 
-### Step 7: `reth_node.rs` を `crates/evm/src/lib.rs` に配線
+### Step 7: `reth_node.rs` を `crates/evm/src/lib.rs` に組み込む
 
 `crates/evm/src/lib.rs` を開く。L4-L5 の in-memory + Reth bridge とその re-export がある。**test cfg でゲートした 1 行追加:**
 
@@ -432,7 +432,7 @@ Reth が返す `NodeHandle` には、こちらで使うパスでの `kill()` メ
 
 ## 次のレッスン (L12)
 
-Reth と Malachite はこれで共存する。**ただし bridge はまだ Reth と話していない。** L12 では `LiveRethEvmBridge::with_live_node()` を build する — さっき bootstrap した `node` を受け取り、`BlockchainProvider` を expose するコンストラクタだ。これによって `build_payload` (L4-L5 の stubbed bridge メソッド) が live な MDBX state に対して **real な** 親ブロック lookup を行えるようになる。これが「Reth が workspace にいる」から「Reth が consensus engine の読むデータを produce している」へ移行する瞬間だ。
+Reth と Malachite はこれで共存する。**ただし bridge はまだ Reth と話していない。** L12 では `LiveRethEvmBridge::with_live_node()` を build する — さっき bootstrap した `node` を受け取り、`BlockchainProvider` を expose するコンストラクタだ。これによって `build_payload` (L4-L5 の stubbed bridge メソッド) が live な MDBX state に対して **real な** 親ブロック lookup を行えるようになる。これが「Reth が workspace にいる」から「Reth が consensus engine の読むデータを 生成している」へ移行する瞬間だ。
 ````
 
 ---
@@ -470,7 +470,7 @@ modules: {
 L11 が参照する openhl コミット (§答え合わせ):
 - `e6b4ebb` (Stage 7a — live Reth EthereumNode が workspace で boot する)
 
-これが依存検証マイルストーン — L12-L15 で `LiveRethEvmBridge` を配線する前に Reth + Malachite の共存を証明する。
+これが依存検証マイルストーン — L12-L15 で `LiveRethEvmBridge` を組み込む前に Reth + Malachite の共存を証明する。
 
 ## 翻訳セルフレビュー (paste 前)
 

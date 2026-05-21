@@ -22,10 +22,10 @@
 
 このレッスンで掴む概念:
 
-- **`BTreeMap` 2 個が matching engine の状態のすべて** — order-id の index も、best-price のキャッシュも、片側ごとの counter も持たない。それ以外はすべて派生値。最適化はコア model を変えずに後から重ねられる。
-- **`Reverse<Price>` で iterator が bid を highest-first で walk する** — *key 型* の `Ord::cmp` を反転させることで、両 side が `BTreeMap::iter().next()` で統一的に動く。型側の非対称性 1 つで matching コードの対称性が買える。
-- **`RestingOrder` は `Order` を trim して「不可能な状態」を表現不能にする** — resting order に `side` は不要 (どちらの map に居るかで分かる)、`order_type` も不要 (Market は rest しない)。型設計 = 制約のエンジニアリング。
-- **FIFO queue は `Vec` ではなく `VecDeque`** — `Vec::remove(0)` は全要素を shift する (O(n))。`VecDeque::pop_front()` は O(1)。Price-time priority は push-back と pop-front の両方が速くないと成立しない。
+- **`BTreeMap` 2 個が matching engine の状態のすべて** — order-id の index も、best-price のキャッシュも、片 side ごとの counter も持たせない。それ以外はすべて派生値。最適化はコアモデルを変えずに後から重ねられる。
+- **`Reverse<Price>` によって iterator は bid を高値から順に走査できる** — *key 型* の `Ord::cmp` を反転させることで、両 side が `BTreeMap::iter().next()` という同じ形で動く。型側に非対称性を 1 つ仕込むだけで、matching コードの対称性が手に入る。
+- **`RestingOrder` は `Order` を trim して「不可能な状態」を表現不能にする** — resting order に `side` は不要 (どちらの map にあるかで分かる)、`order_type` も不要 (Market は rest しない)。型設計とは制約のエンジニアリングそのもの。
+- **FIFO queue は `Vec` ではなく `VecDeque`** — `Vec::remove(0)` は全要素を shift するため O(n)。`VecDeque::pop_front()` は O(1)。price-time priority は push-back と pop-front の両方が速くないと成立しない。
 
 検証:
 
@@ -59,11 +59,11 @@ L2 完了時点で `crates/clob/src/types.rs` は完成している (~109 行): 
 2. **`Book` struct を書く** — `bids: BTreeMap<Reverse<Price>, VecDeque<RestingOrder>>` と `asks: BTreeMap<Price, VecDeque<RestingOrder>>`。
 3. **`RestingOrder` struct を書く** — `Order` から trim したもの (side なし、order_type なし、qty は縮む)。
 4. **`Book::new()`** と accessor メソッド 4 個を追加。
-5. **`pub mod book;`** を `lib.rs` に配線。
+5. **`pub mod book;`** を `lib.rs` に組み込む。
 
 Accessor は `Option<Price>` または `usize` を返す — BTreeMap の形に対する純粋な read 操作。興味深い設計判断は **map key 型** と、`RestingOrder` が `Order` から何を残し何を落とすか、の 2 点。
 
-> 🛑 **考えてみよう。** スクロールする前に: `BTreeMap` は key を **natural order** (小さい順) で iterate する。**ask** (最安価格を最初に欲しい) には `BTreeMap<Price, _>` が完璧 — natural order がそのまま最安先に walk する。**bid** は **最高価格を最初に** 欲しいが、natural order は最安先に walk する。**カスタム comparator を書かずに BTreeMap を最高先に walk させる最も安価な方法は?** ヒント: 「u64 の ordering を反転する」を型として考える。
+> 🛑 **考えてみよう。** スクロールする前に: `BTreeMap` は key を **natural order** (小さい順) で iterate する。**ask** (最安価格を最初に欲しい) には `BTreeMap<Price, _>` がぴったり — natural order がそのまま最安先に辿ってくれる。**bid** は **最高価格を最初に** 欲しいが、natural order は最安先に辿る。**カスタム comparator を書かずに BTreeMap を最高先に辿らせる最も安価な方法は?** ヒント: 「u64 の ordering を反転する」を型として考える。
 
 ## 手順
 
@@ -91,11 +91,11 @@ use crate::types::{
 注目すべき点:
 
 - **`core::cmp::Reverse`** — 任意の `Ord` 型の ordering を反転する wrapper。`Reverse(Price(100))` は `Reverse(Price(200))` **より大きい** と比較される (Reverse が underlying な比較を反転するため)。
-- **`BTreeMap`** — sorted map。Iteration は key を昇順 (= **natural order** = `Ord::cmp` が「小さい順」と言う順) で walk する。Insert/remove/lookup はすべて O(log n)。
+- **`BTreeMap`** — sorted map。Iteration は key を昇順 (= **natural order** = `Ord::cmp` が「小さい順」と言う順) に走査する。Insert/remove/lookup はすべて O(log n)。
 - **`VecDeque`** — 両端 queue。価格 level 内の「time priority」に使う: 新規 order は `push_back` (列の末尾) し、マッチした order は `pop_front` (列の先頭から fill) する。
 - **L1 + L2 のすべての型** — 本レッスンで直接使わないもの (`Fill`、`FillResult`、`Side` 等) も含む。最終的な import リストに合わせて今のうちに import しておく。L4-L6 の matching コードですべて使う。
 
-> 🛑 **やりがちな勘違い。** 「`BTreeMap` ではなく `HashMap` を使えばいいのでは? Hash lookup は O(1) で BTreeMap の O(log n) より速い」。 **lookup だけでなく、価格順に iterate する必要がある。** 「best bid」を見つけるとは「最高価格の bid」を見つけること。HashMap には「次のソート済み key」という概念がなく、全 key を scan (O(n)) して最大を見つけるしかない。BTreeMap の sorted iteration なら best を O(1) lookup (`keys().next()`) で得られる — これが matching を安くしている。
+> 🛑 **やりがちな勘違い。** 「`BTreeMap` ではなく `HashMap` を使えばいいのでは? Hash lookup は O(1) で BTreeMap の O(log n) より速い」。 **lookup だけでなく、価格順に iterate する必要がある。** 「best bid」を見つけるとは「最高価格の bid」を見つけること。HashMap には「次のソート済み key」という概念がなく、全 key を scan (O(n)) して最大を見つけるしかない。BTreeMap の sorted iteration なら best を O(1) lookup (`keys().next()`) で得られる — これが matching のコストを安く抑える鍵。
 
 ### Step 2: `Book` struct を書く
 
@@ -118,7 +118,7 @@ Bids と asks の非対称性 — `Reverse<Price>` vs. `Price` — は奇妙に�
 - **Asks: `BTreeMap<Price, _>`。** Natural-order key で iteration が `Price(99)`, `Price(100)`, `Price(101)`, ... と進む。最安 ask が欲しい buy-taker は `asks.keys().next()` → `Price(99)` を読む。Best-first。
 - **Bids: `BTreeMap<Reverse<Price>, _>`。** `Reverse<Price>(p)` の natural order は **p の降順** になる: `Reverse(Price(101))` が `Reverse(Price(100))` より前、`Reverse(Price(100))` が `Reverse(Price(99))` より前。最高 bid が欲しい sell-taker は `bids.keys().next()` → `Reverse(Price(101))` を読む。Best-first。
 
-**どちらの side も `keys().next()` で best price を取れる。** これが型の非対称性を正当化する API の対称性だ。`Reverse` なしだと bid lookup が `keys().next_back()` (BTreeMap iterator の逆方向) になり、matching コードが side 間で非対称になる — 混乱しやすく、間違えやすい。
+**どちらの side も `keys().next()` で best price を取れる。** これが型の非対称性を正当化する API の対称性だ。`Reverse` なしだと bid lookup が `keys().next_back()` (BTreeMap iterator の逆方向走査) になり、matching コードが side 間で非対称になる — 混乱しやすく、間違えやすい。
 
 `#[derive(Default)]` を付けるのは `Book::new()` (次のステップ) を `Self::default()` だけで済ませるため。コンストラクタで `BTreeMap::new()` を 4 回書かなくてよい。`BTreeMap` の Default は空 map なので、`Book` 全体の `Default` も同様になる。
 
@@ -188,11 +188,11 @@ impl Book {
 - **`best_ask()`** — 同じパターン。ただし key が `Price` そのもの。`keys().next()` が最小 `Price` を返し、`.copied()` で値として取り出す (これがないと `Option<&Price>` になる)。
 - **`depth_bid()` / `depth_ask()`** — 全 price level にわたる queue 長の合計。Inspection 用で、テストとデバッグで使う。
 
-**なぜ best を `Option<Price>` にするのか?** Book が空のとき、best price は存在しないから。`Option::None` が正しい答え。`Price(0)` や `Price(u64::MAX)` を返すと、caller が誤って real price として扱う恐れがある。型が空ケースのハンドリングを強制してくれる。
+**なぜ best を `Option<Price>` にするのか?** Book が空のとき、best price は存在しないから。`Option::None` が正しい答え。`Price(0)` や `Price(u64::MAX)` を返すと、caller が誤って実際の価格として扱う恐れがある。型が空ケースのハンドリングを強制してくれる。
 
-> 🛑 **やりがちな勘違い。** 「`depth_bid` は O(n) — 遅い」。 **テストと inspection でしか呼ばないので、そこでは O(n) は問題にならない。** Matching engine 本体は `depth_bid` を決して呼ばない — `keys().next()` と `front()` を O(1)/O(log n) で walk するだけだ。`depth_bid` が hot path にあるなら counter を追加して push/pop ごとに bump するが、そうではないのでやらない。
+> 🛑 **やりがちな勘違い。** 「`depth_bid` は O(n) — 遅い」。 **テストと inspection でしか呼ばないので、そこでは O(n) は問題にならない。** Matching engine 本体は `depth_bid` を決して呼ばない — `keys().next()` と `front()` を O(1)/O(log n) で順に辿るだけだ。`depth_bid` が hot path にあるなら counter を追加して push/pop ごとに bump するが、そうではないのでやらない。
 
-### Step 5: `lib.rs` に配線
+### Step 5: `lib.rs` に組み込む
 
 `crates/clob/src/lib.rs` を開く。L1 + L2 の内容:
 
@@ -281,7 +281,7 @@ EOF
 
 1. **Matching engine の状態は BTreeMap 2 個。** Order-id index も、best-price cache も、side ごとの counter もない。他のものはすべてその 2 map から導出される。将来の最適化 (例: O(1) cancel のための `HashMap<OrderId, (Side, Price)>`) は core data model を変えずに追加できる。**操作をサポートする最も単純な表現から始め、profile が要求したら最適化する。**
 
-2. **Bids に `Reverse<Price>` を使うのは、matching コードの複雑さを節約する型レベルトリック。** これがないと、book を walk するすべての場所で「ask なら `next`、bid なら `next_back`」という分岐が必要になる。Bids に `Reverse<Price>` を使うことで、両 side とも `next` で uniform に walk できる。**呼び出し側で 1 つの対称的な API を得られるなら、データ定義の 1 つの型の非対称性は十分払う価値がある。**
+2. **Bids に `Reverse<Price>` を使うのは、matching コードの複雑さを節約する型レベルトリック。** これがないと、book を走査するすべての場所で「ask なら `next`、bid なら `next_back`」という分岐が必要になる。Bids に `Reverse<Price>` を使えば、両 side とも `next` で同じ形で辿れる。**呼び出し側で対称的な API を 1 つ得られるなら、データ定義側の型の非対称性は十分払う価値がある。**
 
 3. **`RestingOrder` を `Order` から trim することで invariant を encode する。** Resting order は side を持たないし (どの map にあるかで分かる)、`order_type` も持たない (Market order は決して rest しないから)。これらの field を `RestingOrder` から取り除けば、不可能な状態が表現不可能になる。**型設計とは制約エンジニアリングのこと。**
 
@@ -308,7 +308,7 @@ git checkout main
 高速な push-back **と** 高速な pop-front の両方が必要だから。`Vec::remove(0)` は全要素を左にシフトするので O(n) だが、`VecDeque::pop_front()` は O(1)。FIFO queue には常に `VecDeque` (または真の ringbuffer) を使う — `Vec` を front から shift してはいけない。
 
 **Q: `Reverse` は内部で実際に何をしている?**
-`Ord::cmp` の方向を反転する。`Reverse(a).cmp(&Reverse(b)) == b.cmp(&a)`。それだけだ。`BTreeMap` は sort 時に key の `Ord` impl を query する。key を `Reverse` でラップすると、`BTreeMap` は `Reverse(higher)` を `Reverse(lower)` より「小さい」と判断し、それに従って walk する。
+`Ord::cmp` の方向を反転する。`Reverse(a).cmp(&Reverse(b)) == b.cmp(&a)`。それだけだ。`BTreeMap` は sort 時に key の `Ord` impl を query する。key を `Reverse` でラップすると、`BTreeMap` は `Reverse(higher)` を `Reverse(lower)` より「小さい」と判断し、それに従って key を辿る。
 
 **Q: `RestingOrder` をただの `Order` にしたらどうか?**
 できる — ただし `side` と `order_type` を無駄に運ぶことになる (side は map で既に分かるし、resting Market order は矛盾)。Trim は小さいが、「resting Market order を construct できない」という **型レベル保証** が無料で手に入る。
@@ -318,7 +318,7 @@ caller が map を直接 modify すべきではなく、必ず `submit` / `cance
 
 ## 次のレッスン (L4)
 
-データ構造が揃った。L4 ではその上に最初の matching ロジックを乗せる — Limit Buy order の `submit` を書く。Reader は ask を最安から walk し、limit 以下で match し、fill しなかった残りを rest させる `Buy` ブランチを書くことになる。本体 ~60 LOC と、L4-L5 の両方で使う `match_at_level` ヘルパー。L4 後、最も一般的なシナリオ (limit buy が resting ask を cross する) で matching engine が real `Fill` を produce するようになる。
+データ構造が揃った。L4 ではその上に最初の matching ロジックを乗せる — Limit Buy order の `submit` を書く。Reader は ask を最安から順に辿り、limit 以下で match し、約定しなかった残りを rest させる `Buy` ブランチを書くことになる。本体 ~60 LOC と、L4-L5 の両方で使う `match_at_level` ヘルパー。L4 後、最も一般的なシナリオ (limit buy が resting ask を cross する) で matching engine が実際の `Fill` を生成するようになる。
 ````
 
 ---

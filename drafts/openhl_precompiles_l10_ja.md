@@ -21,13 +21,13 @@
 
 ## ゴール
 
-このレッスンで掴む概念：
+このレッスンで掴む概念:
 
-- **integration test は unit test が捕まえられない配線バグを捕まえる** — unit test は各部品を単独で構築するので、`with_components(...executor(OpenHlExecutorBuilder))` のタイポや `EthereumAddOns` 適用が外れる regression は unit test を green に保ったまま production を壊す。integration test 1 つ = 配線の assertion。
-- **cross-module test には `pub(crate)` が適切な可視性** — `place_order` を `pub` にすると API が漏れる、`#[cfg(test) pub(crate)]` は無意味な ceremony。`pub(crate)` は「crate 内なら誰でも、外からは不可」を表現する。
-- **inline テスト calldata > DRY なヘルパー** — 手書きの `[u8; 128]` に byte 位置のコメントを添えれば、ABI レイアウトが callsite から見える。システムレベルの正しさを示すテストでは、すべての byte 位置が learnable な artifact であるべき (helper は隠してしまう)。
-- **canonical な構成: integration test 1 つ + unit test 多数** — 各部品には narrow なテスト、合成には wide なテスト 1 つ。失敗の局所化は unit test が担い、配線の保証は integration test が担う。
-- **正直な deferred: RPC roundtrip は openhl ではなく Reth の責務** — JSON-RPC → eth_call → revm dispatch を testing するのは openhl ではなく Reth の検証になる。「openhl が Reth に正しく接続される」のスコープには「Reth の RPC サーバーが動く」は含まれない。
+- **integration test は unit test では捕まえられない接続バグを捕まえる。** unit test は各部品を単独で構築するため、`with_components(...executor(OpenHlExecutorBuilder))` のタイポや `EthereumAddOns` の適用漏れといった regression は、unit test を green に保ったまま production を壊しうる。integration test 1 つ = 接続全体の assertion。
+- **cross-module test には `pub(crate)` が適切な可視性。** `place_order` を `pub` にすると API が漏れる、`#[cfg(test) pub(crate)]` は無意味な ceremony。`pub(crate)` は「crate 内なら誰でも、外からは不可」を表現する。
+- **inline なテスト calldata > DRY なヘルパー。** 手書きの `[u8; 128]` にバイト位置のコメントを添えれば、ABI レイアウトが callsite から見える。システムレベルの正しさを示すテストでは、すべてのバイト位置が learnable な artifact であるべき (helper は隠してしまう)。
+- **正典的な構成: integration test 1 つ + unit test 多数。** 各部品には narrow なテスト、合成には wide なテストを 1 つ。失敗の局所化は unit test が担い、組み込み全体の保証は integration test が担う。
+- **正直な deferred: RPC roundtrip は openhl ではなく Reth の責務。** JSON-RPC → eth_call → revm dispatch のテストは openhl ではなく Reth の検証になる。「openhl が Reth に正しく接続される」のスコープには「Reth の RPC サーバが動く」は含まれない。
 
 検証：
 
@@ -46,7 +46,7 @@ cargo test -p openhl-evm --release bridge_against_custom_evm
 3. **bridge が book に書く** — `bridge.submit_order(Buy @ 200 qty 33)`。
 4. **precompile がそれを見る** — `current_best_bid()` が `Some((Price(200), Qty(33)))` を返す。
 5. **precompile が book に書く** — `place_order(Sell @ 200 qty 33)` を直接呼ぶ（EVM dispatch をシミュレートする）。
-6. **bridge が fill を見る** — `bridge.pending_fill_count() == 1`。
+6. **bridge が約定を見る** — `bridge.pending_fill_count() == 1`。
 
 これが **コースのマイルストーン** だ。L10 を終えれば、47 個の unit test で証明したアーキテクチャが、たった 1 つの integration test でも証明される — 実際の Reth ノード + 実際の bridge + 両方の precompile + 両方の global + マッチングエンジンを、end-to-end かつ in-process で exercise することになる。
 
@@ -57,8 +57,8 @@ cargo test -p openhl-evm --release bridge_against_custom_evm
 L9 後の状態：
 - precompile モジュールに `CLOB_STATE` と `FILL_SINK` がある。どちらも `Option<Arc<Mutex<T>>>` 型の global だ。
 - bridge の `new()` が両方の global に install する。
-- unit test 側では、read が動くこと（L6）、write が動くこと（L8）、fill が route されること（L9）まで証明済み。
-- **まだテストしていない** のは、実際の Reth ノード上での *組み合わせ*。unit test では Reth の `NodeBuilder`、`EvmFactory` の dispatch、`EthereumNode::components()` の配線を bypass している。
+- unit test 側では、read が動くこと（L6）、write が動くこと（L8）、約定が route されること（L9）まで証明済み。
+- **まだテストしていない** のは、実際の Reth ノード上での *組み合わせ*。unit test では Reth の `NodeBuilder`、`EvmFactory` の dispatch、`EthereumNode::components()` の組み込みを bypass している。
 
 L10 で、その隙間を integration test 1 つで埋める。
 
@@ -73,7 +73,7 @@ L10 で、その隙間を integration test 1 つで埋める。
 
 > 🛑 **考えてみよう。** スクロールする前に — unit test（L3、L6、L9）で個々の部品が動くことはすでに証明した。**なのに、Reth の `NodeBuilder` を通る同じコードパスを exercise する integration test がわざわざ必要なのはなぜか?** ヒント：unit test では観測できないものを考える。
 
-（答え：**unit test は、bridge と Reth の executor の間の配線ミスを観測できない。** 各 unit test は precompile を単独で構築するか、bridge を単独で構築するかのどちらかだ。`NodeBuilder::launch()` のフローが `OpenHlEvmFactory` インスタンスを構築し、bridge が *その* EVM に登録された precompile 経由で *同じ* CLOB を見る、というパスを exercise したものは 1 つもない。`with_components(...executor(OpenHlExecutorBuilder))` チェーンのタイポや、`EthereumAddOns` の適用が外れてしまう regression は、unit test を green に保ったまま、実際の production パスを壊しうる。**integration test は配線の assertion だ。**）
+（答え：**unit test は、bridge と Reth の executor の間の接続ミスを観測できない。** 各 unit test は precompile を単独で構築するか、bridge を単独で構築するかのどちらかだ。`NodeBuilder::launch()` のフローが `OpenHlEvmFactory` インスタンスを構築し、bridge が *その* EVM に登録された precompile 経由で *同じ* CLOB を見る、というパスを exercise したものは 1 つもない。`with_components(...executor(OpenHlExecutorBuilder))` チェーンのタイポや、`EthereumAddOns` の適用が外れてしまう regression は、unit test を green に保ったまま、実際の production パスを壊しうる。**integration test は接続全体の assertion だ。**）
 
 ## 手順
 
@@ -318,7 +318,7 @@ pub(crate) fn place_order(input: &[u8], _gas_limit: u64, _reservoir: u64) -> Pre
 
 **手で組み立てた calldata は `place_order_calldata` が生成するものと同一だ。** ここでは明示性のためにインラインで書いている — 各バイト位置に注釈が付いているので、読み手はヘルパーへジャンプせずに ABI レイアウトを追える。**end-to-end の正しさを証明する integration test では、calldata を明示することのほうが DRY より重要だ。**
 
-`pending_fill_count()` が 0 から 1 にジャンプする。**この fill は 5 段の間接を経て、ようやくここに辿り着く：**
+`pending_fill_count()` が 0 から 1 にジャンプする。**この約定は 5 段の間接を経て、ようやくここに辿り着く：**
 
 ```
 place_order
@@ -333,7 +333,7 @@ place_order
 
 > 🛑 **考えてみよう。** `crate::precompiles::place_order(&calldata, ...)` の呼び出しに注目してほしい。**なぜ `Precompiles::get(...).execute(...)` 経由ではなく、関数を直接呼ぶのか?** ヒント：L3 の unit test では両方やっている。
 
-（答え：**理由は 2 つ。** (1) Stage 9c+ commit の設計上、`place_order` は直接呼ばれることを想定している — `pub(crate)` にしたのもまさにそのため。registry 経由にすると、`Precompiles` セットを構築する、今どの hardfork にいるかを把握する、といった余計な配線が必要になる — そのぶん証明できることが増えるわけでもない。(2) registry のパスが動くこと自体は、すでに L3 で証明済み。**L10 の仕事は「bridge ↔ precompile モジュールの配線」を証明することであって、registry のパスを再証明することではない。** 直接呼び出しのほうがテストの scope を絞り込める。）
+（答え：**理由は 2 つ。** (1) Stage 9c+ commit の設計上、`place_order` は直接呼ばれることを想定している — `pub(crate)` にしたのもまさにそのため。registry 経由にすると、`Precompiles` セットを構築する、今どの hardfork にいるかを把握する、といった余計な準備が必要になる — そのぶん証明できることが増えるわけでもない。(2) registry のパスが動くこと自体は、すでに L3 で証明済み。**L10 の仕事は「bridge ↔ precompile モジュールの接続」を証明することであって、registry のパスを再証明することではない。** 直接呼び出しのほうがテストの scope を絞り込める。）
 
 ### Phase D — Cleanup
 
@@ -389,13 +389,13 @@ L9 より 1 個多い（47 → 48）。**unit test 47 個 + integration test 1 �
 - **テストが永久にハングする** — `worker_threads = 1` か single-threaded な tokio を使っている。`flavor = "multi_thread", worker_threads = 4` に変える。
 - **`submit_order` の後で `current_best_bid()` が `None`** — `bridge.new()` 内で `install_clob` が実際には呼ばれていない。L4 の bridge 変更を再確認する。もしくは、別のテストが並行で `uninstall_clob()` を呼んでいる可能性もある。global を触る全テストで TEST_SERIALIZER パターンを使っているか確認する（ほとんどは L5 で導入済みのはず）。
 - **`place_order` の後で `pending_fill_count` が 0** — おそらく `bridge.new()` 内で `install_fill_sink` が呼ばれていない（L9 の Step 7）か、`place_order` の fill-routing ブロックにバグがある（L9 の Step 3 — `drop(book)` が sink lock の前にあることを確認する）。
-- **`assertion failed: bridge.pending_fill_count() == 1`（実際は 0）** — `place_order` の submit が fill を 0 個しか返していないので、何も push されていない。手書きの calldata を確認する：account=7、side=1（Sell）、price=200、qty=33。とくに `calldata[63] = 1` を Sell にしているか — 0 だと Buy になり、クロスしない。
+- **`assertion failed: bridge.pending_fill_count() == 1`（実際は 0）** — `place_order` の submit が約定を 0 個しか返していないため、何も push されていない。手書きの calldata を確認する：account=7、side=1（Sell）、price=200、qty=33。とくに `calldata[63] = 1` を Sell にしているか — 0 だと Buy になり、クロスしない。
 
 ## 設計の振り返り
 
 立ち止まりたいポイントが 5 つ：
 
-1. **integration test は、unit test では捕まえられない配線バグを捕まえる。** 各部品が単独で動くことは unit test で証明できる。L10 は初めて *組み合わせで* 動くことを証明するテストだ。L3 の NodeBuilder、L4 の install_clob、L9 の install_fill_sink、稼働中の Reth プロセス間の配線 — そこには unit test が存在しない。**end-to-end のための integration test を 1 本と、部品の正しさのための unit test を多数、というのが標準的な組み合わせ方だ。**
+1. **integration test は、unit test では捕まえられない接続バグを捕まえる。** 各部品が単独で動くことは unit test で証明できる。L10 は初めて *組み合わせで* 動くことを証明するテストだ。L3 の NodeBuilder、L4 の install_clob、L9 の install_fill_sink、稼働中の Reth プロセス間の接続 — そこには unit test が存在しない。**end-to-end のための integration test を 1 本と、部品の正しさのための unit test を多数、というのが標準的な組み合わせ方だ。**
 
 2. **クロスモジュールテストには `pub(crate)` がちょうどよい可視性。** `pub` を加えると API surface が広がる。`#[cfg(test)] pub(crate)` を加えるのは、利得ゼロの ceremony だ（可視性はコンパイル時のみの話）。**`pub(crate)` は「この crate 内からなら誰でも呼べるが、外からは呼べない」と宣言する。** クロスモジュールテストに欲しいのは、まさにこれだ。
 
@@ -403,7 +403,7 @@ L9 より 1 個多い（47 → 48）。**unit test 47 個 + integration test 1 �
 
 4. **「カスタム EVM ノードと bridge を一緒に spawn する」ヘルパーは作らない。** Reth の `NodeAdapter` のジェネリック複雑度が、戻り型の命名を厄介にする。インライン合成は 1 回書くぶんは不格好だが、読むのは簡単だ。**テストコードで早すぎる抽象化を行うコストは、プロダクションコードと同じ — デバッグすべきコードパスが増える。** 3 つ目の caller が現れるのを待ってから抽象化すればよい。
 
-5. **正直に先送りする：RPC の `eth_call` ラウンドトリップ。** このテストは Reth の RPC サーバを通らない。JSON-RPC 経由で `clob_read_best_bid` を呼ぶ実際の Solidity コントラクトは、追加の配線（RPC サーバ、transaction simulation など）を exercise することになる — そこまでは証明していない。**こちらが証明しているのは「Reth が動くこと」ではなく、「openhl が Reth に正しく plug-in できること」だ。** RPC レイヤは Reth の責任なので、そこまで再テストすると、openhl ではなく Reth を validate することになってしまう。
+5. **正直に先送りする：RPC の `eth_call` ラウンドトリップ。** このテストは Reth の RPC サーバを通らない。JSON-RPC 経由で `clob_read_best_bid` を呼ぶ実際の Solidity コントラクトは、追加の経路（RPC サーバ、transaction simulation など）を exercise することになる — そこまでは証明していない。**こちらが証明しているのは「Reth が動くこと」ではなく、「openhl が Reth に正しく plug-in できること」だ。** RPC レイヤは Reth の責任なので、そこまで再テストすると、openhl ではなく Reth を validate することになってしまう。
 
 ## 答え合わせ
 
@@ -414,7 +414,7 @@ diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/prec
 diff -u ~/code/my-openhl/crates/evm/src/live_node.rs ./crates/evm/src/live_node.rs
 ```
 
-L10 を終えると、どちらの diff も **空** になるはず。あなたのコードは Stage 9c+ の HEAD（9c+ の拡張で延長された Stage 9d test 込み）と一致する。**これで Stage 9 が閉じる。** openhl の Stage 9 のすべてのマイルストーン — 9a（カスタム EVM bootstrap）、9b（live な CLOB read）、9c（write path）、9c+（fill を bridge に route）、9d（bridge integration） — を、このコースで一通り再現したことになる。
+L10 を終えると、どちらの diff も **空** になるはず。あなたのコードは Stage 9c+ の HEAD（9c+ の拡張で延長された Stage 9d test 込み）と一致する。**これで Stage 9 が閉じる。** openhl の Stage 9 のすべてのマイルストーン — 9a（カスタム EVM bootstrap）、9b（live な CLOB read）、9c（write path）、9c+（約定を bridge に route）、9d（bridge integration） — を、このコースで一通り再現したことになる。
 
 戻す：
 
@@ -425,7 +425,7 @@ git checkout main
 ## よくある質問
 
 **Q: このテストは RPC パスをカバーするのか? たとえば web3.js から `clob_read_best_bid` を呼ぶ Solidity コントラクト、といったケース。**
-No。このテストは Rust から precompile を直接呼んでいる — `crate::precompiles::place_order(...)` や `current_best_bid()` のように。RPC パス（JSON-RPC サーバ → eth_call → revm dispatch → こちらの precompile）は追加の配線で、しかも Reth 側の責任範囲だ。**RPC レイヤを正しく扱うことは Reth に任せる。** ここまでテストすると、openhl ではなく Reth をテストすることになってしまう — スコープ外。
+No。このテストは Rust から precompile を直接呼んでいる — `crate::precompiles::place_order(...)` や `current_best_bid()` のように。RPC パス（JSON-RPC サーバ → eth_call → revm dispatch → こちらの precompile）は追加の経路で、しかも Reth 側の責任範囲だ。**RPC レイヤを正しく扱うことは Reth に任せる。** ここまでテストすると、openhl ではなく Reth をテストすることになってしまう — スコープ外。
 
 **Q: `NodeBuilder.launch()` が並列で複数回呼ばれたらどうなる（たとえば並列テスト）?**
 それぞれの `launch()` が別々の Reth プロセスの state を生むが、すべて **プロセスグローバル** な `CLOB_STATE` と `FILL_SINK` を共有する。**だからこのテストは先頭と末尾で `uninstall_clob` と `uninstall_fill_sink` を呼んでいる** — 並列テストは global を奪い合いうるからだ。L5 の `TEST_SERIALIZER` パターンはこのテストには届かない — `TEST_SERIALIZER` は `live_node.rs` ではなく、precompile のテストモジュール内にあるからだ。**完全な安全を期すならクロスモジュールな serializer が必要だが、v0 ではこのテストが、たまたまそのモジュール内で両方の global を触る唯一のテストになっている。**
@@ -434,7 +434,7 @@ No。このテストは Rust から precompile を直接呼んでいる — `cra
 `NodeConfig::dev().with_chain(chain_spec.clone())` が、ノードの config 用に clone を 1 つ消費する。`LiveRethEvmBridge::new(provider, chain_spec)` がオリジナルを消費する（bridge 側では Arc として保持する）。**`ChainSpec` の clone は安価だ**（内部で Arc に包まれているのが普通）。代替案は所有権をやりくりすることになり、テストの認知負荷が増す。ここでは clone が正しい道具だ。
 
 **Q: Phase C は、precompile ではなく bridge 経由で marketable order を submit すれば済むのでは?**
-それでも動く — `bridge.submit_order(Sell @ 200 qty 33)` でも fill を 1 つ生む。だが、それでは **bridge 側** の書き込みパスをテストすることになり、それは course 7 の領域だ。**L10 でテストしたいのは、precompile 側の書き込みパスが FILL_SINK 経由で bridge の pending_fills まで届くこと** だ。`place_order` を直接呼ぶことで、Stage 9c+ の配線そのものが証明される。
+それでも動く — `bridge.submit_order(Sell @ 200 qty 33)` でも約定を 1 つ生む。だが、それでは **bridge 側** の書き込みパスをテストすることになり、それは course 7 の領域だ。**L10 でテストしたいのは、precompile 側の書き込みパスが FILL_SINK 経由で bridge の pending_fills まで届くこと** だ。`place_order` を直接呼ぶことで、Stage 9c+ の接続そのものが証明される。
 
 ## コースマイルストーン — ここで証明されたもの
 
@@ -443,13 +443,13 @@ L10 後の状態：
 - **Module 1**：`OpenHlEvmFactory` + `OpenHlExecutorBuilder` が `NodeBuilder` 経由で Reth に plug-in されている。precompile を登録済みのカスタム EVM が boot する。
 - **Module 2**：`read_best_bid` が `CLOB_STATE` global 経由で live な CLOB state を read する。スマートコントラクトから本物の orderbook データが見える。
 - **Module 3**：`place_order` が live な CLOB state に書き込む。EVM ↔ CLOB のサーフェスが、`0x...0c1b`（read）と `0x...0c1c`（write）の 2 方向で双方向になる。
-- **Module 4**：precompile 経由で発注された order の fill が、`FILL_SINK` global を介して bridge の `pending_fills` に流れる。EVM 側の trade が payload の fill になる。
+- **Module 4**：precompile 経由で発注された order の約定が、`FILL_SINK` global を介して bridge の `pending_fills` に流れる。EVM 側の trade が payload の約定になる。
 
 47 個の unit test が各部品を証明し、**1 つの integration test が組み合わせを証明する。** このノード越しに各 precompile を呼ぶスマートコントラクトは、bridge がオーケストレートするのと同じ Book を読み書きする。
 
 ## 次のレッスン（L11）
 
-L11 は capstone で、**新しいコードはなし**。築いたものを振り返り、先送り項目（RPC ラウンドトリップ、マルチバリデータでの OrderId、transaction-scoped な state shadowing、staticcall での mutation 拒否）を名指し、次のステージで追加する拡張（best_ask / depth / mid-price といった read precompile の追加、`clob_cancel_order` precompile、fill を EVM event として出す機構）を一覧する。L11 はメンタルモデルを固め、アーキテクチャを全体として見渡すためのレッスンだ。
+L11 は capstone で、**新しいコードはなし**。築いたものを振り返り、先送り項目（RPC ラウンドトリップ、マルチバリデータでの OrderId、transaction-scoped な state shadowing、staticcall での mutation 拒否）を名指し、次のステージで追加する拡張（best_ask / depth / mid-price といった read precompile の追加、`clob_cancel_order` precompile、約定を EVM event として出す機構）を一覧する。L11 はメンタルモデルを固め、アーキテクチャを全体として見渡すためのレッスンだ。
 ````
 
 ---

@@ -23,10 +23,10 @@
 
 このレッスンで掴む概念:
 
-- **依存グラフ先行のワークフロー** — アプリケーションコードを書き始める *前* に Reth と Malachite を共存させる理由。transitive な衝突がコース途中で噴き出して巻き戻すリスクを潰す。
-- **workspace レベルでの依存宣言** — 外部依存を root の `Cargo.toml` に 1 度だけ書き、各 crate 側は `{ workspace = true }` で継承する。Reth のバージョン bump が 11 crate スイープではなく 1 行修正で済む。
-- **Git SHA pin vs. crates.io** — production L1 が Reth と Malachite を semver range ではなく commit SHA に固定する理由。validators がバイト単位で一致する必要がある以上、再現性は利便性に勝る。
-- **10 crate + 1 bin のレイアウト** — OpenHL の 5 つのサブシステム (types, codec, clob, consensus, evm, …) が flat な `crates/` と単一の `bin/openhl` にどう対応するか。
+- **依存グラフ先行のワークフロー。** アプリケーションコードを書き始める *前* に Reth と Malachite を共存させておく。transitive な衝突がコース途中で噴き出して巻き戻すリスクを、最初に潰しておくため。
+- **workspace レベルでの依存宣言。** 外部依存を root の `Cargo.toml` に一度だけ書き、各 crate 側は `{ workspace = true }` で継承する。Reth のバージョン bump が 11 crate スイープではなく 1 行修正で済む。
+- **Git SHA pin と crates.io の違い。** production L1 が Reth と Malachite を semver range ではなく commit SHA に固定する理由。validator がバイト単位で一致する必要がある以上、再現性は利便性に勝る。
+- **10 crate + 1 bin のレイアウト。** OpenHL の 5 つのサブシステム (types、codec、clob、consensus、evm、…) が flat な `crates/` と単一の `bin/openhl` にどう対応するか。
 
 検証:
 
@@ -361,7 +361,7 @@ alloy-rlp                 = { version = "0.3", default-features = false }
 > - (b) 初回は劇的に遅くなる — Reth の transitive な ~600 crate を fetch + compile する
 > - (c) エラー — Reth は明示的な configuration が必要で、まだ与えていない
 
-答えは (b) だ。Cargo の `workspace.dependencies` 宣言は **resolution** を起こすが、未使用 deps の **compilation** は起こさない。しかし `cargo check` は依存グラフを walk して git source を fetch する。それが 5-15 分の初回コストだ。良いニュース: 以降は cache が効く。
+答えは (b) だ。Cargo の `workspace.dependencies` 宣言は **resolution** を起こすが、未使用 deps の **compilation** は起こさない。しかし `cargo check` は依存グラフを順に辿って git source を fetch する。それが 5-15 分の初回コストだ。良いニュース: 以降は cache が効く。
 
 実行する:
 

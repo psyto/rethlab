@@ -21,7 +21,7 @@
 
 ## 作ったシステム
 
-11 レッスンを通じて、Course 6 で build した substrate に **CLOB matching engine** を追加し、その fill を commit された payload に配線した。Workspace は今こうなっている:
+11 レッスンを通じて、Course 6 で build した substrate に **CLOB matching engine** を追加し、その約定を commit された payload に接続した。Workspace は今こうなっている:
 
 ```
 ~/code/my-openhl/
@@ -46,12 +46,12 @@ Price-time priority CLOB。**操作は 2 つ**: submit (新規 order が take �
 
 | 操作 | Public method | 内部で何が変わるか |
 | - | - | - |
-| Limit order を submit | `Book::submit(order)` (`OrderType::Limit` 経由) | 反対側を price 以下/以上で walk し、resting order とマッチし、未 fill な残りを rest させる |
-| Market order を submit | `Book::submit(order)` (`OrderType::Market` 経由) | 反対側を任意の価格で walk し、マッチし、未 fill な残りを破棄する |
+| Limit order を submit | `Book::submit(order)` (`OrderType::Limit` 経由) | 反対側を price 以下/以上で順に辿り、resting order とマッチし、未 fill な残りを rest させる |
+| Market order を submit | `Book::submit(order)` (`OrderType::Market` 経由) | 反対側を任意の価格で順に辿り、マッチし、未 fill な残りを破棄する |
 | Resting order を cancel | `Book::cancel(order_id)` | 両 side を linear scan し、order を削除し、level が空なら drop する |
 | Inspect | `best_bid`, `best_ask`, `depth_bid`, `depth_ask` | read-only |
 
-Matching は **構築上 deterministic**。Submit ごとに、同じ input と同じ事前 book 状態に対して同じ fill を produce する — これを L8 の proptest invariant (`determinism`) が 256 個のランダムシーケンスで exercise している。
+Matching は **構築上 deterministic**。Submit ごとに、同じ input と同じ事前 book 状態に対して同じ約定を生成する — これを L8 の proptest invariant (`determinism`) が 256 個のランダムシーケンスで exercise している。
 
 ## Bridge 統合
 
@@ -72,7 +72,7 @@ submit_order(order)              build_payload(parent, attrs)
   caller に FillResult を return
 ```
 
-Submit が push、build が drain する。Drain は **forward-only**: 各 payload は build 時点の fill snapshot を所有し、以前の payload に retroactively fill が attach されることはない。**L11 の integration test がこれを real Reth node に対して end-to-end で証明している。**
+Submit が push、build が drain する。Drain は **forward-only**: 各 payload は build 時点の fill snapshot を所有し、以前の payload に retroactively fill が attach されることはない。**L11 の integration test がこれを実 Reth node に対して end-to-end で証明している。**
 
 ## 11 レッスン前にはできなかった、今できること
 
@@ -124,7 +124,7 @@ L6 では明示的に、O(1) index ではなくシンプルさを選んだ。ope
 
 ## Production-readiness チェックリスト
 
-この matching engine + bridge を real testnet に持っていきたいなら:
+この matching engine + bridge を実際の testnet に持っていきたいなら:
 
 - [ ] **EVM-encoded fill** — 各 `Fill` をトランザクションとしてラップし、BlockExecutor に route して state 実行と state-root 計算を行う。
 - [ ] **Custom EVM precompile** — コントラクト読み取り用の `clob_read_best_bid`、chain-driven な submit 用の `clob_place_order`。
@@ -134,7 +134,7 @@ L6 では明示的に、O(1) index ではなくシンプルさを選んだ。ope
 - [ ] **Order-id 衝突チェック** — `submit` は現状、caller が unique な OrderId を割り当てることを信頼している。Production では duplicate を検出して拒否する必要がある。
 - [ ] **Pre-trade リスクチェック** — アカウントを maintenance margin 以下に追い込む order は matching 前に拒否すべき。
 - [ ] **Telemetry** — order スループット、fill latency、depth-of-book メトリクスのカウンター。
-- [ ] **Multi-validator agreement** — single-validator devnet では、2 validator が異なる fill 順序を produce するケースが見えない。Proptest の `determinism` はローカルでの証明にすぎず、multi-validator integration test がネットワーク上での証明になる。
+- [ ] **Multi-validator agreement** — single-validator devnet では、2 validator が異なる fill 順序を生成するケースが見えない。Proptest の `determinism` はローカルでの証明にすぎず、multi-validator integration test がネットワーク上での証明になる。
 - [ ] **Liquidation engine** — アカウントのマージンが maintenance を下回ったときに、ポジションを強制 close する。Course 9 の領域。
 
 このリストは意図的に matching engine 自体より長い。**動く matching engine は基礎であって、製品ではない。**
@@ -152,9 +152,9 @@ L6 では明示的に、O(1) index ではなくシンプルさを選んだ。ope
 
 ## クロージングノート
 
-ソースファイル 5 個 (`types.rs` + `book.rs` + bridge への追加) にわたって約 **800 行の Rust** を書いた。そのコードは *real Reth-backed bridge に配線された動く CLOB matching engine* だ。Production-ready ではないし、本コースで production-ready にする必要もない。
+ソースファイル 5 個 (`types.rs` + `book.rs` + bridge への追加) にわたって約 **800 行の Rust** を書いた。そのコードは *実 Reth-backed bridge に組み込まれた動く CLOB matching engine* だ。Production-ready ではないし、本コースで production-ready にする必要もない。
 
-最も難しい部分は matching ロジックを書くこと自体ではなかった — L4 の submit_limit は構造が理解できれば 60 行で済む。**最も難しいのは determinism property** — 可能な submit の任意の順序付けに対して engine が同じ答えを produce することを保証すること。L8 の proptest が、テストしようと思わなかったバグを catch してくれる。そして、それこそが build した engine を consensus に plug しても safe である理由になる。
+最も難しい部分は matching ロジックを書くこと自体ではなかった — L4 の submit_limit は構造が理解できれば 60 行で済む。**最も難しいのは determinism property** — 可能な submit の任意の順序付けに対して engine が同じ答えを生成することを保証すること。L8 の proptest が、テストしようと思わなかったバグを catch してくれる。そして、それこそが build した engine を consensus に plug しても safe である理由になる。
 
 Correct だが non-deterministic な matching engine は consensus を壊す。Deterministic なものこそが、devnet から mainnet への移行を生き残るコードになる。
 

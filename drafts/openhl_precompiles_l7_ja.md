@@ -20,13 +20,13 @@
 
 ## ゴール
 
-このレッスンで掴む概念：
+このレッスンで掴む概念:
 
-- **schema-first 設計 — calldata レイアウトが public な契約で、behavior より先にロックする** — `0x...0c1c` に precompile を露出させた瞬間からコントラクトが呼んでくる。L7 で入力 layout を固定すれば、L8 で behavior を変えても caller を壊さない。
-- **128-byte ABI 入力 = 32-byte slot 4 個** — Solidity ABI は scalar を 32-byte word に詰める。`u64` は右端 8 バイトに入る (`[0; 24] + [u64 BE]`)。4 word = `account_id` / `side` / `price` / `qty`。
-- **precompile は panic ではなく soft fail する** — 不正な入力 (4 つの rejection path) は sentinel `0` を返し、transaction を revert しない。呼び出し側コントラクトは EVM-level error ではなく、分岐可能な値を受け取る。
-- **`AtomicU64::fetch_add(1, Relaxed)` による ID 採番** — ID には uniqueness が必要 (atomic でこれを保証) だが、他の state との同期不変条件は不要 (Book は自前の Mutex を持つ)。invariant が要求しないなら軽い memory ordering を選ぶ。
-- **sentinel `0` には `NEXT_ORDER_ID` が 1 始まりであることが必須** — ID が 0 始まりだと、最初に発行される ID が「rejected」と区別できなくなる。1 から始めれば sentinel に曖昧さがなくなる。
+- **schema-first 設計 — calldata レイアウトが public な契約で、behavior より先にロックする。** `0x...0c1c` に precompile を露出させた瞬間からコントラクトが呼んでくる。L7 で入力 layout を固定すれば、L8 で behavior を変えても caller を壊さない。
+- **128-byte ABI 入力 = 32-byte slot 4 個。** Solidity ABI は scalar を 32-byte word に詰める。`u64` は右端 8 バイトに入る (`[0; 24] + [u64 BE]`)。4 word = `account_id` / `side` / `price` / `qty`。
+- **precompile は panic ではなく soft fail する。** 不正な入力 (4 つの rejection path) は sentinel `0` を返し、transaction を revert しない。呼び出し側コントラクトは EVM-level error ではなく、分岐可能な値を受け取る。
+- **`AtomicU64::fetch_add(1, Relaxed)` による ID 採番。** ID には一意性が必要 (atomic でこれを保証) だが、他の state との同期不変条件は不要 (Book は自前の Mutex を持つ)。不変条件が要求しないなら軽い memory ordering を選ぶ。
+- **sentinel `0` には `NEXT_ORDER_ID` が 1 始まりであることが必須。** ID が 0 始まりだと、最初に発行される ID が「rejected」と区別できなくなる。1 から始めれば sentinel に曖昧さが残らない。
 
 検証：
 
@@ -46,7 +46,7 @@ CLOB の **書き込みパス** は、precompile が登録され、calldata の�
 - **4 つの rejection path** がすべて zero を返す：入力長不足、無効な `side` byte、`qty == 0`、CLOB 未インストール。
 - **Happy path** では order ID を allocate して返す — **ただし、まだ book には submit しない。** これは L8 で足す。
 
-L7 は Module 3 における L2 に相当する：関数は到達可能で、入力も正しく解析するが、state を変更する挙動は L8 まで先送り。L8 で「book に実際に書き込む」1 行を加え、L9 で発生した fill を bridge に route する。
+L7 は Module 3 における L2 に相当する：関数は到達可能で、入力も正しく解析するが、state を変更する挙動は L8 まで先送り。L8 で「book に実際に書き込む」1 行を加え、L9 で発生した約定を bridge に route する。
 
 ## おさらい
 
@@ -429,7 +429,7 @@ test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out
 
 1. **schema が契約、挙動は後回し。** L7 で出荷するのは、precompile アドレス、128-byte の calldata レイアウト、32-byte の戻り値形式だ。**一度公開すれば、コントラクトはそれを前提に call し始める。** L8 で calldata レイアウトを変えると、間に書かれたコントラクトがすべて壊れる。L7 で schema を確定させる（挙動が未完成でも）ことで、公開した日から契約が安定する。
 
-2. **happy path がフルに配線される前に、rejection path をテストする。** 各 rejection は public API としての保証だ：「malformed input を送れば sentinel 0 が返り、panic も部分的な state 変更も決して起きない」。この保証は、happy path が何か面白いことをするより *前に* テストできる — そして早めに固めておくことで、L8 で本物の submit を追加するときに validation ロジックが後付けにならずに済む。
+2. **happy path がフルに接続される前に、rejection path をテストする。** 各 rejection は public API としての保証だ：「malformed input を送れば sentinel 0 が返り、panic も部分的な state 変更も決して起きない」。この保証は、happy path が何か面白いことをするより *前に* テストできる — そして早めに固めておくことで、L8 で本物の submit を追加するときに validation ロジックが後付けにならずに済む。
 
 3. **order ID には `AtomicU64` を使い、`Mutex<u64>` は使わない。** アクセスパターンに基づく選択だ：ID の割り当ては order 発注のたびに発生し、book state とは論理的に独立している。atomic increment は wait-free、mutex の取得はブロックしうる。**データが他の state と同期の不変条件を持たないなら、軽いプリミティブを選ぶ。**
 
@@ -467,7 +467,7 @@ precompile は Solidity から呼ばれ、panic は precompile エラーとし�
 
 ## 次のレッスン（L8）
 
-L8 は 1 行のコードと、テスト数個ぶんの作業だ。その 1 行とは：order_id の割り当てと encoding の間に `clob.lock().expect("...").submit(Order { id, account, side, qty, order_type });` を挟むこと。テスト側では、`place_order_rejects_malformed_input` を拡張して、各 rejection の後に `book.depth_bid() == 0` を assert する（submit が配線されたので、ようやく意味のある side-effect チェックになる）。`place_order_returns_nonzero_id_on_valid_input` は `place_order_then_read_best_bid_round_trips` に置き換える — 2 つの precompile でラウンドトリップを行い、`0x...0c1c` 経由の write が `0x...0c1b` 経由の read から見えることを証明する。**そのラウンドトリップが Module 3 の中盤マイルストーンだ。**
+L8 は 1 行のコードと、テスト数個ぶんの作業だ。その 1 行とは：order_id の割り当てと encoding の間に `clob.lock().expect("...").submit(Order { id, account, side, qty, order_type });` を挟むこと。テスト側では、`place_order_rejects_malformed_input` を拡張して、各 rejection の後に `book.depth_bid() == 0` を assert する（submit が接続されたので、ようやく意味のある side-effect チェックになる）。`place_order_returns_nonzero_id_on_valid_input` は `place_order_then_read_best_bid_round_trips` に置き換える — 2 つの precompile でラウンドトリップを行い、`0x...0c1c` 経由の write が `0x...0c1b` 経由の read から見えることを証明する。**そのラウンドトリップが Module 3 の中盤マイルストーンだ。**
 ````
 
 ---

@@ -23,9 +23,9 @@
 このレッスンで掴む概念:
 
 - **`BTreeMap::retain` が「mutate + 空 entry を drop」を 1 closure でこなす** — 同じ callback が queue から該当 order を削除し、かつ level を残すかどうかも返す。1 pass で済み、`submit` 由来の空 level 不変条件が自動で維持される。
-- **O(n) 線形 scan は v0 で正しい選択** — O(1) cancel のために `HashMap<OrderId, (Side, Price)>` を持つと、`BTreeMap` と同期させる第 2 のデータ構造、追加メモリ、追加 cache 圧が発生する。プロファイルで見えていないものを最適化しない。Scan が見えてきたら index を入れる。
+- **O(n) 線形 scan は v0 で正しい選択** — O(1) cancel のために `HashMap<OrderId, (Side, Price)>` を抱えると、`BTreeMap` と同期させる 2 つ目のデータ構造、追加メモリ、追加 cache 圧が生まれる。プロファイルで見えていないものを最適化しない。Scan のコストが見えてきたら index を入れる。
 - **`bool` 戻り値が「最小の正直な形」** — `Option<RestingOrder>` は L3 で private にした `RestingOrder` を漏らす。`Result<(), CancelError>` は「見つからない」をエラー扱いに強制するが、cancel の冪等性 (2 回呼んでも安全) はバグではなく機能。
-- **空 level 掃除が `best_bid` の正直さを保つ** — もし `retain` が price 100 に空 queue を残せば、流動性がゼロなのに `best_bid()` は 100 を返し、次の sell は幻の価格でマッチしてしまう。`submit` が守るのと同じ不変条件を `cancel` も守らねばならない。
+- **空 level の掃除が `best_bid` の正直さを保つ** — もし `retain` が price 100 に空 queue を残せば、流動性がゼロなのに `best_bid()` が 100 を返し、次の sell が幻の価格でマッチしてしまう。`submit` が守るのと同じ不変条件を `cancel` も守らねばならない。
 
 検証:
 
@@ -118,10 +118,10 @@ method 1 個、file 1 個。`crates/clob/src/book.rs` で、既存の `impl Book
 注意深く読む:
 
 1. **`let mut found = false`** — local flag。Order を見つけて削除した瞬間 `true` になる。
-2. **`self.bids.retain(|_, queue| { ... })`** — `retain` がすべての (`Reverse<Price>`, `VecDeque<RestingOrder>`) pair を walk する。Closure が `queue` を mutate して `bool` を返す: `false` なら entry を drop し、`true` なら保持する。
+2. **`self.bids.retain(|_, queue| { ... })`** — `retain` がすべての (`Reverse<Price>`, `VecDeque<RestingOrder>`) pair を順に辿る。Closure が `queue` を mutate して `bool` を返す: `false` なら entry を drop し、`true` なら保持する。
 3. **`if !found && let Some(pos) = queue.iter().position(|o| o.id == order_id)`** — まだ見つけていない場合のみ検索する。`iter().position()` は `Option<usize>` を返す — 述語に一致する最初の要素の index。`if let` と組み合わせるのが「index が存在すれば何かする」の Rust 慣用イディオム。
 4. **`queue.remove(pos)`** — `VecDeque::remove(index)` がその index の要素を取り出す。返り値の `Option<T>` (削除された要素) はここでは無視する。**`VecDeque::remove` は O(n)** — 後続要素を 1 slot 左にシフトする。数百 order の queue ならマイクロ秒オーダー。
-5. **`found = true`** — flag を立てて以降の level がスキャンされないようにする。**これが load-bearing な最適化** — order が見つかった後も残りの level を walk する (以前の cancellation で残った空 queue を check するため) が、残り各 queue 内の linear scan はスキップする。
+5. **`found = true`** — flag を立てて以降の level がスキャンされないようにする。**これが load-bearing な最適化** — order が見つかった後も残りの level を順に辿る (以前の cancellation で残った空 queue を check するため) が、残り各 queue 内の linear scan はスキップする。
 6. **`!queue.is_empty()`** — return 値。Queue が空 (最後の order を削除したばかり、または別の理由で空) なら `false` を返して `retain` に entry を drop させる。そうでなければ `true` を返して保持させる。
 7. **`if found { return true }`** — short-circuit。bid で既に見つけて削除したなら、ask を検索する必要はない。
 8. **`self.asks.retain(...)`** — ask に対する同じロジック。Closure 本体は同一 (key の違いはない — 両 map とも value は `VecDeque<RestingOrder>`)。
@@ -223,7 +223,7 @@ mod smoke {
 }
 ```
 
-`cargo test -p openhl-clob smoke` で走らせる。3 つすべて pass するはず。**そのあと smoke module は削除する** — real なテストスイートは L7 で入れる。
+`cargo test -p openhl-clob smoke` で走らせる。3 つすべて pass するはず。**そのあと smoke module は削除する** — 本格的なテストスイートは L7 で入れる。
 
 よくあるエラーと対処:
 
@@ -274,7 +274,7 @@ position を見つけるために BTreeMap を immutably borrow し、削除す�
 
 ## 次のレッスン (L7)
 
-Matching engine がコンパイルできる。**できていないこと**: 動くことを証明する。L7 でテストモジュールを始める — 期待するシナリオをカバーする hand-trace 済み unit test 9 個: 空 book マッチング、price level 内の FIFO time priority、market order の liquidity 枯渇、複数 price level にわたる partial fill、cancel と再 submit、マッチ後の no-crossed-book invariant。各 test が engine の specific な 1 path を walk し、合わせるとここまで build した matching ロジックの regression suite になる。
+Matching engine がコンパイルできる。**できていないこと**: 動くことを証明する。L7 でテストモジュールを始める — 期待するシナリオをカバーする hand-trace 済み unit test 9 個: 空 book マッチング、price level 内の FIFO time priority、market order の liquidity 枯渇、複数 price level にわたる partial 約定、cancel と再 submit、マッチ後の no-crossed-book invariant。各 test が engine の specific な 1 path を順に辿り、合わせるとここまで build した matching ロジックの regression suite になる。
 ````
 
 ---

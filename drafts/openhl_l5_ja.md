@@ -23,10 +23,10 @@
 
 このレッスンで掴む概念:
 
-- **Contract surface の裏側に置く production-shape な内部型** — 内部では `(B256, Header)` を保存しつつ、trait は `ExecutedBlock` を返す。変換は trait 境界でだけ行うので、alloy が進化しても contract は壊れない。L12+ の `LiveRethEvmBridge` はまさにこれを再利用する。
-- **`Header::hash_slow()` による real な RLP hashing** — なぜ `hash_slow` という名前か (毎回再計算、cache なし)、RLP encoding が byte レベルで何をしているか、Ethereum node が計算するのと同じ hash になることを alloy がどう強制するか。
-- **tuple 保存による hash と header の binding** — `(B256, Header)` を 1 つの単位として保存する理由。別フィールドに分けると header の mutation で cache 済み hash と desync するバグを招く。
-- **1 つの trait に対する 2 つの impl** — `InMemoryEvmBridge` と `RethEvmBridge` は trait surface を共有し fidelity だけ違う。trait が正しければ Rust が自動的にくれる多相性で、L12 ではこの形がそのまま 3 つ目の impl に広がる。
+- **Contract surface の裏側に置く production grade な内部型。** 内部では `(B256, Header)` を保存しつつ、trait は `ExecutedBlock` を返す。変換は trait 境界でだけ行うので、alloy が進化しても contract は壊れない。L12 以降の `LiveRethEvmBridge` はまさにこれを再利用する。
+- **`Header::hash_slow()` による実際の RLP hashing。** `hash_slow` という名前の意味 (毎回再計算、cache なし)、RLP encoding がバイトレベルで何をしているか、Ethereum node が計算するのと同じ hash になることを alloy がどう強制するか。
+- **タプルで保持することで hash と header を不可分にする。** `(B256, Header)` を 1 つの単位として保存する理由。別フィールドに分けると header の変更で cache 済み hash と desync するバグを招く。
+- **1 つの trait に対する 2 つの impl。** `InMemoryEvmBridge` と `RethEvmBridge` は trait surface を共有し、fidelity (型の本物度合い) だけが違う。trait が正しければ Rust が自動的にくれる多相性で、L12 ではこの形がそのまま 3 つ目の impl に広がる。
 
 検証:
 
@@ -34,14 +34,14 @@
 cargo test -p openhl-evm
 ```
 
-上記の実行結果が **9 つのテスト** (L4 の `InMemoryEvmBridge` の 5 つ + 新規 4 つ) で pass する。**自分のコードが alloy / Reth 型に初めて触れるレッスン** だ。「テスト用は合成、production-shape は real 型」というパターンはコース全体を通して繰り返される。ここできれいに身につけておくと L11+ で時間を節約できる。
+上記の実行結果が **9 つのテスト** (L4 の `InMemoryEvmBridge` の 5 つ + 新規 4 つ) で pass する。**自分のコードが alloy / Reth 型に初めて触れるレッスン** だ。「テスト用は合成、production grade は本物の型」というパターンはコース全体を通して繰り返される。ここできれいに身につけておくと L11 以降で時間を節約できる。
 
 具体的な変更:
 
 - `crates/evm/Cargo.toml` に alloy 依存を 2 つ追加: `alloy-primitives` (`B256`、`Address` 用) と `alloy-consensus` (`Header` 用)。
 - `crates/evm/src/engine.rs` — 新規ファイル、`RethEvmBridge` struct、`Header` を保存する private `State`、4 method を持つ `impl ConsensusBridge for RethEvmBridge` + 4 つの unit test。
 - 3 つの小さな変換 helper — `to_b256`、`from_b256`、`to_executed_block` — が alloy 型と contract 型を trait 境界でだけ橋渡しする。
-- `crates/evm/src/lib.rs` — `pub mod engine; pub use engine::RethEvmBridge;` を配線する。
+- `crates/evm/src/lib.rs` — `pub mod engine; pub use engine::RethEvmBridge;` を組み込む。
 
 ## おさらい
 
@@ -215,7 +215,7 @@ impl ConsensusBridge for RethEvmBridge {
    - `beneficiary: Address::from(attrs.fee_recipient)` — `[u8; 20]` を alloy の `Address` newtype に変換
    - `mix_hash: B256::from(attrs.prev_randao)` — `[u8; 32]` を `B256` に変換
    - `..Default::default()` — 残りの全フィールドを zero/default で埋める (state_root、gas_limit など)
-5. **`header.hash_slow()`** — **本物の hash 計算**。`Header` 全体 (defaulted フィールド込みで約 20 個) を RLP encode し、Keccak-256 を走らせて `B256` を produce する。"slow" は convention の名前 — `hash_fast` は header struct に hash が pre-cache されている場合に存在するが、ここでは該当しない。
+5. **`header.hash_slow()`** — **本物の hash 計算**。`Header` 全体 (defaulted フィールド込みで約 20 個) を RLP encode し、Keccak-256 を走らせて `B256` を 生成する。"slow" は convention の名前 — `hash_fast` は header struct に hash が pre-cache されている場合に存在するが、ここでは該当しない。
 6. **`(hash, header)` を payload ID を key に pending に insert** し、ID を return する。
 
 **この block hash は real だ。** header のどのフィールドであれ、call 間で 1 byte でも変われば、結果の hash は異なる。L4 の合成 hash にはこの性質がなかった。L5 の hash にはある。Step 9 のテストでこれを証明する。
@@ -459,7 +459,7 @@ L5 の 4 テストが L4 の 5 テストと並んで pass する — **両 impl 
 
 このレッスンで encode した本質的な決定が 3 つ:
 
-1. **内部型は alloy-native、trait 型は contract の serialization。** State は `(B256, Header)` を保存する。Trait は `ExecutedBlock` を返す。変換は trait boundary でだけ起こる (`to_executed_block`)。これにより alloy が型を進化させても trait は壊れず、変換ヘルパーだけを更新すればよくなる。**production-shape の内部型を contract から decouple したことが、L11+ で `LiveRethEvmBridge` が同じ trait を再利用できる理由だ。**
+1. **内部型は alloy-native、trait 型は contract の serialization。** State は `(B256, Header)` を保存する。Trait は `ExecutedBlock` を返す。変換は trait boundary でだけ起こる (`to_executed_block`)。これにより alloy が型を進化させても trait は壊れず、変換ヘルパーだけを更新すればよくなる。**production grade な内部型を contract から decouple したことが、L11 以降で `LiveRethEvmBridge` が同じ trait を再利用できる理由だ。**
 
 2. **別フィールドではなく `(B256, Header)` のタプルで保持する。** hash は *ちょうどこの header の hash* だ。別々に保存すると、header の変更で cache hash が desync するバグを招く。タプルが両者を不可分にする。
 

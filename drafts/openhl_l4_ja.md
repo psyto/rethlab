@@ -23,10 +23,10 @@
 
 このレッスンで掴む概念:
 
-- **テストダブル先行の実装戦略** — Reth に触れる前に fake EVM を書く理由。trait を end-to-end で exercise するのに 600 個の transitive dep を待つ必要がなく、下流の consensus test (L9/L10) を 2.7s ではなく 0.02s で回せる。
-- **内部可変性のための `Mutex<State>`** — L3 で要求された `Send + Sync` bound を満たすため、private `State` struct を単一の `Mutex` で包む。method ごとに 1 回 lock するパターンはテストコードでは十分で、L12+ の `LiveRethEvmBridge` にも構造的に伝播する。
-- **`pending` と `chain` map の分離** — 投機的な build と canonical な commit はライフサイクルが異なる。ここで分離を encode しておくと、以降の impl すべてが同じデータフローを尊重する (build は投機、commit は確定)。
-- **`async_trait` の impl ergonomics** — `#[async_trait]` を `impl` block に付けたとき何が要求されるか (lifetime、`Self: Send + Sync`)、stable Rust で trait の `async fn` がいまだに macro 経由で desugar される理由。
+- **テストダブル先行の実装戦略。** Reth に触れる前に fake EVM を書く理由。trait を end-to-end で exercise するのに 600 個の transitive dep を待つ必要がなく、下流の consensus test (L9/L10) を 2.7s ではなく 0.02s で回せる。
+- **内部可変性のための `Mutex<State>`。** L3 で要求された `Send + Sync` bound を満たすため、private `State` struct を単一の `Mutex` で包む。method ごとに 1 回 lock するパターンはテストコードでは十分で、L12 以降の `LiveRethEvmBridge` にも構造的に伝播する。
+- **`pending` と `chain` map の分離。** 投機的な build と canonical な commit はライフサイクルが異なる。ここで分離を encode しておくと、以降の impl すべてが同じデータフローを尊重する (build は投機、commit は確定)。
+- **`async_trait` の impl ergonomics。** `#[async_trait]` を `impl` block に付けたとき何が要求されるか (lifetime、`Self: Send + Sync`)、stable Rust で trait の `async fn` がいまだに macro 経由で desugar される理由。
 
 検証:
 
@@ -40,7 +40,7 @@ cargo test -p openhl-evm
 
 - `crates/evm/Cargo.toml` に 3 dependency + 1 dev-dependency 追加: `openhl-consensus`、`openhl-types`、`async-trait`、`tokio` (dev)。
 - `crates/evm/src/in_memory.rs` — 新規ファイル、`InMemoryEvmBridge` struct、private `State`、`Mutex<State>`、4 method の `impl ConsensusBridge`、`hex_short` helper、5 unit test を含む。
-- `crates/evm/src/lib.rs` — `pub mod in_memory; pub use InMemoryEvmBridge;` を配線する。
+- `crates/evm/src/lib.rs` — `pub mod in_memory; pub use InMemoryEvmBridge;` を組み込む。
 
 ## おさらい
 
@@ -140,14 +140,14 @@ impl InMemoryEvmBridge {
 }
 ```
 
-各フィールドの役割を walk する:
+各フィールドの役割を順に見ていく:
 
 **`InMemoryEvmBridge`** — public struct。フィールドは 1 つ: `state: Mutex<State>`。Mutex が type を `Send + Sync` にし (thread 間で safely 共有可能)、これは trait が要求する性質だ。Mutable なものはすべて mutex の内側に置く。
 
 **`State`** (private) — 3 つの bookkeeping:
 
 - `next_payload_id: u64` — 単調カウンタ。`build_payload` のたびにインクリメントし、その前の値を返り値の `PayloadId` に使う。
-- `pending: HashMap<u64, ExecutedBlock>` — `build_payload` が produce したが `commit` がまだ accept していない block。`PayloadId` を key にする。
+- `pending: HashMap<u64, ExecutedBlock>` — `build_payload` が 生成したが `commit` がまだ accept していない block。`PayloadId` を key にする。
 - `chain: HashMap<[u8; 32], ExecutedBlock>` — commit 済み block。生の 32-byte hash を key にする (`BlockHash` newtype ではなく — lookup 時に `.0` accessor を省ける)。
 - `head: Option<BlockHash>` — 最も最近 commit された hash。何も commit していなければ `None`。
 

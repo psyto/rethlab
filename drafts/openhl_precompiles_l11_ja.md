@@ -21,14 +21,14 @@
 
 ## ゴール
 
-このレッスンが終わると：
+このレッスンを終えると、次のことができるようになる:
 
-- EVM ↔ CLOB のアーキテクチャを、記憶からホワイトボードに描ける。
-- v0 で先送りした 4 項目（RPC ラウンドトリップ、マルチバリデータでの OrderId、transaction-scoped なロールバック、staticcall での mutation 拒否）を名指し、それぞれが範囲外である理由を説明できる。
-- 拡張がどこに足されるかを 4 つ描ける（best_ask precompile、depth precompile、clob_cancel_order、fill を EVM event として出す機構）。
-- 自分の Reth ベースの L1 でカスタム precompile を出荷する準備ができている。
+- EVM ↔ CLOB のアーキテクチャを、記憶を頼りにホワイトボードに描ける。
+- v0 で先送りした 4 項目 (RPC ラウンドトリップ、マルチバリデータでの OrderId、transaction-scoped なロールバック、staticcall での mutation 拒否) を名指しし、それぞれが範囲外である理由を説明できる。
+- 拡張ポイントを 4 つ描ける (best_ask precompile、depth precompile、clob_cancel_order、約定を EVM event として出す機構)。
+- 自分の Reth ベース L1 にカスタム precompile を出荷する準備ができている。
 
-**このレッスンにコードはなし。** メンタルモデルだけだ。
+**このレッスンにコードはなし。** メンタルモデルだけ。
 
 ## アーキテクチャ、1 枚の図で
 
@@ -97,11 +97,11 @@
 - rejection path：入力長不足、無効な side byte、qty=0、CLOB 未インストール。
 - テストで証明済み：rejection 時に book は触られない、有効な入力は正しくクロスする、precompile 2 つでのラウンドトリップが成立する。
 
-**Module 4（Bridge integration, L9-L10）** — fill が bridge に戻る：
+**Module 4（Bridge integration, L9-L10）** — 約定が bridge に戻る：
 
 - `FILL_SINK` global：`RwLock<Option<Arc<Mutex<Vec<Fill>>>>>` — `CLOB_STATE` と並ぶ構造。
 - `LiveRethEvmBridge::new()` が自身が所有する Arc を、両方の global に install する。
-- `place_order` は（sink が install されていれば）fill を sink に push し、bridge 側の `submit_order` と同じ drain を通って次の `build_payload` に届く。
+- `place_order` は（sink が install されていれば）約定を sink に push し、bridge 側の `submit_order` と同じ drain を通って次の `build_payload` に届く。
 - integration test が、実際の Reth プロセス内でフルチェーンを証明する：合計 48 tests（unit 47 + integration 1）。
 
 ## 正直に先送り
@@ -164,11 +164,11 @@ v0 でやっていない 4 項目だ。どれも実際のプロダクション�
 
 `(order_id, account)` の calldata を受け取り、その order が caller のものなら book から削除する。成功/失敗を返す。**ここで認可の問題が出てくる** — caller がその order を発注したアカウント本人だと、どう検証するか? EVM call の `msg.sender` は precompile を呼び出したコントラクトであって、元のアカウントではない。**`keccak(account_id, signature)` のスキーム、または事前登録された認可マッピングのどちらかが必要。** アカウントモデルが固まるまでは、認可設計を先送りする。
 
-### Extension 4: fill を EVM event として出す（2 週間）
+### Extension 4: 約定を EVM event として出す（2 週間）
 
-現状、fill は `bridge.pending_fills` に届き、payload に積まれて block に attach される。**スマートコントラクトからは観測できない。** fill を EVM event として emit すれば、下流のコントラクトが `eth_getLogs` や event filter で subscribe できる — ERC-20 transfer を subscribe するのと同じ要領で。
+現状、約定は `bridge.pending_fills` に届き、payload に積まれて block に attach される。**スマートコントラクトからは観測できない。** 約定を EVM event として emit すれば、下流のコントラクトが `eth_getLogs` や event filter で subscribe できる — ERC-20 transfer を subscribe するのと同じ要領で。
 
-**仕組み**：`place_order` の末尾で各 fill を Solidity ABI-encoded な event として encode し、`revm::interpreter::Interpreter::add_log(...)` を呼ぶ（あるいは現在の EVM バージョンの相当 API を）。event を emit するコントラクトとしては precompile 自身（アドレス `0x...0c1c`）が振る舞う。
+**仕組み**：`place_order` の末尾で各約定を Solidity ABI-encoded な event として encode し、`revm::interpreter::Interpreter::add_log(...)` を呼ぶ（あるいは現在の EVM バージョンの相当 API を）。event を emit するコントラクトとしては precompile 自身（アドレス `0x...0c1c`）が振る舞う。
 
 **複雑度**：precompile は通常 event を emit しない。この revm API は扱いづらい — `PrecompileFn` のシグネチャを拡張する必要があり、結果として revm の小さな fork が必要になる可能性がある。**インパクトは大きい一方、摩擦も大きい。** 明確なプロダクト需要が出るまで先送りする。
 
@@ -178,11 +178,11 @@ v0 でやっていない 4 項目だ。どれも実際のプロダクション�
 
 1. **カスタム EVM の「スロットを 1 つ差し替える」パターン。** Reth の EVM に独自の dispatch を plug-in したいとき — カスタム opcode、カスタムな transaction 検証、カスタム gas pricing など — 道筋は同じだ：`EvmFactory` + `ExecutorBuilder` + `.with_components(...)`。
 
-2. **precompile state のための「プロセスグローバル Arc」パターン。** REVM の関数ポインタシグネチャではクロージャが使えないので、プロセスグローバルな storage が唯一の選択肢になる。**このパターンは複利で効く** — 共有 state を 1 つ（CLOB）作っておけば、もう 1 つ（fill sink）を足すのはほぼ機械的だ。
+2. **precompile state のための「プロセスグローバル Arc」パターン。** REVM の関数ポインタシグネチャではクロージャが使えないため、プロセスグローバルな storage が唯一の選択肢になる。**このパターンは複利で効く** — 共有 state を 1 つ（CLOB）作っておけば、もう 1 つ（fill sink）を足すのはほぼ機械的だ。
 
 3. **schema-first なプロトコル設計。** 実装（L8）より先に calldata layout（L7）を固めれば、schema を前提にビルドされたコントラクトは実装の進化で壊れない。**契約は schema にあり、関数 body にはない。**
 
-4. **敵対的テストデータ。** 「best = 最高価格であって最大数量ではない」を証明するための、価格の異なる 2 つの order。fill を流すための maker + taker。各テスト値は「正しさを偶然から切り分ける」役割を果たすべきだ。
+4. **敵対的テストデータ。** 「best = 最高価格であって最大数量ではない」を証明するための、価格の異なる 2 つの order。約定を流すための maker + taker。各テスト値は「正しさを偶然から切り分ける」役割を果たすべきだ。
 
 5. **ドキュメント上で正直に scope を切ること。** 先送りした項目を、関連するコード site の doc コメントで名指す。**将来の読者は、ギャップとその理由を 1 箇所で読める。** ドキュメント化されていないギャップは、見えない技術負債になる。
 

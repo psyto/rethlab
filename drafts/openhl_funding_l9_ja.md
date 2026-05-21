@@ -22,11 +22,11 @@
 
 このレッスンで掴む概念:
 
-- **単一呼び出しテストは挙動を、複数呼び出しテストは state machine を検証する** — L8 で確認したのは guard が一度だけ `Some` を返せること。L9 の `second_tick_requires_another_full_interval` で確認するのは guard が fire した*後にも再び engage する*こと。1 度だけ fire して以降 gate しない buggy 実装を捕まえるには 3 連続呼び出しが必要。
-- **Composition テストが配線ミスを捕まえる** — 各ステップが unit test 済みでも、ステップ間の配線は別の関心事だ。`tick()` が `apply_funding` を `compute_rate` より先に呼ぶかもしれないし、`mark` を期待する場所に `index` を渡すかもしれない。`premium_drives_settlement_signs` のような full composition test が、unit test では捕まえられないバグを拾う。
-- **不変条件は通過する各レイヤーで再検証する** — `compute_rate` の cap は L6 で unit test 済みだが、`capped_rate_when_premium_extreme` で `tick()` 経由でも再検証する。Mid-call で `params.rate_cap` を上書きするような配線バグは、下層のテストをすり抜ける。
-- **境界テストはペアで：just-before と exactly-at** — `now == last_settled_at + interval - 1`（none）と `now == last_settled_at + interval`（fire）が標準ペア。両方向で guard 条件の off-by-one を捕まえる。`+1` を追加しても、別クラスのバグは捕まえられない。
-- **失敗は state を変えない** — `tick()` が `None` を返したとき `last_settled_at` は不変。3 連続呼び出し（fire / gated / fire）の 3 回目の成功時刻からこの副不変条件が読み取れる。
+- **単一呼び出しテストは挙動を、複数呼び出しテストは state machine を検証する** — L8 で確認したのは guard が一度だけ `Some` を返せることだ。L9 の `second_tick_requires_another_full_interval` で確認するのは、guard が fire した*後にも再び engage する*ことだ。1 度 fire したきり以降は gate しなくなる buggy 実装を捕まえるには、3 連続の呼び出しが要る。
+- **Composition テストが接続ミスを捕まえる** — 各ステップが unit test 済みでも、ステップ間の接続は別の関心事だ。`tick()` が `apply_funding` を `compute_rate` より先に呼ぶかもしれないし、`mark` を期待している場所に `index` を渡すかもしれない。`premium_drives_settlement_signs` のような full composition test が、unit test では捕まえられないバグを拾い上げる。
+- **不変条件は通過する各レイヤーで再検証する** — `compute_rate` の cap は L6 で unit test 済みだが、`capped_rate_when_premium_extreme` で `tick()` 経由でも再検証する。呼び出しの途中で `params.rate_cap` を上書きするような接続バグは、下層のテストをすり抜けてしまう。
+- **境界テストはペアで：just-before と exactly-at** — `now == last_settled_at + interval - 1`（None）と `now == last_settled_at + interval`（fire）が標準のペアだ。両方向から guard 条件の off-by-one を捕まえる。`+1` を追加しても、別のクラスのバグが捕まるわけではない。
+- **失敗は state を変えない** — `tick()` が `None` を返したとき `last_settled_at` は不変のままだ。3 連続呼び出し（fire / gated / fire）の 3 回目の成功時刻から、この副不変条件が読み取れる。
 
 検証：
 
@@ -104,9 +104,9 @@ L8 のテストはどれも clock を*高々 1 回*しか走らせない。L9 �
 
 **5 行のブロックコメントは、そのまま紙の上の数学だ。** このテストをデバッグする人は誰でも、手で算術を検証できる：`100 × 101 × 1_250_000 = 12_625_000_000`。これを `RATE_SCALE = 1_000_000_000` で割る（整数除算なのでゼロ方向に丸まる）と `12`。`apply_funding` の符号反転で、long は `-12`、short は `+12` になる。**コメントが documentation、テストが spec として働く。**
 
-**各ステップが既に個別にテストされているのに、なぜこのテストが必要なのか？** Composition 自体が独立した関心事だからだ。`tick()` が間違った順序で間違った関数を呼ぶ可能性がある — 例えば `compute_rate` の前に `apply_funding` を呼んでしまったり、`mark` を期待している箇所に `index` を渡してしまったり、といったことが起こりうる。**Composition テストは、unit テストでは見逃される配線ミスを捕まえてくれる。**
+**各ステップが既に個別にテストされているのに、なぜこのテストが必要なのか？** Composition 自体が独立した関心事だからだ。`tick()` が間違った順序で間違った関数を呼ぶ可能性がある — 例えば `compute_rate` の前に `apply_funding` を呼んでしまったり、`mark` を期待している箇所に `index` を渡してしまったり、といったことが起こりうる。**Composition テストは、unit テストでは見逃される接続ミスを捕まえてくれる。**
 
-> 🛑 **やりがちな勘違い。** 「このテストは `apply_funding` のテストと重複している。アカウントごとのアサーションは落として、`out.rate` だけ確認すべきでは？」 **だめだ。** このテストの要点は*composition*にある。`apply_funding` のテストは pass するのに `premium_drives_settlement_signs` だけ fail するなら、バグは `tick()` が呼び出しを配線するやり方にあって、`apply_funding` の中にはない。**レイヤーごとに独自の composition テストが必要だ。** 3 レイヤー深ければ、最低 3 つの composition テストが必要になる。
+> 🛑 **やりがちな勘違い。** 「このテストは `apply_funding` のテストと重複している。アカウントごとのアサーションは落として、`out.rate` だけ確認すべきでは？」 **だめだ。** このテストの要点は*composition*にある。`apply_funding` のテストは pass するのに `premium_drives_settlement_signs` だけ fail するなら、バグは `tick()` が呼び出しを組み立てるやり方にあって、`apply_funding` の中にはない。**レイヤーごとに独自の composition テストが必要だ。** 3 レイヤー深ければ、最低 3 つの composition テストが必要になる。
 
 ### Step 2: `second_tick_requires_another_full_interval` を追加
 
@@ -178,7 +178,7 @@ L8 のテストはどれも clock を*高々 1 回*しか走らせない。L9 �
 
 **`compute_rate` のテストが既に clamping をカバーしているのに、なぜこのテストが必要なのか？** `tick()` 側で rate を unwrap したり、いじったり、bypass したりしないことを確認する必要があるからだ。**Cap が clock を経由しても変化せずに surface することを示す。**
 
-微妙な配線バグ — 例：`compute_rate(premium, FundingParams { rate_cap: FundingRate(0), ..params })` のようなもの — は、このテストで壊れる（cap ゼロ → rate ゼロ → settlement なし）。**Composition テストは、unit テストでは拾えないものを捕まえる。**
+微妙な接続バグ — 例：`compute_rate(premium, FundingParams { rate_cap: FundingRate(0), ..params })` のようなもの — は、このテストで壊れる（cap ゼロ → rate ゼロ → settlement なし）。**Composition テストは、unit テストでは拾えないものを捕まえる。**
 
 ### Step 4: テストを実行
 
@@ -213,7 +213,7 @@ test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 このレッスンに焼き込んだ決定は 4 つ：
 
-1. **Composition テストが配線ミスを捕まえる。** 各ステップが unit-test されていても、ステップ間の配線は別の関心事だ。**3 ステップの pipeline には、最低でも composition テストが必要だ — 各ステップの配置に 1 つずつ、加えてマルチステップの composition テストを 1 つ。** `premium_drives_settlement_signs` が後者にあたる。
+1. **Composition テストが接続ミスを捕まえる。** 各ステップが unit-test されていても、ステップ間の接続は別の関心事だ。**3 ステップの pipeline には、最低でも composition テストが必要だ — 各ステップの配置に 1 つずつ、加えてマルチステップの composition テストを 1 つ。** `premium_drives_settlement_signs` が後者にあたる。
 
 2. **State machine には multi-call テストが必要。** 単一 operation で偶然に不変条件を満たしてしまうことがあり、それを排除して「state machine が一貫して強制しているか」を確認できるのは複数 operation だけだ。**`first_tick_at_exact_interval_fires` だけでは足りないからこそ `second_tick_requires_another_full_interval` が存在する。**
 
@@ -287,7 +287,7 @@ L9 は `cd94137`（Stage 8b）を引用。L9 後、clock.rs が Stage 8b の 7 �
 - **§やりがちな勘違い（`apply_funding` のテストを duplicate）**が test-redundancy 反射を composition-tests 論で先回り。
 - **§Step 2 がテストを 3 番号付き tick call で narrate** — 読者が時間構造を見る。
 - **§考えてみよう（各 tick 後の `last_settled_at`）**が「失敗で state 変化なし」副不変条件を正当化。
-- **§Step 3 が数学と配線関心を説明** — 読者が composition テストが unit テストの見逃すものを捕まえる理由を見る。
+- **§Step 3 が数学と接続関心を説明** — 読者が composition テストが unit テストの見逃すものを捕まえる理由を見る。
 - **§設計の振り返り 1-4** が distinct パターンを名指す（composition-tests-catch-wiring、multi-call-for-state-machines、boundary-at-every-gate、invariants-at-every-layer）。
 - **§よくある質問**が境界対称性、proptest 適用可能性、繰り返し価値、テストデータ可読性を扱う。
 - **L10 プレビュー**が具体的：1 マイルストーンテスト、no-catch-up 設計哲学。

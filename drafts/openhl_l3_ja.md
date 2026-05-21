@@ -23,10 +23,10 @@
 
 このレッスンで掴む概念:
 
-- **なぜちょうど 4 メソッドか** — `build_payload / payload_ready / validate_payload / commit` の 4 つは BFT round 構造 (propose → vote → decide) によって決まるもので、言語の好みではない。build/ready を 1 つにまとめると build-during-voting が消える。5 つ目を足すと consensus 内部が EL に漏れる。
-- **`#[async_trait]` と `Send + Sync` bound** — `async_trait` が実際に何に desugar されるか (boxed futures + object-safety)、そして `: Send + Sync` が Malachite actor 間で共有される `Arc<dyn ConsensusBridge>` の soundness をコンパイル時に保証する仕組み。
-- **3 つの error 分類** — `Rejected / NotReady / Internal` が 3 種類の consensus 応答 (反対 vote / 待つ / 停止) に対応する。1 つの string variant にすると consensus 側が string を parse する羽目になり、variant を増やすと EL 内部が漏れる。
-- **Trait-as-contract プログラミング** — このファイルがコンパイルされた瞬間、以降のレッスンはすべて「この method を実装する」か「この method を呼ぶ」のどちらかになる。L4-L5 は impl、L10-L14 は caller。ここから先の codebase の形が決まる。
+- **メソッドがちょうど 4 つになる理由。** `build_payload / payload_ready / validate_payload / commit` の 4 つは BFT round 構造 (propose → vote → decide) によって決まるもので、言語の好みではない。build/ready を 1 つにまとめると build-during-voting が消える。5 つ目を足すと consensus 内部が EL に漏れる。
+- **`#[async_trait]` と `Send + Sync` bound。** `async_trait` が実際に何に desugar されるか (boxed futures + object-safety)、そして `: Send + Sync` が Malachite actor 間で共有される `Arc<dyn ConsensusBridge>` の soundness をコンパイル時に保証する仕組み。
+- **3 つの error 分類。** `Rejected / NotReady / Internal` が 3 種類の consensus 応答 (反対 vote / 待つ / 停止) に対応する。1 つの string variant にすると consensus 側が string を parse する羽目になり、variant を増やすと EL 内部が漏れる。
+- **Trait-as-contract プログラミング。** このファイルがコンパイルされた瞬間、以降のレッスンはすべて「この method を実装する」か「この method を呼ぶ」のどちらかになる。L4-L5 は impl、L10-L14 は caller。ここから先の codebase の形が決まる。
 
 検証:
 
@@ -40,7 +40,7 @@ cargo check -p openhl-consensus
 
 - `crates/consensus/Cargo.toml` に 4 つの依存追加: `openhl-types`、`async-trait`、`thiserror`、`eyre`。
 - `crates/consensus/src/bridge.rs` — 新規ファイル、`ConsensusBridge` trait (4 つの async method) と `BridgeError` enum (3 variant) を含む。
-- `crates/consensus/src/lib.rs` — `pub mod bridge;` を配線する。
+- `crates/consensus/src/lib.rs` — `pub mod bridge;` を組み込む。
 
 ## おさらい
 
@@ -152,7 +152,7 @@ pub enum BridgeError {
 }
 ```
 
-各部分の役割を walk する — このファイルはコース内で最も重要なファイルだ。
+各部分の役割を順に辿る — このファイルはコース内で最も重要なファイルだ。
 
 ### Step 3: Trait 宣言を理解する
 
@@ -204,7 +204,7 @@ async fn validate_payload(
 async fn commit(&self, block_hash: BlockHash) -> Result<(), BridgeError>;
 ```
 
-最も小さい signature: 入力は hash、出力は unit。**Fire-and-forget。** Consensus がブロックを decide した時点でこのメソッドが EL に「finalize しろ」と告げる。EL は state に適用し、fork-choice を更新し、それ以降この hash を unset することは無い。`Result<()>` を返すことで hard failure を signal できる (**chain を halt させる** — L9 で扱う) が、成功 commit は何も返さない。
+最も小さい signature: 入力は hash、出力は unit。**Fire-and-forget。** Consensus がブロックを確定させた時点でこのメソッドが EL に「finalize しろ」と告げる。EL は state に適用し、fork-choice を更新し、それ以降この hash を unset することは無い。`Result<()>` を返すことで hard failure を signal できる (**chain を halt させる** — L9 で扱う) が、成功 commit は何も返さない。
 
 **`&ExecutedBlock` 引数が無い** ことに注意。commit が呼ばれる時点で、bridge は `payload_ready` か `validate_payload` でこのブロックをすでに見ている。hash だけを引数に取ることで、consensus は何も覚えなくて済む — EL が state を持ち、CL は stateless のままだ。
 

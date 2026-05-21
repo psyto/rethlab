@@ -1,6 +1,6 @@
 # OpenHL CLOB を作る — L9 draft (JA) — build-along
 
-> openhl SHA `428cc26` (Stage 8d — CLOB fill が bridge payload に流れる) 基準。
+> openhl SHA `428cc26` (Stage 8d — CLOB の約定が bridge payload に流れる) 基準。
 > コース: `building-openhl-clob-ja` (track: `reth-l1-architect`)。
 
 ---
@@ -22,11 +22,11 @@
 
 このレッスンで掴む概念:
 
-- **CLOB は Reth EVM の *中* ではなく bridge の *横* に置く** — `clob: Mutex<Book>` は `LiveRethEvmBridge` のフィールドで、`provider` や `state` と並ぶ。Fill は payload に併走する parallel データレーンとなり、まだ EVM transaction ではない (それは course 8 の precompile で扱う)。これが「CLOB を EVM の上に乗せる」アーキテクチャの形。
-- **Lock 粒度: `Mutex` は 1 つではなく 2 つ** — `clob` と `pending_fills` は別タイミングで別 caller に変更される。Lock を分けると `pending_fill_count` を読むスレッドが book を触る submitter をブロックしない。Contention がホットパスに乗ると lock 粒度が効いてくる。
-- **Interior mutability + `&self` が async 共有 state の idiomatic な形** — `submit_order(&self, ...)` だから bridge を `Arc` で wrap して task 間で共有できる。トップに `RwLock<Bridge>` を載せると全アクセスが直列化してしまう。
+- **CLOB は Reth EVM の *中* ではなく bridge の *横* に置く** — `clob: Mutex<Book>` は `LiveRethEvmBridge` のフィールドであり、`provider` や `state` と並ぶ。約定は payload に併走する parallel データレーンであって、まだ EVM transaction ではない (それは course 8 の precompile で扱う)。これが「CLOB を EVM の上に乗せる」アーキテクチャの形。
+- **Lock 粒度: `Mutex` は 1 つではなく 2 つ** — `clob` と `pending_fills` は別タイミングで別 caller に変更される。Lock を分けておけば、`pending_fill_count` を読むスレッドが book を触る submitter を block しない。Contention がホットパスに乗ると lock 粒度が効いてくる。
+- **Interior mutability + `&self` が async 共有 state の idiomatic な形** — `submit_order(&self, ...)` だからこそ、bridge を `Arc` で wrap して task 間で共有できる。トップに `RwLock<Bridge>` を載せると、すべてのアクセスが直列化してしまう。
 - **Lock を取る API は lock 越しに参照を返してはならない** — `payload_fills` は `&[Fill]` ではなく `Vec<Fill>` (clone) を返す。Borrow を返すと caller がスライスの lifetime 分 lock guard を抱え続け、同じ lock を欲しがる他者と即デッドロックする。
-- **空 `Vec` placeholder は TODO コメントより見つけやすい** — `build_payload` は L10 が `std::mem::take(...)` に差し替えるまで `Vec::new()` を入れる。読者は欠けている機能の場所を正確に見られる。コメントは腐る。
+- **空 `Vec` placeholder は TODO コメントより見つけやすい** — `build_payload` には L10 が `std::mem::take(...)` に差し替えるまで `Vec::new()` を入れておく。読者は欠けている機能の場所を正確に見られる。コメントは腐る。
 
 検証:
 
@@ -40,11 +40,11 @@ cargo test -p openhl-evm --release
 
 - **新規 workspace dep 1 個** — `crates/evm/Cargo.toml` に `openhl-clob = { workspace = true }` を追加。
 - **`LiveRethEvmBridge` に新規フィールド 2 個** — `clob: Mutex<Book>` と `pending_fills: Mutex<Vec<Fill>>`。
-- **pending tuple を拡張** — `pending: HashMap<u64, (B256, Header)>` を `HashMap<u64, (B256, Header, Vec<Fill>)>` に変える。3 番目の要素が payload ごとの fill リスト。
+- **pending tuple を拡張** — `pending: HashMap<u64, (B256, Header)>` を `HashMap<u64, (B256, Header, Vec<Fill>)>` に変える。3 番目の要素が payload ごとの約定リスト。
 - **新規メソッド 3 個** — `submit_order(&self, order: Order) -> FillResult`、`payload_fills(id) -> Option<Vec<Fill>>` (inspection 用)、`pending_fill_count() -> usize` (inspection 用)。
 - **波及更新** — `build_payload`、`payload_ready`、`validate_payload`、`commit` での pending tuple の destructuring をすべて 3-tuple pattern に揃える。
 
-**`build_payload` はまだ `pending_fills` を drain しない** — 今は空の `Vec<Fill>` を挿入する。drain の実装は L10 で行う。L9 後、order を submit でき、fill が `pending_fills` に蓄積していく様子も観察できるようになるが、bridge の payload はまだ fill を運ばない。**L10 でそのギャップを閉じ、L11 でそれを証明する integration test を書く。**
+**`build_payload` はまだ `pending_fills` を drain しない** — 今は空の `Vec<Fill>` を挿入する。drain の実装は L10 で行う。L9 後、order を submit でき、約定が `pending_fills` に蓄積していく様子も観察できるようになるが、bridge の payload はまだ約定を運ばない。**L10 でそのギャップを閉じ、L11 でそれを証明する integration test を書く。**
 
 ## おさらい
 
@@ -58,7 +58,7 @@ crates/evm/src/live_node.rs             — LiveRethEvmBridge<P>
 crates/consensus/                       — フル BFT engine
 ```
 
-`cargo test -p openhl-evm` で 38 個 pass する。**CLOB も bridge もそれぞれ存在するが、互いを知らない状態。** L9 で bridge を CLOB に配線する。
+`cargo test -p openhl-evm` で 38 個 pass する。**CLOB も bridge もそれぞれ存在するが、互いを知らない状態。** L9 で bridge を CLOB に接続する。
 
 ## 計画
 
@@ -76,7 +76,7 @@ Step 7 は退屈に聞こえるが機械的な作業: `(hash, header)` や `(h, 
 
 > 🛑 **考えてみよう。** スクロールする前に: L9 後、`bridge.submit_order(order)` を呼べるようになり、`bridge.pending_fill_count()` で fill が蓄積していく様子が観察できる。そこで `bridge.build_payload(parent, attrs)` を呼ぶと、新しく build された payload に対する `bridge.payload_fills(id)` は何を返すか? ヒント: §Step 7 を注意深く読む。
 
-(答え: `Some(vec![])` — 空の fill リスト。L9 はデータフローを配線するが、`build_payload` はまだ drain せず空 Vec を挿入する。L10 の「build 時に drain」変更で、これが `Some(vec![fill_a, fill_b, ...])` になる。)
+(答え: `Some(vec![])` — 空の fill リスト。L9 はデータフローを接続するが、`build_payload` はまだ drain せず空 Vec を挿入する。L10 の「build 時に drain」変更で、これが `Some(vec![fill_a, fill_b, ...])` になる。)
 
 ## 手順
 
@@ -216,7 +216,7 @@ impl<P> LiveRethEvmBridge<P> {
     }
 ```
 
-新規フィールドの初期化が 2 個。`Book::new()` は L3 で書いたヘルパー (workspace が配線されているので、ここで `openhl_clob::Book::new()` が呼べる)。空の fill buffer には `Vec::new()` を使う。
+新規フィールドの初期化が 2 個。`Book::new()` は L3 で書いたヘルパー (workspace に接続されているので、ここで `openhl_clob::Book::new()` が呼べる)。空の fill buffer には `Vec::new()` を使う。
 
 ### Step 6: 新メソッド 3 個を追加
 
@@ -259,7 +259,7 @@ impl<P> LiveRethEvmBridge<P> {
 
 メソッド 3 個、それぞれの意図は次の通り:
 
-- **`submit_order`** — **write** path。`&self` を取る (`&mut self` ではない)。`Mutex` 経由の interior mutability によって、shared 参照で bridge を mutate できる。`clob` を lock し、`book.submit` を呼び、`FillResult` を受け取る。Fill が produce されたら、`pending_fills` を lock して append する。`FillResult` を return して caller に何が起きたかを知らせる。
+- **`submit_order`** — **write** path。`&self` を取る (`&mut self` ではない)。`Mutex` 経由の interior mutability によって、shared 参照で bridge を mutate できる。`clob` を lock し、`book.submit` を呼び、`FillResult` を受け取る。約定が生成されたら、`pending_fills` を lock して append する。`FillResult` を return して caller に何が起きたかを知らせる。
 - **`payload_fills`** — **inspection** path。指定 `PayloadId` に対して `Option<Vec<Fill>>` を返す。Id が pending にない場合は `None`、ある場合は `Some(vec)` (空の可能性あり)。Doc コメントで、これが test-and-debug 用のメソッドであることを明示する — production コードは fill を transaction-encoding pipeline 経由で route する。
 - **`pending_fill_count`** — 小さな debugging ヘルパー。Buffer で drain 待ちの fill 数を返す。「Cross する 2 order を submit、count == 1 を期待」といったテストで有用。
 
@@ -358,7 +358,7 @@ test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 Course 6 のテストはすべて引き続き pass する。L9 では新規テストを追加しない — 新機能 (submit_order 等) は L11 の integration test で exercise する。L9 の変更は **構造的** なもの — bridge に新しいフィールドとメソッドが入るが、既存のテスト面はそれらに触れないので、そのテストはそのまま動き続ける。
 
-新メソッドが正しく配線されたかをクイックにサニティチェックできる:
+新メソッドが正しく接続されたかをクイックにサニティチェックできる:
 
 ```rust
 // 既存の live_bridge_builds_on_real_genesis test または新規 smoke test 内で:
@@ -383,7 +383,7 @@ assert_eq!(bridge.pending_fill_count(), 0); // fresh bridge では空
 
 2. **`submit_order` は `&self` を取る。** `Mutex` 経由の interior mutability によって、shared 参照で bridge を mutate できる。Bridge は `Arc` でラップされ async task 間で共有される。メソッドが `&mut self` を取ると、外側に `RwLock<Bridge>` が必要になり、すべての access を 1 つのグローバル lock で直列化することになる。**内部 `Mutex` + `&self` API が、async-shared state に対する idiomatic な Rust パターン。**
 
-3. **`build_payload` に空の `Vec<Fill>` placeholder を残した。** L9 では構造を配線するに留め、L10 でそれを機能的にする。Placeholder を残すのは honest scoping — reader には欠けている機能がどこにあるかが正確に見える。**`Vec::new()` placeholder のほうが、将来用の TODO コメントよりも discoverable。**
+3. **`build_payload` に空の `Vec<Fill>` placeholder を残した。** L9 では構造を組み込むに留め、L10 でそれを機能的にする。Placeholder を残すのは honest scoping — reader には欠けている機能がどこにあるかが正確に見える。**`Vec::new()` placeholder のほうが、将来用の TODO コメントよりも discoverable。**
 
 ## 答え合わせ
 
@@ -425,7 +425,7 @@ Panic が `submit_order` 経由で上に伝播し、それを呼んだ task が�
 
 ## 次のレッスン (L10)
 
-Bridge が CLOB を持ち、fill が蓄積するようになった。**ただし `build_payload` 経由で build された payload はまだ fill を運ばない** — placeholder の `Vec::new()` がギャップになっている。L10 で placeholder を `std::mem::take(&mut *pending_fills.lock(...))` に置き換え、新しい payload ごとに蓄積した fill をすべて drain する。L10 後、`bridge.payload_fills(id)` が最後の build 以降に produce された実際の fill を返し、`bridge.pending_fill_count()` が 0 にリセットされるようになる。L11 で end-to-end test を書き、この drain 意味論が forward-only である (以前の payload に遡って fill が attach されない) ことを証明する。
+Bridge が CLOB を持ち、約定が蓄積するようになった。**ただし `build_payload` 経由で build された payload はまだ約定を運ばない** — placeholder の `Vec::new()` がギャップになっている。L10 で placeholder を `std::mem::take(&mut *pending_fills.lock(...))` に置き換え、新しい payload ごとに蓄積した約定をすべて drain する。L10 後、`bridge.payload_fills(id)` が最後の build 以降に生成された実際の約定を返し、`bridge.pending_fill_count()` が 0 にリセットされるようになる。L11 で end-to-end test を書き、この drain 意味論が forward-only である (以前の payload に遡って約定が attach されない) ことを証明する。
 ````
 
 ---

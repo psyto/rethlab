@@ -2,7 +2,7 @@
 
 > openhl SHA `708472c` (Stage 6d — engine actor pipeline 経由の最初のブロック) 基準。
 > コース: `building-openhl-consensus-ja` (track: `reth-l1-architect`, 10 コース中 6 番目)。
-> 注: L10 は **real block を produce する** マイルストーン — ここで openhl build arc の Module 1 が閉じる。本レッスン後、single-validator chain は actor system 経由で約 0.02 秒で real block を decide する。L11-L15 で in-memory bridge から live Reth EthereumNode に移行する。
+> 注: L10 は **実際の block を生成する** マイルストーン — ここで openhl build arc の Module 1 が閉じる。本レッスン後、single-validator chain は actor system 経由で約 0.02 秒で実際の block を確定させる。L11-L15 で in-memory bridge から live Reth EthereumNode に移行する。
 
 ---
 
@@ -24,12 +24,12 @@
 
 このレッスンで掴む概念:
 
-- **`AppMsg` ルーティングループ** — Malachite engine が単一の channel に `ConsensusReady / GetValidatorSet / StartedRound / GetValue / Decided / …` を流してくる。App loop は `while let Some(msg) = recv().await` で各 variant に match し、`oneshot::Sender` に reply するか bridge を駆動するかのどちらかをやる。これが Malachite と EL を繋ぐ *唯一* の糊だ。
-- **bridge に対する generic な多相性** — `run_engine_app<B: ConsensusBridge>` は `StubBridge`、`InMemoryEvmBridge`、`RethEvmBridge`、そしてやがて `LiveRethEvmBridge` でも動く。ルーティング関数 1 つに対して backend 4 つ。L3 の trait surface がここで効いてくる。
-- **test ergonomics としての `stop_after_decisions`** — production の validator は `usize::MAX` を渡す。テストは `1` を渡す。「関数が有限状態でテスト可能であるためにだけ」存在する引数は正当な API 設計だ。test ergonomics は API 表面に値する。
-- **reply channel が途中で閉じうる** — 我々が reply する前に engine actor が死ぬと `oneshot::Sender::send()` が err する。propagate ではなく `tracing::warn!` でログを残すのが正解 — propagate は本物のエラーをノイズで隠す。operator はログから調査できる。
-- **channel と event-stream のメッセージフローの違い** — `channels.consensus.recv()` は *命令的* メッセージ (reply 必要)、`subscribe()` は *broadcast* な通知 (reply 不要)。L10 の app loop は前者だけを扱う。
-- **この層で integration > unit な理由** — engine の `AppMsg` arm は決まった順序で届く。その順序を fake するより real engine を 1 block 分だけ回すほうが安い。Integration test のほうが書くコストが低く、証明できる範囲も広い。
+- **`AppMsg` のルーティングループ。** Malachite engine が単一の channel に `ConsensusReady / GetValidatorSet / StartedRound / GetValue / Decided / …` を流してくる。app loop は `while let Some(msg) = recv().await` で各 variant に match し、`oneshot::Sender` に reply するか bridge を駆動するかのどちらかをやる。これが Malachite と EL を繋ぐ *唯一* の接着剤だ。
+- **bridge に対する generic な多相性。** `run_engine_app<B: ConsensusBridge>` は `StubBridge`、`InMemoryEvmBridge`、`RethEvmBridge`、そしてやがて `LiveRethEvmBridge` でも動く。ルーティング関数 1 つに対して backend 4 つ。L3 の trait surface がここで効いてくる。
+- **test ergonomics としての `stop_after_decisions`。** production の validator は `usize::MAX` を渡し、テストは `1` を渡す。「関数が有限状態でテスト可能であるためにだけ」存在する引数も正当な API 設計だ。test ergonomics は API 表面に値する。
+- **reply channel が途中で閉じうる。** こちらが reply する前に engine actor が死ぬと `oneshot::Sender::send()` が err を返す。propagate ではなく `tracing::warn!` でログを残すのが正解 — propagate は本物のエラーをノイズで隠してしまう。operator はログから調査できる。
+- **channel と event-stream のメッセージフローの違い。** `channels.consensus.recv()` は *命令的* メッセージ (reply 必須)、`subscribe()` は *broadcast* な通知 (reply 不要)。L10 の app loop は前者だけを扱う。
+- **この層で integration > unit になる理由。** engine の `AppMsg` arm は決まった順序で届く。その順序を fake するより、実際の engine を 1 block 分だけ回すほうが安い。integration test のほうが書くコストが低く、証明できる範囲も広い。
 
 検証:
 
@@ -43,13 +43,13 @@ cargo test -p openhl-consensus
 test engine_app::tests::first_block_via_engine_actors ... ok
 ```
 
-上記の実行結果が Malachite actor system を spawn し、そこに real な consensus round を駆動し、engine が decide した hash を bridge が正確に commit したことを assert する。**Wall-clock: 0.02 秒。** これが「engine が boot する」から「engine が block を produce する」へ移るマイルストーンだ。
+上記の実行結果が Malachite actor system を spawn し、そこに実際の consensus round を駆動し、engine が確定させた hash を bridge が正確に commit したことを assert する。**Wall-clock: 0.02 秒。** これが「engine が boot する」から「engine が block を生成する」へ移るマイルストーンだ。
 
 具体的な変更:
 
 - `crates/consensus/src/engine_app.rs` — 新規ファイル (~282 行)。`run_engine_app<B: ConsensusBridge + 'static>` が `Channels<OpenHlContext>::consensus` から `AppMsg<OpenHlContext>` を読み、12 個の message arm (substantive 5 + trivial 7) を dispatch し、decided hash のリストを返す。
 - 同ファイル内に `StubBridge` test fixture と `first_block_via_engine_actors` integration test。
-- `crates/consensus/src/lib.rs` — `pub mod engine_app;` を配線する。
+- `crates/consensus/src/lib.rs` — `pub mod engine_app;` を組み込む。
 
 ## おさらい
 
@@ -73,7 +73,7 @@ crates/consensus/src/bridge.rs            — ConsensusBridge trait + InMemoryEv
 
 1. **`crates/consensus/Cargo.toml` に `tracing` を追加する** — loop の「channel-closed」パスで `tracing::warn!` を使う。
 2. **`crates/consensus/src/engine_app.rs` を作成する** — `B: ConsensusBridge` に対してジェネリックな async 関数 `run_engine_app<B>` と `default_attrs()` ヘルパー。ルーティングロジックは約 130 行。
-3. **`pub mod engine_app;`** を `lib.rs` に配線する。
+3. **`pub mod engine_app;`** を `lib.rs` に組み込む。
 4. **integration test `first_block_via_engine_actors`** と `StubBridge` test fixture (`ConsensusBridge` を同期的にインメモリで impl したもの) を追加する。
 5. **実行** — `cargo test -p openhl-consensus first_block_via_engine_actors` が約 0.02 秒で合格する。**じっくり見届けよう。**
 
@@ -246,7 +246,7 @@ Engine からの問いは「height H、round R で value を propose しろ、ti
 
 1. **payload attrs を build する** — 今のところデフォルト値だ (`timestamp: 0`、`fee_recipient: zero`、`prev_randao: zero`)。L12 ではこれらが engine の時刻概念や validator の address から来るようになる。
 2. **`bridge.build_payload(current_parent, attrs).await`** — EL を蹴る: 「`current_parent` の上に、これらの attrs で block を build しろ」。`PayloadId` を返す — in-flight build を track するために EL が使うハンドルだ。
-3. **`bridge.payload_ready(id).await`** — 完了した block を fetch する。L4-L5 の in-memory bridge は即座に produce する。live Reth (L12+) では 10-50ms かかるかもしれない。
+3. **`bridge.payload_ready(id).await`** — 完了した block を fetch する。L4-L5 の in-memory bridge は即座に 生成する。live Reth (L12+) では 10-50ms かかるかもしれない。
 4. **`block.hash` を `OpenHlValue` でラップし、さらに `LocallyProposedValue::new(height, round, value)` でラップする。**
 5. **engine に `LocallyProposedValue` で reply する。**
 
@@ -377,7 +377,7 @@ fn default_attrs() -> PayloadAttrs {
 
 今は全部ゼロでも、テストは気にしないし、in-memory bridge も検証しない。
 
-### Step 8: `engine_app.rs` を `lib.rs` に配線
+### Step 8: `engine_app.rs` を `lib.rs` に組み込む
 
 ```rust
 //! Consensus layer — Malachite BFT.
@@ -523,7 +523,7 @@ mod tests {
   6. **3 つを assert する**: decisions がちょうど 1 個、bridge がその hash を commit している、bridge がその hash を build している。これらが揃って完全なパイプライン (engine → app → bridge → engine → app) を証明する。
   7. クリーンアップに `handle.kill(None)` を呼ぶ。
 
-> 🛑 **やりがちな勘違い。** 「L9 の smoke test は 2 だったのに、ここで `worker_threads = 4` なのはなぜか?」 **Integration test の方がより多くの actor を並行に回すからだ。** Smoke test は spawn + kill だけで、メッセージを produce しなかった。Integration test は `run_engine_app` task (consume + reply) + bridge の async fn 呼び出し + 複数の内部 engine actor を走らせる。4 スレッドあれば全員に余裕がある。少ないと contention (遅い) や deadlock (hang) が起きる。4 で十分余裕がある。
+> 🛑 **やりがちな勘違い。** 「L9 の smoke test は 2 だったのに、ここで `worker_threads = 4` なのはなぜか?」 **Integration test の方がより多くの actor を並行に回すからだ。** Smoke test は spawn + kill だけで、メッセージを生成しなかった。Integration test は `run_engine_app` task (consume + reply) + bridge の async fn 呼び出し + 複数の内部 engine actor を走らせる。4 スレッドあれば全員に余裕がある。少ないと contention (遅い) や deadlock (hang) が起きる。4 で十分余裕がある。
 
 ## テスト
 
@@ -601,7 +601,7 @@ Arm が独立していないからだ。Engine は特定の順序で送ってく
 
 ## 次のレッスン (L11)
 
-Stage 6 はこれで完了だ。Stage 7 開始: `InMemoryEvmBridge` を real な Reth EthereumNode に置き換える。L11 では **dev node bootstrap** をカバーする — consensus actor と同じ tokio runtime 上で Reth を tokio task として spawn する。L12 では `LiveRethEvmBridge` (L5 の `RethEvmBridge` の live 版) を配線する。L12 完了後には、書いた `run_engine_app` が処理する **同じ** `AppMsg` loop を回す Reth-backed devnet ができあがる — `run_engine_app` は同じまま、trait impl を 1 つ差し替えるだけで、real な EVM execution layer が手に入る。
+Stage 6 はこれで完了だ。Stage 7 開始: `InMemoryEvmBridge` を real な Reth EthereumNode に置き換える。L11 では **dev node bootstrap** をカバーする — consensus actor と同じ tokio runtime 上で Reth を tokio task として spawn する。L12 では `LiveRethEvmBridge` (L5 の `RethEvmBridge` の live 版) を組み込む。L12 完了後には、書いた `run_engine_app` が処理する **同じ** `AppMsg` loop を回す Reth-backed devnet ができあがる — `run_engine_app` は同じまま、trait impl を 1 つ差し替えるだけで、real な EVM execution layer が手に入る。
 ````
 
 ---
@@ -638,7 +638,7 @@ modules: {
 L10 が参照する openhl コミット (§答え合わせ):
 - `708472c` (Stage 6d — engine actor pipeline 経由の最初のブロック)
 
-これが Stage-6-completes / Module-1-of-openhl-completes マイルストーン。本レッスン後、single-validator chain は actor system 経由で real block を produce する。
+これが Stage-6-completes / Module-1-of-openhl-completes マイルストーン。本レッスン後、single-validator chain は actor system 経由で real block を 生成する。
 
 ## 翻訳セルフレビュー (paste 前)
 

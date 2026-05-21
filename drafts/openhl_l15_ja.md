@@ -22,12 +22,12 @@
 
 ## 作ったシステム
 
-14 レッスンを通じて、空ディレクトリの `cargo init` から、real な Reth EL を通じて real な block を ~0.02 秒で decide する single-validator BFT chain までたどり着いた。Workspace は今こう見える:
+14 レッスンを通じて、空ディレクトリの `cargo init` から、実際の Reth EL を通じて実際の block を ~0.02 秒で確定させる single-validator BFT chain までたどり着いた。Workspace は今こう見える:
 
 ```
 ~/code/my-openhl/
 ├── Cargo.toml                          ← reth-* 16 個、malachite 8 個、すべて SHA pin
-├── bin/openhl/                         ← (stub バイナリ — production 配線は将来コース)
+├── bin/openhl/                         ← (stub バイナリ — production 接続は将来コース)
 ├── crates/
 │   ├── types/                          L2:  CL↔EL 共通 contract 型
 │   │   └── src/lib.rs                  BlockHash, PayloadId, PayloadAttrs,
@@ -81,7 +81,7 @@ Bridge は Reth のストレージ層 (`HeaderProvider`)、Reth の chain config
 - `fork_choice_updated` 呼び出しの **前に**、`handle.new_payload(payload).await` 経由で送る。
 - レスポンスチェーンを合わせる: `newPayload → VALID` → `forkchoice → VALID` → canonical head が advance する。
 
-ブロッカーは、payload に入れる EVM-executable なトランザクションをまだ持っていないことだ。OpenHL の matching engine (CLOB) が produce するのは **fills** であって、EVM トランザクションではない。Fills を EVM トランザクション (あるいは precompile call) にラップするのが、本コースの次の大きな作業になる — おそらく openhl build arc の Module 2 全体に相当する作業だ。
+ブロッカーは、payload に入れる EVM-executable なトランザクションをまだ持っていないことだ。OpenHL の matching engine (CLOB) が生成するのは **約定 (fill)** であって、EVM トランザクションではない。約定を EVM トランザクション (あるいは precompile call) にラップするのが、本コースの次の大きな作業になる — おそらく openhl build arc の Module 2 全体に相当する作業だ。
 
 ### 2. Real `Codec` impl
 
@@ -113,13 +113,13 @@ Codec stub (#2) が real になり、N=2 の node が共有 chain spec に対し
 
 **ステータス**: なし。
 
-Production BFT chain は、validator の不正挙動 (同じ高さで異なる block 2 個を sign、同じ round で 2 回 vote) を track する。Malachite は `LivenessMsg` にそのためのフックを持っているが、OpenHL では配線していない。**Slashing 無しの multi-validator chain は testnet には問題ないが、value を扱うネットワークには危険だ。**
+Production BFT chain は、validator の不正挙動 (同じ高さで異なる block 2 個を sign、同じ round で 2 回 vote) を track する。Malachite は `LivenessMsg` にそのためのフックを持っているが、OpenHL では接続していない。**Slashing 無しの multi-validator chain は testnet には問題ないが、value を扱うネットワークには危険だ。**
 
-### 6. Custom Hyperliquid-shape 挙動
+### 6. Custom な Hyperliquid 型挙動
 
 **ステータス**: vanilla Ethereum。
 
-「openhl-shape」chain の要点は、Hyperliquid を generic な EVM と区別する precompile と、CLOB 駆動の payload assembly にある。Stage 8 (CLOB matching engine、fills-into-payload) と Stage 9 (custom precompile、`clob_place_order` write path) は `psyto/openhl` に住んでいるが、ここではカバーしない。将来コースの自然な Module 2 だ。
+「Hyperliquid 型」chain の要点は、Hyperliquid を generic な EVM と区別する precompile と、CLOB 駆動の payload assembly にある。Stage 8 (CLOB matching engine、約定を payload に取り込む処理) と Stage 9 (custom precompile、`clob_place_order` write path) は `psyto/openhl` に住んでいるが、ここではカバーしない。将来コースの自然な Module 2 だ。
 
 ## Production-readiness チェックリスト
 
@@ -131,7 +131,7 @@ Production BFT chain は、validator の不正挙動 (同じ高さで異なる b
 - [ ] WAL crash-recovery test (commit 途中で kill、再起動、chain head 検証)。
 - [ ] Production デプロイ用に永続 `home_dir` (tempdir ではない) を configure。
 - [ ] Engine `SYNCING`/`VALID`/`INVALID` レスポンスを `tracing::warn` / structured field でログ、discard しない。
-- [ ] Slashing/double-sign フックを配線・unit test。
+- [ ] Slashing/double-sign フックを接続して unit test を書く。
 - [ ] Key rotation 手順 (chain restart 時の Ed25519 key swap、runtime ではなく)。
 - [ ] 運用テレメトリ: round duration、payload build latency、validate failure の Prometheus metric。
 - [ ] パフォーマンスベースライン: 連続負荷下の blocks-per-second (smoke test だけではなく)。
@@ -145,7 +145,7 @@ Production BFT chain は、validator の不正挙動 (同じ高さで異なる b
 - **real な EL に対してフルな Rust BFT engine を bootstrap できる。** 「mocked EL で」でも「Go への FFI で」でもなく、同じ Rust workspace で `EthereumNode` を実際に走らせられる。
 - **producer/validator の自己整合性について推論できる。** 同じ artifact の builder と validator があるときは、source of truth を共有しなければならない。`chain_spec.next_block_base_fee` が `build_payload` と `validate_payload` の両方を駆動するパターンを見た。
 - **incremental-stub パターンを適用できる。** Trait bound が surface area を強制してくる。一度に全部埋められないなら、明確な failure mode で stub する。L8 の `CodecStub("SignedConsensusMsg<OpenHlContext>")` がそのモデルだ。
-- **2 つの汎用インフラを配線できる。** Reth と Malachite は別のチームが別の sensibility で書いている。Handshake interface (`Node` trait、`ConsensusBridge` trait) がそれらを composable にした。将来コースは別のインフラで同じパターンを使う。
+- **2 つの汎用インフラを接続できる。** Reth と Malachite は別のチームが別の sensibility で書いている。Handshake interface (`Node` trait、`ConsensusBridge` trait) がそれらを composable にした。将来コースは別のインフラで同じパターンを使う。
 - **プロトコルエラーと運用エラーを区別できる。** `BridgeError::Rejected` と `BridgeError::Internal`、`PayloadStatus::Invalid` と伝播。会話レベルが重要だ。
 - **live read が起きたことを証明するテストを書ける。** L12 の `assert_eq!(block.number, 1)` が load-bearing なチェックだった — 他のものだと in-memory fallback がすり抜けてしまう。
 
@@ -162,9 +162,9 @@ rethlab 外:
 
 ## クロージングノート
 
-Consensus と EVM crate を合わせて約 1,400 行の Rust、それに加えて ~250 行の integration test を書いた。そのコードは **動く single-validator な Hyperliquid-shape L1** だ。Production-ready ではないが、そうである必要もない。**手にあるのは、scope について正直で、すべての load-bearing な決定が visible で、次の capability への extensible なインターフェースが 1 つ離れたところにある基盤だ。**
+Consensus と EVM crate を合わせて約 1,400 行の Rust、それに加えて ~250 行の integration test を書いた。そのコードは **動く single-validator な Hyperliquid 型 L1** だ。Production-ready ではないが、そうである必要もない。**手にあるのは、scope について正直で、すべての load-bearing な決定が visible で、次の capability への extensible なインターフェースが 1 つ離れたところにある基盤だ。**
 
-L1 の最も難しい部分は engine を書くことではない — Malachite がほとんどやってくれて、こちらは配線しただけだ。最も難しい部分は、自分のコードに何ができて何ができないかについて正直であること、そして「できる」側を証明するテストを書くことだ。本コースのすべてのレッスンが happy-path の assertion と negative-path の assertion を持っていた。「テストが pass する」から「システムが動く」への鍛錬は、そこにある。
+L1 の最も難しい部分は engine を書くことではない — Malachite がほとんどやってくれて、こちらは接続しただけだ。最も難しい部分は、自分のコードに何ができて何ができないかについて正直であること、そして「できる」側を証明するテストを書くことだ。本コースのすべてのレッスンが happy-path の assertion と negative-path の assertion を持っていた。「テストが pass する」から「システムが動く」への鍛錬は、そこにある。
 
 これを使って、何か作りに行こう。
 ````

@@ -22,11 +22,11 @@
 
 このレッスンで掴む概念:
 
-- **Real Reth node に対する end-to-end な統合テスト** — `EthereumNode` を bootstrap し、`LiveRethEvmBridge` を組み、submit→buffer→drain の全パイプラインを exercise する。L1-L10 の連鎖が個別コンポーネントを越えて end-to-end で成立することを証明するテスト。
-- **Bootstrap が高価なときは 1 本の徹底した統合テストが 3 本の narrow なテストに勝る** — Real Reth node を起動するのに数秒かかる。Bootstrap を 3 回繰り返せばコストも 3 倍。1 シナリオで submit、drain、forward-only の 3 不変条件をまとめて検証する方が安い。
-- **Forward-only assertion こそがこれを *本物の* 統合テストにする** — 「submit が fill を produce する」「build が drain する」は unit test でも自明。以前の (空) payload が遡って更新されていないことを check するからこそ bridge の payload ごと snapshot メカニズムを特に検証している。これがないと unit test の偽装でしかない。
-- **Fill 価格 = maker の価格を end-to-end で示す** — maker bid @ 100、taker sell @ 100、fill @ 100。L4-L5 で確立した price-time priority の規則が統合境界を越えても成立する。Sell を先に submit して buy で crossing しても同じ fill が出る — submit 順序は同一 level 内の time priority であって、どちらが rest するかを決めるものではない。
-- **`launch_with_debug_capabilities()` と add-on 付き `launch()` の使い分け** — Debug-capabilities setup は短く、provider は得られるが engine-API 配線はしない。本テストでは engine handle は不要 (forkchoice を駆動しない)、parent lookup 用の provider だけが要る。
+- **実 Reth node に対する end-to-end な統合テスト** — `EthereumNode` を bootstrap し、`LiveRethEvmBridge` を組み、submit→buffer→drain の全パイプラインを exercise する。L1-L10 の連鎖が個別コンポーネントを越えて end-to-end で成立することを証明するテスト。
+- **Bootstrap が高価なときは、1 本の徹底した統合テストが 3 本の narrow なテストに勝る** — 実 Reth node を起動するのに数秒かかる。Bootstrap を 3 回繰り返せばコストも 3 倍。1 シナリオで submit、drain、forward-only の 3 不変条件をまとめて検証するほうが安い。
+- **Forward-only assertion こそがこれを *本物の* 統合テストにする** — 「submit が約定を生成する」「build が drain する」は unit test でも自明。以前の (空) payload が遡って更新されていないことを check するからこそ、bridge の payload ごと snapshot メカニズムを真に検証していると言える。これがないと unit test の偽装でしかない。
+- **Fill 価格 = maker の価格を end-to-end で示す** — maker bid @ 100、taker sell @ 100、fill @ 100。L4-L5 で確立した price-time priority の規則が、統合境界を越えても成立する。Sell を先に submit して buy で crossing しても同じ fill が出る — submit 順序は同一 level 内の time priority であって、どちらが rest するかを決めるものではない。
+- **`launch_with_debug_capabilities()` と add-on 付き `launch()` の使い分け** — Debug-capabilities setup は短く、provider は得られるが engine-API は接続しない。本テストでは engine handle は不要 (forkchoice を駆動しない)、parent lookup 用の provider だけが要る。
 
 検証:
 
@@ -34,7 +34,7 @@
 cargo test -p openhl-evm clob_fills_flow_into_payload --release
 ```
 
-上記の実行結果が pass する。**これが Course 7 のマイルストーン。** L1-L8 で build した matching engine が produce する real fill が、`LiveRethEvmBridge::submit_order` → `pending_fills` buffer → `LiveRethEvmBridge::build_payload` drain → consensus が commit する payload、という流れで流れていく。テストでは L9-L10 の統合の **すべての piece** を **live Reth node** に対して exercise する。
+上記の実行結果が pass する。**これが Course 7 のマイルストーン。** L1-L8 で build した matching engine が生成する実約定が、`LiveRethEvmBridge::submit_order` → `pending_fills` buffer → `LiveRethEvmBridge::build_payload` drain → consensus が commit する payload、という流れで流れていく。テストでは L9-L10 の統合の **すべての piece** を **live Reth node** に対して exercise する。
 
 具体的な変更:
 
@@ -46,7 +46,7 @@ cargo test -p openhl-evm clob_fills_flow_into_payload --release
 
 1. order なしで空 payload を build → fill が attach されていないことを verify する。
 2. maker bid @ 100 を submit → rest する (即座の fill なし) ことを verify する。
-3. crossing taker sell @ 100 を submit → ちょうど 1 fill が produce されて buffer されることを verify する。
+3. crossing taker sell @ 100 を submit → ちょうど 1 個の約定が生成されて buffer されることを verify する。
 4. 次の payload を build → fill が drain されることを verify する。
 5. `pending_fill_count` が 0 にリセットされることを verify する。
 6. 以前の (空) payload を再 check → drain が **forward-only** だったことを verify する (retroactive な fill がない)。
@@ -72,7 +72,7 @@ L10 完了時点、`LiveRethEvmBridge` は:
 3. **空の初期状態を assert する** — `pending_fill_count() == 0`。
 4. **空 payload を build する** (まだ order を submit していない) — `payload_fills(id)` が `Some(vec![])` を返すことを verify する。
 5. **maker を submit する** — `Order { id: 1, side: Buy, qty: 10, OrderType::Limit { price: 100 } }`。rest し、即座の fill がないことを verify する。
-6. **crossing taker を submit する** — `Order { id: 2, side: Sell, qty: 10, OrderType::Limit { price: 100 } }`。1 fill が produce されることを verify する。
+6. **crossing taker を submit する** — `Order { id: 2, side: Sell, qty: 10, OrderType::Limit { price: 100 } }`。1 個の約定が生成されることを verify する。
 7. **次の payload を build する** — `payload_fills(next_id) == Some([the_fill])` を verify する。
 8. **drain 意味論を verify する** — `pending_fill_count() == 0`、そして **以前の** payload の fill が依然空のまま (retroactive な update がない)。
 
@@ -109,7 +109,7 @@ L10 完了時点、`LiveRethEvmBridge` は:
 - **`#[tokio::test(flavor = "multi_thread", worker_threads = 4)]`** — course 6 の integration test と同じ。Reth の `EthereumNode` はバックグラウンドで task をいくつか spawn する (RPC、payload builder 等) ので、multi-threaded tokio runtime が必要になる。4 worker のセットアップで余裕を持たせている。
 - **`use openhl_clob::{AccountId, OrderId, OrderType, Price, Qty, Side};`** — L1 の newtype セットから必要な型を import する。`Order` と `Fill` は `mod tests` 冒頭の `super::*` で既に scope に入っている。
 
-> 🛑 **やりがちな勘違い。** 「これらの型を `mod tests` のトップではなくテスト関数内で import するのはなぜか?」 **テストの依存をテストサイトで visible に保つため。** 将来の reader がこのテストをデバッグするとき、関連型を一目で見られる。コストはこれらが必要な test ごとに `use` statement が 1 個増えること、利益は各テストが self-contained なシナリオとして読めること。real source コード (`mod tests` の外) のテストではトップに import を置くが、test は特別 — システムが何をするかのドキュメントなので、inline import がそのドキュメント性を引き締める。
+> 🛑 **やりがちな勘違い。** 「これらの型を `mod tests` のトップではなくテスト関数内で import するのはなぜか?」 **テストの依存をテストサイトで visible に保つため。** 将来の reader がこのテストをデバッグするとき、関連型を一目で見られる。コストはこれらが必要な test ごとに `use` statement が 1 個増えること、利益は各テストが self-contained なシナリオとして読めること。実際のソースコード (`mod tests` の外) のテストではトップに import を置くが、test は特別 — システムが何をするかのドキュメントなので、inline import がそのドキュメント性を引き締める。
 
 ### Step 2: Reth node を bootstrap
 
@@ -222,7 +222,7 @@ order 2 個、submit 2 回、assertion 4 個。
 - `pending_fill_count() == 0` — buffer もマッチもなし。
 
 **2 番目の submit (taker)**:
-- `submit_order(taker)` が 100 の resting bid に対してマッチする。マッチで 1 fill が produce される (10 unit @ 100、order 1 から order 2 へ)。
+- `submit_order(taker)` が 100 の resting bid に対してマッチする。マッチで 1 個の約定が生成される (10 unit @ 100、order 1 から order 2 へ)。
 - `taker_result.fills.len() == 1` — matcher が fill を返してきた。
 - `pending_fill_count() == 1` — `submit_order` の post-match append (L9 Step 6 の `if !result.fills.is_empty() { ... }` block) で fill が `pending_fills` に push されている。
 
@@ -305,7 +305,7 @@ cargo test -p openhl-evm --release
 - **`assert_eq!(taker_result.fills.len(), 1)` が 0 で失敗** — order が実際には cross していない。Maker が `Side::Buy` で taker が `Side::Sell` (またはその逆) で、両方とも price 100 になっているか確認。よくあるバグ: 両 order が `Side::Buy` になっており、2 番目の order がマッチせずに rest している。
 - **`assert_eq!(next_fills.len(), 1)` が 0 で失敗** — L10 の drain が動いていない。`build_payload` が `std::mem::take(&mut *self.pending_fills.lock()...)` を call し、その結果を insert していること (`Vec::new()` を直接 insert していないこと) を確認。
 - **`assert!(empty_fills_again.is_empty())` が失敗** — drain が retroactively に以前の payload を modify している。`std::mem::take` (新 payload にしか書かない) では普通起きないが、誤って `pending_fills.clone()` を使って original を mutate していると発生し得る。
-- **テストが「provider has no genesis」で panic** — テストロジックに到達する前に node bootstrap が失敗している。`dev_chain_spec()` が valid な genesis を produce していることを確認。`cargo test -p openhl-evm live_bridge_builds_on_real_genesis` を先に走らせて Reth セットアップが動くことを verify する。
+- **テストが「provider has no genesis」で panic** — テストロジックに到達する前に node bootstrap が失敗している。`dev_chain_spec()` が valid な genesis を生成していることを確認。`cargo test -p openhl-evm live_bridge_builds_on_real_genesis` を先に走らせて Reth セットアップが動くことを verify する。
 
 ## 設計の振り返り
 
@@ -313,7 +313,7 @@ cargo test -p openhl-evm --release
 
 1. **テスト 1 つのシナリオで 3 つの pipeline stage すべてを verify する。** `submit_order` が動くこと (Step 6)、`build_payload` が drain すること (Step 7 の 1 番目の assertion セット)、forward-only invariant が成立すること (Step 7 の最後の assertion)。1 シナリオで 3 property を見る。これを 3 つのテストに分割すると、それぞれで node を bootstrap する必要があり遅くなる。**複数の invariant をカバーする徹底した integration test 1 個のほうが、narrow な 3 つのテストより安上がり。**
 
-2. **forward-only check があるからこそ、これが real な integration test になる。** 最初の 2 つの check (submit が fill を produce する、build が drain する) は unit test からも明らか。Forward-only check は **bridge を必要とする** — bridge の per-payload snapshot 機構が honest であることをテストするから。Production コードが「完全性のため」と称して古い payload に fill を書き戻すバグを入れる可能性があるが、L11 がそれを catch する。
+2. **forward-only check があるからこそ、これが本物の integration test になる。** 最初の 2 つの check (submit が約定を生成する、build が drain する) は unit test からも明らか。Forward-only check は **bridge を必要とする** — bridge の per-payload snapshot 機構が honest であることをテストするから。Production コードが「完全性のため」と称して古い payload に fill を書き戻すバグを入れる可能性があるが、L11 がそれを catch する。
 
 3. **2 つの payload が同じ parent (genesis) を使うのは意図的。** Production では、2 番目の `build_payload` は genesis ではなく最初の decided block を parent にする。このテストでは何も commit する必要がない — drain timing をデモするには payload が 2 つあれば十分だから。Genesis を parent として再利用すればテストがシンプルになり、verify する内容 (drain メカニズム、commit flow ではない) は変わらない。
 
@@ -336,7 +336,7 @@ git checkout main
 ## よくある質問
 
 **Q: なぜここでは `launch_with_debug_capabilities()` を使い、course 6 L14 では `launch()` (`.with_add_ons(...)` 付き) を使ったのか?**
-テスト目標が違うから。Course 6 L14 では `commit → forkchoice_updated` をテストするので engine handle が必要で、engine handle は AddOns 経由で入る。L11 では CLOB → payload をテストするので engine handle は不要で、provider があればよい。`launch_with_debug_capabilities()` は provider を含むが engine API の配線をスキップする短いセットアップ。
+テスト目標が違うから。Course 6 L14 では `commit → forkchoice_updated` をテストするので engine handle が必要で、engine handle は AddOns 経由で入る。L11 では CLOB → payload をテストするので engine handle は不要で、provider があればよい。`launch_with_debug_capabilities()` は provider を含むが engine API の接続をスキップする短いセットアップ。
 
 **Q: このテストが見逃す worst-case な fill シナリオは?**
 1 回の submit で複数 fill が出るケース (たとえば一度に 3 つの price level を cross する Market buy)。これは L7 の unit test (具体的には `buy_market_takes_best_ask`) が matching-engine レベルでカバーしている。L11 では single-fill ケースのみを exercise してテストを focus に保つ。L11 に multi-fill ケースを追加するのは 2 行 (qty の値を変える) で済むが、証明する内容自体は変わらない。

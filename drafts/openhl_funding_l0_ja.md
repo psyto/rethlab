@@ -96,7 +96,7 @@ Funding rate で 1 LSB の不一致が生じたときのコストは**チェー�
 
 このコースから最大限を引き出すには：
 
-- **Course 6 (openhl-consensus) と course 7 (openhl-clob)** をコンセプト背景として頭に入れていること — funding state machine は `AccountId`（course 7）を受け取り、courses 6+7 で構築した bridge にプラグインされる。**Course 8（precompiles）はスキップしても本コースは追える** — funding は純粋な state-machine 数学であり、EVM 側の配線ではないからだ。
+- **Course 6 (openhl-consensus) と course 7 (openhl-clob)** をコンセプト背景として頭に入れていること — funding state machine は `AccountId`（course 7）を受け取り、courses 6+7 で構築した bridge にプラグインされる。**Course 8（precompiles）はスキップしても本コースは追える** — funding は純粋な state-machine 数学であり、EVM 側の接続作業ではないからだ。
 - **Rust の i128 演算に慣れていること** — overflow 回避のための `as i128` upcast を 1 回以上経験していればよい。
 - **永久先物 funding メカニクスに最低限の馴染みがあること**。Perp 取引経験がなくても、上の 1 段落のおさらいで十分。Hyperliquid で perp を取引した経験があれば準備完了。
 - **EVM 固有の知識は不要**。このコースは precompile、コントラクト、RPC に触れない。

@@ -1,6 +1,6 @@
 # Building OpenHL Precompiles — L4 draft (JA) — build-along
 
-> openhl SHA `b635ef7`（Stage 9b — CLOB read precompile に live CLOB state を配線）に対するドラフト。
+> openhl SHA `b635ef7`（Stage 9b — CLOB read precompile に live CLOB state を接続）に対するドラフト。
 > コース: `building-openhl-precompiles-ja`（track: `reth-l1-architect`）。
 
 ---
@@ -20,13 +20,13 @@
 
 ## ゴール
 
-このレッスンで掴む概念：
+このレッスンで掴む概念:
 
-- **`PrecompileFn` は関数ポインタであって closure ではない → process-global state が回避策** — REVM の `fn(&[u8], u64, u64) -> PrecompileResult` は環境を capture できないので、共有 state は `static` に置き、関数が呼び出し時にそこを読む形にする。
-- **`RwLock<Option<Arc<Mutex<T>>>>` — アクセスパターンが違えばロックの種類も違う** — 外側の `RwLock` は installed/uninstalled の区別 (write は稀) を担当し、内側の `Mutex` は matching engine (write は頻繁) を保護する。`Mutex<Option<...>>` 1 個でやろうとすると、すべての read が 1 箇所のボトルネックを通ることになる。
-- **`Arc<Mutex<Book>>` で bridge/precompile 境界を超えて所有を共有** — bridge と precompile は別々の「caller」だが、同じ `Book` を見る必要がある。`Arc` は「所有者は複数、データは同じ」を表現する Rust の道具。
-- **install は replace するだけで error にしない** — テストでは install/uninstall を繰り返す必要があるので、silent な replacement は機能であってバグではない。production の経路では install を 1 回しか呼ばない。
-- **「配線したが電流は流さない」という incremental な形** — L4 は配線 (static、install 関数、bridge フィールドの型) を繋ぐが `read_best_bid` はまだハードコードのまま。switch を入れるのは L5。配線と挙動を分離することで、各レッスンが verifiable な変更を 1 つだけ持てる。
+- **`PrecompileFn` は関数ポインタであってクロージャではない → プロセスグローバル state が回避策。** REVM の `fn(&[u8], u64, u64) -> PrecompileResult` は環境をキャプチャできないため、共有 state は `static` に置き、関数が呼び出し時にそこを読む形にする。
+- **`RwLock<Option<Arc<Mutex<T>>>>` — アクセスパターンが違えばロックの種類も違う。** 外側の `RwLock` は installed/uninstalled の区別 (write は稀) を担当し、内側の `Mutex` は matching engine (write は頻繁) を保護する。`Mutex<Option<...>>` 1 個で済まそうとすると、すべての read が 1 箇所のボトルネックを通ることになる。
+- **`Arc<Mutex<Book>>` で bridge/precompile 境界を越えて所有を共有する。** bridge と precompile は別々の「caller」だが、同じ `Book` を見る必要がある。`Arc` は「所有者は複数、データは同じ」を表現する Rust の道具。
+- **install は replace するだけで error にしない。** テストでは install/uninstall を繰り返す必要があるため、暗黙のうちに置き換える挙動はバグではなく機能だ。production の経路では install を 1 回しか呼ばない。
+- **「配管は通したが電流は流さない」という段階的な形。** L4 は配管 (static、install 関数、bridge フィールドの型) を繋ぐが、`read_best_bid` はまだハードコードのまま。スイッチを入れるのは L5。配管と挙動を分離することで、各レッスンが検証可能な変更を 1 つだけ持てる。
 
 検証：
 
@@ -69,7 +69,7 @@ L3 終了時点（Module 1 完了時点）：
 5. **ブリッジの `clob` フィールド型を `Mutex<Book>` から `Arc<Mutex<Book>>` に変更**。`new()` で `install_clob(clob.clone())` を呼び、precompile がブリッジと同じ `Book` を見るようにする。
 6. **`read_best_bid` には触らない** — 引き続きハードコード値を返す。`current_best_bid()` への差し替えは L5。
 
-L4 を終えた時点で、ブリッジと precompile の間の**配線は存在する**が、**まだ電流は流れていない**。precompile は live な CLOB を無視したままだ。実際に読みに行くのは L5。
+L4 を終えた時点で、ブリッジと precompile の間の**配管は通っている**が、**まだ電流は流れていない**。precompile は live な CLOB を無視したままだ。実際に読みに行くのは L5。
 
 > 🛑 **考えてみよう。** スクロールする前に考えてみてほしい — REVM の `PrecompileFn` は `fn(&[u8], u64, u64) -> PrecompileResult` で、**関数ポインタ**であって `Fn` クロージャではない。つまり環境をキャプチャできない（`move |...| { ... }` が書けない）。**だとすれば、precompile にインスタンスごとの state を渡す唯一の方法は何か?** ヒント：「引数として渡せない関数間で、可変な共有 state を扱う」ための Rust の定石パターンを 2 つ思い浮かべる。
 
@@ -394,7 +394,7 @@ static storage はもっともシンプルなライフタイム — プログラ
 
 ## 次のレッスン（L5）
 
-配線は通したが、precompile はまだそれを無視している。L5 では `read_best_bid` の本体を `current_best_bid()` 呼び出しに差し替える。L3 のテストは、CLOB 未インストール時に zero output を期待する形に更新する。並行テストが global state で競合しないよう、`TEST_SERIALIZER` を導入する。L5 を終えると `read_best_bid` は live な state を読むようになる — ただし、ラウンドトリップを実行するテストは、自分でインラインに書く smoke test だけだ。L6 でラウンドトリップテストを正式に追加する。
+配管は通したが、precompile はまだそれを無視している。L5 では `read_best_bid` の本体を `current_best_bid()` 呼び出しに差し替える。L3 のテストは、CLOB 未インストール時に zero output を期待する形に更新する。並行テストが global state で競合しないよう、`TEST_SERIALIZER` を導入する。L5 を終えると `read_best_bid` は live な state を読むようになる — ただし、ラウンドトリップを実行するテストは、自分でインラインに書く smoke test だけだ。L6 でラウンドトリップテストを正式に追加する。
 ````
 
 ---
@@ -421,7 +421,7 @@ L4 は `b635ef7`（Stage 9b）を引用。L4 終了時点であなたのコー�
 
 ## Style review notes (self-critique before paste)
 
-- **§プランの「配線はあるが電流は流れていない」** が L4 のコンセプトフレーム — 配管のみ、テストから見える機能変化なし。
+- **§プランの「配管は通っているが電流は流れていない」** が L4 のコンセプトフレーム — 配管のみ、テストから見える機能変化なし。
 - **§考えてみよう（関数ポインタ vs クロージャ）** がグローバル state パターンを正当化する — Rust 出身者は本能的にクロージャに手を伸ばすので「なぜ動かないか」を先に提示する必要がある。
 - **§Step 3 の `RwLock<Option<Arc<Mutex<...>>>>` 分解** が一見 4 重ラッパに見えるものを 4 つの異なる責務に分解。
 - **§やりがちな勘違い「1 read に 3 ロックは無駄」** が自然な反発を先回り。

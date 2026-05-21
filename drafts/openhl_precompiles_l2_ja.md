@@ -16,17 +16,17 @@
 ### Content
 
 ````markdown
-# レッスン 2 — `clob_read_best_bid` — 最初の real precompile
+# レッスン 2 — `clob_read_best_bid` — 最初の本物の precompile
 
 ## ゴール
 
 このレッスンで掴む概念:
 
-- **REVM の `PrecompileFn` シグネチャ `fn(&[u8], u64, u64) -> PrecompileResult`** — 関数ポインタ (closure ではない)、3 つの引数 (input、gas_limit、reservoir) は固定。registry は関数ポインタを保持するので、precompile はこの形に正確に従う必要がある。
-- **Solidity ABI の 32-byte slot レイアウト** — `(uint256, uint256)` は合計 64 バイト、big-endian、低位バイトは index 31/63 — wire format でこれに合わせれば Solidity コントラクトがそのまま `abi.decode` できる。
-- **hardcode された stub が「配線テスト」と「内容テスト」を分割する道具** — `(100, 10)` を返す (`unimplemented!()` ではなく) ことで、L3 は precompile の **到達可能性** だけを単独で検証できる。「正しい値を返すか」(L4-L6 の責務) と分離される。
-- **`base.clone()` による extend-not-replace** — 標準の precompile セットを wrap することで ECDSA recovery / SHA-256 などが登録された状態を保てる。新規に `Precompiles::default()` を作ってしまうと、これらが silently 消えてしまう。
-- **address は `pub` const、gas cost は private const** — 呼び出し側は precompile を *call* する必要がある (address が必要)。gas は EVM が内部で処理する (caller は cost を知る必要がない)。可視性は API surface に対応する。
+- **REVM の `PrecompileFn` シグネチャ `fn(&[u8], u64, u64) -> PrecompileResult`。** 関数ポインタ (クロージャではない) で、3 つの引数 (input、gas_limit、reservoir) は固定。registry は関数ポインタを保持するため、precompile はこの形に正確に従う必要がある。
+- **Solidity ABI の 32-byte slot レイアウト。** `(uint256, uint256)` は合計 64 バイト、big-endian、低位バイトは index 31/63。wire format をこれに合わせれば Solidity コントラクトがそのまま `abi.decode` できる。
+- **ハードコードした stub が「接続テスト」と「内容テスト」を分割する道具。** `(100, 10)` を返す (`unimplemented!()` ではなく) ことで、L3 は precompile の **到達可能性** だけを単独で検証できる。「正しい値を返すか」(L4-L6 の責務) とは分離される。
+- **`base.clone()` による extend-not-replace。** 標準の precompile セットをラップすることで ECDSA recovery / SHA-256 などが登録された状態を保てる。新規に `Precompiles::default()` を作ってしまうと、これらが暗黙のうちに消えてしまう。
+- **address は `pub` const、gas cost は private const。** 呼び出し側は precompile を *call* する必要がある (address が必要)。gas は EVM が内部で処理する (caller はコストを知る必要がない)。可視性は API surface に対応する。
 
 検証：
 
@@ -45,7 +45,7 @@ cargo check -p openhl-evm
 - 関数 `read_best_bid(input, gas_limit, reservoir) -> PrecompileResult` — 64 バイトで hardcoded な `(price=100, qty=10)` を返す。
 - `openhl_precompiles` 関数 (もう passthrough ではない) が、base set を新しい precompile で extend する。
 
-追加は ~40 LOC。precompile は **登録されたが、まだ live な CLOB state には配線されていない** — hardcoded な値を返すだけだ。これは意図的。L3 で「precompile が EVM 実行から **到達可能** であること」をテストし、L4-L5 で hardcoded 値を live な CLOB read に差し替える。**関数を先に、中身は後で** — L1 の passthrough と同じ incremental パターンだ。
+追加は ~40 LOC。precompile は **登録されたが、まだ live な CLOB state には接続されていない** — hardcoded な値を返すだけだ。これは意図的。L3 で「precompile が EVM 実行から **到達可能** であること」をテストし、L4-L5 で hardcoded 値を live な CLOB read に差し替える。**関数を先に、中身は後で** — L1 の passthrough と同じ段階的パターンだ。
 
 ## おさらい
 
@@ -69,7 +69,7 @@ pub fn openhl_precompiles(base: &Precompiles) -> Precompiles {
 3. **gas-cost 定数 + `read_best_bid` 関数を追加** — どちらも private。関数は hardcoded な `(price=100, qty=10)` を 64 バイトの ABI encoding で返す。
 4. **passthrough を置き換え** — `openhl_precompiles` が base set を clone し、新しい precompile 登録で `extend` するようにする。
 
-このレッスン後の precompile は **callable** だが **dumb** だ — book の状態に関わらず同じ答えを返す。callable であることを証明するのが L3、smart にするのが L4-L5 だ。
+このレッスン後の precompile は **callable** だが **dumb** だ — book の状態に関わらず同じ答えを返す。callable であることを証明するのが L3、smart にするのが L4-L5。
 
 > 🛑 **考えてみよう。** スクロールする前に: Solidity からの EVM call は `staticcall(gas, 0x...0c1b, calldata=empty, ...) → (price: u256, qty: u256)` の形になる。precompile は 64 バイト (u256 が 2 個) を返す。**なぜ 64 バイトなのか? price も quantity も u32 に収まるのだから 8 バイト (u32 が 2 個) で十分なはずだ。** ヒント: Solidity がネイティブに返す型を考えてみる。
 
@@ -175,7 +175,7 @@ body を上から見ていく:
 
 `#[allow(clippy::unnecessary_wraps)]` は「この関数は常に `Ok(...)` を返すのだから、unwrap した型を直接返せ」という lint を黙らせる。**unwrap した型にはできない** — `PrecompileFn` trait のシグネチャが `PrecompileResult` を **要求する** からだ。ここでは lint のほうが間違っていて、この属性がそれに対する正しい応答。
 
-> 🛑 **やりがちな勘違い。** 「hardcoded な `100, 10` は TODO 臭がする。L4 で本物のデータが入るまでは `unimplemented!()` にしておくべきでは?」 — **その hardcoded 値こそが Stage 9a の本質だ。** これがあるからこそ、**次の** レッスン (L3) で「CLOB state の注入がまだ動いていなくても、precompile が EVM 実行から **到達可能** であること」を証明できる。`unimplemented!()` のまま放置すると、L3 のテストが panic してしまい、「precompile は呼べるのか?」と「正しい値を返すのか?」が切り分けられなくなる。**hardcoded な stub があるおかげで、中身をテストする前に配線をテストできる。**
+> 🛑 **やりがちな勘違い。** 「hardcoded な `100, 10` は TODO 臭がする。L4 で本物のデータが入るまでは `unimplemented!()` にしておくべきでは?」 — **その hardcoded 値こそが Stage 9a の本質だ。** これがあるからこそ、**次の** レッスン (L3) で「CLOB state の注入がまだ動いていなくても、precompile が EVM 実行から **到達可能** であること」を証明できる。`unimplemented!()` のまま放置すると、L3 のテストが panic してしまい、「precompile は呼べるのか?」と「正しい値を返すのか?」が切り分けられなくなる。**hardcoded な stub があるおかげで、中身をテストする前に接続をテストできる。**
 
 ### Step 4: passthrough の `openhl_precompiles` を置き換え
 
@@ -287,7 +287,7 @@ Yes — calldata が `_input` パラメータに入る。v0 では precompile �
 
 ## 次のレッスン (L3)
 
-precompile は登録されたが、まだ **テストされていない**。L3 では executor builder を NodeBuilder に配線し、Reth node を custom EVM で boot し、precompile が `CLOB_READ_BEST_BID` で callable であることを verify する smoke test を書く。テストは小さい (~60 LOC) が、全体のツールチェーンを exercise する — custom EVM、executor builder、NodeBuilder 統合、EVM call dispatch、precompile registry の lookup。L3 を終えれば、スマートコントラクトが `0x...0c1b` を call すると `(100, 10)` を返す Reth node が手に入る。
+precompile は登録されたが、まだ **テストされていない**。L3 では executor builder を NodeBuilder に組み込み、Reth node を custom EVM で boot し、precompile が `CLOB_READ_BEST_BID` で callable であることを verify する smoke test を書く。テストは小さい (~60 LOC) が、全体のツールチェーンを exercise する — custom EVM、executor builder、NodeBuilder 統合、EVM call dispatch、precompile registry の lookup。L3 を終えれば、スマートコントラクトが `0x...0c1b` を call すると `(100, 10)` を返す Reth node が手に入る。
 ````
 
 ---
@@ -298,13 +298,13 @@ L2 は Module 1 (Custom EVM bootstrap) sortOrder 1 に入る:
 
 ```typescript
 {
-  title: 'レッスン 2 — clob_read_best_bid — 最初の real precompile',
+  title: 'レッスン 2 — clob_read_best_bid — 最初の本物の precompile',
   slug: 'openhl-precompiles-read-hardcoded-ja',
   type: 'CONTENT',
   sortOrder: 1,
   duration: 30,
   xpReward: 60,
-  content: `# レッスン 2 — \`clob_read_best_bid\` — 最初の real precompile\n\n...`
+  content: `# レッスン 2 — \`clob_read_best_bid\` — 最初の本物の precompile\n\n...`
 },
 ```
 

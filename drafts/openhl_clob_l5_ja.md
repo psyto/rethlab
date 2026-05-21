@@ -22,11 +22,11 @@
 
 このレッスンで掴む概念:
 
-- **Market = Limit から price check と rest 処理を抜いたもの** — L4 と同じ walk-while-crossing loop だが、`price <= limit` ガードがなく、`rest_unfilled_remainder()` もない。意味的差分は *存在しないコード* にあるので、boolean フラグでパラメタ化すると両方の本体が読めなくなる。
-- **Fill 価格は常に maker の価格** — Market order は価格を持たない。Book が提示する価格を受け入れる。「価格発見」とは、taker の要求ではなく best bid と best ask のスプレッドが価格を決めるという規則そのものを指す。
-- **同じ戻り型、異なる契約** — `FillResult::remaining_qty` は Limit では「rest した分」(常に `Qty(0)`)、Market では「破棄した分」(実際の残量) を意味する。型は同じ、`FillResult` の doc が両方の解釈を明示している。
-- **「何も起きなかった」はエラーではなく有効な結果** — 空 ask book に対する Market buy は `FillResult { fills: vec![], remaining_qty: order.qty }` を返す。残量をどう扱うかは caller の判断、engine は `Result` を投げない。
-- **L4 の `match_at_level` helper をそのまま再利用** — 「maker が部分 fill」と「maker が完全消費」を 1 本の汎用パスで扱う。L5 では fast path も special case も足さない。
+- **Market = Limit から price check と rest 処理を抜いたもの** — L4 と同じ「クロスする限り辿る」ループだが、`price <= limit` ガードがなく、`rest_unfilled_remainder()` もない。意味の差分は *存在しないコード* に宿るため、boolean フラグでパラメタ化すると両方の本体が読めなくなる。
+- **約定価格は常に maker の価格** — Market order は価格を持たず、book が提示する価格を受け入れる。「価格発見」とは、taker の要求ではなく best bid と best ask のスプレッドが価格を決めるという規則そのもの。
+- **同じ戻り型、異なる契約** — `FillResult::remaining_qty` は Limit では「rest した分」(常に `Qty(0)`)、Market では「破棄した分」(実際の残量) を意味する。型は同じだが、`FillResult` の doc が両方の解釈を明示している。
+- **「何も起きなかった」はエラーではなく有効な結果** — 空 ask book に対する Market buy は `FillResult { fills: vec![], remaining_qty: order.qty }` を返す。残量をどう扱うかは caller の判断であり、engine 側は `Result` を投げない。
+- **L4 の `match_at_level` helper をそのまま再利用する** — 「maker が部分的に約定」と「maker が完全消費」を 1 本の汎用パスで扱う。L5 では fast path も special case も足さない。
 
 検証:
 
@@ -43,7 +43,7 @@ cargo check -p openhl-clob
   2. **rest-the-remainder なし** — Market order はマッチしなかった quantity を破棄する。残りは `FillResult::remaining_qty` で返す。
 - **`submit()` dispatcher を更新する** — L4 の `todo!("Market orders land in L5")` を `self.submit_market(order)` に置き換える。
 
-L5 後、matching engine は **完成** する。Limit と Market の両方が real fill を produce するようになる。L6 で `cancel` を追加し、L7-L8 で engine の invariant が成り立つことを証明するテストスイートを追加する。
+L5 後、matching engine は **完成** する。Limit と Market の両方が実際の約定を生成するようになる。L6 で `cancel` を追加し、L7-L8 で engine の invariant が成り立つことを証明するテストスイートを追加する。
 
 ## おさらい
 
@@ -58,7 +58,7 @@ pub fn submit(&mut self, order: Order) -> FillResult {
 }
 
 fn submit_limit(&mut self, order: Order, limit_price: Price) -> FillResult {
-    // ~60 行: 反対側を walk、at-or-better でマッチ、remainder を rest
+    // ~60 行: 反対側を順に辿り、at-or-better でマッチ、remainder を rest
 }
 
 fn match_at_level(taker: &Order, price: Price, ...) -> Fill { ... }
@@ -75,11 +75,11 @@ fn match_at_level(taker: &Order, price: Price, ...) -> Fill { ... }
 
 新規型なし、新規ヘルパーなし。L4 の `match_at_level` をそのまま再利用する。
 
-レッスンが短いのは、**L4 の大部分の作業を終えた後に L5 として残ったもの** だから。構造パターンは同じで、違うのは「market order」と「limit order」の意味的な差分。
+レッスンが短いのは、**L4 の大部分の作業を終えた後に L5 として残ったもの** だから。構造パターンは同じで、違うのは「market order」と「limit order」の意味の差分。
 
-> 🛑 **考えてみよう。** スクロールする前に: ask が `{ Price(100): [O_a (30 units)] }` で、50 unit の Market buy が arrive したとする。Fill はどうなり、`FillResult::remaining_qty` には何が入るか? 対比: 同じ開始 book で price 100、50 unit の Limit buy が来た場合は? **残り 20 unit は各ケースでどこに行くか?**
+> 🛑 **考えてみよう。** スクロールする前に: ask が `{ Price(100): [O_a (30 units)] }` で、50 unit の Market buy が arrive したとする。約定はどうなり、`FillResult::remaining_qty` には何が入るか? 対比: 同じ開始 book で price 100、50 unit の Limit buy が来た場合は? **残り 20 unit は各ケースでどこに行くか?**
 
-(答え: Market ケース → fill `[30 @ 100]`、`remaining_qty = 20` (fill しなかった部分は破棄され、caller には見えるが book には乗らない)。Limit ケース → fill `[30 @ 100]`、`remaining_qty = 0` (20 unit が price 100 の新規 bid として book に rest する)。**同じ fill、だが leftover の運命が違う。**)
+(答え: Market ケース → 約定 `[30 @ 100]`、`remaining_qty = 20` (約定しなかった部分は破棄され、caller には見えるが book には乗らない)。Limit ケース → 約定 `[30 @ 100]`、`remaining_qty = 0` (20 unit が price 100 の新規 bid として book に rest する)。**同じ約定、だが leftover の運命が違う。**)
 
 ## 手順
 
@@ -141,11 +141,11 @@ fn match_at_level(taker: &Order, price: Price, ...) -> Fill { ... }
 | Loop 内の price check | `if best_price > limit_price { break }` (Buy) | **なし** — 任意の価格で取る |
 | Loop 内の price check | `if best_price < limit_price { break }` (Sell) | **なし** — 任意の価格で取る |
 | Loop 後の rest-the-remainder | `if remaining.0 > 0 { ... push_back(resting) ... }` | **なし** — leftover は破棄 |
-| Return の `remaining_qty` | 常に `Qty(0)` (rested または完全 fill) | `remaining` (matching 後に残ったもの) |
+| Return の `remaining_qty` | 常に `Qty(0)` (rest 済みまたは完全に約定) | `remaining` (matching 後に残ったもの) |
 
 差分はこれで全部。**Loop の形は同じで、check を 2 個削り、return 値を 1 個変えるだけ。**
 
-> 🛑 **やりがちな勘違い。** 「Market Buy に `limit_price = Price(u64::MAX)`、Market Sell に `Price(0)` を渡して `submit_limit` を呼べばよいのでは?」 **price-check elimination には効くが、rest-the-remainder ロジックを排除しない。** `u64::MAX` limit の Market order は、fill しなかった qty を `u64::MAX` で rest しようとする — つまり最高可能価格で phantom resting bid を作ってしまう。挙動が間違う: 完全 fill しなかった Market buy が `u64::MAX` 価格の bid を book に置き、それが入ってきた sell を即座にマッチしてしまう。**2 つの関数、2 つの意味論、別々に保つ。**
+> 🛑 **やりがちな勘違い。** 「Market Buy に `limit_price = Price(u64::MAX)`、Market Sell に `Price(0)` を渡して `submit_limit` を呼べばよいのでは?」 **price-check の除去には効くが、rest-the-remainder ロジックを排除しない。** `u64::MAX` limit の Market order は、約定しなかった qty を `u64::MAX` で rest しようとする — つまり最高可能価格で phantom resting bid を作ってしまう。挙動が間違う: 完全に約定しなかった Market buy が `u64::MAX` 価格の bid を book に置き、それが入ってきた sell を即座にマッチしてしまう。**2 つの関数、2 つの意味論、別々に保つ。**
 
 ### Step 2: `submit()` dispatcher を更新
 
@@ -160,7 +160,7 @@ pub fn submit(&mut self, order: Order) -> FillResult {
 }
 ```
 
-`todo!` を real call に置き換える:
+`todo!` を実際の呼び出しに置き換える:
 
 ```rust
 pub fn submit(&mut self, order: Order) -> FillResult {
@@ -234,9 +234,9 @@ mod smoke {
 }
 ```
 
-`cargo test -p openhl-clob smoke` で走らせる。両方 pass するはず。**そのあと smoke module は削除する** — real なテストスイートは L7-L8 で作る。
+`cargo test -p openhl-clob smoke` で走らせる。両方 pass するはず。**そのあと smoke module は削除する** — 本格的なテストスイートは L7-L8 で作る。
 
-2 つの smoke test の対比は L5 のレッスン本質の要約 (ミニ版) になっている: **matching 後に残ったものは fill が produce されたかどうかに関わらず破棄される**。Market order 後の book 状態は、消費された liquidity を引いた book 状態そのもの — resting order は追加されない。
+2 つの smoke test の対比は L5 のレッスン本質の要約 (ミニ版) になっている: **matching 後に残ったものは、約定が生成されたかどうかに関わらず破棄される**。Market order 後の book 状態は、消費された liquidity を引いた book 状態そのもの — resting order は追加されない。
 
 よくあるエラーと対処:
 
@@ -249,9 +249,9 @@ mod smoke {
 
 3 つの load-bearing な決定:
 
-1. **`submit_limit` と `submit_market` は別々の関数として書き、parameterize しない。** Loop が 80% 同一でも、semantic な差 (leftover を rest させるか破棄するか) は **欠けている** コードにあるのであって、そこにあるコードにあるのではない。Parameterize すると `rest_remainder: bool` や `enforce_price: bool` のような boolean flag が必要になり、関数本体が branchy なパズルになる。**明確な分離があってこそ、2 つの意味論を独立に読みやすくなる。**
+1. **`submit_limit` と `submit_market` は別々の関数として書き、parameterize しない。** Loop が 80% 同一でも、意味の差 (leftover を rest させるか破棄するか) は **欠けている** コードにあるのであって、そこにあるコードにあるのではない。Parameterize すると `rest_remainder: bool` や `enforce_price: bool` のような boolean flag が必要になり、関数本体が branchy なパズルになる。**明確な分離があってこそ、2 つの意味論を独立に読みやすくなる。**
 
-2. **`FillResult::remaining_qty` は order type で意味が変わる。** Limit では常に `Qty(0)` (rested か完全 match)。Market では実際の unfilled 残り。**型は同じ、契約は違う。** これが許されるのは、`FillResult` の field doc (L2) が両方の解釈を明示的に named しているから。
+2. **`FillResult::remaining_qty` は order type で意味が変わる。** Limit では常に `Qty(0)` (rest 済みか完全 match)。Market では実際の unfilled 残り。**型は同じ、契約は違う。** これが許されるのは、`FillResult` の field doc (L2) が両方の解釈を明示的に named しているから。
 
 3. **空 book の Market order はエラーではなく clean に返る。** 空 asks book に対する Market buy は `FillResult { fills: vec![], remaining_qty: order.qty }` を返す。エラーなし。これが正しいデフォルト: caller がマッチを依頼し、できるだけ (0 個でも) マッチさせ、leftover を報告する。**「何も起きなかった」はエラーではなく valid な結果であるべき。**
 
@@ -274,16 +274,16 @@ git checkout main
 ## よくある質問
 
 **Q: 空 book の Market order が clean に返るユースケースは?**
-本番 matching engine ではよくある: thin な market が open し、fill の合間に orderbook が一時的に空になり、そこに Market order が arrive する。正しい挙動は「0 fill を produce、full remainder を報告、何をするかは caller が決める」だ。Caller は後で retry したり、Limit に切り替えたり、ユーザーにエラーを surface したりする — だが matching engine 自体はそれを決めない。
+本番 matching engine ではよくある: thin な market が open し、約定の合間に orderbook が一時的に空になり、そこに Market order が arrive する。正しい挙動は「0 約定を生成、full remainder を報告、何をするかは caller が決める」だ。Caller は後で retry したり、Limit に切り替えたり、ユーザーにエラーを surface したりする — だが matching engine 自体はそれを決めない。
 
 **Q: Market は自分の価格を持たないのに、なぜ maker の resting price を使うのか?**
-Fill 価格は常に **resting** order の価格 (maker の) になる。Market order は価格を supply せず、book がオファーするものを受け入れる。**「価格発見」こそが market を market たらしめる** — buyer が価格を決めるのではなく、best bid と best ask のスプレッドが決める。
+約定価格は常に **resting** order の価格 (maker の) になる。Market order は価格を supply せず、book がオファーするものを受け入れる。**「価格発見」こそが market を market たらしめる** — buyer が価格を決めるのではなく、best bid と best ask のスプレッドが決める。
 
-**Q: Market order がゼロ quantity の Fill を produce することはあるか?**
+**Q: Market order がゼロ quantity の Fill を生成することはあるか?**
 ない。`match_at_level` は `fill_qty = min(maker.qty, remaining)` を計算する。これがゼロになるには `maker.qty` か `remaining` のどちらかがゼロでなければならない。invariant が両方を維持してくれる: `submit_market` は `remaining == 0` になった瞬間 loop を抜けるし、maker queue に zero-qty resting order が残ることもない (matching コードが qty を縮めてゼロに当たったら maker を pop するため)。そのため `match_at_level` が両方ゼロで呼ばれることはない。
 
-**Q: 複数 price level にまたがる partial fill は?**
-Market order はこれを自然に扱える。Ask `{99: [30 units], 100: [30 units], 101: [50 units]}` に対する 100-unit Market buy は 3 つの fill を produce する (30 @ 99、30 @ 100、40 @ 101)。Loop の各 iteration が next-best level の front に対して `match_at_level` を呼び、`remaining == 0` になるか book が枯渇するまで loop が続く。**多 level を walk する挙動は crossing Limit order と同じ。**
+**Q: 複数 price level にまたがる partial 約定は?**
+Market order はこれを自然に扱える。Ask `{99: [30 units], 100: [30 units], 101: [50 units]}` に対する 100-unit Market buy は 3 つの約定を生成する (30 @ 99、30 @ 100、40 @ 101)。Loop の各 iteration が next-best level の front に対して `match_at_level` を呼び、`remaining == 0` になるか book が枯渇するまで loop が続く。**複数 level を順に辿る挙動は crossing Limit order と同じ。**
 
 ## 次のレッスン (L6)
 

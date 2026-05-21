@@ -23,10 +23,10 @@
 
 このレッスンを終えると：
 
-- Funding pipeline を記憶からホワイトボードに描けるようになる：`(mark, index)` → premium → rate → settlements、それを clock で gate する形だ。
+- Funding pipeline を記憶からホワイトボードに描けるようになる：`(mark, index)` → premium → rate → settlements、それを clock で gate する、という形だ。
 - 先送りした 5 項目（oracle 統合、balance 更新、liquidation、multi-market funding、funding-as-EVM-event）を名指しでき、それぞれがなぜ `crates/funding/` の守備範囲外なのかを説明できるようになる。
 - 4 つの拡張が将来のどのコースに位置づけられるかを描けるようになる。
-- この state machine を永久先物 DEX に配線する準備が整う。
+- この state machine を永久先物 DEX に組み込む準備が整う。
 
 **このレッスンにコードはない。** メンタルモデルだけだ。
 
@@ -93,7 +93,7 @@
 
 - `FundingClock` と `FundingTick`、`tick()`。
 - 7 つのテストでカバー：guard の semantics、境界ケース、interval 持続、no-catch-up。
-- **学び**：Composition テストが配線ミスを捕まえる。state machine は multi-call のテストを必要とする。設計哲学は doc コメント、テスト、レッスンの散文の 3 箇所に置く — 1 箇所だけに留めてはいけない。
+- **学び**：Composition テストが接続ミスを捕まえる。state machine は multi-call のテストを必要とする。設計哲学は doc コメント、テスト、レッスンの散文の 3 箇所に置く — 1 箇所だけに留めてはいけない。
 
 ## 正直に先送り
 
@@ -105,9 +105,9 @@
 
 **ないもの**：これらの価格を*取得する*方法。呼び出し側は mark を CLOB から（`clob.best_bid_with_qty()` の mid-price のような形で）、index を外部 oracle から（Pyth、Chainlink、validator-attested な feed など）取得する必要がある。
 
-**先送りの理由**：Oracle の plumbing には独自のディシプリンが要る — staleness チェック、deviation circuit breaker、複数ソースの aggregation、validator-set 側のサインオフなどだ。これを funding crate にバンドルすると、無関係な 2 つの関心事を結合してしまう。**Bridge レイヤー（将来のコース）が oracle を `tick()` に配線する。**
+**先送りの理由**：Oracle の plumbing には独自のディシプリンが要る — staleness チェック、deviation circuit breaker、複数ソースの aggregation、validator-set 側のサインオフなどだ。これを funding crate にバンドルすると、無関係な 2 つの関心事を結合してしまう。**Bridge レイヤー（将来のコース）が oracle を `tick()` に接続する。**
 
-**いつ見直すか**：Funding crate を `LiveRethEvmBridge` に配線するときだ。Bridge の payload 構築コードが、`clock.tick(...)` の呼び出しの*直前に*最新の mark / index を読み込む形になる。
+**いつ見直すか**：Funding crate を `LiveRethEvmBridge` に組み込むときだ。Bridge の payload 構築コードが、`clock.tick(...)` の呼び出しの*直前に*最新の mark / index を読み込む形になる。
 
 ### 2. Balance 更新
 
@@ -159,7 +159,7 @@
 
 ### Extension 2: Bridge 側の funding tick（1 週間）
 
-`FundingClock` を `LiveRethEvmBridge` に配線する。Bridge が clock インスタンスを保持し、mark を CLOB から、index を oracle から読み、永久先物 position ストアから position を取得し、`tick()` を呼び出して、得られた settlement を balance に適用する。**作業のほとんどは plumbing で、funding crate 自体は self-contained のままだ。**
+`FundingClock` を `LiveRethEvmBridge` に組み込む。Bridge が clock インスタンスを保持し、mark を CLOB から、index を oracle から読み、永久先物 position ストアから position を取得し、`tick()` を呼び出して、得られた settlement を balance に適用する。**作業のほとんどは plumbing で、funding crate 自体は self-contained のままだ。**
 
 ### Extension 3: Liquidation エンジン（3-4 週間）
 
@@ -195,7 +195,7 @@ Funding-tick 後の balance を監視し、under-margined なアカウントを�
 
 **Course 9（このコース）**：Funding state machine。**pure な state、I/O なし — course 8 の bridge plumbing と対をなす位置づけだ。**
 
-**Course 10**（openhl-bridge-integration — 将来）：funding、oracle、liquidation を `LiveRethEvmBridge` に配線する。ここで courses 6-9 のすべてが、動作する perp DEX として組み上がる。
+**Course 10**（openhl-bridge-integration — 将来）：funding、oracle、liquidation を `LiveRethEvmBridge` に組み込む。ここで courses 6-9 のすべてが、動作する perp DEX として組み上がる。
 
 L1 Architect track の 90% を踏破したことになる。**このコースで身につけたパターン（固定小数点、saturation、composition テスト）は、残りの作業すべてに当てはまる。**
 
@@ -223,7 +223,7 @@ git checkout main
 - Configurable な interval で settlement を gate する。
 - 長い gap の後の catch-up は拒否する（数学を公平性に揃えるための哲学的な選択だ）。
 
-**これで、HL シェイプの永久先物 funding メカニズム一式が手に入った。しかも、任意の Rust トレーディングシステムに drop in できる crate という形でだ。** 次に誰かから「永久先物 funding はどう動くの？」と聞かれたら — この crate を見せればいい。
+**これで、Hyperliquid 型の永久先物 funding メカニズム一式が手に入った。しかも、任意の Rust トレーディングシステムに drop in できる crate という形でだ。** 次に誰かから「永久先物 funding はどう動くの？」と聞かれたら — この crate を見せればいい。
 
 それでは、永久先物を作りに行こう。
 ````

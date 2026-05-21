@@ -22,11 +22,11 @@
 
 このレッスンで掴む概念:
 
-- **Buy と Sell は構造的なミラー、generic 抽象ではない** — Buy 分岐は ask を昇順に walk、Sell は bid を降順に walk。ほぼ同形の 2 関数の方が、boolean フラグでパズル化した generic helper より読みやすい。
-- **「クロスする限り walk する」が matching engine の core loop** — `while remaining > 0 && 反対側の best 価格が limit をクロス { match_at_level; level を進める/外す }`。この形が見えると、L5 の market order は「同じ loop から price check を抜いただけ」になる。
+- **Buy と Sell は構造的なミラーであり、generic 抽象ではない** — Buy 分岐は ask を昇順に辿り、Sell 分岐は bid を降順に辿る。ほぼ同形の関数 2 本のほうが、boolean フラグでパズル化した generic helper より読みやすい。
+- **「クロスする限り辿る」が matching engine の core loop** — `while remaining > 0 && 反対側の best 価格が limit をクロス { match_at_level; level を進める / 外す }`。この形が見えれば、L5 の market order は「同じ loop から price check を抜いただけ」だと分かる。
 - **空 queue 不変条件は変更のたびに維持する** — 各 match の後で `if queue.is_empty() { remove(price) }`。空 queue を map に残すと `best_bid()` が嘘をつき、no-crossed-book 不変条件が壊れる。
-- **戻り値は「呼び出しで何が起きたか」、book 状態は「今どうあるか」を表す** — Limit の `FillResult::remaining_qty` は常に `Qty(0)` (fill しなかった分は rest した)。Rest した残量を知りたければ `best_bid` / `depth_bid` を別途問い合わせる。2 つの契約を混ぜない。
-- **`match_at_level` を free function にして scope を名指す** — `self` を取らない。caller が既に取り出したデータ (queue + remaining) を操作する。関数 signature がドキュメント。
+- **戻り値は「呼び出しで何が起きたか」、book 状態は「今どうあるか」を表す** — Limit の `FillResult::remaining_qty` は常に `Qty(0)` (約定しなかった分は rest した)。rest した残量を知りたければ `best_bid` / `depth_bid` を別途問い合わせる。2 つの契約を混ぜない。
+- **`match_at_level` は free function として scope を名指す** — `self` を取らない。caller が既に取り出したデータ (queue + remaining) を操作する。関数 signature がドキュメントを兼ねる。
 
 検証:
 
@@ -38,13 +38,13 @@ cargo check -p openhl-clob
 
 具体的な変更:
 
-`Book` が **Limit order** (Buy + Sell) を受け付け、real `Fill` を produce できるようになる。Market order はまだ `todo!()` のまま — それは L5 で扱う。
+`Book` が **Limit order** (Buy + Sell) を受け付け、実際の `Fill` を生成できるようになる。Market order はまだ `todo!()` のまま — それは L5 で扱う。
 
 書くもの:
 
 - **`submit()`** — `order.order_type` に基づいて `submit_limit` または `submit_market` にルーティングする dispatch メソッド。
-- **`submit_limit()`** — 本体: book の反対側を walk し、limit price に対して at-or-better でマッチさせ、fill しなかった残りを book に rest させる。
-- **`match_at_level()`** — `submit_limit` (および L5 の `submit_market`) から呼ばれる private ヘルパー。単一 price level で実際の fill を行い、maker queue と taker の remaining quantity の両方を mutate する。
+- **`submit_limit()`** — 本体: book の反対側を順に辿り、limit price に対して at-or-better でマッチさせ、約定しなかった残りを book に rest させる。
+- **`match_at_level()`** — `submit_limit` (および L5 の `submit_market`) から呼ばれる private ヘルパー。単一 price level で実際の約定を行い、maker queue と taker の remaining quantity の両方を mutate する。
 
 L4 後、`book.rs` は **~150 行** になる。Buy + Sell の Limit order がどちらも動く。Market はまだ `todo!` で panic する。
 
@@ -76,14 +76,14 @@ impl Book {
 すべて `crates/clob/src/book.rs` に追加する 3 つ:
 
 1. **`submit()` dispatcher** — `OrderType` に対する 1 つの `match`。Limit → `submit_limit`、Market → 今は `todo!()`。
-2. **`submit_limit()` 本体** — 約 60 行。Buy は ask を昇順 walk し、`ask_price <= limit` の間マッチする。Sell は bid を降順 walk し、`bid_price >= limit` の間マッチする。Fill しなかった残りは book に rest させる (`RestingOrder` として entry)。
+2. **`submit_limit()` 本体** — 約 60 行。Buy は ask を昇順に辿り、`ask_price <= limit` の間マッチする。Sell は bid を降順に辿り、`bid_price >= limit` の間マッチする。約定しなかった残りは book に rest させる (`RestingOrder` として entry)。
 3. **`match_at_level()` ヘルパー** — 約 25 行。Queue 先頭の maker を pop または shrink し、1 つの `Fill` を返し、taker の `remaining` を mutate する。
 
 これが **matching engine の大部分**。L5 で Market を追加する (Market は `submit_limit` から price check と resting step を除いたもの)。L6 で cancel を追加する。**Matching engine の core が本レッスンの中身。**
 
-> 🛑 **考えてみよう。** スクロールする前に: price 100 の Limit Buy order が ask を最安から walk するとする。Ask が `{ Price(98): [O_a], Price(99): [O_b, O_c], Price(101): [O_d] }` のような状態で、buyer は 50 unit 買いたく、各 resting order は 30 unit。**Fill はどの順序で発生するか? Trade 後の book の最終状態は?** ヒント: `keys().next()` から ask を walk し、満たされるか next level が limit を超えるまで各 level でマッチする。
+> 🛑 **考えてみよう。** スクロールする前に: price 100 の Limit Buy order が ask を最安から順に辿るとする。Ask が `{ Price(98): [O_a], Price(99): [O_b, O_c], Price(101): [O_d] }` のような状態で、buyer は 50 unit 買いたく、各 resting order は 30 unit。**約定はどの順序で発生するか? Trade 後の book の最終状態は?** ヒント: `keys().next()` から ask を順に辿り、満たされるか next level が limit を超えるまで各 level でマッチする。
 
-(答え: fill は `[Fill@98 で 30、Fill@99 で 20]`。Trade 後、`O_a` は消え、`O_b` は 10 unit 残り、`O_c` は 30 unit のまま、`O_d` も 30 unit のまま。Buyer は limit より少なく払った (98 + 99 vs 100) — これが「at-or-better」ルール。)
+(答え: 約定は `[Fill@98 で 30、Fill@99 で 20]`。Trade 後、`O_a` は消え、`O_b` は 10 unit 残り、`O_c` は 30 unit のまま、`O_d` も 30 unit のまま。Buyer は limit より少なく払った (98 + 99 vs 100) — これが「at-or-better」ルール。)
 
 ## 手順
 
@@ -104,7 +104,7 @@ impl Book {
 
 本体 3 行。Dispatcher は意図的に小さくしてある — matching ロジックはすべて `submit_limit` と (将来の) `submit_market` に置く。**Dispatcher の唯一の仕事は型駆動のルーティング**であって、matching そのものではない。
 
-`todo!()` はここでは正しい placeholder。Market order が submit されると runtime で clear なメッセージで panic するが、コンパイルは clean に通る。L5 で real な `self.submit_market(order)` 呼び出しに置き換える。
+`todo!()` はここでは正しい placeholder。Market order が submit されると runtime で clear なメッセージで panic するが、コンパイルは clean に通る。L5 で実際の `self.submit_market(order)` 呼び出しに置き換える。
 
 > 🛑 **やりがちな勘違い。** 「Submit() を 1 つの大きな match にして、matching ロジックを各 arm にインラインで書けばいいのでは?」 **そうすると `submit_limit` と `submit_market` が dispatcher の match arm の中に隠れる。** 効果は 2 つ: (1) public method `submit` が 100+ 行になり一目で読みづらい、(2) 各 path のテストが難しくなる (test は `Book::submit` を import するが、特定 path を exercise するために `order_type` を正しく設定した `Order` を construct する必要がある)。`submit_limit` / `submit_market` を named function として外に出すと、addressable で testable になる。
 
@@ -119,7 +119,7 @@ impl Book {
 
         match order.side {
             Side::Buy => {
-                // Buy walks asks from cheapest; matches while ask <= limit.
+                // Buy は ask を最安から順に辿り、ask <= limit の間マッチする。
                 loop {
                     if remaining.0 == 0 {
                         break;
@@ -141,7 +141,7 @@ impl Book {
                 }
             }
             Side::Sell => {
-                // Sell walks bids from highest; matches while bid >= limit.
+                // Sell は bid を最高値から順に辿り、bid >= limit の間マッチする。
                 loop {
                     if remaining.0 == 0 {
                         break;
@@ -172,25 +172,25 @@ impl Book {
 
 これが matching loop。注意深く読む。Buy ブランチ:
 
-1. **無限ループを条件付き break で抜ける。** Exit は 3 つ: (a) taker が完全に fill した、(b) この side で book が空、(c) 最安 ask が limit より高い。
+1. **無限ループを条件付き break で抜ける。** Exit は 3 つ: (a) taker が完全に約定した、(b) この side で book が空、(c) 最安 ask が limit より高い。
 2. **`self.asks.keys().next().copied()`** — 最安 ask 価格。`&Price` ではなく `Price` 値が欲しいので `.copied()` する。
 3. **`if best_price > limit_price { break }`** — at-or-better ルール。Ask に `limit_price` 以上は払わない。
 4. **`self.asks.get_mut(&best_price).expect(...)`** — その価格の queue。**`.expect` は安全** — `best_price` を `keys().next()` から取ったばかりなので、level は確実に存在する。Expect message が invariant を文書化する。
-5. **`match_at_level(&order, best_price, queue, &mut remaining)`** — 実際のマッチを行う。このヘルパーは次に書く。今のところは、`Fill` を返し、`queue` (maker が完全 fill なら pop する) と `remaining` (fill 数量を引く) の両方を mutate することを覚えておけばよい。
+5. **`match_at_level(&order, best_price, queue, &mut remaining)`** — 実際のマッチを行う。このヘルパーは次に書く。今のところは、`Fill` を返し、`queue` (maker が完全に約定すれば pop する) と `remaining` (約定数量を引く) の両方を mutate することを覚えておけばよい。
 6. **`if queue.is_empty() { self.asks.remove(&best_price) }`** — `match_at_level` が queue を空にしたなら、level を drop して `best_ask()` を `depth_ask()` と整合させる。(空 queue を map に残すと、`best_ask()` がその level の価格を返すが、order はそこにない。)
 
 Sell ブランチは **構造的に同一** だが反転している:
-- `asks` ではなく `bids` を walk する。
+- `asks` ではなく `bids` を辿る。
 - key が `Reverse<Price>` なので `best_rev.0` で unwrap する。
 - 比較は `best_price < limit_price` (sell の at-or-better は limit 以上で売る)。
 
-**「構造的同一性」が load-bearing な観察。** Buy と Sell は互いの mirror image。どちらも反対側を best-first で walk し、どちらも price が limit をクリアする間マッチし、どちらも空になった level を pop する。違いは触る BTreeMap と比較の方向だけ。Buy ブランチが分かれば Sell ブランチも分かる。
+**「構造的同一性」が load-bearing な観察。** Buy と Sell は互いの mirror image。どちらも反対側を best-first で辿り、どちらも price が limit をクリアする間マッチし、どちらも空になった level を pop する。違いは触る BTreeMap と比較の方向だけ。Buy ブランチが分かれば Sell ブランチも分かる。
 
 > 🛑 **やりがちな勘違い。** 「Buy/Sell を parameterize して、ループを 1 度だけ書けないか?」 **できる — だがコストに見合わない。** 完全 generic 版は BTreeMap (`Reverse<Price>` vs `Price`)、比較演算子 (`>` vs `<`)、key (`bids` vs `asks`) を抽象化する必要がある。節約できるのは ~30 行の duplication、払うコストは Rust で最も手強い generic-bound パズルの 1 つ。**Duplication は安く、abstraction の予算は貴重。実際に効くところに使う。**
 
 ### Step 3: rest-the-remainder ロジックを追加
 
-上の matching loop は `FillResult { fills, remaining_qty: Qty(0) }` で終わる — これは placeholder。real な「remainder を rest させる」ロジックに置き換える:
+上の matching loop は `FillResult { fills, remaining_qty: Qty(0) }` で終わる — これは placeholder。実際の「remainder を rest させる」ロジックに置き換える:
 
 ```rust
         // Any unfilled limit qty rests on the book.
@@ -225,12 +225,12 @@ Sell ブランチは **構造的に同一** だが反転している:
 
 注意深く読む:
 
-1. **`if remaining.0 > 0`** — taker にまだ fill されていない quantity がある。Limit order ではその quantity が book に乗る (Market order は L5 で代わりに破棄する)。
+1. **`if remaining.0 > 0`** — taker にまだ約定していない quantity がある。Limit order ではその quantity が book に乗る (Market order は L5 で代わりに破棄する)。
 2. **`RestingOrder` を construct する** — side と order_type は落とす (どの map に push するかで encode される) — id + account + remaining qty だけを残す。
-3. **`self.bids.entry(Reverse(limit_price)).or_default().push_back(resting)`** — Buy order の fill しなかった残り。`entry` + `or_default` は BTreeMap の「なければ insert、いずれにせよ mutable ref を取る」イディオム。`Reverse(limit_price)` は L3 で bids に選んだ key の形。
+3. **`self.bids.entry(Reverse(limit_price)).or_default().push_back(resting)`** — Buy order の約定しなかった残り。`entry` + `or_default` は BTreeMap の「なければ insert、いずれにせよ mutable ref を取る」イディオム。`Reverse(limit_price)` は L3 で bids に選んだ key の形。
 4. **`self.asks.entry(limit_price).or_default().push_back(resting)`** — Sell の対称形。
 5. **`FillResult { fills, remaining_qty: Qty(0) }`** — caller にゼロ `remaining_qty` を返す。**これが L2 の `FillResult` doc が約束した load-bearing な意味論**: rest する Limit order は **ゼロ remaining と申告する**。Remainder は book にあって、return 値の中にはない。
-6. **両方のブランチ** (`if` と `else`) が `Qty(0)` remaining を返す。`else` ブランチは完全 fill ケース (taker が 100% マッチし、rest も remaining もない)。2 つのブランチは異なる理由で同じ return 値を produce する。
+6. **両方のブランチ** (`if` と `else`) が `Qty(0)` remaining を返す。`else` ブランチは完全に約定したケース (taker が 100% マッチし、rest も remaining もない)。2 つのブランチは異なる理由で同じ return 値を生成する。
 
 > 🛑 **やりがちな勘違い。** 「rest する Limit order が、resting amount ではなく `remaining_qty: Qty(0)` を返すのはなぜか? Caller は book にいくら乗ったか知りたいかも」。 **`FillResult` は **matching** の結果であって、book の状態ではないから。** Resting amount を知りたい caller は call 後に `best_bid()` や `depth_bid()` を query すればよい。「book が新しい resting liquidity をこれだけ受け取った」と「matcher が place できなかった taker quantity がこれだけ残った」を混ぜると意味論が曖昧になる。**Return value は何が起きたかを表し、book 状態は何があるかを表す。関心事を分離する。**
 
@@ -272,16 +272,16 @@ fn match_at_level(
 }
 ```
 
-これが **実際のマッチ** — real work を行う最小の関数。順に読む:
+これが **実際のマッチ** — 本来の仕事を行う最小の関数。順に読む:
 
 1. **`queue.front_mut().expect(...)`** — queue 先頭の maker。Time priority とは「最初に置かれた order が最初にマッチする」ことなので、これでよい。`submit_limit` は level の存在を確認した後にしか `match_at_level` を呼ばないので `expect` は安全。
-2. **`fill_qty = min(maker.qty, remaining)`** — 2 つの小さい方をマッチさせる。Maker が 30 unit で taker がまだ 50 必要なら fill は 30 (maker は完全消費)。Maker が 30 で taker が 10 だけ必要なら fill は 10 (maker は 20 残る)。
+2. **`fill_qty = min(maker.qty, remaining)`** — 2 つの小さい方をマッチさせる。Maker が 30 unit で taker がまだ 50 必要なら約定は 30 (maker は完全消費)。Maker が 30 で taker が 10 だけ必要なら約定は 10 (maker は 20 残る)。
 3. **`Fill` を build** — order ID 両方と account ID 両方を保存する (L2 の設計判断: self-contained Fills)。
 4. **`maker.qty.0 -= fill_qty.0`** — maker を縮める。**これは RestingOrder 内なら安全だが、Order 内では違和感のある mutation** (L3 の anti-fluency callout — RestingOrder はちょうどこの種の mutation を明示するために存在する)。
 5. **`remaining.0 -= fill_qty.0`** — taker の outstanding quantity を縮める。Caller (`submit_limit`) が `&mut Qty` 引数経由でこれを観測する。
 6. **`if maker.qty.0 == 0 { queue.pop_front() }`** — maker が完全消費されたら pop する。`submit_limit` の outer loop の次の iteration でこの queue を再度 check し、空になっていれば level 自体が drop される。
 
-**なぜ Book のメソッドではなく free function なのか?** `self` へのアクセスが不要だから。単一 queue (`submit_limit` が既に mutable ref を持っている) と単一 `remaining` counter にしか触らない。Free function にすることで scope の狭さを反映している: `Book` 全体は関与しない。
+**なぜ Book のメソッドではなく free function なのか?** `self` へのアクセスが不要だから。単一 queue (`submit_limit` が既に mutable ref を持っている) と単一 `remaining` カウンタにしか触らない。Free function にすることで scope の狭さを反映している: `Book` 全体は関与しない。
 
 > 🛑 **やりがちな勘違い。** 「`expect("empty queue")` の panic はリスキーに見える。Queue が **実際に** 空だったら?」 **この関数は空 queue で呼ばれないことが `submit_limit` の invariant。** 具体的には、`submit_limit` は `keys().next()` が `Some(price)` を返した後にしか `match_at_level` を呼ばず、それが level (そして queue) に少なくとも 1 要素あることを保証する。空 queue で `match_at_level` が呼ばれたとしたら、それは `submit_limit` のバグであって `match_at_level` のバグではない — そして `expect` が `Option::None` のサイレント伝播ではなく、clear なメッセージ付きの panic としてバグを surface する。**内部 invariant は信頼し、`expect` で assert する。**
 
@@ -335,7 +335,7 @@ mod smoke {
 
 `cargo test -p openhl-clob buy_crosses_resting_ask` で走らせる。Pass すれば Limit Buy + Limit Sell ロジックは正しい。
 
-**L5 に進む前にこの smoke test は削除する** — real なテストスイートは L7-L8 で proper な hand-trace シナリオと proptest を伴って入る。上の smoke test は L4 がコンパイルして **走る** ことを verify するためだけのもの。L5 のために `src/lib.rs` を clean に保っておく。
+**L5 に進む前にこの smoke test は削除する** — 本格的なテストスイートは L7-L8 で proper な hand-trace シナリオと proptest を伴って入る。上の smoke test は L4 がコンパイルして **走る** ことを verify するためだけのもの。L5 のために `src/lib.rs` を clean に保っておく。
 
 よくあるエラーと対処:
 
@@ -348,7 +348,7 @@ mod smoke {
 
 3 つの load-bearing な決定:
 
-1. **Buy と Sell は構造的に mirror。** Buy ブランチは ask を昇順 walk し、Sell ブランチは bid を降順 walk する。Generics で abstract する選択はしなかった — duplication のほうが abstraction tax より安いから。**構造的に同一な関数 2 つのほうが、完全 generic な 1 関数より読みやすい。**
+1. **Buy と Sell は構造的に mirror。** Buy ブランチは ask を昇順に辿り、Sell ブランチは bid を降順に辿る。Generics で abstract する選択はしなかった — duplication のほうが abstraction tax より安いから。**構造的に同一な関数 2 つのほうが、完全 generic な 1 関数より読みやすい。**
 
 2. **`match_at_level` は free function であって method ではない。** `self` は要らない。Free function にすることで、book 全体ではなく caller が既に extract したデータ (queue + remaining) に対して動作することを文書化している。**関数 signature が文書として scope を名指す。**
 
@@ -379,7 +379,7 @@ git checkout main
 それはバグ。「map の各 key は非空 queue に対応する」が invariant。`submit_limit` が各 match 後に `if queue.is_empty() { self.asks.remove(&best_price) }` でこれを強制するので、空 queue が残ることはない。もし空 queue を見たら、queue を mutate した後に空チェックしなかった場所を探す。
 
 **Q: `BTreeMap::pop_first()` で best level を 1 回の呼び出しで取得+削除しないのはなぜか?**
-理由は 2 つ。(1) `pop_first` は無条件で level を削除するが、必ずしもそうしたいわけではない — マッチ後に level に order が残ることがある (maker が部分 fill し、後ろに他の order が並んでいる場合)。(2) `pop_first` は Rust 1.66 で stabilize したが、「いくらか消費し、必要なら level を drop する」というフローには `get_mut` + 条件付き `remove` のマッチパターンが自然に読める。
+理由は 2 つ。(1) `pop_first` は無条件で level を削除するが、必ずしもそうしたいわけではない — マッチ後に level に order が残ることがある (maker が部分的に約定し、後ろに他の order が並んでいる場合)。(2) `pop_first` は Rust 1.66 で stabilize したが、「いくらか消費し、必要なら level を drop する」というフローには `get_mut` + 条件付き `remove` のマッチパターンが自然に読める。
 
 **Q: 「taker が maker をぴったりマッチ」のための fast path はあるか?**
 ない、必要もない。General path (`min(maker.qty, remaining)` + shrink-or-pop) が「exact match」を general の特殊ケースとして扱ってくれる。Special-case branch を追加すると test 対象のコードパスが増え、性能向上は marginal。性能が重要なら profile が先。
@@ -388,7 +388,7 @@ git checkout main
 
 Limit order が動くようになった。**Market order はまだ `todo!()` のまま。** L5 で matching engine を完成させる:
 - `submit()` 内の `todo!()` を `self.submit_market(order)` に置き換える。
-- `submit_market()` を書く — `submit_limit` から **price check を抜き** (Market は任意の価格を取る)、**remainder を rest させない** (Market は残りを破棄する) もの。
+- `submit_market()` を書く — `submit_limit` から **price check を抜き** (Market は任意の価格を取る)、**remainder を rest させない** (Market は残りを破棄する) 形のもの。
 
 L5 は L4 より短い。大部分の作業 (`match_at_level`、dispatcher) は済んでいるから。L5 終了時には両方の order type で動く完全な matching engine が手に入る。
 ````

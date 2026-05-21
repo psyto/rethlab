@@ -23,11 +23,11 @@
 
 このレッスンで掴む概念:
 
-- **No-catch-up は公平性の不変条件** — 10 interval 分のギャップ後は 1 度だけ settle して `now` へ advance する。10 tick を replay してはいけない。現在のスナップショットで 10 回 replay すると、ギャップ中に close できなかった負け側に 10 倍の懲罰が集中する。Funding の目的は equilibration であって遡及的な強制ではない。
-- **`now` へ advance する、`last_settled + interval` ではなく** — deadline は実際の settlement 時刻にリセットされ、数学的に「次の整列点」にはならない。Clock は missed interval を完全に忘れる。これがこのテストで pin する設計判断。
-- **同じ `now` での second tick は state machine の最も厳しいテスト** — 2 つの呼び出しの間で時間は経過していない、変わったのは clock の内部 state だけだ。Late tick で `last_settled_at` を更新し忘れる実装をすべて捕まえる。
-- **Catch-up ポリシーは clock の外に置く** — Catch-up が必要な呼び出し側は、中間時点のスナップショットで `tick()` を繰り返し呼ぶ wrapper を書けばよい。Clock 自身は過去の state にアクセスできないからこれはできない。プリミティブはミニマルに、ポリシーは呼び出し側に。
-- **設計哲学はドキュメント、コード、テストの 3 箇所に住む** — Module doc が不変条件を約束し、`tick()` の `self.last_settled_at = now` 行がそれを強制し、`no_catchup_after_long_gap` がそれを証明する。各所が別の読者に対応する。
+- **No-catch-up は公平性の不変条件** — 10 interval 分のギャップが空いた後は、1 度だけ settle して `now` まで advance する。10 tick を replay してはいけない。現在のスナップショットで 10 回 replay すると、ギャップ中に position を閉じられなかった負け側に 10 倍の懲罰が集中してしまう。Funding の目的は equilibration であって、遡及的な強制ではない。
+- **`now` へ advance する、`last_settled + interval` ではなく** — deadline は実際の settlement 時刻にリセットされ、数学的な「次の整列点」にはならない。Clock は見逃した interval を完全に忘れる。これが、このテストで pin する設計判断だ。
+- **同じ `now` での second tick は state machine の最も厳しいテスト** — 2 つの呼び出しの間で時間は 1 ミリ秒も経過しておらず、変わったのは clock の内部 state だけだ。遅れた tick で `last_settled_at` を更新し忘れる実装を、すべて捕まえてくれる。
+- **Catch-up ポリシーは clock の外側に置く** — Catch-up が必要な呼び出し側は、中間時点のスナップショットを伴って `tick()` を繰り返し呼ぶ wrapper を書けばよい。Clock 自身は過去の state にアクセスできないからこれはできない。プリミティブはミニマルに、ポリシーは呼び出し側に。
+- **設計哲学はドキュメント、コード、テストの 3 箇所に住む** — Module doc が不変条件を約束し、`tick()` の `self.last_settled_at = now` の行がそれを強制し、`no_catchup_after_long_gap` がそれを証明する。それぞれが別の読者に対応する。
 
 検証：
 
@@ -45,7 +45,7 @@ L10 後の状態：
 - `crates/funding/` が **Stage 8b（`cd94137`）と byte-identical**。
 - 22 テストすべて pass：手書きトレース 20 + proptest 2。
 - Module 3（Clock state machine）が**完了**。
-- Funding state machine が、独立した crate として**production シェイプ**に達する。
+- Funding state machine が、独立した crate として **production grade** に達する。
 
 教育上の焦点は、**失敗モード下での設計哲学**だ：clock が遅れたとき、何が正しい semantics なのか。素朴な答え（「tick を replay して追いつけばよい」）は間違いで、L10 ではその理由を説明する。
 
@@ -262,11 +262,11 @@ L10 後の状態：
 - **テスト合計 22 個**：手書きトレース 20 + proptest 2。
 - **Rustdoc warning ゼロ。**
 
-Funding state machine は今や、**完成し、テスト済みで、production シェイプ**の crate になっている。Funding を deterministic に計算し、正しい cadence で gate し、gap 後に path-dependent な settlement を持ち込むことを拒む。
+Funding state machine は今や、**完成し、テスト済みで、production grade** の crate になっている。Funding を deterministic に計算し、正しい cadence で gate し、gap 後に path-dependent な settlement を持ち込むことを拒む。
 
 残っているもの：
 - **Module 4（Capstone、L11）** — 統合、先送り項目、bridge integration のプレビュー。コードはなし。
-- **将来のコース** — この crate を bridge に配線していく（oracle 統合、balance 更新、liquidation トリガーなど）。
+- **将来のコース** — この crate を bridge に組み込んでいく（oracle 統合、balance 更新、liquidation トリガーなど）。
 
 ## 次のレッスン（L11）
 

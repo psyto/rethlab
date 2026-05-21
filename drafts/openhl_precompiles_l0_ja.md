@@ -19,16 +19,16 @@
 ````markdown
 # OpenHL Precompile を作る — CLOB state をスマートコントラクトに接続する
 
-前コース (`building-openhl-clob`) は、bridge が CLOB matching engine を所有する地点で終わった。Order が submit され、fill が payload に流れ、integration test が実際の Reth node に対して pipeline 全体を exercise する。**ただし fill はまだ並行リストにすぎない。** 同じ Reth node 上で動くスマートコントラクトからは見えない。CLOB state と EVM state は別世界に存在している。
+前コース (`building-openhl-clob`) は、bridge が CLOB matching engine を所有する地点で終わった。Order が submit され、約定 (fill) が payload に流れ、integration test が実際の Reth node に対して pipeline 全体を exercise する。**ただし約定はまだ並行リストにすぎない。** 同じ Reth node 上で動くスマートコントラクトからは見えない。CLOB の状態と EVM の状態は別世界に存在している。
 
 本コースではこのギャップを閉じる。**Custom EVM precompile** を追加する — Solidity (あるいは任意の EVM caller) から呼ばれると CLOB を read/write する Rust コードが走る、特殊な address のことだ。Course 8 を終えた時点で:
 
 - スマートコントラクトは `0x...0c1b` を call して現在の **best bid を読める**。
 - スマートコントラクトは `0x...0c1c` を call して matching engine が処理する **order を発注できる**。
 
-この 2 つのパスが揃うと、CLOB は EVM の横に並ぶ並行構造から、EVM が対話できる **state 拡張** に変わる。これがチェーンを「Hyperliquid-shape」にする — Hyperliquid の本質的な新規性は、perp matching engine が同じチェーン上のスマートコントラクトから呼び出せる点にある。
+この 2 つのパスが揃うと、CLOB は EVM の横に並ぶ並行構造から、EVM が対話できる **state 拡張** に変わる。これがチェーンを「Hyperliquid 型」にする — Hyperliquid の本質的な新規性は、perp matching engine が同じチェーン上のスマートコントラクトから呼び出せる点にある。
 
-本コース終了時、`cargo test clob_precompile_round_trip` が pass する。スマートコントラクトの call が precompile 経由で order を発注し、既存の book state とマッチし、生じた fill が bridge へ流れる、というラウンドトリップが通る。
+本コース終了時、`cargo test clob_precompile_round_trip` が pass する。スマートコントラクトの call が precompile 経由で order を発注し、既存の book state とマッチし、生じた約定が bridge へ流れる、というラウンドトリップが通る。
 
 ## 1. 終了時に手にするもの
 
@@ -36,22 +36,22 @@
 
 - **既知の EVM address に登録された custom precompile 2 個**:
   - `clob_read_best_bid` (read): best bid の `(price, qty)` を 64-byte response として返す。
-  - `clob_place_order` (write): calldata から order を decode し、CLOB に submit、fill 要約を返す。
-- **Custom EVM machinery** (`openhl_evm.rs`) — Reth の executor に precompile を配線する `EvmFactory` + `ExecutorBuilder`。
+  - `clob_place_order` (write): calldata から order を decode し、CLOB に submit、約定要約を返す。
+- **Custom EVM machinery** (`openhl_evm.rs`) — Reth の executor に precompile を組み込む `EvmFactory` + `ExecutorBuilder`。
 - **Bridge 統合** — `LiveRethEvmBridge` が custom EVM 付きの Reth node を spawn するため、precompile へのスマートコントラクト call は bridge が所有するのと同じ CLOB instance に触れる。
 
-openhl では **6 commit 分** の作業 (~860 LOC)、11 レッスン + capstone に分割。End-to-end テストは ~3 秒: Reth を bootstrap し、薄い Solidity wrapper を deploy する (もしくはエンジン経由で直接 call)、precompile を trigger、fill を assert する。
+openhl では **6 commit 分** の作業 (~860 LOC)、11 レッスン + capstone に分割。End-to-end テストは ~3 秒: Reth を bootstrap し、薄い Solidity wrapper を deploy する (もしくはエンジン経由で直接 call)、precompile を trigger、約定を assert する。
 
 ## 2. 終了時にも手にしないもの
 
 本コースが扱うのは **openhl Stage 9 (9a-9e) のみ**。以下は扱わない:
 
-- **Fill を実 EVM transaction として block body にエンコードすること**。Fill は依然 payload に attach された並行リスト (course 7 L12 の状況) のまま。Course 8 では fill を *EVM 実行から見える* ようにするが、*block body の一部に* はしない。それは将来のコースの仕事。
+- **約定を実 EVM transaction として block body にエンコードすること**。約定は依然 payload に attach された並行リスト (course 7 L12 の状況) のまま。Course 8 では約定を *EVM 実行から見える* ようにするが、*block body の一部に* はしない。それは将来のコースの仕事。
 - **Funding state machine**。Stage 8b / course 9 の領分。
 - **Liquidation、oracle、perp 固有の math**。Stage 9 には含まれない。
 - **Multi-market precompile**。Stage 9 は CLOB ひとつだけ。production では market ごとに 1 precompile を置くか、market-id calldata 付きで 1 つにまとめる。
 
-本コースを終えると、スマートコントラクトが CLOB を read/write できるチェーンが手に入る。これは **大きな** capability ジャンプだ — 「チェーンのどこかに orderbook がある」と「チェーンそのものが orderbook + EVM である」の違い。ただしループを完全に閉じる (fill を tx として block body に戻す) のは下流の仕事。
+本コースを終えると、スマートコントラクトが CLOB を read/write できるチェーンが手に入る。これは **大きな** capability ジャンプだ — 「チェーンのどこかに orderbook がある」と「チェーンそのものが orderbook + EVM である」の違い。ただしループを完全に閉じる (約定を tx として block body に戻す) のは下流の仕事。
 
 ## 3. 前提
 
@@ -110,17 +110,17 @@ cargo test -p openhl-evm clob_fills_flow_into_payload --release 2>&1 | tail -5
 | **L0** | Orientation | (本レッスン) | セットアップ確認 |
 | **L1** | Custom EVM bootstrap | `openhl_evm.rs` — EvmFactory パターン + 依存 | `cargo check -p openhl-evm` |
 | **L2** | Custom EVM bootstrap | `precompiles/mod.rs` — Stage 9a の hardcoded read precompile + registry | precompile がコンパイル |
-| **L3** | Custom EVM bootstrap | `OpenHlExecutorBuilder` + NodeBuilder 配線; precompile を call する smoke test (Stage 9e) | `precompile_is_callable_via_registry` が pass |
+| **L3** | Custom EVM bootstrap | `OpenHlExecutorBuilder` + NodeBuilder 統合; precompile を call する smoke test (Stage 9e) | `precompile_is_callable_via_registry` が pass |
 | **L4** | Read precompile | install_clob() — Arc-shared CLOB state、precompile 注入用 | bridge が shared state でコンパイル |
-| **L5** | Read precompile | read precompile を live CLOB state に配線 (Stage 9b 本体) | precompile が real best_bid を返す |
+| **L5** | Read precompile | read precompile を live CLOB state に接続 (Stage 9b 本体) | precompile が実際の best_bid を返す |
 | **L6** | Read precompile | end-to-end test: read precompile が bridge.submit_order の結果を反映 | integration test pass |
 | **L7** | Write precompile | `clob_place_order` signature + calldata decoding (Stage 9c part 1) | precompile が正しく decode する |
-| **L8** | Write precompile | 実装: CLOB に submit + fill 要約を返す (Stage 9c part 2) | precompile が正しく write する |
-| **L9** | Bridge 統合 | `install_fill_sink()` — precompile が produce した fill が bridge の pending_fills に流れる (Stage 9c+) | precompile-placed fill が bridge に届く |
+| **L8** | Write precompile | 実装: CLOB に submit + 約定要約を返す (Stage 9c part 2) | precompile が正しく write する |
+| **L9** | Bridge 統合 | `install_fill_sink()` — precompile が生成した約定が bridge の pending_fills に流れる (Stage 9c+) | precompile-placed 約定が bridge に届く |
 | **L10** | Bridge 統合 | bridge が custom-EVM Reth node に対して spawn (Stage 9d) | full pipeline test pass |
-| **L11** | Capstone | recap、次は何か (funding via course 9、fill-as-EVM-tx として future course) | (テストなし — recap) |
+| **L11** | Capstone | recap、次は何か (funding via course 9、約定 as EVM-tx として future course) | (テストなし — recap) |
 
-**マイルストーンは L10。** L10 を終えると、live な Reth node 上で EVM から呼べる CLOB が手に入る: スマートコントラクトが precompile を call し、matching engine が走り、fill が bridge を経由して payload に現れる。L11 では「それでも何が足りないか」を名指す (fill はまだ EVM tx になっていない — それは Stage 9 の範囲を超える)。
+**マイルストーンは L10。** L10 を終えると、live な Reth node 上で EVM から呼べる CLOB が手に入る: スマートコントラクトが precompile を call し、matching engine が走り、約定が bridge を経由して payload に現れる。L11 では「それでも何が足りないか」を名指す (約定はまだ EVM tx になっていない — それは Stage 9 の範囲を超える)。
 
 ## 6. 答え合わせの規律 (前と同じ)
 

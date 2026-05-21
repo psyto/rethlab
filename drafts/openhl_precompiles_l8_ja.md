@@ -21,13 +21,13 @@
 
 ## ゴール
 
-このレッスンで掴む概念：
+このレッスンで掴む概念:
 
-- **precompile は on-chain な caller を代表する** — テストコードが `book.lock().submit(...)` を直接呼ぶのは bridge (off-chain) の模倣。`place_order` が book に書き込むのは EVM transaction (on-chain) の模倣。L8 は EVM 実行が CLOB state を mutate し始める瞬間だ。
-- **precompile 2 つ・Arc 1 つ・共有 state = ラウンドトリップ成立** — 両方の precompile が `CLOB_STATE` を介して read/write するので、`0x...0c1c` 経由の write が即座に `0x...0c1b` 経由の read から見える。L4 のアーキテクチャはまさにこの瞬間のために設計されていた。
-- **schema-first だから behavior-second は小さい** — L7 では ~70 行 (定数、atomic、parser、registration、tests) を書いた。L8 では ~7 行 (submit 呼び出し + binding rename + テスト拡張) だけ。先に契約を固定したので、挙動の追加が圧縮されている。
-- **side-effect のテストには handle を保持する必要がある** — L7 の malformed-input テストは book を check できなかった (参照を保持していなかったから)。L8 では `let book = Arc::new(...); install_clob(book.clone());` で修正する。clone することが「戻り値のテスト」と「state のテスト」を分ける鍵だ。
-- **`_result` と `_` の future-intent としての使い分け** — `_result` は「値は見えるが今は使わない、将来使う予定」、`_` (素) は「明示的に使わない」。L8 では `_result` に bind し、L9 で `fills` に改名する。
+- **precompile は on-chain な caller を代表する。** テストコードが `book.lock().submit(...)` を直接呼ぶのは bridge (off-chain) の模倣。`place_order` が book に書き込むのは EVM transaction (on-chain) の模倣。L8 は EVM 実行が CLOB state を変更し始める瞬間だ。
+- **precompile 2 つ・Arc 1 つ・共有 state = ラウンドトリップ成立。** 両方の precompile が `CLOB_STATE` を介して read/write するため、`0x...0c1c` 経由の write が即座に `0x...0c1b` 経由の read から見える。L4 のアーキテクチャはまさにこの瞬間のために設計されていた。
+- **schema-first だから behavior-second は小さい。** L7 では ~70 行 (定数、atomic、parser、registration、tests) を書いた。L8 では ~7 行 (submit 呼び出し + binding rename + テスト拡張) だけ。先に契約を固定したため、挙動の追加が圧縮されている。
+- **副作用のテストには handle を保持する必要がある。** L7 の malformed-input テストは book をチェックできなかった (参照を保持していなかったため)。L8 では `let book = Arc::new(...); install_clob(book.clone());` で修正する。clone することが「戻り値のテスト」と「state のテスト」を分ける鍵だ。
+- **`_result` と `_` の future-intent としての使い分け。** `_result` は「値は見えるが今は使わない、将来使う予定」、`_` (素) は「明示的に使わない」。L8 では `_result` に bind し、L9 で `fills` に改名する。
 
 検証：
 
@@ -141,7 +141,7 @@ L7 の本体を探す。該当部分は order ID 割り当てと出力 encoding 
 L7 からの変更点：
 - `if state.as_ref().is_none() { ... }; drop(state);` を `let Some(clob) = state.as_ref() else { ... };` に置き換える — `let-else` binding なら、`None` の早期 return 後も `clob` を使い続けられる。
 - `Some` で bind したあと、**`state` を drop してはいけない** — `clob`（`state` への参照）を `clob.lock()` 呼び出しまで有効に保ちたいので、`state` が生きている必要がある。
-- `let _result = book.submit(...)` — `submit` は `Vec<Fill>`（マッチングエンジンが生んだ fill）を返す。L8 ではこれを無視する。**L9 でこの fill を bridge に route する** が、今は `let _result` で clippy の unused return value 警告を黙らせる。
+- `let _result = book.submit(...)` — `submit` は `Vec<Fill>`（マッチングエンジンが生んだ約定）を返す。L8 ではこれを無視する。**L9 でこの約定を bridge に route する** が、今は `let _result` で clippy の unused return value 警告を黙らせる。
 - `drop(book)` — Book の mutex ガードを明示的に drop する。`out[24..32]` のコピーと `Ok(...)` の return は、Book のロックを保持せずに行う。hot path 向けのちょっとした最適化だ。
 
 **binding の `_` 接頭辞も外す**（今度は実際に使うので）：
@@ -185,7 +185,7 @@ doc コメントも更新する — L7 で書いた「submit はまだ呼ばな�
 /// precompile and the bridge are write-side independent.
 ```
 
-末尾の「Side note」は次のギャップを明示している — `submit` が返した fill を捨てている、という点だ。**そのギャップを埋めるのが L9。** doc コメントに書いておくことで、将来の読者にも「これは認識済みのギャップで、見落としではない」と伝わり、悩む時間を節約できる。
+末尾の「Side note」は次のギャップを明示している — `submit` が返した約定を捨てている、という点だ。**そのギャップを埋めるのが L9。** doc コメントに書いておくことで、将来の読者にも「これは認識済みのギャップで、見落としではない」と伝わり、悩む時間を節約できる。
 
 > 🛑 **やりがちな勘違い。** 「unused 警告を抑えるだけなら、`_result` の underscore に意味はあるのか?」 — **`let _result = ...` と `let _ = ...` はどちらも警告は抑える。** 違いは：`let _result` は値を bind してスコープの終わりで drop する一方、`let _ = ...` は値を **即座に** drop する（次の文より前に）。`submit` のケースでは、`_result` を後で読むわけではないのでどちらでも動く。だが `let _result` は「値に意味のある名前があり、将来使う予定がある」ときの慣習だ — L9 で本来の名前に bind して route するように。**`_result` は「将来の意図」のマーカーだ。**
 
@@ -376,7 +376,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 45 filtered out
 
 3. **side-effect をテストするには handle を保持しておく必要がある。** L7 の malformed-input テストは参照を保持していなかったので、book を確認できなかった。L8 では `let book = Arc::new(...); install_clob(book.clone());` でこれを直す。**clone のあるなしが「戻り値テスト」と「state テスト」の差だ。** clone のコストは atomic increment 1 回ぶんで安価、効用は「部分的な write が起きていない」ことを証明できる点にある。
 
-4. **`_result` は将来の意図を示すマーカー。** L8 では `submit` が返す fill を `_result` に bind して無視する。L9 では `fills`（underscore なし）に bind して route する。命名規約は次のとおり：`_name` は「値の存在は認識しており、今は使わないが将来使う予定」、`_`（むき出し）は「明示的に使わない、将来も使う予定はない」。状況に応じて選ぶ。
+4. **`_result` は将来の意図を示すマーカー。** L8 では `submit` が返す約定を `_result` に bind して無視する。L9 では `fills`（underscore なし）に bind して route する。命名規約は次のとおり：`_name` は「値の存在は認識しており、今は使わないが将来使う予定」、`_`（むき出し）は「明示的に使わない、将来も使う予定はない」。状況に応じて選ぶ。
 
 ## 答え合わせ
 
@@ -397,7 +397,7 @@ git checkout main
 ## よくある質問
 
 **Q: `Book::submit` の戻り値は何で、なぜ捨てるのか?**
-`Book::submit(order)` は `Vec<Fill>` を返す — 新しい order が反対側の resting order とマッチして生じた fill のリストだ。marketable な Buy を submit すれば 1 つ以上の Sell order を消費し、マッチごとに 1 つの Fill が生まれる。L8 ではこれを捨てる — bridge の `pending_fills`（次の payload に attach される）にはまだ precompile が繋がっていないからだ。**L9 で、`install_clob` を鏡写しにした `install_fill_sink` パターンで繋ぎ込む。**
+`Book::submit(order)` は `Vec<Fill>` を返す — 新しい order が反対側の resting order とマッチして生じた約定のリストだ。marketable な Buy を submit すれば 1 つ以上の Sell order を消費し、マッチごとに 1 つの Fill が生まれる。L8 ではこれを捨てる — bridge の `pending_fills`（次の payload に attach される）にはまだ precompile が繋がっていないからだ。**L9 で、`install_clob` を鏡写しにした `install_fill_sink` パターンで繋ぎ込む。**
 
 **Q: `place_order` を `staticcall` から呼んだらどうなる?**
 staticcall は read-only な呼び出しで、呼び先が state を mutate しようとすると Solidity 側が revert する。**ただし precompile については、EVM は precompile 境界でこれを強制しない** — `STATICCALL` で呼ばれたときに書き込みを拒否するのは precompile 側の責任になる。v0 ではチェックしていない — 強い意志を持ったコントラクトは `0x...0c1c` を STATICCALL でき、こちらは何の抵抗もなく book に書き込んでしまう。**これは既知の soundness gap だ。** production では call context（`is_static`）を見て reject すべきだが、v0 のスコープ外とする。
@@ -410,7 +410,7 @@ staticcall は read-only な呼び出しで、呼び先が state を mutate し�
 
 ## 次のレッスン（L9）
 
-L9 では、L8 の doc コメントに残した「fill を捨てている」というギャップを閉じる。`CLOB_STATE` と対になる `FILL_SINK` static を追加する — プロセスグローバルな `Option<Arc<Mutex<Vec<Fill>>>>` だ。`place_order` は fill を sink に push するようになる。bridge の `pending_fills` フィールドは `Mutex<...>` から `Arc<Mutex<Vec<Fill>>>` に変える。bridge の `new()` がそれを FILL_SINK として install する。L9 を終えると、**EVM 経由で発注された order が生んだ fill が、bridge の payload-attached な fill stream に流れ込むようになる** — precompile と bridge は書き込み側でも独立ではなくなる。
+L9 では、L8 の doc コメントに残した「約定を捨てている」というギャップを閉じる。`CLOB_STATE` と対になる `FILL_SINK` static を追加する — プロセスグローバルな `Option<Arc<Mutex<Vec<Fill>>>>` だ。`place_order` は約定を sink に push するようになる。bridge の `pending_fills` フィールドは `Mutex<...>` から `Arc<Mutex<Vec<Fill>>>` に変える。bridge の `new()` がそれを FILL_SINK として install する。L9 を終えると、**EVM 経由で発注された order が生んだ約定が、bridge の payload-attached な約定 stream に流れ込むようになる** — precompile と bridge は書き込み側でも独立ではなくなる。
 ````
 
 ---
@@ -445,4 +445,4 @@ L8 は `a8823a1`（Stage 9c）を引用。L8 終了時点で `crates/evm/src/pre
 - **§考えてみよう「precompile が別々の global を持っていたら？」** が共有 state アーキテクチャを正当化。
 - **§設計の振り返り 1** — schema first だから behavior second は小さい — が L7/L8 split を retrospect。
 - **§よくある質問の `staticcall` + soundness gap** が v0 制約に正直。
-- **L9 プレビュー**が次のギャップ（fill ルーティング）を指す。
+- **L9 プレビュー**が次のギャップ（約定のルーティング）を指す。

@@ -23,11 +23,11 @@
 
 このレッスンで掴む概念:
 
-- **単項マイナス 1 つが符号規約全体を担う** — `-delta_unscaled` で「market 中心（longs が支払う）」から「account 中心（`Notional` 正 = 受取）」へ flip する。符号反転点が 2 箇所あればバグの表面積も 2 倍になる。1 箇所に集約するのが契約。
-- **保存則を proptest で pin する** — balanced book の settlement 合計は、saturation を踏まない範囲では「ちょうど」ゼロ。`-x/d = -(x/d)`（正の `d` で）が整数除算でも成立するからだ。Funding は再配分するだけで quote currency を生成も破壊もしない。
-- **Flat position は filter する、エラーにしない** — `size == 0` は黙ってドロップする。`Result<Vec<Settlement>, FlatPositionError>` を返したら、呼び出し側に「異常ではない条件」を扱わせることになる。Flat position は*想定内*の状態であって例外ではない。
-- **最も制限の少ない引数型を受け取る** — `positions: &[Position]`（スライス借用）なら呼び出し側が所有権を保持し、tick 間で再利用できる。`Vec<Position>` を要求すると毎回 clone を強制してしまう。
-- **Proptest のレンジは property が*厳密に*成立するように選ぶ** — `size in 1..1M` で i128 積が `saturating_mul` の clamp 閾値を踏まないようにする。レンジを広げると「合計 == 0」を「`sum.abs() < epsilon`」に弱める必要が出てくる — それは不変条件ではなく願望の property になってしまう。
+- **単項マイナス 1 つが符号規約全体を担う** — `-delta_unscaled` で「市場中心（longs が支払う）」から「アカウント中心（`Notional` 正 = 受取）」へと flip する。符号反転点が 2 箇所あれば、バグの表面積も 2 倍になる。1 箇所に集約することが契約だ。
+- **保存則を proptest で pin する** — balanced book の settlement の合計は、saturation を踏まない範囲では「ちょうど」ゼロだ。正の `d` のもとで `-x/d = -(x/d)` が整数除算でも成立するからだ。Funding は再配分するだけで、quote currency を生成も破壊もしない。
+- **Flat position はフィルタする、エラーにはしない** — `size == 0` は黙ってドロップする。`Result<Vec<Settlement>, FlatPositionError>` を返してしまうと、呼び出し側に「異常ではない条件」まで扱わせることになる。Flat position は*想定内*の状態であって例外ではない。
+- **最も制約の弱い引数型を受け取る** — `positions: &[Position]`（スライスの借用）なら呼び出し側が所有権を保持し、tick をまたいで再利用できる。`Vec<Position>` を要求してしまうと毎回 clone を強制することになる。
+- **Proptest のレンジは property が*厳密に*成立するように選ぶ** — `size in 1..1M` であれば i128 の積が `saturating_mul` の clamp 閾値を踏まずに済む。レンジを広げると「合計 == 0」を「`sum.abs() < epsilon`」へと弱める必要が出てくる — それは不変条件ではなく願望の property になってしまう。
 
 検証：
 
@@ -61,7 +61,7 @@ L6 後の状態：
 - 10 テスト pass、proptest 1 つも pass。
 - `saturate_i128_to_i64` のユーザは 1 つだけ（`compute_premium`）。
 
-L7 では pipeline の最終段を配線する — rate をアカウントごとの settlement に落とし込む段だ。同時に、saturate helper の 2 番目のユーザも追加することになる。
+L7 では pipeline の最終段を組み立てる — rate をアカウントごとの settlement に落とし込む段だ。同時に、saturate helper の 2 番目のユーザも追加することになる。
 
 ## プラン
 

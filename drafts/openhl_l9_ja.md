@@ -23,12 +23,12 @@
 
 このレッスンで掴む概念:
 
-- **runtime ではなく handshake 用 interface としての `Node`** — `OpenHlNode` は長命な設定 (key、validator set、home dir、moniker) を保持し、engine を *構築* する。実際に走っている actor system は `start()` が返す `OpenHlNodeHandle` の中にある。構築と実行は別ライフサイクルで、別の型に住む。
-- **actor system spawn の surface** — `start_engine` が実際に何をするか (ractor cell の spawn、libp2p バインド、`Channels<OpenHlContext>` 確保)、なぜ `EngineHandle` を返すか、`OpenHlNodeHandle` がそれを `NodeHandle<OpenHlContext>` trait のためにどう wrap するか。
-- **`Mutex<Option<Channels>>` の take-once セマンティクス** — channel handle がちょうど 1 回しか取り出せない理由。L10 の app loop がそれを消費し、以降の呼び出しは `None` を返す。所有権が移動した、というクリーンなシグナルになる。
-- **address 導出の集中管理** — `SHA-256(pubkey)[12..32]` を *1 箇所* (`get_address`) にだけ書き、L6 runner の helper と一致することを test で assert する。集中化 + 検証テストはファイル間の silent な drift を防ぐ。
-- **`todo!()` ではなく型安全な placeholder** — `run()` は panic ではなく `Err("not yet implemented (L10)")` を返す。これを呼んだコードは grace に失敗し、次のレッスンへの pointer 付きで止まる。PR や stale な tab を跨いでも生き延びるパンくずだ。
-- **smoke test が必要な理由** — L8 のコンパイル時 `assert_impl_all!` は codec が trait を満たすことを証明した。Smoke test は *runtime* path — spawn、channel allocation、libp2p バインド、kill 伝播 — が end-to-end で動くことを証明する。型は必要だが十分ではない。
+- **runtime ではなく handshake 用 interface としての `Node`。** `OpenHlNode` は長命な設定 (key、validator set、home dir、moniker) を保持し、engine を *構築* する。実際に走っている actor system は `start()` が返す `OpenHlNodeHandle` の中にある。構築と実行は別ライフサイクルで、別の型に住む。
+- **actor system spawn の surface。** `start_engine` が実際に何をするか (ractor cell の spawn、libp2p バインド、`Channels<OpenHlContext>` 確保)、なぜ `EngineHandle` を返すか、`OpenHlNodeHandle` がそれを `NodeHandle<OpenHlContext>` trait のためにどう wrap するか。
+- **`Mutex<Option<Channels>>` の take-once セマンティクス。** channel handle がちょうど 1 回しか取り出せない理由。L10 の app loop がそれを消費し、以降の呼び出しは `None` を返す。所有権が移動した、というクリーンなシグナルになる。
+- **address 導出の集中管理。** `SHA-256(pubkey)[12..32]` を *1 箇所* (`get_address`) にだけ書き、L6 runner の helper と一致することをテストで assert する。集中化 + 検証テストの組み合わせが、ファイル間の silent な drift を防ぐ。
+- **`todo!()` ではなく型安全な placeholder。** `run()` は panic ではなく `Err("not yet implemented (L10)")` を返す。これを呼んだコードは graceful に失敗し、次のレッスンへの pointer 付きで止まる。PR や stale な tab を跨いでも生き延びるタイプのパンくずだ。
+- **smoke test が必要な理由。** L8 のコンパイル時 `assert_impl_all!` は codec が trait を満たすことを証明した。Smoke test は *runtime* path — spawn、channel allocation、libp2p バインド、kill 伝播 — が end-to-end で動くことを証明する。型レベルは必要だが十分ではない。
 
 検証:
 
@@ -48,7 +48,7 @@ test node::tests::start_engine_smoke_spawns_and_kills ... ok
 
 - `crates/consensus/Cargo.toml` に 1 dep 追加: `informalsystems-malachitebft-app-channel`。
 - `crates/consensus/src/node.rs` — 新規ファイル (~310 行)、`OpenHlNode`、`OpenHlConfig`、`OpenHlGenesis`、`OpenHlPrivateKeyFile`、`OpenHlNodeHandle`、`impl Node for OpenHlNode` (5 associated type、12 method)、unit test 4 個 (private-key 往復、config defaults、address 導出、`start_engine` smoke) を含む。
-- `crates/consensus/src/lib.rs` — `pub mod node;` を配線する。
+- `crates/consensus/src/lib.rs` — `pub mod node;` を組み込む。
 
 ## おさらい
 
@@ -70,7 +70,7 @@ crates/consensus/src/types/               — 型ファイル 7 個
 
 1. **`crates/consensus/Cargo.toml` に 5 個の依存を追加する** — `informalsystems-malachitebft-app-channel` と `informalsystems-malachitebft-config`、signing-ed25519 に `serde` feature を有効化、`serde` と `tokio` をランタイム dep (dev だけでなく) に追加、`tempfile` を dev-dep に追加。
 2. **`crates/consensus/src/node.rs` を作成する** — `OpenHlConfig` (impl `NodeConfig`)、`OpenHlGenesis` (unit struct)、`OpenHlPrivateKeyFile` (wire wrapper)、`OpenHlNodeHandle` (`start()` の戻り値)、`OpenHlNode` (メイン struct)、そして 5 個の関連型と 12 個のメソッドを持つ `impl Node for OpenHlNode`。
-3. **`pub mod node;`** を `lib.rs` に配線する。
+3. **`pub mod node;`** を `lib.rs` に組み込む。
 4. **ユニットテストを 4 個** `node.rs` に追加する。
 5. **実行** — `cargo test -p openhl-consensus` で 20 個合格する。
 6. **じっくり見届ける** — `start_engine_smoke_spawns_and_kills` が 0.02 秒で合格するところを。**自分のコードが動く BFT エンジンになる瞬間だ。**
@@ -322,7 +322,7 @@ impl NodeHandle<OpenHlContext> for OpenHlNodeHandle {
 **なぜ `std::sync::Mutex` ではなく `tokio::sync::Mutex` を使うのか?** `take_channels()` が `async` で、ロックが `.await` 境界をまたいで保持されるからだ。`std::sync::Mutex` だと executor スレッド全体をブロックしてしまう。`tokio::sync::Mutex` は協調的に yield する。
 
 `NodeHandle` impl はこの段階ではほぼ placeholder だ:
-- `subscribe()` は **新規** の `TxEvent::subscribe()` を返す — producer が attach されていない空のイベントストリームだ。L10 で本物を配線する。
+- `subscribe()` は **新規** の `TxEvent::subscribe()` を返す — producer が attach されていない空のイベントストリームだ。L10 で本物を組み込む。
 - `kill()` は本物だ — actor cell を kill し、tokio task を abort する。これが `start_engine_smoke_spawns_and_kills` で exercise される。
 
 ### Step 5: `OpenHlNode` struct + `Node` impl
@@ -480,7 +480,7 @@ impl Node for OpenHlNode {
 
 > 🛑 **やりがちな勘違い。** 「なぜ `start()` は codec を 2 回取るのか?」 **エンジンが WAL 用と Network gossip 用に別々の codec スロットを持つからだ。** 別の型でも構わない — 例えば WAL は bincode、Network は protobuf でもよい。こちらのケースでは両方 `OpenHlCodec` だが、API は同一だと仮定しない。別々に渡すことで、一方だけを差し替えられる。
 
-### Step 6: `node.rs` を `lib.rs` に配線
+### Step 6: `node.rs` を `lib.rs` に組み込む
 
 ```rust
 //! Consensus layer — Malachite BFT.
@@ -670,7 +670,7 @@ L8 のコンパイル時アサーションは `OpenHlCodec: WalCodec + Consensus
 
 ## 次のレッスン (L10)
 
-エンジンは動く状態になった。だが — 致命的に — **エンジンがメッセージを送ってきているのに、こちらは無視している。** Actor system は parked 状態で、app loop が `Channels<OpenHlContext>` から消費し、`AppMsg::ProposeValue` や `AppMsg::Decided` などに応答するのを待っている。L10 で app loop を実装する: channel に対する `tokio::select` + state struct + エンジンメッセージを `InMemoryEvmBridge` にルートするハンドラ。L10 完了で、`cargo test first_block_via_engine_actors` がフルな engine pipeline 経由で実 block を produce する。
+エンジンは動く状態になった。だが — 致命的に — **エンジンがメッセージを送ってきているのに、こちらは無視している。** Actor system は parked 状態で、app loop が `Channels<OpenHlContext>` から消費し、`AppMsg::ProposeValue` や `AppMsg::Decided` などに応答するのを待っている。L10 で app loop を実装する: channel に対する `tokio::select` + state struct + エンジンメッセージを `InMemoryEvmBridge` にルートするハンドラ。L10 完了で、`cargo test first_block_via_engine_actors` がフルな engine pipeline 経由で実 block を 生成する。
 ````
 
 ---

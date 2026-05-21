@@ -22,11 +22,11 @@
 
 このレッスンで掴む概念:
 
-- **Saturate-not-panic-not-wrap は consensus で許される唯一の overflow** — panic は validator を halt させ network から fork off する。Wrap はコンパイラバージョンによって挙動が変わり、「定義されているが間違った」値を生む。Saturate ならすべての validator が同じ bounded value に到達する。Consensus liveness を保てる他の選択肢はない。
-- **符号を意識した saturation override** — `i64::try_from` は失敗を報告するが方向は教えない。`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })` の closure が方向を復元する。`i64::MAX` 固定にすると `i128::MIN` が正に flip して符号が静かに壊れる。
-- **手書きトレースと proptest は補完関係であって冗長ではない** — proptest のランダムサンプリングは `i128::MAX`（2^129 のうちの 1 点）にまず当たらない。境界は手書きでしか pin できない。Proptest は interior の property に強く、手書きは corner に強い。
-- **テストすべきは「実際に成立する不変条件」であって「願望の property」ではない** — 素朴な antisymmetry は magnitude も等しくあれと書きたくなるが、整数除算がそれを壊す。「符号が逆」という weaker な property をテストし、丸めの caveat を test コメントに残す。
-- **`checked_mul` + `Result` で本当に解決するわけではない理由** — error は最終的に bridge に届くが、bridge が取れる現実的な選択肢は「revert（fork）」「skip（silent inconsistency）」「cap で settle」の 3 つしかない。最後のものは saturate がそのまま実現してくれる挙動だ。
+- **Saturate でも panic でも wrap でもない、consensus で許される overflow は saturate だけ** — panic すると validator が halt し、ネットワークから fork off する。Wrap はコンパイラバージョン次第で挙動が変わり、「定義されているが間違った」値を生む。Saturate ならすべての validator が同じ bounded value に到達する。Consensus の liveness を保てる選択肢は他にない。
+- **符号を意識した saturation の override** — `i64::try_from` は失敗を報告してくれるが方向までは教えてくれない。`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })` の closure が方向を復元する。固定で `i64::MAX` を返すようにすると、`i128::MIN` が正に flip して符号が静かに壊れる。
+- **手書きトレースと proptest は補完関係であって冗長ではない** — proptest のランダムサンプリングは `i128::MAX`（2^129 通りのうちの 1 点）にまず当たらない。境界は手書きでしか pin できない。Proptest は interior の property に強く、手書きは corner に強い。
+- **テストすべきは「実際に成立する不変条件」であって「願望の property」ではない** — 素朴な antisymmetry は magnitude も等しくあれと書きたくなるが、整数除算がそれを壊す。だから「符号が逆」という weaker な property をテストし、丸めの caveat はテストコメントに残す。
+- **`checked_mul` + `Result` で本当に解決するわけではない理由** — エラーは最終的に bridge に届くが、bridge が取れる現実的な選択肢は「revert（fork）」「skip（silent inconsistency）」「cap で settle」の 3 つしかない。最後のものは saturate がそのまま実現してくれる挙動だ。
 
 新規関数なし、新規テストコードは ~5 行。**メンタルモデルこそがレッスンの本体だ。**
 

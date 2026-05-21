@@ -23,11 +23,11 @@
 
 このレッスンで掴む概念:
 
-- **両側の trait contract** — L3 の `ConsensusBridge` は *自分が所有* し execution が実装する trait だった。Malachite の `Context` は *Malachite が所有* し自分が実装する trait だ。インターフェイスの両方向が型レベルでそろう。
-- **Context associated-type パターン** — 単一の `OpenHlContext;` 空 struct が 10 個の sub-type (`Address`、`Height`、`Value`、`Validator`、`Vote`、…) に名前を付ける仕組み。state を一切持たない type-family idiom が、Malachite を chain-generic にしている。
-- **型システムが強制する不変条件** — `OpenHlValidatorSet::new()` が構築時に sort することで「未 sort な set」が表現不能になる。下流の method はすべて sort 済みを前提にしてよい。compiler が見張ってくれる。
-- **決定的な proposer 選択** — stake で sort 済みの set に対する `(height + round) % count`。全 validator が同一に検証できる最も単純な決定的アルゴリズム。洗練 (random beacon、rotation rule) は同じ trait surface の裏に隠せる。
-- **signing key の `PartialOrd / Ord`** — Malachite 内部のコレクションのために `OpenHlValidator` が total order を持つ必要がある理由、Ed25519 公開鍵がその ordering を無料で与えてくれる仕組み。
+- **両側の trait contract。** L3 の `ConsensusBridge` は *自分が所有* し execution が実装する trait だった。Malachite の `Context` は *Malachite が所有* し自分が実装する trait だ。インターフェイスの両方向が型レベルでそろう。
+- **Context associated-type パターン。** 単一の `OpenHlContext;` 空 struct が 10 個の sub-type (`Address`、`Height`、`Value`、`Validator`、`Vote`、…) に名前を付ける仕組み。state を一切持たない type-family idiom が、Malachite を chain-generic にしている。
+- **型システムが強制する不変条件。** `OpenHlValidatorSet::new()` が構築時に sort することで、「未 sort な set」が表現不能になる。下流の method はすべて sort 済みを前提にしてよい。compiler が見張ってくれる。
+- **決定的な proposer 選択。** stake で sort 済みの set に対する `(height + round) % count`。全 validator が同一に検証できる最も単純な決定的アルゴリズム。洗練 (random beacon、rotation rule) は同じ trait surface の裏に隠せる。
+- **signing key の `PartialOrd / Ord`。** Malachite 内部のコレクションのために `OpenHlValidator` が total order を持つ必要がある理由、Ed25519 公開鍵がその ordering を無料で与えてくれる仕組み。
 
 検証:
 
@@ -44,7 +44,7 @@ cargo test -p openhl-consensus
 - `crates/consensus/Cargo.toml` に Malachite 依存 2 つ + dev-dep 1 つ追加: `informalsystems-malachitebft-core-types`、`informalsystems-malachitebft-signing-ed25519`、`rand` (dev)。
 - `crates/consensus/src/types/` — 7 つの type ファイル (`address.rs`、`height.rs`、`value.rs`、`validator.rs`、`proposal.rs`、`proposal_part.rs`、`vote.rs`) と `mod.rs`。
 - `crates/consensus/src/context.rs` — `OpenHlContext` 空 struct と `impl Context for OpenHlContext` (4 つの factory method)。
-- `crates/consensus/src/lib.rs` — `pub mod context; pub mod types;` を配線する。
+- `crates/consensus/src/lib.rs` — `pub mod context; pub mod types;` を組み込む。
 
 ## おさらい
 
@@ -58,7 +58,7 @@ crates/consensus/Cargo.toml:
   openhl-types, async-trait, thiserror, eyre
 ```
 
-ここに Malachite を配線していく。
+ここに Malachite を組み込んでいく。
 
 ## 計画
 
@@ -74,7 +74,7 @@ crates/consensus/Cargo.toml:
    - `proposal_part.rs` — `OpenHlProposalPart` (unit struct — stream しない)
    - `vote.rs` — `OpenHlVote` — prevote または precommit
 3. **`crates/consensus/src/context.rs`** — `OpenHlContext` impl と、10 の type association に加えて **proposer-election アルゴリズム** を含む 4 つの factory method。
-4. **`crates/consensus/src/lib.rs`** — `pub mod types; pub mod context; pub use context::OpenHlContext;` で配線する。
+4. **`crates/consensus/src/lib.rs`** — `pub mod types; pub mod context; pub use context::OpenHlContext;` で組み込む。
 5. **`context.rs` 内に unit test を 5 つ追加する。**
 6. **`cargo test -p openhl-consensus` を実行** — 5 つすべてが pass する。
 
@@ -244,7 +244,7 @@ impl Value for OpenHlValue {
 
 `OpenHlValue` は L2 の `BlockHash` をラップする。`Value::Id` associated type は vote に乗るもの — consensus は full value に投票せず、value の *identifier* (hash) に投票する。ここでは `Id = BlockHash` なので、value と ID が同じデータになっている。
 
-> 🛑 **やりがちな勘違い。** 「`Value` を直接 `BlockHash` にすればいいのでは — なぜラップする?」 **`Value` trait に独自の bound があるからだ。** 具体的には `Value: Clone + Debug + Eq + Ord + Send + Sync` と `Value::Id` associated type の bound。`OpenHlValue` をラッパーにしておけば、`BlockHash` を変えずに「value とは何か」を独立に進化させられる。Module 2 (CLOB) で、`BlockHash` には無いフィールド (例: off-EVM fills のリスト) を足す可能性が高い。
+> 🛑 **やりがちな勘違い。** 「`Value` を直接 `BlockHash` にすればいいのでは — なぜラップする?」 **`Value` trait に独自の bound があるからだ。** 具体的には `Value: Clone + Debug + Eq + Ord + Send + Sync` と `Value::Id` associated type の bound。`OpenHlValue` をラッパーにしておけば、`BlockHash` を変えずに「value とは何か」を独立に進化させられる。Module 2 (CLOB) で、`BlockHash` には無いフィールド (例: off-EVM な約定 (fill) のリスト) を足す可能性が高い。
 
 3 つ書いたら `cargo check -p openhl-consensus` を走らせる。pass するはずだ。
 
@@ -623,7 +623,7 @@ proposer-election アルゴリズムだ。**`(height + round) % count`** がソ�
 
 これらは短い。全部フィールド代入だからだ。興味深いのは、`new_prevote` と `new_precommit` が同じ struct (`OpenHlVote`) を作るが `vote_type` の値が違う点だ — 型システムが construction の時点で区別を強制する。
 
-### Step 7: `lib.rs` に配線
+### Step 7: `lib.rs` に組み込む
 
 `crates/consensus/src/lib.rs` を開く。現状:
 
@@ -747,7 +747,7 @@ mod tests {
 1. **`validator_set_is_sorted_by_power_then_address`** — Power がシャッフルされた 3-validator set (100, 300, 200) を作り、出力が [300, 200, 100] であることを verify する。Step 4 の canonical なソート順が動くことを証明する。
 2. **`select_proposer_round_robins_deterministically`** — 同じ height + round → 同じ proposer (determinism)。違う height → 違う proposer (rotation)。
 3. **`new_proposal_round_trips_fields`** — `new_proposal` で構築し、`Proposal` trait メソッドで読み返す。factory ↔ accessor のペアを verify する。
-4. **`new_prevote_and_precommit_have_distinct_types`** — 同じ引数を渡しても、`new_prevote` は `VoteType::Prevote` を、`new_precommit` は `VoteType::Precommit` を produce する。factory が仕事をしていることを証明する。
+4. **`new_prevote_and_precommit_have_distinct_types`** — 同じ引数を渡しても、`new_prevote` は `VoteType::Prevote` を、`new_precommit` は `VoteType::Precommit` を 生成する。factory が仕事をしていることを証明する。
 5. **`height_increment_and_decrement`** — `INITIAL.increment() == 2`、`ZERO.decrement() == None`、`5.decrement() == Some(4)`。算術メソッドを verify する。
 
 Note: `h.increment()` であって `h.increment_by(1)` ではない — `increment` は `Height` trait のデフォルトメソッドで、内部で `increment_by(1)` を呼ぶ。`decrement` も同様。
@@ -784,7 +784,7 @@ test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 1. **Context sub-type 1 つにつき 1 ファイル。** 大きな `context.rs` に 10 個の型をインラインで定義することもできた。分けることで、(本レッスンや、後で個別の型を引用するレッスンの) walk-through が focused になる。1 ファイルで済むものが 8 ファイルになる、その代わりだ。分割を選んだ理由は **trait surface が独立に load-bearing だから** — `Validator` の決定は `Vote` の決定と別物だし、code review は変更が局所化されているほうが容易だ。
 
-2. **`OpenHlValidatorSet` は別の `sort()` メソッドではなく `new()` でソートする。** unsorted な set を construct できない、ということを意味する。型システムが「この set は常にソートされている」を encode し、unsorted な set を produce する API path が存在しない。これが伝播する: set の全メソッドがソート済み順序を仮定でき、それが compiler の enforce する不変量になる。
+2. **`OpenHlValidatorSet` は別の `sort()` メソッドではなく `new()` でソートする。** unsorted な set を construct できない、ということを意味する。型システムが「この set は常にソートされている」を encode し、unsorted な set を 生成する API path が存在しない。これが伝播する: set の全メソッドがソート済み順序を仮定でき、それが compiler の enforce する不変量になる。
 
 3. **`select_proposer = (height + round) % count`** — 最も単純なアルゴリズム。Malachite はもっと洗練された proposer selection (stake で weighted、同一 validator が連続しない rotation など) をサポートする。それでも最も単純なものを選ぶ理由は:
    - 決定的だ
@@ -829,7 +829,7 @@ openhl v0 では vote extension を使わないからだ。Production BFT chain 
 
 ## 次のレッスン (L7)
 
-10 個の Context sub-type と 4 つの factory method が揃った。Malachite はこちらの chain の address、height、value、validator、message を知っている状態だ。だが **まだ何も署名されていない。** L7 では `OpenHlSigningProvider` を impl する — `OpenHlVote` と `OpenHlProposal` メッセージに対して Ed25519 署名を produce する trait だ。これが Context surface の **もう半分** だ — Context が「これが私の型だ」と言い、SigningProvider が「これがその署名の作り方だ」と言う。
+10 個の Context sub-type と 4 つの factory method が揃った。Malachite はこちらの chain の address、height、value、validator、message を知っている状態だ。だが **まだ何も署名されていない。** L7 では `OpenHlSigningProvider` を impl する — `OpenHlVote` と `OpenHlProposal` メッセージに対して Ed25519 署名を 生成する trait だ。これが Context surface の **もう半分** だ — Context が「これが私の型だ」と言い、SigningProvider が「これがその署名の作り方だ」と言う。
 ````
 
 ---

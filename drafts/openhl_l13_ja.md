@@ -2,7 +2,7 @@
 
 > openhl SHA `0844d58` (Stage 7c — `validate_payload` が Reth の `EthBeaconConsensus` を走らせる) 基準。
 > コース: `building-openhl-consensus-ja` (track: `reth-l1-architect`, 10 コース中 6 番目)。
-> 注: L13 で bridge の両側が production-shape を強制される — `build_payload` は real Reth-shape header を合成し、`validate_payload` は Reth の real validator を走らせる。両者が **合意** しなければならない。つまり本レッスンが、production EIP-1559 数式、post-merge invariant、gas-limit drift ルールに触れる最初のレッスン。
+> 注: L13 で bridge の両側が production grade を強制される — `build_payload` は Reth 流の本物の header を合成し、`validate_payload` は Reth の本物の validator を走らせる。両者が **合意** しなければならない。つまり本レッスンが、production EIP-1559 数式、post-merge invariant、gas-limit drift ルールに触れる最初のレッスンだ。
 
 ---
 
@@ -24,11 +24,11 @@
 
 このレッスンで掴む概念:
 
-- **builder と validator が単一の真実を共有する** — `ChainSpec::next_block_base_fee` は builder が base fee を埋めるのに使うヘルパーで、`EthBeaconConsensus` が検証に使うのも同じヘルパーだ。算数の重複なし、hardfork 越しの drift リスクなし。Consensus-critical な build/validate ペアでは必ずこれを真似る。
-- **validator が builder に誠実さを強制する** — validator が走り出したら builder は手抜きできない。parent から gas_limit をコピー (1/1024 drift bound)、正しい EIP-1559 base fee、difficulty ゼロ (post-merge)、単調増加 timestamp。すべて機械的にチェックされる。
-- **validator の reject は crash ではなく通常動作** — validator が「malformed だ」と答えるのは `PayloadStatus::Invalid` であって `Err` ではない。Error を status に map することで engine が走り続け、次の proposal を選べる。DB エラーだけが `BridgeError::Internal` に escalate する。
-- **trait bound は incremental に広がる** — L12 は `BlockNumReader`、L13 は `BlockNumReader + HeaderProvider` を要求する。レッスンごとに新しい capability surface を露出する。Trait bound は spec — bridge が Reth surface のどこを要求するかをそのまま文書化する。
-- **`SealedHeader` は hash を cache する** — `Header` + 事前計算した `B256` を wrap することで、`.hash()` のたびに 500 byte を Keccak し直すコストを避ける。validator throughput では効くパターンだ。我々のテストでは μs オーダーだが、形として正しい。
+- **builder と validator が単一の真実を共有する。** `ChainSpec::next_block_base_fee` は builder が base fee を埋めるのに使うヘルパーで、`EthBeaconConsensus` が検証に使うのも同じヘルパーだ。算数の重複なし、hardfork を越えた drift リスクなし。consensus-critical な build/validate ペアでは必ずこれを真似る。
+- **validator が builder に誠実さを強制する。** validator が走り出したら builder は手抜きできない。parent から gas_limit をコピー (1/1024 drift bound)、正しい EIP-1559 base fee、difficulty ゼロ (post-merge)、単調増加 timestamp。すべて機械的にチェックされる。
+- **validator の reject は crash ではなく通常動作。** validator が「malformed だ」と答えるのは `PayloadStatus::Invalid` であって `Err` ではない。error を status に map することで engine は走り続け、次の proposal を選べる。DB エラーだけが `BridgeError::Internal` に escalate する。
+- **trait bound は段階的に広がる。** L12 は `BlockNumReader` を、L13 は `BlockNumReader + HeaderProvider` を要求する。レッスンごとに新しい capability surface を露出する。trait bound は spec — bridge が Reth surface のどこを要求するかをそのまま文書化する。
+- **`SealedHeader` は hash を cache する。** `Header` + 事前計算した `B256` を wrap することで、`.hash()` のたびに 500 byte を Keccak し直すコストを避ける。validator throughput では効いてくるパターンだ。本コースのテストでは μs オーダーの差だが、形として正しい。
 
 検証:
 
@@ -47,7 +47,7 @@ test live_node::tests::live_bridge_builds_on_real_genesis ... ok
 具体的な変更:
 
 - 新規 workspace dep 3 個 + 新規 evm production dep 4 個 (`reth-consensus`、`reth-ethereum-consensus`、`reth-chainspec`、`alloy-eips`)。
-- `crates/evm/src/live_node.rs` — 約 141 行変更。新規 struct field `chain_spec: Arc<ChainSpec>` と `validator: EthBeaconConsensus<ChainSpec>`。`build_payload` は production-shape の header を produce するようになる (parent 由来 gas_limit、`next_block_base_fee`、`difficulty: U256::ZERO`、snap した timestamp)。`validate_payload` は `EthBeaconConsensus::validate_header_against_parent` を呼ぶように書き直される。
+- `crates/evm/src/live_node.rs` — 約 141 行変更。新規 struct field `chain_spec: Arc<ChainSpec>` と `validator: EthBeaconConsensus<ChainSpec>`。`build_payload` は production grade の header を生成するようになる (parent 由来 gas_limit、`next_block_base_fee`、`difficulty: U256::ZERO`、snap した timestamp)。`validate_payload` は `EthBeaconConsensus::validate_header_against_parent` を呼ぶように書き直される。
 - **ファイルの shape は変わらない** — 同じ struct、同じ `ConsensusBridge` impl だ。変わるのは `validate_payload` が **何をするか** だ。
 
 ## おさらい
@@ -231,7 +231,7 @@ where
 - L12 でちょうど `BlockNumReader` 用に書いた — 残しておくことで L12→L13 の進行を文書化できる
 - 将来の caller は、number だけ必要なコードパスにより狭い bound を望むかもしれない
 
-### Step 5: `build_payload` をアップグレード — production-shape header
+### Step 5: `build_payload` をアップグレード — production grade な header
 
 これが load-bearing な変更だ。新しい `build_payload`:
 
@@ -474,7 +474,7 @@ cargo test
 
 よくあるエラーと対処:
 
-- **`assert_eq!(status, PayloadStatus::Valid)` が fail する** — 最も多い問題だ。`build_payload` が `EthBeaconConsensus` の拒否する header を produce している。可能性のある原因:
+- **`assert_eq!(status, PayloadStatus::Valid)` が fail する** — 最も多い問題だ。`build_payload` が `EthBeaconConsensus` の拒否する header を生成している。可能性のある原因:
   - `difficulty: U256::ZERO` を忘れている — デフォルトは非ゼロで、post-merge check が fail する。
   - `gas_limit: parent_header.gas_limit` を忘れている — デフォルトはゼロで、parent から 1/1024 以上 drift する。
   - base_fee の計算間違い — `chain_spec.next_block_base_fee(parent, timestamp)` を使うべきだ。
@@ -527,7 +527,7 @@ Validator と chain が、どの hardfork が active かについて合意しな
 
 ## 次のレッスン (L14)
 
-4 つの `ConsensusBridge` メソッドのうち 2 つは live な Reth に到達するようになった。**3 つ目 — `commit` — はまだ in-process な `chain: HashMap` に hash を記録するだけだ。** L14 (最後の大きなレッスン) で、これを real な **Engine API forkchoice update** に置き換える — Reth が production で block を commit するときに使う JSON-RPC call だ。L14 完了後、こちらの bridge は他のどの Ethereum CL client (Lighthouse、Prysm、Teku) も produce する同じ wire-format アクションを produce する。**L15 はそれを受けた capstone** だ — 1 ページの再キャップ、「構築したすべて」図、optional な production-readiness チェックリスト (block bodies、gossip codec、real WAL)。
+4 つの `ConsensusBridge` メソッドのうち 2 つは live な Reth に到達するようになった。**3 つ目 — `commit` — はまだ in-process な `chain: HashMap` に hash を記録するだけだ。** L14 (最後の大きなレッスン) で、これを real な **Engine API forkchoice update** に置き換える — Reth が production で block を commit するときに使う JSON-RPC call だ。L14 完了後、こちらの bridge は、他のどの Ethereum CL client (Lighthouse、Prysm、Teku) も生成するのと同じ wire-format アクションを生成するようになる。**L15 はそれを受けた capstone** だ — 1 ページの再キャップ、「構築したすべて」図、optional な production-readiness チェックリスト (block bodies、gossip codec、real WAL)。
 ````
 
 ---

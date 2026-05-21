@@ -22,10 +22,10 @@
 
 このレッスンで掴む概念:
 
-- **型安全性としての newtype** — `u64` を `AccountId` / `OrderId` / `Price` / `Qty` で wrap すると、引数の swap バグが runtime の暗黙の誤計上ではなくコンパイルエラーに変わる。
-- **整数のみの金銭計算** — `Price` と `Qty` は `u64` ベースで、`f64` は使わない。Float の中間値は境界で engine の厳密整数 invariant (例: 「fill は数量を保存する」) を壊す。
-- **役割に名前を付ける struct-style enum variant** — `OrderType::Limit { price }` は `Limit(Price)` より全ての pattern match 箇所で明瞭。位置ではなく field に *名前* があるため。
-- **Field-level 型と record-level 型の階層化戦略** — atomic な型は L1 に置き、以降の全レッスンが再利用する。Record 型 (`Order`、`Fill`) は L2 でその上に重ねる。
+- **型安全性としての newtype** — `u64` を `AccountId` / `OrderId` / `Price` / `Qty` で包むことで、引数を取り違えるバグを「実行時に静かに誤計上される問題」から「コンパイルエラー」へと格上げできる。
+- **金銭計算は整数のみで完結させる** — `Price` と `Qty` は `u64` ベース、`f64` は使わない。float の中間値が境界に紛れ込めば、engine の厳密整数 invariant (例:「約定は数量を保存する」) は一発で壊れる。
+- **役割を名前で示す struct スタイルの enum variant** — `OrderType::Limit { price }` は `Limit(Price)` よりも、すべての pattern match 箇所で意図が読み取れる。位置ではなく field に *名前* が付いているため。
+- **field-level 型と record-level 型を階層化する** — atomic な型は L1 で確定させ、以降のすべてのレッスンで再利用する。record 型 (`Order`、`Fill`) は L2 でその上に積み上げる。
 
 検証:
 
@@ -57,7 +57,7 @@ crates/consensus/         — フル BFT engine (Context, signing, codec, node, 
 bin/openhl/               — stub バイナリ
 ```
 
-`cargo test` で workspace 全体 ~38 個合格。`LiveRethEvmBridge::commit` が `ForkchoiceUpdated` を Reth に送る。**ただし `build_payload` が produce するのは空 block** — 中身に入れるものがない。
+`cargo test` で workspace 全体 ~38 個合格。`LiveRethEvmBridge::commit` が `ForkchoiceUpdated` を Reth に送る。**ただし `build_payload` が生成するのは空 block** — 中身に入れるものがない。
 
 ## 計画
 
@@ -67,7 +67,7 @@ bin/openhl/               — stub バイナリ
 2. **`crates/clob/` を workspace に登録** — ルート `Cargo.toml` の `[workspace.members]` に追加。
 3. **`openhl-clob` を workspace dependency に追加** — 他 crate が依存できるようにルート `Cargo.toml` に書く。
 4. **`src/types.rs` を書く** — newtype 4 個、`Side`、`OrderType`、`Display` impl。**Record 型はまだ書かない** (L2)。
-5. **`pub mod types;` と re-export を `src/lib.rs` に配線** — crate の public API を型として公開。
+5. **`pub mod types;` と re-export を `src/lib.rs` に組み込む** — crate の public API を型として公開。
 
 このレッスンが短いのは型が短いから。重要なのはコードではなく **設計判断** (なぜ raw `u64` ではなく newtype か、なぜ `Limit` が価格を struct field として運ぶのか、`Qty` の単位は何か)。
 
@@ -194,7 +194,7 @@ impl Side {
 }
 ```
 
-variant 2 個。`opposite()` メソッドは今のところ 1 行だが、後で load-bearing になる: taker order が来たとき book の **反対側** を walk して流動性を探すから。Buy taker は ask を walk し、Sell taker は bid を walk する。**ルールを `opposite()` に 1 度だけ encode しておけば、book コードを読むときどちらの side を walk するか忘れない。**
+variant 2 個。`opposite()` メソッドは今のところ 1 行だが、後で load-bearing になる: taker order が来たとき、book の **反対側** を順に辿って流動性を探すから。Buy taker は ask を上から順に辿り、Sell taker は bid を上から順に辿る。**ルールを `opposite()` に 1 度だけ encode しておけば、book コードを読むときどちらの side を辿るか忘れない。**
 
 `#[derive(PartialOrd, Ord)]` を **付けない** のは意図的。「Buy は Sell より小さい?」は無意味な問いだから。trait を抜くことで、caller が `if side < Side::Sell` を偶発的に書いて declaration 順 (`Buy < Sell`) という意図しない順序付けが効いてしまうのを防ぐ。
 
@@ -248,11 +248,11 @@ impl fmt::Display for Qty {
 }
 ```
 
-`Display` impl 3 個。**`AccountId` に Display を付けない** のは意図的。AccountId は opaque な ID なので、print したいなら生の `u64` ではなく chain 統合のマッピングが返す real address を print したいはず。`Display` を抜くと caller が明示的に扱わざるを得なくなる (例: `format!("{}", a.0)` または「chain の address renderer 経由で render」)。
+`Display` impl 3 個。**`AccountId` に Display を付けない** のは意図的。AccountId は opaque な ID なので、print したいなら生の `u64` ではなく chain 統合のマッピングが返す実際のアドレスを print したいはず。`Display` を抜くと caller が明示的に扱わざるを得なくなる (例: `format!("{}", a.0)` または「chain の address renderer 経由で render」)。
 
 `OrderId` は `"#42"` として format されるのでテスト出力が自然になる (`fill from #1 to #2`)。Price と Qty は単なる数値だが、`Display` impl があれば `.0` を書かずに `format!` / `println!` で使える。
 
-### Step 7: 型を `lib.rs` に配線
+### Step 7: 型を `lib.rs` に組み込む
 
 `crates/clob/src/lib.rs` を開く:
 

@@ -23,11 +23,11 @@
 
 このレッスンで掴む概念:
 
-- **stub による trait 充足** — 型レベルの incremental development。Malachite が呼ばないコードパスに 50 行の protobuf encoder を書くより、未実装を名乗る 4 行 stub のほうが正しい。万一呼ばれたら大声でエラーになる。
-- **sub-trait の blanket impl** — `WalCodec / ConsensusCodec / SyncCodec` は適切な `Codec<T>` 構成要素を実装すれば自動で付いてくる。`static_assertions::assert_impl_all!` テストが blanket impl の発火とコンパイル時 bound の実在を検証する。
-- **codec が crate graph 上どこに住むか** — codec は `openhl-types` ではなく `openhl-consensus` に置く。Malachite の `informalsystems-malachitebft-app` (libp2p、ractor) に依存するからだ。`types/` に置くと、`BlockHash` だけ欲しい下流 crate まで libp2p を引きずる。
-- **wire format vs. canonical signing format** — L7 の canonical encoding は *署名される対象*、L8 の codec は *ネットワークに流れるもの*。重なる部分はあるが同じではない。wire format には framing、versioning、length prefix が乗り、それらに署名は及ばない。
-- **L8 で 1 個の real codec で足りる理由** — 単一 validator devnet では `ProposalPart` しか round-trip しない。残り 7 つは peer を増やすか crash recovery しない限り発火しない gossip / sync / WAL パスだ。
+- **stub による trait 充足。** 型レベルの incremental development。Malachite が呼ばないコードパスに 50 行の protobuf encoder を書くより、未実装を名乗る 4 行の stub のほうが正しい。万一呼ばれたら大きな声でエラーになる。
+- **sub-trait の blanket impl。** `WalCodec / ConsensusCodec / SyncCodec` は適切な `Codec<T>` 構成要素を実装すれば自動でついてくる。`static_assertions::assert_impl_all!` テストが blanket impl の発火とコンパイル時 bound の実在を検証する。
+- **codec が crate graph 上どこに住むか。** codec は `openhl-types` ではなく `openhl-consensus` に置く。Malachite の `informalsystems-malachitebft-app` (libp2p、ractor) に依存するからだ。`types/` に置くと、`BlockHash` だけ欲しい下流 crate まで libp2p を引きずってしまう。
+- **wire format と canonical signing format の違い。** L7 の canonical encoding は *署名される対象*、L8 の codec は *ネットワークに流れるもの*。重なる部分はあるが同じではない。wire format には framing、versioning、length prefix が乗り、それらに署名は及ばない。
+- **L8 で 1 個の本物の codec で足りる理由。** 単一 validator devnet では `ProposalPart` しか round-trip しない。残り 7 つは peer を増やすか crash recovery しない限り発火しない gossip / sync / WAL のパスだ。
 
 検証:
 
@@ -43,7 +43,7 @@ cargo test -p openhl-consensus
 
 - `crates/consensus/Cargo.toml` に `informalsystems-malachitebft-app` + `static_assertions` (dev) を追加。
 - `crates/consensus/src/codec.rs` — 新規ファイル、`OpenHlCodec` 構造体、`CodecStub` エラー型、8 個の `Codec<T>` impl (1 個は `ProposalPart` 用 real、7 個は stub)、unit test 2 個。
-- `crates/consensus/src/lib.rs` — `pub mod codec;` を配線する。
+- `crates/consensus/src/lib.rs` — `pub mod codec;` を組み込む。
 
 ## おさらい
 
@@ -65,7 +65,7 @@ crates/consensus/src/context.rs            — OpenHlContext + Context impl
 
 1. **`crates/consensus/Cargo.toml` に `informalsystems-malachitebft-app` を追加する。** これが重量級だ — libp2p、ractor、フルな app 表面を推移的に引き込んでくる。これ以降の初回コンパイルは ~38 秒。
 2. **`crates/consensus/src/codec.rs` を作成する** — `OpenHlCodec` unit struct、`CodecStub` エラー、8 個の `Codec<T>` impl。
-3. **`pub mod codec;`** を `lib.rs` に配線する。
+3. **`pub mod codec;`** を `lib.rs` に組み込む。
 4. **実行** — `cargo test -p openhl-consensus` で 16 個合格する。
 5. **観察** — コンパイル時アサーションがコンパイルを通る。これがエンジンの codec trait bound を満たしたシグナルだ。
 
@@ -311,7 +311,7 @@ mod tests {
 
 > 🛑 **やりがちな勘違い。** 「なぜテストは空なのに pass するのか?」 **アサーションが型チェッカー側にあり、runtime にはないからだ。** `assert_wal_codec::<OpenHlCodec>()` と書くと、Rust はコンパイル時に `OpenHlCodec: WalCodec<OpenHlContext>` をチェックしなければならない。Bound が失敗すればファイルがコンパイルできず、`cargo test` はテスト失敗ではなく **コンパイルエラー** を報告する。これは Rust の一般的なパターンだ: 検証したい bound を持つ関数を呼ぶことで、runtime チェックをコンパイルチェックに変換する。
 
-### Step 6: codec を `lib.rs` に配線
+### Step 6: codec を `lib.rs` に組み込む
 
 `crates/consensus/src/lib.rs` を開く。現在:
 
@@ -415,7 +415,7 @@ Rust の trait システムは、runtime 構成に応じて impl を条件付き
 
 ## 次のレッスン (L9)
 
-Codec trait bound を満たした — `start_engine` の signature を満たせる状態になった。だが、codec の **値**、node config、validator set のいずれも、`start_engine` が要求する形ではまだ持っていない。L9 では `OpenHlNode` に `Node` trait を実装する: `OpenHlConfig` (NodeConfig impl)、`OpenHlGenesis`、`OpenHlPrivateKeyFile`、`OpenHlNodeHandle`、そして 5 つの関連型と 12 メソッドを持つ `Node` impl 本体、合計 ~300 行だ。L9 の capstone は `start_engine_smoke_spawns_and_kills` — `start_engine` を呼び、actor system が ~0.02 秒で spawn / tear down することを証明するテストだ。L9 完了でエンジンは boot する。L10-L15 では AppMsg loop と Live Reth 統合を配線していく。
+Codec trait bound を満たした — `start_engine` の signature を満たせる状態になった。だが、codec の **値**、node config、validator set のいずれも、`start_engine` が要求する形ではまだ持っていない。L9 では `OpenHlNode` に `Node` trait を実装する: `OpenHlConfig` (NodeConfig impl)、`OpenHlGenesis`、`OpenHlPrivateKeyFile`、`OpenHlNodeHandle`、そして 5 つの関連型と 12 メソッドを持つ `Node` impl 本体、合計 ~300 行だ。L9 の capstone は `start_engine_smoke_spawns_and_kills` — `start_engine` を呼び、actor system が ~0.02 秒で spawn / tear down することを証明するテストだ。L9 完了でエンジンは boot する。L10-L15 では AppMsg loop と Live Reth 統合を接続していく。
 ````
 
 ---

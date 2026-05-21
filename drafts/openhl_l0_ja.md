@@ -21,13 +21,13 @@
 
 これは「読む」コースではない。これは「**作る**」コースだ。
 
-これからの 14 レッスンで、空ディレクトリでの `cargo init` から始めて、最終的に実 Reth と実 Malachite を通じて 1 ブロックを end-to-end で駆動する Rust workspace を手にする。コードベースはすべて自分で 1 行ずつ書いたもので、出来上がる形は `psyto/openhl` の対応 Stage とほぼ同じになる。そのリポジトリは **答え合わせ用のリファレンス** として使う。
+これからの 14 レッスンで、空ディレクトリでの `cargo init` から始めて、最終的に実際の Reth と実際の Malachite を通じて 1 ブロックを end-to-end で駆動する Rust workspace を手にする。コードベースはすべて自分で 1 行ずつ書いたもので、出来上がる形は `psyto/openhl` の対応 Stage とほぼ同じになる。そのリポジトリを **答え合わせ用のリファレンス** として参照していく。
 
 Hyperliquid は 2025 年に $300B+ の perp 取引量を、完全クローズドソースのスタック — HyperBFT consensus、HyperCore matching engine、HyperEVM execution — の上で処理した。公開された Rust 実装はどこにもない。**OpenHL はそのスタックをオープンソースで実装したもの** であり、本コースでは openhl Module 1 の substrate を自分の手で組み上げる。
 
 ## 1. コース終了時点で手元にあるもの
 
-レッスン 14 を終える頃には、自分のマシンで `cargo test first_block_via_engine_actors` を走らせると、single-validator BFT consensus のラウンドが約 0.02 秒で pass する状態になる。EVM 層は実 Reth、BFT 層は実 Malachite。コードのパスは次のようになる:
+レッスン 14 を終える頃には、自分のマシンで `cargo test first_block_via_engine_actors` を走らせると、single-validator BFT consensus のラウンドが約 0.02 秒で pass する状態になる。EVM 層は実際の Reth、BFT 層は実際の Malachite。chain は **Consensus Layer (CL)** と **Execution Layer (EL)** の 2 層に分かれていて、本コースで両側を接続していく。コードのパスは次のようになる:
 
 ```
 自分のコード →
@@ -46,7 +46,7 @@ Hyperliquid は 2025 年に $300B+ の perp 取引量を、完全クローズド
 
 - `psyto/openhl` Module 1 の任意のコードを読み、なぜそこにそのコードがあるのかを説明する
 - Bridge contract の任意の部分を変更してテストを走らせ、何が壊れるかを観察する
-- substrate を fork して自分の Hyperliquid 形 chain を始める — `psyto/openhl` は依存先ではなく、自分の側のリファレンス実装になる
+- substrate を fork して自分の Hyperliquid 型 chain を始める — `psyto/openhl` は依存先ではなく、自分の側のリファレンス実装になる
 
 ## 2. コース終了時点で手元に **ない** もの
 
@@ -135,15 +135,15 @@ cargo check  # 初回は時間がかかる — Reth は大きい
 | **L9** | App loop | `run_engine_app` — 全部を繋ぐ actor pipeline | **`first_block_via_engine_actors`** — Module 1 milestone、BFT round が閉じる |
 | **L10** | Live Reth | テストで実 Reth dev-node を起動する | `reth_dev_node_bootstraps` |
 | **L11** | Live build_payload | `LiveRethEvmBridge` が live provider から parent を読む | `live_bridge_builds_on_real_genesis` |
-| **L12** | Live validate_payload | `EthBeaconConsensus` を配線して実 header validation | validate-path tests |
-| **L13** | Live commit | `forkchoice_updated` を Reth の in-process Engine API で配線 | `commit_sends_forkchoice_to_engine` |
+| **L12** | Live validate_payload | `EthBeaconConsensus` を接続して実 header validation | validate-path tests |
+| **L13** | Live commit | `forkchoice_updated` を Reth の in-process Engine API で接続 | `commit_sends_forkchoice_to_engine` |
 | **L14** | Capstone | openhl にまだ無い end-to-end テストを自分で書く — `run_engine_app` + `LiveRethEvmBridge` を組み合わせる | 自分の integration test |
 
-**L9 がコース最大の milestone だ。** L9 を終えた時点で、actor system 経由で BFT consensus が end-to-end でブロックを 1 つ produce するようになる。L10-L13 で stub Reth を実 Reth に差し替える。L14 では openhl 本体 (SHA `0844d58` 時点) にまだ無い integration test を自分で書く — コース終了時点でリファレンスより **1 歩先** に進んだ状態になる。
+**L9 がコース最大の milestone だ。** L9 を終えた時点で、actor system 経由で BFT consensus が end-to-end でブロックを 1 つ生成するようになる。L10-L13 で stub Reth を実際の Reth に差し替える。L14 では openhl 本体 (SHA `0844d58` 時点) にまだ無い integration test を自分で書く — コース終了時点でリファレンスより **1 歩先** に進んだ状態になる。
 
 ## 7. 答え合わせの作法
 
-各レッスンは `psyto/openhl` の SHA を引用する — 同じコードがその commit で最初に登場した時点だ。レッスンを終えてテストが pass したら:
+各レッスンは `psyto/openhl` の特定の commit SHA を基準にしている — 同じコードがその commit で最初に登場した時点だ。レッスンを終えてテストが pass したら、その revision と自分のコードを `git diff` で見比べて答え合わせをする:
 
 ```bash
 cd ~/code/openhl-reference
