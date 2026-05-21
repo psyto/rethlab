@@ -4083,10 +4083,38 @@ If you wanted to take this matching engine + bridge to a real testnet:
 
 This list is intentionally longer than the matching engine itself. **A working matching engine is the foundation, not the product.**
 
+## Market structure: what you actually built
+
+You spent 11 lessons building a **price-time-priority CLOB**. Before moving on, it's worth situating that choice in the broader landscape of perp DEX designs — because CLOB is one of three real options, and the recent RWA-perps debate makes the tradeoffs unusually concrete.
+
+**The three models.**
+
+- **CLOB (what you built)**: market makers post resting orders, takers cross them. Price is set by the meeting of supply and demand on this venue. Per-market MM economics: every name needs continuous quoting by someone who's willing to absorb inventory risk. Works when there's enough retail flow to make per-name quoting profitable.
+- **RFQ (Variational, Paradigm)**: takers request quotes, dealers respond just-in-time, dealers hedge on a primary venue (CME, NYSE, or another CLOB). Price is *taken* from the source venue plus hedging cost plus dealer margin. Unit economics work for the long tail because dealers don't have to maintain quotes 24/7 — they quote only when asked.
+- **AMM (GMX, dYdX v3 vAMM-era)**: liquidity pooled into a curve, traders move against the curve. Capital-efficient at the start, brutal at the tails. Less relevant now for perps but worth knowing as a design point.
+
+**Where CLOB wins, where it doesn't.**
+
+A CLOB is a price-discovery venue *when there is local supply and demand to discover*. For BTC, ETH, SOL, HYPE — assets without a "primary venue" in the TradFi sense — the CLOB on Hyperliquid genuinely sets price. For WTI, NVDA, SPY perps during NYSE/NYMEX trading hours, the CLOB is just an arbitrage shadow of the primary market. So is RFQ. Neither model does real price discovery for RWAs during primary hours — they're both downstream consumers of CME and the NYSE order book.
+
+The cold-start asymmetry is structural. A CLOB needs a market maker willing to quote continuously on each name. If you have 200 RWA tickers and 10 of them have retail flow, the other 190 either get no quoting or get heavily subsidized quoting that produces thin books that blow out on news. RFQ avoids this — dealers quote only on demand, so there's no idle quoting cost per name.
+
+**The "last look" question.**
+
+A common claim is that RFQ has "last look" (dealer can reject a quote request) while CLOB doesn't. This is half true. In a CLOB, market makers can cancel quotes faster than takers can hit them — what HL calls **cancel prioritization** in the matching docs. An MM who sees an adverse taker can pull the quote before the cross commits. The form differs, the economics don't.
+
+The CLOB you built does not implement cancel prioritization — \`submit_limit\` and \`cancel\` are first-come-first-served in \`pending_actions\`. Production HL is not so generous to takers; cancels can be reordered ahead of conflicting submits to give MMs effective last look. **If you wanted to add it, the change is in the BFT engine's ordering rules, not in your matching engine.**
+
+**What you built, where it sits.**
+
+You built the engine HL uses to price the **top tier of crypto-native names**. That's a real and economically significant slice of the market. It is not the engine that will price the long tail of RWA perps — that flow is structurally better served by RFQ, where dealers can mainline CME and NYSE depth without bootstrapping per-name books.
+
+The interesting builder question isn't "CLOB or RFQ" — it's "which slice of which asset class, with which liquidity source." A CLOB built on top of HyperBFT, with custom precompiles that let smart contracts route into the book, is exactly the right architecture for the top tier of crypto-native perps. For everything else, the design space is open.
+
 ## Where to go next
 
 **Within rethlab**:
-- **Course 8 — Custom EVM precompiles** (when shipped) — \`clob_read_best_bid\` + \`clob_place_order\` from openhl Stage 9.
+- **Course 8 — Custom EVM precompiles** — \`clob_read_best_bid\` + \`clob_place_order\` from openhl Stage 9.
 - **Course 9 — Funding state machine** — openhl Stage 8b.
 
 **Outside rethlab**:
