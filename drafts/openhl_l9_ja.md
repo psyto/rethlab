@@ -266,7 +266,7 @@ impl std::fmt::Debug for OpenHlPrivateKeyFile {
 
 2 つの型:
 
-- **`OpenHlGenesis`** — unit struct。v0 では genesis に乗せるコンテンツがない (allocation なし、ブート時の precompile 登録なし — それらは Module 6 で扱う)。Validator set は genesis ではなく `start_engine` 経由で直接渡す。OpenHL が real な genesis format を持つようになったら、これが `load_genesis()` がデシリアライズする型になる。
+- **`OpenHlGenesis`** — unit struct。v0 では genesis に乗せるコンテンツがない (allocation なし、ブート時の precompile 登録なし — それらは Module 6 で扱う)。Validator set は genesis ではなく `start_engine` 経由で直接渡す。OpenHL が 実際の genesis format を持つようになったら、これが `load_genesis()` がデシリアライズする型になる。
 - **`OpenHlPrivateKeyFile`** — 32 バイトの private key の wire-friendly wrapper だ。`PrivateKey` 自体 (`malachitebft_signing_ed25519` 由来) はデフォルトで `Serialize`/`Deserialize` を impl していない。wrapper が impl し、`from_private_key` / `into_private_key` での変換は明示的に行う。**手書きの `Debug` impl** はバイトを redact する — `{:?}` で実 private key がログに出てしまうのは重大なセキュリティバグだ。`[redacted]` トークンが慣習になっている。
 
 > 🛑 **やりがちな勘違い。** 「なぜ `#[derive(Debug)]` ではダメなのか?」 **デフォルトで derive される `Debug` は `[u8; 32]` の 32 バイト全部を print するからだ。** 誰かが `OpenHlPrivateKeyFile` を別の `Debug`-derive 構造体でラップしてログに出すと、key が stderr / log file / Sentry にリークする。`[redacted]` 付きの手書き `Debug` なら、意図的に変更しない限りこれは起こりえない。**Private key はパスワードと同等に扱い、絶対に print させない。**

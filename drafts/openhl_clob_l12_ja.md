@@ -108,7 +108,7 @@ Perp DEX には funding rate 計算 (mark vs. index、定期 rebalancing) が必
 
 **ステータス**: 暗黙の単一 market。
 
-現在の `Book` は orderbook 1 個。Real な perp exchange は多数の orderbook を持つ (HYPE/USDC、BTC/USDC、ETH/USDC 等)。拡張するなら bridge で `HashMap<MarketId, Book>` を持てばよい。機械的な変更だが、openhl Stage 8 にはまだない。
+現在の `Book` は orderbook 1 個。現実の perp exchange は多数の orderbook を持つ (HYPE/USDC、BTC/USDC、ETH/USDC 等)。拡張するなら bridge で `HashMap<MarketId, Book>` を持てばよい。機械的な変更だが、openhl Stage 8 にはまだない。
 
 ### 5. 永続 CLOB state
 
@@ -145,7 +145,7 @@ L6 では明示的に、O(1) index ではなくシンプルさを選んだ。ope
 
 **3 つのモデル。**
 
-- **CLOB (作ったもの)**: market maker が resting order を置き、taker がそれと約定する。価格はこの venue 上で需給が出会うことによって決まる。Per-market な MM 経済性: どの銘柄も、在庫リスクを引き受けてくれる誰かによる継続的な quoting が必要。Retail flow が銘柄ごとの quoting を採算化できるほど存在する場合に機能する。
+- **CLOB (作ったもの)**: market maker が resting order を置き、taker がそれと約定する。価格はこの venue 上で需給が出会うことによって決まる。銘柄ごとの MM 経済性: どの銘柄も、在庫リスクを引き受けてくれる誰かによる継続的な quoting が必要。Retail flow が銘柄ごとの quoting を採算化できるほど存在する場合に機能する。
 - **RFQ (Variational、Paradigm)**: taker が quote を request し、dealer が just-in-time に応じ、dealer は primary venue (CME、NYSE、または別の CLOB) で hedge する。価格は source venue から *持ってくる* — そこに hedging cost と dealer margin が乗る。Dealer が 24 時間継続的に quote を維持しなくてよい (request されたときだけ quote すればよい) ので、long tail でも unit economics が成立する。
 - **AMM (GMX、dYdX v3 vAMM 時代)**: 流動性を curve に集約し、トレーダーが curve に沿って取引する。最初は資本効率が良いが、tail では破綻する。Perp での重要性は今では低下しているが、設計ポイントとして押さえておく価値はある。
 
@@ -184,7 +184,7 @@ Builder にとって興味深い問いは「CLOB か RFQ か」ではなく、�
 
 最も難しい部分は matching ロジックを書くこと自体ではなかった — L4 の submit_limit は構造が理解できれば 60 行で済む。**最も難しいのは determinism property** — 可能な submit の任意の順序付けに対して engine が同じ答えを生成することを保証すること。L8 の proptest が、テストしようと思わなかったバグを catch してくれる。そして、それこそが build した engine を consensus に plug しても safe である理由になる。
 
-Correct だが non-deterministic な matching engine は consensus を壊す。Deterministic なものこそが、devnet から mainnet への移行を生き残るコードになる。
+正しいが non-deterministic な matching engine は consensus を壊す。Deterministic なものこそが、devnet から mainnet への移行を生き残るコードになる。
 
 これを使って何か作りに行こう。
 ````

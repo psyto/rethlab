@@ -37,7 +37,7 @@
 cargo test -p openhl-evm commit_sends_forkchoice_to_engine_when_handle_installed --release
 ```
 
-上記の実行結果が新規 integration test 1 個に合格する。L11-L13 の既存テストと合わせて、bridge は **4 つの `ConsensusBridge` メソッドすべてが real な Reth コードパスに到達する** 状態になる:
+上記の実行結果が新規 integration test 1 個に合格する。L11-L13 の既存テストと合わせて、bridge は **4 つの `ConsensusBridge` メソッドすべてが 実際の Reth コードパスに到達する** 状態になる:
 
 | メソッド | やること | 走る real Reth コード |
 | - | - | - |
@@ -491,7 +491,7 @@ Engine API が、separate な finalization layer を持つ chain 用に設計さ
 
 ## 次のレッスン (L15 — capstone)
 
-完全な consensus↔EVM bridge ができた。**4 つの `ConsensusBridge` メソッドすべてが real な Reth コードパスに到達している。** L15 は capstone だ: フルシステムを示す 1 ページの recap、production には必要だが skip したもの (`newPayload` 経由の実 block body、stub の代わりに real な Codec impl、gossip codec、persistent WAL)、自然な次コース。新規コードは無く、victory lap と roadmap だけだ。
+完全な consensus↔EVM bridge ができた。**4 つの `ConsensusBridge` メソッドすべてが 実際の Reth コードパスに到達している。** L15 は capstone だ: フルシステムを示す 1 ページの recap、production には必要だが skip したもの (`newPayload` 経由の実 block body、stub の代わりに 実際の Codec impl、gossip codec、persistent WAL)、自然な次コース。新規コードは無く、victory lap と roadmap だけだ。
 ````
 
 ---

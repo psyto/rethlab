@@ -43,6 +43,8 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
 
 Hyperliquid は 2025 年に $300B+ の perp 取引量を、完全クローズドソースのスタック — HyperBFT consensus、HyperCore matching engine、HyperEVM execution — の上で処理した。公開された Rust 実装はどこにもない。**OpenHL はそのスタックをオープンソースで実装したもの** であり、本コースでは openhl Module 1 の substrate を自分の手で組み上げる。
 
+**なぜ CLOB なのか？** Hyperliquid が price-time-priority 板マッチングを選んだのは、ターゲット市場 — crypto-native perps の top tier — に、板が真の price discovery を行えるだけの retail flow が継続的に存在するから。RFQ 系（Variational、Paradigm）は dealer が just-in-time で quote し primary venue で hedge することで long tail を取り、AMM 系（GMX 世代）は cold-start のために tail のリスク経済性を犠牲にする。これから作るのは、CLOB が正しい答えである市場の slice に対する engine。設計トレードオフの深堀りは Course 7（CLOB）の capstone で行う — いまはこの設計コンテキストだけで十分。
+
 ## 1. コース終了時点で手元にあるもの
 
 レッスン 14 を終える頃には、自分のマシンで \`cargo test first_block_via_engine_actors\` を走らせると、single-validator BFT consensus のラウンドが約 0.02 秒で pass する状態になる。EVM 層は実際の Reth、BFT 層は実際の Malachite。chain は **Consensus Layer (CL)** と **Execution Layer (EL)** の 2 層に分かれていて、本コースで両側を接続していく。コードのパスは次のようになる:
@@ -1813,7 +1815,7 @@ import が実際にコード中で使われているか確認する。Boilerplat
 
 ## 次のレッスン (L5)
 
-動作する \`ConsensusBridge\` impl は手元にあるが、Reth はまだ一切使っていない。L5 で次の impl を書く: \`RethEvmBridge\`。同じ trait だが、\`ExecutedBlock\` は real な \`alloy_consensus::Header\` から build され (合成ではなく)、\`BlockHash\` は Reth の \`Header::hash_slow\` で hash された real な \`B256\` になる。State はまだ in-memory (live Reth provider なし) だが、**型は real だ。** これが toy 型 (L4) と live 統合 (L11+) を橋渡しする。`,
+動作する \`ConsensusBridge\` impl は手元にあるが、Reth はまだ一切使っていない。L5 で次の impl を書く: \`RethEvmBridge\`。同じ trait だが、\`ExecutedBlock\` は 実際の \`alloy_consensus::Header\` から build され (合成ではなく)、\`BlockHash\` は Reth の \`Header::hash_slow\` で hash された 実際の \`B256\` になる。State はまだ in-memory (live Reth provider なし) だが、**型は real だ。** これが toy 型 (L4) と live 統合 (L11+) を橋渡しする。`,
                 },
                 {
                   title: "レッスン 5 — real alloy 型を使う RethEvmBridge",
@@ -1871,9 +1873,9 @@ crates/evm/Cargo.toml       — 3 deps (openhl-consensus、openhl-types、async-
 5. **\`engine\` を crate に組み込む** — \`lib.rs\` に \`pub mod engine;\` と re-export を追加。
 6. **\`cargo test -p openhl-evm\` を実行** — 9 つのテストすべてが pass する。
 
-鍵となる step は #2 — **内部 state の形が変わる。** L4 は \`ExecutedBlock\` を直接保存していた。L5 は \`(B256, Header)\` を保存する: alloy-native な型で、\`ExecutedBlock\` への変換は trait boundary でだけ行う。**alloy 型が source of truth で、\`ExecutedBlock\` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — \`LiveRethEvmBridge\` は同じ「内部 vs 境界」split を保ったまま、その後ろに real な Reth provider を追加する。
+鍵となる step は #2 — **内部 state の形が変わる。** L4 は \`ExecutedBlock\` を直接保存していた。L5 は \`(B256, Header)\` を保存する: alloy-native な型で、\`ExecutedBlock\` への変換は trait boundary でだけ行う。**alloy 型が source of truth で、\`ExecutedBlock\` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — \`LiveRethEvmBridge\` は同じ「内部 vs 境界」split を保ったまま、その後ろに 実際の Reth provider を追加する。
 
-> 🛑 **考えてみよう。** L4 の \`InMemoryEvmBridge\` は hash を \`(id, number)\` から合成していた。L5 の \`RethEvmBridge\` は \`header.hash_slow()\` を呼ぶ — real な RLP encoding + Keccak-256 だ。**この違いによって testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
+> 🛑 **考えてみよう。** L4 の \`InMemoryEvmBridge\` は hash を \`(id, number)\` から合成していた。L5 の \`RethEvmBridge\` は \`header.hash_slow()\` を呼ぶ — 実際の RLP encoding + Keccak-256 だ。**この違いによって testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
 
 ## 手を動かす walk-through
 
@@ -2296,7 +2298,7 @@ git checkout main
 ロジックは同じだが **型が違う**。\`InMemoryEvmBridge\` は合成型 (高速 unit test 用)。\`RethEvmBridge\` は alloy 型 (alloy interop を validate するテスト用)。後の \`LiveRethEvmBridge\` は alloy 型 と live Reth provider の両方を使う。Step ごとに production fidelity が上がりつつ、trait surface は安定したままだ。
 
 **Q: \`Header\` は約 20 フィールドあるのに、なぜ 4 つしか set しないのか?**
-未設定フィールドは \`Default::default()\` で埋まる: \`state_root = B256::ZERO\`、\`gas_limit = 0\`、\`base_fee_per_gas = None\` など。v0 では EVM が走っていないので real な \`state_root\` は計算できない。zero を受け入れる。Production コード (L11+) ではこれらを live Reth provider から計算する。
+未設定フィールドは \`Default::default()\` で埋まる: \`state_root = B256::ZERO\`、\`gas_limit = 0\`、\`base_fee_per_gas = None\` など。v0 では EVM が走っていないので 実際の \`state_root\` は計算できない。zero を受け入れる。Production コード (L11+) ではこれらを live Reth provider から計算する。
 
 **Q: alloy の \`hash_slow\` と \`hash_fast\` の違いは?**
 \`Header\` に \`hash_fast\` メソッドは無い。命名 convention は次のとおりだ: 値を再計算するメソッドは "slow"、pre-cache された値を返すメソッドは "fast"。\`Header\` には pre-cache された hash が無いので \`hash_slow\` のみ。alloy の一部の型 (例: \`SealedHeader\`) は hash を持ち、\`.hash()\` を "fast" 版として提供する。
@@ -2848,7 +2850,7 @@ impl Context for OpenHlContext {
 
 10 個の型 binding — \`Context\` の sub-trait 1 つにつき 1 つ。今書いた 8 つに加えて:
 
-- **\`Extension = ()\`** — vote extension 無し。unit 型が trait の bound を満たすので、real な extension 型を書く必要がない。
+- **\`Extension = ()\`** — vote extension 無し。unit 型が trait の bound を満たすので、実際の extension 型を書く必要がない。
 - **\`SigningScheme = Ed25519\`** — Malachite の Ed25519 実装を直接使う。多くの BFT chain は Ed25519 を、BLS (署名集約のため) を使う chain もある。Malachite が実装を ship していて簡潔なので Ed25519 を選ぶ。
 
 それから 4 つの factory method。**\`select_proposer\`** が最も重要:
@@ -4428,7 +4430,7 @@ impl std::fmt::Debug for OpenHlPrivateKeyFile {
 
 2 つの型:
 
-- **\`OpenHlGenesis\`** — unit struct。v0 では genesis に乗せるコンテンツがない (allocation なし、ブート時の precompile 登録なし — それらは Module 6 で扱う)。Validator set は genesis ではなく \`start_engine\` 経由で直接渡す。OpenHL が real な genesis format を持つようになったら、これが \`load_genesis()\` がデシリアライズする型になる。
+- **\`OpenHlGenesis\`** — unit struct。v0 では genesis に乗せるコンテンツがない (allocation なし、ブート時の precompile 登録なし — それらは Module 6 で扱う)。Validator set は genesis ではなく \`start_engine\` 経由で直接渡す。OpenHL が 実際の genesis format を持つようになったら、これが \`load_genesis()\` がデシリアライズする型になる。
 - **\`OpenHlPrivateKeyFile\`** — 32 バイトの private key の wire-friendly wrapper だ。\`PrivateKey\` 自体 (\`malachitebft_signing_ed25519\` 由来) はデフォルトで \`Serialize\`/\`Deserialize\` を impl していない。wrapper が impl し、\`from_private_key\` / \`into_private_key\` での変換は明示的に行う。**手書きの \`Debug\` impl** はバイトを redact する — \`{:?}\` で実 private key がログに出てしまうのは重大なセキュリティバグだ。\`[redacted]\` トークンが慣習になっている。
 
 > 🛑 **やりがちな勘違い。** 「なぜ \`#[derive(Debug)]\` ではダメなのか?」 **デフォルトで derive される \`Debug\` は \`[u8; 32]\` の 32 バイト全部を print するからだ。** 誰かが \`OpenHlPrivateKeyFile\` を別の \`Debug\`-derive 構造体でラップしてログに出すと、key が stderr / log file / Sentry にリークする。\`[redacted]\` 付きの手書き \`Debug\` なら、意図的に変更しない限りこれは起こりえない。**Private key はパスワードと同等に扱い、絶対に print させない。**
@@ -5432,7 +5434,7 @@ Arm が独立していないからだ。Engine は特定の順序で送ってく
 
 ## 次のレッスン (L11)
 
-Stage 6 はこれで完了だ。Stage 7 開始: \`InMemoryEvmBridge\` を real な Reth EthereumNode に置き換える。L11 では **dev node bootstrap** をカバーする — consensus actor と同じ tokio runtime 上で Reth を tokio task として spawn する。L12 では \`LiveRethEvmBridge\` (L5 の \`RethEvmBridge\` の live 版) を組み込む。L12 完了後には、書いた \`run_engine_app\` が処理する **同じ** \`AppMsg\` loop を回す Reth-backed devnet ができあがる — \`run_engine_app\` は同じまま、trait impl を 1 つ差し替えるだけで、real な EVM execution layer が手に入る。`,
+Stage 6 はこれで完了だ。Stage 7 開始: \`InMemoryEvmBridge\` を 実際の Reth EthereumNode に置き換える。L11 では **dev node bootstrap** をカバーする — consensus actor と同じ tokio runtime 上で Reth を tokio task として spawn する。L12 では \`LiveRethEvmBridge\` (L5 の \`RethEvmBridge\` の live 版) を組み込む。L12 完了後には、書いた \`run_engine_app\` が処理する **同じ** \`AppMsg\` loop を回す Reth-backed devnet ができあがる — \`run_engine_app\` は同じまま、trait impl を 1 つ差し替えるだけで、実際の EVM execution layer が手に入る。`,
                 },
               ],
             },
@@ -5863,7 +5865,7 @@ Reth が返す \`NodeHandle\` には、こちらで使うパスでの \`kill()\`
 
 ## 次のレッスン (L12)
 
-Reth と Malachite はこれで共存する。**ただし bridge はまだ Reth と話していない。** L12 では \`LiveRethEvmBridge::with_live_node()\` を build する — さっき bootstrap した \`node\` を受け取り、\`BlockchainProvider\` を expose するコンストラクタだ。これによって \`build_payload\` (L4-L5 の stubbed bridge メソッド) が live な MDBX state に対して **real な** 親ブロック lookup を行えるようになる。これが「Reth が workspace にいる」から「Reth が consensus engine の読むデータを 生成している」へ移行する瞬間だ。`,
+Reth と Malachite はこれで共存する。**ただし bridge はまだ Reth と話していない。** L12 では \`LiveRethEvmBridge::with_live_node()\` を build する — さっき bootstrap した \`node\` を受け取り、\`BlockchainProvider\` を expose するコンストラクタだ。これによって \`build_payload\` (L4-L5 の stubbed bridge メソッド) が live な MDBX state に対して **実際の** 親ブロック lookup を行えるようになる。これが「Reth が workspace にいる」から「Reth が consensus engine の読むデータを 生成している」へ移行する瞬間だ。`,
                 },
                 {
                   title: "レッスン 12 — LiveRethEvmBridge が real chain から parent を読む",
@@ -5896,7 +5898,7 @@ cargo test -p openhl-evm live_bridge_builds_on_real_genesis --release
 test live_node::tests::live_bridge_builds_on_real_genesis ... ok
 \`\`\`
 
-Happy path: \`EthereumNode\` を boot し、その \`BlockchainProvider\` に real な genesis hash を query し、provider を \`LiveRethEvmBridge\` に渡し、\`build_payload(genesis_hash, attrs)\` を呼ぶ。結果の child block は \`number = 1\` と \`parent_hash = genesis\` を持つ — どちらも **live provider 由来** であって、メモリ内の合成ではない。
+Happy path: \`EthereumNode\` を boot し、その \`BlockchainProvider\` に実際の genesis hash を query し、provider を \`LiveRethEvmBridge\` に渡し、\`build_payload(genesis_hash, attrs)\` を呼ぶ。結果の child block は \`number = 1\` と \`parent_hash = genesis\` を持つ — どちらも **live provider 由来** であって、メモリ内の合成ではない。
 
 Negative path: \`build_payload(BlockHash([0xee; 32]), attrs)\` を呼ぶ。Provider はその hash を知らないので、bridge は \`BridgeError::Rejected\` を返す。**Live chain が見たことのない parent に対して build を拒否することで、bridge を consensus に接続しても安全になる。**
 
@@ -6297,10 +6299,10 @@ mod tests {
 
 テストの順を追って見ていく:
 
-1. **real な \`EthereumNode\` を bootstrap する** — L11 と同じセットアップ。
+1. **実際の \`EthereumNode\` を bootstrap する** — L11 と同じセットアップ。
 2. **\`node.provider.block_hash(0)\`** — live provider に genesis block hash を尋ねる。これは \`BlockHashReader\` の API だ (\`BlockNumReader\` とは別 trait で、ペアになっている)。
 3. **\`LiveRethEvmBridge::new(node.provider.clone())\`** — bridge を構築する。\`BlockchainProvider\` は内部的に \`Arc\` ベースなので、clone は安価だ。
-4. **Happy path**: real な genesis hash の上に payload を build し、\`payload_ready\` 経由で fetch して、\`parent_hash == genesis_hash\` と \`number == 1\` を assert する。**これが live read が起きたことの証明だ。** もしインメモリ合成だったら、parent_hash は渡したもの (これは正しい) になるが、\`number\` は任意の値でありえた。\`1\` が出るのは、\`provider.block_number(genesis_hash)\` が \`Some(0)\` を返したときだけだ。
+4. **Happy path**: 実際の genesis hash の上に payload を build し、\`payload_ready\` 経由で fetch して、\`parent_hash == genesis_hash\` と \`number == 1\` を assert する。**これが live read が起きたことの証明だ。** もしインメモリ合成だったら、parent_hash は渡したもの (これは正しい) になるが、\`number\` は任意の値でありえた。\`1\` が出るのは、\`provider.block_number(genesis_hash)\` が \`Some(0)\` を返したときだけだ。
 5. **Negative path**: \`BlockHash([0xee; 32])\` は chain が見たことのない fabricated hash だ。\`build_payload\` は \`BridgeError::Rejected\` を返さなければならない。\`matches!(err, BridgeError::Rejected(_))\` が exhaustive な check になる — 他の error variant が来たらテスト失敗だ。
 
 > 🛑 **やりがちな勘違い。** 「なぜ negative path までテストするのか?」 **Rejection をテストしないテストは、happy path が動くことしか証明できない — bridge が偶然インメモリ state に fallback して任意の parent に対して child block を 生成するバグを catch できない。** ガベージな parent の上にサイレントに build する bridge は、コンパイルが通り、happy path は pass し、consensus は破損した高さの block を嬉々として commit してしまう。Negative path こそが、live read が実際に load-bearing であることを証明する。
@@ -6369,7 +6371,7 @@ git checkout main
 ## よくある質問
 
 **Q: なぜ \`BlockchainProvider\` を直接取らず、\`P\` に対してジェネリックにするのか?**
-理由は 2 つある。1 つ目、\`BlockchainProvider\` は定義に 30 以上の trait bound を持つ重い具象型だ — 直接使うと、\`LiveRethEvmBridge\` のすべての consumer がそれらの bound を糸通ししなければならない。Generic な \`P: BlockNumReader\` は、bridge が必要とする **唯一の能力** に surface を絞ってくれる。2 つ目、generic-over-trait は mock テストを容易にする — \`MockProvider\` impl を書いて \`LiveRethEvmBridge::new(...)\` に渡せば、real な node bootstrap なしで unit-testable な bridge を得られる。
+理由は 2 つある。1 つ目、\`BlockchainProvider\` は定義に 30 以上の trait bound を持つ重い具象型だ — 直接使うと、\`LiveRethEvmBridge\` のすべての consumer がそれらの bound を糸通ししなければならない。Generic な \`P: BlockNumReader\` は、bridge が必要とする **唯一の能力** に surface を絞ってくれる。2 つ目、generic-over-trait は mock テストを容易にする — \`MockProvider\` impl を書いて \`LiveRethEvmBridge::new(...)\` に渡せば、実際の node bootstrap なしで unit-testable な bridge を得られる。
 
 **Q: \`BlockNumReader::block_number\` と \`BlockHashReader::block_hash\` の違いは?**
 方向だ。\`block_number(hash) → Option<u64>\` は「この hash の number は?」に答える。\`block_hash(n) → Option<B256>\` は「この number の hash は?」に答える。テストは両方を使う: \`block_hash(0)\` で genesis hash を pull し、そのあと \`LiveRethEvmBridge\` が内部で \`block_number(hash)\` を使って parent の number を lookup する。同じ chain index に対する 2 つのアクセスパターンだ。
@@ -6382,7 +6384,7 @@ git checkout main
 
 ## 次のレッスン (L13)
 
-Bridge は \`build_payload\` で Reth から読むようになった。だが \`pending\` HashMap はまだインプロセス合成のままだ — engine が「propose する次の block」を尋ねてきたら、こちらは自分で作った header を返している。**L13 で \`pending\` を Reth の実 \`PayloadBuilder\` に置き換える** — Reth が JSON-RPC \`engine_getPayloadV4\` call で block を組み立てるのと同じ機構だ。L13 完了で、bridge は real な Ethereum tooling が受け入れる block を 生成するようになる (フルな transaction list、receipt、gas usage、state root)。これが「bridge が Reth のストレージと会話する」から「bridge が Reth の実行パイプラインと完全に統合される」への移行だ。`,
+Bridge は \`build_payload\` で Reth から読むようになった。だが \`pending\` HashMap はまだインプロセス合成のままだ — engine が「propose する次の block」を尋ねてきたら、こちらは自分で作った header を返している。**L13 で \`pending\` を Reth の実 \`PayloadBuilder\` に置き換える** — Reth が JSON-RPC \`engine_getPayloadV4\` call で block を組み立てるのと同じ機構だ。L13 完了で、bridge は実際の Ethereum tooling が受け入れる block を 生成するようになる (フルな transaction list、receipt、gas usage、state root)。これが「bridge が Reth のストレージと会話する」から「bridge が Reth の実行パイプラインと完全に統合される」への移行だ。`,
                 },
                 {
                   title: "レッスン 13 — validate_payload が Reth の EthBeaconConsensus を走らせる",
@@ -6900,7 +6902,7 @@ Validator と chain が、どの hardfork が active かについて合意しな
 
 ## 次のレッスン (L14)
 
-4 つの \`ConsensusBridge\` メソッドのうち 2 つは live な Reth に到達するようになった。**3 つ目 — \`commit\` — はまだ in-process な \`chain: HashMap\` に hash を記録するだけだ。** L14 (最後の大きなレッスン) で、これを real な **Engine API forkchoice update** に置き換える — Reth が production で block を commit するときに使う JSON-RPC call だ。L14 完了後、こちらの bridge は、他のどの Ethereum CL client (Lighthouse、Prysm、Teku) も生成するのと同じ wire-format アクションを生成するようになる。**L15 はそれを受けた capstone** だ — 1 ページの再キャップ、「構築したすべて」図、optional な production-readiness チェックリスト (block bodies、gossip codec、real WAL)。`,
+4 つの \`ConsensusBridge\` メソッドのうち 2 つは live な Reth に到達するようになった。**3 つ目 — \`commit\` — はまだ in-process な \`chain: HashMap\` に hash を記録するだけだ。** L14 (最後の大きなレッスン) で、これを 実際の **Engine API forkchoice update** に置き換える — Reth が production で block を commit するときに使う JSON-RPC call だ。L14 完了後、こちらの bridge は、他のどの Ethereum CL client (Lighthouse、Prysm、Teku) も生成するのと同じ wire-format アクションを生成するようになる。**L15 はそれを受けた capstone** だ — 1 ページの再キャップ、「構築したすべて」図、optional な production-readiness チェックリスト (block bodies、gossip codec、real WAL)。`,
                 },
                 {
                   title: "レッスン 14 — commit が Reth の Engine API forkchoice を駆動する",
@@ -6928,7 +6930,7 @@ Validator と chain が、どの hardfork が active かについて合意しな
 cargo test -p openhl-evm commit_sends_forkchoice_to_engine_when_handle_installed --release
 \`\`\`
 
-上記の実行結果が新規 integration test 1 個に合格する。L11-L13 の既存テストと合わせて、bridge は **4 つの \`ConsensusBridge\` メソッドすべてが real な Reth コードパスに到達する** 状態になる:
+上記の実行結果が新規 integration test 1 個に合格する。L11-L13 の既存テストと合わせて、bridge は **4 つの \`ConsensusBridge\` メソッドすべてが 実際の Reth コードパスに到達する** 状態になる:
 
 | メソッド | やること | 走る real Reth コード |
 | - | - | - |
@@ -7382,7 +7384,7 @@ Engine API が、separate な finalization layer を持つ chain 用に設計さ
 
 ## 次のレッスン (L15 — capstone)
 
-完全な consensus↔EVM bridge ができた。**4 つの \`ConsensusBridge\` メソッドすべてが real な Reth コードパスに到達している。** L15 は capstone だ: フルシステムを示す 1 ページの recap、production には必要だが skip したもの (\`newPayload\` 経由の実 block body、stub の代わりに real な Codec impl、gossip codec、persistent WAL)、自然な次コース。新規コードは無く、victory lap と roadmap だけだ。`,
+完全な consensus↔EVM bridge ができた。**4 つの \`ConsensusBridge\` メソッドすべてが 実際の Reth コードパスに到達している。** L15 は capstone だ: フルシステムを示す 1 ページの recap、production には必要だが skip したもの (\`newPayload\` 経由の実 block body、stub の代わりに 実際の Codec impl、gossip codec、persistent WAL)、自然な次コース。新規コードは無く、victory lap と roadmap だけだ。`,
                 },
               ],
             },
@@ -7458,7 +7460,7 @@ Bridge は Reth のストレージ層 (\`HeaderProvider\`)、Reth の chain conf
 
 \`commit\` は \`ForkchoiceUpdated\` を送るが、Reth の engine はマッチする block body が無いので \`SYNCING\` で応答する。\`VALID\` まで進めるには:
 
-- \`build_payload\` の出力を、real な \`ExecutionPayload\` として (トランザクションリスト付きで、空でも) encode する。
+- \`build_payload\` の出力を、実際の \`ExecutionPayload\` として (トランザクションリスト付きで、空でも) encode する。
 - \`fork_choice_updated\` 呼び出しの **前に**、\`handle.new_payload(payload).await\` 経由で送る。
 - レスポンスチェーンを合わせる: \`newPayload → VALID\` → \`forkchoice → VALID\` → canonical head が advance する。
 
@@ -7488,7 +7490,7 @@ Codec stub (#2) が real になり、N=2 の node が共有 chain spec に対し
 
 **ステータス**: エフェメラル tempdir。
 
-すべてのテストが \`tempfile::tempdir()\` を使うので、MDBX state は各 run の後に消えてしまう。Production には、再起動を生き残る configurable な \`home_dir\` が必要だ。追加は機械的だが (path を \`OpenHlNode::new\` 経由で route するだけ)、**crash recovery** の検証 (commit 途中で node を kill し、再起動し、chain head が正しいことを assert する) には、real な WAL codec impl と、特に chaos-engineering 形式の Test Plan が必要になる。
+すべてのテストが \`tempfile::tempdir()\` を使うので、MDBX state は各 run の後に消えてしまう。Production には、再起動を生き残る configurable な \`home_dir\` が必要だ。追加は機械的だが (path を \`OpenHlNode::new\` 経由で route するだけ)、**crash recovery** の検証 (commit 途中で node を kill し、再起動し、chain head が正しいことを assert する) には、実際の WAL codec impl と、特に chaos-engineering 形式の Test Plan が必要になる。
 
 ### 5. Slashing + double-sign detection
 
@@ -7523,7 +7525,7 @@ Production BFT chain は、validator の不正挙動 (同じ高さで異なる b
 
 ## 14 レッスン前にはできなかった、今できること
 
-- **real な EL に対してフルな Rust BFT engine を bootstrap できる。** 「mocked EL で」でも「Go への FFI で」でもなく、同じ Rust workspace で \`EthereumNode\` を実際に走らせられる。
+- **実際の EL に対してフルな Rust BFT engine を bootstrap できる。** 「mocked EL で」でも「Go への FFI で」でもなく、同じ Rust workspace で \`EthereumNode\` を実際に走らせられる。
 - **producer/validator の自己整合性について推論できる。** 同じ artifact の builder と validator があるときは、source of truth を共有しなければならない。\`chain_spec.next_block_base_fee\` が \`build_payload\` と \`validate_payload\` の両方を駆動するパターンを見た。
 - **incremental-stub パターンを適用できる。** Trait bound が surface area を強制してくる。一度に全部埋められないなら、明確な failure mode で stub する。L8 の \`CodecStub("SignedConsensusMsg<OpenHlContext>")\` がそのモデルだ。
 - **2 つの汎用インフラを接続できる。** Reth と Malachite は別のチームが別の sensibility で書いている。Handshake interface (\`Node\` trait、\`ConsensusBridge\` trait) がそれらを composable にした。将来コースは別のインフラで同じパターンを使う。

@@ -542,7 +542,7 @@ impl Context for OpenHlContext {
 
 10 個の型 binding — `Context` の sub-trait 1 つにつき 1 つ。今書いた 8 つに加えて:
 
-- **`Extension = ()`** — vote extension 無し。unit 型が trait の bound を満たすので、real な extension 型を書く必要がない。
+- **`Extension = ()`** — vote extension 無し。unit 型が trait の bound を満たすので、実際の extension 型を書く必要がない。
 - **`SigningScheme = Ed25519`** — Malachite の Ed25519 実装を直接使う。多くの BFT chain は Ed25519 を、BLS (署名集約のため) を使う chain もある。Malachite が実装を ship していて簡潔なので Ed25519 を選ぶ。
 
 それから 4 つの factory method。**`select_proposer`** が最も重要:

@@ -379,7 +379,7 @@ Body の流れ:
 
 **同じ input の 2 run が同じ output を生成しなければならない。** Matching engine に何らかの non-determinism — randomness、HashMap iteration 順、スレッディング race — が紛れ込んでいれば、このテストが catch する。
 
-**これが最重要 property である理由**: consensus chain は、すべての validator が同じ input から同じ約定を計算することに依存している。1 人の validator の matching engine が別の validator と異なる約定を生成すれば、validator は block について合意できず、chain が fork する。**Determinism こそが load-bearing property** — `no_crossed_book` は correctness の話だが、determinism は **agreement** の話。Correct だが non-deterministic な engine は consensus を壊すのに対し、deterministic だが incorrect な engine は少なくとも修復可能。
+**これが最重要 property である理由**: consensus chain は、すべての validator が同じ input から同じ約定を計算することに依存している。1 人の validator の matching engine が別の validator と異なる約定を生成すれば、validator は block について合意できず、chain が fork する。**Determinism こそが load-bearing property** — `no_crossed_book` は correctness の話だが、determinism は **agreement** の話。正しいが non-deterministic な engine は consensus を壊すのに対し、deterministic だが incorrect な engine は少なくとも修復可能。
 
 **`Action::SubmitLimit { id, account, side, price, qty }` の destructuring で `*id`、`*account` 等を使う** のは、`actions` が `&[Action]` として borrow されていて、各 field が borrowed `&u64` だから。`*` で deref して value を取り出す。
 
@@ -443,7 +443,7 @@ Proptest は **失敗 input を file にキャッシュ** する (`proptest-regr
 
 2. **Action enum は simplified な中間表現。** 各 variant は raw `u64` を保持し、`OrderId(u64)` / `AccountId(u64)` 風に newtype でラップしない。**Proptest strategy が raw 値を generate し、test body が `submit` を呼ぶ前に newtype でラップする。** 意図的 — proptest の combinator は primitive 型と最もスムーズに動くし、`as u64` の ergonomics で boilerplate を節約できる。Newtype の強制は test generator 内ではなく API 境界 (`submit` 呼び出し) で行う。
 
-3. **`determinism` が consensus の load-bearing property。** Correct だが non-deterministic な matching engine は consensus を壊すのに対し、deterministic だが incorrect な engine は修復可能。Non-determinism を catch するテストが chain の safety を守る。**Property は「何をテストするか」ではなく「何を守るか」で命名・優先順位付けする — その規律が肝。**
+3. **`determinism` が consensus の load-bearing property。** 正しいが non-deterministic な matching engine は consensus を壊すのに対し、deterministic だが incorrect な engine は修復可能。Non-determinism を catch するテストが chain の safety を守る。**Property は「何をテストするか」ではなく「何を守るか」で命名・優先順位付けする — その規律が肝。**
 
 ## 答え合わせ
 

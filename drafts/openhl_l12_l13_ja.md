@@ -391,7 +391,7 @@ INFO  consensus: starting height=2
 
 - **レッスン 13 §4 のトレース出力は approximate だ。** `RUST_LOG=info` が何を示すかを sketch した; 実際の出力は Malachite のロギング構造に依存し違うかもしれない。レッスンを finalize する前に `--nocapture` でテストを走らせ、*real* トレースを capture して bullet を実ログ行に match させる価値がある。
 - **レッスン 13 の締めの「おめでとう」行** はこれをコースの最終レッスンとして扱う。
-- **レッスン 12 §3 の反流暢性 callout** (「single-validator は偽 consensus」) は レッスン 12 で最も leverage が高い段落だ。コース全体を earned に感じさせる reframing — すべてのレッスンが real な機構を trivial topology 上で exercise する。**Review でこの段落をカットしない。**
+- **レッスン 12 §3 の反流暢性 callout** (「single-validator は偽 consensus」) は レッスン 12 で最も leverage が高い段落だ。コース全体を earned に感じさせる reframing — すべてのレッスンが 実際の機構を trivial topology 上で exercise する。**Review でこの段落をカットしない。**
 - **レッスン 13 §5 の実験** は pedagogically rich だ。各々が異なる側面を教える (timeout、voting power 閾値、halt-the-chain)。
 - **翻訳 policy は他の JA レッスンと同一**:
   - `OpenHlNode`、`OpenHlConfig`、`ValuePayload::ProposalOnly` 等の API type は英語のまま。

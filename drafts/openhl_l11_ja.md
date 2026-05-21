@@ -432,7 +432,7 @@ Reth が返す `NodeHandle` には、こちらで使うパスでの `kill()` メ
 
 ## 次のレッスン (L12)
 
-Reth と Malachite はこれで共存する。**ただし bridge はまだ Reth と話していない。** L12 では `LiveRethEvmBridge::with_live_node()` を build する — さっき bootstrap した `node` を受け取り、`BlockchainProvider` を expose するコンストラクタだ。これによって `build_payload` (L4-L5 の stubbed bridge メソッド) が live な MDBX state に対して **real な** 親ブロック lookup を行えるようになる。これが「Reth が workspace にいる」から「Reth が consensus engine の読むデータを 生成している」へ移行する瞬間だ。
+Reth と Malachite はこれで共存する。**ただし bridge はまだ Reth と話していない。** L12 では `LiveRethEvmBridge::with_live_node()` を build する — さっき bootstrap した `node` を受け取り、`BlockchainProvider` を expose するコンストラクタだ。これによって `build_payload` (L4-L5 の stubbed bridge メソッド) が live な MDBX state に対して **実際の** 親ブロック lookup を行えるようになる。これが「Reth が workspace にいる」から「Reth が consensus engine の読むデータを 生成している」へ移行する瞬間だ。
 ````
 
 ---

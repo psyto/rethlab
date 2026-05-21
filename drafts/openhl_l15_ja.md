@@ -77,7 +77,7 @@ Bridge は Reth のストレージ層 (`HeaderProvider`)、Reth の chain config
 
 `commit` は `ForkchoiceUpdated` を送るが、Reth の engine はマッチする block body が無いので `SYNCING` で応答する。`VALID` まで進めるには:
 
-- `build_payload` の出力を、real な `ExecutionPayload` として (トランザクションリスト付きで、空でも) encode する。
+- `build_payload` の出力を、実際の `ExecutionPayload` として (トランザクションリスト付きで、空でも) encode する。
 - `fork_choice_updated` 呼び出しの **前に**、`handle.new_payload(payload).await` 経由で送る。
 - レスポンスチェーンを合わせる: `newPayload → VALID` → `forkchoice → VALID` → canonical head が advance する。
 
@@ -107,7 +107,7 @@ Codec stub (#2) が real になり、N=2 の node が共有 chain spec に対し
 
 **ステータス**: エフェメラル tempdir。
 
-すべてのテストが `tempfile::tempdir()` を使うので、MDBX state は各 run の後に消えてしまう。Production には、再起動を生き残る configurable な `home_dir` が必要だ。追加は機械的だが (path を `OpenHlNode::new` 経由で route するだけ)、**crash recovery** の検証 (commit 途中で node を kill し、再起動し、chain head が正しいことを assert する) には、real な WAL codec impl と、特に chaos-engineering 形式の Test Plan が必要になる。
+すべてのテストが `tempfile::tempdir()` を使うので、MDBX state は各 run の後に消えてしまう。Production には、再起動を生き残る configurable な `home_dir` が必要だ。追加は機械的だが (path を `OpenHlNode::new` 経由で route するだけ)、**crash recovery** の検証 (commit 途中で node を kill し、再起動し、chain head が正しいことを assert する) には、実際の WAL codec impl と、特に chaos-engineering 形式の Test Plan が必要になる。
 
 ### 5. Slashing + double-sign detection
 
@@ -142,7 +142,7 @@ Production BFT chain は、validator の不正挙動 (同じ高さで異なる b
 
 ## 14 レッスン前にはできなかった、今できること
 
-- **real な EL に対してフルな Rust BFT engine を bootstrap できる。** 「mocked EL で」でも「Go への FFI で」でもなく、同じ Rust workspace で `EthereumNode` を実際に走らせられる。
+- **実際の EL に対してフルな Rust BFT engine を bootstrap できる。** 「mocked EL で」でも「Go への FFI で」でもなく、同じ Rust workspace で `EthereumNode` を実際に走らせられる。
 - **producer/validator の自己整合性について推論できる。** 同じ artifact の builder と validator があるときは、source of truth を共有しなければならない。`chain_spec.next_block_base_fee` が `build_payload` と `validate_payload` の両方を駆動するパターンを見た。
 - **incremental-stub パターンを適用できる。** Trait bound が surface area を強制してくる。一度に全部埋められないなら、明確な failure mode で stub する。L8 の `CodecStub("SignedConsensusMsg<OpenHlContext>")` がそのモデルだ。
 - **2 つの汎用インフラを接続できる。** Reth と Malachite は別のチームが別の sensibility で書いている。Handshake interface (`Node` trait、`ConsensusBridge` trait) がそれらを composable にした。将来コースは別のインフラで同じパターンを使う。

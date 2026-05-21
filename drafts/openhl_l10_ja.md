@@ -601,7 +601,7 @@ Arm が独立していないからだ。Engine は特定の順序で送ってく
 
 ## 次のレッスン (L11)
 
-Stage 6 はこれで完了だ。Stage 7 開始: `InMemoryEvmBridge` を real な Reth EthereumNode に置き換える。L11 では **dev node bootstrap** をカバーする — consensus actor と同じ tokio runtime 上で Reth を tokio task として spawn する。L12 では `LiveRethEvmBridge` (L5 の `RethEvmBridge` の live 版) を組み込む。L12 完了後には、書いた `run_engine_app` が処理する **同じ** `AppMsg` loop を回す Reth-backed devnet ができあがる — `run_engine_app` は同じまま、trait impl を 1 つ差し替えるだけで、real な EVM execution layer が手に入る。
+Stage 6 はこれで完了だ。Stage 7 開始: `InMemoryEvmBridge` を 実際の Reth EthereumNode に置き換える。L11 では **dev node bootstrap** をカバーする — consensus actor と同じ tokio runtime 上で Reth を tokio task として spawn する。L12 では `LiveRethEvmBridge` (L5 の `RethEvmBridge` の live 版) を組み込む。L12 完了後には、書いた `run_engine_app` が処理する **同じ** `AppMsg` loop を回す Reth-backed devnet ができあがる — `run_engine_app` は同じまま、trait impl を 1 つ差し替えるだけで、実際の EVM execution layer が手に入る。
 ````
 
 ---

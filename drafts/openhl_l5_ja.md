@@ -66,9 +66,9 @@ crates/evm/Cargo.toml       — 3 deps (openhl-consensus、openhl-types、async-
 5. **`engine` を crate に組み込む** — `lib.rs` に `pub mod engine;` と re-export を追加。
 6. **`cargo test -p openhl-evm` を実行** — 9 つのテストすべてが pass する。
 
-鍵となる step は #2 — **内部 state の形が変わる。** L4 は `ExecutedBlock` を直接保存していた。L5 は `(B256, Header)` を保存する: alloy-native な型で、`ExecutedBlock` への変換は trait boundary でだけ行う。**alloy 型が source of truth で、`ExecutedBlock` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — `LiveRethEvmBridge` は同じ「内部 vs 境界」split を保ったまま、その後ろに real な Reth provider を追加する。
+鍵となる step は #2 — **内部 state の形が変わる。** L4 は `ExecutedBlock` を直接保存していた。L5 は `(B256, Header)` を保存する: alloy-native な型で、`ExecutedBlock` への変換は trait boundary でだけ行う。**alloy 型が source of truth で、`ExecutedBlock` は contract の serialization に過ぎない。** この分離が L11+ で拡張される — `LiveRethEvmBridge` は同じ「内部 vs 境界」split を保ったまま、その後ろに 実際の Reth provider を追加する。
 
-> 🛑 **考えてみよう。** L4 の `InMemoryEvmBridge` は hash を `(id, number)` から合成していた。L5 の `RethEvmBridge` は `header.hash_slow()` を呼ぶ — real な RLP encoding + Keccak-256 だ。**この違いによって testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
+> 🛑 **考えてみよう。** L4 の `InMemoryEvmBridge` は hash を `(id, number)` から合成していた。L5 の `RethEvmBridge` は `header.hash_slow()` を呼ぶ — 実際の RLP encoding + Keccak-256 だ。**この違いによって testable になる挙動は何か?** ヒント: header の 1 フィールドを変えたとき hash がどうなるかを考えよ。
 
 ## 手を動かす walk-through
 
@@ -491,7 +491,7 @@ git checkout main
 ロジックは同じだが **型が違う**。`InMemoryEvmBridge` は合成型 (高速 unit test 用)。`RethEvmBridge` は alloy 型 (alloy interop を validate するテスト用)。後の `LiveRethEvmBridge` は alloy 型 と live Reth provider の両方を使う。Step ごとに production fidelity が上がりつつ、trait surface は安定したままだ。
 
 **Q: `Header` は約 20 フィールドあるのに、なぜ 4 つしか set しないのか?**
-未設定フィールドは `Default::default()` で埋まる: `state_root = B256::ZERO`、`gas_limit = 0`、`base_fee_per_gas = None` など。v0 では EVM が走っていないので real な `state_root` は計算できない。zero を受け入れる。Production コード (L11+) ではこれらを live Reth provider から計算する。
+未設定フィールドは `Default::default()` で埋まる: `state_root = B256::ZERO`、`gas_limit = 0`、`base_fee_per_gas = None` など。v0 では EVM が走っていないので 実際の `state_root` は計算できない。zero を受け入れる。Production コード (L11+) ではこれらを live Reth provider から計算する。
 
 **Q: alloy の `hash_slow` と `hash_fast` の違いは?**
 `Header` に `hash_fast` メソッドは無い。命名 convention は次のとおりだ: 値を再計算するメソッドは "slow"、pre-cache された値を返すメソッドは "fast"。`Header` には pre-cache された hash が無いので `hash_slow` のみ。alloy の一部の型 (例: `SealedHeader`) は hash を持ち、`.hash()` を "fast" 版として提供する。

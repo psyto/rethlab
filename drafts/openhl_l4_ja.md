@@ -453,7 +453,7 @@ import が実際にコード中で使われているか確認する。Boilerplat
 
 ## 次のレッスン (L5)
 
-動作する `ConsensusBridge` impl は手元にあるが、Reth はまだ一切使っていない。L5 で次の impl を書く: `RethEvmBridge`。同じ trait だが、`ExecutedBlock` は real な `alloy_consensus::Header` から build され (合成ではなく)、`BlockHash` は Reth の `Header::hash_slow` で hash された real な `B256` になる。State はまだ in-memory (live Reth provider なし) だが、**型は real だ。** これが toy 型 (L4) と live 統合 (L11+) を橋渡しする。
+動作する `ConsensusBridge` impl は手元にあるが、Reth はまだ一切使っていない。L5 で次の impl を書く: `RethEvmBridge`。同じ trait だが、`ExecutedBlock` は 実際の `alloy_consensus::Header` から build され (合成ではなく)、`BlockHash` は Reth の `Header::hash_slow` で hash された 実際の `B256` になる。State はまだ in-memory (live Reth provider なし) だが、**型は real だ。** これが toy 型 (L4) と live 統合 (L11+) を橋渡しする。
 ````
 
 ---

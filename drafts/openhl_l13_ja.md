@@ -527,7 +527,7 @@ Validator と chain が、どの hardfork が active かについて合意しな
 
 ## 次のレッスン (L14)
 
-4 つの `ConsensusBridge` メソッドのうち 2 つは live な Reth に到達するようになった。**3 つ目 — `commit` — はまだ in-process な `chain: HashMap` に hash を記録するだけだ。** L14 (最後の大きなレッスン) で、これを real な **Engine API forkchoice update** に置き換える — Reth が production で block を commit するときに使う JSON-RPC call だ。L14 完了後、こちらの bridge は、他のどの Ethereum CL client (Lighthouse、Prysm、Teku) も生成するのと同じ wire-format アクションを生成するようになる。**L15 はそれを受けた capstone** だ — 1 ページの再キャップ、「構築したすべて」図、optional な production-readiness チェックリスト (block bodies、gossip codec、real WAL)。
+4 つの `ConsensusBridge` メソッドのうち 2 つは live な Reth に到達するようになった。**3 つ目 — `commit` — はまだ in-process な `chain: HashMap` に hash を記録するだけだ。** L14 (最後の大きなレッスン) で、これを 実際の **Engine API forkchoice update** に置き換える — Reth が production で block を commit するときに使う JSON-RPC call だ。L14 完了後、こちらの bridge は、他のどの Ethereum CL client (Lighthouse、Prysm、Teku) も生成するのと同じ wire-format アクションを生成するようになる。**L15 はそれを受けた capstone** だ — 1 ページの再キャップ、「構築したすべて」図、optional な production-readiness チェックリスト (block bodies、gossip codec、real WAL)。
 ````
 
 ---

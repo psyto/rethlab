@@ -24,6 +24,8 @@ Over the next 14 lessons, you'll start from `cargo init` on an empty directory a
 
 Hyperliquid moved $300B+ of perp volume in 2025 on a fully closed-source stack — HyperBFT consensus, HyperCore matching engine, HyperEVM execution. There is no public Rust reference. **OpenHL is what the open-source version looks like**, and this course is how you build the Module 1 substrate of it yourself.
 
+**Why a CLOB?** Hyperliquid's design choice is price-time-priority order book matching because its target market — top-tier crypto-native perps — has enough continuous retail flow for the order book to do real local price discovery. RFQ systems (Variational, Paradigm) win the long tail of assets by quoting just-in-time and hedging on a primary venue; AMMs (GMX-era) optimize cold-start at the cost of tail economics. You're about to build the engine for the slice of the market where CLOB is the right answer. The CLOB course (Course 7) capstone reflects on this tradeoff in depth — for now, the design context is enough to start.
+
 ## 1. What you'll have at the end
 
 By the end of lesson 14, on your own machine, `cargo test first_block_via_engine_actors` will produce a passing single-validator BFT consensus round in roughly 0.02 seconds against real Reth as the EVM layer and real Malachite as the BFT layer. The code path is:

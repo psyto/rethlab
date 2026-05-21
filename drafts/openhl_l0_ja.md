@@ -25,6 +25,8 @@
 
 Hyperliquid は 2025 年に $300B+ の perp 取引量を、完全クローズドソースのスタック — HyperBFT consensus、HyperCore matching engine、HyperEVM execution — の上で処理した。公開された Rust 実装はどこにもない。**OpenHL はそのスタックをオープンソースで実装したもの** であり、本コースでは openhl Module 1 の substrate を自分の手で組み上げる。
 
+**なぜ CLOB なのか？** Hyperliquid が price-time-priority 板マッチングを選んだのは、ターゲット市場 — crypto-native perps の top tier — に、板が真の price discovery を行えるだけの retail flow が継続的に存在するから。RFQ 系（Variational、Paradigm）は dealer が just-in-time で quote し primary venue で hedge することで long tail を取り、AMM 系（GMX 世代）は cold-start のために tail のリスク経済性を犠牲にする。これから作るのは、CLOB が正しい答えである市場の slice に対する engine。設計トレードオフの深堀りは Course 7（CLOB）の capstone で行う — いまはこの設計コンテキストだけで十分。
+
 ## 1. コース終了時点で手元にあるもの
 
 レッスン 14 を終える頃には、自分のマシンで `cargo test first_block_via_engine_actors` を走らせると、single-validator BFT consensus のラウンドが約 0.02 秒で pass する状態になる。EVM 層は実際の Reth、BFT 層は実際の Malachite。chain は **Consensus Layer (CL)** と **Execution Layer (EL)** の 2 層に分かれていて、本コースで両側を接続していく。コードのパスは次のようになる:
