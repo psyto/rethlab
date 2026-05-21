@@ -19,10 +19,10 @@
 
 このレッスンで掴む概念:
 
-- **なぜ分類カスケードは `Underwater` を最初に check するか** — 負の margin ratio は maintenance より *も* 小さいので、順序を反転すると underwater アカウントが静かに Liquidatable に reclassify され、insurance-fund signal が失われる。最も極端な state を最初に check する — カスケードは内側に narrow する。
-- **すべての境界で strict-less-than** — `ratio < maintenance_bps`、`≤` ではない。ratio が *ちょうど* maintenance のアカウントは `AtRisk` であって `Liquidatable` ではない。境界線そのものは *より良い* state に属する。strict に下回って初めて悪い state に落ちる。
-- **Params 比較のための型 widening** — `i64::from(params.initial_margin_bps)` が境界で u32 を i64 に upcast し、その後 2 つの i64 値を比較する。各比較サイトでの暗黙キャストを避ける。
-- **Flat-as-Safe は無償、code しない** — `margin_ratio` は flat ポジションに対して `MarginRatio(i64::MAX)` を返し、その値は妥当な `initial_margin_bps` のどれよりも大きいので、`margin_health` は special-case 分岐なしに `Safe` を返す。Composition が処理する。
+- **分類カスケードが `Underwater` を最初に check する理由。** 負の margin ratio は maintenance より *も* 小さいので、順序を逆にすると underwater アカウントが静かに Liquidatable に再分類されてしまい、insurance-fund 向けのシグナルが失われる。最も極端な state から先に check する — カスケードは内側に narrow していく。
+- **すべての境界で strict-less-than を使う。** `ratio < maintenance_bps` であって、`≤` ではない。Ratio が *ちょうど* maintenance のアカウントは `AtRisk` であって `Liquidatable` ではない。境界線そのものは *より良い* state に属する。Strict に下回って初めて、悪い state に落ちる。
+- **Params 比較のための型 widening。** `i64::from(params.initial_margin_bps)` が境界で u32 を i64 にアップキャストし、その後は 2 つの i64 値の比較になる。各比較サイトでの暗黙キャストを避けるための一手だ。
+- **Flat-as-Safe は無償、明示的に書かない。** `margin_ratio` は flat ポジションに対して `MarginRatio(i64::MAX)` を返し、その値は妥当な `initial_margin_bps` のどれよりも大きい。したがって `margin_health` は special-case 分岐なしに自然と `Safe` を返す。Composition が片付けてくれる。
 
 確認:
 
@@ -30,35 +30,35 @@
 cargo test -p openhl-liquidation
 ```
 
-…が 21 テスト pass する（L4-L5 から 16 + 新規境界テスト 5）。
+…で 21 テストが pass する（L4-L5 の 16 + 新規境界テスト 5）。
 
 具体的な変更:
 
-- **`src/compute.rs`** — `margin_ratio` の後に `margin_health` を追記 + 既存のテストモジュール内に unit test 5 個。
-- **`src/lib.rs`** — compute の re-export を `margin_health` で拡張。
+- **`src/compute.rs`。** `margin_ratio` の後に `margin_health` を追記し、既存のテストモジュールに unit test 5 個を加える。
+- **`src/lib.rs`。** Compute の re-export を `margin_health` で拡張する。
 
-L6 は応用: ここまでに i128 / saturate / proptest の規律は内面化されている。分類カスケードは短い — だが design hill（カスケード順 + strict-less-than）が、不注意な実装でほとんどのバグが潜む場所。
+L6 は応用編だ。ここまでに i128 / saturate / proptest の規律は内面化されている。分類カスケードは短い — だが design hill（カスケード順 + strict-less-than）こそが、不注意な実装でバグが潜みやすい場所だ。
 
 ## おさらい
 
 L5 の後:
-- `compute.rs` には `notional_value`、`unrealized_pnl`、`account_equity`、`margin_ratio`、`saturate_i128_to_i64` ヘルパー、加えて 13 unit test と 3 proptest がある。
-- 非単調エッジケースは `long_ratio_monotonic_in_mark_when_levered` に `prop_assume!` で表現済み。
-- `cargo test` が 16 テストを走らせ、すべて green。
+- `compute.rs` には `notional_value`、`unrealized_pnl`、`account_equity`、`margin_ratio`、`saturate_i128_to_i64` ヘルパー、加えて 13 unit test と 3 proptest が揃っている。
+- 非単調エッジケースは `long_ratio_monotonic_in_mark_when_levered` の `prop_assume!` で表現済み。
+- `cargo test` は 16 テストを走らせ、すべて green。
 
-L6 では `MarginRatio` 値を `MarginHealth` variants にマップする。関数は短い。決定は短くない。
+L6 では `MarginRatio` の値を `MarginHealth` の variant にマップする。関数は短い。決定は短くない。
 
 ## 計画
 
-3 つの編集:
+編集は 3 つ:
 
-1. **`crates/liquidation/src/compute.rs` に `margin_health` を追記** — 13 行 + doc コメント。`margin_ratio` の下に置き、それを使う。
-2. **既存のテストモジュールに unit test 5 個追加** — `MarginHealth` variant ごとに 1 つ（4 テスト）+ ちょうど maintenance しきい値での境界テスト 1 つ。
-3. **`crates/liquidation/src/lib.rs` を更新** — `pub use compute::{...}` 行を拡張。
+1. **`crates/liquidation/src/compute.rs` に `margin_health` を追記。** 13 行 + doc コメント。`margin_ratio` の直下に置き、それを利用する。
+2. **既存のテストモジュールに unit test 5 個を追加。** `MarginHealth` variant ごとに 1 つ（4 テスト）+ ちょうど maintenance しきい値での境界テスト 1 つ。
+3. **`crates/liquidation/src/lib.rs` を更新。** `pub use compute::{...}` 行を拡張する。
 
-> 🛑 **予測。** スクロール前に: カスケードは 4 状態（`Underwater`、`Liquidatable`、`AtRisk`、`Safe`）を check する必要がある。条件は: `ratio < 0`、`ratio < maintenance_bps`、`ratio < initial_bps`、それ以外。**カスケードを `Liquidatable → Underwater → AtRisk → Safe` の順に書く（Liquidatable を最初に check）と何が起きるか?**
+> 🛑 **予測。** スクロール前に考えてほしい。カスケードは 4 状態（`Underwater`、`Liquidatable`、`AtRisk`、`Safe`）を見分ける必要がある。条件は `ratio < 0`、`ratio < maintenance_bps`、`ratio < initial_bps`、それ以外。**カスケードを `Liquidatable → Underwater → AtRisk → Safe` の順（Liquidatable を最初に check）に書いたら、何が起きるか?**
 
-（答え: **Underwater アカウントが Liquidatable に分類される。** Ratio `−5_000` は `< maintenance_bps`（= 200）でもあるので、Liquidatable 分岐が最初に発火し、カスケードは Underwater check に到達しない。結果: bridge が insurance-fund-needed signal を受け取らず、underwater な不足が静かに通常の liquidation path を通り、数学が「不足を解消できなかった」と言っているのに帳簿上はポジションが solvent に close される。**カスケード順は load-bearing — 最も極端な state を最初に check する。内側に進む各ステップが残りの範囲を narrow する。**）
+（答え: **Underwater アカウントが Liquidatable に分類されてしまう。** Ratio `−5_000` は `< maintenance_bps`（= 200）でもあるので、Liquidatable 分岐が先に発火し、カスケードは Underwater check に到達しない。結果として、bridge は insurance-fund-needed のシグナルを受け取らず、underwater な不足が静かに通常の liquidation path を通る。数学が「不足を解消できなかった」と言っているのに、帳簿の上ではポジションが solvent に close されてしまう。**カスケード順は load-bearing だ — 最も極端な state から先に check する。内側に進む各ステップが、残りの範囲を narrow させる。**）
 
 ## 手を動かす walk-through
 
@@ -97,19 +97,19 @@ pub fn margin_health(
 }
 ```
 
-この 18 行の関数で気づくべき 5 点:
+この 18 行の関数で押さえておく点が 5 つ:
 
-1. **カスケード順が `Underwater` を最初に check する。** 負の ratio も `< maintenance_bps` を満たすので、Liquidatable を最初に check すると、すべての Underwater アカウントが Liquidatable に誤分類される。**不変量: 各分岐の条件は、前の分岐が捕まえたものすべてを排除する。** Underwater（`< 0`）が最も厳しく、Liquidatable（`< maintenance`）、AtRisk（`< initial`）、そして最後に Safe（残り）へと内側に narrow する。
+1. **カスケード順が `Underwater` を最初に check する。** 負の ratio は `< maintenance_bps` も満たすので、Liquidatable を最初に check すると、すべての Underwater アカウントが Liquidatable に誤分類されてしまう。**不変量: 各分岐の条件は、前の分岐が捕まえたものをすべて排除している。** Underwater（`< 0`）が最も厳しく、そこから Liquidatable（`< maintenance`）、AtRisk（`< initial`）、最後に Safe（残り）へと内側に narrow していく。
 
-2. **すべてのしきい値で `<`、`≤` ではない。** Ratio が `maintenance_bps` に等しいアカウントは *まだ* Liquidatable ではない — AtRisk。慣例的な読み方: maintenance margin は *上に* とどまるべき線。strict に超えてから liquidation 対象になる。Doc がこれを明示し、Step 2 のテストが強制する。**Strict inequality はしきい値そのものがより良い health state に属することを意味する。**
+2. **しきい値はすべて `<`、`≤` ではない。** Ratio が `maintenance_bps` に等しいアカウントは *まだ* Liquidatable ではなく、AtRisk だ。慣例的な読み方は「maintenance margin は *上にとどまる* べき線で、strict に超えてから liquidation 対象になる」。Doc がこれを明示し、Step 2 のテストが強制する。**Strict inequality は、しきい値そのものがより良い health state に属する、ということを意味している。**
 
-3. **`i64::from(params.initial_margin_bps)` が u32 → i64 を widen する。** フィールドは `u32`（メモリ節約、bps 値は ~40 億まで十分な範囲）。Ratio は `i64`（`margin_ratio` の signed 除算によって強制された型）。Rust では異なる integer 型の比較はコンパイルエラー。境界で widening することで比較がクリーンに保たれる。**Params ごとに 1 回キャスト。カスケード本体は純粋な i64 < i64 として読める。**
+3. **`i64::from(params.initial_margin_bps)` が u32 → i64 を widen する。** フィールドは `u32`（メモリ節約。bps 値は ~40 億まで十分な範囲だ）。Ratio は `i64`（`margin_ratio` の signed 除算によって型がそうなっている）。Rust では異なる integer 型同士の比較はコンパイルエラーになる。境界で widening しておけば、本体の比較はクリーンに保てる。**Params ごとに 1 回キャストする。カスケード本体は純粋な i64 < i64 として読める。**
 
-4. **Flat ポジション用の special case なし。** `margin_ratio` は flat アカウントに対して `MarginRatio(i64::MAX)` を返す。`i64::MAX` は妥当な `initial_margin_bps` のどれよりはるかに大きいので、カスケードは `Safe` に fall through する。**Flat-as-Safe の性質は `margin_ratio` の flat-position ガードに反映されている — `margin_health` はそれを知る必要がない。** Flat-position セマンティクスへの将来の微調整は *1 箇所* （`margin_ratio`）で起きる、2 つの同期した分岐ではなく。
+4. **Flat ポジション用の special case がない。** `margin_ratio` は flat アカウントに対して `MarginRatio(i64::MAX)` を返す。`i64::MAX` は妥当な `initial_margin_bps` のどれよりも遥かに大きいので、カスケードはそのまま `Safe` まで fall through する。**Flat-as-Safe の性質は `margin_ratio` の flat-position ガードに既に反映されている。`margin_health` はそれを知らなくてよい。** Flat-position セマンティクスを将来微調整したくなったとき、変更は *1 箇所*（`margin_ratio`）で済む。2 つの同期した分岐を抱えずに済む。
 
-5. **関数は `&LiquidationParams` を受け取る、値の `LiquidationParams` ではない。** `LiquidationParams` は `Copy`（12 byte）だが、参照シグネチャは「これは読むだけで consume しない」を signal する。Bridge は同じ `params` をスキャン全体のあらゆる `margin_health` 呼び出しに渡す。参照は呼び出しごとの（技術的には無償の）move を回避する。
+5. **関数は `&LiquidationParams` を受け取る。値の `LiquidationParams` ではない。** `LiquidationParams` は `Copy`（12 byte）だが、参照シグネチャは「これは読むだけで consume しない」と読み手にシグナルする。Bridge は同じ `params` を、スキャン中のすべての `margin_health` 呼び出しに渡す。参照渡しなら、呼び出しごとの（技術的には無償の）move を避けられる。
 
-> 🛑 **やりがちな勘違い。** 「3 つの `if` 分岐ではなく `match (ratio.0, maintenance_bps, initial_bps) { ... }` ではダメか?」 **条件は不等式であってパターンマッチではないから。** Match パターンは値の structural な相等性のためのもので、range check のためではない。Guard 句（`x if x < 0 => ...`）付きの match に書き換えると、可読性を失うだけで何も得られない — 明示的なカスケードはちょうど決定をそう考える通りに読める。
+> 🛑 **やりがちな勘違い。** 「3 つの `if` 分岐ではなく `match (ratio.0, maintenance_bps, initial_bps) { ... }` ではダメか?」 **条件は不等式であって、パターンマッチではないからだ。** Match パターンは値の structural な相等性のためのもので、range check のためではない。Guard 句（`x if x < 0 => ...`）付きの match に書き換えると、可読性を失うだけで得るものがない — 明示的なカスケードは、決定をそう考える通りにそのまま読める。
 
 ### Step 2: 境界テストを 5 個追加
 
@@ -167,15 +167,15 @@ pub fn margin_health(
     }
 ```
 
-気づくべき 4 点:
+押さえておく点が 4 つ:
 
-1. **各テストがテストの `MarginHealth` を生み出す算術を名指しする。** "*Ratio 1_500 bps (= 15%)*" が読者（および失敗を読み返す将来の自分）に、テストがどの range を exercise するかを正確に伝える。コメントが正しくセットアップが間違ったテストは、assertion だけのテストより気づきやすい。
+1. **各テストが、結果の `MarginHealth` を生む算術をコメントで名指ししている。** "*Ratio 1_500 bps (= 15%)*" のように書くと、読者（および失敗を読み返す将来の自分）にどの range を突いているかが正確に伝わる。コメントは正しいのにセットアップだけ間違っているテストは、assertion だけのテストより、ずっと気づきやすい。
 
-2. **4 variant 用に 4 テスト、境界用に 1 テスト。** 各カスケード分岐が positive テストを得る。`health_boundary_at_maintenance` が strict-less-than の慣例を証明する。この 5 番目のテストがないと、`<` を `≤` に flip した将来のリファクタリングが他の 4 つを pass しつつ、ちょうどしきい値での挙動を静かに変えてしまう — 本番ポジションの最も一般的な margin level がそこ（アカウントは maintenance に *到達してから* 下回る）。
+2. **Variant 用に 4 テスト、境界用に 1 テスト。** 各カスケード分岐が positive テストを 1 つずつ持ち、`health_boundary_at_maintenance` が strict-less-than の慣例を裏付ける。この 5 番目のテストがないと、`<` を `≤` に flip するリファクタリングが他の 4 テストを pass したまま通ってしまい、ちょうどしきい値での挙動を静かに変えてしまう — そして本番ポジションの最も一般的な margin level は、ちょうどその辺りに集まる（アカウントは maintenance に *到達してから* 下回るからだ）。
 
-3. **`health_boundary_at_maintenance` は `hyperliquid_default()` ではなく独自の params を構築する。** Hyperliquid default は `liquidation_fee_bps = 150` を持つが、このテストには無関係。明示的な struct 構築は、テストが *実際* どのフィールドに依存するかを文書化する。他のテストは fee フィールドが load-bearing でないので default を使う。
+3. **`health_boundary_at_maintenance` は `hyperliquid_default()` ではなく、独自に params を組み立てる。** Hyperliquid default は `liquidation_fee_bps = 150` を持つが、このテストには無関係だ。明示的に struct を構築することで、「このテストが *実際に* どのフィールドに依存するか」が文書化される。他のテストは fee フィールドが load-bearing でないので default を使う。
 
-4. **`MarginHealth::Underwater` は L5 の underwater ケース** で exercise される（薄い collateral を持つ long ポジションに対する `mark = 50`）。L5 の `ratio_can_be_negative` と同じセットアップ — 負の ratio テストが数学を証明し、variant テストが分類を証明する。
+4. **`MarginHealth::Underwater` は L5 の underwater ケース**（薄い collateral の long ポジションに対する `mark = 50`）で exercise する。L5 の `ratio_can_be_negative` と同じセットアップだ — 負の ratio テストが数学を保証し、variant テストが分類を保証する、という形になる。
 
 ### Step 3: `src/lib.rs` を更新
 
@@ -193,7 +193,7 @@ pub use compute::{
 };
 ```
 
-新規 1 名 — `margin_health` — がアルファベット順に `account_equity` と `margin_ratio` の間に挿入される。リストが ~5 項目を超えるとここで行が wrap する。
+新規 1 名 — `margin_health` — を、アルファベット順で `account_equity` と `margin_ratio` の間に挿入する。リストが ~5 項目を超えたあたりで、ここの行が wrap し始める。
 
 ### Step 4: テストを走らせる
 
@@ -230,20 +230,20 @@ test compute::tests::short_ratio_monotonic_in_mark ... ok
 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-エラーが出た場合に多い原因:
+エラー時にありがちなパターン:
 
-- **`health_boundary_at_maintenance` が `AtRisk` の代わりに `Liquidatable` で失敗** — カスケード内のどこかで `<` を `≤` に間違って書いた。境界テストはまさにこれを捕まえるために存在する。
-- **`health_underwater` が `Liquidatable` で失敗** — `Underwater` check を `Liquidatable` check の *後* に置いた。並び替える。最も極端な state が最初。
+- **`health_boundary_at_maintenance` が `AtRisk` の代わりに `Liquidatable` で失敗。** カスケード内のどこかで `<` を `≤` と書いてしまっている。境界テストはまさにこれを捕まえるために存在する。
+- **`health_underwater` が `Liquidatable` で失敗。** `Underwater` の check を `Liquidatable` の check より *後* に置いてしまっている。並び替える — 最も極端な state を最初に。
 
 ## 設計の振り返り
 
-このレッスンの load-bearing な決定が 3 つ:
+このレッスンに焼き込んだ load-bearing な決定は 3 つ:
 
-1. **カスケード順: 最も極端な state を最初に check する。** `Underwater` → `Liquidatable` → `AtRisk` → `Safe`。Narrowing の方向は、各分岐の条件が前の分岐が捕まえたものすべてを排除することを意味する。順序を反転すると、深刻なケースが静かに緩いケースを通る。**カスケード条件が重なるとき、最も厳しいものから最も緩いものへ sort する。**
+1. **カスケード順: 最も極端な state を最初に check する。** `Underwater` → `Liquidatable` → `AtRisk` → `Safe`。Narrowing の方向に並んでいるので、各分岐の条件は前の分岐が捕まえたものを必ず排除している。順序を逆にすると、深刻なケースが静かに緩いケースの分岐を通り抜けてしまう。**カスケードの条件が重なり合うときは、厳しいものから緩いものへ sort する。**
 
-2. **しきい値での strict-less-than: 線はより良い state に属する。** Maintenance ちょうどのアカウントは `AtRisk`、`Liquidatable` ではない。これは慣例の選択 — 本番の取引所では異なる — だが、システム *内* の一貫性が、しきい値がどちら側に属するかより重要。**慣例を選び、doc で名指しし、境界テストで強制する。**
+2. **しきい値での strict-less-than: 境界線はより良い state に属する。** Maintenance ちょうどのアカウントは `AtRisk` であって `Liquidatable` ではない。これは慣例の選択 — 本番の取引所では別の慣例を採るところもある — だが、システム *内* で一貫していることのほうが、しきい値がどちら側に属するかより重要だ。**慣例を選び、doc で名指しし、境界テストで強制する。**
 
-3. **`margin_health` 内に flat ポジションの special case なし。** `margin_ratio`（flat に対して `i64::MAX` を返す）との composition で、性質が無料で fall out する。`if snapshot.position_size.0 == 0 { return Safe; }` を追加すれば、flat-position の挙動を 2 箇所に複製してしまい、片方が変わった瞬間にずれる。**不変量を 1 箇所に表現し、下流の関数が composition で継承するに任せる。**
+3. **`margin_health` 内に flat ポジションの special case を置かない。** `margin_ratio`（flat に対して `i64::MAX` を返す）との composition のおかげで、その性質が無料で落ちてくる。`if snapshot.position_size.0 == 0 { return Safe; }` を追加してしまうと、flat-position の挙動を 2 箇所に複製することになり、片方が変わった瞬間にずれが生まれる。**不変量は 1 箇所で表現し、下流の関数が composition でそれを継承するに任せる。**
 
 ## 答え合わせ
 
@@ -260,29 +260,29 @@ L6 の後:
 
 ## よくある質問
 
-**Q1: なぜ misconfigured な params（maintenance ≥ initial）のようなケースのために `Result<MarginHealth, ...>` を返さないのか?**
+**Q1: なぜ misconfigured な params（maintenance ≥ initial）のケースに備えて `Result<MarginHealth, ...>` を返さないのか?**
 
-関数は total — どの入力も定義された出力を生む。Misconfigured な params（maintenance == initial、または maintenance > initial）でも、すべてのアカウントを 4 variants のどれかに分類する、間違ったセマンティクスで。`Result` を返すと、すべての呼び出しサイトに *params を妥当に構築した bridge からは決して起きない* `MisconfiguredParams` エラーを処理させる。**Total function は compose しやすい。Params は loading 境界で validate し、下流ではすべて信頼する。**
+関数は total だ — どんな入力にも、定義された出力が対応する。Misconfigured な params（maintenance == initial、あるいは maintenance > initial）でも、すべてのアカウントは 4 variant のどれかに分類される。意味的に間違った結果ではあるが、定義された結果ではある。`Result` を返してしまうと、*params を妥当に組み立てる bridge からは決して起きない* `MisconfiguredParams` エラーを、すべての呼び出しサイトに処理させることになる。**Total function は compose しやすい。Params は loading 境界で validate し、下流ではすべて信頼する。**
 
-**Q2: `margin_health` を sorted thresholds 配列と binary search でもっと「データ駆動」にできないか?**
+**Q2: `margin_health` を sorted thresholds 配列と binary search で、もっと「データ駆動」にできないか?**
 
-4 状態なら、明示的なカスケードのほうがクリアで速い。Binary search は threshold の数が ~10 を超えると勝つ — その時点でリファクタリングする。先取りした一般化は、エンジンが必要としない仕組みを足す。**持っている cardinality に最適化する、いつか持つかもしれない cardinality ではなく。**
+4 状態しかないなら、明示的なカスケードのほうがクリアで速い。Binary search が勝つのは threshold の数が ~10 を超えたあたりからだ — その時点でリファクタリングすればよい。先取りの一般化は、エンジンが必要としない仕組みを足してしまう。**今もっている cardinality に最適化する。いつか持つかもしれない cardinality に最適化しない。**
 
-**Q3: `maintenance_bps > initial_bps`（misconfigured）のとき何が起きるか?**
+**Q3: `maintenance_bps > initial_bps`（misconfigured）のとき、何が起きるか?**
 
-カスケードは依然として定義された分類を生む: `ratio >= maintenance_bps` で、次の分岐は `ratio < initial_bps`（maintenance > initial なら ratio も ≥ initial なので false）、`Safe` に fall through する。`ratio ∈ [0, maintenance_bps)` で `Liquidatable` に着地する。AtRisk は到達不能になる。**Misconfigured params は一貫性のあるが意図しない分類スキームを生む。Validation は param 構築側の責任で、分類器の責任ではない。**
+カスケードは依然として定義された分類を生む。`ratio >= maintenance_bps` の領域では、次の分岐 `ratio < initial_bps` が false になり（maintenance > initial なら ratio も ≥ initial だ）、そのまま `Safe` に fall through する。`ratio ∈ [0, maintenance_bps)` の領域は `Liquidatable` に着地する。結果として AtRisk が到達不能になる。**Misconfigured params は一貫性はあるが意図しない分類スキームを生む。Validation は param 構築側の責任で、分類器の責任ではない。**
 
 **Q4: なぜ `margin_health` は params の i64 変換をキャッシュしないのか?**
 
-呼び出し側は通常、block ごとのスイープで `margin_health` をアカウント当たり 1 回呼ぶ。Bridge は同じ `&LiquidationParams` をすべての呼び出しに渡す。2 つの `i64::from(u32)` キャストはゼロコスト — コンパイラは最大でも `mov` 命令を 1 つ emit するだけ。**コストを測ってからキャッシュする。反射でキャッシュに手を伸ばさない。**
+呼び出し側は通常、block ごとのスイープで `margin_health` をアカウント 1 件あたり 1 回しか呼ばない。Bridge は同じ `&LiquidationParams` をすべての呼び出しに渡す。2 つの `i64::from(u32)` キャストはゼロコスト — コンパイラはせいぜい `mov` 命令を 1 つ emit するだけだ。**コストを測ってからキャッシュする。反射でキャッシュに手を伸ばさない。**
 
 **Q5: カスケードを `match` の range pattern（`0..maintenance_bps => Liquidatable`）で書けるか?**
 
-Rust の `match` は exclusive-range pattern をサポートする（1.26 から）ので、構文的にはイエス。しかしパターンは `i64::MIN..0`、`0..maintenance_bps`、`maintenance_bps..initial_bps`、`initial_bps..=i64::MAX` になる。*名前付きの* 境界（リテラルではなく変数を参照）が必要なので、各パターンに guard 句がいずれにせよ必要になる。If/else カスケードのほうがここではクリーンに読める。**Structural なケースには `match`、同じ値での不等式カスケードには `if/else`。**
+Rust の `match` は exclusive-range pattern をサポートする（1.26 から）ので、構文的にはイエス。だがパターンは `i64::MIN..0`、`0..maintenance_bps`、`maintenance_bps..initial_bps`、`initial_bps..=i64::MAX` になる。*名前付き* の境界（リテラルではなく変数）を参照する必要があるので、各パターンに結局 guard 句が必要だ。If/else カスケードのほうがここではクリーンに読める。**Structural なケースには `match`、同じ値に対する不等式カスケードには `if/else`。**
 
 ## 次のレッスン (L7)
 
-L7 で Stage 10a を `close_order_spec` で閉じる — snapshot を bridge が consume する `CloseOrderSpec` に変換する関数だ。3 unit test: long-closes-with-Sell、short-closes-with-Buy、flat-position エッジケース（qty = 0）。L6 より短い — L7 までに compute モジュール全体が背後にあり、レッスンの大半は L4 の `unsigned_abs` 規律とエンジンの外向きインターフェース間の橋渡し。
+L7 では `close_order_spec` で Stage 10a を閉じる — snapshot を bridge が consume する `CloseOrderSpec` に変換する関数だ。Unit test は 3 つ: long-closes-with-Sell、short-closes-with-Buy、flat-position エッジケース（qty = 0）。L6 より短い — L7 の時点で compute モジュール全体は背後に揃っていて、レッスンの大半は L4 の `unsigned_abs` 規律と、エンジンの外向きインターフェースとの間を橋渡しすることに費やされる。
 
 ````
 

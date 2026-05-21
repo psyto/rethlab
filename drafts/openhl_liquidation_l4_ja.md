@@ -19,11 +19,11 @@
 
 このレッスンで掴む概念:
 
-- **なぜ `notional_value` は `u64` を返し、`unrealized_pnl` は `i64` を返すか** — notional exposure は常に非負（`|size| × mark`）。PnL は signed（`mark − entry` は両側に振れる）。それぞれを return type で示すことで、呼び出しサイトでの sign-confusion バグをコンパイラが捕まえられる。
-- **`i64` には `abs()` ではなく `unsigned_abs()`** — `i64::MIN.abs()` はオーバーフローする（正の `i64::MIN` は存在しない）。`unsigned_abs()` は `u64` を返し、panic しない。signed integer の magnitude が欲しいときは常にこれを使う。
-- **分岐なしでロングとショートを処理する signed-multiplication のトリック** — `(mark − entry) × size`、`size` は signed。4 つの符号の組み合わせがすべて自然に正しい PnL に解決する。`if side == Long` はどこにもいらない。
-- **i128 中間値の規律** — sign-preserving な減算（`i128::from(mark.0) − i128::from(entry.0)`）の後、overflow-safe な積、最後に `i64` に saturate して戻す。Funding の `compute_premium` と同じ形状。
-- **`saturate_i128_to_i64` が load-bearing ヘルパー** — network-pathological な入力で `i64::MAX` を *超えうる* 積は、いつかは超える。Saturate であって panic ではない。
+- **`notional_value` は `u64`、`unrealized_pnl` は `i64`。** Notional exposure は `|size| × mark` で、常に非負。PnL は `mark − entry` が両側に振れるので signed。この差を返り型で示しておけば、呼び出し側で符号を取り違えるバグはコンパイラが捕まえてくれる。
+- **`i64` から magnitude が欲しいなら `abs()` ではなく `unsigned_abs()` を使う。** `i64::MIN.abs()` はオーバーフローする（正の `i64::MIN` は表現できないため）。`unsigned_abs()` は `u64` を返すので panic しない。Signed integer から magnitude を取り出すときは、迷わずこちらを選ぶ。
+- **分岐なしで long / short 両方を捌く signed-multiplication のトリック。** `size` を signed のまま保ち `(mark − entry) × size` を計算すれば、4 通りの符号の組み合わせがすべて正しい PnL に自然に着地する。`if side == Long` は一度も書かない。
+- **i128 中間値の規律。** まず符号を保ったまま減算（`i128::from(mark.0) − i128::from(entry.0)`）、次にオーバーフローしない積、最後に `i64` へ saturate して戻す。Funding の `compute_premium` と同じ形だ。
+- **`saturate_i128_to_i64` という load-bearing なヘルパー。** Network-pathological な入力で積が `i64::MAX` を超えうる場面は、いつか必ず訪れる。そのとき panic ではなく saturate する、という選択がここで効いてくる。
 
 確認:
 
@@ -31,32 +31,32 @@
 cargo test -p openhl-liquidation
 ```
 
-…が 8 つのテストを pass する（`notional_value` 用 3 つ + `unrealized_pnl` 用 5 つ）。
+…で 8 テストが pass する（`notional_value` 用 3 つ + `unrealized_pnl` 用 5 つ）。
 
 具体的な変更:
 
-- **`crates/liquidation/src/compute.rs` を作成** — このファイルはまだ存在しない。モジュール docs + imports + 2 つの公開関数 + 1 つの private ヘルパー + 8 つの unit test を入れた `#[cfg(test)]` ブロック。
-- **`src/lib.rs`** — `pub mod compute;` を追加し、re-export に `notional_value` と `unrealized_pnl` を加える。
+- **`crates/liquidation/src/compute.rs` を新規作成。** このファイルはまだ存在しない。モジュール doc、import、公開関数 2 つ、private ヘルパー 1 つ、unit test 8 個を載せた `#[cfg(test)]` ブロックを、一気に流し込む。
+- **`src/lib.rs` を更新。** `pub mod compute;` を追加し、re-export に `notional_value` と `unrealized_pnl` を足す。
 
-L4 はテストが走る最初のレッスンだ。ここから各レッスンが L8（`close_order_spec`、Stage 10a 挙動の最後）までテストを追加していく。
+L4 は本クレートで初めてテストが走るレッスンだ。ここから L8（`close_order_spec`、Stage 10a の挙動の最後）まで、各レッスンがテストを積み増していく。
 
 ## おさらい
 
 L3 の後:
-- Types モジュールは Stage 10a に対して byte-for-byte 完成 — `MARGIN_SCALE`、`LiquidationParams`、`MarginRatio`、`MarginHealth`、`AccountSnapshot`、`CloseOrderSpec`。
+- Types モジュールは Stage 10a に対して byte-for-byte 完成している — `MARGIN_SCALE`、`LiquidationParams`、`MarginRatio`、`MarginHealth`、`AccountSnapshot`、`CloseOrderSpec`。
 - Compute モジュールはまだ存在しない。
-- `cargo build` は pass する。`cargo test` はゼロ件走る。
+- `cargo build` は通る。`cargo test` は走るテストがゼロ件だ。
 
-L4 で compute モジュールを作成する。最初の 2 関数が「このアカウントは *現在* どう見えるか?」 — その notional exposure と unrealized PnL — に答える。L5 ではその上に equity と margin ratio を build する。
+L4 で compute モジュールを作る。最初の 2 関数が答えるのは「このアカウントは *いま* どう見えるか」 — notional exposure と unrealized PnL の 2 つだ。L5 ではその上に equity と margin ratio を積み上げる。
 
 ## 計画
 
-2 つの編集:
+編集は 2 つ:
 
-1. **`crates/liquidation/src/compute.rs` を作成** — モジュール docs + L1-L3 から `AccountSnapshot`、`MarkPrice` を import する `use` 文 + `notional_value` + `unrealized_pnl` + private な `saturate_i128_to_i64` ヘルパー + `#[cfg(test)]` テストブロック（notional 3 個 + PnL 5 個）。
-2. **`src/lib.rs` を更新** — `pub mod compute;` を追加し、公開 re-export を 2 つの新関数名で拡張する。
+1. **`crates/liquidation/src/compute.rs` を新規作成。** モジュール doc、L1-L3 から `AccountSnapshot` と `MarkPrice` を import する `use` 文、`notional_value`、`unrealized_pnl`、private な `saturate_i128_to_i64` ヘルパー、`#[cfg(test)]` テストブロック（notional 3 個 + PnL 5 個）まで。
+2. **`src/lib.rs` を更新。** `pub mod compute;` を追加し、公開 re-export に新関数 2 つを足す。
 
-> 🛑 **予測。** スクロール前に: `unrealized_pnl` は long が profit のときも short が profit のときも *正* を返す必要がある。素朴な形は:
+> 🛑 **予測。** スクロール前に考えてほしい。`unrealized_pnl` は long が利益を出しているときも short が利益を出しているときも *正* の値を返してほしい。素朴に書くとこうなる:
 >
 > ```rust
 > if size > 0 {  // long
@@ -66,21 +66,21 @@ L4 で compute モジュールを作成する。最初の 2 関数が「この�
 > }
 > ```
 >
-> これは動くが分岐する。**4 つの符号の組み合わせをすべて `if` なしで正しく扱う single-expression の式がある。** 何か? ヒント: `(mark - entry) * size` という式で、`size` 自体が long/short の符号を運んでいたら何が起きるか考える。
+> これでも動くが、分岐がある。**実は、4 通りの符号の組み合わせをすべて `if` なしで正しく捌く単一の式がある。** 何か。ヒント: `(mark - entry) * size` の中で `size` 自身が long/short の符号を運んでいたら、計算がどう転ぶか考えてみる。
 
-（答え: **`(mark − entry) × size`、`size` は signed `i64`。** 4 ケースを辿る:
+（答え: **`(mark − entry) × size`、ただし `size` は signed の `i64`。** 4 ケースを順に追ってみる:
 - Long（`size = +10`）、mark > entry: 正 × 正 = 正の profit ✓
 - Long（`size = +10`）、mark < entry: 負 × 正 = 負の loss ✓
 - Short（`size = −10`）、mark > entry: 正 × 負 = 負の loss ✓
 - Short（`size = −10`）、mark < entry: 負 × 負 = 正の profit ✓
 
-すべてのケースで符号が正しく着地する。**分岐なし、2 つのコードパスを別々にテストする必要なし、誰かが片方の分岐だけ「直して」もう片方を放置するリスクなし。** これが `PositionSize` を signed にした load-bearing な理由 — 型が long/short の区別を運ぶので、演算が運ぶ必要がない。）
+どのケースでも符号が正しく着地する。**分岐がない。コードパスが 2 本に分かれて別々にテストを要求することもない。片方の分岐だけ「直して」もう一方を放置するリスクもない。** `PositionSize` を signed にしたのは、まさにこのためだ — 型が long/short の区別を運んでくれれば、演算側がそれを運ぶ必要はなくなる。）
 
 ## 手を動かす walk-through
 
 ### Step 1: `src/compute.rs` を作成
 
-`crates/liquidation/src/compute.rs` を作成する。このファイルはまだ存在しない。初期内容:
+`crates/liquidation/src/compute.rs` を新規作成する。初期内容:
 
 ```rust
 //! Pure liquidation math.
@@ -106,9 +106,9 @@ use openhl_clob::{Qty, Side};
 use openhl_funding::MarkPrice;
 ```
 
-モジュール doc には 6 つの関数を挙げているが、L4 で着地するのはその 2 つだけ。次の 4 つ（`account_equity`、`margin_ratio`、`margin_health`、`close_order_spec`）は L5–L7 で来る。6 つすべてを前もって挙げておけば、レッスンごとにモジュール doc を編集し直さずに済む。文脈なしでここに辿り着いた読者にとってのロードマップにもなる。
+モジュール doc に挙げているのは 6 関数だが、L4 で着地するのはそのうちの 2 つ。残り 4 つ（`account_equity`、`margin_ratio`、`margin_health`、`close_order_spec`）は L5–L7 で順に追加していく。6 つ全部をいま列挙しておけば、レッスンごとにモジュール doc を編集し直さなくて済む。文脈なしでここに辿り着いた読者にとっても、ロードマップとして機能する。
 
-> 🛑 **やりがちな勘違い。** 「L4 は `AccountSnapshot` と `MarkPrice` しか使わないのに、なぜ `CloseOrderSpec`、`Side`、`Qty`、`LiquidationParams`、`MarginHealth`、`MarginRatio` を import するのか?」 **次のすべてのレッスンが使うから — まとめて L4 で import を追加しておけば、各レッスンの diff が追加される関数だけにフォーカスされる。** Rust は L5+ まで unused import warning を出す。Funding L1 が後から来る型の rustdoc warning を許容したのと同じ要領でそれを許容する。代替案 — `use` 行を L4–L7 で 6 回編集する — は busywork で、各レッスンが実際に何を加えているのかを曖昧にする。
+> 🛑 **やりがちな勘違い。** 「L4 で使うのは `AccountSnapshot` と `MarkPrice` だけだ。なぜ `CloseOrderSpec`、`Side`、`Qty`、`LiquidationParams`、`MarginHealth`、`MarginRatio` まで import するのか?」 **後のレッスンが全部使うからだ。** L4 でまとめて import を入れておけば、各レッスンの diff は「今回追加する関数」だけに絞れる。L5 以降に到達するまで Rust は unused import の warning を出し続けるが、Funding L1 で後から来る型の rustdoc warning を許容したのと同じ理屈で、ここでも許容する。代わりに `use` 行を L4–L7 で 6 回いじる選択肢は busywork でしかなく、各レッスンが実際に追加している部分を見えにくくしてしまう。
 
 ### Step 2: `notional_value` を追加
 
@@ -128,13 +128,13 @@ pub fn notional_value(snapshot: &AccountSnapshot, mark: MarkPrice) -> u64 {
 }
 ```
 
-この 7 行の関数で気づくべき 3 点:
+この 7 行の関数で押さえておく点が 3 つ:
 
-1. **Return type は `u64`、`i64` ではない。** Notional は exposure の *magnitude* — 常に非負。`u64` を返すことで「呼び出し側が abs を取り忘れた?」を不可能にする: 型システムがそれを強制する。Notional を signed な計算（L5 の `margin_ratio` の割り算など）に流したい呼び出し側は、呼び出しサイトで明示的な `i64::from(notional_value(...))` を行う。**変換は 1 行。それで防げるのは production まで生き残る silent な sign error の一群。**
+1. **返り型は `u64`、`i64` ではない。** Notional は exposure の *magnitude* なので、常に非負だ。`u64` を返せば、呼び出し側が abs を取り忘れる可能性を型レベルで潰せる。Notional を signed な計算に流したい呼び出し側（L5 の `margin_ratio` の割り算など）は、呼び出しサイトで明示的に `i64::from(notional_value(...))` を書く。**変換は 1 行で済む。代わりに防げるのは、production まで生き残る silent な符号バグの群れだ。**
 
-2. **`snapshot.position_size.0.unsigned_abs()`、`.abs()` ではない。** `i64::abs` は `i64` を返す — そして `i64::MIN.abs()` は safe Rust で未定義（debug で panic、release で wrap）。`unsigned_abs` は `u64` を返し、`i64::MIN` を含むあらゆる入力に対して定義されている（`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808`）。**Signed integer の magnitude が必要なら常に `unsigned_abs` を使う。`abs` は値が `MIN` になりえないと確信できるときだけにする。**
+2. **`snapshot.position_size.0.unsigned_abs()` を使う。`.abs()` ではない。** `i64::abs` は `i64` を返すが、`i64::MIN.abs()` は safe Rust では未定義動作だ（debug では panic、release では wrap）。一方 `unsigned_abs` は `u64` を返し、`i64::MIN` を含むあらゆる入力に対してきちんと定義されている（`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808`）。**Signed integer の magnitude が必要なら、迷わず `unsigned_abs`。`abs` を使ってよいのは、値が `MIN` を取り得ないと確信できるときに限る。**
 
-3. **`u64::saturating_mul`、`u64::checked_mul` ではない。** 両方ともオーバーフローを検出する。`saturating_mul` はオーバーフロー時に `u64::MAX` を返し、`checked_mul` は `None` を返す。`Option<u64>` を返すと、L5 の margin_ratio 等のすべての呼び出し側に *network-pathological な入力でのみ* 起きる `None` を処理させてしまう。Saturating は、極端な入力で数学的に間違ってはいるが使える値を返す — そしてその極端な入力では margin engine はどのみちそのアカウントを `Liquidatable` と分類する。**「間違っているが bounded」が「Option を処理しなければならない」を上回るときの正しい failure mode は saturation。**
+3. **`u64::saturating_mul` であって、`u64::checked_mul` ではない。** どちらもオーバーフローを検知するが、`saturating_mul` はオーバーフロー時に `u64::MAX` を返し、`checked_mul` は `None` を返す。`Option<u64>` を返してしまうと、L5 の `margin_ratio` を含むすべての呼び出し側が、*network-pathological な入力でしか起きない* `None` を扱うハメになる。Saturating なら、極端な入力に対しても — 数学的には間違っていても — 使える値を返す。どのみちその極端な入力では margin engine はそのアカウントを `Liquidatable` と分類するので、上流的な意味でも整合が取れる。**「間違っているが bounded」が「Option を処理しなければならない」を上回るとき、正しい failure mode は saturation だ。**
 
 ### Step 3: `unrealized_pnl` を追加
 
@@ -160,17 +160,17 @@ pub fn unrealized_pnl(snapshot: &AccountSnapshot, mark: MarkPrice) -> i64 {
 }
 ```
 
-気づくべき 4 点:
+押さえておく点が 4 つ:
 
-1. **`i128::from(mark.0) − i128::from(snapshot.avg_entry.0)`、`(mark.0 as i64) − (snapshot.avg_entry.0 as i64)` ではない。** `mark` も `entry` も `u64`。Rust で `u64 − u64` の結果が負になると panic する。先に `i64` にキャストすると、どちらかが `i64::MAX` を超えていればトップビットが失われる。先に `i128` にアップキャストすれば full range が保たれ、サプライズなしに負になりうる signed 結果が得られる。**必要だと思うより広くアップキャストする — コストはゼロ、安全性は莫大。**
+1. **`i128::from(mark.0) − i128::from(snapshot.avg_entry.0)` を使う。`(mark.0 as i64) − (snapshot.avg_entry.0 as i64)` ではない。** `mark` も `entry` も `u64` だ。Rust では `u64 − u64` の結果が負になると panic する。先に `i64` にキャストしても、どちらかが `i64::MAX` を超えていれば最上位ビットが落ちてしまう。先に `i128` までアップキャストしてしまえば、フルレンジが保たれ、サプライズなしに signed の結果が得られる（負にもなれる）。**必要だと思うより一段広くアップキャストする — コストはゼロ、得られる安全性は大きい。**
 
-2. **`saturating_mul` は `i128` 上。** `diff` が `u64::MAX`（≈ 2⁶⁴）に近く、`position_size` が `i64::MAX`（≈ 2⁶³）に近いと積は ≈ 2¹²⁷ — `i128` の `±2¹²⁷` 範囲内だが、極端な入力での `saturating_mul` は安価な防御。Funding と同じパターン。
+2. **`saturating_mul` は `i128` 上で行う。** `diff` が `u64::MAX`（≈ 2⁶⁴）に近く、`position_size` が `i64::MAX`（≈ 2⁶³）に近ければ、積は ≈ 2¹²⁷ になる。これは `i128` の `±2¹²⁷` 範囲内には収まるが、極端な入力に対して `saturating_mul` を使うのは安価な保険だ。Funding と同じパターン。
 
-3. **末尾の `saturate_i128_to_i64(pnl)`。** 積の後は PnL は i128 領域にあるかもしれないが、下流のエンジンは `i64` を使う。変換失敗時に panic ではなく saturate するヘルパー — 同じ規律。（ヘルパー定義は Step 4。）
+3. **末尾で `saturate_i128_to_i64(pnl)` を呼ぶ。** 積を取った直後の PnL は i128 領域に居る可能性があるが、下流のエンジンは `i64` を使う。変換が失敗したとき panic ではなく saturate するためのヘルパーだ — funding と同じ規律。（ヘルパー定義は Step 4 で書く。）
 
-4. **Sign convention が doc に書かれている。** 4 ケース列挙（「Long は mark > entry のとき profit」）は、レビュアーが「待って、これは short でも動くの?」と聞いたときの正典的参照。数学が construction で正しいが、doc が *なぜ* かを言う — 読者がそのたびにメンタルウォークする必要がない。
+4. **符号ルールを doc に明文化してある。** 4 ケースの列挙（「Long は mark > entry のとき profit」）は、レビュアーから「待って、これ short でも動くの?」と聞かれたときの正典的な参照になる。コードは construction で正しいが、doc は *なぜ* 正しいかを書く — 読者が毎回頭の中で辿り直さなくて済むように。
 
-> 🛑 **やりがちな勘違い。** 「`(mark.0 as i64 − entry.0 as i64) × size` を直接やってはダメか?」 **3 つの問題。** (1) `mark` か `entry` が `i64::MAX` を超えると、キャストが静かに wrap する — トップビットが符号ビットになる。(2) 両方が i64 に収まっても、片方が `i64::MIN` 近くで他方が正だと、i64 での減算がオーバーフローしうる。(3) 各オペランドが収まっていても、積 `(mark − entry) × size` が i64 を超えうる — `i64::MAX` サイズのポジションに対する 1% の値動きで overflow する。**`as` キャストは本レッスンが武装解除する Rust の footgun。**
+> 🛑 **やりがちな勘違い。** 「いっそ `(mark.0 as i64 − entry.0 as i64) × size` を直接書けばよいのでは?」 **問題が 3 つある。** (1) `mark` か `entry` が `i64::MAX` を超えると、キャストが silent に wrap する — 最上位ビットが符号ビットに化けてしまう。(2) 両方が i64 に収まっていても、片方が `i64::MIN` 近く、他方が正なら、i64 での減算がオーバーフローする。(3) 各オペランドが収まっていても、積 `(mark − entry) × size` が i64 を超えうる — `i64::MAX` サイズのポジションなら、わずか 1% の値動きでオーバーフローする。**`as` キャストは Rust の有名な footgun で、本レッスンが武装解除しに行く対象でもある。**
 
 ### Step 4: `saturate_i128_to_i64` ヘルパーを追加
 
@@ -186,13 +186,13 @@ fn saturate_i128_to_i64(v: i128) -> i64 {
 }
 ```
 
-この 3 行のヘルパーで気づくべき 3 点:
+この 3 行のヘルパーで押さえておく点が 3 つ:
 
-1. **`pub` なし。** これは `compute.rs` の実装上の選択。公開 API はモジュール doc に挙げた 6 関数。ヘルパーは本体をクリーンに保つために存在する。**他のモジュールの呼び出し側が本当に必要としない限り、ヘルパーは private に保つ。**
+1. **`pub` を付けない。** これは `compute.rs` 内部の実装上の選択だ。公開 API はモジュール doc に挙げた 6 関数で、ヘルパーは本体をクリーンに保つために置いてある。**他モジュールの呼び出し側が本当に必要としない限り、ヘルパーは private のままにする。**
 
-2. **`i64::try_from(v).unwrap_or(...)`。** `try_from` は値が収まらないときちょうど `Err` を返す。`unwrap_or` の分岐が saturation target を符号で選ぶ。`v > 0` なら値が大きすぎた（`i64::MAX` に saturate）。`v ≤ 0` なら小さすぎた（`i64::MIN` に saturate）。**3 行の演算、1 つの decision、typo 不可能。**
+2. **`i64::try_from(v).unwrap_or(...)` の形。** `try_from` は値が収まらなければ `Err` を返す。`unwrap_or` の分岐が、符号によって saturation の行き先を選ぶ。`v > 0` なら大きすぎたので `i64::MAX` へ、`v ≤ 0` なら小さすぎたので `i64::MIN` へ。**演算は 3 行、判断は 1 つ、typo の余地もない。**
 
-3. **ヘルパー自体のテストはない。** その挙動は `unrealized_pnl` のテストケース（happy-path と range の境界の両方を exercise する）を通じて網羅的にテストされる。ヘルパー専用のテストを足すのは冗長になる。
+3. **ヘルパー自体には専用のテストを置かない。** その挙動は `unrealized_pnl` のテスト群（happy-path と境界の両方を突く）を通じて十分カバーされる。ヘルパー単体のテストを足してもただの重複になる。
 
 ### Step 5: テストを追加
 
@@ -273,15 +273,15 @@ mod tests {
 }
 ```
 
-テストブロックで気づくべき 4 点:
+テストブロックで押さえておく点が 4 つ:
 
-1. **冒頭の `snapshot()` ヘルパー。** 3 つの整数引数（`size`、`entry`、`collateral`）— `account` は `AccountId(42)` にハードコード。8+ テストにわたってタイプ量を節約し、各テストの *意味のある* 入力（size の符号、entry と mark の関係）を見えるように保つ。**Test fixture は変動するものを露出し、定数を隠す。**
+1. **冒頭の `snapshot()` ヘルパー。** 整数引数を 3 つ取る（`size`、`entry`、`collateral`） — `account` は `AccountId(42)` にハードコード。8 個以上のテストにまたがって記述量を節約しつつ、各テストの *意味のある* 入力（size の符号、entry と mark の関係）は読み手の目に晒したまま保てる。**テスト fixture では、変化するものを表に出し、定数は隠す。**
 
-2. **4 つの PnL ケースが予測コールアウトの 4 つの符号の組み合わせと対応する。** `pnl_long_profit`、`pnl_long_loss`、`pnl_short_profit`、`pnl_short_loss`。加えて、size がゼロのパスを止める `pnl_flat_is_zero`。到達可能なすべての符号の組み合わせがテストされる。**符号の組み合わせの coverage が load-bearing — 1 つを見落とすと、将来のリファクタリングで side を静かに反転させてしまえる。**
+2. **PnL 4 ケースが、予測コールアウトの 4 通りの符号の組み合わせと一対一に対応している。** `pnl_long_profit`、`pnl_long_loss`、`pnl_short_profit`、`pnl_short_loss`。加えて size がゼロのパスをカバーする `pnl_flat_is_zero`。これで到達可能な符号の組み合わせはすべてテスト下に入る。**符号の組み合わせの網羅性が load-bearing で、1 つでも漏らすと、将来のリファクタリングで side が silent に反転する余地が残る。**
 
-3. **L4 に proptest はまだないのに `use proptest::prelude::*;`。** L5/L8 で proptest が追加されたとき、ここに既に import がある。`compute.rs` 本体の bulk imports と同じ推論 — 境界で 1 度書き、次の数レッスンで unused-import warning を許容する。
+3. **L4 ではまだ proptest を使わないのに `use proptest::prelude::*;` を書いておく。** L5 / L8 で proptest を足すとき、import はすでにここにある状態になる。`compute.rs` 本体の bulk import と同じ理屈で、境界で一度だけ書き、それまでの数レッスンは unused import の warning を許容する。
 
-4. **テスト名は文。** `pnl_long_profit` は「PnL when long is in profit」と読める。テストが失敗したとき、失敗出力のテスト名が最初に目に入るもの — 本体を読まなくても何が壊れたか分かるくらい説明的にする。**`fn test_1`、`fn test_2` は CI noise。文断片の名前は CI signal。**
+4. **テスト名は文として読める形にする。** `pnl_long_profit` は「PnL when long is in profit」と読める。テストが失敗したとき、出力で最初に目に入るのはテスト名だ — 本体を読まなくても何が壊れたか分かる程度には説明的にしておく。**`fn test_1` / `fn test_2` は CI のノイズだが、文の断片で名付けるなら CI のシグナルになる。**
 
 ### Step 6: `src/lib.rs` を更新
 
@@ -307,10 +307,10 @@ pub use types::{
 };
 ```
 
-2 つの変更:
+変更は 2 箇所:
 
-1. **`pub mod compute;`** を `pub mod types;` の上に — アルファベット順、既存の慣例と同じ。
-2. **`pub use compute::{notional_value, unrealized_pnl};`** — 新しい re-export 行で、`types` の re-export とは別。各モジュールが独自の行を持つ。L5–L7 でさらに関数が来たら compute リストを拡張する。
+1. **`pub mod compute;`** を `pub mod types;` の上に置く — アルファベット順、既存の慣例どおり。
+2. **`pub use compute::{notional_value, unrealized_pnl};`** — 新しい re-export 行で、`types` の re-export とは別の行に分ける。モジュールごとに自分の行を持たせる方針だ。L5–L7 で関数が増えたら、この compute 側のリストを伸ばしていく。
 
 ### Step 7: テストを走らせる
 
@@ -334,23 +334,23 @@ test compute::tests::pnl_short_profit ... ok
 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-**この 8 つのテストが、signed-multiplication のトリックが各符号の組み合わせで動くことの証明だ。** あなた（あるいは将来の貢献者）が `unrealized_pnl` を refactor したとき、これらのテストが sign convention を honest に保つ。
+**この 8 テストが、signed-multiplication のトリックが各符号の組み合わせで実際に動くことの証拠になる。** 将来あなた（あるいは別の貢献者）が `unrealized_pnl` をリファクタするとき、ここのテストが符号ルールを正直に保ってくれる。
 
-エラーが出た場合に多い原因:
+よくあるエラー:
 
-- **`warning: unused import: ...`** — まとめて追加した import について。期待通り、L7 までに消える。
-- **`error[E0599]: no method named 'unsigned_abs' found for type 'i64'`** — Rust のバージョンが古すぎる。`unsigned_abs` は Rust 1.51（2021）で安定化された。プロジェクトの `rust-toolchain.toml` が十分新しいバージョンを pin しているはず。
-- **`attempt to multiply with overflow` でテストが失敗する** — debug ビルドで `saturating_mul` ではなく `*` を書いた。置き換える。
+- **`warning: unused import: ...`** — まとめて入れた import に対する warning だ。想定どおりで、L7 までには消える。
+- **`error[E0599]: no method named 'unsigned_abs' found for type 'i64'`** — Rust のバージョンが古い。`unsigned_abs` は Rust 1.51（2021）で安定化された。プロジェクトの `rust-toolchain.toml` で十分新しいバージョンが pin されているはずだ。
+- **テストが `attempt to multiply with overflow` で落ちる。** debug ビルドで `saturating_mul` の代わりに `*` を書いてしまっている。置き換える。
 
 ## 設計の振り返り
 
-このレッスンの load-bearing な決定が 3 つ:
+このレッスンに焼き込んだ load-bearing な決定は 3 つ:
 
-1. **`notional_value: u64`、`unrealized_pnl: i64`。** Return type は不変量を signal する。Notional は決して負にならない。PnL は両側にいきうる。両者を混ぜたい呼び出し側コードは明示的な変換をする（`i64::from(notional)`）。**呼び出しサイトでの変換 1 行が、production まで生き残る silent な sign バグの一群に勝つ。**
+1. **`notional_value: u64`、`unrealized_pnl: i64`。** 返り型が不変量を表現している。Notional は決して負にならない、PnL は両側に振れる。両者を混ぜたい呼び出し側のコードは、明示的に変換する（`i64::from(notional)`）。**呼び出しサイトでの 1 行の変換は、production まで生き残る silent な符号バグの群れより、はるかに安い。**
 
-2. **分岐ではなく signed-multiplication symmetry。** `(mark − entry) × size` は `size` が long/short の符号を運ぶので、4 つの符号の組み合わせすべてを正しく解決する。分岐する代替案（`if size > 0 { ... } else { ... }`）はコードパスを 2 つに分け、テスト予算を倍にし、将来のリファクタリングで「long branch を直すのを忘れて short branch を放置する」バグのリスクを生む。**演算が自然に扱うケースは、型システムに運ばせる。**
+2. **分岐ではなく signed-multiplication の対称性で書く。** `(mark − entry) × size` は `size` が long/short の符号を運んでくれるので、4 通りの符号の組み合わせすべてが自然に解決する。分岐版（`if size > 0 { ... } else { ... }`）はコードパスを 2 本に分け、テスト予算を倍に増やし、「long 側を直して short 側を直し忘れる」というリファクタ時のバグリスクを残す。**演算が自然に扱えるケースは、型システムに運ばせる。**
 
-3. **`i64` には `abs` より `unsigned_abs`。** `i64::MIN.abs()` は Rust の正典的 footgun だ: debug で panic、release で silently wrap。`unsigned_abs` は `u64` を返し、すべての `i64` 入力に対して定義されている。**Panic path を持たない方の演算を選ぶ。代替案は debug でしか出ないクラッシュで、release ビルドが喜んで隠す。**
+3. **`i64` の magnitude には `abs` ではなく `unsigned_abs`。** `i64::MIN.abs()` は Rust の代表的な footgun だ — debug で panic、release で silently wrap する。`unsigned_abs` は `u64` を返し、すべての `i64` 入力に対して定義されている。**panic パスを持たないほうの演算を選ぶ。逆を選ぶと、debug でしか顕在化しない crash になり、release ビルドがそれを喜んで隠してしまう。**
 
 ## 答え合わせ
 
@@ -362,34 +362,34 @@ diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/
 ```
 
 L4 の後:
-- **compute.rs** は Stage 10a の `compute.rs` の最初の ~80 行と一致する — モジュール doc + imports + `notional_value` + `unrealized_pnl` + ヘルパー + 最初の 8 テスト。下の部分（次の 4 関数とそのテスト、3 つの proptest）は L5–L7 で着地する。
-- **lib.rs** は compute 側の 4 つの追加 re-export（`account_equity`、`margin_ratio`、`margin_health`、`close_order_spec`）がまだ欠けている。それらが順次到着する。
+- **compute.rs** は Stage 10a の `compute.rs` の最初の ~80 行と一致する — モジュール doc、import、`notional_value`、`unrealized_pnl`、ヘルパー、最初の 8 テストまで。それ以降（残り 4 関数とそのテスト、proptest 3 つ）は L5–L7 で着地する。
+- **lib.rs** はまだ compute 側の追加 re-export 4 つ（`account_equity`、`margin_ratio`、`margin_health`、`close_order_spec`）を持たない。これらは順次到着する。
 
 ## よくある質問
 
-**Q1: `notional_value` は `u64`、`mark` も `u64` — 積が `u64` を overflow しないか?**
+**Q1: `notional_value` は `u64` を返し、`mark` も `u64` だ。積が `u64` をオーバーフローすることはないのか?**
 
-しうる、network-pathological な入力で（`|size| × mark > 2⁶⁴` になるほど大きなポジション）。それを `saturating_mul` が防ぐ。現実的なマーケットではこれは起こらない — 取引所のポジションサイズ制限が notional を `u64::MAX` よりはるかに下に保つ。Saturation は第二の防衛線。第一は上流の sanity check。
+ありうる。Network-pathological な入力（`|size| × mark > 2⁶⁴` になるような巨大ポジション）でだ。それを防ぐのが `saturating_mul`。現実的な市場ではまず起こらない — 取引所側のポジションサイズ制限が、notional を `u64::MAX` のはるか手前に抑えてくれる。Saturation は第二の防衛線で、第一の防衛線は上流の sanity check だ。
 
 **Q2: なぜ `saturate_i128_to_i64` ヘルパーは private で、`notional_value` と `unrealized_pnl` は public なのか?**
 
-ヘルパーは実装上の選択（saturating cast）。2 つの public 関数はエンジンの契約の一部 — margin を計算するすべてのコールサイトが必要とする。**Public は「呼び出し側がこれに依存する」。Private は「これがたまたまそれを内部でどうやっているか」を意味する。** 将来のリファクタリングが `saturate_i128_to_i64` を `checked_mul` + `Option` 伝播に置き換えても、呼び出し側は壊れない。
+ヘルパーは実装上の選択（saturating cast）にすぎない。公開関数 2 つはエンジンの契約の一部 — margin を計算するすべての呼び出しサイトが必要とする。**Public は「呼び出し側がこれに依存している」、Private は「内部でたまたまこういう形でやっている」という意味だ。** 将来のリファクタリングが `saturate_i128_to_i64` を `checked_mul` + `Option` 伝播に置き換えたとしても、呼び出し側は壊れない。
 
-**Q3: Signed-multiplication のトリックは整数の極端値で誤った符号を出すか?**
+**Q3: signed-multiplication のトリックは、整数の極端値で誤った符号を出すことはないのか?**
 
-数学的にはノー — 4 つの符号の組み合わせは初等代数から来る。だが算術的にはイエス: i64 を（さらに i128 も）overflow する積は、真の結果の符号の情報を失う。だからすべての中間値の積は `i128::saturating_mul` を使い、最後のキャストは i128 値の符号によって `i64::MAX` / `i64::MIN` に saturate する。**Saturation は magnitude を失うが、答えの *符号* は保つ。**
+数学的にはノー — 4 通りの符号の組み合わせは初等代数から導かれる。算術的にはイエス: i64 を（さらには i128 さえも）オーバーフローするような積は、真の結果の符号情報を失う。だからすべての中間積で `i128::saturating_mul` を使い、最後のキャストでも i128 値の符号に応じて `i64::MAX` か `i64::MIN` へ saturate する。**Saturation は magnitude を失うが、答えの *符号* は保つ。**
 
-**Q4: `unrealized_pnl` は `mark == 0` のとき panic すべきか?**
+**Q4: `unrealized_pnl` は `mark == 0` のとき panic すべきではないか?**
 
-No — `mark = 0` は奇妙だが未定義ではない。式 `(0 − entry) × size = −entry × size` は数学的に well-defined（そしてポジションを deeply underwater と分類するが、それは正しい挙動）。Production のデプロイはゼロ mark を *公開* するのを拒否する。もしすり抜けてきたら、エンジンはそれを graceful に扱う。**純粋関数は policy を決めない — 与えられた入力で計算する。**
+ノー。`mark = 0` は不自然ではあるが未定義ではない。式 `(0 − entry) × size = −entry × size` は数学的にきちんと定義されているし、その結果ポジションが deeply underwater に分類されるのも正しい挙動だ。本番環境では、そもそも mark = 0 を *公開* しないようゼロ mark が reject される。万が一漏れてきても、エンジンは graceful に処理する。**Pure 関数は方針を決めない — 与えられた入力に対して計算するだけだ。**
 
-**Q5: なぜ `notional_value` は `&MarkPrice` ではなく `MarkPrice` を受け取るのか?**
+**Q5: なぜ `notional_value` は `&MarkPrice` ではなく `MarkPrice` を値で受け取るのか?**
 
-`MarkPrice` は `Copy` で 8 byte（`u64`）。このサイズの `Copy` 型なら、値渡しのほうが参照渡しより安価 — ポインタ間接参照なし、aliasing の懸念なし。**型が大きくてコピーが高価な場合、OR 所有権セマンティクスが意味を持つ場合に `&` に手を伸ばす。プリミティブをラップした `Copy` newtype については、値渡しが正しいデフォルト。**
+`MarkPrice` は `Copy` で、サイズは 8 byte（`u64`）だ。このサイズの `Copy` 型なら、値渡しのほうが参照渡しより安い — ポインタ間接参照もなく、aliasing の懸念もない。**型のサイズが大きくコピーが高価なとき、あるいは所有権セマンティクスに意味があるときに `&` へ手を伸ばす。プリミティブをラップした `Copy` newtype については、値渡しが正しいデフォルトだ。**
 
 ## 次のレッスン (L5)
 
-L5 では `account_equity` と `margin_ratio` を追加する — そして **Stage 10a で最も教育的に load-bearing な発見**: `margin_ratio` の levered-regime での非単調性。読者は先に proptest を書く（「long に対して mark が上がれば margin_ratio も上がるはず」）。小さな入力群でそれが失敗するのを見る。失敗が *なぜ* 本物か（バグではない）を辿る。`prop_assume!` で実際の不変量を表現するように proptest を refine する。これは学習者の margin math の最初のメンタルモデルが壊されて再構築されるレッスン。
+L5 では `account_equity` と `margin_ratio` を追加する。そこで **Stage 10a で最も教育的に load-bearing な発見**に出会う: levered regime での `margin_ratio` の非単調性だ。読者はまず proptest を書く（「long に対して mark が上がれば margin_ratio も上がるはず」）。それが小さな入力群で失敗するのを目にする。なぜそれが「バグではなく本物の失敗」なのかを辿り、`prop_assume!` を使って実際に成り立つ不変量を表現するように proptest を refine する。学習者が margin math について最初に持っていたメンタルモデルが、いったん壊されてから再構築されるレッスンだ。
 
 ````
 
