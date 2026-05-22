@@ -89,6 +89,31 @@ s.pending.insert(id, (hash, header, drained_fills));
 
 (答え: `drain(..)` は要素を 1 つずつ取り除く iterator を返す。`mem::take` は `Vec<Fill>` 全体を値で swap する — pointer swap 1 回で済み、要素ごとの仕事はない。N fill の Vec に対して `drain` は O(N) + iterator のオーバーヘッドだが、`mem::take` は O(1) constant time。**「全部取って default にリセット」をやるなら `mem::take` のほうが速く、意図も明確。**)
 
+L10 後の forward-only な drain 意味論を時系列で見ると:
+
+```
+時間軸 →
+
+   submit_order(o_a)     submit_order(o_b)     build_payload(id=1)     submit_order(o_c)     build_payload(id=2)
+        ↓                     ↓                      ↓                       ↓                      ↓
+  pending_fills:          pending_fills:        std::mem::take →         pending_fills:         std::mem::take →
+   [fill_a]                [fill_a, fill_b]      payload_id=1 が             [fill_c]              payload_id=2 が
+                                                 [fill_a, fill_b] を         (drain 後の               [fill_c] を所有
+                                                 所有                         buffer に追加)             pending_fills は
+                                                 pending_fills は             ↓                         また空に戻る
+                                                 空に戻る                                              
+
+       ←  fills going into payload id=1  →   ←  fills going into payload id=2  →
+
+pending HashMap (build_payload が書く):
+   {                                            {
+     id=1: (hash_1, header_1, [fill_a, fill_b])   id=1: (..., [fill_a, fill_b])  ← retroactive 書き込みなし
+                                                   id=2: (hash_2, header_2, [fill_c])
+   }                                            }
+```
+
+**Forward-only な意味論**: ある時点で build された payload は、その瞬間までに溜まっていた fill だけを所有する。後から到着した fill が過去の payload に retroactively attach されることはない。`build_payload` の各呼び出しが timeline を区切るカット。これが L11 の integration test で証明する load-bearing な不変量だ。
+
 ## 手順
 
 ### Step 1: 変更する行を見つける
@@ -135,7 +160,7 @@ L9 のコメントが明示的にここを指している。これが変更場�
 1. **`self.pending_fills.lock()`** — mutex を acquire する。`LockResult<MutexGuard<Vec<Fill>>>` を返す。`.expect("pending_fills mutex poisoned")` が結果を unwrap する (poisoned mutex に対する `expect` で問題ない — L9 の設計の振り返り参照)。
 2. **`.lock().expect(...)`** が `MutexGuard<Vec<Fill>>` を返す。`MutexGuard` は `Deref<Target = Vec<Fill>>` だが `DerefMut` も持っている。Vec の所有権を取るには `&mut Vec<Fill>` が必要で、それを `&mut *guard` で得る。
 3. **`std::mem::take(&mut *guard)`** が swap を行う: Vec の heap-pointer + len + capacity が MutexGuard から `drained_fills` 変数に move し、MutexGuard 側の Vec は `Vec::default()` (= `Vec::new()` — allocation なしの空 Vec) に置き換わる。
-4. **MutexGuard が block 式の末尾で drop される** — lock が release される。
+4. **MutexGuard が statement の末尾 (`;`) で drop される** — `let drained_fills = std::mem::take(&mut *self.pending_fills.lock().expect("...")) ;` の右辺で生成された一時的な `MutexGuard` は、Rust のスコープルールによりこの statement を終える `;` の時点で即座に `Drop::drop` される。次行の `s.pending.insert(...)` を実行する時点で、`pending_fills` の lock はすでに release 済み。これは**ロック順序 (lock ordering)** の観点で重要 — `state.lock()` を保持したまま `pending_fills.lock()` を別の関数で逆順に取る経路があれば deadlock するが、L10 の構造ではその窓を作らない。
 5. **`s.pending.insert(id, (hash, header, drained_fills))`** で fill の snapshot を新 payload と共に保存する。**pending_fills buffer は今は空で、次の submit ラウンドに備える。**
 
 `std::mem::take(...)` 式全体が **lock 下の atomic 操作** になっている — 他の caller が「半分 drain された状態」を見ることはない。`pending_fills` は full か空のどちらかで、mid-drain にはならない。

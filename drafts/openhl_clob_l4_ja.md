@@ -85,6 +85,32 @@ impl Book {
 
 (答え: 約定は `[Fill@98 で 30、Fill@99 で 20]`。Trade 後、`O_a` は消え、`O_b` は 10 unit 残り、`O_c` は 30 unit のまま、`O_d` も 30 unit のまま。Buyer は limit より少なく払った (98 + 99 vs 100) — これが「at-or-better」ルール。)
 
+このシナリオを board の状態変化として並べると:
+
+```
+BEFORE — submit Limit Buy @ 100, qty 50:
+
+  asks (lowest first):                bids: (empty)
+    98  → [O_a(30)]
+    99  → [O_b(30), O_c(30)]
+    101 → [O_d(30)]
+
+  walk asks while ask_price ≤ 100 and remaining > 0:
+    98  ≤ 100 → eat O_a fully      → Fill(O_a, taker, 98, 30); remaining = 20
+    99  ≤ 100 → eat O_b partial    → Fill(O_b, taker, 99, 20); remaining = 0
+    101 > 100 → STOP                 (price exceeds limit / taker filled)
+
+AFTER:
+
+  asks:                                bids: (empty — taker fully filled,
+    99  → [O_b(10), O_c(30)]                    nothing remains to rest)
+    101 → [O_d(30)]
+
+  returned: FillResult { fills: [F1, F2], remaining_qty: Qty(0) }
+```
+
+これが matching engine の hot path の動的な姿だ — taker が ask 側の流動性を上方向に *walk* して食らい、残量がゼロになれば終わり、ゼロでなければその時点で reverse して bid 側に rest する（Step 3 で実装する partial-fill ケース）。
+
 ## 手順
 
 ### Step 1: `submit()` dispatcher を追加
@@ -283,7 +309,7 @@ fn match_at_level(
 
 **なぜ Book のメソッドではなく free function なのか?** `self` へのアクセスが不要だから。単一 queue (`submit_limit` が既に mutable ref を持っている) と単一 `remaining` カウンタにしか触らない。Free function にすることで scope の狭さを反映している: `Book` 全体は関与しない。
 
-> 🛑 **やりがちな勘違い。** 「`expect("empty queue")` の panic はリスキーに見える。Queue が **実際に** 空だったら?」 **この関数は空 queue で呼ばれないことが `submit_limit` の invariant。** 具体的には、`submit_limit` は `keys().next()` が `Some(price)` を返した後にしか `match_at_level` を呼ばず、それが level (そして queue) に少なくとも 1 要素あることを保証する。空 queue で `match_at_level` が呼ばれたとしたら、それは `submit_limit` のバグであって `match_at_level` のバグではない — そして `expect` が `Option::None` のサイレント伝播ではなく、clear なメッセージ付きの panic としてバグを surface する。**内部 invariant は信頼し、`expect` で assert する。**
+> 🛑 **やりがちな勘違い。** 「`expect("empty queue")` の panic はリスキーに見える。Queue が **実際に** 空だったら?」 **この関数は空 queue で呼ばれないことが `submit_limit` の invariant。** 具体的には、`submit_limit` は `keys().next()` が `Some(price)` を返した後にしか `match_at_level` を呼ばず、空 queue を即削除する規律をループ内で守っている — だから `match_at_level` の入口に到達する時点で「level に少なくとも 1 要素ある」ことが構造的に保証される。**この `expect` は手抜きではなく、上位レイヤの invariant をコンパイル時に表明する明示的な防衛境界（assertion）だ。** 空 queue で `match_at_level` が呼ばれたとしたら、それは `submit_limit` のバグであって `match_at_level` のバグではない — そして `expect` が `Option::None` のサイレント伝播ではなく、clear なメッセージ付きの panic としてバグを surface する。**内部 invariant は信頼し、`expect` で明示的に assert する。** これは production 品質の Rust の規律の一つだ。
 
 ## テスト
 
@@ -293,12 +319,13 @@ cargo check -p openhl-clob
 
 クリーンにコンパイルするはず。L3 の unused-import warning (`Fill`、`FillResult`、`Order`、`OrderType`、`Qty`、`Side`) はここで消えるはず — `submit_limit` と `match_at_level` がすべてを使うから。
 
-Matching ロジックをサニティチェックするためのテストはまだない (それは L7-L8)。`src/lib.rs` に一時的に書ける:
+Matching ロジックをサニティチェックするためのテストはまだない (それは L7-L8)。仮の動作確認として、**`crates/clob/src/book.rs` の最末尾**（`match_at_level` 関数の下）に以下の一時的な smoke テストを貼り付ける。`book.rs` 末尾なら `Book`、`OrderId`、`AccountId`、`Side`、`Qty`、`OrderType`、`Price` がすべて crate 内 path から見えるので `use super::*;` と `use crate::types::*;` だけで足りる:
 
 ```rust
 #[cfg(test)]
 mod smoke {
     use super::*;
+    use crate::types::{AccountId, OrderId, OrderType, Price, Qty, Side};
 
     #[test]
     fn buy_crosses_resting_ask() {
@@ -333,9 +360,9 @@ mod smoke {
 }
 ```
 
-`cargo test -p openhl-clob buy_crosses_resting_ask` で走らせる。Pass すれば Limit Buy + Limit Sell ロジックは正しい。
+`cargo test -p openhl-clob smoke::buy_crosses_resting_ask` で走らせる。Pass すれば Limit Buy + Limit Sell ロジックは正しい。
 
-**L5 に進む前にこの smoke test は削除する** — 本格的なテストスイートは L7-L8 で proper な hand-trace シナリオと proptest を伴って入る。上の smoke test は L4 がコンパイルして **走る** ことを verify するためだけのもの。L5 のために `src/lib.rs` を clean に保っておく。
+**L5 に進む前にこの `mod smoke` ブロックは `book.rs` から削除する** — 本格的なテストスイートは L7-L8 で proper な hand-trace シナリオと proptest を伴って入る。上の smoke test は L4 がコンパイルして **走る** ことを verify するためだけのもの。L5 開始時点で `book.rs` をクリーンに戻しておく。
 
 よくあるエラーと対処:
 

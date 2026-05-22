@@ -16,7 +16,7 @@
 ### Content
 
 ````markdown
-# Build OpenHL CLOB — adding the matching engine on top of the substrate
+# Build OpenHL CLOB — adding the matching engine on top of the Reth substrate
 
 The previous course (`building-openhl-consensus`) ended with a single-validator BFT chain that decides blocks through a real Reth EVM in 0.02 seconds. **It decides empty blocks.** No transactions. No matching. No price discovery.
 
@@ -60,7 +60,7 @@ This is honest scoping. A CLOB engine without execution wiring is half the story
 You need:
 
 - **`building-openhl-consensus` complete** — or, equivalently, a workspace at the end-of-course-6 state. Your `crates/evm/src/live_node.rs` should already have `LiveRethEvmBridge<P>` with `provider`, `chain_spec`, `validator`, and optional `engine_handle` fields. If yours doesn't, work through course 6 first.
-- **Rust 1.95+**, same as course 6.
+- **Rust 1.95+** — openhl's `rust-toolchain.toml` pins `1.95.0`. Same prerequisite as course 6.
 - **Comfort with `BTreeMap`, `VecDeque`, `Reverse<T>`, and proptest.** If "natural ordering" and "reverse-ordering trick to walk highest-first" are unfamiliar, skim the `std::collections::BTreeMap` docs first.
 
 You do **not** need:
@@ -145,8 +145,8 @@ Before L1, run all of these and confirm they pass:
 rustc --version    # expect: rustc 1.95.x or later
 
 # 2. End-of-course-6 state
-cd ~/code/my-openhl && cargo test -p openhl-evm --release 2>&1 | grep -E "^test result"
-# Expect: at least 3 tests passing in openhl-evm
+cd ~/code/my-openhl && cargo test -p openhl-evm --release
+# Expect: trailing line `test result: ok. 3 passed; 0 failed; ...`
 
 # 3. Reference repo has Stage 8 commits
 cd ~/code/openhl-reference && git log --oneline | grep -E "(55a9dff|428cc26)"
@@ -166,13 +166,13 @@ L0 lands in Module 0 (Orientation), sortOrder 0:
 
 ```typescript
 {
-  title: 'Build OpenHL CLOB — adding the matching engine on top of the substrate',
+  title: 'Build OpenHL CLOB — adding the matching engine on top of the Reth substrate',
   slug: 'openhl-clob-orientation-en',
   type: 'CONTENT',
   sortOrder: 0,
   duration: 15,
   xpReward: 50,
-  content: `# Build OpenHL CLOB — adding the matching engine on top of the substrate\n\n...`
+  content: `# Build OpenHL CLOB — adding the matching engine on top of the Reth substrate\n\n...`
 },
 ```
 

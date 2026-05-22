@@ -192,7 +192,7 @@ Three strategies, building up:
 
 - **`arb_side()`** — uniformly picks Buy or Sell. `prop_oneof![Just(...), Just(...)]` is proptest's "one of these literals" combinator.
 - **`arb_action(id)`** — generates a random `Action` with a fixed `id`. The Limit branch generates `(account, qty, side, price)` in ranges; the Market branch generates `(account, qty, side)`. Weights: `3 => limit_action, 1 => market_action` — Limit actions happen 3× as often as Market, reflecting realistic order-book usage.
-- **`arb_actions()`** — generates a random `Vec<Action>` of length 1..30. The `.prop_flat_map` pattern is a bit unusual: it first generates a vec of u64s just to **decide the length**, then maps each position to an `arb_action(i+1)` so order IDs increment. The trick is that `arb_actions` produces sequences with strictly-increasing order IDs (avoiding collisions in the book).
+- **`arb_actions()`** — generates a random `Vec<Action>` of length 1..30. The `.prop_flat_map` pattern is a bit unusual: it first calls `prop::collection::vec(0u64..1000, 1..30)` to produce a vec of u64s, of length 1..30, with values in `0..1000`. **The u64 values themselves are dummies** — the `.enumerate()` inside `.prop_flat_map` overwrites them with indices immediately. The `0u64..1000` range is there only to give the vector a shape; the actual values are not used. Then each position is mapped to an `arb_action(i+1)` so order IDs are assigned in increasing order. The trick is that `arb_actions` produces sequences with strictly-increasing order IDs (avoiding collisions in the book).
 
 **Why use ranges (`1..=200` for account, `50..=150` for price)?** To bias proptest toward generating *plausible* scenarios. With `0..=u64::MAX` ranges, proptest would mostly generate extreme outliers (account_id = 18_446_744_073_709_551_614). Realistic ranges produce scenarios that look like real trading: accounts 1-200, prices 50-150, quantities 1-20. The matching engine's bugs are most likely to hide in normal-looking sequences.
 
@@ -265,9 +265,13 @@ This is the "quantity is conserved" invariant. The body has three counters:
 - **`total_filled`**: sum of `fill_qty` across all `Fill`s produced.
 - **`total_market_unfilled`**: sum of `remaining_qty` from Market orders (the leftover discarded).
 
-The invariant: `total_in = 2 * total_filled + total_market_unfilled + resting_qty`.
+The invariant is a conservation law:
 
-Why `2 *`? **Because a fill consumes 1 unit from the maker AND 1 unit from the taker, so 1 unit of fill_qty appears in `total_in` twice** — once when the maker was originally submitted, once when the taker arrived. The math:
+```
+total_in = 2 × total_filled + total_market_unfilled + resting_qty
+```
+
+Why `2 ×`? **Because a fill consumes 1 unit from the maker AND 1 unit from the taker, so 1 unit of fill_qty appears in `total_in` twice** — once when the maker was originally submitted, once when the taker arrived. The math:
 
 | Action | `total_in` | What's left at the end |
 | - | - | - |
@@ -276,6 +280,23 @@ Why `2 *`? **Because a fill consumes 1 unit from the maker AND 1 unit from the t
 | Submit Limit 10 units that match a 5-unit ask | +10 | 5 units filled (one from each), 5 units left over to rest |
 
 If 5 units fill, that means: maker offered 5 (already in `total_in`), taker took 5 (also in `total_in`). The 5 filled units appear in `total_in` as 10 — once from each side. **That's why `2 * total_filled`.**
+
+Timeline view of the third row:
+
+```
+[t=0]  Sell Limit(qty=5) arrives → fully rests
+         total_in += 5         → total_in = 5
+         (no fill; rests on the book)
+         Check: total_in(5) = 2×total_filled(0) + market_unfilled(0) + resting(5) ✓
+
+[t=1]  Buy Limit(qty=10) arrives → 5 units cross the maker, 5 units rest
+         total_in += 10        → total_in = 15
+         total_filled += 5     → total_filled = 5
+         resting = 5 (taker remainder; the maker's 5 units are consumed)
+         Check: total_in(15) = 2×total_filled(10) + market_unfilled(0) + resting(5) ✓
+```
+
+`total_in` is just a running counter — "sum the qty of every submitted order in arrival order." The seemingly mysterious `2 *` encodes a real accounting fact: one fill contributes to `total_in` twice — once when the maker was originally submitted, once when the taker arrived.
 
 **The `#![proptest_config(ProptestConfig { cases: 256, .. })]` line at the top** of the `proptest!` block sets each test to run 256 times. With 3 invariants × 256 cases = 768 random scenarios.
 
@@ -468,7 +489,7 @@ git checkout main
 A balance. 256 cases × 3 properties × ~10ms per case ≈ 8 seconds total — fast enough to run on every `cargo test`. 1024 cases would push it to 30+ seconds, becoming a friction in dev iteration. 100 cases would risk missing rare bugs. **Pick a case count that's small enough to run cheaply but large enough to catch common bugs.**
 
 **Q: Why no `cancel` in the proptest actions?**
-Because cancel actions complicate the determinism + conservation properties: after a cancel, you need to track which order IDs are still alive. The simplification "submit-only sequences" makes the 3 invariants tractable. Adding cancel-aware properties is a follow-up; the existing 3 invariants are the highest-value ones to get right first.
+Because cancel actions complicate the determinism + conservation properties. On the conservation side it looks easy — just add `+ total_canceled_qty` to the right-hand side: `total_in = 2 * total_filled + total_market_unfilled + resting_qty + total_canceled_qty`. The real difficulty is on the generator side: to avoid producing "double-cancel of an already-filled-or-canceled order id" sequences, the strategy needs to **statefully track which order IDs are still live** — that's exactly the boundary L7's Test 8 (`cancel_unknown_returns_false`) covers, but in proptest it becomes the generator's responsibility. Stateful strategies break out of proptest's pure-combinator pattern, so the generator code grows quickly. The simplification "submit-only sequences" makes the 3 invariants tractable. Adding cancel-aware properties is a follow-up — get the foundation clean first, then layer on top. The existing 3 invariants are the highest-value ones to get right first.
 
 **Q: What happens when proptest finds a failing input?**
 It enters the **shrinking phase**. Starting from the failing input, proptest tries to find the smallest subset / smallest values that still fail. For our test case generators (which produce `Vec<Action>`), shrinking might reduce a 25-action sequence to a 3-action sequence that still reproduces the bug. The minimal sequence is what you debug against — much easier than the original input.

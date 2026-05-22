@@ -226,7 +226,7 @@ The struct-style `Limit { price: Price }` is deliberate over a tuple-style `Limi
 
 ### Step 6: Add `Display` impls for the 3 user-facing newtypes
 
-Append:
+`Display` needs the `fmt` module; we already added `use core::fmt;` at the top of the file in Step 3 — placing all `use` lines together makes the file's structure easier to scan than sprinkling imports per Step. Append at the end of `types.rs`:
 
 ```rust
 impl fmt::Display for OrderId {
@@ -332,7 +332,7 @@ git checkout main
 ## Common questions
 
 **Q: Why are `AccountId`, `OrderId`, `Price`, `Qty` all `Copy`?**
-They're `u64` under the hood — 8 bytes, no heap. Marking them `Copy` lets the engine pass them by value freely without `.clone()` everywhere. The trait bound costs nothing at runtime.
+They're `u64` under the hood — just 8 bytes, no heap allocation. Marking them `Copy` lets the engine pass them by value freely, with no `.clone()` calls anywhere. Copying a `u64` flows through a CPU register, so there's zero runtime overhead compared to a move.
 
 **Q: Why `Hash` on these types?**
 Future use: `HashMap<OrderId, RestingOrder>` for O(1) cancel-by-id (lesson L6). Adding `Hash` now means no derive-cascade churn later.

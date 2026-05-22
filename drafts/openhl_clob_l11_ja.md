@@ -70,7 +70,7 @@ L10 完了時点、`LiveRethEvmBridge` は:
 1. **Reth node を bootstrap する** — course 6 の `live_bridge_builds_on_real_genesis` test と同じパターン。Parent lookup のために provider が必要。
 2. **`LiveRethEvmBridge::new(provider, chain_spec)` を construct する** — 注: 今回は `with_engine_handle` を付けない。Forkchoice を駆動する必要がないし、matching pipeline は engine_handle に依存しないから。
 3. **空の初期状態を assert する** — `pending_fill_count() == 0`。
-4. **空 payload を build する** (まだ order を submit していない) — `payload_fills(id)` が `Some(vec![])` を返すことを verify する。
+4. **空 payload を build する** (まだ order を submit していない) — 返ってきた `PayloadId` を `empty_id` に bind し、`payload_fills(empty_id)` が `Some(vec![])` を返すことを verify する。`empty_id` は Step 7 で再 query するために手元に残す。
 5. **maker を submit する** — `Order { id: 1, side: Buy, qty: 10, OrderType::Limit { price: 100 } }`。rest し、即座の fill がないことを verify する。
 6. **crossing taker を submit する** — `Order { id: 2, side: Sell, qty: 10, OrderType::Limit { price: 100 } }`。1 個の約定が生成されることを verify する。
 7. **次の payload を build する** — `payload_fills(next_id) == Some([the_fill])` を verify する。
@@ -78,9 +78,41 @@ L10 完了時点、`LiveRethEvmBridge` は:
 
 これが Course 7 で build するすべての integration test。
 
+各 step が時間軸でどう assertion を並べるかを図にすると:
+
+```
+time →
+
+  Step 3                  Step 5                Step 6                       Step 7
+  bridge::new          build_payload         submit(maker)                build_payload
+  (空の初期状態)        (empty_id)            submit(taker)                (next_id)
+        ↓                   ↓                     ↓                            ↓
+  pending_fill_count   pending_fill_count    pending_fill_count           pending_fill_count
+   == 0 ✅              == 0 ✅               == 1 ✅                       == 0 ✅
+                                                                          (drain 後にゼロ)
+
+  pending HashMap:    {empty_id: ([], hdr)} {empty_id: ([], hdr)}    {empty_id: ([], hdr),
+   (empty)                                                            next_id:  ([fill], hdr)}
+
+  payload_fills:                            ┌───────────────────────────────────────────┐
+                       empty_id → Some([])  │   ① next_id  → Some([the_fill])           │
+                                            │   ② empty_id → Some([])  ← forward-only!  │
+                                            │      (next が drain した後でも空のまま)    │
+                                            └───────────────────────────────────────────┘
+
+                                                                        ↑ assertion の順序
+                                                                          が time-invariance
+                                                                          を証明する load-bearing
+                                                                          ポイント
+```
+
+`empty_id` を Step 5 で bind して保持し続けるのは、Step 7 で「2 番目の payload を drain したあとに 1 番目の payload を re-read しても fill は空のまま」を verify するため。assertion を `next_id` → `empty_id` の順で並べることで、retroactive 更新がないことを能動的に証明する。逆順だと「最初の payload が空」しか言えず、L10 の forward-only な意味論は exercise されない。
+
 > 🛑 **考えてみよう。** スクロールする前に: maker bid が price 100、qty 10。Taker が Sell @ price 100、qty 10 で来る。**結果の fill price は 100? それとも違うのか?** 2 つの order が同じ価格で cross するとき、fill price を決めるルールは何か?
 
-(答え: fill は **maker の** 価格で起きる — このケースでは `Price(100)`。L4 から: 「fill 価格は常に **resting** order の価格 (maker の)。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格)。buyer が勝つ」。両 order が同じ価格でも同じルールが適用される — maker が 100 で rest し、taker が 100 でマッチする。**「price-time priority」ルールは「maker の価格 (price priority) + 同じ price level 内では first-come (time priority)」。ここでは time priority の disambiguation は不要 — maker が 100 で唯一の order だから。**)
+(答え: fill は **maker の** 価格で起きる — このケースでは `Price(100)`。L4 から: 「fill 価格は常に **resting** order の価格 (maker の)。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格)。buyer が勝つ」。両 order が同じ価格でも同じルールが適用される — maker が 100 で rest し、taker が 100 でマッチする。**「price-time priority」ルールは「maker の価格 (price priority) + 同じ price level 内では first-come (time priority)」。ここでは time priority の disambiguation は不要 — maker が 100 で唯一の order だから。**
+
+仮にこの統合テストの Taker Sell が **`Price(95)`** を提示して突っ込んできても、板に `Price(100)` の Maker Buy が rest している以上、約定は **`100` で発生する** — Taker は提示価格より良い 100 で sell できることになる (price improvement)。これは「price-time priority は resting 側に決定権がある」という L4 の規律が、Reth node + bridge + matching engine の統合境界を越えても揺るがない証拠だ。この統合テストの背後では、まさにそのエンジン挙動が走っている。)
 
 ## 手順
 
@@ -110,6 +142,8 @@ L10 完了時点、`LiveRethEvmBridge` は:
 - **`use openhl_clob::{AccountId, OrderId, OrderType, Price, Qty, Side};`** — L1 の newtype セットから必要な型を import する。`Order` と `Fill` は `mod tests` 冒頭の `super::*` で既に scope に入っている。
 
 > 🛑 **やりがちな勘違い。** 「これらの型を `mod tests` のトップではなくテスト関数内で import するのはなぜか?」 **テストの依存をテストサイトで visible に保つため。** 将来の reader がこのテストをデバッグするとき、関連型を一目で見られる。コストはこれらが必要な test ごとに `use` statement が 1 個増えること、利益は各テストが self-contained なシナリオとして読めること。実際のソースコード (`mod tests` の外) のテストではトップに import を置くが、test は特別 — システムが何をするかのドキュメントなので、inline import がそのドキュメント性を引き締める。
+
+> 💡 **インライン import の思想。** プロダクションコードでは import をトップに集約するのが規範だが、統合テストは「**システムが満たすべき仕様のドキュメント**」としての性格が強い。テストサイト (関数内部) に `AccountId / OrderId / OrderType / Price / Qty / Side` を明示的に閉じ込めることで、**この 1 本のテスト単体でドメイン知識 (どの newtype が何を表しているか) のマッピングが完結する**。L11 を初めて読む reader は、ファイル冒頭の import 群を遡らずに、テストの 5 行目で `Side` と `Price` が登場することの意味を即座に再構築できる。これは「inline import = テストを semantic snapshot として封じ込めるための道具」という設計判断だ。
 
 ### Step 2: Reth node を bootstrap
 

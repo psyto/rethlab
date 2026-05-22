@@ -74,8 +74,8 @@ impl Book {
 mod tests {
     use super::*;
 
-    fn limit(...) -> Order { ... }
-    fn market(...) -> Order { ... }
+    fn limit(id: u64, account: u64, side: Side, price: u64, qty: u64) -> Order { ... }
+    fn market(id: u64, account: u64, side: Side, qty: u64) -> Order { ... }
 
     #[test] fn empty_book_has_no_best_prices() { ... }
     #[test] fn resting_limit_creates_bid_or_ask() { ... }
@@ -95,7 +95,7 @@ mod tests {
 
 > 🛑 **考えてみよう。** スクロールする前に: 9 個のうちどれが、`submit_limit::Buy` が ask を **降順** (最高値先) に辿るバグで失敗するか? ヒント: 「best ask 先」を明示的に assert しているテストを考える。
 
-(答え: `buy_market_takes_best_ask`。`r.fills[0].price == Price(100)` と `r.fills[1].price == Price(105)` で best-first を assert している。降順に辿るバグだと `[105, 100]` を生成してしまう。**Directional バグは randomized テストでも catch できるが、hand-trace テストならより安く catch できる。**)
+(答え: `buy_market_takes_best_ask` と `limit_buy_walks_asks_within_price` の 2 つが catch する — ただし違うバグ症状として。`buy_market_takes_best_ask` は **約定順序の逆転**（`[105, 100]`）として検知する: `r.fills[0].price == Price(100)` という best-first assertion が失敗する。`limit_buy_walks_asks_within_price` は **早期 stop バグ** として検知する: 降順に辿ると最初に当たる ask が 105、limit は 103 なので「price > limit」で即 stop してしまい、本来マッチすべき 100 の ask を素通りして 1 件も約定しない。**Directional バグは randomized テストでも catch できるが、hand-trace テストなら 2 つの違う観点からピンポイントに catch できる — どちらが先に失敗するかでバグの種類が見える。**)
 
 ## 手順
 
@@ -284,7 +284,7 @@ Test 3 との違いは、**limit price check** が走査を早く止める点。
 
 **このテストが失敗する** のは、誤って `Vec<RestingOrder>` を使って `Vec::remove(0)` した場合 (結果は正しいが queue を shift するためマッチごとに O(n) になる) や、`push_back` の代わりに `VecDeque::push_front` を使った場合 (newest-first になり、price-anti-time-priority になる)。
 
-### Step 7: Test 6, 7, 8 — Market with leftover, cancel, cancel-unknown
+### Step 7: Test 6, 7, 8 — `market_with_insufficient_liquidity`, `cancel_removes_resting_order`, `cancel_unknown_returns_false`
 
 ```rust
     #[test]
@@ -403,7 +403,7 @@ test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 2. **9 個のテストは有限で defensible なセット。** 各テストが特定の invariant に対応する: empty-book、resting、walks-levels、respects-limit、FIFO、partial-market、cancel-found、cancel-not-found、no-cross。100 個書く必要はない。**Invariant のリストは短く明確であるべきで、カバレッジは invariant 単位で測るもの。テスト数ではない。**
 
-3. **`book_does_not_cross_after_match` を最後に配置している。** テストはアルファベット順で走るので、このテストの **ソース順序** での位置は実行順に影響しない。だが **読む** 順序 (上から下に file を scan するメンテナの視線) では、最重要テストが最も目立つ位置に来る。**ソース上のレイアウト自体が「何が最重要か」の優先度シグナルを encode する。**
+3. **`book_does_not_cross_after_match` を最後に配置している。** テストはアルファベット順で走るので、このテストの **ソース順序** での位置は実行順に影響しない。だが **読む** 順序 (上から下に file を scan するメンテナの視線) では、前段の 8 テスト（resting / walks / FIFO / cancel など）が担保された前提のうえで初めて検証可能になる、最も強力なセーフティプロパティが大トリとしてファイルを締めくくる構造になる。「ここまで読めば engine の正しさが framework として立つ」と言える終端だ。**ソース上のレイアウト自体が「何がコアな防衛境界か」の優先度シグナルを encode する。**
 
 ## 答え合わせ
 
@@ -430,7 +430,7 @@ git checkout main
 L8 でまさにそれをやる — 768 ランダムシナリオを exercise する proptest invariant 3 個。ただし proptest は hand-trace テストを oracle として依存する。proptest が失敗したときに、それを isolate できる小さな hand-trace テストが欲しいから。**Hand-trace unit test が基礎、proptest がそれを amplify する役。**
 
 **Q: Sell-side limit order のテストは?**
-良い質問。9 個のテストが buy-side シナリオに focus しているのは、trace するのが直感的だから (「ask を最安先で辿る」は「bid を最高先で辿る」よりイメージしやすい)。Sell-side テストは correctness 上必須ではない — **もし** `submit_limit::Sell` が `submit_limit::Buy` の構造的 mirror なら (L4 で確立済み)。心配なら sell-side テストをいくつか追加すればよい — このセットの test 3、4、5 を mirror すればよい。
+良い質問。9 個のテストが buy-side シナリオに focus しているのは、trace するのが直感的だから (「ask を最安先で辿る」は「bid を最高先で辿る」よりイメージしやすい)。Sell-side テストは correctness 上必須ではない — **もし** `submit_limit::Sell` が `submit_limit::Buy` の構造的 mirror なら (L4 で確立済み)。**そして決定的なのは、次の L8 で導入する proptest が Buy/Sell をランダムに混ぜた action sequence を 256 ケース × 3 invariant = 768 シナリオで生成・実行する点だ。Mirror が崩れている（不等号の向きを取り違えた、bid 側の `Reverse<Price>` を忘れた、など）バグは、proptest の `no_crossed_book` や `qty_conservation` が容赦なく catch する。** Hand-trace は「片側の invariant が組めているか」の最小確認、proptest は両 side の chaos coverage — その分担で sell-side の手動 mirror テスト 9 個を書く手間が省ける。心配なら sell-side テストをいくつか追加してもよい — このセットの test 3、4、5 を mirror すればよい。
 
 **Q: なぜ `assert!` ではなく `assert_eq!` を使うのか?**
 `assert_eq!(a, b)` は失敗時に両方の値を print してくれるが、`assert!(a == b)` は値なしの「left == right」だけを print する。Test デバッグでは、engine が生成した実際の値を知ることが重要。比較が equality なら `assert_eq!` が厳密に優れている。

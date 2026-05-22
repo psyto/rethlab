@@ -70,7 +70,7 @@ One test, added to the existing `#[cfg(test)] mod tests` block in `crates/evm/sr
 1. **Bootstrap a Reth node** — same pattern course 6's `live_bridge_builds_on_real_genesis` used. We need the provider for parent lookups.
 2. **Construct `LiveRethEvmBridge::new(provider, chain_spec)`** — note: no `with_engine_handle` this time. We don't need to drive forkchoice for this test; the matching pipeline doesn't depend on engine_handle.
 3. **Assert empty initial state** — `pending_fill_count() == 0`.
-4. **Build an empty payload** (no orders submitted) — verify `payload_fills(id)` returns `Some(vec![])`.
+4. **Build an empty payload** (no orders submitted) — bind the returned `PayloadId` as `empty_id` and verify `payload_fills(empty_id)` returns `Some(vec![])`. We keep `empty_id` in scope so Step 7 can re-query it.
 5. **Submit a maker** — `Order { id: 1, side: Buy, qty: 10, OrderType::Limit { price: 100 } }`. Verify rests, no immediate fill.
 6. **Submit a crossing taker** — `Order { id: 2, side: Sell, qty: 10, OrderType::Limit { price: 100 } }`. Verify 1 fill produced.
 7. **Build the next payload** — verify `payload_fills(next_id) == Some([the_fill])`.
@@ -78,9 +78,41 @@ One test, added to the existing `#[cfg(test)] mod tests` block in `crates/evm/sr
 
 This is the integration test for everything Course 7 built.
 
+Laying the assertion targets out along the time axis:
+
+```
+time →
+
+  Step 3                  Step 5                Step 6                       Step 7
+  bridge::new          build_payload         submit(maker)                build_payload
+  (empty state)        (empty_id)            submit(taker)                (next_id)
+        ↓                   ↓                     ↓                            ↓
+  pending_fill_count   pending_fill_count    pending_fill_count           pending_fill_count
+   == 0 ✅              == 0 ✅               == 1 ✅                       == 0 ✅
+                                                                          (zero again after drain)
+
+  pending HashMap:    {empty_id: ([], hdr)} {empty_id: ([], hdr)}    {empty_id: ([], hdr),
+   (empty)                                                            next_id:  ([fill], hdr)}
+
+  payload_fills:                            ┌────────────────────────────────────────────┐
+                       empty_id → Some([])  │   ① next_id  → Some([the_fill])            │
+                                            │   ② empty_id → Some([])  ← forward-only!   │
+                                            │      (still empty after next's drain)      │
+                                            └────────────────────────────────────────────┘
+
+                                                                        ↑ the order of these
+                                                                          assertions is what
+                                                                          actually proves
+                                                                          time-invariance
+```
+
+The reason we bind `empty_id` in Step 5 and *hold onto it* is so Step 7 can re-read it after the drain. Asserting `next_id` first and `empty_id` second is what actively proves that the drain didn't write backwards into an earlier payload. Reversed, we'd only be re-stating "the empty payload is empty" — Step 5 already gave us that. L10's forward-only semantics is only exercised by this ordering.
+
 > 🛑 **Predict.** Before scrolling: the maker bid is at price 100, qty 10. The taker is a Sell at price 100, qty 10. **Will the resulting fill price be 100, or could it be different?** What's the rule that determines the fill price when two orders cross at exactly the same price?
 
-(Answer: the fill happens at the **maker's** price — `Price(100)` in this case. From L4: "the fill price is the *resting* order's price (the maker's). Limit-buyer at $101 matching a resting limit-seller at $100 fills at $100 (maker's price); the buyer wins." When both orders are at the same price, the rule still applies — maker resting at 100, taker matches at 100. **The "price-time priority" rule says: maker price (price priority) + first-come within a price level (time priority). Here, no time priority disambiguation is needed because the maker is the only order at 100.**)
+(Answer: the fill happens at the **maker's** price — `Price(100)` in this case. From L4: "the fill price is the *resting* order's price (the maker's). Limit-buyer at $101 matching a resting limit-seller at $100 fills at $100 (maker's price); the buyer wins." When both orders are at the same price, the rule still applies — maker resting at 100, taker matches at 100. **The "price-time priority" rule says: maker price (price priority) + first-come within a price level (time priority). Here, no time priority disambiguation is needed because the maker is the only order at 100.**
+
+Counterfactually, even if this integration test's Taker Sell came in at **`Price(95)`** instead, the maker's `Price(100)` Buy is resting on the book, so the match would still happen **at `100`** — the Taker would sell at a *better* price than they asked for (price improvement). That's L4's "the resting side owns the price" rule surviving the integration boundary between the Reth node, the bridge, and the matching engine. This test's engine behavior is exactly that rule firing end-to-end.)
 
 ## Walk-through
 
@@ -110,6 +142,8 @@ Two things to notice in the test header:
 - **`use openhl_clob::{AccountId, OrderId, OrderType, Price, Qty, Side};`** — imports the types we need from L1's newtype set. The `Order` and `Fill` types are already in scope from the `super::*` at the top of `mod tests`.
 
 > 🛑 **Anti-fluency.** "Why import these types inside the test function instead of at the top of `mod tests`?" **To keep the test's dependencies visible at the test site.** If a future reader is debugging this test, they can see at a glance which types are involved. The cost is one `use` statement per test that needs them; the benefit is that each test reads as a self-contained scenario. For tests outside `mod tests` (in real source code), you'd put imports at the top — but tests are special: they're documentation for what the system does, and inline imports make the documentation tighter.
+
+> 💡 **The inline-import philosophy.** Production code aggregates its imports at the top of the file as a matter of style. An integration test, though, leans much harder into being **a document of what the system has to deliver**. Trapping `AccountId / OrderId / OrderType / Price / Qty / Side` inside the test function means **a single read of this test fully reconstructs the domain mapping** — which newtype represents which financial concept. A reader new to L11 doesn't have to backtrack to the file header to recognize, on line 5, what `Side` and `Price` even mean here. Inline imports are the tool for sealing each test as its own semantic snapshot.
 
 ### Step 2: Bootstrap a Reth node
 

@@ -85,6 +85,32 @@ This is **most of the matching engine**. L5 adds Market (which is `submit_limit`
 
 (Answer: fills are `[Fill@98 for 30, Fill@99 for 20]`. After the trade, `O_a` is gone, `O_b` has 10 units left, `O_c` is untouched at 30, `O_d` is untouched at 30. The buyer paid less than the limit (98 + 99 vs 100) — that's the "at-or-better" rule.)
 
+Laid out as the book's state transition:
+
+```
+BEFORE — submit Limit Buy @ 100, qty 50:
+
+  asks (lowest first):                bids: (empty)
+    98  → [O_a(30)]
+    99  → [O_b(30), O_c(30)]
+    101 → [O_d(30)]
+
+  walk asks while ask_price ≤ 100 and remaining > 0:
+    98  ≤ 100 → consume O_a fully  → Fill(O_a, taker, 98, 30); remaining = 20
+    99  ≤ 100 → consume O_b partial → Fill(O_b, taker, 99, 20); remaining = 0
+    101 > 100 → STOP                  (price exceeds limit / taker filled)
+
+AFTER:
+
+  asks:                                bids: (still empty — taker fully filled,
+    99  → [O_b(10), O_c(30)]                    nothing to rest)
+    101 → [O_d(30)]
+
+  returned: FillResult { fills: [F1, F2], remaining_qty: Qty(0) }
+```
+
+That's the matching engine's hot path in motion — the taker *walks* the ask side upward and consumes liquidity. When the remainder hits zero we stop; if it doesn't, the taker reverses and rests on the bid side (the partial-fill case implemented in Step 3).
+
 ## Walk-through
 
 ### Step 1: Add the `submit()` dispatcher
@@ -283,7 +309,7 @@ This is **the actual match** — the smallest function that does the real work. 
 
 **Why is this a free function instead of a method on Book?** Because it doesn't need access to `self`. It only touches a single queue (which `submit_limit` already has a mutable reference to) and a single `remaining` counter. Making it a free function reflects that scope: nothing about `Book` as a whole is involved.
 
-> 🛑 **Anti-fluency.** "The `expect("empty queue")` panic seems risky. What if the queue *is* empty?" **The function isn't supposed to be called with an empty queue — that's an `submit_limit` invariant.** Specifically, `submit_limit` calls `match_at_level` only after `keys().next()` returned `Some(price)`, which guarantees the level (and thus its queue) has at least one element. If `match_at_level` were called with an empty queue, that's a bug in `submit_limit`, not in `match_at_level` — and `expect` makes the bug surface as a panic with a clear message instead of an `Option::None` silently propagating. **Trust internal invariants; assert them with `expect`.**
+> 🛑 **Anti-fluency.** "The `expect("empty queue")` panic seems risky. What if the queue *is* empty?" **The function isn't supposed to be called with an empty queue — that's a `submit_limit` invariant.** Specifically, `submit_limit` calls `match_at_level` only after `keys().next()` returned `Some(price)`, and the outer loop removes empty queues immediately — so by the time `match_at_level` is entered, "the level has at least one resting order" is structurally guaranteed. **This `expect` isn't laziness; it's an explicit defensive boundary that asserts an upper-layer invariant at compile time.** If `match_at_level` were called with an empty queue, that's a bug in `submit_limit`, not in `match_at_level` — and `expect` makes the bug surface as a panic with a clear message instead of an `Option::None` silently propagating. **Trust internal invariants; assert them explicitly with `expect`.** This is one of the production-quality Rust disciplines.
 
 ## Test
 
@@ -293,12 +319,13 @@ cargo check -p openhl-clob
 
 Should compile clean. Unused-import warnings from L3 (specifically `Fill`, `FillResult`, `Order`, `OrderType`, `Qty`, `Side`) should be gone now — `submit_limit` and `match_at_level` use all of them.
 
-To sanity-check the matching logic, we don't have tests yet (those are L7-L8), but you can write a one-off in `src/lib.rs` temporarily:
+To sanity-check the matching logic, we don't have tests yet (those are L7-L8). Paste this one-off smoke test **at the very end of `crates/clob/src/book.rs`** (below the `match_at_level` function). At the bottom of `book.rs`, `Book`, `OrderId`, `AccountId`, `Side`, `Qty`, `OrderType`, `Price` are all in scope via crate paths, so a single `use super::*;` plus `use crate::types::*;` suffices:
 
 ```rust
 #[cfg(test)]
 mod smoke {
     use super::*;
+    use crate::types::{AccountId, OrderId, OrderType, Price, Qty, Side};
 
     #[test]
     fn buy_crosses_resting_ask() {
@@ -333,9 +360,9 @@ mod smoke {
 }
 ```
 
-Run with `cargo test -p openhl-clob buy_crosses_resting_ask`. If it passes, your Limit Buy + Limit Sell logic is correct.
+Run with `cargo test -p openhl-clob smoke::buy_crosses_resting_ask`. If it passes, your Limit Buy + Limit Sell logic is correct.
 
-**Delete this smoke test before moving to L5** — the real test suite goes in L7-L8 with proper hand-traced scenarios + proptests. The smoke test above is just to verify L4 compiles AND runs correctly. Keep your `src/lib.rs` clean for L5.
+**Delete this `mod smoke` block from `book.rs` before moving to L5** — the real test suite goes in L7-L8 with proper hand-traced scenarios + proptests. The smoke test above is just to verify L4 compiles AND runs correctly. Reset `book.rs` to a clean state for L5.
 
 Common errors and fixes:
 

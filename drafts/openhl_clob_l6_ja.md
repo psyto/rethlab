@@ -77,6 +77,35 @@ method 1 個、file 1 個。`crates/clob/src/book.rs` で、既存の `impl Book
 
 `retain` は各 (key, value) pair で closure を呼び、closure が `false` を返した pair を削除する。Queue-mutation と空 check return を組み合わせることで、「削除 + 空 level cleanup」の invariant が無料で得られる。
 
+`retain` の closure は各 (price, queue) に対して 2 段階の判断をする:
+
+```
+closure(price, queue):
+  1. queue 内に id==target の order があれば取り除く
+  2. return !queue.is_empty()
+     ├─ true  → BTreeMap はこの (price, queue) entry を KEEP
+     └─ false → BTreeMap はこの entry を DROP（price level 自体が map から消える）
+
+Case A — 同一 price level に他の order も resting している:
+
+  BEFORE: 100 → [O_3, O_5, O_4]    ← price 100 に 3 件
+          ↓ retain closure
+            O_5 を queue から remove
+          ↓
+  AFTER:  100 → [O_3, O_4]         ← queue 非空 → level KEEP
+
+Case B — その price level に他の order がない:
+
+  BEFORE: 100 → [O_7]              ← price 100 に 1 件のみ
+          ↓ retain closure
+            O_7 を queue から remove
+          ↓
+  AFTER:  (no entry at 100)        ← queue 空 → level DROP
+                                     `best_bid()` がこの price を返さなくなる
+```
+
+Case B が「空 level cleanup」の invariant を自動で守るしくみだ — `submit` のループ内で「空 queue を即 drop」と同じ規律を、`retain` の return 値が代わりにやってくれる。
+
 > 🛑 **考えてみよう。** スクロールする前に: ユーザーが price 100 で 50 unit の Limit Buy を submit し (完全 rest し)、それからその order id で Cancel を submit するとする。Cancel 後、**`best_bid()` は何を返すべきか?** ヒント: cancellation 後にその price level が map にまだ残っているかを考える。
 
 (答え: `None`。order が price 100 で唯一のものだったので、cancel すると queue が空になり、`retain` が level を map から drop し、`bids.keys().next()` が `None` を返し、`best_bid()` が `None` を返す。**空 level cleanup によって `best_bid` が「実際に liquidity が存在するか」について正直であり続ける。**)
@@ -238,7 +267,7 @@ mod smoke {
 
 1. **「削除 + cleanup」を `retain` で組み合わせる。** 2 つの別操作を 1 closure pass で済ませる: queue を mutate し、entry を drop するか決める。これがまさに `retain` のユースケース。代替 (iterate-then-cleanup や、`BTreeMap::iter_mut` + 手動で空 key 収集) は invariant をより多くのコードに分散させてしまう。**自分の操作にぴったり合うメソッドがあるなら、それを使う。**
 
-2. **O(n) linear scan は v0 では fine。** 本番取引所は何千、何万の resting order を持つ。v0 の openhl で数百なら scan はマイクロ秒で済む。`HashMap<OrderId, (Side, Price)>` index を追加すれば cancel は O(1) になるが、その代わりに BTreeMap と同期を保つ second data structure、追加メモリ、追加 cache pressure を抱えることになる。**Profile に出てこないものは最適化しない。** openhl が v0 scale を超えたら index を追加すればよい — それまでは scan が正しい形。
+2. **O(n) linear scan は v0 では fine。** 本番取引所は何千、何万の resting order を持つ。v0 の openhl で数百なら scan はマイクロ秒で済む。`HashMap<OrderId, (Side, Price)>` index を追加すれば cancel は O(1) になるが、その代わりに BTreeMap と同期を保つ second data structure、追加メモリ、追加 cache pressure を抱えることになる。さらに低レイヤの観点を加えると: **`VecDeque` はメモリ上で連続配置されるため、数百〜数千要素程度の走査では CPU の空間局所性とプリフェッチが効き、ポインタを飛び回る HashMap の lookup より「実測の wall-clock time」で速いケースが多い。** Big-O 表記は asymptotic な傾向で、CPU 1 サイクルの世界では cache miss の方が支配的になる — mechanical sympathy の観点でも、現スケールでは index を持つメリットが薄い。**Profile に出てこないものは最適化しない。** openhl が v0 scale を超えたら index を追加すればよい — それまでは scan が正しい形。
 
 3. **Cancel は `bool` を返す。`Option<RestingOrder>` や `Result<(), CancelError>` ではない。** 削除した order を返すと `RestingOrder` を expose することになる (L3 で意図的に private 型にした)。`Result` を返すと caller に「見つからない」ケースを error として handle させることになるが、cancellation の冪等性は機能でありバグではない (cancel を 2 回呼べることが安全であるべき)。`bool` なら「仕事をしたかしなかったか」をクリーンに伝えられる — 内部を漏らさず、error-handling を強制せずに済む。**何が起きたかを正直に表す、最小の return 形を選ぶ。**
 

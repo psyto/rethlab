@@ -16,7 +16,7 @@
 ### Content
 
 ````markdown
-# OpenHL CLOB を作る — substrate の上に matching engine を載せる
+# OpenHL CLOB を作る — Reth 基盤の上に matching engine を載せる
 
 前コース (`building-openhl-consensus`) は、実 Reth EVM を通じて 0.02 秒で block を確定する single-validator BFT chain で終わった。**ただし確定していたのは空の block。** トランザクションもマッチングも価格発見もない。
 
@@ -60,7 +60,7 @@
 必要なもの:
 
 - **`building-openhl-consensus` 完了** — または同等の course 6 end state の workspace。`crates/evm/src/live_node.rs` に `LiveRethEvmBridge<P>` が `provider`、`chain_spec`、`validator`、optional な `engine_handle` フィールド付きで存在すること。なければまず course 6 を完了させる。
-- **Rust 1.95+** — course 6 と同じ。
+- **Rust 1.95+** — openhl の `rust-toolchain.toml` で `1.95.0` に pin 済み。course 6 と同じ前提。
 - **`BTreeMap`、`VecDeque`、`Reverse<T>`、proptest に慣れていること。** 「natural ordering」や「最高値から順に辿るための reverse-ordering trick」が初耳なら、まず `std::collections::BTreeMap` のドキュメントを軽く読んでおく。
 
 不要なもの:
@@ -144,8 +144,8 @@ L1 に進む前に、以下をすべて走らせて pass することを確認:
 rustc --version    # 期待: rustc 1.95.x 以降
 
 # 2. Course 6 end state
-cd ~/code/my-openhl && cargo test -p openhl-evm --release 2>&1 | grep -E "^test result"
-# 期待: openhl-evm で少なくとも 3 個合格
+cd ~/code/my-openhl && cargo test -p openhl-evm --release
+# 期待: 出力末尾に `test result: ok. 3 passed; 0 failed; ...` のような合格行が表示される
 
 # 3. Reference repo に Stage 8 commit がある
 cd ~/code/openhl-reference && git log --oneline | grep -E "(55a9dff|428cc26)"
@@ -165,13 +165,13 @@ L0 は Module 0 (Orientation) sortOrder 0 に入る:
 
 ```typescript
 {
-  title: 'OpenHL CLOB を作る — substrate の上に matching engine を載せる',
+  title: 'OpenHL CLOB を作る — Reth 基盤の上に matching engine を載せる',
   slug: 'openhl-clob-orientation-ja',
   type: 'CONTENT',
   sortOrder: 0,
   duration: 15,
   xpReward: 50,
-  content: `# OpenHL CLOB を作る — substrate の上に matching engine を載せる\n\n...`
+  content: `# OpenHL CLOB を作る — Reth 基盤の上に matching engine を載せる\n\n...`
 },
 ```
 

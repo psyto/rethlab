@@ -77,6 +77,35 @@ The trick is `retain`. We use the same closure to do **two jobs**:
 
 `retain` calls the closure on every (key, value) pair and removes the pair if the closure returns `false`. By combining the queue-mutation with the empty-check return, we get the "remove + clean up empty levels" invariant for free.
 
+The closure makes a two-step decision per (price, queue):
+
+```
+closure(price, queue):
+  1. If queue contains an order with id==target, remove it.
+  2. return !queue.is_empty()
+     ├─ true  → BTreeMap KEEPS this (price, queue) entry
+     └─ false → BTreeMap DROPS this entry (the price level vanishes)
+
+Case A — the target shares its level with other resting orders:
+
+  BEFORE: 100 → [O_3, O_5, O_4]    ← 3 orders at price 100
+          ↓ retain closure
+            remove O_5 from queue
+          ↓
+  AFTER:  100 → [O_3, O_4]         ← queue non-empty → level KEPT
+
+Case B — the target is the only order at its level:
+
+  BEFORE: 100 → [O_7]              ← 1 order at price 100
+          ↓ retain closure
+            remove O_7 from queue
+          ↓
+  AFTER:  (no entry at 100)        ← queue empty → level DROPPED
+                                     `best_bid()` no longer returns this price
+```
+
+Case B is how the "empty-level cleanup" invariant is maintained automatically — the same discipline `submit` enforces in its loop ("drop empty queues immediately") is delivered by `retain`'s return value instead.
+
 > 🛑 **Predict.** Before scrolling: a user submits a Limit Buy at 100 for 50 units (which fully rests on the book), then submits Cancel for that order's id. After cancel, **what should `best_bid()` return**? Hint: think about whether the price level still exists in the map after the cancellation.
 
 (Answer: `None`. The order was the only one at price 100, so canceling it leaves the queue empty, which means `retain` drops the level from the map, which means `bids.keys().next()` returns `None`, which means `best_bid()` returns `None`. **The empty-level cleanup is what keeps `best_bid` honest about whether liquidity actually exists.**)
@@ -238,7 +267,7 @@ Three load-bearing decisions encoded here:
 
 1. **`retain` for the "remove + cleanup" combo.** Two separate operations done in one closure pass: mutate the queue, decide whether to drop the entry. This is `retain`'s exact use case. Alternatives (iterate-then-cleanup, or `BTreeMap::iter_mut` plus manual collection of empty keys) would split the invariant across more code. **When a method exists that exactly matches your operation, use it.**
 
-2. **O(n) linear scan is fine for v0.** Real exchanges have thousands or tens of thousands of resting orders. For v0 openhl with hundreds, the scan is microseconds. Adding a `HashMap<OrderId, (Side, Price)>` index would make cancel O(1) but also adds: a second data structure to keep in sync with the BTreeMaps, additional memory, additional cache pressure. **Don't optimize what doesn't show up in profiling.** When openhl outgrows v0 scale, add the index; until then, the scan is the right shape.
+2. **O(n) linear scan is fine for v0.** Real exchanges have thousands or tens of thousands of resting orders. For v0 openhl with hundreds, the scan is microseconds. Adding a `HashMap<OrderId, (Side, Price)>` index would make cancel O(1) but also adds: a second data structure to keep in sync with the BTreeMaps, additional memory, additional cache pressure. Add a low-level angle: **`VecDeque` is contiguous memory, and at the hundreds-to-thousands scale, the CPU's spatial locality and prefetcher make a sequential scan faster on wall-clock time than HashMap pointer chasing in many real measurements.** Big-O is asymptotic; at the cycle level, cache misses dominate — mechanical sympathy says the index buys little at this scale. **Don't optimize what doesn't show up in profiling.** When openhl outgrows v0 scale, add the index; until then, the scan is the right shape.
 
 3. **Cancel returns `bool`, not `Option<RestingOrder>` or a `Result<(), CancelError>`.** Returning the removed order would expose `RestingOrder` (intentionally a private type from L3). Returning a `Result` would force callers to handle the "not found" case as an error — but cancellation idempotency is a feature, not a bug (calling cancel twice should be safe). `bool` cleanly says "I did the work or I didn't" without leaking internals or forcing error-handling. **Pick the smallest return shape that's honest about what happened.**
 

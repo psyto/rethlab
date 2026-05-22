@@ -38,6 +38,67 @@ Over 11 lessons you added a **CLOB matching engine** to the substrate you built 
 └── ... rest unchanged from course 6 ...
 ```
 
+A topology view of what now sits where:
+
+```
+                     ┌──────────────────────────────────────────────┐
+                     │              Reth EthereumNode                │
+                     │   (the substrate stood up in Course 6, L9-L14)│
+                     │                                                │
+                     │   ┌─────────────┐         ┌────────────────┐  │
+                     │   │  Engine API │ ◄─────► │ Payload Builder │  │
+                     │   │ (forkchoice)│         │  (build_payload)│  │
+                     │   └─────────────┘         └────────┬───────┘  │
+                     │                                    │           │
+                     │   ┌──────────────────────────────  │  ──────┐  │
+                     │   │       BlockExecutor (EVM)      │        │  │
+                     │   │  (the EVM main lane Reth runs) │        │  │
+                     │   └────────────────────────────────┘        │  │
+                     │                ▲                            │  │
+                     │   (still unwired — Course 8 closes the gap) │  │
+                     └────────────────┼────────────────────────────┘  │
+                                      │                               │
+       ┌────────  Bridge (LiveRethEvmBridge, crates/evm) ─────────┐
+       │                                                          │
+       │   ┌─────────────┐    ┌──────────────────────┐            │
+       │   │ submit_order│ ──►│ Mutex<Book>          │            │
+       │   │  (caller-   │    │  (matching engine)   │            │
+       │   │   facing)   │    └──────────┬───────────┘            │
+       │   └─────────────┘               │ FillResult              │
+       │          ▲                      ▼                         │
+       │          │            ┌──────────────────────┐            │
+       │          │            │ Mutex<Vec<Fill>>     │            │
+       │          │            │  pending_fills       │            │
+       │          │            └──────────┬───────────┘            │
+       │          │                       │ std::mem::take         │
+       │          │                       ▼                         │
+       │          │            ┌──────────────────────┐            │
+       │          │            │ pending: HashMap     │            │
+       │          │            │  <PayloadId,         │            │
+       │          │            │   (hash, hdr, fills)>│            │
+       │          │            └──────────┬───────────┘            │
+       │          │                       │ payload_fills(id)      │
+       │          └───────────────────────┘                        │
+       │                                                           │
+       └───────────────────────────────────────────────────────────┘
+                                  ▲
+                                  │
+       ┌──────────────────────────┴────────────────────────────────┐
+       │       openhl-clob crate (crates/clob — created in C7)     │
+       │                                                            │
+       │   types.rs    ─── Side / Price / Qty / Order / Fill        │
+       │   book.rs     ─── Book (BTreeMap<Reverse<Price>,VecDeque>) │
+       │                   submit / cancel / inspect                │
+       │                   pure state machine (no I/O, no async)    │
+       │                                                            │
+       └────────────────────────────────────────────────────────────┘
+```
+
+What the picture says:
+- **The CLOB is not embedded in Reth.** `openhl-clob` is a fully pure crate with no dependency on EVM, consensus, or an async runtime — that boundary was drawn carefully across L1-L8.
+- **The bridge is the mediator between two asymmetric worlds.** A pure matching engine on one side, Reth's async + I/O-heavy EVM substrate on the other, joined through `Mutex<...>` (L9-L11).
+- **Fills don't cross the EVM main lane yet.** They sit in the `pending` HashMap and get attached to a payload, but `BlockExecutor` has no idea fills exist. That dashed vertical edge is what **Course 8 (precompiles)** turns into a solid line.
+
 About **15 new tests** total: 9 hand-traced unit tests (L7) + 3 proptest invariants (L8, 768 random scenarios) + 1 integration test (L11). Workspace test count: 39 tests (38 from course 6 + L11's `clob_fills_flow_into_payload`).
 
 ## What the matching engine does
@@ -74,12 +135,14 @@ submit_order(order)              build_payload(parent, attrs)
 
 Submit pushes; build drains. The drain is **forward-only**: each payload owns the fill snapshot taken at its build time; earlier payloads aren't retroactively filled. **L11's integration test proves this end-to-end** against a real Reth node.
 
+A subtlety worth naming explicitly: **fills are currently running on a parallel data lane next to the EVM main lane.** Reth's `BlockExecutor` — the lane that actually executes EVM transactions — knows nothing about `Vec<Fill>`; we're peeking at it from the outside through `payload_fills(id)`. The two lanes share a `PayloadId` as identifier, but as *state* they're still orthogonal — they haven't intersected. **Course 8 (Precompiles) is the moment those two lanes cross**: a precompile reads `Vec<Fill>`, and smart contracts gain the ability to query and mutate CLOB state from inside EVM execution. The "pure matching engine" boundary we drew in Course 7 only shakes hands with the EVM execution path in Course 8.
+
 ## What you can now do that you couldn't 11 lessons ago
 
 - **Build a price-time priority matching engine from scratch in Rust** — and understand why `BTreeMap<Reverse<Price>, ...>` is the right shape for bids, why `VecDeque` is the right per-level queue, and what trade-offs cancel's O(n) scan has versus an O(1) index.
 - **Reason about pure-state-machine determinism** — the `determinism` proptest is the kind of invariant chains rely on, and you've encoded it.
 - **Integrate a sub-system into an existing async-shared bridge** — interior mutability via `Mutex<T>` and `&self` methods is the idiomatic Rust pattern for shared state under async tasks. You've applied it.
-- **Read openhl Stage 8a + 8d source** and explain every line of `book.rs` + the bridge's CLOB-related code.
+- **Read the openhl Stage 8a + 8d source you covered across these 11 lessons** and explain every line of `book.rs` + the bridge's CLOB-related code.
 - **Modify the matching engine** — add a new order type (Stop, Iceberg, Post-Only) and know where in `submit_limit`/`submit_market` it'd land.
 
 ## What's still placeholder

@@ -70,6 +70,18 @@ Three records to add, all to the same `types.rs`:
 2. **`Fill`** — 6 fields naming maker + taker explicitly. **Both** maker_order_id AND maker_account are stored because the chain integration (course 8) needs the account to credit/debit balances.
 3. **`FillResult`** — collects the fills plus the unmatched-and-not-rested remainder. Includes a `total_filled()` helper so callers can ask "how much got matched?" without iterating.
 
+The three records relate like this:
+
+```mermaid
+flowchart LR
+    Order["Order<br/>(taker)"] -->|submit| Engine["matching engine"]
+    Engine -->|returns| Result["FillResult"]
+    Result --> Fills["fills: Vec&lt;Fill&gt;"]
+    Result --> Rem["remaining_qty: Qty"]
+```
+
+`Order` is the engine's input; `FillResult` is the output, split into "what matched" (a list of `Fill`s) and "what didn't" (`remaining_qty`). This is the single dataflow one `submit_order` call produces inside the L4-L5 matching engine.
+
 No new dependencies. No code changes outside `types.rs`. The lesson is ~35 lines of code.
 
 > 🛑 **Predict.** Before scrolling: `Fill` carries **both** `maker_order_id` AND `maker_account`. Why duplicate? The maker's `OrderId` should be enough to look up the account, right? Hint: think about who consumes a `Fill`. The chain's `clob_place_order` precompile (course 8) credits a balance — it needs the account directly. Looking up `OrderId → AccountId` would require the precompile to hold a reference to the order book's internal index. **Carrying both fields in the Fill itself decouples consumers from the engine's internal state.** Same idea as message-passing vs. shared-state.
@@ -93,6 +105,8 @@ pub struct Order {
 ```
 
 5 fields. **All `Copy`** — Order is 8 (OrderId) + 8 (AccountId) + 1 (Side) + 8 (Qty) + 16 (OrderType — discriminant + Price) = 41 bytes. With padding, around 48 bytes. Small enough to pass by value freely; we don't need `Box<Order>` or `&Order` in normal code.
+
+> **Memory-layout note:** under Rust's default `#[repr(Rust)]`, the compiler reorders fields automatically to align them optimally and minimize padding. The declaration order above is for human readability — you don't have to sacrifice it to get the smallest size. Confirm with `std::mem::size_of::<Order>()`.
 
 The field order is meaningful:
 - **`id` first** — the most-used field (lookups, equality, debug).
@@ -164,7 +178,7 @@ Three things in the doc comment that the L3+ code will rely on:
 
 1. **`fills` is in order of execution**. If a market buy walks 3 ask levels, fills[0] is the cheapest match, fills[1] is the next, fills[2] is the most expensive. This ordering matters for replay determinism (L8's proptest will assert this).
 2. **`remaining_qty` is for unrested taker quantity only**. A Market order with remainder 100 means 100 units couldn't be matched at any price (because the book ran out of liquidity). A Limit order with remainder 0 might still have an unfilled remainder — but that remainder is **now in the book** as a resting order, not in the return value.
-3. **`total_filled` is a helper, not a stored field**. It's an O(N) sum over fills. We don't cache it because (a) `Vec::len()` is usually what callers really want when they just need "did anything fill?", and (b) the actual quantity total is only needed by tests/inspection code, where O(N) doesn't matter.
+3. **`total_filled` is a helper, not a stored field**. It's an O(N) sum over fills. We don't cache it because (a) `Vec::len()` is usually what callers really want when they just need "did anything fill?", and (b) the actual quantity total is only needed by tests/inspection code, where O(N) doesn't matter. On top of that, `Vec<Fill>` is contiguous memory — for small N (1-3 in practice) the iteration fits in a single CPU cache line and runs much faster than `O(N)` notation suggests. Mechanical sympathy says: caching buys little here.
 
 > 🛑 **Anti-fluency.** "Why isn't `remaining_qty` part of the per-fill data instead of a separate field?" **Because there's at most one remainder per submit, and it's not associated with any fill** — it's the *unfilled* part. Putting it in `Fill` would either force every fill to carry a meaningless 0 or require a "phantom fill" entry just to hold it. Keeping it separate on `FillResult` is the right shape.
 

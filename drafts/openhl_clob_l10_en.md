@@ -89,6 +89,30 @@ That's the whole lesson. Eight lines of code. The interesting parts are **what `
 
 (Answer: `drain(..)` removes the elements one at a time, returning an iterator. `mem::take` swaps the entire `Vec<Fill>` by value — one pointer swap, no per-element work. For a Vec with N fills, `drain` is O(N) plus iterator overhead; `mem::take` is O(1) constant-time. **`mem::take` is faster and clearer for "take everything and reset to default."**)
 
+Drawing the forward-only drain semantics along the time axis:
+
+```
+time →
+
+   submit_order(o_a)     submit_order(o_b)     build_payload(id=1)     submit_order(o_c)     build_payload(id=2)
+        ↓                     ↓                      ↓                       ↓                      ↓
+  pending_fills:          pending_fills:        std::mem::take →         pending_fills:         std::mem::take →
+   [fill_a]                [fill_a, fill_b]      payload_id=1 owns          [fill_c]              payload_id=2 owns
+                                                 [fill_a, fill_b]           (appended to            [fill_c]
+                                                 pending_fills is           drained buffer)         pending_fills is
+                                                 empty again                                        empty again
+
+       ←  fills going into payload id=1  →   ←  fills going into payload id=2  →
+
+pending HashMap (written by build_payload):
+   {                                            {
+     id=1: (hash_1, header_1, [fill_a, fill_b])   id=1: (..., [fill_a, fill_b])  ← no retroactive write
+                                                   id=2: (hash_2, header_2, [fill_c])
+   }                                            }
+```
+
+**Forward-only semantics:** a payload built at moment T owns exactly the fills that had accumulated up to T. Fills arriving after T never attach retroactively to an earlier payload. Each `build_payload` call is a cut on the timeline. This is the load-bearing invariant that L11's integration tests will pin down.
+
 ## Walk-through
 
 ### Step 1: Find the line to change
@@ -135,7 +159,7 @@ Walk the new code carefully:
 1. **`self.pending_fills.lock()`** — acquire the mutex. Returns `LockResult<MutexGuard<Vec<Fill>>>`. The `.expect("pending_fills mutex poisoned")` unwraps the result (`expect` over poisoned mutexes is fine — see L9's design reflection).
 2. **`.lock().expect(...)`** returns a `MutexGuard<Vec<Fill>>`. `MutexGuard` is `Deref<Target = Vec<Fill>>`, but it also has `DerefMut`. To take ownership of the Vec by value, we need `&mut Vec<Fill>`, which we get by `&mut *guard`.
 3. **`std::mem::take(&mut *guard)`** does the swap: the Vec's heap-pointer + len + capacity move out of the MutexGuard into our `drained_fills` variable; the MutexGuard's Vec is replaced with `Vec::default()` (which is `Vec::new()` — an empty Vec with no allocation).
-4. **The MutexGuard is dropped at the end of the block expression** — the lock releases.
+4. **The MutexGuard is dropped at the statement's `;`** — the temporary `MutexGuard` produced inside `let drained_fills = std::mem::take(&mut *self.pending_fills.lock().expect("...")) ;` lives only for the duration of that right-hand side. Rust's scoping rule drops it at the terminating `;`, releasing the lock *before* the next line `s.pending.insert(...)` runs. This matters for **lock ordering**: if some other path held `state.lock()` while reaching for `pending_fills.lock()` in the opposite order, you'd risk a deadlock — L10's structure leaves no such window.
 5. **`s.pending.insert(id, (hash, header, drained_fills))`** stores the snapshot of fills with the new payload. **The pending_fills buffer is now empty, ready for the next round of submits.**
 
 The whole `std::mem::take(...)` expression is **a single atomic operation under the lock** — no other caller can see "half-drained" state. Either `pending_fills` is full or it's empty; never mid-drain.

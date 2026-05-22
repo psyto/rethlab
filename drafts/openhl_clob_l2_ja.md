@@ -70,6 +70,18 @@ pub enum OrderType { Limit { price: Price }, Market }
 2. **`Fill`** — 6 field、maker と taker を明示的に名付ける。maker_order_id と maker_account の **両方** を保存するのは、chain 統合 (course 8) が account を credit/debit するため。
 3. **`FillResult`** — fill 群と、マッチも rest もしなかった残りを集める。`total_filled()` ヘルパー付きで、caller が iterate せずに「いくらマッチしたか?」を尋ねられる。
 
+3 つの record の関係を 1 枚にまとめると:
+
+```mermaid
+flowchart LR
+    Order["Order<br/>(taker)"] -->|submit| Engine["matching engine"]
+    Engine -->|returns| Result["FillResult"]
+    Result --> Fills["fills: Vec&lt;Fill&gt;"]
+    Result --> Rem["remaining_qty: Qty"]
+```
+
+`Order` が engine の入力、`FillResult` が出力。出力は「マッチした分」(複数の `Fill`) と「マッチしなかった分」(`remaining_qty`) に分かれる。これが L4-L5 の matching engine の中で 1 回の `submit_order` 呼び出しに対応する 1 つのデータフローだ。
+
 新規依存なし。`types.rs` の外でのコード変更なし。コード ~35 行。
 
 > 🛑 **考えてみよう。** スクロールする前に: `Fill` は `maker_order_id` と `maker_account` の **両方** を運ぶ。なぜ重複させるのか? Maker の `OrderId` で account を lookup できれば十分なのでは? ヒント: `Fill` を consume する側は誰か。Chain の `clob_place_order` precompile (course 8) は balance を credit する — account が直接必要。`OrderId → AccountId` の lookup を許すと、precompile が order book の内部 index への参照を保持しなければならない。**両方を Fill 自体に持たせることで consumer が engine の内部 state から decouple される。** Message passing と shared state の発想の違い。
@@ -93,6 +105,8 @@ pub struct Order {
 ```
 
 5 field。**全部 `Copy`** — Order は 8 (OrderId) + 8 (AccountId) + 1 (Side) + 8 (Qty) + 16 (OrderType — discriminant + Price) = 41 バイト。padding 込みで約 48 バイト。値渡しで自由に渡せる小ささだ。通常コードで `Box<Order>` や `&Order` を使う必要はない。
+
+> **メモリレイアウト補足:** Rust のデフォルト `#[repr(Rust)]` では、コンパイラがフィールドの順序をアライメントに合わせて最適に再整列（reorder）してパディングを最小化する。だから上記の順序はあくまで人間が読みやすい論理順で並べているだけで、サイズのために宣言順を犠牲にする必要はない。サイズ計算は `std::mem::size_of::<Order>()` で確認できる。
 
 field 順序には意味がある:
 - **`id` を最初に** — 最も使われる field (lookup、equality、debug)。
@@ -164,7 +178,7 @@ doc コメント中の 3 点に L3+ のコードが依存する:
 
 1. **`fills` は execution 順序**。Market buy が ask level を 3 個走査すると、fills[0] が最安マッチ、fills[1] が次、fills[2] が最高となる。Replay determinism にこの順序が重要 (L8 の proptest で assert する)。
 2. **`remaining_qty` は rest しなかった taker quantity のみ**。Market order の remainder 100 は「100 unit がどの価格でもマッチできなかった (book が流動性切れ)」を意味する。Limit order でも remainder が 0 だが約定しなかった残りがあり得る — ただしその残りは **今 book にある** (resting order として) のであって、return 値の中にあるわけではない。
-3. **`total_filled` はヘルパーであって stored field ではない**。約定全体に対する O(N) 合計。cache しない理由は、(a) caller が「約定したか?」を聞くだけなら通常 `Vec::len()` で済む、(b) 実際の quantity total は test/inspection コードでしか必要にならず、そこでは O(N) が問題にならない、から。
+3. **`total_filled` はヘルパーであって stored field ではない**。約定全体に対する O(N) 合計。cache しない理由は、(a) caller が「約定したか?」を聞くだけなら通常 `Vec::len()` で済む、(b) 実際の quantity total は test/inspection コードでしか必要にならず、そこでは O(N) が問題にならない、から。加えて `Vec<Fill>` はメモリ上に連続配置されるので、N が小さい範囲（実運用で 1-3 個）の iterate は CPU キャッシュラインに収まり、`O(N)` 表記から想像されるよりはるかに速い — 機械共感（mechanical sympathy）的にも cache する価値が薄い。
 
 > 🛑 **やりがちな勘違い。** 「`remaining_qty` を別 field ではなく per-fill data の一部にしたら?」 **submit ごとに remainder は最大 1 つで、どの約定にも紐付かない** — **約定しなかった** 部分そのものだから。`Fill` に入れると、すべての約定に無意味な 0 を運ばせるか、保持するためだけの「phantom fill」エントリを作る羽目になる。`FillResult` に別 field として置くのが正しい形。
 

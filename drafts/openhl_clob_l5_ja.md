@@ -81,6 +81,33 @@ fn match_at_level(taker: &Order, price: Price, ...) -> Fill { ... }
 
 (答え: Market ケース → 約定 `[30 @ 100]`、`remaining_qty = 20` (約定しなかった部分は破棄され、caller には見えるが book には乗らない)。Limit ケース → 約定 `[30 @ 100]`、`remaining_qty = 0` (20 unit が price 100 の新規 bid として book に rest する)。**同じ約定、だが leftover の運命が違う。**)
 
+この「leftover の運命の分岐」を board の状態として並べる:
+
+```
+START — asks: {100: [O_a(30)]}, bids: empty
+        taker: Buy qty=50
+
+   MARKET case (discard leftover)         LIMIT @ 100 case (rest leftover)
+   ────────────────────────────           ──────────────────────────────
+   walk asks (no price guard)              walk asks while ask_price ≤ 100
+     100: eat O_a fully → Fill(30)           100: eat O_a fully → Fill(30)
+     asks empty, remaining = 20              asks empty, remaining = 20
+   leftover の処理:                          leftover の処理:
+     DISCARD (board に乗らない)              REST as new bid @ 100
+
+   AFTER:                                  AFTER:
+     asks: empty                             asks: empty
+     bids: empty   ← 20 が消えた            bids: {100: [new(20)]}   ← 20 が rest
+
+   returned:                               returned:
+     FillResult {                            FillResult {
+       fills: [F1],                            fills: [F1],
+       remaining_qty: Qty(20)  ← caller       remaining_qty: Qty(0)  ← rest 済み
+     }                                       }
+```
+
+同じ matching ループ、同じ約定。違うのはループ後の最後の 1 ステップだけ — Market は残量を `remaining_qty` に運ぶだけで book には触れず、Limit は残量を新規の resting order として book に挿入する。コード上は **「rest-the-remainder ブロックの有無」** だけが差分になる。
+
 ## 手順
 
 ### Step 1: `submit_market()` を `impl Book` に追加
@@ -253,7 +280,7 @@ mod smoke {
 
 2. **`FillResult::remaining_qty` は order type で意味が変わる。** Limit では常に `Qty(0)` (rest 済みか完全 match)。Market では実際の unfilled 残り。**型は同じ、契約は違う。** これが許されるのは、`FillResult` の field doc (L2) が両方の解釈を明示的に named しているから。
 
-3. **空 book の Market order はエラーではなく clean に返る。** 空 asks book に対する Market buy は `FillResult { fills: vec![], remaining_qty: order.qty }` を返す。エラーなし。これが正しいデフォルト: caller がマッチを依頼し、できるだけ (0 個でも) マッチさせ、leftover を報告する。**「何も起きなかった」はエラーではなく valid な結果であるべき。**
+3. **空 book の Market order はエラーではなく clean に返る。** 空 asks book に対する Market buy は `FillResult { fills: vec![], remaining_qty: order.qty }` を返す。エラーなし。これが正しいデフォルト: caller がマッチを依頼し、できるだけ (0 個でも) マッチさせ、leftover を報告する。**「流動性が無かった」は実行エラー（`Result::Err`）ではなく、valid な「ゼロ件約定という状態遷移の結果」だ。** Consensus chain の文脈では特に重要 — `submit_market` を `Result` にすると、呼び出し側（EVM precompile、bridge、上位のトランザクション実行レイヤー）が空 book と他のエラーを区別する分岐ロジックを抱え込み、ガス計算も状態巻き戻しも複雑になる。Total な関数（任意の入力で必ず `FillResult` を返す）に保つことで、上位層は「fills が空かどうか」を一度 check するだけで済み、純粋関数的な予測可能性が保たれる。**Total + side-effect-free が consensus state machine 設計の規律。**
 
 ## 答え合わせ
 

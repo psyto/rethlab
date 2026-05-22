@@ -81,6 +81,33 @@ The lesson is short because **L5 is what's left over after L4 did most of the wo
 
 (Answer: Market case → fill `[30 @ 100]`, `remaining_qty = 20` (the unfilled portion is discarded — the caller sees it but it's not on the book). Limit case → fill `[30 @ 100]`, `remaining_qty = 0` (the 20 units rest on the book as a new bid at 100). **Same fill, different fate for the leftover.**)
 
+Laid out as board state transitions:
+
+```
+START — asks: {100: [O_a(30)]}, bids: empty
+        taker: Buy qty=50
+
+   MARKET case (discard leftover)         LIMIT @ 100 case (rest leftover)
+   ────────────────────────────           ──────────────────────────────
+   walk asks (no price guard)              walk asks while ask_price ≤ 100
+     100: consume O_a fully → Fill(30)       100: consume O_a fully → Fill(30)
+     asks empty, remaining = 20              asks empty, remaining = 20
+   leftover handling:                       leftover handling:
+     DISCARD (not added to book)             REST as new bid @ 100
+
+   AFTER:                                  AFTER:
+     asks: empty                             asks: empty
+     bids: empty   ← 20 vanished            bids: {100: [new(20)]}   ← 20 rests
+
+   returned:                               returned:
+     FillResult {                            FillResult {
+       fills: [F1],                            fills: [F1],
+       remaining_qty: Qty(20)  ← caller       remaining_qty: Qty(0)  ← rested
+     }                                       }
+```
+
+Same matching loop, same fill. The only difference is the one step *after* the loop — Market just carries the remaining qty into `remaining_qty` and never touches the book; Limit inserts the remainder as a new resting order. In code, the difference is the **presence or absence of the rest-the-remainder block**.
+
 ## Walk-through
 
 ### Step 1: Add `submit_market()` to `impl Book`
@@ -253,7 +280,7 @@ Three load-bearing decisions encoded here:
 
 2. **`FillResult::remaining_qty` carries different meaning across order types.** For Limit, it's always `Qty(0)` (rested or fully matched). For Market, it's the actual unfilled remainder. **The type is the same; the contract differs.** This is OK because the field doc on `FillResult` (L2) explicitly names both interpretations.
 
-3. **Empty-book Market orders return cleanly, not via error.** A Market buy against an empty asks book returns `FillResult { fills: vec![], remaining_qty: order.qty }`. No error. This is the right default: the caller asked us to match, we matched as much as we could (zero), and we reported the leftover. **"Nothing happened" should be a valid result, not an error.**
+3. **Empty-book Market orders return cleanly, not via error.** A Market buy against an empty asks book returns `FillResult { fills: vec![], remaining_qty: order.qty }`. No error. This is the right default: the caller asked us to match, we matched as much as we could (zero), and we reported the leftover. **"No liquidity available" isn't a runtime error (`Result::Err`) — it's a valid "zero-fill state transition."** This matters especially in a consensus chain: making `submit_market` return `Result` forces every caller (EVM precompiles, the bridge, the upper transaction execution layer) to branch between "empty book" and "other errors," complicating gas accounting and state rollback. Keeping the function total (always returns a `FillResult`, for any input) means the upper layer only has to check "is `fills` empty?" once — purely functional, predictable. **Total + side-effect-free is the consensus state-machine discipline.**
 
 ## Answer key
 

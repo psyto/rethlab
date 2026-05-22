@@ -48,7 +48,7 @@ Specific changes:
 
 ## Recap
 
-After course 6 (L14) + course 7 L8, your workspace has:
+After course 6 (consensus, through L14) + course 7 (CLOB, through L8), your workspace has:
 
 ```
 crates/clob/                            — complete matching engine (L1-L8)
@@ -73,6 +73,40 @@ Six things, all in `crates/evm/`:
 7. **Ripple-update the destructuring** in `build_payload`, `payload_ready`, `validate_payload`, `commit` to match the new 3-tuple shape. `build_payload` inserts an empty `Vec<Fill>` for now.
 
 Step 7 sounds tedious but is mechanical: every place that wrote `(hash, header)` or `(h, _)` becomes `(hash, header, fills)` or `(h, _, _)`. The compiler tells you each location with a clear error.
+
+The bridge's internal topology after L9, in one diagram:
+
+```
+        order in
+            ↓
+   ┌───────────────────────────────────┐
+   │  LiveRethEvmBridge<P>             │
+   │                                   │
+   │   ┌─────────────────┐             │
+   │   │ Arc<Mutex<Book>>│ ← submit_order locks briefly to match,
+   │   │   (matching)    │   returns the FillResult
+   │   └─────────────────┘             │
+   │            │ fills                │
+   │            ↓                      │
+   │   ┌─────────────────────┐         │
+   │   │ Mutex<Vec<Fill>>    │ ← submit_order locks briefly to append.
+   │   │   (pending_fills)   │   L10's build_payload drains it.
+   │   └─────────────────────┘         │
+   │            │                      │
+   │            ↓                      │
+   │   ┌──────────────────────────┐    │
+   │   │ Mutex<State>             │    │
+   │   │   pending: HashMap<id,   │    │
+   │   │     (hash, header,       │ ← L10 will inject fills as Vec<Fill>;
+   │   │      Vec<Fill>)>         │   today we insert an empty Vec
+   │   └──────────────────────────┘    │
+   └───────────────────────────────────┘
+            │ build_payload → PayloadId
+            ↓
+        EVM lane (state, header, forkchoice)
+```
+
+The load-bearing decision is keeping `clob` and `pending_fills` in **separate Mutexes** — the two lanes don't serialize each other, so a long hold on one doesn't delay the other. The EVM lane (`State.pending` HashMap) is the existing bridge plumbing; the CLOB plugs in as a fully parallel lane.
 
 > 🛑 **Predict.** Before scrolling: after L9 you can call `bridge.submit_order(order)` and see fills accumulate via `bridge.pending_fill_count()`. If you then call `bridge.build_payload(parent, attrs)`, what does `bridge.payload_fills(id)` return for the newly-built payload? Hint: read §Step 7 carefully.
 
@@ -260,6 +294,10 @@ Below `new()` (or after `chain_spec()` if you prefer grouping pub methods togeth
 Three methods, three intents:
 
 - **`submit_order`** — the **write** path. Takes `&self` (not `&mut self`) because internal mutability via `Mutex` lets shared references mutate the bridge. Locks `clob`, calls `book.submit`, gets back a `FillResult`. If any fills were produced, locks `pending_fills` and appends them. Returns the `FillResult` so the caller knows what happened.
+
+  > **Lock-ordering safety — important:** the source makes it look like `let mut book = self.clob.lock()...` stays alive into the middle of the function, but Rust's **non-lexical lifetimes (NLL)** drop `book` (the MutexGuard) **immediately after** `book.submit(order)` (its last use). By the time `pending_fills.lock()` runs, the `clob` lock is already released. **The two locks are never held simultaneously** — they're acquired and released in series. No deadlock path exists; the compiler enforces the drop timing.
+  >
+  > For maximum explicitness, you could wrap the first step in a scope block — `let result = { let mut book = ...; book.submit(order) };` — or insert `drop(book);` right after `book.submit`. This course keeps the byte-identical form against the `openhl` reference SHA, but in production code the explicit scope or `drop` is a defensive habit that makes it harder to accidentally introduce "hold one lock while taking another" in a later refactor.
 - **`payload_fills`** — the **inspection** path. Returns `Option<Vec<Fill>>` for a given `PayloadId`. `None` if the id isn't in pending; `Some(vec)` (possibly empty) if it is. The doc comment is explicit that this is a test-and-debug method — production code would route fills through a transaction-encoding pipeline.
 - **`pending_fill_count`** — a small debugging helper. How many fills are sitting in the buffer waiting to be drained. Useful for tests like "submit two orders that cross, expect count == 1."
 

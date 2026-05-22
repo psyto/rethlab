@@ -192,7 +192,7 @@ mod prop_tests {
 
 - **`arb_side()`** — uniform に Buy または Sell を選ぶ。`prop_oneof![Just(...), Just(...)]` が proptest の「これらリテラルのどれか 1 つ」combinator。
 - **`arb_action(id)`** — 固定 `id` で random な `Action` を生成する。Limit 分岐は `(account, qty, side, price)` を range で生成し、Market 分岐は `(account, qty, side)` を生成する。重みは `3 => limit_action, 1 => market_action` — Limit action を Market の 3 倍の頻度にして、現実的な order-book usage を反映している。
-- **`arb_actions()`** — 長さ 1..30 の random `Vec<Action>` を生成する。`.prop_flat_map` パターンは少し奇妙だ: まず u64 vec を生成して **長さを決め**、それから各 position を `arb_action(i+1)` にマップして order ID を increment する。ポイントは、`arb_actions` が strictly-increasing な order ID を持つ sequence を生成すること (book での collision を避けるため)。
+- **`arb_actions()`** — 長さ 1..30 の random `Vec<Action>` を生成する。`.prop_flat_map` パターンは少し奇妙だ: まず `prop::collection::vec(0u64..1000, 1..30)` で「長さ 1..30 の、値が 0..1000 の u64 vec」を生成する。**ただし中身の u64 値はダミーで、`.prop_flat_map` の中の `.enumerate()` が直後に index で上書きしてしまう** — `0u64..1000` の range は「ベクタの長さ」を決めるためだけのもので、生成される値そのものは使われない。それから各 position を `arb_action(i+1)` にマップして order ID を確定させる。ポイントは、`arb_actions` が strictly-increasing な order ID を持つ sequence を生成すること (book での collision を避けるため)。
 
 **range (`1..=200` for account、`50..=150` for price) を使う理由は?** Proptest を **plausible** なシナリオへバイアスするため。`0..=u64::MAX` の range にすると、proptest はほとんどの場合 extreme outlier (account_id = 18_446_744_073_709_551_614 等) を生成する。現実的な range にすれば、実際のトレーディングに見えるシナリオが生成される: account 1-200、price 50-150、quantity 1-20。Matching engine のバグは、normal-looking な sequence に最も隠れやすい。
 
@@ -265,9 +265,13 @@ Strategy の下に append:
 - **`total_filled`**: 生成された全 `Fill` の `fill_qty` の合計。
 - **`total_market_unfilled`**: Market order の `remaining_qty` の合計 (破棄された leftover)。
 
-Invariant: `total_in = 2 * total_filled + total_market_unfilled + resting_qty`。
+不変条件（invariant）は以下の保存則:
 
-`2 *` が付くのはなぜか? **約定は maker から 1 unit と taker から 1 unit を消費するので、fill_qty の 1 unit が `total_in` に 2 回現れる** — maker が submit されたとき 1 回、taker が arrive したとき 1 回。計算:
+```
+total_in = 2 × total_filled + total_market_unfilled + resting_qty
+```
+
+`2 ×` が付くのはなぜか? **約定は maker から 1 unit と taker から 1 unit を消費するので、fill_qty の 1 unit が `total_in` に 2 回現れる** — maker が submit されたとき 1 回、taker が arrive したとき 1 回。計算:
 
 | Action | `total_in` | 最後に残るもの |
 | - | - | - |
@@ -276,6 +280,23 @@ Invariant: `total_in = 2 * total_filled + total_market_unfilled + resting_qty`�
 | Limit 10 unit を submit、5 unit の ask とマッチ | +10 | 5 unit 約定 (各 side から 1 つずつ)、5 unit が rest として残る |
 
 5 unit 約定する場合を考える: maker が 5 をオファーし (既に `total_in` に計上済み)、taker が 5 を取る (これも `total_in` に計上される)。約定した 5 unit が `total_in` に 10 として現れる — 各 side から 1 回ずつ。**だから `2 * total_filled` になる。**
+
+タイムラインで見る具体例（3 行目のケース）:
+
+```
+[t=0]  Sell Limit(qty=5) が入る → 全て rest
+         total_in += 5         → total_in = 5
+         (約定なし、resting に積まれる)
+         検算: total_in(5) = 2×total_filled(0) + market_unfilled(0) + resting(5) ✓
+
+[t=1]  Buy Limit(qty=10) が入る → 5 unit が maker と約定、残 5 unit が rest
+         total_in += 10        → total_in = 15
+         total_filled += 5     → total_filled = 5
+         resting = 5 (taker の残り、maker の 5 unit は消費済み)
+         検算: total_in(15) = 2×total_filled(10) + market_unfilled(0) + resting(5) ✓
+```
+
+`total_in` は「submit された全 order の qty を時系列で足し続けるだけ」のシンプルなカウンタだ。複雑に見える `2 *` は、「約定 1 件が `total_in` に 2 回（maker submit 時 + taker submit 時）寄与する」という会計上の事実を保存則に組み込んだもの。
 
 **`proptest!` block の冒頭にある `#![proptest_config(ProptestConfig { cases: 256, .. })]` 行** が各テストを 256 回走らせる。Invariant 3 個 × 256 case = 768 ランダムシナリオ。
 
@@ -468,7 +489,7 @@ git checkout main
 バランスの問題。256 case × 3 property × ~10ms per case ≈ 8 秒 — `cargo test` で毎回走らせるのに十分速い。1024 case なら 30 秒超になり、dev iteration の摩擦になる。100 case では稀なバグを見逃すリスクがある。**安く走らせられて、common なバグを catch できる程度の case count を選ぶ。**
 
 **Q: なぜ proptest action に `cancel` を入れていないのか?**
-Cancel action は determinism と conservation property を複雑にする: cancel 後、どの order ID が生きているかを track する必要が出てくる。「submit-only sequence」に simplify することで、3 つの invariant が tractable になる。Cancel-aware property は follow-up で追加すればよい。既存の 3 invariant が最も価値の高いところなので、まずそこを正しく押さえる。
+Cancel action は determinism と conservation property を複雑にする。まず保存則は単純に `total_in = 2 * total_filled + total_market_unfilled + resting_qty + total_canceled_qty` と項を 1 つ足すだけで済みそうに見える。だが本当に難しいのはその先で、generator 側が「すでに約定または cancel 済みの order ID への二重 cancel」を generate しないように、**生きている order ID を stateful に track する必要が出てくる**（L7 の Test 8 `cancel_unknown_returns_false` で扱った境界が、proptest では generator の責任として返ってくる）。Stateful な strategy は proptest の純粋な combinator パターンから外れるので、generator のコード量が一気に増える。「submit-only sequence」に simplify することで、3 つの invariant が tractable になる。Cancel-aware property は follow-up で追加すればよい — まずは基礎を綺麗に固めるのが正しい設計ステップ。既存の 3 invariant が最も価値の高いところ。
 
 **Q: Proptest が失敗 input を見つけたらどうなるか?**
 **Shrinking phase** に入る。失敗 input から始めて、proptest がまだ失敗する最小の subset / 最小値を探す。本コースのテストケース generator (`Vec<Action>` を生成) では、shrinking で 25-action sequence が 3-action sequence まで縮んでバグを再現することもある。デバッグ対象はその最小 sequence — original input よりはるかに扱いやすい。

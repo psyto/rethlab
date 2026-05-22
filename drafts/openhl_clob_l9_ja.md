@@ -48,7 +48,7 @@ cargo test -p openhl-evm --release
 
 ## おさらい
 
-Course 6 (L14) + course 7 L8 完了時点で workspace は:
+Course 6 (consensus、L14 完了) + course 7 (CLOB、L8 完了) 時点で workspace は:
 
 ```
 crates/clob/                            — 完成した matching engine (L1-L8)
@@ -73,6 +73,40 @@ crates/consensus/                       — フル BFT engine
 7. **destructuring を波及更新する** — `build_payload`、`payload_ready`、`validate_payload`、`commit` を新しい 3-tuple shape にマッチさせる。`build_payload` は今のところ空の `Vec<Fill>` を挿入しておく。
 
 Step 7 は退屈に聞こえるが機械的な作業: `(hash, header)` や `(h, _)` を書いた場所すべてが `(hash, header, fills)` または `(h, _, _)` になる。Compiler が各場所をクリアなエラーで教えてくれる。
+
+L9 後の bridge の内部トポロジーを 1 枚にまとめると:
+
+```
+        order in
+            ↓
+   ┌───────────────────────────────────┐
+   │  LiveRethEvmBridge<P>             │
+   │                                   │
+   │   ┌─────────────────┐             │
+   │   │ Arc<Mutex<Book>>│ ← submit_order が短時間ロック
+   │   │   (matching)    │   して match、結果を返す
+   │   └─────────────────┘             │
+   │            │ fills                │
+   │            ↓                      │
+   │   ┌─────────────────────┐         │
+   │   │ Mutex<Vec<Fill>>    │ ← submit_order が短時間ロック
+   │   │   (pending_fills)   │   して append。L10 で build_payload
+   │   └─────────────────────┘   が drain する
+   │            │                      │
+   │            ↓                      │
+   │   ┌──────────────────────────┐    │
+   │   │ Mutex<State>             │    │
+   │   │   pending: HashMap<id,   │    │
+   │   │     (hash, header,       │ ← L10 で fills を Vec<Fill> として注入
+   │   │      Vec<Fill>)>         │   今は空 Vec を挿入
+   │   └──────────────────────────┘    │
+   └───────────────────────────────────┘
+            │ build_payload → PayloadId
+            ↓
+        EVM レーン（state、header、forkchoice）
+```
+
+`clob` と `pending_fills` を **別々の Mutex** に分けているのが load-bearing — 2 つのレーンが直列化しないので、片方が長く保持されても他方が遅延しない。EVM レーン側（`State` 内の `pending` HashMap）は既存の bridge の動きで、CLOB は完全な並走レーンとして接続される。
 
 > 🛑 **考えてみよう。** スクロールする前に: L9 後、`bridge.submit_order(order)` を呼べるようになり、`bridge.pending_fill_count()` で fill が蓄積していく様子が観察できる。そこで `bridge.build_payload(parent, attrs)` を呼ぶと、新しく build された payload に対する `bridge.payload_fills(id)` は何を返すか? ヒント: §Step 7 を注意深く読む。
 
@@ -260,7 +294,11 @@ impl<P> LiveRethEvmBridge<P> {
 メソッド 3 個、それぞれの意図は次の通り:
 
 - **`submit_order`** — **write** path。`&self` を取る (`&mut self` ではない)。`Mutex` 経由の interior mutability によって、shared 参照で bridge を mutate できる。`clob` を lock し、`book.submit` を呼び、`FillResult` を受け取る。約定が生成されたら、`pending_fills` を lock して append する。`FillResult` を return して caller に何が起きたかを知らせる。
-- **`payload_fills`** — **inspection** path。指定 `PayloadId` に対して `Option<Vec<Fill>>` を返す。Id が pending にない場合は `None`、ある場合は `Some(vec)` (空の可能性あり)。Doc コメントで、これが test-and-debug 用のメソッドであることを明示する — production コードは fill を transaction-encoding pipeline 経由で route する。
+
+  > **ロック順序の安全性 — 重要:** ソース上は `let mut book = self.clob.lock()...` が関数の途中まで生きているように見えるが、Rust の **non-lexical lifetimes (NLL)** によって、`book.submit(order)` の行（`book` の最後の使用）の **直後に** `book` (MutexGuard) は drop される。`pending_fills.lock()` が呼ばれる時点では `clob` のロックは既に解放されている。つまり **2 つのロックは決して同時に保持されない** — 直列に取って直列に放す。デッドロックの可能性はゼロ。コンパイラがこの drop タイミングを保証してくれる。
+  >
+  > もし明示性を最大化したければ、`let result = { let mut book = ...; book.submit(order) };` のように **scope block で囲む**、または `drop(book);` を `book.submit` の直後に書く、という書き方もある。本コースは `openhl` 参照 SHA との byte-identical を優先するためそのままにしているが、production code では明示的な scope か `drop` のほうが、将来「ロックを保持したまま別ロックを取る」拡張を入れにくくなる防御として機能する。
+- **`payload_fills`** — **inspection** path。指定 `PayloadId` に対して `Option<Vec<Fill>>` を返す。`PayloadId` が pending にない場合は `None`、ある場合は `Some(vec)` (空の可能性あり)。Doc コメントで、これが test-and-debug 用のメソッドであることを明示する — production コードは fill を transaction-encoding pipeline 経由で route する。
 - **`pending_fill_count`** — 小さな debugging ヘルパー。Buffer で drain 待ちの fill 数を返す。「Cross する 2 order を submit、count == 1 を期待」といったテストで有用。
 
 3 メソッドすべてが `&self` を取る点に注目。内部の `Mutex` が重い処理を担い、public API としては「shared 参照 + interior mutability」になる — まさに async コードが必要とする形 (複数の async task が `&LiveRethEvmBridge` を同時に保持できる)。

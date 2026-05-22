@@ -63,6 +63,22 @@ Five things:
 
 The accessors return `Option<Price>` or `usize` — pure read operations against the BTreeMap shape. The interesting design choices are the **map key types** and what `RestingOrder` keeps vs. drops from `Order`.
 
+The completed Book's logical structure is a 2-level nest:
+
+```
+bids (BTreeMap<Reverse<Price>, VecDeque<RestingOrder>>) — iterate highest first:
+  Reverse(Price(102)) → [O3]              ← best bid: keys().next()
+  Reverse(Price(100)) → [O1, O2]
+  Reverse(Price(99))  → [O5, O6]
+
+asks (BTreeMap<Price, VecDeque<RestingOrder>>) — iterate lowest first:
+  Price(103) → [O7, O8]                   ← best ask: keys().next()
+  Price(105) → [O9]
+  Price(107) → [O10, O11]
+```
+
+The outer `BTreeMap` gives **price priority** (sorted keys); the inner `VecDeque` gives **time priority** (FIFO order) — that's the structure of a price-time-priority CLOB. Only the bid side's `Reverse<Price>` key type is asymmetric, and that's the load-bearing trick that makes `keys().next()` return the best bid on both sides.
+
 > 🛑 **Predict.** Before scrolling: `BTreeMap` iterates keys in **natural order** (smallest to largest). For **asks** (we want lowest price first), `BTreeMap<Price, _>` is perfect — natural order already walks lowest-first. For **bids**, we want **highest price first** — but natural order would walk lowest-first. **What's the cheapest way to make BTreeMap walk highest-first without writing a custom comparator?** Hint: think about what "reverse a u64's ordering" looks like as a type.
 
 ## Walk-through
@@ -190,7 +206,7 @@ impl Book {
 
 **Why `Option<Price>` for best?** When the book is empty, there's no best price. `Option::None` is the right answer; returning `Price(0)` or `Price(u64::MAX)` would let callers accidentally treat them as real prices. The type forces the empty case to be handled.
 
-> 🛑 **Anti-fluency.** "`depth_bid` is O(n) — that's slow." **It's only called from tests and inspection code, where O(n) is fine.** The matching engine itself never calls `depth_bid` — it walks `keys().next()` and `front()` in O(1)/O(log n). If `depth_bid` were on the hot path, we'd add a counter and bump it on every push/pop; but it's not, so we don't.
+> 🛑 **Anti-fluency.** "`depth_bid` is O(n) — that's slow." **It's only called from tests and inspection code, where O(n) is fine.** Strictly, the loop is over the number of **active price levels P**, not the total number of orders N — each `VecDeque::len()` is itself O(1), and we sum that across price levels. The matching engine itself never calls `depth_bid` — it walks `keys().next()` and `front()` in O(1)/O(log P). If `depth_bid` were on the hot path, we'd add a counter and bump it on every push/pop; but it's not, so we don't.
 
 ### Step 5: Wire into `lib.rs`
 
@@ -243,10 +259,10 @@ warning: unused import: `Fill, FillResult, Order, OrderType, Qty, Side`
 
 **Two options for how to handle this:**
 
-1. **Suppress the warning for now** by adding `#[allow(unused_imports)]` above the use statement. Remove it once L4 starts using everything.
+1. **Tolerate the warning for now** — move on; each import gets used in L4-L6 and the warning disappears naturally. If the compile-time noise bothers you, temporarily add `#[allow(unused_imports)]` above the `use` statement (remove in L4).
 2. **Comment out the unused imports for now**, uncomment as you need them in L4-L6.
 
-The reference at SHA `55a9dff` keeps all imports (because the file is complete at that SHA). For build-along, choice 1 is closer to the reference; choice 2 is cleaner if you mind warnings. Either is fine.
+**This course recommends option 1.** The reference at SHA `55a9dff` keeps all imports (the file is complete at that SHA), so the build-along's per-step code lines up byte-for-byte with the reference. The warning is transient noise — it goes away naturally from L4 onward.
 
 A quick sanity test that the structure compiles correctly:
 

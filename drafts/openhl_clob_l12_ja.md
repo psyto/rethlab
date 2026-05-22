@@ -38,6 +38,67 @@
 └── ... course 6 から変わらず ...
 ```
 
+このコース全体で何がどこに座っているかをトポロジー図で見ると:
+
+```
+                     ┌──────────────────────────────────────────────┐
+                     │              Reth EthereumNode                │
+                     │   (Course 6 で立ち上げた substrate, L9-L14)    │
+                     │                                                │
+                     │   ┌─────────────┐         ┌────────────────┐  │
+                     │   │  Engine API │ ◄─────► │ Payload Builder │  │
+                     │   │ (forkchoice)│         │  (build_payload)│  │
+                     │   └─────────────┘         └────────┬───────┘  │
+                     │                                    │           │
+                     │   ┌──────────────────────────────  │  ──────┐  │
+                     │   │       BlockExecutor (EVM)      │        │  │
+                     │   │  (Reth が EVM を回す本流レーン) │        │  │
+                     │   └────────────────────────────────┘        │  │
+                     │                ▲                            │  │
+                     │  (まだ未接続 — Course 8 で precompile 接続)  │  │
+                     └────────────────┼────────────────────────────┘  │
+                                      │                               │
+       ┌────────  Bridge (LiveRethEvmBridge, crates/evm) ─────────┐
+       │                                                          │
+       │   ┌─────────────┐    ┌──────────────────────┐            │
+       │   │ submit_order│ ──►│ Mutex<Book>          │            │
+       │   │  (caller    │    │  (matching engine)   │            │
+       │   │   facing)   │    └──────────┬───────────┘            │
+       │   └─────────────┘               │ FillResult              │
+       │          ▲                      ▼                         │
+       │          │            ┌──────────────────────┐            │
+       │          │            │ Mutex<Vec<Fill>>     │            │
+       │          │            │  pending_fills       │            │
+       │          │            └──────────┬───────────┘            │
+       │          │                       │ std::mem::take         │
+       │          │                       ▼                         │
+       │          │            ┌──────────────────────┐            │
+       │          │            │ pending: HashMap     │            │
+       │          │            │  <PayloadId,         │            │
+       │          │            │   (hash, hdr, fills)>│            │
+       │          │            └──────────┬───────────┘            │
+       │          │                       │ payload_fills(id)      │
+       │          └───────────────────────┘                        │
+       │                                                           │
+       └───────────────────────────────────────────────────────────┘
+                                  ▲
+                                  │
+       ┌──────────────────────────┴────────────────────────────────┐
+       │       openhl-clob crate (crates/clob — Course 7 で作成)   │
+       │                                                            │
+       │   types.rs    ─── Side / Price / Qty / Order / Fill        │
+       │   book.rs     ─── Book (BTreeMap<Reverse<Price>,VecDeque>) │
+       │                   submit / cancel / inspect                │
+       │                   pure state machine (no I/O, no async)    │
+       │                                                            │
+       └────────────────────────────────────────────────────────────┘
+```
+
+ポイントは:
+- **CLOB は Reth に組み込まれていない** — `openhl-clob` は完全に pure な crate であり、EVM/consensus/async runtime に何も依存しない (L1-L8 でその境界を引いた)。
+- **Bridge が 2 つの非対称な世界を仲介する** — pure な matching engine と、Reth が回す async + I/O ヘビーな EVM substrate を、`Mutex<...>` 越しに繋いでいる (L9-L11)。
+- **Fill は今のところ EVM の本流レーンを横切らない** — `pending` HashMap に座って payload に attach されるだけで、`BlockExecutor` は fill を知らない。この破線の縦軸が **Course 8 (precompile)** で実線になる。
+
 合計で約 **新規テスト 15 個**: hand-trace 済み unit test 9 個 (L7) + proptest invariant 3 個 (L8、768 ランダムシナリオ) + integration test 1 個 (L11)。Workspace のテスト数は 39 個 (course 6 の 38 + L11 の `clob_fills_flow_into_payload`)。
 
 ## Matching engine が何をするか
@@ -74,12 +135,14 @@ submit_order(order)              build_payload(parent, attrs)
 
 Submit が push、build が drain する。Drain は **forward-only**: 各 payload は build 時点の fill snapshot を所有し、以前の payload に retroactively fill が attach されることはない。**L11 の integration test がこれを実 Reth node に対して end-to-end で証明している。**
 
+ただし重要なのは、**fill は今のところ EVM 本流の隣を「並走するデータレーン」を走っているにすぎない** という点だ。Reth が EVM transaction を実行する本流レーンは別にあり、`BlockExecutor` は `Vec<Fill>` の存在を全く知らない (`payload_fills(id)` 経由でこちらが外から覗いているだけ)。両者は同じ `PayloadId` で identifier として紐づいているが、state としてはまだ直交していない。**Course 8 (Precompiles) は、この並走レーンを EVM 本流に対して直交交差させる**: precompile が `Vec<Fill>` を読み、smart contract から CLOB 側の state を query/mutate できるようにする。Course 7 で引いた「pure matching engine」境界が、Course 8 で初めて EVM execution path と握手する瞬間だ。
+
 ## 11 レッスン前にはできなかった、今できること
 
 - **Rust でゼロから price-time priority matching engine を build する** — そして、なぜ `BTreeMap<Reverse<Price>, ...>` が bid の正しい shape なのか、なぜ `VecDeque` が level ごとの queue の正しい shape なのか、cancel の O(n) scan が O(1) index に対してどんなトレードオフを持つのかを理解する。
 - **Pure-state-machine の determinism について推論する** — `determinism` proptest は chain が依存する種類の invariant であり、それを自分で encode した。
 - **既存の async-shared bridge にサブシステムを統合する** — `Mutex<T>` による interior mutability と `&self` メソッドが、async task 下の共有 state に対する idiomatic な Rust パターン。それを適用した。
-- **openhl Stage 8a + 8d のソースを読み**、`book.rs` と bridge の CLOB 関連コードのすべての行を説明できる。
+- **これまでの 11 レッスンを通じて触れた openhl Stage 8a + 8d のソースを読み**、`book.rs` と bridge の CLOB 関連コードのすべての行を説明できる。
 - **Matching engine を変更する** — 新しい order type (Stop、Iceberg、Post-Only) を追加するとき、`submit_limit`/`submit_market` のどこに着地させればよいか把握できる。
 
 ## まだ placeholder のもの
@@ -120,7 +183,7 @@ Bridge を再起動するとすべての resting order が消える。Production
 
 **ステータス**: O(n) linear scan。
 
-L6 では明示的に、O(1) index ではなくシンプルさを選んだ。openhl が book あたり ~10k order を超えてスケールするようになれば、cancel scan が意味を持ち始める。`HashMap<OrderId, (Side, Price)>` を追加すれば cancel が O(1) になる — 小さな機械的変更だが、profile が要求するまでは deferred。
+L6 では明示的に、O(1) index ではなくシンプルさを選んだ。openhl が book あたり ~10k order を超えてスケールするようになれば、cancel scan が意味を持ち始める。`HashMap<OrderId, (Side, Price)>` を追加すれば cancel が O(1) になる — 小さな機械的変更だが、profile が要求するまでは将来への宿題として遅延 (defer) させている。
 
 ## Production-readiness チェックリスト
 

@@ -74,8 +74,8 @@ One block to add at the bottom of `crates/clob/src/book.rs`, after `fn match_at_
 mod tests {
     use super::*;
 
-    fn limit(...) -> Order { ... }
-    fn market(...) -> Order { ... }
+    fn limit(id: u64, account: u64, side: Side, price: u64, qty: u64) -> Order { ... }
+    fn market(id: u64, account: u64, side: Side, qty: u64) -> Order { ... }
 
     #[test] fn empty_book_has_no_best_prices() { ... }
     #[test] fn resting_limit_creates_bid_or_ask() { ... }
@@ -95,7 +95,7 @@ The 9 tests are organized in **complexity order**: start with the simplest invar
 
 > 🛑 **Predict.** Before scrolling: which of the 9 tests would *fail* if I made the bug `submit_limit::Buy` walks asks **descending** (highest first) instead of ascending? Hint: think about the test that specifically asserts "best ask first."
 
-(Answer: `buy_market_takes_best_ask`. It asserts `r.fills[0].price == Price(100)` and `r.fills[1].price == Price(105)` — best-first. A descending walk would produce `[105, 100]`. **Hand-traced tests catch directional bugs that randomized tests would also catch but more expensively.**)
+(Answer: both `buy_market_takes_best_ask` AND `limit_buy_walks_asks_within_price` catch it — but as different bug symptoms. `buy_market_takes_best_ask` catches an **order-of-fills inversion** (`[105, 100]`): the best-first assertion `r.fills[0].price == Price(100)` fails. `limit_buy_walks_asks_within_price` catches a **premature-stop bug**: walking descending, the first ask is 105, the limit is 103, so `price > limit` triggers an immediate stop — and the 100 ask that *should* match is never visited, resulting in zero fills. **Directional bugs would also be caught by randomized tests, but hand-traced tests pinpoint them from two different angles — which test fails first tells you which kind of bug it is.**)
 
 ## Walk-through
 
@@ -284,7 +284,7 @@ This is the **time priority** half of "price-time priority." Within a price leve
 
 **This test would fail** if we accidentally used `Vec<RestingOrder>` and did `Vec::remove(0)` (still correct, but shifts the queue — O(n) per match), or if we used `VecDeque::push_front` instead of `push_back` (newest-first, which would be price-anti-time-priority).
 
-### Step 7: Tests 6, 7, 8 — Market with leftover, cancel, cancel-unknown
+### Step 7: Tests 6, 7, 8 — `market_with_insufficient_liquidity`, `cancel_removes_resting_order`, `cancel_unknown_returns_false`
 
 ```rust
     #[test]
@@ -403,7 +403,7 @@ Three load-bearing decisions encoded here:
 
 2. **9 tests is a finite, defensible set.** Each test corresponds to a specific invariant: empty-book, resting, walks-levels, respects-limit, FIFO, partial-market, cancel-found, cancel-not-found, no-cross. We didn't write 100 tests. **The list of invariants is short and well-defined; coverage should be by invariant, not by count.**
 
-3. **`book_does_not_cross_after_match` is positioned last.** Tests run in alphabetical order, so this specific test's placement in *source order* doesn't affect run order. But for *reading* order (a maintainer scanning the file top-to-bottom), the most important test is the most prominent. **Source layout encodes priority signals about what matters most.**
+3. **`book_does_not_cross_after_match` is positioned last.** Tests run in alphabetical order, so this specific test's placement in *source order* doesn't affect run order. But for *reading* order (a maintainer scanning the file top-to-bottom), the strongest safety property — the one that can only be validated *after* all 8 prior tests (resting / walks / FIFO / cancel / ...) have already established their preconditions — caps the file as the grand finale. It's the terminal note that says: "if you got this far, the engine's correctness stands as a framework." **Source layout encodes priority signals about what the core defensive boundary is.**
 
 ## Answer key
 
@@ -430,7 +430,7 @@ Because they're private to the `mod tests` block. Other modules don't need to co
 L8 does exactly that — 3 proptest invariants exercising 768 random scenarios. But proptests rely on hand-traced tests as their oracle: when a proptest fails, you want a small hand-traced test you can isolate to. **Hand-traced unit tests are the foundation; proptests are the amplifier.**
 
 **Q: What about tests for sell-side limit orders?**
-Good question. The 9 tests focus on buy-side scenarios because they're more intuitive to trace ("walk asks lowest-first" is more visualisable than "walk bids highest-first"). Sell-side tests aren't necessary for correctness *if* `submit_limit::Sell` is the structural mirror of `submit_limit::Buy` (which L4 established). If you're paranoid, add a few sell-side tests — they'd mirror tests 3, 4, 5 from this set.
+Good question. The 9 tests focus on buy-side scenarios because they're more intuitive to trace ("walk asks lowest-first" is more visualisable than "walk bids highest-first"). Sell-side tests aren't necessary for correctness *if* `submit_limit::Sell` is the structural mirror of `submit_limit::Buy` (which L4 established). **The decisive reason: L8's proptests generate action sequences that randomly mix Buy and Sell across 256 cases × 3 invariants = 768 scenarios. Mirror-broken bugs (inverted inequality, missing `Reverse<Price>` on the bid side) get caught mercilessly by `no_crossed_book` and `qty_conservation`.** Hand-trace is the minimum check that one side's invariants are wired up correctly; proptest provides the cross-side chaos coverage. That division of labor saves you writing 9 sell-side mirror tests by hand. If you're still paranoid, add a few — they'd mirror tests 3, 4, 5 from this set.
 
 **Q: Why `assert_eq!` instead of `assert!`?**
 `assert_eq!(a, b)` prints both values on failure, while `assert!(a == b)` prints only "left == right" with no values. For test debugging, knowing the actual value the engine produced is critical. `assert_eq!` is strictly better when the comparison is equality.

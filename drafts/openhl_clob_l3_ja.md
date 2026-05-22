@@ -63,6 +63,22 @@ L2 完了時点で `crates/clob/src/types.rs` は完成している (~109 行): 
 
 Accessor は `Option<Price>` または `usize` を返す — BTreeMap の形に対する純粋な read 操作。興味深い設計判断は **map key 型** と、`RestingOrder` が `Order` から何を残し何を落とすか、の 2 点。
 
+完成形の Book の論理構造はこういう 2 階層になる:
+
+```
+bids (BTreeMap<Reverse<Price>, VecDeque<RestingOrder>>) — 高値から走査:
+  Reverse(Price(102)) → [O3]              ← best bid: keys().next()
+  Reverse(Price(100)) → [O1, O2]
+  Reverse(Price(99))  → [O5, O6]
+
+asks (BTreeMap<Price, VecDeque<RestingOrder>>) — 安値から走査:
+  Price(103) → [O7, O8]                   ← best ask: keys().next()
+  Price(105) → [O9]
+  Price(107) → [O10, O11]
+```
+
+外側の `BTreeMap` が **価格優先** を実現（ソート済み key）、内側の `VecDeque` が **時間優先** を実現（FIFO の順序）— これが price-time-priority CLOB の構造そのものだ。Bid 側の `Reverse<Price>` だけが key 型として非対称で、それが両 side で `keys().next()` を「最良気配」に揃える load-bearing なトリック。
+
 > 🛑 **考えてみよう。** スクロールする前に: `BTreeMap` は key を **natural order** (小さい順) で iterate する。**ask** (最安価格を最初に欲しい) には `BTreeMap<Price, _>` がぴったり — natural order がそのまま最安先に辿ってくれる。**bid** は **最高価格を最初に** 欲しいが、natural order は最安先に辿る。**カスタム comparator を書かずに BTreeMap を最高先に辿らせる最も安価な方法は?** ヒント: 「u64 の ordering を反転する」を型として考える。
 
 ## 手順
@@ -190,7 +206,7 @@ impl Book {
 
 **なぜ best を `Option<Price>` にするのか?** Book が空のとき、best price は存在しないから。`Option::None` が正しい答え。`Price(0)` や `Price(u64::MAX)` を返すと、caller が誤って実際の価格として扱う恐れがある。型が空ケースのハンドリングを強制してくれる。
 
-> 🛑 **やりがちな勘違い。** 「`depth_bid` は O(n) — 遅い」。 **テストと inspection でしか呼ばないので、そこでは O(n) は問題にならない。** Matching engine 本体は `depth_bid` を決して呼ばない — `keys().next()` と `front()` を O(1)/O(log n) で順に辿るだけだ。`depth_bid` が hot path にあるなら counter を追加して push/pop ごとに bump するが、そうではないのでやらない。
+> 🛑 **やりがちな勘違い。** 「`depth_bid` は O(n) — 遅い」。 **テストと inspection でしか呼ばないので、そこでは O(n) は問題にならない。** 厳密には全注文数 N ではなく「アクティブな価格レベル数 P」に対するループだ（各 `VecDeque::len()` 自体は O(1) で、それを価格レベルの数だけ合計する）。Matching engine 本体は `depth_bid` を決して呼ばない — `keys().next()` と `front()` を O(1)/O(log P) で順に辿るだけだ。`depth_bid` が hot path にあるなら counter を追加して push/pop ごとに bump するが、そうではないのでやらない。
 
 ### Step 5: `lib.rs` に組み込む
 
@@ -243,10 +259,10 @@ warning: unused import: `Fill, FillResult, Order, OrderType, Qty, Side`
 
 **対処の選択肢が 2 つ:**
 
-1. **今は warning を抑制する** — use 文の上に `#[allow(unused_imports)]` を追加。L4 ですべて使い始めたら削除。
+1. **今は warning を容認する** — そのまま進めて L4-L6 で各 import を使い始めたときに warning が自然に消える。コンパイル時のノイズが気になる場合は、一時的に use 文の上に `#[allow(unused_imports)]` を追加（L4 で削除）。
 2. **今は未使用 import をコメントアウトする** — L4-L6 で必要に応じて uncomment。
 
-SHA `55a9dff` の参照は import をすべて残している (ファイルがその SHA で完成しているため)。Build-along では選択 1 のほうが参照に近いが、warning が気になるなら選択 2 のほうが綺麗。どちらでも問題ない。
+**本コースでは選択肢 1 を推奨する。** 参照 SHA `55a9dff` のファイルが import をすべて残している（書き上がった状態）ので、build-along の各 step のコードが参照と byte-identical に並ぶ。Warning は一時的なノイズに過ぎず、L4 以降で自然に消える。
 
 構造がコンパイルできることをクイックにサニティチェックする:
 

@@ -226,7 +226,7 @@ variant 2 個:
 
 ### Step 6: User-facing な newtype 3 個に `Display` impl
 
-末尾に追加:
+`Display` を使うので `fmt` モジュールが要るが、Step 3 でファイル冒頭に `use core::fmt;` をすでに書いている — Step ごとに `use` を継ぎ足すのではなく最初にまとめておく方が、ファイル全体の構造が見通しやすいから。`types.rs` の末尾に追加:
 
 ```rust
 impl fmt::Display for OrderId {
@@ -332,16 +332,16 @@ git checkout main
 ## よくある質問
 
 **Q: なぜ `AccountId`、`OrderId`、`Price`、`Qty` がすべて `Copy`?**
-中身は `u64` — 8 バイト、heap なし。`Copy` をマークすると、engine が `.clone()` を書かずに value で自由に渡せるようになる。Trait bound は runtime ではゼロコスト。
+中身は `u64`（わずか 8 バイト）であり、heap アロケーションもない。`Copy` を実装しておくと、engine 内で `.clone()` を明示的に呼び出すことなく値セマンティクスで自由に引き回せる。`u64` のコピーは CPU レジスタ経由で行われるので、move と比較しても runtime のオーバーヘッドはゼロだ。
 
 **Q: なぜこれらの型に `Hash`?**
-将来の用途を見据えて: O(1) cancel-by-id (レッスン L6) のための `HashMap<OrderId, RestingOrder>`。今 `Hash` を足しておけば、後で derive cascade の churn が起こらない。
+将来の用途を見据えて。L6 で実装する O(1) の高速な注文キャンセル（cancel-by-id）に `HashMap<OrderId, RestingOrder>` を使う。いま `Hash` を足しておけば、後から派生（derive）の連鎖でコードを書き直す churn が起こらない。
 
 **Q: なぜ `Side` に `PartialOrd + Ord` を付けないのか?**
-「Buy は Sell より小さい?」が無意味な質問だから。`Ord` を derive すると、caller が `if side < Side::Sell { ... }` を書けるようになり、Rust が最初に列挙した variant (ここでは Buy) を採用する — だがこれは declaration 順の artifact であって semantic な意味ではない。trait を抜けば caller は `match` か `==` の使用を強制される。
+「Buy は Sell より小さい?」という問いそのものが、ドメインとして無意味だから。`Ord` を derive してしまうと、caller が `if side < Side::Sell { ... }` と書けてしまう。これは enum の定義順という artifact による順序付けに過ぎず、semantic な意味は持たない — バグの温床になる。trait を外しておけば、caller は `match` か `==` の使用を型システムから強制される。
 
 **Q: なぜ `opposite()` に `#[must_use]`?**
-`side.opposite();` (結果を assign しない) がほぼ確実にバグだから — `opposite()` は新しい `Side` を返すだけで mutate しない。`#[must_use]` でそれを warning として浮き上がらせる。返り値が唯一の目的の関数すべてで良いプラクティス。
+`side.opposite();` のように戻り値を変数に代入し忘れるコードは、ほぼ確実にバグだから。`opposite()` は自分自身を mutate せず、新しい `Side` を返す純粋関数だ。`#[must_use]` を付けておくと、戻り値が無視された場合にコンパイラが warning を出す。副作用なしで値を返すだけの関数すべてに有効なプラクティス。
 
 ## 次のレッスン (L2)
 
