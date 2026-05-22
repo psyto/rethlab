@@ -270,9 +270,9 @@ const JA: LocaleConfig = {
   exportName: 'seedRethOpenHlConsensusJA',
   course: {
     slug: 'reth-openhl-consensus-ja',
-    title: 'OpenHL を自作する — `cargo init` から動く single-validator devnet まで',
+    title: 'OpenHL 自作開発ガイド：`cargo init` から始める single-validator devnet 構築',
     description:
-      'HL シェイプ L1 の consensus substrate を一から構築する。実 Reth (EVM) と実 Malachite (BFT) を 1 つの Rust workspace に組み込んで、ブロックを end-to-end で生成するところまで進める。リファレンス実装は `psyto/openhl`。DIY Perp シリーズの最初のコース。',
+      'Hyperliquid シェイプの L1 コンセンサス層をスクラッチで構築します。プロダクションクオリティの Reth (EVM) と Malachite (BFT) を単一の Rust workspace へ統合し、end-to-end でのブロック生成機構を実装。リファレンス実装（psyto/openhl）をベースに手を動かしながら学ぶ、「DIY Perp シリーズ」の記念すべきファーストステップです。',
     track: 'diy-perp',
     instructorName: 'RethLab',
   },
