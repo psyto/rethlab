@@ -59,7 +59,7 @@ const EN: LocaleConfig = {
     title: 'Perp DEX Primer — the perpetual-futures mechanics behind the DIY Perp track',
     description:
       "Concept-only prerequisite course for the DIY Perp track. Four lessons covering: (1) what perpetual futures are and why they have no expiry, (2) mark, index, and funding rates, (3) margin model and the four health states, (4) liquidation, insurance fund, and ADL. No Rust code — just the perp domain knowledge the build-along courses quietly assume. Worked numerical examples at Hyperliquid's actual parameter values throughout.",
-    track: 'concept',
+    track: 'diy-perp',
     instructorName: 'RethLab',
   },
   modules: {
@@ -125,7 +125,7 @@ const JA: LocaleConfig = {
     title: 'Perp DEX Primer — DIY Perp track の前提となる永久先物の仕組み',
     description:
       'DIY Perp track の prerequisite となる概念コース。4 レッスン: (1) 永久先物とは何か、なぜ期限がないのか、(2) mark / index / funding rate、(3) margin model と 4 つの health state、(4) liquidation、insurance fund、ADL。Rust コードは扱わない — build-along コースが暗黙のうちに前提にしている perp 領域の知識のみ。全レッスンを通じて Hyperliquid の実パラメータでの計算例。',
-    track: 'concept',
+    track: 'diy-perp',
     instructorName: 'RethLab',
   },
   modules: {
