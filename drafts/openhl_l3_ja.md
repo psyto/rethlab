@@ -171,6 +171,36 @@ pub trait ConsensusBridge: Send + Sync {
 
 ### Step 4: 4 つの method signature を理解する
 
+シグネチャを 1 つずつ読む前に、4 つのメソッドが BFT round のどのタイミングで、どちらの方向にデータを流すのかをタイムラインで掴んでおくと、各 signature の必然性が直感で押さえられる:
+
+```
+【 CL / EL インタラクションフロー — BFT round の時間軸 】
+
+──[ 前 round の投票が進行中、proposer は自分のターンを準備 ]─────────────────────
+   CL ──────( build_payload(parent, attrs) )──────►  EL
+                                                     │
+                                                     └─ 裏でブロック構築を開始
+                                                        (前 round 投票と並走)
+
+──[ 自分が proposer になった瞬間 — hot path、ここで microseconds が効く ]─────
+   CL ──────( payload_ready(id) )─────────────────►  EL
+   CL ◄────( ExecutedBlock を返す ) ────────────────── EL
+   CL ─► (ネットワークへ Proposal を broadcast)
+
+──[ 他 peer から Proposal を受信 — validator はすべてここを通る ]──────────
+   CL ──────( validate_payload(&ExecutedBlock) )───►  EL
+   CL ◄────( PayloadStatus: Valid / Invalid / Syncing ) ── EL
+   CL ─► 結果に応じて vote (賛成 / Nil / 棄権)
+
+──[ 2/3+ Quorum に達した — block が finalized になる ]──────────────────
+   CL ──────( commit(hash) )──────────────────────►  EL
+                                                     │
+                                                     └─ そのブロックを永続化、
+                                                        new head として確定
+```
+
+ポイントは 2 つ: (a) **`build_payload` と `payload_ready` は別の round 局面で呼ばれる** — 前者は前 round 投票中、後者は自分が proposer になった hot path。これがレッスン後半で見る「最も重要な latency trick」の正体だ。(b) **call の主導権は常に CL 側にある** が、`payload_ready` だけはデータが EL → CL に逆流する seam になっている (§計画のクイズの答え)。それでは各 signature を読んでいく。
+
 ```rust
 async fn build_payload(
     &self,
@@ -186,6 +216,8 @@ async fn payload_ready(&self, id: PayloadId) -> Result<ExecutedBlock, BridgeErro
 ```
 
 その companion。`build_payload` から返ってきた `PayloadId` を渡し、`ExecutedBlock` を受け取る。in-flight な build が完了するまで block するので async になっている。
+
+*(これが §計画 のクイズの答えだ。call の主導権は CL 側にあるが、EL 側の構築スレッドから完成済みの `ExecutedBlock` が CL へと逆流して同期する **seam** になっている — データの流れだけ見ると 4 メソッドの中で唯一 EL → CL 方向を持つ。)*
 
 **なぜ `build_payload` + `payload_ready` に分けて、1 つの `build_payload -> ExecutedBlock` にしないのか?** EL が *前 round の投票中に* build する必要があるからだ。`build_payload` が同期的にブロックを返すなら、proposer は build を待ってから broadcast することになる。分けると build が裏で走りつつ投票が進み、proposer の hot path は「準備済みブロックを fetch」(microsecond) に縮む。これが設計上 **最も重要な latency trick** で、sub-second block time はこれに依存する。
 

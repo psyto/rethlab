@@ -170,6 +170,34 @@ Same shape as L4's `InMemoryEvmBridge`, but the **types inside `State` are diffe
 
 **Why `B256` instead of `[u8; 32]` for `chain` key and `head`?** Because we're now in alloy-native space — once you have a `Header`, the natural hash type is `B256`. Using `[u8; 32]` would require `.0` accessors everywhere. The conversion to `BlockHash` happens only when we cross the trait boundary, in helper functions (Step 6).
 
+The core of L5 is a two-layer separation between "contract types we expose outward" and "alloy types we hold inward." Drawing that boundary in one picture pins down what the Step 6 helpers (`to_b256` / `from_b256` / `to_executed_block`) actually do, and why we can replace `State`'s internals without touching the CL:
+
+```
+【 Type-boundary layout inside RethEvmBridge 】
+
+   [ Outer: the consensus-layer (CL) world ]
+   ──────────────────────────────────────────────────────────────────────────
+       openhl-types / contract primitives (the types we defined ourselves):
+         BlockHash       PayloadId        ExecutedBlock
+   ──────────────────────────────────────────────────────────────────────────
+                                  ▲    │
+                                  │    ▼
+                  conversions happen ONLY at the trait boundary (Step 6 helpers):
+                      to_b256 / from_b256 / to_executed_block
+                                  ▲    │
+                                  │    ▼
+   ──────────────────────────────────────────────────────────────────────────
+       alloy-primitives / alloy-consensus (Ethereum ecosystem standard types):
+         B256             u64              Header
+   ──────────────────────────────────────────────────────────────────────────
+   [ Inner: the execution-layer (EL) / RethEvmBridge interior ]
+   ※ State stores real (B256, Header) tuples — wrapping the hash inside the
+      tuple keeps Header and hash in lockstep, blocking the "I mutated the
+      Header and forgot to refresh the cached hash" bug at the type level.
+```
+
+Two things this picture pins down: (a) **the contract types (`BlockHash` etc.) appear only in the four trait method signatures and return values** — the `impl` body is written entirely in alloy types. (b) **alloy is the source of truth, and `ExecutedBlock` is just a serialization at the trait boundary.** So when alloy bumps and `Header`'s shape shifts, we only fix the three conversion helpers — the CL never sees the change. L11+'s `LiveRethEvmBridge` swaps `State`'s backing for a live provider, but this boundary line doesn't move.
+
 ### Step 4: Implement `build_payload` — first real hashing
 
 ```rust
@@ -271,7 +299,7 @@ Walk through:
 - Insert the header into `chain` (keyed by `B256`)
 - Update `head`
 
-Notice the closure pattern `find(|(h, _)| *h == hash)` — destructure the tuple, compare the first element. The `*h` dereferences the `&B256` to a `B256` so we can compare with `hash` (also a `B256`).
+Notice the closure pattern `find(|(h, _)| *h == hash)` — destructure the tuple, compare the first element. The `*h` dereferences the `&B256` to a `B256` so we can compare with `hash` (also a `B256`). **`B256` implements `Copy`**, so `*h` only triggers a value-level memcpy — no ownership moves out of `pending`. Keep this in mind as a safe access pattern when reading `B256` fields elsewhere.
 
 ### Step 6: Add the conversion helpers
 
@@ -500,7 +528,7 @@ No — the workspace pins alloy to specific versions (`alloy-primitives = "1.5"`
 
 ## Next lesson (L6)
 
-You've now written two `ConsensusBridge` impls — one synthesized, one with real alloy types. Both are usable by consensus-side test code, which you'll start writing in L8. But first, in L6, we go to the consensus side properly: we implement Malachite's `Context` trait — the type-level API surface that Malachite requires from any chain that uses it. 10 associated types, 4 factory methods. After L6, your chain can answer "what's our `Address` type, our `Height` type, our `Value` type" to Malachite. This is the **other half** of the contract: L3 was the trait we own; L6 is the trait Malachite owns.
+You've now written two `ConsensusBridge` impls — one synthesized, one with real alloy types. Both are usable by consensus-side test code, which you'll start writing in L8. But first, in L6, we go to the consensus side properly: we implement Malachite's `Context` trait — the type-level API surface that Malachite requires from any chain that uses it. 10 associated types, 4 factory methods. After L6, your chain can answer "what's our `Address` type, our `Height` type, our `Value` type" to Malachite. This is the **other half** of the contract: **the `ConsensusBridge` we wrote in L3 is a trait we (openhl) own**, whereas **the `Context` we implement in L6 is a trait Malachite (the library) owns**. Writing an `impl` for a contract you defined yourself, versus filling in an `impl` for a contract an external library defined for your types, are mirror-image design forces — the next lesson is where that asymmetry becomes muscle memory.
 ````
 
 ---

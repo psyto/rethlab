@@ -54,6 +54,56 @@ Over 14 lessons you went from `cargo init` on an empty directory to a single-val
 
 About **40-50 source files** total. Workspace tests: 38 passing.
 
+Drawing the **full CL ↔ EL integration** you opened across this course in one picture makes the boundary you stitched together immediately legible:
+
+```
+   [ CL: openhl-consensus ]                          [ EL: openhl-evm ]
+  ┌──────────────────────────────────────────┐    ┌──────────────────────────────────────────┐
+  │  Malachite BFT engine (actor system)      │    │   LiveRethEvmBridge<P>                    │
+  │                                            │    │                                            │
+  │   ├── OpenHlContext                         │    │    ├── provider: P (BlockNumReader        │
+  │   │   (10 associated types — L6)            │    │    │             + HeaderProvider)         │
+  │   ├── OpenHlSigningProvider                 │    │    ├── chain_spec: Arc<ChainSpec>          │
+  │   │   (Ed25519 + canonical encoding — L7)   │    │    │   (shared source of truth — L13)     │
+  │   ├── OpenHlCodec                           │    │    ├── validator:                          │
+  │   │   (1 real + 7 stub — L8)                │    │    │   EthBeaconConsensus<ChainSpec> (L13) │
+  │   ├── OpenHlNode / OpenHlNodeHandle (L9)    │    │    ├── engine_handle:                      │
+  │   └── run_engine_app loop                   │    │    │   Option<ConsensusEngineHandle> (L14) │
+  │       (12 AppMsg arms — L10)                │    │    └── state: Mutex<{ pending, chain,      │
+  │                                              │    │                       head, … }>          │
+  └──────────────────┬──────────────────────────┘    └──────────────────┬──────────────────────┘
+                     │                                                  ▲
+                     │ ── all chatter goes through 4 ConsensusBridge ───┘
+                     │   methods (the trait surface defined in L3)
+                     │
+                     ├── ① build_payload(parent, attrs)
+                     │     CL ──► EL : "Assemble the next block."
+                     │     EL ──► CL : PayloadId (returns immediately; Reth assembles async)
+                     │     Under the hood: pull parent_header from provider →
+                     │                     ChainSpec::next_block_base_fee + gas_limit copy
+                     │                     + timestamp monotonicity → header synth → stash in pending
+                     │
+                     ├── ② payload_ready(id)
+                     │     CL ──► EL : "Hand me the block for that PayloadId."
+                     │     EL ──► CL : ExecutedBlock (retrieved from pending)
+                     │     ※ The only seam where data flows EL → CL among the four methods
+                     │
+                     ├── ③ validate_payload(&block)
+                     │     CL ──► EL : "A peer's proposal — validate it."
+                     │     EL ──► CL : PayloadStatus { Valid / Invalid / Syncing }
+                     │     Under the hood: EthBeaconConsensus::validate_header_against_parent
+                     │                     (4 sub-checks: number / timestamp / gas-limit / EIP-1559)
+                     │
+                     └── ④ commit(hash)
+                           CL ──► EL : "Quorum reached; finalize this."
+                           EL ──► CL : Ok(())
+                           Phase 1 (must succeed): state.chain.insert + update head
+                           Phase 2 (best-effort):  ConsensusEngineHandle::fork_choice_updated
+                               → Reth's in-process Engine API (no body yet → SYNCING reply; discarded)
+```
+
+Three things this picture pins down: (a) **The two worlds on either side talk through exactly the four `ConsensusBridge` methods defined in L3** — the entire seam between two huge infrastructure stacks fits into that one trait surface. (b) **Because `run_engine_app` (L10) is generic over `B: ConsensusBridge`, the same loop runs against four bridge implementations** — StubBridge / InMemoryEvmBridge / RethEvmBridge / LiveRethEvmBridge. That's the polymorphism payoff. (c) **The `chain_spec: Arc<ChainSpec>` inside `LiveRethEvmBridge` is the shared source of truth referenced by both `build_payload` and `validate_payload`** — split that, and self-forks appear the moment a hard fork shifts the base-fee formula. Every L1-architect design decision in this course lives somewhere on this single diagram.
+
 ## The four `ConsensusBridge` methods — all live
 
 Each row is the closing state of a method after the course:
@@ -81,7 +131,7 @@ This course shipped a *working single-validator chain*. It's honest to call out 
 - Send it via `handle.new_payload(payload).await` *before* the `fork_choice_updated` call.
 - Match the response chain: `newPayload → VALID` → `forkchoice → VALID` → canonical head advances.
 
-The blocker is that we don't have EVM-executable transactions to put in the payload yet. OpenHL's matching engine (CLOB) produces *fills*, not EVM transactions. Wrapping fills as EVM transactions (or precompile calls) is the next big chunk of work after this course — likely a full Module 2 of openhl's build arc.
+The blocker is that we don't have EVM-executable transactions to put in the payload yet. OpenHL's matching engine (CLOB) produces *fills*, not ECDSA-signed user transactions of the kind that flow through a regular Ethereum mempool. Trying to route fills as user-signed transactions through a mempool would erase the entire point of an HL-shape chain — the gas cost and mempool latency would destroy the price-time-priority CLOB's performance characteristics. Instead, real Hyperliquid-shape chains **inject the consensus-agreed fill data into `ExecutionPayload` at `build_payload` / `newPayload` time as "protocol-initiated system transactions" or as direct state injections into dedicated precompiles, with no user signature**, opening a path for `Vec<Fill>` to land in EVM state from the consensus side. Building this "fills → privileged system tx / precompile injection in the payload" path is the next big chunk of work after this course — likely a full Module 2 of openhl's build arc.
 
 ### 2. Real `Codec` impls
 

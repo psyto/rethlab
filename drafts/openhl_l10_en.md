@@ -186,6 +186,50 @@ Three loop-state values:
 
 The `while let Some(msg) = channels.consensus.recv().await` loop is the heart of an actor-message app: receive a message, dispatch by variant, reply (if applicable), continue. When `recv()` returns `None`, the channel is closed — that's our error path.
 
+Before writing the 12 arms one at a time, having a single picture of what this loop is mediating makes "who sent this, who's expecting a reply" trivial to track per arm:
+
+```
+   [ Malachite Engine actors ]  (producer side — emits proposals, votes, Decided, etc.)
+              │
+              │ AppMsg::ConsensusReady { reply, validator_set }
+              │ AppMsg::GetValue       { reply, height, round, ... }
+              │ AppMsg::Decided        { reply, certificate, ... }
+              │ … (12 variants total, all funneled into a single `tokio::mpsc` channel)
+              ▼
+   ┌──────────────────────────────────────────────────────────────────────────┐
+   │ ◆ app_task: the run_engine_app loop  (consumer — what this lesson builds, │
+   │                                       the central dispatcher)             │
+   │                                                                            │
+   │  while let Some(msg) = channels.consensus.recv().await { match msg { … } } │
+   │                                                                            │
+   │  Each arm does exactly one or two things:                                  │
+   │   1. reply.send(...)        ──► unblock the engine by giving it a value    │
+   │   2. bridge.<method>().await ──► drive the EL and pick up the result       │
+   └──────────────────────────────────────────────────────────────────────────┘
+              │                                                  ▲
+              │ bridge.build_payload / payload_ready / commit    │ FillResult /
+              ▼                                                  │ ExecutedBlock / Ok
+   [ ConsensusBridge impl ]  (StubBridge / InMemoryEvmBridge / RethEvmBridge / LiveRethEvmBridge)
+
+
+   ── One representative cycle ─────────────────────────────────────────────────
+
+   ① ConsensusReady    ── engine ──► app: "I'm ready — hand me the validator set."
+                          app ──► engine: reply.send(validator_set)
+
+   ② GetValue          ── engine ──► app: "Propose the next block at (height, round)."
+                          app ──► bridge.build_payload + payload_ready
+                          app ──► engine: reply.send(LocallyProposedValue(value))
+
+   ③ Decided           ── engine ──► app: "2/3+ committed; here's the certificate."
+                          app ──► bridge.commit(hash)
+                          app ──► engine: reply.send(Next::Start)  or  Next::Stop
+                          decided.push(hash)
+                          if decided.len() >= stop_after_decisions { return Ok(decided) }
+```
+
+Three things this picture pins down: (a) **Messages flow engine → app one-way, but each message carries an `oneshot::Sender` (reply)**, so the engine side stays parked until the app sends the reply — forget the reply and the engine waits forever. (b) **The app is a *router* between engine and bridge, not a logic core** — the heavy lifting (build/commit) lives in the bridge, the consensus driving lives in the engine. (c) **Because the bridge is `B: ConsensusBridge`, the exact same loop runs against `StubBridge` / `InMemoryEvmBridge` / `RethEvmBridge` / `LiveRethEvmBridge`** — the investment in cleanly defining the trait surface back in L3 pays off here as polymorphism.
+
 ### Step 3: The `ConsensusReady` and `StartedRound` arms
 
 Add these inside the `match`:
@@ -524,6 +568,8 @@ Three pieces:
   7. `handle.kill(None)` for cleanup.
 
 > 🛑 **Anti-fluency.** "Why `worker_threads = 4` here when L9's smoke test used 2?" **Because the integration test runs MORE actors concurrently.** The smoke test only spawned + killed; we never produced messages. The integration test additionally runs our `run_engine_app` task (consuming + replying), the bridge's `async fn` calls, AND the multiple internal engine actors. 4 threads gives them all room. If you go lower, you can hit contention (slower) or deadlock (hang). 4 is comfortable.
+>
+> *(Background: integration tests combining the actor model with async channels routinely create patterns where multiple tasks **block on each other's replies** (the engine waits on the app's `reply.send(...)`, the app `.await`s the bridge, the bridge waits on the engine's next instruction). If worker threads are scarce, **every worker can end up parked on a "waiting for reply" task while the scheduler has nowhere to place the task that would actually send the reply** — a "thread-starvation deadlock." The code looks correct but the test hangs; this isn't a design bug, it's a runtime under-provision. With 4 workers, the whole pipeline (2-3 internal engine actors + the app loop + the bridge's async work) lands on distinct physical cores simultaneously, and this entire class of deadlock is impossible by construction.)*
 
 ## Test
 
@@ -552,7 +598,7 @@ cargo test -p openhl-consensus
 
 Common errors and fixes:
 
-- **Test hangs > 15s** — the `tokio::time::timeout` fires. Most likely cause: forgot to handle a reply on the `Decided` exit path, so the engine actor is stuck waiting. Re-check Step 5 — the `if decided.len() >= stop_after_decisions` branch *must* reply before returning.
+- **Test hangs > 15s** — the `tokio::time::timeout` fires. The cause is always in the same family: **one of the `ConsensusReady` / `GetValue` / `Decided` arms either forgot `reply.send(...)` or accidentally dropped the `oneshot::Sender` mid-flow**. The engine actor stays parked forever until the receiver responds — no timeout, no panic, just silent waiting. **The `Decided` exit path is the easiest to miss** — early returns make it tempting to skip the reply. **Always send the reply before returning.** Re-walk Steps 3-5 and verify that the `reply.send(...)` line is reachable from every control-flow path through the match arm.
 - **`error[E0277]: ConsensusBridge is not Send`** — bridge needs `+ Send + Sync` bounds. Or your impl uses `std::sync::Mutex` (which is `Send`) but you forgot the `Send` annotation on the trait. Check `bridge.rs`.
 - **`bridge.committed.lock().expect("poisoned")` panic** — only happens if a task panicked while holding the mutex. Usually means a panic in the bridge impl. Check the bridge's `build_payload` / `commit` for panics.
 - **`assert_eq!(decisions.len(), 1)` fires** — `decisions` is empty. The loop never hit `Decided`. Most likely cause: forgot to handle `GetValue` (the engine waits for a `LocallyProposedValue` reply, never moves on without it). Re-check Step 4.

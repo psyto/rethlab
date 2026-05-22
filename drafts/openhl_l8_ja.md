@@ -37,7 +37,7 @@ cargo test -p openhl-consensus
 
 上記の実行結果が **16 個のテストすべてに合格する** (L7 から 14 個 + codec の新規 2 個)。新規テストは 2 個: `OpenHlCodec` が 3 つの super-trait を満たすことを示すコンパイル時アサーション、および `ProposalPart` の runtime ラウンドトリップテスト。
 
-ここでもうひとつ unblock されるものがある: `informalsystems-malachitebft-app` が libp2p、ractor、その他エンジン表面のすべてを引き込んでくる。これ以降の初回コンパイルは ~38 秒かかる。投資の見返りは L9 で spawn する actor system だ。
+ここでもうひとつ unblock されるものがある: `informalsystems-malachitebft-app` が libp2p、ractor、その他エンジン表面のすべてを引き込んでくる。これ以降の**初回コンパイルは非常に重い** (近代的なマルチコア環境で ~38 秒以上、シングルコア寄りやリソース制限のある環境では数分単位)。投資の見返りは L9 で spawn する actor system だ。
 
 具体的な変更:
 
@@ -63,7 +63,7 @@ crates/consensus/src/context.rs            — OpenHlContext + Context impl
 
 5 つやる:
 
-1. **`crates/consensus/Cargo.toml` に `informalsystems-malachitebft-app` を追加する。** これが重量級だ — libp2p、ractor、フルな app 表面を推移的に引き込んでくる。これ以降の初回コンパイルは ~38 秒。
+1. **`crates/consensus/Cargo.toml` に `informalsystems-malachitebft-app` を追加する。** これが重量級だ — libp2p、ractor、フルな app 表面を推移的に引き込んでくる。これ以降の初回コンパイルは**非常に重い** (近代的マルチコア環境で ~38 秒以上、リソース制限環境では数分単位)。
 2. **`crates/consensus/src/codec.rs` を作成する** — `OpenHlCodec` unit struct、`CodecStub` エラー、8 個の `Codec<T>` impl。
 3. **`pub mod codec;`** を `lib.rs` に組み込む。
 4. **実行** — `cargo test -p openhl-consensus` で 16 個合格する。
@@ -91,7 +91,7 @@ informalsystems-malachitebft-app             = { workspace = true }
 cargo check -p openhl-consensus 2>&1 | tail -5
 ```
 
-初回ビルドは遅い (libp2p + ractor と依存が初めてコンパイルされる、~38 秒)。以降はキャッシュが効く。
+初回ビルドは非常に重い (libp2p + ractor と大量の推移的依存が初めてコンパイルされるため、近代的なマルチコア環境でも **~38 秒以上**、シングルコア寄りやリソース制限のある環境では数分かかることもある)。途中で進行ログが止まって見えてもフリーズではない — コーヒーをもう一杯淹れて待つ。以降はキャッシュが効き、差分ビルドは秒単位に縮む。
 
 ### Step 2: `crates/consensus/src/codec.rs` を作成
 
@@ -367,7 +367,7 @@ test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 よくあるエラーと対処:
 
 - **`error[E0277]: the trait bound 'OpenHlCodec: WalCodec<OpenHlContext>' is not satisfied`** — 8 個の `Codec<T>` impl のうちどれかが抜けている。Step 3 と Step 4 を再確認 — 8 つの構成型すべてに `impl Codec<T> for OpenHlCodec` が必要だ。
-- **`error[E0282]: type annotations needed for 'CodecStub'`** — `&'static str` フィールドを忘れている。`pub &'static str` の単一フィールドに `CodecStub("...")` で渡す形だ。
+- **`error[E0061]: this function takes 1 argument but 0 arguments were supplied`** (または `error[E0308]: mismatched types`) — `CodecStub` は `pub &'static str` を 1 個取るタプル構造体だから、引数なしで `CodecStub` と書いたり、波括弧で `CodecStub { ... }` と書いたりすると弾かれる。`Err(CodecStub("SignedConsensusMsg<OpenHlContext>"))` のように、対象の型名リテラルを正しく 1 個渡す。
 - **`error[E0432]: unresolved import 'informalsystems_malachitebft_app::types::codec::ConsensusCodec'`** — Cargo.toml に `informalsystems-malachitebft-app` を追加し忘れている。Step 1 を再確認。
 - **再ビルドでも 60 秒以上かかる** — `cargo build` (`--release` なし) を試す。それでも遅ければ原因は libp2p なので、そのままにしておく。
 
@@ -380,6 +380,33 @@ test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 2. **blanket impl のおかげで、1 つの trait impl で複数の super-trait を満たせる。** `WalCodec<Ctx>` は自動的に `impl<C> WalCodec<Ctx> for C where C: Codec<ProposedValue<Ctx>>` で満たされる (Consensus/Sync も同様)。適切な **構成要素** `Codec<T>` impl を提供すれば、`impl WalCodec` は書かなくていい — Malachite が blanket impl を無料でくれる。コンパイル時アサーションテストが、これが本物であることを検証する。
 
 3. **codec は `types/` ではなく `consensus/` に置く。** Codec はエンジン側の「何が wire 上を流れるか」という概念 (`SignedConsensusMsg`、`ProposedValue`、`sync::Status`) に依存する。これは consensus 層の関心事で、base 型の関心事ではない。Codec を `types/` に置くと、`types/` が `informalsystems-malachitebft-app` に依存することになり、エンジンを必要としない下流 crate にとって `openhl-types` が重い依存になってしまう。
+
+この「`types/` に Codec を入れない」という規律は、依存グラフを 2 通り並べると違いが一目で見える:
+
+```
+🟢 採用した設計 (clean dependency graph)
+   ┌─────────────────────────┐                  ┌──────────────────────────────────┐
+   │   openhl-evm            │ ─┐               │  openhl-consensus (Codec を保持)   │
+   ├─────────────────────────┤   ▼               │   - bridge.rs / types/ / codec.rs │
+   │   openhl-node           │ ─► openhl-types  │   - signing*.rs / context.rs       │
+   ├─────────────────────────┤   ▲   (軽量、 ────►─── informalsystems-malachitebft-app
+   │   (他の下流 crate)      │ ─┘   依存ゼロ)            (libp2p / ractor / 重量級)
+   └─────────────────────────┘                  └──────────────────────────────────┘
+       ※ EVM 側を直すたびに consensus / libp2p / ractor は触らない → 高速イテレーション
+
+🔴 アンチパターン (codec を types/ に同居させた場合)
+   ┌─────────────────────────┐
+   │   openhl-evm            │ ─┐
+   ├─────────────────────────┤   ▼
+   │   openhl-node           │ ─► openhl-types (Codec も同居) ─► informalsystems-malachitebft-app
+   ├─────────────────────────┤   ▲                                  (libp2p / ractor / 重量級)
+   │   (他の下流 crate)      │ ─┘
+   └─────────────────────────┘
+       ※ EVM 側のロジックを 1 行直すだけでも、無関係な libp2p や actor system まで
+         巻き添えでビルドが走り、初回 ~38 秒の依存解決を何度も払う羽目になる
+```
+
+採用した形 (左) では、`openhl-types` は「皆が共通語彙として参照する軽量な辞書」のままで、重量級な consensus / libp2p / ractor の依存は `openhl-consensus` の中だけに閉じる。逆に右側のアンチパターンを取ると、`openhl-types` を引いている下流 crate 全部が libp2p までビルドする義務を負う。**「型は軽く保ち、重量級の依存は持ち込むべきレイヤーで持ち込む」** が `crates/` 構成の血肉になっている討議だ。
 
 ## 答え合わせ
 

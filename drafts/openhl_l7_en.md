@@ -137,6 +137,25 @@ Walk through the byte layout:
 | 18..50 (if Val) | `value_id` data | 32 bytes of BlockHash |
 | 18..38 OR 50..70 | `address` | 20 bytes |
 
+Drawing the 70-byte layout for the `value_id = Val(...)` case as a memory diagram makes the bytes that go into the signature visible in one image:
+
+```
+【 Vote (Val case) canonical signing-bytes — 70 bytes total 】
+
+┌────────────────┬────────────────┬───┬───┬───────────────────────────────┬─────────────────────────┐
+│   Height (8B)  │   Round (8B)   │Typ│Tag│      Value ID  (32B / hash)    │ Validator Address (20B) │
+└────────────────┴────────────────┴───┴───┴───────────────────────────────┴─────────────────────────┘
+ 0              8               16  17  18                              50                         70  (offset / bytes)
+ [── u64 LE ──] [── i64 LE ──]   │   │   [─────── BlockHash payload ────] [─────── 20-byte Eth addr ─]
+                                 │   │
+                                 │   └── 0 = Nil  /  1 = Val            (if Nil, the 32B payload is omitted and addr lands at 18..38)
+                                 └────── 0 = Prevote  /  1 = Precommit
+
+  Every validator, on any host (x86 / ARM / RISC-V / …), produces the **exact same**
+  70 bytes when this function is run — not a single byte may drift. This bytestring
+  is the message Ed25519 actually signs.
+```
+
 **Why little-endian?** Convention for x86 / ARM hosts. **Why length-byte tags?** Because `NilOrVal::Nil` produces 1 byte (tag 0) while `NilOrVal::Val` produces 33 bytes (tag 1 + 32-byte hash). The tag tells the parser which it is. **Why include the validator address?** Because a vote is *whose* vote, not just *which* vote — the same proposal can be voted on by 100 different validators, and each produces a different signing-bytes string.
 
 > 🛑 **Anti-fluency.** "Can I just `bincode::serialize(v)` and sign the result?" **No.** Off-the-shelf serialization formats can change between library versions — what you sign today might not be what you sign tomorrow even though the struct is identical. A **canonical** encoding is one you control byte-by-byte. Production chains define their encoding in a protobuf schema or write it manually like this; either way, the encoding becomes part of the chain's wire format spec.
@@ -327,7 +346,7 @@ impl OpenHlSigningProvider {
 
 The struct holds a `PrivateKey`. The constructor takes one in (typically from disk or environment). `public_key()` derives the corresponding public key on demand — Ed25519 public keys are derivable from private keys via scalar multiplication, ~milliseconds.
 
-The `use` block imports the lower-level functions from `signing.rs` with `as sign_X_with` renames. **Why renames?** Because the `SigningProvider` trait has methods named `sign_vote` and `sign_proposal`, and we want to call our own helpers without name collision. The `_with` suffix is convention for "this is the implementation function I delegate to from the trait method."
+The `use` block imports the lower-level functions from `signing.rs` with **`_with`-suffixed renames** (`sign_vote as sign_vote_with`, `sign_proposal as sign_proposal_with`). **Why renames?** Because the `SigningProvider` trait has methods named `sign_vote` and `sign_proposal`, and we want to call our own helpers without name collision. The `_with` suffix is a local convention for "this is the implementation function I delegate to from the trait method" — it's not a special macro or language feature; the `as ...` in the code above is just minting a new identifier.
 
 ### Step 8: Implement the `SigningProvider` trait — 4 sign/verify pairs
 
@@ -591,13 +610,15 @@ Common errors and fixes:
 
 ## Design reflection
 
-Three load-bearing decisions encoded:
+Four load-bearing decisions encoded:
 
 1. **Canonical encoding is in `signing.rs`, not derived from `serde::Serialize`.** `signing.rs` defines a byte-level layout that we control. Why? Because `serde` versions can change between Rust edition bumps or library upgrades, but our signed messages have to round-trip across validators running potentially-different binary versions. Locking the encoding in code (not a library) means the wire format is part of the chain's spec, not a library detail.
 
 2. **`SigningProvider` wraps the pure `sign_vote` functions, holding the key as state.** Could have made `sign_vote` a method on `OpenHlSigningProvider`. The split lets *tests* and *internal code* call `sign_vote(vote, &sk)` directly (passing the key as a parameter), while *Malachite's engine* uses the trait method `sp.sign_vote(vote)` (binding to the provider's stored key). **The same logic serves both use cases without duplication.**
 
 3. **Empty-bytes signatures for ProposalPart and Extension.** When the trait surface requires methods but our chain doesn't use the feature, we provide deterministic, verifiable signatures over empty data. This honors the trait without committing to data we don't have. Production chains that use these features fill them with real bytes; we don't, but the engine doesn't crash either way.
+
+4. **The `VerifierLike` shim that walls off "leaky abstraction" from dependencies.** The one-method trait introduced in Step 5 exists for a single purpose: keeping the dependency graph clean. Concretely: Malachite's `PublicKey` provides verification through the external `signature` crate's `Verifier` trait. If `verify_vote(v, sig, pk)` called `signature::Verifier::verify(...)` directly, **the responsibility to import the `signature` crate's trait would leak into our consensus crate's public API surface**. The moment Malachite swaps `signature` for a different crypto library (new crate, different trait name), **every downstream consumer of this crate (including the L8+ lessons) eats a breaking change**. By interposing one tiny first-party trait (`VerifierLike`), the existence of `signature` is sealed behind the five lines of `impl VerifierLike for PublicKey` in `signing.rs`, and any future upstream churn is absorbed by editing exactly one line there. **The discipline is: "never let someone else's traits show up in your crate's public API."** This is the eight-line, minimum-cost implementation of it.
 
 ## Answer key
 

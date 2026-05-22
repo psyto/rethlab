@@ -37,7 +37,7 @@ cargo test -p openhl-consensus
 
 …passes **16 tests** (14 from L7 + 2 new ones for the codec). The 2 new tests are: a compile-time assertion that `OpenHlCodec` satisfies all three super-traits, and a runtime round-trip test for `ProposalPart`.
 
-You also unblock a much heavier dependency: `informalsystems-malachitebft-app` pulls in libp2p, ractor, and the rest of the engine surface — your first compile after this will take ~38 seconds. The investment buys you the actor system you'll spawn in L9.
+You also unblock a much heavier dependency: `informalsystems-malachitebft-app` pulls in libp2p, ractor, and the rest of the engine surface — your first compile after this **is genuinely heavy** (~38 seconds on a modern multi-core machine; can stretch to several minutes on single-core-bound or resource-constrained environments). The investment buys you the actor system you'll spawn in L9.
 
 Specific changes:
 
@@ -63,7 +63,7 @@ crates/consensus/src/context.rs            — OpenHlContext + Context impl
 
 Five things:
 
-1. **Add `informalsystems-malachitebft-app` to `crates/consensus/Cargo.toml`.** This is the heavy lift — it pulls libp2p, ractor, and the full app surface transitively. First compile after this will take ~38s.
+1. **Add `informalsystems-malachitebft-app` to `crates/consensus/Cargo.toml`.** This is the heavy lift — it pulls libp2p, ractor, and the full app surface transitively. First compile after this **is genuinely heavy** (~38s on a modern multi-core box; up to several minutes on slower or more constrained machines).
 2. **Create `crates/consensus/src/codec.rs`** with the `OpenHlCodec` unit struct, a `CodecStub` error, and 8 `Codec<T>` impls.
 3. **Wire `pub mod codec;`** into `lib.rs`.
 4. **Run** `cargo test -p openhl-consensus` — 16 tests pass.
@@ -91,7 +91,7 @@ Run a quick sanity check:
 cargo check -p openhl-consensus 2>&1 | tail -5
 ```
 
-The first build will be slow (libp2p + ractor + dependencies compile for the first time, ~38s). Subsequent builds use the cache.
+The first build is genuinely heavy (libp2p + ractor + dependencies compile for the first time — **~38s on a modern multi-core machine, up to several minutes on slower or single-core-bound environments**). If the progress log looks stuck, it isn't — pour another coffee. Subsequent builds use the cache and the incremental rebuild is back to seconds.
 
 ### Step 2: Create `crates/consensus/src/codec.rs`
 
@@ -367,7 +367,7 @@ test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 Common errors and fixes:
 
 - **`error[E0277]: the trait bound 'OpenHlCodec: WalCodec<OpenHlContext>' is not satisfied`** — you're missing one of the eight `Codec<T>` impls. Re-check Step 3 and Step 4 — all eight constituent types must have `impl Codec<T> for OpenHlCodec`.
-- **`error[E0282]: type annotations needed for 'CodecStub'`** — you forgot the `&'static str` field. The single field `pub &'static str` is what gets passed in via `CodecStub("...")`.
+- **`error[E0061]: this function takes 1 argument but 0 arguments were supplied`** (or `error[E0308]: mismatched types`) — `CodecStub` is a tuple struct that takes a single `pub &'static str`, so writing `CodecStub` with no argument or using the brace form `CodecStub { ... }` won't compile. Pass the type name literal explicitly: `Err(CodecStub("SignedConsensusMsg<OpenHlContext>"))`.
 - **`error[E0432]: unresolved import 'informalsystems_malachitebft_app::types::codec::ConsensusCodec'`** — you forgot to add `informalsystems-malachitebft-app` to Cargo.toml. Re-check Step 1.
 - **Build takes 60+ seconds even on a recompile** — try `cargo build` (no `--release`). If still slow, the issue is libp2p; let it run.
 
@@ -380,6 +380,33 @@ Three load-bearing decisions encoded here:
 2. **One trait impl can satisfy multiple super-traits via blanket impls.** `WalCodec<Ctx>` is automatically `impl<C> WalCodec<Ctx> for C where C: Codec<ProposedValue<Ctx>>` (and similar for Consensus/Sync). By implementing the right *constituent* `Codec<T>` impls, you don't have to write `impl WalCodec` — Malachite gives you the blanket impl free. The compile-time assertion test verifies this is real.
 
 3. **The codec is in `consensus/`, not `types/`.** Codecs depend on the engine's notion of "what gets wired" — `SignedConsensusMsg`, `ProposedValue`, `sync::Status` — which is a consensus-layer concern, not a base-type concern. Putting codec in `types/` would force `types/` to depend on `informalsystems-malachitebft-app`, which would make `openhl-types` a heavy dep for downstream crates that don't need the engine.
+
+The "no codec inside `types/`" discipline is easiest to see by drawing the two dependency graphs side by side:
+
+```
+🟢 The design we picked (clean dependency graph)
+   ┌─────────────────────────┐                  ┌──────────────────────────────────┐
+   │   openhl-evm            │ ─┐               │  openhl-consensus (holds Codec)   │
+   ├─────────────────────────┤   ▼               │   - bridge.rs / types/ / codec.rs │
+   │   openhl-node           │ ─► openhl-types  │   - signing*.rs / context.rs       │
+   ├─────────────────────────┤   ▲   (lightweight ────►─── informalsystems-malachitebft-app
+   │   (other downstream)    │ ─┘    zero-dep)            (libp2p / ractor / heavy)
+   └─────────────────────────┘                  └──────────────────────────────────┘
+       Editing the EVM side never recompiles consensus / libp2p / ractor → fast inner loop
+
+🔴 Anti-pattern (codec colocated inside types/)
+   ┌─────────────────────────┐
+   │   openhl-evm            │ ─┐
+   ├─────────────────────────┤   ▼
+   │   openhl-node           │ ─► openhl-types (codec also lives here) ─► informalsystems-malachitebft-app
+   ├─────────────────────────┤   ▲                                            (libp2p / ractor / heavy)
+   │   (other downstream)    │ ─┘
+   └─────────────────────────┘
+       A single-line tweak in EVM logic drags libp2p and the actor system into every rebuild;
+       the ~38s first-build cost gets paid again and again.
+```
+
+In the picked layout (left), `openhl-types` stays "the lightweight shared dictionary everyone references," and the heavy consensus / libp2p / ractor surface is sealed inside `openhl-consensus`. In the anti-pattern (right), every downstream crate that touches `openhl-types` is forced to build through libp2p. **"Keep types light; introduce heavy dependencies in the layer that actually needs them"** is the discipline this `crates/` topology bakes in.
 
 ## Answer key
 

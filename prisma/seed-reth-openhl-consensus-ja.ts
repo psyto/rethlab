@@ -123,8 +123,14 @@ Hyperliquid は 2025 年に $300B+ の perp 取引量を、完全クローズド
 \`\`\`bash
 # 自分の workspace
 mkdir -p ~/code/my-openhl && cd ~/code/my-openhl
-cargo init --name openhl --lib
-# (lib.rs はレッスン 1 で削除する。これは workspace stub を作るためだけのコマンド)
+cargo init --lib
+# (パッケージ名はディレクトリ名から \`my-openhl\` になる。L1 で workspace に作り変えて
+#  内部の crate を \`openhl-types\` / \`openhl-consensus\` / … として並べていくので、
+#  root パッケージ名はその時点で消える。lib.rs も L1 で外す — ここで作るのは workspace
+#  stub を取りに行くためだけの初期 commit)
+
+# 自分の workspace でもリファレンスと同じ Rust toolchain を強制しておく
+echo -e '[toolchain]\\nchannel = "1.95.0"' > rust-toolchain.toml
 
 # 答え合わせ用リファレンス
 mkdir -p ~/code && cd ~/code
@@ -133,7 +139,7 @@ cd openhl-reference
 cargo check  # 初回は時間がかかる — Reth は大きい
 \`\`\`
 
-\`openhl-reference\` 側で \`cargo check\` が pass すれば toolchain は正しい。次に進んでよい。pass しない場合はまず toolchain version を直す — リファレンスの \`rust-toolchain.toml\` が Rust 1.95.0 を pin している。
+\`openhl-reference\` 側で \`cargo check\` が pass すれば toolchain は正しい。次に進んでよい。pass しない場合はまず toolchain version を直す — リファレンスの \`rust-toolchain.toml\` が Rust 1.95.0 を pin しており、\`my-openhl/\` 側でも同じ pin を置いたので、\`rustup\` が必要な toolchain を自動 install してくれるはずだ。
 
 > 🛑 **やりがちな勘違い。** 「\`openhl-reference\` を直接編集すればいい。」 **違う。** あのリポは答え合わせであって自分の workspace ではない。read-only として扱うこと。\`my-openhl/\` への編集は自分のコード。\`openhl-reference/\` への編集は混乱の元 — どれが自分の書いたコードでどれが元からあったコードか分からなくなる。
 
@@ -154,9 +160,9 @@ cargo check  # 初回は時間がかかる — Reth は大きい
 | **L8** | Codec + Node | \`OpenHlCodec\` + \`Node\` trait impl | engine start/stop smoke |
 | **L9** | App loop | \`run_engine_app\` — 全部を繋ぐ actor pipeline | **\`first_block_via_engine_actors\`** — Module 1 milestone、BFT round が閉じる |
 | **L10** | Live Reth | テストで実 Reth dev-node を起動する | \`reth_dev_node_bootstraps\` |
-| **L11** | Live build_payload | \`LiveRethEvmBridge\` が live provider から parent を読む | \`live_bridge_builds_on_real_genesis\` |
-| **L12** | Live validate_payload | \`EthBeaconConsensus\` を接続して実 header validation | validate-path tests |
-| **L13** | Live commit | \`forkchoice_updated\` を Reth の in-process Engine API で接続 | \`commit_sends_forkchoice_to_engine\` |
+| **L11** | Live bridge — build path | \`LiveRethEvmBridge\` (build_payload 側) が live provider から parent を読む | \`live_bridge_builds_on_real_genesis\` |
+| **L12** | Live bridge — validate path | \`LiveRethEvmBridge\` (validate_payload 側) に \`EthBeaconConsensus\` を接続して実 header validation | validate-path tests |
+| **L13** | Live bridge — commit path | \`LiveRethEvmBridge\` (commit 側) を Reth の in-process Engine API に \`forkchoice_updated\` で接続 | \`commit_sends_forkchoice_to_engine\` |
 | **L14** | Capstone | openhl にまだ無い end-to-end テストを自分で書く — \`run_engine_app\` + \`LiveRethEvmBridge\` を組み合わせる | 自分の integration test |
 
 **L9 がコース最大の milestone だ。** L9 を終えた時点で、actor system 経由で BFT consensus が end-to-end でブロックを 1 つ生成するようになる。L10-L13 で stub Reth を実際の Reth に差し替える。L14 では openhl 本体 (SHA \`0844d58\` 時点) にまだ無い integration test を自分で書く — コース終了時点でリファレンスより **1 歩先** に進んだ状態になる。
@@ -193,7 +199,11 @@ cd ~/code/openhl-reference && cargo check    # 期待値: 最終的に "Finished
 
 3 つすべて pass すればセットアップ完了。L1 に進む。
 
-> **最終チェック。** 1 文で、\`~/code/my-openhl\` と \`~/code/openhl-reference\` の役割の違いは何か? 答えに「片方は自分のもの、片方は答え合わせ。最初に書いて、2 番目を読んで照合する」が含まれていなければ §5 を読み直すこと。`,
+> 💡 **次へ進む前のセルフチェック**
+>
+> 1 文で、\`~/code/my-openhl\` と \`~/code/openhl-reference\` の役割の違いを説明できるか？
+>
+> 自分の言葉で「**片方は自分が 1 行ずつ書く本番の workspace、もう片方は迷ったときだけ覗く答え合わせの鏡だ**」と言えなければ、§5 を読み直してから L1 へ進むこと。この区別を曖昧にしたまま走り出すと、レッスン後半で \`openhl-reference\` 側にうっかりコードを書いてしまい、自分が書いたコードと借りてきたコードの境界が消える事故が起きる。**境界を体に染み込ませてから L1 へ。**`,
                 },
               ],
             },
@@ -427,6 +437,14 @@ workspace = true
 - \`crates/<name>/Cargo.toml\` (形は同じ、\`name\` フィールドだけ変える)
 - \`crates/<name>/src/lib.rs\` (doc comment のみ)
 
+例えば \`codec\` であれば、まずディレクトリを作り:
+
+\`\`\`bash
+mkdir -p crates/codec/src
+\`\`\`
+
+そのあと \`crates/codec/Cargo.toml\` と \`crates/codec/src/lib.rs\` を、下の表の \`name\` と doc comment に差し替えて配置する。残りの 8 crate も同じ手順 (\`mkdir -p crates/<name>/src\` → 2 ファイル配置) を繰り返すだけだ。
+
 残り 9 crate と doc comment:
 
 | Crate | \`name\` | \`lib.rs\` の doc comment |
@@ -501,7 +519,7 @@ cargo check --workspace
     Finished \`dev\` profile
 \`\`\`
 
-いくつかの \`unused_imports\` 警告は OK (\`serde\` を workspace の依存として宣言したが、ほとんどの crate がまだ使っていないため)。Hard error は許容できない — 出た場合に多い原因:
+いくつかの「依存として宣言したがコード内で使っていない」系の警告 (\`unused_crate_dependencies\` 相当) が出るが、これは完全に正常だ — \`serde\` を workspace 依存として宣言済みなのに、ほとんどの crate の \`src/lib.rs\` がまだ doc comment しかないため、実際の \`use serde::...\` が現れていない。後続レッスンで実コードが land した瞬間に消える。Hard error は許容できない — 出た場合に多い原因:
 
 - **\`workspace.members\` または crate Cargo.toml の crate 名にタイプミス。** Cargo が見つからない crate 名を教えてくれるので、タイプミスを直す。
 - **library crate に \`src/lib.rs\` が無い。** \`workspace.members\` にリストされた crate はそれぞれ \`src/lib.rs\` か \`src/main.rs\` のどちらかが必要。
@@ -612,14 +630,16 @@ cargo check --workspace
 Step 9 が成功した後に:
 
 \`\`\`bash
-cargo check --workspace 2>&1 | tail -5
+cargo check --workspace
 \`\`\`
 
-期待値 (正確な warning 数や時間は環境次第):
+期待値 (Step 7-9 のキャッシュが効いているので、2 回目以降は 1-2 秒で終わる):
 
 \`\`\`
-    Finished \`dev\` profile [optimized + debuginfo] target(s) in 23.45s
+    Finished \`dev\` profile [optimized + debuginfo] target(s) in 0.23s
 \`\`\`
+
+> ⚠️ \`| tail -5\` で出力をカットしないこと。万が一エラーが出た場合、肝心の error 本体はコンパイルパイプラインの**上部**に流れているので、\`tail\` で削るとデバッグ可能な手がかりが消える。warning が多くて煩いと感じても、フルログを残したまま見るのが安全だ。
 
 binary も試せる:
 
@@ -923,7 +943,16 @@ pub struct ExecutedBlock {
 
 ### Step 9: Unit test を追加
 
-\`crates/types/src/lib.rs\` の末尾に追加:
+テスト内で \`serde\` の round-trip を実際に走らせるので、**先に**dev-dependency に \`serde_json\` を入れてから test code を書く。\`crates/types/Cargo.toml\` の末尾に追加:
+
+\`\`\`toml
+[dev-dependencies]
+serde_json = { workspace = true }
+\`\`\`
+
+(IDE / rust-analyzer に \`serde_json::to_string\` を「未解決」とフラグされる前に依存を入れておくことで、無用な赤波線とリビルド時間を回避できる。)
+
+そのうえで \`crates/types/src/lib.rs\` の末尾に追加:
 
 \`\`\`rust
 #[cfg(test)]
@@ -969,13 +998,6 @@ mod tests {
 }
 \`\`\`
 
-最後のテストには \`serde_json\` を dev-dependency として加える必要がある。\`crates/types/Cargo.toml\` に追加:
-
-\`\`\`toml
-[dev-dependencies]
-serde_json = { workspace = true }
-\`\`\`
-
 ## テスト
 
 \`\`\`bash
@@ -1008,6 +1030,43 @@ test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 2. **PayloadStatus は bool ではなく enum。** L0 と上の予測で flag した話。3 つの状態は互換ではない: EL が *どの* not-Valid 状態にいるかで consensus 側の応答が変わる。\`bool { is_valid }\` に collapse すると、chain の liveness にとって load-bearing な情報を失う — Syncing node を Invalid として扱えば、本来助けてくれたはずの peer から永久に fork してしまう。
 
+CL ↔ EL 間で \`PayloadStatus\` がどう流れ、各 verdict がそれぞれ違う action を引き起こすかを 1 枚で見ると、なぜ 3 状態が必要なのかが一目で見える:
+
+\`\`\`
+┌────────────────────────────────────────────────────────────────────────────┐
+│                       Consensus Layer (CL)                                  │
+│                                                                             │
+│         validate_payload(block) を Execution Layer に問い合わせ              │
+│                                  │                                          │
+└──────────────────────────────────┼──────────────────────────────────────────┘
+                                   │ ▲
+                                   ▼ │ PayloadStatus
+┌────────────────────────────────────┼──────────────────────────────────────┐
+│                Execution Layer (EL)│                                       │
+│                                    │                                       │
+│   ┌────────────────────────────────┴──────────────────────────────────┐    │
+│   │  block を実行 → 結果を 3 つに分類:                                  │    │
+│   │                                                                    │    │
+│   │  ✅ Valid   : state-root が一致、gas-limit OK、全ルール pass        │    │
+│   │  ❌ Invalid : 実行はできたが結果が間違い (state-root mismatch 等)   │    │
+│   │  ⏳ Syncing : そもそも実行に必要な state をまだ持っていない          │    │
+│   └────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+CL 側の応答 (これが 3 つに分かれる理由):
+  ✅ Valid   → block に投票 (consensus に乗せる)
+  ❌ Invalid → Nil 投票、proposer を faulty 扱い (slash 対象)
+  ⏳ Syncing → 投票しない、待つか timeout に falling、peer から sync を再試行
+
+3 状態を bool に潰したときの事故:
+  Syncing を Invalid 扱い → 自分が遅れているだけの正当な proposer を Nil 投票
+                            → peer 群と「自分だけが invalid と判定した」状態で永続的に fork
+  Invalid を Syncing 扱い → 本当に間違った block を「待てば直る」と誤認
+                            → bad proposal が timeout 経由で素通り、chain が腐る
+\`\`\`
+
+つまり \`Valid\` / \`Invalid\` / \`Syncing\` は「投票する / 否決する / 棄権する」という consensus 上の 3 つの action と 1:1 対応している。bool に潰すと「棄権」が消えて、\`Syncing\` の正しい挙動が表現できなくなる。L3 (\`ConsensusBridge\` trait) でこの 3 状態の handling を実際の関数シグネチャに落としていく。
+
 ## 答え合わせ
 
 \`\`\`bash
@@ -1033,7 +1092,7 @@ git checkout main
 今の形ではできない — production では \`Vec<...>\` (transaction list) を含むようになり、\`Vec\` は \`Copy\` ではないからだ。v0 では fixed-size フィールドだけなので *理論的には* Copy にできるが、後で外す手間を避けるために意図的に derive しない。フィールドが byte 列だけならクローンも安いので、必要な call site で明示的に \`.clone()\` すればよい。
 
 **Q: なぜ \`prev_randao\` は「ランダム性」なのに 32 bytes?**
-前ブロックの RANDAO mix の hash (Ethereum の beacon-chain randomness beacon) だからだ。32 bytes = SHA-256 output。実際のエントロピー source は beacon chain だが、こちらは hash として受け取る。したがって type は \`[u8; 32]\`。
+前ブロック時点での **RANDAO mix** (Ethereum の beacon chain が各スロットで validator の reveal を XOR 累積していくミキシング値) だからだ。厳密には「単発の hash」ではないが、結果として常に 32 バイト固定長のランダムに見えるバイト列 (\`[u8; 32]\`) に収まるよう設計されている。実際のエントロピー source は beacon chain 側にあり、execution layer の \`PayloadAttrs\` はその 32 バイト値を入力として受け取るだけ。したがって openhl 側の type も \`[u8; 32]\` で受ける。
 
 **Q: \`BlockHash\` に \`Default\` を derive すべき?**
 できる (\`[u8; 32]\` の \`Default\` は all-zeros) が、**ここでは derive しない**。openhl の convention は「block hash は real data から compute されるもの」だ。Default-construct された \`BlockHash([0u8; 32])\` は code smell。Sentinel が必要な test code は \`BlockHash([0u8; 32])\` を明示的に書く。
@@ -1203,6 +1262,36 @@ pub trait ConsensusBridge: Send + Sync {
 
 ### Step 4: 4 つの method signature を理解する
 
+シグネチャを 1 つずつ読む前に、4 つのメソッドが BFT round のどのタイミングで、どちらの方向にデータを流すのかをタイムラインで掴んでおくと、各 signature の必然性が直感で押さえられる:
+
+\`\`\`
+【 CL / EL インタラクションフロー — BFT round の時間軸 】
+
+──[ 前 round の投票が進行中、proposer は自分のターンを準備 ]─────────────────────
+   CL ──────( build_payload(parent, attrs) )──────►  EL
+                                                     │
+                                                     └─ 裏でブロック構築を開始
+                                                        (前 round 投票と並走)
+
+──[ 自分が proposer になった瞬間 — hot path、ここで microseconds が効く ]─────
+   CL ──────( payload_ready(id) )─────────────────►  EL
+   CL ◄────( ExecutedBlock を返す ) ────────────────── EL
+   CL ─► (ネットワークへ Proposal を broadcast)
+
+──[ 他 peer から Proposal を受信 — validator はすべてここを通る ]──────────
+   CL ──────( validate_payload(&ExecutedBlock) )───►  EL
+   CL ◄────( PayloadStatus: Valid / Invalid / Syncing ) ── EL
+   CL ─► 結果に応じて vote (賛成 / Nil / 棄権)
+
+──[ 2/3+ Quorum に達した — block が finalized になる ]──────────────────
+   CL ──────( commit(hash) )──────────────────────►  EL
+                                                     │
+                                                     └─ そのブロックを永続化、
+                                                        new head として確定
+\`\`\`
+
+ポイントは 2 つ: (a) **\`build_payload\` と \`payload_ready\` は別の round 局面で呼ばれる** — 前者は前 round 投票中、後者は自分が proposer になった hot path。これがレッスン後半で見る「最も重要な latency trick」の正体だ。(b) **call の主導権は常に CL 側にある** が、\`payload_ready\` だけはデータが EL → CL に逆流する seam になっている (§計画のクイズの答え)。それでは各 signature を読んでいく。
+
 \`\`\`rust
 async fn build_payload(
     &self,
@@ -1218,6 +1307,8 @@ async fn payload_ready(&self, id: PayloadId) -> Result<ExecutedBlock, BridgeErro
 \`\`\`
 
 その companion。\`build_payload\` から返ってきた \`PayloadId\` を渡し、\`ExecutedBlock\` を受け取る。in-flight な build が完了するまで block するので async になっている。
+
+*(これが §計画 のクイズの答えだ。call の主導権は CL 側にあるが、EL 側の構築スレッドから完成済みの \`ExecutedBlock\` が CL へと逆流して同期する **seam** になっている — データの流れだけ見ると 4 メソッドの中で唯一 EL → CL 方向を持つ。)*
 
 **なぜ \`build_payload\` + \`payload_ready\` に分けて、1 つの \`build_payload -> ExecutedBlock\` にしないのか?** EL が *前 round の投票中に* build する必要があるからだ。\`build_payload\` が同期的にブロックを返すなら、proposer は build を待ってから broadcast することになる。分けると build が裏で走りつつ投票が進み、proposer の hot path は「準備済みブロックを fetch」(microsecond) に縮む。これが設計上 **最も重要な latency trick** で、sub-second block time はこれに依存する。
 
@@ -1515,6 +1606,47 @@ impl InMemoryEvmBridge {
 
 \`pending\` と \`chain\` を分けるのが重要だ: \`commit(hash)\` が呼ばれた時点で、その block は (前の \`build_payload\` から) すでに \`pending\` にある。\`commit\` は pending → chain に移し、\`head\` を更新する。real EL が in-flight payload buffer と finalized chain の両方を持つ構造と同じだ。
 
+\`State\` の 4 フィールド (\`next_payload_id\` / \`pending\` / \`chain\` / \`head\`) を、\`build_payload\` → \`payload_ready\` → \`commit\` のライフサイクルに沿ってどう動くかを 1 枚で見ると、L5 や L11+ の本物の bridge でも同じ形が再利用されることが直感で押さえられる:
+
+\`\`\`
+【 InMemoryEvmBridge 内のブロックライフサイクル 】
+
+1. build_payload(parent, attrs)
+                       │
+                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ chain.get(&parent.0) で parent の number を引く              │
+   │ next_payload_id を 1 増やして PayloadId を発行               │
+   │ 新しい ExecutedBlock を合成 (number = parent + 1、hash 等)   │
+   │ pending.insert(PayloadId, ExecutedBlock)  ◄── 投機的に格納   │
+   └────────────────────────────────────────────────────────────┘
+                       │
+                       ▼  (CL に PayloadId だけ返す)
+
+2. payload_ready(id)
+                       │
+                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ pending.get(&id).cloned()  ◄── 未確定ブロックを CL に貸し出す │
+   │ (pending には残しておく — まだ commit されていない)            │
+   └────────────────────────────────────────────────────────────┘
+                       │
+                       ▼  (ExecutedBlock を返す)
+
+3. commit(hash)                  ※ CL が 2/3+ Quorum 達成後に呼ぶ
+                       │
+                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ pending から該当ブロックを検索 → remove                       │
+   │ chain.insert(hash.0, ExecutedBlock)  ◄── canonical 領域へ移す │
+   │ head = Some(hash)                    ◄── new head を更新     │
+   └────────────────────────────────────────────────────────────┘
+                       │
+                       ▼  (Ok(()) を返す、ブロックは finalized)
+\`\`\`
+
+ポイントは「**pending = 投機的 (未確定) / chain = 確定済み**」という 2 つの寿命がマップレベルで分離していることだ。\`build_payload\` は楽観的に積み上げ、\`commit\` だけが「pending から chain へ昇格させる」唯一の権限を持つ。これは本物の Reth EL でも \`pending blocks\` と \`canonical chain\` という名前で同じ形が存在しており、L5 / L11+ で本物の bridge に差し替えても**データの流れ方は L4 と同じ**になる。
+
 **\`impl InMemoryEvmBridge::new\`** — constructor。\`#[must_use]\` は clippy へのヒント: caller が \`InMemoryEvmBridge::new();\` を bind せずに書いたら、ほぼ間違いなくバグだ。
 
 ### Step 4: \`ConsensusBridge\` を impl — \`build_payload\`
@@ -1626,6 +1758,8 @@ impl ConsensusBridge for InMemoryEvmBridge {
 \`pending\` から remove しない点に注意 — commit 後、block は両方の map に残り続ける。Real impl は \`pending.remove(&id)\` するかもしれないが、test では関係ない。
 
 \`hex_short\` ヘルパーは次のセクション:
+
+> 📍 **配置のナビゲーション。** \`hex_short\` は \`impl ConsensusBridge for InMemoryEvmBridge { ... }\` ブロックの**外側**に、ファイル末尾の独立した非公開関数として置く (\`&self\` を取らず、struct 状態にも依存しない単なる byte → string 変換ユーティリティだから)。\`impl\` ブロック内に書いてしまうと「method の追加」になり、trait 定義側 (\`ConsensusBridge\`) にもこの形が必要だと誤解させてしまう。
 
 \`\`\`rust
 fn hex_short(bytes: &[u8; 32]) -> String {
@@ -1802,7 +1936,9 @@ git checkout main
 ## よくある質問
 
 **Q: \`commit_advances_head_and_records_block\` が "mutex poisoned" で panic する。**
-最もよくある原因は、別のテストが同じ impl 内で lock を持ったまま panic し、state が poisoned のまま残ったことだ。Cargo はデフォルトで test を並列実行する。本当の問題だと確信したら \`cargo test -p openhl-evm -- --test-threads=1\` で逐次実行する。(このケースではほぼ test コードのバグだろう — 各テストが \`InMemoryEvmBridge::new()\` を新たに作るので shared state は無いはずだ。)
+最もよくある原因は、別のテストが同じ impl 内で lock を持ったまま panic し、state が poisoned のまま残ったことだ。Cargo はデフォルトで test を並列実行する。本当の問題だと確信したら \`cargo test -p openhl-evm -- --test-threads=1\` で逐次実行する。
+
+*(ただし、このコースで書いたテストでは並列衝突は起こらない: 各テスト関数が \`InMemoryEvmBridge::new()\` を個別に生成しているので、テスト間で \`Mutex<State>\` を共有していない。実際にこのエラーに遭ったときの真の原因は、**そのテスト関数自身の実行中に lock を保持したまま別の場所で panic が起き (assertion 失敗、\`unwrap()\` の破裂、\`expect()\` の発火など)、その後同じテスト内で再度 \`state.lock()\` を呼んだ**ことにある。\`--test-threads=1\` を試す前に、cargo test 出力の上部で最初に発火した panic 行 — \`thread 'tests::...' panicked at ...\` — を確認すること。Mutex の poison はそのテスト固有の自家中毒であり、\`--test-threads\` を下げても消えない。)*
 
 **Q: \`pending\` を \`HashMap<u64, _>\` ではなく \`HashMap<PayloadId, _>\` にすべき?**
 どちらでも動く。openhl の convention は、storage layer で内側の type (\`u64\`) を使い、lookup 内での wrap/unwrap を避けることだ。Public API では依然 \`PayloadId\` を使う。trade-off は次のとおり: \`HashMap<PayloadId, _>\` で type safety を得る代わりに、lookup ごとに \`.0\` accessor が必要になる。\`HashMap<u64, _>\` なら storage layer の type safety は諦めるが、noise は避けられる。好みの問題で、こちらは \`u64\` を選んだ。
@@ -1978,6 +2114,33 @@ L4 の \`InMemoryEvmBridge\` と同じ shape だが、**\`State\` 内の型が�
 
 **なぜ \`chain\` の key と \`head\` に \`[u8; 32]\` ではなく \`B256\` を使うのか?** alloy-native な空間にいるからだ — \`Header\` を持っている時点で自然な hash 型は \`B256\` になる。\`[u8; 32]\` を使うとあちこちで \`.0\` accessor が必要になる。\`BlockHash\` への変換は trait boundary を越えるときだけ、ヘルパー関数で行う (Step 6)。
 
+L5 の核は「外側に見せる contract 型」と「内側に持つ alloy 型」の二重構造だ。この境界がどう走っているかを 1 枚で見ると、Step 6 で書く変換ヘルパー (\`to_b256\` / \`from_b256\` / \`to_executed_block\`) が果たす役割と、なぜ \`State\` 内の型だけ刷新できるのかが直感で押さえられる:
+
+\`\`\`
+【 RethEvmBridge における型境界のレイアウト 】
+
+   [ 外側: CL (consensus 層) の空間 ]
+   ──────────────────────────────────────────────────────────────────────────
+       openhl-types / contract primitives (このコースで自前定義した型):
+         BlockHash       PayloadId        ExecutedBlock
+   ──────────────────────────────────────────────────────────────────────────
+                                  ▲    │
+                                  │    ▼
+                  trait boundary 上だけで変換 (Step 6 のヘルパー):
+                      to_b256 / from_b256 / to_executed_block
+                                  ▲    │
+                                  │    ▼
+   ──────────────────────────────────────────────────────────────────────────
+       alloy-primitives / alloy-consensus (Ethereum エコシステム標準):
+         B256             u64              Header
+   ──────────────────────────────────────────────────────────────────────────
+   [ 内側: EL (実行層) / RethEvmBridge の本体空間 ]
+   ※ State の中身は本物の (B256, Header) タプル — タプルに hash を抱き込ませることで
+      Header と hash が常に同期する。Header だけ変えて hash 更新を忘れる事故を型で塞ぐ。
+\`\`\`
+
+ポイントは 2 つ: (a) **contract 型 (\`BlockHash\` 等) は 4 つの trait method のシグネチャと戻り値にしか登場しない** — \`impl\` 内部はすべて alloy 型で書ける。(b) **alloy が source of truth、\`ExecutedBlock\` は trait boundary 用の serialization** にすぎない。だから alloy がバージョンを上げて \`Header\` の形が変わっても、変換ヘルパー 3 つを直すだけで CL 側からは一切見えない。L11+ の \`LiveRethEvmBridge\` でも State の中身が live provider に変わるだけで、この境界線そのものは動かない。
+
 ### Step 4: \`build_payload\` を impl — 初めての real hashing
 
 \`\`\`rust
@@ -2079,7 +2242,7 @@ impl ConsensusBridge for RethEvmBridge {
 - header を \`chain\` に insert (key は \`B256\`)
 - \`head\` を更新
 
-closure パターン \`find(|(h, _)| *h == hash)\` に注目 — タプルを destructure して 1 番目の要素を比較する。\`*h\` は \`&B256\` を deref して \`B256\` にし、\`hash\` (こちらも \`B256\`) と比較できるようにする。
+closure パターン \`find(|(h, _)| *h == hash)\` に注目 — タプルを destructure して 1 番目の要素を比較する。\`*h\` は \`&B256\` を deref して \`B256\` にし、\`hash\` (こちらも \`B256\`) と比較できるようにする。**\`B256\` は \`Copy\` を実装している**ので、\`*h\` でデリファレンスしても値の memcpy が走るだけで、\`pending\` から所有権が move されることはない — \`B256\` を持つフィールドへの安全なアクセスパターンとして覚えておくとよい。
 
 ### Step 6: 変換ヘルパーを追加
 
@@ -2308,7 +2471,7 @@ git checkout main
 
 ## 次のレッスン (L6)
 
-\`ConsensusBridge\` impl を 2 つ書いた — 合成版と real alloy 型版。両方とも consensus 側の test コードから使える (L8 から書き始める)。だがその前に、L6 で consensus 側に進む: Malachite の \`Context\` trait — Malachite を使う任意の chain に対して Malachite が要求する型レベル API surface — を実装する。Associated type 10 個、factory method 4 個だ。L6 を終えると、自分の chain は「\`Address\` 型は何か、\`Height\` 型は何か、\`Value\` 型は何か」を Malachite に答えられるようになる。これが contract の **もう半分** だ。L3 は自分が所有する trait だったのに対し、L6 は Malachite が所有する trait になる。`,
+\`ConsensusBridge\` impl を 2 つ書いた — 合成版と real alloy 型版。両方とも consensus 側の test コードから使える (L8 から書き始める)。だがその前に、L6 で consensus 側に進む: Malachite の \`Context\` trait — Malachite を使う任意の chain に対して Malachite が要求する型レベル API surface — を実装する。Associated type 10 個、factory method 4 個だ。L6 を終えると、自分の chain は「\`Address\` 型は何か、\`Height\` 型は何か、\`Value\` 型は何か」を Malachite に答えられるようになる。これが contract の **もう半分** だ。**L3 で書いた \`ConsensusBridge\` は自分 (openhl 側) が所有する trait** だったのに対し、**L6 で実装する \`Context\` は Malachite (ライブラリ側) が所有する trait** になる。自分が定義した契約に自分で impl を書くのと、外部ライブラリが定義した契約に対して自分の型で impl を埋めるのとでは、設計の力学が真逆 — 次のレッスンはその違いを体で覚える回でもある。`,
                 },
               ],
             },
@@ -2340,6 +2503,10 @@ git checkout main
 検証:
 
 \`\`\`bash
+# L6 で書いた 5 テストだけに集中したいとき (他 crate の noise を排除):
+cargo test -p openhl-consensus context::tests
+
+# crate 全体を走らせる:
 cargo test -p openhl-consensus
 \`\`\`
 
@@ -2393,6 +2560,26 @@ crates/consensus/Cargo.toml:
 > - \`OpenHlContext::select_proposer\` の **specific なアルゴリズム**
 >
 > **なぜこの 2 つは validator 間で一致しなければならないのか?** ヒント: 同じ (height, round) で validator が違う proposer を選んだら、chain はどうなるか?
+
+本レッスンで触る \`crates/consensus/src/\` 配下の最終的なファイル構造はこうなる。8 個の新規ファイルがどの step で生まれるか、\`types/\` サブディレクトリにどう並ぶかを 1 枚で押さえておくと、step を進めながら現在地を見失わずに済む:
+
+\`\`\`
+crates/consensus/src/
+├── lib.rs               (Step 7: 全モジュールを束ねる)
+├── bridge.rs            (L3 で書いた ConsensusBridge trait、変更なし)
+├── context.rs           (Step 6: OpenHlContext + 4 factory + テスト) ★中央
+└── types/               (Step 2: ディレクトリ + mod.rs を作成)
+    ├── mod.rs           (Step 2: サブモジュールの index / re-export)
+    ├── address.rs       (Step 3: 20-byte validator アドレス)
+    ├── height.rs        (Step 3: モノトニックな u64 height カウンタ)
+    ├── value.rs         (Step 3: BlockHash の薄いラッパー)
+    ├── validator.rs     (Step 4: バリデータ + canonical ソート済み set) ★最重要
+    ├── proposal.rs      (Step 5: Proposal メッセージ)
+    ├── proposal_part.rs (Step 5: dummy ProposalPart、v0 は full-block)
+    └── vote.rs          (Step 5: Vote メッセージ、prevote/precommit)
+\`\`\`
+
+「8 つの新規ファイル」と聞くと多く感じるが、実態は **types/ 配下が 8 個 (\`mod.rs\` + 7 つの型ファイル) + 1 個 (\`context.rs\`) = 9 個**、しかも各ファイルが 1 つの設計判断を 1 個ずつ抱えているため、独立してレビュー・テスト可能になっている。**Step 3 (シンプル 3 型) → Step 4 (難関: validator) → Step 5 (3 メッセージ型) → Step 6 (中央 binding)** という順序は、依存方向に沿った最短経路だ。
 
 ## 手を動かす walk-through
 
@@ -2881,6 +3068,25 @@ proposer-election アルゴリズムだ。**\`(height + round) % count\`** が�
 
 算術は注意深い: \`u64\` での \`wrapping_add\` で overflow を回避し、\`% count\` で valid な index になる。\`.expect\` は証明可能だ: \`... % count\` で計算したのだから \`index < count\` が成り立つ。
 
+\`(height + round) % count\` が実際にどう validator を回転させるか、3 validator (A: 300 stake / B: 200 / C: 100) の小さな例で追うと一目で見える:
+
+\`\`\`
+ソート済みセット (voting_power 降順、tiebreak は address 昇順):
+   Index 0 ──► Validator A (stake 300)
+   Index 1 ──► Validator B (stake 200)
+   Index 2 ──► Validator C (stake 100)
+
+決定的な proposer 選択:
+   Height 1, Round 0 ──► (1 + 0) % 3 = 1 ──► Proposer: B
+   Height 1, Round 1 ──► (1 + 1) % 3 = 2 ──► Proposer: C  (round が進むと rotation)
+   Height 1, Round 2 ──► (1 + 2) % 3 = 0 ──► Proposer: A
+   Height 2, Round 0 ──► (2 + 0) % 3 = 2 ──► Proposer: C  (height が進んでも rotation)
+   Height 2, Round 1 ──► (2 + 1) % 3 = 0 ──► Proposer: A
+   ...
+\`\`\`
+
+ここで効いてくるのが Step 4 で見た「canonical sort order」だ。**もし validator A 側で \`[A, B, C]\`、validator B 側で \`[B, A, C]\` の順にソートされていたら**、同じ \`(height=1, round=0)\` を投げても A は「Index 1 = B」を、B は「Index 1 = A」を proposer として認識する。**最初の round で誰を proposer と認めるかが食い違い、chain は即座に fork する。** ソート順 = proposer-election protocol の本体、というのはこういう意味だ。
+
 続いて \`new_proposal\`、\`new_prevote\`、\`new_precommit\` — 型付きメッセージを構築する 3 つの factory method:
 
 \`\`\`rust
@@ -3267,6 +3473,25 @@ pub fn vote_signing_bytes(v: &OpenHlVote) -> Vec<u8> {
 | 18..50 (Val の場合) | \`value_id\` 本体 | BlockHash の 32 バイト |
 | 18..38 OR 50..70 | \`address\` | 20 バイト |
 
+\`value_id = Val(...)\` のときの 70 バイトの並びをメモリ図にすると、署名対象になるバイト列の正体が 1 枚で見える:
+
+\`\`\`
+【 Vote (Val ケース) の canonical signing-bytes — 全 70 バイト 】
+
+┌────────────────┬────────────────┬───┬───┬───────────────────────────────┬─────────────────────────┐
+│   Height (8B)  │   Round (8B)   │Typ│Tag│      Value ID  (32B / hash)    │ Validator Address (20B) │
+└────────────────┴────────────────┴───┴───┴───────────────────────────────┴─────────────────────────┘
+ 0              8               16  17  18                              50                         70  (offset / bytes)
+ [── u64 LE ──] [── i64 LE ──]   │   │   [─────── BlockHash 本体 ───────] [───── 20-byte Eth addr ──]
+                                 │   │
+                                 │   └── 0 = Nil  /  1 = Val            (※ Nil なら本体 32B は省略され、addr が 18..38 に来る)
+                                 └────── 0 = Prevote  /  1 = Precommit
+
+  どの validator が、どの host (x86 / ARM / RISC-V / …) でこの関数を走らせても、
+  上の 70 バイトは **完全に同一** に生成される ─ 1 バイトのズレも許されない。
+  この 70 バイトが「Ed25519 が署名するメッセージ」そのものになる。
+\`\`\`
+
 **なぜ little-endian?** x86 / ARM ホストでの慣習だからだ。**なぜ tag バイトを付ける?** \`NilOrVal::Nil\` は 1 バイト (tag 0)、\`NilOrVal::Val\` は 33 バイト (tag 1 + 32 バイトのハッシュ) になる。Tag があるので、パーサがどちらか判別できる。**なぜ validator address を含めるのか?** Vote は **どの** vote かだけでなく **誰の** vote かも表すからだ。同じ proposal に対して 100 人の validator が vote すれば、それぞれ別の signing-bytes 文字列が生成される。
 
 > 🛑 **やりがちな勘違い。** 「\`bincode::serialize(v)\` の結果に署名するだけではダメか?」 **ダメだ。** 既製のシリアライゼーション形式は、ライブラリのバージョンが上がると変わりうる — 今日署名するものと明日署名するものが、struct は同一でも違ってしまう可能性がある。**canonical** encoding は自分で 1 バイト単位までコントロールするものだ。本番 chain では encoding を protobuf スキーマで定義するか、ここのように手書きで定義する。どちらにせよ encoding は chain の wire format spec の一部になる。
@@ -3457,7 +3682,7 @@ impl OpenHlSigningProvider {
 
 構造体は \`PrivateKey\` を保持する。コンストラクタは外から鍵を受け取る (通常はディスクや環境変数から)。\`public_key()\` は対応する public key をオンデマンドで導出する — Ed25519 では private key からスカラー乗算で public key を導出でき、ミリ秒オーダーで済む。
 
-\`use\` ブロックは \`signing.rs\` から低レベル関数を \`as sign_X_with\` のリネーム付きで import する。**なぜリネームするのか?** \`SigningProvider\` trait に \`sign_vote\` と \`sign_proposal\` という名前のメソッドがあり、自前ヘルパーを名前衝突なしで呼びたいからだ。\`_with\` サフィックスは「これは trait メソッドが委譲する先の実装関数」を表す慣習。
+\`use\` ブロックは \`signing.rs\` から低レベル関数を **\`_with\` サフィックスを付けたリネーム形式** (\`sign_vote as sign_vote_with\`、\`sign_proposal as sign_proposal_with\`) で import する。**なぜリネームするのか?** \`SigningProvider\` trait 側に \`sign_vote\` と \`sign_proposal\` という名前のメソッドがあり、自前ヘルパーを名前衝突なしで呼びたいからだ。\`_with\` サフィックスは「これは trait メソッドが委譲する先の実装関数」を表すローカル慣習で、特別なマクロや言語機能ではない (上のコードの \`as ...\` がそのまま新しい名前を作っているだけ)。
 
 ### Step 8: \`SigningProvider\` trait を実装 — 4 つの sign/verify ペア
 
@@ -3729,6 +3954,8 @@ test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 3. **ProposalPart と Extension の空バイト署名。** Trait 表面がメソッドを要求するが、chain がその機能を使わない場合は、空データに対する確定的で検証可能な署名を提供する。これで、持っていないデータにコミットすることなく trait を honor できる。これらの機能を使う本番 chain は実データを入れる。こちらは入れないが、どちらの場合もエンジンはクラッシュしない。
 
+4. **\`VerifierLike\` shim による「依存性の汚染 (Leaky Abstraction) の遮断」。** Step 5 で導入した 1 メソッド trait は、純粋に依存グラフをきれいに保つためだけに存在する。具体的には: Malachite の \`PublicKey\` は外部 crate \`signature\` の \`Verifier\` trait 経由で検証を提供しているので、もし \`verify_vote(v, sig, pk)\` が直接 \`signature::Verifier::verify(...)\` を呼ぶと、**こちらの consensus crate の公開 API surface に \`signature\` crate の trait を import させる責務が漏れ出す** ことになる。すると将来 Malachite が \`signature\` を別の crypto ライブラリ (新しい crate、別 trait 名) に差し替えた瞬間に、**こちらの crate の利用者 (L8 以降のレッスンを含む) すべてが breaking change を踏む**。\`VerifierLike\` という自前の薄い trait を 1 枚かませておけば、\`signature\` の存在は \`signing.rs\` の \`impl VerifierLike for PublicKey\` という 5 行に閉じ込められ、外部 crate の変動はそこを 1 行直すだけで吸収できる。**「自分の crate の API に他人 (依存先) の trait を直接出さない」**という discipline の、コード 8 行で買える最小コストの実装例だ。
+
 ## 答え合わせ
 
 \`\`\`bash
@@ -3794,7 +4021,7 @@ cargo test -p openhl-consensus
 
 上記の実行結果が **16 個のテストすべてに合格する** (L7 から 14 個 + codec の新規 2 個)。新規テストは 2 個: \`OpenHlCodec\` が 3 つの super-trait を満たすことを示すコンパイル時アサーション、および \`ProposalPart\` の runtime ラウンドトリップテスト。
 
-ここでもうひとつ unblock されるものがある: \`informalsystems-malachitebft-app\` が libp2p、ractor、その他エンジン表面のすべてを引き込んでくる。これ以降の初回コンパイルは ~38 秒かかる。投資の見返りは L9 で spawn する actor system だ。
+ここでもうひとつ unblock されるものがある: \`informalsystems-malachitebft-app\` が libp2p、ractor、その他エンジン表面のすべてを引き込んでくる。これ以降の**初回コンパイルは非常に重い** (近代的なマルチコア環境で ~38 秒以上、シングルコア寄りやリソース制限のある環境では数分単位)。投資の見返りは L9 で spawn する actor system だ。
 
 具体的な変更:
 
@@ -3820,7 +4047,7 @@ crates/consensus/src/context.rs            — OpenHlContext + Context impl
 
 5 つやる:
 
-1. **\`crates/consensus/Cargo.toml\` に \`informalsystems-malachitebft-app\` を追加する。** これが重量級だ — libp2p、ractor、フルな app 表面を推移的に引き込んでくる。これ以降の初回コンパイルは ~38 秒。
+1. **\`crates/consensus/Cargo.toml\` に \`informalsystems-malachitebft-app\` を追加する。** これが重量級だ — libp2p、ractor、フルな app 表面を推移的に引き込んでくる。これ以降の初回コンパイルは**非常に重い** (近代的マルチコア環境で ~38 秒以上、リソース制限環境では数分単位)。
 2. **\`crates/consensus/src/codec.rs\` を作成する** — \`OpenHlCodec\` unit struct、\`CodecStub\` エラー、8 個の \`Codec<T>\` impl。
 3. **\`pub mod codec;\`** を \`lib.rs\` に組み込む。
 4. **実行** — \`cargo test -p openhl-consensus\` で 16 個合格する。
@@ -3848,7 +4075,7 @@ informalsystems-malachitebft-app             = { workspace = true }
 cargo check -p openhl-consensus 2>&1 | tail -5
 \`\`\`
 
-初回ビルドは遅い (libp2p + ractor と依存が初めてコンパイルされる、~38 秒)。以降はキャッシュが効く。
+初回ビルドは非常に重い (libp2p + ractor と大量の推移的依存が初めてコンパイルされるため、近代的なマルチコア環境でも **~38 秒以上**、シングルコア寄りやリソース制限のある環境では数分かかることもある)。途中で進行ログが止まって見えてもフリーズではない — コーヒーをもう一杯淹れて待つ。以降はキャッシュが効き、差分ビルドは秒単位に縮む。
 
 ### Step 2: \`crates/consensus/src/codec.rs\` を作成
 
@@ -4124,7 +4351,7 @@ test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 よくあるエラーと対処:
 
 - **\`error[E0277]: the trait bound 'OpenHlCodec: WalCodec<OpenHlContext>' is not satisfied\`** — 8 個の \`Codec<T>\` impl のうちどれかが抜けている。Step 3 と Step 4 を再確認 — 8 つの構成型すべてに \`impl Codec<T> for OpenHlCodec\` が必要だ。
-- **\`error[E0282]: type annotations needed for 'CodecStub'\`** — \`&'static str\` フィールドを忘れている。\`pub &'static str\` の単一フィールドに \`CodecStub("...")\` で渡す形だ。
+- **\`error[E0061]: this function takes 1 argument but 0 arguments were supplied\`** (または \`error[E0308]: mismatched types\`) — \`CodecStub\` は \`pub &'static str\` を 1 個取るタプル構造体だから、引数なしで \`CodecStub\` と書いたり、波括弧で \`CodecStub { ... }\` と書いたりすると弾かれる。\`Err(CodecStub("SignedConsensusMsg<OpenHlContext>"))\` のように、対象の型名リテラルを正しく 1 個渡す。
 - **\`error[E0432]: unresolved import 'informalsystems_malachitebft_app::types::codec::ConsensusCodec'\`** — Cargo.toml に \`informalsystems-malachitebft-app\` を追加し忘れている。Step 1 を再確認。
 - **再ビルドでも 60 秒以上かかる** — \`cargo build\` (\`--release\` なし) を試す。それでも遅ければ原因は libp2p なので、そのままにしておく。
 
@@ -4137,6 +4364,33 @@ test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 2. **blanket impl のおかげで、1 つの trait impl で複数の super-trait を満たせる。** \`WalCodec<Ctx>\` は自動的に \`impl<C> WalCodec<Ctx> for C where C: Codec<ProposedValue<Ctx>>\` で満たされる (Consensus/Sync も同様)。適切な **構成要素** \`Codec<T>\` impl を提供すれば、\`impl WalCodec\` は書かなくていい — Malachite が blanket impl を無料でくれる。コンパイル時アサーションテストが、これが本物であることを検証する。
 
 3. **codec は \`types/\` ではなく \`consensus/\` に置く。** Codec はエンジン側の「何が wire 上を流れるか」という概念 (\`SignedConsensusMsg\`、\`ProposedValue\`、\`sync::Status\`) に依存する。これは consensus 層の関心事で、base 型の関心事ではない。Codec を \`types/\` に置くと、\`types/\` が \`informalsystems-malachitebft-app\` に依存することになり、エンジンを必要としない下流 crate にとって \`openhl-types\` が重い依存になってしまう。
+
+この「\`types/\` に Codec を入れない」という規律は、依存グラフを 2 通り並べると違いが一目で見える:
+
+\`\`\`
+🟢 採用した設計 (clean dependency graph)
+   ┌─────────────────────────┐                  ┌──────────────────────────────────┐
+   │   openhl-evm            │ ─┐               │  openhl-consensus (Codec を保持)   │
+   ├─────────────────────────┤   ▼               │   - bridge.rs / types/ / codec.rs │
+   │   openhl-node           │ ─► openhl-types  │   - signing*.rs / context.rs       │
+   ├─────────────────────────┤   ▲   (軽量、 ────►─── informalsystems-malachitebft-app
+   │   (他の下流 crate)      │ ─┘   依存ゼロ)            (libp2p / ractor / 重量級)
+   └─────────────────────────┘                  └──────────────────────────────────┘
+       ※ EVM 側を直すたびに consensus / libp2p / ractor は触らない → 高速イテレーション
+
+🔴 アンチパターン (codec を types/ に同居させた場合)
+   ┌─────────────────────────┐
+   │   openhl-evm            │ ─┐
+   ├─────────────────────────┤   ▼
+   │   openhl-node           │ ─► openhl-types (Codec も同居) ─► informalsystems-malachitebft-app
+   ├─────────────────────────┤   ▲                                  (libp2p / ractor / 重量級)
+   │   (他の下流 crate)      │ ─┘
+   └─────────────────────────┘
+       ※ EVM 側のロジックを 1 行直すだけでも、無関係な libp2p や actor system まで
+         巻き添えでビルドが走り、初回 ~38 秒の依存解決を何度も払う羽目になる
+\`\`\`
+
+採用した形 (左) では、\`openhl-types\` は「皆が共通語彙として参照する軽量な辞書」のままで、重量級な consensus / libp2p / ractor の依存は \`openhl-consensus\` の中だけに閉じる。逆に右側のアンチパターンを取ると、\`openhl-types\` を引いている下流 crate 全部が libp2p までビルドする義務を負う。**「型は軽く保ち、重量級の依存は持ち込むべきレイヤーで持ち込む」** が \`crates/\` 構成の血肉になっている討議だ。
 
 ## 答え合わせ
 
@@ -4435,6 +4689,41 @@ impl std::fmt::Debug for OpenHlPrivateKeyFile {
 
 > 🛑 **やりがちな勘違い。** 「なぜ \`#[derive(Debug)]\` ではダメなのか?」 **デフォルトで derive される \`Debug\` は \`[u8; 32]\` の 32 バイト全部を print するからだ。** 誰かが \`OpenHlPrivateKeyFile\` を別の \`Debug\`-derive 構造体でラップしてログに出すと、key が stderr / log file / Sentry にリークする。\`[redacted]\` 付きの手書き \`Debug\` なら、意図的に変更しない限りこれは起こりえない。**Private key はパスワードと同等に扱い、絶対に print させない。**
 
+ここから先で扱う \`OpenHlNode\` と \`OpenHlNodeHandle\` の関係を 1 枚で見ると、本レッスンの設計判断 — 「**構築 (静的な設定) と実行 (動的な actor system) を別の型に住み分けさせる**」 — が直感で押さえられる:
+
+\`\`\`
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ◆ ライフサイクル 1: 静的な設定・構築 (Node)                              │
+│                                                                          │
+│   OpenHlNode {                                                            │
+│       private_key, validator_set,                                         │
+│       home_dir, moniker, …                                                │
+│   }                                                                       │
+│                                                                          │
+│   ・プロセス起動時に 1 回 new、長命                                       │
+│   ・engine は**まだ走っていない** (config を保持しているだけ)             │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             │  .start().await   ◄── handshake (Node trait)
+                             │                        の実行 (Step 5)
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ◆ ライフサイクル 2: 動的な実行・actor system (Handle)                    │
+│                                                                          │
+│   OpenHlNodeHandle {                                                      │
+│       engine   : EngineHandle           ──► ractor cell + libp2p が起動中 │
+│       channels : Mutex<Option<Channels<OpenHlContext>>>                   │
+│                                         ──► L10 の app loop が \`take()\`  │
+│                                            で 1 回だけ引き抜く            │
+│   }                                                                       │
+│                                                                          │
+│   ・\`start()\` の戻り値、\`.kill().await\` するまで生存                      │
+│   ・所有権の流れは Node → Handle → app loop の一方通行                    │
+└─────────────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+ポイントは 3 つ: (a) **\`OpenHlNode\` は config を抱えるだけで、actor system を所有しない** — \`start()\` を呼ぶまで何のスレッドも立たない。(b) **\`OpenHlNodeHandle\` は実行中の actor system + 通信チャネルを所有** — engine と libp2p のライフタイムはこの handle に bind されている。(c) **\`Mutex<Option<Channels<...>>>\` は所有権の一方通行ゲート** — \`take()\` で L10 の app loop に渡したら二度と取り戻せず、「もう消費済み」を \`None\` という値で型レベルに表明する。L9 の \`run()\` メソッドが「未実装」エラーを返すのは、この (c) の **app loop 側 (L10)** がまだ書かれていないからだ。
+
 ### Step 4: \`OpenHlNodeHandle\` — \`start()\` が返すもの
 
 \`\`\`rust
@@ -4617,7 +4906,7 @@ impl Node for OpenHlNode {
 **12 個のメソッド**:
 
 | メソッド | 目的 | 本体 |
-| - | - | - |
+| :--- | :--- | :--- |
 | \`get_home_dir\` | Node がデータを保存する場所 | 構築時に渡された path を返す |
 | \`load_config\` | Config を作る (再呼出可) | \`OpenHlConfig\` を構築し、listen address をエフェメラル local にオーバーライド |
 | \`get_address\` | SHA-256 ハッシュ → 20 バイト address | 32 バイト digest の最後の 20 バイト |
@@ -4745,6 +5034,8 @@ mod tests {
 Smoke test の wall-clock はおおよそ **0.02 秒**。大部分は libp2p がローカル listener を立ち上げる時間だ — tcp/0 のエフェメラルポートでも、libp2p のネゴシエーションには固定コストがある。
 
 > 🛑 **やりがちな勘違い。** 「なぜ \`flavor = 'multi_thread'\` なのか?」 **エンジンが複数 actor をそれぞれの task として spawn するからだ。** Single-threaded runtime でも 1 スレッドに全部回せる — だが、エンジン内部に single-thread だと deadlock する \`block_on\` パターンがある。Multi-thread runtime で回避する。**API レベルでは見えないが、テスト失敗レベルでは致命的な詳細だ。**
+>
+> *(具体的には: 非同期コンテキストの最中に \`tokio::runtime::Handle::current().block_on(...)\` のような同期的待機が走ると、\`current_thread\` runtime ではその唯一のワーカースレッドが完全にロックされる。すると \`block_on\` の内側で \`await\` されている future を進ませる実行者がいなくなり、actor 初期化 future が**永久にハング**する — タイムアウトや panic にすらならない、純粋な deadlock だ。\`multi_thread\` 版なら別のワーカースレッドが残りの future を拾えるので、この pattern が通り抜ける。Malachite / ractor / libp2p の組み合わせは内部で何度かこの形を踏むので、テスト側で multi-thread を強制する必要がある。)*
 
 ## テスト
 
@@ -5018,6 +5309,49 @@ where
 - **\`current_height: OpenHlHeight\`** — engine が今いる height。\`INITIAL\` から始まり、\`StartedRound\` と \`Decided\` で bump される。
 
 \`while let Some(msg) = channels.consensus.recv().await\` loop が actor-message app の心臓だ: message を receive、variant で dispatch、(該当するなら) reply、continue。\`recv()\` が \`None\` を返したら channel が閉じている — それが error path だ。
+
+12 個のアームを 1 つずつ書く前に、この loop が何と何を繋いでいる中継地点なのかを 1 枚で見ておくと、各アームの「誰から来て、誰に返すか」を迷わず追える:
+
+\`\`\`
+   [ Malachite Engine actors ]  (producer 側 — proposal / vote / Decided 等を生成)
+              │
+              │ AppMsg::ConsensusReady { reply, validator_set }
+              │ AppMsg::GetValue       { reply, height, round, ... }
+              │ AppMsg::Decided        { reply, certificate, ... }
+              │ … (合計 12 variant、\`tokio::mpsc\` で 1 本のチャネルに流れてくる)
+              ▼
+   ┌──────────────────────────────────────────────────────────────────────────┐
+   │ ◆ app_task: run_engine_app loop  (consumer 側、本レッスンで書く中央指令塔) │
+   │                                                                            │
+   │  while let Some(msg) = channels.consensus.recv().await { match msg { … } } │
+   │                                                                            │
+   │  各 arm がやることは 2 種類だけ:                                            │
+   │   1. reply.send(...)  ──► engine に値を返してアンブロックする               │
+   │   2. bridge.<method>().await ──► EL 側を駆動して結果を受け取る              │
+   └──────────────────────────────────────────────────────────────────────────┘
+              │                                                  ▲
+              │ bridge.build_payload / payload_ready / commit    │ FillResult /
+              ▼                                                  │ ExecutedBlock / Ok
+   [ ConsensusBridge impl ]  (StubBridge / InMemoryEvmBridge / RethEvmBridge / LiveRethEvmBridge)
+
+
+   ── 代表的な 1 サイクル ──────────────────────────────────────────────────
+
+   ① ConsensusReady    ── engine ──► app: 「準備できた、validator set を寄越せ」
+                          app ──► engine: reply.send(validator_set)
+
+   ② GetValue          ── engine ──► app: 「次の block を propose しろ (height, round)」
+                          app ──► bridge.build_payload + payload_ready
+                          app ──► engine: reply.send(LocallyProposedValue(value))
+
+   ③ Decided           ── engine ──► app: 「2/3+ で commit が成立した、certificate 入り」
+                          app ──► bridge.commit(hash)
+                          app ──► engine: reply.send(Next::Start)  または  Next::Stop
+                          decided.push(hash)
+                          if decided.len() >= stop_after_decisions { return Ok(decided) }
+\`\`\`
+
+3 つの focal point: (a) **メッセージは engine → app の **片方向**だが、各メッセージに \`oneshot::Sender\` (reply) が同梱されている** ので、app が reply を返すまで engine 側の処理は parked になる (reply を忘れるとそこで永久に止まる)。(b) **app は engine と bridge の中継地点**であり、ロジック本体ではない — 重い計算 (build/commit) は bridge 側、合意の駆動は engine 側に閉じている。(c) **bridge が \`B: ConsensusBridge\` の generic なので、同じ loop で \`StubBridge\` / \`InMemoryEvmBridge\` / \`RethEvmBridge\` / \`LiveRethEvmBridge\` が全部走る** — L3 で trait surface を綺麗に定義した投資が、ここで多態性として効いてくる。
 
 ### Step 3: \`ConsensusReady\` と \`StartedRound\` の arm
 
@@ -5357,6 +5691,8 @@ mod tests {
   7. クリーンアップに \`handle.kill(None)\` を呼ぶ。
 
 > 🛑 **やりがちな勘違い。** 「L9 の smoke test は 2 だったのに、ここで \`worker_threads = 4\` なのはなぜか?」 **Integration test の方がより多くの actor を並行に回すからだ。** Smoke test は spawn + kill だけで、メッセージを生成しなかった。Integration test は \`run_engine_app\` task (consume + reply) + bridge の async fn 呼び出し + 複数の内部 engine actor を走らせる。4 スレッドあれば全員に余裕がある。少ないと contention (遅い) や deadlock (hang) が起きる。4 で十分余裕がある。
+>
+> *(背景: actor モデル + 非同期チャネルを組み合わせた結合テストでは、複数の task が **互いのリプライをブロッキングに待ち合う** パターンが頻発する (engine actor は app の \`reply.send(...)\` を待ち、app は bridge の \`.await\` を待ち、bridge は engine から次の指示を待つ、という鎖)。ワーカースレッド数が足りないと、**全ワーカーが「リプライを待つタスク」で埋まり、肝心のリプライを送信する側のタスクにスケジューラが時間を割り当てられない**という「スレッド枯渇型デッドロック」が起きる。一見正しいコードがハングして見えるが、これは設計バグではなく runtime のサイジング不足だ。4 ワーカーあればパイプライン全体 (engine 内部の少なくとも 2-3 actor + app loop + bridge async) を同時に物理コアに散らせるので、このクラスのデッドロックは構造的に発生しない。)*
 
 ## テスト
 
@@ -5385,7 +5721,7 @@ cargo test -p openhl-consensus
 
 よくあるエラーと対処:
 
-- **テストが 15 秒以上 hang する** — \`tokio::time::timeout\` が発火している。最有力原因は \`Decided\` の exit path で reply を忘れていて、engine actor が待ち続けていることだ。Step 5 を再確認 — \`if decided.len() >= stop_after_decisions\` 分岐は return 前に **必ず** reply する。
+- **テストが 15 秒以上 hang する** — \`tokio::time::timeout\` が発火している。原因は常に同じクラスで、**\`ConsensusReady\` / \`GetValue\` / \`Decided\` のいずれかの arm で \`reply.send(...)\` を忘れているか、途中で \`oneshot::Sender\` を drop してしまっていること**だ。Engine actor は受け取り側 (こちらの app loop) が応答するまで永久に parked になる — タイムアウトも panic もなく、ひたすら待ち続ける。特に **\`Decided\` の exit path** (\`if decided.len() >= stop_after_decisions { return Ok(decided) }\` の分岐内) は油断しやすい: 早期 return を書くと reply を入れ忘れがちだ。**return 前に必ず reply する**。Step 3-5 の 3 arm 全てで、\`reply.send(...)\` の行が match arm の制御フローのどのパスからも到達できることを確認しよう。
 - **\`error[E0277]: ConsensusBridge is not Send\`** — bridge に \`+ Send + Sync\` bound が必要だ。または impl で \`std::sync::Mutex\` を使っている (Send) のに trait の \`Send\` 注釈を忘れている。\`bridge.rs\` を確認する。
 - **\`bridge.committed.lock().expect("poisoned")\` panic** — task が mutex 保持中に panic したときだけ起きる。普通は bridge impl 側の panic が原因だ。bridge の \`build_payload\` / \`commit\` の panic を確認する。
 - **\`assert_eq!(decisions.len(), 1)\` が落ちる** — \`decisions\` が空だ。Loop が \`Decided\` に到達していない。最有力原因は \`GetValue\` の handle を忘れていることだ (engine は \`LocallyProposedValue\` reply を待ち、reply なしでは進まない)。Step 4 を再確認。
@@ -5510,7 +5846,7 @@ bin/openhl/             — 空のバイナリ stub
 
 このレッスンが教えるのは **依存共存の検証パターン** だ。大きなインフラ crate を 2 つ (今回は Reth と Malachite) に依存する場合、衝突は integration コードを書いて初めて判明する — その時点では、**動くはずなのに** コンパイルできないコードに大量投資済みになっている。**検証パターンは、integration を書く前に、両方を同時に exercise する最小のテストを書くことだ。** Test が pass すれば両方の dep が resolve・link される。失敗すれば失敗が即座に visible になり、blast radius が小さくて済む。
 
-> 🛑 **考えてみよう。** スクロールする前に: なぜゴールコマンドで bootstrap test を \`--release\` で走らせるのか? ヒント: compile time とその支配要因を考える。Reth の MDBX bindings + libp2p + alloy + rocksdb 系ストレージスタックは **巨大** だ — debug mode の初回コンパイルは ~2:34、release も同程度だが、結果バイナリは大幅に高速になる。Test 自体は bootstrap と chain-ID チェックだけなので、**初回コンパイル後** は fast compile よりも fast runtime のほうが欲しい。初回 cold ビルド後は \`--release\` で走らせる。
+> 🛑 **考えてみよう。** スクロールする前に: なぜゴールコマンドで bootstrap test を \`--release\` で走らせるのか? ヒント: compile time とその支配要因を考える。Reth の MDBX bindings + libp2p + alloy + rocksdb 系ストレージスタックは **巨大** だ — 初回コンパイルはマシンパワーを使い切るレベルで、**高速なマルチコアワークステーションでも debug mode ~2:34、ラップトップ環境やリソース制限のあるマシンでは 5-10 分かかることも珍しくない** (Reth 単体だけで ~600 crate のツリー)。Release も同程度の時間を食うが、結果バイナリは大幅に高速になる。Test 自体は bootstrap と chain-ID チェックだけなので、**初回コンパイル後** は fast compile よりも fast runtime のほうが欲しい。初回 cold ビルド後は \`--release\` で走らせる。途中で進行ログが止まって見えてもフリーズではない — 別のことをしながら待つ。
 
 ## 手順
 
@@ -5700,6 +6036,33 @@ JSON は \`serde_json::from_str(...)\` で \`Genesis\` に parse され、\`gene
 
 > 🛑 **やりがちな勘違い。** 「なぜ Rust で \`ChainSpec\` を直接構築せず、raw JSON 文字列を使うのか?」 **Reth の \`ChainSpec\` builder には 50 以上のフィールドと複雑な内部 invariant があるからだ。** プログラマチックに構築するということは、最近のフォークごとに必要なフィールドに自分で追いついていくことを意味する。\`Genesis\` deserializer 経由で JSON から構築すれば、Reth 自身の型システムにデフォルトと validity を強制させられる。**JSON フォーマットはどのみち chain の外部インターフェースだ** — production chain はすべて同じ JSON 形を使う (\`reth-chainspec/res/genesis/mainnet.json\` を見よ)。
 
+L11 のテストが実際に何をブートさせているのか、Tokio runtime 上の task 配置で 1 枚にまとめると見える。L9-L10 までは左半分 (Malachite 側) だけが動いていたが、L11 以降は **同じ runtime 上に右半分 (Reth 側) が同居する**:
+
+\`\`\`
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ◆ 共有の単一 multi-thread Tokio Runtime (worker_threads = 4)                 │
+│                                                                              │
+│  ┌────────────────────────────────────┐  ┌─────────────────────────────────┐│
+│  │ [側 A: Malachite Consensus 世界]    │  │ [側 B: Live Reth EL 世界]        ││
+│  │  (L9-L10 で立ち上げ済み)             │  │  (L11 でブート、L12 以降で連結)  ││
+│  │                                     │  │                                 ││
+│  │ ├─ Engine Driver Actor Tasks        │  │ ├─ TaskExecutor                 ││
+│  │ │   (BFT 状態遷移、proposer 選択)    │  │ │   (Reth バックグラウンド管理) ││
+│  │ ├─ libp2p Network Task              │  │ ├─ MDBX Storage Engine Task     ││
+│  │ │   (P2P gossip、CI では isolated)   │  │ │   (tempdir 上の state DB)     ││
+│  │ ├─ WAL / Storage Tasks              │  │ ├─ Payload Builder Task         ││
+│  │ └─ run_engine_app Loop Task         │  │ ├─ Mempool Task                 ││
+│  │     (L10 で書いた message router)    │  │ └─ Engine API / RPC Stub Tasks  ││
+│  └────────────────────────────────────┘  └─────────────────────────────────┘│
+│                                                                              │
+│  L11 のテストは、これら 2 つの世界が同一プロセス・同一 runtime で                │
+│  リソース (スレッド / ポート / Cargo の feature) を衝突させずに共存できるかの    │
+│  「ハンドシェイク」を検証している (まだ A と B の間に直接の通信線は無い)。       │
+└─────────────────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+ポイントは「**この時点で A と B はまだ直接話していない**」ことだ。L11 が証明するのは「両者が同じ Tokio runtime 上で衝突せずに立ち上がる」だけで、\`run_engine_app\` ↔ \`LiveRethEvmBridge\` 経由のメッセージ往来は L12-L15 で接続される。それでも、Reth v2.2.0 と Malachite v0.5.0 という 2 つの大規模クレートツリーが Cargo の feature unification と version 制約をすり抜けて 1 workspace に同居できることが、ここで初めて build と test の両方で証明される。
+
 ### Step 5: \`launch_and_check\` ヘルパー
 
 \`dev_chain_spec\` の下:
@@ -5817,7 +6180,7 @@ cargo test
 - **\`error[E0432]: unresolved import 'reth_node_builder'\`** — \`crates/evm/Cargo.toml\` で \`test-utils\` feature が抜けている。Step 2 を再確認: \`features = ["test-utils"]\` であること。
 - **\`error: failed to resolve: use of undeclared crate or module 'reth_provider'\`** — workspace レベルで \`reth-provider = ...\` が抜けている。Step 1 を再確認。
 - **\`error: feature 'test-utils' on 'reth-node-builder' requires feature 'X'\`** — version skew だ。Pin している Reth SHA が \`reth-node-builder\` の peer crate の期待と一致する必要がある。すべての reth-* dep (12 個) が同じ SHA を使っているか、Step 1 を再確認。
-- **\`Reth dev node bootstrap failed: Failed to bind...\`** — 前回の test run からのポート衝突だ。\`NodeConfig::test()\` はエフェメラルポートを使うが、tempdir の stale 状態が衝突を生むことがある。\`cargo clean -p openhl-evm\` してから retry する。
+- **\`Reth dev node bootstrap failed: Failed to bind...\`** — \`NodeConfig::test()\` は内部で **\`:0\` (カーネル自動割り当ての ephemeral port)** を要求しているので、本来は物理的なポート衝突は起きない設計だ。それでもこのエラーが出るときは、**直前のテスト run が panic や Ctrl+C で異常終了し、Tokio runtime の drop が遅延して、Reth が掴んでいた socket / MDBX lock がプロセス側にゾンビとして残っている** ことがほぼ唯一の原因だ。対処は \`cargo clean\` ではなく (clean しても OS レベルのポート占有は解放されない): (1) **数秒〜十数秒待ってから再実行** (大半はこれで通る)、それでもダメなら (2) \`pgrep -f openhl-evm\` / \`pgrep -f reth\` で生き残ったテストプロセスを探して \`kill\`、最終手段として (3) シェルを開き直して新しいプロセス空間にする。
 - **Test はコンパイルできるが 30 秒以上 hang する** — \`Runtime::test()\` が正しく動いていない。Single-thread default ではなく \`#[tokio::test(flavor = "multi_thread", worker_threads = 4)]\` を使っているか確認する。
 
 ## 設計の振り返り
@@ -5936,6 +6299,8 @@ crates/consensus/                — フル BFT engine + run_engine_app
 このレッスンが教えるのは **provider に対してジェネリックなパターン** だ。これによって bridge を isolation でテスト可能にする。\`LiveRethEvmBridge<P>\` は \`P: BlockNumReader + Clone + Sync + 'static\` に対してジェネリックだ。Production では \`P\` は live node の \`BlockchainProvider\` になる。テストでは \`P\` を、決定的な \`(hash → number)\` マッピングを返す \`MockProvider\` にしてもよい。**Bridge 自体はどちらかを気にしない** — ただ \`provider.block_number(...)\` を呼ぶだけだ。これは L10 の \`run_engine_app<B: ConsensusBridge>\` と同じパターンで、具象型ではなく trait に依存する。
 
 > 🛑 **考えてみよう。** スクロールする前に: \`build_payload\` が live provider から読むのに、なぜ \`LiveRethEvmBridge\` は依然として \`pending\`、\`chain\`、\`head\` フィールドを持つ内部の \`Mutex<State>\` を保持しているのか? ヒント: \`build_payload\` は \`PayloadId\` を返し、engine は後で \`payload_ready(id)\` を呼んで実際の block を fetch する。Pending 状態がこの 2 つの呼び出しの橋渡しをする — Reth の payload-builder は block を組み立てるのに 10-50ms かかるので、engine が待っている間、bridge は **結果** をどこかに保持しておく必要がある。**L13 でこのインメモリの pending 状態を Reth の実 payload-builder に置き換える。** 今のところは build-then-fetch の形が動くことを証明する placeholder だ。
+>
+> *(より具体的には: consensus 側のアクタータスクは \`build_payload\` を叩いて即座に \`PayloadId\` だけ回収し、いったん proposal broadcast や他の作業に進む。そのあと別のアクタータスク (場合によっては別のワーカースレッド) が \`payload_ready(id)\` を非同期に呼び出す。Reth が裏で block を組み立てている時間も、Malachite が他の round を進めている時間も、両者は**独立した寿命の async task** だ。\`Mutex<State>::pending\` という 1 枚のマップは、この「\`build_payload\` が返した瞬間」と「\`payload_ready\` が呼ばれた瞬間」という 2 つの独立した protocol moment を、型レベルで安全に糊付け (同期) する **seam** として機能している。L13 で実 payload-builder に差し替えても、この seam の **必要性** 自体は消えず、\`pending\` を真の async channel / oneshot に置き換える形に進化するだけだ。)*
 
 ## 手順
 
@@ -6021,6 +6386,41 @@ use std::sync::Mutex;
 \`\`\`
 
 \`BlockNumReader\` が live read を駆動する唯一の trait だ。他はすべて L4 以来使っている bridge 型だ。
+
+この crate の境界レイアウトを 1 枚で見ると、L5 の \`RethEvmBridge\` で確立した「外側 = contract 型 / 内側 = alloy 型」の構造に、今回新しく **trait による provider 抽象境界** が 1 段挟まることがわかる:
+
+\`\`\`
+   [ 外側: CL (consensus 層) の空間 ]
+   ──────────────────────────────────────────────────────────────────────
+       openhl-types / contract primitives (自前定義):
+         BlockHash       PayloadId        ExecutedBlock
+   ──────────────────────────────────────────────────────────────────────
+                                  ▲    │
+                                  │    ▼  trait boundary の変換 (L5 と同じヘルパー)
+                                  │       to_b256 / from_b256 / to_executed_block
+                                  │    │
+   ──────────────────────────────────────────────────────────────────────
+       alloy-primitives / alloy-consensus (Ethereum エコシステム標準):
+         B256             u64              Header
+   ──────────────────────────────────────────────────────────────────────
+                                       │
+                                       │  self.provider.block_number(parent_b256)
+                                       ▼
+   ────────── ★ L12 で追加: trait による provider 抽象境界 ★ ──────────────
+       reth-storage-api / 抽象 trait:
+         BlockNumReader   (← bridge が必要とする capability、ちょうど 1 個)
+   ──────────────────────────────────────────────────────────────────────
+                                       │
+                                       │ 型システムが具象プロバイダを隠蔽
+                                       ▼
+   ──────────────────────────────────────────────────────────────────────
+       reth-provider / 具象実装 (production の \`P\` がここを satisfy):
+         BlockchainProvider  ──►  MDBX storage engine ──► 実際の block number
+   ──────────────────────────────────────────────────────────────────────
+   [ 内側: EL (実行層) / 実際のディスク上の state ]
+\`\`\`
+
+3 つの focal point: (a) **\`LiveRethEvmBridge<P>\` は \`P: BlockNumReader\` に対してジェネリック** — bridge 本体は具象 provider 型 (\`BlockchainProvider\` の 30+ trait bound) を一切知らない。(b) **trait 抽象境界 (★ の段) が「mock test 用の \`P\`」と「production の live provider」を同じインターフェースで差し替え可能にする** — \`BlockNumReader\` を満たす任意の型ならどれでも入る。(c) **データの流れは外側 → 内側に向かって型が「狭く」なる**: \`BlockHash\` (32 byte の意味付き newtype) → \`B256\` (alloy primitives) → trait 経由の query → MDBX が返す \`u64\` 一個。L5 の trait boundary discipline がここで「provider 抽象境界」として 1 段拡張された形だ。
 
 ### Step 4: struct を定義
 
@@ -6335,6 +6735,7 @@ cargo test
 よくあるエラーと対処:
 
 - **\`error[E0277]: P: BlockNumReader is not satisfied for ...\`** — workspace の \`reth-storage-api\` SHA が他の reth-* SHA と一致していない。Step 1 を再確認。
+- **\`error[E0433]: failed to resolve: use of undeclared crate or module 'reth_provider'\`** — \`crates/evm/Cargo.toml\` の \`[dev-dependencies]\` に \`reth-provider = { workspace = true }\` を書き忘れている (\`reth-storage-api\` ではなく \`reth-provider\` のほう — 後者が test で必要になる concrete provider 型を提供する)。\`test-utils\` feature ではなく **依存自体の追加忘れ**が原因なので、Step 2 の依存リストをそのまま再点検する。
 - **Happy path テストで \`provider has no block with hash 0x000...\`** — \`block_hash(0)\` を query しているのに \`None\` を返している。\`NodeConfig\` で \`.dev()\` mode を使っているか確認する (\`.dev()\` なしの test mode では genesis が事前 seed されないことがある)。
 - **Test が \`matches!(err, BridgeError::Rejected(_))\` で失敗する** — \`build_payload\` が \`BridgeError::Internal\` を伝播している。\`.ok_or_else(|| BridgeError::Rejected(...))\` の行を確認する。代わりに \`.expect(...)\` や \`.unwrap_or(0)\` を使うと error path が発火しない。
 - **Test はコンパイルできるが「P is private」と言われる** — \`LiveRethEvmBridge<P>\` には \`pub struct ... { provider: P, ... }\` が必要だ。\`provider\` が \`pub\` でも、ジェネリックパラメータが \`pub\` であるのは暗黙的になる。
@@ -6454,6 +6855,43 @@ pub struct LiveRethEvmBridge<P> {
 
 このレッスンが教えるのは **producer-consumer の自己整合性パターン** だ。同じ artifact の builder と validator がいる場合、**両者は同じルールを使わなければならない**。\`build_payload\` が 1 つの base-fee 公式を使い、\`validate_payload\` が別の公式を使うと、すべての block が validation に失敗する。これを保証する方法は、**両方を同じソースから導出すること** — ここでは \`ChainSpec\` だ。\`ChainSpec::next_block_base_fee()\` が build に使われ、\`EthBeaconConsensus::validate_against_parent_eip1559_base_fee\` の中で同じヘルパーが check に使われる。**Source-of-truth の共有が、システムを自己整合にする。**
 
+このコースで作る \`LiveRethEvmBridge\` の **build 側と validate 側がどう ChainSpec を共有しているか** を 1 枚に落とすと、なぜ自分の build したブロックが自分の validator に拒否されない (= 自己整合) のかが直感で見える:
+
+\`\`\`
+                       ┌──────────────────────────────────────────┐
+                       │   共通の真実のソース (Source of truth)     │
+                       │   Arc<ChainSpec>                          │
+                       │   ├─ chainId = 2600                       │
+                       │   ├─ hardforks (Cancun / Shanghai / …)    │
+                       │   ├─ genesis (base_fee_per_gas、gas_limit) │
+                       │   └─ EIP-1559 parameters (elasticity 等)    │
+                       └────────────────────┬─────────────────────┘
+                                            │
+                ┌───────────────────────────┼───────────────────────────┐
+                ▼                           │                           ▼
+   chain_spec.next_block_base_fee(...)      │       EthBeaconConsensus<ChainSpec>
+   chain_spec.genesis.gas_limit             │       .validate_header_against_parent(...)
+   …                                        │           ├─ base_fee_per_gas check
+                ▼                           │           ├─ gas_limit drift check (±1/1024)
+   ┌───────────────────────────┐            │           ├─ timestamp monotonicity check
+   │  build_payload(parent)    │            │           └─ post-merge invariants
+   │   ├─ parent_header を引く │ ─[Block]──►│
+   │   ├─ base_fee を計算      │            │       ┌───────────────────────────┐
+   │   ├─ gas_limit をコピー   │            ▼       │  validate_payload(block)  │
+   │   ├─ difficulty = ZERO    │     ──────────────►│   pending/chain から       │
+   │   └─ timestamp 単調化     │                    │   header を引き、         │
+   └───────────────────────────┘                    │   provider から parent    │
+                                                    │   sealed を fetch、       │
+                                                    │   validator を走らせる    │
+                                                    └─────────────┬─────────────┘
+                                                                  │
+                                                                  ▼
+                                                       PayloadStatus::Valid ✅
+                                                       (validator が承認した)
+\`\`\`
+
+両側が **同じ \`Arc<ChainSpec>\` インスタンス** を握っているので、hardfork のたびに変わる base_fee 公式や、ネットワーク固有の gas_limit / elasticity が変わっても、**build と validate のロジックが片方だけ古いまま取り残される** という事故が物理的に起きない。逆に、もし build 側がインラインに base_fee を計算し、validate 側が \`ChainSpec\` を経由するという非対称な実装にしていたら、Cancun 以降のフォークでひっそりと「自分の生成したブロックを自分の validator が拒否する」という silent fork が量産される。**「自己整合性は API で買うのではなく、共有 source-of-truth で買う」**が、この crate の血肉になっている discipline だ。
+
 > 🛑 **考えてみよう。** スクロールする前に: なぜ \`EthBeaconConsensus::validate_header_against_parent\` は parent の **full** な sealed header (gas_limit、timestamp、base_fee_per_gas、すべて) を必要とするのに、\`BlockNumReader::block_number\` は \`u64\` しか返さないのか? ヒント: Reth の validator が走らせる 4 つの sub-check を考える。Number monotonicity は parent.number だけで足りる。Timestamp monotonicity には parent.timestamp が必要だ。Gas-limit drift には parent.gas_limit が必要。EIP-1559 base fee には parent.base_fee_per_gas + parent.gas_used + parent.gas_limit が必要だ。**Validate する瞬間には header 全体が必要で、number だけでは足りない。** だからこそ L13 で trait bound を \`BlockNumReader\` から **加えて** \`HeaderProvider<Header = Header>\` まで拡張する。
 
 ## 手順
@@ -6483,6 +6921,8 @@ reth-primitives-traits    = "0.3"
 - **\`reth-primitives-traits\` (crates.io \`0.3\` から)** — \`SealedHeader\` を提供する。\`Header\` とその hash をペアにするラッパーだ。**これは crates.io 由来であって、git ではない** — stable foundation crate として spin out された。
 
 > 🛑 **やりがちな勘違い。** 「なぜ \`reth-primitives-traits\` だけ crates.io で、他は git-pin なのか?」 **\`reth-primitives-traits\` が、Reth の中で public Rust エコシステム crate として **stabilize** された部分だからだ。** 他の crate (alloy、foundry、custom L2) もすべてこれに依存している。Git SHA で pin すると、crates.io から import している全員とバージョン衝突する — そして皆 crates.io から import している。**Git-pin reth-* dep は主に Reth の「内部」表面で、\`reth-primitives-traits\` は **外部** 表面だ。**
+>
+> *(背景にあるのは Cargo の厳格な制約だ: **crates.io に publish されたパッケージは、Git の特定 revision を \`git = "...", rev = "..."\` で直接指している crate を依存ツリーに含められない** (publish-time に弾かれる)。エコシステム全体で共有される共通トレイト (\`SealedHeader\` / \`BlockHeader\` 等) が Git 依存のままだと、crates.io 上の他のあらゆるライブラリから事実上利用できなくなる。だから「外部表面」になるこのレイヤーだけが Reth から早期に切り出され、crates.io 上に独立して publish (stabilize) されている。型レイアウトの mismatch を防ぐため、こちら側でも workspace で pin したバージョンを継承する。)*
 
 ### Step 2: \`crates/evm/Cargo.toml\` を更新
 
@@ -6856,7 +7296,7 @@ cargo test
   - Timestamp が parent より厳密に大きくない — \`our_timestamp = attrs.timestamp.max(parent_header.timestamp + 1)\` を強制する必要がある。
 - **\`error[E0277]: HeaderProvider not satisfied\`** — workspace の \`reth-storage-api\` SHA が \`reth-provider\` と一致していない。すべての reth-* git-pin dep が同じ SHA を共有しなければならない。
 - **\`error[E0277]: HeaderValidator is not in scope\`** — \`use reth_consensus::HeaderValidator\` を忘れている。Trait はメソッドを呼ぶために scope に入っている必要がある。
-- **\`error: 'next_block_base_fee' not found on ChainSpec\`** — \`use reth_chainspec::EthChainSpec\` を忘れている。\`next_block_base_fee\` は \`ChainSpec\` 自体ではなく \`EthChainSpec\` 拡張 trait の上にある。
+- **\`error: 'next_block_base_fee' not found on ChainSpec\`** — **拡張トレイト \`reth_chainspec::EthChainSpec\` を \`use\` し忘れている**。\`next_block_base_fee\` は \`ChainSpec\` の inherent メソッドではなく、\`EthChainSpec\` trait に定義された extension method なので、Rust のルール上**そのトレイト自体を明示的に \`use\` して scope に入れない限りメソッド解決が走らない** (IDE の auto-import 機能でも、\`EthChainSpec\` トレイトをサジェスト候補に入れて選ぶこと)。修正: \`use reth_chainspec::{ChainSpec, EthChainSpec};\` のように \`ChainSpec\` 型と並べて trait もインポートする。
 
 ## 設計の振り返り
 
@@ -6985,6 +7425,49 @@ pub struct LiveRethEvmBridge<P> {
 \`\`\`
 
 Step 2 が失敗してもログするが伝播はしない — Step 1 がすでに起きており、roll back すると不整合な状態に陥るからだ。**成功の **後** に続く副作用は、成功を **gate する** 副作用とは別物だ。**
+
+\`commit\` が呼ばれた瞬間に何が起こるか、Phase 1 (絶対成功) と Phase 2 (best-effort 副作用) の時間順を 1 枚に落とすと、なぜ Step 2 の失敗で Step 1 を巻き戻してはいけないのかが直感で押さえられる:
+
+\`\`\`
+   [ openhl-consensus ] (Malachite アクター)
+              │
+              │ bridge.commit(block_hash).await
+              ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ ◆ LiveRethEvmBridge::commit()                                     │
+  │                                                                    │
+  │  [ Phase 1: カノニカル確定 (絶対成功する必要がある) ]                │
+  │   ├── state.lock() で Mutex<State> を獲得                            │
+  │   ├── pending から header を lookup (None なら Rejected)             │
+  │   ├── state.chain.insert(hash, header)  ◄── new canonical entry    │
+  │   └── state.head = Some(hash)           ◄── source of truth 更新   │
+  │                                                                    │
+  │   ※ ここを抜けた瞬間、consensus 上は「commit 済み」が確定する。       │
+  │      下流の \`payload_ready\` や次の \`build_payload\` がこの値を読む。   │
+  └──────────────────────────────┬───────────────────────────────────┘
+                                 │ (ローカル確定が成功 — もう引き返せない)
+                                 ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  [ Phase 2: ベストエフォートの副作用 (下流通知、fire-and-mostly-forget) ]│
+  │   ├── ForkchoiceState { head_block_hash, safe = head, finalized = head } │
+  │   └── if let Some(handle) = &self.engine_handle {                      │
+  │           let _ = handle.fork_choice_updated(state, None).await;       │
+  │       }                                                                │
+  └──────────────────────────────┬───────────────────────────────────┘
+                                 │
+                                 ▼ in-process Engine API
+                       ┌──────────────────────────────┐
+                       │ Reth Engine actor              │
+                       │ (現状は body を持たないので    │
+                       │  PayloadStatus::SYNCING で応答)│
+                       └──────────────┬───────────────┘
+                                      │ レスポンスは \`let _ =\` で破棄
+                                      ▼
+                              \`commit\` は Ok(()) を返す
+                              CL 側は何事もなかったかのように次の round へ
+\`\`\`
+
+ポイントは 3 つ: (a) **Phase 1 の \`state.chain.insert\` + \`state.head\` 更新は consensus の "commit 済み" を表す source of truth** であり、ここを抜けたら下流 (\`payload_ready\`、次の \`build_payload\`) が即座にこの値を読みに来る。(b) **Phase 2 の \`fork_choice_updated\` は下流通知の副作用にすぎず、\`SYNCING\` / 接続失敗 / panic が起きてもログに残すだけで \`Err\` には変換しない** — もし Phase 2 失敗で \`Err\` を返したら、consensus は「commit 失敗」と誤認して既に確定した state を巻き戻そうとし、安全性が壊れる。(c) **\`engine_handle: Option<...>\` が \`None\` の場合は Phase 2 自体をスキップ** する — unit test では「Phase 1 だけ走らせて、Reth bootstrap なしに検証」ができる。L14 の integration test は \`Some(handle)\` を渡して両 phase が fire することを assert する。
 
 > 🛑 **考えてみよう。** スクロールする前に: なぜテストは \`commit().await.expect(...)\` が成功することだけを assert し、Reth の canonical chain head が動いたことは assert しないのか? ヒント: \`build_payload\` の出力に何が欠けているかを考える。Engine に渡す \`ExecutedBlock\` は header だけで、トランザクションも receipt も state root も無い。Reth の engine は canonical chain を advance させるために **実際の block body** が必要だ。\`engine_newPayload\` を先に送らない限り、\`fork_choice_updated\` は \`SYNCING\` (「この block をまだ知らない、body を fetch しろ」) を返す。Wire は接続されているが、データが違う。**L14 で証明するのは接続だ。payload execution は将来コースに先送りする。**
 
@@ -7140,7 +7623,7 @@ impl<P> LiveRethEvmBridge<P> {
 
 3 個の新規メソッド:
 
-- **\`with_engine_handle()\`** — consume-and-return-self builder だ。\`mut self\` パラメータが所有権を取り、mutate して return する。canonical な Rust の「builder method」パターン。**\`#[must_use]\`** にしているのは、返り値を bind し忘れる (例: \`bridge.with_engine_handle(h);\`) と、修正された bridge がサイレントに drop されてしまうからだ。
+- **\`with_engine_handle()\`** — consume-and-return-self builder だ。\`mut self\` パラメータが所有権を取り、mutate して return する。canonical な Rust の「builder method」パターン。**\`#[must_use]\`** にしているのは、返り値を bind し忘れる (例: \`bridge.with_engine_handle(h);\`) と、修正された bridge がサイレントに drop されてしまうからだ。**注: これは \`&mut self\` ではなく \`self\` (所有権を消費) なので、\`let bridge = ...; bridge.with_engine_handle(h);\` のように 2 行に分けると \`bridge\` が move out されてしまい、以降の行で \`bridge\` を使えなくなる。**\`let bridge = LiveRethEvmBridge::new(p, c).with_engine_handle(h);\` のようにコンストラクタからチェーンして 1 つの式で書き切るのが idiomatic だ (Step 6 の integration test もまさにこの形)。後から条件付きで engine handle を差し込みたい場合は \`let bridge = if want_engine { LiveRethEvmBridge::new(p, c).with_engine_handle(h) } else { LiveRethEvmBridge::new(p, c) };\` のように、構築 → 設定 → 束縛を 1 つの式に閉じ込める。
 - **\`has_engine_handle()\`** — \`const fn\` accessor。Test と assertion 用だ (「接続が実際に効いたか?」)。\`const\` にしているのは、\`Option::is_some()\` チェックが runtime 計算を必要としないからだ。
 - **\`new()\` 初期化** — 唯一の変更は \`engine_handle: None\` だ。Handle が欲しい caller は \`LiveRethEvmBridge::new(p, c).with_engine_handle(h)\` を使う。
 
@@ -7336,7 +7819,8 @@ cargo test
 
 - **\`error[E0282]: type annotations needed for \`Option<ConsensusEngineHandle<_>>\`** — \`new()\` の \`engine_handle: None\` は型パラメータが推論される必要がある。Struct フィールドの型注釈が欠けているか間違っているか、\`EthEngineTypes\` import を忘れているかだ。Step 3 を再確認。
 - **\`error: cannot find struct \`EthereumAddOns\` in module \`reth_node_ethereum::node\`** — \`reth-node-ethereum\` と他の \`reth-*\` の version drift だ。すべての git-pinned reth dep は同じ SHA を共有しなければならない。
-- **テストが 30 秒以上 hang する** — \`fork_choice_updated\` 呼び出しが return していない可能性が高い。\`let _ = handle.fork_choice_updated(state, None).await\` (\`.await\` 付きで!) を使っているか確認する。\`.await\` が無いと future が完了前に drop されてしまう。
+- **テストが 30 秒以上 hang する** — 最有力原因は **\`EthereumNode\` のバックグラウンドタスク (engine actor、payload builder、libp2p、RPC stub 等) のクリーンアップが遅れ、Tokio runtime の解体がブロックされている**ことだ。テスト末尾で \`EthereumNode\` の所有権が drop される瞬間に、各 actor が \`JoinHandle\` の終了待ちに入るが、未処理の oneshot や残った socket が drop されないと runtime 全体が止まる。テストの最後に \`drop(handle);\` や明示的な \`node.task_executor().graceful_shutdown_with_timeout(...)\` などのクリーンアップが正しく走っているか確認しよう。
+  - 補足: \`let _ = handle.fork_choice_updated(state, None).await\` から **\`.await\` を落とすと** これは **hang ではなく silent skip** になる (\`warning: unused implementor of 'Future'\` が出て、future はその場で drop され、engine への通知そのものがスキップされる)。\`.await\` 忘れは「Reth への通知が走らない」バグなので、テストは hang せずに通り抜けてしまう。挙動が hang か silent skip かで原因の場所が全く違うので、症状を切り分けてからデバッグする。
 - **\`assert!(bridge.has_engine_handle())\` が fail する** — \`with_engine_handle\` は \`#[must_use]\` だが、return を bind し忘れている: \`let bridge = ...new(...); bridge.with_engine_handle(h);\` ではなく、\`let bridge = ...new(...).with_engine_handle(h);\` でなければならない。
 - **Commit が \`Ok\` を返すが、unknown hash テストでも \`Ok\` が返る (rejection なし)** — commit ロジックが local lookup の前に engine パスに到達している。Step 5 を再確認 — \`?\` が \`BridgeError::Rejected\` を伝播し、engine ブロックの前に exit するはずだ。
 
@@ -7437,6 +7921,57 @@ Engine API が、separate な finalization layer を持つ chain 用に設計さ
 
 合計で **40-50 個のソースファイル**。Workspace テスト: 38 個合格。
 
+このコース全体で開通させた **CL ↔ EL 結合の全体像** を 1 枚に落とすと、自分の手で繋ぎ切った境界線がどこを走っているかが一望できる:
+
+\`\`\`
+   [ CL: openhl-consensus ]                          [ EL: openhl-evm ]
+  ┌──────────────────────────────────────────┐    ┌──────────────────────────────────────────┐
+  │  Malachite BFT Engine (actor system)      │    │   LiveRethEvmBridge<P>                    │
+  │                                            │    │                                            │
+  │   ├── OpenHlContext                         │    │    ├── provider: P (BlockNumReader        │
+  │   │   (10 associated types — L6)            │    │    │             + HeaderProvider)         │
+  │   ├── OpenHlSigningProvider                 │    │    ├── chain_spec: Arc<ChainSpec>          │
+  │   │   (Ed25519 + canonical encoding — L7)   │    │    │   (共有 source of truth — L13)         │
+  │   ├── OpenHlCodec                           │    │    ├── validator:                          │
+  │   │   (1 Real + 7 Stub — L8)                │    │    │   EthBeaconConsensus<ChainSpec> (L13) │
+  │   ├── OpenHlNode / OpenHlNodeHandle (L9)    │    │    ├── engine_handle:                      │
+  │   └── run_engine_app loop                   │    │    │   Option<ConsensusEngineHandle> (L14) │
+  │       (12 AppMsg arms — L10)                │    │    └── state: Mutex<{ pending, chain,      │
+  │                                              │    │                       head, … }>          │
+  └──────────────────┬──────────────────────────┘    └──────────────────┬──────────────────────┘
+                     │                                                  ▲
+                     │ ── 4 つの ConsensusBridge メソッド契約越しに対話 ─┘
+                     │   (L3 で定義した trait surface)
+                     │
+                     ├── ① build_payload(parent, attrs)
+                     │     CL ──► EL : 「次の block を組み立てろ」
+                     │     EL ──► CL : PayloadId (即返却、Reth が裏で構築)
+                     │     裏側: provider から parent_header 取得 →
+                     │           ChainSpec::next_block_base_fee + gas_limit copy
+                     │           + timestamp 単調化 → header 合成 → pending に格納
+                     │
+                     ├── ② payload_ready(id)
+                     │     CL ──► EL : 「さっきの PayloadId、ブロック寄越せ」
+                     │     EL ──► CL : ExecutedBlock (pending から回収)
+                     │     ※ 4 method の中で唯一データが EL → CL 方向の seam
+                     │
+                     ├── ③ validate_payload(&block)
+                     │     CL ──► EL : 「peer から来た proposal、検証してくれ」
+                     │     EL ──► CL : PayloadStatus { Valid / Invalid / Syncing }
+                     │     裏側: EthBeaconConsensus::validate_header_against_parent
+                     │           (4 sub-check: number / timestamp / gas-limit / EIP-1559)
+                     │
+                     └── ④ commit(hash)
+                           CL ──► EL : 「2/3+ で合意成立、確定させろ」
+                           EL ──► CL : Ok(())
+                           裏側 Phase 1 (絶対成功): state.chain.insert + head 更新
+                           裏側 Phase 2 (best-effort): ConsensusEngineHandle::
+                               fork_choice_updated → Reth の in-process Engine API
+                               (現状 body 無しなので SYNCING 応答、レスポンスは破棄)
+\`\`\`
+
+ポイントは 3 つ: (a) **左右の世界は L3 で定義した \`ConsensusBridge\` trait の 4 メソッドだけで会話する** — 巨大なインフラ 2 つを繋ぐ唯一の接着面がここに収まっている。(b) **\`run_engine_app\` (L10) が \`B: ConsensusBridge\` ジェネリックなので、StubBridge / InMemoryEvmBridge / RethEvmBridge / LiveRethEvmBridge の 4 種類の bridge が同じ loop で走る** — 多態性の payoff。(c) **\`LiveRethEvmBridge\` 内部の \`chain_spec: Arc<ChainSpec>\` が build_payload と validate_payload の両方で参照される共有 source of truth** で、ここが分かれた瞬間に self-fork が発生する。L1 アーキテクトとしての設計判断はすべて、この 1 枚の図のどこかに焼き込まれている。
+
 ## 4 つの \`ConsensusBridge\` メソッド — 全部 live
 
 各行はコース後のメソッドの最終状態:
@@ -7464,7 +7999,7 @@ Bridge は Reth のストレージ層 (\`HeaderProvider\`)、Reth の chain conf
 - \`fork_choice_updated\` 呼び出しの **前に**、\`handle.new_payload(payload).await\` 経由で送る。
 - レスポンスチェーンを合わせる: \`newPayload → VALID\` → \`forkchoice → VALID\` → canonical head が advance する。
 
-ブロッカーは、payload に入れる EVM-executable なトランザクションをまだ持っていないことだ。OpenHL の matching engine (CLOB) が生成するのは **約定 (fill)** であって、EVM トランザクションではない。約定を EVM トランザクション (あるいは precompile call) にラップするのが、本コースの次の大きな作業になる — おそらく openhl build arc の Module 2 全体に相当する作業だ。
+ブロッカーは、payload に入れる EVM-executable なトランザクションをまだ持っていないことだ。OpenHL の matching engine (CLOB) が生成するのは **約定 (fill)** であって、ユーザーが ECDSA で署名する通常の EVM トランザクションではない。仮にユーザー署名トランザクションとして mempool 経由で流す形にすると、ガスコストと mempool レイテンシが price-time-priority CLOB のパフォーマンスを殺してしまう (HL 系チェーンの存在意義そのものが消える)。代わりに本物の Hyperliquid 型チェーンは、**コンセンサスが合意した約定データを \`build_payload\` / \`newPayload\` のタイミングで「protocol-initiated なシステムトランザクション」あるいは「専用 precompile への直接ステートインジェクション」として、ユーザー署名なしで \`ExecutionPayload\` に差し込む** — \`Vec<Fill>\` を EVM ステートに反映させるルートをコンセンサス側から開通させる、というアプローチを採る。この「約定 → 特権的な system tx / precompile injection としての payload 編入」を組むのが、本コースの次の大きな作業になる — おそらく openhl build arc の Module 2 全体に相当する作業だ。
 
 ### 2. Real \`Codec\` impl
 

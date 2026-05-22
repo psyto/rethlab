@@ -271,6 +271,41 @@ Two types:
 
 > 🛑 **Anti-fluency.** "Why not just `#[derive(Debug)]`?" **Because the default derived `Debug` for `[u8; 32]` prints all 32 bytes.** If anyone ever wraps an `OpenHlPrivateKeyFile` in another `Debug`-derived struct and logs it, the key leaks into stderr / log files / Sentry. A manual `Debug` with `[redacted]` makes this impossible without conscious effort. **Treat private keys like passwords — never let them print.**
 
+The relationship between `OpenHlNode` and `OpenHlNodeHandle` in one diagram makes the central design choice of this lesson — **separating construction (static config) from execution (dynamic actor system) into two distinct types** — immediately intuitive:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ◆ Lifecycle 1: static config / construction (Node)                       │
+│                                                                          │
+│   OpenHlNode {                                                            │
+│       private_key, validator_set,                                         │
+│       home_dir, moniker, …                                                │
+│   }                                                                       │
+│                                                                          │
+│   • Created once at process start, long-lived                             │
+│   • Engine **is not running yet** (just config in hand)                   │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             │  .start().await   ◄── handshake (Node trait)
+                             │                        executes (Step 5)
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ◆ Lifecycle 2: dynamic execution / actor system (Handle)                 │
+│                                                                          │
+│   OpenHlNodeHandle {                                                      │
+│       engine   : EngineHandle           ──► ractor cell + libp2p running │
+│       channels : Mutex<Option<Channels<OpenHlContext>>>                   │
+│                                         ──► L10's app loop pulls it out  │
+│                                            exactly once via `take()`     │
+│   }                                                                       │
+│                                                                          │
+│   • Returned by `start()`; lives until `.kill().await`                   │
+│   • Ownership flows Node → Handle → app loop in one direction            │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+Three things this picture pins down: (a) **`OpenHlNode` only holds config — it doesn't own an actor system** — calling `start()` is what spins up any threads at all. (b) **`OpenHlNodeHandle` owns both the running actor system and the comm channels** — the engine and libp2p lifetimes are bound to this handle. (c) **`Mutex<Option<Channels<...>>>` is a one-way ownership gate** — once `take()` hands it to L10's app loop, it can never be reclaimed, and "already consumed" is expressed at the type level as `None`. L9's `run()` method returns an "unimplemented" error precisely because the (c) consumer side (L10's **app loop**) hasn't been written yet.
+
 ### Step 4: `OpenHlNodeHandle` — what `start()` returns
 
 ```rust
@@ -453,7 +488,7 @@ This is the load-bearing block. Walk through:
 **The 12 methods**:
 
 | Method | Purpose | Body |
-| - | - | - |
+| :--- | :--- | :--- |
 | `get_home_dir` | Where the node stores its data | Returns the path passed at construction |
 | `load_config` | Build the config (re-callable) | Constructs `OpenHlConfig`, then overrides the listen address to ephemeral local |
 | `get_address` | SHA-256 hash → 20-byte address | Last 20 of the 32-byte digest |
@@ -581,6 +616,8 @@ Four tests:
 The smoke test is roughly **0.02 seconds** wall-clock. The bulk is libp2p setting up the local listener — even on a tcp/0 ephemeral port, libp2p's negotiation has a fixed cost.
 
 > 🛑 **Anti-fluency.** "Why `flavor = 'multi_thread'`?" **Because the engine spawns multiple actors, each on its own task.** A single-threaded runtime can run them all on one thread — but the engine has internal `block_on` patterns that would deadlock under single-thread. Multi-thread runtime works around this. **This is the kind of detail that's invisible at the API level but lethal at the test-failure level.**
+>
+> *(Concretely: if a synchronous wait like `tokio::runtime::Handle::current().block_on(...)` runs in the middle of an async context, a `current_thread` runtime hard-locks its only worker. The future being `await`ed inside `block_on` has no executor to drive it forward, and the actor-initialization future **hangs forever** — not a timeout, not a panic, a pure deadlock. With `multi_thread`, a sibling worker thread can pick up the remaining future and the pattern unblocks. The Malachite / ractor / libp2p stack hits this shape several times internally, which is why tests have to force multi-threaded execution.)*
 
 ## Test
 

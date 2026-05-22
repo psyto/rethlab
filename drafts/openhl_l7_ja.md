@@ -137,6 +137,25 @@ pub fn vote_signing_bytes(v: &OpenHlVote) -> Vec<u8> {
 | 18..50 (Val の場合) | `value_id` 本体 | BlockHash の 32 バイト |
 | 18..38 OR 50..70 | `address` | 20 バイト |
 
+`value_id = Val(...)` のときの 70 バイトの並びをメモリ図にすると、署名対象になるバイト列の正体が 1 枚で見える:
+
+```
+【 Vote (Val ケース) の canonical signing-bytes — 全 70 バイト 】
+
+┌────────────────┬────────────────┬───┬───┬───────────────────────────────┬─────────────────────────┐
+│   Height (8B)  │   Round (8B)   │Typ│Tag│      Value ID  (32B / hash)    │ Validator Address (20B) │
+└────────────────┴────────────────┴───┴───┴───────────────────────────────┴─────────────────────────┘
+ 0              8               16  17  18                              50                         70  (offset / bytes)
+ [── u64 LE ──] [── i64 LE ──]   │   │   [─────── BlockHash 本体 ───────] [───── 20-byte Eth addr ──]
+                                 │   │
+                                 │   └── 0 = Nil  /  1 = Val            (※ Nil なら本体 32B は省略され、addr が 18..38 に来る)
+                                 └────── 0 = Prevote  /  1 = Precommit
+
+  どの validator が、どの host (x86 / ARM / RISC-V / …) でこの関数を走らせても、
+  上の 70 バイトは **完全に同一** に生成される ─ 1 バイトのズレも許されない。
+  この 70 バイトが「Ed25519 が署名するメッセージ」そのものになる。
+```
+
 **なぜ little-endian?** x86 / ARM ホストでの慣習だからだ。**なぜ tag バイトを付ける?** `NilOrVal::Nil` は 1 バイト (tag 0)、`NilOrVal::Val` は 33 バイト (tag 1 + 32 バイトのハッシュ) になる。Tag があるので、パーサがどちらか判別できる。**なぜ validator address を含めるのか?** Vote は **どの** vote かだけでなく **誰の** vote かも表すからだ。同じ proposal に対して 100 人の validator が vote すれば、それぞれ別の signing-bytes 文字列が生成される。
 
 > 🛑 **やりがちな勘違い。** 「`bincode::serialize(v)` の結果に署名するだけではダメか?」 **ダメだ。** 既製のシリアライゼーション形式は、ライブラリのバージョンが上がると変わりうる — 今日署名するものと明日署名するものが、struct は同一でも違ってしまう可能性がある。**canonical** encoding は自分で 1 バイト単位までコントロールするものだ。本番 chain では encoding を protobuf スキーマで定義するか、ここのように手書きで定義する。どちらにせよ encoding は chain の wire format spec の一部になる。
@@ -327,7 +346,7 @@ impl OpenHlSigningProvider {
 
 構造体は `PrivateKey` を保持する。コンストラクタは外から鍵を受け取る (通常はディスクや環境変数から)。`public_key()` は対応する public key をオンデマンドで導出する — Ed25519 では private key からスカラー乗算で public key を導出でき、ミリ秒オーダーで済む。
 
-`use` ブロックは `signing.rs` から低レベル関数を `as sign_X_with` のリネーム付きで import する。**なぜリネームするのか?** `SigningProvider` trait に `sign_vote` と `sign_proposal` という名前のメソッドがあり、自前ヘルパーを名前衝突なしで呼びたいからだ。`_with` サフィックスは「これは trait メソッドが委譲する先の実装関数」を表す慣習。
+`use` ブロックは `signing.rs` から低レベル関数を **`_with` サフィックスを付けたリネーム形式** (`sign_vote as sign_vote_with`、`sign_proposal as sign_proposal_with`) で import する。**なぜリネームするのか?** `SigningProvider` trait 側に `sign_vote` と `sign_proposal` という名前のメソッドがあり、自前ヘルパーを名前衝突なしで呼びたいからだ。`_with` サフィックスは「これは trait メソッドが委譲する先の実装関数」を表すローカル慣習で、特別なマクロや言語機能ではない (上のコードの `as ...` がそのまま新しい名前を作っているだけ)。
 
 ### Step 8: `SigningProvider` trait を実装 — 4 つの sign/verify ペア
 
@@ -598,6 +617,8 @@ test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 2. **`SigningProvider` は純粋関数 `sign_vote` をラップし、鍵を状態として持つ。** `sign_vote` を `OpenHlSigningProvider` のメソッドにすることもできた。分離することで、**テスト** や **内部コード** は `sign_vote(vote, &sk)` を直接呼び (鍵を引数で渡す)、**Malachite エンジン** は trait メソッド `sp.sign_vote(vote)` を使える (provider が保持する鍵にバインドされている)。**同じロジックを、重複なく両方のユースケースに提供できる。**
 
 3. **ProposalPart と Extension の空バイト署名。** Trait 表面がメソッドを要求するが、chain がその機能を使わない場合は、空データに対する確定的で検証可能な署名を提供する。これで、持っていないデータにコミットすることなく trait を honor できる。これらの機能を使う本番 chain は実データを入れる。こちらは入れないが、どちらの場合もエンジンはクラッシュしない。
+
+4. **`VerifierLike` shim による「依存性の汚染 (Leaky Abstraction) の遮断」。** Step 5 で導入した 1 メソッド trait は、純粋に依存グラフをきれいに保つためだけに存在する。具体的には: Malachite の `PublicKey` は外部 crate `signature` の `Verifier` trait 経由で検証を提供しているので、もし `verify_vote(v, sig, pk)` が直接 `signature::Verifier::verify(...)` を呼ぶと、**こちらの consensus crate の公開 API surface に `signature` crate の trait を import させる責務が漏れ出す** ことになる。すると将来 Malachite が `signature` を別の crypto ライブラリ (新しい crate、別 trait 名) に差し替えた瞬間に、**こちらの crate の利用者 (L8 以降のレッスンを含む) すべてが breaking change を踏む**。`VerifierLike` という自前の薄い trait を 1 枚かませておけば、`signature` の存在は `signing.rs` の `impl VerifierLike for PublicKey` という 5 行に閉じ込められ、外部 crate の変動はそこを 1 行直すだけで吸収できる。**「自分の crate の API に他人 (依存先) の trait を直接出さない」**という discipline の、コード 8 行で買える最小コストの実装例だ。
 
 ## 答え合わせ
 

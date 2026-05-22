@@ -32,6 +32,10 @@
 検証:
 
 ```bash
+# L6 で書いた 5 テストだけに集中したいとき (他 crate の noise を排除):
+cargo test -p openhl-consensus context::tests
+
+# crate 全体を走らせる:
 cargo test -p openhl-consensus
 ```
 
@@ -85,6 +89,26 @@ crates/consensus/Cargo.toml:
 > - `OpenHlContext::select_proposer` の **specific なアルゴリズム**
 >
 > **なぜこの 2 つは validator 間で一致しなければならないのか?** ヒント: 同じ (height, round) で validator が違う proposer を選んだら、chain はどうなるか?
+
+本レッスンで触る `crates/consensus/src/` 配下の最終的なファイル構造はこうなる。8 個の新規ファイルがどの step で生まれるか、`types/` サブディレクトリにどう並ぶかを 1 枚で押さえておくと、step を進めながら現在地を見失わずに済む:
+
+```
+crates/consensus/src/
+├── lib.rs               (Step 7: 全モジュールを束ねる)
+├── bridge.rs            (L3 で書いた ConsensusBridge trait、変更なし)
+├── context.rs           (Step 6: OpenHlContext + 4 factory + テスト) ★中央
+└── types/               (Step 2: ディレクトリ + mod.rs を作成)
+    ├── mod.rs           (Step 2: サブモジュールの index / re-export)
+    ├── address.rs       (Step 3: 20-byte validator アドレス)
+    ├── height.rs        (Step 3: モノトニックな u64 height カウンタ)
+    ├── value.rs         (Step 3: BlockHash の薄いラッパー)
+    ├── validator.rs     (Step 4: バリデータ + canonical ソート済み set) ★最重要
+    ├── proposal.rs      (Step 5: Proposal メッセージ)
+    ├── proposal_part.rs (Step 5: dummy ProposalPart、v0 は full-block)
+    └── vote.rs          (Step 5: Vote メッセージ、prevote/precommit)
+```
+
+「8 つの新規ファイル」と聞くと多く感じるが、実態は **types/ 配下が 8 個 (`mod.rs` + 7 つの型ファイル) + 1 個 (`context.rs`) = 9 個**、しかも各ファイルが 1 つの設計判断を 1 個ずつ抱えているため、独立してレビュー・テスト可能になっている。**Step 3 (シンプル 3 型) → Step 4 (難関: validator) → Step 5 (3 メッセージ型) → Step 6 (中央 binding)** という順序は、依存方向に沿った最短経路だ。
 
 ## 手を動かす walk-through
 
@@ -572,6 +596,25 @@ proposer-election アルゴリズムだ。**`(height + round) % count`** がソ�
 3. したがって全 validator が同じ proposer を選ぶ。
 
 算術は注意深い: `u64` での `wrapping_add` で overflow を回避し、`% count` で valid な index になる。`.expect` は証明可能だ: `... % count` で計算したのだから `index < count` が成り立つ。
+
+`(height + round) % count` が実際にどう validator を回転させるか、3 validator (A: 300 stake / B: 200 / C: 100) の小さな例で追うと一目で見える:
+
+```
+ソート済みセット (voting_power 降順、tiebreak は address 昇順):
+   Index 0 ──► Validator A (stake 300)
+   Index 1 ──► Validator B (stake 200)
+   Index 2 ──► Validator C (stake 100)
+
+決定的な proposer 選択:
+   Height 1, Round 0 ──► (1 + 0) % 3 = 1 ──► Proposer: B
+   Height 1, Round 1 ──► (1 + 1) % 3 = 2 ──► Proposer: C  (round が進むと rotation)
+   Height 1, Round 2 ──► (1 + 2) % 3 = 0 ──► Proposer: A
+   Height 2, Round 0 ──► (2 + 0) % 3 = 2 ──► Proposer: C  (height が進んでも rotation)
+   Height 2, Round 1 ──► (2 + 1) % 3 = 0 ──► Proposer: A
+   ...
+```
+
+ここで効いてくるのが Step 4 で見た「canonical sort order」だ。**もし validator A 側で `[A, B, C]`、validator B 側で `[B, A, C]` の順にソートされていたら**、同じ `(height=1, round=0)` を投げても A は「Index 1 = B」を、B は「Index 1 = A」を proposer として認識する。**最初の round で誰を proposer と認めるかが食い違い、chain は即座に fork する。** ソート順 = proposer-election protocol の本体、というのはこういう意味だ。
 
 続いて `new_proposal`、`new_prevote`、`new_precommit` — 型付きメッセージを構築する 3 つの factory method:
 

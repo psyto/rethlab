@@ -31,6 +31,10 @@ Concepts you'll grasp in this lesson:
 Verification:
 
 ```bash
+# Focused: just the 5 tests this lesson lands (avoids noise from other crates):
+cargo test -p openhl-consensus context::tests
+
+# Whole crate:
 cargo test -p openhl-consensus
 ```
 
@@ -84,6 +88,26 @@ The shape of these types **propagates everywhere downstream**. L7 (SigningProvid
 > - `OpenHlContext::select_proposer` uses a **specific algorithm**
 >
 > **Why must these two agree across validators?** Hint: what happens to the chain if validators pick different proposers for the same (height, round)?
+
+By the end of this lesson, the layout under `crates/consensus/src/` looks like this. Holding the final tree in mind — which step produces which file, and how the seven type files sit inside `types/` — keeps you from losing your place as you walk through the steps:
+
+```
+crates/consensus/src/
+├── lib.rs               (Step 7: bundles every module)
+├── bridge.rs            (the ConsensusBridge trait from L3, unchanged here)
+├── context.rs           (Step 6: OpenHlContext + 4 factories + tests) ★ centerpiece
+└── types/               (Step 2: creates the directory + mod.rs)
+    ├── mod.rs           (Step 2: submodule index / re-exports)
+    ├── address.rs       (Step 3: 20-byte validator address)
+    ├── height.rs        (Step 3: monotonic u64 height counter)
+    ├── value.rs         (Step 3: thin wrapper around BlockHash)
+    ├── validator.rs     (Step 4: validator + canonically sorted set) ★ most critical
+    ├── proposal.rs      (Step 5: Proposal message)
+    ├── proposal_part.rs (Step 5: dummy ProposalPart; v0 is full-block)
+    └── vote.rs          (Step 5: Vote message; prevote / precommit)
+```
+
+"Eight new files" sounds like a lot, but the actual count is **8 files under `types/` (`mod.rs` + 7 type files) + 1 file (`context.rs`) = 9**, and each file carries one independent design decision, which keeps them individually reviewable and testable. The order — **Step 3 (simple trio) → Step 4 (hard one: validator) → Step 5 (three message types) → Step 6 (the central binding)** — follows the dependency direction along the shortest path.
 
 ## Walk-through
 
@@ -571,6 +595,25 @@ The proposer-election algorithm. **`(height + round) % count`** picks an index i
 3. Therefore every validator picks the same proposer.
 
 The arithmetic is careful: `wrapping_add` on `u64` avoids overflow; `% count` then yields a valid index. The `.expect` is provable: `index < count` because we just computed it as `... % count`.
+
+How `(height + round) % count` actually rotates the proposer is best seen on a small example — 3 validators (A: 300 stake / B: 200 / C: 100):
+
+```
+Sorted set (voting_power descending, then address ascending as tiebreak):
+   Index 0 ──► Validator A (stake 300)
+   Index 1 ──► Validator B (stake 200)
+   Index 2 ──► Validator C (stake 100)
+
+Deterministic proposer selection:
+   Height 1, Round 0 ──► (1 + 0) % 3 = 1 ──► Proposer: B
+   Height 1, Round 1 ──► (1 + 1) % 3 = 2 ──► Proposer: C  (round advances → rotates)
+   Height 1, Round 2 ──► (1 + 2) % 3 = 0 ──► Proposer: A
+   Height 2, Round 0 ──► (2 + 0) % 3 = 2 ──► Proposer: C  (height advances → also rotates)
+   Height 2, Round 1 ──► (2 + 1) % 3 = 0 ──► Proposer: A
+   ...
+```
+
+This is where the canonical sort order from Step 4 earns its keep. **If validator A sorts the set as `[A, B, C]` while validator B sorts it as `[B, A, C]`**, then for the same `(height=1, round=0)`, A reads "Index 1 = B" while B reads "Index 1 = A" — they pick *different* proposers. **The chain forks at the very first round.** "The sort order is the proposer-election protocol" is what that means in practice.
 
 Then `new_proposal`, `new_prevote`, `new_precommit` — three factory methods that construct typed messages:
 

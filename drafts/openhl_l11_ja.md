@@ -77,7 +77,7 @@ bin/openhl/             — 空のバイナリ stub
 
 このレッスンが教えるのは **依存共存の検証パターン** だ。大きなインフラ crate を 2 つ (今回は Reth と Malachite) に依存する場合、衝突は integration コードを書いて初めて判明する — その時点では、**動くはずなのに** コンパイルできないコードに大量投資済みになっている。**検証パターンは、integration を書く前に、両方を同時に exercise する最小のテストを書くことだ。** Test が pass すれば両方の dep が resolve・link される。失敗すれば失敗が即座に visible になり、blast radius が小さくて済む。
 
-> 🛑 **考えてみよう。** スクロールする前に: なぜゴールコマンドで bootstrap test を `--release` で走らせるのか? ヒント: compile time とその支配要因を考える。Reth の MDBX bindings + libp2p + alloy + rocksdb 系ストレージスタックは **巨大** だ — debug mode の初回コンパイルは ~2:34、release も同程度だが、結果バイナリは大幅に高速になる。Test 自体は bootstrap と chain-ID チェックだけなので、**初回コンパイル後** は fast compile よりも fast runtime のほうが欲しい。初回 cold ビルド後は `--release` で走らせる。
+> 🛑 **考えてみよう。** スクロールする前に: なぜゴールコマンドで bootstrap test を `--release` で走らせるのか? ヒント: compile time とその支配要因を考える。Reth の MDBX bindings + libp2p + alloy + rocksdb 系ストレージスタックは **巨大** だ — 初回コンパイルはマシンパワーを使い切るレベルで、**高速なマルチコアワークステーションでも debug mode ~2:34、ラップトップ環境やリソース制限のあるマシンでは 5-10 分かかることも珍しくない** (Reth 単体だけで ~600 crate のツリー)。Release も同程度の時間を食うが、結果バイナリは大幅に高速になる。Test 自体は bootstrap と chain-ID チェックだけなので、**初回コンパイル後** は fast compile よりも fast runtime のほうが欲しい。初回 cold ビルド後は `--release` で走らせる。途中で進行ログが止まって見えてもフリーズではない — 別のことをしながら待つ。
 
 ## 手順
 
@@ -267,6 +267,33 @@ JSON は `serde_json::from_str(...)` で `Genesis` に parse され、`genesis.i
 
 > 🛑 **やりがちな勘違い。** 「なぜ Rust で `ChainSpec` を直接構築せず、raw JSON 文字列を使うのか?」 **Reth の `ChainSpec` builder には 50 以上のフィールドと複雑な内部 invariant があるからだ。** プログラマチックに構築するということは、最近のフォークごとに必要なフィールドに自分で追いついていくことを意味する。`Genesis` deserializer 経由で JSON から構築すれば、Reth 自身の型システムにデフォルトと validity を強制させられる。**JSON フォーマットはどのみち chain の外部インターフェースだ** — production chain はすべて同じ JSON 形を使う (`reth-chainspec/res/genesis/mainnet.json` を見よ)。
 
+L11 のテストが実際に何をブートさせているのか、Tokio runtime 上の task 配置で 1 枚にまとめると見える。L9-L10 までは左半分 (Malachite 側) だけが動いていたが、L11 以降は **同じ runtime 上に右半分 (Reth 側) が同居する**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ◆ 共有の単一 multi-thread Tokio Runtime (worker_threads = 4)                 │
+│                                                                              │
+│  ┌────────────────────────────────────┐  ┌─────────────────────────────────┐│
+│  │ [側 A: Malachite Consensus 世界]    │  │ [側 B: Live Reth EL 世界]        ││
+│  │  (L9-L10 で立ち上げ済み)             │  │  (L11 でブート、L12 以降で連結)  ││
+│  │                                     │  │                                 ││
+│  │ ├─ Engine Driver Actor Tasks        │  │ ├─ TaskExecutor                 ││
+│  │ │   (BFT 状態遷移、proposer 選択)    │  │ │   (Reth バックグラウンド管理) ││
+│  │ ├─ libp2p Network Task              │  │ ├─ MDBX Storage Engine Task     ││
+│  │ │   (P2P gossip、CI では isolated)   │  │ │   (tempdir 上の state DB)     ││
+│  │ ├─ WAL / Storage Tasks              │  │ ├─ Payload Builder Task         ││
+│  │ └─ run_engine_app Loop Task         │  │ ├─ Mempool Task                 ││
+│  │     (L10 で書いた message router)    │  │ └─ Engine API / RPC Stub Tasks  ││
+│  └────────────────────────────────────┘  └─────────────────────────────────┘│
+│                                                                              │
+│  L11 のテストは、これら 2 つの世界が同一プロセス・同一 runtime で                │
+│  リソース (スレッド / ポート / Cargo の feature) を衝突させずに共存できるかの    │
+│  「ハンドシェイク」を検証している (まだ A と B の間に直接の通信線は無い)。       │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+ポイントは「**この時点で A と B はまだ直接話していない**」ことだ。L11 が証明するのは「両者が同じ Tokio runtime 上で衝突せずに立ち上がる」だけで、`run_engine_app` ↔ `LiveRethEvmBridge` 経由のメッセージ往来は L12-L15 で接続される。それでも、Reth v2.2.0 と Malachite v0.5.0 という 2 つの大規模クレートツリーが Cargo の feature unification と version 制約をすり抜けて 1 workspace に同居できることが、ここで初めて build と test の両方で証明される。
+
 ### Step 5: `launch_and_check` ヘルパー
 
 `dev_chain_spec` の下:
@@ -384,7 +411,7 @@ cargo test
 - **`error[E0432]: unresolved import 'reth_node_builder'`** — `crates/evm/Cargo.toml` で `test-utils` feature が抜けている。Step 2 を再確認: `features = ["test-utils"]` であること。
 - **`error: failed to resolve: use of undeclared crate or module 'reth_provider'`** — workspace レベルで `reth-provider = ...` が抜けている。Step 1 を再確認。
 - **`error: feature 'test-utils' on 'reth-node-builder' requires feature 'X'`** — version skew だ。Pin している Reth SHA が `reth-node-builder` の peer crate の期待と一致する必要がある。すべての reth-* dep (12 個) が同じ SHA を使っているか、Step 1 を再確認。
-- **`Reth dev node bootstrap failed: Failed to bind...`** — 前回の test run からのポート衝突だ。`NodeConfig::test()` はエフェメラルポートを使うが、tempdir の stale 状態が衝突を生むことがある。`cargo clean -p openhl-evm` してから retry する。
+- **`Reth dev node bootstrap failed: Failed to bind...`** — `NodeConfig::test()` は内部で **`:0` (カーネル自動割り当ての ephemeral port)** を要求しているので、本来は物理的なポート衝突は起きない設計だ。それでもこのエラーが出るときは、**直前のテスト run が panic や Ctrl+C で異常終了し、Tokio runtime の drop が遅延して、Reth が掴んでいた socket / MDBX lock がプロセス側にゾンビとして残っている** ことがほぼ唯一の原因だ。対処は `cargo clean` ではなく (clean しても OS レベルのポート占有は解放されない): (1) **数秒〜十数秒待ってから再実行** (大半はこれで通る)、それでもダメなら (2) `pgrep -f openhl-evm` / `pgrep -f reth` で生き残ったテストプロセスを探して `kill`、最終手段として (3) シェルを開き直して新しいプロセス空間にする。
 - **Test はコンパイルできるが 30 秒以上 hang する** — `Runtime::test()` が正しく動いていない。Single-thread default ではなく `#[tokio::test(flavor = "multi_thread", worker_threads = 4)]` を使っているか確認する。
 
 ## 設計の振り返り

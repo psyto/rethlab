@@ -271,6 +271,41 @@ impl std::fmt::Debug for OpenHlPrivateKeyFile {
 
 > 🛑 **やりがちな勘違い。** 「なぜ `#[derive(Debug)]` ではダメなのか?」 **デフォルトで derive される `Debug` は `[u8; 32]` の 32 バイト全部を print するからだ。** 誰かが `OpenHlPrivateKeyFile` を別の `Debug`-derive 構造体でラップしてログに出すと、key が stderr / log file / Sentry にリークする。`[redacted]` 付きの手書き `Debug` なら、意図的に変更しない限りこれは起こりえない。**Private key はパスワードと同等に扱い、絶対に print させない。**
 
+ここから先で扱う `OpenHlNode` と `OpenHlNodeHandle` の関係を 1 枚で見ると、本レッスンの設計判断 — 「**構築 (静的な設定) と実行 (動的な actor system) を別の型に住み分けさせる**」 — が直感で押さえられる:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ◆ ライフサイクル 1: 静的な設定・構築 (Node)                              │
+│                                                                          │
+│   OpenHlNode {                                                            │
+│       private_key, validator_set,                                         │
+│       home_dir, moniker, …                                                │
+│   }                                                                       │
+│                                                                          │
+│   ・プロセス起動時に 1 回 new、長命                                       │
+│   ・engine は**まだ走っていない** (config を保持しているだけ)             │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             │  .start().await   ◄── handshake (Node trait)
+                             │                        の実行 (Step 5)
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ◆ ライフサイクル 2: 動的な実行・actor system (Handle)                    │
+│                                                                          │
+│   OpenHlNodeHandle {                                                      │
+│       engine   : EngineHandle           ──► ractor cell + libp2p が起動中 │
+│       channels : Mutex<Option<Channels<OpenHlContext>>>                   │
+│                                         ──► L10 の app loop が `take()`  │
+│                                            で 1 回だけ引き抜く            │
+│   }                                                                       │
+│                                                                          │
+│   ・`start()` の戻り値、`.kill().await` するまで生存                      │
+│   ・所有権の流れは Node → Handle → app loop の一方通行                    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+ポイントは 3 つ: (a) **`OpenHlNode` は config を抱えるだけで、actor system を所有しない** — `start()` を呼ぶまで何のスレッドも立たない。(b) **`OpenHlNodeHandle` は実行中の actor system + 通信チャネルを所有** — engine と libp2p のライフタイムはこの handle に bind されている。(c) **`Mutex<Option<Channels<...>>>` は所有権の一方通行ゲート** — `take()` で L10 の app loop に渡したら二度と取り戻せず、「もう消費済み」を `None` という値で型レベルに表明する。L9 の `run()` メソッドが「未実装」エラーを返すのは、この (c) の **app loop 側 (L10)** がまだ書かれていないからだ。
+
 ### Step 4: `OpenHlNodeHandle` — `start()` が返すもの
 
 ```rust
@@ -453,7 +488,7 @@ impl Node for OpenHlNode {
 **12 個のメソッド**:
 
 | メソッド | 目的 | 本体 |
-| - | - | - |
+| :--- | :--- | :--- |
 | `get_home_dir` | Node がデータを保存する場所 | 構築時に渡された path を返す |
 | `load_config` | Config を作る (再呼出可) | `OpenHlConfig` を構築し、listen address をエフェメラル local にオーバーライド |
 | `get_address` | SHA-256 ハッシュ → 20 バイト address | 32 バイト digest の最後の 20 バイト |
@@ -581,6 +616,8 @@ mod tests {
 Smoke test の wall-clock はおおよそ **0.02 秒**。大部分は libp2p がローカル listener を立ち上げる時間だ — tcp/0 のエフェメラルポートでも、libp2p のネゴシエーションには固定コストがある。
 
 > 🛑 **やりがちな勘違い。** 「なぜ `flavor = 'multi_thread'` なのか?」 **エンジンが複数 actor をそれぞれの task として spawn するからだ。** Single-threaded runtime でも 1 スレッドに全部回せる — だが、エンジン内部に single-thread だと deadlock する `block_on` パターンがある。Multi-thread runtime で回避する。**API レベルでは見えないが、テスト失敗レベルでは致命的な詳細だ。**
+>
+> *(具体的には: 非同期コンテキストの最中に `tokio::runtime::Handle::current().block_on(...)` のような同期的待機が走ると、`current_thread` runtime ではその唯一のワーカースレッドが完全にロックされる。すると `block_on` の内側で `await` されている future を進ませる実行者がいなくなり、actor 初期化 future が**永久にハング**する — タイムアウトや panic にすらならない、純粋な deadlock だ。`multi_thread` 版なら別のワーカースレッドが残りの future を拾えるので、この pattern が通り抜ける。Malachite / ractor / libp2p の組み合わせは内部で何度かこの形を踏むので、テスト側で multi-thread を強制する必要がある。)*
 
 ## テスト
 

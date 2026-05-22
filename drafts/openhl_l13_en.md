@@ -79,6 +79,44 @@ Seven things:
 
 This lesson teaches **the producer-consumer self-consistency pattern**. When you have a builder and a validator for the same artifact, **they must use the same rules**. If `build_payload` uses one base-fee formula and `validate_payload` uses another, every block fails validation. The way you ensure this is to **derive both from the same source** — here, the `ChainSpec`. `ChainSpec::next_block_base_fee()` is what builds, and inside `EthBeaconConsensus::validate_against_parent_eip1559_base_fee` the same helper is what checks. **Sharing the source-of-truth is what makes the system self-consistent.**
 
+Drawing how the build side and validate side of `LiveRethEvmBridge` share the `ChainSpec` in a single picture makes it immediately obvious why blocks we build won't be rejected by our own validator (i.e. self-consistent):
+
+```
+                       ┌──────────────────────────────────────────┐
+                       │   Shared source of truth                   │
+                       │   Arc<ChainSpec>                          │
+                       │   ├─ chainId = 2600                       │
+                       │   ├─ hardforks (Cancun / Shanghai / …)    │
+                       │   ├─ genesis (base_fee_per_gas, gas_limit)│
+                       │   └─ EIP-1559 parameters (elasticity etc.)│
+                       └────────────────────┬─────────────────────┘
+                                            │
+                ┌───────────────────────────┼───────────────────────────┐
+                ▼                           │                           ▼
+   chain_spec.next_block_base_fee(...)      │       EthBeaconConsensus<ChainSpec>
+   chain_spec.genesis.gas_limit             │       .validate_header_against_parent(...)
+   …                                        │           ├─ base_fee_per_gas check
+                ▼                           │           ├─ gas_limit drift check (±1/1024)
+   ┌───────────────────────────┐            │           ├─ timestamp monotonicity check
+   │  build_payload(parent)    │            │           └─ post-merge invariants
+   │   ├─ pull parent_header   │ ─[Block]──►│
+   │   ├─ compute base_fee     │            │       ┌───────────────────────────┐
+   │   ├─ copy gas_limit       │            ▼       │  validate_payload(block)  │
+   │   ├─ difficulty = ZERO    │     ──────────────►│   look up the header in   │
+   │   └─ enforce timestamp    │                    │   pending/chain, fetch    │
+   │      monotonicity         │                    │   the parent sealed       │
+   └───────────────────────────┘                    │   header from the         │
+                                                    │   provider, run the       │
+                                                    │   validator               │
+                                                    └─────────────┬─────────────┘
+                                                                  │
+                                                                  ▼
+                                                       PayloadStatus::Valid ✅
+                                                       (validator approved)
+```
+
+Because both sides hold **the same `Arc<ChainSpec>` instance**, no matter how the base-fee formula evolves across hard forks or how network-specific `gas_limit` / elasticity changes, **the build and validate logics can never drift apart** with one side stuck on the old rule. Conversely, if the build side computed base fees inline while the validate side went through `ChainSpec`, every fork starting from Cancun would silently start producing "blocks I built that my own validator rejects" — a silent fork at the bridge level. **"Self-consistency isn't bought through an API; it's bought through a shared source of truth"** is the discipline this crate carries in its bones.
+
 > 🛑 **Predict.** Before scrolling: why does `EthBeaconConsensus::validate_header_against_parent` need the parent's *full* sealed header (with gas_limit, timestamp, base_fee_per_gas, all the fields), but `BlockNumReader::block_number` only gives us a `u64`? Hint: think about the four sub-checks Reth's validator runs. Number monotonicity only needs parent.number. But timestamp monotonicity needs parent.timestamp. Gas-limit drift needs parent.gas_limit. EIP-1559 base fee needs parent.base_fee_per_gas + parent.gas_used + parent.gas_limit. **As soon as you need to validate at all, you need the whole header — not just the number.** That's why L13 widens the trait bound from `BlockNumReader` to *also* `HeaderProvider<Header = Header>`.
 
 ## Walk-through
@@ -108,6 +146,8 @@ Three deps, three roles:
 - **`reth-primitives-traits` from crates.io `0.3`** — provides `SealedHeader`, the wrapper that pairs `Header` with its hash. **This one comes from crates.io, not git** — it's been spun out as a stable foundation crate.
 
 > 🛑 **Anti-fluency.** "Why is `reth-primitives-traits` from crates.io while everything else is git-pinned?" **Because `reth-primitives-traits` is the part of Reth that's been *stabilized* as a public Rust ecosystem crate.** Other crates (alloy, foundry, custom L2s) all depend on it. Pinning it to the git SHA would force version conflicts with anyone who imports it from crates.io — which is everyone. **The git-pinned reth-* deps are mainly Reth's "internal" surface; `reth-primitives-traits` is the *external* one.**
+>
+> *(The underlying mechanism is a strict Cargo constraint: **a package published to crates.io cannot have a dependency tree that includes any crate referenced by a Git revision (`git = "...", rev = "..."`)** — `cargo publish` rejects it. If an ecosystem-wide shared trait crate (`SealedHeader` / `BlockHeader` / …) stayed Git-pinned, it would be effectively unusable from every other library on crates.io. That's why this one "external surface" layer gets spun out of Reth early and published independently on crates.io. We inherit the workspace-pinned version on our side to avoid type-layout mismatches.)*
 
 ### Step 2: Update `crates/evm/Cargo.toml`
 
@@ -481,7 +521,7 @@ Common errors and fixes:
   - Timestamp not strictly greater than parent — must enforce `our_timestamp = attrs.timestamp.max(parent_header.timestamp + 1)`.
 - **`error[E0277]: HeaderProvider not satisfied`** — workspace `reth-storage-api` SHA mismatch with `reth-provider`. All reth-* git-pinned deps must share the same SHA.
 - **`error[E0277]: HeaderValidator is not in scope`** — forgot `use reth_consensus::HeaderValidator`. The trait must be in scope to call its methods.
-- **`error: 'next_block_base_fee' not found on ChainSpec`** — forgot `use reth_chainspec::EthChainSpec`. `next_block_base_fee` is on the `EthChainSpec` extension trait, not `ChainSpec` itself.
+- **`error: 'next_block_base_fee' not found on ChainSpec`** — **the extension trait `reth_chainspec::EthChainSpec` isn't in scope.** `next_block_base_fee` isn't an inherent method on `ChainSpec`; it's an extension method defined on the `EthChainSpec` trait, and Rust's method-resolution rules require **you `use` the trait itself to bring its methods into scope** (when relying on IDE auto-import, pick `EthChainSpec` explicitly from the suggestion list). Fix: import the trait alongside the type — `use reth_chainspec::{ChainSpec, EthChainSpec};`.
 
 ## Design reflection
 

@@ -54,6 +54,57 @@
 
 合計で **40-50 個のソースファイル**。Workspace テスト: 38 個合格。
 
+このコース全体で開通させた **CL ↔ EL 結合の全体像** を 1 枚に落とすと、自分の手で繋ぎ切った境界線がどこを走っているかが一望できる:
+
+```
+   [ CL: openhl-consensus ]                          [ EL: openhl-evm ]
+  ┌──────────────────────────────────────────┐    ┌──────────────────────────────────────────┐
+  │  Malachite BFT Engine (actor system)      │    │   LiveRethEvmBridge<P>                    │
+  │                                            │    │                                            │
+  │   ├── OpenHlContext                         │    │    ├── provider: P (BlockNumReader        │
+  │   │   (10 associated types — L6)            │    │    │             + HeaderProvider)         │
+  │   ├── OpenHlSigningProvider                 │    │    ├── chain_spec: Arc<ChainSpec>          │
+  │   │   (Ed25519 + canonical encoding — L7)   │    │    │   (共有 source of truth — L13)         │
+  │   ├── OpenHlCodec                           │    │    ├── validator:                          │
+  │   │   (1 Real + 7 Stub — L8)                │    │    │   EthBeaconConsensus<ChainSpec> (L13) │
+  │   ├── OpenHlNode / OpenHlNodeHandle (L9)    │    │    ├── engine_handle:                      │
+  │   └── run_engine_app loop                   │    │    │   Option<ConsensusEngineHandle> (L14) │
+  │       (12 AppMsg arms — L10)                │    │    └── state: Mutex<{ pending, chain,      │
+  │                                              │    │                       head, … }>          │
+  └──────────────────┬──────────────────────────┘    └──────────────────┬──────────────────────┘
+                     │                                                  ▲
+                     │ ── 4 つの ConsensusBridge メソッド契約越しに対話 ─┘
+                     │   (L3 で定義した trait surface)
+                     │
+                     ├── ① build_payload(parent, attrs)
+                     │     CL ──► EL : 「次の block を組み立てろ」
+                     │     EL ──► CL : PayloadId (即返却、Reth が裏で構築)
+                     │     裏側: provider から parent_header 取得 →
+                     │           ChainSpec::next_block_base_fee + gas_limit copy
+                     │           + timestamp 単調化 → header 合成 → pending に格納
+                     │
+                     ├── ② payload_ready(id)
+                     │     CL ──► EL : 「さっきの PayloadId、ブロック寄越せ」
+                     │     EL ──► CL : ExecutedBlock (pending から回収)
+                     │     ※ 4 method の中で唯一データが EL → CL 方向の seam
+                     │
+                     ├── ③ validate_payload(&block)
+                     │     CL ──► EL : 「peer から来た proposal、検証してくれ」
+                     │     EL ──► CL : PayloadStatus { Valid / Invalid / Syncing }
+                     │     裏側: EthBeaconConsensus::validate_header_against_parent
+                     │           (4 sub-check: number / timestamp / gas-limit / EIP-1559)
+                     │
+                     └── ④ commit(hash)
+                           CL ──► EL : 「2/3+ で合意成立、確定させろ」
+                           EL ──► CL : Ok(())
+                           裏側 Phase 1 (絶対成功): state.chain.insert + head 更新
+                           裏側 Phase 2 (best-effort): ConsensusEngineHandle::
+                               fork_choice_updated → Reth の in-process Engine API
+                               (現状 body 無しなので SYNCING 応答、レスポンスは破棄)
+```
+
+ポイントは 3 つ: (a) **左右の世界は L3 で定義した `ConsensusBridge` trait の 4 メソッドだけで会話する** — 巨大なインフラ 2 つを繋ぐ唯一の接着面がここに収まっている。(b) **`run_engine_app` (L10) が `B: ConsensusBridge` ジェネリックなので、StubBridge / InMemoryEvmBridge / RethEvmBridge / LiveRethEvmBridge の 4 種類の bridge が同じ loop で走る** — 多態性の payoff。(c) **`LiveRethEvmBridge` 内部の `chain_spec: Arc<ChainSpec>` が build_payload と validate_payload の両方で参照される共有 source of truth** で、ここが分かれた瞬間に self-fork が発生する。L1 アーキテクトとしての設計判断はすべて、この 1 枚の図のどこかに焼き込まれている。
+
 ## 4 つの `ConsensusBridge` メソッド — 全部 live
 
 各行はコース後のメソッドの最終状態:
@@ -81,7 +132,7 @@ Bridge は Reth のストレージ層 (`HeaderProvider`)、Reth の chain config
 - `fork_choice_updated` 呼び出しの **前に**、`handle.new_payload(payload).await` 経由で送る。
 - レスポンスチェーンを合わせる: `newPayload → VALID` → `forkchoice → VALID` → canonical head が advance する。
 
-ブロッカーは、payload に入れる EVM-executable なトランザクションをまだ持っていないことだ。OpenHL の matching engine (CLOB) が生成するのは **約定 (fill)** であって、EVM トランザクションではない。約定を EVM トランザクション (あるいは precompile call) にラップするのが、本コースの次の大きな作業になる — おそらく openhl build arc の Module 2 全体に相当する作業だ。
+ブロッカーは、payload に入れる EVM-executable なトランザクションをまだ持っていないことだ。OpenHL の matching engine (CLOB) が生成するのは **約定 (fill)** であって、ユーザーが ECDSA で署名する通常の EVM トランザクションではない。仮にユーザー署名トランザクションとして mempool 経由で流す形にすると、ガスコストと mempool レイテンシが price-time-priority CLOB のパフォーマンスを殺してしまう (HL 系チェーンの存在意義そのものが消える)。代わりに本物の Hyperliquid 型チェーンは、**コンセンサスが合意した約定データを `build_payload` / `newPayload` のタイミングで「protocol-initiated なシステムトランザクション」あるいは「専用 precompile への直接ステートインジェクション」として、ユーザー署名なしで `ExecutionPayload` に差し込む** — `Vec<Fill>` を EVM ステートに反映させるルートをコンセンサス側から開通させる、というアプローチを採る。この「約定 → 特権的な system tx / precompile injection としての payload 編入」を組むのが、本コースの次の大きな作業になる — おそらく openhl build arc の Module 2 全体に相当する作業だ。
 
 ### 2. Real `Codec` impl
 

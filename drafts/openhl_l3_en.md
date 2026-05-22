@@ -170,6 +170,37 @@ pub trait ConsensusBridge: Send + Sync {
 
 ### Step 4: Understand the four method signatures
 
+Before reading the signatures one at a time, holding a timeline of when each of the four methods fires during a BFT round — and which direction the data flows — makes each signature land on intuition rather than memorization:
+
+```
+【 CL / EL interaction flow — along a BFT round timeline 】
+
+──[ The previous round is still voting; the proposer is prepping their turn ]─────────
+   CL ──────( build_payload(parent, attrs) )──────►  EL
+                                                     │
+                                                     └─ kicks off block construction
+                                                        in the background, in parallel
+                                                        with the previous round's votes
+
+──[ The moment we become the proposer — hot path, where microseconds matter ]──────
+   CL ──────( payload_ready(id) )─────────────────►  EL
+   CL ◄────( returns ExecutedBlock ) ────────────────── EL
+   CL ─► (broadcasts the Proposal onto the network)
+
+──[ A Proposal arrives from a peer — every validator passes through here ]────────────
+   CL ──────( validate_payload(&ExecutedBlock) )───►  EL
+   CL ◄────( PayloadStatus: Valid / Invalid / Syncing ) ── EL
+   CL ─► votes accordingly (yes / Nil / abstain)
+
+──[ Quorum (2/3+) is reached — the block becomes finalized ]──────────────────────
+   CL ──────( commit(hash) )──────────────────────►  EL
+                                                     │
+                                                     └─ persists the block,
+                                                        promotes it to the new head
+```
+
+Two things to notice: (a) **`build_payload` and `payload_ready` are called at different round phases** — the former during the previous round's voting, the latter on the proposer's hot path. This is the "most important latency trick" we'll spell out a few paragraphs down. (b) **CL always initiates the call**, but `payload_ready` is the one seam where data flows back EL → CL (the answer to the §Plan quiz). With that, the individual signatures:
+
 ```rust
 async fn build_payload(
     &self,
@@ -185,6 +216,8 @@ async fn payload_ready(&self, id: PayloadId) -> Result<ExecutedBlock, BridgeErro
 ```
 
 The companion. Hand back the `PayloadId` from `build_payload`; receive the `ExecutedBlock`. Async because the call may block until the in-flight build finishes.
+
+*(This is the §Plan quiz answer. The call still originates from CL, but it's the one **seam** where a completed `ExecutedBlock` flows the other way — from the EL's build thread back into CL — and synchronizes. Of the four methods, only `payload_ready` carries data EL → CL.)*
 
 **Why split into `build_payload` + `payload_ready` instead of one `build_payload -> ExecutedBlock`?** Because the EL needs to build *during* the previous round's voting. If `build_payload` returned the block synchronously, the proposer would have to wait for build before broadcasting; with the split, build runs in the background while voting happens, and the proposer's hot path becomes "fetch the prepared block" (microseconds). This is the **single most important latency trick** in the design. Sub-second block times depend on it.
 

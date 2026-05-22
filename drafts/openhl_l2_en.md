@@ -237,7 +237,16 @@ Run `cargo check -p openhl-types` — should still pass.
 
 ### Step 9: Add unit tests
 
-Append to `crates/types/src/lib.rs`:
+The tests actually exercise `serde`'s round-trip, so add `serde_json` as a **dev-dependency first** (before the test code lands). Edit `crates/types/Cargo.toml`:
+
+```toml
+[dev-dependencies]
+serde_json = { workspace = true }
+```
+
+(Adding the dep before writing the test prevents your IDE / rust-analyzer from flashing `serde_json::to_string` as unresolved and triggering an unnecessary rebuild.)
+
+Then append to `crates/types/src/lib.rs`:
 
 ```rust
 #[cfg(test)]
@@ -283,13 +292,6 @@ mod tests {
 }
 ```
 
-The last test needs `serde_json` as a dev-dependency. Add it to `crates/types/Cargo.toml`:
-
-```toml
-[dev-dependencies]
-serde_json = { workspace = true }
-```
-
 ## Test
 
 ```bash
@@ -322,6 +324,43 @@ Two load-bearing decisions:
 
 2. **PayloadStatus is an enum, not a bool.** L0 / your prediction above flagged this. The three states are not interchangeable: the consensus-side response depends on *which* not-Valid state the EL is in. Collapsing them to `bool { is_valid }` would lose information that's load-bearing for chain liveness — a Syncing node treated as Invalid permanently forks from peers who could have helped it.
 
+Drawing how `PayloadStatus` flows between CL and EL, and how each verdict drives a *different* CL action, makes the necessity of three states immediate:
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                       Consensus Layer (CL)                                  │
+│                                                                             │
+│         asks the Execution Layer: validate_payload(block)                   │
+│                                  │                                          │
+└──────────────────────────────────┼──────────────────────────────────────────┘
+                                   │ ▲
+                                   ▼ │ PayloadStatus
+┌────────────────────────────────────┼──────────────────────────────────────┐
+│                Execution Layer (EL)│                                       │
+│                                    │                                       │
+│   ┌────────────────────────────────┴──────────────────────────────────┐    │
+│   │  Run the block → classify the outcome into one of three:           │    │
+│   │                                                                    │    │
+│   │  ✅ Valid    : state-root matches, gas-limit OK, all rules pass    │    │
+│   │  ❌ Invalid  : ran the block, result is wrong (state-root mismatch) │    │
+│   │  ⏳ Syncing  : don't have the state needed to run it yet            │    │
+│   └────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+CL-side response (the reason three branches are needed):
+  ✅ Valid    → vote for the block (carry it into consensus)
+  ❌ Invalid  → Nil vote, treat the proposer as faulty (slashing surface)
+  ⏳ Syncing  → don't vote yet, wait or fall through to timeout, retry sync from a peer
+
+What happens if you collapse to a bool:
+  Syncing treated as Invalid → you Nil-vote a legitimate proposer while you're just behind
+                                → you fork permanently from peers who saw it as valid
+  Invalid treated as Syncing → you treat a genuinely wrong block as "this will resolve itself"
+                                → a bad proposal slips through via timeout and the chain rots
+```
+
+`Valid` / `Invalid` / `Syncing` correspond 1:1 to "vote / nil-vote / abstain" at the consensus layer. Squashing them into a bool deletes "abstain", and with it the only correct response when you're the one out of sync. L3 (the `ConsensusBridge` trait) is where these three states land in actual function signatures.
+
 ## Answer key
 
 ```bash
@@ -347,7 +386,7 @@ You probably wrote `write!(f, "{b:x}")` (single hex digit) instead of `write!(f,
 Not as written — it contains a `Vec<...>` in production (transactions list), and `Vec` isn't `Copy`. At v0 the struct only has fixed-size fields so it *could* be Copy, but we omit the derive deliberately to avoid having to remove it later. Cloning is cheap when fields are bytes; the call sites that need it can `.clone()` explicitly.
 
 **Q: Why is `prev_randao` 32 bytes if it's "randomness"?**
-It's a hash of the previous block's RANDAO mix (Ethereum's beacon-chain randomness beacon). 32 bytes = SHA-256 output. The actual entropy source is the beacon chain, but we receive it as a hash, so the type is `[u8; 32]`.
+It's the **RANDAO mix** at the time of the previous block — Ethereum's beacon chain accumulates each slot's validator reveals via XOR into a running mixing value. Strictly speaking it's not a single hash output, but the result is always a fixed 32-byte pseudo-random blob (`[u8; 32]`). The entropy lives on the beacon-chain side; the execution layer's `PayloadAttrs` just receives the 32-byte mix as an input. So openhl's type matches: `[u8; 32]`.
 
 **Q: Should `BlockHash` derive `Default`?**
 It can (`Default` for `[u8; 32]` is all-zeros), but **we don't here** — the openhl convention is that block hashes are computed from real data; a default-constructed `BlockHash([0u8; 32])` is a code smell. Let test code that needs a sentinel write `BlockHash([0u8; 32])` explicitly.

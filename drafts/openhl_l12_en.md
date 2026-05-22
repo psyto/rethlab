@@ -80,6 +80,8 @@ Six things:
 This lesson teaches **the generic-over-provider pattern** that makes the bridge testable in isolation. `LiveRethEvmBridge<P>` is generic over `P: BlockNumReader + Clone + Sync + 'static`. In production, `P` is the live node's `BlockchainProvider`. In tests, `P` could be a `MockProvider` that returns a deterministic set of `(hash → number)` mappings. **The bridge itself doesn't care which** — it just calls `provider.block_number(...)`. This is the same pattern as `run_engine_app<B: ConsensusBridge>` in L10: depend on the trait, not the concrete type.
 
 > 🛑 **Predict.** Before scrolling: why does `LiveRethEvmBridge` still hold an internal `Mutex<State>` with `pending`, `chain`, and `head` fields if `build_payload` reads from the live provider? Hint: `build_payload` returns a `PayloadId`, and the engine later calls `payload_ready(id)` to fetch the actual block. The pending state is what bridges those two calls — Reth's payload-builder takes 10-50ms to assemble blocks, and the bridge needs to hold the *result* somewhere while the engine waits. **L13 replaces this in-memory pending state with Reth's actual payload-builder.** For now, it's a placeholder that proves the build-then-fetch shape works.
+>
+> *(More concretely: the consensus-side actor task fires `build_payload`, grabs only the `PayloadId`, and immediately moves on — broadcasting the proposal, doing other work. A separate actor task (possibly on a different worker thread) later calls `payload_ready(id)`. While Reth assembles the block in the background and Malachite drives other rounds elsewhere, both run as **independent async-task lifetimes**. The single `Mutex<State>::pending` map is the **seam** that safely splices together two distinct protocol moments — "the instant `build_payload` returned" and "the instant `payload_ready` is invoked" — at the type level. L13 swaps in the real payload-builder, but the **need** for this seam doesn't vanish; `pending` simply evolves into a real async channel / oneshot.)*
 
 ## Walk-through
 
@@ -165,6 +167,41 @@ use std::sync::Mutex;
 ```
 
 `BlockNumReader` is the single trait that drives the live read; everything else is bridge types we've used since L4.
+
+Drawing this crate's boundary layout in one picture shows that L5's "outer = contract types / inner = alloy types" structure now gets one additional layer below it — a **trait-based provider abstraction** introduced for L12:
+
+```
+   [ Outer: the consensus-layer (CL) world ]
+   ──────────────────────────────────────────────────────────────────────
+       openhl-types / contract primitives (defined ourselves):
+         BlockHash       PayloadId        ExecutedBlock
+   ──────────────────────────────────────────────────────────────────────
+                                  ▲    │
+                                  │    ▼  trait-boundary conversions (same helpers as L5)
+                                  │       to_b256 / from_b256 / to_executed_block
+                                  │    │
+   ──────────────────────────────────────────────────────────────────────
+       alloy-primitives / alloy-consensus (Ethereum-ecosystem standard):
+         B256             u64              Header
+   ──────────────────────────────────────────────────────────────────────
+                                       │
+                                       │  self.provider.block_number(parent_b256)
+                                       ▼
+   ────── ★ NEW in L12: trait-based provider abstraction boundary ★ ──────
+       reth-storage-api / the abstract trait:
+         BlockNumReader   (← the one capability the bridge actually needs)
+   ──────────────────────────────────────────────────────────────────────
+                                       │
+                                       │ the type system hides the concrete provider
+                                       ▼
+   ──────────────────────────────────────────────────────────────────────
+       reth-provider / concrete impl (this is what `P` satisfies in production):
+         BlockchainProvider  ──►  MDBX storage engine ──► the real block number
+   ──────────────────────────────────────────────────────────────────────
+   [ Inner: the execution-layer (EL) / actual on-disk state ]
+```
+
+Three things this picture pins down: (a) **`LiveRethEvmBridge<P>` is generic over `P: BlockNumReader`** — the bridge body never sees the concrete provider type (with its 30+ trait bounds). (b) **The trait-abstraction layer (the ★ row) lets "a mock `P` for tests" and "the live provider in production" plug into the same interface** — anything satisfying `BlockNumReader` works. (c) **Data narrows in type as it flows from outer to inner**: `BlockHash` (a meaning-carrying 32-byte newtype) → `B256` (alloy primitive) → a query through the trait → the single `u64` MDBX returns. The trait-boundary discipline established back in L5 has been extended here by one more layer — the provider abstraction.
 
 ### Step 4: Define the struct
 
@@ -479,6 +516,7 @@ cargo test
 Common errors and fixes:
 
 - **`error[E0277]: P: BlockNumReader is not satisfied for ...`** — workspace `reth-storage-api` SHA doesn't match the rest of the reth-* SHAs. Re-check Step 1.
+- **`error[E0433]: failed to resolve: use of undeclared crate or module 'reth_provider'`** — you forgot to add `reth-provider = { workspace = true }` to the `[dev-dependencies]` block of `crates/evm/Cargo.toml` (note: it's `reth-provider`, not `reth-storage-api` — the latter gives you the trait, the former gives you the concrete provider type you need in tests). The fix isn't a `test-utils` feature — it's adding the dependency itself. Re-walk the Step 2 dependency list.
 - **`provider has no block with hash 0x000...`** in the happy path test — you're querying `block_hash(0)` but it returns `None`. Check that you're using `.dev()` mode in `NodeConfig` (test mode without dev sometimes doesn't pre-seed genesis correctly).
 - **Test fails on `matches!(err, BridgeError::Rejected(_))`** — your `build_payload` propagated `BridgeError::Internal` instead. Check the `.ok_or_else(|| BridgeError::Rejected(...))` line; if you used `.expect(...)` or `.unwrap_or(0)` instead, the error path won't fire.
 - **Test compiles but says "P is private"** — your `LiveRethEvmBridge<P>` needs `pub struct ... { provider: P, ... }`. Even though `provider` is `pub`, the generic parameter being `pub` is implicit.

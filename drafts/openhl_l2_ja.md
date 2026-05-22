@@ -238,7 +238,16 @@ pub struct ExecutedBlock {
 
 ### Step 9: Unit test を追加
 
-`crates/types/src/lib.rs` の末尾に追加:
+テスト内で `serde` の round-trip を実際に走らせるので、**先に**dev-dependency に `serde_json` を入れてから test code を書く。`crates/types/Cargo.toml` の末尾に追加:
+
+```toml
+[dev-dependencies]
+serde_json = { workspace = true }
+```
+
+(IDE / rust-analyzer に `serde_json::to_string` を「未解決」とフラグされる前に依存を入れておくことで、無用な赤波線とリビルド時間を回避できる。)
+
+そのうえで `crates/types/src/lib.rs` の末尾に追加:
 
 ```rust
 #[cfg(test)]
@@ -284,13 +293,6 @@ mod tests {
 }
 ```
 
-最後のテストには `serde_json` を dev-dependency として加える必要がある。`crates/types/Cargo.toml` に追加:
-
-```toml
-[dev-dependencies]
-serde_json = { workspace = true }
-```
-
 ## テスト
 
 ```bash
@@ -323,6 +325,43 @@ test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 2. **PayloadStatus は bool ではなく enum。** L0 と上の予測で flag した話。3 つの状態は互換ではない: EL が *どの* not-Valid 状態にいるかで consensus 側の応答が変わる。`bool { is_valid }` に collapse すると、chain の liveness にとって load-bearing な情報を失う — Syncing node を Invalid として扱えば、本来助けてくれたはずの peer から永久に fork してしまう。
 
+CL ↔ EL 間で `PayloadStatus` がどう流れ、各 verdict がそれぞれ違う action を引き起こすかを 1 枚で見ると、なぜ 3 状態が必要なのかが一目で見える:
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                       Consensus Layer (CL)                                  │
+│                                                                             │
+│         validate_payload(block) を Execution Layer に問い合わせ              │
+│                                  │                                          │
+└──────────────────────────────────┼──────────────────────────────────────────┘
+                                   │ ▲
+                                   ▼ │ PayloadStatus
+┌────────────────────────────────────┼──────────────────────────────────────┐
+│                Execution Layer (EL)│                                       │
+│                                    │                                       │
+│   ┌────────────────────────────────┴──────────────────────────────────┐    │
+│   │  block を実行 → 結果を 3 つに分類:                                  │    │
+│   │                                                                    │    │
+│   │  ✅ Valid   : state-root が一致、gas-limit OK、全ルール pass        │    │
+│   │  ❌ Invalid : 実行はできたが結果が間違い (state-root mismatch 等)   │    │
+│   │  ⏳ Syncing : そもそも実行に必要な state をまだ持っていない          │    │
+│   └────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+CL 側の応答 (これが 3 つに分かれる理由):
+  ✅ Valid   → block に投票 (consensus に乗せる)
+  ❌ Invalid → Nil 投票、proposer を faulty 扱い (slash 対象)
+  ⏳ Syncing → 投票しない、待つか timeout に falling、peer から sync を再試行
+
+3 状態を bool に潰したときの事故:
+  Syncing を Invalid 扱い → 自分が遅れているだけの正当な proposer を Nil 投票
+                            → peer 群と「自分だけが invalid と判定した」状態で永続的に fork
+  Invalid を Syncing 扱い → 本当に間違った block を「待てば直る」と誤認
+                            → bad proposal が timeout 経由で素通り、chain が腐る
+```
+
+つまり `Valid` / `Invalid` / `Syncing` は「投票する / 否決する / 棄権する」という consensus 上の 3 つの action と 1:1 対応している。bool に潰すと「棄権」が消えて、`Syncing` の正しい挙動が表現できなくなる。L3 (`ConsensusBridge` trait) でこの 3 状態の handling を実際の関数シグネチャに落としていく。
+
 ## 答え合わせ
 
 ```bash
@@ -348,7 +387,7 @@ git checkout main
 今の形ではできない — production では `Vec<...>` (transaction list) を含むようになり、`Vec` は `Copy` ではないからだ。v0 では fixed-size フィールドだけなので *理論的には* Copy にできるが、後で外す手間を避けるために意図的に derive しない。フィールドが byte 列だけならクローンも安いので、必要な call site で明示的に `.clone()` すればよい。
 
 **Q: なぜ `prev_randao` は「ランダム性」なのに 32 bytes?**
-前ブロックの RANDAO mix の hash (Ethereum の beacon-chain randomness beacon) だからだ。32 bytes = SHA-256 output。実際のエントロピー source は beacon chain だが、こちらは hash として受け取る。したがって type は `[u8; 32]`。
+前ブロック時点での **RANDAO mix** (Ethereum の beacon chain が各スロットで validator の reveal を XOR 累積していくミキシング値) だからだ。厳密には「単発の hash」ではないが、結果として常に 32 バイト固定長のランダムに見えるバイト列 (`[u8; 32]`) に収まるよう設計されている。実際のエントロピー source は beacon chain 側にあり、execution layer の `PayloadAttrs` はその 32 バイト値を入力として受け取るだけ。したがって openhl 側の type も `[u8; 32]` で受ける。
 
 **Q: `BlockHash` に `Default` を derive すべき?**
 できる (`[u8; 32]` の `Default` は all-zeros) が、**ここでは derive しない**。openhl の convention は「block hash は real data から compute されるもの」だ。Default-construct された `BlockHash([0u8; 32])` は code smell。Sentinel が必要な test code は `BlockHash([0u8; 32])` を明示的に書く。

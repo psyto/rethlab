@@ -80,6 +80,8 @@ crates/consensus/                — フル BFT engine + run_engine_app
 このレッスンが教えるのは **provider に対してジェネリックなパターン** だ。これによって bridge を isolation でテスト可能にする。`LiveRethEvmBridge<P>` は `P: BlockNumReader + Clone + Sync + 'static` に対してジェネリックだ。Production では `P` は live node の `BlockchainProvider` になる。テストでは `P` を、決定的な `(hash → number)` マッピングを返す `MockProvider` にしてもよい。**Bridge 自体はどちらかを気にしない** — ただ `provider.block_number(...)` を呼ぶだけだ。これは L10 の `run_engine_app<B: ConsensusBridge>` と同じパターンで、具象型ではなく trait に依存する。
 
 > 🛑 **考えてみよう。** スクロールする前に: `build_payload` が live provider から読むのに、なぜ `LiveRethEvmBridge` は依然として `pending`、`chain`、`head` フィールドを持つ内部の `Mutex<State>` を保持しているのか? ヒント: `build_payload` は `PayloadId` を返し、engine は後で `payload_ready(id)` を呼んで実際の block を fetch する。Pending 状態がこの 2 つの呼び出しの橋渡しをする — Reth の payload-builder は block を組み立てるのに 10-50ms かかるので、engine が待っている間、bridge は **結果** をどこかに保持しておく必要がある。**L13 でこのインメモリの pending 状態を Reth の実 payload-builder に置き換える。** 今のところは build-then-fetch の形が動くことを証明する placeholder だ。
+>
+> *(より具体的には: consensus 側のアクタータスクは `build_payload` を叩いて即座に `PayloadId` だけ回収し、いったん proposal broadcast や他の作業に進む。そのあと別のアクタータスク (場合によっては別のワーカースレッド) が `payload_ready(id)` を非同期に呼び出す。Reth が裏で block を組み立てている時間も、Malachite が他の round を進めている時間も、両者は**独立した寿命の async task** だ。`Mutex<State>::pending` という 1 枚のマップは、この「`build_payload` が返した瞬間」と「`payload_ready` が呼ばれた瞬間」という 2 つの独立した protocol moment を、型レベルで安全に糊付け (同期) する **seam** として機能している。L13 で実 payload-builder に差し替えても、この seam の **必要性** 自体は消えず、`pending` を真の async channel / oneshot に置き換える形に進化するだけだ。)*
 
 ## 手順
 
@@ -165,6 +167,41 @@ use std::sync::Mutex;
 ```
 
 `BlockNumReader` が live read を駆動する唯一の trait だ。他はすべて L4 以来使っている bridge 型だ。
+
+この crate の境界レイアウトを 1 枚で見ると、L5 の `RethEvmBridge` で確立した「外側 = contract 型 / 内側 = alloy 型」の構造に、今回新しく **trait による provider 抽象境界** が 1 段挟まることがわかる:
+
+```
+   [ 外側: CL (consensus 層) の空間 ]
+   ──────────────────────────────────────────────────────────────────────
+       openhl-types / contract primitives (自前定義):
+         BlockHash       PayloadId        ExecutedBlock
+   ──────────────────────────────────────────────────────────────────────
+                                  ▲    │
+                                  │    ▼  trait boundary の変換 (L5 と同じヘルパー)
+                                  │       to_b256 / from_b256 / to_executed_block
+                                  │    │
+   ──────────────────────────────────────────────────────────────────────
+       alloy-primitives / alloy-consensus (Ethereum エコシステム標準):
+         B256             u64              Header
+   ──────────────────────────────────────────────────────────────────────
+                                       │
+                                       │  self.provider.block_number(parent_b256)
+                                       ▼
+   ────────── ★ L12 で追加: trait による provider 抽象境界 ★ ──────────────
+       reth-storage-api / 抽象 trait:
+         BlockNumReader   (← bridge が必要とする capability、ちょうど 1 個)
+   ──────────────────────────────────────────────────────────────────────
+                                       │
+                                       │ 型システムが具象プロバイダを隠蔽
+                                       ▼
+   ──────────────────────────────────────────────────────────────────────
+       reth-provider / 具象実装 (production の `P` がここを satisfy):
+         BlockchainProvider  ──►  MDBX storage engine ──► 実際の block number
+   ──────────────────────────────────────────────────────────────────────
+   [ 内側: EL (実行層) / 実際のディスク上の state ]
+```
+
+3 つの focal point: (a) **`LiveRethEvmBridge<P>` は `P: BlockNumReader` に対してジェネリック** — bridge 本体は具象 provider 型 (`BlockchainProvider` の 30+ trait bound) を一切知らない。(b) **trait 抽象境界 (★ の段) が「mock test 用の `P`」と「production の live provider」を同じインターフェースで差し替え可能にする** — `BlockNumReader` を満たす任意の型ならどれでも入る。(c) **データの流れは外側 → 内側に向かって型が「狭く」なる**: `BlockHash` (32 byte の意味付き newtype) → `B256` (alloy primitives) → trait 経由の query → MDBX が返す `u64` 一個。L5 の trait boundary discipline がここで「provider 抽象境界」として 1 段拡張された形だ。
 
 ### Step 4: struct を定義
 
@@ -479,6 +516,7 @@ cargo test
 よくあるエラーと対処:
 
 - **`error[E0277]: P: BlockNumReader is not satisfied for ...`** — workspace の `reth-storage-api` SHA が他の reth-* SHA と一致していない。Step 1 を再確認。
+- **`error[E0433]: failed to resolve: use of undeclared crate or module 'reth_provider'`** — `crates/evm/Cargo.toml` の `[dev-dependencies]` に `reth-provider = { workspace = true }` を書き忘れている (`reth-storage-api` ではなく `reth-provider` のほう — 後者が test で必要になる concrete provider 型を提供する)。`test-utils` feature ではなく **依存自体の追加忘れ**が原因なので、Step 2 の依存リストをそのまま再点検する。
 - **Happy path テストで `provider has no block with hash 0x000...`** — `block_hash(0)` を query しているのに `None` を返している。`NodeConfig` で `.dev()` mode を使っているか確認する (`.dev()` なしの test mode では genesis が事前 seed されないことがある)。
 - **Test が `matches!(err, BridgeError::Rejected(_))` で失敗する** — `build_payload` が `BridgeError::Internal` を伝播している。`.ok_or_else(|| BridgeError::Rejected(...))` の行を確認する。代わりに `.expect(...)` や `.unwrap_or(0)` を使うと error path が発火しない。
 - **Test はコンパイルできるが「P is private」と言われる** — `LiveRethEvmBridge<P>` には `pub struct ... { provider: P, ... }` が必要だ。`provider` が `pub` でも、ジェネリックパラメータが `pub` であるのは暗黙的になる。

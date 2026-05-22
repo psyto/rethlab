@@ -234,6 +234,14 @@ workspace = true
 - `crates/<name>/Cargo.toml` (形は同じ、`name` フィールドだけ変える)
 - `crates/<name>/src/lib.rs` (doc comment のみ)
 
+例えば `codec` であれば、まずディレクトリを作り:
+
+```bash
+mkdir -p crates/codec/src
+```
+
+そのあと `crates/codec/Cargo.toml` と `crates/codec/src/lib.rs` を、下の表の `name` と doc comment に差し替えて配置する。残りの 8 crate も同じ手順 (`mkdir -p crates/<name>/src` → 2 ファイル配置) を繰り返すだけだ。
+
 残り 9 crate と doc comment:
 
 | Crate | `name` | `lib.rs` の doc comment |
@@ -308,7 +316,7 @@ cargo check --workspace
     Finished `dev` profile
 ```
 
-いくつかの `unused_imports` 警告は OK (`serde` を workspace の依存として宣言したが、ほとんどの crate がまだ使っていないため)。Hard error は許容できない — 出た場合に多い原因:
+いくつかの「依存として宣言したがコード内で使っていない」系の警告 (`unused_crate_dependencies` 相当) が出るが、これは完全に正常だ — `serde` を workspace 依存として宣言済みなのに、ほとんどの crate の `src/lib.rs` がまだ doc comment しかないため、実際の `use serde::...` が現れていない。後続レッスンで実コードが land した瞬間に消える。Hard error は許容できない — 出た場合に多い原因:
 
 - **`workspace.members` または crate Cargo.toml の crate 名にタイプミス。** Cargo が見つからない crate 名を教えてくれるので、タイプミスを直す。
 - **library crate に `src/lib.rs` が無い。** `workspace.members` にリストされた crate はそれぞれ `src/lib.rs` か `src/main.rs` のどちらかが必要。
@@ -419,14 +427,16 @@ cargo check --workspace
 Step 9 が成功した後に:
 
 ```bash
-cargo check --workspace 2>&1 | tail -5
+cargo check --workspace
 ```
 
-期待値 (正確な warning 数や時間は環境次第):
+期待値 (Step 7-9 のキャッシュが効いているので、2 回目以降は 1-2 秒で終わる):
 
 ```
-    Finished `dev` profile [optimized + debuginfo] target(s) in 23.45s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.23s
 ```
+
+> ⚠️ `| tail -5` で出力をカットしないこと。万が一エラーが出た場合、肝心の error 本体はコンパイルパイプラインの**上部**に流れているので、`tail` で削るとデバッグ可能な手がかりが消える。warning が多くて煩いと感じても、フルログを残したまま見るのが安全だ。
 
 binary も試せる:
 

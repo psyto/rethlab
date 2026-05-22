@@ -153,6 +153,47 @@ impl InMemoryEvmBridge {
 
 `pending` と `chain` を分けるのが重要だ: `commit(hash)` が呼ばれた時点で、その block は (前の `build_payload` から) すでに `pending` にある。`commit` は pending → chain に移し、`head` を更新する。real EL が in-flight payload buffer と finalized chain の両方を持つ構造と同じだ。
 
+`State` の 4 フィールド (`next_payload_id` / `pending` / `chain` / `head`) を、`build_payload` → `payload_ready` → `commit` のライフサイクルに沿ってどう動くかを 1 枚で見ると、L5 や L11+ の本物の bridge でも同じ形が再利用されることが直感で押さえられる:
+
+```
+【 InMemoryEvmBridge 内のブロックライフサイクル 】
+
+1. build_payload(parent, attrs)
+                       │
+                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ chain.get(&parent.0) で parent の number を引く              │
+   │ next_payload_id を 1 増やして PayloadId を発行               │
+   │ 新しい ExecutedBlock を合成 (number = parent + 1、hash 等)   │
+   │ pending.insert(PayloadId, ExecutedBlock)  ◄── 投機的に格納   │
+   └────────────────────────────────────────────────────────────┘
+                       │
+                       ▼  (CL に PayloadId だけ返す)
+
+2. payload_ready(id)
+                       │
+                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ pending.get(&id).cloned()  ◄── 未確定ブロックを CL に貸し出す │
+   │ (pending には残しておく — まだ commit されていない)            │
+   └────────────────────────────────────────────────────────────┘
+                       │
+                       ▼  (ExecutedBlock を返す)
+
+3. commit(hash)                  ※ CL が 2/3+ Quorum 達成後に呼ぶ
+                       │
+                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ pending から該当ブロックを検索 → remove                       │
+   │ chain.insert(hash.0, ExecutedBlock)  ◄── canonical 領域へ移す │
+   │ head = Some(hash)                    ◄── new head を更新     │
+   └────────────────────────────────────────────────────────────┘
+                       │
+                       ▼  (Ok(()) を返す、ブロックは finalized)
+```
+
+ポイントは「**pending = 投機的 (未確定) / chain = 確定済み**」という 2 つの寿命がマップレベルで分離していることだ。`build_payload` は楽観的に積み上げ、`commit` だけが「pending から chain へ昇格させる」唯一の権限を持つ。これは本物の Reth EL でも `pending blocks` と `canonical chain` という名前で同じ形が存在しており、L5 / L11+ で本物の bridge に差し替えても**データの流れ方は L4 と同じ**になる。
+
 **`impl InMemoryEvmBridge::new`** — constructor。`#[must_use]` は clippy へのヒント: caller が `InMemoryEvmBridge::new();` を bind せずに書いたら、ほぼ間違いなくバグだ。
 
 ### Step 4: `ConsensusBridge` を impl — `build_payload`
@@ -264,6 +305,8 @@ impl ConsensusBridge for InMemoryEvmBridge {
 `pending` から remove しない点に注意 — commit 後、block は両方の map に残り続ける。Real impl は `pending.remove(&id)` するかもしれないが、test では関係ない。
 
 `hex_short` ヘルパーは次のセクション:
+
+> 📍 **配置のナビゲーション。** `hex_short` は `impl ConsensusBridge for InMemoryEvmBridge { ... }` ブロックの**外側**に、ファイル末尾の独立した非公開関数として置く (`&self` を取らず、struct 状態にも依存しない単なる byte → string 変換ユーティリティだから)。`impl` ブロック内に書いてしまうと「method の追加」になり、trait 定義側 (`ConsensusBridge`) にもこの形が必要だと誤解させてしまう。
 
 ```rust
 fn hex_short(bytes: &[u8; 32]) -> String {
@@ -440,7 +483,9 @@ git checkout main
 ## よくある質問
 
 **Q: `commit_advances_head_and_records_block` が "mutex poisoned" で panic する。**
-最もよくある原因は、別のテストが同じ impl 内で lock を持ったまま panic し、state が poisoned のまま残ったことだ。Cargo はデフォルトで test を並列実行する。本当の問題だと確信したら `cargo test -p openhl-evm -- --test-threads=1` で逐次実行する。(このケースではほぼ test コードのバグだろう — 各テストが `InMemoryEvmBridge::new()` を新たに作るので shared state は無いはずだ。)
+最もよくある原因は、別のテストが同じ impl 内で lock を持ったまま panic し、state が poisoned のまま残ったことだ。Cargo はデフォルトで test を並列実行する。本当の問題だと確信したら `cargo test -p openhl-evm -- --test-threads=1` で逐次実行する。
+
+*(ただし、このコースで書いたテストでは並列衝突は起こらない: 各テスト関数が `InMemoryEvmBridge::new()` を個別に生成しているので、テスト間で `Mutex<State>` を共有していない。実際にこのエラーに遭ったときの真の原因は、**そのテスト関数自身の実行中に lock を保持したまま別の場所で panic が起き (assertion 失敗、`unwrap()` の破裂、`expect()` の発火など)、その後同じテスト内で再度 `state.lock()` を呼んだ**ことにある。`--test-threads=1` を試す前に、cargo test 出力の上部で最初に発火した panic 行 — `thread 'tests::...' panicked at ...` — を確認すること。Mutex の poison はそのテスト固有の自家中毒であり、`--test-threads` を下げても消えない。)*
 
 **Q: `pending` を `HashMap<u64, _>` ではなく `HashMap<PayloadId, _>` にすべき?**
 どちらでも動く。openhl の convention は、storage layer で内側の type (`u64`) を使い、lookup 内での wrap/unwrap を避けることだ。Public API では依然 `PayloadId` を使う。trade-off は次のとおり: `HashMap<PayloadId, _>` で type safety を得る代わりに、lookup ごとに `.0` accessor が必要になる。`HashMap<u64, _>` なら storage layer の type safety は諦めるが、noise は避けられる。好みの問題で、こちらは `u64` を選んだ。

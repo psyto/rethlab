@@ -105,8 +105,14 @@ Hyperliquid は 2025 年に $300B+ の perp 取引量を、完全クローズド
 ```bash
 # 自分の workspace
 mkdir -p ~/code/my-openhl && cd ~/code/my-openhl
-cargo init --name openhl --lib
-# (lib.rs はレッスン 1 で削除する。これは workspace stub を作るためだけのコマンド)
+cargo init --lib
+# (パッケージ名はディレクトリ名から `my-openhl` になる。L1 で workspace に作り変えて
+#  内部の crate を `openhl-types` / `openhl-consensus` / … として並べていくので、
+#  root パッケージ名はその時点で消える。lib.rs も L1 で外す — ここで作るのは workspace
+#  stub を取りに行くためだけの初期 commit)
+
+# 自分の workspace でもリファレンスと同じ Rust toolchain を強制しておく
+echo -e '[toolchain]\nchannel = "1.95.0"' > rust-toolchain.toml
 
 # 答え合わせ用リファレンス
 mkdir -p ~/code && cd ~/code
@@ -115,7 +121,7 @@ cd openhl-reference
 cargo check  # 初回は時間がかかる — Reth は大きい
 ```
 
-`openhl-reference` 側で `cargo check` が pass すれば toolchain は正しい。次に進んでよい。pass しない場合はまず toolchain version を直す — リファレンスの `rust-toolchain.toml` が Rust 1.95.0 を pin している。
+`openhl-reference` 側で `cargo check` が pass すれば toolchain は正しい。次に進んでよい。pass しない場合はまず toolchain version を直す — リファレンスの `rust-toolchain.toml` が Rust 1.95.0 を pin しており、`my-openhl/` 側でも同じ pin を置いたので、`rustup` が必要な toolchain を自動 install してくれるはずだ。
 
 > 🛑 **やりがちな勘違い。** 「`openhl-reference` を直接編集すればいい。」 **違う。** あのリポは答え合わせであって自分の workspace ではない。read-only として扱うこと。`my-openhl/` への編集は自分のコード。`openhl-reference/` への編集は混乱の元 — どれが自分の書いたコードでどれが元からあったコードか分からなくなる。
 
@@ -136,9 +142,9 @@ cargo check  # 初回は時間がかかる — Reth は大きい
 | **L8** | Codec + Node | `OpenHlCodec` + `Node` trait impl | engine start/stop smoke |
 | **L9** | App loop | `run_engine_app` — 全部を繋ぐ actor pipeline | **`first_block_via_engine_actors`** — Module 1 milestone、BFT round が閉じる |
 | **L10** | Live Reth | テストで実 Reth dev-node を起動する | `reth_dev_node_bootstraps` |
-| **L11** | Live build_payload | `LiveRethEvmBridge` が live provider から parent を読む | `live_bridge_builds_on_real_genesis` |
-| **L12** | Live validate_payload | `EthBeaconConsensus` を接続して実 header validation | validate-path tests |
-| **L13** | Live commit | `forkchoice_updated` を Reth の in-process Engine API で接続 | `commit_sends_forkchoice_to_engine` |
+| **L11** | Live bridge — build path | `LiveRethEvmBridge` (build_payload 側) が live provider から parent を読む | `live_bridge_builds_on_real_genesis` |
+| **L12** | Live bridge — validate path | `LiveRethEvmBridge` (validate_payload 側) に `EthBeaconConsensus` を接続して実 header validation | validate-path tests |
+| **L13** | Live bridge — commit path | `LiveRethEvmBridge` (commit 側) を Reth の in-process Engine API に `forkchoice_updated` で接続 | `commit_sends_forkchoice_to_engine` |
 | **L14** | Capstone | openhl にまだ無い end-to-end テストを自分で書く — `run_engine_app` + `LiveRethEvmBridge` を組み合わせる | 自分の integration test |
 
 **L9 がコース最大の milestone だ。** L9 を終えた時点で、actor system 経由で BFT consensus が end-to-end でブロックを 1 つ生成するようになる。L10-L13 で stub Reth を実際の Reth に差し替える。L14 では openhl 本体 (SHA `0844d58` 時点) にまだ無い integration test を自分で書く — コース終了時点でリファレンスより **1 歩先** に進んだ状態になる。
@@ -175,7 +181,11 @@ cd ~/code/openhl-reference && cargo check    # 期待値: 最終的に "Finished
 
 3 つすべて pass すればセットアップ完了。L1 に進む。
 
-> **最終チェック。** 1 文で、`~/code/my-openhl` と `~/code/openhl-reference` の役割の違いは何か? 答えに「片方は自分のもの、片方は答え合わせ。最初に書いて、2 番目を読んで照合する」が含まれていなければ §5 を読み直すこと。
+> 💡 **次へ進む前のセルフチェック**
+>
+> 1 文で、`~/code/my-openhl` と `~/code/openhl-reference` の役割の違いを説明できるか？
+>
+> 自分の言葉で「**片方は自分が 1 行ずつ書く本番の workspace、もう片方は迷ったときだけ覗く答え合わせの鏡だ**」と言えなければ、§5 を読み直してから L1 へ進むこと。この区別を曖昧にしたまま走り出すと、レッスン後半で `openhl-reference` 側にうっかりコードを書いてしまい、自分が書いたコードと借りてきたコードの境界が消える事故が起きる。**境界を体に染み込ませてから L1 へ。**
 ````
 
 ---

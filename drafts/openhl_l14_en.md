@@ -93,6 +93,51 @@ This lesson teaches **the side-effect-after-success pattern**. The bridge's loca
 
 If step 2 fails, we log it but don't propagate — because step 1 already happened, and rolling it back would leave us in an inconsistent state. **Side effects that *follow* a success are different from side effects that *gate* a success.**
 
+Laying out what happens when `commit` is called — Phase 1 (must succeed) and Phase 2 (best-effort) — in chronological order makes it obvious why a Phase 2 failure must not undo Phase 1:
+
+```
+   [ openhl-consensus ] (Malachite actor)
+              │
+              │ bridge.commit(block_hash).await
+              ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ ◆ LiveRethEvmBridge::commit()                                     │
+  │                                                                    │
+  │  [ Phase 1: canonical commit (must succeed) ]                      │
+  │   ├── acquire Mutex<State> via state.lock()                        │
+  │   ├── look up the header in pending (Rejected if not found)       │
+  │   ├── state.chain.insert(hash, header)  ◄── new canonical entry   │
+  │   └── state.head = Some(hash)           ◄── source-of-truth update │
+  │                                                                    │
+  │   ※ Past this point, the consensus layer treats the block as       │
+  │      committed; downstream `payload_ready` / next `build_payload`  │
+  │      will read this value immediately.                              │
+  └──────────────────────────────┬───────────────────────────────────┘
+                                 │ (local commit succeeded — no rollback)
+                                 ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  [ Phase 2: best-effort side-effect (fire-and-mostly-forget) ]   │
+  │   ├── ForkchoiceState { head_block_hash, safe = head, finalized = head } │
+  │   └── if let Some(handle) = &self.engine_handle {                      │
+  │           let _ = handle.fork_choice_updated(state, None).await;       │
+  │       }                                                                │
+  └──────────────────────────────┬───────────────────────────────────┘
+                                 │
+                                 ▼ in-process Engine API
+                       ┌──────────────────────────────┐
+                       │ Reth engine actor              │
+                       │ (Currently has no body, so it  │
+                       │  replies with PayloadStatus    │
+                       │  ::SYNCING)                    │
+                       └──────────────┬───────────────┘
+                                      │ response is discarded via `let _ =`
+                                      ▼
+                              `commit` returns Ok(())
+                              CL proceeds to the next round, unaware
+```
+
+Three things this picture pins down: (a) **Phase 1's `state.chain.insert` + `state.head` update is the consensus-side "committed" source-of-truth** — past this line, downstream code (`payload_ready`, the next `build_payload`) reads from these structures immediately. (b) **Phase 2's `fork_choice_updated` is a downstream-notification side effect; `SYNCING` / connection failures / panics get logged but are *not* turned into `Err`** — if a Phase 2 failure surfaced as `Err`, consensus would treat "commit failed" as true and try to roll back already-finalized state, breaking safety. (c) **When `engine_handle: Option<...>` is `None`, Phase 2 is skipped entirely** — unit tests can exercise "Phase 1 only, no Reth bootstrap." L14's integration test passes `Some(handle)` and asserts that both phases fire.
+
 > 🛑 **Predict.** Before scrolling: why does the test only assert `commit().await.expect(...)` succeeds, instead of asserting that Reth's canonical chain head moved? Hint: think about what's missing from our `build_payload` output. The `ExecutedBlock` we hand the engine is just a header — no transactions, no receipts, no state root. Reth's engine needs *the actual block body* to advance its canonical chain. Without `engine_newPayload` first, `fork_choice_updated` responds `SYNCING` ("I don't know this block yet, fetch me the body"). The wire is connected; the data isn't. **L14 proves the connection; payload execution is deferred to a future course.**
 
 ## Walk-through
@@ -247,7 +292,7 @@ impl<P> LiveRethEvmBridge<P> {
 
 Three new methods:
 
-- **`with_engine_handle()`** — consume-and-return-self builder. The `mut self` parameter takes ownership, mutates, returns. This is the canonical Rust "builder method" pattern. **`#[must_use]`** because forgetting to bind the return value (e.g., `bridge.with_engine_handle(h);`) silently drops the modified bridge.
+- **`with_engine_handle()`** — consume-and-return-self builder. The `mut self` parameter takes ownership, mutates, returns. This is the canonical Rust "builder method" pattern. **`#[must_use]`** because forgetting to bind the return value (e.g., `bridge.with_engine_handle(h);`) silently drops the modified bridge. **Note: this is `self` (consuming), not `&mut self`, so the pattern `let bridge = ...; bridge.with_engine_handle(h);` will move `bridge` out and leave you unable to use it on subsequent lines.** The idiomatic shape is to chain from the constructor in a single expression — `let bridge = LiveRethEvmBridge::new(p, c).with_engine_handle(h);` (which is what Step 6's integration test does). For conditional wiring, keep construction → configuration → binding inside one expression: `let bridge = if want_engine { LiveRethEvmBridge::new(p, c).with_engine_handle(h) } else { LiveRethEvmBridge::new(p, c) };`.
 - **`has_engine_handle()`** — a `const fn` accessor. Useful for tests and assertions ("did the wiring actually take effect?"). `const` because checking `Option::is_some()` doesn't require any runtime computation.
 - **`new()` initialization** — the only change is `engine_handle: None`. Callers who want the handle use `LiveRethEvmBridge::new(p, c).with_engine_handle(h)`.
 
@@ -443,7 +488,8 @@ Common errors and fixes:
 
 - **`error[E0282]: type annotations needed for `Option<ConsensusEngineHandle<_>>`** — the `engine_handle: None` in `new()` needs the type parameter inferred. Either the struct field's type annotation is missing/wrong, or you forgot the `EthEngineTypes` import. Re-check Step 3.
 - **`error: cannot find struct `EthereumAddOns` in module `reth_node_ethereum::node`** — version drift between `reth-node-ethereum` and the rest of `reth-*`. All git-pinned reth deps must share the same SHA.
-- **Test hangs > 30s** — most likely the `fork_choice_updated` call isn't returning. Check that you used `let _ = handle.fork_choice_updated(state, None).await` (with `.await`!) — without it the future is dropped before completion.
+- **Test hangs > 30s** — the most likely cause is that **`EthereumNode`'s background tasks (engine actor, payload builder, libp2p, RPC stubs, …) aren't cleaning up promptly, and Tokio runtime teardown is blocked on them.** When `EthereumNode` drops at the end of the test, each actor waits on its `JoinHandle`; if any oneshot is still pending or a socket isn't released, the runtime stalls. Verify that the test ends with proper cleanup — explicit `drop(handle);` or a `node.task_executor().graceful_shutdown_with_timeout(...)` where appropriate.
+  - Side note: dropping `.await` from `let _ = handle.fork_choice_updated(state, None).await` doesn't cause a hang — it causes a **silent skip** (`warning: unused implementor of 'Future'` fires; the future is dropped on the spot and the engine notification never runs). A missing `.await` produces a "Reth never gets notified" bug that lets the test sail through; hangs and silent skips are diagnostically different beasts, so identify which symptom you're seeing before chasing the wrong fix.
 - **`assert!(bridge.has_engine_handle())` fails** — `with_engine_handle` is `#[must_use]` but you didn't bind the return: `let bridge = ...new(...); bridge.with_engine_handle(h);`. Must be `let bridge = ...new(...).with_engine_handle(h);`.
 - **Commit returns `Ok` but the test for unknown hash also returns `Ok` (no rejection)** — your commit logic is reaching the engine path before the local lookup. Re-check Step 5 — the `?` propagates `BridgeError::Rejected` and exits before the engine block.
 

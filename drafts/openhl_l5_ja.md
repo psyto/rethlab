@@ -171,6 +171,33 @@ L4 の `InMemoryEvmBridge` と同じ shape だが、**`State` 内の型が違う
 
 **なぜ `chain` の key と `head` に `[u8; 32]` ではなく `B256` を使うのか?** alloy-native な空間にいるからだ — `Header` を持っている時点で自然な hash 型は `B256` になる。`[u8; 32]` を使うとあちこちで `.0` accessor が必要になる。`BlockHash` への変換は trait boundary を越えるときだけ、ヘルパー関数で行う (Step 6)。
 
+L5 の核は「外側に見せる contract 型」と「内側に持つ alloy 型」の二重構造だ。この境界がどう走っているかを 1 枚で見ると、Step 6 で書く変換ヘルパー (`to_b256` / `from_b256` / `to_executed_block`) が果たす役割と、なぜ `State` 内の型だけ刷新できるのかが直感で押さえられる:
+
+```
+【 RethEvmBridge における型境界のレイアウト 】
+
+   [ 外側: CL (consensus 層) の空間 ]
+   ──────────────────────────────────────────────────────────────────────────
+       openhl-types / contract primitives (このコースで自前定義した型):
+         BlockHash       PayloadId        ExecutedBlock
+   ──────────────────────────────────────────────────────────────────────────
+                                  ▲    │
+                                  │    ▼
+                  trait boundary 上だけで変換 (Step 6 のヘルパー):
+                      to_b256 / from_b256 / to_executed_block
+                                  ▲    │
+                                  │    ▼
+   ──────────────────────────────────────────────────────────────────────────
+       alloy-primitives / alloy-consensus (Ethereum エコシステム標準):
+         B256             u64              Header
+   ──────────────────────────────────────────────────────────────────────────
+   [ 内側: EL (実行層) / RethEvmBridge の本体空間 ]
+   ※ State の中身は本物の (B256, Header) タプル — タプルに hash を抱き込ませることで
+      Header と hash が常に同期する。Header だけ変えて hash 更新を忘れる事故を型で塞ぐ。
+```
+
+ポイントは 2 つ: (a) **contract 型 (`BlockHash` 等) は 4 つの trait method のシグネチャと戻り値にしか登場しない** — `impl` 内部はすべて alloy 型で書ける。(b) **alloy が source of truth、`ExecutedBlock` は trait boundary 用の serialization** にすぎない。だから alloy がバージョンを上げて `Header` の形が変わっても、変換ヘルパー 3 つを直すだけで CL 側からは一切見えない。L11+ の `LiveRethEvmBridge` でも State の中身が live provider に変わるだけで、この境界線そのものは動かない。
+
 ### Step 4: `build_payload` を impl — 初めての real hashing
 
 ```rust
@@ -272,7 +299,7 @@ impl ConsensusBridge for RethEvmBridge {
 - header を `chain` に insert (key は `B256`)
 - `head` を更新
 
-closure パターン `find(|(h, _)| *h == hash)` に注目 — タプルを destructure して 1 番目の要素を比較する。`*h` は `&B256` を deref して `B256` にし、`hash` (こちらも `B256`) と比較できるようにする。
+closure パターン `find(|(h, _)| *h == hash)` に注目 — タプルを destructure して 1 番目の要素を比較する。`*h` は `&B256` を deref して `B256` にし、`hash` (こちらも `B256`) と比較できるようにする。**`B256` は `Copy` を実装している**ので、`*h` でデリファレンスしても値の memcpy が走るだけで、`pending` から所有権が move されることはない — `B256` を持つフィールドへの安全なアクセスパターンとして覚えておくとよい。
 
 ### Step 6: 変換ヘルパーを追加
 
@@ -501,7 +528,7 @@ git checkout main
 
 ## 次のレッスン (L6)
 
-`ConsensusBridge` impl を 2 つ書いた — 合成版と real alloy 型版。両方とも consensus 側の test コードから使える (L8 から書き始める)。だがその前に、L6 で consensus 側に進む: Malachite の `Context` trait — Malachite を使う任意の chain に対して Malachite が要求する型レベル API surface — を実装する。Associated type 10 個、factory method 4 個だ。L6 を終えると、自分の chain は「`Address` 型は何か、`Height` 型は何か、`Value` 型は何か」を Malachite に答えられるようになる。これが contract の **もう半分** だ。L3 は自分が所有する trait だったのに対し、L6 は Malachite が所有する trait になる。
+`ConsensusBridge` impl を 2 つ書いた — 合成版と real alloy 型版。両方とも consensus 側の test コードから使える (L8 から書き始める)。だがその前に、L6 で consensus 側に進む: Malachite の `Context` trait — Malachite を使う任意の chain に対して Malachite が要求する型レベル API surface — を実装する。Associated type 10 個、factory method 4 個だ。L6 を終えると、自分の chain は「`Address` 型は何か、`Height` 型は何か、`Value` 型は何か」を Malachite に答えられるようになる。これが contract の **もう半分** だ。**L3 で書いた `ConsensusBridge` は自分 (openhl 側) が所有する trait** だったのに対し、**L6 で実装する `Context` は Malachite (ライブラリ側) が所有する trait** になる。自分が定義した契約に自分で impl を書くのと、外部ライブラリが定義した契約に対して自分の型で impl を埋めるのとでは、設計の力学が真逆 — 次のレッスンはその違いを体で覚える回でもある。
 ````
 
 ---

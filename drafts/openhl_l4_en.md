@@ -152,6 +152,47 @@ Walk through what each field is:
 
 The split between `pending` and `chain` matters: by the time `commit(hash)` is called, the block is already in `pending` (from a prior `build_payload`). `commit` moves it from pending → chain and updates `head`. This mirrors how a real EL maintains both an in-flight payload buffer and a finalized chain.
 
+Walking the 4 fields of `State` (`next_payload_id` / `pending` / `chain` / `head`) through the `build_payload` → `payload_ready` → `commit` lifecycle in one picture makes it obvious why the same shape gets reused in the real `RethEvmBridge` (L5) and `LiveRethEvmBridge` (L11+):
+
+```
+【 Block lifecycle inside InMemoryEvmBridge 】
+
+1. build_payload(parent, attrs)
+                       │
+                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ chain.get(&parent.0) → look up the parent's number          │
+   │ next_payload_id += 1; return that id as PayloadId           │
+   │ Synthesize a new ExecutedBlock (number = parent + 1, …)     │
+   │ pending.insert(PayloadId, ExecutedBlock)  ◄── speculative   │
+   └────────────────────────────────────────────────────────────┘
+                       │
+                       ▼  (return just the PayloadId to CL)
+
+2. payload_ready(id)
+                       │
+                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ pending.get(&id).cloned()  ◄── lend the unconfirmed block   │
+   │ (keep a copy in pending — it hasn't been committed yet)     │
+   └────────────────────────────────────────────────────────────┘
+                       │
+                       ▼  (return the ExecutedBlock)
+
+3. commit(hash)                  // CL calls this only after a 2/3+ quorum
+                       │
+                       ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │ Find and remove the block from pending                      │
+   │ chain.insert(hash.0, ExecutedBlock)  ◄── promote to canonical│
+   │ head = Some(hash)                    ◄── update the new head │
+   └────────────────────────────────────────────────────────────┘
+                       │
+                       ▼  (return Ok(()); the block is now finalized)
+```
+
+The key thing the picture pins down is "**pending = speculative (unconfirmed) / chain = finalized**" — the two lifetimes are physically separated at the map level. `build_payload` optimistically piles up; only `commit` has the authority to promote a block from pending to chain. A real Reth EL exposes the same shape under the names `pending blocks` and `canonical chain`, which is why **swapping in the real bridge in L5 / L11+ doesn't change how data flows** — only what backs the maps.
+
 **`impl InMemoryEvmBridge::new`** — the constructor. `#[must_use]` is a hint to clippy: if a caller writes `InMemoryEvmBridge::new();` without binding, that's almost certainly a bug.
 
 ### Step 4: Implement `ConsensusBridge` — `build_payload`
@@ -263,6 +304,8 @@ The flow:
 Note we don't remove from `pending` — the block lives in both maps after commit. Real impls might `pending.remove(&id)`, but for tests it doesn't matter.
 
 The `hex_short` helper is the next file section:
+
+> 📍 **Placement note.** `hex_short` lives **outside** the `impl ConsensusBridge for InMemoryEvmBridge { ... }` block, as a standalone private function at the end of the file (it takes no `&self` and depends on no struct state — it's a plain byte → string utility). Defining it inside the `impl` would make it look like a method on the trait and mislead readers into thinking `ConsensusBridge` requires it.
 
 ```rust
 fn hex_short(bytes: &[u8; 32]) -> String {
@@ -439,7 +482,9 @@ git checkout main
 ## Common questions
 
 **Q: My `commit_advances_head_and_records_block` test panics with "mutex poisoned".**
-The most common cause is that an earlier test panicked inside the same impl while holding the lock, leaving it in a poisoned state. Cargo runs tests in parallel by default; if you're sure the issue is real, run `cargo test -p openhl-evm -- --test-threads=1` to serialize. (In our case it's almost certainly a test-code bug, since each test creates its own `InMemoryEvmBridge::new()` — no shared state.)
+The most common cause is that an earlier test panicked inside the same impl while holding the lock, leaving it in a poisoned state. Cargo runs tests in parallel by default; if you're sure the issue is real, run `cargo test -p openhl-evm -- --test-threads=1` to serialize.
+
+*(That said: the tests in this course can't actually collide across threads — each test function builds its own `InMemoryEvmBridge::new()`, so the `Mutex<State>` isn't shared between tests. If you hit this error in practice, the real cause is that **the same test panicked at an earlier line while still holding the lock** (a failed assertion, a burst `unwrap()`, an `expect()` that fired, …) and then the next `state.lock()` call inside the same test poisoned-out. Before reaching for `--test-threads=1`, scroll to the **top** of the cargo-test output and find the first `thread 'tests::...' panicked at ...` line — that's the root panic. The mutex poison is self-inflicted within the one test, and lowering `--test-threads` won't make it go away.)*
 
 **Q: Should `pending` use `HashMap<PayloadId, _>` instead of `HashMap<u64, _>`?**
 Either works. The openhl convention is to use the inner type (`u64`) at the storage layer to avoid wrapping/unwrapping inside lookups. The public API still uses `PayloadId`. The trade-off: with `HashMap<PayloadId, _>`, you get type safety at the price of `.0` accessors on every key. With `HashMap<u64, _>`, you give up some type safety at the storage layer but avoid the noise. Personal preference; we picked `u64`.

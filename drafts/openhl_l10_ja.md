@@ -186,6 +186,49 @@ where
 
 `while let Some(msg) = channels.consensus.recv().await` loop が actor-message app の心臓だ: message を receive、variant で dispatch、(該当するなら) reply、continue。`recv()` が `None` を返したら channel が閉じている — それが error path だ。
 
+12 個のアームを 1 つずつ書く前に、この loop が何と何を繋いでいる中継地点なのかを 1 枚で見ておくと、各アームの「誰から来て、誰に返すか」を迷わず追える:
+
+```
+   [ Malachite Engine actors ]  (producer 側 — proposal / vote / Decided 等を生成)
+              │
+              │ AppMsg::ConsensusReady { reply, validator_set }
+              │ AppMsg::GetValue       { reply, height, round, ... }
+              │ AppMsg::Decided        { reply, certificate, ... }
+              │ … (合計 12 variant、`tokio::mpsc` で 1 本のチャネルに流れてくる)
+              ▼
+   ┌──────────────────────────────────────────────────────────────────────────┐
+   │ ◆ app_task: run_engine_app loop  (consumer 側、本レッスンで書く中央指令塔) │
+   │                                                                            │
+   │  while let Some(msg) = channels.consensus.recv().await { match msg { … } } │
+   │                                                                            │
+   │  各 arm がやることは 2 種類だけ:                                            │
+   │   1. reply.send(...)  ──► engine に値を返してアンブロックする               │
+   │   2. bridge.<method>().await ──► EL 側を駆動して結果を受け取る              │
+   └──────────────────────────────────────────────────────────────────────────┘
+              │                                                  ▲
+              │ bridge.build_payload / payload_ready / commit    │ FillResult /
+              ▼                                                  │ ExecutedBlock / Ok
+   [ ConsensusBridge impl ]  (StubBridge / InMemoryEvmBridge / RethEvmBridge / LiveRethEvmBridge)
+
+
+   ── 代表的な 1 サイクル ──────────────────────────────────────────────────
+
+   ① ConsensusReady    ── engine ──► app: 「準備できた、validator set を寄越せ」
+                          app ──► engine: reply.send(validator_set)
+
+   ② GetValue          ── engine ──► app: 「次の block を propose しろ (height, round)」
+                          app ──► bridge.build_payload + payload_ready
+                          app ──► engine: reply.send(LocallyProposedValue(value))
+
+   ③ Decided           ── engine ──► app: 「2/3+ で commit が成立した、certificate 入り」
+                          app ──► bridge.commit(hash)
+                          app ──► engine: reply.send(Next::Start)  または  Next::Stop
+                          decided.push(hash)
+                          if decided.len() >= stop_after_decisions { return Ok(decided) }
+```
+
+3 つの focal point: (a) **メッセージは engine → app の **片方向**だが、各メッセージに `oneshot::Sender` (reply) が同梱されている** ので、app が reply を返すまで engine 側の処理は parked になる (reply を忘れるとそこで永久に止まる)。(b) **app は engine と bridge の中継地点**であり、ロジック本体ではない — 重い計算 (build/commit) は bridge 側、合意の駆動は engine 側に閉じている。(c) **bridge が `B: ConsensusBridge` の generic なので、同じ loop で `StubBridge` / `InMemoryEvmBridge` / `RethEvmBridge` / `LiveRethEvmBridge` が全部走る** — L3 で trait surface を綺麗に定義した投資が、ここで多態性として効いてくる。
+
 ### Step 3: `ConsensusReady` と `StartedRound` の arm
 
 `match` 内に追加:
@@ -524,6 +567,8 @@ mod tests {
   7. クリーンアップに `handle.kill(None)` を呼ぶ。
 
 > 🛑 **やりがちな勘違い。** 「L9 の smoke test は 2 だったのに、ここで `worker_threads = 4` なのはなぜか?」 **Integration test の方がより多くの actor を並行に回すからだ。** Smoke test は spawn + kill だけで、メッセージを生成しなかった。Integration test は `run_engine_app` task (consume + reply) + bridge の async fn 呼び出し + 複数の内部 engine actor を走らせる。4 スレッドあれば全員に余裕がある。少ないと contention (遅い) や deadlock (hang) が起きる。4 で十分余裕がある。
+>
+> *(背景: actor モデル + 非同期チャネルを組み合わせた結合テストでは、複数の task が **互いのリプライをブロッキングに待ち合う** パターンが頻発する (engine actor は app の `reply.send(...)` を待ち、app は bridge の `.await` を待ち、bridge は engine から次の指示を待つ、という鎖)。ワーカースレッド数が足りないと、**全ワーカーが「リプライを待つタスク」で埋まり、肝心のリプライを送信する側のタスクにスケジューラが時間を割り当てられない**という「スレッド枯渇型デッドロック」が起きる。一見正しいコードがハングして見えるが、これは設計バグではなく runtime のサイジング不足だ。4 ワーカーあればパイプライン全体 (engine 内部の少なくとも 2-3 actor + app loop + bridge async) を同時に物理コアに散らせるので、このクラスのデッドロックは構造的に発生しない。)*
 
 ## テスト
 
@@ -552,7 +597,7 @@ cargo test -p openhl-consensus
 
 よくあるエラーと対処:
 
-- **テストが 15 秒以上 hang する** — `tokio::time::timeout` が発火している。最有力原因は `Decided` の exit path で reply を忘れていて、engine actor が待ち続けていることだ。Step 5 を再確認 — `if decided.len() >= stop_after_decisions` 分岐は return 前に **必ず** reply する。
+- **テストが 15 秒以上 hang する** — `tokio::time::timeout` が発火している。原因は常に同じクラスで、**`ConsensusReady` / `GetValue` / `Decided` のいずれかの arm で `reply.send(...)` を忘れているか、途中で `oneshot::Sender` を drop してしまっていること**だ。Engine actor は受け取り側 (こちらの app loop) が応答するまで永久に parked になる — タイムアウトも panic もなく、ひたすら待ち続ける。特に **`Decided` の exit path** (`if decided.len() >= stop_after_decisions { return Ok(decided) }` の分岐内) は油断しやすい: 早期 return を書くと reply を入れ忘れがちだ。**return 前に必ず reply する**。Step 3-5 の 3 arm 全てで、`reply.send(...)` の行が match arm の制御フローのどのパスからも到達できることを確認しよう。
 - **`error[E0277]: ConsensusBridge is not Send`** — bridge に `+ Send + Sync` bound が必要だ。または impl で `std::sync::Mutex` を使っている (Send) のに trait の `Send` 注釈を忘れている。`bridge.rs` を確認する。
 - **`bridge.committed.lock().expect("poisoned")` panic** — task が mutex 保持中に panic したときだけ起きる。普通は bridge impl 側の panic が原因だ。bridge の `build_payload` / `commit` の panic を確認する。
 - **`assert_eq!(decisions.len(), 1)` が落ちる** — `decisions` が空だ。Loop が `Decided` に到達していない。最有力原因は `GetValue` の handle を忘れていることだ (engine は `LocallyProposedValue` reply を待ち、reply なしでは進まない)。Step 4 を再確認。

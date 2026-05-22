@@ -77,7 +77,7 @@ Four things:
 
 This lesson teaches **the dependency-coexistence validation pattern**. When you depend on two large infrastructure crates (Reth and Malachite, in our case), you don't find out they conflict until you write the integration code — by which point you've invested heavily in code that *should* work but doesn't compile. **The validation pattern is to write the smallest possible test that exercises both at once, before writing the integration.** If the test passes, both deps resolve and link. If it fails, the failure is visible immediately, with a small blast radius.
 
-> 🛑 **Predict.** Before scrolling: why is the bootstrap test marked `--release` in the goal command? Hint: think about compile times and what dominates them. Reth's MDBX bindings + libp2p + alloy + rocksdb-style storage stack are *enormous* — debug-mode compile is ~2:34 first time, release is similar but the resulting binary runs significantly faster. The test itself only does a bootstrap and a chain-ID check, so we want fast runtime over fast compile *after the first compile*. Run `--release` after that first cold build.
+> 🛑 **Predict.** Before scrolling: why is the bootstrap test marked `--release` in the goal command? Hint: think about compile times and what dominates them. Reth's MDBX bindings + libp2p + alloy + rocksdb-style storage stack are *enormous* — the first compile saturates the machine and **even a fast multi-core workstation lands around ~2:34 for the debug build; on laptops or resource-constrained environments, 5-10 minutes is not unusual** (~600 crates in Reth alone). Release is similar in wall-clock time but the resulting binary runs significantly faster. The test itself only does a bootstrap and a chain-ID check, so we want fast runtime over fast compile *after the first compile*. Run `--release` after that first cold build. If the progress log appears stuck, it isn't — go do something else while it runs.
 
 ## Walk-through
 
@@ -267,6 +267,33 @@ The JSON is parsed via `serde_json::from_str(...)` into `Genesis`, then converte
 
 > 🛑 **Anti-fluency.** "Why a raw JSON string instead of constructing a `ChainSpec` directly in Rust?" **Because Reth's `ChainSpec` builder has 50+ fields and complex internal invariants.** Constructing one programmatically means catching up to every recent fork's required fields. Constructing from JSON via the `Genesis` deserializer means letting Reth's own type system enforce defaults and validity. **The JSON format is the chain's external interface anyway** — production chains all use the same JSON shape (look at `reth-chainspec/res/genesis/mainnet.json`).
 
+What L11's test is actually booting becomes obvious if you draw the task layout on the shared Tokio runtime. Up through L9-L10 only the left half (Malachite) was running; L11 onward **the right half (Reth) coexists on the same runtime**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ◆ Shared single multi-threaded Tokio Runtime (worker_threads = 4)            │
+│                                                                              │
+│  ┌────────────────────────────────────┐  ┌─────────────────────────────────┐│
+│  │ [Side A: Malachite consensus world]│  │ [Side B: Live Reth EL world]    ││
+│  │  (Already up since L9-L10)          │  │  (Boots in L11; wired in L12+)  ││
+│  │                                     │  │                                 ││
+│  │ ├─ Engine Driver actor tasks        │  │ ├─ TaskExecutor                 ││
+│  │ │   (BFT state machine, proposer)   │  │ │   (Reth background task mgr) ││
+│  │ ├─ libp2p networking task           │  │ ├─ MDBX storage engine task     ││
+│  │ │   (P2P gossip; isolated in CI)    │  │ │   (state DB in tempdir)       ││
+│  │ ├─ WAL / storage tasks              │  │ ├─ Payload builder task         ││
+│  │ └─ run_engine_app loop task         │  │ ├─ Mempool task                 ││
+│  │     (the L10 message router)         │  │ └─ Engine API / RPC stub tasks ││
+│  └────────────────────────────────────┘  └─────────────────────────────────┘│
+│                                                                              │
+│  L11's test verifies that these two worlds can coexist on a single process    │
+│  / single runtime without colliding on resources (threads / ports / Cargo     │
+│  features) — a "handshake," not yet a communication link.                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+The thing to internalize is "**A and B aren't talking to each other yet.**" All L11 proves is that both sides come up on the same Tokio runtime without collision; the actual `run_engine_app` ↔ `LiveRethEvmBridge` message flow gets wired in L12-L15. Even so, this is the moment Reth v2.2.0 and Malachite v0.5.0 — two of the largest crate trees in the L1 reference implementation universe — are first shown to slip past Cargo's feature unification and version constraints and live in one workspace at both build time and test time.
+
 ### Step 5: The `launch_and_check` helper
 
 Below `dev_chain_spec`:
@@ -384,7 +411,7 @@ Common errors and fixes:
 - **`error[E0432]: unresolved import 'reth_node_builder'`** — `crates/evm/Cargo.toml` is missing the `test-utils` feature. Re-check Step 2: it must be `features = ["test-utils"]`.
 - **`error: failed to resolve: use of undeclared crate or module 'reth_provider'`** — workspace-level `reth-provider = ...` is missing. Re-check Step 1.
 - **`error: feature 'test-utils' on 'reth-node-builder' requires feature 'X'`** — version skew. The Reth SHA you're pinning must match what `reth-node-builder` expects from its peer crates. All 12 reth-* deps must use the same SHA — re-check Step 1.
-- **`Reth dev node bootstrap failed: Failed to bind...`** — port conflict from a previous test run. `NodeConfig::test()` uses ephemeral ports, but stale state in tempdir can collide. Run `cargo clean -p openhl-evm` and retry.
+- **`Reth dev node bootstrap failed: Failed to bind...`** — `NodeConfig::test()` asks the kernel for **`:0` (auto-assigned ephemeral ports)** internally, so physical port collisions aren't really possible by design. When this error does surface, the cause is almost always that **the previous test run died via panic or Ctrl+C, the Tokio runtime didn't drain cleanly, and the socket / MDBX lock Reth was holding is still owned by a zombie process**. The right fix isn't `cargo clean` (it doesn't release OS-level port holds): (1) **wait a handful of seconds and re-run** — this clears most cases; (2) if it persists, find the leftover with `pgrep -f openhl-evm` / `pgrep -f reth` and `kill` it; (3) as a last resort, open a fresh shell so you're in a new process space.
 - **Test compiles but hangs > 30s** — `Runtime::test()` not working right. Check that you're using `#[tokio::test(flavor = "multi_thread", worker_threads = 4)]`, not the single-threaded default.
 
 ## Design reflection

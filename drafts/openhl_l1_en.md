@@ -233,6 +233,14 @@ The pattern is the same as `crates/types`. For each, create:
 - `crates/<name>/Cargo.toml` (same shape, only `name` field differs)
 - `crates/<name>/src/lib.rs` (empty other than doc comment)
 
+For example, for `codec`, first create the directory:
+
+```bash
+mkdir -p crates/codec/src
+```
+
+then drop in `crates/codec/Cargo.toml` and `crates/codec/src/lib.rs` using the `name` and doc comment from the table below. Repeat the same `mkdir -p crates/<name>/src` + two-file recipe for each of the remaining 8 crates.
+
 The 9 remaining crates and their doc comments:
 
 | Crate | `name` | `lib.rs` doc comment |
@@ -307,7 +315,7 @@ Expected output:
     Finished `dev` profile
 ```
 
-Some `unused_imports` warnings are OK (we declared `serde` as a workspace dep but most crates don't use it yet). Hard errors are NOT OK — if you see one, the most common causes are:
+Some "declared but unused dependency" warnings (the `unused_crate_dependencies` family) are OK — we declared `serde` as a workspace dep, but most crates still hold only a doc-comment `lib.rs`, so no actual `use serde::...` exists yet. They'll disappear lesson by lesson as real code lands. Hard errors are NOT OK — if you see one, the most common causes are:
 
 - **Typo in a crate name in workspace.members or in a per-crate Cargo.toml.** Cargo will name the missing crate; fix the typo.
 - **Missing `src/lib.rs` for a library crate.** Each crate listed in workspace.members must have either `src/lib.rs` or `src/main.rs`.
@@ -418,14 +426,16 @@ This time the incremental Reth cache means only Malachite needs fetching/compili
 After Step 9 finishes successfully:
 
 ```bash
-cargo check --workspace 2>&1 | tail -5
+cargo check --workspace
 ```
 
-Expected (the exact "x warnings" count and timing may differ):
+Expected (the cache from Steps 7-9 should be warm, so the second run lands in 1-2 seconds):
 
 ```
-    Finished `dev` profile [optimized + debuginfo] target(s) in 23.45s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.23s
 ```
+
+> ⚠️ Don't pipe through `| tail -5`. If something does fail, the actual error body streams out near the *top* of the compile pipeline, and `tail` will throw it away — leaving you with a useless trailing summary. Even if warnings feel noisy, keep the full log visible while you're debugging.
 
 You can also try:
 

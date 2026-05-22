@@ -93,6 +93,49 @@ pub struct LiveRethEvmBridge<P> {
 
 Step 2 が失敗してもログするが伝播はしない — Step 1 がすでに起きており、roll back すると不整合な状態に陥るからだ。**成功の **後** に続く副作用は、成功を **gate する** 副作用とは別物だ。**
 
+`commit` が呼ばれた瞬間に何が起こるか、Phase 1 (絶対成功) と Phase 2 (best-effort 副作用) の時間順を 1 枚に落とすと、なぜ Step 2 の失敗で Step 1 を巻き戻してはいけないのかが直感で押さえられる:
+
+```
+   [ openhl-consensus ] (Malachite アクター)
+              │
+              │ bridge.commit(block_hash).await
+              ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ ◆ LiveRethEvmBridge::commit()                                     │
+  │                                                                    │
+  │  [ Phase 1: カノニカル確定 (絶対成功する必要がある) ]                │
+  │   ├── state.lock() で Mutex<State> を獲得                            │
+  │   ├── pending から header を lookup (None なら Rejected)             │
+  │   ├── state.chain.insert(hash, header)  ◄── new canonical entry    │
+  │   └── state.head = Some(hash)           ◄── source of truth 更新   │
+  │                                                                    │
+  │   ※ ここを抜けた瞬間、consensus 上は「commit 済み」が確定する。       │
+  │      下流の `payload_ready` や次の `build_payload` がこの値を読む。   │
+  └──────────────────────────────┬───────────────────────────────────┘
+                                 │ (ローカル確定が成功 — もう引き返せない)
+                                 ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  [ Phase 2: ベストエフォートの副作用 (下流通知、fire-and-mostly-forget) ]│
+  │   ├── ForkchoiceState { head_block_hash, safe = head, finalized = head } │
+  │   └── if let Some(handle) = &self.engine_handle {                      │
+  │           let _ = handle.fork_choice_updated(state, None).await;       │
+  │       }                                                                │
+  └──────────────────────────────┬───────────────────────────────────┘
+                                 │
+                                 ▼ in-process Engine API
+                       ┌──────────────────────────────┐
+                       │ Reth Engine actor              │
+                       │ (現状は body を持たないので    │
+                       │  PayloadStatus::SYNCING で応答)│
+                       └──────────────┬───────────────┘
+                                      │ レスポンスは `let _ =` で破棄
+                                      ▼
+                              `commit` は Ok(()) を返す
+                              CL 側は何事もなかったかのように次の round へ
+```
+
+ポイントは 3 つ: (a) **Phase 1 の `state.chain.insert` + `state.head` 更新は consensus の "commit 済み" を表す source of truth** であり、ここを抜けたら下流 (`payload_ready`、次の `build_payload`) が即座にこの値を読みに来る。(b) **Phase 2 の `fork_choice_updated` は下流通知の副作用にすぎず、`SYNCING` / 接続失敗 / panic が起きてもログに残すだけで `Err` には変換しない** — もし Phase 2 失敗で `Err` を返したら、consensus は「commit 失敗」と誤認して既に確定した state を巻き戻そうとし、安全性が壊れる。(c) **`engine_handle: Option<...>` が `None` の場合は Phase 2 自体をスキップ** する — unit test では「Phase 1 だけ走らせて、Reth bootstrap なしに検証」ができる。L14 の integration test は `Some(handle)` を渡して両 phase が fire することを assert する。
+
 > 🛑 **考えてみよう。** スクロールする前に: なぜテストは `commit().await.expect(...)` が成功することだけを assert し、Reth の canonical chain head が動いたことは assert しないのか? ヒント: `build_payload` の出力に何が欠けているかを考える。Engine に渡す `ExecutedBlock` は header だけで、トランザクションも receipt も state root も無い。Reth の engine は canonical chain を advance させるために **実際の block body** が必要だ。`engine_newPayload` を先に送らない限り、`fork_choice_updated` は `SYNCING` (「この block をまだ知らない、body を fetch しろ」) を返す。Wire は接続されているが、データが違う。**L14 で証明するのは接続だ。payload execution は将来コースに先送りする。**
 
 ## 手順
@@ -247,7 +290,7 @@ impl<P> LiveRethEvmBridge<P> {
 
 3 個の新規メソッド:
 
-- **`with_engine_handle()`** — consume-and-return-self builder だ。`mut self` パラメータが所有権を取り、mutate して return する。canonical な Rust の「builder method」パターン。**`#[must_use]`** にしているのは、返り値を bind し忘れる (例: `bridge.with_engine_handle(h);`) と、修正された bridge がサイレントに drop されてしまうからだ。
+- **`with_engine_handle()`** — consume-and-return-self builder だ。`mut self` パラメータが所有権を取り、mutate して return する。canonical な Rust の「builder method」パターン。**`#[must_use]`** にしているのは、返り値を bind し忘れる (例: `bridge.with_engine_handle(h);`) と、修正された bridge がサイレントに drop されてしまうからだ。**注: これは `&mut self` ではなく `self` (所有権を消費) なので、`let bridge = ...; bridge.with_engine_handle(h);` のように 2 行に分けると `bridge` が move out されてしまい、以降の行で `bridge` を使えなくなる。**`let bridge = LiveRethEvmBridge::new(p, c).with_engine_handle(h);` のようにコンストラクタからチェーンして 1 つの式で書き切るのが idiomatic だ (Step 6 の integration test もまさにこの形)。後から条件付きで engine handle を差し込みたい場合は `let bridge = if want_engine { LiveRethEvmBridge::new(p, c).with_engine_handle(h) } else { LiveRethEvmBridge::new(p, c) };` のように、構築 → 設定 → 束縛を 1 つの式に閉じ込める。
 - **`has_engine_handle()`** — `const fn` accessor。Test と assertion 用だ (「接続が実際に効いたか?」)。`const` にしているのは、`Option::is_some()` チェックが runtime 計算を必要としないからだ。
 - **`new()` 初期化** — 唯一の変更は `engine_handle: None` だ。Handle が欲しい caller は `LiveRethEvmBridge::new(p, c).with_engine_handle(h)` を使う。
 
@@ -443,7 +486,8 @@ cargo test
 
 - **`error[E0282]: type annotations needed for `Option<ConsensusEngineHandle<_>>`** — `new()` の `engine_handle: None` は型パラメータが推論される必要がある。Struct フィールドの型注釈が欠けているか間違っているか、`EthEngineTypes` import を忘れているかだ。Step 3 を再確認。
 - **`error: cannot find struct `EthereumAddOns` in module `reth_node_ethereum::node`** — `reth-node-ethereum` と他の `reth-*` の version drift だ。すべての git-pinned reth dep は同じ SHA を共有しなければならない。
-- **テストが 30 秒以上 hang する** — `fork_choice_updated` 呼び出しが return していない可能性が高い。`let _ = handle.fork_choice_updated(state, None).await` (`.await` 付きで!) を使っているか確認する。`.await` が無いと future が完了前に drop されてしまう。
+- **テストが 30 秒以上 hang する** — 最有力原因は **`EthereumNode` のバックグラウンドタスク (engine actor、payload builder、libp2p、RPC stub 等) のクリーンアップが遅れ、Tokio runtime の解体がブロックされている**ことだ。テスト末尾で `EthereumNode` の所有権が drop される瞬間に、各 actor が `JoinHandle` の終了待ちに入るが、未処理の oneshot や残った socket が drop されないと runtime 全体が止まる。テストの最後に `drop(handle);` や明示的な `node.task_executor().graceful_shutdown_with_timeout(...)` などのクリーンアップが正しく走っているか確認しよう。
+  - 補足: `let _ = handle.fork_choice_updated(state, None).await` から **`.await` を落とすと** これは **hang ではなく silent skip** になる (`warning: unused implementor of 'Future'` が出て、future はその場で drop され、engine への通知そのものがスキップされる)。`.await` 忘れは「Reth への通知が走らない」バグなので、テストは hang せずに通り抜けてしまう。挙動が hang か silent skip かで原因の場所が全く違うので、症状を切り分けてからデバッグする。
 - **`assert!(bridge.has_engine_handle())` が fail する** — `with_engine_handle` は `#[must_use]` だが、return を bind し忘れている: `let bridge = ...new(...); bridge.with_engine_handle(h);` ではなく、`let bridge = ...new(...).with_engine_handle(h);` でなければならない。
 - **Commit が `Ok` を返すが、unknown hash テストでも `Ok` が返る (rejection なし)** — commit ロジックが local lookup の前に engine パスに到達している。Step 5 を再確認 — `?` が `BridgeError::Rejected` を伝播し、engine ブロックの前に exit するはずだ。
 

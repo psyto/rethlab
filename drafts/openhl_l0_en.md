@@ -104,8 +104,15 @@ You will have **two** directories on your machine:
 ```bash
 # Your workspace
 mkdir -p ~/code/my-openhl && cd ~/code/my-openhl
-cargo init --name openhl --lib
-# (we'll delete the default lib.rs in lesson 1; this just makes a workspace stub)
+cargo init --lib
+# (the package name will default to `my-openhl` from the directory name. L1
+#  restructures this into a workspace where the inner crates are `openhl-types`
+#  / `openhl-consensus` / …, so the root package name disappears at that point.
+#  We'll also delete the default lib.rs in L1 — this `cargo init` only exists
+#  to give git a starting commit to track against.)
+
+# Pin the same Rust toolchain in your own workspace too
+echo -e '[toolchain]\nchannel = "1.95.0"' > rust-toolchain.toml
 
 # Answer-key reference
 mkdir -p ~/code && cd ~/code
@@ -114,7 +121,7 @@ cd openhl-reference
 cargo check  # this WILL take a long time the first time — Reth is big
 ```
 
-If `cargo check` in `openhl-reference` passes, you have the right toolchain. Move on. If it fails, fix toolchain version first — rust-toolchain.toml in that repo pins Rust 1.95.0.
+If `cargo check` in `openhl-reference` passes, you have the right toolchain. Move on. If it fails, fix toolchain version first — `rust-toolchain.toml` in that repo pins Rust 1.95.0, and you've just dropped the same pin into `my-openhl/`, so `rustup` should auto-install the required toolchain for both.
 
 > 🛑 **Anti-fluency.** "I'll just edit `openhl-reference` directly." **No.** That repo is your answer key, not your workspace. Treat it as read-only. Edits to `my-openhl/` are yours; edits to `openhl-reference/` are confusing — you'll lose track of what you wrote vs what was already there.
 
@@ -135,9 +142,9 @@ Each row is one lesson. Each lesson ends with a passing `cargo test`.
 | **L8** | Codec + Node | `OpenHlCodec` + `Node` trait impl | engine start/stop smoke |
 | **L9** | App loop | `run_engine_app` — the actor pipeline that ties it all together | **`first_block_via_engine_actors`** — Module 1 milestone, BFT round closes |
 | **L10** | Live Reth | bootstrap a real Reth dev-node in a test | `reth_dev_node_bootstraps` |
-| **L11** | Live build_payload | `LiveRethEvmBridge` reads parent from a live provider | `live_bridge_builds_on_real_genesis` |
-| **L12** | Live validate_payload | wire `EthBeaconConsensus` for real header validation | validate-path tests |
-| **L13** | Live commit | wire `forkchoice_updated` via Reth's in-process Engine API | `commit_sends_forkchoice_to_engine` |
+| **L11** | Live bridge — build path | `LiveRethEvmBridge` (build_payload side) reads parent from a live provider | `live_bridge_builds_on_real_genesis` |
+| **L12** | Live bridge — validate path | `LiveRethEvmBridge` (validate_payload side) wires `EthBeaconConsensus` for real header validation | validate-path tests |
+| **L13** | Live bridge — commit path | `LiveRethEvmBridge` (commit side) wires `forkchoice_updated` via Reth's in-process Engine API | `commit_sends_forkchoice_to_engine` |
 | **L14** | Capstone | write the end-to-end test that openhl doesn't have yet — `run_engine_app` + `LiveRethEvmBridge` together | your own integration test |
 
 **L9 is the major milestone.** Finishing L9, you have BFT consensus producing a block end-to-end through your actor system. L10-L13 swap your stub Reth for real Reth. L14 lets you exercise the combined whole — something `psyto/openhl` itself hasn't built yet (at SHA `0844d58`), so you'll be **ahead** of the reference at the end.
@@ -174,7 +181,11 @@ cd ~/code/openhl-reference && cargo check    # expect: "Finished" eventually
 
 If all three pass, you are set up correctly. Move to L1.
 
-> **Final check.** In one sentence, what's the difference between `~/code/my-openhl` and `~/code/openhl-reference` in this course's workflow? If your answer doesn't mention "one is yours, one is the answer key, you write in the first and read the second to verify," re-read §5.
+> 💡 **Self-check before moving on**
+>
+> In one sentence, can you state the difference between `~/code/my-openhl` and `~/code/openhl-reference`?
+>
+> If you can't say in your own words "**one is the real workspace I write line by line, the other is the mirror I only consult when I'm stuck**," re-read §5 before starting L1. If you blur this distinction now, you'll eventually write code into `openhl-reference` by mistake and lose the boundary between what you wrote and what you borrowed. **Make the boundary muscle memory before moving on.**
 ````
 
 ---
