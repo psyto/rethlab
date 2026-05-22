@@ -39,7 +39,7 @@ export const en = {
   landing: {
     hero: {
       title: 'Rust Ethereum Systems Engineering',
-      subtitle: "Ethereum is a database + distributed system + compiler + networking stack + concurrency runtime — five systems-engineering disciplines glued by consensus, implemented in Rust by Reth, Revm, and Alloy. HyperEVM (Hyperliquid), Tempo (Stripe), OP-Reth (Optimism / Base), MegaETH, Berachain — every modern Rust EVM L1 is a Reth fork. Open source, in Rust, and almost nobody can read it. RethLab walks you through 13 source-reading courses across 4 tiers — EVM foundations through ten production apps — plus DIY Perp, a 4-course build-along where you construct your own open-source implementation of Hyperliquid from scratch.",
+      subtitle: "Hyperliquid, Tempo, OP-Reth, Berachain — every modern L1 sits on the Rust Reth stack. Demand has exploded; the protocol engineers who can actually read this codebase are still scarce worldwide.\n\nRethLab walks you through 13 source-reading courses across 4 tiers — Reth, Revm, Alloy — plus DIY Perp, a 5-course build-along where you construct Hyperliquid from `cargo init`.",
       cta: 'Start Training',
       ctaSecondary: 'Explore Courses',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -87,7 +87,7 @@ export const en = {
     },
     cta: {
       title: 'Hyperliquid, Tempo, Paradigm are hiring.',
-      description: "The Rust EVM stack is moving fast — Reth ships releases on a cadence most projects can't match, and the engineers who can read it are scarce. RethLab gives you the stack-reading depth plus ten portfolio-ready builds (MEV searcher, indexer, custom RPC, wallet backend, EIP-7702 sponsor, Foundry-style cheatcode, swap aggregator, frontrun-resistant router, cross-client validation harness, HTTP 402 / MPP machine-payments endpoint). The hires made in 2026 will be people who already showed up with these artifacts.",
+      description: "The Rust EVM stack moves at a punishing pace. Reth ships releases on a cadence most projects can't match, and the protocol engineers who can actually lead this ecosystem are in short supply.\n\nWhat RethLab delivers isn't lecture-grade theory. You ship ten portfolio-ready Build artifacts that prove you can hit the ground running — MEV searcher, EIP-7702 sponsor, Foundry-style cheatcode, cross-client validation harness, HTTP 402 / MPP machine-payments endpoint, and more.\n\nThe 2026 hiring slots at the top projects won't go to the people who talk specs. They'll go to the people who walk in carrying these artifacts.",
       cta: 'Start',
     },
     features: {
@@ -135,14 +135,14 @@ export const en = {
     },
     catalog: {
       title: 'Course Catalog',
-      subtitle: 'From beginner to expert across 4 tiers (foundations, source-reading of Reth / Revm / Alloy, L1 architecture, production apps), plus DIY Perp — a 4-course build-along where you construct your own open-source implementation of Hyperliquid from scratch.',
+      subtitle: 'From beginner to expert across 4 tiers (foundations, source-reading of Reth / Revm / Alloy, L1 architecture, production apps), plus DIY Perp — a 5-course build-along where you construct your own open-source implementation of Hyperliquid from scratch.',
       searchPlaceholder: 'Search courses...',
       noResults: 'No courses found matching your filters.',
     },
     diyPerpSeries: {
       title: 'About the DIY Perp series',
       intro: 'Hyperliquid is the largest perpetual DEX by volume, and its entire stack (HyperBFT consensus, HyperCore matching engine, HyperEVM execution) is closed source. `psyto/openhl` is the open reference implementation — a Rust workspace that wires real Reth (EVM) into real Malachite (BFT) and adds pure-state CLOB, funding, and vault subsystems on top. The CL/EL boundary is just four messages; the state machines are I/O-free and deterministic.',
-      mapping: 'The DIY Perp series is the build-along course track for openhl. You start from `cargo init` on an empty directory and reach a runnable open-source implementation of Hyperliquid over four courses — Consensus → CLOB → Precompiles → Funding — with openhl pinned to specific commit SHAs as the byte-identical answer key for each lesson.',
+      mapping: 'The DIY Perp series is the build-along course track for openhl. You start from `cargo init` on an empty directory and reach a runnable open-source implementation of Hyperliquid over five courses — Consensus → CLOB → Precompiles → Funding → Liquidation — with openhl pinned to specific commit SHAs as the byte-identical answer key for each lesson.',
       openhlLinkText: 'psyto/openhl',
       architectureLinkText: 'Architecture overview →',
     },
@@ -312,8 +312,8 @@ export const en = {
   },
   about: {
     title: 'About RethLab',
-    subtitle: 'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — Reth, Revm, and Alloy implement all five in Rust. Hyperliquid runs on it. Tempo launched on it. Paradigm built it — Reth, Revm, Foundry, Alloy. RethLab walks you through 13 source-reading courses across 4 tiers — from EVM foundations, to reading Alloy/Revm/Reth source line by line, to architecting L1 consensus, to shipping ten production-grade apps — plus DIY Perp, a 4-course build-along where you construct your own open-source implementation of Hyperliquid from scratch (`psyto/openhl` as the byte-identical reference).',
-    bio: '15+ years shipping mission-critical financial systems — core banking, retail deposits, mortgages, KYC, regulatory reporting — across Tokyo (Shinsei Bank), Bangalore (offshore dev), and Hong Kong (free English-learning email, 500K+ users). Now Head of Sales Engineering at SBI R3 Japan, focused on Solana enterprise adoption and real-world-asset tokenization, while building actively across Bitcoin, Ethereum, Solana, Hyperliquid, and Corda.\n\nI built RethLab because when I tried to learn Reth / Revm / Alloy / Foundry properly, I hit the gap the curriculum walks through: the docs are scattered, the source is dense, and there is no clear path from "I know some Rust" to "I can ship production EVM infrastructure." I learned by doing, then turned what worked into the curriculum I wish I\'d had — 17 courses total, ~200+ lessons. 13 source-reading courses are organized across 4 tiers (Foundations / Source-Reading / L1 Architecture / Production); the Advanced tier treats what most curricula present as "blockchain magic" — BFT consensus, cross-chain bridges, sequencer & rollup architecture, P2P networking, validator operations — as standard distributed-systems / compiler / networking / concurrency engineering, and the Expert tier ships ten end-to-end apps. On top of that, the DIY Perp series is a 4-course build-along where you construct your own open-source implementation of Hyperliquid from scratch, with my open-source reference implementation [`psyto/openhl`](https://github.com/psyto/openhl) as the byte-identical answer key per lesson. Source-first, openly published.\n\nPersonally, I\'m interested in the teams shipping this stack — Paradigm and Tempo above all.',
+    subtitle: "A training programme for Rust Ethereum Systems Engineering. The stack Hyperliquid runs on, Stripe's Tempo launched on, and Paradigm built — Reth, Revm, Foundry, Alloy — read at the source level.\n\nFrom EVM foundations through line-by-line source reading, L1 architecture, to shipping ten production-grade apps — 13 courses across 4 tiers. Plus DIY Perp, a 5-course build-along where you construct Hyperliquid from `cargo init` (`psyto/openhl` as the byte-identical reference).",
+    bio: '15+ years shipping mission-critical financial systems — core banking, retail deposits, mortgages, KYC, regulatory reporting — across Tokyo (Shinsei Bank), Bangalore (offshore dev), and Hong Kong (free English-learning email, 500K+ users). Now Head of Sales Engineering at SBI R3 Japan, focused on Solana enterprise adoption and real-world-asset tokenization, while building actively across Bitcoin, Ethereum, Solana, Hyperliquid, and Corda.\n\nI built RethLab because when I tried to learn Reth / Revm / Alloy / Foundry properly, I hit the gap the curriculum walks through: the docs are scattered, the source is dense, and there is no clear path from "I know some Rust" to "I can ship production EVM infrastructure." I learned by doing, then turned what worked into the curriculum I wish I\'d had.\n\n17 courses total, ~200+ lessons. 13 source-reading courses across 4 tiers, plus DIY Perp — a 5-course build-along with my open-source reference implementation [`psyto/openhl`](https://github.com/psyto/openhl) as the byte-identical answer key per lesson. Source-first, openly published.\n\nPersonally, I\'m interested in the teams shipping this stack — Paradigm and Tempo above all.',
     background: {
       tradfi: 'Background',
       tradfiDetail: '15+ yrs of mission-critical FS at Shinsei Bank: core banking (Flexcube), retail deposits, mortgages, KYC/FATCA, Zengin payments, ATM. Backbase (Dutch Banking-as-a-Service unicorn) as PM.',
@@ -364,7 +364,7 @@ export const en = {
       sourceReadingHeader: 'Source-Reading',
       sourceReadingSubheader: '13 courses across 4 difficulty tiers — read production Rust EVM source line by line',
       buildAlongHeader: 'Build-Along',
-      buildAlongSubheader: '4 courses where you construct your own Hyperliquid implementation from scratch',
+      buildAlongSubheader: '5 courses where you construct your own Hyperliquid implementation from scratch',
       subtitle: 'Finish all four tiers and you can read, design, and ship Rust Ethereum Systems Engineering at the standard used by Paradigm, Hyperliquid, and Tempo.',
       basicsDesc: 'Three courses that ground you in the Rust EVM stack. Rust and Alloy setup, EVM concepts, byte-level dispatch loop. The foundation for the source-reading tier.',
       fundamentals: 'Fundamentals',
@@ -372,7 +372,7 @@ export const en = {
       hyperliquid: 'Advanced',
       hyperliquidDesc: 'Five courses on architecting an L1: BFT consensus, cross-chain bridges, sequencer & rollup architecture, P2P networking, validator operations. The design skills behind Hyperliquid- and Tempo-class chains.',
       expertDesc: 'Two courses for production and app engineering. Reth Expert covers performance, MDBX, Tokio, MEV, zkEVM, and Reth fork ops. Building with the Stack ships ten runnable apps — MEV searcher, indexer, wallet backend, order router, an HTTP 402 machine-payments endpoint, and more.',
-      diyPerpDesc: 'Build your own open-source implementation of Hyperliquid (perpetual DEX) from scratch. Four build-along courses cover consensus, the CLOB matching engine, custom EVM precompiles, and the funding state machine — each lesson diffed against `psyto/openhl` as the answer key.',
+      diyPerpDesc: 'Build your own open-source implementation of Hyperliquid (perpetual DEX) from scratch. Five build-along courses cover consensus, the CLOB matching engine, custom EVM precompiles, the funding state machine, and the liquidation engine — each lesson diffed against `psyto/openhl` as the answer key.',
       diyPerpTag: 'Project',
       hlDev: 'Reth Devs',
       hlDevDesc: 'Reth Staged Sync, custom RPC methods, ExEx, and the Reth SDK for building App-chains.',
