@@ -131,7 +131,6 @@ export const en = {
       advanced: 'Advanced',
       expert: 'Expert',
       diyPerp: 'DIY Perp',
-      concept: 'Concept',
     },
     catalog: {
       title: 'Course Catalog',

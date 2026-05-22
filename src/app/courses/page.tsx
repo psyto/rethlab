@@ -16,7 +16,6 @@ const DIFFICULTY_COLORS = {
 
 const TRACK_COLORS: Record<string, string> = {
   'diy-perp': 'bg-pink-500/10 text-pink-400 border-pink-500/20',
-  concept: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
 };
 
 export default function CourseCatalogPage() {
@@ -98,9 +97,7 @@ export default function CourseCatalogPage() {
                   >
                     {course.track === 'diy-perp'
                       ? t('courses.categories.diyPerp')
-                      : course.track === 'concept'
-                        ? t('courses.categories.concept')
-                        : course.track}
+                      : course.track}
                   </span>
                 ) : (
                   <span
