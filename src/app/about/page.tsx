@@ -26,7 +26,7 @@ export default function AboutPage() {
 
       <motion.div {...fadeIn}>
         <h1 className="text-3xl font-bold">{t('about.title')}</h1>
-        <p className="mt-4 text-lg text-muted-foreground">
+        <p className="mt-4 whitespace-pre-line text-lg text-muted-foreground">
           {t('about.subtitle')}
         </p>
       </motion.div>
