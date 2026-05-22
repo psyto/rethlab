@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Rust Ethereum Systems Engineering',
-      subtitle: 'Ethereum はデータベース、分散システム、コンパイラ、ネットワーク、並行ランタイムが高度に融合した巨大なシステムです。そして、その最先端の実装が Rust 製の Reth / Revm / Alloy スタックです。\n\n事実、HyperEVM (Hyperliquid)、Tempo (Stripe)、OP-Reth、MegaETH、Berachain といった次世代の主要高速 L1 は、すべて Reth の系譜（Fork）にあります。市場の需要は爆発している一方、このコードベースを完全にマスターしているプロトコルエンジニアは世界でも極めて稀です。\n\nRethLab では、EVM の基礎から本番プロダクト 10 本の解剖までを行う「ソースコード読解 13 コース（4 ティア）」を開講。さらに、Hyperliquid のアーキテクチャを cargo init から自作するハンズオンシリーズ『DIY Perp』（全 5 コース）を通じて、世界のトップ 1% に君臨するシステムエンジニアへの道を提示します。',
+      subtitle: 'Hyperliquid、Tempo、OP-Reth、Berachain — 次世代 L1 はすべて Rust 製 Reth スタック上に。需要は爆発、しかし真に読めるプロトコルエンジニアは世界でも稀です。\n\nRethLab は、Reth・Revm・Alloy をソース単位で読み解く「13 コース・4 ティア」と、Hyperliquid を `cargo init` から自作する『DIY Perp』全 5 コースを提供します。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
@@ -89,7 +89,7 @@ export const ja: TranslationKeys = {
     },
     cta: {
       title: 'Hyperliquid, Tempo, Paradigm が牽引する、Rust EVM スタックの最前線。',
-      description: '驚異的なハイペースで開発が進む Reth。競合を突き放すスピードでアップデートが繰り返される一方、このエコシステムを真にリードできるプロトコルエンジニアは圧倒的に不足しています。\n\nRethLab が目指すのは、単なるコードの座学ではありません。あなたの GitHub を飾り、即戦力を証明する 10 本の高度な Build 成果物 の実装です（MEV searcher、EIP-7702 sponsor、Foundry スタイルの cheatcode、cross-client 検証ハーネス、HTTP 402 / MPP 機械間決済エンドポイントなど）。\n\n2026 年、激化するトッププロジェクトの採用枠。それを手にするのは、仕様書を語る人ではなく、これらの強固な成果物を手に、実装力で語る人たちです。',
+      description: '驚異的なハイペースで開発が進む Reth。競合を突き放すスピードでアップデートが繰り返される一方、このエコシステムを真にリードできるプロトコルエンジニアは圧倒的に不足しています。\n\nRethLab が提供するのは、単なるコードの座学ではありません。あなたの GitHub を飾り、即戦力を証明する 10 本の高度な Build 成果物を実装します（MEV searcher、EIP-7702 sponsor、Foundry スタイルの cheatcode、cross-client 検証ハーネス、HTTP 402 / MPP 機械間決済エンドポイントなど）。\n\n2026 年、激化するトッププロジェクトの採用枠。それを手にするのは、仕様書を語る人ではなく、これらの強固な成果物を手に、実装力で語る人たちです。',
       cta: '始める',
     },
     features: {
@@ -314,8 +314,8 @@ export const ja: TranslationKeys = {
   },
   about: {
     title: 'RethLabについて',
-    subtitle: 'Rust Ethereum Systems Engineering を体系化したトレーニングプログラム。\n\nEthereum は、データベース、分散システム、コンパイラ、ネットワーク、そして並行ランタイムをコンセンサスで束ねた「5 つのシステム・エンジニアリング層」で構成されています。Reth・Revm・Alloy は、そのすべてを Rust で具現化した最先端のスタックです。\n\nHyperliquid を動かすアーキテクチャ基盤。Stripe の Tempo がローンチした基盤。そして Paradigm がビルドした Reth・Revm・Foundry・Alloy。\n\nRethLab は、EVM の基礎から本番ソースの行単位読解、L1 アーキテクチャ設計、そして本番クオリティのアプリ 10 本の出荷までを網羅する「4 ティア・13 コースのソース読解カリキュラム」を提供。さらに、Hyperliquid のオープンソース実装を一からスクラッチで自作する、全 5 コースのビルドアロングシリーズ『DIY Perp』（リファレンス実装: `psyto/openhl`）を展開します。',
-    bio: '15 年以上にわたり、金融機関のミッションクリティカルなシステム（コアバンキング、リテール預金、住宅ローン、KYC、規制対応など）を、東京（新生銀行）、バンガロール（オフショア開発リード）、香港（50 万ユーザー超の英語学習サービス）でローンチしてきました。現在は SBI R3 Japan の Head of Sales Engineering として、金融機関向けの Solana エンタープライズ採用と RWA（現実資産）トークン化を推進。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda のすべてでアクティブにビルドを続けています。\n\nRethLab を立ち上げたのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとしたとき、「まさにこのカリキュラムが埋めようとしている断絶」にぶつかったからです。ネット上のドキュメントは散在し、ソースコードは難解極まる。「Rust が少し書ける」という状態から、「本番級の EVM システムをデプロイできる」状態へ到達するための明確な道筋はどこにもありませんでした。私自身が泥臭く学び、最も効果的だったアプローチを「自分が当時欲しかった理想のカリキュラム」として結晶化させたのが、この RethLab です。\n\n全 17 コース、約 200+ レッスン。ソース読解の 13 コースは 4 ティア（基礎 / ソース読解 / L1 アーキテクチャ / 本番）で構成。Advanced ティアでは、多くの人が「ブロックチェーンの魔法」として片付ける対象（BFT コンセンサス、クロスチェーンブリッジ、シーケンサー＆ロールアップ、P2P、バリデータ運用）を、分散システム／コンパイラ／ネットワーク／並行性の標準的なエンジニアリングとして解体。Expert ティアでは、本番水準で動く 10 本のアプリをエンドツーエンドで実装します。さらに『DIY Perp』シリーズは全 5 コースのビルドアロングで、cargo init から Hyperliquid のオープンソース実装を一から自作する構成。私のリファレンス実装 [`psyto/openhl`](https://github.com/psyto/openhl) が、レッスンごとに byte-identical な答え合わせとして機能します。Source-first、そして完全オープン。\n\n個人的には、このスタックを本番運用しているチーム（特に Paradigm と Tempo）に強い関心を持っています。',
+    subtitle: 'Rust Ethereum Systems Engineering を体系化したトレーニングプログラム。Hyperliquid を動かす基盤、Stripe の Tempo がローンチした基盤、Paradigm がビルドした Reth・Revm・Foundry・Alloy — その本物のソースコードを読み解きます。\n\nEVM の基礎から本番ソースの行単位読解、L1 アーキテクチャ設計、本番クオリティのアプリ 10 本の出荷までを網羅する「4 ティア・13 コース」を提供。さらに、Hyperliquid のオープンソース実装を一からスクラッチで自作する『DIY Perp』全 5 コース（リファレンス: `psyto/openhl`）を展開します。',
+    bio: '15 年以上にわたり、金融機関のミッションクリティカルなシステム（コアバンキング、リテール預金、住宅ローン、KYC、規制対応など）を、東京（新生銀行）、バンガロール（オフショア開発リード）、香港（50 万ユーザー超の英語学習サービス）でローンチしてきました。現在は SBI R3 Japan の Head of Sales Engineering として、金融機関向けの Solana エンタープライズ採用と RWA（現実資産）トークン化を推進。並行して Bitcoin、Ethereum、Solana、Hyperliquid、Corda のすべてでアクティブにビルドを続けています。\n\nRethLab を立ち上げたのは、自分が Reth / Revm / Alloy / Foundry を本気で学ぼうとしたとき、「まさにこのカリキュラムが埋めようとしている断絶」にぶつかったからです。ネット上のドキュメントは散在し、ソースコードは難解極まる。「Rust が少し書ける」という状態から、「本番級の EVM システムをデプロイできる」状態へ到達するための明確な道筋はどこにもありませんでした。私自身が泥臭く学び、最も効果的だったアプローチを「自分が当時欲しかった理想のカリキュラム」として結晶化させたのが、この RethLab です。\n\n全 17 コース、約 200+ レッスン。ソース読解 13 コース（4 ティア構成）と『DIY Perp』全 5 コースのビルドアロングで、私のリファレンス実装 [`psyto/openhl`](https://github.com/psyto/openhl) が、レッスンごとに byte-identical な答え合わせとして機能します。Source-first、そして完全オープン。\n\n個人的には、このスタックを本番運用しているチーム（特に Paradigm と Tempo）に強い関心を持っています。',
     background: {
       tradfi: '経歴',
       tradfiDetail: '新生銀行にて 15 年以上、金融機関のミッションクリティカル開発に従事（コアバンキング (Flexcube)、リテール預金、住宅ローン、KYC/FATCA、全銀システム、ATM）。Backbase（オランダ発の Banking as a Service ユニコーン）にて PM を担当。',
