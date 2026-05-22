@@ -47,6 +47,59 @@ cargo test -p openhl-evm --release
 - パターン（precompile が global Arc から read する）が証明されたので、今後の stage で別の read precompile（best_ask、depth、mid-price など）に複製できる。
 - Module 3 (Write precompile、L7-L9) は同じインフラの上に、逆方向で構築する：precompile が CLOB state に **書く** ようにする。
 
+### E2E ラウンドトリップ: Solidity → CLOB → Solidity
+
+L6 で点灯する full path をひと目で:
+
+```
+ Solidity contract                                                  .sol
+   (uint256 price, uint256 qty) = abi.decode(
+       staticcall(gas, 0x...0c1b, "", 64), (uint256, uint256)
+   );
+        │                                                            ▲
+        │ STATICCALL (read-only)                                     │ 64-byte response
+        ▼                                                            │
+ ┌───────────────────────────────────────────────────────────────────┴───┐
+ │ Reth EVM dispatch                                         [L1/L2/L3]  │
+ │   spec → openhl_precompiles_for(spec) → registry table                │
+ │   0x...0c1b ➜ Precompile { execute: read_best_bid, base_gas: 500 }    │
+ └─────────────────────────────────┬─────────────────────────────────────┘
+                                   │ fn pointer call
+                                   ▼
+ ┌───────────────────────────────────────────────────────────────────────┐
+ │ read_best_bid(input, gas_limit, _env)              [L2 body + L5 swap]│
+ │   1. let mut out = vec![0u8; 64];                                     │
+ │   2. match current_best_bid() {                                       │
+ │        Some((p, q)) ➜ encode into out  ──┐                            │
+ │        None         ➜ zero buffer        │ (encoding 経路は ↑ へ)     │
+ │      }                                   │                            │
+ │   3. PrecompileOutput { gas_used: 500, bytes: out }                   │
+ └─────────────────────────────────┬────────┼────────────────────────────┘
+                                   │        │
+                                   ▼        │
+ ┌────────────────────────────────────────  ┴────────────────────────────┐
+ │ static CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>>     [L4 plumbing] │
+ │   ① RwLock.read()        ─ install されているか? (read-mostly)        │
+ │   ② Option.as_ref()      ─ 未 install なら None → zero で即帰る       │
+ │   ③ Arc::clone(arc)      ─ bridge と所有権を分け合う                  │
+ │   ④ inner Mutex.lock()   ─ マッチングエンジンを排他保護               │
+ └─────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+ ┌───────────────────────────────────────────────────────────────────────┐
+ │ Book::best_bid_with_qty()              [Course 7 — マッチングエンジン]│
+ │   bids: BTreeMap<RevPrice, OrderQueue>.iter().next()                  │
+ │   → (Price, Qty)  または  None                                        │
+ └───────────────────────────────────────────────────────────────────────┘
+
+ 戻り経路 (encoding 側):
+   out[24..32].copy_from_slice(&price.0.to_be_bytes());  // slot 1 の右端 8 byte
+   out[56..64].copy_from_slice(&qty.0.to_be_bytes());    // slot 2 の右端 8 byte
+   // 上位 24 byte は vec![0u8; 64] の zero-init のまま → u64 を u256 に zero-extend
+```
+
+「Module 2 完了」とは、この縦線が**端から端まで実線で書ける状態**になったということ。L6 のテストは、まさにこの線が途中で断線していないことを 1 本の `assert_eq!` で証明する — `(250, 7)` という値が、Book → Mutex → RwLock → registry → EVM → 呼び出し元、というすべての関門を通り抜けてきたという観測そのものだ。L4 の配管、L5 の通電、L6 の計測がここで合流する。
+
 ## おさらい
 
 L5 終了時点の状態：

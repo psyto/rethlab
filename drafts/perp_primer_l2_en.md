@@ -86,6 +86,7 @@ The two thresholds are different on purpose:
 - Initial > maintenance: a trader who barely passes initial margin has room to take a small adverse mark move before they hit liquidation
 - Without the gap, every position opened at the limit would liquidate immediately on any unfavorable tick
 - The gap is the *buffer* the venue gives traders to make decisions (add collateral, partial-close, etc.) before forced liquidation
+- **It's also a defense line for the system itself.** Maintenance isn't a "you die instantly" line — the gap buys the liquidation engine **enough slippage room + startup latency** to submit force-close orders into the market and have them fill. The L3 force-close flow burns through this room as its budget — the thinner the room, the more the insurance fund has to absorb the shortfall.
 
 **Margin ratio** is the central quantity:
 
@@ -112,26 +113,66 @@ The Liquidatable / Underwater distinction matters because it determines *who cov
 
 This is the four-state classification the Build OpenHL — Liquidation course implements as the `MarginHealth` enum. Same four states, same boundary conditions.
 
+### The four states on one axis
+
+Lay `margin_ratio` out as a single number line from high to low, and the four states map to four adjacent intervals:
+
+```
+   high ◄────────────── margin_ratio = equity / notional ────────────► low / negative
+        20%             10%                   2%                0%
+   ─────┼──────────────┼─────────────────────┼─────────────────┼─────────►
+        │              │                     │                 │
+        │  ┌────────┐  │   ┌──────────┐      │ ┌────────────┐  │ ┌──────────┐
+        │  │  Safe  │  │   │  AtRisk  │      │ │Liquidatable│  │ │Underwater│
+        │  │        │  │   │          │      │ │            │  │ │          │
+        │  │ open + │  │   │ hold     │      │ │ engine     │  │ │ engine   │
+        │  │  add   │  │   │ only, no │      │ │ force-     │  │ │ close +  │
+        │  │ allowed│  │   │ new risk │      │ │ closes     │  │ │ insurance│
+        │  └────────┘  │   └──────────┘      │ └────────────┘  │ │   fund   │
+        │              ▲                     ▲                 ▲ └──────────┘
+        │     initial margin (10%)   maintenance margin (2%)  equity = 0
+        │              │                     │                 │
+        │   ratio ≥    │  maintenance ≤      │  0 ≤ ratio <    │  equity < 0
+        │   initial    │  ratio < initial    │  maintenance    │  (notional still > 0)
+        │              │                     │                 │
+        │  branch:     │  branch:            │  branch:        │  branch:
+        │  if ratio    │  else if ratio      │  else if equity │  else
+        │   ≥ initial  │   ≥ maintenance     │   ≥ 0           │   { Underwater }
+        │   {Safe}     │   {AtRisk}          │   {Liquidatable}│
+        │                                                      │
+        └─ Numbers in the example below ($10k coll, 0.5 BTC long, entry $100k) ──┐
+                                                                                  │
+              Safe → AtRisk        boundary: mark = $88,889  (−11.1% from entry)  │
+              AtRisk → Liquidatable boundary: mark = $81,633  (−18.4% from entry) │
+              Liquidatable → Underwater boundary: mark = $80,000  (−20.0%)        │
+                                                                                  │
+        ───────────────────────────────────────────────────────────────────────────┘
+```
+
+This is the picture: the `MarginHealth` decision reduces to **a 4-interval classification on a single scalar** (margin_ratio, plus the sign of equity). L3 walks through what the engine actually does in each interval — `Safe` and `AtRisk` do nothing (the trader is in control), `Liquidatable` triggers a market force-close, `Underwater` adds an insurance-fund draw on top. **Each code branch maps 1-to-1 to one interval on the number line** — which is why `match MarginHealth { Safe => …, AtRisk => …, Liquidatable => …, Underwater => … }` reads so cleanly in Rust.
+
 ## Worked example — same position, five mark prices
 
 Trader: $10k collateral, 0.5 BTC long, entry $100,000. Hyperliquid params (initial 10%, maintenance 2%).
 
 | Mark | Notional | PnL | Equity | Ratio | State |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **$100,000** | $50,000 | $0 | $10,000 | **20%** | Safe |
+| **$100,000** | $50,000 | $0 | $10,000 | **20.0%** | Safe (initial state) |
 | **$95,000** | $47,500 | −$2,500 | $7,500 | **15.8%** | Safe |
+| **$88,889** | $44,444 | −$5,556 | $4,444 | **10.0%** | **Safe ↔ AtRisk boundary (exact)** |
 | **$85,000** | $42,500 | −$7,500 | $2,500 | **5.9%** | AtRisk |
 | **$82,000** | $41,000 | −$9,000 | $1,000 | **2.4%** | AtRisk (barely) |
-| **$81,500** | $40,750 | −$9,250 | $750 | **1.8%** | **Liquidatable** |
-| **$80,000** | $40,000 | −$10,000 | $0 | **0%** | Liquidatable |
+| **$81,633** | $40,816 | −$9,184 | $816 | **2.0%** | **AtRisk ↔ Liquidatable boundary (exact)** |
+| **$81,500** | $40,750 | −$9,250 | $750 | **1.8%** | Liquidatable |
+| **$80,000** | $40,000 | −$10,000 | $0 | **0.0%** | Liquidatable (zero equity — next tick risks Underwater) |
 | **$78,000** | $39,000 | −$11,000 | −$1,000 | **−2.6%** | **Underwater** |
 
 Two boundary crossings to notice:
 
-1. **Mark $87,500 → $82,000 (Safe → AtRisk)**: the trader can still hold but can no longer add to the position or take new positions. UI typically warns the user at this point.
-2. **Mark $82,000 → $81,500 (AtRisk → Liquidatable)**: the engine triggers force-close. Below maintenance, the trader's collateral can no longer cover the trade plus liquidation fee.
+1. **Safe → AtRisk (boundary at mark $88,889, −11.1% from entry)**: between the $95,000 and $85,000 rows. Below $88,889 the trader can still hold but can no longer add to the position or open new ones. The UI typically warns the user at this point.
+2. **AtRisk → Liquidatable (boundary at mark $81,633, −18.4% from entry)**: between the $82,000 and $81,500 rows. Below $81,633 the engine triggers force-close. Below maintenance, the trader's collateral can no longer cover the trade plus liquidation fee.
 
-In the same example, mark would need to drop only **18.5% from entry** to hit Liquidatable. That's the inverse of leverage: at 5× leverage, an 18.5% adverse move (≈ 1/5 × maintenance gap) cleans out the position. At 10× leverage, it would be ~9%. At 50× leverage, ~1.8% (a routine intraday move).
+In the same example, mark would need to drop only **about 18.4% from entry** ($81,633 / $100,000) to hit Liquidatable. That's the inverse of leverage: at 5× leverage (notional/equity = $50k/$10k), an 18.4% adverse move (≈ 1/5 × maintenance gap) cleans out the position. At 10× leverage, it would be ~9%. At 50× leverage, ~1.8% (a routine intraday move).
 
 **Leverage at the engine is risk-symmetric**: high leverage = high upside on favorable moves, *but a small adverse move is enough to liquidate*. The math doesn't favor either side; the trader chose the risk profile when they opened the position.
 

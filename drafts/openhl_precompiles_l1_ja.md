@@ -142,6 +142,8 @@ tempfile             = "3"
 
 **`reth-node-api` だけは workspace 経由ではなく、1 回限りの直接 git dep として宣言する。** workspace の `Cargo.toml` には宣言を置かず、git+rev を inline で書く。これは意図的だ — `reth-node-api` を使う crate は `openhl-evm` だけで、workspace の他の部分には不要。workspace dep に昇格させると、すべての crate の build graph がこれを把握する羽目になる。
 
+> ⚠️ **rev は他の `reth-*` クレートと完全一致させる。** inline で `rev = "88505c7..."` を書くときは、**workspace で固定されている他の `reth-*` クレートとまったく同じコミットハッシュ**でなければならない。Reth は内部 crate 間の型 (`FullNodeTypes`、`NodeTypes`、`BuilderContext` 等) を厳格に共有しており、Cargo の同一バージョン・同一ソースルールにより、わずかな rev のズレでも「同じ名前だが別の型」として扱われ、`expected ChainSpec, found ChainSpec` のような難解な型不一致エラーが大量発生する。`reth-node-api` を独自に「最新版」へ書き換えたい誘惑は強いが、必ず他の `reth-*` の rev をまず upgrade してから合わせること。
+
 > 🛑 **やりがちな勘違い。** 「Reth 関連の依存はすべて workspace dep にすべき、それがパターンだ」 — **必ずしもそうではない。** workspace dep が有用なのは、複数の crate が同じ依存を同じバージョンで必要とする場合。1 つの crate でしか必要としないなら、inline 宣言のほうがクリーンだ — workspace-level の Cargo.toml にエントリが増えず、読み手にとって間接参照も減る。`reth-node-api` は openhl-evm でしか使わないので、それに合わせて扱う。
 
 ### Step 3: `crates/evm/src/precompiles/mod.rs` (stub) を作成
@@ -400,13 +402,13 @@ cargo check -p openhl-evm
 
 警告は出ない (import 一覧は長いが、すべて使われている)。エラーもない。
 
-既存のテストスイートが他に壊れていないことも確認する:
+**既存テストへの回帰確認 (regression check)** — L1 では新モジュールに対する新規テストはまだ追加していないが、依存追加や `lib.rs` の改変が前コースから引き継いだ 39 個のテスト (Course 6 の bridges / live_node、Course 7 の clob bridge integration 等) を壊していないかを確認する:
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-39 個は引き続き pass する。新モジュールにはまだテストがない — 最初のテストは L3 で追加する。
+39 個は引き続き pass するはずだ。**これは L1 の新規ロジックを検証するためのテストではなく、純粋に「構造変更が既存の挙動を壊していない」ことを保証する回帰チェック**である点に注意。新モジュール自体の最初のテストは L3 で追加する (`precompile_is_callable_via_registry`)。もし L1 時点でビルドだけ確認すれば十分という場合は、`cargo check -p openhl-evm` だけでも構造の整合性は担保できる。
 
 よくあるエラーと対処:
 

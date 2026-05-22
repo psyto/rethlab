@@ -82,13 +82,14 @@ cd ~/code/openhl-reference
 git fetch origin
 git log --oneline | head -25
 # You should see commits up to and including SHA d19ba1b (Stage 9c+).
-# Stage 9 commits in chronological order:
-#   1761d4d — Stage 9a
+# `git log` defaults to reverse-chronological order (newest first); the
+# main Stage 9 commits appear like this:
 #   2ba97c6 — Stage 9e
-#   b635ef7 — Stage 9b
-#   a8823a1 — Stage 9c
 #   2f796c3 — Stage 9d
 #   d19ba1b — Stage 9c+
+#   a8823a1 — Stage 9c
+#   b635ef7 — Stage 9b
+#   1761d4d — Stage 9a
 ```
 
 Then confirm your workspace is at the end-of-course-7 state:

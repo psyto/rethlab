@@ -324,6 +324,60 @@ EVM call は別々、precompile も別々だが、global を共有している�
 
 （答え：**テストは fail する。** `read_best_bid` は空の book を見て zero を返す。このラウンドトリップが成立する唯一の理由は、**両方の precompile が同じ `CLOB_STATE` global から読み、その global が 1 つの Arc を保持していて、その Arc が 1 つの Book を指しているから** だ。Arc を共有するパターンこそが、ラウンドトリップに意味を与えている。各 precompile が自前の private な state を持っていたら、機能的に切り離されてしまい、同じ CLOB に話しかける用途には使えない。）
 
+### 双方向ラウンドトリップ・トポロジー図
+
+L4 から仕込んできた配管が、ここで両方向に通電する全景:
+
+```
+ ┌────── on-chain (Solidity, 同一トランザクション内で連続発行) ──────┐
+ │  uint256 id  = call      (0x...0c1c, abi.encode(0xABCD,0,175,12)); │ ← WRITE call
+ │  (uint256 p,                                                       │
+ │   uint256 q) = staticcall(0x...0c1b, "");                          │ ← READ staticcall
+ └──────────┬──────────────────────────────────────────┬──────────────┘
+            │ CALL (128-byte calldata)                 │ STATICCALL (空 calldata)
+            ▼                                          ▼
+ ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+ │ Reth EVM dispatch — write side   │   │ Reth EVM dispatch — read side    │
+ │   0x...0c1c → place_order        │   │   0x...0c1b → read_best_bid      │
+ └──────────────┬───────────────────┘   └──────────────────┬───────────────┘
+                │ fn pointer call                          │ fn pointer call
+                ▼                                          ▼
+ ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+ │ place_order(input,...)  [L7+L8]  │   │ read_best_bid(_,...)  [L2+L5]    │
+ │  1. parse 128-byte calldata      │   │  1. let mut out = vec![0u8; 64]; │
+ │  2. validate (4 rejection paths) │   │  2. current_best_bid()  ──┐      │
+ │  3. fetch_add(1, Relaxed) → id   │   │  3. encode (price,qty)  ◄─┘      │
+ │  4. clob.lock().submit(Order{…}) │   │     out[24..32] ← price BE       │
+ │  5. encode id → out[24..32]      │   │     out[56..64] ← qty BE         │
+ └──────────────┬───────────────────┘   └──────────────────┬───────────────┘
+                │ ── mutating write ──                     │ ── pure read ──
+                │ submit(Order{id, 0xABCD,                 │ best_bid_with_qty():
+                │         Buy, Qty(12),                    │   bids.iter().next()
+                │         Limit{Price(175)}})              │   → (Price(175), Qty(12))
+                ▼                                          ▼
+ ┌──────────────────────────────────────────────────────────────────────┐
+ │ static CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>>      [L4 が install]│
+ │                                                                       │
+ │   ┌─────────────── 唯一の Arc → 唯一の Mutex → 唯一の Book ────────┐ │
+ │   │  bids: BTreeMap<RevPrice, OrderQueue>                          │ │
+ │   │     RevPrice(175) → [Order{ id, account: 0xABCD, qty: 12,      │ │
+ │   │                             side: Buy, type: Limit }]          │ │
+ │   └────────────────────────────────────────────────────────────────┘ │
+ │                                                                       │
+ │   write 側が握る lock = inner Mutex (exclusive)                       │
+ │   read 側が握る lock  = inner Mutex (exclusive, ただし write 解放後)   │
+ └──────────────────────────────────────────────────────────────────────┘
+```
+
+ラウンドトリップが成立する理由 = **「Arc が 1 つしかない」** という一点に尽きる:
+
+- write も read も同じ `CLOB_STATE` を経由する → 同じ Arc を `clone` する → 同じ Book を見る
+- write 側の `clob.lock().submit(...)` が release されると、内部 Mutex は解放され、read 側が同じ瞬間に `current_best_bid()` を呼べる
+- bridge 側の off-chain な `submit_order` (Course 7) も**同じ Arc に書き込む** — つまり precompile (on-chain) と bridge (off-chain) は、Book に対する書き込み主体としては対等になる
+- **L4 で組んだ `Arc<Mutex<Book>>` の global hand-off は、まさにこの双方向通電のために設計された** — L7 で precompile 2 つを並べ、L8 で write side を本物にしたことで、ようやくその設計が「目に見える挙動」として実現する
+
+「Module 3 中盤マイルストーン」とは、この縦線がついに **両方向に同時に走る** ようになったということだ。
+
 ## テスト
 
 ```bash

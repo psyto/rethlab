@@ -74,6 +74,85 @@ Read top-to-bottom: the bridge owns the data, the precompile module exposes it v
 
 Read bottom-to-top: a smart contract issues `STATICCALL(0x...0c1b)`. The Reth EVM looks up the address in its precompile registry → dispatches to `read_best_bid` → which reads from `CLOB_STATE` → which is the same `Arc<Mutex<Book>>` the bridge's `submit_order` writes to. **No translation layer. No serialization round-trip. Just memory.**
 
+### The full topology map — Modules 1-4, consolidated
+
+The diagram above is the mental-model skeleton. This one fleshes it out to "whiteboard-this-from-memory" detail — the full penetration path (Solidity → Reth dispatch → precompile body → process-global statics → bridge object → Book / Vec<Fill>) with every Module 1-4 deliverable burned into a single map:
+
+```
+┌───── on-chain (Solidity, EVM caller) ──────────────────┐    ┌── off-chain (App / RPC) ──┐
+│  staticcall(0x...0c1b, "")           ← read entry      │    │  bridge.submit_order(…)   │
+│  call      (0x...0c1c, 128B calldata) ← write entry    │    │  (Course 7 pre-existing)  │
+└──────┬───────────────────────┬─────────────────────────┘    └───────────┬───────────────┘
+       │                       │                                          │
+┌──────│───────────────────────│──── Reth process (NodeBuilder.launch()) ─│──────────────┐
+│      │                       │                                          │              │
+│  ╔═══╧═════════ Custom EVM (Module 1: L1+L3) ════════════════════════╗  │              │
+│  ║     spec_id → openhl_precompiles_for(spec)  [OnceLock cached]     ║  │              │
+│  ║     registry table:                                                ║  │              │
+│  ║       0x...0c1b ─► read_best_bid    [Module 2: L2 body + L5 swap] ║  │              │
+│  ║       0x...0c1c ─► place_order      [Module 3+4: L7+L8+L9]        ║  │              │
+│  ╚══════╤═══════════════════════════════════╤═══════════════════════╝  │              │
+│         │ fn pointer call                   │ fn pointer call           │              │
+│         ▼                                   ▼                           │              │
+│  ┌── read_best_bid ──────────┐    ┌── place_order ────────────────┐     │              │
+│  │  out = vec![0u8; 64]      │    │  parse 4 × 32B ABI slots      │     │              │
+│  │  current_best_bid()  ◄────┤    │  validate (4 rejection paths) │     │              │
+│  │  out[24..32] ← price BE   │    │  NEXT_ORDER_ID.fetch_add(     │     │              │
+│  │  out[56..64] ← qty   BE   │    │    1, Relaxed) → id           │     │              │
+│  └──────────┬────────────────┘    │  clob.lock().submit(…)        │     │              │
+│             │                     │    → SubmitResult{ fills, …}  │     │              │
+│             │ CLOB_STATE.read()   │  drop(book)                   │     │              │
+│             │ .as_ref().clone()   │  if !fills.is_empty():        │     │              │
+│             │   (acquire Arc)     │    FILL_SINK.read().extend(…) │     │              │
+│             │                     │  out[24..32] ← id BE          │     │              │
+│             │                     └──────────┬────────────────────┘     │              │
+│             │                                │                          │              │
+├─────────────│────────────────────────────────│──────────────────────────│──────────────┤
+│   process-global statics (the seam wired in L4 + L9)                    │              │
+│  ┌────────────────────────────────────┐  ┌──────────────────────────────────────────┐  │
+│  │ static CLOB_STATE                  │  │ static FILL_SINK                          │  │
+│  │   RwLock<Option<Arc<Mutex<Book>>>> │  │   RwLock<Option<Arc<Mutex<Vec<Fill>>>>>   │  │
+│  │   ▲ written by install_clob (L4)   │  │   ▲ written by install_fill_sink (L9)     │  │
+│  │   ▼ read by precompile             │  │   ▼ extended by place_order              │  │
+│  └─────────────────┬──────────────────┘  └──────────────────┬───────────────────────┘  │
+│                    │ shares the same Arc                    │ shares the same Arc      │
+│                    ▼                                         ▼                          │
+│  ╔══════ LiveRethEvmBridge (an object in the same process) ══════════════════════╗   │
+│  ║                                                                                ║   │
+│  ║   bridge.clob: Arc<Mutex<Book>>          bridge.pending_fills:                ║   │
+│  ║     ▲ bridge.submit_order writes           Arc<Mutex<Vec<Fill>>>              ║   │
+│  ║     ▲ physically the same Arc as the       ▲ place_order extends via         ║   │
+│  ║       precompile holds                       FILL_SINK                        ║   │
+│  ║                                            ▲ bridge.submit_order also pushes  ║   │
+│  ║                                              directly                         ║   │
+│  ║                                                                                ║   │
+│  ║   bridge.build_payload()  ─► pending_fills.lock().drain(..)                   ║   │
+│  ║                            ─► fills attached to next block payload            ║   │
+│  ╚════════════════════════════════════════════════════════════════════════════════╝   │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+
+ Module attribution (the colored layers):
+   Module 1 [L1-L3]: "the pluggable seam" — custom dispatch slotted into Reth's EVM
+   Module 2 [L4-L6]: "read live state" — Solidity can peek at the Book's best bid
+   Module 3 [L7-L8]: "write live state" — Solidity can place orders on the Book
+   Module 4 [L9-L10]: "route fills back to the block" — EVM-placed fills reach build_payload
+
+ Data path summary:
+   READ  : Solidity ──► 0x...0c1b ──► read_best_bid ──► CLOB_STATE ──► Arc<Mutex<Book>>
+           ──► Book::best_bid_with_qty() ──► encode (24..32 + 56..64) ──► 64B return
+   WRITE : Solidity ──► 0x...0c1c ──► place_order   ──► CLOB_STATE ──► Arc<Mutex<Book>>
+           ──► Book::submit() → SubmitResult{ fills } ──► FILL_SINK ──► Arc<Mutex<Vec<Fill>>>
+           ──► bridge.pending_fills (the same Arc) ──► build_payload.drain() ──► next block
+
+ The whole thesis: **there is physically only one Arc.** Both the precompile and the bridge
+   hold the same Arc — they read/write the same Book / the same Vec<Fill>. CLOB_STATE and
+   FILL_SINK are just "shared registers that let anyone grab that Arc from anywhere."
+   **No translation layer, no serialization, just memory** — the entire architecture
+   compresses down to that single sentence.
+```
+
+If you can reproduce this map from memory, you can mentally rebuild the openhl precompile layer. When someone asks you to explain the architecture in 5 minutes, draw this on a whiteboard and trace top-to-bottom: Solidity → EVM dispatch → precompile body → static global → Arc shared with bridge → matching engine. **All 12 lessons of this course compress into this one diagram.**
+
 ## What each module delivered
 
 **Module 1 (Custom EVM bootstrap, L1-L3)** — The pluggable seam:

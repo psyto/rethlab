@@ -48,7 +48,83 @@ The test does everything Stages 9a-9c+ touched, all in one place:
 5. **Precompile writes to book** — `place_order(Sell @ 200 qty 33)` via direct call (simulating EVM dispatch).
 6. **Bridge sees the fill** — `bridge.pending_fill_count() == 1`.
 
-This is **the course milestone**. After L10, the architecture proven by 47 unit tests is also proven by 1 integration test that exercises a real Reth node + a real bridge + both precompiles + both globals + the matching engine — end-to-end, in-process.
+### Full-stack integration topology: Modules 1-4 all sharing one Reth process
+
+L10 is the first lesson where all four modules' plumbing connects a **real Reth process** to a **real `LiveRethEvmBridge`** via process-global statics:
+
+```
+┌──────────────────── one process (cargo test binary / production Reth) ─────────────────────┐
+│                                                                                              │
+│  ╔════════════ Reth node (booted via NodeBuilder.launch()) ══════════════╗                   │
+│  ║                                                                         ║                   │
+│  ║  Executor / RPC server / mining / consensus  ──┐                       ║                   │
+│  ║                                                 │  Custom EVM thread     ║                   │
+│  ║                                                 │  plugged in via        ║                   │
+│  ║                                                 ▼  OpenHlExecutorBuilder ║                   │
+│  ║                                                    (L1 + L3 output)       ║                   │
+│  ║  ┌─── OpenHlEvmFactory → Custom EVM (revm) ────────────────────────────┐ ║                   │
+│  ║  │   fork registry → openhl_precompiles_for(spec):                     │ ║                   │
+│  ║  │     0x...0c1b → read_best_bid    [Module 2: L2 + L5]                │ ║                   │
+│  ║  │     0x...0c1c → place_order      [Module 3+4: L7+L8+L9]             │ ║                   │
+│  ║  └──────────────────┬──────────────────────┬─────────────────────────────┘ ║                   │
+│  ║                     │ CLOB_STATE.read()    │ FILL_SINK.read()             ║                   │
+│  ╚═════════════════════│══════════════════════│═════════════════════════════╝                   │
+│  ──────────────────────│──────────────────────│──────────────────────────────────────────────  │
+│   process-global statics (in-process, reachable lock-free as references)                       │
+│  ┌──────────────────────────────────┐  ┌──────────────────────────────────────────────────┐    │
+│  │ static CLOB_STATE                │  │ static FILL_SINK                                  │    │
+│  │   RwLock<Option<Arc<Mutex<Book>>>>│  │   RwLock<Option<Arc<Mutex<Vec<Fill>>>>>           │    │
+│  │   ▲                              │  │   ▲                                               │    │
+│  │   │ bridge::new()                │  │   │ bridge::new()                                 │    │
+│  │   │   install_clob(Arc::clone)   │  │   │   install_fill_sink(Arc::clone)               │    │
+│  │   │   wired in L4                │  │   │   wired in L9                                 │    │
+│  └───┼──────────────────────────────┘  └────┼──────────────────────────────────────────────┘    │
+│  ────│──────────────────────────────────────│──────────────────────────────────────────────────  │
+│  ╔═══│════════════ LiveRethEvmBridge (an object in the same process) ════════════════════╗    │
+│  ║   ▼ (holds the same Arc as the precompile) ▼ (holds the same Arc as the precompile)    ║    │
+│  ║  bridge.clob                              bridge.pending_fills                          ║    │
+│  ║    : Arc<Mutex<Book>>                       : Arc<Mutex<Vec<Fill>>>                     ║    │
+│  ║                                                                                          ║    │
+│  ║  bridge.submit_order(Order{…})  ─► self.clob.submit() → pushes fills into pending_fills ║    │
+│  ║  bridge.build_payload()          ─► self.pending_fills.drain() → attaches to next block ║    │
+│  ║                                                                                          ║    │
+│  ║  provider = handle.node.provider  (taken from the NodeBuilder-returned node handle)      ║    │
+│  ╚══════════════════════════════════════════════════════════════════════════════════════╝    │
+│                                                                                              │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ The path the L10 integration test traces through this topology:
+
+  Phase A  uninstall_{clob,fill_sink}() to clear globals
+           → NodeBuilder.launch() boots the Reth process (the Reth node block above comes up)
+           → LiveRethEvmBridge::new(handle.node.provider, ...) installs into both globals
+           → Result: every Arc arrow in the diagram is wired up
+
+  Phase B  bridge.submit_order(Buy@200 q33)
+           → bridge.clob.submit() puts a bid on the Book
+           → the precompile reads the same Arc via CLOB_STATE
+           → current_best_bid() == Some((Price(200), Qty(33)))            ◄ wiring proof #1
+
+  Phase C  crate::precompiles::place_order(Sell@200 q33 calldata) — direct call
+           → the Custom EVM's place_order body in the diagram is exercised
+           → CLOB_STATE.read() → clob.lock().submit() crosses → SubmitResult.fills
+           → FILL_SINK.read() → extend(fills) into the sink Arc
+           → bridge.pending_fills holds the same Arc, sees the increment
+           → bridge.pending_fill_count() == 1                              ◄ wiring proof #2
+
+  Phase D  uninstall_{fill_sink,clob}() → drop(handle) so the Reth process shuts down clean
+```
+
+**Four observation points:**
+
+- **Module 1 (L1+L3)**: `OpenHlExecutorBuilder` is genuinely plugged into Reth via `NodeBuilder`, and the Custom EVM boots (= the EVM block inside the Reth node above)
+- **Module 2 (L2+L5)**: `read_best_bid` reads live state, satisfying Phase B's wiring proof #1
+- **Module 3 (L7+L8)**: `place_order` writes live state, so the first half of Phase C (the Order lands on the Book) succeeds
+- **Module 4 (L9)**: the resulting fills travel through FILL_SINK to the bridge, satisfying wiring proof #2
+
+**What L10 proves is that all four hold simultaneously** — if any single wire were cut, either `current_best_bid()` or `pending_fill_count()` would fail. **A typo in the `NodeBuilder` chain that breaks production while every unit test stays green** is exactly the regression this single test rules out.
+
+This is **the course milestone**. After L10, the architecture proven by 47 unit tests is also proven by 1 integration test — as the topology above shows, a real Reth node process, a real bridge object, both precompiles, both globals, and the matching engine **all mesh inside a single in-process space**, exercised end-to-end.
 
 To make this work, **one production-code change is needed**: `place_order` must become `pub(crate)` so the integration test (which lives in `live_node.rs`, a sibling module) can call it directly.
 

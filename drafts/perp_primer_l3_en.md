@@ -55,6 +55,19 @@ No price — it's always a **market order**. The engine doesn't pick prices; it 
 
 This is mechanically the same as a normal trade. The trader's position closes. The counterparty (whoever's resting order fills the close) opens or increases their position. Mark moves to reflect the new top-of-book.
 
+> 💡 **Sidebar: how this differs from a trader-placed stop-loss**
+>
+> Behaviorally they look similar — when a trigger condition fires, a market order goes out. But the system boundary is in completely different places:
+>
+> | | Stop-loss (market stop order) | Force-close (liquidation) |
+> | :--- | :--- | :--- |
+> | Who places it | The trader (client-side) | The state machine all validators agreed on |
+> | How it reaches the book | RPC → mempool → block → matching engine | Injected directly into the orderbook from inside `block_execute` |
+> | Failure modes | Can fail on signature / nonce / gas / RPC outage | Cannot structurally fail — the consensus itself emits the order |
+> | Cancelable | Yes, by the trader | No — once the state machine decides to fire, it fills |
+>
+> Retail-facing copy sometimes describes liquidation as "an automatic stop-loss when margin runs out," but from the engine's point of view they're not the same thing at all. **Force-close is a *privileged order*** — an order written into the orderbook by the engine itself, on a code path no external caller can reach. The `Liquidatable` arm of the `MarginHealth` enum from L2 is exactly the trigger for that privileged emission.
+
 A worked example:
 
 ```
@@ -185,6 +198,18 @@ When the insurance fund is empty and another account goes underwater, somebody h
 2. Starting from the top of the ranking (most profitable + highest leverage), the venue **force-closes** those positions to absorb the deficit.
 3. The closed positions get their realized PnL — the trader is "paid" their profit but loses the position.
 
+> 💡 **Why doesn't ADL go through the orderbook?**
+>
+> You might think: "If there's a shortfall, just keep market-selling the underwater positions until they clear." But every one of those market orders would punch through the bid stack and crash mark further — and that crash would push *more* positions underwater. **The feedback loop runs away.**
+>
+> ADL is designed to break that loop by **bypassing the orderbook entirely**:
+>
+> - One bankrupt position and one winning position are **matched and cancelled** directly inside the engine's bookkeeping
+> - Both positions disappear from the venue's books simultaneously
+> - The orderbook's bid/ask is untouched — no extra crash pressure pushed into prices
+>
+> In other words, ADL isn't "liquidation in the market." It's **netting on the books** — an off-orderbook offset where the engine matches a winner against a loser and erases both positions at once. In the Stage 10c (multi-account scanner) implementation, the ADL path doesn't call `book.submit()` at all; it mutates the `Position` records directly and deletes them. **"Move the loss to the winners without touching the market"** — that's what ADL is for, and it's also why it's designed to fire only rarely.
+
 ADL is **deeply unpopular**. A trader who correctly predicted a market crash and is profitably short doesn't want to be force-closed; they'd prefer to ride the win further. But when the insurance fund can't cover the underwater loss, *someone has to lose money* — the math is conservation of cash. ADL distributes that loss to the side that "won" the most from the move.
 
 Hyperliquid's design is to make ADL **very rare**:
@@ -192,6 +217,49 @@ Hyperliquid's design is to make ADL **very rare**:
 - High liquidation fees keep the insurance fund well-capitalized in normal conditions
 - Cross-margin (the default) makes most accounts more resilient — losses in one position can be buffered by others
 - The DIY Perp track's Stage 10c (multi-account scanner) will implement ADL as a fallback path. It's intentionally the last lesson because the goal is to never reach it.
+
+## The safety-net cascade
+
+From L2's margin requirement down to ADL, four layers cascade through the loss-absorption stack. **The higher in the stack you stop, the less damage everyone takes:**
+
+```
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 0: Margin requirement (covered in L2)                      │
+   │   Initial 10% / Maintenance 2% cap the risk a trader can take    │
+   │   → "The trader's own collateral covers their own losses"        │
+   │   Stops here if: ratio ≥ maintenance and the market bounces      │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ Fails: ratio < maintenance
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 1: Force-close at maintenance (solvent close)              │
+   │   Engine closes the position in the market, deducts fee          │
+   │   → Most cases stop here (insurance fund grows from the fee)     │
+   │   Stops here if: close realized PnL + fee ≤ collateral           │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ Fails: equity < 0 after the close
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 2: Insurance fund                                          │
+   │   Pays the shortfall out of fees accumulated from past liquidations│
+   │   → Absorbs a single underwater account                          │
+   │   Stops here if: insurance_fund_balance ≥ shortfall              │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ Fails: insurance fund balance = 0
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 3: ADL (Auto-Deleveraging) — last resort                   │
+   │   Engine matches winners against losers on the books, off-market │
+   │   → Only reached in large crash conditions                       │
+   │   Always stops here (the loss redistribution preserves cash)     │
+   └─────────────────────────────────────────────────────────────────┘
+```
+
+**How to read this cascade:**
+
+- **Damage spreads as you fall further down**: at Layer 1 only the trader pays. At Layer 2 the venue pays from its pooled fee reserve. At Layer 3 unrelated (profitable) traders get pulled in.
+- **Each layer is designed to absorb as much as possible before handing off to the next**: the 8% gap between initial and maintenance margin (from L2) is the room Layer 1 has to absorb, the 1.5% liquidation fee is the rate Layer 2 refills at, cross-margin (offsetting losses with profits within one account) delays the trip into Layer 1 — and so on. **Venue design is essentially a set of numerical choices for "keep work out of the layer below you."**
+- **How this maps to code branches**: Stage 10c's `MarginHealth` enum transitions are exactly the Layer 1-3 transitions. `Safe` / `AtRisk` = Layer 0, `Liquidatable` = Layer 1, `Underwater` with a non-empty insurance fund = Layer 2, `Underwater` with a depleted fund = Layer 3. **The four-state enum maps 1-to-1 onto the four defensive layers.**
 
 ## Hyperliquid specifics
 

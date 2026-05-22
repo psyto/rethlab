@@ -90,6 +90,19 @@ Intuitively: the side that's contributing to the imbalance pays the side that's 
 
 The payment isn't paid by the venue. It moves directly between traders: the longs collectively transfer to the shorts collectively, scaled by each position's notional. Zero-sum at the venue level — Hyperliquid is just the bookkeeper.
 
+> 💡 **Engineer's view — one signed-size equation collapses every branch:**
+> In code, track each position's direction as a signed size (Long = `+size`, Short = `-size`). Every trader's balance update then collapses to one branch-free expression:
+>
+> ```
+> collateral -= size_with_sign × mark × rate
+> ```
+>
+> - `rate > 0` and `size > 0` (Long) → `collateral` decreases = long pays ✓
+> - `rate > 0` and `size < 0` (Short) → double-negative makes `collateral` increase = short receives ✓
+> - `rate < 0` wires the symmetric case through the same single expression
+>
+> If the matching engine stores each position as one signed `i64`/`i128` size, the funding tick becomes a branch-free linear scan. **Combining Rust's type system with a deliberate sign convention makes the state transition "symmetric by construction"** — for consensus determinism, eliminating this kind of branching is load-bearing.
+
 ## Worked example — Hyperliquid parameters
 
 A trader holds **10 BTC long** on Hyperliquid. Current state:
@@ -129,12 +142,57 @@ The funding payment doesn't directly move mark. It moves *traders' balances*. Th
 
 This is also why funding is *continuous* (every interval, small amounts) rather than *terminal* (one big payment at a fixed date). Traders adjust their behavior in response to the ongoing cost, not in anticipation of a future event.
 
+### Mark / index / funding — the pull-back loop
+
+The three actors compressed into one feedback loop:
+
+```
+       ┌────────────────────────────────────────────┐
+       │  index price (CEX spot weighted feed)       │ ← true reference price (exogenous)
+       └────────────────────┬───────────────────────┘
+                            │
+                            │ (mark − index) / index
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  premium                                   │ ← how far apart they are
+       │    ÷ 8 (divisor) → clamp(±4%) (cap)         │
+       └────────────────────┬───────────────────────┘
+                            │ = funding rate (per interval)
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  funding payment (at each interval boundary)│ ← rate > 0 → long pays short
+       │    = size_with_sign × mark × rate           │   rate < 0 → short pays long
+       └────────────────────┬───────────────────────┘
+                            │ the imbalanced side "pays rent"
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  imbalanced side reduces or flips position │ ← economic incentive
+       └────────────────────┬───────────────────────┘
+                            │ selling (or buying) hits the orderbook
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  mark price moves back toward index         │ ← pull-back pressure (endogenous)
+       └────────────────────┬───────────────────────┘
+                            │
+                            └──► premium shrinks → funding shrinks → loop relaxes
+                                 (equilibrium: mark ≈ index, small oscillations,
+                                  small funding payments)
+```
+
+**The three actors in one line:**
+
+- **index** = the true reference price (the anchor target)
+- **mark** = the market price driven by orderbook supply/demand (the thing being anchored)
+- **funding** = the control signal that pulls them back together *through incentive*
+
+It's not "funding moves mark directly." It's "funding moves trader balances, traders move the orderbook, the orderbook moves mark" — a **three-step indirection** is what anchoring actually is. Where expiry-style futures force convergence at a single moment, perps replace that with a continuous control signal that nudges every interval.
+
 ## Hyperliquid specifics worth knowing
 
 - **Index composition**: weighted from multiple CEX spot feeds. A deviation circuit breaker pauses the index if one feed is too far from the others — protects against single-venue spot manipulation.
 - **Settlement at tick**: every funding interval, the engine iterates over non-flat positions and adjusts each trader's collateral balance by `position_size × mark × rate`. No batch payment — each position settles individually.
 - **Saturating arithmetic**: the funding computation uses signed integers scaled by `RATE_SCALE = 1e9` (parts per billion). All multiplications use `i128` intermediates and saturate on overflow rather than wrapping. This is consensus-determinism discipline — every validator must compute the same rate from the same inputs.
-- **No funding accrual between ticks**: if a position is opened mid-interval and closed before the next tick, no funding is owed. Hyperliquid's interval boundaries are the only payment events.
+- **No funding accrual between ticks (snapshot-based state machine)**: positions opened and closed mid-interval owe no funding. Hyperliquid's payment is decided purely by **whether you hold the position at the exact interval boundary** (e.g. on the hour) — the engine snapshots positions at that instant and applies `size × mark × rate` in one pass. Readers coming from dYdX-style continuous funding (time-integrated charging) should recalibrate: this is a discrete event-driven state machine where "did you hold at the snapshot tick?" matters far more than "for how long did you hold?" **When you design a bug-free state machine here, nail this boundary condition first.**
 
 ## Common misconceptions
 

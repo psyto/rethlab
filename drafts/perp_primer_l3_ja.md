@@ -55,6 +55,19 @@ L2 のおさらい: `margin_ratio < maintenance_margin_bps` かつ `equity ≥ 0
 
 機械的には通常の取引と同じだ。トレーダーの position が閉じる。Counterparty（resting order が約定した相手）が position を開くか増やす。Mark は new top-of-book を反映して動く。
 
+> 💡 **コラム: トレーダーが置くストップロス (逆指値) との違い**
+>
+> 表面的な挙動 — トリガー条件を満たすと市場価格で売る — は似ているが、システム境界の位置がまったく違う:
+>
+> | | ストップロス (逆指値成行) | Force-close (清算) |
+> | :--- | :--- | :--- |
+> | 発注主体 | トレーダー本人 (クライアント) | バリデータ全員が合意したステートマシン本体 |
+> | 注文の経路 | RPC → mempool → block → matching engine | block 実行中にエンジン内部から直接 orderbook に inject |
+> | 失敗モード | 署名エラー / nonce 衝突 / ガス不足 / RPC ダウン等で失敗しうる | 失敗が構造的にあり得ない (注文を流す主体がコンセンサス自身) |
+> | キャンセル可 | トレーダーが取り消せる | 取り消し不能 (state machine が「発射」と決めたら必ず約定する) |
+>
+> 一般のトレーダー向け解説では「マージン不足になるとストップロスが自動発火する」と表現されることがあるが、エンジン視点では別物だ。**清算は『特権注文 (privileged order)』** — `block_execute` の中でエンジンが自ら orderbook に書き込む、外部からは到達不可能な経路の注文 — として実装される。L2 で見た `MarginHealth` enum の `Liquidatable` 分岐が、まさにこの特権注文の発火元になる。
+
 具体例:
 
 ```
@@ -163,6 +176,18 @@ Insurance fund が空でさらに別のアカウントが Underwater になっ�
 2. Ranking 上位（最も利益が出ている + 高 leverage）から、その position を **force-close** して不足を吸収させる。
 3. Close された position の実現 PnL がトレーダーに渡る — 利益は「支払われる」が、position は失う。
 
+> 💡 **なぜ ADL は orderbook を通さないのか?**
+>
+> 「不足が出たなら、underwater の position を市場でガンガン force-close すればいい」と思うかもしれない。だが、その瞬間に orderbook には逆方向の巨大な market order が連射されることになる — bid stack を突き抜けて mark を更にクラッシュさせ、その下落で別の position が Underwater 化する。**フィードバックループが暴走する。**
+>
+> ADL はこのループを断ち切るために、**orderbook を一切経由しない**設計になっている:
+>
+> - 1 つの破綻 position と 1 つの勝ち position を、エンジン内部の帳簿上で **直接相殺 (match & cancel)** する
+> - 相殺された 2 つの position は、両方とも venue の books から消える
+> - Orderbook の bid / ask には 1 satoshi も触れない → 価格に追加のクラッシュ圧をかけない
+>
+> つまり ADL は「市場での清算」ではなく **「帳簿上の名寄せ・netting」** — システム内部で勝者と敗者を直接マッチさせて、両者の position を同時に消去するオフチェーン (正確には off-orderbook) な相殺処理だ。Stage 10c (multi-account scanner) の実装でも、ADL パスは `book.submit()` を呼ばず、`Position` レコードを直接 mutate して削除する。**「市場を汚さずに、帳簿の上だけで損失を勝者に転送する」** — これが ADL の本質であり、極めて稀にしか発動しないように設計されている理由でもある。
+
 ADL は **非常に不評** だ。マーケットの crash を正しく予測して short で勝っているトレーダーは、勝ち分をもっと伸ばしたいので force-close されたくない。ただし insurance fund がカバーできない以上、*誰かが loss を引き受けなければならない* — 現金は保存則に従う。ADL はその loss を、その move から最も「勝った」側に分配する仕組み。
 
 Hyperliquid の設計は ADL を **極めて稀** にすることを狙っている:
@@ -170,6 +195,49 @@ Hyperliquid の設計は ADL を **極めて稀** にすることを狙ってい
 - 高めの liquidation fee で、平時に insurance fund を厚く capitalize しておく
 - Cross-margin（デフォルト）で多くのアカウントを resilient にする — 1 つの position の損失を他で buffer できる
 - DIY Perp track の Stage 10c（multi-account scanner）が ADL を fallback path として実装する。それが最後のレッスンになっているのは、ここまで到達しないこと自体が目標だから。
+
+## セーフティネットの階層構造
+
+L2 のマージン要件から ADL まで、損失を吸収する 4 層が下にカスケードしている。**上の層で止まれば止まるほど、トレーダーにも venue にもダメージが小さい:**
+
+```
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 0: Margin requirement (L2 で見た)                          │
+   │   Initial 10% / Maintenance 2% でリスク量を上限規制              │
+   │   → 「トレーダー自身の collateral で損失をカバーできる範囲」      │
+   │   止まる条件: ratio ≥ maintenance のまま市場が反発する            │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ 失敗: ratio < maintenance に陥落
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 1: Force-close at maintenance (Solvent close)              │
+   │   エンジンが市場で position を閉じる、collateral から fee を徴収  │
+   │   → 大多数のケースはここで止まる (insurance fund は積み増しに回る) │
+   │   止まる条件: close 実現 PnL + fee ≤ collateral                  │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ 失敗: close 後も equity < 0 (Underwater)
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 2: Insurance fund                                          │
+   │   過去の solvent close で積み上げた fee 残高から不足を補填        │
+   │   → 単一の Underwater 口座を吸収できる                            │
+   │   止まる条件: insurance_fund_balance ≥ shortfall                 │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ 失敗: insurance fund が枯渇 (残高 = 0)
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 3: ADL (Auto-Deleveraging) — 最終手段                       │
+   │   勝者側の position を帳簿上で強制相殺、orderbook には触れない    │
+   │   → ここに到達するのは大規模 crash のときだけ                     │
+   │   止まる条件: 必ず止まる (損失を勝者に分配することで保存則を維持)  │
+   └─────────────────────────────────────────────────────────────────┘
+```
+
+**この階層の読み方:**
+
+- **下の層に落ちるほど痛みが拡散する**: Layer 1 ではトレーダー本人だけが損する。Layer 2 では venue が venue 全体の資金から払う。Layer 3 では関係のない (勝っている) 別トレーダーまで巻き込む。
+- **各層が「次の層に渡す前に absorb する」量を最大化する設計**: Initial と Maintenance の差 (L2 で見た 8% のギャップ) は Layer 1 が吸収できる余地、liquidation fee の 1.5% は Layer 2 の補充ペース、cross-margin (1 口座内の利益で他の損失を相殺) は Layer 1 の到達を遅らせる、といった具合。**venue 設計とは、上の層が下の層に「仕事を渡さない」ための数値選択そのもの。**
+- **コード分岐との対応**: Stage 10c の `MarginHealth` enum 分岐は、この階層の Layer 1-3 への遷移ロジックそのもの。`Safe` / `AtRisk` = Layer 0、`Liquidatable` = Layer 1、`Underwater` + insurance fund 残高あり = Layer 2、`Underwater` + insurance fund 枯渇 = Layer 3。**4 状態の enum と 4 層の防御は 1 対 1 で対応する。**
 
 ## Hyperliquid 固有の点
 

@@ -132,9 +132,9 @@ import が 2 つ必要なのは、`EthereumAddOns` が `.with_add_ons(...)` で�
                 .with_add_ons(EthereumAddOns::default())
                 .launch()
                 .await?;
-            // The node spawned with our custom EVM. We don't need to inspect
-            // further — if the EvmFactory or ExecutorBuilder were broken,
-            // launch() would have failed.
+            // ノードはカスタム EVM とともにクリーンに起動した。これ以上の検査は
+            // 不要 — もし EvmFactory や ExecutorBuilder が壊れていれば、
+            // ここまで到達せず launch() の時点で失敗している。
             let _ = expected_chain_id;
             Ok(())
         }
@@ -306,6 +306,57 @@ test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 - **`registered_precompile_is_invokable_via_registry` が panic** — L2 の `openhl_precompiles` における `Precompile::new(...)` の呼び方が間違っている (関数ポインタや引数の並び順が違うなど)。3 引数の形 `(PrecompileId, Address, fn)` を再確認する。
 
 ## 設計の振り返り
+
+このレッスンで書いた 4 つのテストを「scope の広さ」で 1 枚に並べると、なぜこの 4 段構成がバグ局在化の道具として効くのかが視覚で押さえられる:
+
+```
+                       テストの scope (狭 ─────────────────────► 広)
+                       ┌─────────────────────────────────────────────────────────┐
+                       │                                                          │
+                       │  ① 関数本体だけ                                          │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ read_best_bid_returns_hardcoded_*    │  ── unit    │
+                       │     │ (read_best_bid を直接 call、bytes 検証) │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ 失敗 → L2 Step 3 の関数本体                  │
+                       │                                                          │
+                       │  ② Registry 登録の不変条件                                │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ openhl_precompiles_registers_clob_*  │  ── unit    │
+                       │     │ (extend した set に address + ECDSA   │             │
+                       │     │  の両方が存在 = extend-not-replace)    │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ 失敗 → L2 Step 4 の clone()/extend() の  │
+                       │                       意味取り違え (新規 set 上書きなど)   │
+                       │                                                          │
+                       │  ③ Registry 経由の EVM dispatch                            │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ registered_precompile_is_invokable_* │  ── unit    │
+                       │     │ (.get(addr) → .execute()、REVM 内部の  │             │
+                       │     │  STATICCALL と同じ経路)                 │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ 失敗 → L2 Step 4 の Precompile::new(...)    │
+                       │                       の組み立て (id / fn / 引数順)        │
+                       │                                                          │
+                       │  ④ Node 全体の合成 (Integration)                          │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ reth_dev_node_with_openhl_executor   │  ── integration│
+                       │     │ (NodeBuilder + ExecutorBuilder +      │             │
+                       │     │  EthereumAddOns の合成、launch まで)   │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ 失敗 → L1 の Factory / Builder 接続、       │
+                       │                       または with_components / add_ons の │
+                       │                       trait 不整合                          │
+                       └─────────────────────────────────────────────────────────┘
+
+                       「狭い scope のテストから先に壊れる」のが正常なシグナル:
+                         ① が落ちて他が通る → 関数本体に絞ってデバッグ
+                         ② だけが落ちる   → wrapper の意味論 (clone/extend の選択)
+                         ③ だけが落ちる   → 登録の組み立てミス (関数ポインタ vs id vs address)
+                         ④ だけが落ちる   → Node Builder の trait 接続 (Factory 外の配管)
+```
+
+ポイントは「**scope の異なるテストが同時に落ちる場合と、特定の scope だけ落ちる場合で、バグの位置が一意に絞られる**」という設計だ。たとえば ① ② ③ が通って ④ だけが落ちたら、関数も registry も dispatch も正常で、不具合は Reth の `NodeBuilder` 接続側 (L1 の `OpenHlExecutorBuilder` / `EvmFactory` の trait bound) にあると即座にわかる。逆に ① だけが落ちて他が通ることはない (関数本体が壊れていれば dispatch も連鎖して落ちる) — この依存方向が「scope を広げながらテストする」discipline の正当性そのものだ。
 
 要となる決定が 3 つ:
 

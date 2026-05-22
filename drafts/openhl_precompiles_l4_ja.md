@@ -157,7 +157,7 @@ static CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>> = RwLock::new(None);
 
 ドキュメントコメントが本レッスンの肝 — `None` は「未インストール」状態を表し、エラーではなく zero bytes を返すことを明示している。メインネットで未初期化の perp market を読む契約はゼロ値を見る — その挙動と揃える。
 
-> 🛑 **やりがちな勘違い。** 「`lazy_static!` や `OnceLock` を使えばいいのでは?」 — **使えるが、制約が強すぎる。** `OnceLock` は 1 回しか set できない — だがこちらでは、テスト分離のために `install_clob` を何度も呼び直せるようにしたい。`lazy_static!` は unsafe な初期化トリックが必要 — Rust 1.63 以降の `static RwLock<...> = RwLock::new(None)` ならそれが不要になる。素の `static RwLock<...>` が 2024 年時点で最もクリーンなイディオムだ。
+> 🛑 **やりがちな勘違い。** 「`lazy_static!` や `OnceLock` を使えばいいのでは?」 — **使えるが、制約が強すぎる。** `OnceLock` は 1 回しか set できない — だがこちらでは、テスト分離のために `install_clob` を何度も呼び直せるようにしたい。`lazy_static!` は unsafe な初期化トリックを必要としていた古いパターン — Rust 1.63 以降の `static RwLock<...> = RwLock::new(None)` (`const fn` によるコンパイル時初期化) でそれが不要になり、現在 (2026 年時点) では std だけで完結するこの形が**プロセスごとの可変共有 state に対する標準イディオム**だ。`OnceLock` (1.70 安定) や `LazyCell` (1.80 安定) は「1 回だけ書く」用途には強力だが、今回の install/uninstall 反復にはそもそも不向き — 道具と要件を取り違えないこと。
 
 ### Step 4: 3 つのモジュール関数を追加
 
@@ -349,6 +349,69 @@ mod smoke {
 - **`unused variable: clob` in `new()`** — struct リテラル内で `clob` を使い忘れている。`let clob = Arc::new(...)` で束縛した変数は struct 内に `clob,` として登場する必要がある。
 
 ## 設計の振り返り
+
+ここで組んだ多層ラッパー `RwLock<Option<Arc<Mutex<Book>>>>` が、bridge 側 (Write パス: order submit) と precompile 側 (Read パス: best bid 取得) からの並行アクセスをどう捌くのかを 1 枚で見ると、4 重構造に見える型パズルがそれぞれ役割の異なる薄い層だと分かる:
+
+```
+   [ bridge: submit_order ]                                 [ EVM precompile: staticcall to 0x...0c1b ]
+            │                                                            │
+            │ self.clob.lock()                                            │ current_best_bid()
+            ▼                                                            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ① Outer: static RwLock<Option<Arc<Mutex<Book>>>>                                │
+   │    役割: 「CLOB が install 済みか否か」の境界を持つロック (Write は install/    │
+   │           uninstall の超レアパス、ほぼ常時 Read 専用 → RwLock が最適)            │
+   │                                                                                │
+   │    write() ──► install_clob / uninstall_clob (プロセスあたり 1 度〜数度)        │
+   │    read()  ──► current_best_bid (precompile 呼び出しのたび、超高頻度・並列 OK)   │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │  (write/read ガード経由)
+            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ② Option<Arc<Mutex<Book>>>                                                     │
+   │    役割: install 前 (= None) と install 済み (= Some) の区別を型で表現           │
+   │    None  → precompile はゼロエンコード (= 未初期化 perp market の挙動を mirror) │
+   │    Some  → 中身の Arc を deref/clone                                            │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │  (None なら早期 return、Some なら次へ)
+            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ③ Arc<Mutex<Book>>                                                             │
+   │    役割: 所有権の共有 (bridge と static の両方が同じ Book を強参照)              │
+   │    Arc は cheap-clone な atomic 参照カウント — bridge の struct と CLOB_STATE   │
+   │    の両方が「同じ Book を所有している」を表現するための Rust の定石             │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │  (.lock() で内側の Mutex に進入)
+            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ④ Inner: Mutex<Book>                                                           │
+   │    役割: matching engine 本体 (submit / cancel / best_bid_with_qty) の排他保護   │
+   │    Write も Read もここで直列化される (Book の変更頻度は高いため Mutex が妥当)   │
+   │                                                                                │
+   │    bridge 側: submit_order が `.lock().submit(...)` で書き込み                  │
+   │    precompile 側: current_best_bid が `.lock().best_bid_with_qty()` で読み込み  │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │
+            ▼
+        [ 同じ Book インスタンス ]
+
+
+   なぜ「① RwLock + ④ Mutex」の二段構成にするのか:
+
+   ・もし「Mutex<Option<Arc<Mutex<Book>>>>」(=① も Mutex) にしてしまうと、
+     **すべての precompile read が ① でも直列化される** ため、N 並列の EVM call が
+     N 倍のレイテンシで詰まる。① は read 並列化が効くので RwLock が正解。
+
+   ・もし「RwLock<Book>」(= 中間構造を全部省略) にしてしまうと、
+     **bridge と precompile が別々に Book を所有できなくなる** (どちらか一方が
+     `&'static` なら他方は ownership を取れない)。`Arc` がこの問題を解く。
+
+   ・もし「Arc<Mutex<Book>> を static に直接置く」(= ② の Option を省略) にすると、
+     コンパイル時に `Book::new()` が evaluate できない (const fn ではない) のと、
+     install 前の「未初期化状態」を型で表現する手段が消える。`Option` が両方解く。
+
+   4 層それぞれが「別の責務」を持つ。重ねている、ではなく分担している、が正しい読み方。
+```
 
 ここに焼き込んだ重要な決定が 3 つ：
 

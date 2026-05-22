@@ -37,14 +37,14 @@ export async function seedRethOpenHlPrecompilesJA(prisma: PrismaClient) {
                   xpReward: 50,
                   content: `# OpenHL Precompile を作る — CLOB state をスマートコントラクトに接続する
 
-前コース (\`building-openhl-clob\`) は、bridge が CLOB matching engine を所有する地点で終わった。Order が submit され、約定 (fill) が payload に流れ、integration test が実際の Reth node に対して pipeline 全体を exercise する。**ただし約定はまだ並行リストにすぎない。** 同じ Reth node 上で動くスマートコントラクトからは見えない。CLOB の状態と EVM の状態は別世界に存在している。
+前コース (\`building-openhl-clob\`) は、bridge が CLOB matching engine を所有する地点で終わった。Order が submit され、約定 (fill) が payload に流れ、integration test が実際の Reth node に対して pipeline 全体を網羅的にテストする。**ただし約定はまだ並列リストにすぎない。** 同じ Reth node 上で動くスマートコントラクトからは見えない。CLOB の状態と EVM の状態は別世界に存在している。
 
 本コースではこのギャップを閉じる。**Custom EVM precompile** を追加する — Solidity (あるいは任意の EVM caller) から呼ばれると CLOB を read/write する Rust コードが走る、特殊な address のことだ。Course 8 を終えた時点で:
 
 - スマートコントラクトは \`0x...0c1b\` を call して現在の **best bid を読める**。
 - スマートコントラクトは \`0x...0c1c\` を call して matching engine が処理する **order を発注できる**。
 
-この 2 つのパスが揃うと、CLOB は EVM の横に並ぶ並行構造から、EVM が対話できる **state 拡張** に変わる。これがチェーンを「Hyperliquid 型」にする — Hyperliquid の本質的な新規性は、perp matching engine が同じチェーン上のスマートコントラクトから呼び出せる点にある。
+この 2 つのパスが揃うと、CLOB は EVM の横に並ぶ独立した並列構造から、EVM が対話できる **state 拡張** に変わる。これがチェーンを「Hyperliquid 型」にする — Hyperliquid の本質的な新規性は、perp matching engine が同じチェーン上のスマートコントラクトから呼び出せる点にある。
 
 本コース終了時、\`cargo test clob_precompile_round_trip\` が pass する。スマートコントラクトの call が precompile 経由で order を発注し、既存の book state とマッチし、生じた約定が bridge へ流れる、というラウンドトリップが通る。
 
@@ -83,7 +83,7 @@ openhl では **6 commit 分** の作業 (~860 LOC)、11 レッスン + capstone
 不要なもの:
 
 - \`EvmFactory\` や \`ExecutorBuilder\` の予備知識 (L1-L2 で説明する)。
-- Solidity (本コースで Solidity は書かない — raw calldata 経由で precompile を exercise するだけ)。
+- Solidity (本コースで Solidity は書かない — raw calldata 経由で precompile をテストするだけ)。
 - Course 6 で扱った範囲を超える Reth の block 実行 pipeline 内部の知識。
 
 ## 4. セットアップ確認 (今やる)
@@ -100,13 +100,13 @@ cd ~/code/openhl-reference
 git fetch origin
 git log --oneline | head -25
 # SHA d19ba1b (Stage 9c+) までの commit が見えるはず。
-# Stage 9 commit を chronological 順で:
-#   1761d4d — Stage 9a
+# \`git log\` のデフォルトは最新順 (逆時系列) で、Stage 9 の主要 commit は以下のように並ぶ:
 #   2ba97c6 — Stage 9e
-#   b635ef7 — Stage 9b
-#   a8823a1 — Stage 9c
 #   2f796c3 — Stage 9d
 #   d19ba1b — Stage 9c+
+#   a8823a1 — Stage 9c
+#   b635ef7 — Stage 9b
+#   1761d4d — Stage 9a
 \`\`\`
 
 続いて、workspace が course 7 の end state にあることを確認:
@@ -325,6 +325,8 @@ tempfile             = "3"
 \`\`\`
 
 **\`reth-node-api\` だけは workspace 経由ではなく、1 回限りの直接 git dep として宣言する。** workspace の \`Cargo.toml\` には宣言を置かず、git+rev を inline で書く。これは意図的だ — \`reth-node-api\` を使う crate は \`openhl-evm\` だけで、workspace の他の部分には不要。workspace dep に昇格させると、すべての crate の build graph がこれを把握する羽目になる。
+
+> ⚠️ **rev は他の \`reth-*\` クレートと完全一致させる。** inline で \`rev = "88505c7..."\` を書くときは、**workspace で固定されている他の \`reth-*\` クレートとまったく同じコミットハッシュ**でなければならない。Reth は内部 crate 間の型 (\`FullNodeTypes\`、\`NodeTypes\`、\`BuilderContext\` 等) を厳格に共有しており、Cargo の同一バージョン・同一ソースルールにより、わずかな rev のズレでも「同じ名前だが別の型」として扱われ、\`expected ChainSpec, found ChainSpec\` のような難解な型不一致エラーが大量発生する。\`reth-node-api\` を独自に「最新版」へ書き換えたい誘惑は強いが、必ず他の \`reth-*\` の rev をまず upgrade してから合わせること。
 
 > 🛑 **やりがちな勘違い。** 「Reth 関連の依存はすべて workspace dep にすべき、それがパターンだ」 — **必ずしもそうではない。** workspace dep が有用なのは、複数の crate が同じ依存を同じバージョンで必要とする場合。1 つの crate でしか必要としないなら、inline 宣言のほうがクリーンだ — workspace-level の Cargo.toml にエントリが増えず、読み手にとって間接参照も減る。\`reth-node-api\` は openhl-evm でしか使わないので、それに合わせて扱う。
 
@@ -584,13 +586,13 @@ cargo check -p openhl-evm
 
 警告は出ない (import 一覧は長いが、すべて使われている)。エラーもない。
 
-既存のテストスイートが他に壊れていないことも確認する:
+**既存テストへの回帰確認 (regression check)** — L1 では新モジュールに対する新規テストはまだ追加していないが、依存追加や \`lib.rs\` の改変が前コースから引き継いだ 39 個のテスト (Course 6 の bridges / live_node、Course 7 の clob bridge integration 等) を壊していないかを確認する:
 
 \`\`\`bash
 cargo test -p openhl-evm --release
 \`\`\`
 
-39 個は引き続き pass する。新モジュールにはまだテストがない — 最初のテストは L3 で追加する。
+39 個は引き続き pass するはずだ。**これは L1 の新規ロジックを検証するためのテストではなく、純粋に「構造変更が既存の挙動を壊していない」ことを保証する回帰チェック**である点に注意。新モジュール自体の最初のテストは L3 で追加する (\`precompile_is_callable_via_registry\`)。もし L1 時点でビルドだけ確認すれば十分という場合は、\`cargo check -p openhl-evm\` だけでも構造の整合性は担保できる。
 
 よくあるエラーと対処:
 
@@ -806,6 +808,24 @@ body を上から見ていく:
 
 1. **\`vec![0u8; 64]\`** — 64 個のゼロバイト。\`(uint256, uint256)\` の ABI shape は 32 バイトのブロック 2 つ。
 2. **\`out[31] = 100\`** — 最初の 32 バイトブロックの最右バイトに price (100) を書く。big-endian の u256 は、上位バイトがゼロで、下位バイト (index 31) に実値が来る形だ。qty も同様に index 63 に書く。
+
+   64 バイトバッファ全体を 1 枚に展開すると、なぜ index 31 と 63 が「実値の書き込み点」になるのかが視覚で押さえられる:
+
+   \`\`\`
+                       ┌───── 第 1 スロット: price (u256, big-endian) ─────┐ ┌───── 第 2 スロット: qty (u256, big-endian) ─────┐
+   byte index:          0    1    2    ...   29   30   31     32   33   ...   60   61   62   63
+                       ┌────┬────┬────┬───┬────┬────┬────┐  ┌────┬────┬───┬────┬────┬────┬────┐
+   value (hex):        │ 00 │ 00 │ 00 │...│ 00 │ 00 │ 64 │  │ 00 │ 00 │...│ 00 │ 00 │ 00 │ 0a │
+                       └────┴────┴────┴───┴────┴────┴────┘  └────┴────┴───┴────┴────┴────┴────┘
+                        ↑    ↑    ↑                   ↑     ↑                              ↑
+                        │    │    │                   │     │                              │
+                        高位 ← (ゼロパディング) ←   低位    高位 ← (ゼロパディング) ←       低位
+                                                100 = 0x64                              10 = 0x0a
+                                            (price はここに着地)                   (qty はここに着地)
+   \`\`\`
+
+   ポイントは「**u256 は 32 バイト固定幅で big-endian。実値が \`u64\` (8 バイト) や \`u32\` (4 バイト) に収まる小さい数でも、左側 (高位) はゼロパディングで埋まり、右端 (低位、index 31 と 63) に実値が来る**」。Solidity の \`(uint256, uint256)\` のレイアウトに wire format を合わせる、というのはこの 1 枚を踏襲しているに過ぎない。
+
 3. **\`PrecompileOutput::new(CLOB_BASE_GAS_COST, Bytes::from(out), 0)\`** — output を組み立てる:
    - 第 1 引数: 消費 gas (500 をチャージ)。
    - 第 2 引数: output バイト (64 バイトの buffer)。
@@ -1055,9 +1075,9 @@ import が 2 つ必要なのは、\`EthereumAddOns\` が \`.with_add_ons(...)\` 
                 .with_add_ons(EthereumAddOns::default())
                 .launch()
                 .await?;
-            // The node spawned with our custom EVM. We don't need to inspect
-            // further — if the EvmFactory or ExecutorBuilder were broken,
-            // launch() would have failed.
+            // ノードはカスタム EVM とともにクリーンに起動した。これ以上の検査は
+            // 不要 — もし EvmFactory や ExecutorBuilder が壊れていれば、
+            // ここまで到達せず launch() の時点で失敗している。
             let _ = expected_chain_id;
             Ok(())
         }
@@ -1229,6 +1249,57 @@ test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 - **\`registered_precompile_is_invokable_via_registry\` が panic** — L2 の \`openhl_precompiles\` における \`Precompile::new(...)\` の呼び方が間違っている (関数ポインタや引数の並び順が違うなど)。3 引数の形 \`(PrecompileId, Address, fn)\` を再確認する。
 
 ## 設計の振り返り
+
+このレッスンで書いた 4 つのテストを「scope の広さ」で 1 枚に並べると、なぜこの 4 段構成がバグ局在化の道具として効くのかが視覚で押さえられる:
+
+\`\`\`
+                       テストの scope (狭 ─────────────────────► 広)
+                       ┌─────────────────────────────────────────────────────────┐
+                       │                                                          │
+                       │  ① 関数本体だけ                                          │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ read_best_bid_returns_hardcoded_*    │  ── unit    │
+                       │     │ (read_best_bid を直接 call、bytes 検証) │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ 失敗 → L2 Step 3 の関数本体                  │
+                       │                                                          │
+                       │  ② Registry 登録の不変条件                                │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ openhl_precompiles_registers_clob_*  │  ── unit    │
+                       │     │ (extend した set に address + ECDSA   │             │
+                       │     │  の両方が存在 = extend-not-replace)    │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ 失敗 → L2 Step 4 の clone()/extend() の  │
+                       │                       意味取り違え (新規 set 上書きなど)   │
+                       │                                                          │
+                       │  ③ Registry 経由の EVM dispatch                            │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ registered_precompile_is_invokable_* │  ── unit    │
+                       │     │ (.get(addr) → .execute()、REVM 内部の  │             │
+                       │     │  STATICCALL と同じ経路)                 │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ 失敗 → L2 Step 4 の Precompile::new(...)    │
+                       │                       の組み立て (id / fn / 引数順)        │
+                       │                                                          │
+                       │  ④ Node 全体の合成 (Integration)                          │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ reth_dev_node_with_openhl_executor   │  ── integration│
+                       │     │ (NodeBuilder + ExecutorBuilder +      │             │
+                       │     │  EthereumAddOns の合成、launch まで)   │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ 失敗 → L1 の Factory / Builder 接続、       │
+                       │                       または with_components / add_ons の │
+                       │                       trait 不整合                          │
+                       └─────────────────────────────────────────────────────────┘
+
+                       「狭い scope のテストから先に壊れる」のが正常なシグナル:
+                         ① が落ちて他が通る → 関数本体に絞ってデバッグ
+                         ② だけが落ちる   → wrapper の意味論 (clone/extend の選択)
+                         ③ だけが落ちる   → 登録の組み立てミス (関数ポインタ vs id vs address)
+                         ④ だけが落ちる   → Node Builder の trait 接続 (Factory 外の配管)
+\`\`\`
+
+ポイントは「**scope の異なるテストが同時に落ちる場合と、特定の scope だけ落ちる場合で、バグの位置が一意に絞られる**」という設計だ。たとえば ① ② ③ が通って ④ だけが落ちたら、関数も registry も dispatch も正常で、不具合は Reth の \`NodeBuilder\` 接続側 (L1 の \`OpenHlExecutorBuilder\` / \`EvmFactory\` の trait bound) にあると即座にわかる。逆に ① だけが落ちて他が通ることはない (関数本体が壊れていれば dispatch も連鎖して落ちる) — この依存方向が「scope を広げながらテストする」discipline の正当性そのものだ。
 
 要となる決定が 3 つ:
 
@@ -1432,7 +1503,7 @@ static CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>> = RwLock::new(None);
 
 ドキュメントコメントが本レッスンの肝 — \`None\` は「未インストール」状態を表し、エラーではなく zero bytes を返すことを明示している。メインネットで未初期化の perp market を読む契約はゼロ値を見る — その挙動と揃える。
 
-> 🛑 **やりがちな勘違い。** 「\`lazy_static!\` や \`OnceLock\` を使えばいいのでは?」 — **使えるが、制約が強すぎる。** \`OnceLock\` は 1 回しか set できない — だがこちらでは、テスト分離のために \`install_clob\` を何度も呼び直せるようにしたい。\`lazy_static!\` は unsafe な初期化トリックが必要 — Rust 1.63 以降の \`static RwLock<...> = RwLock::new(None)\` ならそれが不要になる。素の \`static RwLock<...>\` が 2024 年時点で最もクリーンなイディオムだ。
+> 🛑 **やりがちな勘違い。** 「\`lazy_static!\` や \`OnceLock\` を使えばいいのでは?」 — **使えるが、制約が強すぎる。** \`OnceLock\` は 1 回しか set できない — だがこちらでは、テスト分離のために \`install_clob\` を何度も呼び直せるようにしたい。\`lazy_static!\` は unsafe な初期化トリックを必要としていた古いパターン — Rust 1.63 以降の \`static RwLock<...> = RwLock::new(None)\` (\`const fn\` によるコンパイル時初期化) でそれが不要になり、現在 (2026 年時点) では std だけで完結するこの形が**プロセスごとの可変共有 state に対する標準イディオム**だ。\`OnceLock\` (1.70 安定) や \`LazyCell\` (1.80 安定) は「1 回だけ書く」用途には強力だが、今回の install/uninstall 反復にはそもそも不向き — 道具と要件を取り違えないこと。
 
 ### Step 4: 3 つのモジュール関数を追加
 
@@ -1625,6 +1696,69 @@ mod smoke {
 
 ## 設計の振り返り
 
+ここで組んだ多層ラッパー \`RwLock<Option<Arc<Mutex<Book>>>>\` が、bridge 側 (Write パス: order submit) と precompile 側 (Read パス: best bid 取得) からの並行アクセスをどう捌くのかを 1 枚で見ると、4 重構造に見える型パズルがそれぞれ役割の異なる薄い層だと分かる:
+
+\`\`\`
+   [ bridge: submit_order ]                                 [ EVM precompile: staticcall to 0x...0c1b ]
+            │                                                            │
+            │ self.clob.lock()                                            │ current_best_bid()
+            ▼                                                            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ① Outer: static RwLock<Option<Arc<Mutex<Book>>>>                                │
+   │    役割: 「CLOB が install 済みか否か」の境界を持つロック (Write は install/    │
+   │           uninstall の超レアパス、ほぼ常時 Read 専用 → RwLock が最適)            │
+   │                                                                                │
+   │    write() ──► install_clob / uninstall_clob (プロセスあたり 1 度〜数度)        │
+   │    read()  ──► current_best_bid (precompile 呼び出しのたび、超高頻度・並列 OK)   │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │  (write/read ガード経由)
+            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ② Option<Arc<Mutex<Book>>>                                                     │
+   │    役割: install 前 (= None) と install 済み (= Some) の区別を型で表現           │
+   │    None  → precompile はゼロエンコード (= 未初期化 perp market の挙動を mirror) │
+   │    Some  → 中身の Arc を deref/clone                                            │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │  (None なら早期 return、Some なら次へ)
+            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ③ Arc<Mutex<Book>>                                                             │
+   │    役割: 所有権の共有 (bridge と static の両方が同じ Book を強参照)              │
+   │    Arc は cheap-clone な atomic 参照カウント — bridge の struct と CLOB_STATE   │
+   │    の両方が「同じ Book を所有している」を表現するための Rust の定石             │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │  (.lock() で内側の Mutex に進入)
+            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ④ Inner: Mutex<Book>                                                           │
+   │    役割: matching engine 本体 (submit / cancel / best_bid_with_qty) の排他保護   │
+   │    Write も Read もここで直列化される (Book の変更頻度は高いため Mutex が妥当)   │
+   │                                                                                │
+   │    bridge 側: submit_order が \`.lock().submit(...)\` で書き込み                  │
+   │    precompile 側: current_best_bid が \`.lock().best_bid_with_qty()\` で読み込み  │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │
+            ▼
+        [ 同じ Book インスタンス ]
+
+
+   なぜ「① RwLock + ④ Mutex」の二段構成にするのか:
+
+   ・もし「Mutex<Option<Arc<Mutex<Book>>>>」(=① も Mutex) にしてしまうと、
+     **すべての precompile read が ① でも直列化される** ため、N 並列の EVM call が
+     N 倍のレイテンシで詰まる。① は read 並列化が効くので RwLock が正解。
+
+   ・もし「RwLock<Book>」(= 中間構造を全部省略) にしてしまうと、
+     **bridge と precompile が別々に Book を所有できなくなる** (どちらか一方が
+     \`&'static\` なら他方は ownership を取れない)。\`Arc\` がこの問題を解く。
+
+   ・もし「Arc<Mutex<Book>> を static に直接置く」(= ② の Option を省略) にすると、
+     コンパイル時に \`Book::new()\` が evaluate できない (const fn ではない) のと、
+     install 前の「未初期化状態」を型で表現する手段が消える。\`Option\` が両方解く。
+
+   4 層それぞれが「別の責務」を持つ。重ねている、ではなく分担している、が正しい読み方。
+\`\`\`
+
 ここに焼き込んだ重要な決定が 3 つ：
 
 1. **関数ポインタのシグネチャ制約に対する定石は process-global な state。** REVM の \`PrecompileFn = fn(...) -> PrecompileResult\` は関数ポインタであってクロージャではないので、state をキャプチャできない。選択肢は (a) 関数引数として受け取る（REVM API の変更が必要）、(b) process-global から読む — のどちらか。今回は (b) を取った。**コストはプロセスあたり CLOB が 1 つになること。** 単一バリデータの deployment なら問題ないが、マルチテナントには REVM API の変更が必要だ。
@@ -1778,6 +1912,36 @@ fn read_best_bid(_input: &[u8], _gas_limit: u64, _reservoir: u64) -> PrecompileR
 - **\`out[24..32].copy_from_slice(&price.0.to_be_bytes())\`** — \`Price\` は \`u64\` のラップ型。\`to_be_bytes()\` は \`[u8; 8]\` を返す。その 8 バイトを 32-byte word の **最後の 8 バイト**（position 24..32）にコピーする。先頭 24 バイトはゼロ — これが u64 値の big-endian u256 エンコーディング。
 - **qty も同様に \`out[56..64]\` へ** — 2 つ目の 32-byte word の最後の 8 バイト。
 - **ハードコードの \`out[31] = 100\` と \`out[63] = 10\` は消える。**
+
+なぜ \`out[24..32]\` という「マジックナンバー」が正しいのかを、64 バイト buffer 全体のメモリレイアウトで見ると一目で押さえられる:
+
+\`\`\`
+                       ┌──── 第 1 スロット: price (u256 BE, 32 byte) ────┐ ┌──── 第 2 スロット: qty (u256 BE, 32 byte) ────┐
+   byte index:          0    ...    23   24    25    ...    30    31     32    ...    55   56    57    ...    62    63
+                       ┌────────────┬────┬────┬─────────────┬────┬────┐  ┌────────────┬────┬────┬─────────────┬────┬────┐
+   memory:             │ 00 ... 00  │ p7 │ p6 │ ........... │ p1 │ p0 │  │ 00 ... 00  │ q7 │ q6 │ ........... │ q1 │ q0 │
+                       └────────────┴────┴────┴─────────────┴────┴────┘  └────────────┴────┴────┴─────────────┴────┴────┘
+                        ↑           ↑                            ↑       ↑           ↑                            ↑
+                        │           │                            │       │           │                            │
+                       高位 24 byte  └─── price.0.to_be_bytes() ───┘    高位 24 byte  └─── qty.0.to_be_bytes() ─────┘
+                       (zero pad)            [u8; 8] が ぴったり収まる    (zero pad)            [u8; 8] が ぴったり収まる
+                                             ┃                                                  ┃
+                                             ▼                                                  ▼
+                                    out[24..32] (8 byte の slice)                       out[56..64] (8 byte の slice)
+                                    .copy_from_slice(&price.0.to_be_bytes())            .copy_from_slice(&qty.0.to_be_bytes())
+
+
+   数で押さえると:
+     ・slot 1 全体は byte 0..32 の 32 byte (= u256 BE 1 個分)
+     ・上位 24 byte (0..24) は zero pad のまま (vec![0u8; 64] で既に確保済み)
+     ・下位 8 byte (24..32) に u64 を big-endian で直接書き込む → slot 全体が「u64 を u256 に zero-extend したもの」になる
+     ・slot 2 も同じ構造を 32 byte 平行移動 (byte index に +32)
+
+   結論: 24..32 と 56..64 は「u64 (8 byte) が u256 (32 byte) の右端に滑り込む位置」。
+        マジックではなく、(32 − 8 = 24) と (64 − 8 = 56) という算数の結果にすぎない。
+\`\`\`
+
+ここで効いているのは「**u64 BE bytes → u256 BE word の右端 8 byte に直接コピー、中間で \`[u8; 32]\` を確保しない**」というホットパス最適化だ。\`U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)\` のように 32 byte の一時配列を経由するルートは結果こそ同じだが、(a) スタック上に余分な 32 byte の zero-init、(b) その配列から output への 32 byte memcpy、の二重コストが乗る。直接書き込みなら 8 byte memcpy のみ — しかも上位 zero pad は \`vec![0u8; 64]\` の初期化時点で既に確保済みなので、追加コスト 0 で zero-extend が成立している。
 
 > 🛑 **やりがちな勘違い。** 「明快さのために \`U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)\` でいいのでは?」 — それだと **一時的な \`[u8; 32]\` を allocate してから byte-by-byte でコピー** することになる。直接 \`out[24..32].copy_from_slice(&price.0.to_be_bytes())\` と書けば、output buffer に直接書き込んで中間 allocation を挟まない。**結果は同じだが、仕事は半分。** precompile は hot path で、マイクロ秒の積み重ねが効いてくる。
 
@@ -2062,6 +2226,59 @@ cargo test -p openhl-evm --release
 - Module 2 (Read precompile) **完了**：\`STATICCALL(0x...0c1b)\` を発行する Solidity コントラクトが、live な CLOB state を受け取れる。
 - パターン（precompile が global Arc から read する）が証明されたので、今後の stage で別の read precompile（best_ask、depth、mid-price など）に複製できる。
 - Module 3 (Write precompile、L7-L9) は同じインフラの上に、逆方向で構築する：precompile が CLOB state に **書く** ようにする。
+
+### E2E ラウンドトリップ: Solidity → CLOB → Solidity
+
+L6 で点灯する full path をひと目で:
+
+\`\`\`
+ Solidity contract                                                  .sol
+   (uint256 price, uint256 qty) = abi.decode(
+       staticcall(gas, 0x...0c1b, "", 64), (uint256, uint256)
+   );
+        │                                                            ▲
+        │ STATICCALL (read-only)                                     │ 64-byte response
+        ▼                                                            │
+ ┌───────────────────────────────────────────────────────────────────┴───┐
+ │ Reth EVM dispatch                                         [L1/L2/L3]  │
+ │   spec → openhl_precompiles_for(spec) → registry table                │
+ │   0x...0c1b ➜ Precompile { execute: read_best_bid, base_gas: 500 }    │
+ └─────────────────────────────────┬─────────────────────────────────────┘
+                                   │ fn pointer call
+                                   ▼
+ ┌───────────────────────────────────────────────────────────────────────┐
+ │ read_best_bid(input, gas_limit, _env)              [L2 body + L5 swap]│
+ │   1. let mut out = vec![0u8; 64];                                     │
+ │   2. match current_best_bid() {                                       │
+ │        Some((p, q)) ➜ encode into out  ──┐                            │
+ │        None         ➜ zero buffer        │ (encoding 経路は ↑ へ)     │
+ │      }                                   │                            │
+ │   3. PrecompileOutput { gas_used: 500, bytes: out }                   │
+ └─────────────────────────────────┬────────┼────────────────────────────┘
+                                   │        │
+                                   ▼        │
+ ┌────────────────────────────────────────  ┴────────────────────────────┐
+ │ static CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>>     [L4 plumbing] │
+ │   ① RwLock.read()        ─ install されているか? (read-mostly)        │
+ │   ② Option.as_ref()      ─ 未 install なら None → zero で即帰る       │
+ │   ③ Arc::clone(arc)      ─ bridge と所有権を分け合う                  │
+ │   ④ inner Mutex.lock()   ─ マッチングエンジンを排他保護               │
+ └─────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+ ┌───────────────────────────────────────────────────────────────────────┐
+ │ Book::best_bid_with_qty()              [Course 7 — マッチングエンジン]│
+ │   bids: BTreeMap<RevPrice, OrderQueue>.iter().next()                  │
+ │   → (Price, Qty)  または  None                                        │
+ └───────────────────────────────────────────────────────────────────────┘
+
+ 戻り経路 (encoding 側):
+   out[24..32].copy_from_slice(&price.0.to_be_bytes());  // slot 1 の右端 8 byte
+   out[56..64].copy_from_slice(&qty.0.to_be_bytes());    // slot 2 の右端 8 byte
+   // 上位 24 byte は vec![0u8; 64] の zero-init のまま → u64 を u256 に zero-extend
+\`\`\`
+
+「Module 2 完了」とは、この縦線が**端から端まで実線で書ける状態**になったということ。L6 のテストは、まさにこの線が途中で断線していないことを 1 本の \`assert_eq!\` で証明する — \`(250, 7)\` という値が、Book → Mutex → RwLock → registry → EVM → 呼び出し元、というすべての関門を通り抜けてきたという観測そのものだ。L4 の配管、L5 の通電、L6 の計測がここで合流する。
 
 ## おさらい
 
@@ -2537,7 +2754,42 @@ fn u64_from_be_chunk(chunk: &[u8]) -> u64 {
 
 ### Step 4: \`place_order\` precompile 関数を追加
 
-\`read_best_bid\` の下、\`u64_from_be_chunk\` の上：
+**コードを読む前に — 128-byte 入力のメモリ配置:**
+
+\`\`\`
+ABI-aligned 128-byte calldata (4 × 32-byte slot、値は各 slot の右端に右寄せ):
+
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ slot 0 (input[ 0.. 32])  account_id                                    │
+  │   bytes  0..24  : zero pad (24 byte)                                   │
+  │   bytes 24..32  : u64 big-endian      ← u64_from_be_chunk(&input[0..32])│
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ slot 1 (input[32.. 64])  side                                          │
+  │   bytes 32..63  : zero pad (31 byte)                                   │
+  │   byte  63      : u8                  ← side_byte = input[63]          │
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ slot 2 (input[64.. 96])  price                                         │
+  │   bytes 64..88  : zero pad (24 byte)                                   │
+  │   bytes 88..96  : u64 big-endian      ← u64_from_be_chunk(&input[64..96])│
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ slot 3 (input[96..128])  qty                                           │
+  │   bytes  96..120: zero pad (24 byte)                                   │
+  │   bytes 120..128: u64 big-endian      ← u64_from_be_chunk(&input[96..128])│
+  └────────────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+「right-aligned」の算術:
+
+- u64 を載せる slot は、絶対 byte 位置 \`[32×N + 24 .. 32×N + 32]\` に値が乗る
+  - slot 0 (account_id) → \`24..32\`
+  - slot 2 (price)      → \`88..96\`   (= 64 + 24 .. 64 + 32)
+  - slot 3 (qty)        → \`120..128\` (= 96 + 24 .. 96 + 32)
+- u8 (1 byte) を載せる slot 1 の side bit = \`32 × 1 + 31 = 63\` — slot の最右端 1 byte だけ
+- ヘルパー (Step 6) 側の \`buf[24..32]\` / \`buf[63]\` / \`buf[88..96]\` / \`buf[120..128]\` も**同じ算術の裏返し** — 書く側と読む側で位置が対称になる
+
+つまり \`u64_from_be_chunk\` が 32-byte chunk のうち \`[24..32]\` をピックする理由、\`side_byte\` が \`input[63]\` を直接読む理由、テストヘルパーが \`buf[88..96]\` を price に使う理由は、**すべて上の図の zero pad / value 境界そのもの**だ。マジックではなく ABI の規約 + 算数。
+
+これを念頭に置いた上で関数を見ていく。\`read_best_bid\` の下、\`u64_from_be_chunk\` の上に追加する：
 
 \`\`\`rust
 /// Place a limit order on the installed CLOB. The write counterpart to
@@ -3146,6 +3398,60 @@ EVM call は別々、precompile も別々だが、global を共有している�
 
 （答え：**テストは fail する。** \`read_best_bid\` は空の book を見て zero を返す。このラウンドトリップが成立する唯一の理由は、**両方の precompile が同じ \`CLOB_STATE\` global から読み、その global が 1 つの Arc を保持していて、その Arc が 1 つの Book を指しているから** だ。Arc を共有するパターンこそが、ラウンドトリップに意味を与えている。各 precompile が自前の private な state を持っていたら、機能的に切り離されてしまい、同じ CLOB に話しかける用途には使えない。）
 
+### 双方向ラウンドトリップ・トポロジー図
+
+L4 から仕込んできた配管が、ここで両方向に通電する全景:
+
+\`\`\`
+ ┌────── on-chain (Solidity, 同一トランザクション内で連続発行) ──────┐
+ │  uint256 id  = call      (0x...0c1c, abi.encode(0xABCD,0,175,12)); │ ← WRITE call
+ │  (uint256 p,                                                       │
+ │   uint256 q) = staticcall(0x...0c1b, "");                          │ ← READ staticcall
+ └──────────┬──────────────────────────────────────────┬──────────────┘
+            │ CALL (128-byte calldata)                 │ STATICCALL (空 calldata)
+            ▼                                          ▼
+ ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+ │ Reth EVM dispatch — write side   │   │ Reth EVM dispatch — read side    │
+ │   0x...0c1c → place_order        │   │   0x...0c1b → read_best_bid      │
+ └──────────────┬───────────────────┘   └──────────────────┬───────────────┘
+                │ fn pointer call                          │ fn pointer call
+                ▼                                          ▼
+ ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+ │ place_order(input,...)  [L7+L8]  │   │ read_best_bid(_,...)  [L2+L5]    │
+ │  1. parse 128-byte calldata      │   │  1. let mut out = vec![0u8; 64]; │
+ │  2. validate (4 rejection paths) │   │  2. current_best_bid()  ──┐      │
+ │  3. fetch_add(1, Relaxed) → id   │   │  3. encode (price,qty)  ◄─┘      │
+ │  4. clob.lock().submit(Order{…}) │   │     out[24..32] ← price BE       │
+ │  5. encode id → out[24..32]      │   │     out[56..64] ← qty BE         │
+ └──────────────┬───────────────────┘   └──────────────────┬───────────────┘
+                │ ── mutating write ──                     │ ── pure read ──
+                │ submit(Order{id, 0xABCD,                 │ best_bid_with_qty():
+                │         Buy, Qty(12),                    │   bids.iter().next()
+                │         Limit{Price(175)}})              │   → (Price(175), Qty(12))
+                ▼                                          ▼
+ ┌──────────────────────────────────────────────────────────────────────┐
+ │ static CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>>      [L4 が install]│
+ │                                                                       │
+ │   ┌─────────────── 唯一の Arc → 唯一の Mutex → 唯一の Book ────────┐ │
+ │   │  bids: BTreeMap<RevPrice, OrderQueue>                          │ │
+ │   │     RevPrice(175) → [Order{ id, account: 0xABCD, qty: 12,      │ │
+ │   │                             side: Buy, type: Limit }]          │ │
+ │   └────────────────────────────────────────────────────────────────┘ │
+ │                                                                       │
+ │   write 側が握る lock = inner Mutex (exclusive)                       │
+ │   read 側が握る lock  = inner Mutex (exclusive, ただし write 解放後)   │
+ └──────────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+ラウンドトリップが成立する理由 = **「Arc が 1 つしかない」** という一点に尽きる:
+
+- write も read も同じ \`CLOB_STATE\` を経由する → 同じ Arc を \`clone\` する → 同じ Book を見る
+- write 側の \`clob.lock().submit(...)\` が release されると、内部 Mutex は解放され、read 側が同じ瞬間に \`current_best_bid()\` を呼べる
+- bridge 側の off-chain な \`submit_order\` (Course 7) も**同じ Arc に書き込む** — つまり precompile (on-chain) と bridge (off-chain) は、Book に対する書き込み主体としては対等になる
+- **L4 で組んだ \`Arc<Mutex<Book>>\` の global hand-off は、まさにこの双方向通電のために設計された** — L7 で precompile 2 つを並べ、L8 で write side を本物にしたことで、ようやくその設計が「目に見える挙動」として実現する
+
+「Module 3 中盤マイルストーン」とは、この縦線がついに **両方向に同時に走る** ようになったということだ。
+
 ## テスト
 
 \`\`\`bash
@@ -3279,7 +3585,61 @@ L8 の doc コメントで述べた「約定を捨てている」というギャ
 - **\`LiveRethEvmBridge::pending_fills\`** を \`Mutex<Vec<Fill>>\` から \`Arc<Mutex<Vec<Fill>>>\` に変更する。bridge の \`new()\` が \`install_clob\` と並んで \`install_fill_sink(Arc::clone(&pending_fills))\` を呼ぶ。
 - **新しい unit test** \`place_order_routes_fills_to_installed_sink\` を追加 — maker/taker のクロスを実行し、sink が約定を受け取ることを検証する。
 
-L9 を終えると、precompile と bridge はもはや **書き込み側でも独立ではない**。EVM 経由で発注された order が生んだ約定は、bridge 側の \`submit_order\` が書き込むのと同じ \`pending_fills\` キューに流れる。次の \`build_payload\` がそれを拾う。
+### E2E 環状データルーティング・トポロジー (Stage 9c+ で閉じる)
+
+L9 で初めて、order → Book → Fill → payload の loop が完全に閉じる。on-chain (EVM precompile) と off-chain (bridge) の 2 つの writer が、**同じ Book** と **同じ pending_fills** に合流する全景:
+
+\`\`\`
+ ── 入力経路 1: on-chain (Solidity → EVM) ──────────────────────────────────
+   Solidity contract → call(0x...0c1c, abi.encode(account, side, price, qty))
+                                       │
+                                       ▼
+   Reth EVM dispatch → place_order  [L7 parse + L8 submit + L9 fill routing]
+                                       │
+                                       │ clob.lock().submit(Order{…})
+                                       │     → SubmitResult { fills: Vec<Fill>, … }
+                                       │
+                                       ▼ (1) Book を mutate    (2) fills を sink へ
+ ── 入力経路 2: off-chain (App / RPC → bridge) ─────────────────────────────
+   App / RPC → bridge.submit_order(…)              [Course 7 既存ルート]
+                                       │
+                                       │ self.clob.lock().submit(…)
+                                       │     → fills を self.pending_fills に直書き
+                                       ▼
+ ── 共有 Book (双方向 writer の合流点 ①) ──────────────────────────────────
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │ Arc<Mutex<Book>>                                                    │
+   │   ▲ static CLOB_STATE が参照 (L4 で install)                         │
+   │   ▲ bridge.clob と Arc を共有 → 同じ Book を on/off 双方から書ける    │
+   └─────────────────────────────────────────────────────────────────────┘
+
+ ── 共有 Fill バッファ (双方向 writer の合流点 ②) ──────────────────────────
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │ Arc<Mutex<Vec<Fill>>>                                               │
+   │   ▲ static FILL_SINK が参照 (L9 で install — 新規)                   │
+   │   ▲ bridge.pending_fills と Arc を共有 (L9 で Mutex → Arc<Mutex> 化) │
+   │                                                                     │
+   │   write 経路 A: place_order が FILL_SINK 経由で extend(fills)        │
+   │   write 経路 B: bridge.submit_order が pending_fills へ直接 push     │
+   │   (どちらも同じ Vec<Fill> — Arc が 1 つしかない)                     │
+   └────────────────────────────────┬────────────────────────────────────┘
+                                    │ self.pending_fills.lock().drain(..)
+                                    ▼
+ ── 出口: ブロックペイロード ──────────────────────────────────────────────
+   bridge.build_payload()  →  drain した fills を block に attach
+                                    │
+                                    ▼
+                            次の Reth ブロック
+\`\`\`
+
+**環状性 (loop closure) の本質:**
+
+- writer は 2 つ (on-chain \`place_order\` / off-chain \`bridge.submit_order\`)、reader (= drain) は 1 つ (\`build_payload\`)
+- 2 つの writer は **物理的に同じ \`Arc<Mutex<Vec<Fill>>>\`** を見る — global (\`FILL_SINK\`) と bridge フィールド (\`pending_fills\`) が、L4 と完全に対称な「同じ Arc を 2 か所が握る」パターンで結合
+- 「on-chain で発注された order の約定が、off-chain で発注された約定と区別なく block に乗る」という Module 4 の中核プロパティが、ここで初めて成立する
+- **L4 で \`Arc<Mutex<Book>>\` を分散させた設計が、L9 で \`Arc<Mutex<Vec<Fill>>>\` 側にも完全ミラー** — \`install_clob\` と \`install_fill_sink\`、\`bridge.clob\` と \`bridge.pending_fills\`、すべてが対称形
+
+L9 を終えると、precompile と bridge はもはや **書き込み側でも独立ではない**。EVM 経由で発注された order が生んだ約定は、bridge 側の \`submit_order\` が書き込むのと同じ \`pending_fills\` キューに流れる。上の構造図が示すように、この合流によってオンチェーンで発生した流動性の変化が、次の \`build_payload\`（ブロックペイロード構築）へ途切れることなく完全に循環・伝播するようになる。
 
 ## おさらい
 
@@ -3729,7 +4089,82 @@ cargo test -p openhl-evm --release bridge_against_custom_evm
 5. **precompile が book に書く** — \`place_order(Sell @ 200 qty 33)\` を直接呼ぶ（EVM dispatch をシミュレートする）。
 6. **bridge が約定を見る** — \`bridge.pending_fill_count() == 1\`。
 
-これが **コースのマイルストーン** だ。L10 を終えれば、47 個の unit test で証明したアーキテクチャが、たった 1 つの integration test でも証明される — 実際の Reth ノード + 実際の bridge + 両方の precompile + 両方の global + マッチングエンジンを、end-to-end かつ in-process で exercise することになる。
+### フルスタック結合トポロジー: Reth プロセス内に Module 1-4 のすべてが同居する
+
+L10 で初めて、これまでの 4 モジュールの配管が**本物の Reth プロセス**と**本物の \`LiveRethEvmBridge\`** という両端を、process-global statics で結ぶ：
+
+\`\`\`
+┌──────────────────────── 単一プロセス (cargo test バイナリ / 本番 Reth) ─────────────────────────┐
+│                                                                                                  │
+│  ╔════════════ Reth node (NodeBuilder.launch() で boot) ═════════════════╗                       │
+│  ║                                                                         ║                       │
+│  ║  Executor / RPC server / mining / consensus  ──┐                       ║                       │
+│  ║                                                 │  OpenHlExecutorBuilder ║                       │
+│  ║                                                 │  で plug-in されたカスタム ║                   │
+│  ║                                                 ▼  EVM (L1 + L3 の成果物)  ║                   │
+│  ║  ┌─── OpenHlEvmFactory → Custom EVM (revm) ────────────────────────────┐ ║                       │
+│  ║  │   fork registry → openhl_precompiles_for(spec):                     │ ║                       │
+│  ║  │     0x...0c1b → read_best_bid    [Module 2: L2 + L5]                │ ║                       │
+│  ║  │     0x...0c1c → place_order      [Module 3+4: L7+L8+L9]             │ ║                       │
+│  ║  └──────────────────┬──────────────────────┬─────────────────────────────┘ ║                       │
+│  ║                     │ CLOB_STATE.read()    │ FILL_SINK.read()             ║                       │
+│  ╚═════════════════════│══════════════════════│═════════════════════════════╝                       │
+│  ──────────────────────│──────────────────────│──────────────────────────────────────────────────  │
+│   process-global statics (同一プロセス内、ロックフリーで参照可能)                                   │
+│  ┌──────────────────────────────────┐  ┌──────────────────────────────────────────────────┐         │
+│  │ static CLOB_STATE                │  │ static FILL_SINK                                  │         │
+│  │   RwLock<Option<Arc<Mutex<Book>>>>│  │   RwLock<Option<Arc<Mutex<Vec<Fill>>>>>           │         │
+│  │   ▲                              │  │   ▲                                               │         │
+│  │   │ bridge::new() が             │  │   │ bridge::new() が                              │         │
+│  │   │ install_clob(Arc::clone)     │  │   │ install_fill_sink(Arc::clone) を L9 で追加     │         │
+│  │   │ を L4 で配管                  │  │                                                   │         │
+│  └───┼──────────────────────────────┘  └────┼──────────────────────────────────────────────┘         │
+│  ────│──────────────────────────────────────│──────────────────────────────────────────────────────  │
+│  ╔═══│════════════ LiveRethEvmBridge (同一プロセス内のオブジェクト) ════════════════════════╗      │
+│  ║   ▼ (precompile と同じ Arc を握る)     ▼ (precompile と同じ Arc を握る)                   ║      │
+│  ║  bridge.clob                          bridge.pending_fills                                 ║      │
+│  ║    : Arc<Mutex<Book>>                   : Arc<Mutex<Vec<Fill>>>                            ║      │
+│  ║                                                                                            ║      │
+│  ║  bridge.submit_order(Order{…})  ─► self.clob.submit() → self.pending_fills へ約定 push    ║      │
+│  ║  bridge.build_payload()          ─► self.pending_fills.drain() → 次の block に attach     ║      │
+│  ║                                                                                            ║      │
+│  ║  provider = handle.node.provider  (NodeBuilder が返した node handle 経由で結合)             ║      │
+│  ╚════════════════════════════════════════════════════════════════════════════════════════╝      │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ L10 integration test がこのトポロジー上で走るパス:
+
+  Phase A  uninstall_{clob,fill_sink}() で global を空に
+           → NodeBuilder.launch() で Reth プロセスを起動 (上図の Reth node 部分が立ち上がる)
+           → LiveRethEvmBridge::new(handle.node.provider, ...) が両 global に install
+           → 結果: 上図の 4 本の Arc 矢印が「全部繋がる」状態に揃う
+
+  Phase B  bridge.submit_order(Buy@200 q33)
+           → bridge.clob.submit() が Book に bid を載せる
+           → 同じ Arc を CLOB_STATE 経由で precompile も見る
+           → current_best_bid() == Some((Price(200), Qty(33)))            ◄ 接続証明 #1
+
+  Phase C  crate::precompiles::place_order(Sell@200 q33 calldata) を直接呼ぶ
+           → 上図 Custom EVM 側の place_order body が exercise される
+           → CLOB_STATE.read() → clob.lock().submit() がクロス → SubmitResult.fills
+           → FILL_SINK.read() で sink Arc を取り、extend(fills)
+           → bridge.pending_fills が同じ Arc を握っているので increment が見える
+           → bridge.pending_fill_count() == 1                              ◄ 接続証明 #2
+
+  Phase D  uninstall_{fill_sink,clob}() で global を空に戻す → drop(handle) で Reth プロセス終了
+\`\`\`
+
+**4 つの観測ポイント:**
+
+- **Module 1 (L1+L3) の成果**: \`OpenHlExecutorBuilder\` が \`NodeBuilder\` を通って実際に Reth に plug-in され、Custom EVM が boot している (= 上図の Reth node 内 EVM ブロック)
+- **Module 2 (L2+L5) の成果**: \`read_best_bid\` が live state を読み、Phase B の接続証明 #1 を成立させる
+- **Module 3 (L7+L8) の成果**: \`place_order\` が live state に書き込み、Phase C の前半 (Order が book に乗る) が成立
+- **Module 4 (L9) の成果**: 生まれた fills が FILL_SINK 経由で bridge に届き、接続証明 #2 を成立させる
+
+**L10 が証明するのは「これら 4 つが同時に成立する」こと** — どれか 1 つでも配管が外れていたら、\`current_best_bid()\` か \`pending_fill_count()\` のどちらかで失敗する。**unit test を全部 green に保ったまま、\`NodeBuilder\` チェーンのタイポ 1 つで production が壊れる** という現実的な regression を、この test が 1 本で塞ぐ。
+
+これが **コースのマイルストーン** だ。L10 を終えれば、47 個の unit test で証明したアーキテクチャが、たった 1 つの integration test でも証明される — 上の結合図が示すように、実際の Reth ノードプロセス、実際の bridge オブジェクト、両方の precompile、両方の global、そしてマッチングエンジンが**単一のインプロセス空間で完全に噛み合い**、end-to-end で駆動 (exercise) されることになる。
 
 これを動かすために必要な **プロダクションコードの変更は 1 つだけ**：\`place_order\` を \`pub(crate)\` にすること。\`live_node.rs\` 内、sibling モジュールにいる integration test から直接呼べるようにするためだ。
 
@@ -4203,6 +4638,82 @@ L11 は capstone で、**新しいコードはなし**。築いたものを振�
 上から下：bridge がデータを所有し、precompile モジュールがプロセスグローバルな handle で公開し、EVM が precompile への call を dispatch する。Solidity コントラクトは、\`ecrecover\` を叩くのと同じ感覚で同じアドレスを叩く。
 
 下から上：スマートコントラクトが \`STATICCALL(0x...0c1b)\` を発行する。Reth の EVM が precompile registry でアドレスを引き、\`read_best_bid\` に dispatch し、\`CLOB_STATE\` から read する — そしてそれは、bridge の \`submit_order\` が書き込んでいるのと同じ \`Arc<Mutex<Book>>\` だ。**翻訳レイヤなし。シリアライゼーションの往復なし。メモリだけ。**
+
+### 全配管トポロジーマップ — Module 1-4 統合表示
+
+上の図はメンタルモデル骨格だ。下の図はそれを「ホワイトボードに描けるレベル」まで肉付けした決定版マップ — Solidity → Reth dispatch → precompile body → process-global statics → bridge object → Book / Vec<Fill> という貫通路と、Module 1-4 のすべての成果物を 1 枚に焼き付ける:
+
+\`\`\`
+┌───── on-chain (Solidity, EVM caller) ──────────────────┐    ┌── off-chain (App / RPC) ──┐
+│  staticcall(0x...0c1b, "")           ← read entry      │    │  bridge.submit_order(…)   │
+│  call      (0x...0c1c, 128B calldata) ← write entry    │    │  (Course 7 既存ルート)    │
+└──────┬───────────────────────┬─────────────────────────┘    └───────────┬───────────────┘
+       │                       │                                          │
+┌──────│───────────────────────│──── Reth process (NodeBuilder.launch()) ─│──────────────┐
+│      │                       │                                          │              │
+│  ╔═══╧═════════ Custom EVM (Module 1: L1+L3) ════════════════════════╗  │              │
+│  ║     spec_id → openhl_precompiles_for(spec)  [OnceLock キャッシュ] ║  │              │
+│  ║     registry table:                                                ║  │              │
+│  ║       0x...0c1b ─► read_best_bid    [Module 2: L2 body + L5 swap] ║  │              │
+│  ║       0x...0c1c ─► place_order      [Module 3+4: L7+L8+L9]        ║  │              │
+│  ╚══════╤═══════════════════════════════════╤═══════════════════════╝  │              │
+│         │ fn pointer call                   │ fn pointer call           │              │
+│         ▼                                   ▼                           │              │
+│  ┌── read_best_bid ──────────┐    ┌── place_order ────────────────┐     │              │
+│  │  out = vec![0u8; 64]      │    │  parse 4 × 32B ABI slots      │     │              │
+│  │  current_best_bid()  ◄────┤    │  validate (4 rejection paths) │     │              │
+│  │  out[24..32] ← price BE   │    │  NEXT_ORDER_ID.fetch_add(     │     │              │
+│  │  out[56..64] ← qty   BE   │    │    1, Relaxed) → id           │     │              │
+│  └──────────┬────────────────┘    │  clob.lock().submit(…)        │     │              │
+│             │                     │    → SubmitResult{ fills, …}  │     │              │
+│             │ CLOB_STATE.read()   │  drop(book)                   │     │              │
+│             │ .as_ref().clone()   │  if !fills.is_empty():        │     │              │
+│             │   (Arc を取得)      │    FILL_SINK.read().extend(…) │     │              │
+│             │                     │  out[24..32] ← id BE          │     │              │
+│             │                     └──────────┬────────────────────┘     │              │
+│             │                                │                          │              │
+├─────────────│────────────────────────────────│──────────────────────────│──────────────┤
+│   process-global statics (L4 + L9 で配管されたシーム)                    │              │
+│  ┌────────────────────────────────────┐  ┌──────────────────────────────────────────┐  │
+│  │ static CLOB_STATE                  │  │ static FILL_SINK                          │  │
+│  │   RwLock<Option<Arc<Mutex<Book>>>> │  │   RwLock<Option<Arc<Mutex<Vec<Fill>>>>>   │  │
+│  │   ▲ install_clob で書き込み (L4)   │  │   ▲ install_fill_sink で書き込み (L9)     │  │
+│  │   ▼ precompile が read             │  │   ▼ place_order が extend                │  │
+│  └─────────────────┬──────────────────┘  └──────────────────┬───────────────────────┘  │
+│                    │ 同じ Arc を共有                         │ 同じ Arc を共有          │
+│                    ▼                                         ▼                          │
+│  ╔══════ LiveRethEvmBridge (同一プロセス内のオブジェクト) ════════════════════════╗   │
+│  ║                                                                                ║   │
+│  ║   bridge.clob: Arc<Mutex<Book>>          bridge.pending_fills:                ║   │
+│  ║     ▲ bridge.submit_order が書き込む       Arc<Mutex<Vec<Fill>>>              ║   │
+│  ║     ▲ precompile と物理的に同じ Arc        ▲ place_order が FILL_SINK 経由     ║   │
+│  ║                                            ▲ bridge.submit_order も直接 push   ║   │
+│  ║                                                                                ║   │
+│  ║   bridge.build_payload()  ─► pending_fills.lock().drain(..)                   ║   │
+│  ║                            ─► fills を次の block payload に attach            ║   │
+│  ╚════════════════════════════════════════════════════════════════════════════════╝   │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+
+ Module 別の成果 (各色のレイヤ):
+   Module 1 [L1-L3]: 「プラガブルなシーム」 — Reth EVM に独自 dispatch を差し込めるようにした
+   Module 2 [L4-L6]: 「live state を read する」 — Solidity から Book の best bid を覗ける
+   Module 3 [L7-L8]: 「live state に write する」 — Solidity から Book に order を発注できる
+   Module 4 [L9-L10]: 「fills を block 経路に戻す」 — EVM 発注由来の約定が build_payload に届く
+
+ データ経路の要約:
+   READ  : Solidity ──► 0x...0c1b ──► read_best_bid ──► CLOB_STATE ──► Arc<Mutex<Book>>
+           ──► Book::best_bid_with_qty() ──► encode (24..32 + 56..64) ──► 64B return
+   WRITE : Solidity ──► 0x...0c1c ──► place_order   ──► CLOB_STATE ──► Arc<Mutex<Book>>
+           ──► Book::submit() → SubmitResult{ fills } ──► FILL_SINK ──► Arc<Mutex<Vec<Fill>>>
+           ──► bridge.pending_fills (同じ Arc) ──► build_payload.drain() ──► 次の block
+
+ 全体のテーゼ: **Arc が物理的に 1 つしかない**。precompile も bridge も同じ Arc を握り、
+   同じ Book / 同じ Vec<Fill> を read/write する。CLOB_STATE と FILL_SINK は「その Arc を
+   どこからでも取れるようにする shared register」にすぎない。**翻訳レイヤなし、シリアライ
+   ゼーションなし、メモリだけ** — このアーキテクチャの全部はこの 1 行に集約される。
+\`\`\`
+
+このマップを記憶から再現できるなら、もう openhl の precompile レイヤを脳内で再構築できるようになっている。誰かに 5 分でアーキテクチャを説明する場面では、このマップを白板に描きながら「Solidity → EVM dispatch → precompile body → static global → Arc shared with bridge → matching engine」と上から下になぞればよい。**コース全体の 12 レッスンが、この 1 枚の図に圧縮されている。**
 
 ## 各モジュールが届けたもの
 

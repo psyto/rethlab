@@ -19,13 +19,13 @@
 
 - **永久先物（perpetual future）の正体。** 期限がない、決済イベントもない、満期で spot 価格に収束する仕組みも持たない、そういう派生商品だ。本 primer の残り 3 レッスンの形状は、この 1 つの設計選択から導かれる。
 - **「期限なし」が実際に解くべきエンジニアリング課題だった理由。** その課題を解くために新しい経済メカニズム（L1 で扱う）を発明する必要があった。
-- **Perp、spot、伝統的 futures の違い。** 3 つの市場、3 つの価格動態、3 つのトレーダーインセンティブ。
+- **perp、spot、伝統的 futures の違い。** 3 つの市場、3 つの価格動態、3 つのトレーダーインセンティブ。
 - **なぜ本コースで Hyperliquid を例に取るのか。** 現状は closed-source。rethlab DIY Perp track は、その open 版を作ることを教える。
 
 このレッスンを終えると、以下に答えられる:
 
 - 「BTC を spot で買うのと、BTC perp を long するのは何が違う?」
-- 「Perp に期限がないのに、なぜ価格が原資産から離れずに済むのか?」
+- 「perp に期限がないのに、なぜ価格が原資産から離れずに済むのか?」
 - 「Hyperliquid とは何で、Rust EVM エンジニアにとってなぜ重要なのか?」
 
 ## なぜこの primer が存在するか
@@ -42,9 +42,9 @@ BTC の価格に対してポジションを取る方法は 3 種類ある:
 
 | 市場 | 保有するもの | 決済 | 例 |
 | :--- | :--- | :--- | :--- |
-| **Spot** | 実物の BTC そのもの | 即時 — 所有する | Coinbase で 0.1 BTC を買う。手元に 0.1 BTC が残る。 |
-| **伝統的 futures** | 将来の特定日付に BTC を固定価格で買う/売る契約 | 満期に — 現金または現物で決済 | CME 2026 年 12 月 BTC future。12 月 31 日に $100k で買う約束。 |
-| **永久先物（perp）** | BTC 価格に連動する契約。期限なし | しない — ポジションは閉じるまで開いたまま | Hyperliquid の BTC-USD perp。10× long を取り、margin が足りているかぎり開いたまま。 |
+| **Spot**（現物） | 実物の BTC そのもの | 即時 — 所有する | Coinbase で 0.1 BTC を買う。手元に 0.1 BTC が残る。 |
+| **伝統的 futures**（先物） | 将来の特定日付に BTC を固定価格で買う/売る契約 | 満期に — 差金（現金）または現物で決済 | CME 2026 年 12 月 BTC future。12 月 31 日に $100k で買う約束。 |
+| **永久先物（perp）** | BTC 価格に連動する契約。期限なし | なし — ポジションを閉じるまで継続（差金決済） | Hyperliquid の BTC-USD perp。10× long を取り、margin が足りているかぎり開いたまま。 |
 
 Spot は最もシンプル。資産を保有しているので、価格の動きがそのまま自分の損益になる。
 
@@ -101,9 +101,9 @@ L1 / L2 / L3 の計算例ではこれらの数値が繰り返し登場する。D
 
 ## よくある誤解
 
-**「Perp は自動でロールする futures だろう」。** 近いが違う。自動ロール futures にも expiry はある。サイクルごとに新しい契約に乗り換えるだけだ。各ロールには basis spread のコストがかかる。Perp にはロール自体がない — funding payment がロールコストの代わりを果たす。
+**「perp は自動でロールする futures だろう」。** 近いが違う。自動ロール futures にも expiry はある。サイクルごとに新しい契約に乗り換えるだけだ。各ロールには basis spread のコストがかかる。Perp にはロール自体がない — funding payment がロールコストの代わりを果たす。
 
-**「Perp は spot より危険だ」。** 比較の方向が誤っている。Perp が追加するのは **leverage の risk**（underwater になれば預けた collateral 以上を失いうる。ただし regulated な venue では insurance fund が通常それを吸収する）。Leverage を使わなければ、1× の perp position は spot とほぼ同じ risk しか持たない。差し引きの funding コストだけ違う。
+**「perp は spot より危険だ」。** 比較の方向が誤っている。Perp が追加するのは **leverage の risk**（underwater になれば預けた collateral 以上を失いうる。ただし regulated な venue では insurance fund が通常それを吸収する）。Leverage を使わなければ、1× の perp position は spot とほぼ同じ risk しか持たない。差し引きの funding コストだけ違う。
 
 **「Hyperliquid は Ethereum 上のスマートコントラクトだ」。** 違う — Hyperliquid は **独立した L1** だ。DIY Perp track を作る理由は、汎用 L1 上のスマートコントラクトより、perp UX（sub-second の latency、gas なし、深い orderbook）に最適化した app-chain のほうが勝るから、というのが核心。
 

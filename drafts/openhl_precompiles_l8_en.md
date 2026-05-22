@@ -324,6 +324,60 @@ Two separate EVM calls, two separate precompiles, but they share state because t
 
 (Answer: **The test would fail.** `read_best_bid` would see an empty book and return zero. The only reason this round-trip works is that **both precompiles read from the same `CLOB_STATE` global, which holds one Arc, which points to one Book.** The Arc-shared-pattern is what makes the round-trip semantically meaningful. If we had two precompiles each with their own private state, they'd be functionally isolated — useless for talking to the same CLOB.)
 
+### Bidirectional round-trip topology
+
+The plumbing we've been laying since L4 finally conducts in both directions — here's the full picture:
+
+```
+ ┌────── on-chain (Solidity, two calls in one transaction) ──────────┐
+ │  uint256 id  = call      (0x...0c1c, abi.encode(0xABCD,0,175,12)); │ ← WRITE call
+ │  (uint256 p,                                                       │
+ │   uint256 q) = staticcall(0x...0c1b, "");                          │ ← READ staticcall
+ └──────────┬──────────────────────────────────────────┬──────────────┘
+            │ CALL (128-byte calldata)                 │ STATICCALL (empty calldata)
+            ▼                                          ▼
+ ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+ │ Reth EVM dispatch — write side   │   │ Reth EVM dispatch — read side    │
+ │   0x...0c1c → place_order        │   │   0x...0c1b → read_best_bid      │
+ └──────────────┬───────────────────┘   └──────────────────┬───────────────┘
+                │ fn pointer call                          │ fn pointer call
+                ▼                                          ▼
+ ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+ │ place_order(input,...)  [L7+L8]  │   │ read_best_bid(_,...)  [L2+L5]    │
+ │  1. parse 128-byte calldata      │   │  1. let mut out = vec![0u8; 64]; │
+ │  2. validate (4 rejection paths) │   │  2. current_best_bid()  ──┐      │
+ │  3. fetch_add(1, Relaxed) → id   │   │  3. encode (price,qty)  ◄─┘      │
+ │  4. clob.lock().submit(Order{…}) │   │     out[24..32] ← price BE       │
+ │  5. encode id → out[24..32]      │   │     out[56..64] ← qty BE         │
+ └──────────────┬───────────────────┘   └──────────────────┬───────────────┘
+                │ ── mutating write ──                     │ ── pure read ──
+                │ submit(Order{id, 0xABCD,                 │ best_bid_with_qty():
+                │         Buy, Qty(12),                    │   bids.iter().next()
+                │         Limit{Price(175)}})              │   → (Price(175), Qty(12))
+                ▼                                          ▼
+ ┌──────────────────────────────────────────────────────────────────────┐
+ │ static CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>>     [installed by L4]│
+ │                                                                       │
+ │   ┌─────────────── one Arc → one Mutex → one Book ────────────────┐ │
+ │   │  bids: BTreeMap<RevPrice, OrderQueue>                          │ │
+ │   │     RevPrice(175) → [Order{ id, account: 0xABCD, qty: 12,      │ │
+ │   │                             side: Buy, type: Limit }]          │ │
+ │   └────────────────────────────────────────────────────────────────┘ │
+ │                                                                       │
+ │   write side holds = inner Mutex (exclusive)                          │
+ │   read side holds  = inner Mutex (exclusive, after write releases)    │
+ └──────────────────────────────────────────────────────────────────────┘
+```
+
+The reason the round-trip works boils down to **"there is only one Arc"**:
+
+- Write and read both go through the same `CLOB_STATE` → both clone the same Arc → both see the same Book
+- When the write side's `clob.lock().submit(...)` releases, the inner Mutex is freed and the read side can immediately call `current_best_bid()`
+- The bridge's off-chain `submit_order` (Course 7) **writes to the same Arc** — meaning the precompile (on-chain) and the bridge (off-chain) are now equal-status writers from the Book's perspective
+- **The `Arc<Mutex<Book>>` global hand-off we built in L4 was designed exactly for this bidirectional conduction** — L7 placed the two precompiles side by side, L8 made the write side real, and only now does that design surface as visible behavior
+
+"Module 3's mid-stage milestone" means this vertical line now runs **both directions simultaneously**.
+
 ## Test
 
 ```bash

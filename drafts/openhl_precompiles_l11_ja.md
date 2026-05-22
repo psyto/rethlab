@@ -74,6 +74,82 @@
 
 下から上：スマートコントラクトが `STATICCALL(0x...0c1b)` を発行する。Reth の EVM が precompile registry でアドレスを引き、`read_best_bid` に dispatch し、`CLOB_STATE` から read する — そしてそれは、bridge の `submit_order` が書き込んでいるのと同じ `Arc<Mutex<Book>>` だ。**翻訳レイヤなし。シリアライゼーションの往復なし。メモリだけ。**
 
+### 全配管トポロジーマップ — Module 1-4 統合表示
+
+上の図はメンタルモデル骨格だ。下の図はそれを「ホワイトボードに描けるレベル」まで肉付けした決定版マップ — Solidity → Reth dispatch → precompile body → process-global statics → bridge object → Book / Vec<Fill> という貫通路と、Module 1-4 のすべての成果物を 1 枚に焼き付ける:
+
+```
+┌───── on-chain (Solidity, EVM caller) ──────────────────┐    ┌── off-chain (App / RPC) ──┐
+│  staticcall(0x...0c1b, "")           ← read entry      │    │  bridge.submit_order(…)   │
+│  call      (0x...0c1c, 128B calldata) ← write entry    │    │  (Course 7 既存ルート)    │
+└──────┬───────────────────────┬─────────────────────────┘    └───────────┬───────────────┘
+       │                       │                                          │
+┌──────│───────────────────────│──── Reth process (NodeBuilder.launch()) ─│──────────────┐
+│      │                       │                                          │              │
+│  ╔═══╧═════════ Custom EVM (Module 1: L1+L3) ════════════════════════╗  │              │
+│  ║     spec_id → openhl_precompiles_for(spec)  [OnceLock キャッシュ] ║  │              │
+│  ║     registry table:                                                ║  │              │
+│  ║       0x...0c1b ─► read_best_bid    [Module 2: L2 body + L5 swap] ║  │              │
+│  ║       0x...0c1c ─► place_order      [Module 3+4: L7+L8+L9]        ║  │              │
+│  ╚══════╤═══════════════════════════════════╤═══════════════════════╝  │              │
+│         │ fn pointer call                   │ fn pointer call           │              │
+│         ▼                                   ▼                           │              │
+│  ┌── read_best_bid ──────────┐    ┌── place_order ────────────────┐     │              │
+│  │  out = vec![0u8; 64]      │    │  parse 4 × 32B ABI slots      │     │              │
+│  │  current_best_bid()  ◄────┤    │  validate (4 rejection paths) │     │              │
+│  │  out[24..32] ← price BE   │    │  NEXT_ORDER_ID.fetch_add(     │     │              │
+│  │  out[56..64] ← qty   BE   │    │    1, Relaxed) → id           │     │              │
+│  └──────────┬────────────────┘    │  clob.lock().submit(…)        │     │              │
+│             │                     │    → SubmitResult{ fills, …}  │     │              │
+│             │ CLOB_STATE.read()   │  drop(book)                   │     │              │
+│             │ .as_ref().clone()   │  if !fills.is_empty():        │     │              │
+│             │   (Arc を取得)      │    FILL_SINK.read().extend(…) │     │              │
+│             │                     │  out[24..32] ← id BE          │     │              │
+│             │                     └──────────┬────────────────────┘     │              │
+│             │                                │                          │              │
+├─────────────│────────────────────────────────│──────────────────────────│──────────────┤
+│   process-global statics (L4 + L9 で配管されたシーム)                    │              │
+│  ┌────────────────────────────────────┐  ┌──────────────────────────────────────────┐  │
+│  │ static CLOB_STATE                  │  │ static FILL_SINK                          │  │
+│  │   RwLock<Option<Arc<Mutex<Book>>>> │  │   RwLock<Option<Arc<Mutex<Vec<Fill>>>>>   │  │
+│  │   ▲ install_clob で書き込み (L4)   │  │   ▲ install_fill_sink で書き込み (L9)     │  │
+│  │   ▼ precompile が read             │  │   ▼ place_order が extend                │  │
+│  └─────────────────┬──────────────────┘  └──────────────────┬───────────────────────┘  │
+│                    │ 同じ Arc を共有                         │ 同じ Arc を共有          │
+│                    ▼                                         ▼                          │
+│  ╔══════ LiveRethEvmBridge (同一プロセス内のオブジェクト) ════════════════════════╗   │
+│  ║                                                                                ║   │
+│  ║   bridge.clob: Arc<Mutex<Book>>          bridge.pending_fills:                ║   │
+│  ║     ▲ bridge.submit_order が書き込む       Arc<Mutex<Vec<Fill>>>              ║   │
+│  ║     ▲ precompile と物理的に同じ Arc        ▲ place_order が FILL_SINK 経由     ║   │
+│  ║                                            ▲ bridge.submit_order も直接 push   ║   │
+│  ║                                                                                ║   │
+│  ║   bridge.build_payload()  ─► pending_fills.lock().drain(..)                   ║   │
+│  ║                            ─► fills を次の block payload に attach            ║   │
+│  ╚════════════════════════════════════════════════════════════════════════════════╝   │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+
+ Module 別の成果 (各色のレイヤ):
+   Module 1 [L1-L3]: 「プラガブルなシーム」 — Reth EVM に独自 dispatch を差し込めるようにした
+   Module 2 [L4-L6]: 「live state を read する」 — Solidity から Book の best bid を覗ける
+   Module 3 [L7-L8]: 「live state に write する」 — Solidity から Book に order を発注できる
+   Module 4 [L9-L10]: 「fills を block 経路に戻す」 — EVM 発注由来の約定が build_payload に届く
+
+ データ経路の要約:
+   READ  : Solidity ──► 0x...0c1b ──► read_best_bid ──► CLOB_STATE ──► Arc<Mutex<Book>>
+           ──► Book::best_bid_with_qty() ──► encode (24..32 + 56..64) ──► 64B return
+   WRITE : Solidity ──► 0x...0c1c ──► place_order   ──► CLOB_STATE ──► Arc<Mutex<Book>>
+           ──► Book::submit() → SubmitResult{ fills } ──► FILL_SINK ──► Arc<Mutex<Vec<Fill>>>
+           ──► bridge.pending_fills (同じ Arc) ──► build_payload.drain() ──► 次の block
+
+ 全体のテーゼ: **Arc が物理的に 1 つしかない**。precompile も bridge も同じ Arc を握り、
+   同じ Book / 同じ Vec<Fill> を read/write する。CLOB_STATE と FILL_SINK は「その Arc を
+   どこからでも取れるようにする shared register」にすぎない。**翻訳レイヤなし、シリアライ
+   ゼーションなし、メモリだけ** — このアーキテクチャの全部はこの 1 行に集約される。
+```
+
+このマップを記憶から再現できるなら、もう openhl の precompile レイヤを脳内で再構築できるようになっている。誰かに 5 分でアーキテクチャを説明する場面では、このマップを白板に描きながら「Solidity → EVM dispatch → precompile body → static global → Arc shared with bridge → matching engine」と上から下になぞればよい。**コース全体の 12 レッスンが、この 1 枚の図に圧縮されている。**
+
 ## 各モジュールが届けたもの
 
 **Module 1（Custom EVM bootstrap, L1-L3）** — プラガブルなシーム：

@@ -46,7 +46,61 @@ L8 の doc コメントで述べた「約定を捨てている」というギャ
 - **`LiveRethEvmBridge::pending_fills`** を `Mutex<Vec<Fill>>` から `Arc<Mutex<Vec<Fill>>>` に変更する。bridge の `new()` が `install_clob` と並んで `install_fill_sink(Arc::clone(&pending_fills))` を呼ぶ。
 - **新しい unit test** `place_order_routes_fills_to_installed_sink` を追加 — maker/taker のクロスを実行し、sink が約定を受け取ることを検証する。
 
-L9 を終えると、precompile と bridge はもはや **書き込み側でも独立ではない**。EVM 経由で発注された order が生んだ約定は、bridge 側の `submit_order` が書き込むのと同じ `pending_fills` キューに流れる。次の `build_payload` がそれを拾う。
+### E2E 環状データルーティング・トポロジー (Stage 9c+ で閉じる)
+
+L9 で初めて、order → Book → Fill → payload の loop が完全に閉じる。on-chain (EVM precompile) と off-chain (bridge) の 2 つの writer が、**同じ Book** と **同じ pending_fills** に合流する全景:
+
+```
+ ── 入力経路 1: on-chain (Solidity → EVM) ──────────────────────────────────
+   Solidity contract → call(0x...0c1c, abi.encode(account, side, price, qty))
+                                       │
+                                       ▼
+   Reth EVM dispatch → place_order  [L7 parse + L8 submit + L9 fill routing]
+                                       │
+                                       │ clob.lock().submit(Order{…})
+                                       │     → SubmitResult { fills: Vec<Fill>, … }
+                                       │
+                                       ▼ (1) Book を mutate    (2) fills を sink へ
+ ── 入力経路 2: off-chain (App / RPC → bridge) ─────────────────────────────
+   App / RPC → bridge.submit_order(…)              [Course 7 既存ルート]
+                                       │
+                                       │ self.clob.lock().submit(…)
+                                       │     → fills を self.pending_fills に直書き
+                                       ▼
+ ── 共有 Book (双方向 writer の合流点 ①) ──────────────────────────────────
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │ Arc<Mutex<Book>>                                                    │
+   │   ▲ static CLOB_STATE が参照 (L4 で install)                         │
+   │   ▲ bridge.clob と Arc を共有 → 同じ Book を on/off 双方から書ける    │
+   └─────────────────────────────────────────────────────────────────────┘
+
+ ── 共有 Fill バッファ (双方向 writer の合流点 ②) ──────────────────────────
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │ Arc<Mutex<Vec<Fill>>>                                               │
+   │   ▲ static FILL_SINK が参照 (L9 で install — 新規)                   │
+   │   ▲ bridge.pending_fills と Arc を共有 (L9 で Mutex → Arc<Mutex> 化) │
+   │                                                                     │
+   │   write 経路 A: place_order が FILL_SINK 経由で extend(fills)        │
+   │   write 経路 B: bridge.submit_order が pending_fills へ直接 push     │
+   │   (どちらも同じ Vec<Fill> — Arc が 1 つしかない)                     │
+   └────────────────────────────────┬────────────────────────────────────┘
+                                    │ self.pending_fills.lock().drain(..)
+                                    ▼
+ ── 出口: ブロックペイロード ──────────────────────────────────────────────
+   bridge.build_payload()  →  drain した fills を block に attach
+                                    │
+                                    ▼
+                            次の Reth ブロック
+```
+
+**環状性 (loop closure) の本質:**
+
+- writer は 2 つ (on-chain `place_order` / off-chain `bridge.submit_order`)、reader (= drain) は 1 つ (`build_payload`)
+- 2 つの writer は **物理的に同じ `Arc<Mutex<Vec<Fill>>>`** を見る — global (`FILL_SINK`) と bridge フィールド (`pending_fills`) が、L4 と完全に対称な「同じ Arc を 2 か所が握る」パターンで結合
+- 「on-chain で発注された order の約定が、off-chain で発注された約定と区別なく block に乗る」という Module 4 の中核プロパティが、ここで初めて成立する
+- **L4 で `Arc<Mutex<Book>>` を分散させた設計が、L9 で `Arc<Mutex<Vec<Fill>>>` 側にも完全ミラー** — `install_clob` と `install_fill_sink`、`bridge.clob` と `bridge.pending_fills`、すべてが対称形
+
+L9 を終えると、precompile と bridge はもはや **書き込み側でも独立ではない**。EVM 経由で発注された order が生んだ約定は、bridge 側の `submit_order` が書き込むのと同じ `pending_fills` キューに流れる。上の構造図が示すように、この合流によってオンチェーンで発生した流動性の変化が、次の `build_payload`（ブロックペイロード構築）へ途切れることなく完全に循環・伝播するようになる。
 
 ## おさらい
 

@@ -174,7 +174,42 @@ fn u64_from_be_chunk(chunk: &[u8]) -> u64 {
 
 ### Step 4: `place_order` precompile 関数を追加
 
-`read_best_bid` の下、`u64_from_be_chunk` の上：
+**コードを読む前に — 128-byte 入力のメモリ配置:**
+
+```
+ABI-aligned 128-byte calldata (4 × 32-byte slot、値は各 slot の右端に右寄せ):
+
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ slot 0 (input[ 0.. 32])  account_id                                    │
+  │   bytes  0..24  : zero pad (24 byte)                                   │
+  │   bytes 24..32  : u64 big-endian      ← u64_from_be_chunk(&input[0..32])│
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ slot 1 (input[32.. 64])  side                                          │
+  │   bytes 32..63  : zero pad (31 byte)                                   │
+  │   byte  63      : u8                  ← side_byte = input[63]          │
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ slot 2 (input[64.. 96])  price                                         │
+  │   bytes 64..88  : zero pad (24 byte)                                   │
+  │   bytes 88..96  : u64 big-endian      ← u64_from_be_chunk(&input[64..96])│
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ slot 3 (input[96..128])  qty                                           │
+  │   bytes  96..120: zero pad (24 byte)                                   │
+  │   bytes 120..128: u64 big-endian      ← u64_from_be_chunk(&input[96..128])│
+  └────────────────────────────────────────────────────────────────────────┘
+```
+
+「right-aligned」の算術:
+
+- u64 を載せる slot は、絶対 byte 位置 `[32×N + 24 .. 32×N + 32]` に値が乗る
+  - slot 0 (account_id) → `24..32`
+  - slot 2 (price)      → `88..96`   (= 64 + 24 .. 64 + 32)
+  - slot 3 (qty)        → `120..128` (= 96 + 24 .. 96 + 32)
+- u8 (1 byte) を載せる slot 1 の side bit = `32 × 1 + 31 = 63` — slot の最右端 1 byte だけ
+- ヘルパー (Step 6) 側の `buf[24..32]` / `buf[63]` / `buf[88..96]` / `buf[120..128]` も**同じ算術の裏返し** — 書く側と読む側で位置が対称になる
+
+つまり `u64_from_be_chunk` が 32-byte chunk のうち `[24..32]` をピックする理由、`side_byte` が `input[63]` を直接読む理由、テストヘルパーが `buf[88..96]` を price に使う理由は、**すべて上の図の zero pad / value 境界そのもの**だ。マジックではなく ABI の規約 + 算数。
+
+これを念頭に置いた上で関数を見ていく。`read_best_bid` の下、`u64_from_be_chunk` の上に追加する：
 
 ```rust
 /// Place a limit order on the installed CLOB. The write counterpart to

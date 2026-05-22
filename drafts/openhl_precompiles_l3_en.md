@@ -307,6 +307,60 @@ Common errors and fixes:
 
 ## Design reflection
 
+Lining up the four tests this lesson wrote by "scope width" in one picture makes it visible *why* this 4-tier shape works as a bug-localization tool:
+
+```
+                       Test scope (narrow ─────────────────────► wide)
+                       ┌─────────────────────────────────────────────────────────┐
+                       │                                                          │
+                       │  ① Function body alone                                    │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ read_best_bid_returns_hardcoded_*    │  ── unit    │
+                       │     │ (call read_best_bid directly,         │             │
+                       │     │  verify bytes)                        │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ Failure → L2 Step 3 function body          │
+                       │                                                          │
+                       │  ② Registry registration invariant                       │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ openhl_precompiles_registers_clob_*  │  ── unit    │
+                       │     │ (both our address AND ECDSA present  │             │
+                       │     │  in extended set = extend-not-replace)│             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ Failure → L2 Step 4 wrong clone()/extend() │
+                       │                          semantics (e.g. building a new  │
+                       │                          set that replaces the base)     │
+                       │                                                          │
+                       │  ③ EVM dispatch through the registry                     │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ registered_precompile_is_invokable_* │  ── unit    │
+                       │     │ (.get(addr) → .execute(), same path  │             │
+                       │     │  REVM uses on STATICCALL)             │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ Failure → L2 Step 4 Precompile::new(...)   │
+                       │                          assembly (id / fn / arg order)  │
+                       │                                                          │
+                       │  ④ Full node composition (integration)                   │
+                       │     ┌──────────────────────────────────────┐             │
+                       │     │ reth_dev_node_with_openhl_executor   │  ── integration│
+                       │     │ (NodeBuilder + ExecutorBuilder +      │             │
+                       │     │  EthereumAddOns compose; launch)      │             │
+                       │     └──────────────────────────────────────┘             │
+                       │             ▲ Failure → L1 Factory / Builder wiring,     │
+                       │                          or with_components / add_ons    │
+                       │                          trait mismatch                  │
+                       └─────────────────────────────────────────────────────────┘
+
+                       The "narrower tests fail before wider ones" pattern is the
+                       diagnostic signal we want:
+                         ① fails alone           → debug the function body
+                         only ② fails            → wrapper semantics (clone vs replace)
+                         only ③ fails            → registration assembly (fn ptr vs id vs address)
+                         only ④ fails            → NodeBuilder trait wiring (outside the factory)
+```
+
+The key idea: **when scopes differ, the position of the bug is uniquely constrained by which subset of tests fail.** If ①, ②, ③ pass and only ④ fails, the function, registry, and dispatch are all fine — the defect must live in the Reth `NodeBuilder` wiring (L1's `OpenHlExecutorBuilder` / `EvmFactory` trait bounds). Conversely, ① failing alone while ②–④ pass is *impossible* — a broken function body cascades into dispatch failures too. That dependency direction is precisely what gives the "tests in increasing scope" discipline its diagnostic power.
+
 Three load-bearing decisions encoded here:
 
 1. **Tests in increasing scope.** The 3 unit tests start with the narrowest (function body) and expand outward (registry registration → registry dispatch). When one fails, you know exactly which layer is broken. **Test scope = bug localization.**

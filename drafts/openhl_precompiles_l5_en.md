@@ -117,6 +117,37 @@ Three things changed:
 - **Same for qty at `out[56..64]`** — second 32-byte word, last 8 bytes.
 - **Hardcoded `out[31] = 100` and `out[63] = 10`** are gone.
 
+Why `out[24..32]` is the right "magic number" pops out the moment you draw the whole 64-byte buffer:
+
+```
+                       ┌──── slot 1: price (u256 BE, 32 bytes) ──────┐ ┌──── slot 2: qty (u256 BE, 32 bytes) ────────┐
+   byte index:          0    ...    23   24    25    ...    30    31     32    ...    55   56    57    ...    62    63
+                       ┌────────────┬────┬────┬─────────────┬────┬────┐  ┌────────────┬────┬────┬─────────────┬────┬────┐
+   memory:             │ 00 ... 00  │ p7 │ p6 │ ........... │ p1 │ p0 │  │ 00 ... 00  │ q7 │ q6 │ ........... │ q1 │ q0 │
+                       └────────────┴────┴────┴─────────────┴────┴────┘  └────────────┴────┴────┴─────────────┴────┴────┘
+                        ↑           ↑                            ↑       ↑           ↑                            ↑
+                        │           │                            │       │           │                            │
+                       high 24 B    └── price.0.to_be_bytes() ───┘      high 24 B    └── qty.0.to_be_bytes() ─────┘
+                       (zero pad)         [u8; 8] fits exactly           (zero pad)         [u8; 8] fits exactly
+                                          ┃                                                 ┃
+                                          ▼                                                 ▼
+                                  out[24..32] (8-byte slice)                        out[56..64] (8-byte slice)
+                                  .copy_from_slice(&price.0.to_be_bytes())          .copy_from_slice(&qty.0.to_be_bytes())
+
+
+   By the numbers:
+     ・Slot 1 spans bytes 0..32 (one u256 BE).
+     ・The top 24 bytes (0..24) stay zero-padded (already zeroed by vec![0u8; 64]).
+     ・The bottom 8 bytes (24..32) take the u64 directly in big-endian → the whole slot
+       reads as a "u64 zero-extended into a u256."
+     ・Slot 2 is just the same shape shifted +32 bytes.
+
+   Bottom line: 24..32 and 56..64 are "where the u64 (8 bytes) slides into the right
+   edge of a u256 (32 bytes)." Not magic — just (32 − 8 = 24) and (64 − 8 = 56).
+```
+
+The optimization at work: **u64 BE bytes go directly into the right-edge 8 bytes of a u256 BE word; no intermediate `[u8; 32]` is allocated.** Going through `U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)` lands on the same result but costs you (a) a stack-allocated 32-byte zero-init and (b) a 32-byte memcpy from that array into `out`. The direct write is one 8-byte memcpy — and the leading zeros are already guaranteed by the initial `vec![0u8; 64]`, so zero-extension comes free.
+
 > 🛑 **Anti-fluency.** "Why not `U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)` for clarity?" **It allocates** a temporary `[u8; 32]` array, then copies it byte-by-byte. The direct `out[24..32].copy_from_slice(&price.0.to_be_bytes())` writes directly into the output buffer with no intermediate allocation. **Same result, half the work.** Precompiles are hot paths — every microsecond compounds.
 
 ### Step 2: Update the doc comment

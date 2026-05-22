@@ -157,7 +157,7 @@ One line that does a lot:
 
 The doc comment is the lesson — call out that `None` is the "uninstalled" state and that we return zero bytes rather than erroring. Mainnet contracts that read an uninitialised perp market would see zero values; we match that semantic.
 
-> 🛑 **Anti-fluency.** "Why not use `lazy_static!` or `OnceLock`?" **They'd work but they'd over-constrain us.** `OnceLock` only allows one set; we want `install_clob` to be re-callable (test isolation). `lazy_static!` requires unsafe initialization tricks that `static RwLock<...> = RwLock::new(None)` avoids since Rust 1.63. Plain `static RwLock<...>` is the cleanest 2024 idiom.
+> 🛑 **Anti-fluency.** "Why not use `lazy_static!` or `OnceLock`?" **They'd work but they'd over-constrain us.** `OnceLock` only allows one set; we want `install_clob` to be re-callable (test isolation). `lazy_static!` was the old workaround back when runtime initialization needed unsafe tricks; `static RwLock<...> = RwLock::new(None)` (`const fn`-based compile-time init) made it obsolete starting Rust 1.63, and as of today (2026) **plain `static RwLock<...>` is the standard, std-only idiom for per-process mutable shared state.** `OnceLock` (stable in 1.70) and `LazyCell` (stable in 1.80) are sharp tools for "write exactly once" patterns, but they don't fit install/uninstall iteration — don't confuse the tool with the requirement.
 
 ### Step 4: Add the three module functions
 
@@ -349,6 +349,77 @@ Common errors and fixes:
 - **`unused variable: clob` in `new()`** — you forgot to use `clob` in the struct literal. The variable bound to `let clob = Arc::new(...)` must also appear in the struct as `clob,`.
 
 ## Design reflection
+
+Drawing how the layered wrapper `RwLock<Option<Arc<Mutex<Book>>>>` handles concurrent access from the bridge side (write path: order submit) and the precompile side (read path: best-bid query) in a single picture makes the seeming "4-deep type puzzle" turn into four thin layers with distinct responsibilities:
+
+```
+   [ bridge: submit_order ]                                 [ EVM precompile: staticcall to 0x...0c1b ]
+            │                                                            │
+            │ self.clob.lock()                                            │ current_best_bid()
+            ▼                                                            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ① Outer: static RwLock<Option<Arc<Mutex<Book>>>>                                │
+   │    Responsibility: gates "is the CLOB installed yet?" (writes are the           │
+   │    super-rare install/uninstall path; almost all calls are reads —              │
+   │    RwLock is optimal here)                                                      │
+   │                                                                                │
+   │    write() ──► install_clob / uninstall_clob (once-or-twice per process)         │
+   │    read()  ──► current_best_bid (every precompile call; ultra-frequent,         │
+   │                                  parallel-safe)                                 │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │  (via write/read guard)
+            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ② Option<Arc<Mutex<Book>>>                                                     │
+   │    Responsibility: expresses pre-install (= None) vs installed (= Some) in the  │
+   │    type itself                                                                  │
+   │    None  → precompile returns zero-encoded bytes (mirrors an uninitialised      │
+   │             perp market on mainnet)                                              │
+   │    Some  → deref / clone the inner Arc                                          │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │  (None → early return; Some → continue)
+            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ③ Arc<Mutex<Book>>                                                             │
+   │    Responsibility: shared ownership — bridge and the static both hold strong    │
+   │    references to the same Book.                                                 │
+   │    Arc is the cheap-clone atomic refcount that lets the bridge struct and       │
+   │    CLOB_STATE jointly own one Book — Rust's canonical tool for this.            │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │  (.lock() to descend into the inner Mutex)
+            ▼
+   ┌────────────────────────────────────────────────────────────────────────────────┐
+   │ ④ Inner: Mutex<Book>                                                           │
+   │    Responsibility: exclusive protection of the matching engine itself           │
+   │    (submit / cancel / best_bid_with_qty). Both writes and reads serialize       │
+   │    here — Mutex is right when mutations are frequent.                           │
+   │                                                                                │
+   │    Bridge side: submit_order does `.lock().submit(...)` (write).                │
+   │    Precompile side: current_best_bid does `.lock().best_bid_with_qty()` (read). │
+   └────────────────────────────────────────────────────────────────────────────────┘
+            │
+            ▼
+        [ One and the same Book instance ]
+
+
+   Why the "① RwLock + ④ Mutex" pairing matters:
+
+   ・If ① were also a Mutex (`Mutex<Option<Arc<Mutex<Book>>>>`),
+     **every precompile read would serialize at ① too** — N parallel EVM calls
+     would line up behind one bottleneck. ① benefits from read parallelism;
+     RwLock is the right tool.
+
+   ・If we flattened to `RwLock<Book>` (no Arc, no Option),
+     **the bridge and the precompile couldn't both own the Book** — if one
+     side holds `&'static`, the other can't claim ownership. Arc resolves this.
+
+   ・If we put `Arc<Mutex<Book>>` directly in a static (no Option),
+     `Book::new()` can't be evaluated at compile time (not const-fn), AND we lose
+     the type-level distinction for the "not yet installed" state. Option fixes both.
+
+   Each of the four layers carries one responsibility. They're not stacked
+   redundantly — they're a division of labour.
+```
 
 Three load-bearing decisions encoded here:
 

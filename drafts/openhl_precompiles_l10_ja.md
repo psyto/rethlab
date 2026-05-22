@@ -48,7 +48,82 @@ cargo test -p openhl-evm --release bridge_against_custom_evm
 5. **precompile が book に書く** — `place_order(Sell @ 200 qty 33)` を直接呼ぶ（EVM dispatch をシミュレートする）。
 6. **bridge が約定を見る** — `bridge.pending_fill_count() == 1`。
 
-これが **コースのマイルストーン** だ。L10 を終えれば、47 個の unit test で証明したアーキテクチャが、たった 1 つの integration test でも証明される — 実際の Reth ノード + 実際の bridge + 両方の precompile + 両方の global + マッチングエンジンを、end-to-end かつ in-process で exercise することになる。
+### フルスタック結合トポロジー: Reth プロセス内に Module 1-4 のすべてが同居する
+
+L10 で初めて、これまでの 4 モジュールの配管が**本物の Reth プロセス**と**本物の `LiveRethEvmBridge`** という両端を、process-global statics で結ぶ：
+
+```
+┌──────────────────────── 単一プロセス (cargo test バイナリ / 本番 Reth) ─────────────────────────┐
+│                                                                                                  │
+│  ╔════════════ Reth node (NodeBuilder.launch() で boot) ═════════════════╗                       │
+│  ║                                                                         ║                       │
+│  ║  Executor / RPC server / mining / consensus  ──┐                       ║                       │
+│  ║                                                 │  OpenHlExecutorBuilder ║                       │
+│  ║                                                 │  で plug-in されたカスタム ║                   │
+│  ║                                                 ▼  EVM (L1 + L3 の成果物)  ║                   │
+│  ║  ┌─── OpenHlEvmFactory → Custom EVM (revm) ────────────────────────────┐ ║                       │
+│  ║  │   fork registry → openhl_precompiles_for(spec):                     │ ║                       │
+│  ║  │     0x...0c1b → read_best_bid    [Module 2: L2 + L5]                │ ║                       │
+│  ║  │     0x...0c1c → place_order      [Module 3+4: L7+L8+L9]             │ ║                       │
+│  ║  └──────────────────┬──────────────────────┬─────────────────────────────┘ ║                       │
+│  ║                     │ CLOB_STATE.read()    │ FILL_SINK.read()             ║                       │
+│  ╚═════════════════════│══════════════════════│═════════════════════════════╝                       │
+│  ──────────────────────│──────────────────────│──────────────────────────────────────────────────  │
+│   process-global statics (同一プロセス内、ロックフリーで参照可能)                                   │
+│  ┌──────────────────────────────────┐  ┌──────────────────────────────────────────────────┐         │
+│  │ static CLOB_STATE                │  │ static FILL_SINK                                  │         │
+│  │   RwLock<Option<Arc<Mutex<Book>>>>│  │   RwLock<Option<Arc<Mutex<Vec<Fill>>>>>           │         │
+│  │   ▲                              │  │   ▲                                               │         │
+│  │   │ bridge::new() が             │  │   │ bridge::new() が                              │         │
+│  │   │ install_clob(Arc::clone)     │  │   │ install_fill_sink(Arc::clone) を L9 で追加     │         │
+│  │   │ を L4 で配管                  │  │                                                   │         │
+│  └───┼──────────────────────────────┘  └────┼──────────────────────────────────────────────┘         │
+│  ────│──────────────────────────────────────│──────────────────────────────────────────────────────  │
+│  ╔═══│════════════ LiveRethEvmBridge (同一プロセス内のオブジェクト) ════════════════════════╗      │
+│  ║   ▼ (precompile と同じ Arc を握る)     ▼ (precompile と同じ Arc を握る)                   ║      │
+│  ║  bridge.clob                          bridge.pending_fills                                 ║      │
+│  ║    : Arc<Mutex<Book>>                   : Arc<Mutex<Vec<Fill>>>                            ║      │
+│  ║                                                                                            ║      │
+│  ║  bridge.submit_order(Order{…})  ─► self.clob.submit() → self.pending_fills へ約定 push    ║      │
+│  ║  bridge.build_payload()          ─► self.pending_fills.drain() → 次の block に attach     ║      │
+│  ║                                                                                            ║      │
+│  ║  provider = handle.node.provider  (NodeBuilder が返した node handle 経由で結合)             ║      │
+│  ╚════════════════════════════════════════════════════════════════════════════════════════╝      │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ L10 integration test がこのトポロジー上で走るパス:
+
+  Phase A  uninstall_{clob,fill_sink}() で global を空に
+           → NodeBuilder.launch() で Reth プロセスを起動 (上図の Reth node 部分が立ち上がる)
+           → LiveRethEvmBridge::new(handle.node.provider, ...) が両 global に install
+           → 結果: 上図の 4 本の Arc 矢印が「全部繋がる」状態に揃う
+
+  Phase B  bridge.submit_order(Buy@200 q33)
+           → bridge.clob.submit() が Book に bid を載せる
+           → 同じ Arc を CLOB_STATE 経由で precompile も見る
+           → current_best_bid() == Some((Price(200), Qty(33)))            ◄ 接続証明 #1
+
+  Phase C  crate::precompiles::place_order(Sell@200 q33 calldata) を直接呼ぶ
+           → 上図 Custom EVM 側の place_order body が exercise される
+           → CLOB_STATE.read() → clob.lock().submit() がクロス → SubmitResult.fills
+           → FILL_SINK.read() で sink Arc を取り、extend(fills)
+           → bridge.pending_fills が同じ Arc を握っているので increment が見える
+           → bridge.pending_fill_count() == 1                              ◄ 接続証明 #2
+
+  Phase D  uninstall_{fill_sink,clob}() で global を空に戻す → drop(handle) で Reth プロセス終了
+```
+
+**4 つの観測ポイント:**
+
+- **Module 1 (L1+L3) の成果**: `OpenHlExecutorBuilder` が `NodeBuilder` を通って実際に Reth に plug-in され、Custom EVM が boot している (= 上図の Reth node 内 EVM ブロック)
+- **Module 2 (L2+L5) の成果**: `read_best_bid` が live state を読み、Phase B の接続証明 #1 を成立させる
+- **Module 3 (L7+L8) の成果**: `place_order` が live state に書き込み、Phase C の前半 (Order が book に乗る) が成立
+- **Module 4 (L9) の成果**: 生まれた fills が FILL_SINK 経由で bridge に届き、接続証明 #2 を成立させる
+
+**L10 が証明するのは「これら 4 つが同時に成立する」こと** — どれか 1 つでも配管が外れていたら、`current_best_bid()` か `pending_fill_count()` のどちらかで失敗する。**unit test を全部 green に保ったまま、`NodeBuilder` チェーンのタイポ 1 つで production が壊れる** という現実的な regression を、この test が 1 本で塞ぐ。
+
+これが **コースのマイルストーン** だ。L10 を終えれば、47 個の unit test で証明したアーキテクチャが、たった 1 つの integration test でも証明される — 上の結合図が示すように、実際の Reth ノードプロセス、実際の bridge オブジェクト、両方の precompile、両方の global、そしてマッチングエンジンが**単一のインプロセス空間で完全に噛み合い**、end-to-end で駆動 (exercise) されることになる。
 
 これを動かすために必要な **プロダクションコードの変更は 1 つだけ**：`place_order` を `pub(crate)` にすること。`live_node.rs` 内、sibling モジュールにいる integration test から直接呼べるようにするためだ。
 

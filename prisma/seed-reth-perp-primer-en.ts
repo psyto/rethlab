@@ -67,8 +67,8 @@ Three ways to express a view on the price of BTC:
 | Market | What you hold | Settlement | Example |
 | :--- | :--- | :--- | :--- |
 | **Spot** | The actual BTC | Instant — you own it | Buy 0.1 BTC on Coinbase. You now have 0.1 BTC. |
-| **Traditional futures** | A contract to buy/sell BTC at a fixed price on a future date | At expiry — settles in cash or delivery | CME December 2026 BTC future. You agree to buy at $100k on Dec 31. |
-| **Perpetual future** | A contract that mimics BTC price exposure, with no expiry | Never — the position stays open until you close it | Hyperliquid BTC-USD perp. You go 10× long, position stays open as long as you keep margin. |
+| **Traditional futures** | A contract to buy/sell BTC at a fixed price on a future date | At expiry — cash-settled (price difference) or physical delivery | CME December 2026 BTC future. You agree to buy at $100k on Dec 31. |
+| **Perpetual future** | A contract that mimics BTC price exposure, with no expiry | Never — stays open until you close it (cash-settled) | Hyperliquid BTC-USD perp. You go 10× long, position stays open as long as you keep margin. |
 
 Spot is the simplest. You own the asset; price moves are your gains and losses directly.
 
@@ -224,6 +224,19 @@ Intuitively: the side that's contributing to the imbalance pays the side that's 
 
 The payment isn't paid by the venue. It moves directly between traders: the longs collectively transfer to the shorts collectively, scaled by each position's notional. Zero-sum at the venue level — Hyperliquid is just the bookkeeper.
 
+> 💡 **Engineer's view — one signed-size equation collapses every branch:**
+> In code, track each position's direction as a signed size (Long = \`+size\`, Short = \`-size\`). Every trader's balance update then collapses to one branch-free expression:
+>
+> \`\`\`
+> collateral -= size_with_sign × mark × rate
+> \`\`\`
+>
+> - \`rate > 0\` and \`size > 0\` (Long) → \`collateral\` decreases = long pays ✓
+> - \`rate > 0\` and \`size < 0\` (Short) → double-negative makes \`collateral\` increase = short receives ✓
+> - \`rate < 0\` wires the symmetric case through the same single expression
+>
+> If the matching engine stores each position as one signed \`i64\`/\`i128\` size, the funding tick becomes a branch-free linear scan. **Combining Rust's type system with a deliberate sign convention makes the state transition "symmetric by construction"** — for consensus determinism, eliminating this kind of branching is load-bearing.
+
 ## Worked example — Hyperliquid parameters
 
 A trader holds **10 BTC long** on Hyperliquid. Current state:
@@ -263,12 +276,57 @@ The funding payment doesn't directly move mark. It moves *traders' balances*. Th
 
 This is also why funding is *continuous* (every interval, small amounts) rather than *terminal* (one big payment at a fixed date). Traders adjust their behavior in response to the ongoing cost, not in anticipation of a future event.
 
+### Mark / index / funding — the pull-back loop
+
+The three actors compressed into one feedback loop:
+
+\`\`\`
+       ┌────────────────────────────────────────────┐
+       │  index price (CEX spot weighted feed)       │ ← true reference price (exogenous)
+       └────────────────────┬───────────────────────┘
+                            │
+                            │ (mark − index) / index
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  premium                                   │ ← how far apart they are
+       │    ÷ 8 (divisor) → clamp(±4%) (cap)         │
+       └────────────────────┬───────────────────────┘
+                            │ = funding rate (per interval)
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  funding payment (at each interval boundary)│ ← rate > 0 → long pays short
+       │    = size_with_sign × mark × rate           │   rate < 0 → short pays long
+       └────────────────────┬───────────────────────┘
+                            │ the imbalanced side "pays rent"
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  imbalanced side reduces or flips position │ ← economic incentive
+       └────────────────────┬───────────────────────┘
+                            │ selling (or buying) hits the orderbook
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  mark price moves back toward index         │ ← pull-back pressure (endogenous)
+       └────────────────────┬───────────────────────┘
+                            │
+                            └──► premium shrinks → funding shrinks → loop relaxes
+                                 (equilibrium: mark ≈ index, small oscillations,
+                                  small funding payments)
+\`\`\`
+
+**The three actors in one line:**
+
+- **index** = the true reference price (the anchor target)
+- **mark** = the market price driven by orderbook supply/demand (the thing being anchored)
+- **funding** = the control signal that pulls them back together *through incentive*
+
+It's not "funding moves mark directly." It's "funding moves trader balances, traders move the orderbook, the orderbook moves mark" — a **three-step indirection** is what anchoring actually is. Where expiry-style futures force convergence at a single moment, perps replace that with a continuous control signal that nudges every interval.
+
 ## Hyperliquid specifics worth knowing
 
 - **Index composition**: weighted from multiple CEX spot feeds. A deviation circuit breaker pauses the index if one feed is too far from the others — protects against single-venue spot manipulation.
 - **Settlement at tick**: every funding interval, the engine iterates over non-flat positions and adjusts each trader's collateral balance by \`position_size × mark × rate\`. No batch payment — each position settles individually.
 - **Saturating arithmetic**: the funding computation uses signed integers scaled by \`RATE_SCALE = 1e9\` (parts per billion). All multiplications use \`i128\` intermediates and saturate on overflow rather than wrapping. This is consensus-determinism discipline — every validator must compute the same rate from the same inputs.
-- **No funding accrual between ticks**: if a position is opened mid-interval and closed before the next tick, no funding is owed. Hyperliquid's interval boundaries are the only payment events.
+- **No funding accrual between ticks (snapshot-based state machine)**: positions opened and closed mid-interval owe no funding. Hyperliquid's payment is decided purely by **whether you hold the position at the exact interval boundary** (e.g. on the hour) — the engine snapshots positions at that instant and applies \`size × mark × rate\` in one pass. Readers coming from dYdX-style continuous funding (time-integrated charging) should recalibrate: this is a discrete event-driven state machine where "did you hold at the snapshot tick?" matters far more than "for how long did you hold?" **When you design a bug-free state machine here, nail this boundary condition first.**
 
 ## Common misconceptions
 
@@ -367,6 +425,7 @@ The two thresholds are different on purpose:
 - Initial > maintenance: a trader who barely passes initial margin has room to take a small adverse mark move before they hit liquidation
 - Without the gap, every position opened at the limit would liquidate immediately on any unfavorable tick
 - The gap is the *buffer* the venue gives traders to make decisions (add collateral, partial-close, etc.) before forced liquidation
+- **It's also a defense line for the system itself.** Maintenance isn't a "you die instantly" line — the gap buys the liquidation engine **enough slippage room + startup latency** to submit force-close orders into the market and have them fill. The L3 force-close flow burns through this room as its budget — the thinner the room, the more the insurance fund has to absorb the shortfall.
 
 **Margin ratio** is the central quantity:
 
@@ -393,26 +452,66 @@ The Liquidatable / Underwater distinction matters because it determines *who cov
 
 This is the four-state classification the Build OpenHL — Liquidation course implements as the \`MarginHealth\` enum. Same four states, same boundary conditions.
 
+### The four states on one axis
+
+Lay \`margin_ratio\` out as a single number line from high to low, and the four states map to four adjacent intervals:
+
+\`\`\`
+   high ◄────────────── margin_ratio = equity / notional ────────────► low / negative
+        20%             10%                   2%                0%
+   ─────┼──────────────┼─────────────────────┼─────────────────┼─────────►
+        │              │                     │                 │
+        │  ┌────────┐  │   ┌──────────┐      │ ┌────────────┐  │ ┌──────────┐
+        │  │  Safe  │  │   │  AtRisk  │      │ │Liquidatable│  │ │Underwater│
+        │  │        │  │   │          │      │ │            │  │ │          │
+        │  │ open + │  │   │ hold     │      │ │ engine     │  │ │ engine   │
+        │  │  add   │  │   │ only, no │      │ │ force-     │  │ │ close +  │
+        │  │ allowed│  │   │ new risk │      │ │ closes     │  │ │ insurance│
+        │  └────────┘  │   └──────────┘      │ └────────────┘  │ │   fund   │
+        │              ▲                     ▲                 ▲ └──────────┘
+        │     initial margin (10%)   maintenance margin (2%)  equity = 0
+        │              │                     │                 │
+        │   ratio ≥    │  maintenance ≤      │  0 ≤ ratio <    │  equity < 0
+        │   initial    │  ratio < initial    │  maintenance    │  (notional still > 0)
+        │              │                     │                 │
+        │  branch:     │  branch:            │  branch:        │  branch:
+        │  if ratio    │  else if ratio      │  else if equity │  else
+        │   ≥ initial  │   ≥ maintenance     │   ≥ 0           │   { Underwater }
+        │   {Safe}     │   {AtRisk}          │   {Liquidatable}│
+        │                                                      │
+        └─ Numbers in the example below ($10k coll, 0.5 BTC long, entry $100k) ──┐
+                                                                                  │
+              Safe → AtRisk        boundary: mark = $88,889  (−11.1% from entry)  │
+              AtRisk → Liquidatable boundary: mark = $81,633  (−18.4% from entry) │
+              Liquidatable → Underwater boundary: mark = $80,000  (−20.0%)        │
+                                                                                  │
+        ───────────────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+This is the picture: the \`MarginHealth\` decision reduces to **a 4-interval classification on a single scalar** (margin_ratio, plus the sign of equity). L3 walks through what the engine actually does in each interval — \`Safe\` and \`AtRisk\` do nothing (the trader is in control), \`Liquidatable\` triggers a market force-close, \`Underwater\` adds an insurance-fund draw on top. **Each code branch maps 1-to-1 to one interval on the number line** — which is why \`match MarginHealth { Safe => …, AtRisk => …, Liquidatable => …, Underwater => … }\` reads so cleanly in Rust.
+
 ## Worked example — same position, five mark prices
 
 Trader: $10k collateral, 0.5 BTC long, entry $100,000. Hyperliquid params (initial 10%, maintenance 2%).
 
 | Mark | Notional | PnL | Equity | Ratio | State |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **$100,000** | $50,000 | $0 | $10,000 | **20%** | Safe |
+| **$100,000** | $50,000 | $0 | $10,000 | **20.0%** | Safe (initial state) |
 | **$95,000** | $47,500 | −$2,500 | $7,500 | **15.8%** | Safe |
+| **$88,889** | $44,444 | −$5,556 | $4,444 | **10.0%** | **Safe ↔ AtRisk boundary (exact)** |
 | **$85,000** | $42,500 | −$7,500 | $2,500 | **5.9%** | AtRisk |
 | **$82,000** | $41,000 | −$9,000 | $1,000 | **2.4%** | AtRisk (barely) |
-| **$81,500** | $40,750 | −$9,250 | $750 | **1.8%** | **Liquidatable** |
-| **$80,000** | $40,000 | −$10,000 | $0 | **0%** | Liquidatable |
+| **$81,633** | $40,816 | −$9,184 | $816 | **2.0%** | **AtRisk ↔ Liquidatable boundary (exact)** |
+| **$81,500** | $40,750 | −$9,250 | $750 | **1.8%** | Liquidatable |
+| **$80,000** | $40,000 | −$10,000 | $0 | **0.0%** | Liquidatable (zero equity — next tick risks Underwater) |
 | **$78,000** | $39,000 | −$11,000 | −$1,000 | **−2.6%** | **Underwater** |
 
 Two boundary crossings to notice:
 
-1. **Mark $87,500 → $82,000 (Safe → AtRisk)**: the trader can still hold but can no longer add to the position or take new positions. UI typically warns the user at this point.
-2. **Mark $82,000 → $81,500 (AtRisk → Liquidatable)**: the engine triggers force-close. Below maintenance, the trader's collateral can no longer cover the trade plus liquidation fee.
+1. **Safe → AtRisk (boundary at mark $88,889, −11.1% from entry)**: between the $95,000 and $85,000 rows. Below $88,889 the trader can still hold but can no longer add to the position or open new ones. The UI typically warns the user at this point.
+2. **AtRisk → Liquidatable (boundary at mark $81,633, −18.4% from entry)**: between the $82,000 and $81,500 rows. Below $81,633 the engine triggers force-close. Below maintenance, the trader's collateral can no longer cover the trade plus liquidation fee.
 
-In the same example, mark would need to drop only **18.5% from entry** to hit Liquidatable. That's the inverse of leverage: at 5× leverage, an 18.5% adverse move (≈ 1/5 × maintenance gap) cleans out the position. At 10× leverage, it would be ~9%. At 50× leverage, ~1.8% (a routine intraday move).
+In the same example, mark would need to drop only **about 18.4% from entry** ($81,633 / $100,000) to hit Liquidatable. That's the inverse of leverage: at 5× leverage (notional/equity = $50k/$10k), an 18.4% adverse move (≈ 1/5 × maintenance gap) cleans out the position. At 10× leverage, it would be ~9%. At 50× leverage, ~1.8% (a routine intraday move).
 
 **Leverage at the engine is risk-symmetric**: high leverage = high upside on favorable moves, *but a small adverse move is enough to liquidate*. The math doesn't favor either side; the trader chose the risk profile when they opened the position.
 
@@ -500,6 +599,19 @@ When the engine decides to liquidate, it generates a **close order spec** with t
 No price — it's always a **market order**. The engine doesn't pick prices; it accepts whatever the orderbook offers right now. The matching engine settles the close against resting liquidity (other traders' limit orders).
 
 This is mechanically the same as a normal trade. The trader's position closes. The counterparty (whoever's resting order fills the close) opens or increases their position. Mark moves to reflect the new top-of-book.
+
+> 💡 **Sidebar: how this differs from a trader-placed stop-loss**
+>
+> Behaviorally they look similar — when a trigger condition fires, a market order goes out. But the system boundary is in completely different places:
+>
+> | | Stop-loss (market stop order) | Force-close (liquidation) |
+> | :--- | :--- | :--- |
+> | Who places it | The trader (client-side) | The state machine all validators agreed on |
+> | How it reaches the book | RPC → mempool → block → matching engine | Injected directly into the orderbook from inside \`block_execute\` |
+> | Failure modes | Can fail on signature / nonce / gas / RPC outage | Cannot structurally fail — the consensus itself emits the order |
+> | Cancelable | Yes, by the trader | No — once the state machine decides to fire, it fills |
+>
+> Retail-facing copy sometimes describes liquidation as "an automatic stop-loss when margin runs out," but from the engine's point of view they're not the same thing at all. **Force-close is a *privileged order*** — an order written into the orderbook by the engine itself, on a code path no external caller can reach. The \`Liquidatable\` arm of the \`MarginHealth\` enum from L2 is exactly the trigger for that privileged emission.
 
 A worked example:
 
@@ -631,6 +743,18 @@ When the insurance fund is empty and another account goes underwater, somebody h
 2. Starting from the top of the ranking (most profitable + highest leverage), the venue **force-closes** those positions to absorb the deficit.
 3. The closed positions get their realized PnL — the trader is "paid" their profit but loses the position.
 
+> 💡 **Why doesn't ADL go through the orderbook?**
+>
+> You might think: "If there's a shortfall, just keep market-selling the underwater positions until they clear." But every one of those market orders would punch through the bid stack and crash mark further — and that crash would push *more* positions underwater. **The feedback loop runs away.**
+>
+> ADL is designed to break that loop by **bypassing the orderbook entirely**:
+>
+> - One bankrupt position and one winning position are **matched and cancelled** directly inside the engine's bookkeeping
+> - Both positions disappear from the venue's books simultaneously
+> - The orderbook's bid/ask is untouched — no extra crash pressure pushed into prices
+>
+> In other words, ADL isn't "liquidation in the market." It's **netting on the books** — an off-orderbook offset where the engine matches a winner against a loser and erases both positions at once. In the Stage 10c (multi-account scanner) implementation, the ADL path doesn't call \`book.submit()\` at all; it mutates the \`Position\` records directly and deletes them. **"Move the loss to the winners without touching the market"** — that's what ADL is for, and it's also why it's designed to fire only rarely.
+
 ADL is **deeply unpopular**. A trader who correctly predicted a market crash and is profitably short doesn't want to be force-closed; they'd prefer to ride the win further. But when the insurance fund can't cover the underwater loss, *someone has to lose money* — the math is conservation of cash. ADL distributes that loss to the side that "won" the most from the move.
 
 Hyperliquid's design is to make ADL **very rare**:
@@ -638,6 +762,49 @@ Hyperliquid's design is to make ADL **very rare**:
 - High liquidation fees keep the insurance fund well-capitalized in normal conditions
 - Cross-margin (the default) makes most accounts more resilient — losses in one position can be buffered by others
 - The DIY Perp track's Stage 10c (multi-account scanner) will implement ADL as a fallback path. It's intentionally the last lesson because the goal is to never reach it.
+
+## The safety-net cascade
+
+From L2's margin requirement down to ADL, four layers cascade through the loss-absorption stack. **The higher in the stack you stop, the less damage everyone takes:**
+
+\`\`\`
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 0: Margin requirement (covered in L2)                      │
+   │   Initial 10% / Maintenance 2% cap the risk a trader can take    │
+   │   → "The trader's own collateral covers their own losses"        │
+   │   Stops here if: ratio ≥ maintenance and the market bounces      │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ Fails: ratio < maintenance
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 1: Force-close at maintenance (solvent close)              │
+   │   Engine closes the position in the market, deducts fee          │
+   │   → Most cases stop here (insurance fund grows from the fee)     │
+   │   Stops here if: close realized PnL + fee ≤ collateral           │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ Fails: equity < 0 after the close
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 2: Insurance fund                                          │
+   │   Pays the shortfall out of fees accumulated from past liquidations│
+   │   → Absorbs a single underwater account                          │
+   │   Stops here if: insurance_fund_balance ≥ shortfall              │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ Fails: insurance fund balance = 0
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 3: ADL (Auto-Deleveraging) — last resort                   │
+   │   Engine matches winners against losers on the books, off-market │
+   │   → Only reached in large crash conditions                       │
+   │   Always stops here (the loss redistribution preserves cash)     │
+   └─────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+**How to read this cascade:**
+
+- **Damage spreads as you fall further down**: at Layer 1 only the trader pays. At Layer 2 the venue pays from its pooled fee reserve. At Layer 3 unrelated (profitable) traders get pulled in.
+- **Each layer is designed to absorb as much as possible before handing off to the next**: the 8% gap between initial and maintenance margin (from L2) is the room Layer 1 has to absorb, the 1.5% liquidation fee is the rate Layer 2 refills at, cross-margin (offsetting losses with profits within one account) delays the trip into Layer 1 — and so on. **Venue design is essentially a set of numerical choices for "keep work out of the layer below you."**
+- **How this maps to code branches**: Stage 10c's \`MarginHealth\` enum transitions are exactly the Layer 1-3 transitions. \`Safe\` / \`AtRisk\` = Layer 0, \`Liquidatable\` = Layer 1, \`Underwater\` with a non-empty insurance fund = Layer 2, \`Underwater\` with a depleted fund = Layer 3. **The four-state enum maps 1-to-1 onto the four defensive layers.**
 
 ## Hyperliquid specifics
 

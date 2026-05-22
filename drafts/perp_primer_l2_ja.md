@@ -86,6 +86,7 @@ Leverage は informational だ。エンジンは「leverage 上限」を直接�
 - Initial > maintenance: initial を辛うじてクリアして開いたトレーダーには、liquidation に達する前に少し adverse な mark の動きを耐える余裕がある
 - ギャップがなければ、ぎりぎりで開いた position は不利な tick が来た瞬間に必ず liquidate する
 - ギャップは venue がトレーダーに与える *バッファ*。Liquidation に至る前に意思決定する（collateral を足す、partial close する、など）時間を確保する
+- **同時に、これはシステム側の防衛ラインでもある。** Maintenance を割った瞬間に「即破綻」ではなく、清算エンジンが force-close 注文を市場に流し込んで約定するまでの **スリッページ + 起動レイテンシの吸収余地** を、このギャップが用意している。L3 で見る force-close 注文は、この余地を予算として使って執行される — 余地が薄ければ薄いほど、insurance fund が負担する不足分が膨らむ。
 
 **Margin ratio** が中心的な量:
 
@@ -112,26 +113,66 @@ Liquidatable と Underwater の区別は、*残余を誰が負担するか* を�
 
 これが Build OpenHL — Liquidation コースが `MarginHealth` enum として実装する 4 状態分類だ。同じ 4 状態、同じ境界条件。
 
+### 4 状態の遷移を 1 本の軸で見る
+
+`margin_ratio` を高 → 低の 1 本の数直線として眺めると、4 状態は隣接する 4 区間に対応する:
+
+```
+   高 ◄────────────── margin_ratio = equity / notional ──────────────► 低 / 負
+       20%             10%                   2%                0%
+   ─────┼──────────────┼─────────────────────┼─────────────────┼─────────►
+        │              │                     │                 │
+        │  ┌────────┐  │   ┌──────────┐      │ ┌────────────┐  │ ┌──────────┐
+        │  │  Safe  │  │   │  AtRisk  │      │ │Liquidatable│  │ │Underwater│
+        │  │        │  │   │          │      │ │            │  │ │          │
+        │  │ 新規 / │  │   │ 保持のみ │      │ │ engine が  │  │ │ engine が│
+        │  │  追加  │  │   │ 可、新規 │      │ │ force-close│  │ │ close +  │
+        │  │  可    │  │   │  禁止    │      │ │            │  │ │ insurance│
+        │  └────────┘  │   └──────────┘      │ └────────────┘  │ │   fund   │
+        │              ▲                     ▲                 ▲ └──────────┘
+        │     initial margin (10%)   maintenance margin (2%)  equity = 0
+        │              │                     │                 │
+        │   ratio ≥    │  maintenance ≤      │  0 ≤ ratio <    │  equity < 0
+        │   initial    │  ratio < initial    │  maintenance    │  (notional は正)
+        │              │                     │                 │
+        │  条件分岐:   │  分岐:              │  分岐:          │  分岐:
+        │  if ratio    │  else if ratio      │  else if equity │  else
+        │   ≥ initial  │   ≥ maintenance     │   ≥ 0           │   { Underwater }
+        │   {Safe}     │   {AtRisk}          │   {Liquidatable}│
+        │                                                      │
+        └─────── 上記の数値例 ($10k coll、0.5 BTC long、entry $100k) ────────────┐
+                                                                                  │
+              Safe → AtRisk      の境界: mark = $88,889  (entry から −11.1%)      │
+              AtRisk → Liquidatable の境界: mark = $81,633  (entry から −18.4%)   │
+              Liquidatable → Underwater の境界: mark = $80,000  (entry から −20.0%) │
+                                                                                  │
+        ───────────────────────────────────────────────────────────────────────────┘
+```
+
+この図のとおり、`MarginHealth` enum の判定は **margin_ratio (および equity の符号) という単一スカラーに対する 4 区間分類** に還元できる。L3 ではこの 4 区間それぞれで「engine が実際に何をするか」を順に辿る — `Safe` と `AtRisk` は何もしない (=トレーダー側の自由)、`Liquidatable` は force-close 注文を market に流す、`Underwater` は force-close + insurance fund 引き出し。**コードの分岐は数直線の区間に 1 対 1 で対応する** — これが Rust の `match MarginHealth { Safe => …, AtRisk => …, Liquidatable => …, Underwater => … }` で綺麗に書ける理由だ。
+
 ## 計算例 — 同じ position、5 つの mark 価格
 
 トレーダー: $10k collateral、0.5 BTC long、entry $100,000。Hyperliquid params（initial 10%、maintenance 2%）。
 
 | Mark | Notional | PnL | Equity | Ratio | 状態 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **$100,000** | $50,000 | $0 | $10,000 | **20%** | Safe |
+| **$100,000** | $50,000 | $0 | $10,000 | **20.0%** | Safe (初期状態) |
 | **$95,000** | $47,500 | −$2,500 | $7,500 | **15.8%** | Safe |
+| **$88,889** | $44,444 | −$5,556 | $4,444 | **10.0%** | **Safe ↔ AtRisk 境界 (理論値)** |
 | **$85,000** | $42,500 | −$7,500 | $2,500 | **5.9%** | AtRisk |
 | **$82,000** | $41,000 | −$9,000 | $1,000 | **2.4%** | AtRisk (ぎりぎり) |
-| **$81,500** | $40,750 | −$9,250 | $750 | **1.8%** | **Liquidatable** |
-| **$80,000** | $40,000 | −$10,000 | $0 | **0%** | Liquidatable |
+| **$81,633** | $40,816 | −$9,184 | $816 | **2.0%** | **AtRisk ↔ Liquidatable 境界 (理論値)** |
+| **$81,500** | $40,750 | −$9,250 | $750 | **1.8%** | Liquidatable |
+| **$80,000** | $40,000 | −$10,000 | $0 | **0.0%** | Liquidatable (残余ゼロ — 次 tick で Underwater 化リスク) |
 | **$78,000** | $39,000 | −$11,000 | −$1,000 | **−2.6%** | **Underwater** |
 
 境界を越える瞬間が 2 つある:
 
-1. **Mark $87,500 → $82,000（Safe → AtRisk）**: トレーダーは保持はできるが、position を追加することも新規 position を取ることもできなくなる。UI が警告を出すのも通常この時点。
-2. **Mark $82,000 → $81,500（AtRisk → Liquidatable）**: エンジンが force-close を発動する。Maintenance を下回ると、collateral がもう取引と liquidation fee を払いきれない。
+1. **Safe → AtRisk (mark $88,889 が境界、entry から −11.1%)**: 表の $95,000 → $85,000 の間。$88,889 を下回ると、トレーダーは保持はできるが、position を追加することも新規 position を取ることもできなくなる。UI が警告を出すのも通常この時点。
+2. **AtRisk → Liquidatable (mark $81,633 が境界、entry から −18.4%)**: 表の $82,000 → $81,500 の間。$81,633 を下回ると、エンジンが force-close を発動する。Maintenance を下回ると、collateral がもう取引と liquidation fee を払いきれない。
 
-この例では、Liquidatable に到達するのに必要な mark 下落は entry から **18.5%** だけ。これは leverage の逆数に近い: 5× leverage で adverse 18.5%（≈ 1/5 × maintenance ギャップ）の動きで吹き飛ぶ。10× で ~9%、50× だと ~1.8%（日中ふつうに見る幅）。
+この例では、Liquidatable に到達するのに必要な mark 下落は entry から **約 18.4%** だけ ($81,633 / $100,000)。これは leverage の逆数に近い: 5× leverage (notional/equity = $50k/$10k) で adverse 18.4%（≈ 1/5 × maintenance ギャップ）の動きで吹き飛ぶ。10× で ~9%、50× だと ~1.8%（日中ふつうに見る幅）。
 
 **エンジン上では leverage は risk 対称的**: 高 leverage = 有利な動きで大きな upside、*ただし小さな adverse な動きで liquidate する*。数学はどちらの方向にも肩を持たない。Position を開いた時点でトレーダーが risk profile を選んだだけだ。
 

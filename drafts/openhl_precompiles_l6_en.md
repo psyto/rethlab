@@ -47,6 +47,59 @@ This is the milestone. The full chain — `bid placed on CLOB → bridge writes 
 - The pattern (precompile-reads-from-global-Arc) is proven, ready to replicate for additional read precompiles (best_ask, depth, mid-price, etc.) in future stages.
 - Module 3 (Write precompile, L7-L9) builds on the same infrastructure but in the opposite direction: precompile **writes** to CLOB state.
 
+### E2E round-trip: Solidity → CLOB → Solidity
+
+The full path L6 lights up, at a glance:
+
+```
+ Solidity contract                                                  .sol
+   (uint256 price, uint256 qty) = abi.decode(
+       staticcall(gas, 0x...0c1b, "", 64), (uint256, uint256)
+   );
+        │                                                            ▲
+        │ STATICCALL (read-only)                                     │ 64-byte response
+        ▼                                                            │
+ ┌───────────────────────────────────────────────────────────────────┴───┐
+ │ Reth EVM dispatch                                         [L1/L2/L3]  │
+ │   spec → openhl_precompiles_for(spec) → registry table                │
+ │   0x...0c1b ➜ Precompile { execute: read_best_bid, base_gas: 500 }    │
+ └─────────────────────────────────┬─────────────────────────────────────┘
+                                   │ fn pointer call
+                                   ▼
+ ┌───────────────────────────────────────────────────────────────────────┐
+ │ read_best_bid(input, gas_limit, _env)              [L2 body + L5 swap]│
+ │   1. let mut out = vec![0u8; 64];                                     │
+ │   2. match current_best_bid() {                                       │
+ │        Some((p, q)) ➜ encode into out  ──┐                            │
+ │        None         ➜ zero buffer        │ (encode path returns ↑)    │
+ │      }                                   │                            │
+ │   3. PrecompileOutput { gas_used: 500, bytes: out }                   │
+ └─────────────────────────────────┬────────┼────────────────────────────┘
+                                   │        │
+                                   ▼        │
+ ┌────────────────────────────────────────  ┴────────────────────────────┐
+ │ static CLOB_STATE: RwLock<Option<Arc<Mutex<Book>>>>     [L4 plumbing] │
+ │   ① RwLock.read()        ─ is something installed? (read-mostly)      │
+ │   ② Option.as_ref()      ─ not installed → return zero immediately    │
+ │   ③ Arc::clone(arc)      ─ share ownership with the bridge            │
+ │   ④ inner Mutex.lock()   ─ exclusive access to the matching engine    │
+ └─────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+ ┌───────────────────────────────────────────────────────────────────────┐
+ │ Book::best_bid_with_qty()              [Course 7 — matching engine]   │
+ │   bids: BTreeMap<RevPrice, OrderQueue>.iter().next()                  │
+ │   → (Price, Qty)  or  None                                            │
+ └───────────────────────────────────────────────────────────────────────┘
+
+ Return path (encoding side):
+   out[24..32].copy_from_slice(&price.0.to_be_bytes());  // rightmost 8 bytes of slot 1
+   out[56..64].copy_from_slice(&qty.0.to_be_bytes());    // rightmost 8 bytes of slot 2
+   // Top 24 bytes remain as vec![0u8; 64]'s zero-init → u64 zero-extended to u256
+```
+
+"Module 2 complete" means this vertical line can now be drawn **solid from end to end**. The L6 test is the proof that the line isn't broken anywhere along the way — a single `assert_eq!` that observes `(250, 7)` passing through every gate: Book → Mutex → RwLock → registry → EVM → caller. L4's plumbing, L5's wiring, and L6's measurement converge here.
+
 ## Recap
 
 After L5:

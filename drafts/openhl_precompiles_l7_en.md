@@ -174,7 +174,42 @@ Three things:
 
 ### Step 4: Add the `place_order` precompile function
 
-Below `read_best_bid`, before `u64_from_be_chunk`:
+**Before reading the code — the 128-byte input's memory layout:**
+
+```
+ABI-aligned 128-byte calldata (4 × 32-byte slots, values right-aligned within each slot):
+
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ slot 0 (input[ 0.. 32])  account_id                                    │
+  │   bytes  0..24  : zero pad (24 bytes)                                  │
+  │   bytes 24..32  : u64 big-endian      ← u64_from_be_chunk(&input[0..32])│
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ slot 1 (input[32.. 64])  side                                          │
+  │   bytes 32..63  : zero pad (31 bytes)                                  │
+  │   byte  63      : u8                  ← side_byte = input[63]          │
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ slot 2 (input[64.. 96])  price                                         │
+  │   bytes 64..88  : zero pad (24 bytes)                                  │
+  │   bytes 88..96  : u64 big-endian      ← u64_from_be_chunk(&input[64..96])│
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ slot 3 (input[96..128])  qty                                           │
+  │   bytes  96..120: zero pad (24 bytes)                                  │
+  │   bytes 120..128: u64 big-endian      ← u64_from_be_chunk(&input[96..128])│
+  └────────────────────────────────────────────────────────────────────────┘
+```
+
+The "right-aligned" arithmetic:
+
+- For u64 slots, the value lives at absolute byte positions `[32×N + 24 .. 32×N + 32]`
+  - slot 0 (account_id) → `24..32`
+  - slot 2 (price)      → `88..96`   (= 64 + 24 .. 64 + 32)
+  - slot 3 (qty)        → `120..128` (= 96 + 24 .. 96 + 32)
+- For the u8 in slot 1, the side bit = `32 × 1 + 31 = 63` — just the rightmost byte of the slot
+- The Step 6 helper's `buf[24..32]` / `buf[63]` / `buf[88..96]` / `buf[120..128]` is **the same arithmetic in reverse** — the write side and the read side are mirror-symmetric
+
+In other words: the reason `u64_from_be_chunk` picks `[24..32]` from each 32-byte chunk, the reason `side_byte` reads `input[63]` directly, and the reason the test helper writes price to `buf[88..96]` — they're all just **the zero-pad / value boundary from the figure above**. No magic; ABI convention + arithmetic.
+
+With that in hand, let's read the function. Below `read_best_bid`, before `u64_from_be_chunk`:
 
 ```rust
 /// Place a limit order on the installed CLOB. The write counterpart to

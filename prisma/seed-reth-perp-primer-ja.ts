@@ -43,13 +43,13 @@ export async function seedRethPerpPrimerJA(prisma: PrismaClient) {
 
 - **永久先物（perpetual future）の正体。** 期限がない、決済イベントもない、満期で spot 価格に収束する仕組みも持たない、そういう派生商品だ。本 primer の残り 3 レッスンの形状は、この 1 つの設計選択から導かれる。
 - **「期限なし」が実際に解くべきエンジニアリング課題だった理由。** その課題を解くために新しい経済メカニズム（L1 で扱う）を発明する必要があった。
-- **Perp、spot、伝統的 futures の違い。** 3 つの市場、3 つの価格動態、3 つのトレーダーインセンティブ。
+- **perp、spot、伝統的 futures の違い。** 3 つの市場、3 つの価格動態、3 つのトレーダーインセンティブ。
 - **なぜ本コースで Hyperliquid を例に取るのか。** 現状は closed-source。rethlab DIY Perp track は、その open 版を作ることを教える。
 
 このレッスンを終えると、以下に答えられる:
 
 - 「BTC を spot で買うのと、BTC perp を long するのは何が違う?」
-- 「Perp に期限がないのに、なぜ価格が原資産から離れずに済むのか?」
+- 「perp に期限がないのに、なぜ価格が原資産から離れずに済むのか?」
 - 「Hyperliquid とは何で、Rust EVM エンジニアにとってなぜ重要なのか?」
 
 ## なぜこの primer が存在するか
@@ -66,9 +66,9 @@ BTC の価格に対してポジションを取る方法は 3 種類ある:
 
 | 市場 | 保有するもの | 決済 | 例 |
 | :--- | :--- | :--- | :--- |
-| **Spot** | 実物の BTC そのもの | 即時 — 所有する | Coinbase で 0.1 BTC を買う。手元に 0.1 BTC が残る。 |
-| **伝統的 futures** | 将来の特定日付に BTC を固定価格で買う/売る契約 | 満期に — 現金または現物で決済 | CME 2026 年 12 月 BTC future。12 月 31 日に $100k で買う約束。 |
-| **永久先物（perp）** | BTC 価格に連動する契約。期限なし | しない — ポジションは閉じるまで開いたまま | Hyperliquid の BTC-USD perp。10× long を取り、margin が足りているかぎり開いたまま。 |
+| **Spot**（現物） | 実物の BTC そのもの | 即時 — 所有する | Coinbase で 0.1 BTC を買う。手元に 0.1 BTC が残る。 |
+| **伝統的 futures**（先物） | 将来の特定日付に BTC を固定価格で買う/売る契約 | 満期に — 差金（現金）または現物で決済 | CME 2026 年 12 月 BTC future。12 月 31 日に $100k で買う約束。 |
+| **永久先物（perp）** | BTC 価格に連動する契約。期限なし | なし — ポジションを閉じるまで継続（差金決済） | Hyperliquid の BTC-USD perp。10× long を取り、margin が足りているかぎり開いたまま。 |
 
 Spot は最もシンプル。資産を保有しているので、価格の動きがそのまま自分の損益になる。
 
@@ -125,9 +125,9 @@ L1 / L2 / L3 の計算例ではこれらの数値が繰り返し登場する。D
 
 ## よくある誤解
 
-**「Perp は自動でロールする futures だろう」。** 近いが違う。自動ロール futures にも expiry はある。サイクルごとに新しい契約に乗り換えるだけだ。各ロールには basis spread のコストがかかる。Perp にはロール自体がない — funding payment がロールコストの代わりを果たす。
+**「perp は自動でロールする futures だろう」。** 近いが違う。自動ロール futures にも expiry はある。サイクルごとに新しい契約に乗り換えるだけだ。各ロールには basis spread のコストがかかる。Perp にはロール自体がない — funding payment がロールコストの代わりを果たす。
 
-**「Perp は spot より危険だ」。** 比較の方向が誤っている。Perp が追加するのは **leverage の risk**（underwater になれば預けた collateral 以上を失いうる。ただし regulated な venue では insurance fund が通常それを吸収する）。Leverage を使わなければ、1× の perp position は spot とほぼ同じ risk しか持たない。差し引きの funding コストだけ違う。
+**「perp は spot より危険だ」。** 比較の方向が誤っている。Perp が追加するのは **leverage の risk**（underwater になれば預けた collateral 以上を失いうる。ただし regulated な venue では insurance fund が通常それを吸収する）。Leverage を使わなければ、1× の perp position は spot とほぼ同じ risk しか持たない。差し引きの funding コストだけ違う。
 
 **「Hyperliquid は Ethereum 上のスマートコントラクトだ」。** 違う — Hyperliquid は **独立した L1** だ。DIY Perp track を作る理由は、汎用 L1 上のスマートコントラクトより、perp UX（sub-second の latency、gas なし、深い orderbook）に最適化した app-chain のほうが勝るから、というのが核心。
 
@@ -224,6 +224,19 @@ rate_per_interval = clamp(premium / divisor, ±rate_cap)
 
 支払いは venue が受け取るのではない。Trader 間で直接やりとりされる — long 全体が short 全体に、各 position の notional に比例して移動する。Venue レベルではゼロサム。Hyperliquid は帳簿係でしかない。
 
+> 💡 **エンジニア向けの視点 — 符号付き size による 1 式実装:**
+> 実装時、ポジションの方向を符号付きで管理する (Long = \`+size\`、Short = \`-size\`)。すると、すべてのトレーダーの残高更新は分岐なしの 1 式に圧縮できる:
+>
+> \`\`\`
+> collateral -= size_with_sign × mark × rate
+> \`\`\`
+>
+> - \`rate > 0\` かつ \`size > 0\` (Long) → \`collateral\` が減る = long が支払う ✓
+> - \`rate > 0\` かつ \`size < 0\` (Short) → 二重マイナスで \`collateral\` が増える = short が受け取る ✓
+> - \`rate < 0\` の場合も対称的に 1 式で正しく配線される
+>
+> マッチングエンジンが long/short の position を 1 つの \`i64\`/\`i128\` size として持っておけば、funding tick は分岐なしの線形スキャンになる。**Rust の型システムと符号規約を組み合わせることで、状態遷移が「絶対に対称」になる** — Consensus determinism を担保する上でこの種の「分岐の排除」は load-bearing だ。
+
 ## 計算例 — Hyperliquid のパラメータ
 
 トレーダーが Hyperliquid で **10 BTC long** を持っている。現状:
@@ -263,12 +276,56 @@ Funding payment は mark を直接動かさない。動かすのは *トレー�
 
 これが funding が *連続的*（各 interval で少額）であって *終端的*（特定日に 1 度の大きな支払い）でない理由でもある。トレーダーは継続的なコストに対して行動を調整する。将来のイベントを予期して動くのではない。
 
+### Mark / Index / Funding の引き戻しループ
+
+3 者の関係を 1 周のフィードバックループに圧縮するとこうなる:
+
+\`\`\`
+       ┌────────────────────────────────────────────┐
+       │  index price (CEX spot 加重平均)            │ ← 真の参照価格 (外生)
+       └────────────────────┬───────────────────────┘
+                            │
+                            │ (mark − index) / index
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  premium                                   │ ← どれだけ離れているか
+       │    ÷ 8 (divisor) → clamp(±4%) (cap)         │
+       └────────────────────┬───────────────────────┘
+                            │ = funding rate (per interval)
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  funding payment (毎 interval boundary)     │ ← rate > 0 なら long → short
+       │    = size_with_sign × mark × rate           │   rate < 0 なら short → long
+       └────────────────────┬───────────────────────┘
+                            │ 不均衡側のトレーダーが「家賃」を払う
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  不均衡側がポジションを縮小／反対側を取る   │ ← 経済インセンティブ
+       └────────────────────┬───────────────────────┘
+                            │ orderbook 上で売り (or 買い) が発生
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  mark price が index 方向に動く             │ ← 引き戻し圧力 (内生)
+       └────────────────────┬───────────────────────┘
+                            │
+                            └──► premium 縮小 → funding 縮小 → ループが緩む
+                                 (均衡: mark ≈ index、小さな振動と小さな funding)
+\`\`\`
+
+**3 者の役割を 1 行で要約:**
+
+- **index** = 真の参照価格 (anchor の目標)
+- **mark** = orderbook の需給で動く市場価格 (anchor したい対象)
+- **funding** = 両者の乖離を「インセンティブ経由で」引き戻す制御信号
+
+「funding が mark を直接動かす」のではなく、「funding がトレーダーの残高を動かし、トレーダーが orderbook を動かし、orderbook が mark を動かす」という **3 段間接** が anchor の正体だ。Expiry 型の futures が「特定日に強制収束させる」のに対し、perp は「毎 interval で少しずつ引き戻す」— 連続的な制御信号で離散的な収束を置き換えている。
+
 ## Hyperliquid 固有の点
 
 - **Index の構成**: 複数 CEX spot feed の加重平均。1 つの feed が他から離れすぎたら index を一時停止する deviation circuit breaker が入っている — single-venue な spot 操作に対する保護。
 - **Tick での settlement**: 各 funding interval で、エンジンが非 flat な position を順に走査し、トレーダーの collateral balance を \`position_size × mark × rate\` で調整する。一括支払いではない — 各 position が個別に決済される。
 - **Saturating な算術**: Funding 計算は \`RATE_SCALE = 1e9\`（parts per billion）スケールの符号付き整数を使う。すべての乗算は \`i128\` 中間値で行い、overflow 時は wrap せずに saturate する。Consensus determinism の規律 — すべての validator が同じ入力から同じ rate を計算する必要がある。
-- **Tick 間で funding は累積しない**: Interval の中で開いて閉じた position には funding がかからない。Hyperliquid の支払いイベントは interval boundary のみだ。
+- **Tick 間で funding は累積しない (スナップショット方式)**: Interval の中で開いて閉じた position には funding がかからない。Hyperliquid の支払いイベントは、**毎時 00 分などの interval boundary の瞬間** にポジションを保有しているかどうかだけで判定される — その瞬間の position snapshot を取り、\`size × mark × rate\` を一括計算する。dYdX のような連続 funding (時間積分型) を経験してきた読者は要注意: ここは離散イベント方式のステートマシンであり、「保有時間に対する課金」ではなく「snapshot 時刻に保有していたかどうか」が支配的だ。**バグのない state machine を設計するときは、この境界条件を最初に固める。**
 
 ## よくある誤解
 
@@ -367,6 +424,7 @@ Leverage は informational だ。エンジンは「leverage 上限」を直接�
 - Initial > maintenance: initial を辛うじてクリアして開いたトレーダーには、liquidation に達する前に少し adverse な mark の動きを耐える余裕がある
 - ギャップがなければ、ぎりぎりで開いた position は不利な tick が来た瞬間に必ず liquidate する
 - ギャップは venue がトレーダーに与える *バッファ*。Liquidation に至る前に意思決定する（collateral を足す、partial close する、など）時間を確保する
+- **同時に、これはシステム側の防衛ラインでもある。** Maintenance を割った瞬間に「即破綻」ではなく、清算エンジンが force-close 注文を市場に流し込んで約定するまでの **スリッページ + 起動レイテンシの吸収余地** を、このギャップが用意している。L3 で見る force-close 注文は、この余地を予算として使って執行される — 余地が薄ければ薄いほど、insurance fund が負担する不足分が膨らむ。
 
 **Margin ratio** が中心的な量:
 
@@ -393,26 +451,66 @@ Liquidatable と Underwater の区別は、*残余を誰が負担するか* を�
 
 これが Build OpenHL — Liquidation コースが \`MarginHealth\` enum として実装する 4 状態分類だ。同じ 4 状態、同じ境界条件。
 
+### 4 状態の遷移を 1 本の軸で見る
+
+\`margin_ratio\` を高 → 低の 1 本の数直線として眺めると、4 状態は隣接する 4 区間に対応する:
+
+\`\`\`
+   高 ◄────────────── margin_ratio = equity / notional ──────────────► 低 / 負
+       20%             10%                   2%                0%
+   ─────┼──────────────┼─────────────────────┼─────────────────┼─────────►
+        │              │                     │                 │
+        │  ┌────────┐  │   ┌──────────┐      │ ┌────────────┐  │ ┌──────────┐
+        │  │  Safe  │  │   │  AtRisk  │      │ │Liquidatable│  │ │Underwater│
+        │  │        │  │   │          │      │ │            │  │ │          │
+        │  │ 新規 / │  │   │ 保持のみ │      │ │ engine が  │  │ │ engine が│
+        │  │  追加  │  │   │ 可、新規 │      │ │ force-close│  │ │ close +  │
+        │  │  可    │  │   │  禁止    │      │ │            │  │ │ insurance│
+        │  └────────┘  │   └──────────┘      │ └────────────┘  │ │   fund   │
+        │              ▲                     ▲                 ▲ └──────────┘
+        │     initial margin (10%)   maintenance margin (2%)  equity = 0
+        │              │                     │                 │
+        │   ratio ≥    │  maintenance ≤      │  0 ≤ ratio <    │  equity < 0
+        │   initial    │  ratio < initial    │  maintenance    │  (notional は正)
+        │              │                     │                 │
+        │  条件分岐:   │  分岐:              │  分岐:          │  分岐:
+        │  if ratio    │  else if ratio      │  else if equity │  else
+        │   ≥ initial  │   ≥ maintenance     │   ≥ 0           │   { Underwater }
+        │   {Safe}     │   {AtRisk}          │   {Liquidatable}│
+        │                                                      │
+        └─────── 上記の数値例 ($10k coll、0.5 BTC long、entry $100k) ────────────┐
+                                                                                  │
+              Safe → AtRisk      の境界: mark = $88,889  (entry から −11.1%)      │
+              AtRisk → Liquidatable の境界: mark = $81,633  (entry から −18.4%)   │
+              Liquidatable → Underwater の境界: mark = $80,000  (entry から −20.0%) │
+                                                                                  │
+        ───────────────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+この図のとおり、\`MarginHealth\` enum の判定は **margin_ratio (および equity の符号) という単一スカラーに対する 4 区間分類** に還元できる。L3 ではこの 4 区間それぞれで「engine が実際に何をするか」を順に辿る — \`Safe\` と \`AtRisk\` は何もしない (=トレーダー側の自由)、\`Liquidatable\` は force-close 注文を market に流す、\`Underwater\` は force-close + insurance fund 引き出し。**コードの分岐は数直線の区間に 1 対 1 で対応する** — これが Rust の \`match MarginHealth { Safe => …, AtRisk => …, Liquidatable => …, Underwater => … }\` で綺麗に書ける理由だ。
+
 ## 計算例 — 同じ position、5 つの mark 価格
 
 トレーダー: $10k collateral、0.5 BTC long、entry $100,000。Hyperliquid params（initial 10%、maintenance 2%）。
 
 | Mark | Notional | PnL | Equity | Ratio | 状態 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **$100,000** | $50,000 | $0 | $10,000 | **20%** | Safe |
+| **$100,000** | $50,000 | $0 | $10,000 | **20.0%** | Safe (初期状態) |
 | **$95,000** | $47,500 | −$2,500 | $7,500 | **15.8%** | Safe |
+| **$88,889** | $44,444 | −$5,556 | $4,444 | **10.0%** | **Safe ↔ AtRisk 境界 (理論値)** |
 | **$85,000** | $42,500 | −$7,500 | $2,500 | **5.9%** | AtRisk |
 | **$82,000** | $41,000 | −$9,000 | $1,000 | **2.4%** | AtRisk (ぎりぎり) |
-| **$81,500** | $40,750 | −$9,250 | $750 | **1.8%** | **Liquidatable** |
-| **$80,000** | $40,000 | −$10,000 | $0 | **0%** | Liquidatable |
+| **$81,633** | $40,816 | −$9,184 | $816 | **2.0%** | **AtRisk ↔ Liquidatable 境界 (理論値)** |
+| **$81,500** | $40,750 | −$9,250 | $750 | **1.8%** | Liquidatable |
+| **$80,000** | $40,000 | −$10,000 | $0 | **0.0%** | Liquidatable (残余ゼロ — 次 tick で Underwater 化リスク) |
 | **$78,000** | $39,000 | −$11,000 | −$1,000 | **−2.6%** | **Underwater** |
 
 境界を越える瞬間が 2 つある:
 
-1. **Mark $87,500 → $82,000（Safe → AtRisk）**: トレーダーは保持はできるが、position を追加することも新規 position を取ることもできなくなる。UI が警告を出すのも通常この時点。
-2. **Mark $82,000 → $81,500（AtRisk → Liquidatable）**: エンジンが force-close を発動する。Maintenance を下回ると、collateral がもう取引と liquidation fee を払いきれない。
+1. **Safe → AtRisk (mark $88,889 が境界、entry から −11.1%)**: 表の $95,000 → $85,000 の間。$88,889 を下回ると、トレーダーは保持はできるが、position を追加することも新規 position を取ることもできなくなる。UI が警告を出すのも通常この時点。
+2. **AtRisk → Liquidatable (mark $81,633 が境界、entry から −18.4%)**: 表の $82,000 → $81,500 の間。$81,633 を下回ると、エンジンが force-close を発動する。Maintenance を下回ると、collateral がもう取引と liquidation fee を払いきれない。
 
-この例では、Liquidatable に到達するのに必要な mark 下落は entry から **18.5%** だけ。これは leverage の逆数に近い: 5× leverage で adverse 18.5%（≈ 1/5 × maintenance ギャップ）の動きで吹き飛ぶ。10× で ~9%、50× だと ~1.8%（日中ふつうに見る幅）。
+この例では、Liquidatable に到達するのに必要な mark 下落は entry から **約 18.4%** だけ ($81,633 / $100,000)。これは leverage の逆数に近い: 5× leverage (notional/equity = $50k/$10k) で adverse 18.4%（≈ 1/5 × maintenance ギャップ）の動きで吹き飛ぶ。10× で ~9%、50× だと ~1.8%（日中ふつうに見る幅）。
 
 **エンジン上では leverage は risk 対称的**: 高 leverage = 有利な動きで大きな upside、*ただし小さな adverse な動きで liquidate する*。数学はどちらの方向にも肩を持たない。Position を開いた時点でトレーダーが risk profile を選んだだけだ。
 
@@ -500,6 +598,19 @@ L2 のおさらい: \`margin_ratio < maintenance_margin_bps\` かつ \`equity �
 価格はない — 常に **market order**。エンジンは価格を選ばない。Orderbook が今提示している価格で受ける。Matching engine が他のトレーダーの resting limit orders に対して close を約定させる。
 
 機械的には通常の取引と同じだ。トレーダーの position が閉じる。Counterparty（resting order が約定した相手）が position を開くか増やす。Mark は new top-of-book を反映して動く。
+
+> 💡 **コラム: トレーダーが置くストップロス (逆指値) との違い**
+>
+> 表面的な挙動 — トリガー条件を満たすと市場価格で売る — は似ているが、システム境界の位置がまったく違う:
+>
+> | | ストップロス (逆指値成行) | Force-close (清算) |
+> | :--- | :--- | :--- |
+> | 発注主体 | トレーダー本人 (クライアント) | バリデータ全員が合意したステートマシン本体 |
+> | 注文の経路 | RPC → mempool → block → matching engine | block 実行中にエンジン内部から直接 orderbook に inject |
+> | 失敗モード | 署名エラー / nonce 衝突 / ガス不足 / RPC ダウン等で失敗しうる | 失敗が構造的にあり得ない (注文を流す主体がコンセンサス自身) |
+> | キャンセル可 | トレーダーが取り消せる | 取り消し不能 (state machine が「発射」と決めたら必ず約定する) |
+>
+> 一般のトレーダー向け解説では「マージン不足になるとストップロスが自動発火する」と表現されることがあるが、エンジン視点では別物だ。**清算は『特権注文 (privileged order)』** — \`block_execute\` の中でエンジンが自ら orderbook に書き込む、外部からは到達不可能な経路の注文 — として実装される。L2 で見た \`MarginHealth\` enum の \`Liquidatable\` 分岐が、まさにこの特権注文の発火元になる。
 
 具体例:
 
@@ -609,6 +720,18 @@ Insurance fund が空でさらに別のアカウントが Underwater になっ�
 2. Ranking 上位（最も利益が出ている + 高 leverage）から、その position を **force-close** して不足を吸収させる。
 3. Close された position の実現 PnL がトレーダーに渡る — 利益は「支払われる」が、position は失う。
 
+> 💡 **なぜ ADL は orderbook を通さないのか?**
+>
+> 「不足が出たなら、underwater の position を市場でガンガン force-close すればいい」と思うかもしれない。だが、その瞬間に orderbook には逆方向の巨大な market order が連射されることになる — bid stack を突き抜けて mark を更にクラッシュさせ、その下落で別の position が Underwater 化する。**フィードバックループが暴走する。**
+>
+> ADL はこのループを断ち切るために、**orderbook を一切経由しない**設計になっている:
+>
+> - 1 つの破綻 position と 1 つの勝ち position を、エンジン内部の帳簿上で **直接相殺 (match & cancel)** する
+> - 相殺された 2 つの position は、両方とも venue の books から消える
+> - Orderbook の bid / ask には 1 satoshi も触れない → 価格に追加のクラッシュ圧をかけない
+>
+> つまり ADL は「市場での清算」ではなく **「帳簿上の名寄せ・netting」** — システム内部で勝者と敗者を直接マッチさせて、両者の position を同時に消去するオフチェーン (正確には off-orderbook) な相殺処理だ。Stage 10c (multi-account scanner) の実装でも、ADL パスは \`book.submit()\` を呼ばず、\`Position\` レコードを直接 mutate して削除する。**「市場を汚さずに、帳簿の上だけで損失を勝者に転送する」** — これが ADL の本質であり、極めて稀にしか発動しないように設計されている理由でもある。
+
 ADL は **非常に不評** だ。マーケットの crash を正しく予測して short で勝っているトレーダーは、勝ち分をもっと伸ばしたいので force-close されたくない。ただし insurance fund がカバーできない以上、*誰かが loss を引き受けなければならない* — 現金は保存則に従う。ADL はその loss を、その move から最も「勝った」側に分配する仕組み。
 
 Hyperliquid の設計は ADL を **極めて稀** にすることを狙っている:
@@ -616,6 +739,49 @@ Hyperliquid の設計は ADL を **極めて稀** にすることを狙ってい
 - 高めの liquidation fee で、平時に insurance fund を厚く capitalize しておく
 - Cross-margin（デフォルト）で多くのアカウントを resilient にする — 1 つの position の損失を他で buffer できる
 - DIY Perp track の Stage 10c（multi-account scanner）が ADL を fallback path として実装する。それが最後のレッスンになっているのは、ここまで到達しないこと自体が目標だから。
+
+## セーフティネットの階層構造
+
+L2 のマージン要件から ADL まで、損失を吸収する 4 層が下にカスケードしている。**上の層で止まれば止まるほど、トレーダーにも venue にもダメージが小さい:**
+
+\`\`\`
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 0: Margin requirement (L2 で見た)                          │
+   │   Initial 10% / Maintenance 2% でリスク量を上限規制              │
+   │   → 「トレーダー自身の collateral で損失をカバーできる範囲」      │
+   │   止まる条件: ratio ≥ maintenance のまま市場が反発する            │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ 失敗: ratio < maintenance に陥落
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 1: Force-close at maintenance (Solvent close)              │
+   │   エンジンが市場で position を閉じる、collateral から fee を徴収  │
+   │   → 大多数のケースはここで止まる (insurance fund は積み増しに回る) │
+   │   止まる条件: close 実現 PnL + fee ≤ collateral                  │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ 失敗: close 後も equity < 0 (Underwater)
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 2: Insurance fund                                          │
+   │   過去の solvent close で積み上げた fee 残高から不足を補填        │
+   │   → 単一の Underwater 口座を吸収できる                            │
+   │   止まる条件: insurance_fund_balance ≥ shortfall                 │
+   └────────────────────────────────┬───────────────────────────────┘
+                                    │ 失敗: insurance fund が枯渇 (残高 = 0)
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ Layer 3: ADL (Auto-Deleveraging) — 最終手段                       │
+   │   勝者側の position を帳簿上で強制相殺、orderbook には触れない    │
+   │   → ここに到達するのは大規模 crash のときだけ                     │
+   │   止まる条件: 必ず止まる (損失を勝者に分配することで保存則を維持)  │
+   └─────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+**この階層の読み方:**
+
+- **下の層に落ちるほど痛みが拡散する**: Layer 1 ではトレーダー本人だけが損する。Layer 2 では venue が venue 全体の資金から払う。Layer 3 では関係のない (勝っている) 別トレーダーまで巻き込む。
+- **各層が「次の層に渡す前に absorb する」量を最大化する設計**: Initial と Maintenance の差 (L2 で見た 8% のギャップ) は Layer 1 が吸収できる余地、liquidation fee の 1.5% は Layer 2 の補充ペース、cross-margin (1 口座内の利益で他の損失を相殺) は Layer 1 の到達を遅らせる、といった具合。**venue 設計とは、上の層が下の層に「仕事を渡さない」ための数値選択そのもの。**
+- **コード分岐との対応**: Stage 10c の \`MarginHealth\` enum 分岐は、この階層の Layer 1-3 への遷移ロジックそのもの。\`Safe\` / \`AtRisk\` = Layer 0、\`Liquidatable\` = Layer 1、\`Underwater\` + insurance fund 残高あり = Layer 2、\`Underwater\` + insurance fund 枯渇 = Layer 3。**4 状態の enum と 4 層の防御は 1 対 1 で対応する。**
 
 ## Hyperliquid 固有の点
 

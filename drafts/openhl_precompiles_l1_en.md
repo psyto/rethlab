@@ -142,7 +142,9 @@ tempfile             = "3"
 
 **`reth-node-api` is a one-off direct git dep** (not via workspace). The workspace `Cargo.toml` doesn't declare it; we inline the git+rev directly. This is intentional: `reth-node-api` is used in exactly one crate (`openhl-evm`), and the rest of the workspace doesn't need it. Promoting it to a workspace dep would force every crate's build graph to know about it.
 
-> 🛑 **やりがちな勘違い.** "Every Reth dep should be a workspace dep — that's the pattern." **Not necessarily.** Workspace deps are useful when multiple crates need the same dep at the same version. When only one crate needs it, inline declaration is cleaner — fewer entries in the workspace-level Cargo.toml, less indirection for readers. `reth-node-api` is openhl-evm-only; treat it accordingly.
+> ⚠️ **The `rev` must match the rest of the `reth-*` crates exactly.** When you inline `rev = "88505c7..."`, the commit hash has to be **identical** to the one already pinned by the other `reth-*` crates in the workspace. Reth shares types (`FullNodeTypes`, `NodeTypes`, `BuilderContext`, etc.) strictly across its internal crates, and Cargo's same-version-same-source rule means even a one-character mismatch causes those types to be treated as different identities — producing cryptic errors like `expected ChainSpec, found ChainSpec`. The temptation to "just bump `reth-node-api` to a newer rev" is strong; resist it unless you're upgrading *every* `reth-*` rev together.
+
+> 🛑 **Anti-fluency.** "Every Reth dep should be a workspace dep — that's the pattern." **Not necessarily.** Workspace deps are useful when multiple crates need the same dep at the same version. When only one crate needs it, inline declaration is cleaner — fewer entries in the workspace-level Cargo.toml, less indirection for readers. `reth-node-api` is openhl-evm-only; treat it accordingly.
 
 ### Step 3: Create `crates/evm/src/precompiles/mod.rs` (stub)
 
@@ -400,13 +402,13 @@ Expected:
 
 No warnings (the import list is long but every item is used). No errors.
 
-You can also run the existing test suite to confirm nothing else broke:
+**Regression check for existing tests** — L1 doesn't add tests for the new modules yet, but you should confirm that the dep additions and the `lib.rs` edits haven't broken the 39 tests carried over from prior courses (Course 6's bridges / live_node and Course 7's CLOB-bridge integration):
 
 ```bash
 cargo test -p openhl-evm --release
 ```
 
-39 tests still pass. The new modules don't have tests yet — L3 adds the first one.
+39 tests should still pass. **This isn't a test of L1's new logic — it's purely a regression check that the structural changes haven't broken existing behaviour.** The first test for the new modules lands in L3 (`precompile_is_callable_via_registry`). If you only want to confirm the structure compiles at L1, `cargo check -p openhl-evm` alone is enough.
 
 Common errors and fixes:
 

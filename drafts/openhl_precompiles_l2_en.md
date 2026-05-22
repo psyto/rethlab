@@ -163,6 +163,24 @@ Walk the body:
 
 1. **`vec![0u8; 64]`** — 64 zero bytes. The ABI shape for `(uint256, uint256)` is two 32-byte blocks.
 2. **`out[31] = 100`** — write the price (100) at the rightmost byte of the first 32-byte block. Big-endian u256 means the high-order bytes are zero and the low-order byte (index 31) holds the actual value. Same for qty at index 63.
+
+   Drawing the entire 64-byte buffer in one picture makes it visually clear why index 31 and 63 are the "actual write points":
+
+   ```
+                       ┌───── slot 1: price (u256, big-endian) ─────┐ ┌───── slot 2: qty (u256, big-endian) ─────┐
+   byte index:          0    1    2    ...   29   30   31     32   33   ...   60   61   62   63
+                       ┌────┬────┬────┬───┬────┬────┬────┐  ┌────┬────┬───┬────┬────┬────┬────┐
+   value (hex):        │ 00 │ 00 │ 00 │...│ 00 │ 00 │ 64 │  │ 00 │ 00 │...│ 00 │ 00 │ 00 │ 0a │
+                       └────┴────┴────┴───┴────┴────┴────┘  └────┴────┴───┴────┴────┴────┴────┘
+                        ↑    ↑    ↑                   ↑     ↑                              ↑
+                        │    │    │                   │     │                              │
+                       high ← (zero padding) ← low (LSB)   high ← (zero padding) ← low (LSB)
+                                              100 = 0x64                              10 = 0x0a
+                                          (price lands here)                       (qty lands here)
+   ```
+
+   The rule: **u256 is a fixed 32-byte big-endian width. Even when the actual value fits in `u64` (8 bytes) or `u32` (4 bytes), the high-order side is zero-padded and the actual value lands at the rightmost (least-significant) byte — index 31 and 63 in our buffer.** Matching the wire format to Solidity's `(uint256, uint256)` layout is just following this one picture.
+
 3. **`PrecompileOutput::new(CLOB_BASE_GAS_COST, Bytes::from(out), 0)`** — build the output:
    - First arg: gas spent (we charge 500).
    - Second arg: output bytes (the 64-byte buffer).

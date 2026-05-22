@@ -117,6 +117,36 @@ fn read_best_bid(_input: &[u8], _gas_limit: u64, _reservoir: u64) -> PrecompileR
 - **qty も同様に `out[56..64]` へ** — 2 つ目の 32-byte word の最後の 8 バイト。
 - **ハードコードの `out[31] = 100` と `out[63] = 10` は消える。**
 
+なぜ `out[24..32]` という「マジックナンバー」が正しいのかを、64 バイト buffer 全体のメモリレイアウトで見ると一目で押さえられる:
+
+```
+                       ┌──── 第 1 スロット: price (u256 BE, 32 byte) ────┐ ┌──── 第 2 スロット: qty (u256 BE, 32 byte) ────┐
+   byte index:          0    ...    23   24    25    ...    30    31     32    ...    55   56    57    ...    62    63
+                       ┌────────────┬────┬────┬─────────────┬────┬────┐  ┌────────────┬────┬────┬─────────────┬────┬────┐
+   memory:             │ 00 ... 00  │ p7 │ p6 │ ........... │ p1 │ p0 │  │ 00 ... 00  │ q7 │ q6 │ ........... │ q1 │ q0 │
+                       └────────────┴────┴────┴─────────────┴────┴────┘  └────────────┴────┴────┴─────────────┴────┴────┘
+                        ↑           ↑                            ↑       ↑           ↑                            ↑
+                        │           │                            │       │           │                            │
+                       高位 24 byte  └─── price.0.to_be_bytes() ───┘    高位 24 byte  └─── qty.0.to_be_bytes() ─────┘
+                       (zero pad)            [u8; 8] が ぴったり収まる    (zero pad)            [u8; 8] が ぴったり収まる
+                                             ┃                                                  ┃
+                                             ▼                                                  ▼
+                                    out[24..32] (8 byte の slice)                       out[56..64] (8 byte の slice)
+                                    .copy_from_slice(&price.0.to_be_bytes())            .copy_from_slice(&qty.0.to_be_bytes())
+
+
+   数で押さえると:
+     ・slot 1 全体は byte 0..32 の 32 byte (= u256 BE 1 個分)
+     ・上位 24 byte (0..24) は zero pad のまま (vec![0u8; 64] で既に確保済み)
+     ・下位 8 byte (24..32) に u64 を big-endian で直接書き込む → slot 全体が「u64 を u256 に zero-extend したもの」になる
+     ・slot 2 も同じ構造を 32 byte 平行移動 (byte index に +32)
+
+   結論: 24..32 と 56..64 は「u64 (8 byte) が u256 (32 byte) の右端に滑り込む位置」。
+        マジックではなく、(32 − 8 = 24) と (64 − 8 = 56) という算数の結果にすぎない。
+```
+
+ここで効いているのは「**u64 BE bytes → u256 BE word の右端 8 byte に直接コピー、中間で `[u8; 32]` を確保しない**」というホットパス最適化だ。`U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)` のように 32 byte の一時配列を経由するルートは結果こそ同じだが、(a) スタック上に余分な 32 byte の zero-init、(b) その配列から output への 32 byte memcpy、の二重コストが乗る。直接書き込みなら 8 byte memcpy のみ — しかも上位 zero pad は `vec![0u8; 64]` の初期化時点で既に確保済みなので、追加コスト 0 で zero-extend が成立している。
+
 > 🛑 **やりがちな勘違い。** 「明快さのために `U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)` でいいのでは?」 — それだと **一時的な `[u8; 32]` を allocate してから byte-by-byte でコピー** することになる。直接 `out[24..32].copy_from_slice(&price.0.to_be_bytes())` と書けば、output buffer に直接書き込んで中間 allocation を挟まない。**結果は同じだが、仕事は半分。** precompile は hot path で、マイクロ秒の積み重ねが効いてくる。
 
 ### Step 2: ドキュメントコメントを更新

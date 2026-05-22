@@ -90,6 +90,19 @@ rate_per_interval = clamp(premium / divisor, ±rate_cap)
 
 支払いは venue が受け取るのではない。Trader 間で直接やりとりされる — long 全体が short 全体に、各 position の notional に比例して移動する。Venue レベルではゼロサム。Hyperliquid は帳簿係でしかない。
 
+> 💡 **エンジニア向けの視点 — 符号付き size による 1 式実装:**
+> 実装時、ポジションの方向を符号付きで管理する (Long = `+size`、Short = `-size`)。すると、すべてのトレーダーの残高更新は分岐なしの 1 式に圧縮できる:
+>
+> ```
+> collateral -= size_with_sign × mark × rate
+> ```
+>
+> - `rate > 0` かつ `size > 0` (Long) → `collateral` が減る = long が支払う ✓
+> - `rate > 0` かつ `size < 0` (Short) → 二重マイナスで `collateral` が増える = short が受け取る ✓
+> - `rate < 0` の場合も対称的に 1 式で正しく配線される
+>
+> マッチングエンジンが long/short の position を 1 つの `i64`/`i128` size として持っておけば、funding tick は分岐なしの線形スキャンになる。**Rust の型システムと符号規約を組み合わせることで、状態遷移が「絶対に対称」になる** — Consensus determinism を担保する上でこの種の「分岐の排除」は load-bearing だ。
+
 ## 計算例 — Hyperliquid のパラメータ
 
 トレーダーが Hyperliquid で **10 BTC long** を持っている。現状:
@@ -129,12 +142,56 @@ Funding payment は mark を直接動かさない。動かすのは *トレー�
 
 これが funding が *連続的*（各 interval で少額）であって *終端的*（特定日に 1 度の大きな支払い）でない理由でもある。トレーダーは継続的なコストに対して行動を調整する。将来のイベントを予期して動くのではない。
 
+### Mark / Index / Funding の引き戻しループ
+
+3 者の関係を 1 周のフィードバックループに圧縮するとこうなる:
+
+```
+       ┌────────────────────────────────────────────┐
+       │  index price (CEX spot 加重平均)            │ ← 真の参照価格 (外生)
+       └────────────────────┬───────────────────────┘
+                            │
+                            │ (mark − index) / index
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  premium                                   │ ← どれだけ離れているか
+       │    ÷ 8 (divisor) → clamp(±4%) (cap)         │
+       └────────────────────┬───────────────────────┘
+                            │ = funding rate (per interval)
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  funding payment (毎 interval boundary)     │ ← rate > 0 なら long → short
+       │    = size_with_sign × mark × rate           │   rate < 0 なら short → long
+       └────────────────────┬───────────────────────┘
+                            │ 不均衡側のトレーダーが「家賃」を払う
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  不均衡側がポジションを縮小／反対側を取る   │ ← 経済インセンティブ
+       └────────────────────┬───────────────────────┘
+                            │ orderbook 上で売り (or 買い) が発生
+                            ▼
+       ┌────────────────────────────────────────────┐
+       │  mark price が index 方向に動く             │ ← 引き戻し圧力 (内生)
+       └────────────────────┬───────────────────────┘
+                            │
+                            └──► premium 縮小 → funding 縮小 → ループが緩む
+                                 (均衡: mark ≈ index、小さな振動と小さな funding)
+```
+
+**3 者の役割を 1 行で要約:**
+
+- **index** = 真の参照価格 (anchor の目標)
+- **mark** = orderbook の需給で動く市場価格 (anchor したい対象)
+- **funding** = 両者の乖離を「インセンティブ経由で」引き戻す制御信号
+
+「funding が mark を直接動かす」のではなく、「funding がトレーダーの残高を動かし、トレーダーが orderbook を動かし、orderbook が mark を動かす」という **3 段間接** が anchor の正体だ。Expiry 型の futures が「特定日に強制収束させる」のに対し、perp は「毎 interval で少しずつ引き戻す」— 連続的な制御信号で離散的な収束を置き換えている。
+
 ## Hyperliquid 固有の点
 
 - **Index の構成**: 複数 CEX spot feed の加重平均。1 つの feed が他から離れすぎたら index を一時停止する deviation circuit breaker が入っている — single-venue な spot 操作に対する保護。
 - **Tick での settlement**: 各 funding interval で、エンジンが非 flat な position を順に走査し、トレーダーの collateral balance を `position_size × mark × rate` で調整する。一括支払いではない — 各 position が個別に決済される。
 - **Saturating な算術**: Funding 計算は `RATE_SCALE = 1e9`（parts per billion）スケールの符号付き整数を使う。すべての乗算は `i128` 中間値で行い、overflow 時は wrap せずに saturate する。Consensus determinism の規律 — すべての validator が同じ入力から同じ rate を計算する必要がある。
-- **Tick 間で funding は累積しない**: Interval の中で開いて閉じた position には funding がかからない。Hyperliquid の支払いイベントは interval boundary のみだ。
+- **Tick 間で funding は累積しない (スナップショット方式)**: Interval の中で開いて閉じた position には funding がかからない。Hyperliquid の支払いイベントは、**毎時 00 分などの interval boundary の瞬間** にポジションを保有しているかどうかだけで判定される — その瞬間の position snapshot を取り、`size × mark × rate` を一括計算する。dYdX のような連続 funding (時間積分型) を経験してきた読者は要注意: ここは離散イベント方式のステートマシンであり、「保有時間に対する課金」ではなく「snapshot 時刻に保有していたかどうか」が支配的だ。**バグのない state machine を設計するときは、この境界条件を最初に固める。**
 
 ## よくある誤解
 

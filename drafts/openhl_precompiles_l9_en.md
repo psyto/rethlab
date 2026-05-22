@@ -46,7 +46,63 @@ The "fills are discarded" gap from L8's doc comment is closed:
 - **`LiveRethEvmBridge::pending_fills`** changes from `Mutex<Vec<Fill>>` to `Arc<Mutex<Vec<Fill>>>`. The bridge's `new()` now calls `install_fill_sink(Arc::clone(&pending_fills))` alongside `install_clob`.
 - **New unit test** `place_order_routes_fills_to_installed_sink` — exercises the maker/taker cross and verifies the sink receives a fill.
 
-After L9, the precompile and the bridge are no longer **write-side independent**. EVM-placed orders produce fills that flow into the same `pending_fills` queue that bridge-side `submit_order` writes to. The next `build_payload` will see them.
+### E2E cyclic data routing topology (the loop closes at Stage 9c+)
+
+L9 is the moment the order → Book → Fill → payload loop finally closes. The two writers — on-chain (EVM precompile) and off-chain (bridge) — converge on **the same Book** and **the same pending_fills**:
+
+```
+ ── Input path 1: on-chain (Solidity → EVM) ────────────────────────────────
+   Solidity contract → call(0x...0c1c, abi.encode(account, side, price, qty))
+                                       │
+                                       ▼
+   Reth EVM dispatch → place_order  [L7 parse + L8 submit + L9 fill routing]
+                                       │
+                                       │ clob.lock().submit(Order{…})
+                                       │     → SubmitResult { fills: Vec<Fill>, … }
+                                       │
+                                       ▼ (1) mutate Book      (2) extend fills into sink
+ ── Input path 2: off-chain (App / RPC → bridge) ───────────────────────────
+   App / RPC → bridge.submit_order(…)              [pre-existing Course 7 path]
+                                       │
+                                       │ self.clob.lock().submit(…)
+                                       │     → writes fills directly to self.pending_fills
+                                       ▼
+ ── Shared Book (convergence point ① for both writers) ─────────────────────
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │ Arc<Mutex<Book>>                                                    │
+   │   ▲ static CLOB_STATE references it (installed in L4)                │
+   │   ▲ bridge.clob shares the same Arc → both writers see one Book     │
+   └─────────────────────────────────────────────────────────────────────┘
+
+ ── Shared Fill buffer (convergence point ② for both writers) ──────────────
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │ Arc<Mutex<Vec<Fill>>>                                               │
+   │   ▲ static FILL_SINK references it (installed in L9 — new)           │
+   │   ▲ bridge.pending_fills shares the same Arc (L9 upgrades it from    │
+   │     Mutex to Arc<Mutex>)                                            │
+   │                                                                     │
+   │   Write path A: place_order extends via FILL_SINK                   │
+   │   Write path B: bridge.submit_order pushes directly into            │
+   │                 pending_fills                                       │
+   │   (Both writes land in the same Vec<Fill> — only one Arc exists)    │
+   └────────────────────────────────┬────────────────────────────────────┘
+                                    │ self.pending_fills.lock().drain(..)
+                                    ▼
+ ── Exit: block payload ────────────────────────────────────────────────────
+   bridge.build_payload()  →  drain pending fills, attach to block
+                                    │
+                                    ▼
+                            next Reth block
+```
+
+**What makes the loop cyclic (loop closure):**
+
+- Two writers (on-chain `place_order` / off-chain `bridge.submit_order`), one reader (the `build_payload` drain)
+- Both writers reach **the same physical `Arc<Mutex<Vec<Fill>>>`** — the global (`FILL_SINK`) and the bridge field (`pending_fills`) clone the same Arc, in perfect mirror of the L4 "two holders, one Arc" pattern
+- Module 4's core property finally holds: "fills from EVM-placed orders ride into the block alongside fills from bridge-placed orders, indistinguishable from each other"
+- **L4's `Arc<Mutex<Book>>` distribution gets a complete mirror in L9's `Arc<Mutex<Vec<Fill>>>`** — `install_clob` ↔ `install_fill_sink`, `bridge.clob` ↔ `bridge.pending_fills`, every piece is symmetric
+
+After L9, the precompile and the bridge are no longer **write-side independent**. EVM-placed orders produce fills that flow into the same `pending_fills` queue that bridge-side `submit_order` writes to. As the topology above shows, this convergence is what lets on-chain liquidity changes propagate uninterrupted into the next `build_payload` and onwards into the block.
 
 ## Recap
 

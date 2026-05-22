@@ -43,8 +43,8 @@ Three ways to express a view on the price of BTC:
 | Market | What you hold | Settlement | Example |
 | :--- | :--- | :--- | :--- |
 | **Spot** | The actual BTC | Instant — you own it | Buy 0.1 BTC on Coinbase. You now have 0.1 BTC. |
-| **Traditional futures** | A contract to buy/sell BTC at a fixed price on a future date | At expiry — settles in cash or delivery | CME December 2026 BTC future. You agree to buy at $100k on Dec 31. |
-| **Perpetual future** | A contract that mimics BTC price exposure, with no expiry | Never — the position stays open until you close it | Hyperliquid BTC-USD perp. You go 10× long, position stays open as long as you keep margin. |
+| **Traditional futures** | A contract to buy/sell BTC at a fixed price on a future date | At expiry — cash-settled (price difference) or physical delivery | CME December 2026 BTC future. You agree to buy at $100k on Dec 31. |
+| **Perpetual future** | A contract that mimics BTC price exposure, with no expiry | Never — stays open until you close it (cash-settled) | Hyperliquid BTC-USD perp. You go 10× long, position stays open as long as you keep margin. |
 
 Spot is the simplest. You own the asset; price moves are your gains and losses directly.
 
