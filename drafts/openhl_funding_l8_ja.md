@@ -240,7 +240,42 @@ Private フィールドへの read-only アクセスだ。両方とも **`const 
 
 #### `tick(&mut self, now, mark, index, positions)`
 
-Clock の核心となるメソッド。論理的には 3 つの phase だ：
+Clock の核心となるメソッド。論理的には 3 つの phase が時間制御 → 純粋計算 → state 更新の順に重なっていて、これがこの crate のレイヤード composition そのものだ:
+
+```
+【 FundingClock::tick(&mut self, now, mark, index, positions) 】
+
+  1. Guard (時間制御レイヤー)
+     ┌────────────────────────────────────────────────────────────────────┐
+     │ if now < last_settled_at + interval_secs                           │
+     │     return None     ◄── 静かに終了。state は変化していない          │
+     └────────────────────────────────────────────────────────────────────┘
+              │ (条件を満たす場合のみ下へ)
+              ▼
+
+  2. Compute (ステートレス計算レイヤー — Module 2 の関数の合成)
+     ┌────────────────────────────────────────────────────────────────────┐
+     │   (mark, index)        ──► compute_premium  ──► Premium             │
+     │                                                    │                │
+     │   (premium, params)    ──► compute_rate     ──► FundingRate         │
+     │                                                    │                │
+     │   (positions, mark, rate) ──► apply_funding ──► Vec<Settlement>     │
+     │                                                                     │
+     │   ※ どの関数も clock の state を読まない / 書かない。pure。           │
+     └────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+
+  3. State 更新 + Return (出力レイヤー)
+     ┌────────────────────────────────────────────────────────────────────┐
+     │ self.last_settled_at = now;     ◄── 次の deadline をリセット          │
+     │ return Some(FundingTick {                                           │
+     │     settled_at: now, premium, rate, settlements,                    │
+     │ });                                                                 │
+     └────────────────────────────────────────────────────────────────────┘
+```
+
+「**clock が時間を gate し、Module 2 の数学が値を計算し、出力レイヤーが state を進めて返す**」という責任分離が、`tick` のボディの上から下にそのまま並んでいる。論理的には 3 つの phase だ：
 
 1. **Guard**：`if now < self.last_settled_at.saturating_add(self.params.interval_secs) { return None; }`。`saturating_add` のおかげで、`last_settled_at` が `u64::MAX` 近くのときに `u64` の overflow を防げる（pathological なケースだが、defense は無料だ）。
 
@@ -393,7 +428,29 @@ test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 - **`now == last_settled_at + interval - 1` で `tick` が fire してしまう** — guard で `<` のところを `<=` にしてしまった、もしくは反転形で `>` ではなく `>=` にしてしまった場合だ。意図する semantics は「`now >= last_settled_at + interval` のとき fire」で、guard 側に否定するなら `if now < last_settled_at + interval { return None; }` になる。
 - **`tick` の後で `last_settled_at` が進まない** — `Some(FundingTick { ... })` の手前にある `self.last_settled_at = now;` の行を書き忘れた場合だ。次の tick が即座に再 fire してしまう。
 - **`empty_positions...` テストで `out.settlements` が non-empty** — `apply_funding(&[])` は empty を返すべきだ。トレースしてみる：`rate.0 == 0` の早期 return も empty vec を返すし、空の positions スライスはループを完全にスキップする。どちらのパスからも empty が出る。
-- **`clock.tick(...).expect(...)` の直後の `clock.last_settled_at()` で borrow checker エラー** — `tick` は `&mut self` を取り、その借用は式が終わるまで続く。結果を変数に束縛してその束縛を drop する前に `clock.last_settled_at()` を呼ぶと、借用がまだ生きている状態になる。対処は `let out = clock.tick(...); assert_eq!(clock.last_settled_at(), ...);` の形に分けること — `let` の末尾で借用が終わる。
+- **`clock.tick(...).expect(...)` の直後の `clock.last_settled_at()` で borrow checker エラー** — `tick` は `&mut self` を取り、その借用は式が終わるまで続く。結果を変数に束縛してその束縛を drop する前に `clock.last_settled_at()` を呼ぶと、借用がまだ生きている状態になる。対処は `let out = clock.tick(...); assert_eq!(clock.last_settled_at(), ...);` の形に分けること — `let` の末尾で借用が終わる。具体的にはこの 2 つの書き方が代表的:
+
+  ```rust
+  // ❌ メソッドチェーンの戻り値からフィールドを 1 行で取り出すパターン
+  //    一時オブジェクトの寿命が statement 末尾まで延び、その間 clock は
+  //    可変借用されたまま → 直後の clock.last_settled_at() が衝突。
+  let settlements = clock
+      .tick(now, mark, index, &positions)
+      .expect("tick fired")
+      .settlements;
+  let last = clock.last_settled_at(); // error[E0502]: cannot borrow `clock` as immutable
+                                       //               because it is also borrowed as mutable
+
+  // 🟢 戻り値をまず let で束縛 → mutable 借用はこの statement の `;` で終わる
+  //    → 次行で immutable 借用を取り直して OK
+  let out = clock
+      .tick(now, mark, index, &positions)
+      .expect("tick fired");
+  assert_eq!(clock.last_settled_at(), now); // OK: 借用がすでに切れている
+  let settlements = out.settlements;        // out は所有しているので自由に分解できる
+  ```
+
+  ポイントは「`&mut self` 借用は式の終了 (`;`) まで生き続ける」という Rust の規則だ。中間結果をフィールド抽出まで一気にチェーンすると、`expect()` が返す `FundingTick` がメソッドチェーンの一時オブジェクトとして statement 末尾まで生存し、その間ずっと `clock` の mutable 借用が残る。`let out = ...;` で一度切ることで、mutable 借用がそこで release され、続く `clock` の読み取りが許される。
 
 ## 設計の振り返り
 

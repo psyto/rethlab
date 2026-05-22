@@ -95,6 +95,40 @@ openhl チェーンが通常通り稼働し、毎時 funding を settle して�
 
 **openhl では Choice B を採る。** Catch-up ロジックが必要な人は、clock の*外側*でそれを構築する — 正しい歴史時刻のスナップショットを伴って `tick()` を繰り返し呼ぶ形だ。
 
+時間が大きく飛んだ直後に state machine がどう振る舞うか、Choice A と Choice B を 1 枚の障害シナリオで並べると差が一目で見える:
+
+```
+1_000_000 (Genesis、last_settled_at = 1_000_000)
+   │
+   ▼  +3,600 秒 (正常に 1 interval 経過)
+1_003_600 ── 【正常 Tick】成功 ──► last_settled_at = 1_003_600
+   │
+   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+   ░░  障害発生! 10 時間チェーンが停止             ░░
+   ░░  trader は position を閉じられない          ░░
+   ░░  mark が index 上に乖離し続けたとする        ░░
+   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+   │
+   ▼  +36,000 秒 (再起動後の最初のブロック)
+1_039_600 ── 【遅れてきた Tick】
+                  │
+                  ├─► ❌ Choice A (catch-up replay):
+                  │     現在のスナップショットを使って 10 回連続で settle を replay
+                  │     負けていた側 (longs) に毎時 cap 上限が 10 連発で襲いかかる
+                  │     trader は gap 中に position を閉じる手段がなかった
+                  │     →「動けなかった時間に対する retroactive な強制」になる
+                  │     last_settled_at の遷移は 1,003,600 → 1,007,200 → ... → 1,039,600
+                  │
+                  └─► 🟢 Choice B (openhl の採用、本実装):
+                        現在のスナップショットで 1 度だけ settle
+                        見逃した 9 interval 分の settlement は完全にスキップ
+                        clock は一気に `now = 1_039_600` まで advance
+                        →「funding revenue は失うが、trader にはフェア」
+                        last_settled_at = 1_003_600 ──► 1_039_600 ✨ (1 ステップ)
+```
+
+ポイントは「Choice B では `last_settled_at` の遷移が常に 1 ステップで完結する」ということだ。10 時間の gap だろうが 10 秒の gap だろうが、`tick()` は 1 回呼ばれて 1 回 advance するだけ。これが path-independence (gap のタイミングに結果が依存しないこと) の正体であり、テスト 1 本でこの不変条件全体を pin できる理由でもある。
+
 > 🛑 **考えてみよう。** スクロール前に — ノード再起動で 10 時間の funding を取り逃がした validator が、*現在*のスナップショットから 10 tick を replay して埋め合わせようとする場面を考える。**このアプローチで一番痛い目に遭うのはどの trader か？** ヒント：gap 中に負けていたのは誰か、を考えよ。
 
 （答え：**負けていた側が 10 倍の打撃を食らう。** 10 時間の gap の間、mark が index に対して上振れし続けたとしよう — 「現実」世界では longs が overpay していた状態だ。Choice A は*現在*の rate で settlement を 10 回 replay する、すべて longs から charge する形だ。Basis の負け側にすでに居た trader は、毎時 funding が適用されていたなら払っていたはずの 10 倍を支払う羽目になる。さらに悪いことに、gap 中は position を閉じることもできなかった（チェーン自体が止まっていたからだ）。catch-up は、trader が動けなかった時間に対して retroactive に charge しているように見える。**Choice B はこう言う：見逃した 10 回の支払いはスキップして、今から fresh に始めよう、と。Funding revenue には悪いが、trader にはフェアだ。**）
@@ -244,6 +278,8 @@ clock.tick(now, current_snapshot.mark, ...);
 ```
 
 難しいのは `fetch_snapshot_at(historical_timestamp)` の部分だ — 呼び出し側が過去時点での mark / index / positions の姿を知っている必要がある。**だからこそ catch-up は clock の内側にはない：clock が持っていない歴史 state を要求するからだ。** Application 層（chain database を持つ層）ならそれが可能だ。
+
+この `// !!! complex !!!` が指している「複雑さ」を clock の内側に取り込もうとすると、こういう破滅が起きる: clock 自身が **過去 N interval 分の (mark, index, position snapshot) をオンチェーンに永続化** しておく必要が出てくる。HL のように 1 時間 interval で 1 ヶ月分でも保持しようとすれば、`24 × 30 = 720` 個のスナップショットを **すべての market 分** だけ抱える state バルーンになる — おまけにそのストレージ自体が consensus state に組み込まれるので、ストレージレイアウトを変えるたびに network upgrade が必要になる。**「pure かつ軽量な state machine」という `openhl-funding` クレートの美点が一瞬で蒸発する。** 一方、application 層なら chain database をすでに持っているので、`fetch_snapshot_at(t)` は「block T の state root を引いて position を読む」程度のコストで済む。「primitive はミニマルに、policy は外側に」という責任分離が、ここでは具体的にストレージサイズの 720 倍差として現れている。
 
 **Q: `way_later` が overflow する前に、gap はどれだけ長くできるのか？**
 `u64::MAX` 秒はおよそ `5.8 × 10^11` 年 — 宇宙の熱的死のはるか先だ。Guard の `saturating_add` は `last_settled_at` が `u64::MAX` 近くでも安全に扱うが、実用上はその領域に届かない。**pathological なケースは guard の責任、現実のケースは設計の責任だ。**

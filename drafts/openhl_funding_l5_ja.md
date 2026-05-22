@@ -75,6 +75,16 @@ L4 のテストでは pathological な入力（例：`MarkPrice(u64::MAX)`）を
 
 ### Step 1: Overflow の taxonomy
 
+「整数が収まらなかった」の失敗モード 3 つを、validator から見た**最終的な帰結**で並べると、なぜ選択肢が 1 つしかないのかが一目で分かる:
+
+| モード | Rust 上の挙動 | validator/network への影響 | 判定 |
+| --- | --- | --- | --- |
+| **Panic** (`*` in debug) | スレッドが halt | validator 1 台が consensus から永久脱落、network は気づかず前進 | ❌ 自ら **fork off** する最悪ケース (liveness 喪失) |
+| **Wrap** (`*` in release) | silent に modulo wrap | コンパイラ最適化次第で**各 validator が別々の誤値**、または全員一致で**誤った値に合意** | ❌ 検出不可能な **chain fork** または検出不能な silent corruption |
+| **Saturate** (`saturating_mul`) | 型境界 (`i128::MAX` / `MIN`) に clamp | 全 validator が**同じ bounded 値**で合意し前進、経済的には capped settlement に降りる | ⭕ **liveness 維持** — consensus が許す唯一の選択肢 |
+
+下に各モードの細部を順に展開する。
+
 「整数が収まらなかった」の失敗モード 3 つ：
 
 #### Panic（debug build の `*`）
@@ -130,6 +140,30 @@ fn saturate_i128_to_i64(v: i128) -> i64 {
 | `v < i64::MIN` | `Err(...)` | `i64::MIN`（`v ≤ 0` だから） |
 
 **`unwrap_or` の中で符号チェックを行う理由は？** `try_from` は overflow がどちらの方向に起きたかを教えてくれず、「収まりません」としか言わないからだ。もし overflow に対して固定値（例：`i64::MAX`）を返すと、`i128::MIN` も `i64::MIN` ではなく `i64::MAX` に saturate されてしまい、符号が反転する。`if v > 0` のテストが、その方向情報を回復してくれる。
+
+ここで重要なのは、**`try_from` の `Err` は方向の情報を捨てているが、引数の `v` (i128) はクロージャから依然読めるまま生きている**という点だ。データフローで書くと:
+
+```
+                     ┌──── Ok(value)  ─────────────────────┐
+                     │     (v が i64 に収まる)              │
+[入力] v: i128 ──► try_from(v)                              │
+                     │     収まらない → 方向情報は潰される   │
+                     └──── Err(_)                           │
+                              │                             │
+                              │  ★ ここで unwrap_or の closure 内から   │
+                              │     v (元の i128) を再度参照できる    │
+                              ▼                             │
+                       if v > 0  ──► i64::MAX  ─────────────┤
+                       else      ──► i64::MIN  ─────────────┤
+                                                            ▼
+                                                       [出力] i64 (符号が保たれた)
+
+例:  v = i128::MAX  → try_from = Err → v > 0 で true  → i64::MAX  ✅
+     v = i128::MIN  → try_from = Err → v > 0 で false → i64::MIN  ✅ (固定値だと符号が flip して大事故)
+     v = 0          → try_from = Ok(0) → closure 不発火    → 0
+```
+
+「`Err` は値の中身を捨てるが、元の引数は scope に残っている」が `unwrap_or` という API の存在意義そのものだ。これを `unwrap_or(i64::MAX)` のような単純な fallback にすると、`i128::MIN` のような「絶対値が最大の負の数」が**正の `i64::MAX` に化ける** — premium の符号反転バグが consensus に乗ってしまう。クロージャ版は「`v` を覗き見して方向を復元する 1 行」を挟むことで、その事故を物理的に塞いでいる。
 
 > 🛑 **考えてみよう。** `saturate_i128_to_i64(0)` は何を返すか。
 
@@ -209,6 +243,7 @@ mod tests {
 
 proptest 固有の要素は以下：
 
+- **`signum()` について(初出メモ):** `i64::signum()` は値の符号を `-1` / `0` / `+1` のいずれかで返す標準ライブラリのメソッド。負値で `-1`、ゼロで `0`、正値で `+1`。`a.0.signum() == -b.0.signum()` は「a と b の符号が正負で逆 (`+1` と `-1` のペアになる)」という命題に変換される — 整数除算の丸めで magnitude がぶれても、符号だけは厳密に antisymmetric であることを property にしている。
 - **`proptest! { ... }`** — テスト関数をラップするマクロ。このブロック内では、`#[test]` 関数が generator 付きの property test として扱われる。
 - **`mark in 1u64..1_000_000`** — **戦略**だ。`mark` は `[1, 1_000_000)` の範囲からサンプルされる。デフォルトは test run あたり 256 ケース（つまり ~256 個のランダムな `(mark, index)` ペア）。
 - **`prop_assert_eq!` と `prop_assert!`** — proptest のアサーションマクロだ。単一ケースとして見れば `assert_eq!` / `assert!` と同等だが、proptest は失敗時に入力を shrink して*最小*の失敗ケースを探すため、専用のマクロが必要になる。

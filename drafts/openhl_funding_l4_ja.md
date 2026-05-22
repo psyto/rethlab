@@ -131,9 +131,31 @@ pub fn compute_premium(mark: MarkPrice, index: IndexPrice) -> Premium {
 }
 ```
 
+この関数の中で「型がどこで widen し、どこで saturate し、どこで narrow に戻るか」を 1 枚で見ると、ロジックの幹がそのまま追える:
+
+```
+  MarkPrice(u64) ──► i128 ──┐
+                            ▼
+  IndexPrice(u64) ──► i128 ─► [ - 引き算 ] ──► diff (i128: 符号が安全に残る)
+                                                  │
+                                                  ▼
+  RATE_SCALE(i64) ──► i128 ────────────────► [ saturating_mul ] ──► scaled (i128, overflow を clamp)
+                                                                       │
+                                                                       ▼
+  IndexPrice(u64) ──► i128 ──────────────────────────────────────► [ / 除算 ]  (※ index == 0 は事前に弾く)
+                                                                       │
+                                                                       ▼
+                                                                    premium (i128)
+                                                                       │
+                                                                       ▼
+  Premium(pub i64) ◄──────────────────────────────────── [ saturate_i128_to_i64 ]
+```
+
+3 つの面白さがこの図には焼き込まれている: (a) 入力 (`MarkPrice` / `IndexPrice` / `RATE_SCALE`) と出力 (`Premium`) は narrow な型なのに、中間値だけ意図的に `i128` に widen している、(b) overflow は `saturating_mul` と最後の `saturate_i128_to_i64` の **2 箇所**で吸収していて、間の `diff` には saturation が不要 (`i128` の幅は引き算には十分すぎる)、(c) 「掛けてから割る」の順序が、`scaled` というラベルの位置として現れている。
+
 Body は 10 行、動く部分は 4 つ：
 
-1. **`index == 0` での早期 return。** Zero index は「oracle がまだ価格を配信していない」（boot state）か、「アセットに spot reference がない」のどちらかを意味する。**どちらのケースでも zero funding を返すべきだ** — index がない以上、意味のある `(mark - index)` を計算する余地がない。`Premium(0)` を返すのは graceful degradation だ。エラーにしてしまうと bridge を経由してトランザクションレベルの失敗として伝播し、無関係な処理までブロックしてしまう — 一時的な oracle 問題への対応としては誤りだ。
+1. **`index == 0` での早期 return。** Zero index は「oracle がまだ価格を配信していない」（boot state）か、「アセットに spot reference がない」のどちらかを意味する。**どちらのケースでも zero funding を返すべきだ** — index がない以上、意味のある `(mark - index)` を計算する余地がない。`Premium(0)` を返すのは graceful degradation だ。エラーにしてしまうと bridge を経由してトランザクションレベルの失敗として伝播し、無関係な処理までブロックしてしまう — 一時的な oracle 問題への対応としては誤りだ。**この早期 return は同時に「ゼロ除算 panic」も未然に防いでいる**: 直後の `scaled / i128::from(index.0)` で分母 `0` を踏むパスを物理的に閉じる役割を兼ねていて、graceful degradation と「絶対に panic させない」が同じ 2 行で両立している。
 
 2. **`i128::from(mark.0) - i128::from(index.0)`。** 両 operand を引き算の*前*に `i128` に upcast する。**`u64` 同士の引き算は `mark < index` で underflow する** — 結果が負数になるのではなく、`u64::MAX` 近くまでラップしてしまう。符号付き i128 に upcast することで、引き算が代数的に正しく振る舞うようになる。
 
@@ -297,7 +319,7 @@ test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 1. **`index == 0` のときは `Premium(0)` を返す、エラーにはしない。** Oracle が使えないときの graceful degradation だ。エラーにすると bridge を経由してトランザクション失敗として伝播し、無関係な payload の処理までブロックしてしまう。「rate を駆動する情報がない」状態への正しい答えはゼロだ。
 
-2. **中間値は `i128` を使い、`u64` は絶対に使わない。** 引き算は負になりうるし、乗算は `u64::MAX` を超えうる。どちらの演算でも符号付き かつ より wide な算術が必要だ。**整数幅は入力の範囲ではなく、*中間値*の範囲を見て選ぶ。**
+2. **中間値は `i128` を使い、`u64` は絶対に使わない。** 引き算は負になりうるし、乗算は `u64::MAX` を超えうる。どちらの演算でも符号付きかつより wide な算術が必要だ。**整数幅は入力の範囲ではなく、*中間値*の範囲を見て選ぶ。**
 
 3. **乗算は `*` ではなく `saturating_mul` を使う。** 乗算中の overflow は panic（debug）か wrap（release）になる。どちらも saturation より悪い：panic = halt 経由の chain fork、wrap = 誤った値経由の chain fork だ。**Consensus 中核の数学で bounded behavior を得る唯一の選択肢が saturation だ。**
 

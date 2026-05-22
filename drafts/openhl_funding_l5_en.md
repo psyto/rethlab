@@ -75,6 +75,16 @@ No production code changes.
 
 ### Step 1: The overflow taxonomy
 
+Lining the three failure modes up by their **final consequence** at the validator/network level makes it obvious why only one option survives:
+
+| Mode | Rust behavior | Validator / network impact | Verdict |
+| --- | --- | --- | --- |
+| **Panic** (`*` in debug) | thread halts | one validator falls off consensus permanently; network advances without it | ❌ self-inflicted **fork-off** — liveness lost |
+| **Wrap** (`*` in release) | silent modulo wrap | compiler-optimization-dependent → either **different wrong values across validators** *or* **all validators agree on a wrong value** | ❌ undetectable **chain fork** or silent corruption |
+| **Saturate** (`saturating_mul`) | clamps to type boundary (`i128::MAX` / `MIN`) | every validator agrees on the same **bounded value** and advances; economically, the system settles at a capped rate | ⭕ **liveness preserved** — the only consensus-safe option |
+
+Each row is expanded below.
+
 Three failure modes for "the integer didn't fit":
 
 #### Panic (debug builds with `*`)
@@ -130,6 +140,30 @@ Three input regimes:
 | `v < i64::MIN` | `Err(...)` | `i64::MIN` (since `v ≤ 0`) |
 
 **Why the sign check inside `unwrap_or`?** Because `try_from` doesn't tell us which direction the overflow went — it just says "doesn't fit." If we returned a fixed value (say `i64::MAX`) on every overflow, then `i128::MIN` would saturate to `i64::MAX` instead of `i64::MIN` — the sign would flip. The `if v > 0` test recovers the direction.
+
+The key observation is that **`try_from`'s `Err` drops the direction information, but the original argument `v` (i128) is still in scope and readable from the closure**. The data flow:
+
+```
+                     ┌──── Ok(value)  ─────────────────────┐
+                     │     (v fits in i64)                 │
+[input] v: i128 ──► try_from(v)                             │
+                     │     doesn't fit → direction discarded │
+                     └──── Err(_)                           │
+                              │                             │
+                              │  ★ inside unwrap_or's closure, the original   │
+                              │     v (i128) is still visible — peek at it    │
+                              ▼                             │
+                       if v > 0  ──► i64::MAX  ─────────────┤
+                       else      ──► i64::MIN  ─────────────┤
+                                                            ▼
+                                                       [output] i64 (sign preserved)
+
+example:  v = i128::MAX  → try_from = Err → v > 0 is true  → i64::MAX  ✅
+          v = i128::MIN  → try_from = Err → v > 0 is false → i64::MIN  ✅ (a fixed fallback would flip this to MAX — disaster)
+          v = 0          → try_from = Ok(0) → closure doesn't fire    → 0
+```
+
+"`Err` drops the value but the original argument is still in scope" is the whole point of `unwrap_or` taking a closure. A naive `unwrap_or(i64::MAX)` would map `i128::MIN` — the most-negative possible intermediate — to a **positive** `i64::MAX`, silently flipping the premium's sign onto consensus. The closure version inserts one line — "peek at `v` to recover direction" — that physically closes that hole.
 
 > 🛑 **Predict.** What does `saturate_i128_to_i64(0)` return?
 
@@ -209,6 +243,7 @@ After the 4 unit tests, before the closing `}` of the test module, add:
 
 Several proptest-specific elements:
 
+- **About `signum()` (first appearance):** `i64::signum()` is the standard-library method that reports the sign of a value as `-1` / `0` / `+1`. Negative → `-1`, zero → `0`, positive → `+1`. The assertion `a.0.signum() == -b.0.signum()` therefore reads "the signs of `a` and `b` are opposite (one is `+1`, the other `-1`)" — the magnitude can drift under integer-division rounding, but the **sign must be strictly antisymmetric**. That's the invariant the proptest is locking in.
 - **`proptest! { ... }`** — the macro that wraps the test function. Inside this block, `#[test]` functions get treated as property tests with generators.
 - **`mark in 1u64..1_000_000`** — the **strategy**. `mark` will be sampled from values in `[1, 1_000_000)`. Default is 256 cases per test run (~256 random `(mark, index)` pairs).
 - **`prop_assert_eq!` and `prop_assert!`** — proptest's assertion macros. Same effect as `assert_eq!` / `assert!` on a single case, but proptest needs its own macros to shrink the input on failure (find the *minimal* failing case).

@@ -145,7 +145,19 @@ Then `saturate_i128_to_i64(delta_scaled)` clips back to i64 (Notional's inner ty
 
 ### Step 2: Walk through the sign convention
 
-The sign flip is the most subtle part of the function. Let's trace it through both directions.
+The sign flip is the most subtle part of the function. Across the four regimes (Long/Short × Positive/Negative rate), the leading unary `-` is what collapses every case onto `Notional`'s account-centric convention. Lining them up as a matrix shows the whole sign contract sitting on one character:
+
+```
+【 Positive rate (rate > 0): longs pay 】
+  Long  (+size) × (+rate) ──► (+ product) ──► [ - ] ──► Notional(negative) ──► pays    ⭕
+  Short (-size) × (+rate) ──► (- product) ──► [ - ] ──► Notional(positive) ──► receives ⭕
+
+【 Negative rate (rate < 0): shorts pay 】
+  Long  (+size) × (-rate) ──► (- product) ──► [ - ] ──► Notional(positive) ──► receives ⭕
+  Short (-size) × (-rate) ──► (+ product) ──► [ - ] ──► Notional(negative) ──► pays    ⭕
+```
+
+No matter the sign of the raw `size × rate` product (market-centric: "longs pay → positive product"), one pass through the leading `-` lands all four regimes squarely on `Notional`'s convention (positive = the account receives, negative = the account pays). **"One character carries one design decision" — this is what that means in practice.** Below we trace the four cases with concrete numbers.
 
 **Positive rate, long position:**
 - `size.0 = +100`, `mark.0 = 100`, `rate.0 = 1_000_000` (0.1%)
@@ -167,6 +179,13 @@ The sign flip is the most subtle part of the function. Let's trace it through bo
 - `delta_unscaled = 10_000 × -1_000_000 = -10_000_000_000`
 - `delta_scaled = -(-10_000_000_000) / 1_000_000_000 = 10`
 - `Notional(+10)` → "long receives 10" ✓
+
+**Negative rate, short position:**
+- `size.0 = -50`, `mark.0 = 100`, `rate.0 = -1_000_000`
+- `notional = -50 × 100 = -5_000`
+- `delta_unscaled = -5_000 × -1_000_000 = 5_000_000_000` (positive i128)
+- `delta_scaled = -5_000_000_000 / 1_000_000_000 = -5`
+- `Notional(-5)` → "short pays 5" ✓
 
 **The single `-` in front of `delta_unscaled` handles all four cases.** Without it, longs would receive when they should pay, and vice versa. **One character; one design decision.**
 
@@ -270,6 +289,8 @@ The proptest exercises this:
 (Answer: **At very large `size` or `mark`, the i128 intermediate can saturate.** When `i128::saturating_mul` clips, the round-trip computation `(size * mark * rate / RATE_SCALE)` loses information — the long's saturated value won't be exactly the negative of the short's saturated value, breaking the zero-sum property. **The 1M bound keeps inputs in the regime where saturation doesn't kick in.** A real production proptest could be wider but would need to add tolerance for saturation; we chose the simpler "no saturation regime" approach.)
 
 > 🛑 **Anti-fluency.** "Couldn't we test `sum.abs() < 1` to allow for integer-division rounding instead of `== 0`?" **Within the input range we chose, the property holds exactly.** Because `size_long == -size_short`, the i128 products are exact negatives of each other before the divide; the divide by `RATE_SCALE` doesn't change that (integer division rounds toward zero, and `-x / d == -(x / d)` for any signed `x` and positive `d`). **We get exact zero-sum within range; no tolerance needed.**
+>
+> "But integer division truncates the remainder — wouldn't the sum drift by `+1` or `-1`?" — no, because the long-side and short-side `i128` products form a **perfectly mirrored pair `(P, -P)`**, identical in magnitude and opposite in sign. For example, if the products are `(12_345, -12_345)`, then `12_345 / 1_000_000_000 = 0` remainder `12_345`, and `-12_345 / 1_000_000_000 = 0` remainder `-12_345`. Both quotients are `0`, and the truncated remainders are also **equal in magnitude and opposite in sign** — they cancel exactly. As long as the long-side and short-side inputs are strictly symmetric, the identity `-x / d == -(x / d)` holds pointwise, and the sum's zero-sum survives without tolerance.
 
 ### Step 5: Update `lib.rs`
 

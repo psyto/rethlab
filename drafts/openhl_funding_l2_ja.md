@@ -120,7 +120,33 @@ Doc にもこれを明記してある：*「zero or negative price would be a sy
 
 `IndexPrice` は構造的には `MarkPrice` と同一だ。同じフィールド、同じ derive、同じ範囲。**違いは純粋に型システム上のものでしかない。** 関数シグネチャ `compute_premium(mark: MarkPrice, index: IndexPrice) -> Premium` は、`compute_premium(IndexPrice(100), MarkPrice(100))` をコンパイル時に拒否する。Newtype なしだと両引数とも `u64` で、引数順のバグが静かに反転した premium を生んでしまう。
 
-**これこそが newtype パターンの存在意義そのものだ。** 型あたり ~5 行のコストで、*production に出るまで見えなかったはずのバグクラス*を防げる。
+`u64` (raw) と newtype で起きる挙動の差を並べると違いが鮮明になる:
+
+```rust
+// 🔴 raw u64 の場合 — 「signature 上は両方 u64」
+fn compute_premium(mark: u64, index: u64) -> i64 { /* ... */ }
+
+let mark  = 100_u64;
+let index = 105_u64;
+
+compute_premium(mark, index);   // ✨ 意図通り (mark, index)
+compute_premium(index, mark);   // 🔴 引数を取り違えても COMPILE OK
+                                //    Premium の符号が反転して production まで届く
+                                //    → 全 long が受け取るべきタイミングで支払う
+
+// 🟢 newtype の場合 — 「型システムが意図を覚えている」
+fn compute_premium(mark: MarkPrice, index: IndexPrice) -> Premium { /* ... */ }
+
+let mark  = MarkPrice(100);
+let index = IndexPrice(105);
+
+compute_premium(mark, index);   // ✨ OK
+compute_premium(index, mark);   // ❌ COMPILE ERROR:
+                                //    expected `MarkPrice`, found `IndexPrice`
+                                //    ↑ Rust が手元で即座に拒否する
+```
+
+差は「実行時の挙動」ではなく「ビルドが通るかどうか」。`u64` 版は production に届くまで気付けないバグを、newtype はキーボードを叩いている数秒のうちに見つけてしまう。**これこそが newtype パターンの存在意義そのものだ。** 型あたり ~5 行のコストで、*production に出るまで見えなかったはずのバグクラス*を防げる。
 
 > 🛑 **やりがちな勘違い。** 「型エイリアスでよくない？ `type MarkPrice = u64; type IndexPrice = u64;`」 **だめだ — 型エイリアスは新しい型を作らない**、既存の型をリネームするだけだ。`type MarkPrice = u64` と `type IndexPrice = u64` はどちらも `u64` のままで、`compute_premium(some_index, some_mark)` は静かにコンパイルが通る。**型エイリアスは documentation のためのものであって、安全性のためのものではない。** 可読性が落ちる長いジェネリック型（`type FillSink = Arc<Mutex<Vec<Fill>>>` など）に使うもので、意味的に異なる値を区別するためのものではない。
 
@@ -135,6 +161,24 @@ Doc にはこう書いてある：*「Sign convention: positive when mark > inde
 `Notional` は、ある settlement における単一アカウントの quote balance の変化量を表す。符号規約は*正 = アカウントの受取、負 = アカウントの支払い*。だから正の funding rate のもとでは、long position は `Notional(負)` を、short position は `Notional(正)` を生む。
 
 **符号はアカウント視点**であって、市場視点ではない。これは bridge integration レイヤー（course 10）で効いてくる — `Notional(-12)` がそのまま「このアカウントの quote balance から 12 を引く」になる。市場中心の符号にしていたら、bridge が適用前に符号を反転させる必要が出てくる。
+
+(Premium の符号) × (ポジションの向き) → どちらのアカウントが Notional のどの符号を持つかの対応を表で見ると:
+
+```
+┌─────────────────────────────┬───────────────────┬───────────────────┐
+│ 市場の状態                  │ Long ポジション   │ Short ポジション  │
+├─────────────────────────────┼───────────────────┼───────────────────┤
+│ Mark > Index                │ Notional(負)      │ Notional(正)      │
+│ (Premium が正、              │ → 支払う          │ → 受け取る        │
+│  longs が overpay 中)        │                   │                   │
+├─────────────────────────────┼───────────────────┼───────────────────┤
+│ Mark < Index                │ Notional(正)      │ Notional(負)      │
+│ (Premium が負、              │ → 受け取る        │ → 支払う          │
+│  shorts が overpay 中)       │                   │                   │
+└─────────────────────────────┴───────────────────┴───────────────────┘
+```
+
+読み方は単純: **`Notional` の符号 = 「そのアカウントの quote balance に足すべき差分」**。market の方向ではなく、bridge がそのまま `balance += notional.0` で適用できる視点で符号を決めている。L7 の `apply_funding` が、まさにこの表の 4 つのセルを 4 行のコードで実装する。
 
 ### Step 2: `lib.rs` re-export を更新
 
@@ -225,6 +269,9 @@ git checkout main
 
 **Q: これらの型に `Default` を付ける理由は？ デフォルト値がいつ役に立つのか？**
 `Default::default()` は `MarkPrice(0)` や `Premium(0)` などを返す。テストの fixture で便利だ：`let mark: MarkPrice = Default::default();` は `MarkPrice(0)` より短く書ける。これらの型を内部に持つ struct で `#[derive(Default)]` も可能になる。**安価な derive で、挙動上のコストはない。**
+
+**Q: `Hash` / `Ord` / `PartialOrd` まで全部 derive している理由は？**
+将来これらの型がコレクションのキーやソートキーとして登場する場面を、あらかじめ解禁しておくためだ。L3 で導入する `Position { account, size }` や、L7 で `apply_funding` が返す settlements の Vec — どこかで `HashMap<AccountId, MarkPrice>` (snapshot 用) や `BTreeMap<Premium, Vec<Settlement>>` (bucket 用) や `settlements.sort_by_key(|s| s.delta)` (test の決定的ソート用) が登場した瞬間に必要になる trait をすべて先に貼っておくと、後から追加する手間がゼロになる。**プリミティブをラップする newtype の trait derive は副作用がない (内部の `i64`/`u64` の振る舞いを継承するだけ) ので、`Copy + Default + PartialEq + Eq + PartialOrd + Ord + Hash + Debug` の 1 行を全 newtype に貼っておくのが慣習だ。** 後から `#[derive(Hash)]` を追加するために型定義を 1 個ずつ書き換える未来を、いま 1 行で買っている。
 
 **Q: `Premium` と `Notional` に `Add` / `Sub` / `Mul` を実装すべきでは？**
 誘惑的ではある — `Premium(5) + Premium(3) == Premium(8)` は綺麗だ。だが Stage 8b では実装しないことを選んだ：`compute.rs` の数学演算は overflow 対策で `i128` への upcast を要求する。`Premium` に `Add` を実装すると、呼び出し側が i128 ダンスなしで使ってしまう誘惑が生まれてしまう。**この crate の API 契約は「内部フィールドを取り出して明示的に i128 へ upcast してから演算する」だ。** 型に演算オペレータがないほうが、その契約を強制しやすい。

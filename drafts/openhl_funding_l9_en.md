@@ -152,6 +152,34 @@ After `premium_drives_settlement_signs`:
 
 **The clock doesn't advance on a gated call.** That's the second part of the interval-gating invariant: failure leaves state unchanged. The test doesn't explicitly assert `last_settled_at` after tick 2, but the success of tick 3 at exactly `1_003_600 + 3600` implies it.)
 
+Laying the three calls out on a timeline makes the "what moves vs. what stays" picture (= gate re-engagement) immediate:
+
+```
+timeline (seconds)
+1_000_000 ── Genesis (FundingClock::new, last_settled_at = 1_000_000)
+    │
+    │   +3,600 s (= exactly one interval)
+    ▼
+1_003_600 ── Tick 1: success ✨
+              now ≥ last_settled_at + interval → fire
+              returns Some(FundingTick { settled_at: 1_003_600, ... })
+              ──► last_settled_at reset to 1_003_600
+    │
+    │   +3,599 s (still one second short)
+    ▼
+1_007_199 ── Tick 2: rejected 🛑
+              now < last_settled_at + interval (1_007_200) → guarded → None
+              ──► last_settled_at stays at 1_003_600 (state untouched)
+    │
+    │   +1 s more (one full interval reached)
+    ▼
+1_007_200 ── Tick 3: success ✨
+              now ≥ last_settled_at + interval again → fire
+              ──► last_settled_at reset to 1_007_200
+```
+
+The load-bearing point of this test is that **Tick 1's success does not permanently unlock the clock** — Tick 3 only fires because another full interval has elapsed since Tick 1. That "gate closes again" invariant only becomes observable with three calls in sequence.
+
 ### Step 3: Add `capped_rate_when_premium_extreme`
 
 After `second_tick_requires_another_full_interval`:
@@ -177,6 +205,25 @@ After `second_tick_requires_another_full_interval`:
 2. `compute_rate(Premium(1_000_000_000), {divisor=8, cap=40M})` → raw = `1_000_000_000 / 8 = 125_000_000`. After clamp to `±40_000_000` → `FundingRate(40_000_000)`.
 
 **Why does this test exist if `compute_rate`'s tests already cover clamping?** Because we need to know `tick()` doesn't unwrap, fiddle with, or bypass the rate before applying it. **The cap surfaces through the clock unchanged.**
+
+What this test really protects is the invariant that the **type-safe relay** assembled across L4–L6 stays lossless inside `tick()`. Drawing the data path:
+
+```
+[MarkPrice(200), IndexPrice(100)] ──► compute_premium ──► Premium(1_000_000_000)
+                                                                │
+                                                                ▼
+        FundingParams { divisor: 8, cap: 4e7 } ──► compute_rate ──► FundingRate(40_000_000)
+                                                                              │
+                                                                ※ does this pass through
+                                                                  losslessly?
+                                                                              ▼
+                                            FundingTick { rate: FundingRate(40_000_000), .. }
+                                                                              │
+                                                                              ▼
+                                                       out.rate == FundingRate(40_000_000) ✨
+```
+
+The actual assertion is "`compute_rate`'s return value is forwarded into `FundingTick`'s `rate` field byte-for-byte." If `tick()` accidentally stripped the newtype via `.0`, recomputed against different `FundingParams`, or rebuilt `FundingRate` from a derived value, the result here would diverge from `40_000_000` and the test would catch it immediately. **The test proves the type relay is intact by actually pushing a value through it.**
 
 A subtle wiring bug — say, `compute_rate(premium, FundingParams { rate_cap: FundingRate(0), ..params })` — would break this test (zero cap → zero rate → no settlements at all). **The composition test catches what unit tests can't.**
 

@@ -95,6 +95,40 @@ Apply funding *once* at the current snapshot, then advance `last_settled_at` to 
 
 **openhl chooses Choice B.** The catch-up logic, if anyone needs it, lives *outside* the clock — built on repeated `tick()` calls with snapshots at the right historical times.
 
+What the state machine does immediately after a large time jump makes Choice A vs Choice B easy to see side by side on one outage scenario:
+
+```
+1_000_000 (Genesis, last_settled_at = 1_000_000)
+   │
+   ▼  +3,600 s (one healthy interval)
+1_003_600 ── 【Normal tick】 success ──► last_settled_at = 1_003_600
+   │
+   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+   ░░  Outage! Chain halts for 10 hours          ░░
+   ░░  Traders can't close their positions       ░░
+   ░░  Suppose mark drifts above index throughout░░
+   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+   │
+   ▼  +36,000 s (first block after restart)
+1_039_600 ── 【Late tick】
+                  │
+                  ├─► ❌ Choice A (catch-up replay):
+                  │     replay settlement 10 times against the current snapshot
+                  │     the losing side (longs) eats 10 consecutive cap-rate hits
+                  │     traders had no way to close during the gap
+                  │     → retroactive coercion for time they had no agency
+                  │     last_settled_at: 1,003,600 → 1,007,200 → ... → 1,039,600
+                  │
+                  └─► 🟢 Choice B (openhl, this implementation):
+                        settle once against the current snapshot
+                        the 9 missed intervals are skipped entirely
+                        the clock jumps straight to `now = 1_039_600`
+                        → loses funding revenue, but fair to traders
+                        last_settled_at: 1_003_600 ──► 1_039_600 ✨ (one step)
+```
+
+The key thing this picture pins down is that **under Choice B, `last_settled_at` always advances in a single step**. Ten-hour gap or ten-second gap, `tick()` is called once and advances once. That's the actual content of path-independence (the outcome doesn't depend on gap timing), and it's why a *single* test can pin the whole invariant.
+
 > 🛑 **Predict.** Before scrolling: a validator that missed 10 hours of funding due to a node reboot tries to make up for lost time by replaying 10 ticks from the *current* snapshot. **Which kind of trader gets hurt the most by this approach?** Hint: think about who's been losing during the gap.
 
 (Answer: **The losing side gets pummeled 10x.** During a 10-hour gap, suppose mark drifted high relative to index — longs have been overpaying in the "real" world. Choice A replays 10 settlements at the *current* rate, all charging longs. The trader who was already on the losing side of the basis pays 10x what they would have if funding had been applied hourly. Worse, they couldn't have closed their position during the gap (the chain was paused); the catch-up appears to charge them retroactively for time they had no agency. **Choice B says: skip the 10 missed payments and start fresh now. Bad for funding revenue; fair to traders.**)
@@ -244,6 +278,8 @@ clock.tick(now, current_snapshot.mark, ...);
 ```
 
 The hard part is `fetch_snapshot_at(historical_timestamp)` — the caller has to know what mark/index/positions looked like at past times. **That's why catch-up isn't in the clock: it requires historical state the clock doesn't have.** The application layer (which has the chain database) can do it.
+
+The "complex !!!" comment is pointing at exactly the disaster that would unfold if you tried to pull that complexity *inside* the clock: the clock would have to **persist the last N intervals' worth of `(mark, index, position snapshot)` tuples on-chain**. For HL's 1-hour cadence, keeping even one month means `24 × 30 = 720` snapshots per market, multiplied across every market the chain trades — and since that storage is now consensus state, every layout change requires a network upgrade. **The "pure, minimal state machine" virtue of `openhl-funding` evaporates instantly.** The application layer, by contrast, already maintains the chain database, so `fetch_snapshot_at(t)` is roughly "look up the state root at block T and read the positions." The "primitive minimal, policy outside" separation here shows up concretely as a 720× difference in storage footprint.
 
 **Q: How long can the gap be before `way_later` overflows?**
 `u64::MAX` seconds is roughly `5.8 × 10^11` years — well past heat death. The `saturating_add` in the guard handles `last_settled_at` near `u64::MAX`, but in practice we don't reach that regime. **The pathological case is the guard's responsibility; the realistic case is the design's.**

@@ -25,7 +25,7 @@ Concepts you'll grasp in this lesson:
 
 - **Same shape, different role = separate types** — `FundingRate` and `Premium` are both `i64` scaled by `RATE_SCALE`, but a premium is the raw dislocation and a rate is the post-divisor-post-clamp output. Keeping them distinct enforces the pipeline at the type level: you can't `apply_funding` a premium that hasn't been through `compute_rate`.
 - **Single signed integer for direction + magnitude** — `PositionSize(i64)` encodes long / short / flat in one field instead of an enum + magnitude pair. Smaller, faster, simpler math; the sign convention lives in the doc comment.
-- **Snapshot types vs stateful entities** — `Position` carries only `(account, size)`, deliberately omitting entry price, PnL, history. The owning layer keeps wide state; the funding crate processes narrow snapshots. The doc comment makes the ownership contract explicit.
+- **Snapshot types vs stateful entities** — `Position` carries only `(account, size)`, deliberately omitting entry price, PnL, history. The **owning layer** (the upstream layer that owns and mutates positions — typically a vault or clearing layer) keeps wide state; the funding crate processes narrow snapshots. The doc comment makes the ownership contract explicit. We'll use "owning layer" consistently in that sense throughout this lesson.
 - **Parameter-object pattern** — bundling `interval_secs`, `rate_cap`, `divisor` into `FundingParams` preserves call-site stability when config grows. Positional args break every call site at every new parameter; a struct adds fields without touching signatures.
 - **HL-default arithmetic decoded** — `divisor: 8` means "premium / 8 per tick"; with 24 hourly intervals and a 4% cap, the worst-case daily payment is bounded by the cap (not the divisor). The cap is the insurance policy against oracle dislocations.
 
@@ -222,6 +222,26 @@ Three fields, all `pub` for the same reason as the newtypes — `compute_rate` n
 - **`rate_cap: FundingRate(40_000_000)`** — 4%/interval. With 24 intervals/day this is `±96%/day` worst case; with the divisor below, effective worst is much lower. The cap is the *insurance policy* against oracle hijinks: an attacker who can move the index 50% transiently can't extract 50% from the longs in one tick.
 - **`divisor: 8`** — 8 settlements per day (per HL's spec), but applied across **24** 1-hour intervals. The arithmetic in the doc comment is the load-bearing nuance: `(premium / 8) × 24 hours = 3 × premium/day`. **HL's caps are stricter than the divisor alone implies** — the divisor sets the cadence, but the cap binds the worst-case payment.
 
+The asymmetry between "**divisor = 8**" and "**applied 24 times/day**" is the thing to internalize. Laying it out side by side:
+
+```
+              Semantic intent                  What actually happens
+              ─────────────────                ─────────────────────
+divisor = 8 = "split the day into 8"           But we settle/apply every hour (24 / day)
+                ↓                                ↓
+If those two had matched:                       Actual per-day accumulation:
+  premium / 8 × 8 = premium                     premium / 8 × 24 = 3 × premium
+  → one premium's worth of funding paid daily   → 3× the "targeted daily" amount
+
+Then the cap (4%/interval) steps in:
+  In normal markets the post-divisor rate is ≪ 4%, so the cap never bites,
+  and effective daily ≈ 3 × premium.
+  In pathological markets (oracle outage etc.), each hour clamps at 4%, so the
+  worst case is bounded at 4% × 24 = 96%/day.
+```
+
+So HL runs a two-stage, asymmetric design: **the divisor lifts the typical daily payment to ~3 × premium, and the cap chops worst-case daily down to 96%**. The cap supplies a *tighter* absolute ceiling than the divisor's "8 settlements/day" semantics would naively predict.
+
 > 🛑 **Predict.** What's the effective worst-case daily payment with the HL defaults? Hint: `rate_cap = 4%/hour`, intervals per day = 24, but the divisor is 8.
 
 (Answer: **`±96%/day` if every interval hits the cap.** The cap of 4% per *interval* applies regardless of the divisor. The divisor only affects the per-interval rate *before* clamping. So if the premium is so large that the post-divisor rate exceeds 4%, every hour clamps to 4%, and 24 hourly clamps × 4% = 96% per day. In practice, premiums that drive sustained 4%/interval clamping are pathological — HL has historically seen them only during oracle outages. **The cap is the floor on insurance cost, not the typical funding magnitude.**)
@@ -323,6 +343,33 @@ Tempting — reject `interval_secs == 0` (would cause division-by-zero or perpet
 
 **Q: Are the `Position` and `Settlement` types redundant — they both have `account` + a value field?**
 They look similar but they're at different lifecycle stages. `Position` is an *input* to `apply_funding`; `Settlement` is its *output*. The owning layer hands you `Position`s and receives `Settlement`s back. **Type-level distinction prevents accidentally re-applying settlements as if they were positions.**
+
+## The data pipeline cutting through Module 1
+
+The 9 types defined so far are exactly the **vocabulary** of the pure-compute pipeline that Module 2 (L4-L7) will assemble. The whole arrangement on one page:
+
+```
+[Inputs (snapshots)]                [Pure compute (Module 2)]              [Outputs]
+
+  MarkPrice  ──┐
+               ├─► (L4: compute_premium) ─► Premium ──┐
+  IndexPrice ──┘                                       │
+                                                       ▼
+  FundingParams ───────────────────────────► (L6: compute_rate)
+   { rate_cap, divisor, … }                            │
+                                                       ▼
+                                                  FundingRate ──┐
+                                                                ├─► (L7: apply_funding) ──► Vec<Settlement>
+  Position (snapshot)             ──────────────────────────────┘                            { account, delta: Notional }
+   { account, size: PositionSize }
+```
+
+Three properties this picture enforces at the type level:
+1. **`Premium` and `FundingRate` share `i64` but are different types** — handing a `Premium` straight to `apply_funding` without going through `compute_rate` is a **compile error**. The pipeline order is policed by the type system.
+2. **Inputs (`Position`) and outputs (`Settlement`) are separate types** — the owning layer can't accidentally feed a `Settlement` back as if it were a position; the types block that path.
+3. **`FundingParams` runs alongside as a side-branch** — it's a config argument referenced by each settlement computation, not a value on the main pipeline. Adding `min_settlement_threshold` later doesn't grow the number of arrows.
+
+Module 2 fills in the three functions in this diagram, in order. Every argument and return value will use only the types defined in L1-L3.
 
 ## Module 1 milestone — what you've built
 

@@ -25,7 +25,7 @@
 
 - **同じ形、別の役割 = 別の型** — `FundingRate` も `Premium` もどちらも `RATE_SCALE` スケールの `i64` だが、premium は「生の dislocation」、rate は「divisor + clamp を通した後の出力」だ。別の型にしておけば pipeline を型レベルで強制できる — `compute_rate` を通っていない premium を `apply_funding` に渡せない。
 - **方向 + 大きさを 1 つの符号付き整数で表す** — `PositionSize(i64)` で long / short / flat を 1 フィールドにまとめ、enum + magnitude のペアにはしない。サイズも小さく、演算も速く、形もシンプルになる。符号規約は doc コメントに残す。
-- **スナップショット型 vs stateful なエンティティ** — `Position` は `(account, size)` だけを持ち、entry price も PnL も履歴も意図的に持たない。広い state を抱えるのは owning layer の仕事で、funding crate は狭いスナップショットを処理するだけだ。doc コメントが ownership 契約を明示する。
+- **スナップショット型 vs stateful なエンティティ** — `Position` は `(account, size)` だけを持ち、entry price も PnL も履歴も意図的に持たない。広い state を抱えるのは **owning layer (= position の所有・更新を担う上位レイヤー、典型的には vault や clearing layer)** の仕事で、funding crate は狭いスナップショットを処理するだけだ。doc コメントが ownership 契約を明示する。以降このレッスンでは「owning layer」をその意味で一貫して使う。
 - **Parameter-object パターン** — `interval_secs` / `rate_cap` / `divisor` を `FundingParams` にまとめておけば、config が拡張されても呼び出し箇所は安定する。positional 引数だと新パラメータが増えるたびに全呼び出し箇所が壊れる。struct ならフィールドを足すだけでシグネチャは変わらない。
 - **Hyperliquid デフォルトの算術を解きほぐす** — `divisor: 8` は「tick ごとに premium / 8」を意味する。1 時間 interval × 24 回 / 日と 4% cap のもとで、最悪日次支払いを縛るのは divisor ではなく cap だ。Cap は oracle dislocation に対する保険ポリシーとして効く。
 
@@ -222,6 +222,26 @@ impl FundingParams {
 - **`rate_cap: FundingRate(40_000_000)`** — 4%/interval。1 日 24 interval なので最悪 `±96%/day`、ただし下にある divisor の効果で実効最悪値はずっと低くなる。Cap は oracle 異常への*保険*として効く：index を一時的に 50% 動かせる攻撃者でも、1 tick で longs から 50% を抜くことはできない。
 - **`divisor: 8`** — 1 日 8 settlement（HL の spec）、ただし **24** 個の 1 時間 interval にまたがって適用される。Doc コメントの算術に load-bearing な含意がある：`(premium / 8) × 24 hours = 3 × premium/day`。**HL の cap は divisor 単体から導かれる値より厳しい** — divisor が cadence を、cap が最悪ケースの支払いを bind する。
 
+ここで「**divisor = 8**」と「**24 回/日 適用**」のアシンメトリーがどうして焼き込まれているのか、計算で並べると見える:
+
+```
+              セマンティクス上の意図           実際の挙動
+              ─────────────────────           ───────────────
+divisor = 8 = 「1 日を 8 分割」                でも settle/適用は毎時 (24 回/日)
+                ↓                                ↓
+仮にこの 2 つが揃っていれば                    実際の per-day 累積:
+  premium / 8 × 8 = premium                    premium / 8 × 24 = 3 × premium
+  → 1 日分の premium がそのまま支払われる         → 「狙った daily 量」より 3 倍出る
+
+そこで cap (4%/interval) が登場する:
+  普通の市場では post-divisor の per-interval rate は ≪ 4% なので cap に当たらず、
+  実効 daily ≒ 3 × premium で済む。
+  異常時 (oracle outage 等) でも 毎時 4% で clamp されるので、
+  最悪 daily = 4% × 24 = 96%/day で必ず止まる。
+```
+
+つまり HL は「**divisor で typical daily を 3 × premium に持ち上げ、cap で worst daily を 96% に切る**」という非対称な 2 段構えを採っている。Divisor 単体（= 1 日 8 回 settlement）から素直に出る値より、cap のほうが*より厳しい*絶対上限を提供する設計だ。
+
 > 🛑 **考えてみよう。** HL デフォルトでの実効最悪日次支払いはいくらか。ヒント：`rate_cap = 4%/hour`、1 日の interval = 24、ただし divisor は 8 だ。
 
 （答え：**毎 interval が cap に当たる場合 `±96%/day` になる。** 4%/*interval* の cap は divisor に依らず適用される。Divisor が影響するのは clamp の*前*の per-interval rate だけだ。だから premium が大きすぎて post-divisor rate が 4% を超えるときは毎時 4% に clamp され、24 回 × 4% = 1 日 96% となる。実際には、4%/interval で持続的に clamp し続けるほどの premium は pathological だ — HL の歴史でも oracle outage の最中にしか観測されていない。**Cap は保険コストの floor を定めるもので、典型的な funding 規模を示すものではない。**）
@@ -323,6 +343,33 @@ HL の divisor は 8 だ。他の設定でも 24（毎時 settle で divisor と
 
 **Q: `Position` と `Settlement` は冗長では — 両方とも `account` + 値フィールドを持っている？**
 似て見えるが、ライフサイクル上のステージが違う。`Position` は `apply_funding` の*入力*、`Settlement` はその*出力*だ。Owning layer が `Position` を渡し、`Settlement` を受け取る。**型レベルで区別しておくことで、settlement を position として誤って再適用してしまう事故を防げる。**
+
+## Module 1 を貫くデータパイプライン
+
+ここまでで定義した 9 型は、Module 2 (L4-L7) で組み立てる純粋計算パイプラインに対する**語彙**そのものだ。L4 以降に何を作るかを 1 枚で見ると:
+
+```
+[インプット (snapshots)]            [純粋計算 (Module 2)]                 [アウトプット]
+
+  MarkPrice  ──┐
+               ├─► (L4: compute_premium) ─► Premium ──┐
+  IndexPrice ──┘                                       │
+                                                       ▼
+  FundingParams ───────────────────────────► (L6: compute_rate)
+   { rate_cap, divisor, … }                            │
+                                                       ▼
+                                                  FundingRate ──┐
+                                                                ├─► (L7: apply_funding) ──► Vec<Settlement>
+  Position (snapshot)             ──────────────────────────────┘                            { account, delta: Notional }
+   { account, size: PositionSize }
+```
+
+3 つのポイントを型レベルで強制している:
+1. **`Premium` と `FundingRate` は同じ `i64` だが別の型** — `compute_rate` を通さずに `apply_funding` に渡すと**コンパイルエラー**。pipeline の順序が型システム側で守られている。
+2. **入力 (`Position`) と出力 (`Settlement`) を別の型に分けている** — owning layer が `Settlement` を再び position として誤適用するパスを型で塞いでいる。
+3. **`FundingParams` は枝として並走する** — 各 settlement 計算で参照される config 引数であって、pipeline 本流の値ではない。後から `min_settlement_threshold` 等が追加されても、矢印の本数は増えない。
+
+Module 2 ではこの図の関数 3 つを順番に肉付けする。すべての引数と返り値は、L1-L3 で定義した型だけで構成される。
 
 ## Module 1 マイルストーン — 築き上げたもの
 

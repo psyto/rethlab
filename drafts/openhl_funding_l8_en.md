@@ -240,7 +240,42 @@ Read-only access to the private fields. **`const fn`** + **`#[must_use]`** for b
 
 #### `tick(&mut self, now, mark, index, positions)`
 
-The heart of the clock. Three logical phases:
+The heart of the clock. Three logical phases stack as **temporal guard → stateless compute → state update**, and that ordering *is* the crate's layered composition:
+
+```
+【 FundingClock::tick(&mut self, now, mark, index, positions) 】
+
+  1. Guard (temporal-control layer)
+     ┌────────────────────────────────────────────────────────────────────┐
+     │ if now < last_settled_at + interval_secs                           │
+     │     return None     ◄── quiet exit; no state change                │
+     └────────────────────────────────────────────────────────────────────┘
+              │ (proceed only past the guard)
+              ▼
+
+  2. Compute (stateless layer — composition of Module 2's functions)
+     ┌────────────────────────────────────────────────────────────────────┐
+     │   (mark, index)        ──► compute_premium  ──► Premium             │
+     │                                                    │                │
+     │   (premium, params)    ──► compute_rate     ──► FundingRate         │
+     │                                                    │                │
+     │   (positions, mark, rate) ──► apply_funding ──► Vec<Settlement>     │
+     │                                                                     │
+     │   ※ none of these read or write clock state. All pure.              │
+     └────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+
+  3. State update + return (output layer)
+     ┌────────────────────────────────────────────────────────────────────┐
+     │ self.last_settled_at = now;     ◄── reset the next deadline         │
+     │ return Some(FundingTick {                                           │
+     │     settled_at: now, premium, rate, settlements,                    │
+     │ });                                                                 │
+     └────────────────────────────────────────────────────────────────────┘
+```
+
+"**The clock gates time, Module 2's math computes values, the output layer advances state and returns**" — that separation of concerns reads top-to-bottom in `tick`'s body. Three logical phases:
 
 1. **Guard**: `if now < self.last_settled_at.saturating_add(self.params.interval_secs) { return None; }`. The `saturating_add` defends against `u64` overflow when `last_settled_at` is near `u64::MAX` (pathological, but free to defend).
 
@@ -393,7 +428,30 @@ Common errors:
 - **`tick` fires for `now == last_settled_at + interval - 1`** — you used `<=` instead of `<` in the guard, or `>` instead of `>=` in the inverted form. The intended semantic: "fire if `now >= last_settled_at + interval`," which negated for the guard is `if now < last_settled_at + interval { return None; }`.
 - **`tick` doesn't advance `last_settled_at`** — you forgot the `self.last_settled_at = now;` line before `Some(FundingTick { ... })`. The next tick would refire immediately.
 - **`out.settlements` is non-empty** in `empty_positions...` test — `apply_funding(&[])` should return empty. Trace: the early-return on `rate.0 == 0` returns an empty vec, *and* an empty positions slice would skip the loop entirely. Either path yields empty.
-- **Borrow checker error on `clock.tick(...).expect(...)` followed by `clock.last_settled_at()`** — `tick` takes `&mut self`; the borrow ends when the expression completes. If you assigned the result to a variable and then called `clock.last_settled_at()` *before* dropping the result, the borrow would be live. Solution: `let out = clock.tick(...); assert_eq!(clock.last_settled_at(), ...); ` — the `let` ends the borrow at the end of the call.
+- **Borrow checker error on `clock.tick(...).expect(...)` followed by `clock.last_settled_at()`** — `tick` takes `&mut self`; the borrow ends when the expression completes. If you assigned the result to a variable and then called `clock.last_settled_at()` *before* dropping the result, the borrow would be live. Solution: `let out = clock.tick(...); assert_eq!(clock.last_settled_at(), ...); ` — the `let` ends the borrow at the end of the call. Concretely, here are the two shapes the trap-and-fix actually take:
+
+  ```rust
+  // ❌ Pulling a field straight off the method chain in one statement.
+  //    The temporary returned by .expect() lives until the statement's `;`,
+  //    and during that whole window `clock` is still mutably borrowed
+  //    → the next line collides immediately.
+  let settlements = clock
+      .tick(now, mark, index, &positions)
+      .expect("tick fired")
+      .settlements;
+  let last = clock.last_settled_at(); // error[E0502]: cannot borrow `clock` as immutable
+                                       //               because it is also borrowed as mutable
+
+  // 🟢 Bind the result first → the mutable borrow ends at this statement's `;`
+  //    → the next line is free to take an immutable borrow.
+  let out = clock
+      .tick(now, mark, index, &positions)
+      .expect("tick fired");
+  assert_eq!(clock.last_settled_at(), now); // OK: the mutable borrow already ended
+  let settlements = out.settlements;        // `out` is owned, free to destructure
+  ```
+
+  The rule under the hood is "an `&mut self` borrow lives until the statement's `;`." Chaining all the way to a field access keeps the `FundingTick` temporary alive across the whole statement, and with it the mutable borrow on `clock`. Splitting via `let out = ...;` releases that borrow at the `;`, letting the subsequent read of `clock` proceed.
 
 ## Design reflection
 

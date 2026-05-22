@@ -152,6 +152,34 @@ L8 のテストはどれも clock を*高々 1 回*しか走らせない。L9 �
 
 **Clock は gated な呼び出しでは advance しない。** これが interval-gating 不変条件のもう 1 つの側面で、失敗時には state を変化させない、ということだ。テスト自体は tick 2 後の `last_settled_at` を明示的には assert していないが、tick 3 がちょうど `1_003_600 + 3600` で成功することがそれを暗黙に保証している。）
 
+3 連続呼び出しを時間軸で並べると、何が動いて何が動かないか (= ゲートの再エンゲージ) が一望できる:
+
+```
+タイムライン (秒)
+1_000_000 ── Genesis (FundingClock::new、last_settled_at = 1_000_000)
+    │
+    │   +3,600 秒 (= 1 interval ちょうど)
+    ▼
+1_003_600 ── Tick 1: 成功 ✨
+              now ≥ last_settled_at + interval を満たす → fire
+              Some(FundingTick { settled_at: 1_003_600, ... }) を返す
+              ──► last_settled_at = 1_003_600 にリセット
+    │
+    │   +3,599 秒 (まだ 1 秒足りない)
+    ▼
+1_007_199 ── Tick 2: 拒否 🛑
+              now < last_settled_at + interval (1_007_200) → guard で None
+              ──► last_settled_at = 1_003_600 のまま (state は汚さない)
+    │
+    │   さらに +1 秒 (ちょうど 1 interval 達成)
+    ▼
+1_007_200 ── Tick 3: 成功 ✨
+              now ≥ last_settled_at + interval を再び満たす → fire
+              ──► last_settled_at = 1_007_200 にリセット
+```
+
+このテストの load-bearing なポイントは **Tick 1 の成功が clock を恒久的に unlock してしまわないこと** — つまり Tick 3 を fire させるには、Tick 1 を起点に新たに 1 interval を待つ必要がある、という再エンゲージの不変条件だ。3 つ並べないとこの「ゲートが閉じ直す」挙動は観測できない。
+
 ### Step 3: `capped_rate_when_premium_extreme` を追加
 
 `second_tick_requires_another_full_interval` の後に：
@@ -177,6 +205,25 @@ L8 のテストはどれも clock を*高々 1 回*しか走らせない。L9 �
 2. `compute_rate(Premium(1_000_000_000), {divisor=8, cap=40M})` → raw = `1_000_000_000 / 8 = 125_000_000`。`±40_000_000` に clamp → `FundingRate(40_000_000)`。
 
 **`compute_rate` のテストが既に clamping をカバーしているのに、なぜこのテストが必要なのか？** `tick()` 側で rate を unwrap したり、いじったり、bypass したりしないことを確認する必要があるからだ。**Cap が clock を経由しても変化せずに surface することを示す。**
+
+このテストが本当に守っているのは、L4〜L6 で組んだ「型安全なリレー」が `tick()` の中でも一切値を歪めずに繋がっている、という不変条件だ。データの通り道を図で書くと:
+
+```
+[MarkPrice(200), IndexPrice(100)] ──► compute_premium ──► Premium(1_000_000_000)
+                                                                │
+                                                                ▼
+            FundingParams { divisor: 8, cap: 4e7 } ──► compute_rate ──► FundingRate(40_000_000)
+                                                                              │
+                                                                  ※ ここが lossless に
+                                                                    通り抜けているか？
+                                                                              ▼
+                                            FundingTick { rate: FundingRate(40_000_000), .. }
+                                                                              │
+                                                                              ▼
+                                                       out.rate == FundingRate(40_000_000) ✨
+```
+
+assert している実体は「`compute_rate` の戻り値が `FundingTick` の `rate` フィールドにそのまま代入されて表面化していること」だ。例えば `tick()` が誤って `compute_rate` の結果を `.0` で剥がしたまま代入したり、別の `FundingParams` で再計算したりしていれば、ここで値が `40_000_000` 以外に変質して即座に検出される。**型のリレー (Pipeline) が壊れていないことを、実際にデータを通して証明している。**
 
 微妙な接続バグ — 例：`compute_rate(premium, FundingParams { rate_cap: FundingRate(0), ..params })` のようなもの — は、このテストで壊れる（cap ゼロ → rate ゼロ → settlement なし）。**Composition テストは、unit テストでは拾えないものを捕まえる。**
 

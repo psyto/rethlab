@@ -131,9 +131,31 @@ pub fn compute_premium(mark: MarkPrice, index: IndexPrice) -> Premium {
 }
 ```
 
+Drawing where types widen, saturate, and narrow inside this function makes the spine of the logic visible at a glance:
+
+```
+  MarkPrice(u64) ──► i128 ──┐
+                            ▼
+  IndexPrice(u64) ──► i128 ─► [ subtract ] ──► diff (i128: sign preserved)
+                                                  │
+                                                  ▼
+  RATE_SCALE(i64) ──► i128 ────────────────► [ saturating_mul ] ──► scaled (i128, overflow clamped)
+                                                                       │
+                                                                       ▼
+  IndexPrice(u64) ──► i128 ──────────────────────────────────────► [ / divide ]   (index == 0 already guarded above)
+                                                                       │
+                                                                       ▼
+                                                                    premium (i128)
+                                                                       │
+                                                                       ▼
+  Premium(pub i64) ◄──────────────────────────────────── [ saturate_i128_to_i64 ]
+```
+
+Three things this picture pins down: (a) the inputs (`MarkPrice` / `IndexPrice` / `RATE_SCALE`) and the output (`Premium`) are deliberately narrow types, while only the intermediates get widened to `i128`; (b) overflow is absorbed at **two** places — `saturating_mul` in the middle and `saturate_i128_to_i64` at the end — but `diff` itself doesn't need saturation, because `i128`'s headroom is more than enough for the subtraction; (c) the "multiply-then-divide" order is what the label `scaled` represents on the diagram.
+
 10 lines of body. Four moving parts:
 
-1. **Early return on `index == 0`.** A zero index means the oracle hasn't delivered a price (boot state) or the asset has no spot reference. **Either case should produce zero funding** — there's no meaningful (mark - index) to compute when there's no index. Returning `Premium(0)` is graceful degradation; an error would propagate as a transaction-level failure through the bridge, which is the wrong response to a transient oracle issue.
+1. **Early return on `index == 0`.** A zero index means the oracle hasn't delivered a price (boot state) or the asset has no spot reference. **Either case should produce zero funding** — there's no meaningful (mark - index) to compute when there's no index. Returning `Premium(0)` is graceful degradation; an error would propagate as a transaction-level failure through the bridge, which is the wrong response to a transient oracle issue. **This early return also pre-empts a divide-by-zero panic**: the next line, `scaled / i128::from(index.0)`, would otherwise be reached with a zero denominator. Graceful degradation and "never panic" share the same two lines.
 
 2. **`i128::from(mark.0) - i128::from(index.0)`.** Both operands upcast to `i128` *before* the subtraction. **Subtracting two `u64`s would underflow for `mark < index`** — the result would wrap to near `u64::MAX` instead of producing a negative number. Upcasting to signed i128 makes the subtraction algebraically correct.
 

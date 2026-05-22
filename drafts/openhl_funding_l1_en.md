@@ -68,6 +68,31 @@ That's it. Compile, see green, move on.
 
 (Answer: **i64 max is ~9.2e18.** With `RATE_SCALE = 1e9`, a raw value of `1e18` represents `1e9` = a billion. We don't need rates in the billion range — funding rates are typically `0.0001` to `0.04` per interval. **`RATE_SCALE = 1e9` gives 9 decimal digits of precision with massive headroom**: `40_000_000` (`0.04`, the HL cap) is 11 orders of magnitude below `i64::MAX`. Going to `1e12` (parts-per-trillion) would buy more precision but cost headroom — multiplying two `1e12`-scaled values would need `i256` to stay safe. Going to `1e6` would save no real headroom and lose meaningful precision when a funding rate is `0.0001%` = `10` ppb. **`1e9` is the sweet spot for fixed-point rates in i64.**)
 
+Lining the headroom up on a magnitude ruler makes it obvious why `1e9` sits in the safe zone:
+
+```
+magnitude                          value                              what lives there
+─────────────────────────────────────────────────────────────────────────────────────
+1e18  ────────  9_223_372_036_854_775_807  ───────  i64::MAX (~9.2 × 10^18)
+1e18                                                ↑ ceiling for intermediate values
+                                                    │
+1e15  ────────  1_600_000_000_000_000     ───────  4% × 4% (cap²) = 1.6 × 10^15
+                                                    │  ← absorbed comfortably by i128 intermediates
+                                                    │
+1e9   ────────  1_000_000_000             ───────  RATE_SCALE = 100% (one billion)
+                                                    │
+1e7   ────────       40_000_000           ───────  HL Funding Cap 4% (40 million)
+                                                    │
+1e6   ────────        1_000_000           ───────  0.1%
+                                                    │
+1e1   ────────               10           ───────  0.0001% = 10 ppb (realistic minimum granularity)
+```
+
+Three things this picture nails down:
+1. **The cap (`4e7`) and RATE_SCALE (`1e9`) are still more than one order of magnitude apart** — a rate of `0.04` represented as `40_000_000` has comfortable room above it.
+2. **Even cap² is only `1.6e15`** — that's still 3+ orders of magnitude below the i64 ceiling (`9.2e18`). So products like "rate × rate" or "rate × notional" can be promoted to `i128`, computed safely, then divided back by `RATE_SCALE` to land in `i64`. Module 2's `compute_premium` / `apply_funding` is exactly the place where those three orders of margin get spent.
+3. **The smallest realistic granularity (`10` ppb = `0.0001%`) is still representable** — at `1e6` (parts-per-million), this value would round to `0` and precision would be destroyed. `1e9` is the integer size that fits both the realistic floor and ceiling of a funding rate into one space.
+
 ## Walk-through
 
 ### Step 1: Update Cargo.toml
@@ -148,7 +173,7 @@ pub const RATE_SCALE: i64 = 1_000_000_000;
 
 Four things to notice about this 15-line file:
 
-1. **Module doc has a "Why fixed-point integers, not floats" section.** This is the load-bearing rationale for the entire crate. The next engineer reading `types.rs` six months from now needs to see this explanation at the top — not buried in a commit message.
+1. **Module doc has a "Why fixed-point integers, not floats" section.** This is the load-bearing rationale for the entire crate. The next engineer reading `types.rs` six months from now needs to see this explanation at the top — not buried in a commit message. The phrase at the end of the module doc — "**callers can pass snapshots without lifetime gymnastics**" — encodes a design choice that drives the rest of the crate: "**snapshot**" means values are passed by-value (a copy of the state at a point in time, not a reference into someone's storage); "**lifetime gymnastics**" is Rust's idiom for the cascade of `'a` / `'b` annotations that creep into signatures when you start holding `&'a T` everywhere. Every money type added in L2+ (`MarkPrice`, `Premium`, etc.) is a `Copy` newtype precisely so that callers can hand values around freely without those lifetime annotations.
 2. **The `[`FundingRate`]` and `[`Premium`]` cross-references.** Those types don't exist yet (L2 / L3). Rustdoc will warn about broken links during the L1 build. **Tolerate the warnings** — they resolve as we add types in L2/L3. If you really want zero warnings now, use `[FundingRate]` (no backticks) in plain text rather than `[`FundingRate`]` — but the cross-reference style matches the source convention.
 3. **`pub const RATE_SCALE: i64 = 1_000_000_000`** — `i64`, not `u64`. Rates and premiums are *signed* (longs paying = positive premium, shorts paying = negative). Signed integers also let the arithmetic in `compute.rs` flow without sign-checking, since `i128` intermediates absorb the products naturally.
 4. **The doc says `1.0` = `100%`.** That's a unit-of-account decision. A raw `RATE_SCALE` value (1e9) means a 100% funding rate per interval. `40_000_000` means 4%. `1_000_000` means 0.1%. **Read it as parts-per-billion of "1 unit notional."**

@@ -34,30 +34,32 @@ By the end of this lesson:
 
 ```
    ┌────────────┐   ┌─────────────┐
-   │ MarkPrice  │   │ IndexPrice  │     (oracle, off-chain)
+   │ MarkPrice  │   │ IndexPrice  │     (raw u64, upstream oracle price, off-chain)
    └─────┬──────┘   └──────┬──────┘
          │                 │
          ▼                 ▼
        ┌─────────────────────┐
-       │   compute_premium    │  →  Premium(i64, ppb)
+       │   compute_premium    │  →  Premium       (i64, RATE_SCALE = 1e9 scale)
        └──────────┬───────────┘
                   │
                   ▼
        ┌─────────────────────┐
-       │    compute_rate      │  ← FundingParams (divisor, cap)
+       │    compute_rate      │  ←  FundingParams (divisor: u32, rate_cap: FundingRate, …)
        └──────────┬───────────┘
                   │
-                  ▼  FundingRate(i64, ppb, clamped)
+                  ▼  FundingRate (i64, RATE_SCALE = 1e9 scale, clamped to ±rate_cap)
                   │
             ┌─────┴─────┐
             │           │
             ▼           ▼
        ┌──────────────────────┐
-       │   apply_funding      │  ← Vec<Position>, MarkPrice
+       │   apply_funding      │  ←  &[Position] (account snapshots), MarkPrice
        └──────────┬───────────┘
                   │
                   ▼
-              Vec<Settlement>  →  bridge → balance updates (future)
+              Vec<Settlement>  →  each element = { account: AccountId, delta: Notional }
+                                   Notional is i64, raw quote-currency amount (1 unit = 1)
+                                   bridge → balance updates (future)
 
 
    ╔═══════════════════════════════════════════════════════╗
@@ -173,7 +175,25 @@ A `crates/markets/` that maintains `HashMap<MarketId, FundingClock>` plus per-ma
 
 Five skills that generalize beyond perpetual funding:
 
-1. **Fixed-point arithmetic for consensus systems.** Any time you need to share numerical state across validators — funding, fees, oracle prices, vesting schedules — you'll use signed integers + a scale constant. **`RATE_SCALE = 1e9` is the pattern; the constant value is the variable.**
+1. **Fixed-point arithmetic for consensus systems.** Any time you need to share numerical state across validators — funding, fees, oracle prices, vesting schedules — you'll use signed integers + a scale constant. Stated as the general pattern: real-valued `x` and `y` are encoded with a scale factor `S` as `X = x × S` and `Y = y × S`; multiplications widen the intermediate into a larger integer type, then divide by `S` at the end to land back in the original scale:
+
+```
+                          (S = scale factor; this course uses S = RATE_SCALE = 1e9)
+
+   real-number space:    x  ·  y                    ──►   x × y
+                          │       │                              │
+                          ▼       ▼                              ▼
+   fixed-point space:    X = x·S  Y = y·S         X × Y = (x × y) × S²
+                                                              │
+                                                              ▼  (received by a wider type, e.g. i128)
+                                                       (x × y) × S²
+                                                              │
+                                                              ▼  ÷ S
+                                                       (x × y) × S       ◄── final representation
+                                                                              (back to the original fixed-point scale)
+```
+
+That one identity is the spine of every wrestling-with-intermediates moment in Module 2: the product carries an extra factor of `S`, so we let `i128` hold it, then divide by `RATE_SCALE` to cancel it back out. **`RATE_SCALE = 1e9` is the pattern; the constant value is the variable.** A fee calculator might use `S = 10_000` (basis-points scale) and reach for the same identity; a vesting schedule might use `S = 86_400` (seconds-per-day) to build a fixed-point representation along the time axis.
 
 2. **Saturation as the consensus-safe overflow strategy.** Panic = chain fork via halt. Wrap = chain fork via wrong value. Saturate = bounded, consistent across validators. **For any consensus-critical math, saturate is the only choice.**
 

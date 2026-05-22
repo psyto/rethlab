@@ -134,6 +134,40 @@ let raw = capped_premium / divisor;
 
 **Approach A is what we want.** Approach B would make the cap effectively `0.5%/interval` (rate_cap divided by divisor), which isn't what the docstring promises.
 
+**With a 100% premium (= `RATE_SCALE` ppb)**, the two approaches diverge dramatically from the same input — the data flow makes the gap obvious:
+
+```
+HL defaults: divisor = 8, cap = ±4%
+
+🟢 Approach A (the implementation) — divide → clamp
+   ┌─ Premium: 100% (1_000_000_000 ppb) ─┐
+   │                                      │
+   │            ┌─ / divisor 8 ──► raw rate: 12.5% (125_000_000 ppb)
+   │            │                                    │
+   │            │                                    ▼
+   │            │                      ┌─ clamp(-4%, +4%) ─► 4% (40_000_000 ppb)  ✨ correct
+   │            ▼                      │                          │
+   └────────────┴──────────────────────┘                          ▼
+                                                           [FundingRate: 4%/interval]
+                                                            = spec ceiling binds correctly
+
+🔴 Approach B (order reversed, wrong) — clamp → divide
+   ┌─ Premium: 100% (1_000_000_000 ppb) ─┐
+   │                                      │
+   │            ┌─ clamp(-4%, +4%) ──► clamped premium: 4% (40_000_000 ppb)
+   │            │                              │
+   │            │                              ▼
+   │            │              ┌─ / divisor 8 ──► 0.5% (5_000_000 ppb)  ❌ 1/8 of spec
+   │            ▼              │                       │
+   └────────────┴──────────────┘                       ▼
+                                                [FundingRate: 0.5%/interval]
+                                                 = cap silently mutates from "rate ceiling"
+                                                   into "premium ceiling", and the effective
+                                                   ceiling shrinks to spec/divisor
+```
+
+Same `premium` / `divisor` / `cap` go in, but flipping two lines inside the function yields `4%` vs `0.5%` — an 8x semantic discrepancy that no compiler warning and no unit-test type signature will surface. The discipline that prevents it compresses into one sentence: **the cap's unit must match the output's unit (rate)**.
+
 > 🛑 **Predict.** With `params.hyperliquid_default()` (divisor=8, cap=4%), what's the maximum rate produced from a premium of `RATE_SCALE` (100% dislocation)?
 
 (Answer: **`FundingRate(40_000_000)` = 4%/interval.** Walk through: premium.0 = 1_000_000_000 (RATE_SCALE). raw = 1_000_000_000 / 8 = 125_000_000 (12.5%/interval). cap = 40_000_000 (4%). clamp(-40_000_000, 40_000_000) on 125_000_000 → 40_000_000. **The cap does its job.** Compare to approach B: clamped_premium = clamp(1_000_000_000) at cap 40_000_000 → 40_000_000. raw = 40_000_000 / 8 = 5_000_000 (0.5%). Way under the spec.)
@@ -289,7 +323,7 @@ The widening is a single `i64::from(u32)` call — a no-op cost in machine code.
 The division `premium / divisor` cannot grow the value — division by a positive integer produces a smaller magnitude. `clamp(-cap, cap)` cannot grow beyond `cap`'s i64 value. **No overflow possible inside `compute_rate`.** Unlike `compute_premium`, no i128 intermediate is needed.
 
 **Q: What if `rate_cap > i64::MAX / 2`? Does the symmetric clamp still work?**
-`.abs()` on `i64::MIN` panics (no positive `i64` for `i64::MIN`'s magnitude). With `rate_cap.0 == i64::MIN`, the `.abs()` would panic. Stage 8b doesn't guard against this — it's a user-supplied `FundingParams` issue. Realistic deployments use values like `40_000_000` (way below `i64::MAX / 2`), so the edge isn't reachable in practice. **A defensive `saturating_abs()` would handle this, but Stage 8b doesn't bother.**
+`.abs()` on `i64::MIN` panics, and the reason is **two's-complement asymmetry**: a signed 64-bit integer packs one more negative value than positive (negatives go down to `i64::MIN = -2^63`, positives only up to `i64::MAX = 2^63 - 1`), so `|i64::MIN| = 2^63` is one bit past the largest representable positive `i64`. The `.abs()` call therefore overflows — panic in debug, wrap in release. With `rate_cap.0 == i64::MIN`, that's the path we'd hit. Stage 8b doesn't guard against this — it's a user-supplied `FundingParams` issue. Realistic deployments use values like `40_000_000` (way below `i64::MAX / 2`), so the edge isn't reachable in practice. **A defensive `saturating_abs()` (which folds `i64::MIN` to `i64::MAX`) would handle this, but Stage 8b doesn't bother.**
 
 **Q: Why no proptest for `compute_rate`?**
 There's no obvious algebraic property to test. "Divide and clamp" doesn't have an antisymmetry, commutativity, or other invariant that proptest would shine on. The 5 hand-traced tests cover the input regions (normal divide, positive clamp, negative clamp, divisor zero, cap zero) well. **Proptest is great for properties; hand-traced tests are great for distinct input regions.** Don't force a proptest where there's no property to test.

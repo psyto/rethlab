@@ -134,6 +134,39 @@ let raw = capped_premium / divisor;
 
 **欲しいのはアプローチ A だ。** アプローチ B だと cap は事実上 `0.5%/interval`（rate_cap を divisor で割った値）になってしまい、docstring が約束している内容と合わない。
 
+**Premium が 100% (= `RATE_SCALE` ppb) のとき**、両アプローチが同じ入力からどれだけ異なる出力に着地するか、データフローで並べると差が極端に見える:
+
+```
+HL デフォルト: divisor = 8, cap = ±4%
+
+🟢 アプローチA (今回の実装) — divide → clamp
+   ┌─ Premium: 100% (1_000_000_000 ppb) ─┐
+   │                                      │
+   │            ┌─ / divisor 8 ──► raw rate: 12.5% (125_000_000 ppb)
+   │            │                                    │
+   │            │                                    ▼
+   │            │                      ┌─ clamp(-4%, +4%) ─► 4% (40_000_000 ppb)  ✨ 正解
+   │            ▼                      │                          │
+   └────────────┴──────────────────────┘                          ▼
+                                                           [FundingRate: 4%/interval]
+                                                            = spec 通りの上限を bind
+
+🔴 アプローチB (順序逆転、間違い) — clamp → divide
+   ┌─ Premium: 100% (1_000_000_000 ppb) ─┐
+   │                                      │
+   │            ┌─ clamp(-4%, +4%) ──► clamped premium: 4% (40_000_000 ppb)
+   │            │                              │
+   │            │                              ▼
+   │            │              ┌─ / divisor 8 ──► 0.5% (5_000_000 ppb)  ❌ spec の 1/8
+   │            ▼              │                       │
+   └────────────┴──────────────┘                       ▼
+                                                [FundingRate: 0.5%/interval]
+                                                 = cap が「premium 上限」にすり替わり、
+                                                   実効上限が spec の 1/divisor になる
+```
+
+同じ `premium` / `divisor` / `cap` を渡しても、関数内部の 2 行を入れ替えるだけで最終 rate が **4%** と **0.5%** という 8 倍違う値に着地する。コンパイラもテストも警告を出さない、純粋に semantics 上のバグだ。「cap の単位は出力の単位 (rate) に合わせる必要がある」が、その差を 1 文に圧縮した規律になっている。
+
 > 🛑 **考えてみよう。** `params.hyperliquid_default()`（divisor=8、cap=4%）のもとで、premium が `RATE_SCALE`（100% の dislocation）のときに生まれる最大 rate はいくらか。
 
 （答え：**`FundingRate(40_000_000)` = 4%/interval。** 順に計算する：premium.0 = 1_000_000_000（RATE_SCALE）、raw = 1_000_000_000 / 8 = 125_000_000（12.5%/interval）、cap = 40_000_000（4%）。125_000_000 に対する clamp(-40_000_000, 40_000_000) は 40_000_000 を返す。**cap がきちんと仕事をする。** アプローチ B と比較してみよう：clamped_premium = clamp(1_000_000_000, -40_000_000, 40_000_000) = 40_000_000、raw = 40_000_000 / 8 = 5_000_000（0.5%）。spec を大きく下回ってしまう。）
@@ -289,7 +322,7 @@ Widening は `i64::from(u32)` の呼び出し 1 つで済むからだ — マシ
 しない。除算 `premium / divisor` は値を大きくしない — 正の整数除算は magnitude を小さくするだけだ。`clamp(-cap, cap)` も `cap` の i64 値を超えて成長することはない。**`compute_rate` 内で overflow は起こらない。** `compute_premium` と違って i128 中間値も不要だ。
 
 **Q: `rate_cap > i64::MAX / 2` のときはどうなるか？ 対称な clamp は機能するのか？**
-`i64::MIN` に対する `.abs()` は panic する（`i64::MIN` の magnitude を表せる正の `i64` 値が存在しないからだ）。だから `rate_cap.0 == i64::MIN` のときは `.abs()` が panic する。Stage 8b ではこれを guard していない — ユーザ提供の `FundingParams` 側の問題として扱う。現実のデプロイでは `40_000_000`（`i64::MAX / 2` よりはるかに小さい）のような値を使うため、このエッジには届かない。**defensive な `saturating_abs()` を入れれば対応できるが、Stage 8b では採用していない。**
+`i64::MIN` に対する `.abs()` は panic する。理由は**2 の補数表現の非対称性**だ: 符号付き 64 bit には負の数が正の数より 1 個多く詰め込まれている (負側は `i64::MIN = -2^63` まで、正側は `i64::MAX = 2^63 - 1` まで) ので、`|i64::MIN| = 2^63` という値は正の `i64` で表現できる範囲を 1 だけ超えてしまう。つまり `i64::MIN.abs()` は overflow し、debug build では panic / release build では wrap となる。だから `rate_cap.0 == i64::MIN` のときは `.abs()` が踏み抜く。Stage 8b ではこれを guard していない — ユーザ提供の `FundingParams` 側の問題として扱う。現実のデプロイでは `40_000_000`（`i64::MAX / 2` よりはるかに小さい）のような値を使うため、このエッジには届かない。**defensive な `saturating_abs()`（`i64::MIN` を `i64::MAX` に丸める）を入れれば対応できるが、Stage 8b では採用していない。**
 
 **Q: `compute_rate` の proptest がないのはなぜか？**
 明らかな代数的 property が見当たらないからだ。「Divide and clamp」には proptest が輝くような antisymmetry や可換性、その他の不変条件がない。代わりに手書きトレーステスト 5 つで入力領域（通常の除算、正側 clamp、負側 clamp、divisor 0、cap 0）をきれいにカバーしている。**proptest は property に向き、手書きトレースは個別の入力領域に向く。** property がない場所に無理に proptest を当てる必要はない。

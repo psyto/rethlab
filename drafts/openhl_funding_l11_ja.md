@@ -34,30 +34,32 @@
 
 ```
    ┌────────────┐   ┌─────────────┐
-   │ MarkPrice  │   │ IndexPrice  │     (oracle、オフチェーン)
+   │ MarkPrice  │   │ IndexPrice  │     (raw u64、上流の oracle 価格、オフチェーン)
    └─────┬──────┘   └──────┬──────┘
          │                 │
          ▼                 ▼
        ┌─────────────────────┐
-       │   compute_premium    │  →  Premium(i64、ppb)
+       │   compute_premium    │  →  Premium       (i64、RATE_SCALE = 1e9 スケール)
        └──────────┬───────────┘
                   │
                   ▼
        ┌─────────────────────┐
-       │    compute_rate      │  ← FundingParams (divisor、cap)
+       │    compute_rate      │  ←  FundingParams (divisor: u32、rate_cap: FundingRate、…)
        └──────────┬───────────┘
                   │
-                  ▼  FundingRate(i64、ppb、clamped)
+                  ▼  FundingRate (i64、RATE_SCALE = 1e9 スケール、±rate_cap に clamp 済)
                   │
             ┌─────┴─────┐
             │           │
             ▼           ▼
        ┌──────────────────────┐
-       │   apply_funding      │  ← Vec<Position>、MarkPrice
+       │   apply_funding      │  ←  &[Position] (アカウントのスナップショット)、MarkPrice
        └──────────┬───────────┘
                   │
                   ▼
-              Vec<Settlement>  →  bridge → balance 更新 (将来)
+              Vec<Settlement>  →  各要素 = { account: AccountId, delta: Notional }
+                                   Notional は i64、quote currency の生額 (1 ユニット = 1 単位)
+                                   bridge → balance 更新 (将来)
 
 
    ╔═══════════════════════════════════════════════════════╗
@@ -173,7 +175,25 @@ Funding-tick 後の balance を監視し、under-margined なアカウントを�
 
 永久先物 funding を超えて一般化できるスキルが 5 つある：
 
-1. **Consensus システムにおける固定小数点演算。** Validator 間で数値 state を共有する必要があるあらゆる場面 — funding、fee、oracle 価格、vesting schedule など — で、符号付き整数 + スケール定数を使う。**`RATE_SCALE = 1e9` はパターンで、定数の具体値はケースごとに変わる、ということだ。**
+1. **Consensus システムにおける固定小数点演算。** Validator 間で数値 state を共有する必要があるあらゆる場面 — funding、fee、oracle 価格、vesting schedule など — で、符号付き整数 + スケール定数を使う。一般式で書くと、実数 `x`、`y` をスケール因子 `S` でエンコードして `X = x × S` / `Y = y × S` を持ち回り、乗算では中間値を一段広い整数型に上げてから最後に `S` で割って戻す:
+
+```
+                          (S = スケール因子、本コースでは S = RATE_SCALE = 1e9)
+
+   実数空間:               x  ·  y                    ──►   x × y
+                            │       │                              │
+                            ▼       ▼                              ▼
+   固定小数点空間:        X = x·S   Y = y·S       X × Y = (x × y) × S²
+                                                              │
+                                                              ▼  (i128 等の wider 型で受ける)
+                                                       (x × y) × S²
+                                                              │
+                                                              ▼  ÷ S
+                                                       (x × y) × S       ◄── 結果の表現
+                                                                              (元の固定小数点スケールに戻る)
+```
+
+Module 2 で何度も格闘した「中間積が `S` の分だけ余分に拡大するので `i128` で受け、最後に `RATE_SCALE` で割って打ち消す」の正体がこの 1 式だ。**`RATE_SCALE = 1e9` はパターンで、定数の具体値はケースごとに変わる、ということだ。** Fee 計算なら `S = 10_000` (basis-point スケール) で同じパターンが当てはまるし、vesting schedule なら `S = 86_400` (日単位) で時間方向の固定小数点を組める。
 
 2. **Consensus-safe な overflow 戦略としての saturation。** Panic は halt 経由の chain fork、wrap は誤った値経由の chain fork を生む。Saturate は bounded で、しかも validator 間で consistent だ。**Consensus-critical な数学に対しては、saturate が唯一の選択肢だ。**
 

@@ -120,7 +120,33 @@ The doc says it explicitly: *"zero or negative price would be a system invariant
 
 `IndexPrice` is structurally identical to `MarkPrice`. Same field, same derives, same range. **The difference is purely in the type system.** A function signature `compute_premium(mark: MarkPrice, index: IndexPrice) -> Premium` rejects `compute_premium(IndexPrice(100), MarkPrice(100))` at compile time. Without the newtypes, both arguments would be `u64`, and an argument-order bug would silently produce an inverted premium.
 
-**This is the entire point of the newtype pattern.** It costs ~5 lines per type and prevents a class of bugs that *would otherwise be invisible until production*.
+Side-by-side, the difference between raw `u64` and newtype is exactly the difference between "production bug" and "compile error":
+
+```rust
+// 🔴 With raw u64 — the signature is "two u64s in some order"
+fn compute_premium(mark: u64, index: u64) -> i64 { /* ... */ }
+
+let mark  = 100_u64;
+let index = 105_u64;
+
+compute_premium(mark, index);   // ✨ correct order
+compute_premium(index, mark);   // 🔴 swapped: COMPILE OK
+                                //    Premium's sign flips, ships to production
+                                //    → every long pays when they should receive
+
+// 🟢 With newtypes — the type system remembers the intent
+fn compute_premium(mark: MarkPrice, index: IndexPrice) -> Premium { /* ... */ }
+
+let mark  = MarkPrice(100);
+let index = IndexPrice(105);
+
+compute_premium(mark, index);   // ✨ OK
+compute_premium(index, mark);   // ❌ COMPILE ERROR:
+                                //    expected `MarkPrice`, found `IndexPrice`
+                                //    ↑ caught at the keyboard
+```
+
+The difference isn't runtime behavior — it's whether the build passes. The `u64` version's bug isn't visible until production; the newtype version's bug is visible in the seconds between typing it and the next save. **This is the entire point of the newtype pattern.** It costs ~5 lines per type and prevents a class of bugs that *would otherwise be invisible until production*.
 
 > 🛑 **Anti-fluency.** "Couldn't we use type aliases instead? `type MarkPrice = u64; type IndexPrice = u64;`" **No — type aliases don't create new types**, they just rename existing ones. `type MarkPrice = u64` and `type IndexPrice = u64` are both `u64`, and `compute_premium(some_index, some_mark)` would compile silently. **Type aliases are documentation, not safety.** Use them for long generic types where readability suffers (`type FillSink = Arc<Mutex<Vec<Fill>>>`) — not for distinguishing semantically different values.
 
@@ -135,6 +161,24 @@ The doc says: *"Sign convention: positive when mark > index (longs are overpayin
 `Notional` represents the change to a single account's quote balance from a single settlement. Sign convention: *positive = account receives, negative = account pays.* So a long position with a positive funding rate produces `Notional(negative)`; a short position with a positive funding rate produces `Notional(positive)`.
 
 **The sign is from the account's viewpoint**, not from the market's. This matters at the bridge integration layer (course 10) where a `Notional(-12)` becomes "subtract 12 from this account's quote balance." If the sign were market-centric, the bridge would need to flip it before applying.
+
+The matrix of (Premium sign) × (position direction) → which account gets which `Notional` sign:
+
+```
+┌──────────────────────────────┬─────────────────────┬─────────────────────┐
+│ Market state                 │ Long position       │ Short position      │
+├──────────────────────────────┼─────────────────────┼─────────────────────┤
+│ Mark > Index                 │ Notional(negative)  │ Notional(positive)  │
+│ (Premium positive,           │ → pays              │ → receives          │
+│  longs are overpaying)       │                     │                     │
+├──────────────────────────────┼─────────────────────┼─────────────────────┤
+│ Mark < Index                 │ Notional(positive)  │ Notional(negative)  │
+│ (Premium negative,           │ → receives          │ → pays              │
+│  shorts are overpaying)      │                     │                     │
+└──────────────────────────────┴─────────────────────┴─────────────────────┘
+```
+
+Read it as: **`Notional`'s sign = the delta to add to that account's quote balance**. The choice of viewpoint isn't market direction; it's whatever lets the bridge apply the value with one line, `balance += notional.0`, with no conditional flipping. L7's `apply_funding` implements exactly these four cells in four lines of code.
 
 ### Step 2: Update `lib.rs` re-exports
 
@@ -225,6 +269,9 @@ Because prices are always positive (negative price would be a system invariant v
 
 **Q: Why `Default` on these types? When would default values be useful?**
 `Default::default()` returns `MarkPrice(0)`, `Premium(0)`, etc. Useful in test fixtures: `let mark: MarkPrice = Default::default();` is shorter than `MarkPrice(0)`. Also enables `#[derive(Default)]` on containing structs that use these types. **Cheap derive; no behavioral cost.**
+
+**Q: Why eagerly derive `Hash` / `Ord` / `PartialOrd` on every newtype?**
+To unlock the future moments where these types want to be keys or sort keys without having to revisit every type definition. L3's `Position { account, size }`, L7's settlements `Vec`, any later `HashMap<AccountId, MarkPrice>` (snapshot map), `BTreeMap<Premium, Vec<Settlement>>` (bucketing), or `settlements.sort_by_key(|s| s.delta)` (deterministic test ordering) — each of those needs one of these trait bounds the moment it appears. **For newtypes over primitives, deriving the full `Copy + Default + PartialEq + Eq + PartialOrd + Ord + Hash + Debug` set is free at the derive site (the behavior is inherited verbatim from the inner `i64`/`u64`), so the convention is to paste the same one-line attribute on every newtype up front.** You're buying out the future cost of editing N type definitions to add `#[derive(Hash)]` later — one line, now.
 
 **Q: Should `Premium` and `Notional` implement `Add` / `Sub` / `Mul`?**
 Tempting — `Premium(5) + Premium(3) == Premium(8)` reads nicely. But Stage 8b chose not to: the math operations in `compute.rs` need to upcast to `i128` for overflow safety, and providing `Add` for `Premium` would tempt callers to use it without the i128 dance. **The crate's API contract is: do arithmetic on the inner field with explicit i128 upcasting.** That contract is easier to enforce when the types don't have arithmetic ops.

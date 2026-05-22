@@ -24,7 +24,7 @@ The previous course (`building-openhl-precompiles`) plugged custom EVM precompil
 
 By the end of this course, you'll have shipped:
 
-- **3 source files / ~635 LOC** in a new `openhl-funding` crate.
+- **3 source files / ~635 lines of code (LOC)** in a new `openhl-funding` crate.
 - **22 tests passing**: 20 hand-traced + 2 proptest (premium antisymmetry + balanced-book zero-sum).
 - **3 building blocks**: a fixed-point types module, a pure compute module (premium / rate / settlement), and a tick-gating clock state machine.
 - **Two enforced invariants on the clock**: at most one settlement per interval; no catch-up after long gaps.
@@ -34,16 +34,27 @@ You'll understand:
 - Why floating-point arithmetic is a network-fork hazard in consensus systems.
 - The Hyperliquid funding-rate shape: premium → rate → settlement, with divisor + cap.
 - How fixed-point integers scaled by `RATE_SCALE = 1_000_000_000` (parts-per-billion) get you 9 decimal digits of precision without consensus risk.
-- Why pure state machines + saturating arithmetic are the right shape for consensus-critical math.
+- Why pure state machines + saturating arithmetic (operations that clamp to min/max on overflow instead of panicking — `saturating_add` / `saturating_mul` in Rust) are the right shape for consensus-critical math.
 - Why the clock advances to `now` (not to `last_settled + interval`) — and the design trade-off that encodes.
 
 ## Why funding matters (1-paragraph perp recap)
 
-Perpetual futures don't expire. So how does the mark price stay anchored to the spot/index price? Funding payments. When mark > index (longs are overpaying relative to spot), longs pay shorts on a fixed cadence — typically every interval (HL: 1 hour). When mark < index, shorts pay longs. The premium `(mark - index) / index` gets divided by a `divisor` (HL: 8) to derive a per-interval rate, then **capped** at a network-set absolute max (HL: ±4%/interval) to bound worst-case payments. At each tick, every account with a non-zero position settles `size × mark × rate` in quote currency. Longs pay, shorts receive — or vice versa, depending on the sign of the premium.
+Perpetual futures don't expire. So how does the mark price stay anchored to the spot/index price? Funding payments. When mark > index (longs are overpaying relative to spot), longs pay shorts on a fixed cadence — typically every interval (HL: 1 hour). When mark < index, shorts pay longs.
+
+Funding rate is assembled in stages:
+
+```
+1. Premium    = (mark - index) / index               ← still a raw, dimensionless ratio at this point
+2. Rate       = Premium / divisor                    ← divisor = 8 (HL)
+3. Capped     = clamp(Rate, -4%/interval, +4%/interval)   ← network-set absolute cap
+4. Settlement = size × mark × Capped                 ← quote-currency amount each non-zero position settles per tick
+```
+
+The `(mark - index) / index` premium introduced here is a **raw ratio**, and this course never implements it as `f64`. Module 1 (L1) bridges it to a signed integer scaled by `RATE_SCALE = 1_000_000_000` (parts-per-billion), and every Premium / Rate / Capped / Settlement computation downstream lives entirely in that fixed-point representation, deterministically. Longs pay, shorts receive — or vice versa, depending on the sign of the premium.
 
 ## Why funding can't use floats
 
-A consensus L1 validator must compute *exactly the same* funding rate as every other validator. If two validators disagree on the last bit of a rate, they fork the chain.
+A consensus L1 validator must compute *exactly the same* funding rate as every other validator. If two validators disagree on the last bit — the least-significant bit (LSB) — of a rate, they fork the chain.
 
 Float arithmetic gives different bit patterns across:
 - **Compilers** — LLVM may emit FMA (fused multiply-add) on one CPU and split it on another.
@@ -82,7 +93,7 @@ This is the same constraint Solana's compute budget, Ethereum's EVM, and every o
 
 ## SHA pinning per module
 
-Every lesson cites the openhl commit it builds against. For this course, all 12 lessons cite **Stage 8b `cd94137`** — funding is a single self-contained commit. (Compare to course 8 which spanned 5 commits across Stage 9a-9d.) The clean SHA mapping means the answer-key diff at the end of L11 is `crates/funding/` byte-identical against `cd94137`.
+Every lesson cites the openhl commit it builds against. For this course, all 12 lessons cite **Stage 8b `cd94137`** — funding is a single self-contained commit. (Compare to Course 8, which spanned 5 commits across Stage 9a-9d.) The clean SHA mapping means the answer-key diff at the end of L11 is `crates/funding/` byte-identical against `cd94137`.
 
 | Module | Lessons | SHA |
 |---|---|---|
@@ -96,7 +107,7 @@ Every lesson cites the openhl commit it builds against. For this course, all 12 
 
 To get the most from this course you should have:
 
-- **Course 6 (openhl-consensus) and course 7 (openhl-clob)** in your head as conceptual background — the funding state machine consumes `AccountId` (course 7) and is targeted at the bridge built in courses 6+7. **You can skip course 8 (precompiles) and still follow this course** — funding is pure state-machine math, not EVM-side wiring.
+- **Course 6 (openhl-consensus) and Course 7 (openhl-clob)** in your head as conceptual background — the funding state machine consumes `AccountId` (Course 7) and is targeted at the bridge built in Courses 6 and 7. **You can skip Course 8 (precompiles) and still follow this course** — funding is pure state-machine math, not EVM-side wiring.
 - **Comfort with i128 arithmetic in Rust** — at least one prior `as i128` upcast for overflow avoidance in your bag.
 - **A passing familiarity with perpetual-futures funding mechanics.** If you've never traded a perp, the 1-paragraph recap above is enough. If you've traded a perp on Hyperliquid, you're set.
 - **No EVM-specific knowledge.** This course doesn't touch precompiles, contracts, or RPC.
@@ -126,7 +137,7 @@ git checkout cd94137
 
 ## Course style
 
-Each lesson follows the build-along format established in courses 6-8:
+Each lesson follows the build-along format established in Courses 6-8:
 - **Goal** — what passes / what's built by the end.
 - **Recap** — where the previous lesson left off.
 - **Plan** — the specific edits, numbered.
@@ -138,7 +149,7 @@ Each lesson follows the build-along format established in courses 6-8:
 - **Answer key** — `git diff` against the openhl reference SHA.
 - **Common questions** — 3-5 questions with grounded answers.
 
-The math content (especially modules 2-3) is more concept-heavy than code-heavy compared to course 8. Plan to **slow down at the formulas** — they're short, but they need to compute the right thing for every input you can imagine. **A perp funding bug doesn't crash; it silently shifts wealth.**
+The math content (especially Modules 2-3) is more concept-heavy than code-heavy compared to Course 8. Plan to **slow down at the formulas** — they're short, but they need to compute the right thing for every input you can imagine. **A perp funding bug doesn't crash; it silently shifts wealth.**
 
 ## Ready
 
@@ -171,6 +182,6 @@ L0 cites `cd94137` (Stage 8b). The whole course pins to this single SHA — fund
 
 - **§Why floats can't be used** earns the determinism framing — readers from non-consensus backgrounds need the chain-fork explanation up front.
 - **§12 lessons** maps the structure with one line per lesson — readers can see the path before starting L1.
-- **§Prerequisites** flags that course 8 is skippable. Anyone who skipped precompiles can still follow funding.
+- **§Prerequisites** flags that Course 8 is skippable. Anyone who skipped precompiles can still follow funding.
 - **§Course style** sets reader expectations for the math-heavy modules — "slow down at the formulas" is the key heuristic.
 - **§Setup** is minimal — no node bootstrap, no integration tests yet. Pure crate work.
