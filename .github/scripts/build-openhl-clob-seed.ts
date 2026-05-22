@@ -225,9 +225,9 @@ const JA: LocaleConfig = {
   exportName: 'seedRethOpenHlClobJA',
   course: {
     slug: 'building-openhl-clob-ja',
-    title: 'OpenHL CLOB を作る — matching engine を追加する',
+    title: 'OpenHL CLOB 開発ガイド：マッチングエンジンの追加とステートマシンの統合',
     description:
-      '`building-openhl-consensus` で構築した consensus substrate に、price-time priority のマッチングエンジンを追加する。CLOB を純粋な state machine として実装し、その fill を bridge 経由で consensus にコミットされたブロックまで配線する。DIY Perp シリーズの 2 つ目のコース。',
+      '前層で組み上げたコンセンサス・サブストレート上に、Price-Time Priority 準拠のマッチングエンジンを実装します。CLOB を決定論的な純粋ステートマシン（Pure State Machine）として設計し、その約定イベント（fill）をブリッジを介してコンセンサス側でコミットされたブロックへと結合します。「DIY Perp シリーズ」の第2ステップ。コアとなる取引実行レーンを自作します。',
     track: 'diy-perp',
     instructorName: 'RethLab',
   },

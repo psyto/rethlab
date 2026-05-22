@@ -9,9 +9,9 @@ export async function seedRethOpenHlFundingJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-funding-ja",
-      title: "OpenHL Funding を作る — 永久先物 funding state machine",
+      title: "OpenHL Funding 開発ガイド：決定論的数学パイプラインと Funding ステートマシンの構築",
       description:
-        "永久先物 funding の state machine を構築する。固定小数点で deterministic な数学パイプライン (premium → rate → settlement) を、no-catch-up セマンティクスを強制する interval clock で gate する。Pure state で I/O なし — bridge への統合は後続のコースで扱う。DIY Perp シリーズの 4 つ目のコース。",
+        "Perpetual DEX の命脈である funding メカニズムのステートマシンをスクラッチで実装します。固定小数点演算による、再現可能で deterministic な数学パイプライン (premium → rate → settlement) を構築。これを no-catch-up セマンティクスを厳格に強制する interval clock によって制御します。本コースでは外部 I/O を一切排除した Pure state machine として完結させ、ブリッジへの統合は次章へと繋ぎます。「DIY Perp シリーズ」の第4ステップ。数理ロジックをコードに落とし込む真髄を学びます。",
       difficulty: "EXPERT",
       duration: 355,
       xpReward: 730,

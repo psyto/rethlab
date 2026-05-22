@@ -9,9 +9,9 @@ export async function seedRethOpenHlLiquidationJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-liquidation-ja",
-      title: "OpenHL Liquidation を作る — 永久先物ポジション liquidation エンジン",
+      title: "OpenHL Liquidation 開発ガイド：レバレッジ環境における非単調性の発見と清算エンジンの構築",
       description:
-        "永久先物ポジションの liquidation engine を構築する — margin ratio からアカウントを分類し（Safe / AtRisk / Liquidatable / Underwater）、close order の spec を生成する pure compute レイヤー。Levered-regime での非単調性の発見も含む: proptest を書く、失敗を見る、原因をトレースする、prop_assume! で refine する。DIY Perp シリーズの 5 つ目のコース。Stage 10a（margin math）shipped 済み。Insurance fund（Stage 10b）と multi-account scanner（Stage 10c）は pending。",
+        "永久先物ポジションを司る liquidation engine の中核を実装します。証拠金維持率からアカウントを4つのフェーズ（Safe / AtRisk / Liquidatable / Underwater）に厳密に分類し、適切なクローズ注文 spec を生成する Pure な計算レイヤー（pure compute layer）を設計。さらに、levered-regime で発生する「非単調性（Non-monotonicity）」の潜伏バグを浮き彫りにします。proptest を用いた反例の自動生成、原因のトレース、そして prop_assume! による不変条件の精査（refining）まで、高難度な数理バグに立ち向かう手法を網羅。",
       difficulty: "EXPERT",
       duration: 250,
       xpReward: 490,
