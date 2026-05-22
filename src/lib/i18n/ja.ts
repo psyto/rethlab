@@ -41,7 +41,7 @@ export const ja: TranslationKeys = {
   landing: {
     hero: {
       title: 'Rust Ethereum Systems Engineering',
-      subtitle: 'Ethereum はデータベース + 分散システム + コンパイラ + ネットワーク + 並行ランタイム — コンセンサスでひとつに結ばれた 5 つの systems engineering の層です。Reth・Revm・Alloy が Rust でそれを実装する。HyperEVM (Hyperliquid)、Tempo (Stripe)、OP-Reth (Optimism / Base)、MegaETH、Berachain — 主要な Rust EVM L1 はすべて Reth fork。オープンソース、Rust 製、しかし読めるエンジニアはほとんどいない。RethLab は 4 ティアにわたるソース読解 13 コース（EVM の基礎から本番アプリ 10 本まで）に加えて、DIY Perp という 4 コースのビルドアロングで Hyperliquid のオープンソース実装を一から自作するシリーズも提供します。',
+      subtitle: 'Ethereum はデータベース、分散システム、コンパイラ、ネットワーク、並行ランタイムが高度に融合した巨大なシステムです。そして、その最先端の実装が Rust 製の Reth / Revm / Alloy スタックです。\n\n事実、HyperEVM (Hyperliquid)、Tempo (Stripe)、OP-Reth、MegaETH、Berachain といった次世代の主要高速 L1 は、すべて Reth の系譜（Fork）にあります。市場の需要は爆発している一方、このコードベースを完全にマスターしているプロトコルエンジニアは世界でも極めて稀です。\n\nRethLab では、EVM の基礎から本番プロダクト 10 本の解剖までを行う「ソースコード読解 13 コース（4 ティア）」を開講。さらに、Hyperliquid のアーキテクチャを cargo init から自作するハンズオンシリーズ『DIY Perp』（全 5 コース）を通じて、世界のトップ 1% に君臨するシステムエンジニアへの道を提示します。',
       cta: 'トレーニングを始める',
       ctaSecondary: 'コースを探す',
       tagline: 'Demanding · Source-grounded · No fluff',
