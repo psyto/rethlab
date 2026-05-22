@@ -54,7 +54,7 @@ You'll understand:
 - The Hyperliquid-shape margin model: cross-margin, mark-vs-entry, initial-vs-maintenance.
 - The four states of margin health and what each state authorizes the engine to do.
 - The **non-monotonic edge case** in \`margin_ratio\` — when collateral dominates notional, the ratio can move against the direction of mark, and why that doesn't break liquidations.
-- Why the insurance fund is a state machine, not a balance entry.
+- Why the insurance fund is **a pure state machine (with its own transition rules — \`deposit\` / \`withdraw\` / \`absorb_deficit\` invariants), not just a plain \`u64\` balance entry**.
 - How auto-deleveraging (ADL) lives at the edge of this design — and why we leave it out of Stage 10.
 
 ## Why liquidations matter (1-paragraph perp recap)
@@ -73,7 +73,7 @@ The price you pay for this guarantee is the determinism discipline: float arithm
 
 Same answer as funding: consensus determinism. A validator that classifies an account as \`Liquidatable\` while a peer validator classifies the same account as \`AtRisk\` will produce a different block — different close orders, different fees, different insurance-fund deltas. Block proposals diverge, the chain forks.
 
-The fix: signed integers + saturating arithmetic + i128 intermediate products for any multiplication that can overflow i64. We use \`MARGIN_SCALE = 10_000\` (basis points) as the fixed-point unit for \`MarginRatio\`. Bps is the conventional unit for margin in TradFi *and* in crypto perp venues — Hyperliquid, Binance, Drift all express margin requirements in bps. \`MarginRatio(1_000)\` is exactly 10%; \`MarginRatio(MARGIN_SCALE)\` is exactly 100%.
+The fix: signed integers + **saturating arithmetic (operations that, on overflow, neither panic nor wrap but clamp to the type boundary — \`i64::MAX\` / \`i64::MIN\` — via Rust's \`saturating_add\` / \`saturating_mul\` etc.)** + i128 intermediate products for any multiplication that can overflow i64. We use \`MARGIN_SCALE = 10_000\` (basis points) as the fixed-point unit for \`MarginRatio\`. Bps is the conventional unit for margin in TradFi *and* in crypto perp venues — Hyperliquid, Binance, Drift all express margin requirements in bps. \`MarginRatio(1_000)\` is exactly 10%; \`MarginRatio(MARGIN_SCALE)\` is exactly 100%.
 
 (Funding used \`RATE_SCALE = 1_000_000_000\` because it needed parts-per-billion precision for tiny per-interval rates. Liquidation needs less precision but the same discipline.)
 
@@ -85,11 +85,11 @@ The fix: signed integers + saturating arithmetic + i128 intermediate products fo
 ### Module 1 — Types (L1-L3)
 - **L1** — \`MARGIN_SCALE = 1e4\` (bps) + \`LiquidationParams\` + \`hyperliquid_default()\` (10% / 2% / 1.5%). Why bps, why these defaults.
 - **L2** — \`MarginRatio\` newtype + \`MarginHealth\` enum (\`Safe\` / \`AtRisk\` / \`Liquidatable\` / \`Underwater\`). Why four states, what each authorizes.
-- **L3** — \`AccountSnapshot\` + \`CloseOrderSpec\`. Why a new snapshot type (not \`funding::Position\`), and how the bridge layer assembles it.
+- **L3** — \`AccountSnapshot\` + \`CloseOrderSpec\`. Why a new snapshot type (not \`funding::Position\`) — **separating the read-only, immutable snapshot type keeps the risk-calculation core decoupled from whatever mutable state shape the upstream layers (bridge / clearing) carry** — and how the bridge layer assembles it.
 
 ### Module 2 — Pure compute (L4-L7) — Stage 10a
 - **L4** — \`notional_value\` + \`unrealized_pnl\`. The signed-multiplication trick that gets the sign right for both longs and shorts.
-- **L5** — \`account_equity\` + \`margin_ratio\`. The proptest that uncovers the **non-monotonic edge case** when collateral dominates notional, and why \`prop_assume!\` is the right fix.
+- **L5** — \`account_equity\` + \`margin_ratio\`. The proptest that uncovers the **non-monotonic edge case (= the surprising regime where the price seems to move favorably, yet under certain conditions the margin ratio appears to *worsen* in the opposite direction)** when collateral dominates notional, and why \`prop_assume!\` is the right fix.
 - **L6** — \`margin_health\` classification. Strict-less-than at every boundary and what that buys you.
 - **L7** — \`close_order_spec\`. The market-order discipline: liquidation takes any available price. Stage 10a complete.
 
@@ -231,6 +231,27 @@ Three edits, exactly mirroring funding L1's shape but with two deps instead of o
 > 🛑 **Predict.** Before scrolling: funding uses \`RATE_SCALE = 1_000_000_000\` (parts-per-billion, 9 decimal digits of precision). Why does liquidation use \`MARGIN_SCALE = 10_000\` (basis points, 4 decimal digits)? Hint: think about what magnitudes you need to represent — funding rates are typically \`0.0001\` to \`0.04\` per interval; margin requirements are \`0.02\` to \`0.10\` of notional.
 
 (Answer: **the resolution you need scales with the smallest meaningful step.** A funding rate of \`0.0001%\` per interval is a meaningful difference for high-volume traders — ppb is the right resolution. A maintenance margin of \`0.02%\` instead of \`0.05%\` is **not** a meaningful difference at the engine layer — production deployments set maintenance in whole bps (\`200 bps\`, \`500 bps\`). Bps is the conventional unit; using ppb would buy precision the system can't actually use. **Use the smallest scale that covers your real range.**)
+
+Laying \`RATE_SCALE\` and \`MARGIN_SCALE\` side by side makes it obvious why each one is "just right" for its own domain:
+
+\`\`\`
+                       Course 9 (funding)              Course 10 (liquidation)
+                       ─────────────────────           ────────────────────────
+Scale constant         RATE_SCALE = 1_000_000_000      MARGIN_SCALE = 10_000
+                       (parts-per-billion, 10⁹)        (basis points, 10⁴)
+Precision              9 decimal digits                4 decimal digits
+Typical range          0.0001% — 4% / interval         2% — 10% (maintenance)
+                                                       10% — 50% (initial)
+Smallest meaningful    0.0001% (= 10 ppb)              1 bp = 0.01%
+step in production
+Raw value for 1.0      1_000_000_000                   10_000
+Raw value for 4%       40_000_000                      400
+                       ↑ ppb: 1 step = 0.0000001%       ↑ bps: 1 step = 0.01%
+                       For a world where traders         For a world where operators
+                       feel sub-basis-point diffs        run with whole-bps boundaries
+\`\`\`
+
+The discipline: **pick the resolution that matches the domain's conventional unit.** Funding lives in per-billion sub-bp deltas, margin lives in whole-bp operator settings. The two scales don't need to match because the two domains are independent; if they did match, you'd waste i64 headroom on precision the system never uses.
 
 ## Walk-through
 
@@ -374,9 +395,9 @@ Five things to notice about this file:
 
 4. **\`hyperliquid_default()\` is \`const fn\`.** This lets the defaults appear in \`static\` items: \`static PARAMS: LiquidationParams = LiquidationParams::hyperliquid_default();\` works in any context, including embedded in tests, fixtures, and protobuf-encoded genesis state. **A \`const fn\` constructor is the bridge between "value I want" and "value I can declare anywhere."**
 
-5. **\`#[must_use]\` on the constructor and getters.** Constructed-but-dropped \`LiquidationParams\` is almost certainly a bug — you computed the defaults and threw them away. Same logic for accessor: reading \`initial_margin_bps()\` and ignoring the result is almost always wrong. \`#[must_use]\` makes the compiler ask the reader to confirm.
+5. **\`#[must_use]\` on the constructor and getters.** Constructed-but-dropped \`LiquidationParams\` is almost certainly a bug — you computed the defaults and threw them away. Same logic for accessor: reading \`initial_margin_bps()\` and ignoring the result is almost always wrong. \`#[must_use]\` makes the compiler ask the reader to confirm. **This isn't just a hint — it's a defensive-programming technique that **promotes logic bugs that human reviewers typically miss** (discarded return values) into compiler warnings — or, with \`#![deny(unused_must_use)]\`, into outright compile errors.** The discipline behind it is **"drive the compiler as far as it'll go as a static-analysis tool, so review cost trends toward zero"** — a Rust-native pattern worth internalizing.
 
-> 🛑 **Anti-fluency.** "Why three separate \`u32\` fields instead of one \`LiquidationParams\` newtype wrapping a \`(u32, u32, u32)\` tuple?" **Because the three values mean different things.** Tuple ordering is positional and fragile — a refactor that swaps \`initial\` and \`maintenance\` produces a silent semantic bug. Named fields force the call site to be explicit: \`LiquidationParams { initial_margin_bps: 1000, ... }\`. **Names cost no runtime; positional tuples earn no runtime.**
+> 🛑 **Anti-fluency.** "Why three separate \`u32\` fields instead of one \`LiquidationParams\` newtype wrapping a \`(u32, u32, u32)\` tuple?" **Because the three values mean different things.** Tuple ordering is positional and fragile — a refactor that swaps \`initial\` and \`maintenance\` produces a silent semantic bug. Named fields force the call site to be explicit: \`LiquidationParams { initial_margin_bps: 1000, ... }\`. **Named fields cost nothing at runtime and buy overwhelming safety; positional tuples sacrifice safety and earn nothing at runtime.**
 
 ### Step 3: Update \`src/lib.rs\`
 
@@ -480,7 +501,7 @@ HL's actual maintenance margin tiers run from 1.25% to 6.67% depending on positi
 
 **Q4: What's the actual i64-overflow risk on a margin ratio computation?**
 
-\`margin_ratio = equity * MARGIN_SCALE / notional\`. With \`MARGIN_SCALE = 10_000\` and \`equity\` and \`notional\` bounded by \`i64::MAX\`, the product \`equity * MARGIN_SCALE\` can overflow i64 when \`equity > i64::MAX / 10_000 ≈ 9.2e14\`. At realistic exchange scales that's $920 trillion of equity — far above plausible inputs, but L5 still does the multiplication in \`i128\` and saturates back. **The reflex is the same as funding: any product that *can* exceed i64 *will* exceed i64 at some adversarial input.**
+\`margin_ratio = equity * MARGIN_SCALE / notional\`. With \`MARGIN_SCALE = 10_000\` and \`equity\` and \`notional\` bounded by \`i64::MAX\`, the product \`equity * MARGIN_SCALE\` can overflow i64 when \`equity > i64::MAX / 10_000 ≈ 9.2e14\`. At realistic exchange scales that's $920 trillion of equity — far above plausible inputs, but L5 still does the multiplication in \`i128\` and saturates back. **The discipline is the same as funding: any product that *can* exceed i64 *will* exceed i64 at some adversarial input — assume that as the default.**
 
 **Q5: Could we use \`u32\` for \`MARGIN_SCALE\` and \`bps\` and avoid the i64 conversion noise?**
 
@@ -544,6 +565,29 @@ Two edits, both small:
 
 (Answer: **3 questions → 4 variants.** \`Safe\` = yes to (a). \`AtRisk\` = no to (a), no to (b). \`Liquidatable\` = no to (a), yes to (b), yes to (c) (close-only suffices). \`Underwater\` = no to (a), yes to (b), no to (c) (insurance fund absorbs the deficit). A 3-variant enum (Safe/AtRisk/Liquidatable) would collapse Liquidatable and Underwater, losing the "does the insurance fund get involved?" signal. The engine doesn't have to recompute that — it's already encoded in the variant.)
 
+Laying the four variants × the three actions they authorize into one matrix makes it immediately clear why four is the right number, and how each variant carries a "downstream decision" at the type level:
+
+\`\`\`
+                    │ (a) Open new       │ (b) Force-close   │ (c) Does closing    │
+                    │     positions?      │     the position?  │     alone cover the │
+                    │                    │                   │     deficit?        │
+   ─────────────────┼────────────────────┼───────────────────┼─────────────────────┤
+   Safe              │ ✅ yes              │ ❌ no              │ N/A (no close)      │
+   AtRisk            │ ❌ no               │ ❌ no              │ N/A (no close)      │
+   Liquidatable      │ ❌ no               │ ✅ yes             │ ✅ yes (equity left) │
+   Underwater        │ ❌ no               │ ✅ yes             │ ❌ no → insurance    │
+                    │                    │                   │   fund absorbs      │
+   ─────────────────┴────────────────────┴───────────────────┴─────────────────────┘
+
+Downstream engine behavior (implemented in L7 / Module 3):
+   Safe         ─► trader keeps operating
+   AtRisk       ─► warn in UI, refuse new positions, let trader close voluntarily
+   Liquidatable ─► emit auto close order, deduct fee, return remaining equity
+   Underwater   ─► emit auto close order, draw the deficit from the insurance fund
+\`\`\`
+
+The point: **each variant maps directly to its own set of authorized actions.** Collapse \`Liquidatable\` and \`Underwater\` together and the "should we call the insurance fund?" signal disappears from the type — the engine then has to recompute equity to decide. Add more variants and no row produces a new column either (= these four are the minimal unique set of action profiles). **"A state machine has exactly as many variants as the distinct downstream actions it triggers"** — that's the principle this design embodies.
+
 ## Walk-through
 
 ### Step 1: Append to \`src/types.rs\`
@@ -584,11 +628,11 @@ pub enum MarginHealth {
 
 Things to notice about these 25 lines:
 
-1. **\`MarginRatio(pub i64)\` is a newtype.** Not a \`type MarginRatio = i64\` alias. The newtype gives the type checker a handle: a function that takes \`MarginRatio\` cannot be accidentally called with a raw \`i64\` value that's actually a balance, an account ID, or a \`MarkPrice\`. The \`pub i64\` field means callers can construct one with \`MarginRatio(1000)\` and read it with \`ratio.0\` — no encapsulation invariant to defend.
+1. **\`MarginRatio(pub i64)\` is a newtype.** Not a \`type MarginRatio = i64\` alias. The newtype gives the type checker a handle: a function that takes \`MarginRatio\` cannot be accidentally called with a raw \`i64\` value that's actually a balance, an account ID, or a \`MarkPrice\`. The \`pub i64\` field means callers can construct one with \`MarginRatio(1000)\` and read it with \`ratio.0\` — **the type can't hold an invalid state in the first place (i.e., no \`i64\` value would be malformed), so there's no encapsulation invariant to defend, and we keep it as a transparent data container instead of hiding behind getters/setters.** The "wrap a \`Vec\` inside \`MyVec\` to re-expose \`len()\`" pattern is a cost paid to defend an invariant; don't pay it where no invariant exists.
 
 2. **\`MarginRatio\` derives a lot of traits — \`Default\`, \`PartialOrd\`, \`Ord\`, \`Hash\`.** The defaults aren't required by the engine, but they let downstream code (telemetry, sorted-by-worst-health scanners in Stage 10c, dashboards) use \`MarginRatio\` like any other comparable value type. \`MarginRatio::default()\` is \`MarginRatio(0)\` — 0 bps, semantically "no ratio computed" or "freshly zeroed." The engine itself never reads \`default()\`; it always computes from a snapshot.
 
-3. **\`MarginHealth\` does NOT derive \`PartialOrd\` / \`Ord\`.** Even though the variants naturally order (Safe < AtRisk < Liquidatable < Underwater in worsening direction), ordered comparisons on enums read as code-smell. \`if health > MarginHealth::AtRisk\` is less clear than \`if matches!(health, MarginHealth::Liquidatable | MarginHealth::Underwater)\`. The compiler enforces the explicit pattern; future maintainers see exactly which variants the branch covers.
+3. **\`MarginHealth\` does NOT derive \`PartialOrd\` / \`Ord\`.** Even though the variants naturally order (Safe < AtRisk < Liquidatable < Underwater in worsening direction), ordered comparisons on enums read as code-smell. \`if health > MarginHealth::AtRisk\` is less clear than \`if matches!(health, MarginHealth::Liquidatable | MarginHealth::Underwater)\`. The compiler enforces the explicit pattern; future maintainers see exactly which variants the branch covers. **Sloppy ordered comparisons on enums are a typical breeding ground for bugs (a code smell) — reach for \`matches!\` and explicit pattern matching first as a matter of discipline.** When you really do need an order (sorting by severity in telemetry, for example), grow an explicit \`severity_rank()\` method instead — that surfaces intent.
 
 4. **Per-variant doc comments describe the *authorization*, not the math.** "Margin ratio < maintenance" tells you when the variant fires, but the comment also says what the engine does in response ("should liquidate the position at market"). Doc comments here serve as the canonical reference for "what does Liquidatable actually mean to the rest of the system?"
 
@@ -738,6 +782,49 @@ Two edits, both append-only:
 
 (Answer: **\`avg_entry\` (to compute the PnL leg) and \`collateral\` (to compute equity).** Funding's formula has no \`entry\` factor — it scales by the current mark times the rate, regardless of where the position was opened. Funding also doesn't read collateral; the settlement deltas it emits get applied to balances at the bridge layer, which keeps its own balance ledger. Liquidation's job is to *measure* whether collateral + unrealized PnL has fallen below the threshold, so it needs both. Different jobs, different snapshots.)
 
+Drawing what the \`types\` module — completed in L3 — receives as input and produces as output makes the joint between Module 1 (types) and Module 2 (pure compute) immediately legible:
+
+\`\`\`
+                    [ Upstream: bridge / clearing layer (the ledger owner) ]
+                              │
+                              │ builds a snapshot per account, per tick,
+                              │ pulled from its own ledger
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ Input: AccountSnapshot { account, position_size, avg_entry,         │
+   │                          collateral }                               │
+   │   ※ Immutable, read-only, Copy. Finalized in L3.                    │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ ★ The liquidation engine (everything Module 2-4 builds)             │
+   │                                                                     │
+   │   L4: notional_value / unrealized_pnl   (pure compute)               │
+   │   L5: account_equity / margin_ratio     (pure compute)               │
+   │   L6: margin_health                      (classification: 4-state)   │
+   │   L7: close_order_spec                   (Liquidatable / Underwater) │
+   │   ↑↑ The constants and types from L1-L2 (MARGIN_SCALE,              │
+   │      LiquidationParams, MarginRatio, MarginHealth) flow through      │
+   │      every layer.                                                    │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ Output: CloseOrderSpec { account, side, qty }                       │
+   │   ※ No price (market order). Only emitted for Liquidatable /        │
+   │     Underwater accounts. Finalized in L3.                            │
+   │   Module 3-4 emits InsuranceFundDelta alongside.                     │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                    [ Downstream: bridge → matching engine (CLOB) ]
+                              ・convert close orders into \`SubmitMarket\` actions
+                              ・credit/debit the insurance fund on Underwater paths
+\`\`\`
+
+Two things this picture pins down: (a) **The two types finalized in L3 — \`AccountSnapshot\` (input) and \`CloseOrderSpec\` (output) — are the engine's only contact surface with the outside world.** All the engine body lives in L4 onward, but every function signature lands on "consume an \`AccountSnapshot\`" or "emit a \`CloseOrderSpec\`." (b) **Both the input (snapshot) and the output (spec) are immutable** — the engine never mutates the ledger; full ownership of the ledger stays on the bridge side. This is the concrete shape of what L0 previewed as "**a read-only snapshot type that keeps the risk-calculation core decoupled from upstream state.**"
+
 ## Walk-through
 
 ### Step 1: Append \`AccountSnapshot\` to \`src/types.rs\`
@@ -768,7 +855,7 @@ Things to notice about this 10-line block:
 
 2. **\`avg_entry: MarkPrice\`, not a new \`EntryPrice\` type.** The price at which a position was opened lives in the same unit-of-account as the mark price the position is currently measured against. Defining a separate \`EntryPrice\` newtype would force conversions at every PnL computation site for no semantic gain. **When two fields measure the same physical thing, share the type.**
 
-3. **\`collateral: Notional\` — signed.** Collateral is *deposited* funds, conventionally non-negative, but the type is \`Notional\` (signed) because \`account_equity = collateral + unrealized_pnl\` needs to flow as a signed sum. Making \`collateral\` unsigned would force an \`as i64\` cast in every equity computation. **Convert at the boundary, keep the math in one signed type.**
+3. **\`collateral: Notional\` — signed.** Collateral is *deposited* funds, conventionally non-negative, but the type is \`Notional\` (signed) because \`account_equity = collateral + unrealized_pnl\` needs to flow as a signed sum. Making \`collateral\` unsigned would force an \`as i64\` cast in every equity computation. **Convert at the boundary, keep the math in one signed type — that way, silent runtime bugs caused by missed casts or mixing signed and unsigned (underflows, an \`as\` cast that flips the top bit, a subtraction that should have produced a negative number turning into a large positive one) get eliminated at the compile-level as type mismatches.** L4's sign trick — computing \`(mark − entry) × size\` branchlessly for all four quadrants — only works because every step on that path is uniformly signed.
 
 4. **\`pub\` fields, no constructor function.** Same convention as \`LiquidationParams\` from L1: transparent struct, no encapsulation invariant. The bridge layer builds \`AccountSnapshot { account: …, position_size: …, … }\` directly. There's no \`AccountSnapshot::new()\` because there's nothing for a constructor to enforce.
 
@@ -802,7 +889,7 @@ Three things to notice:
 
 1. **No \`price\` field.** Liquidation never picks a price; the engine produces a market order spec and the matching engine fills it at whatever depth exists in the book. Stage 10c will iterate \`AccountSnapshot\` slices and emit one \`CloseOrderSpec\` per \`Liquidatable\` or \`Underwater\` account; none of them will carry a limit.
 
-2. **\`side: Side\` reuses \`openhl_clob::Side\`.** The matching engine speaks in \`Side::{Buy, Sell}\`. If we defined a new \`liquidation::Side\` enum and converted at the bridge, we'd introduce a translation surface that can drift (someone adds a third side variant in one crate but not the other). **One enum, one source of truth.**
+2. **\`side: Side\` reuses \`openhl_clob::Side\`.** The matching engine speaks in \`Side::{Buy, Sell}\`. If we defined a new \`liquidation::Side\` enum and converted at the bridge, we'd be **introducing an unnecessary translation layer (an \`impl From\` and its inverse) that becomes a source of future type drift** — someone adds a third variant (\`Closing\`, say) to one crate but not the other, or quietly inverts the \`Buy ↔ Sell\` mapping in one spot. **One enum, one source of truth.** Vocabulary that crosses crate boundaries (\`Side\`, \`Qty\`) should be shared across the boundary so you don't end up paying a permanent type-conversion cost (an "adjustment tax") forever.
 
 3. **\`qty: Qty\` reuses \`openhl_clob::Qty(u64)\`.** The doc comment says "absolute value of the position size" — \`PositionSize\` is \`i64\` (signed) but the close quantity is always positive. The conversion (\`Qty(position_size.0.unsigned_abs())\`) happens in \`compute::close_order_spec\` at L7; here we just commit to the *output type* being unsigned.
 
@@ -976,6 +1063,23 @@ Two edits:
 
 Every case lands on the right sign. **No branching, no two-codepath testing, no risk that someone "fixes" one branch without the other.** This is the load-bearing reason \`PositionSize\` is signed — the type carries the long/short distinction so the arithmetic doesn't have to.)
 
+Dropping the four quadrants of \`(mark − entry) × size\` into one matrix makes it visually obvious why this single line replaces four \`if\` branches:
+
+\`\`\`
+                          mark > entry              mark < entry
+                       (price up → diff +)         (price down → diff −)
+                       ────────────────────       ────────────────────
+   Long  (size = +)     (+) × (+) = +              (−) × (+) = −
+                       ◤ profit ✓                  ◤ loss ✓
+                       e.g. (110−100) × +10 = +100 e.g. (90−100) × +10 = −100
+   ─────────────────────────────────────────────────────────────────────
+   Short (size = −)     (+) × (−) = −              (−) × (−) = +
+                       ◤ loss ✓                    ◤ profit ✓
+                       e.g. (110−100) × −10 = −100 e.g. (90−100) × −10 = +100
+\`\`\`
+
+The mechanic: **\`size\`'s sign carries the long/short direction, \`(mark − entry)\`'s sign carries the price-move direction — multiplying them lets the two pieces of directional information combine, and the correct profit/loss sign falls out mechanically.** In the \`if size > 0 { ... } else { ... }\` branched version, the developer has to mentally reconstruct both cases while writing each branch, and bugs that hit only one side are a common failure mode. The signed-multiplication form **outsources that reconstruction entirely to the type system and arithmetic rules.**
+
 ## Walk-through
 
 ### Step 1: Create \`src/compute.rs\`
@@ -1034,7 +1138,7 @@ Three things to notice about this 7-line function:
 
 2. **\`snapshot.position_size.0.unsigned_abs()\`, not \`.abs()\`.** \`i64::abs\` returns \`i64\` — and \`i64::MIN.abs()\` is undefined in safe Rust (panics in debug, wraps in release). \`unsigned_abs\` returns \`u64\` and is defined for every input, including \`i64::MIN\` (\`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808\`). **Use \`unsigned_abs\` whenever you need the magnitude of a signed integer; reserve \`abs\` only when you're sure the value can't be \`MIN\`.**
 
-3. **\`u64::saturating_mul\` over \`u64::checked_mul\`.** Both detect overflow; \`saturating_mul\` returns \`u64::MAX\` on overflow, \`checked_mul\` returns \`None\`. Returning \`Option<u64>\` would force every caller (margin_ratio in L5, etc.) to handle a \`None\` that *only* arises at network-pathological inputs. Saturating returns a usable value that's mathematically wrong only at the extremes — and at those extremes the margin engine will classify the account as \`Liquidatable\` either way. **Saturation is the right failure mode when "wrong but bounded" beats "must handle Option."**
+3. **\`u64::saturating_mul\` over \`u64::checked_mul\`.** Both detect overflow; \`saturating_mul\` returns \`u64::MAX\` on overflow, \`checked_mul\` returns \`None\`. Returning \`Option<u64>\` would force every caller (margin_ratio in L5, etc.) to handle a \`None\` that *only* arises at network-pathological inputs. Saturating returns a usable value that's mathematically wrong only at the extremes — and at those extremes the margin engine will classify the account as \`Liquidatable\` either way. **Saturation is the right failure mode when "the value is extreme but stays in bounds" beats "the cost of forcing every call site to propagate \`Option\` and write the boilerplate (\`?\` / \`unwrap_or\` / early returns) that comes with it."**
 
 ### Step 3: Add \`unrealized_pnl\`
 
@@ -1070,7 +1174,7 @@ Four things to notice:
 
 4. **Sign convention spelled out in the doc.** The 4-case enumeration ("Long profits when mark > entry") is the canonical reference for any reviewer asking "wait, does this work for shorts?" The math gets it right by construction, but the doc says *why* — readers don't have to mentally walk through the cases each time.
 
-> 🛑 **Anti-fluency.** "Why not just do \`(mark.0 as i64 − entry.0 as i64) × size\` directly?" **Three problems.** (1) If \`mark\` or \`entry\` exceeds \`i64::MAX\`, the cast wraps silently — the top bit becomes the sign bit. (2) Even if both fit in i64, the subtraction in i64 can overflow when one is near \`i64::MIN\` and the other is positive. (3) The product \`(mark − entry) × size\` can exceed i64 even when each operand fits — a 1% price move on an \`i64::MAX\`-size position overflows. **The \`as\` cast is the Rust footgun this lesson exists to defuse.**
+> 🛑 **Anti-fluency.** "Why not just do \`(mark.0 as i64 − entry.0 as i64) × size\` directly?" **Three problems.** (1) If \`mark\` or \`entry\` exceeds \`i64::MAX\`, the cast wraps silently — the top bit becomes the sign bit. (2) Even if both fit in i64, the subtraction in i64 can overflow when one is near \`i64::MIN\` and the other is positive. (3) The product \`(mark − entry) × size\` can exceed i64 even when each operand fits — a 1% price move on an \`i64::MAX\`-size position overflows. **Implicit \`as\` casts are one of the canonical bug-breeding footguns in Rust, and this lesson exists to defuse exactly that pattern.**
 
 ### Step 4: Add the \`saturate_i128_to_i64\` helper
 
@@ -1090,7 +1194,7 @@ Three things to notice about this 3-line helper:
 
 1. **No \`pub\`.** This is an implementation detail of \`compute.rs\`. The public API is the six functions named in the module doc; the helper exists to keep their bodies clean. **Keep helpers private unless callers in other modules genuinely need them.**
 
-2. **\`i64::try_from(v).unwrap_or(...)\`.** \`try_from\` returns \`Err\` exactly when the value doesn't fit; the \`unwrap_or\` branch picks the saturation target by sign. For \`v > 0\` the value was too positive (saturate at \`i64::MAX\`); for \`v ≤ 0\` it was too negative (saturate at \`i64::MIN\`). **Three lines of arithmetic; one decision point; impossible to typo.**
+2. **\`i64::try_from(v).unwrap_or(...)\`.** \`try_from\` returns \`Err\` exactly when the value doesn't fit; the \`unwrap_or\` branch picks the saturation target by sign. For \`v > 0\` the value was too positive (saturate at \`i64::MAX\`); for \`v ≤ 0\` it was too negative (saturate at \`i64::MIN\`). **Three lines of arithmetic; one decision point; impossible to typo.** **(Note: when \`v == 0\`, \`try_from\` always succeeds with \`Ok(0)\`, so the \`else\` branch of \`unwrap_or\` (\`i64::MIN\`) is never taken — i.e., the \`else\` effectively only fires "when \`v < 0\` *and* doesn't fit," catching negative-direction saturation. Spelled out so readers don't burn a moment wondering whether \`v == 0\` would somehow take the \`i64::MIN\` path.)**
 
 3. **No tests for the helper.** The behavior is exhaustively tested through \`unrealized_pnl\`'s test cases (which exercise both happy-path and edge-of-range inputs). A separate test for the helper would be redundant.
 
@@ -1414,7 +1518,7 @@ pub fn margin_ratio(snapshot: &AccountSnapshot, mark: MarkPrice) -> MarginRatio 
 
 Five things to notice:
 
-1. **\`notional == 0\` early return with \`i64::MAX\`.** Flat positions have no exposure → no margin requirement to fall short of. Returning the maximum representable ratio signals "infinitely safe" and lets every downstream \`margin_health\` comparison short-circuit naturally (no special-case in \`margin_health\`). The alternative — \`Option<MarginRatio>\` or \`Result<MarginRatio>\` — would force every caller to handle the flat case explicitly. **Encode the "no constraint" case as the safest possible value.**
+1. **\`notional == 0\` early return with \`i64::MAX\`.** Flat positions have no exposure → no margin requirement to fall short of. Returning the maximum representable ratio signals "infinitely safe" and lets every downstream \`margin_health\` comparison short-circuit naturally (no special-case in \`margin_health\`). **Concretely, the one-directional comparison we'll write in L6 — \`if ratio >= params.initial_margin_bps { Safe } else { ... }\` — works for a flat account without any extra branch, because \`i64::MAX >= initial_margin_bps\` is always true and the account lands in \`Safe\` automatically.** That is, \`i64::MAX\` is acting as a **"magic boundary that lets the downstream comparison short-circuit straight through."** The alternative — \`Option<MarginRatio>\` or \`Result<MarginRatio>\` — would force every caller to handle the flat case explicitly. **Encode the "no constraint" case as the system's safest possible upper bound — that's the design discipline at work here.**
 
 2. **The multiplication happens *before* the division.** \`equity × MARGIN_SCALE / notional\` in i128 preserves precision for small ratios (e.g., a 1% margin = 100 bps survives the divide). Doing the divide first (\`equity / notional × MARGIN_SCALE\` in i64) would truncate to integer percentages before scaling, losing precision. **Order of operations matters when integer division is in the mix.**
 
@@ -1561,6 +1665,44 @@ The sign of this derivative is the sign of \`entry − collateral / size\`. So:
 - If \`entry × size > collateral\`: derivative is positive → ratio **increases** with mark (the levered regime, where the naïve intuition is correct).
 - If \`entry × size < collateral\`: derivative is negative → ratio **decreases** with mark (the cash-heavy regime, where the naïve intuition is wrong).
 - If \`entry × size = collateral\`: derivative is zero → ratio is constant in mark (the "exactly funded" knife edge).
+
+Lining up the three regimes and how \`margin_ratio\` behaves in each shows visually why the naïve intuition breaks, and where the "singular boundary" actually runs:
+
+\`\`\`
+                         margin_ratio (Long position; collateral and size fixed, sweep mark)
+                         ▲
+                         │     🔴 Cash-heavy regime
+                         │        (collateral > entry × size)
+                         │        ratio ↘ decreases as mark rises
+                         │        ※ The zone where "ratio goes up with mark" breaks
+                         │     ──────────────────────────────────
+                         │
+                         │     ◆ Singular boundary: collateral = entry × size
+                         │        (= exactly 1x leverage; just-barely cash-funded)
+                         │        ratio is flat in mark (derivative = 0)
+                         │     ──────────────────────────────────
+                         │
+                         │     🟢 Levered regime
+                         │        (collateral < entry × size)
+                         │        ratio ↗ increases as mark rises
+                         │        ※ Naïve intuition holds; 99% of real perp positions
+                         │
+                         └─────────────────────────────────────►  mark
+
+  Things to read off:
+    - The boundary position depends only on **the relation between collateral and entry × size**;
+      it does not depend on mark.
+    - The moment collateral exceeds entry × size (notional at entry), the slope of margin_ratio
+      flips sign.
+    - On real exchanges, traders are almost always in the levered regime, so this flip is a rare
+      corner case in production. But the proptest feeds random inputs and will mercilessly step
+      into the corner.
+    - The "naïve monotonicity intuition" isn't fundamentally wrong — it is correct **under the
+      implicit precondition "you are in the levered regime."** The proptest is the device that
+      forces that hidden precondition to become visible.
+\`\`\`
+
+This figure also matters in L6 / L7 when we write the classifier and liquidation discipline: healthy traders live in the levered region, but an extremely over-collateralized "pseudo-long" account can wander into the cash-heavy region at any time, and the engine has to behave correctly in both.
 
 The failing input has \`entry × size = 100 × 1 = 100\` and \`collateral = 103\`. Since \`collateral > entry × size\`, we're in the cash-heavy regime where the ratio decreases as mark rises.
 
@@ -1739,7 +1881,7 @@ Three load-bearing decisions in this lesson:
 
 1. **\`MarginRatio(i64::MAX)\` for flat positions, not \`Option\` or \`Result\`.** The "no constraint" case is the *safest* possible state. Encoding it as the max representable ratio lets every downstream classifier short-circuit naturally without special-case branching. **Encode "no information" as the safest value, not as an absence of information.**
 
-2. **The proptest's failure is the lesson.** If the proptest had passed on the first try, the reader would have learned "margin_ratio is monotonic in mark." With the failure-and-trace step, the reader learns "**margin_ratio is monotonic in mark *in the levered regime*, and the boundary is when collateral equals notional-at-entry."** The deeper fact survives because the reader walked through the derivative themselves.
+2. **The proptest's failure is the lesson.** If the proptest had passed on the first try, the reader would have learned "margin_ratio is monotonic in mark." With the failure-and-trace step, the reader reaches a deeper domain fact: "**margin_ratio is monotonic in mark *only in the levered regime*, and its singular boundary is the point where the deposited collateral equals the notional at entry (= entry × size)."** That deeper fact survives because the reader walked through the derivative themselves.
 
 3. **\`prop_assume!\` for conditional invariants.** When an invariant holds only over a subset of inputs, the right tool is \`prop_assume!\` — not a stronger function postcondition, not a weaker assertion, not a hand-restricted strategy. **The invariant is what's true *under what condition*; encode both.**
 
@@ -1768,7 +1910,7 @@ Margin ratio is \`equity / notional\`, scaled. There's no upper bound at 100% ma
 
 **Q3: Could we simplify \`margin_ratio\` by always computing in i128 without the flat guard?**
 
-Division by zero in Rust panics in both debug and release for integers. The flat guard prevents that panic. Removing it would require either a \`try_div\` (which i128 doesn't have built-in) or a branchless approach (multiplying notional by a constant before the divide, with extra rounding noise). The two-line guard is the cleanest. **One conditional is cheaper than a branchless dance.**
+Division by zero in Rust panics in both debug and release for integers. The flat guard prevents that panic. Removing it would require either a \`try_div\` (which i128 doesn't have built-in) or a branchless approach (multiplying notional by a constant before the divide, with extra rounding noise). The two-line guard is the cleanest. **An explicit one-branch conditional is far cheaper — in terms of readability and maintainability — than escaping into a tricky branchless implementation.**
 
 **Q4: Why \`prop_assume!\` instead of restricting the input strategy to \`collateral in 1..(entry × size)\`?**
 
@@ -1837,6 +1979,43 @@ Three edits:
 
 (Answer: **Underwater accounts get classified as Liquidatable.** A ratio of \`−5_000\` is \`< maintenance_bps\` (= 200), so the Liquidatable branch fires first and the cascade never reaches the Underwater check. Result: the bridge doesn't get the insurance-fund-needed signal, the underwater deficit silently routes through the regular liquidation path, and the position closes solvently in the books even though the math says it didn't. **Cascade order is load-bearing — check the most extreme state first; each step inward narrows the remaining range.**)
 
+Laying the four-state cascade out on the margin-ratio number line makes it visible why this is the only order that works, and why reversing it would let Underwater get "absorbed" into Liquidatable:
+
+\`\`\`
+                       (worsening ◄────────────────── value magnitude ──────────────────► improving)
+
+   margin ratio:   ── −∞ ── 0 ─────── maintenance_bps ─────── initial_bps ─────── i64::MAX ──
+                       ↑    ↑                    ↑                      ↑                    ↑
+                       │    │ (e.g. 200)         │ (e.g. 1000)           │                    │
+                       │    │                    │                      │                    │
+                       └────┴──┐  ┌──────────────┴──┐  ┌─────────────────┴──┐  ┌──────────────┘
+                              ▼  ▼                 ▼  ▼                    ▼  ▼
+                          🔴 Underwater       🟠 Liquidatable          🟡 AtRisk            🟢 Safe
+                          (ratio < 0)         (0 ≤ ratio                (maint ≤ ratio       (initial ≤ ratio;
+                                              < maintenance)            < initial)            flat lands here
+                                                                                              via i64::MAX too)
+
+
+   🟢 Correct cascade order (narrow inward):
+      ① if ratio < 0                ──► Underwater     (cut out the most extreme region first)
+      ② else if ratio < maintenance ──► Liquidatable   (Underwater already excluded in ①)
+      ③ else if ratio < initial     ──► AtRisk         (Liquidatable already excluded in ②)
+      ④ else                        ──► Safe           (the whole remaining region)
+      ※ Each branch operates only on "what survived being filtered by the branches above."
+
+   🔴 Reversed (check the wide region first):
+      ① if ratio < maintenance     ──► Liquidatable   ← ratio = -5_000 (Underwater) also
+                                                         satisfies < 200, so it gets
+                                                         "absorbed" into Liquidatable
+      ② if ratio < 0               ──► Underwater     ← unreachable
+      ③ ...
+      Result: the insurance-fund signal disappears; the Underwater deficit flows silently
+              through the normal close path. The math says the deficit wasn't resolved,
+              but the books record it as a solvent close.
+\`\`\`
+
+The point: **when the cascade is written as "carve out the most extreme region first, then narrow," each branch's condition naturally operates inside the complement of every prior branch.** Reverse it — check the wide region first — and the more-extreme region (Underwater) gets swallowed by the wider one (Liquidatable), degrading what should be a four-way classification into three. L7's \`close_order_spec\` keys off these four states to decide what to emit, so collapsing the narrowing breaks the downstream behaviour entirely.
+
 ## Walk-through
 
 ### Step 1: Append \`margin_health\` to \`src/compute.rs\`
@@ -1882,7 +2061,7 @@ Five things to notice about this 18-line function:
 
 3. **\`i64::from(params.initial_margin_bps)\` widens u32 → i64.** The fields are \`u32\` (saves memory, plenty of range for bps values up to ~4 billion). The ratio is \`i64\` (the type forced by signed division in \`margin_ratio\`). Comparing different integer types is a compile error in Rust; widening at the boundary keeps the comparisons clean. **One cast per param at the top; the cascade body reads as pure i64 < i64.**
 
-4. **No special case for flat positions.** \`margin_ratio\` returns \`MarginRatio(i64::MAX)\` for a flat account. \`i64::MAX\` is far above any sane \`initial_margin_bps\`, so the cascade falls through to \`Safe\`. **The flat-as-Safe property is encoded by \`margin_ratio\`'s flat-position guard — \`margin_health\` doesn't need to know about it.** A future tweak to flat-position semantics happens in *one place* (\`margin_ratio\`), not in two synchronized branches.
+4. **No special case for flat positions.** \`margin_ratio\` returns \`MarginRatio(i64::MAX)\` for a flat account. \`i64::MAX\` is far above any sane \`initial_margin_bps\`, so the cascade falls through to \`Safe\`. **The flat-as-Safe property is encoded by \`margin_ratio\`'s flat-position guard — \`margin_health\` doesn't need to know about it.** This is **function composition at work: downstream functions inherit invariants established upstream, automatically.** \`margin_ratio\` decides "flat → \`i64::MAX\`" in one spot, and every downstream consumer (this \`margin_health\`, L7's \`close_order_spec\`) gets "flat = always lands in Safe" **for free — zero extra code.** If you have the habit of "adding a flag-branch inside every function for every edge case," this is the paradigm shift worth internalizing: **scope each invariant to a single owner, then trust it downstream.** A future tweak to flat-position semantics happens in *one place* (\`margin_ratio\`), not in two synchronized branches.
 
 5. **Function takes \`&LiquidationParams\`, not \`LiquidationParams\` by value.** Even though \`LiquidationParams\` is \`Copy\` (12 bytes), the reference signature signals "I'm reading these, not consuming them." The bridge passes the same \`params\` to every \`margin_health\` call for an entire scan; reference avoids a (technically free) move per call.
 
@@ -2039,7 +2218,7 @@ After L6:
 
 **Q1: Why not return \`Result<MarginHealth, ...>\` for cases like a misconfigured params (maintenance ≥ initial)?**
 
-The function is total — every input produces a defined output. A misconfigured params (maintenance == initial, or maintenance > initial) still classifies every account into one of the four variants, just with the wrong semantics. Returning \`Result\` would force every call site to handle a \`MisconfiguredParams\` error that *never arises from a bridge that constructed params validly*. **Total functions are easier to compose; validate params at the loading boundary, then trust them everywhere downstream.**
+The function is total — every input produces a defined output. A misconfigured params (maintenance == initial, or maintenance > initial) still classifies every account into one of the four variants, just with the wrong semantics. Returning \`Result\` would force every call site to handle a \`MisconfiguredParams\` error that *never arises from a bridge that constructed params validly*. **Total functions are overwhelmingly easier to compose; complete the parameter-validity check at the system input boundary (config load / config parse), and the downstream domain layer (\`margin_health\` and the other classifiers) treats invariants as fully held** — this is the **"Parse, don't validate"** discipline: concentrate validation logic at the boundary, then build the domain layer out of total functions.
 
 **Q2: Could \`margin_health\` use a sorted-thresholds array and binary-search to be more "data-driven"?**
 
@@ -2116,6 +2295,38 @@ Three edits:
 
 (Answer: **Long: \`Side::Sell\`, \`Qty(10)\`. Short: \`Side::Buy\`, \`Qty(10)\`.** Long is closed by selling: the trader holds 10 units long, so they need to sell 10 to flatten. Short is closed by buying: the trader has 10 units short, so they need to buy 10 to flatten. Quantity is always the magnitude of the position; the sign lives in the side, not in qty. **\`Qty\` is \`u64\` precisely because magnitude is sign-free.**)
 
+At its core, \`close_order_spec\` is just **flipping the side of a position**. Drawing the bridge between the CLOB (matching engine) and the liquidation engine in one picture makes it obvious why this function fits in 11 lines, and why it carries zero responsibility for picking a side or a price:
+
+\`\`\`
+   ┌─────────────────────────────┐                  ┌─────────────────────────────┐
+   │ Held account position        │                  │ Inverted market order that  │
+   │ (account state)              │                  │ close_order_spec emits      │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Long  size = +10             │   ──[invert]──► │  Side::Sell    qty = 10        │
+   │  (holds 10 units long)        │                  │  → submit "sell 10" to CLOB    │
+   │                              │                  │  → consume bids until filled    │
+   │                              │                  │  → position flattens            │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Short size = −10             │   ──[invert]──► │  Side::Buy     qty = 10        │
+   │  (10 units short)             │                  │  → submit "buy 10" to CLOB     │
+   │                              │                  │  → consume asks until filled    │
+   │                              │                  │  → position flattens            │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Flat  size =   0             │   ──[invert]──► │  Side::Buy     qty =  0        │
+   │  (no position; shouldn't even │                  │  → bridge filters; not submitted│
+   │   normally reach here)        │                  │                                │
+   └─────────────────────────────┘                  └─────────────────────────────┘
+
+   ※ \`close_order_spec\` decides only two things: "invert the direction" and
+     "extract the magnitude via \`unsigned_abs\`."
+     ・The "should we liquidate?" decision is already settled by L6's \`margin_health\`.
+     ・The "at what price?" decision happens in the matching engine (CLOB) against the book.
+     ・The "don't submit flat specs" filter is the bridge's job before submission.
+   Each layer owns exactly one concern; they compose in series.
+\`\`\`
+
+The point: **the essence of this function is the side inversion, full stop.** The Long ↔ Sell / Short ↔ Buy mapping is the smallest possible transformation that issues a netting trade through the CLOB; throwing \`MarkPrice\` or \`LiquidationParams\` into the signature would mix in price discovery or threshold decisions that belong elsewhere. **The function expresses "close this position" in its smallest possible form — and that's all \`close_order_spec\` is for.**
+
 ## Walk-through
 
 ### Step 1: Append \`close_order_spec\` to \`src/compute.rs\`
@@ -2160,7 +2371,7 @@ Five things to notice about this 11-line function:
 
 4. **No \`mark\`, no \`params\`.** \`close_order_spec\` only needs the snapshot. The "decision to close" lives in \`margin_health\`; the price discovery happens at the matching engine. **Each function owns exactly one concern. The bridge composes them: scan → classify → generate close spec → submit.**
 
-5. **Returns \`CloseOrderSpec\` by value, not \`Option<CloseOrderSpec>\`.** The function is total — it always returns a spec, even for flat positions (with \`qty == 0\`). The alternative — \`Option\` — would force the caller to handle \`None\` for every flat account in a scan, even though those accounts are already pre-filtered by the time we reach the close step. **Total functions compose; optional functions force every caller to handle the empty case.**
+5. **Returns \`CloseOrderSpec\` by value, not \`Option<CloseOrderSpec>\`.** The function is total — it always returns a spec, even for flat positions (with \`qty == 0\`). The alternative — \`Option\` — would force the caller to handle \`None\` for every flat account in a scan, even though those accounts are already pre-filtered by the time we reach the close step. **Total functions compose; optional functions force every caller to handle the empty case (with the boilerplate that comes with it).** Where this matters concretely is Stage 10c's \`LiquidationScanner\`: it can process every account snapshot uniformly through a plain \`map\` or a flat \`for\` loop, with **no \`filter_map\` and no \`Option\` chaining**. Because \`close_order_spec\` is total, the scanner writes the "is this \`Liquidatable\` or \`Underwater\`?" classification filter in one place, and doesn't need to re-filter at close-spec generation time. **Edge-case filtering (don't submit a flat-qty spec) lives at the outermost shell of the system — the bridge** — which is the discipline that runs across this whole crate.
 
 > 🛑 **Anti-fluency.** "Why not \`if size >= 0 { Sell } else { Buy }\` — wouldn't that handle flat as Sell, which is what some test exchanges do?" **Three problems.** (1) Flat-as-Sell is a behavior choice that belongs at the bridge, not in pure compute. (2) The current \`> 0\` correctly reflects that flat positions are neither longs nor shorts. (3) Production semantics for \`qty == 0 + Side::Sell\` are undefined at the matching engine; the bridge has to filter regardless. **Pick the convention that produces the cleanest contract for callers, not the one that hides edge cases.**
 
@@ -2274,7 +2485,7 @@ Common errors:
 
 Three load-bearing decisions in this lesson:
 
-1. **Side is the opposite of position direction — no other case.** Long → Sell, Short → Buy. The function doesn't need a third case for "ambiguous" or a fallback for "unknown." The position has a sign or it's flat; the spec inverts the sign or carries zero. **Elementary inversion is the right shape for "close this position."**
+1. **Side is the opposite of position direction — no other case.** Long → Sell, Short → Buy. The function doesn't need a third case for "ambiguous" or a fallback for "unknown." The position has a sign or it's flat; the spec inverts the sign or carries zero. **A plain inversion of position direction — that's the simplest and most accurate expression of "close (liquidate) this position" in code.**
 
 2. **\`close_order_spec\` is side-effect-free even for flat positions.** Returning a zero-qty spec instead of filtering inside the function keeps \`close_order_spec\` total and easy to compose. The Stage 10c scanner can \`for snapshot in snapshots { specs.push(close_order_spec(snapshot)); }\` without branching; the bridge filters at submit time. **Pure functions return; impure boundary layers filter.**
 
@@ -2304,7 +2515,7 @@ Could, but adds friction. Every caller that doesn't care about the flat case (mo
 
 **Q2: Why \`size > 0\` (strict) and not \`size >= 0\` (non-strict) for the \`Side::Sell\` branch?**
 
-Because flat (\`size == 0\`) is *neither* long *nor* short — it's outside the long/short dichotomy. The convention "flat is a long" or "flat is a short" is both arbitrary; we picked the convention where flat falls into the \`else\` branch silently and qty is 0 anyway. Either choice works; the discipline is **be consistent and document the choice**. The doc says "flat → qty 0, callers filter," which is what readers can verify against the code.
+Because flat (\`size == 0\`) is *neither* long *nor* short — it's outside the long/short dichotomy. The conventions "flat is a long" and "flat is a short" are both **arbitrary (a matter of taste)**; we picked the convention where flat falls into the \`else\` branch silently and qty is 0 anyway. Either choice works; the discipline is **be consistent and document the choice**. The doc says "flat → qty 0, callers filter," which is what readers can verify against the code.
 
 **Q3: Could \`close_order_spec\` be a method on \`AccountSnapshot\` (\`snapshot.close_order_spec()\`)?**
 

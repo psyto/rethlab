@@ -60,6 +60,43 @@ Three edits:
 
 (Answer: **Underwater accounts get classified as Liquidatable.** A ratio of `−5_000` is `< maintenance_bps` (= 200), so the Liquidatable branch fires first and the cascade never reaches the Underwater check. Result: the bridge doesn't get the insurance-fund-needed signal, the underwater deficit silently routes through the regular liquidation path, and the position closes solvently in the books even though the math says it didn't. **Cascade order is load-bearing — check the most extreme state first; each step inward narrows the remaining range.**)
 
+Laying the four-state cascade out on the margin-ratio number line makes it visible why this is the only order that works, and why reversing it would let Underwater get "absorbed" into Liquidatable:
+
+```
+                       (worsening ◄────────────────── value magnitude ──────────────────► improving)
+
+   margin ratio:   ── −∞ ── 0 ─────── maintenance_bps ─────── initial_bps ─────── i64::MAX ──
+                       ↑    ↑                    ↑                      ↑                    ↑
+                       │    │ (e.g. 200)         │ (e.g. 1000)           │                    │
+                       │    │                    │                      │                    │
+                       └────┴──┐  ┌──────────────┴──┐  ┌─────────────────┴──┐  ┌──────────────┘
+                              ▼  ▼                 ▼  ▼                    ▼  ▼
+                          🔴 Underwater       🟠 Liquidatable          🟡 AtRisk            🟢 Safe
+                          (ratio < 0)         (0 ≤ ratio                (maint ≤ ratio       (initial ≤ ratio;
+                                              < maintenance)            < initial)            flat lands here
+                                                                                              via i64::MAX too)
+
+
+   🟢 Correct cascade order (narrow inward):
+      ① if ratio < 0                ──► Underwater     (cut out the most extreme region first)
+      ② else if ratio < maintenance ──► Liquidatable   (Underwater already excluded in ①)
+      ③ else if ratio < initial     ──► AtRisk         (Liquidatable already excluded in ②)
+      ④ else                        ──► Safe           (the whole remaining region)
+      ※ Each branch operates only on "what survived being filtered by the branches above."
+
+   🔴 Reversed (check the wide region first):
+      ① if ratio < maintenance     ──► Liquidatable   ← ratio = -5_000 (Underwater) also
+                                                         satisfies < 200, so it gets
+                                                         "absorbed" into Liquidatable
+      ② if ratio < 0               ──► Underwater     ← unreachable
+      ③ ...
+      Result: the insurance-fund signal disappears; the Underwater deficit flows silently
+              through the normal close path. The math says the deficit wasn't resolved,
+              but the books record it as a solvent close.
+```
+
+The point: **when the cascade is written as "carve out the most extreme region first, then narrow," each branch's condition naturally operates inside the complement of every prior branch.** Reverse it — check the wide region first — and the more-extreme region (Underwater) gets swallowed by the wider one (Liquidatable), degrading what should be a four-way classification into three. L7's `close_order_spec` keys off these four states to decide what to emit, so collapsing the narrowing breaks the downstream behaviour entirely.
+
 ## Walk-through
 
 ### Step 1: Append `margin_health` to `src/compute.rs`
@@ -105,7 +142,7 @@ Five things to notice about this 18-line function:
 
 3. **`i64::from(params.initial_margin_bps)` widens u32 → i64.** The fields are `u32` (saves memory, plenty of range for bps values up to ~4 billion). The ratio is `i64` (the type forced by signed division in `margin_ratio`). Comparing different integer types is a compile error in Rust; widening at the boundary keeps the comparisons clean. **One cast per param at the top; the cascade body reads as pure i64 < i64.**
 
-4. **No special case for flat positions.** `margin_ratio` returns `MarginRatio(i64::MAX)` for a flat account. `i64::MAX` is far above any sane `initial_margin_bps`, so the cascade falls through to `Safe`. **The flat-as-Safe property is encoded by `margin_ratio`'s flat-position guard — `margin_health` doesn't need to know about it.** A future tweak to flat-position semantics happens in *one place* (`margin_ratio`), not in two synchronized branches.
+4. **No special case for flat positions.** `margin_ratio` returns `MarginRatio(i64::MAX)` for a flat account. `i64::MAX` is far above any sane `initial_margin_bps`, so the cascade falls through to `Safe`. **The flat-as-Safe property is encoded by `margin_ratio`'s flat-position guard — `margin_health` doesn't need to know about it.** This is **function composition at work: downstream functions inherit invariants established upstream, automatically.** `margin_ratio` decides "flat → `i64::MAX`" in one spot, and every downstream consumer (this `margin_health`, L7's `close_order_spec`) gets "flat = always lands in Safe" **for free — zero extra code.** If you have the habit of "adding a flag-branch inside every function for every edge case," this is the paradigm shift worth internalizing: **scope each invariant to a single owner, then trust it downstream.** A future tweak to flat-position semantics happens in *one place* (`margin_ratio`), not in two synchronized branches.
 
 5. **Function takes `&LiquidationParams`, not `LiquidationParams` by value.** Even though `LiquidationParams` is `Copy` (12 bytes), the reference signature signals "I'm reading these, not consuming them." The bridge passes the same `params` to every `margin_health` call for an entire scan; reference avoids a (technically free) move per call.
 
@@ -262,7 +299,7 @@ After L6:
 
 **Q1: Why not return `Result<MarginHealth, ...>` for cases like a misconfigured params (maintenance ≥ initial)?**
 
-The function is total — every input produces a defined output. A misconfigured params (maintenance == initial, or maintenance > initial) still classifies every account into one of the four variants, just with the wrong semantics. Returning `Result` would force every call site to handle a `MisconfiguredParams` error that *never arises from a bridge that constructed params validly*. **Total functions are easier to compose; validate params at the loading boundary, then trust them everywhere downstream.**
+The function is total — every input produces a defined output. A misconfigured params (maintenance == initial, or maintenance > initial) still classifies every account into one of the four variants, just with the wrong semantics. Returning `Result` would force every call site to handle a `MisconfiguredParams` error that *never arises from a bridge that constructed params validly*. **Total functions are overwhelmingly easier to compose; complete the parameter-validity check at the system input boundary (config load / config parse), and the downstream domain layer (`margin_health` and the other classifiers) treats invariants as fully held** — this is the **"Parse, don't validate"** discipline: concentrate validation logic at the boundary, then build the domain layer out of total functions.
 
 **Q2: Could `margin_health` use a sorted-thresholds array and binary-search to be more "data-driven"?**
 

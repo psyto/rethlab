@@ -61,6 +61,27 @@ Three edits, exactly mirroring funding L1's shape but with two deps instead of o
 
 (Answer: **the resolution you need scales with the smallest meaningful step.** A funding rate of `0.0001%` per interval is a meaningful difference for high-volume traders — ppb is the right resolution. A maintenance margin of `0.02%` instead of `0.05%` is **not** a meaningful difference at the engine layer — production deployments set maintenance in whole bps (`200 bps`, `500 bps`). Bps is the conventional unit; using ppb would buy precision the system can't actually use. **Use the smallest scale that covers your real range.**)
 
+Laying `RATE_SCALE` and `MARGIN_SCALE` side by side makes it obvious why each one is "just right" for its own domain:
+
+```
+                       Course 9 (funding)              Course 10 (liquidation)
+                       ─────────────────────           ────────────────────────
+Scale constant         RATE_SCALE = 1_000_000_000      MARGIN_SCALE = 10_000
+                       (parts-per-billion, 10⁹)        (basis points, 10⁴)
+Precision              9 decimal digits                4 decimal digits
+Typical range          0.0001% — 4% / interval         2% — 10% (maintenance)
+                                                       10% — 50% (initial)
+Smallest meaningful    0.0001% (= 10 ppb)              1 bp = 0.01%
+step in production
+Raw value for 1.0      1_000_000_000                   10_000
+Raw value for 4%       40_000_000                      400
+                       ↑ ppb: 1 step = 0.0000001%       ↑ bps: 1 step = 0.01%
+                       For a world where traders         For a world where operators
+                       feel sub-basis-point diffs        run with whole-bps boundaries
+```
+
+The discipline: **pick the resolution that matches the domain's conventional unit.** Funding lives in per-billion sub-bp deltas, margin lives in whole-bp operator settings. The two scales don't need to match because the two domains are independent; if they did match, you'd waste i64 headroom on precision the system never uses.
+
 ## Walk-through
 
 ### Step 1: Update Cargo.toml
@@ -203,9 +224,9 @@ Five things to notice about this file:
 
 4. **`hyperliquid_default()` is `const fn`.** This lets the defaults appear in `static` items: `static PARAMS: LiquidationParams = LiquidationParams::hyperliquid_default();` works in any context, including embedded in tests, fixtures, and protobuf-encoded genesis state. **A `const fn` constructor is the bridge between "value I want" and "value I can declare anywhere."**
 
-5. **`#[must_use]` on the constructor and getters.** Constructed-but-dropped `LiquidationParams` is almost certainly a bug — you computed the defaults and threw them away. Same logic for accessor: reading `initial_margin_bps()` and ignoring the result is almost always wrong. `#[must_use]` makes the compiler ask the reader to confirm.
+5. **`#[must_use]` on the constructor and getters.** Constructed-but-dropped `LiquidationParams` is almost certainly a bug — you computed the defaults and threw them away. Same logic for accessor: reading `initial_margin_bps()` and ignoring the result is almost always wrong. `#[must_use]` makes the compiler ask the reader to confirm. **This isn't just a hint — it's a defensive-programming technique that **promotes logic bugs that human reviewers typically miss** (discarded return values) into compiler warnings — or, with `#![deny(unused_must_use)]`, into outright compile errors.** The discipline behind it is **"drive the compiler as far as it'll go as a static-analysis tool, so review cost trends toward zero"** — a Rust-native pattern worth internalizing.
 
-> 🛑 **Anti-fluency.** "Why three separate `u32` fields instead of one `LiquidationParams` newtype wrapping a `(u32, u32, u32)` tuple?" **Because the three values mean different things.** Tuple ordering is positional and fragile — a refactor that swaps `initial` and `maintenance` produces a silent semantic bug. Named fields force the call site to be explicit: `LiquidationParams { initial_margin_bps: 1000, ... }`. **Names cost no runtime; positional tuples earn no runtime.**
+> 🛑 **Anti-fluency.** "Why three separate `u32` fields instead of one `LiquidationParams` newtype wrapping a `(u32, u32, u32)` tuple?" **Because the three values mean different things.** Tuple ordering is positional and fragile — a refactor that swaps `initial` and `maintenance` produces a silent semantic bug. Named fields force the call site to be explicit: `LiquidationParams { initial_margin_bps: 1000, ... }`. **Named fields cost nothing at runtime and buy overwhelming safety; positional tuples sacrifice safety and earn nothing at runtime.**
 
 ### Step 3: Update `src/lib.rs`
 
@@ -309,7 +330,7 @@ HL's actual maintenance margin tiers run from 1.25% to 6.67% depending on positi
 
 **Q4: What's the actual i64-overflow risk on a margin ratio computation?**
 
-`margin_ratio = equity * MARGIN_SCALE / notional`. With `MARGIN_SCALE = 10_000` and `equity` and `notional` bounded by `i64::MAX`, the product `equity * MARGIN_SCALE` can overflow i64 when `equity > i64::MAX / 10_000 ≈ 9.2e14`. At realistic exchange scales that's $920 trillion of equity — far above plausible inputs, but L5 still does the multiplication in `i128` and saturates back. **The reflex is the same as funding: any product that *can* exceed i64 *will* exceed i64 at some adversarial input.**
+`margin_ratio = equity * MARGIN_SCALE / notional`. With `MARGIN_SCALE = 10_000` and `equity` and `notional` bounded by `i64::MAX`, the product `equity * MARGIN_SCALE` can overflow i64 when `equity > i64::MAX / 10_000 ≈ 9.2e14`. At realistic exchange scales that's $920 trillion of equity — far above plausible inputs, but L5 still does the multiplication in `i128` and saturates back. **The discipline is the same as funding: any product that *can* exceed i64 *will* exceed i64 at some adversarial input — assume that as the default.**
 
 **Q5: Could we use `u32` for `MARGIN_SCALE` and `bps` and avoid the i64 conversion noise?**
 

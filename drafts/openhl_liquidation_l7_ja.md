@@ -60,6 +60,36 @@ L7 で Stage 10a を閉じる。本レッスンの後、`22eedf9` に対する�
 
 （答え: **Long なら `Side::Sell`、`Qty(10)`。Short なら `Side::Buy`、`Qty(10)`。** Long は売って close する。トレーダーは 10 ユニットを long で保有しているので、10 売って flat にする必要がある。Short は買って close する。トレーダーは 10 ユニットを short で保有しているので、10 買って flat にする必要がある。Quantity は常にポジションの magnitude だ。符号は side のほうが運んでいて、qty には乗らない。**`Qty` が `u64` なのは、まさに magnitude が符号を持たないからだ。**）
 
+`close_order_spec` 関数は本質的に「**ポジションの side をひっくり返すだけ**」という極めて単純なメカニズムを持つ。CLOB (matching engine) と liquidation engine の間の橋を 1 枚で見ると、なぜこの関数が 11 行で済むのか、なぜ side 決定や価格決定の責務を一切持たないのかが直感で見える:
+
+```
+   ┌─────────────────────────────┐                  ┌─────────────────────────────┐
+   │ アカウントが保有中のポジション │                  │ close_order_spec が emit する  │
+   │ (Account state)              │                  │ 反対方向の市場注文 (CloseOrder) │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Long  size = +10             │   ──[反転]──►   │  Side::Sell    qty = 10        │
+   │  (10 ユニットを保有中)        │                  │  → CLOB に「10 売り」を submit  │
+   │                              │                  │  → 板の bid を順に食って fill   │
+   │                              │                  │  → ポジションが flat に          │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Short size = −10             │   ──[反転]──►   │  Side::Buy     qty = 10        │
+   │  (10 ユニットを売り持ち中)    │                  │  → CLOB に「10 買い」を submit  │
+   │                              │                  │  → 板の ask を順に食って fill   │
+   │                              │                  │  → ポジションが flat に          │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Flat  size =   0             │   ──[反転]──►   │  Side::Buy     qty =  0        │
+   │  (保有なし、本来は呼ばれない) │                  │  → bridge がフィルタして submit せず │
+   └─────────────────────────────┘                  └─────────────────────────────┘
+
+   ※ `close_order_spec` が決めるのは「方向を反転」「magnitude を `unsigned_abs` で取り出す」の 2 つだけ。
+     ・「liquidate するかどうか」の意思決定は L6 `margin_health` が完了させている。
+     ・「いくらで close するか」の価格決定は matching engine (CLOB) の板が決める。
+     ・「flat の spec を出さない」のフィルタは Bridge が submit 前に行う。
+   各レイヤーがちょうど 1 つの関心事を持ち、それらが直列に compose されている。
+```
+
+ポイントは「**この関数の本質は side のインバージョン (反転) しかない**」こと。Long ↔ Sell、Short ↔ Buy という対応は CLOB の板を介して「相殺取引」を発行するための最も単純な変換であり、ここに `MarkPrice` や `LiquidationParams` を持ち込むと、価格発見や閾値判断の責務が混入してしまう。**「ポジションを close する」という行為そのものを、最も小さい形で表現する関数** — それが `close_order_spec` だ。
+
 ## 手を動かす walk-through
 
 ### Step 1: `src/compute.rs` に `close_order_spec` を追記
@@ -104,7 +134,7 @@ pub fn close_order_spec(snapshot: &AccountSnapshot) -> CloseOrderSpec {
 
 4. **`mark` なし、`params` なし。** `close_order_spec` に必要なのは snapshot だけだ。「Close するか否か」の判断は `margin_health` に住み、price discovery は matching engine で起きる。**各関数がちょうど 1 つの関心事を所有する。Bridge がそれらを compose する: スキャン → 分類 → close spec 生成 → submit、という流れになる。**
 
-5. **`Option<CloseOrderSpec>` ではなく `CloseOrderSpec` を値で返す。** 関数は total だ — flat ポジション（`qty == 0`）でも常に spec を返す。代替案として `Option` を返すと、スキャン内のすべての flat アカウントに対して呼び出し側に `None` を扱わせることになる — close ステップに到達する頃にはそれらのアカウントはすでに前段でフィルタされているのに、だ。**Total な関数は compose しやすい。Optional な関数は、すべての呼び出し側に空ケースの処理を強要する。**
+5. **`Option<CloseOrderSpec>` ではなく `CloseOrderSpec` を値で返す。** 関数は total（全域関数）だ — flat ポジション（`qty == 0`）でも常に spec を返す。代替案として `Option` を返すと、スキャン内のすべての flat アカウントに対して呼び出し側に `None` を扱わせることになる — close ステップに到達する頃にはそれらのアカウントはすでに前段でフィルタされているのに、だ。**Total な関数は圧倒的に compose（結合）しやすい。Optional な関数は、すべての呼び出し側に空ケースの処理（ボイラープレート）を強用する。** 具体的に効いてくるのは Stage 10c で実装する `LiquidationScanner` だ: 全アカウントのスナップショットを `filter_map` や `Option` chaining なしに**単なる `map` や平坦な `for` ループで均質に処理**できる。`close_order_spec` が total だからこそ、scanner は「`Liquidatable` か `Underwater` か」の分類フィルタを 1 箇所で書けば済み、close-spec 生成側で再度フィルタする必要がない。**エッジケース (flat → qty 0 の spec は submit しない) のフィルタリングは、入出力の最外殻である bridge レイヤーにのみ集約する** — これが crate を貫く規律になっている。
 
 > 🛑 **やりがちな勘違い。** 「`if size >= 0 { Sell } else { Buy }` ではダメか — そうすれば flat が Sell として扱われ、一部のテスト取引所と挙動が揃う」 **問題が 3 つある。** (1) Flat-as-Sell は挙動の選択であり、pure compute ではなく bridge に属する判断だ。(2) 現在の `> 0` は「flat ポジションは long でも short でもない」という事実を正しく反映している。(3) `qty == 0 + Side::Sell` の本番セマンティクスは matching engine では未定義。Bridge はどのみちフィルタしなければならない。**呼び出し側に最もクリーンな契約を提供する慣例を選ぶ — エッジケースを隠す慣例ではなく。**
 
@@ -218,7 +248,7 @@ test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 このレッスンに焼き込んだ load-bearing な決定は 3 つ:
 
-1. **Side はポジション方向の反対 — それ以外のケースはない。** Long → Sell、Short → Buy。関数は「曖昧なケース」のための 3 つ目の分岐も、「不明なケース」のためのフォールバックも要らない。ポジションは符号を持つか、さもなくば flat。Spec は符号を反転するか、ゼロを運ぶ。**基本反転こそが「このポジションを close する」の正しい表現だ。**
+1. **Side はポジション方向の反対 — それ以外のケースはない。** Long → Sell、Short → Buy。関数は「曖昧なケース」のための 3 つ目の分岐も、「不明なケース」のためのフォールバックも要らない。ポジションは符号を持つか、さもなくば flat。Spec は符号を反転するか、ゼロを運ぶ。**ポジション方向の単純な反転 (インバージョン) こそが、「ポジションをクローズ (清算) する」という行為を最もシンプルかつ正確に表現したコードである。**
 
 2. **`close_order_spec` は flat ポジションに対しても side-effect-free。** 関数内でフィルタする代わりに zero-qty spec を返すことで、`close_order_spec` を total に、かつ compose しやすく保てる。Stage 10c の scanner は分岐なしで `for snapshot in snapshots { specs.push(close_order_spec(snapshot)); }` と書ける。Bridge が submit 時にフィルタする。**Pure 関数は返す。Impure な境界レイヤーがフィルタする。**
 
@@ -248,7 +278,7 @@ Stage 10a クレートのすべてがあなたの workspace に揃った。
 
 **Q2: なぜ `Side::Sell` 分岐で `size > 0`（strict）であって `size >= 0`（non-strict）ではないのか?**
 
-Flat（`size == 0`）は long *でもなく* short *でもない* — long/short の二分法の外側にある。「flat は long」も「flat は short」も、どちらも arbitrary な慣例だ。ここでは flat が `else` 分岐に静かに落ち、qty もどのみち 0 になる、という慣例を選んだ。どちらの選択も動く。規律は **一貫性を保ち、選択を文書化すること** だ。Doc には「flat → qty 0、呼び出し側がフィルタ」と書いてあり、読者はそれをコードに対して検証できる。
+Flat（`size == 0`）は long *でもなく* short *でもない* — long/short の二分法の外側にある。「flat は long」も「flat は short」も、どちらも**恣意的な (好みの分かれる) 慣例にすぎない**。ここでは flat が `else` 分岐に静かに落ち、qty もどのみち 0 になる、という慣例を選んだ。どちらの選択も動く。規律は **一貫性を保ち、選択を文書化すること** だ。Doc には「flat → qty 0、呼び出し側がフィルタ」と書いてあり、読者はそれをコードに対して検証できる。
 
 **Q3: `close_order_spec` を `AccountSnapshot` のメソッド（`snapshot.close_order_spec()`）にできないか?**
 

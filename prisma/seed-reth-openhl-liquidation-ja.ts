@@ -39,7 +39,7 @@ export async function seedRethOpenHlLiquidationJA(prisma: PrismaClient) {
 
 ## 何を作るか
 
-前のコース（\`building-openhl-funding\`）で追加した funding-rate state machine によって、永久先物は mark を index に anchor する仕組みを得た。本コースで作るのは次の openhl primitive、すなわちアカウントの損失が預け入れ collateral を超えたときにポジションを force-close する **liquidation エンジン**だ。
+前のコース（\`building-openhl-funding\`）で追加した funding-rate state machine によって、永久先物の mark と index の乖離を funding payment で抑える仕組みが手に入った。本コースで作るのは次の openhl primitive、すなわちアカウントの損失が預け入れ collateral を超えたときにポジションを force-close する **liquidation エンジン**だ。
 
 本コースを終えると、以下を完成させている:
 
@@ -54,7 +54,7 @@ export async function seedRethOpenHlLiquidationJA(prisma: PrismaClient) {
 - Hyperliquid 型 margin model: cross-margin、mark-vs-entry、initial-vs-maintenance。
 - Margin health の 4 状態と、それぞれが engine に何を許可するか。
 - \`margin_ratio\` の **非単調エッジケース**。collateral が notional を支配するとき、ratio が mark の方向と逆に動くケースが生じる。それでもなお liquidation が壊れない理由。
-- insurance fund を残高エントリではなく state machine として作る理由。
+- insurance fund を**単なる \`u64\` の残高変数 (balance entry) ではなく、独自の遷移ルール (\`deposit\` / \`withdraw\` / \`absorb_deficit\` の不変条件) を持つ pure state machine** として作る理由。
 - Auto-deleveraging (ADL) がこの設計の端でどう位置づけられるか。そして Stage 10 では扱わない理由。
 
 ## なぜ liquidation が重要か（perp 1 段落）
@@ -73,7 +73,7 @@ Hyperliquid は liquidation を **consensus 内** で実行する。すべての
 
 Funding と同じ答え: consensus determinism のためだ。あるアカウントを \`Liquidatable\` と分類する validator と、同じアカウントを \`AtRisk\` と分類する validator がいると、生成される block が違ってくる — close orders も違えば、fees も違い、insurance-fund deltas も違う。Block proposal が分岐し、chain が fork する。
 
-直し方は決まっている。符号付き整数を使い、saturating 演算を通し、i64 でオーバーフローしうる乗算には i128 の中間値を経由させる。\`MarginRatio\` の固定小数点単位には \`MARGIN_SCALE = 10_000\`（basis points）を採用する。Bps は TradFi *でも* crypto perp venue でも margin の慣例単位だ — Hyperliquid、Binance、Drift はいずれも margin 要件を bps で表現する。\`MarginRatio(1_000)\` はちょうど 10%、\`MarginRatio(MARGIN_SCALE)\` はちょうど 100%。
+直し方は決まっている。符号付き整数を使い、**飽和演算 (saturating arithmetic — オーバーフロー時に panic も wrap もせず型境界値 \`i64::MAX\` / \`i64::MIN\` に張り付かせる演算、Rust では \`saturating_add\` / \`saturating_mul\` 等)** を通し、i64 でオーバーフローしうる乗算には i128 の中間値を経由させる。\`MarginRatio\` の固定小数点単位には \`MARGIN_SCALE = 10_000\`（basis points）を採用する。Bps は TradFi *でも* crypto perp venue でも margin の慣例単位だ — Hyperliquid、Binance、Drift はいずれも margin 要件を bps で表現する。\`MarginRatio(1_000)\` はちょうど 10%、\`MarginRatio(MARGIN_SCALE)\` はちょうど 100%。
 
 （Funding は parts-per-billion の精度が必要だったので \`RATE_SCALE = 1_000_000_000\` を選んだ。Liquidation はそこまでの精度を要求しないが、規律自体は同じだ。）
 
@@ -85,11 +85,11 @@ Funding と同じ答え: consensus determinism のためだ。あるアカウン
 ### Module 1 — 型（L1-L3）
 - **L1** — \`MARGIN_SCALE = 1e4\`（bps）+ \`LiquidationParams\` + \`hyperliquid_default()\`（10% / 2% / 1.5%）。bps を選ぶ理由、このデフォルト値の根拠。
 - **L2** — \`MarginRatio\` newtype + \`MarginHealth\` enum（\`Safe\` / \`AtRisk\` / \`Liquidatable\` / \`Underwater\`）。4 状態にする理由と、各状態が許可する挙動。
-- **L3** — \`AccountSnapshot\` + \`CloseOrderSpec\`。\`funding::Position\` を流用せず新しい snapshot 型を起こす理由と、bridge レイヤーがどう組み立てるか。
+- **L3** — \`AccountSnapshot\` + \`CloseOrderSpec\`。\`funding::Position\` を流用せず新しい snapshot 型を起こす理由 (**read-only な不変 snapshot 型に分離して、リスク計算のコアロジックを上流レイヤー (bridge / clearing) のミュータブルな state shape から疎結合に保つ**)、そして bridge レイヤーがどう組み立てるか。
 
 ### Module 2 — 純粋な compute（L4-L7）— Stage 10a
 - **L4** — \`notional_value\` + \`unrealized_pnl\`。ロング・ショートいずれでも符号が正しく揃う signed-multiplication のトリック。
-- **L5** — \`account_equity\` + \`margin_ratio\`。Collateral が notional を支配するときに姿を現す **非単調エッジケース** を proptest で検出し、\`prop_assume!\` がなぜ正しい修正なのかを見る。
+- **L5** — \`account_equity\` + \`margin_ratio\`。Collateral が notional を支配するときに姿を現す **非単調エッジケース (= 価格が好転しているように見えるのに、特定の条件下ではマージン比率が逆に悪化して見える現象)** を proptest で検出し、\`prop_assume!\` がなぜ正しい修正なのかを見る。
 - **L6** — \`margin_health\` 分類。境界条件にすべて strict less-than を採用する理由と、それが何を保証するか。
 - **L7** — \`close_order_spec\`。Market order の規律 — liquidation は利用可能な任意の価格を取る。ここで Stage 10a が完成する。
 
@@ -231,6 +231,26 @@ L1 では、この空の crate を、公開された scale 定数 1 つと、エ
 > 🛑 **予測。** スクロール前に: funding は \`RATE_SCALE = 1_000_000_000\`（parts-per-billion、9 decimal digits の精度）を使う。それなのに liquidation は \`MARGIN_SCALE = 10_000\`（basis points、4 decimal digits）にする — なぜか? ヒント: 表現すべきマグニチュードを思い出す。funding rate は 1 区間で \`0.0001\` から \`0.04\`、margin 要件は notional の \`0.02\` から \`0.10\`。
 
 （答え: **必要な解像度は、意味のある最小ステップに従って決める。** 1 区間 \`0.0001%\` の funding rate は高ボリュームトレーダーにとって意味のある差だから、ppb が正しい解像度になる。一方で maintenance margin が \`0.02%\` か \`0.05%\` かは engine 層で意味のある差には **ならない** — 本番のデプロイは bps の整数（\`200 bps\`、\`500 bps\`）で maintenance を設定する。Bps は慣例単位だ。ppb を採用してしまうと、システムが実際には使わない精度を買い込むことになる。**実際のレンジをカバーする最小のスケールを選ぶ。**）
+
+\`RATE_SCALE\` と \`MARGIN_SCALE\` の解像度差を 1 枚で並べると、なぜそれぞれが「自分のドメインに対して必要十分」なのかが直感で見える:
+
+\`\`\`
+                       Course 9 (funding)              Course 10 (liquidation)
+                       ─────────────────────           ────────────────────────
+スケール定数             RATE_SCALE = 1_000_000_000      MARGIN_SCALE = 10_000
+                       (parts-per-billion, 10⁹)        (basis points, 10⁴)
+精度                    9 decimal digits                4 decimal digits
+扱う典型レンジ           0.0001% — 4% / interval         2% — 10% (maintenance)
+                                                       10% — 50% (initial)
+本番で意味のある最小ステップ  0.0001% (= 10 ppb)               1 bp = 0.01%
+1.0 を表す raw 値        1_000_000_000                   10_000
+4% を表す raw 値        40_000_000                      400
+                       ↑ ppb は 1 step = 0.0000001%      ↑ bps は 1 step = 0.01%
+                       「ベイシスポイント以下の精度を     「ベイシスポイント単位の境界を
+                        トレーダーが感じ取る」世界用       オペレータが運用する」世界用
+\`\`\`
+
+ポイントは「**解像度はドメインの慣例単位に合わせる**」だ。funding は per-billion でしか表せない差を扱うので \`ppb\`、margin はそもそも本番設定が bps の整数で来るので \`bps\`。スケールを揃えなくていい理由は両者がドメインとして独立しているからで、揃えてしまうと使われない精度のために i64 のヘッドルームを浪費する。
 
 ## 手を動かす walk-through
 
@@ -374,9 +394,9 @@ impl LiquidationParams {
 
 4. **\`hyperliquid_default()\` を \`const fn\` にする。** これでデフォルト値を \`static\` アイテムに乗せられる: \`static PARAMS: LiquidationParams = LiquidationParams::hyperliquid_default();\` のような書き方が、テスト、fixture、protobuf encoded genesis state への埋め込みなど、あらゆるコンテキストで通る。**\`const fn\` constructor は、「欲しい値」と「どこでも宣言できる値」を橋渡しする道具だ。**
 
-5. **constructor とゲッターに \`#[must_use]\`。** \`LiquidationParams\` を組み立ててから捨てる動作はほぼ間違いなくバグだ — デフォルト値を計算しておいて捨てている。Accessor も同じで、\`initial_margin_bps()\` を読んだ結果を無視するのはたいてい誤り。\`#[must_use]\` を付けておけば、コンパイラが読者に「本当にそれでいいのか」と問い返してくれる。
+5. **constructor とゲッターに \`#[must_use]\`。** \`LiquidationParams\` を組み立ててから捨てる動作はほぼ間違いなくバグだ — デフォルト値を計算しておいて捨てている。Accessor も同じで、\`initial_margin_bps()\` を読んだ結果を無視するのはたいてい誤り。\`#[must_use]\` を付けておけば、コンパイラが読者に「本当にそれでいいのか」と問い返してくれる。**これは単なる気休めではなく、人間のレビューで見落とされがちな論理バグ (戻り値の捨て忘れ) を、**コンパイラ警告 (あるいは \`#![deny(unused_must_use)]\` で**コンパイルエラー**) に昇格させる防衛的プログラミングのテクニックだ。**「コンパイラを静的解析ツールとして最大限に駆動して、レビューコストをゼロに近づける」**という、Rust ならではの開発規律になっている。
 
-> 🛑 **やりがちな勘違い。** 「3 つの独立した \`u32\` フィールドではなく、\`(u32, u32, u32)\` タプルをラップする \`LiquidationParams\` newtype ではダメか?」 **ダメだ。3 つの値は意味が違う。** タプルの順序は位置依存で壊れやすく、\`initial\` と \`maintenance\` を入れ替えるリファクタリングが静かに意味のバグを呼び込む。名前付きフィールドなら、呼び出し側を明示的に書かせられる: \`LiquidationParams { initial_margin_bps: 1000, ... }\`。**名前は実行時コストがゼロ、位置タプルは実行時利益がゼロ。**
+> 🛑 **やりがちな勘違い。** 「3 つの独立した \`u32\` フィールドではなく、\`(u32, u32, u32)\` タプルをラップする \`LiquidationParams\` newtype ではダメか?」 **ダメだ。3 つの値は意味が違う。** タプルの順序は位置依存で壊れやすく、\`initial\` と \`maintenance\` を入れ替えるリファクタリングが静かに意味のバグを呼び込む。名前付きフィールドなら、呼び出し側を明示的に書かせられる: \`LiquidationParams { initial_margin_bps: 1000, ... }\`。**名前付きフィールドは実行時コストゼロで圧倒的な安全性を買い、位置タプルは安全性を失うだけで実行時の利益はゼロだ。**
 
 ### Step 3: \`src/lib.rs\` を更新
 
@@ -480,7 +500,7 @@ HL の実際の maintenance margin tier は position size に応じて 1.25% か
 
 **Q4: Margin ratio の計算で実際の i64 overflow リスクは?**
 
-\`margin_ratio = equity * MARGIN_SCALE / notional\`。\`MARGIN_SCALE = 10_000\` のもと、\`equity\` と \`notional\` が \`i64::MAX\` で bound されているとすると、積 \`equity * MARGIN_SCALE\` は \`equity > i64::MAX / 10_000 ≈ 9.2e14\` で i64 を overflow しうる。現実的な取引所スケールに直すと 920 兆ドルの equity だ — 妥当な入力からははるか上にある。ただし L5 では依然として乗算を \`i128\` で行い、i64 に saturate して戻す。**反射神経としては funding と同じ — i64 を超えうる積は、敵対的な入力では必ず超える。**
+\`margin_ratio = equity * MARGIN_SCALE / notional\`。\`MARGIN_SCALE = 10_000\` のもと、\`equity\` と \`notional\` が \`i64::MAX\` で bound されているとすると、積 \`equity * MARGIN_SCALE\` は \`equity > i64::MAX / 10_000 ≈ 9.2e14\` で i64 を overflow しうる。現実的な取引所スケールに直すと 920 兆ドルの equity だ — 妥当な入力からははるか上にある。ただし L5 では依然として乗算を \`i128\` で行い、i64 に saturate して戻す。**設計の規律としては funding と同じ — i64 を超えうる積は、敵対的な入力では必ず超えるものと想定する。**
 
 **Q5: \`MARGIN_SCALE\` と bps に \`u32\` を使って、i64 への変換ノイズを避けられないか?**
 
@@ -544,6 +564,28 @@ L2 ではエンジンの残り部分が言葉として使う 2 つの分類型�
 
 （答え: **3 つの問い → 4 variants。** \`Safe\` は (a) yes。\`AtRisk\` は (a) no, (b) no。\`Liquidatable\` は (a) no, (b) yes, (c) yes（close だけで足りる）。\`Underwater\` は (a) no, (b) yes, (c) no（insurance fund が不足分を吸収する）。3-variant enum にして Safe / AtRisk / Liquidatable だけにすると、Liquidatable と Underwater が潰れて「insurance fund は関与するのか?」という信号が消えてしまう。エンジンがそれを再計算する必要はない — variant にすでに反映済みだ。）
 
+4 つの variant が、それぞれアカウントに対して**どの action を authorize するか**を 1 枚のマトリクスに落とすと、なぜ 4 つ必要なのか、そして各 variant がどう「下流の意思決定」を型レベルで運ぶのかが一目で見える:
+
+\`\`\`
+                    │ (a) 新規ポジション │ (b) Force-close   │ (c) Close だけで    │
+                    │     を開ける?       │   実行する?       │   不足カバー可能?    │
+   ─────────────────┼────────────────────┼───────────────────┼─────────────────────┤
+   Safe              │ ✅ yes              │ ❌ no              │ N/A (close 不要)    │
+   AtRisk            │ ❌ no               │ ❌ no              │ N/A (close 不要)    │
+   Liquidatable      │ ❌ no               │ ✅ yes             │ ✅ yes (equity 残あり)│
+   Underwater        │ ❌ no               │ ✅ yes             │ ❌ no → insurance    │
+                    │                    │                   │   fund が吸収        │
+   ─────────────────┴────────────────────┴───────────────────┴─────────────────────┘
+
+下流のエンジン挙動 (L7 / Module 3 で実装):
+   Safe         ─► trader はそのまま運用継続
+   AtRisk       ─► UI で警告、新規ポジは拒否、close は trader 自身に任せる
+   Liquidatable ─► 自動 close order を発行、fee を差し引き、残 equity を返却
+   Underwater   ─► 自動 close order を発行、不足分は insurance fund から補填
+\`\`\`
+
+ポイント: **各 variant がそのまま「許可される action のセット」を表す**。\`Liquidatable\` と \`Underwater\` を 1 つに潰すと「insurance fund を呼ぶべきか」の信号が型から消え、エンジンが equity を再計算してから判断し直すコストが発生する。逆に variant を増やしてもどの行も新しい列は引き出せない (= action set として一意に区別される最小単位がこの 4 つ)。**「state machine の variants は、自分がトリガーする下流 action の数だけ存在する」** が、この設計が体現している原則だ。
+
 ## 手を動かす walk-through
 
 ### Step 1: \`src/types.rs\` に追記
@@ -584,11 +626,11 @@ pub enum MarginHealth {
 
 この 25 行で気づきたい点が 5 つ:
 
-1. **\`MarginRatio(pub i64)\` は newtype。** \`type MarginRatio = i64\` の alias ではない。Newtype は型チェッカーに足場を与える — \`MarginRatio\` を取る関数を、balance や account ID、\`MarkPrice\` のつもりで渡した生の \`i64\` 値では呼べなくなる。\`pub i64\` フィールドにしてあるので、呼び出し側は \`MarginRatio(1000)\` で組み立てて \`ratio.0\` で読み出せる。守るべきカプセル化不変量はない。
+1. **\`MarginRatio(pub i64)\` は newtype。** \`type MarginRatio = i64\` の alias ではない。Newtype は型チェッカーに足場を与える — \`MarginRatio\` を取る関数を、balance や account ID、\`MarkPrice\` のつもりで渡した生の \`i64\` 値では呼べなくなる。\`pub i64\` フィールドにしてあるので、呼び出し側は \`MarginRatio(1000)\` で組み立てて \`ratio.0\` で読み出せる。**内部に不正な状態を持ち得ない (= どんな \`i64\` 値が入っても型として不正にならない、つまり守るべきカプセル化不変量がない) ため、無駄にゲッター/セッターで隠蔽せず、透明なデータコンテナとしてシンプルに保っている。**「\`Vec\` を \`MyVec\` の private フィールドにラップして \`len()\` を再公開する」ような防壁は、不変量を守るためのコストであって不変量がないところに払うべきではない。
 
 2. **\`MarginRatio\` は \`Default\`、\`PartialOrd\`、\`Ord\`、\`Hash\` まで広めに derive している。** これらが engine 側から要求されているわけではないが、下流のコード（telemetry、Stage 10c の worst-health 順 scanner、ダッシュボード）が \`MarginRatio\` を他の比較可能な値型と同じように扱えるようにしておく狙いがある。\`MarginRatio::default()\` は \`MarginRatio(0)\` で、意味としては「ratio 未計算」または「ゼロ初期化済み」だ。Engine 自身は \`default()\` を読むことはなく、必ず snapshot から計算する。
 
-3. **\`MarginHealth\` は \`PartialOrd\` / \`Ord\` を derive *していない*。** variants は自然に順序を成す（Safe < AtRisk < Liquidatable < Underwater が worsening 方向）が、enum に順序比較を入れるのはコード臭だ。\`if health > MarginHealth::AtRisk\` よりも、\`if matches!(health, MarginHealth::Liquidatable | MarginHealth::Underwater)\` のほうが意図がはっきり読める。コンパイラに明示的なパターンを書かせれば、将来の保守者は分岐がどの variants をカバーしているかを過不足なく確認できる。
+3. **\`MarginHealth\` は \`PartialOrd\` / \`Ord\` を derive *していない*。** variants は自然に順序を成す（Safe < AtRisk < Liquidatable < Underwater が worsening 方向）が、enum に順序比較を入れるのはコード臭だ。\`if health > MarginHealth::AtRisk\` よりも、\`if matches!(health, MarginHealth::Liquidatable | MarginHealth::Underwater)\` のほうが意図がはっきり読める。コンパイラに明示的なパターンを書かせれば、将来の保守者は分岐がどの variants をカバーしているかを過不足なく確認できる。**安易な enum の順序比較はバグの温床 (コード臭) になりがち — まずは \`matches!\` による明示的なパターンマッチに手を伸ばす規律を持とう。** 順序比較が真に欲しい場面 (severity 順のテレメトリソート等) では、明示的な \`severity_rank()\` メソッドを生やすほうが意図が見える。
 
 4. **Variant ごとの doc コメントは数学ではなく *authorization* を語る。** 「Margin ratio < maintenance」は variant が発火する条件を示すが、コメントはエンジンが応答として何をすべきか（「ポジションを market で liquidate すべき」）まで書いている。この doc コメントが、「Liquidatable がシステムの残り部分にとって何を意味するか」を引く際の正式な参照になる。
 
@@ -738,6 +780,48 @@ L3 では 2 つの **I/O 型**を加える。あらゆる margin 関数が consu
 
 （答え: **\`avg_entry\`（PnL の項を計算するため）と \`collateral\`（equity を計算するため）の 2 つだ。** Funding の式に \`entry\` 係数は出てこない — ポジションがどこで開かれたかに関係なく、現在の mark に rate を掛けてスケールするだけだ。Funding はまた collateral を読まない。Funding が emit する settlement delta は bridge レイヤーで balance に適用され、balance 台帳の管理は bridge 側に閉じている。Liquidation の仕事は、\`collateral + unrealized PnL\` がしきい値を下回ったかを *測る* ことなので、両方の値が手元に揃っている必要がある。仕事が違えば snapshot も違う、ということだ。）
 
+L3 で完成する \`types\` モジュールが、エンジン全体に対して **どんな入力を受け、どんな出力を返すか**を 1 枚で見ると、Module 1 (型) から Module 2 (純粋計算) へ向かう接続点がはっきりする:
+
+\`\`\`
+                    [ 上流: bridge / clearing レイヤー (台帳の所有者) ]
+                              │
+                              │ tick ごとに各アカウントの
+                              │ 台帳から snapshot を構築
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ 入力: AccountSnapshot { account, position_size, avg_entry,          │
+   │                         collateral }                                │
+   │   ※ 不変・read-only・Copy。L3 で確定。                                │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ ★ liquidation エンジン (Module 2-4 で実装するすべて)                 │
+   │                                                                     │
+   │   L4: notional_value / unrealized_pnl  (純粋計算)                    │
+   │   L5: account_equity / margin_ratio   (純粋計算)                    │
+   │   L6: margin_health                    (分類: 4 状態 enum)           │
+   │   L7: close_order_spec                 (Liquidatable/Underwater 用)  │
+   │   ↑↑ L1-L2 の定数・型 (MARGIN_SCALE, LiquidationParams,             │
+   │                       MarginRatio, MarginHealth) も全レイヤーで参照 │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ 出力: CloseOrderSpec { account, side, qty }                         │
+   │   ※ price なし (market order) / Liquidatable・Underwater アカウントに  │
+   │      対してのみ emit。L3 で確定。                                    │
+   │   さらに Module 3-4 で InsuranceFundDelta も並行して emit する        │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                    [ 下流: bridge → matching engine (CLOB) ]
+                              ・close order を SubmitMarket に変換して submit
+                              ・Underwater 分は insurance fund を credit/debit
+\`\`\`
+
+ポイントは 2 つ: (a) **L3 で完成する 2 つの型 (\`AccountSnapshot\` 入力 / \`CloseOrderSpec\` 出力) が、エンジンと外界の唯一の接触面になる** — エンジン本体は L4 以降で書くが、その関数たちは型シグネチャの上ではすべて「AccountSnapshot を受けて何かを返す」「最終的に CloseOrderSpec を emit する」という形に揃う。(b) **入力 (snapshot) は不変、出力 (spec) も不変** — エンジンは台帳を更新しない、台帳の所有権は完全に bridge 側に残る。これが L0 で予告した「**リスク計算専用の不変な snapshot 型を分離して依存関係をクリーンに保つ**」の具体形だ。
+
 ## 手を動かす walk-through
 
 ### Step 1: \`src/types.rs\` に \`AccountSnapshot\` を追記
@@ -768,7 +852,7 @@ pub struct AccountSnapshot {
 
 2. **\`avg_entry\` は \`MarkPrice\` 型で持つ。新しい \`EntryPrice\` 型は作らない。** ポジションが開かれた価格と、現在ポジションを測っている mark price は、同じ unit-of-account に住む。別途 \`EntryPrice\` newtype を作ると、すべての PnL 計算サイトで変換が必要になり、意味的な利益は何もない。**2 つのフィールドが同じ物理量を測るなら、型を共有する。**
 
-3. **\`collateral: Notional\` は signed にしている。** Collateral は *預け入れ* 資金として慣例的に非負だが、\`Notional\`（signed）に揃えるのは \`account_equity = collateral + unrealized_pnl\` を signed sum のまま流したいからだ。\`collateral\` を unsigned にすると、すべての equity 計算で \`as i64\` キャストが入り込む。**境界で変換し、計算は 1 つの signed 型で揃える。**
+3. **\`collateral: Notional\` は signed にしている。** Collateral は *預け入れ* 資金として慣例的に非負だが、\`Notional\`（signed）に揃えるのは \`account_equity = collateral + unrealized_pnl\` を signed sum のまま流したいからだ。\`collateral\` を unsigned にすると、すべての equity 計算で \`as i64\` キャストが入り込む。**境界で変換し、計算は 1 つの signed 型で揃える。これにより、キャスト漏れや signed / unsigned の混在に伴う静かなランタイムバグ (アンダーフロー、\`as\` キャストでの最上位ビット化け、減算で負になるはずの値が大きな正の数に化けるなど) を、コンパイル時の型不一致として根絶できる**。L4 の符号トリック (\`(mark − entry) × size\` を 4 象限すべて branchless で正しく計算する) は、まさにこの「計算経路をすべて signed で統一する」前提の上に成り立つ。
 
 4. **\`pub\` フィールド、コンストラクタ関数なし。** L1 の \`LiquidationParams\` と同じ慣例だ。透明な構造体で、カプセル化不変量はない。Bridge レイヤーは \`AccountSnapshot { account: …, position_size: …, … }\` を直接組み立てる。\`AccountSnapshot::new()\` を置かないのは、コンストラクタが強制すべき不変量がないからだ。
 
@@ -802,7 +886,7 @@ pub struct CloseOrderSpec {
 
 1. **\`price\` フィールドはない。** Liquidation は価格を選ばない。エンジンは market order の仕様を組み立てるところまでで、あとは matching engine が板に存在する深さで約定する。Stage 10c で \`AccountSnapshot\` のスライスを順に辿り、\`Liquidatable\` か \`Underwater\` のアカウントごとに \`CloseOrderSpec\` を 1 つずつ emit する流れになる。どれも limit を持たない。
 
-2. **\`side: Side\` は \`openhl_clob::Side\` を再利用する。** Matching engine は \`Side::{Buy, Sell}\` で話す。\`liquidation::Side\` を別に定義して bridge で変換するようにすると、いずれ drift する翻訳サーフェスを導入してしまう（片方の crate で 3 番目の side variant を足したのにもう片方には足さなかった、など）。**1 つの enum、1 つの真実の源泉。**
+2. **\`side: Side\` は \`openhl_clob::Side\` を再利用する。** Matching engine は \`Side::{Buy, Sell}\` で話す。\`liquidation::Side\` を別に定義して bridge で変換するようにすると、**将来的に型の乖離 (drift) を引き起こす原因となる、不要な翻訳レイヤー (\`impl From\` などの変換ロジック) を導入してしまう** — たとえば片方の crate に 3 番目の side variant (\`Closing\` など) を足したのにもう片方に足し忘れる、\`Buy ↔ Sell\` のマッピングを 1 箇所でうっかり反転させる、といった事故が静かに発生する。**1 つの enum、1 つの真実の源泉。** 境界を跨ぐメッセージの語彙 (\`Side\` / \`Qty\`) は crate 境界に関係なく共通化して、永続的な型変換処理のコスト (調整税) を払い続ける羽目にならないようにする。
 
 3. **\`qty: Qty\` は \`openhl_clob::Qty(u64)\` を再利用する。** Doc コメントが言うとおり「position size の絶対値」だ。\`PositionSize\` は \`i64\`（signed）だが、close する数量は常に正の値になる。変換（\`Qty(position_size.0.unsigned_abs())\`）は L7 の \`compute::close_order_spec\` で行う。ここでは *出力型* が unsigned であることに commit するだけにとどめる。
 
@@ -976,6 +1060,23 @@ L4 で compute モジュールを作る。最初の 2 関数が答えるのは�
 
 どのケースでも符号が正しく着地する。**分岐がない。コードパスが 2 本に分かれて別々にテストを要求することもない。片方の分岐だけ「直して」もう一方を放置するリスクもない。** \`PositionSize\` を signed にしたのは、まさにこのためだ — 型が long/short の区別を運んでくれれば、演算側がそれを運ぶ必要はなくなる。）
 
+\`(mark − entry) × size\` の 4 象限を 1 枚のマトリクスに落とすと、なぜこの 1 行が \`if\` 分岐 4 本ぶんの仕事を吸収しているのかが視覚で見える:
+
+\`\`\`
+                          mark > entry              mark < entry
+                       (上昇 → diff = 正値)        (下落 → diff = 負値)
+                       ────────────────────       ────────────────────
+   Long  (size = +)     (+) × (+) = +              (−) × (+) = −
+                       ◤ profit ✓                  ◤ loss ✓
+                       例: (110−100) × +10 = +100  例: (90−100) × +10 = −100
+   ─────────────────────────────────────────────────────────────────────
+   Short (size = −)     (+) × (−) = −              (−) × (−) = +
+                       ◤ loss ✓                    ◤ profit ✓
+                       例: (110−100) × −10 = −100  例: (90−100) × −10 = +100
+\`\`\`
+
+ポイントは「**\`size\` の符号が long/short の方向情報を運び、\`(mark − entry)\` の符号が値動きの方向情報を運ぶ → 積を取った瞬間に 2 つの方向情報が掛け合わさり、正しい profit/loss の符号が機械的に出てくる**」こと。\`if size > 0 { ... } else { ... }\` の分岐版では、開発者が両方の case を頭の中で再構築しながら書くため、片側だけバグが残るパターンが頻発する。signed multiplication は **その再構築を型システム + 算術ルールに完全に外注している**。
+
 ## 手を動かす walk-through
 
 ### Step 1: \`src/compute.rs\` を作成
@@ -1034,7 +1135,7 @@ pub fn notional_value(snapshot: &AccountSnapshot, mark: MarkPrice) -> u64 {
 
 2. **\`snapshot.position_size.0.unsigned_abs()\` を使う。\`.abs()\` ではない。** \`i64::abs\` は \`i64\` を返すが、\`i64::MIN.abs()\` は safe Rust では未定義動作だ（debug では panic、release では wrap）。一方 \`unsigned_abs\` は \`u64\` を返し、\`i64::MIN\` を含むあらゆる入力に対してきちんと定義されている（\`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808\`）。**Signed integer の magnitude が必要なら、迷わず \`unsigned_abs\`。\`abs\` を使ってよいのは、値が \`MIN\` を取り得ないと確信できるときに限る。**
 
-3. **\`u64::saturating_mul\` であって、\`u64::checked_mul\` ではない。** どちらもオーバーフローを検知するが、\`saturating_mul\` はオーバーフロー時に \`u64::MAX\` を返し、\`checked_mul\` は \`None\` を返す。\`Option<u64>\` を返してしまうと、L5 の \`margin_ratio\` を含むすべての呼び出し側が、*network-pathological な入力でしか起きない* \`None\` を扱うハメになる。Saturating なら、極端な入力に対しても — 数学的には間違っていても — 使える値を返す。どのみちその極端な入力では margin engine はそのアカウントを \`Liquidatable\` と分類するので、上流的な意味でも整合が取れる。**「間違っているが bounded」が「Option を処理しなければならない」を上回るとき、正しい failure mode は saturation だ。**
+3. **\`u64::saturating_mul\` であって、\`u64::checked_mul\` ではない。** どちらもオーバーフローを検知するが、\`saturating_mul\` はオーバーフロー時に \`u64::MAX\` を返し、\`checked_mul\` は \`None\` を返す。\`Option<u64>\` を返してしまうと、L5 の \`margin_ratio\` を含むすべての呼び出し側が、*network-pathological な入力でしか起きない* \`None\` を扱うハメになる。Saturating なら、極端な入力に対しても — 数学的には間違っていても — 使える値を返す。どのみちその極端な入力では margin engine はそのアカウントを \`Liquidatable\` と分類するので、上流的な意味でも整合が取れる。**「値は極端だが境界内に収まっている」という保証が、「すべての呼び出しサイトに \`Option\` 型の伝播とボイラープレート (\`?\` / \`unwrap_or\` / 早期 return) を強いるコスト」を上回るとき、正しい failure mode は saturation だ。**
 
 ### Step 3: \`unrealized_pnl\` を追加
 
@@ -1070,7 +1171,7 @@ pub fn unrealized_pnl(snapshot: &AccountSnapshot, mark: MarkPrice) -> i64 {
 
 4. **符号ルールを doc に明文化してある。** 4 ケースの列挙（「Long は mark > entry のとき profit」）は、レビュアーから「待って、これ short でも動くの?」と聞かれたときの正典的な参照になる。コードは construction で正しいが、doc は *なぜ* 正しいかを書く — 読者が毎回頭の中で辿り直さなくて済むように。
 
-> 🛑 **やりがちな勘違い。** 「いっそ \`(mark.0 as i64 − entry.0 as i64) × size\` を直接書けばよいのでは?」 **問題が 3 つある。** (1) \`mark\` か \`entry\` が \`i64::MAX\` を超えると、キャストが silent に wrap する — 最上位ビットが符号ビットに化けてしまう。(2) 両方が i64 に収まっていても、片方が \`i64::MIN\` 近く、他方が正なら、i64 での減算がオーバーフローする。(3) 各オペランドが収まっていても、積 \`(mark − entry) × size\` が i64 を超えうる — \`i64::MAX\` サイズのポジションなら、わずか 1% の値動きでオーバーフローする。**\`as\` キャストは Rust の有名な footgun で、本レッスンが武装解除しに行く対象でもある。**
+> 🛑 **やりがちな勘違い。** 「いっそ \`(mark.0 as i64 − entry.0 as i64) × size\` を直接書けばよいのでは?」 **問題が 3 つある。** (1) \`mark\` か \`entry\` が \`i64::MAX\` を超えると、キャストが silent に wrap する — 最上位ビットが符号ビットに化けてしまう。(2) 両方が i64 に収まっていても、片方が \`i64::MIN\` 近く、他方が正なら、i64 での減算がオーバーフローする。(3) 各オペランドが収まっていても、積 \`(mark − entry) × size\` が i64 を超えうる — \`i64::MAX\` サイズのポジションなら、わずか 1% の値動きでオーバーフローする。**\`as\` による暗黙的な型キャストは、Rust において最も代表的なバグの温床 (footgun) の 1 つであり、本レッスンが武装解除しに行く対象でもある。**
 
 ### Step 4: \`saturate_i128_to_i64\` ヘルパーを追加
 
@@ -1090,7 +1191,7 @@ fn saturate_i128_to_i64(v: i128) -> i64 {
 
 1. **\`pub\` を付けない。** これは \`compute.rs\` 内部の実装上の選択だ。公開 API はモジュール doc に挙げた 6 関数で、ヘルパーは本体をクリーンに保つために置いてある。**他モジュールの呼び出し側が本当に必要としない限り、ヘルパーは private のままにする。**
 
-2. **\`i64::try_from(v).unwrap_or(...)\` の形。** \`try_from\` は値が収まらなければ \`Err\` を返す。\`unwrap_or\` の分岐が、符号によって saturation の行き先を選ぶ。\`v > 0\` なら大きすぎたので \`i64::MAX\` へ、\`v ≤ 0\` なら小さすぎたので \`i64::MIN\` へ。**演算は 3 行、判断は 1 つ、typo の余地もない。**
+2. **\`i64::try_from(v).unwrap_or(...)\` の形。** \`try_from\` は値が収まらなければ \`Err\` を返す。\`unwrap_or\` の分岐が、符号によって saturation の行き先を選ぶ。\`v > 0\` なら大きすぎたので \`i64::MAX\` へ、\`v ≤ 0\` なら小さすぎたので \`i64::MIN\` へ。**演算は 3 行、判断は 1 つ、typo の余地もない。** **(※ \`v == 0\` のときは \`try_from\` が必ず \`Ok(0)\` を返すため、\`unwrap_or\` の \`else\` 分岐 (\`i64::MIN\`) は実行されない — つまりこの \`else\` は実質的に「\`v < 0\` かつ収まらなかったときの負方向 saturation」だけを拾っている。コードを読む人が \`v == 0 → i64::MIN\` の経路を一瞬気にしないよう、明示的に書いておく。)**
 
 3. **ヘルパー自体には専用のテストを置かない。** その挙動は \`unrealized_pnl\` のテスト群（happy-path と境界の両方を突く）を通じて十分カバーされる。ヘルパー単体のテストを足してもただの重複になる。
 
@@ -1414,7 +1515,7 @@ pub fn margin_ratio(snapshot: &AccountSnapshot, mark: MarkPrice) -> MarginRatio 
 
 この関数で押さえておく点が 5 つ:
 
-1. **\`notional == 0\` の early return で \`i64::MAX\` を返す。** Flat ポジションは exposure ゼロ → 下回るべき margin 要件もない。表現可能な最大の ratio を返すことが「無限に safe」のシグナルになり、下流の \`margin_health\` の比較すべてを自然に short-circuit させる（\`margin_health\` 側に special-case はいらない）。代替案 — \`Option<MarginRatio>\` や \`Result<MarginRatio>\` — はすべての呼び出し側に flat ケースを明示的に扱わせることになる。**「制約なし」のケースを、最も safe な値として表現する。**
+1. **\`notional == 0\` の early return で \`i64::MAX\` を返す。** Flat ポジションは exposure ゼロ → 下回るべき margin 要件もない。表現可能な最大の ratio を返すことが「無限に safe」のシグナルになり、下流の \`margin_health\` の比較すべてを自然に short-circuit させる（\`margin_health\` 側に special-case はいらない）。**具体的には、次レッスン (L6) で実装する \`if ratio >= params.initial_margin_bps { Safe } else { ... }\` という一方向の比較式が、flat なアカウントに対しても追加の特例分岐なしでそのまま機能し、\`i64::MAX >= initial_margin_bps\` が常に真なので自動的に \`Safe\` と判定される**。つまり \`i64::MAX\` は **「下流の比較演算が短絡的に通り抜けるための magic boundary」** として効いている。代替案 — \`Option<MarginRatio>\` や \`Result<MarginRatio>\` — はすべての呼び出し側に flat ケースを明示的に扱わせることになる。**「制約なし」のケースを、システム上最も safe な上限値で表現する設計規律だ。**
 
 2. **乗算を除算より *先* に置く。** \`equity × MARGIN_SCALE / notional\` を i128 で計算すれば、小さい ratio（例えば 1% margin = 100 bps）も割り算を生き残る。先に除算する（\`equity / notional × MARGIN_SCALE\` を i64 で）と、スケーリングの前に整数パーセントに切り捨てられ、精度が失われる。**整数除算が混じるとき、演算順序が効く。**
 
@@ -1561,6 +1662,41 @@ mark が上がるにつれて margin ratio は 400% から 250% に下がった�
 - \`entry × size > collateral\` のとき: 微分は正 → ratio は mark とともに **増加** する（levered regime、素朴な直感が正しい領域）。
 - \`entry × size < collateral\` のとき: 微分は負 → ratio は mark とともに **減少** する（cash-heavy regime、素朴な直感が外れる領域）。
 - \`entry × size = collateral\` のとき: 微分はゼロ → ratio は mark に対して一定（「ちょうど資金化された」境界）。
+
+3 つの regime と margin_ratio の挙動を 1 枚に並べると、なぜ素朴な直感が破綻するのか、どこに「特異な境界」が走っているのかが視覚で見える:
+
+\`\`\`
+                         margin_ratio (Long ポジション、collateral と size を固定したまま mark を動かす)
+                         ▲
+                         │     🔴 Cash-heavy regime
+                         │        (collateral > entry × size)
+                         │        ratio は mark の上昇とともに ↘ 減少
+                         │        ※ 素朴な直感「mark が上がれば ratio も上がる」が破綻するゾーン
+                         │     ──────────────────────────────────
+                         │
+                         │     ◆ 特異な境界: collateral = entry × size
+                         │        (= ちょうど 1x レバレッジ、cash-funded ぎりぎり)
+                         │        ratio は mark に対して水平 (微分 = 0)
+                         │     ──────────────────────────────────
+                         │
+                         │     🟢 Levered regime
+                         │        (collateral < entry × size)
+                         │        ratio は mark の上昇とともに ↗ 増加
+                         │        ※ 素朴な直感どおりに動く、現実の perp で 99% のケース
+                         │
+                         └─────────────────────────────────────►  mark
+
+  ポイント:
+    - 境界の位置は **collateral と entry × size の大小関係** だけで決まる (mark には依存しない)。
+    - 預け入れ担保 (collateral) がエントリー時の想定元本 (notional at entry = entry × size) を
+      超える瞬間、margin_ratio の傾きが反転する。
+    - 現実の取引所では trader はほぼ常に levered regime にいるので、この反転は本番では稀な
+      コーナーケース。だが proptest はランダム入力なので、容赦なくこのコーナーを踏み抜く。
+    - 「素朴な monotonicity の直感」は本質的には間違っていない — **「levered regime に居る」
+      という暗黙の前提**の下では正しい。proptest はその前提を可視化させる装置だ。
+\`\`\`
+
+この図は L6 / L7 で classifier やリクイデーション規律を書くときにも参照する: 健康な trader はほぼ levered 領域に居るが、極端に over-collateralize した「擬似ロング」のアカウントが cash-heavy 領域に紛れ込む可能性は常にあるので、エンジンは両 regime で正しく動かなければならない。
 
 失敗した入力では \`entry × size = 100 × 1 = 100\`、\`collateral = 103\`。\`collateral > entry × size\` なので、mark が上がると ratio が下がる cash-heavy regime に居る。
 
@@ -1739,7 +1875,7 @@ test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 1. **Flat ポジションに \`MarginRatio(i64::MAX)\` を返す — \`Option\` でも \`Result\` でもなく。** 「制約なし」のケースは *最も safe な* state。これを表現可能な最大の ratio にマップしておけば、下流のすべての分類器が special-case 分岐なしに自然に short-circuit できる。**「情報なし」を「情報の欠如」としてではなく、「最も safe な値」として表現する。**
 
-2. **Proptest の失敗そのものがレッスンだ。** Proptest が最初の試みで pass してしまっていたら、読者は「margin_ratio は mark に対して monotonic」とだけ学んで終わっていただろう。失敗とトレースのステップを経ることで、読者は「**margin_ratio は mark に対して *levered regime でのみ* monotonic で、境界は collateral が notional-at-entry に等しい点**」という、より深い事実を持って帰る。自分で微分を歩いたからこそ、その理解は残る。
+2. **Proptest の失敗そのものがレッスンだ。** Proptest が最初の試みで pass してしまっていたら、読者は「margin_ratio は mark に対して monotonic」とだけ学んで終わっていただろう。失敗とトレースのステップを経ることで、読者は「**margin_ratio は mark に対して *levered regime でのみ* monotonic であり、その特異な境界は、預け入れ担保 (collateral) がエントリー時の想定元本 (notional at entry = entry × size) とちょうど等しくなる点である**」という、より深いドメインの事実に到達する。自分で微分を歩いたからこそ、そのシステムに対する理解は揺るぎないものになる。
 
 3. **条件付き不変量には \`prop_assume!\`。** 不変量が入力のサブセット上でしか成り立たないとき、正しい道具は \`prop_assume!\` だ。関数の事後条件を強めることでもなく、assertion を弱めることでもなく、手で strategy を制限することでもない。**不変量とは「どの条件下で真なのか」を含めて初めて意味を持つ。両方を表現する。**
 
@@ -1768,7 +1904,7 @@ Margin ratio は \`equity / notional\` のスケールにすぎない。数学�
 
 **Q3: Flat ガードなしで \`margin_ratio\` を常に i128 で計算して単純化できないか?**
 
-できない。Rust では整数のゼロ除算は debug でも release でも panic する。Flat ガードはその panic を防いでいる。削除するなら \`try_div\`（i128 は built-in を持たない）や、branchless なアプローチ（rounding noise を足して除算前に notional を定数で乗算する）が必要になる。2 行のガードが一番クリーンだ。**条件分岐 1 つのほうが、branchless な小細工より安く済む。**
+できない。Rust では整数のゼロ除算は debug でも release でも panic する。Flat ガードはその panic を防いでいる。削除するなら \`try_div\`（i128 は built-in を持たない）や、branchless なアプローチ（rounding noise を足して除算前に notional を定数で乗算する）が必要になる。2 行のガードが一番クリーンだ。**条件分岐 1 つで明示的に書くほうが、トリッキーな branchless (分岐なし) の実装に逃げるよりも、コードの可読性と保守性の観点から遥かに安上がりだ。**
 
 **Q4: 入力 strategy を \`collateral in 1..(entry × size)\` に制限するのではなく、なぜ \`prop_assume!\` なのか?**
 
@@ -1837,6 +1973,42 @@ L6 では \`MarginRatio\` の値を \`MarginHealth\` の variant にマップす
 
 （答え: **Underwater アカウントが Liquidatable に分類されてしまう。** Ratio \`−5_000\` は \`< maintenance_bps\`（= 200）でもあるので、Liquidatable 分岐が先に発火し、カスケードは Underwater check に到達しない。結果として、bridge は insurance-fund-needed のシグナルを受け取らず、underwater な不足が静かに通常の liquidation path を通る。数学が「不足を解消できなかった」と言っているのに、帳簿の上ではポジションが solvent に close されてしまう。**カスケード順は load-bearing だ — 最も極端な state から先に check する。内側に進む各ステップが、残りの範囲を narrow させる。**）
 
+4 状態の判定カスケードを margin ratio の数直線上に並べると、なぜこの順序でしか正しく動かないのか、そしてなぜ逆順だと Underwater が Liquidatable に「吸い込まれる」のかが視覚で見える:
+
+\`\`\`
+                       (悪化方向 ◄────────────────── 値の大きさ ──────────────────► 改善方向)
+
+   margin ratio:   ── −∞ ── 0 ─────── maintenance_bps ─────── initial_bps ─────── i64::MAX ──
+                       ↑    ↑                    ↑                      ↑                    ↑
+                       │    │ (例: 200)          │ (例: 1000)            │                    │
+                       │    │                    │                      │                    │
+                       └────┴──┐  ┌──────────────┴──┐  ┌─────────────────┴──┐  ┌──────────────┘
+                              ▼  ▼                 ▼  ▼                    ▼  ▼
+                          🔴 Underwater       🟠 Liquidatable          🟡 AtRisk            🟢 Safe
+                          (ratio < 0)         (0 ≤ ratio                (maint ≤ ratio       (initial ≤ ratio、
+                                              < maintenance)            < initial)            flat なら i64::MAX も
+                                                                                              ここに着地)
+
+
+   🟢 正しいカスケード順 (内側に narrow していく):
+      ① if ratio < 0                ──► Underwater     (最も極端な領域を最初に切り出す)
+      ② else if ratio < maintenance ──► Liquidatable   (Underwater は ① で除外済み)
+      ③ else if ratio < initial     ──► AtRisk         (Liquidatable は ② で除外済み)
+      ④ else                        ──► Safe           (残りの全域)
+      ※ 各分岐の条件は「前の分岐が拾ったすべての値を排除した残り」を相手にする。
+
+   🔴 逆順 (広い領域から先に check) にすると:
+      ① if ratio < maintenance     ──► Liquidatable   ← ratio = -5_000 (Underwater) も
+                                                         < 200 を満たすので Liquidatable に
+                                                         「吸い込まれる」
+      ② if ratio < 0               ──► Underwater     ← ここに来ることはない (到達不能)
+      ③ ...
+      結果: insurance-fund シグナルが消え、Underwater アカウントの不足が通常の close path で
+            silent に流される。数学が解けていない不足を、帳簿は solvent な close として記録する。
+\`\`\`
+
+ポイント: **カスケードを「最も極端な領域から先に切り出していく narrowing」として書くと、各分岐の条件は自然に上の分岐の補集合の中だけで成立する**。逆に「広い領域から先に check」にすると、より極端な領域 (Underwater) が広い領域 (Liquidatable) に吸収されてしまい、本来 4 つあるはずの分類が 3 つに退化する。L7 で \`close_order_spec\` がこの 4 状態を見て発火するかどうかを決めるので、この narrowing が崩れると下流の挙動全体が壊れる。
+
 ## 手を動かす walk-through
 
 ### Step 1: \`src/compute.rs\` に \`margin_health\` を追記
@@ -1882,7 +2054,7 @@ pub fn margin_health(
 
 3. **\`i64::from(params.initial_margin_bps)\` が u32 → i64 を widen する。** フィールドは \`u32\`（メモリ節約。bps 値は ~40 億まで十分な範囲だ）。Ratio は \`i64\`（\`margin_ratio\` の signed 除算によって型がそうなっている）。Rust では異なる integer 型同士の比較はコンパイルエラーになる。境界で widening しておけば、本体の比較はクリーンに保てる。**Params ごとに 1 回キャストする。カスケード本体は純粋な i64 < i64 として読める。**
 
-4. **Flat ポジション用の special case がない。** \`margin_ratio\` は flat アカウントに対して \`MarginRatio(i64::MAX)\` を返す。\`i64::MAX\` は妥当な \`initial_margin_bps\` のどれよりも遥かに大きいので、カスケードはそのまま \`Safe\` まで fall through する。**Flat-as-Safe の性質は \`margin_ratio\` の flat-position ガードに既に反映されている。\`margin_health\` はそれを知らなくてよい。** Flat-position セマンティクスを将来微調整したくなったとき、変更は *1 箇所*（\`margin_ratio\`）で済む。2 つの同期した分岐を抱えずに済む。
+4. **Flat ポジション用の special case がない。** \`margin_ratio\` は flat アカウントに対して \`MarginRatio(i64::MAX)\` を返す。\`i64::MAX\` は妥当な \`initial_margin_bps\` のどれよりも遥かに大きいので、カスケードはそのまま \`Safe\` まで fall through する。**Flat-as-Safe の性質は \`margin_ratio\` の flat-position ガードに既に反映されている。\`margin_health\` はそれを知らなくてよい。** これは **関数の合成 (function composition) によって、上流が確立した不変量を下流が自然に継承する** という設計の実例だ — \`margin_ratio\` 側で「flat なら i64::MAX」を 1 箇所だけ決めれば、それを呼ぶすべての下流関数 (この \`margin_health\` も、L7 の \`close_order_spec\` も) が「flat = 必ず Safe に着地する」を**追加コードゼロで**手にする。「関数内で何でもフラグ分岐を足す」癖を持つ開発者は、ここでパラダイムを切り替える価値がある: **不変量の責務を 1 箇所に閉じ込め、下流は信頼するだけ**。Flat-position セマンティクスを将来微調整したくなったとき、変更は *1 箇所*（\`margin_ratio\`）で済む — 2 つの同期した分岐を抱えずに済む。
 
 5. **関数は \`&LiquidationParams\` を受け取る。値の \`LiquidationParams\` ではない。** \`LiquidationParams\` は \`Copy\`（12 byte）だが、参照シグネチャは「これは読むだけで consume しない」と読み手にシグナルする。Bridge は同じ \`params\` を、スキャン中のすべての \`margin_health\` 呼び出しに渡す。参照渡しなら、呼び出しごとの（技術的には無償の）move を避けられる。
 
@@ -2039,7 +2211,7 @@ L6 の後:
 
 **Q1: なぜ misconfigured な params（maintenance ≥ initial）のケースに備えて \`Result<MarginHealth, ...>\` を返さないのか?**
 
-関数は total だ — どんな入力にも、定義された出力が対応する。Misconfigured な params（maintenance == initial、あるいは maintenance > initial）でも、すべてのアカウントは 4 variant のどれかに分類される。意味的に間違った結果ではあるが、定義された結果ではある。\`Result\` を返してしまうと、*params を妥当に組み立てる bridge からは決して起きない* \`MisconfiguredParams\` エラーを、すべての呼び出しサイトに処理させることになる。**Total function は compose しやすい。Params は loading 境界で validate し、下流ではすべて信頼する。**
+関数は total（全域関数）だ — どんな入力にも、定義された出力が対応する。Misconfigured な params（maintenance == initial、あるいは maintenance > initial）でも、すべてのアカウントは 4 variant のどれかに分類される。意味的に間違った結果ではあるが、定義された結果ではある。\`Result\` を返してしまうと、*params を妥当に組み立てる bridge からは決して起きない* \`MisconfiguredParams\` エラーを、すべての呼び出しサイトに処理させることになる。**Total function は圧倒的に compose しやすい。パラメータの妥当性はシステムへの入力境界 (ロード時 / config パース時) で検証を完了させ、下流のドメイン計算層 (\`margin_health\` などの分類器) では不変量が維持されているものとして 100% 信頼する** — これは "Parse, don't validate" として知られる規律で、検証ロジックを境界に集中させ、ドメイン層を total function で構成する設計パターンだ。
 
 **Q2: \`margin_health\` を sorted thresholds 配列と binary search で、もっと「データ駆動」にできないか?**
 
@@ -2116,6 +2288,36 @@ L7 で Stage 10a を閉じる。本レッスンの後、\`22eedf9\` に対する
 
 （答え: **Long なら \`Side::Sell\`、\`Qty(10)\`。Short なら \`Side::Buy\`、\`Qty(10)\`。** Long は売って close する。トレーダーは 10 ユニットを long で保有しているので、10 売って flat にする必要がある。Short は買って close する。トレーダーは 10 ユニットを short で保有しているので、10 買って flat にする必要がある。Quantity は常にポジションの magnitude だ。符号は side のほうが運んでいて、qty には乗らない。**\`Qty\` が \`u64\` なのは、まさに magnitude が符号を持たないからだ。**）
 
+\`close_order_spec\` 関数は本質的に「**ポジションの side をひっくり返すだけ**」という極めて単純なメカニズムを持つ。CLOB (matching engine) と liquidation engine の間の橋を 1 枚で見ると、なぜこの関数が 11 行で済むのか、なぜ side 決定や価格決定の責務を一切持たないのかが直感で見える:
+
+\`\`\`
+   ┌─────────────────────────────┐                  ┌─────────────────────────────┐
+   │ アカウントが保有中のポジション │                  │ close_order_spec が emit する  │
+   │ (Account state)              │                  │ 反対方向の市場注文 (CloseOrder) │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Long  size = +10             │   ──[反転]──►   │  Side::Sell    qty = 10        │
+   │  (10 ユニットを保有中)        │                  │  → CLOB に「10 売り」を submit  │
+   │                              │                  │  → 板の bid を順に食って fill   │
+   │                              │                  │  → ポジションが flat に          │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Short size = −10             │   ──[反転]──►   │  Side::Buy     qty = 10        │
+   │  (10 ユニットを売り持ち中)    │                  │  → CLOB に「10 買い」を submit  │
+   │                              │                  │  → 板の ask を順に食って fill   │
+   │                              │                  │  → ポジションが flat に          │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Flat  size =   0             │   ──[反転]──►   │  Side::Buy     qty =  0        │
+   │  (保有なし、本来は呼ばれない) │                  │  → bridge がフィルタして submit せず │
+   └─────────────────────────────┘                  └─────────────────────────────┘
+
+   ※ \`close_order_spec\` が決めるのは「方向を反転」「magnitude を \`unsigned_abs\` で取り出す」の 2 つだけ。
+     ・「liquidate するかどうか」の意思決定は L6 \`margin_health\` が完了させている。
+     ・「いくらで close するか」の価格決定は matching engine (CLOB) の板が決める。
+     ・「flat の spec を出さない」のフィルタは Bridge が submit 前に行う。
+   各レイヤーがちょうど 1 つの関心事を持ち、それらが直列に compose されている。
+\`\`\`
+
+ポイントは「**この関数の本質は side のインバージョン (反転) しかない**」こと。Long ↔ Sell、Short ↔ Buy という対応は CLOB の板を介して「相殺取引」を発行するための最も単純な変換であり、ここに \`MarkPrice\` や \`LiquidationParams\` を持ち込むと、価格発見や閾値判断の責務が混入してしまう。**「ポジションを close する」という行為そのものを、最も小さい形で表現する関数** — それが \`close_order_spec\` だ。
+
 ## 手を動かす walk-through
 
 ### Step 1: \`src/compute.rs\` に \`close_order_spec\` を追記
@@ -2160,7 +2362,7 @@ pub fn close_order_spec(snapshot: &AccountSnapshot) -> CloseOrderSpec {
 
 4. **\`mark\` なし、\`params\` なし。** \`close_order_spec\` に必要なのは snapshot だけだ。「Close するか否か」の判断は \`margin_health\` に住み、price discovery は matching engine で起きる。**各関数がちょうど 1 つの関心事を所有する。Bridge がそれらを compose する: スキャン → 分類 → close spec 生成 → submit、という流れになる。**
 
-5. **\`Option<CloseOrderSpec>\` ではなく \`CloseOrderSpec\` を値で返す。** 関数は total だ — flat ポジション（\`qty == 0\`）でも常に spec を返す。代替案として \`Option\` を返すと、スキャン内のすべての flat アカウントに対して呼び出し側に \`None\` を扱わせることになる — close ステップに到達する頃にはそれらのアカウントはすでに前段でフィルタされているのに、だ。**Total な関数は compose しやすい。Optional な関数は、すべての呼び出し側に空ケースの処理を強要する。**
+5. **\`Option<CloseOrderSpec>\` ではなく \`CloseOrderSpec\` を値で返す。** 関数は total（全域関数）だ — flat ポジション（\`qty == 0\`）でも常に spec を返す。代替案として \`Option\` を返すと、スキャン内のすべての flat アカウントに対して呼び出し側に \`None\` を扱わせることになる — close ステップに到達する頃にはそれらのアカウントはすでに前段でフィルタされているのに、だ。**Total な関数は圧倒的に compose（結合）しやすい。Optional な関数は、すべての呼び出し側に空ケースの処理（ボイラープレート）を強用する。** 具体的に効いてくるのは Stage 10c で実装する \`LiquidationScanner\` だ: 全アカウントのスナップショットを \`filter_map\` や \`Option\` chaining なしに**単なる \`map\` や平坦な \`for\` ループで均質に処理**できる。\`close_order_spec\` が total だからこそ、scanner は「\`Liquidatable\` か \`Underwater\` か」の分類フィルタを 1 箇所で書けば済み、close-spec 生成側で再度フィルタする必要がない。**エッジケース (flat → qty 0 の spec は submit しない) のフィルタリングは、入出力の最外殻である bridge レイヤーにのみ集約する** — これが crate を貫く規律になっている。
 
 > 🛑 **やりがちな勘違い。** 「\`if size >= 0 { Sell } else { Buy }\` ではダメか — そうすれば flat が Sell として扱われ、一部のテスト取引所と挙動が揃う」 **問題が 3 つある。** (1) Flat-as-Sell は挙動の選択であり、pure compute ではなく bridge に属する判断だ。(2) 現在の \`> 0\` は「flat ポジションは long でも short でもない」という事実を正しく反映している。(3) \`qty == 0 + Side::Sell\` の本番セマンティクスは matching engine では未定義。Bridge はどのみちフィルタしなければならない。**呼び出し側に最もクリーンな契約を提供する慣例を選ぶ — エッジケースを隠す慣例ではなく。**
 
@@ -2274,7 +2476,7 @@ test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 このレッスンに焼き込んだ load-bearing な決定は 3 つ:
 
-1. **Side はポジション方向の反対 — それ以外のケースはない。** Long → Sell、Short → Buy。関数は「曖昧なケース」のための 3 つ目の分岐も、「不明なケース」のためのフォールバックも要らない。ポジションは符号を持つか、さもなくば flat。Spec は符号を反転するか、ゼロを運ぶ。**基本反転こそが「このポジションを close する」の正しい表現だ。**
+1. **Side はポジション方向の反対 — それ以外のケースはない。** Long → Sell、Short → Buy。関数は「曖昧なケース」のための 3 つ目の分岐も、「不明なケース」のためのフォールバックも要らない。ポジションは符号を持つか、さもなくば flat。Spec は符号を反転するか、ゼロを運ぶ。**ポジション方向の単純な反転 (インバージョン) こそが、「ポジションをクローズ (清算) する」という行為を最もシンプルかつ正確に表現したコードである。**
 
 2. **\`close_order_spec\` は flat ポジションに対しても side-effect-free。** 関数内でフィルタする代わりに zero-qty spec を返すことで、\`close_order_spec\` を total に、かつ compose しやすく保てる。Stage 10c の scanner は分岐なしで \`for snapshot in snapshots { specs.push(close_order_spec(snapshot)); }\` と書ける。Bridge が submit 時にフィルタする。**Pure 関数は返す。Impure な境界レイヤーがフィルタする。**
 
@@ -2304,7 +2506,7 @@ Stage 10a クレートのすべてがあなたの workspace に揃った。
 
 **Q2: なぜ \`Side::Sell\` 分岐で \`size > 0\`（strict）であって \`size >= 0\`（non-strict）ではないのか?**
 
-Flat（\`size == 0\`）は long *でもなく* short *でもない* — long/short の二分法の外側にある。「flat は long」も「flat は short」も、どちらも arbitrary な慣例だ。ここでは flat が \`else\` 分岐に静かに落ち、qty もどのみち 0 になる、という慣例を選んだ。どちらの選択も動く。規律は **一貫性を保ち、選択を文書化すること** だ。Doc には「flat → qty 0、呼び出し側がフィルタ」と書いてあり、読者はそれをコードに対して検証できる。
+Flat（\`size == 0\`）は long *でもなく* short *でもない* — long/short の二分法の外側にある。「flat は long」も「flat は short」も、どちらも**恣意的な (好みの分かれる) 慣例にすぎない**。ここでは flat が \`else\` 分岐に静かに落ち、qty もどのみち 0 になる、という慣例を選んだ。どちらの選択も動く。規律は **一貫性を保ち、選択を文書化すること** だ。Doc には「flat → qty 0、呼び出し側がフィルタ」と書いてあり、読者はそれをコードに対して検証できる。
 
 **Q3: \`close_order_spec\` を \`AccountSnapshot\` のメソッド（\`snapshot.close_order_spec()\`）にできないか?**
 

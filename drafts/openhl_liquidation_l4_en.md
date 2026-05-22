@@ -76,6 +76,23 @@ Two edits:
 
 Every case lands on the right sign. **No branching, no two-codepath testing, no risk that someone "fixes" one branch without the other.** This is the load-bearing reason `PositionSize` is signed — the type carries the long/short distinction so the arithmetic doesn't have to.)
 
+Dropping the four quadrants of `(mark − entry) × size` into one matrix makes it visually obvious why this single line replaces four `if` branches:
+
+```
+                          mark > entry              mark < entry
+                       (price up → diff +)         (price down → diff −)
+                       ────────────────────       ────────────────────
+   Long  (size = +)     (+) × (+) = +              (−) × (+) = −
+                       ◤ profit ✓                  ◤ loss ✓
+                       e.g. (110−100) × +10 = +100 e.g. (90−100) × +10 = −100
+   ─────────────────────────────────────────────────────────────────────
+   Short (size = −)     (+) × (−) = −              (−) × (−) = +
+                       ◤ loss ✓                    ◤ profit ✓
+                       e.g. (110−100) × −10 = −100 e.g. (90−100) × −10 = +100
+```
+
+The mechanic: **`size`'s sign carries the long/short direction, `(mark − entry)`'s sign carries the price-move direction — multiplying them lets the two pieces of directional information combine, and the correct profit/loss sign falls out mechanically.** In the `if size > 0 { ... } else { ... }` branched version, the developer has to mentally reconstruct both cases while writing each branch, and bugs that hit only one side are a common failure mode. The signed-multiplication form **outsources that reconstruction entirely to the type system and arithmetic rules.**
+
 ## Walk-through
 
 ### Step 1: Create `src/compute.rs`
@@ -134,7 +151,7 @@ Three things to notice about this 7-line function:
 
 2. **`snapshot.position_size.0.unsigned_abs()`, not `.abs()`.** `i64::abs` returns `i64` — and `i64::MIN.abs()` is undefined in safe Rust (panics in debug, wraps in release). `unsigned_abs` returns `u64` and is defined for every input, including `i64::MIN` (`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808`). **Use `unsigned_abs` whenever you need the magnitude of a signed integer; reserve `abs` only when you're sure the value can't be `MIN`.**
 
-3. **`u64::saturating_mul` over `u64::checked_mul`.** Both detect overflow; `saturating_mul` returns `u64::MAX` on overflow, `checked_mul` returns `None`. Returning `Option<u64>` would force every caller (margin_ratio in L5, etc.) to handle a `None` that *only* arises at network-pathological inputs. Saturating returns a usable value that's mathematically wrong only at the extremes — and at those extremes the margin engine will classify the account as `Liquidatable` either way. **Saturation is the right failure mode when "wrong but bounded" beats "must handle Option."**
+3. **`u64::saturating_mul` over `u64::checked_mul`.** Both detect overflow; `saturating_mul` returns `u64::MAX` on overflow, `checked_mul` returns `None`. Returning `Option<u64>` would force every caller (margin_ratio in L5, etc.) to handle a `None` that *only* arises at network-pathological inputs. Saturating returns a usable value that's mathematically wrong only at the extremes — and at those extremes the margin engine will classify the account as `Liquidatable` either way. **Saturation is the right failure mode when "the value is extreme but stays in bounds" beats "the cost of forcing every call site to propagate `Option` and write the boilerplate (`?` / `unwrap_or` / early returns) that comes with it."**
 
 ### Step 3: Add `unrealized_pnl`
 
@@ -170,7 +187,7 @@ Four things to notice:
 
 4. **Sign convention spelled out in the doc.** The 4-case enumeration ("Long profits when mark > entry") is the canonical reference for any reviewer asking "wait, does this work for shorts?" The math gets it right by construction, but the doc says *why* — readers don't have to mentally walk through the cases each time.
 
-> 🛑 **Anti-fluency.** "Why not just do `(mark.0 as i64 − entry.0 as i64) × size` directly?" **Three problems.** (1) If `mark` or `entry` exceeds `i64::MAX`, the cast wraps silently — the top bit becomes the sign bit. (2) Even if both fit in i64, the subtraction in i64 can overflow when one is near `i64::MIN` and the other is positive. (3) The product `(mark − entry) × size` can exceed i64 even when each operand fits — a 1% price move on an `i64::MAX`-size position overflows. **The `as` cast is the Rust footgun this lesson exists to defuse.**
+> 🛑 **Anti-fluency.** "Why not just do `(mark.0 as i64 − entry.0 as i64) × size` directly?" **Three problems.** (1) If `mark` or `entry` exceeds `i64::MAX`, the cast wraps silently — the top bit becomes the sign bit. (2) Even if both fit in i64, the subtraction in i64 can overflow when one is near `i64::MIN` and the other is positive. (3) The product `(mark − entry) × size` can exceed i64 even when each operand fits — a 1% price move on an `i64::MAX`-size position overflows. **Implicit `as` casts are one of the canonical bug-breeding footguns in Rust, and this lesson exists to defuse exactly that pattern.**
 
 ### Step 4: Add the `saturate_i128_to_i64` helper
 
@@ -190,7 +207,7 @@ Three things to notice about this 3-line helper:
 
 1. **No `pub`.** This is an implementation detail of `compute.rs`. The public API is the six functions named in the module doc; the helper exists to keep their bodies clean. **Keep helpers private unless callers in other modules genuinely need them.**
 
-2. **`i64::try_from(v).unwrap_or(...)`.** `try_from` returns `Err` exactly when the value doesn't fit; the `unwrap_or` branch picks the saturation target by sign. For `v > 0` the value was too positive (saturate at `i64::MAX`); for `v ≤ 0` it was too negative (saturate at `i64::MIN`). **Three lines of arithmetic; one decision point; impossible to typo.**
+2. **`i64::try_from(v).unwrap_or(...)`.** `try_from` returns `Err` exactly when the value doesn't fit; the `unwrap_or` branch picks the saturation target by sign. For `v > 0` the value was too positive (saturate at `i64::MAX`); for `v ≤ 0` it was too negative (saturate at `i64::MIN`). **Three lines of arithmetic; one decision point; impossible to typo.** **(Note: when `v == 0`, `try_from` always succeeds with `Ok(0)`, so the `else` branch of `unwrap_or` (`i64::MIN`) is never taken — i.e., the `else` effectively only fires "when `v < 0` *and* doesn't fit," catching negative-direction saturation. Spelled out so readers don't burn a moment wondering whether `v == 0` would somehow take the `i64::MIN` path.)**
 
 3. **No tests for the helper.** The behavior is exhaustively tested through `unrealized_pnl`'s test cases (which exercise both happy-path and edge-of-range inputs). A separate test for the helper would be redundant.
 

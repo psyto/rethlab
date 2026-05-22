@@ -60,6 +60,49 @@ Two edits, both append-only:
 
 (Answer: **`avg_entry` (to compute the PnL leg) and `collateral` (to compute equity).** Funding's formula has no `entry` factor — it scales by the current mark times the rate, regardless of where the position was opened. Funding also doesn't read collateral; the settlement deltas it emits get applied to balances at the bridge layer, which keeps its own balance ledger. Liquidation's job is to *measure* whether collateral + unrealized PnL has fallen below the threshold, so it needs both. Different jobs, different snapshots.)
 
+Drawing what the `types` module — completed in L3 — receives as input and produces as output makes the joint between Module 1 (types) and Module 2 (pure compute) immediately legible:
+
+```
+                    [ Upstream: bridge / clearing layer (the ledger owner) ]
+                              │
+                              │ builds a snapshot per account, per tick,
+                              │ pulled from its own ledger
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ Input: AccountSnapshot { account, position_size, avg_entry,         │
+   │                          collateral }                               │
+   │   ※ Immutable, read-only, Copy. Finalized in L3.                    │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ ★ The liquidation engine (everything Module 2-4 builds)             │
+   │                                                                     │
+   │   L4: notional_value / unrealized_pnl   (pure compute)               │
+   │   L5: account_equity / margin_ratio     (pure compute)               │
+   │   L6: margin_health                      (classification: 4-state)   │
+   │   L7: close_order_spec                   (Liquidatable / Underwater) │
+   │   ↑↑ The constants and types from L1-L2 (MARGIN_SCALE,              │
+   │      LiquidationParams, MarginRatio, MarginHealth) flow through      │
+   │      every layer.                                                    │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ Output: CloseOrderSpec { account, side, qty }                       │
+   │   ※ No price (market order). Only emitted for Liquidatable /        │
+   │     Underwater accounts. Finalized in L3.                            │
+   │   Module 3-4 emits InsuranceFundDelta alongside.                     │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                    [ Downstream: bridge → matching engine (CLOB) ]
+                              ・convert close orders into `SubmitMarket` actions
+                              ・credit/debit the insurance fund on Underwater paths
+```
+
+Two things this picture pins down: (a) **The two types finalized in L3 — `AccountSnapshot` (input) and `CloseOrderSpec` (output) — are the engine's only contact surface with the outside world.** All the engine body lives in L4 onward, but every function signature lands on "consume an `AccountSnapshot`" or "emit a `CloseOrderSpec`." (b) **Both the input (snapshot) and the output (spec) are immutable** — the engine never mutates the ledger; full ownership of the ledger stays on the bridge side. This is the concrete shape of what L0 previewed as "**a read-only snapshot type that keeps the risk-calculation core decoupled from upstream state.**"
+
 ## Walk-through
 
 ### Step 1: Append `AccountSnapshot` to `src/types.rs`
@@ -90,7 +133,7 @@ Things to notice about this 10-line block:
 
 2. **`avg_entry: MarkPrice`, not a new `EntryPrice` type.** The price at which a position was opened lives in the same unit-of-account as the mark price the position is currently measured against. Defining a separate `EntryPrice` newtype would force conversions at every PnL computation site for no semantic gain. **When two fields measure the same physical thing, share the type.**
 
-3. **`collateral: Notional` — signed.** Collateral is *deposited* funds, conventionally non-negative, but the type is `Notional` (signed) because `account_equity = collateral + unrealized_pnl` needs to flow as a signed sum. Making `collateral` unsigned would force an `as i64` cast in every equity computation. **Convert at the boundary, keep the math in one signed type.**
+3. **`collateral: Notional` — signed.** Collateral is *deposited* funds, conventionally non-negative, but the type is `Notional` (signed) because `account_equity = collateral + unrealized_pnl` needs to flow as a signed sum. Making `collateral` unsigned would force an `as i64` cast in every equity computation. **Convert at the boundary, keep the math in one signed type — that way, silent runtime bugs caused by missed casts or mixing signed and unsigned (underflows, an `as` cast that flips the top bit, a subtraction that should have produced a negative number turning into a large positive one) get eliminated at the compile-level as type mismatches.** L4's sign trick — computing `(mark − entry) × size` branchlessly for all four quadrants — only works because every step on that path is uniformly signed.
 
 4. **`pub` fields, no constructor function.** Same convention as `LiquidationParams` from L1: transparent struct, no encapsulation invariant. The bridge layer builds `AccountSnapshot { account: …, position_size: …, … }` directly. There's no `AccountSnapshot::new()` because there's nothing for a constructor to enforce.
 
@@ -124,7 +167,7 @@ Three things to notice:
 
 1. **No `price` field.** Liquidation never picks a price; the engine produces a market order spec and the matching engine fills it at whatever depth exists in the book. Stage 10c will iterate `AccountSnapshot` slices and emit one `CloseOrderSpec` per `Liquidatable` or `Underwater` account; none of them will carry a limit.
 
-2. **`side: Side` reuses `openhl_clob::Side`.** The matching engine speaks in `Side::{Buy, Sell}`. If we defined a new `liquidation::Side` enum and converted at the bridge, we'd introduce a translation surface that can drift (someone adds a third side variant in one crate but not the other). **One enum, one source of truth.**
+2. **`side: Side` reuses `openhl_clob::Side`.** The matching engine speaks in `Side::{Buy, Sell}`. If we defined a new `liquidation::Side` enum and converted at the bridge, we'd be **introducing an unnecessary translation layer (an `impl From` and its inverse) that becomes a source of future type drift** — someone adds a third variant (`Closing`, say) to one crate but not the other, or quietly inverts the `Buy ↔ Sell` mapping in one spot. **One enum, one source of truth.** Vocabulary that crosses crate boundaries (`Side`, `Qty`) should be shared across the boundary so you don't end up paying a permanent type-conversion cost (an "adjustment tax") forever.
 
 3. **`qty: Qty` reuses `openhl_clob::Qty(u64)`.** The doc comment says "absolute value of the position size" — `PositionSize` is `i64` (signed) but the close quantity is always positive. The conversion (`Qty(position_size.0.unsigned_abs())`) happens in `compute::close_order_spec` at L7; here we just commit to the *output type* being unsigned.
 

@@ -128,7 +128,7 @@ pub fn margin_ratio(snapshot: &AccountSnapshot, mark: MarkPrice) -> MarginRatio 
 
 この関数で押さえておく点が 5 つ:
 
-1. **`notional == 0` の early return で `i64::MAX` を返す。** Flat ポジションは exposure ゼロ → 下回るべき margin 要件もない。表現可能な最大の ratio を返すことが「無限に safe」のシグナルになり、下流の `margin_health` の比較すべてを自然に short-circuit させる（`margin_health` 側に special-case はいらない）。代替案 — `Option<MarginRatio>` や `Result<MarginRatio>` — はすべての呼び出し側に flat ケースを明示的に扱わせることになる。**「制約なし」のケースを、最も safe な値として表現する。**
+1. **`notional == 0` の early return で `i64::MAX` を返す。** Flat ポジションは exposure ゼロ → 下回るべき margin 要件もない。表現可能な最大の ratio を返すことが「無限に safe」のシグナルになり、下流の `margin_health` の比較すべてを自然に short-circuit させる（`margin_health` 側に special-case はいらない）。**具体的には、次レッスン (L6) で実装する `if ratio >= params.initial_margin_bps { Safe } else { ... }` という一方向の比較式が、flat なアカウントに対しても追加の特例分岐なしでそのまま機能し、`i64::MAX >= initial_margin_bps` が常に真なので自動的に `Safe` と判定される**。つまり `i64::MAX` は **「下流の比較演算が短絡的に通り抜けるための magic boundary」** として効いている。代替案 — `Option<MarginRatio>` や `Result<MarginRatio>` — はすべての呼び出し側に flat ケースを明示的に扱わせることになる。**「制約なし」のケースを、システム上最も safe な上限値で表現する設計規律だ。**
 
 2. **乗算を除算より *先* に置く。** `equity × MARGIN_SCALE / notional` を i128 で計算すれば、小さい ratio（例えば 1% margin = 100 bps）も割り算を生き残る。先に除算する（`equity / notional × MARGIN_SCALE` を i64 で）と、スケーリングの前に整数パーセントに切り捨てられ、精度が失われる。**整数除算が混じるとき、演算順序が効く。**
 
@@ -275,6 +275,41 @@ mark が上がるにつれて margin ratio は 400% から 250% に下がった�
 - `entry × size > collateral` のとき: 微分は正 → ratio は mark とともに **増加** する（levered regime、素朴な直感が正しい領域）。
 - `entry × size < collateral` のとき: 微分は負 → ratio は mark とともに **減少** する（cash-heavy regime、素朴な直感が外れる領域）。
 - `entry × size = collateral` のとき: 微分はゼロ → ratio は mark に対して一定（「ちょうど資金化された」境界）。
+
+3 つの regime と margin_ratio の挙動を 1 枚に並べると、なぜ素朴な直感が破綻するのか、どこに「特異な境界」が走っているのかが視覚で見える:
+
+```
+                         margin_ratio (Long ポジション、collateral と size を固定したまま mark を動かす)
+                         ▲
+                         │     🔴 Cash-heavy regime
+                         │        (collateral > entry × size)
+                         │        ratio は mark の上昇とともに ↘ 減少
+                         │        ※ 素朴な直感「mark が上がれば ratio も上がる」が破綻するゾーン
+                         │     ──────────────────────────────────
+                         │
+                         │     ◆ 特異な境界: collateral = entry × size
+                         │        (= ちょうど 1x レバレッジ、cash-funded ぎりぎり)
+                         │        ratio は mark に対して水平 (微分 = 0)
+                         │     ──────────────────────────────────
+                         │
+                         │     🟢 Levered regime
+                         │        (collateral < entry × size)
+                         │        ratio は mark の上昇とともに ↗ 増加
+                         │        ※ 素朴な直感どおりに動く、現実の perp で 99% のケース
+                         │
+                         └─────────────────────────────────────►  mark
+
+  ポイント:
+    - 境界の位置は **collateral と entry × size の大小関係** だけで決まる (mark には依存しない)。
+    - 預け入れ担保 (collateral) がエントリー時の想定元本 (notional at entry = entry × size) を
+      超える瞬間、margin_ratio の傾きが反転する。
+    - 現実の取引所では trader はほぼ常に levered regime にいるので、この反転は本番では稀な
+      コーナーケース。だが proptest はランダム入力なので、容赦なくこのコーナーを踏み抜く。
+    - 「素朴な monotonicity の直感」は本質的には間違っていない — **「levered regime に居る」
+      という暗黙の前提**の下では正しい。proptest はその前提を可視化させる装置だ。
+```
+
+この図は L6 / L7 で classifier やリクイデーション規律を書くときにも参照する: 健康な trader はほぼ levered 領域に居るが、極端に over-collateralize した「擬似ロング」のアカウントが cash-heavy 領域に紛れ込む可能性は常にあるので、エンジンは両 regime で正しく動かなければならない。
 
 失敗した入力では `entry × size = 100 × 1 = 100`、`collateral = 103`。`collateral > entry × size` なので、mark が上がると ratio が下がる cash-heavy regime に居る。
 
@@ -453,7 +488,7 @@ test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 1. **Flat ポジションに `MarginRatio(i64::MAX)` を返す — `Option` でも `Result` でもなく。** 「制約なし」のケースは *最も safe な* state。これを表現可能な最大の ratio にマップしておけば、下流のすべての分類器が special-case 分岐なしに自然に short-circuit できる。**「情報なし」を「情報の欠如」としてではなく、「最も safe な値」として表現する。**
 
-2. **Proptest の失敗そのものがレッスンだ。** Proptest が最初の試みで pass してしまっていたら、読者は「margin_ratio は mark に対して monotonic」とだけ学んで終わっていただろう。失敗とトレースのステップを経ることで、読者は「**margin_ratio は mark に対して *levered regime でのみ* monotonic で、境界は collateral が notional-at-entry に等しい点**」という、より深い事実を持って帰る。自分で微分を歩いたからこそ、その理解は残る。
+2. **Proptest の失敗そのものがレッスンだ。** Proptest が最初の試みで pass してしまっていたら、読者は「margin_ratio は mark に対して monotonic」とだけ学んで終わっていただろう。失敗とトレースのステップを経ることで、読者は「**margin_ratio は mark に対して *levered regime でのみ* monotonic であり、その特異な境界は、預け入れ担保 (collateral) がエントリー時の想定元本 (notional at entry = entry × size) とちょうど等しくなる点である**」という、より深いドメインの事実に到達する。自分で微分を歩いたからこそ、そのシステムに対する理解は揺るぎないものになる。
 
 3. **条件付き不変量には `prop_assume!`。** 不変量が入力のサブセット上でしか成り立たないとき、正しい道具は `prop_assume!` だ。関数の事後条件を強めることでもなく、assertion を弱めることでもなく、手で strategy を制限することでもない。**不変量とは「どの条件下で真なのか」を含めて初めて意味を持つ。両方を表現する。**
 
@@ -482,7 +517,7 @@ Margin ratio は `equity / notional` のスケールにすぎない。数学的�
 
 **Q3: Flat ガードなしで `margin_ratio` を常に i128 で計算して単純化できないか?**
 
-できない。Rust では整数のゼロ除算は debug でも release でも panic する。Flat ガードはその panic を防いでいる。削除するなら `try_div`（i128 は built-in を持たない）や、branchless なアプローチ（rounding noise を足して除算前に notional を定数で乗算する）が必要になる。2 行のガードが一番クリーンだ。**条件分岐 1 つのほうが、branchless な小細工より安く済む。**
+できない。Rust では整数のゼロ除算は debug でも release でも panic する。Flat ガードはその panic を防いでいる。削除するなら `try_div`（i128 は built-in を持たない）や、branchless なアプローチ（rounding noise を足して除算前に notional を定数で乗算する）が必要になる。2 行のガードが一番クリーンだ。**条件分岐 1 つで明示的に書くほうが、トリッキーな branchless (分岐なし) の実装に逃げるよりも、コードの可読性と保守性の観点から遥かに安上がりだ。**
 
 **Q4: 入力 strategy を `collateral in 1..(entry × size)` に制限するのではなく、なぜ `prop_assume!` なのか?**
 

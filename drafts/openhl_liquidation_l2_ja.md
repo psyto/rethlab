@@ -59,6 +59,28 @@ L2 ではエンジンの残り部分が言葉として使う 2 つの分類型�
 
 （答え: **3 つの問い → 4 variants。** `Safe` は (a) yes。`AtRisk` は (a) no, (b) no。`Liquidatable` は (a) no, (b) yes, (c) yes（close だけで足りる）。`Underwater` は (a) no, (b) yes, (c) no（insurance fund が不足分を吸収する）。3-variant enum にして Safe / AtRisk / Liquidatable だけにすると、Liquidatable と Underwater が潰れて「insurance fund は関与するのか?」という信号が消えてしまう。エンジンがそれを再計算する必要はない — variant にすでに反映済みだ。）
 
+4 つの variant が、それぞれアカウントに対して**どの action を authorize するか**を 1 枚のマトリクスに落とすと、なぜ 4 つ必要なのか、そして各 variant がどう「下流の意思決定」を型レベルで運ぶのかが一目で見える:
+
+```
+                    │ (a) 新規ポジション │ (b) Force-close   │ (c) Close だけで    │
+                    │     を開ける?       │   実行する?       │   不足カバー可能?    │
+   ─────────────────┼────────────────────┼───────────────────┼─────────────────────┤
+   Safe              │ ✅ yes              │ ❌ no              │ N/A (close 不要)    │
+   AtRisk            │ ❌ no               │ ❌ no              │ N/A (close 不要)    │
+   Liquidatable      │ ❌ no               │ ✅ yes             │ ✅ yes (equity 残あり)│
+   Underwater        │ ❌ no               │ ✅ yes             │ ❌ no → insurance    │
+                    │                    │                   │   fund が吸収        │
+   ─────────────────┴────────────────────┴───────────────────┴─────────────────────┘
+
+下流のエンジン挙動 (L7 / Module 3 で実装):
+   Safe         ─► trader はそのまま運用継続
+   AtRisk       ─► UI で警告、新規ポジは拒否、close は trader 自身に任せる
+   Liquidatable ─► 自動 close order を発行、fee を差し引き、残 equity を返却
+   Underwater   ─► 自動 close order を発行、不足分は insurance fund から補填
+```
+
+ポイント: **各 variant がそのまま「許可される action のセット」を表す**。`Liquidatable` と `Underwater` を 1 つに潰すと「insurance fund を呼ぶべきか」の信号が型から消え、エンジンが equity を再計算してから判断し直すコストが発生する。逆に variant を増やしてもどの行も新しい列は引き出せない (= action set として一意に区別される最小単位がこの 4 つ)。**「state machine の variants は、自分がトリガーする下流 action の数だけ存在する」** が、この設計が体現している原則だ。
+
 ## 手を動かす walk-through
 
 ### Step 1: `src/types.rs` に追記
@@ -99,11 +121,11 @@ pub enum MarginHealth {
 
 この 25 行で気づきたい点が 5 つ:
 
-1. **`MarginRatio(pub i64)` は newtype。** `type MarginRatio = i64` の alias ではない。Newtype は型チェッカーに足場を与える — `MarginRatio` を取る関数を、balance や account ID、`MarkPrice` のつもりで渡した生の `i64` 値では呼べなくなる。`pub i64` フィールドにしてあるので、呼び出し側は `MarginRatio(1000)` で組み立てて `ratio.0` で読み出せる。守るべきカプセル化不変量はない。
+1. **`MarginRatio(pub i64)` は newtype。** `type MarginRatio = i64` の alias ではない。Newtype は型チェッカーに足場を与える — `MarginRatio` を取る関数を、balance や account ID、`MarkPrice` のつもりで渡した生の `i64` 値では呼べなくなる。`pub i64` フィールドにしてあるので、呼び出し側は `MarginRatio(1000)` で組み立てて `ratio.0` で読み出せる。**内部に不正な状態を持ち得ない (= どんな `i64` 値が入っても型として不正にならない、つまり守るべきカプセル化不変量がない) ため、無駄にゲッター/セッターで隠蔽せず、透明なデータコンテナとしてシンプルに保っている。**「`Vec` を `MyVec` の private フィールドにラップして `len()` を再公開する」ような防壁は、不変量を守るためのコストであって不変量がないところに払うべきではない。
 
 2. **`MarginRatio` は `Default`、`PartialOrd`、`Ord`、`Hash` まで広めに derive している。** これらが engine 側から要求されているわけではないが、下流のコード（telemetry、Stage 10c の worst-health 順 scanner、ダッシュボード）が `MarginRatio` を他の比較可能な値型と同じように扱えるようにしておく狙いがある。`MarginRatio::default()` は `MarginRatio(0)` で、意味としては「ratio 未計算」または「ゼロ初期化済み」だ。Engine 自身は `default()` を読むことはなく、必ず snapshot から計算する。
 
-3. **`MarginHealth` は `PartialOrd` / `Ord` を derive *していない*。** variants は自然に順序を成す（Safe < AtRisk < Liquidatable < Underwater が worsening 方向）が、enum に順序比較を入れるのはコード臭だ。`if health > MarginHealth::AtRisk` よりも、`if matches!(health, MarginHealth::Liquidatable | MarginHealth::Underwater)` のほうが意図がはっきり読める。コンパイラに明示的なパターンを書かせれば、将来の保守者は分岐がどの variants をカバーしているかを過不足なく確認できる。
+3. **`MarginHealth` は `PartialOrd` / `Ord` を derive *していない*。** variants は自然に順序を成す（Safe < AtRisk < Liquidatable < Underwater が worsening 方向）が、enum に順序比較を入れるのはコード臭だ。`if health > MarginHealth::AtRisk` よりも、`if matches!(health, MarginHealth::Liquidatable | MarginHealth::Underwater)` のほうが意図がはっきり読める。コンパイラに明示的なパターンを書かせれば、将来の保守者は分岐がどの variants をカバーしているかを過不足なく確認できる。**安易な enum の順序比較はバグの温床 (コード臭) になりがち — まずは `matches!` による明示的なパターンマッチに手を伸ばす規律を持とう。** 順序比較が真に欲しい場面 (severity 順のテレメトリソート等) では、明示的な `severity_rank()` メソッドを生やすほうが意図が見える。
 
 4. **Variant ごとの doc コメントは数学ではなく *authorization* を語る。** 「Margin ratio < maintenance」は variant が発火する条件を示すが、コメントはエンジンが応答として何をすべきか（「ポジションを market で liquidate すべき」）まで書いている。この doc コメントが、「Liquidatable がシステムの残り部分にとって何を意味するか」を引く際の正式な参照になる。
 

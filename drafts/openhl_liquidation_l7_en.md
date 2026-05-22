@@ -60,6 +60,38 @@ Three edits:
 
 (Answer: **Long: `Side::Sell`, `Qty(10)`. Short: `Side::Buy`, `Qty(10)`.** Long is closed by selling: the trader holds 10 units long, so they need to sell 10 to flatten. Short is closed by buying: the trader has 10 units short, so they need to buy 10 to flatten. Quantity is always the magnitude of the position; the sign lives in the side, not in qty. **`Qty` is `u64` precisely because magnitude is sign-free.**)
 
+At its core, `close_order_spec` is just **flipping the side of a position**. Drawing the bridge between the CLOB (matching engine) and the liquidation engine in one picture makes it obvious why this function fits in 11 lines, and why it carries zero responsibility for picking a side or a price:
+
+```
+   ┌─────────────────────────────┐                  ┌─────────────────────────────┐
+   │ Held account position        │                  │ Inverted market order that  │
+   │ (account state)              │                  │ close_order_spec emits      │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Long  size = +10             │   ──[invert]──► │  Side::Sell    qty = 10        │
+   │  (holds 10 units long)        │                  │  → submit "sell 10" to CLOB    │
+   │                              │                  │  → consume bids until filled    │
+   │                              │                  │  → position flattens            │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Short size = −10             │   ──[invert]──► │  Side::Buy     qty = 10        │
+   │  (10 units short)             │                  │  → submit "buy 10" to CLOB     │
+   │                              │                  │  → consume asks until filled    │
+   │                              │                  │  → position flattens            │
+   ├─────────────────────────────┤                  ├─────────────────────────────┤
+   │  Flat  size =   0             │   ──[invert]──► │  Side::Buy     qty =  0        │
+   │  (no position; shouldn't even │                  │  → bridge filters; not submitted│
+   │   normally reach here)        │                  │                                │
+   └─────────────────────────────┘                  └─────────────────────────────┘
+
+   ※ `close_order_spec` decides only two things: "invert the direction" and
+     "extract the magnitude via `unsigned_abs`."
+     ・The "should we liquidate?" decision is already settled by L6's `margin_health`.
+     ・The "at what price?" decision happens in the matching engine (CLOB) against the book.
+     ・The "don't submit flat specs" filter is the bridge's job before submission.
+   Each layer owns exactly one concern; they compose in series.
+```
+
+The point: **the essence of this function is the side inversion, full stop.** The Long ↔ Sell / Short ↔ Buy mapping is the smallest possible transformation that issues a netting trade through the CLOB; throwing `MarkPrice` or `LiquidationParams` into the signature would mix in price discovery or threshold decisions that belong elsewhere. **The function expresses "close this position" in its smallest possible form — and that's all `close_order_spec` is for.**
+
 ## Walk-through
 
 ### Step 1: Append `close_order_spec` to `src/compute.rs`
@@ -104,7 +136,7 @@ Five things to notice about this 11-line function:
 
 4. **No `mark`, no `params`.** `close_order_spec` only needs the snapshot. The "decision to close" lives in `margin_health`; the price discovery happens at the matching engine. **Each function owns exactly one concern. The bridge composes them: scan → classify → generate close spec → submit.**
 
-5. **Returns `CloseOrderSpec` by value, not `Option<CloseOrderSpec>`.** The function is total — it always returns a spec, even for flat positions (with `qty == 0`). The alternative — `Option` — would force the caller to handle `None` for every flat account in a scan, even though those accounts are already pre-filtered by the time we reach the close step. **Total functions compose; optional functions force every caller to handle the empty case.**
+5. **Returns `CloseOrderSpec` by value, not `Option<CloseOrderSpec>`.** The function is total — it always returns a spec, even for flat positions (with `qty == 0`). The alternative — `Option` — would force the caller to handle `None` for every flat account in a scan, even though those accounts are already pre-filtered by the time we reach the close step. **Total functions compose; optional functions force every caller to handle the empty case (with the boilerplate that comes with it).** Where this matters concretely is Stage 10c's `LiquidationScanner`: it can process every account snapshot uniformly through a plain `map` or a flat `for` loop, with **no `filter_map` and no `Option` chaining**. Because `close_order_spec` is total, the scanner writes the "is this `Liquidatable` or `Underwater`?" classification filter in one place, and doesn't need to re-filter at close-spec generation time. **Edge-case filtering (don't submit a flat-qty spec) lives at the outermost shell of the system — the bridge** — which is the discipline that runs across this whole crate.
 
 > 🛑 **Anti-fluency.** "Why not `if size >= 0 { Sell } else { Buy }` — wouldn't that handle flat as Sell, which is what some test exchanges do?" **Three problems.** (1) Flat-as-Sell is a behavior choice that belongs at the bridge, not in pure compute. (2) The current `> 0` correctly reflects that flat positions are neither longs nor shorts. (3) Production semantics for `qty == 0 + Side::Sell` are undefined at the matching engine; the bridge has to filter regardless. **Pick the convention that produces the cleanest contract for callers, not the one that hides edge cases.**
 
@@ -218,7 +250,7 @@ Common errors:
 
 Three load-bearing decisions in this lesson:
 
-1. **Side is the opposite of position direction — no other case.** Long → Sell, Short → Buy. The function doesn't need a third case for "ambiguous" or a fallback for "unknown." The position has a sign or it's flat; the spec inverts the sign or carries zero. **Elementary inversion is the right shape for "close this position."**
+1. **Side is the opposite of position direction — no other case.** Long → Sell, Short → Buy. The function doesn't need a third case for "ambiguous" or a fallback for "unknown." The position has a sign or it's flat; the spec inverts the sign or carries zero. **A plain inversion of position direction — that's the simplest and most accurate expression of "close (liquidate) this position" in code.**
 
 2. **`close_order_spec` is side-effect-free even for flat positions.** Returning a zero-qty spec instead of filtering inside the function keeps `close_order_spec` total and easy to compose. The Stage 10c scanner can `for snapshot in snapshots { specs.push(close_order_spec(snapshot)); }` without branching; the bridge filters at submit time. **Pure functions return; impure boundary layers filter.**
 
@@ -248,7 +280,7 @@ Could, but adds friction. Every caller that doesn't care about the flat case (mo
 
 **Q2: Why `size > 0` (strict) and not `size >= 0` (non-strict) for the `Side::Sell` branch?**
 
-Because flat (`size == 0`) is *neither* long *nor* short — it's outside the long/short dichotomy. The convention "flat is a long" or "flat is a short" is both arbitrary; we picked the convention where flat falls into the `else` branch silently and qty is 0 anyway. Either choice works; the discipline is **be consistent and document the choice**. The doc says "flat → qty 0, callers filter," which is what readers can verify against the code.
+Because flat (`size == 0`) is *neither* long *nor* short — it's outside the long/short dichotomy. The conventions "flat is a long" and "flat is a short" are both **arbitrary (a matter of taste)**; we picked the convention where flat falls into the `else` branch silently and qty is 0 anyway. Either choice works; the discipline is **be consistent and document the choice**. The doc says "flat → qty 0, callers filter," which is what readers can verify against the code.
 
 **Q3: Could `close_order_spec` be a method on `AccountSnapshot` (`snapshot.close_order_spec()`)?**
 

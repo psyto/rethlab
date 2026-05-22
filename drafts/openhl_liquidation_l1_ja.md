@@ -61,6 +61,26 @@ L1 では、この空の crate を、公開された scale 定数 1 つと、エ
 
 （答え: **必要な解像度は、意味のある最小ステップに従って決める。** 1 区間 `0.0001%` の funding rate は高ボリュームトレーダーにとって意味のある差だから、ppb が正しい解像度になる。一方で maintenance margin が `0.02%` か `0.05%` かは engine 層で意味のある差には **ならない** — 本番のデプロイは bps の整数（`200 bps`、`500 bps`）で maintenance を設定する。Bps は慣例単位だ。ppb を採用してしまうと、システムが実際には使わない精度を買い込むことになる。**実際のレンジをカバーする最小のスケールを選ぶ。**）
 
+`RATE_SCALE` と `MARGIN_SCALE` の解像度差を 1 枚で並べると、なぜそれぞれが「自分のドメインに対して必要十分」なのかが直感で見える:
+
+```
+                       Course 9 (funding)              Course 10 (liquidation)
+                       ─────────────────────           ────────────────────────
+スケール定数             RATE_SCALE = 1_000_000_000      MARGIN_SCALE = 10_000
+                       (parts-per-billion, 10⁹)        (basis points, 10⁴)
+精度                    9 decimal digits                4 decimal digits
+扱う典型レンジ           0.0001% — 4% / interval         2% — 10% (maintenance)
+                                                       10% — 50% (initial)
+本番で意味のある最小ステップ  0.0001% (= 10 ppb)               1 bp = 0.01%
+1.0 を表す raw 値        1_000_000_000                   10_000
+4% を表す raw 値        40_000_000                      400
+                       ↑ ppb は 1 step = 0.0000001%      ↑ bps は 1 step = 0.01%
+                       「ベイシスポイント以下の精度を     「ベイシスポイント単位の境界を
+                        トレーダーが感じ取る」世界用       オペレータが運用する」世界用
+```
+
+ポイントは「**解像度はドメインの慣例単位に合わせる**」だ。funding は per-billion でしか表せない差を扱うので `ppb`、margin はそもそも本番設定が bps の整数で来るので `bps`。スケールを揃えなくていい理由は両者がドメインとして独立しているからで、揃えてしまうと使われない精度のために i64 のヘッドルームを浪費する。
+
 ## 手を動かす walk-through
 
 ### Step 1: Cargo.toml を更新
@@ -203,9 +223,9 @@ impl LiquidationParams {
 
 4. **`hyperliquid_default()` を `const fn` にする。** これでデフォルト値を `static` アイテムに乗せられる: `static PARAMS: LiquidationParams = LiquidationParams::hyperliquid_default();` のような書き方が、テスト、fixture、protobuf encoded genesis state への埋め込みなど、あらゆるコンテキストで通る。**`const fn` constructor は、「欲しい値」と「どこでも宣言できる値」を橋渡しする道具だ。**
 
-5. **constructor とゲッターに `#[must_use]`。** `LiquidationParams` を組み立ててから捨てる動作はほぼ間違いなくバグだ — デフォルト値を計算しておいて捨てている。Accessor も同じで、`initial_margin_bps()` を読んだ結果を無視するのはたいてい誤り。`#[must_use]` を付けておけば、コンパイラが読者に「本当にそれでいいのか」と問い返してくれる。
+5. **constructor とゲッターに `#[must_use]`。** `LiquidationParams` を組み立ててから捨てる動作はほぼ間違いなくバグだ — デフォルト値を計算しておいて捨てている。Accessor も同じで、`initial_margin_bps()` を読んだ結果を無視するのはたいてい誤り。`#[must_use]` を付けておけば、コンパイラが読者に「本当にそれでいいのか」と問い返してくれる。**これは単なる気休めではなく、人間のレビューで見落とされがちな論理バグ (戻り値の捨て忘れ) を、**コンパイラ警告 (あるいは `#![deny(unused_must_use)]` で**コンパイルエラー**) に昇格させる防衛的プログラミングのテクニックだ。**「コンパイラを静的解析ツールとして最大限に駆動して、レビューコストをゼロに近づける」**という、Rust ならではの開発規律になっている。
 
-> 🛑 **やりがちな勘違い。** 「3 つの独立した `u32` フィールドではなく、`(u32, u32, u32)` タプルをラップする `LiquidationParams` newtype ではダメか?」 **ダメだ。3 つの値は意味が違う。** タプルの順序は位置依存で壊れやすく、`initial` と `maintenance` を入れ替えるリファクタリングが静かに意味のバグを呼び込む。名前付きフィールドなら、呼び出し側を明示的に書かせられる: `LiquidationParams { initial_margin_bps: 1000, ... }`。**名前は実行時コストがゼロ、位置タプルは実行時利益がゼロ。**
+> 🛑 **やりがちな勘違い。** 「3 つの独立した `u32` フィールドではなく、`(u32, u32, u32)` タプルをラップする `LiquidationParams` newtype ではダメか?」 **ダメだ。3 つの値は意味が違う。** タプルの順序は位置依存で壊れやすく、`initial` と `maintenance` を入れ替えるリファクタリングが静かに意味のバグを呼び込む。名前付きフィールドなら、呼び出し側を明示的に書かせられる: `LiquidationParams { initial_margin_bps: 1000, ... }`。**名前付きフィールドは実行時コストゼロで圧倒的な安全性を買い、位置タプルは安全性を失うだけで実行時の利益はゼロだ。**
 
 ### Step 3: `src/lib.rs` を更新
 
@@ -309,7 +329,7 @@ HL の実際の maintenance margin tier は position size に応じて 1.25% か
 
 **Q4: Margin ratio の計算で実際の i64 overflow リスクは?**
 
-`margin_ratio = equity * MARGIN_SCALE / notional`。`MARGIN_SCALE = 10_000` のもと、`equity` と `notional` が `i64::MAX` で bound されているとすると、積 `equity * MARGIN_SCALE` は `equity > i64::MAX / 10_000 ≈ 9.2e14` で i64 を overflow しうる。現実的な取引所スケールに直すと 920 兆ドルの equity だ — 妥当な入力からははるか上にある。ただし L5 では依然として乗算を `i128` で行い、i64 に saturate して戻す。**反射神経としては funding と同じ — i64 を超えうる積は、敵対的な入力では必ず超える。**
+`margin_ratio = equity * MARGIN_SCALE / notional`。`MARGIN_SCALE = 10_000` のもと、`equity` と `notional` が `i64::MAX` で bound されているとすると、積 `equity * MARGIN_SCALE` は `equity > i64::MAX / 10_000 ≈ 9.2e14` で i64 を overflow しうる。現実的な取引所スケールに直すと 920 兆ドルの equity だ — 妥当な入力からははるか上にある。ただし L5 では依然として乗算を `i128` で行い、i64 に saturate して戻す。**設計の規律としては funding と同じ — i64 を超えうる積は、敵対的な入力では必ず超えるものと想定する。**
 
 **Q5: `MARGIN_SCALE` と bps に `u32` を使って、i64 への変換ノイズを避けられないか?**
 

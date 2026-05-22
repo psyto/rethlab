@@ -33,7 +33,7 @@
 - Hyperliquid 型 margin model: cross-margin、mark-vs-entry、initial-vs-maintenance。
 - Margin health の 4 状態と、それぞれが engine に何を許可するか。
 - `margin_ratio` の **非単調エッジケース**。collateral が notional を支配するとき、ratio が mark の方向と逆に動くケースが生じる。それでもなお liquidation が壊れない理由。
-- insurance fund を残高エントリではなく state machine として作る理由。
+- insurance fund を**単なる `u64` の残高変数 (balance entry) ではなく、独自の遷移ルール (`deposit` / `withdraw` / `absorb_deficit` の不変条件) を持つ pure state machine** として作る理由。
 - Auto-deleveraging (ADL) がこの設計の端でどう位置づけられるか。そして Stage 10 では扱わない理由。
 
 ## なぜ liquidation が重要か（perp 1 段落）
@@ -52,7 +52,7 @@ Hyperliquid は liquidation を **consensus 内** で実行する。すべての
 
 Funding と同じ答え: consensus determinism のためだ。あるアカウントを `Liquidatable` と分類する validator と、同じアカウントを `AtRisk` と分類する validator がいると、生成される block が違ってくる — close orders も違えば、fees も違い、insurance-fund deltas も違う。Block proposal が分岐し、chain が fork する。
 
-直し方は決まっている。符号付き整数を使い、saturating 演算を通し、i64 でオーバーフローしうる乗算には i128 の中間値を経由させる。`MarginRatio` の固定小数点単位には `MARGIN_SCALE = 10_000`（basis points）を採用する。Bps は TradFi *でも* crypto perp venue でも margin の慣例単位だ — Hyperliquid、Binance、Drift はいずれも margin 要件を bps で表現する。`MarginRatio(1_000)` はちょうど 10%、`MarginRatio(MARGIN_SCALE)` はちょうど 100%。
+直し方は決まっている。符号付き整数を使い、**飽和演算 (saturating arithmetic — オーバーフロー時に panic も wrap もせず型境界値 `i64::MAX` / `i64::MIN` に張り付かせる演算、Rust では `saturating_add` / `saturating_mul` 等)** を通し、i64 でオーバーフローしうる乗算には i128 の中間値を経由させる。`MarginRatio` の固定小数点単位には `MARGIN_SCALE = 10_000`（basis points）を採用する。Bps は TradFi *でも* crypto perp venue でも margin の慣例単位だ — Hyperliquid、Binance、Drift はいずれも margin 要件を bps で表現する。`MarginRatio(1_000)` はちょうど 10%、`MarginRatio(MARGIN_SCALE)` はちょうど 100%。
 
 （Funding は parts-per-billion の精度が必要だったので `RATE_SCALE = 1_000_000_000` を選んだ。Liquidation はそこまでの精度を要求しないが、規律自体は同じだ。）
 
@@ -64,11 +64,11 @@ Funding と同じ答え: consensus determinism のためだ。あるアカウン
 ### Module 1 — 型（L1-L3）
 - **L1** — `MARGIN_SCALE = 1e4`（bps）+ `LiquidationParams` + `hyperliquid_default()`（10% / 2% / 1.5%）。bps を選ぶ理由、このデフォルト値の根拠。
 - **L2** — `MarginRatio` newtype + `MarginHealth` enum（`Safe` / `AtRisk` / `Liquidatable` / `Underwater`）。4 状態にする理由と、各状態が許可する挙動。
-- **L3** — `AccountSnapshot` + `CloseOrderSpec`。`funding::Position` を流用せず新しい snapshot 型を起こす理由と、bridge レイヤーがどう組み立てるか。
+- **L3** — `AccountSnapshot` + `CloseOrderSpec`。`funding::Position` を流用せず新しい snapshot 型を起こす理由 (**read-only な不変 snapshot 型に分離して、リスク計算のコアロジックを上流レイヤー (bridge / clearing) のミュータブルな state shape から疎結合に保つ**)、そして bridge レイヤーがどう組み立てるか。
 
 ### Module 2 — 純粋な compute（L4-L7）— Stage 10a
 - **L4** — `notional_value` + `unrealized_pnl`。ロング・ショートいずれでも符号が正しく揃う signed-multiplication のトリック。
-- **L5** — `account_equity` + `margin_ratio`。Collateral が notional を支配するときに姿を現す **非単調エッジケース** を proptest で検出し、`prop_assume!` がなぜ正しい修正なのかを見る。
+- **L5** — `account_equity` + `margin_ratio`。Collateral が notional を支配するときに姿を現す **非単調エッジケース (= 価格が好転しているように見えるのに、特定の条件下ではマージン比率が逆に悪化して見える現象)** を proptest で検出し、`prop_assume!` がなぜ正しい修正なのかを見る。
 - **L6** — `margin_health` 分類。境界条件にすべて strict less-than を採用する理由と、それが何を保証するか。
 - **L7** — `close_order_spec`。Market order の規律 — liquidation は利用可能な任意の価格を取る。ここで Stage 10a が完成する。
 

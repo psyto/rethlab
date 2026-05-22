@@ -34,7 +34,7 @@ You'll understand:
 - The Hyperliquid-shape margin model: cross-margin, mark-vs-entry, initial-vs-maintenance.
 - The four states of margin health and what each state authorizes the engine to do.
 - The **non-monotonic edge case** in `margin_ratio` — when collateral dominates notional, the ratio can move against the direction of mark, and why that doesn't break liquidations.
-- Why the insurance fund is a state machine, not a balance entry.
+- Why the insurance fund is **a pure state machine (with its own transition rules — `deposit` / `withdraw` / `absorb_deficit` invariants), not just a plain `u64` balance entry**.
 - How auto-deleveraging (ADL) lives at the edge of this design — and why we leave it out of Stage 10.
 
 ## Why liquidations matter (1-paragraph perp recap)
@@ -53,7 +53,7 @@ The price you pay for this guarantee is the determinism discipline: float arithm
 
 Same answer as funding: consensus determinism. A validator that classifies an account as `Liquidatable` while a peer validator classifies the same account as `AtRisk` will produce a different block — different close orders, different fees, different insurance-fund deltas. Block proposals diverge, the chain forks.
 
-The fix: signed integers + saturating arithmetic + i128 intermediate products for any multiplication that can overflow i64. We use `MARGIN_SCALE = 10_000` (basis points) as the fixed-point unit for `MarginRatio`. Bps is the conventional unit for margin in TradFi *and* in crypto perp venues — Hyperliquid, Binance, Drift all express margin requirements in bps. `MarginRatio(1_000)` is exactly 10%; `MarginRatio(MARGIN_SCALE)` is exactly 100%.
+The fix: signed integers + **saturating arithmetic (operations that, on overflow, neither panic nor wrap but clamp to the type boundary — `i64::MAX` / `i64::MIN` — via Rust's `saturating_add` / `saturating_mul` etc.)** + i128 intermediate products for any multiplication that can overflow i64. We use `MARGIN_SCALE = 10_000` (basis points) as the fixed-point unit for `MarginRatio`. Bps is the conventional unit for margin in TradFi *and* in crypto perp venues — Hyperliquid, Binance, Drift all express margin requirements in bps. `MarginRatio(1_000)` is exactly 10%; `MarginRatio(MARGIN_SCALE)` is exactly 100%.
 
 (Funding used `RATE_SCALE = 1_000_000_000` because it needed parts-per-billion precision for tiny per-interval rates. Liquidation needs less precision but the same discipline.)
 
@@ -65,11 +65,11 @@ The fix: signed integers + saturating arithmetic + i128 intermediate products fo
 ### Module 1 — Types (L1-L3)
 - **L1** — `MARGIN_SCALE = 1e4` (bps) + `LiquidationParams` + `hyperliquid_default()` (10% / 2% / 1.5%). Why bps, why these defaults.
 - **L2** — `MarginRatio` newtype + `MarginHealth` enum (`Safe` / `AtRisk` / `Liquidatable` / `Underwater`). Why four states, what each authorizes.
-- **L3** — `AccountSnapshot` + `CloseOrderSpec`. Why a new snapshot type (not `funding::Position`), and how the bridge layer assembles it.
+- **L3** — `AccountSnapshot` + `CloseOrderSpec`. Why a new snapshot type (not `funding::Position`) — **separating the read-only, immutable snapshot type keeps the risk-calculation core decoupled from whatever mutable state shape the upstream layers (bridge / clearing) carry** — and how the bridge layer assembles it.
 
 ### Module 2 — Pure compute (L4-L7) — Stage 10a
 - **L4** — `notional_value` + `unrealized_pnl`. The signed-multiplication trick that gets the sign right for both longs and shorts.
-- **L5** — `account_equity` + `margin_ratio`. The proptest that uncovers the **non-monotonic edge case** when collateral dominates notional, and why `prop_assume!` is the right fix.
+- **L5** — `account_equity` + `margin_ratio`. The proptest that uncovers the **non-monotonic edge case (= the surprising regime where the price seems to move favorably, yet under certain conditions the margin ratio appears to *worsen* in the opposite direction)** when collateral dominates notional, and why `prop_assume!` is the right fix.
 - **L6** — `margin_health` classification. Strict-less-than at every boundary and what that buys you.
 - **L7** — `close_order_spec`. The market-order discipline: liquidation takes any available price. Stage 10a complete.
 

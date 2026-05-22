@@ -76,6 +76,23 @@ L4 で compute モジュールを作る。最初の 2 関数が答えるのは�
 
 どのケースでも符号が正しく着地する。**分岐がない。コードパスが 2 本に分かれて別々にテストを要求することもない。片方の分岐だけ「直して」もう一方を放置するリスクもない。** `PositionSize` を signed にしたのは、まさにこのためだ — 型が long/short の区別を運んでくれれば、演算側がそれを運ぶ必要はなくなる。）
 
+`(mark − entry) × size` の 4 象限を 1 枚のマトリクスに落とすと、なぜこの 1 行が `if` 分岐 4 本ぶんの仕事を吸収しているのかが視覚で見える:
+
+```
+                          mark > entry              mark < entry
+                       (上昇 → diff = 正値)        (下落 → diff = 負値)
+                       ────────────────────       ────────────────────
+   Long  (size = +)     (+) × (+) = +              (−) × (+) = −
+                       ◤ profit ✓                  ◤ loss ✓
+                       例: (110−100) × +10 = +100  例: (90−100) × +10 = −100
+   ─────────────────────────────────────────────────────────────────────
+   Short (size = −)     (+) × (−) = −              (−) × (−) = +
+                       ◤ loss ✓                    ◤ profit ✓
+                       例: (110−100) × −10 = −100  例: (90−100) × −10 = +100
+```
+
+ポイントは「**`size` の符号が long/short の方向情報を運び、`(mark − entry)` の符号が値動きの方向情報を運ぶ → 積を取った瞬間に 2 つの方向情報が掛け合わさり、正しい profit/loss の符号が機械的に出てくる**」こと。`if size > 0 { ... } else { ... }` の分岐版では、開発者が両方の case を頭の中で再構築しながら書くため、片側だけバグが残るパターンが頻発する。signed multiplication は **その再構築を型システム + 算術ルールに完全に外注している**。
+
 ## 手を動かす walk-through
 
 ### Step 1: `src/compute.rs` を作成
@@ -134,7 +151,7 @@ pub fn notional_value(snapshot: &AccountSnapshot, mark: MarkPrice) -> u64 {
 
 2. **`snapshot.position_size.0.unsigned_abs()` を使う。`.abs()` ではない。** `i64::abs` は `i64` を返すが、`i64::MIN.abs()` は safe Rust では未定義動作だ（debug では panic、release では wrap）。一方 `unsigned_abs` は `u64` を返し、`i64::MIN` を含むあらゆる入力に対してきちんと定義されている（`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808`）。**Signed integer の magnitude が必要なら、迷わず `unsigned_abs`。`abs` を使ってよいのは、値が `MIN` を取り得ないと確信できるときに限る。**
 
-3. **`u64::saturating_mul` であって、`u64::checked_mul` ではない。** どちらもオーバーフローを検知するが、`saturating_mul` はオーバーフロー時に `u64::MAX` を返し、`checked_mul` は `None` を返す。`Option<u64>` を返してしまうと、L5 の `margin_ratio` を含むすべての呼び出し側が、*network-pathological な入力でしか起きない* `None` を扱うハメになる。Saturating なら、極端な入力に対しても — 数学的には間違っていても — 使える値を返す。どのみちその極端な入力では margin engine はそのアカウントを `Liquidatable` と分類するので、上流的な意味でも整合が取れる。**「間違っているが bounded」が「Option を処理しなければならない」を上回るとき、正しい failure mode は saturation だ。**
+3. **`u64::saturating_mul` であって、`u64::checked_mul` ではない。** どちらもオーバーフローを検知するが、`saturating_mul` はオーバーフロー時に `u64::MAX` を返し、`checked_mul` は `None` を返す。`Option<u64>` を返してしまうと、L5 の `margin_ratio` を含むすべての呼び出し側が、*network-pathological な入力でしか起きない* `None` を扱うハメになる。Saturating なら、極端な入力に対しても — 数学的には間違っていても — 使える値を返す。どのみちその極端な入力では margin engine はそのアカウントを `Liquidatable` と分類するので、上流的な意味でも整合が取れる。**「値は極端だが境界内に収まっている」という保証が、「すべての呼び出しサイトに `Option` 型の伝播とボイラープレート (`?` / `unwrap_or` / 早期 return) を強いるコスト」を上回るとき、正しい failure mode は saturation だ。**
 
 ### Step 3: `unrealized_pnl` を追加
 
@@ -170,7 +187,7 @@ pub fn unrealized_pnl(snapshot: &AccountSnapshot, mark: MarkPrice) -> i64 {
 
 4. **符号ルールを doc に明文化してある。** 4 ケースの列挙（「Long は mark > entry のとき profit」）は、レビュアーから「待って、これ short でも動くの?」と聞かれたときの正典的な参照になる。コードは construction で正しいが、doc は *なぜ* 正しいかを書く — 読者が毎回頭の中で辿り直さなくて済むように。
 
-> 🛑 **やりがちな勘違い。** 「いっそ `(mark.0 as i64 − entry.0 as i64) × size` を直接書けばよいのでは?」 **問題が 3 つある。** (1) `mark` か `entry` が `i64::MAX` を超えると、キャストが silent に wrap する — 最上位ビットが符号ビットに化けてしまう。(2) 両方が i64 に収まっていても、片方が `i64::MIN` 近く、他方が正なら、i64 での減算がオーバーフローする。(3) 各オペランドが収まっていても、積 `(mark − entry) × size` が i64 を超えうる — `i64::MAX` サイズのポジションなら、わずか 1% の値動きでオーバーフローする。**`as` キャストは Rust の有名な footgun で、本レッスンが武装解除しに行く対象でもある。**
+> 🛑 **やりがちな勘違い。** 「いっそ `(mark.0 as i64 − entry.0 as i64) × size` を直接書けばよいのでは?」 **問題が 3 つある。** (1) `mark` か `entry` が `i64::MAX` を超えると、キャストが silent に wrap する — 最上位ビットが符号ビットに化けてしまう。(2) 両方が i64 に収まっていても、片方が `i64::MIN` 近く、他方が正なら、i64 での減算がオーバーフローする。(3) 各オペランドが収まっていても、積 `(mark − entry) × size` が i64 を超えうる — `i64::MAX` サイズのポジションなら、わずか 1% の値動きでオーバーフローする。**`as` による暗黙的な型キャストは、Rust において最も代表的なバグの温床 (footgun) の 1 つであり、本レッスンが武装解除しに行く対象でもある。**
 
 ### Step 4: `saturate_i128_to_i64` ヘルパーを追加
 
@@ -190,7 +207,7 @@ fn saturate_i128_to_i64(v: i128) -> i64 {
 
 1. **`pub` を付けない。** これは `compute.rs` 内部の実装上の選択だ。公開 API はモジュール doc に挙げた 6 関数で、ヘルパーは本体をクリーンに保つために置いてある。**他モジュールの呼び出し側が本当に必要としない限り、ヘルパーは private のままにする。**
 
-2. **`i64::try_from(v).unwrap_or(...)` の形。** `try_from` は値が収まらなければ `Err` を返す。`unwrap_or` の分岐が、符号によって saturation の行き先を選ぶ。`v > 0` なら大きすぎたので `i64::MAX` へ、`v ≤ 0` なら小さすぎたので `i64::MIN` へ。**演算は 3 行、判断は 1 つ、typo の余地もない。**
+2. **`i64::try_from(v).unwrap_or(...)` の形。** `try_from` は値が収まらなければ `Err` を返す。`unwrap_or` の分岐が、符号によって saturation の行き先を選ぶ。`v > 0` なら大きすぎたので `i64::MAX` へ、`v ≤ 0` なら小さすぎたので `i64::MIN` へ。**演算は 3 行、判断は 1 つ、typo の余地もない。** **(※ `v == 0` のときは `try_from` が必ず `Ok(0)` を返すため、`unwrap_or` の `else` 分岐 (`i64::MIN`) は実行されない — つまりこの `else` は実質的に「`v < 0` かつ収まらなかったときの負方向 saturation」だけを拾っている。コードを読む人が `v == 0 → i64::MIN` の経路を一瞬気にしないよう、明示的に書いておく。)**
 
 3. **ヘルパー自体には専用のテストを置かない。** その挙動は `unrealized_pnl` のテスト群（happy-path と境界の両方を突く）を通じて十分カバーされる。ヘルパー単体のテストを足してもただの重複になる。
 

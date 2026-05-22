@@ -60,6 +60,42 @@ L6 では `MarginRatio` の値を `MarginHealth` の variant にマップする�
 
 （答え: **Underwater アカウントが Liquidatable に分類されてしまう。** Ratio `−5_000` は `< maintenance_bps`（= 200）でもあるので、Liquidatable 分岐が先に発火し、カスケードは Underwater check に到達しない。結果として、bridge は insurance-fund-needed のシグナルを受け取らず、underwater な不足が静かに通常の liquidation path を通る。数学が「不足を解消できなかった」と言っているのに、帳簿の上ではポジションが solvent に close されてしまう。**カスケード順は load-bearing だ — 最も極端な state から先に check する。内側に進む各ステップが、残りの範囲を narrow させる。**）
 
+4 状態の判定カスケードを margin ratio の数直線上に並べると、なぜこの順序でしか正しく動かないのか、そしてなぜ逆順だと Underwater が Liquidatable に「吸い込まれる」のかが視覚で見える:
+
+```
+                       (悪化方向 ◄────────────────── 値の大きさ ──────────────────► 改善方向)
+
+   margin ratio:   ── −∞ ── 0 ─────── maintenance_bps ─────── initial_bps ─────── i64::MAX ──
+                       ↑    ↑                    ↑                      ↑                    ↑
+                       │    │ (例: 200)          │ (例: 1000)            │                    │
+                       │    │                    │                      │                    │
+                       └────┴──┐  ┌──────────────┴──┐  ┌─────────────────┴──┐  ┌──────────────┘
+                              ▼  ▼                 ▼  ▼                    ▼  ▼
+                          🔴 Underwater       🟠 Liquidatable          🟡 AtRisk            🟢 Safe
+                          (ratio < 0)         (0 ≤ ratio                (maint ≤ ratio       (initial ≤ ratio、
+                                              < maintenance)            < initial)            flat なら i64::MAX も
+                                                                                              ここに着地)
+
+
+   🟢 正しいカスケード順 (内側に narrow していく):
+      ① if ratio < 0                ──► Underwater     (最も極端な領域を最初に切り出す)
+      ② else if ratio < maintenance ──► Liquidatable   (Underwater は ① で除外済み)
+      ③ else if ratio < initial     ──► AtRisk         (Liquidatable は ② で除外済み)
+      ④ else                        ──► Safe           (残りの全域)
+      ※ 各分岐の条件は「前の分岐が拾ったすべての値を排除した残り」を相手にする。
+
+   🔴 逆順 (広い領域から先に check) にすると:
+      ① if ratio < maintenance     ──► Liquidatable   ← ratio = -5_000 (Underwater) も
+                                                         < 200 を満たすので Liquidatable に
+                                                         「吸い込まれる」
+      ② if ratio < 0               ──► Underwater     ← ここに来ることはない (到達不能)
+      ③ ...
+      結果: insurance-fund シグナルが消え、Underwater アカウントの不足が通常の close path で
+            silent に流される。数学が解けていない不足を、帳簿は solvent な close として記録する。
+```
+
+ポイント: **カスケードを「最も極端な領域から先に切り出していく narrowing」として書くと、各分岐の条件は自然に上の分岐の補集合の中だけで成立する**。逆に「広い領域から先に check」にすると、より極端な領域 (Underwater) が広い領域 (Liquidatable) に吸収されてしまい、本来 4 つあるはずの分類が 3 つに退化する。L7 で `close_order_spec` がこの 4 状態を見て発火するかどうかを決めるので、この narrowing が崩れると下流の挙動全体が壊れる。
+
 ## 手を動かす walk-through
 
 ### Step 1: `src/compute.rs` に `margin_health` を追記
@@ -105,7 +141,7 @@ pub fn margin_health(
 
 3. **`i64::from(params.initial_margin_bps)` が u32 → i64 を widen する。** フィールドは `u32`（メモリ節約。bps 値は ~40 億まで十分な範囲だ）。Ratio は `i64`（`margin_ratio` の signed 除算によって型がそうなっている）。Rust では異なる integer 型同士の比較はコンパイルエラーになる。境界で widening しておけば、本体の比較はクリーンに保てる。**Params ごとに 1 回キャストする。カスケード本体は純粋な i64 < i64 として読める。**
 
-4. **Flat ポジション用の special case がない。** `margin_ratio` は flat アカウントに対して `MarginRatio(i64::MAX)` を返す。`i64::MAX` は妥当な `initial_margin_bps` のどれよりも遥かに大きいので、カスケードはそのまま `Safe` まで fall through する。**Flat-as-Safe の性質は `margin_ratio` の flat-position ガードに既に反映されている。`margin_health` はそれを知らなくてよい。** Flat-position セマンティクスを将来微調整したくなったとき、変更は *1 箇所*（`margin_ratio`）で済む。2 つの同期した分岐を抱えずに済む。
+4. **Flat ポジション用の special case がない。** `margin_ratio` は flat アカウントに対して `MarginRatio(i64::MAX)` を返す。`i64::MAX` は妥当な `initial_margin_bps` のどれよりも遥かに大きいので、カスケードはそのまま `Safe` まで fall through する。**Flat-as-Safe の性質は `margin_ratio` の flat-position ガードに既に反映されている。`margin_health` はそれを知らなくてよい。** これは **関数の合成 (function composition) によって、上流が確立した不変量を下流が自然に継承する** という設計の実例だ — `margin_ratio` 側で「flat なら i64::MAX」を 1 箇所だけ決めれば、それを呼ぶすべての下流関数 (この `margin_health` も、L7 の `close_order_spec` も) が「flat = 必ず Safe に着地する」を**追加コードゼロで**手にする。「関数内で何でもフラグ分岐を足す」癖を持つ開発者は、ここでパラダイムを切り替える価値がある: **不変量の責務を 1 箇所に閉じ込め、下流は信頼するだけ**。Flat-position セマンティクスを将来微調整したくなったとき、変更は *1 箇所*（`margin_ratio`）で済む — 2 つの同期した分岐を抱えずに済む。
 
 5. **関数は `&LiquidationParams` を受け取る。値の `LiquidationParams` ではない。** `LiquidationParams` は `Copy`（12 byte）だが、参照シグネチャは「これは読むだけで consume しない」と読み手にシグナルする。Bridge は同じ `params` を、スキャン中のすべての `margin_health` 呼び出しに渡す。参照渡しなら、呼び出しごとの（技術的には無償の）move を避けられる。
 
@@ -262,7 +298,7 @@ L6 の後:
 
 **Q1: なぜ misconfigured な params（maintenance ≥ initial）のケースに備えて `Result<MarginHealth, ...>` を返さないのか?**
 
-関数は total だ — どんな入力にも、定義された出力が対応する。Misconfigured な params（maintenance == initial、あるいは maintenance > initial）でも、すべてのアカウントは 4 variant のどれかに分類される。意味的に間違った結果ではあるが、定義された結果ではある。`Result` を返してしまうと、*params を妥当に組み立てる bridge からは決して起きない* `MisconfiguredParams` エラーを、すべての呼び出しサイトに処理させることになる。**Total function は compose しやすい。Params は loading 境界で validate し、下流ではすべて信頼する。**
+関数は total（全域関数）だ — どんな入力にも、定義された出力が対応する。Misconfigured な params（maintenance == initial、あるいは maintenance > initial）でも、すべてのアカウントは 4 variant のどれかに分類される。意味的に間違った結果ではあるが、定義された結果ではある。`Result` を返してしまうと、*params を妥当に組み立てる bridge からは決して起きない* `MisconfiguredParams` エラーを、すべての呼び出しサイトに処理させることになる。**Total function は圧倒的に compose しやすい。パラメータの妥当性はシステムへの入力境界 (ロード時 / config パース時) で検証を完了させ、下流のドメイン計算層 (`margin_health` などの分類器) では不変量が維持されているものとして 100% 信頼する** — これは "Parse, don't validate" として知られる規律で、検証ロジックを境界に集中させ、ドメイン層を total function で構成する設計パターンだ。
 
 **Q2: `margin_health` を sorted thresholds 配列と binary search で、もっと「データ駆動」にできないか?**
 

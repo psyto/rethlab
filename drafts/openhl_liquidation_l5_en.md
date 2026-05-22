@@ -128,7 +128,7 @@ pub fn margin_ratio(snapshot: &AccountSnapshot, mark: MarkPrice) -> MarginRatio 
 
 Five things to notice:
 
-1. **`notional == 0` early return with `i64::MAX`.** Flat positions have no exposure → no margin requirement to fall short of. Returning the maximum representable ratio signals "infinitely safe" and lets every downstream `margin_health` comparison short-circuit naturally (no special-case in `margin_health`). The alternative — `Option<MarginRatio>` or `Result<MarginRatio>` — would force every caller to handle the flat case explicitly. **Encode the "no constraint" case as the safest possible value.**
+1. **`notional == 0` early return with `i64::MAX`.** Flat positions have no exposure → no margin requirement to fall short of. Returning the maximum representable ratio signals "infinitely safe" and lets every downstream `margin_health` comparison short-circuit naturally (no special-case in `margin_health`). **Concretely, the one-directional comparison we'll write in L6 — `if ratio >= params.initial_margin_bps { Safe } else { ... }` — works for a flat account without any extra branch, because `i64::MAX >= initial_margin_bps` is always true and the account lands in `Safe` automatically.** That is, `i64::MAX` is acting as a **"magic boundary that lets the downstream comparison short-circuit straight through."** The alternative — `Option<MarginRatio>` or `Result<MarginRatio>` — would force every caller to handle the flat case explicitly. **Encode the "no constraint" case as the system's safest possible upper bound — that's the design discipline at work here.**
 
 2. **The multiplication happens *before* the division.** `equity × MARGIN_SCALE / notional` in i128 preserves precision for small ratios (e.g., a 1% margin = 100 bps survives the divide). Doing the divide first (`equity / notional × MARGIN_SCALE` in i64) would truncate to integer percentages before scaling, losing precision. **Order of operations matters when integer division is in the mix.**
 
@@ -275,6 +275,44 @@ The sign of this derivative is the sign of `entry − collateral / size`. So:
 - If `entry × size > collateral`: derivative is positive → ratio **increases** with mark (the levered regime, where the naïve intuition is correct).
 - If `entry × size < collateral`: derivative is negative → ratio **decreases** with mark (the cash-heavy regime, where the naïve intuition is wrong).
 - If `entry × size = collateral`: derivative is zero → ratio is constant in mark (the "exactly funded" knife edge).
+
+Lining up the three regimes and how `margin_ratio` behaves in each shows visually why the naïve intuition breaks, and where the "singular boundary" actually runs:
+
+```
+                         margin_ratio (Long position; collateral and size fixed, sweep mark)
+                         ▲
+                         │     🔴 Cash-heavy regime
+                         │        (collateral > entry × size)
+                         │        ratio ↘ decreases as mark rises
+                         │        ※ The zone where "ratio goes up with mark" breaks
+                         │     ──────────────────────────────────
+                         │
+                         │     ◆ Singular boundary: collateral = entry × size
+                         │        (= exactly 1x leverage; just-barely cash-funded)
+                         │        ratio is flat in mark (derivative = 0)
+                         │     ──────────────────────────────────
+                         │
+                         │     🟢 Levered regime
+                         │        (collateral < entry × size)
+                         │        ratio ↗ increases as mark rises
+                         │        ※ Naïve intuition holds; 99% of real perp positions
+                         │
+                         └─────────────────────────────────────►  mark
+
+  Things to read off:
+    - The boundary position depends only on **the relation between collateral and entry × size**;
+      it does not depend on mark.
+    - The moment collateral exceeds entry × size (notional at entry), the slope of margin_ratio
+      flips sign.
+    - On real exchanges, traders are almost always in the levered regime, so this flip is a rare
+      corner case in production. But the proptest feeds random inputs and will mercilessly step
+      into the corner.
+    - The "naïve monotonicity intuition" isn't fundamentally wrong — it is correct **under the
+      implicit precondition "you are in the levered regime."** The proptest is the device that
+      forces that hidden precondition to become visible.
+```
+
+This figure also matters in L6 / L7 when we write the classifier and liquidation discipline: healthy traders live in the levered region, but an extremely over-collateralized "pseudo-long" account can wander into the cash-heavy region at any time, and the engine has to behave correctly in both.
 
 The failing input has `entry × size = 100 × 1 = 100` and `collateral = 103`. Since `collateral > entry × size`, we're in the cash-heavy regime where the ratio decreases as mark rises.
 
@@ -453,7 +491,7 @@ Three load-bearing decisions in this lesson:
 
 1. **`MarginRatio(i64::MAX)` for flat positions, not `Option` or `Result`.** The "no constraint" case is the *safest* possible state. Encoding it as the max representable ratio lets every downstream classifier short-circuit naturally without special-case branching. **Encode "no information" as the safest value, not as an absence of information.**
 
-2. **The proptest's failure is the lesson.** If the proptest had passed on the first try, the reader would have learned "margin_ratio is monotonic in mark." With the failure-and-trace step, the reader learns "**margin_ratio is monotonic in mark *in the levered regime*, and the boundary is when collateral equals notional-at-entry."** The deeper fact survives because the reader walked through the derivative themselves.
+2. **The proptest's failure is the lesson.** If the proptest had passed on the first try, the reader would have learned "margin_ratio is monotonic in mark." With the failure-and-trace step, the reader reaches a deeper domain fact: "**margin_ratio is monotonic in mark *only in the levered regime*, and its singular boundary is the point where the deposited collateral equals the notional at entry (= entry × size)."** That deeper fact survives because the reader walked through the derivative themselves.
 
 3. **`prop_assume!` for conditional invariants.** When an invariant holds only over a subset of inputs, the right tool is `prop_assume!` — not a stronger function postcondition, not a weaker assertion, not a hand-restricted strategy. **The invariant is what's true *under what condition*; encode both.**
 
@@ -482,7 +520,7 @@ Margin ratio is `equity / notional`, scaled. There's no upper bound at 100% math
 
 **Q3: Could we simplify `margin_ratio` by always computing in i128 without the flat guard?**
 
-Division by zero in Rust panics in both debug and release for integers. The flat guard prevents that panic. Removing it would require either a `try_div` (which i128 doesn't have built-in) or a branchless approach (multiplying notional by a constant before the divide, with extra rounding noise). The two-line guard is the cleanest. **One conditional is cheaper than a branchless dance.**
+Division by zero in Rust panics in both debug and release for integers. The flat guard prevents that panic. Removing it would require either a `try_div` (which i128 doesn't have built-in) or a branchless approach (multiplying notional by a constant before the divide, with extra rounding noise). The two-line guard is the cleanest. **An explicit one-branch conditional is far cheaper — in terms of readability and maintainability — than escaping into a tricky branchless implementation.**
 
 **Q4: Why `prop_assume!` instead of restricting the input strategy to `collateral in 1..(entry × size)`?**
 

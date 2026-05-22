@@ -59,6 +59,29 @@ Two edits, both small:
 
 (Answer: **3 questions → 4 variants.** `Safe` = yes to (a). `AtRisk` = no to (a), no to (b). `Liquidatable` = no to (a), yes to (b), yes to (c) (close-only suffices). `Underwater` = no to (a), yes to (b), no to (c) (insurance fund absorbs the deficit). A 3-variant enum (Safe/AtRisk/Liquidatable) would collapse Liquidatable and Underwater, losing the "does the insurance fund get involved?" signal. The engine doesn't have to recompute that — it's already encoded in the variant.)
 
+Laying the four variants × the three actions they authorize into one matrix makes it immediately clear why four is the right number, and how each variant carries a "downstream decision" at the type level:
+
+```
+                    │ (a) Open new       │ (b) Force-close   │ (c) Does closing    │
+                    │     positions?      │     the position?  │     alone cover the │
+                    │                    │                   │     deficit?        │
+   ─────────────────┼────────────────────┼───────────────────┼─────────────────────┤
+   Safe              │ ✅ yes              │ ❌ no              │ N/A (no close)      │
+   AtRisk            │ ❌ no               │ ❌ no              │ N/A (no close)      │
+   Liquidatable      │ ❌ no               │ ✅ yes             │ ✅ yes (equity left) │
+   Underwater        │ ❌ no               │ ✅ yes             │ ❌ no → insurance    │
+                    │                    │                   │   fund absorbs      │
+   ─────────────────┴────────────────────┴───────────────────┴─────────────────────┘
+
+Downstream engine behavior (implemented in L7 / Module 3):
+   Safe         ─► trader keeps operating
+   AtRisk       ─► warn in UI, refuse new positions, let trader close voluntarily
+   Liquidatable ─► emit auto close order, deduct fee, return remaining equity
+   Underwater   ─► emit auto close order, draw the deficit from the insurance fund
+```
+
+The point: **each variant maps directly to its own set of authorized actions.** Collapse `Liquidatable` and `Underwater` together and the "should we call the insurance fund?" signal disappears from the type — the engine then has to recompute equity to decide. Add more variants and no row produces a new column either (= these four are the minimal unique set of action profiles). **"A state machine has exactly as many variants as the distinct downstream actions it triggers"** — that's the principle this design embodies.
+
 ## Walk-through
 
 ### Step 1: Append to `src/types.rs`
@@ -99,11 +122,11 @@ pub enum MarginHealth {
 
 Things to notice about these 25 lines:
 
-1. **`MarginRatio(pub i64)` is a newtype.** Not a `type MarginRatio = i64` alias. The newtype gives the type checker a handle: a function that takes `MarginRatio` cannot be accidentally called with a raw `i64` value that's actually a balance, an account ID, or a `MarkPrice`. The `pub i64` field means callers can construct one with `MarginRatio(1000)` and read it with `ratio.0` — no encapsulation invariant to defend.
+1. **`MarginRatio(pub i64)` is a newtype.** Not a `type MarginRatio = i64` alias. The newtype gives the type checker a handle: a function that takes `MarginRatio` cannot be accidentally called with a raw `i64` value that's actually a balance, an account ID, or a `MarkPrice`. The `pub i64` field means callers can construct one with `MarginRatio(1000)` and read it with `ratio.0` — **the type can't hold an invalid state in the first place (i.e., no `i64` value would be malformed), so there's no encapsulation invariant to defend, and we keep it as a transparent data container instead of hiding behind getters/setters.** The "wrap a `Vec` inside `MyVec` to re-expose `len()`" pattern is a cost paid to defend an invariant; don't pay it where no invariant exists.
 
 2. **`MarginRatio` derives a lot of traits — `Default`, `PartialOrd`, `Ord`, `Hash`.** The defaults aren't required by the engine, but they let downstream code (telemetry, sorted-by-worst-health scanners in Stage 10c, dashboards) use `MarginRatio` like any other comparable value type. `MarginRatio::default()` is `MarginRatio(0)` — 0 bps, semantically "no ratio computed" or "freshly zeroed." The engine itself never reads `default()`; it always computes from a snapshot.
 
-3. **`MarginHealth` does NOT derive `PartialOrd` / `Ord`.** Even though the variants naturally order (Safe < AtRisk < Liquidatable < Underwater in worsening direction), ordered comparisons on enums read as code-smell. `if health > MarginHealth::AtRisk` is less clear than `if matches!(health, MarginHealth::Liquidatable | MarginHealth::Underwater)`. The compiler enforces the explicit pattern; future maintainers see exactly which variants the branch covers.
+3. **`MarginHealth` does NOT derive `PartialOrd` / `Ord`.** Even though the variants naturally order (Safe < AtRisk < Liquidatable < Underwater in worsening direction), ordered comparisons on enums read as code-smell. `if health > MarginHealth::AtRisk` is less clear than `if matches!(health, MarginHealth::Liquidatable | MarginHealth::Underwater)`. The compiler enforces the explicit pattern; future maintainers see exactly which variants the branch covers. **Sloppy ordered comparisons on enums are a typical breeding ground for bugs (a code smell) — reach for `matches!` and explicit pattern matching first as a matter of discipline.** When you really do need an order (sorting by severity in telemetry, for example), grow an explicit `severity_rank()` method instead — that surfaces intent.
 
 4. **Per-variant doc comments describe the *authorization*, not the math.** "Margin ratio < maintenance" tells you when the variant fires, but the comment also says what the engine does in response ("should liquidate the position at market"). Doc comments here serve as the canonical reference for "what does Liquidatable actually mean to the rest of the system?"
 

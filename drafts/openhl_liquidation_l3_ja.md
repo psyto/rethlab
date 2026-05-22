@@ -60,6 +60,48 @@ L3 では 2 つの **I/O 型**を加える。あらゆる margin 関数が consu
 
 （答え: **`avg_entry`（PnL の項を計算するため）と `collateral`（equity を計算するため）の 2 つだ。** Funding の式に `entry` 係数は出てこない — ポジションがどこで開かれたかに関係なく、現在の mark に rate を掛けてスケールするだけだ。Funding はまた collateral を読まない。Funding が emit する settlement delta は bridge レイヤーで balance に適用され、balance 台帳の管理は bridge 側に閉じている。Liquidation の仕事は、`collateral + unrealized PnL` がしきい値を下回ったかを *測る* ことなので、両方の値が手元に揃っている必要がある。仕事が違えば snapshot も違う、ということだ。）
 
+L3 で完成する `types` モジュールが、エンジン全体に対して **どんな入力を受け、どんな出力を返すか**を 1 枚で見ると、Module 1 (型) から Module 2 (純粋計算) へ向かう接続点がはっきりする:
+
+```
+                    [ 上流: bridge / clearing レイヤー (台帳の所有者) ]
+                              │
+                              │ tick ごとに各アカウントの
+                              │ 台帳から snapshot を構築
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ 入力: AccountSnapshot { account, position_size, avg_entry,          │
+   │                         collateral }                                │
+   │   ※ 不変・read-only・Copy。L3 で確定。                                │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ ★ liquidation エンジン (Module 2-4 で実装するすべて)                 │
+   │                                                                     │
+   │   L4: notional_value / unrealized_pnl  (純粋計算)                    │
+   │   L5: account_equity / margin_ratio   (純粋計算)                    │
+   │   L6: margin_health                    (分類: 4 状態 enum)           │
+   │   L7: close_order_spec                 (Liquidatable/Underwater 用)  │
+   │   ↑↑ L1-L2 の定数・型 (MARGIN_SCALE, LiquidationParams,             │
+   │                       MarginRatio, MarginHealth) も全レイヤーで参照 │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌────────────────────────────────────────────────────────────────────┐
+   │ 出力: CloseOrderSpec { account, side, qty }                         │
+   │   ※ price なし (market order) / Liquidatable・Underwater アカウントに  │
+   │      対してのみ emit。L3 で確定。                                    │
+   │   さらに Module 3-4 で InsuranceFundDelta も並行して emit する        │
+   └────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                    [ 下流: bridge → matching engine (CLOB) ]
+                              ・close order を SubmitMarket に変換して submit
+                              ・Underwater 分は insurance fund を credit/debit
+```
+
+ポイントは 2 つ: (a) **L3 で完成する 2 つの型 (`AccountSnapshot` 入力 / `CloseOrderSpec` 出力) が、エンジンと外界の唯一の接触面になる** — エンジン本体は L4 以降で書くが、その関数たちは型シグネチャの上ではすべて「AccountSnapshot を受けて何かを返す」「最終的に CloseOrderSpec を emit する」という形に揃う。(b) **入力 (snapshot) は不変、出力 (spec) も不変** — エンジンは台帳を更新しない、台帳の所有権は完全に bridge 側に残る。これが L0 で予告した「**リスク計算専用の不変な snapshot 型を分離して依存関係をクリーンに保つ**」の具体形だ。
+
 ## 手を動かす walk-through
 
 ### Step 1: `src/types.rs` に `AccountSnapshot` を追記
@@ -90,7 +132,7 @@ pub struct AccountSnapshot {
 
 2. **`avg_entry` は `MarkPrice` 型で持つ。新しい `EntryPrice` 型は作らない。** ポジションが開かれた価格と、現在ポジションを測っている mark price は、同じ unit-of-account に住む。別途 `EntryPrice` newtype を作ると、すべての PnL 計算サイトで変換が必要になり、意味的な利益は何もない。**2 つのフィールドが同じ物理量を測るなら、型を共有する。**
 
-3. **`collateral: Notional` は signed にしている。** Collateral は *預け入れ* 資金として慣例的に非負だが、`Notional`（signed）に揃えるのは `account_equity = collateral + unrealized_pnl` を signed sum のまま流したいからだ。`collateral` を unsigned にすると、すべての equity 計算で `as i64` キャストが入り込む。**境界で変換し、計算は 1 つの signed 型で揃える。**
+3. **`collateral: Notional` は signed にしている。** Collateral は *預け入れ* 資金として慣例的に非負だが、`Notional`（signed）に揃えるのは `account_equity = collateral + unrealized_pnl` を signed sum のまま流したいからだ。`collateral` を unsigned にすると、すべての equity 計算で `as i64` キャストが入り込む。**境界で変換し、計算は 1 つの signed 型で揃える。これにより、キャスト漏れや signed / unsigned の混在に伴う静かなランタイムバグ (アンダーフロー、`as` キャストでの最上位ビット化け、減算で負になるはずの値が大きな正の数に化けるなど) を、コンパイル時の型不一致として根絶できる**。L4 の符号トリック (`(mark − entry) × size` を 4 象限すべて branchless で正しく計算する) は、まさにこの「計算経路をすべて signed で統一する」前提の上に成り立つ。
 
 4. **`pub` フィールド、コンストラクタ関数なし。** L1 の `LiquidationParams` と同じ慣例だ。透明な構造体で、カプセル化不変量はない。Bridge レイヤーは `AccountSnapshot { account: …, position_size: …, … }` を直接組み立てる。`AccountSnapshot::new()` を置かないのは、コンストラクタが強制すべき不変量がないからだ。
 
@@ -124,7 +166,7 @@ pub struct CloseOrderSpec {
 
 1. **`price` フィールドはない。** Liquidation は価格を選ばない。エンジンは market order の仕様を組み立てるところまでで、あとは matching engine が板に存在する深さで約定する。Stage 10c で `AccountSnapshot` のスライスを順に辿り、`Liquidatable` か `Underwater` のアカウントごとに `CloseOrderSpec` を 1 つずつ emit する流れになる。どれも limit を持たない。
 
-2. **`side: Side` は `openhl_clob::Side` を再利用する。** Matching engine は `Side::{Buy, Sell}` で話す。`liquidation::Side` を別に定義して bridge で変換するようにすると、いずれ drift する翻訳サーフェスを導入してしまう（片方の crate で 3 番目の side variant を足したのにもう片方には足さなかった、など）。**1 つの enum、1 つの真実の源泉。**
+2. **`side: Side` は `openhl_clob::Side` を再利用する。** Matching engine は `Side::{Buy, Sell}` で話す。`liquidation::Side` を別に定義して bridge で変換するようにすると、**将来的に型の乖離 (drift) を引き起こす原因となる、不要な翻訳レイヤー (`impl From` などの変換ロジック) を導入してしまう** — たとえば片方の crate に 3 番目の side variant (`Closing` など) を足したのにもう片方に足し忘れる、`Buy ↔ Sell` のマッピングを 1 箇所でうっかり反転させる、といった事故が静かに発生する。**1 つの enum、1 つの真実の源泉。** 境界を跨ぐメッセージの語彙 (`Side` / `Qty`) は crate 境界に関係なく共通化して、永続的な型変換処理のコスト (調整税) を払い続ける羽目にならないようにする。
 
 3. **`qty: Qty` は `openhl_clob::Qty(u64)` を再利用する。** Doc コメントが言うとおり「position size の絶対値」だ。`PositionSize` は `i64`（signed）だが、close する数量は常に正の値になる。変換（`Qty(position_size.0.unsigned_abs())`）は L7 の `compute::close_order_spec` で行う。ここでは *出力型* が unsigned であることに commit するだけにとどめる。
 
