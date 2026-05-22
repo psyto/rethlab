@@ -397,9 +397,13 @@ export default function LandingPage() {
             <h2 className="text-2xl font-bold sm:text-3xl">
               {t('landing.cta.title')}
             </h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              {t('landing.cta.description')}
-            </p>
+            <div className="mx-auto mt-3 max-w-2xl space-y-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              {t('landing.cta.description')
+                .split('\n\n')
+                .map((paragraph, idx) => (
+                  <p key={idx}>{paragraph}</p>
+                ))}
+            </div>
             <div className="mt-6">
               <Link
                 href="/courses"

@@ -88,8 +88,8 @@ export const ja: TranslationKeys = {
       card3Desc: 'Reth は execution client シェアでまだ一桁〜低い 2 桁 % — Geth と Nethermind が大半のチェーンを serve している。RethLab は Revm ベースのコードを ship する方法と、それを production で動いている non-Revm チェーンに対して検証する方法の両方を教える (Building tier に収録)。タレントギャップが現実なのは、まさにこのスタックがまだ emerging だから。',
     },
     cta: {
-      title: 'Hyperliquid、Tempo、Paradigm が採用中。',
-      description: 'Rust EVM スタックは急速に動いています。Reth は他のプロジェクトが追いつけない頻度でリリースを重ね、それを読めるエンジニアは希少。RethLab はスタックを読みこなす深さに加えて、ポートフォリオに出せる 10 本の build (MEV searcher、indexer、custom RPC、wallet backend、EIP-7702 sponsor、Foundry スタイルの cheatcode、swap aggregator、frontrun-resistant router、cross-client 検証ハーネス、HTTP 402 / MPP machine-payments エンドポイント) を渡します。2026 年の採用枠を取るのは、これらの成果物を手にして現れる人たちです。',
+      title: 'Hyperliquid, Tempo, Paradigm が牽引する、Rust EVM スタックの最前線。',
+      description: '驚異的なハイペースで開発が進む Reth。競合を突き放すスピードでアップデートが繰り返される一方、このエコシステムを真にリードできるプロトコルエンジニアは圧倒的に不足しています。\n\nRethLab が目指すのは、単なるコードの座学ではありません。あなたの GitHub を飾り、即戦力を証明する 10 本の高度な Build 成果物 の実装です（MEV searcher、EIP-7702 sponsor、Foundry スタイルの cheatcode、cross-client 検証ハーネス、HTTP 402 / MPP 機械間決済エンドポイントなど）。\n\n2026 年、激化するトッププロジェクトの採用枠。それを手にするのは、仕様書を語る人ではなく、これらの強固な成果物を手に、実装力で語る人たちです。',
       cta: '始める',
     },
     features: {
