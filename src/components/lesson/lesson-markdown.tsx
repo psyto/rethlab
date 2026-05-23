@@ -3,7 +3,9 @@
 import { isValidElement, type ReactElement } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeKatex from 'rehype-katex';
 import { MermaidDiagram } from './mermaid-diagram';
 import { YouTubeEmbed } from './youtube-embed';
 import { CopyButton } from './copy-button';
@@ -68,8 +70,8 @@ const LANG_LABELS: Record<string, string> = {
 export function LessonMarkdown({ content }: { content: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight]}
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeHighlight, rehypeKatex]}
       components={{
         // Wrap fenced code blocks in a "terminal" frame matching the
         // home-page hero snippet — border, traffic-light dots, language

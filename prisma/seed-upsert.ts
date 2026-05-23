@@ -59,6 +59,8 @@ import { seedRethOpenHlFundingEN } from './seed-reth-openhl-funding-en';
 import { seedRethOpenHlFundingJA } from './seed-reth-openhl-funding-ja';
 import { seedRethOpenHlLiquidationEN } from './seed-reth-openhl-liquidation-en';
 import { seedRethOpenHlLiquidationJA } from './seed-reth-openhl-liquidation-ja';
+import { seedRethOpenHlAdlEN } from './seed-reth-openhl-adl-en';
+import { seedRethOpenHlAdlJA } from './seed-reth-openhl-adl-ja';
 import { seedRethPerpPrimerEN } from './seed-reth-perp-primer-en';
 import { seedRethPerpPrimerJA } from './seed-reth-perp-primer-ja';
 
@@ -102,6 +104,8 @@ const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethOpenHlFundingJA,
   seedRethOpenHlLiquidationEN,
   seedRethOpenHlLiquidationJA,
+  seedRethOpenHlAdlEN,
+  seedRethOpenHlAdlJA,
   seedRethPerpPrimerEN,
   seedRethPerpPrimerJA,
 ];

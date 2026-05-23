@@ -35,6 +35,8 @@ import { seedRethOpenHlFundingEN } from './seed-reth-openhl-funding-en';
 import { seedRethOpenHlFundingJA } from './seed-reth-openhl-funding-ja';
 import { seedRethOpenHlLiquidationEN } from './seed-reth-openhl-liquidation-en';
 import { seedRethOpenHlLiquidationJA } from './seed-reth-openhl-liquidation-ja';
+import { seedRethOpenHlAdlEN } from './seed-reth-openhl-adl-en';
+import { seedRethOpenHlAdlJA } from './seed-reth-openhl-adl-ja';
 import { seedRethPerpPrimerEN } from './seed-reth-perp-primer-en';
 import { seedRethPerpPrimerJA } from './seed-reth-perp-primer-ja';
 
@@ -146,6 +148,9 @@ async function main() {
   await seedRethOpenHlLiquidationEN(prisma);
   await seedRethOpenHlLiquidationJA(prisma);
   console.log('  Seeded Building OpenHL — Liquidation (EN + JA)');
+  await seedRethOpenHlAdlEN(prisma);
+  await seedRethOpenHlAdlJA(prisma);
+  console.log('  Seeded Building OpenHL — ADL (EN + JA)');
   await seedRethPerpPrimerEN(prisma);
   await seedRethPerpPrimerJA(prisma);
   console.log('  Seeded Perp DEX Primer (EN + JA)');
