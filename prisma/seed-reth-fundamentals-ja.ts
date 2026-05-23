@@ -383,24 +383,37 @@ Alloyの **Provider** は「ノードへの窓口」です。これを通じて�
 
 ## 最小コード — 一字一句そのまま
 
-これは [\`alloy-rs/examples\`](https://github.com/alloy-rs/examples/blob/main/examples/providers/examples/http.rs) の \`http.rs\` 全体：
+これは [\`alloy-rs/examples\`](https://github.com/alloy-rs/examples/blob/main/examples/providers/examples/http.rs) の \`http.rs\` をベースにした最小プロジェクトです。
+
+まず \`Cargo.toml\`：
+
+\`\`\`toml
+[package]
+name = "hello_provider"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+alloy = "2.0.5"
+alloy-provider = "2.0.5"
+eyre = "0.6.12"
+tokio = { version = "1", features = ["full"] }
+\`\`\`
+
+次に \`src/main.rs\`：
 
 \`\`\`rust
-//! Example of using the HTTP provider with the \`reqwest\` crate to get the latest block number.
-
 use alloy::providers::{Provider, ProviderBuilder};
 use eyre::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // reqwest クレートを使った HTTP transport でProvider作成
-    let rpc_url = "https://reth-ethereum.ithaca.xyz/rpc".parse()?;
+    let rpc_url = "https://ethereum.reth.rs/rpc".parse()?;
     let provider = ProviderBuilder::new().connect_http(rpc_url);
 
-    // 最新ブロック番号を取得
     let latest_block = provider.get_block_number().await?;
 
-    println!("Latest block number: {latest_block}");
+    println!("Latest block number: {}", latest_block);
 
     Ok(())
 }
@@ -408,7 +421,7 @@ async fn main() -> Result<()> {
 
 \`cargo run\` するとメインネットの最新ブロック番号が表示されます。**これがあなたが書く全ての"監視Bot"の出発点** です。
 
-URLに注目：\`https://reth-ethereum.ithaca.xyz/rpc\` は **Paradigm/Ithaca が運用する公開Rethノード**。あなたのコードは既に文字通りRethノードと喋っています。スタックの中にもう入っているのです。
+URLに注目：\`https://ethereum.reth.rs/rpc\` は **Reth プロジェクトが運営する公開 RPC エンドポイント**。あなたのコードは既に文字通り Reth ノードと喋っています。スタックの中にもう入っているのです。
 
 ## よく使うProviderメソッド
 
@@ -499,7 +512,7 @@ async fn is_empty_wallet(
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let provider = ProviderBuilder::new()
-        .connect_http("https://reth-ethereum.ithaca.xyz/rpc".parse()?);
+        .connect_http("https://ethereum.reth.rs/rpc".parse()?);
 
     let vitalik = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045".parse::<Address>()?;
     println!("vitalik empty? {}", is_empty_wallet(&provider, vitalik).await?);

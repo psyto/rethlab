@@ -382,24 +382,37 @@ A **Provider** is your gateway to a node. Block numbers, balances, transactions 
 
 ## Minimal example — verbatim
 
-This is the entire \`http.rs\` example from [\`alloy-rs/examples\`](https://github.com/alloy-rs/examples/blob/main/examples/providers/examples/http.rs):
+This is a minimal project built around the [\`alloy-rs/examples\`](https://github.com/alloy-rs/examples/blob/main/examples/providers/examples/http.rs) \`http.rs\` example.
+
+First \`Cargo.toml\`:
+
+\`\`\`toml
+[package]
+name = "hello_provider"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+alloy = "2.0.5"
+alloy-provider = "2.0.5"
+eyre = "0.6.12"
+tokio = { version = "1", features = ["full"] }
+\`\`\`
+
+Then \`src/main.rs\`:
 
 \`\`\`rust
-//! Example of using the HTTP provider with the \`reqwest\` crate to get the latest block number.
-
 use alloy::providers::{Provider, ProviderBuilder};
 use eyre::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Create a provider with the HTTP transport using the \`reqwest\` crate.
-    let rpc_url = "https://reth-ethereum.ithaca.xyz/rpc".parse()?;
+    let rpc_url = "https://ethereum.reth.rs/rpc".parse()?;
     let provider = ProviderBuilder::new().connect_http(rpc_url);
 
-    // Get latest block number.
     let latest_block = provider.get_block_number().await?;
 
-    println!("Latest block number: {latest_block}");
+    println!("Latest block number: {}", latest_block);
 
     Ok(())
 }
@@ -407,7 +420,7 @@ async fn main() -> Result<()> {
 
 \`cargo run\` and you should see the current mainnet block number. **This is the seed of every monitoring bot you'll ever write.**
 
-Note the URL: \`https://reth-ethereum.ithaca.xyz/rpc\` is the **public Reth RPC operated by Paradigm/Ithaca** — your code is literally talking to a Reth node. You're already inside the stack.
+Note the URL: \`https://ethereum.reth.rs/rpc\` is the **public RPC endpoint operated by the Reth project** — your code is literally talking to a Reth node. You're already inside the stack.
 
 ## Common Provider methods
 
@@ -496,7 +509,7 @@ And exercise it from \`main\`:
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let provider = ProviderBuilder::new()
-        .connect_http("https://reth-ethereum.ithaca.xyz/rpc".parse()?);
+        .connect_http("https://ethereum.reth.rs/rpc".parse()?);
 
     let vitalik = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045".parse::<Address>()?;
     println!("vitalik empty? {}", is_empty_wallet(&provider, vitalik).await?);
