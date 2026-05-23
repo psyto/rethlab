@@ -11,10 +11,10 @@ export async function seedRethOpenHlLiquidationEN(prisma: PrismaClient) {
       slug: "building-openhl-liquidation-en",
       title: "Build OpenHL Liquidation — perpetual position liquidation engine",
       description:
-        "Build the perpetual-position liquidation engine — the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs, plus the insurance-fund state machine that absorbs deficits via a three-variant outcome enum (Covered / PartiallyDrained / Depleted). Includes the leveraged-regime non-monotonicity discovery, conservation-law proptests for the cascade math, and the credit/debit decomposition that bridges pure compute and stateful book-keeping. The fifth course in the DIY Perp series. Stage 10a (margin math) + Stage 10b (insurance fund + close-outcome decomposition) shipped; multi-account scanner (Stage 10c) pending.",
+        "Build the perpetual-position liquidation engine end-to-end: the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs, the insurance-fund state machine that absorbs deficits via a three-variant outcome enum (Covered / PartiallyDrained / Depleted), and the multi-account scanner that ties them into a single orchestration loop the bridge calls once per block. Includes the leveraged-regime non-monotonicity discovery, three layers of conservation-law proptests that compose vertically, the credit/debit decomposition that bridges pure compute and stateful book-keeping, and the discriminated-dispatch pattern via debug_assert! pairs. 14 lessons (L0–L13) across 5 modules, byte-for-byte against openhl's full Stage 10 trilogy (margin math + insurance fund + scanner). The fifth course in the DIY Perp series.",
       difficulty: "EXPERT",
-      duration: 340,
-      xpReward: 670,
+      duration: 440,
+      xpReward: 870,
       track: "diy-perp",
       tags,
       isPublished: true,
@@ -4055,6 +4055,1563 @@ The semantics are *the same*: both fields say "this much of the close's fee flow
 L11 begins Stage 10c — the multi-account scanner. The scanner is the state-machine consumer of everything L4–L10 produced. It takes a slice of \`&[AccountSnapshot]\`, classifies each one (Liquidatable, Underwater, Safe, At-Risk) using \`margin_health\` from L6, calls either \`solvent_close_outcome\` or \`underwater_close_outcome\` per Liquidatable account, threads the credits/debits into an owned \`InsuranceFund\`, and returns a \`ScanReport\` summarizing the batch: which accounts were closed, which ADL trigger amounts surfaced, and where the fund stands afterwards.
 
 After L11, the cascade has its first *runnable* layer: not just math + state, but math + state + orchestration loop. The SHA pin advances from \`260883b\` to \`0a8464e\` (Stage 10c).
+`,
+                },
+              ],
+            },
+          },
+          {
+            title: "Scanner & capstone",
+            sortOrder: 4,
+            lessons: {
+              create: [
+                {
+                  title: "Lesson 11 — Scanner type vocabulary — CloseOutcomeKind, LiquidationRecord, ScanReport, LiquidationScanner",
+                  slug: "openhl-liquidation-scanner-types-en",
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 25,
+                  xpReward: 50,
+                  content: `# Lesson 11 — Scanner type vocabulary — \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`
+
+## Goal
+
+Concepts you'll grasp in this lesson:
+
+- **The orchestration layer has its own type vocabulary, distinct from compute or insurance.** Stage 10a produced \`MarginHealth\` (per-account classification). Stage 10b produced \`SolventClose\` / \`UnderwaterClose\` (per-close decomposition) and \`WithdrawOutcome\` (per-fund-call outcome). Stage 10c introduces *batch-level* types: \`CloseOutcomeKind\` (which kind of close this account had), \`LiquidationRecord\` (one row per liquidated account), and \`ScanReport\` (everything that happened in one scan). **Each architectural layer needs its own type vocabulary because each layer answers different questions.**
+- **\`CloseOutcomeKind\` is a discriminated union of \`SolventClose\` and \`UnderwaterClose\` — same shape as L9's \`WithdrawOutcome\`, different vocabulary.** Two variants, each carrying a struct produced by the corresponding Stage 10b function. The scanner pattern-matches on this enum to dispatch the post-close work (fund deposit, fund withdraw, escalation aggregation). **When a higher layer routes between two lower-layer outputs, an enum variant carrying each output is the cleanest mechanical bridge.**
+- **\`ScanReport\` includes both per-account records AND aggregate fund-flow totals.** The records vector is the *audit trail* (one row per liquidation, in iteration order). The three aggregate \`i64\`s (\`fund_deposits\`, \`fund_withdrawals\`, \`unfilled_deficit\`) are the *telemetry summary* (sums the bridge can read without iterating the records). Pre-computing them inside the scan loop costs nothing — the bridge wanted them anyway. **Aggregate fields next to a record vector save the caller a fold; they're not redundant, they're convenient.**
+- **\`LiquidationScanner\` owns the \`InsuranceFund\` directly, not via \`Arc<Mutex<...>>\`.** The scanner is a per-bridge component, not a shared resource. The bridge holds the scanner, the scanner holds the fund, the fund holds the balance. Mutation flows down the ownership tree without lock contention. **State machines that change exactly once per block don't need synchronization primitives.**
+
+Verification:
+
+\`\`\`bash
+cargo check -p openhl-liquidation
+\`\`\`
+
+…compiles clean. We don't add new tests in L11 — the type vocabulary doesn't have behavior to test yet. L12 adds the \`scan\` method and its 4 simplest tests; L13 adds the nuanced cases + 4 proptests. After L13, 68 tests total.
+
+Specific changes:
+
+- **\`src/scanner.rs\`** — new module file. Adds the module-level doc, \`CloseOutcomeKind\` enum, \`LiquidationRecord\` struct, \`ScanReport\` struct, \`LiquidationScanner\` struct, plus 5 accessor methods (\`new\`, \`with_empty_fund\`, \`fund_balance\`, \`fund\`, \`into_fund\`). No \`scan\` method yet.
+- **\`src/lib.rs\`** — adds \`pub mod scanner;\` and re-exports the four scanner types.
+
+L11 stages the type vocabulary; L12 implements \`scan\`.
+
+## Recap
+
+After L10:
+- \`compute.rs\`, \`insurance.rs\`, \`types.rs\`, \`lib.rs\` all match Stage 10b's \`260883b\` byte-for-byte.
+- \`cargo test\` runs 55 tests, all green.
+- We have *all the parts* for a multi-account orchestration loop: margin classification (\`margin_health\`), close-order generation (\`close_order_spec\`), fee math (\`liquidation_fee\`), close-outcome decomposition (\`solvent_close_outcome\` / \`underwater_close_outcome\`), and the insurance fund state machine (\`InsuranceFund::deposit\` / \`::withdraw_shortfall\`).
+- The bridge would have to hand-wire those parts itself for every block.
+
+Stage 10c assembles them once, in a reusable component the bridge owns. The orchestration loop is \`scan\` (L12); the contract — what \`scan\` takes and returns — is L11.
+
+## Plan
+
+Three edits:
+
+1. **Create \`crates/liquidation/src/scanner.rs\`** — new module file with \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`, and the 5 accessor methods. No \`scan\` method (lands in L12).
+2. **Add \`pub mod scanner;\`** and the re-exports to \`crates/liquidation/src/lib.rs\`. The four types become part of the crate's public surface.
+3. **Update \`lib.rs\`'s top-of-file roadmap** to mark Stage 10c in progress.
+
+> 🛑 **Predict.** Before reading further: the scanner's \`scan\` method (L12 territory) will produce a \`ScanReport\` per block. What fields belong in the report? List as many as you can. Then: what fields belong in the *per-account record* inside the report?
+
+(Answer: **Scan report:** (a) one record per liquidated account, (b) aggregate fees deposited to fund, (c) aggregate amount the fund actually paid out, (d) aggregate unfilled deficit the fund couldn't cover. **Per-account record:** (a) the account ID, (b) the close-order spec the bridge will submit, (c) the pre-close classification (for traceability), (d) the post-close outcome decomposition (solvent or underwater). The scanner gives the bridge two views of the same data: per-account records for the CLOB submit step, and aggregate totals for telemetry / ADL escalation in one O(1) read.)
+
+The type layering picture for L11:
+
+\`\`\`
+   ┌────────────────────────────────────────────────────────────┐
+   │  L11 — orchestration layer types                            │
+   ├────────────────────────────────────────────────────────────┤
+   │                                                            │
+   │  Per-account, post-classification:                         │
+   │  ─────────────────────────────                             │
+   │  enum CloseOutcomeKind {                                   │
+   │      Solvent(SolventClose),       ──→ Fund deposit + refund │
+   │      Underwater(UnderwaterClose), ──→ Fund shortfall path   │
+   │  }                                                         │
+   │                                                            │
+   │  struct LiquidationRecord {                                │
+   │      account, close_order, classification, outcome         │
+   │  }                                                         │
+   │                                                            │
+   │  Per-batch:                                                │
+   │  ──────────                                                │
+   │  struct ScanReport {                                       │
+   │      records: Vec<LiquidationRecord>,                      │
+   │      fund_deposits:     i64,    ← Σ over records           │
+   │      fund_withdrawals:  i64,    ← Σ over records           │
+   │      unfilled_deficit:  i64,    ← Σ → ADL trigger          │
+   │  }                                                         │
+   │                                                            │
+   │  Owner:                                                    │
+   │  ──────                                                    │
+   │  struct LiquidationScanner {                               │
+   │      params: LiquidationParams,                            │
+   │      fund:   InsuranceFund,    ← owned, not shared          │
+   │  }                                                         │
+   │                                                            │
+   └────────────────────────────────────────────────────────────┘
+\`\`\`
+
+Three things to notice about the layering:
+
+1. **\`CloseOutcomeKind\` is the *only* new enum in Stage 10c.** Everything else is a struct. Why? Because the routing decision (solvent vs. underwater) was already made by \`compute\`'s \`debug_assert!\` pair (L10); the enum exists to *carry* the decision through the scan loop, not to *re-make* it. **Enums encode irreducible dispatch; struct fields encode parallel data.**
+2. **\`LiquidationRecord\` carries \`classification\` (the pre-close \`MarginHealth\`) even though the bridge can derive it.** The bridge submitting the close order doesn't actually need it; what needs it is the *telemetry consumer* — a dashboard that wants to chart "how many Liquidatable vs Underwater closes per hour." Keeping it in the record makes the audit trail self-contained. **Record fields are for downstream consumers, not just the immediate caller.**
+3. **\`ScanReport\`'s three aggregate \`i64\` fields are computed by the scanner during the loop, not by a separate fold.** Adding them to the scan loop costs three \`saturating_add\` calls per record — effectively free, since the scanner already touches each record once. **Pre-computing aggregates inside a single-pass loop is free; computing them in a second pass is wasteful.**
+
+## Walk-through
+
+### Step 1: Create \`src/scanner.rs\`
+
+Create a new file \`crates/liquidation/src/scanner.rs\`. The whole-module doc comment goes first; it's the architectural overview that explains the determinism contract and the FIFO-fairness policy:
+
+\`\`\`rust
+//! Multi-account liquidation scanner (Stage 10c).
+//!
+//! The scanner is the orchestration layer that ties Stage 10a (margin
+//! classification + close-order generation) and Stage 10b (insurance
+//! fund + close-outcome decomposition) together. The bridge owns a
+//! [\`LiquidationScanner\`], calls [\`LiquidationScanner::scan\`] once per
+//! block (or per market-event tick) with the current accounts and mark,
+//! and consumes the returned [\`ScanReport\`] to (a) submit the close
+//! orders to the CLOB and (b) escalate any unfilled deficit.
+//!
+//! ### Determinism
+//!
+//! Every validator must produce byte-identical [\`ScanReport\`]s from the
+//! same \`(accounts, mark, params, fund_state)\`. The scanner only uses
+//! \`Vec\`'s ordered iteration and the fully-deterministic Stage 10a/10b
+//! primitives, so determinism follows from caller-side ordering of the
+//! accounts slice — **the bridge is responsible for handing accounts in
+//! a deterministic order** (typically \`account_id\`-sorted).
+//!
+//! ### Fairness when the fund is partially drained
+//!
+//! When the insurance fund cannot cover every underwater shortfall in
+//! one scan, the v0 policy is **first-come-first-served** in iteration
+//! order. Earlier-iterated underwater accounts get covered; later ones
+//! contribute to [\`ScanReport::unfilled_deficit\`]. This is the simplest
+//! deterministic choice; production fairness designs (pro-rata draw,
+//! priority by account leverage) can be layered on later without
+//! changing the public type shape.
+//!
+//! ### ADL handoff (Stage 10d)
+//!
+//! [\`ScanReport::unfilled_deficit\`] is the load-bearing signal that the
+//! fund couldn't absorb everything. Stage 10c records it; a future
+//! Stage 10d would consume it to drive ADL ranking and force-close
+//! profitable counter-positions. Until Stage 10d ships, the bridge can
+//! either panic on \`unfilled_deficit > 0\` (conservative — halt the
+//! chain) or log and continue (permissive — accept the deficit as a
+//! protocol loss).
+\`\`\`
+
+Five things to notice about this preamble:
+
+1. **It defines *who calls what* in the first sentence.** "The bridge owns a \`LiquidationScanner\`, calls \`LiquidationScanner::scan\` once per block, and consumes the returned \`ScanReport\`." A reader who reads only the first sentence already knows the ownership and call-pattern. **For orchestration modules, the first sentence of the module doc is the call-pattern.**
+2. **The \`Determinism\` section names *who is responsible for what*.** The scanner is deterministic *given a deterministic ordering of accounts*; the *bridge* is responsible for the ordering. Splitting the determinism contract this way is honest: the scanner can't enforce something it doesn't own. **A module that depends on a caller-provided invariant should name the invariant and credit the caller for upholding it.**
+3. **The \`Fairness when the fund is partially drained\` section names the v0 policy AND its successors.** First-come-first-served is the simplest deterministic choice; pro-rata draw and leverage-priority are future designs. Naming both makes the policy *replaceable* without the public-type shape changing. **When picking a policy, name the alternatives the public type leaves room for.**
+4. **The \`ADL handoff\` section explains how the scanner integrates with a stage that doesn't exist yet.** Stage 10d is the next stage in the openhl roadmap; L11's scanner already produces the signal Stage 10d needs (\`unfilled_deficit\`). **Forward references in docs aren't speculation — they're integration contracts that the next stage will fulfill.**
+5. **The escalation alternatives ("panic vs log and continue")** explicitly name the trade-off until Stage 10d ships. The reader who deploys an early-stage chain knows their options. **Doc the operational decisions a deployer faces, not just the API.**
+
+Below the doc, add the imports the scanner uses:
+
+\`\`\`rust
+use crate::compute::{
+    account_equity, close_order_spec, liquidation_fee, margin_health, notional_value,
+    solvent_close_outcome, underwater_close_outcome,
+};
+use crate::insurance::{InsuranceFund, WithdrawOutcome};
+use crate::types::{
+    AccountSnapshot, CloseOrderSpec, LiquidationParams, MarginHealth, SolventClose, UnderwaterClose,
+};
+use openhl_clob::AccountId;
+use openhl_funding::MarkPrice;
+\`\`\`
+
+The import block is unusually wide because the scanner *composes everything*. Six compute functions, two insurance types, five type-module types, two cross-crate types. The width is intentional — it's the bill of materials that says "Stage 10c is what happens when everything from 10a + 10b combines." **An import block can serve as documentation when it's the inventory of dependencies.**
+
+### Step 2: Add \`CloseOutcomeKind\`
+
+Below the imports, add the discriminated outcome enum:
+
+\`\`\`rust
+/// Discriminated outcome for a single liquidated account in a scan.
+///
+/// \`Solvent\` carries the [\`SolventClose\`] decomposition (full fee
+/// collectable, residual returns to account). \`Underwater\` carries the
+/// [\`UnderwaterClose\`] decomposition (partial or zero fee, shortfall the
+/// fund must absorb).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CloseOutcomeKind {
+    Solvent(SolventClose),
+    Underwater(UnderwaterClose),
+}
+\`\`\`
+
+Four things to notice:
+
+1. **The enum is a *tuple variant* enum, not a struct-variant enum.** Each variant carries one positional payload. The alternative — \`Solvent { close: SolventClose }\` — would require named-field destructuring (\`CloseOutcomeKind::Solvent { close } => ...\`). Tuple variants give you the cleaner \`CloseOutcomeKind::Solvent(close) => ...\`. **Tuple variants beat struct variants when the variant carries exactly one payload type.**
+2. **The enum is \`Copy\`** because both \`SolventClose\` and \`UnderwaterClose\` are \`Copy\` (each is two \`i64\` fields). Pass by value, pattern-match by value, no borrow management. **Composing \`Copy\` types produces a \`Copy\` enum at zero engineering cost.**
+3. **The doc comment names the *two payloads* explicitly** — full-fee solvent vs. partial-or-zero underwater. A reader who sees the enum signature without the doc would not know that \`Underwater\` includes the "zero fee, full shortfall" case (which the L10 doc made clear). The cross-reference here saves a hop. **When a higher-layer enum carries a lower-layer struct with subtle internal cases, name those cases in the higher-layer doc.**
+4. **No \`match\`-exhaustiveness helper variant.** No \`_ => unreachable!()\`-style catch-all is needed because the enum has exactly two variants and they exhaust the discriminated-dispatch space we set up in L10. **Two-variant enums are the smallest possible discriminated dispatch — nothing to catch.**
+
+### Step 3: Add \`LiquidationRecord\`
+
+Below \`CloseOutcomeKind\`, add the per-account record struct:
+
+\`\`\`rust
+/// Per-account record produced by the scanner when an account is
+/// liquidated. The bridge submits \`close_order\` to the CLOB; \`outcome\`
+/// records the credit/debit decomposition the scanner already applied
+/// against the [\`InsuranceFund\`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LiquidationRecord {
+    pub account: AccountId,
+    pub close_order: CloseOrderSpec,
+    /// Pre-close classification from [\`margin_health\`]. \`Liquidatable\`
+    /// or \`Underwater\`; \`Safe\`/\`AtRisk\` accounts never appear in a
+    /// record.
+    pub classification: MarginHealth,
+    /// Decomposition of what happened in the close. Note that a
+    /// \`Liquidatable\`-classified account can still produce an
+    /// \`Underwater\` outcome when the fee tips post-close equity
+    /// negative.
+    pub outcome: CloseOutcomeKind,
+}
+\`\`\`
+
+Six things to notice:
+
+1. **Four fields, three of which are \`Copy\` types from earlier modules.** \`AccountId\` (from \`openhl-clob\`), \`CloseOrderSpec\` (Stage 10a), \`MarginHealth\` (Stage 10a), \`CloseOutcomeKind\` (this module). Composing existing types into a record is free. **A record struct that doesn't introduce new fields is purely a vocabulary widening — name it and move on.**
+2. **\`classification\` carries \`MarginHealth\`, an enum with four variants** (\`Safe\`, \`AtRisk\`, \`Liquidatable\`, \`Underwater\`). The doc says only two appear in records — the other two would never be in a \`LiquidationRecord\` because the scanner skips them. The type *allows* four values; the contract narrows to two. **A type can carry more cases than the API actually produces; document the contract narrowing in the doc, not in a separate sub-enum.**
+3. **The note about \`Liquidatable\`-classified → \`Underwater\`-outcome is the key teaching point.** A reader who reads only the field name would assume \`classification == outcome\` always — but the *classification* uses pre-close equity, while the *outcome* uses post-close equity (which the fee reduces). Stage 10a's \`margin_health\` and Stage 10b's \`solvent_close_outcome\` / \`underwater_close_outcome\` can disagree on which side of the fee-threshold an account lands. The concrete case is L10's \`underwater_close_partial_fee_collection\` test: account is \`Liquidatable\` pre-close (positive equity above the maintenance margin), but the close-plus-fee tips post-close equity below the desired fee — so the *outcome* lands in the \`Underwater\` branch even though the *classification* was \`Liquidatable\`. **Document the cases where two related fields can disagree — readers will assume they always agree otherwise.**
+4. **The struct is \`Copy\`** because all four fields are \`Copy\`. Even though \`LiquidationRecord\` will be pushed into a \`Vec\` (which never requires \`Copy\`), keeping it \`Copy\` makes the per-iteration loop body in L12's \`scan\` method ergonomic — no \`.clone()\`, no borrow management. **Make record types \`Copy\` when their fields permit; the cost is zero and the ergonomics compound.**
+5. **All four fields are \`pub\`.** A \`LiquidationRecord\` is a *value type* — the bridge reads its fields directly. Hiding them behind accessors would impose \`record.account()\` instead of \`record.account\`, and gain nothing because there are no invariants to defend. **For records that exist purely to carry data, public fields beat methods.**
+6. **No \`Default\` derive.** What would a default record even mean? An empty \`AccountId\`, a zero-qty \`CloseOrderSpec\`, a \`Safe\` classification, a \`Solvent(SolventClose::default())\` outcome? Nothing about that has meaning. **Don't derive \`Default\` for records whose meaning is "something specific happened" — there's no neutral state to encode.**
+
+### Step 4: Add \`ScanReport\`
+
+Below \`LiquidationRecord\`, add the batch-level summary:
+
+\`\`\`rust
+/// Summary of a single scan pass. Includes per-account records plus
+/// aggregate fund-flow totals for telemetry / escalation.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct ScanReport {
+    /// One record per liquidated account, in scan-iteration order. The
+    /// bridge submits each record's \`close_order\` to the CLOB.
+    pub records: Vec<LiquidationRecord>,
+    /// Total fees credited to the insurance fund during this scan.
+    pub fund_deposits: i64,
+    /// Total amount the insurance fund actually paid out (sum of the
+    /// \`amount\` field across \`Covered\` and \`PartiallyDrained\`
+    /// withdrawals).
+    pub fund_withdrawals: i64,
+    /// Total shortfall the fund could NOT cover (sum across
+    /// \`PartiallyDrained.unfilled\` and \`Depleted.unfilled\`). Stage 10d
+    /// consumes this as the ADL trigger.
+    pub unfilled_deficit: i64,
+}
+\`\`\`
+
+Six things to notice:
+
+1. **\`ScanReport\` is \`Clone + Default\` but **NOT** \`Copy\`.** Because it contains a \`Vec\`, which is heap-allocated and can't be bitwise-copied. The compiler enforces this; you can't accidentally derive \`Copy\` on a \`Vec\`-containing struct. **The presence of a \`Vec\` is the compiler-enforced "I have a heap allocation" signal.**
+2. **\`Default\` is derived — and it's meaningful.** An empty scan (no liquidatable accounts) produces \`ScanReport { records: vec![], fund_deposits: 0, fund_withdrawals: 0, unfilled_deficit: 0 }\`. That's exactly what \`Default::default()\` gives, and it's exactly what L12's \`scan\` method initializes with. **\`Default\` is meaningful when the default value represents a real domain state — here, "scan returned nothing."**
+3. **Three \`i64\` aggregates next to the \`Vec\`** — \`fund_deposits\`, \`fund_withdrawals\`, \`unfilled_deficit\`. The alternative — computing them via \`report.records.iter().map(|r| r.outcome.fee()).sum()\` — would require iterating the records every time the bridge reads them. Pre-computing inside the scan loop is O(1) extra work per record and saves the bridge an O(n) fold. **Aggregate fields next to a record vector save the caller a fold; they're not redundant.**
+4. **\`fund_withdrawals\` is the sum of \`amount\`, not of \`shortfall\`.** Read it twice. The bridge wants to know "how much did the fund actually pay out?", not "how much was requested." The two differ when the fund is partially drained (\`amount < shortfall\`). The field name reflects what was *paid out*, not what was *asked for*. **Aggregate fields measure what *happened*, not what was *requested*.**
+5. **\`unfilled_deficit\` is the sum across two \`WithdrawOutcome\` variants.** Specifically \`PartiallyDrained.unfilled\` AND \`Depleted.unfilled\`. The doc names both contributors. A reader who only knew \`PartiallyDrained\` would miss the \`Depleted\` case (where the fund was already empty before the call). **When an aggregate sums across enum variants, name every variant that contributes.**
+6. **\`unfilled_deficit\` is *the* signal to Stage 10d.** The doc comment names it. L11's contract is that this field exists and is computed correctly; Stage 10d's contract is that it consumes this field to drive ADL. **The handoff between two stages is an i64 field with a clear name and a documented consumer.**
+
+### Step 5: Add \`LiquidationScanner\` struct + accessors
+
+Below \`ScanReport\`, add the scanner struct and its accessors:
+
+\`\`\`rust
+/// Multi-account liquidation scanner.
+///
+/// Owns an [\`InsuranceFund\`] and a set of [\`LiquidationParams\`]. The
+/// bridge calls [\`Self::scan\`] once per block; the scanner classifies
+/// every account, generates close orders for the Liquidatable/Underwater
+/// ones, mutates the fund accordingly, and returns the resulting
+/// [\`ScanReport\`].
+#[derive(Clone, Debug)]
+pub struct LiquidationScanner {
+    params: LiquidationParams,
+    fund: InsuranceFund,
+}
+
+impl LiquidationScanner {
+    /// Construct a scanner with the given params and a starting fund
+    /// balance.
+    #[must_use]
+    pub const fn new(params: LiquidationParams, fund: InsuranceFund) -> Self {
+        Self { params, fund }
+    }
+
+    /// Construct a scanner with the given params and an empty insurance
+    /// fund. Convenience for tests and fresh-chain bootstrap.
+    #[must_use]
+    pub const fn with_empty_fund(params: LiquidationParams) -> Self {
+        Self {
+            params,
+            fund: InsuranceFund::empty(),
+        }
+    }
+
+    /// Current insurance fund balance.
+    #[must_use]
+    pub const fn fund_balance(&self) -> i64 {
+        self.fund.balance()
+    }
+
+    /// Borrow the underlying insurance fund (read-only).
+    #[must_use]
+    pub const fn fund(&self) -> &InsuranceFund {
+        &self.fund
+    }
+
+    /// Consume the scanner and return its fund — useful for handoff to
+    /// snapshot/persistence layers at chain shutdown.
+    #[must_use]
+    pub fn into_fund(self) -> InsuranceFund {
+        self.fund
+    }
+}
+\`\`\`
+
+Seven things to notice:
+
+1. **The struct has *two* private fields and no public ones.** Unlike \`LiquidationRecord\` (all-public, data carrier) or \`ScanReport\` (all-public, value type), \`LiquidationScanner\` is a *state machine* — it owns mutable state (the fund) and the bridge is supposed to interact with it through methods. Private fields enforce that contract. **State machines hide their fields; data carriers expose them.**
+2. **The struct is \`Clone\` but NOT \`Copy\`** (because it contains the fund, which is technically \`Copy\` here but composed inside a \`#[derive(Clone, Debug)]\` block to allow future evolution). Cloning is for tests and for safe snapshot patterns — production code rarely clones a scanner. **Derive \`Clone\` defensively even when no current caller uses it; the cost is zero and it unblocks future test patterns.**
+3. **Five accessor methods, *not* one Builder pattern.** A builder would let you do \`LiquidationScanner::builder().with_params(p).with_fund(f).build()\`. We don't have one because the scanner has exactly two fields and the construction site is small. **Builders earn their keep when there are 5+ optional fields; for 2 fields, two constructors (\`new\`, \`with_empty_fund\`) beat a builder.**
+4. **\`fund_balance\` returns \`i64\` directly; \`fund\` returns \`&InsuranceFund\`.** Two access patterns, two methods. The bridge logs the balance often (\`fund_balance\` is one i64 — fast). The bridge occasionally inspects the full fund state (\`fund\` returns a borrow — \`Copy\` would also work, but borrow is more explicit). **Provide both the hot-path scalar and the cold-path full reference; let callers pick.**
+5. **\`into_fund\` is the *consume-and-extract* pattern.** At chain shutdown (Stage 13+ in openhl), the bridge calls \`scanner.into_fund()\` to extract the fund state for snapshot/persistence. The method takes \`self\` by value (not \`&self\`), so the scanner is dropped after the call and the fund moves into the caller's hands. **\`into_*\` methods that take \`self\` by value signal "this is a one-shot, the original is gone."**
+6. **Four of the five accessors are \`const fn\`.** All but \`into_fund\` can be evaluated at compile time because they don't move out of \`self\`. The \`into_fund\` consume-pattern can't be const because consuming \`self\` of a non-\`Copy\` type and destructuring it to move out an owned field is exactly the kind of ownership operation that current \`const\` contexts forbid (destructive moves of non-\`Copy\` locals and arguments are restricted at compile-time evaluation). **\`const fn\` everything you can; the limit is usually whether the function moves data.**
+7. **No \`set_*\` methods.** The bridge mutates fund state via the (future) \`scan\` method, not by directly assigning to \`self.fund\`. A \`set_fund(&mut self, f: InsuranceFund)\` accessor would let the bridge bypass the scan loop, which is exactly the abstraction-breaking surface we want to prevent. **State machines expose mutation only through methods that implement the state-machine transitions — not through field setters.**
+
+> 🛑 **Anti-fluency.** "Why does \`LiquidationScanner\` own an \`InsuranceFund\` by value, rather than taking it by reference (\`fund: &'a mut InsuranceFund\`) or sharing it (\`fund: Arc<Mutex<InsuranceFund>>\`)?" Three problems with the alternatives. (1) \`&'a mut\` introduces a lifetime parameter that propagates through every type the scanner appears in — call sites get noisier and \`LiquidationScanner<'a>\` shows up in every struct that holds one. (2) \`Arc<Mutex<...>>\` is for shared mutable state — the scanner isn't shared, the bridge owns it. Synchronization without contention is just runtime overhead. (3) Owning by value means the scanner's lifetime *is* the fund's lifetime; the \`into_fund\` method gives the caller a clean handoff at shutdown. **Ownership semantics match the lifecycle: per-bridge component, single mutator, persisted at shutdown.**
+
+### Step 6: Wire the module into \`lib.rs\`
+
+Open \`crates/liquidation/src/lib.rs\`. Three changes:
+
+First, add the module declaration. Insert \`scanner\` after \`insurance\`:
+
+\`\`\`rust
+pub mod compute;
+pub mod insurance;
+pub mod scanner;
+pub mod types;
+\`\`\`
+
+Second, add the scanner re-exports as a new line below the \`insurance\` re-export:
+
+\`\`\`rust
+pub use compute::{
+    account_equity, close_order_spec, liquidation_fee, margin_health, margin_ratio,
+    notional_value, solvent_close_outcome, underwater_close_outcome, unrealized_pnl,
+};
+pub use insurance::{InsuranceFund, WithdrawOutcome};
+pub use scanner::{CloseOutcomeKind, LiquidationRecord, LiquidationScanner, ScanReport};
+pub use types::{
+    AccountSnapshot, CloseOrderSpec, LiquidationParams, MarginHealth, MarginRatio, SolventClose,
+    UnderwaterClose, MARGIN_SCALE,
+};
+\`\`\`
+
+All four scanner types (the enum + three structs) re-exported in one line, alphabetical inside the \`{ }\`.
+
+Third, update the \`lib.rs\`-top roadmap comment to mark Stage 10c in progress. The exact change here depends on what your \`lib.rs\` preamble currently says — the answer key has Stage 10c marked "scanner shipping in this commit." Match that prose.
+
+### Step 7: Run \`cargo check\`
+
+\`\`\`bash
+cargo check -p openhl-liquidation
+\`\`\`
+
+Expected output:
+
+\`\`\`
+    Checking openhl-liquidation v0.1.0 (/path/to/openhl/crates/liquidation)
+    Finished \`dev\` profile [optimized + debuginfo] target(s) in 1.2s
+\`\`\`
+
+**Clean compile.** No tests run — we don't have a \`scan\` method yet, so there's nothing testable. The 55 existing tests from L10 still pass (\`cargo test -p openhl-liquidation\` confirms), but L11 doesn't add or modify any of them.
+
+Common errors:
+
+- **\`unresolved import \\\`openhl_clob::AccountId\\\`** — the scanner depends on \`openhl-clob\` and \`openhl-funding\` for \`AccountId\` and \`MarkPrice\`. Make sure \`crates/liquidation/Cargo.toml\` lists both in \`[dependencies]\`. The answer-key crate already has them (L0's lesson set them up).
+- **\`unused import: \\\`account_equity\\\`** — clippy / rustc may warn that some imports are unused because L11 doesn't have a \`scan\` method that uses them. **These warnings are intentional at L11** — the imports are *staged* for L12, which consumes every one of them. If you keep a zero-warnings discipline, add \`#[allow(unused_imports)]\` to the top of \`scanner.rs\` for L11 only and delete the attribute when L12 lands; otherwise just leave the warnings — they go away the moment L12's \`scan\` body compiles. The answer-key doesn't \`allow\` because it ships L11 and L12 together. **No warning at L11 indicates a real issue; every unused-import warning here is expected.**
+- **\`pub mod scanner;\` placement** — if you put it after \`pub mod types;\`, the alphabetical order breaks. The answer-key has them in alphabetical order inside \`lib.rs\`. Match that order.
+
+## Design reflection
+
+Three load-bearing decisions in this lesson:
+
+1. **Type vocabulary before mechanism, again.** Same pattern as L8 (where \`WithdrawOutcome\` was declared in L8 but used in L9) and L10 (where \`SolventClose\` / \`UnderwaterClose\` were declared and immediately used). L11 declares the orchestration-layer types so L12's \`scan\` method has somewhere to put its return values. **A reader who lands on the file after L11 sees a complete type API surface; L12 fills in the verb.**
+
+2. **The scanner owns the insurance fund by value.** Not \`&'a mut\`, not \`Arc<Mutex<...>>\`, not \`Rc<RefCell<...>>\`. The ownership decision is what makes the scanner usable without lifetime gymnastics or runtime overhead. **State-machine components that have a single mutator and a clear shutdown point should own their state by value.**
+
+3. **Aggregate fields next to record vectors save the caller a fold.** \`ScanReport.fund_deposits\` is mathematically equal to a sum over \`report.records.iter().map(|r| ...)\` — but computing it inside the scan loop costs three \`saturating_add\` calls and saves the bridge an iteration. **Pre-compute aggregates inside single-pass loops; the cost is free and the API contract is cleaner.**
+
+## Answer key
+
+\`\`\`bash
+cd ~/code/openhl-reference
+git checkout 0a8464e
+diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/src/scanner.rs
+diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
+\`\`\`
+
+After L11:
+- **scanner.rs** matches Stage 10c's \`scanner.rs\` **up through the \`impl LiquidationScanner\` block** for the accessors (everything except the \`scan\` method and the tests, which land in L12 + L13). Specifically: doc + imports + \`CloseOutcomeKind\` + \`LiquidationRecord\` + \`ScanReport\` + \`LiquidationScanner\` struct + \`new\` / \`with_empty_fund\` / \`fund_balance\` / \`fund\` / \`into_fund\`.
+- **lib.rs** matches Stage 10c's \`lib.rs\` **byte-for-byte** for the \`pub mod scanner;\` line and the \`pub use scanner::{...}\` re-export.
+
+## Common questions
+
+**Q1: Why is \`CloseOutcomeKind\` named with the \`Kind\` suffix? Why not just \`CloseOutcome\`?**
+
+Because \`CloseOutcome\` would clash mentally with the *outcome* fields inside \`SolventClose\` and \`UnderwaterClose\`. The suffix \`Kind\` says "this enum is about *which kind* of outcome happened" — making clear that the enum is the *dispatcher*, not the outcome data itself. **Suffix-naming (Kind, Type, Variant) is the Rust idiom for "this is the discriminator, not the data."**
+
+**Q2: Why doesn't \`LiquidationRecord\` carry the post-close trader balance? The bridge needs it to credit the trader.**
+
+Because that balance lives on the trader's account, not in the liquidation engine. The scanner produces a \`SolventClose { fee_to_fund, residual_to_account }\` — the \`residual_to_account\` is what the bridge adds to the trader's balance. The scanner doesn't *know* the trader's pre-liquidation balance; the bridge does. **Compute components produce deltas; balance owners apply them. Don't store data that lives elsewhere.**
+
+**Q3: \`ScanReport\` has \`Vec<LiquidationRecord>\` — won't this allocate on every scan?**
+
+Yes, and that's fine. The vec is at most one entry per Liquidatable account in the slice; in steady state on a healthy chain, most blocks see zero liquidations and the vec stays empty (which doesn't allocate). On a stressed chain with many liquidations, allocation is a microsecond next to the price of the actual liquidations. If profiling later shows it's hot, the bridge can pool \`ScanReport\` instances. **Don't pre-optimize allocations that are dwarfed by the work they accompany.**
+
+**Q4: Could \`LiquidationScanner\` be generic over the fund type, \`LiquidationScanner<F: Fund>\`?**
+
+You could, but the only existing implementation of \`Fund\` would be \`InsuranceFund\`, and adding the generic adds a type parameter that propagates through every caller. **Generics are for *interchangeable* implementations; with one implementation, concrete types beat generics.** If a future "redundant fund" (two-layered insurance) needs to swap, that's the time to introduce the trait — not before.
+
+**Q5: \`into_fund\` consumes the scanner. What if the bridge wants the fund snapshot AND continued scanner operation?**
+
+Use \`fund()\` (returns \`&InsuranceFund\`) and call \`.balance()\` or read other fields through the borrow. \`into_fund\` is specifically for *handoff at chain shutdown* — the bridge is done with the scanner. For mid-chain inspection, the borrow is the right pattern. **\`into_*\` is for terminal state; \`fn x(&self) -> &T\` is for inspection.**
+
+**Q6: Why does \`LiquidationRecord\` carry \`classification\` (the pre-close \`MarginHealth\`) if the bridge can re-derive it from the snapshot at any point?**
+
+The bridge *could* re-derive it, but only if it kept the pre-close snapshots around — which it usually doesn't. The scanner already has them (it iterated through them); storing the classification in the record is O(1) extra space per record and saves the bridge from having to maintain its own snapshot history. **A record that captures a derivation made earlier saves callers from having to redo the upstream work.**
+
+## Next lesson (L12) — \`scan\` method + first 4 unit tests
+
+L12 implements the orchestration heart — the \`scan\` method. The method takes \`&[AccountSnapshot]\` and \`MarkPrice\`, classifies every account via L6's \`margin_health\`, dispatches Liquidatable/Underwater accounts through L10's \`solvent_close_outcome\` / \`underwater_close_outcome\`, mutates the fund in place via L9's \`InsuranceFund::deposit\` and \`::withdraw_shortfall\`, and builds a \`ScanReport\` along the way.
+
+L12 also adds the four simplest unit tests:
+- \`scan_empty_accounts_returns_empty_report\` — sanity check.
+- \`scan_all_safe_accounts_does_nothing\` — no liquidations means no records.
+- \`scan_atrisk_does_not_liquidate\` — AtRisk is a *warning*, not a trigger.
+- \`scan_skips_flat_positions\` — defensive guard for misclassified flats.
+
+After L12, the scanner is *runnable* — 59 tests pass total (34 compute + 21 insurance + 4 new scanner tests). L13 stress-tests it with 5 more nuanced unit tests and 4 conservation-law proptests, bringing the final count to 68.
+`,
+                },
+                {
+                  title: "Lesson 12 — scan — the orchestration heart of the safety cascade",
+                  slug: "openhl-liquidation-scan-method-en",
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 35,
+                  xpReward: 70,
+                  content: `# Lesson 12 — \`scan\` — the orchestration heart of the safety cascade
+
+## Goal
+
+Concepts you'll grasp in this lesson:
+
+- **The \`scan\` method is the *only verb* in the orchestration layer; everything else is noun.** L11 declared four types that describe state; L12 implements one method that produces state from input. The method takes \`(accounts, mark)\` and returns a \`ScanReport\` — and inside its body, every Stage 10a + 10b primitive you've built across L4–L10 is called exactly once per liquidatable account. **Composition is the architecture; one verb consumes ten nouns.**
+- **\`match\` on \`MarginHealth\` with a \`continue\`-guard is the cleanest "skip non-liquidatable accounts" pattern.** The alternative — \`if !matches!(c, MarginHealth::Liquidatable | MarginHealth::Underwater) { continue; }\` — is shorter but loses exhaustiveness. The \`match\` form makes the compiler enforce that *every* \`MarginHealth\` variant has been considered, which is the discipline that catches the future bug where someone adds a fifth variant. **Exhaustive \`match\` over an enum beats predicate-with-\`!\` whenever the enum might grow.**
+- **The solvent-vs-underwater dispatch inside the loop directly mirrors L10's \`debug_assert!\` pair.** \`if post_close_equity >= fee_desired\` routes to \`solvent_close_outcome\`; the \`else\` routes to \`underwater_close_outcome\`. The scanner is doing exactly the routing that L10's debug-asserts said the caller would do. **The runtime predicate in the caller is identical to the contract enforced in the callee.**
+- **The underwater branch's \`WithdrawOutcome\` pattern-match decomposes the L9 enum into a \`(paid, unfilled)\` tuple — that's the *only* place in the loop where L9's three-variant enum needs more than one line of handling.** Solvent closes never touch \`withdraw_shortfall\`; they only \`deposit\`. Underwater closes call \`withdraw_shortfall\` and pattern-match on the result. The aggregation into \`ScanReport\`'s i64 fields is a \`saturating_add\` per record. **The orchestration layer translates between L9's variants and L11's i64 aggregates in exactly one pattern-match.**
+
+Verification:
+
+\`\`\`bash
+cargo test -p openhl-liquidation
+\`\`\`
+
+…passes 59 tests (34 compute + 21 insurance + 4 new scanner tests). The next 5 unit tests and 4 proptests land in L13; after L13, 68 tests total.
+
+Specific changes:
+
+- **\`src/scanner.rs\`** — adds the \`scan\` method to the existing \`impl LiquidationScanner\` block. The L11 imports finally have a consumer; the unused-import warnings go away. Adds the \`#[cfg(test)] mod tests\` scaffolding (helpers + \`use\` block + first section divider) and the 4 simplest unit tests.
+
+L12 makes the scanner *runnable*. L13 stress-tests it.
+
+## Recap
+
+After L11:
+- \`scanner.rs\` has the type vocabulary (\`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`) and 5 accessors (\`new\`, \`with_empty_fund\`, \`fund_balance\`, \`fund\`, \`into_fund\`).
+- \`lib.rs\` re-exports all four scanner types.
+- \`cargo check\` compiles cleanly, with unused-import warnings on \`account_equity\`, \`close_order_spec\`, \`liquidation_fee\`, \`margin_health\`, \`notional_value\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`, and \`WithdrawOutcome\` — all *staged for L12*.
+- \`cargo test\` still runs L0–L10's 55 tests, all green.
+
+L12 cashes in every one of those staged imports.
+
+## Plan
+
+Two edits:
+
+1. **Add the \`scan\` method to the \`impl LiquidationScanner\` block** in \`crates/liquidation/src/scanner.rs\`. The method body is ~50 lines — the orchestration loop that ties Stage 10a margin classification, Stage 10b close-outcome decomposition, and the InsuranceFund state machine into one batch operation.
+2. **Add the \`#[cfg(test)] mod tests\` block** with three helper imports, the \`snapshot\` factory, the \`default_params\` helper, and the 4 simplest unit tests.
+
+> 🛑 **Predict.** Before reading further: you're writing a single function that, for each account in a slice, either liquidates it (with the fund moving in some direction) or skips it. List the *six* distinct branches the function body needs — including the two skip cases (Safe/AtRisk continue, flat-position continue) and the four work cases (solvent → fund deposit; underwater positive equity → partial fee + withdraw; underwater zero equity → no fee + full withdraw; underwater negative equity → no fee + extra-large withdraw).
+
+(Answer in the body: the function has exactly two \`continue\` branches and two routing branches (solvent vs underwater), with the underwater branch unifying the three positive/zero/negative equity sub-cases under one \`underwater_close_outcome\` call — the call internally branches but presents one return type. So at the scanner level: **two skips + one solvent + one underwater = four branches**. The "six" you might have predicted collapses to four because L10's \`underwater_close_outcome\` already handled the sub-case unification. **Encapsulating sub-cases inside a callee shrinks the caller's branch count.**)
+
+The scan-method shape:
+
+\`\`\`
+   ┌────────────────────────────────────────────────────────────┐
+   │  scan(accounts, mark) → ScanReport                         │
+   ├────────────────────────────────────────────────────────────┤
+   │                                                            │
+   │  let mut report = ScanReport::default();                   │
+   │  for snapshot in accounts {                                │
+   │                                                            │
+   │      let classification = margin_health(...);              │
+   │      match classification {                                │
+   │          Safe | AtRisk => continue,    ←─ skip path 1       │
+   │          Liquidatable | Underwater => {} ← work path        │
+   │      }                                                     │
+   │                                                            │
+   │      if snapshot.position_size.0 == 0 { continue; } ← skip 2│
+   │                                                            │
+   │      let close_order = close_order_spec(snapshot);         │
+   │                                                            │
+   │      let outcome = if post_close_equity >= fee_desired {   │
+   │          // Solvent branch                                 │
+   │          let s = solvent_close_outcome(...);               │
+   │          self.fund.deposit(s.fee_to_fund);                 │
+   │          report.fund_deposits += s.fee_to_fund;            │
+   │          CloseOutcomeKind::Solvent(s)                      │
+   │      } else {                                              │
+   │          // Underwater branch                              │
+   │          let u = underwater_close_outcome(...);            │
+   │          if u.fee_to_fund > 0 { self.fund.deposit(u.f_t_f);│
+   │                                  report.fund_deposits +=  }│
+   │          let w = self.fund.withdraw_shortfall(u.shortfall);│
+   │          // Pattern-match on WithdrawOutcome → (paid, unfilled)│
+   │          report.fund_withdrawals += paid;                  │
+   │          report.unfilled_deficit  += unfilled;             │
+   │          CloseOutcomeKind::Underwater(u)                   │
+   │      };                                                    │
+   │                                                            │
+   │      report.records.push(LiquidationRecord { ... });       │
+   │  }                                                         │
+   │                                                            │
+   │  report                                                    │
+   │                                                            │
+   └────────────────────────────────────────────────────────────┘
+\`\`\`
+
+Three things to notice about the shape:
+
+1. **The outer iteration is \`for snapshot in accounts\` — a simple ordered loop.** No \`iter().filter().map().collect()\` chain. Why? Because each iteration has *side effects* (fund mutation, report mutation). Iterator chains compose well over pure transformations; for stateful per-iteration work, a plain \`for\` is more readable and easier to debug. **\`for\` loops beat iterator chains when iteration side-effects mutate state outside the closure.**
+2. **The two \`continue\` branches are at the *top* of the loop body.** They reject inputs before the function commits to any work — classification first, flat-skip second. The "happy path" code (after the skips) sits inline at the same indent level, not nested inside an \`if\`. **Top-of-loop rejection is the cleanest pattern for skip-conditions; nesting would push the work deeper than it needs to go.**
+3. **The aggregation into \`ScanReport\` fields uses \`saturating_add\` per iteration, not a final \`.iter().sum()\`.** L11's design choice (aggregate fields next to record vector) demands per-iteration accumulation. The cost is one \`saturating_add\` per scalar per record — a microsecond next to the work being done. **Single-pass accumulation matches the L11 design contract.**
+
+## Walk-through
+
+### Step 1: Add the \`scan\` method
+
+Open \`crates/liquidation/src/scanner.rs\`. Find the existing \`impl LiquidationScanner { ... }\` block (which currently ends with the \`into_fund\` accessor). After \`into_fund\`, append the \`scan\` method:
+
+\`\`\`rust
+    /// Scan every account and produce a [\`ScanReport\`] of the resulting
+    /// liquidations.
+    ///
+    /// All accounts are classified at the given \`mark\`. Liquidatable and
+    /// Underwater accounts are converted to close orders + outcomes,
+    /// with the insurance fund mutated in place. \`Safe\` and \`AtRisk\`
+    /// accounts produce no record and no fund mutation.
+    ///
+    /// Flat positions (\`position_size == 0\`) that misclassify as
+    /// Liquidatable are also skipped — \`close_order_spec\` would emit a
+    /// zero-qty spec which the CLOB rejects.
+    pub fn scan(
+        &mut self,
+        accounts: &[AccountSnapshot],
+        mark: MarkPrice,
+    ) -> ScanReport {
+        let mut report = ScanReport::default();
+
+        for snapshot in accounts {
+            let classification = margin_health(snapshot, mark, &self.params);
+            match classification {
+                MarginHealth::Safe | MarginHealth::AtRisk => continue,
+                MarginHealth::Liquidatable | MarginHealth::Underwater => {}
+            }
+
+            // Skip flat positions defensively — the upstream
+            // classification should never put them here, but the math
+            // for a zero-size position produces a zero-qty close order
+            // which the CLOB rejects.
+            if snapshot.position_size.0 == 0 {
+                continue;
+            }
+
+            let close_order = close_order_spec(snapshot);
+
+            // Decide solvent vs underwater path on post-close-equity vs
+            // desired fee, exactly mirroring the compute module's
+            // contract.
+            let notional = notional_value(snapshot, mark);
+            let fee_desired = liquidation_fee(notional, &self.params);
+            let post_close_equity = account_equity(snapshot, mark);
+
+            let outcome = if post_close_equity >= fee_desired {
+                let solvent = solvent_close_outcome(snapshot, mark, &self.params);
+                self.fund.deposit(solvent.fee_to_fund);
+                report.fund_deposits =
+                    report.fund_deposits.saturating_add(solvent.fee_to_fund);
+                CloseOutcomeKind::Solvent(solvent)
+            } else {
+                let underwater = underwater_close_outcome(snapshot, mark, &self.params);
+                if underwater.fee_to_fund > 0 {
+                    self.fund.deposit(underwater.fee_to_fund);
+                    report.fund_deposits = report
+                        .fund_deposits
+                        .saturating_add(underwater.fee_to_fund);
+                }
+                let withdraw = self.fund.withdraw_shortfall(underwater.shortfall_to_fund);
+                let (paid, unfilled) = match withdraw {
+                    WithdrawOutcome::Covered { amount } => (amount, 0),
+                    WithdrawOutcome::PartiallyDrained { amount, unfilled } => {
+                        (amount, unfilled)
+                    }
+                    WithdrawOutcome::Depleted { unfilled } => (0, unfilled),
+                };
+                report.fund_withdrawals = report.fund_withdrawals.saturating_add(paid);
+                report.unfilled_deficit = report.unfilled_deficit.saturating_add(unfilled);
+                CloseOutcomeKind::Underwater(underwater)
+            };
+
+            report.records.push(LiquidationRecord {
+                account: snapshot.account,
+                close_order,
+                classification,
+                outcome,
+            });
+        }
+
+        report
+    }
+\`\`\`
+
+Walking the body phase-by-phase:
+
+#### Phase 1: Classify (lines 1-5 inside the loop)
+
+\`\`\`rust
+let classification = margin_health(snapshot, mark, &self.params);
+match classification {
+    MarginHealth::Safe | MarginHealth::AtRisk => continue,
+    MarginHealth::Liquidatable | MarginHealth::Underwater => {}
+}
+\`\`\`
+
+Three things to notice:
+
+1. **The \`match\` is exhaustive — and the compiler enforces it.** L6's \`MarginHealth\` has exactly four variants; the two arms cover all four. If someone adds a fifth variant tomorrow (e.g., \`LiquidatableButOnHold\`), this \`match\` will fail to compile, and the build break tells us we need to decide which side it goes on. **The non-exhaustive alternative — \`if !matches!(c, Liquidatable | Underwater) { continue; }\` — would silently accept the new variant as a skip, hiding the design question.**
+2. **The work-path arm is \`{} \`, not a body.** The arm exists *only* to make exhaustiveness work; the actual work happens after the \`match\`. This is the Rust idiom for "filter and fall through to the rest of the function." **Empty arms in \`match\` are how you fall through after exhaustiveness checking.**
+3. **Or-patterns (\`Safe | AtRisk\`)** unify the two skip cases under one arm. The same trick L9's proptest used (\`Covered { amount } | PartiallyDrained { amount, .. }\`) reappears here for variant grouping. **Or-patterns are the rhythm of exhaustive-match code in Rust.**
+
+Before Phase 2, the rejection-ladder structure that Phase 1's \`match\` and Phase 2's flat-check form together is worth pausing on. Both guards live at the top of the loop body and *exit the iteration* if they fire; the happy path then runs at the same indent level as the guards themselves, never nested inside an \`if\`:
+
+\`\`\`
+   Account slice ─┐
+                  │
+                  ▼
+        [Phase 1: margin_health]
+                  │
+                  ├─ Safe / AtRisk ──────────→ continue (next iteration)
+                  │
+                  ▼ Liquidatable / Underwater
+        [Phase 2: defensive flat-check]
+                  │
+                  ├─ size == 0 ──────────────→ continue (next iteration)
+                  │
+                  ▼ size != 0
+        ── happy path (no nesting) ──
+        Phase 3-6: close order, routing, fund mutation, push record
+\`\`\`
+
+The two rejection branches diverge *out of* the iteration; the happy-path code stays flat at one indent level. **The pattern is "filter at the top, work at the bottom, no nesting in between."**
+
+#### Phase 2: Defensive flat-skip (lines 7-13)
+
+\`\`\`rust
+if snapshot.position_size.0 == 0 {
+    continue;
+}
+\`\`\`
+
+This is a defensive guard against a *theoretically-impossible* state: the only way for a flat position to reach this point is for \`margin_health\` to misclassify it as \`Liquidatable\` or \`Underwater\`, which L6's classification rules forbid (flat → ratio MAX → \`Safe\`). But the bridge can submit unsanitized snapshots, and L7's \`close_order_spec\` would produce a zero-qty \`CloseOrderSpec\` that the CLOB rejects. **The skip is cheap defensive coding — *protect downstream consumers from upstream bugs we can't enforce away.***
+
+#### Phase 3: Generate close order (line 15)
+
+\`\`\`rust
+let close_order = close_order_spec(snapshot);
+\`\`\`
+
+One line. L7's pure function does all the work. **A single-line call to a Stage 10a function is what the orchestration layer's "use the primitives" look like.**
+
+#### Phase 4: Routing decision (lines 17-24)
+
+\`\`\`rust
+let notional = notional_value(snapshot, mark);
+let fee_desired = liquidation_fee(notional, &self.params);
+let post_close_equity = account_equity(snapshot, mark);
+
+let outcome = if post_close_equity >= fee_desired {
+    // ... solvent branch
+} else {
+    // ... underwater branch
+};
+\`\`\`
+
+Five things to notice:
+
+1. **The predicate is exactly the inverse of L10's \`underwater_close_outcome\` \`debug_assert!\` (\`equity < fee\`).** L10's assertion said "underwater means equity < fee"; here we use \`>=\` for solvent. The scanner's runtime check matches L10's compile-time contract. **The scanner does *no math* L10 didn't already document.**
+2. **Three local variables (\`notional\`, \`fee_desired\`, \`post_close_equity\`) before the predicate.** Each is named, each is one line, each is an existing function call. The reader walks down the local-variable cascade and arrives at the predicate knowing exactly what's on each side. **Locally-named intermediate values are the cheapest readability win.**
+3. **\`solvent_close_outcome\` and \`underwater_close_outcome\` are called *separately* in each branch — they're not unified into one routed call.** A unified call (\`let outcome = if is_solvent { solvent_close_outcome(...) } else { underwater_close_outcome(...) }\`) would force one of them to be called with a precondition violation in the *other* branch, triggering L10's \`debug_assert!\`. Keeping them in separate branches makes each call self-consistent with its precondition. **Separate the dispatch from the call; each callee gets its precondition met cleanly.**
+4. **The local variable \`outcome\` is set inside the \`if\`/\`else\` and used after.** It's a \`let outcome = if ... { ... } else { ... };\` pattern. Rust's if-as-expression returns a value, so this is idiomatic. **\`let x = if y { a } else { b };\` is the Rust way of conditionally computing a value.**
+5. **Both branches return a \`CloseOutcomeKind\` variant.** The two variants share a parent type; the \`if\`/\`else\` types out cleanly. **An \`if\`/\`else\` returning two variants of the same enum is the safest pattern for variant-routing.**
+
+#### Phase 5a: Solvent branch (3 lines)
+
+\`\`\`rust
+let solvent = solvent_close_outcome(snapshot, mark, &self.params);
+self.fund.deposit(solvent.fee_to_fund);
+report.fund_deposits = report.fund_deposits.saturating_add(solvent.fee_to_fund);
+CloseOutcomeKind::Solvent(solvent)
+\`\`\`
+
+Three things to notice:
+
+1. **\`fee_to_fund\` is read three times: once into \`deposit\`, once into the aggregate, once as part of the moved \`solvent\` value into \`CloseOutcomeKind::Solvent\`.** Because \`SolventClose\` is \`Copy\`, this is free — no clones, no borrows. **\`Copy\`-derived types let you spread fields across multiple writes without ownership ceremony.**
+2. **No conditional on \`fee_to_fund == 0\`.** Solvent closes always have positive \`fee_to_fund\` (per L10's contract — the precondition was \`equity >= fee\`, and fee is positive). If we wrote \`if solvent.fee_to_fund > 0 { ... }\` here, we'd be checking a condition that's guaranteed false-or-impossible. **Don't defend against conditions the type contract has already ruled out.**
+3. **No call to \`withdraw_shortfall\`.** Solvent closes credit the fund and pay residual back to the trader; the fund is *never* drawn from. The bridge does the trader-balance crediting (using \`solvent.residual_to_account\`) — that's outside the scanner's scope. **The scanner only mutates the fund; the bridge handles trader balances.**
+
+#### Phase 5b: Underwater branch (8 lines)
+
+\`\`\`rust
+let underwater = underwater_close_outcome(snapshot, mark, &self.params);
+if underwater.fee_to_fund > 0 {
+    self.fund.deposit(underwater.fee_to_fund);
+    report.fund_deposits = report
+        .fund_deposits
+        .saturating_add(underwater.fee_to_fund);
+}
+let withdraw = self.fund.withdraw_shortfall(underwater.shortfall_to_fund);
+let (paid, unfilled) = match withdraw {
+    WithdrawOutcome::Covered { amount } => (amount, 0),
+    WithdrawOutcome::PartiallyDrained { amount, unfilled } => (amount, unfilled),
+    WithdrawOutcome::Depleted { unfilled } => (0, unfilled),
+};
+report.fund_withdrawals = report.fund_withdrawals.saturating_add(paid);
+report.unfilled_deficit = report.unfilled_deficit.saturating_add(unfilled);
+CloseOutcomeKind::Underwater(underwater)
+\`\`\`
+
+Six things to notice:
+
+1. **The \`if underwater.fee_to_fund > 0\` guard exists** because L10's \`underwater_close_outcome\` *can* return \`fee_to_fund == 0\` (the "already underwater pre-fee" sub-case). \`deposit(0)\` is a no-op per L8, but the guard saves the \`saturating_add\` and the function-call overhead. **Predicates that gate "do nothing" actions are cheap correctness.**
+2. **The pattern-match on \`WithdrawOutcome\` destructures into \`(paid, unfilled)\`.** All three variants collapse to one tuple shape:
+
+   - \`WithdrawOutcome::Covered { amount }\` → \`(amount, 0)\` — fund paid out the full requested shortfall; nothing escalates.
+   - \`WithdrawOutcome::PartiallyDrained { amount, unfilled }\` → \`(amount, unfilled)\` — fund paid out everything it had; the remainder is recorded as protocol-level unfilled deficit.
+   - \`WithdrawOutcome::Depleted { unfilled }\` → \`(0, unfilled)\` — fund was already empty; nothing paid out, full shortfall escalates.
+
+   The conservation law \`amount + unfilled = requested_shortfall\` holds in all three rows (L9's proptest proved it). L13 will lift that law from the per-call level to the per-scan level via \`report_unfilled_equals_sum_of_unfilled_shortfalls\`. **The tuple is the *normalized form* of L9's variant payloads — three different shapes collapse to one \`(i64, i64)\`, and conservation carries forward.**
+3. **The match arms use *or-pattern destructuring* indirectly.** Strictly speaking they're three separate arms, but each arm computes the same tuple shape \`(paid, unfilled)\`. The visual symmetry makes the code easy to scan. **Pattern-match arms that compute a uniform output type are visually parallel — make them line up.**
+4. **The \`paid\` and \`unfilled\` are immediately consumed by \`saturating_add\` on the report.** Both per-variant aggregations happen in two lines. The match → tuple → aggregate cascade is the standard "enum-to-scalar" pattern across the crate. **L9's \`WithdrawOutcome\` returns *information*; the scanner converts it to *numbers*.**
+5. **\`saturating_add\` on both \`fund_withdrawals\` and \`unfilled_deficit\`.** Even though both running totals are bounded by realistic protocol scale (~$10^15 max), saturation is the consistent discipline. **Saturating arithmetic everywhere costs nothing and consistently respects the determinism contract.**
+6. **The final line — \`CloseOutcomeKind::Underwater(underwater)\` — moves \`underwater\` into the enum.** This is the only place \`underwater\` is consumed after its fields are read; \`UnderwaterClose\` is \`Copy\`, so the move is just a value-copy. **\`Copy\` types let "read fields, then move into enum" feel like a free operation.**
+
+#### Phase 6: Push the record (lines 26-30)
+
+\`\`\`rust
+report.records.push(LiquidationRecord {
+    account: snapshot.account,
+    close_order,
+    classification,
+    outcome,
+});
+\`\`\`
+
+The struct-construction is direct: four fields, each a local already in scope. **At the end of every iteration, one push.** That's the only allocation \`scan\` does per-record (the \`Vec\` may grow, but the push itself is a tail allocation). **Per-iteration allocation is bounded by record count; no scratch allocations.**
+
+> 🛑 **Anti-fluency.** "Why is the for-loop using indexes or \`iter()\`? Wouldn't \`iter().filter_map(...).collect()\` be more idiomatic?" Two problems. (1) \`filter_map\` over a closure that mutates \`self.fund\` borrows \`self\` exclusively for the entire iterator chain, which collides with the closure capture. Rust's borrow checker rejects this without major refactoring (interior mutability or splitting the fund out). (2) Even if it compiled, the iterator chain hides the per-iteration side effects (deposit, withdraw, aggregate-add) inside a \`map\` closure — readers can't easily see "this iteration mutated the fund." **For loops with \`&mut self\` capture beat iterator chains when the body mutates the enclosing self.**
+
+### Step 2: Add the test module scaffolding
+
+Append the test module at the bottom of \`scanner.rs\`. The scaffolding has three parts: imports, helpers, and the first section divider.
+
+\`\`\`rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use openhl_funding::{Notional, PositionSize};
+    use proptest::prelude::*;
+
+    fn snapshot(account: u64, size: i64, entry: u64, collateral: i64) -> AccountSnapshot {
+        AccountSnapshot {
+            account: AccountId(account),
+            position_size: PositionSize(size),
+            avg_entry: MarkPrice(entry),
+            collateral: Notional(collateral),
+        }
+    }
+
+    fn default_params() -> LiquidationParams {
+        LiquidationParams::hyperliquid_default()
+    }
+
+    // ─── empty / non-liquidatable input ────────────────────────────
+\`\`\`
+
+Three things to notice:
+
+1. **\`use proptest::prelude::*;\` is imported even though L12 has no proptests.** Staged for L13. Same staging discipline as L11's \`account_equity\` import. **Tests in this course are written *forward-compatibly* — L12's \`use\` block is L13's \`use\` block.**
+2. **The \`snapshot\` helper packages 4 fields into the full \`AccountSnapshot\` struct.** Mirroring L4's \`compute::tests::snapshot\` helper (same name, same return type). This keeps every test's first line readable: \`let s = snapshot(1, 1, 100_000, 50_000);\` reads as "account 1, long 1 BTC, entry $100k, $50k collateral." **Test helpers that hide irrelevant construction noise are worth their weight; here, the alternative would be 8 lines per test.**
+3. **The section divider \`// ─── empty / non-liquidatable input ───\` matches the style we established in L8/L9.** The Liquidation course's test files use box-drawing dividers consistently. **Consistent test-file structure across modules is a small but compounding readability win.**
+
+### Step 3: Add the 4 simple unit tests
+
+Inside the test module, append:
+
+\`\`\`rust
+    #[test]
+    fn scan_empty_accounts_returns_empty_report() {
+        let mut s = LiquidationScanner::with_empty_fund(default_params());
+        let report = s.scan(&[], MarkPrice(100));
+        assert!(report.records.is_empty());
+        assert_eq!(report.fund_deposits, 0);
+        assert_eq!(report.fund_withdrawals, 0);
+        assert_eq!(report.unfilled_deficit, 0);
+    }
+
+    #[test]
+    fn scan_all_safe_accounts_does_nothing() {
+        // Long 1 @ $100k, $50k collateral, mark $100k → 50% ratio = Safe.
+        let accts = vec![
+            snapshot(1, 1, 100_000, 50_000),
+            snapshot(2, 1, 100_000, 50_000),
+        ];
+        let mut s = LiquidationScanner::with_empty_fund(default_params());
+        let report = s.scan(&accts, MarkPrice(100_000));
+        assert!(report.records.is_empty());
+    }
+
+    #[test]
+    fn scan_atrisk_does_not_liquidate() {
+        // Long 1 @ $100k, $5k collateral, mark $100k → 5% ratio
+        // 5% > 2% maintenance, < 10% initial → AtRisk; no liquidation.
+        let accts = vec![snapshot(1, 1, 100_000, 5_000)];
+        let mut s = LiquidationScanner::with_empty_fund(default_params());
+        let report = s.scan(&accts, MarkPrice(100_000));
+        assert!(report.records.is_empty());
+    }
+
+    #[test]
+    fn scan_skips_flat_positions() {
+        // Flat (size 0) accounts misclassified somewhere upstream get
+        // silently skipped. Default ratio for flat positions is MAX
+        // (Safe), so this is also defensive against future
+        // classification changes.
+        let accts = vec![snapshot(1, 0, 100_000, 1_000)];
+        let mut s = LiquidationScanner::with_empty_fund(default_params());
+        let report = s.scan(&accts, MarkPrice(100_000));
+        assert!(report.records.is_empty());
+    }
+\`\`\`
+
+Eight things to notice about the test design:
+
+1. **\`scan_empty_accounts_returns_empty_report\` asserts *all four* \`ScanReport\` fields.** Records empty, three aggregates at 0. The four assertions catch a future bug where the \`ScanReport::default()\` initialization stops being all-zero — a regression even smaller than a logic bug. **Default-state tests assert every field of the default.**
+2. **\`scan_all_safe_accounts_does_nothing\` uses *two* accounts, not one.** Why two? Because one-account tests can mask a "loop ran for the first iteration but skipped the second" bug. Two accounts force the loop to iterate twice, both times producing nothing. **Multi-account skip tests beat single-account skip tests at catching loop-control bugs.**
+3. **The arithmetic comments in \`scan_all_safe_accounts_does_nothing\` document the expected classification.** "50% ratio = Safe" lets a reader follow the L1–L6 logic mentally without re-deriving it. **Test comments that name the classification path are how curriculum reinforcement happens here.**
+4. **\`scan_atrisk_does_not_liquidate\` is the *most pedagogically important* of the four.** It establishes that \`AtRisk\` is a *warning state*, not a *trigger state*. If a future maintainer "promotes" AtRisk to trigger liquidation (by adding it to the match arm), this test fails immediately. **Tests for stable architectural boundaries are how the course's design choices survive refactoring.**
+5. **The 5% boundary in \`scan_atrisk_does_not_liquidate\` is *deliberately* close to the maintenance margin (2%) and the initial margin (10%).** A value at 1% (< maintenance) would be Liquidatable; a value at 15% (> initial) would be Safe; 5% is the *middle* — both sides of the AtRisk boundary feel testable from here. **Boundary tests pick values that exercise the *interior* of the classification, not just the edges.**
+6. **\`scan_skips_flat_positions\` uses \`snapshot(1, 0, 100_000, 1_000)\`.** Notice \`size = 0\` — the flat case. Even though L6's \`margin_ratio\` returns MAX for flat positions (which would classify as Safe and skip via the Phase-1 \`continue\`), the test exercises the Phase-2 defensive guard *in case* an upstream change promotes flats to Liquidatable. **Defense-in-depth tests verify the second layer of protection independent of the first.**
+7. **All four tests use \`LiquidationScanner::with_empty_fund(default_params())\`.** No starting fund balance, default Hyperliquid params. Consistency lets the reader scan all four tests and absorb only the *differences* (accounts, mark). **Per-test isolation lets you read the diff between tests at a glance.**
+8. **The test names form a 4-step narrative:** empty → all-Safe → all-AtRisk → flat. The reader learning "what scan skips" walks through them in order and builds a complete mental model. **Test ordering can encode pedagogical progression.**
+
+### Step 4: Run the tests
+
+\`\`\`bash
+cargo test -p openhl-liquidation
+\`\`\`
+
+Expected output (abbreviated):
+
+\`\`\`
+running 59 tests
+test compute::tests::close_flat_has_zero_qty ... ok
+... (33 more compute tests from L0–L10)
+test insurance::tests::balance_never_negative ... ok
+... (20 more insurance tests from L8–L9)
+test scanner::tests::scan_all_safe_accounts_does_nothing ... ok
+test scanner::tests::scan_atrisk_does_not_liquidate ... ok
+test scanner::tests::scan_empty_accounts_returns_empty_report ... ok
+test scanner::tests::scan_skips_flat_positions ... ok
+
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+\`\`\`
+
+**59 tests passing. The scanner is *runnable*.** L13 stress-tests it with 5 nuanced unit tests (solvent fee deposit, underwater fully/partially/depleted, mixed batch, FIFO fairness) plus 4 proptests (conservation laws across scans). After L13, 68 tests total.
+
+Common errors:
+
+- **Compile error: \`cannot find function \\\`account_equity\\\` in this scope\`** — the L11 imports staged six compute functions; if you forgot one (or removed an unused-import warning by deleting an import you actually need), \`scan\` won't compile. Re-add the missing function from the \`use crate::compute::{...}\` line at the top of \`scanner.rs\`.
+- **Test fail: \`assertion failed: report.records.is_empty()\` on \`scan_all_safe_accounts_does_nothing\`** — your \`margin_health\` is misclassifying 50% ratio. L6 said 50% > 10% initial = Safe; if your \`match\` arm reads \`MarginHealth::Safe | MarginHealth::Liquidatable\` (typo), then Safe gets liquidated. Re-read the \`match\`'s arm 1.
+- **Test fail: \`report.fund_deposits != 0\` on \`scan_empty_accounts_returns_empty_report\`** — your \`ScanReport::default()\` is mis-derived. The \`derive(Default)\` on \`ScanReport\` is what makes this test green; if you \`impl Default\` manually with non-zero defaults, you break the contract.
+- **Compile error: \`the trait bound \\\`SomeType: Copy\\\` is not satisfied\`** — somewhere in the \`outcome = if ... { ... }\` branches you have a type that the compiler thinks is non-\`Copy\`. Check that \`SolventClose\` and \`UnderwaterClose\` both have \`#[derive(Clone, Copy, Debug, PartialEq, Eq)]\` (they do, from L10) — if they don't, the \`if\`/\`else\` returning these variants needs them.
+
+## Design reflection
+
+Three load-bearing decisions in this lesson:
+
+1. **The \`scan\` method is a *thin orchestrator*, not a *fat coordinator*.** Every line in \`scan\` either calls a Stage 10a/10b primitive or applies a \`saturating_add\` to a \`ScanReport\` field. No new math, no new policy, no new data shape. **Orchestration layers should call primitives, not duplicate them.**
+
+2. **Exhaustive \`match\` beats predicate-with-\`!\`.** The \`MarginHealth\` \`match\` in Phase 1 is the discipline that catches future enum-variant additions. If we wrote \`if !matches!(c, Liquidatable | Underwater) { continue; }\`, adding a fifth variant tomorrow would silently classify it as a skip. **Exhaustive \`match\` is how an enum and its consumers stay in sync across refactors.**
+
+3. **The \`WithdrawOutcome → (paid, unfilled)\` tuple destructuring is the *only* place L9's enum needs more than one line of orchestration handling.** Three variants collapse to one \`(i64, i64)\` because the aggregation contract is uniform. **L9's \`WithdrawOutcome\` returns information; the scanner converts it to numbers.**
+
+## Answer key
+
+\`\`\`bash
+cd ~/code/openhl-reference
+git checkout 0a8464e
+diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/src/scanner.rs
+\`\`\`
+
+After L12:
+- **scanner.rs** matches Stage 10c's \`scanner.rs\` **through the test module's \`scan_skips_flat_positions\` test**. Specifically: doc + imports + \`CloseOutcomeKind\` + \`LiquidationRecord\` + \`ScanReport\` + \`LiquidationScanner\` struct + 5 accessors + \`scan\` method + test module scaffolding + 4 simple unit tests. The 5 nuanced unit tests and 4 proptests land in L13.
+
+## Common questions
+
+**Q1: Why does \`scan\` take \`&[AccountSnapshot]\` instead of \`&mut [AccountSnapshot]\`? The scanner doesn't need to write to the snapshots.**
+
+The scanner *doesn't* need to write to snapshots — exactly. \`&[T]\` (immutable slice) signals "I read-only consume this slice." \`&mut [T]\` (mutable slice) would imply the scanner *could* mutate the snapshots, which it shouldn't and doesn't. **Choose the borrow that matches the function's needs, not the caller's convenience.** The caller (bridge) can pass \`&accounts[..]\` even if it owns \`accounts\` mutably elsewhere.
+
+**Q2: Why does \`scan\` take \`MarkPrice\` by value but \`&self.params\` by reference inside?**
+
+\`MarkPrice\` is a 1-field \`Copy\` struct — passing by value is free. \`LiquidationParams\` is a 3-field \`Copy\` struct that the scanner already owns, so passing \`&self.params\` to the called functions avoids a struct-copy. Both choices are about cost-of-copy: tiny \`Copy\` types go by value, larger \`Copy\` types go by reference. **Pass \`Copy\` types by value when they're tiny; by reference when they're bigger.**
+
+**Q3: Could the \`for snapshot in accounts\` loop be replaced with \`accounts.iter().enumerate().for_each(|(i, snap)| ...)\` to track the iteration index?**
+
+Yes, but the index isn't needed — \`LiquidationRecord\` carries \`account: AccountId\` from the snapshot, which is the *durable* identifier. The iteration index would be a synthetic ID (positional in the slice) that means nothing to downstream consumers. **Identifiers should be domain-meaningful, not iteration-positional.**
+
+**Q4: Why doesn't \`scan\` early-return after the loop body if the scanner reaches a "fund fully depleted" state?**
+
+Because the L11 design contract says aggregate fields capture *everything* that happens during the scan, including post-depletion underwater closes. An early return would cut off the audit trail; a Liquidatable account in iteration position 50 would never produce a \`LiquidationRecord\`, and the bridge would miss it. **Scan completes the batch even if the fund's been emptied; the aggregate \`unfilled_deficit\` is the bridge's signal that more aggressive policy (ADL) is needed.**
+
+**Q5: What if two snapshots in the slice have the same \`AccountId\`?**
+
+The scanner processes them in iteration order. The first one's \`LiquidationRecord\` and fund-mutations land first; the second's land second. There's no deduplication. This is *by design* — the scanner trusts the bridge to deliver a deterministic, deduplicated slice. Duplicate-account behavior would be a bridge bug, not a scanner bug. **Trust the caller for invariants the caller controls.**
+
+**Q6: The body uses \`report.fund_deposits = report.fund_deposits.saturating_add(...)\`. Could this be \`report.fund_deposits += ...\` instead?**
+
+The \`+=\` operator's behavior changes between build profiles: **panics on overflow in debug, silently *wraps* (two's-complement modular arithmetic) in release**. The release-build wrap is the actual consensus danger — it doesn't crash, so an overflowing add on one validator quietly produces a different \`i64\` than the others. The result is a state disagreement → a chain fork. The debug panic is the easy failure mode; the silent release wrap is the *deceptive* one. \`saturating_add\` clamps to \`i64::MAX\` (or \`i64::MIN\`) under every build profile, so every validator sees the same value regardless of which compiler flags they used. **\`+=\` is fine for non-consensus arithmetic; \`saturating_add\` is the standard for state that validators must agree on byte-for-byte.**
+
+## Next lesson (L13) — Module 4 capstone: 5 nuanced unit tests + 4 proptests
+
+L13 closes Module 4 — and Stage 10c — and Module 10 of openhl entirely. The 5 nuanced unit tests cover:
+- \`scan_liquidatable_solvent_deposits_fee\` — happy path: trader's collateral covers everything.
+- \`scan_underwater_fully_covered_drains_fund_partially\` — fund drains but covers.
+- \`scan_underwater_partial_drain_surfaces_unfilled\` — fund partially drains; some shortfall escalates.
+- \`scan_underwater_depleted_fund_escalates_full_shortfall\` — fund already empty.
+- \`scan_first_underwater_gets_paid_then_second_unfilled\` — FIFO fairness with multiple underwater accounts.
+
+Plus a \`scan_mixed_batch_processes_only_unhealthy\` to verify the loop handles heterogeneous batches.
+
+The 4 proptests verify conservation laws across scans:
+- \`fund_balance_never_negative_across_scans\` — the L8 invariant extends to multi-account scans.
+- \`report_unfilled_equals_sum_of_unfilled_shortfalls\` — \`unfilled_deficit\` is consistent with per-account unfilled amounts.
+- \`fund_deposits_minus_withdrawals_equals_balance_change\` — fund accounting closes.
+- \`scan_preserves_account_order_in_records\` — determinism: records appear in input order.
+
+After L13, the Liquidation crate is *complete* — 68 tests, byte-for-byte against \`0a8464e\`. The reader has built an entire pure-compute + state-machine + orchestration cascade in 13 lessons.
+`,
+                },
+                {
+                  title: "Lesson 13 — Scanner capstone — 6 nuanced unit tests + 4 invariant proptests + the Stage 10 retrospective",
+                  slug: "openhl-liquidation-scanner-capstone-en",
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 40,
+                  xpReward: 80,
+                  content: `# Lesson 13 — Scanner capstone — 6 nuanced unit tests + 4 invariant proptests + the Stage 10 retrospective
+
+## Goal
+
+Concepts you'll grasp in this lesson:
+
+- **The 6 nuanced unit tests form a 4×2 matrix.** Four outcomes (solvent-close, fully-covered-underwater, partial-drain-underwater, depleted-underwater) crossed with two batch shapes (single-account-batch, multi-account-batch). The mixed-batch test is the explicit 4-state proof; the FIFO test is the multi-underwater fairness proof. **Together they exercise every reachable interaction between L6 classification, L10 close-outcomes, and L8/L9 fund operations.**
+- **The 4 proptests encode invariants the type system can't.** Fund accounting closes (\`before + deposits − withdrawals = after\`). Unfilled deficit implies an empty fund (\`unfilled > 0 ⇒ balance == 0\`). Record count is bounded by input count (\`|records| ≤ |accounts|\`). Determinism holds (\`scan(same inputs) ≡ scan(same inputs)\`). **Each invariant is a contract the scanner must keep across every scan, every block, every validator.**
+- **Conservation laws compose vertically across the crate.** Three layers, three identities, one math story:
+
+  \`\`\`
+  L9  (single fund call):       amount + unfilled                    = shortfall
+  L10 (single position close):  fee_to_fund + residual_to_account    = post_close_equity
+  L13 (per-block scan batch):   balance_before + Σ deposits − Σ withdrawals = balance_after
+  \`\`\`
+
+  **Each layer's conservation law is consumed by the next layer's invariant; the crate's math closes.**
+- **Stage 10 is *three* stages plus *one* trilogy.** Stage 10a (margin math) built the pure-compute classifier. Stage 10b (insurance fund + close-outcome decomposition) introduced state and the credit/debit decomposition. Stage 10c (multi-account scanner) tied them together with one orchestration loop. **L13 closes the trilogy: 69 tests, 4 modules, byte-for-byte against \`0a8464e\`.**
+
+Verification:
+
+\`\`\`bash
+cargo test -p openhl-liquidation
+\`\`\`
+
+…passes 69 tests (34 compute + 21 insurance + 14 scanner = 10 unit + 4 proptest). The liquidation crate is *complete* against Stage 10c's answer key.
+
+> **Note on the count:** L11 and L12's next-lesson previews said "68 total" — that was an off-by-one. The actual L13 adds 6 nuanced unit tests, not 5; the FIFO-fairness test is its own test, distinct from the mixed-batch test. The correct total is 69. (The cascade-math reasoning is unaffected.)
+
+Specific changes:
+
+- **\`src/scanner.rs\`** — adds 6 nuanced unit tests after the 4 simple ones from L12, and a \`proptest!\` block with 4 invariant properties.
+
+After L13, the Liquidation course is complete. Stage 10d (ADL) is the next openhl roadmap entry but is a separate course.
+
+## Recap
+
+After L12:
+- \`scanner.rs\` has the type vocabulary (L11), the \`scan\` method (L12), and 4 simple unit tests covering the skip paths.
+- \`cargo test\` runs 59 tests, all green.
+- The scanner *works* — it iterates, classifies, dispatches, mutates, aggregates, returns. But the only tests so far cover the "skip" cases. The four "work" outcomes — solvent, fully-covered, partial-drain, depleted — have no per-scan assertions yet.
+
+L13 fills that gap, then locks the invariants with proptests, then steps back for the Stage 10 retrospective.
+
+## Plan
+
+Three edits:
+
+1. **Append 6 nuanced unit tests** to the existing \`#[cfg(test)] mod tests\` block in \`crates/liquidation/src/scanner.rs\`.
+2. **Append a \`proptest!\` block** with 4 invariant properties at the bottom of the test module.
+3. **Verify** with \`cargo test\`. After this commit, the Liquidation crate is byte-for-byte against \`0a8464e\`.
+
+> 🛑 **Predict.** Before reading further: name the four "fund state transitions" a single liquidation can cause, and pair each one with the \`WithdrawOutcome\` variant or \`deposit\` call that drives it. Then: which of those transitions can *not* happen if the input is \`Solvent\` (i.e., \`Liquidatable && post_close_equity ≥ fee\`)?
+
+(Answer: **Four transitions** are (a) \`+fee\` only (solvent close — \`deposit\`, no withdraw), (b) \`+fee_partial − shortfall_full\` (underwater with positive equity — \`deposit\` + \`withdraw_shortfall\` returning \`Covered\`), (c) \`0 − shortfall_partial\` (underwater already underwater, fund partially drained — \`withdraw_shortfall\` returning \`PartiallyDrained\`), (d) \`0 − 0_with_unfilled\` (underwater with depleted fund — \`withdraw_shortfall\` returning \`Depleted\`). **Transitions b, c, d cannot happen on a Solvent input** — L10's \`debug_assert!\` would fire. Solvent inputs only drive transition (a). **The 4 nuanced unit tests exercise transitions a, b, c, d. The 5th (mixed batch) and 6th (FIFO) verify that the orchestration loop processes multi-account batches correctly.**)
+
+The scan-coverage matrix:
+
+\`\`\`
+   ┌─────────────────────────────────────────────────────────────┐
+   │  Test coverage matrix — Stage 10c                             │
+   ├─────────────────────────────────────────────────────────────┤
+   │                                                              │
+   │  4 outcomes × 2 batch shapes:                                │
+   │                                                              │
+   │                  single account     multi-account            │
+   │                  ──────────────     ──────────────           │
+   │  Solvent         #1 ✓                (covered by mixed)      │
+   │  Covered uw      #2 ✓                                        │
+   │  Partial uw      #3 ✓                #6 ✓ (FIFO fairness)    │
+   │  Depleted uw     #4 ✓                                        │
+   │                                                              │
+   │  Mixed-batch     —                   #5 ✓ (4 health states)  │
+   │                                                              │
+   │  Proptests (cross-cutting):                                  │
+   │  ────────────────────────                                    │
+   │  #1 fund_balance_delta_matches_report                        │
+   │  #2 unfilled_implies_empty_fund                              │
+   │  #3 records_count_bounded_by_accounts                        │
+   │  #4 scan_is_deterministic                                    │
+   │                                                              │
+   └─────────────────────────────────────────────────────────────┘
+\`\`\`
+
+Two things to notice about the matrix:
+
+1. **The single-account column covers all 4 outcomes; the multi-account column covers the *interesting* compound cases** (mixed health states + FIFO fairness). We don't need a "multi-account Solvent" test because per-account behavior is the same in both columns — the orchestration loop is the same on iteration 2 as on iteration 1. **Test what's *new* when multiplicity is introduced; don't repeat what's already proven.**
+2. **The 4 proptests are *cross-cutting* — they apply to every outcome and every batch shape**. They're not in the matrix because they're orthogonal to it. **Unit tests verify specific points; proptests verify the *shape* of all points.**
+
+## Walk-through
+
+### Step 1: Add the 6 nuanced unit tests
+
+Inside the existing \`#[cfg(test)] mod tests\` block in \`scanner.rs\`, after the 4 simple tests from L12, append the 6 nuanced cases. The tests are grouped by single-vs-multi-account and by outcome.
+
+#### Test 1: Solvent close deposits fee
+
+\`\`\`rust
+    // ─── single Liquidatable: solvent close ────────────────────────
+
+    #[test]
+    fn scan_liquidatable_solvent_deposits_fee() {
+        // size=1, entry=1_000, collateral=20, mark=999.
+        //   notional=999; fee = 999 × 150 / 10_000 = 14
+        //   pnl = -1; post_close_equity = 19
+        //   ratio = 19 / 999 × 10_000 = 190 bps < 200 maint → Liquidatable
+        //   post_close_equity (19) ≥ fee (14) → solvent close
+        //   residual_to_account = 19 - 14 = 5
+        let accts = vec![snapshot(7, 1, 1_000, 20)];
+        let mut s = LiquidationScanner::with_empty_fund(default_params());
+        let report = s.scan(&accts, MarkPrice(999));
+
+        assert_eq!(report.records.len(), 1);
+        let rec = &report.records[0];
+        assert_eq!(rec.account, AccountId(7));
+        assert_eq!(rec.classification, MarginHealth::Liquidatable);
+        match rec.outcome {
+            CloseOutcomeKind::Solvent(s) => {
+                assert_eq!(s.fee_to_fund, 14);
+                assert_eq!(s.residual_to_account, 5);
+            }
+            CloseOutcomeKind::Underwater(_) => panic!("expected Solvent"),
+        }
+        assert_eq!(report.fund_deposits, 14);
+        assert_eq!(report.fund_withdrawals, 0);
+        assert_eq!(report.unfilled_deficit, 0);
+        assert_eq!(s.fund_balance(), 14);
+    }
+\`\`\`
+
+Five things to notice:
+
+1. **The comment block walks the math step-by-step from primitives.** notional → fee → pnl → equity → ratio → classification → routing decision → outputs. A reader debugging a failing test reads this comment and re-derives the expected values from the snapshot's 4 inputs. **Math-walk comments turn a single test into a worked example of the full Stage 10a + 10b pipeline.** (A subtle bind-name note: the test introduces \`let mut s = LiquidationScanner::...\` and *also* shadows \`s\` inside the \`match\` arm via \`CloseOutcomeKind::Solvent(s)\`. Inside the arm, \`s\` is the \`SolventClose\` payload; the moment the arm closes, the outer scanner \`s\` is back in scope, which is why \`s.fund_balance()\` two lines later works. This is a deliberate Rust idiom — shadowing inside a match arm is scope-bounded — but new readers should recognize the dual binding for what it is.)
+2. **The chosen numbers — entry=1_000, collateral=20, mark=999 — pick a *boundary case*** where ratio (190 bps) is just barely below maintenance (200 bps). A bug that flipped the inequality (\`>\` instead of \`>=\`, etc.) would land 190 in the wrong bucket. **Boundary inputs make tests catch off-by-one in classification predicates.**
+3. **The \`match\` on \`outcome\` uses \`panic!("expected Solvent")\` for the wrong variant.** Failure messages name the *expected* variant; a future reader of a failing test log immediately knows which branch they meant to hit. **Panic messages name the expected variant, not the unexpected one.**
+4. **All four \`ScanReport\` fields are asserted, plus \`fund_balance()\`.** The aggregate fields are checked even though the per-record \`outcome\` already implies them. Why? Because the L11 design contract said aggregates are first-class — a regression that breaks the aggregation math is a different bug class than one that breaks the per-record decomposition. **Aggregate fields and per-record fields get separate assertions; they're separate invariants.**
+5. **\`s.fund_balance() == 14\` proves the fund actually mutated** — not just that the report claims it did. The fund is *state*, not derivation; a separate read confirms the report doesn't lie. **State changes deserve a separate post-call read; reports describing them deserve their own assertions.**
+
+#### Test 2: Underwater account, fully covered by fund
+
+\`\`\`rust
+    // ─── single Underwater: fully covered by fund ──────────────────
+
+    #[test]
+    fn scan_underwater_fully_covered_drains_fund_partially() {
+        // 1 BTC long, entry $100k, $10k collateral, mark $80,500 →
+        // pnl = −19_500, equity = −9_500 → Underwater.
+        // notional = 80_500, fee = 1_207, shortfall = 1_207 + 9_500 = 10_707.
+        // Start fund with $20k — covers in full.
+        let accts = vec![snapshot(1, 1, 100_000, 10_000)];
+        let fund = InsuranceFund::new(20_000);
+        let mut s = LiquidationScanner::new(default_params(), fund);
+        let report = s.scan(&accts, MarkPrice(80_500));
+
+        assert_eq!(report.records.len(), 1);
+        match report.records[0].outcome {
+            CloseOutcomeKind::Underwater(u) => {
+                assert_eq!(u.fee_to_fund, 0); // already underwater pre-fee
+                assert_eq!(u.shortfall_to_fund, 10_707);
+            }
+            CloseOutcomeKind::Solvent(_) => panic!("expected Underwater"),
+        }
+        assert_eq!(report.fund_deposits, 0);
+        assert_eq!(report.fund_withdrawals, 10_707);
+        assert_eq!(report.unfilled_deficit, 0);
+        assert_eq!(s.fund_balance(), 20_000 - 10_707);
+    }
+\`\`\`
+
+Four things to notice:
+
+1. **The Perp Primer L3 scenario reappears for the fourth time** in this course: $100k entry, $10k collateral, $80,500 close, $19,500 PnL, $9,500 negative equity. The numbers thread through L10's \`fee_basic\`, L10's \`underwater_close_already_underwater_pre_fee\`, and now L13's scanner-level test. **Curriculum reinforcement compounds: by L13 the reader recognizes the numbers without re-deriving them.**
+2. **\`fee_to_fund == 0\`** — confirmed at the scanner level. The L10 contract said "negative equity pre-fee → no fee collected"; L13 verifies the contract is preserved through the orchestration layer. **Cross-layer contract tests verify that orchestration doesn't *break* the lower-layer guarantees.**
+3. **\`fund_deposits == 0\` AND \`fund_withdrawals == 10_707\`** — the aggregate fields show *zero deposit* (because \`fee_to_fund == 0\`) and *full withdrawal* (because the fund had enough). The two aggregates together describe the full balance-flow story. **Aggregate fields are the bridge's read-once telemetry; they should be precise.**
+4. **\`s.fund_balance() == 20_000 - 10_707\`** — the post-scan fund balance is computed from the inputs, not asserted as a literal. This makes the test self-documenting: the reader sees \`20_000 - 10_707\` and knows where each number came from. **Arithmetic expressions in assertions make the test self-explain better than hardcoded literals.**
+
+#### Test 3: Underwater, fund partially drained
+
+\`\`\`rust
+    // ─── single Underwater: fund partially drained, deficit escalates ─
+
+    #[test]
+    fn scan_underwater_partial_drain_surfaces_unfilled() {
+        // Same underwater account, but fund only has $5k — can't cover.
+        let accts = vec![snapshot(1, 1, 100_000, 10_000)];
+        let fund = InsuranceFund::new(5_000);
+        let mut s = LiquidationScanner::new(default_params(), fund);
+        let report = s.scan(&accts, MarkPrice(80_500));
+
+        assert_eq!(report.fund_withdrawals, 5_000); // drained to 0
+        assert_eq!(report.unfilled_deficit, 10_707 - 5_000);
+        assert_eq!(s.fund_balance(), 0);
+    }
+\`\`\`
+
+Three things to notice:
+
+1. **The test reuses the same snapshot as Test 2.** Only the fund balance changes — $20k vs $5k. The reader can read Test 2 and Test 3 back-to-back and see *exactly* what difference the fund size makes. **Reusing the same input across tests isolates the input-axis that matters.**
+2. **Fewer assertions than Test 2.** Only the 3 most-changed values are asserted (\`fund_withdrawals\`, \`unfilled_deficit\`, \`fund_balance\`). The classification, the per-record outcome, the account ID — already proven by Test 2 — are not re-asserted. **Tests that share setup with earlier tests assert only the differential.**
+3. **\`unfilled_deficit == 10_707 - 5_000\`** — again an arithmetic expression. The reader sees \`shortfall − available = unfilled\` and instantly grasps the conservation law \`paid + unfilled = shortfall\`. **Algebraic expressions in assertions teach invariants alongside the assertion itself.**
+
+#### Test 4: Underwater, fund already depleted
+
+\`\`\`rust
+    #[test]
+    fn scan_underwater_depleted_fund_escalates_full_shortfall() {
+        // Fund empty from the start.
+        let accts = vec![snapshot(1, 1, 100_000, 10_000)];
+        let mut s = LiquidationScanner::with_empty_fund(default_params());
+        let report = s.scan(&accts, MarkPrice(80_500));
+
+        assert_eq!(report.fund_withdrawals, 0);
+        assert_eq!(report.unfilled_deficit, 10_707);
+        assert_eq!(s.fund_balance(), 0);
+    }
+\`\`\`
+
+Three things to notice:
+
+1. **\`with_empty_fund\` instead of \`new(0)\`** — the named constructor at the call site says "empty fund" instead of "0 balance fund." Reading the test, the reader sees the intent immediately. **Named constructors at test call sites are documentation.**
+2. **\`fund_withdrawals == 0\`** — *not* the full shortfall. The L8 \`Depleted\` variant returns \`(0, unfilled)\`, meaning the fund pays *zero* (because it had nothing) and escalates the *full* shortfall. The aggregate fields preserve this distinction. **\`Depleted\` and \`Covered { amount: 0 }\` are different outcomes; the aggregates must show different numbers.**
+3. **The test is shorter than Test 2 and Test 3** — fewer assertions, simpler setup, cleaner narrative. The depleted state is the "edge of the cliff" of the cascade — the boundary where Stage 10d (ADL) would have to fire. **Edge-case tests should be terse; their *being there* is most of their value.**
+
+#### Test 5: Mixed batch processes only unhealthy accounts
+
+\`\`\`rust
+    // ─── mixed batch ───────────────────────────────────────────────
+
+    #[test]
+    fn scan_mixed_batch_processes_only_unhealthy() {
+        // 4 accounts, all 1 long @ entry $100, mark $80 (−20% adverse).
+        // Vary collateral to span the 4 states:
+        //   coll 50 → equity 30, ratio 30/80 = 37.5% → Safe
+        //   coll 25 → equity 5,  ratio  5/80 = 6.25% → AtRisk
+        //   coll 21 → equity 1,  ratio  1/80 = 1.25% → Liquidatable (solvent close)
+        //   coll 10 → equity −10 → Underwater
+        let accts = vec![
+            snapshot(1, 1, 100, 50),
+            snapshot(2, 1, 100, 25),
+            snapshot(3, 1, 100, 21),
+            snapshot(4, 1, 100, 10),
+        ];
+        let mut s = LiquidationScanner::new(default_params(), InsuranceFund::new(1_000));
+        let report = s.scan(&accts, MarkPrice(80));
+
+        assert_eq!(report.records.len(), 2);
+        assert_eq!(report.records[0].account, AccountId(3));
+        assert_eq!(report.records[1].account, AccountId(4));
+        assert_eq!(report.records[0].classification, MarginHealth::Liquidatable);
+        assert_eq!(report.records[1].classification, MarginHealth::Underwater);
+    }
+\`\`\`
+
+Six things to notice:
+
+1. **Four accounts in one slice — each calibrated to land in a different \`MarginHealth\` state.** Account 1 → Safe, 2 → AtRisk, 3 → Liquidatable, 4 → Underwater. The slice exercises *every* arm of L6's classification cascade in a single call. **Mixed-batch tests are the cheapest way to verify the classification cascade is complete.**
+2. **\`report.records.len() == 2\`** — *not* 4. Safe and AtRisk produce no records; only Liquidatable and Underwater do. The test catches a future bug where someone misclassifies AtRisk as a liquidation trigger. **Length assertions on filtered outputs catch "wrong filter" bugs at the orchestration level.**
+3. **\`report.records[0].account == AccountId(3)\` and \`[1].account == AccountId(4)\`** — the records preserve *input order*. Account 3 came before account 4 in the input slice; the records appear in the same order. This is the FIFO ordering policy from L11's module-level doc. **Ordered iteration → ordered records; the policy is enforced by the test.**
+4. **The math comments are *per-account*, not per-test.** Each account gets its own classification math worked out inline. **For mixed-batch tests, math comments belong next to the accounts they describe.**
+5. **\`InsuranceFund::new(1_000)\` — non-empty fund.** A fund of $1,000 covers any solvent fee and any small underwater shortfall in this batch. The fund-state mutations are validated but not the primary point of the test; the primary point is the *classification + filtering* behavior. **One test, one primary point; fund state is incidental here.**
+6. **No assertion on \`fund_deposits\`/\`fund_withdrawals\`/\`unfilled_deficit\`.** Those are derivative of the per-account outcomes (which the records carry). Asserting them would duplicate test #1-#4's coverage; mixed-batch tests should focus on what's *new* — the orchestration of multiple accounts. **Assert the new behavior; don't re-assert what's already covered.**
+
+#### Test 6: FIFO fairness on multi-underwater partial drain
+
+\`\`\`rust
+    // ─── FIFO fairness when fund partially drains ──────────────────
+
+    #[test]
+    fn scan_first_underwater_gets_paid_then_second_unfilled() {
+        // Two underwater accounts, fund has enough for the first only.
+        // Underwater shortfall per account: notional 80_500, fee 1_207,
+        // equity -9_500 → shortfall 10_707.
+        // Fund starts at 12_000: covers first (10_707), leaves 1_293;
+        // second needs 10_707 → partial 1_293 + unfilled 9_414.
+        let accts = vec![
+            snapshot(1, 1, 100_000, 10_000),
+            snapshot(2, 1, 100_000, 10_000),
+        ];
+        let mut s = LiquidationScanner::new(default_params(), InsuranceFund::new(12_000));
+        let report = s.scan(&accts, MarkPrice(80_500));
+
+        assert_eq!(report.records.len(), 2);
+        assert_eq!(report.fund_withdrawals, 12_000); // 10_707 + 1_293
+        assert_eq!(report.unfilled_deficit, 10_707 - 1_293);
+        assert_eq!(s.fund_balance(), 0);
+    }
+\`\`\`
+
+Five things to notice:
+
+1. **Two *identical* underwater accounts.** Same entry, same collateral, same close mark. The only thing that differs is iteration position. By making them identical, the test isolates the *fairness policy* — FIFO — as the only thing that determines outcome differences. **Identical inputs across iterations isolate the policy variable.**
+2. **The fund balance ($12,000) is *exactly* \`first shortfall + partial second payment\`** — $10,707 + $1,293 = $12,000. The reader sees the fund deplete *exactly* through the first underwater account, with the partial remainder going to the second. **Carefully-chosen fund balances make the fairness policy visible in the assertions.**
+3. **\`fund_withdrawals == 12_000\`** — the *total* withdrawal, summed across both accounts. The aggregate field doesn't distinguish "first account got 10,707, second got 1,293"; it just shows the sum. **Aggregate fields summarize; per-record fields differentiate.**
+4. **The comment includes the arithmetic explicitly**: \`10_707 + 1_293\`. A reader debugging a failure traces the unfilled-deficit number back to the FIFO rule via the comment. **Test comments that show the FIFO arithmetic are how the policy stays auditable.**
+5. **The \`unfilled_deficit == 10_707 − 1_293\` assertion is the *only* signal Stage 10d would consume.** The next stage (ADL) would force-close enough profitable counter-positions to cover this \`9_414\` shortfall. L13's test fixes the contract that Stage 10d will read. **Per-stage handoff tests fix the contract the next stage will consume.**
+
+### Step 2: Add the 4 invariant proptests
+
+Append a \`proptest!\` block after the 6 unit tests. The block exercises 4 cross-cutting invariants over random \`(collaterals × mark × initial_fund)\` triples.
+
+\`\`\`rust
+    // ─── proptest: invariants ──────────────────────────────────────
+
+    proptest! {
+        /// The scanner's \`fund_balance\` after a scan equals the prior
+        /// balance plus \`fund_deposits\` minus \`fund_withdrawals\`.
+        #[test]
+        fn fund_balance_delta_matches_report(
+            collaterals in proptest::collection::vec(1_i64..1_000_000, 0..10),
+            mark in 50_u64..150,
+            initial_fund in 0_i64..10_000_000,
+        ) {
+            let accts: Vec<_> = collaterals
+                .iter()
+                .enumerate()
+                .map(|(i, c)| snapshot(i as u64, 1, 100, *c))
+                .collect();
+            let mut s = LiquidationScanner::new(
+                default_params(),
+                InsuranceFund::new(initial_fund),
+            );
+            let before = s.fund_balance();
+            let report = s.scan(&accts, MarkPrice(mark));
+            let after = s.fund_balance();
+            // before + deposits - withdrawals = after
+            prop_assert_eq!(
+                before.saturating_add(report.fund_deposits).saturating_sub(report.fund_withdrawals),
+                after,
+            );
+        }
+
+        /// \`unfilled_deficit > 0\` implies the fund was insufficient at
+        /// some point during the scan, which implies \`fund_balance == 0\`
+        /// at the end of the scan.
+        #[test]
+        fn unfilled_implies_empty_fund(
+            collaterals in proptest::collection::vec(1_i64..1_000, 1..10),
+            mark in 50_u64..70,    // adverse to long positions
+            initial_fund in 0_i64..5_000,
+        ) {
+            let accts: Vec<_> = collaterals
+                .iter()
+                .enumerate()
+                .map(|(i, c)| snapshot(i as u64, 1, 100, *c))
+                .collect();
+            let mut s = LiquidationScanner::new(
+                default_params(),
+                InsuranceFund::new(initial_fund),
+            );
+            let report = s.scan(&accts, MarkPrice(mark));
+            if report.unfilled_deficit > 0 {
+                prop_assert_eq!(s.fund_balance(), 0);
+            }
+        }
+
+        /// Number of records ≤ number of input accounts. Safe and AtRisk
+        /// accounts never produce records; the inequality is strict
+        /// when at least one input is healthy.
+        #[test]
+        fn records_count_bounded_by_accounts(
+            collaterals in proptest::collection::vec(1_i64..1_000_000, 0..20),
+            mark in 50_u64..150,
+        ) {
+            let accts: Vec<_> = collaterals
+                .iter()
+                .enumerate()
+                .map(|(i, c)| snapshot(i as u64, 1, 100, *c))
+                .collect();
+            let mut s = LiquidationScanner::with_empty_fund(default_params());
+            let report = s.scan(&accts, MarkPrice(mark));
+            prop_assert!(report.records.len() <= accts.len());
+        }
+
+        /// Determinism: scanning the same input twice produces the same
+        /// report (fresh fund + fresh scanner each time).
+        #[test]
+        fn scan_is_deterministic(
+            collaterals in proptest::collection::vec(1_i64..1_000_000, 0..10),
+            mark in 50_u64..150,
+            initial_fund in 0_i64..1_000_000,
+        ) {
+            let accts: Vec<_> = collaterals
+                .iter()
+                .enumerate()
+                .map(|(i, c)| snapshot(i as u64, 1, 100, *c))
+                .collect();
+
+            let mut s1 = LiquidationScanner::new(
+                default_params(),
+                InsuranceFund::new(initial_fund),
+            );
+            let mut s2 = LiquidationScanner::new(
+                default_params(),
+                InsuranceFund::new(initial_fund),
+            );
+            let r1 = s1.scan(&accts, MarkPrice(mark));
+            let r2 = s2.scan(&accts, MarkPrice(mark));
+            prop_assert_eq!(r1, r2);
+            prop_assert_eq!(s1.fund_balance(), s2.fund_balance());
+        }
+    }
+\`\`\`
+
+The 4 proptests together encode the *invariants of the orchestration layer*. Each one is a contract:
+
+#### Proptest #1: \`fund_balance_delta_matches_report\`
+
+**The conservation law for the fund.** \`before + ∑deposits − ∑withdrawals = after\`. The L8 invariant (\`balance ≥ 0\`) extends per-call; L13 extends it across an entire scan. Every deposit the report claims must show up in the fund balance; every withdrawal must too. **If this proptest passes, the report and the fund agree on what happened.**
+
+Three things to notice:
+
+1. **The math is \`saturating_add\` and \`saturating_sub\`** to match the scanner's own arithmetic. Without saturation, the proptest would have to either bound inputs more tightly or accept overflow as "the property doesn't hold." **The proptest's arithmetic must match the production code's arithmetic.**
+2. **Input ranges (\`1..1_000_000\`)** are bounded well below \`i64::MAX\` so the property is *simply expressible* — no saturation actually fires in the operating range. The proptest still works against \`saturating_add\` because saturation in the bounded range is a no-op. **Bound proptest inputs so the property holds in the simplest form, not in the saturated form.**
+3. **\`mark in 50..150\`** — a 50-150% range around the assumed entry price of $100, sweeping both Safe and Liquidatable / Underwater conditions. **Mark ranges should sweep across the boundary that classification cares about.**
+
+#### Proptest #2: \`unfilled_implies_empty_fund\`
+
+**The fund-exhaustion contract.** If the report shows \`unfilled_deficit > 0\`, the fund *must* be empty at the end. This catches the bug where the scanner reports "unfilled exists" but the fund still has money — a contradiction. The contract holds because L9's \`withdraw_shortfall\` drains the fund to 0 before reporting any unfilled deficit. **L9's per-call contract scales to a per-scan invariant.**
+
+Three things to notice:
+
+1. **The \`if report.unfilled_deficit > 0 { ... }\` filter inside the proptest body.** Only the cases where unfilled exists trigger the assertion; cases where the fund had enough to cover everything are valid "no assertion fires" cases. **Conditional assertions inside proptests are how you express "when X is true, Y must hold."**
+2. **The input range is *adverse* — \`mark in 50..70\`.** Long positions at entry $100 face severe losses at mark $50-70, making underwater outcomes likely. This biases the test toward triggering the \`unfilled > 0\` branch. **Proptest inputs should be biased toward triggering the *interesting* condition; otherwise most cases skip the assertion silently.** This is the *proptest density problem*: with a wide range like \`mark in 50..150\`, the majority of randomly generated inputs would land Safe or Solvent, the conditional assertion would never fire, and across the proptest's default 100-250 iterations *the property could pass without ever being tested* — an invisible dead-code test. Bias inputs toward the regime where the assertion actually fires; otherwise your property test is exercising no property at all.
+3. **\`initial_fund in 0..5_000\` — capped at the bottom range.** The fund is sized to be insufficient for the expected aggregate shortfall (which scales with the number of underwater accounts). **Sizing the fund below the expected shortfall maximizes the chance of an unfilled deficit.**
+
+#### Proptest #3: \`records_count_bounded_by_accounts\`
+
+**The cardinality bound.** The scanner can never produce more records than input accounts. Safe and AtRisk accounts contribute zero records; Liquidatable and Underwater each contribute exactly one. **The orchestration loop can't *create* records out of nothing or *amplify* them per account.**
+
+Two things to notice:
+
+1. **The assertion uses \`<=\`, not \`<\` strict.** When all accounts are unhealthy, records count *equals* accounts count. The bound is non-strict because zero-skipped-accounts is a valid case. **Cardinality bounds are usually \`<=\`; strict-\`<\` would falsely reject the all-unhealthy case.**
+2. **The proptest covers up to 20 accounts per scan** (\`vec(..., 0..20)\`). Larger than the other proptests, because the cardinality bound is the easiest to violate at scale and the cheapest to test. **Use larger collections in proptests where the invariant scales linearly.**
+
+#### Proptest #4: \`scan_is_deterministic\`
+
+**The validator-consensus contract.** Two scanners with identical state and identical inputs must produce byte-identical outputs. If this proptest fails, the scanner has nondeterminism — and on a consensus chain, nondeterminism means a fork. **This proptest is the single most load-bearing test in the entire course.**
+
+Four things to notice:
+
+1. **The proptest constructs *two* scanners, not one, and scans the same input through both.** A single scanner that scans twice could mask nondeterminism if the second scan's state inherits something from the first. Two fresh scanners catch any state that survives an \`InsuranceFund::new(initial_fund)\` reset. **Determinism tests must use independent state at every run.**
+2. **The assertion is on *both* \`report == report\` AND \`fund_balance == fund_balance\`.** A scanner that produces a deterministic report but a nondeterministic fund-balance change would pass a report-only test but be a real bug. The two-way assertion catches both. **Determinism tests assert on every observable side effect.**
+3. **\`PartialEq\` on \`ScanReport\` is *what enables this test*.** L11's derive \`#[derive(Clone, Debug, PartialEq, Eq, Default)]\` is what lets \`prop_assert_eq!(r1, r2)\` compile. Without \`PartialEq\`, this proptest couldn't be written. **Standard-derive traits unlock standard-test patterns; derive them eagerly.**
+4. **No \`Hash\` derive needed.** The determinism test compares by \`==\`, not by hashing. \`Hash\` would be redundant for this test (and most others). **Derive what tests actually need; resist the urge to derive \`Hash\` defensively.**
+
+### Step 3: Run the tests
+
+\`\`\`bash
+cargo test -p openhl-liquidation
+\`\`\`
+
+Expected output (abbreviated):
+
+\`\`\`
+running 69 tests
+test compute::tests::close_flat_has_zero_qty ... ok
+... (33 more compute tests)
+test insurance::tests::balance_never_negative ... ok
+... (20 more insurance tests)
+test scanner::tests::fund_balance_delta_matches_report ... ok
+test scanner::tests::records_count_bounded_by_accounts ... ok
+test scanner::tests::scan_all_safe_accounts_does_nothing ... ok
+test scanner::tests::scan_atrisk_does_not_liquidate ... ok
+test scanner::tests::scan_empty_accounts_returns_empty_report ... ok
+test scanner::tests::scan_first_underwater_gets_paid_then_second_unfilled ... ok
+test scanner::tests::scan_is_deterministic ... ok
+test scanner::tests::scan_liquidatable_solvent_deposits_fee ... ok
+test scanner::tests::scan_mixed_batch_processes_only_unhealthy ... ok
+test scanner::tests::scan_skips_flat_positions ... ok
+test scanner::tests::scan_underwater_depleted_fund_escalates_full_shortfall ... ok
+test scanner::tests::scan_underwater_fully_covered_drains_fund_partially ... ok
+test scanner::tests::scan_underwater_partial_drain_surfaces_unfilled ... ok
+test scanner::tests::unfilled_implies_empty_fund ... ok
+
+test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+\`\`\`
+
+**69 tests passing. The Liquidation crate is byte-for-byte against \`0a8464e\`.** Stage 10c is complete; Stage 10 — the trilogy of margin math + insurance fund + scanner — is *closed*.
+
+Common errors:
+
+- **\`scan_is_deterministic\` flakes on some runs and passes on others** — your scanner has a hidden non-determinism. The most common cause: iterating a \`HashMap\` (whose iteration order varies). Stage 10c never uses \`HashMap\`; if you introduced one, switch to \`BTreeMap\` or \`Vec\`. **Hidden non-determinism is a chain-fork risk; the proptest catches it before mainnet.**
+- **\`fund_balance_delta_matches_report\` fails with \`5000 vs 4999\`** — off-by-one in the \`saturating_add\` order. Re-check the production code: \`before + deposits − withdrawals\`, in that order. Reversing to \`before − withdrawals + deposits\` looks arithmetically identical but is actually different: the intermediate \`before − withdrawals\` can go negative in *some* invocations and, *in release builds without saturation*, silently *wraps* to a huge positive number — every validator producing a different \`i64\` than its peers, every chain forking. Saturating arithmetic in the L12 order is the cheap defense; the proptest is what catches the order if you reverse it.
+- **\`unfilled_implies_empty_fund\` fails with \`unfilled=500, balance=1000\`** — your \`scan\` exits early when the fund depletes (skipping further underwater accounts). The L11 design contract says the scan continues; you should be aggregating across *every* underwater account in the slice. Re-read the L12 fan-out logic.
+- **\`records_count_bounded_by_accounts\` fails with \`records=21, accounts=20\`** — somewhere your loop double-pushed. Most likely cause: you wrote \`report.records.push(...)\` *inside* the \`if\`/\`else\` branches AND once more outside. Re-check the loop body — the push should be exactly once at the bottom.
+
+## Design reflection — the Stage 10 trilogy
+
+Three load-bearing decisions that shaped Stage 10 across all 13 lessons:
+
+1. **Layered conservation laws.** L9's \`amount + unfilled = shortfall\` (per call), L10's \`fee_to_fund + residual_to_account = post_close_equity\` (per close), L13's \`before + ∑deposits − ∑withdrawals = after\` (per scan). Each layer's law is consumed by the next layer's invariant. The crate's math closes from the smallest unit (one \`withdraw_shortfall\` call) to the largest (one \`scan\` batch). **Layered conservation is how consensus state machines stay *provably* correct under composition.**
+
+2. **\`debug_assert!\` pair + \`saturating_arithmetic\` everywhere.** Every function in the crate uses one or both. The L10 dispatch (\`solvent_close_outcome\` / \`underwater_close_outcome\`) is a debug-assert pair; the L8 deposit and L9 withdraw use saturating arithmetic. The L12 scan combines both — debug-asserts via the routing predicates, saturation via the report aggregation. **The dev-assertion + prod-saturation discipline scales from one function to one crate.**
+
+3. **Vocabulary before mechanism, four times in a row.** L1-L3 declared \`LiquidationParams\`, \`MarginRatio\`, \`MarginHealth\`, \`AccountSnapshot\`, \`CloseOrderSpec\` before any \`margin_health\` was implemented. L8 declared \`InsuranceFund\`, \`WithdrawOutcome\` before \`withdraw_shortfall\`. L10 declared \`SolventClose\`, \`UnderwaterClose\` while implementing them. L11 declared \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\` before \`scan\`. **The pattern is consistent across the course because *vocabulary defines the contract; mechanism implements it*.**
+
+## Answer key
+
+\`\`\`bash
+cd ~/code/openhl-reference
+git checkout 0a8464e
+diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/src/scanner.rs
+\`\`\`
+
+After L13:
+- **scanner.rs** matches Stage 10c's \`scanner.rs\` **byte-for-byte**. The full file — module-level doc + imports + 4 types + 5 accessors + \`scan\` method + 10 unit tests + 4 proptests — is in your workspace.
+- **All other files** in \`crates/liquidation/src/\` have been byte-for-byte stable since L10.
+
+**The Liquidation course is complete.** Module 0 (Orientation, L0) + Module 1 (Types, L1-L3) + Module 2 (Pure compute, L4-L7) + Module 3 (Insurance fund, L8-L10) + Module 4 (Scanner + capstone, L11-L13) = 13 lessons across 5 modules.
+
+## Common questions
+
+**Q1: Why does L13 add 6 unit tests and not 4 or 8?**
+
+Because the test coverage matrix has 4 outcomes × 2 batch shapes, and the multi-account column collapses 3 of the 4 outcomes into the mixed-batch test. The remaining 4 single-account outcomes (Solvent, FullyCovered, PartialDrain, Depleted) need their own tests, and the multi-account column needs the mixed-batch test plus the FIFO-fairness test (because identical-account-iteration-order is the *only* thing that distinguishes the two underwater iterations). 4 + 1 (mixed) + 1 (FIFO) = 6. **Coverage math, not arbitrary count.**
+
+**Q2: Why doesn't L13 add a "scanner runs after fund depletes mid-batch" test?**
+
+Because that case is already covered by \`unfilled_implies_empty_fund\` proptest #2 (which triggers exactly when the fund depletes mid-scan) and by \`scan_first_underwater_gets_paid_then_second_unfilled\` unit test #6 (which constructs a deterministic version). Adding a dedicated "mid-batch depletion" test would duplicate either of those. **The 6 unit tests + 4 proptests already cover the case; redundant tests are noise.**
+
+**Q3: Could the 4 proptests be reduced to 1 by combining them all into one mega-property?**
+
+You *could* (\`fund_balance_delta_matches_report ∧ unfilled_implies_empty_fund ∧ records_count_bounded_by_accounts ∧ scan_is_deterministic\`), but each property is independently meaningful — proving them separately makes the test failure message tell you *which* invariant broke. A mega-property with \`prop_assert!(A && B && C && D)\` would only report "the mega-property failed" without saying which sub-property. **Property-level granularity gives diagnostic granularity at failure time.**
+
+**Q4: Why does \`scan_is_deterministic\` only run two iterations, not many?**
+
+Because two iterations is what catches the nondeterminism. If two runs differ, *any* number of runs would differ. Three runs would catch the same bug; four runs same. The "many runs" defense is for *flaky* tests where the bug occurs probabilistically (which scanner determinism shouldn't have — it's deterministic by construction). **Test the property at minimum-multiplicity; multiplicity beyond that is wasted iteration.**
+
+**Q5: What's not tested by L13's tests + proptests?**
+
+A few things — deliberately. **Out of scope:** (a) the precise byte-layout of \`ScanReport\` (it's only used in-process, never serialized to disk in Stage 10c); (b) thread-safety (\`LiquidationScanner\` isn't \`Send + Sync\`-tested because Stage 10c uses single-threaded execution by design); (c) panic-safety (the bridge handles panics at a higher level). **In scope:** every classification → routing → aggregation path that affects fund state. **L13's tests cover what consensus actually needs.**
+
+**Q6: What does Stage 10d (ADL) consume from L13's scanner?**
+
+Exactly \`ScanReport.unfilled_deficit\` — the i64 that means "this many quote units of shortfall the fund couldn't absorb." Stage 10d would (a) read this field after every block's scan, (b) if non-zero, walk the *profitable* counter-positions in deterministic order, (c) force-close enough of them to cover the deficit. The L13 proptest \`unfilled_implies_empty_fund\` *guarantees* that this field is the only place the bridge needs to look — there's no second escalation signal hiding elsewhere. **Stage 10d gets one number; it knows what to do with it.**
+
+## Module 4 + Stage 10 retrospective
+
+The 13 lessons of the Liquidation course, in one table:
+
+| # | Module | Lessons | Stage | What was built |
+|---|---|---|---|---|
+| M0 | Orientation | L0 | — | Course overview, openhl context |
+| M1 | Types | L1, L2, L3 | 10a | \`LiquidationParams\`, \`MarginRatio\`, \`MarginHealth\`, \`AccountSnapshot\`, \`CloseOrderSpec\` |
+| M2 | Pure compute | L4, L5, L6, L7 | 10a | \`notional_value\`, \`unrealized_pnl\`, \`account_equity\`, \`margin_ratio\`, \`margin_health\`, \`close_order_spec\` |
+| M3 | Insurance fund | L8, L9, L10 | 10b | \`InsuranceFund\` state machine, \`WithdrawOutcome\` 3-variant enum, \`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`, \`SolventClose\`, \`UnderwaterClose\` |
+| M4 | Scanner + capstone | **L11, L12, L13** | 10c | \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`, \`scan\` method, 10 unit tests + 4 proptests |
+
+**69 tests. 4 modules. 13 lessons. 3 openhl commit SHAs.** The Liquidation crate is now a complete, deterministic, defensively-coded multi-account orchestration layer that the openhl bridge can call once per block to drive the entire safety-net cascade up to (but not including) ADL.
+
+The next course in the openhl curriculum — Stage 10d, ADL — will consume \`ScanReport.unfilled_deficit\` as its only input, walk profitable counter-positions, and force-close them to absorb whatever the fund couldn't. The contract L13's proptests fix is what Stage 10d will read.
+
+## Next course — Stage 10d, ADL (separate course)
+
+L13 is the *last* lesson in the Liquidation course. The cascade's Layer 3 — ADL (auto-deleveraging) — is its own dedicated future course. The handoff:
+
+1. **The scanner produces \`unfilled_deficit > 0\`** when the fund couldn't absorb all underwater shortfalls (L13 proptest #2 guarantees this is the *only* signal).
+2. **Stage 10d's ADL routine** would read this field after each block's scan.
+3. **The ADL routine** walks all *profitable* counter-positions in deterministic order (likely \`(pnl_pct × leverage)\` descending, with \`account_id\` as tiebreaker), force-closes them in sequence, and credits the recovered margin back to the insolvent positions.
+4. **The ADL outcome** is a separate \`AdlReport\` type, with its own conservation law and its own proptests.
+
+Stage 10d is implemented in openhl at commit \`d66b44a\`; the rethlab ADL course will land when its lessons are drafted.
 `,
                 },
               ],

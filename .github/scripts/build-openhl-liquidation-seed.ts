@@ -6,9 +6,11 @@
  * draft file naming convention (openhl_liquidation_l<N>_<locale>.md), different
  * output filename, different course metadata.
  *
- * Currently covers L0..L10 — Stage 10a (margin math) + Stage 10b (insurance fund +
- * close-outcome decomposition). Module 4 (scanner + capstone, Stage 10c) will be
- * added once Stage 10c ships in openhl.
+ * Covers L0..L13 — the full Liquidation course: Stage 10a (margin math),
+ * Stage 10b (insurance fund + close-outcome decomposition), and Stage 10c
+ * (multi-account scanner + capstone). 13 lessons / 5 modules. The next
+ * stage in the openhl roadmap (Stage 10d, ADL — auto-deleveraging) will be
+ * a separate course.
  *
  * Run from rethlab root:
  *   npx tsx .github/scripts/build-openhl-liquidation-seed.ts            # generates EN
@@ -61,7 +63,7 @@ const EN: LocaleConfig = {
     slug: 'building-openhl-liquidation-en',
     title: 'Build OpenHL Liquidation — perpetual position liquidation engine',
     description:
-      "Build the perpetual-position liquidation engine — the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs, plus the insurance-fund state machine that absorbs deficits via a three-variant outcome enum (Covered / PartiallyDrained / Depleted). Includes the leveraged-regime non-monotonicity discovery, conservation-law proptests for the cascade math, and the credit/debit decomposition that bridges pure compute and stateful book-keeping. The fifth course in the DIY Perp series. Stage 10a (margin math) + Stage 10b (insurance fund + close-outcome decomposition) shipped; multi-account scanner (Stage 10c) pending.",
+      "Build the perpetual-position liquidation engine end-to-end: the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs, the insurance-fund state machine that absorbs deficits via a three-variant outcome enum (Covered / PartiallyDrained / Depleted), and the multi-account scanner that ties them into a single orchestration loop the bridge calls once per block. Includes the leveraged-regime non-monotonicity discovery, three layers of conservation-law proptests that compose vertically, the credit/debit decomposition that bridges pure compute and stateful book-keeping, and the discriminated-dispatch pattern via debug_assert! pairs. 14 lessons (L0–L13) across 5 modules, byte-for-byte against openhl's full Stage 10 trilogy (margin math + insurance fund + scanner). The fifth course in the DIY Perp series.",
     track: 'diy-perp',
     instructorName: 'RethLab',
   },
@@ -70,6 +72,7 @@ const EN: LocaleConfig = {
     1: { title: 'Types', sortOrder: 1 },
     2: { title: 'Pure compute', sortOrder: 2 },
     3: { title: 'Insurance fund', sortOrder: 3 },
+    4: { title: 'Scanner & capstone', sortOrder: 4 },
   },
   lessons: [
     {
@@ -203,6 +206,43 @@ const EN: LocaleConfig = {
         '# Lesson 10 — `liquidation_fee` + close-outcome decomposition — the bridge between `compute` and `insurance`',
       startSignature: "Concepts you'll grasp in this lesson",
     },
+    {
+      draftFile: 'openhl_liquidation_l11_en.md',
+      moduleNumber: 4,
+      sortOrder: 0,
+      title:
+        'Lesson 11 — Scanner type vocabulary — CloseOutcomeKind, LiquidationRecord, ScanReport, LiquidationScanner',
+      slug: 'openhl-liquidation-scanner-types-en',
+      duration: 25,
+      xpReward: 50,
+      h1Marker:
+        '# Lesson 11 — Scanner type vocabulary — `CloseOutcomeKind`, `LiquidationRecord`, `ScanReport`, `LiquidationScanner`',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
+    {
+      draftFile: 'openhl_liquidation_l12_en.md',
+      moduleNumber: 4,
+      sortOrder: 1,
+      title: 'Lesson 12 — scan — the orchestration heart of the safety cascade',
+      slug: 'openhl-liquidation-scan-method-en',
+      duration: 35,
+      xpReward: 70,
+      h1Marker: '# Lesson 12 — `scan` — the orchestration heart of the safety cascade',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
+    {
+      draftFile: 'openhl_liquidation_l13_en.md',
+      moduleNumber: 4,
+      sortOrder: 2,
+      title:
+        'Lesson 13 — Scanner capstone — 6 nuanced unit tests + 4 invariant proptests + the Stage 10 retrospective',
+      slug: 'openhl-liquidation-scanner-capstone-en',
+      duration: 40,
+      xpReward: 80,
+      h1Marker:
+        '# Lesson 13 — Scanner capstone — 6 nuanced unit tests + 4 invariant proptests + the Stage 10 retrospective',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
   ],
 };
 
@@ -217,7 +257,7 @@ const JA: LocaleConfig = {
     slug: 'building-openhl-liquidation-ja',
     title: 'OpenHL Liquidation 開発ガイド：レバレッジ環境における非単調性の発見と清算エンジンの構築',
     description:
-      '永久先物ポジションを司る liquidation engine の中核を実装します。証拠金維持率からアカウントを4つのフェーズ（Safe / AtRisk / Liquidatable / Underwater）に厳密に分類し、適切なクローズ注文 spec を生成する Pure な計算レイヤー（pure compute layer）を設計。さらに、levered-regime で発生する「非単調性（Non-monotonicity）」の潜伏バグを proptest で炙り出し、prop_assume! で精査する手法を網羅。Stage 10b では、保険基金（InsuranceFund）の state machine と、3 つの WithdrawOutcome variant（Covered / PartiallyDrained / Depleted）が表現する Layer 2 → Layer 3 のカスケード境界を実装。保存則を proptest で encode し、`(fund movement, account residual)` ペアへの分解で pure compute と stateful book-keeping を橋渡しします。',
+      '永久先物ポジションを司る liquidation engine の中核を end-to-end で実装します。証拠金維持率からアカウントを 4 フェーズ（Safe / AtRisk / Liquidatable / Underwater）に分類する pure compute 層、保険基金（InsuranceFund）の state machine と 3 つの WithdrawOutcome variant（Covered / PartiallyDrained / Depleted）が表現する Layer 2 → Layer 3 カスケード境界、そして bridge がブロックごとに 1 回呼ぶ multi-account scanner — これらすべてを 1 つの orchestration loop に結合します。Levered-regime での「非単調性（Non-monotonicity）」を proptest と prop_assume! で炙り出す手法、3 つの層を縦に compose する保存則の proptest、pure compute と stateful book-keeping を結ぶ credit/debit 分解、`debug_assert!` ペアによる discriminated dispatch パターンを網羅。Stage 10 trilogy（margin math + insurance fund + scanner）に対して 5 modules・14 lessons（L0–L13）・byte-for-byte 一致。DIY Perp シリーズ第 5 弾。',
     track: 'diy-perp',
     instructorName: 'RethLab',
   },
@@ -226,6 +266,7 @@ const JA: LocaleConfig = {
     1: { title: '型', sortOrder: 1 },
     2: { title: '純粋な compute', sortOrder: 2 },
     3: { title: '保険基金', sortOrder: 3 },
+    4: { title: 'Scanner & capstone', sortOrder: 4 },
   },
   lessons: [
     {
@@ -355,6 +396,43 @@ const JA: LocaleConfig = {
         '# レッスン 10 — `liquidation_fee` + close-outcome decomposition — `compute` と `insurance` をつなぐ橋',
       startSignature: 'このレッスンで掴む概念',
     },
+    {
+      draftFile: 'openhl_liquidation_l11_ja.md',
+      moduleNumber: 4,
+      sortOrder: 0,
+      title:
+        'レッスン 11 — Scanner 型の語彙 — CloseOutcomeKind、LiquidationRecord、ScanReport、LiquidationScanner',
+      slug: 'openhl-liquidation-scanner-types-ja',
+      duration: 25,
+      xpReward: 50,
+      h1Marker:
+        '# レッスン 11 — Scanner 型の語彙 — `CloseOutcomeKind`、`LiquidationRecord`、`ScanReport`、`LiquidationScanner`',
+      startSignature: 'このレッスンで掴む概念',
+    },
+    {
+      draftFile: 'openhl_liquidation_l12_ja.md',
+      moduleNumber: 4,
+      sortOrder: 1,
+      title: 'レッスン 12 — scan — safety cascade のオーケストレーションの心臓',
+      slug: 'openhl-liquidation-scan-method-ja',
+      duration: 35,
+      xpReward: 70,
+      h1Marker: '# レッスン 12 — `scan` — safety cascade のオーケストレーションの心臓',
+      startSignature: 'このレッスンで掴む概念',
+    },
+    {
+      draftFile: 'openhl_liquidation_l13_ja.md',
+      moduleNumber: 4,
+      sortOrder: 2,
+      title:
+        'レッスン 13 — Scanner capstone — 6 個の nuanced unit test + 4 個の invariant proptest + Stage 10 retrospective',
+      slug: 'openhl-liquidation-scanner-capstone-ja',
+      duration: 40,
+      xpReward: 80,
+      h1Marker:
+        '# レッスン 13 — Scanner capstone — 6 個の nuanced unit test + 4 個の invariant proptest + Stage 10 retrospective',
+      startSignature: 'このレッスンで掴む概念',
+    },
   ],
 };
 
@@ -376,8 +454,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 340, // L0..L10 total: 15+30+25+25+45+60+30+20+25+30+35
-  xpReward: 670, // L0..L10 total: 50+60+50+50+80+100+60+40+50+60+70
+  duration: 440, // L0..L13 total: 15+30+25+25+45+60+30+20+25+30+35+25+35+40
+  xpReward: 870, // L0..L13 total: 50+60+50+50+80+100+60+40+50+60+70+50+70+80
   tags: ['reth', 'evm', 'liquidation', 'perpetual', 'l1', 'openhl', 'expert'],
   sortOrder: 1000,
   isPublished: true,
