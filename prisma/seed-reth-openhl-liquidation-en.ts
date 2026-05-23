@@ -11,10 +11,10 @@ export async function seedRethOpenHlLiquidationEN(prisma: PrismaClient) {
       slug: "building-openhl-liquidation-en",
       title: "Build OpenHL Liquidation — perpetual position liquidation engine",
       description:
-        "Build the perpetual-position liquidation engine — the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs. Includes the leveraged-regime non-monotonicity discovery: write the proptest, watch it fail, trace the failure analytically, refine with prop_assume!. The fifth course in the DIY Perp series. Stage 10a (margin math) shipped; insurance fund (Stage 10b) and multi-account scanner (Stage 10c) pending.",
+        "Build the perpetual-position liquidation engine — the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs, plus the insurance-fund state machine that absorbs deficits via a three-variant outcome enum (Covered / PartiallyDrained / Depleted). Includes the leveraged-regime non-monotonicity discovery, conservation-law proptests for the cascade math, and the credit/debit decomposition that bridges pure compute and stateful book-keeping. The fifth course in the DIY Perp series. Stage 10a (margin math) + Stage 10b (insurance fund + close-outcome decomposition) shipped; multi-account scanner (Stage 10c) pending.",
       difficulty: "EXPERT",
-      duration: 250,
-      xpReward: 490,
+      duration: 340,
+      xpReward: 670,
       track: "diy-perp",
       tags,
       isPublished: true,
@@ -2534,6 +2534,1527 @@ Yes, by design. \`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808u64\` (\`u
 L8 starts Stage 10b — the insurance fund. The pure-compute module you finished in L7 is the *what should happen* layer. Stage 10b adds *the bookkeeping that records what happened* — the \`InsuranceFund\` state machine that tracks the fund's balance, absorbs deficits from underwater liquidations, and credits liquidation fees from solvent closes. After Stage 10b, the engine knows not just "this account is Liquidatable" but "this close credited 1.5% to the fund" or "this close drained $400 from the fund."
 
 **Stage 10b is not yet shipped in openhl** as of this lesson's draft — L8 lands in rethlab when the openhl-side implementation does.
+`,
+                },
+              ],
+            },
+          },
+          {
+            title: "Insurance fund",
+            sortOrder: 3,
+            lessons: {
+              create: [
+                {
+                  title: "Lesson 8 — InsuranceFund — where the crate stops being pure",
+                  slug: "openhl-liquidation-insurance-fund-intro-en",
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 25,
+                  xpReward: 50,
+                  content: `# Lesson 8 — \`InsuranceFund\` — where the crate stops being pure
+
+## Goal
+
+Concepts you'll grasp in this lesson:
+
+- **The pure → stateful boundary.** Stage 10a's \`compute.rs\` is pure: every function is a deterministic projection of its arguments. Stage 10b introduces the first state in the liquidation crate — the insurance fund's accumulating balance — because the fund is genuinely a fact about *history*, not a fact about a single snapshot. **State appears in code only when the value can't be re-derived from its inputs.**
+- **The \`balance ≥ 0\` type invariant.** Every public operation on \`InsuranceFund\` preserves it. The field type is \`i64\` (for arithmetic uniformity with the rest of the crate), but **the invariant is enforced in code, not in the type system**. \`new(-500)\` clamps to 0; \`deposit(-50)\` is a no-op; \`withdraw_shortfall(...)\` saturates at 0 with the unfilled portion surfaced via \`WithdrawOutcome\` (L9). The discipline: **make every public method a transition that preserves the invariant.**
+- **Defensive boundaries vs. defensive functions.** The \`compute\` module trusts its inputs; the \`insurance\` module doesn't. Why the difference? \`compute\` is a pure projection — its caller already constructed a valid \`AccountSnapshot\`. \`InsuranceFund\` is *the boundary* — bridges, scanners, and (later) ADL routines all call it from different layers, and any of them can be buggy. **Defensive coding earns its keep at boundaries that aggregate many callers.**
+- **Saturating arithmetic in consensus state.** \`deposit\` uses \`saturating_add\` instead of \`+\`. The reason isn't "to avoid panics in dev" — it's that **any consensus-affecting arithmetic must be deterministic across validators, and panic-on-overflow makes one validator halt while others continue, splitting the network.** Saturation is the principled choice for consensus state.
+
+Verification:
+
+\`\`\`bash
+cargo test -p openhl-liquidation
+\`\`\`
+
+…passes 33 tests (24 from L0–L7 + 9 new tests for construction + deposit). The 22 additional withdrawal / proptest cases land in L9.
+
+Specific changes:
+
+- **\`src/insurance.rs\`** — new module file. Adds \`InsuranceFund\` struct, three constructors (\`new\` / \`empty\` / \`Default::default\`), \`balance()\` accessor, \`deposit()\` mutator, and 9 unit tests.
+- **\`src/lib.rs\`** — adds \`pub mod insurance;\` and re-exports \`InsuranceFund\`.
+
+L8 lands roughly half of \`insurance.rs\`. The withdraw path — including the \`WithdrawOutcome\` enum — is the L9 capstone of the insurance-fund module.
+
+## Recap
+
+After L7:
+- \`compute.rs\` is complete for Stage 10a: 6 functions (\`notional_value\`, \`unrealized_pnl\`, \`account_equity\`, \`margin_ratio\`, \`margin_health\`, \`close_order_spec\`) plus the \`saturate_i128_to_i64\` helper.
+- \`lib.rs\` re-exports all 6 compute functions and the Stage 10a types.
+- \`cargo test\` runs 24 tests, all green.
+- The crate is **purely functional**: no \`&mut self\`, no module-level state, every function returns a value derived from its arguments alone.
+
+L8 starts Stage 10b. The first thing that changes is that the crate is no longer purely functional.
+
+## Plan
+
+Three edits:
+
+1. **Create \`crates/liquidation/src/insurance.rs\`** — a new module file with the \`InsuranceFund\` struct, two constructors, the \`balance()\` accessor, the \`deposit()\` mutator, the \`WithdrawOutcome\` enum scaffold (used in L9), and 9 unit tests covering construction + deposit.
+2. **Add \`pub mod insurance;\`** and the re-exports to \`crates/liquidation/src/lib.rs\`.
+3. **Update \`lib.rs\`'s top-of-file roadmap** to mark Stage 10b in progress.
+
+> 🛑 **Predict.** Before reading further: in a state machine with a single non-negative balance field, what's the smallest defensive surface that preserves \`balance ≥ 0\` across an open set of callers? Specifically: **\`new(initial: i64)\`, \`deposit(fee: i64)\`, \`withdraw(amount: i64)\`** — at which of these three call sites do you need to defend, and against what bad input shape?
+
+(Answer: **All three.** \`new\` defends against a negative initial — clamp to 0. \`deposit\` defends against a negative fee — treat as no-op (a negative fee would silently drain the fund). \`withdraw\` defends against (a) a negative shortfall — treat as a 0-amount Covered, (b) an amount exceeding the balance — drain to 0 and surface the unfilled portion. Each defense exists because the public API is callable from many layers and **any single bad call must not violate the type invariant**. L8 covers \`new\` + \`deposit\`; L9 covers \`withdraw\`.)
+
+The architectural picture of why state appears here:
+
+\`\`\`
+   ┌────────────────────────────────────────────────────────────────┐
+   │ Stage 10a — pure compute (compute.rs)                          │
+   │                                                                │
+   │  margin_health(snapshot, mark, params) → MarginHealth          │
+   │  margin_ratio(snapshot, mark)          → MarginRatio           │
+   │  close_order_spec(snapshot)            → CloseOrderSpec        │
+   │                                                                │
+   │  Every result is a projection of inputs. Re-evaluable forever. │
+   └────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+   ┌────────────────────────────────────────────────────────────────┐
+   │ Stage 10b — state machine (insurance.rs)                       │
+   │                                                                │
+   │  InsuranceFund { balance: i64 }   ← the fund accumulates       │
+   │      .deposit(fee)                ← fees CREDIT the fund        │
+   │      .withdraw_shortfall(amount)  ← deficits DEBIT the fund     │
+   │      .balance()                   ← current accumulated value  │
+   │                                                                │
+   │  Balance is a fact about *history*, not a fact about an input. │
+   │  Two different sequences of (deposit, withdraw) calls produce  │
+   │  two different balances — even if the *final* call's arguments │
+   │  are identical.                                                │
+   └────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+   ┌────────────────────────────────────────────────────────────────┐
+   │ Stage 10c — scanner (scanner.rs, L11–L12)                      │
+   │                                                                │
+   │  Owns an InsuranceFund; calls .deposit / .withdraw_shortfall   │
+   │  per liquidation event; threads outcomes back into ScanReport. │
+   └────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+The point: **pure compute returns; stateful modules accumulate.** Stage 10a told the engine *what* the world looks like for each account. Stage 10b lets the engine remember *what happened* across accounts and across blocks. The scanner (L11–L12) is the layer that orchestrates the two.
+
+## Walk-through
+
+### Step 1: Create \`src/insurance.rs\`
+
+Create a new file \`crates/liquidation/src/insurance.rs\`. The whole-module doc comment comes first; it's the single most-read piece of prose in the module because every doc generator and every \`cargo doc\` reader sees it before any function.
+
+\`\`\`rust
+//! Insurance fund state machine (Stage 10b).
+//!
+//! The insurance fund is the venue's pooled buffer that absorbs the
+//! deficit when a Liquidatable account's close turns underwater, or when
+//! an Underwater account is liquidated outright. It accumulates the
+//! liquidation fees that solvent closes pay in. Stage 10c's scanner will
+//! own an [\`InsuranceFund\`] and call its deposit / withdraw operations
+//! from the per-account liquidation loop.
+//!
+//! ### Why stateful here when the rest of the crate is pure
+//!
+//! Margin classification, fee math, and close-outcome computation
+//! ([\`crate::compute\`]) are pure functions over per-account snapshots —
+//! they can be re-evaluated lossless at any time. The insurance fund's
+//! balance, in contrast, accumulates effects from many liquidation events
+//! across many blocks; it is genuinely state. The shape mirrors
+//! \`openhl_funding::clock\` — a small state machine, owned by the bridge,
+//! mutated only on well-defined boundary events.
+//!
+//! ### Sign discipline
+//!
+//! The balance is \`i64\` internally for arithmetic uniformity with
+//! [\`crate::compute\`], but the type invariant is **\`balance ≥ 0\`** —
+//! every public operation preserves it. Withdrawals that exceed the
+//! balance saturate at 0 and surface the unfilled portion via
+//! [\`WithdrawOutcome\`]. Stage 10c's scanner reads the unfilled portion
+//! as the trigger to escalate to ADL (Stage 10d).
+//!
+//! ### Deposit semantics
+//!
+//! \`deposit\` accepts a non-negative fee amount. Negative deposits are
+//! treated as zero (saturating semantics, no panic) — defensive coding
+//! against accidental misuse from the caller. Saturating-add caps at
+//! \`i64::MAX\` for network-pathological accumulated balances.
+\`\`\`
+
+Four things to notice about this preamble:
+
+1. **It opens with the *role*, not the *type*.** "The insurance fund is the venue's pooled buffer that absorbs the deficit…" — a reader who skims only the first sentence already knows where this module fits in the safety-net cascade. **Module docs are read by people deciding whether to keep reading. Lead with the role.**
+2. **It cites Stage 10c and Stage 10d by name.** Even though those stages don't exist yet in the reader's checkout, the doc anticipates them so the reader knows the module is part of a planned arc — not a one-off addition. **Forward references in docs are a contract with the future: "this is going somewhere."**
+3. **The sign-discipline section is *not* about Rust's type system.** It's about a invariant the type *doesn't* enforce. **Document invariants that the compiler can't check; the compiler already documents the ones it can.**
+4. **"openhl_funding::clock"** is a cross-module cite to a *pattern* the reader has already seen — small state machine, owned by the bridge, mutated only on boundary events. Anchoring a new module to a familiar one shortens the learning curve. **When introducing a new pattern, point at a previous instance of the same pattern in the codebase.**
+
+### Step 2: Add the \`InsuranceFund\` struct and its constructors
+
+Below the doc comment, add the struct definition and its three constructors:
+
+\`\`\`rust
+/// The insurance fund's accumulating balance.
+///
+/// Owned by the bridge (Stage 10c+), exposed via deposit / withdraw
+/// operations that maintain the \`balance ≥ 0\` invariant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InsuranceFund {
+    balance: i64,
+}
+\`\`\`
+
+Two things to notice about the struct shape:
+
+1. **The field is private (\`balance: i64\`, no \`pub\`).** That's the entire enforcement mechanism for the \`balance ≥ 0\` invariant. If \`balance\` were public, any caller could write \`fund.balance = -1\` and silently violate the contract. **Private fields are how Rust expresses "this invariant exists, and you must go through my public methods to change it."**
+2. **\`Clone + Copy + Debug + PartialEq + Eq\`** — every trait that the compiler can derive for a single-\`i64\` struct, derived. Cheap to pass by value, easy to assert in tests, comparable in proptests. **For pure-value types, derive the standard four (or five, with \`Hash\`) eagerly.**
+
+Now the constructors:
+
+\`\`\`rust
+impl InsuranceFund {
+    /// Create a fund with the given initial balance.
+    ///
+    /// Negative initial balances are clamped to zero — defensive against
+    /// accidental misuse. A negative initial balance can't represent any
+    /// physical state of the fund and would violate the type invariant.
+    #[must_use]
+    pub const fn new(initial_balance: i64) -> Self {
+        Self {
+            balance: if initial_balance > 0 {
+                initial_balance
+            } else {
+                0
+            },
+        }
+    }
+
+    /// An empty fund; equivalent to [\`InsuranceFund::new(0)\`].
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self { balance: 0 }
+    }
+
+    /// Current balance of the fund. Always \`≥ 0\`.
+    #[must_use]
+    pub const fn balance(&self) -> i64 {
+        self.balance
+    }
+}
+
+impl Default for InsuranceFund {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+\`\`\`
+
+Five things to notice:
+
+1. **\`new\` clamps negatives to 0 silently.** No \`Result<Self, ...>\`, no panic. Why? Because the *physical* meaning of a negative initial balance is undefined — a fund that owes money isn't a fund. **When the only sensible interpretation of a bad input is "make it the nearest valid input," do that without ceremony.** A \`Result\` here would force every caller to handle an error that should never happen in practice; a panic would create a debug-vs-release behaviour split. Clamping is the cheapest correct answer.
+2. **\`empty()\` exists despite \`new(0)\` doing the same thing.** Two reasons. First, \`InsuranceFund::empty()\` reads more clearly at call sites than \`InsuranceFund::new(0)\` — intent over numerics. Second, \`empty\` is also what \`Default::default()\` calls, so the two names point at the same construction site. **A named constructor for the canonical zero value is a small clarity win that pays compounding interest.**
+3. **\`const fn\` on every method that touches the field.** The struct has one \`i64\` field; everything that doesn't mutate the underlying state is trivially const-evaluable. This lets future code use \`InsuranceFund\` in const contexts (e.g., as a default in a config struct), and signals to readers that these operations are pure. **\`const fn\` is documentation as much as it is capability — it says "this method does nothing fancy."**
+4. **\`#[must_use]\` on \`new\` and \`empty\`.** Constructing a fund and throwing it away is almost always a bug — usually a leftover from a refactor. \`#[must_use]\` makes the compiler complain about it. **Marker attributes catch the "obviously wrong, easily missed" cases.**
+5. **\`Default::default()\` is implemented manually**, not derived. The derived \`Default\` for a struct with \`balance: i64\` would produce \`balance: 0\` — same result. But pointing the manual impl at \`Self::empty()\` makes the *intent* explicit: "the default fund is the empty fund, by design, not by coincidence." **Manual \`Default\` impls are valuable when the default value has semantic meaning beyond zero-initialization.**
+
+> 🛑 **Anti-fluency.** "Why not \`pub fn new(initial_balance: u64) -> Self\` — \`u64\` makes the invariant impossible to violate, no?" Three problems. (1) The rest of the crate uses \`i64\` for fungible amounts (\`pnl\`, \`equity\`, \`collateral\`); changing the type at a single boundary forces a cast at every call site. (2) Validators that compute fees with i64 arithmetic would need a checked \`u64::try_from\` everywhere — adding panics where saturation suffices. (3) The *invariant* \`balance ≥ 0\` is enforced by code anyway, so the type-level safety is gilt on a lily. **Match the surrounding type discipline; defend the invariant in code where the rest of the crate already does the same.**
+
+### Step 3: Add the \`WithdrawOutcome\` enum scaffold
+
+Even though L8 doesn't implement \`withdraw_shortfall\`, we declare \`WithdrawOutcome\` now so the L9 changes are purely additive in \`impl InsuranceFund\` (no enum-introduction churn). Add this **above the \`impl InsuranceFund\` block**:
+
+\`\`\`rust
+/// Outcome of attempting to absorb a shortfall via
+/// [\`InsuranceFund::withdraw_shortfall\`].
+///
+/// The three variants are exactly the three transitions across the
+/// "Layer 2 → Layer 3" boundary in the safety-net cascade:
+///   - [\`WithdrawOutcome::Covered\`] — the fund had enough; Layer 2
+///     fully absorbed the deficit.
+///   - [\`WithdrawOutcome::PartiallyDrained\`] — the fund drained to
+///     zero and covered part of the shortfall; the remainder must
+///     escalate to Layer 3 (ADL).
+///   - [\`WithdrawOutcome::Depleted\`] — the fund was already empty
+///     before the call; nothing covered, full shortfall escalates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WithdrawOutcome {
+    /// Fund had enough balance to cover the request in full.
+    Covered {
+        /// Amount paid out of the fund (= requested shortfall).
+        amount: i64,
+    },
+    /// Fund partially covered the shortfall before draining to zero.
+    PartiallyDrained {
+        /// Amount actually paid out (= fund's prior balance).
+        amount: i64,
+        /// Remaining shortfall that the caller must escalate to ADL.
+        unfilled: i64,
+    },
+    /// Fund was already empty; nothing was paid out.
+    Depleted {
+        /// Full shortfall that must escalate to ADL.
+        unfilled: i64,
+    },
+}
+\`\`\`
+
+This enum is **declared now and used in L9**. L8 introduces it because:
+
+1. **The enum's existence is part of the public surface story.** A reader who skims \`insurance.rs\` after L8 should see the full type vocabulary of the module, even if some methods are deferred. **Vocabulary before mechanism.**
+2. **Each variant carries its own payload.** \`Covered\` and \`PartiallyDrained\` both carry \`amount\` (what was actually paid out), and \`PartiallyDrained\` and \`Depleted\` both carry \`unfilled\` (what the scanner must escalate). The L9 proptest \`withdraw_amount_plus_unfilled_equals_shortfall\` is the conservation law that ties them together — but you can already see the shape of the law in the variant payloads. **Self-describing variants are documentation that the compiler enforces.**
+3. **\`Layer 2 → Layer 3 boundary\`** in the doc comment names the cascade architecture explicitly: margin (Layer 1, Stage 10a) → fund (Layer 2, Stage 10b) → ADL (Layer 3, Stage 10d). The reader gets the map every time they look at this enum. **When a type sits at an architectural seam, say so in its doc.**
+
+### Step 4: Add the \`deposit\` method
+
+Append \`deposit\` to the existing \`impl InsuranceFund\` block:
+
+\`\`\`rust
+    /// Credit the fund with a fee. Returns the new balance.
+    ///
+    /// Negative inputs are treated as a no-op (defensive against the
+    /// caller passing a signed value where the contract expects a credit).
+    /// Saturates at \`i64::MAX\` for network-pathological accumulated
+    /// balances.
+    pub fn deposit(&mut self, fee: i64) -> i64 {
+        if fee > 0 {
+            self.balance = self.balance.saturating_add(fee);
+        }
+        self.balance
+    }
+\`\`\`
+
+Five things to notice:
+
+1. **\`fee > 0\` (strict).** A fee of \`0\` is also a no-op, so \`>\` and \`>=\` produce identical behaviour for zero. The strict form makes the branch fire only when there's actual work to do. **For predicates that gate side effects, prefer \`> 0\` (the "is this meaningful?" test) over \`>= 0\` (the "is this non-negative?" test) when zero is a no-op.**
+2. **Negative inputs are silently ignored, not panicked or errored on.** Why? Because the alternative is consensus disaster. A panic-on-negative would halt one validator while others continue if a single bridge bug ever pushed a negative fee — and Rust's panic semantics are particularly cruel here (debug vs release, hook differences, etc.). A \`Result<i64, ...>\` would force every caller in the scanner to either \`unwrap\` (panic-by-other-name) or thread an error type through code that has no good error path. **Saturating-no-op semantics give consensus determinism for free.**
+3. **\`saturating_add\`, not \`+\`.** In a debug build, \`100i64 + i64::MAX\` panics with overflow; in release, it wraps to a negative value — *which would silently violate the \`balance ≥ 0\` invariant*. Saturation caps at \`i64::MAX\`. The network can never accumulate more than \`9.2 × 10^18\` of fees anyway, and the cap is invisible in any non-pathological state. **\`saturating_*\` family is the consensus-safe arithmetic family.**
+4. **Returns the new balance.** The caller often wants to log it ("fee credited: 150, fund balance now: 2_400_150") and a single chained call is cleaner than a two-step \`let _ = f.deposit(150); let new_balance = f.balance();\`. The method is \`&mut self\`-and-returns; that pattern shows up in Rust's standard library too (e.g., \`HashMap::insert\` returns the old value). **\`&mut self\` methods that return useful state save a follow-up \`balance()\` call.**
+5. **The doc string says "non-negative fee amount" then handles negatives anyway.** This isn't a contradiction — it's defensive documentation. The doc says "this is what you should pass"; the implementation says "but if you pass garbage, we won't crash." **Doc the intended contract; implement the merciful failure mode.**
+
+### Step 5: Wire the module into \`lib.rs\`
+
+Open \`crates/liquidation/src/lib.rs\`. Make two changes:
+
+First, add the module declaration. Find the existing \`pub mod compute;\` and \`pub mod types;\` block and insert \`insurance\` between them:
+
+\`\`\`rust
+pub mod compute;
+pub mod insurance;
+pub mod types;
+\`\`\`
+
+Second, add the \`InsuranceFund\` re-export. Find the existing \`pub use compute::{ ... };\` block and add an \`insurance\` re-export after it:
+
+\`\`\`rust
+pub use compute::{
+    account_equity, close_order_spec, margin_health, margin_ratio, notional_value, unrealized_pnl,
+};
+pub use insurance::{InsuranceFund, WithdrawOutcome};
+pub use types::{
+    AccountSnapshot, CloseOrderSpec, LiquidationParams, MarginHealth, MarginRatio, MARGIN_SCALE,
+};
+\`\`\`
+
+Both re-exports — the type and the enum — go on one line. Why both now? Because **users of the crate import what they call**, and the L9 path that calls \`withdraw_shortfall\` will pattern-match on \`WithdrawOutcome\` immediately. Re-exporting the enum at L8 means L9 needs no changes to \`lib.rs\`. **Re-export the public surface once per module, not per method.**
+
+### Step 6: Add the 9 unit tests
+
+Append the test module at the bottom of \`insurance.rs\`:
+
+\`\`\`rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── construction ──────────────────────────────────────────────
+
+    #[test]
+    fn new_with_positive_balance() {
+        let f = InsuranceFund::new(1_000);
+        assert_eq!(f.balance(), 1_000);
+    }
+
+    #[test]
+    fn new_with_zero_is_empty() {
+        let f = InsuranceFund::new(0);
+        assert_eq!(f.balance(), 0);
+    }
+
+    #[test]
+    fn new_with_negative_clamps_to_zero() {
+        let f = InsuranceFund::new(-500);
+        assert_eq!(f.balance(), 0);
+    }
+
+    #[test]
+    fn empty_is_zero() {
+        let f = InsuranceFund::empty();
+        assert_eq!(f.balance(), 0);
+    }
+
+    #[test]
+    fn default_is_empty() {
+        let f = InsuranceFund::default();
+        assert_eq!(f.balance(), 0);
+    }
+
+    // ─── deposit ───────────────────────────────────────────────────
+
+    #[test]
+    fn deposit_accumulates() {
+        let mut f = InsuranceFund::empty();
+        assert_eq!(f.deposit(100), 100);
+        assert_eq!(f.deposit(250), 350);
+        assert_eq!(f.balance(), 350);
+    }
+
+    #[test]
+    fn deposit_zero_is_noop() {
+        let mut f = InsuranceFund::new(100);
+        assert_eq!(f.deposit(0), 100);
+    }
+
+    #[test]
+    fn deposit_negative_is_noop() {
+        // Defensive: negative deposits must not silently drain the fund.
+        let mut f = InsuranceFund::new(100);
+        assert_eq!(f.deposit(-50), 100);
+        assert_eq!(f.balance(), 100);
+    }
+
+    #[test]
+    fn deposit_saturates_at_max() {
+        let mut f = InsuranceFund::new(i64::MAX - 10);
+        assert_eq!(f.deposit(1_000), i64::MAX);
+    }
+}
+\`\`\`
+
+Six things to notice about how this test module is shaped:
+
+1. **\`// ─── construction ───\` section headers.** Box-drawing-character comments mark the four logical groups (construction · deposit · in L9: withdrawal-covered · withdrawal-partial · withdrawal-depleted · sequencing · proptests). The headers exist because the eventual module has ~22 tests; scanning the file by section name beats scrolling by line number. **In a test file with more than ~10 tests, group them.**
+2. **\`new_with_zero_is_empty\` exists even though it's trivially derivable from the \`new\` source.** It's not redundant — it locks the behaviour in. A future refactor that accidentally added \`if initial_balance >= 0\` instead of \`> 0\` would still pass this test (because 0 falls through both predicates correctly), but a refactor that flipped to \`if initial_balance < 0\` *with* a typo would break exactly this case. **Boundary tests on small predicates catch typos that bigger tests miss.**
+3. **\`new_with_negative_clamps_to_zero\` directly tests the defensive surface.** The test isn't there to verify the *function works*; it's there to verify the *invariant is preserved*. If a future refactor "fixed" the apparent dead code in \`new\` by removing the clamp, this test would catch it. **Tests for defensive code defend the defensive code.**
+4. **\`default_is_empty\` is a one-liner that proves the \`Default\` impl points at \`Self::empty()\`** and didn't accidentally get derived (which would also produce \`balance: 0\`, but with different intent). **Tests can lock in *which path* produces a result, not just the result.**
+5. **\`deposit_negative_is_noop\` has a \`// Defensive\` comment.** The comment names the failure mode the test guards against: "negative deposits must not silently drain the fund." A reader who removes the test will see the comment and reconsider. **Brief test-level comments are scaffolding for future maintainers who might think a test is unnecessary.**
+6. **\`deposit_saturates_at_max\` uses \`i64::MAX - 10\`** as the initial balance. Why not \`i64::MAX\`? Because a deposit of any amount into a max-balance fund saturates at max — the test would also pass even if \`saturating_add\` were *replaced* by \`wrapping_add\`, since \`i64::MAX + anything >= 0\` wraps to a negative value, but \`+1000\` would wrap, and the test would catch it. Starting near max gives the test room to fire the saturation logic. **Boundary tests on saturating arithmetic need a buffer so the boundary actually fires.**
+
+### Step 7: Run the tests
+
+\`\`\`bash
+cargo test -p openhl-liquidation
+\`\`\`
+
+Expected output:
+
+\`\`\`
+running 33 tests
+test compute::tests::close_flat_has_zero_qty ... ok
+test compute::tests::close_long_with_sell ... ok
+test compute::tests::close_short_with_buy ... ok
+test compute::tests::equity_can_go_negative ... ok
+... (21 more Stage 10a tests)
+test insurance::tests::default_is_empty ... ok
+test insurance::tests::deposit_accumulates ... ok
+test insurance::tests::deposit_negative_is_noop ... ok
+test insurance::tests::deposit_saturates_at_max ... ok
+test insurance::tests::deposit_zero_is_noop ... ok
+test insurance::tests::empty_is_zero ... ok
+test insurance::tests::new_with_negative_clamps_to_zero ... ok
+test insurance::tests::new_with_positive_balance ... ok
+test insurance::tests::new_with_zero_is_empty ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+\`\`\`
+
+**33 tests passing. The insurance fund module exists, its invariant is enforced, and deposit semantics are locked in.** Withdraw (and the \`WithdrawOutcome\` payload semantics) land in L9.
+
+Common errors:
+
+- **\`new_with_negative_clamps_to_zero\` fails with \`assertion failed: f.balance() == 0 — left: -500, right: 0\`** — you wrote \`if initial_balance >= 0 { initial_balance } else { 0 }\`, which would clamp on negatives but pass \`-500\` through if the comparison were reversed. Or you wrote \`Self { balance: initial_balance }\` without the clamp. Re-check the \`if\` condition: \`> 0\`.
+- **\`deposit_saturates_at_max\` fails with overflow panic** — you wrote \`self.balance += fee\` instead of \`self.balance.saturating_add(fee)\`. Debug build panics on overflow; release build silently wraps. \`saturating_*\` is the only consensus-safe choice.
+- **\`deposit_negative_is_noop\` fails with \`left: 50, right: 100\`** — you forgot the \`if fee > 0\` guard and let \`saturating_add(-50)\` run, which decremented the balance to 50. Saturating add doesn't preserve the invariant by itself; the predicate is load-bearing.
+- **\`new_with_zero_is_empty\` fails with \`left: 1, right: 0\`** — you wrote \`if initial_balance > 0 { initial_balance } else { 1 }\` (or similar typo in the else branch). Re-check the else branch literal: \`0\`.
+
+## Design reflection
+
+Three load-bearing decisions in this lesson:
+
+1. **State appears at the layer where history matters.** The fund's balance is a fact about all the deposits and withdraws that have ever happened to it; the snapshot type can't represent that, because a snapshot is a fact about one account at one moment. **State appears in code only at the boundary where re-derivation from inputs stops being possible.** Stage 10a was that boundary in one direction; Stage 10b crosses it deliberately.
+
+2. **The \`balance ≥ 0\` invariant is enforced in code, not the type system.** We could have used \`balance: u64\` and let the compiler enforce it. We didn't, because the rest of the crate computes in \`i64\` and a u64 field would force casts at every interaction. The decision is a **type-discipline tradeoff**: pick the representation that makes the crate-internal code cleanest, and defend the invariant at the methods that take untyped inputs from outside. **Cross-crate uniformity beats per-field type safety when the per-field invariant is single-line code.**
+
+3. **Defensive code is concentrated at boundaries, not sprinkled throughout.** \`compute.rs\` trusts every input; \`insurance.rs\` checks every input. The difference: \`compute.rs\` is called by other in-crate code that already constructed the inputs correctly, while \`insurance.rs\` is the boundary where the bridge, the scanner, ADL, and (future) governance all converge. **One module pays the defensive cost; the rest of the crate goes fast.**
+
+## Answer key
+
+\`\`\`bash
+cd ~/code/openhl-reference
+git checkout 260883b
+diff -u ~/code/my-openhl/crates/liquidation/src/insurance.rs ./crates/liquidation/src/insurance.rs
+diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
+\`\`\`
+
+After L8:
+- **insurance.rs** matches Stage 10b's \`insurance.rs\` **up through line 118** (everything except \`withdraw_shortfall\`, the proptest section, and the sequencing test, which land in L9). Specifically: doc comment + struct + \`WithdrawOutcome\` enum + \`impl\` block ending at \`deposit\` + \`impl Default\` + tests up through \`deposit_saturates_at_max\`.
+- **lib.rs** matches Stage 10b's \`lib.rs\` **byte-for-byte** for the \`pub mod\` lines and \`InsuranceFund / WithdrawOutcome\` re-exports. (The roadmap comment at the top of \`lib.rs\` is also updated — that's an optional cosmetic edit in this lesson; L9 brings it in line with the answer key anyway.)
+
+## Common questions
+
+**Q1: Why not use \`Option<NonZeroI64>\` or similar to make the invariant a type-level fact?**
+
+Because every consumer in \`compute.rs\` would have to unwrap the option to do arithmetic. The \`compute.rs\` functions are already validated to handle zero correctly; forcing them through an \`Option\` boundary adds dead branches without protecting anything. **Type-level invariants are great when many callers will *read* the value with structurally-aware code; less great when many callers want to *compute* with it.**
+
+**Q2: Should \`deposit\` return \`Result<i64, FundError>\` instead of returning the balance unconditionally?**
+
+No. There's no failure mode worth distinguishing at the call site. Saturation is silent because it's the right behaviour (the fund really does cap at \`i64::MAX\`); negative fees are silent because the caller is buggy (a \`Result\` here would force a thread of error handling through every scanner site, just to ignore the error). **Use \`Result\` when the caller has a meaningful action to take; here they don't.**
+
+**Q3: Why does \`WithdrawOutcome\` get declared in L8 if \`withdraw_shortfall\` is in L9?**
+
+Three reasons. (1) Re-exports — \`lib.rs\` exports the enum at L8 so L9 doesn't touch \`lib.rs\` again. (2) Public-surface vocabulary — a reader who lands on \`insurance.rs\` after L8 sees the full type vocabulary of the module, even if some methods are deferred. (3) The variants document the safety-cascade architecture; their *shapes* tell the reader where the fund sits in Layer 2→3 transitions. **Types are documentation that compile; declare them when you can describe them, not when you call them.**
+
+**Q4: Could \`InsuranceFund\` be a free-standing \`i64\` value with module-level functions that mutate it, like global state?**
+
+Technically yes, mechanically no. The Stage 10c scanner owns the fund as a field of \`LiquidationScanner\`; the bridge owns the scanner. Threading the fund through the call stack (rather than reaching for global state) is what makes the scanner unit-testable in isolation. **State that touches consensus must be owned by a known component; ownership-by-stack-position is the discipline that lets multiple scanners coexist without interference.**
+
+**Q5: Why is \`new\` \`const fn\` but \`deposit\` isn't?**
+
+\`new\` reads only its argument and the \`Self\` constructor; nothing it does involves mutation through \`&mut self\`. \`deposit\` mutates \`self.balance\` — which Rust currently doesn't allow in \`const fn\` for non-trivially-const types. \`new\` being const lets \`static FUND: InsuranceFund = InsuranceFund::new(0);\` compile, which is useful for tests and (later) for default-config constants. **\`const fn\` what you can; the boundary is usually whether the function mutates state.**
+
+## Next lesson (L9) — \`withdraw_shortfall\`
+
+L9 closes out \`insurance.rs\` with the withdrawal path. The \`WithdrawOutcome\` enum we declared in L8 finally gets used: \`withdraw_shortfall(amount)\` returns \`Covered { amount }\` when the fund has enough, \`PartiallyDrained { amount, unfilled }\` when it drains to zero, and \`Depleted { unfilled }\` when it was already empty.
+
+The two interesting parts: (1) the three-variant outcome is **exactly** the three transitions across the Layer 2 → Layer 3 boundary in the safety-net cascade, and (2) four proptests enforce conservation laws — \`balance_never_negative\`, \`deposit_is_additive\`, \`withdraw_amount_matches_balance_delta\`, and \`withdraw_amount_plus_unfilled_equals_shortfall\`. The proptests are where the cascade math becomes a property the type-system-but-not-quite enforces.
+`,
+                },
+                {
+                  title: "Lesson 9 — withdraw_shortfall — the Layer 2 → Layer 3 boundary as code",
+                  slug: "openhl-liquidation-withdraw-shortfall-en",
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 30,
+                  xpReward: 60,
+                  content: `# Lesson 9 — \`withdraw_shortfall\` — the Layer 2 → Layer 3 boundary as code
+
+## Goal
+
+Concepts you'll grasp in this lesson:
+
+- **The three-variant outcome enum is the cascade boundary in type form.** \`WithdrawOutcome::Covered\` is "Layer 2 absorbed it fully." \`PartiallyDrained\` is "Layer 2 absorbed what it could; the rest escalates." \`Depleted\` is "Layer 2 had nothing; everything escalates." Stage 10d's ADL routine pattern-matches on this enum to decide what work it has to do. **Architecture seams that span multiple stages become enum variants that span multiple call sites.**
+- **Early-return ladders for total functions.** \`withdraw_shortfall\` handles four distinct cases (non-positive shortfall, empty fund, sufficient balance, partial drain) and uses four guarded early returns instead of nested \`match\`. The ladder reads top-down as a sequence of "is it *this* case? if yes, return; if no, keep going." **Early returns flatten conditional structure when each case is independent.**
+- **Conservation laws encoded as proptests.** Type systems can express "this enum has three variants" but not "regardless of which variant fires, \`amount + unfilled = original_shortfall\`." Proptests over \`(initial_balance, requested_shortfall)\` pairs let us prove the conservation law against thousands of random inputs. **Proptests are how invariants the compiler can't enforce become invariants the test suite *does* enforce.**
+- **\`&mut self\` methods that return *outcomes*, not just new state.** Unlike \`deposit\` (returns the new balance), \`withdraw_shortfall\` returns a *categorically different shape* per path. Three variants × different payloads = three different "what just happened" responses for the same method. **When mutations have qualitatively distinct success modes, return the distinction in the type.**
+
+Verification:
+
+\`\`\`bash
+cargo test -p openhl-liquidation
+\`\`\`
+
+…passes 45 tests (24 compute + 21 insurance: 9 from L8 + 8 new unit tests + 4 new proptests). The full \`insurance.rs\` module is byte-for-byte against \`260883b\` after L9.
+
+Specific changes:
+
+- **\`src/insurance.rs\`** — adds \`withdraw_shortfall\` to the \`impl InsuranceFund\` block, 7 unit tests covering the three variants and the negative/zero edge cases, 1 sequencing test that combines deposit + withdraw, and 4 proptests.
+- **No changes to \`lib.rs\`** — \`WithdrawOutcome\` was already re-exported in L8.
+
+L9 closes the insurance fund module. After this lesson the answer-key diff against \`260883b\` is fully clean for \`insurance.rs\`.
+
+## Recap
+
+After L8:
+- \`insurance.rs\` exists, with the \`InsuranceFund\` struct, \`WithdrawOutcome\` enum (declared, unused), three constructors, the \`balance()\` accessor, and the \`deposit()\` mutator.
+- \`lib.rs\` re-exports both \`InsuranceFund\` and \`WithdrawOutcome\`.
+- \`cargo test\` runs 33 tests, all green.
+- The fund **accumulates** deposits (with the \`balance ≥ 0\` invariant defended at every public method), but it doesn't yet **drain**.
+
+L9 wires the drain path. The enum the reader met in L8 finally has a method that returns its variants.
+
+## Plan
+
+Two edits:
+
+1. **Add \`withdraw_shortfall\` to the \`impl InsuranceFund\` block** in \`crates/liquidation/src/insurance.rs\`. The method is ~20 lines plus the doc comment; the implementation is an early-return ladder that handles four input cases.
+2. **Add 8 unit tests + 4 proptests** to the existing \`#[cfg(test)] mod tests\` block. The proptests need a small change at the top of the test module — \`use proptest::prelude::*;\` — and a \`proptest! { ... }\` block wrapping the property assertions.
+
+> 🛑 **Predict.** Before reading further: a fund with balance 300 receives a \`withdraw_shortfall(500)\` call. What's the new balance, and which variant of \`WithdrawOutcome\` should the method return — including the payload values? Now imagine the next call on the same fund: \`withdraw_shortfall(100)\`. Same questions.
+
+(Answer: **First call:** balance becomes 0; outcome is \`PartiallyDrained { amount: 300, unfilled: 200 }\`. The fund covered 300 (everything it had) and 200 must escalate to ADL. **Second call:** balance stays 0; outcome is \`Depleted { unfilled: 100 }\`. The fund was already empty before this call started, so we returned the depleted variant — *not* \`PartiallyDrained { amount: 0, unfilled: 100 }\`. The distinction matters: \`PartiallyDrained\` means "we paid out something," \`Depleted\` means "we paid out nothing." Stage 10c's scanner logs them differently because operationally they represent different bridge health states — a fund actively draining vs a fund already exhausted.)
+
+The mental model for the three variants:
+
+\`\`\`
+   Initial state              Call                         Outcome variant
+   ─────────────              ────                         ────────────────
+   balance = 1000        withdraw_shortfall(300)        Covered { amount: 300 }
+   balance = 1000        withdraw_shortfall(1000)       Covered { amount: 1000 }     ← exact drain
+   balance =  300        withdraw_shortfall(500)        PartiallyDrained {            ← only partial
+                                                          amount: 300,
+                                                          unfilled: 200
+                                                        }
+   balance =    0        withdraw_shortfall(500)        Depleted { unfilled: 500 }    ← nothing to give
+   balance = 1000        withdraw_shortfall(0)          Covered { amount: 0 }         ← no-op
+   balance = 1000        withdraw_shortfall(-100)       Covered { amount: 0 }         ← defensive
+
+   ── after each call ──────────────────────────────────────────────────────
+   balance becomes        sum of \`amount\` payouts        ≥ 0 always
+   \`unfilled\` payload      escalates to ADL (Stage 10d)   carries Layer 3's input
+\`\`\`
+
+Notice three things about the variant assignments:
+
+1. **\`Covered\` covers both "perfect match" and "no-op" cases.** A shortfall of exactly the balance is \`Covered { amount: balance }\`. A shortfall of 0 is \`Covered { amount: 0 }\`. The variant says "the fund had what was asked of it"; the payload says how much that was. **A variant's payload carries the magnitude; the variant itself carries the meaning.**
+2. **\`PartiallyDrained\` requires *both* a positive balance and an insufficient-but-not-zero deficit.** It can't fire when \`balance == 0\` (that's \`Depleted\`) or when \`shortfall ≤ balance\` (that's \`Covered\`). The variant has a narrow eligibility window — which is what makes it informationally meaningful at the call site. **Each variant fires under conditions that no other variant fires under.**
+3. **\`Depleted\` doesn't change state.** Balance is already 0; the method does nothing except surface the unfilled amount. The variant exists *to be observed*, not to record an action. **Outcome enums that include "no action taken" variants are usually right — they let callers branch on the cascade-position fact, not just on the side effect.**
+
+## Walk-through
+
+### Step 1: Add \`withdraw_shortfall\` to the \`impl InsuranceFund\` block
+
+Open \`crates/liquidation/src/insurance.rs\`. Find the existing \`impl InsuranceFund { ... }\` block. After \`deposit\`, append \`withdraw_shortfall\`:
+
+\`\`\`rust
+    /// Attempt to absorb \`shortfall\` from the fund.
+    ///
+    /// Three outcomes:
+    ///   - \`shortfall ≤ balance\` → [\`WithdrawOutcome::Covered\`], balance
+    ///     decreases by \`shortfall\`.
+    ///   - \`0 < balance < shortfall\` → [\`WithdrawOutcome::PartiallyDrained\`],
+    ///     balance drops to 0, unfilled = \`shortfall − prior_balance\`.
+    ///   - \`balance == 0\` → [\`WithdrawOutcome::Depleted\`], no state change,
+    ///     unfilled = \`shortfall\`.
+    ///
+    /// Non-positive \`shortfall\` is treated as a successful no-op
+    /// (\`Covered { amount: 0 }\`): no balance change, no escalation.
+    pub fn withdraw_shortfall(&mut self, shortfall: i64) -> WithdrawOutcome {
+        if shortfall <= 0 {
+            return WithdrawOutcome::Covered { amount: 0 };
+        }
+        if self.balance == 0 {
+            return WithdrawOutcome::Depleted {
+                unfilled: shortfall,
+            };
+        }
+        if self.balance >= shortfall {
+            self.balance -= shortfall;
+            WithdrawOutcome::Covered { amount: shortfall }
+        } else {
+            let prior = self.balance;
+            self.balance = 0;
+            WithdrawOutcome::PartiallyDrained {
+                amount: prior,
+                unfilled: shortfall - prior,
+            }
+        }
+    }
+\`\`\`
+
+Six things to notice about this 20-line method:
+
+1. **The early-return ladder handles four cases in evaluation order.** Non-positive shortfall first (defensive). Empty fund second (no balance can be moved). Sufficient balance third (the happy path). Partial drain fourth (fallthrough). **Each guard is independent — none cascades into the next.** A guarded early-return ladder beats a nested \`match\` here because the cases don't share structure: each one's input shape is different (\`shortfall <= 0\` vs \`balance == 0\` vs \`balance >= shortfall\` vs everything else).
+2. **\`shortfall <= 0\` covers both negative and zero in one branch.** Zero shortfall is a meaningful caller call ("the fee was 0; nothing to draw from the fund"); negative shortfall is a caller bug. Both produce the same \`Covered { amount: 0 }\` because the caller-facing semantics are identical: nothing was drawn, nothing escalates. **Group input cases by their *outcome*, not by their *intent*.**
+3. **\`self.balance -= shortfall\` is plain \`-\`, not \`saturating_sub\`.** Because the previous guard (\`self.balance >= shortfall\`) has *already proven* — deterministically and identically across every validator — that the \`i64\` subtraction cannot underflow. This isn't a contradiction of L8's "consensus state must never panic" rule: it's the narrow exception where a static control-flow guard makes the panic probability *provably zero*, so the redundant saturation can be dropped. **A type invariant that holds at the precondition of a subtraction makes saturating arithmetic redundant.** This is the inverse pattern to \`deposit\`'s \`saturating_add\` — there we couldn't prove the precondition, so we saturated; here we *did* prove it (the \`if\` is the proof), so we use plain subtraction.
+4. **\`PartiallyDrained\` reads \`prior\` into a local first, then sets \`balance = 0\`, then constructs the variant.** The order matters: if you wrote \`WithdrawOutcome::PartiallyDrained { amount: self.balance, unfilled: shortfall - self.balance }\` and then \`self.balance = 0\`, the construction would be fine (it captures \`self.balance\` before any mutation), but the assignment after struct construction looks like an afterthought to readers. Storing \`prior\` first makes the temporal order obvious: read → mutate → construct. **For state-machine transitions, name the prior state explicitly when you'll reference it after the mutation.**
+5. **\`Covered { amount: shortfall }\` uses \`shortfall\` directly, not \`self.balance\` before subtraction.** That's fine because we've already checked \`self.balance >= shortfall\`, so \`shortfall\` is exactly what we paid out. **Use the *requested* amount in the payload, not the *available* amount, when they're equal — it matches the caller's mental model better.**
+6. **The method takes \`&mut self\` and returns by value.** No reference, no lifetime, no \`Result\`. The variant *is* the success-shape; the borrow checker treats this exactly like \`deposit\`'s \`-> i64\`. **Outcome enums by-value compose smoothly with \`match\` at call sites; they don't force the caller to manage a borrow.**
+
+> 🛑 **Anti-fluency.** "Why not \`Result<i64, FundError>\` where \`FundError::PartiallyDrained(amount, unfilled)\` and \`FundError::Depleted(unfilled)\`?" Three problems. (1) \`PartiallyDrained\` and \`Depleted\` aren't *errors* — they're successful outcomes that surface escalation work to the caller. Tagging them as errors blurs the line between "this method failed" and "this method succeeded with caveat." (2) The \`?\` operator on \`Result\` short-circuits the caller; we don't *want* short-circuit here, we want the caller to *pattern-match* and route. (3) \`WithdrawOutcome\` is also returned from later signed-outcome wrappers (Stage 10c); a \`Result\` would force every consumer to wrap their own helpers in \`Result\` propagation. **\`Result\` is for "should I unwind?" \`Enum\` is for "what kind of success did I just have?"**
+
+### Step 2: Add the 8 unit tests
+
+Inside the existing \`#[cfg(test)] mod tests { ... }\` block in \`insurance.rs\`, add three test sections after the existing L8 deposit tests:
+
+\`\`\`rust
+    // ─── withdraw_shortfall: Covered ───────────────────────────────
+
+    #[test]
+    fn withdraw_covered_typical() {
+        let mut f = InsuranceFund::new(1_000);
+        let out = f.withdraw_shortfall(300);
+        assert_eq!(out, WithdrawOutcome::Covered { amount: 300 });
+        assert_eq!(f.balance(), 700);
+    }
+
+    #[test]
+    fn withdraw_covered_exact_balance() {
+        let mut f = InsuranceFund::new(1_000);
+        let out = f.withdraw_shortfall(1_000);
+        assert_eq!(out, WithdrawOutcome::Covered { amount: 1_000 });
+        assert_eq!(f.balance(), 0);
+    }
+
+    #[test]
+    fn withdraw_zero_is_covered_noop() {
+        let mut f = InsuranceFund::new(1_000);
+        let out = f.withdraw_shortfall(0);
+        assert_eq!(out, WithdrawOutcome::Covered { amount: 0 });
+        assert_eq!(f.balance(), 1_000);
+    }
+
+    #[test]
+    fn withdraw_negative_is_covered_noop() {
+        // Defensive: a negative shortfall is a caller bug, not a deposit.
+        let mut f = InsuranceFund::new(1_000);
+        let out = f.withdraw_shortfall(-100);
+        assert_eq!(out, WithdrawOutcome::Covered { amount: 0 });
+        assert_eq!(f.balance(), 1_000);
+    }
+
+    // ─── withdraw_shortfall: PartiallyDrained ──────────────────────
+
+    #[test]
+    fn withdraw_partial_drains_to_zero() {
+        let mut f = InsuranceFund::new(300);
+        let out = f.withdraw_shortfall(500);
+        assert_eq!(
+            out,
+            WithdrawOutcome::PartiallyDrained {
+                amount: 300,
+                unfilled: 200
+            }
+        );
+        assert_eq!(f.balance(), 0);
+    }
+
+    // ─── withdraw_shortfall: Depleted ──────────────────────────────
+
+    #[test]
+    fn withdraw_depleted_no_change() {
+        let mut f = InsuranceFund::empty();
+        let out = f.withdraw_shortfall(500);
+        assert_eq!(out, WithdrawOutcome::Depleted { unfilled: 500 });
+        assert_eq!(f.balance(), 0);
+    }
+
+    #[test]
+    fn withdraw_after_full_drain_is_depleted() {
+        let mut f = InsuranceFund::new(100);
+        let _ = f.withdraw_shortfall(100); // Covered, drains to 0
+        let out = f.withdraw_shortfall(50);
+        assert_eq!(out, WithdrawOutcome::Depleted { unfilled: 50 });
+    }
+
+    // ─── deposit + withdraw sequencing ─────────────────────────────
+
+    #[test]
+    fn deposit_after_drain_recovers() {
+        let mut f = InsuranceFund::new(100);
+        let _ = f.withdraw_shortfall(100); // drains
+        f.deposit(50);
+        let out = f.withdraw_shortfall(30);
+        assert_eq!(out, WithdrawOutcome::Covered { amount: 30 });
+        assert_eq!(f.balance(), 20);
+    }
+\`\`\`
+
+Six things to notice about how these tests are grouped:
+
+1. **Three section dividers — Covered, PartiallyDrained, Depleted — match the variant names exactly.** A reader scanning the test file to find the test for a specific \`WithdrawOutcome\` variant can grep on the section header. **For tests that exercise an enum's variants, group by variant.**
+2. **\`withdraw_covered_exact_balance\` is the boundary case for the \`balance >= shortfall\` branch.** When \`balance == shortfall\`, the \`>=\` predicate is true and the \`Covered\` path fires. The test makes sure a future "off-by-one" refactor (\`>\` instead of \`>=\`) would be caught. **Boundary tests on inequality predicates catch the most common refactor mistakes.**
+3. **\`withdraw_partial_drains_to_zero\` is the *only* test for the \`PartiallyDrained\` variant.** One test is enough because the variant's path is unique: it fires when \`0 < balance < shortfall\`, and the math (\`amount = balance\`, \`unfilled = shortfall - balance\`) is a direct read from the struct construction. **Single-path code needs single-path coverage; the proptest below covers the conservation law across all paths.**
+4. **\`withdraw_after_full_drain_is_depleted\` tests the state transition, not just the variant.** A naive "no setup" test (\`withdraw on empty\`) is already covered by \`withdraw_depleted_no_change\`. This second \`Depleted\` test catches a different bug: a future refactor that accidentally cached the balance before mutation (so the *second* call sees the *first* call's pre-drain balance). **Multiple tests for one variant should each catch a *different* class of regression.**
+5. **\`deposit_after_drain_recovers\` is the only sequencing test.** It chains four operations (\`new\`, \`withdraw_shortfall\`, \`deposit\`, \`withdraw_shortfall\`) and asserts the final balance and outcome. The test exists because the per-operation tests verify each method in isolation, but a real liquidation event sequence is exactly this kind of multi-operation chain. **Unit tests verify methods; sequencing tests verify state-machine transitions across method boundaries.**
+6. **The negative-shortfall test has \`// Defensive\` as a marker comment**, same pattern as L8's \`deposit_negative_is_noop\`. A future maintainer who looks at this test and thinks "we never pass negatives, this is dead code" gets stopped by the one-word comment. **Marker comments are how tests defend defensive code from refactor removal.**
+
+### Step 3: Add the 4 proptests
+
+Proptests are the conservation laws of \`insurance.rs\`. They're not testing one specific input → output relationship; they're testing that *every* valid input pair satisfies a property the type system can't express.
+
+First, add the proptest import at the top of the \`#[cfg(test)] mod tests\` block (between \`use super::*;\` and the first \`#[test]\`):
+
+\`\`\`rust
+    use proptest::prelude::*;
+\`\`\`
+
+Then, after the unit tests, add the proptest block:
+
+\`\`\`rust
+    // ─── proptest: type invariants ─────────────────────────────────
+
+    proptest! {
+        /// The fund's balance is never negative after any sequence of
+        /// deposits and withdraws.
+        #[test]
+        fn balance_never_negative(
+            ops in proptest::collection::vec(
+                proptest::prelude::any::<(bool, i64)>(),
+                0..20,
+            ),
+        ) {
+            let mut f = InsuranceFund::empty();
+            for (is_deposit, amount) in ops {
+                if is_deposit {
+                    f.deposit(amount);
+                } else {
+                    f.withdraw_shortfall(amount);
+                }
+                prop_assert!(f.balance() >= 0);
+            }
+        }
+
+        /// \`deposit(x).deposit(y)\` accumulates: balance after two deposits
+        /// equals the sum of the two (modulo saturation at i64::MAX).
+        #[test]
+        fn deposit_is_additive(a in 0_i64..1_000_000, b in 0_i64..1_000_000) {
+            let mut f = InsuranceFund::empty();
+            f.deposit(a);
+            f.deposit(b);
+            prop_assert_eq!(f.balance(), a + b);
+        }
+
+        /// After a withdraw, the change in balance equals the \`amount\`
+        /// reported in the outcome — regardless of which variant fired.
+        #[test]
+        fn withdraw_amount_matches_balance_delta(
+            initial in 0_i64..1_000_000,
+            shortfall in 0_i64..1_000_000,
+        ) {
+            let mut f = InsuranceFund::new(initial);
+            let before = f.balance();
+            let out = f.withdraw_shortfall(shortfall);
+            let after = f.balance();
+            let delta = before - after;
+            match out {
+                WithdrawOutcome::Covered { amount }
+                | WithdrawOutcome::PartiallyDrained { amount, .. } => {
+                    prop_assert_eq!(delta, amount);
+                }
+                WithdrawOutcome::Depleted { .. } => {
+                    prop_assert_eq!(delta, 0);
+                }
+            }
+        }
+
+        /// Conservation: \`amount + unfilled\` across all outcome shapes
+        /// always equals the original (positive) shortfall.
+        #[test]
+        fn withdraw_amount_plus_unfilled_equals_shortfall(
+            initial in 0_i64..1_000_000,
+            shortfall in 1_i64..1_000_000,
+        ) {
+            let mut f = InsuranceFund::new(initial);
+            let out = f.withdraw_shortfall(shortfall);
+            let total = match out {
+                WithdrawOutcome::Covered { amount } => amount,
+                WithdrawOutcome::PartiallyDrained { amount, unfilled } => amount + unfilled,
+                WithdrawOutcome::Depleted { unfilled } => unfilled,
+            };
+            prop_assert_eq!(total, shortfall);
+        }
+    }
+\`\`\`
+
+Eight things to notice about these four properties:
+
+1. **\`balance_never_negative\` is *the* type invariant from L8.** This is the proptest that proves the \`balance ≥ 0\` discipline holds across arbitrary sequences. The input — a vector of \`(is_deposit, amount)\` pairs of length 0 to 20 — covers virtually every reachable state-machine trajectory in fewer than a thousand cases. **The proptest of the type invariant is the strongest possible statement that defensive coding works.**
+2. **\`deposit_is_additive\` uses bounded ranges (\`0..1_000_000\`)**, not \`i64::MIN..i64::MAX\`. Why? Because we'd otherwise need to encode saturation into the property. With the bounded range, \`a + b ≤ 2_000_000\` never approaches \`i64::MAX\`, so saturation never fires and we can use exact equality. **Bound proptest inputs to the operating range where the property is simply expressible; let unit tests cover the boundary cases.** (The \`deposit_saturates_at_max\` unit test from L8 owns the saturation boundary; proptests own the arithmetic identity.)
+3. **\`withdraw_amount_matches_balance_delta\` uses one of Rust's most powerful pattern-matching features — the or-pattern: \`Covered { amount } | PartiallyDrained { amount, .. }\`.** Distinct variants can share a single bind site as long as they expose the same field name and type (\`amount: i64\` here); Rust 1.53+ strengthened this to support nested or-patterns too. Both variants carry an \`amount\` field; the property is the same for both ("delta equals the reported \`amount\`"). The \`..\` skips the \`unfilled\` field on \`PartiallyDrained\` that we don't need. **Or-patterns flatten conditional logic when distinct variants share a payload field.**
+4. **The proptest doesn't try to predict *which* variant fires.** Given \`initial=300, shortfall=500\`, the test doesn't compute "this should be \`PartiallyDrained\`"; it lets the method decide and then asserts the property. **Proptests assert properties, not paths.** A test that re-implements the method under test in order to predict its output isn't testing — it's a mirror.
+5. **\`withdraw_amount_plus_unfilled_equals_shortfall\` has \`shortfall in 1..1_000_000\`** (positive only). The boundary at zero is \`Covered { amount: 0 }\` and falls into the conservation as \`0 + 0 = 0\`, but the property is most informative when there's actually a shortfall to conserve. Restricting the range puts the test on the meaningful regime. **Restrict input ranges to where the property *says* something.**
+6. **No proptest covers "deposit followed by withdraw."** The \`deposit_after_drain_recovers\` unit test handles the sequenced case manually. Why isn't this a property? Because the property would need to thread \`(deposit_amount, balance_before_withdraw)\` into the assertion in a way that's hard to make readable — and the sequence is short enough that the unit test is more illustrative. **Use proptests for properties over arbitrary inputs; use unit tests for sequenced narratives.**
+7. **All four proptests use \`prop_assert!\` / \`prop_assert_eq!\`, not \`assert!\`.** The \`prop_*\` macros emit shrinkage information when a test fails, so when proptest finds a counterexample it can report the *minimal* failing input. **Use the proptest-specific macros inside \`proptest!\` blocks; plain \`assert!\` defeats shrinkage.**
+8. **The proptest block is at the *end* of the test module.** Unit tests fail fast and give precise messages; proptests give *distributions* of behavior. By putting proptests after unit tests, the failure stream — if anything goes wrong — leads with the most diagnostically useful information. **Order tests in the file by "highest signal-to-noise first."**
+
+### Step 4: Run the tests
+
+\`\`\`bash
+cargo test -p openhl-liquidation
+\`\`\`
+
+Expected output (abbreviated; 24 compute tests at the top, then insurance):
+
+\`\`\`
+running 45 tests
+test compute::tests::close_flat_has_zero_qty ... ok
+test compute::tests::close_long_with_sell ... ok
+... (22 more compute tests)
+test insurance::tests::balance_never_negative ... ok
+test insurance::tests::default_is_empty ... ok
+test insurance::tests::deposit_accumulates ... ok
+test insurance::tests::deposit_after_drain_recovers ... ok
+test insurance::tests::deposit_is_additive ... ok
+test insurance::tests::deposit_negative_is_noop ... ok
+test insurance::tests::deposit_saturates_at_max ... ok
+test insurance::tests::deposit_zero_is_noop ... ok
+test insurance::tests::empty_is_zero ... ok
+test insurance::tests::new_with_negative_clamps_to_zero ... ok
+test insurance::tests::new_with_positive_balance ... ok
+test insurance::tests::new_with_zero_is_empty ... ok
+test insurance::tests::withdraw_after_full_drain_is_depleted ... ok
+test insurance::tests::withdraw_amount_matches_balance_delta ... ok
+test insurance::tests::withdraw_amount_plus_unfilled_equals_shortfall ... ok
+test insurance::tests::withdraw_covered_exact_balance ... ok
+test insurance::tests::withdraw_covered_typical ... ok
+test insurance::tests::withdraw_depleted_no_change ... ok
+test insurance::tests::withdraw_negative_is_covered_noop ... ok
+test insurance::tests::withdraw_partial_drains_to_zero ... ok
+test insurance::tests::withdraw_zero_is_covered_noop ... ok
+
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+\`\`\`
+
+**45 tests passing. The insurance fund module is byte-for-byte against \`260883b\`.** Stage 10b's stateful core is complete; only the close-outcome decomposition (\`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`) remains for L10.
+
+Common errors:
+
+- **\`balance_never_negative\` fails with a shrunken counterexample like \`[(false, -100)]\`** — your \`withdraw_shortfall\` is treating negative \`shortfall\` as a deposit (subtracting a negative = adding). The defensive guard \`if shortfall <= 0 { return ... }\` must be the first guard, before any state mutation.
+- **\`withdraw_amount_plus_unfilled_equals_shortfall\` fails on \`initial=300, shortfall=500\` with \`total=300\`** — your \`PartiallyDrained\` is only carrying \`amount\` and missing \`unfilled\`. Re-read the struct construction: both fields must be populated and their sum must equal \`shortfall\`.
+- **\`withdraw_amount_matches_balance_delta\` fails on a Depleted case with \`delta=-N\`** — your \`withdraw_shortfall\` is mutating \`self.balance\` in the Depleted branch when it shouldn't. The branch should return immediately without touching state.
+- **\`withdraw_covered_exact_balance\` passes but \`withdraw_partial_drains_to_zero\` fails with \`balance=300, expected 0\`** — your \`if self.balance >= shortfall\` branch is correct but your \`else\` branch forgot to set \`self.balance = 0\`. The partial-drain path always zeroes the balance.
+
+## Design reflection
+
+Three load-bearing decisions in this lesson:
+
+1. **A three-variant outcome enum, not \`Option\` or \`Result\`.** \`Option<i64>\` could express "we paid out N or nothing," but it loses the distinction between "paid out everything we had" and "had nothing to pay." \`Result<i64, FundError>\` could carry both, but it tags the partial-drain case as a *failure*, which it isn't. **The right shape is the enum that matches the actual decision tree of the caller** — and the caller (Stage 10c's scanner) has three distinct routing decisions: log a successful absorb, log a partial absorb + escalate, log a depletion + escalate.
+
+2. **The four-case early-return ladder.** Cases are checked in order of "is this trivially the answer?": negative shortfall (defensive), empty fund (no work possible), sufficient balance (happy path), partial drain (fallthrough). The ordering matters operationally: it's the *cost-ordered* sequence — cheapest check first, structural mutation last. **State-machine methods should evaluate guards in order of cost.**
+
+3. **The proptest suite encodes invariants the type system can't.** \`balance_never_negative\` is the proptest of the L8 type invariant. \`withdraw_amount_plus_unfilled_equals_shortfall\` is the conservation law for the cascade math. \`deposit_is_additive\` proves the abelian-group structure of deposits. \`withdraw_amount_matches_balance_delta\` ties the variant payload to the observable state change. **Together, these four properties make every public method's contract a thing the test suite can *prove*, not just *probe*.**
+
+## Answer key
+
+\`\`\`bash
+cd ~/code/openhl-reference
+git checkout 260883b
+diff -u ~/code/my-openhl/crates/liquidation/src/insurance.rs ./crates/liquidation/src/insurance.rs
+\`\`\`
+
+After L9:
+- **insurance.rs** matches Stage 10b's \`insurance.rs\` **byte-for-byte**. The full state machine — struct, enum, three constructors, accessor, deposit, withdraw_shortfall, Default impl, 12 unit tests, 4 proptests — is in the file.
+- **lib.rs** was already byte-for-byte after L8.
+
+If you also re-ran \`lib.rs\`'s \`mod\` ordering or re-export styling differently in L8, fix it now: the answer key lists \`pub mod compute; pub mod insurance; pub mod types;\` and \`pub use insurance::{InsuranceFund, WithdrawOutcome};\` on a single line. Minor whitespace differences are harmless.
+
+## Common questions
+
+**Q1: Why doesn't \`withdraw_shortfall\` take \`&mut self\` and return \`Result<i64, WithdrawOutcome>\` where the success case is the new balance and the "error" case carries escalation info?**
+
+Because the cascade pattern needs the caller to *always* pattern-match. With a \`Result\`, the typical Rust idiom is \`let new_balance = f.withdraw_shortfall(s)?;\` — and \`?\` would short-circuit the scanner's loop on the very first partial drain, exactly when we *don't* want short-circuit (we want to keep scanning and absorb deposits from later events). Returning the variant by value forces the caller to think about each outcome explicitly. **The \`?\` operator is a poor fit for "successful with caveat" semantics.**
+
+**Q2: Should \`Covered\`'s \`amount\` field equal \`shortfall\` (the request) or the previous balance minus the new balance (the delta)?**
+
+They're identical in \`Covered\`'s eligibility window (\`shortfall ≤ balance\`), so both representations are correct. We pick \`shortfall\` because it matches the *caller's mental model* — they asked for X, they got X. The \`withdraw_amount_matches_balance_delta\` proptest verifies this is consistent. **When two representations are mathematically equal, pick the one that matches the caller's framing.**
+
+**Q3: Why is the proptest input range \`0..1_000_000\` instead of \`i64::MIN..i64::MAX\`?**
+
+For two reasons. (1) The interesting properties hold in the *operating* range; the boundary saturation cases are unit-tested separately (L8's \`deposit_saturates_at_max\`). (2) Wider ranges would force the properties to encode saturation logic in their assertions, making them harder to read. **Proptest ranges should match the regime where the property is simply expressible — boundary cases belong to unit tests.**
+
+**Q4: Why no proptest for "if balance > 0, the next withdraw never returns Depleted"?**
+
+Because that property is *trivially* a consequence of the code's structure — the \`if self.balance == 0\` guard fires only when balance is zero, and balance can only be zero after a covering or partial-draining withdraw. A property test for it would be testing the existence of the guard, not its consequences. **Proptests should test the *consequences* of the implementation, not its *structure*.**
+
+**Q5: Could \`WithdrawOutcome\` be \`WithdrawResult\` with \`Covered\` as the \`Ok\` variant and the other two as \`Err\`?**
+
+You could write it that way, but it conflates *categories of success* with *failure*. The cascade math says all three variants are "successful in their layer" — Covered absorbs at Layer 2, the other two correctly delegate to Layer 3. Calling them "errors" leaks Stage 10b's internal regime into Stage 10c's vocabulary. **Naming should reflect the architectural role; error vs success is a 1-bit distinction that this 3-bit decision tree doesn't fit.**
+
+**Q6: The proptest \`balance_never_negative\` uses \`proptest::collection::vec(..., 0..20)\`. Why 20 and not 100?**
+
+Two reasons. (1) 20 operations is enough to exercise every reachable transition in the state machine multiple times; longer sequences don't increase coverage. (2) Proptest's shrinker can shrink a 20-op failure case down to the minimal subsequence in a reasonable time; shrinking a 100-op failure can take seconds and produce a less-readable counterexample. **Pick proptest sizes for shrinkage cost, not for "more is better."**
+
+## Next lesson (L10) — \`liquidation_fee\` + close-outcome decomposition
+
+L10 returns to \`compute.rs\` and adds the three Stage 10b pure-compute functions that bridge \`compute\` and \`insurance\`: \`liquidation_fee(notional, params)\`, \`solvent_close_outcome(snapshot, mark, params)\`, and \`underwater_close_outcome(snapshot, mark, params)\`. Together they decompose every liquidation event into a \`(fund credit, residual to trader)\` or \`(fund debit, partial fee captured)\` tuple — exactly the shape the Stage 10c scanner needs to call \`InsuranceFund::deposit\` / \`InsuranceFund::withdraw_shortfall\` per close.
+
+After L10, the \`compute\` and \`insurance\` modules talk to each other through the cascade math: pure functions produce the credit/debit numbers, the state machine accumulates them. L11 wraps this loop in the \`LiquidationScanner\` and the safety-net cascade has a runnable scanner.
+`,
+                },
+                {
+                  title: "Lesson 10 — liquidation_fee + close-outcome decomposition — the bridge between compute and insurance",
+                  slug: "openhl-liquidation-close-outcome-decomposition-en",
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 35,
+                  xpReward: 70,
+                  content: `# Lesson 10 — \`liquidation_fee\` + close-outcome decomposition — the bridge between \`compute\` and \`insurance\`
+
+## Goal
+
+Concepts you'll grasp in this lesson:
+
+- **Every liquidation event decomposes into a \`(fund movement, account residual)\` pair.** A solvent close credits the fund and returns positive residual to the trader. An underwater close debits the fund and (sometimes) collects a partial fee. The two functions in this lesson encode that decomposition once, so Stage 10c's scanner can call \`InsuranceFund::deposit\` and \`InsuranceFund::withdraw_shortfall\` against the *exact* numbers the math produces. **Pure compute produces credit/debit; state machine accumulates them.**
+- **\`debug_assert!\` as a routing contract.** \`solvent_close_outcome\` and \`underwater_close_outcome\` are *non-overlapping*: each one debug-asserts that the *other* one wasn't the right call. The pair is a discriminated dispatch where the caller has the routing obligation; the functions are total only within their precondition window. **Debug-asserts document the contract that the type system can't.**
+- **\`fee.saturating_sub(post_close_equity)\` when \`post_close_equity\` is negative.** This is the cleanest piece of arithmetic in the lesson: \`i64 − (negative i64) = i64 + |negative i64|\`. The "already-underwater" sub-case reuses the same expression as the "partial fee" sub-case because subtraction of a negative value adds the magnitude. **One expression covers both branches of an \`if\` ladder when the operands are signed.**
+- **Two distinct return types, not \`Result\` or one enum.** \`SolventClose { fee_to_fund, residual_to_account }\` and \`UnderwaterClose { fee_to_fund, shortfall_to_fund }\` have the same \`fee_to_fund\` field but completely different second fields. The semantic difference (residual flows *out* to trader, shortfall flows *in* from fund) is heavy enough that one enum with \`Option<i64>\` shoving these through one slot would obscure the dispatch. **When two paths produce categorically different field semantics, two struct types beat one enum.**
+
+Verification:
+
+\`\`\`bash
+cargo test -p openhl-liquidation
+\`\`\`
+
+…passes 55 tests (34 compute + 21 insurance). The full Stage 10b crate is byte-for-byte against \`260883b\` after L10.
+
+Specific changes:
+
+- **\`src/types.rs\`** — adds \`SolventClose\` and \`UnderwaterClose\` structs with their doc comments.
+- **\`src/compute.rs\`** — adds \`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`, plus 10 new unit tests (4 fee + 3 solvent + 3 underwater).
+- **\`src/lib.rs\`** — extends the compute re-export to include the three new functions; extends the types re-export to include \`SolventClose\` + \`UnderwaterClose\`.
+
+L10 closes Stage 10b. After this lesson the answer-key diff against \`260883b\` is fully clean across all three liquidation crate files.
+
+## Recap
+
+After L9:
+- \`insurance.rs\` is byte-for-byte against \`260883b\` — the \`InsuranceFund\` state machine + \`WithdrawOutcome\` enum + all 12 unit tests + 4 proptests are in place.
+- \`lib.rs\` re-exports \`InsuranceFund\` and \`WithdrawOutcome\`.
+- \`cargo test\` runs 45 tests, all green.
+- The fund *can* receive deposits and surface drains, but **nothing yet computes how much to deposit or drain on a given close.**
+
+L10 closes that gap. The three new compute functions are the numeric source-of-truth that Stage 10c's scanner will feed into the state machine.
+
+## Plan
+
+Four edits:
+
+1. **Add \`SolventClose\` + \`UnderwaterClose\` structs to \`crates/liquidation/src/types.rs\`** — two simple two-field structs, both \`#[derive(Clone, Copy, Debug, PartialEq, Eq)]\`.
+2. **Add three functions to \`crates/liquidation/src/compute.rs\`**:
+   - \`liquidation_fee(closed_notional, params)\` — pure fee math with i128 intermediate.
+   - \`solvent_close_outcome(snapshot, mark, params)\` — \`SolventClose\` for accounts where post-close equity covers the fee.
+   - \`underwater_close_outcome(snapshot, mark, params)\` — \`UnderwaterClose\` for accounts where it doesn't.
+3. **Add 10 unit tests to the existing \`#[cfg(test)] mod tests\`** in compute.rs.
+4. **Extend \`crates/liquidation/src/lib.rs\`** — re-export the three new functions and the two new types.
+
+> 🛑 **Predict.** Before reading further: a trader holds 1 BTC long, entry $100k, $10k collateral. The position is force-closed at $80,500 (a $19,500 loss). The Hyperliquid-default \`liquidation_fee_bps\` is 150 (1.5%). Question: **does the insurance fund credit or debit on this close, and by how much?**
+
+(Answer: **The fund debits — it must absorb a $10,707 shortfall.** Walk through: notional at close is $80,500. Fee = $80,500 × 150 / 10,000 = $1,207.50, rounded to $1,207 (integer math). The trader's realized PnL is −$19,500, so post-close equity = $10,000 collateral + (−$19,500 PnL) = −$9,500 — already underwater *before* the fee. No fee is collected (you can't bill a negative balance), and the fund must cover both the desired fee *and* the negative equity: $1,207 + $9,500 = $10,707. This is the \`underwater_close_outcome\` "already underwater" sub-case, and it's identical to the scenario from the Perp Primer L3 lesson — the same numbers reappear in code form here.)
+
+The decomposition picture for L10:
+
+\`\`\`
+   ┌────────────────────────────────────────────────────────────┐
+   │  Per-close decomposition produced by Stage 10b compute     │
+   ├────────────────────────────────────────────────────────────┤
+   │                                                            │
+   │  SOLVENT path                                              │
+   │  ───────────                                               │
+   │  post_close_equity ≥ fee  →  SolventClose {                │
+   │                                fee_to_fund:           +X   │  ──→ flows INTO Fund
+   │                                residual_to_account:   +Y   │  ←── flows back to Trader
+   │                              }                             │
+   │                                                            │
+   │  Stage 10c scanner uses:                                   │
+   │    fund.deposit(fee_to_fund)                ← Layer 2 grow  │
+   │    trader_balance += residual_to_account    ← refund        │
+   │                                                            │
+   ├────────────────────────────────────────────────────────────┤
+   │                                                            │
+   │  UNDERWATER path (two sub-cases under one shape)           │
+   │  ────────────────                                          │
+   │  0 < post_close_equity < fee  →  UnderwaterClose {         │
+   │      (partial fee)                 fee_to_fund:       +X   │  ──→ flows INTO Fund
+   │                                    shortfall_to_fund: +Y   │  ←── pulled FROM Fund
+   │                                  }                         │
+   │                                                            │
+   │  post_close_equity ≤ 0       →  UnderwaterClose {          │
+   │      (already underwater)          fee_to_fund:        0   │
+   │                                    shortfall_to_fund: +Z   │  ←── pulled FROM Fund
+   │                                  }                         │
+   │                                                            │
+   │  Stage 10c scanner uses:                                   │
+   │    fund.deposit(fee_to_fund)            ← may be 0          │
+   │    fund.withdraw_shortfall(shortfall_to_fund)               │
+   │      ↑ returns WithdrawOutcome (L9)                         │
+   │      ↑ Depleted/PartiallyDrained variants escalate to ADL   │
+   │                                                            │
+   └────────────────────────────────────────────────────────────┘
+\`\`\`
+
+Three things to notice about the diagram:
+
+1. **\`SolventClose\` outputs flow *out* of the system; \`UnderwaterClose\` outputs flow *in* from the system.** Residual returns to the trader (positive flow toward the account); shortfall pulls from the fund (positive flow toward the close). Same magnitude shape (\`i64 ≥ 0\`), opposite direction. **The *direction* of money flow lives in the field name, not in the sign.**
+2. **\`UnderwaterClose\` has two sub-cases that compile to one shape.** A single struct with two \`i64\` fields covers both "partial fee, partial shortfall" and "zero fee, full shortfall." The struct doesn't need an internal \`kind\` discriminator because the *value* of \`fee_to_fund\` (zero or positive) carries the distinction. **Don't tag a sub-case if a field value already tells you which one fired.**
+3. **The decomposition is what makes Stage 10c possible.** The scanner doesn't need to know *why* a close is solvent or underwater — only that it gets back two i64s with named semantics. **A clean decomposition between math and state lets the state-machine layer stay dumb.**
+
+## Walk-through
+
+### Step 1: Add \`SolventClose\` + \`UnderwaterClose\` to \`src/types.rs\`
+
+Open \`crates/liquidation/src/types.rs\`. After the existing \`CloseOrderSpec\` definition, add:
+
+\`\`\`rust
+/// Solvent-close outcome (Stage 10b).
+///
+/// Produced by [\`crate::compute::solvent_close_outcome\`] for a Liquidatable
+/// account whose post-close equity covers the liquidation fee in full.
+/// Both fields are non-negative.
+///
+/// \`fee_to_fund\` is credited to the insurance fund; \`residual_to_account\`
+/// is returned to the trader's collateral balance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SolventClose {
+    /// Fee deducted from collateral and credited to the insurance fund.
+    pub fee_to_fund: i64,
+    /// What's returned to the trader's collateral after the close + fee.
+    pub residual_to_account: i64,
+}
+
+/// Underwater-close outcome (Stage 10b).
+///
+/// Produced by [\`crate::compute::underwater_close_outcome\`] when the
+/// account's post-close equity cannot cover the full liquidation fee.
+///
+/// Covers two sub-cases under one shape:
+///   - Post-close equity is positive but smaller than the desired fee
+///     (Liquidatable account whose close + fee turned underwater): the
+///     remaining equity is paid as a partial fee, the uncollected portion
+///     becomes the shortfall.
+///   - Post-close equity is already negative (Underwater account): no fee
+///     is collected, the full desired fee plus the negative equity becomes
+///     the shortfall.
+///
+/// Both fields are non-negative; \`fee_to_fund\` may be \`0\` in the
+/// negative-equity case.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UnderwaterClose {
+    /// Partial fee collected from any positive post-close equity, credited
+    /// to the insurance fund. May be \`0\`.
+    pub fee_to_fund: i64,
+    /// What the insurance fund must absorb so the close completes. The
+    /// caller hands this to [\`crate::insurance::InsuranceFund::withdraw_shortfall\`].
+    pub shortfall_to_fund: i64,
+}
+\`\`\`
+
+Four things to notice about these types:
+
+1. **Both fields in both structs are \`i64\`, not \`u64\`** — same type-uniformity reasoning as L8's \`InsuranceFund::balance\`. The whole crate computes in \`i64\`; the structs document non-negativity in their doc comments instead. **Type uniformity inside a crate compounds over time; per-field unsignedness is local convenience that costs casts at every boundary.**
+2. **Same derive set on both: \`Clone + Copy + Debug + PartialEq + Eq\`** — same set as \`WithdrawOutcome\` and \`InsuranceFund\`. These are 16-byte POD types; values are cheaper than references. **Pure-value types in this crate use one consistent derive list. Predictability is its own virtue.**
+3. **Doc comments name the *destination* of each field, not the *source*.** \`fee_to_fund\` says where it goes (insurance fund), not where it came from (trader's collateral). \`shortfall_to_fund\` says where it goes (paid *to* the close from the fund), not the negative-equity arithmetic that produced it. **Name fields by what the caller does with them, not by how the producer computed them.**
+4. **\`UnderwaterClose\` carries \`shortfall_to_fund\` even though \`fee_to_fund\` is sometimes zero.** The field is always present in the struct regardless of which sub-case fired. The caller pattern-matches on the *value* (\`if shortfall_to_fund > 0 { fund.withdraw_shortfall(...) }\`), not on the struct shape. **Total field presence > sub-case-specific shape; the caller does one match against zero.**
+
+### Step 2: Add \`liquidation_fee\` to \`src/compute.rs\`
+
+Open \`crates/liquidation/src/compute.rs\`. After the \`saturate_i128_to_i64\` helper (at the bottom of the helper section, before any tests), add:
+
+\`\`\`rust
+/// Liquidation fee on a closed notional, in quote units.
+///
+/// \`fee = notional × fee_bps / MARGIN_SCALE\`, saturating on overflow.
+/// Pure math — the caller (Stage 10c scanner / bridge) supplies the
+/// actual fill notional from the matching engine.
+///
+/// Returns \`0\` for a zero notional (flat positions; should never reach
+/// the engine but symbol-completeness pays off in proptest).
+#[must_use]
+pub fn liquidation_fee(closed_notional: u64, params: &LiquidationParams) -> i64 {
+    if closed_notional == 0 {
+        return 0;
+    }
+    let bps = i128::from(params.liquidation_fee_bps);
+    let n = i128::from(closed_notional);
+    let scaled = n.saturating_mul(bps);
+    let fee = scaled / i128::from(MARGIN_SCALE);
+    saturate_i128_to_i64(fee)
+}
+\`\`\`
+
+Five things to notice:
+
+1. **\`closed_notional: u64\` (input), \`-> i64\` (output).** Notional is always non-negative — it's a magnitude (price × |size|). The output is signed because the rest of the crate's arithmetic is signed; the fee will be subtracted from the trader's equity via \`i64\` subtraction, and forcing a \`u64 → i64\` cast at the call site would clutter the scanner. **Unsignedness at the input boundary captures the domain fact; signedness at the output matches the surrounding arithmetic.**
+2. **The fast-path return for \`closed_notional == 0\`.** Skips three \`i128\` conversions and a saturating multiply for a value that's almost always going to be zero (flat positions don't reach the close path, but the scanner can still call this defensively). **Cheap predicates that handle the dominant zero case earn their keep.**
+3. **\`i128::from(...)\` instead of \`as i128\`.** \`From\` is infallible by construction — \`u64 → i128\` and \`u32 → i128\` are both widening conversions that can never lose data. Using \`From\` makes the intent explicit and prevents accidental \`as\` from sneaking into narrowing positions later. **In code that talks to consensus arithmetic, \`From\` for widening is the default; reserve \`as\` for narrowing where you control the bit-width.**
+4. **\`saturating_mul\` on the i128 product.** Even \`i128\` can overflow on \`u64::MAX × u32::MAX\` (the pathological case the \`fee_saturates_on_pathological_input\` test fires); saturating-mul caps at \`i128::MAX\`, which then gets saturated again to \`i64::MAX\` by the helper. **Two layers of saturation in series is fine — each one defends against the next.**
+5. **No \`saturating_div\`.** Integer division on i128 doesn't overflow (except \`i128::MIN / -1\`, which is unreachable here because numerator and denominator are both non-negative). Using plain \`/\` is correct and the alternative would just be ceremony. **Saturating operations are for arithmetic that *can* overflow; division of two non-negative operands cannot, so don't decorate it.**
+
+### Step 3: Add \`solvent_close_outcome\` to \`src/compute.rs\`
+
+Append below \`liquidation_fee\`:
+
+\`\`\`rust
+/// Solvent-close outcome — the trader's collateral plus realized \`PnL\`
+/// covers the liquidation fee in full, with positive residual returning
+/// to the account.
+///
+/// **Precondition** (debug-asserted): the account is Liquidatable AND the
+/// post-close equity (= collateral + realized \`PnL\` at \`close_price\`)
+/// covers the desired fee. If the precondition is violated, the result
+/// has \`residual_to_account ≤ 0\` — caller should have routed to
+/// [\`underwater_close_outcome\`] instead.
+///
+/// Stage 10b never mutates state — this is pure compute that produces
+/// the credit/debit pair for the caller (Stage 10c scanner) to apply
+/// against [\`crate::insurance::InsuranceFund\`] and the trader's balance.
+#[must_use]
+pub fn solvent_close_outcome(
+    snapshot: &AccountSnapshot,
+    close_price: MarkPrice,
+    params: &LiquidationParams,
+) -> SolventClose {
+    let notional = notional_value(snapshot, close_price);
+    let fee = liquidation_fee(notional, params);
+    let post_close_equity = account_equity(snapshot, close_price);
+    debug_assert!(
+        post_close_equity >= fee,
+        "solvent_close_outcome called with post_close_equity={post_close_equity} < fee={fee}; \\
+         caller should route to underwater_close_outcome instead",
+    );
+    SolventClose {
+        fee_to_fund: fee,
+        residual_to_account: post_close_equity.saturating_sub(fee),
+    }
+}
+\`\`\`
+
+Six things to notice:
+
+1. **The function *composes three pre-existing functions* from Stage 10a.** \`notional_value\`, \`liquidation_fee\` (added in Step 2), and \`account_equity\` are all called inline. There's no new math; the function is a *routing* function that produces a packaged outcome from three existing primitives. **High-level outcome functions should compose low-level math, not duplicate it.**
+2. **\`debug_assert!\` is the contract.** The precondition (\`post_close_equity >= fee\`) is the *routing decision* the caller already made: "this is a solvent close." Calling \`solvent_close_outcome\` when the close is underwater is a *caller bug*, not a runtime branch — and \`debug_assert!\` fires in debug builds while compiling out in release. **The \`debug_assert!\` doesn't change runtime behaviour; it catches caller bugs during development and disappears in production.**
+3. **The error message in \`debug_assert!\` includes the *named values*.** A developer who triggers this assertion sees \`post_close_equity=-500 < fee=1207\`, not just a line number. With format-string captures (\`{post_close_equity}\`), the message has zero string-allocation overhead in the success path. **Format-string captures in assertion messages cost nothing when the assertion passes; they pay back enormously when it fails.**
+4. **\`post_close_equity.saturating_sub(fee)\` even though the assertion guarantees \`equity ≥ fee\`.** Why? Because release builds don't fire \`debug_assert!\`. If a caller bug skips the assertion in release, plain \`-\` would still complete the subtraction, but a different bug elsewhere (e.g., \`equity\` being \`i64::MIN\` due to upstream overflow) could underflow \`equity - fee\`. Saturation gives us a clamped i64 in every case. **Saturating arithmetic is the belt-and-braces complement to \`debug_assert!\`; together they cover dev *and* prod.**
+5. **The function takes \`params: &LiquidationParams\` by reference, not by value.** \`LiquidationParams\` is \`Copy + 12 bytes\`; passing by value would be marginally cheaper, but every other compute function in the crate takes it by reference, so consistency wins. **Match the calling convention of sibling functions.**
+6. **No return-by-tuple.** We could return \`(i64, i64)\` and let the caller decide which is which. Returning \`SolventClose\` with named fields makes the dispatch at the call site self-documenting and prevents a future mistake where someone swaps the field order. **Named-field structs beat tuples whenever the call site has to remember "what was the second one again?"**
+
+### Step 4: Add \`underwater_close_outcome\` to \`src/compute.rs\`
+
+Append below \`solvent_close_outcome\`:
+
+\`\`\`rust
+/// Underwater-close outcome — the account's post-close equity cannot
+/// cover the liquidation fee, so the insurance fund must absorb the
+/// shortfall.
+///
+/// Handles both sub-cases under one shape:
+///   - Positive but insufficient post-close equity (Liquidatable account
+///     whose close + fee turned underwater): the equity is paid as a
+///     partial fee, the rest becomes the shortfall.
+///   - Negative post-close equity (Underwater account before fee): no
+///     fee is collected, the entire fee plus \`|equity|\` becomes the
+///     shortfall.
+///
+/// **Precondition** (debug-asserted): \`post_close_equity < fee_desired\` —
+/// otherwise the close is solvent and the caller should have routed to
+/// [\`solvent_close_outcome\`].
+#[must_use]
+pub fn underwater_close_outcome(
+    snapshot: &AccountSnapshot,
+    close_price: MarkPrice,
+    params: &LiquidationParams,
+) -> UnderwaterClose {
+    let notional = notional_value(snapshot, close_price);
+    let fee = liquidation_fee(notional, params);
+    let post_close_equity = account_equity(snapshot, close_price);
+    debug_assert!(
+        post_close_equity < fee,
+        "underwater_close_outcome called with post_close_equity={post_close_equity} ≥ fee={fee}; \\
+         caller should route to solvent_close_outcome instead",
+    );
+
+    if post_close_equity > 0 {
+        // Partial fee: equity covers some but not all of the desired fee.
+        UnderwaterClose {
+            fee_to_fund: post_close_equity,
+            shortfall_to_fund: fee.saturating_sub(post_close_equity),
+        }
+    } else {
+        // Already underwater (equity ≤ 0). No fee collected; fund covers
+        // the full fee plus the negative equity. \`fee - negative_equity\`
+        // is \`fee + |equity|\` via saturating_sub semantics.
+        UnderwaterClose {
+            fee_to_fund: 0,
+            shortfall_to_fund: fee.saturating_sub(post_close_equity),
+        }
+    }
+}
+\`\`\`
+
+Seven things to notice:
+
+1. **The two sub-case branches share the same \`shortfall_to_fund\` expression: \`fee.saturating_sub(post_close_equity)\`.** In the partial-fee case, \`equity\` is positive and the subtraction yields the uncollected portion. In the already-underwater case, \`equity\` is negative or zero and the subtraction becomes \`fee - negative = fee + |equity|\`. Concretely, with \`fee = 1207\` and \`post_close_equity = -9500\`:
+
+   \`\`\`
+   1207 - (-9500) = 1207 + 9500 = 10707
+   \`\`\`
+
+   — and the code reaches this answer without \`.abs()\`, an explicit \`+\`, or a branch on the sign. **One expression covers both branches because integer subtraction of a negative value is addition of its magnitude.** This is the cleanest piece of arithmetic in the lesson — a junior reader will see it twice and *think* it's a bug; a senior reader will see it and understand why the function works. (The code comment in Step 4 uses \`negative_equity\` as a *concept name* for \`post_close_equity\` when it's negative — it's not a separate variable.)
+2. **The \`if post_close_equity > 0\` branch is *strict greater-than*.** A post-close equity of exactly zero falls into the \`else\` (already-underwater) branch, where \`fee_to_fund = 0\`. That matches the semantics: there's nothing to *collect* if collateral is exhausted. **Strict greater-than at boundary predicates routes zero into the "no work" branch.**
+3. **\`fee_to_fund\` differs between branches; \`shortfall_to_fund\` does not.** This asymmetry is intentional: the *fee collection* depends on whether equity is positive, but the *shortfall* is always \`fee - equity\` (where negative equity adds to the shortfall). **When two branches share part of their work, factor the shared expression out only if the saving is greater than the readability cost.** Here, an early \`let shortfall = fee.saturating_sub(post_close_equity);\` would save 12 characters and lose the inline visual symmetry; we keep the duplication.
+4. **The \`else\` branch doesn't \`match\` on equity = 0 vs equity < 0 separately.** Both cases produce identical outputs (\`fee_to_fund = 0, shortfall = fee - equity\`), so they share a branch. **Code paths whose outputs collapse to one expression share one branch.**
+5. **The doc comment is *the* user-facing summary** of when each sub-case fires. The walked-through reader will jump from this function back to the doc comment when they later use the function elsewhere; the doc has to stand alone without the body for context. **Doc comments are read by the *consumer* of the function, who doesn't have your body open.**
+6. **\`debug_assert!\` flips its predicate from \`solvent_close_outcome\`.** That's deliberate: the assertions form a *non-overlapping cover* of the input space. Together, \`solvent ⇔ equity ≥ fee\` and \`underwater ⇔ equity < fee\` exhaustively partition the input space. The pair is a discriminated dispatch, and the assertions prove it. **Pairing two pure functions with opposite preconditions is a discriminated dispatch by convention — the type system can't help here, but the pair of asserts does.**
+7. **No early return on \`post_close_equity == 0\`.** A reader might think we should add a fast path for "exactly at zero" since it's a common boundary. We don't — because the \`else\` branch already produces the correct answer, and the branch evaluation cost is one comparison. **Don't add boundary fast-paths unless the math actually differs at the boundary.**
+
+> 🛑 **Anti-fluency.** "Why not collapse \`solvent_close_outcome\` and \`underwater_close_outcome\` into one function returning \`Result<SolventClose, UnderwaterClose>\`?" Three problems. (1) Neither outcome is an error — both are *successful* closes that route to different state-machine operations. (2) Stage 10c's scanner calls the *appropriate one* based on a margin-health check the scanner *already did*; routing the dispatch through \`Result\` re-does the work the scanner already did. (3) The \`debug_assert!\` pair is more meaningful with two separate functions because each function declares its own contract — a single function with one return type can't express "this side of the partition is correct only here." **Two functions with opposite preconditions express discriminated dispatch better than one function returning a tagged union.**
+
+### Step 5: Add the 10 unit tests to compute.rs
+
+Inside the existing \`#[cfg(test)] mod tests\` block, add three test sections after the existing L7 close-order-spec tests:
+
+\`\`\`rust
+    // ─── Stage 10b: liquidation_fee ────────────────────────────────
+
+    #[test]
+    fn fee_basic() {
+        // 1.5% of $80,400 = $1,206 — matches the Perp Primer L3 example.
+        let params = LiquidationParams::hyperliquid_default();
+        assert_eq!(liquidation_fee(80_400, &params), 1_206);
+    }
+
+    #[test]
+    fn fee_zero_notional() {
+        let params = LiquidationParams::hyperliquid_default();
+        assert_eq!(liquidation_fee(0, &params), 0);
+    }
+
+    #[test]
+    fn fee_zero_bps() {
+        // No fee if the network params zero it out.
+        let params = LiquidationParams {
+            initial_margin_bps: 1_000,
+            maintenance_margin_bps: 200,
+            liquidation_fee_bps: 0,
+        };
+        assert_eq!(liquidation_fee(1_000_000, &params), 0);
+    }
+
+    #[test]
+    fn fee_saturates_on_pathological_input() {
+        // notional × bps would overflow i64 but saturates inside i128.
+        let params = LiquidationParams {
+            initial_margin_bps: 1_000,
+            maintenance_margin_bps: 200,
+            liquidation_fee_bps: u32::MAX,
+        };
+        let fee = liquidation_fee(u64::MAX, &params);
+        assert_eq!(fee, i64::MAX);
+    }
+
+    // ─── Stage 10b: solvent_close_outcome ──────────────────────────
+
+    #[test]
+    fn solvent_close_typical_liquidatable() {
+        // 1 BTC long, entry $100k, $10k collateral, close at $95k.
+        //   notional = 95_000; fee = 95_000 × 150 / 10_000 = 1_425
+        //   realized_pnl = (95_000 − 100_000) × 1 = −5_000
+        //   post_close_equity = 10_000 − 5_000 = 5_000
+        //   residual = 5_000 − 1_425 = 3_575
+        let s = snapshot(1, 100_000, 10_000);
+        let params = LiquidationParams::hyperliquid_default();
+        let outcome = solvent_close_outcome(&s, MarkPrice(95_000), &params);
+        assert_eq!(outcome.fee_to_fund, 1_425);
+        assert_eq!(outcome.residual_to_account, 3_575);
+    }
+
+    #[test]
+    fn solvent_close_short_profit() {
+        // Short −1, entry $100k, $10k collateral, close at $90k (favorable!).
+        //   notional = 1 × 90_000 = 90_000; fee = 1_350
+        //   realized_pnl = (90_000 − 100_000) × (−1) = +10_000
+        //   post_close_equity = 10_000 + 10_000 = 20_000
+        //   residual = 20_000 − 1_350 = 18_650
+        let s = snapshot(-1, 100_000, 10_000);
+        let params = LiquidationParams::hyperliquid_default();
+        let outcome = solvent_close_outcome(&s, MarkPrice(90_000), &params);
+        assert_eq!(outcome.fee_to_fund, 1_350);
+        assert_eq!(outcome.residual_to_account, 18_650);
+    }
+
+    #[test]
+    fn solvent_close_fee_consumes_all_residual() {
+        // Edge: post_close_equity exactly equals fee. residual = 0.
+        // Construct: size=1, entry=10_000, collateral=10, mark=10_000.
+        //   notional = 10_000; fee = 150
+        //   pnl = 0; post_close_equity = 10 (collateral only)
+        // For fee == equity exactly: need fee = collateral when pnl = 0.
+        //   fee = notional × 150 / 10_000 = notional × 0.015
+        //   notional = collateral / 0.015
+        // Pick collateral=150, then notional must be 10_000.
+        let s = snapshot(1, 10_000, 150);
+        let params = LiquidationParams::hyperliquid_default();
+        let outcome = solvent_close_outcome(&s, MarkPrice(10_000), &params);
+        assert_eq!(outcome.fee_to_fund, 150);
+        assert_eq!(outcome.residual_to_account, 0);
+    }
+
+    // ─── Stage 10b: underwater_close_outcome ────────────────────────
+
+    #[test]
+    fn underwater_close_already_underwater_pre_fee() {
+        // Perp Primer L3 scenario: 1 BTC long, entry $100k, $10k collateral,
+        // close at $80,500. Realized PnL = −$19,500, post_close_equity = −$9,500.
+        // Notional = $80,500; fee = 1_207 (80_500 × 150 / 10_000)
+        // shortfall = fee − post_close_equity = 1_207 − (−9_500) = $10,707
+        let s = snapshot(1, 100_000, 10_000);
+        let params = LiquidationParams::hyperliquid_default();
+        let outcome = underwater_close_outcome(&s, MarkPrice(80_500), &params);
+        assert_eq!(outcome.fee_to_fund, 0);
+        assert_eq!(outcome.shortfall_to_fund, 1_207 + 9_500);
+    }
+
+    #[test]
+    fn underwater_close_partial_fee_collection() {
+        // Liquidatable account whose close + fee just barely turns underwater.
+        // 1 BTC long, entry $100k, $10k collateral, close at $90,500.
+        //   notional = $90,500; fee = 1_357 (90_500 × 150 / 10_000)
+        //   realized_pnl = −$9,500; post_close_equity = $500
+        //   post_close_equity (500) < fee (1357) → underwater branch
+        //   fee_to_fund = 500 (partial fee from positive equity)
+        //   shortfall = 1_357 − 500 = 857
+        let s = snapshot(1, 100_000, 10_000);
+        let params = LiquidationParams::hyperliquid_default();
+        let outcome = underwater_close_outcome(&s, MarkPrice(90_500), &params);
+        assert_eq!(outcome.fee_to_fund, 500);
+        assert_eq!(outcome.shortfall_to_fund, 1_357 - 500);
+    }
+
+    #[test]
+    fn underwater_close_zero_equity_at_fee() {
+        // Edge: post_close_equity exactly 0 (collateral fully eaten by losses).
+        // 1 BTC long, entry $100k, $10k collateral, close at $90k → pnl = −10k,
+        // equity = 0. fee = 1_350. shortfall = full fee.
+        let s = snapshot(1, 100_000, 10_000);
+        let params = LiquidationParams::hyperliquid_default();
+        let outcome = underwater_close_outcome(&s, MarkPrice(90_000), &params);
+        assert_eq!(outcome.fee_to_fund, 0);
+        assert_eq!(outcome.shortfall_to_fund, 1_350);
+    }
+\`\`\`
+
+Seven things to notice about the test design:
+
+1. **Section dividers match the function names** — \`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`. Same grep-friendly grouping discipline as L9. **Group tests by the function they exercise; let the file structure document the API.**
+2. **\`fee_basic\` uses Perp Primer L3 numbers.** $80,400 × 1.5% = $1,206 is the same calculation the Perp Primer L3 lesson walked through conceptually. Seeing the same numbers in concrete code is **curriculum-to-implementation reinforcement** — the reader who came in through the Primer feels the abstraction landing on real arithmetic.
+3. **\`fee_zero_bps\` constructs \`LiquidationParams\` inline** instead of using the \`hyperliquid_default()\`. Why? Because the default has \`liquidation_fee_bps = 150\`, and the test needs \`bps = 0\`. **When a parameter under test diverges from the default, construct the params inline rather than mutating the default.** It makes the test's intent visible at the top.
+4. **\`fee_saturates_on_pathological_input\` uses both \`u64::MAX\` and \`u32::MAX\`.** That's the only test that exercises the i128 saturation path. The math: \`u64::MAX × u32::MAX ≈ 2^96\`, which fits in i128 but would catastrophically overflow \`i64\`. The saturating-mul caps at \`i128::MAX\`, then the final saturate-to-i64 yields \`i64::MAX\`. **The pathological input test is the *only* place this code path runs; without it, the saturation is dead-code-equivalent.**
+5. **\`solvent_close_short_profit\` exists as a complement to the long-loss case.** Long → loss → solvent close is the expected scenario; short → profit → solvent close ("favorable" liquidation) is the case where a trader gets *more* back than they put in. Both produce a \`SolventClose\` with the same struct shape, but the residual numbers are wildly different (3,575 vs 18,650). **Tests must cover both signs of every signed-input function.**
+6. **\`solvent_close_fee_consumes_all_residual\` has *the comment that explains the construction*.** The math to find inputs where \`post_close_equity == fee\` requires solving \`fee = notional × 150 / 10_000\`. The comment in the test walks the reader through the construction. **A test whose values look magic deserves a comment explaining why they're those values.**
+7. **\`underwater_close_already_underwater_pre_fee\` reuses the Perp Primer L3 numbers.** Same $100k entry, $10k collateral, close at $80,500, same $19,500 PnL — the conceptual scenario from the Primer now produces a \`UnderwaterClose\` with \`fee_to_fund: 0, shortfall_to_fund: 10_707\` against the answer-key code. **Curriculum reinforcement compounds across the course; reusing the Primer's numbers in L10 closes the loop.**
+
+### Step 6: Update \`src/lib.rs\`
+
+Extend the existing re-exports. Find the \`pub use compute::{ ... };\` block and extend it. Was (after L7):
+
+\`\`\`rust
+pub use compute::{
+    account_equity, close_order_spec, margin_health, margin_ratio, notional_value, unrealized_pnl,
+};
+\`\`\`
+
+Becomes:
+
+\`\`\`rust
+pub use compute::{
+    account_equity, close_order_spec, liquidation_fee, margin_health, margin_ratio,
+    notional_value, solvent_close_outcome, underwater_close_outcome, unrealized_pnl,
+};
+\`\`\`
+
+Then extend the \`pub use types::{ ... };\` block. Was:
+
+\`\`\`rust
+pub use types::{
+    AccountSnapshot, CloseOrderSpec, LiquidationParams, MarginHealth, MarginRatio, MARGIN_SCALE,
+};
+\`\`\`
+
+Becomes:
+
+\`\`\`rust
+pub use types::{
+    AccountSnapshot, CloseOrderSpec, LiquidationParams, MarginHealth, MarginRatio, SolventClose,
+    UnderwaterClose, MARGIN_SCALE,
+};
+\`\`\`
+
+Three new function names (\`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`) and two new type names (\`SolventClose\`, \`UnderwaterClose\`), all inserted alphabetically. After L10, the crate's public surface includes 9 compute functions and 8 types.
+
+### Step 7: Run the tests
+
+\`\`\`bash
+cargo test -p openhl-liquidation
+\`\`\`
+
+Expected output (abbreviated):
+
+\`\`\`
+running 55 tests
+test compute::tests::close_flat_has_zero_qty ... ok
+test compute::tests::close_long_with_sell ... ok
+... (8 Stage 10a tests)
+test compute::tests::fee_basic ... ok
+test compute::tests::fee_saturates_on_pathological_input ... ok
+test compute::tests::fee_zero_bps ... ok
+test compute::tests::fee_zero_notional ... ok
+... (more compute)
+test compute::tests::solvent_close_fee_consumes_all_residual ... ok
+test compute::tests::solvent_close_short_profit ... ok
+test compute::tests::solvent_close_typical_liquidatable ... ok
+test compute::tests::underwater_close_already_underwater_pre_fee ... ok
+test compute::tests::underwater_close_partial_fee_collection ... ok
+test compute::tests::underwater_close_zero_equity_at_fee ... ok
+... (insurance tests from L8 + L9)
+
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+\`\`\`
+
+**55 tests passing. Stage 10b is complete.** The full crate — \`compute.rs\`, \`insurance.rs\`, \`types.rs\`, \`lib.rs\` — is byte-for-byte against \`260883b\`. Pure math, stateful fund, and decomposition outcomes all sit alongside each other.
+
+Common errors:
+
+- **\`underwater_close_already_underwater_pre_fee\` fails with \`shortfall_to_fund: 1_207 - 9_500\` (i.e. negative).** You wrote \`fee - post_close_equity\` with a plain \`i64 - i64\`, which works arithmetically, but you got the sign of the subtraction wrong: it should be \`fee.saturating_sub(post_close_equity)\` = \`1_207 - (-9_500)\` = \`+10_707\`. Re-read the doc comment on \`fee.saturating_sub(post_close_equity)\`: the trick is that subtracting a negative adds the magnitude.
+- **\`underwater_close_partial_fee_collection\` fails with \`fee_to_fund: 0, shortfall_to_fund: 1_357\`** — you wrote the \`if\` branch as \`>=\` instead of \`>\`. With \`>=\`, equity = 0 routes into the partial-fee branch (still produces correct math: \`fee_to_fund = 0, shortfall = fee - 0 = fee\`), but with the wrong intent. The doc says "positive but insufficient" — strictly positive.
+- **\`solvent_close_typical_liquidatable\` panics with the debug-assert message.** Your \`account_equity\` or \`notional_value\` from L4/L5 is returning a wrong sign. The expected \`post_close_equity\` is +$5,000; if you're getting something else, walk through the Stage 10a math and fix the upstream function first.
+- **\`fee_saturates_on_pathological_input\` fails with overflow panic.** You wrote \`n * bps\` (plain \`*\`) instead of \`n.saturating_mul(bps)\`. \`i128\` overflow on multiplication still panics in debug.
+
+## Design reflection
+
+Three load-bearing decisions in this lesson:
+
+1. **The \`(fund movement, account outcome)\` decomposition is what makes the cascade composable.** Stage 10c's scanner is fundamentally a loop: for each Liquidatable account, decide solvent vs. underwater, call the right outcome function, route the credits/debits to the fund and trader. That loop is trivial *because* L10 packaged the math into two functions with named-field outputs. **A clean decomposition between math and state lets the state-machine layer stay dumb.**
+
+2. **\`debug_assert!\` is the contract; \`saturating_sub\` is the seatbelt.** The assertion documents the precondition and catches caller bugs in development. The saturation catches the same bug in production (where assertions compile out) and clamps it to a sane value. **Neither is sufficient alone** — and that's the whole point of the pairing: \`debug_assert!\` alone would, in release, let an upstream bug (a bad oracle, a corrupted snapshot) underflow into a silent wrap; \`saturating_sub\` alone would silently absorb a *routing* bug (the caller invoked the wrong function entirely), masking the symptom and leaving the cause un-debugged. Two layers, two failure modes: **dev-time assertions explode where the bug lives so it gets fixed; prod-time saturation guarantees the chain doesn't fork if a bug slips through to mainnet anyway.** **Defensive coding in pure compute uses dev-time assertions + prod-time saturation as a pair.**
+
+3. **Two functions with opposite preconditions > one function returning a tagged union.** \`solvent_close_outcome\` and \`underwater_close_outcome\` are a discriminated dispatch *by convention*: the caller routes based on a margin-health check, and the functions' debug-asserts enforce the routing decision. The alternative — one function returning \`enum CloseOutcome { Solvent(SolventClose), Underwater(UnderwaterClose) }\` — would re-do the routing work inside the function. **When the caller has already made the routing decision, the right interface is two functions, not one with a tagged-union return.**
+
+## Answer key
+
+\`\`\`bash
+cd ~/code/openhl-reference
+git checkout 260883b
+diff -u ~/code/my-openhl/crates/liquidation/src/compute.rs ./crates/liquidation/src/compute.rs
+diff -u ~/code/my-openhl/crates/liquidation/src/types.rs ./crates/liquidation/src/types.rs
+diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
+\`\`\`
+
+After L10:
+- **compute.rs** matches Stage 10b's \`compute.rs\` **byte-for-byte**.
+- **types.rs** matches Stage 10b's \`types.rs\` **byte-for-byte**.
+- **lib.rs** matches Stage 10b's \`lib.rs\` **byte-for-byte**.
+- **insurance.rs** has been byte-for-byte since L9.
+
+**Stage 10b is complete.** The whole \`openhl-liquidation\` crate at commit \`260883b\` is in your workspace. Module 3 (insurance fund) of the rethlab Liquidation course wraps here.
+
+## Common questions
+
+**Q1: Why does \`liquidation_fee\` truncate (integer division) instead of round-half-up?**
+
+Consensus determinism requires every validator to compute the same number, and Rust's \`/\` operator on integers is **truncation toward zero** — the unambiguous default for integer division in every language ABI. Rounding semantics differ between languages (banker's rounding vs. half-away-from-zero) and even between processor families; truncation is the *only* operation that's portably the same. The same discipline is why the *whole crate* refuses \`f64\` arithmetic: IEEE 754 rounding modes can differ by FPU, by compiler flags, by ordering of operations — every one of those is a chain-fork risk. Integers + saturation + truncation is the only path that gives validators byte-identical state transitions, full stop. **For consensus arithmetic, pick the operation with the simplest determinism story, even if it sacrifices a fraction of a basis point in fee accuracy.**
+
+**Q2: Should \`solvent_close_outcome\` and \`underwater_close_outcome\` be methods on \`AccountSnapshot\`?**
+
+Same answer as L7's Q3 for \`close_order_spec\`: they live in \`compute.rs\` alongside the other margin math functions because that's the architectural home. \`AccountSnapshot\` is a data carrier (in \`types.rs\`); compute lives in \`compute.rs\`. **Co-locate by concept, not by receiver.**
+
+**Q3: Why does \`underwater_close_outcome\` not return zero \`shortfall_to_fund\` for the trivially-not-underwater boundary case (equity exactly equal to fee)?**
+
+Because the \`debug_assert!\` precondition is \`equity < fee\` (strict). If a caller calls \`underwater_close_outcome\` with \`equity == fee\`, the assertion fires in debug and the function still runs (in release), producing \`fee_to_fund = post_close_equity = fee, shortfall_to_fund = 0\` — which is *actually correct* (the close is exactly solvent), but it's not the function's job to fix the caller's routing mistake. **Use \`debug_assert!\` to enforce contracts; use saturation to make the unenforced case still produce a sane answer.**
+
+**Q4: The \`fee_saturates_on_pathological_input\` test sets \`liquidation_fee_bps = u32::MAX\`. That's \`4,294,967,295\` — over 42 *million* percent. Is this test realistic?**
+
+No, it's not realistic — and that's the point. The test exists to verify the saturation path *fires correctly* in the one input regime where it can fire. A realistic test would test fees of 50 to 500 bps; this test is a *consensus determinism guard* — it proves that even a maliciously-crafted \`LiquidationParams\` produces a deterministic, non-panicking output. **Saturation tests live at the boundary, not in the operating range.**
+
+**Q5: Could \`solvent_close_outcome\` return \`Option<SolventClose>\` where \`None\` means "actually this is underwater, retry with the other function"?**
+
+You could, but it conflates two questions: "did the function complete?" and "did the caller route correctly?" The current design separates these — the function always completes (returning a value, even when the assertion would fire), and the assertion catches the routing error during development. **Mixing completion semantics with routing semantics is a design smell; keep them in different mechanisms.**
+
+**Q6: Why is \`fee_to_fund\` in \`UnderwaterClose\` named the same as in \`SolventClose\` if the semantics are different?**
+
+The semantics are *the same*: both fields say "this much of the close's fee flowed to the insurance fund." In \`SolventClose\`, that's the full fee (collected from positive collateral residual). In \`UnderwaterClose\`, that's a partial fee (collected from positive-but-insufficient equity) or zero (collected from negative equity). The *amount* differs; the *destination* doesn't. **Name fields by destination, not by the math that produced them.**
+
+## Next lesson (L11) — \`LiquidationScanner\` introduction (Stage 10c)
+
+L11 begins Stage 10c — the multi-account scanner. The scanner is the state-machine consumer of everything L4–L10 produced. It takes a slice of \`&[AccountSnapshot]\`, classifies each one (Liquidatable, Underwater, Safe, At-Risk) using \`margin_health\` from L6, calls either \`solvent_close_outcome\` or \`underwater_close_outcome\` per Liquidatable account, threads the credits/debits into an owned \`InsuranceFund\`, and returns a \`ScanReport\` summarizing the batch: which accounts were closed, which ADL trigger amounts surfaced, and where the fund stands afterwards.
+
+After L11, the cascade has its first *runnable* layer: not just math + state, but math + state + orchestration loop. The SHA pin advances from \`260883b\` to \`0a8464e\` (Stage 10c).
 `,
                 },
               ],

@@ -6,8 +6,9 @@
  * draft file naming convention (openhl_liquidation_l<N>_<locale>.md), different
  * output filename, different course metadata.
  *
- * Currently covers L0..L7 — Stage 10a content (margin math). Modules 3 (insurance
- * fund) and 4 (scanner + capstone) will be added once Stage 10b/10c ship in openhl.
+ * Currently covers L0..L10 — Stage 10a (margin math) + Stage 10b (insurance fund +
+ * close-outcome decomposition). Module 4 (scanner + capstone, Stage 10c) will be
+ * added once Stage 10c ships in openhl.
  *
  * Run from rethlab root:
  *   npx tsx .github/scripts/build-openhl-liquidation-seed.ts            # generates EN
@@ -60,7 +61,7 @@ const EN: LocaleConfig = {
     slug: 'building-openhl-liquidation-en',
     title: 'Build OpenHL Liquidation — perpetual position liquidation engine',
     description:
-      "Build the perpetual-position liquidation engine — the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs. Includes the leveraged-regime non-monotonicity discovery: write the proptest, watch it fail, trace the failure analytically, refine with prop_assume!. The fifth course in the DIY Perp series. Stage 10a (margin math) shipped; insurance fund (Stage 10b) and multi-account scanner (Stage 10c) pending.",
+      "Build the perpetual-position liquidation engine — the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs, plus the insurance-fund state machine that absorbs deficits via a three-variant outcome enum (Covered / PartiallyDrained / Depleted). Includes the leveraged-regime non-monotonicity discovery, conservation-law proptests for the cascade math, and the credit/debit decomposition that bridges pure compute and stateful book-keeping. The fifth course in the DIY Perp series. Stage 10a (margin math) + Stage 10b (insurance fund + close-outcome decomposition) shipped; multi-account scanner (Stage 10c) pending.",
     track: 'diy-perp',
     instructorName: 'RethLab',
   },
@@ -68,6 +69,7 @@ const EN: LocaleConfig = {
     0: { title: 'Orientation', sortOrder: 0 },
     1: { title: 'Types', sortOrder: 1 },
     2: { title: 'Pure compute', sortOrder: 2 },
+    3: { title: 'Insurance fund', sortOrder: 3 },
   },
   lessons: [
     {
@@ -166,6 +168,41 @@ const EN: LocaleConfig = {
       h1Marker: "# Lesson 7 — `close_order_spec` — Stage 10a's last function",
       startSignature: "Concepts you'll grasp in this lesson",
     },
+    {
+      draftFile: 'openhl_liquidation_l8_en.md',
+      moduleNumber: 3,
+      sortOrder: 0,
+      title: 'Lesson 8 — InsuranceFund — where the crate stops being pure',
+      slug: 'openhl-liquidation-insurance-fund-intro-en',
+      duration: 25,
+      xpReward: 50,
+      h1Marker: '# Lesson 8 — `InsuranceFund` — where the crate stops being pure',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
+    {
+      draftFile: 'openhl_liquidation_l9_en.md',
+      moduleNumber: 3,
+      sortOrder: 1,
+      title: 'Lesson 9 — withdraw_shortfall — the Layer 2 → Layer 3 boundary as code',
+      slug: 'openhl-liquidation-withdraw-shortfall-en',
+      duration: 30,
+      xpReward: 60,
+      h1Marker: '# Lesson 9 — `withdraw_shortfall` — the Layer 2 → Layer 3 boundary as code',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
+    {
+      draftFile: 'openhl_liquidation_l10_en.md',
+      moduleNumber: 3,
+      sortOrder: 2,
+      title:
+        'Lesson 10 — liquidation_fee + close-outcome decomposition — the bridge between compute and insurance',
+      slug: 'openhl-liquidation-close-outcome-decomposition-en',
+      duration: 35,
+      xpReward: 70,
+      h1Marker:
+        '# Lesson 10 — `liquidation_fee` + close-outcome decomposition — the bridge between `compute` and `insurance`',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
   ],
 };
 
@@ -180,7 +217,7 @@ const JA: LocaleConfig = {
     slug: 'building-openhl-liquidation-ja',
     title: 'OpenHL Liquidation 開発ガイド：レバレッジ環境における非単調性の発見と清算エンジンの構築',
     description:
-      '永久先物ポジションを司る liquidation engine の中核を実装します。証拠金維持率からアカウントを4つのフェーズ（Safe / AtRisk / Liquidatable / Underwater）に厳密に分類し、適切なクローズ注文 spec を生成する Pure な計算レイヤー（pure compute layer）を設計。さらに、levered-regime で発生する「非単調性（Non-monotonicity）」の潜伏バグを浮き彫りにします。proptest を用いた反例の自動生成、原因のトレース、そして prop_assume! による不変条件の精査（refining）まで、高難度な数理バグに立ち向かう手法を網羅。',
+      '永久先物ポジションを司る liquidation engine の中核を実装します。証拠金維持率からアカウントを4つのフェーズ（Safe / AtRisk / Liquidatable / Underwater）に厳密に分類し、適切なクローズ注文 spec を生成する Pure な計算レイヤー（pure compute layer）を設計。さらに、levered-regime で発生する「非単調性（Non-monotonicity）」の潜伏バグを proptest で炙り出し、prop_assume! で精査する手法を網羅。Stage 10b では、保険基金（InsuranceFund）の state machine と、3 つの WithdrawOutcome variant（Covered / PartiallyDrained / Depleted）が表現する Layer 2 → Layer 3 のカスケード境界を実装。保存則を proptest で encode し、`(fund movement, account residual)` ペアへの分解で pure compute と stateful book-keeping を橋渡しします。',
     track: 'diy-perp',
     instructorName: 'RethLab',
   },
@@ -188,6 +225,7 @@ const JA: LocaleConfig = {
     0: { title: 'Orientation', sortOrder: 0 },
     1: { title: '型', sortOrder: 1 },
     2: { title: '純粋な compute', sortOrder: 2 },
+    3: { title: '保険基金', sortOrder: 3 },
   },
   lessons: [
     {
@@ -281,6 +319,42 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 7 — `close_order_spec` — Stage 10a の最後の関数',
       startSignature: 'このレッスンで掴む概念',
     },
+    {
+      draftFile: 'openhl_liquidation_l8_ja.md',
+      moduleNumber: 3,
+      sortOrder: 0,
+      title: 'レッスン 8 — InsuranceFund — クレートが純粋でなくなる地点',
+      slug: 'openhl-liquidation-insurance-fund-intro-ja',
+      duration: 25,
+      xpReward: 50,
+      h1Marker: '# レッスン 8 — `InsuranceFund` — クレートが純粋でなくなる地点',
+      startSignature: 'このレッスンで掴む概念',
+    },
+    {
+      draftFile: 'openhl_liquidation_l9_ja.md',
+      moduleNumber: 3,
+      sortOrder: 1,
+      title: 'レッスン 9 — withdraw_shortfall — Layer 2 → Layer 3 境界をコードで表現する',
+      slug: 'openhl-liquidation-withdraw-shortfall-ja',
+      duration: 30,
+      xpReward: 60,
+      h1Marker:
+        '# レッスン 9 — `withdraw_shortfall` — Layer 2 → Layer 3 境界をコードで表現する',
+      startSignature: 'このレッスンで掴む概念',
+    },
+    {
+      draftFile: 'openhl_liquidation_l10_ja.md',
+      moduleNumber: 3,
+      sortOrder: 2,
+      title:
+        'レッスン 10 — liquidation_fee + close-outcome decomposition — compute と insurance をつなぐ橋',
+      slug: 'openhl-liquidation-close-outcome-decomposition-ja',
+      duration: 35,
+      xpReward: 70,
+      h1Marker:
+        '# レッスン 10 — `liquidation_fee` + close-outcome decomposition — `compute` と `insurance` をつなぐ橋',
+      startSignature: 'このレッスンで掴む概念',
+    },
   ],
 };
 
@@ -302,8 +376,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 250, // L0..L7 total: 15+30+25+25+45+60+30+20
-  xpReward: 490, // L0..L7 total: 50+60+50+50+80+100+60+40
+  duration: 340, // L0..L10 total: 15+30+25+25+45+60+30+20+25+30+35
+  xpReward: 670, // L0..L10 total: 50+60+50+50+80+100+60+40+50+60+70
   tags: ['reth', 'evm', 'liquidation', 'perpetual', 'l1', 'openhl', 'expert'],
   sortOrder: 1000,
   isPublished: true,
