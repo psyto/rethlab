@@ -1166,8 +1166,12 @@ chisel
 
 1. Foundry インストール：\`curl -L https://foundry.paradigm.xyz | bash && foundryup\`
 2. \`forge init my-test && cd my-test && forge test\` — 最初の Revm バックの Solidity テストを実行
-3. \`anvil --fork-url <RPC>\` — メインネットをローカルにフォーク
-4. 別のターミナルで：\`cast call $UNISWAP_V3_POOL "slot0()" --rpc-url http://localhost:8545\` — ローカルフォーク経由で生きた Uniswap 状態を読む
+3. \`anvil --fork-url https://ethereum.reth.rs/rpc\` — メインネットをローカルにフォーク（前のレッスンで使った Reth プロジェクトの公開 RPC をそのまま再利用）
+4. 別のターミナルで以下を実行 — ローカルフォーク経由で生きた Uniswap 状態を読む。アドレス \`0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8\` は **Uniswap V3 の USDC/ETH 0.05% プール**（メインネット上で最もアクティブな pool の一つ）：
+
+   \`\`\`bash
+   cast call 0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8 "slot0()" --rpc-url http://localhost:8545
+   \`\`\`
 5. [\`forge-std/src/Vm.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Vm.sol) を開いて cheatcode インターフェースを眺める — 各エントリが Foundry の Rust precompile の関数に対応している
 
 これで Revm を学習者として、また日常的な利用者として使う立場になりました。

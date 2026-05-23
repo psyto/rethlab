@@ -1160,8 +1160,12 @@ If you're aiming for serious Rust EVM work, Foundry is **both your daily tool an
 
 1. Install Foundry: \`curl -L https://foundry.paradigm.xyz | bash && foundryup\`
 2. \`forge init my-test && cd my-test && forge test\` — run your first Revm-backed test
-3. \`anvil --fork-url <RPC>\` — fork mainnet locally
-4. In another terminal: \`cast call $UNISWAP_V3_POOL "slot0()" --rpc-url http://localhost:8545\` — read live Uniswap state from your local fork
+3. \`anvil --fork-url https://ethereum.reth.rs/rpc\` — fork mainnet locally (reusing the same Reth-project public RPC you used in the previous lesson)
+4. In another terminal, run the command below to read live Uniswap state from your local fork. The address \`0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8\` is the **Uniswap V3 USDC/ETH 0.05% pool** (one of the most active pools on mainnet):
+
+   \`\`\`bash
+   cast call 0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8 "slot0()" --rpc-url http://localhost:8545
+   \`\`\`
 5. Open [\`forge-std/src/Vm.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Vm.sol) and skim the cheatcode interface — every entry corresponds to a function in Foundry's Rust precompile
 
 You're now using Revm both as a learner and as a daily user.
