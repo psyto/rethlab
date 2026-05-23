@@ -8083,6 +8083,7 @@ Outside rethlab:
 - **\`psyto/openhl\` Stages 8-9** — the CLOB and custom precompiles. Source code in the public repo; no walkthrough course yet.
 - **Malachite spec docs** (\`informalsystems/malachite\`) — read the \`core-types\` crate's docs straight through. Half of it is now familiar; the other half is what multi-validator requires.
 - **A real Reth full node** — clone \`paradigmxyz/reth\`, run \`cargo run --bin reth -- node --chain dev\`. Your \`EthereumNode::default()\` in L11 is the same thing, minus the consensus layer. Compare the surface.
+- **\`category-labs/monad-bft\`** — a second mature Rust BFT consensus implementation, actively developed (672★ as of mid-2026, GPLv3-licensed). Where Malachite treats consensus as a generic state-machine library with a context type the embedding chain plugs into, Monad-BFT is purpose-built for a single execution layer and pipelines block proposal with execution to amortize finality latency. The two represent opposite honest trade-offs: **Malachite optimizes for *embeddability*** (easy to wire into anything, which is exactly what L0-L7 of this course did); **Monad-BFT optimizes for *single-chain throughput*** (faster, but harder to reuse). Worth reading after this course to internalize that "BFT in Rust" isn't a single shape. **License note:** GPLv3 means citing or studying it is fine; never copy code into your openhl tree — openhl is permissive-licensed and would inherit the copyleft.
 
 ## Closing note
 

@@ -8077,6 +8077,7 @@ rethlab 外:
 - **\`psyto/openhl\` Stages 8-9** — CLOB と custom precompile。Source code は public repo にあるが、walkthrough コースはまだ無い。
 - **Malachite spec docs** (\`informalsystems/malachite\`) — \`core-types\` crate の doc を読み通す。半分はすでに馴染みがあり、残り半分が multi-validator に必要なものになる。
 - **Real Reth full node** — \`paradigmxyz/reth\` を clone し、\`cargo run --bin reth -- node --chain dev\` を走らせる。L11 の \`EthereumNode::default()\` と同じものから consensus 層を引いた形だ。Surface を比較してみる。
+- **\`category-labs/monad-bft\`** — もう 1 つの成熟した Rust 製 BFT consensus 実装、現在も活発開発中（2026 年中頃時点で 672★、GPLv3 ライセンス）。本コースが使う Malachite は consensus を「embedding chain が plug できる context type 付きの汎用 state-machine library」として扱う。一方 Monad-BFT は単一の execution layer のために purpose-built で、block proposal と execution を pipeline して finality latency を amortize する。両者は正直に対立する設計トレードオフだ: **Malachite は *embeddability* に最適化** (どこにでも wire しやすい — 本コースの L0-L7 でやったように)、**Monad-BFT は *single-chain throughput* に最適化** (速いが reuse は難しい)。本コース後に読むと「Rust BFT は単一の shape ではない」と腹落ちする。**ライセンス注意:** GPLv3 のため citation や読解は OK だが、code を openhl tree に copy するのは NG — openhl は permissive license で、copyleft が伝染する。
 
 ## クロージングノート
 

@@ -22,7 +22,7 @@
 - **Pure → stateful の境界。** Stage 10a の `compute.rs` は pure だった。どの関数も引数からの決定的な投影でしかなく、いつでも再計算できた。Stage 10b で liquidation crate に初めて state が登場する — insurance fund の蓄積される balance だ。なぜか。Fund は単一のスナップショットに閉じた事実ではなく、そこに至る **履歴そのもの** の事実だからだ。**State がコードに現れるのは、入力から再導出できなくなる地点だけ。**
 - **`balance ≥ 0` という型不変条件。** すべての public 操作がこれを保つ。フィールドの型は `i64`（crate の他のところと算術の型を揃えるため）だが、**不変条件はコードで守られる — 型システムが守るのではない**。`new(-500)` は 0 にクランプする。`deposit(-50)` は no-op になる。`withdraw_shortfall(...)` は 0 で飽和して、不足分は `WithdrawOutcome`（L9 で）として表面化する。規律はこうだ: **すべての public メソッドを「不変条件を保つ遷移」として書く。**
 - **境界の防御 vs 関数の防御。** `compute` モジュールは入力を信用する。`insurance` モジュールは信用しない。違いはこうだ。`compute` は pure な投影 — 呼び出し側が valid な `AccountSnapshot` をすでに組み立てている。`InsuranceFund` は *境界そのもの* — bridge、scanner、（後の）ADL ルーチンがそれぞれ異なるレイヤーから呼んでくる。どれか 1 つに bug が混入しうる。**多くの呼び出し側を集約する境界でこそ、defensive coding が意味を持つ。**
-- **コンセンサス state における saturating 演算。** `deposit` は `+` ではなく `saturating_add` を使う。理由は「dev で panic を避けるため」ではない。**コンセンサスに影響する演算は、すべての validator で決定的でなければならない。panic-on-overflow を入れた瞬間、1 つの validator だけが halt して他は走り続け、結果としてネットワークが分裂 (fork) する。** Saturation はコンセンサス state のための原則的な選択だ。
+- **コンセンサス state における saturating 演算。** `deposit` は `+` ではなく `saturating_add` を使う。理由は「dev で panic を避けるため」だけではない。Rust の `+` 演算子はビルドプロファイルで *2 つの* failure mode を持つ。**Debug ビルドでは overflow に panic する** (1 つの validator がクラッシュ、他は走り続け → fork)、**release ビルドではサイレントに wrap する** (2 の補数の剰余演算で、validator ごとに異なる `i64` を生む → fork)。Release の wrap こそが厄介だ — クラッシュなし、エラーなし、ただ state の不一致が起きる。`saturating_add` は `i64::MAX` (または `MIN`) にあらゆるビルドプロファイルで clamp する。全 validator が同じ値を見る、コンパイラフラグが何であれ。**Saturation はコンセンサス安全な算術規律だ。**
 
 確認:
 
@@ -288,7 +288,7 @@ pub enum WithdrawOutcome {
 
 1. **`fee > 0`（strict）。** Fee = 0 も no-op なので、`>` と `>=` の挙動はゼロでは同じだ。Strict 形だと、分岐は「実際に仕事があるとき」だけ発火する。**Side effect を gate する述語では、ゼロが no-op のとき `> 0`（「これは意味があるか?」テスト）を `>= 0`（「これは非負か?」テスト）より優先する。**
 2. **負の入力は黙って無視される。Panic も Error も出さない。** なぜか。代替案がコンセンサスにとって致命的だからだ。Panic-on-negative にすると、bridge bug で負の fee が 1 度来た瞬間、1 つの validator は halt し、他は走り続ける — Rust の panic セマンティクスはここで特に酷い（debug vs release、hook の差、etc.）。`Result<i64, ...>` を返せば、scanner のすべての呼び出し側に `unwrap`（panic を別名で）かエラー型のスレッディング（うまく扱える場所がない）を強要する。**Saturating-no-op がコンセンサスの決定性を無料でくれる。**
-3. **`saturating_add` であって `+` ではない。** Debug ビルドでは `100i64 + i64::MAX` がオーバーフロー panic する。Release ビルドでは負の値に wrap する — *これは `balance ≥ 0` の不変条件を silently 破る*。Saturation は `i64::MAX` で頭打ちにする。ネットワークが `9.2 × 10^18` を超える fee を蓄積することはどのみち起きないし、cap は病理的でない state では不可視だ。**`saturating_*` ファミリはコンセンサス安全な算術ファミリ。**
+3. **`saturating_add` であって `+` ではない。** `+` を使うと 2 つの failure mode が出る。Debug ビルドでは `100i64 + i64::MAX` がオーバーフロー panic する (1 つの validator が halt、他は走り続け → fork)。Release ビルドではサイレントに負の値に wrap する — *これは `balance ≥ 0` の不変条件を破ると同時に、同じ演算を扱った peer ごとに異なる `i64` を生む → fork*。`saturating_add` はあらゆるビルドプロファイルで `i64::MAX` に頭打ちにする。全 validator が同じ数を見る。ネットワークが `9.2 × 10^18` を超える fee を蓄積することはどのみち起きないし、cap は病理的でない state では不可視だ。**`saturating_*` ファミリはコンセンサス安全な算術ファミリ。**
 4. **新しい balance を返す。** 呼び出し側はそれを log したいケースがよくある（「fee credited: 150、fund balance now: 2,400,150」）。`let _ = f.deposit(150); let new_balance = f.balance();` の二段書きより、チェーンしたほうがきれい。`&mut self`-and-returns は標準ライブラリにもあるパターン（`HashMap::insert` が古い値を返すなど）。**有用な state を返す `&mut self` メソッドは、追加の `balance()` 呼び出しを省ける。**
 5. **doc 文字列が「non-negative fee amount」と言い、実装は負も扱う。** 矛盾ではなく defensive ドキュメントだ。Doc は「こう渡してください」を言い、実装は「でも garbage が来てもクラッシュしません」を言う。**意図する契約を doc に書き、慈悲深い失敗モードを実装する。**
 
