@@ -606,7 +606,7 @@ L2 後、Solidity で最初の保存則 fuzz test を書き終えている。ope
 
 このレッスンで掴む概念:
 
-- **\`forge fuzz\` は別構文の \`proptest!\`。** 同じ theorem-first のマインドセット: assertion が *すべての valid な入力に対して* 成立するべきと書き（hand-picked example だけではなく）、runner に入力空間の counterexample を探させる。同じ shrinker が 32-byte の失敗入力を、bug を trigger する最小の \`uint256\` に reduce する。同じ corpus persistence が既知の counterexample を次回 run で即座に replay する。openhl-liquidation L9 で \`proptest! { #[test] fn balance_never_negative(...) { ... } }\` を書いたなら、\`testFuzz_*\` 関数の形はすでに知っている。Solidity が contract 構文で包むだけだ。
+- **\`forge fuzz\` は別構文の \`proptest!\`。** 同じ「定理先行（Theorem-first）」のマインドセット: assertion が *すべての valid な入力に対して* 成立するべきと書き（hand-picked example だけではなく）、runner に入力空間の counterexample を探させる。同じ shrinker が 32-byte の失敗入力を、bug を trigger する最小の \`uint256\` に reduce する。同じ corpus persistence が既知の counterexample を次回 run で即座に replay する。openhl-liquidation L9 で \`proptest! { #[test] fn balance_never_negative(...) { ... } }\` を書いたなら、\`testFuzz_*\` 関数の形はすでに知っている。Solidity が contract 構文で包むだけだ。
 - **\`vm.assume(condition)\` は \`prop_assume!\` の Solidity 等価物。** どちらも前提条件に違反する入力を、assertion が走る *前* に filter する。Test は property の well-defined な regime だけを exercise する。Liquidation L9 の \`prop_assume!(entry * size > collateral)\` と同じパターン: 入力が test の意味ある domain から外れるなら捨てる。Fuzzer は別の入力を生成して再試行する。それだけ。
 - **デフォルト 256 iteration は *最小* であって、ゴールではない。** \`foundry.toml\` の \`fuzz.runs = 256\` が out-of-the-box デフォルト。明らかな bug を数秒で catch するには十分、property を証明するには不十分。Production codebase は CI で 10_000 や 100_000 まで bump し、より高い count は nightly run のために予約する。Rust の \`proptest!\` が \`CASES = 256\` デフォルトで取るのと同じ trade-off。
 - **Shrinking は「test がどこかで失敗した」と「test が *正確にこの入力で* 失敗した」の差。** \`forge fuzz\` が counterexample (例えば \`x = 0xa3b8...4d2f\` — ランダムな 32 バイト値) を見つけたとき、失敗を報告して終わりではない。Binary-search スタイルの reduction を走らせ、失敗を再現する *最小* の \`x\` を見つける。出力に現れるのは minimal counterexample (しばしば 1 桁の数字) で、「ある入力で壊れた」より一桁速く debug できる。
@@ -645,26 +645,27 @@ L2 がその謎の 256-run 行を property-based testing の中心ツールに�
 
 > 🛑 **予測。** 続きを読む前に: openhl-liquidation L9 の \`proptest!\` で \`CASES\` のデフォルトは \`256\`。\`forge fuzz\` でも \`fuzz.runs\` のデフォルトは \`256\`。Production codebase がよく使う CI-tier の実用値は? \`1_000_000\` に bump するとトレードオフは?
 
-(答え: **ほとんどの production CI は \`10_000\` か \`100_000\` で回す**。Nightly fuzzer は \`1_000_000\` まで push する。トレードオフはこう。各 iteration が full test (setUp → call → assertion → state cleanup) を走らせる。256 iteration なら単一の fuzz test は ~50ms、100_000 で ~20 秒、1_000_000 で ~200 秒。100_000 を超えると diminishing returns が始まる。巨大な入力空間を exercise していない限り、だが。ほとんどの uint256 fuzz test には *de facto* 小さい interesting region があり、100_000 でそこに到達する。**High count は専用 nightly CI で、デフォルト count は PR CI で、低 count はローカル開発で。**)
+(答え: **ほとんどの production CI は \`10_000\` か \`100_000\` で回す**。Nightly fuzzer は \`1_000_000\` まで push する。トレードオフはこう。各 iteration が full test (setUp → call → assertion → state cleanup) を走らせる。256 iteration なら単一の fuzz test は ~50ms、100_000 で ~20 秒、1_000_000 で ~200 秒。100_000 を超えると収穫逓減（Diminishing returns）が始まる。巨大な入力空間を exercise していない限り、だが。ほとんどの uint256 fuzz test には *de facto* 小さい interesting region があり、100_000 でそこに到達する。**High count は専用 nightly CI で、デフォルト count は PR CI で、低 count はローカル開発で。**)
 
 ## \`forge fuzz\` が実際に何をするか
 
 \`\`\`mermaid
 flowchart TD
     A[1. ランダムな uint256 生成] --> B[2. setUp 実行<br/>fresh な Counter, number = 0]
-    B --> C[3. testFuzz_* x = generated 呼び出し]
-    C --> D{4. vm.assume cond?}
-    D -->|false: iteration discard| A
-    D -->|true| E[5. assertion 実行<br/>assertEq / assertTrue / ...]
-    E -->|PASS: loop back| A
-    E -->|FAIL: shrinker trigger| F[次セクション]
-    A -.->|fuzz.runs 回成功後| G[gas 統計 μ ~ 報告]
+    B --> C[3. testFuzz_* x = 生成値 で呼び出し]
+    C --> D{4. vm.assume の条件合致?}
+    D -->|false: イテレーション破棄| A
+    D -->|true| E[5. アサーション実行<br/>assertEq / assertTrue]
+    E -->|PASS: 次のループへ| A
+    E -->|FAIL: シュリンカー起動| F[最小の反例を特定]
+    A -.->|max_test_rejects 超過| H[TooManyAssumptions エラー終了]
+    A -.->|fuzz.runs 回成功後| G[Gas 統計 μ / ~ を報告]
 \`\`\`
 
 Loop で押さえる点が 3 つ。
 
 1. **\`setUp()\` が *毎* iteration 走る。** これが per-iteration state isolation。L1 の per-test isolation と同じ規律だが、より細かい粒度だ。失敗する iteration が次の iteration を poison できない。各 run は fresh。**Per-iteration isolation が fuzz failure を reproducible にする。**
-2. **Fuzz test 内の \`vm.assume(cond)\` は、condition が false なら iteration を silently discard する。** Test を失敗させず、pass としてもカウントしない。新しい入力を生成するだけだ。これが入力 filtering メカニズム。**Precondition には \`vm.assume\`、negative-path test には \`vm.expectRevert\`。** 似て聞こえるが、逆のことをする。
+2. **Fuzz test 内の \`vm.assume(cond)\` は、condition が false なら iteration を暗黙的に破棄（Discard）する。** Test を失敗させず、pass としてもカウントしない。新しい入力を生成するだけだ。これが入力 filtering メカニズム。**Precondition には \`vm.assume\`、negative-path test には \`vm.expectRevert\`。** 似て聞こえるが、逆のことをする。
 3. **Gas 統計 (μ と ~) は *pass した* iteration から来る。** 失敗 iteration は寄与しない。Fuzz test がほぼ pass するが時々高コストな edge case に当たる場合、cheap iteration が dominant で μ は低く報告される。Fuzz gas 値を worst-case として読まない。typical-case だ。**Worst-case gas が欲しければ、特定の high-gas 入力に対する unit test を使う。**
 
 ## Shrinker が発火するとき
@@ -682,7 +683,7 @@ flowchart TD
 Shrinking で押さえる点が 2 つ。
 
 1. **Shrinker は *網羅的ではない*。** ヒューリスティック (半分にする、small-step mutation、bit-flipping) を使い、絶対的な最小ではなく「小さい」失敗を見つける。実務的にはこれで十分。counterexample \`5\` は absolute-minimum \`3\` と同じように debug できる。**ヒューリスティック shrinking で十分。32-byte 入力空間に exhaustive shrinking は実用的でない。**
-2. **Shrinkage は per-parameter。** \`(uint256 a, uint256 b)\` を取る fuzz test は各パラメータを独立に shrink する。Foundry は \`a, b/2\` の後 \`a/2, b\` のような cross-product を試さない。1 つずつ shrink する。**Multi-parameter shrinking は global ではなく local。出力に現れる minimal counterexample は per-axis に局所的に minimal。**
+2. **Shrinkage は per-parameter。** \`(uint256 a, uint256 b)\` を取る fuzz test は各パラメータを独立に shrink する。Foundry は \`a, b/2\` の後 \`a/2, b\` のような cross-product を試さない。1 つずつ shrink する。**Multi-parameter shrinking は大域的最適（Global）ではなく局所的最適（Local）。出力に現れる minimal counterexample は per-axis に局所的に minimal。**
 
 ## 手を動かす walk-through
 
@@ -774,7 +775,7 @@ function testFuzz_SetNumber(uint256 x) public {
 
 押さえる点が 6 つ。
 
-1. **\`vm.assume(x < type(uint256).max)\` が、property が成立しない唯一の入力を filter する** — 最大値、\`x + 1\` が overflow する場所。Filter なしだと test は *正しく* その 1 つの入力で失敗する。Filter ありだと、test は *意味ある* 入力範囲で property を証明する。**\`vm.assume\` が、property が assert される regime を定義する。**
+1. **\`vm.assume(x < type(uint256).max)\` が、property が成立しない唯一の入力を filter する** — 最大値、\`x + 1\` が overflow する場所。Filter なしだと test は *正しく* その 1 つの入力で失敗する。Filter ありだと、test は *意味ある* 入力範囲で property を証明する。**\`vm.assume\` が、property が assert される regime を定義する。** これは L1 の \`vm.expectRevert\` とは目的が真逆だ。\`vm.expectRevert\` は「リバートが起きること」を期待する negative-path test であり、リバート発生こそが成功条件。一方 \`vm.assume\` は「そもそもリバートを引き起こす入力を試験空間から除外する」positive-path test の保護機構で、property assertion が well-defined な domain で走れるようにする。物理現象は同じ（このコントラクトはこの入力でリバートする）— だが test 規律上の意図は正反対。
 2. **コメントが openhl-liquidation L9 の \`prop_assume!\` を cross-reference する。** 同じ役割、同じパターン、別の構文。そのコースを通った読者はこの規律を認識する。**Cross-language pattern recognition がこのコース全体の load-bearing pedagogical move。**
 3. **Property \`counter.number() == x + 1\` が保存則。** Increment 前: \`x\`。Increment 後: \`x + 1\`。差はちょうど 1。そして *すべての valid な \`x\`* で成立する。L9 proptest \`withdraw_amount_plus_unfilled_equals_shortfall\` と同じ shape。**Fuzz test は保存則を表現する、unit test は特定の case を表現する。**
 4. **\`x + 1\` は assertion 内、\`vm.assume\` が \`type(uint256).max\` を reject した後に起きる。** だから \`+1\` の算術は常に安全 (never overflow)。\`vm.assume\` がこの assertion を misfire から protect する。**Precondition が算術を guard する。Precondition は property の一部だ。**
@@ -882,7 +883,7 @@ FOUNDRY_PROFILE=ci forge test
 
 2. **\`vm.assume\` が fail ではなく filter する。** 代替は \`vm.requirePrecondition(cond)\` で、false なら iteration を *fail* させる形になる。Foundry は filter semantics を選んだ。理由は 3 つ。(a) ほとんどの precondition 違反は genuinely test したくない入力で、bug ではない、(b) それを test failure として扱うと CI がノイズで溢れる、(c) \`max_test_rejects\` がすでに、precondition が too restrictive で valid 入力を見つけられないケースを catch する。**\`vm.assume\` は「この入力は interesting でない」を言う、failure は「この property が壊れている」を言う。**
 
-3. **Shrinking は per-parameter で局所的、global ではない。** \`(uint256 a, uint256 b)\` を取る multi-parameter test は \`a\` を \`b\` と独立に shrink する。これは cross-parameter optimality を runtime speed と引き換えにする決定だ。実務的には、single-axis minimal counterexample が debugging の 95% で十分。**ヒューリスティックな local shrinking は、入力空間が 64+ バイトのとき exhaustive global shrinking に勝つ。**
+3. **Shrinking は per-parameter で局所的最適（Local）、大域的最適（Global）ではない。** \`(uint256 a, uint256 b)\` を取る multi-parameter test は \`a\` を \`b\` と独立に shrink する。これは cross-parameter optimality を runtime speed と引き換えにする決定だ。実務的には、single-axis minimal counterexample が debugging の 95% で十分。**ヒューリスティックな局所的最適 shrinking は、入力空間が 64+ バイトのとき exhaustive な大域的最適 shrinking に勝つ。**
 
 ## 答え合わせ
 

@@ -69,9 +69,10 @@ flowchart TD
     B --> C[3. Call testFuzz_* x = generated]
     C --> D{4. vm.assume cond?}
     D -->|false: discard iteration| A
-    D -->|true| E[5. Run assertion<br/>assertEq / assertTrue / ...]
-    E -->|PASS: loop back| A
-    E -->|FAIL: trigger shrinker| F[next section]
+    D -->|true| E[5. Run assertion<br/>assertEq / assertTrue]
+    E -->|PASS: next iteration| A
+    E -->|FAIL: trigger shrinker| F[find minimal counterexample]
+    A -.->|max_test_rejects exceeded| H[TooManyAssumptions error exit]
     A -.->|after fuzz.runs successes| G[report gas stats μ ~]
 ```
 
@@ -188,7 +189,7 @@ Append to `test/Counter.t.sol`:
 
 Six things to notice:
 
-1. **`vm.assume(x < type(uint256).max)` filters the one input the property doesn't hold for** — the maximum value, where `x + 1` would overflow. Without this filter, the test would *correctly* fail on that single input. With the filter, the test proves the property for the *meaningful* input range. **`vm.assume` defines the regime where the property is asserted.**
+1. **`vm.assume(x < type(uint256).max)` filters the one input the property doesn't hold for** — the maximum value, where `x + 1` would overflow. Without this filter, the test would *correctly* fail on that single input. With the filter, the test proves the property for the *meaningful* input range. **`vm.assume` defines the regime where the property is asserted.** This is the opposite role from L1's `vm.expectRevert`. `vm.expectRevert` is a negative-path test that *expects* the revert to happen and treats it as success; `vm.assume` is a positive-path test that *excludes* inputs that would revert, so the property assertion can run on the well-defined domain. Same physical phenomenon (the contract would revert at this input) — opposite test-discipline intent.
 2. **The comment cross-references openhl-liquidation L9's `prop_assume!`** — same role, same pattern, different syntax. Readers who came through that course recognize the discipline. **Cross-language pattern recognition is the load-bearing pedagogical move of this whole course.**
 3. **The property `counter.number() == x + 1` is the conservation law.** Before increment: `x`. After increment: `x + 1`. The difference is exactly 1 — and it holds *for all valid `x`*. Same shape as the L9 proptest `withdraw_amount_plus_unfilled_equals_shortfall`. **Fuzz tests express conservation laws; unit tests express specific cases.**
 4. **`x + 1` happens inside the assertion, after `vm.assume` rejected `type(uint256).max`.** So the `+1` arithmetic is always safe — never overflows. The `vm.assume` is what protects this assertion from misfire. **Preconditions guard arithmetic; preconditions are part of the property.**
