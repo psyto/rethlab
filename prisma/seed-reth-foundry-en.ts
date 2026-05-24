@@ -52,9 +52,9 @@ By the end of this course, you'll have:
 
 You'll understand:
 
-- **Why Foundry won the Solidity tooling war**: because it's Rust-built, single-binary, sub-second-feedback, and embeds Revm directly — the same Revm you've been peering into across the openhl courses.
+- **Why Foundry won the Solidity tooling war**: because it's Rust-built, single-binary, sub-second-feedback, and embeds REVM directly — the same REVM you've been peering into across the openhl courses.
 - **Why Hardhat / Truffle / Brownie lost ground**: JS-based, slower, indirect EVM access via remote forks rather than embedded execution.
-- **What \`forge fuzz\` and \`forge invariant\` actually do under the hood** — they're orchestrating Revm via the same patterns rethlab teaches in \`crates/evm\` of openhl, just exposed as Solidity-side tests.
+- **What \`forge fuzz\` and \`forge invariant\` actually do under the hood** — they're orchestrating REVM via the same patterns rethlab teaches in \`crates/evm\` of openhl, just exposed as Solidity-side tests.
 - **Why cheatcodes are precompiles** — and why that's the design choice that makes Foundry's test environment so much faster than JS-based alternatives.
 
 ## Why this course exists
@@ -85,7 +85,7 @@ Every row in the right column is what you'll be writing by L6. The capstone is t
 
 A one-paragraph history: **Foundry replaced the JS-based stack between 2022 and 2024 for serious Ethereum engineering — Truffle is end-of-life, Hardhat survives mostly for deploy scripts and frontend integration, and for L1 / contract / engine work Foundry is now the de facto standard.** For the audience of this course (L1 / infra engineers), **Foundry fluency is a commodity prerequisite — not a competitive advantage.** This course teaches it so the discipline you already have transfers. Three reasons Foundry won:
 
-1. **Speed.** Foundry's test runner embeds Revm directly in-process. There's no IPC round-trip between a JS test runner and a separate \`ganache\` / \`hardhat node\`. A 1,000-test suite that takes 60 seconds in Hardhat finishes in 2-3 seconds with \`forge test\`. The architecture difference:
+1. **Speed.** Foundry's test runner embeds REVM directly in-process. There's no IPC round-trip between a JS test runner and a separate \`ganache\` / \`hardhat node\`. A 1,000-test suite that takes 60 seconds in Hardhat finishes in 2-3 seconds with \`forge test\`. The architecture difference:
 
    \`\`\`
       ┌─────────────────────────────────────────────────────────┐
@@ -106,7 +106,7 @@ A one-paragraph history: **Foundry replaced the JS-based stack between 2022 and 
       │   │   forge test (single Rust binary)                │  │
       │   │   ┌──────────────┐     direct fn calls           │  │
       │   │   │  Solidity    │  ───────────────►             │  │
-      │   │   │  test runner │     Revm execution            │  │
+      │   │   │  test runner │     REVM execution            │  │
       │   │   └──────────────┘     (same process)            │  │
       │   └─────────────────────────────────────────────────┘  │
       │            ↑ ~µs per call, no IPC, no serialization     │
@@ -115,9 +115,9 @@ A one-paragraph history: **Foundry replaced the JS-based stack between 2022 and 
 
    The 20-30× speedup isn't an optimization — it's an architectural consequence of removing the process boundary.
 2. **Fuzzing as a first-class primitive.** Hardhat had property-based testing as a plugin. Foundry shipped it built-in, with shrinking, with corpus persistence, with invariant testing for sequenced calls. The closest JS equivalent (\`fast-check\` + Hardhat) requires non-trivial wiring.
-3. **Cheatcodes-as-precompiles.** Hardhat's \`evm_snapshot\` / \`evm_increaseTime\` are JSON-RPC methods that ask a remote node to change its state. Foundry's \`vm.warp\` / \`vm.deal\` / \`vm.prank\` are Solidity calls to a magic precompile at address \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` that **hacks Revm's state from the inside** — same process, no IPC, no remote-node trust. For readers who came through the openhl Precompiles course (Stage 9), this is the *same precompile-as-EVM-superpower pattern* you learned in Rust, exposed via Solidity for testing. Faster, more composable, and (importantly) testable inside the same Solidity file as the contracts they test.
+3. **Cheatcodes-as-precompiles.** Hardhat's \`evm_snapshot\` / \`evm_increaseTime\` are JSON-RPC methods that ask a remote node to change its state. Foundry's \`vm.warp\` / \`vm.deal\` / \`vm.prank\` are Solidity calls to a magic precompile at address \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` that **hacks REVM's state from the inside** — same process, no IPC, no remote-node trust. For readers who came through the openhl Precompiles course (Stage 9), this is the *same precompile-as-EVM-superpower pattern* you learned in Rust, exposed via Solidity for testing. Faster, more composable, and (importantly) testable inside the same Solidity file as the contracts they test.
 
-**The strategic implication for an L1 engineer:** if you write or read Reth/Revm/Alloy code (rethlab's existing focus), Foundry is the same toolchain in a different language wrapper. Learning it is not switching ecosystems — it's adding a second language to the same execution engine.
+**The strategic implication for an L1 engineer:** if you write or read Reth/REVM/Alloy code (rethlab's existing focus), Foundry is the same toolchain in a different language wrapper. Learning it is not switching ecosystems — it's adding a second language to the same execution engine.
 
 ## The discipline transfer — three concrete invariants you'll port
 
@@ -311,8 +311,8 @@ Expected output (abbreviated):
 
 \`\`\`
 [⠊] Compiling...
-[⠒] Compiling 27 files with Solc 0.8.28
-[⠢] Solc 0.8.28 finished in 1.49s
+[⠒] Compiling 27 files with Solc 0.8.35
+[⠢] Solc 0.8.35 finished in 1.49s
 Compiler run successful!
 
 Ran 2 tests for test/Counter.t.sol:CounterTest
@@ -335,7 +335,7 @@ Three things to notice about the output format:
 
 \`\`\`solidity
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 contract Counter {
     uint256 public number;
@@ -352,7 +352,7 @@ contract Counter {
 
 Five things to notice:
 
-1. **\`pragma solidity ^0.8.28\`** — the \`^\` is a caret-style version constraint (same syntax Cargo uses). Means "any 0.8.28+ version, but not 0.9". Solidity 0.8 is the discipline-line: it introduced built-in overflow checks (no more \`SafeMath\`), which is what makes our \`test_RevertWhen_DecrementBelowZero\` test possible later.
+1. **\`pragma solidity ^0.8.35\`** — the \`^\` is a caret-style version constraint (same syntax Cargo uses). Means "any 0.8.35+ version, but not 0.9". Solidity 0.8 is the discipline-line: it introduced built-in overflow checks (no more \`SafeMath\`), which is what makes our \`test_RevertWhen_DecrementBelowZero\` test possible later.
 2. **\`uint256 public number\`** — \`public\` auto-generates a getter function (\`number()\`) returning the value. The state variable itself can also be written directly from inside the contract; from outside, only the auto-generated getter is callable. **Solidity collapses \`let pub\` and \`let pub fn ...()\` into one declaration.**
 3. **No constructor.** Default initialization: \`number = 0\`. Same default-zero semantics as Rust's \`i64::default()\`.
 4. **\`setNumber\` and \`increment\` are \`public\`** — anyone can call them. (Restriction modifiers like \`onlyOwner\` would go here in production; the example is intentionally permissionless.)
@@ -362,7 +362,7 @@ Five things to notice:
 
 \`\`\`solidity
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {Test, console} from "forge-std/Test.sol";
 import {Counter} from "../src/Counter.sol";
@@ -415,6 +415,14 @@ Append to \`test/Counter.t.sol\`:
         // the zero in a local variable defeats the constant folder — the
         // subtraction becomes a runtime SUB opcode, which Solidity 0.8
         // wraps with the overflow check that triggers Panic(0x11).
+        //
+        // Important: \`zero - 1\` evaluates *in this test contract* — the
+        // argument to setNumber must be computed before the external call
+        // is made. So the panic fires here, in the test contract, and the
+        // call to \`counter.setNumber\` is never actually dispatched. A trace
+        // (\`forge test -vvvv\`) shows no call into \`counter\`. vm.expectRevert
+        // still catches it because it intercepts any revert that occurs
+        // between arming and the next external-call site.
         uint256 zero = 0;
         counter.setNumber(zero - 1);
     }
@@ -449,7 +457,7 @@ Six things to notice:
    \`\`\`
 
    **\`vm.expectRevert\` has a 1-call lifetime; respect the ordering.**
-4. **The \`uint256 zero = 0; zero - 1\` pattern is the constant-folding workaround.** Writing \`uint256(0) - 1\` as a literal expression looks identical but doesn't compile — Solc 0.8 evaluates literal arithmetic at compile time, sees the underflow, and rejects the source. Storing zero in a local variable opaques it past the constant folder; the SUB opcode runs at runtime, and the *runtime* overflow check (which Solidity 0.8 inserts around every arithmetic op outside \`unchecked {}\`) is what triggers \`Panic(0x11)\`. **Compile-time and runtime overflow checks live at different layers; the pattern you write determines which one fires.**
+4. **The \`uint256 zero = 0; zero - 1\` pattern is the constant-folding workaround.** Writing \`uint256(0) - 1\` as a literal expression looks identical but doesn't compile — Solc 0.8 evaluates literal arithmetic at compile time, sees the underflow, and rejects the source. Storing zero in a local variable opaques it past the constant folder; the SUB opcode runs at runtime, and the *runtime* overflow check (which Solidity 0.8 inserts around every arithmetic op outside \`unchecked {}\`) is what triggers \`Panic(0x11)\`. **Compile-time and runtime overflow checks live at different layers; the pattern you write determines which one fires.** Subtle but worth knowing: the SUB opcode runs *inside this test contract* while computing the argument — so the panic fires before the external call to \`counter.setNumber\` is ever dispatched. A \`-vvvv\` trace shows no call into \`counter\`; the test passes because \`vm.expectRevert\` catches any revert that happens between arming and the next external-call site, including reverts inside the test contract itself.
 5. **The comment block walks the test's intent step-by-step.** Same \`math-walk in comments\` discipline from openhl-liquidation L13's tests. A future reader debugging a failure reads the comment and re-derives the expected behavior. **Math-walk comments turn one test into a worked example of the EVM behavior under test.**
 6. **No \`decrement()\` was added to \`Counter.sol\`** — we triggered the underflow inside the test directly. This keeps the production contract unchanged while still exercising the behavior. For production contracts with real \`decrement\` methods, the test would \`counter.decrement()\` directly. **Tests can construct minimal scenarios without modifying the contract under test.**
 
@@ -491,7 +499,7 @@ Revert the test back to the original passing version before continuing.
 Common errors:
 
 - **\`Source "forge-std/Test.sol" not found\`** — you didn't run \`forge install foundry-rs/forge-std\` and \`lib/forge-std/\` is empty. Run it now. (\`forge init\` usually does this for you, but a network hiccup can skip it.)
-- **\`Error: test_RevertWhen_DecrementBelowZero() FAILED. Reason: call did not revert as expected\`** — your Solidity version isn't 0.8.x and lacks the built-in overflow check. Check \`pragma solidity ^0.8.28\` is at the top of \`Counter.sol\`.
+- **\`Error: test_RevertWhen_DecrementBelowZero() FAILED. Reason: call did not revert as expected\`** — your Solidity version isn't 0.8.x and lacks the built-in overflow check. Check \`pragma solidity ^0.8.35\` is at the top of \`Counter.sol\`.
 - **\`compile error: not found: Counter\`** — your import path is wrong. The test file says \`import {Counter} from "../src/Counter.sol"\`; double-check the relative path.
 
 ### Step 6: Filter tests with \`--match-test\`
@@ -518,7 +526,7 @@ Three load-bearing decisions that shaped Foundry's \`forge test\`:
 
 2. **Test discovery is by name, not by attribute.** Foundry doesn't need \`@Test\` annotations because Solidity doesn't have decorators. Functions named \`test*\` are tests. The convention is enforced by \`forge\`'s grep through the test contract's function list. **Conventions documented in tooling output are equivalent to attributes for the human reader; both produce the "this is a test" signal.**
 
-3. **\`vm.*\` cheatcodes are precompiles, not JS-side wrappers.** Hardhat's \`evm_snapshot\` is an RPC method; Foundry's \`vm.expectRevert\` is a precompile call. The cheatcode lives at address \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` and Foundry's Revm fork intercepts calls to that address — exactly the precompile-as-EVM-superpower pattern from openhl Stage 9. **L1 only used \`vm.expectRevert\`; L2 and L3 will introduce more cheatcodes. Each one is a precompile.**
+3. **\`vm.*\` cheatcodes are precompiles, not JS-side wrappers.** Hardhat's \`evm_snapshot\` is an RPC method; Foundry's \`vm.expectRevert\` is a precompile call. The cheatcode lives at address \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` and Foundry's REVM fork intercepts calls to that address — exactly the precompile-as-EVM-superpower pattern from openhl Stage 9. **L1 only used \`vm.expectRevert\`; L2 and L3 will introduce more cheatcodes. Each one is a precompile.**
 
 ## Answer key
 
@@ -568,7 +576,7 @@ In practice: use \`-vvv\` for daily development (fast, only shows interesting st
 
 You can configure \`foundry.toml\` to add other test paths, but the default \`test/\` directory is conventional and tooling integrations (IDE plugins, CI matrices) assume it. Stay with the default unless you have a real reason (e.g., a giant monorepo where contract teams want their own test/ subdirs). **Convention beats configuration when the default is sane.**
 
-**Q6: Why does Solidity have \`pragma solidity ^0.8.28\` instead of \`[package] edition = "2024"\` like Rust?**
+**Q6: Why does Solidity have \`pragma solidity ^0.8.35\` instead of \`[package] edition = "2024"\` like Rust?**
 
 Different language-evolution model. Rust's editions are *epochs* that change defaults (e.g., 2024 enables new keyword reservations) without breaking old syntax. Solidity's pragma constrains which compiler version can build the file, which matters more in Solidity because compiler bugs are common and consensus determinism makes mid-deploy version mismatches catastrophic. **Solidity's pragma is closer to \`rust-version = "1.85"\` in Cargo.toml than to \`edition = "2024"\`.**
 

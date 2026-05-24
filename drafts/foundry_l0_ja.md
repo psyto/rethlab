@@ -28,9 +28,9 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
 
 掴むこと:
 
-- **Foundry が Solidity ツール戦争に勝った理由**: Rust 製、single-binary、sub-second feedback、Revm を直接 embed する。その Revm こそ、openhl 系コースで内部を覗いてきた Revm そのものだ。
+- **Foundry が Solidity ツール戦争に勝った理由**: Rust 製、single-binary、sub-second feedback、REVM を直接 embed する。その REVM こそ、openhl 系コースで内部を覗いてきた REVM そのものだ。
 - **Hardhat / Truffle / Brownie が後退した理由**: JS ベース、遅い、EVM へのアクセスが embedded execution ではなく remote fork 経由で間接的だった。
-- **`forge fuzz` と `forge invariant` が内部で実際にやっていること** — rethlab が openhl の `crates/evm` で教えているのと同じパターンで Revm を orchestrate し、それを Solidity 側の test として露出させているだけ。
+- **`forge fuzz` と `forge invariant` が内部で実際にやっていること** — rethlab が openhl の `crates/evm` で教えているのと同じパターンで REVM を orchestrate し、それを Solidity 側の test として露出させているだけ。
 - **なぜ cheatcodes が precompile なのか** — この設計判断ひとつが、Foundry の test 環境を JS ベースの代替より圧倒的に速くしている。
 
 ## このコースが存在する理由
@@ -60,7 +60,7 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
 
 歴史を 1 段落で。**Foundry は 2022-2024 年にかけて JS ベース stack を置き換えた — Truffle は終了、Hardhat は主に deploy script や frontend 連携用途で生き残るのみ、L1 / contract / engine 開発では Foundry が事実上の業界標準 (de facto standard) になった。** 本コースのターゲット層 (L1 / infra エンジニア) にとって、**Foundry の習得は競争優位ではなく前提知識 (commodity prerequisite) だ。** 本コースが Foundry を教えるのは、すでに持っている規律をそのまま transfer するため。Foundry が勝った理由は 3 つ。
 
-1. **速度。** Foundry の test runner は Revm を直接 in-process で embed する。JS test runner と別プロセスの `ganache` / `hardhat node` をつなぐ IPC round-trip がない。Hardhat で 60 秒かかる 1000-test スイートが、`forge test` なら 2-3 秒で終わる。アーキテクチャ的な違い:
+1. **速度。** Foundry の test runner は REVM を直接 in-process で embed する。JS test runner と別プロセスの `ganache` / `hardhat node` をつなぐ IPC round-trip がない。Hardhat で 60 秒かかる 1000-test スイートが、`forge test` なら 2-3 秒で終わる。アーキテクチャ的な違い:
 
    ```
       ┌─────────────────────────────────────────────────────────┐
@@ -81,7 +81,7 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
       │   │   forge test (単一の Rust binary)                │  │
       │   │   ┌──────────────┐     直接の関数呼び出し         │  │
       │   │   │  Solidity    │  ───────────────►             │  │
-      │   │   │  test runner │     Revm の実行                │  │
+      │   │   │  test runner │     REVM の実行                │  │
       │   │   └──────────────┘     (同一プロセス)             │  │
       │   └─────────────────────────────────────────────────┘  │
       │            ↑ 呼び出しごとに ~µs、IPC なし、serialize なし│
@@ -90,9 +90,9 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
 
    この 20-30× の高速化は optimization ではない — process boundary を取り除いた アーキテクチャ的な必然だ。
 2. **Fuzzing が first-class primitive。** Hardhat では property-based testing は plugin 扱いだった。Foundry は built-in で出荷した — shrinking、corpus persistence、sequenced call 用の invariant testing 込みで。最も近い JS 等価物 (`fast-check` + Hardhat) は非自明な配線を要求する。
-3. **Cheatcodes-as-precompiles。** Hardhat の `evm_snapshot` / `evm_increaseTime` は JSON-RPC method — リモートノードに state を変えるよう依頼する。Foundry の `vm.warp` / `vm.deal` / `vm.prank` はアドレス `0x7109709ECfa91a80626fF3989D68f67F5b1DD12D` の magic precompile への Solidity 呼び出し。これが **Revm の state を内側から hack する** — 同一プロセス、IPC なし、リモートノードへの信頼も不要。openhl Precompiles コース (Stage 9) を通った読者には、これは *Rust で学んだ「precompile-as-EVM-superpower」パターン* が Solidity 経由でテスト用に露出されたものだと分かる。速く、composable、何より contract と同じ Solidity ファイル内で testable。
+3. **Cheatcodes-as-precompiles。** Hardhat の `evm_snapshot` / `evm_increaseTime` は JSON-RPC method — リモートノードに state を変えるよう依頼する。Foundry の `vm.warp` / `vm.deal` / `vm.prank` はアドレス `0x7109709ECfa91a80626fF3989D68f67F5b1DD12D` の magic precompile への Solidity 呼び出し。これが **REVM の state を内側から hack する** — 同一プロセス、IPC なし、リモートノードへの信頼も不要。openhl Precompiles コース (Stage 9) を通った読者には、これは *Rust で学んだ「precompile-as-EVM-superpower」パターン* が Solidity 経由でテスト用に露出されたものだと分かる。速く、composable、何より contract と同じ Solidity ファイル内で testable。
 
-**L1 エンジニアにとっての戦略的含意。** Reth / Revm / Alloy code を書いたり読んだりするなら（rethlab の既存フォーカス）、Foundry は別言語の wrapper を被った同じ toolchain だ。生態系を切り替えるのではない。同じ execution engine に第 2 の言語を足すだけだ。
+**L1 エンジニアにとっての戦略的含意。** Reth / REVM / Alloy code を書いたり読んだりするなら（rethlab の既存フォーカス）、Foundry は別言語の wrapper を被った同じ toolchain だ。生態系を切り替えるのではない。同じ execution engine に第 2 の言語を足すだけだ。
 
 ## 規律の transfer — port する 3 つの具体的不変条件
 

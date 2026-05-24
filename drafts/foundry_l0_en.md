@@ -31,9 +31,9 @@ By the end of this course, you'll have:
 
 You'll understand:
 
-- **Why Foundry won the Solidity tooling war**: because it's Rust-built, single-binary, sub-second-feedback, and embeds Revm directly — the same Revm you've been peering into across the openhl courses.
+- **Why Foundry won the Solidity tooling war**: because it's Rust-built, single-binary, sub-second-feedback, and embeds REVM directly — the same REVM you've been peering into across the openhl courses.
 - **Why Hardhat / Truffle / Brownie lost ground**: JS-based, slower, indirect EVM access via remote forks rather than embedded execution.
-- **What `forge fuzz` and `forge invariant` actually do under the hood** — they're orchestrating Revm via the same patterns rethlab teaches in `crates/evm` of openhl, just exposed as Solidity-side tests.
+- **What `forge fuzz` and `forge invariant` actually do under the hood** — they're orchestrating REVM via the same patterns rethlab teaches in `crates/evm` of openhl, just exposed as Solidity-side tests.
 - **Why cheatcodes are precompiles** — and why that's the design choice that makes Foundry's test environment so much faster than JS-based alternatives.
 
 ## Why this course exists
@@ -64,7 +64,7 @@ Every row in the right column is what you'll be writing by L6. The capstone is t
 
 A one-paragraph history: **Foundry replaced the JS-based stack between 2022 and 2024 for serious Ethereum engineering — Truffle is end-of-life, Hardhat survives mostly for deploy scripts and frontend integration, and for L1 / contract / engine work Foundry is now the de facto standard.** For the audience of this course (L1 / infra engineers), **Foundry fluency is a commodity prerequisite — not a competitive advantage.** This course teaches it so the discipline you already have transfers. Three reasons Foundry won:
 
-1. **Speed.** Foundry's test runner embeds Revm directly in-process. There's no IPC round-trip between a JS test runner and a separate `ganache` / `hardhat node`. A 1,000-test suite that takes 60 seconds in Hardhat finishes in 2-3 seconds with `forge test`. The architecture difference:
+1. **Speed.** Foundry's test runner embeds REVM directly in-process. There's no IPC round-trip between a JS test runner and a separate `ganache` / `hardhat node`. A 1,000-test suite that takes 60 seconds in Hardhat finishes in 2-3 seconds with `forge test`. The architecture difference:
 
    ```
       ┌─────────────────────────────────────────────────────────┐
@@ -85,7 +85,7 @@ A one-paragraph history: **Foundry replaced the JS-based stack between 2022 and 
       │   │   forge test (single Rust binary)                │  │
       │   │   ┌──────────────┐     direct fn calls           │  │
       │   │   │  Solidity    │  ───────────────►             │  │
-      │   │   │  test runner │     Revm execution            │  │
+      │   │   │  test runner │     REVM execution            │  │
       │   │   └──────────────┘     (same process)            │  │
       │   └─────────────────────────────────────────────────┘  │
       │            ↑ ~µs per call, no IPC, no serialization     │
@@ -94,9 +94,9 @@ A one-paragraph history: **Foundry replaced the JS-based stack between 2022 and 
 
    The 20-30× speedup isn't an optimization — it's an architectural consequence of removing the process boundary.
 2. **Fuzzing as a first-class primitive.** Hardhat had property-based testing as a plugin. Foundry shipped it built-in, with shrinking, with corpus persistence, with invariant testing for sequenced calls. The closest JS equivalent (`fast-check` + Hardhat) requires non-trivial wiring.
-3. **Cheatcodes-as-precompiles.** Hardhat's `evm_snapshot` / `evm_increaseTime` are JSON-RPC methods that ask a remote node to change its state. Foundry's `vm.warp` / `vm.deal` / `vm.prank` are Solidity calls to a magic precompile at address `0x7109709ECfa91a80626fF3989D68f67F5b1DD12D` that **hacks Revm's state from the inside** — same process, no IPC, no remote-node trust. For readers who came through the openhl Precompiles course (Stage 9), this is the *same precompile-as-EVM-superpower pattern* you learned in Rust, exposed via Solidity for testing. Faster, more composable, and (importantly) testable inside the same Solidity file as the contracts they test.
+3. **Cheatcodes-as-precompiles.** Hardhat's `evm_snapshot` / `evm_increaseTime` are JSON-RPC methods that ask a remote node to change its state. Foundry's `vm.warp` / `vm.deal` / `vm.prank` are Solidity calls to a magic precompile at address `0x7109709ECfa91a80626fF3989D68f67F5b1DD12D` that **hacks REVM's state from the inside** — same process, no IPC, no remote-node trust. For readers who came through the openhl Precompiles course (Stage 9), this is the *same precompile-as-EVM-superpower pattern* you learned in Rust, exposed via Solidity for testing. Faster, more composable, and (importantly) testable inside the same Solidity file as the contracts they test.
 
-**The strategic implication for an L1 engineer:** if you write or read Reth/Revm/Alloy code (rethlab's existing focus), Foundry is the same toolchain in a different language wrapper. Learning it is not switching ecosystems — it's adding a second language to the same execution engine.
+**The strategic implication for an L1 engineer:** if you write or read Reth/REVM/Alloy code (rethlab's existing focus), Foundry is the same toolchain in a different language wrapper. Learning it is not switching ecosystems — it's adding a second language to the same execution engine.
 
 ## The discipline transfer — three concrete invariants you'll port
 

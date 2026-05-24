@@ -52,9 +52,9 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
 
 掴むこと:
 
-- **Foundry が Solidity ツール戦争に勝った理由**: Rust 製、single-binary、sub-second feedback、Revm を直接 embed する。その Revm こそ、openhl 系コースで内部を覗いてきた Revm そのものだ。
+- **Foundry が Solidity ツール戦争に勝った理由**: Rust 製、single-binary、sub-second feedback、REVM を直接 embed する。その REVM こそ、openhl 系コースで内部を覗いてきた REVM そのものだ。
 - **Hardhat / Truffle / Brownie が後退した理由**: JS ベース、遅い、EVM へのアクセスが embedded execution ではなく remote fork 経由で間接的だった。
-- **\`forge fuzz\` と \`forge invariant\` が内部で実際にやっていること** — rethlab が openhl の \`crates/evm\` で教えているのと同じパターンで Revm を orchestrate し、それを Solidity 側の test として露出させているだけ。
+- **\`forge fuzz\` と \`forge invariant\` が内部で実際にやっていること** — rethlab が openhl の \`crates/evm\` で教えているのと同じパターンで REVM を orchestrate し、それを Solidity 側の test として露出させているだけ。
 - **なぜ cheatcodes が precompile なのか** — この設計判断ひとつが、Foundry の test 環境を JS ベースの代替より圧倒的に速くしている。
 
 ## このコースが存在する理由
@@ -84,7 +84,7 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
 
 歴史を 1 段落で。**Foundry は 2022-2024 年にかけて JS ベース stack を置き換えた — Truffle は終了、Hardhat は主に deploy script や frontend 連携用途で生き残るのみ、L1 / contract / engine 開発では Foundry が事実上の業界標準 (de facto standard) になった。** 本コースのターゲット層 (L1 / infra エンジニア) にとって、**Foundry の習得は競争優位ではなく前提知識 (commodity prerequisite) だ。** 本コースが Foundry を教えるのは、すでに持っている規律をそのまま transfer するため。Foundry が勝った理由は 3 つ。
 
-1. **速度。** Foundry の test runner は Revm を直接 in-process で embed する。JS test runner と別プロセスの \`ganache\` / \`hardhat node\` をつなぐ IPC round-trip がない。Hardhat で 60 秒かかる 1000-test スイートが、\`forge test\` なら 2-3 秒で終わる。アーキテクチャ的な違い:
+1. **速度。** Foundry の test runner は REVM を直接 in-process で embed する。JS test runner と別プロセスの \`ganache\` / \`hardhat node\` をつなぐ IPC round-trip がない。Hardhat で 60 秒かかる 1000-test スイートが、\`forge test\` なら 2-3 秒で終わる。アーキテクチャ的な違い:
 
    \`\`\`
       ┌─────────────────────────────────────────────────────────┐
@@ -105,7 +105,7 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
       │   │   forge test (単一の Rust binary)                │  │
       │   │   ┌──────────────┐     直接の関数呼び出し         │  │
       │   │   │  Solidity    │  ───────────────►             │  │
-      │   │   │  test runner │     Revm の実行                │  │
+      │   │   │  test runner │     REVM の実行                │  │
       │   │   └──────────────┘     (同一プロセス)             │  │
       │   └─────────────────────────────────────────────────┘  │
       │            ↑ 呼び出しごとに ~µs、IPC なし、serialize なし│
@@ -114,9 +114,9 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
 
    この 20-30× の高速化は optimization ではない — process boundary を取り除いた アーキテクチャ的な必然だ。
 2. **Fuzzing が first-class primitive。** Hardhat では property-based testing は plugin 扱いだった。Foundry は built-in で出荷した — shrinking、corpus persistence、sequenced call 用の invariant testing 込みで。最も近い JS 等価物 (\`fast-check\` + Hardhat) は非自明な配線を要求する。
-3. **Cheatcodes-as-precompiles。** Hardhat の \`evm_snapshot\` / \`evm_increaseTime\` は JSON-RPC method — リモートノードに state を変えるよう依頼する。Foundry の \`vm.warp\` / \`vm.deal\` / \`vm.prank\` はアドレス \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` の magic precompile への Solidity 呼び出し。これが **Revm の state を内側から hack する** — 同一プロセス、IPC なし、リモートノードへの信頼も不要。openhl Precompiles コース (Stage 9) を通った読者には、これは *Rust で学んだ「precompile-as-EVM-superpower」パターン* が Solidity 経由でテスト用に露出されたものだと分かる。速く、composable、何より contract と同じ Solidity ファイル内で testable。
+3. **Cheatcodes-as-precompiles。** Hardhat の \`evm_snapshot\` / \`evm_increaseTime\` は JSON-RPC method — リモートノードに state を変えるよう依頼する。Foundry の \`vm.warp\` / \`vm.deal\` / \`vm.prank\` はアドレス \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` の magic precompile への Solidity 呼び出し。これが **REVM の state を内側から hack する** — 同一プロセス、IPC なし、リモートノードへの信頼も不要。openhl Precompiles コース (Stage 9) を通った読者には、これは *Rust で学んだ「precompile-as-EVM-superpower」パターン* が Solidity 経由でテスト用に露出されたものだと分かる。速く、composable、何より contract と同じ Solidity ファイル内で testable。
 
-**L1 エンジニアにとっての戦略的含意。** Reth / Revm / Alloy code を書いたり読んだりするなら（rethlab の既存フォーカス）、Foundry は別言語の wrapper を被った同じ toolchain だ。生態系を切り替えるのではない。同じ execution engine に第 2 の言語を足すだけだ。
+**L1 エンジニアにとっての戦略的含意。** Reth / REVM / Alloy code を書いたり読んだりするなら（rethlab の既存フォーカス）、Foundry は別言語の wrapper を被った同じ toolchain だ。生態系を切り替えるのではない。同じ execution engine に第 2 の言語を足すだけだ。
 
 ## 規律の transfer — port する 3 つの具体的不変条件
 
@@ -310,8 +310,8 @@ forge test
 
 \`\`\`
 [⠊] Compiling...
-[⠒] Compiling 27 files with Solc 0.8.28
-[⠢] Solc 0.8.28 finished in 1.49s
+[⠒] Compiling 27 files with Solc 0.8.35
+[⠢] Solc 0.8.35 finished in 1.49s
 Compiler run successful!
 
 Ran 2 tests for test/Counter.t.sol:CounterTest
@@ -334,7 +334,7 @@ Ran 1 test suite in 12.46ms (5.67ms CPU time): 2 tests passed, 0 failed, 0 skipp
 
 \`\`\`solidity
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 contract Counter {
     uint256 public number;
@@ -351,7 +351,7 @@ contract Counter {
 
 押さえる点が 5 つ。
 
-1. **\`pragma solidity ^0.8.28\`** — \`^\` は caret style version 制約 (Cargo と同じ構文) で、「0.8.28 以上、ただし 0.9 未満」を意味する。Solidity 0.8 が規律の境界線: built-in overflow check が導入された (\`SafeMath\` 不要)。これこそが後の \`test_RevertWhen_DecrementBelowZero\` test を可能にしている。
+1. **\`pragma solidity ^0.8.35\`** — \`^\` は caret style version 制約 (Cargo と同じ構文) で、「0.8.35 以上、ただし 0.9 未満」を意味する。Solidity 0.8 が規律の境界線: built-in overflow check が導入された (\`SafeMath\` 不要)。これこそが後の \`test_RevertWhen_DecrementBelowZero\` test を可能にしている。
 2. **\`uint256 public number\`** — \`public\` が getter 関数 (\`number()\`) を自動生成する。State variable 自体はコントラクト内部から直接書ける。外部からは自動生成された getter のみ呼び出せる。**Solidity は \`let pub\` と \`let pub fn ...()\` を 1 つの宣言に collapse する。**
 3. **コンストラクタなし。** デフォルト初期化で \`number = 0\`。Rust の \`i64::default()\` と同じ default-zero semantics。
 4. **\`setNumber\` と \`increment\` は \`public\`** — 誰でも呼べる。(\`onlyOwner\` のような制限 modifier は production ではここに入る。例は意図的に permissionless。)
@@ -361,7 +361,7 @@ contract Counter {
 
 \`\`\`solidity
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {Test, console} from "forge-std/Test.sol";
 import {Counter} from "../src/Counter.sol";
@@ -414,6 +414,14 @@ Counter コントラクトには \`increment\` はあるが \`decrement\` はな
         // the zero in a local variable defeats the constant folder — the
         // subtraction becomes a runtime SUB opcode, which Solidity 0.8
         // wraps with the overflow check that triggers Panic(0x11).
+        //
+        // Important: \`zero - 1\` evaluates *in this test contract* — the
+        // argument to setNumber must be computed before the external call
+        // is made. So the panic fires here, in the test contract, and the
+        // call to \`counter.setNumber\` is never actually dispatched. A trace
+        // (\`forge test -vvvv\`) shows no call into \`counter\`. vm.expectRevert
+        // still catches it because it intercepts any revert that occurs
+        // between arming and the next external-call site.
         uint256 zero = 0;
         counter.setNumber(zero - 1);
     }
@@ -448,7 +456,7 @@ Counter コントラクトには \`increment\` はあるが \`decrement\` はな
    \`\`\`
 
    **\`vm.expectRevert\` は 1-call の lifetime を持つ。順序を尊重する。**
-4. **\`uint256 zero = 0; zero - 1\` パターンは constant-folding 回避策。** \`uint256(0) - 1\` をリテラル式として書くと見た目は同じだが、コンパイルが通らない — Solc 0.8 はリテラル算術をコンパイル時に評価し、underflow を検出してソースを reject する。ゼロをローカル変数に格納すると、constant folder の目を欺ける: SUB opcode が runtime で走り、Solidity 0.8 が \`unchecked {}\` の外のあらゆる算術 op に挿入する *runtime* overflow check が \`Panic(0x11)\` を trigger する。**Compile-time と runtime の overflow check は別の layer に住む。書き方がどちらを発火させるかを決める。**
+4. **\`uint256 zero = 0; zero - 1\` パターンは constant-folding 回避策。** \`uint256(0) - 1\` をリテラル式として書くと見た目は同じだが、コンパイルが通らない — Solc 0.8 はリテラル算術をコンパイル時に評価し、underflow を検出してソースを reject する。ゼロをローカル変数に格納すると、constant folder の目を欺ける: SUB opcode が runtime で走り、Solidity 0.8 が \`unchecked {}\` の外のあらゆる算術 op に挿入する *runtime* overflow check が \`Panic(0x11)\` を trigger する。**Compile-time と runtime の overflow check は別の layer に住む。書き方がどちらを発火させるかを決める。** 微妙だが押さえておくべき点: SUB opcode は *このテストコントラクトの内部* で実行される — \`counter.setNumber\` への引数を組み立てる段階で発火する。つまり panic が走る場所はテストコントラクト側であり、\`counter.setNumber\` への external call は実際には dispatch されない。\`-vvvv\` トレースを見ると \`counter\` への call は現れない。それでもテストが pass するのは、\`vm.expectRevert\` が arm から次の external-call サイトまでの間に起きるあらゆる revert を catch するからだ — テストコントラクト自身が起こす revert もこれに含まれる。
 5. **コメントブロックが test の意図を step-by-step で walk する。** openhl-liquidation L13 の test と同じ \`math-walk in comments\` 規律だ。失敗を debug する将来の reader はコメントを読んで期待される挙動を再導出できる。**Math-walk コメントが 1 つの test を、テスト対象の EVM 挙動の worked example に変える。**
 6. **\`Counter.sol\` に \`decrement()\` を追加していない** — underflow を test 内部で直接 trigger した。Production contract を変更せずに挙動を exercise できるという意味だ。Real な \`decrement\` メソッドがある production contract では、test は \`counter.decrement()\` を直接呼ぶ。**Test は contract を変更せずに minimal シナリオを構築できる。**
 
@@ -490,7 +498,7 @@ counter.setNumber(42); // これは revert しない。Test は失敗するは�
 エラー時にありがちなパターン。
 
 - **\`Source "forge-std/Test.sol" not found\`** — \`forge install foundry-rs/forge-std\` を実行しておらず、\`lib/forge-std/\` が空。今走らせる。(\`forge init\` が通常やってくれるが、ネットワーク不具合で skip されることがある。)
-- **\`Error: test_RevertWhen_DecrementBelowZero() FAILED. Reason: call did not revert as expected\`** — Solidity version が 0.8.x ではなく、built-in overflow check を欠いている。\`Counter.sol\` の冒頭で \`pragma solidity ^0.8.28\` を確認する。
+- **\`Error: test_RevertWhen_DecrementBelowZero() FAILED. Reason: call did not revert as expected\`** — Solidity version が 0.8.x ではなく、built-in overflow check を欠いている。\`Counter.sol\` の冒頭で \`pragma solidity ^0.8.35\` を確認する。
 - **\`compile error: not found: Counter\`** — import path が wrong。Test ファイルは \`import {Counter} from "../src/Counter.sol"\` と書く。相対 path を再確認する。
 
 ### Step 6: \`--match-test\` で test を filter
@@ -517,7 +525,7 @@ Foundry の \`forge test\` を形作った load-bearing な決定が 3 つ。
 
 2. **Test discovery は attribute ではなく name で行う。** Foundry が \`@Test\` annotation を必要としないのは、Solidity に decorator がないからだ。\`test*\` で名付けられた関数が test。慣例は \`forge\` の test contract の関数リストへの grep で enforce される。**Tooling 出力に documented された慣例は、人間 reader にとって attribute と等価だ。両方とも「これは test」signal を生む。**
 
-3. **\`vm.*\` cheatcodes は precompile であって、JS 側 wrapper ではない。** Hardhat の \`evm_snapshot\` は RPC method。Foundry の \`vm.expectRevert\` は precompile call。Cheatcode はアドレス \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` に住み、Foundry の Revm fork がそのアドレスへの call を intercept する。まさに openhl Stage 9 の precompile-as-EVM-superpower パターン。**L1 では \`vm.expectRevert\` だけを使った。L2 と L3 でさらに cheatcode が登場する。それぞれが precompile だ。**
+3. **\`vm.*\` cheatcodes は precompile であって、JS 側 wrapper ではない。** Hardhat の \`evm_snapshot\` は RPC method。Foundry の \`vm.expectRevert\` は precompile call。Cheatcode はアドレス \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` に住み、Foundry の REVM fork がそのアドレスへの call を intercept する。まさに openhl Stage 9 の precompile-as-EVM-superpower パターン。**L1 では \`vm.expectRevert\` だけを使った。L2 と L3 でさらに cheatcode が登場する。それぞれが precompile だ。**
 
 ## 答え合わせ
 
@@ -569,7 +577,7 @@ Foundry の test isolation が各 test を *fresh* な EVM state に対して走
 
 書ける。\`foundry.toml\` を設定して他の test path を追加できる。だが default の \`test/\` ディレクトリが慣例で、tooling integration (IDE plugin、CI matrix) はそれを前提にする。Real な理由がない限り (各 contract チームが独自 \`test/\` subdir を欲しがる巨大 monorepo など) default のままで。**慣例は default が sane であるとき configuration に勝つ。**
 
-**Q6: なぜ Solidity は Rust の \`[package] edition = "2024"\` のような形ではなく \`pragma solidity ^0.8.28\` を持つのか?**
+**Q6: なぜ Solidity は Rust の \`[package] edition = "2024"\` のような形ではなく \`pragma solidity ^0.8.35\` を持つのか?**
 
 言語進化モデルが違うから。Rust の edition は *epoch* で、古い構文を壊さずに default を変える (例: 2024 が新しいキーワード予約を有効化)。Solidity の pragma はどの compiler version が file をビルドできるかを制約する。Solidity では compiler bug が一般的で、コンセンサス決定性が mid-deploy version 不一致を catastrophic にする。だからこちらのほうが重い。**Solidity の pragma は Cargo.toml の \`edition = "2024"\` よりも \`rust-version = "1.85"\` に近い。**
 
