@@ -106,6 +106,28 @@ const EN: LocaleConfig = {
       h1Marker: "# Lesson 2 — `forge fuzz` — Solidity's `proptest!`",
       startSignature: "Concepts you'll grasp in this lesson",
     },
+    {
+      draftFile: 'foundry_l3_en.md',
+      moduleNumber: 1,
+      sortOrder: 2,
+      title: 'Lesson 3 — forge invariant — multi-call invariant testing via the Handler pattern',
+      slug: 'foundry-forge-invariant-en',
+      duration: 40,
+      xpReward: 80,
+      h1Marker: '# Lesson 3 — `forge invariant` — multi-call invariant testing via the Handler pattern',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
+    {
+      draftFile: 'foundry_l4_en.md',
+      moduleNumber: 2,
+      sortOrder: 0,
+      title: "Lesson 4 — cast — the EVM's curl + jq",
+      slug: 'foundry-cast-cli-en',
+      duration: 30,
+      xpReward: 60,
+      h1Marker: "# Lesson 4 — `cast` — the EVM's `curl` + `jq`",
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
   ],
 };
 
@@ -164,6 +186,28 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 2 — `forge fuzz` — Solidity の `proptest!`',
       startSignature: 'このレッスンで掴む概念',
     },
+    {
+      draftFile: 'foundry_l3_ja.md',
+      moduleNumber: 1,
+      sortOrder: 2,
+      title: 'レッスン 3 — forge invariant — Handler パターンによる multi-call invariant testing',
+      slug: 'foundry-forge-invariant-ja',
+      duration: 40,
+      xpReward: 80,
+      h1Marker: '# レッスン 3 — `forge invariant` — Handler パターンによる multi-call invariant testing',
+      startSignature: 'このレッスンで掴む概念',
+    },
+    {
+      draftFile: 'foundry_l4_ja.md',
+      moduleNumber: 2,
+      sortOrder: 0,
+      title: 'レッスン 4 — cast — EVM の curl + jq',
+      slug: 'foundry-cast-cli-ja',
+      duration: 30,
+      xpReward: 60,
+      h1Marker: '# レッスン 4 — `cast` — EVM の `curl` + `jq`',
+      startSignature: 'このレッスンで掴む概念',
+    },
   ],
 };
 
@@ -185,8 +229,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'ADVANCED' as const,
-  duration: 75, // L0..L2 so far (15+25+35); bumps as L3..L6 land. Final target: 220 min.
-  xpReward: 170, // L0..L2 so far (50+50+70); bumps as L3..L6 land. Final target: 460 XP.
+  duration: 145, // L0..L4 so far (15+25+35+40+30); bumps as L5..L6 land. Final target: 220 min.
+  xpReward: 310, // L0..L4 so far (50+50+70+80+60); bumps as L5..L6 land. Final target: 460 XP.
   tags: ['foundry', 'forge', 'anvil', 'cast', 'solidity', 'testing', 'invariants', 'fuzz', 'l1', 'reth'],
   sortOrder: 350,
   isPublished: true,

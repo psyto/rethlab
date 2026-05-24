@@ -13,8 +13,8 @@ export async function seedRethFoundryJA(prisma: PrismaClient) {
       description:
         "本コースは、rethlab の openhl 系列コースで学んだ厳格なテスト規律（proptest! による保存則、debug_assert! によるルーティング契約、openhl SHA に対する Byte-for-byte の検証）を、Solidity コントラクトへ機械的に転写（Transfer）するための道具立てとして Foundry を扱います。\n\nすでに Rust で思考する L1 / コントラクト / エンジン開発者を前提に、forge test の基本アサーションから、forge fuzz（Solidity 版 proptest!）、複数呼び出しに対する forge invariant、CLI ツールとしての cast、メインネット状態を再現する anvil --fork-url ＋ cheatcodes までを網羅。Cheatcodes が単に「リモートノードに JSON-RPC で依頼する」のではなく、「REVM を内部から操作する Magic Precompile」であるというアーキテクチャの正体まで掘り下げます。\n\n最終章（L7 Capstone）では、openhl-liquidation Stage 10b の InsuranceFund を Rust から Solidity へ移植（Port）。まったく同じ 4 つの保存則（Invariants）を forge invariant で 10,000 iteration 実行し、同じ定理を 2 つの言語で機械的に検証することで、テスト規律が言語の壁を超えて成立することを体感します。\n\n2026 年現在、Foundry の習得は本格的な L1 / インフラ開発における前提条件（Commodity Prerequisite）であり、もはやそれ自体は競争優位ではありません。本コースは単なる「ツールの使い方」ではなく、「すでに脳内にある厳格な規律を Solidity 側へいかに持ち込むか」を叩き込む、唯一無二のポジショニングを取ります。\n\n全 4 モジュール・7 レッスン。リポジトリ内の examples/foundry-capstone/ にリファレンス実装が常駐します。",
       difficulty: "ADVANCED",
-      duration: 75,
-      xpReward: 170,
+      duration: 145,
+      xpReward: 310,
       track: "reth-stack",
       tags,
       isPublished: true,
@@ -936,6 +936,716 @@ L3 が single-call fuzz testing から *multi-call invariant testing* に gradua
 Key concept: \`Handler\` contract を定義する。その関数が「システムができること」(deposit、withdraw、increment 等) を表す。Foundry に「この Handler を fuzz する surface area として扱え」と告げる。Foundry はランダムなメソッド call *系列* を生成し (\`deposit(100), withdraw(50), increment(), withdraw(75)\`)、各 step 後に \`invariant_*\` 関数を check する。
 
 これが single-call fuzzing が決して見ない multi-call bug を catch する。token-balance reentrancy、ordering-dependent な state corruption、Mt. Gox をスローモーションでクラッシュさせたタイプの bug。**L3 は \`forge\` が単なるパラメータ生成器ではなく、real な adversary になる場所だ。**
+`,
+                },
+                {
+                  title: "レッスン 3 — forge invariant — Handler パターンによる multi-call invariant testing",
+                  slug: "foundry-forge-invariant-ja",
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 40,
+                  xpReward: 80,
+                  content: `# レッスン 3 — \`forge invariant\` — Handler パターンによる multi-call invariant testing
+
+## ゴール
+
+このレッスンで掴む概念:
+
+- **\`forge invariant\` は、fuzz testing を 1 call から call の *系列* へと格上げする。** \`forge fuzz\` (L2) は各 iteration で 1 つの関数をランダム parameter で呼び、property を assert する。\`forge invariant\` は method call の *ランダム系列* — \`increment, increment, setNumber(0), increment, increment\` — を生成し、系列の各 step 後に *すべての* \`invariant_*\` 関数を再 check する。これが、特定の *順序* で初めて顔を出すバグを catch する。token-balance reentrancy、withdraw-during-deposit のレース、1 call は survive するが 2 call 後に壊れる ghost-state divergence。Single-call の系譜ではこれらは見えない。**L2 は単一入力で存在するバグを見つけた。L3 は履歴を必要とするバグを見つける。**
+- **Handler は、target contract に対する「test 制御の API surface area」ラッパーだ。** \`forge invariant\` を target contract に直接向けることは普通しない。代わりに Handler contract に向ける。Handler は target の method を wrap し、入力を bound し（例: \`bound(amount, 1, target.balance())\`）、ghost variable（invariant が比較するための mirror state）を track する \`public\` method を一握り公開する。Foundry はその Handler の method をランダムに呼ぶのであって、target の method を直接呼ぶのではない。一見、冗長な手続き（Ceremony）に思えるが、これが load-bearing な問題を解く。target contract の大半は「ランダム parameter だと precondition を即座に violate する」method を持つ（\`withdraw(uint256)\` に \`uint256 > balance\` を渡すなど）。直接 fuzz すると iteration の大半が \`vm.assume\` rejection で無駄になる。Handler は入力を意味ある range に clip するので、iteration の 100% が target を exercise する。**Handler なしの \`forge invariant\` は iteration の大半をナンセンス拒否で消費する。Handler ありなら、各 iteration が真の adversary move になる。**
+- **\`invariant_*\` 関数は、*系列の各 call 後に* 成立すべき保存則（Conservation law）を名指す。** \`test_\` / \`testFuzz_\` と同じ prefix 規律で \`invariant_\` を使う。Body は何が起きようと成立するべき equality か bound を assert する。古典的な例は \`balance + sum_of_withdrawals == sum_of_deposits\`。どんな deposit/withdraw 系列でも成立する保存則だ。これは openhl-liquidation L13 の \`before + deposits - withdrawals == after\` per-scan proptest と *まったく同じ* 形状。**\`invariant_*\` は Rust で使った保存則規律の Solidity bindings。構文は \`assertEq(handler.ghostSum(), target.actualBalance())\`。**
+- **Invariant が失敗すると、反例（Counterexample）は単一入力ではなく call 系列全体になる。** \`forge fuzz\` の counterexample は \`args=[5]\`。\`forge invariant\` は \`deposit(100), withdraw(50), increment(), withdraw(75)\` という *trace* を報告し、どの call がどの invariant を壊したかを教える。Shrinker は *系列を* reduce する。load-bearing でない call を drop し、残る引数値を半分にし、invariant をまだ違反する最小長・最小値の call 系列に到達するまで続ける。**200-call 反例が 3 calls まで縮む。それなら debug できる。Sequence shrinking がなければ、invariant testing は読めない失敗を吐き出すだけだ。**
+
+確認:
+
+\`\`\`bash
+forge test --match-test invariant
+\`\`\`
+
+…で新しい invariant suite が走り、\`(runs: <N>, calls: <M>, reverts: <R>)\` を報告する。本レッスン完走後はこれらを手にする。Counter を wrap する Handler、何千ものランダム call 系列にわたって成立する \`invariant_NumberEqualsIncrementCount\`、そして意図的に壊して call-sequence 反例を観察した経験。
+
+具体的な変更:
+
+- **\`foundry.toml\`** — \`[invariant]\` profile セクションを追加し、\`runs\`、\`depth\`（run あたりの call 数）、\`fail_on_revert\` を設定する。
+- **\`test/CounterHandler.sol\`** — 新規ファイル。\`wrappedIncrement()\` と（後で）\`wrappedSetNumber(uint256)\` を ghost-variable tracking 付きで公開する Handler contract。
+- **\`test/Counter.invariant.t.sol\`** — 新規ファイル。Handler を \`targetContract(...)\` に wire し、\`invariant_*\` 関数を宣言する invariant test contract。
+
+合計で約 50 行の新規コードを 2 つの新規 test ファイルにまたがって書く。L3 の主題は *Handler パターンを理解すること* であって、賢い invariant 算術ではない。
+
+## おさらい
+
+L2 の後はこうなっている。
+- \`forge fuzz\` が 1 つの test 関数を 256+ iteration、ランダム parameter で走らせる。
+- \`vm.assume\` は precondition を filter し、\`vm.expectRevert\` は negative-path test のためのもので、目的は真逆。
+- Shrinker が 32-byte の失敗入力を minimal counterexample まで reduce する。\`cache/fuzz/\` がそれらを persist する。
+- \`testFuzz_IncrementPreservesPlusOne\` を書いた。1 call の保存則 property だ。
+
+L3 はその保存則 property を call の *系列* で走らせる。同じ定理、より深い adversary だ。
+
+## 計画
+
+編集は 5 つ、2 つの新規ファイルにまたがる。
+
+1. **\`foundry.toml\` に \`[invariant]\` config を追加** — \`runs = 256\`、\`depth = 50\` (run あたり 50 ランダム call)、\`fail_on_revert = false\`。Invariant testing における「run」が何を意味するかを定義する。
+2. **\`test/CounterHandler.sol\` を作る** — \`Counter\` instance を保持し、\`ghostIncrementCount\` 変数を lockstep で bump する \`wrappedIncrement()\` を公開する。後で reset を track する \`wrappedSetNumber(uint256)\` も追加する。
+3. **\`test/Counter.invariant.t.sol\` を作る** — \`Test\` を継承し、\`CounterHandler\` をインスタンス化し、\`targetContract(...)\` で登録、\`counter.number() == handler.ghostIncrementCount()\` を assert する \`invariant_NumberEqualsIncrementCount\` を宣言する。
+4. **\`forge test --match-contract CounterInvariantTest -vvv\` を走らせる** — \`(runs: 256, calls: 12800, reverts: 0)\` を観察し、何千ものランダム系列を超えて invariant が成立し続けるのを見る。
+5. **\`setNumber\` を ghost 更新なしで公開して意図的に壊す** — \`wrappedIncrement(), wrappedIncrement(), badSetNumber(0), wrappedIncrement()\` のような multi-call counterexample を Foundry が生成するのを観察する。
+
+> 🛑 **予測。** 続きを読む前に: openhl-liquidation L13 の cascade-conservation proptest は、insurance fund に適用される operation 系列にわたって \`before_balance + sum(deposits) - sum(withdrawals) == after_balance\` を assert する。この test を \`InsuranceFund.sol\` contract に対する \`forge invariant\` へ port するとき、Handler は ghost variable として何を track する必要があり、\`invariant_*\` 関数は何を assert する?
+
+(答え: **Handler は \`ghostSumDeposits\` と \`ghostSumWithdrawals\` の両方を track する必要がある。** どちらも \`wrappedDeposit(uint256)\` と \`wrappedWithdraw(uint256)\` の内部で増分する。構築時に 1 回 capture される \`ghostInitialBalance\` も必要。Invariant は \`target.balance() == handler.ghostInitialBalance() + handler.ghostSumDeposits() - handler.ghostSumWithdrawals()\` を assert する。L13 proptest と *まったく同じ* 算術形状だ。同じ定理、2 言語。本コースの L6 capstone がまさに openhl-liquidation Stage 10b の \`InsuranceFund\` についてこの port を行う。)
+
+## \`forge invariant\` が \`forge fuzz\` とどう違うか
+
+\`\`\`mermaid
+flowchart TD
+    A[1. ランダムな Handler メソッドを選択] --> B[2. 宣言済み bound 内でランダム引数を選択]
+    B --> C[3. Handler メソッドを呼び出し<br/>target を駆動しゴースト変数を更新]
+    C --> D{4. 呼び出しがリバートした?}
+    D -->|yes, かつ fail_on_revert=true| F[FAIL: 系列全体を反例として登録]
+    D -->|yes, かつ fail_on_revert=false| E[5. すべての invariant_* 関数を評価]
+    D -->|no| E
+    E -->|インバリアント違反発生| F
+    E -->|すべての保存則が成立| G{6. Depth 上限に到達?}
+    G -->|no| A
+    G -->|yes| H[Run 完了: setUp をリセットし次の Run へ]
+    F -.->|系列シュリンカーがトレースを圧縮| I[最小化されたコール系列を報告]
+\`\`\`
+
+Loop で押さえる点が 5 つ。
+
+1. **2 つのネストしたランダム軸がある。method 選択と parameter 選択だ。** L2 の \`forge fuzz\` は軸が 1 つ。固定された test 関数があり、parameter を選ぶだけ。L3 の \`forge invariant\` は軸が 2 つ。各 step で *どの* Handler method を呼ぶかと、その parameter を選ぶ。探索空間は \`(num_methods × param_space)^depth\`。Depth 50 で 3 つの method、32-byte parameter なら \`(3 × 2^256)^50\`。総当たり（Exhaustive）など到底不可能であり、biased random + shrinking だけが頼みの綱。**この組み合わせ爆発こそが Handler-bounded inputs が重要な理由だ。Precondition 違反に費やす iteration は、真の adversary move に費やさない iteration だ。**
+2. **\`fail_on_revert\` が test の strict 度合いを制御する dial。** \`fail_on_revert = true\` のとき、Handler call からの *任意の* revert が run を失敗させる。Handler は target を panic させてはならない、という strict mode で、Handler が無効入力を素通りさせるバグを catch する。\`fail_on_revert = false\` のとき、revert は許容され、invariant 違反だけが run を失敗させる。Handler を iterate している間の緩い default だ。**まず \`fail_on_revert = false\` で始める。Handler が tight になったら \`true\` に flip して、Handler が許した入力で target が panic するバグを catch する。**
+3. **Invariant は終わりだけでなく *毎 call 後に* check される。** これが L2 の per-iteration assertion の multi-call 等価物だ。\`total >= 0\` invariant が call 1 と call 3 の後では成立するが call 2 の後に壊れる場合、失敗は call 2 で検出される。「いつか気づく」ではない。これが invariant testing を「self-heal する一過性の inconsistency」を catch するのに有用にする所以だ。**一貫した 2 つの状態の間で 1 call の間だけ存在するバグは、single-call fuzzing には絶対に見えない種類だ。**
+4. **\`depth\` parameter が coverage と実行時間を trade off する。** \`depth = 50\` は各 run が 50 ランダム call を行う。\`runs = 256\` はその run が 256 回起きる。1 回の \`forge test\` invocation あたりの total call は \`runs × depth = 12,800\`。各 call が setUp、method 選択、parameter 選択、Handler 呼び出し、invariant check を走らせる。Depth 50 で typical run は ~100ms、depth 500 で ~1s。**Depth を増やす = 順序バグを catch しやすい。Runs を増やす = 初期状態への sensitivity を catch しやすい。\`fuzz.runs\` と同じく、環境ごとに両方を tune する。**
+5. **Sequence shrinking が killer feature だ。** Invariant が 50-call 系列の後で失敗するとき、生の失敗は読めない。Shrinker は個々の call を drop してみる。call #23 なしでも invariant はまだ失敗するか。call #7 なしでも。そうやって系列を、失敗をまだ trigger する最小 subset まで reduce する。報告される counterexample はしばしば 2–5 calls。失敗が call 47 で発見されたとしてもだ。**Sequence shrinking なしでは、invariant testing は debug できない失敗を吐く。**
+
+## Handler パターンを 1 段落で
+
+Handler とは、target の *test 制御の API surface* となることを仕事にした contract だ。target への参照を保持し、target の method を wrap する \`public\` method を一握り公開する。それらの method の入力を *bound* し（例: \`bound(amount, 1, target.balance())\`）、invariant が期待する conceptual state を mirror する *ゴースト変数（Ghost variables）* を更新する。Foundry の invariant runner はランダムな Handler method をランダム parameter で呼ぶ。Handler は 3 つを決める。どの parameter 値が sensible か（balance を超える withdraw はしない）、何が起きたかをどう数えるか（ghost-variable accumulator）、何を無視するか（fuzz したくない method はそもそも公開しない）。\`invariant_*\` 関数は Handler の ghost state を target の actual state と比較する。一致しなければバグだ。**Handler はあなたの「シャドウ仕様（Shadow Specification）」だ。Solidity で書かれ、test 対象の contract と並走して実行される。**
+
+## 手を動かす walk-through
+
+### Step 1: \`foundry.toml\` に \`[invariant]\` を設定する
+
+\`foundry.toml\` に追記:
+
+\`\`\`toml
+[invariant]
+runs = 256
+depth = 50
+fail_on_revert = false
+call_override = false
+\`\`\`
+
+押さえる点が 4 つ。
+
+1. **\`runs = 256\` は \`fuzz.runs\` default と同じ** — 同じ「試行回数」概念だ。各 run は fresh な \`setUp()\` の後に \`depth\` 回のランダム call。Production CI はこれを \`1000\` 以上まで bump する。
+2. **\`depth = 50\` は run あたり 50 ランダム Handler call を意味する。** これが各 run が call-history 空間にどれだけ深く分け入るかだ。Newer Foundry の default は 500。50 は学習中の小さく速い値だ。Handler が正しくなったら 500 まで bump して real な adversary coverage を得る。
+3. **\`fail_on_revert = false\`** は Handler method が revert しても run を失敗させない。Iterate 中は便利だ。Handler 内部で \`try/catch\` を使って expected revert を飲み込める。Production codebase は Handler が tight になったら \`true\` に flip する。その時点で revert があれば Handler が入力 bounding に失敗した signal だからだ。**開発中は \`false\`、証明には \`true\`。**
+4. **\`call_override = false\`** は Foundry が call ごとに \`msg.sender\` を override できるかを制御する。L3 では \`false\` のまま。\`msg.sender\` 操作は L4 で \`vm.prank\` 経由で見る。
+
+### Step 2: \`test/CounterHandler.sol\` を書く
+
+\`test/CounterHandler.sol\` を作る:
+
+\`\`\`solidity
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.35;
+
+import {Counter} from "../src/Counter.sol";
+
+contract CounterHandler {
+    Counter public counter;
+    uint256 public ghostIncrementCount;
+
+    constructor(Counter _counter) {
+        counter = _counter;
+    }
+
+    function wrappedIncrement() public {
+        counter.increment();
+        ghostIncrementCount++;
+    }
+}
+\`\`\`
+
+押さえる点が 4 つ。
+
+1. **Handler は普通の Solidity contract で、test contract ではない。** 何も継承しない。\`Test\` も \`forge-std\` もなし。State (\`counter\`, \`ghostIncrementCount\`) を保持し、method を公開するだけだ。Foundry の invariant runner は \`targetContract(...)\` 経由でそれを発見する（次の step）。**Handler は plain Solidity。Invariant runner は discovery layer だ。**
+2. **\`ghostIncrementCount\` は ghost 変数だ。** *これまでの call から* target の state がこうあるべきだと予想する値を mirror する。Invariant test は \`counter.number() == handler.ghostIncrementCount()\` を assert する。将来 \`Counter.increment()\` の code 変更で誤って double-increment するようになれば、この Handler はそれを catch する。\`ghostIncrementCount\` と \`counter.number()\` が乖離するからだ。**Ghost 変数は test の「shadow specification」だ。Contract が何をするかとは別に、我々が何を期待しているか。**
+3. **\`wrappedIncrement()\` は lockstep で 2 つのことをする。target を呼び、ghost を更新する。** これが load-bearing 規律だ。Ghost を更新せずに target を呼ぶと、次の invariant check で失敗する（actual が expected と乖離するから）。Target を呼ばずに ghost を更新しても失敗する。Wrapper が「target は X をした」と「ghost は X を track した」の 1:1 binding を強制する。**Handler method こそが、target action と ghost update が atomic に起きる場所だ。**
+4. **Handler は \`setNumber\` を公開していない** — まだ、だ。我々は invariant を簡単に表現できる *1 つの* operation だけを公開する Handler から始める (\`number == count\`)。Handler が method を公開しなければ、invariant runner はそれを呼べない。Invariant を壊す method は単に省くという選択をしているのだ。**Handler が公開する surface ≠ target の full surface。Invariant を書ける範囲だけを公開する。**
+
+### Step 3: \`test/Counter.invariant.t.sol\` を書く
+
+\`test/Counter.invariant.t.sol\` を作る:
+
+\`\`\`solidity
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.35;
+
+import {Test} from "forge-std/Test.sol";
+import {Counter} from "../src/Counter.sol";
+import {CounterHandler} from "./CounterHandler.sol";
+
+contract CounterInvariantTest is Test {
+    Counter public counter;
+    CounterHandler public handler;
+
+    function setUp() public {
+        counter = new Counter();
+        handler = new CounterHandler(counter);
+
+        // Tell Foundry: when generating random call sequences, only
+        // call methods on \`handler\`. Without this, Foundry would also
+        // try to fuzz Counter directly, and uncontrolled setNumber(x)
+        // calls would immediately break our invariant.
+        targetContract(address(handler));
+    }
+
+    function invariant_NumberEqualsIncrementCount() public view {
+        // The conservation law: every wrappedIncrement() bumps both
+        // counter.number() and handler.ghostIncrementCount() by 1.
+        // No matter what random sequence of Handler calls Foundry has
+        // generated, these two values must remain equal.
+        assertEq(counter.number(), handler.ghostIncrementCount());
+    }
+}
+\`\`\`
+
+押さえる点が 5 つ。
+
+1. **\`setUp()\` は call ごとではなく *run ごと* に走る。** 各 run の内部では、同じ \`counter\` と \`handler\` instance が 50 call すべてにわたって再利用される。それが state が系列にわたって蓄積する仕組みだ。Run 間では fresh instance。**L2 の per-iteration isolation と同じ規律だが、外側のループで起きる。**
+2. **\`targetContract(address(handler))\` が Foundry にどこを fuzz するか教える。** これがないと、Foundry は到達できる *すべての* contract の method を呼ぼうとする。\`Counter\` も含めて直接、だ。Uncontrolled な \`counter.setNumber(x)\` call は ghost を bypass するから invariant を即座に壊す。\`targetContract\` 登録は探索を Handler の \`public\` method のみに scope する。**\`targetContract\` は invariant runner の discovery scope。何を登録するかで何が fuzz されるかをコントロールする。**
+3. **\`invariant_NumberEqualsIncrementCount\` は \`view\` でマークされている。** State を変えず、ただ読んで assert するだけだ。Foundry は系列の各 Handler call 後にこれを呼ぶ。\`view\` を忘れても runner はそれでも呼ぶが gas コストが高くなる。\`view\` ならその call は事実上 free だ。**Performance のために invariant は \`view\` であるべき。Assertion の意味はどちらでも同じ。**
+4. **関数名が \`invariant_\` で始まる。** \`test_\` や \`testFuzz_\` と同じ naming-convention discovery だ。Foundry の runner は \`invariant_*\` 関数を scan し、Handler call ごとに各 invariant を呼ぶ。1 つの test contract に複数の invariant を持てる。それらすべてが各 call 後に check される。**Test contract あたり複数 invariant = 複数の保存則を同時に check する。L13 の 4 つの独立した proptest と同じ構造だ。**
+5. **Assertion は L1 と同じ \`assertEq\` だ。** 異質なものはない。invariant は単に常に成立するべき assertion。新規性は *いつ* check されるか（ランダム call ごと）であって、*何を* check するか（plain Solidity の equality）ではない。**\`forge invariant\` は新しい assertion vocabulary ではなく、discovery loop が違う \`forge fuzz\` だ。**
+
+### Step 4: Invariant suite を走らせる
+
+\`\`\`bash
+forge test --match-contract CounterInvariantTest -vvv
+\`\`\`
+
+期待される出力:
+
+\`\`\`
+[PASS] invariant_NumberEqualsIncrementCount() (runs: 256, calls: 12800, reverts: 0)
+\`\`\`
+
+この行を注意深く読む。
+- \`runs: 256\` — 別々の run の数 (\`[invariant] runs\` と一致)
+- \`calls: 12800\` — 全 run にわたる total Handler call 数 (256 × 50 = 12800)
+- \`reverts: 0\` — revert した call の数 (\`wrappedIncrement()\` は決して revert しないからゼロ)
+
+**12,800 ランダム Handler call、invariant は毎回成立した。** 保存則 \`number == ghostIncrementCount\` が膨大なバリエーションの call 系列にわたって証明された。
+
+### Step 5: 意図的に invariant を壊す
+
+Sequence-counterexample ワークフローを見るため、ghost を bypass する Handler method を公開する。\`CounterHandler.sol\` に追記:
+
+\`\`\`solidity
+    function badSetNumber(uint256 x) public {
+        // Intentionally wrong: updates the target without updating the ghost.
+        // This breaks the invariant on purpose to demonstrate Foundry's
+        // sequence-counterexample reporting.
+        counter.setNumber(x);
+    }
+\`\`\`
+
+再実行:
+
+\`\`\`bash
+forge test --match-contract CounterInvariantTest -vvv
+\`\`\`
+
+期待される出力:
+
+\`\`\`
+[FAIL: invariant_NumberEqualsIncrementCount persisted failure]
+    Counter: 0x...
+    Sequence (length: 2):
+        sender=0x... addr=[CounterHandler]0x... calldata=badSetNumber(uint256), args=[42]
+        sender=0x... addr=[CounterHandler]0x... calldata=wrappedIncrement(), args=[]
+    Last invariant: invariant_NumberEqualsIncrementCount
+\`\`\`
+
+**報告された反例は、わずか 2 コールの系列にまで圧縮されている。** Foundry は最初におそらく ~30 ランダム call 後に失敗を見つけ、shrinker が reduce した。大半の call を drop し、\`badSetNumber(0xa3b8...)\` を \`badSetNumber(42)\` まで半分にし、最小失敗が ちょうど \`badSetNumber(42)\` の後に \`wrappedIncrement()\` を必要とすることを発見した。ここでの因果連鎖を call-by-call で追うと押さえどころが見える。\`badSetNumber(42)\` は *リバートせずに成功する* — \`counter.setNumber(42)\` は合法な操作で、ただ ghost を bypass するだけだ。\`fail_on_revert = false\` の設定により、Foundry はこの call 自体を問題視せず、state mutation を素通しさせる。結果、\`counter.number() = 42\` のまま \`ghostIncrementCount\` は \`0\` で取り残される。この時点で保存則はすでに崩壊しているが、invariant runner はまだそれを知らない。invariant は *次の* call が返ってきた後にだけ評価されるからだ。Foundry は次の Handler method に進み、\`wrappedIncrement()\` を呼び、その call が clean に返り、*そこで* \`invariant_NumberEqualsIncrementCount\` が走る: \`counter.number() == handler.ghostIncrementCount()\` → \`43 != 1\` → 失敗。Shrinker が 2 コール両方を残すのは、両者が組み合わさってこそ「乖離発生 → 評価点に到達」までの最短 trace を形成するからだ。
+
+**続行する前に \`CounterHandler.sol\` から \`badSetNumber\` を削除する。** 保存則規律は、すべての Handler method が target と ghost を lockstep で更新する場合だけ成立する。
+
+### Step 6: 適切に handle された \`wrappedSetNumber\` を追加する
+
+今度は \`setNumber\` を *正しく* 公開する。ghost を一致させて更新することで、だ。\`CounterHandler.sol\` に追記:
+
+\`\`\`solidity
+    function wrappedSetNumber(uint256 newNumber) public {
+        counter.setNumber(newNumber);
+        // setNumber breaks the simple "number == incrementCount" relationship,
+        // so we reset the ghost to match the new target value. The invariant
+        // is now: "number equals the number we asked for, plus increments since."
+        ghostIncrementCount = newNumber;
+    }
+\`\`\`
+
+再実行:
+
+\`\`\`bash
+forge test --match-contract CounterInvariantTest -vvv
+\`\`\`
+
+期待される出力:
+
+\`\`\`
+[PASS] invariant_NumberEqualsIncrementCount() (runs: 256, calls: 12800, reverts: 0)
+\`\`\`
+
+**Invariant は再び成立する。** Foundry の runner は今、\`wrappedIncrement()\` と \`wrappedSetNumber(uint256)\` の call からランダムに選び、両 Handler method が ghost を lockstep で維持する。Invariant は同じ 1 行の \`assertEq\` だが、test surface area は広い。それでも invariant は 2 つの operation を混ぜた 12,800 のランダム系列にわたって成立する。
+
+**これが L3 の punchline だ。** Invariant は Handler 媒介の mutation と保存則の間の *契約* だ。Handler method を ghost 更新なしで追加 → invariant 失敗。Ghost を正しく更新 → invariant がどんな unit test もカバーできない指数的に大きな系列空間にわたって成立する。
+
+## よくある失敗パターン
+
+- **\`fail_on_revert = true\` で Handler が revert する** — Handler method が target が扱えない入力を渡したことを意味する。Handler method 内部に入力 bounding (\`amount = bound(amount, 1, target.balance())\`) を追加する。
+- **\`runs: 256, calls: 12800, reverts: 12000\`** — Handler call の大半が revert している。Handler の入力 bound が緩すぎるか、target の precondition がきつすぎるかのどちらかだ。Handler の \`bound(...)\` をきつくするか、\`fail_on_revert\` を緩めて iteration を生産的に保つ。
+- **Invariant が *毎* run で即座に失敗する** — invariant が間違っている。contract ではない。Assertion の算術を check する。単一 call の manual test を走らせて期待通りに成立するか確認する。
+- **Invariant が時々、長い系列の後でだけ失敗する** — これが *good* な種類の失敗だ。特定の call 順序が本物のバグを暴いている。Shrink された counterexample を使って、それを deterministic に再現する unit test を書く。
+
+## 設計の振り返り
+
+\`forge invariant\` の設計に焼き込んだ load-bearing な決定が 3 つ。
+
+1. **Handler パターンは syntax ではなく convention だ。** Foundry は Handler を書くことを *要求* しない。\`targetContract(target)\` を直接呼んで target の method を raw に fuzz できる。だが *コミュニティが Handler に標準化した* のは、それが「すべての iteration が \`vm.assume\` rejection」問題を解くからだ。Convention は集合的実践によって enforce され、ツールによってではない。**Foundry が multi-call sequencing primitive を与え、Handler パターンはエコシステムがその上に重ねた規律だ。**
+
+2. **Ghost 変数は target ではなく Handler に住む。** これは意図的だ。target は clean Solidity のまま、test infrastructure は test ディレクトリに住む。Target に ghost 変数があれば production bytecode を汚染し、gas コストを上げる。Ghost を Handler に置くことで、保存則規律は deploy 時に zero gas コストだ。**Test は production contract を testable にするために変更してはならない。Handler が test-only state を target state から isolate する。**
+
+3. **Sequence shrinking は per-byte ではなく per-call だ。** Invariant が失敗すると、shrinker は *どの call を残すか* と *引数値を何にするか* を別の pass で reduce する。Call graph をランダムに mutate しようとはしない。系列を walk して「この call を drop できるか」、次に「この引数を shrink できるか」と問う。Foundry はこれを \`proptest\` の state-machine shrinking strategy から継承している。結果として、最小 counterexample は usually 2–5 calls、決して original の 30+ ではない。**Per-call shrinking が invariant testing を debuggable にする。なしでは誰も parse できない 50-call trace を吐く。**
+
+## 答え合わせ
+
+L3 の後:
+
+\`\`\`
+   my-foundry-lab/
+   ├── foundry.toml                      (+ [invariant] セクション)
+   ├── src/Counter.sol                    (L1 から変更なし)
+   ├── test/Counter.t.sol                 (L2 から変更なし)
+   ├── test/CounterHandler.sol            (新規 — wrappedIncrement + wrappedSetNumber を持つ Handler)
+   ├── test/Counter.invariant.t.sol       (新規 — targetContract を持つ invariant test)
+   └── lib/forge-std/                     (変更なし)
+\`\`\`
+
+L3 の後:
+- \`forge test --match-contract CounterInvariantTest\` が \`(runs: 256, calls: 12800, reverts: 0)\` で pass する
+- Multi-call counterexample 形式を見た (単一引数ではなく call の系列)
+- Shrinker が 30+ call の失敗を 2-call minimal example まで reduce するのを見た
+- Handler がなぜ存在するかを理解した。入力を bound して iteration を生産的にするためだ
+
+## よくある質問
+
+**Q1: なぜ target を直接 \`targetContract(address(counter))\` で呼ばないのか?**
+
+呼べる。Trivial な contract には動く。だが precondition を持つ contract (\`withdraw(amount)\` が \`amount <= balance\` を要求するなど) にとって、ランダム \`uint256\` parameter は事実上すべての call で precondition を violate する。\`fail_on_revert = true\` なら test は即座に失敗する。\`fail_on_revert = false\` なら \`reverts: 12800\` と生産的な iteration ゼロを得る。Handler はその間に挟まる layer だ。ランダム入力を、target が実際に exercise できる *bound されて意味ある* 入力に変換する。**直接 fuzz は stateless または precondition-free な target に動く。Handler 媒介の fuzz はそれ以外のすべてに動く。**
+
+**Q2: 1 つの test contract に複数の \`invariant_*\` 関数を持てる?**
+
+Yes、持つべきだ。openhl-liquidation L13 capstone は 4 つの独立した invariant proptest を持ち、それぞれが異なる保存則を assert する。ここでも同じだ。各 \`invariant_*\` が 1 つの法則を check する。Foundry は各 call 後にそれらすべてを走らせる。3 つが pass して 1 つが失敗するなら、どの法則が壊れたかが分かる。これは bundle された 1 つの invariant よりずっと debug しやすい。**保存則 1 つにつき 1 つの invariant。Handler あたり複数の invariant が norm だ。**
+
+**Q3: \`targetContract\` と \`targetSelector\` の違いは?**
+
+\`targetContract(address)\` は Foundry に「この contract のすべての \`public\`/\`external\` method を fuzz しろ」と告げる。\`targetSelector(FuzzSelector({addr: address, selectors: [bytes4[]]}))\` はより細かい。「この contract のこれら特定の method *だけ* を fuzz しろ」だ。Fuzz したくない method を持つ Handler に使う (view-only ヘルパーなど、簡単に private にできない場合)。ほとんどの Handler には \`targetContract\` と慎重な \`public\`/\`internal\` 規律で十分。**\`targetContract\` から始める。Surgical scoping が必要になったら \`targetSelector\` を出す。**
+
+**Q4: これは openhl-liquidation L13 の proptest とどう違う?**
+
+L13 は Rust の \`proptest!\` macro と手書きの test を使い、insurance fund method を系列で呼んで保存則を assert する。Pattern は \`forge invariant\` がやることと同一だ。ランダム operation 系列、call ごとに assert する保存則。鍵となる違いはこれだ。\`forge invariant\` は sequencing + shrinking machinery を built-in として提供する (Handler と invariant だけ書く)。Rust では sequencing は通常自分で書くか \`proptest-state-machine\` を使う。Foundry の tooling は stateful testing でより turnkey、Rust の tooling はより細かい制御を与える。**同じ定理、Foundry の tooling が ceremony をより多く持ち上げる。**
+
+**Q5: \`fail_on_revert = false\` のとき、Handler が正しいかどうやって分かる?**
+
+\`reverts:\` カウンタを見る。12800 call のうち \`reverts: 12800\` なら、すべての Handler call が revert した。入力 bounding が壊れているサインだ。\`reverts: 30\` なら occasional な revert がある。これは usually 大丈夫 (一部の operation は特定の prior state を与えられたら自然に失敗する)。\`reverts: 0\` なら Handler は \`fail_on_revert = true\` に flip して strict な証明にできるくらい tight だ。**\`reverts:\` が Handler-quality dashboard。低い 1 桁台かゼロを目指す。**
+
+**Q6: \`invariant_*\` 関数は setup 用に state を変更できる?**
+
+No。\`view\` か \`pure\` でなければならない。Foundry は Handler call の間に呼ぶからだ。Invariant 内部の state mutation は test 系列を破壊する。Check 前に work が必要なら、Handler 内部か \`setUp()\` で行う。**Invariant は state の純粋な観察。決して mutate しない。**
+
+## 次のレッスン (L4) — \`cast\` — Solidity CLI の swiss army knife
+
+L4 が testing primitive を後にして、Foundry に同梱される CLI ツール \`cast\` を導入する。\`forge\` がビルドと test を行うのに対し、\`cast\` は chain と対話し、data を decode し、ABI encoding を terminal から計算する。HTTP の \`curl\` と同じワークフロー ergonomics だ。\`alloy\` (Reth と同様、\`cast\` の構築基盤) への cross-reference が、このレッスンを Rust エンジニアにとって「\`alloy::Provider\` を grok しているなら、cast の mental model はすでに知っている」という payoff にする。
+
+学ぶこと:
+- \`cast call\` で read-only contract query (view 関数の RPC 等価物)
+- \`cast send\` で state-changing transaction (\`--rpc-url\` で mainnet/testnet/anvil を指す)
+- script で calldata を扱うための \`cast abi-encode\` / \`cast abi-decode\`
+- Chain introspection 用の \`cast block\` / \`cast tx\` / \`cast logs\`
+- Full read-eval パターン: contract を書く → forge test → forked anvil に対して cast call を打って real state で挙動を検証する
+
+L4 完走後は、Solidity script を書かずに shell loop からデプロイされた contract と対話できるようになる。EVM 用の \`curl\`+\`jq\` の CLI 等価物だ。
+`,
+                },
+              ],
+            },
+          },
+          {
+            title: "CLI & state-aware testing",
+            sortOrder: 2,
+            lessons: {
+              create: [
+                {
+                  title: "レッスン 4 — cast — EVM の curl + jq",
+                  slug: "foundry-cast-cli-ja",
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 30,
+                  xpReward: 60,
+                  content: `# レッスン 4 — \`cast\` — EVM の \`curl\` + \`jq\`
+
+## ゴール
+
+このレッスンで掴む概念:
+
+- **\`cast\` は \`alloy::Provider\` を terminal コマンドとして露出させたものだ。** すべての \`cast\` subcommand が \`alloy_provider::Provider\` の method に map する — rethlab の \`alloy-provider\` レッスンで Rust コードから呼んだのと同じ trait だ。\`cast call\` ↔ \`provider.call(...)\`、\`cast block\` ↔ \`provider.get_block(...)\`、\`cast send\` ↔ \`provider.send_transaction(...)\`。CLI は同じ Rust code path への thin な shell wrapper にすぎない。Rust で \`provider.call().await?\` をすでに書いたなら、新しいメンタルモデル（Mental model）は要らない。タイピングの筋肉記憶（Muscle memory）を更新するだけだ。**\`cast\` は alloy bindings + shell prompt。背後の RPC リクエストは同一だ。**
+- **\`cast\` は *何を尋ねるか* と *どのチェーンに尋ねるか* を分離する。** どのコマンドも \`--rpc-url <URL>\` フラグを option として取り、ノードを指す。フラグなしなら \`cast\` は環境変数 \`$ETH_RPC_URL\` を使う。同じ \`cast call\` を mainnet、sepolia、ローカル anvil instance のいずれに対しても、フラグ 1 つ変えるだけで実行できる。コマンド自体は同一だ。**ターゲットチェーンは束縛（Binding）ではなく引数（Parameter）。** これが L1 エンジニアにとっての payoff だ。同じクエリが prod、staging、forked simulation を読む。置換 1 つで。
+- **\`cast call\`（読み取り専用）と \`cast send\`（state-changing）の 2 つが 90% の時間使う動詞だ。** \`cast call\` は view / pure 関数を走らせるか、broadcast せずに transaction を simulate する。関数の return 値を raw bytes として（あるいは function signature を渡せば decoded で）返す。\`cast send\` は実際に transaction を broadcast する。\`--private-key\` を要求し、transaction hash を表示する。残りのコマンド (\`cast block\`、\`cast tx\`、\`cast logs\`、\`cast abi-encode\`、\`cast 4byte\`) は内省（Introspection）とデータ操作のツールだ。便利だが、load-bearing なペアは \`call\` と \`send\`。**Production debug の大半は forked anvil に対する \`cast call\`。Production deploy の大半は testnet に続いて mainnet への \`cast send\`。**
+- **\`cast abi-encode\` / \`cast abi-decode\` がデータレイヤーのループを閉じる。** Calldata を手で構築する必要があるとき (\`cast send --create\` 用、multisig 提出用、Solidity script への埋め込み用)、\`cast abi-encode "transfer(address,uint256)" 0x... 1000\` がオンチェーンで送られる exact bytes を生成する。\`cast abi-decode\` は逆。calldata と function signature を与えると、type 付き引数を取り出す。これは \`forge\` の test runner が内部で使うのと *同じ* ABI 機構（ABI machinery）が CLI で露出されたものだ。**Calldata を手で debug したことがあるなら、\`cast abi-decode\` は何年も前に shell alias に入れておくべきだったツールだ。**
+
+確認:
+
+\`\`\`bash
+cast --version
+cast call --rpc-url https://ethereum.reth.rs/rpc \\
+  0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 "totalSupply()(uint256)"
+\`\`\`
+
+…で Reth プロジェクトの public RPC 経由で real mainnet に対して走り、USDC の現在の total supply を返す（~12 桁の数字、6 桁 decimal 精度）。本レッスン完走後は次の 3 つを手にする。どの \`cast\` subcommand がどの alloy method に map するか、\`cast call\` と \`cast send\` のどちらに手を伸ばすべきか、calldata を必要に応じて手で組み立てる方法。
+
+具体的な変更:
+
+- **ソースファイル編集なし。** L4 はすべて CLI invocation。Mainnet に対して ~8 種類の \`cast\` コマンドを走らせ、（option として）ローカル anvil に対しても走らせる。
+- **\`.env\`**（option）— \`ETH_RPC_URL=https://ethereum.reth.rs/rpc\` を設定して、毎コマンドに \`--rpc-url\` を渡すのを避けたいかもしれない。L5 で anvil を扱う際、terminal session ごとに \`ETH_RPC_URL\` を mainnet と forked anvil の間で切り替えるデモをする。
+
+合計で Solidity ゼロ行。L4 は shell time。Pedagogical move は alloy-method ↔ cast-subcommand マッピングを内面化すること。次に Rust の \`Provider\` に手を伸ばすとき、まず \`cast\` に手を伸ばすようになる。
+
+## おさらい
+
+L3 の後はこうなっている。
+- \`forge invariant\` が Handler に対してランダム call 系列を走らせ、毎 call 後に \`invariant_*\` を check する。
+- Handler が target を wrap し、入力を bound し、ghost variable (shadow specification) を track する。
+- Sequence shrinking が 30+ call の失敗を 2-call minimal counterexample まで reduce する。
+
+L3 は \`test/\` ファイル内に住んだ。L4 は test ディレクトリを完全に離れる。\`cast\` は、deploy 済み contract、transaction hash、decode したい calldata があり、それを見るためだけに Solidity script を書きたくないときに手を伸ばすツールだ。**L1 エンジニアの debug ループは \`forge test\` だけではなく、\`forge test\` の後の \`cast call\` だ。**
+
+## 計画
+
+invocation のカテゴリが 5 つ。
+
+1. **\`cast call\`** — terminal から mainnet state を読む。USDC の \`totalSupply()\` と既知 address の \`balanceOf(address)\` をクエリする。
+2. **\`cast block\` / \`cast tx\`** — チェーン内省。最近の mainnet block を lookup する。Hash で特定 transaction を検査する。
+3. **\`cast abi-encode\` / \`cast abi-decode\`** — calldata 操作。ERC-20 transfer call の bytes を構築する。Bytes を type 付き引数へ decode して戻す。
+4. **\`cast 4byte\` / \`cast 4byte-decode\`** — function-selector lookup。Calldata の先頭 4 bytes を与えると、public な 4byte directory 経由で人間可読 function 名を見つける。
+5. **ローカル anvil に対する \`cast send\`（preview）** — state-changing transaction。重要なものは deploy しない。この演習は \`cast send\` がチェーンとどう interact するかをデモする (L5 が anvil 自体を深掘りする)。
+
+> 🛑 **予測。** 続きを読む前に: rethlab の \`alloy-provider\` レッスンで、\`eth_call\` semantics で構築した \`tx\` を使って (paraphrased) \`let supply = provider.call(&tx).await?\` と書いた。同じ結果を mainnet に対して生成する exact な \`cast\` invocation は何か?
+
+(答え: **\`cast call --rpc-url <URL> <contract-address> "<function-signature>" [args...]\`**。各ピースが直接 map する。\`--rpc-url\` フラグは alloy の \`RootProvider\` の underlying transport URL。Contract address は transaction の \`to\` フィールド。Function signature は cast が内部で 4-byte selector に hash する人間可読 ABI 短縮形 (alloy が同じ \`Function::parse\` 機構を使う)。任意の args は positional。Return は raw hex (function signature の後に \`"(...returntypes)"\` で return type を指定しない限り)。指定すれば cast が decode する。**同じ code path、2 つの surface。プログラム用は Rust、shell 用は cast。**)
+
+## \`cast\` が \`alloy::Provider\` にどう map するか
+
+\`\`\`
+┌─────────────────────────┬────────────────────────────────────────────────┐
+│  cast subcommand        │  alloy::Provider method                        │
+├─────────────────────────┼────────────────────────────────────────────────┤
+│  cast call              │  provider.call(tx)                             │
+│  cast send              │  provider.send_transaction(tx)                 │
+│  cast block             │  provider.get_block(block_id)                  │
+│  cast tx <hash>         │  provider.get_transaction_by_hash(hash)        │
+│  cast receipt <hash>    │  provider.get_transaction_receipt(hash)        │
+│  cast logs              │  provider.get_logs(filter)                     │
+│  cast balance <addr>    │  provider.get_balance(addr)                    │
+│  cast nonce <addr>      │  provider.get_transaction_count(addr)          │
+│  cast chain-id          │  provider.get_chain_id()                       │
+│  cast gas-price         │  provider.get_gas_price()                      │
+│  cast block-number      │  provider.get_block_number()                   │
+├─────────────────────────┼────────────────────────────────────────────────┤
+│  cast abi-encode        │  alloy_dyn_abi::DynSolType::abi_encode         │
+│  cast abi-decode        │  alloy_dyn_abi::DynSolType::abi_decode         │
+│  cast 4byte             │  (public 4byte directory lookup, not RPC)      │
+│  cast keccak <data>     │  alloy_primitives::keccak256(data)             │
+└─────────────────────────┴────────────────────────────────────────────────┘
+\`\`\`
+
+構造的に押さえるべきこと。\`cast\` ≈ \`alloy::Provider\`（RPC operation 用）、\`cast\` ≈ \`alloy_dyn_abi\`（ABI operation 用）。rethlab Fundamentals コースでこれら 2 つの crate を grok 済みなら、すべての \`cast\` subcommand が何をするかをすでに知っている。まだ引数構文を知らないだけだ。
+
+## 手を動かす walk-through
+
+### Step 1: 方角合わせ — \`cast --version\` と \`cast help\`
+
+\`\`\`bash
+cast --version
+\`\`\`
+
+\`forge\` version (両者は同じ \`foundry-rs/foundry\` バイナリ配布から船出する) と一致する \`cast Version: 1.7.x\` のような表示が見えるはず。
+
+\`\`\`bash
+cast help
+\`\`\`
+
+出力は subcommand のフラットなリスト。押さえる点が 3 つ。
+
+1. **Subcommand は何に触るかでカテゴリ分けされている。** \`cast call\`、\`cast send\`、\`cast call --trace\` はチェーン state と interact する。\`cast abi-*\`、\`cast keccak\`、\`cast 4byte\` はローカルデータ操作ツール (RPC なし)。\`cast wallet\` は鍵を管理する。頭の中で bucket 分けする。*RPC コマンドは \`--rpc-url\` を要求する。ローカルコマンドはしない*。
+2. **多くの subcommand に alias がある。** \`cast call\` は \`cast c\` でもある。\`cast send\` は \`cast s\` でもある。Interactive 利用では長形を打つ必要はない。Full name はスクリプトに現れる。
+3. **\`cast help <subcommand>\`** が任意の subcommand の詳細フラグを与える。\`cast help call\` は \`cast call\` が受け付けるすべてのフラグを表示する (block tag、value、gas override 等)。**迷ったら docs を読むより \`cast help <subcommand>\` のほうが速い。**
+
+### Step 2: \`cast call\` で mainnet state を読む
+
+レッスン全体で使う public RPC endpoint: \`https://ethereum.reth.rs/rpc\`（Reth プロジェクトの public ノード — rethlab \`alloy-provider\` レッスンと同じもの）。
+
+\`\`\`bash
+cast call --rpc-url https://ethereum.reth.rs/rpc \\
+  0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \\
+  "totalSupply()(uint256)"
+\`\`\`
+
+これは mainnet 上の USDC contract address に対し、\`totalSupply()\` を呼び、cast に return を \`uint256\` として decode してくれと頼んでいる。
+
+期待される出力:
+
+\`\`\`
+35234876543210000000  # 実際の数字は変わる。~350 億 USDC、6 桁 decimal 精度
+\`\`\`
+
+押さえる点が 6 つ。
+
+1. **Function signature は 4-byte selector ではなく人間可読 Solidity 形式だ。** cast が内部で \`"totalSupply()(uint256)"\` を alloy と同じ parser で parse し、signature を keccak256 で hash し、先頭 4 bytes を取り、それを背後の \`eth_call\` における function selector として使う。**書くのは Solidity-ergonomic な構文、encode は cast がやる。**
+2. **Function 名の後の \`(uint256)\` が return type の annotation だ。** これがないと cast は raw hex bytes (\`0x0000...\`) を表示する。あれば cast は return を \`uint256\` として decode し、decimal を表示する。複数 return の関数も同じパターンに従う — \`"slot0()(uint160,int24,uint16,uint16,uint16,uint8,bool)"\` は Uniswap V3 pool の slot0 signature で、cast は各 tuple 要素を 1 行ずつ表示する。Inline decode が exotic な signature で躓いた場合（稀だが起こり得る。動的配列を含む struct が典型）、安定したフォールバックは return-type annotation を完全に省き、生 hex を \`cast abi-decode "<full-signature>"\` にパイプすることだ。同じ parser を使うが、より permissive な context で走る。**実 production の signature の大半では inline 形式で動く。動かないときだけ \`cast abi-decode\` に手を伸ばす。**
+3. **Private key 不要。** \`cast call\` は read-only。Broadcast せずノードの state view に対して実行する。これが production debug のワークホースだ。mainnet に対して任意の view 関数を 1 wei も使わずに simulate できる。
+4. **\`--rpc-url\` は shell 環境の \`ETH_RPC_URL\` で代替できる。** \`export ETH_RPC_URL=https://ethereum.reth.rs/rpc\` を 1 回設定し、以降のコマンドからフラグを落とす。L5 で anvil を扱う際、terminal session ごとに \`ETH_RPC_URL\` を mainnet と forked anvil の間で切り替えるデモをする。
+5. **出力 decimal は人間フォーマットされていない、raw integer だ。** USDC は decimal 6 桁。\`35,234,876,543,210,000,000\` raw は \`35,234,876,543,210.000000 USDC\` を意味する。cast は decimal scaling を適用しない。それは自分の仕事だ。あるいは \`cast --to-unit <value> ether\` で変換する (名前にもかかわらず、unit conversion は汎用)。
+6. **\`cast call\` で使われる mainnet block は default ではチェーンの現在の head だ。** 特定 block に対して call するには \`--block <number-or-hash-or-tag>\` を追加する。過去 state の replay に便利。\`--block 12345678\` がその block 時点で \`totalSupply()\` が返したであろう値を simulate する。
+
+もう 1 つ試す — 特定 address の USDC balance をクエリ:
+
+\`\`\`bash
+cast call --rpc-url https://ethereum.reth.rs/rpc \\
+  0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \\
+  "balanceOf(address)(uint256)" \\
+  0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503  # 任意の mainnet address
+\`\`\`
+
+これが Rust の \`provider.call(USDC.balanceOf(addr).await?)\` の CLI 等価物だ。背後の RPC は同一、違うのはキーボード ergonomics だけ。
+
+### Step 3: Block と transaction を検査する
+
+現在の block を見る:
+
+\`\`\`bash
+cast block latest --rpc-url https://ethereum.reth.rs/rpc
+\`\`\`
+
+YAML-style な dump が見える: \`number\`、\`hash\`、\`parentHash\`、\`timestamp\`、\`gasLimit\`、\`gasUsed\`、\`baseFeePerGas\`、\`miner\`、full transactions list、withdrawals 等。Alloy の \`Block\` type が持つのと同じデータ構造、terminal 読み用にフォーマットされている。
+
+\`\`\`bash
+cast block 19000000 --rpc-url https://ethereum.reth.rs/rpc
+\`\`\`
+
+Number で lookup して過去 block を replay する。「contract X が block N でどんな state を持っていたか」を debug するときに有用。
+
+特定 transaction を検査:
+
+\`\`\`bash
+cast tx 0xa84a9... --rpc-url https://ethereum.reth.rs/rpc  # 任意の real な mainnet tx hash
+\`\`\`
+
+Transaction の \`from\`、\`to\`、\`value\`、\`input\` (calldata)、\`gas\`、\`gasPrice\`、\`nonce\`、signature components を返す。**\`input\` フィールドこそが次に \`cast abi-decode\` を使いたくなる場所だ。**
+
+Receipt — tx が mine されたとき実際に何が起きたか:
+
+\`\`\`bash
+cast receipt 0xa84a9... --rpc-url https://ethereum.reth.rs/rpc
+\`\`\`
+
+\`status\` (1 = success、0 = reverted)、\`gasUsed\`、emit された \`logs\` (events)、\`blockNumber\` 等を含む。**「deploy は成功したか」を debug するとき、\`cast send\` の後の最初のコマンドは \`cast receipt\`。**
+
+### Step 4: \`cast abi-encode\` / \`cast abi-decode\` で calldata を操作する
+
+ERC-20 \`transfer(address,uint256)\` call の calldata を構築:
+
+\`\`\`bash
+cast abi-encode "transfer(address,uint256)" \\
+  0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503 \\
+  1000000  # 1 USDC、6-decimal 精度
+\`\`\`
+
+出力 (call の実際の calldata bytes):
+
+\`\`\`
+0xa9059cbb00000000000000000000000047ac0fb4f2d84898e4d9e7b4dab3c24507a6d50300000000000000000000000000000000000000000000000000000000000f4240
+\`\`\`
+
+3 セクションを読む。
+- \`0xa9059cbb\` — \`transfer(address,uint256)\` の 4-byte selector (signature の keccak256 の先頭 4 bytes)
+- \`0000...0047ac...\` — 第 1 引数 (address)、32 bytes に padded
+- \`0000...0f4240\` — 第 2 引数 (uint256 1,000,000 = 0xf4240)、32 bytes に padded
+
+これが生 transaction の \`data\` フィールドに埋め込む exact な bytes。**Multisig 提案、governance calldata、external call を構築する必要のある Solidity script のために bytes を build する方法はこれだ。**
+
+逆操作。calldata を与えて、type 付き引数を recover する。
+
+\`\`\`bash
+cast abi-decode "transfer(address,uint256)" \\
+  0xa9059cbb00000000000000000000000047ac0fb4f2d84898e4d9e7b4dab3c24507a6d50300000000000000000000000000000000000000000000000000000000000f4240
+\`\`\`
+
+出力:
+
+\`\`\`
+0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503
+1000000
+\`\`\`
+
+**\`abi-decode\` は、謎 calldata blob と function signature を持っているときに手を伸ばすツールだ。** Production debug の大半は「tx からの calldata がある、これが実際に何をするのか」。それこそが \`cast abi-decode\` が解く問題だ。
+
+### Step 5: \`cast 4byte\` で function-selector lookup
+
+時に calldata はあるが function signature を *知らない*。先頭 4 bytes が selector だ。cast が public directory (4byte.directory) をクエリして人間可読名を recover する。
+
+\`\`\`bash
+cast 4byte 0xa9059cbb
+\`\`\`
+
+出力:
+
+\`\`\`
+transfer(address,uint256)
+\`\`\`
+
+複数候補 signature が同じ 4 bytes に hash すれば、cast はすべてを列挙する。selector の衝突は存在する (production 関数では稀、obscure な関数では一般的)。**\`cast 4byte\` は unknown calldata に最初に走らせるコマンドで、その後に \`cast abi-decode\` を出す。**
+
+Unknown-calldata の full な debug ループ。
+
+\`\`\`bash
+# Step 5a — 謎 calldata を与えて、function 名を見つける:
+cast 4byte 0xa9059cbb
+# → transfer(address,uint256)
+
+# Step 5b — recover した signature を使って calldata を decode する:
+cast abi-decode "transfer(address,uint256)" 0xa9059cbb...
+# → 0x47ac... 1000000
+\`\`\`
+
+### Step 6: ローカル anvil に対する \`cast send\` の preview
+
+\`cast send\` は \`cast call\` の state-changing なツインだ。Private key を要求し (あるいは wallet 管理コマンドの 1 つ)、transaction を broadcast し、結果の transaction hash を表示する。重要なものは実際には送らない (L5 が anvil と full なローカル開発ループを扱う)。だが構文は見ておく価値がある。
+
+\`\`\`bash
+# 別 terminal でローカル anvil を起動 (L5 が深掘りする):
+#   anvil
+# anvil は 10 個の funded test account とその private key を表示する。
+
+# ローカル anvil に対して transaction を送る:
+cast send --rpc-url http://localhost:8545 \\
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \\
+  0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \\
+  "transfer(address,uint256)" \\
+  0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503 \\
+  1000000
+\`\`\`
+
+押さえる点が 3 つ (走らせなくても見える)。
+
+1. **\`cast call\` に対して \`--private-key\` だけが新しいフラグ。** 他はすべて同一だ。cast が key で transaction を sign し、RPC で broadcast し、hash を表示する。
+2. **anvil の default private key \`0xac0974...\` は事前 fund 済みだ。** anvil が起動時に 10 個の deterministic account を seed する。毎回同じ private key、ローカル開発のみ safe。**anvil の default key を任意の real network に対して決して使うな。**
+3. **出力は transaction hash。** それを \`cast receipt $tx\` に pipe する (hash を back-tick) と status、gas used、emit された logs が見える。2-step pattern は \`cast send\` → \`cast receipt\`。Alloy では \`provider.send_transaction(...).await?.get_receipt().await?\` をやるのと同じだ。
+
+L5 (次のレッスン) が anvil に mainnet forking で戻る。そこで \`cast send\` が真に有用になる。real な mainnet transaction を forked state に対して、real ETH を使わずに simulate できる。
+
+## よくある失敗パターン
+
+- **\`error sending request for url\`** — \`--rpc-url\` が到達不可能。URL、自分のネットワーク、または別の public RPC (Cloudflare、Ankr 等) にフォールバックを check する。
+- **\`Error: Wrong function selector ...\`** — 渡した function signature が contract と一致していない。Contract の実際の calldata に \`cast 4byte\` を使って正しい signature を recover するか、block explorer から contract の ABI を読む。
+- **\`Error: missing field "input"\`** — 指している chain に存在しない transaction hash をクエリしている (例: testnet RPC に対して mainnet hash を使った)。Chain を検証する。
+- **\`cast send\` が tx hash を返すが receipt は \`status: 0\` を表示する** — tx は mine されたが revert した。同じ calldata で \`cast call\` を走らせて revert reason を見る (cast call は broadcast せずに simulate し、revert message を表示する)。
+- **\`Error: insufficient funds\`** — \`--private-key\` が target chain で ETH を持たない account を制御している。ローカル anvil なら anvil の seed 済み account を使う。Testnet なら faucet からリクエストする。
+
+## 設計の振り返り
+
+\`cast\` の設計に焼き込んだ load-bearing な決定が 3 つ。
+
+1. **\`cast\` は背後で alloy を再利用する。別の JSON-RPC クライアントなし。** Foundry の \`cast\` バイナリは Reth が使うのと同じ \`alloy\` crate に link する。すべての \`cast\` invocation が、自分の Rust プログラムが歩むのと同じ code path を歩む。含意はこうだ。Reth が新しい RPC method (例えば新しい tracing endpoint) をサポートすれば、alloy version が bump された時点で \`cast\` はそれを無料で得る。**実装は 1 つ、surface は 2 つ。CLI は library と別に保守されていない。**
+
+2. **Function signature は 4-byte selector ではなく人間可読だ。** cast は \`transfer(address,uint256)\` に対して \`0xa9059cbb\` を渡せと要求することもできた (Geth の \`eth_call\` は raw bytes を取る)。cast はどちらも受け付けるが、人間可読形式が documented default だ。規律はこうだ。*キーボード ergonomics が自分の書いた Solidity ソースと一致する*。**cast に打ち込むものが、Solidity に打ち込んだものと一致する。メンタルな翻訳ステップなし。**
+
+3. **\`--rpc-url\` は session 単位ではなく command 単位だ。** 環境に \`ETH_RPC_URL\` を 1 回設定できるが、個々の \`cast\` invocation が inline でそれを上書きできる。これは deliberate に stateless。\`npm\` が \`npm config set registry\` で持つような「現在の chain」モードはない。理由はこうだ。chain mistake は破滅的だ (testnet を意図して mainnet に送る)。cast の設計はすべての state-changing コマンドで chain を可視に保つことを強制する。**ステートレス性（Statelessness）は usability の見落としではなく safety feature だ。**
+
+## 答え合わせ
+
+L4 の後、shell history はこんな具合に含む。
+
+\`\`\`bash
+# Mainnet を読む
+cast call --rpc-url https://ethereum.reth.rs/rpc \\
+  0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \\
+  "totalSupply()(uint256)"
+
+# Block を検査
+cast block latest --rpc-url https://ethereum.reth.rs/rpc
+
+# Calldata を build
+cast abi-encode "transfer(address,uint256)" 0x... 1000000
+
+# 謎 calldata を decode
+cast 4byte 0xa9059cbb
+cast abi-decode "transfer(address,uint256)" 0xa9059cbb...
+
+# Option: ローカル anvil に対して送る
+cast send --rpc-url http://localhost:8545 \\
+  --private-key 0xac09... 0xA0b8... "transfer(address,uint256)" 0x47ac... 1000000
+\`\`\`
+
+L4 の後はこれができる。
+- 任意の chain 上の任意の contract の任意の view 関数を terminal から読む
+- Block explorer を開かずに block と transaction を検査する
+- Multisig 提案、governance、scripts 用に calldata を build / decode する
+- 4byte 経由で unknown function selector を lookup する
+- ローカル anvil に対して transaction を送る (L5 で anvil を full に扱う)
+
+## よくある質問
+
+**Q1: Etherscan + ブラウザで同じことができるのに、なぜ \`cast\` を使うのか?**
+
+理由は 3 つ。**(a) 合成可能性（Composability）** — \`cast\` の出力はプレインテキストなので、Unix のパイプライン思想そのままに \`jq\`、\`awk\`、\`xargs\`、\`grep\` へ直接流し込める。自動化スクリプトへの組み込みが容易だ。Etherscan の出力はブラウザの中だ。**(b) 再現性（Reproducibility）** — cast コマンドは単一の bash one-liner としてチーム内で共有できる。Etherscan ワークフローはランブックに paste できないクリックの連続だ。**(c) スピード** — ローカル Reth ノードに対する \`cast call\` は milliseconds で返る。Etherscan は rate limit 付きで重い Web ブラウザのロードを待たされる。1 時間に数十の view クエリを投げる L1 エンジニアには、思考の同期を保つために cast の 10×+ の速度差が死活問題だ。**Etherscan は一度きりの探索用、cast はそれ以外のすべてに。**
+
+**Q2: \`cast\` はすべての JSON-RPC method を サポートする? それとも subset か?**
+
+Subset だ。cast は ~30 の named subcommand を露出し、common method をカバーする。直接露出していないものには \`cast rpc <method> [params...]\` を使う。これが raw escape hatch だ。method 名と parameter を JSON-RPC リクエストとして送り、JSON response を表示する。**Typed wrapper なしで method を欲しいとき、alloy で \`provider.client().request::<...>()\` を使うのと同じパターンだ。**
+
+**Q3: \`cast\` は \`cast send\` のために signed transaction をどう扱うのか?**
+
+すべて client side で sign する。\`--private-key\` を渡すと、cast が client side で transaction を構築し、key (\`alloy_signer_local\` を使う) で sign し、*signed* な transaction を \`eth_sendRawTransaction\` 経由で submit する。Private key は machine を離れない。Hardware wallet ワークフローには \`--ledger\` か \`--trezor\` を代わりに使う。cast が同じ \`alloy_signer_*\` trait を歩む。**Signing はローカル、RPC が見るのは broadcast bytes だけ。**
+
+**Q4: \`cast\` の代わりに \`alloy::Provider\` で Rust プログラムを書くべきはいつか?**
+
+ワークフローが 3 コマンドより長く、bash を超える branching / loop / error handling を必要とするときだ。Rough rule。場当たり的クエリは \`cast\`、繰り返しのワークフローや CI で走るものは Rust + alloy。一度きりの deploy には \`cast send\` で十分。検証、role 設定、ownership 移譲、parameter 設定を必要とする deployment script なら Rust バイナリ (あるいは Foundry の \`script/\` ファイル、Solidity) を書く。**cast は 1 行 bash script までスケールする。alloy は deployment バイナリまでスケールする。**
+
+**Q5: \`cast call\` で異なる \`msg.sender\` を持つ transaction を simulate できる?**
+
+Yes。\`--from <address>\` フラグが transaction の見かけ上の sender を上書きする。Access-controlled 関数の test に有用だ。\`--from <owner-address>\` で owner が見るものを simulate できる。ただし注意。これは *simulated* な call だ。On-chain で address を impersonate するわけではない。Test 用に impersonation が必要なら、それは Solidity の \`vm.prank\` か、RPC 経由の \`anvil_impersonateAccount\` だ (L5 が両方を扱う)。**Simulation には cast call --from、Forked-chain testing には anvil_impersonateAccount。**
+
+**Q6: \`cast\` は non-Ethereum な EVM チェーンで動くか?**
+
+Yes。標準 JSON-RPC interface を喋るものなら何でも動く。Optimism、Arbitrum、Base、Polygon、BNB Chain、自分のカスタム L2 — すべて同一に動く。\`--rpc-url\` を正しい endpoint に向けるだけだ。例外は非標準 RPC method を持つ chain (Tron、NEAR、non-EVM Solana 等)。明らかに当てはまらない。**任意の EVM 互換 chain には cast がある。Non-EVM chain には chain 自身の tooling が要る。**
+
+## 次のレッスン (L5) — \`anvil\` + cheatcodes — real な mainnet state でのローカル開発
+
+L5 が最後の piece を wire する。\`anvil --fork-url\` 経由で *real な* mainnet state に対するローカル開発だ。学ぶこと。
+
+- \`anvil --fork-url <mainnet-rpc>\` — 起動時に mainnet の現 state を mirror するローカル chain を立ち上げる
+- anvil が seed する 10 個の funded test account と、なぜ deterministic か
+- anvil 固有の RPC method: \`anvil_impersonateAccount\`、\`anvil_setBalance\`、\`anvil_mine\`、\`anvil_setStorageAt\`
+- Foundry の \`vm.*\` cheatcode (L1–L3 test の) が anvil の RPC 等価物にどう map するか。同じ機構、違う surface
+- Full なローカル開発ループ。\`anvil --fork-url\` → forked mainnet に対する \`cast send\` → 検証用の \`cast call\` → real ETH ゼロ消費
+
+L5 完走後、laptop を離れずに real な mainnet state に対して開発できる。L5 がコースの test-discipline + CLI 部分を閉じる。L6 が capstone で、そこで openhl-liquidation Stage 10b の \`InsuranceFund\` を Solidity に port し、同じ 4 つの保存則を \`forge invariant\` で証明する。
 `,
                 },
               ],
