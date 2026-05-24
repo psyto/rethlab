@@ -257,7 +257,7 @@ const JA: LocaleConfig = {
     slug: 'building-openhl-liquidation-ja',
     title: 'OpenHL Liquidation 開発ガイド：レバレッジ環境における非単調性の発見と清算エンジンの構築',
     description:
-      '永久先物ポジションを司る liquidation engine の中核を end-to-end で実装します。証拠金維持率からアカウントを 4 フェーズ（Safe / AtRisk / Liquidatable / Underwater）に分類する pure compute 層、保険基金（InsuranceFund）の state machine と 3 つの WithdrawOutcome variant（Covered / PartiallyDrained / Depleted）が表現する Layer 2 → Layer 3 カスケード境界、そして bridge がブロックごとに 1 回呼ぶ multi-account scanner — これらすべてを 1 つの orchestration loop に結合します。Levered-regime での「非単調性（Non-monotonicity）」を proptest と prop_assume! で炙り出す手法、3 つの層を縦に compose する保存則の proptest、pure compute と stateful book-keeping を結ぶ credit/debit 分解、`debug_assert!` ペアによる discriminated dispatch パターンを網羅。Stage 10 trilogy（margin math + insurance fund + scanner）に対して 5 modules・14 lessons（L0–L13）・byte-for-byte 一致。DIY Perp シリーズ第 5 弾。',
+      '本ガイドでは、永久先物（Perpetual Futures）のポジションを司る清算エンジン（Liquidation Engine）の中核を、End-to-Endで実装します。\n\n証拠金維持率からアカウントを4つのフェーズ（Safe / AtRisk / Liquidatable / Underwater）に分類する pure compute 層。保険基金（Insurance Fund）のステートマシンと、3つの WithdrawOutcome バリアント（Covered / PartiallyDrained / Depleted）が表現する Layer 2 → Layer 3 のカスケード境界。そして、Bridgeがブロックごとに1回呼び出す multi-account scanner。これらすべてを1つのオーケストレーション・ループ（Orchestration Loop）へと結合します。\n\nさらに、レバレッジ環境（Levered-regime）特有の「非単調性（Non-monotonicity）」を proptest と prop_assume! で炙り出す手法、3つの層を縦に結合（Compose）する保存則のプロパティテスト、pure compute と状態を持つ帳簿管理（Stateful Book-keeping）を結ぶ credit/debit 分解、そして debug_assert! のペアによる discriminated dispatch パターンまでを網羅。\n\nStage 10 三部作（Margin Math + Insurance Fund + Scanner）に対応する 5モジュール・14レッスン（L0〜L13）を通じ、バイト単位（Byte-for-byte）で一致する実装を目指します。DIY Perp シリーズ第5弾。',
     track: 'diy-perp',
     instructorName: 'RethLab',
   },
