@@ -1,17 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * Build prisma/seed-reth-openhl-adl-{en,ja}.ts from drafts/openhl_adl_*.md.
+ * Build prisma/seed-reth-foundry-{en,ja}.ts from drafts/foundry_*.md.
  *
- * Sister script of build-openhl-liquidation-seed.ts. Same extraction logic,
- * different draft file naming (openhl_adl_l<N>_<locale>.md), different
+ * Sister script of build-openhl-adl-seed.ts. Same extraction logic,
+ * different draft file naming (foundry_l<N>_<locale>.md), different
  * output filename, different course metadata.
  *
- * Currently covers L0 only — orientation. L1..L4 will be added as drafts
- * land. The ADL course pins to openhl SHA d66b44a (Stage 10d).
+ * Currently covers L0 only — orientation. L1..L6 will be added as drafts
+ * land. The Foundry course doesn't pin an openhl SHA (it teaches Foundry
+ * itself); L6's capstone references openhl-liquidation Stage 10b
+ * (260883b) and lives in-repo at examples/foundry-capstone/.
  *
  * Run from rethlab root:
- *   npx tsx .github/scripts/build-openhl-adl-seed.ts            # generates EN
- *   npx tsx .github/scripts/build-openhl-adl-seed.ts --locale=ja # generates JA
+ *   npx tsx .github/scripts/build-foundry-seed.ts            # generates EN
+ *   npx tsx .github/scripts/build-foundry-seed.ts --locale=ja # generates JA
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -54,42 +56,33 @@ interface LocaleConfig {
 // ──────────────────────────────────────────────────────────────
 
 const EN: LocaleConfig = {
-  outputFileName: 'seed-reth-openhl-adl-en.ts',
-  exportName: 'seedRethOpenHlAdlEN',
+  outputFileName: 'seed-reth-foundry-en.ts',
+  exportName: 'seedRethFoundryEN',
   course: {
-    slug: 'building-openhl-adl-en',
-    title: 'Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade',
+    slug: 'mastering-foundry-en',
+    title: 'Mastering Foundry — Solidity testing discipline for engineers who already think in Rust',
     description:
-      "Build auto-deleveraging (ADL) — the cascade's last line of defense when the insurance fund couldn't absorb everything. Ranks profitable counter-positions by (pnl_pct × leverage) using Hyperliquid's convention, force-closes them via bookkeeping mutation rather than orderbook submission, and applies a haircut that absorbs the unfilled deficit. Includes the feedback-loop crash explanation (why ADL bypasses the orderbook entirely), the layered conservation law that closes the Stage 10 cascade math, and 4 invariant proptests proving determinism. 5 lessons across 2 modules, byte-for-byte against openhl Stage 10d (d66b44a). Course 6 of the DIY Perp series.",
-    track: 'diy-perp',
+      "The rigorous-testing discipline you learned in rethlab's openhl courses (proptest! conservation laws, debug_assert! routing contracts, byte-for-byte answer keys against openhl SHAs) transfers to Solidity contracts almost 1:1 — and Foundry is the tool that makes the transfer mechanical. This course teaches forge test / fuzz / invariant + cast + anvil for L1 / contract / engine engineers who already think in Rust. By the L6 capstone, you'll have ported openhl-liquidation Stage 10b's InsuranceFund from Rust to Solidity and proven the same 4 conservation invariants with forge — same theorem, two languages, both mechanically proven. Foundry mastery is now a commodity prerequisite for serious L1 work; this course assumes you already have the discipline and gives you the Solidity syntax. 7 lessons across 4 modules, openhl SHA references via L6 capstone, in-repo answer keys at examples/foundry-capstone/.",
+    track: 'reth-stack',
     instructorName: 'RethLab',
   },
   modules: {
     0: { title: 'Orientation', sortOrder: 0 },
-    1: { title: 'ADL implementation', sortOrder: 1 },
+    1: { title: 'Test discipline', sortOrder: 1 },
+    2: { title: 'CLI & state-aware testing', sortOrder: 2 },
+    3: { title: 'Capstone', sortOrder: 3 },
   },
   lessons: [
     {
-      draftFile: 'openhl_adl_l0_en.md',
+      draftFile: 'foundry_l0_en.md',
       moduleNumber: 0,
       sortOrder: 0,
-      title: 'Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade',
-      slug: 'openhl-adl-orientation-en',
+      title: 'Mastering Foundry — Solidity testing discipline for engineers who already think in Rust',
+      slug: 'foundry-orientation-en',
       duration: 15,
       xpReward: 50,
-      h1Marker: '# Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade',
-      startSignature: 'The previous course',
-    },
-    {
-      draftFile: 'openhl_adl_l1_en.md',
-      moduleNumber: 1,
-      sortOrder: 0,
-      title: 'Lesson 1 — AdlScore, AdlRecord, AdlReport + adl_score — the ranking function',
-      slug: 'openhl-adl-score-en',
-      duration: 35,
-      xpReward: 60,
-      h1Marker: '# Lesson 1 — `AdlScore`, `AdlRecord`, `AdlReport` + `adl_score` — the ranking function',
-      startSignature: "Concepts you'll grasp in this lesson",
+      h1Marker: '# Mastering Foundry — Solidity testing discipline for engineers who already think in Rust',
+      startSignature: "If you've been through any of rethlab's openhl courses",
     },
   ],
 };
@@ -99,42 +92,33 @@ const EN: LocaleConfig = {
 // ──────────────────────────────────────────────────────────────
 
 const JA: LocaleConfig = {
-  outputFileName: 'seed-reth-openhl-adl-ja.ts',
-  exportName: 'seedRethOpenHlAdlJA',
+  outputFileName: 'seed-reth-foundry-ja.ts',
+  exportName: 'seedRethFoundryJA',
   course: {
-    slug: 'building-openhl-adl-ja',
-    title: 'OpenHL ADL を作る — auto-deleveraging、safety-net cascade の Layer 3',
+    slug: 'mastering-foundry-ja',
+    title: 'Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律',
     description:
-      'Auto-deleveraging (ADL) — insurance fund がすべてを absorb しきれなかったときに発火する cascade の最終防衛線 — を実装します。Hyperliquid 慣例の `(pnl_pct × leverage)` で profitable な counter-position をランキングし、orderbook 提出ではなく bookkeeping mutation で force-close、unfilled deficit を吸収する haircut を適用します。Feedback-loop crash の解説 (なぜ ADL が orderbook を完全に bypass するのか)、Stage 10 cascade 数学を閉じる層を成す保存則、決定性を証明する 4 つの invariant proptest を網羅。Stage 10d (d66b44a) に対して 2 modules・5 lessons・byte-for-byte 一致。DIY Perp シリーズ第 6 弾。',
-    track: 'diy-perp',
+      'rethlab の openhl 系コースで学んだ厳格テスト規律 (proptest! による保存則、debug_assert! の routing 契約、openhl SHA に対する byte-for-byte 答え合わせ) は、Solidity contract にほぼ 1:1 で transfer する — そして Foundry がその transfer を mechanical にする道具だ。本コースは、すでに Rust で考える L1 / contract / engine エンジニアのための forge test / fuzz / invariant + cast + anvil を教える。L6 capstone までに、openhl-liquidation Stage 10b の InsuranceFund を Rust から Solidity に port し、同じ 4 つの保存則 invariant を forge で証明する — 同じ定理、2 言語、両方とも mechanical に証明済み。Foundry の習得は今や本格的な L1 開発の commodity prerequisite。本コースは既に規律を持っている前提で Solidity 構文を渡す。7 lessons across 4 modules、openhl SHA は L6 capstone 経由で参照、答え合わせは in-repo の examples/foundry-capstone/。',
+    track: 'reth-stack',
     instructorName: 'RethLab',
   },
   modules: {
     0: { title: 'Orientation', sortOrder: 0 },
-    1: { title: 'ADL implementation', sortOrder: 1 },
+    1: { title: 'Test discipline', sortOrder: 1 },
+    2: { title: 'CLI & state-aware testing', sortOrder: 2 },
+    3: { title: 'Capstone', sortOrder: 3 },
   },
   lessons: [
     {
-      draftFile: 'openhl_adl_l0_ja.md',
+      draftFile: 'foundry_l0_ja.md',
       moduleNumber: 0,
       sortOrder: 0,
-      title: 'OpenHL ADL を作る — auto-deleveraging、safety-net cascade の Layer 3',
-      slug: 'openhl-adl-orientation-ja',
+      title: 'Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律',
+      slug: 'foundry-orientation-ja',
       duration: 15,
       xpReward: 50,
-      h1Marker: '# OpenHL ADL を作る — auto-deleveraging、safety-net cascade の Layer 3',
-      startSignature: '前のコース',
-    },
-    {
-      draftFile: 'openhl_adl_l1_ja.md',
-      moduleNumber: 1,
-      sortOrder: 0,
-      title: 'レッスン 1 — AdlScore, AdlRecord, AdlReport + adl_score — ranking 関数',
-      slug: 'openhl-adl-score-ja',
-      duration: 35,
-      xpReward: 60,
-      h1Marker: '# レッスン 1 — `AdlScore`, `AdlRecord`, `AdlReport` + `adl_score` — ranking 関数',
-      startSignature: 'このレッスンで掴む概念',
+      h1Marker: '# Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律',
+      startSignature: 'rethlab の openhl 系コース',
     },
   ],
 };
@@ -142,7 +126,7 @@ const JA: LocaleConfig = {
 const LOCALES: Record<Locale, LocaleConfig> = { en: EN, ja: JA };
 
 // ──────────────────────────────────────────────────────────────
-// Generator (same shape as build-openhl-liquidation-seed.ts)
+// Generator (same shape as build-openhl-adl-seed.ts)
 // ──────────────────────────────────────────────────────────────
 
 interface Lesson {
@@ -156,11 +140,11 @@ interface Lesson {
 }
 
 const COURSE_SHARED = {
-  difficulty: 'EXPERT' as const,
-  duration: 50, // L0..L1 so far (15+35); bumps as L2..L4 land.
-  xpReward: 110,
-  tags: ['reth', 'evm', 'liquidation', 'adl', 'perpetual', 'l1', 'openhl', 'expert'],
-  sortOrder: 1010,
+  difficulty: 'ADVANCED' as const,
+  duration: 15, // L0 only for now; bumps as L1..L6 land. Final target: 220 min.
+  xpReward: 50, // L0 only for now; bumps as L1..L6 land. Final target: 460 XP.
+  tags: ['foundry', 'forge', 'anvil', 'cast', 'solidity', 'testing', 'invariants', 'fuzz', 'l1', 'reth'],
+  sortOrder: 350,
   isPublished: true,
 };
 
@@ -247,7 +231,7 @@ ${lessonBlocks},
     })
     .join(',\n');
 
-  return `// AUTO-GENERATED from drafts/openhl_adl_*_${locale}.md by .github/scripts/build-openhl-adl-seed.ts
+  return `// AUTO-GENERATED from drafts/foundry_*_${locale}.md by .github/scripts/build-foundry-seed.ts
 // Do not hand-edit. Re-run the build script when drafts change.
 
 import { PrismaClient } from '@prisma/client';
@@ -296,7 +280,7 @@ async function main(): Promise<void> {
   const config = LOCALES[locale];
   const outPath = join(RETHLAB_ROOT, 'prisma', config.outputFileName);
 
-  console.log(`Building openhl-adl seed file (locale=${locale}) from drafts...`);
+  console.log(`Building foundry seed file (locale=${locale}) from drafts...`);
   console.log(`  drafts:  ${DRAFTS_DIR}`);
   console.log(`  output:  ${outPath}`);
 
