@@ -95,6 +95,17 @@ const EN: LocaleConfig = {
       h1Marker: '# Lesson 1 — `forge test` — the Solidity equivalent of `cargo test`',
       startSignature: "Concepts you'll grasp in this lesson",
     },
+    {
+      draftFile: 'foundry_l2_en.md',
+      moduleNumber: 1,
+      sortOrder: 1,
+      title: "Lesson 2 — forge fuzz — Solidity's proptest!",
+      slug: 'foundry-forge-fuzz-en',
+      duration: 35,
+      xpReward: 70,
+      h1Marker: "# Lesson 2 — `forge fuzz` — Solidity's `proptest!`",
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
   ],
 };
 
@@ -142,6 +153,17 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 1 — `forge test` — `cargo test` の Solidity 等価物',
       startSignature: 'このレッスンで掴む概念',
     },
+    {
+      draftFile: 'foundry_l2_ja.md',
+      moduleNumber: 1,
+      sortOrder: 1,
+      title: 'レッスン 2 — forge fuzz — Solidity の proptest!',
+      slug: 'foundry-forge-fuzz-ja',
+      duration: 35,
+      xpReward: 70,
+      h1Marker: '# レッスン 2 — `forge fuzz` — Solidity の `proptest!`',
+      startSignature: 'このレッスンで掴む概念',
+    },
   ],
 };
 
@@ -163,8 +185,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'ADVANCED' as const,
-  duration: 40, // L0..L1 so far (15+25); bumps as L2..L6 land. Final target: 220 min.
-  xpReward: 100, // L0..L1 so far (50+50); bumps as L2..L6 land. Final target: 460 XP.
+  duration: 75, // L0..L2 so far (15+25+35); bumps as L3..L6 land. Final target: 220 min.
+  xpReward: 170, // L0..L2 so far (50+50+70); bumps as L3..L6 land. Final target: 460 XP.
   tags: ['foundry', 'forge', 'anvil', 'cast', 'solidity', 'testing', 'invariants', 'fuzz', 'l1', 'reth'],
   sortOrder: 350,
   isPublished: true,
