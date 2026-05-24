@@ -11,7 +11,7 @@ export async function seedRethOpenHlAdlJA(prisma: PrismaClient) {
       slug: "building-openhl-adl-ja",
       title: "OpenHL ADL を作る — auto-deleveraging、safety-net cascade の Layer 3",
       description:
-        "Auto-deleveraging (ADL) — insurance fund がすべてを absorb しきれなかったときに発火する cascade の最終防衛線 — を実装します。Hyperliquid 慣例の `(pnl_pct × leverage)` で profitable な counter-position をランキングし、orderbook 提出ではなく bookkeeping mutation で force-close、unfilled deficit を吸収する haircut を適用します。Feedback-loop crash の解説 (なぜ ADL が orderbook を完全に bypass するのか)、Stage 10 cascade 数学を閉じる層を成す保存則、決定性を証明する 4 つの invariant proptest を網羅。Stage 10d (d66b44a) に対して 2 modules・5 lessons・byte-for-byte 一致。DIY Perp シリーズ第 6 弾。",
+        "本ガイドでは、保険基金（Insurance Fund）が損失をすべて吸収（Absorb）しきれなかったときに発火する、セーフティネット・カスケードの最終防衛線「Auto-deleveraging (ADL)」を実装します。\n\nHyperliquidの慣例である (pnl_pct × leverage) に基づき、利益の出ているカウンターポジション（Counter-position）をランキング。オーダーブックへの注文提出ではなく、**帳簿の直接書き換え（Bookkeeping mutation）**によってポジションを強制クローズ（Force-close）し、未充填の赤字（Unfilled deficit）を吸収するヘアカット（Haircut）を適用します。\n\nさらに、「なぜ ADL はオーダーブックを完全にバイパス（Bypass）しなければならないのか」を解き明かす Feedback-loop crash のメカニズム解説、Stage 10 のカスケード数学を完結させる保存則、そしてシステムの決定性を証明する 4つの不変条件（Invariant）プロパティテスト を網羅。\n\n特定のコミットハッシュ Stage 10d (d66b44a) に対応する 2モジュール・5レッスンを通じ、バイト単位（Byte-for-byte）で一致する堅牢な実装を作り上げます。DIY Perp シリーズ第6弾。",
       difficulty: "EXPERT",
       duration: 50,
       xpReward: 110,
