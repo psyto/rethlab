@@ -84,6 +84,17 @@ const EN: LocaleConfig = {
       h1Marker: '# Mastering Foundry — Solidity testing discipline for engineers who already think in Rust',
       startSignature: "If you've been through any of rethlab's openhl courses",
     },
+    {
+      draftFile: 'foundry_l1_en.md',
+      moduleNumber: 1,
+      sortOrder: 0,
+      title: 'Lesson 1 — forge test — the Solidity equivalent of cargo test',
+      slug: 'foundry-forge-test-basics-en',
+      duration: 25,
+      xpReward: 50,
+      h1Marker: '# Lesson 1 — `forge test` — the Solidity equivalent of `cargo test`',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
   ],
 };
 
@@ -120,6 +131,17 @@ const JA: LocaleConfig = {
       h1Marker: '# Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律',
       startSignature: 'rethlab の openhl 系コース',
     },
+    {
+      draftFile: 'foundry_l1_ja.md',
+      moduleNumber: 1,
+      sortOrder: 0,
+      title: 'レッスン 1 — forge test — cargo test の Solidity 等価物',
+      slug: 'foundry-forge-test-basics-ja',
+      duration: 25,
+      xpReward: 50,
+      h1Marker: '# レッスン 1 — `forge test` — `cargo test` の Solidity 等価物',
+      startSignature: 'このレッスンで掴む概念',
+    },
   ],
 };
 
@@ -141,8 +163,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'ADVANCED' as const,
-  duration: 15, // L0 only for now; bumps as L1..L6 land. Final target: 220 min.
-  xpReward: 50, // L0 only for now; bumps as L1..L6 land. Final target: 460 XP.
+  duration: 40, // L0..L1 so far (15+25); bumps as L2..L6 land. Final target: 220 min.
+  xpReward: 100, // L0..L1 so far (50+50); bumps as L2..L6 land. Final target: 460 XP.
   tags: ['foundry', 'forge', 'anvil', 'cast', 'solidity', 'testing', 'invariants', 'fuzz', 'l1', 'reth'],
   sortOrder: 350,
   isPublished: true,
