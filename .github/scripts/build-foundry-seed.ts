@@ -164,7 +164,7 @@ const JA: LocaleConfig = {
     slug: 'mastering-foundry-ja',
     title: 'Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律',
     description:
-      '本コースは、rethlab の openhl 系列コースで学んだ厳格なテスト規律（proptest! による保存則、debug_assert! によるルーティング契約、openhl SHA に対する Byte-for-byte の検証）を、Solidity コントラクトへ機械的に転写（Transfer）するための道具立てとして Foundry を扱います。\n\nすでに Rust で思考する L1 / コントラクト / エンジン開発者を前提に、forge test の基本アサーションから、forge fuzz（Solidity 版 proptest!）、複数呼び出しに対する forge invariant、CLI ツールとしての cast、メインネット状態を再現する anvil --fork-url ＋ cheatcodes までを網羅。Cheatcodes が単に「リモートノードに JSON-RPC で依頼する」のではなく、「REVM を内部から操作する Magic Precompile」であるというアーキテクチャの正体まで掘り下げます。\n\n最終章（L7 Capstone）では、openhl-liquidation Stage 10b の InsuranceFund を Rust から Solidity へ移植（Port）。まったく同じ 4 つの保存則（Invariants）を forge invariant で 10,000 iteration 実行し、同じ定理を 2 つの言語で機械的に検証することで、テスト規律が言語の壁を超えて成立することを体感します。\n\n2026 年現在、Foundry の習得は本格的な L1 / インフラ開発における前提条件（Commodity Prerequisite）であり、もはやそれ自体は競争優位ではありません。本コースは単なる「ツールの使い方」ではなく、「すでに脳内にある厳格な規律を Solidity 側へいかに持ち込むか」を叩き込む、唯一無二のポジショニングを取ります。\n\n全 4 モジュール・7 レッスン。リポジトリ内の examples/foundry-capstone/ にリファレンス実装が常駐します。',
+      '本コースは、Rust開発で培った厳格なテスト規律（保存則、ルーティング契約、Byte-for-byte検証）をSolidityへ機械的に転写するための実践講座です。\n\nforge fuzz や invariant はもちろん、Cheatcodesを「REVMを内部操作するMagic Precompile」として捉えるアーキテクチャの深層まで網羅。最終章では openhl-liquidation の InsuranceFund をSolidityへ移植し、10,000回の不変条件テストで「言語の壁を超えるテスト規律」を体感します。単なるツールの使い方ではなく、脳内にある規律をスマートコントラクトに持ち込むための唯一無二のカリキュラムです。（全4モジュール・7レッスン）',
     track: 'reth-stack',
     instructorName: 'RethLab',
   },

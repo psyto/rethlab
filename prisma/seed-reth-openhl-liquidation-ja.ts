@@ -11,7 +11,7 @@ export async function seedRethOpenHlLiquidationJA(prisma: PrismaClient) {
       slug: "building-openhl-liquidation-ja",
       title: "OpenHL Liquidation 開発ガイド：レバレッジ環境における非単調性の発見と清算エンジンの構築",
       description:
-        "本ガイドでは、永久先物（Perpetual Futures）のポジションを司る清算エンジン（Liquidation Engine）の中核を、End-to-Endで実装します。\n\n証拠金維持率からアカウントを4つのフェーズ（Safe / AtRisk / Liquidatable / Underwater）に分類する pure compute 層。保険基金（Insurance Fund）のステートマシンと、3つの WithdrawOutcome バリアント（Covered / PartiallyDrained / Depleted）が表現する Layer 2 → Layer 3 のカスケード境界。そして、Bridgeがブロックごとに1回呼び出す multi-account scanner。これらすべてを1つのオーケストレーション・ループ（Orchestration Loop）へと結合します。\n\nさらに、レバレッジ環境（Levered-regime）特有の「非単調性（Non-monotonicity）」を proptest と prop_assume! で炙り出す手法、3つの層を縦に結合（Compose）する保存則のプロパティテスト、pure compute と状態を持つ帳簿管理（Stateful Book-keeping）を結ぶ credit/debit 分解、そして debug_assert! のペアによる discriminated dispatch パターンまでを網羅。\n\nStage 10 三部作（Margin Math + Insurance Fund + Scanner）に対応する 5モジュール・14レッスン（L0〜L13）を通じ、バイト単位（Byte-for-byte）で一致する実装を目指します。DIY Perp シリーズ第5弾。",
+        "永久先物（Perpetual Futures）の清算エンジン中核をEnd-to-Endで実装する、DIY Perpシリーズ第5弾。\n\nアカウントの4フェーズ分類（pure compute）、保険基金（Insurance Fund）のステートマシン、そしてマルチアカウント・スキャナーを1つのオーケストレーション・ループへ結合します。さらに、レバレッジ環境特有の「非単調性」を proptest で炙り出す手法や、debug_assert! による契約検証まで網羅。Stage 10三部作に対応する全14レッスンを通じ、バイト単位（Byte-for-byte）で一致する堅牢な実装を構築します。",
       difficulty: "EXPERT",
       duration: 440,
       xpReward: 870,

@@ -105,7 +105,7 @@ const JA: LocaleConfig = {
     slug: 'building-openhl-adl-ja',
     title: 'OpenHL ADL を作る — auto-deleveraging、safety-net cascade の Layer 3',
     description:
-      '本ガイドでは、保険基金（Insurance Fund）が損失をすべて吸収（Absorb）しきれなかったときに発火する、セーフティネット・カスケードの最終防衛線「Auto-deleveraging (ADL)」を実装します。\n\nHyperliquidの慣例である (pnl_pct × leverage) に基づき、利益の出ているカウンターポジション（Counter-position）をランキング。オーダーブックへの注文提出ではなく、**帳簿の直接書き換え（Bookkeeping mutation）**によってポジションを強制クローズ（Force-close）し、未充填の赤字（Unfilled deficit）を吸収するヘアカット（Haircut）を適用します。\n\nさらに、「なぜ ADL はオーダーブックを完全にバイパス（Bypass）しなければならないのか」を解き明かす Feedback-loop crash のメカニズム解説、Stage 10 のカスケード数学を完結させる保存則、そしてシステムの決定性を証明する 4つの不変条件（Invariant）プロパティテスト を網羅。\n\n特定のコミットハッシュ Stage 10d (d66b44a) に対応する 2モジュール・5レッスンを通じ、バイト単位（Byte-for-byte）で一致する堅牢な実装を作り上げます。DIY Perp シリーズ第6弾。',
+      '保険基金が損失を吸収しきれなかった際の発火回路、最終防衛線「Auto-deleveraging (ADL)」を実装するDIY Perpシリーズ第6弾。\n\n利益の出ているカウンターポジションをランキングし、オーダーブックをバイパスした「帳簿の直接書き換え（Bookkeeping mutation）」による強制クローズとヘアカットを実装します。さらに、破綻を防ぐ「Feedback-loop crash」のメカニズム解説や、システムの決定性を証明する4つの不変条件（Invariant）プロパティテストも網羅。全5レッスンを通じ、Stage 10dに対応するByte-for-byteの一致を達成します。',
     track: 'diy-perp',
     instructorName: 'RethLab',
   },
