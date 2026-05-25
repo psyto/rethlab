@@ -1688,6 +1688,64 @@ MegaETH ([\`megaeth-labs/\`](https://github.com/megaeth-labs)) is a 100K+ TPS L1
 
 The MegaETH picture is important pedagogically because it shows the SDK's ceiling: how deep customization can go without forking core Reth. Tempo swaps a few components and keeps everything else. MegaETH replaces the EVM executor and the storage layer **and still doesn't fork Reth** (\`megaeth-labs/reth\`: 0 ahead, 7666 behind).
 
+## What shipping bera-reth actually felt like — Berachain's reflections
+
+The architecture sections above ("what each chain swaps") describe the *destination*. This section describes the *journey* — what it actually felt like for Berachain to ship bera-reth on mainnet with dozens of validators. The source is the [Berachain team's own write-up by Rez](https://medium.com/@rezayan/building-modular-execution-clients-on-reth-d56c2d65b85a), distilled here into the parts that change your expectations when *you* reach for the Reth SDK.
+
+### What worked well
+
+| What | Why it matters |
+| :--- | :--- |
+| **Sync and pruning inherited free** | By implementing the \`Header\` / \`Block\` traits, you get sync, prune, history caching, header download — all of it — without writing a line. The 80% you don't think about. |
+| **Ethereum compatibility falls out** | With the custom hard fork disabled, bera-reth passes the **Hive test suite** unmodified. That's the regression discipline the framework gives you: customizations are gated, and the default path stays Ethereum-equivalent. |
+| **Shared execution path** | The same block-execution code is used by the block builder, the validator, the re-execution CLI — everywhere. One implementation, many callers. Forking would have meant duplicating it once per caller. |
+| **Fast to bootstrap** | Examples + SDK get you to a differentiated node in days. The first compile is hours; the first custom transaction works the first week. |
+| **Reth team responsiveness** | Upstream PR review and merge cycles are fast. When bera-reth hit leaky abstractions, the fixes shipped upstream quickly. |
+
+### What was tricky
+
+The honest list, in roughly increasing pain:
+
+1. **The big-bang problem with new transaction types.** Introducing a custom transaction touches dozens of code paths — every encoder, every validator, every tracing path. Rez landed bera-reth's custom transaction in a **single 5,000+ line PR** just to get the code compiling. Iterative or collaborative development against this abstraction was not really possible. **If your project needs a new tx type, plan for one all-at-once delivery, not incremental work.**
+
+2. **SDK abstractions break almost every release.** Bumping the Reth dependency is **rarely a one-line change**. Reading upstream PRs to understand how the SDK changed is part of the normal release-bump workflow. Expect breakage; budget for adaptation.
+
+3. **Regression tests are non-optional.** Bera-reth inherited a variable whose value changed unexpectedly in a new Reth release — silently. Only their regression tests caught it. **If you're not running CI against a battery of integration tests, the SDK will eventually surprise you in production.**
+
+4. **Tracing APIs were broken by the custom transaction.** Custom execution paths shared across all calling contexts (builder, validator, CLI, *and tracing*) would have prevented this. Today they're not, so bera-reth ships an "un-elegant solution" for tracing. **A custom transaction may force you to write the same execution logic twice.**
+
+5. **Validation provenance is ambiguous.** Because the SDK doesn't expose the core runtime loop, it's unclear when something should be re-validated during execution that was already validated in pre-validation. You read code to find out.
+
+6. **Generics + error messages.** Rust's generics are heavy in the SDK; error messages are notoriously hard to read. **Even LLM assistance struggles with these errors** — you'll spend time on type errors that don't have obvious fixes.
+
+7. **Leaky abstractions → upstream PRs.** Some abstractions don't quite cover their declared surface; the workaround is contributing back to Reth. Turnaround is fast, but the contribution burden is real.
+
+8. **Multi-layer abstractions cascade.** Changes deep in **REVM** cascade up into **Alloy**, then into **Reth**. Three crate boundaries to navigate to fix one issue.
+
+9. **You're tied to upstream release cadence.** Whether you like it or not, your release schedule is downstream of Paradigm's.
+
+### The strategic question — Reth SDK vs Geth fork
+
+Rez's framing, sharpened:
+
+- **If your project doesn't share Ethereum's core loop or Engine API**, the Reth SDK's current abstractions may not be sufficient. You'll fight the framework. (Hyperliquid runs a Reth-adjacent execution layer for exactly this reason — their consensus loop is too different.)
+- **If you'd otherwise build a Geth fork**, the Reth SDK is strictly better for maintenance. **10,000-line upstream Geth merges are not fun.** Rez has reviewed them.
+- **For client diversity**, build both. Berachain runs **bera-reth AND bera-geth** on mainnet. When state-root mismatches occur, having two independent implementations of the same spec is what catches them. This also forced Berachain to build against a *specification*, not against one implementation.
+
+### What this changes about your project plan
+
+When you reach for the Reth SDK on your own chain, expect:
+
+- **Days, not weeks**, to a working differentiated node (via examples)
+- **Weeks, not days**, to integrate a new transaction type (big-bang scope)
+- **Regular adaptation work** as Reth releases ship breaking abstraction changes
+- **A pipeline of upstream PRs** you contribute back over time
+- **Client-diversity decisions** if you're shipping a real L1 — build a second client, or rely on Reth alone
+
+The SDK isn't a panacea. But for the right shape of project — chains that **extend** Ethereum rather than reinvent it — it's the lowest-friction path to a production-deployable Rust EVM client. **Rez's verdict: "With hindsight, I would absolutely have built with the Reth SDK again."**
+
+> 🔍 **Find in repo.** Open [\`berachain/bera-reth\`](https://github.com/berachain/bera-reth) and look at \`crates/bera-reth/src/lib.rs\`. That's the entry point. The \`with_components\` chain there is the production version of the builder you read in this module's earlier lessons — for a chain doing dozens-of-validators-on-mainnet today.
+
 ## The pattern: swap what your thesis demands
 
 If you can articulate your chain's thesis in one sentence, you can usually map it to 1–3 component swaps:
