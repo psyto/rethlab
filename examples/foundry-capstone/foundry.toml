@@ -1,0 +1,14 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.35"
+
+[invariant]
+runs = 256
+depth = 50
+fail_on_revert = false
+
+[profile.ci.invariant]
+runs = 2000
+depth = 100

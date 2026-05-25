@@ -128,6 +128,28 @@ const EN: LocaleConfig = {
       h1Marker: "# Lesson 4 — `cast` — the EVM's `curl` + `jq`",
       startSignature: "Concepts you'll grasp in this lesson",
     },
+    {
+      draftFile: 'foundry_l5_en.md',
+      moduleNumber: 2,
+      sortOrder: 1,
+      title: 'Lesson 5 — anvil + cheatcodes — local development with mainnet state',
+      slug: 'foundry-anvil-cheatcodes-en',
+      duration: 35,
+      xpReward: 70,
+      h1Marker: '# Lesson 5 — `anvil` + cheatcodes — local development with mainnet state',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
+    {
+      draftFile: 'foundry_l6_en.md',
+      moduleNumber: 3,
+      sortOrder: 0,
+      title: "Lesson 6 — Capstone — port openhl-liquidation's InsuranceFund to Solidity, prove the 4 invariants",
+      slug: 'foundry-capstone-en',
+      duration: 60,
+      xpReward: 110,
+      h1Marker: "# Lesson 6 — Capstone — port openhl-liquidation's `InsuranceFund` to Solidity, prove the 4 invariants",
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
   ],
 };
 
@@ -208,6 +230,28 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 4 — `cast` — EVM の `curl` + `jq`',
       startSignature: 'このレッスンで掴む概念',
     },
+    {
+      draftFile: 'foundry_l5_ja.md',
+      moduleNumber: 2,
+      sortOrder: 1,
+      title: 'レッスン 5 — anvil + cheatcodes — real な mainnet state でのローカル開発',
+      slug: 'foundry-anvil-cheatcodes-ja',
+      duration: 35,
+      xpReward: 70,
+      h1Marker: '# レッスン 5 — `anvil` + cheatcodes — real な mainnet state でのローカル開発',
+      startSignature: 'このレッスンで掴む概念',
+    },
+    {
+      draftFile: 'foundry_l6_ja.md',
+      moduleNumber: 3,
+      sortOrder: 0,
+      title: 'レッスン 6 — Capstone — openhl-liquidation の InsuranceFund を Solidity へ port し、4 つの invariant を証明する',
+      slug: 'foundry-capstone-ja',
+      duration: 60,
+      xpReward: 110,
+      h1Marker: '# レッスン 6 — Capstone — openhl-liquidation の `InsuranceFund` を Solidity へ port し、4 つの invariant を証明する',
+      startSignature: 'このレッスンで掴む概念',
+    },
   ],
 };
 
@@ -229,8 +273,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'ADVANCED' as const,
-  duration: 145, // L0..L4 so far (15+25+35+40+30); bumps as L5..L6 land. Final target: 220 min.
-  xpReward: 310, // L0..L4 so far (50+50+70+80+60); bumps as L5..L6 land. Final target: 460 XP.
+  duration: 240, // L0..L6 (15+25+35+40+30+35+60) — COURSE COMPLETE
+  xpReward: 490, // L0..L6 (50+50+70+80+60+70+110) — COURSE COMPLETE
   tags: ['foundry', 'forge', 'anvil', 'cast', 'solidity', 'testing', 'invariants', 'fuzz', 'l1', 'reth'],
   sortOrder: 350,
   isPublished: true,

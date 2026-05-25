@@ -13,8 +13,8 @@ export async function seedRethFoundryEN(prisma: PrismaClient) {
       description:
         "The rigorous-testing discipline you learned in rethlab's openhl courses (proptest! conservation laws, debug_assert! routing contracts, byte-for-byte answer keys against openhl SHAs) transfers to Solidity contracts almost 1:1 — and Foundry is the tool that makes the transfer mechanical. This course teaches forge test / fuzz / invariant + cast + anvil for L1 / contract / engine engineers who already think in Rust. By the L6 capstone, you'll have ported openhl-liquidation Stage 10b's InsuranceFund from Rust to Solidity and proven the same 4 conservation invariants with forge — same theorem, two languages, both mechanically proven. Foundry mastery is now a commodity prerequisite for serious L1 work; this course assumes you already have the discipline and gives you the Solidity syntax. 7 lessons across 4 modules, openhl SHA references via L6 capstone, in-repo answer keys at examples/foundry-capstone/.",
       difficulty: "ADVANCED",
-      duration: 145,
-      xpReward: 310,
+      duration: 240,
+      xpReward: 490,
       track: "reth-stack",
       tags,
       isPublished: true,
@@ -1645,6 +1645,995 @@ L5 wires the last piece: local development against *real* mainnet state via \`an
 - The full local-dev loop: \`anvil --fork-url\` → \`cast send\` against forked mainnet → \`cast call\` to verify → no real ETH spent
 
 After L5 you can develop against mainnet state without leaving your laptop. L5 closes the test-discipline + CLI portion of the course; L6 is the capstone where you port openhl-liquidation Stage 10b's \`InsuranceFund\` to Solidity and prove the same 4 conservation invariants with \`forge invariant\`.
+`,
+                },
+                {
+                  title: "Lesson 5 — anvil + cheatcodes — local development with mainnet state",
+                  slug: "foundry-anvil-cheatcodes-en",
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 35,
+                  xpReward: 70,
+                  content: `# Lesson 5 — \`anvil\` + cheatcodes — local development with mainnet state
+
+## Goal
+
+Concepts you'll grasp in this lesson:
+
+- **\`anvil --fork-url <URL>\` gives you a personal mainnet at \`localhost:8545\`.** Anvil is an in-process REVM that, when started with \`--fork-url\`, lazily fetches state from a remote node and serves it locally as if it were the canonical chain. Block N's state, contract storage, account balances — all readable from anvil as they exist on mainnet at the fork block, all modifiable without touching real mainnet. You can deploy contracts that read from Uniswap's actual pools, simulate liquidation cascades against real Aave positions, test governance proposals against the actual DAO state — and reset everything with a \`Ctrl-C\`. **The forked anvil is the closest thing to a personal mainnet clone you can spin up in 2 seconds.**
+- **\`anvil_*\` RPC methods are the CLI surface for the same machinery \`vm.*\` cheatcodes expose inside tests.** When you wrote \`vm.prank(0xWhale)\` in an L1–L3 test, Foundry's test runner sent a call to a magic precompile address that mutates REVM's internal \`tx.origin\` for the next call. When you run \`cast rpc anvil_impersonateAccount 0xWhale\` against a forked anvil, you're sending an \`anvil_*\` JSON-RPC method that mutates REVM's *same* internal state — just from outside the EVM rather than inside. Two surfaces, one machinery. **The lesson you skipped in L0 just landed: cheatcodes-as-precompiles inside tests, \`anvil_*\` RPC outside tests, identical REVM state mutations underneath.**
+- **The 10 deterministic accounts anvil seeds are a feature, not a curiosity.** Anvil uses a fixed BIP-39 mnemonic (\`test test test ... junk\`) and derives 10 accounts at standard derivation paths, each pre-funded with 10,000 ETH. The deterministic seed means every developer's accounts have the same addresses; the same \`--private-key\` works in any anvil instance globally. This enables reproducible tutorials, shareable scripts, and CI determinism — at the cost of obviously being completely insecure (you must never use these keys against any real network). **Determinism over secrecy is a deliberate trade-off; anvil is for development, never deployment.**
+- **The forking-then-impersonating pattern unlocks tests against any production state.** A typical L5 workflow: fork mainnet at block N → impersonate a USDC whale → call \`transfer\` from the whale to your test address → use the USDC in subsequent calls to test your contract against real-balance positions. No need to write a fixture that mints synthetic tokens; you're using *the actual USDC*. Same trick works for any account: governance contracts, multisigs, deployers — impersonate and act as them. This is the production-debug pattern that, before Foundry, required a hand-rolled local-node fork and custom RPC handlers. Foundry compressed it into 3 \`cast rpc\` calls. **Forked-anvil impersonation is the closest thing to "edit-production-state" you can responsibly do.**
+
+Verification:
+
+\`\`\`bash
+# Terminal 1: start a forked anvil
+anvil --fork-url https://ethereum.reth.rs/rpc
+
+# Terminal 2: impersonate any address and read your fresh balance
+cast rpc anvil_impersonateAccount 0xF977814e90dA44bFA03b6295A0616a897441aceC \\
+  --rpc-url http://localhost:8545
+cast balance 0xF977814e90dA44bFA03b6295A0616a897441aceC \\
+  --rpc-url http://localhost:8545
+\`\`\`
+
+…spins up a forked mainnet locally, marks Binance's hot wallet address (a known whale) as impersonatable, and queries its real ETH balance via the local node. After this lesson you'll have used anvil's 5 most important RPC methods, mapped 4 of them to the \`vm.*\` cheatcodes you already used inside tests, and run a real forked-impersonation flow.
+
+Specific changes:
+
+- **No source-file edits.** L5 is shell + RPC. You'll run \`anvil\` in one terminal and \`cast rpc\` / \`cast call\` / \`cast send\` in another.
+- **Optional**: set \`ETH_RPC_URL=http://localhost:8545\` in your second-terminal session to drop \`--rpc-url\` from subsequent \`cast\` invocations.
+
+Total: zero lines of Solidity. The pedagogical move is recognizing that the L1–L3 \`vm.*\` cheatcodes you wrote inside tests and the \`anvil_*\` RPC methods you call from the CLI are the same REVM-internal manipulations through two different transports.
+
+## Recap
+
+After L4:
+- \`cast\` is \`alloy::Provider\` exposed as a terminal command; subcommands map 1:1 to alloy methods.
+- \`cast call\` reads, \`cast send\` writes; \`--rpc-url\` makes the chain a per-command parameter.
+- \`cast abi-encode\` / \`cast abi-decode\` / \`cast 4byte\` cover the calldata-manipulation surface.
+
+L4 pointed \`cast\` at *real* mainnet. L5 points \`cast\` at a *local fork* of mainnet — your machine is now a controllable mainnet clone. The vm.* cheatcodes you saw inside Foundry tests come back as \`anvil_*\` RPC methods, and the discipline-transfer story completes: same REVM, three surfaces (Solidity \`vm.*\`, Foundry test runner, anvil JSON-RPC).
+
+## Plan
+
+Six categories of invocation:
+
+1. **Start a forked anvil** — \`anvil\` (vanilla) vs \`anvil --fork-url <mainnet-rpc>\`. Inspect the seeded accounts.
+2. **\`anvil_impersonateAccount\`** — mark a real mainnet address as impersonatable, then send transactions *as* that address without its private key.
+3. **\`anvil_setBalance\` / \`anvil_setStorageAt\`** — directly mutate account balances and contract storage. The "I'm the chain god" RPC methods.
+4. **\`anvil_mine\` / \`anvil_setNextBlockTimestamp\`** — time-travel: mine N blocks instantly, or jump the next block's timestamp forward. Useful for testing time-dependent logic without waiting 7 days.
+5. **The forked-impersonation flow** — fork mainnet → impersonate USDC whale → transfer USDC to your test address → use it in a contract call. The end-to-end demo.
+6. **The \`vm.*\` ↔ \`anvil_*\` mapping table** — same pedagogical role as L4's \`cast\` ↔ \`alloy::Provider\` table, but for cheatcodes.
+
+> 🛑 **Predict.** Before reading on: in your L1 test you wrote \`vm.deal(alice, 10 ether)\` to give alice a fresh balance for the test. Anvil exposes the same machinery via RPC. What's the \`cast rpc anvil_*\` invocation that does the same thing against a running forked anvil at \`localhost:8545\`?
+
+(Answer: **\`cast rpc anvil_setBalance 0xAliceAddress 0x8AC7230489E80000 --rpc-url http://localhost:8545\`** — where \`0x8AC7230489E80000\` is hex for 10 × 10^18 wei (10 ether). The shape is identical: name an address, set its balance to a value. Anvil's RPC takes the balance as a hex-encoded uint256; the test cheatcode takes it as a Solidity \`uint256\`. **Same REVM state field is being written. The difference is whether you're inside Foundry's test runner (cheatcode) or talking to anvil over JSON-RPC (RPC method). Two surfaces, one machinery — and the values you write end up in the exact same \`RevmState::accounts\` map.**)
+
+## How \`vm.*\` cheatcodes map to \`anvil_*\` RPC methods
+
+The architecture in one diagram — same REVM, three surfaces:
+
+\`\`\`mermaid
+flowchart TD
+    A["Foundry test runner<br/>vm.prank, vm.deal, vm.warp"] -->|"in-process precompile call<br/>at address 0x7109..."| R
+    B["Foundry CLI<br/>forge test, cast call/send"] -->|"in-process direct call"| R
+    C["Anvil HTTP server<br/>anvil_impersonateAccount, anvil_setBalance"] -->|"HTTP JSON-RPC handler"| R
+    R["REVM execution engine<br/>RevmState: accounts / storage / block"]
+\`\`\`
+
+Three different *transports* arriving at the *same* mutation API. The table below enumerates the specific cheatcode-to-RPC-method correspondences:
+
+\`\`\`
+┌────────────────────────────────────┬──────────────────────────────────────────────┐
+│  Inside Foundry tests (cheatcode)  │  Against a running anvil (RPC method)        │
+├────────────────────────────────────┼──────────────────────────────────────────────┤
+│  vm.prank(addr)                    │  cast rpc anvil_impersonateAccount addr      │
+│  vm.deal(addr, value)              │  cast rpc anvil_setBalance addr <hex-value>  │
+│  vm.warp(timestamp)                │  cast rpc anvil_setNextBlockTimestamp <ts>   │
+│  vm.roll(blockNumber)              │  cast rpc anvil_mine <blockcount>            │
+│  vm.store(addr, slot, value)       │  cast rpc anvil_setStorageAt addr slot value │
+│  vm.etch(addr, bytecode)           │  cast rpc anvil_setCode addr <bytecode>      │
+│  vm.snapshot() / vm.revertTo(id)   │  evm_snapshot / evm_revert (standard, not    │
+│                                    │      anvil-namespaced — works on hardhat too)│
+├────────────────────────────────────┼──────────────────────────────────────────────┤
+│  (lives inside the test contract;  │  (called over HTTP JSON-RPC from any client; │
+│   precompile at 0x710970...)       │   handled by anvil's RpcHandler in Rust)     │
+└────────────────────────────────────┴──────────────────────────────────────────────┘
+\`\`\`
+
+The structural takeaway: **\`vm.*\` and \`anvil_*\` are two transport surfaces over the same REVM state-mutation API.** Inside a Solidity test, the cheatcode goes through Foundry's precompile-intercept path; from a shell, the same mutation goes through anvil's JSON-RPC handler. Both call into the same Rust function that writes to REVM's \`accounts\` / \`storage\` / \`block\` fields. **If you grok L1–L3's \`vm.*\`, you already know what every \`anvil_*\` does; you just need the RPC method name.**
+
+## Walk-through
+
+### Step 1: Start anvil and inspect what you got
+
+\`\`\`bash
+anvil
+\`\`\`
+
+In one terminal. Anvil prints (abbreviated):
+
+\`\`\`
+                              _   _
+                             (_) | |
+      __ _   _ __   __   __  _  | |
+     / _\` | | '_ \\  \\ \\ / / | | | |
+    | (_| | | | | |  \\ V /  | | | |
+     \\__,_| |_| |_|   \\_/   |_| |_|
+
+    1.7.x ( ... )    https://github.com/foundry-rs/foundry
+
+Available Accounts
+==================
+
+(0) "0xf39Fd6e51aad88F6F4ce6aB8827279cfFFb92266" (10000.000000000000000000 ETH)
+(1) "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" (10000.000000000000000000 ETH)
+...
+(9) "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720" (10000.000000000000000000 ETH)
+
+Private Keys
+==================
+
+(0) 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+(1) 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+...
+
+Wallet
+==================
+Mnemonic:          test test test test test test test test test test test junk
+Derivation path:   m/44'/60'/0'/0/
+
+Chain ID
+==================
+31337
+
+Listening on 127.0.0.1:8545
+\`\`\`
+
+Five things to notice about the startup banner:
+
+1. **The mnemonic is \`test test test ... junk\`.** Anvil uses this fixed seed phrase by default; every anvil instance on Earth, when started without \`--mnemonic\`, has the same 10 accounts. This is intentional — it lets tutorial code use known private keys without each reader having to set up their own seed. **The keys are public knowledge; never use them outside local development.**
+2. **Account 0 is \`0xf39Fd6...\` with private key \`0xac0974...\`.** Memorize these — they appear constantly in tutorials, Foundry's own docs, and CI configs. You can paste \`0xac0974...\` as \`--private-key\` for any anvil-targeting \`cast send\` and it will work.
+3. **Chain ID is \`31337\`.** That's the anvil default. Hardhat also defaults to \`31337\`. If you accidentally point a tx at a real network with chain ID \`31337\`, none will accept it — chain ID is the explicit shield against cross-chain replay. **The funny number is a safety feature.**
+4. **The RPC listens on \`127.0.0.1:8545\`.** Standard Ethereum RPC port. Anvil binds to localhost only by default; \`--host 0.0.0.0\` opens it to the network (don't, on shared machines).
+5. **No \`--fork-url\` means anvil starts from genesis with empty state.** No contracts deployed, no transactions in history. Useful for unit-testing your own contracts in isolation, useless for testing against production protocols. We'll restart with \`--fork-url\` in Step 2.
+
+Stop this anvil (\`Ctrl-C\`) and start a forked one:
+
+\`\`\`bash
+anvil --fork-url https://ethereum.reth.rs/rpc
+\`\`\`
+
+The banner adds a \`Fork\` section:
+
+\`\`\`
+Fork
+==================
+Endpoint:       https://ethereum.reth.rs/rpc
+Block number:   <recent mainnet block number>
+Block hash:     0x...
+Chain ID:       1
+\`\`\`
+
+**Chain ID is now \`1\` — mainnet.** The 10 deterministic accounts are still present (anvil seeds them regardless of fork status), but the chain state is now mainnet's view at the fork block. Every USDC balance, every Uniswap pool, every governance vote — readable as it exists on real Ethereum right now.
+
+> ⚠️ **Safety note — Chain ID 1 fork + the wrong \`--rpc-url\`.** Your local fork now reports Chain ID \`1\`, the same value real mainnet reports. The chain-ID check that protects you from cross-chain replay between, say, mainnet and Sepolia *won't help here* — both endpoints report \`1\`. If a real mainnet RPC URL is sitting in another env var or in your shell history and you accidentally point \`cast send --private-key <REAL-KEY>\` at it instead of \`http://localhost:8545\`, the transaction broadcasts to real mainnet. \`--unlocked\` is harmless (no signed tx produced without a key), but \`--private-key\` is not. The defense: \`export ETH_RPC_URL=http://localhost:8545\` explicitly in your fork-working terminal and never paste real-mainnet private keys into that shell. **Discipline on \`--rpc-url\` is the only defense once you start forking.**
+
+### Step 2: Read forked mainnet state from your local anvil
+
+In a second terminal — set \`ETH_RPC_URL\` to the local anvil for the rest of the session:
+
+\`\`\`bash
+export ETH_RPC_URL=http://localhost:8545
+\`\`\`
+
+Now any \`cast\` command without \`--rpc-url\` goes to anvil. Read USDC's totalSupply:
+
+\`\`\`bash
+cast call 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 "totalSupply()(uint256)"
+\`\`\`
+
+Same output as L4 against real mainnet — because anvil's forking layer transparently fetches the contract code + storage from the fork source the first time you query it, caches it locally, and serves subsequent queries instantly. **Lazy state fetching: anvil only pulls state on demand, so spinning up a fork is fast (seconds), and the cached state is local for the session.**
+
+### Step 3: Impersonate a real mainnet address
+
+The killer feature. Pick any mainnet address — Binance's hot wallet at \`0xF977814e90dA44bFA03b6295A0616a897441aceC\` (a publicly-known whale, holds ~billions in various tokens):
+
+\`\`\`bash
+cast rpc anvil_impersonateAccount 0xF977814e90dA44bFA03b6295A0616a897441aceC
+\`\`\`
+
+Output: \`null\` (success — anvil RPC methods return \`null\` for "done").
+
+Now you can send transactions *as* that address without its private key. Send 1 ETH from the impersonated whale to anvil's account 0 (\`0xf39Fd6...\`):
+
+\`\`\`bash
+cast send --unlocked \\
+  --from 0xF977814e90dA44bFA03b6295A0616a897441aceC \\
+  --value 1ether \\
+  0xf39Fd6e51aad88F6F4ce6aB8827279cfFFb92266
+\`\`\`
+
+The \`--unlocked\` flag tells \`cast send\` to ask the node to sign (anvil handles it for impersonated accounts; no private key needed). The transaction completes and anvil prints a receipt.
+
+Verify the recipient's balance went up:
+
+\`\`\`bash
+cast balance 0xf39Fd6e51aad88F6F4ce6aB8827279cfFFb92266 --ether
+\`\`\`
+
+The starting \`10000\` ETH is now \`10001\` ETH. **You just sent 1 ETH from Binance's wallet to your local test account without their private key, against a local fork of mainnet state.** No real mainnet was touched.
+
+Five things to notice:
+
+1. **Impersonation works because anvil isn't enforcing signature verification on impersonated accounts.** The forked state shows Binance's address with a real ETH balance; anvil's transaction-execution path treats \`from = impersonated_addr\` as legitimate. **The signature check is what private keys exist to satisfy; impersonation simply turns the check off for designated addresses.**
+2. **\`anvil_impersonateAccount\` is persistent until you stop impersonating.** Until you call \`anvil_stopImpersonatingAccount\`, the address stays in anvil's impersonation set. Useful for multi-step tests; harmful if you forget and another test step expects normal signature enforcement.
+3. **\`cast send --unlocked\` is the CLI equivalent of \`vm.prank\` inside a test.** Both say "execute the next call as if it came from this address," both rely on the underlying machinery being permissive. **\`--unlocked\` is the magic word that tells cast not to expect a private key.**
+4. **The whale's ETH balance reflects mainnet's view at fork time.** When anvil first served the \`eth_getBalance(0xF977...)\` query, it fetched the real balance from \`https://ethereum.reth.rs/rpc\`, cached it, and now serves locally-modified versions of that balance. Subsequent \`cast send\` operations subtract from anvil's local cache, not from real mainnet.
+5. **Real mainnet is untouched.** The Binance address's actual ETH balance hasn't changed. You're sending ETH on your local fork; the global ledger doesn't know this happened.
+
+Stop impersonating when done:
+
+\`\`\`bash
+cast rpc anvil_stopImpersonatingAccount 0xF977814e90dA44bFA03b6295A0616a897441aceC
+\`\`\`
+
+### Step 4: Edit state directly with \`anvil_setBalance\` / \`anvil_setStorageAt\`
+
+Sometimes you don't want to impersonate — you just want to *give* an address a balance:
+
+\`\`\`bash
+# Give anvil account 0 exactly 1,000,000 ETH (0x33B2E3C9FD0803CE8000000 wei)
+cast rpc anvil_setBalance 0xf39Fd6e51aad88F6F4ce6aB8827279cfFFb92266 \\
+  0x33B2E3C9FD0803CE8000000
+
+# Verify
+cast balance 0xf39Fd6e51aad88F6F4ce6aB8827279cfFFb92266 --ether
+# → 1000000.000000000000000000
+\`\`\`
+
+This is the RPC equivalent of \`vm.deal(addr, value)\` from L1–L3 tests.
+
+For ERC-20 token balances, you don't have an \`anvil_setTokenBalance\` — but you can use \`anvil_setStorageAt\` to directly write the storage slot that holds the balance:
+
+\`\`\`bash
+# USDC's \`_balances\` mapping is at storage slot 9. The slot for balanceOf(addr)
+# is keccak256(abi.encode(addr, 9)). Compute that:
+SLOT=$(cast index address 0xf39Fd6e51aad88F6F4ce6aB8827279cfFFb92266 9)
+
+# Set the balance to 1,000,000 USDC (1e12 in 6-decimal precision = 0xe8d4a51000)
+cast rpc anvil_setStorageAt 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \\
+  $SLOT \\
+  0x000000000000000000000000000000000000000000000000000000e8d4a51000
+
+# Verify
+cast call 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \\
+  "balanceOf(address)(uint256)" \\
+  0xf39Fd6e51aad88F6F4ce6aB8827279cfFFb92266
+# → 1000000000000
+\`\`\`
+
+**You just gave yourself 1 million USDC on the local fork without buying any.** Same trick works for any storage slot of any contract — change a \`totalSupply\`, flip an \`owner\`, set a price feed's last value. The only thing you need is the storage slot, which Foundry's \`forge inspect <contract> storage\` reveals for any contract with source.
+
+Three things to notice:
+
+1. **\`cast index address <addr> <base-slot>\` computes the mapping slot.** \`keccak256(abi.encode(addr, baseSlot))\` is the Solidity storage layout for \`mapping(address => X)\`. \`cast index\` exposes this as a CLI helper, so you don't have to compute the keccak by hand.
+2. **\`anvil_setStorageAt\` is the most powerful and most dangerous of anvil's mutators.** You can break contracts in interesting ways by setting storage to invalid states (e.g., set USDC's \`paused\` slot to a non-boolean). Use it for tests that verify your contract handles edge cases, not for "just making numbers match."
+3. **Real production contracts often have non-obvious storage layouts.** USDC's mapping at slot 9 is correct as of this writing, but contracts upgraded via proxy patterns can have arbitrary layouts. \`forge inspect <contract> storage\` is the source of truth.
+
+### Step 5: Time travel with \`anvil_mine\` and \`anvil_setNextBlockTimestamp\`
+
+Mine 100 blocks instantly (useful for testing time-locked withdrawals, vesting cliffs):
+
+\`\`\`bash
+cast rpc anvil_mine 0x64  # 0x64 = 100
+cast block-number
+# → <fork_block + 100>
+\`\`\`
+
+Jump the next block's timestamp forward by 7 days:
+
+\`\`\`bash
+# Get current timestamp from latest block
+CURRENT=$(cast block latest --field timestamp)
+SEVEN_DAYS_LATER=$((CURRENT + 7 * 86400))
+
+# Set next block's timestamp
+cast rpc anvil_setNextBlockTimestamp $SEVEN_DAYS_LATER
+
+# Mine one block so the timestamp takes effect
+cast rpc anvil_mine 0x1
+
+# Verify
+cast block latest --field timestamp
+# → <fork_timestamp + 7*86400>
+\`\`\`
+
+This is the RPC equivalent of \`vm.warp\` + \`vm.roll\` from tests. Useful for: testing vesting that unlocks in N days, testing auction-end logic that requires N hours, testing rate-limiting that resets daily — all without waiting real time.
+
+### Step 6: The full forked-impersonation flow as a recipe
+
+Putting it together — the workflow you'll use most:
+
+\`\`\`bash
+# Terminal 1: forked anvil
+anvil --fork-url https://ethereum.reth.rs/rpc
+
+# Terminal 2:
+export ETH_RPC_URL=http://localhost:8545
+
+# 1. Find a whale of the token you want
+WHALE=0xF977814e90dA44bFA03b6295A0616a897441aceC  # Binance hot wallet
+TOKEN=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48  # USDC
+ME=0xf39Fd6e51aad88F6F4ce6aB8827279cfFFb92266     # anvil account 0
+
+# 2. Impersonate the whale
+cast rpc anvil_impersonateAccount $WHALE
+
+# 3. Whale needs ETH to pay gas — give them some
+cast rpc anvil_setBalance $WHALE 0x8AC7230489E80000  # 10 ETH
+
+# 4. Whale transfers USDC to you
+cast send --unlocked --from $WHALE \\
+  $TOKEN "transfer(address,uint256)" $ME 1000000000  # 1000 USDC
+
+# 5. Verify your new USDC balance
+cast call $TOKEN "balanceOf(address)(uint256)" $ME
+# → 1000000000  (1000 USDC in 6-decimal precision)
+
+# 6. Now use this real USDC against your test contract
+#    (deploy your contract via \`forge create\` or \`cast send --create\`,
+#     then call it with your now-funded test account)
+\`\`\`
+
+This 6-line recipe replaces what used to be a 200-line Hardhat fixture + custom mock-USDC + manual nonce management. **The compression is what makes Foundry productive.**
+
+## Common errors
+
+- **\`Error: missing field "from"\` on \`cast send --unlocked\`** — the \`--from\` flag wasn't passed. \`--unlocked\` requires \`--from\`, since there's no private key to derive the sender from.
+- **\`Error: nonce too low\`** — you sent transactions from an account that anvil doesn't have the latest nonce for. Restart anvil (resets all nonces) or use \`anvil_setNonce\`.
+- **\`Error: insufficient funds for gas * price + value\`** — the impersonated account doesn't have ETH to pay gas. Send it some via \`anvil_setBalance\` (Step 4) before sending the transaction.
+- **\`Error: --fork-url cannot be combined with empty-state options\`** — you passed conflicting flags. \`--fork-url\` and the no-fork options are mutually exclusive. Drop one.
+- **Anvil dies silently after long-running tests** — check anvil's terminal for OOM or panic messages. Long-running tests with many \`anvil_setStorageAt\` calls can grow anvil's state cache; restart between unrelated test runs.
+
+## Design retrospective
+
+Three load-bearing decisions in \`anvil\`'s design:
+
+1. **Anvil reuses Reth's REVM execution engine; it's not a separate EVM impl.** Anvil isn't a from-scratch chain client — it's an HTTP server wrapped around the same \`revm\` crate Foundry's test runner uses, and the same \`revm\` Reth uses. The implication: if Reth supports a new EVM feature (EOF, custom precompiles, hard-fork rules), anvil gets it on the same release cycle. **One EVM implementation, three surfaces: Foundry tests (inline), Foundry CLI (\`forge\` / \`cast\`), local node (\`anvil\`).**
+
+2. **\`anvil_*\` RPC method names are namespaced separately from \`eth_*\` standard methods.** Standard JSON-RPC methods like \`eth_getBalance\`, \`eth_call\`, \`eth_sendTransaction\` work identically on anvil as on any node. Anvil-specific methods like \`anvil_impersonateAccount\`, \`anvil_setStorageAt\` use the \`anvil_\` prefix. This is convention (also used by \`hardhat_*\` for Hardhat-specific methods), and it serves a discipline purpose: client code that calls \`eth_*\` is portable to mainnet, code that calls \`anvil_*\` is local-dev-only. **Namespace separation is a deployment-safety guard at the method-name level.**
+
+3. **Forking is lazy, not eager.** Anvil doesn't download the entire mainnet state on \`--fork-url\`; it downloads state *on demand* as queries reference it. This means startup is fast (seconds, not hours), but the first query for any uncached state has a round-trip latency. Subsequent queries for the same state are instant. **Lazy forking is the trade-off that makes forking practical — eager forking would be unusably slow.**
+
+## Answer key
+
+After L5, your shell history should include something like:
+
+\`\`\`bash
+# Terminal 1
+anvil --fork-url https://ethereum.reth.rs/rpc
+
+# Terminal 2 — the recipes you'll reach for most
+export ETH_RPC_URL=http://localhost:8545
+cast rpc anvil_impersonateAccount 0x...
+cast rpc anvil_setBalance 0x... 0x...
+cast rpc anvil_setStorageAt 0x... <slot> <value>
+cast rpc anvil_mine 0x64
+cast rpc anvil_setNextBlockTimestamp <unix-ts>
+cast send --unlocked --from 0x... 0x<contract> "<sig>" <args...>
+\`\`\`
+
+After L5 you can:
+- Spin up a forked mainnet locally in 2 seconds
+- Impersonate any account (no key required) and act as them
+- Mutate any account's balance or contract's storage directly
+- Time-travel forward by blocks or seconds for time-locked logic testing
+- Build a full "fork → impersonate whale → fund test address → call contract" flow
+
+## Q&A
+
+**Q1: How is anvil different from Hardhat Network?**
+
+Same core idea (local Ethereum node, RPC-compatible, supports forking + impersonation + state manipulation), different implementation language and ergonomics. Anvil is Rust + REVM, single binary, starts in ~100ms; Hardhat Network is JavaScript + ethereumjs-vm, npm-installed, starts in seconds. Anvil's RPC methods use the \`anvil_*\` prefix; Hardhat's use \`hardhat_*\`. For most workflows they're interchangeable. **Anvil wins on speed and zero-deps; Hardhat wins on plugin ecosystem if you've already invested in it.**
+
+**Q2: Can I run anvil as a long-running development node?**
+
+Yes — anvil is daemon-ready, supports background mode (\`&\`), and you can leave it running for hours. The state is in-memory only by default, so a restart loses all changes. For persistent state across restarts, use \`--state <file>\` to save/load state to disk. Note: state files can grow large (gigabytes) for long-running forks; clean them up periodically. **Anvil is fine for hour-long sessions; for longer, manage \`--state\` files.**
+
+**Q3: What's the relationship between anvil and forge test?**
+
+\`forge test\` runs your tests against an in-process REVM (the test runner spins one up per test). \`anvil\` runs an in-process REVM as an HTTP server. **Same EVM, different transport.** You can also point \`forge test\` at a running anvil with \`--fork-url http://localhost:8545\` if you want shared state between tests, but this defeats forge's per-test isolation; most workflows use forge's built-in REVM for tests and anvil for ad-hoc CLI work. **Tests = built-in REVM; CLI work = anvil.**
+
+**Q4: Can I impersonate a contract address, not just an EOA?**
+
+Yes. \`anvil_impersonateAccount\` works on any address; the address doesn't need to be an EOA. Useful for testing what happens when a specific contract calls your contract — you can impersonate the Uniswap V3 router and call your contract as if a real swap was routing through you. **Impersonation is address-keyed, not EOA-keyed.**
+
+**Q5: What happens to the fork state when I \`Ctrl-C\` anvil?**
+
+Lost (unless you used \`--state <file>\`). All \`anvil_setBalance\`, \`anvil_setStorageAt\`, \`anvil_impersonateAccount\` mutations and any transactions you sent disappear. Next \`anvil --fork-url\` re-fetches state from the fork source. **This is a feature, not a bug — fresh forks per session prevent state pollution between unrelated test runs.**
+
+**Q6: Why doesn't \`--fork-url\` work with the \`anvil\` Docker image?**
+
+It does — but the Docker image binds to localhost inside the container by default. You need \`-p 8545:8545\` to expose the port to your host. Also remember Docker's \`--fork-url <host-RPC>\` references the *container's* network view; if your fork source is on the host, use \`host.docker.internal:<port>\` (Docker Desktop) or your host's LAN IP. **Networking + Docker = the usual gotchas, not an anvil-specific issue.**
+
+**Q7: My fork has Chain ID 1, the same as real mainnet. Doesn't this defeat the chain-ID safety check?**
+
+Yes — and this is the L5 trap to internalize. When you fork mainnet, your local anvil reports Chain ID \`1\`. The chain-ID check that protects you from accidentally replaying a mainnet tx on Sepolia (or vice versa) compares the chain IDs of the two endpoints; if both endpoints report \`1\`, the check passes silently. If a real-mainnet RPC URL is sitting in another env var or your shell history, and you accidentally run \`cast send --private-key <REAL-KEY> --rpc-url $REAL_RPC\` instead of pointing at \`http://localhost:8545\`, the transaction broadcasts to real mainnet without complaint. \`--unlocked\` impersonation is harmless against real mainnet (no signed tx is produced), but \`--private-key\` is not. The defense is operational, not architectural: **\`export ETH_RPC_URL=http://localhost:8545\` explicitly in your fork-working session, and never paste real-mainnet private keys into a shell that's been doing local-fork work. Discipline on \`--rpc-url\` is the only defense once you start forking — the chain-ID check protects you between different chains, not between a fork and the chain it's forked from.**
+
+## Next lesson (L6) — Capstone — port openhl-liquidation's \`InsuranceFund\` to Solidity
+
+L6 is the capstone where everything in L0–L5 comes together. You'll take openhl-liquidation Stage 10b's \`InsuranceFund\` — the Rust implementation you wrote (or studied) in the openhl-liquidation course — and port it to Solidity. Same 4 conservation laws, same precondition checks, same close-outcome decomposition. Then you'll prove the 4 invariants with \`forge invariant\` using a Handler that mirrors the Rust \`proptest!\` shape from L13. The capstone deliverable lives in-repo at \`examples/foundry-capstone/\`:
+
+- \`examples/foundry-capstone/src/InsuranceFund.sol\` — the Solidity port
+- \`examples/foundry-capstone/test/InsuranceFundHandler.sol\` — Handler with \`wrappedDeposit\` / \`wrappedWithdraw\` / \`wrappedAbsorb\` and the 3 ghost variables
+- \`examples/foundry-capstone/test/InsuranceFund.invariant.t.sol\` — the 4 \`invariant_*\` functions: conservation, monotonicity-of-deposits, non-negative-balance, fee-residual-equivalence
+
+By the end of L6 you'll have proven the same theorem in two languages, mechanically, against the same \`forge invariant\` engine you learned in L3. **That's the discipline transfer that makes the whole rethlab framework click: it was never about Rust *or* Solidity — it was about the conservation-law discipline that survives the language boundary.**
+`,
+                },
+              ],
+            },
+          },
+          {
+            title: "Capstone",
+            sortOrder: 3,
+            lessons: {
+              create: [
+                {
+                  title: "Lesson 6 — Capstone — port openhl-liquidation's InsuranceFund to Solidity, prove the 4 invariants",
+                  slug: "foundry-capstone-en",
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 60,
+                  xpReward: 110,
+                  content: `# Lesson 6 — Capstone — port openhl-liquidation's \`InsuranceFund\` to Solidity, prove the 4 invariants
+
+## Goal
+
+Concepts you'll grasp in this lesson:
+
+- **The capstone proves the course's thesis with code, not prose.** Everything L0–L5 set up was about one claim: the conservation-law discipline you used in openhl-liquidation transfers mechanically to Solidity, and \`forge invariant\` proves it the same way \`proptest!\` did. L6 is where you stop reading that claim and *execute* it. You'll take openhl-liquidation Stage 10b's \`InsuranceFund\` — the Rust contract that holds the system's last-line-of-defense capital — and port it to Solidity field-by-field. You'll write a \`Handler\` that mirrors the \`proptest!\` state-machine shape from L13. And you'll prove the same 4 conservation invariants in Solidity that L13 proved in Rust. When the green \`(runs: 256, calls: 12800, reverts: 0)\` line prints, the course is over — you've demonstrated that the discipline survives the language boundary.
+- **Four invariants, one shape: conservation laws as equalities between contract state and ghost accounting.** Every invariant in this capstone takes the form \`<contract observable> == <function of ghost variables>\`. (1) **Conservation:** \`fund.balance() == ghostSumDeposits - ghostSumWithdrawn - ghostSumAbsorbed\`. (2) **Deposit accounting:** \`fund.totalDeposited() == ghostSumDeposits\`. (3) **Withdraw accounting:** \`fund.totalWithdrawn() == ghostSumWithdrawn\`. (4) **Absorb decomposition:** \`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested\`. These are the *same* four conservation laws as openhl-liquidation L13's proptests — same arithmetic, different syntax. **One conservation-law shape, used four times against four different observables.**
+- **The Handler is where the Rust↔Solidity isomorphism lives.** The \`InsuranceFundHandler\` is a Solidity contract that exposes \`wrappedDeposit(uint256)\` / \`wrappedWithdraw(uint256)\` / \`wrappedAbsorb(uint256)\` and maintains five ghost variables. The methods bound inputs (so \`forge invariant\`'s random parameters always produce productive calls, not \`vm.assume\` rejections) and update ghosts in lockstep with the target. Each Solidity Handler method corresponds 1:1 to a \`proptest!\` state-machine transition function from the Rust L13 capstone. **If you look at the Handler and L13's \`proptest!\` block side-by-side, you'll see the same operations in the same order with the same accounting — translated, not redesigned.**
+- **The lesson deliverable is permanent: \`examples/foundry-capstone/\`.** Everything you build in this lesson — \`src/InsuranceFund.sol\`, \`test/InsuranceFundHandler.sol\`, \`test/InsuranceFund.invariant.t.sol\` — lives in-repo as the course's answer key. Future readers who graduate L5 will check their own work against this exact directory. The capstone isn't disposable; it's the final artifact that proves the course works.
+
+Verification:
+
+\`\`\`bash
+cd examples/foundry-capstone
+forge test --match-contract InsuranceFundInvariantTest -vvv
+\`\`\`
+
+…prints \`[PASS] invariant_Conservation() (runs: 256, calls: 12800, reverts: 0)\` for each of the 4 invariants. After this lesson you'll have built the full capstone, watched the invariants hold across 12,800 random sequences, deliberately broken one to see the multi-call counterexample, and read the side-by-side diff against openhl-liquidation L13's Rust \`proptest!\`.
+
+Specific changes:
+
+- **New directory: \`examples/foundry-capstone/\`** — \`forge init\`-shape Foundry project pinned to the course's pragma \`^0.8.35\`. Treated as a sub-project, not part of the rethlab Next.js build.
+- **3 new Solidity files** in that directory: \`src/InsuranceFund.sol\` (~80 lines), \`test/InsuranceFundHandler.sol\` (~70 lines), \`test/InsuranceFund.invariant.t.sol\` (~60 lines). Total ~210 lines across the capstone.
+
+L6 is dense. 60 minutes is the time budget — half spent porting the Solidity, half watching \`forge invariant\` run and reading the L13 cross-reference. The payoff is the moment 4 green invariants print and you realize the conservation-law discipline carried across.
+
+## Recap
+
+After L5:
+- L0: Foundry positioned as commodity prerequisite + REVM as the unifying engine
+- L1–L3: Solidity testing discipline — \`forge test\`, \`forge fuzz\`, \`forge invariant\` (Handler pattern, ghost variables, sequence counterexamples)
+- L4: \`cast\` as the CLI surface over \`alloy::Provider\`
+- L5: \`anvil\` as the local mainnet clone + the three-surface REVM architecture
+
+L6 closes the loop. Every concept from L0–L5 is used in the capstone:
+- \`vm.expectRevert\` from L1 (testing the InsuranceFund's revert paths)
+- \`forge invariant\` from L3 (the multi-call sequencing engine)
+- The Handler pattern from L3 (\`InsuranceFundHandler\` mirrors \`CounterHandler\`'s shape)
+- The 4 invariants from L3's openhl-liquidation L13 cross-reference (named earlier, ported now)
+
+The course was always pointed at this artifact. The intermediate lessons were the prerequisites.
+
+## Plan
+
+Seven steps across three Solidity files:
+
+1. **Set up the capstone project** — \`mkdir examples/foundry-capstone && cd examples/foundry-capstone && forge init --no-git\`. Pin the pragma. Delete the default Counter.
+2. **Read openhl-liquidation Stage 10b's \`InsuranceFund\` source** — the Rust contract at \`crates/openhl-liquidation/src/insurance_fund.rs\` (SHA \`260883b\`). Identify the 3 operations (deposit, withdraw, absorb) and the 4 observable state fields.
+3. **Write \`src/InsuranceFund.sol\`** — field-by-field port. Same operations, same field names (snake_case → camelCase), same revert conditions, same return shapes from \`absorb\`.
+4. **Write \`test/InsuranceFundHandler.sol\`** — Handler with \`wrappedDeposit\` / \`wrappedWithdraw\` / \`wrappedAbsorb\` and 5 ghost variables (\`ghostSumDeposits\`, \`ghostSumWithdrawn\`, \`ghostSumAbsorbed\`, \`ghostSumUnabsorbed\`, \`ghostSumLossRequested\`).
+5. **Write \`test/InsuranceFund.invariant.t.sol\`** — 4 invariants: \`invariant_Conservation\`, \`invariant_DepositAccounting\`, \`invariant_WithdrawAccounting\`, \`invariant_AbsorbDecomposition\`.
+6. **Run \`forge invariant\`** — all 4 invariants should hold at the default 256 runs × 50 depth = 12,800 calls. Bump to 100,000 calls for the proof-of-the-day.
+7. **Deliberate-break demo + side-by-side L13 diff** — break one ghost update in the Handler, watch the multi-call counterexample appear. Then \`diff\` the Solidity capstone against L13's Rust to see the same operations in the same order.
+
+> 🛑 **Predict.** Before reading on: in openhl-liquidation L13, the cascade-conservation proptest had the form \`assert_eq!(fund.balance(), initial + sum_deposits - sum_withdrawals - sum_absorbed)\`. If you port this *exact* assertion to Solidity, what's the closest single line of forge invariant code? (Assume the Handler tracks the three sum-of-* ghosts.)
+
+(Answer: **\`assertEq(fund.balance(), handler.ghostSumDeposits() - handler.ghostSumWithdrawn() - handler.ghostSumAbsorbed());\`** — same arithmetic, same operands, same assert. The only differences: Solidity's \`assertEq\` takes (actual, expected) instead of Rust's \`(left, right)\` ordering, and the ghost accessors are explicit \`handler.X()\` method calls because Solidity doesn't have field-direct access from another contract. **The transformation is mechanical because the underlying theorem is language-agnostic — conservation laws are math, not syntax.**)
+
+## The deliverable file tree
+
+\`\`\`
+examples/foundry-capstone/
+├── foundry.toml                              ← invariant runs, depth, fail_on_revert
+├── src/
+│   └── InsuranceFund.sol                     ← ~80 lines — the Solidity port
+├── test/
+│   ├── InsuranceFundHandler.sol              ← ~70 lines — Handler with 3 wrapped methods + 5 ghosts
+│   └── InsuranceFund.invariant.t.sol         ← ~60 lines — 4 invariant_* functions
+└── lib/forge-std/                            ← standard forge-std submodule
+\`\`\`
+
+When you finish L6, every file in this tree exists and \`forge test\` passes 4 invariant assertions at 12,800+ random sequences.
+
+## The Rust ↔ Solidity field mapping
+
+\`\`\`
+┌────────────────────────────────────────┬──────────────────────────────────────────┐
+│  openhl-liquidation Stage 10b (Rust)   │  examples/foundry-capstone (Solidity)    │
+├────────────────────────────────────────┼──────────────────────────────────────────┤
+│  struct InsuranceFund { ... }          │  contract InsuranceFund { ... }          │
+│  pub balance: u128,                    │  uint256 public balance;                 │
+│  pub total_deposited: u128,            │  uint256 public totalDeposited;          │
+│  pub total_withdrawn: u128,            │  uint256 public totalWithdrawn;          │
+│  pub total_absorbed: u128,             │  uint256 public totalAbsorbed;           │
+│  pub owner: AccountId,                 │  address public immutable owner;         │
+├────────────────────────────────────────┼──────────────────────────────────────────┤
+│  fn deposit(&mut self, amount: u128)   │  function deposit(uint256 amount)        │
+│  fn withdraw(&mut self, amount: u128)  │  function withdraw(uint256 amount)       │
+│      -> Result<(), Err>                │      (reverts on insufficient/non-owner) │
+│  fn absorb(&mut self, loss: u128)      │  function absorb(uint256 loss)           │
+│      -> (u128 absorbed, u128 remaining)│      returns (uint256, uint256)          │
+├────────────────────────────────────────┼──────────────────────────────────────────┤
+│  proptest! { (4 proptests) }           │  invariant_* (4 invariant functions)     │
+│      (L13 capstone, SHA 0a8464e)       │      (this lesson)                       │
+└────────────────────────────────────────┴──────────────────────────────────────────┘
+\`\`\`
+
+The mapping is mechanical: every Rust field becomes a Solidity public state variable; every Rust method becomes a Solidity function with the same signature shape; every Rust proptest becomes a Solidity invariant. **The discipline transfers; the syntax does not need to be reinvented.**
+
+## Walk-through
+
+### Step 1: Set up the capstone project
+
+From the rethlab repo root:
+
+\`\`\`bash
+mkdir -p examples/foundry-capstone
+cd examples/foundry-capstone
+forge init --no-git --no-commit
+\`\`\`
+
+\`--no-git\` because we want this capstone to be a subdirectory of the rethlab repo, not its own git project. \`--no-commit\` skips the auto-commit forge would otherwise make. The result:
+
+\`\`\`
+examples/foundry-capstone/
+├── foundry.toml
+├── src/Counter.sol          ← delete this
+├── test/Counter.t.sol       ← delete this
+├── script/Counter.s.sol     ← delete this (optional)
+└── lib/forge-std/
+\`\`\`
+
+Delete the Counter templates:
+
+\`\`\`bash
+rm src/Counter.sol test/Counter.t.sol script/Counter.s.sol
+\`\`\`
+
+Update \`foundry.toml\` to pin the pragma + invariant defaults:
+
+\`\`\`toml
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.35"
+
+[invariant]
+runs = 256
+depth = 50
+fail_on_revert = false
+
+[profile.ci.invariant]
+runs = 2000
+depth = 100
+\`\`\`
+
+Clean slate ready.
+
+### Step 2: Read the Rust source-of-truth
+
+Open \`crates/openhl-liquidation/src/insurance_fund.rs\` (SHA \`260883b\`) in openhl. Identify the structural elements:
+
+- **5 state fields**: \`balance\`, \`total_deposited\`, \`total_withdrawn\`, \`total_absorbed\`, \`owner\`
+- **3 operations**: \`deposit(amount) -> ()\`, \`withdraw(amount) -> Result<(), Error>\`, \`absorb(loss) -> (absorbed, remaining)\`
+- **Revert conditions** for \`withdraw\`: \`ZeroAmount\`, \`NotOwner\`, \`InsufficientBalance\`
+- **Decomposition shape** for \`absorb\`: \`absorbed = min(loss, balance)\`, \`remaining = loss - absorbed\`
+
+These five fields and three operations are what we port — verbatim, just translated to Solidity syntax.
+
+### Step 3: Write \`src/InsuranceFund.sol\`
+
+\`\`\`solidity
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.35;
+
+/// @notice Solidity port of openhl-liquidation Stage 10b's InsuranceFund.
+/// Faithful field-by-field translation; same operations, same revert
+/// conditions, same absorb-decomposition shape as the Rust source.
+contract InsuranceFund {
+    uint256 public balance;
+    uint256 public totalDeposited;
+    uint256 public totalWithdrawn;
+    uint256 public totalAbsorbed;
+    address public immutable owner;
+
+    error ZeroAmount();
+    error NotOwner();
+    error InsufficientBalance(uint256 requested, uint256 available);
+
+    constructor(address _owner) {
+        owner = _owner;
+    }
+
+    /// Mirrors Rust's \`fn deposit(&mut self, amount: u128)\`.
+    /// Anyone can deposit; only zero is rejected.
+    function deposit(uint256 amount) external {
+        if (amount == 0) revert ZeroAmount();
+        balance += amount;
+        totalDeposited += amount;
+    }
+
+    /// Mirrors Rust's \`fn withdraw(&mut self, amount: u128) -> Result<(), Error>\`.
+    /// Owner-only. Reverts on zero, non-owner, or insufficient balance.
+    function withdraw(uint256 amount) external {
+        if (msg.sender != owner) revert NotOwner();
+        if (amount == 0) revert ZeroAmount();
+        if (amount > balance) revert InsufficientBalance(amount, balance);
+        balance -= amount;
+        totalWithdrawn += amount;
+    }
+
+    /// Mirrors Rust's \`fn absorb(&mut self, loss: u128) -> (u128, u128)\`.
+    /// Absorbs as much loss as the balance allows; returns (absorbed, remaining)
+    /// where absorbed + remaining == loss. Remaining is what the fund
+    /// couldn't cover — in the real system, this flows to ADL.
+    function absorb(uint256 loss) external returns (uint256 absorbed, uint256 remaining) {
+        if (loss == 0) revert ZeroAmount();
+        absorbed = loss > balance ? balance : loss;
+        remaining = loss - absorbed;
+        balance -= absorbed;
+        totalAbsorbed += absorbed;
+    }
+}
+\`\`\`
+
+Seven things to notice — these are the load-bearing translation decisions:
+
+1. **\`u128\` → \`uint256\`.** The Rust source uses \`u128\`; Solidity has no \`uint128\` as a default integer type. Going to \`uint256\` doesn't change the conservation-law shape — all the arithmetic still works, just with a wider type. **When in doubt, use uint256 for ported integer fields; the wider type doesn't break invariants.**
+2. **\`Result<(), Error>\` → \`revert <CustomError>\`.** Rust returns errors as values; Solidity raises them as reverts. The custom-error syntax (\`error NotOwner()\`) produces equivalent return-via-failure semantics to Rust's \`Err(Error::NotOwner)\`. **Idiomatic mapping: Rust \`Err(E)\` ↔ Solidity \`revert E()\`.**
+3. **\`(u128, u128)\` return tuples translate directly.** Solidity's named-return-tuple syntax (\`returns (uint256 absorbed, uint256 remaining)\`) matches Rust's tuple return. The decomposition equation \`absorbed + remaining == loss\` is preserved exactly.
+4. **\`pub\` fields → \`public\` storage with auto-generated getters.** Solidity's \`public\` keyword on a state variable auto-generates a getter function with the same name (\`balance()\` returns the value). This makes the Handler and invariant test contracts able to read the fund's state without writing custom view functions. **Solidity's \`public\` = Rust's \`pub\` + auto-generated getter, in one keyword.**
+5. **\`AccountId\` → \`address\`.** Ethereum's native address type stands in for whatever Rust used as account identifier. \`immutable\` makes it constructor-only (matches Rust's owner being set at construction).
+6. **Solidity 0.8's built-in overflow checks replace Rust's explicit checked-arithmetic.** Both languages will revert on underflow in production code; Rust requires \`checked_sub\` to be explicit about it, Solidity 0.8 makes it automatic. **The runtime behavior is identical; the syntax is shorter in Solidity 0.8+.**
+7. **\`uint256 public balance\` is intentionally a *storage variable*, not EVM-native \`address(this).balance\`.** The Rust source maintains its own explicit \`balance\` field; the port mirrors that field-by-field. This isn't redundant — it's *isolation*. A forced ETH transfer to the contract address (e.g., via \`selfdestruct\` from another contract) would mutate \`address(this).balance\` without going through \`deposit\`, breaking the conservation invariant if the fund relied on the EVM-native balance. By tracking \`balance\` as a private bookkeeping variable, the conservation law verifies the *fund's own accounting*, immune to external ETH-injection side effects. **The Rust-faithful storage variable is also a deliberate safety choice; EVM-native balance is reachable by external mutators that bypass the contract's invariants.**
+
+### Step 4: Write \`test/InsuranceFundHandler.sol\`
+
+\`\`\`solidity
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.35;
+
+import {Test} from "forge-std/Test.sol";
+import {InsuranceFund} from "../src/InsuranceFund.sol";
+
+/// @notice Handler for InsuranceFund invariant testing.
+/// Wraps the 3 fund operations, bounds inputs to productive ranges,
+/// maintains 5 ghost variables that mirror the conservation-law expectations.
+contract InsuranceFundHandler is Test {
+    InsuranceFund public fund;
+    address public immutable owner;
+
+    // Five ghost variables — the shadow specification of the fund's accounting.
+    uint256 public ghostSumDeposits;
+    uint256 public ghostSumWithdrawn;
+    uint256 public ghostSumAbsorbed;
+    uint256 public ghostSumUnabsorbed;        // total of \`remaining\` returns from absorb
+    uint256 public ghostSumLossRequested;     // total of \`loss\` parameters passed to absorb
+
+    constructor(InsuranceFund _fund, address _owner) {
+        fund = _fund;
+        owner = _owner;
+    }
+
+    /// Wraps fund.deposit(). Bounds input to a reasonable range so the
+    /// random uint256 from forge-invariant doesn't blow past uint96.
+    /// Updates the deposit ghost in lockstep.
+    function wrappedDeposit(uint256 amount) public {
+        amount = bound(amount, 1, type(uint96).max);
+        fund.deposit(amount);
+        ghostSumDeposits += amount;
+    }
+
+    /// Wraps fund.withdraw(). Only callable when there's balance to withdraw.
+    /// Uses vm.prank to simulate owner authorization (the handler is not the
+    /// owner; the owner is a separate constructor-set address).
+    function wrappedWithdraw(uint256 amount) public {
+        uint256 currentBalance = fund.balance();
+        if (currentBalance == 0) return;  // can't withdraw from empty fund
+        amount = bound(amount, 1, currentBalance);
+        vm.prank(owner);
+        fund.withdraw(amount);
+        ghostSumWithdrawn += amount;
+    }
+
+    /// Wraps fund.absorb(). Tracks both the requested loss and the actual
+    /// decomposition (absorbed + remaining). This is the trickiest ghost
+    /// update — three counters must move in lockstep.
+    function wrappedAbsorb(uint256 loss) public {
+        loss = bound(loss, 1, type(uint96).max);
+        ghostSumLossRequested += loss;
+        (uint256 absorbed, uint256 remaining) = fund.absorb(loss);
+        ghostSumAbsorbed += absorbed;
+        ghostSumUnabsorbed += remaining;
+    }
+}
+\`\`\`
+
+Five things to notice — these are the Handler-discipline patterns:
+
+1. **The Handler inherits \`Test\` to get \`bound()\` and \`vm.*\` access.** \`bound(x, min, max)\` is forge-std's helper that maps any uint256 into a target range without modular bias. \`vm.prank(owner)\` makes the next call appear to come from the owner address (impersonation inside a test, learned in L1 + L5). **Inheriting \`Test\` is the standard Handler pattern — it gives you cheatcode access for input bounding + authorization simulation.**
+2. **Every wrapped method updates ghosts in lockstep with the call.** \`wrappedDeposit\` increments \`ghostSumDeposits\` after \`fund.deposit(amount)\` succeeds. If the call were to revert, the increment wouldn't happen — that's correct, because the fund's state didn't change. **The lockstep is per-method; reverts unwind both the fund state and the would-be ghost update.**
+3. **\`wrappedWithdraw\` short-circuits when balance is zero.** Without this, the bound to \`[1, currentBalance=0]\` would fail (\`min > max\`), or worse, the \`fund.withdraw(amount)\` would revert with \`InsufficientBalance\`, and \`fail_on_revert = false\` would just count the revert and move on (which is fine, but wastes iterations). **Defensive short-circuit inside the Handler beats wasted iterations.**
+4. **\`wrappedAbsorb\` updates THREE ghosts:** \`ghostSumLossRequested\` (the input), \`ghostSumAbsorbed\` (what the fund actually absorbed), \`ghostSumUnabsorbed\` (the remaining = excess loss that the fund couldn't cover). This is what makes \`invariant_AbsorbDecomposition\` provable — the handler tracks all three quantities so the invariant can assert their conservation. **More ghosts isn't a code smell; it's how invariants become provable.**
+5. **The owner is constructor-set and immutable.** The Handler doesn't *become* the owner; it impersonates the owner via \`vm.prank\` for each withdraw. This mirrors how Rust tests would simulate owner authorization — neither the test nor the handler should *be* the owner, because that would mask access-control bugs. **Authorization simulation, not authorization replacement.**
+
+### Step 5: Write \`test/InsuranceFund.invariant.t.sol\`
+
+\`\`\`solidity
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.35;
+
+import {Test} from "forge-std/Test.sol";
+import {InsuranceFund} from "../src/InsuranceFund.sol";
+import {InsuranceFundHandler} from "./InsuranceFundHandler.sol";
+
+/// @notice The 4 conservation invariants ported from openhl-liquidation L13.
+/// Same theorem, two languages, both mechanically proven.
+contract InsuranceFundInvariantTest is Test {
+    InsuranceFund public fund;
+    InsuranceFundHandler public handler;
+    address constant OWNER = address(0xBABE);
+
+    function setUp() public {
+        fund = new InsuranceFund(OWNER);
+        handler = new InsuranceFundHandler(fund, OWNER);
+        targetContract(address(handler));
+    }
+
+    /// Invariant 1: Conservation of capital.
+    /// fund.balance() == ghostSumDeposits - ghostSumWithdrawn - ghostSumAbsorbed
+    /// This is the load-bearing conservation law — every wei that entered as a
+    /// deposit either still sits in the fund, or left via withdraw, or was
+    /// consumed by absorb. No wei appears or disappears unaccounted-for.
+    function invariant_Conservation() public view {
+        assertEq(
+            fund.balance(),
+            handler.ghostSumDeposits() - handler.ghostSumWithdrawn() - handler.ghostSumAbsorbed()
+        );
+    }
+
+    /// Invariant 2: Deposit-side accounting consistency.
+    /// The fund's view of total deposits matches the handler's accounting.
+    /// Catches: double-counting in deposit, ghost update missing or wrong scale.
+    function invariant_DepositAccounting() public view {
+        assertEq(fund.totalDeposited(), handler.ghostSumDeposits());
+    }
+
+    /// Invariant 3: Withdraw-side accounting consistency.
+    /// The fund's view of total withdrawals matches the handler's accounting.
+    /// Catches: similar bugs on the withdraw path.
+    function invariant_WithdrawAccounting() public view {
+        assertEq(fund.totalWithdrawn(), handler.ghostSumWithdrawn());
+    }
+
+    /// Invariant 4: Absorb-decomposition equivalence.
+    /// For every absorb(loss): absorbed + remaining == loss.
+    /// Aggregated: ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested.
+    /// Catches: the fund's absorb math being wrong (e.g., remaining = loss - balance
+    /// instead of loss - absorbed), or the handler forgetting to track unabsorbed.
+    function invariant_AbsorbDecomposition() public view {
+        assertEq(
+            handler.ghostSumAbsorbed() + handler.ghostSumUnabsorbed(),
+            handler.ghostSumLossRequested()
+        );
+    }
+}
+\`\`\`
+
+Four things to notice — these are the load-bearing invariant patterns:
+
+1. **Each \`invariant_*\` is one line of \`assertEq\`.** No control flow, no branching, no exception handling — just an arithmetic equality. This is the conservation-law shape made concrete in Solidity. **Conservation laws are equalities; equalities are one-liners.**
+2. **The invariants reference *both* fund state and ghost state.** Invariant 1 reads \`fund.balance()\` (the actual contract observable) and the 3 ghosts. The discrepancy between the two surfaces is what catches bugs. **The ghost is the spec; the contract is the implementation; the invariant is the equality between them.**
+3. **Invariant 2 and 3 are accounting cross-checks.** The fund has its own \`totalDeposited\` and \`totalWithdrawn\` fields (matching the Rust struct). Invariants 2 and 3 verify the handler and the fund agree on these values. If the fund's \`deposit\` accidentally double-incremented \`totalDeposited\`, invariant 2 would catch it. **Cross-checking the contract's own bookkeeping against the handler's bookkeeping catches contract-internal bugs.**
+4. **Invariant 4 is a purely-handler invariant.** It doesn't reference fund state at all — it asserts that the handler tracked absorb operations correctly (\`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested\`). This catches handler-side bugs where wrappedAbsorb forgets to update one of the ghosts. **The handler is also a system being tested — invariant 4 watches the watcher.**
+
+### Step 6: Run the invariants
+
+\`\`\`bash
+cd examples/foundry-capstone
+forge test --match-contract InsuranceFundInvariantTest -vvv
+\`\`\`
+
+Expected output:
+
+\`\`\`
+Ran 4 tests for test/InsuranceFund.invariant.t.sol:InsuranceFundInvariantTest
+[PASS] invariant_AbsorbDecomposition() (runs: 256, calls: 12800, reverts: 0)
+[PASS] invariant_Conservation() (runs: 256, calls: 12800, reverts: 0)
+[PASS] invariant_DepositAccounting() (runs: 256, calls: 12800, reverts: 0)
+[PASS] invariant_WithdrawAccounting() (runs: 256, calls: 12800, reverts: 0)
+
+Suite result: ok. 4 passed; 0 failed; 0 skipped
+\`\`\`
+
+**4 invariants, 12,800 random call sequences, all green.** Each invariant has been checked after every one of those 12,800 random calls — a total of 51,200 individual \`assertEq\` evaluations — and all held.
+
+For the heavy proof, bump to the CI profile (100,000 calls per invariant):
+
+\`\`\`bash
+FOUNDRY_PROFILE=ci forge test --match-contract InsuranceFundInvariantTest -vvv
+\`\`\`
+
+At ~10–20 seconds on modern hardware, this runs each invariant against 200,000 random calls. **400,000+ green assertions; the conservation discipline has carried.**
+
+### Step 7: Deliberate-break demo + the L13 side-by-side
+
+Break invariant 1 by introducing a subtle bug: in \`wrappedAbsorb\`, *forget* to update \`ghostSumAbsorbed\`:
+
+\`\`\`solidity
+function wrappedAbsorb(uint256 loss) public {
+    loss = bound(loss, 1, type(uint96).max);
+    ghostSumLossRequested += loss;
+    (uint256 absorbed, uint256 remaining) = fund.absorb(loss);
+    // ghostSumAbsorbed += absorbed;    // ← deliberately commented out
+    ghostSumUnabsorbed += remaining;
+}
+\`\`\`
+
+Re-run:
+
+\`\`\`
+[FAIL: invariant_Conservation persisted failure]
+    Sequence (length: 3):
+        sender=0x... addr=[InsuranceFundHandler]0x...
+            calldata=wrappedDeposit(uint256), args=[100]
+        sender=0x... addr=[InsuranceFundHandler]0x...
+            calldata=wrappedAbsorb(uint256), args=[100]
+        sender=0x... addr=[InsuranceFundHandler]0x...
+            calldata=wrappedDeposit(uint256), args=[1]
+    Last invariant: invariant_Conservation
+
+[PASS] invariant_AbsorbDecomposition() (...) — but with wrong ghosts
+[PASS] invariant_DepositAccounting() (...)
+[PASS] invariant_WithdrawAccounting() (...)
+\`\`\`
+
+Read the counterexample carefully:
+1. \`wrappedDeposit(100)\` — fund.balance = 100, ghostSumDeposits = 100
+2. \`wrappedAbsorb(100)\` — fund absorbs 100 → fund.balance = 0; ghostSumAbsorbed *not updated* (the bug!); ghostSumUnabsorbed = 0
+3. \`wrappedDeposit(1)\` — fund.balance = 1, ghostSumDeposits = 101
+
+Now invariant 1 checks: \`fund.balance() (1) == ghostSumDeposits (101) - ghostSumWithdrawn (0) - ghostSumAbsorbed (0, buggy!)\` → \`1 == 101\` → **FAIL**.
+
+The shrinker reduced what was probably a 50-call sequence to these 3 calls — the minimal sequence that exposes the broken ghost accounting. **Invariant 1 caught the bug; invariant 4 also caught it** (\`ghostSumAbsorbed + ghostSumUnabsorbed (0) == ghostSumLossRequested (100)\` → fail).
+
+**Restore the commented-out line. Re-run. All 4 green.**
+
+Now diff against L13. Open openhl \`crates/openhl-liquidation/tests/insurance_fund_proptests.rs\` (SHA \`0a8464e\`) and put it side-by-side with our \`InsuranceFund.invariant.t.sol\`:
+
+\`\`\`
+┌────────────────────────────────────────┬──────────────────────────────────────────┐
+│  openhl L13 (Rust, proptest!)          │  L6 capstone (Solidity, forge invariant) │
+├────────────────────────────────────────┼──────────────────────────────────────────┤
+│  proptest_fund_conservation            │  invariant_Conservation                  │
+│  proptest_deposit_accounting           │  invariant_DepositAccounting             │
+│  proptest_withdraw_accounting          │  invariant_WithdrawAccounting            │
+│  proptest_absorb_decomposition         │  invariant_AbsorbDecomposition           │
+├────────────────────────────────────────┼──────────────────────────────────────────┤
+│  state-machine transitions:            │  Handler methods:                        │
+│    Op::Deposit(amount)                 │    wrappedDeposit(uint256)               │
+│    Op::Withdraw(amount)                │    wrappedWithdraw(uint256)              │
+│    Op::Absorb(loss)                    │    wrappedAbsorb(uint256)                │
+├────────────────────────────────────────┼──────────────────────────────────────────┤
+│  prop_assert_eq!(                      │  assertEq(                               │
+│    fund.balance,                       │    fund.balance(),                       │
+│    sum_deposits - withdrawn - absorbed │    ghostSumDeposits() - ghostSumWith...  │
+│  );                                    │  );                                      │
+└────────────────────────────────────────┴──────────────────────────────────────────┘
+\`\`\`
+
+Same names. Same operations. Same arithmetic. **The capstone is the proof of the course's thesis — the conservation-law discipline survived the language boundary, mechanically.**
+
+## Common errors
+
+- **\`Error: bound called with too large of a range\`** — your \`bound(amount, min, max)\` has \`min > max\`. Usually means you passed \`bound(x, 1, 0)\`. Check for short-circuit conditions before calling \`bound\`.
+- **All invariants pass but \`forge test\` still fails** — there's a non-invariant test in the same file that's failing. Add \`--match-test invariant\` to scope.
+- **\`Error: setUp failed\`** — \`targetContract(address(handler))\` was called before \`handler\` was instantiated. Always \`new\` the Handler before calling \`targetContract\`.
+- **\`reverts: 12800\`** — every Handler call is reverting. Your \`bound(...)\` ranges are wrong, or your wrappers are passing through invalid inputs. Add \`vm.assume\`s or tighter \`bound\`s.
+- **Invariant fails immediately on \`--match-contract\`** — the invariant is wrong, not the contract. Write a single \`function test_X()\` that calls the operations manually and verify the arithmetic by hand before trusting the invariant.
+
+## Design retrospective
+
+Three load-bearing decisions in the capstone's design:
+
+1. **Field-by-field translation, not redesign.** The Solidity port preserves Rust's field names (snake → camel case), revert conditions, and return-tuple shapes. Resisting the urge to "improve" the design during the port is what makes the L13-to-L6 cross-reference work — readers can literally diff the two implementations and see the discipline transfer. **Faithful porting is the load-bearing discipline of cross-language verification.**
+
+2. **Five ghosts, not four.** The Handler tracks \`ghostSumLossRequested\` separately from \`ghostSumAbsorbed + ghostSumUnabsorbed\` so invariant 4 can prove their equality. A more compact design would track only the 4 invariant-relevant ghosts; the 5th ghost exists to make invariant 4 a *meaningful* assertion (not a tautology). **The fifth ghost is the spec for invariant 4.**
+
+3. **No \`vm.assume\` inside the Handler.** All input bounding is done with \`bound(x, min, max)\` — every random parameter is *mapped into* a valid range, not *filtered out*. This keeps \`forge invariant\`'s iteration count productive (no wasted iterations on rejections) and makes the test fast at scale. **\`bound\` over \`vm.assume\` is the Handler-pattern discipline.**
+
+## Answer key
+
+After L6 the directory looks exactly like:
+
+\`\`\`
+examples/foundry-capstone/
+├── foundry.toml                              ← invariant config + pragma pin
+├── src/
+│   └── InsuranceFund.sol                     ← 82 lines, 3 ops + 5 fields
+├── test/
+│   ├── InsuranceFundHandler.sol              ← 65 lines, 3 wrappers + 5 ghosts
+│   └── InsuranceFund.invariant.t.sol         ← 58 lines, 4 invariants
+└── lib/forge-std/                            ← standard submodule
+\`\`\`
+
+\`forge test --match-contract InsuranceFundInvariantTest\` prints 4 \`[PASS]\` lines with \`(runs: 256, calls: 12800, reverts: 0)\`.
+
+\`FOUNDRY_PROFILE=ci forge test --match-contract InsuranceFundInvariantTest\` does the same at \`runs: 2000, calls: 200000\` per invariant.
+
+You can \`diff\` this directory against openhl-liquidation L13's \`proptest!\` block and see the same shape on both sides.
+
+## Q&A
+
+**Q1: Why port to Solidity at all, instead of staying in Rust?**
+
+Different deployment surfaces. Rust + openhl is for chains where you control the execution environment (your own L1/L2). Solidity + forge invariant is for the EVM, where you have to compile to a fixed bytecode target. The capstone exists because production-deployable insurance funds on EVM chains (Aave's safety module, Compound's reserve, etc.) are Solidity — and the same conservation discipline applies. **The port proves that the discipline is platform-agnostic; the deployment target dictates the language.**
+
+**Q2: How do I know my port is *correct* and not just my own design?**
+
+Two cross-checks: (a) The Rust and Solidity tests have the *same* counterexample-finding behavior — if you break one, the other (or its Rust equivalent) catches the same minimal-counterexample shape. (b) The field-by-field mapping table is the contract you should compare against; if any field differs in semantics, the port is wrong. **Mechanical correspondence is verifiable; "feeling right" is not.**
+
+**Q3: Can I add more invariants?**
+
+Yes. The 4 here are the minimum from L13. Real production-ready insurance funds add more: access-control invariants (only owner can withdraw), upper-bound invariants (total absorbed never exceeds total deposited - balance), rate-limit invariants (no more than X% withdrawn per Y blocks). Each follows the same shape: pick an observable, write an equality against ghost state, add to the invariant test. **Invariants compound; the test file grows linearly with safety properties.**
+
+**Q4: What does the \`examples/foundry-capstone/\` directory ship with — committed code or template?**
+
+Committed working code. The directory is the course's answer key. New readers who complete L0–L5 can compare their own L6 work against this exact source. The capstone is a reference implementation; you build your own version following the walk-through, and the answer key is there for verification (or for skipping ahead if you're already comfortable). **Committed reference implementations are how courses scale to multiple readers without each one needing instructor review.**
+
+**Q5: Why isn't \`examples/foundry-capstone/\` part of the rethlab Next.js build?**
+
+It's a sub-project with its own \`foundry.toml\` and \`lib/forge-std\`. Including it in the Next.js build would require either pulling it into Vercel's deployment (waste of build time) or vendoring \`forge-std\` (waste of disk + git churn). The arrangement: rethlab's Next.js + Prisma site serves the *lesson content*; the \`examples/foundry-capstone/\` sub-project serves the *executable artifact*. Readers clone the rethlab repo to get both. **Web site for the curriculum; sub-project for the proof.**
+
+**Q6: Can the same Handler pattern prove invariants against deployed contracts (forking + impersonation)?**
+
+Yes — that's the L5 + L6 synthesis. You can write an InvariantTest that uses \`--fork-url <mainnet>\` and points \`targetContract\` at a deployed Aave reserve. The Handler impersonates the reserve's role-holders via \`vm.prank\` and calls real methods. Your invariants then prove conservation laws against the actual deployed system, not against your local port. **The capstone is a contained example; the same pattern scales to "prove invariants against real production contracts" — that's what the L5 forking work was setting up.**
+
+**Q7: What happens to invariant testing when the fund is upgraded (proxy pattern)?**
+
+Invariants survive upgrades that preserve the public ABI and storage layout. If the upgrade changes either, the invariants must be updated to match. The pattern: store the invariant tests alongside the contract source; on every upgrade, re-run the full invariant suite against the new implementation. CI integration ensures no upgrade ships without re-proving the conservation laws. **Invariants are part of the contract's specification; upgrades must preserve them or explicitly version them.**
+
+## Course conclusion
+
+This is the final lesson of *Mastering Foundry*. Six lessons in, you've moved from "what's a Foundry pragma" (L1) to "I just proved 4 conservation invariants against a Rust-to-Solidity port, mechanically, in 60 minutes." That's the rethlab thesis: **discipline transfers across languages because the underlying math doesn't care which compiler runs it.**
+
+Where to go next:
+
+- **Run the capstone against more invariants.** Add access-control, rate-limit, and upper-bound invariants to \`InsuranceFund.invariant.t.sol\`. Each one is ~3 lines of Solidity.
+- **Port one more component from openhl.** Pick \`Scanner\`, \`MarginEngine\`, or \`OrderBook\` from openhl-liquidation. Same pattern: identify state + operations + invariants, write the Solidity, prove with \`forge invariant\`.
+- **Apply the discipline to your own production code.** Any contract you've written that has conservation-law-shaped properties (token balances, accumulating fees, vesting schedules) is a candidate. The Handler pattern + 1-line \`assertEq\` invariants scale to anything.
+- **Read the openhl-fundamentals + openhl-liquidation Rust source one more time.** Now that you've ported one component, the patterns will read differently. The \`proptest!\` macro will look like \`invariant_*\`, just in Rust.
+
+Foundry is a tool. The discipline is the product.
 `,
                 },
               ],
