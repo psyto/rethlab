@@ -91,6 +91,39 @@ const EN: LocaleConfig = {
       h1Marker: '# Lesson 1 — `AdlScore`, `AdlRecord`, `AdlReport` + `adl_score` — the ranking function',
       startSignature: "Concepts you'll grasp in this lesson",
     },
+    {
+      draftFile: 'openhl_adl_l2_en.md',
+      moduleNumber: 1,
+      sortOrder: 1,
+      title: 'Lesson 2 — execute_adl — the 5-phase orchestration heart',
+      slug: 'openhl-adl-execute-en',
+      duration: 40,
+      xpReward: 70,
+      h1Marker: '# Lesson 2 — `execute_adl` — the 5-phase orchestration heart',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
+    {
+      draftFile: 'openhl_adl_l3_en.md',
+      moduleNumber: 1,
+      sortOrder: 2,
+      title: 'Lesson 3 — 6 nuanced absorption tests — proving execute_adl against the matrix',
+      slug: 'openhl-adl-absorption-tests-en',
+      duration: 35,
+      xpReward: 60,
+      h1Marker: '# Lesson 3 — 6 nuanced absorption tests — proving `execute_adl` against the matrix',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
+    {
+      draftFile: 'openhl_adl_l4_en.md',
+      moduleNumber: 1,
+      sortOrder: 3,
+      title: 'Lesson 4 — Capstone — 5 invariant proptests + Stage 10 quartet retrospective',
+      slug: 'openhl-adl-capstone-en',
+      duration: 45,
+      xpReward: 90,
+      h1Marker: '# Lesson 4 — Capstone — 5 invariant proptests + Stage 10 quartet retrospective',
+      startSignature: "Concepts you'll grasp in this lesson",
+    },
   ],
 };
 
@@ -136,6 +169,39 @@ const JA: LocaleConfig = {
       h1Marker: '# レッスン 1 — `AdlScore`, `AdlRecord`, `AdlReport` + `adl_score` — ranking 関数',
       startSignature: 'このレッスンで掴む概念',
     },
+    {
+      draftFile: 'openhl_adl_l2_ja.md',
+      moduleNumber: 1,
+      sortOrder: 1,
+      title: 'レッスン 2 — execute_adl — 5 フェーズのオーケストレーション中枢',
+      slug: 'openhl-adl-execute-ja',
+      duration: 40,
+      xpReward: 70,
+      h1Marker: '# レッスン 2 — `execute_adl` — 5 フェーズのオーケストレーション中枢',
+      startSignature: 'このレッスンで掴む概念',
+    },
+    {
+      draftFile: 'openhl_adl_l3_ja.md',
+      moduleNumber: 1,
+      sortOrder: 2,
+      title: 'レッスン 3 — 6 つの nuanced absorption テスト — マトリクスで execute_adl を証明する',
+      slug: 'openhl-adl-absorption-tests-ja',
+      duration: 35,
+      xpReward: 60,
+      h1Marker: '# レッスン 3 — 6 つの nuanced absorption テスト — マトリクスで `execute_adl` を証明する',
+      startSignature: 'このレッスンで掴む概念',
+    },
+    {
+      draftFile: 'openhl_adl_l4_ja.md',
+      moduleNumber: 1,
+      sortOrder: 3,
+      title: 'レッスン 4 — Capstone — 5 つの invariant proptest + Stage 10 四部作のレトロスペクティブ',
+      slug: 'openhl-adl-capstone-ja',
+      duration: 45,
+      xpReward: 90,
+      h1Marker: '# レッスン 4 — Capstone — 5 つの invariant proptest + Stage 10 四部作のレトロスペクティブ',
+      startSignature: 'このレッスンで掴む概念',
+    },
   ],
 };
 
@@ -157,8 +223,8 @@ interface Lesson {
 
 const COURSE_SHARED = {
   difficulty: 'EXPERT' as const,
-  duration: 50, // L0..L1 so far (15+35); bumps as L2..L4 land.
-  xpReward: 110,
+  duration: 170, // L0..L4 (15+35+40+35+45) — COURSE COMPLETE
+  xpReward: 330, // L0..L4 (50+60+70+60+90) — COURSE COMPLETE
   tags: ['reth', 'evm', 'liquidation', 'adl', 'perpetual', 'l1', 'openhl', 'expert'],
   sortOrder: 1010,
   isPublished: true,
