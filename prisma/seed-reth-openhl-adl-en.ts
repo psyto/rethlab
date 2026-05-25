@@ -1744,7 +1744,7 @@ For typical workloads, comparable. \`proptest!\` is the better-maintained option
 
 **Q6: How does this compare with \`forge invariant\` (Foundry)?**
 
-Same theorem, different mechanics. \`forge invariant\` randomly *sequences method calls* against a Handler and checks invariants after each call; \`proptest!\` here generates *random parameter sets* and runs the function once per input. Both prove "for all valid inputs, this property holds." \`forge invariant\` is multi-call; \`proptest!\` here is single-call (a separate \`proptest-state-machine\` crate handles stateful properties in Rust). **Same discipline, different surface: Rust uses \`proptest!\` for single-call and state-machine for multi-call; Solidity uses \`forge invariant\` for both.**
+Same theorem, different mechanics. \`forge invariant\` randomly *sequences method calls* against a Handler and checks invariants after each call; \`proptest!\` here generates *random parameter sets* and runs the function once per input. Both prove "for all valid inputs, this property holds." \`forge invariant\` is multi-call; \`proptest!\` here is single-call (a separate \`proptest-state-machine\` crate handles stateful properties in Rust). **Same discipline, different surface: Rust uses \`proptest!\` for single-call and state-machine for multi-call; Solidity uses \`forge invariant\` for both.** The *Mastering Foundry* L6 capstone is the Solidity-side sibling to this lesson — it ports openhl-liquidation Stage 10b's \`InsuranceFund\` to Solidity and proves 4 invariants via \`forge invariant\`. Read alongside this L4 capstone, the pair demonstrates that the discipline transfers in both language directions.
 
 ## Course conclusion — DIY Perp series #6 complete
 

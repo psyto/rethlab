@@ -2632,6 +2632,7 @@ Where to go next:
 - **Port one more component from openhl.** Pick \`Scanner\`, \`MarginEngine\`, or \`OrderBook\` from openhl-liquidation. Same pattern: identify state + operations + invariants, write the Solidity, prove with \`forge invariant\`.
 - **Apply the discipline to your own production code.** Any contract you've written that has conservation-law-shaped properties (token balances, accumulating fees, vesting schedules) is a candidate. The Handler pattern + 1-line \`assertEq\` invariants scale to anything.
 - **Read the openhl-fundamentals + openhl-liquidation Rust source one more time.** Now that you've ported one component, the patterns will read differently. The \`proptest!\` macro will look like \`invariant_*\`, just in Rust.
+- **Read the Building OpenHL ADL course's L4 capstone — the Rust-side sibling of this lesson.** Same theorem (conservation laws across a cascade), same Handler-shaped discipline, different tooling: \`proptest!\` in Rust, \`forge invariant\` here. The two capstones together prove that the discipline transfers in *both* directions — Rust → Solidity here, and the Stage 10 quartet retrospective there.
 
 Foundry is a tool. The discipline is the product.
 `,

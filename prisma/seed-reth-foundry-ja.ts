@@ -2633,6 +2633,7 @@ Invariant は public ABI と storage layout を保つアップグレードを su
 - **openhl からもう 1 つコンポーネントを port する。** openhl-liquidation から \`Scanner\`、\`MarginEngine\`、\`OrderBook\` のいずれかを選ぶ。同じパターンだ。state + operation + invariant を特定し、Solidity を書き、\`forge invariant\` で証明する。
 - **規律を自分の production code に適用する。** 自分が書いた保存則形状の property (token balance、累積 fee、vesting schedule) を持つ contract は候補だ。Handler パターン + 1 行 \`assertEq\` invariant が何にでもスケールする。
 - **openhl-fundamentals + openhl-liquidation の Rust ソースをもう一度読む。** 1 つコンポーネントを port した今、パターンは違って読める。\`proptest!\` macro が \`invariant_*\` のように見える。Rust ではあるが、骨格は同じだ。
+- **Building OpenHL ADL コースの L4 capstone を読む — 本レッスンの Rust 側 sibling capstone だ。** 同じ定理（cascade を貫く保存則）、同じ Handler 形状の規律、違うツール: あちらは \`proptest!\` (Rust)、ここは \`forge invariant\` (Solidity)。2 つの capstone を合わせると、規律が *両方向* で転写することが証明される — ここでは Rust → Solidity、あちらは Stage 10 四部作のレトロスペクティブとして。
 
 Capstone を走らせ終わったその瞬間、画面には 4 行の緑が並んでいる。書いたのは Solidity、走らせたのは \`forge invariant\`、証明したのは Rust で先に証明したのと同じ 4 つの保存則。コードは 2 つ、定理は 1 つ。これがコース全体が指していた一点だ。
 

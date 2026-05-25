@@ -396,7 +396,7 @@ Typical workload には comparable だ。`proptest!` は 2026 Rust エコシス�
 
 **Q6: これは `forge invariant`（Foundry）とどう比較されるか?**
 
-同じ定理、違うメカニクスだ。`forge invariant` は Handler に対してランダムな *メソッド call 系列* を生成し、各 call 後に invariant を check する。ここの `proptest!` はランダム *parameter set* を生成し、入力 1 つにつき関数を 1 回走らせる。両方が「すべての valid 入力に対して、このプロパティが成立する」を証明する。`forge invariant` は multi-call、ここの `proptest!` は single-call だ（別 `proptest-state-machine` crate が Rust で stateful プロパティを扱う）。**同じ規律、違う surface。Rust は single-call に `proptest!`、multi-call に state-machine を使う。Solidity は両方に `forge invariant` を使う。**
+同じ定理、違うメカニクスだ。`forge invariant` は Handler に対してランダムな *メソッド call 系列* を生成し、各 call 後に invariant を check する。ここの `proptest!` はランダム *parameter set* を生成し、入力 1 つにつき関数を 1 回走らせる。両方が「すべての valid 入力に対して、このプロパティが成立する」を証明する。`forge invariant` は multi-call、ここの `proptest!` は single-call だ（別 `proptest-state-machine` crate が Rust で stateful プロパティを扱う）。**同じ規律、違う surface。Rust は single-call に `proptest!`、multi-call に state-machine を使う。Solidity は両方に `forge invariant` を使う。** *Mastering Foundry* の L6 capstone が本レッスンの Solidity 側 sibling だ — openhl-liquidation Stage 10b の `InsuranceFund` を Solidity に port し、4 invariant を `forge invariant` で証明する。本 L4 capstone と並べて読むと、規律が両言語方向に転写することが実感できる。
 
 ## コース総括 — DIY Perp シリーズ第 6 弾完結
 
