@@ -12,13 +12,13 @@ export async function seedRethFoundryEN(prisma: PrismaClient) {
       title: "Mastering Foundry — Solidity testing discipline for engineers who already think in Rust",
       description:
         "The rigorous-testing discipline you learned in rethlab's openhl courses (proptest! conservation laws, debug_assert! routing contracts, byte-for-byte answer keys against openhl SHAs) transfers to Solidity contracts almost 1:1 — and Foundry is the tool that makes the transfer mechanical. This course teaches forge test / fuzz / invariant + cast + anvil for L1 / contract / engine engineers who already think in Rust. By the L6 capstone, you'll have ported openhl-liquidation Stage 10b's InsuranceFund from Rust to Solidity and proven the same 4 conservation invariants with forge — same theorem, two languages, both mechanically proven. Foundry mastery is now a commodity prerequisite for serious L1 work; this course assumes you already have the discipline and gives you the Solidity syntax. 7 lessons across 4 modules, openhl SHA references via L6 capstone, in-repo answer keys at examples/foundry-capstone/.",
-      difficulty: "ADVANCED",
+      difficulty: "INTERMEDIATE",
       duration: 240,
       xpReward: 490,
       track: "reth-stack",
       tags,
       isPublished: true,
-      sortOrder: 350,
+      sortOrder: 190,
       locale: "en",
       instructorName: "RethLab",
       modules: {

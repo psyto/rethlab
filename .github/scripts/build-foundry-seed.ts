@@ -272,11 +272,14 @@ interface Lesson {
 }
 
 const COURSE_SHARED = {
-  difficulty: 'ADVANCED' as const,
+  difficulty: 'INTERMEDIATE' as const,
   duration: 240, // L0..L6 (15+25+35+40+30+35+60) — COURSE COMPLETE
   xpReward: 490, // L0..L6 (50+50+70+80+60+70+110) — COURSE COMPLETE
   tags: ['foundry', 'forge', 'anvil', 'cast', 'solidity', 'testing', 'invariants', 'fuzz', 'l1', 'reth'],
-  sortOrder: 350,
+  // Positioned right before Inside Alloy (200) — Foundry is commodity prerequisite
+  // for the alloy/reth-deep work that follows; Fundamentals' foundry-toolchain +
+  // foundry-tests lessons only scratch the surface and this course completes them.
+  sortOrder: 190,
   isPublished: true,
 };
 
