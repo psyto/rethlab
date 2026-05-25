@@ -1688,64 +1688,6 @@ MegaETH ([\`megaeth-labs/\`](https://github.com/megaeth-labs)) は Reth 上に�
 
 MegaETH の事例が教育的に重要なのは、SDK の天井を見せてくれるからです: コア Reth を fork せずにカスタマイズはどこまで深く行けるか。Tempo は数コンポーネントだけ差し替えて残りはそのまま。MegaETH は EVM executor と storage layer を置き換え、**それでも Reth を fork していません** (\`megaeth-labs/reth\`: 0 ahead, 7666 behind)。
 
-## bera-reth を ship した実体験 — Berachain の振り返り
-
-上記のアーキテクチャ各節（「各チェーンが何を差し替えているか」）は *到達地点* を語っています。本節は *journey*（道のり）を語ります — Berachain が dozens of validators を擁する mainnet 上に bera-reth を ship したとき、実際にはどう感じたか。出典は [Berachain チームの Rez 氏自身による寄稿](https://medium.com/@rezayan/building-modular-execution-clients-on-reth-d56c2d65b85a)。本節はそこから、*あなたが* Reth SDK に手を伸ばすときに期待値を変えるべき部分だけを蒸留しています。
-
-### うまくいったこと
-
-| 何が | なぜ重要か |
-| :--- | :--- |
-| **sync と pruning が無料で継承される** | \`Header\` / \`Block\` trait を実装するだけで、sync、prune、history caching、header download — すべてを 1 行も書かずに継承する。意識せずに済む 80% だ。 |
-| **Ethereum 互換性が副産物として手に入る** | カスタムハードフォークを無効化した状態で、bera-reth は **Hive test suite** を無修正で pass する。これがフレームワークが与える regression discipline だ。カスタマイズは gate されており、デフォルトパスは Ethereum 等価のまま。 |
-| **execution path の共有** | 同じ block-execution コードが block builder、validator、re-execution CLI — どこでも使われる。1 つの実装、複数の呼び出し元。Fork していたら caller ごとに duplicate していたところだ。 |
-| **bootstrap が速い** | Examples + SDK で differentiated なノードまで数日。最初のコンパイルは数時間、初回のカスタムトランザクションは最初の週で動く。 |
-| **Reth チームの反応速度** | Upstream PR の review と merge cycle が速い。bera-reth が leaky abstraction にぶつかったとき、修正は upstream に速やかに反映された。 |
-
-### 難しかったこと
-
-正直なリスト、ざっくり苦痛が小→大の順で。
-
-1. **新トランザクション型における big-bang 問題。** カスタムトランザクションの導入はコードパスを十数か所同時に touch する — すべての encoder、すべての validator、すべての tracing パス。Rez は bera-reth のカスタムトランザクションを **5,000+ 行の単一 PR** でまとめてランディングした。コードがコンパイルさえ通るために必要だったからだ。この抽象に対する iterative または collaborative な開発は、構造上ほぼ不可能。**新 tx 型が必要なプロジェクトは、一気通貫の delivery を計画せよ。Incremental ではない。**
-
-2. **SDK の抽象はほぼ毎リリース壊れる。** Reth 依存の bump は **1 行で済むことが稀**。SDK がどう変わったかを理解するために upstream PR を読むのが、通常のリリース bump ワークフローの一部だ。壊れることを織り込み、適応工数を予算化せよ。
-
-3. **Regression test は non-optional。** bera-reth は、新しい Reth リリースで予期せず値が変わったある変数を継承していた — 黙って。それを catch したのは regression test だけ。**CI で integration test 一式を走らせていなければ、SDK はいずれ production で君を驚かせる。**
-
-4. **Tracing API がカスタムトランザクションで壊れた。** 呼び出しコンテキスト（builder、validator、CLI、*そして tracing*）で共有されるカスタム execution path 抽象があれば防げた問題だ。今はないので、bera-reth は tracing のために「un-elegant な解決策」を抱えて出荷している。**カスタムトランザクションは同じ execution logic を 2 回書かせる可能性がある。**
-
-5. **検証の provenance（出所）が曖昧。** SDK がコアの runtime loop を露出しないため、「pre-validation で既に validate 済みのものを execution 中に再 validate すべきか」が不明瞭。コードを読んで判断するしかない。
-
-6. **Generics + エラーメッセージ。** Rust の generics は SDK で重い。エラーメッセージは notoriously 読みにくい。**LLM の支援すら手こずる** — 明白な修正方法を持たない型エラーに時間を使うことになる。
-
-7. **Leaky abstraction → upstream PR。** 一部の抽象は宣言された surface をきっちりカバーしきれていない。回避策は Reth への contribution back。Turnaround は速いが、貢献負担は実在する。
-
-8. **多層抽象がカスケードする。** **REVM** 深部の変更が **Alloy** へカスケードし、さらに **Reth** へ到達する。1 つの問題を直すために 3 つの crate 境界をナビゲートする。
-
-9. **upstream のリリースケイデンスに縛られる。** 好むと好まざるとに関わらず、自分のリリーススケジュールは Paradigm のペースの下流だ。
-
-### 戦略的な問い — Reth SDK か Geth fork か
-
-Rez のフレーミング、より鋭く言い直すと:
-
-- **プロジェクトが Ethereum のコアループや Engine API を共有しない場合**、Reth SDK の現在の抽象では不十分かもしれない。フレームワークと戦うことになる。（Hyperliquid が Reth-adjacent な execution layer を走らせるのはまさにこの理由 — コンセンサスループが違いすぎる。）
-- **代替が Geth fork なら**、Reth SDK は厳密に保守性で勝る。**10,000 行の upstream Geth merge は楽しくない。** Rez はそれをレビューしたことがある。
-- **Client diversity のためなら**、両方 build せよ。Berachain は mainnet 上で **bera-reth AND bera-geth** を走らせる。State-root mismatch が起きたとき、同じ spec の独立した 2 実装を持つことが原因究明に効く。また、これは Berachain に *仕様* に対して build することを強制し、1 つの実装に対して build することを許さなかった。
-
-### これがあなたのプロジェクト計画に意味すること
-
-自分のチェーンで Reth SDK に手を伸ばすとき、期待値はこう設定する:
-
-- 動く differentiated ノードまで **週ではなく日**（examples 経由）
-- 新トランザクション型の統合まで **日ではなく週**（big-bang スコープ）
-- Reth リリースが breaking abstraction change を出荷するたびの **定期的な適応作業**
-- 時間とともに contribute back する **upstream PR のパイプライン**
-- 本物の L1 を ship するなら **client diversity の意思決定** — second client を build するか、Reth 単独で行くか
-
-SDK は万能薬ではない。だが正しい形のプロジェクトには — Ethereum を *再発明* するのではなく *拡張* するチェーンには — production-deploy 可能な Rust EVM クライアントへの最も摩擦の少ない経路だ。**Rez の結論: 「振り返ってみても、私は絶対にもう一度 Reth SDK で build する」。**
-
-> 🔍 **Find in repo.** [\`berachain/bera-reth\`](https://github.com/berachain/bera-reth) を開いて \`crates/bera-reth/src/lib.rs\` を見る。それがエントリーポイントだ。そこの \`with_components\` チェーンは、本モジュールの先のレッスンで読んだ builder の production 版 — 今日 dozens-of-validators-on-mainnet を抱えるチェーンのものだ。
-
 ## パターン: thesis が要求する部分を差し替える
 
 チェーンの thesis を 1 文で言えるなら、たいてい 1〜3 個のコンポーネント差し替えにマッピングできます:
