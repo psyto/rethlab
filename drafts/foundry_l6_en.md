@@ -236,6 +236,16 @@ Seven things to notice — these are the load-bearing translation decisions:
 4. **`pub` fields → `public` storage with auto-generated getters.** Solidity's `public` keyword on a state variable auto-generates a getter function with the same name (`balance()` returns the value). This makes the Handler and invariant test contracts able to read the fund's state without writing custom view functions. **Solidity's `public` = Rust's `pub` + auto-generated getter, in one keyword.**
 5. **`AccountId` → `address`.** Ethereum's native address type stands in for whatever Rust used as account identifier. `immutable` makes it constructor-only (matches Rust's owner being set at construction).
 6. **Solidity 0.8's built-in overflow checks replace Rust's explicit checked-arithmetic.** Both languages will revert on underflow in production code; Rust requires `checked_sub` to be explicit about it, Solidity 0.8 makes it automatic. **The runtime behavior is identical; the syntax is shorter in Solidity 0.8+.**
+
+   > [!NOTE]
+   > **Mimicking Rust's Wrapping Behavior and Gas Optimization via `unchecked`**
+   > In Solidity 0.8+, if you want to bypass the default safety checks to mimic Rust's wrapping arithmetic behavior (like `wrapping_add` or `wrapping_sub`), or if you need to optimize gas efficiency to match the performance profile of the Rust implementation, you can wrap operations inside an `unchecked { ... }` block:
+   > ```solidity
+   > unchecked {
+   >     balance -= amount; // Gas saving, or intentional wrapping behavior
+   > }
+   > ```
+   > Since `unchecked` disables the compiler-generated overflow/underflow checks (which throw `Panic(0x11)`), it reduces transaction gas costs. For infrastructure engineers, it is a key discipline to explicitly separate safe, boundary-checked arithmetic (the default) from performance-critical sections where checks have already been manually verified and can be skipped (`unchecked`).
 7. **`uint256 public balance` is intentionally a *storage variable*, not EVM-native `address(this).balance`.** The Rust source maintains its own explicit `balance` field; the port mirrors that field-by-field. This isn't redundant — it's *isolation*. A forced ETH transfer to the contract address (e.g., via `selfdestruct` from another contract) would mutate `address(this).balance` without going through `deposit`, breaking the conservation invariant if the fund relied on the EVM-native balance. By tracking `balance` as a private bookkeeping variable, the conservation law verifies the *fund's own accounting*, immune to external ETH-injection side effects. **The Rust-faithful storage variable is also a deliberate safety choice; EVM-native balance is reachable by external mutators that bypass the contract's invariants.**
 
 ### Step 4: Write `test/InsuranceFundHandler.sol`
@@ -376,7 +386,22 @@ Four things to notice — these are the load-bearing invariant patterns:
 1. **Each `invariant_*` is one line of `assertEq`.** No control flow, no branching, no exception handling — just an arithmetic equality. This is the conservation-law shape made concrete in Solidity. **Conservation laws are equalities; equalities are one-liners.**
 2. **The invariants reference *both* fund state and ghost state.** Invariant 1 reads `fund.balance()` (the actual contract observable) and the 3 ghosts. The discrepancy between the two surfaces is what catches bugs. **The ghost is the spec; the contract is the implementation; the invariant is the equality between them.**
 3. **Invariant 2 and 3 are accounting cross-checks.** The fund has its own `totalDeposited` and `totalWithdrawn` fields (matching the Rust struct). Invariants 2 and 3 verify the handler and the fund agree on these values. If the fund's `deposit` accidentally double-incremented `totalDeposited`, invariant 2 would catch it. **Cross-checking the contract's own bookkeeping against the handler's bookkeeping catches contract-internal bugs.**
-4. **Invariant 4 is a purely-handler invariant.** It doesn't reference fund state at all — it asserts that the handler tracked absorb operations correctly (`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested`). This catches handler-side bugs where wrappedAbsorb forgets to update one of the ghosts. **The handler is also a system being tested — invariant 4 watches the watcher.**
+4. **"Multi-Layered Invariants" Design Pattern**
+
+   In this test suite, we are deliberately combining invariants of different architectural scopes. This is known as a **"Multi-Layered Invariants"** design pattern, which is extremely helpful for partitioning bugs and eliminating false positives:
+   - **System-Level Conservation Laws (Invariant 1)**:
+     Cross-checks the actual balance of the contract (the observable state) against the net inputs/outputs recorded by the ghosts. This checks the global economic sanity of the system (e.g., that no capital is created or destroyed).
+   - **Component-Level Internal Invariants (Invariant 4)**:
+     Only compares ghost states against each other without referencing contract state (e.g., `ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested`). This ensures the mathematical relationships within operations are consistent.
+   - **"Watching the Watchers" Defense**:
+     Bugs in your test logic (ghost updates) are the primary source of flaky invariant failures. Invariant 4 purely verifies that the handler's internal accounting behaves correctly, thus serving as a self-validation layer for the test suite.
+   - **Immediate Bug Partitioning**:
+     When a run fails:
+     - **If both Invariant 1 and Invariant 4 fail**: Likely a bug in the contract logic (or a mismatch in both contract and handler implementations).
+     - **If only Invariant 1 fails, while Invariant 4 passes**: The contract's state transition is inconsistent, but the handler's input tracking is mathematically sound. (Highly likely a smart contract bug).
+     - **If only Invariant 4 fails, while Invariant 1 passes**: The contract behaves correctly, but the handler made an accounting mistake (test suite bug).
+     
+     This multi-layered partitioning saves hours of debugging by pointing you directly to the culprit contract or test file.
 
 ### Step 6: Run the invariants
 

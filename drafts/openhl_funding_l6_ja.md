@@ -25,7 +25,7 @@
 - **演算順が単位を決める** — 先に割って、*それから* clamp する。Cap は `4%/interval` なので rate レベルで bind する必要がある。Clamp してから divide すると、cap の実効値が `cap/divisor`（Hyperliquid デフォルトなら `0.5%/interval`）にすり替わり、仕様が静かに弱められてしまう。
 - **`.clamp(-cap, cap)` で対称的にクランプする** — 標準の `i64::clamp` が両側を一度に処理してくれる。よくあるバグは `min(raw, cap)` のように正側だけ clamp して負側を見落とすパターンだ。`.clamp` を使えばそれが構造的に防げる。
 - **API 境界での defensive な `.abs()`** — `FundingRate(-40_000_000)` を「絶対値」として受け入れれば、呼び出し側のフットガンを 1 つ減らせる。コストは ~1 ns、効果は実質的だ。
-- **自然に成立する edge case は明示的な分岐より強い** — `cap == 0` は `clamp(0, 0) = 0` から自動的に `FundingRate(0)` を生む。特例コードを書かない = テストすべきコードパスも増えない、ということだ。
+- **自然に成立する edge case は明示的な分岐より強い** — `cap == 0` は `clamp(0, 0) = 0` から自動的に `FundingRate(0)` を生む。特例コードを書かない = テストすべきコードパスも増えない。
 - **Property のない場所に proptest を強引に当てない** — `compute_rate` は「割って clamp」だけで、proptest が活きる代数的不変条件がない。手書きトレースで入力領域をカバーすれば十分だ。Property がない場所に無理に proptest を書く必要はない。
 
 検証：
@@ -323,6 +323,7 @@ Widening は `i64::from(u32)` の呼び出し 1 つで済むからだ — マシ
 
 **Q: `rate_cap > i64::MAX / 2` のときはどうなるか？ 対称な clamp は機能するのか？**
 `i64::MIN` に対する `.abs()` は panic する。理由は**2 の補数表現の非対称性**だ: 符号付き 64 bit には負の数が正の数より 1 個多く詰め込まれている (負側は `i64::MIN = -2^63` まで、正側は `i64::MAX = 2^63 - 1` まで) ので、`|i64::MIN| = 2^63` という値は正の `i64` で表現できる範囲を 1 だけ超えてしまう。つまり `i64::MIN.abs()` は overflow し、debug build では panic / release build では wrap となる。だから `rate_cap.0 == i64::MIN` のときは `.abs()` が踏み抜く。Stage 8b ではこれを guard していない — ユーザ提供の `FundingParams` 側の問題として扱う。現実のデプロイでは `40_000_000`（`i64::MAX / 2` よりはるかに小さい）のような値を使うため、このエッジには届かない。**defensive な `saturating_abs()`（`i64::MIN` を `i64::MAX` に丸める）を入れれば対応できるが、Stage 8b では採用していない。**
+加えて実運用では、ガバナンス経由のパラメータ更新や設定ロード時に `rate_cap` の境界（例: `0..=40_000_000`）を先に検証するのが通常で、`i64::MIN` のような爆弾値は pure 計算層まで到達させない。ここでも Defense in Depth を使う。
 
 **Q: `compute_rate` の proptest がないのはなぜか？**
 明らかな代数的 property が見当たらないからだ。「Divide and clamp」には proptest が輝くような antisymmetry や可換性、その他の不変条件がない。代わりに手書きトレーステスト 5 つで入力領域（通常の除算、正側 clamp、負側 clamp、divisor 0、cap 0）をきれいにカバーしている。**proptest は property に向き、手書きトレースは個別の入力領域に向く。** property がない場所に無理に proptest を当てる必要はない。

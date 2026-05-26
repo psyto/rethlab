@@ -71,7 +71,7 @@ L5 でようやくその配管を使う。
 
 > 🛑 **考えてみよう。** スクロールする前に — `cargo test` はデフォルトで **並列実行** される（典型的には論理 CPU 1 つにつき 1 スレッド）。今あるテストのうち 2 つが `CLOB_STATE` を read/write する。**直列化しなかった場合、どんな失敗モードが出るか?** ヒント：あるテストが `None` を期待している瞬間に、`Some(clob_A)` が一瞬だけ見えてしまう、という状況を想像してみる。
 
-（答え：**flaky test になる**。テスト A が CLOB を install し、テスト B が「CLOB なし → zero output」を assert したい — だが B が、A の `install_clob` と `uninstall_clob` の間に走ってしまえば、B は A の CLOB を見て間違った値を assert することになる。失敗率はテストのスケジューリング次第で、0% のこともあれば 30% のこともある。CI がランダムに flake する。`TEST_SERIALIZER` の mutex パターンは、これらのテストを 1 つずつ走らせて race を排除する。**コストは 0.0 秒（これらのテストはマイクロ秒で終わる）、利得は deterministic な CI。**）
+（答え：**flaky test になる**。テスト A が CLOB を install し、テスト B が「CLOB なし → zero output」を assert したい — だが B が、A の `install_clob` と `uninstall_clob` の間に走ってしまえば、B は A の CLOB を見て間違った値を assert する。失敗率はテストのスケジューリング次第で、0% のこともあれば 30% のこともある。CI がランダムに flake する。`TEST_SERIALIZER` の mutex パターンは、これらのテストを 1 つずつ走らせて race を排除する。**コストは 0.0 秒（これらのテストはマイクロ秒で終わる）、利得は deterministic な CI。**）
 
 ## 手順
 
@@ -147,7 +147,7 @@ fn read_best_bid(_input: &[u8], _gas_limit: u64, _reservoir: u64) -> PrecompileR
 
 ここで効いているのは「**u64 BE bytes → u256 BE word の右端 8 byte に直接コピー、中間で `[u8; 32]` を確保しない**」というホットパス最適化だ。`U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)` のように 32 byte の一時配列を経由するルートは結果こそ同じだが、(a) スタック上に余分な 32 byte の zero-init、(b) その配列から output への 32 byte memcpy、の二重コストが乗る。直接書き込みなら 8 byte memcpy のみ — しかも上位 zero pad は `vec![0u8; 64]` の初期化時点で既に確保済みなので、追加コスト 0 で zero-extend が成立している。
 
-> 🛑 **やりがちな勘違い。** 「明快さのために `U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)` でいいのでは?」 — それだと **一時的な `[u8; 32]` を allocate してから byte-by-byte でコピー** することになる。直接 `out[24..32].copy_from_slice(&price.0.to_be_bytes())` と書けば、output buffer に直接書き込んで中間 allocation を挟まない。**結果は同じだが、仕事は半分。** precompile は hot path で、マイクロ秒の積み重ねが効いてくる。
+> 🛑 **やりがちな勘違い。** 「明快さのために `U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)` でいいのでは?」 — それだと **一時的な `[u8; 32]` を allocate してから byte-by-byte でコピー** する。直接 `out[24..32].copy_from_slice(&price.0.to_be_bytes())` と書けば、output buffer に直接書き込んで中間 allocation を挟まない。**結果は同じだが、仕事は半分。** precompile は hot path で、マイクロ秒の積み重ねが効いてくる。
 
 ### Step 2: ドキュメントコメントを更新
 
@@ -198,9 +198,9 @@ static TEST_SERIALIZER: Mutex<()> = Mutex::new(());
 let _g = TEST_SERIALIZER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 ```
 
-`unwrap_or_else(PoisonError::into_inner)` パターンが **死活問題** だ — これがないと、テストが 1 つ panic しただけで mutex が poison し、以降の全テストが `PoisonError` で落ちる。poison から復旧することで「このテストは 1 度 panic した」を「このテストは 1 度 panic したが、後続は走る」に変える。復旧したガードもちゃんと排他アクセスを与えてくれる。poison はシグナルであって、永久の障害ではない。
+`unwrap_or_else(PoisonError::into_inner)` パターンが **死活問題** だ — これがないと、テストが 1 つ panic しただけで mutex が poison し、以降の全テストが `PoisonError` で落ちる。poison から復旧することで「このテストは 1 度 panic した」を「このテストは 1 度 panic したが、後続は走る」に変える。復旧したガードもちゃんと排他アクセスを与えてくれる。poison はシグナルであって、永久の障害ではない。なお、コンパイラの型推論が詰まる環境では `unwrap_or_else(std::sync::PoisonError::into_inner)` より、`unwrap_or_else(|e| e.into_inner())` の明示クロージャ形のほうが安定する。
 
-> 🛑 **やりがちな勘違い。** 「`serial_test` crate の `#[serial]` でいいのでは?」 — **使えるが、mutex 1 つで済む話に対して dev-dep を増やすことになる。** `serial_test` は proc-macro、属性のパース、hash-keyed な lock map に手を出す。global を 1 つ触るテスト 4 つに対しては、1 行の `static Mutex<()>` がちょうどよい。**複数の global を別々のロック partition で管理したくなったら crate を導入すればよい — それ以前にやる必要はない。**
+> 🛑 **やりがちな勘違い。** 「`serial_test` crate の `#[serial]` でいいのでは?」 — **使えるが、mutex 1 つで済む話に対して dev-dep を増やす。** `serial_test` は proc-macro、属性のパース、hash-keyed な lock map に手を出す。global を 1 つ触るテスト 4 つに対しては、1 行の `static Mutex<()>` がちょうどよい。**複数の global を別々のロック partition で管理したくなったら crate を導入すればよい — それ以前にやる必要はない。**
 
 ### Step 4: L3 最初のテストを更新（rename + 書き換え）
 
@@ -382,7 +382,7 @@ git checkout main
 条件分岐で `current_best_bid()` が `None` のときに少ない gas を返す、という設計もありうる。だがそれは実装詳細を漏らす — 攻撃者は gas 消費量を計測することで、validator が CLOB を install したかどうかを判別できてしまう。一律で `CLOB_BASE_GAS_COST` を課金するのが、定石の「constant-time precompile」パターンだ。**gas 課金から state を漏らしてはいけない。**
 
 **Q: `u64::to_be_bytes()` と `U256::to_be_bytes::<32>()` の違いは?**
-`u64::to_be_bytes()` は `[u8; 8]` — 8 バイトを返す。`U256::to_be_bytes::<32>()` は `[u8; 32]` — 左を zero パディングした 32 バイトを返す。**今回のように、source が 8 バイトの値で destination が 32 バイトの場合、source の 8 バイトを destination の右端 8 バイトにコピーしたい。** それを実現するのが `out[24..32].copy_from_slice(&u64_bytes)` だ。U256 版を使うと 32 バイトすべて（うち 24 バイトは zero）をコピーすることになる — 同じ結果に 4 倍の仕事をかけている。
+`u64::to_be_bytes()` は `[u8; 8]` — 8 バイトを返す。`U256::to_be_bytes::<32>()` は `[u8; 32]` — 左を zero パディングした 32 バイトを返す。**今回のように、source が 8 バイトの値で destination が 32 バイトの場合、source の 8 バイトを destination の右端 8 バイトにコピーしたい。** それを実現するのが `out[24..32].copy_from_slice(&u64_bytes)` だ。U256 版を使うと 32 バイトすべて（うち 24 バイトは zero）をコピーする— 同じ結果に 4 倍の仕事をかけている。
 
 **Q: `TEST_SERIALIZER` があっても flake することはあるか?**
 通常の `cargo test` 実行ではしない。Mutex が、2 つのテストスレッドから `CLOB_STATE` の途中状態を観測することを防いでくれる。それでも flake しうるエッジケース：(a) `current_best_bid` の中で panic して mutex が poison する（`into_inner` で復旧する）、(b) テストモジュール外のコードが `CLOB_STATE` に書き込む（`reth_node.rs` の integration test がいずれそれをやり始めたら問題になるが、今はやっていない）。

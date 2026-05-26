@@ -58,7 +58,7 @@ L3 では 2 つの **I/O 型**を加える。あらゆる margin 関数が consu
 
 > 🛑 **予測。** スクロール前に: liquidation はアカウントごとに unrealized PnL を計算する必要がある。式は `(mark - entry) * size` だ。**`funding::Position` から得られない入力は何か、そしてなぜ funding ではそれが要らなかったのか?** ヒント: funding の式は `size * mark * rate`。ここから何が抜けているかを比べる。
 
-（答え: **`avg_entry`（PnL の項を計算するため）と `collateral`（equity を計算するため）の 2 つだ。** Funding の式に `entry` 係数は出てこない — ポジションがどこで開かれたかに関係なく、現在の mark に rate を掛けてスケールするだけだ。Funding はまた collateral を読まない。Funding が emit する settlement delta は bridge レイヤーで balance に適用され、balance 台帳の管理は bridge 側に閉じている。Liquidation の仕事は、`collateral + unrealized PnL` がしきい値を下回ったかを *測る* ことなので、両方の値が手元に揃っている必要がある。仕事が違えば snapshot も違う、ということだ。）
+（答え: **`avg_entry`（PnL の項を計算するため）と `collateral`（equity を計算するため）の 2 つだ。** Funding の式に `entry` 係数は出てこない — ポジションがどこで開かれたかに関係なく、現在の mark に rate を掛けてスケールするだけだ。Funding はまた collateral を読まない。Funding が emit する settlement delta は bridge レイヤーで balance に適用され、balance 台帳の管理は bridge 側に閉じている。Liquidation の仕事は、`collateral + unrealized PnL` がしきい値を下回ったかを *測る* ことなので、両方の値が手元に揃っている必要がある。仕事が違えば snapshot も違う。）
 
 L3 で完成する `types` モジュールが、エンジン全体に対して **どんな入力を受け、どんな出力を返すか**を 1 枚で見ると、Module 1 (型) から Module 2 (純粋計算) へ向かう接続点がはっきりする:
 
@@ -255,7 +255,7 @@ L3 の後:
 
 **Q5: なぜ両構造体が `Copy` なのか?**
 
-安価で便利だからだ。`AccountSnapshot` は 32 バイト、`CloseOrderSpec` は 24 バイトで、このサイズなら Copy は実質タダ。Copy が乗っていないと、2 つ目の参照が欲しいたびに呼び出し側で clone することになる。**小さな Plain-Old-Data 型は `Copy` にする。`Clone` に手を伸ばすのは、所有権セマンティクスが本当に意味を持つときだけだ。**
+安価で便利だからだ。`AccountSnapshot` は 32 バイト、`CloseOrderSpec` は 24 バイトで、このサイズなら Copy は実質タダ。Copy が乗っていないと、2 つ目の参照が欲しいたびに呼び出し側で clone する。**小さな Plain-Old-Data 型は `Copy` にする。`Clone` に手を伸ばすのは、所有権セマンティクスが本当に意味を持つときだけだ。**
 
 ## 次のレッスン (L4)
 

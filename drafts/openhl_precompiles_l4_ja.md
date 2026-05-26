@@ -23,7 +23,7 @@
 このレッスンで掴む概念:
 
 - **`PrecompileFn` は関数ポインタであってクロージャではない → プロセスグローバル state が回避策。** REVM の `fn(&[u8], u64, u64) -> PrecompileResult` は環境をキャプチャできないため、共有 state は `static` に置き、関数が呼び出し時にそこを読む形にする。
-- **`RwLock<Option<Arc<Mutex<T>>>>` — アクセスパターンが違えばロックの種類も違う。** 外側の `RwLock` は installed/uninstalled の区別 (write は稀) を担当し、内側の `Mutex` は matching engine (write は頻繁) を保護する。`Mutex<Option<...>>` 1 個で済まそうとすると、すべての read が 1 箇所のボトルネックを通ることになる。
+- **`RwLock<Option<Arc<Mutex<T>>>>` — アクセスパターンが違えばロックの種類も違う。** 外側の `RwLock` は installed/uninstalled の区別 (write は稀) を担当し、内側の `Mutex` は matching engine (write は頻繁) を保護する。`Mutex<Option<...>>` 1 個で済まそうとすると、すべての read が 1 箇所のボトルネックを通る。
 - **`Arc<Mutex<Book>>` で bridge/precompile 境界を越えて所有を共有する。** bridge と precompile は別々の「caller」だが、同じ `Book` を見る必要がある。`Arc` は「所有者は複数、データは同じ」を表現する Rust の道具。
 - **install は replace するだけで error にしない。** テストでは install/uninstall を繰り返す必要があるため、暗黙のうちに置き換える挙動はバグではなく機能だ。production の経路では install を 1 回しか呼ばない。
 - **「配管は通したが電流は流さない」という段階的な形。** L4 は配管 (static、install 関数、bridge フィールドの型) を繋ぐが、`read_best_bid` はまだハードコードのまま。スイッチを入れるのは L5。配管と挙動を分離することで、各レッスンが検証可能な変更を 1 つだけ持てる。
@@ -200,6 +200,8 @@ pub fn current_best_bid() -> Option<(openhl_clob::Price, openhl_clob::Qty)> {
 - **`current_best_bid`** — EVM を経由せず直接テストできるよう露出させる。流れは write lock → read lock → option を deref → mutex を lock → `best_bid_with_qty()`。**ロックを 3 段**通って 1 つの値を読む — コストが高そうに見えるが各々マイクロ秒単位で、しかも read は `RwLock` の下で並行に走れる。
 
 > 🛑 **やりがちな勘違い。** 「1 回の read に 3 つもロックを取るのは無駄では?」 — **3 つのロックはそれぞれ別の目的を持っている。** `RwLock` は installed か uninstalled かを分離する（write 競合は稀）。`Mutex<Book>` はマッチングエンジンの state を守る（write 競合は頻繁だがミリ秒単位）。1 つのロックに統合してしまうと、全 read と write がそのロックで一様に直列化される — 並行性は遥かに悪化する。**多層のロックは多層の関心事を反映している。**
+>
+> ロック順序の不変条件もここで固定される: **常に外側 (`CLOB_STATE` の RwLock) → 内側 (`Book` の Mutex) の順で取得する**。逆方向（内側 mutex を保持したまま外側 write-lock を取りに行く経路）を作らない限り、デッドロックは構造的に起きない。
 
 ### Step 5: `LiveRethEvmBridge::clob` を `Arc<Mutex<Book>>` に変更
 
@@ -417,7 +419,7 @@ mod smoke {
 
 1. **関数ポインタのシグネチャ制約に対する定石は process-global な state。** REVM の `PrecompileFn = fn(...) -> PrecompileResult` は関数ポインタであってクロージャではないので、state をキャプチャできない。選択肢は (a) 関数引数として受け取る（REVM API の変更が必要）、(b) process-global から読む — のどちらか。今回は (b) を取った。**コストはプロセスあたり CLOB が 1 つになること。** 単一バリデータの deployment なら問題ないが、マルチテナントには REVM API の変更が必要だ。
 
-2. **外側の Option には `RwLock`、内側の `Book` には `Mutex`。** 外側のロックは installed か uninstalled かを分離する（write は稀）。内側のロックはマッチングエンジンの state を守る（write は submit のたびに発生して頻繁）。アクセスパターンが違えばロックの型も変える。1 つの `Mutex<Option<Arc<Mutex<Book>>>>` に統合してしまうと、すべての read が 1 つのボトルネックを通ることになる。
+2. **外側の Option には `RwLock`、内側の `Book` には `Mutex`。** 外側のロックは installed か uninstalled かを分離する（write は稀）。内側のロックはマッチングエンジンの state を守る（write は submit のたびに発生して頻繁）。アクセスパターンが違えばロックの型も変える。1 つの `Mutex<Option<Arc<Mutex<Book>>>>` に統合してしまうと、すべての read が 1 つのボトルネックを通る。
 
 3. **`install_clob` は黙って置き換える設計で、エラーにはしない。** 別の CLOB で 2 回呼ばれた場合、最初のものを黙って置き換える。検知して panic させる手もあるが、production パスでは 1 回しか呼ばれない一方で、テストは install/uninstall を繰り返す。**置き換え挙動はテストにとってバグではなく機能だ。** ドキュメントコメントで明示してある。
 
@@ -447,7 +449,7 @@ git checkout main
 static storage はもっともシンプルなライフタイム — プログラム開始から終了まで生きる。ヒープ割り当て（`Box::leak` など）でも動くが、ランタイムの allocation コストと複雑さが増える。「プログラム開始から終了までずっと存在してほしい」というケース — まさに今回 — では `static` が正しい道具だ。
 
 **Q: 並行テストなどで `LiveRethEvmBridge` が 2 個作られたら?**
-2 回目の `install_clob` が 1 回目を置き換える。**結果として両方のブリッジが、global 経由で 2 つ目の CLOB を共有することになる。** だからテストでは直列化が必要だ（L5 で導入する）。production deployment ではブリッジを 1 つしか作らないので、問題にはならない。
+2 回目の `install_clob` が 1 回目を置き換える。**結果として両方のブリッジが、global 経由で 2 つ目の CLOB を共有する。** だからテストでは直列化が必要だ（L5 で導入する）。production deployment ではブリッジを 1 つしか作らないので、問題にはならない。
 
 **Q: `current_best_bid` は `Option<...>` ではなく `Result<...>` を返してもいい?**
 できる — `None` の代わりに `Err(NoClobInstalled)` を返すこともできる。だが precompile としては「CLOB 未インストール」と「CLOB はあるが空」を区別する必要がない — どちらの場合もゼロを返すべきだからだ。`Option` ならその 2 ケースを `None` に潰せる。`Result` にすると precompile に余計な分岐を強いることになり、利得はない。

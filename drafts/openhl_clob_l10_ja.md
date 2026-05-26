@@ -259,7 +259,7 @@ git checkout main
 ない。`std::mem::take` が `MutexGuard` の下で実行されているから。Lock が保持されている間、他のスレッドは lock を acquire できない。最初の build_payload が full set を得て、2 番目は空 Vec を得る (最初の呼び出しが `Vec::default()` で置き換えているため)。**Mutex が drain を直列化する。**
 
 **Q: `build_payload` が drain **後** に error したら?**
-Fill は `pending_fills` から消えたが payload には入らなかったことになる — 実質的に失われる (submit されたが commit されていない)。**これは現実に起こりうるバグクラスで**、production コードでは handle すべき (たとえば build_payload の残処理を行う前に、drain した fill を recovery queue に保存するなど)。本コースの v0 single-validator devnet では failure path が稀なので loss を許容する。production hardening は下流の仕事。
+Fill は `pending_fills` から消えたが payload には入らなかった— 実質的に失われる (submit されたが commit されていない)。**これは現実に起こりうるバグクラスで**、production コードでは handle すべき (たとえば build_payload の残処理を行う前に、drain した fill を recovery queue に保存するなど)。本コースの v0 single-validator devnet では failure path が稀なので loss を許容する。production hardening は下流の仕事。
 
 **Q: `drained_fills` を `state` lock 内ではなく、別の lock で取るのはなぜ?**
 `pending_fills` と `state` が別々の mutex だから (L9 の設計判断)。まず `state` を lock し (新しい payload ID を計算するため)、次に `pending_fills` を短く lock し (swap のためだけ)、そのまま state lock を使って `pending` への insert を続ける。**操作が独立しているなら、長い lock 1 つよりも短い lock 2 つのほうがよい。**

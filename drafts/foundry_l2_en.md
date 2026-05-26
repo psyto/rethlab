@@ -215,7 +215,21 @@ Suite result: ok. 4 passed; 0 failed; 0 skipped
 
 **Four tests, all green at 1000 iterations.** The new fuzz test runs in ~50ms despite the iteration count because each iteration is cheap.
 
-> ⚠️ **`vm.assume` trap: write loose filters, not pinpoint ones.** A good `vm.assume(x < type(uint256).max)` predicate excludes *one* value from the $2^{256}$ space — the fuzzer almost always gets a valid input. But `vm.assume(x == 42)` — "I want exactly this value" — has effectively zero chance of the fuzzer randomly drawing `42` from $2^{256}$, so the test burns through `max_test_rejects` (default 65536) and dies with `TooManyAssumptions`. **Rule of thumb: use `vm.assume` only when it excludes a tiny slice of the input space (typically < 1%). If you want to test a pinpoint value, that's a unit test, not a fuzz test.**
+> [!WARNING]
+> **The "Pinpoint Filtering Trap" and `TooManyAssumptions` Errors**
+>
+> `vm.assume` should be used **exclusively to filter out a tiny fraction of the input space** (typically less than 1%), such as boundary values (like overflow limits or zero).
+>
+> If you write a filter to pass only one specific pinpoint value, like so:
+> ```solidity
+> vm.assume(x == 42); // ✗ Dangerous anti-pattern!
+> ```
+> The fuzzer has practically zero chance of randomly drawing `42` from the massive $2^{256}$ space. As a result, the test runner will fail to find a valid input and will quickly exhaust the rejection budget limit of `max_test_rejects` (default 65,536), aborting with a `TooManyAssumptions` error (or a `Result::unwrap()` panic).
+>
+> - **The Core Issue**: Writing `vm.assume(x == target)` degrades a powerful fuzz test into a highly inefficient unit test.
+> - **Remedy and Best Practice**:
+>   - If you need to verify code behavior for specific pinpoint values (e.g., `42` or `0xdead...`), do not use fuzzing. Write a standard unit test (`test_...`) instead.
+>   - Fuzz testing is designed to verify invariants across broad ranges, not to serve as a substitute for explicit scenario tests. Use each tool for its intended purpose.
 
 ### Step 4: See the shrinker in action by breaking the test
 
@@ -255,7 +269,7 @@ ls cache/fuzz/
 
 You should see a directory with files named after test signatures. Each file holds failing inputs from past runs. The next time you run `forge test`, Foundry *immediately* re-runs against those persisted inputs before generating new random ones.
 
-This means: **if you fixed a bug and re-broke it, the test fails immediately with the same counterexample — no waiting for the fuzzer to rediscover it.** This is the corpus persistence pattern, and it's the same thing `proptest`'s `proptest-regressions/` files do in Rust.
+This means **if you fixed a bug and re-broke it, the test fails immediately with the same counterexample — no waiting for the fuzzer to rediscover it.** This is the corpus persistence pattern, and it's the same thing `proptest`'s `proptest-regressions/` files do in Rust.
 
 ```bash
 # Persist a counterexample by intentionally breaking + reverting:

@@ -427,7 +427,7 @@ impl SigningProvider<OpenHlContext> for OpenHlSigningProvider {
 - **`sign_proposal_part` / `verify_signed_proposal_part`** — **空バイトに署名する。** なぜか? `OpenHlProposalPart` は unit struct で、コミットすべきデータが存在しないからだ。空ペイロードに署名しても valid な Ed25519 署名は生成される (private key だけで確定的)。検証は「はい、この provider がこの署名を作った」を確認する。署名に情報量はないが、trait 表面は満たされる。
 - **`sign_vote_extension` / `verify_signed_vote_extension`** — proposal_part と同じ。Vote extension は `()` (v0 では未使用) なので、空バイトに署名する。
 
-> 🛑 **やりがちな勘違い。** 「空バイトに署名するのは何か違う気がする — 意味があるのか?」 **意味は、持っていないデータにコミットすることなく trait 表面を満たすことだ。** Malachite エンジンは実行時にこれらのメソッドを呼ぶ。panic したり Error を返したらエンジンがクラッシュする。空バイトに署名して valid な署名を返すことで、「はい、これはこちらからの本物の署名です。ただし、メッセージの残りの部分以上に追加でコミットしているデータはありません」と言えるわけだ。これらの機能を使う本番 chain は実データを入れる。こちらは入れないが、trait 表面はそのまま保たれる。
+> 🛑 **やりがちな勘違い。** 「空バイトに署名するのは何か違う気がする — 意味があるのか?」 **意味は、持っていないデータにコミットすることなく trait 表面を満たすことだ。** Malachite エンジンは実行時にこれらのメソッドを呼ぶ。panic したり Error を返したらエンジンがクラッシュする。空バイトに署名して valid な署名を返すことで、「はい、これはこちらからの本物の署名だ。ただし、メッセージの残りの部分以上に追加でコミットしているデータはない」と言えるわけだ。これらの機能を使う本番 chain は実データを入れる。こちらは入れないが、trait 表面はそのまま保たれる。
 
 ### Step 9: `signing_provider.rs` にテストを 7 個追加
 
@@ -618,7 +618,8 @@ test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 3. **ProposalPart と Extension の空バイト署名。** Trait 表面がメソッドを要求するが、chain がその機能を使わない場合は、空データに対する確定的で検証可能な署名を提供する。これで、持っていないデータにコミットすることなく trait を honor できる。これらの機能を使う本番 chain は実データを入れる。こちらは入れないが、どちらの場合もエンジンはクラッシュしない。
 
-4. **`VerifierLike` shim による「依存性の汚染 (Leaky Abstraction) の遮断」。** Step 5 で導入した 1 メソッド trait は、純粋に依存グラフをきれいに保つためだけに存在する。具体的には: Malachite の `PublicKey` は外部 crate `signature` の `Verifier` trait 経由で検証を提供しているので、もし `verify_vote(v, sig, pk)` が直接 `signature::Verifier::verify(...)` を呼ぶと、**こちらの consensus crate の公開 API surface に `signature` crate の trait を import させる責務が漏れ出す** ことになる。すると将来 Malachite が `signature` を別の crypto ライブラリ (新しい crate、別 trait 名) に差し替えた瞬間に、**こちらの crate の利用者 (L8 以降のレッスンを含む) すべてが breaking change を踏む**。`VerifierLike` という自前の薄い trait を 1 枚かませておけば、`signature` の存在は `signing.rs` の `impl VerifierLike for PublicKey` という 5 行に閉じ込められ、外部 crate の変動はそこを 1 行直すだけで吸収できる。**「自分の crate の API に他人 (依存先) の trait を直接出さない」**という discipline の、コード 8 行で買える最小コストの実装例だ。
+4. **`VerifierLike` shim で依存の漏れを遮断する。** 目的は 1 つだけで、公開 API から外部 crate 依存を隠すことだ。`verify_vote` が `signature::Verifier` を直接呼ぶと、こちらの crate 利用者まで `signature` trait を意識することになる。上流が別ライブラリへ差し替わった瞬間、下流にも breaking change が波及する。  
+`VerifierLike` を 1 枚かませれば、外部依存は `signing.rs` の `impl VerifierLike for PublicKey` に閉じ込められる。将来の変更点はそこ 1 箇所で済む。**原則は「自分の公開 API に他人の trait を直接出さない」。**
 
 ## 答え合わせ
 

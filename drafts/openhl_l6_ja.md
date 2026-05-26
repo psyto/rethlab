@@ -363,6 +363,8 @@ validators.sort_by(|a, b| {
 });
 ```
 
+ここで 2 つの保証が重なる。`Vec::sort_by` 自体は stable sort なので、比較結果が `Equal` の要素同士は元の相対順序を保つ。一方でこの comparator は `then_with(|| a.address.cmp(&b.address))` まで含めて **total ordering** を与えるため、実際には `Equal` が残らず、入力順に依存しない一意な並びに収束する。つまり「stable sort の性質」+「完全なタイブレイカー」の組み合わせで、validator-set の順序は決定的になる。
+
 これが **canonical な CometBFT validator-set ソート順** だ: voting power 降順、tiebreaker は address 昇順。**全 validator がこの同じソートを同じ入力 set に適用する必要がある。** なぜか?
 
 `OpenHlContext::select_proposer` (Step 6 で書く) が `validator_set.get_by_index((height + round) % count)` をするからだ。Validator A がある順にソートし、validator B が違う順にソートすると、同じ `(height, round)` に対して別の proposer を選ぶ。**最初の round で chain が fork する。** ソート順 *が* proposer-election protocol そのものだ。
@@ -827,7 +829,7 @@ test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 1. **Context sub-type 1 つにつき 1 ファイル。** 大きな `context.rs` に 10 個の型をインラインで定義することもできた。分けることで、(本レッスンや、後で個別の型を引用するレッスンの) walk-through が focused になる。1 ファイルで済むものが 8 ファイルになる、その代わりだ。分割を選んだ理由は **trait surface が独立に load-bearing だから** — `Validator` の決定は `Vote` の決定と別物だし、code review は変更が局所化されているほうが容易だ。
 
-2. **`OpenHlValidatorSet` は別の `sort()` メソッドではなく `new()` でソートする。** unsorted な set を construct できない、ということを意味する。型システムが「この set は常にソートされている」を encode し、unsorted な set を 生成する API path が存在しない。これが伝播する: set の全メソッドがソート済み順序を仮定でき、それが compiler の enforce する不変量になる。
+2. **`OpenHlValidatorSet` は別の `sort()` メソッドではなく `new()` でソートする。** unsorted な set を construct できない、を意味する。型システムが「この set は常にソートされている」を encode し、unsorted な set を 生成する API path が存在しない。これが伝播する: set の全メソッドがソート済み順序を仮定でき、それが compiler の enforce する不変量になる。
 
 3. **`select_proposer = (height + round) % count`** — 最も単純なアルゴリズム。Malachite はもっと洗練された proposer selection (stake で weighted、同一 validator が連続しない rotation など) をサポートする。それでも最も単純なものを選ぶ理由は:
    - 決定的だ
@@ -859,7 +861,7 @@ git checkout main
 ## よくある質問
 
 **Q: validator set のソートが (300, 200, 100) ではなく (100, 200, 300) になる。何が間違っているのか?**
-`a.voting_power.cmp(&b.voting_power)` (昇順) と書いている。正しい comparator は `b.voting_power.cmp(&a.voting_power)` (降順) で、`a.cmp(&b)` ではなく `b.cmp(&a)` だ。Stake が高い validator が *早い* index (低い index) にソートされる必要がある。
+`a.voting_power.cmp(&b.voting_power)`（昇順）になっている。正しくは `b.voting_power.cmp(&a.voting_power)`（降順）だ。高い stake の validator を低い index に置く必要がある。
 
 **Q: `select_proposer` が "validator set is empty." で panic する。なぜか?**
 テストが空の `OpenHlValidatorSet` を作っている。Real chain は最低 1 validator (single-validator devnet) か 4 以上 (byzantine tolerance 付きの multi-validator) を持つ。この assert は malformed config を modulo-by-zero になる前に catch するためにある。Unit test で出るなら test setup が間違っている。production で出るなら config loader が間違っている。

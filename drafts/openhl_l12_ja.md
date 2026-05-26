@@ -282,7 +282,7 @@ where
     }
 ```
 
-Trait bound `P: BlockNumReader + Clone + Sync + 'static` が契約だ: hash→number lookup ができる、clone が安価、スレッド間で共有しても安全、任意の async task より長生きする — そのような provider なら何でもよい、ということになる。
+Trait bound `P: BlockNumReader + Clone + Sync + 'static` が契約だ: hash→number lookup ができる、clone が安価、スレッド間で共有しても安全、任意の async task より長生きする — そのような provider なら何でもよい、という。
 
 `build_payload` の body は 3 フェーズだ:
 

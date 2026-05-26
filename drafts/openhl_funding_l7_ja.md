@@ -25,8 +25,8 @@
 
 - **単項マイナス 1 つが符号規約全体を担う** — `-delta_unscaled` で「市場中心（longs が支払う）」から「アカウント中心（`Notional` 正 = 受取）」へと flip する。符号反転点が 2 箇所あれば、バグの表面積も 2 倍になる。1 箇所に集約することが契約だ。
 - **保存則を proptest で pin する** — balanced book の settlement の合計は、saturation を踏まない範囲では「ちょうど」ゼロだ。正の `d` のもとで `-x/d = -(x/d)` が整数除算でも成立するからだ。Funding は再配分するだけで、quote currency を生成も破壊もしない。
-- **Flat position はフィルタする、エラーにはしない** — `size == 0` は黙ってドロップする。`Result<Vec<Settlement>, FlatPositionError>` を返してしまうと、呼び出し側に「異常ではない条件」まで扱わせることになる。Flat position は*想定内*の状態であって例外ではない。
-- **最も制約の弱い引数型を受け取る** — `positions: &[Position]`（スライスの借用）なら呼び出し側が所有権を保持し、tick をまたいで再利用できる。`Vec<Position>` を要求してしまうと毎回 clone を強制することになる。
+- **Flat position はフィルタする、エラーにはしない** — `size == 0` は黙ってドロップする。`Result<Vec<Settlement>, FlatPositionError>` を返してしまうと、呼び出し側に「異常ではない条件」まで扱わせる。Flat position は*想定内*の状態であって例外ではない。
+- **最も制約の弱い引数型を受け取る** — `positions: &[Position]`（スライスの借用）なら呼び出し側が所有権を保持し、tick をまたいで再利用できる。`Vec<Position>` を要求してしまうと毎回 clone を強制する。
 - **Proptest のレンジは property が*厳密に*成立するように選ぶ** — `size in 1..1M` であれば i128 の積が `saturating_mul` の clamp 閾値を踏まずに済む。レンジを広げると「合計 == 0」を「`sum.abs() < epsilon`」へと弱める必要が出てくる — それは不変条件ではなく願望の property になってしまう。
 
 検証：
@@ -61,7 +61,7 @@ L6 後の状態：
 - 10 テスト pass、proptest 1 つも pass。
 - `saturate_i128_to_i64` のユーザは 1 つだけ（`compute_premium`）。
 
-L7 では pipeline の最終段を組み立てる — rate をアカウントごとの settlement に落とし込む段だ。同時に、saturate helper の 2 番目のユーザも追加することになる。
+L7 では pipeline の最終段を組み立てる — rate をアカウントごとの settlement に落とし込む段だ。同時に、saturate helper の 2 番目のユーザも追加する。
 
 ## プラン
 
@@ -123,7 +123,7 @@ pub fn apply_funding(
 
 ~25 行、動く部分は 6 つ：
 
-1. **`if rate.0 == 0 { return Vec::new(); }`** — zero-rate のファストパス。allocation も作業もなし。契約をそのまま反映する：rate がゼロ = 適用すべき funding なし、ということだ。boot 中や oracle 故障時に典型的な状況だ。
+1. **`if rate.0 == 0 { return Vec::new(); }`** — zero-rate のファストパス。allocation も作業もなし。契約をそのまま反映する：rate がゼロ = 適用すべき funding なし。boot 中や oracle 故障時に典型的な状況だ。
 
 2. **`Vec::with_capacity(positions.len())`** — 出力の capacity を事前確保する。Flat position は後でフィルタされうるが、input の長さは良い上限になる。**push しながら再アロケートが走るのを防ぐ。** 小さな最適化だが、hot path では効いてくる。
 
@@ -141,7 +141,7 @@ pub fn apply_funding(
 
 （答え：**呼び出し側が position リストを所有していて、tick をまたいで再利用するからだ。** 所有権を奪う形にすると、呼び出し側は毎回呼び出す前に clone する必要が出てくる。Slice の借用はコストゼロで、呼び出し側は所有権を保持できる。**関数が使える型のうち、最も制約の弱いものを受け取る** — iteration だけで足りるなら、Vec ではなく slice にする。）
 
-> 🛑 **やりがちな勘違い。** 「ループでなく `positions.iter().filter(...).map(...).collect()` を使えばよくないか？」 **動くし、Rust としてはより idiomatic だ。** Stage 8b で imperative なループを採っているのは、中間計算を別々の `let` binding として置く方が追いやすいからだ。関数チェーン `positions.iter().filter(|p| p.size.0 != 0).map(|pos| { let notional = ...; Settlement { ... } }).collect()` も同じく動く。**idiom より可読性を優先する** — チームがデバッグしやすい形を選ぶ、ということだ。
+> 🛑 **やりがちな勘違い。** 「ループでなく `positions.iter().filter(...).map(...).collect()` を使えばよくないか？」 **動くし、Rust としてはより idiomatic だ。** Stage 8b で imperative なループを採っているのは、中間計算を別々の `let` binding として置く方が追いやすいからだ。関数チェーン `positions.iter().filter(|p| p.size.0 != 0).map(|pos| { let notional = ...; Settlement { ... } }).collect()` も同じく動く。**idiom より可読性を優先する** — チームがデバッグしやすい形を選ぶ。
 
 ### Step 2: 符号規約を歩く
 
@@ -278,6 +278,8 @@ pub fn apply_funding(
 
 **Zero-sum property は funding の根本的な保存則だ。** Balanced book — 同じサイズの short 1 つにつき long 1 つ — では、ちょうど再配分が起きるはずだ。Shorts が集合として受け取る量と longs が集合として支払う量が等しく、quote currency は生成も破壊もされない。
 
+ここで重要なのは、整数除算の切り捨てがあっても `(+P, -P)` の対称ペアでは恒等式 `(-P) / d == -(P / d)`（`d > 0`）が保たれる点だ。つまり long と short を厳密に反対符号・同一絶対値で組んだこのテストでは、端数も対称に相殺され、tolerance なしで和が厳密に 0 に揃う。
+
 proptest はこれを exercise する：
 - `size`（1 から 1M）、`mark`（1 から 1M）、`rate`（-10M から +10M ppb、つまり -1% から +1%）をランダムに**生成**する。
 - Balanced book を**構築**する：account 1 が long `size`、account 2 が short `size`。
@@ -306,7 +308,7 @@ pub use compute::{compute_premium, compute_rate};
 pub use compute::{apply_funding, compute_premium, compute_rate};
 ```
 
-アルファベット順だ。**これで Module 2 の 3 つの pure 関数がすべてクレートルートで re-export されたことになる。** 呼び出し側は `compute::` を経由せずに使える。
+アルファベット順だ。**これで Module 2 の 3 つの pure 関数がすべてクレートルートで re-export された。** 呼び出し側は `compute::` を経由せずに使える。
 
 ### Step 6: テストを実行
 
@@ -378,10 +380,10 @@ git checkout main
 ## よくある質問
 
 **Q: 出力をアカウント順にソートせず、入力順を保つのはなぜか？**
-Determinism のためだ。ソートはソート順の選択を強要するが、入力順を保つほうが、関数の挙動が入力から自明に予測可能になる。**ソートされた出力が必要な呼び出し側は自分でソートすればよく、不要な呼び出し側はコストを払わずに済む。** デフォルトとして最も安価な挙動を採る、ということだ。
+Determinism のためだ。ソートはソート順の選択を強要するが、入力順を保つほうが、関数の挙動が入力から自明に予測可能になる。**ソートされた出力が必要な呼び出し側は自分でソートすればよく、不要な呼び出し側はコストを払わずに済む。** デフォルトとして最も安価な挙動を採る。
 
 **Q: 現実的な入力では `notional × rate` の桁数はどれくらいになるか？**
-`size = 1M`、`mark = 1M`、`rate = 1e7`（RATE_SCALE の 1% = interval あたり 1%）で計算すると `notional = 1e12`、`delta_unscaled = 1e19` になる。これは `i64::MAX`（~9.2e18）のすぐ近くで、「合理的」と言える入力ですら saturation regime に届きうるということだ。**現実のデプロイで i128 中間値は optional ではない。**
+`size = 1M`、`mark = 1M`、`rate = 1e7`（RATE_SCALE の 1% = interval あたり 1%）で計算すると `notional = 1e12`、`delta_unscaled = 1e19` になる。これは `i64::MAX`（~9.2e18）のすぐ近くで、「合理的」と言える入力ですら saturation regime に届きうる。**現実のデプロイで i128 中間値は optional ではない。**
 
 **Q: `apply_funding` の saturation 挙動のテストがないのはなぜか？**
 Saturation ケースは*helper を通じて*すでにテスト済みだからだ（`saturate_i128_to_i64` の境界挙動は L5 で探っている）。同じ境界を関数呼び出し越しに再テストするのは冗長になる。**Helper を 1 度テストしたら、あとはそれを信用する。** 念のため composition test（`size = u64::MAX, mark = u64::MAX, rate = i64::MAX` のような）を足す価値はあるかもしれないが、Stage 8b では採用していない — saturation の保証は helper から来ており、その helper はテスト済みだ。

@@ -616,8 +616,7 @@ mod tests {
 Smoke test の wall-clock はおおよそ **0.02 秒**。大部分は libp2p がローカル listener を立ち上げる時間だ — tcp/0 のエフェメラルポートでも、libp2p のネゴシエーションには固定コストがある。
 
 > 🛑 **やりがちな勘違い。** 「なぜ `flavor = 'multi_thread'` なのか?」 **エンジンが複数 actor をそれぞれの task として spawn するからだ。** Single-threaded runtime でも 1 スレッドに全部回せる — だが、エンジン内部に single-thread だと deadlock する `block_on` パターンがある。Multi-thread runtime で回避する。**API レベルでは見えないが、テスト失敗レベルでは致命的な詳細だ。**
->
-> *(具体的には: 非同期コンテキストの最中に `tokio::runtime::Handle::current().block_on(...)` のような同期的待機が走ると、`current_thread` runtime ではその唯一のワーカースレッドが完全にロックされる。すると `block_on` の内側で `await` されている future を進ませる実行者がいなくなり、actor 初期化 future が**永久にハング**する — タイムアウトや panic にすらならない、純粋な deadlock だ。`multi_thread` 版なら別のワーカースレッドが残りの future を拾えるので、この pattern が通り抜ける。Malachite / ractor / libp2p の組み合わせは内部で何度かこの形を踏むので、テスト側で multi-thread を強制する必要がある。)*
+> `current_thread` では `block_on(...)` が唯一のワーカーを占有し、内側 future を進める実行者が消えるため、初期化が永久ハングしうる。`multi_thread` なら別ワーカーが残りの future を進められる。Malachite / ractor / libp2p の組み合わせではこのパターンを踏むので、テスト側で multi-thread を強制する。
 
 ## テスト
 

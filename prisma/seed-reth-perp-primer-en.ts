@@ -327,6 +327,7 @@ It's not "funding moves mark directly." It's "funding moves trader balances, tra
 - **Settlement at tick**: every funding interval, the engine iterates over non-flat positions and adjusts each trader's collateral balance by \`position_size × mark × rate\`. No batch payment — each position settles individually.
 - **Saturating arithmetic**: the funding computation uses signed integers scaled by \`RATE_SCALE = 1e9\` (parts per billion). All multiplications use \`i128\` intermediates and saturate on overflow rather than wrapping. This is consensus-determinism discipline — every validator must compute the same rate from the same inputs.
 - **No funding accrual between ticks (snapshot-based state machine)**: positions opened and closed mid-interval owe no funding. Hyperliquid's payment is decided purely by **whether you hold the position at the exact interval boundary** (e.g. on the hour) — the engine snapshots positions at that instant and applies \`size × mark × rate\` in one pass. Readers coming from dYdX-style continuous funding (time-integrated charging) should recalibrate: this is a discrete event-driven state machine where "did you hold at the snapshot tick?" matters far more than "for how long did you hold?" **When you design a bug-free state machine here, nail this boundary condition first.**
+- **Architecture trade-off (Boundary Gaming)**: this model is implementation-clean and highly deterministic, but it introduces a visible game-theory edge case: a trader can open near \`HH:59\`, cross the hourly boundary, and close at \`HH:01\`, yet still pay/receive a full interval of funding. That creates incentives to open/close aggressively around boundaries, which can temporarily distort orderbook liquidity (wider spreads near the hour). **You are explicitly trading time-integration complexity for boundary-gaming market structure risk.**
 
 ## Common misconceptions
 
@@ -426,6 +427,7 @@ The two thresholds are different on purpose:
 - Without the gap, every position opened at the limit would liquidate immediately on any unfavorable tick
 - The gap is the *buffer* the venue gives traders to make decisions (add collateral, partial-close, etc.) before forced liquidation
 - **It's also a defense line for the system itself.** Maintenance isn't a "you die instantly" line — the gap buys the liquidation engine **enough slippage room + startup latency** to submit force-close orders into the market and have them fill. The L3 force-close flow burns through this room as its budget — the thinner the room, the more the insurance fund has to absorb the shortfall.
+- **Why this is non-negotiable (Initial = Maintenance counterexample)**: if initial and maintenance were both 2%, a position opened at 2.01% would become Liquidatable after a tiny adverse tick. In fast markets, the account can cross from maintenance breach to negative equity during the short delay before force-close fills. **So the initial/maintenance gap is not only trader UX buffer; it is the system's slippage cushion for preserving venue-wide solvency.**
 
 **Margin ratio** is the central quantity:
 
@@ -753,7 +755,7 @@ When the insurance fund is empty and another account goes underwater, somebody h
 > - Both positions disappear from the venue's books simultaneously
 > - The orderbook's bid/ask is untouched — no extra crash pressure pushed into prices
 >
-> In other words, ADL isn't "liquidation in the market." It's **netting on the books** — an off-orderbook offset where the engine matches a winner against a loser and erases both positions at once. In the Stage 10c (multi-account scanner) implementation, the ADL path doesn't call \`book.submit()\` at all; it mutates the \`Position\` records directly and deletes them. **"Move the loss to the winners without touching the market"** — that's what ADL is for, and it's also why it's designed to fire only rarely.
+> In other words, ADL isn't "liquidation in the market." It's **netting on the books** — an off-orderbook offset where the engine matches a winner against a loser and erases both positions at once. In the Stage 10c (multi-account scanner) implementation, the ADL path doesn't call \`book.submit()\` at all; it mutates the \`Position\` records directly and deletes them. **"Move the loss to the winners without touching the market"** — this is specifically how venues block the liquidation **death spiral** (forced selling causing more mark collapse causing more forced selling).
 
 ADL is **deeply unpopular**. A trader who correctly predicted a market crash and is profitably short doesn't want to be force-closed; they'd prefer to ride the win further. But when the insurance fund can't cover the underwater loss, *someone has to lose money* — the math is conservation of cash. ADL distributes that loss to the side that "won" the most from the move.
 

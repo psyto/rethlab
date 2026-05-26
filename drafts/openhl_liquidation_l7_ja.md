@@ -134,7 +134,7 @@ pub fn close_order_spec(snapshot: &AccountSnapshot) -> CloseOrderSpec {
 
 4. **`mark` なし、`params` なし。** `close_order_spec` に必要なのは snapshot だけだ。「Close するか否か」の判断は `margin_health` に住み、price discovery は matching engine で起きる。**各関数がちょうど 1 つの関心事を所有する。Bridge がそれらを compose する: スキャン → 分類 → close spec 生成 → submit、という流れになる。**
 
-5. **`Option<CloseOrderSpec>` ではなく `CloseOrderSpec` を値で返す。** 関数は total（全域関数）だ — flat ポジション（`qty == 0`）でも常に spec を返す。代替案として `Option` を返すと、スキャン内のすべての flat アカウントに対して呼び出し側に `None` を扱わせることになる — close ステップに到達する頃にはそれらのアカウントはすでに前段でフィルタされているのに、だ。**Total な関数は圧倒的に compose（結合）しやすい。Optional な関数は、すべての呼び出し側に空ケースの処理（ボイラープレート）を強用する。** 具体的に効いてくるのは Stage 10c で実装する `LiquidationScanner` だ: 全アカウントのスナップショットを `filter_map` や `Option` chaining なしに**単なる `map` や平坦な `for` ループで均質に処理**できる。`close_order_spec` が total だからこそ、scanner は「`Liquidatable` か `Underwater` か」の分類フィルタを 1 箇所で書けば済み、close-spec 生成側で再度フィルタする必要がない。**エッジケース (flat → qty 0 の spec は submit しない) のフィルタリングは、入出力の最外殻である bridge レイヤーにのみ集約する** — これが crate を貫く規律になっている。
+5. **`Option<CloseOrderSpec>` ではなく `CloseOrderSpec` を値で返す。** 関数は total（全域関数）だ — flat ポジション（`qty == 0`）でも常に spec を返す。代替案として `Option` を返すと、スキャン内のすべての flat アカウントに対して呼び出し側に `None` を扱わせる— close ステップに到達する頃にはそれらのアカウントはすでに前段でフィルタされているのに、だ。**Total な関数は圧倒的に compose（結合）しやすい。Optional な関数は、すべての呼び出し側に空ケースの処理（ボイラープレート）を強用する。** 具体的に効いてくるのは Stage 10c で実装する `LiquidationScanner` だ: 全アカウントのスナップショットを `filter_map` や `Option` chaining なしに**単なる `map` や平坦な `for` ループで均質に処理**できる。`close_order_spec` が total だからこそ、scanner は「`Liquidatable` か `Underwater` か」の分類フィルタを 1 箇所で書けば済み、close-spec 生成側で再度フィルタする必要がない。**エッジケース (flat → qty 0 の spec は submit しない) のフィルタリングは、入出力の最外殻である bridge レイヤーにのみ集約する** — これが crate を貫く規律になっている。
 
 > 🛑 **やりがちな勘違い。** 「`if size >= 0 { Sell } else { Buy }` ではダメか — そうすれば flat が Sell として扱われ、一部のテスト取引所と挙動が揃う」 **問題が 3 つある。** (1) Flat-as-Sell は挙動の選択であり、pure compute ではなく bridge に属する判断だ。(2) 現在の `> 0` は「flat ポジションは long でも short でもない」という事実を正しく反映している。(3) `qty == 0 + Side::Sell` の本番セマンティクスは matching engine では未定義。Bridge はどのみちフィルタしなければならない。**呼び出し側に最もクリーンな契約を提供する慣例を選ぶ — エッジケースを隠す慣例ではなく。**
 
@@ -294,7 +294,7 @@ Flat（`size == 0`）は long *でもなく* short *でもない* — long/short
 
 ## 次のレッスン (L8) — Stage 10b が始まる
 
-L8 で Stage 10b — insurance fund — が始まる。L7 で完成した pure-compute モジュールが *何が起きるべきか* のレイヤーだとすると、Stage 10b は *何が起きたかを記録する帳簿* を足すレイヤーだ。Fund の balance を track し、underwater liquidation からの不足を吸収し、solvent な close から liquidation fee を credit する `InsuranceFund` state machine が入る。Stage 10b の後、エンジンは「このアカウントは Liquidatable」だけでなく「この close は fund に 1.5% を credit した」あるいは「この close は fund から $400 を drain した」も知ることになる。
+L8 で Stage 10b — insurance fund — が始まる。L7 で完成した pure-compute モジュールが *何が起きるべきか* のレイヤーだとすると、Stage 10b は *何が起きたかを記録する帳簿* を足すレイヤーだ。Fund の balance を track し、underwater liquidation からの不足を吸収し、solvent な close から liquidation fee を credit する `InsuranceFund` state machine が入る。Stage 10b の後、エンジンは「このアカウントは Liquidatable」だけでなく「この close は fund に 1.5% を credit した」あるいは「この close は fund から $400 を drain した」も知る。
 
 **本レッスンのドラフト時点で、Stage 10b はまだ openhl に ship されていない。** L8 は、openhl 側の実装が来たタイミングで rethlab に着地する。
 

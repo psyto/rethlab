@@ -291,7 +291,7 @@ CloseOutcomeKind::Solvent(solvent)
 押さえる点が 3 つ:
 
 1. **`fee_to_fund` は 3 回読まれる: `deposit` に 1 回、aggregate に 1 回、`CloseOutcomeKind::Solvent` に move された `solvent` の一部として 1 回。** `SolventClose` が `Copy` なので、これは無料 — clone なし、borrow なし。**`Copy` 派生型は、フィールドを複数 write にまたがって広げる際に ownership の儀式を不要にする。**
-2. **`fee_to_fund == 0` 条件がない。** Solvent close は常に positive な `fee_to_fund` を持つ（L10 の契約より — precondition が `equity >= fee` で、fee は positive）。ここに `if solvent.fee_to_fund > 0 { ... }` を書くと、保証された false-or-impossible 条件をチェックすることになる。**型契約がすでに排除した条件には defend しない。**
+2. **`fee_to_fund == 0` 条件がない。** Solvent close は常に positive な `fee_to_fund` を持つ（L10 の契約より — precondition が `equity >= fee` で、fee は positive）。ここに `if solvent.fee_to_fund > 0 { ... }` を書くと、保証された false-or-impossible 条件をチェックする。**型契約がすでに排除した条件には defend しない。**
 3. **`withdraw_shortfall` の呼び出しがない。** Solvent close は fund に credit して trader に residual を返す。Fund から *引かれることはない*。Trader balance の credit は bridge の仕事だ（`solvent.residual_to_account` を使う）。Scanner のスコープ外。**Scanner は fund だけを mutate する。Trader balance は bridge の仕事。**
 
 #### フェーズ 5b: Underwater 分岐（8 行）
@@ -534,7 +534,7 @@ L13 が Module 4 を閉じる — そして Stage 10c を閉じる — そして
 - `fund_deposits_minus_withdrawals_equals_balance_change` — fund 会計が閉じる。
 - `scan_preserves_account_order_in_records` — 決定性: records が input 順に現れる。
 
-L13 後、Liquidation crate は *完成* する — 68 テスト、`0a8464e` と byte-for-byte 一致。読者は pure-compute + state-machine + orchestration cascade をまるごと 13 レッスンで構築したことになる。
+L13 後、Liquidation crate は *完成* する — 68 テスト、`0a8464e` と byte-for-byte 一致。読者は pure-compute + state-machine + orchestration cascade をまるごと 13 レッスンで構築した。
 
 ````
 

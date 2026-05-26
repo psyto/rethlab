@@ -170,7 +170,7 @@ doc コメントで注目する点が 3 つ:
 - **`OrderId` は caller-allocated** — book は ID を生成せず、caller が生成する。これで book が pure-stateless に保たれる: `submit_order` は (book, order) の関数であり、(book, order, generator-state) ではない。
 - **`Price`/`Qty` は minor unit** — USDC のような 6-decimal token では `Price(1_000_000)` が $1.00 を表す。Matching engine の中に `f64` は **存在しない**。**お金の計算に float は持ち込まない。**
 
-> 🛑 **やりがちな勘違い。** 「便利のために `pub fn from_dollars(d: f64) -> Price` メソッドを追加しよう。」 **ダメ、f64 の精度問題を engine に持ち込むことになる。** `Price(1_000_000)` が wire format。User 向けツールで `from_dollars` をやりたければ、ツール側の境界で integer 乗算をして bridge には integer-typed Price を渡す。Matching engine は float に触れない。
+> 🛑 **やりがちな勘違い。** 「便利のために `pub fn from_dollars(d: f64) -> Price` メソッドを追加しよう。」 **ダメ、f64 の精度問題を engine に持ち込む。** `Price(1_000_000)` が wire format。User 向けツールで `from_dollars` をやりたければ、ツール側の境界で integer 乗算をして bridge には integer-typed Price を渡す。Matching engine は float に触れない。
 
 ### Step 4: `Side` enum と `opposite()` ヘルパー
 

@@ -73,6 +73,8 @@
 
 上から下へ：価格を入力、settlement を出力。pipeline 全体を、clock が「十分な時間が経過したか？」の gate でラップする。
 
+トラック全体の現在地として見ると、この `Vec<Settlement>` レーンは Course 7 の `Vec<Fill>` と同じく、まだ EVM 本流 (`BlockExecutor`) の外側を並走している。つまり現時点では「約定（Fill）も資金調達決済（Settlement）も、まずは bridge 側の補助レーンで運び、後段で payload / state 適用へ合流させる」形だ。どちらも直交レーンとして先に独立実装し、統合点を後で合わせるのが openhl の一貫した設計規律になる。
+
 ## 各モジュールが届けたもの
 
 **Module 1（Determinism + 型、L1-L3）** — 固定小数点の語彙：
@@ -147,7 +149,7 @@
 
 **ないもの**：スマートコントラクトが funding tick を*観測する*方法。Funding に反応したいコントラクト（例：「funding が X% を超えたら auto-deleverage する」）が、イベントとして購読する手段がない。
 
-**先送りの理由**：非 EVM コードから EVM event を emit するには plumbing が必要だ — bridge が各 `Settlement` を `EvmLog` に変換して次のブロックに inject する処理を担うことになる。**bridge レイヤーの関心事であって、state-machine の関心事ではない。**
+**先送りの理由**：非 EVM コードから EVM event を emit するには plumbing が必要だ — bridge が各 `Settlement` を `EvmLog` に変換して次のブロックに inject する処理を担う。**bridge レイヤーの関心事であって、state-machine の関心事ではない。**
 
 **いつ見直すか**：Event ベースで funding を観測したい具体的なコントラクトユースケースが出てきたときだ。**それまでは telemetry を bridge レイヤーで行えばよい。**
 
@@ -193,7 +195,7 @@ Funding-tick 後の balance を監視し、under-margined なアカウントを�
                                                                               (元の固定小数点スケールに戻る)
 ```
 
-Module 2 で何度も格闘した「中間積が `S` の分だけ余分に拡大するので `i128` で受け、最後に `RATE_SCALE` で割って打ち消す」の正体がこの 1 式だ。**`RATE_SCALE = 1e9` はパターンで、定数の具体値はケースごとに変わる、ということだ。** Fee 計算なら `S = 10_000` (basis-point スケール) で同じパターンが当てはまるし、vesting schedule なら `S = 86_400` (日単位) で時間方向の固定小数点を組める。
+Module 2 で何度も格闘した「中間積が `S` の分だけ余分に拡大するので `i128` で受け、最後に `RATE_SCALE` で割って打ち消す」の正体がこの 1 式だ。**`RATE_SCALE = 1e9` はパターンで、定数の具体値はケースごとに変わる。** Fee 計算なら `S = 10_000` (basis-point スケール) で同じパターンが当てはまるし、vesting schedule なら `S = 86_400` (日単位) で時間方向の固定小数点を組める。
 
 2. **Consensus-safe な overflow 戦略としての saturation。** Panic は halt 経由の chain fork、wrap は誤った値経由の chain fork を生む。Saturate は bounded で、しかも validator 間で consistent だ。**Consensus-critical な数学に対しては、saturate が唯一の選択肢だ。**
 
@@ -217,7 +219,7 @@ Module 2 で何度も格闘した「中間積が `S` の分だけ余分に拡大
 
 **Course 10**（openhl-bridge-integration — 将来）：funding、oracle、liquidation を `LiveRethEvmBridge` に組み込む。ここで courses 6-9 のすべてが、動作する perp DEX として組み上がる。
 
-L1 Architect track の 90% を踏破したことになる。**このコースで身につけたパターン（固定小数点、saturation、composition テスト）は、残りの作業すべてに当てはまる。**
+L1 Architect track の 90% を踏破した。**このコースで身につけたパターン（固定小数点、saturation、composition テスト）は、残りの作業すべてに当てはまる。**
 
 ## 最終答え合わせ
 
@@ -227,7 +229,7 @@ git checkout cd94137
 diff -u ~/code/my-openhl/crates/funding/ ./crates/funding/ --recursive
 ```
 
-L11 後、**`crates/funding/` ディレクトリ全体が Stage 8b と byte-identical** に一致するはずだ。3 ファイルにまたがる ~635 LOC の 1 commit を、各行が*なぜ*そこにあるのかを完全に理解した上で手で再現した、ということだ。**Crate は standalone でコンパイルが通り、テストも standalone で pass する。外部依存は `openhl-clob`（`AccountId` 用）以外にない。**
+L11 後、**`crates/funding/` ディレクトリ全体が Stage 8b と byte-identical** に一致するはずだ。3 ファイルにまたがる ~635 LOC の 1 commit を、各行が*なぜ*そこにあるのかを完全に理解した上で手で再現した。**Crate は standalone でコンパイルが通り、テストも standalone で pass する。外部依存は `openhl-clob`（`AccountId` 用）以外にない。**
 
 戻す：
 

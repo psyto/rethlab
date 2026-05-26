@@ -284,7 +284,7 @@ git checkout d19ba1b
 diff -u ~/code/my-openhl/crates/evm/ ./crates/evm/ --recursive
 ```
 
-L11 を終えると、**`crates/evm/` ディレクトリ全体が、openhl の Stage 9c+ HEAD と byte-identical** に一致するはずだ。5 つの commit（9a、9b、9c、9c+、9d）を手で再現したことになる — しかも、各行がなぜそこにあるかを完全に理解した上で。
+L11 を終えると、**`crates/evm/` ディレクトリ全体が、openhl の Stage 9c+ HEAD と byte-identical** に一致するはずだ。5 つの commit（9a、9b、9c、9c+、9d）を手で再現した— しかも、各行がなぜそこにあるかを完全に理解した上で。
 
 main に戻す：
 

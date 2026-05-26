@@ -536,7 +536,7 @@ Block N+2:                     Propose → Vote → Commit
 Hyperliquid のホワイトペーパーと技術ブログから分かること:
 
 - **HotStuff 派生**: 明示的に言及されている
-- **~20〜25 バリデータ**: 有界委員会
+- **約 20〜25 バリデータ**: 有界委員会
 - **サブ秒 finality**: 実用上 1 ラウンドトリップ
 - **EVM 統合**: HyperEVM が orderbook と並列で実行され、両者が同じコンセンサスで commit される
 
@@ -1863,7 +1863,7 @@ Tempo や Hyperliquid 向けの slashing 設計:
 - **内部告発者報酬**: 1〜5% が標準
 - **Inactivity 罰則**: 検閲耐性が欲しいなら必要
 
-Hyperliquid の約 20 バリデータは、バリデータあたり非常に高い stake 要件 + 重い slashing。Tempo の ~30〜50 バリデータでも似たパターンになる。
+Hyperliquid の約 20 バリデータは、バリデータあたり非常に高い stake 要件 + 重い slashing。Tempo の 約 30〜50 バリデータでも似たパターンになる。
 
 ## 8. Launch 時の問題 — Day 1 から slashing を入れるか?
 
@@ -1935,7 +1935,7 @@ Hyperliquid は slashing 付きで launch した。OP-Stack chain は知られ�
                       explanation: '単一リーダー BFT = 投票なし。3 つの仕事 — 構築 (Engine API forkchoiceUpdated + PayloadAttributes 経由)、署名 (ブロック hash を ECDSA 署名者に渡す)、ブロードキャスト (Engine API + P2P)。Lesson 10 §3 の Rust 約 100 行。',
                     },
                     {
-                      question: 'Tendermint/HotStuff では validator set が有界 (~20〜100)。**この上限を決めている構造的な制約** は何か?',
+                      question: 'Tendermint/HotStuff では validator set が有界 (約 20〜100)。**この上限を決めている構造的な制約** は何か?',
                       options: [
                         'ディスク容量 — 各バリデータが chain の状態を保存するため。',
                         '通信複雑度: PBFT はブロックあたり O(n²) メッセージ、閾値署名付きの HotStuff でもラウンドあたり O(n)。ネットワーク帯域とレイテンシによって、実用上 n は約 100〜200 が上限になる。',

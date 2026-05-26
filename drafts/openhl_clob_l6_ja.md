@@ -150,7 +150,7 @@ Case B が「空 level cleanup」の invariant を自動で守るしくみだ �
 2. **`self.bids.retain(|_, queue| { ... })`** — `retain` がすべての (`Reverse<Price>`, `VecDeque<RestingOrder>`) pair を順に辿る。Closure が `queue` を mutate して `bool` を返す: `false` なら entry を drop し、`true` なら保持する。
 3. **`if !found && let Some(pos) = queue.iter().position(|o| o.id == order_id)`** — まだ見つけていない場合のみ検索する。`iter().position()` は `Option<usize>` を返す — 述語に一致する最初の要素の index。`if let` と組み合わせるのが「index が存在すれば何かする」の Rust 慣用イディオム。
 4. **`queue.remove(pos)`** — `VecDeque::remove(index)` がその index の要素を取り出す。返り値の `Option<T>` (削除された要素) はここでは無視する。**`VecDeque::remove` は O(n)** — 後続要素を 1 slot 左にシフトする。数百 order の queue ならマイクロ秒オーダー。
-5. **`found = true`** — flag を立てて以降の level がスキャンされないようにする。**これが load-bearing な最適化** — order が見つかった後も残りの level を順に辿る (以前の cancellation で残った空 queue を check するため) が、残り各 queue 内の linear scan はスキップする。
+5. **`found = true`** — flag を立てると、以降の level では `if !found` が偽になるため `position(...)` による **queue 内の線形探索** は走らない。**これが load-bearing な最適化**。ただし `BTreeMap::retain` 自体は map 全体を最後まで反復し、各 level で `!queue.is_empty()` の評価は継続する（空 level のパージ判定のため）。つまり「map 走査を break」するのではなく、「以降の level で queue 内探索だけを省略する」という挙動になる。
 6. **`!queue.is_empty()`** — return 値。Queue が空 (最後の order を削除したばかり、または別の理由で空) なら `false` を返して `retain` に entry を drop させる。そうでなければ `true` を返して保持させる。
 7. **`if found { return true }`** — short-circuit。bid で既に見つけて削除したなら、ask を検索する必要はない。
 8. **`self.asks.retain(...)`** — ask に対する同じロジック。Closure 本体は同一 (key の違いはない — 両 map とも value は `VecDeque<RestingOrder>`)。
@@ -267,7 +267,7 @@ mod smoke {
 
 1. **「削除 + cleanup」を `retain` で組み合わせる。** 2 つの別操作を 1 closure pass で済ませる: queue を mutate し、entry を drop するか決める。これがまさに `retain` のユースケース。代替 (iterate-then-cleanup や、`BTreeMap::iter_mut` + 手動で空 key 収集) は invariant をより多くのコードに分散させてしまう。**自分の操作にぴったり合うメソッドがあるなら、それを使う。**
 
-2. **O(n) linear scan は v0 では fine。** 本番取引所は何千、何万の resting order を持つ。v0 の openhl で数百なら scan はマイクロ秒で済む。`HashMap<OrderId, (Side, Price)>` index を追加すれば cancel は O(1) になるが、その代わりに BTreeMap と同期を保つ second data structure、追加メモリ、追加 cache pressure を抱えることになる。さらに低レイヤの観点を加えると: **`VecDeque` はメモリ上で連続配置されるため、数百〜数千要素程度の走査では CPU の空間局所性とプリフェッチが効き、ポインタを飛び回る HashMap の lookup より「実測の wall-clock time」で速いケースが多い。** Big-O 表記は asymptotic な傾向で、CPU 1 サイクルの世界では cache miss の方が支配的になる — mechanical sympathy の観点でも、現スケールでは index を持つメリットが薄い。**Profile に出てこないものは最適化しない。** openhl が v0 scale を超えたら index を追加すればよい — それまでは scan が正しい形。
+2. **O(n) linear scan は v0 では fine。** 本番取引所は何千、何万の resting order を持つ。v0 の openhl で数百なら scan はマイクロ秒で済む。`HashMap<OrderId, (Side, Price)>` index を追加すれば cancel は O(1) になるが、その代わりに BTreeMap と同期を保つ second data structure、追加メモリ、追加 cache pressure を抱える。さらに低レイヤの観点を加えると: **`VecDeque` はメモリ上で連続配置されるため、数百〜数千要素程度の走査では CPU の空間局所性とプリフェッチが効き、ポインタを飛び回る HashMap の lookup より「実測の wall-clock time」で速いケースが多い。** Big-O 表記は asymptotic な傾向で、CPU 1 サイクルの世界では cache miss の方が支配的になる — mechanical sympathy の観点でも、現スケールでは index を持つメリットが薄い。**Profile に出てこないものは最適化しない。** openhl が v0 scale を超えたら index を追加すればよい — それまでは scan が正しい形。
 
 3. **Cancel は `bool` を返す。`Option<RestingOrder>` や `Result<(), CancelError>` ではない。** 削除した order を返すと `RestingOrder` を expose することになる (L3 で意図的に private 型にした)。`Result` を返すと caller に「見つからない」ケースを error として handle させることになるが、cancellation の冪等性は機能でありバグではない (cancel を 2 回呼べることが安全であるべき)。`bool` なら「仕事をしたかしなかったか」をクリーンに伝えられる — 内部を漏らさず、error-handling を強制せずに済む。**何が起きたかを正直に表す、最小の return 形を選ぶ。**
 

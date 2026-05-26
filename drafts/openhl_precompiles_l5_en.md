@@ -199,7 +199,7 @@ One line. Plain `Mutex<()>` (unit type as payload — we never inspect the value
 let _g = TEST_SERIALIZER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 ```
 
-The `unwrap_or_else(PoisonError::into_inner)` pattern is **critical** — without it, one panicking test poisons the mutex and every subsequent test fails with `PoisonError` instead of running. Recovering from poison turns "this test panicked once" into "this test panicked once and subsequent tests still get to run." The recovered guard still grants exclusive access; poison is just a signal, not a permanent disability.
+The `unwrap_or_else(PoisonError::into_inner)` pattern is **critical** — without it, one panicking test poisons the mutex and every subsequent test fails with `PoisonError` instead of running. Recovering from poison turns "this test panicked once" into "this test panicked once and subsequent tests still get to run." The recovered guard still grants exclusive access; poison is just a signal, not a permanent disability. If type inference ever gets noisy in your toolchain, prefer the explicit closure form: `unwrap_or_else(|e| e.into_inner())`.
 
 > 🛑 **Anti-fluency.** "Couldn't we use `#[serial]` from the `serial_test` crate instead?" **You could, but it's a dev-dep for what one mutex does.** `serial_test` reaches for proc-macros, attribute parsing, and a hash-keyed lock map. For 4 tests touching one global, a 1-line `static Mutex<()>` is right-sized. **Reach for the crate when you have many globals with different lock partitions; not before.**
 

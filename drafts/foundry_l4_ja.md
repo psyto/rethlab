@@ -130,7 +130,15 @@ cast call --rpc-url https://ethereum.reth.rs/rpc \
 押さえる点が 6 つ。
 
 1. **Function signature は 4-byte selector ではなく人間可読 Solidity 形式だ。** cast が内部で `"totalSupply()(uint256)"` を alloy と同じ parser で parse し、signature を keccak256 で hash し、先頭 4 bytes を取り、それを背後の `eth_call` における function selector として使う。**書くのは Solidity-ergonomic な構文、encode は cast がやる。**
-2. **Function 名の後の `(uint256)` が return type の annotation だ。** これがないと cast は raw hex bytes (`0x0000...`) を表示する。あれば cast は return を `uint256` として decode し、decimal を表示する。複数 return の関数も同じパターンに従う — `"slot0()(uint160,int24,uint16,uint16,uint16,uint8,bool)"` は Uniswap V3 pool の slot0 signature で、cast は各 tuple 要素を 1 行ずつ表示する。Inline decode が exotic な signature で躓いた場合（稀だが起こり得る。動的配列を含む struct が典型）、安定したフォールバックは return-type annotation を完全に省き、生 hex を `cast abi-decode "<full-signature>"` にパイプすることだ。同じ parser を使うが、より permissive な context で走る。**実 production の signature の大半では inline 形式で動く。動かないときだけ `cast abi-decode` に手を伸ばす。**
+2. **Function 名の後の `(uint256)` が return type の annotation だ。** これがないと cast は raw hex bytes (`0x0000...`) を表示する。あれば cast は return を `uint256` として decode し、decimal を表示する。複数 return の関数も同じパターンに従う — `"slot0()(uint160,int24,uint16,uint16,uint16,uint8,bool)"` は Uniswap V3 pool の slot0 signature で、cast は各 tuple 要素を 1 行ずつ表示する。
+
+   > [!TIP]
+   > **`cast abi-decode` によるデコードの堅牢なフォールバック**
+   > 複雑な構造体や動的配列、ネストされたタプルを返す関数の場合、`cast call` のインラインデコードアノテーション（例：`"myFunction()(uint256[],(string,address))"`）が CLI パーサーの文脈制限により解析に失敗することがある。その際のプロフェッショナルなフォールバック手段は、デコードを指定せずに関数を呼び出して生の hex バイトを出力させ、それをパイプ経由で `cast abi-decode` に渡す方法だ：
+   > ```bash
+   > cast call <contract-address> "myFunction()" | cast abi-decode "myFunction()(uint256[],(string,address))"
+   > ```
+   > このアプローチは、コマンドライン引数のパース時よりも permissive（寛容）なコンテキストで ABI デコーダーが実行されるため、複雑なネスト構造やカスタムデータ型であっても確実にデコードできる。実運用において、通常の型シグネチャでデコードできない場合は、即座にこのパイプライン方式に切り替えるのが定石だ。
 3. **Private key 不要。** `cast call` は read-only。Broadcast せずノードの state view に対して実行する。これが production debug のワークホースだ。mainnet に対して任意の view 関数を 1 wei も使わずに simulate できる。
 4. **`--rpc-url` は shell 環境の `ETH_RPC_URL` で代替できる。** `export ETH_RPC_URL=https://ethereum.reth.rs/rpc` を 1 回設定し、以降のコマンドからフラグを落とす。L5 で anvil を扱う際、terminal session ごとに `ETH_RPC_URL` を mainnet と forked anvil の間で切り替えるデモをする。
 5. **出力 decimal は人間フォーマットされていない、raw integer だ。** USDC は decimal 6 桁。`35,234,876,543,210,000,000` raw は `35,234,876,543,210.000000 USDC` を意味する。cast は decimal scaling を適用しない。それは自分の仕事だ。あるいは `cast --to-unit <value> ether` で変換する (名前にもかかわらず、unit conversion は汎用)。
@@ -326,7 +334,12 @@ L4 の後はこれができる。
 
 **Q1: Etherscan + ブラウザで同じことができるのに、なぜ `cast` を使うのか?**
 
-理由は 3 つ。**(a) 合成可能性（Composability）** — `cast` の出力はプレインテキストなので、Unix のパイプライン思想そのままに `jq`、`awk`、`xargs`、`grep` へ直接流し込める。自動化スクリプトへの組み込みが容易だ。Etherscan の出力はブラウザの中だ。**(b) 再現性（Reproducibility）** — cast コマンドは単一の bash one-liner としてチーム内で共有できる。Etherscan ワークフローはランブックに paste できないクリックの連続だ。**(c) スピード** — ローカル Reth ノードに対する `cast call` は milliseconds で返る。Etherscan は rate limit 付きで重い Web ブラウザのロードを待たされる。1 時間に数十の view クエリを投げる L1 エンジニアには、思考の同期を保つために cast の 10×+ の速度差が死活問題だ。**Etherscan は一度きりの探索用、cast はそれ以外のすべてに。**
+理由は 3 つ。
+1. **合成可能性（Composability）** — `cast` の出力はプレインテキストなので、Unix のパイプライン思想そのままに `jq`、`awk`、`xargs`、`grep` へ直接流し込める。自動化スクリプトへの組み込みが容易だ。Etherscan の出力はブラウザの中だ。
+2. **再現性（Reproducibility）** — cast コマンドは単一の bash one-liner としてチーム内で共有できる。Etherscan ワークフローはランブックに paste できないクリックの連続だ。
+3. **スピード** — ローカル Reth ノードに対する `cast call` は milliseconds で返る。Etherscan は rate limit 付きで重い Web ブラウザのロードを待たされる。1 時間に数十の view クエリを投げる L1 エンジニアには、思考の同期を保つために cast の 10×+ の速度差が死活問題だ。
+
+**Etherscan は一度きりの探索用、cast はそれ以外のすべてに。**
 
 **Q2: `cast` はすべての JSON-RPC method を サポートする? それとも subset か?**
 
@@ -400,4 +413,3 @@ L4 は Module 2 (CLI & state-aware testing) の sortOrder 0 に入る:
 - **`load-bearing` は英語のまま使用**。L0–L3 と同じ。
 - **`alloy bindings` / `escape hatch` / `discipline-transfer framing` も英語のまま**。技術用語として確立、翻訳すると失われるニュアンスがある。
 - **`合成可能性 (Composability)`、`再現性 (Reproducibility)`、`ステートレス性 (Statelessness)`、`内省 (Introspection)`** は Q&A / 設計振り返り内で bilingual annotation 付き。
-

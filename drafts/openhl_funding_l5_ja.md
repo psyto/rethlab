@@ -23,7 +23,7 @@
 このレッスンで掴む概念:
 
 - **Saturate でも panic でも wrap でもない、consensus で許される overflow は saturate だけ** — panic すると validator が halt し、ネットワークから fork off する。Wrap はコンパイラバージョン次第で挙動が変わり、「定義されているが間違った」値を生む。Saturate ならすべての validator が同じ bounded value に到達する。Consensus の liveness を保てる選択肢は他にない。
-- **符号を意識した saturation の override** — `i64::try_from` は失敗を報告してくれるが方向までは教えてくれない。`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })` の closure が方向を復元する。固定で `i64::MAX` を返すようにすると、`i128::MIN` が正に flip して符号が静かに壊れる。
+- **符号を意識した saturation の override** — `i64::try_from` は失敗を報告してくれるが方向までは教えてくれない。`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })` の**インライン条件式**が方向を復元する。固定で `i64::MAX` を返すようにすると、`i128::MIN` が正に flip して符号が静かに壊れる。(`unwrap_or` は eager 評価だが、ここで渡しているのは軽い即時式なので実コストは無視できる。)
 - **手書きトレースと proptest は補完関係であって冗長ではない** — proptest のランダムサンプリングは `i128::MAX`（2^129 通りのうちの 1 点）にまず当たらない。境界は手書きでしか pin できない。Proptest は interior の property に強く、手書きは corner に強い。
 - **テストすべきは「実際に成立する不変条件」であって「願望の property」ではない** — 素朴な antisymmetry は magnitude も等しくあれと書きたくなるが、整数除算がそれを壊す。だから「符号が逆」という weaker な property をテストし、丸めの caveat はテストコメントに残す。
 - **`checked_mul` + `Result` で本当に解決するわけではない理由** — エラーは最終的に bridge に届くが、bridge が取れる現実的な選択肢は「revert（fork）」「skip（silent inconsistency）」「cap で settle」の 3 つしかない。最後のものは saturate がそのまま実現してくれる挙動だ。
@@ -69,7 +69,7 @@ L4 のテストでは pathological な入力（例：`MarkPrice(u64::MAX)`）を
 
 > 🛑 **考えてみよう。** スクロール前に — `compute_premium` で panic が起きれば validator は halt する。**なぜそれが単一ノード障害ではなく chain fork になるのか？** ヒント：1 つが halt したとき、他の validator が何をしているかを考えよ。
 
-（答え：**他の validator は、halt したノードを置き去りに前進していくからだ。** Funding tick はすべての validator で deterministic な state update を生む。1 つが halt しても、network の quorum（典型的には 2/3 以上）はそのまま動き続ける。Halt した validator が再起動する頃には、chain head は何ブロックも先に進んでいる。Halt した validator は sync できない — halt したブロックでの local state が network 側の view と食い違うからだ。**Halt によって history が 2 つに分かれる：「panic を踏んだ入力での history」と「network が進めた state での history」だ。Validator は事実上、自ら network から fork off したことになる。** これに対して saturate は、validator 同士を lockstep のまま保ってくれる。）
+（答え：**他の validator は、halt したノードを置き去りに前進していくからだ。** Funding tick はすべての validator で deterministic な state update を生む。1 つが halt しても、network の quorum（典型的には 2/3 以上）はそのまま動き続ける。Halt した validator が再起動する頃には、chain head は何ブロックも先に進んでいる。Halt した validator は sync できない — halt したブロックでの local state が network 側の view と食い違うからだ。**Halt によって history が 2 つに分かれる：「panic を踏んだ入力での history」と「network が進めた state での history」だ。Validator は事実上、自ら network から fork off した。** これに対して saturate は、validator 同士を lockstep のまま保ってくれる。）
 
 ## 手順
 
@@ -256,7 +256,7 @@ proptest 固有の要素は以下：
 
 **コメントには、なぜ property を弱めたかも書いてある。** 将来この property を読んで「規模も等しいべきでは？」と思った読者は、rounding 由来の caveat がその場で documentation されているのを見つけられる。**整数算術のもとで実際には成り立たない aspirational な property は、テスト失敗を呼び込むだけだ。** 実際に invariant な property をテストすること。
 
-> 🛑 **やりがちな勘違い。** 「テスト fixture で `f64` を使って期待規模を厳密に計算すればよいのでは？」 **それは `f64` 計算の期待値を `i64` 計算の実測値に対して assert することになる — 両者は LSB レベルで一致しない。** 決定的な整数コードを非決定的な float の期待値と比較するテストは、信頼できない。**テスト側の算術も、本番側の算術と同じドメインに留める。**
+> 🛑 **やりがちな勘違い。** 「テスト fixture で `f64` を使って期待規模を厳密に計算すればよいのでは？」 **それは `f64` 計算の期待値を `i64` 計算の実測値に対して assert する— 両者は LSB レベルで一致しない。** 決定的な整数コードを非決定的な float の期待値と比較するテストは、信頼できない。**テスト側の算術も、本番側の算術と同じドメインに留める。**
 
 > 🛑 **考えてみよう。** 戦略で `0u64..1_000_000` ではなく `1u64..1_000_000` を使い、ゼロを除外しているのはなぜか。
 
@@ -315,9 +315,9 @@ PROPTEST_VERBOSE=1 cargo test -p openhl-funding premium_is_antisymmetric
 
 3. **テストモジュールの boilerplate は早めに安定化させる。** `use proptest::prelude::*`、`use openhl_clob::AccountId`、`pos` helper を今のうちに足しておけば、テストモジュールの import は L6 / L7 まで安定する。**Boilerplate の churn は、レッスンごとの diff の本質を覆い隠してしまう。**
 
-4. **`saturate_i128_to_i64` の `unwrap_or` の closure は符号に依存させる。** 固定値の override では、負方向の overflow を正に flip してしまう。Saturate helper を丁寧に読めば、closure が*念のため*ではなく*必要だから*そうなっていると分かる。
+4. **`saturate_i128_to_i64` の `unwrap_or` のインライン条件式は符号に依存させる。** 固定値の override では、負方向の overflow を正に flip してしまう。Saturate helper を丁寧に読めば、この条件分岐が*念のため*ではなく*必要だから*そうなっていると分かる。
 
-5. **proptest の範囲からゼロを除外する** — ゼロのケースは既に手書きトレースの unit test でカバー済みであり、proptest に含めると property を余計に複雑化することになる。**手書きトレースは境界ケースを pin し、proptest は内部の property を pin する。** 互いに補完的であって、冗長ではない。
+5. **proptest の範囲からゼロを除外する** — ゼロのケースは既に手書きトレースの unit test でカバー済みであり、proptest に含めると property を余計に複雑化する。**手書きトレースは境界ケースを pin し、proptest は内部の property を pin する。** 互いに補完的であって、冗長ではない。
 
 ## 答え合わせ
 
@@ -348,7 +348,7 @@ git checkout main
 どちらも Rust の property-testing crate であり、どちらでも動く。`proptest` は shrinking が強く（より小さい counterexample を見つける）、strategy の合成（range に対する `in` 構文）も書きやすい。openhl workspace は consensus crate のテストで既に proptest を引いているので、限界コストはゼロだ。**一つに決めたら貫く。コードベースの途中で乗り換えるコストは、最初に違う方を選ぶより高い。**
 
 **Q: `saturating_mul` と `saturate_i128_to_i64` の関係は？**
-`saturating_mul` は `i128`（や他の整数型）の組み込みメソッドで、その型自身の範囲内で saturated な積を生む。`saturate_i128_to_i64` はユーザ定義の helper で、`i128` を `i64` の範囲に clamp する。対応している境界が違う：`saturating_mul` は型内 overflow を防ぐもの、`saturate_i128_to_i64` は型をまたいだ narrowing を防ぐものだ。**両方とも必要だ — 数学が積のために i128 を、保存のために i64 を、どちらも使うからだ。**
+`saturating_mul` は `i128`（や他の整数型）の組み込みメソッドで、その型自身の範囲内で saturated な積を生む。`saturate_i128_to_i64` はユーザー定義の helper で、`i128` を `i64` の範囲に clamp する。対応している境界が違う：`saturating_mul` は型内 overflow を防ぐもの、`saturate_i128_to_i64` は型をまたいだ narrowing を防ぐものだ。**両方とも必要だ — 数学が積のために i128 を、保存のために i64 を、どちらも使うからだ。**
 
 ## 次のレッスン（L6）
 

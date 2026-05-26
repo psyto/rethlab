@@ -295,13 +295,13 @@ git checkout main
 `PrecompileId` は不透明な識別子で、主に REVM の logging/tracing 層で使われるものだから。custom precompile は標準セットの外にあるので、文字列名で識別する。文字列は human-readable なので、precompile call が trace に現れたときに numeric variant ではなく「clob_read_best_bid」が見える。
 
 **Q: エラーハンドリングを追加したくなったら?**
-return パスを `Ok(...)` から `Err(PrecompileError::Other(...))` に変えればよい。trait 自体はすでに対応している — v0 では失敗するモードがないだけだ。L4-L5 で read precompile が live state にアクセスするようになると、ありうるエラーの 1 つは「CLOB の lock が poisoned」になる — それを `PrecompileError` にマップすることになる。
+return パスを `Ok(...)` から `Err(PrecompileError::Other(...))` に変えればよい。trait 自体はすでに対応している — v0 では失敗するモードがないだけだ。L4-L5 で read precompile が live state にアクセスするようになると、ありうるエラーの 1 つは「CLOB の lock が poisoned」になる — それを `PrecompileError` にマップする。
 
 **Q: なぜ `Bytes::from(out)` が必要なのか — `Vec<u8>` を直接 return してはだめなのか?**
 ダメ。trait が `Bytes` (alloy の reference-counted な byte buffer。Rust 標準の `Vec<u8>` ではない) を要求する。`Bytes::from(vec)` で変換できる。wrapper 型を使う理由は、`Bytes` は安く clone でき、再 allocation なしに EVM 内部のあちこちで共有できるからだ。
 
 **Q: スマートコントラクトは calldata で read_best_bid に引数を渡せる?**
-Yes — calldata が `_input` パラメータに入る。v0 では precompile がそれを無視している (どんな入力でも best bid を返す) が、production コードでは calldata を使って **どの market の** best bid を読むかを指定する。現状は single-market のセットアップで、multi-market 対応には `_input` の decode を足すことになる。
+Yes — calldata が `_input` パラメータに入る。v0 では precompile がそれを無視している (どんな入力でも best bid を返す) が、production コードでは calldata を使って **どの market の** best bid を読むかを指定する。現状は single-market のセットアップで、multi-market 対応には `_input` の decode を足す。
 
 ## 次のレッスン (L3)
 

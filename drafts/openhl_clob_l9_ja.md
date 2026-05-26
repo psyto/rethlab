@@ -195,7 +195,7 @@ pub struct LiveRethEvmBridge<P> {
 - **`clob: Mutex<Book>`** — matching engine。`Book` 自体は内部的に thread-safe ではない。`Mutex` でラップすれば、複数の caller が同時に order を submit できる (engine app loop に統合された後、bridge は `Arc<LiveRethEvmBridge>` で共有される)。
 - **`pending_fills: Mutex<Vec<Fill>>`** — `submit_order` が fill を push し、(L10 の) `build_payload` が drain する buffer。`clob` と別の `Mutex` にしているのは、2 つが異なるタイミングで mutate するから: submit は matching のために `clob` の lock を短時間保持し、その後 append のために `pending_fills` の lock を短時間保持する。lock を分けることで、2 つの submit が submit → push の全 chain を直列化しなくて済む。
 
-> 🛑 **やりがちな勘違い。** 「`Mutex<(Book, Vec<Fill>)>` 1 個ではなく `Mutex` 2 個にする理由は?」 **Lock 粒度。** 1 個の mutex で両方を覆うと、submit ごとに matching 作業と fill-buffer mutation の両方で lock を保持することになる。submit せずに `pending_fill_count` を読みたい将来のコード (たとえば L10 の `build_payload` drain やデバッグツール) が、submit-in-progress で block されてしまう。`Mutex` を 2 個にすれば、read が write contention を bypass できる。**コストは余分な `Mutex::new` 呼び出しが数個増える程度。利益は並行スループットの改善。**
+> 🛑 **やりがちな勘違い。** 「`Mutex<(Book, Vec<Fill>)>` 1 個ではなく `Mutex` 2 個にする理由は?」 **Lock 粒度。** 1 個の mutex で両方を覆うと、submit ごとに matching 作業と fill-buffer mutation の両方で lock を保持する。submit せずに `pending_fill_count` を読みたい将来のコード (たとえば L10 の `build_payload` drain やデバッグツール) が、submit-in-progress で block されてしまう。`Mutex` を 2 個にすれば、read が write contention を bypass できる。**コストは余分な `Mutex::new` 呼び出しが数個増える程度。利益は並行スループットの改善。**
 
 ### Step 4: `pending` tuple を変更
 
@@ -303,7 +303,7 @@ impl<P> LiveRethEvmBridge<P> {
 
 3 メソッドすべてが `&self` を取る点に注目。内部の `Mutex` が重い処理を担い、public API としては「shared 参照 + interior mutability」になる — まさに async コードが必要とする形 (複数の async task が `&LiveRethEvmBridge` を同時に保持できる)。
 
-> 🛑 **やりがちな勘違い。** 「`submit_order` が `&mut self` ではなく `&self` を取るのはなぜか?」 **order を同時に submit したい async task 間で bridge を共有する必要があるから。** Matching engine (実際に mutate するコード) は `Mutex` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制しているから、この mutation は安全」と受け入れる。`submit_order` が `&mut self` を取るなら `Arc<RwLock<LiveRethEvmBridge>>` が必要になり、submit ごとに bridge 全体を lock することになる — パフォーマンスが悪化し、API の形としても適切でない。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
+> 🛑 **やりがちな勘違い。** 「`submit_order` が `&mut self` ではなく `&self` を取るのはなぜか?」 **order を同時に submit したい async task 間で bridge を共有する必要があるから。** Matching engine (実際に mutate するコード) は `Mutex` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制しているから、この mutation は安全」と受け入れる。`submit_order` が `&mut self` を取るなら `Arc<RwLock<LiveRethEvmBridge>>` が必要になり、submit ごとに bridge 全体を lock する— パフォーマンスが悪化し、API の形としても適切でない。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
 
 ### Step 7: destructuring を波及更新
 
@@ -419,7 +419,7 @@ assert_eq!(bridge.pending_fill_count(), 0); // fresh bridge では空
 
 1. **`Mutex` 1 個ではなく 2 個にした。** Bridge の CLOB 状態と fill buffer は別々の関心事で、別々のタイミングで mutate する。Lock を分割しておけば、並行 submit が不必要に互いを block し合わなくて済む。**Lock 粒度は、contention が hot path 上にあるときに重要になる。**
 
-2. **`submit_order` は `&self` を取る。** `Mutex` 経由の interior mutability によって、shared 参照で bridge を mutate できる。Bridge は `Arc` でラップされ async task 間で共有される。メソッドが `&mut self` を取ると、外側に `RwLock<Bridge>` が必要になり、すべての access を 1 つのグローバル lock で直列化することになる。**内部 `Mutex` + `&self` API が、async-shared state に対する idiomatic な Rust パターン。**
+2. **`submit_order` は `&self` を取る。** `Mutex` 経由の interior mutability によって、shared 参照で bridge を mutate できる。Bridge は `Arc` でラップされ async task 間で共有される。メソッドが `&mut self` を取ると、外側に `RwLock<Bridge>` が必要になり、すべての access を 1 つのグローバル lock で直列化する。**内部 `Mutex` + `&self` API が、async-shared state に対する idiomatic な Rust パターン。**
 
 3. **`build_payload` に空の `Vec<Fill>` placeholder を残した。** L9 では構造を組み込むに留め、L10 でそれを機能的にする。Placeholder を残すのは honest scoping — reader には欠けている機能がどこにあるかが正確に見える。**`Vec::new()` placeholder のほうが、将来用の TODO コメントよりも discoverable。**
 
@@ -450,7 +450,7 @@ git checkout main
 ## よくある質問
 
 **Q: `submit_order` が `clob` を lock してから別途 `pending_fills` を lock するのはなぜか? 両方を同時に保持しないのは?**
-`pending_fills` の append が依存しているのは matching の **結果** であって、matching の中間状態ではないから。`book.submit(order)` が return した時点で `FillResult` は所有データなので、`clob` の lock を release してから result を安全に処理できる。両 lock を保持してしまうと、無関係な `pending_fills` 操作 (たとえば別の caller が `pending_fill_count` を読むなど) を correctness 上の利益なしに直列化することになる。
+`pending_fills` の append が依存しているのは matching の **結果** であって、matching の中間状態ではないから。`book.submit(order)` が return した時点で `FillResult` は所有データなので、`clob` の lock を release してから result を安全に処理できる。両 lock を保持してしまうと、無関係な `pending_fills` 操作 (たとえば別の caller が `pending_fill_count` を読むなど) を correctness 上の利益なしに直列化する。
 
 **Q: `payload_fills` が `&[Fill]` (borrowed) ではなく `Vec<Fill>` (clone) を返すのはなぜか?**
 `&[Fill]` を返すと caller が slice のライフタイム中ずっと `state` Mutex の lock guard を保持しなければならず、lock を欲しがる他のすべてが deadlock してしまうから。Vec を clone するのは `payload_fills` 呼び出しごとに allocation 1 個増えるだけで、稀にしか呼ばれない inspection メソッドなら問題ない。**Lock を取る API は、決して lock 越しの参照を返してはいけない。**

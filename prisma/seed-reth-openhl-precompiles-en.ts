@@ -328,6 +328,7 @@ tempfile             = "3"
 **\`reth-node-api\` is a one-off direct git dep** (not via workspace). The workspace \`Cargo.toml\` doesn't declare it; we inline the git+rev directly. This is intentional: \`reth-node-api\` is used in exactly one crate (\`openhl-evm\`), and the rest of the workspace doesn't need it. Promoting it to a workspace dep would force every crate's build graph to know about it.
 
 > ⚠️ **The \`rev\` must match the rest of the \`reth-*\` crates exactly.** When you inline \`rev = "88505c7..."\`, the commit hash has to be **identical** to the one already pinned by the other \`reth-*\` crates in the workspace. Reth shares types (\`FullNodeTypes\`, \`NodeTypes\`, \`BuilderContext\`, etc.) strictly across its internal crates, and Cargo's same-version-same-source rule means even a one-character mismatch causes those types to be treated as different identities — producing cryptic errors like \`expected ChainSpec, found ChainSpec\`. The temptation to "just bump \`reth-node-api\` to a newer rev" is strong; resist it unless you're upgrading *every* \`reth-*\` rev together.
+> Operationally, confirm after \`cargo check -p openhl-evm\` that root \`Cargo.lock\` resolves one coherent graph. A stray rev here causes Cargo to resolve duplicate Reth trees, which increases build time and explodes into type-identity mismatches.
 
 > 🛑 **Anti-fluency.** "Every Reth dep should be a workspace dep — that's the pattern." **Not necessarily.** Workspace deps are useful when multiple crates need the same dep at the same version. When only one crate needs it, inline declaration is cleaner — fewer entries in the workspace-level Cargo.toml, less indirection for readers. \`reth-node-api\` is openhl-evm-only; treat it accordingly.
 
@@ -1551,6 +1552,8 @@ Three public functions, each \`pub\` for a reason:
 - **\`current_best_bid\`** — exposed for direct testing without going through the EVM. Walks: write lock → read lock → option deref → mutex lock → \`best_bid_with_qty()\`. **Three locks** to read one value; that sounds expensive but each is microseconds, and reads are concurrent under \`RwLock\`.
 
 > 🛑 **Anti-fluency.** "Three locks for one read seems wasteful." **The locks serve different purposes.** \`RwLock\` distinguishes installed-vs-uninstalled (rare write contention). \`Mutex<Book>\` protects the matching engine state (frequent contention but milliseconds). Putting them all in one lock would serialize all reads + writes uniformly — much worse for concurrency. **Layered locks reflect layered concerns.**
+>
+> Lock-ordering invariant is the safety rail: always acquire outer (\`CLOB_STATE\` RwLock) before inner (\`Book\` Mutex). As long as no path inverts that order (inner-held then outer-write), deadlock is structurally avoided.
 
 ### Step 5: Change \`LiveRethEvmBridge::clob\` to \`Arc<Mutex<Book>>\`
 
@@ -2008,7 +2011,7 @@ One line. Plain \`Mutex<()>\` (unit type as payload — we never inspect the val
 let _g = TEST_SERIALIZER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 \`\`\`
 
-The \`unwrap_or_else(PoisonError::into_inner)\` pattern is **critical** — without it, one panicking test poisons the mutex and every subsequent test fails with \`PoisonError\` instead of running. Recovering from poison turns "this test panicked once" into "this test panicked once and subsequent tests still get to run." The recovered guard still grants exclusive access; poison is just a signal, not a permanent disability.
+The \`unwrap_or_else(PoisonError::into_inner)\` pattern is **critical** — without it, one panicking test poisons the mutex and every subsequent test fails with \`PoisonError\` instead of running. Recovering from poison turns "this test panicked once" into "this test panicked once and subsequent tests still get to run." The recovered guard still grants exclusive access; poison is just a signal, not a permanent disability. If type inference ever gets noisy in your toolchain, prefer the explicit closure form: \`unwrap_or_else(|e| e.into_inner())\`.
 
 > 🛑 **Anti-fluency.** "Couldn't we use \`#[serial]\` from the \`serial_test\` crate instead?" **You could, but it's a dev-dep for what one mutex does.** \`serial_test\` reaches for proc-macros, attribute parsing, and a hash-keyed lock map. For 4 tests touching one global, a 1-line \`static Mutex<()>\` is right-sized. **Reach for the crate when you have many globals with different lock partitions; not before.**
 
@@ -2884,6 +2887,8 @@ Five sequential steps. Each rejection is an **early return**, not a nested \`if\
 
 (Answer: **A read lock blocks write locks.** If we held \`state\` for the entire function — including past the L8-future \`clob.lock()\` — we'd be holding a read lock on \`CLOB_STATE\` while trying to acquire a separate Mutex on the Book it points to. That works (no deadlock), but the read lock prevents anyone else from calling \`install_clob\` mid-precompile. Dropping it early reduces the lock-held window. **Be a good citizen: hold each lock for the shortest time you can get away with.**)
 
+Extra precision for the L8 refactor: once we switch to \`let Some(clob) = state.as_ref() else { ... };\`, \`clob\` is a borrow into the \`RwLockReadGuard\`. That means early \`drop(state)\` is no longer legal; the read lock lives through \`book.submit()\` and is released when those borrows go out of scope.
+
 ### Step 5: Update \`openhl_precompiles\` to register both
 
 Current (after L6):
@@ -3278,6 +3283,8 @@ The "Side note" at the bottom names the next gap — fills returned by \`submit\
 > 🛑 **Anti-fluency.** "Why is \`_result\` underscored if we want to suppress the unused warning?" **\`let _result = ...\` and \`let _ = ...\` both suppress the warning.** The difference: \`let _result\` *binds* the value and drops it at end of scope. \`let _ = ...\` drops the value *immediately* (before any subsequent statement). For \`submit\`, either works because nothing in the function reads \`_result\` later. But \`let _result\` is conventional when the value has a meaningful name and we plan to use it later — like in L9, where we'll bind it to a real name and route it. **\`_result\` is a "future intent" marker.**
 
 > 🛑 **Anti-fluency.** "Why explicitly \`drop(book)\` if the lock would release at end-of-scope anyway?" **Because the encoding and Ok() return are still pending.** If we don't \`drop(book)\`, the Book lock is held across the \`out[24..32].copy_from_slice(...)\` and the \`Ok(PrecompileOutput::new(...))\` construction. Neither needs the lock. Holding it costs concurrent readers and other precompiles parallel access. **Explicit drop = "I'm done with this lock, I don't need it for the rest of the function."** Compiler-optional, but it shrinks the lock-held window noticeably in hot paths.
+>
+> Modern Rust with NLL usually drops at last use automatically, so this is mechanically optional. We still keep explicit \`drop(book)\` as a maintenance guardrail: if later edits add another lock-taking step (e.g. sink routing), the lock boundary remains explicit and review-friendly.
 
 ### Step 2: Extend \`place_order_rejects_malformed_input\` with \`depth_bid\` checks
 
@@ -4520,6 +4527,7 @@ Common errors and fixes:
 - **\`error[E0603]: function 'place_order' is private\`** — you forgot Step 1. Add \`pub(crate)\` to the \`fn place_order\` signature.
 - **\`error[E0277]: 'NodeBuilder<...>' does not satisfy the trait...\`** — typo in the NodeBuilder chain. Compare to L3's \`reth_dev_node_with_openhl_executor\` test — same chain, same method order.
 - **Test hangs forever** — \`worker_threads = 1\` or single-threaded tokio. Use \`flavor = "multi_thread", worker_threads = 4\`.
+- **Fails fast (no hang) with \`pending_fill_count == 0\`** — suspect a missing \`.await\` on \`place_order(...)\` / \`launch().await\` path. Futures are lazy; without \`.await\`, the operation is silently dropped (silent skip), not blocked.
 - **\`current_best_bid()\` returns \`None\` after submit_order** — \`install_clob\` wasn't actually called inside \`bridge.new()\`. Re-check L4's bridge changes. Or: another test running in parallel did \`uninstall_clob()\` mid-execution. Verify the TEST_SERIALIZER pattern at all global-touching tests (most should have it from L5).
 - **\`pending_fill_count\` returns 0 after place_order** — likely \`install_fill_sink\` wasn't called inside \`bridge.new()\` (L9 Step 7), or \`place_order\`'s fill-routing block has a bug (L9 Step 3 — verify the \`drop(book)\` comes before the sink lock).
 - **\`assertion failed: bridge.pending_fill_count() == 1\`** with count = 0 — the place_order's submit returned 0 fills, so nothing was pushed. Verify your hand-built calldata: account=7, side=1 (Sell), price=200, qty=33. Specifically check \`calldata[63] = 1\` for side=Sell; if it's 0 the order is a Buy and won't cross.
@@ -4726,7 +4734,7 @@ The diagram above is the mental-model skeleton. This one fleshes it out to "whit
            ──► Book::submit() → SubmitResult{ fills } ──► FILL_SINK ──► Arc<Mutex<Vec<Fill>>>
            ──► bridge.pending_fills (the same Arc) ──► build_payload.drain() ──► next block
 
- The whole thesis: **there is physically only one Arc.** Both the precompile and the bridge
+ The whole thesis: **only one Arc exists.** Both the precompile and the bridge
    hold the same Arc — they read/write the same Book / the same Vec<Fill>. CLOB_STATE and
    FILL_SINK are just "shared registers that let anyone grab that Arc from anywhere."
    **No translation layer, no serialization, just memory** — the entire architecture

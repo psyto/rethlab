@@ -282,7 +282,7 @@ git checkout main
 ## よくある質問
 
 **Q: L1 にテストがないのに `[dev-dependencies] proptest` を今宣言するのはなぜ？**
-Cargo.toml の diff を 1 箇所に集中させたいからだ。L4 で proptest を追加すると Cargo.toml を 2 回触ることになる。L1 でまとめて済ませれば、このレッスン以降このファイルは変わらない。**Cargo.toml の安定性は、小さな unused dep 宣言を抱える価値がある。**
+Cargo.toml の diff を 1 箇所に集中させたいからだ。L4 で proptest を追加すると Cargo.toml を 2 回触る。L1 でまとめて済ませれば、このレッスン以降このファイルは変わらない。**Cargo.toml の安定性は、小さな unused dep 宣言を抱える価値がある。**
 
 **Q: 「parts-per-billion」解釈は実際どう読むのか？**
 Funding rate の生値 `1_250_000` は `0.00125`（interval ごとに 0.125%）を意味する。つまり「1,000,000,000 分の 1,250,000」 = 0.125% だ。HL の 1 日 8 回 settlement と 4% cap のもとでは、実際に見る値の範囲は `±40_000_000` raw = `±4%/interval` = 最悪ケースで `±32%/day`。**すべて i64 で余裕を持って表現できる。**
@@ -291,7 +291,7 @@ Funding rate の生値 `1_250_000` は `0.00125`（interval ごとに 0.125%）�
 **無理だ。** `RATE_SCALE` はチェーンの consensus 定数だ。永続化済みのすべての balance、過去すべての settlement、すべてのテストフィクスチャが `RATE_SCALE = 1e9` を前提に calibrate されている。変更には coordinated な network upgrade が必要になる。**デプロイ後は immutable として扱うべきだ。** だからこそクレート開始時に一度だけ、`const` として設定する。
 
 **Q: `RATE_SCALE` のテストがないのはなぜ？**
-何を assert すればいい？ `assert_eq!(RATE_SCALE, 1_000_000_000)` は同義反復にすぎない — 定数を自分自身と比較しているだけだ。定数の意味は*他の*コードでの使われ方を通じて生きる。**最初の意味あるテストは、L2 で最初の money type に付くことになる。**
+何を assert すればいい？ `assert_eq!(RATE_SCALE, 1_000_000_000)` は同義反復にすぎない — 定数を自分自身と比較しているだけだ。定数の意味は*他の*コードでの使われ方を通じて生きる。**最初の意味あるテストは、L2 で最初の money type に付く。**
 
 ## 次のレッスン（L2）
 

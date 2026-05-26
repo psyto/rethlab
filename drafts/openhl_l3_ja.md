@@ -209,7 +209,7 @@ async fn build_payload(
 ) -> Result<PayloadId, BridgeError>;
 ```
 
-入力: parent block hash と payload attribute。出力: `PayloadId` — 不透明 handle で、bridge は build を開始したがブロックはまだ ready ではない、ということを表す。即座に return する。
+入力: parent block hash と payload attribute。出力: `PayloadId` — 不透明 handle で、bridge は build を開始したがブロックはまだ ready ではないことを表す。即座に return する。
 
 ```rust
 async fn payload_ready(&self, id: PayloadId) -> Result<ExecutedBlock, BridgeError>;
@@ -219,7 +219,7 @@ async fn payload_ready(&self, id: PayloadId) -> Result<ExecutedBlock, BridgeErro
 
 *(これが §計画 のクイズの答えだ。call の主導権は CL 側にあるが、EL 側の構築スレッドから完成済みの `ExecutedBlock` が CL へと逆流して同期する **seam** になっている — データの流れだけ見ると 4 メソッドの中で唯一 EL → CL 方向を持つ。)*
 
-**なぜ `build_payload` + `payload_ready` に分けて、1 つの `build_payload -> ExecutedBlock` にしないのか?** EL が *前 round の投票中に* build する必要があるからだ。`build_payload` が同期的にブロックを返すなら、proposer は build を待ってから broadcast することになる。分けると build が裏で走りつつ投票が進み、proposer の hot path は「準備済みブロックを fetch」(microsecond) に縮む。これが設計上 **最も重要な latency trick** で、sub-second block time はこれに依存する。
+**なぜ `build_payload` + `payload_ready` に分けて、1 つの `build_payload -> ExecutedBlock` にしないのか?** EL が *前 round の投票中に* build する必要があるからだ。`build_payload` が同期的にブロックを返すなら、proposer は build を待ってから broadcast する。分けると build が裏で走りつつ投票が進み、proposer の hot path は「準備済みブロックを fetch」(microsecond) に縮む。これが設計上 **最も重要な latency trick** で、sub-second block time はこれに依存する。
 
 ```rust
 async fn validate_payload(
@@ -327,7 +327,7 @@ cargo check --workspace
 
 2. **trait に `Send + Sync` bound。** すべての impl が thread-safe であることを強制する。これが無いと、actor 間で共有される `Arc<dyn ConsensusBridge>` がコンパイルできない。これがあれば、実装者は「mutable state は Mutex か atomic の裏に置く必要がある」と最初から分かる。Runtime バグへの discipline を compiler が enforce してくれる形だ。
 
-3. **Error variant は 3 つ。1 つでも多くでもない。** 3 つは consensus 側の 3 つの distinct な action (vote-against、wait、halt) に対応する。`BridgeError(String)` 1 つだと consensus 側で文字列パースをすることになる。5 つ以上 (例: `Rejected.Hash`、`Rejected.Number`、`Rejected.BaseFee`) にすると、EL 内部を consensus 側に leak するか、EL が変わると急速に drift する。3 つは **consensus が error に対して取る応答** の cardinality であり、EL の internal taxonomy は `Rejected` の String の裏に隠したままだ。
+3. **Error variant は 3 つ。1 つでも多くでもない。** 3 つは consensus 側の 3 つの distinct な action (vote-against、wait、halt) に対応する。`BridgeError(String)` 1 つだと consensus 側で文字列パースをする。5 つ以上 (例: `Rejected.Hash`、`Rejected.Number`、`Rejected.BaseFee`) にすると、EL 内部を consensus 側に leak するか、EL が変わると急速に drift する。3 つは **consensus が error に対して取る応答** の cardinality であり、EL の internal taxonomy は `Rejected` の String の裏に隠したままだ。
 
 ## 答え合わせ
 

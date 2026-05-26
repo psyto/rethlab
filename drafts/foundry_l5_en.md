@@ -278,6 +278,12 @@ Three things to notice:
 
 1. **`cast index address <addr> <base-slot>` computes the mapping slot.** `keccak256(abi.encode(addr, baseSlot))` is the Solidity storage layout for `mapping(address => X)`. `cast index` exposes this as a CLI helper, so you don't have to compute the keccak by hand.
 2. **`anvil_setStorageAt` is the most powerful and most dangerous of anvil's mutators.** You can break contracts in interesting ways by setting storage to invalid states (e.g., set USDC's `paused` slot to a non-boolean). Use it for tests that verify your contract handles edge cases, not for "just making numbers match."
+
+   > [!IMPORTANT]
+   > **EVM Storage Alignment and Zero-Padding**
+   > EVM storage slots are strictly aligned to 32-byte (256-bit) words. When calling `anvil_setStorageAt`, you must supply a **complete 32-byte hex value (`0x` followed by exactly 64 hex characters)**, padded with leading zeros (e.g., `0x000000000000000000000000000000000000000000000000000000e8d4a51000`).
+   >
+   > If you write a shorter hex value without explicit zero-padding (e.g., just `0xe8d4a51000`), it may violate word boundary rules and **risk corrupting or overwriting adjacent packed variables** sharing that same storage slot. Solidity's compiler optimization (Storage Packing) packs multiple small variables (e.g., an `address` and a `uint96`) into a single 32-byte slot to save gas. Writing to a slot without accounting for all variables in it will overwrite everything. The professional approach to updating single variables in a packed slot is to read the existing 32-byte value, apply a bitwise mask to update only the target bytes, and write the combined 32-byte word back.
 3. **Real production contracts often have non-obvious storage layouts.** USDC's mapping at slot 9 is correct as of this writing, but contracts upgraded via proxy patterns can have arbitrary layouts. `forge inspect <contract> storage` is the source of truth.
 
 ### Step 5: Time travel with `anvil_mine` and `anvil_setNextBlockTimestamp`
@@ -418,7 +424,18 @@ It does — but the Docker image binds to localhost inside the container by defa
 
 **Q7: My fork has Chain ID 1, the same as real mainnet. Doesn't this defeat the chain-ID safety check?**
 
-Yes — and this is the L5 trap to internalize. When you fork mainnet, your local anvil reports Chain ID `1`. The chain-ID check that protects you from accidentally replaying a mainnet tx on Sepolia (or vice versa) compares the chain IDs of the two endpoints; if both endpoints report `1`, the check passes silently. If a real-mainnet RPC URL is sitting in another env var or your shell history, and you accidentally run `cast send --private-key <REAL-KEY> --rpc-url $REAL_RPC` instead of pointing at `http://localhost:8545`, the transaction broadcasts to real mainnet without complaint. `--unlocked` impersonation is harmless against real mainnet (no signed tx is produced), but `--private-key` is not. The defense is operational, not architectural: **`export ETH_RPC_URL=http://localhost:8545` explicitly in your fork-working session, and never paste real-mainnet private keys into a shell that's been doing local-fork work. Discipline on `--rpc-url` is the only defense once you start forking — the chain-ID check protects you between different chains, not between a fork and the chain it's forked from.**
+Yes — and this is the L5 trap to internalize.
+
+When you fork mainnet, local anvil reports Chain ID `1`. The chain-ID safety check only compares endpoint IDs, so if both endpoints report `1`, it passes silently.  
+If a real-mainnet RPC URL is still in another env var or shell history, and you accidentally run `cast send --private-key <REAL-KEY> --rpc-url $REAL_RPC` instead of `http://localhost:8545`, the transaction will broadcast to real mainnet.
+
+`--unlocked` impersonation is harmless against real mainnet (no signed tx is produced), but `--private-key` is not.  
+The defense is operational, not architectural:
+
+1. Explicitly set `export ETH_RPC_URL=http://localhost:8545` in fork-working sessions.
+2. Never paste real-mainnet private keys into a shell that has been used for local-fork work.
+
+**Once you start forking, `--rpc-url` discipline is your only defense. Chain-ID checks protect between different chains, not between a fork and its source chain.**
 
 ## Next lesson (L6) — Capstone — port openhl-liquidation's `InsuranceFund` to Solidity
 
@@ -459,4 +476,3 @@ L5 lands in Module 2 (CLI & state-aware testing) sortOrder 1:
 - **Step 6 (full recipe) is intentionally a copy-paste runnable script.** 6 lines of bash that replace what used to be a 200-line Hardhat fixture. The compression IS the lesson.
 - **Q3 (forge test ↔ anvil relationship) clears up a common confusion** — same REVM, different transports. Q4 (impersonating a contract address) is the "wait, I can do that?" payoff. Q5 (state lost on Ctrl-C) is the "feature, not bug" framing.
 - **Next-lesson preview names the L6 deliverable files explicitly.** Three files at `examples/foundry-capstone/` — readers know exactly what artifact they're building. The closing claim ("it was never about Rust or Solidity, it was about conservation-law discipline") is the course-spanning thesis that L0 promised and L6 will deliver.
-

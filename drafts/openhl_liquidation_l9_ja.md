@@ -421,7 +421,7 @@ L8 で `lib.rs` の `mod` 順序や re-export スタイルを微妙に変えて�
 
 **Q4: 「balance > 0 のとき、次の withdraw は決して Depleted を返さない」の proptest がないのはなぜか?**
 
-そのプロパティはコードの構造から *自明に* 帰結するからだ。`if self.balance == 0` の guard は balance がゼロのときだけ発火し、balance がゼロになり得るのは covering または partial-draining な withdraw の後だけ。これのプロパティテストは、guard の *結果* ではなく guard の *存在* をテストすることになる。**Proptest は実装の *構造* ではなく *結果* をテストすべきだ。**
+そのプロパティはコードの構造から *自明に* 帰結するからだ。`if self.balance == 0` の guard は balance がゼロのときだけ発火し、balance がゼロになり得るのは covering または partial-draining な withdraw の後だけ。これのプロパティテストは、guard の *結果* ではなく guard の *存在* をテストする。**Proptest は実装の *構造* ではなく *結果* をテストすべきだ。**
 
 **Q5: `WithdrawOutcome` を `WithdrawResult`、`Covered` を `Ok` variant、他 2 つを `Err` にできないか?**
 
@@ -435,7 +435,7 @@ L8 で `lib.rs` の `mod` 順序や re-export スタイルを微妙に変えて�
 
 L10 は `compute.rs` に戻り、`compute` と `insurance` の橋渡しをする Stage 10b の 3 つの pure-compute 関数を加える: `liquidation_fee(notional, params)`、`solvent_close_outcome(snapshot, mark, params)`、`underwater_close_outcome(snapshot, mark, params)`。3 つを合わせると、liquidation event を `(fund credit, trader への残額)` あるいは `(fund debit, 部分的に取れた fee)` のタプルに分解する — まさに Stage 10c の scanner が close ごとに `InsuranceFund::deposit` / `InsuranceFund::withdraw_shortfall` を呼ぶために必要な shape だ。
 
-L10 の後、`compute` モジュールと `insurance` モジュールはカスケード数学を介して会話するようになる。Pure 関数が credit/debit の数字を生み、state machine がそれらを蓄積する。L11 はこのループを `LiquidationScanner` で包み、safety-net cascade が runnable な scanner を持つことになる。
+L10 の後、`compute` モジュールと `insurance` モジュールはカスケード数学を介して会話するようになる。Pure 関数が credit/debit の数字を生み、state machine がそれらを蓄積する。L11 はこのループを `LiquidationScanner` で包み、safety-net cascade が runnable な scanner を持つ。
 
 ````
 

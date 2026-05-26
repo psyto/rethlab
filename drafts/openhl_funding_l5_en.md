@@ -23,7 +23,7 @@
 Concepts you'll grasp in this lesson:
 
 - **Saturate-not-panic-not-wrap as the only consensus-safe overflow** — panic halts the validator and forks it off the network; wrap can differ across compiler versions and produce divergent-but-defined values; saturate gives every validator the same bounded value. There are no other options that preserve consensus liveness.
-- **Sign-aware saturation override** — `i64::try_from` reports failure but not direction. The `unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })` closure recovers the direction; a fixed `i64::MAX` override would flip `i128::MIN` to positive and silently corrupt sign.
+- **Sign-aware saturation override** — `i64::try_from` reports failure but not direction. The inline fallback expression `unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })` recovers the direction; a fixed `i64::MAX` override would flip `i128::MIN` to positive and silently corrupt sign. (`unwrap_or` is eagerly evaluated, but this immediate expression is trivial and optimized away in practice.)
 - **Hand-traced tests vs proptests are complementary, not redundant** — proptest random sampling will never hit `i128::MAX` (one point out of 2^129); boundary cases must be hand-traced. Proptest excels at interior properties; hand-traced tests pin the corners.
 - **Test the property that's actually invariant, not the aspirational one** — naive antisymmetry would require equal magnitudes both ways, but integer division breaks that. We test the weaker "signs are opposite" property and document the rounding caveat in the test comment.
 - **Why `checked_mul` + `Result` doesn't actually solve it** — the error has to propagate to the bridge, whose only real options are "revert (fork)", "skip (silent inconsistency)", or "settle at the cap" — and the last is exactly what saturate produces without propagation.
@@ -315,7 +315,7 @@ Five load-bearing decisions in this lesson:
 
 3. **Stabilize test-module boilerplate early.** Adding `use proptest::prelude::*`, `use openhl_clob::AccountId`, and the `pos` helper now means the test module's imports stay stable for L6 / L7. **Boilerplate churn obscures the actual diff per lesson.**
 
-4. **The `unwrap_or` closure in `saturate_i128_to_i64` depends on sign.** A fixed override would flip negative overflows to positive. Reading the saturate helper carefully reveals why the closure is *necessary*, not just defensive.
+4. **The `unwrap_or` sign-aware fallback expression in `saturate_i128_to_i64` is required.** A fixed override would flip negative overflows to positive. Reading the saturate helper carefully reveals why this branch is *necessary*, not just defensive.
 
 5. **Exclude zero from the proptest range** — the zero case is already a hand-traced unit test, and including it in the proptest would require complicating the property. **Hand-traced tests pin boundary cases; proptests pin properties on the interior.** They're complementary, not redundant.
 

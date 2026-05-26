@@ -149,7 +149,7 @@ Scan-coverage 行列:
 2. **選ばれた数字 — entry=1_000、collateral=20、mark=999 — は ratio（190 bps）が maintenance（200 bps）のすぐ下に着地する *境界ケース*。** 不等号を flip させた bug（`>` の代わりに `>=` など）が 190 を間違ったバケットに落とす。**境界の入力は、分類 predicate での off-by-one を捕える test を作る。**
 3. **`outcome` への `match` は別 variant に `panic!("expected Solvent")` を使う。** 失敗メッセージは *期待する* variant を名指す。失敗ログを読む将来の読者には、どちらの分岐を狙ったかが即座に分かる。**Panic メッセージは「想定外の variant」ではなく「期待した variant」を名指す。**
 4. **`ScanReport` の 4 フィールドすべて + `fund_balance()` を assert する。** Per-record の `outcome` がすでに含意していても、aggregate フィールドもチェックする。なぜか。L11 の設計契約が aggregate を first-class と宣言した以上、集計の数学を破る regression は、per-record の分解を破るものとは別の bug クラスだからだ。**Aggregate フィールドと per-record フィールドは別々の assertion を得る。別々の invariant だからだ。**
-5. **`s.fund_balance() == 14` で fund が実際に mutate したことを証明する** — report が claim しただけではない、ということだ。Fund は *state* であり、derivation ではない。別途読み直すことで「report が嘘をついていない」を確認する。**State 変更は call 後の別 read を要する。それを describe する report は独自の assertion を要する。**
+5. **`s.fund_balance() == 14` で fund が実際に mutate したことを証明する** — report が claim しただけではない。Fund は *state* であり、derivation ではない。別途読み直すことで「report が嘘をついていない」を確認する。**State 変更は call 後の別 read を要する。それを describe する report は独自の assertion を要する。**
 
 #### Test 2: Underwater、fund が完全 cover
 
@@ -435,8 +435,9 @@ Scan-coverage 行列:
 押さえる点が 3 つ:
 
 1. **Proptest body 内の `if report.unfilled_deficit > 0 { ... }` filter。** Unfilled が存在するケースだけが assertion を発火させる。Fund がすべてを cover できたケースは valid な「assertion が発火しないケース」だ。**Proptest 内の条件付き assertion は「X が true なら Y も成立する」の表現方法。**
-2. **入力範囲が *adverse* — `mark in 50..70`。** Entry $100 の long position は mark $50-70 で深刻な損失に直面し、underwater outcome が起こりやすくなる。これで test は `unfilled > 0` 分岐をトリガする方向に bias する。**Proptest input は *interesting な* 条件をトリガする方向に bias すべき。さもないと、ほとんどのケースが assertion を静かに skip する。** これが *proptest の密度（density）問題* だ: `mark in 50..150` のような広い範囲だと、ランダム入力の大多数が Safe か Solvent に着地し、条件付き assertion は一度も発火しない。Proptest のデフォルト 100-250 iteration を通じて *プロパティは実際にテストされないまま pass する* — 見えない dead-code test だ。Assertion が実際に発火する regime に向けて入力を bias する。さもないと、プロパティテストは何もテストしていないことになる。
+2. **入力範囲が *adverse* — `mark in 50..70`。** Entry $100 の long position は mark $50-70 で深刻な損失に直面し、underwater outcome が起こりやすくなる。これで test は `unfilled > 0` 分岐をトリガする方向に bias する。**Proptest input は *interesting な* 条件をトリガする方向に bias すべき。さもないと、ほとんどのケースが assertion を静かに skip する。** これが *proptest の密度（density）問題* だ: `mark in 50..150` のような広い範囲だと、ランダム入力の大多数が Safe か Solvent に着地し、条件付き assertion は一度も発火しない。Proptest のデフォルト 100-250 iteration を通じて *プロパティは実際にテストされないまま pass する* — 見えない dead-code test だ。Assertion が実際に発火する regime に向けて入力を bias する。さもないと、プロパティテストは何もテストしていない。
 3. **`initial_fund in 0..5_000` — 下の範囲で cap してある。** Fund は予想される aggregate shortfall（underwater account 数で scale する）に対して不十分にサイズされる。**予想される shortfall より下に fund をサイズすれば、unfilled deficit の可能性が最大化される。**
+4. **L13 では `prop_assume!` 多用よりも Strategy 側の事前バイアスを優先する。** このプロパティの目的は `unfilled > 0` 分岐を高密度で発火させることなので、生成器を最初から adverse 領域へ寄せるほうが効率が良い。こうすると reject 数が抑えられ、`TooManyAssumptions` のリスクも下がる。**数理前提を明示したいときは L5 のように `prop_assume!`、発火密度を作りたいときは L13 のように Strategy で先に寄せる**、という使い分けが本コースの規律だ。
 
 #### Proptest #3: `records_count_bounded_by_accounts`
 

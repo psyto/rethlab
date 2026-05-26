@@ -455,7 +455,7 @@ git checkout main
 ## よくある質問
 
 **Q: L1 にテストがないのに \`[dev-dependencies] proptest\` を今宣言するのはなぜ？**
-Cargo.toml の diff を 1 箇所に集中させたいからだ。L4 で proptest を追加すると Cargo.toml を 2 回触ることになる。L1 でまとめて済ませれば、このレッスン以降このファイルは変わらない。**Cargo.toml の安定性は、小さな unused dep 宣言を抱える価値がある。**
+Cargo.toml の diff を 1 箇所に集中させたいからだ。L4 で proptest を追加すると Cargo.toml を 2 回触る。L1 でまとめて済ませれば、このレッスン以降このファイルは変わらない。**Cargo.toml の安定性は、小さな unused dep 宣言を抱える価値がある。**
 
 **Q: 「parts-per-billion」解釈は実際どう読むのか？**
 Funding rate の生値 \`1_250_000\` は \`0.00125\`（interval ごとに 0.125%）を意味する。つまり「1,000,000,000 分の 1,250,000」 = 0.125% だ。HL の 1 日 8 回 settlement と 4% cap のもとでは、実際に見る値の範囲は \`±40_000_000\` raw = \`±4%/interval\` = 最悪ケースで \`±32%/day\`。**すべて i64 で余裕を持って表現できる。**
@@ -464,7 +464,7 @@ Funding rate の生値 \`1_250_000\` は \`0.00125\`（interval ごとに 0.125%
 **無理だ。** \`RATE_SCALE\` はチェーンの consensus 定数だ。永続化済みのすべての balance、過去すべての settlement、すべてのテストフィクスチャが \`RATE_SCALE = 1e9\` を前提に calibrate されている。変更には coordinated な network upgrade が必要になる。**デプロイ後は immutable として扱うべきだ。** だからこそクレート開始時に一度だけ、\`const\` として設定する。
 
 **Q: \`RATE_SCALE\` のテストがないのはなぜ？**
-何を assert すればいい？ \`assert_eq!(RATE_SCALE, 1_000_000_000)\` は同義反復にすぎない — 定数を自分自身と比較しているだけだ。定数の意味は*他の*コードでの使われ方を通じて生きる。**最初の意味あるテストは、L2 で最初の money type に付くことになる。**
+何を assert すればいい？ \`assert_eq!(RATE_SCALE, 1_000_000_000)\` は同義反復にすぎない — 定数を自分自身と比較しているだけだ。定数の意味は*他の*コードでの使われ方を通じて生きる。**最初の意味あるテストは、L2 で最初の money type に付く。**
 
 ## 次のレッスン（L2）
 
@@ -1142,7 +1142,7 @@ L4 では \`compute.rs\` を始める。ファイルを作って、module doc �
 - **割る前に掛ければ精度が残る** — \`(mark - index) / index\` を整数で先に計算してしまうと、100% 未満の premium はすべてゼロに丸められる。先に \`RATE_SCALE\` を掛けて分数を i128 のマグニチュードへと変換し、その後で割れば意味のある整数が残る。
 - **\`u64\` での引き算が王道の符号バグ** — \`MarkPrice(99) - IndexPrice(100)\` は \`u64\` で計算すると \`u64::MAX\` 近くに wrap し、本来「小さな負」であるべき premium が「巨大な正」になる。\`i128::from(...)\` の upcast でこの引き算が代数的に正しくなる。
 - **Oracle 欠損時の graceful degradation** — \`index == 0\` のときは \`Premium(0)\` を返し、エラーにはしない。Funding は bridge を経由して balance update として流れる仕組みなので、\`Err\` を返すと無関係な payload までトランザクション失敗として表面化してしまう。信号がないなら「ゼロを返す」が正解だ。
-- **テストコメントは紙の上の数学そのもの** — assertion の隣に \`// (101-100) * 1e9 / 100 = 10_000_000\` と書いておけば、将来このコードを debug する人は「テストの著者を信じる」のではなく「数式に対して assertion を検証する」ことができる。
+- **テストコメントは紙の上の数学そのもの** — assertion の隣に \`// (101-100) * 1e9 / 100 = 10_000_000\` と書いておけば、将来このコードを debug する人は「テストの著者を信じる」のではなく「数式に対して assertion を検証する」できる。
 
 検証：
 
@@ -1469,7 +1469,7 @@ git checkout main
 \`from\` が idiomatic かつ non-truncating な変換だからだ。ここでは \`as i128\` でも動く（\`i64 → i128\` で truncate は起きない）が、\`from\` を使うことで「これは widening であって reinterpretation ではない」と意図を documentation できる。**Widening には \`from\` を使う。truncation が起きないことを検証済みのときだけ \`as\` を使う。** \`as i128\` を読んだ将来のエンジニアは safety を自分で検証する必要があるが、\`from\` を読めば変換が safe だと一目で分かる。
 
 **Q: なぜ helper の名前が \`clamp_to_i64\` ではなく \`saturate_i128_to_i64\` なのか？**
-「Saturate」は「型境界で clamp する」を表す確立した用語だからだ — \`u64::saturating_mul\`、\`i128::saturating_sub\` と同じ単語だ。**標準語彙を使えば、関数の挙動がどの Rust 開発者にも一目で伝わる。** 「Clamp」だとユーザ定義の境界も含む任意の clamping を意味しうるが、「saturate」は型境界での clamping を特定的に指す。
+「Saturate」は「型境界で clamp する」を表す確立した用語だからだ — \`u64::saturating_mul\`、\`i128::saturating_sub\` と同じ単語だ。**標準語彙を使えば、関数の挙動がどの Rust 開発者にも一目で伝わる。** 「Clamp」だとユーザー定義の境界も含む任意の clamping を意味しうるが、「saturate」は型境界での clamping を特定的に指す。
 
 **Q: \`compute_premium\` は \`pub\` ではなく \`pub(crate)\` にすべきでは？**
 \`pub\` でないと外部の caller（course 10 の bridge integration や、funding state を telemetry のために問い合わせる外部 observer）が呼べないからだ。\`pub(crate)\` ではそれが禁じられる。**この関数は public API の一部だ。** \`saturate_i128_to_i64\` が実装の詳細、\`compute_premium\` が契約だ。
@@ -1492,7 +1492,7 @@ L5 では新しい関数は追加しない。代わりに overflow 哲学を深�
 このレッスンで掴む概念:
 
 - **Saturate でも panic でも wrap でもない、consensus で許される overflow は saturate だけ** — panic すると validator が halt し、ネットワークから fork off する。Wrap はコンパイラバージョン次第で挙動が変わり、「定義されているが間違った」値を生む。Saturate ならすべての validator が同じ bounded value に到達する。Consensus の liveness を保てる選択肢は他にない。
-- **符号を意識した saturation の override** — \`i64::try_from\` は失敗を報告してくれるが方向までは教えてくれない。\`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })\` の closure が方向を復元する。固定で \`i64::MAX\` を返すようにすると、\`i128::MIN\` が正に flip して符号が静かに壊れる。
+- **符号を意識した saturation の override** — \`i64::try_from\` は失敗を報告してくれるが方向までは教えてくれない。\`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })\` の**インライン条件式**が方向を復元する。固定で \`i64::MAX\` を返すようにすると、\`i128::MIN\` が正に flip して符号が静かに壊れる。(\`unwrap_or\` は eager 評価だが、ここで渡しているのは軽い即時式なので実コストは無視できる。)
 - **手書きトレースと proptest は補完関係であって冗長ではない** — proptest のランダムサンプリングは \`i128::MAX\`（2^129 通りのうちの 1 点）にまず当たらない。境界は手書きでしか pin できない。Proptest は interior の property に強く、手書きは corner に強い。
 - **テストすべきは「実際に成立する不変条件」であって「願望の property」ではない** — 素朴な antisymmetry は magnitude も等しくあれと書きたくなるが、整数除算がそれを壊す。だから「符号が逆」という weaker な property をテストし、丸めの caveat はテストコメントに残す。
 - **\`checked_mul\` + \`Result\` で本当に解決するわけではない理由** — エラーは最終的に bridge に届くが、bridge が取れる現実的な選択肢は「revert（fork）」「skip（silent inconsistency）」「cap で settle」の 3 つしかない。最後のものは saturate がそのまま実現してくれる挙動だ。
@@ -1538,7 +1538,7 @@ L4 のテストでは pathological な入力（例：\`MarkPrice(u64::MAX)\`）�
 
 > 🛑 **考えてみよう。** スクロール前に — \`compute_premium\` で panic が起きれば validator は halt する。**なぜそれが単一ノード障害ではなく chain fork になるのか？** ヒント：1 つが halt したとき、他の validator が何をしているかを考えよ。
 
-（答え：**他の validator は、halt したノードを置き去りに前進していくからだ。** Funding tick はすべての validator で deterministic な state update を生む。1 つが halt しても、network の quorum（典型的には 2/3 以上）はそのまま動き続ける。Halt した validator が再起動する頃には、chain head は何ブロックも先に進んでいる。Halt した validator は sync できない — halt したブロックでの local state が network 側の view と食い違うからだ。**Halt によって history が 2 つに分かれる：「panic を踏んだ入力での history」と「network が進めた state での history」だ。Validator は事実上、自ら network から fork off したことになる。** これに対して saturate は、validator 同士を lockstep のまま保ってくれる。）
+（答え：**他の validator は、halt したノードを置き去りに前進していくからだ。** Funding tick はすべての validator で deterministic な state update を生む。1 つが halt しても、network の quorum（典型的には 2/3 以上）はそのまま動き続ける。Halt した validator が再起動する頃には、chain head は何ブロックも先に進んでいる。Halt した validator は sync できない — halt したブロックでの local state が network 側の view と食い違うからだ。**Halt によって history が 2 つに分かれる：「panic を踏んだ入力での history」と「network が進めた state での history」だ。Validator は事実上、自ら network から fork off した。** これに対して saturate は、validator 同士を lockstep のまま保ってくれる。）
 
 ## 手順
 
@@ -1725,7 +1725,7 @@ proptest 固有の要素は以下：
 
 **コメントには、なぜ property を弱めたかも書いてある。** 将来この property を読んで「規模も等しいべきでは？」と思った読者は、rounding 由来の caveat がその場で documentation されているのを見つけられる。**整数算術のもとで実際には成り立たない aspirational な property は、テスト失敗を呼び込むだけだ。** 実際に invariant な property をテストすること。
 
-> 🛑 **やりがちな勘違い。** 「テスト fixture で \`f64\` を使って期待規模を厳密に計算すればよいのでは？」 **それは \`f64\` 計算の期待値を \`i64\` 計算の実測値に対して assert することになる — 両者は LSB レベルで一致しない。** 決定的な整数コードを非決定的な float の期待値と比較するテストは、信頼できない。**テスト側の算術も、本番側の算術と同じドメインに留める。**
+> 🛑 **やりがちな勘違い。** 「テスト fixture で \`f64\` を使って期待規模を厳密に計算すればよいのでは？」 **それは \`f64\` 計算の期待値を \`i64\` 計算の実測値に対して assert する— 両者は LSB レベルで一致しない。** 決定的な整数コードを非決定的な float の期待値と比較するテストは、信頼できない。**テスト側の算術も、本番側の算術と同じドメインに留める。**
 
 > 🛑 **考えてみよう。** 戦略で \`0u64..1_000_000\` ではなく \`1u64..1_000_000\` を使い、ゼロを除外しているのはなぜか。
 
@@ -1784,9 +1784,9 @@ PROPTEST_VERBOSE=1 cargo test -p openhl-funding premium_is_antisymmetric
 
 3. **テストモジュールの boilerplate は早めに安定化させる。** \`use proptest::prelude::*\`、\`use openhl_clob::AccountId\`、\`pos\` helper を今のうちに足しておけば、テストモジュールの import は L6 / L7 まで安定する。**Boilerplate の churn は、レッスンごとの diff の本質を覆い隠してしまう。**
 
-4. **\`saturate_i128_to_i64\` の \`unwrap_or\` の closure は符号に依存させる。** 固定値の override では、負方向の overflow を正に flip してしまう。Saturate helper を丁寧に読めば、closure が*念のため*ではなく*必要だから*そうなっていると分かる。
+4. **\`saturate_i128_to_i64\` の \`unwrap_or\` のインライン条件式は符号に依存させる。** 固定値の override では、負方向の overflow を正に flip してしまう。Saturate helper を丁寧に読めば、この条件分岐が*念のため*ではなく*必要だから*そうなっていると分かる。
 
-5. **proptest の範囲からゼロを除外する** — ゼロのケースは既に手書きトレースの unit test でカバー済みであり、proptest に含めると property を余計に複雑化することになる。**手書きトレースは境界ケースを pin し、proptest は内部の property を pin する。** 互いに補完的であって、冗長ではない。
+5. **proptest の範囲からゼロを除外する** — ゼロのケースは既に手書きトレースの unit test でカバー済みであり、proptest に含めると property を余計に複雑化する。**手書きトレースは境界ケースを pin し、proptest は内部の property を pin する。** 互いに補完的であって、冗長ではない。
 
 ## 答え合わせ
 
@@ -1817,7 +1817,7 @@ git checkout main
 どちらも Rust の property-testing crate であり、どちらでも動く。\`proptest\` は shrinking が強く（より小さい counterexample を見つける）、strategy の合成（range に対する \`in\` 構文）も書きやすい。openhl workspace は consensus crate のテストで既に proptest を引いているので、限界コストはゼロだ。**一つに決めたら貫く。コードベースの途中で乗り換えるコストは、最初に違う方を選ぶより高い。**
 
 **Q: \`saturating_mul\` と \`saturate_i128_to_i64\` の関係は？**
-\`saturating_mul\` は \`i128\`（や他の整数型）の組み込みメソッドで、その型自身の範囲内で saturated な積を生む。\`saturate_i128_to_i64\` はユーザ定義の helper で、\`i128\` を \`i64\` の範囲に clamp する。対応している境界が違う：\`saturating_mul\` は型内 overflow を防ぐもの、\`saturate_i128_to_i64\` は型をまたいだ narrowing を防ぐものだ。**両方とも必要だ — 数学が積のために i128 を、保存のために i64 を、どちらも使うからだ。**
+\`saturating_mul\` は \`i128\`（や他の整数型）の組み込みメソッドで、その型自身の範囲内で saturated な積を生む。\`saturate_i128_to_i64\` はユーザー定義の helper で、\`i128\` を \`i64\` の範囲に clamp する。対応している境界が違う：\`saturating_mul\` は型内 overflow を防ぐもの、\`saturate_i128_to_i64\` は型をまたいだ narrowing を防ぐものだ。**両方とも必要だ — 数学が積のために i128 を、保存のために i64 を、どちらも使うからだ。**
 
 ## 次のレッスン（L6）
 
@@ -1839,7 +1839,7 @@ L6 では \`compute_rate\` を追加する — \`Premium\` と \`FundingParams\`
 - **演算順が単位を決める** — 先に割って、*それから* clamp する。Cap は \`4%/interval\` なので rate レベルで bind する必要がある。Clamp してから divide すると、cap の実効値が \`cap/divisor\`（Hyperliquid デフォルトなら \`0.5%/interval\`）にすり替わり、仕様が静かに弱められてしまう。
 - **\`.clamp(-cap, cap)\` で対称的にクランプする** — 標準の \`i64::clamp\` が両側を一度に処理してくれる。よくあるバグは \`min(raw, cap)\` のように正側だけ clamp して負側を見落とすパターンだ。\`.clamp\` を使えばそれが構造的に防げる。
 - **API 境界での defensive な \`.abs()\`** — \`FundingRate(-40_000_000)\` を「絶対値」として受け入れれば、呼び出し側のフットガンを 1 つ減らせる。コストは ~1 ns、効果は実質的だ。
-- **自然に成立する edge case は明示的な分岐より強い** — \`cap == 0\` は \`clamp(0, 0) = 0\` から自動的に \`FundingRate(0)\` を生む。特例コードを書かない = テストすべきコードパスも増えない、ということだ。
+- **自然に成立する edge case は明示的な分岐より強い** — \`cap == 0\` は \`clamp(0, 0) = 0\` から自動的に \`FundingRate(0)\` を生む。特例コードを書かない = テストすべきコードパスも増えない。
 - **Property のない場所に proptest を強引に当てない** — \`compute_rate\` は「割って clamp」だけで、proptest が活きる代数的不変条件がない。手書きトレースで入力領域をカバーすれば十分だ。Property がない場所に無理に proptest を書く必要はない。
 
 検証：
@@ -2137,6 +2137,7 @@ Widening は \`i64::from(u32)\` の呼び出し 1 つで済むからだ — マ�
 
 **Q: \`rate_cap > i64::MAX / 2\` のときはどうなるか？ 対称な clamp は機能するのか？**
 \`i64::MIN\` に対する \`.abs()\` は panic する。理由は**2 の補数表現の非対称性**だ: 符号付き 64 bit には負の数が正の数より 1 個多く詰め込まれている (負側は \`i64::MIN = -2^63\` まで、正側は \`i64::MAX = 2^63 - 1\` まで) ので、\`|i64::MIN| = 2^63\` という値は正の \`i64\` で表現できる範囲を 1 だけ超えてしまう。つまり \`i64::MIN.abs()\` は overflow し、debug build では panic / release build では wrap となる。だから \`rate_cap.0 == i64::MIN\` のときは \`.abs()\` が踏み抜く。Stage 8b ではこれを guard していない — ユーザ提供の \`FundingParams\` 側の問題として扱う。現実のデプロイでは \`40_000_000\`（\`i64::MAX / 2\` よりはるかに小さい）のような値を使うため、このエッジには届かない。**defensive な \`saturating_abs()\`（\`i64::MIN\` を \`i64::MAX\` に丸める）を入れれば対応できるが、Stage 8b では採用していない。**
+加えて実運用では、ガバナンス経由のパラメータ更新や設定ロード時に \`rate_cap\` の境界（例: \`0..=40_000_000\`）を先に検証するのが通常で、\`i64::MIN\` のような爆弾値は pure 計算層まで到達させない。ここでも Defense in Depth を使う。
 
 **Q: \`compute_rate\` の proptest がないのはなぜか？**
 明らかな代数的 property が見当たらないからだ。「Divide and clamp」には proptest が輝くような antisymmetry や可換性、その他の不変条件がない。代わりに手書きトレーステスト 5 つで入力領域（通常の除算、正側 clamp、負側 clamp、divisor 0、cap 0）をきれいにカバーしている。**proptest は property に向き、手書きトレースは個別の入力領域に向く。** property がない場所に無理に proptest を当てる必要はない。
@@ -2160,8 +2161,8 @@ L7 では \`apply_funding\` を追加する — 3 つ目で最後の pure 関数
 
 - **単項マイナス 1 つが符号規約全体を担う** — \`-delta_unscaled\` で「市場中心（longs が支払う）」から「アカウント中心（\`Notional\` 正 = 受取）」へと flip する。符号反転点が 2 箇所あれば、バグの表面積も 2 倍になる。1 箇所に集約することが契約だ。
 - **保存則を proptest で pin する** — balanced book の settlement の合計は、saturation を踏まない範囲では「ちょうど」ゼロだ。正の \`d\` のもとで \`-x/d = -(x/d)\` が整数除算でも成立するからだ。Funding は再配分するだけで、quote currency を生成も破壊もしない。
-- **Flat position はフィルタする、エラーにはしない** — \`size == 0\` は黙ってドロップする。\`Result<Vec<Settlement>, FlatPositionError>\` を返してしまうと、呼び出し側に「異常ではない条件」まで扱わせることになる。Flat position は*想定内*の状態であって例外ではない。
-- **最も制約の弱い引数型を受け取る** — \`positions: &[Position]\`（スライスの借用）なら呼び出し側が所有権を保持し、tick をまたいで再利用できる。\`Vec<Position>\` を要求してしまうと毎回 clone を強制することになる。
+- **Flat position はフィルタする、エラーにはしない** — \`size == 0\` は黙ってドロップする。\`Result<Vec<Settlement>, FlatPositionError>\` を返してしまうと、呼び出し側に「異常ではない条件」まで扱わせる。Flat position は*想定内*の状態であって例外ではない。
+- **最も制約の弱い引数型を受け取る** — \`positions: &[Position]\`（スライスの借用）なら呼び出し側が所有権を保持し、tick をまたいで再利用できる。\`Vec<Position>\` を要求してしまうと毎回 clone を強制する。
 - **Proptest のレンジは property が*厳密に*成立するように選ぶ** — \`size in 1..1M\` であれば i128 の積が \`saturating_mul\` の clamp 閾値を踏まずに済む。レンジを広げると「合計 == 0」を「\`sum.abs() < epsilon\`」へと弱める必要が出てくる — それは不変条件ではなく願望の property になってしまう。
 
 検証：
@@ -2196,7 +2197,7 @@ L6 後の状態：
 - 10 テスト pass、proptest 1 つも pass。
 - \`saturate_i128_to_i64\` のユーザは 1 つだけ（\`compute_premium\`）。
 
-L7 では pipeline の最終段を組み立てる — rate をアカウントごとの settlement に落とし込む段だ。同時に、saturate helper の 2 番目のユーザも追加することになる。
+L7 では pipeline の最終段を組み立てる — rate をアカウントごとの settlement に落とし込む段だ。同時に、saturate helper の 2 番目のユーザも追加する。
 
 ## プラン
 
@@ -2258,7 +2259,7 @@ pub fn apply_funding(
 
 ~25 行、動く部分は 6 つ：
 
-1. **\`if rate.0 == 0 { return Vec::new(); }\`** — zero-rate のファストパス。allocation も作業もなし。契約をそのまま反映する：rate がゼロ = 適用すべき funding なし、ということだ。boot 中や oracle 故障時に典型的な状況だ。
+1. **\`if rate.0 == 0 { return Vec::new(); }\`** — zero-rate のファストパス。allocation も作業もなし。契約をそのまま反映する：rate がゼロ = 適用すべき funding なし。boot 中や oracle 故障時に典型的な状況だ。
 
 2. **\`Vec::with_capacity(positions.len())\`** — 出力の capacity を事前確保する。Flat position は後でフィルタされうるが、input の長さは良い上限になる。**push しながら再アロケートが走るのを防ぐ。** 小さな最適化だが、hot path では効いてくる。
 
@@ -2276,7 +2277,7 @@ pub fn apply_funding(
 
 （答え：**呼び出し側が position リストを所有していて、tick をまたいで再利用するからだ。** 所有権を奪う形にすると、呼び出し側は毎回呼び出す前に clone する必要が出てくる。Slice の借用はコストゼロで、呼び出し側は所有権を保持できる。**関数が使える型のうち、最も制約の弱いものを受け取る** — iteration だけで足りるなら、Vec ではなく slice にする。）
 
-> 🛑 **やりがちな勘違い。** 「ループでなく \`positions.iter().filter(...).map(...).collect()\` を使えばよくないか？」 **動くし、Rust としてはより idiomatic だ。** Stage 8b で imperative なループを採っているのは、中間計算を別々の \`let\` binding として置く方が追いやすいからだ。関数チェーン \`positions.iter().filter(|p| p.size.0 != 0).map(|pos| { let notional = ...; Settlement { ... } }).collect()\` も同じく動く。**idiom より可読性を優先する** — チームがデバッグしやすい形を選ぶ、ということだ。
+> 🛑 **やりがちな勘違い。** 「ループでなく \`positions.iter().filter(...).map(...).collect()\` を使えばよくないか？」 **動くし、Rust としてはより idiomatic だ。** Stage 8b で imperative なループを採っているのは、中間計算を別々の \`let\` binding として置く方が追いやすいからだ。関数チェーン \`positions.iter().filter(|p| p.size.0 != 0).map(|pos| { let notional = ...; Settlement { ... } }).collect()\` も同じく動く。**idiom より可読性を優先する** — チームがデバッグしやすい形を選ぶ。
 
 ### Step 2: 符号規約を歩く
 
@@ -2413,6 +2414,8 @@ pub fn apply_funding(
 
 **Zero-sum property は funding の根本的な保存則だ。** Balanced book — 同じサイズの short 1 つにつき long 1 つ — では、ちょうど再配分が起きるはずだ。Shorts が集合として受け取る量と longs が集合として支払う量が等しく、quote currency は生成も破壊もされない。
 
+ここで重要なのは、整数除算の切り捨てがあっても \`(+P, -P)\` の対称ペアでは恒等式 \`(-P) / d == -(P / d)\`（\`d > 0\`）が保たれる点だ。つまり long と short を厳密に反対符号・同一絶対値で組んだこのテストでは、端数も対称に相殺され、tolerance なしで和が厳密に 0 に揃う。
+
 proptest はこれを exercise する：
 - \`size\`（1 から 1M）、\`mark\`（1 から 1M）、\`rate\`（-10M から +10M ppb、つまり -1% から +1%）をランダムに**生成**する。
 - Balanced book を**構築**する：account 1 が long \`size\`、account 2 が short \`size\`。
@@ -2441,7 +2444,7 @@ pub use compute::{compute_premium, compute_rate};
 pub use compute::{apply_funding, compute_premium, compute_rate};
 \`\`\`
 
-アルファベット順だ。**これで Module 2 の 3 つの pure 関数がすべてクレートルートで re-export されたことになる。** 呼び出し側は \`compute::\` を経由せずに使える。
+アルファベット順だ。**これで Module 2 の 3 つの pure 関数がすべてクレートルートで re-export された。** 呼び出し側は \`compute::\` を経由せずに使える。
 
 ### Step 6: テストを実行
 
@@ -2513,10 +2516,10 @@ git checkout main
 ## よくある質問
 
 **Q: 出力をアカウント順にソートせず、入力順を保つのはなぜか？**
-Determinism のためだ。ソートはソート順の選択を強要するが、入力順を保つほうが、関数の挙動が入力から自明に予測可能になる。**ソートされた出力が必要な呼び出し側は自分でソートすればよく、不要な呼び出し側はコストを払わずに済む。** デフォルトとして最も安価な挙動を採る、ということだ。
+Determinism のためだ。ソートはソート順の選択を強要するが、入力順を保つほうが、関数の挙動が入力から自明に予測可能になる。**ソートされた出力が必要な呼び出し側は自分でソートすればよく、不要な呼び出し側はコストを払わずに済む。** デフォルトとして最も安価な挙動を採る。
 
 **Q: 現実的な入力では \`notional × rate\` の桁数はどれくらいになるか？**
-\`size = 1M\`、\`mark = 1M\`、\`rate = 1e7\`（RATE_SCALE の 1% = interval あたり 1%）で計算すると \`notional = 1e12\`、\`delta_unscaled = 1e19\` になる。これは \`i64::MAX\`（~9.2e18）のすぐ近くで、「合理的」と言える入力ですら saturation regime に届きうるということだ。**現実のデプロイで i128 中間値は optional ではない。**
+\`size = 1M\`、\`mark = 1M\`、\`rate = 1e7\`（RATE_SCALE の 1% = interval あたり 1%）で計算すると \`notional = 1e12\`、\`delta_unscaled = 1e19\` になる。これは \`i64::MAX\`（~9.2e18）のすぐ近くで、「合理的」と言える入力ですら saturation regime に届きうる。**現実のデプロイで i128 中間値は optional ではない。**
 
 **Q: \`apply_funding\` の saturation 挙動のテストがないのはなぜか？**
 Saturation ケースは*helper を通じて*すでにテスト済みだからだ（\`saturate_i128_to_i64\` の境界挙動は L5 で探っている）。同じ境界を関数呼び出し越しに再テストするのは冗長になる。**Helper を 1 度テストしたら、あとはそれを信用する。** 念のため composition test（\`size = u64::MAX, mark = u64::MAX, rate = i64::MAX\` のような）を足す価値はあるかもしれないが、Stage 8b では採用していない — saturation の保証は helper から来ており、その helper はテスト済みだ。
@@ -2613,7 +2616,7 @@ L8 ではその「いつ」を組み立てる。Clock は数学を正しいタ�
 
 > 🛑 **考えてみよう。** スクロール前に — \`tick()\` は \`Option<FundingTick>\` を返す（settlement があれば \`Some\`、なければ \`None\`）。**なぜ \`Option\` を返すのか。\`FundingTick\` を常に返す（settlement がないときは空の \`settlements\` を持つ形）形にしないのはなぜか？** ヒント：呼び出し側が結果をどう扱うかを考えよ。
 
-（答え：**\`None\` だけで「state 変化なし」を通知でき、呼び出し側が結果を inspect するまでもないからだ。** Funding tick をブロック生成ループに繋ぐ呼び出し側は、\`FundingApplied\` イベントを発火するか、settlement をログするか、といった判断を安く済ませたい。\`Option\` なら \`if let Some(tick) = clock.tick(...)\` という自然な形が書ける。常に何かを返す形にすると、呼び出し側に \`if !tick.settlements.is_empty()\` のようなチェックを書かせることになる — それは正しい意味すら表せない（空の settlement リストは「tick が fire したが position がなかった」かもしれないし、「そもそも tick が fire していない」かもしれない）。**\`Option\` は、この二分を型レベルで明示してくれる。**）
+（答え：**\`None\` だけで「state 変化なし」を通知でき、呼び出し側が結果を inspect するまでもないからだ。** Funding tick をブロック生成ループに繋ぐ呼び出し側は、\`FundingApplied\` イベントを発火するか、settlement をログするか、といった判断を安く済ませたい。\`Option\` なら \`if let Some(tick) = clock.tick(...)\` という自然な形が書ける。常に何かを返す形にすると、呼び出し側に \`if !tick.settlements.is_empty()\` のようなチェックを書かせる— それは正しい意味すら表せない（空の settlement リストは「tick が fire したが position がなかった」かもしれないし、「そもそも tick が fire していない」かもしれない）。**\`Option\` は、この二分を型レベルで明示してくれる。**）
 
 ## 手順
 
@@ -2644,7 +2647,7 @@ use crate::types::{
 
 注目点は 2 つ：
 
-**Module doc が両方の不変条件を冒頭で明示している。** 実際に強制するのは \`tick()\`（interval guard）と L9 / L10 のテストだが、*契約*はここ、ファイル最上部に置いてある — モジュールを読む人は、コードを見る前に両不変条件を見ることになる。**契約を約束し、下のコードとテストで守る。**
+**Module doc が両方の不変条件を冒頭で明示している。** 実際に強制するのは \`tick()\`（interval guard）と L9 / L10 のテストだが、*契約*はここ、ファイル最上部に置いてある — モジュールを読む人は、コードを見る前に両不変条件を見る。**契約を約束し、下のコードとテストで守る。**
 
 **Imports は必要なものを一通り引っ張ってくる。** \`apply_funding\`、\`compute_premium\`、\`compute_rate\`（Module 2）、\`FundingParams\`、\`FundingRate\`、\`IndexPrice\`、\`MarkPrice\`、\`Position\`、\`Premium\`、\`Settlement\`（Module 1）。**L4 の compute.rs の import と同じ理屈で、boilerplate を早めに安定化させる。**
 
@@ -2770,7 +2773,7 @@ impl FundingClock {
 
 Clock を construct する。**\`const fn\`** なので、コンパイル時に \`static DEFAULT_CLOCK: FundingClock = FundingClock::new(...)\` と書ける。**\`#[must_use]\`** を付けてあるのは、clock を構築してそのまま捨てるのは常にバグだからだ。
 
-Doc にはタイミングの semantics も書いてある：「\`genesis_time + interval_secs\` 以降の最初の tick で fire する」。\`genesis_time = 1_000_000\`、\`interval_secs = 3600\` を渡した呼び出し側は、最初の tick が \`1_003_600\` 以降で fire することを把握できる。**驚きはない。**
+Doc にはタイミングの semantics も書いてある：「\`genesis_time + interval_secs\` 以降の最初の tick で fire する」。\`genesis_time = 1_000_000\`、\`interval_secs = 3600\` を渡した呼び出し側は、最初の tick が \`1_003_600\` 以降で fire することを把握できる。**驚きはない。** ここでの timestamp は Unix time の**秒単位**であり、ミリ秒ではない点を固定しておく（\`+3600\` はちょうど 1 時間）。
 
 #### \`params()\` と \`last_settled_at()\` アクセサ
 
@@ -2821,7 +2824,7 @@ Clock の核心となるメソッド。論理的には 3 つの phase が時間�
 
 3. **state 更新 + return**：\`last_settled_at\` を \`now\` に進め、\`Some(FundingTick { ... })\` を返す。
 
-**決定的に重要なのは、clock を \`now\` に進めること** — \`last_settled_at + interval_secs\` ではない、という点だ。これが「no catch-up」不変条件の実装で、tick が遅れて fire したときに deadline を後ろにリセットする catch-up にはしない、ということだ。なぜそれが重要なのかは L10 のレッスンで説明する。
+**決定的に重要なのは、clock を \`now\` に進めること** — \`last_settled_at + interval_secs\` ではない、という点だ。これが「no catch-up」不変条件の実装で、tick が遅れて fire したときに deadline を後ろにリセットする catch-up にはしない。なぜそれが重要なのかは L10 のレッスンで説明する。
 
 > 🛑 **考えてみよう。** \`last_settled_at = 1_000_000\`、\`interval_secs = 3600\`、\`now = 1_010_000\`（= +10000 秒、~2.8 interval）で \`tick()\` を呼んだ後の \`last_settled_at\` はいくらになるか。
 
@@ -3026,7 +3029,7 @@ git checkout main
 ## よくある質問
 
 **Q: \`tick\` が \`&mut self\` を取って、\`self\` を消費する形で \`(Self, Option<FundingTick>)\` を返さないのはなぜか？**
-実用主義による選択だ。\`&mut self\` は in-place な変更を表す Rust の標準パターンだ。消費して返す形にすると、呼び出し側に \`clock = clock.tick(...)\` のような再代入を強いることになる — semantic な利得もなく、ただ verbose になるだけだ。**state machine が mutate するなら \`&mut self\`、本当に変換するなら consuming にする。** Funding clock は前者にあたる。
+実用主義による選択だ。\`&mut self\` は in-place な変更を表す Rust の標準パターンだ。消費して返す形にすると、呼び出し側に \`clock = clock.tick(...)\` のような再代入を強いる— semantic な利得もなく、ただ verbose になるだけだ。**state machine が mutate するなら \`&mut self\`、本当に変換するなら consuming にする。** Funding clock は前者にあたる。
 
 **Q: \`FundingClock\` は tick の*回数*も追跡すべきでは（telemetry 用に）？**
 \`ticks_fired: u64\` のカウンタを足すこともできる。Stage 8b ではやらない — 呼び出し側が気にするなら外部でカウントすればよい。**具体的な consumer がいないうちは、最小限の struct に state を足さない。** 後から足すのは struct のフィールドを 1 つ変更するだけで済むが、未使用な state を削除するのは breaking な API 変更になる。
@@ -3188,7 +3191,7 @@ L8 のテストはどれも clock を*高々 1 回*しか走らせない。L9 �
 - Tick 2（None — gated）後：変化なし、まだ \`1_003_600\`。
 - Tick 3（成功）後：\`1_007_200\`。
 
-**Clock は gated な呼び出しでは advance しない。** これが interval-gating 不変条件のもう 1 つの側面で、失敗時には state を変化させない、ということだ。テスト自体は tick 2 後の \`last_settled_at\` を明示的には assert していないが、tick 3 がちょうど \`1_003_600 + 3600\` で成功することがそれを暗黙に保証している。）
+**Clock は gated な呼び出しでは advance しない。** これが interval-gating 不変条件のもう 1 つの側面で、失敗時には state を変化させない。テスト自体は tick 2 後の \`last_settled_at\` を明示的には assert していないが、tick 3 がちょうど \`1_003_600 + 3600\` で成功することがそれを暗黙に保証している。）
 
 3 連続呼び出しを時間軸で並べると、何が動いて何が動かないか (= ゲートの再エンゲージ) が一望できる:
 
@@ -3215,6 +3218,8 @@ L8 のテストはどれも clock を*高々 1 回*しか走らせない。L9 �
               now ≥ last_settled_at + interval を再び満たす → fire
               ──► last_settled_at = 1_007_200 にリセット
 \`\`\`
+
+このタイムラインの timestamp はすべて Unix 時間の**秒単位**として読む。したがって \`+3600\` は 1 時間、\`+3599\` は「1 秒不足」を意味する（ミリ秒系の \`+3_600_000\` ではない）。
 
 このテストの load-bearing なポイントは **Tick 1 の成功が clock を恒久的に unlock してしまわないこと** — つまり Tick 3 を fire させるには、Tick 1 を起点に新たに 1 interval を待つ必要がある、という再エンゲージの不変条件だ。3 つ並べないとこの「ゲートが閉じ直す」挙動は観測できない。
 
@@ -3410,7 +3415,7 @@ openhl チェーンが通常通り稼働し、毎時 funding を settle して�
 **Con**：
 - **stale-snapshot 問題**：10 個の settlement すべてが*同じ*現在スナップショットを使うことになり、各歴史的 interval 境界時点のスナップショットではない。Gap 中に勝っていた trader が、いまの有利な rate で計算された 10 個の settlement を支払う羽目になる。Gap 中に負け続けていた側は 10 倍の打撃を受け、しかも途中で position を閉じて逃げる機会は一度もなかった。
 - **集中リスク**：1 度に 10 倍の funding がかかれば、毎時 1 回ずつ別々に支払っていれば耐えられたはずのアカウントが liquidate されうる。
-- **path dependency**：funding の履歴が、gap が*いつ*発生したかに依存することになる — 累積時間だけでなく。
+- **path dependency**：funding の履歴が、gap が*いつ*発生したかに依存する— 累積時間だけでなく。
 
 ### Choice B: 1 度 settle して \`now\` に advance する
 
@@ -3458,7 +3463,7 @@ openhl チェーンが通常通り稼働し、毎時 funding を settle して�
                         last_settled_at = 1_003_600 ──► 1_039_600 ✨ (1 ステップ)
 \`\`\`
 
-ポイントは「Choice B では \`last_settled_at\` の遷移が常に 1 ステップで完結する」ということだ。10 時間の gap だろうが 10 秒の gap だろうが、\`tick()\` は 1 回呼ばれて 1 回 advance するだけ。これが path-independence (gap のタイミングに結果が依存しないこと) の正体であり、テスト 1 本でこの不変条件全体を pin できる理由でもある。
+ポイントは「Choice B では \`last_settled_at\` の遷移が常に 1 ステップで完結する」。10 時間の gap だろうが 10 秒の gap だろうが、\`tick()\` は 1 回呼ばれて 1 回 advance するだけ。これが path-independence (gap のタイミングに結果が依存しないこと) の正体であり、テスト 1 本でこの不変条件全体を pin できる理由でもある。
 
 > 🛑 **考えてみよう。** スクロール前に — ノード再起動で 10 時間の funding を取り逃がした validator が、*現在*のスナップショットから 10 tick を replay して埋め合わせようとする場面を考える。**このアプローチで一番痛い目に遭うのはどの trader か？** ヒント：gap 中に負けていたのは誰か、を考えよ。
 
@@ -3567,7 +3572,7 @@ test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 このレッスンに焼き込んだ決定は 4 つ：
 
-1. **長い gap が起きても settle は 1 度、advance 先は \`now\`。** 代替案（interval を replay して catch up する）では、負けていた側に集中的な懲罰を、position を閉じる機会も与えずに課すことになる。Funding の目的は*equilibration* であって、retroactive な enforcement ではない。**Choice B は funding revenue を多少犠牲にしてでも、数学を公平性と揃える。**
+1. **長い gap が起きても settle は 1 度、advance 先は \`now\`。** 代替案（interval を replay して catch up する）では、負けていた側に集中的な懲罰を、position を閉じる機会も与えずに課す。Funding の目的は*equilibration* であって、retroactive な enforcement ではない。**Choice B は funding revenue を多少犠牲にしてでも、数学を公平性と揃える。**
 
 2. **同じ \`now\` での second tick テストは、可能な限り最も厳しい。** 時間は経過せず、変化するのは state だけだ。遅れた tick で \`last_settled_at\` を更新し忘れる実装を、すべて捕まえてくれる。**state machine では「同じ入力で連続呼び出し」が、state 更新のバグを最も鋭くあぶり出す。**
 
@@ -3710,6 +3715,8 @@ L11 は capstone だ — 新規コードはない。アーキテクチャをス�
 
 上から下へ：価格を入力、settlement を出力。pipeline 全体を、clock が「十分な時間が経過したか？」の gate でラップする。
 
+トラック全体の現在地として見ると、この \`Vec<Settlement>\` レーンは Course 7 の \`Vec<Fill>\` と同じく、まだ EVM 本流 (\`BlockExecutor\`) の外側を並走している。つまり現時点では「約定（Fill）も資金調達決済（Settlement）も、まずは bridge 側の補助レーンで運び、後段で payload / state 適用へ合流させる」形だ。どちらも直交レーンとして先に独立実装し、統合点を後で合わせるのが openhl の一貫した設計規律になる。
+
 ## 各モジュールが届けたもの
 
 **Module 1（Determinism + 型、L1-L3）** — 固定小数点の語彙：
@@ -3784,7 +3791,7 @@ L11 は capstone だ — 新規コードはない。アーキテクチャをス�
 
 **ないもの**：スマートコントラクトが funding tick を*観測する*方法。Funding に反応したいコントラクト（例：「funding が X% を超えたら auto-deleverage する」）が、イベントとして購読する手段がない。
 
-**先送りの理由**：非 EVM コードから EVM event を emit するには plumbing が必要だ — bridge が各 \`Settlement\` を \`EvmLog\` に変換して次のブロックに inject する処理を担うことになる。**bridge レイヤーの関心事であって、state-machine の関心事ではない。**
+**先送りの理由**：非 EVM コードから EVM event を emit するには plumbing が必要だ — bridge が各 \`Settlement\` を \`EvmLog\` に変換して次のブロックに inject する処理を担う。**bridge レイヤーの関心事であって、state-machine の関心事ではない。**
 
 **いつ見直すか**：Event ベースで funding を観測したい具体的なコントラクトユースケースが出てきたときだ。**それまでは telemetry を bridge レイヤーで行えばよい。**
 
@@ -3830,7 +3837,7 @@ Funding-tick 後の balance を監視し、under-margined なアカウントを�
                                                                               (元の固定小数点スケールに戻る)
 \`\`\`
 
-Module 2 で何度も格闘した「中間積が \`S\` の分だけ余分に拡大するので \`i128\` で受け、最後に \`RATE_SCALE\` で割って打ち消す」の正体がこの 1 式だ。**\`RATE_SCALE = 1e9\` はパターンで、定数の具体値はケースごとに変わる、ということだ。** Fee 計算なら \`S = 10_000\` (basis-point スケール) で同じパターンが当てはまるし、vesting schedule なら \`S = 86_400\` (日単位) で時間方向の固定小数点を組める。
+Module 2 で何度も格闘した「中間積が \`S\` の分だけ余分に拡大するので \`i128\` で受け、最後に \`RATE_SCALE\` で割って打ち消す」の正体がこの 1 式だ。**\`RATE_SCALE = 1e9\` はパターンで、定数の具体値はケースごとに変わる。** Fee 計算なら \`S = 10_000\` (basis-point スケール) で同じパターンが当てはまるし、vesting schedule なら \`S = 86_400\` (日単位) で時間方向の固定小数点を組める。
 
 2. **Consensus-safe な overflow 戦略としての saturation。** Panic は halt 経由の chain fork、wrap は誤った値経由の chain fork を生む。Saturate は bounded で、しかも validator 間で consistent だ。**Consensus-critical な数学に対しては、saturate が唯一の選択肢だ。**
 
@@ -3854,7 +3861,7 @@ Module 2 で何度も格闘した「中間積が \`S\` の分だけ余分に拡�
 
 **Course 10**（openhl-bridge-integration — 将来）：funding、oracle、liquidation を \`LiveRethEvmBridge\` に組み込む。ここで courses 6-9 のすべてが、動作する perp DEX として組み上がる。
 
-L1 Architect track の 90% を踏破したことになる。**このコースで身につけたパターン（固定小数点、saturation、composition テスト）は、残りの作業すべてに当てはまる。**
+L1 Architect track の 90% を踏破した。**このコースで身につけたパターン（固定小数点、saturation、composition テスト）は、残りの作業すべてに当てはまる。**
 
 ## 最終答え合わせ
 
@@ -3864,7 +3871,7 @@ git checkout cd94137
 diff -u ~/code/my-openhl/crates/funding/ ./crates/funding/ --recursive
 \`\`\`
 
-L11 後、**\`crates/funding/\` ディレクトリ全体が Stage 8b と byte-identical** に一致するはずだ。3 ファイルにまたがる ~635 LOC の 1 commit を、各行が*なぜ*そこにあるのかを完全に理解した上で手で再現した、ということだ。**Crate は standalone でコンパイルが通り、テストも standalone で pass する。外部依存は \`openhl-clob\`（\`AccountId\` 用）以外にない。**
+L11 後、**\`crates/funding/\` ディレクトリ全体が Stage 8b と byte-identical** に一致するはずだ。3 ファイルにまたがる ~635 LOC の 1 commit を、各行が*なぜ*そこにあるのかを完全に理解した上で手で再現した。**Crate は standalone でコンパイルが通り、テストも standalone で pass する。外部依存は \`openhl-clob\`（\`AccountId\` 用）以外にない。**
 
 戻す：
 

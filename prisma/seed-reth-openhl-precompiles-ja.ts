@@ -228,7 +228,7 @@ cargo check -p openhl-evm
 
 加えて **依存も 5 個追加** (workspace 1 + crate 4 — このうち \`reth-node-api\` は新規の git-pin 依存)。
 
-L1 が終わると、custom EVM の **構造** が end-to-end で存在することになる。Reth は factory 経由で EVM instance を construct でき、factory 自体の仕事 (custom precompile の登録) はまだ何もしない — それら precompile を定義するのは L2 のため。
+L1 が終わると、custom EVM の **構造** が end-to-end で存在する。Reth は factory 経由で EVM instance を construct でき、factory 自体の仕事 (custom precompile の登録) はまだ何もしない — それら precompile を定義するのは L2 のため。
 
 ## おさらい
 
@@ -327,6 +327,7 @@ tempfile             = "3"
 **\`reth-node-api\` だけは workspace 経由ではなく、1 回限りの直接 git dep として宣言する。** workspace の \`Cargo.toml\` には宣言を置かず、git+rev を inline で書く。これは意図的だ — \`reth-node-api\` を使う crate は \`openhl-evm\` だけで、workspace の他の部分には不要。workspace dep に昇格させると、すべての crate の build graph がこれを把握する羽目になる。
 
 > ⚠️ **rev は他の \`reth-*\` クレートと完全一致させる。** inline で \`rev = "88505c7..."\` を書くときは、**workspace で固定されている他の \`reth-*\` クレートとまったく同じコミットハッシュ**でなければならない。Reth は内部 crate 間の型 (\`FullNodeTypes\`、\`NodeTypes\`、\`BuilderContext\` 等) を厳格に共有しており、Cargo の同一バージョン・同一ソースルールにより、わずかな rev のズレでも「同じ名前だが別の型」として扱われ、\`expected ChainSpec, found ChainSpec\` のような難解な型不一致エラーが大量発生する。\`reth-node-api\` を独自に「最新版」へ書き換えたい誘惑は強いが、必ず他の \`reth-*\` の rev をまず upgrade してから合わせること。
+> さらに実務上は、\`cargo check -p openhl-evm\` の後にルートの \`Cargo.lock\` が 1 つの解決グラフとして更新されることを確認する。ここで別 rev が混入すると、Cargo は Reth を二重に解決し始め、ビルド時間と型不一致の両方が悪化する。
 
 > 🛑 **やりがちな勘違い。** 「Reth 関連の依存はすべて workspace dep にすべき、それがパターンだ」 — **必ずしもそうではない。** workspace dep が有用なのは、複数の crate が同じ依存を同じバージョンで必要とする場合。1 つの crate でしか必要としないなら、inline 宣言のほうがクリーンだ — workspace-level の Cargo.toml にエントリが増えず、読み手にとって間接参照も減る。\`reth-node-api\` は openhl-evm でしか使わないので、それに合わせて扱う。
 
@@ -642,7 +643,7 @@ git checkout main
 \`OpenHlEvmFactory\` は consumer が必要とする public API (L3 の NodeBuilder 統合で使う) だが、\`openhl_precompiles\` は \`openhl_evm.rs\` の内部でだけ消費される実装詳細だ。precompile モジュールを private に保つことで API の漏出を防ぐ — caller が自分で precompile セットを construct したり改変したりすべきではない。
 
 **Q: \`Precompiles::from_static\` と \`Precompiles::default\` の違いは?**
-\`from_static\` は \`&'static Precompiles\` の参照を取る — つまり precompile セットは「キャッシュして使い回すもの」という前提だ。\`default\` は新規の (空の) \`Precompiles\` インスタンスを作る。\`create_evm\` が \`from_static\` を使うのは、\`OnceLock\` でキャッシュされたセットが \`'static\` だから。キャッシュ + static 参照 = EVM 生成ごとの allocation がゼロ、ということになる。
+\`from_static\` は \`&'static Precompiles\` の参照を取る — つまり precompile セットは「キャッシュして使い回すもの」という前提だ。\`default\` は新規の (空の) \`Precompiles\` インスタンスを作る。\`create_evm\` が \`from_static\` を使うのは、\`OnceLock\` でキャッシュされたセットが \`'static\` だから。キャッシュ + static 参照 = EVM 生成ごとの allocation がゼロ、という。
 
 **Q: なぜ \`PRAGUE\` が \`OSAKA\` もカバーするのか?**
 Osaka (Prague の次に予定されている hardfork) は、参照 SHA 時点では新たな標準 precompile を導入しない。Osaka で新規 precompile が追加されたタイミングで、この match arm を \`OSAKA\` と \`PRAGUE\` の別ブランチに分割すればよい。それまでは同じ \`OnceLock\` を共有するのが正しい。
@@ -940,13 +941,13 @@ git checkout main
 \`PrecompileId\` は不透明な識別子で、主に REVM の logging/tracing 層で使われるものだから。custom precompile は標準セットの外にあるので、文字列名で識別する。文字列は human-readable なので、precompile call が trace に現れたときに numeric variant ではなく「clob_read_best_bid」が見える。
 
 **Q: エラーハンドリングを追加したくなったら?**
-return パスを \`Ok(...)\` から \`Err(PrecompileError::Other(...))\` に変えればよい。trait 自体はすでに対応している — v0 では失敗するモードがないだけだ。L4-L5 で read precompile が live state にアクセスするようになると、ありうるエラーの 1 つは「CLOB の lock が poisoned」になる — それを \`PrecompileError\` にマップすることになる。
+return パスを \`Ok(...)\` から \`Err(PrecompileError::Other(...))\` に変えればよい。trait 自体はすでに対応している — v0 では失敗するモードがないだけだ。L4-L5 で read precompile が live state にアクセスするようになると、ありうるエラーの 1 つは「CLOB の lock が poisoned」になる — それを \`PrecompileError\` にマップする。
 
 **Q: なぜ \`Bytes::from(out)\` が必要なのか — \`Vec<u8>\` を直接 return してはだめなのか?**
 ダメ。trait が \`Bytes\` (alloy の reference-counted な byte buffer。Rust 標準の \`Vec<u8>\` ではない) を要求する。\`Bytes::from(vec)\` で変換できる。wrapper 型を使う理由は、\`Bytes\` は安く clone でき、再 allocation なしに EVM 内部のあちこちで共有できるからだ。
 
 **Q: スマートコントラクトは calldata で read_best_bid に引数を渡せる?**
-Yes — calldata が \`_input\` パラメータに入る。v0 では precompile がそれを無視している (どんな入力でも best bid を返す) が、production コードでは calldata を使って **どの market の** best bid を読むかを指定する。現状は single-market のセットアップで、multi-market 対応には \`_input\` の decode を足すことになる。
+Yes — calldata が \`_input\` パラメータに入る。v0 では precompile がそれを無視している (どんな入力でも best bid を返す) が、production コードでは calldata を使って **どの market の** best bid を読むかを指定する。現状は single-market のセットアップで、multi-market 対応には \`_input\` の decode を足す。
 
 ## 次のレッスン (L3)
 
@@ -1369,7 +1370,7 @@ precompile が登録され、callable であることまで証明できた。だ
 このレッスンで掴む概念:
 
 - **\`PrecompileFn\` は関数ポインタであってクロージャではない → プロセスグローバル state が回避策。** REVM の \`fn(&[u8], u64, u64) -> PrecompileResult\` は環境をキャプチャできないため、共有 state は \`static\` に置き、関数が呼び出し時にそこを読む形にする。
-- **\`RwLock<Option<Arc<Mutex<T>>>>\` — アクセスパターンが違えばロックの種類も違う。** 外側の \`RwLock\` は installed/uninstalled の区別 (write は稀) を担当し、内側の \`Mutex\` は matching engine (write は頻繁) を保護する。\`Mutex<Option<...>>\` 1 個で済まそうとすると、すべての read が 1 箇所のボトルネックを通ることになる。
+- **\`RwLock<Option<Arc<Mutex<T>>>>\` — アクセスパターンが違えばロックの種類も違う。** 外側の \`RwLock\` は installed/uninstalled の区別 (write は稀) を担当し、内側の \`Mutex\` は matching engine (write は頻繁) を保護する。\`Mutex<Option<...>>\` 1 個で済まそうとすると、すべての read が 1 箇所のボトルネックを通る。
 - **\`Arc<Mutex<Book>>\` で bridge/precompile 境界を越えて所有を共有する。** bridge と precompile は別々の「caller」だが、同じ \`Book\` を見る必要がある。\`Arc\` は「所有者は複数、データは同じ」を表現する Rust の道具。
 - **install は replace するだけで error にしない。** テストでは install/uninstall を繰り返す必要があるため、暗黙のうちに置き換える挙動はバグではなく機能だ。production の経路では install を 1 回しか呼ばない。
 - **「配管は通したが電流は流さない」という段階的な形。** L4 は配管 (static、install 関数、bridge フィールドの型) を繋ぐが、\`read_best_bid\` はまだハードコードのまま。スイッチを入れるのは L5。配管と挙動を分離することで、各レッスンが検証可能な変更を 1 つだけ持てる。
@@ -1546,6 +1547,8 @@ pub fn current_best_bid() -> Option<(openhl_clob::Price, openhl_clob::Qty)> {
 - **\`current_best_bid\`** — EVM を経由せず直接テストできるよう露出させる。流れは write lock → read lock → option を deref → mutex を lock → \`best_bid_with_qty()\`。**ロックを 3 段**通って 1 つの値を読む — コストが高そうに見えるが各々マイクロ秒単位で、しかも read は \`RwLock\` の下で並行に走れる。
 
 > 🛑 **やりがちな勘違い。** 「1 回の read に 3 つもロックを取るのは無駄では?」 — **3 つのロックはそれぞれ別の目的を持っている。** \`RwLock\` は installed か uninstalled かを分離する（write 競合は稀）。\`Mutex<Book>\` はマッチングエンジンの state を守る（write 競合は頻繁だがミリ秒単位）。1 つのロックに統合してしまうと、全 read と write がそのロックで一様に直列化される — 並行性は遥かに悪化する。**多層のロックは多層の関心事を反映している。**
+>
+> ロック順序の不変条件もここで固定される: **常に外側 (\`CLOB_STATE\` の RwLock) → 内側 (\`Book\` の Mutex) の順で取得する**。逆方向（内側 mutex を保持したまま外側 write-lock を取りに行く経路）を作らない限り、デッドロックは構造的に起きない。
 
 ### Step 5: \`LiveRethEvmBridge::clob\` を \`Arc<Mutex<Book>>\` に変更
 
@@ -1763,7 +1766,7 @@ mod smoke {
 
 1. **関数ポインタのシグネチャ制約に対する定石は process-global な state。** REVM の \`PrecompileFn = fn(...) -> PrecompileResult\` は関数ポインタであってクロージャではないので、state をキャプチャできない。選択肢は (a) 関数引数として受け取る（REVM API の変更が必要）、(b) process-global から読む — のどちらか。今回は (b) を取った。**コストはプロセスあたり CLOB が 1 つになること。** 単一バリデータの deployment なら問題ないが、マルチテナントには REVM API の変更が必要だ。
 
-2. **外側の Option には \`RwLock\`、内側の \`Book\` には \`Mutex\`。** 外側のロックは installed か uninstalled かを分離する（write は稀）。内側のロックはマッチングエンジンの state を守る（write は submit のたびに発生して頻繁）。アクセスパターンが違えばロックの型も変える。1 つの \`Mutex<Option<Arc<Mutex<Book>>>>\` に統合してしまうと、すべての read が 1 つのボトルネックを通ることになる。
+2. **外側の Option には \`RwLock\`、内側の \`Book\` には \`Mutex\`。** 外側のロックは installed か uninstalled かを分離する（write は稀）。内側のロックはマッチングエンジンの state を守る（write は submit のたびに発生して頻繁）。アクセスパターンが違えばロックの型も変える。1 つの \`Mutex<Option<Arc<Mutex<Book>>>>\` に統合してしまうと、すべての read が 1 つのボトルネックを通る。
 
 3. **\`install_clob\` は黙って置き換える設計で、エラーにはしない。** 別の CLOB で 2 回呼ばれた場合、最初のものを黙って置き換える。検知して panic させる手もあるが、production パスでは 1 回しか呼ばれない一方で、テストは install/uninstall を繰り返す。**置き換え挙動はテストにとってバグではなく機能だ。** ドキュメントコメントで明示してある。
 
@@ -1793,7 +1796,7 @@ git checkout main
 static storage はもっともシンプルなライフタイム — プログラム開始から終了まで生きる。ヒープ割り当て（\`Box::leak\` など）でも動くが、ランタイムの allocation コストと複雑さが増える。「プログラム開始から終了までずっと存在してほしい」というケース — まさに今回 — では \`static\` が正しい道具だ。
 
 **Q: 並行テストなどで \`LiveRethEvmBridge\` が 2 個作られたら?**
-2 回目の \`install_clob\` が 1 回目を置き換える。**結果として両方のブリッジが、global 経由で 2 つ目の CLOB を共有することになる。** だからテストでは直列化が必要だ（L5 で導入する）。production deployment ではブリッジを 1 つしか作らないので、問題にはならない。
+2 回目の \`install_clob\` が 1 回目を置き換える。**結果として両方のブリッジが、global 経由で 2 つ目の CLOB を共有する。** だからテストでは直列化が必要だ（L5 で導入する）。production deployment ではブリッジを 1 つしか作らないので、問題にはならない。
 
 **Q: \`current_best_bid\` は \`Option<...>\` ではなく \`Result<...>\` を返してもいい?**
 できる — \`None\` の代わりに \`Err(NoClobInstalled)\` を返すこともできる。だが precompile としては「CLOB 未インストール」と「CLOB はあるが空」を区別する必要がない — どちらの場合もゼロを返すべきだからだ。\`Option\` ならその 2 ケースを \`None\` に潰せる。\`Result\` にすると precompile に余計な分岐を強いることになり、利得はない。
@@ -1867,7 +1870,7 @@ L5 でようやくその配管を使う。
 
 > 🛑 **考えてみよう。** スクロールする前に — \`cargo test\` はデフォルトで **並列実行** される（典型的には論理 CPU 1 つにつき 1 スレッド）。今あるテストのうち 2 つが \`CLOB_STATE\` を read/write する。**直列化しなかった場合、どんな失敗モードが出るか?** ヒント：あるテストが \`None\` を期待している瞬間に、\`Some(clob_A)\` が一瞬だけ見えてしまう、という状況を想像してみる。
 
-（答え：**flaky test になる**。テスト A が CLOB を install し、テスト B が「CLOB なし → zero output」を assert したい — だが B が、A の \`install_clob\` と \`uninstall_clob\` の間に走ってしまえば、B は A の CLOB を見て間違った値を assert することになる。失敗率はテストのスケジューリング次第で、0% のこともあれば 30% のこともある。CI がランダムに flake する。\`TEST_SERIALIZER\` の mutex パターンは、これらのテストを 1 つずつ走らせて race を排除する。**コストは 0.0 秒（これらのテストはマイクロ秒で終わる）、利得は deterministic な CI。**）
+（答え：**flaky test になる**。テスト A が CLOB を install し、テスト B が「CLOB なし → zero output」を assert したい — だが B が、A の \`install_clob\` と \`uninstall_clob\` の間に走ってしまえば、B は A の CLOB を見て間違った値を assert する。失敗率はテストのスケジューリング次第で、0% のこともあれば 30% のこともある。CI がランダムに flake する。\`TEST_SERIALIZER\` の mutex パターンは、これらのテストを 1 つずつ走らせて race を排除する。**コストは 0.0 秒（これらのテストはマイクロ秒で終わる）、利得は deterministic な CI。**）
 
 ## 手順
 
@@ -1943,7 +1946,7 @@ fn read_best_bid(_input: &[u8], _gas_limit: u64, _reservoir: u64) -> PrecompileR
 
 ここで効いているのは「**u64 BE bytes → u256 BE word の右端 8 byte に直接コピー、中間で \`[u8; 32]\` を確保しない**」というホットパス最適化だ。\`U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)\` のように 32 byte の一時配列を経由するルートは結果こそ同じだが、(a) スタック上に余分な 32 byte の zero-init、(b) その配列から output への 32 byte memcpy、の二重コストが乗る。直接書き込みなら 8 byte memcpy のみ — しかも上位 zero pad は \`vec![0u8; 64]\` の初期化時点で既に確保済みなので、追加コスト 0 で zero-extend が成立している。
 
-> 🛑 **やりがちな勘違い。** 「明快さのために \`U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)\` でいいのでは?」 — それだと **一時的な \`[u8; 32]\` を allocate してから byte-by-byte でコピー** することになる。直接 \`out[24..32].copy_from_slice(&price.0.to_be_bytes())\` と書けば、output buffer に直接書き込んで中間 allocation を挟まない。**結果は同じだが、仕事は半分。** precompile は hot path で、マイクロ秒の積み重ねが効いてくる。
+> 🛑 **やりがちな勘違い。** 「明快さのために \`U256::from(price.0).to_be_bytes::<32>().copy_from_slice(...)\` でいいのでは?」 — それだと **一時的な \`[u8; 32]\` を allocate してから byte-by-byte でコピー** する。直接 \`out[24..32].copy_from_slice(&price.0.to_be_bytes())\` と書けば、output buffer に直接書き込んで中間 allocation を挟まない。**結果は同じだが、仕事は半分。** precompile は hot path で、マイクロ秒の積み重ねが効いてくる。
 
 ### Step 2: ドキュメントコメントを更新
 
@@ -1994,9 +1997,9 @@ static TEST_SERIALIZER: Mutex<()> = Mutex::new(());
 let _g = TEST_SERIALIZER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 \`\`\`
 
-\`unwrap_or_else(PoisonError::into_inner)\` パターンが **死活問題** だ — これがないと、テストが 1 つ panic しただけで mutex が poison し、以降の全テストが \`PoisonError\` で落ちる。poison から復旧することで「このテストは 1 度 panic した」を「このテストは 1 度 panic したが、後続は走る」に変える。復旧したガードもちゃんと排他アクセスを与えてくれる。poison はシグナルであって、永久の障害ではない。
+\`unwrap_or_else(PoisonError::into_inner)\` パターンが **死活問題** だ — これがないと、テストが 1 つ panic しただけで mutex が poison し、以降の全テストが \`PoisonError\` で落ちる。poison から復旧することで「このテストは 1 度 panic した」を「このテストは 1 度 panic したが、後続は走る」に変える。復旧したガードもちゃんと排他アクセスを与えてくれる。poison はシグナルであって、永久の障害ではない。なお、コンパイラの型推論が詰まる環境では \`unwrap_or_else(std::sync::PoisonError::into_inner)\` より、\`unwrap_or_else(|e| e.into_inner())\` の明示クロージャ形のほうが安定する。
 
-> 🛑 **やりがちな勘違い。** 「\`serial_test\` crate の \`#[serial]\` でいいのでは?」 — **使えるが、mutex 1 つで済む話に対して dev-dep を増やすことになる。** \`serial_test\` は proc-macro、属性のパース、hash-keyed な lock map に手を出す。global を 1 つ触るテスト 4 つに対しては、1 行の \`static Mutex<()>\` がちょうどよい。**複数の global を別々のロック partition で管理したくなったら crate を導入すればよい — それ以前にやる必要はない。**
+> 🛑 **やりがちな勘違い。** 「\`serial_test\` crate の \`#[serial]\` でいいのでは?」 — **使えるが、mutex 1 つで済む話に対して dev-dep を増やす。** \`serial_test\` は proc-macro、属性のパース、hash-keyed な lock map に手を出す。global を 1 つ触るテスト 4 つに対しては、1 行の \`static Mutex<()>\` がちょうどよい。**複数の global を別々のロック partition で管理したくなったら crate を導入すればよい — それ以前にやる必要はない。**
 
 ### Step 4: L3 最初のテストを更新（rename + 書き換え）
 
@@ -2178,7 +2181,7 @@ git checkout main
 条件分岐で \`current_best_bid()\` が \`None\` のときに少ない gas を返す、という設計もありうる。だがそれは実装詳細を漏らす — 攻撃者は gas 消費量を計測することで、validator が CLOB を install したかどうかを判別できてしまう。一律で \`CLOB_BASE_GAS_COST\` を課金するのが、定石の「constant-time precompile」パターンだ。**gas 課金から state を漏らしてはいけない。**
 
 **Q: \`u64::to_be_bytes()\` と \`U256::to_be_bytes::<32>()\` の違いは?**
-\`u64::to_be_bytes()\` は \`[u8; 8]\` — 8 バイトを返す。\`U256::to_be_bytes::<32>()\` は \`[u8; 32]\` — 左を zero パディングした 32 バイトを返す。**今回のように、source が 8 バイトの値で destination が 32 バイトの場合、source の 8 バイトを destination の右端 8 バイトにコピーしたい。** それを実現するのが \`out[24..32].copy_from_slice(&u64_bytes)\` だ。U256 版を使うと 32 バイトすべて（うち 24 バイトは zero）をコピーすることになる — 同じ結果に 4 倍の仕事をかけている。
+\`u64::to_be_bytes()\` は \`[u8; 8]\` — 8 バイトを返す。\`U256::to_be_bytes::<32>()\` は \`[u8; 32]\` — 左を zero パディングした 32 バイトを返す。**今回のように、source が 8 バイトの値で destination が 32 バイトの場合、source の 8 バイトを destination の右端 8 バイトにコピーしたい。** それを実現するのが \`out[24..32].copy_from_slice(&u64_bytes)\` だ。U256 版を使うと 32 バイトすべて（うち 24 バイトは zero）をコピーする— 同じ結果に 4 倍の仕事をかけている。
 
 **Q: \`TEST_SERIALIZER\` があっても flake することはあるか?**
 通常の \`cargo test\` 実行ではしない。Mutex が、2 つのテストスレッドから \`CLOB_STATE\` の途中状態を観測することを防いでくれる。それでも flake しうるエッジケース：(a) \`current_best_bid\` の中で panic して mutex が poison する（\`into_inner\` で復旧する）、(b) テストモジュール外のコードが \`CLOB_STATE\` に書き込む（\`reth_node.rs\` の integration test がいずれそれをやり始めたら問題になるが、今はやっていない）。
@@ -2463,7 +2466,7 @@ order は 1 つではなく 2 つ。2 つ目（\`240, qty=99\`）は **間違っ
 
 \`from_be_slice\` デコーダは、L5 の Step 1 で使った \`to_be_bytes\` の逆だ。\`out[24..32]\` に 8 バイト書き込んでおき、デコーダ側は \`result.bytes[0..32]\` から 32 バイトを読む — 先頭 24 バイトはゼロ、続く 8 バイトが値、という形が同じ u64 にラウンドトリップしてくる。
 
-assertion メッセージは **飾りではない**。素の \`assert_eq!(price, U256::from(250u64))\` だと、失敗時は \`left != right\` としか出ない — テストの意図は読み手に推測させることになる。「best bid is the 250 order, not 240」というメッセージなら、**どの概念的前提が違反されているかを即座に伝えられる**。**特にマイルストーンテストでは、assertion メッセージはドキュメントとしても機能する。**
+assertion メッセージは **飾りではない**。素の \`assert_eq!(price, U256::from(250u64))\` だと、失敗時は \`left != right\` としか出ない — テストの意図は読み手に推測させる。「best bid is the 250 order, not 240」というメッセージなら、**どの概念的前提が違反されているかを即座に伝えられる**。**特にマイルストーンテストでは、assertion メッセージはドキュメントとしても機能する。**
 
 ### Step 7: Cleanup
 
@@ -2477,7 +2480,7 @@ assertion メッセージは **飾りではない**。素の \`assert_eq!(price,
 - L5 の 2 つの zero-output テストでは不要だった：開始時に \`uninstall_clob()\` を呼ぶので、どんな state が残っていても気にしないからだ。
 - だがこのテストは、空でない CLOB を install したまま終わる。次のテストが同じ \`cargo test\` 実行内で（\`TEST_SERIALIZER\` の解放後に）「CLOB なし → zero」を assert する目的で走った場合、こちらが install した book を拾ってしまい fail する。
 
-他のテストは **冒頭でも** \`uninstall_clob\` を呼んでいるので、技術的にはこの cleanup は冗長だ。**だが、空でない state を実際に install するテストで cleanup を明示しておくのは衛生的によい。** テストフレームワークの支援なしに、「Setup / Exercise / Verify / Teardown」というテスト規約をミラーリングしていることになる。
+他のテストは **冒頭でも** \`uninstall_clob\` を呼んでいるので、技術的にはこの cleanup は冗長だ。**だが、空でない state を実際に install するテストで cleanup を明示しておくのは衛生的によい。** テストフレームワークの支援なしに、「Setup / Exercise / Verify / Teardown」というテスト規約をミラーリングしている。
 
 ## テスト
 
@@ -2550,7 +2553,7 @@ git checkout main
 ## よくある質問
 
 **Q: \`Precompile::execute\` 経由ではなく、\`read_best_bid\` を直接呼ぶのはなぜ?**
-どちらのパスでも動く。直接呼ぶ（\`read_best_bid(...)\`）と関数を単独でテストすることになり、registry のパス（\`precompile.execute(...)\`）だと dispatch をテストすることになる。**dispatch はすでに L5 の 3 つ目のテストで証明済み** だ。L6 で証明したいのは「挙動が global から read していること」なので、直接呼び出しでテストを 1 つの assertion に絞り込む。
+どちらのパスでも動く。直接呼ぶ（\`read_best_bid(...)\`）と関数を単独でテストすることになり、registry のパス（\`precompile.execute(...)\`）だと dispatch をテストする。**dispatch はすでに L5 の 3 つ目のテストで証明済み** だ。L6 で証明したいのは「挙動が global から read していること」なので、直接呼び出しでテストを 1 つの assertion に絞り込む。
 
 **Q: \`submit\` が失敗したら（たとえば \`OrderId\` の重複）どうなる?**
 \`Book::submit\`（course 7 由来）は \`()\` を返す — 失敗しない。内部的には、同じ OrderId で 2 回 submit すると 2 回目が黙って 1 回目を上書きする。**これはマッチングエンジンの仕様** だが、テストでは罠になる。\`OrderId(1)\` と \`OrderId(2)\` を意図的に使い分けるのはこのためだ。
@@ -2575,7 +2578,7 @@ git checkout main
 - live なマッチングエンジンの best bid を read し、ABI の uint256 pair として encode する precompile。
 - 証明済みのテスト：(a) precompile が registry から到達可能、(b) CLOB 未インストール時には zero を read、(c) CLOB インストール時には live な state を read。
 
-スマートコントラクトから直接 CLOB state をクエリできるようになった。Course 7 L12 で残っていた「約定が並行リストにあるだけで、スマートコントラクトからは見えない」というギャップが、**read 方向については** 部分的に閉じたことになる。Write 側（コントラクトから order を発注する）は Module 3 の領分。
+スマートコントラクトから直接 CLOB state をクエリできるようになった。Course 7 L12 で残っていた「約定が並行リストにあるだけで、スマートコントラクトからは見えない」というギャップが、**read 方向については** 部分的に閉じた。Write 側（コントラクトから order を発注する）は Module 3 の領分。
 
 ## 次のレッスン（L7）
 
@@ -2862,13 +2865,15 @@ fn place_order(input: &[u8], _gas_limit: u64, _reservoir: u64) -> PrecompileResu
 
 **increment 側の \`Ordering::Relaxed\`。** これは Step 2 で確立済み。
 
-**\`out\` バッファ。** success path で最後の 8 バイトを上書きするまでは、全部ゼロのままだ。各 rejection path はバッファを変えずに return する — \`out[24..32]\` がゼロのままなので、caller は \`order_id = 0\` を rejected として decode することになる。
+**\`out\` バッファ。** success path で最後の 8 バイトを上書きするまでは、全部ゼロのままだ。各 rejection path はバッファを変えずに return する — \`out[24..32]\` がゼロのままなので、caller は \`order_id = 0\` を rejected として decode する。
 
 > 🛑 **やりがちな勘違い。** 「まだ使わない \`account_id\` や \`price\` を、なぜ parse するのか?」 — **L7 の仕事は calldata の schema を確定させることだ。** schema さえ公開すれば、コントラクトはその schema を前提にビルドし始める。すべてのフィールドを parse する（まだ使わないものも含めて）ことで、**parse の形がそのまま契約になる**。仮に L8 で parse 対象のフィールドを変えると、L7 と L8 の間にビルドされた全コントラクトが壊れる。**フルの schema は L7 で parse する — 未使用 binding があってもよい。挙動の変更は L8 でやる。**
 
 > 🛑 **考えてみよう。** \`drop(state)\` の行に注目してほしい。なぜ order ID を allocate する *前に* read lock を明示的に drop するのか? ヒント：L8 で **同じ Arc に対して write 側のロックを取りに行く** ときに何が起きるかを考える。
 
 （答え：**read lock は write lock をブロックする。** 関数全体を通して \`state\` を保持すると — L8 で追加する \`clob.lock()\` まで含めて — \`CLOB_STATE\` の read lock を持ったまま、その先にある Book 独自の Mutex を取りに行く形になる。動作はする（デッドロックはしない）が、read lock を握っている間ずっと、他の主体による \`install_clob\` を precompile 実行中ブロックしてしまう。早めに drop することで、ロック保持の窓を縮められる。**良き市民であれ：それぞれのロックは可能なかぎり短く保つ。**）
+
+補足: L8 で \`let Some(clob) = state.as_ref() else { ... };\` に移行すると、\`clob\` は \`state\`（\`RwLockReadGuard\`）内部への借用になる。したがってその形では \`state\` を早期 \`drop\` できず、\`book.submit()\` まで read-lock が生存する。これは borrow checker が強制する正しい制約で、後段で \`drop(book)\` した時点で \`state\` もスコープアウトして解放される。
 
 ### Step 5: \`openhl_precompiles\` を両方登録するように更新
 
@@ -3078,7 +3083,7 @@ precompile は Solidity から呼ばれ、panic は precompile エラーとし�
 \`PrecompileFn\` のシグネチャは \`fn(...) -> PrecompileResult\` で、\`PrecompileResult = Result<PrecompileOutput, PrecompileError>\` だ。malformed input で \`Err(...)\` を返すこと自体は *できる* が、それは EVM レベルのエラー（transaction の revert）として伝播する。\`Ok\` + sentinel 0 にしておけば、呼び出し側のコントラクトが rejection を gracefully にハンドリングできる。**これは設計上の選択だ：precompile のエラーは EVM 致命的にするか、それとも caller から見える形にするか?** 今回のように「ユーザが渡した calldata を validate する」用途では、caller から見える形をデフォルトにするのが良い。
 
 **Q: ちょうど \`u64::MAX\` のあたりで誰かが order を submit したら?**
-そのうち \`NEXT_ORDER_ID.fetch_add(1, Relaxed)\` が 0 にラップする（u64 を返すので）。その瞬間、次の allocation は sentinel 0 を返してしまい、caller は「rejected」として扱うことになる。\`u64\` の overflow までは ~1.8e19 orders で、およそ 1800 京 order ぶん — v0 では問題にならない。production ではもっと幅のあるカウンタを使うか、overflow 直前で panic させるべきだ。
+そのうち \`NEXT_ORDER_ID.fetch_add(1, Relaxed)\` が 0 にラップする（u64 を返すので）。その瞬間、次の allocation は sentinel 0 を返してしまい、caller は「rejected」として扱う。\`u64\` の overflow までは ~1.8e19 orders で、およそ 1800 京 order ぶん — v0 では問題にならない。production ではもっと幅のあるカウンタを使うか、overflow 直前で panic させるべきだ。
 
 ## 次のレッスン（L8）
 
@@ -3263,7 +3268,9 @@ doc コメントも更新する — L7 で書いた「submit はまだ呼ばな�
 
 > 🛑 **やりがちな勘違い。** 「unused 警告を抑えるだけなら、\`_result\` の underscore に意味はあるのか?」 — **\`let _result = ...\` と \`let _ = ...\` はどちらも警告は抑える。** 違いは：\`let _result\` は値を bind してスコープの終わりで drop する一方、\`let _ = ...\` は値を **即座に** drop する（次の文より前に）。\`submit\` のケースでは、\`_result\` を後で読むわけではないのでどちらでも動く。だが \`let _result\` は「値に意味のある名前があり、将来使う予定がある」ときの慣習だ — L9 で本来の名前に bind して route するように。**\`_result\` は「将来の意図」のマーカーだ。**
 
-> 🛑 **やりがちな勘違い。** 「どうせスコープの終わりで release されるのに、なぜ \`drop(book)\` を明示するのか?」 — **encoding と \`Ok()\` の return がまだ残っているからだ。** \`drop(book)\` しないと、\`out[24..32].copy_from_slice(...)\` と \`Ok(PrecompileOutput::new(...))\` の構築の間も Book ロックを握り続けることになる。どちらの操作もロックを必要としない。握り続けていると、並行 reader や他の precompile の並列アクセスにコストがかかる。**明示的な drop は「このロックは用済み、関数の残りでは要らない」という宣言だ。** コンパイラ上は省略可能だが、hot path ではロック保持の窓を目に見えて縮められる。
+> 🛑 **やりがちな勘違い。** 「どうせスコープの終わりで release されるのに、なぜ \`drop(book)\` を明示するのか?」 — **encoding と \`Ok()\` の return がまだ残っているからだ。** \`drop(book)\` しないと、\`out[24..32].copy_from_slice(...)\` と \`Ok(PrecompileOutput::new(...))\` の構築の間も Book ロックを握り続ける。どちらの操作もロックを必要としない。握り続けていると、並行 reader や他の precompile の並列アクセスにコストがかかる。**明示的な drop は「このロックは用済み、関数の残りでは要らない」という宣言だ。** コンパイラ上は省略可能だが、hot path ではロック保持の窓を目に見えて縮められる。
+>
+> Rust の NLL により、最終使用点の直後に自動 drop されるため機械的には省略可能だが、ここでは将来の保守で \`FILL_SINK\` など別ロック取得が後段に追加されても安全性を読み取りやすいよう、ガードレールとして明示している。
 
 ### Step 2: \`place_order_rejects_malformed_input\` を \`depth_bid\` check で拡張
 
@@ -3328,7 +3335,7 @@ doc コメントも更新する — L7 で書いた「submit はまだ呼ばな�
 L7 からの変更点は 3 つ：
 
 1. **\`let book = Arc::new(...); install_clob(book.clone());\`** — Arc をローカルに束縛する。Arc の \`.clone()\` は refcount をインクリメントするだけ。両方の名前が同じ Book を指す形になる。
-2. **新規 assertion を 3 つ：\`book.lock().unwrap().depth_bid() == 0\`** — 各 rejection の後、book には何も乗っていないことを確かめる。**\`depth_bid()\` は全価格レベルにわたる bid order の本数を返す**（course 7 の Book で定義した）。Zero なら空、ということだ。
+2. **新規 assertion を 3 つ：\`book.lock().unwrap().depth_bid() == 0\`** — 各 rejection の後、book には何も乗っていないことを確かめる。**\`depth_bid()\` は全価格レベルにわたる bid order の本数を返す**（course 7 の Book で定義した）。Zero なら空。
 3. **doc コメント** を追加（L7 では「L7 NOTE」で先送りチェックを説明していたが、ここで消える）。
 
 **追加した 3 つの assertion が side-effect 側の証明だ。** L7 の \`assert_eq!(... U256::ZERO)\` は precompile が sentinel を *返す* ことしかチェックしていなかった。L8 では、precompile が **何も書き込んでいない** ことも合わせて確認する。両方を合わせて、「malformed input → 0 を返し、かつ state には触れない」が証明できる。
@@ -3450,7 +3457,7 @@ L4 から仕込んできた配管が、ここで両方向に通電する全景:
 - bridge 側の off-chain な \`submit_order\` (Course 7) も**同じ Arc に書き込む** — つまり precompile (on-chain) と bridge (off-chain) は、Book に対する書き込み主体としては対等になる
 - **L4 で組んだ \`Arc<Mutex<Book>>\` の global hand-off は、まさにこの双方向通電のために設計された** — L7 で precompile 2 つを並べ、L8 で write side を本物にしたことで、ようやくその設計が「目に見える挙動」として実現する
 
-「Module 3 中盤マイルストーン」とは、この縦線がついに **両方向に同時に走る** ようになったということだ。
+「Module 3 中盤マイルストーン」とは、この縦線がついに **両方向に同時に走る** ようになった。
 
 ## テスト
 
@@ -3785,7 +3792,7 @@ L8 の body：
 
 > 🛑 **考えてみよう。** \`if !submit_result.fills.is_empty()\` の guard に注目してほしい。これを外して、無条件に FILL_SINK の read ロックを取って \`as_ref()\` をチェックする形にしたら、挙動は変わるか?
 
-（答え：**挙動は同じだが、約定なしのケースで性能が落ちる。** 一般ケース — limit を rest させただけの \`place_order\` 呼び出し — のたびに、FILL_SINK の read ロックを取り、結局何も push しないことを確認するだけ、という処理を毎回繰り返すことになる。guard はそれを短絡してくれる。**一般ケースを早期に回避できるなら、それはタダで得られる勝利だ。** ここは hot path — 不要なロック取得のコストはじわじわ積み上がる。）
+（答え：**挙動は同じだが、約定なしのケースで性能が落ちる。** 一般ケース — limit を rest させただけの \`place_order\` 呼び出し — のたびに、FILL_SINK の read ロックを取り、結局何も push しないことを確認するだけ、という処理を毎回繰り返す。guard はそれを短絡してくれる。**一般ケースを早期に回避できるなら、それはタダで得られる勝利だ。** ここは hot path — 不要なロック取得のコストはじわじわ積み上がる。）
 
 ### Step 4: \`place_order\` doc コメントを更新
 
@@ -4164,7 +4171,7 @@ L10 で初めて、これまでの 4 モジュールの配管が**本物の Reth
 
 **L10 が証明するのは「これら 4 つが同時に成立する」こと** — どれか 1 つでも配管が外れていたら、\`current_best_bid()\` か \`pending_fill_count()\` のどちらかで失敗する。**unit test を全部 green に保ったまま、\`NodeBuilder\` チェーンのタイポ 1 つで production が壊れる** という現実的な regression を、この test が 1 本で塞ぐ。
 
-これが **コースのマイルストーン** だ。L10 を終えれば、47 個の unit test で証明したアーキテクチャが、たった 1 つの integration test でも証明される — 上の結合図が示すように、実際の Reth ノードプロセス、実際の bridge オブジェクト、両方の precompile、両方の global、そしてマッチングエンジンが**単一のインプロセス空間で完全に噛み合い**、end-to-end で駆動 (exercise) されることになる。
+これが **コースのマイルストーン** だ。L10 を終えれば、47 個の unit test で証明したアーキテクチャが、たった 1 つの integration test でも証明される — 上の結合図が示すように、実際の Reth ノードプロセス、実際の bridge オブジェクト、両方の precompile、両方の global、そしてマッチングエンジンが**単一のインプロセス空間で完全に噛み合い**、end-to-end で駆動 (exercise) される。
 
 これを動かすために必要な **プロダクションコードの変更は 1 つだけ**：\`place_order\` を \`pub(crate)\` にすること。\`live_node.rs\` 内、sibling モジュールにいる integration test から直接呼べるようにするためだ。
 
@@ -4503,6 +4510,7 @@ L9 より 1 個多い（47 → 48）。**unit test 47 個 + integration test 1 �
 - **\`error[E0603]: function 'place_order' is private\`** — Step 1 を忘れている。\`fn place_order\` のシグネチャに \`pub(crate)\` を追加する。
 - **\`error[E0277]: 'NodeBuilder<...>' does not satisfy the trait...\`** — NodeBuilder チェーンのタイポ。L3 の \`reth_dev_node_with_openhl_executor\` テストと比べる — 同じチェーン、同じメソッド順だ。
 - **テストが永久にハングする** — \`worker_threads = 1\` か single-threaded な tokio を使っている。\`flavor = "multi_thread", worker_threads = 4\` に変える。
+- **ハングせず高速で失敗する (\`pending_fill_count == 0\`)** — \`place_order(...)\` や \`launch().await\` などの \`.await\` 抜けを疑う。Future は lazy なので \`.await\` しない限り実行されず、その場で drop される。これはハングではなく **silent skip**。
 - **\`submit_order\` の後で \`current_best_bid()\` が \`None\`** — \`bridge.new()\` 内で \`install_clob\` が実際には呼ばれていない。L4 の bridge 変更を再確認する。もしくは、別のテストが並行で \`uninstall_clob()\` を呼んでいる可能性もある。global を触る全テストで TEST_SERIALIZER パターンを使っているか確認する（ほとんどは L5 で導入済みのはず）。
 - **\`place_order\` の後で \`pending_fill_count\` が 0** — おそらく \`bridge.new()\` 内で \`install_fill_sink\` が呼ばれていない（L9 の Step 7）か、\`place_order\` の fill-routing ブロックにバグがある（L9 の Step 3 — \`drop(book)\` が sink lock の前にあることを確認する）。
 - **\`assertion failed: bridge.pending_fill_count() == 1\`（実際は 0）** — \`place_order\` の submit が約定を 0 個しか返していないため、何も push されていない。手書きの calldata を確認する：account=7、side=1（Sell）、price=200、qty=33。とくに \`calldata[63] = 1\` を Sell にしているか — 0 だと Buy になり、クロスしない。
@@ -4519,7 +4527,7 @@ L9 より 1 個多い（47 → 48）。**unit test 47 個 + integration test 1 �
 
 4. **「カスタム EVM ノードと bridge を一緒に spawn する」ヘルパーは作らない。** Reth の \`NodeAdapter\` のジェネリック複雑度が、戻り型の命名を厄介にする。インライン合成は 1 回書くぶんは不格好だが、読むのは簡単だ。**テストコードで早すぎる抽象化を行うコストは、プロダクションコードと同じ — デバッグすべきコードパスが増える。** 3 つ目の caller が現れるのを待ってから抽象化すればよい。
 
-5. **正直に先送りする：RPC の \`eth_call\` ラウンドトリップ。** このテストは Reth の RPC サーバを通らない。JSON-RPC 経由で \`clob_read_best_bid\` を呼ぶ実際の Solidity コントラクトは、追加の経路（RPC サーバ、transaction simulation など）を exercise することになる — そこまでは証明していない。**こちらが証明しているのは「Reth が動くこと」ではなく、「openhl が Reth に正しく plug-in できること」だ。** RPC レイヤは Reth の責任なので、そこまで再テストすると、openhl ではなく Reth を validate することになってしまう。
+5. **正直に先送りする：RPC の \`eth_call\` ラウンドトリップ。** このテストは Reth の RPC サーバを通らない。JSON-RPC 経由で \`clob_read_best_bid\` を呼ぶ実際の Solidity コントラクトは、追加の経路（RPC サーバ、transaction simulation など）を exercise する— そこまでは証明していない。**こちらが証明しているのは「Reth が動くこと」ではなく、「openhl が Reth に正しく plug-in できること」だ。** RPC レイヤは Reth の責任なので、そこまで再テストすると、openhl ではなく Reth を validate することになってしまう。
 
 ## 答え合わせ
 
@@ -4530,7 +4538,7 @@ diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/prec
 diff -u ~/code/my-openhl/crates/evm/src/live_node.rs ./crates/evm/src/live_node.rs
 \`\`\`
 
-L10 を終えると、どちらの diff も **空** になるはず。あなたのコードは Stage 9c+ の HEAD（9c+ の拡張で延長された Stage 9d test 込み）と一致する。**これで Stage 9 が閉じる。** openhl の Stage 9 のすべてのマイルストーン — 9a（カスタム EVM bootstrap）、9b（live な CLOB read）、9c（write path）、9c+（約定を bridge に route）、9d（bridge integration） — を、このコースで一通り再現したことになる。
+L10 を終えると、どちらの diff も **空** になるはず。あなたのコードは Stage 9c+ の HEAD（9c+ の拡張で延長された Stage 9d test 込み）と一致する。**これで Stage 9 が閉じる。** openhl の Stage 9 のすべてのマイルストーン — 9a（カスタム EVM bootstrap）、9b（live な CLOB read）、9c（write path）、9c+（約定を bridge に route）、9d（bridge integration） — を、このコースで一通り再現した。
 
 戻す：
 
@@ -4849,7 +4857,7 @@ git checkout d19ba1b
 diff -u ~/code/my-openhl/crates/evm/ ./crates/evm/ --recursive
 \`\`\`
 
-L11 を終えると、**\`crates/evm/\` ディレクトリ全体が、openhl の Stage 9c+ HEAD と byte-identical** に一致するはずだ。5 つの commit（9a、9b、9c、9c+、9d）を手で再現したことになる — しかも、各行がなぜそこにあるかを完全に理解した上で。
+L11 を終えると、**\`crates/evm/\` ディレクトリ全体が、openhl の Stage 9c+ HEAD と byte-identical** に一致するはずだ。5 つの commit（9a、9b、9c、9c+、9d）を手で再現した— しかも、各行がなぜそこにあるかを完全に理解した上で。
 
 main に戻す：
 

@@ -19,13 +19,23 @@
 ````markdown
 # OpenHL を自作する — `cargo init` から動く single-validator devnet まで
 
-これは「読む」コースではない。これは「**作る**」コースだ。
+これは「読む」コースではない。自分で組み上げる「**作る**」コースだ。
 
-これからの 14 レッスンで、空ディレクトリでの `cargo init` から始めて、最終的に実際の Reth と実際の Malachite を通じて 1 ブロックを end-to-end で駆動する Rust workspace を手にする。コードベースはすべて自分で 1 行ずつ書いたもので、出来上がる形は `psyto/openhl` の対応 Stage とほぼ同じになる。そのリポジトリを **答え合わせ用のリファレンス** として参照していく。
+最初に、やることを短く整理する。
 
-Hyperliquid は 2025 年に $300B+ の perp 取引量を、完全クローズドソースのスタック — HyperBFT consensus、HyperCore matching engine、HyperEVM execution — の上で処理した。公開された Rust 実装はどこにもない。**OpenHL はそのスタックをオープンソースで実装したもの** であり、本コースでは openhl Module 1 の substrate を自分の手で組み上げる。
+- 空ディレクトリから `cargo init` で開始する。
+- 実際の Reth と Malachite を接続し、1 ブロックを end-to-end で動かす workspace まで到達する。
+- コードは自分で 1 行ずつ実装する。
+- 最終構造は `psyto/openhl` の対応 Stage とほぼ一致する。
 
-**なぜ CLOB なのか？** Hyperliquid が price-time-priority 板マッチングを選んだのは、ターゲット市場 — crypto-native perps の top tier — に、板で真の price discovery が成立するだけの retail flow が継続的にあるから。RFQ 系（Variational、Paradigm）は dealer が just-in-time に quote を出し、primary venue で hedge することで long tail を取り、AMM 系（GMX 世代）は cold-start を取る代わりに、tail（裾野銘柄）の経済性を犠牲にする。これから作るのは、CLOB が正しい答えである市場セグメントに対する engine。設計トレードオフの掘り下げは Course 7（CLOB）の capstone で行う — いまはこの設計コンテキストを押さえておけば十分。
+`psyto/openhl` は、実装途中の答え合わせに使うリファレンスである。
+
+背景は 2 点だけ押さえればよい。
+
+- Hyperliquid は 2025 年に $300B 超の perp 取引量を、クローズドソースのスタック（HyperBFT / HyperCore / HyperEVM）で処理した。
+- OpenHL はその設計をオープンソースで再構成する試みであり、本コースでは Module 1 の substrate を自分で構築する。
+
+**なぜ CLOB なのか。** Hyperliquid の対象市場では、price-time-priority の板で価格発見が成立するだけの継続フローがある。RFQ は long tail を取りやすく、AMM は cold-start に強いが、それぞれ別のトレードオフを持つ。本コースで作るのは、CLOB が機能する市場セグメント向けの engine である。詳細な比較は Course 7（CLOB）で扱う。
 
 ## 1. コース終了時点で手元にあるもの
 
@@ -123,7 +133,9 @@ cargo check  # 初回は時間がかかる — Reth は大きい
 
 `openhl-reference` 側で `cargo check` が pass すれば toolchain は正しい。次に進んでよい。pass しない場合はまず toolchain version を直す — リファレンスの `rust-toolchain.toml` が Rust 1.95.0 を pin しており、`my-openhl/` 側でも同じ pin を置いたので、`rustup` が必要な toolchain を自動 install してくれるはずだ。
 
-> 🛑 **やりがちな勘違い。** 「`openhl-reference` を直接編集すればいい。」 **違う。** あのリポは答え合わせであって自分の workspace ではない。read-only として扱うこと。`my-openhl/` への編集は自分のコード。`openhl-reference/` への編集は混乱の元 — どれが自分の書いたコードでどれが元からあったコードか分からなくなる。
+> 🛑 **やりがちな勘違い。** 「`openhl-reference` を直接編集すればよい。」  
+> **違う。** `openhl-reference` は答え合わせ専用で、編集対象ではない。  
+> 編集は必ず `my-openhl/` 側で行う。境界を曖昧にすると、どこまでが自分の実装か追えなくなる。
 
 ## 6. 15 レッスンの地図
 
@@ -162,7 +174,9 @@ diff -ru ~/code/my-openhl/crates/types ./crates/types
 
 自分のコードは細かい点 (空白、変数名、コメントの言い回し) で違って当然だ。重要なのは型、シグネチャ、制御フローが等価であること。そこが大きく食い違うなら、レッスンが land していない — 設計を振り返るセクションを読み直して調整する。
 
-> 🛑 **やりがちな勘違い。** 「答え合わせから直接 type した方が早い。」 **違う、それが一番悪い道だ。** `openhl-reference` から copy すれば 30 分で終わるが、学べることは何もない。レッスンの説明に従って自分で type し、レッスンが描写している摩擦に実際にぶつかり、結果として答え合わせのコードと一致する状態に着地する — それが本来の道だ。一致は **証拠** であって、目的ではない。
+> 🛑 **やりがちな勘違い。** 「答えを直接写せば早い。」  
+> **違う。** コピーは速いが、設計判断が身につかない。  
+> レッスンどおりに自分で実装し、最後に diff で一致を確認する。一致は目的ではなく、理解の結果である。
 
 ## 8. セットアップ確認 — 本レッスンの実際の演習
 

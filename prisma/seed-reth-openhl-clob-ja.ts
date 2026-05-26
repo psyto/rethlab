@@ -344,7 +344,7 @@ doc コメントで注目する点が 3 つ:
 - **\`OrderId\` は caller-allocated** — book は ID を生成せず、caller が生成する。これで book が pure-stateless に保たれる: \`submit_order\` は (book, order) の関数であり、(book, order, generator-state) ではない。
 - **\`Price\`/\`Qty\` は minor unit** — USDC のような 6-decimal token では \`Price(1_000_000)\` が $1.00 を表す。Matching engine の中に \`f64\` は **存在しない**。**お金の計算に float は持ち込まない。**
 
-> 🛑 **やりがちな勘違い。** 「便利のために \`pub fn from_dollars(d: f64) -> Price\` メソッドを追加しよう。」 **ダメ、f64 の精度問題を engine に持ち込むことになる。** \`Price(1_000_000)\` が wire format。User 向けツールで \`from_dollars\` をやりたければ、ツール側の境界で integer 乗算をして bridge には integer-typed Price を渡す。Matching engine は float に触れない。
+> 🛑 **やりがちな勘違い。** 「便利のために \`pub fn from_dollars(d: f64) -> Price\` メソッドを追加しよう。」 **ダメ、f64 の精度問題を engine に持ち込む。** \`Price(1_000_000)\` が wire format。User 向けツールで \`from_dollars\` をやりたければ、ツール側の境界で integer 乗算をして bridge には integer-typed Price を渡す。Matching engine は float に触れない。
 
 ### Step 4: \`Side\` enum と \`opposite()\` ヘルパー
 
@@ -880,6 +880,7 @@ use crate::types::{
 - **\`core::cmp::Reverse\`** — 任意の \`Ord\` 型の ordering を反転する wrapper。\`Reverse(Price(100))\` は \`Reverse(Price(200))\` **より大きい** と比較される (Reverse が underlying な比較を反転するため)。
 - **\`BTreeMap\`** — sorted map。Iteration は key を昇順 (= **natural order** = \`Ord::cmp\` が「小さい順」と言う順) に走査する。Insert/remove/lookup はすべて O(log n)。
 - **\`VecDeque\`** — 両端 queue。価格 level 内の「time priority」に使う: 新規 order は \`push_back\` (列の末尾) し、マッチした order は \`pop_front\` (列の先頭から fill) する。
+- **機械共感の補足** — \`VecDeque\` は \`Vec\` のような単一連続領域そのものではないが、リングバッファとして両端 O(1) を維持しつつ高い局所性を持つ。価格 level あたり数百〜数千件の走査では、連続アクセスに近いパターンになり CPU のキャッシュとプリフェッチが効きやすい。結果として、ランダムアクセスの多いハッシュ構造より wall-clock で有利になる場面が多い。
 - **L1 + L2 のすべての型** — 本レッスンで直接使わないもの (\`Fill\`、\`FillResult\`、\`Side\` 等) も含む。最終的な import リストに合わせて今のうちに import しておく。L4-L6 の matching コードですべて使う。
 
 > 🛑 **やりがちな勘違い。** 「\`BTreeMap\` ではなく \`HashMap\` を使えばいいのでは? Hash lookup は O(1) で BTreeMap の O(log n) より速い」。 **lookup だけでなく、価格順に iterate する必要がある。** 「best bid」を見つけるとは「最高価格の bid」を見つけること。HashMap には「次のソート済み key」という概念がなく、全 key を scan (O(n)) して最大を見つけるしかない。BTreeMap の sorted iteration なら best を O(1) lookup (\`keys().next()\`) で得られる — これが matching のコストを安く抑える鍵。
@@ -933,7 +934,7 @@ field 3 個、**pub ではない** (内部型なので、caller が \`RestingOrd
 - **\`order_type\`** — 削除。Resting order は定義上常に Limit order になる (Market order は決して rest しない — 取れる分だけ取って残りは破棄するから)。\`order_type\` を保存すると \`OrderType::Market\` の \`RestingOrder\` を作れてしまうが、それは無意味。
 - **\`qty\` は残す** — ただし **部分 fill される度に時間と共に縮む**。L4 の submit コードは、maker が taker の qty の 100% 未満しか食わなかったときに \`RestingOrder.qty\` を直接 mutate する。
 
-> 🛑 **やりがちな勘違い。** 「元の \`Order\` を book に保存して \`qty\` を modify すればよいのでは?」 **\`Order\` は \`Copy\` (field 5 個、すべて stack-safe) であり、Copy field を mutate するのは注意深い reviewer の目にバグとして映る。** 具体的には、\`Order\` が queue 内に保存されていると、matching コードが \`*order_in_queue.qty.0 -= fill_qty.0\` のように書くことになる — だがこれは \`Copy\` で安く clone できるはずのデータを mutate していることになる。\`RestingOrder\` を別型にすることで「これは mutate される」という性質を明示する: \`RestingOrder\` がそのために **ある** 以上、caller は \`RestingOrder.qty\` が縮むことを当然と思う。
+> 🛑 **やりがちな勘違い。** 「元の \`Order\` を book に保存して \`qty\` を modify すればよいのでは?」 **\`Order\` は \`Copy\` (field 5 個、すべて stack-safe) であり、Copy field を mutate するのは注意深い reviewer の目にバグとして映る。** 具体的には、\`Order\` が queue 内に保存されていると、matching コードが \`*order_in_queue.qty.0 -= fill_qty.0\` のように書く— だがこれは \`Copy\` で安く clone できるはずのデータを mutate している。\`RestingOrder\` を別型にすることで「これは mutate される」という性質を明示する: \`RestingOrder\` がそのために **ある** 以上、caller は \`RestingOrder.qty\` が縮むことを当然と思う。
 
 ### Step 4: \`new()\` と accessor 4 個を追加
 
@@ -1105,7 +1106,7 @@ caller が map を直接 modify すべきではなく、必ず \`submit\` / \`ca
 
 ## 次のレッスン (L4)
 
-データ構造が揃った。L4 ではその上に最初の matching ロジックを乗せる — Limit Buy order の \`submit\` を書く。Reader は ask を最安から順に辿り、limit 以下で match し、約定しなかった残りを rest させる \`Buy\` ブランチを書くことになる。本体 ~60 LOC と、L4-L5 の両方で使う \`match_at_level\` ヘルパー。L4 後、最も一般的なシナリオ (limit buy が resting ask を cross する) で matching engine が実際の \`Fill\` を生成するようになる。`,
+データ構造が揃った。L4 ではその上に最初の matching ロジックを乗せる — Limit Buy order の \`submit\` を書く。Reader は ask を最安から順に辿り、limit 以下で match し、約定しなかった残りを rest させる \`Buy\` ブランチを書く。本体 ~60 LOC と、L4-L5 の両方で使う \`match_at_level\` ヘルパー。L4 後、最も一般的なシナリオ (limit buy が resting ask を cross する) で matching engine が実際の \`Fill\` を生成するようになる。`,
                 },
                 {
                   title: "レッスン 4 — Limit order 用 submit + match_at_level",
@@ -1969,7 +1970,7 @@ Case B が「空 level cleanup」の invariant を自動で守るしくみだ �
 2. **\`self.bids.retain(|_, queue| { ... })\`** — \`retain\` がすべての (\`Reverse<Price>\`, \`VecDeque<RestingOrder>\`) pair を順に辿る。Closure が \`queue\` を mutate して \`bool\` を返す: \`false\` なら entry を drop し、\`true\` なら保持する。
 3. **\`if !found && let Some(pos) = queue.iter().position(|o| o.id == order_id)\`** — まだ見つけていない場合のみ検索する。\`iter().position()\` は \`Option<usize>\` を返す — 述語に一致する最初の要素の index。\`if let\` と組み合わせるのが「index が存在すれば何かする」の Rust 慣用イディオム。
 4. **\`queue.remove(pos)\`** — \`VecDeque::remove(index)\` がその index の要素を取り出す。返り値の \`Option<T>\` (削除された要素) はここでは無視する。**\`VecDeque::remove\` は O(n)** — 後続要素を 1 slot 左にシフトする。数百 order の queue ならマイクロ秒オーダー。
-5. **\`found = true\`** — flag を立てて以降の level がスキャンされないようにする。**これが load-bearing な最適化** — order が見つかった後も残りの level を順に辿る (以前の cancellation で残った空 queue を check するため) が、残り各 queue 内の linear scan はスキップする。
+5. **\`found = true\`** — flag を立てると、以降の level では \`if !found\` が偽になるため \`position(...)\` による **queue 内の線形探索** は走らない。**これが load-bearing な最適化**。ただし \`BTreeMap::retain\` 自体は map 全体を最後まで反復し、各 level で \`!queue.is_empty()\` の評価は継続する（空 level のパージ判定のため）。つまり「map 走査を break」するのではなく、「以降の level で queue 内探索だけを省略する」という挙動になる。
 6. **\`!queue.is_empty()\`** — return 値。Queue が空 (最後の order を削除したばかり、または別の理由で空) なら \`false\` を返して \`retain\` に entry を drop させる。そうでなければ \`true\` を返して保持させる。
 7. **\`if found { return true }\`** — short-circuit。bid で既に見つけて削除したなら、ask を検索する必要はない。
 8. **\`self.asks.retain(...)\`** — ask に対する同じロジック。Closure 本体は同一 (key の違いはない — 両 map とも value は \`VecDeque<RestingOrder>\`)。
@@ -2086,7 +2087,7 @@ mod smoke {
 
 1. **「削除 + cleanup」を \`retain\` で組み合わせる。** 2 つの別操作を 1 closure pass で済ませる: queue を mutate し、entry を drop するか決める。これがまさに \`retain\` のユースケース。代替 (iterate-then-cleanup や、\`BTreeMap::iter_mut\` + 手動で空 key 収集) は invariant をより多くのコードに分散させてしまう。**自分の操作にぴったり合うメソッドがあるなら、それを使う。**
 
-2. **O(n) linear scan は v0 では fine。** 本番取引所は何千、何万の resting order を持つ。v0 の openhl で数百なら scan はマイクロ秒で済む。\`HashMap<OrderId, (Side, Price)>\` index を追加すれば cancel は O(1) になるが、その代わりに BTreeMap と同期を保つ second data structure、追加メモリ、追加 cache pressure を抱えることになる。さらに低レイヤの観点を加えると: **\`VecDeque\` はメモリ上で連続配置されるため、数百〜数千要素程度の走査では CPU の空間局所性とプリフェッチが効き、ポインタを飛び回る HashMap の lookup より「実測の wall-clock time」で速いケースが多い。** Big-O 表記は asymptotic な傾向で、CPU 1 サイクルの世界では cache miss の方が支配的になる — mechanical sympathy の観点でも、現スケールでは index を持つメリットが薄い。**Profile に出てこないものは最適化しない。** openhl が v0 scale を超えたら index を追加すればよい — それまでは scan が正しい形。
+2. **O(n) linear scan は v0 では fine。** 本番取引所は何千、何万の resting order を持つ。v0 の openhl で数百なら scan はマイクロ秒で済む。\`HashMap<OrderId, (Side, Price)>\` index を追加すれば cancel は O(1) になるが、その代わりに BTreeMap と同期を保つ second data structure、追加メモリ、追加 cache pressure を抱える。さらに低レイヤの観点を加えると: **\`VecDeque\` はメモリ上で連続配置されるため、数百〜数千要素程度の走査では CPU の空間局所性とプリフェッチが効き、ポインタを飛び回る HashMap の lookup より「実測の wall-clock time」で速いケースが多い。** Big-O 表記は asymptotic な傾向で、CPU 1 サイクルの世界では cache miss の方が支配的になる — mechanical sympathy の観点でも、現スケールでは index を持つメリットが薄い。**Profile に出てこないものは最適化しない。** openhl が v0 scale を超えたら index を追加すればよい — それまでは scan が正しい形。
 
 3. **Cancel は \`bool\` を返す。\`Option<RestingOrder>\` や \`Result<(), CancelError>\` ではない。** 削除した order を返すと \`RestingOrder\` を expose することになる (L3 で意図的に private 型にした)。\`Result\` を返すと caller に「見つからない」ケースを error として handle させることになるが、cancellation の冪等性は機能でありバグではない (cancel を 2 回呼べることが安全であるべき)。\`bool\` なら「仕事をしたかしなかったか」をクリーンに伝えられる — 内部を漏らさず、error-handling を強制せずに済む。**何が起きたかを正直に表す、最小の return 形を選ぶ。**
 
@@ -2257,7 +2258,7 @@ mod tests {
 }
 \`\`\`
 
-ヘルパー関数 2 個。これがないと、各テスト本体で次のように書くことになる:
+ヘルパー関数 2 個。これがないと、各テスト本体で次のように書く: 
 
 \`\`\`rust
 let order = Order {
@@ -2482,7 +2483,7 @@ Test 7 と 8 のペアは \`cancel\` のバグの一群を catch する: \`cance
 - \`best_bid() == Some(Price(95))\` — order 2 はまだ resting。
 - \`best_ask() == None\` — order 1 の ask は完全に消費されている。
 
-**これが最強のテストである理由**: no-crossed-book invariant こそが orderbook を **正しい** ものにしている。Cross する book は、起こるべきトレードが起こっていない取引所を見せていることになる — matching engine としての根本的失敗。これが pass すれば、engine が safety property を維持しているという **証拠** が得られる (証明ではない — それは L8 の proptest で行う)。
+**これが最強のテストである理由**: no-crossed-book invariant こそが orderbook を **正しい** ものにしている。Cross する book は、起こるべきトレードが起こっていない取引所を見せている— matching engine としての根本的失敗。これが pass すれば、engine が safety property を維持しているという **証拠** が得られる (証明ではない — それは L8 の proptest で行う)。
 
 > 🛑 **やりがちな勘違い。** 「9 個ではなく 100 個の unit test を書けばよい? カバレッジは多い方がよい」。 **多くのテストでも同じ path を exercise しているなら、カバレッジが増えたことにはならない。** この 9 個は **異なる invariant** を exercise するように選んである: empty-book、resting、market-walks-levels、limit-respects-price、time-priority、partial-market、cancel-found、cancel-not-found、no-cross。それぞれが他 8 個ではテストできない property をテストする。**「buy crosses ask」をひたすら exercise する 100 個のテストは、99 個が冗長。**
 
@@ -2672,7 +2673,7 @@ workspace = true
 
 \`proptest\` は workspace \`Cargo.toml\` で既に宣言されている (workspace に追加する必要はない — L1 Architect の最初のコースから workspace dep として入っている)。\`[dev-dependencies]\` block に置けば test build 時のみ利用可能になり、production build には含まれない。
 
-> 🛑 **やりがちな勘違い。** 「\`[dependencies]\` に入れて non-test コードでも使えるようにすればよいのでは?」 **そうすると \`openhl-clob\` のすべての consumer が \`proptest\` を runtime dependency として抱えることになる。** スマートコントラクト、validator、indexer — どれも matching engine を **使う** のに property test インフラを必要としない。\`[dev-dependencies]\` の規律で、テストインフラは必要なところにしか入れないようにする。
+> 🛑 **やりがちな勘違い。** 「\`[dependencies]\` に入れて non-test コードでも使えるようにすればよいのでは?」 **そうすると \`openhl-clob\` のすべての consumer が \`proptest\` を runtime dependency として抱える。** スマートコントラクト、validator、indexer — どれも matching engine を **使う** のに property test インフラを必要としない。\`[dev-dependencies]\` の規律で、テストインフラは必要なところにしか入れないようにする。
 
 ### Step 2: \`Action\` enum で \`mod prop_tests\` をセットアップ
 
@@ -2752,6 +2753,7 @@ mod prop_tests {
 - **\`arb_side()\`** — uniform に Buy または Sell を選ぶ。\`prop_oneof![Just(...), Just(...)]\` が proptest の「これらリテラルのどれか 1 つ」combinator。
 - **\`arb_action(id)\`** — 固定 \`id\` で random な \`Action\` を生成する。Limit 分岐は \`(account, qty, side, price)\` を range で生成し、Market 分岐は \`(account, qty, side)\` を生成する。重みは \`3 => limit_action, 1 => market_action\` — Limit action を Market の 3 倍の頻度にして、現実的な order-book usage を反映している。
 - **\`arb_actions()\`** — 長さ 1..30 の random \`Vec<Action>\` を生成する。\`.prop_flat_map\` パターンは少し奇妙だ: まず \`prop::collection::vec(0u64..1000, 1..30)\` で「長さ 1..30 の、値が 0..1000 の u64 vec」を生成する。**ただし中身の u64 値はダミーで、\`.prop_flat_map\` の中の \`.enumerate()\` が直後に index で上書きしてしまう** — \`0u64..1000\` の range は「ベクタの長さ」を決めるためだけのもので、生成される値そのものは使われない。それから各 position を \`arb_action(i+1)\` にマップして order ID を確定させる。ポイントは、\`arb_actions\` が strictly-increasing な order ID を持つ sequence を生成すること (book での collision を避けるため)。
+- ここで \`enumerate()\` の \`i\` は \`usize\` なので、\`arb_action\` の \`u64\` 引数に合わせるため \`i as u64 + 1\` の明示キャストを入れている。これは「生成時の位置 index を決定論的な \`OrderId(1..)\` に写像する」ための型変換だ。
 
 **range (\`1..=200\` for account、\`50..=150\` for price) を使う理由は?** Proptest を **plausible** なシナリオへバイアスするため。\`0..=u64::MAX\` の range にすると、proptest はほとんどの場合 extreme outlier (account_id = 18_446_744_073_709_551_614 等) を生成する。現実的な range にすれば、実際のトレーディングに見えるシナリオが生成される: account 1-200、price 50-150、quantity 1-20。Matching engine のバグは、normal-looking な sequence に最も隠れやすい。
 
@@ -2905,7 +2907,7 @@ Body の流れ:
 
 1. **各 action ごと** に order を submit する。
 2. **各 submit 後** に \`book.best_bid() < book.best_ask()\` (両方存在する場合) を check する。
-3. **どこかで \`best_bid >= best_ask\`** になればテスト失敗 — book が cross したことになる。
+3. **どこかで \`best_bid >= best_ask\`** になればテスト失敗 — book が cross した。
 
 これは **L7 の \`book_does_not_cross_after_match\` と同じ invariant** だが、random sequence に対してテストする。L7 では **1 つ** のシナリオで invariant が成立することを証明したが、L8 では **256 個の randomized** シナリオで成立することを証明する。
 
@@ -3254,7 +3256,7 @@ pub struct LiveRethEvmBridge<P> {
 - **\`clob: Mutex<Book>\`** — matching engine。\`Book\` 自体は内部的に thread-safe ではない。\`Mutex\` でラップすれば、複数の caller が同時に order を submit できる (engine app loop に統合された後、bridge は \`Arc<LiveRethEvmBridge>\` で共有される)。
 - **\`pending_fills: Mutex<Vec<Fill>>\`** — \`submit_order\` が fill を push し、(L10 の) \`build_payload\` が drain する buffer。\`clob\` と別の \`Mutex\` にしているのは、2 つが異なるタイミングで mutate するから: submit は matching のために \`clob\` の lock を短時間保持し、その後 append のために \`pending_fills\` の lock を短時間保持する。lock を分けることで、2 つの submit が submit → push の全 chain を直列化しなくて済む。
 
-> 🛑 **やりがちな勘違い。** 「\`Mutex<(Book, Vec<Fill>)>\` 1 個ではなく \`Mutex\` 2 個にする理由は?」 **Lock 粒度。** 1 個の mutex で両方を覆うと、submit ごとに matching 作業と fill-buffer mutation の両方で lock を保持することになる。submit せずに \`pending_fill_count\` を読みたい将来のコード (たとえば L10 の \`build_payload\` drain やデバッグツール) が、submit-in-progress で block されてしまう。\`Mutex\` を 2 個にすれば、read が write contention を bypass できる。**コストは余分な \`Mutex::new\` 呼び出しが数個増える程度。利益は並行スループットの改善。**
+> 🛑 **やりがちな勘違い。** 「\`Mutex<(Book, Vec<Fill>)>\` 1 個ではなく \`Mutex\` 2 個にする理由は?」 **Lock 粒度。** 1 個の mutex で両方を覆うと、submit ごとに matching 作業と fill-buffer mutation の両方で lock を保持する。submit せずに \`pending_fill_count\` を読みたい将来のコード (たとえば L10 の \`build_payload\` drain やデバッグツール) が、submit-in-progress で block されてしまう。\`Mutex\` を 2 個にすれば、read が write contention を bypass できる。**コストは余分な \`Mutex::new\` 呼び出しが数個増える程度。利益は並行スループットの改善。**
 
 ### Step 4: \`pending\` tuple を変更
 
@@ -3362,7 +3364,7 @@ impl<P> LiveRethEvmBridge<P> {
 
 3 メソッドすべてが \`&self\` を取る点に注目。内部の \`Mutex\` が重い処理を担い、public API としては「shared 参照 + interior mutability」になる — まさに async コードが必要とする形 (複数の async task が \`&LiveRethEvmBridge\` を同時に保持できる)。
 
-> 🛑 **やりがちな勘違い。** 「\`submit_order\` が \`&mut self\` ではなく \`&self\` を取るのはなぜか?」 **order を同時に submit したい async task 間で bridge を共有する必要があるから。** Matching engine (実際に mutate するコード) は \`Mutex\` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制しているから、この mutation は安全」と受け入れる。\`submit_order\` が \`&mut self\` を取るなら \`Arc<RwLock<LiveRethEvmBridge>>\` が必要になり、submit ごとに bridge 全体を lock することになる — パフォーマンスが悪化し、API の形としても適切でない。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
+> 🛑 **やりがちな勘違い。** 「\`submit_order\` が \`&mut self\` ではなく \`&self\` を取るのはなぜか?」 **order を同時に submit したい async task 間で bridge を共有する必要があるから。** Matching engine (実際に mutate するコード) は \`Mutex\` の後ろにあり、Rust の borrow checker は「mutex が exclusion を強制しているから、この mutation は安全」と受け入れる。\`submit_order\` が \`&mut self\` を取るなら \`Arc<RwLock<LiveRethEvmBridge>>\` が必要になり、submit ごとに bridge 全体を lock する— パフォーマンスが悪化し、API の形としても適切でない。**Interior mutability は shared concurrent access が use case のときに正しいツール。**
 
 ### Step 7: destructuring を波及更新
 
@@ -3478,7 +3480,7 @@ assert_eq!(bridge.pending_fill_count(), 0); // fresh bridge では空
 
 1. **\`Mutex\` 1 個ではなく 2 個にした。** Bridge の CLOB 状態と fill buffer は別々の関心事で、別々のタイミングで mutate する。Lock を分割しておけば、並行 submit が不必要に互いを block し合わなくて済む。**Lock 粒度は、contention が hot path 上にあるときに重要になる。**
 
-2. **\`submit_order\` は \`&self\` を取る。** \`Mutex\` 経由の interior mutability によって、shared 参照で bridge を mutate できる。Bridge は \`Arc\` でラップされ async task 間で共有される。メソッドが \`&mut self\` を取ると、外側に \`RwLock<Bridge>\` が必要になり、すべての access を 1 つのグローバル lock で直列化することになる。**内部 \`Mutex\` + \`&self\` API が、async-shared state に対する idiomatic な Rust パターン。**
+2. **\`submit_order\` は \`&self\` を取る。** \`Mutex\` 経由の interior mutability によって、shared 参照で bridge を mutate できる。Bridge は \`Arc\` でラップされ async task 間で共有される。メソッドが \`&mut self\` を取ると、外側に \`RwLock<Bridge>\` が必要になり、すべての access を 1 つのグローバル lock で直列化する。**内部 \`Mutex\` + \`&self\` API が、async-shared state に対する idiomatic な Rust パターン。**
 
 3. **\`build_payload\` に空の \`Vec<Fill>\` placeholder を残した。** L9 では構造を組み込むに留め、L10 でそれを機能的にする。Placeholder を残すのは honest scoping — reader には欠けている機能がどこにあるかが正確に見える。**\`Vec::new()\` placeholder のほうが、将来用の TODO コメントよりも discoverable。**
 
@@ -3509,7 +3511,7 @@ git checkout main
 ## よくある質問
 
 **Q: \`submit_order\` が \`clob\` を lock してから別途 \`pending_fills\` を lock するのはなぜか? 両方を同時に保持しないのは?**
-\`pending_fills\` の append が依存しているのは matching の **結果** であって、matching の中間状態ではないから。\`book.submit(order)\` が return した時点で \`FillResult\` は所有データなので、\`clob\` の lock を release してから result を安全に処理できる。両 lock を保持してしまうと、無関係な \`pending_fills\` 操作 (たとえば別の caller が \`pending_fill_count\` を読むなど) を correctness 上の利益なしに直列化することになる。
+\`pending_fills\` の append が依存しているのは matching の **結果** であって、matching の中間状態ではないから。\`book.submit(order)\` が return した時点で \`FillResult\` は所有データなので、\`clob\` の lock を release してから result を安全に処理できる。両 lock を保持してしまうと、無関係な \`pending_fills\` 操作 (たとえば別の caller が \`pending_fill_count\` を読むなど) を correctness 上の利益なしに直列化する。
 
 **Q: \`payload_fills\` が \`&[Fill]\` (borrowed) ではなく \`Vec<Fill>\` (clone) を返すのはなぜか?**
 \`&[Fill]\` を返すと caller が slice のライフタイム中ずっと \`state\` Mutex の lock guard を保持しなければならず、lock を欲しがる他のすべてが deadlock してしまうから。Vec を clone するのは \`payload_fills\` 呼び出しごとに allocation 1 個増えるだけで、稀にしか呼ばれない inspection メソッドなら問題ない。**Lock を取る API は、決して lock 越しの参照を返してはいけない。**
@@ -3774,7 +3776,7 @@ git checkout main
 ない。\`std::mem::take\` が \`MutexGuard\` の下で実行されているから。Lock が保持されている間、他のスレッドは lock を acquire できない。最初の build_payload が full set を得て、2 番目は空 Vec を得る (最初の呼び出しが \`Vec::default()\` で置き換えているため)。**Mutex が drain を直列化する。**
 
 **Q: \`build_payload\` が drain **後** に error したら?**
-Fill は \`pending_fills\` から消えたが payload には入らなかったことになる — 実質的に失われる (submit されたが commit されていない)。**これは現実に起こりうるバグクラスで**、production コードでは handle すべき (たとえば build_payload の残処理を行う前に、drain した fill を recovery queue に保存するなど)。本コースの v0 single-validator devnet では failure path が稀なので loss を許容する。production hardening は下流の仕事。
+Fill は \`pending_fills\` から消えたが payload には入らなかった— 実質的に失われる (submit されたが commit されていない)。**これは現実に起こりうるバグクラスで**、production コードでは handle すべき (たとえば build_payload の残処理を行う前に、drain した fill を recovery queue に保存するなど)。本コースの v0 single-validator devnet では failure path が稀なので loss を許容する。production hardening は下流の仕事。
 
 **Q: \`drained_fills\` を \`state\` lock 内ではなく、別の lock で取るのはなぜ?**
 \`pending_fills\` と \`state\` が別々の mutex だから (L9 の設計判断)。まず \`state\` を lock し (新しい payload ID を計算するため)、次に \`pending_fills\` を短く lock し (swap のためだけ)、そのまま state lock を使って \`pending\` への insert を続ける。**操作が独立しているなら、長い lock 1 つよりも短い lock 2 つのほうがよい。**
@@ -3897,7 +3899,7 @@ time →
 
 (答え: fill は **maker の** 価格で起きる — このケースでは \`Price(100)\`。L4 から: 「fill 価格は常に **resting** order の価格 (maker の)。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格)。buyer が勝つ」。両 order が同じ価格でも同じルールが適用される — maker が 100 で rest し、taker が 100 でマッチする。**「price-time priority」ルールは「maker の価格 (price priority) + 同じ price level 内では first-come (time priority)」。ここでは time priority の disambiguation は不要 — maker が 100 で唯一の order だから。**
 
-仮にこの統合テストの Taker Sell が **\`Price(95)\`** を提示して突っ込んできても、板に \`Price(100)\` の Maker Buy が rest している以上、約定は **\`100\` で発生する** — Taker は提示価格より良い 100 で sell できることになる (price improvement)。これは「price-time priority は resting 側に決定権がある」という L4 の規律が、Reth node + bridge + matching engine の統合境界を越えても揺るがない証拠だ。この統合テストの背後では、まさにそのエンジン挙動が走っている。)
+仮にこの統合テストの Taker Sell が **\`Price(95)\`** を提示して突っ込んできても、板に \`Price(100)\` の Maker Buy が rest している以上、約定は **\`100\` で発生する** — Taker は提示価格より良い 100 で sell できる (price improvement)。これは「price-time priority は resting 側に決定権がある」という L4 の規律が、Reth node + bridge + matching engine の統合境界を越えても揺るがない証拠だ。この統合テストの背後では、まさにそのエンジン挙動が走っている。
 
 ## 手順
 
@@ -4002,7 +4004,7 @@ Genesis を parent として \`build_payload\` を呼ぶ。Bridge が L10 の \`
 
 返された \`PayloadId\` を \`empty_id\` に bind しておくのは、**Step 7 でこの payload の fill を後から re-check** し、drain が forward-only であることを証明するため。
 
-\`attrs.clone()\` を使うのは、後で 2 番目の \`build_payload\` 呼び出しで \`attrs\` を再利用するから。両 payload が同じ attrs (timestamp 1、ゼロ fee_recipient、ゼロ prev_randao) を使うのはシンプルさのため — production code では各 payload が fresh な timestamp を持つことになる。
+\`attrs.clone()\` を使うのは、後で 2 番目の \`build_payload\` 呼び出しで \`attrs\` を再利用するから。両 payload が同じ attrs (timestamp 1、ゼロ fee_recipient、ゼロ prev_randao) を使うのはシンプルさのため — production code では各 payload が fresh な timestamp を持つ。
 
 ### Step 6: maker + taker を submit、fill を verify
 

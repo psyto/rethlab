@@ -112,7 +112,7 @@ time →
 
 (答え: fill は **maker の** 価格で起きる — このケースでは `Price(100)`。L4 から: 「fill 価格は常に **resting** order の価格 (maker の)。$101 の limit-buyer が $100 の resting limit-seller とマッチすると $100 で fill する (maker の価格)。buyer が勝つ」。両 order が同じ価格でも同じルールが適用される — maker が 100 で rest し、taker が 100 でマッチする。**「price-time priority」ルールは「maker の価格 (price priority) + 同じ price level 内では first-come (time priority)」。ここでは time priority の disambiguation は不要 — maker が 100 で唯一の order だから。**
 
-仮にこの統合テストの Taker Sell が **`Price(95)`** を提示して突っ込んできても、板に `Price(100)` の Maker Buy が rest している以上、約定は **`100` で発生する** — Taker は提示価格より良い 100 で sell できることになる (price improvement)。これは「price-time priority は resting 側に決定権がある」という L4 の規律が、Reth node + bridge + matching engine の統合境界を越えても揺るがない証拠だ。この統合テストの背後では、まさにそのエンジン挙動が走っている。)
+仮にこの統合テストの Taker Sell が **`Price(95)`** を提示して突っ込んできても、板に `Price(100)` の Maker Buy が rest している以上、約定は **`100` で発生する** — Taker は提示価格より良い 100 で sell できる (price improvement)。これは「price-time priority は resting 側に決定権がある」という L4 の規律が、Reth node + bridge + matching engine の統合境界を越えても揺るがない証拠だ。この統合テストの背後では、まさにそのエンジン挙動が走っている。
 
 ## 手順
 
@@ -217,7 +217,7 @@ Genesis を parent として `build_payload` を呼ぶ。Bridge が L10 の `std
 
 返された `PayloadId` を `empty_id` に bind しておくのは、**Step 7 でこの payload の fill を後から re-check** し、drain が forward-only であることを証明するため。
 
-`attrs.clone()` を使うのは、後で 2 番目の `build_payload` 呼び出しで `attrs` を再利用するから。両 payload が同じ attrs (timestamp 1、ゼロ fee_recipient、ゼロ prev_randao) を使うのはシンプルさのため — production code では各 payload が fresh な timestamp を持つことになる。
+`attrs.clone()` を使うのは、後で 2 番目の `build_payload` 呼び出しで `attrs` を再利用するから。両 payload が同じ attrs (timestamp 1、ゼロ fee_recipient、ゼロ prev_randao) を使うのはシンプルさのため — production code では各 payload が fresh な timestamp を持つ。
 
 ### Step 6: maker + taker を submit、fill を verify
 

@@ -483,9 +483,13 @@ git checkout main
 ## よくある質問
 
 **Q: `commit_advances_head_and_records_block` が "mutex poisoned" で panic する。**
-最もよくある原因は、別のテストが同じ impl 内で lock を持ったまま panic し、state が poisoned のまま残ったことだ。Cargo はデフォルトで test を並列実行する。本当の問題だと確信したら `cargo test -p openhl-evm -- --test-threads=1` で逐次実行する。
+まず最初の panic 行を確認する。  
+このコースのテストは `InMemoryEvmBridge::new()` を各テストで作るため、テスト間で `Mutex<State>` を共有しない。原因の多くは「同じテスト内で lock 保持中に先に panic し、その後もう一度 lock を取りに行く」パターンだ。
 
-*(ただし、このコースで書いたテストでは並列衝突は起こらない: 各テスト関数が `InMemoryEvmBridge::new()` を個別に生成しているので、テスト間で `Mutex<State>` を共有していない。実際にこのエラーに遭ったときの真の原因は、**そのテスト関数自身の実行中に lock を保持したまま別の場所で panic が起き (assertion 失敗、`unwrap()` の破裂、`expect()` の発火など)、その後同じテスト内で再度 `state.lock()` を呼んだ**ことにある。`--test-threads=1` を試す前に、cargo test 出力の上部で最初に発火した panic 行 — `thread 'tests::...' panicked at ...` — を確認すること。Mutex の poison はそのテスト固有の自家中毒であり、`--test-threads` を下げても消えない。)*
+確認手順:
+1. `cargo test` 出力の先頭にある最初の `thread 'tests::...' panicked at ...` を特定する。  
+2. その panic を直してから poison エラーの再現を確認する。  
+3. 並列実行の切り分けが必要なときだけ `cargo test -p openhl-evm -- --test-threads=1` を使う。  
 
 **Q: `pending` を `HashMap<u64, _>` ではなく `HashMap<PayloadId, _>` にすべき?**
 どちらでも動く。openhl の convention は、storage layer で内側の type (`u64`) を使い、lookup 内での wrap/unwrap を避けることだ。Public API では依然 `PayloadId` を使う。trade-off は次のとおり: `HashMap<PayloadId, _>` で type safety を得る代わりに、lookup ごとに `.0` accessor が必要になる。`HashMap<u64, _>` なら storage layer の type safety は諦めるが、noise は避けられる。好みの問題で、こちらは `u64` を選んだ。

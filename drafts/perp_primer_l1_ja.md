@@ -192,6 +192,7 @@ Funding payment は mark を直接動かさない。動かすのは *トレー�
 - **Tick での settlement**: 各 funding interval で、エンジンが非 flat な position を順に走査し、トレーダーの collateral balance を `position_size × mark × rate` で調整する。一括支払いではない — 各 position が個別に決済される。
 - **Saturating な算術**: Funding 計算は `RATE_SCALE = 1e9`（parts per billion）スケールの符号付き整数を使う。すべての乗算は `i128` 中間値で行い、overflow 時は wrap せずに saturate する。Consensus determinism の規律 — すべての validator が同じ入力から同じ rate を計算する必要がある。
 - **Tick 間で funding は累積しない (スナップショット方式)**: Interval の中で開いて閉じた position には funding がかからない。Hyperliquid の支払いイベントは、**毎時 00 分などの interval boundary の瞬間** にポジションを保有しているかどうかだけで判定される — その瞬間の position snapshot を取り、`size × mark × rate` を一括計算する。dYdX のような連続 funding (時間積分型) を経験してきた読者は要注意: ここは離散イベント方式のステートマシンであり、「保有時間に対する課金」ではなく「snapshot 時刻に保有していたかどうか」が支配的だ。**バグのない state machine を設計するときは、この境界条件を最初に固める。**
+- **アーキテクチャ上のトレードオフ (Boundary Gaming)**: この方式は実装がシンプルで deterministic だが、副作用として「59 分に建てて 00 分を跨いで 01 分に閉じる」ような短時間保有でも 1 interval 分の funding を受払する。つまりトレーダーには boundary 直前直後でポジションを急開閉するインセンティブが生まれ、正時付近の板で一時的な流動性の歪み（スプレッド拡大）が発生しうる。**時間積分の複雑さを捨てる代わりに、境界ゲーミングの市場構造リスクを受け入れる**のが、この設計選択だ。
 
 ## よくある誤解
 

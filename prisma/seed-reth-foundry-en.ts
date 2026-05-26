@@ -457,7 +457,13 @@ Six things to notice:
    \`\`\`
 
    **\`vm.expectRevert\` has a 1-call lifetime; respect the ordering.**
-4. **The \`uint256 zero = 0; zero - 1\` pattern is the constant-folding workaround.** Writing \`uint256(0) - 1\` as a literal expression looks identical but doesn't compile — Solc 0.8 evaluates literal arithmetic at compile time, sees the underflow, and rejects the source. Storing zero in a local variable opaques it past the constant folder; the SUB opcode runs at runtime, and the *runtime* overflow check (which Solidity 0.8 inserts around every arithmetic op outside \`unchecked {}\`) is what triggers \`Panic(0x11)\`. **Compile-time and runtime overflow checks live at different layers; the pattern you write determines which one fires.** Subtle but worth knowing: the SUB opcode runs *inside this test contract* while computing the argument — so the panic fires before the external call to \`counter.setNumber\` is ever dispatched. A \`-vvvv\` trace shows no call into \`counter\`; the test passes because \`vm.expectRevert\` catches any revert that happens between arming and the next external-call site, including reverts inside the test contract itself.
+4. **The \`uint256 zero = 0; zero - 1\` pattern is the constant-folding workaround.** Writing \`uint256(0) - 1\` as a literal expression looks identical but doesn't compile — Solc 0.8 evaluates literal arithmetic at compile time, sees the underflow, and rejects the source. Storing zero in a local variable opaques it past the constant folder; the SUB opcode runs at runtime, and the *runtime* overflow check (which Solidity 0.8 inserts around every arithmetic op outside \`unchecked {}\`) is what triggers \`Panic(0x11)\`. **Compile-time and runtime overflow checks live at different layers; the pattern you write determines which one fires.**
+
+   What is critical to understand here is the **execution layer (context) where the panic occurs**:
+   - **Local Evaluation Panic inside Test Contract (This Case)**: The subtraction \`zero - 1\` evaluates *inside this test contract* while computing the argument to \`counter.setNumber(...)\`. This means the panic fires **within the test contract's context (the test runner's execution frame)**. Consequently, the external call to \`counter.setNumber\` is never actually dispatched. A \`-vvvv\` trace shows no call into \`counter\`; the test passes because \`vm.expectRevert\` intercepts any revert occurring between arming and the next external-call site, including reverts inside the test contract itself.
+   - **Panic inside an External Contract (Typical Case)**: In contrast, if \`Counter\` had a \`decrement()\` function and we triggered underflow by calling it, the panic would fire **within the context of the external contract (a separate EVM execution frame)**, and the revert data (\`Panic(0x11)\`) would bubble up to the caller (the test contract). In this scenario, a \`-vvvv\` trace would explicitly show the call to \`Counter::decrement()\` and its subsequent failure.
+
+   Mapping this to a Rust mental model: the former is equivalent to a panic occurring while evaluating arguments on the caller's side (before the function call is dispatched), whereas the latter is a panic occurring inside the callee's function block and propagating across the call boundary. Discerning where a panic resides in the execution trace is a vital skill for debugging complex contract suites.
 5. **The comment block walks the test's intent step-by-step.** Same \`math-walk in comments\` discipline from openhl-liquidation L13's tests. A future reader debugging a failure reads the comment and re-derives the expected behavior. **Math-walk comments turn one test into a worked example of the EVM behavior under test.**
 6. **No \`decrement()\` was added to \`Counter.sol\`** — we triggered the underflow inside the test directly. This keeps the production contract unchanged while still exercising the behavior. For production contracts with real \`decrement\` methods, the test would \`counter.decrement()\` directly. **Tests can construct minimal scenarios without modifying the contract under test.**
 
@@ -800,7 +806,21 @@ Suite result: ok. 4 passed; 0 failed; 0 skipped
 
 **Four tests, all green at 1000 iterations.** The new fuzz test runs in ~50ms despite the iteration count because each iteration is cheap.
 
-> ⚠️ **\`vm.assume\` trap: write loose filters, not pinpoint ones.** A good \`vm.assume(x < type(uint256).max)\` predicate excludes *one* value from the $2^{256}$ space — the fuzzer almost always gets a valid input. But \`vm.assume(x == 42)\` — "I want exactly this value" — has effectively zero chance of the fuzzer randomly drawing \`42\` from $2^{256}$, so the test burns through \`max_test_rejects\` (default 65536) and dies with \`TooManyAssumptions\`. **Rule of thumb: use \`vm.assume\` only when it excludes a tiny slice of the input space (typically < 1%). If you want to test a pinpoint value, that's a unit test, not a fuzz test.**
+> [!WARNING]
+> **The "Pinpoint Filtering Trap" and \`TooManyAssumptions\` Errors**
+>
+> \`vm.assume\` should be used **exclusively to filter out a tiny fraction of the input space** (typically less than 1%), such as boundary values (like overflow limits or zero).
+>
+> If you write a filter to pass only one specific pinpoint value, like so:
+> \`\`\`solidity
+> vm.assume(x == 42); // ✗ Dangerous anti-pattern!
+> \`\`\`
+> The fuzzer has practically zero chance of randomly drawing \`42\` from the massive $2^{256}$ space. As a result, the test runner will fail to find a valid input and will quickly exhaust the rejection budget limit of \`max_test_rejects\` (default 65,536), aborting with a \`TooManyAssumptions\` error (or a \`Result::unwrap()\` panic).
+>
+> - **The Core Issue**: Writing \`vm.assume(x == target)\` degrades a powerful fuzz test into a highly inefficient unit test.
+> - **Remedy and Best Practice**:
+>   - If you need to verify code behavior for specific pinpoint values (e.g., \`42\` or \`0xdead...\`), do not use fuzzing. Write a standard unit test (\`test_...\`) instead.
+>   - Fuzz testing is designed to verify invariants across broad ranges, not to serve as a substitute for explicit scenario tests. Use each tool for its intended purpose.
 
 ### Step 4: See the shrinker in action by breaking the test
 
@@ -840,7 +860,7 @@ ls cache/fuzz/
 
 You should see a directory with files named after test signatures. Each file holds failing inputs from past runs. The next time you run \`forge test\`, Foundry *immediately* re-runs against those persisted inputs before generating new random ones.
 
-This means: **if you fixed a bug and re-broke it, the test fails immediately with the same counterexample — no waiting for the fuzzer to rediscover it.** This is the corpus persistence pattern, and it's the same thing \`proptest\`'s \`proptest-regressions/\` files do in Rust.
+This means **if you fixed a bug and re-broke it, the test fails immediately with the same counterexample — no waiting for the fuzzer to rediscover it.** This is the corpus persistence pattern, and it's the same thing \`proptest\`'s \`proptest-regressions/\` files do in Rust.
 
 \`\`\`bash
 # Persist a counterexample by intentionally breaking + reverting:
@@ -1171,7 +1191,20 @@ Expected output:
     Last invariant: invariant_NumberEqualsIncrementCount
 \`\`\`
 
-**The reported counterexample is a 2-call sequence.** Foundry initially found the failure after ~30 random calls, then the shrinker reduced it: dropped most calls, halved \`badSetNumber(0xa3b8...)\` to \`badSetNumber(42)\`, found that the minimal failure requires exactly \`badSetNumber(42)\` followed by \`wrappedIncrement()\`. The causality chain is important and worth tracing call-by-call: \`badSetNumber(42)\` *succeeds without reverting* — \`counter.setNumber(42)\` is a legal operation, just one that bypasses the ghost. Because \`fail_on_revert = false\`, Foundry doesn't flag the call itself; it lets the state mutation through, leaving \`counter.number() = 42\` while \`ghostIncrementCount\` is still \`0\`. The conservation law has already broken at this point, but the invariant runner doesn't know yet — it only checks after the *next* call returns. So Foundry proceeds to the next Handler method, calls \`wrappedIncrement()\`, that call returns cleanly, and *then* \`invariant_NumberEqualsIncrementCount\` evaluates: \`counter.number() == handler.ghostIncrementCount()\` → \`43 != 1\` → fail. The shrinker keeps both calls because together they form the minimal trace that reaches a checked-invariant moment after the divergence.
+**The reported counterexample is a 2-call sequence.** Foundry initially found the failure after ~30 random calls, and then the shrinker reduced it: dropped most calls, halved \`badSetNumber(0xa3b8...)\` to \`badSetNumber(42)\`, and found that the minimal failure requires exactly \`badSetNumber(42)\` followed by \`wrappedIncrement()\`.
+
+This behavior demonstrates a fundamental concept in invariant testing: **"Causal Time Lag"**.
+
+### What "Causal Time Lag" Means Here
+Invariants are evaluated **after** each handler call. So the call that corrupts state and the call where failure is observed may differ.
+
+In this test:
+1. \`badSetNumber(42)\` succeeds (\`fail_on_revert = false\`).
+2. \`counter.number()\` becomes \`42\`, but \`ghostIncrementCount\` stays \`0\`.
+3. \`wrappedIncrement()\` succeeds and moves \`counter.number()\` to \`43\`.
+4. The next invariant check catches the mismatch: \`43 != 1\`.
+
+\`forge\`'s sequence shrinker then removes unrelated calls and keeps this minimal causal trace. That is why debugging stays practical even when the original failing run was much longer.
 
 **Remove \`badSetNumber\` from \`CounterHandler.sol\` before continuing.** The conservation discipline is intact only when every Handler method updates both target and ghost in lockstep.
 
@@ -1279,7 +1312,7 @@ You'll learn:
 - \`cast block\` / \`cast tx\` / \`cast logs\` for chain introspection
 - The full read-eval pattern: write contract → forge test → cast call against a forked anvil to verify behavior on real state
 
-After L4 you'll be able to interact with deployed contracts from a shell loop without writing a Solidity script — the CLI equivalent of \`curl\`+\`jq\` for the EVM.
+After L4 you can interact with deployed contracts from a shell loop without writing a Solidity script — the CLI equivalent of \`curl\`+\`jq\` for the EVM.
 `,
                 },
               ],
@@ -1416,7 +1449,15 @@ Expected output:
 Six things to notice:
 
 1. **The function signature is the human-readable Solidity form, not the 4-byte selector.** cast parses \`"totalSupply()(uint256)"\` internally using the same parser alloy uses, hashes the signature with keccak256, takes the first 4 bytes, and uses that as the function selector in the underlying \`eth_call\`. **You write Solidity-ergonomic syntax; cast does the encoding.**
-2. **The \`(uint256)\` after the function name is the return-type annotation.** Without it, cast prints the raw hex bytes (\`0x0000...\`). With it, cast decodes the return as a \`uint256\` and prints the decimal. Multi-return functions follow the same pattern — \`"slot0()(uint160,int24,uint16,uint16,uint16,uint8,bool)"\` is the Uniswap V3 pool's slot0 signature, and cast prints each tuple element on its own line. If the inline decode trips on an exotic signature (rare but possible — dynamic arrays of structs are the usual suspects), the stable fallback is to drop the return-type annotation entirely and pipe the raw hex into \`cast abi-decode "<full-signature>"\`, which uses the same parser but in a more permissive context. **For most real production signatures, the inline form just works; reach for \`cast abi-decode\` only when it doesn't.**
+2. **The \`(uint256)\` after the function name is the return-type annotation.** Without it, cast prints the raw hex bytes (\`0x0000...\`). With it, cast decodes the return as a \`uint256\` and prints the decimal. Multi-return functions follow the same pattern — \`"slot0()(uint160,int24,uint16,uint16,uint16,uint8,bool)"\` is the Uniswap V3 pool's slot0 signature, and cast prints each tuple element on its own line.
+
+   > [!TIP]
+   > **Robust Decoding Fallback using \`cast abi-decode\`**
+   > For functions returning complex structs, dynamic arrays, or nested tuples, the inline return-type annotation (e.g., \`"myFunction()(uint256[],(string,address))"\`) might occasionally fail due to parser limitations in the CLI argument handling context. The professional fallback is to query the function *without* specifying return type annotations to retrieve the raw hex output, and then pipe that output directly to \`cast abi-decode\`:
+   > \`\`\`bash
+   > cast call <contract-address> "myFunction()" | cast abi-decode "myFunction()(uint256[],(string,address))"
+   > \`\`\`
+   > This approach runs the ABI decoder in a more permissive context than the command-line arguments parser, allowing it to correctly parse highly nested or custom data types. If a standard query fails to decode, immediately switch to this piped command pattern.
 3. **No private key needed.** \`cast call\` is read-only; it executes against the node's view of state without broadcasting. This is the workhorse for production debugging — you can simulate any view function against mainnet without spending a wei.
 4. **\`--rpc-url\` can be replaced by \`ETH_RPC_URL\` in your shell env.** Set \`export ETH_RPC_URL=https://ethereum.reth.rs/rpc\` once and drop the flag from subsequent commands. The L5 lesson on anvil will show switching \`ETH_RPC_URL\` between mainnet and forked anvil.
 5. **The output decimal is raw integer, not human-formatted.** USDC has 6 decimals, so \`35,234,876,543,210,000,000\` raw means \`35,234,876,543,210.000000 USDC\`. cast doesn't apply decimal scaling — that's your job, or use \`cast --to-unit <value> ether\` for conversion (despite the name, the unit conversion is general).
@@ -1612,7 +1653,12 @@ After L4 you can:
 
 **Q1: Why use \`cast\` when Etherscan + a browser do the same thing?**
 
-Three reasons. **(a) Composability** — \`cast\` output pipes into \`jq\`, \`awk\`, \`xargs\`, \`grep\`, exactly like any Unix tool. Etherscan output is in a browser. **(b) Reproducibility** — a cast command is a shareable bash one-liner; an Etherscan workflow is a series of clicks you can't paste into a runbook. **(c) Speed** — \`cast call\` against a local Reth node returns in milliseconds; Etherscan loads in seconds with rate limits. For L1 engineers doing dozens of view queries per hour, cast is 10×+ faster than browser-based tools. **Etherscan for one-off exploration; cast for everything else.**
+Three reasons:
+1. **Composability** — \`cast\` output pipes into \`jq\`, \`awk\`, \`xargs\`, \`grep\`, exactly like any Unix tool. Etherscan output is in a browser.
+2. **Reproducibility** — a cast command is a shareable bash one-liner; an Etherscan workflow is a series of clicks you can't paste into a runbook.
+3. **Speed** — \`cast call\` against a local Reth node returns in milliseconds; Etherscan loads in seconds with rate limits. For L1 engineers doing dozens of view queries per hour, cast is 10×+ faster than browser-based tools.
+
+**Etherscan for one-off exploration; cast for everything else.**
 
 **Q2: Does \`cast\` support every JSON-RPC method or only a subset?**
 
@@ -1921,6 +1967,12 @@ Three things to notice:
 
 1. **\`cast index address <addr> <base-slot>\` computes the mapping slot.** \`keccak256(abi.encode(addr, baseSlot))\` is the Solidity storage layout for \`mapping(address => X)\`. \`cast index\` exposes this as a CLI helper, so you don't have to compute the keccak by hand.
 2. **\`anvil_setStorageAt\` is the most powerful and most dangerous of anvil's mutators.** You can break contracts in interesting ways by setting storage to invalid states (e.g., set USDC's \`paused\` slot to a non-boolean). Use it for tests that verify your contract handles edge cases, not for "just making numbers match."
+
+   > [!IMPORTANT]
+   > **EVM Storage Alignment and Zero-Padding**
+   > EVM storage slots are strictly aligned to 32-byte (256-bit) words. When calling \`anvil_setStorageAt\`, you must supply a **complete 32-byte hex value (\`0x\` followed by exactly 64 hex characters)**, padded with leading zeros (e.g., \`0x000000000000000000000000000000000000000000000000000000e8d4a51000\`).
+   >
+   > If you write a shorter hex value without explicit zero-padding (e.g., just \`0xe8d4a51000\`), it may violate word boundary rules and **risk corrupting or overwriting adjacent packed variables** sharing that same storage slot. Solidity's compiler optimization (Storage Packing) packs multiple small variables (e.g., an \`address\` and a \`uint96\`) into a single 32-byte slot to save gas. Writing to a slot without accounting for all variables in it will overwrite everything. The professional approach to updating single variables in a packed slot is to read the existing 32-byte value, apply a bitwise mask to update only the target bytes, and write the combined 32-byte word back.
 3. **Real production contracts often have non-obvious storage layouts.** USDC's mapping at slot 9 is correct as of this writing, but contracts upgraded via proxy patterns can have arbitrary layouts. \`forge inspect <contract> storage\` is the source of truth.
 
 ### Step 5: Time travel with \`anvil_mine\` and \`anvil_setNextBlockTimestamp\`
@@ -2061,7 +2113,18 @@ It does — but the Docker image binds to localhost inside the container by defa
 
 **Q7: My fork has Chain ID 1, the same as real mainnet. Doesn't this defeat the chain-ID safety check?**
 
-Yes — and this is the L5 trap to internalize. When you fork mainnet, your local anvil reports Chain ID \`1\`. The chain-ID check that protects you from accidentally replaying a mainnet tx on Sepolia (or vice versa) compares the chain IDs of the two endpoints; if both endpoints report \`1\`, the check passes silently. If a real-mainnet RPC URL is sitting in another env var or your shell history, and you accidentally run \`cast send --private-key <REAL-KEY> --rpc-url $REAL_RPC\` instead of pointing at \`http://localhost:8545\`, the transaction broadcasts to real mainnet without complaint. \`--unlocked\` impersonation is harmless against real mainnet (no signed tx is produced), but \`--private-key\` is not. The defense is operational, not architectural: **\`export ETH_RPC_URL=http://localhost:8545\` explicitly in your fork-working session, and never paste real-mainnet private keys into a shell that's been doing local-fork work. Discipline on \`--rpc-url\` is the only defense once you start forking — the chain-ID check protects you between different chains, not between a fork and the chain it's forked from.**
+Yes — and this is the L5 trap to internalize.
+
+When you fork mainnet, local anvil reports Chain ID \`1\`. The chain-ID safety check only compares endpoint IDs, so if both endpoints report \`1\`, it passes silently.  
+If a real-mainnet RPC URL is still in another env var or shell history, and you accidentally run \`cast send --private-key <REAL-KEY> --rpc-url $REAL_RPC\` instead of \`http://localhost:8545\`, the transaction will broadcast to real mainnet.
+
+\`--unlocked\` impersonation is harmless against real mainnet (no signed tx is produced), but \`--private-key\` is not.  
+The defense is operational, not architectural:
+
+1. Explicitly set \`export ETH_RPC_URL=http://localhost:8545\` in fork-working sessions.
+2. Never paste real-mainnet private keys into a shell that has been used for local-fork work.
+
+**Once you start forking, \`--rpc-url\` discipline is your only defense. Chain-ID checks protect between different chains, not between a fork and its source chain.**
 
 ## Next lesson (L6) — Capstone — port openhl-liquidation's \`InsuranceFund\` to Solidity
 
@@ -2314,6 +2377,16 @@ Seven things to notice — these are the load-bearing translation decisions:
 4. **\`pub\` fields → \`public\` storage with auto-generated getters.** Solidity's \`public\` keyword on a state variable auto-generates a getter function with the same name (\`balance()\` returns the value). This makes the Handler and invariant test contracts able to read the fund's state without writing custom view functions. **Solidity's \`public\` = Rust's \`pub\` + auto-generated getter, in one keyword.**
 5. **\`AccountId\` → \`address\`.** Ethereum's native address type stands in for whatever Rust used as account identifier. \`immutable\` makes it constructor-only (matches Rust's owner being set at construction).
 6. **Solidity 0.8's built-in overflow checks replace Rust's explicit checked-arithmetic.** Both languages will revert on underflow in production code; Rust requires \`checked_sub\` to be explicit about it, Solidity 0.8 makes it automatic. **The runtime behavior is identical; the syntax is shorter in Solidity 0.8+.**
+
+   > [!NOTE]
+   > **Mimicking Rust's Wrapping Behavior and Gas Optimization via \`unchecked\`**
+   > In Solidity 0.8+, if you want to bypass the default safety checks to mimic Rust's wrapping arithmetic behavior (like \`wrapping_add\` or \`wrapping_sub\`), or if you need to optimize gas efficiency to match the performance profile of the Rust implementation, you can wrap operations inside an \`unchecked { ... }\` block:
+   > \`\`\`solidity
+   > unchecked {
+   >     balance -= amount; // Gas saving, or intentional wrapping behavior
+   > }
+   > \`\`\`
+   > Since \`unchecked\` disables the compiler-generated overflow/underflow checks (which throw \`Panic(0x11)\`), it reduces transaction gas costs. For infrastructure engineers, it is a key discipline to explicitly separate safe, boundary-checked arithmetic (the default) from performance-critical sections where checks have already been manually verified and can be skipped (\`unchecked\`).
 7. **\`uint256 public balance\` is intentionally a *storage variable*, not EVM-native \`address(this).balance\`.** The Rust source maintains its own explicit \`balance\` field; the port mirrors that field-by-field. This isn't redundant — it's *isolation*. A forced ETH transfer to the contract address (e.g., via \`selfdestruct\` from another contract) would mutate \`address(this).balance\` without going through \`deposit\`, breaking the conservation invariant if the fund relied on the EVM-native balance. By tracking \`balance\` as a private bookkeeping variable, the conservation law verifies the *fund's own accounting*, immune to external ETH-injection side effects. **The Rust-faithful storage variable is also a deliberate safety choice; EVM-native balance is reachable by external mutators that bypass the contract's invariants.**
 
 ### Step 4: Write \`test/InsuranceFundHandler.sol\`
@@ -2454,7 +2527,22 @@ Four things to notice — these are the load-bearing invariant patterns:
 1. **Each \`invariant_*\` is one line of \`assertEq\`.** No control flow, no branching, no exception handling — just an arithmetic equality. This is the conservation-law shape made concrete in Solidity. **Conservation laws are equalities; equalities are one-liners.**
 2. **The invariants reference *both* fund state and ghost state.** Invariant 1 reads \`fund.balance()\` (the actual contract observable) and the 3 ghosts. The discrepancy between the two surfaces is what catches bugs. **The ghost is the spec; the contract is the implementation; the invariant is the equality between them.**
 3. **Invariant 2 and 3 are accounting cross-checks.** The fund has its own \`totalDeposited\` and \`totalWithdrawn\` fields (matching the Rust struct). Invariants 2 and 3 verify the handler and the fund agree on these values. If the fund's \`deposit\` accidentally double-incremented \`totalDeposited\`, invariant 2 would catch it. **Cross-checking the contract's own bookkeeping against the handler's bookkeeping catches contract-internal bugs.**
-4. **Invariant 4 is a purely-handler invariant.** It doesn't reference fund state at all — it asserts that the handler tracked absorb operations correctly (\`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested\`). This catches handler-side bugs where wrappedAbsorb forgets to update one of the ghosts. **The handler is also a system being tested — invariant 4 watches the watcher.**
+4. **"Multi-Layered Invariants" Design Pattern**
+
+   In this test suite, we are deliberately combining invariants of different architectural scopes. This is known as a **"Multi-Layered Invariants"** design pattern, which is extremely helpful for partitioning bugs and eliminating false positives:
+   - **System-Level Conservation Laws (Invariant 1)**:
+     Cross-checks the actual balance of the contract (the observable state) against the net inputs/outputs recorded by the ghosts. This checks the global economic sanity of the system (e.g., that no capital is created or destroyed).
+   - **Component-Level Internal Invariants (Invariant 4)**:
+     Only compares ghost states against each other without referencing contract state (e.g., \`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested\`). This ensures the mathematical relationships within operations are consistent.
+   - **"Watching the Watchers" Defense**:
+     Bugs in your test logic (ghost updates) are the primary source of flaky invariant failures. Invariant 4 purely verifies that the handler's internal accounting behaves correctly, thus serving as a self-validation layer for the test suite.
+   - **Immediate Bug Partitioning**:
+     When a run fails:
+     - **If both Invariant 1 and Invariant 4 fail**: Likely a bug in the contract logic (or a mismatch in both contract and handler implementations).
+     - **If only Invariant 1 fails, while Invariant 4 passes**: The contract's state transition is inconsistent, but the handler's input tracking is mathematically sound. (Highly likely a smart contract bug).
+     - **If only Invariant 4 fails, while Invariant 1 passes**: The contract behaves correctly, but the handler made an accounting mistake (test suite bug).
+     
+     This multi-layered partitioning saves hours of debugging by pointing you directly to the culprit contract or test file.
 
 ### Step 6: Run the invariants
 

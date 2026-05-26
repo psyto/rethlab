@@ -37,25 +37,32 @@ export async function seedRethFoundryJA(prisma: PrismaClient) {
                   xpReward: 50,
                   content: `# Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律
 
-## このコースで作るもの
+## このコースで得るもの
 
-rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL）のどれかを通過していれば、すでに *規律* は身についている: pure-compute プリミティブ、\`debug_assert!\` + \`saturating_arithmetic\` で守られた state machine、\`proptest!\` で証明された保存則、byte-for-byte の答え合わせ。**この規律はそのまま Solidity contract に 1:1 で transfer する。Foundry はその transfer を mechanical にする道具だ。**
+rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL）を通過していれば、すでに次の規律は身についています。
 
-完走後にはこうなる:
+- pure-compute プリミティブ
+- \`debug_assert!\` + \`saturating_arithmetic\` で守る state machine
+- \`proptest!\` による保存則の検証
+- byte-for-byte の答え合わせ
 
-- **\`forge init\` で initialize された Solidity プロジェクト** — build、test、fuzz が sub-second の feedback loop でローカルで回る。
-- **\`forge fuzz\` のハンズオン経験** — Solidity 版の \`proptest!\`。shrinking、input distribution、最小失敗入力の特定 — Liquidation L9 で学んだワークフローと同一。
-- **\`forge invariant\` の multi-call testing** — per-scan な保存則（Liquidation L13）に最も近い Solidity プリミティブ。\`Handler\` を定義し、何千通りのランダムなメソッド呼び出し系列を回し、各ステップで property を assert する。
-- **\`cast\` の筋肉記憶** — production の trader / engineer が 1 日に何十回も叩く chain CLI。Storage slot を読み、view 関数を呼び、ABI を decode する。
-- **\`anvil --fork-url\` + cheatcodes** — \`vm.deal\` / \`vm.warp\` / \`vm.prank\` でローカルにメインネットを再現し、state-aware testing を回す。Cheatcodes の正体は precompile（openhl Precompiles コース参照）。Foundry はそれを Rust ではなく Solidity 経由で露出させているだけだ。
-- **Capstone**: openhl-liquidation Stage 10b の \`InsuranceFund\` を Rust から Solidity に port し、L9 の保存則 invariant を Foundry で書き直し、同じ定理を 2 言語で mechanical に証明する。
+このコースの目的は、その規律を Solidity contract に 1:1 で移植することです。Foundry は、その移植を機械的に回すための実行環境です。
 
-掴むこと:
+完走後の到達点:
 
-- **Foundry が Solidity ツール戦争に勝った理由**: Rust 製、single-binary、sub-second feedback、REVM を直接 embed する。その REVM こそ、openhl 系コースで内部を覗いてきた REVM そのものだ。
-- **Hardhat / Truffle / Brownie が後退した理由**: JS ベース、遅い、EVM へのアクセスが embedded execution ではなく remote fork 経由で間接的だった。
-- **\`forge fuzz\` と \`forge invariant\` が内部で実際にやっていること** — rethlab が openhl の \`crates/evm\` で教えているのと同じパターンで REVM を orchestrate し、それを Solidity 側の test として露出させているだけ。
-- **なぜ cheatcodes が precompile なのか** — この設計判断ひとつが、Foundry の test 環境を JS ベースの代替より圧倒的に速くしている。
+- **\`forge init\` で最小構成を立ち上げる。** build / test / fuzz のループをローカルで高速に回せる。
+- **\`forge fuzz\` を Rust の \`proptest!\` と同じ感覚で使う。** shrinking、失敗入力の最小化、再実行まで一通り実践する。
+- **\`forge invariant\` で multi-call 保存則を検証する。** \`Handler\` を介してランダムな呼び出し列を作り、各ステップで不変条件を確認する。
+- **\`cast\` を日常的に使える状態にする。** storage 読み取り、view 呼び出し、ABI decode を手癖化する。
+- **\`anvil --fork-url\` + cheatcodes で state-aware testing を行う。** \`vm.deal\` / \`vm.warp\` / \`vm.prank\` を使い、実チェーン状態に近い検証を行う。
+- **Capstone:** openhl-liquidation Stage 10b の \`InsuranceFund\` を Rust から Solidity に移植し、同じ定理を 2 言語で検証する。
+
+このコースで理解すること:
+
+- **なぜ Foundry が標準になったか。** Rust 製の single binary で、REVM を同一プロセスで直接扱えるため。
+- **なぜ JS 系ツールだけでは不足するか。** IPC/JSON-RPC 経由の間接実行が増え、重い検証ほど遅延が効くため。
+- **\`forge fuzz\` / \`forge invariant\` の正体。** openhl の \`crates/evm\` と同種の REVM 駆動パターンを、Solidity テストとして表面化したもの。
+- **なぜ cheatcodes が precompile なのか。** テストから EVM 状態へ直接アクセスでき、検証ループを短く保てるため。
 
 ## このコースが存在する理由
 
@@ -82,7 +89,13 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
 
 ## なぜ Hardhat / Truffle / Brownie ではなく Foundry なのか
 
-歴史を 1 段落で。**Foundry は 2022-2024 年にかけて JS ベース stack を置き換えた — Truffle は終了、Hardhat は主に deploy script や frontend 連携用途で生き残るのみ、L1 / contract / engine 開発では Foundry が事実上の業界標準 (de facto standard) になった。** 本コースのターゲット層 (L1 / infra エンジニア) にとって、**Foundry の習得は競争優位ではなく前提知識 (commodity prerequisite) だ。** 本コースが Foundry を教えるのは、すでに持っている規律をそのまま transfer するため。Foundry が勝った理由は 3 つ。
+背景を短く整理する。
+
+- 2022-2024 年にかけて、Foundry は JS ベースの主要ツールを置き換えた。
+- Truffle は終了し、Hardhat は主にデプロイやフロント連携で使われる。
+- L1 / contract / engine 開発では、Foundry が事実上の標準になった。
+
+このコースの対象（L1 / infra エンジニア）にとって、Foundry は競争優位ではなく前提知識である。本コースは新しい作法を教えるのではなく、既存の Rust 規律を Solidity 側へ移すことに集中する。Foundry が選ばれた理由は次の 3 点だ。
 
 1. **速度。** Foundry の test runner は REVM を直接 in-process で embed する。JS test runner と別プロセスの \`ganache\` / \`hardhat node\` をつなぐ IPC round-trip がない。Hardhat で 60 秒かかる 1000-test スイートが、\`forge test\` なら 2-3 秒で終わる。アーキテクチャ的な違い:
 
@@ -112,7 +125,7 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
       └─────────────────────────────────────────────────────────┘
    \`\`\`
 
-   この 20-30× の高速化は optimization ではない — process boundary を取り除いた アーキテクチャ的な必然だ。
+   この 20-30× の差は、最適化の積み上げではない。process boundary を外したアーキテクチャ差によるものだ。
 2. **Fuzzing が first-class primitive。** Hardhat では property-based testing は plugin 扱いだった。Foundry は built-in で出荷した — shrinking、corpus persistence、sequenced call 用の invariant testing 込みで。最も近い JS 等価物 (\`fast-check\` + Hardhat) は非自明な配線を要求する。
 3. **Cheatcodes-as-precompiles。** Hardhat の \`evm_snapshot\` / \`evm_increaseTime\` は JSON-RPC method — リモートノードに state を変えるよう依頼する。Foundry の \`vm.warp\` / \`vm.deal\` / \`vm.prank\` はアドレス \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` の magic precompile への Solidity 呼び出し。これが **REVM の state を内側から hack する** — 同一プロセス、IPC なし、リモートノードへの信頼も不要。openhl Precompiles コース (Stage 9) を通った読者には、これは *Rust で学んだ「precompile-as-EVM-superpower」パターン* が Solidity 経由でテスト用に露出されたものだと分かる。速く、composable、何より contract と同じ Solidity ファイル内で testable。
 
@@ -456,7 +469,13 @@ Counter コントラクトには \`increment\` はあるが \`decrement\` はな
    \`\`\`
 
    **\`vm.expectRevert\` は 1-call の lifetime を持つ。順序を尊重する。**
-4. **\`uint256 zero = 0; zero - 1\` パターンは constant-folding 回避策。** \`uint256(0) - 1\` をリテラル式として書くと見た目は同じだが、コンパイルが通らない — Solc 0.8 はリテラル算術をコンパイル時に評価し、underflow を検出してソースを reject する。ゼロをローカル変数に格納すると、constant folder の目を欺ける: SUB opcode が runtime で走り、Solidity 0.8 が \`unchecked {}\` の外のあらゆる算術 op に挿入する *runtime* overflow check が \`Panic(0x11)\` を trigger する。**Compile-time と runtime の overflow check は別の layer に住む。書き方がどちらを発火させるかを決める。** 微妙だが押さえておくべき点: SUB opcode は *このテストコントラクトの内部* で実行される — \`counter.setNumber\` への引数を組み立てる段階で発火する。つまり panic が走る場所はテストコントラクト側であり、\`counter.setNumber\` への external call は実際には dispatch されない。\`-vvvv\` トレースを見ると \`counter\` への call は現れない。それでもテストが pass するのは、\`vm.expectRevert\` が arm から次の external-call サイトまでの間に起きるあらゆる revert を catch するからだ — テストコントラクト自身が起こす revert もこれに含まれる。
+4. **\`uint256 zero = 0; zero - 1\` パターンは constant-folding 回避策。** \`uint256(0) - 1\` をリテラル式として書くと見た目は同じだが、コンパイルが通らない — Solc 0.8 はリテラル算術をコンパイル時に評価し、underflow を検出してソースを reject する。ゼロをローカル変数に格納すると、constant folder の目を欺ける: SUB opcode が runtime で走り、Solidity 0.8 が \`unchecked {}\` の外のあらゆる算術 op に挿入する *runtime* overflow check が \`Panic(0x11)\` を trigger する。**Compile-time と runtime の overflow check は別の layer に住む。書き方がどちらを発火させるかを決める。**
+
+   ここで極めて重要なのは、**「パニック（Revert）が発生する実行レイヤー（コンテキスト）の所在」** を理解することだ：
+   - **テスト契約内のローカル評価パニック（今回）**： \`zero - 1\` の減算は、\`counter.setNumber(...)\` への引数を構築する過程、すなわち **このテストコントラクト自身のコンテキスト（テストランナーの実行フレーム）内** で評価され、そこで \`Panic(0x11)\` がトリガーされる。このため、ターゲットコントラクトである \`counter\` への外部呼び出し（external call）自体はディスパッチすらされない。\`-vvvv\` トレースに \`counter\` へのコールが一切記録されないのはこのためだ。それでもテストがパスするのは、\`vm.expectRevert()\` が「次の外部コールが呼び出されるまでの間に、同一実行フレーム（テストランナーコンテキスト）で発生した revert」も捕捉する仕様になっているからである。
+   - **外部コントラクト内でのパニック（一般的なケース）**： 対照的に、もし \`Counter\` コントラクト側に \`decrement()\` 関数が存在し、その内部で \`number - 1\` を実行してアンダーフローさせた場合、パニックは **外部の \`Counter\` コントラクトのコンテキスト（EVM の別実行フレーム）** で発生し、呼び出し元であるテストコントラクトへ revert データ（\`Panic(0x11)\`）がバブルアップする。この場合、\`-vvvv\` トレースには明示的に \`Counter::decrement()\` へのコールと、それが \`Panic(0x11)\` で失敗したログが残る。
+   
+   Rust のメンタルモデルで例えるなら、前者は関数の実引数を評価する際（呼び出し側）に \`panic!\` が発生する状態であり、後者は呼び出された関数（被呼び出し側）の内部で \`panic!\` が発生し、呼び出し境界を越えてスタックトレースが伝播してくる状態に相当する。このように、パニックがどのレイヤーで発生しているかをトレースから見極めることは、複雑な統合テストのデバッグにおいて不可欠なスキルとなる。
 5. **コメントブロックが test の意図を step-by-step で walk する。** openhl-liquidation L13 の test と同じ \`math-walk in comments\` 規律だ。失敗を debug する将来の reader はコメントを読んで期待される挙動を再導出できる。**Math-walk コメントが 1 つの test を、テスト対象の EVM 挙動の worked example に変える。**
 6. **\`Counter.sol\` に \`decrement()\` を追加していない** — underflow を test 内部で直接 trigger した。Production contract を変更せずに挙動を exercise できるという意味だ。Real な \`decrement\` メソッドがある production contract では、test は \`counter.decrement()\` を直接呼ぶ。**Test は contract を変更せずに minimal シナリオを構築できる。**
 
@@ -801,7 +820,21 @@ Suite result: ok. 4 passed; 0 failed; 0 skipped
 
 **4 test、すべて 1000 iteration で green。** 新規 fuzz test は iteration count によらず ~50ms で走る。各 iteration が cheap だからだ。
 
-> ⚠️ **\`vm.assume\` の罠: 緩いフィルタを書け、ピンポイントなフィルタを書くな。** 良い \`vm.assume(x < type(uint256).max)\` のような predicate は $2^{256}$ 空間から *1 つの* 値だけを除外する。fuzzer はほぼ常に valid な入力を得る。一方で \`vm.assume(x == 42)\` のような「特定のピンポイント値を期待する」predicate を書くと、fuzzer が $2^{256}$ から偶然 \`42\` を引く確率は実質ゼロで、\`max_test_rejects\` (デフォルト 65536) を使い切って \`TooManyAssumptions\` で自爆する。**経験則: \`vm.assume\` は入力空間のごく一部 (典型的には < 1%) しか除外しないときだけ使う。pinpoint な値を test したいなら、それは fuzz test ではなく unit test だ。**
+> [!WARNING]
+> **「ピンポイント・フィルタリングの罠」と \`TooManyAssumptions\` エラー**
+>
+> \`vm.assume\` は入力空間の境界条件（オーバーフロー値やゼロなど）のような、**ごく一部の異常値（通常は全体の 1% 未満）を除外するためだけ**に使うべきだ。
+>
+> もし以下のように「特定のピンポイント値のみを通過させる」フィルタを記述した場合：
+> \`\`\`solidity
+> vm.assume(x == 42); // ✗ 極めて危険なアンチパターン
+> \`\`\`
+> ファザーが $2^{256}$ の巨大な空間から偶然 \`42\` を引き当てる確率は実質的にゼロだ。その結果、テストランナーは有効な入力を生成できず、フィルタによる破棄上限である \`max_test_rejects\`（デフォルト 65,536 回）を瞬時に使い切り、**\`TooManyAssumptions\` エラー（または \`Result::unwrap()\` のパニック）で自爆**する。
+>
+> - **本質的な問題**： \`vm.assume(x == target)\` と書くことは、せっかくのファズテストを「非効率な単一値のユニットテスト」へ強制改変していることに他なりません。
+> - **対策と指針**：
+>   - 特定の値（\`42\` や \`0xdead...\` など）における挙動をピンポイントで検証したい場合は、ファズテストではなく**通常のユニットテスト（\`test_...\`）として記述**する。
+>   - ファザーは広範なパラメータ空間の不変関係をチェックするものであり、特定のシナリオテストを代替するものではありません。適材適所で使い分けましょう。
 
 ### Step 4: Test を意図的に壊して shrinker を見る
 
@@ -1172,7 +1205,20 @@ forge test --match-contract CounterInvariantTest -vvv
     Last invariant: invariant_NumberEqualsIncrementCount
 \`\`\`
 
-**報告された反例は、わずか 2 コールの系列にまで圧縮されている。** Foundry は最初におそらく ~30 ランダム call 後に失敗を見つけ、shrinker が reduce した。大半の call を drop し、\`badSetNumber(0xa3b8...)\` を \`badSetNumber(42)\` まで半分にし、最小失敗が ちょうど \`badSetNumber(42)\` の後に \`wrappedIncrement()\` を必要とすることを発見した。ここでの因果連鎖を call-by-call で追うと押さえどころが見える。\`badSetNumber(42)\` は *リバートせずに成功する* — \`counter.setNumber(42)\` は合法な操作で、ただ ghost を bypass するだけだ。\`fail_on_revert = false\` の設定により、Foundry はこの call 自体を問題視せず、state mutation を素通しさせる。結果、\`counter.number() = 42\` のまま \`ghostIncrementCount\` は \`0\` で取り残される。この時点で保存則はすでに崩壊しているが、invariant runner はまだそれを知らない。invariant は *次の* call が返ってきた後にだけ評価されるからだ。Foundry は次の Handler method に進み、\`wrappedIncrement()\` を呼び、その call が clean に返り、*そこで* \`invariant_NumberEqualsIncrementCount\` が走る: \`counter.number() == handler.ghostIncrementCount()\` → \`43 != 1\` → 失敗。Shrinker が 2 コール両方を残すのは、両者が組み合わさってこそ「乖離発生 → 評価点に到達」までの最短 trace を形成するからだ。
+**報告された反例は、わずか 2 コールの系列にまで圧縮されている。** Foundry は最初におそらく ~30 ランダム call 後に失敗を見つけ、shrinker が reduce した。大半の call を drop し、\`badSetNumber(0xa3b8...)\` を \`badSetNumber(42)\` まで半分にし、最小失敗が ちょうど \`badSetNumber(42)\` の後に \`wrappedIncrement()\` を必要とすることを発見した。
+
+ここには、インバリアント・テストにおける極めて重要な概念である**「因果的タイムラグ（Causal Time Lag）」**が体現されている。
+
+### インバリアント検証における「因果的タイムラグ」とは？
+インバリアントは各ハンドラーコールの**後**に評価される。つまり、**状態を壊したコール**と**失敗が観測されるコール**は一致しないことがある。
+
+このテストの因果連鎖は次のとおり。
+1. \`badSetNumber(42)\` は成功する（\`fail_on_revert = false\`）。
+2. \`counter.number()\` は \`42\` になるが、\`ghostIncrementCount\` は \`0\` のまま。
+3. 次に \`wrappedIncrement()\` が成功し、\`counter.number()\` は \`43\` になる。
+4. その直後の invariant 評価で \`43 != 1\` が露呈して失敗する。
+
+\`forge\` のシーケンスシュリンカーは、無関係なコールを削ってこの最小系列に収束させる。長大なトレースを読む代わりに、原因と結果が最短で見える形を直接受け取れる。
 
 **続行する前に \`CounterHandler.sol\` から \`badSetNumber\` を削除する。** 保存則規律は、すべての Handler method が target と ghost を lockstep で更新する場合だけ成立する。
 
@@ -1417,7 +1463,15 @@ cast call --rpc-url https://ethereum.reth.rs/rpc \\
 押さえる点が 6 つ。
 
 1. **Function signature は 4-byte selector ではなく人間可読 Solidity 形式だ。** cast が内部で \`"totalSupply()(uint256)"\` を alloy と同じ parser で parse し、signature を keccak256 で hash し、先頭 4 bytes を取り、それを背後の \`eth_call\` における function selector として使う。**書くのは Solidity-ergonomic な構文、encode は cast がやる。**
-2. **Function 名の後の \`(uint256)\` が return type の annotation だ。** これがないと cast は raw hex bytes (\`0x0000...\`) を表示する。あれば cast は return を \`uint256\` として decode し、decimal を表示する。複数 return の関数も同じパターンに従う — \`"slot0()(uint160,int24,uint16,uint16,uint16,uint8,bool)"\` は Uniswap V3 pool の slot0 signature で、cast は各 tuple 要素を 1 行ずつ表示する。Inline decode が exotic な signature で躓いた場合（稀だが起こり得る。動的配列を含む struct が典型）、安定したフォールバックは return-type annotation を完全に省き、生 hex を \`cast abi-decode "<full-signature>"\` にパイプすることだ。同じ parser を使うが、より permissive な context で走る。**実 production の signature の大半では inline 形式で動く。動かないときだけ \`cast abi-decode\` に手を伸ばす。**
+2. **Function 名の後の \`(uint256)\` が return type の annotation だ。** これがないと cast は raw hex bytes (\`0x0000...\`) を表示する。あれば cast は return を \`uint256\` として decode し、decimal を表示する。複数 return の関数も同じパターンに従う — \`"slot0()(uint160,int24,uint16,uint16,uint16,uint8,bool)"\` は Uniswap V3 pool の slot0 signature で、cast は各 tuple 要素を 1 行ずつ表示する。
+
+   > [!TIP]
+   > **\`cast abi-decode\` によるデコードの堅牢なフォールバック**
+   > 複雑な構造体や動的配列、ネストされたタプルを返す関数の場合、\`cast call\` のインラインデコードアノテーション（例：\`"myFunction()(uint256[],(string,address))"\`）が CLI パーサーの文脈制限により解析に失敗することがある。その際のプロフェッショナルなフォールバック手段は、デコードを指定せずに関数を呼び出して生の hex バイトを出力させ、それをパイプ経由で \`cast abi-decode\` に渡す方法だ：
+   > \`\`\`bash
+   > cast call <contract-address> "myFunction()" | cast abi-decode "myFunction()(uint256[],(string,address))"
+   > \`\`\`
+   > このアプローチは、コマンドライン引数のパース時よりも permissive（寛容）なコンテキストで ABI デコーダーが実行されるため、複雑なネスト構造やカスタムデータ型であっても確実にデコードできる。実運用において、通常の型シグネチャでデコードできない場合は、即座にこのパイプライン方式に切り替えるのが定石だ。
 3. **Private key 不要。** \`cast call\` は read-only。Broadcast せずノードの state view に対して実行する。これが production debug のワークホースだ。mainnet に対して任意の view 関数を 1 wei も使わずに simulate できる。
 4. **\`--rpc-url\` は shell 環境の \`ETH_RPC_URL\` で代替できる。** \`export ETH_RPC_URL=https://ethereum.reth.rs/rpc\` を 1 回設定し、以降のコマンドからフラグを落とす。L5 で anvil を扱う際、terminal session ごとに \`ETH_RPC_URL\` を mainnet と forked anvil の間で切り替えるデモをする。
 5. **出力 decimal は人間フォーマットされていない、raw integer だ。** USDC は decimal 6 桁。\`35,234,876,543,210,000,000\` raw は \`35,234,876,543,210.000000 USDC\` を意味する。cast は decimal scaling を適用しない。それは自分の仕事だ。あるいは \`cast --to-unit <value> ether\` で変換する (名前にもかかわらず、unit conversion は汎用)。
@@ -1613,7 +1667,12 @@ L4 の後はこれができる。
 
 **Q1: Etherscan + ブラウザで同じことができるのに、なぜ \`cast\` を使うのか?**
 
-理由は 3 つ。**(a) 合成可能性（Composability）** — \`cast\` の出力はプレインテキストなので、Unix のパイプライン思想そのままに \`jq\`、\`awk\`、\`xargs\`、\`grep\` へ直接流し込める。自動化スクリプトへの組み込みが容易だ。Etherscan の出力はブラウザの中だ。**(b) 再現性（Reproducibility）** — cast コマンドは単一の bash one-liner としてチーム内で共有できる。Etherscan ワークフローはランブックに paste できないクリックの連続だ。**(c) スピード** — ローカル Reth ノードに対する \`cast call\` は milliseconds で返る。Etherscan は rate limit 付きで重い Web ブラウザのロードを待たされる。1 時間に数十の view クエリを投げる L1 エンジニアには、思考の同期を保つために cast の 10×+ の速度差が死活問題だ。**Etherscan は一度きりの探索用、cast はそれ以外のすべてに。**
+理由は 3 つ。
+1. **合成可能性（Composability）** — \`cast\` の出力はプレインテキストなので、Unix のパイプライン思想そのままに \`jq\`、\`awk\`、\`xargs\`、\`grep\` へ直接流し込める。自動化スクリプトへの組み込みが容易だ。Etherscan の出力はブラウザの中だ。
+2. **再現性（Reproducibility）** — cast コマンドは単一の bash one-liner としてチーム内で共有できる。Etherscan ワークフローはランブックに paste できないクリックの連続だ。
+3. **スピード** — ローカル Reth ノードに対する \`cast call\` は milliseconds で返る。Etherscan は rate limit 付きで重い Web ブラウザのロードを待たされる。1 時間に数十の view クエリを投げる L1 エンジニアには、思考の同期を保つために cast の 10×+ の速度差が死活問題だ。
+
+**Etherscan は一度きりの探索用、cast はそれ以外のすべてに。**
 
 **Q2: \`cast\` はすべての JSON-RPC method を サポートする? それとも subset か?**
 
@@ -1922,6 +1981,12 @@ cast call 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \\
 
 1. **\`cast index address <addr> <base-slot>\` が mapping slot を計算する。** \`keccak256(abi.encode(addr, baseSlot))\` が \`mapping(address => X)\` の Solidity storage layout だ。\`cast index\` がこれを CLI ヘルパーとして露出する。手で keccak を計算する必要はない。
 2. **\`anvil_setStorageAt\` が anvil の mutator のうち最も強力で最も危険だ。** Storage を invalid な state にすると面白い壊れ方をする (例: USDC の \`paused\` slot に non-boolean を入れる)。それを「単に数字を合わせる」ためではなく、自分の contract が edge case を扱うことを検証する test に使え。
+
+   > [!IMPORTANT]
+   > **EVM ストレージのアライメントとパディングの重要性**
+   > EVM のストレージスロットはすべて 32 バイト（256 ビット）ワード単位で管理されている。\`anvil_setStorageAt\` を呼び出す際は、必ず **先頭をゼロパディングした完全な 32 バイトの 16 進数値（\`0x\` ＋ 64桁の16進文字列）** を指定しなければならない。
+   >
+   > もし \`0xe8d4a51000\` のように短い 16 進数値をパディングなしで直接書き込むと、EVM のワード境界に対する配置ルールによっては、同じスロット内に Solidity のコンパイラ最適化（Storage Packing）によって詰め込まれた **隣接する他の変数を予期せず破壊・汚染（Corruption）する危険** がある。例えば、\`address\`（20バイト）と \`uint96\`（12バイト）が同一スロットにパックされている場合、一方のみを更新するつもりでもスロット全体が書き換わる。特定の変数のみをピンポイントで書き換えたい場合は、事前にスロット全体の生データを読み出し、対象ビットのみをビット演算でマスク・合成した完全な 32 バイト値を組み立ててから書き戻すのがプロフェッショナルな標準手順だ。
 3. **Real production contract はしばしば non-obvious な storage layout を持つ。** USDC の mapping が slot 9 にあるのはこの執筆時点で正しい。だが proxy パターン経由でアップグレードされた contract は任意の layout を持ち得る。\`forge inspect <contract> storage\` がソースオブトゥルースだ。
 
 ### Step 5: \`anvil_mine\` と \`anvil_setNextBlockTimestamp\` でタイムトラベルする
@@ -1956,7 +2021,7 @@ cast block latest --field timestamp
 
 ### Step 6: Forked-impersonation flow の full レシピ
 
-組み合わせる。一番使うことになる workflow だ:
+組み合わせる。最も使う workflow だ:
 
 \`\`\`bash
 # Terminal 1: forked anvil
@@ -2017,7 +2082,7 @@ L5 の後、shell history にはこんなものが残る:
 # Terminal 1
 anvil --fork-url https://ethereum.reth.rs/rpc
 
-# Terminal 2 — 一番手を伸ばすことになるレシピ
+# Terminal 2 — 最も使うレシピ
 export ETH_RPC_URL=http://localhost:8545
 cast rpc anvil_impersonateAccount 0x...
 cast rpc anvil_setBalance 0x... 0x...
@@ -2062,7 +2127,18 @@ Yes。\`anvil_impersonateAccount\` は任意の address で動く。EOA であ�
 
 **Q7: 私の fork は Chain ID 1 で、real mainnet と同じだ。これが chain-ID safety check を骨抜きにしないか?**
 
-Yes — そしてこれが L5 で内面化すべき罠だ。Mainnet を fork すると、ローカル anvil は Chain ID \`1\` を返す。Mainnet と Sepolia の間で誤った replay を防いでくれる chain-ID check は、2 つの endpoint の chain ID を比較する。両 endpoint とも \`1\` を返すなら、check は silently に pass する。Real な mainnet RPC URL が別の env var や shell 履歴に残っていて、誤って \`cast send --private-key <REAL-KEY> --rpc-url $REAL_RPC\` を (\`http://localhost:8545\` を指す代わりに) 実行すると、transaction は real mainnet に文句なく broadcast される。\`--unlocked\` の impersonation は real mainnet に対して無害だ (signed tx は生成されない) が、\`--private-key\` はそうではない。防御は architectural ではなく operational だ。**Fork を扱う session で \`export ETH_RPC_URL=http://localhost:8545\` を明示的に export し、real-mainnet private key をローカル fork 作業をしてきた shell に paste しない。Fork を始めた瞬間から、\`--rpc-url\` への規律だけが唯一の防御だ — chain-ID check は異なるチェーン間で守ってくれる。Fork とそれが fork したチェーンの間では守ってくれない。**
+Yes — そしてこれが L5 で内面化すべき罠だ。
+
+Mainnet を fork すると、ローカル anvil は Chain ID \`1\` を返す。chain-ID check は endpoint 間の chain ID を比較するだけなので、両方が \`1\` なら silently に pass する。  
+その状態で、real mainnet RPC URL が別の env var や shell 履歴に残っていると、\`cast send --private-key <REAL-KEY> --rpc-url $REAL_RPC\` を誤実行したとき transaction は real mainnet に broadcast される。
+
+\`--unlocked\` の impersonation は real mainnet では無害だ（signed tx を作らない）が、\`--private-key\` は無害ではない。  
+防御は architectural ではなく operational だ。
+
+1. Fork 作業セッションでは \`export ETH_RPC_URL=http://localhost:8545\` を明示する。  
+2. Real-mainnet の private key を、fork 作業済みシェルに貼り付けない。  
+
+**Fork 開始後の唯一の防御は \`--rpc-url\` 規律だ。chain-ID check が守るのは「異なるチェーン間」であり、「fork と元チェーン間」ではない。**
 
 ## 次のレッスン (L6) — Capstone — openhl-liquidation の \`InsuranceFund\` を Solidity へ port する
 
@@ -2315,6 +2391,16 @@ contract InsuranceFund {
 4. **\`pub\` フィールド → \`public\` storage with auto-generated getter。** Solidity の state 変数上の \`public\` キーワードは同名の getter 関数を自動生成する (\`balance()\` が値を返す)。これで Handler と invariant test contract が、カスタム view 関数を書かずに fund の state を読める。**Solidity の \`public\` = Rust の \`pub\` + auto-generated getter を 1 キーワードで。**
 5. **\`AccountId\` → \`address\`。** Ethereum のネイティブ address 型が、Rust の account 識別子の代わりに立つ。\`immutable\` がそれを constructor-only にする (Rust の owner が construction で set される挙動と一致)。
 6. **Solidity 0.8 の built-in overflow check が Rust の explicit な checked-arithmetic を置き換える。** 両言語とも production code で underflow に revert する。Rust は \`checked_sub\` を明示的に書くことを要求する。Solidity 0.8 は自動でやる。**Runtime 挙動は同一。Solidity 0.8+ では構文が短いだけだ。**
+
+   > [!NOTE]
+   > **\`unchecked\` ブロックによる Rust の wrapping 挙動の模倣とガス最適化**
+   > Solidity 0.8+ では、オーバーフロー/アンダーフローを許容する wrapping 算術（Rust の \`wrapping_add\` や \`wrapping_sub\` に相当）を行いたい場合、あるいはガス効率を極限まで高めて Rust 実装と同等のガスプロファイルに近づけたい場合、\`unchecked { ... }\` ブロックを使用します：
+   > \`\`\`solidity
+   > unchecked {
+   >     balance -= amount; // ガス節約、または意図的な wrapping 動作
+   > }
+   > \`\`\`
+   > \`unchecked\` は Solidity の標準的なオーバーフローチェックコード生成（\`Panic(0x11)\` をスローする条件分岐）を無効化するため、ガスコストを削減できる。インフラエンジニアとしては、安全性が必要な場所（デフォルトの安全な算術評価）と、すでに手動で境界値チェック（bounds check）を済ませてオーバーフローが絶対に起き得ないためガスを節約したい場所（\`unchecked\`）を厳格に区別して設計する習慣が重要だ。
 7. **\`uint256 public balance\` は意図的に *storage 変数* であって、EVM ネイティブの \`address(this).balance\` ではない。** Rust ソースが自身の明示的な \`balance\` フィールドを保持しているから、port はそれを field-by-field でミラーする。これは冗長ではない — *隔離* だ。Contract address への強制的な ETH 送金 (別 contract からの \`selfdestruct\` 経由など) は \`deposit\` を通らずに \`address(this).balance\` を mutate する。Fund が EVM ネイティブな balance に依存していたら、保存則が壊れる。\`balance\` を private な bookkeeping 変数として track することで、保存則 invariant は *fund 自身の会計* を検証する。外部 ETH 注入の副作用に対して immune だ。**Rust に忠実な storage 変数は意図的な safety 選択でもある — EVM ネイティブの balance は contract の invariant を bypass する外部 mutator から触れられる。**
 
 ### Step 4: \`test/InsuranceFundHandler.sol\` を書く
@@ -2455,7 +2541,22 @@ contract InsuranceFundInvariantTest is Test {
 1. **各 \`invariant_*\` は 1 行の \`assertEq\`。** Control flow なし、branching なし、exception handling なし。ただの算術等価性だ。これが Solidity で concrete になった保存則形状だ。**保存則は等価性。等価性は one-liner。**
 2. **Invariant は fund state と ghost state の *両方* を参照する。** Invariant 1 は \`fund.balance()\` (実際の contract observable) と 3 つの ghost を読む。2 つの surface の間の不一致こそがバグを catch する。**Ghost は spec。Contract は implementation。Invariant は両者の間の等価性。**
 3. **Invariant 2 と 3 は accounting の cross-check だ。** Fund は独自の \`totalDeposited\` と \`totalWithdrawn\` フィールドを持つ (Rust struct と一致)。Invariant 2 と 3 は handler と fund がこれらの値で agree していることを検証する。Fund の \`deposit\` が誤って \`totalDeposited\` を double-increment したら、invariant 2 が catch する。**Contract 自身の bookkeeping を handler の bookkeeping に対して cross-check することが、contract-internal なバグを catch する。**
-4. **Invariant 4 は purely-handler な invariant だ。** Fund state を一切参照しない。handler が absorb operation を正しく track したことを assert する (\`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested\`)。これは wrappedAbsorb が ghost の 1 つを更新し忘れる handler 側のバグを catch する。**Handler もまた test されているシステムだ。Invariant 4 は監視者をさらに監視する（Who watches the watchers?）規律として機能する。**
+4. **「多層的インバリアント（Multi-Layered Invariants）」の設計パターン**
+
+   このテスト設計では、異なる階層の性質を持つインバリアントを意図的に組み合わせており、これを**「多層的インバリアント」**と呼ぶ。デバッグの効率化と偽陽性の排除において強力な力を発揮する：
+   - **システムレベルの保存則（System-Level Conservation Laws - Invariant 1）**：
+     コントラクト自体の残高（リアルな状態）と、外部とのすべての入出力の総和（ゴースト状態）を突き合わせる最もマクロな不変条件。システム全体の経済的合理性（「資金がどこからも現れず、どこにも消えない」こと）を検証する。
+   - **コンポーネントレベルの内部インバリアント（Component-Level Invariants - Invariant 4）**：
+     コントラクトの状態は参照せず、ハンドラー（ゴースト変数）の内部状態のみを相互検証するミクロな不変条件。今回の例では、\`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested\`（吸い込まれた損失とカバーされなかった損失の和は、発生した総損失と等しい）がこれに相当する。
+   - **「監視者を監視する（Who watches the watchers?）」防衛ライン**：
+     インバリアントテスト自体のバグ（ゴースト変数の更新ロジック自体の誤り）は、テストの有効性を無効化する最大の要因だ。Invariant 4 は純粋にハンドラー側の記録整合性をアサートしているため、「テストロジックが仕様通りに機能しているか」を自己検証する。
+   - **バグ所在の瞬時切り分け（Partitioning of Bugs）**：
+     もしバグによってテストが失敗した際：
+     - **Invariant 1 と Invariant 4 の両方が失敗**：コントラクトの実装バグ（またはコントラクトとハンドラー両方の誤り）。
+     - **Invariant 1 のみ失敗し、Invariant 4 はパス**：コントラクトの内部状態遷移に不整合があるが、ハンドラーの記録自体は正しい（コントラクト本体にバグが存在する確率が極めて高い）。
+     - **Invariant 4 のみ失敗し、Invariant 1 はパス**：コントラクトは正しく動作しているが、ハンドラー（テストロジック）側のゴースト変数の更新漏れ（テスト側のバグ）。
+     
+     このようにアサーションの階層を分けることで、複雑なプロトコルでも「本体コード」と「テスト用モック・ハンドラーコード」のどちらに原因があるかを一目で特定できる。
 
 ### Step 6: Invariant を走らせる
 
@@ -2566,7 +2667,7 @@ Shrinker は、おそらく 50-call だった元系列をこの 3 calls まで r
 
 Capstone の設計に焼き込んだ load-bearing な決定が 3 つ。
 
-1. **Field-by-field な翻訳であって、再設計ではない。** Solidity port は Rust のフィールド名 (snake → camel case)、revert 条件、return-tuple の形を保つ。Port 中に「improve」する誘惑に抵抗することこそが L13-to-L6 cross-reference を機能させる。読者は 2 つの実装を文字通り diff して規律転写を目で見ることができる。**忠実な porting が言語横断 verification の load-bearing な規律だ。**
+1. **Field-by-field な翻訳であって、再設計ではない。** Solidity port は Rust のフィールド名 (snake → camel case)、revert 条件、return-tuple の形を保つ。Port 中に「improve」する誘惑に抵抗することこそが L13-to-L6 cross-reference を機能させる。読者は 2 つの実装を文字通り diff して規律転写を目で見るできる。**忠実な porting が言語横断 verification の load-bearing な規律だ。**
 
 2. **4 つではなく 5 つの ghost。** Handler は \`ghostSumLossRequested\` を \`ghostSumAbsorbed + ghostSumUnabsorbed\` とは別に track する。これで invariant 4 が両者の等価性を証明できる。よりコンパクトな設計なら invariant に直接関連する 4 ghost だけを track するだろう。5 番目の ghost は invariant 4 を *意味ある* assertion にするために存在する (tautology ではなく)。**5 番目の ghost は invariant 4 の spec だ。**
 

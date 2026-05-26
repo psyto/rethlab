@@ -19,7 +19,7 @@
 
 Concepts you'll grasp in this lesson:
 
-- **Why `account_equity` returns `i64` and can be negative** — equity is `collateral + unrealized_pnl`. The PnL leg can blow through deposited collateral and produce a deficit; the engine has to be able to *measure* that deficit so liquidation can pull the right lever.
+- **Why `account_equity` returns `i64` and can be negative** — equity is `collateral + unrealized_pnl`. The PnL leg can blow through deposited collateral and produce a deficit; the engine has to can *measure* that deficit so liquidation can pull the right lever.
 - **Why `margin_ratio` guards `notional == 0` with `MarginRatio(i64::MAX)`** — flat positions have no exposure, so no margin requirement applies. Returning the maximum representable ratio signals "infinitely safe" and lets every downstream classifier short-circuit naturally.
 - **The i128-scaling discipline for `equity × MARGIN_SCALE / notional`** — order of operations matters: multiply first in `i128` so the high-precision numerator survives the divide. Doing the divide first in `i64` loses precision for small ratios.
 - **The leveraged-regime non-monotonicity of `margin_ratio`** — your first intuition ("as mark increases for a long, margin_ratio increases") is **wrong in the cash-heavy regime** where `collateral > entry × size`. The proptest will catch this — and the fix isn't "patch the function," it's "refine the invariant statement."

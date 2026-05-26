@@ -881,8 +881,8 @@ let mut ranked: Vec<(AccountSnapshot, AdlScore, i64)> = candidates
 
 押さえる点が 5 つ。
 
-1. **\`filter_map\` がここでの正しい combinator だ。** \`adl_score(s, mark)\` は \`Option<AdlScore>\` を返す (L1 の設計)。\`filter_map\` は \`Some\` ケースを残し \`None\` を drop する。\`filter\` + \`map\` を別々に使うと \`adl_score\` を 2 回評価することになる (filter 用に 1 回、map 用に 1 回)。\`filter_map\` は 1 パスで両方をやり、\`Some\` を unwrap する。**\`filter_map\` は「filter して unwrap、1 パスで」。\`T -> Option<U>\` の関数があるときはいつでも使う。**
-2. **クロージャ内部の \`?\` 演算子がエレガントな部分だ。** \`adl_score(s, mark)?\` は \`adl_score\` が \`None\` を返した時点でクロージャを short-circuit し、\`filter_map\` の外に propagate する。\`?\` なしだと explicit な \`match\` か \`let Some(score) = ... else { return None }\` が必要だ。**\`?\` 演算子は async 関数だけでなく、任意の \`-> Option<_>\` クロージャ内部で動く。**
+1. **\`filter_map\` がここでの正しい combinator だ。** \`adl_score(s, mark)\` は \`Option<AdlScore>\` を返す (L1 の設計)。\`filter_map\` は \`Some\` ケースを残し \`None\` を drop する。\`filter\` + \`map\` を別々に使うと \`adl_score\` を 2 回評価する (filter 用に 1 回、map 用に 1 回)。\`filter_map\` は 1 パスで両方をやり、\`Some\` を unwrap する。**\`filter_map\` は「filter して unwrap、1 パスで」。\`T -> Option<U>\` の関数があるときはいつでも使う。**
+2. **クロージャ内部の \`?\` 演算子がエレガントな部分だ。** \`adl_score(s, mark)?\` は \`adl_score\` が \`None\` を返した時点で**その要素を処理中のクロージャ本体だけ**を short-circuit し、\`filter_map\` へ \`None\` を返す。\`filter_map\` 自体はそれを「この要素は drop」として扱い、次の要素の反復へ進む。\`?\` なしだと explicit な \`match\` か \`let Some(score) = ... else { return None }\` が必要だ。**\`?\` はイテレータ全体を \`break\` しない。現在のクロージャから \`None\` を返して次要素へ進めるための短絡規則だ。**
 3. **\`unrealized_pnl\` を filter pass の *後* で計算する。** 順序が重要だ。\`unrealized_pnl\` は cheap だが、expensive なら eligibility filter を pass したアカウントだけ計算したい。**先に filter、後で derive。捨てるかもしれない量は決して decide しない。**
 4. **\`(snapshot, score, pnl)\` のタプルがループの 3 つのニーズをパックする。** Phase 3 はソート用に \`score\`、tiebreaker 用に \`account_id\` (\`snapshot\` 経由) が要る。Phase 4 は \`AdlRecord\` を build するために \`snapshot\`、\`score\`、\`pnl_gross\` が要る。3 つすべてを 1 つのタプルにパッケージすれば、Phase 4 で何も re-derive する必要がない。**タプルは pre-computed 値をループ間で再導出なしに carry する方法だ。**
 5. **\`*s\` が \`&AccountSnapshot\` を \`AccountSnapshot\` (copy) に deref する。** \`AccountSnapshot\` は \`Copy\` (小さな flat struct) なので \`*s\` は cheap な memcpy だ。\`*s\` なしだとタプルは \`(&AccountSnapshot, ...)\` を持つ — 元の slice の drop を妨げる参照だ。**\`Copy\` 型は ownership を cheap に move させる。値が欲しいときに \`*s\` を使う。参照ではない。**
@@ -898,7 +898,7 @@ ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.account.0.cmp(&b.0.account.
 1. **\`b.1.cmp(&a.1)\` が順序を反転 — score *降順*。** 高 score が最初に force-close される (Hyperliquid convention: 最もラッキーな winner が最初に支払う)。\`a.cmp(&b)\` ではなく \`b.cmp(&a)\` と書くのが Rust で idiomatic な「降順」パターンだ。\`.reverse()\` を呼ぶ必要はない。**\`b.cmp(&a)\` が降順、\`a.cmp(&b)\` が昇順。パターンを暗記する。**
 2. **\`.then_with(|| ...)\` は遅延評価（Lazy evaluation）。** 内部のクロージャは \`b.1.cmp(&a.1) == Ordering::Equal\` (score の tie) のときだけ走る。Score がユニークな common case では work を節約する。**\`.then\` は eager 評価、\`.then_with\` がクロージャ版。tiebreaker が non-trivial なら \`.then_with\` を選ぶ。**
 3. **Tiebreaker は \`account_id ascending\` — \`a.0.account.0.cmp(&b.0.account.0)\`。** 昇順のため \`a\` が \`b\` の前に来る。「昇順」の選択は原理的には arbitrary だが、*deterministic* でなければならない。異なるバリデータ上の equally-lucky な winner 2 人が、誰が先に行くかについて agree する必要があるからだ。Ascending account_id が最もシンプルな deterministic な選択だ。**Tiebreaker はバリデータ間で order を reproducible にするために存在する。「fair」のためではない。fair は deterministic と偶然一致するだけだ。**
-4. **\`sort_by\` は stable (equal-key 挿入順を保持する)。** これは 2 つの record が equal score *かつ* equal account_id を持つケースで効いてくる (account_id がユニークなら不可能だが、型 signature はユニーク性を強制しない)。Stable sort なら equal-equal ケースは Phase 2 の iteration order を保つ。**\`sort\` は unstable、\`sort_by\` と \`sort_unstable_by\` は stability で異なる。決定論クリティカルなコードには \`sort_by\` を選ぶ。**
+4. **\`sort_by\` は stable (equal-key 挿入順を保持する)。** これは 2 つの record が equal score *かつ* equal account_id を持つケースで効いてくる (account_id がユニークなら不可能だが、型 signature はユニーク性を強制しない)。Stable sort なら equal-equal ケースは Phase 2 の iteration order を保つ。実装上は最悪計算量 \`O(N log N)\` を保証する代わりに、ソート中に一時バッファ（概ね \`O(N)\`）を使う。一方 \`sort_unstable_by\` は in-place で追加メモリが小さい。**このコースの候補数（最大 15）では追加メモリコストは実質ゼロで、決定論性の利得が圧倒的に勝つ。**
 
 ### Phase 4: iterate と haircut
 
@@ -1039,7 +1039,7 @@ cargo test -p openhl-liquidation adl::tests::adl_
 
 **Q1: なぜ unstable-sort (\`sort_unstable_by\`) ではなく stable-sort (\`sort_by\`) を使うのか?**
 
-決定論性のためだ。\`sort_unstable_by\` は速い (追加アロケーションなし、挿入順 tracking なし) が、*equal 要素の order が unspecified* になる。単一バリデータプロセス内では fine。異なるマシン上のバリデータ間では、同じ入力でも、score が等しい場合にランタイム順が異なれば異なる \`AdlReport\` を生成し得る。Stable sort なら、equal-scored record の相対順がすべてのバリデータで同じになることが保証される。**\`_unstable_\` variant は決定論性を speed と引き換えにする。コンセンサスコードでは決定論性が勝つ。**
+決定論性のためだ。\`sort_unstable_by\` は速く、追加メモリもほぼ使わないが、*equal 要素の order が unspecified* になる。単一バリデータプロセス内では fine。異なるマシン上のバリデータ間では、同じ入力でも、score が等しい場合にランタイム順が異なれば異なる \`AdlReport\` を生成し得る。\`sort_by\` は stable で、equal-scored record の相対順を保持する（加えてこの実装は最悪 \`O(N log N)\`・一時 \`O(N)\` メモリを使う）。**候補数 0..15 の設計ではこのメモリコストは無視できるので、コンセンサスコードでは決定論性を優先して \`sort_by\` を選ぶ。**
 
 **Q2: 十分な候補を collect したら Phase 2 (\`filter_map\`) を short-circuit できる?**
 
@@ -1370,6 +1370,7 @@ L4 後、ADL コースは complete: 5 レッスン 2 モジュール、16 unit t
 - **L4 は 2 つを同時に閉じる。ADL コースと Stage 10 四部作だ。** Stage 10a（margin classification、pure compute）+ 10b（insurance fund、stateful absorption）+ 10c（scanner、orchestration）+ 10d（ADL、off-orderbook fallback）が full なセーフティネット・カスケード（Safety-net cascade）を構成する。L4 後、ストレス下の任意のアカウント状態遷移を指差して、(a) どの layer が扱ったか、(b) どの保存則が preserve したか、(c) どの proptest が普遍的に証明するか、を名指せるようになる。**4 つの stage、4 つの layer、1 つの規律。**
 - **5 つの invariant proptest が、L2+L3 が特定入力で証明したことを普遍化する。** L2 の 5 degenerate-path テストと L3 の 6 nuanced-absorption テストは、hand-picked 入力で \`execute_adl\` を証明した。L4 の 5 proptest は同じ properties を *ランダム* 入力で証明する。(1) \`conservation_absorbed_plus_remaining_equals_deficit\` — load-bearing な保存則。(2) \`each_record_balances_pnl\` — per-record decomposition。(3) \`total_haircut_equals_deficit_absorbed\` — per-record と aggregate accounting の consistency。(4) \`execute_adl_is_deterministic\` — 同じ入力 → 同じ出力、常に。(5) \`records_in_rank_order\` — 任意の入力に対してソート規律が成立する。**Specific tests が関数の shape を証明する。Proptest が関数の普遍性を証明する。**
 - **Proptest の input strategy が「何が valid 入力か」の spec だ。** \`collaterals in proptest::collection::vec(1_i64..1_000_000, 0..15)\` は「0 から 15 の候補アカウント、各 collateral は 1 から 1,000,000」と言う。\`mark in 1_u64..1_000\` は「mark 価格は 1 から 1000 の範囲」。\`deficit in 0_i64..1_000_000\` は「deficit は 0 から 1M」。これらの range が *意味ある operating regime* を定義する。それ以外で proptest が入力を生成することはない（overflow/underflow edge case は L2 で導入した saturating ops が扱う。proptest の責任ではない）。**Input strategy は単なる「任意の入力」ではない。「operating regime 内の任意の入力」だ。**
+- **L4 は L5 型の \`prop_assume!\` 事後リジェクトより、Strategy 側の事前絞り込みを優先する。** このレッスンの 5 つの property は「分岐に十分な密度で当てる」ことが目的なので、生成器レンジを最初から適切に寄せるほうが reject を減らし、\`TooManyAssumptions\` リスクを構造的に避けられる。**数理前提を明示したいときは \`prop_assume!\`、発火密度を作りたいときは Strategy 設計で先に寄せる。**
 - **Stage 10 レトロスペクティブはコース全体を跨ぐ thesis statement だ。** 4 つの stage が単一の per-block orchestration に compose する。scanner が classify し、insurance fund が absorb し、ADL が fallback し、各層の failure mode が *機械的に証明された構造的 invariant で bound されている*。これが rethlab thesis を 1 つの production cascade に適用したものだ。規律は layer 境界を超えて転写される。保存則が layer 境界を気にしないからだ。**保存則は付け加えるプロパティではない。Layer 1 から Layer 3 まで preserve する規律だ。**
 
 確認:

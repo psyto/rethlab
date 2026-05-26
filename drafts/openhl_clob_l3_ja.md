@@ -109,6 +109,7 @@ use crate::types::{
 - **`core::cmp::Reverse`** — 任意の `Ord` 型の ordering を反転する wrapper。`Reverse(Price(100))` は `Reverse(Price(200))` **より大きい** と比較される (Reverse が underlying な比較を反転するため)。
 - **`BTreeMap`** — sorted map。Iteration は key を昇順 (= **natural order** = `Ord::cmp` が「小さい順」と言う順) に走査する。Insert/remove/lookup はすべて O(log n)。
 - **`VecDeque`** — 両端 queue。価格 level 内の「time priority」に使う: 新規 order は `push_back` (列の末尾) し、マッチした order は `pop_front` (列の先頭から fill) する。
+- **機械共感の補足** — `VecDeque` は `Vec` のような単一連続領域そのものではないが、リングバッファとして両端 O(1) を維持しつつ高い局所性を持つ。価格 level あたり数百〜数千件の走査では、連続アクセスに近いパターンになり CPU のキャッシュとプリフェッチが効きやすい。結果として、ランダムアクセスの多いハッシュ構造より wall-clock で有利になる場面が多い。
 - **L1 + L2 のすべての型** — 本レッスンで直接使わないもの (`Fill`、`FillResult`、`Side` 等) も含む。最終的な import リストに合わせて今のうちに import しておく。L4-L6 の matching コードですべて使う。
 
 > 🛑 **やりがちな勘違い。** 「`BTreeMap` ではなく `HashMap` を使えばいいのでは? Hash lookup は O(1) で BTreeMap の O(log n) より速い」。 **lookup だけでなく、価格順に iterate する必要がある。** 「best bid」を見つけるとは「最高価格の bid」を見つけること。HashMap には「次のソート済み key」という概念がなく、全 key を scan (O(n)) して最大を見つけるしかない。BTreeMap の sorted iteration なら best を O(1) lookup (`keys().next()`) で得られる — これが matching のコストを安く抑える鍵。
@@ -162,7 +163,7 @@ field 3 個、**pub ではない** (内部型なので、caller が `RestingOrde
 - **`order_type`** — 削除。Resting order は定義上常に Limit order になる (Market order は決して rest しない — 取れる分だけ取って残りは破棄するから)。`order_type` を保存すると `OrderType::Market` の `RestingOrder` を作れてしまうが、それは無意味。
 - **`qty` は残す** — ただし **部分 fill される度に時間と共に縮む**。L4 の submit コードは、maker が taker の qty の 100% 未満しか食わなかったときに `RestingOrder.qty` を直接 mutate する。
 
-> 🛑 **やりがちな勘違い。** 「元の `Order` を book に保存して `qty` を modify すればよいのでは?」 **`Order` は `Copy` (field 5 個、すべて stack-safe) であり、Copy field を mutate するのは注意深い reviewer の目にバグとして映る。** 具体的には、`Order` が queue 内に保存されていると、matching コードが `*order_in_queue.qty.0 -= fill_qty.0` のように書くことになる — だがこれは `Copy` で安く clone できるはずのデータを mutate していることになる。`RestingOrder` を別型にすることで「これは mutate される」という性質を明示する: `RestingOrder` がそのために **ある** 以上、caller は `RestingOrder.qty` が縮むことを当然と思う。
+> 🛑 **やりがちな勘違い。** 「元の `Order` を book に保存して `qty` を modify すればよいのでは?」 **`Order` は `Copy` (field 5 個、すべて stack-safe) であり、Copy field を mutate するのは注意深い reviewer の目にバグとして映る。** 具体的には、`Order` が queue 内に保存されていると、matching コードが `*order_in_queue.qty.0 -= fill_qty.0` のように書く— だがこれは `Copy` で安く clone できるはずのデータを mutate している。`RestingOrder` を別型にすることで「これは mutate される」という性質を明示する: `RestingOrder` がそのために **ある** 以上、caller は `RestingOrder.qty` が縮むことを当然と思う。
 
 ### Step 4: `new()` と accessor 4 個を追加
 
@@ -334,7 +335,7 @@ caller が map を直接 modify すべきではなく、必ず `submit` / `cance
 
 ## 次のレッスン (L4)
 
-データ構造が揃った。L4 ではその上に最初の matching ロジックを乗せる — Limit Buy order の `submit` を書く。Reader は ask を最安から順に辿り、limit 以下で match し、約定しなかった残りを rest させる `Buy` ブランチを書くことになる。本体 ~60 LOC と、L4-L5 の両方で使う `match_at_level` ヘルパー。L4 後、最も一般的なシナリオ (limit buy が resting ask を cross する) で matching engine が実際の `Fill` を生成するようになる。
+データ構造が揃った。L4 ではその上に最初の matching ロジックを乗せる — Limit Buy order の `submit` を書く。Reader は ask を最安から順に辿り、limit 以下で match し、約定しなかった残りを rest させる `Buy` ブランチを書く。本体 ~60 LOC と、L4-L5 の両方で使う `match_at_level` ヘルパー。L4 後、最も一般的なシナリオ (limit buy が resting ask を cross する) で matching engine が実際の `Fill` を生成するようになる。
 ````
 
 ---

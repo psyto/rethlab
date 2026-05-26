@@ -79,7 +79,7 @@ openhl チェーンが通常通り稼働し、毎時 funding を settle して�
 **Con**：
 - **stale-snapshot 問題**：10 個の settlement すべてが*同じ*現在スナップショットを使うことになり、各歴史的 interval 境界時点のスナップショットではない。Gap 中に勝っていた trader が、いまの有利な rate で計算された 10 個の settlement を支払う羽目になる。Gap 中に負け続けていた側は 10 倍の打撃を受け、しかも途中で position を閉じて逃げる機会は一度もなかった。
 - **集中リスク**：1 度に 10 倍の funding がかかれば、毎時 1 回ずつ別々に支払っていれば耐えられたはずのアカウントが liquidate されうる。
-- **path dependency**：funding の履歴が、gap が*いつ*発生したかに依存することになる — 累積時間だけでなく。
+- **path dependency**：funding の履歴が、gap が*いつ*発生したかに依存する— 累積時間だけでなく。
 
 ### Choice B: 1 度 settle して `now` に advance する
 
@@ -127,7 +127,7 @@ openhl チェーンが通常通り稼働し、毎時 funding を settle して�
                         last_settled_at = 1_003_600 ──► 1_039_600 ✨ (1 ステップ)
 ```
 
-ポイントは「Choice B では `last_settled_at` の遷移が常に 1 ステップで完結する」ということだ。10 時間の gap だろうが 10 秒の gap だろうが、`tick()` は 1 回呼ばれて 1 回 advance するだけ。これが path-independence (gap のタイミングに結果が依存しないこと) の正体であり、テスト 1 本でこの不変条件全体を pin できる理由でもある。
+ポイントは「Choice B では `last_settled_at` の遷移が常に 1 ステップで完結する」。10 時間の gap だろうが 10 秒の gap だろうが、`tick()` は 1 回呼ばれて 1 回 advance するだけ。これが path-independence (gap のタイミングに結果が依存しないこと) の正体であり、テスト 1 本でこの不変条件全体を pin できる理由でもある。
 
 > 🛑 **考えてみよう。** スクロール前に — ノード再起動で 10 時間の funding を取り逃がした validator が、*現在*のスナップショットから 10 tick を replay して埋め合わせようとする場面を考える。**このアプローチで一番痛い目に遭うのはどの trader か？** ヒント：gap 中に負けていたのは誰か、を考えよ。
 
@@ -236,7 +236,7 @@ test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 このレッスンに焼き込んだ決定は 4 つ：
 
-1. **長い gap が起きても settle は 1 度、advance 先は `now`。** 代替案（interval を replay して catch up する）では、負けていた側に集中的な懲罰を、position を閉じる機会も与えずに課すことになる。Funding の目的は*equilibration* であって、retroactive な enforcement ではない。**Choice B は funding revenue を多少犠牲にしてでも、数学を公平性と揃える。**
+1. **長い gap が起きても settle は 1 度、advance 先は `now`。** 代替案（interval を replay して catch up する）では、負けていた側に集中的な懲罰を、position を閉じる機会も与えずに課す。Funding の目的は*equilibration* であって、retroactive な enforcement ではない。**Choice B は funding revenue を多少犠牲にしてでも、数学を公平性と揃える。**
 
 2. **同じ `now` での second tick テストは、可能な限り最も厳しい。** 時間は経過せず、変化するのは state だけだ。遅れた tick で `last_settled_at` を更新し忘れる実装を、すべて捕まえてくれる。**state machine では「同じ入力で連続呼び出し」が、state 更新のバグを最も鋭くあぶり出す。**
 

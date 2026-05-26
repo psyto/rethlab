@@ -3673,7 +3673,7 @@ let client = ClientBuilder::new(reqwest::Client::new())
 let resp = client.get("https://mpp.dev/api/ping/paid").send().await?;
 \`\`\`
 
-\`PaymentMiddleware\` wraps a reqwest client. The middleware intercepts 402 responses, parses the challenge, calls the provider to fulfill the payment, retries with the \`Authorization: Payment\` header. From the caller's perspective, \`.get(...).send()\` Just Works against any MPP-compatible endpoint.
+\`PaymentMiddleware\` wraps a reqwest client. The middleware intercepts 402 responses, parses the challenge, calls the provider to fulfill the payment, then retries with the \`Authorization: Payment\` header. For callers, \`.get(...).send()\` works transparently against any MPP-compatible endpoint.
 
 > 🔍 **Find in repo.** Open [\`src/client/middleware.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/client/middleware.rs) and find the function that handles the retry. Then open [\`src/server/mpp.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/server/mpp.rs) and find where the challenge is emitted. **Predict:** what's the smallest change you'd make to add a new payment provider — say, a custom L2's native asset? (Answer: implement the \`PaymentProvider\` trait on the client side and the \`ChargeMethod\` trait on the server. Zero changes to middleware or the protocol parser.)
 

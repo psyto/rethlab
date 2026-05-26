@@ -189,7 +189,9 @@ doc コメントも更新する — L7 で書いた「submit はまだ呼ばな�
 
 > 🛑 **やりがちな勘違い。** 「unused 警告を抑えるだけなら、`_result` の underscore に意味はあるのか?」 — **`let _result = ...` と `let _ = ...` はどちらも警告は抑える。** 違いは：`let _result` は値を bind してスコープの終わりで drop する一方、`let _ = ...` は値を **即座に** drop する（次の文より前に）。`submit` のケースでは、`_result` を後で読むわけではないのでどちらでも動く。だが `let _result` は「値に意味のある名前があり、将来使う予定がある」ときの慣習だ — L9 で本来の名前に bind して route するように。**`_result` は「将来の意図」のマーカーだ。**
 
-> 🛑 **やりがちな勘違い。** 「どうせスコープの終わりで release されるのに、なぜ `drop(book)` を明示するのか?」 — **encoding と `Ok()` の return がまだ残っているからだ。** `drop(book)` しないと、`out[24..32].copy_from_slice(...)` と `Ok(PrecompileOutput::new(...))` の構築の間も Book ロックを握り続けることになる。どちらの操作もロックを必要としない。握り続けていると、並行 reader や他の precompile の並列アクセスにコストがかかる。**明示的な drop は「このロックは用済み、関数の残りでは要らない」という宣言だ。** コンパイラ上は省略可能だが、hot path ではロック保持の窓を目に見えて縮められる。
+> 🛑 **やりがちな勘違い。** 「どうせスコープの終わりで release されるのに、なぜ `drop(book)` を明示するのか?」 — **encoding と `Ok()` の return がまだ残っているからだ。** `drop(book)` しないと、`out[24..32].copy_from_slice(...)` と `Ok(PrecompileOutput::new(...))` の構築の間も Book ロックを握り続ける。どちらの操作もロックを必要としない。握り続けていると、並行 reader や他の precompile の並列アクセスにコストがかかる。**明示的な drop は「このロックは用済み、関数の残りでは要らない」という宣言だ。** コンパイラ上は省略可能だが、hot path ではロック保持の窓を目に見えて縮められる。
+>
+> Rust の NLL により、最終使用点の直後に自動 drop されるため機械的には省略可能だが、ここでは将来の保守で `FILL_SINK` など別ロック取得が後段に追加されても安全性を読み取りやすいよう、ガードレールとして明示している。
 
 ### Step 2: `place_order_rejects_malformed_input` を `depth_bid` check で拡張
 
@@ -254,7 +256,7 @@ doc コメントも更新する — L7 で書いた「submit はまだ呼ばな�
 L7 からの変更点は 3 つ：
 
 1. **`let book = Arc::new(...); install_clob(book.clone());`** — Arc をローカルに束縛する。Arc の `.clone()` は refcount をインクリメントするだけ。両方の名前が同じ Book を指す形になる。
-2. **新規 assertion を 3 つ：`book.lock().unwrap().depth_bid() == 0`** — 各 rejection の後、book には何も乗っていないことを確かめる。**`depth_bid()` は全価格レベルにわたる bid order の本数を返す**（course 7 の Book で定義した）。Zero なら空、ということだ。
+2. **新規 assertion を 3 つ：`book.lock().unwrap().depth_bid() == 0`** — 各 rejection の後、book には何も乗っていないことを確かめる。**`depth_bid()` は全価格レベルにわたる bid order の本数を返す**（course 7 の Book で定義した）。Zero なら空。
 3. **doc コメント** を追加（L7 では「L7 NOTE」で先送りチェックを説明していたが、ここで消える）。
 
 **追加した 3 つの assertion が side-effect 側の証明だ。** L7 の `assert_eq!(... U256::ZERO)` は precompile が sentinel を *返す* ことしかチェックしていなかった。L8 では、precompile が **何も書き込んでいない** ことも合わせて確認する。両方を合わせて、「malformed input → 0 を返し、かつ state には触れない」が証明できる。
@@ -376,7 +378,7 @@ L4 から仕込んできた配管が、ここで両方向に通電する全景:
 - bridge 側の off-chain な `submit_order` (Course 7) も**同じ Arc に書き込む** — つまり precompile (on-chain) と bridge (off-chain) は、Book に対する書き込み主体としては対等になる
 - **L4 で組んだ `Arc<Mutex<Book>>` の global hand-off は、まさにこの双方向通電のために設計された** — L7 で precompile 2 つを並べ、L8 で write side を本物にしたことで、ようやくその設計が「目に見える挙動」として実現する
 
-「Module 3 中盤マイルストーン」とは、この縦線がついに **両方向に同時に走る** ようになったということだ。
+「Module 3 中盤マイルストーン」とは、この縦線がついに **両方向に同時に走る** ようになった。
 
 ## テスト
 

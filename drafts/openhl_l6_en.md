@@ -362,6 +362,8 @@ validators.sort_by(|a, b| {
 });
 ```
 
+Two guarantees compose here. `Vec::sort_by` is stable, so elements that compare `Equal` preserve input-relative order. But this comparator includes `then_with(|| a.address.cmp(&b.address))`, which gives a full tie-break and therefore a **total ordering** in practice. So no unresolved `Equal` class remains, and the final ordering is unique independent of input order. Stable-sort behavior plus an explicit total tie-break is what makes the validator-set ordering deterministic.
+
 This is the **canonical CometBFT validator-set sort order**: voting power descending, then address ascending as tiebreaker. **Every validator must apply this same sort to the same input set**. Why?
 
 Because `OpenHlContext::select_proposer` (which we write in Step 8) does `validator_set.get_by_index((height + round) % count)`. If validator A sorts the set one way and validator B sorts it differently, they pick different proposers for the same `(height, round)`. **The chain forks at the first round.** The sort order *is* the proposer-election protocol.
@@ -858,7 +860,7 @@ git checkout main
 ## Common questions
 
 **Q: My validator set sort produces (100, 200, 300) instead of (300, 200, 100). What's wrong?**
-You wrote `a.voting_power.cmp(&b.voting_power)` (ascending). The correct comparator is `b.voting_power.cmp(&a.voting_power)` (descending) — note `b.cmp(&a)` not `a.cmp(&b)`. Higher-stake validators should sort *earlier* (lower index).
+You used `a.voting_power.cmp(&b.voting_power)` (ascending). Use `b.voting_power.cmp(&a.voting_power)` (descending) instead. Higher-stake validators must sort earlier (lower index).
 
 **Q: `select_proposer` panics with "validator set is empty." Why?**
 Your test created an empty `OpenHlValidatorSet`. Real chains have at least one validator (single-validator devnet) or 4+ (multi-validator with byzantine tolerance). The assertion catches the malformed-config case before it causes a modulo-by-zero. If you see it in unit tests, your test setup is wrong; if you see it in production, your config loader is wrong.

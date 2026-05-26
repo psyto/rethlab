@@ -438,7 +438,7 @@ Rust は未使用引数に `_` 接頭辞を要求する (unused-variable 警告�
 Rust の trait システムは、runtime 構成に応じて impl を条件付きで含めたり除外したりできないからだ。エンジンの `start_engine` には `C: ConsensusCodec<Ctx> + WalCodec<Ctx> + SyncCodec<Ctx>` という trait bound があり、これは codec メソッドが実行されるかどうかに関係なくコンパイル時にチェックされる。**stub は型システムを満たすために存在するのであって、runtime を満たすためではない。**
 
 **Q: stub を本物の impl に置き換えるのはいつか?**
-エンジンが実際に呼んだときだ。L9 の smoke test は actor system を spawn していくつかのパスを exercise する。Stub が fire すれば、エラーメッセージがどれかを教えてくれる。最初に呼ばれる可能性が高いのは `Codec<ProposedValue<OpenHlContext>>` (WAL) だ — エンジンは peer gossip の前に、最初の proposal を crash recovery のためにディスクに書くからだ。そこを protobuf-backed encoder に差し替えることになる。
+エンジンが実際に呼んだときだ。L9 の smoke test は actor system を spawn していくつかのパスを exercise する。Stub が fire すれば、エラーメッセージがどれかを教えてくれる。最初に呼ばれる可能性が高いのは `Codec<ProposedValue<OpenHlContext>>` (WAL) だ — エンジンは peer gossip の前に、最初の proposal を crash recovery のためにディスクに書くからだ。そこを protobuf-backed encoder に差し替える。
 
 ## 次のレッスン (L9)
 

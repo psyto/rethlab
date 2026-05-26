@@ -8,7 +8,7 @@ export async function seedRethFundamentalsJA(prisma: PrismaClient) {
       slug: 'reth-fundamentals-ja',
       title: 'Reth Fundamentals — Alloyで動かす最初の一歩',
       description:
-        'Alloyを使ってEthereumノードに接続し、署名・残高取得・ブロック番号取得など実用的なRustコードを書きます。さらにEVMの基本概念（スタック、メモリ、Opcode）を学びRevmへの橋渡しを行います。',
+        'Alloyを使ってEthereumノードに接続し、署名・残高取得・ブロック番号取得など実用的なRustコードを書きます。さらにEVM の基本概念（スタック、メモリ、Opcode）を学びRevmへの橋渡しを行います。',
       difficulty: 'BEGINNER',
       duration: 150,
       xpReward: 250,
@@ -321,7 +321,7 @@ match parse_int("42") {
 
 ## 4. \`?\` 演算子：エラー伝播の魔法
 
-\`?\` は **「エラーなら今すぐ関数からreturn、成功なら中身を取り出す」** という意味です。
+\`?\` は **「エラーなら今すぐ関数からreturn、成功なら中身を取り出す」** という意味だ。
 
 \`\`\`rust
 fn parse_two(a: &str, b: &str) -> Result<(i32, i32), std::num::ParseIntError> {
@@ -592,7 +592,7 @@ async fn main() -> eyre::Result<()> {
             },
           },
           {
-            title: 'EVMの中身を覗く',
+            title: 'EVM の中身を覗く',
             sortOrder: 1,
             lessons: {
               create: [
@@ -676,7 +676,7 @@ ADD
 事後: スタック [..., 12]
 \`\`\`
 
-Revm の **本物の** \`add\` ソース — 中級ティアで一行ずつ分解する — は、両方popしてpushすらしません：1つpopし、もう1つには可変参照経由で書き戻します。RevmのインタープリターはEVMの概念モデルをそのままRustに写しつつ、サイクル単位の最適化を重ねた設計になっています。
+Revm の **本物の** \`add\` ソース — 中級ティアで一行ずつ分解する — は、両方popしてpushすらしません：1つpopし、もう1つには可変参照経由で書き戻します。RevmのインタープリターはEVM の概念モデルをそのままRustに写しつつ、サイクル単位の最適化を重ねた設計になっています。
 
 ## なぜEVMはスタックマシンか
 
@@ -1037,7 +1037,7 @@ xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024)
 
 > 🧭 **このレッスンの位置づけ:** Foundry は、Reth / Revm / Alloy と並ぶ **ツール層** — 同じ Rust EVM スタックを、スマートコントラクト開発者向けに公開したもの。ノード側を目指す場合でも有用 — エコシステムがノードと話すときの共通インタフェースだから。
 
-Reth（ノード）と Revm（エンジン）は見ました。**Rust EVM スタックの第3の柱** が **[Foundry](https://github.com/foundry-rs/foundry)** — Paradigm の Solidity 開発ツールチェインで、すべてが Revm の上に作られています。Rust EVM チェーンに触れる Solidity を書くなら、Foundry を毎日使うことになります。
+Reth（ノード）と Revm（エンジン）は見ました。**Rust EVM スタックの第3の柱** が **[Foundry](https://github.com/foundry-rs/foundry)** — Paradigm の Solidity 開発ツールチェインで、すべてが Revm の上に作られています。Rust EVM チェーンに触れる Solidity を書くなら、Foundry を毎日使うことになる。
 
 4つのバイナリ：
 
@@ -1402,7 +1402,7 @@ forge snapshot --diff
 5. \`forge snapshot\` — snapshot をコミット
 6. \`increment\` に無意味な \`unchecked\` ブロックを足す。再実行して gas snapshot が変化を検出することを確認
 
-\`forge test\` が green で snapshot がコミットされたら、「テストについて読んだ」から「テスト済みコントラクトを持っている」に渡れたことになります。
+\`forge test\` が green で snapshot がコミットされたら、「テストについて読んだ」から「テスト済みコントラクトを持っている」に渡れたことになる。
 
 ## なぜこれが中級ティアの前に必要か
 
@@ -1447,7 +1447,7 @@ Alloy・EVM・Revmの基礎を理解できたか確認します。`,
                       explanation: 'ProviderはノードへのRPCクライアントで、get_block_numberやget_balanceなどのメソッドを提供します。',
                     },
                     {
-                      question: 'EVMの `ADD` 命令はどのように動きますか？',
+                      question: 'EVM の `ADD` 命令はどのように動きますか？',
                       options: [
                         'メモリの先頭2バイトを足す',
                         'スタックから2つpopして加算結果をpushする',

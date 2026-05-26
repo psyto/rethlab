@@ -278,6 +278,8 @@ In the existing `proptest! { ... }` block (which currently holds only `premium_i
 
 **The zero-sum property is the fundamental conservation law for funding.** A balanced book — one long for every short of equal size — should redistribute exactly. The shorts collectively receive what the longs collectively pay; quote currency is neither created nor destroyed.
 
+Key algebra behind this exactness: for mirrored pairs `(+P, -P)` and positive divisor `d`, integer division still preserves `(-P) / d == -(P / d)`. So when inputs are strictly symmetric, truncation does not introduce residual drift and the sum lands on exactly zero without tolerance.
+
 The proptest exercises this:
 - **Generate** a random `size` (1 to 1M), `mark` (1 to 1M), and `rate` (-10M to +10M ppb, i.e., -1% to +1%).
 - **Construct** a balanced book: account 1 long `size`, account 2 short `size`.

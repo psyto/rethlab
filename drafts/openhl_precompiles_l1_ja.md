@@ -44,7 +44,7 @@ cargo check -p openhl-evm
 
 加えて **依存も 5 個追加** (workspace 1 + crate 4 — このうち `reth-node-api` は新規の git-pin 依存)。
 
-L1 が終わると、custom EVM の **構造** が end-to-end で存在することになる。Reth は factory 経由で EVM instance を construct でき、factory 自体の仕事 (custom precompile の登録) はまだ何もしない — それら precompile を定義するのは L2 のため。
+L1 が終わると、custom EVM の **構造** が end-to-end で存在する。Reth は factory 経由で EVM instance を construct でき、factory 自体の仕事 (custom precompile の登録) はまだ何もしない — それら precompile を定義するのは L2 のため。
 
 ## おさらい
 
@@ -143,6 +143,7 @@ tempfile             = "3"
 **`reth-node-api` だけは workspace 経由ではなく、1 回限りの直接 git dep として宣言する。** workspace の `Cargo.toml` には宣言を置かず、git+rev を inline で書く。これは意図的だ — `reth-node-api` を使う crate は `openhl-evm` だけで、workspace の他の部分には不要。workspace dep に昇格させると、すべての crate の build graph がこれを把握する羽目になる。
 
 > ⚠️ **rev は他の `reth-*` クレートと完全一致させる。** inline で `rev = "88505c7..."` を書くときは、**workspace で固定されている他の `reth-*` クレートとまったく同じコミットハッシュ**でなければならない。Reth は内部 crate 間の型 (`FullNodeTypes`、`NodeTypes`、`BuilderContext` 等) を厳格に共有しており、Cargo の同一バージョン・同一ソースルールにより、わずかな rev のズレでも「同じ名前だが別の型」として扱われ、`expected ChainSpec, found ChainSpec` のような難解な型不一致エラーが大量発生する。`reth-node-api` を独自に「最新版」へ書き換えたい誘惑は強いが、必ず他の `reth-*` の rev をまず upgrade してから合わせること。
+> さらに実務上は、`cargo check -p openhl-evm` の後にルートの `Cargo.lock` が 1 つの解決グラフとして更新されることを確認する。ここで別 rev が混入すると、Cargo は Reth を二重に解決し始め、ビルド時間と型不一致の両方が悪化する。
 
 > 🛑 **やりがちな勘違い。** 「Reth 関連の依存はすべて workspace dep にすべき、それがパターンだ」 — **必ずしもそうではない。** workspace dep が有用なのは、複数の crate が同じ依存を同じバージョンで必要とする場合。1 つの crate でしか必要としないなら、inline 宣言のほうがクリーンだ — workspace-level の Cargo.toml にエントリが増えず、読み手にとって間接参照も減る。`reth-node-api` は openhl-evm でしか使わないので、それに合わせて扱う。
 
@@ -458,7 +459,7 @@ git checkout main
 `OpenHlEvmFactory` は consumer が必要とする public API (L3 の NodeBuilder 統合で使う) だが、`openhl_precompiles` は `openhl_evm.rs` の内部でだけ消費される実装詳細だ。precompile モジュールを private に保つことで API の漏出を防ぐ — caller が自分で precompile セットを construct したり改変したりすべきではない。
 
 **Q: `Precompiles::from_static` と `Precompiles::default` の違いは?**
-`from_static` は `&'static Precompiles` の参照を取る — つまり precompile セットは「キャッシュして使い回すもの」という前提だ。`default` は新規の (空の) `Precompiles` インスタンスを作る。`create_evm` が `from_static` を使うのは、`OnceLock` でキャッシュされたセットが `'static` だから。キャッシュ + static 参照 = EVM 生成ごとの allocation がゼロ、ということになる。
+`from_static` は `&'static Precompiles` の参照を取る — つまり precompile セットは「キャッシュして使い回すもの」という前提だ。`default` は新規の (空の) `Precompiles` インスタンスを作る。`create_evm` が `from_static` を使うのは、`OnceLock` でキャッシュされたセットが `'static` だから。キャッシュ + static 参照 = EVM 生成ごとの allocation がゼロ、という。
 
 **Q: なぜ `PRAGUE` が `OSAKA` もカバーするのか?**
 Osaka (Prague の次に予定されている hardfork) は、参照 SHA 時点では新たな標準 precompile を導入しない。Osaka で新規 precompile が追加されたタイミングで、この match arm を `OSAKA` と `PRAGUE` の別ブランチに分割すればよい。それまでは同じ `OnceLock` を共有するのが正しい。

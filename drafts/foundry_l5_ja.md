@@ -278,6 +278,12 @@ cast call 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \
 
 1. **`cast index address <addr> <base-slot>` が mapping slot を計算する。** `keccak256(abi.encode(addr, baseSlot))` が `mapping(address => X)` の Solidity storage layout だ。`cast index` がこれを CLI ヘルパーとして露出する。手で keccak を計算する必要はない。
 2. **`anvil_setStorageAt` が anvil の mutator のうち最も強力で最も危険だ。** Storage を invalid な state にすると面白い壊れ方をする (例: USDC の `paused` slot に non-boolean を入れる)。それを「単に数字を合わせる」ためではなく、自分の contract が edge case を扱うことを検証する test に使え。
+
+   > [!IMPORTANT]
+   > **EVM ストレージのアライメントとパディングの重要性**
+   > EVM のストレージスロットはすべて 32 バイト（256 ビット）ワード単位で管理されている。`anvil_setStorageAt` を呼び出す際は、必ず **先頭をゼロパディングした完全な 32 バイトの 16 進数値（`0x` ＋ 64桁の16進文字列）** を指定しなければならない。
+   >
+   > もし `0xe8d4a51000` のように短い 16 進数値をパディングなしで直接書き込むと、EVM のワード境界に対する配置ルールによっては、同じスロット内に Solidity のコンパイラ最適化（Storage Packing）によって詰め込まれた **隣接する他の変数を予期せず破壊・汚染（Corruption）する危険** がある。例えば、`address`（20バイト）と `uint96`（12バイト）が同一スロットにパックされている場合、一方のみを更新するつもりでもスロット全体が書き換わる。特定の変数のみをピンポイントで書き換えたい場合は、事前にスロット全体の生データを読み出し、対象ビットのみをビット演算でマスク・合成した完全な 32 バイト値を組み立ててから書き戻すのがプロフェッショナルな標準手順だ。
 3. **Real production contract はしばしば non-obvious な storage layout を持つ。** USDC の mapping が slot 9 にあるのはこの執筆時点で正しい。だが proxy パターン経由でアップグレードされた contract は任意の layout を持ち得る。`forge inspect <contract> storage` がソースオブトゥルースだ。
 
 ### Step 5: `anvil_mine` と `anvil_setNextBlockTimestamp` でタイムトラベルする
@@ -312,7 +318,7 @@ cast block latest --field timestamp
 
 ### Step 6: Forked-impersonation flow の full レシピ
 
-組み合わせる。一番使うことになる workflow だ:
+組み合わせる。最も使う workflow だ:
 
 ```bash
 # Terminal 1: forked anvil
@@ -373,7 +379,7 @@ L5 の後、shell history にはこんなものが残る:
 # Terminal 1
 anvil --fork-url https://ethereum.reth.rs/rpc
 
-# Terminal 2 — 一番手を伸ばすことになるレシピ
+# Terminal 2 — 最も使うレシピ
 export ETH_RPC_URL=http://localhost:8545
 cast rpc anvil_impersonateAccount 0x...
 cast rpc anvil_setBalance 0x... 0x...
@@ -418,7 +424,18 @@ Yes。`anvil_impersonateAccount` は任意の address で動く。EOA である�
 
 **Q7: 私の fork は Chain ID 1 で、real mainnet と同じだ。これが chain-ID safety check を骨抜きにしないか?**
 
-Yes — そしてこれが L5 で内面化すべき罠だ。Mainnet を fork すると、ローカル anvil は Chain ID `1` を返す。Mainnet と Sepolia の間で誤った replay を防いでくれる chain-ID check は、2 つの endpoint の chain ID を比較する。両 endpoint とも `1` を返すなら、check は silently に pass する。Real な mainnet RPC URL が別の env var や shell 履歴に残っていて、誤って `cast send --private-key <REAL-KEY> --rpc-url $REAL_RPC` を (`http://localhost:8545` を指す代わりに) 実行すると、transaction は real mainnet に文句なく broadcast される。`--unlocked` の impersonation は real mainnet に対して無害だ (signed tx は生成されない) が、`--private-key` はそうではない。防御は architectural ではなく operational だ。**Fork を扱う session で `export ETH_RPC_URL=http://localhost:8545` を明示的に export し、real-mainnet private key をローカル fork 作業をしてきた shell に paste しない。Fork を始めた瞬間から、`--rpc-url` への規律だけが唯一の防御だ — chain-ID check は異なるチェーン間で守ってくれる。Fork とそれが fork したチェーンの間では守ってくれない。**
+Yes — そしてこれが L5 で内面化すべき罠だ。
+
+Mainnet を fork すると、ローカル anvil は Chain ID `1` を返す。chain-ID check は endpoint 間の chain ID を比較するだけなので、両方が `1` なら silently に pass する。  
+その状態で、real mainnet RPC URL が別の env var や shell 履歴に残っていると、`cast send --private-key <REAL-KEY> --rpc-url $REAL_RPC` を誤実行したとき transaction は real mainnet に broadcast される。
+
+`--unlocked` の impersonation は real mainnet では無害だ（signed tx を作らない）が、`--private-key` は無害ではない。  
+防御は architectural ではなく operational だ。
+
+1. Fork 作業セッションでは `export ETH_RPC_URL=http://localhost:8545` を明示する。  
+2. Real-mainnet の private key を、fork 作業済みシェルに貼り付けない。  
+
+**Fork 開始後の唯一の防御は `--rpc-url` 規律だ。chain-ID check が守るのは「異なるチェーン間」であり、「fork と元チェーン間」ではない。**
 
 ## 次のレッスン (L6) — Capstone — openhl-liquidation の `InsuranceFund` を Solidity へ port する
 
@@ -467,4 +484,3 @@ L5 は Module 2 (CLI & state-aware testing) の sortOrder 1 に入る:
 - **ASCII vm.*↔anvil_* マッピング表は header だけ翻訳しなかった**。`Inside Foundry tests (cheatcode)` と `Against a running anvil (RPC method)` は英語のまま — セル値も英語、混合させると読みづらい。
 - **`load-bearing`、`killer feature`、`pedagogical move`、`discipline transfer` は英語のまま**。L0–L4 と一貫。
 - **Bilingual annotation** は first-mention にのみ適用: `決定的（Deterministic）`/`決定的シード（Deterministic seed）`、`偽装（Impersonation）`、`遅延フェッチ（Lazy fetching）`、`状態キャッシュ（State cache）`、`名前空間分離（Namespace separation）`。
-

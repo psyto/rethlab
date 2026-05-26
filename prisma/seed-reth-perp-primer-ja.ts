@@ -326,6 +326,7 @@ Funding payment は mark を直接動かさない。動かすのは *トレー�
 - **Tick での settlement**: 各 funding interval で、エンジンが非 flat な position を順に走査し、トレーダーの collateral balance を \`position_size × mark × rate\` で調整する。一括支払いではない — 各 position が個別に決済される。
 - **Saturating な算術**: Funding 計算は \`RATE_SCALE = 1e9\`（parts per billion）スケールの符号付き整数を使う。すべての乗算は \`i128\` 中間値で行い、overflow 時は wrap せずに saturate する。Consensus determinism の規律 — すべての validator が同じ入力から同じ rate を計算する必要がある。
 - **Tick 間で funding は累積しない (スナップショット方式)**: Interval の中で開いて閉じた position には funding がかからない。Hyperliquid の支払いイベントは、**毎時 00 分などの interval boundary の瞬間** にポジションを保有しているかどうかだけで判定される — その瞬間の position snapshot を取り、\`size × mark × rate\` を一括計算する。dYdX のような連続 funding (時間積分型) を経験してきた読者は要注意: ここは離散イベント方式のステートマシンであり、「保有時間に対する課金」ではなく「snapshot 時刻に保有していたかどうか」が支配的だ。**バグのない state machine を設計するときは、この境界条件を最初に固める。**
+- **アーキテクチャ上のトレードオフ (Boundary Gaming)**: この方式は実装がシンプルで deterministic だが、副作用として「59 分に建てて 00 分を跨いで 01 分に閉じる」ような短時間保有でも 1 interval 分の funding を受払する。つまりトレーダーには boundary 直前直後でポジションを急開閉するインセンティブが生まれ、正時付近の板で一時的な流動性の歪み（スプレッド拡大）が発生しうる。**時間積分の複雑さを捨てる代わりに、境界ゲーミングの市場構造リスクを受け入れる**のが、この設計選択だ。
 
 ## よくある誤解
 
@@ -425,6 +426,7 @@ Leverage は informational だ。エンジンは「leverage 上限」を直接�
 - ギャップがなければ、ぎりぎりで開いた position は不利な tick が来た瞬間に必ず liquidate する
 - ギャップは venue がトレーダーに与える *バッファ*。Liquidation に至る前に意思決定する（collateral を足す、partial close する、など）時間を確保する
 - **同時に、これはシステム側の防衛ラインでもある。** Maintenance を割った瞬間に「即破綻」ではなく、清算エンジンが force-close 注文を市場に流し込んで約定するまでの **スリッページ + 起動レイテンシの吸収余地** を、このギャップが用意している。L3 で見る force-close 注文は、この余地を予算として使って執行される — 余地が薄ければ薄いほど、insurance fund が負担する不足分が膨らむ。
+- **反例で見る必然性 (Initial = Maintenance が危険な理由)**: もし initial と maintenance が同じ 2% なら、2.01% で開いたポジションは 1 tick の微小逆行だけで即 Liquidatable になる。急変時は、清算注文が板に入り約定するまでの短い遅延中に ratio が 0% を割って Underwater へ突き抜ける確率が高い。**Initial と Maintenance のギャップは、トレーダー保護だけでなく、システム全体のソルベンシーを守る「スリッページ・クッション」** そのものだ。
 
 **Margin ratio** が中心的な量:
 
@@ -722,7 +724,7 @@ Insurance fund が空でさらに別のアカウントが Underwater になっ�
 
 > 💡 **なぜ ADL は orderbook を通さないのか?**
 >
-> 「不足が出たなら、underwater の position を市場でガンガン force-close すればいい」と思うかもしれない。だが、その瞬間に orderbook には逆方向の巨大な market order が連射されることになる — bid stack を突き抜けて mark を更にクラッシュさせ、その下落で別の position が Underwater 化する。**フィードバックループが暴走する。**
+> 「不足が出たなら、underwater の position を市場でガンガン force-close すればいい」と思うかもしれない。だが、その瞬間に orderbook には逆方向の巨大な market order が連射される— bid stack を突き抜けて mark を更にクラッシュさせ、その下落で別の position が Underwater 化する。**フィードバックループが暴走する。**
 >
 > ADL はこのループを断ち切るために、**orderbook を一切経由しない**設計になっている:
 >
@@ -730,7 +732,7 @@ Insurance fund が空でさらに別のアカウントが Underwater になっ�
 > - 相殺された 2 つの position は、両方とも venue の books から消える
 > - Orderbook の bid / ask には 1 satoshi も触れない → 価格に追加のクラッシュ圧をかけない
 >
-> つまり ADL は「市場での清算」ではなく **「帳簿上の名寄せ・netting」** — システム内部で勝者と敗者を直接マッチさせて、両者の position を同時に消去するオフチェーン (正確には off-orderbook) な相殺処理だ。Stage 10c (multi-account scanner) の実装でも、ADL パスは \`book.submit()\` を呼ばず、\`Position\` レコードを直接 mutate して削除する。**「市場を汚さずに、帳簿の上だけで損失を勝者に転送する」** — これが ADL の本質であり、極めて稀にしか発動しないように設計されている理由でもある。
+> つまり ADL は「市場での清算」ではなく **「帳簿上の名寄せ・netting」** — システム内部で勝者と敗者を直接マッチさせて、両者の position を同時に消去するオフチェーン (正確には off-orderbook) な相殺処理だ。Stage 10c (multi-account scanner) の実装でも、ADL パスは \`book.submit()\` を呼ばず、\`Position\` レコードを直接 mutate して削除する。**「市場を汚さずに、帳簿の上だけで損失を勝者に転送する」** — これは liquidation の連鎖が板をさらに壊して次の清算を呼ぶ **デス・スパイラル (death spiral)** を遮断するための、最後のファイアウォールである。
 
 ADL は **非常に不評** だ。マーケットの crash を正しく予測して short で勝っているトレーダーは、勝ち分をもっと伸ばしたいので force-close されたくない。ただし insurance fund がカバーできない以上、*誰かが loss を引き受けなければならない* — 現金は保存則に従う。ADL はその loss を、その move から最も「勝った」側に分配する仕組み。
 
@@ -800,7 +802,7 @@ L2 のマージン要件から ADL まで、損失を吸収する 4 層が下に
 
 ## Primer の終わり
 
-これで以下を理解したことになる:
+これで以下を理解した: 
 
 - **Perp とは何か**（L0）
 - **Funding が mark を index に anchor する仕組み**（L1）

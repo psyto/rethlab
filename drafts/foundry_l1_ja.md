@@ -254,7 +254,13 @@ Counter コントラクトには `increment` はあるが `decrement` はない�
    ```
 
    **`vm.expectRevert` は 1-call の lifetime を持つ。順序を尊重する。**
-4. **`uint256 zero = 0; zero - 1` パターンは constant-folding 回避策。** `uint256(0) - 1` をリテラル式として書くと見た目は同じだが、コンパイルが通らない — Solc 0.8 はリテラル算術をコンパイル時に評価し、underflow を検出してソースを reject する。ゼロをローカル変数に格納すると、constant folder の目を欺ける: SUB opcode が runtime で走り、Solidity 0.8 が `unchecked {}` の外のあらゆる算術 op に挿入する *runtime* overflow check が `Panic(0x11)` を trigger する。**Compile-time と runtime の overflow check は別の layer に住む。書き方がどちらを発火させるかを決める。** 微妙だが押さえておくべき点: SUB opcode は *このテストコントラクトの内部* で実行される — `counter.setNumber` への引数を組み立てる段階で発火する。つまり panic が走る場所はテストコントラクト側であり、`counter.setNumber` への external call は実際には dispatch されない。`-vvvv` トレースを見ると `counter` への call は現れない。それでもテストが pass するのは、`vm.expectRevert` が arm から次の external-call サイトまでの間に起きるあらゆる revert を catch するからだ — テストコントラクト自身が起こす revert もこれに含まれる。
+4. **`uint256 zero = 0; zero - 1` パターンは constant-folding 回避策。** `uint256(0) - 1` をリテラル式として書くと見た目は同じだが、コンパイルが通らない — Solc 0.8 はリテラル算術をコンパイル時に評価し、underflow を検出してソースを reject する。ゼロをローカル変数に格納すると、constant folder の目を欺ける: SUB opcode が runtime で走り、Solidity 0.8 が `unchecked {}` の外のあらゆる算術 op に挿入する *runtime* overflow check が `Panic(0x11)` を trigger する。**Compile-time と runtime の overflow check は別の layer に住む。書き方がどちらを発火させるかを決める。**
+
+   ここで極めて重要なのは、**「パニック（Revert）が発生する実行レイヤー（コンテキスト）の所在」** を理解することだ：
+   - **テスト契約内のローカル評価パニック（今回）**： `zero - 1` の減算は、`counter.setNumber(...)` への引数を構築する過程、すなわち **このテストコントラクト自身のコンテキスト（テストランナーの実行フレーム）内** で評価され、そこで `Panic(0x11)` がトリガーされる。このため、ターゲットコントラクトである `counter` への外部呼び出し（external call）自体はディスパッチすらされない。`-vvvv` トレースに `counter` へのコールが一切記録されないのはこのためだ。それでもテストがパスするのは、`vm.expectRevert()` が「次の外部コールが呼び出されるまでの間に、同一実行フレーム（テストランナーコンテキスト）で発生した revert」も捕捉する仕様になっているからである。
+   - **外部コントラクト内でのパニック（一般的なケース）**： 対照的に、もし `Counter` コントラクト側に `decrement()` 関数が存在し、その内部で `number - 1` を実行してアンダーフローさせた場合、パニックは **外部の `Counter` コントラクトのコンテキスト（EVM の別実行フレーム）** で発生し、呼び出し元であるテストコントラクトへ revert データ（`Panic(0x11)`）がバブルアップする。この場合、`-vvvv` トレースには明示的に `Counter::decrement()` へのコールと、それが `Panic(0x11)` で失敗したログが残る。
+   
+   Rust のメンタルモデルで例えるなら、前者は関数の実引数を評価する際（呼び出し側）に `panic!` が発生する状態であり、後者は呼び出された関数（被呼び出し側）の内部で `panic!` が発生し、呼び出し境界を越えてスタックトレースが伝播してくる状態に相当する。このように、パニックがどのレイヤーで発生しているかをトレースから見極めることは、複雑な統合テストのデバッグにおいて不可欠なスキルとなる。
 5. **コメントブロックが test の意図を step-by-step で walk する。** openhl-liquidation L13 の test と同じ `math-walk in comments` 規律だ。失敗を debug する将来の reader はコメントを読んで期待される挙動を再導出できる。**Math-walk コメントが 1 つの test を、テスト対象の EVM 挙動の worked example に変える。**
 6. **`Counter.sol` に `decrement()` を追加していない** — underflow を test 内部で直接 trigger した。Production contract を変更せずに挙動を exercise できるという意味だ。Real な `decrement` メソッドがある production contract では、test は `counter.decrement()` を直接呼ぶ。**Test は contract を変更せずに minimal シナリオを構築できる。**
 

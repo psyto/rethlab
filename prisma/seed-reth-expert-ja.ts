@@ -2994,7 +2994,7 @@ Paradigm は Reth、alphanet、**そして** Tempo のすべてを自社で開�
 
 1. **Rebase の痛みは現実。** Optimism の op-geth はフォーク乖離が深刻化し、Optimism 自身が書き直しに資金を投じることになりました — その成果は今 \`crates/optimism/\` として reth 本体に統合されています。
 2. **監査の範囲。** Fork を読む監査人は upstream に対する diff を取り、すべての patch を一つひとつ理由づけしなければなりません。Node crate を読む監査人は repo を一つ、実装された trait の集合だけを見れば済みます。
-3. **コンポーザビリティ。** Berachain は reth + 独自 consensus を、Scroll は reth + zk-friendly state を、Seismic は reth + 暗号化 tx を必要としています。拡張モデルならこの 3 つが共存できますが、フォークモデルでは各々が独自の分岐コピーを保守し続けることになります。
+3. **コンポーザビリティ。** Berachain は reth + 独自 consensus を、Scroll は reth + zk-friendly state を、Seismic は reth + 暗号化 tx を必要としています。拡張モデルならこの 3 つが共存できますが、フォークモデルでは各々が独自の分岐コピーを保守し続けることになる。
 
 つまり: **reth の trait アーキテクチャ = chain を作るための API**。
 
@@ -3247,7 +3247,7 @@ Tempo のような L1 にはこれらは適用されませんが、拡張され�
                   xpReward: 45,
                   content: `# Custom executor — execution layer を差し替える
 
-Executor とは「実際に tx を実行して post-state を生成するもの」です。Ethereum mainnet では vanilla revm がそれにあたります。Optimism では revm に **deposit-tx 処理**、**L1 cost 計算**、**少し異なる precompile リスト** を足したものになる。本レッスンでは、Reth がこの実行レイヤーをどう差し替えさせてくれるかを見ていきます。
+Executor とは「実際に tx を実行して post-state を生成するもの」です。Ethereum mainnet では vanilla revm がそれにあたります。Optimism では revm に **deposit-tx 処理**、**L1 cost 計算**、**少し異なる precompile リスト** を足したものになる。本レッスンでは、Reth がこの実行レイヤーをどう差し替えさせてくれるかを見ていく。
 
 > 🛑 **予測。** Reth ベース L2 が "deposit transaction" — L1 起源で L2 側には署名のない tx — を実行する必要があるとき、**L2 がカスタマイズするのはどの層** ですか? mempool? Transaction validator? Executor? **理由づけしてから** 読み進めてください。
 
@@ -3557,7 +3557,7 @@ Tempo の上に何かを作るなら:
 | Cross-chain settlement layer | EVM 側の settlement proof は Tempo の state と厳密に一致しなければならない。Tempo の chainspec と executor が信頼できる source of truth。 |
 | Merchant treasury / payment ops | Merchant 運用には予測可能な confirmation semantics が必要。Tempo の payload builder と mempool policy が、tx が inclusion-final になるタイミングを教えてくれる。 |
 
-Tempo のローンチ時に reth を trait レベルで読まずに現れる誰よりも、**数ヶ月先** にいることになります。
+Tempo のローンチ時に reth を trait レベルで読まずに現れる誰よりも、**数ヶ月先** にいることになる。
 
 ## 8. 最終練習
 

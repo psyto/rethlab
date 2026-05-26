@@ -1492,7 +1492,7 @@ L5 doesn't add a new function. Instead, it does a deep dive on the overflow phil
 Concepts you'll grasp in this lesson:
 
 - **Saturate-not-panic-not-wrap as the only consensus-safe overflow** — panic halts the validator and forks it off the network; wrap can differ across compiler versions and produce divergent-but-defined values; saturate gives every validator the same bounded value. There are no other options that preserve consensus liveness.
-- **Sign-aware saturation override** — \`i64::try_from\` reports failure but not direction. The \`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })\` closure recovers the direction; a fixed \`i64::MAX\` override would flip \`i128::MIN\` to positive and silently corrupt sign.
+- **Sign-aware saturation override** — \`i64::try_from\` reports failure but not direction. The inline fallback expression \`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })\` recovers the direction; a fixed \`i64::MAX\` override would flip \`i128::MIN\` to positive and silently corrupt sign. (\`unwrap_or\` is eagerly evaluated, but this immediate expression is trivial and optimized away in practice.)
 - **Hand-traced tests vs proptests are complementary, not redundant** — proptest random sampling will never hit \`i128::MAX\` (one point out of 2^129); boundary cases must be hand-traced. Proptest excels at interior properties; hand-traced tests pin the corners.
 - **Test the property that's actually invariant, not the aspirational one** — naive antisymmetry would require equal magnitudes both ways, but integer division breaks that. We test the weaker "signs are opposite" property and document the rounding caveat in the test comment.
 - **Why \`checked_mul\` + \`Result\` doesn't actually solve it** — the error has to propagate to the bridge, whose only real options are "revert (fork)", "skip (silent inconsistency)", or "settle at the cap" — and the last is exactly what saturate produces without propagation.
@@ -1784,7 +1784,7 @@ Five load-bearing decisions in this lesson:
 
 3. **Stabilize test-module boilerplate early.** Adding \`use proptest::prelude::*\`, \`use openhl_clob::AccountId\`, and the \`pos\` helper now means the test module's imports stay stable for L6 / L7. **Boilerplate churn obscures the actual diff per lesson.**
 
-4. **The \`unwrap_or\` closure in \`saturate_i128_to_i64\` depends on sign.** A fixed override would flip negative overflows to positive. Reading the saturate helper carefully reveals why the closure is *necessary*, not just defensive.
+4. **The \`unwrap_or\` sign-aware fallback expression in \`saturate_i128_to_i64\` is required.** A fixed override would flip negative overflows to positive. Reading the saturate helper carefully reveals why this branch is *necessary*, not just defensive.
 
 5. **Exclude zero from the proptest range** — the zero case is already a hand-traced unit test, and including it in the proptest would require complicating the property. **Hand-traced tests pin boundary cases; proptests pin properties on the interior.** They're complementary, not redundant.
 
@@ -2138,6 +2138,7 @@ The division \`premium / divisor\` cannot grow the value — division by a posit
 
 **Q: What if \`rate_cap > i64::MAX / 2\`? Does the symmetric clamp still work?**
 \`.abs()\` on \`i64::MIN\` panics, and the reason is **two's-complement asymmetry**: a signed 64-bit integer packs one more negative value than positive (negatives go down to \`i64::MIN = -2^63\`, positives only up to \`i64::MAX = 2^63 - 1\`), so \`|i64::MIN| = 2^63\` is one bit past the largest representable positive \`i64\`. The \`.abs()\` call therefore overflows — panic in debug, wrap in release. With \`rate_cap.0 == i64::MIN\`, that's the path we'd hit. Stage 8b doesn't guard against this — it's a user-supplied \`FundingParams\` issue. Realistic deployments use values like \`40_000_000\` (way below \`i64::MAX / 2\`), so the edge isn't reachable in practice. **A defensive \`saturating_abs()\` (which folds \`i64::MIN\` to \`i64::MAX\`) would handle this, but Stage 8b doesn't bother.**
+In production, this is usually blocked earlier: governance/config ingestion validates \`rate_cap\` bounds (e.g. \`0..=40_000_000\`) before parameters reach the pure compute path. That's the defense-in-depth layer above this function.
 
 **Q: Why no proptest for \`compute_rate\`?**
 There's no obvious algebraic property to test. "Divide and clamp" doesn't have an antisymmetry, commutativity, or other invariant that proptest would shine on. The 5 hand-traced tests cover the input regions (normal divide, positive clamp, negative clamp, divisor zero, cap zero) well. **Proptest is great for properties; hand-traced tests are great for distinct input regions.** Don't force a proptest where there's no property to test.
@@ -2413,6 +2414,8 @@ In the existing \`proptest! { ... }\` block (which currently holds only \`premiu
 \`\`\`
 
 **The zero-sum property is the fundamental conservation law for funding.** A balanced book — one long for every short of equal size — should redistribute exactly. The shorts collectively receive what the longs collectively pay; quote currency is neither created nor destroyed.
+
+Key algebra behind this exactness: for mirrored pairs \`(+P, -P)\` and positive divisor \`d\`, integer division still preserves \`(-P) / d == -(P / d)\`. So when inputs are strictly symmetric, truncation does not introduce residual drift and the sum lands on exactly zero without tolerance.
 
 The proptest exercises this:
 - **Generate** a random \`size\` (1 to 1M), \`mark\` (1 to 1M), and \`rate\` (-10M to +10M ppb, i.e., -1% to +1%).
@@ -2771,7 +2774,7 @@ Four methods:
 
 Construct the clock. **\`const fn\`** so \`static DEFAULT_CLOCK: FundingClock = FundingClock::new(...)\` is possible at compile time. **\`#[must_use]\`** because constructing a clock and discarding it is always a bug.
 
-The doc explains the timing semantics: "The first tick after \`genesis_time + interval_secs\` will fire." A caller setting \`genesis_time = 1_000_000\` and \`interval_secs = 3600\` knows the first tick fires at or after \`1_003_600\`. **No surprises.**
+The doc explains the timing semantics: "The first tick after \`genesis_time + interval_secs\` will fire." A caller setting \`genesis_time = 1_000_000\` and \`interval_secs = 3600\` knows the first tick fires at or after \`1_003_600\`. **No surprises.** Timestamps here are Unix **seconds**, not milliseconds (\`+3600\` means exactly one hour).
 
 #### \`params()\` and \`last_settled_at()\` accessors
 
@@ -3217,6 +3220,8 @@ timeline (seconds)
               now ≥ last_settled_at + interval again → fire
               ──► last_settled_at reset to 1_007_200
 \`\`\`
+
+All timestamps in this timeline are Unix **seconds**. So \`+3600\` is one full hour, and \`+3599\` is exactly "one second short" (not a millisecond-scale delta).
 
 The load-bearing point of this test is that **Tick 1's success does not permanently unlock the clock** — Tick 3 only fires because another full interval has elapsed since Tick 1. That "gate closes again" invariant only becomes observable with three calls in sequence.
 
@@ -3711,6 +3716,8 @@ By the end of this lesson:
 \`\`\`
 
 Read top-to-bottom: prices in, settlements out. The clock wraps the whole pipeline behind a "has enough time elapsed?" gate.
+
+Track-level topology note: this \`Vec<Settlement>\` lane is still running outside the EVM mainline (\`BlockExecutor\`), in the same way Course 7 carried \`Vec<Fill>\` in a parallel lane. At this stage, both fills and settlements are bridge-side side-lanes that later merge at payload/state application boundaries.
 
 ## What each module delivered
 

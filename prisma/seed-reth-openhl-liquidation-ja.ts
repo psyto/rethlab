@@ -230,7 +230,7 @@ L1 では、この空の crate を、公開された scale 定数 1 つと、エ
 
 > 🛑 **予測。** スクロール前に: funding は \`RATE_SCALE = 1_000_000_000\`（parts-per-billion、9 decimal digits の精度）を使う。それなのに liquidation は \`MARGIN_SCALE = 10_000\`（basis points、4 decimal digits）にする — なぜか? ヒント: 表現すべきマグニチュードを思い出す。funding rate は 1 区間で \`0.0001\` から \`0.04\`、margin 要件は notional の \`0.02\` から \`0.10\`。
 
-（答え: **必要な解像度は、意味のある最小ステップに従って決める。** 1 区間 \`0.0001%\` の funding rate は高ボリュームトレーダーにとって意味のある差だから、ppb が正しい解像度になる。一方で maintenance margin が \`0.02%\` か \`0.05%\` かは engine 層で意味のある差には **ならない** — 本番のデプロイは bps の整数（\`200 bps\`、\`500 bps\`）で maintenance を設定する。Bps は慣例単位だ。ppb を採用してしまうと、システムが実際には使わない精度を買い込むことになる。**実際のレンジをカバーする最小のスケールを選ぶ。**）
+（答え: **必要な解像度は、意味のある最小ステップに従って決める。** 1 区間 \`0.0001%\` の funding rate は高ボリュームトレーダーにとって意味のある差だから、ppb が正しい解像度になる。一方で maintenance margin が \`0.02%\` か \`0.05%\` かは engine 層で意味のある差には **ならない** — 本番のデプロイは bps の整数（\`200 bps\`、\`500 bps\`）で maintenance を設定する。Bps は慣例単位だ。ppb を採用してしまうと、システムが実際には使わない精度を買い込む。**実際のレンジをカバーする最小のスケールを選ぶ。**）
 
 \`RATE_SCALE\` と \`MARGIN_SCALE\` の解像度差を 1 枚で並べると、なぜそれぞれが「自分のドメインに対して必要十分」なのかが直感で見える:
 
@@ -719,7 +719,7 @@ bridge が両ケースで *別の挙動* を取らねばならないからだ。
 
 **Q5: \`margin_health\` は flat なポジションに対して \`Option<MarginHealth>\` を返すべきか?**
 
-いいえ。flat なポジションは \`MarginHealth::Safe\` を返す（notional がなく、満たすべき margin 要件もないため）。\`Option\` で包んでしまうと、すべての呼び出し側に \`None\` を明示処理させることになる — 「flat = safe」は曖昧さがないのに、だ。**型システムですでに扱える状態をわざわざ \`Option\` で表現しない。**
+いいえ。flat なポジションは \`MarginHealth::Safe\` を返す（notional がなく、満たすべき margin 要件もないため）。\`Option\` で包んでしまうと、すべての呼び出し側に \`None\` を明示処理させる— 「flat = safe」は曖昧さがないのに、だ。**型システムですでに扱える状態をわざわざ \`Option\` で表現しない。**
 
 ## 次のレッスン (L3)
 
@@ -778,7 +778,7 @@ L3 では 2 つの **I/O 型**を加える。あらゆる margin 関数が consu
 
 > 🛑 **予測。** スクロール前に: liquidation はアカウントごとに unrealized PnL を計算する必要がある。式は \`(mark - entry) * size\` だ。**\`funding::Position\` から得られない入力は何か、そしてなぜ funding ではそれが要らなかったのか?** ヒント: funding の式は \`size * mark * rate\`。ここから何が抜けているかを比べる。
 
-（答え: **\`avg_entry\`（PnL の項を計算するため）と \`collateral\`（equity を計算するため）の 2 つだ。** Funding の式に \`entry\` 係数は出てこない — ポジションがどこで開かれたかに関係なく、現在の mark に rate を掛けてスケールするだけだ。Funding はまた collateral を読まない。Funding が emit する settlement delta は bridge レイヤーで balance に適用され、balance 台帳の管理は bridge 側に閉じている。Liquidation の仕事は、\`collateral + unrealized PnL\` がしきい値を下回ったかを *測る* ことなので、両方の値が手元に揃っている必要がある。仕事が違えば snapshot も違う、ということだ。）
+（答え: **\`avg_entry\`（PnL の項を計算するため）と \`collateral\`（equity を計算するため）の 2 つだ。** Funding の式に \`entry\` 係数は出てこない — ポジションがどこで開かれたかに関係なく、現在の mark に rate を掛けてスケールするだけだ。Funding はまた collateral を読まない。Funding が emit する settlement delta は bridge レイヤーで balance に適用され、balance 台帳の管理は bridge 側に閉じている。Liquidation の仕事は、\`collateral + unrealized PnL\` がしきい値を下回ったかを *測る* ことなので、両方の値が手元に揃っている必要がある。仕事が違えば snapshot も違う。）
 
 L3 で完成する \`types\` モジュールが、エンジン全体に対して **どんな入力を受け、どんな出力を返すか**を 1 枚で見ると、Module 1 (型) から Module 2 (純粋計算) へ向かう接続点がはっきりする:
 
@@ -975,7 +975,7 @@ L3 の後:
 
 **Q5: なぜ両構造体が \`Copy\` なのか?**
 
-安価で便利だからだ。\`AccountSnapshot\` は 32 バイト、\`CloseOrderSpec\` は 24 バイトで、このサイズなら Copy は実質タダ。Copy が乗っていないと、2 つ目の参照が欲しいたびに呼び出し側で clone することになる。**小さな Plain-Old-Data 型は \`Copy\` にする。\`Clone\` に手を伸ばすのは、所有権セマンティクスが本当に意味を持つときだけだ。**
+安価で便利だからだ。\`AccountSnapshot\` は 32 バイト、\`CloseOrderSpec\` は 24 バイトで、このサイズなら Copy は実質タダ。Copy が乗っていないと、2 つ目の参照が欲しいたびに呼び出し側で clone する。**小さな Plain-Old-Data 型は \`Copy\` にする。\`Clone\` に手を伸ばすのは、所有権セマンティクスが本当に意味を持つときだけだ。**
 
 ## 次のレッスン (L4)
 
@@ -1515,7 +1515,7 @@ pub fn margin_ratio(snapshot: &AccountSnapshot, mark: MarkPrice) -> MarginRatio 
 
 この関数で押さえておく点が 5 つ:
 
-1. **\`notional == 0\` の early return で \`i64::MAX\` を返す。** Flat ポジションは exposure ゼロ → 下回るべき margin 要件もない。表現可能な最大の ratio を返すことが「無限に safe」のシグナルになり、下流の \`margin_health\` の比較すべてを自然に short-circuit させる（\`margin_health\` 側に special-case はいらない）。**具体的には、次レッスン (L6) で実装する \`if ratio >= params.initial_margin_bps { Safe } else { ... }\` という一方向の比較式が、flat なアカウントに対しても追加の特例分岐なしでそのまま機能し、\`i64::MAX >= initial_margin_bps\` が常に真なので自動的に \`Safe\` と判定される**。つまり \`i64::MAX\` は **「下流の比較演算が短絡的に通り抜けるための magic boundary」** として効いている。代替案 — \`Option<MarginRatio>\` や \`Result<MarginRatio>\` — はすべての呼び出し側に flat ケースを明示的に扱わせることになる。**「制約なし」のケースを、システム上最も safe な上限値で表現する設計規律だ。**
+1. **\`notional == 0\` の early return で \`i64::MAX\` を返す。** Flat ポジションは exposure ゼロ → 下回るべき margin 要件もない。表現可能な最大の ratio を返すことが「無限に safe」のシグナルになり、下流の \`margin_health\` の比較すべてを自然に short-circuit させる（\`margin_health\` 側に special-case はいらない）。**具体的には、次レッスン (L6) で実装する \`if ratio >= params.initial_margin_bps { Safe } else { ... }\` という一方向の比較式が、flat なアカウントに対しても追加の特例分岐なしでそのまま機能し、\`i64::MAX >= initial_margin_bps\` が常に真なので自動的に \`Safe\` と判定される**。つまり \`i64::MAX\` は **「下流の比較演算が短絡的に通り抜けるための magic boundary」** として効いている。代替案 — \`Option<MarginRatio>\` や \`Result<MarginRatio>\` — はすべての呼び出し側に flat ケースを明示的に扱わせる。**「制約なし」のケースを、システム上最も safe な上限値で表現する設計規律だ。**
 
 2. **乗算を除算より *先* に置く。** \`equity × MARGIN_SCALE / notional\` を i128 で計算すれば、小さい ratio（例えば 1% margin = 100 bps）も割り算を生き残る。先に除算する（\`equity / notional × MARGIN_SCALE\` を i64 で）と、スケーリングの前に整数パーセントに切り捨てられ、精度が失われる。**整数除算が混じるとき、演算順序が効く。**
 
@@ -1862,7 +1862,7 @@ test compute::tests::margin_ratio_deterministic ... ok
 test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**16 テストすべて pass。** 3 つの proptest はデフォルトでそれぞれ 256 ケースを走らせる — 合計で ~768 のランダム入力の組み合わせがチェックされたことになる。
+**16 テストすべて pass。** 3 つの proptest はデフォルトでそれぞれ 256 ケースを走らせる — 合計で ~768 のランダム入力の組み合わせがチェックされた。
 
 エラー時にありがちなパターン / サプライズ:
 
@@ -2050,7 +2050,7 @@ pub fn margin_health(
 
 1. **カスケード順が \`Underwater\` を最初に check する。** 負の ratio は \`< maintenance_bps\` も満たすので、Liquidatable を最初に check すると、すべての Underwater アカウントが Liquidatable に誤分類されてしまう。**不変量: 各分岐の条件は、前の分岐が捕まえたものをすべて排除している。** Underwater（\`< 0\`）が最も厳しく、そこから Liquidatable（\`< maintenance\`）、AtRisk（\`< initial\`）、最後に Safe（残り）へと内側に narrow していく。
 
-2. **しきい値はすべて \`<\`、\`≤\` ではない。** Ratio が \`maintenance_bps\` に等しいアカウントは *まだ* Liquidatable ではなく、AtRisk だ。慣例的な読み方は「maintenance margin は *上にとどまる* べき線で、strict に超えてから liquidation 対象になる」。Doc がこれを明示し、Step 2 のテストが強制する。**Strict inequality は、しきい値そのものがより良い health state に属する、ということを意味している。**
+2. **しきい値はすべて \`<\`、\`≤\` ではない。** Ratio が \`maintenance_bps\` に等しいアカウントは *まだ* Liquidatable ではなく、AtRisk だ。慣例的な読み方は「maintenance margin は *上にとどまる* べき線で、strict に超えてから liquidation 対象になる」。Doc がこれを明示し、Step 2 のテストが強制する。**Strict inequality は、しきい値そのものがより良い health state に属する、を意味している。**
 
 3. **\`i64::from(params.initial_margin_bps)\` が u32 → i64 を widen する。** フィールドは \`u32\`（メモリ節約。bps 値は ~40 億まで十分な範囲だ）。Ratio は \`i64\`（\`margin_ratio\` の signed 除算によって型がそうなっている）。Rust では異なる integer 型同士の比較はコンパイルエラーになる。境界で widening しておけば、本体の比較はクリーンに保てる。**Params ごとに 1 回キャストする。カスケード本体は純粋な i64 < i64 として読める。**
 
@@ -2211,7 +2211,7 @@ L6 の後:
 
 **Q1: なぜ misconfigured な params（maintenance ≥ initial）のケースに備えて \`Result<MarginHealth, ...>\` を返さないのか?**
 
-関数は total（全域関数）だ — どんな入力にも、定義された出力が対応する。Misconfigured な params（maintenance == initial、あるいは maintenance > initial）でも、すべてのアカウントは 4 variant のどれかに分類される。意味的に間違った結果ではあるが、定義された結果ではある。\`Result\` を返してしまうと、*params を妥当に組み立てる bridge からは決して起きない* \`MisconfiguredParams\` エラーを、すべての呼び出しサイトに処理させることになる。**Total function は圧倒的に compose しやすい。パラメータの妥当性はシステムへの入力境界 (ロード時 / config パース時) で検証を完了させ、下流のドメイン計算層 (\`margin_health\` などの分類器) では不変量が維持されているものとして 100% 信頼する** — これは "Parse, don't validate" として知られる規律で、検証ロジックを境界に集中させ、ドメイン層を total function で構成する設計パターンだ。
+関数は total（全域関数）だ — どんな入力にも、定義された出力が対応する。Misconfigured な params（maintenance == initial、あるいは maintenance > initial）でも、すべてのアカウントは 4 variant のどれかに分類される。意味的に間違った結果ではあるが、定義された結果ではある。\`Result\` を返してしまうと、*params を妥当に組み立てる bridge からは決して起きない* \`MisconfiguredParams\` エラーを、すべての呼び出しサイトに処理させる。**Total function は圧倒的に compose しやすい。パラメータの妥当性はシステムへの入力境界 (ロード時 / config パース時) で検証を完了させ、下流のドメイン計算層 (\`margin_health\` などの分類器) では不変量が維持されているものとして 100% 信頼する** — これは "Parse, don't validate" として知られる規律で、検証ロジックを境界に集中させ、ドメイン層を total function で構成する設計パターンだ。
 
 **Q2: \`margin_health\` を sorted thresholds 配列と binary search で、もっと「データ駆動」にできないか?**
 
@@ -2362,7 +2362,7 @@ pub fn close_order_spec(snapshot: &AccountSnapshot) -> CloseOrderSpec {
 
 4. **\`mark\` なし、\`params\` なし。** \`close_order_spec\` に必要なのは snapshot だけだ。「Close するか否か」の判断は \`margin_health\` に住み、price discovery は matching engine で起きる。**各関数がちょうど 1 つの関心事を所有する。Bridge がそれらを compose する: スキャン → 分類 → close spec 生成 → submit、という流れになる。**
 
-5. **\`Option<CloseOrderSpec>\` ではなく \`CloseOrderSpec\` を値で返す。** 関数は total（全域関数）だ — flat ポジション（\`qty == 0\`）でも常に spec を返す。代替案として \`Option\` を返すと、スキャン内のすべての flat アカウントに対して呼び出し側に \`None\` を扱わせることになる — close ステップに到達する頃にはそれらのアカウントはすでに前段でフィルタされているのに、だ。**Total な関数は圧倒的に compose（結合）しやすい。Optional な関数は、すべての呼び出し側に空ケースの処理（ボイラープレート）を強用する。** 具体的に効いてくるのは Stage 10c で実装する \`LiquidationScanner\` だ: 全アカウントのスナップショットを \`filter_map\` や \`Option\` chaining なしに**単なる \`map\` や平坦な \`for\` ループで均質に処理**できる。\`close_order_spec\` が total だからこそ、scanner は「\`Liquidatable\` か \`Underwater\` か」の分類フィルタを 1 箇所で書けば済み、close-spec 生成側で再度フィルタする必要がない。**エッジケース (flat → qty 0 の spec は submit しない) のフィルタリングは、入出力の最外殻である bridge レイヤーにのみ集約する** — これが crate を貫く規律になっている。
+5. **\`Option<CloseOrderSpec>\` ではなく \`CloseOrderSpec\` を値で返す。** 関数は total（全域関数）だ — flat ポジション（\`qty == 0\`）でも常に spec を返す。代替案として \`Option\` を返すと、スキャン内のすべての flat アカウントに対して呼び出し側に \`None\` を扱わせる— close ステップに到達する頃にはそれらのアカウントはすでに前段でフィルタされているのに、だ。**Total な関数は圧倒的に compose（結合）しやすい。Optional な関数は、すべての呼び出し側に空ケースの処理（ボイラープレート）を強用する。** 具体的に効いてくるのは Stage 10c で実装する \`LiquidationScanner\` だ: 全アカウントのスナップショットを \`filter_map\` や \`Option\` chaining なしに**単なる \`map\` や平坦な \`for\` ループで均質に処理**できる。\`close_order_spec\` が total だからこそ、scanner は「\`Liquidatable\` か \`Underwater\` か」の分類フィルタを 1 箇所で書けば済み、close-spec 生成側で再度フィルタする必要がない。**エッジケース (flat → qty 0 の spec は submit しない) のフィルタリングは、入出力の最外殻である bridge レイヤーにのみ集約する** — これが crate を貫く規律になっている。
 
 > 🛑 **やりがちな勘違い。** 「\`if size >= 0 { Sell } else { Buy }\` ではダメか — そうすれば flat が Sell として扱われ、一部のテスト取引所と挙動が揃う」 **問題が 3 つある。** (1) Flat-as-Sell は挙動の選択であり、pure compute ではなく bridge に属する判断だ。(2) 現在の \`> 0\` は「flat ポジションは long でも short でもない」という事実を正しく反映している。(3) \`qty == 0 + Side::Sell\` の本番セマンティクスは matching engine では未定義。Bridge はどのみちフィルタしなければならない。**呼び出し側に最もクリーンな契約を提供する慣例を選ぶ — エッジケースを隠す慣例ではなく。**
 
@@ -2522,7 +2522,7 @@ Flat（\`size == 0\`）は long *でもなく* short *でもない* — long/sho
 
 ## 次のレッスン (L8) — Stage 10b が始まる
 
-L8 で Stage 10b — insurance fund — が始まる。L7 で完成した pure-compute モジュールが *何が起きるべきか* のレイヤーだとすると、Stage 10b は *何が起きたかを記録する帳簿* を足すレイヤーだ。Fund の balance を track し、underwater liquidation からの不足を吸収し、solvent な close から liquidation fee を credit する \`InsuranceFund\` state machine が入る。Stage 10b の後、エンジンは「このアカウントは Liquidatable」だけでなく「この close は fund に 1.5% を credit した」あるいは「この close は fund から $400 を drain した」も知ることになる。
+L8 で Stage 10b — insurance fund — が始まる。L7 で完成した pure-compute モジュールが *何が起きるべきか* のレイヤーだとすると、Stage 10b は *何が起きたかを記録する帳簿* を足すレイヤーだ。Fund の balance を track し、underwater liquidation からの不足を吸収し、solvent な close から liquidation fee を credit する \`InsuranceFund\` state machine が入る。Stage 10b の後、エンジンは「このアカウントは Liquidatable」だけでなく「この close は fund に 1.5% を credit した」あるいは「この close は fund から $400 を drain した」も知る。
 
 **本レッスンのドラフト時点で、Stage 10b はまだ openhl に ship されていない。** L8 は、openhl 側の実装が来たタイミングで rethlab に着地する。
 `,
@@ -2742,7 +2742,7 @@ impl Default for InsuranceFund {
 押さえておく点が 5 つ:
 
 1. **\`new\` は負の値を黙って 0 にクランプする。** \`Result<Self, ...>\` でも panic でもない。なぜか。負の初期 balance の *物理的意味* が未定義だからだ — 借金を持つ fund は fund ではない。**Bad な入力に対して妥当な解釈が「最も近い valid な入力にする」しかない場合、儀式抜きでそうする。** ここで \`Result\` を返すと、すべての呼び出し側が「起きないはずのエラー」をハンドルさせられる。Panic にすると debug-vs-release で挙動が割れる。クランプが最も安価で正しい答えだ。
-2. **\`new(0)\` と同じことをするのに \`empty()\` が存在する。** 理由は 2 つ。第一に、呼び出し地点で \`InsuranceFund::empty()\` のほうが \`InsuranceFund::new(0)\` より意図が読める — 数字でなく意図を運ぶ。第二に、\`empty\` は \`Default::default()\` が呼ぶ先でもあり、2 つの異なる名前 (インターフェース) が同じ構築ロジックを指すことになる。**Canonical な zero value 用に名付けたコンストラクタを置くと、ちょっとした明快さの利息が複利で効いてくる。**
+2. **\`new(0)\` と同じことをするのに \`empty()\` が存在する。** 理由は 2 つ。第一に、呼び出し地点で \`InsuranceFund::empty()\` のほうが \`InsuranceFund::new(0)\` より意図が読める — 数字でなく意図を運ぶ。第二に、\`empty\` は \`Default::default()\` が呼ぶ先でもあり、2 つの異なる名前 (インターフェース) が同じ構築ロジックを指す。**Canonical な zero value 用に名付けたコンストラクタを置くと、ちょっとした明快さの利息が複利で効いてくる。**
 3. **フィールドに触れるすべてのメソッドが \`const fn\`。** 構造体は \`i64\` フィールド 1 つだけ。state を mutation しない処理は trivially const-evaluable だ。将来のコードは \`InsuranceFund\` を const 文脈（config struct のデフォルトなど）で使える。読者にも「このメソッドは fancy なことをしません」と伝わる。**\`const fn\` は能力であると同時にドキュメントだ。**
 4. **\`new\` と \`empty\` に \`#[must_use]\`。** Fund を作って捨てるのはほぼ常に bug だ — 大抵リファクタリングの残骸。\`#[must_use]\` でコンパイラに警告させる。**「明らかに間違っているが見落としやすい」ケースをマーカー属性が拾う。**
 5. **\`Default::default()\` は手動 impl で、derive ではない。** Derive した \`Default\` は \`balance: i64\` から \`balance: 0\` を生む — 結果は同じだ。だが、手動 impl で \`Self::empty()\` を呼べば *意図* が明示される: 「デフォルト fund は empty fund だ — 設計でそうしている、偶然そうなったのではない」。**Default 値が「ゼロ初期化」を超える semantic な意味を持つときは、手動 impl の価値がある。**
@@ -3433,7 +3433,7 @@ L8 で \`lib.rs\` の \`mod\` 順序や re-export スタイルを微妙に変え
 
 **Q4: 「balance > 0 のとき、次の withdraw は決して Depleted を返さない」の proptest がないのはなぜか?**
 
-そのプロパティはコードの構造から *自明に* 帰結するからだ。\`if self.balance == 0\` の guard は balance がゼロのときだけ発火し、balance がゼロになり得るのは covering または partial-draining な withdraw の後だけ。これのプロパティテストは、guard の *結果* ではなく guard の *存在* をテストすることになる。**Proptest は実装の *構造* ではなく *結果* をテストすべきだ。**
+そのプロパティはコードの構造から *自明に* 帰結するからだ。\`if self.balance == 0\` の guard は balance がゼロのときだけ発火し、balance がゼロになり得るのは covering または partial-draining な withdraw の後だけ。これのプロパティテストは、guard の *結果* ではなく guard の *存在* をテストする。**Proptest は実装の *構造* ではなく *結果* をテストすべきだ。**
 
 **Q5: \`WithdrawOutcome\` を \`WithdrawResult\`、\`Covered\` を \`Ok\` variant、他 2 つを \`Err\` にできないか?**
 
@@ -3447,7 +3447,7 @@ L8 で \`lib.rs\` の \`mod\` 順序や re-export スタイルを微妙に変え
 
 L10 は \`compute.rs\` に戻り、\`compute\` と \`insurance\` の橋渡しをする Stage 10b の 3 つの pure-compute 関数を加える: \`liquidation_fee(notional, params)\`、\`solvent_close_outcome(snapshot, mark, params)\`、\`underwater_close_outcome(snapshot, mark, params)\`。3 つを合わせると、liquidation event を \`(fund credit, trader への残額)\` あるいは \`(fund debit, 部分的に取れた fee)\` のタプルに分解する — まさに Stage 10c の scanner が close ごとに \`InsuranceFund::deposit\` / \`InsuranceFund::withdraw_shortfall\` を呼ぶために必要な shape だ。
 
-L10 の後、\`compute\` モジュールと \`insurance\` モジュールはカスケード数学を介して会話するようになる。Pure 関数が credit/debit の数字を生み、state machine がそれらを蓄積する。L11 はこのループを \`LiquidationScanner\` で包み、safety-net cascade が runnable な scanner を持つことになる。
+L10 の後、\`compute\` モジュールと \`insurance\` モジュールはカスケード数学を介して会話するようになる。Pure 関数が credit/debit の数字を生み、state machine がそれらを蓄積する。L11 はこのループを \`LiquidationScanner\` で包み、safety-net cascade が runnable な scanner を持つ。
 `,
                 },
                 {
@@ -4788,7 +4788,7 @@ CloseOutcomeKind::Solvent(solvent)
 押さえる点が 3 つ:
 
 1. **\`fee_to_fund\` は 3 回読まれる: \`deposit\` に 1 回、aggregate に 1 回、\`CloseOutcomeKind::Solvent\` に move された \`solvent\` の一部として 1 回。** \`SolventClose\` が \`Copy\` なので、これは無料 — clone なし、borrow なし。**\`Copy\` 派生型は、フィールドを複数 write にまたがって広げる際に ownership の儀式を不要にする。**
-2. **\`fee_to_fund == 0\` 条件がない。** Solvent close は常に positive な \`fee_to_fund\` を持つ（L10 の契約より — precondition が \`equity >= fee\` で、fee は positive）。ここに \`if solvent.fee_to_fund > 0 { ... }\` を書くと、保証された false-or-impossible 条件をチェックすることになる。**型契約がすでに排除した条件には defend しない。**
+2. **\`fee_to_fund == 0\` 条件がない。** Solvent close は常に positive な \`fee_to_fund\` を持つ（L10 の契約より — precondition が \`equity >= fee\` で、fee は positive）。ここに \`if solvent.fee_to_fund > 0 { ... }\` を書くと、保証された false-or-impossible 条件をチェックする。**型契約がすでに排除した条件には defend しない。**
 3. **\`withdraw_shortfall\` の呼び出しがない。** Solvent close は fund に credit して trader に residual を返す。Fund から *引かれることはない*。Trader balance の credit は bridge の仕事だ（\`solvent.residual_to_account\` を使う）。Scanner のスコープ外。**Scanner は fund だけを mutate する。Trader balance は bridge の仕事。**
 
 #### フェーズ 5b: Underwater 分岐（8 行）
@@ -5031,7 +5031,7 @@ L13 が Module 4 を閉じる — そして Stage 10c を閉じる — そして
 - \`fund_deposits_minus_withdrawals_equals_balance_change\` — fund 会計が閉じる。
 - \`scan_preserves_account_order_in_records\` — 決定性: records が input 順に現れる。
 
-L13 後、Liquidation crate は *完成* する — 68 テスト、\`0a8464e\` と byte-for-byte 一致。読者は pure-compute + state-machine + orchestration cascade をまるごと 13 レッスンで構築したことになる。
+L13 後、Liquidation crate は *完成* する — 68 テスト、\`0a8464e\` と byte-for-byte 一致。読者は pure-compute + state-machine + orchestration cascade をまるごと 13 レッスンで構築した。
 `,
                 },
                 {
@@ -5177,7 +5177,7 @@ Scan-coverage 行列:
 2. **選ばれた数字 — entry=1_000、collateral=20、mark=999 — は ratio（190 bps）が maintenance（200 bps）のすぐ下に着地する *境界ケース*。** 不等号を flip させた bug（\`>\` の代わりに \`>=\` など）が 190 を間違ったバケットに落とす。**境界の入力は、分類 predicate での off-by-one を捕える test を作る。**
 3. **\`outcome\` への \`match\` は別 variant に \`panic!("expected Solvent")\` を使う。** 失敗メッセージは *期待する* variant を名指す。失敗ログを読む将来の読者には、どちらの分岐を狙ったかが即座に分かる。**Panic メッセージは「想定外の variant」ではなく「期待した variant」を名指す。**
 4. **\`ScanReport\` の 4 フィールドすべて + \`fund_balance()\` を assert する。** Per-record の \`outcome\` がすでに含意していても、aggregate フィールドもチェックする。なぜか。L11 の設計契約が aggregate を first-class と宣言した以上、集計の数学を破る regression は、per-record の分解を破るものとは別の bug クラスだからだ。**Aggregate フィールドと per-record フィールドは別々の assertion を得る。別々の invariant だからだ。**
-5. **\`s.fund_balance() == 14\` で fund が実際に mutate したことを証明する** — report が claim しただけではない、ということだ。Fund は *state* であり、derivation ではない。別途読み直すことで「report が嘘をついていない」を確認する。**State 変更は call 後の別 read を要する。それを describe する report は独自の assertion を要する。**
+5. **\`s.fund_balance() == 14\` で fund が実際に mutate したことを証明する** — report が claim しただけではない。Fund は *state* であり、derivation ではない。別途読み直すことで「report が嘘をついていない」を確認する。**State 変更は call 後の別 read を要する。それを describe する report は独自の assertion を要する。**
 
 #### Test 2: Underwater、fund が完全 cover
 
@@ -5463,8 +5463,9 @@ Scan-coverage 行列:
 押さえる点が 3 つ:
 
 1. **Proptest body 内の \`if report.unfilled_deficit > 0 { ... }\` filter。** Unfilled が存在するケースだけが assertion を発火させる。Fund がすべてを cover できたケースは valid な「assertion が発火しないケース」だ。**Proptest 内の条件付き assertion は「X が true なら Y も成立する」の表現方法。**
-2. **入力範囲が *adverse* — \`mark in 50..70\`。** Entry $100 の long position は mark $50-70 で深刻な損失に直面し、underwater outcome が起こりやすくなる。これで test は \`unfilled > 0\` 分岐をトリガする方向に bias する。**Proptest input は *interesting な* 条件をトリガする方向に bias すべき。さもないと、ほとんどのケースが assertion を静かに skip する。** これが *proptest の密度（density）問題* だ: \`mark in 50..150\` のような広い範囲だと、ランダム入力の大多数が Safe か Solvent に着地し、条件付き assertion は一度も発火しない。Proptest のデフォルト 100-250 iteration を通じて *プロパティは実際にテストされないまま pass する* — 見えない dead-code test だ。Assertion が実際に発火する regime に向けて入力を bias する。さもないと、プロパティテストは何もテストしていないことになる。
+2. **入力範囲が *adverse* — \`mark in 50..70\`。** Entry $100 の long position は mark $50-70 で深刻な損失に直面し、underwater outcome が起こりやすくなる。これで test は \`unfilled > 0\` 分岐をトリガする方向に bias する。**Proptest input は *interesting な* 条件をトリガする方向に bias すべき。さもないと、ほとんどのケースが assertion を静かに skip する。** これが *proptest の密度（density）問題* だ: \`mark in 50..150\` のような広い範囲だと、ランダム入力の大多数が Safe か Solvent に着地し、条件付き assertion は一度も発火しない。Proptest のデフォルト 100-250 iteration を通じて *プロパティは実際にテストされないまま pass する* — 見えない dead-code test だ。Assertion が実際に発火する regime に向けて入力を bias する。さもないと、プロパティテストは何もテストしていない。
 3. **\`initial_fund in 0..5_000\` — 下の範囲で cap してある。** Fund は予想される aggregate shortfall（underwater account 数で scale する）に対して不十分にサイズされる。**予想される shortfall より下に fund をサイズすれば、unfilled deficit の可能性が最大化される。**
+4. **L13 では \`prop_assume!\` 多用よりも Strategy 側の事前バイアスを優先する。** このプロパティの目的は \`unfilled > 0\` 分岐を高密度で発火させることなので、生成器を最初から adverse 領域へ寄せるほうが効率が良い。こうすると reject 数が抑えられ、\`TooManyAssumptions\` のリスクも下がる。**数理前提を明示したいときは L5 のように \`prop_assume!\`、発火密度を作りたいときは L13 のように Strategy で先に寄せる**、という使い分けが本コースの規律だ。
 
 #### Proptest #3: \`records_count_bounded_by_accounts\`
 

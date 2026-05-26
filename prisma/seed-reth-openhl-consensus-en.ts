@@ -1938,9 +1938,13 @@ git checkout main
 ## Common questions
 
 **Q: My \`commit_advances_head_and_records_block\` test panics with "mutex poisoned".**
-The most common cause is that an earlier test panicked inside the same impl while holding the lock, leaving it in a poisoned state. Cargo runs tests in parallel by default; if you're sure the issue is real, run \`cargo test -p openhl-evm -- --test-threads=1\` to serialize.
+Check the first panic first.  
+In this course, each test creates its own \`InMemoryEvmBridge::new()\`, so tests do not share one \`Mutex<State>\`. The common cause is a panic earlier in the **same test** while holding the lock, followed by another \`state.lock()\` in that test.
 
-*(That said: the tests in this course can't actually collide across threads — each test function builds its own \`InMemoryEvmBridge::new()\`, so the \`Mutex<State>\` isn't shared between tests. If you hit this error in practice, the real cause is that **the same test panicked at an earlier line while still holding the lock** (a failed assertion, a burst \`unwrap()\`, an \`expect()\` that fired, …) and then the next \`state.lock()\` call inside the same test poisoned-out. Before reaching for \`--test-threads=1\`, scroll to the **top** of the cargo-test output and find the first \`thread 'tests::...' panicked at ...\` line — that's the root panic. The mutex poison is self-inflicted within the one test, and lowering \`--test-threads\` won't make it go away.)*
+Triage steps:
+1. Find the first \`thread 'tests::...' panicked at ...\` line at the top of \`cargo test\` output.  
+2. Fix that root panic and rerun.  
+3. Use \`cargo test -p openhl-evm -- --test-threads=1\` only when you need a parallelism sanity check.  
 
 **Q: Should \`pending\` use \`HashMap<PayloadId, _>\` instead of \`HashMap<u64, _>\`?**
 Either works. The openhl convention is to use the inner type (\`u64\`) at the storage layer to avoid wrapping/unwrapping inside lookups. The public API still uses \`PayloadId\`. The trade-off: with \`HashMap<PayloadId, _>\`, you get type safety at the price of \`.0\` accessors on every key. With \`HashMap<u64, _>\`, you give up some type safety at the storage layer but avoid the noise. Personal preference; we picked \`u64\`.
@@ -2474,7 +2478,18 @@ No — the workspace pins alloy to specific versions (\`alloy-primitives = "1.5"
 
 ## Next lesson (L6)
 
-You've now written two \`ConsensusBridge\` impls — one synthesized, one with real alloy types. Both are usable by consensus-side test code, which you'll start writing in L8. But first, in L6, we go to the consensus side properly: we implement Malachite's \`Context\` trait — the type-level API surface that Malachite requires from any chain that uses it. 10 associated types, 4 factory methods. After L6, your chain can answer "what's our \`Address\` type, our \`Height\` type, our \`Value\` type" to Malachite. This is the **other half** of the contract: **the \`ConsensusBridge\` we wrote in L3 is a trait we (openhl) own**, whereas **the \`Context\` we implement in L6 is a trait Malachite (the library) owns**. Writing an \`impl\` for a contract you defined yourself, versus filling in an \`impl\` for a contract an external library defined for your types, are mirror-image design forces — the next lesson is where that asymmetry becomes muscle memory.`,
+You've now written two \`ConsensusBridge\` impls — one synthesized, one with real alloy types. Both are usable by consensus-side test code (starting in L8).
+
+In L6 we move to the consensus side properly and implement Malachite's \`Context\` trait.  
+That trait is the type-level API surface Malachite requires from any chain that uses it: 10 associated types and 4 factory methods.
+
+After L6, your chain can answer "what is our \`Address\` type, \`Height\` type, and \`Value\` type" to Malachite. This is the **other half** of the contract.
+
+The key contrast:
+1. \`ConsensusBridge\` (L3) is a trait we (openhl) own.
+2. \`Context\` (L6) is a trait Malachite owns.
+
+Implementing your own contract versus implementing an external library's contract for your types are mirror-image design forces. The next lesson is where that asymmetry becomes muscle memory.`,
                 },
               ],
             },
@@ -2836,6 +2851,8 @@ validators.sort_by(|a, b| {
         .then_with(|| a.address.cmp(&b.address)) // tiebreaker: address asc
 });
 \`\`\`
+
+Two guarantees compose here. \`Vec::sort_by\` is stable, so elements that compare \`Equal\` preserve input-relative order. But this comparator includes \`then_with(|| a.address.cmp(&b.address))\`, which gives a full tie-break and therefore a **total ordering** in practice. So no unresolved \`Equal\` class remains, and the final ordering is unique independent of input order. Stable-sort behavior plus an explicit total tie-break is what makes the validator-set ordering deterministic.
 
 This is the **canonical CometBFT validator-set sort order**: voting power descending, then address ascending as tiebreaker. **Every validator must apply this same sort to the same input set**. Why?
 
@@ -3333,7 +3350,7 @@ git checkout main
 ## Common questions
 
 **Q: My validator set sort produces (100, 200, 300) instead of (300, 200, 100). What's wrong?**
-You wrote \`a.voting_power.cmp(&b.voting_power)\` (ascending). The correct comparator is \`b.voting_power.cmp(&a.voting_power)\` (descending) — note \`b.cmp(&a)\` not \`a.cmp(&b)\`. Higher-stake validators should sort *earlier* (lower index).
+You used \`a.voting_power.cmp(&b.voting_power)\` (ascending). Use \`b.voting_power.cmp(&a.voting_power)\` (descending) instead. Higher-stake validators must sort earlier (lower index).
 
 **Q: \`select_proposer\` panics with "validator set is empty." Why?**
 Your test created an empty \`OpenHlValidatorSet\`. Real chains have at least one validator (single-validator devnet) or 4+ (multi-validator with byzantine tolerance). The assertion catches the malformed-config case before it causes a modulo-by-zero. If you see it in unit tests, your test setup is wrong; if you see it in production, your config loader is wrong.
@@ -3957,7 +3974,8 @@ Four load-bearing decisions encoded:
 
 3. **Empty-bytes signatures for ProposalPart and Extension.** When the trait surface requires methods but our chain doesn't use the feature, we provide deterministic, verifiable signatures over empty data. This honors the trait without committing to data we don't have. Production chains that use these features fill them with real bytes; we don't, but the engine doesn't crash either way.
 
-4. **The \`VerifierLike\` shim that walls off "leaky abstraction" from dependencies.** The one-method trait introduced in Step 5 exists for a single purpose: keeping the dependency graph clean. Concretely: Malachite's \`PublicKey\` provides verification through the external \`signature\` crate's \`Verifier\` trait. If \`verify_vote(v, sig, pk)\` called \`signature::Verifier::verify(...)\` directly, **the responsibility to import the \`signature\` crate's trait would leak into our consensus crate's public API surface**. The moment Malachite swaps \`signature\` for a different crypto library (new crate, different trait name), **every downstream consumer of this crate (including the L8+ lessons) eats a breaking change**. By interposing one tiny first-party trait (\`VerifierLike\`), the existence of \`signature\` is sealed behind the five lines of \`impl VerifierLike for PublicKey\` in \`signing.rs\`, and any future upstream churn is absorbed by editing exactly one line there. **The discipline is: "never let someone else's traits show up in your crate's public API."** This is the eight-line, minimum-cost implementation of it.
+4. **Use \`VerifierLike\` to block dependency leakage.** Its job is simple: keep external traits out of our public API. If \`verify_vote\` called \`signature::Verifier\` directly, that dependency would leak to downstream users. The moment upstream swaps crypto libraries, downstream consumers inherit a breaking change.  
+With one thin first-party trait (\`VerifierLike\`), the external dependency is sealed behind \`impl VerifierLike for PublicKey\` in \`signing.rs\`. Future churn is absorbed in one place. **Rule: never expose someone else's trait directly in your public API.**
 
 ## Answer key
 
@@ -5037,8 +5055,7 @@ Four tests:
 The smoke test is roughly **0.02 seconds** wall-clock. The bulk is libp2p setting up the local listener — even on a tcp/0 ephemeral port, libp2p's negotiation has a fixed cost.
 
 > 🛑 **Anti-fluency.** "Why \`flavor = 'multi_thread'\`?" **Because the engine spawns multiple actors, each on its own task.** A single-threaded runtime can run them all on one thread — but the engine has internal \`block_on\` patterns that would deadlock under single-thread. Multi-thread runtime works around this. **This is the kind of detail that's invisible at the API level but lethal at the test-failure level.**
->
-> *(Concretely: if a synchronous wait like \`tokio::runtime::Handle::current().block_on(...)\` runs in the middle of an async context, a \`current_thread\` runtime hard-locks its only worker. The future being \`await\`ed inside \`block_on\` has no executor to drive it forward, and the actor-initialization future **hangs forever** — not a timeout, not a panic, a pure deadlock. With \`multi_thread\`, a sibling worker thread can pick up the remaining future and the pattern unblocks. The Malachite / ractor / libp2p stack hits this shape several times internally, which is why tests have to force multi-threaded execution.)*
+> In \`current_thread\`, a \`block_on(...)\` can occupy the only worker and starve the future it is waiting on, so initialization hangs forever. In \`multi_thread\`, another worker can drive the remaining future and unblock the pattern. The Malachite / ractor / libp2p stack hits this shape internally, so tests must force multi-threaded execution.
 
 ## Test
 

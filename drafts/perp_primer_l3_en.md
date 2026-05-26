@@ -208,7 +208,7 @@ When the insurance fund is empty and another account goes underwater, somebody h
 > - Both positions disappear from the venue's books simultaneously
 > - The orderbook's bid/ask is untouched — no extra crash pressure pushed into prices
 >
-> In other words, ADL isn't "liquidation in the market." It's **netting on the books** — an off-orderbook offset where the engine matches a winner against a loser and erases both positions at once. In the Stage 10c (multi-account scanner) implementation, the ADL path doesn't call `book.submit()` at all; it mutates the `Position` records directly and deletes them. **"Move the loss to the winners without touching the market"** — that's what ADL is for, and it's also why it's designed to fire only rarely.
+> In other words, ADL isn't "liquidation in the market." It's **netting on the books** — an off-orderbook offset where the engine matches a winner against a loser and erases both positions at once. In the Stage 10c (multi-account scanner) implementation, the ADL path doesn't call `book.submit()` at all; it mutates the `Position` records directly and deletes them. **"Move the loss to the winners without touching the market"** — this is specifically how venues block the liquidation **death spiral** (forced selling causing more mark collapse causing more forced selling).
 
 ADL is **deeply unpopular**. A trader who correctly predicted a market crash and is profitably short doesn't want to be force-closed; they'd prefer to ride the win further. But when the insurance fund can't cover the underwater loss, *someone has to lose money* — the math is conservation of cash. ADL distributes that loss to the side that "won" the most from the move.
 

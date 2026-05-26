@@ -37,13 +37,23 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
                   xpReward: 60,
                   content: `# OpenHL を自作する — \`cargo init\` から動く single-validator devnet まで
 
-これは「読む」コースではない。これは「**作る**」コースだ。
+これは「読む」コースではない。自分で組み上げる「**作る**」コースだ。
 
-これからの 14 レッスンで、空ディレクトリでの \`cargo init\` から始めて、最終的に実際の Reth と実際の Malachite を通じて 1 ブロックを end-to-end で駆動する Rust workspace を手にする。コードベースはすべて自分で 1 行ずつ書いたもので、出来上がる形は \`psyto/openhl\` の対応 Stage とほぼ同じになる。そのリポジトリを **答え合わせ用のリファレンス** として参照していく。
+最初に、やることを短く整理する。
 
-Hyperliquid は 2025 年に $300B+ の perp 取引量を、完全クローズドソースのスタック — HyperBFT consensus、HyperCore matching engine、HyperEVM execution — の上で処理した。公開された Rust 実装はどこにもない。**OpenHL はそのスタックをオープンソースで実装したもの** であり、本コースでは openhl Module 1 の substrate を自分の手で組み上げる。
+- 空ディレクトリから \`cargo init\` で開始する。
+- 実際の Reth と Malachite を接続し、1 ブロックを end-to-end で動かす workspace まで到達する。
+- コードは自分で 1 行ずつ実装する。
+- 最終構造は \`psyto/openhl\` の対応 Stage とほぼ一致する。
 
-**なぜ CLOB なのか？** Hyperliquid が price-time-priority 板マッチングを選んだのは、ターゲット市場 — crypto-native perps の top tier — に、板で真の price discovery が成立するだけの retail flow が継続的にあるから。RFQ 系（Variational、Paradigm）は dealer が just-in-time に quote を出し、primary venue で hedge することで long tail を取り、AMM 系（GMX 世代）は cold-start を取る代わりに、tail（裾野銘柄）の経済性を犠牲にする。これから作るのは、CLOB が正しい答えである市場セグメントに対する engine。設計トレードオフの掘り下げは Course 7（CLOB）の capstone で行う — いまはこの設計コンテキストを押さえておけば十分。
+\`psyto/openhl\` は、実装途中の答え合わせに使うリファレンスである。
+
+背景は 2 点だけ押さえればよい。
+
+- Hyperliquid は 2025 年に $300B 超の perp 取引量を、クローズドソースのスタック（HyperBFT / HyperCore / HyperEVM）で処理した。
+- OpenHL はその設計をオープンソースで再構成する試みであり、本コースでは Module 1 の substrate を自分で構築する。
+
+**なぜ CLOB なのか。** Hyperliquid の対象市場では、price-time-priority の板で価格発見が成立するだけの継続フローがある。RFQ は long tail を取りやすく、AMM は cold-start に強いが、それぞれ別のトレードオフを持つ。本コースで作るのは、CLOB が機能する市場セグメント向けの engine である。詳細な比較は Course 7（CLOB）で扱う。
 
 ## 1. コース終了時点で手元にあるもの
 
@@ -141,7 +151,9 @@ cargo check  # 初回は時間がかかる — Reth は大きい
 
 \`openhl-reference\` 側で \`cargo check\` が pass すれば toolchain は正しい。次に進んでよい。pass しない場合はまず toolchain version を直す — リファレンスの \`rust-toolchain.toml\` が Rust 1.95.0 を pin しており、\`my-openhl/\` 側でも同じ pin を置いたので、\`rustup\` が必要な toolchain を自動 install してくれるはずだ。
 
-> 🛑 **やりがちな勘違い。** 「\`openhl-reference\` を直接編集すればいい。」 **違う。** あのリポは答え合わせであって自分の workspace ではない。read-only として扱うこと。\`my-openhl/\` への編集は自分のコード。\`openhl-reference/\` への編集は混乱の元 — どれが自分の書いたコードでどれが元からあったコードか分からなくなる。
+> 🛑 **やりがちな勘違い。** 「\`openhl-reference\` を直接編集すればよい。」  
+> **違う。** \`openhl-reference\` は答え合わせ専用で、編集対象ではない。  
+> 編集は必ず \`my-openhl/\` 側で行う。境界を曖昧にすると、どこまでが自分の実装か追えなくなる。
 
 ## 6. 15 レッスンの地図
 
@@ -180,7 +192,9 @@ diff -ru ~/code/my-openhl/crates/types ./crates/types
 
 自分のコードは細かい点 (空白、変数名、コメントの言い回し) で違って当然だ。重要なのは型、シグネチャ、制御フローが等価であること。そこが大きく食い違うなら、レッスンが land していない — 設計を振り返るセクションを読み直して調整する。
 
-> 🛑 **やりがちな勘違い。** 「答え合わせから直接 type した方が早い。」 **違う、それが一番悪い道だ。** \`openhl-reference\` から copy すれば 30 分で終わるが、学べることは何もない。レッスンの説明に従って自分で type し、レッスンが描写している摩擦に実際にぶつかり、結果として答え合わせのコードと一致する状態に着地する — それが本来の道だ。一致は **証拠** であって、目的ではない。
+> 🛑 **やりがちな勘違い。** 「答えを直接写せば早い。」  
+> **違う。** コピーは速いが、設計判断が身につかない。  
+> レッスンどおりに自分で実装し、最後に diff で一致を確認する。一致は目的ではなく、理解の結果である。
 
 ## 8. セットアップ確認 — 本レッスンの実際の演習
 
@@ -267,7 +281,7 @@ L0 のセットアップを済ませている前提だ。手元には:
 
 各 stage は \`psyto/openhl\` の実際の commit に対応する: \`75be9de\`、続いて \`5fc7ca1\`。
 
-**アプリケーションコードより先に依存グラフを組む理由**: Rust workspace で最も摩擦が多いのは依存解決だ。Reth も Malachite も巨大で、transitive な依存ツリーが深い。**「あとでやる」と決めると、アプリケーションコードを書いている最中に衝突に気付いて巻き戻すことになる。** 先に依存を確定させておけば、その後のレッスンはレッスン本来の主題に集中できる。
+**アプリケーションコードより先に依存グラフを組む理由**: Rust workspace で最も摩擦が多いのは依存解決だ。Reth も Malachite も巨大で、transitive な依存ツリーが深い。**「あとでやる」と決めると、アプリケーションコードを書いている最中に衝突に気付いて巻き戻す。** 先に依存を確定させておけば、その後のレッスンはレッスン本来の主題に集中できる。
 
 > 🛑 **考えてみよう。** スクロールする前に sketch せよ: workspace の Cargo.toml に書く \`members\` は何個で、それぞれ何か? ヒント: ライブラリ crate 10 個 + binary crate 1 個。L0 §3 で 5 つのサブシステムを学んだ。それを実装するのは具体的に 10 個のうちのどの crate か? (必要なら L0 §4 を見返す。)
 
@@ -1026,7 +1040,7 @@ test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 このレッスンで encode した本質的な決定が 2 つ:
 
-1. **Contract type は別 crate (\`openhl-types\`) に置く** — \`openhl-consensus\` でも \`openhl-evm\` でもない場所に。理由は Rust の crate-graph の制約だ: \`BlockHash\` を \`openhl-consensus\` に置くと、\`openhl-evm\` はその type を使うために \`openhl-consensus\` に依存することになる。だが \`openhl-consensus\` も \`openhl-evm\` が impl するメソッドを呼ぶ必要があり、\`openhl-consensus\` が \`openhl-evm\` に依存することになる。**A→B と B→A は循環依存で、Rust は許可しない。** 解決策は **shared vocabulary crate** だ: \`openhl-consensus\` と \`openhl-evm\` の両方が \`openhl-types\` に依存し、両者は type 定義のために互いに依存しなくなる。これは CL↔EL split を持つあらゆる Rust workspace の標準パターンで、Reth も同じ目的で \`alloy-primitives\` と \`reth-primitives-traits\` を使っている。
+1. **Contract type は別 crate (\`openhl-types\`) に置く** — \`openhl-consensus\` でも \`openhl-evm\` でもない場所に。理由は Rust の crate-graph の制約だ: \`BlockHash\` を \`openhl-consensus\` に置くと、\`openhl-evm\` はその type を使うために \`openhl-consensus\` に依存する。だが \`openhl-consensus\` も \`openhl-evm\` が impl するメソッドを呼ぶ必要があり、\`openhl-consensus\` が \`openhl-evm\` に依存する。**A→B と B→A は循環依存で、Rust は許可しない。** 解決策は **shared vocabulary crate** だ: \`openhl-consensus\` と \`openhl-evm\` の両方が \`openhl-types\` に依存し、両者は type 定義のために互いに依存しなくなる。これは CL↔EL split を持つあらゆる Rust workspace の標準パターンで、Reth も同じ目的で \`alloy-primitives\` と \`reth-primitives-traits\` を使っている。
 
 2. **PayloadStatus は bool ではなく enum。** L0 と上の予測で flag した話。3 つの状態は互換ではない: EL が *どの* not-Valid 状態にいるかで consensus 側の応答が変わる。\`bool { is_valid }\` に collapse すると、chain の liveness にとって load-bearing な情報を失う — Syncing node を Invalid として扱えば、本来助けてくれたはずの peer から永久に fork してしまう。
 
@@ -1300,7 +1314,7 @@ async fn build_payload(
 ) -> Result<PayloadId, BridgeError>;
 \`\`\`
 
-入力: parent block hash と payload attribute。出力: \`PayloadId\` — 不透明 handle で、bridge は build を開始したがブロックはまだ ready ではない、ということを表す。即座に return する。
+入力: parent block hash と payload attribute。出力: \`PayloadId\` — 不透明 handle で、bridge は build を開始したがブロックはまだ ready ではないことを表す。即座に return する。
 
 \`\`\`rust
 async fn payload_ready(&self, id: PayloadId) -> Result<ExecutedBlock, BridgeError>;
@@ -1310,7 +1324,7 @@ async fn payload_ready(&self, id: PayloadId) -> Result<ExecutedBlock, BridgeErro
 
 *(これが §計画 のクイズの答えだ。call の主導権は CL 側にあるが、EL 側の構築スレッドから完成済みの \`ExecutedBlock\` が CL へと逆流して同期する **seam** になっている — データの流れだけ見ると 4 メソッドの中で唯一 EL → CL 方向を持つ。)*
 
-**なぜ \`build_payload\` + \`payload_ready\` に分けて、1 つの \`build_payload -> ExecutedBlock\` にしないのか?** EL が *前 round の投票中に* build する必要があるからだ。\`build_payload\` が同期的にブロックを返すなら、proposer は build を待ってから broadcast することになる。分けると build が裏で走りつつ投票が進み、proposer の hot path は「準備済みブロックを fetch」(microsecond) に縮む。これが設計上 **最も重要な latency trick** で、sub-second block time はこれに依存する。
+**なぜ \`build_payload\` + \`payload_ready\` に分けて、1 つの \`build_payload -> ExecutedBlock\` にしないのか?** EL が *前 round の投票中に* build する必要があるからだ。\`build_payload\` が同期的にブロックを返すなら、proposer は build を待ってから broadcast する。分けると build が裏で走りつつ投票が進み、proposer の hot path は「準備済みブロックを fetch」(microsecond) に縮む。これが設計上 **最も重要な latency trick** で、sub-second block time はこれに依存する。
 
 \`\`\`rust
 async fn validate_payload(
@@ -1418,7 +1432,7 @@ cargo check --workspace
 
 2. **trait に \`Send + Sync\` bound。** すべての impl が thread-safe であることを強制する。これが無いと、actor 間で共有される \`Arc<dyn ConsensusBridge>\` がコンパイルできない。これがあれば、実装者は「mutable state は Mutex か atomic の裏に置く必要がある」と最初から分かる。Runtime バグへの discipline を compiler が enforce してくれる形だ。
 
-3. **Error variant は 3 つ。1 つでも多くでもない。** 3 つは consensus 側の 3 つの distinct な action (vote-against、wait、halt) に対応する。\`BridgeError(String)\` 1 つだと consensus 側で文字列パースをすることになる。5 つ以上 (例: \`Rejected.Hash\`、\`Rejected.Number\`、\`Rejected.BaseFee\`) にすると、EL 内部を consensus 側に leak するか、EL が変わると急速に drift する。3 つは **consensus が error に対して取る応答** の cardinality であり、EL の internal taxonomy は \`Rejected\` の String の裏に隠したままだ。
+3. **Error variant は 3 つ。1 つでも多くでもない。** 3 つは consensus 側の 3 つの distinct な action (vote-against、wait、halt) に対応する。\`BridgeError(String)\` 1 つだと consensus 側で文字列パースをする。5 つ以上 (例: \`Rejected.Hash\`、\`Rejected.Number\`、\`Rejected.BaseFee\`) にすると、EL 内部を consensus 側に leak するか、EL が変わると急速に drift する。3 つは **consensus が error に対して取る応答** の cardinality であり、EL の internal taxonomy は \`Rejected\` の String の裏に隠したままだ。
 
 ## 答え合わせ
 
@@ -1936,9 +1950,13 @@ git checkout main
 ## よくある質問
 
 **Q: \`commit_advances_head_and_records_block\` が "mutex poisoned" で panic する。**
-最もよくある原因は、別のテストが同じ impl 内で lock を持ったまま panic し、state が poisoned のまま残ったことだ。Cargo はデフォルトで test を並列実行する。本当の問題だと確信したら \`cargo test -p openhl-evm -- --test-threads=1\` で逐次実行する。
+まず最初の panic 行を確認する。  
+このコースのテストは \`InMemoryEvmBridge::new()\` を各テストで作るため、テスト間で \`Mutex<State>\` を共有しない。原因の多くは「同じテスト内で lock 保持中に先に panic し、その後もう一度 lock を取りに行く」パターンだ。
 
-*(ただし、このコースで書いたテストでは並列衝突は起こらない: 各テスト関数が \`InMemoryEvmBridge::new()\` を個別に生成しているので、テスト間で \`Mutex<State>\` を共有していない。実際にこのエラーに遭ったときの真の原因は、**そのテスト関数自身の実行中に lock を保持したまま別の場所で panic が起き (assertion 失敗、\`unwrap()\` の破裂、\`expect()\` の発火など)、その後同じテスト内で再度 \`state.lock()\` を呼んだ**ことにある。\`--test-threads=1\` を試す前に、cargo test 出力の上部で最初に発火した panic 行 — \`thread 'tests::...' panicked at ...\` — を確認すること。Mutex の poison はそのテスト固有の自家中毒であり、\`--test-threads\` を下げても消えない。)*
+確認手順:
+1. \`cargo test\` 出力の先頭にある最初の \`thread 'tests::...' panicked at ...\` を特定する。  
+2. その panic を直してから poison エラーの再現を確認する。  
+3. 並列実行の切り分けが必要なときだけ \`cargo test -p openhl-evm -- --test-threads=1\` を使う。  
 
 **Q: \`pending\` を \`HashMap<u64, _>\` ではなく \`HashMap<PayloadId, _>\` にすべき?**
 どちらでも動く。openhl の convention は、storage layer で内側の type (\`u64\`) を使い、lookup 内での wrap/unwrap を避けることだ。Public API では依然 \`PayloadId\` を使う。trade-off は次のとおり: \`HashMap<PayloadId, _>\` で type safety を得る代わりに、lookup ごとに \`.0\` accessor が必要になる。\`HashMap<u64, _>\` なら storage layer の type safety は諦めるが、noise は避けられる。好みの問題で、こちらは \`u64\` を選んだ。
@@ -2471,7 +2489,18 @@ git checkout main
 
 ## 次のレッスン (L6)
 
-\`ConsensusBridge\` impl を 2 つ書いた — 合成版と real alloy 型版。両方とも consensus 側の test コードから使える (L8 から書き始める)。だがその前に、L6 で consensus 側に進む: Malachite の \`Context\` trait — Malachite を使う任意の chain に対して Malachite が要求する型レベル API surface — を実装する。Associated type 10 個、factory method 4 個だ。L6 を終えると、自分の chain は「\`Address\` 型は何か、\`Height\` 型は何か、\`Value\` 型は何か」を Malachite に答えられるようになる。これが contract の **もう半分** だ。**L3 で書いた \`ConsensusBridge\` は自分 (openhl 側) が所有する trait** だったのに対し、**L6 で実装する \`Context\` は Malachite (ライブラリ側) が所有する trait** になる。自分が定義した契約に自分で impl を書くのと、外部ライブラリが定義した契約に対して自分の型で impl を埋めるのとでは、設計の力学が真逆 — 次のレッスンはその違いを体で覚える回でもある。`,
+\`ConsensusBridge\` impl を 2 つ書いた — 合成版と real alloy 型版。両方とも consensus 側の test コードから使える（L8 から書き始める）。
+
+次は L6 で consensus 側に進む。実装するのは Malachite の \`Context\` trait だ。  
+これは「Malachite を使うチェーンが満たすべき型レベル API surface」で、Associated type 10 個と factory method 4 個を持つ。
+
+L6 を終えると、自分の chain は「\`Address\` 型は何か」「\`Height\` 型は何か」「\`Value\` 型は何か」を Malachite に答えられるようになる。これが contract の**もう半分**だ。
+
+ここが重要な対比になる:
+1. L3 の \`ConsensusBridge\` は openhl 側が**所有する trait**。  
+2. L6 の \`Context\` は Malachite 側が**所有する trait**。
+
+自分で定義した契約に impl を書くのと、外部ライブラリが定義した契約に自分の型をはめるのとでは、設計の力学が逆向きになる。次レッスンはその違いを体で覚える回だ。`,
                 },
               ],
             },
@@ -2833,6 +2862,8 @@ validators.sort_by(|a, b| {
         .then_with(|| a.address.cmp(&b.address)) // tiebreak: address 昇順
 });
 \`\`\`
+
+ここで 2 つの保証が重なる。\`Vec::sort_by\` 自体は stable sort なので、比較結果が \`Equal\` の要素同士は元の相対順序を保つ。一方でこの comparator は \`then_with(|| a.address.cmp(&b.address))\` まで含めて **total ordering** を与えるため、実際には \`Equal\` が残らず、入力順に依存しない一意な並びに収束する。つまり「stable sort の性質」+「完全なタイブレイカー」の組み合わせで、validator-set の順序は決定的になる。
 
 これが **canonical な CometBFT validator-set ソート順** だ: voting power 降順、tiebreaker は address 昇順。**全 validator がこの同じソートを同じ入力 set に適用する必要がある。** なぜか?
 
@@ -3298,7 +3329,7 @@ test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 1. **Context sub-type 1 つにつき 1 ファイル。** 大きな \`context.rs\` に 10 個の型をインラインで定義することもできた。分けることで、(本レッスンや、後で個別の型を引用するレッスンの) walk-through が focused になる。1 ファイルで済むものが 8 ファイルになる、その代わりだ。分割を選んだ理由は **trait surface が独立に load-bearing だから** — \`Validator\` の決定は \`Vote\` の決定と別物だし、code review は変更が局所化されているほうが容易だ。
 
-2. **\`OpenHlValidatorSet\` は別の \`sort()\` メソッドではなく \`new()\` でソートする。** unsorted な set を construct できない、ということを意味する。型システムが「この set は常にソートされている」を encode し、unsorted な set を 生成する API path が存在しない。これが伝播する: set の全メソッドがソート済み順序を仮定でき、それが compiler の enforce する不変量になる。
+2. **\`OpenHlValidatorSet\` は別の \`sort()\` メソッドではなく \`new()\` でソートする。** unsorted な set を construct できない、を意味する。型システムが「この set は常にソートされている」を encode し、unsorted な set を 生成する API path が存在しない。これが伝播する: set の全メソッドがソート済み順序を仮定でき、それが compiler の enforce する不変量になる。
 
 3. **\`select_proposer = (height + round) % count\`** — 最も単純なアルゴリズム。Malachite はもっと洗練された proposer selection (stake で weighted、同一 validator が連続しない rotation など) をサポートする。それでも最も単純なものを選ぶ理由は:
    - 決定的だ
@@ -3330,7 +3361,7 @@ git checkout main
 ## よくある質問
 
 **Q: validator set のソートが (300, 200, 100) ではなく (100, 200, 300) になる。何が間違っているのか?**
-\`a.voting_power.cmp(&b.voting_power)\` (昇順) と書いている。正しい comparator は \`b.voting_power.cmp(&a.voting_power)\` (降順) で、\`a.cmp(&b)\` ではなく \`b.cmp(&a)\` だ。Stake が高い validator が *早い* index (低い index) にソートされる必要がある。
+\`a.voting_power.cmp(&b.voting_power)\`（昇順）になっている。正しくは \`b.voting_power.cmp(&a.voting_power)\`（降順）だ。高い stake の validator を低い index に置く必要がある。
 
 **Q: \`select_proposer\` が "validator set is empty." で panic する。なぜか?**
 テストが空の \`OpenHlValidatorSet\` を作っている。Real chain は最低 1 validator (single-validator devnet) か 4 以上 (byzantine tolerance 付きの multi-validator) を持つ。この assert は malformed config を modulo-by-zero になる前に catch するためにある。Unit test で出るなら test setup が間違っている。production で出るなら config loader が間違っている。
@@ -3763,7 +3794,7 @@ impl SigningProvider<OpenHlContext> for OpenHlSigningProvider {
 - **\`sign_proposal_part\` / \`verify_signed_proposal_part\`** — **空バイトに署名する。** なぜか? \`OpenHlProposalPart\` は unit struct で、コミットすべきデータが存在しないからだ。空ペイロードに署名しても valid な Ed25519 署名は生成される (private key だけで確定的)。検証は「はい、この provider がこの署名を作った」を確認する。署名に情報量はないが、trait 表面は満たされる。
 - **\`sign_vote_extension\` / \`verify_signed_vote_extension\`** — proposal_part と同じ。Vote extension は \`()\` (v0 では未使用) なので、空バイトに署名する。
 
-> 🛑 **やりがちな勘違い。** 「空バイトに署名するのは何か違う気がする — 意味があるのか?」 **意味は、持っていないデータにコミットすることなく trait 表面を満たすことだ。** Malachite エンジンは実行時にこれらのメソッドを呼ぶ。panic したり Error を返したらエンジンがクラッシュする。空バイトに署名して valid な署名を返すことで、「はい、これはこちらからの本物の署名です。ただし、メッセージの残りの部分以上に追加でコミットしているデータはありません」と言えるわけだ。これらの機能を使う本番 chain は実データを入れる。こちらは入れないが、trait 表面はそのまま保たれる。
+> 🛑 **やりがちな勘違い。** 「空バイトに署名するのは何か違う気がする — 意味があるのか?」 **意味は、持っていないデータにコミットすることなく trait 表面を満たすことだ。** Malachite エンジンは実行時にこれらのメソッドを呼ぶ。panic したり Error を返したらエンジンがクラッシュする。空バイトに署名して valid な署名を返すことで、「はい、これはこちらからの本物の署名だ。ただし、メッセージの残りの部分以上に追加でコミットしているデータはない」と言えるわけだ。これらの機能を使う本番 chain は実データを入れる。こちらは入れないが、trait 表面はそのまま保たれる。
 
 ### Step 9: \`signing_provider.rs\` にテストを 7 個追加
 
@@ -3954,7 +3985,8 @@ test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 3. **ProposalPart と Extension の空バイト署名。** Trait 表面がメソッドを要求するが、chain がその機能を使わない場合は、空データに対する確定的で検証可能な署名を提供する。これで、持っていないデータにコミットすることなく trait を honor できる。これらの機能を使う本番 chain は実データを入れる。こちらは入れないが、どちらの場合もエンジンはクラッシュしない。
 
-4. **\`VerifierLike\` shim による「依存性の汚染 (Leaky Abstraction) の遮断」。** Step 5 で導入した 1 メソッド trait は、純粋に依存グラフをきれいに保つためだけに存在する。具体的には: Malachite の \`PublicKey\` は外部 crate \`signature\` の \`Verifier\` trait 経由で検証を提供しているので、もし \`verify_vote(v, sig, pk)\` が直接 \`signature::Verifier::verify(...)\` を呼ぶと、**こちらの consensus crate の公開 API surface に \`signature\` crate の trait を import させる責務が漏れ出す** ことになる。すると将来 Malachite が \`signature\` を別の crypto ライブラリ (新しい crate、別 trait 名) に差し替えた瞬間に、**こちらの crate の利用者 (L8 以降のレッスンを含む) すべてが breaking change を踏む**。\`VerifierLike\` という自前の薄い trait を 1 枚かませておけば、\`signature\` の存在は \`signing.rs\` の \`impl VerifierLike for PublicKey\` という 5 行に閉じ込められ、外部 crate の変動はそこを 1 行直すだけで吸収できる。**「自分の crate の API に他人 (依存先) の trait を直接出さない」**という discipline の、コード 8 行で買える最小コストの実装例だ。
+4. **\`VerifierLike\` shim で依存の漏れを遮断する。** 目的は 1 つだけで、公開 API から外部 crate 依存を隠すことだ。\`verify_vote\` が \`signature::Verifier\` を直接呼ぶと、こちらの crate 利用者まで \`signature\` trait を意識することになる。上流が別ライブラリへ差し替わった瞬間、下流にも breaking change が波及する。  
+\`VerifierLike\` を 1 枚かませれば、外部依存は \`signing.rs\` の \`impl VerifierLike for PublicKey\` に閉じ込められる。将来の変更点はそこ 1 箇所で済む。**原則は「自分の公開 API に他人の trait を直接出さない」。**
 
 ## 答え合わせ
 
@@ -4422,7 +4454,7 @@ Rust は未使用引数に \`_\` 接頭辞を要求する (unused-variable 警�
 Rust の trait システムは、runtime 構成に応じて impl を条件付きで含めたり除外したりできないからだ。エンジンの \`start_engine\` には \`C: ConsensusCodec<Ctx> + WalCodec<Ctx> + SyncCodec<Ctx>\` という trait bound があり、これは codec メソッドが実行されるかどうかに関係なくコンパイル時にチェックされる。**stub は型システムを満たすために存在するのであって、runtime を満たすためではない。**
 
 **Q: stub を本物の impl に置き換えるのはいつか?**
-エンジンが実際に呼んだときだ。L9 の smoke test は actor system を spawn していくつかのパスを exercise する。Stub が fire すれば、エラーメッセージがどれかを教えてくれる。最初に呼ばれる可能性が高いのは \`Codec<ProposedValue<OpenHlContext>>\` (WAL) だ — エンジンは peer gossip の前に、最初の proposal を crash recovery のためにディスクに書くからだ。そこを protobuf-backed encoder に差し替えることになる。
+エンジンが実際に呼んだときだ。L9 の smoke test は actor system を spawn していくつかのパスを exercise する。Stub が fire すれば、エラーメッセージがどれかを教えてくれる。最初に呼ばれる可能性が高いのは \`Codec<ProposedValue<OpenHlContext>>\` (WAL) だ — エンジンは peer gossip の前に、最初の proposal を crash recovery のためにディスクに書くからだ。そこを protobuf-backed encoder に差し替える。
 
 ## 次のレッスン (L9)
 
@@ -5034,8 +5066,7 @@ mod tests {
 Smoke test の wall-clock はおおよそ **0.02 秒**。大部分は libp2p がローカル listener を立ち上げる時間だ — tcp/0 のエフェメラルポートでも、libp2p のネゴシエーションには固定コストがある。
 
 > 🛑 **やりがちな勘違い。** 「なぜ \`flavor = 'multi_thread'\` なのか?」 **エンジンが複数 actor をそれぞれの task として spawn するからだ。** Single-threaded runtime でも 1 スレッドに全部回せる — だが、エンジン内部に single-thread だと deadlock する \`block_on\` パターンがある。Multi-thread runtime で回避する。**API レベルでは見えないが、テスト失敗レベルでは致命的な詳細だ。**
->
-> *(具体的には: 非同期コンテキストの最中に \`tokio::runtime::Handle::current().block_on(...)\` のような同期的待機が走ると、\`current_thread\` runtime ではその唯一のワーカースレッドが完全にロックされる。すると \`block_on\` の内側で \`await\` されている future を進ませる実行者がいなくなり、actor 初期化 future が**永久にハング**する — タイムアウトや panic にすらならない、純粋な deadlock だ。\`multi_thread\` 版なら別のワーカースレッドが残りの future を拾えるので、この pattern が通り抜ける。Malachite / ractor / libp2p の組み合わせは内部で何度かこの形を踏むので、テスト側で multi-thread を強制する必要がある。)*
+> \`current_thread\` では \`block_on(...)\` が唯一のワーカーを占有し、内側 future を進める実行者が消えるため、初期化が永久ハングしうる。\`multi_thread\` なら別ワーカーが残りの future を進められる。Malachite / ractor / libp2p の組み合わせではこのパターンを踏むので、テスト側で multi-thread を強制する。
 
 ## テスト
 
@@ -6501,7 +6532,7 @@ where
     }
 \`\`\`
 
-Trait bound \`P: BlockNumReader + Clone + Sync + 'static\` が契約だ: hash→number lookup ができる、clone が安価、スレッド間で共有しても安全、任意の async task より長生きする — そのような provider なら何でもよい、ということになる。
+Trait bound \`P: BlockNumReader + Clone + Sync + 'static\` が契約だ: hash→number lookup ができる、clone が安価、スレッド間で共有しても安全、任意の async task より長生きする — そのような provider なら何でもよい、という。
 
 \`build_payload\` の body は 3 フェーズだ:
 
@@ -7861,7 +7892,7 @@ git checkout main
 Engine API が、separate な finalization layer を持つ chain 用に設計されたからだ。Ethereum mainnet では head は slot ごとに (12 秒で) 進められるが、block が「safe」になるのは 32 slot 後 (Casper checkpoint)、「finalized」になるのは 64 slot 以降だ。こちらの v0 single-validator chain にはそんな区別はない — どのコミットも final だ。3 つすべてを同じ hash に設定するのが v0 の簡略化で、multi-validator OpenHL になれば区別する。
 
 **Q: マッチする \`newPayload\` なしで \`ForkchoiceUpdated\` を受け取ると、engine は実際には **何を** するのか?**
-\`PayloadStatusEnum::Syncing\` で応答し、内部的には peer から block を sync しようとし始める。こちらの isolated な dev node には peer がいないので、sync リクエストはどこにも届かない。Engine はその hash 用の「block 待ち」状態にただ座っているだけになる。**それで構わない** — L14 の目的で、engine に canonical chain を advance させる必要は実は無い。\`newPayload\` 経由で実 block body を導入する将来コースの教材が、このギャップを埋めることになる。
+\`PayloadStatusEnum::Syncing\` で応答し、内部的には peer から block を sync しようとし始める。こちらの isolated な dev node には peer がいないので、sync リクエストはどこにも届かない。Engine はその hash 用の「block 待ち」状態にただ座っているだけになる。**それで構わない** — L14 の目的で、engine に canonical chain を advance させる必要は実は無い。\`newPayload\` 経由で実 block body を導入する将来コースの教材が、このギャップを埋める。
 
 **Q: Await ではなく、\`ForkchoiceUpdated\` を非同期に送って即座に return できるか?**
 できる — \`tokio::spawn(handle.fork_choice_updated(...))\` で fire-and-forget にできる。だが await は fast (SYNCING で sub-millisecond) で、レスポンスをログするオプションも与えてくれる。Async-spawn アプローチはテストの順序も難しくする (テスト exit 前に engine が update を見るか?)。**Await が安全なデフォルトだ。**

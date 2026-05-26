@@ -134,7 +134,7 @@ mod tests {
 }
 ```
 
-ヘルパー関数 2 個。これがないと、各テスト本体で次のように書くことになる:
+ヘルパー関数 2 個。これがないと、各テスト本体で次のように書く: 
 
 ```rust
 let order = Order {
@@ -359,7 +359,7 @@ Test 7 と 8 のペアは `cancel` のバグの一群を catch する: `cancel` 
 - `best_bid() == Some(Price(95))` — order 2 はまだ resting。
 - `best_ask() == None` — order 1 の ask は完全に消費されている。
 
-**これが最強のテストである理由**: no-crossed-book invariant こそが orderbook を **正しい** ものにしている。Cross する book は、起こるべきトレードが起こっていない取引所を見せていることになる — matching engine としての根本的失敗。これが pass すれば、engine が safety property を維持しているという **証拠** が得られる (証明ではない — それは L8 の proptest で行う)。
+**これが最強のテストである理由**: no-crossed-book invariant こそが orderbook を **正しい** ものにしている。Cross する book は、起こるべきトレードが起こっていない取引所を見せている— matching engine としての根本的失敗。これが pass すれば、engine が safety property を維持しているという **証拠** が得られる (証明ではない — それは L8 の proptest で行う)。
 
 > 🛑 **やりがちな勘違い。** 「9 個ではなく 100 個の unit test を書けばよい? カバレッジは多い方がよい」。 **多くのテストでも同じ path を exercise しているなら、カバレッジが増えたことにはならない。** この 9 個は **異なる invariant** を exercise するように選んである: empty-book、resting、market-walks-levels、limit-respects-price、time-priority、partial-market、cancel-found、cancel-not-found、no-cross。それぞれが他 8 個ではテストできない property をテストする。**「buy crosses ask」をひたすら exercise する 100 個のテストは、99 個が冗長。**
 

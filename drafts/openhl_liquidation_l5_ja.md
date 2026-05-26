@@ -128,7 +128,7 @@ pub fn margin_ratio(snapshot: &AccountSnapshot, mark: MarkPrice) -> MarginRatio 
 
 この関数で押さえておく点が 5 つ:
 
-1. **`notional == 0` の early return で `i64::MAX` を返す。** Flat ポジションは exposure ゼロ → 下回るべき margin 要件もない。表現可能な最大の ratio を返すことが「無限に safe」のシグナルになり、下流の `margin_health` の比較すべてを自然に short-circuit させる（`margin_health` 側に special-case はいらない）。**具体的には、次レッスン (L6) で実装する `if ratio >= params.initial_margin_bps { Safe } else { ... }` という一方向の比較式が、flat なアカウントに対しても追加の特例分岐なしでそのまま機能し、`i64::MAX >= initial_margin_bps` が常に真なので自動的に `Safe` と判定される**。つまり `i64::MAX` は **「下流の比較演算が短絡的に通り抜けるための magic boundary」** として効いている。代替案 — `Option<MarginRatio>` や `Result<MarginRatio>` — はすべての呼び出し側に flat ケースを明示的に扱わせることになる。**「制約なし」のケースを、システム上最も safe な上限値で表現する設計規律だ。**
+1. **`notional == 0` の early return で `i64::MAX` を返す。** Flat ポジションは exposure ゼロ → 下回るべき margin 要件もない。表現可能な最大の ratio を返すことが「無限に safe」のシグナルになり、下流の `margin_health` の比較すべてを自然に short-circuit させる（`margin_health` 側に special-case はいらない）。**具体的には、次レッスン (L6) で実装する `if ratio >= params.initial_margin_bps { Safe } else { ... }` という一方向の比較式が、flat なアカウントに対しても追加の特例分岐なしでそのまま機能し、`i64::MAX >= initial_margin_bps` が常に真なので自動的に `Safe` と判定される**。つまり `i64::MAX` は **「下流の比較演算が短絡的に通り抜けるための magic boundary」** として効いている。代替案 — `Option<MarginRatio>` や `Result<MarginRatio>` — はすべての呼び出し側に flat ケースを明示的に扱わせる。**「制約なし」のケースを、システム上最も safe な上限値で表現する設計規律だ。**
 
 2. **乗算を除算より *先* に置く。** `equity × MARGIN_SCALE / notional` を i128 で計算すれば、小さい ratio（例えば 1% margin = 100 bps）も割り算を生き残る。先に除算する（`equity / notional × MARGIN_SCALE` を i64 で）と、スケーリングの前に整数パーセントに切り捨てられ、精度が失われる。**整数除算が混じるとき、演算順序が効く。**
 
@@ -475,7 +475,7 @@ test compute::tests::margin_ratio_deterministic ... ok
 test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-**16 テストすべて pass。** 3 つの proptest はデフォルトでそれぞれ 256 ケースを走らせる — 合計で ~768 のランダム入力の組み合わせがチェックされたことになる。
+**16 テストすべて pass。** 3 つの proptest はデフォルトでそれぞれ 256 ケースを走らせる — 合計で ~768 のランダム入力の組み合わせがチェックされた。
 
 エラー時にありがちなパターン / サプライズ:
 

@@ -144,7 +144,7 @@ The diagram above is the mental-model skeleton. This one fleshes it out to "whit
            ──► Book::submit() → SubmitResult{ fills } ──► FILL_SINK ──► Arc<Mutex<Vec<Fill>>>
            ──► bridge.pending_fills (the same Arc) ──► build_payload.drain() ──► next block
 
- The whole thesis: **there is physically only one Arc.** Both the precompile and the bridge
+ The whole thesis: **only one Arc exists.** Both the precompile and the bridge
    hold the same Arc — they read/write the same Book / the same Vec<Fill>. CLOB_STATE and
    FILL_SINK are just "shared registers that let anyone grab that Arc from anywhere."
    **No translation layer, no serialization, just memory** — the entire architecture

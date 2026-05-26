@@ -238,7 +238,20 @@ Expected output:
     Last invariant: invariant_NumberEqualsIncrementCount
 ```
 
-**The reported counterexample is a 2-call sequence.** Foundry initially found the failure after ~30 random calls, then the shrinker reduced it: dropped most calls, halved `badSetNumber(0xa3b8...)` to `badSetNumber(42)`, found that the minimal failure requires exactly `badSetNumber(42)` followed by `wrappedIncrement()`. The causality chain is important and worth tracing call-by-call: `badSetNumber(42)` *succeeds without reverting* — `counter.setNumber(42)` is a legal operation, just one that bypasses the ghost. Because `fail_on_revert = false`, Foundry doesn't flag the call itself; it lets the state mutation through, leaving `counter.number() = 42` while `ghostIncrementCount` is still `0`. The conservation law has already broken at this point, but the invariant runner doesn't know yet — it only checks after the *next* call returns. So Foundry proceeds to the next Handler method, calls `wrappedIncrement()`, that call returns cleanly, and *then* `invariant_NumberEqualsIncrementCount` evaluates: `counter.number() == handler.ghostIncrementCount()` → `43 != 1` → fail. The shrinker keeps both calls because together they form the minimal trace that reaches a checked-invariant moment after the divergence.
+**The reported counterexample is a 2-call sequence.** Foundry initially found the failure after ~30 random calls, and then the shrinker reduced it: dropped most calls, halved `badSetNumber(0xa3b8...)` to `badSetNumber(42)`, and found that the minimal failure requires exactly `badSetNumber(42)` followed by `wrappedIncrement()`.
+
+This behavior demonstrates a fundamental concept in invariant testing: **"Causal Time Lag"**.
+
+### What "Causal Time Lag" Means Here
+Invariants are evaluated **after** each handler call. So the call that corrupts state and the call where failure is observed may differ.
+
+In this test:
+1. `badSetNumber(42)` succeeds (`fail_on_revert = false`).
+2. `counter.number()` becomes `42`, but `ghostIncrementCount` stays `0`.
+3. `wrappedIncrement()` succeeds and moves `counter.number()` to `43`.
+4. The next invariant check catches the mismatch: `43 != 1`.
+
+`forge`'s sequence shrinker then removes unrelated calls and keeps this minimal causal trace. That is why debugging stays practical even when the original failing run was much longer.
 
 **Remove `badSetNumber` from `CounterHandler.sol` before continuing.** The conservation discipline is intact only when every Handler method updates both target and ghost in lockstep.
 
@@ -346,7 +359,7 @@ You'll learn:
 - `cast block` / `cast tx` / `cast logs` for chain introspection
 - The full read-eval pattern: write contract → forge test → cast call against a forked anvil to verify behavior on real state
 
-After L4 you'll be able to interact with deployed contracts from a shell loop without writing a Solidity script — the CLI equivalent of `curl`+`jq` for the EVM.
+After L4 you can interact with deployed contracts from a shell loop without writing a Solidity script — the CLI equivalent of `curl`+`jq` for the EVM.
 
 ````
 
@@ -376,4 +389,3 @@ L3 lands in Module 1 (Test discipline) sortOrder 2:
 - **Step 6 (wrappedSetNumber with ghost update) closes the conservation discipline loop.** Reader writes the WRONG version (badSetNumber, no ghost), sees it fail, then writes the RIGHT version (wrappedSetNumber, ghost reset). The lesson ends with the Handler covering 2 methods and the invariant still holding across 12,800 calls — concrete evidence the discipline works.
 - **Q4 explicitly names the openhl-liquidation L13 mapping.** This is the bridge to L6 capstone where the InsuranceFund port lives. Q5's "reverts: counter is your Handler-quality dashboard" is the operational tip production codebases live by.
 - **No LaTeX needed in L3.** Unlike L2's $2^{256}$ / $10^{77}$ confusion-space, L3's math is integer arithmetic (number == count, sum_deposits - sum_withdrawals == balance). The interesting payload is the *pattern*, not the magnitude — leave LaTeX for L6 where the InsuranceFund cascade conservation actually needs it.
-

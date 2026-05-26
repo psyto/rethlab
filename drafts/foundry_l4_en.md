@@ -130,7 +130,15 @@ Expected output:
 Six things to notice:
 
 1. **The function signature is the human-readable Solidity form, not the 4-byte selector.** cast parses `"totalSupply()(uint256)"` internally using the same parser alloy uses, hashes the signature with keccak256, takes the first 4 bytes, and uses that as the function selector in the underlying `eth_call`. **You write Solidity-ergonomic syntax; cast does the encoding.**
-2. **The `(uint256)` after the function name is the return-type annotation.** Without it, cast prints the raw hex bytes (`0x0000...`). With it, cast decodes the return as a `uint256` and prints the decimal. Multi-return functions follow the same pattern — `"slot0()(uint160,int24,uint16,uint16,uint16,uint8,bool)"` is the Uniswap V3 pool's slot0 signature, and cast prints each tuple element on its own line. If the inline decode trips on an exotic signature (rare but possible — dynamic arrays of structs are the usual suspects), the stable fallback is to drop the return-type annotation entirely and pipe the raw hex into `cast abi-decode "<full-signature>"`, which uses the same parser but in a more permissive context. **For most real production signatures, the inline form just works; reach for `cast abi-decode` only when it doesn't.**
+2. **The `(uint256)` after the function name is the return-type annotation.** Without it, cast prints the raw hex bytes (`0x0000...`). With it, cast decodes the return as a `uint256` and prints the decimal. Multi-return functions follow the same pattern — `"slot0()(uint160,int24,uint16,uint16,uint16,uint8,bool)"` is the Uniswap V3 pool's slot0 signature, and cast prints each tuple element on its own line.
+
+   > [!TIP]
+   > **Robust Decoding Fallback using `cast abi-decode`**
+   > For functions returning complex structs, dynamic arrays, or nested tuples, the inline return-type annotation (e.g., `"myFunction()(uint256[],(string,address))"`) might occasionally fail due to parser limitations in the CLI argument handling context. The professional fallback is to query the function *without* specifying return type annotations to retrieve the raw hex output, and then pipe that output directly to `cast abi-decode`:
+   > ```bash
+   > cast call <contract-address> "myFunction()" | cast abi-decode "myFunction()(uint256[],(string,address))"
+   > ```
+   > This approach runs the ABI decoder in a more permissive context than the command-line arguments parser, allowing it to correctly parse highly nested or custom data types. If a standard query fails to decode, immediately switch to this piped command pattern.
 3. **No private key needed.** `cast call` is read-only; it executes against the node's view of state without broadcasting. This is the workhorse for production debugging — you can simulate any view function against mainnet without spending a wei.
 4. **`--rpc-url` can be replaced by `ETH_RPC_URL` in your shell env.** Set `export ETH_RPC_URL=https://ethereum.reth.rs/rpc` once and drop the flag from subsequent commands. The L5 lesson on anvil will show switching `ETH_RPC_URL` between mainnet and forked anvil.
 5. **The output decimal is raw integer, not human-formatted.** USDC has 6 decimals, so `35,234,876,543,210,000,000` raw means `35,234,876,543,210.000000 USDC`. cast doesn't apply decimal scaling — that's your job, or use `cast --to-unit <value> ether` for conversion (despite the name, the unit conversion is general).
@@ -326,7 +334,12 @@ After L4 you can:
 
 **Q1: Why use `cast` when Etherscan + a browser do the same thing?**
 
-Three reasons. **(a) Composability** — `cast` output pipes into `jq`, `awk`, `xargs`, `grep`, exactly like any Unix tool. Etherscan output is in a browser. **(b) Reproducibility** — a cast command is a shareable bash one-liner; an Etherscan workflow is a series of clicks you can't paste into a runbook. **(c) Speed** — `cast call` against a local Reth node returns in milliseconds; Etherscan loads in seconds with rate limits. For L1 engineers doing dozens of view queries per hour, cast is 10×+ faster than browser-based tools. **Etherscan for one-off exploration; cast for everything else.**
+Three reasons:
+1. **Composability** — `cast` output pipes into `jq`, `awk`, `xargs`, `grep`, exactly like any Unix tool. Etherscan output is in a browser.
+2. **Reproducibility** — a cast command is a shareable bash one-liner; an Etherscan workflow is a series of clicks you can't paste into a runbook.
+3. **Speed** — `cast call` against a local Reth node returns in milliseconds; Etherscan loads in seconds with rate limits. For L1 engineers doing dozens of view queries per hour, cast is 10×+ faster than browser-based tools.
+
+**Etherscan for one-off exploration; cast for everything else.**
 
 **Q2: Does `cast` support every JSON-RPC method or only a subset?**
 
@@ -391,4 +404,3 @@ L4 lands in Module 2 (CLI & state-aware testing) sortOrder 0:
 - **Q2 (`cast rpc` escape hatch) and Q4 (cast → alloy graduation rule) are the operational tips.** Q1 (vs Etherscan) is the philosophy. Q5 (`--from` simulation) and Q6 (non-Ethereum EVM chains) are the practical edge cases. Q3 (signing locality) is the security note.
 - **Step 6 (`cast send` against anvil) is intentionally preview-only.** Full anvil treatment is L5. Showing the syntax now without making the reader run anvil keeps L4 shell-only (no daemon to manage) while planting the L5 hook.
 - **No LaTeX, no math.** L4 is all CLI ergonomics — strings, addresses, hex bytes. Save math for L6 capstone where the InsuranceFund cascade actually needs it.
-

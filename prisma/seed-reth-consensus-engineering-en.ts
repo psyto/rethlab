@@ -63,7 +63,7 @@ The classical literature calls all of these "faults." The **Byzantine** case (na
 
 > 🛑 **Predict.** You have 4 nodes. One is Byzantine. **What's the maximum number of total nodes f Byzantines you can tolerate while still reaching consensus?** (Answer below — but predict first. The answer is famous.)
 
-The answer is **f < n/3**. With 4 nodes you tolerate 1 Byzantine. With 7 you tolerate 2. **You always need 3f+1 nodes to tolerate f Byzantines.** This is a hard math result, not a design choice. Proven by Lamport, Pease, and Shostak in 1982.
+The answer is **f < n/3**. With 4 nodes you tolerate 1 Byzantine. With 7 you tolerate 2. **You always need 3f+1 nodes tolerate f Byzantines.** This is a hard math result, not a design choice. Proven by Lamport, Pease, and Shostak in 1982.
 
 ## 3. Safety vs liveness
 
@@ -1212,7 +1212,7 @@ Short test on what you've read in this module. **No fluency answers** — every 
                       question: 'What does **3f+1** mean in BFT consensus, and why is it tight?',
                       options: [
                         'Block size limit — 3 transactions plus 1 coinbase.',
-                        'Minimum total validator count needed to tolerate f Byzantine validators. Tight because any two quorums must overlap in at least one honest validator (mathematical proof from Lamport 1982).',
+                        'Minimum total validator count needed tolerate f Byzantine validators. Tight because any two quorums must overlap in at least one honest validator (mathematical proof from Lamport 1982).',
                         'Number of voting rounds — 3 phases plus 1 commit.',
                         'A consensus tax rate — 3% of stake plus 1% fee.',
                       ],

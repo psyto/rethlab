@@ -528,7 +528,18 @@ git checkout main
 
 ## 次のレッスン (L6)
 
-`ConsensusBridge` impl を 2 つ書いた — 合成版と real alloy 型版。両方とも consensus 側の test コードから使える (L8 から書き始める)。だがその前に、L6 で consensus 側に進む: Malachite の `Context` trait — Malachite を使う任意の chain に対して Malachite が要求する型レベル API surface — を実装する。Associated type 10 個、factory method 4 個だ。L6 を終えると、自分の chain は「`Address` 型は何か、`Height` 型は何か、`Value` 型は何か」を Malachite に答えられるようになる。これが contract の **もう半分** だ。**L3 で書いた `ConsensusBridge` は自分 (openhl 側) が所有する trait** だったのに対し、**L6 で実装する `Context` は Malachite (ライブラリ側) が所有する trait** になる。自分が定義した契約に自分で impl を書くのと、外部ライブラリが定義した契約に対して自分の型で impl を埋めるのとでは、設計の力学が真逆 — 次のレッスンはその違いを体で覚える回でもある。
+`ConsensusBridge` impl を 2 つ書いた — 合成版と real alloy 型版。両方とも consensus 側の test コードから使える（L8 から書き始める）。
+
+次は L6 で consensus 側に進む。実装するのは Malachite の `Context` trait だ。  
+これは「Malachite を使うチェーンが満たすべき型レベル API surface」で、Associated type 10 個と factory method 4 個を持つ。
+
+L6 を終えると、自分の chain は「`Address` 型は何か」「`Height` 型は何か」「`Value` 型は何か」を Malachite に答えられるようになる。これが contract の**もう半分**だ。
+
+ここが重要な対比になる:
+1. L3 の `ConsensusBridge` は openhl 側が**所有する trait**。  
+2. L6 の `Context` は Malachite 側が**所有する trait**。
+
+自分で定義した契約に impl を書くのと、外部ライブラリが定義した契約に自分の型をはめるのとでは、設計の力学が逆向きになる。次レッスンはその違いを体で覚える回だ。
 ````
 
 ---

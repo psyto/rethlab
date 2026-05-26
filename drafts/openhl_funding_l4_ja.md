@@ -26,7 +26,7 @@
 - **割る前に掛ければ精度が残る** — `(mark - index) / index` を整数で先に計算してしまうと、100% 未満の premium はすべてゼロに丸められる。先に `RATE_SCALE` を掛けて分数を i128 のマグニチュードへと変換し、その後で割れば意味のある整数が残る。
 - **`u64` での引き算が王道の符号バグ** — `MarkPrice(99) - IndexPrice(100)` は `u64` で計算すると `u64::MAX` 近くに wrap し、本来「小さな負」であるべき premium が「巨大な正」になる。`i128::from(...)` の upcast でこの引き算が代数的に正しくなる。
 - **Oracle 欠損時の graceful degradation** — `index == 0` のときは `Premium(0)` を返し、エラーにはしない。Funding は bridge を経由して balance update として流れる仕組みなので、`Err` を返すと無関係な payload までトランザクション失敗として表面化してしまう。信号がないなら「ゼロを返す」が正解だ。
-- **テストコメントは紙の上の数学そのもの** — assertion の隣に `// (101-100) * 1e9 / 100 = 10_000_000` と書いておけば、将来このコードを debug する人は「テストの著者を信じる」のではなく「数式に対して assertion を検証する」ことができる。
+- **テストコメントは紙の上の数学そのもの** — assertion の隣に `// (101-100) * 1e9 / 100 = 10_000_000` と書いておけば、将来このコードを debug する人は「テストの著者を信じる」のではなく「数式に対して assertion を検証する」できる。
 
 検証：
 
@@ -353,7 +353,7 @@ git checkout main
 `from` が idiomatic かつ non-truncating な変換だからだ。ここでは `as i128` でも動く（`i64 → i128` で truncate は起きない）が、`from` を使うことで「これは widening であって reinterpretation ではない」と意図を documentation できる。**Widening には `from` を使う。truncation が起きないことを検証済みのときだけ `as` を使う。** `as i128` を読んだ将来のエンジニアは safety を自分で検証する必要があるが、`from` を読めば変換が safe だと一目で分かる。
 
 **Q: なぜ helper の名前が `clamp_to_i64` ではなく `saturate_i128_to_i64` なのか？**
-「Saturate」は「型境界で clamp する」を表す確立した用語だからだ — `u64::saturating_mul`、`i128::saturating_sub` と同じ単語だ。**標準語彙を使えば、関数の挙動がどの Rust 開発者にも一目で伝わる。** 「Clamp」だとユーザ定義の境界も含む任意の clamping を意味しうるが、「saturate」は型境界での clamping を特定的に指す。
+「Saturate」は「型境界で clamp する」を表す確立した用語だからだ — `u64::saturating_mul`、`i128::saturating_sub` と同じ単語だ。**標準語彙を使えば、関数の挙動がどの Rust 開発者にも一目で伝わる。** 「Clamp」だとユーザー定義の境界も含む任意の clamping を意味しうるが、「saturate」は型境界での clamping を特定的に指す。
 
 **Q: `compute_premium` は `pub` ではなく `pub(crate)` にすべきでは？**
 `pub` でないと外部の caller（course 10 の bridge integration や、funding state を telemetry のために問い合わせる外部 observer）が呼べないからだ。`pub(crate)` ではそれが禁じられる。**この関数は public API の一部だ。** `saturate_i128_to_i64` が実装の詳細、`compute_premium` が契約だ。

@@ -147,7 +147,7 @@ You won't fully internalize ownership until you've fought a few compile errors. 
 
 > 🧭 **Why this matters:** introduces the type-level primitives (\`Address\`, \`U256\`, \`B256\`) and the signature surface that every later networking-layer and authentication-layer lesson reuses. These types are the lingua franca of the Rust EVM stack.
 
-Time to touch **Alloy** directly. Alloy is the de facto Ethereum library suite for Rust, and Reth uses it everywhere.
+Time touch **Alloy** directly. Alloy is the de facto Ethereum library suite for Rust, and Reth uses it everywhere.
 
 ## 1. Project setup
 
@@ -182,7 +182,7 @@ async fn main() -> Result<()> {
     // Set up a random signer.
     let signer = PrivateKeySigner::random();
 
-    // Optionally, the wallet's chain id can be set, in order to use EIP-155
+    // Optionally, the wallet's chain id can be set, to use EIP-155
     // replay protection with different chains.
     let signer = signer.with_chain_id(Some(1337));
 

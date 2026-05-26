@@ -75,7 +75,7 @@ L8 ではその「いつ」を組み立てる。Clock は数学を正しいタ�
 
 > 🛑 **考えてみよう。** スクロール前に — `tick()` は `Option<FundingTick>` を返す（settlement があれば `Some`、なければ `None`）。**なぜ `Option` を返すのか。`FundingTick` を常に返す（settlement がないときは空の `settlements` を持つ形）形にしないのはなぜか？** ヒント：呼び出し側が結果をどう扱うかを考えよ。
 
-（答え：**`None` だけで「state 変化なし」を通知でき、呼び出し側が結果を inspect するまでもないからだ。** Funding tick をブロック生成ループに繋ぐ呼び出し側は、`FundingApplied` イベントを発火するか、settlement をログするか、といった判断を安く済ませたい。`Option` なら `if let Some(tick) = clock.tick(...)` という自然な形が書ける。常に何かを返す形にすると、呼び出し側に `if !tick.settlements.is_empty()` のようなチェックを書かせることになる — それは正しい意味すら表せない（空の settlement リストは「tick が fire したが position がなかった」かもしれないし、「そもそも tick が fire していない」かもしれない）。**`Option` は、この二分を型レベルで明示してくれる。**）
+（答え：**`None` だけで「state 変化なし」を通知でき、呼び出し側が結果を inspect するまでもないからだ。** Funding tick をブロック生成ループに繋ぐ呼び出し側は、`FundingApplied` イベントを発火するか、settlement をログするか、といった判断を安く済ませたい。`Option` なら `if let Some(tick) = clock.tick(...)` という自然な形が書ける。常に何かを返す形にすると、呼び出し側に `if !tick.settlements.is_empty()` のようなチェックを書かせる— それは正しい意味すら表せない（空の settlement リストは「tick が fire したが position がなかった」かもしれないし、「そもそも tick が fire していない」かもしれない）。**`Option` は、この二分を型レベルで明示してくれる。**）
 
 ## 手順
 
@@ -106,7 +106,7 @@ use crate::types::{
 
 注目点は 2 つ：
 
-**Module doc が両方の不変条件を冒頭で明示している。** 実際に強制するのは `tick()`（interval guard）と L9 / L10 のテストだが、*契約*はここ、ファイル最上部に置いてある — モジュールを読む人は、コードを見る前に両不変条件を見ることになる。**契約を約束し、下のコードとテストで守る。**
+**Module doc が両方の不変条件を冒頭で明示している。** 実際に強制するのは `tick()`（interval guard）と L9 / L10 のテストだが、*契約*はここ、ファイル最上部に置いてある — モジュールを読む人は、コードを見る前に両不変条件を見る。**契約を約束し、下のコードとテストで守る。**
 
 **Imports は必要なものを一通り引っ張ってくる。** `apply_funding`、`compute_premium`、`compute_rate`（Module 2）、`FundingParams`、`FundingRate`、`IndexPrice`、`MarkPrice`、`Position`、`Premium`、`Settlement`（Module 1）。**L4 の compute.rs の import と同じ理屈で、boilerplate を早めに安定化させる。**
 
@@ -232,7 +232,7 @@ impl FundingClock {
 
 Clock を construct する。**`const fn`** なので、コンパイル時に `static DEFAULT_CLOCK: FundingClock = FundingClock::new(...)` と書ける。**`#[must_use]`** を付けてあるのは、clock を構築してそのまま捨てるのは常にバグだからだ。
 
-Doc にはタイミングの semantics も書いてある：「`genesis_time + interval_secs` 以降の最初の tick で fire する」。`genesis_time = 1_000_000`、`interval_secs = 3600` を渡した呼び出し側は、最初の tick が `1_003_600` 以降で fire することを把握できる。**驚きはない。**
+Doc にはタイミングの semantics も書いてある：「`genesis_time + interval_secs` 以降の最初の tick で fire する」。`genesis_time = 1_000_000`、`interval_secs = 3600` を渡した呼び出し側は、最初の tick が `1_003_600` 以降で fire することを把握できる。**驚きはない。** ここでの timestamp は Unix time の**秒単位**であり、ミリ秒ではない点を固定しておく（`+3600` はちょうど 1 時間）。
 
 #### `params()` と `last_settled_at()` アクセサ
 
@@ -283,7 +283,7 @@ Clock の核心となるメソッド。論理的には 3 つの phase が時間�
 
 3. **state 更新 + return**：`last_settled_at` を `now` に進め、`Some(FundingTick { ... })` を返す。
 
-**決定的に重要なのは、clock を `now` に進めること** — `last_settled_at + interval_secs` ではない、という点だ。これが「no catch-up」不変条件の実装で、tick が遅れて fire したときに deadline を後ろにリセットする catch-up にはしない、ということだ。なぜそれが重要なのかは L10 のレッスンで説明する。
+**決定的に重要なのは、clock を `now` に進めること** — `last_settled_at + interval_secs` ではない、という点だ。これが「no catch-up」不変条件の実装で、tick が遅れて fire したときに deadline を後ろにリセットする catch-up にはしない。なぜそれが重要なのかは L10 のレッスンで説明する。
 
 > 🛑 **考えてみよう。** `last_settled_at = 1_000_000`、`interval_secs = 3600`、`now = 1_010_000`（= +10000 秒、~2.8 interval）で `tick()` を呼んだ後の `last_settled_at` はいくらになるか。
 
@@ -488,7 +488,7 @@ git checkout main
 ## よくある質問
 
 **Q: `tick` が `&mut self` を取って、`self` を消費する形で `(Self, Option<FundingTick>)` を返さないのはなぜか？**
-実用主義による選択だ。`&mut self` は in-place な変更を表す Rust の標準パターンだ。消費して返す形にすると、呼び出し側に `clock = clock.tick(...)` のような再代入を強いることになる — semantic な利得もなく、ただ verbose になるだけだ。**state machine が mutate するなら `&mut self`、本当に変換するなら consuming にする。** Funding clock は前者にあたる。
+実用主義による選択だ。`&mut self` は in-place な変更を表す Rust の標準パターンだ。消費して返す形にすると、呼び出し側に `clock = clock.tick(...)` のような再代入を強いる— semantic な利得もなく、ただ verbose になるだけだ。**state machine が mutate するなら `&mut self`、本当に変換するなら consuming にする。** Funding clock は前者にあたる。
 
 **Q: `FundingClock` は tick の*回数*も追跡すべきでは（telemetry 用に）？**
 `ticks_fired: u64` のカウンタを足すこともできる。Stage 8b ではやらない — 呼び出し側が気にするなら外部でカウントすればよい。**具体的な consumer がいないうちは、最小限の struct に state を足さない。** 後から足すのは struct のフィールドを 1 つ変更するだけで済むが、未使用な state を削除するのは breaking な API 変更になる。

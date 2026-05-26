@@ -200,6 +200,8 @@ Three public functions, each `pub` for a reason:
 - **`current_best_bid`** — exposed for direct testing without going through the EVM. Walks: write lock → read lock → option deref → mutex lock → `best_bid_with_qty()`. **Three locks** to read one value; that sounds expensive but each is microseconds, and reads are concurrent under `RwLock`.
 
 > 🛑 **Anti-fluency.** "Three locks for one read seems wasteful." **The locks serve different purposes.** `RwLock` distinguishes installed-vs-uninstalled (rare write contention). `Mutex<Book>` protects the matching engine state (frequent contention but milliseconds). Putting them all in one lock would serialize all reads + writes uniformly — much worse for concurrency. **Layered locks reflect layered concerns.**
+>
+> Lock-ordering invariant is the safety rail: always acquire outer (`CLOB_STATE` RwLock) before inner (`Book` Mutex). As long as no path inverts that order (inner-held then outer-write), deadlock is structurally avoided.
 
 ### Step 5: Change `LiveRethEvmBridge::clob` to `Arc<Mutex<Book>>`
 

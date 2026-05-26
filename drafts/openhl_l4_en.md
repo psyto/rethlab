@@ -482,9 +482,13 @@ git checkout main
 ## Common questions
 
 **Q: My `commit_advances_head_and_records_block` test panics with "mutex poisoned".**
-The most common cause is that an earlier test panicked inside the same impl while holding the lock, leaving it in a poisoned state. Cargo runs tests in parallel by default; if you're sure the issue is real, run `cargo test -p openhl-evm -- --test-threads=1` to serialize.
+Check the first panic first.  
+In this course, each test creates its own `InMemoryEvmBridge::new()`, so tests do not share one `Mutex<State>`. The common cause is a panic earlier in the **same test** while holding the lock, followed by another `state.lock()` in that test.
 
-*(That said: the tests in this course can't actually collide across threads — each test function builds its own `InMemoryEvmBridge::new()`, so the `Mutex<State>` isn't shared between tests. If you hit this error in practice, the real cause is that **the same test panicked at an earlier line while still holding the lock** (a failed assertion, a burst `unwrap()`, an `expect()` that fired, …) and then the next `state.lock()` call inside the same test poisoned-out. Before reaching for `--test-threads=1`, scroll to the **top** of the cargo-test output and find the first `thread 'tests::...' panicked at ...` line — that's the root panic. The mutex poison is self-inflicted within the one test, and lowering `--test-threads` won't make it go away.)*
+Triage steps:
+1. Find the first `thread 'tests::...' panicked at ...` line at the top of `cargo test` output.  
+2. Fix that root panic and rerun.  
+3. Use `cargo test -p openhl-evm -- --test-threads=1` only when you need a parallelism sanity check.  
 
 **Q: Should `pending` use `HashMap<PayloadId, _>` instead of `HashMap<u64, _>`?**
 Either works. The openhl convention is to use the inner type (`u64`) at the storage layer to avoid wrapping/unwrapping inside lookups. The public API still uses `PayloadId`. The trade-off: with `HashMap<PayloadId, _>`, you get type safety at the price of `.0` accessors on every key. With `HashMap<u64, _>`, you give up some type safety at the storage layer but avoid the noise. Personal preference; we picked `u64`.

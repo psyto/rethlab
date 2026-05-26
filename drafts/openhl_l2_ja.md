@@ -321,7 +321,7 @@ test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 このレッスンで encode した本質的な決定が 2 つ:
 
-1. **Contract type は別 crate (`openhl-types`) に置く** — `openhl-consensus` でも `openhl-evm` でもない場所に。理由は Rust の crate-graph の制約だ: `BlockHash` を `openhl-consensus` に置くと、`openhl-evm` はその type を使うために `openhl-consensus` に依存することになる。だが `openhl-consensus` も `openhl-evm` が impl するメソッドを呼ぶ必要があり、`openhl-consensus` が `openhl-evm` に依存することになる。**A→B と B→A は循環依存で、Rust は許可しない。** 解決策は **shared vocabulary crate** だ: `openhl-consensus` と `openhl-evm` の両方が `openhl-types` に依存し、両者は type 定義のために互いに依存しなくなる。これは CL↔EL split を持つあらゆる Rust workspace の標準パターンで、Reth も同じ目的で `alloy-primitives` と `reth-primitives-traits` を使っている。
+1. **Contract type は別 crate (`openhl-types`) に置く** — `openhl-consensus` でも `openhl-evm` でもない場所に。理由は Rust の crate-graph の制約だ: `BlockHash` を `openhl-consensus` に置くと、`openhl-evm` はその type を使うために `openhl-consensus` に依存する。だが `openhl-consensus` も `openhl-evm` が impl するメソッドを呼ぶ必要があり、`openhl-consensus` が `openhl-evm` に依存する。**A→B と B→A は循環依存で、Rust は許可しない。** 解決策は **shared vocabulary crate** だ: `openhl-consensus` と `openhl-evm` の両方が `openhl-types` に依存し、両者は type 定義のために互いに依存しなくなる。これは CL↔EL split を持つあらゆる Rust workspace の標準パターンで、Reth も同じ目的で `alloy-primitives` と `reth-primitives-traits` を使っている。
 
 2. **PayloadStatus は bool ではなく enum。** L0 と上の予測で flag した話。3 つの状態は互換ではない: EL が *どの* not-Valid 状態にいるかで consensus 側の応答が変わる。`bool { is_valid }` に collapse すると、chain の liveness にとって load-bearing な情報を失う — Syncing node を Invalid として扱えば、本来助けてくれたはずの peer から永久に fork してしまう。
 

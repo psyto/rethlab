@@ -236,6 +236,16 @@ contract InsuranceFund {
 4. **`pub` フィールド → `public` storage with auto-generated getter。** Solidity の state 変数上の `public` キーワードは同名の getter 関数を自動生成する (`balance()` が値を返す)。これで Handler と invariant test contract が、カスタム view 関数を書かずに fund の state を読める。**Solidity の `public` = Rust の `pub` + auto-generated getter を 1 キーワードで。**
 5. **`AccountId` → `address`。** Ethereum のネイティブ address 型が、Rust の account 識別子の代わりに立つ。`immutable` がそれを constructor-only にする (Rust の owner が construction で set される挙動と一致)。
 6. **Solidity 0.8 の built-in overflow check が Rust の explicit な checked-arithmetic を置き換える。** 両言語とも production code で underflow に revert する。Rust は `checked_sub` を明示的に書くことを要求する。Solidity 0.8 は自動でやる。**Runtime 挙動は同一。Solidity 0.8+ では構文が短いだけだ。**
+
+   > [!NOTE]
+   > **`unchecked` ブロックによる Rust の wrapping 挙動の模倣とガス最適化**
+   > Solidity 0.8+ では、オーバーフロー/アンダーフローを許容する wrapping 算術（Rust の `wrapping_add` や `wrapping_sub` に相当）を行いたい場合、あるいはガス効率を極限まで高めて Rust 実装と同等のガスプロファイルに近づけたい場合、`unchecked { ... }` ブロックを使用します：
+   > ```solidity
+   > unchecked {
+   >     balance -= amount; // ガス節約、または意図的な wrapping 動作
+   > }
+   > ```
+   > `unchecked` は Solidity の標準的なオーバーフローチェックコード生成（`Panic(0x11)` をスローする条件分岐）を無効化するため、ガスコストを削減できる。インフラエンジニアとしては、安全性が必要な場所（デフォルトの安全な算術評価）と、すでに手動で境界値チェック（bounds check）を済ませてオーバーフローが絶対に起き得ないためガスを節約したい場所（`unchecked`）を厳格に区別して設計する習慣が重要だ。
 7. **`uint256 public balance` は意図的に *storage 変数* であって、EVM ネイティブの `address(this).balance` ではない。** Rust ソースが自身の明示的な `balance` フィールドを保持しているから、port はそれを field-by-field でミラーする。これは冗長ではない — *隔離* だ。Contract address への強制的な ETH 送金 (別 contract からの `selfdestruct` 経由など) は `deposit` を通らずに `address(this).balance` を mutate する。Fund が EVM ネイティブな balance に依存していたら、保存則が壊れる。`balance` を private な bookkeeping 変数として track することで、保存則 invariant は *fund 自身の会計* を検証する。外部 ETH 注入の副作用に対して immune だ。**Rust に忠実な storage 変数は意図的な safety 選択でもある — EVM ネイティブの balance は contract の invariant を bypass する外部 mutator から触れられる。**
 
 ### Step 4: `test/InsuranceFundHandler.sol` を書く
@@ -376,7 +386,22 @@ contract InsuranceFundInvariantTest is Test {
 1. **各 `invariant_*` は 1 行の `assertEq`。** Control flow なし、branching なし、exception handling なし。ただの算術等価性だ。これが Solidity で concrete になった保存則形状だ。**保存則は等価性。等価性は one-liner。**
 2. **Invariant は fund state と ghost state の *両方* を参照する。** Invariant 1 は `fund.balance()` (実際の contract observable) と 3 つの ghost を読む。2 つの surface の間の不一致こそがバグを catch する。**Ghost は spec。Contract は implementation。Invariant は両者の間の等価性。**
 3. **Invariant 2 と 3 は accounting の cross-check だ。** Fund は独自の `totalDeposited` と `totalWithdrawn` フィールドを持つ (Rust struct と一致)。Invariant 2 と 3 は handler と fund がこれらの値で agree していることを検証する。Fund の `deposit` が誤って `totalDeposited` を double-increment したら、invariant 2 が catch する。**Contract 自身の bookkeeping を handler の bookkeeping に対して cross-check することが、contract-internal なバグを catch する。**
-4. **Invariant 4 は purely-handler な invariant だ。** Fund state を一切参照しない。handler が absorb operation を正しく track したことを assert する (`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested`)。これは wrappedAbsorb が ghost の 1 つを更新し忘れる handler 側のバグを catch する。**Handler もまた test されているシステムだ。Invariant 4 は監視者をさらに監視する（Who watches the watchers?）規律として機能する。**
+4. **「多層的インバリアント（Multi-Layered Invariants）」の設計パターン**
+
+   このテスト設計では、異なる階層の性質を持つインバリアントを意図的に組み合わせており、これを**「多層的インバリアント」**と呼ぶ。デバッグの効率化と偽陽性の排除において強力な力を発揮する：
+   - **システムレベルの保存則（System-Level Conservation Laws - Invariant 1）**：
+     コントラクト自体の残高（リアルな状態）と、外部とのすべての入出力の総和（ゴースト状態）を突き合わせる最もマクロな不変条件。システム全体の経済的合理性（「資金がどこからも現れず、どこにも消えない」こと）を検証する。
+   - **コンポーネントレベルの内部インバリアント（Component-Level Invariants - Invariant 4）**：
+     コントラクトの状態は参照せず、ハンドラー（ゴースト変数）の内部状態のみを相互検証するミクロな不変条件。今回の例では、`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested`（吸い込まれた損失とカバーされなかった損失の和は、発生した総損失と等しい）がこれに相当する。
+   - **「監視者を監視する（Who watches the watchers?）」防衛ライン**：
+     インバリアントテスト自体のバグ（ゴースト変数の更新ロジック自体の誤り）は、テストの有効性を無効化する最大の要因だ。Invariant 4 は純粋にハンドラー側の記録整合性をアサートしているため、「テストロジックが仕様通りに機能しているか」を自己検証する。
+   - **バグ所在の瞬時切り分け（Partitioning of Bugs）**：
+     もしバグによってテストが失敗した際：
+     - **Invariant 1 と Invariant 4 の両方が失敗**：コントラクトの実装バグ（またはコントラクトとハンドラー両方の誤り）。
+     - **Invariant 1 のみ失敗し、Invariant 4 はパス**：コントラクトの内部状態遷移に不整合があるが、ハンドラーの記録自体は正しい（コントラクト本体にバグが存在する確率が極めて高い）。
+     - **Invariant 4 のみ失敗し、Invariant 1 はパス**：コントラクトは正しく動作しているが、ハンドラー（テストロジック）側のゴースト変数の更新漏れ（テスト側のバグ）。
+     
+     このようにアサーションの階層を分けることで、複雑なプロトコルでも「本体コード」と「テスト用モック・ハンドラーコード」のどちらに原因があるかを一目で特定できる。
 
 ### Step 6: Invariant を走らせる
 
@@ -487,7 +512,7 @@ Shrinker は、おそらく 50-call だった元系列をこの 3 calls まで r
 
 Capstone の設計に焼き込んだ load-bearing な決定が 3 つ。
 
-1. **Field-by-field な翻訳であって、再設計ではない。** Solidity port は Rust のフィールド名 (snake → camel case)、revert 条件、return-tuple の形を保つ。Port 中に「improve」する誘惑に抵抗することこそが L13-to-L6 cross-reference を機能させる。読者は 2 つの実装を文字通り diff して規律転写を目で見ることができる。**忠実な porting が言語横断 verification の load-bearing な規律だ。**
+1. **Field-by-field な翻訳であって、再設計ではない。** Solidity port は Rust のフィールド名 (snake → camel case)、revert 条件、return-tuple の形を保つ。Port 中に「improve」する誘惑に抵抗することこそが L13-to-L6 cross-reference を機能させる。読者は 2 つの実装を文字通り diff して規律転写を目で見るできる。**忠実な porting が言語横断 verification の load-bearing な規律だ。**
 
 2. **4 つではなく 5 つの ghost。** Handler は `ghostSumLossRequested` を `ghostSumAbsorbed + ghostSumUnabsorbed` とは別に track する。これで invariant 4 が両者の等価性を証明できる。よりコンパクトな設計なら invariant に直接関連する 4 ghost だけを track するだろう。5 番目の ghost は invariant 4 を *意味ある* assertion にするために存在する (tautology ではなく)。**5 番目の ghost は invariant 4 の spec だ。**
 
@@ -599,4 +624,3 @@ L6 は Module 3 (Capstone) の sortOrder 0 に入る:
 - **Bilingual annotation** は first-mention にのみ適用: `保存則（Conservation law）`、`規律転写（Discipline transfer）`、`同型対応（Isomorphism）`、`シャドウ仕様 (Shadow Specification)` (L3 から established)。
 - **`load-bearing`、`pedagogical artifact`、`emotional payoff`、`source-of-truth`** は英語のまま使用。L0–L5 と一貫。
 - **コース総括の最終行「Foundry は道具だ。規律こそがプロダクトだ。」** は意図的に簡潔に翻訳。Punch を保つ。
-

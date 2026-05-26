@@ -290,6 +290,8 @@ Five sequential steps. Each rejection is an **early return**, not a nested `if` 
 
 (Answer: **A read lock blocks write locks.** If we held `state` for the entire function — including past the L8-future `clob.lock()` — we'd be holding a read lock on `CLOB_STATE` while trying to acquire a separate Mutex on the Book it points to. That works (no deadlock), but the read lock prevents anyone else from calling `install_clob` mid-precompile. Dropping it early reduces the lock-held window. **Be a good citizen: hold each lock for the shortest time you can get away with.**)
 
+Extra precision for the L8 refactor: once we switch to `let Some(clob) = state.as_ref() else { ... };`, `clob` is a borrow into the `RwLockReadGuard`. That means early `drop(state)` is no longer legal; the read lock lives through `book.submit()` and is released when those borrows go out of scope.
+
 ### Step 5: Update `openhl_precompiles` to register both
 
 Current (after L6):

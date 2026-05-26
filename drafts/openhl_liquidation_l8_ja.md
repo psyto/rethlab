@@ -213,7 +213,7 @@ impl Default for InsuranceFund {
 押さえておく点が 5 つ:
 
 1. **`new` は負の値を黙って 0 にクランプする。** `Result<Self, ...>` でも panic でもない。なぜか。負の初期 balance の *物理的意味* が未定義だからだ — 借金を持つ fund は fund ではない。**Bad な入力に対して妥当な解釈が「最も近い valid な入力にする」しかない場合、儀式抜きでそうする。** ここで `Result` を返すと、すべての呼び出し側が「起きないはずのエラー」をハンドルさせられる。Panic にすると debug-vs-release で挙動が割れる。クランプが最も安価で正しい答えだ。
-2. **`new(0)` と同じことをするのに `empty()` が存在する。** 理由は 2 つ。第一に、呼び出し地点で `InsuranceFund::empty()` のほうが `InsuranceFund::new(0)` より意図が読める — 数字でなく意図を運ぶ。第二に、`empty` は `Default::default()` が呼ぶ先でもあり、2 つの異なる名前 (インターフェース) が同じ構築ロジックを指すことになる。**Canonical な zero value 用に名付けたコンストラクタを置くと、ちょっとした明快さの利息が複利で効いてくる。**
+2. **`new(0)` と同じことをするのに `empty()` が存在する。** 理由は 2 つ。第一に、呼び出し地点で `InsuranceFund::empty()` のほうが `InsuranceFund::new(0)` より意図が読める — 数字でなく意図を運ぶ。第二に、`empty` は `Default::default()` が呼ぶ先でもあり、2 つの異なる名前 (インターフェース) が同じ構築ロジックを指す。**Canonical な zero value 用に名付けたコンストラクタを置くと、ちょっとした明快さの利息が複利で効いてくる。**
 3. **フィールドに触れるすべてのメソッドが `const fn`。** 構造体は `i64` フィールド 1 つだけ。state を mutation しない処理は trivially const-evaluable だ。将来のコードは `InsuranceFund` を const 文脈（config struct のデフォルトなど）で使える。読者にも「このメソッドは fancy なことをしません」と伝わる。**`const fn` は能力であると同時にドキュメントだ。**
 4. **`new` と `empty` に `#[must_use]`。** Fund を作って捨てるのはほぼ常に bug だ — 大抵リファクタリングの残骸。`#[must_use]` でコンパイラに警告させる。**「明らかに間違っているが見落としやすい」ケースをマーカー属性が拾う。**
 5. **`Default::default()` は手動 impl で、derive ではない。** Derive した `Default` は `balance: i64` から `balance: 0` を生む — 結果は同じだ。だが、手動 impl で `Self::empty()` を呼べば *意図* が明示される: 「デフォルト fund は empty fund だ — 設計でそうしている、偶然そうなったのではない」。**Default 値が「ゼロ初期化」を超える semantic な意味を持つときは、手動 impl の価値がある。**

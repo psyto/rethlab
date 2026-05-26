@@ -178,7 +178,7 @@ Insurance fund が空でさらに別のアカウントが Underwater になっ�
 
 > 💡 **なぜ ADL は orderbook を通さないのか?**
 >
-> 「不足が出たなら、underwater の position を市場でガンガン force-close すればいい」と思うかもしれない。だが、その瞬間に orderbook には逆方向の巨大な market order が連射されることになる — bid stack を突き抜けて mark を更にクラッシュさせ、その下落で別の position が Underwater 化する。**フィードバックループが暴走する。**
+> 「不足が出たなら、underwater の position を市場でガンガン force-close すればいい」と思うかもしれない。だが、その瞬間に orderbook には逆方向の巨大な market order が連射される— bid stack を突き抜けて mark を更にクラッシュさせ、その下落で別の position が Underwater 化する。**フィードバックループが暴走する。**
 >
 > ADL はこのループを断ち切るために、**orderbook を一切経由しない**設計になっている:
 >
@@ -186,7 +186,7 @@ Insurance fund が空でさらに別のアカウントが Underwater になっ�
 > - 相殺された 2 つの position は、両方とも venue の books から消える
 > - Orderbook の bid / ask には 1 satoshi も触れない → 価格に追加のクラッシュ圧をかけない
 >
-> つまり ADL は「市場での清算」ではなく **「帳簿上の名寄せ・netting」** — システム内部で勝者と敗者を直接マッチさせて、両者の position を同時に消去するオフチェーン (正確には off-orderbook) な相殺処理だ。Stage 10c (multi-account scanner) の実装でも、ADL パスは `book.submit()` を呼ばず、`Position` レコードを直接 mutate して削除する。**「市場を汚さずに、帳簿の上だけで損失を勝者に転送する」** — これが ADL の本質であり、極めて稀にしか発動しないように設計されている理由でもある。
+> つまり ADL は「市場での清算」ではなく **「帳簿上の名寄せ・netting」** — システム内部で勝者と敗者を直接マッチさせて、両者の position を同時に消去するオフチェーン (正確には off-orderbook) な相殺処理だ。Stage 10c (multi-account scanner) の実装でも、ADL パスは `book.submit()` を呼ばず、`Position` レコードを直接 mutate して削除する。**「市場を汚さずに、帳簿の上だけで損失を勝者に転送する」** — これは liquidation の連鎖が板をさらに壊して次の清算を呼ぶ **デス・スパイラル (death spiral)** を遮断するための、最後のファイアウォールである。
 
 ADL は **非常に不評** だ。マーケットの crash を正しく予測して short で勝っているトレーダーは、勝ち分をもっと伸ばしたいので force-close されたくない。ただし insurance fund がカバーできない以上、*誰かが loss を引き受けなければならない* — 現金は保存則に従う。ADL はその loss を、その move から最も「勝った」側に分配する仕組み。
 
@@ -256,7 +256,7 @@ L2 のマージン要件から ADL まで、損失を吸収する 4 層が下に
 
 ## Primer の終わり
 
-これで以下を理解したことになる:
+これで以下を理解した: 
 
 - **Perp とは何か**（L0）
 - **Funding が mark を index に anchor する仕組み**（L1）

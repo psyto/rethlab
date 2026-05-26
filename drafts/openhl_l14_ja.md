@@ -528,7 +528,7 @@ git checkout main
 Engine API が、separate な finalization layer を持つ chain 用に設計されたからだ。Ethereum mainnet では head は slot ごとに (12 秒で) 進められるが、block が「safe」になるのは 32 slot 後 (Casper checkpoint)、「finalized」になるのは 64 slot 以降だ。こちらの v0 single-validator chain にはそんな区別はない — どのコミットも final だ。3 つすべてを同じ hash に設定するのが v0 の簡略化で、multi-validator OpenHL になれば区別する。
 
 **Q: マッチする `newPayload` なしで `ForkchoiceUpdated` を受け取ると、engine は実際には **何を** するのか?**
-`PayloadStatusEnum::Syncing` で応答し、内部的には peer から block を sync しようとし始める。こちらの isolated な dev node には peer がいないので、sync リクエストはどこにも届かない。Engine はその hash 用の「block 待ち」状態にただ座っているだけになる。**それで構わない** — L14 の目的で、engine に canonical chain を advance させる必要は実は無い。`newPayload` 経由で実 block body を導入する将来コースの教材が、このギャップを埋めることになる。
+`PayloadStatusEnum::Syncing` で応答し、内部的には peer から block を sync しようとし始める。こちらの isolated な dev node には peer がいないので、sync リクエストはどこにも届かない。Engine はその hash 用の「block 待ち」状態にただ座っているだけになる。**それで構わない** — L14 の目的で、engine に canonical chain を advance させる必要は実は無い。`newPayload` 経由で実 block body を導入する将来コースの教材が、このギャップを埋める。
 
 **Q: Await ではなく、`ForkchoiceUpdated` を非同期に送って即座に return できるか?**
 できる — `tokio::spawn(handle.fork_choice_updated(...))` で fire-and-forget にできる。だが await は fast (SYNCING で sub-millisecond) で、レスポンスをログするオプションも与えてくれる。Async-spawn アプローチはテストの順序も難しくする (テスト exit 前に engine が update を見るか?)。**Await が安全なデフォルトだ。**

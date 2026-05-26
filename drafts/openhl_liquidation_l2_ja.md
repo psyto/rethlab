@@ -214,7 +214,7 @@ bridge が両ケースで *別の挙動* を取らねばならないからだ。
 
 **Q5: `margin_health` は flat なポジションに対して `Option<MarginHealth>` を返すべきか?**
 
-いいえ。flat なポジションは `MarginHealth::Safe` を返す（notional がなく、満たすべき margin 要件もないため）。`Option` で包んでしまうと、すべての呼び出し側に `None` を明示処理させることになる — 「flat = safe」は曖昧さがないのに、だ。**型システムですでに扱える状態をわざわざ `Option` で表現しない。**
+いいえ。flat なポジションは `MarginHealth::Safe` を返す（notional がなく、満たすべき margin 要件もないため）。`Option` で包んでしまうと、すべての呼び出し側に `None` を明示処理させる— 「flat = safe」は曖昧さがないのに、だ。**型システムですでに扱える状態をわざわざ `Option` で表現しない。**
 
 ## 次のレッスン (L3)
 

@@ -238,7 +238,20 @@ forge test --match-contract CounterInvariantTest -vvv
     Last invariant: invariant_NumberEqualsIncrementCount
 ```
 
-**報告された反例は、わずか 2 コールの系列にまで圧縮されている。** Foundry は最初におそらく ~30 ランダム call 後に失敗を見つけ、shrinker が reduce した。大半の call を drop し、`badSetNumber(0xa3b8...)` を `badSetNumber(42)` まで半分にし、最小失敗が ちょうど `badSetNumber(42)` の後に `wrappedIncrement()` を必要とすることを発見した。ここでの因果連鎖を call-by-call で追うと押さえどころが見える。`badSetNumber(42)` は *リバートせずに成功する* — `counter.setNumber(42)` は合法な操作で、ただ ghost を bypass するだけだ。`fail_on_revert = false` の設定により、Foundry はこの call 自体を問題視せず、state mutation を素通しさせる。結果、`counter.number() = 42` のまま `ghostIncrementCount` は `0` で取り残される。この時点で保存則はすでに崩壊しているが、invariant runner はまだそれを知らない。invariant は *次の* call が返ってきた後にだけ評価されるからだ。Foundry は次の Handler method に進み、`wrappedIncrement()` を呼び、その call が clean に返り、*そこで* `invariant_NumberEqualsIncrementCount` が走る: `counter.number() == handler.ghostIncrementCount()` → `43 != 1` → 失敗。Shrinker が 2 コール両方を残すのは、両者が組み合わさってこそ「乖離発生 → 評価点に到達」までの最短 trace を形成するからだ。
+**報告された反例は、わずか 2 コールの系列にまで圧縮されている。** Foundry は最初におそらく ~30 ランダム call 後に失敗を見つけ、shrinker が reduce した。大半の call を drop し、`badSetNumber(0xa3b8...)` を `badSetNumber(42)` まで半分にし、最小失敗が ちょうど `badSetNumber(42)` の後に `wrappedIncrement()` を必要とすることを発見した。
+
+ここには、インバリアント・テストにおける極めて重要な概念である**「因果的タイムラグ（Causal Time Lag）」**が体現されている。
+
+### インバリアント検証における「因果的タイムラグ」とは？
+インバリアントは各ハンドラーコールの**後**に評価される。つまり、**状態を壊したコール**と**失敗が観測されるコール**は一致しないことがある。
+
+このテストの因果連鎖は次のとおり。
+1. `badSetNumber(42)` は成功する（`fail_on_revert = false`）。
+2. `counter.number()` は `42` になるが、`ghostIncrementCount` は `0` のまま。
+3. 次に `wrappedIncrement()` が成功し、`counter.number()` は `43` になる。
+4. その直後の invariant 評価で `43 != 1` が露呈して失敗する。
+
+`forge` のシーケンスシュリンカーは、無関係なコールを削ってこの最小系列に収束させる。長大なトレースを読む代わりに、原因と結果が最短で見える形を直接受け取れる。
 
 **続行する前に `CounterHandler.sol` から `badSetNumber` を削除する。** 保存則規律は、すべての Handler method が target と ghost を lockstep で更新する場合だけ成立する。
 
@@ -385,4 +398,3 @@ L3 は Module 1 (Test discipline) の sortOrder 2 に入る:
 - **`ghost 変数`** は技術用語として ghost を英語のまま残し、変数だけ和訳。`シャドウ仕様 (shadow specification)` も同様の混合体。
 - **保存則 (Conservation law)** は L9/L10/L13 から確立した用語。`不変条件 (invariant)` は固有名詞 `invariant_*` の機械的訳出を避け、文脈で「保存則」「invariant」を使い分け。
 - **`load-bearing`** は英語のまま使用。L0/L1/L2 と同じ。
-

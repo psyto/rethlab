@@ -178,6 +178,8 @@ timeline (seconds)
               ──► last_settled_at reset to 1_007_200
 ```
 
+All timestamps in this timeline are Unix **seconds**. So `+3600` is one full hour, and `+3599` is exactly "one second short" (not a millisecond-scale delta).
+
 The load-bearing point of this test is that **Tick 1's success does not permanently unlock the clock** — Tick 3 only fires because another full interval has elapsed since Tick 1. That "gate closes again" invariant only becomes observable with three calls in sequence.
 
 ### Step 3: Add `capped_rate_when_premium_extreme`

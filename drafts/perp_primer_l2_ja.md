@@ -87,6 +87,7 @@ Leverage は informational だ。エンジンは「leverage 上限」を直接�
 - ギャップがなければ、ぎりぎりで開いた position は不利な tick が来た瞬間に必ず liquidate する
 - ギャップは venue がトレーダーに与える *バッファ*。Liquidation に至る前に意思決定する（collateral を足す、partial close する、など）時間を確保する
 - **同時に、これはシステム側の防衛ラインでもある。** Maintenance を割った瞬間に「即破綻」ではなく、清算エンジンが force-close 注文を市場に流し込んで約定するまでの **スリッページ + 起動レイテンシの吸収余地** を、このギャップが用意している。L3 で見る force-close 注文は、この余地を予算として使って執行される — 余地が薄ければ薄いほど、insurance fund が負担する不足分が膨らむ。
+- **反例で見る必然性 (Initial = Maintenance が危険な理由)**: もし initial と maintenance が同じ 2% なら、2.01% で開いたポジションは 1 tick の微小逆行だけで即 Liquidatable になる。急変時は、清算注文が板に入り約定するまでの短い遅延中に ratio が 0% を割って Underwater へ突き抜ける確率が高い。**Initial と Maintenance のギャップは、トレーダー保護だけでなく、システム全体のソルベンシーを守る「スリッページ・クッション」** そのものだ。
 
 **Margin ratio** が中心的な量:
 

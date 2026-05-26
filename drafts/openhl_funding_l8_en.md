@@ -232,7 +232,7 @@ Four methods:
 
 Construct the clock. **`const fn`** so `static DEFAULT_CLOCK: FundingClock = FundingClock::new(...)` is possible at compile time. **`#[must_use]`** because constructing a clock and discarding it is always a bug.
 
-The doc explains the timing semantics: "The first tick after `genesis_time + interval_secs` will fire." A caller setting `genesis_time = 1_000_000` and `interval_secs = 3600` knows the first tick fires at or after `1_003_600`. **No surprises.**
+The doc explains the timing semantics: "The first tick after `genesis_time + interval_secs` will fire." A caller setting `genesis_time = 1_000_000` and `interval_secs = 3600` knows the first tick fires at or after `1_003_600`. **No surprises.** Timestamps here are Unix **seconds**, not milliseconds (`+3600` means exactly one hour).
 
 #### `params()` and `last_settled_at()` accessors
 

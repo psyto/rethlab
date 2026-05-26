@@ -123,7 +123,7 @@ L10 で初めて、これまでの 4 モジュールの配管が**本物の Reth
 
 **L10 が証明するのは「これら 4 つが同時に成立する」こと** — どれか 1 つでも配管が外れていたら、`current_best_bid()` か `pending_fill_count()` のどちらかで失敗する。**unit test を全部 green に保ったまま、`NodeBuilder` チェーンのタイポ 1 つで production が壊れる** という現実的な regression を、この test が 1 本で塞ぐ。
 
-これが **コースのマイルストーン** だ。L10 を終えれば、47 個の unit test で証明したアーキテクチャが、たった 1 つの integration test でも証明される — 上の結合図が示すように、実際の Reth ノードプロセス、実際の bridge オブジェクト、両方の precompile、両方の global、そしてマッチングエンジンが**単一のインプロセス空間で完全に噛み合い**、end-to-end で駆動 (exercise) されることになる。
+これが **コースのマイルストーン** だ。L10 を終えれば、47 個の unit test で証明したアーキテクチャが、たった 1 つの integration test でも証明される — 上の結合図が示すように、実際の Reth ノードプロセス、実際の bridge オブジェクト、両方の precompile、両方の global、そしてマッチングエンジンが**単一のインプロセス空間で完全に噛み合い**、end-to-end で駆動 (exercise) される。
 
 これを動かすために必要な **プロダクションコードの変更は 1 つだけ**：`place_order` を `pub(crate)` にすること。`live_node.rs` 内、sibling モジュールにいる integration test から直接呼べるようにするためだ。
 
@@ -462,6 +462,7 @@ L9 より 1 個多い（47 → 48）。**unit test 47 個 + integration test 1 �
 - **`error[E0603]: function 'place_order' is private`** — Step 1 を忘れている。`fn place_order` のシグネチャに `pub(crate)` を追加する。
 - **`error[E0277]: 'NodeBuilder<...>' does not satisfy the trait...`** — NodeBuilder チェーンのタイポ。L3 の `reth_dev_node_with_openhl_executor` テストと比べる — 同じチェーン、同じメソッド順だ。
 - **テストが永久にハングする** — `worker_threads = 1` か single-threaded な tokio を使っている。`flavor = "multi_thread", worker_threads = 4` に変える。
+- **ハングせず高速で失敗する (`pending_fill_count == 0`)** — `place_order(...)` や `launch().await` などの `.await` 抜けを疑う。Future は lazy なので `.await` しない限り実行されず、その場で drop される。これはハングではなく **silent skip**。
 - **`submit_order` の後で `current_best_bid()` が `None`** — `bridge.new()` 内で `install_clob` が実際には呼ばれていない。L4 の bridge 変更を再確認する。もしくは、別のテストが並行で `uninstall_clob()` を呼んでいる可能性もある。global を触る全テストで TEST_SERIALIZER パターンを使っているか確認する（ほとんどは L5 で導入済みのはず）。
 - **`place_order` の後で `pending_fill_count` が 0** — おそらく `bridge.new()` 内で `install_fill_sink` が呼ばれていない（L9 の Step 7）か、`place_order` の fill-routing ブロックにバグがある（L9 の Step 3 — `drop(book)` が sink lock の前にあることを確認する）。
 - **`assertion failed: bridge.pending_fill_count() == 1`（実際は 0）** — `place_order` の submit が約定を 0 個しか返していないため、何も push されていない。手書きの calldata を確認する：account=7、side=1（Sell）、price=200、qty=33。とくに `calldata[63] = 1` を Sell にしているか — 0 だと Buy になり、クロスしない。
@@ -478,7 +479,7 @@ L9 より 1 個多い（47 → 48）。**unit test 47 個 + integration test 1 �
 
 4. **「カスタム EVM ノードと bridge を一緒に spawn する」ヘルパーは作らない。** Reth の `NodeAdapter` のジェネリック複雑度が、戻り型の命名を厄介にする。インライン合成は 1 回書くぶんは不格好だが、読むのは簡単だ。**テストコードで早すぎる抽象化を行うコストは、プロダクションコードと同じ — デバッグすべきコードパスが増える。** 3 つ目の caller が現れるのを待ってから抽象化すればよい。
 
-5. **正直に先送りする：RPC の `eth_call` ラウンドトリップ。** このテストは Reth の RPC サーバを通らない。JSON-RPC 経由で `clob_read_best_bid` を呼ぶ実際の Solidity コントラクトは、追加の経路（RPC サーバ、transaction simulation など）を exercise することになる — そこまでは証明していない。**こちらが証明しているのは「Reth が動くこと」ではなく、「openhl が Reth に正しく plug-in できること」だ。** RPC レイヤは Reth の責任なので、そこまで再テストすると、openhl ではなく Reth を validate することになってしまう。
+5. **正直に先送りする：RPC の `eth_call` ラウンドトリップ。** このテストは Reth の RPC サーバを通らない。JSON-RPC 経由で `clob_read_best_bid` を呼ぶ実際の Solidity コントラクトは、追加の経路（RPC サーバ、transaction simulation など）を exercise する— そこまでは証明していない。**こちらが証明しているのは「Reth が動くこと」ではなく、「openhl が Reth に正しく plug-in できること」だ。** RPC レイヤは Reth の責任なので、そこまで再テストすると、openhl ではなく Reth を validate することになってしまう。
 
 ## 答え合わせ
 
@@ -489,7 +490,7 @@ diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/prec
 diff -u ~/code/my-openhl/crates/evm/src/live_node.rs ./crates/evm/src/live_node.rs
 ```
 
-L10 を終えると、どちらの diff も **空** になるはず。あなたのコードは Stage 9c+ の HEAD（9c+ の拡張で延長された Stage 9d test 込み）と一致する。**これで Stage 9 が閉じる。** openhl の Stage 9 のすべてのマイルストーン — 9a（カスタム EVM bootstrap）、9b（live な CLOB read）、9c（write path）、9c+（約定を bridge に route）、9d（bridge integration） — を、このコースで一通り再現したことになる。
+L10 を終えると、どちらの diff も **空** になるはず。あなたのコードは Stage 9c+ の HEAD（9c+ の拡張で延長された Stage 9d test 込み）と一致する。**これで Stage 9 が閉じる。** openhl の Stage 9 のすべてのマイルストーン — 9a（カスタム EVM bootstrap）、9b（live な CLOB read）、9c（write path）、9c+（約定を bridge に route）、9d（bridge integration） — を、このコースで一通り再現した。
 
 戻す：
 

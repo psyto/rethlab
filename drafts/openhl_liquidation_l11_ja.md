@@ -488,7 +488,7 @@ L11 は SHA pin を `0a8464e`（Stage 10c — multi-account liquidation scanner�
 - **「メカニズムの前に型語彙」フレーミング** はコース内で 3 度目の登場。L8 が `WithdrawOutcome` をメソッドなしで宣言。L10 が `SolventClose` / `UnderwaterClose` を宣言してすぐ使用。L11 が scanner 型 4 つを宣言してどれも使わない。繰り返しは読者にこれが *規律ある選択* であって偶然ではないと教える。
 - **「fund を値で所有」** が L11 の最も深い設計フレーミングだ。Goal、Step 5 「押さえる点」#5、anti-fluency callout、設計の振り返り #2 で再登場する。読者がこれを内面化すると、後で「shared を意識して」`Arc<Mutex<...>>` に refactor することを思いとどまる。Hyperliquid の scanner は single-mutator; Solana の vault もそう。パターンは generalize する。
 - **`unfilled_deficit` フィールドは Stage 10d cross-reference を明示的に得る。** Stage 10c は Stage 10d が consume する signal を生むよう engineer されている。L11（そして `ScanReport` doc）でこれを名指すことで staging が可視化される — 読者は *次の* openhl stage が ADL を加えて cascade を閉じることを理解する。
-- **L11 では新規 test なし。** 意図的な選択だ — types-only レッスンには test すべき behavior がなく、test を強制すると logic ではなく compilation をテストすることになる。読者は `cargo check` でファイルが parse することを確認し、`cargo test` で L0-L10 の 55 テストが依然 pass することを確認する。**L11 はコース内で新規 test がない唯一のレッスン; 次のレッスン preview がそれを名指す。**
+- **L11 では新規 test なし。** 意図的な選択だ — types-only レッスンには test すべき behavior がなく、test を強制すると logic ではなく compilation をテストする。読者は `cargo check` でファイルが parse することを確認し、`cargo test` で L0-L10 の 55 テストが依然 pass することを確認する。**L11 はコース内で新規 test がない唯一のレッスン; 次のレッスン preview がそれを名指す。**
 
 ### JA 特有のスタイル決定
 

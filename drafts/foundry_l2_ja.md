@@ -212,7 +212,21 @@ Suite result: ok. 4 passed; 0 failed; 0 skipped
 
 **4 test、すべて 1000 iteration で green。** 新規 fuzz test は iteration count によらず ~50ms で走る。各 iteration が cheap だからだ。
 
-> ⚠️ **`vm.assume` の罠: 緩いフィルタを書け、ピンポイントなフィルタを書くな。** 良い `vm.assume(x < type(uint256).max)` のような predicate は $2^{256}$ 空間から *1 つの* 値だけを除外する。fuzzer はほぼ常に valid な入力を得る。一方で `vm.assume(x == 42)` のような「特定のピンポイント値を期待する」predicate を書くと、fuzzer が $2^{256}$ から偶然 `42` を引く確率は実質ゼロで、`max_test_rejects` (デフォルト 65536) を使い切って `TooManyAssumptions` で自爆する。**経験則: `vm.assume` は入力空間のごく一部 (典型的には < 1%) しか除外しないときだけ使う。pinpoint な値を test したいなら、それは fuzz test ではなく unit test だ。**
+> [!WARNING]
+> **「ピンポイント・フィルタリングの罠」と `TooManyAssumptions` エラー**
+>
+> `vm.assume` は入力空間の境界条件（オーバーフロー値やゼロなど）のような、**ごく一部の異常値（通常は全体の 1% 未満）を除外するためだけ**に使うべきだ。
+>
+> もし以下のように「特定のピンポイント値のみを通過させる」フィルタを記述した場合：
+> ```solidity
+> vm.assume(x == 42); // ✗ 極めて危険なアンチパターン
+> ```
+> ファザーが $2^{256}$ の巨大な空間から偶然 `42` を引き当てる確率は実質的にゼロだ。その結果、テストランナーは有効な入力を生成できず、フィルタによる破棄上限である `max_test_rejects`（デフォルト 65,536 回）を瞬時に使い切り、**`TooManyAssumptions` エラー（または `Result::unwrap()` のパニック）で自爆**する。
+>
+> - **本質的な問題**： `vm.assume(x == target)` と書くことは、せっかくのファズテストを「非効率な単一値のユニットテスト」へ強制改変していることに他なりません。
+> - **対策と指針**：
+>   - 特定の値（`42` や `0xdead...` など）における挙動をピンポイントで検証したい場合は、ファズテストではなく**通常のユニットテスト（`test_...`）として記述**する。
+>   - ファザーは広範なパラメータ空間の不変関係をチェックするものであり、特定のシナリオテストを代替するものではありません。適材適所で使い分けましょう。
 
 ### Step 4: Test を意図的に壊して shrinker を見る
 
@@ -383,4 +397,3 @@ L2 は Module 1 (Test discipline) の sortOrder 1 に入る:
 - **Solidity / TOML / bash コードと in-code コメントは英語のまま**。Reader が直接 copy-paste する。
 - **`load-bearing` は英語のまま使用**。Liquidation シリーズと同じ。
 - **`普遍量化` は意訳的すぎず natural** — `universally-quantified` の直訳より JA reader に通じる。技術用語として確立されている。
-

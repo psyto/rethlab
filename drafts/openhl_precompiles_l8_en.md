@@ -190,6 +190,8 @@ The "Side note" at the bottom names the next gap — fills returned by `submit` 
 > 🛑 **Anti-fluency.** "Why is `_result` underscored if we want to suppress the unused warning?" **`let _result = ...` and `let _ = ...` both suppress the warning.** The difference: `let _result` *binds* the value and drops it at end of scope. `let _ = ...` drops the value *immediately* (before any subsequent statement). For `submit`, either works because nothing in the function reads `_result` later. But `let _result` is conventional when the value has a meaningful name and we plan to use it later — like in L9, where we'll bind it to a real name and route it. **`_result` is a "future intent" marker.**
 
 > 🛑 **Anti-fluency.** "Why explicitly `drop(book)` if the lock would release at end-of-scope anyway?" **Because the encoding and Ok() return are still pending.** If we don't `drop(book)`, the Book lock is held across the `out[24..32].copy_from_slice(...)` and the `Ok(PrecompileOutput::new(...))` construction. Neither needs the lock. Holding it costs concurrent readers and other precompiles parallel access. **Explicit drop = "I'm done with this lock, I don't need it for the rest of the function."** Compiler-optional, but it shrinks the lock-held window noticeably in hot paths.
+>
+> Modern Rust with NLL usually drops at last use automatically, so this is mechanically optional. We still keep explicit `drop(book)` as a maintenance guardrail: if later edits add another lock-taking step (e.g. sink routing), the lock boundary remains explicit and review-friendly.
 
 ### Step 2: Extend `place_order_rejects_malformed_input` with `depth_bid` checks
 

@@ -13,25 +13,32 @@
 ````markdown
 # Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律
 
-## このコースで作るもの
+## このコースで得るもの
 
-rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL）のどれかを通過していれば、すでに *規律* は身についている: pure-compute プリミティブ、`debug_assert!` + `saturating_arithmetic` で守られた state machine、`proptest!` で証明された保存則、byte-for-byte の答え合わせ。**この規律はそのまま Solidity contract に 1:1 で transfer する。Foundry はその transfer を mechanical にする道具だ。**
+rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL）を通過していれば、すでに次の規律は身についている。
 
-完走後にはこうなる:
+- pure-compute プリミティブ
+- `debug_assert!` + `saturating_arithmetic` で守る state machine
+- `proptest!` による保存則の検証
+- byte-for-byte の答え合わせ
 
-- **`forge init` で initialize された Solidity プロジェクト** — build、test、fuzz が sub-second の feedback loop でローカルで回る。
-- **`forge fuzz` のハンズオン経験** — Solidity 版の `proptest!`。shrinking、input distribution、最小失敗入力の特定 — Liquidation L9 で学んだワークフローと同一。
-- **`forge invariant` の multi-call testing** — per-scan な保存則（Liquidation L13）に最も近い Solidity プリミティブ。`Handler` を定義し、何千通りのランダムなメソッド呼び出し系列を回し、各ステップで property を assert する。
-- **`cast` の筋肉記憶** — production の trader / engineer が 1 日に何十回も叩く chain CLI。Storage slot を読み、view 関数を呼び、ABI を decode する。
-- **`anvil --fork-url` + cheatcodes** — `vm.deal` / `vm.warp` / `vm.prank` でローカルにメインネットを再現し、state-aware testing を回す。Cheatcodes の正体は precompile（openhl Precompiles コース参照）。Foundry はそれを Rust ではなく Solidity 経由で露出させているだけだ。
-- **Capstone**: openhl-liquidation Stage 10b の `InsuranceFund` を Rust から Solidity に port し、L9 の保存則 invariant を Foundry で書き直し、同じ定理を 2 言語で mechanical に証明する。
+このコースの目的は、その規律を Solidity contract に 1:1 で移植することだ。Foundry は、その移植を機械的に回すための実行環境である。
 
-掴むこと:
+完走後の到達点:
 
-- **Foundry が Solidity ツール戦争に勝った理由**: Rust 製、single-binary、sub-second feedback、REVM を直接 embed する。その REVM こそ、openhl 系コースで内部を覗いてきた REVM そのものだ。
-- **Hardhat / Truffle / Brownie が後退した理由**: JS ベース、遅い、EVM へのアクセスが embedded execution ではなく remote fork 経由で間接的だった。
-- **`forge fuzz` と `forge invariant` が内部で実際にやっていること** — rethlab が openhl の `crates/evm` で教えているのと同じパターンで REVM を orchestrate し、それを Solidity 側の test として露出させているだけ。
-- **なぜ cheatcodes が precompile なのか** — この設計判断ひとつが、Foundry の test 環境を JS ベースの代替より圧倒的に速くしている。
+- **`forge init` で最小構成を立ち上げる。** build / test / fuzz のループをローカルで高速に回せる。
+- **`forge fuzz` を Rust の `proptest!` と同じ感覚で使う。** shrinking、失敗入力の最小化、再実行まで一通り実践する。
+- **`forge invariant` で multi-call 保存則を検証する。** `Handler` を介してランダムな呼び出し列を作り、各ステップで不変条件を確認する。
+- **`cast` を日常的に使える状態にする。** storage 読み取り、view 呼び出し、ABI decode を手癖化する。
+- **`anvil --fork-url` + cheatcodes で state-aware testing を行う。** `vm.deal` / `vm.warp` / `vm.prank` を使い、実チェーン状態に近い検証を行う。
+- **Capstone:** openhl-liquidation Stage 10b の `InsuranceFund` を Rust から Solidity に移植し、同じ定理を 2 言語で検証する。
+
+このコースで理解すること:
+
+- **なぜ Foundry が標準になったか。** Rust 製の single binary で、REVM を同一プロセスで直接扱えるため。
+- **なぜ JS 系ツールだけでは不足するか。** IPC/JSON-RPC 経由の間接実行が増え、重い検証ほど遅延が効くため。
+- **`forge fuzz` / `forge invariant` の正体。** openhl の `crates/evm` と同種の REVM 駆動パターンを、Solidity テストとして表面化したもの。
+- **なぜ cheatcodes が precompile なのか。** テストから EVM 状態へ直接アクセスでき、検証ループを短く保てるため。
 
 ## このコースが存在する理由
 
@@ -58,7 +65,13 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
 
 ## なぜ Hardhat / Truffle / Brownie ではなく Foundry なのか
 
-歴史を 1 段落で。**Foundry は 2022-2024 年にかけて JS ベース stack を置き換えた — Truffle は終了、Hardhat は主に deploy script や frontend 連携用途で生き残るのみ、L1 / contract / engine 開発では Foundry が事実上の業界標準 (de facto standard) になった。** 本コースのターゲット層 (L1 / infra エンジニア) にとって、**Foundry の習得は競争優位ではなく前提知識 (commodity prerequisite) だ。** 本コースが Foundry を教えるのは、すでに持っている規律をそのまま transfer するため。Foundry が勝った理由は 3 つ。
+背景を短く整理する。
+
+- 2022-2024 年にかけて、Foundry は JS ベースの主要ツールを置き換えた。
+- Truffle は終了し、Hardhat は主にデプロイやフロント連携で使われる。
+- L1 / contract / engine 開発では、Foundry が事実上の標準になった。
+
+このコースの対象（L1 / infra エンジニア）にとって、Foundry は競争優位ではなく前提知識である。本コースは新しい作法を教えるのではなく、既存の Rust 規律を Solidity 側へ移すことに集中する。Foundry が選ばれた理由は次の 3 点だ。
 
 1. **速度。** Foundry の test runner は REVM を直接 in-process で embed する。JS test runner と別プロセスの `ganache` / `hardhat node` をつなぐ IPC round-trip がない。Hardhat で 60 秒かかる 1000-test スイートが、`forge test` なら 2-3 秒で終わる。アーキテクチャ的な違い:
 
@@ -88,7 +101,7 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
       └─────────────────────────────────────────────────────────┘
    ```
 
-   この 20-30× の高速化は optimization ではない — process boundary を取り除いた アーキテクチャ的な必然だ。
+   この 20-30× の差は、最適化の積み上げではない。process boundary を外したアーキテクチャ差によるものだ。
 2. **Fuzzing が first-class primitive。** Hardhat では property-based testing は plugin 扱いだった。Foundry は built-in で出荷した — shrinking、corpus persistence、sequenced call 用の invariant testing 込みで。最も近い JS 等価物 (`fast-check` + Hardhat) は非自明な配線を要求する。
 3. **Cheatcodes-as-precompiles。** Hardhat の `evm_snapshot` / `evm_increaseTime` は JSON-RPC method — リモートノードに state を変えるよう依頼する。Foundry の `vm.warp` / `vm.deal` / `vm.prank` はアドレス `0x7109709ECfa91a80626fF3989D68f67F5b1DD12D` の magic precompile への Solidity 呼び出し。これが **REVM の state を内側から hack する** — 同一プロセス、IPC なし、リモートノードへの信頼も不要。openhl Precompiles コース (Stage 9) を通った読者には、これは *Rust で学んだ「precompile-as-EVM-superpower」パターン* が Solidity 経由でテスト用に露出されたものだと分かる。速く、composable、何より contract と同じ Solidity ファイル内で testable。
 
@@ -225,4 +238,3 @@ L0 は新規コースの最初のレッスン、module 0 / sortOrder 0:
 - **Solidity コードと Rust コードは英語のまま**（コメント含めて）。答え合わせとの byte-for-byte 一致のため。
 - **「規律」は和語維持** — 「discipline」のカタカナ化（ディシプリン）は読みにくい。英語専門用語と並ぶときの文脈で「規律」が最適。
 - **「load-bearing」は英語のまま** — Liquidation シリーズ全体で確立された表現。
-

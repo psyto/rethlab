@@ -137,7 +137,7 @@ pub fn margin_health(
 
 1. **カスケード順が `Underwater` を最初に check する。** 負の ratio は `< maintenance_bps` も満たすので、Liquidatable を最初に check すると、すべての Underwater アカウントが Liquidatable に誤分類されてしまう。**不変量: 各分岐の条件は、前の分岐が捕まえたものをすべて排除している。** Underwater（`< 0`）が最も厳しく、そこから Liquidatable（`< maintenance`）、AtRisk（`< initial`）、最後に Safe（残り）へと内側に narrow していく。
 
-2. **しきい値はすべて `<`、`≤` ではない。** Ratio が `maintenance_bps` に等しいアカウントは *まだ* Liquidatable ではなく、AtRisk だ。慣例的な読み方は「maintenance margin は *上にとどまる* べき線で、strict に超えてから liquidation 対象になる」。Doc がこれを明示し、Step 2 のテストが強制する。**Strict inequality は、しきい値そのものがより良い health state に属する、ということを意味している。**
+2. **しきい値はすべて `<`、`≤` ではない。** Ratio が `maintenance_bps` に等しいアカウントは *まだ* Liquidatable ではなく、AtRisk だ。慣例的な読み方は「maintenance margin は *上にとどまる* べき線で、strict に超えてから liquidation 対象になる」。Doc がこれを明示し、Step 2 のテストが強制する。**Strict inequality は、しきい値そのものがより良い health state に属する、を意味している。**
 
 3. **`i64::from(params.initial_margin_bps)` が u32 → i64 を widen する。** フィールドは `u32`（メモリ節約。bps 値は ~40 億まで十分な範囲だ）。Ratio は `i64`（`margin_ratio` の signed 除算によって型がそうなっている）。Rust では異なる integer 型同士の比較はコンパイルエラーになる。境界で widening しておけば、本体の比較はクリーンに保てる。**Params ごとに 1 回キャストする。カスケード本体は純粋な i64 < i64 として読める。**
 
@@ -298,7 +298,7 @@ L6 の後:
 
 **Q1: なぜ misconfigured な params（maintenance ≥ initial）のケースに備えて `Result<MarginHealth, ...>` を返さないのか?**
 
-関数は total（全域関数）だ — どんな入力にも、定義された出力が対応する。Misconfigured な params（maintenance == initial、あるいは maintenance > initial）でも、すべてのアカウントは 4 variant のどれかに分類される。意味的に間違った結果ではあるが、定義された結果ではある。`Result` を返してしまうと、*params を妥当に組み立てる bridge からは決して起きない* `MisconfiguredParams` エラーを、すべての呼び出しサイトに処理させることになる。**Total function は圧倒的に compose しやすい。パラメータの妥当性はシステムへの入力境界 (ロード時 / config パース時) で検証を完了させ、下流のドメイン計算層 (`margin_health` などの分類器) では不変量が維持されているものとして 100% 信頼する** — これは "Parse, don't validate" として知られる規律で、検証ロジックを境界に集中させ、ドメイン層を total function で構成する設計パターンだ。
+関数は total（全域関数）だ — どんな入力にも、定義された出力が対応する。Misconfigured な params（maintenance == initial、あるいは maintenance > initial）でも、すべてのアカウントは 4 variant のどれかに分類される。意味的に間違った結果ではあるが、定義された結果ではある。`Result` を返してしまうと、*params を妥当に組み立てる bridge からは決して起きない* `MisconfiguredParams` エラーを、すべての呼び出しサイトに処理させる。**Total function は圧倒的に compose しやすい。パラメータの妥当性はシステムへの入力境界 (ロード時 / config パース時) で検証を完了させ、下流のドメイン計算層 (`margin_health` などの分類器) では不変量が維持されているものとして 100% 信頼する** — これは "Parse, don't validate" として知られる規律で、検証ロジックを境界に集中させ、ドメイン層を total function で構成する設計パターンだ。
 
 **Q2: `margin_health` を sorted thresholds 配列と binary search で、もっと「データ駆動」にできないか?**
 

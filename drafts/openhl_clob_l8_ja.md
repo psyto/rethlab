@@ -113,7 +113,7 @@ workspace = true
 
 `proptest` は workspace `Cargo.toml` で既に宣言されている (workspace に追加する必要はない — L1 Architect の最初のコースから workspace dep として入っている)。`[dev-dependencies]` block に置けば test build 時のみ利用可能になり、production build には含まれない。
 
-> 🛑 **やりがちな勘違い。** 「`[dependencies]` に入れて non-test コードでも使えるようにすればよいのでは?」 **そうすると `openhl-clob` のすべての consumer が `proptest` を runtime dependency として抱えることになる。** スマートコントラクト、validator、indexer — どれも matching engine を **使う** のに property test インフラを必要としない。`[dev-dependencies]` の規律で、テストインフラは必要なところにしか入れないようにする。
+> 🛑 **やりがちな勘違い。** 「`[dependencies]` に入れて non-test コードでも使えるようにすればよいのでは?」 **そうすると `openhl-clob` のすべての consumer が `proptest` を runtime dependency として抱える。** スマートコントラクト、validator、indexer — どれも matching engine を **使う** のに property test インフラを必要としない。`[dev-dependencies]` の規律で、テストインフラは必要なところにしか入れないようにする。
 
 ### Step 2: `Action` enum で `mod prop_tests` をセットアップ
 
@@ -193,6 +193,7 @@ mod prop_tests {
 - **`arb_side()`** — uniform に Buy または Sell を選ぶ。`prop_oneof![Just(...), Just(...)]` が proptest の「これらリテラルのどれか 1 つ」combinator。
 - **`arb_action(id)`** — 固定 `id` で random な `Action` を生成する。Limit 分岐は `(account, qty, side, price)` を range で生成し、Market 分岐は `(account, qty, side)` を生成する。重みは `3 => limit_action, 1 => market_action` — Limit action を Market の 3 倍の頻度にして、現実的な order-book usage を反映している。
 - **`arb_actions()`** — 長さ 1..30 の random `Vec<Action>` を生成する。`.prop_flat_map` パターンは少し奇妙だ: まず `prop::collection::vec(0u64..1000, 1..30)` で「長さ 1..30 の、値が 0..1000 の u64 vec」を生成する。**ただし中身の u64 値はダミーで、`.prop_flat_map` の中の `.enumerate()` が直後に index で上書きしてしまう** — `0u64..1000` の range は「ベクタの長さ」を決めるためだけのもので、生成される値そのものは使われない。それから各 position を `arb_action(i+1)` にマップして order ID を確定させる。ポイントは、`arb_actions` が strictly-increasing な order ID を持つ sequence を生成すること (book での collision を避けるため)。
+- ここで `enumerate()` の `i` は `usize` なので、`arb_action` の `u64` 引数に合わせるため `i as u64 + 1` の明示キャストを入れている。これは「生成時の位置 index を決定論的な `OrderId(1..)` に写像する」ための型変換だ。
 
 **range (`1..=200` for account、`50..=150` for price) を使う理由は?** Proptest を **plausible** なシナリオへバイアスするため。`0..=u64::MAX` の range にすると、proptest はほとんどの場合 extreme outlier (account_id = 18_446_744_073_709_551_614 等) を生成する。現実的な range にすれば、実際のトレーディングに見えるシナリオが生成される: account 1-200、price 50-150、quantity 1-20。Matching engine のバグは、normal-looking な sequence に最も隠れやすい。
 
@@ -346,7 +347,7 @@ Body の流れ:
 
 1. **各 action ごと** に order を submit する。
 2. **各 submit 後** に `book.best_bid() < book.best_ask()` (両方存在する場合) を check する。
-3. **どこかで `best_bid >= best_ask`** になればテスト失敗 — book が cross したことになる。
+3. **どこかで `best_bid >= best_ask`** になればテスト失敗 — book が cross した。
 
 これは **L7 の `book_does_not_cross_after_match` と同じ invariant** だが、random sequence に対してテストする。L7 では **1 つ** のシナリオで invariant が成立することを証明したが、L8 では **256 個の randomized** シナリオで成立することを証明する。
 

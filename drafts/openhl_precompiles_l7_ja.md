@@ -282,13 +282,15 @@ fn place_order(input: &[u8], _gas_limit: u64, _reservoir: u64) -> PrecompileResu
 
 **increment 側の `Ordering::Relaxed`。** これは Step 2 で確立済み。
 
-**`out` バッファ。** success path で最後の 8 バイトを上書きするまでは、全部ゼロのままだ。各 rejection path はバッファを変えずに return する — `out[24..32]` がゼロのままなので、caller は `order_id = 0` を rejected として decode することになる。
+**`out` バッファ。** success path で最後の 8 バイトを上書きするまでは、全部ゼロのままだ。各 rejection path はバッファを変えずに return する — `out[24..32]` がゼロのままなので、caller は `order_id = 0` を rejected として decode する。
 
 > 🛑 **やりがちな勘違い。** 「まだ使わない `account_id` や `price` を、なぜ parse するのか?」 — **L7 の仕事は calldata の schema を確定させることだ。** schema さえ公開すれば、コントラクトはその schema を前提にビルドし始める。すべてのフィールドを parse する（まだ使わないものも含めて）ことで、**parse の形がそのまま契約になる**。仮に L8 で parse 対象のフィールドを変えると、L7 と L8 の間にビルドされた全コントラクトが壊れる。**フルの schema は L7 で parse する — 未使用 binding があってもよい。挙動の変更は L8 でやる。**
 
 > 🛑 **考えてみよう。** `drop(state)` の行に注目してほしい。なぜ order ID を allocate する *前に* read lock を明示的に drop するのか? ヒント：L8 で **同じ Arc に対して write 側のロックを取りに行く** ときに何が起きるかを考える。
 
 （答え：**read lock は write lock をブロックする。** 関数全体を通して `state` を保持すると — L8 で追加する `clob.lock()` まで含めて — `CLOB_STATE` の read lock を持ったまま、その先にある Book 独自の Mutex を取りに行く形になる。動作はする（デッドロックはしない）が、read lock を握っている間ずっと、他の主体による `install_clob` を precompile 実行中ブロックしてしまう。早めに drop することで、ロック保持の窓を縮められる。**良き市民であれ：それぞれのロックは可能なかぎり短く保つ。**）
+
+補足: L8 で `let Some(clob) = state.as_ref() else { ... };` に移行すると、`clob` は `state`（`RwLockReadGuard`）内部への借用になる。したがってその形では `state` を早期 `drop` できず、`book.submit()` まで read-lock が生存する。これは borrow checker が強制する正しい制約で、後段で `drop(book)` した時点で `state` もスコープアウトして解放される。
 
 ### Step 5: `openhl_precompiles` を両方登録するように更新
 
@@ -498,7 +500,7 @@ precompile は Solidity から呼ばれ、panic は precompile エラーとし�
 `PrecompileFn` のシグネチャは `fn(...) -> PrecompileResult` で、`PrecompileResult = Result<PrecompileOutput, PrecompileError>` だ。malformed input で `Err(...)` を返すこと自体は *できる* が、それは EVM レベルのエラー（transaction の revert）として伝播する。`Ok` + sentinel 0 にしておけば、呼び出し側のコントラクトが rejection を gracefully にハンドリングできる。**これは設計上の選択だ：precompile のエラーは EVM 致命的にするか、それとも caller から見える形にするか?** 今回のように「ユーザが渡した calldata を validate する」用途では、caller から見える形をデフォルトにするのが良い。
 
 **Q: ちょうど `u64::MAX` のあたりで誰かが order を submit したら?**
-そのうち `NEXT_ORDER_ID.fetch_add(1, Relaxed)` が 0 にラップする（u64 を返すので）。その瞬間、次の allocation は sentinel 0 を返してしまい、caller は「rejected」として扱うことになる。`u64` の overflow までは ~1.8e19 orders で、およそ 1800 京 order ぶん — v0 では問題にならない。production ではもっと幅のあるカウンタを使うか、overflow 直前で panic させるべきだ。
+そのうち `NEXT_ORDER_ID.fetch_add(1, Relaxed)` が 0 にラップする（u64 を返すので）。その瞬間、次の allocation は sentinel 0 を返してしまい、caller は「rejected」として扱う。`u64` の overflow までは ~1.8e19 orders で、およそ 1800 京 order ぶん — v0 では問題にならない。production ではもっと幅のあるカウンタを使うか、overflow 直前で panic させるべきだ。
 
 ## 次のレッスン（L8）
 

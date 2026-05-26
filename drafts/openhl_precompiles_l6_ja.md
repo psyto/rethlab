@@ -283,7 +283,7 @@ order は 1 つではなく 2 つ。2 つ目（`240, qty=99`）は **間違っ�
 
 `from_be_slice` デコーダは、L5 の Step 1 で使った `to_be_bytes` の逆だ。`out[24..32]` に 8 バイト書き込んでおき、デコーダ側は `result.bytes[0..32]` から 32 バイトを読む — 先頭 24 バイトはゼロ、続く 8 バイトが値、という形が同じ u64 にラウンドトリップしてくる。
 
-assertion メッセージは **飾りではない**。素の `assert_eq!(price, U256::from(250u64))` だと、失敗時は `left != right` としか出ない — テストの意図は読み手に推測させることになる。「best bid is the 250 order, not 240」というメッセージなら、**どの概念的前提が違反されているかを即座に伝えられる**。**特にマイルストーンテストでは、assertion メッセージはドキュメントとしても機能する。**
+assertion メッセージは **飾りではない**。素の `assert_eq!(price, U256::from(250u64))` だと、失敗時は `left != right` としか出ない — テストの意図は読み手に推測させる。「best bid is the 250 order, not 240」というメッセージなら、**どの概念的前提が違反されているかを即座に伝えられる**。**特にマイルストーンテストでは、assertion メッセージはドキュメントとしても機能する。**
 
 ### Step 7: Cleanup
 
@@ -297,7 +297,7 @@ assertion メッセージは **飾りではない**。素の `assert_eq!(price, 
 - L5 の 2 つの zero-output テストでは不要だった：開始時に `uninstall_clob()` を呼ぶので、どんな state が残っていても気にしないからだ。
 - だがこのテストは、空でない CLOB を install したまま終わる。次のテストが同じ `cargo test` 実行内で（`TEST_SERIALIZER` の解放後に）「CLOB なし → zero」を assert する目的で走った場合、こちらが install した book を拾ってしまい fail する。
 
-他のテストは **冒頭でも** `uninstall_clob` を呼んでいるので、技術的にはこの cleanup は冗長だ。**だが、空でない state を実際に install するテストで cleanup を明示しておくのは衛生的によい。** テストフレームワークの支援なしに、「Setup / Exercise / Verify / Teardown」というテスト規約をミラーリングしていることになる。
+他のテストは **冒頭でも** `uninstall_clob` を呼んでいるので、技術的にはこの cleanup は冗長だ。**だが、空でない state を実際に install するテストで cleanup を明示しておくのは衛生的によい。** テストフレームワークの支援なしに、「Setup / Exercise / Verify / Teardown」というテスト規約をミラーリングしている。
 
 ## テスト
 
@@ -370,7 +370,7 @@ git checkout main
 ## よくある質問
 
 **Q: `Precompile::execute` 経由ではなく、`read_best_bid` を直接呼ぶのはなぜ?**
-どちらのパスでも動く。直接呼ぶ（`read_best_bid(...)`）と関数を単独でテストすることになり、registry のパス（`precompile.execute(...)`）だと dispatch をテストすることになる。**dispatch はすでに L5 の 3 つ目のテストで証明済み** だ。L6 で証明したいのは「挙動が global から read していること」なので、直接呼び出しでテストを 1 つの assertion に絞り込む。
+どちらのパスでも動く。直接呼ぶ（`read_best_bid(...)`）と関数を単独でテストすることになり、registry のパス（`precompile.execute(...)`）だと dispatch をテストする。**dispatch はすでに L5 の 3 つ目のテストで証明済み** だ。L6 で証明したいのは「挙動が global から read していること」なので、直接呼び出しでテストを 1 つの assertion に絞り込む。
 
 **Q: `submit` が失敗したら（たとえば `OrderId` の重複）どうなる?**
 `Book::submit`（course 7 由来）は `()` を返す — 失敗しない。内部的には、同じ OrderId で 2 回 submit すると 2 回目が黙って 1 回目を上書きする。**これはマッチングエンジンの仕様** だが、テストでは罠になる。`OrderId(1)` と `OrderId(2)` を意図的に使い分けるのはこのためだ。
@@ -395,7 +395,7 @@ git checkout main
 - live なマッチングエンジンの best bid を read し、ABI の uint256 pair として encode する precompile。
 - 証明済みのテスト：(a) precompile が registry から到達可能、(b) CLOB 未インストール時には zero を read、(c) CLOB インストール時には live な state を read。
 
-スマートコントラクトから直接 CLOB state をクエリできるようになった。Course 7 L12 で残っていた「約定が並行リストにあるだけで、スマートコントラクトからは見えない」というギャップが、**read 方向については** 部分的に閉じたことになる。Write 側（コントラクトから order を発注する）は Module 3 の領分。
+スマートコントラクトから直接 CLOB state をクエリできるようになった。Course 7 L12 で残っていた「約定が並行リストにあるだけで、スマートコントラクトからは見えない」というギャップが、**read 方向については** 部分的に閉じた。Write 側（コントラクトから order を発注する）は Module 3 の領分。
 
 ## 次のレッスン（L7）
 

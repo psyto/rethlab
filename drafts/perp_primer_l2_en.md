@@ -87,6 +87,7 @@ The two thresholds are different on purpose:
 - Without the gap, every position opened at the limit would liquidate immediately on any unfavorable tick
 - The gap is the *buffer* the venue gives traders to make decisions (add collateral, partial-close, etc.) before forced liquidation
 - **It's also a defense line for the system itself.** Maintenance isn't a "you die instantly" line — the gap buys the liquidation engine **enough slippage room + startup latency** to submit force-close orders into the market and have them fill. The L3 force-close flow burns through this room as its budget — the thinner the room, the more the insurance fund has to absorb the shortfall.
+- **Why this is non-negotiable (Initial = Maintenance counterexample)**: if initial and maintenance were both 2%, a position opened at 2.01% would become Liquidatable after a tiny adverse tick. In fast markets, the account can cross from maintenance breach to negative equity during the short delay before force-close fills. **So the initial/maintenance gap is not only trader UX buffer; it is the system's slippage cushion for preserving venue-wide solvency.**
 
 **Margin ratio** is the central quantity:
 

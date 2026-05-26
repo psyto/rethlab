@@ -616,8 +616,7 @@ Four tests:
 The smoke test is roughly **0.02 seconds** wall-clock. The bulk is libp2p setting up the local listener — even on a tcp/0 ephemeral port, libp2p's negotiation has a fixed cost.
 
 > 🛑 **Anti-fluency.** "Why `flavor = 'multi_thread'`?" **Because the engine spawns multiple actors, each on its own task.** A single-threaded runtime can run them all on one thread — but the engine has internal `block_on` patterns that would deadlock under single-thread. Multi-thread runtime works around this. **This is the kind of detail that's invisible at the API level but lethal at the test-failure level.**
->
-> *(Concretely: if a synchronous wait like `tokio::runtime::Handle::current().block_on(...)` runs in the middle of an async context, a `current_thread` runtime hard-locks its only worker. The future being `await`ed inside `block_on` has no executor to drive it forward, and the actor-initialization future **hangs forever** — not a timeout, not a panic, a pure deadlock. With `multi_thread`, a sibling worker thread can pick up the remaining future and the pattern unblocks. The Malachite / ractor / libp2p stack hits this shape several times internally, which is why tests have to force multi-threaded execution.)*
+> In `current_thread`, a `block_on(...)` can occupy the only worker and starve the future it is waiting on, so initialization hangs forever. In `multi_thread`, another worker can drive the remaining future and unblock the pattern. The Malachite / ractor / libp2p stack hits this shape internally, so tests must force multi-threaded execution.
 
 ## Test
 

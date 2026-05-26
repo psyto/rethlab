@@ -528,7 +528,18 @@ No — the workspace pins alloy to specific versions (`alloy-primitives = "1.5"`
 
 ## Next lesson (L6)
 
-You've now written two `ConsensusBridge` impls — one synthesized, one with real alloy types. Both are usable by consensus-side test code, which you'll start writing in L8. But first, in L6, we go to the consensus side properly: we implement Malachite's `Context` trait — the type-level API surface that Malachite requires from any chain that uses it. 10 associated types, 4 factory methods. After L6, your chain can answer "what's our `Address` type, our `Height` type, our `Value` type" to Malachite. This is the **other half** of the contract: **the `ConsensusBridge` we wrote in L3 is a trait we (openhl) own**, whereas **the `Context` we implement in L6 is a trait Malachite (the library) owns**. Writing an `impl` for a contract you defined yourself, versus filling in an `impl` for a contract an external library defined for your types, are mirror-image design forces — the next lesson is where that asymmetry becomes muscle memory.
+You've now written two `ConsensusBridge` impls — one synthesized, one with real alloy types. Both are usable by consensus-side test code (starting in L8).
+
+In L6 we move to the consensus side properly and implement Malachite's `Context` trait.  
+That trait is the type-level API surface Malachite requires from any chain that uses it: 10 associated types and 4 factory methods.
+
+After L6, your chain can answer "what is our `Address` type, `Height` type, and `Value` type" to Malachite. This is the **other half** of the contract.
+
+The key contrast:
+1. `ConsensusBridge` (L3) is a trait we (openhl) own.
+2. `Context` (L6) is a trait Malachite owns.
+
+Implementing your own contract versus implementing an external library's contract for your types are mirror-image design forces. The next lesson is where that asymmetry becomes muscle memory.
 ````
 
 ---
