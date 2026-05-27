@@ -762,9 +762,7 @@ What changed:
 - **\`payable\` doesn't exist.** It was always a Solidity-level convention encoded in the ABI; Rust just doesn't model "this function receives money."
 - **\`&mut self\`** is the new bit. The \`deposit\` function declares it *needs to mutate* the contract's state. We'll come back to this.
 
-> 🛑 **Predict before scrolling.** What does \`&mut self\` give you that Solidity's implicit \`this\` doesn't?
-
-A compiler-checked guarantee that **nobody else is reading or writing this struct while \`deposit\` is running.** In Solidity that's true at the EVM level (one tx at a time), but the language has no way to express it. In Rust the type system enforces it — across threads, across async tasks, everywhere. That's the value Rust brings to the engine layer: **no concurrent-modification bugs by construction.**
+What \`&mut self\` gives you over Solidity's implicit \`this\` is a compiler-checked guarantee that **nobody else is reading or writing this struct while \`deposit\` is running.** In Solidity that's true at the EVM level (one tx at a time), but the language has no way to express it. In Rust the type system enforces it — across threads, across async tasks, everywhere. That's the value Rust brings to the engine layer: **no concurrent-modification bugs by construction.**
 
 ## 3. Ownership: the part with no Solidity analog
 
@@ -783,9 +781,7 @@ The mental shift: **every value in Rust has exactly one owner at a time**, and o
 
 The good news: **the EVM source you're going to read mostly stays in "boring" ownership territory** — a struct holds its state, a function takes \`&mut\` or \`&\`, and that's 90% of it. The exotic stuff (lifetimes that escape function boundaries, \`Pin\`, self-referential structs) shows up in async / unsafe corners, not in opcode bodies.
 
-> 🛑 **Recall check.** Solidity gives you no way to ask "is anyone else mutating \`balances\` right now?" because there is no concurrency. Rust *does* ask that question on every \`&mut\`. **In what kind of EVM-stack code would the answer change from "nobody" to "someone might"?**
-
-Anywhere Reth or revm runs multiple things in parallel: trace alongside execution, multiple ExEx subscribers, fuzz harness with many threads. Solidity doesn't have to think about this; the engine *does*, and ownership is how the engine encodes the answer.
+Where does the answer change from "nobody" to "someone might"? Anywhere Reth or revm runs multiple things in parallel: trace alongside execution, multiple ExEx subscribers, fuzz harness with many threads. Solidity doesn't have to think about this because there is no concurrency at the contract level; the engine *does*, and ownership is how the engine encodes the answer.
 
 ## 4. Errors: \`require\` becomes \`Result\`
 

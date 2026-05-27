@@ -235,9 +235,7 @@ The model gap that *does* matter:
 
 The biggest mental flip: **storage is per-contract, not per-account**. In Solana you pass the account that holds the state; in EVM the contract *is* the state. Read this carefully when you reach Inside Revm's \`Database\` trait — that trait is the EVM-side answer to "what AccountInfo do I touch?"
 
-> 🛑 **Predict.** You've written a Solana program that updates per-user counters. In EVM, what does the equivalent storage look like? Where does the data live?
-
-A \`mapping(address => uint256) counter\` inside the contract. The contract owns the slot keys; each user's counter is at \`keccak256(user_address . slot)\`. Solana would have one account per user; EVM packs them all into one contract's storage trie. Same problem, different model.
+A concrete example: a Solana program that updates per-user counters has one account per user. The EVM equivalent is a \`mapping(address => uint256) counter\` *inside* the contract. The contract owns the slot keys; each user's counter lives at \`keccak256(user_address . slot)\`. Same problem, different model — Solana spreads state across many accounts, EVM packs it into one contract's storage trie.
 
 ## 3. Where the two stacks meet: HyperEVM, Tempo
 
@@ -313,9 +311,7 @@ Geth (Go-Ethereum) is the original execution client. It's run mainnet since 2015
 | **Chain forking** | Hard (entire fork-of-Geth) | Easy (Reth SDK: swap one component, keep the rest) | Hyperliquid's HyperEVM, Tempo, MegaETH, Base (OP-Reth), Berachain all use this pattern. |
 | **Reuse footprint** | Geth's code is used by Geth | Reth's components (revm, alloy, reth-* crates) are reused by 100+ projects | Every Rust EVM tool you'll touch is built on top of one of these crates. |
 
-> 🛑 **Predict.** A team wants to ship a payments-priority L1 with custom transaction ordering. Which client do they fork?
-
-They fork Reth — and they don't even fork the whole thing. They depend on Reth's crates and replace only the \`Pool\` and \`Payload\` components. With Geth they'd fork the whole codebase, accept the rebase tax forever, and inherit a 200K-line surface they don't want to maintain. This is exactly what Tempo does, and what every other Reth-based L1 in the table from the previous lesson does.
+Concretely: a team shipping a payments-priority L1 with custom transaction ordering forks Reth — and they don't even fork the whole thing. They depend on Reth's crates and replace only the \`Pool\` and \`Payload\` components. With Geth they'd fork the whole codebase, accept the rebase tax forever, and inherit a 200K-line surface they don't want to maintain. This is exactly what Tempo does, and what every other Reth-based L1 in the table from the previous lesson does.
 
 **Reth wasn't built to dethrone Geth.** It was built to be the *substrate* the next generation of chains builds on. That's a different category.
 
@@ -333,9 +329,7 @@ ethers-rs was *the* Rust Ethereum library from ~2020 to 2024. Then in mid-2024, 
 | **Procedural macros (\`sol!\`)** | External crate, looser integration | First-class, used throughout alloy | Define Solidity types in Rust at compile time; no manual ABI structs. Used in every Rust Solidity-interop project. |
 | **Maintainership** | One person at Paradigm, time-limited | Funded Paradigm project + community | Active development, fast PR turnaround, clear roadmap. |
 
-> 🛑 **Predict.** You're writing a new MEV searcher in 2026. Why would you choose Alloy over ethers-rs?
-
-You'd choose Alloy because (a) you share types with revm (and your fork simulation lives in revm), (b) you can compose your own \`Signer\` with cloud KMS or hardware without rewriting the Provider, (c) your code runs on Optimism / Base / any Reth-based L2 with one type parameter change, and (d) ethers-rs no longer receives bug fixes from Paradigm. **Inertia is the only reason to stick with ethers-rs**, and inertia gets weaker every quarter.
+If you're writing a new MEV searcher in 2026, you'd choose Alloy because (a) you share types with revm (and your fork simulation lives in revm), (b) you can compose your own \`Signer\` with cloud KMS or hardware without rewriting the Provider, (c) your code runs on Optimism / Base / any Reth-based L2 with one type parameter change, and (d) ethers-rs no longer receives bug fixes from Paradigm. **Inertia is the only reason to stick with ethers-rs**, and inertia gets weaker every quarter.
 
 ## 3. The pattern across both substitutions
 
@@ -345,11 +339,7 @@ Geth and ethers-rs are not bad. They're products of an earlier moment in the Rus
 
 This is the structural reason the rest of this curriculum exists. **The lessons that come next — Inside Revm, Inside Reth, Inside Alloy — teach you to read the substrate.** Once you can read it, you can build on it. That's the leverage Geth and ethers-rs structurally couldn't offer.
 
-> 🛑 **Recall check.** In one sentence each:
-> - Why does a payments-priority L1 team fork Reth and not Geth?
-> - Why does a new MEV searcher pick Alloy over ethers-rs in 2026?
-
-If you can answer both without scrolling, you have the substitution model. If not, re-read the relevant table.
+Two reads of the same pattern: payments-priority L1s fork Reth instead of Geth because Reth's crates compose; new MEV searchers pick Alloy over ethers-rs because Alloy shares types with revm and stays maintained. Both are decisions about substrates versus products — keep that lens for the rest of the curriculum.
 
 ## Next up
 
@@ -383,9 +373,7 @@ Reth's source tree decomposes cleanly into five systems-engineering disciplines:
 | **Networking stack** | Custom TCP-based gossip protocol with peer scoring and DoS resistance | \`reth-network\` (devp2p), libp2p in alternative chains | BGP, BitTorrent's tracker layer, IRC |
 | **Concurrency runtime** | Async I/O orchestration; thousands of in-flight tasks | Tokio (cooperatively scheduled futures) | Node.js's event loop, Go's goroutines, Erlang's BEAM |
 
-> 🛑 **Predict before scrolling.** Pick one bug class you've seen in production at any company: a race condition, a database deadlock, a TCP backpressure issue, a JIT miscompile. **Which Ethereum subsystem could it occur in?**
-
-All of them could occur, and all of them have. Reth's CI catches database compaction stalls (database problem), reorg-handling races (distributed system problem), opcode-pricing bugs (compiler problem), peer-eclipse attacks (networking problem), and task starvation under load (concurrency runtime problem). **The bug classes are not Ethereum-specific.** The techniques to find and fix them aren't either.
+Take any bug class you've seen in production at any company — a race condition, a database deadlock, a TCP backpressure issue, a JIT miscompile — and ask which Ethereum subsystem it could occur in. **All of them could, and all of them have.** Reth's CI catches database compaction stalls (database problem), reorg-handling races (distributed system problem), opcode-pricing bugs (compiler problem), peer-eclipse attacks (networking problem), and task starvation under load (concurrency runtime problem). **The bug classes are not Ethereum-specific.** The techniques to find and fix them aren't either.
 
 ## 2. Why this matters for reading source
 
@@ -411,9 +399,7 @@ Because Ethereum is a composition of well-studied systems, the skills you build 
 
 The "Ethereum engineer" who can only read Solidity has a narrow market. The systems engineer who happens to specialize in Ethereum has the *entire systems-engineering job market* as a fallback — and the Ethereum-specialist premium on top of it.
 
-> 🛑 **Predict.** A friend asks you "what does learning Reth actually buy me if Ethereum doesn't take off?" Sketch a 30-second answer.
-
-Roughly: "A Rust-fluent systems engineer who has shipped against MDBX, Tokio, and a real distributed system has every infra-engineering job in the broader industry as a fallback — TigerBeetle, Cloudflare, Discord, PlanetScale, Neon, every cloud database team. The Ethereum-specific knowledge is upside; the underlying skills are the floor."
+The 30-second answer for skeptics asking "what does learning Reth actually buy me if Ethereum doesn't take off?": a Rust-fluent systems engineer who has shipped against MDBX, Tokio, and a real distributed system has every infra-engineering job in the broader industry as a fallback — TigerBeetle, Cloudflare, Discord, PlanetScale, Neon, every cloud database team. The Ethereum-specific knowledge is upside; the underlying skills are the floor.
 
 This is why the bet on Reth is not really a bet on Ethereum. It's a bet on **systems engineering as a discipline** — with Ethereum as a particularly interesting and lucrative application surface.
 
