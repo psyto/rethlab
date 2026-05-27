@@ -27,6 +27,19 @@ jobs:
       - name: Type Check
         run: npm run type-check
 
+      - name: Runtime Must Not Read Drafts
+        run: npm run check:runtime-no-drafts
+
+      - name: Editorial Style Rules
+        run: npm run check:editorial-style
+
+      - name: Generated Seeds Must Be Clean
+        run: npm run check:generated-seeds-clean
+
+      - name: Generated Seeds Must Be Clean (EN+JA)
+        continue-on-error: true
+        run: CONTENT_CHECK_LOCALES=en,ja npm run check:generated-seeds-clean
+
   test:
     name: Tests
     runs-on: ubuntu-latest

@@ -8,7 +8,7 @@ export async function seedRethFundamentalsJA(prisma: PrismaClient) {
       slug: 'reth-fundamentals-ja',
       title: 'Reth Fundamentals — Alloyで動かす最初の一歩',
       description:
-        'Alloyを使ってEthereumノードに接続し、署名・残高取得・ブロック番号取得など実用的なRustコードを書きます。さらにEVM の基本概念（スタック、メモリ、Opcode）を学びRevmへの橋渡しを行います。',
+        'Alloyを使ってEthereumノードに接続し、署名・残高取得・ブロック番号取得など実用的なRustコードを書く。さらにEVMの基本概念（スタック、メモリ、Opcode）を学び、Revmへの橋渡しを行う。',
       difficulty: 'BEGINNER',
       duration: 150,
       xpReward: 250,
@@ -36,11 +36,11 @@ export async function seedRethFundamentalsJA(prisma: PrismaClient) {
 
 > 🧭 **このレッスンの位置づけ:** ownership / borrowing は、スタックの並行性まわり全体の土台 — Reth の Tokio ランタイム、Revm の \`&mut\` 駆動の実行、alloy の Send 境界付き Provider。ここで一度頭に入れておけば、以降の並行性レッスンが「新しいルール」には見えなくなる。
 
-これからAlloyを書きはじめると、必ず突き当たるのが **所有権（ownership）** です。Rust最大の特徴であり、最初の壁。完璧に理解する必要はなく、**「コードを読んでいてルールが思い出せる」** 状態を目指しましょう。
+これからAlloyを書き始めると、必ず突き当たるのが **所有権（ownership）** である。Rust最大の特徴であり、最初の壁でもある。完璧な理解は不要で、**「コードを読みながらルールを思い出せる」** 状態を目指す。
 
 ## 1. なぜ所有権が必要なのか
 
-C/C++ではメモリ管理を人間がやり、JavaやJSではガベージコレクタがやります。Rustは **コンパイル時に「誰が所有していて、いつ解放するか」をチェック** する第三の道を選びました。
+C/C++は人間がメモリ管理を担い、Java/JSはGCが担う。Rustは **コンパイル時に「誰が所有し、いつ解放するか」を検証** する第三の道を取る。
 
 そのおかげで、
 
@@ -48,7 +48,7 @@ C/C++ではメモリ管理を人間がやり、JavaやJSではガベージコレ
 - メモリ二重解放やuse-after-freeがコンパイル時に検出される
 - 並行処理でデータ競合がコンパイル時に検出される
 
-…という「金融資産を扱うコードに最適な性質」が手に入ります。
+…という「金融資産を扱うコードに適した性質」が得られる。
 
 ## 2. 所有権のルール（3つだけ）
 
@@ -97,18 +97,18 @@ append_suffix(&mut a);
 - **複数の \`&\`（読み取り）** OR
 - **ただ1つの \`&mut\`（書き換え）**
 
-このルールで、データ競合がコンパイル時に防がれます。
+このルールで、データ競合はコンパイル時に防がれる。
 
 ## 6. \`&str\` は何者なのか
 
-実は \`&str\` は **「文字列の借用」** です。\`String\` を所有して、その一部を \`&str\` として貸し出すイメージ。
+実は \`&str\` は **「文字列の借用」** である。\`String\` を所有し、その一部を \`&str\` として貸し出すイメージになる。
 
 \`\`\`rust
 let owned: String = String::from("Hello, Alloy");
 let borrowed: &str = &owned;   // 借用
 \`\`\`
 
-関数引数で \`&str\` を要求するのは「読み取りで十分なので、所有権までは要らない」という宣言です。
+関数引数で \`&str\` を要求するのは、「読み取りで十分で所有権は不要」という宣言である。
 
 ## 7. これからAlloyコードで見るパターン
 
@@ -123,7 +123,7 @@ provider.get_balance(&address).await?;
 let mut signer = PrivateKeySigner::random();
 \`\`\`
 
-これらは全部、所有権ルールから来ています。次のレッスンでAlloyコードを実際に書くときに「あ、これは借用してるんだな」と気づけたら勝ちです。
+これらはすべて所有権ルールに由来する。次のレッスンでAlloyコードを書くときに「これは借用だ」と気づければ十分である。
 
 ## まとめ
 
@@ -147,7 +147,7 @@ let mut signer = PrivateKeySigner::random();
 
 > 🧭 **このレッスンの位置づけ:** 型レベルのプリミティブ（\`Address\`・\`U256\`・\`B256\`）と署名 API を導入する。以降のネットワーク層・認証層のレッスンが、これらを共通の語彙として再利用する。Rust EVM スタックの基礎語彙。
 
-最初に **Alloy** を直接触ってみましょう。Alloyは「EthereumをRustで扱うための決定版ライブラリ群」で、Rethも内部でこれをフル活用しています。
+最初に **Alloy** を直接触る。Alloyは「EthereumをRustで扱うためのライブラリ群」で、Rethも内部でこれを活用している。
 
 ## 1. プロジェクトの準備
 
@@ -156,7 +156,7 @@ cargo new hello_alloy
 cd hello_alloy
 \`\`\`
 
-\`Cargo.toml\` の \`[dependencies]\` に追記します。
+\`Cargo.toml\` の \`[dependencies]\` に追記する。
 
 \`\`\`toml
 [dependencies]
@@ -165,7 +165,7 @@ tokio = { version = "1", features = ["full"] }
 eyre = "0.6"
 \`\`\`
 
-> **Tip**: バージョンは執筆時点のもの。実際は最新版を [crates.io](https://crates.io/crates/alloy) で確認してください。\`eyre\` は人間に優しいエラー出力のためのクレートです。
+> **Tip**: バージョンは執筆時点のもの。実際は最新版を [crates.io](https://crates.io/crates/alloy) で確認する。\`eyre\` は読みやすいエラー出力向けのクレートである。
 
 ## 2. メッセージに署名する — 実例
 
@@ -198,7 +198,7 @@ async fn main() -> Result<()> {
 }
 \`\`\`
 
-\`src/main.rs\` にコピーして \`cargo run\`。ランダム生成されたシグナーのアドレス、署名、そして検証で復元したアドレス（一致するはず）が表示されます。
+\`src/main.rs\` にコピーして \`cargo run\` する。ランダム生成シグナーのアドレス、署名、検証で復元したアドレス（一致するはず）が表示される。
 
 \`\`\`mermaid
 sequenceDiagram
@@ -222,7 +222,7 @@ sequenceDiagram
 セキュアRNGで新しい鍵ペア生成。**本番資金には絶対に使わないこと** — テストと学習用。本番では環境変数、暗号化キーストア、ハードウェアウォレットから読み込む。
 
 ### \`with_chain_id(Some(1337))\`
-EIP-155 がチェーンIDを署名に含めるので、チェーンAで署名したtxがチェーンBで再送できなくなります。**本番では必須**。\`1337\` はローカルAnvilの典型的チェーンID。
+EIP-155 はチェーンIDを署名に含めるため、チェーンAで署名したtxをチェーンBへ再送できなくする。**本番では必須**。 \`1337\` はローカルAnvilの典型的チェーンIDである。
 
 ### \`sign_message(message).await\`
 **EIP-191** （"Ethereum signed message" プレフィックス）を実装。JSON-RPCの \`personal_sign\` や \`window.ethereum.request("personal_sign", ...)\` が返すものと同じ。async なのは、ハードウェアウォレット（Ledger/Trezor）が応答に時間がかかるため — ローカルシグナーも同じインターフェースで差し替え可能。
@@ -238,7 +238,7 @@ use alloy::primitives::address;
 let recipient = address!("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
 \`\`\`
 
-\`address!\` は **手続きマクロ** で、コンパイル時に走ります。1桁タイポしたり長さを間違えると、**コンパイルすら通らない** — 「ユーザーが送信ボタンを押したときに実行時エラー」ではない。Expertティアでこのマクロが内部でどう作られているか正確に見ます。
+\`address!\` は **手続きマクロ** で、コンパイル時に走る。1桁タイポや長さミスは **コンパイル時に失敗** し、送信時の実行時エラーにしない。Expertティアで内部実装を正確に扱う。
 
 ## なぜ「型」が重要なのか
 
@@ -269,16 +269,16 @@ Solidityも \`address\` 型を持ちますが、Rustの型システムはより�
 
 > 🧭 **このレッスンの位置づけ:** \`Result\` と \`Option\` は、スタックの全層 — RPC エラー、EVM の halt、DB のキー欠落 — が「失敗を隠さずに表に出す」ための語彙。ここでまとめて頭に入れておく。
 
-Alloyのコードを書くと、ほぼすべての行に \`.await?\` や \`.parse()?\` が出てきます。これは **Rustのエラーハンドリング** の構文です。
+Alloyコードでは、ほぼすべての行に \`.await?\` や \`.parse()?\` が出る。これは **Rustのエラーハンドリング** 構文である。
 
 ## 1. なぜ例外がないのか
 
-Rustには try/catch（例外）がありません。代わりに **値としてエラーを返す** 設計です。
+Rustに try/catch（例外）はない。代わりに **値としてエラーを返す** 設計を取る。
 
 - 関数は「成功」か「失敗」を **\`Result<T, E>\`** で返す
 - 値があるかないかは **\`Option<T>\`** で返す
 
-これらは \`enum\`（列挙型）です。
+これらは \`enum\`（列挙型）である。
 
 \`\`\`rust
 enum Result<T, E> {
@@ -331,7 +331,7 @@ fn parse_two(a: &str, b: &str) -> Result<(i32, i32), std::num::ParseIntError> {
 }
 \`\`\`
 
-\`?\` がない世界では、毎回 \`match\` を書く必要があります。同じ意味のコードが3倍くらい長くなります。
+\`?\` がない場合、毎回 \`match\` を書く必要があり、同じ意味のコードが大きく長くなる。
 
 ## 5. \`Result<(), Box<dyn Error>>\` と \`eyre::Result<()>\`
 
@@ -342,7 +342,7 @@ main関数の戻り値でよく見るやつです：
 | \`Result<(), Box<dyn std::error::Error>>\` | 標準ライブラリのみ（やや冗長） |
 | \`eyre::Result<()>\` | **\`eyre\`** クレートの便利版（推奨） |
 
-\`eyre\` は「人間が読めるエラー出力」と「いろんなエラー型を1つにまとめられる」のが特徴。Alloyコードでは \`eyre::Result<()>\` が事実上の標準です。
+\`eyre\` は「読みやすいエラー出力」と「多様なエラー型の統合」が特徴である。Alloyコードでは \`eyre::Result<()>\` が事実上の標準になる。
 
 ## 6. \`unwrap()\` と \`expect()\`
 
@@ -364,9 +364,9 @@ async fn main() -> eyre::Result<()> {
 }
 \`\`\`
 
-ほぼすべての行で \`?\` が活躍します。**「成功したらそのまま、失敗したら呼び出し元へエラーを投げる」** とだけ覚えてください。
+ほぼすべての行で \`?\` が活躍する。**「成功ならそのまま、失敗なら呼び出し元へ返す」** と覚えればよい。
 
-次のレッスンでこれを実際のProvider接続コードに使います。`,
+次のレッスンでこれを実際のProvider接続コードに使う。`,
                 },
                 {
                   title: 'Provider — ノードへ接続する',
@@ -379,11 +379,11 @@ async fn main() -> eyre::Result<()> {
 
 > 🧭 **このレッスンの位置づけ:** **ネットワーク層のクライアントトレイト** に正面から触れる最初の機会 — Inside Alloy で後ほど内側を覗くのと同じ \`Provider\` トレイト。本レッスンでは外側からの使い方を掴み、設計の中身は Inside Alloy の組み立て章で読む。
 
-Alloyの **Provider** は「ノードへの窓口」です。これを通じてブロック番号・残高・トランザクション情報を取得します。
+Alloyの **Provider** は「ノードへの窓口」である。これを通じてブロック番号・残高・トランザクション情報を取得する。
 
 ## 最小コード — 一字一句そのまま
 
-これは [\`alloy-rs/examples\`](https://github.com/alloy-rs/examples/blob/main/examples/providers/examples/http.rs) の \`http.rs\` をベースにした最小プロジェクトです。
+これは [\`alloy-rs/examples\`](https://github.com/alloy-rs/examples/blob/main/examples/providers/examples/http.rs) の \`http.rs\` をベースにした最小プロジェクトである。
 
 まず \`Cargo.toml\`：
 
@@ -419,9 +419,9 @@ async fn main() -> Result<()> {
 }
 \`\`\`
 
-\`cargo run\` するとメインネットの最新ブロック番号が表示されます。**これがあなたが書く全ての"監視Bot"の出発点** です。
+\`cargo run\` するとメインネットの最新ブロック番号が表示される。**これが監視Botの出発点** になる。
 
-URLに注目：\`https://ethereum.reth.rs/rpc\` は **Reth プロジェクトが運営する公開 RPC エンドポイント**。あなたのコードは既に文字通り Reth ノードと喋っています。スタックの中にもう入っているのです。
+URLに注目: \`https://ethereum.reth.rs/rpc\` は **Reth プロジェクトが運営する公開RPCエンドポイント** である。コードは既に文字通り Reth ノードと通信している。
 
 ## よく使うProviderメソッド
 
@@ -435,7 +435,7 @@ URLに注目：\`https://ethereum.reth.rs/rpc\` は **Reth プロジェクトが
 
 ## 任意のEVM互換チェーンに繋ぐ
 
-URLを差し替えるだけで、HyperEVM、Optimism、Anvil（ローカル）などにも繋がります。
+URLを差し替えるだけで、HyperEVM、Optimism、Anvil（ローカル）などにも接続できる。
 
 \`\`\`rust
 let provider = ProviderBuilder::new()
@@ -452,11 +452,11 @@ let provider = ProviderBuilder::new()
 anvil
 \`\`\`
 
-ガス代を払わずに残高変更や送金を試せるので、学習にはもってこいです。
+ガス代なしで残高変更や送金を試せるため、学習用途に向く。
 
 ## 次のステップ
 
-これでAlloyの「Read」（読み取り）まで来ました。次のモジュールでは、EVMが実際に「動く」中身 — スタック、メモリ、Opcode — に踏み込みます。`,
+これでAlloyの「Read」（読み取り）まで来た。次のモジュールでは、EVMが実際に「動く」中身（スタック、メモリ、Opcode）に踏み込む。`,
                 },
                 {
                   title: 'クイズ：残高チェッカー',
@@ -607,7 +607,7 @@ async fn main() -> eyre::Result<()> {
 
 > 🧭 **このレッスンの位置づけ:** EVM を **スタックマシン** として導入する。以降の VM 層レッスン（Revm 内部、opcode、ガス、precompile）はすべて、この設計上の前提に立つ。JVM や CPython VM と同じ設計を、ブロックチェーンのコンセンサスのために制約したかたち。
 
-EVM（Ethereum Virtual Machine）は **スタックマシン** と呼ばれる仮想機械の一種です。レジスタや関数呼び出し規約を持たず、ほぼすべての計算を **スタック** の上で行います。
+EVM（Ethereum Virtual Machine）は **スタックマシン** と呼ばれる仮想機械の一種である。レジスタや関数呼び出し規約を持たず、ほぼすべての計算を **スタック** 上で行う。
 
 ## 主要な「場所」
 
@@ -676,7 +676,7 @@ ADD
 事後: スタック [..., 12]
 \`\`\`
 
-Revm の **本物の** \`add\` ソース — 中級ティアで一行ずつ分解する — は、両方popしてpushすらしません：1つpopし、もう1つには可変参照経由で書き戻します。RevmのインタープリターはEVM の概念モデルをそのままRustに写しつつ、サイクル単位の最適化を重ねた設計になっています。
+Revm の **本物の** \`add\` ソース（中級ティアで一行ずつ分解する）は、両方popしてpushすらしない。1つpopし、もう1つへ可変参照経由で書き戻す。Revmのインタープリターは、EVM概念モデルをRustへ写しつつ、サイクル単位の最適化を重ねた設計である。
 
 ## なぜEVMはスタックマシンか
 
@@ -711,7 +711,7 @@ Rust で小さな EVM 風スタックを 3 操作だけで作ります：
 - \`add()\`: 上から2つ pop し、合計を push
 - \`peek()\`: 上の値を読むだけ（pop しない）
 
-前のレッスンで読んだ本物の Revm \`Stack\` と同じ形を、シンプル化のために \`U256\` の代わりに \`i64\` で作るだけです。
+前レッスンで読んだ本物の Revm \`Stack\` と同じ形を、シンプル化のため \`U256\` の代わりに \`i64\` で作るだけである。
 
 ## 必要な要素
 
@@ -827,11 +827,11 @@ fn main() {
 
 > 🧭 **このレッスンの位置づけ:** async + トレイト + ジェネリクスの 3 つの交点で、Rust EVM スタック全体が動いている。Reth のパイプライン future、alloy の \`<N: Network>\` Provider、Revm の \`auto_impl\` トレイト — どれもこの交点の上に立っている。ここで一度まとめて頭に入れておく。
 
-Revmや Reth のコードを読む前に、**3つの言語機能** を押さえておきます。これがないとAlloy/Reth本体のコードはほぼ読めません。
+Revmや Reth のコードを読む前に、**3つの言語機能** を押さえる。これがないとAlloy/Reth本体のコードはほぼ読めない。
 
 ## 1. async / await — 「待つ」を書ける
 
-ネットワーク通信のように **時間がかかる処理** を効率よく扱うための機能です。
+ネットワーク通信のような **時間がかかる処理** を効率よく扱うための機能である。
 
 \`\`\`rust
 async fn fetch_block_number() -> u64 {
@@ -848,15 +848,15 @@ async fn main() {
 
 ### \`async\` が返すのは「未来の値」
 
-\`async fn\` は実行されると **\`Future\`** という「あとで値になるもの」を返します。\`.await\` を呼ぶまで実は何も起きません。
+\`async fn\` は実行時に **\`Future\`**（あとで値になるもの）を返す。\`.await\` を呼ぶまで実際の実行は進まない。
 
 ### \`#[tokio::main]\` の正体
 
-Rust標準には非同期ランタイムが入っていません。**tokio** を使ってランタイムを起動するのが \`#[tokio::main]\` の役割です。Alloyは tokio 上で動きます。
+Rust標準には非同期ランタイムが入っていない。**tokio** でランタイムを起動するのが \`#[tokio::main]\` の役割であり、Alloyは tokio 上で動く。
 
 ## 2. トレイト（trait） — 「○○できる」という契約
 
-Java/TypeScriptの **interface** に近いものですが、もっと強力です。「この型は××ができる」を宣言します。
+Java/TypeScriptの **interface** に近いが、より強力である。「この型は××できる」を宣言する。
 
 \`\`\`rust
 trait HasArea {
@@ -881,7 +881,7 @@ println!("{}", s.area());   // 9.0
 provider.get_block_number().await?;
 \`\`\`
 
-\`provider\` は **\`Provider\` トレイトを実装したなんらかの型** です。HTTP・WebSocket・IPCなど中身が違っても、同じインターフェースで呼べる。これがトレイトの威力です。
+\`provider\` は **\`Provider\` トレイトを実装した何らかの型** である。HTTP・WebSocket・IPCで中身が違っても、同じインターフェースで呼べる。これがトレイトの威力である。
 
 ### トレイトの最重要ポイント — Reth/Revmで頻出
 
@@ -894,7 +894,7 @@ provider.get_block_number().await?;
 
 ## 3. ジェネリクス — 「型を後から決める」
 
-\`Vec<i32>\` の \`<i32>\` がジェネリクスです。\`Vec\` は **何でも入れられる** が、コンパイル時にどの型を入れるか確定する。
+\`Vec<i32>\` の \`<i32>\` がジェネリクスである。\`Vec\` は **何でも入れられる** が、コンパイル時に要素型を確定する。
 
 \`\`\`rust
 fn first<T: Clone>(v: &Vec<T>) -> T {
@@ -907,7 +907,7 @@ let f = first(&v);   // T = i32 と推論される
 
 ### Alloyの \`Provider<N: Network = Ethereum>\`
 
-実は Alloy の Provider は **「どのネットワーク向けか」** を型パラメータで持ちます。
+Alloy の Provider は **「どのネットワーク向けか」** を型パラメータで持つ。
 
 \`\`\`rust
 let p = ProviderBuilder::new()              // デフォルトは Ethereum
@@ -918,11 +918,11 @@ let p = ProviderBuilder::new()
     .connect_http(rpc_url);
 \`\`\`
 
-これが「コンパイル時に型でチェーンが固定される＝ランタイムバグが減る」というRustらしい設計です。
+これは「コンパイル時に型でチェーンを固定し、ランタイムバグを減らす」というRustらしい設計である。
 
 ## 4. ライフタイム（チラ見せ）
 
-\`&str\` のような借用には実は **ライフタイム** \`<'a>\` という注釈が暗黙にあります。
+\`&str\` のような借用には、実は **ライフタイム** \`<'a>\` 注釈が暗黙にある。
 
 \`\`\`rust
 fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
@@ -950,7 +950,7 @@ async fn my_exex<Node: FullNodeComponents>(
 - \`while let Some(x) = ...\` ：Optionの中身を取り出すパターン
 - \`.await?\` ：非同期＋エラー伝播
 
-すべて、ここまでで紹介した文法の組み合わせです。**読めれば、書けます。**
+すべて、ここまでで紹介した文法の組み合わせである。**読めれば、書ける。**
 
 次のレッスンで、実際のRevmの世界に入っていきましょう。`,
                 },
@@ -965,7 +965,7 @@ async fn my_exex<Node: FullNodeComponents>(
 
 > 🧭 **このレッスンの位置づけ:** **VM 層のエンジン本体** に踏み込む回。Inside REVM で後ほど \`add\`・opcode テーブル・\`Database\` を内側から読みに行く前に、ここで全体像を掴んでおく。
 
-ここまででAlloy（外側のRPC）と、EVMが「スタックマシン」であることを学びました。次の主役は **Revm** — 実際にOpcodeを実行する **エンジン** そのものです。
+ここまででAlloy（外側のRPC）と、EVMがスタックマシンであることを学んだ。次の主役は **Revm**、実際にOpcodeを実行する **エンジン** そのものである。
 
 ## Revmの位置づけ
 
@@ -1013,11 +1013,11 @@ Revmは以下を公開（[\`crates/revm/src/lib.rs\`](https://github.com/blueall
 | **zkVM（Risc0等）** | 証明可能なEVM実行 |
 | **MEV/シミュレーション** | 1msでも速く取引を再現したい場面 |
 
-「ライブラリとして使える」「Rustなので組み込みやすい」「カスタマイズが容易」という3点が、ほぼ独占を生み出した理由です。
+「ライブラリ利用しやすい」「Rustで組み込みやすい」「カスタマイズ容易」という3点が、ほぼ独占を生んだ理由である。
 
 ## 次のステップ
 
-Revmは「動かすための部品」が分かれば、コードを読み始められます。**次のレッスン** で Foundry — 日常的に使う Rust EVM ツールチェイン — を扱い、その後 **中級** ティアで Interpreter フォルダに入ります。
+Revmは「動かすための部品」が分かれば、コードを読み始められる。**次のレッスン** で Foundry（日常的に使う Rust EVM ツールチェイン）を扱い、その後 **中級** ティアで Interpreter フォルダに入る。
 
 ## 📺 関連動画
 
@@ -1031,398 +1031,80 @@ xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024)
                   slug: 'foundry-toolchain-ja',
                   type: 'CONTENT',
                   sortOrder: 4,
-                  duration: 18,
-                  xpReward: 35,
-                  content: `# Foundry — Rust EVMツールチェイン
+                  duration: 10,
+                  xpReward: 20,
+                  content: `# Foundry — Rust EVMツールチェイン（導線）
 
-> 🧭 **このレッスンの位置づけ:** Foundry は、Reth / Revm / Alloy と並ぶ **ツール層** — 同じ Rust EVM スタックを、スマートコントラクト開発者向けに公開したもの。ノード側を目指す場合でも有用 — エコシステムがノードと話すときの共通インタフェースだから。
+> 🧭 **このレッスンの位置づけ:** Fundamentals では「Foundry が Rust EVM スタックのどこにあるか」だけを押さえる。実装・テスト規律の本編は **mastering-foundry-ja** で扱う。
 
-Reth（ノード）と Revm（エンジン）は見ました。**Rust EVM スタックの第3の柱** が **[Foundry](https://github.com/foundry-rs/foundry)** — Paradigm の Solidity 開発ツールチェインで、すべてが Revm の上に作られています。Rust EVM チェーンに触れる Solidity を書くなら、Foundry を毎日使うことになる。
-
-4つのバイナリ：
+Foundry は Reth / Revm / Alloy と同じ Rust EVM 系譜のツールチェインで、主に次の 4 つから成る。
 
 | ツール | 役割 |
 | :--- | :--- |
-| **forge** | Solidity のビルド・テスト・フォーマット — テストは Revm の中で走る |
-| **cast** | 「スイスアーミーナイフ」 — コントラクト呼び出し、calldata デコード、チェーンクエリ |
-| **anvil** | ローカル Ethereum ノード（メインネットフォーク機能付き、Revm ベース） |
-| **chisel** | Solidity REPL — コードを貼って即 Revm で実行 |
+| **forge** | Solidity の build / test |
+| **cast** | RPC / calldata / storage の検査 |
+| **anvil** | ローカルノード（fork 含む） |
+| **chisel** | Solidity REPL |
 
-## 1. インストール — [Foundry リポジトリ README](https://github.com/foundry-rs/foundry) より一字一句
+最小セットアップ:
 
 \`\`\`bash
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
-\`\`\`
-
-\`foundryup\` は最新の \`forge\`/\`cast\`/\`anvil\`/\`chisel\` を \`~/.foundry/bin\` に配置するマネージャ。
-
-## 2. \`forge\` — Revm 上で動く Solidity
-
-\`\`\`bash
 forge init counter && cd counter
-forge build
 forge test
 \`\`\`
 
-\`forge test\` がハイライト。これが何をするか：
+ここで理解すべき要点は 1 つだけ: **\`forge test\` は Revm の上で実行される**。  
+つまり Foundry は、ノード開発と分断された別世界ではなく、同じ実行基盤の開発者向けインターフェースである。
 
-1. Solidity テストをコンパイル
-2. **メモリ内DBの新しい Revm インスタンスを起動**
-3. 各 \`testXxx\` 関数を Revm 経由で実行
-4. pass/fail、ガス使用量、トレースを報告
+## この先の学習導線
 
-ここで既に Revm を使っています。\`forge test\` は、ほとんどの Solidity 開発者にとって **毎日触れる本番 Revm 利用例**。
+- 詳細な Foundry 全体像: \`/courses/mastering-foundry-ja/lessons/foundry-orientation-ja\`
+- Cheatcode の内部機構: \`/courses/mastering-foundry-ja/lessons/foundry-anvil-cheatcodes-ja\`
+- 実務レベルのテスト規律: fuzz / invariant / cheatcode は Foundry 本編へ
 
-## 3. Cheatcodes — Foundry の秘密兵器
+## テスト観点（このページで最低限）
 
-Solidity テストの中で、通常のコントラクトでは不可能なことができます：
+Foundry テストの型は 3 つだけ覚える:
 
-\`\`\`solidity
-import "forge-std/Test.sol";
+1. **unit**（\`forge test\`）
+2. **fuzz**（入力空間の探索）
+3. **invariant**（呼び出し順序を跨ぐ保存則）
 
-contract MyTest is Test {
-    function testTransfer() public {
-        vm.deal(alice, 10 ether);             // alice に 10 ETH 与える
-        vm.warp(block.timestamp + 1 days);    // 1日進める
-        vm.prank(alice);                       // 次のコールは alice 発信扱い
-        myContract.transfer(bob, 1 ether);
-    }
-}
-\`\`\`
-
-なぜ可能か？**Cheatcodes は、Foundry が Revm precompile として注入した特殊アドレスへのコール**。[\`forge-std/src/Base.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Base.sol) より：
-
-\`\`\`solidity
-address internal constant VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
-\`\`\`
-
-このアドレスは **暗号学的特性を持たない** — 文字通り：
-
-\`\`\`solidity
-address(uint160(uint256(keccak256("hevm cheat code"))))
-\`\`\`
-
-Foundry はこのアドレスに **カスタム precompile を登録した Revm** を走らせています。Solidity から \`vm.deal(...)\` を呼ぶと、実際は \`0x7109...\` への \`CALL\` で ABI エンコード済み引数を渡しており、それを Foundry の Rust コードが横取りする仕組みです。
-
-これが **Expert ティアで見る precompile 登録機構そのもの**。Foundry は最も広く使われている本番のカスタム precompile 実例。
-
-## 4. \`cast\` — EVM スイスアーミーナイフ
+最小サイクル:
 
 \`\`\`bash
-# 任意のチェーンと通信
-cast block-number --rpc-url https://eth.merkle.io
-cast balance vitalik.eth --ether --rpc-url https://eth.merkle.io
-
-# calldata 検査
-cast 4byte 0xa9059cbb              # → "transfer(address,uint256)"
-cast --abi-decode "balanceOf(address)(uint256)" 0x...
-
-# ストレージ読み取り
-cast storage 0xUniswapV2Pair 0 --rpc-url https://eth.merkle.io
-
-# tx を送らずにコール（eth_call）
-cast call $TOKEN "balanceOf(address)(uint256)" $WALLET --rpc-url ...
-\`\`\`
-
-MEV サーチャーや RPC エンジニアにとって、\`cast\` は手が勝手に動くレベルの常用ツール。1日に何十回もチェーン状態を確認するのに使う。
-
-## 5. \`anvil\` — ローカルノード + メインネットフォーク
-
-\`\`\`bash
-# スタンドアロンのローカルチェーン — 即時ブロック、10アカウントに資金あり
-anvil
-
-# 最新ブロックでメインネットフォーク — ローカルから本物のプロトコルと対話
-anvil --fork-url https://eth.merkle.io
-\`\`\`
-
-フォークモードがキラー機能。これは **\`AlloyDB\` 型のバッキングストアを持つ Revm インスタンス** で、上流 RPC から状態を遅延ロードします。**Uniswap V3 のメインネット状態に対して、ラップトップから testnet 不要で対話できる**。
-
-内部的には anvil は中級ティアの MEV レッスンで分解する \`forked_db\` パターンと同系統のコード。anvil はそれを Rust API ではなく JSON-RPC で公開しているだけ。
-
-## 6. \`chisel\` — Solidity REPL
-
-\`\`\`bash
-chisel
-> uint256 x = 1 + 2 * 3;
-> x
-7
-> address(0x1).balance
-0
-\`\`\`
-
-裏は Revm。1行打って即結果。フルファイルを書かずに済むコントラクト実験用。
-
-## 7. ハードコア Rust EVM 開発でなぜ重要か
-
-本格的な Rust EVM 開発を目指すなら、Foundry は **日常ツールであり、巨大な Revm 利用例として学べる** 存在：
-
-- \`foundry-rs/foundry/crates/cheatcodes\` を読めば、本番のカスタム precompile システムが分かる
-- \`forge\` テストランナーはファジング・invariant テスト・カバレッジ付きの本物の Revm オーケストレータ
-- \`anvil\` の状態フォーキングは、中級ティアの Database レッスンで扱う \`AlloyDB\` パターンの本番版
-
-## 練習
-
-1. Foundry インストール：\`curl -L https://foundry.paradigm.xyz | bash && foundryup\`
-2. \`forge init my-test && cd my-test && forge test\` — 最初の Revm バックの Solidity テストを実行
-3. \`anvil --fork-url https://ethereum.reth.rs/rpc\` — メインネットをローカルにフォーク（前のレッスンで使った Reth プロジェクトの公開 RPC をそのまま再利用）
-4. 別のターミナルで以下を実行 — ローカルフォーク経由で生きた Uniswap 状態を読む。アドレス \`0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8\` は **Uniswap V3 の USDC/ETH 0.05% プール**（メインネット上で最もアクティブな pool の一つ）：
-
-   \`\`\`bash
-   cast call 0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8 "slot0()" --rpc-url http://localhost:8545
-   \`\`\`
-5. [\`forge-std/src/Vm.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Vm.sol) を開いて cheatcode インターフェースを眺める — 各エントリが Foundry の Rust precompile の関数に対応している
-
-これで Revm を学習者として、また日常的な利用者として使う立場になりました。
-
-## 📺 関連動画
-
-\`\`\`youtube
-wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular toolkit for Ethereum applications
-\`\`\`
-`,
-                },
-                {
-                  title: 'Foundry でテストを書く — \`forge test\` を本番スキルとして',
-                  slug: 'foundry-tests-ja',
-                  type: 'CONTENT',
-                  sortOrder: 5,
-                  duration: 25,
-                  xpReward: 50,
-                  content: `# Foundry でテストを書く — \`forge test\` を本番スキルとして
-
-> 🧭 **このレッスンの位置づけ:** Building ティアがあなたに要求する **検証規律** を、ここで先に導入する。テスト ＝ 実行可能な仕様。Reth / Revm / Foundry のメンテナ全員が、自分自身に課しているのと同じ基準。
-
-前のレッスンで \`forge test\` を実行し、その下で Revm が立ち上がる様子を見ました。本レッスンでは、実際にバグを捕まえる **テストを書く** スキルに進みます — 監査済みコントラクト、MEV searcher、L2 sequencer が本番に出すときに必ず備えているテストです。
-
-テスト設計こそ、趣味の Solidity と本番コードを分ける境界線です。立派なコメントが付いていてテストが無いコントラクトは本番ではなく、スケッチです。
-
-## 1. 全テストの形：Arrange · Act · Assert
-
-Foundry のテストは 3 つに分解できます：
-
-\`\`\`solidity
-import "forge-std/Test.sol";
-
-contract CounterTest is Test {
-    Counter counter;
-
-    function setUp() public {
-        counter = new Counter();
-    }
-
-    function testIncrementsByOne() public {
-        // Arrange — 上の setUp() で完了
-        uint256 before = counter.count();
-
-        // Act
-        counter.increment();
-
-        // Assert
-        assertEq(counter.count(), before + 1);
-    }
-}
-\`\`\`
-
-\`setUp()\` は各テストの前に実行される。\`assertEq\` が主アサーション — Rust の \`assert_eq!\` と同じ発想。値が違えばトレースに diff 付きで失敗が表示される。
-
-Foundry は各 \`testXxx\` 関数を **\`setUp()\` から組み直した新しい Revm 状態** に対して実行します。テスト間で状態が漏れることはありません。
-
-## 2. 9 割の場面で使う 4 つの cheatcode
-
-前のレッスンで \`vm.deal\`、\`vm.warp\`、\`vm.prank\` を見ました。あれらは状態を *書き換えて* シナリオを準備するもの。次の 4 つは状態を *確認する* cheatcode — コントラクトが正しく振る舞ったかを assert する道具です。
-
-### \`vm.expectRevert(bytes)\` — 「次の呼び出しは revert するはず」
-
-\`\`\`solidity
-function testCannotWithdrawMoreThanBalance() public {
-    vm.expectRevert("Insufficient balance");
-    vault.withdraw(100 ether);
-}
-\`\`\`
-
-Foundry は次の外部呼び出しが指定の理由文字列（カスタムエラーなら 4 バイトセレクタ）で revert することを期待する。成功したら fail。違う理由で revert したら期待値と実値の両方を出して fail。
-
-\`try/catch\` の plumbing を書かずに **失敗パスをテストする** 方法。
-
-### \`vm.expectEmit(...)\` — 「イベントが発火するはず」
-
-\`\`\`solidity
-function testTransferEmitsEvent() public {
-    vm.expectEmit(true, true, false, true);    // topic1, topic2, topic3, data を確認
-    emit Transfer(alice, bob, 1 ether);         // 期待されるイベント
-    token.transfer(bob, 1 ether);
-}
-\`\`\`
-
-bool フラグはどの topic を確認するか。indexed イベント引数は topic に、非 indexed 引数は \`data\` にパックされる。これは ERC-20 / ERC-721 の表面が、下流のインデクサや dapp が依存するイベントをちゃんと吐いていることを保証する手段。
-
-### \`vm.expectCall(address, bytes)\` — 「コントラクトは X を呼ぶはず」
-
-\`\`\`solidity
-function testWithdrawCallsTransfer() public {
-    vm.expectCall(
-        address(token),
-        abi.encodeWithSelector(token.transfer.selector, alice, 1 ether)
-    );
-    vault.withdraw(1 ether);
-}
-\`\`\`
-
-これはコンポーザビリティのテスト方法 — 依存先に正しく委譲しているかを確認する。特に依存先が fork した本番アドレスのとき、価値が高い。
-
-### \`vm.recordLogs()\` / \`vm.getRecordedLogs()\` — 「発火したものを全部見せろ」
-
-\`\`\`solidity
-function testReentrancyEmitsTwoEvents() public {
-    vm.recordLogs();
-    vault.deposit{value: 1 ether}();
-    Vm.Log[] memory logs = vm.getRecordedLogs();
-    assertEq(logs.length, 2);
-}
-\`\`\`
-
-事前にどのイベントが出るか分からないとき — たとえばデバッグ中 — は全部記録して配列に対して assert する。
-
-## 3. Fork テスト — 本物のチェーン状態でテストを走らせる
-
-ユニットテストは空の Revm に対して走る。Fork テストは **mainnet（あるいは任意のチェーン）の特定ブロック時点のスナップショット** に対して走る：
-
-\`\`\`solidity
-contract UniswapV3Test is Test {
-    uint256 mainnetFork;
-
-    function setUp() public {
-        mainnetFork = vm.createFork("https://eth.merkle.io", 18_500_000);
-        vm.selectFork(mainnetFork);
-    }
-
-    function testPriceQuoteAgainstRealPool() public {
-        IUniswapV3Pool pool = IUniswapV3Pool(0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640);
-        (uint160 sqrtPriceX96,,,,,,) = pool.slot0();
-        // sqrtPriceX96 はブロック 18_500_000 の本物の値
-        assertGt(sqrtPriceX96, 0);
-    }
-}
-\`\`\`
-
-\`vm.createFork\` は \`AlloyDB\` 風の状態を背後に持つ Revm インスタンスを構築し、\`SLOAD\` ごとに upstream RPC から lazy load してキャッシュします。**実際にデプロイされている Uniswap V3 コントラクトに対して、特定ブロック高でテストできる** — testnet も、ローカルデプロイも、チェーン状態のモックも要らない。
-
-これは **MEV searcher、監査再現、オンチェーンプロトコルと統合するコントラクト** の本番パターンです。テストを決定的にするためにブロックを pin する。
-
-> 💡 **CI コスト。** Fork テストは upstream RPC を叩く。有料エンドポイント（Alchemy、Infura）はクォータを消費する。ブロックを pin してレスポンスをキャッシュする（Foundry はデフォルトで \`~/.foundry/cache\` にキャッシュ）か、CI ではパブリック RPC を使う。
-
-## 4. Fuzz テスト — 1 本のテストを数千本に化けさせる
-
-\`testXxx\` 関数に引数を足すと、Foundry がランダム入力を生成します：
-
-\`\`\`solidity
-function testTransferAlwaysReducesSenderBalance(uint96 amount) public {
-    amount = uint96(bound(amount, 1, token.balanceOf(alice)));
-    uint256 before = token.balanceOf(alice);
-
-    vm.prank(alice);
-    token.transfer(bob, amount);
-
-    assertEq(token.balanceOf(alice), before - amount);
-}
-\`\`\`
-
-Foundry はデフォルトで 256 回、ランダム \`amount\` で実行する。\`bound(value, min, max)\` は任意の入力を有効範囲にマップする — \`vm.assume()\`（範囲外を捨てて遅くなる）より優先して使う、特定の理由で捨てる必要がない限り。
-
-**fuzz するタイミング**：ユーザー入力で算術をするときは常に。\`uint256\`、\`int256\`、\`bytes\` を受け取るものは信用する前に fuzz する。Foundry の fuzzer は本番監査コードでユニットテストが取り逃したバグを日常的に発見します。
-
-## 5. Invariant テスト — どの呼び出し順でも成立すべき性質
-
-Invariant は、どの関数がどの順で呼ばれても **常に** 成立すべき性質をテストする：
-
-\`\`\`solidity
-contract VaultInvariantTest is Test {
-    Vault vault;
-    Handler handler;
-
-    function setUp() public {
-        vault = new Vault();
-        handler = new Handler(vault);
-        targetContract(address(handler));   // \`handler\` の関数をランダムに呼ぶよう Foundry に指示
-    }
-
-    function invariant_totalSharesMatchesAssets() public view {
-        assertEq(vault.totalShares(), vault.totalAssetsBacking());
-    }
-}
-\`\`\`
-
-Foundry の invariant runner は \`handler\`（fuzz したい操作を露出させる）の関数をランダム順で呼び、呼び出し間で \`invariant_*\` を全部評価する。invariant を破る順序があれば、最小の再現ケースが返ってくる。
-
-DEX、貸出、vault のような contracts が「3 つの操作の組み合わせで会計が壊れる」種類のバグを単純な fuzz では捕まえられないとき、これが効きます。
-
-## 6. Gas snapshot — リグレッション検出
-
-\`\`\`bash
+forge test
+forge test -vvv
 forge snapshot
 \`\`\`
 
-\`.gas-snapshot\` ファイルに各テストのガス使用量を記録する。次回 \`forge test\` 時、ガスが増えたテストを警告する。CI でリグレッションを fail にできる。
+本番前の最低基準:
 
-\`\`\`bash
-forge snapshot --diff
-\`\`\`
+- 失敗パスを \`vm.expectRevert\` で確認
+- 重要イベントを \`vm.expectEmit\` で確認
+- 算術を含む public 入力を fuzz
+- 会計保存則を invariant で確認
 
-最後の snapshot からの差分を見せる。「リファクタしたら全 transfer に 10K gas 足してしまった」を merge 前に捕まえる方法です。
+## ここから先（重複回避のため専用コースへ）
 
-## 7. EVM コントラクトテストのチェックリスト
-
-本番投入予定のコントラクトについて、**「テスト済みか?」** という問いは次のように分解できます：
-
-| レイヤー | 何を assert するか |
-| :--- | :--- |
-| **State** | 状態を変える呼び出しの後、変わるはずのストレージスロットが期待値を持っているか |
-| **Events** | 公開アクションがドキュメント通りの引数でドキュメント通りのイベントを吐くか |
-| **Reverts** | revert パスが全て試されているか — 不正入力、未認可呼び出し、残高不足、pause 状態 |
-| **Gas** | hot path に snapshot テストがあり、リファクタで暗黙に膨らまないか |
-| **Composability** | 跨りコールが正しい引数で起きているか（\`vm.expectCall\`） |
-| **Fork integrations** | Uniswap / Aave / 本物のアドレスに依存するなら、pin した mainnet fork でテストしているか |
-| **Properties (fuzz)** | ユーザー入力との算術は fuzz されているか、保存則（total supply、残高合計）は invariant で守られているか |
-
-「完全な」Foundry テストスイートは、全 public 関数についてこれらの行をすべて埋めている。本番監査の指摘の大半は **Reverts** と **Properties** の行が空であることに集中します。
-
-## ドリル
-
-1. \`forge init counter && cd counter\`
-2. \`Counter.sol\` を書く: \`increment()\`、\`decrement()\`（underflow で revert）、\`set(uint256)\`（owner のみ呼べる、\`CountSet(uint256 newValue)\` イベントを吐く）
-3. 以下に当たるテストを書く：
-   - \`increment\` の \`assertEq\`（state）
-   - 0 からの \`decrement\` で \`vm.expectRevert\`
-   - 非 owner からの \`set\` で \`vm.expectRevert\`
-   - \`set\` の \`vm.expectEmit\`
-   - fuzz テスト：\`testSetReturnsTheValueYouSet(uint256 x)\`
-4. \`forge test -vvv\` — トレースを読む
-5. \`forge snapshot\` — snapshot をコミット
-6. \`increment\` に無意味な \`unchecked\` ブロックを足す。再実行して gas snapshot が変化を検出することを確認
-
-\`forge test\` が green で snapshot がコミットされたら、「テストについて読んだ」から「テスト済みコントラクトを持っている」に渡れたことになる。
-
-## なぜこれが中級ティアの前に必要か
-
-Inside REVM では Revm 自身の state-test フレームワークを歩く。Inside Reth では \`Stage\` トレイトの単体テストを歩く。**どちらもあなたが既に test-first で考えている前提** で進む — 「テストは後で足す」が smell であって計画ではないことを、本レッスンが先に植え付ける。
-
-## 📺 関連リンク
-
-[Foundry Book — Forge testing chapter](https://getfoundry.sh/forge/tests/overview/) — 全 cheatcode リファレンスと CLI オプション。
+- テスト規律の全体像: \`/courses/mastering-foundry-ja/lessons/foundry-orientation-ja\`
+- fuzz 実践: \`/courses/mastering-foundry-ja/lessons/foundry-forge-fuzz-ja\`
+- invariant 実践: \`/courses/mastering-foundry-ja/lessons/foundry-forge-invariant-ja\`
+- cheatcode / fork 実践: \`/courses/mastering-foundry-ja/lessons/foundry-anvil-cheatcodes-ja\`
 `,
                 },
                 {
                   title: 'Fundamentalsまとめクイズ',
                   slug: 'fundamentals-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 6,
+                  sortOrder: 5,
                   duration: 12,
                   xpReward: 30,
                   content: `# Fundamentalsまとめクイズ
 
-Alloy・EVM・Revmの基礎を理解できたか確認します。`,
+Alloy・EVM・Revmの基礎を理解できたか確認する。`,
                   quizQuestions: [
                     {
                       question: 'Alloyの `PrivateKeySigner::random()` で得られるものは？',
@@ -1433,7 +1115,7 @@ Alloy・EVM・Revmの基礎を理解できたか確認します。`,
                         '監査済みのスマートコントラクト',
                       ],
                       correctIndex: 1,
-                      explanation: 'PrivateKeySignerは秘密鍵を保持し、署名を行うオブジェクトです。.address()で公開アドレスを取り出せます。',
+                      explanation: 'PrivateKeySignerは秘密鍵を保持し、署名を行うオブジェクトである。.address()で公開アドレスを取り出せる。',
                     },
                     {
                       question: 'Alloyの `ProviderBuilder::new().connect_http(url)` で作るのは？',
@@ -1444,7 +1126,7 @@ Alloy・EVM・Revmの基礎を理解できたか確認します。`,
                         '新しいブロックチェーン',
                       ],
                       correctIndex: 1,
-                      explanation: 'ProviderはノードへのRPCクライアントで、get_block_numberやget_balanceなどのメソッドを提供します。',
+                      explanation: 'ProviderはノードへのRPCクライアントであり、get_block_numberやget_balanceなどのメソッドを提供する。',
                     },
                     {
                       question: 'EVM の `ADD` 命令はどのように動きますか？',
@@ -1455,7 +1137,7 @@ Alloy・EVM・Revmの基礎を理解できたか確認します。`,
                         'gasLimitを2倍にする',
                       ],
                       correctIndex: 1,
-                      explanation: 'EVMはスタックマシンで、ADDはスタック上の2つの値をpopし加算結果をpushします。オーバーフローはuint256でラップします。',
+                      explanation: 'EVMはスタックマシンで、ADDはスタック上の2つの値をpopし、加算結果をpushする。オーバーフローはuint256でラップする。',
                     },
                     {
                       question: 'Revmが Foundry や Reth で使われている主な理由は？',
@@ -1466,7 +1148,7 @@ Alloy・EVM・Revmの基礎を理解できたか確認します。`,
                         'Solidityコンパイラが内蔵されているから',
                       ],
                       correctIndex: 1,
-                      explanation: 'Revmはライブラリとして設計されており、Foundry、Reth、OP-Reth、各種zkVM、MEVボットなどで採用されています。',
+                      explanation: 'Revmはライブラリとして設計され、Foundry、Reth、OP-Reth、各種zkVM、MEVボットなどで採用されている。',
                     },
                     {
                       question: 'EVMで「永続化される」のはどの記憶領域ですか？',
@@ -1477,7 +1159,7 @@ Alloy・EVM・Revmの基礎を理解できたか確認します。`,
                         'コールデータ（Calldata）',
                       ],
                       correctIndex: 2,
-                      explanation: 'スタックとメモリはトランザクション内のみ揮発、Storageだけがブロックチェーン状態に永続化されます。書き込みコストが高いのもStorageの特徴です。',
+                      explanation: 'スタックとメモリはトランザクション内のみ揮発し、Storageだけがブロックチェーン状態に永続化される。書き込みコストが高いのもStorageの特徴である。',
                     },
                   ],
                 },

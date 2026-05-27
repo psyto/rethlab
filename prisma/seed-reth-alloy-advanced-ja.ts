@@ -40,13 +40,13 @@ export async function seedRethAlloyAdvancedJA(prisma: PrismaClient) {
 - **Inside Reth** — Reth の内側: Staged Sync・ExEx・Reth SDK
 - **Inside Alloy**（あなたはここ）— Alloy の内側: Provider・Network・Signer
 
-Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い、Revm は alloy の primitive を使い、Rust から Ethereum と通信する dapp / MEV ボット / インデクサはすべて alloy の \`Provider\` を使います。本コースが教えるのは **alloy のソースを読む** スキル — Inside Revm が revm を読む力を養うのと同じ形です。
+Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い、Revm は alloy の primitive を使い、Rust から Ethereum と通信する dapp / MEV ボット / インデクサはすべて alloy の \`Provider\` を使いる。本コースが教えるのは **alloy のソースを読む** スキル — Inside Revm が revm を読む力を養うのと同じ形である。
 
-> 📋 **中級ティアは初めて?** 始める前に *中級への橋渡し* の末尾にある **「中級コースの読み方」** に目を通してください。編集スタイル（Predict プロンプト、クイズゲート、build-up → walkthrough → quiz → drill のチェーン構造）とペース配分を説明しています。3 つの中級コース全てに共通なので、1 度だけ読めば十分。
+> 📋 **中級ティアは初めて?** 始める前に *中級への橋渡し* の末尾にある **「中級コースの読み方」** に目を通してしてほしい。編集スタイル（Predict プロンプト、クイズゲート、build-up → walkthrough → quiz → drill のチェーン構造）とペース配分を説明している。3 つの中級コース全てに共通なので、1 度だけ読めば十分。
 
 ## このコースが教えること
 
-[\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) のソースを 1 行ずつ読みます:
+[\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) のソースを 1 行ずつ読む:
 
 - **\`Provider\` トレイト** — Ethereum ノードと話すための中心的なトレイト
 - **\`Network\` トレイト** — alloy が Ethereum・Optimism・Anvil・カスタム L2 を同じ API で扱う仕組み
@@ -54,7 +54,7 @@ Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い
 
 トピックチェーンは 3 本、それぞれ build-up + walkthrough + quiz + drill の構成。
 
-読み終える頃には alloy のホットパスを読みこなし、カスタム Provider レイヤーを構築できるようになります — MEV パイプライン、インデクサ、Reth-SDK App-chain が本番に投入しているのと同じ種類のコードです。
+読み終える頃には alloy のホットパスを読みこなし、カスタム Provider レイヤーを構築できるようになる — MEV パイプライン、インデクサ、Reth-SDK App-chain が本番に投入しているのと同じ種類のコードである。
 
 ## 前提知識
 
@@ -64,9 +64,9 @@ Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い
 - \`async\` / \`Future\` の基礎、Tokio ランタイムモデル
 - \`auto_impl\` マクロと手続き属性
 
-**EVM 内部の知識は不要。** Alloy は EVM の上で動きます — 通信相手はノードであって opcode ではありません。(3 つの中級コース全てを受けるなら、EVM 内部は Inside Revm で扱います。)
+**EVM 内部の知識は不要。** Alloy は EVM の上で動きます — 通信相手はノードであって opcode ではない。(3 つの中級コース全てを受けるなら、EVM 内部は Inside Revm で扱いる。)
 
-**alloy をユーザーとして使った経験** — \`Provider::get_balance\`、\`ProviderBuilder\`、tx 署名 — は Fundamentals（\`alloy-primitives-signing\`、\`alloy-provider\`）で扱います。心もとなければ Fundamentals レッスンを先に。本コースが教えるのは alloy を *使う* ことではなく *読む* ことです。
+**alloy をユーザーとして使った経験** — \`Provider::get_balance\`、\`ProviderBuilder\`、tx 署名 — は Fundamentals（\`alloy-primitives-signing\`、\`alloy-provider\`）で扱いる。心もとなければ Fundamentals レッスンを先に。本コースが教えるのは alloy を *使う* ことではなく *読む* ことである。
 
 ## セットアップ — 一度だけ
 
@@ -82,7 +82,7 @@ Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い
 
 コース詳細に戻り、**\`Provider\` トレイトをステップで組み立てる** から始めましょう。
 
-Inside Alloy を終えると、3 つの中級コースをすべて完了したことになる。続く **Expert** では手続きマクロと zkVM 統合を深掘りします。`,
+Inside Alloy を終えると、3 つの中級コースをすべて完了したことになる。続く **Expert** では手続きマクロと zkVM 統合を深掘りしる。`,
                 },
                 {
                   title: '\`Provider\` トレイトをステップで組み立てる',
@@ -244,7 +244,7 @@ pub struct ProviderImpl<T: Transport, N: Network> {
 
 > 🔍 **リポジトリで確認。** alloy で \`alloy-transport\` と \`alloy-transport-http\` を検索。トランスポートが別クレートに切り出されている点に注目。おかげで \`alloy-transport-http\` *だけ*、あるいは \`alloy-transport-ws\` *だけ* に依存できる — 両方を引き込まずに済む。
 
-(現行 alloy では、トランスポート抽象は \`tower::Service\` を内側に持つ \`Transport\` + \`TransportConnect\` という、より精緻な設計へ進化しています。とはいえ構造的な決定 — トランスポートを抽象化して 1 つのプロバイダ実装ですべてを動かす — は不変の骨格です。)
+(現行 alloy では、トランスポート抽象は \`tower::Service\` を内側に持つ \`Transport\` + \`TransportConnect\` という、より精緻な設計へ進化している。とはいえ構造的な決定 — トランスポートを抽象化して 1 つのプロバイダ実装ですべてを動かす — は不変の骨格である。)
 
 ## ステップ 4 — \`RootProvider\` と \`root()\` による間接化
 
@@ -352,7 +352,7 @@ pub trait Provider<N: Network = Ethereum>: Send + Sync {
 - **\`FillProvider\` / \`Filler\`**（ステップ 5）— 署名、nonce、ガスを合成可能な層に
 - **\`auto_impl\`**（ステップ 6）— \`Arc<P>\` がそのまま \`Provider\` として動く; タスク間で安価に共有できる
 
-次のレッスンでは、alloy 本体の \`crates/provider/src/provider/trait.rs\` を 1 行ずつ読み、各行を組み立てステップに対応づけていきます。
+次のレッスンでは、alloy 本体の \`crates/provider/src/provider/trait.rs\` を 1 行ずつ読み、各行を組み立てステップに対応づけていきる。
 
 ## 先に進む前のリコール
 
@@ -375,11 +375,11 @@ pub trait Provider<N: Network = Ethereum>: Send + Sync {
                   xpReward: 25,
                   content: `# 本物の \`Provider\` トレイトを読む
 
-素朴な RPC クライアントから本物のトレイトの形まで \`Provider\` を組み立ててきました。今度はソースを開きます — [\`crates/provider/src/provider/trait.rs\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) を開いて、本番版を 1 行ずつ読み解きます。読むピースのひとつひとつが、それを動機づけた組み立てステップに対応しているはずです。
+素朴な RPC クライアントから本物のトレイトの形まで \`Provider\` を組み立ててきました。今度はソースを開きます — [\`crates/provider/src/provider/trait.rs\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) を開いて、本番版を 1 行ずつ読み解きる。読むピースのひとつひとつが、それを動機づけた組み立てステップに対応しているはずである。
 
-特に大事なのは、組み立てが意図的に省いた部分を埋めること — **戻り値型の機構**（\`ProviderCall\`、\`RpcWithBlock\`、\`EthCall\`、\`PendingTransactionBuilder\` — await する *前* に RPC 呼び出しをカスタマイズできる future ビルダー型）。これらのラッパー型は、alloy に初めて触れる人がもっとも奇妙に感じる部分です — が、存在理由が見えてくると、トレイトの面構えは恣意的なものではなくなります。
+特に大事なのは、組み立てが意図的に省いた部分を埋めること — **戻り値型の機構**（\`ProviderCall\`、\`RpcWithBlock\`、\`EthCall\`、\`PendingTransactionBuilder\` — await する *前* に RPC 呼び出しをカスタマイズできる future ビルダー型）。これらのラッパー型は、alloy に初めて触れる人がもっとも奇妙に感じる部分です — が、存在理由が見えてくると、トレイトの面構えは恣意的なものではなくなりる。
 
-> 📂 **\`alloy-rs/alloy/crates/provider/src/provider/trait.rs\` を今開く。** 行番号やメソッド本体は動きますが、構造的なポイントは変わりません。レッスンが「現行 alloy main」と言っていても、引用部分は **必ず自分の手元で確認** してください。
+> 📂 **\`alloy-rs/alloy/crates/provider/src/provider/trait.rs\` を今開く。** 行番号やメソッド本体は動きますが、構造的なポイントは変わりません。レッスンが「現行 alloy main」と言っていても、引用部分は **必ず自分の手元で確認** してしてほしい。
 
 ## トレイトヘッダー
 
@@ -623,9 +623,9 @@ provider.send_transaction(tx).with_required_confirmations(3).get_receipt().await
                   xpReward: 25,
                   content: `# ドリル: ログ Provider ラッパーを作る
 
-読むだけではリハーサル。**手を動かすことで記憶になる。** このドリルでは、「ラッパープロバイダを読んだ」段階から「実際に書いて、実 RPC エンドポイントに当て、各呼び出しの経路に自分のコードが介在しているのを見届けた」段階まで進みます。
+読むだけではリハーサル。**手を動かすことで記憶になる。** このドリルでは、「ラッパープロバイダを読んだ」段階から「実際に書いて、実 RPC エンドポイントに当て、各呼び出しの経路に自分のコードが介在しているのを見届けた」段階まで進みる。
 
-任意の Provider をラップし、選んだ RPC 呼び出しを内側のプロバイダへ転送する前にログ出力する \`LoggingProvider\` を書きます。これは **本番のインデクサや MEV パイプラインで実際に動いているのとまったく同じ種類のコード**: alloy をフォークせずに、RPC クライアントの上に観測可能性を層として積み増す形です。
+任意の Provider をラップし、選んだ RPC 呼び出しを内側のプロバイダへ転送する前にログ出力する \`LoggingProvider\` を書きる。これは **本番のインデクサや MEV パイプラインで実際に動いているのとまったく同じ種類のコード**: alloy をフォークせずに、RPC クライアントの上に観測可能性を層として積み増す形である。
 
 ## セットアップ
 
@@ -818,7 +818,7 @@ let bal = provider.get_balance(addr).await?;
 
 Optimism のトランザクションは L1 \`mint\` フィールドを持つ。レシートには \`l1_fee\` と \`l1_block_number\` が乗る。Polygon zkEVM の tx エンベロープにはシーケンサ署名がある。各 L2 は独自の tx・レシート・ブロックの形を持つ — それでも同じ \`Provider\` API がそのすべてで動く。**どうやって?** \`Network\` を通してだ: alloy の *型レベル辞書*（1 つのトレイトで、その関連型が、あるチェーンが使うチェーン固有の型一式を選ぶ）。
 
-Provider チェーンでは \`Network\` をブラックボックスとして扱いました。本チェーンではその中身を開けていきます。
+Provider チェーンでは \`Network\` をブラックボックスとして扱いました。本チェーンではその中身を開けていきる。
 
 このレッスンを終える頃には、以下のすべてを組み立てたことになる:
 
@@ -923,7 +923,7 @@ trait Network {
 
 > 🛑 **予測。** Receipt と Block を分割するとしたら、それぞれ何種類の関連型が出てくる? なぜ?
 
-スクロール前に答えを書く。下に続きます。
+スクロール前に答えを書く。下に続きる。
 
 ## ステップ 3 — レシートとヘッダーも分割される
 
@@ -1036,7 +1036,7 @@ alloy の具象実装は: \`Ethereum\`（\`alloy-network\` 内）、\`Optimism\`
 3. **\`'static\`** はトレイト境界のひとつ。\`Network: Send + Sync\`（\`'static\` なし）だったらどんなパターンが壊れるか?
 4. Optimism のデポジットには L1 \`mint\` フィールドが含まれる。**\`Ethereum\` と \`Optimism\` で値が異なる必要があるのはどの関連型か?**
 
-答えが曖昧ならスクロールして戻る。次のレッスンでは、alloy 本体の \`Network\` トレイトと \`Ethereum\` / \`Optimism\` の実装を詳しく読みます。
+答えが曖昧ならスクロールして戻る。次のレッスンでは、alloy 本体の \`Network\` トレイトと \`Ethereum\` / \`Optimism\` の実装を詳しく読みる。
 `,
                 },
                 {
@@ -1048,9 +1048,9 @@ alloy の具象実装は: \`Ethereum\`（\`alloy-network\` 内）、\`Optimism\`
                   xpReward: 25,
                   content: `# 本物の \`Network\` トレイト + Ethereum / Optimism 実装を読む
 
-10 個の関連型とトレイト境界を、素朴な出発点から動機づけてきました。今度は本物のソースを読みます — 組み立てで省いた関連型ごとのトレイト境界、alloy の \`Ethereum\` 実装、\`Optimism\` 実装の並列比較、そして \`TransactionRequest\` をチェーンをまたいで流暢に扱うためのヘルパートレイト（\`TransactionBuilder\`）まで。
+10 個の関連型とトレイト境界を、素朴な出発点から動機づけてきました。今度は本物のソースを読む — 組み立てで省いた関連型ごとのトレイト境界、alloy の \`Ethereum\` 実装、\`Optimism\` 実装の並列比較、そして \`TransactionRequest\` をチェーンをまたいで流暢に扱うためのヘルパートレイト（\`TransactionBuilder\`）まで。
 
-組み立てステップ 4 で見た「一貫性の性質」（関連型は『これらは組で動く』をひとまとめにする）が、ここで具体的な形になります。並べて見ると、Optimism がどのスロットをオーバーライドし、どのスロットを Ethereum から再利用しているかが一目で分かります。
+組み立てステップ 4 で見た「一貫性の性質」（関連型は『これらは組で動く』をひとまとめにする）が、ここで具体的な形になりる。並べて見ると、Optimism がどのスロットをオーバーライドし、どのスロットを Ethereum から再利用しているかが一目で分かりる。
 
 > 📂 **3 つのファイルをタブで開く:**
 > - \`crates/network/src/lib.rs\` — \`Network\` トレイト
@@ -1314,9 +1314,9 @@ impl Network for AnyNetwork {
                   xpReward: 25,
                   content: `# ドリル: Ethereum *と* Optimism で動く N 上ジェネリックなコードを書く
 
-読むだけではリハーサル。**手を動かすことで記憶になる。** このドリルでは、「\`Network\` が型レベル辞書だと読んだ」段階から、「チェーンごとのコードを書かずに、Ethereum でも Optimism でも動く 1 つの関数を書き上げた」段階まで進みます。
+読むだけではリハーサル。**手を動かすことで記憶になる。** このドリルでは、「\`Network\` が型レベル辞書だと読んだ」段階から、「チェーンごとのコードを書かずに、Ethereum でも Optimism でも動く 1 つの関数を書き上げた」段階まで進みる。
 
-本番での見返り: ブロックエクスプローラ、インデクサ、MEV ボット — 複数の EVM 互換チェーンをサポートしたいツールはすべて、中核ロジックを一度だけ \`N: Network\` 上ジェネリックに書きます。今回はその実演をします。
+本番での見返り: ブロックエクスプローラ、インデクサ、MEV ボット — 複数の EVM 互換チェーンをサポートしたいツールはすべて、中核ロジックを一度だけ \`N: Network\` 上ジェネリックに書きる。今回はその実演をしる。
 
 ## セットアップ
 
@@ -1744,7 +1744,7 @@ pub trait TxSigner<Sig> {
 - **\`SignerSync\` を並列トレイトに**（ステップ 4）— プロセス内鍵で async のオーバーヘッドを回避; ネットワーク束縛の署名者は async のみ
 - **\`WalletFiller\`**（ステップ 5）— Provider チェーンの Filler 機構を介して \`Signer\` / \`TxSigner\` を \`Provider\` のリクエストフローへつなぐ
 
-次のレッスンでは、alloy 本体の \`Signer\` トレイト、\`PrivateKeySigner\` 実装、\`AwsSigner\` 実装、\`WalletFiller\` のソースを行単位で読みます。
+次のレッスンでは、alloy 本体の \`Signer\` トレイト、\`PrivateKeySigner\` 実装、\`AwsSigner\` 実装、\`WalletFiller\` のソースを行単位で読みる。
 
 ## 先に進む前のリコール
 
@@ -1755,7 +1755,7 @@ pub trait TxSigner<Sig> {
 3. **\`SignerSync\` が存在する理由は?** プロセス内署名者が \`Signer\` と並べて \`SignerSync\` も実装することで、なにが得られるか?
 4. ユーザーコードの \`ProviderBuilder.wallet(signer)\` は、\`WalletFiller\` や \`Filler\` を直接は言及しない。それらは内部でどう結び付くか?
 
-どれかの答えが揺らぐなら、戻って読み直すこと。次のレッスンでは、alloy 本体の \`Signer\` ソースと具体実装を読みます。
+どれかの答えが揺らぐなら、戻って読み直すこと。次のレッスンでは、alloy 本体の \`Signer\` ソースと具体実装を読みる。
 
 > **🧭 ここまでで積み上げたもの:** **暗号認証層の署名者抽象** を組み上げた — ハッシュ用の \`Signer\`、tx エンベロープ用の \`TxSigner<N>\`、クラウドとローカルを切り分ける async / sync 分離、FillProvider チェーンに署名を差し込む \`WalletFiller\`。同じユーザコードが、互いを知らないままローカル鍵・クラウド KMS・ハードウェアウォレットを駆動できる形になった。次のレッスンでは、本物の実装側に踏み込む。
 `,
@@ -1769,7 +1769,7 @@ pub trait TxSigner<Sig> {
                   xpReward: 25,
                   content: `# 実 \`Signer\` トレイト + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\` を読む
 
-3 トレイトへの分割（\`Signer\` / \`TxSigner\` / \`SignerSync\`）と \`WalletFiller\` の橋渡しを動機づけてきました。今度は実ソースを読みます — 全境界付きのトレイトヘッダ、プロセス内の \`PrivateKeySigner\`、クラウドの \`AwsSigner\`（AWS が返してくれないリカバリバイトを総当たりで復元しなければならない箇所）、\`SignableTransaction\` の接着剤、\`WalletFiller\` の FillProvider チェーンへの組み込み — そのすべて。
+3 トレイトへの分割（\`Signer\` / \`TxSigner\` / \`SignerSync\`）と \`WalletFiller\` の橋渡しを動機づけてきました。今度は実ソースを読む — 全境界付きのトレイトヘッダ、プロセス内の \`PrivateKeySigner\`、クラウドの \`AwsSigner\`（AWS が返してくれないリカバリバイトを総当たりで復元しなければならない箇所）、\`SignableTransaction\` の接着剤、\`WalletFiller\` の FillProvider チェーンへの組み込み — そのすべて。
 
 > 📂 **タブで 4 つのファイルを開く:**
 > - \`crates/signer/src/signer.rs\` — \`Signer\` と \`SignerSync\` トレイト
@@ -2067,9 +2067,9 @@ Signer の組み立てとウォークスルーにまたがる設計判断を問�
                   duration: 12,
                   content: `# ドリル: FillProvider チェーン経由でエンドツーエンドの署名済 tx を出荷
 
-読むだけではリハーサル。**手を動かすことで記憶になる。** このドリルでは、「\`Signer\` と \`WalletFiller\` を読んだ」段階から、「実際の署名者を実際の ProviderBuilder に配線し、Anvil に対して署名済みトランザクションを送り、FillProvider チェーンが nonce / gas / chain-id / 署名をスタック順に処理するのを観察した」段階まで進みます。
+読むだけではリハーサル。**手を動かすことで記憶になる。** このドリルでは、「\`Signer\` と \`WalletFiller\` を読んだ」段階から、「実際の署名者を実際の ProviderBuilder に配線し、Anvil に対して署名済みトランザクションを送り、FillProvider チェーンが nonce / gas / chain-id / 署名をスタック順に処理するのを観察した」段階まで進みる。
 
-これは Provider、Network、Signer 各チェーンの **総決算**: 3 つのトレイトファミリすべてが 1 つの実行可能プログラムに合流します。
+これは Provider、Network、Signer 各チェーンの **総決算**: 3 つのトレイトファミリすべてが 1 つの実行可能プログラムに合流しる。
 
 ## セットアップ
 
@@ -2281,7 +2281,7 @@ expected (), found
                   xpReward: 45,
                   content: `# alloy 消費者コードのテスト — anvil・Provider モック・トレイト差し替え
 
-ここまでで \`Provider\`・\`Network\`・\`Signer\` トレイトの形を一通り歩いてきました。**次の問いは、それらに依存するコードをどうテストするか** です。Building tier で作る全アプリ — MEV searcher、indexer、ウォレットバックエンド、swap aggregator — はすべて \`Provider\` をインスタンス化し、\`Signer\` で署名し、filler chain で穴を埋めます。実 RPC エンドポイントを立てずにそのコードをユニットテストできないと、test gate は機能しません。本レッスンがその答えです。
+ここまでで \`Provider\`・\`Network\`・\`Signer\` トレイトの形を一通り歩いてきました。**次の問いは、それらに依存するコードをどうテストするか** である。Building tier で作る全アプリ — MEV searcher、indexer、ウォレットバックエンド、swap aggregator — はすべて \`Provider\` をインスタンス化し、\`Signer\` で署名し、filler chain で穴を埋める。実 RPC エンドポイントを立てずにそのコードをユニットテストできないと、test gate は機能しません。本レッスンがその答えである。
 
 ## alloy 消費者コードに対して書く 3 種類のテスト
 
@@ -2291,7 +2291,7 @@ expected (), found
 | **fork した anvil** | ブロックを pin した \`anvil --fork-url <RPC>\` | ~200 ms + RPC クォータ | 実 mainnet のコントラクト状態が必要なとき |
 | **トレイトを自作で差し替える** | \`impl Provider for ...\` した自作 struct | なし | 稀。ロジックがチェーンセマンティクスに依存しないときに限る |
 
-テストの 9 割はプログラム制御の anvil で済みます。残り 2 つは逃げ道として用意しておく形です。
+テストの 9 割はプログラム制御の anvil で済みる。残り 2 つは逃げ道として用意しておく形である。
 
 ## 1. プログラマブル anvil — 本番パターン
 
@@ -2348,7 +2348,7 @@ async fn impersonates_a_real_address() {
 
 cheat の全体像: \`anvil_set_balance\`、\`anvil_set_storage_at\`、\`anvil_set_code\`、\`anvil_impersonate_account\`、\`anvil_mine\`（強制 mine）、\`anvil_snapshot\` / \`anvil_revert\`（状態チェックポイントとロールバック）。**MEV / wallet / indexer のテストを実現可能にする道具立て** — これが無ければ arb シナリオを準備するだけで丸ごとのトランザクション列を構築する羽目になる。
 
-> 🔍 **リポジトリで確認。** [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) を開き、\`AnvilApi\` を検索。これは独立した型ではなく **\`Provider\` のトレイト拡張** です。**本番で使うのと同じ Provider をテストでも使う。cheat は基底トランスポートが anvil のときに（そのときに限り）そのプロバイダ上のメソッド呼び出しになる。**
+> 🔍 **リポジトリで確認。** [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) を開き、\`AnvilApi\` を検索。これは独立した型ではなく **\`Provider\` のトレイト拡張** である。**本番で使うのと同じ Provider をテストでも使う。cheat は基底トランスポートが anvil のときに（そのときに限り）そのプロバイダ上のメソッド呼び出しになる。**
 
 ## 3. Forked anvil — テスト内に実 mainnet コントラクト状態を持ち込む
 

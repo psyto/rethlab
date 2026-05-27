@@ -9,7 +9,7 @@ export async function seedRethOpenHlPrecompilesEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-precompiles-en",
-      title: "Build OpenHL Precompiles — connecting CLOB state to smart contracts",
+      title: "Step 3. Precompiles: connecting CLOB state to smart contracts",
       description:
         "Connect the CLOB from `building-openhl-clob` to smart contracts via custom EVM precompiles. Smart contracts gain read and write access to the matching engine at well-known precompile addresses, and the resulting fills route back through the bridge into the next payload. The third course in the DIY Perp series.",
       difficulty: "EXPERT",
@@ -29,7 +29,7 @@ export async function seedRethOpenHlPrecompilesEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: "Build OpenHL Precompiles — connecting CLOB state to smart contracts",
+                  title: "Step 3. Precompiles: connecting CLOB state to smart contracts",
                   slug: "openhl-precompiles-orientation-en",
                   type: 'CONTENT',
                   sortOrder: 0,
@@ -120,7 +120,7 @@ cargo test -p openhl-evm clob_fills_flow_into_payload --release 2>&1 | tail -5
 
 If that passes, you're at the right starting point.
 
-> 🛑 **やりがちな勘違い.** "Custom EVM precompiles are just a fancier version of contract calls — I'll think of them as Solidity functions." **No, they're more fundamental.** Precompiles execute Rust directly inside the EVM at well-known addresses, with no Solidity bytecode in between. From the calling contract's perspective they look like an external call to a fixed address, but the implementation is native Rust running with full access to whatever state we choose to expose. The mental model is "native function callable from EVM" — not "another smart contract."
+> 🛑 **Common misconception.** "Custom EVM precompiles are just a fancier version of contract calls — I'll think of them as Solidity functions." **No, they're more fundamental.** Precompiles execute Rust directly inside the EVM at well-known addresses, with no Solidity bytecode in between. From the calling contract's perspective they look like an external call to a fixed address, but the implementation is native Rust running with full access to whatever state we choose to expose. The mental model is "native function callable from EVM" — not "another smart contract."
 
 ## 5. The 12-lesson map
 
@@ -163,7 +163,7 @@ diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/prec
 
 Match meaningfully — same types, same control flow. Whitespace and naming will differ.
 
-> 🛑 **やりがちな勘違い.** "Precompiles seem like a custom thing — surely the openhl reference is more advanced than what I'd write." **The reference is straightforward; this course teaches the canonical Reth + REVM pattern.** Reth provides an \`EvmFactory\` + \`ExecutorBuilder\` pattern specifically for cases like this (the upstream example is \`paradigmxyz/reth/examples/custom-evm\`). What openhl does is *follow the pattern, with one read precompile and one write precompile registered*. If you understand the pattern, you can add more precompiles by copy-modifying the existing ones.
+> 🛑 **Common misconception.** "Precompiles seem like a custom thing — surely the openhl reference is more advanced than what I'd write." **The reference is straightforward; this course teaches the canonical Reth + REVM pattern.** Reth provides an \`EvmFactory\` + \`ExecutorBuilder\` pattern specifically for cases like this (the upstream example is \`paradigmxyz/reth/examples/custom-evm\`). What openhl does is *follow the pattern, with one read precompile and one write precompile registered*. If you understand the pattern, you can add more precompiles by copy-modifying the existing ones.
 
 ## 7. Setup confirmation — the actual L0 exercise
 
@@ -279,7 +279,7 @@ alloy-evm                 = { version = "0.34", default-features = false }
 
 \`alloy-evm\` is the public alloy crate that provides REVM's abstractions at the trait level (\`EvmFactory\`, \`Database\`, \`EvmEnv\`). It's a stable crates.io dependency, not git-pinned to Reth — same status as \`alloy-genesis\` and \`alloy-rpc-types-engine\`.
 
-> 🛑 **やりがちな勘違い.** "\`alloy-evm\` and \`reth-evm\` are the same thing — pick one." **No, they're different layers.** \`alloy-evm\` provides the *abstract* traits (\`EvmFactory\`, \`Database\`, etc.) that any EVM implementation can satisfy. \`reth-evm\` is Reth's *concrete* implementation that wires those traits to its block-executor pipeline. We import both: the abstract for our factory definition, the concrete for the executor wiring.
+> 🛑 **Common misconception.** "\`alloy-evm\` and \`reth-evm\` are the same thing — pick one." **No, they're different layers.** \`alloy-evm\` provides the *abstract* traits (\`EvmFactory\`, \`Database\`, etc.) that any EVM implementation can satisfy. \`reth-evm\` is Reth's *concrete* implementation that wires those traits to its block-executor pipeline. We import both: the abstract for our factory definition, the concrete for the executor wiring.
 
 ### Step 2: Update \`crates/evm/Cargo.toml\`
 
@@ -370,7 +370,7 @@ pub fn openhl_precompiles(base: &Precompiles) -> Precompiles {
 
 The function signature is the **stable contract** the EVM factory depends on. L2-L11 will change the *contents* of this function, but \`openhl_precompiles(base: Precompiles) -> Precompiles\` stays the same shape throughout.
 
-> 🛑 **やりがちな勘違い.** "An empty function is wasted code — combine L1 + L2." **The passthrough is what proves the structure compiles** before we add the precompile logic. If we wrote L1 + L2 as one lesson and the precompile registration was broken, the reader wouldn't know whether the factory wiring or the precompile registration was at fault. Splitting the lesson makes the failure modes addressable separately.
+> 🛑 **Common misconception.** "An empty function is wasted code — combine L1 + L2." **The passthrough is what proves the structure compiles** before we add the precompile logic. If we wrote L1 + L2 as one lesson and the precompile registration was broken, the reader wouldn't know whether the factory wiring or the precompile registration was at fault. Splitting the lesson makes the failure modes addressable separately.
 
 ### Step 4: Create \`crates/evm/src/openhl_evm.rs\`
 
@@ -473,7 +473,7 @@ The 8 associated types are scaffolding — every \`EvmFactory\` impl needs them,
 
 \`create_evm_with_inspector\` is the same path with a custom inspector instead of the no-op. Most callers use \`create_evm\`; the inspector variant is for debug RPC.
 
-> 🛑 **やりがちな勘違い.** "Why does the factory take \`db: DB\` as a generic? Wouldn't a concrete \`RevmDatabase\` be simpler?" **Because Reth uses many different database snapshot types depending on context.** Block validation uses the live MDBX state; eth_call RPC uses a historical snapshot; debug RPC may use an in-memory overlay. The factory must work with any of them. Generic over \`DB: Database\` is the way to express that without committing to a concrete type.
+> 🛑 **Common misconception.** "Why does the factory take \`db: DB\` as a generic? Wouldn't a concrete \`RevmDatabase\` be simpler?" **Because Reth uses many different database snapshot types depending on context.** Block validation uses the live MDBX state; eth_call RPC uses a historical snapshot; debug RPC may use an in-memory overlay. The factory must work with any of them. Generic over \`DB: Database\` is the way to express that without committing to a concrete type.
 
 ### Step 5: Add the \`precompiles_for(spec)\` helper
 
@@ -1758,16 +1758,16 @@ Drawing how the layered wrapper \`RwLock<Option<Arc<Mutex<Book>>>>\` handles con
 
    Why the "① RwLock + ④ Mutex" pairing matters:
 
-   ・If ① were also a Mutex (\`Mutex<Option<Arc<Mutex<Book>>>>\`),
+   - If ① were also a Mutex (\`Mutex<Option<Arc<Mutex<Book>>>>\`),
      **every precompile read would serialize at ① too** — N parallel EVM calls
      would line up behind one bottleneck. ① benefits from read parallelism;
      RwLock is the right tool.
 
-   ・If we flattened to \`RwLock<Book>\` (no Arc, no Option),
+   - If we flattened to \`RwLock<Book>\` (no Arc, no Option),
      **the bridge and the precompile couldn't both own the Book** — if one
      side holds \`&'static\`, the other can't claim ownership. Arc resolves this.
 
-   ・If we put \`Arc<Mutex<Book>>\` directly in a static (no Option),
+   - If we put \`Arc<Mutex<Book>>\` directly in a static (no Option),
      \`Book::new()\` can't be evaluated at compile time (not const-fn), AND we lose
      the type-level distinction for the "not yet installed" state. Option fixes both.
 
@@ -1948,11 +1948,11 @@ Why \`out[24..32]\` is the right "magic number" pops out the moment you draw the
 
 
    By the numbers:
-     ・Slot 1 spans bytes 0..32 (one u256 BE).
-     ・The top 24 bytes (0..24) stay zero-padded (already zeroed by vec![0u8; 64]).
-     ・The bottom 8 bytes (24..32) take the u64 directly in big-endian → the whole slot
+     - Slot 1 spans bytes 0..32 (one u256 BE).
+     - The top 24 bytes (0..24) stay zero-padded (already zeroed by vec![0u8; 64]).
+     - The bottom 8 bytes (24..32) take the u64 directly in big-endian → the whole slot
        reads as a "u64 zero-extended into a u256."
-     ・Slot 2 is just the same shape shifted +32 bytes.
+     - Slot 2 has the same shape, shifted by +32 bytes.
 
    Bottom line: 24..32 and 56..64 are "where the u64 (8 bytes) slides into the right
    edge of a u256 (32 bytes)." Not magic — just (32 − 8 = 24) and (64 − 8 = 56).

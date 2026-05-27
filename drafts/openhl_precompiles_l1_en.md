@@ -94,7 +94,7 @@ alloy-evm                 = { version = "0.34", default-features = false }
 
 `alloy-evm` is the public alloy crate that provides REVM's abstractions at the trait level (`EvmFactory`, `Database`, `EvmEnv`). It's a stable crates.io dependency, not git-pinned to Reth — same status as `alloy-genesis` and `alloy-rpc-types-engine`.
 
-> 🛑 **やりがちな勘違い.** "`alloy-evm` and `reth-evm` are the same thing — pick one." **No, they're different layers.** `alloy-evm` provides the *abstract* traits (`EvmFactory`, `Database`, etc.) that any EVM implementation can satisfy. `reth-evm` is Reth's *concrete* implementation that wires those traits to its block-executor pipeline. We import both: the abstract for our factory definition, the concrete for the executor wiring.
+> 🛑 **Common misconception.** "`alloy-evm` and `reth-evm` are the same thing — pick one." **No, they're different layers.** `alloy-evm` provides the *abstract* traits (`EvmFactory`, `Database`, etc.) that any EVM implementation can satisfy. `reth-evm` is Reth's *concrete* implementation that wires those traits to its block-executor pipeline. We import both: the abstract for our factory definition, the concrete for the executor wiring.
 
 ### Step 2: Update `crates/evm/Cargo.toml`
 
@@ -185,7 +185,7 @@ pub fn openhl_precompiles(base: &Precompiles) -> Precompiles {
 
 The function signature is the **stable contract** the EVM factory depends on. L2-L11 will change the *contents* of this function, but `openhl_precompiles(base: Precompiles) -> Precompiles` stays the same shape throughout.
 
-> 🛑 **やりがちな勘違い.** "An empty function is wasted code — combine L1 + L2." **The passthrough is what proves the structure compiles** before we add the precompile logic. If we wrote L1 + L2 as one lesson and the precompile registration was broken, the reader wouldn't know whether the factory wiring or the precompile registration was at fault. Splitting the lesson makes the failure modes addressable separately.
+> 🛑 **Common misconception.** "An empty function is wasted code — combine L1 + L2." **The passthrough is what proves the structure compiles** before we add the precompile logic. If we wrote L1 + L2 as one lesson and the precompile registration was broken, the reader wouldn't know whether the factory wiring or the precompile registration was at fault. Splitting the lesson makes the failure modes addressable separately.
 
 ### Step 4: Create `crates/evm/src/openhl_evm.rs`
 
@@ -288,7 +288,7 @@ The 8 associated types are scaffolding — every `EvmFactory` impl needs them, a
 
 `create_evm_with_inspector` is the same path with a custom inspector instead of the no-op. Most callers use `create_evm`; the inspector variant is for debug RPC.
 
-> 🛑 **やりがちな勘違い.** "Why does the factory take `db: DB` as a generic? Wouldn't a concrete `RevmDatabase` be simpler?" **Because Reth uses many different database snapshot types depending on context.** Block validation uses the live MDBX state; eth_call RPC uses a historical snapshot; debug RPC may use an in-memory overlay. The factory must work with any of them. Generic over `DB: Database` is the way to express that without committing to a concrete type.
+> 🛑 **Common misconception.** "Why does the factory take `db: DB` as a generic? Wouldn't a concrete `RevmDatabase` be simpler?" **Because Reth uses many different database snapshot types depending on context.** Block validation uses the live MDBX state; eth_call RPC uses a historical snapshot; debug RPC may use an in-memory overlay. The factory must work with any of them. Generic over `DB: Database` is the way to express that without committing to a concrete type.
 
 ### Step 5: Add the `precompiles_for(spec)` helper
 

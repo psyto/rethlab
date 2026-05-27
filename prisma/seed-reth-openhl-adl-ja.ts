@@ -9,9 +9,9 @@ export async function seedRethOpenHlAdlJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-adl-ja",
-      title: "OpenHL ADL を作る — auto-deleveraging、safety-net cascade の Layer 3",
+      title: "Step 6. ADL：auto-deleveraging、safety-net cascade の Layer 3",
       description:
-        "保険基金が損失を吸収しきれなかった際の発火回路、最終防衛線「Auto-deleveraging (ADL)」を実装するDIY Perpシリーズ第6弾。\n\n利益の出ているカウンターポジションをランキングし、オーダーブックをバイパスした「帳簿の直接書き換え（Bookkeeping mutation）」による強制クローズとヘアカットを実装します。さらに、破綻を防ぐ「Feedback-loop crash」のメカニズム解説や、システムの決定性を証明する4つの不変条件（Invariant）プロパティテストも網羅。全5レッスンを通じ、Stage 10dに対応するByte-for-byteの一致を達成します。",
+        "保険基金が損失を吸収しきれなかった際の発火回路、最終防衛線「Auto-deleveraging (ADL)」を実装するDIY Perpシリーズ第6弾。\n\n利益の出ているカウンターポジションをランキングし、オーダーブックをバイパスした「帳簿の直接書き換え（Bookkeeping mutation）」による強制クローズとヘアカットを実装する。さらに、破綻を防ぐ「Feedback-loop crash」のメカニズム解説や、システムの決定性を証明する4つの不変条件（Invariant）プロパティテストも網羅する。全5レッスンを通じ、Stage 10dに対応するByte-for-byteの一致を達成する。",
       difficulty: "EXPERT",
       duration: 170,
       xpReward: 330,

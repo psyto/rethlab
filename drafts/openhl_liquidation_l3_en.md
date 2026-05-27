@@ -97,8 +97,8 @@ Drawing what the `types` module — completed in L3 — receives as input and pr
                               │
                               ▼
                     [ Downstream: bridge → matching engine (CLOB) ]
-                              ・convert close orders into `SubmitMarket` actions
-                              ・credit/debit the insurance fund on Underwater paths
+                              - convert close orders into `SubmitMarket` actions
+                              - credit/debit the insurance fund on Underwater paths
 ```
 
 Two things this picture pins down: (a) **The two types finalized in L3 — `AccountSnapshot` (input) and `CloseOrderSpec` (output) — are the engine's only contact surface with the outside world.** All the engine body lives in L4 onward, but every function signature lands on "consume an `AccountSnapshot`" or "emit a `CloseOrderSpec`." (b) **Both the input (snapshot) and the output (spec) are immutable** — the engine never mutates the ledger; full ownership of the ledger stays on the bridge side. This is the concrete shape of what L0 previewed as "**a read-only snapshot type that keeps the risk-calculation core decoupled from upstream state.**"

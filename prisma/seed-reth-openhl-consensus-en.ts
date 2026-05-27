@@ -9,7 +9,7 @@ export async function seedRethOpenHlConsensusEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "reth-openhl-consensus-en",
-      title: "Build OpenHL — from `cargo init` to a single-validator devnet",
+      title: "Step 1. Consensus: from `cargo init` to a single-validator devnet",
       description:
         "Build the consensus substrate for an HL-shape L1 from scratch — wire real Reth (EVM) and real Malachite (BFT) into a single Rust workspace that produces blocks end-to-end. The reference implementation is `psyto/openhl`. The first course in the DIY Perp series.",
       difficulty: "EXPERT",
@@ -36,6 +36,17 @@ export async function seedRethOpenHlConsensusEN(prisma: PrismaClient) {
                   duration: 20,
                   xpReward: 60,
                   content: `# Build OpenHL — from \`cargo init\` to a single-validator devnet
+
+## 30-second summary
+
+- Audience: engineers who want to implement Hyperliquid-style architecture in Rust.
+- What you get: a minimal consensus substrate that connects real Reth + real Malachite.
+- Why now: this is the foundation for CLOB, precompiles, funding, and liquidation.
+
+## Completion criteria
+
+- You can pass \`cargo test first_block_via_engine_actors\`.
+- You can explain the CL/EL connection points in your bridge contract.
 
 This is not a course you read. This is a course you **build**.
 

@@ -9,7 +9,7 @@ export async function seedRethOpenHlAdlEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-adl-en",
-      title: "Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade",
+      title: "Step 6. ADL: auto-deleveraging, Layer 3 of the safety-net cascade",
       description:
         "Build auto-deleveraging (ADL) — the cascade's last line of defense when the insurance fund couldn't absorb everything. Ranks profitable counter-positions by (pnl_pct × leverage) using Hyperliquid's convention, force-closes them via bookkeeping mutation rather than orderbook submission, and applies a haircut that absorbs the unfilled deficit. Includes the feedback-loop crash explanation (why ADL bypasses the orderbook entirely), the layered conservation law that closes the Stage 10 cascade math, and 4 invariant proptests proving determinism. 5 lessons across 2 modules, byte-for-byte against openhl Stage 10d (d66b44a). Course 6 of the DIY Perp series.",
       difficulty: "EXPERT",
@@ -29,7 +29,7 @@ export async function seedRethOpenHlAdlEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: "Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade",
+                  title: "Step 6. ADL: auto-deleveraging, Layer 3 of the safety-net cascade",
                   slug: "openhl-adl-orientation-en",
                   type: 'CONTENT',
                   sortOrder: 0,
@@ -1197,7 +1197,7 @@ Four things to notice:
 1. **A and B have the same PnL (100), different collateral.** A is \`coll 100\`, so \`pnl_pct = 100×10000/100 = 10000\` bps and leverage = \`notional/equity = 200/200 = 10000\` bps → score 10,000. B is \`coll 50\`, so \`pnl_pct = 100×10000/50 = 20000\` bps and leverage = \`200/150 ≈ 13333\` bps → score \`20000 × 13333 / 10000 = 26666\`. **Same PnL but higher leverage = higher score = haircut first.**
 2. **The score-math comment is the test's spec.** Without the math in the comment, the test would be a magic-numbers assertion: "trust me, B has score 26666". With the math, the test reads as a derivation a human can verify. **Math-walk comments turn assertions into proofs.**
 3. **A's record is absent from the report.** The \`break\` in Phase 4 fires after B is haircut (remaining = 0); A never enters the loop body. The assertion \`records.len() == 1\` documents this — A isn't there because A wasn't needed. **The Predict callout's payoff: the record count tells you how many accounts actually got force-closed.**
-4. **The \`"deficit smaller than B's pnl → only B"\` message on the length assertion is documentation.** If this test ever fails (e.g., a refactor breaks Phase 3's sort discipline), the failure message tells the debugger *why* this matters. **Assertion messages are documentation — write them as if you'd read them in CI logs at 3am.**
+4. **The \`"deficit smaller than B's pnl → only B"\` message on the length assertion is documentation.** If this test ever fails (e.g., a refactor breaks Phase 3's sort discipline), the failure message tells the debugger *why* this matters. **Assertion messages are documentation — write them as if you'd read them in CI logs at 3 a.m.**
 
 ### Test 4: deficit drains rank 1, partially covers rank 2
 
@@ -1272,7 +1272,7 @@ fn adl_does_not_touch_losers_or_flats() {
 
 Three things to notice:
 
-1. **Acct 1 and acct 2 both pass the eligibility filter, but acct 2 is still untouched — for a different reason.** All candidates are evaluated at the same mark (200). Acct 1 (long 1 @ entry 100, mark 200) and acct 2 (long 1 @ entry 100, mark 200) both have PnL = +100, so both are profitable. L1's \`adl_score\` doesn't return \`None\` based on collateral magnitude, so both pass Phase 2 and enter \`ranked\`. But acct 2 has higher collateral (1000 vs acct 1's 50) → lower leverage → lower score → rank #2. \`deficit = 10\` is fully exhausted by the haircut to top-ranked acct 1, so Phase 4's \`break\` exits the loop before acct 2 is processed. **Acct 3 was filtered out at Phase 2 (eligibility). Acct 2 was left untouched at Phase 4 (quota exhaustion). One test proves two distinct defense layers in one pass.** The \`// loser?\` comment is a leftover from an earlier draft where acct 2 was meant to be the loser.
+1. **Acct 1 and acct 2 both pass the eligibility filter, but acct 2 doesn't get touched — for a different reason.** All candidates evaluated at the same mark (200). Acct 1 (long 1 @ entry 100, mark 200) and acct 2 (long 1 @ entry 100, mark 200) both have PnL = +100 — both profitable. L1's \`adl_score\` doesn't return \`None\` based on collateral magnitude, so both pass Phase 2 and enter \`ranked\`. But acct 2 has higher collateral (1000 vs acct 1's 50) → lower leverage → lower score → rank #2. \`deficit = 10\` is fully exhausted by the haircut to top-ranked acct 1 → Phase 4's \`break\` exits the loop before acct 2 is processed. **Acct 3 was filtered out at Phase 2 (eligibility). Acct 2 was left untouched at Phase 4 (quota exhaustion). One test, two distinct defense layers proven simultaneously.** The \`// loser?\` comment is honestly preserved drafting-history residue from when acct 2 was originally intended as a loser.
 2. **Acct 3 is flat (position_size = 0) → \`adl_score\` returns \`None\` (L1's first eligibility check).** Phase 2's \`filter_map\` drops the \`None\` → acct 3 never enters \`ranked\` → no record. **L1's eligibility tests prove \`adl_score\` on inputs in isolation; this test proves the filter integrates with the full pipeline.**
 3. **\`deficit = 10\` is a deliberate test-design choice — small enough to trigger Phase 4's \`break\` after acct 1.** A larger deficit would have continued the loop into acct 2 and obscured what this test is meant to prove. The size of deficit is itself part of the test's design — it isolates the "filter at Phase 2 + early-break at Phase 4" composition by picking a deficit that exercises both. **Test inputs aren't just data; they're chosen to make the proof visible.**
 

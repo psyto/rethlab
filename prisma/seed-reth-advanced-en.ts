@@ -38,7 +38,7 @@ This course is one of three independent Intermediate-tier courses on RethLab:
 
 - **Inside Revm** — Inside the EVM engine *(recommended first if you haven't done it)*
 - **Inside Reth** (you are here) — Inside Reth: Staged Sync, ExEx, the Reth SDK
-- **Inside Alloy** *(coming soon)* — Inside Alloy: Provider, Network, Signer
+- **Inside Alloy** — Inside Alloy: Provider, Network, Signer
 
 These three are independent, but **several lessons here assume comfort with the \`Database\` trait and Revm execution model from Inside Revm**. If those concepts feel shaky, do Inside Revm first.
 
@@ -737,7 +737,7 @@ trait Greet {
 struct En;
 struct Ja;
 impl Greet for En { fn greet(&self) { println!("Hello"); } }
-impl Greet for Ja { fn greet(&self) { println!("こんにちは"); } }
+impl Greet for Ja { fn greet(&self) { println!("Hello"); } }
 
 let g: Box<dyn Greet> = if std::env::var("LANG").unwrap_or_default().starts_with("ja") {
     Box::new(Ja)

@@ -12,8 +12,8 @@
  *   - For each course, upsert modules by `(courseId, sortOrder)` (no unique
  *     constraint in the schema, so use findFirst + update/create).
  *   - Upsert lessons by `(moduleId, slug)` (composite unique).
- *   - Do NOT delete orphans. If a lesson/module is renamed or removed in
- *     seed data, the old row remains in the DB. Manual cleanup if needed.
+ *   - Prune orphan lessons per module. If a lesson is removed/renamed in
+ *     seed data, old rows under that module are deleted.
  *   - Never touch User, Enrollment, LessonProgress, XPEvent, StreakDay.
  *
  * Run locally:    npm run seed:upsert
@@ -151,6 +151,7 @@ type Counts = {
   modulesUpdated: number;
   lessonsCreated: number;
   lessonsUpdated: number;
+  lessonsDeleted: number;
 };
 
 async function upsertAll(courses: any[]): Promise<Counts> {
@@ -161,6 +162,7 @@ async function upsertAll(courses: any[]): Promise<Counts> {
     modulesUpdated: 0,
     lessonsCreated: 0,
     lessonsUpdated: 0,
+    lessonsDeleted: 0,
   };
 
   for (const course of courses) {
@@ -185,6 +187,7 @@ async function upsertAll(courses: any[]): Promise<Counts> {
     for (const mod of moduleList) {
       const { lessons, ...moduleFields } = mod;
       const lessonList: any[] = lessons?.create ?? [];
+      const expectedLessonSlugs = new Set(lessonList.map((l) => l.slug));
 
       // Upsert module by (courseId, sortOrder). No unique constraint in schema,
       // so use findFirst + update/create.
@@ -208,27 +211,31 @@ async function upsertAll(courses: any[]): Promise<Counts> {
       }
 
       for (const lesson of lessonList) {
-        // Lesson is @@unique([moduleId, slug]) — use upsert directly
+        // Lesson is @@unique([moduleId, slug])
+        const existingLesson = await prisma.lesson.findUnique({
+          where: { moduleId_slug: { moduleId, slug: lesson.slug } },
+          select: { id: true },
+        });
         await prisma.lesson.upsert({
           where: { moduleId_slug: { moduleId, slug: lesson.slug } },
           create: { ...lesson, moduleId },
           update: { ...lesson },
         });
-        // Can't easily distinguish create vs update from upsert return value;
-        // do a quick re-check via createdAt vs updatedAt
-        const updated = await prisma.lesson.findUnique({
-          where: { moduleId_slug: { moduleId, slug: lesson.slug } },
-          select: { createdAt: true, updatedAt: true },
-        });
-        if (
-          updated &&
-          updated.createdAt.getTime() === updated.updatedAt.getTime()
-        ) {
-          counts.lessonsCreated++;
-        } else {
+        if (existingLesson) {
           counts.lessonsUpdated++;
+        } else {
+          counts.lessonsCreated++;
         }
       }
+
+      // Remove stale lessons that are no longer present in seed data
+      const prune = await prisma.lesson.deleteMany({
+        where: {
+          moduleId,
+          slug: { notIn: Array.from(expectedLessonSlugs) },
+        },
+      });
+      counts.lessonsDeleted += prune.count;
     }
   }
 
@@ -249,6 +256,7 @@ async function main() {
   console.log(`  Courses:  created=${counts.coursesCreated}  updated=${counts.coursesUpdated}`);
   console.log(`  Modules:  created=${counts.modulesCreated}  updated=${counts.modulesUpdated}`);
   console.log(`  Lessons:  created=${counts.lessonsCreated}  updated=${counts.lessonsUpdated}`);
+  console.log(`  Lessons:  deleted=${counts.lessonsDeleted}`);
 
   // Final totals for sanity
   const [c, m, l] = await Promise.all([

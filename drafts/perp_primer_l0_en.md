@@ -34,7 +34,7 @@ The rethlab DIY Perp track teaches you to build an open-source Hyperliquid imple
 
 **But the code only makes sense if you understand what a perp is.** When the funding course says "premium = (mark − index) / index, divisor 8, cap ±4%", that's six pieces of perp jargon in fifteen characters. If you're a Rust engineer coming in from infra work, you'd be forgiven for thinking the math is the hard part. **The math is the easy part. The mechanism is the hard part.**
 
-This primer is the 4-lesson concept layer the DIY Perp track quietly assumed. No code, no openhl references — just the perp mechanics you need to make sense of the Rust later.
+This primer is the four-lesson conceptual layer the DIY Perp track quietly assumed. No code and no openhl references — just the perp mechanics you need to make sense of the Rust later.
 
 ## Three markets, three contracts
 

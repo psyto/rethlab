@@ -84,9 +84,9 @@ At its core, `close_order_spec` is just **flipping the side of a position**. Dra
 
    ※ `close_order_spec` decides only two things: "invert the direction" and
      "extract the magnitude via `unsigned_abs`."
-     ・The "should we liquidate?" decision is already settled by L6's `margin_health`.
-     ・The "at what price?" decision happens in the matching engine (CLOB) against the book.
-     ・The "don't submit flat specs" filter is the bridge's job before submission.
+     - The "should we liquidate?" decision is already settled by L6's `margin_health`.
+     - The "at what price?" decision happens in the matching engine (CLOB) against the book.
+     - The "don't submit flat specs" filter is the bridge's job before submission.
    Each layer owns exactly one concern; they compose in series.
 ```
 

@@ -34,7 +34,7 @@ export async function seedRethConsensusEngineeringEN(prisma: PrismaClient) {
                   xpReward: 40,
                   content: `# The BFT problem from scratch
 
-It's 3am. One validator in your 30-node chain just signed two conflicting blocks. Other validators are voting both ways. The chain's split-brained. **What do you reach for?** If you don't have a mental model for *why this is even possible* — for what failure modes consensus is supposed to survive — you'll spend the next eight hours guessing.
+It's 3 a.m. One validator in your 30-node chain just signed two conflicting blocks. Other validators are voting both ways. The chain's split-brained. **What do you reach for?** If you don't have a mental model for *why this is even possible* — for what failure modes consensus is supposed to survive — you'll spend the next eight hours guessing.
 
 This lesson builds the model: failure modes, the safety/liveness split, and why FLP (the 1985 impossibility theorem) makes "perfect" consensus mathematically off the table.
 
@@ -223,7 +223,7 @@ What this costs:
 
 > 🛑 **Predict.** You have 100 BFT validators across 5 continents. **What's the latency floor on finality?** (Hint: speed of light, message rounds.) Why does this make BFT inherently regional?
 
-Speed of light is ~140 ms round-the-world. With 2 rounds of voting, that's ~300 ms minimum. Real BFT chains cluster validators in low-latency regions to get under 1 sec.
+Speed of light is ~140 ms around the world. With 2 rounds of voting, that's ~300 ms minimum. Real BFT chains cluster validators in low-latency regions to get under 1 second.
 
 **Verdict**: classical BFT is the default for new L1s when finality matters more than validator count. **Hyperliquid (HotStuff-derived). Tempo (likely Tendermint or HotStuff family). Most app-chains.**
 
@@ -467,7 +467,7 @@ Hyperliquid does ~200,000 perp trades per second with sub-second finality. The c
 
 Hyperliquid hasn't open-sourced HyperBFT. But HotStuff is published, and reading it is the closest reference you have to what's actually running under HYPE.
 
-> 🛑 **Predict before scrolling.** PBFT (1999) has O(n²) messages per block. HotStuff (2018) has O(n). **What changed to enable that 10000x message reduction at n=100 validators?** (Hint: cryptography.)
+> 🛑 **Predict before scrolling.** PBFT (1999) has O(n²) messages per block. HotStuff (2018) has O(n). **What changed to enable that 10000x message reduction at n = 100 validators?** (Hint: cryptography.)
 
 ## 1. PBFT — the parent
 
@@ -481,7 +481,7 @@ Round 3 (Commit):      All → all: "I'm ready to commit B"
 
 After round 3, validators commit. Three round-trips × n² messages (because round 2 and 3 are all-to-all) = **n² total**.
 
-For n=100, that's 10,000 messages per block. For n=1000, 1M messages per block. Doesn't scale.
+For n = 100, that's 10,000 messages per block. For n = 1,000, that's 1 million messages per block. It doesn't scale.
 
 > 🛑 **Anti-fluency.** Why not just have everyone send to the leader, who aggregates? **What attack does that open?** If your answer doesn't include "Byzantine leader can lie about who voted what," re-read Lesson 1's §3 on safety.
 
@@ -1863,7 +1863,7 @@ Designing slashing for Tempo or Hyperliquid:
 - **Whistleblower reward**: 1-5% is standard
 - **Inactivity penalty**: necessary if you want resilience to censorship
 
-Hyperliquid at ~20 validators has very high per-validator stake requirements + heavy slashing. Tempo at ~30-50 will similar pattern.
+Hyperliquid at ~20 validators has very high per-validator stake requirements + heavy slashing. Tempo at ~30-50 will likely follow a similar pattern.
 
 ## 8. The launch question — slashing at day 1?
 
@@ -1943,7 +1943,7 @@ The final consensus check. You'll need this to ship a Tempo-class L1.`,
                         'Legal — you can\'t have more than 100 entities in one protocol.',
                       ],
                       correctIndex: 1,
-                      explanation: 'Network is the bottleneck. PBFT n² messages = 10k messages at n=100, 1M at n=1000. HotStuff O(n) helps but bandwidth + latency still cap the practical max. Hybrid PoS like Ethereum solves this by separating fork choice (every slot, sampling-based) from finality (every epoch, full participation).',
+                      explanation: 'Network is the bottleneck. PBFT n² messages = 10k messages at n = 100, 1 million at n = 1,000. HotStuff O(n) helps but bandwidth + latency still cap the practical max. Hybrid PoS like Ethereum solves this by separating fork choice (every slot, sampling-based) from finality (every epoch, full participation).',
                     },
                     {
                       question: 'Why is **slashing** the load-bearing foundation of BFT economic security?',

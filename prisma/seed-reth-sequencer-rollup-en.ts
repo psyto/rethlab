@@ -100,7 +100,7 @@ If decentralization is the whole point, why ship centralized sequencers? Five pr
 
 The trade-off is **UX (centralized sequencer) vs censorship-resistance (decentralized)**. Most L2s pick UX.
 
-Tempo Moderato (Tempo's testnet) is centralized today. Hyperliquid is centralized too. Both will likely decentralize eventually but **not at launch**.
+Tempo Moderato (Tempo's testnet) is centralized today. Hyperliquid is centralized as well. Both will likely decentralize eventually, but **not at launch**.
 
 ## 4. The L1↔L2 communication layers
 

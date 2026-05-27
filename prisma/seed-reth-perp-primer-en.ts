@@ -9,7 +9,7 @@ export async function seedRethPerpPrimerEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "perp-primer-en",
-      title: "Perp DEX Primer — the perpetual-futures mechanics behind the DIY Perp track",
+      title: "Step 0. Perp DEX Primer: the perpetual-futures mechanics behind the DIY Perp track",
       description:
         "Concept-only prerequisite course for the DIY Perp track. Four lessons covering: (1) what perpetual futures are and why they have no expiry, (2) mark, index, and funding rates, (3) margin model and the four health states, (4) liquidation, insurance fund, and ADL. No Rust code — just the perp domain knowledge the build-along courses quietly assume. Worked numerical examples at Hyperliquid's actual parameter values throughout.",
       difficulty: "INTERMEDIATE",
@@ -37,6 +37,17 @@ export async function seedRethPerpPrimerEN(prisma: PrismaClient) {
                   xpReward: 50,
                   content: `# What perpetual futures are — and why they have no expiry
 
+## 30-second summary
+
+- Audience: engineers who want perp domain clarity before touching Rust implementation details.
+- What you get: a practical model of spot vs futures vs perps, and why funding exists.
+- Why now: Step 1+ implementation lessons become much easier to read.
+
+## Completion criteria
+
+- You can explain in 2-3 sentences why perps need funding.
+- You can explain at least one concrete difference between spot and perps.
+
 ## Goal
 
 Concepts you'll grasp in this lesson:
@@ -58,7 +69,7 @@ The rethlab DIY Perp track teaches you to build an open-source Hyperliquid imple
 
 **But the code only makes sense if you understand what a perp is.** When the funding course says "premium = (mark − index) / index, divisor 8, cap ±4%", that's six pieces of perp jargon in fifteen characters. If you're a Rust engineer coming in from infra work, you'd be forgiven for thinking the math is the hard part. **The math is the easy part. The mechanism is the hard part.**
 
-This primer is the 4-lesson concept layer the DIY Perp track quietly assumed. No code, no openhl references — just the perp mechanics you need to make sense of the Rust later.
+This primer is the four-lesson conceptual layer the DIY Perp track quietly assumed. No code and no openhl references — just the perp mechanics you need to make sense of the Rust later.
 
 ## Three markets, three contracts
 
@@ -222,7 +233,7 @@ Sign convention: **positive rate → longs pay shorts**. Negative rate → short
 
 Intuitively: the side that's contributing to the imbalance pays the side that's offsetting it. Longs drove mark above index → longs pay. Shorts drove mark below → shorts pay. The payment makes the offending side a bit less profitable to hold, which creates the economic incentive to exit (or to take the other side), which pulls mark back toward index.
 
-The payment isn't paid by the venue. It moves directly between traders: the longs collectively transfer to the shorts collectively, scaled by each position's notional. Zero-sum at the venue level — Hyperliquid is just the bookkeeper.
+The payment isn't paid by the venue. It moves directly between traders: the longs collectively transfer to the shorts collectively, scaled by each position's notional. Zero-sum at the venue level — Hyperliquid is the bookkeeper.
 
 > 💡 **Engineer's view — one signed-size equation collapses every branch:**
 > In code, track each position's direction as a signed size (Long = \`+size\`, Short = \`-size\`). Every trader's balance update then collapses to one branch-free expression:
@@ -598,7 +609,7 @@ When the engine decides to liquidate, it generates a **close order spec** with t
 | \`qty\` | Full absolute position size (\`\\|size\\|\`) |
 | \`account\` | The liquidated trader's account ID |
 
-No price — it's always a **market order**. The engine doesn't pick prices; it accepts whatever the orderbook offers right now. The matching engine settles the close against resting liquidity (other traders' limit orders).
+There is no price field — it is always a **market order**. The engine doesn't pick prices; it accepts whatever the orderbook offers right now. The matching engine settles the close against resting liquidity (other traders' limit orders).
 
 This is mechanically the same as a normal trade. The trader's position closes. The counterparty (whoever's resting order fills the close) opens or increases their position. Mark moves to reflect the new top-of-book.
 
@@ -670,7 +681,7 @@ Trader's position before liquidation:
   collateral:    $10,000
   size:          1 BTC long
   entry:         $100,000
-  mark at close: $89,000   (PnL = −$11,000, equity = −$1,000 wait that's negative)
+  mark at close: $89,000   (PnL = −$11,000, equity = −$1,000 — wait, that's negative)
 \`\`\`
 
 Let me pick a better number. Mark $90,500 → PnL = −$9,500 → equity = $500. Ratio = $500 / $90,500 ≈ 0.55% — below maintenance, equity positive. Liquidatable, not Underwater.

@@ -230,7 +230,7 @@ L0 itself has no `file:line@SHA` cites — it's pure orientation. Subsequent les
 ## Style review notes (self-critique before paste)
 
 - **L0 is now ~doubled in length (20 min)** vs the previous 15-min reading orientation. Justified because L0 in the build-along course has more practical content (setup, the 15-lesson map, the answer-key discipline) than a pure reading orientation. The new XP (60) reflects this.
-- **The hook is no longer 3am-style.** The current course opens with "you'll build this in 14 lessons" — concrete, action-framed. The 3am hooks return in L1-L14 where reader is debugging code they wrote themselves.
+- **The hook is no longer 3 a.m.-style.** The current course opens with "you'll build this in 14 lessons" — concrete, action-framed. The 3 a.m. hooks return in L1-L14 where reader is debugging code they wrote themselves.
 - **§5 (setup) is the first action.** Putting setup in L0 is critical — if reader hasn't done it before L1, they'll hit friction immediately. The L0 final check exercise is "run these 3 commands and confirm".
 - **§7's anti-fluency callout** ("don't type from the answer key") is the most important behavioral norm. Without it, reader copies and learns nothing. Keep this prominently.
 - **§6 (15-lesson map) is the artifact** readers will reference back to most. If we update lesson titles or test names elsewhere, this table needs to stay in sync.

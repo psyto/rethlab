@@ -9,9 +9,9 @@ export async function seedRethOpenHlLiquidationJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-liquidation-ja",
-      title: "OpenHL Liquidation 開発ガイド：レバレッジ環境における非単調性の発見と清算エンジンの構築",
+      title: "Step 5. Liquidation：レバレッジ環境における非単調性の発見と清算エンジンの構築",
       description:
-        "永久先物（Perpetual Futures）の清算エンジン中核をEnd-to-Endで実装する、DIY Perpシリーズ第5弾。\n\nアカウントの4フェーズ分類（pure compute）、保険基金（Insurance Fund）のステートマシン、そしてマルチアカウント・スキャナーを1つのオーケストレーション・ループへ結合します。さらに、レバレッジ環境特有の「非単調性」を proptest で炙り出す手法や、debug_assert! による契約検証まで網羅。Stage 10三部作に対応する全14レッスンを通じ、バイト単位（Byte-for-byte）で一致する堅牢な実装を構築します。",
+        "永久先物（Perpetual Futures）の清算エンジン中核をEnd-to-Endで実装する、DIY Perpシリーズ第5弾。\n\nアカウントの4フェーズ分類（pure compute）、保険基金（Insurance Fund）のステートマシン、そしてマルチアカウント・スキャナーを1つのオーケストレーション・ループへ結合する。さらに、レバレッジ環境特有の「非単調性」を proptest で炙り出す手法や、debug_assert! による契約検証まで網羅する。Stage 10三部作に対応する全14レッスンを通じ、バイト単位（Byte-for-byte）で一致する堅牢な実装を構築する。",
       difficulty: "EXPERT",
       duration: 440,
       xpReward: 870,
@@ -2696,7 +2696,7 @@ pub struct InsuranceFund {
 
 構造体の形について 2 点:
 
-1. **フィールドは private（\`balance: i64\`、\`pub\` なし）。** これが \`balance ≥ 0\` を enforce する仕組みのすべてだ。もし \`balance\` が public だったら、呼び出し側はいつでも \`fund.balance = -1\` と書けて、契約を sneaky に破れる。**Private フィールドは Rust 流の「この不変条件があります — 公開メソッド経由で変更してください」の表現方法だ。**
+1. **フィールドは private（\`balance: i64\`、\`pub\` なし）。** これが \`balance ≥ 0\` を enforce する仕組みのすべてだ。もし \`balance\` が public だったら、呼び出し側はいつでも \`fund.balance = -1\` と書けて、契約を sneaky に破れる。**Private フィールドは Rust 流の「この不変条件がある — 公開メソッド経由で変更してほしい」の表現方法だ。**
 2. **\`Clone + Copy + Debug + PartialEq + Eq\`。** \`i64\` フィールド 1 つの構造体でコンパイラが自動 derive できるトレイトを、すべて derive する。値渡しが安く、テストで assert しやすく、proptest で比較しやすい。**Pure-value 型に対しては、標準の 4 つ（または \`Hash\` を含めて 5 つ）を躊躇なく derive する。**
 
 次にコンストラクタ:
@@ -2819,7 +2819,7 @@ pub enum WithdrawOutcome {
 2. **負の入力は黙って無視される。Panic も Error も出さない。** なぜか。代替案がコンセンサスにとって致命的だからだ。Panic-on-negative にすると、bridge bug で負の fee が 1 度来た瞬間、1 つの validator は halt し、他は走り続ける — Rust の panic セマンティクスはここで特に酷い（debug vs release、hook の差、etc.）。\`Result<i64, ...>\` を返せば、scanner のすべての呼び出し側に \`unwrap\`（panic を別名で）かエラー型のスレッディング（うまく扱える場所がない）を強要する。**Saturating-no-op がコンセンサスの決定性を無料でくれる。**
 3. **\`saturating_add\` であって \`+\` ではない。** \`+\` を使うと 2 つの failure mode が出る。Debug ビルドでは \`100i64 + i64::MAX\` がオーバーフロー panic する (1 つの validator が halt、他は走り続け → fork)。Release ビルドではサイレントに負の値に wrap する — *これは \`balance ≥ 0\` の不変条件を破ると同時に、同じ演算を扱った peer ごとに異なる \`i64\` を生む → fork*。\`saturating_add\` はあらゆるビルドプロファイルで \`i64::MAX\` に頭打ちにする。全 validator が同じ数を見る。ネットワークが \`9.2 × 10^18\` を超える fee を蓄積することはどのみち起きないし、cap は病理的でない state では不可視だ。**\`saturating_*\` ファミリはコンセンサス安全な算術ファミリ。**
 4. **新しい balance を返す。** 呼び出し側はそれを log したいケースがよくある（「fee credited: 150、fund balance now: 2,400,150」）。\`let _ = f.deposit(150); let new_balance = f.balance();\` の二段書きより、チェーンしたほうがきれい。\`&mut self\`-and-returns は標準ライブラリにもあるパターン（\`HashMap::insert\` が古い値を返すなど）。**有用な state を返す \`&mut self\` メソッドは、追加の \`balance()\` 呼び出しを省ける。**
-5. **doc 文字列が「non-negative fee amount」と言い、実装は負も扱う。** 矛盾ではなく defensive ドキュメントだ。Doc は「こう渡してください」を言い、実装は「でも garbage が来てもクラッシュしません」を言う。**意図する契約を doc に書き、慈悲深い失敗モードを実装する。**
+5. **doc 文字列が「non-negative fee amount」と言い、実装は負も扱う。** 矛盾ではなく defensive ドキュメントだ。Doc は「こう渡してほしい」を言い、実装は「でも garbage が来てもクラッシュしない」を言う。**意図する契約を doc に書き、慈悲深い失敗モードを実装する。**
 
 ### Step 5: \`lib.rs\` にモジュールを配線
 

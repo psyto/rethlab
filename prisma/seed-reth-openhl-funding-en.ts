@@ -9,7 +9,7 @@ export async function seedRethOpenHlFundingEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-funding-en",
-      title: "Build OpenHL Funding — perpetual funding state machine",
+      title: "Step 4. Funding: perpetual funding state machine",
       description:
         "Build the perpetual-funding state machine — a deterministic fixed-point pipeline (premium → rate → settlement) gated by an interval clock that enforces no-catch-up semantics. Pure state, no I/O; the integration into the bridge belongs to a later course. The fourth course in the DIY Perp series.",
       difficulty: "EXPERT",
@@ -29,7 +29,7 @@ export async function seedRethOpenHlFundingEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: "Build OpenHL Funding — perpetual funding state machine",
+                  title: "Step 4. Funding: perpetual funding state machine",
                   slug: "openhl-funding-orientation-en",
                   type: 'CONTENT',
                   sortOrder: 0,
@@ -3717,7 +3717,7 @@ By the end of this lesson:
 
 Read top-to-bottom: prices in, settlements out. The clock wraps the whole pipeline behind a "has enough time elapsed?" gate.
 
-Track-level topology note: this \`Vec<Settlement>\` lane is still running outside the EVM mainline (\`BlockExecutor\`), in the same way Course 7 carried \`Vec<Fill>\` in a parallel lane. At this stage, both fills and settlements are bridge-side side-lanes that later merge at payload/state application boundaries.
+Track-level topology note: this \`Vec<Settlement>\` lane is still running outside the EVM mainline (\`BlockExecutor\`), in the same way Course 7 carried \`Vec<Fill>\` in a parallel lane. At this stage, both fills and settlements are bridge-side lanes that later merge at payload/state application boundaries.
 
 ## What each module delivered
 

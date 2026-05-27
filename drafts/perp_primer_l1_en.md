@@ -88,7 +88,7 @@ Sign convention: **positive rate → longs pay shorts**. Negative rate → short
 
 Intuitively: the side that's contributing to the imbalance pays the side that's offsetting it. Longs drove mark above index → longs pay. Shorts drove mark below → shorts pay. The payment makes the offending side a bit less profitable to hold, which creates the economic incentive to exit (or to take the other side), which pulls mark back toward index.
 
-The payment isn't paid by the venue. It moves directly between traders: the longs collectively transfer to the shorts collectively, scaled by each position's notional. Zero-sum at the venue level — Hyperliquid is just the bookkeeper.
+The payment isn't paid by the venue. It moves directly between traders: the longs collectively transfer to the shorts collectively, scaled by each position's notional. Zero-sum at the venue level — Hyperliquid is the bookkeeper.
 
 > 💡 **Engineer's view — one signed-size equation collapses every branch:**
 > In code, track each position's direction as a signed size (Long = `+size`, Short = `-size`). Every trader's balance update then collapses to one branch-free expression:

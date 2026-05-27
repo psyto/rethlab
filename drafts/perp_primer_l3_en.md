@@ -51,7 +51,7 @@ When the engine decides to liquidate, it generates a **close order spec** with t
 | `qty` | Full absolute position size (`\|size\|`) |
 | `account` | The liquidated trader's account ID |
 
-No price — it's always a **market order**. The engine doesn't pick prices; it accepts whatever the orderbook offers right now. The matching engine settles the close against resting liquidity (other traders' limit orders).
+There is no price field — it is always a **market order**. The engine doesn't pick prices; it accepts whatever the orderbook offers right now. The matching engine settles the close against resting liquidity (other traders' limit orders).
 
 This is mechanically the same as a normal trade. The trader's position closes. The counterparty (whoever's resting order fills the close) opens or increases their position. Mark moves to reflect the new top-of-book.
 
@@ -123,7 +123,7 @@ Trader's position before liquidation:
   collateral:    $10,000
   size:          1 BTC long
   entry:         $100,000
-  mark at close: $89,000   (PnL = −$11,000, equity = −$1,000 wait that's negative)
+  mark at close: $89,000   (PnL = −$11,000, equity = −$1,000 — wait, that's negative)
 ```
 
 Let me pick a better number. Mark $90,500 → PnL = −$9,500 → equity = $500. Ratio = $500 / $90,500 ≈ 0.55% — below maintenance, equity positive. Liquidatable, not Underwater.

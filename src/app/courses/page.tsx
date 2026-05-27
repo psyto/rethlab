@@ -21,6 +21,14 @@ const TRACK_COLORS: Record<string, string> = {
 export default function CourseCatalogPage() {
   const { t, locale } = useLocale();
   const [search, setSearch] = useState('');
+  const isJA = locale === 'ja';
+  const conceptCourseSlug = isJA ? 'reth-beginner-ja' : 'reth-beginner-en';
+  const conceptSystemsSlug = isJA
+    ? 'ethereum-as-systems-engineering-ja'
+    : 'ethereum-as-systems-engineering-en';
+  const conceptAdversarialSlug = isJA
+    ? 'ethereum-adversarial-forces-ja'
+    : 'ethereum-adversarial-forces-en';
 
   const { data: courses, isLoading, error } = useCourses(search, 'all', locale);
   const localCompletion = useLocalCompletion();
@@ -31,6 +39,32 @@ export default function CourseCatalogPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold">{t('courses.catalog.title')}</h1>
         <p className="mt-2 text-muted-foreground">{t('courses.catalog.subtitle')}</p>
+      </div>
+
+      {/* Concept-first entry points */}
+      <div className="mb-8 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-primary">
+          {isJA ? 'Concept First' : 'Concept First'}
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {isJA
+            ? 'RethLabの核となるコンセプトを先に掴むなら、まずこの2本から。'
+            : 'Start with these two lessons to get the core RethLab concept framing.'}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-3 text-sm">
+          <Link
+            href={`/courses/${conceptCourseSlug}/lessons/${conceptSystemsSlug}`}
+            className="rounded-lg border border-primary/30 px-3 py-1.5 hover:bg-primary/10"
+          >
+            {isJA ? 'Ethereumをシステムエンジニアリングとして捉える' : 'Ethereum as Systems Engineering'}
+          </Link>
+          <Link
+            href={`/courses/${conceptCourseSlug}/lessons/${conceptAdversarialSlug}`}
+            className="rounded-lg border border-primary/30 px-3 py-1.5 hover:bg-primary/10"
+          >
+            {isJA ? 'Ethereumを動かす敵対的な力学' : 'Ethereum Adversarial Forces'}
+          </Link>
+        </div>
       </div>
 
       {/* Search */}
@@ -61,9 +95,48 @@ export default function CourseCatalogPage() {
         </div>
       )}
 
-      {/* Course Grid — split into Source-Reading + Build-Along sections,
-          matching the two-format model used on the landing page. */}
+      {/* Course Grid — strategy-aligned sections:
+          Flagship (OpenHL) / Prerequisites / Deep Dives / Advanced */}
       {courses && (() => {
+        const text = {
+          flagshipHeader: isJA ? 'Flagship Path' : 'Flagship Path',
+          flagshipSub: isJA
+            ? 'OpenHLを主導線にした実装ジャーニー'
+            : 'OpenHL-led implementation journey',
+          prereqHeader: isJA ? 'Prerequisites' : 'Prerequisites',
+          prereqSub: isJA
+            ? 'OpenHLに入る前に固める基礎'
+            : 'Foundations before entering OpenHL',
+          deepDiveHeader: isJA ? 'Deep Dives (Optional)' : 'Deep Dives (Optional)',
+          deepDiveSub: isJA
+            ? '詰まった時に参照する中級読解コース'
+            : 'Reference tracks for unblock moments',
+          advancedHeader: isJA ? 'Advanced Architect' : 'Advanced Architect',
+          advancedSub: isJA
+            ? 'L1設計・運用の上位トラック'
+            : 'Upper-tier L1 architecture and operations',
+        };
+
+        const isFlagship = (slug: string, track?: string) =>
+          track === 'diy-perp' || slug.includes('openhl');
+        const isPrereq = (slug: string) =>
+          slug.includes('beginner') ||
+          slug.includes('fundamentals') ||
+          slug.includes('bridge-to-advanced') ||
+          slug.includes('perp-primer');
+        const isDeepDive = (slug: string) =>
+          slug.includes('mastering-foundry') ||
+          slug.includes('revm-advanced') ||
+          slug.includes('reth-advanced') ||
+          slug.includes('alloy-advanced');
+
+        const sectionFor = (course: typeof courses[number]) => {
+          if (isFlagship(course.slug, course.track)) return 'flagship';
+          if (isPrereq(course.slug)) return 'prereq';
+          if (isDeepDive(course.slug)) return 'deep';
+          return 'advanced';
+        };
+
         const renderCard = (course: typeof courses[number]) => {
           const localCompleted = course.lessonSlugs.filter((s) =>
             localCompletion.isCompleted(s)
@@ -146,39 +219,81 @@ export default function CourseCatalogPage() {
           );
         };
 
-        const buildAlong = courses.filter((c) => c.track === 'diy-perp');
-        const sourceReading = courses.filter((c) => c.track !== 'diy-perp');
+        const flagship = courses.filter((c) => sectionFor(c) === 'flagship');
+        const prerequisites = courses.filter((c) => sectionFor(c) === 'prereq');
+        const deepDives = courses
+          .filter((c) => sectionFor(c) === 'deep')
+          .sort((a, b) => {
+            const aFoundry = a.slug.includes('mastering-foundry');
+            const bFoundry = b.slug.includes('mastering-foundry');
+            if (aFoundry && !bFoundry) return -1;
+            if (!aFoundry && bFoundry) return 1;
+            return 0;
+          });
+        const advanced = courses.filter((c) => sectionFor(c) === 'advanced');
 
         return (
           <>
-            {sourceReading.length > 0 && (
+            {flagship.length > 0 && (
               <div className="mb-12">
                 <div className="mb-4 flex items-center gap-2">
-                  <h2 className="font-mono text-xs uppercase tracking-widest text-primary">
-                    {t('page.tracks.sourceReadingHeader')}
+                  <h2 className="font-mono text-xs uppercase tracking-widest text-pink-400">
+                    {text.flagshipHeader}
                   </h2>
                   <span className="text-xs text-muted-foreground">
-                    {t('page.tracks.sourceReadingSubheader')}
+                    {text.flagshipSub}
                   </span>
                 </div>
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {sourceReading.map(renderCard)}
+                  {flagship.map(renderCard)}
                 </div>
               </div>
             )}
 
-            {buildAlong.length > 0 && (
+            {prerequisites.length > 0 && (
               <div className="mb-12">
                 <div className="mb-4 flex items-center gap-2">
-                  <h2 className="font-mono text-xs uppercase tracking-widest text-pink-400">
-                    {t('page.tracks.buildAlongHeader')}
+                  <h2 className="font-mono text-xs uppercase tracking-widest text-primary">
+                    {text.prereqHeader}
                   </h2>
                   <span className="text-xs text-muted-foreground">
-                    {t('page.tracks.buildAlongSubheader')}
+                    {text.prereqSub}
                   </span>
                 </div>
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {buildAlong.map(renderCard)}
+                  {prerequisites.map(renderCard)}
+                </div>
+              </div>
+            )}
+
+            {deepDives.length > 0 && (
+              <div className="mb-12">
+                <div className="mb-4 flex items-center gap-2">
+                  <h2 className="font-mono text-xs uppercase tracking-widest text-yellow-400">
+                    {text.deepDiveHeader}
+                  </h2>
+                  <span className="text-xs text-muted-foreground">
+                    {text.deepDiveSub}
+                  </span>
+                </div>
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {deepDives.map(renderCard)}
+                </div>
+              </div>
+            )}
+
+            {advanced.length > 0 && (
+              <div className="mb-12">
+                <div className="mb-4 flex items-center gap-2">
+                  <h2 className="font-mono text-xs uppercase tracking-widest text-red-400">
+                    {text.advancedHeader}
+                  </h2>
+                  <span className="text-xs text-muted-foreground">
+                    {text.advancedSub}
+                  </span>
+                </div>
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {advanced.map(renderCard)}
                 </div>
               </div>
             )}

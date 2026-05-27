@@ -235,6 +235,14 @@ When adding a lesson that references real source code, please use the same shape
 1. Edit the markdown draft in `drafts/`
 2. Re-run the builder, e.g. `npx tsx .github/scripts/build-openhl-funding-seed.ts --locale=ja`
 3. `npm run seed:upsert`
+
+### Draft safety policy
+
+- `drafts/` is an editorial source directory, not a runtime content source.
+- Production/runtime code must read from database content seeded by `prisma/seed-reth-*.ts`.
+- Guardrails:
+  - `npm run check:runtime-no-drafts` verifies runtime code does not reference `drafts/`.
+  - `npm run check:generated-seeds-clean` verifies generated seed files are in sync with drafts.
 4. Refresh the browser
 
 Build-along lessons follow a different structure than source-reading lessons:

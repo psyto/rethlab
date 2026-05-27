@@ -1681,7 +1681,7 @@ Now you know what "L2 prover" actually does.
                   xpReward: 40,
                   content: `# Running a Reth fork in production
 
-It's 3am. Your validator stopped producing blocks 40 minutes ago. The dashboard shows: file-descriptor exhaustion, MDBX page-cache pressure, peer count at 2. None of these would have shown up in unit tests. None of them would have shown up the day you shipped. They show up at month 3, all at once. This lesson is the **ops checklist** that prevents that 3am page — build flags, systemd limits, diff testing against vanilla, the deployment topology that lets your fork survive contact with reality.
+It's 3 a.m. Your validator stopped producing blocks 40 minutes ago. The dashboard shows: file-descriptor exhaustion, MDBX page-cache pressure, peer count at 2. None of these would have shown up in unit tests. None of them would have shown up the day you shipped. They show up at month 3, all at once. This lesson is the **ops checklist** that prevents that 3 a.m. page — build flags, systemd limits, diff testing against vanilla, the deployment topology that lets your fork survive contact with reality.
 
 > 🛑 **Predict before scrolling.** You ship your fork built with **default \`cargo build --release\`** — no jemalloc, no asm-keccak, no \`target-cpu=native\`. List the production symptoms you'd see in **week 1, week 4, month 3**. (Hint: which symptoms creep in slowly versus hit immediately?)
 

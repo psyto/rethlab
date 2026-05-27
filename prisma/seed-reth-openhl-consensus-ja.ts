@@ -9,9 +9,9 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "reth-openhl-consensus-ja",
-      title: "OpenHL 自作開発ガイド：`cargo init` から始める single-validator devnet 構築",
+      title: "Step 1. Consensus：`cargo init` から始める single-validator devnet 構築",
       description:
-        "Hyperliquid シェイプの L1 コンセンサス層をスクラッチで構築します。プロダクションクオリティの Reth (EVM) と Malachite (BFT) を単一の Rust workspace へ統合し、end-to-end でのブロック生成機構を実装。リファレンス実装（psyto/openhl）をベースに手を動かしながら学ぶ、「DIY Perp シリーズ」の記念すべきファーストステップです。",
+        "Hyperliquid シェイプの L1 コンセンサス層をスクラッチで構築する。プロダクションクオリティの Reth (EVM) と Malachite (BFT) を単一の Rust workspace へ統合し、end-to-end でのブロック生成機構を実装。リファレンス実装（psyto/openhl）をベースに手を動かしながら学ぶ、「DIY Perp シリーズ」の記念すべきファーストステップである。",
       difficulty: "EXPERT",
       duration: 660,
       xpReward: 1270,
@@ -36,6 +36,17 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
                   duration: 20,
                   xpReward: 60,
                   content: `# OpenHL を自作する — \`cargo init\` から動く single-validator devnet まで
+
+## 30秒要約
+
+- 対象: Hyperliquid系アーキテクチャを Rust で実装したい人。
+- 得られるもの: Reth + Malachite を接続した最小の consensus substrate。
+- このあと: CLOB / Precompiles / Funding へ安全に進める土台ができる。
+
+## 完了条件
+
+- \`cargo test first_block_via_engine_actors\` を通せる。
+- CL と EL の接続点（bridge contract）を説明できる。
 
 これは「読む」コースではない。自分で組み上げる「**作る**」コースだ。
 

@@ -9,7 +9,7 @@ export async function seedRethPerpPrimerJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "perp-primer-ja",
-      title: "Perp DEX Primer — DIY Perp track の前提となる永久先物の仕組み",
+      title: "Step 0. Perp DEX Primer：DIY Perp track の前提となる永久先物の仕組み",
       description:
         "DIY Perp track の prerequisite となる概念コース。4 レッスン: (1) 永久先物とは何か、なぜ期限がないのか、(2) mark / index / funding rate、(3) margin model と 4 つの health state、(4) liquidation、insurance fund、ADL。Rust コードは扱わない — build-along コースが暗黙のうちに前提にしている perp 領域の知識のみ。全レッスンを通じて Hyperliquid の実パラメータでの計算例。",
       difficulty: "INTERMEDIATE",
@@ -36,6 +36,17 @@ export async function seedRethPerpPrimerJA(prisma: PrismaClient) {
                   duration: 30,
                   xpReward: 50,
                   content: `# 永久先物とは何か — そしてなぜ期限がないのか
+
+## 30秒要約
+
+- 対象: Rust 実装に入る前に、perp の仕組みを先に理解したい人。
+- 得られるもの: spot / futures / perp の違いと、funding が必要な理由。
+- このあと: Step 1 以降の実装レッスンで出る用語が読めるようになる。
+
+## 完了条件
+
+- 「なぜ perp には funding が必要か」を 2-3 文で説明できる。
+- 「spot と perp の違い」を 1 つ以上具体例で説明できる。
 
 ## ゴール
 

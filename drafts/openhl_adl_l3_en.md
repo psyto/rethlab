@@ -129,7 +129,7 @@ Four things to notice:
 1. **A and B have the same PnL (100), different collateral.** A is `coll 100`, so `pnl_pct = 100×10000/100 = 10000` bps and leverage = `notional/equity = 200/200 = 10000` bps → score 10,000. B is `coll 50`, so `pnl_pct = 100×10000/50 = 20000` bps and leverage = `200/150 ≈ 13333` bps → score `20000 × 13333 / 10000 = 26666`. **Same PnL but higher leverage = higher score = haircut first.**
 2. **The score-math comment is the test's spec.** Without the math in the comment, the test would be a magic-numbers assertion: "trust me, B has score 26666". With the math, the test reads as a derivation a human can verify. **Math-walk comments turn assertions into proofs.**
 3. **A's record is absent from the report.** The `break` in Phase 4 fires after B is haircut (remaining = 0); A never enters the loop body. The assertion `records.len() == 1` documents this — A isn't there because A wasn't needed. **The Predict callout's payoff: the record count tells you how many accounts actually got force-closed.**
-4. **The `"deficit smaller than B's pnl → only B"` message on the length assertion is documentation.** If this test ever fails (e.g., a refactor breaks Phase 3's sort discipline), the failure message tells the debugger *why* this matters. **Assertion messages are documentation — write them as if you'd read them in CI logs at 3am.**
+4. **The `"deficit smaller than B's pnl → only B"` message on the length assertion is documentation.** If this test ever fails (e.g., a refactor breaks Phase 3's sort discipline), the failure message tells the debugger *why* this matters. **Assertion messages are documentation — write them as if you'd read them in CI logs at 3 a.m.**
 
 ### Test 4: deficit drains rank 1, partially covers rank 2
 
@@ -314,4 +314,3 @@ L3 lands in Module 1 (ADL implementation) at sortOrder 2:
 - **Q5 honestly explains the `// loser?` comment** — drafting honesty. Don't airbrush. The test still passes; the comment was preserved from an earlier draft and signals that.
 - **L4 preview names the 5 proptests + the Stage 10 retrospective explicitly** — the capstone is the universal generalization of L3's specific cases.
 - **No Mermaid in L3.** The test-to-behavior mapping table + the math-walk comments inside each test are the structural visuals. A Mermaid for "6 tests in a 2-axis matrix" would be visual noise compared to the table.
-

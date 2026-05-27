@@ -136,11 +136,11 @@ Why `out[24..32]` is the right "magic number" pops out the moment you draw the w
 
 
    By the numbers:
-     ・Slot 1 spans bytes 0..32 (one u256 BE).
-     ・The top 24 bytes (0..24) stay zero-padded (already zeroed by vec![0u8; 64]).
-     ・The bottom 8 bytes (24..32) take the u64 directly in big-endian → the whole slot
+     - Slot 1 spans bytes 0..32 (one u256 BE).
+     - The top 24 bytes (0..24) stay zero-padded (already zeroed by vec![0u8; 64]).
+     - The bottom 8 bytes (24..32) take the u64 directly in big-endian → the whole slot
        reads as a "u64 zero-extended into a u256."
-     ・Slot 2 is just the same shape shifted +32 bytes.
+     - Slot 2 has the same shape, shifted by +32 bytes.
 
    Bottom line: 24..32 and 56..64 are "where the u64 (8 bytes) slides into the right
    edge of a u256 (32 bytes)." Not magic — just (32 − 8 = 24) and (64 − 8 = 56).

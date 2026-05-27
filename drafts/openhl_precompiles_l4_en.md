@@ -406,16 +406,16 @@ Drawing how the layered wrapper `RwLock<Option<Arc<Mutex<Book>>>>` handles concu
 
    Why the "① RwLock + ④ Mutex" pairing matters:
 
-   ・If ① were also a Mutex (`Mutex<Option<Arc<Mutex<Book>>>>`),
+   - If ① were also a Mutex (`Mutex<Option<Arc<Mutex<Book>>>>`),
      **every precompile read would serialize at ① too** — N parallel EVM calls
      would line up behind one bottleneck. ① benefits from read parallelism;
      RwLock is the right tool.
 
-   ・If we flattened to `RwLock<Book>` (no Arc, no Option),
+   - If we flattened to `RwLock<Book>` (no Arc, no Option),
      **the bridge and the precompile couldn't both own the Book** — if one
      side holds `&'static`, the other can't claim ownership. Arc resolves this.
 
-   ・If we put `Arc<Mutex<Book>>` directly in a static (no Option),
+   - If we put `Arc<Mutex<Book>>` directly in a static (no Option),
      `Book::new()` can't be evaluated at compile time (not const-fn), AND we lose
      the type-level distinction for the "not yet installed" state. Option fixes both.
 

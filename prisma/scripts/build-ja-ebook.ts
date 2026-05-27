@@ -1,7 +1,7 @@
 /**
- * Builds Japanese-locale curriculum exports, split into two volumes:
+ * Builds Japanese-locale curriculum exports, split into three volumes:
  *
- *   Volume 1 — Beginner + Intermediate (foundations through Inside Reth):
+ *   Volume 1 — Beginner + Intermediate (foundations through Inside Reth + Foundry):
  *     rethlab-ja-vol1.pdf   (page numbers in footer)
  *     rethlab-ja-vol1.epub  (reflowable, for Kindle / iBooks)
  *
@@ -9,10 +9,15 @@
  *     rethlab-ja-vol2.pdf
  *     rethlab-ja-vol2.epub
  *
+ *   Volume 3 — DIY Perp (perp-primer + OpenHL stack):
+ *     rethlab-ja-vol3.pdf
+ *     rethlab-ja-vol3.epub
+ *
  * Pipeline per volume:
  *   prisma seed funcs  →  combined markdown  →  pandoc  →  PDF (via Chrome) + EPUB
  *
  * Run with: npm run build:ja-ebook
+ *   Set PDF_ONLY=1 to skip EPUB generation.
  *
  * Requires: pandoc on PATH (`brew install pandoc`), Google Chrome at the
  * standard macOS location for the PDF step.
@@ -26,6 +31,7 @@ import { seedRethBridgeToAdvancedJA } from '../seed-reth-bridge-to-advanced-ja';
 import { seedRethAlloyAdvancedJA } from '../seed-reth-alloy-advanced-ja';
 import { seedRethRevmAdvancedJA } from '../seed-reth-revm-advanced-ja';
 import { seedRethAdvancedJA } from '../seed-reth-advanced-ja';
+import { seedRethFoundryJA } from '../seed-reth-foundry-ja';
 import { seedRethConsensusEngineeringJA } from '../seed-reth-consensus-engineering-ja';
 import { seedRethCrossChainBridgesJA } from '../seed-reth-cross-chain-bridges-ja';
 import { seedRethSequencerRollupJA } from '../seed-reth-sequencer-rollup-ja';
@@ -33,6 +39,13 @@ import { seedRethP2PNetworkingJA } from '../seed-reth-p2p-networking-ja';
 import { seedRethValidatorOpsJA } from '../seed-reth-validator-ops-ja';
 import { seedRethExpertJA } from '../seed-reth-expert-ja';
 import { seedRethBuildingJA } from '../seed-reth-building-ja';
+import { seedRethPerpPrimerJA } from '../seed-reth-perp-primer-ja';
+import { seedRethOpenHlConsensusJA } from '../seed-reth-openhl-consensus-ja';
+import { seedRethOpenHlClobJA } from '../seed-reth-openhl-clob-ja';
+import { seedRethOpenHlPrecompilesJA } from '../seed-reth-openhl-precompiles-ja';
+import { seedRethOpenHlFundingJA } from '../seed-reth-openhl-funding-ja';
+import { seedRethOpenHlLiquidationJA } from '../seed-reth-openhl-liquidation-ja';
+import { seedRethOpenHlAdlJA } from '../seed-reth-openhl-adl-ja';
 
 const REPO_ROOT = resolve(__dirname, '../..');
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -59,6 +72,7 @@ const VOLUMES: Volume[] = [
       seedRethAlloyAdvancedJA,
       seedRethRevmAdvancedJA,
       seedRethAdvancedJA,
+      seedRethFoundryJA,
     ],
   },
   {
@@ -73,6 +87,20 @@ const VOLUMES: Volume[] = [
       seedRethValidatorOpsJA,
       seedRethExpertJA,
       seedRethBuildingJA,
+    ],
+  },
+  {
+    slug: 'vol3',
+    title: 'RethLab Vol.3 — DIY Perp 編 (日本語版)',
+    description: 'Rust EVM L1 エンジニアのための学校 — 永久先物取引所をゼロから自作する DIY Perp トラック',
+    seeds: [
+      seedRethPerpPrimerJA,
+      seedRethOpenHlConsensusJA,
+      seedRethOpenHlClobJA,
+      seedRethOpenHlPrecompilesJA,
+      seedRethOpenHlFundingJA,
+      seedRethOpenHlLiquidationJA,
+      seedRethOpenHlAdlJA,
     ],
   },
 ];
@@ -241,13 +269,17 @@ async function buildVolume(volume: Volume, headerPath: string): Promise<{ pdf: s
     { stdio: 'inherit' },
   );
 
-  console.log(`[${volume.slug}] Pandoc → EPUB...`);
-  execSync(
-    `pandoc ${mdPath} -o "${epubPath}" --toc --toc-depth=2 --split-level=1 ` +
-      `-V lang=ja --metadata title="${volume.title}" --metadata author="${AUTHOR}" ` +
-      `--metadata description="${volume.description}"`,
-    { stdio: 'inherit' },
-  );
+  if (process.env.PDF_ONLY === '1') {
+    console.log(`[${volume.slug}] Skipping EPUB (PDF_ONLY=1)`);
+  } else {
+    console.log(`[${volume.slug}] Pandoc → EPUB...`);
+    execSync(
+      `pandoc ${mdPath} -o "${epubPath}" --toc --toc-depth=2 --split-level=1 ` +
+        `-V lang=ja --metadata title="${volume.title}" --metadata author="${AUTHOR}" ` +
+        `--metadata description="${volume.description}"`,
+      { stdio: 'inherit' },
+    );
+  }
 
   // Estimate page count for the PDF
   let pages: number | null = null;
@@ -262,7 +294,11 @@ async function buildVolume(volume: Volume, headerPath: string): Promise<{ pdf: s
     /* page count is best-effort */
   }
 
-  return { pdf: pdfPath, epub: epubPath, pages };
+  return {
+    pdf: pdfPath,
+    epub: process.env.PDF_ONLY === '1' ? null : epubPath,
+    pages,
+  };
 }
 
 async function main() {
@@ -273,7 +309,7 @@ async function main() {
   const headerPath = '/tmp/rethlab-ja-header.html';
   writeFileSync(headerPath, PDF_HEADER_HTML, 'utf8');
 
-  const results = [] as Array<{ slug: string; pdf: string; epub: string; pages: number | null }>;
+  const results = [] as Array<{ slug: string; pdf: string; epub: string | null; pages: number | null }>;
   for (const volume of VOLUMES) {
     const res = await buildVolume(volume, headerPath);
     results.push({ slug: volume.slug, ...res });
@@ -282,7 +318,7 @@ async function main() {
   console.log('\nDone. Outputs:');
   for (const r of results) {
     console.log(`  ${r.slug}:  ${r.pdf}${r.pages != null ? `  (~${r.pages} pages)` : ''}`);
-    console.log(`        ${r.epub}`);
+    if (r.epub) console.log(`        ${r.epub}`);
   }
 }
 

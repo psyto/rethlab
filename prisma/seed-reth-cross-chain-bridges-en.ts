@@ -431,7 +431,7 @@ For Tempo, this matters: if Tempo has a stablecoin native to its chain, and you 
 
 ## 6. Tempo↔Ethereum via OP Standard Bridge?
 
-Tempo is **not OP Stack** (it's a standalone L1). So OP Standard Bridge doesn't directly apply. But the **pattern** does:
+Tempo is **not an OP Stack chain** (it's a standalone L1). So the OP Standard Bridge doesn't directly apply. But the **pattern** does:
 
 For Tempo↔Ethereum, the equivalent would be:
 - Tempo Standard Bridge (Solidity contracts on both sides)
@@ -484,7 +484,7 @@ The same pattern works for Tempo: an ExEx on Tempo that watches CCIP bridge even
                   xpReward: 45,
                   content: `# Chainlink CCIP — the cross-chain rail Tempo uses
 
-A merchant accepts USDC payment in Tempo. Behind the scenes that USDC needs to settle on Ethereum (for treasury) and Solana (for DeFi yield) — across three chains, two of which can't speak to each other directly. **That cross-chain settlement isn't a theoretical bridge problem; it's what Tempo runs in production today, and the rail it runs on is Chainlink CCIP** (Cross-Chain Interoperability Protocol). Not a light client. Not a fork of Wormhole. A production bridge designed for arbitrary chain pairs.
+A merchant accepts USDC payment in Tempo. Behind the scenes, that USDC must settle on Ethereum (for treasury) and Solana (for DeFi yield) — across three chains, two of which can't speak to each other directly. **This cross-chain settlement is not theoretical; Tempo runs it in production today on Chainlink CCIP** (Cross-Chain Interoperability Protocol). Not a light client. Not a fork of Wormhole. A production bridge designed for arbitrary chain pairs.
 
 Hyperliquid doesn't use CCIP — they ship their own bridge. But for mppsol and soltempo, CCIP is the **operational reality**, not a theoretical alternative. Understanding it isn't optional if you're going to architect anything that touches Tempo's payments stack.
 
@@ -552,7 +552,7 @@ Anyone who used cross-chain DEXes in 2021 remembers the wrapped-token mess: USDC
 - On bridging, source pool locks the asset; destination pool releases
 - For **burn-mint** model: source pool burns; destination pool mints from the same total supply
 
-Tempo's USDC on Ethereum uses burn-mint via CCIP. Source USDC is burned; destination USDC is minted. There's no "USDC.e" — just the same USDC on different chains. **Simpler, and more secure than wrapped tokens.**
+Tempo's USDC on Ethereum uses burn-mint via CCIP. Source USDC is burned; destination USDC is minted. There's no "USDC.e" — only USDC on different chains. **Simpler, and more secure than wrapped tokens.**
 
 > 🔍 **Find in repo.** [\`smartcontractkit/ccip\`](https://github.com/smartcontractkit/ccip) — the CCIP contracts. Find \`TokenPool.sol\`. **What's the inheritance structure?** The contract has multiple variants for different token types.
 
@@ -739,7 +739,7 @@ To run an IBC light client of chain X on chain Y, **chain Y needs to verify chai
 
 For Ethereum, you'd need a Solidity contract implementing Tendermint verification — expensive and complex. For Solana, you'd need an Anchor program for the same. **Cross-ecosystem IBC is theoretically possible but practically rare** because of the implementation cost.
 
-There's progress: [Polymer](https://www.polymerlabs.org/) is building an IBC hub that connects Cosmos to Ethereum via a rollup. **For Tempo (a Reth-based EVM chain), IBC is not the natural choice** — it would require building a Tempo light client in CosmWasm + Tendermint light client on Tempo (Solidity). Possible but high cost for marginal benefit.
+There's progress: [Polymer](https://www.polymerlabs.org/) is building an IBC hub that connects Cosmos to Ethereum via a rollup. **For Tempo (a Reth-based EVM chain), IBC is not a natural choice** — it would require building a Tempo light client in CosmWasm + a Tendermint light client on Tempo (Solidity). Possible, but at high cost for limited benefit.
 
 ## 3. Wormhole + IBC + CCIP: when each wins
 

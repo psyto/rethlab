@@ -102,7 +102,7 @@ cargo test -p openhl-evm clob_fills_flow_into_payload --release 2>&1 | tail -5
 
 If that passes, you're at the right starting point.
 
-> 🛑 **やりがちな勘違い.** "Custom EVM precompiles are just a fancier version of contract calls — I'll think of them as Solidity functions." **No, they're more fundamental.** Precompiles execute Rust directly inside the EVM at well-known addresses, with no Solidity bytecode in between. From the calling contract's perspective they look like an external call to a fixed address, but the implementation is native Rust running with full access to whatever state we choose to expose. The mental model is "native function callable from EVM" — not "another smart contract."
+> 🛑 **Common misconception.** "Custom EVM precompiles are just a fancier version of contract calls — I'll think of them as Solidity functions." **No, they're more fundamental.** Precompiles execute Rust directly inside the EVM at well-known addresses, with no Solidity bytecode in between. From the calling contract's perspective they look like an external call to a fixed address, but the implementation is native Rust running with full access to whatever state we choose to expose. The mental model is "native function callable from EVM" — not "another smart contract."
 
 ## 5. The 12-lesson map
 
@@ -145,7 +145,7 @@ diff -u ~/code/my-openhl/crates/evm/src/precompiles/mod.rs ./crates/evm/src/prec
 
 Match meaningfully — same types, same control flow. Whitespace and naming will differ.
 
-> 🛑 **やりがちな勘違い.** "Precompiles seem like a custom thing — surely the openhl reference is more advanced than what I'd write." **The reference is straightforward; this course teaches the canonical Reth + REVM pattern.** Reth provides an `EvmFactory` + `ExecutorBuilder` pattern specifically for cases like this (the upstream example is `paradigmxyz/reth/examples/custom-evm`). What openhl does is *follow the pattern, with one read precompile and one write precompile registered*. If you understand the pattern, you can add more precompiles by copy-modifying the existing ones.
+> 🛑 **Common misconception.** "Precompiles seem like a custom thing — surely the openhl reference is more advanced than what I'd write." **The reference is straightforward; this course teaches the canonical Reth + REVM pattern.** Reth provides an `EvmFactory` + `ExecutorBuilder` pattern specifically for cases like this (the upstream example is `paradigmxyz/reth/examples/custom-evm`). What openhl does is *follow the pattern, with one read precompile and one write precompile registered*. If you understand the pattern, you can add more precompiles by copy-modifying the existing ones.
 
 ## 7. Setup confirmation — the actual L0 exercise
 

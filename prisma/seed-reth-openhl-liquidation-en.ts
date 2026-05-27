@@ -9,7 +9,7 @@ export async function seedRethOpenHlLiquidationEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-liquidation-en",
-      title: "Build OpenHL Liquidation — perpetual position liquidation engine",
+      title: "Step 5. Liquidation: perpetual position liquidation engine",
       description:
         "Build the perpetual-position liquidation engine end-to-end: the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs, the insurance-fund state machine that absorbs deficits via a three-variant outcome enum (Covered / PartiallyDrained / Depleted), and the multi-account scanner that ties them into a single orchestration loop the bridge calls once per block. Includes the leveraged-regime non-monotonicity discovery, three layers of conservation-law proptests that compose vertically, the credit/debit decomposition that bridges pure compute and stateful book-keeping, and the discriminated-dispatch pattern via debug_assert! pairs. 14 lessons (L0–L13) across 5 modules, byte-for-byte against openhl's full Stage 10 trilogy (margin math + insurance fund + scanner). The fifth course in the DIY Perp series.",
       difficulty: "EXPERT",
@@ -29,7 +29,7 @@ export async function seedRethOpenHlLiquidationEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: "Build OpenHL Liquidation — perpetual position liquidation engine",
+                  title: "Step 5. Liquidation: perpetual position liquidation engine",
                   slug: "openhl-liquidation-orientation-en",
                   type: 'CONTENT',
                   sortOrder: 0,
@@ -819,8 +819,8 @@ Drawing what the \`types\` module — completed in L3 — receives as input and 
                               │
                               ▼
                     [ Downstream: bridge → matching engine (CLOB) ]
-                              ・convert close orders into \`SubmitMarket\` actions
-                              ・credit/debit the insurance fund on Underwater paths
+                              - convert close orders into \`SubmitMarket\` actions
+                              - credit/debit the insurance fund on Underwater paths
 \`\`\`
 
 Two things this picture pins down: (a) **The two types finalized in L3 — \`AccountSnapshot\` (input) and \`CloseOrderSpec\` (output) — are the engine's only contact surface with the outside world.** All the engine body lives in L4 onward, but every function signature lands on "consume an \`AccountSnapshot\`" or "emit a \`CloseOrderSpec\`." (b) **Both the input (snapshot) and the output (spec) are immutable** — the engine never mutates the ledger; full ownership of the ledger stays on the bridge side. This is the concrete shape of what L0 previewed as "**a read-only snapshot type that keeps the risk-calculation core decoupled from upstream state.**"
@@ -2319,9 +2319,9 @@ At its core, \`close_order_spec\` is just **flipping the side of a position**. D
 
    ※ \`close_order_spec\` decides only two things: "invert the direction" and
      "extract the magnitude via \`unsigned_abs\`."
-     ・The "should we liquidate?" decision is already settled by L6's \`margin_health\`.
-     ・The "at what price?" decision happens in the matching engine (CLOB) against the book.
-     ・The "don't submit flat specs" filter is the bridge's job before submission.
+     - The "should we liquidate?" decision is already settled by L6's \`margin_health\`.
+     - The "at what price?" decision happens in the matching engine (CLOB) against the book.
+     - The "don't submit flat specs" filter is the bridge's job before submission.
    Each layer owns exactly one concern; they compose in series.
 \`\`\`
 

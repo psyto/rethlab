@@ -11,7 +11,7 @@ export async function seedRethFoundryJA(prisma: PrismaClient) {
       slug: "mastering-foundry-ja",
       title: "Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律",
       description:
-        "本コースは、Rust開発で培った厳格なテスト規律（保存則、ルーティング契約、Byte-for-byte検証）をSolidityへ機械的に転写するための実践講座です。\n\nforge fuzz や invariant はもちろん、Cheatcodesを「REVMを内部操作するMagic Precompile」として捉えるアーキテクチャの深層まで網羅。最終章では openhl-liquidation の InsuranceFund をSolidityへ移植し、10,000回の不変条件テストで「言語の壁を超えるテスト規律」を体感します。単なるツールの使い方ではなく、脳内にある規律をスマートコントラクトに持ち込むための唯一無二のカリキュラムです。（全4モジュール・7レッスン）",
+        "Rust で培ったテスト規律（保存則、ルーティング契約、byte-for-byte 検証）を Solidity に移植する実践講座である。\n\nforge fuzz / invariant に加え、cheatcode を「REVM を内部操作する precompile」として扱う設計まで踏み込む。最終章では openhl-liquidation の InsuranceFund を Solidity に移植し、10,000 回の invariant テストで同じ規律を 2 言語で検証する。（全 4 モジュール・7 レッスン）",
       difficulty: "INTERMEDIATE",
       duration: 240,
       xpReward: 490,
@@ -39,14 +39,14 @@ export async function seedRethFoundryJA(prisma: PrismaClient) {
 
 ## このコースで得るもの
 
-rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL）を通過していれば、すでに次の規律は身についています。
+rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL）を通過していれば、次の規律は身についている。
 
 - pure-compute プリミティブ
 - \`debug_assert!\` + \`saturating_arithmetic\` で守る state machine
 - \`proptest!\` による保存則の検証
 - byte-for-byte の答え合わせ
 
-このコースの目的は、その規律を Solidity contract に 1:1 で移植することです。Foundry は、その移植を機械的に回すための実行環境です。
+このコースの目的は、その規律を Solidity contract に 1:1 で移植することにある。Foundry はその移植を機械的に回す実行環境である。
 
 完走後の到達点:
 

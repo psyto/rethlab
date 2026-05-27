@@ -169,6 +169,28 @@ When you've verified the donation flow with `sk_test_...` end-to-end (test card 
 
 Need `AUTH_SECRET` locally? `vercel env pull .env.production.local --environment=production`, then `export AUTH_SECRET=$(grep '^AUTH_SECRET=' .env.production.local | cut -d= -f2- | tr -d '"')`.
 
+### Recommended content release sequence
+
+For safe production content updates, run this order locally before deploy:
+
+```bash
+npm run seed:upsert
+npm run check:runtime-no-drafts
+npm run check:generated-seeds-clean
+```
+
+Then deploy:
+
+```bash
+vercel --prod
+```
+
+Optional stricter pre-release check (monitor EN+JA generated-seed drift):
+
+```bash
+CONTENT_CHECK_LOCALES=en,ja npm run check:generated-seeds-clean
+```
+
 ---
 
 ## Costs

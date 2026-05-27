@@ -9,9 +9,9 @@ export async function seedRethOpenHlClobJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-clob-ja",
-      title: "OpenHL CLOB 開発ガイド：マッチングエンジンの追加とステートマシンの統合",
+      title: "Step 2. CLOB：マッチングエンジンの追加とステートマシンの統合",
       description:
-        "前層で組み上げたコンセンサス・サブストレート上に、Price-Time Priority 準拠のマッチングエンジンを実装します。CLOB を決定論的な純粋ステートマシン（Pure State Machine）として設計し、その約定イベント（fill）をブリッジを介してコンセンサス側でコミットされたブロックへと結合します。「DIY Perp シリーズ」の第2ステップ。コアとなる取引実行レーンを自作します。",
+        "前層で組み上げたコンセンサス・サブストレート上に、Price-Time Priority 準拠のマッチングエンジンを実装する。CLOB を決定論的な純粋ステートマシン（Pure State Machine）として設計し、その約定イベント（fill）をブリッジを介してコンセンサス側でコミットされたブロックへと結合する。「DIY Perp シリーズ」の第2ステップ。コアとなる取引実行レーンを自作する。",
       difficulty: "EXPERT",
       duration: 365,
       xpReward: 800,
@@ -36,6 +36,17 @@ export async function seedRethOpenHlClobJA(prisma: PrismaClient) {
                   duration: 15,
                   xpReward: 50,
                   content: `# OpenHL CLOB を作る — Reth 基盤の上に matching engine を載せる
+
+## 30秒要約
+
+- 対象: Consensus の次に、約定ロジックを実装したい人。
+- 得られるもの: deterministic な CLOB matching engine と fill 生成パイプライン。
+- このあと: Precompiles でコントラクト連携へ進める。
+
+## 完了条件
+
+- \`cargo test clob_fills_flow_into_payload\` を通せる。
+- CLOB の price-time-priority を説明できる。
 
 前コース (\`building-openhl-consensus\`) は、実 Reth EVM を通じて 0.02 秒で block を確定する single-validator BFT chain で終わった。**ただし確定していたのは空の block。** トランザクションもマッチングも価格発見もない。
 

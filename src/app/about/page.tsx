@@ -12,7 +12,8 @@ const fadeIn = {
 };
 
 export default function AboutPage() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
+  const isJA = locale === 'ja';
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
@@ -31,170 +32,161 @@ export default function AboutPage() {
         </p>
       </motion.div>
 
-      {/* Builder profile */}
       <motion.div
-        className="mt-10 rounded-2xl border border-border bg-card p-8"
+        className="mt-6 rounded-xl border border-pink-400/25 bg-pink-500/5 p-5"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
+        transition={{ delay: 0.05 }}
       >
-        <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-fabrknt-gradient text-2xl font-bold text-white">
-            P
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">psyto</h2>
-            <p className="text-sm text-muted-foreground">@psyto</p>
-          </div>
-        </div>
-
-        <p className="mt-6 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-          {t('about.bio')}
+        <p className="text-sm font-semibold text-pink-300">
+          {isJA ? 'Hyperliquid時代のRust実装力を育てる' : 'Train for Hyperliquid-era Rust execution'}
         </p>
-
-        {/* Background highlights */}
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          {[
-            { icon: Shield, label: t('about.background.tradfi'), value: t('about.background.tradfiDetail') },
-            { icon: Brain, label: t('about.background.blockchain'), value: t('about.background.blockchainDetail') },
-            { icon: BarChart3, label: t('about.background.vaults'), value: t('about.background.vaultsDetail') },
-            { icon: Globe, label: t('about.background.multilingual'), value: t('about.background.multilingualDetail') },
-          ].map((item, i) => (
-            <div key={i} className="rounded-xl border border-border bg-background p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <item.icon className="h-4 w-4 text-primary" />
-                {item.label}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">{item.value}</p>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Why this stack */}
-      <motion.div
-        className="mt-8"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
-        <h2 className="text-xl font-bold">{t('about.tech.title')}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">{t('about.tech.subtitle')}</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {[
-            t('about.tech.signal'),
-            t('about.tech.regime'),
-            t('about.tech.crossvenue'),
-            t('about.tech.liquidation'),
-            t('about.tech.tilt'),
-            t('about.tech.hyperlend'),
-          ].map((feature, i) => (
-            <div key={i} className="flex items-start gap-2 rounded-lg border border-border bg-background p-3">
-              <div className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              <p className="text-xs text-muted-foreground">{feature}</p>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* The Insight */}
-      <motion.div
-        className="mt-8 rounded-xl border border-primary/20 bg-primary/5 p-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.38 }}
-      >
-        <p className="text-sm font-semibold text-primary">{t('page.about.insightTitle')}</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          {t('page.about.insightDesc')}
+          {isJA
+            ? 'RethLabは、注目が集まる高速L1/DEXアーキテクチャを題材に、Rust Ethereum Systems Engineering を実装ベースで学ぶ。'
+            : 'RethLab teaches Rust Ethereum Systems Engineering through implementation, using high-performance L1/DEX architecture as the motivating case.'}
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {isJA
+            ? '注記: 教材実装は Hyperliquid に着想を得た学習用参照実装であり、公式実装ではありません。'
+            : 'Note: learning implementations are inspired references and are not official Hyperliquid code.'}
         </p>
       </motion.div>
 
-      {/* What's Next */}
-      <motion.div
-        className="mt-8"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-      >
-        <h2 className="text-xl font-bold">{t('page.about.whatsNext')}</h2>
-        <div className="mt-4 space-y-3">
-          {[
-            { label: t('page.about.moreContent'), detail: t('page.about.moreContentDesc') },
-            { label: t('page.about.multiLanguage'), detail: t('page.about.multiLanguageDesc') },
-            { label: t('page.about.moreCourses'), detail: t('page.about.moreCoursesDesc') },
-          ].map((item, i) => (
-            <div key={i} className="flex items-start gap-3 rounded-lg border border-border bg-card p-4">
-              <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
-              <div>
-                <p className="text-sm font-semibold">{item.label}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Support this work */}
       <motion.div
         className="mt-8 rounded-2xl border border-border bg-card p-6"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.45 }}
+        transition={{ delay: 0.1 }}
       >
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <Heart className="h-4 w-4 text-primary" />
+        <div>
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-fabrknt-gradient text-2xl font-bold text-white">
+              P
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">psyto</h2>
+              <p className="text-sm text-muted-foreground">@psyto</p>
+            </div>
           </div>
-          <div className="flex-1">
-            <h2 className="text-lg font-bold">{t('about.support.title')}</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              {t('about.support.body')}
-            </p>
-            <Link
-              href="/donate"
-              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
-            >
-              {t('about.support.cta')}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </div>
-      </motion.div>
 
-      {/* Contact */}
-      <motion.div
-        className="mt-8 rounded-xl border border-border bg-card p-6 text-center"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-      >
-        <p className="text-sm font-semibold">{t('about.contact')}</p>
-        <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-4">
-          <a
-            href="https://github.com/psyto/rethlab/discussions"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:border-primary/50 hover:text-primary transition-colors"
-          >
-            GitHub Discussions
-          </a>
-          <a
-            href="https://x.com/psyto"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:border-primary/50 hover:text-primary transition-colors"
-          >
-            @psyto on X
-          </a>
-          <a
-            href="https://www.linkedin.com/in/hiroyuki-saito/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:border-primary/50 hover:text-primary transition-colors"
-          >
-            LinkedIn
-          </a>
+          <p className="mt-6 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+            {t('about.bio')}
+          </p>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            {[
+              { icon: Shield, label: t('about.background.tradfi'), value: t('about.background.tradfiDetail') },
+              { icon: Brain, label: t('about.background.blockchain'), value: t('about.background.blockchainDetail') },
+              { icon: BarChart3, label: t('about.background.vaults'), value: t('about.background.vaultsDetail') },
+              { icon: Globe, label: t('about.background.multilingual'), value: t('about.background.multilingualDetail') },
+            ].map((item, i) => (
+              <div key={i} className="rounded-xl border border-border bg-background p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <item.icon className="h-4 w-4 text-primary" />
+                  {item.label}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{item.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8">
+            <h2 className="text-xl font-bold">{t('about.tech.title')}</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{t('about.tech.subtitle')}</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[
+                t('about.tech.signal'),
+                t('about.tech.regime'),
+                t('about.tech.crossvenue'),
+                t('about.tech.liquidation'),
+                t('about.tech.tilt'),
+                t('about.tech.hyperlend'),
+              ].map((feature, i) => (
+                <div key={i} className="flex items-start gap-2 rounded-lg border border-border bg-background p-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                  <p className="text-xs text-muted-foreground">{feature}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-xl border border-primary/20 bg-primary/5 p-6">
+            <p className="text-sm font-semibold text-primary">{t('page.about.insightTitle')}</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {t('page.about.insightDesc')}
+            </p>
+          </div>
+
+          <div className="mt-8">
+            <h2 className="text-xl font-bold">{t('page.about.whatsNext')}</h2>
+            <div className="mt-4 space-y-3">
+              {[
+                { label: t('page.about.moreContent'), detail: t('page.about.moreContentDesc') },
+                { label: t('page.about.multiLanguage'), detail: t('page.about.multiLanguageDesc') },
+                { label: t('page.about.moreCourses'), detail: t('page.about.moreCoursesDesc') },
+              ].map((item, i) => (
+                <div key={i} className="flex items-start gap-3 rounded-lg border border-border bg-card p-4">
+                  <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                  <div>
+                    <p className="text-sm font-semibold">{item.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-2xl border border-border bg-card p-6">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <Heart className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-bold">{t('about.support.title')}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {t('about.support.body')}
+                </p>
+                <Link
+                  href="/donate"
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary"
+                >
+                  {t('about.support.cta')}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-xl border border-border bg-card p-6 text-center">
+            <p className="text-sm font-semibold">{t('about.contact')}</p>
+            <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-4">
+              <a
+                href="https://github.com/psyto/rethlab/discussions"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:border-primary/50 hover:text-primary transition-colors"
+              >
+                GitHub Discussions
+              </a>
+              <a
+                href="https://x.com/psyto"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:border-primary/50 hover:text-primary transition-colors"
+              >
+                @psyto on X
+              </a>
+              <a
+                href="https://www.linkedin.com/in/hiroyuki-saito/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:border-primary/50 hover:text-primary transition-colors"
+              >
+                LinkedIn
+              </a>
+            </div>
+          </div>
         </div>
       </motion.div>
     </div>

@@ -40,7 +40,7 @@ This is one of three independent Intermediate-tier courses on RethLab:
 
 - **Inside Revm** (you are here) — Inside the EVM engine
 - **Inside Reth** — Inside Reth: Staged Sync, ExEx, the Reth SDK
-- **Inside Alloy** *(coming soon)* — Inside Alloy: Provider, Network, Signer
+- **Inside Alloy** — Inside Alloy: Provider, Network, Signer
 
 Revm goes first because its types (\`Address\`, \`U256\`, \`B256\`, the \`Database\` trait) underpin most of what Reth and Alloy do. The three courses are independent — pick the one that matches what you're building.
 

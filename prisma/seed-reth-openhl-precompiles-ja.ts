@@ -9,9 +9,9 @@ export async function seedRethOpenHlPrecompilesJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-precompiles-ja",
-      title: "OpenHL Precompile 開発ガイド：EVM 拡張による CLOB ステートのスマートコントラクト連携",
+      title: "Step 3. Precompiles：EVM 拡張による CLOB ステートのスマートコントラクト連携",
       description:
-        "前回構築した CLOB ステートマシンを、カスタム EVM Precompile として再定義し、スマートコントラクト層へシームレスに結合します。コントラクトから well-known なアドレスを介してマッチングエンジンを直接 Read/Write するランタイムを実装。発生した fill（約定イベント）をブリッジ経由で次期ペイロードへ伝播させるデータパイプラインを完遂させます。「DIY Perp シリーズ」の第3ステップ。App-chain のコアとなる EVM 拡張基盤をハックします。",
+        "前回構築した CLOB ステートマシンを、カスタム EVM Precompile として再定義し、スマートコントラクト層へシームレスに結合する。コントラクトから well-known なアドレスを介してマッチングエンジンを直接 Read/Write するランタイムを実装。発生した fill（約定イベント）をブリッジ経由で次期ペイロードへ伝播させるデータパイプラインを完遂させる。「DIY Perp シリーズ」の第3ステップ。App-chain のコアとなる EVM 拡張基盤をハックする。",
       difficulty: "EXPERT",
       duration: 400,
       xpReward: 820,

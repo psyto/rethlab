@@ -17,7 +17,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build:ja-ebook": "tsx prisma/scripts/build-ja-ebook.ts",
-    "seed:upsert": "tsx prisma/seed-upsert.ts"
+    "seed:upsert": "tsx prisma/seed-upsert.ts",
+    "check:runtime-no-drafts": "node prisma/scripts/check-runtime-no-drafts.mjs",
+    "check:generated-seeds-clean": "node prisma/scripts/check-generated-seeds-clean.mjs",
+    "check:editorial-style": "node prisma/scripts/check-editorial-style.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -1016,7 +1016,7 @@ A vector of mixed implementations:
 trait Greet { fn greet(&self); }
 struct En; struct Ja;
 impl Greet for En { fn greet(&self) { println!("Hi"); } }
-impl Greet for Ja { fn greet(&self) { println!("こんにちは"); } }
+impl Greet for Ja { fn greet(&self) { println!("Hello"); } }
 
 let mixed: Vec<Box<dyn Greet>> = vec![Box::new(En), Box::new(Ja)];
 for g in &mixed { g.greet(); }
@@ -1663,7 +1663,7 @@ Source-reading lessons use **active-learning prompts** that you don't see in ear
 - **End-of-lesson recall tests** — Most lessons close with "the lesson isn't done with you until you can answer X." Take that literally.
 - **Quiz gates** — Every major topic ends with a 4-question quiz that gates progression. **You can't nod past a quiz** — that's the design. Miss two and the build-up didn't internalize; scroll back.
 
-The editorial style is harder than tutorials you've read. It's deliberately so. **Smooth tutorial prose creates a "わかった気になる" trap** — readers nod through complex material and walk away with shallow comprehension. The Predict / Recall / Quiz pattern forces actual engagement.
+The editorial style is harder than tutorials you've read. It's deliberately so. **Smooth tutorial prose creates a "illusion of understanding" trap** — readers nod through complex material and walk away with shallow comprehension. The Predict / Recall / Quiz pattern forces actual engagement.
 
 This is friction by design. Lean into it.
 
@@ -1699,7 +1699,7 @@ The three source-reading courses are independent and can be taken in any order �
 
 - **Inside Revm** — Inside the EVM engine
 - **Inside Reth** — Inside Reth: Staged Sync, ExEx, the Reth SDK
-- **Inside Alloy** *(coming soon)* — Inside Alloy: Provider, Network, Signer
+- **Inside Alloy** — Inside Alloy: Provider, Network, Signer
 
 Each course has a brief welcome that handles course-specific prereqs and setup. Read that and start lesson 1.
 
