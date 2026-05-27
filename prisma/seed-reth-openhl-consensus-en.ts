@@ -1564,7 +1564,7 @@ Add the module-level doc:
 //! In-memory \`ConsensusBridge\` — a test double for the EL side.
 //!
 //! Useful for unit-testing the consensus crate without spinning up Reth. The
-//! real Reth-backed implementation lives in \`engine.rs\` (lands in L5).
+//! real Reth-backed implementation lives in \`engine.rs\` (lands in Lesson 5).
 \`\`\`
 
 ### Step 3: Add the imports + structs
@@ -2069,7 +2069,7 @@ Start with the module doc + imports:
 //!
 //! At v0 this maintains state in-process for the parts that would normally
 //! require a running Reth node (\`PayloadBuilder\` service, \`BlockchainProvider\`).
-//! The live-node bootstrap lands in later lessons (L10-L13); the type
+//! The live-node bootstrap lands in later lessons (Lessons 10–13); the type
 //! conversions and state-machine shape here are the contract that bootstrap
 //! will satisfy.
 
@@ -2220,7 +2220,7 @@ Walk through:
         &self,
         _block: &ExecutedBlock,
     ) -> Result<PayloadStatus, BridgeError> {
-        // Real validation requires a live Reth provider + EVM (lessons L11+).
+        // Real validation requires a live Reth provider + EVM (Lesson 11 onward).
         // For now, defer to the CL's voting layer for actual block validity
         // and accept structurally.
         Ok(PayloadStatus::Valid)
@@ -4114,7 +4114,7 @@ Top of the file:
 //! engine requires them to exist by trait bound, but the methods are not
 //! invoked on the happy path.
 //!
-//! When L9 spins up actors and one of these stubs IS hit, the error
+//! When Lesson 9 spins up actors and one of these stubs IS hit, the error
 //! message names the type that needs a real impl — that's the cue to swap
 //! the stub for a Protobuf/JSON implementation.
 
@@ -4769,7 +4769,7 @@ impl std::fmt::Debug for OpenHlNodeHandle {
 
 impl OpenHlNodeHandle {
     /// Take ownership of the engine→app message channels. Returns None on
-    /// the second call. L10 will consume from this to drive the bridge.
+    /// the second call. Lesson 10 will consume from this to drive the bridge.
     pub async fn take_channels(&self) -> Option<Channels<OpenHlContext>> {
         self.channels.lock().await.take()
     }
@@ -4779,7 +4779,7 @@ impl OpenHlNodeHandle {
 impl NodeHandle<OpenHlContext> for OpenHlNodeHandle {
     fn subscribe(&self) -> informalsystems_malachitebft_app::events::RxEvent<OpenHlContext> {
         // No event subscription in Stage 6c — caller can't yet observe engine
-        // events. L10 wires the TxEvent from the engine to here.
+        // events. Lesson 10 wires the TxEvent from the engine to here.
         informalsystems_malachitebft_app::events::TxEvent::new().subscribe()
     }
 
@@ -4909,8 +4909,8 @@ impl Node for OpenHlNode {
     }
 
     async fn run(self) -> eyre::Result<()> {
-        // L10 will consume from channels here and run the app loop.
-        Err(eyre!("OpenHlNode::run is not yet implemented (L10)"))
+        // Lesson 10 will consume from channels here and run the app loop.
+        Err(eyre!("OpenHlNode::run is not yet implemented (Lesson 10)"))
     }
 }
 \`\`\`
@@ -5031,7 +5031,7 @@ mod tests {
     }
 
     /// Smoke test: spin up the actor system, get a handle back, kill cleanly.
-    /// Does NOT drive consensus — that's L10.
+    /// Does NOT drive consensus — that's Lesson 10.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn start_engine_smoke_spawns_and_kills() {
         let tmp = tempfile::tempdir().unwrap();
@@ -5256,7 +5256,7 @@ Start with module doc + imports:
 //! Engine app loop — consumes \`AppMsg\` from the Malachite engine and routes
 //! every consensus-relevant event through a [\`ConsensusBridge\`].
 //!
-//! This is the missing half of L9: with \`OpenHlNode::start()\` spinning
+//! This is the missing half of Lesson 9: with \`OpenHlNode::start()\` spinning
 //! up the actor system, this loop is what makes those actors do useful work.
 //! Once a \`Decided\` arrives we commit through the bridge, increment height,
 //! and (optionally) stop after N decisions for tests.
@@ -5291,7 +5291,7 @@ Now the function signature:
 ///
 /// Returns the \`BlockHash\`es that were decided, in order. Single-validator mode
 /// uses this with \`stop_after_decisions = 1\` to exit after the first block.
-#[allow(clippy::too_many_lines)] // 12 AppMsg arms — laid out flat for lesson L11's match-by-match walk
+#[allow(clippy::too_many_lines)] // 12 AppMsg arms — laid out flat for Lesson 11's match-by-match walk
 pub async fn run_engine_app<B>(
     bridge: Arc<B>,
     mut channels: Channels<OpenHlContext>,
@@ -7275,7 +7275,7 @@ The test gets a new bridge constructor call (now takes chain_spec) plus two \`va
             .expect("validate_payload failed");
         assert_eq!(status, PayloadStatus::Invalid);
 
-        // (Negative case from L12 unchanged.)
+        // (Negative case from Lesson 12 unchanged.)
         let fake_parent = BlockHash([0xeeu8; 32]);
         let err = bridge.build_payload(fake_parent, attrs).await.unwrap_err();
         assert!(matches!(err, BridgeError::Rejected(_)));
@@ -7729,7 +7729,7 @@ Append to the \`tests\` module in \`crates/evm/src/live_node.rs\`:
     ///
     /// At this stage the engine will respond SYNCING because we haven't sent
     /// a matching \`newPayload\` (\`build_payload\` doesn't yet produce a real
-    /// \`ExecutionPayload\`). That's intentional: L14 proves the wire is
+    /// \`ExecutionPayload\`). That's intentional: Lesson 14 proves the wire is
     /// connected. Full alignment between Malachite's commit and Reth's
     /// canonical head needs \`newPayload\` integration, which is the next
     /// staging chunk after fills become EVM transactions.
