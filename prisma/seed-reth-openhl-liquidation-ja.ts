@@ -5032,7 +5032,7 @@ Scanner は iteration 順に処理する。1 つ目の \`LiquidationRecord\` と
 - \`fund_deposits_minus_withdrawals_equals_balance_change\` — fund 会計が閉じる。
 - \`scan_preserves_account_order_in_records\` — 決定性: records が input 順に現れる。
 
-レッスン13 後、Liquidation crate は *完成* する — 68 テスト、\`0a8464e\` と byte-for-byte 一致。読者は pure-compute + state-machine + orchestration cascade をまるごと 13 レッスンで構築した。
+レッスン13 後、Liquidation crate は *完成* する — 68 テスト、\`0a8464e\` と byte-for-byte 一致。読者は pure-compute + state-machine + orchestration cascade をまるごと 14 レッスンで構築した。
 `,
                 },
                 {
@@ -5531,7 +5531,7 @@ test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 ## 設計の振り返り — Liquidation三部作
 
-13 レッスンを通して Liquidation三部作を形作った load-bearing な決定が 3 つ:
+14 レッスンを通して Liquidation三部作を形作った load-bearing な決定が 3 つ:
 
 1. **層を成す保存則。** レッスン9 の \`amount + unfilled = shortfall\`（per call）、レッスン10 の \`fee_to_fund + residual_to_account = post_close_equity\`（per close）、レッスン13 の \`before + ∑deposits − ∑withdrawals = after\`（per scan）。各層の法則が次の層の invariant に consume される。Crate の数学が最小単位（1 回の \`withdraw_shortfall\` 呼び出し）から最大単位（1 回の \`scan\` batch）まで閉じる。**層を成す保存則こそが、コンセンサス state machine を composition の下で *証明可能に* 正しく保つ方法だ。**
 
@@ -5581,7 +5581,7 @@ Coverage math から落ちる数字だ。Test coverage 行列が 4 outcome × 2 
 
 ## セクション4 + Liquidation三部作の振り返り
 
-Liquidation コースの 13 レッスン、表 1 つで:
+Liquidation コースの 14 レッスン、表 1 つで:
 
 | # | セクション | レッスン | 対応パート | 何を構築したか |
 |---|---|---|---|---|
@@ -5591,7 +5591,7 @@ Liquidation コースの 13 レッスン、表 1 つで:
 | M3 | Insurance fund | レッスン8, レッスン9, レッスン10 | 保険基金パート | \`InsuranceFund\` state machine、\`WithdrawOutcome\` 3-variant enum、\`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`、\`SolventClose\`、\`UnderwaterClose\` |
 | M4 | Scanner + capstone | **レッスン11, レッスン12, レッスン13** | スキャナパート | \`CloseOutcomeKind\`、\`LiquidationRecord\`、\`ScanReport\`、\`LiquidationScanner\`、\`scan\` メソッド、10 unit test + 4 proptest |
 
-**69 テスト。4 modules。13 レッスン。openhl コミット SHA 3 つ。** Liquidation crate はいまや完全で決定的で defensively-coded な multi-account orchestration 層であり、openhl bridge が block ごとに 1 回呼んで safety-net cascade を ADL の手前まで駆動できる。
+**69 テスト。5 modules。14 レッスン。openhl コミット SHA 3 つ。** Liquidation crate はいまや完全で決定的で defensively-coded な multi-account orchestration 層であり、openhl bridge が block ごとに 1 回呼んで safety-net cascade を ADL の手前まで駆動できる。
 
 openhl カリキュラムの次のコース — ADL参照実装パート、ADL — は \`ScanReport.unfilled_deficit\` を唯一の入力として consume し、profitable counter-position を walk し、fund が absorb できなかった分を force-close する。ADL参照実装パート が read する契約こそ、レッスン13 proptest が固定したものだ。
 

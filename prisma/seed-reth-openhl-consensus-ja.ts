@@ -7934,7 +7934,7 @@ Engine API が、separate な finalization layer を持つ chain 用に設計さ
 
 ## 作ったシステム
 
-14 レッスンを通じて、空ディレクトリの \`cargo init\` から、実際の Reth EL を通じて実際の block を ~0.02 秒で確定させる single-validator BFT chain までたどり着いた。Workspace は今こう見える:
+16 レッスンを通じて、空ディレクトリの \`cargo init\` から、実際の Reth EL を通じて実際の block を ~0.02 秒で確定させる single-validator BFT chain までたどり着いた。Workspace は今こう見える:
 
 \`\`\`
 ~/code/my-openhl/
@@ -8103,7 +8103,7 @@ Production BFT chain は、validator の不正挙動 (同じ高さで異なる b
 
 このコースのコードを production chain に fork するなら、このリストを long-pole 作業として扱うこと — ほとんどはコース自体より難しい作業だ。
 
-## 14 レッスン前にはできなかった、今できること
+## 16 レッスン前にはできなかった、今できること
 
 - **実際の EL に対してフルな Rust BFT engine を bootstrap できる。** 「mocked EL で」でも「Go への FFI で」でもなく、同じ Rust workspace で \`EthereumNode\` を実際に走らせられる。
 - **producer/validator の自己整合性について推論できる。** 同じ artifact の builder と validator があるときは、source of truth を共有しなければならない。\`chain_spec.next_block_base_fee\` が \`build_payload\` と \`validate_payload\` の両方を駆動するパターンを見た。

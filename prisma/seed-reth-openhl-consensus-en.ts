@@ -39,7 +39,7 @@ export async function seedRethOpenHlConsensusEN(prisma: PrismaClient) {
 
 This is not a course you read. This is a course you **build**.
 
-Over the next 14 lessons, you'll start from \`cargo init\` on an empty directory and end with a Rust workspace that compiles, passes a real BFT-consensus integration test, and drives a complete block end-to-end through a real Reth + a real Malachite. The codebase you end with is your own — written by you, line by line — and it will look almost exactly like \`psyto/openhl\` at the same Stage. That repo is your **answer key**.
+Over the next 16 lessons, you'll start from \`cargo init\` on an empty directory and end with a Rust workspace that compiles, passes a real BFT-consensus integration test, and drives a complete block end-to-end through a real Reth + a real Malachite. The codebase you end with is your own — written by you, line by line — and it will look almost exactly like \`psyto/openhl\` at the same Stage. That repo is your **answer key**.
 
 Hyperliquid moved $300B+ of perp volume in 2025 on a fully closed-source stack — HyperBFT consensus, HyperCore matching engine, HyperEVM execution. There is no public Rust reference. **OpenHL is what the open-source version looks like**, and this course is how you build the Module 1 substrate of it yourself.
 
@@ -49,7 +49,7 @@ Hyperliquid moved $300B+ of perp volume in 2025 on a fully closed-source stack �
 
 **A 30-second BFT primer first.** BFT consensus runs in *rounds* of three phases: **propose** (one chosen validator broadcasts a block proposal), **prevote** (every validator broadcasts a yes/no/nil vote on the proposal), **precommit** (validators lock their vote). A block is **decided** (= final) once ≥ 2/3 of validators have precommitted it. Within each round the **proposer** is selected deterministically from the validator set; if the round fails (no quorum), the protocol advances to the next round with a different proposer. Malachite is the Rust BFT engine that drives this state machine; your job in this course is to wire your application (header construction, EVM execution) into it via a \`Context\` trait. Keep five words in hand — *propose, prevote, precommit, decided, proposer* — and the rest of the course vocabulary lands cleanly.
 
-By the end of lesson 14, on your own machine, \`cargo test first_block_via_engine_actors\` will produce a passing single-validator BFT consensus round in roughly 0.02 seconds against real Reth as the EVM layer and real Malachite as the BFT layer. The code path is:
+By the end of Lesson 15, on your own machine, \`cargo test first_block_via_engine_actors\` will produce a passing single-validator BFT consensus round in roughly 0.02 seconds against real Reth as the EVM layer and real Malachite as the BFT layer. The code path is:
 
 \`\`\`
 your code →
@@ -7916,7 +7916,7 @@ You now have a complete consensus↔EVM bridge. **All four \`ConsensusBridge\` m
 
 ## The system you built
 
-Over 14 lessons you went from \`cargo init\` on an empty directory to a single-validator BFT chain that decides real blocks through a real Reth EL in ~0.02 seconds. Your workspace now looks like this:
+Over 16 lessons you went from \`cargo init\` on an empty directory to a single-validator BFT chain that decides real blocks through a real Reth EL in ~0.02 seconds. Your workspace now looks like this:
 
 \`\`\`
 ~/code/my-openhl/
@@ -8084,7 +8084,7 @@ Working from "I have a passing test" to "I'd let this take real value":
 
 If you're forking this course's code into a production chain, treat this list as the long-pole work — most of it is harder than the course itself.
 
-## What you can now do that you couldn't 14 lessons ago
+## What you can now do that you couldn't 16 lessons ago
 
 - **Bootstrap a full Rust BFT engine against a real EL.** Not "with a mocked EL", not "with an FFI to Go" — actually with \`EthereumNode\` running in the same Rust workspace.
 - **Reason about producer/validator self-consistency.** When you have a builder and a validator for the same artifact, they must share a source of truth. You've seen this pattern in \`chain_spec.next_block_base_fee\` driving both \`build_payload\` and \`validate_payload\`.

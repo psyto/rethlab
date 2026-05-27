@@ -5540,7 +5540,7 @@ Common errors:
 
 ## Design reflection — the Stage 10 trilogy
 
-Three load-bearing decisions that shaped Stage 10 across all 13 lessons:
+Three load-bearing decisions that shaped Stage 10 across all 14 lessons:
 
 1. **Layered conservation laws.** Lesson 9's \`amount + unfilled = shortfall\` (per call), Lesson 10's \`fee_to_fund + residual_to_account = post_close_equity\` (per close), Lesson 13's \`before + ∑deposits − ∑withdrawals = after\` (per scan). Each layer's law is consumed by the next layer's invariant. The crate's math closes from the smallest unit (one \`withdraw_shortfall\` call) to the largest (one \`scan\` batch). **Layered conservation is how consensus state machines stay *provably* correct under composition.**
 
@@ -5560,7 +5560,7 @@ After Lesson 13:
 - **scanner.rs** matches Stage 10c's \`scanner.rs\` **byte-for-byte**. The full file — module-level doc + imports + 4 types + 5 accessors + \`scan\` method + 10 unit tests + 4 proptests — is in your workspace.
 - **All other files** in \`crates/liquidation/src/\` have been byte-for-byte stable since Lesson 10.
 
-**The Liquidation course is complete.** Module 0 (Orientation, Lesson 0) + Module 1 (Types, Lessons 1–3) + Module 2 (Pure compute, Lessons 4–7) + Module 3 (Insurance fund, Lessons 8–10) + Module 4 (Scanner + capstone, Lessons 11–13) = 13 lessons across 5 modules.
+**The Liquidation course is complete.** Module 0 (Orientation, Lesson 0) + Module 1 (Types, Lessons 1–3) + Module 2 (Pure compute, Lessons 4–7) + Module 3 (Insurance fund, Lessons 8–10) + Module 4 (Scanner + capstone, Lessons 11–13) = 14 lessons across 5 modules.
 
 ## Common questions
 
@@ -5590,7 +5590,7 @@ Exactly \`ScanReport.unfilled_deficit\` — the i64 that means "this many quote 
 
 ## Module 4 + Stage 10 retrospective
 
-The 13 lessons of the Liquidation course, in one table:
+The 14 lessons of the Liquidation course, in one table:
 
 | # | Module | Lessons | Stage | What was built |
 |---|---|---|---|---|
@@ -5600,7 +5600,7 @@ The 13 lessons of the Liquidation course, in one table:
 | M3 | Insurance fund | Lessons 8, 9, 10 | 10b | \`InsuranceFund\` state machine, \`WithdrawOutcome\` 3-variant enum, \`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`, \`SolventClose\`, \`UnderwaterClose\` |
 | M4 | Scanner + capstone | **Lessons 11, 12, 13** | 10c | \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`, \`scan\` method, 10 unit tests + 4 proptests |
 
-**69 tests. 4 modules. 13 lessons. 3 openhl commit SHAs.** The Liquidation crate is now a complete, deterministic, defensively-coded multi-account orchestration layer that the openhl bridge can call once per block to drive the entire safety-net cascade up to (but not including) ADL.
+**69 tests. 5 modules. 14 lessons. 3 openhl commit SHAs.** The Liquidation crate is now a complete, deterministic, defensively-coded multi-account orchestration layer that the openhl bridge can call once per block to drive the entire safety-net cascade up to (but not including) ADL.
 
 The next course in the openhl curriculum — Stage 10d, ADL — will consume \`ScanReport.unfilled_deficit\` as its only input, walk profitable counter-positions, and force-close them to absorb whatever the fund couldn't. The contract Lesson 13's proptests fix is what Stage 10d will read.
 
