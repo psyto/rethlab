@@ -11,7 +11,7 @@ export async function seedRethOpenHlLiquidationEN(prisma: PrismaClient) {
       slug: "building-openhl-liquidation-en",
       title: "Build OpenHL Liquidation — perpetual position liquidation engine",
       description:
-        "Build the perpetual-position liquidation engine end-to-end: the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs, the insurance-fund state machine that absorbs deficits via a three-variant outcome enum (Covered / PartiallyDrained / Depleted), and the multi-account scanner that ties them into a single orchestration loop the bridge calls once per block. Includes the leveraged-regime non-monotonicity discovery, three layers of conservation-law proptests that compose vertically, the credit/debit decomposition that bridges pure compute and stateful book-keeping, and the discriminated-dispatch pattern via debug_assert! pairs. 14 lessons (L0–L13) across 5 modules, byte-for-byte against openhl's full Stage 10 trilogy (margin math + insurance fund + scanner). The fifth course in the DIY Perp series.",
+        "Build the perpetual-position liquidation engine end-to-end: the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs, the insurance-fund state machine that absorbs deficits via a three-variant outcome enum (Covered / PartiallyDrained / Depleted), and the multi-account scanner that ties them into a single orchestration loop the bridge calls once per block. Includes the leveraged-regime non-monotonicity discovery, three layers of conservation-law proptests that compose vertically, the credit/debit decomposition that bridges pure compute and stateful book-keeping, and the discriminated-dispatch pattern via debug_assert! pairs. 14 lessons (Lessons 0–13) across 5 modules, byte-for-byte against openhl's full Stage 10 trilogy (margin math + insurance fund + scanner). The fifth course in the DIY Perp series.",
       difficulty: "EXPERT",
       duration: 440,
       xpReward: 870,
@@ -80,28 +80,28 @@ The fix: signed integers + **saturating arithmetic (operations that, on overflow
 ## The 14 lessons
 
 ### Module 0 — Orientation
-- **L0** (this lesson) — Why liquidations, why margin model, three-sub-stage roadmap.
+- **Lesson 0** (this lesson) — Why liquidations, why margin model, three-sub-stage roadmap.
 
-### Module 1 — Types (L1-L3)
-- **L1** — \`MARGIN_SCALE = 1e4\` (bps) + \`LiquidationParams\` + \`hyperliquid_default()\` (10% / 2% / 1.5%). Why bps, why these defaults.
-- **L2** — \`MarginRatio\` newtype + \`MarginHealth\` enum (\`Safe\` / \`AtRisk\` / \`Liquidatable\` / \`Underwater\`). Why four states, what each authorizes.
-- **L3** — \`AccountSnapshot\` + \`CloseOrderSpec\`. Why a new snapshot type (not \`funding::Position\`) — **separating the read-only, immutable snapshot type keeps the risk-calculation core decoupled from whatever mutable state shape the upstream layers (bridge / clearing) carry** — and how the bridge layer assembles it.
+### Module 1 — Types (Lessons 1–3)
+- **Lesson 1** — \`MARGIN_SCALE = 1e4\` (bps) + \`LiquidationParams\` + \`hyperliquid_default()\` (10% / 2% / 1.5%). Why bps, why these defaults.
+- **Lesson 2** — \`MarginRatio\` newtype + \`MarginHealth\` enum (\`Safe\` / \`AtRisk\` / \`Liquidatable\` / \`Underwater\`). Why four states, what each authorizes.
+- **Lesson 3** — \`AccountSnapshot\` + \`CloseOrderSpec\`. Why a new snapshot type (not \`funding::Position\`) — **separating the read-only, immutable snapshot type keeps the risk-calculation core decoupled from whatever mutable state shape the upstream layers (bridge / clearing) carry** — and how the bridge layer assembles it.
 
-### Module 2 — Pure compute (L4-L7) — Stage 10a
-- **L4** — \`notional_value\` + \`unrealized_pnl\`. The signed-multiplication trick that gets the sign right for both longs and shorts.
-- **L5** — \`account_equity\` + \`margin_ratio\`. The proptest that uncovers the **non-monotonic edge case (= the surprising regime where the price seems to move favorably, yet under certain conditions the margin ratio appears to *worsen* in the opposite direction)** when collateral dominates notional, and why \`prop_assume!\` is the right fix.
-- **L6** — \`margin_health\` classification. Strict-less-than at every boundary and what that buys you.
-- **L7** — \`close_order_spec\`. The market-order discipline: liquidation takes any available price. Stage 10a complete.
+### Module 2 — Pure compute (Lessons 4–7) — Stage 10a
+- **Lesson 4** — \`notional_value\` + \`unrealized_pnl\`. The signed-multiplication trick that gets the sign right for both longs and shorts.
+- **Lesson 5** — \`account_equity\` + \`margin_ratio\`. The proptest that uncovers the **non-monotonic edge case (= the surprising regime where the price seems to move favorably, yet under certain conditions the margin ratio appears to *worsen* in the opposite direction)** when collateral dominates notional, and why \`prop_assume!\` is the right fix.
+- **Lesson 6** — \`margin_health\` classification. Strict-less-than at every boundary and what that buys you.
+- **Lesson 7** — \`close_order_spec\`. The market-order discipline: liquidation takes any available price. Stage 10a complete.
 
-### Module 3 — Insurance fund (L8-L10) — Stage 10b
-- **L8** — \`InsuranceFund\` struct + \`deposit\` / \`withdraw\`. The single-balance state machine.
-- **L9** — \`absorb_deficit\`: how an Underwater liquidation drains the fund.
-- **L10** — \`credit_fee\`: liquidation fee flows from collateral into the fund. Composition test: a single liquidation can both credit a fee *and* absorb a deficit when the position is severely underwater.
+### Module 3 — Insurance fund (Lessons 8–10) — Stage 10b
+- **Lesson 8** — \`InsuranceFund\` struct + \`deposit\` / \`withdraw\`. The single-balance state machine.
+- **Lesson 9** — \`absorb_deficit\`: how an Underwater liquidation drains the fund.
+- **Lesson 10** — \`credit_fee\`: liquidation fee flows from collateral into the fund. Composition test: a single liquidation can both credit a fee *and* absorb a deficit when the position is severely underwater.
 
-### Module 4 — Scanner + Capstone (L11-L13) — Stage 10c
-- **L11** — Scanner type vocabulary: \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`. The scaffolding types and builder API that the scan loop will compose against.
-- **L12** — \`scan\` — the orchestration heart of the safety cascade: iterate \`&[AccountSnapshot]\`, classify each, emit close orders for \`Liquidatable\` and \`Underwater\`, return insurance-fund deltas. The composition layer.
-- **L13** — Capstone — 6 nuanced unit tests + 4 invariant proptests + the Stage 10 retrospective. Synthesis, bridge integration preview, market structure context: how on-chain CLOB liquidations differ from CEX liquidations and from ADL.
+### Module 4 — Scanner + Capstone (Lessons 11–13) — Stage 10c
+- **Lesson 11** — Scanner type vocabulary: \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`. The scaffolding types and builder API that the scan loop will compose against.
+- **Lesson 12** — \`scan\` — the orchestration heart of the safety cascade: iterate \`&[AccountSnapshot]\`, classify each, emit close orders for \`Liquidatable\` and \`Underwater\`, return insurance-fund deltas. The composition layer.
+- **Lesson 13** — Capstone — 6 nuanced unit tests + 4 invariant proptests + the Stage 10 retrospective. Synthesis, bridge integration preview, market structure context: how on-chain CLOB liquidations differ from CEX liquidations and from ADL.
 
 ## SHA pinning per module
 
@@ -109,11 +109,11 @@ Every lesson cites the openhl commit it builds against. For this course, lessons
 
 | Module | Lessons | openhl SHA |
 |---|---|---|
-| 0 | L0 | \`22eedf9\` (Stage 10a) |
-| 1 | L1-L3 | \`22eedf9\` (Stage 10a) |
-| 2 | L4-L7 | \`22eedf9\` (Stage 10a) |
-| 3 | L8-L10 | *Stage 10b — TBD* |
-| 4 | L11-L12 | *Stage 10c — TBD* |
+| 0 | Lesson 0 | \`22eedf9\` (Stage 10a) |
+| 1 | Lessons 1–3 | \`22eedf9\` (Stage 10a) |
+| 2 | Lessons 4–7 | \`22eedf9\` (Stage 10a) |
+| 3 | Lessons 8–10 | *Stage 10b — TBD* |
+| 4 | Lessons 11–12 | *Stage 10c — TBD* |
 
 The TBD rows update as Stage 10b and 10c ship. Until then, modules 3 and 4 are skeleton — the modules 1-2 content (the entire pure-compute side) is fully built against \`22eedf9\` and ready to take you through Stage 10a end-to-end.
 
@@ -137,7 +137,7 @@ You do NOT need:
 # In your openhl workspace root:
 cd ~/code/my-openhl
 git checkout main
-cargo build --workspace  # baseline — should pass before L1
+cargo build --workspace  # baseline — should pass before Lesson 1
 \`\`\`
 
 Reference checkout (for the answer-key diff at the end of each lesson):
@@ -163,11 +163,11 @@ Each lesson follows the build-along format established in courses 6-9:
 - **Answer key** — \`git diff\` against the openhl reference SHA.
 - **Common questions** — 3-5 grounded answers.
 
-Module 2 (pure compute) is more proof-heavy than code-heavy compared to the matching engine in course 7. **Plan to slow down at the edge cases** — the leveraged-regime non-monotonicity in L5 is where most readers' first mental model breaks. We rebuild it.
+Module 2 (pure compute) is more proof-heavy than code-heavy compared to the matching engine in course 7. **Plan to slow down at the edge cases** — the leveraged-regime non-monotonicity in Lesson 5 is where most readers' first mental model breaks. We rebuild it.
 
 ## Ready
 
-Onward to L1, where we set up \`MARGIN_SCALE\` and the \`LiquidationParams\` struct that the network's risk parameters live in.
+Onward to Lesson 1, where we set up \`MARGIN_SCALE\` and the \`LiquidationParams\` struct that the network's risk parameters live in.
 `,
                 },
               ],
@@ -210,22 +210,22 @@ Specific changes:
 - **\`src/types.rs\`** — newly created, containing the module doc + \`MARGIN_SCALE\` constant + \`LiquidationParams\` struct + impl block with defaults and accessors.
 - **\`src/lib.rs\`** — was empty, now declares \`pub mod types;\` + re-exports \`MARGIN_SCALE\` and \`LiquidationParams\` at the crate root.
 
-L1 has no tests — \`MARGIN_SCALE\` is a value and \`LiquidationParams\` is a passive struct. L2's first behavior-bearing type (the \`MarginHealth\` enum) earns the first unit test.
+Lesson 1 has no tests — \`MARGIN_SCALE\` is a value and \`LiquidationParams\` is a passive struct. Lesson 2's first behavior-bearing type (the \`MarginHealth\` enum) earns the first unit test.
 
 ## Recap
 
-After L0:
+After Lesson 0:
 - You understand why a perp DEX runs liquidations in consensus, not off-chain.
 - You understand why floats are a chain-fork hazard (same as funding).
 - The liquidation crate scaffold (Cargo.toml + empty \`src/lib.rs\`) is already in your workspace from before Stage 10a — same as the funding crate scaffold was before Stage 8b.
 
-L1 turns the empty crate into a real crate with one publicly-visible scale + the parameters that govern the entire engine.
+Lesson 1 turns the empty crate into a real crate with one publicly-visible scale + the parameters that govern the entire engine.
 
 ## Plan
 
-Three edits, exactly mirroring funding L1's shape but with two deps instead of one:
+Three edits, exactly mirroring funding Lesson 1's shape but with two deps instead of one:
 
-1. **\`crates/liquidation/Cargo.toml\`** — add \`openhl-clob = { path = "../clob" }\` and \`openhl-funding = { path = "../funding" }\` to \`[dependencies]\`, plus a \`[dev-dependencies]\` block with \`proptest\` (used at L5 / L6).
+1. **\`crates/liquidation/Cargo.toml\`** — add \`openhl-clob = { path = "../clob" }\` and \`openhl-funding = { path = "../funding" }\` to \`[dependencies]\`, plus a \`[dev-dependencies]\` block with \`proptest\` (used at Lessons 5 / 6).
 2. **Create \`crates/liquidation/src/types.rs\`** — module doc explaining the bps rationale + \`MARGIN_SCALE\` constant + \`LiquidationParams\` struct + impl block.
 3. **\`crates/liquidation/src/lib.rs\`** — was empty; add the crate doc + \`pub mod types;\` + \`pub use types::{LiquidationParams, MARGIN_SCALE};\`.
 
@@ -303,9 +303,9 @@ Three changes:
 
 1. **\`openhl-clob = { path = "../clob" }\`** — needed for \`AccountId\`, \`Side\`, \`Qty\` (the bridge layer reuses these for liquidation orders, and \`AccountSnapshot\` carries \`AccountId\`).
 2. **\`openhl-funding = { path = "../funding" }\`** — needed for \`MarkPrice\`, \`PositionSize\`, \`Notional\`. These types are the contact surface between funding and liquidation: both crates speak the same currency.
-3. **\`[dev-dependencies]\` block** with \`proptest\`. Used at L5 (margin-ratio monotonicity test) and L6 (margin-health determinism test). Declared now, used later.
+3. **\`[dev-dependencies]\` block** with \`proptest\`. Used at Lesson 5 (margin-ratio monotonicity test) and Lesson 6 (margin-health determinism test). Declared now, used later.
 
-> 🛑 **Anti-fluency.** "Why not put both deps as dev-deps too, since L5/L6 are tests?" **Because the production code uses \`MarkPrice\`, \`AccountId\` etc. in the function signatures of \`compute.rs\`, not just in tests.** Funding made the same call at its L1. The rule: a type that appears in any \`pub fn\` signature has to be a regular dep, not dev-only.
+> 🛑 **Anti-fluency.** "Why not put both deps as dev-deps too, since Lessons 5 / 6 are tests?" **Because the production code uses \`MarkPrice\`, \`AccountId\` etc. in the function signatures of \`compute.rs\`, not just in tests.** Funding made the same call at its Lesson 1. The rule: a type that appears in any \`pub fn\` signature has to be a regular dep, not dev-only.
 
 ### Step 2: Create \`src/types.rs\`
 
@@ -431,11 +431,11 @@ pub mod types;
 pub use types::{LiquidationParams, MARGIN_SCALE};
 \`\`\`
 
-Notice what's missing compared to the L11-end version: \`pub mod compute\`, the rest of the \`pub use types::{...}\` re-exports for \`MarginHealth\`, \`MarginRatio\`, \`AccountSnapshot\`, \`CloseOrderSpec\`. Those come in L2-L7 as we add the types and the compute functions. **L1 lib.rs is the minimum that compiles.**
+Notice what's missing compared to the Lesson 11-end version: \`pub mod compute\`, the rest of the \`pub use types::{...}\` re-exports for \`MarginHealth\`, \`MarginRatio\`, \`AccountSnapshot\`, \`CloseOrderSpec\`. Those come in Lessons 2–7 as we add the types and the compute functions. **Lesson 1 lib.rs is the minimum that compiles.**
 
-The cross-reference \`[\`MarginHealth\`]\` will be broken until L2 adds the enum; rustdoc will emit a warning that we tolerate (same handling as funding L1).
+The cross-reference \`[\`MarginHealth\`]\` will be broken until Lesson 2 adds the enum; rustdoc will emit a warning that we tolerate (same handling as funding Lesson 1).
 
-> 🛑 **Predict.** What happens if you write \`pub use types::*;\` here instead of the explicit two-name re-export? Hint: think about what types exist after L1 vs after L7, and which API surface you're committing to.
+> 🛑 **Predict.** What happens if you write \`pub use types::*;\` here instead of the explicit two-name re-export? Hint: think about what types exist after Lesson 1 vs after Lesson 7, and which API surface you're committing to.
 
 (Answer: **\`pub use types::*\` would re-export everything that ever lives in \`types.rs\`, including future helpers and private support types you might accidentally \`pub\`.** Explicit \`pub use types::{LiquidationParams, MARGIN_SCALE}\` makes the crate's public surface a deliberate decision — every time you add a public type to \`types.rs\`, you also have to add it to the lib.rs re-export, which forces a moment of "is this part of the public API?" Glob re-exports are a maintenance hazard: a future helper added with \`pub\` instead of \`pub(crate)\` accidentally becomes part of the public API. **Explicit re-export is a checklist for the public API surface.**)
 
@@ -453,12 +453,12 @@ warning: unresolved link to \`MarginHealth\`
     Finished \`dev\` profile [unoptimized + debuginfo] in 0.4s
 \`\`\`
 
-One rustdoc warning about an unresolved link to \`MarginHealth\` (added at L2). **Don't suppress it** — it's the build telling you what's still missing.
+One rustdoc warning about an unresolved link to \`MarginHealth\` (added at Lesson 2). **Don't suppress it** — it's the build telling you what's still missing.
 
 Common errors:
 
-- **\`error[E0463]: can't find crate for 'openhl_clob'\` or \`'openhl_funding'\`** — you forgot to add one of the \`path = "..."\` deps in Cargo.toml. L1 code doesn't actually use them yet, but if you preempted the L3 imports they'll fire.
-- **\`error[E0583]: file not found for module 'compute'\`** — you preemptively added \`pub mod compute;\` to lib.rs. Remove it; we'll add it back at L4.
+- **\`error[E0463]: can't find crate for 'openhl_clob'\` or \`'openhl_funding'\`** — you forgot to add one of the \`path = "..."\` deps in Cargo.toml. Lesson 1 code doesn't actually use them yet, but if you preempted the Lesson 3 imports they'll fire.
+- **\`error[E0583]: file not found for module 'compute'\`** — you preemptively added \`pub mod compute;\` to lib.rs. Remove it; we'll add it back at Lesson 4.
 - **\`error: failed to parse manifest\`** — Cargo.toml syntax. Easy mistake: \`[dev-dependences]\` typo.
 
 ## Design reflection
@@ -481,9 +481,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/types.rs ./crates/liquidation/sr
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-After L1:
+After Lesson 1:
 - **Cargo.toml** matches Stage 10a exactly.
-- **types.rs** matches the *first ~50 lines* of Stage 10a's types.rs — module doc + \`MARGIN_SCALE\` + \`LiquidationParams\` + impl. The rest (\`MarginRatio\`, \`MarginHealth\`, \`AccountSnapshot\`, \`CloseOrderSpec\`) is L2/L3.
+- **types.rs** matches the *first ~50 lines* of Stage 10a's types.rs — module doc + \`MARGIN_SCALE\` + \`LiquidationParams\` + impl. The rest (\`MarginRatio\`, \`MarginHealth\`, \`AccountSnapshot\`, \`CloseOrderSpec\`) is Lessons 2 / 3.
 - **lib.rs** matches the *first ~25 lines* of Stage 10a's lib.rs — crate doc + \`pub mod types;\` + the two re-exports. The other re-exports come as we add their types.
 
 ## Common questions
@@ -502,15 +502,15 @@ HL's actual maintenance margin tiers run from 1.25% to 6.67% depending on positi
 
 **Q4: What's the actual i64-overflow risk on a margin ratio computation?**
 
-\`margin_ratio = equity * MARGIN_SCALE / notional\`. With \`MARGIN_SCALE = 10_000\` and \`equity\` and \`notional\` bounded by \`i64::MAX\`, the product \`equity * MARGIN_SCALE\` can overflow i64 when \`equity > i64::MAX / 10_000 ≈ 9.2e14\`. At realistic exchange scales that's $920 trillion of equity — far above plausible inputs, but L5 still does the multiplication in \`i128\` and saturates back. **The discipline is the same as funding: any product that *can* exceed i64 *will* exceed i64 at some adversarial input — assume that as the default.**
+\`margin_ratio = equity * MARGIN_SCALE / notional\`. With \`MARGIN_SCALE = 10_000\` and \`equity\` and \`notional\` bounded by \`i64::MAX\`, the product \`equity * MARGIN_SCALE\` can overflow i64 when \`equity > i64::MAX / 10_000 ≈ 9.2e14\`. At realistic exchange scales that's $920 trillion of equity — far above plausible inputs, but Lesson 5 still does the multiplication in \`i128\` and saturates back. **The discipline is the same as funding: any product that *can* exceed i64 *will* exceed i64 at some adversarial input — assume that as the default.**
 
 **Q5: Could we use \`u32\` for \`MARGIN_SCALE\` and \`bps\` and avoid the i64 conversion noise?**
 
 You could — and you'd save a few \`i64::from(...)\` calls. The cost: every margin-ratio calculation involves \`equity\` (signed) and \`notional\` (unsigned), and mixing signed/unsigned in arithmetic requires explicit casts at every site. Better to upcast to i64 once at the boundary (\`i64::from(params.initial_margin_bps)\`) and keep the arithmetic signed throughout. **Convert at the boundary, compute in one type.**
 
-## Next lesson (L2)
+## Next lesson (Lesson 2)
 
-L2 adds the \`MarginRatio\` newtype + the \`MarginHealth\` enum. \`MarginHealth\` is the load-bearing classification type — the next 5 lessons all return or consume it. You'll see why we made it a 4-variant enum and not a \`bool\` or a \`u8\`.
+Lesson 2 adds the \`MarginRatio\` newtype + the \`MarginHealth\` enum. \`MarginHealth\` is the load-bearing classification type — the next 5 lessons all return or consume it. You'll see why we made it a 4-variant enum and not a \`bool\` or a \`u8\`.
 `,
                 },
                 {
@@ -541,19 +541,19 @@ cargo build -p openhl-liquidation
 
 Specific changes:
 
-- **\`src/types.rs\`** — appends \`MARGIN_SCALE\`-typed \`MarginRatio\` newtype and \`MarginHealth\` enum below the existing \`MARGIN_SCALE\` constant and \`LiquidationParams\` struct. No changes to anything from L1.
+- **\`src/types.rs\`** — appends \`MARGIN_SCALE\`-typed \`MarginRatio\` newtype and \`MarginHealth\` enum below the existing \`MARGIN_SCALE\` constant and \`LiquidationParams\` struct. No changes to anything from Lesson 1.
 - **\`src/lib.rs\`** — adds \`MarginRatio\` and \`MarginHealth\` to the existing \`pub use types::{...}\` re-export.
 
-L2 still has no tests — \`MarginRatio\` and \`MarginHealth\` are passive data types. L3 finishes the types module with \`AccountSnapshot\` + \`CloseOrderSpec\` (also no tests). The first behavior test arrives at L4 with \`notional_value\`.
+Lesson 2 still has no tests — \`MarginRatio\` and \`MarginHealth\` are passive data types. Lesson 3 finishes the types module with \`AccountSnapshot\` + \`CloseOrderSpec\` (also no tests). The first behavior test arrives at Lesson 4 with \`notional_value\`.
 
 ## Recap
 
-After L1:
+After Lesson 1:
 - The crate has \`MARGIN_SCALE\` (10⁴) and \`LiquidationParams\` with a \`hyperliquid_default()\`.
 - \`lib.rs\` re-exports both names from \`types\`.
 - \`cargo build -p openhl-liquidation\` passes; one rustdoc warning about \`MarginHealth\` (still unresolved at this point).
 
-L2 adds the two classification types the rest of the engine speaks in. From L4 onward, \`margin_ratio\` returns a \`MarginRatio\` and \`margin_health\` returns a \`MarginHealth\`.
+Lesson 2 adds the two classification types the rest of the engine speaks in. From Lesson 4 onward, \`margin_ratio\` returns a \`MarginRatio\` and \`margin_health\` returns a \`MarginHealth\`.
 
 ## Plan
 
@@ -580,7 +580,7 @@ Laying the four variants × the three actions they authorize into one matrix mak
                     │                    │                   │   fund absorbs      │
    ─────────────────┴────────────────────┴───────────────────┴─────────────────────┘
 
-Downstream engine behavior (implemented in L7 / Module 3):
+Downstream engine behavior (implemented in Lesson 7 / Module 3):
    Safe         ─► trader keeps operating
    AtRisk       ─► warn in UI, refuse new positions, let trader close voluntarily
    Liquidatable ─► emit auto close order, deduct fee, return remaining equity
@@ -657,7 +657,7 @@ pub use types::{LiquidationParams, MarginHealth, MarginRatio, MARGIN_SCALE};
 
 That's the entire \`lib.rs\` change — three new public names at the crate root, in alphabetical order. Constants traditionally sort last so \`MARGIN_SCALE\` stays at the end.
 
-The rustdoc warning about \`[\`MarginHealth\`]\` (unresolved at L1) now resolves — the type exists.
+The rustdoc warning about \`[\`MarginHealth\`]\` (unresolved at Lesson 1) now resolves — the type exists.
 
 ### Step 3: Compile
 
@@ -672,7 +672,7 @@ Expected output:
     Finished \`dev\` profile [unoptimized + debuginfo] in 0.4s
 \`\`\`
 
-Zero warnings. The L1 rustdoc warning about \`MarginHealth\` is gone.
+Zero warnings. The Lesson 1 rustdoc warning about \`MarginHealth\` is gone.
 
 Common errors:
 
@@ -698,9 +698,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/types.rs ./crates/liquidation/sr
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-After L2:
-- **types.rs** matches lines 1 through ~\`MarginHealth::Underwater\` of Stage 10a's types.rs — the \`MARGIN_SCALE\` + \`LiquidationParams\` (from L1) plus the new \`MarginRatio\` + \`MarginHealth\`. The next two types (\`AccountSnapshot\`, \`CloseOrderSpec\`) are L3.
-- **lib.rs** matches Stage 10a's lib.rs except for \`compute\` module + 6 more re-exports — those come in L4–L7.
+After Lesson 2:
+- **types.rs** matches lines 1 through ~\`MarginHealth::Underwater\` of Stage 10a's types.rs — the \`MARGIN_SCALE\` + \`LiquidationParams\` (from Lesson 1) plus the new \`MarginRatio\` + \`MarginHealth\`. The next two types (\`AccountSnapshot\`, \`CloseOrderSpec\`) are Lesson 3.
+- **lib.rs** matches Stage 10a's lib.rs except for \`compute\` module + 6 more re-exports — those come in Lessons 4–7.
 
 ## Common questions
 
@@ -724,9 +724,9 @@ Because the bridge needs to do *different things* in the two cases. A \`Liquidat
 
 No — flat positions return \`MarginHealth::Safe\` (no notional, no margin requirement to fall short of). \`Option\` would force every caller to handle \`None\` explicitly, even though "flat = safe" is unambiguous. **Don't add \`Option\` to encode states the type system already handles.**
 
-## Next lesson (L3)
+## Next lesson (Lesson 3)
 
-L3 closes the types module with \`AccountSnapshot\` (the input to every margin function) and \`CloseOrderSpec\` (the output the engine hands the bridge). After L3, the \`types\` module is complete; L4 starts the \`compute\` module with \`notional_value\`.
+Lesson 3 closes the types module with \`AccountSnapshot\` (the input to every margin function) and \`CloseOrderSpec\` (the output the engine hands the bridge). After Lesson 3, the \`types\` module is complete; Lesson 4 starts the \`compute\` module with \`notional_value\`.
 `,
                 },
                 {
@@ -757,19 +757,19 @@ cargo build -p openhl-liquidation
 
 Specific changes:
 
-- **\`src/types.rs\`** — appends \`AccountSnapshot\` and \`CloseOrderSpec\` structs below the existing \`MarginHealth\` enum. No changes to anything from L1 or L2.
+- **\`src/types.rs\`** — appends \`AccountSnapshot\` and \`CloseOrderSpec\` structs below the existing \`MarginHealth\` enum. No changes to anything from Lesson 1 or Lesson 2.
 - **\`src/lib.rs\`** — adds \`AccountSnapshot\` and \`CloseOrderSpec\` to the \`pub use types::{...}\` re-export.
 
-L3 still has no tests — both new structs are passive data containers. L4 begins the \`compute\` module and earns the first behavior test (\`notional_value\`).
+Lesson 3 still has no tests — both new structs are passive data containers. Lesson 4 begins the \`compute\` module and earns the first behavior test (\`notional_value\`).
 
 ## Recap
 
-After L2:
-- \`types.rs\` has \`MARGIN_SCALE\` + \`LiquidationParams\` (L1) + \`MarginRatio\` + \`MarginHealth\` (L2).
+After Lesson 2:
+- \`types.rs\` has \`MARGIN_SCALE\` + \`LiquidationParams\` (Lesson 1) + \`MarginRatio\` + \`MarginHealth\` (Lesson 2).
 - \`lib.rs\` re-exports four names: \`LiquidationParams\`, \`MarginHealth\`, \`MarginRatio\`, \`MARGIN_SCALE\`.
 - \`cargo build -p openhl-liquidation\` passes with zero warnings.
 
-L3 adds the two **I/O types**: the input every margin function consumes (\`AccountSnapshot\`) and the output the engine hands the bridge (\`CloseOrderSpec\`). After L3, the types module is finished — Module 1 of Course 10 is closed.
+Lesson 3 adds the two **I/O types**: the input every margin function consumes (\`AccountSnapshot\`) and the output the engine hands the bridge (\`CloseOrderSpec\`). After Lesson 3, the types module is finished — Module 1 of Course 10 is closed.
 
 ## Plan
 
@@ -783,7 +783,7 @@ Two edits, both append-only:
 
 (Answer: **\`avg_entry\` (to compute the PnL leg) and \`collateral\` (to compute equity).** Funding's formula has no \`entry\` factor — it scales by the current mark times the rate, regardless of where the position was opened. Funding also doesn't read collateral; the settlement deltas it emits get applied to balances at the bridge layer, which keeps its own balance ledger. Liquidation's job is to *measure* whether collateral + unrealized PnL has fallen below the threshold, so it needs both. Different jobs, different snapshots.)
 
-Drawing what the \`types\` module — completed in L3 — receives as input and produces as output makes the joint between Module 1 (types) and Module 2 (pure compute) immediately legible:
+Drawing what the \`types\` module — completed in Lesson 3 — receives as input and produces as output makes the joint between Module 1 (types) and Module 2 (pure compute) immediately legible:
 
 \`\`\`
                     [ Upstream: bridge / clearing layer (the ledger owner) ]
@@ -794,18 +794,18 @@ Drawing what the \`types\` module — completed in L3 — receives as input and 
    ┌────────────────────────────────────────────────────────────────────┐
    │ Input: AccountSnapshot { account, position_size, avg_entry,         │
    │                          collateral }                               │
-   │   ※ Immutable, read-only, Copy. Finalized in L3.                    │
+   │   ※ Immutable, read-only, Copy. Finalized in Lesson 3.                    │
    └────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
    ┌────────────────────────────────────────────────────────────────────┐
    │ ★ The liquidation engine (everything Module 2-4 builds)             │
    │                                                                     │
-   │   L4: notional_value / unrealized_pnl   (pure compute)               │
-   │   L5: account_equity / margin_ratio     (pure compute)               │
-   │   L6: margin_health                      (classification: 4-state)   │
-   │   L7: close_order_spec                   (Liquidatable / Underwater) │
-   │   ↑↑ The constants and types from L1-L2 (MARGIN_SCALE,              │
+   │   Lesson 4: notional_value / unrealized_pnl   (pure compute)               │
+   │   Lesson 5: account_equity / margin_ratio     (pure compute)               │
+   │   Lesson 6: margin_health                      (classification: 4-state)   │
+   │   Lesson 7: close_order_spec                   (Liquidatable / Underwater) │
+   │   ↑↑ The constants and types from Lessons 1–2 (MARGIN_SCALE,              │
    │      LiquidationParams, MarginRatio, MarginHealth) flow through      │
    │      every layer.                                                    │
    └────────────────────────────────────────────────────────────────────┘
@@ -814,7 +814,7 @@ Drawing what the \`types\` module — completed in L3 — receives as input and 
    ┌────────────────────────────────────────────────────────────────────┐
    │ Output: CloseOrderSpec { account, side, qty }                       │
    │   ※ No price (market order). Only emitted for Liquidatable /        │
-   │     Underwater accounts. Finalized in L3.                            │
+   │     Underwater accounts. Finalized in Lesson 3.                            │
    │   Module 3-4 emits InsuranceFundDelta alongside.                     │
    └────────────────────────────────────────────────────────────────────┘
                               │
@@ -824,7 +824,7 @@ Drawing what the \`types\` module — completed in L3 — receives as input and 
                               - credit/debit the insurance fund on Underwater paths
 \`\`\`
 
-Two things this picture pins down: (a) **The two types finalized in L3 — \`AccountSnapshot\` (input) and \`CloseOrderSpec\` (output) — are the engine's only contact surface with the outside world.** All the engine body lives in L4 onward, but every function signature lands on "consume an \`AccountSnapshot\`" or "emit a \`CloseOrderSpec\`." (b) **Both the input (snapshot) and the output (spec) are immutable** — the engine never mutates the ledger; full ownership of the ledger stays on the bridge side. This is the concrete shape of what L0 previewed as "**a read-only snapshot type that keeps the risk-calculation core decoupled from upstream state.**"
+Two things this picture pins down: (a) **The two types finalized in Lesson 3 — \`AccountSnapshot\` (input) and \`CloseOrderSpec\` (output) — are the engine's only contact surface with the outside world.** All the engine body lives in Lesson 4 onward, but every function signature lands on "consume an \`AccountSnapshot\`" or "emit a \`CloseOrderSpec\`." (b) **Both the input (snapshot) and the output (spec) are immutable** — the engine never mutates the ledger; full ownership of the ledger stays on the bridge side. This is the concrete shape of what Lesson 0 previewed as "**a read-only snapshot type that keeps the risk-calculation core decoupled from upstream state.**"
 
 ## Walk-through
 
@@ -856,9 +856,9 @@ Things to notice about this 10-line block:
 
 2. **\`avg_entry: MarkPrice\`, not a new \`EntryPrice\` type.** The price at which a position was opened lives in the same unit-of-account as the mark price the position is currently measured against. Defining a separate \`EntryPrice\` newtype would force conversions at every PnL computation site for no semantic gain. **When two fields measure the same physical thing, share the type.**
 
-3. **\`collateral: Notional\` — signed.** Collateral is *deposited* funds, conventionally non-negative, but the type is \`Notional\` (signed) because \`account_equity = collateral + unrealized_pnl\` needs to flow as a signed sum. Making \`collateral\` unsigned would force an \`as i64\` cast in every equity computation. **Convert at the boundary, keep the math in one signed type — that way, silent runtime bugs caused by missed casts or mixing signed and unsigned (underflows, an \`as\` cast that flips the top bit, a subtraction that should have produced a negative number turning into a large positive one) get eliminated at the compile-level as type mismatches.** L4's sign trick — computing \`(mark − entry) × size\` branchlessly for all four quadrants — only works because every step on that path is uniformly signed.
+3. **\`collateral: Notional\` — signed.** Collateral is *deposited* funds, conventionally non-negative, but the type is \`Notional\` (signed) because \`account_equity = collateral + unrealized_pnl\` needs to flow as a signed sum. Making \`collateral\` unsigned would force an \`as i64\` cast in every equity computation. **Convert at the boundary, keep the math in one signed type — that way, silent runtime bugs caused by missed casts or mixing signed and unsigned (underflows, an \`as\` cast that flips the top bit, a subtraction that should have produced a negative number turning into a large positive one) get eliminated at the compile-level as type mismatches.** Lesson 4's sign trick — computing \`(mark − entry) × size\` branchlessly for all four quadrants — only works because every step on that path is uniformly signed.
 
-4. **\`pub\` fields, no constructor function.** Same convention as \`LiquidationParams\` from L1: transparent struct, no encapsulation invariant. The bridge layer builds \`AccountSnapshot { account: …, position_size: …, … }\` directly. There's no \`AccountSnapshot::new()\` because there's nothing for a constructor to enforce.
+4. **\`pub\` fields, no constructor function.** Same convention as \`LiquidationParams\` from Lesson 1: transparent struct, no encapsulation invariant. The bridge layer builds \`AccountSnapshot { account: …, position_size: …, … }\` directly. There's no \`AccountSnapshot::new()\` because there's nothing for a constructor to enforce.
 
 5. **Doc comment names the caller's contract.** "*The owning layer (vault / clearing) is responsible for maintaining this across fills.*" That single sentence is the entire \`avg_entry\` invariant: liquidation doesn't track fills, doesn't recompute entry, doesn't reconcile partial closes. Those responsibilities live one layer up. **The crate doc says what *this* crate guarantees; what it requires from the caller goes in the type's doc comment.**
 
@@ -892,7 +892,7 @@ Three things to notice:
 
 2. **\`side: Side\` reuses \`openhl_clob::Side\`.** The matching engine speaks in \`Side::{Buy, Sell}\`. If we defined a new \`liquidation::Side\` enum and converted at the bridge, we'd be **introducing an unnecessary translation layer (an \`impl From\` and its inverse) that becomes a source of future type drift** — someone adds a third variant (\`Closing\`, say) to one crate but not the other, or quietly inverts the \`Buy ↔ Sell\` mapping in one spot. **One enum, one source of truth.** Vocabulary that crosses crate boundaries (\`Side\`, \`Qty\`) should be shared across the boundary so you don't end up paying a permanent type-conversion cost (an "adjustment tax") forever.
 
-3. **\`qty: Qty\` reuses \`openhl_clob::Qty(u64)\`.** The doc comment says "absolute value of the position size" — \`PositionSize\` is \`i64\` (signed) but the close quantity is always positive. The conversion (\`Qty(position_size.0.unsigned_abs())\`) happens in \`compute::close_order_spec\` at L7; here we just commit to the *output type* being unsigned.
+3. **\`qty: Qty\` reuses \`openhl_clob::Qty(u64)\`.** The doc comment says "absolute value of the position size" — \`PositionSize\` is \`i64\` (signed) but the close quantity is always positive. The conversion (\`Qty(position_size.0.unsigned_abs())\`) happens in \`compute::close_order_spec\` at Lesson 7; here we just commit to the *output type* being unsigned.
 
 > 🛑 **Predict.** Before scrolling: \`CloseOrderSpec\` doesn't carry a \`Reason\` field saying *why* the close happened (Liquidatable vs Underwater). Should it? Hint: think about who consumes the spec and what information they need.
 
@@ -933,7 +933,7 @@ Zero warnings, zero errors. The \`types\` module of the liquidation crate is now
 
 Common errors:
 
-- **\`error[E0432]: unresolved import 'openhl_clob::Qty'\`** — the import line at the top of \`types.rs\` already names \`Qty\` (added back in L1's types.rs scaffold), so this fires only if you stripped imports. If it does, the L1-era top of the file should still read \`use openhl_clob::{AccountId, Qty, Side};\` and \`use openhl_funding::{MarkPrice, Notional, PositionSize};\` — the same imports cover both L2 and L3.
+- **\`error[E0432]: unresolved import 'openhl_clob::Qty'\`** — the import line at the top of \`types.rs\` already names \`Qty\` (added back in Lesson 1's types.rs scaffold), so this fires only if you stripped imports. If it does, the Lesson 1-era top of the file should still read \`use openhl_clob::{AccountId, Qty, Side};\` and \`use openhl_funding::{MarkPrice, Notional, PositionSize};\` — the same imports cover both Lesson 2 and Lesson 3.
 - **\`error: cannot find type 'Notional'\`** — same root cause; check the \`use openhl_funding::{…}\` line includes \`Notional\`.
 
 ## Design reflection
@@ -955,9 +955,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/types.rs ./crates/liquidation/sr
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-After L3:
+After Lesson 3:
 - **types.rs** matches **the full Stage 10a types.rs byte-for-byte**. Module 1 of Course 10 ships exactly this types module.
-- **lib.rs** still misses \`pub mod compute;\` + the compute re-exports. Those land in L4–L7.
+- **lib.rs** still misses \`pub mod compute;\` + the compute re-exports. Those land in Lessons 4–7.
 
 ## Common questions
 
@@ -981,9 +981,9 @@ No — Stage 10c will pass \`CloseOrderSpec\` directly to the bridge with no env
 
 Cheap and convenient. \`AccountSnapshot\` is 32 bytes, \`CloseOrderSpec\` is 24 bytes — Copy is essentially free at these sizes. Without it, callers have to clone every time they want a second reference. **Make small Plain-Old-Data types \`Copy\`; reach for \`Clone\` only when ownership semantics actually matter.**
 
-## Next lesson (L4)
+## Next lesson (Lesson 4)
 
-L4 starts the \`compute\` module. The first two functions — \`notional_value\` and \`unrealized_pnl\` — earn the first behavior tests for the liquidation crate. You'll see the signed-multiplication trick that makes the same code path produce the right sign for both long and short positions, and the i128-intermediate discipline that keeps multiplications safe from i64 overflow at network-pathological inputs.
+Lesson 4 starts the \`compute\` module. The first two functions — \`notional_value\` and \`unrealized_pnl\` — earn the first behavior tests for the liquidation crate. You'll see the signed-multiplication trick that makes the same code path produce the right sign for both long and short positions, and the i128-intermediate discipline that keeps multiplications safe from i64 overflow at network-pathological inputs.
 `,
                 },
               ],
@@ -1026,22 +1026,22 @@ Specific changes:
 - **Create \`crates/liquidation/src/compute.rs\`** — the file doesn't exist yet. Module doc + imports + two public functions + one private helper + a \`#[cfg(test)]\` block with 8 unit tests.
 - **\`src/lib.rs\`** — add \`pub mod compute;\` + extend the re-export to include \`notional_value\` and \`unrealized_pnl\`.
 
-L4 is the first lesson with running tests. From here every lesson adds tests until L8 (\`close_order_spec\`, the last of Stage 10a's behaviors).
+Lesson 4 is the first lesson with running tests. From here every lesson adds tests until Lesson 8 (\`close_order_spec\`, the last of Stage 10a's behaviors).
 
 ## Recap
 
-After L3:
+After Lesson 3:
 - The types module is byte-for-byte complete against Stage 10a — \`MARGIN_SCALE\`, \`LiquidationParams\`, \`MarginRatio\`, \`MarginHealth\`, \`AccountSnapshot\`, \`CloseOrderSpec\`.
 - The compute module doesn't exist yet.
 - \`cargo build\` passes; \`cargo test\` runs zero tests.
 
-L4 creates the compute module. The first two functions answer the question "what does this account *currently* look like?" — its notional exposure and its unrealized PnL. L5 builds equity and margin ratio on top of these.
+Lesson 4 creates the compute module. The first two functions answer the question "what does this account *currently* look like?" — its notional exposure and its unrealized PnL. Lesson 5 builds equity and margin ratio on top of these.
 
 ## Plan
 
 Two edits:
 
-1. **Create \`crates/liquidation/src/compute.rs\`** — module doc + \`use\` statements pulling \`AccountSnapshot\`, \`MarkPrice\` from L1–L3 + \`notional_value\` + \`unrealized_pnl\` + the private \`saturate_i128_to_i64\` helper + a \`#[cfg(test)]\` tests block with 3 notional tests + 5 PnL tests.
+1. **Create \`crates/liquidation/src/compute.rs\`** — module doc + \`use\` statements pulling \`AccountSnapshot\`, \`MarkPrice\` from Lessons 1–3 + \`notional_value\` + \`unrealized_pnl\` + the private \`saturate_i128_to_i64\` helper + a \`#[cfg(test)]\` tests block with 3 notional tests + 5 PnL tests.
 2. **Update \`src/lib.rs\`** — add \`pub mod compute;\` and extend the public re-exports to include the two new function names.
 
 > 🛑 **Predict.** Before scrolling: \`unrealized_pnl\` needs to return *positive* when a long is in profit AND when a short is in profit. The naïve shape is:
@@ -1111,9 +1111,9 @@ use openhl_clob::{Qty, Side};
 use openhl_funding::MarkPrice;
 \`\`\`
 
-The module doc names six functions — only two of them land in L4. The next four (\`account_equity\`, \`margin_ratio\`, \`margin_health\`, \`close_order_spec\`) come in L5–L7. Listing all six upfront avoids re-editing the module doc at every lesson; it's also a roadmap for any reader who lands here without context.
+The module doc names six functions — only two of them land in Lesson 4. The next four (\`account_equity\`, \`margin_ratio\`, \`margin_health\`, \`close_order_spec\`) come in Lessons 5–7. Listing all six upfront avoids re-editing the module doc at every lesson; it's also a roadmap for any reader who lands here without context.
 
-> 🛑 **Anti-fluency.** "Why import \`CloseOrderSpec\`, \`Side\`, \`Qty\`, \`LiquidationParams\`, \`MarginHealth\`, \`MarginRatio\` when L4 only uses \`AccountSnapshot\` and \`MarkPrice\`?" **Because every subsequent lesson uses them — adding imports in batch at L4 keeps the diff focused on the function being added.** Rust will warn about unused imports until L5+; you tolerate those warnings the same way funding L1 tolerated rustdoc warnings about types that arrive later. The alternative — edit the \`use\` lines six times across L4–L7 — is busywork that obscures what each lesson actually adds.
+> 🛑 **Anti-fluency.** "Why import \`CloseOrderSpec\`, \`Side\`, \`Qty\`, \`LiquidationParams\`, \`MarginHealth\`, \`MarginRatio\` when Lesson 4 only uses \`AccountSnapshot\` and \`MarkPrice\`?" **Because every subsequent lesson uses them — adding imports in batch at Lesson 4 keeps the diff focused on the function being added.** Rust will warn about unused imports until Lesson 5+; you tolerate those warnings the same way funding Lesson 1 tolerated rustdoc warnings about types that arrive later. The alternative — edit the \`use\` lines six times across Lessons 4–7 — is busywork that obscures what each lesson actually adds.
 
 ### Step 2: Add \`notional_value\`
 
@@ -1139,7 +1139,7 @@ Three things to notice about this 7-line function:
 
 2. **\`snapshot.position_size.0.unsigned_abs()\`, not \`.abs()\`.** \`i64::abs\` returns \`i64\` — and \`i64::MIN.abs()\` is undefined in safe Rust (panics in debug, wraps in release). \`unsigned_abs\` returns \`u64\` and is defined for every input, including \`i64::MIN\` (\`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808\`). **Use \`unsigned_abs\` whenever you need the magnitude of a signed integer; reserve \`abs\` only when you're sure the value can't be \`MIN\`.**
 
-3. **\`u64::saturating_mul\` over \`u64::checked_mul\`.** Both detect overflow; \`saturating_mul\` returns \`u64::MAX\` on overflow, \`checked_mul\` returns \`None\`. Returning \`Option<u64>\` would force every caller (margin_ratio in L5, etc.) to handle a \`None\` that *only* arises at network-pathological inputs. Saturating returns a usable value that's mathematically wrong only at the extremes — and at those extremes the margin engine will classify the account as \`Liquidatable\` either way. **Saturation is the right failure mode when "the value is extreme but stays in bounds" beats "the cost of forcing every call site to propagate \`Option\` and write the boilerplate (\`?\` / \`unwrap_or\` / early returns) that comes with it."**
+3. **\`u64::saturating_mul\` over \`u64::checked_mul\`.** Both detect overflow; \`saturating_mul\` returns \`u64::MAX\` on overflow, \`checked_mul\` returns \`None\`. Returning \`Option<u64>\` would force every caller (margin_ratio in Lesson 5, etc.) to handle a \`None\` that *only* arises at network-pathological inputs. Saturating returns a usable value that's mathematically wrong only at the extremes — and at those extremes the margin engine will classify the account as \`Liquidatable\` either way. **Saturation is the right failure mode when "the value is extreme but stays in bounds" beats "the cost of forcing every call site to propagate \`Option\` and write the boilerplate (\`?\` / \`unwrap_or\` / early returns) that comes with it."**
 
 ### Step 3: Add \`unrealized_pnl\`
 
@@ -1284,7 +1284,7 @@ Things to notice about the test block:
 
 2. **Four PnL cases mirror the four sign combinations from the predict callout.** \`pnl_long_profit\`, \`pnl_long_loss\`, \`pnl_short_profit\`, \`pnl_short_loss\`. Plus \`pnl_flat_is_zero\` to nail the zero-size path. Every reachable sign combination has a test. **Coverage of sign combinations is the load-bearing property — miss one and a future refactor can silently invert a side.**
 
-3. **\`use proptest::prelude::*;\` even though L4 has no proptests yet.** The import lands here once and survives through L5/L8 where proptests are added. Same reasoning as the bulk imports in \`compute.rs\` proper — write once at the boundary, tolerate the unused-import warning across the next few lessons.
+3. **\`use proptest::prelude::*;\` even though Lesson 4 has no proptests yet.** The import lands here once and survives through Lessons 5 / 8 where proptests are added. Same reasoning as the bulk imports in \`compute.rs\` proper — write once at the boundary, tolerate the unused-import warning across the next few lessons.
 
 4. **Test names are sentences.** \`pnl_long_profit\` reads as "PnL when long is in profit." When a test fails, the test name in the failure output is the first thing you see — make it descriptive enough that you don't need to read the body to know what broke. **\`fn test_1\`, \`fn test_2\` are CI noise; sentence-fragment names are CI signal.**
 
@@ -1315,7 +1315,7 @@ pub use types::{
 Two changes:
 
 1. **\`pub mod compute;\`** above \`pub mod types;\` — alphabetical, same as the existing convention.
-2. **\`pub use compute::{notional_value, unrealized_pnl};\`** — a new re-export line, separate from the \`types\` re-export so each module gets its own line. L5–L7 will extend the compute list as more functions land.
+2. **\`pub use compute::{notional_value, unrealized_pnl};\`** — a new re-export line, separate from the \`types\` re-export so each module gets its own line. Lessons 5–7 will extend the compute list as more functions land.
 
 ### Step 7: Run the tests
 
@@ -1343,7 +1343,7 @@ test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 Common errors:
 
-- **\`warning: unused import: ...\`** for any of the imports added in batch — expected, gone by L7.
+- **\`warning: unused import: ...\`** for any of the imports added in batch — expected, gone by Lesson 7.
 - **\`error[E0599]: no method named 'unsigned_abs' found for type 'i64'\`** — you're on a very old Rust. \`unsigned_abs\` was stabilized in Rust 1.51 (2021). The project's \`rust-toolchain.toml\` should pin a recent enough version.
 - **Test fails with \`attempt to multiply with overflow\`** — your build is in debug mode and you wrote \`*\` instead of \`saturating_mul\`. Replace.
 
@@ -1366,8 +1366,8 @@ diff -u ~/code/my-openhl/crates/liquidation/src/compute.rs ./crates/liquidation/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-After L4:
-- **compute.rs** matches the first ~80 lines of Stage 10a's \`compute.rs\` — module doc + imports + \`notional_value\` + \`unrealized_pnl\` + helper + the first 8 tests. Everything below (the next four functions and their tests, plus 3 proptests) lands in L5–L7.
+After Lesson 4:
+- **compute.rs** matches the first ~80 lines of Stage 10a's \`compute.rs\` — module doc + imports + \`notional_value\` + \`unrealized_pnl\` + helper + the first 8 tests. Everything below (the next four functions and their tests, plus 3 proptests) lands in Lessons 5–7.
 - **lib.rs** still misses 4 more compute re-exports (\`account_equity\`, \`margin_ratio\`, \`margin_health\`, \`close_order_spec\`). Those arrive incrementally.
 
 ## Common questions
@@ -1392,9 +1392,9 @@ No — \`mark = 0\` is bizarre but not undefined. The formula \`(0 − entry) ×
 
 \`MarkPrice\` is \`Copy\` and 8 bytes (\`u64\`). Pass-by-value is cheaper than pass-by-reference for \`Copy\` types this small — no pointer indirection, no aliasing concerns. **Reach for \`&\` when the type is large enough that copying is expensive, OR when ownership semantics matter. For \`Copy\` newtypes around primitives, pass-by-value is the right default.**
 
-## Next lesson (L5)
+## Next lesson (Lesson 5)
 
-L5 adds \`account_equity\` and \`margin_ratio\` — and the **most pedagogically loaded discovery in Stage 10a**: the leveraged-regime non-monotonicity of \`margin_ratio\`. You'll write the proptest first ("as mark increases for a long, margin_ratio should also increase"), watch it fail at a small handful of inputs, trace through *why* the failure is real (and not a bug), and refine the proptest with \`prop_assume!\` to express the actual invariant. This is the lesson where a learner's first mental model of margin math gets broken and rebuilt.
+Lesson 5 adds \`account_equity\` and \`margin_ratio\` — and the **most pedagogically loaded discovery in Stage 10a**: the leveraged-regime non-monotonicity of \`margin_ratio\`. You'll write the proptest first ("as mark increases for a long, margin_ratio should also increase"), watch it fail at a small handful of inputs, trace through *why* the failure is real (and not a bug), and refine the proptest with \`prop_assume!\` to express the actual invariant. This is the lesson where a learner's first mental model of margin math gets broken and rebuilt.
 `,
                 },
                 {
@@ -1423,23 +1423,23 @@ Verification:
 cargo test -p openhl-liquidation
 \`\`\`
 
-…passes 16 tests (8 from L4 + 5 new unit tests + 3 proptests, each at the default 256 cases).
+…passes 16 tests (8 from Lesson 4 + 5 new unit tests + 3 proptests, each at the default 256 cases).
 
 Specific changes:
 
-- **\`src/compute.rs\`** — appends \`account_equity\`, \`margin_ratio\`, 5 unit tests, and 3 proptests below the existing L4 content.
+- **\`src/compute.rs\`** — appends \`account_equity\`, \`margin_ratio\`, 5 unit tests, and 3 proptests below the existing Lesson 4 content.
 - **\`src/lib.rs\`** — extends the \`pub use compute::{...}\` re-export to include \`account_equity\` and \`margin_ratio\`.
 
-L5 is the pedagogical center of Stage 10a. Don't rush it. The proptest discovery loop — write, fail, trace, refine — is the load-bearing skill the lesson exists to teach.
+Lesson 5 is the pedagogical center of Stage 10a. Don't rush it. The proptest discovery loop — write, fail, trace, refine — is the load-bearing skill the lesson exists to teach.
 
 ## Recap
 
-After L4:
+After Lesson 4:
 - The compute module exists with \`notional_value\` and \`unrealized_pnl\` plus the private \`saturate_i128_to_i64\` helper.
 - 8 unit tests cover the four sign combinations of PnL plus the three notional cases (long, short, flat).
 - \`cargo test\` runs 8 tests, all green.
 
-L5 builds the next layer: convert PnL into account equity (adds collateral), then divide equity by notional to get a margin ratio. Then we write the first proptest — and meet the surprise that defines this stage.
+Lesson 5 builds the next layer: convert PnL into account equity (adds collateral), then divide equity by notional to get a margin ratio. Then we write the first proptest — and meet the surprise that defines this stage.
 
 ## Plan
 
@@ -1519,7 +1519,7 @@ pub fn margin_ratio(snapshot: &AccountSnapshot, mark: MarkPrice) -> MarginRatio 
 
 Five things to notice:
 
-1. **\`notional == 0\` early return with \`i64::MAX\`.** Flat positions have no exposure → no margin requirement to fall short of. Returning the maximum representable ratio signals "infinitely safe" and lets every downstream \`margin_health\` comparison short-circuit naturally (no special-case in \`margin_health\`). **Concretely, the one-directional comparison we'll write in L6 — \`if ratio >= params.initial_margin_bps { Safe } else { ... }\` — works for a flat account without any extra branch, because \`i64::MAX >= initial_margin_bps\` is always true and the account lands in \`Safe\` automatically.** That is, \`i64::MAX\` is acting as a **"magic boundary that lets the downstream comparison short-circuit straight through."** The alternative — \`Option<MarginRatio>\` or \`Result<MarginRatio>\` — would force every caller to handle the flat case explicitly. **Encode the "no constraint" case as the system's safest possible upper bound — that's the design discipline at work here.**
+1. **\`notional == 0\` early return with \`i64::MAX\`.** Flat positions have no exposure → no margin requirement to fall short of. Returning the maximum representable ratio signals "infinitely safe" and lets every downstream \`margin_health\` comparison short-circuit naturally (no special-case in \`margin_health\`). **Concretely, the one-directional comparison we'll write in Lesson 6 — \`if ratio >= params.initial_margin_bps { Safe } else { ... }\` — works for a flat account without any extra branch, because \`i64::MAX >= initial_margin_bps\` is always true and the account lands in \`Safe\` automatically.** That is, \`i64::MAX\` is acting as a **"magic boundary that lets the downstream comparison short-circuit straight through."** The alternative — \`Option<MarginRatio>\` or \`Result<MarginRatio>\` — would force every caller to handle the flat case explicitly. **Encode the "no constraint" case as the system's safest possible upper bound — that's the design discipline at work here.**
 
 2. **The multiplication happens *before* the division.** \`equity × MARGIN_SCALE / notional\` in i128 preserves precision for small ratios (e.g., a 1% margin = 100 bps survives the divide). Doing the divide first (\`equity / notional × MARGIN_SCALE\` in i64) would truncate to integer percentages before scaling, losing precision. **Order of operations matters when integer division is in the mix.**
 
@@ -1531,7 +1531,7 @@ Five things to notice:
 
 ### Step 3: Add 5 unit tests
 
-Inside the existing \`#[cfg(test)] mod tests { ... }\` block, after the PnL tests from L4, add:
+Inside the existing \`#[cfg(test)] mod tests { ... }\` block, after the PnL tests from Lesson 4, add:
 
 \`\`\`rust
     // ─── account_equity ────────────────────────────────────────────
@@ -1581,7 +1581,7 @@ Things to notice:
 
 2. **\`ratio_can_be_negative\` uses \`assert!(r.0 < 0)\` instead of \`assert_eq!(r, MarginRatio(-8000))\`.** The exact ratio value depends on i64 rounding of the divide; pinning the exact bps locks in arithmetic that doesn't have a single canonical answer (different rounding modes give different LSBs). Asserting just the *sign* tests the load-bearing property — equity-negative-implies-ratio-negative — without testing the rounding accident. **Test the property, not the artifact.**
 
-3. **\`ratio_flat_returns_max\` uses \`MarginRatio(i64::MAX)\` directly.** The sentinel value is part of the contract — \`margin_health\` (in L6) will rely on it.
+3. **\`ratio_flat_returns_max\` uses \`MarginRatio(i64::MAX)\` directly.** The sentinel value is part of the contract — \`margin_health\` (in Lesson 6) will rely on it.
 
 ### Step 4: Write the proptest — initial naïve form
 
@@ -1703,7 +1703,7 @@ Lining up the three regimes and how \`margin_ratio\` behaves in each shows visua
       forces that hidden precondition to become visible.
 \`\`\`
 
-This figure also matters in L6 / L7 when we write the classifier and liquidation discipline: healthy traders live in the levered region, but an extremely over-collateralized "pseudo-long" account can wander into the cash-heavy region at any time, and the engine has to behave correctly in both.
+This figure also matters in Lessons 6 / 7 when we write the classifier and liquidation discipline: healthy traders live in the levered region, but an extremely over-collateralized "pseudo-long" account can wander into the cash-heavy region at any time, and the engine has to behave correctly in both.
 
 The failing input has \`entry × size = 100 × 1 = 100\` and \`collateral = 103\`. Since \`collateral > entry × size\`, we're in the cash-heavy regime where the ratio decreases as mark rises.
 
@@ -1895,9 +1895,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/compute.rs ./crates/liquidation/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-After L5:
-- **compute.rs** now matches Stage 10a through \`margin_ratio\` + the first 13 unit tests + all 3 proptests. The next two functions (\`margin_health\` at L6, \`close_order_spec\` at L7) and their tests are still pending.
-- **lib.rs** has 4 of 6 compute re-exports — \`notional_value\`, \`unrealized_pnl\`, \`account_equity\`, \`margin_ratio\`. The last two arrive in L6/L7.
+After Lesson 5:
+- **compute.rs** now matches Stage 10a through \`margin_ratio\` + the first 13 unit tests + all 3 proptests. The next two functions (\`margin_health\` at Lesson 6, \`close_order_spec\` at Lesson 7) and their tests are still pending.
+- **lib.rs** has 4 of 6 compute re-exports — \`notional_value\`, \`unrealized_pnl\`, \`account_equity\`, \`margin_ratio\`. The last two arrive in Lessons 6 / 7.
 
 ## Common questions
 
@@ -1921,9 +1921,9 @@ Two reasons. (1) Proptest strategies are independent per-parameter; expressing i
 
 It doesn't hold when \`collateral ≥ entry × size\` — the cash-heavy regime where the position is so over-collateralized that it can't be liquidated. In that regime, mark moves push the margin ratio around but never below maintenance, so the engine never has to act. **The cases where monotonicity fails are exactly the cases the engine doesn't care about — that's why excluding them with \`prop_assume!\` is the right move, not a workaround.**
 
-## Next lesson (L6)
+## Next lesson (Lesson 6)
 
-L6 adds \`margin_health\` — the function that turns a \`MarginRatio\` into one of the four \`MarginHealth\` variants by comparing against the params. Five unit tests at the boundaries (Safe / AtRisk / Liquidatable / Underwater / exact-maintenance-edge) plus a discussion of why the boundaries use strict-less-than at every threshold. The lesson is shorter than L5 — by L6 you've internalized the discipline; L6 is application.
+Lesson 6 adds \`margin_health\` — the function that turns a \`MarginRatio\` into one of the four \`MarginHealth\` variants by comparing against the params. Five unit tests at the boundaries (Safe / AtRisk / Liquidatable / Underwater / exact-maintenance-edge) plus a discussion of why the boundaries use strict-less-than at every threshold. The lesson is shorter than Lesson 5 — by Lesson 6 you've internalized the discipline; Lesson 6 is application.
 `,
                 },
                 {
@@ -1950,23 +1950,23 @@ Verification:
 cargo test -p openhl-liquidation
 \`\`\`
 
-…passes 21 tests (16 from L4–L5 + 5 new boundary tests).
+…passes 21 tests (16 from Lessons 4–5 + 5 new boundary tests).
 
 Specific changes:
 
 - **\`src/compute.rs\`** — appends \`margin_health\` after \`margin_ratio\` + 5 unit tests inside the existing test module.
 - **\`src/lib.rs\`** — extends the compute re-export to include \`margin_health\`.
 
-L6 is application: by now you've internalized the i128 / saturate / proptest discipline. The classification cascade is short — but the design hill (cascade order + strict-less-than) is where most bugs would hide in a careless implementation.
+Lesson 6 is application: by now you've internalized the i128 / saturate / proptest discipline. The classification cascade is short — but the design hill (cascade order + strict-less-than) is where most bugs would hide in a careless implementation.
 
 ## Recap
 
-After L5:
+After Lesson 5:
 - \`compute.rs\` has \`notional_value\`, \`unrealized_pnl\`, \`account_equity\`, \`margin_ratio\`, the \`saturate_i128_to_i64\` helper, plus 13 unit tests and 3 proptests.
 - The non-monotonic edge case is encoded in \`long_ratio_monotonic_in_mark_when_levered\` with \`prop_assume!\`.
 - \`cargo test\` runs 16 tests, all green.
 
-L6 maps \`MarginRatio\` values to \`MarginHealth\` variants. The function is short. The decisions are not.
+Lesson 6 maps \`MarginRatio\` values to \`MarginHealth\` variants. The function is short. The decisions are not.
 
 ## Plan
 
@@ -2015,7 +2015,7 @@ Laying the four-state cascade out on the margin-ratio number line makes it visib
               but the books record it as a solvent close.
 \`\`\`
 
-The point: **when the cascade is written as "carve out the most extreme region first, then narrow," each branch's condition naturally operates inside the complement of every prior branch.** Reverse it — check the wide region first — and the more-extreme region (Underwater) gets swallowed by the wider one (Liquidatable), degrading what should be a four-way classification into three. L7's \`close_order_spec\` keys off these four states to decide what to emit, so collapsing the narrowing breaks the downstream behaviour entirely.
+The point: **when the cascade is written as "carve out the most extreme region first, then narrow," each branch's condition naturally operates inside the complement of every prior branch.** Reverse it — check the wide region first — and the more-extreme region (Underwater) gets swallowed by the wider one (Liquidatable), degrading what should be a four-way classification into three. Lesson 7's \`close_order_spec\` keys off these four states to decide what to emit, so collapsing the narrowing breaks the downstream behaviour entirely.
 
 ## Walk-through
 
@@ -2062,7 +2062,7 @@ Five things to notice about this 18-line function:
 
 3. **\`i64::from(params.initial_margin_bps)\` widens u32 → i64.** The fields are \`u32\` (saves memory, plenty of range for bps values up to ~4 billion). The ratio is \`i64\` (the type forced by signed division in \`margin_ratio\`). Comparing different integer types is a compile error in Rust; widening at the boundary keeps the comparisons clean. **One cast per param at the top; the cascade body reads as pure i64 < i64.**
 
-4. **No special case for flat positions.** \`margin_ratio\` returns \`MarginRatio(i64::MAX)\` for a flat account. \`i64::MAX\` is far above any sane \`initial_margin_bps\`, so the cascade falls through to \`Safe\`. **The flat-as-Safe property is encoded by \`margin_ratio\`'s flat-position guard — \`margin_health\` doesn't need to know about it.** This is **function composition at work: downstream functions inherit invariants established upstream, automatically.** \`margin_ratio\` decides "flat → \`i64::MAX\`" in one spot, and every downstream consumer (this \`margin_health\`, L7's \`close_order_spec\`) gets "flat = always lands in Safe" **for free — zero extra code.** If you have the habit of "adding a flag-branch inside every function for every edge case," this is the paradigm shift worth internalizing: **scope each invariant to a single owner, then trust it downstream.** A future tweak to flat-position semantics happens in *one place* (\`margin_ratio\`), not in two synchronized branches.
+4. **No special case for flat positions.** \`margin_ratio\` returns \`MarginRatio(i64::MAX)\` for a flat account. \`i64::MAX\` is far above any sane \`initial_margin_bps\`, so the cascade falls through to \`Safe\`. **The flat-as-Safe property is encoded by \`margin_ratio\`'s flat-position guard — \`margin_health\` doesn't need to know about it.** This is **function composition at work: downstream functions inherit invariants established upstream, automatically.** \`margin_ratio\` decides "flat → \`i64::MAX\`" in one spot, and every downstream consumer (this \`margin_health\`, Lesson 7's \`close_order_spec\`) gets "flat = always lands in Safe" **for free — zero extra code.** If you have the habit of "adding a flag-branch inside every function for every edge case," this is the paradigm shift worth internalizing: **scope each invariant to a single owner, then trust it downstream.** A future tweak to flat-position semantics happens in *one place* (\`margin_ratio\`), not in two synchronized branches.
 
 5. **Function takes \`&LiquidationParams\`, not \`LiquidationParams\` by value.** Even though \`LiquidationParams\` is \`Copy\` (12 bytes), the reference signature signals "I'm reading these, not consuming them." The bridge passes the same \`params\` to every \`margin_health\` call for an entire scan; reference avoids a (technically free) move per call.
 
@@ -2132,7 +2132,7 @@ Four things to notice:
 
 3. **\`health_boundary_at_maintenance\` constructs its own params, not \`hyperliquid_default()\`.** The hyperliquid default has \`liquidation_fee_bps = 150\`, irrelevant to this test, and the explicit struct construction documents which fields the test *actually* depends on. Other tests use the default because the fee field isn't load-bearing for them.
 
-4. **\`MarginHealth::Underwater\` is exercised via the L5 underwater case** (\`mark = 50\` against a long position with thin collateral). Same setup as \`ratio_can_be_negative\` from L5 — the negative-ratio test proved the math; the variant test proves the classification.
+4. **\`MarginHealth::Underwater\` is exercised via the Lesson 5 underwater case** (\`mark = 50\` against a long position with thin collateral). Same setup as \`ratio_can_be_negative\` from Lesson 5 — the negative-ratio test proved the math; the variant test proves the classification.
 
 ### Step 3: Update \`src/lib.rs\`
 
@@ -2211,9 +2211,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/compute.rs ./crates/liquidation/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-After L6:
-- **compute.rs** matches Stage 10a through \`margin_health\` + 18 unit tests + 3 proptests. The last function (\`close_order_spec\`) and its 3 tests are L7.
-- **lib.rs** has 5 of 6 compute re-exports. The final one (\`close_order_spec\`) lands in L7.
+After Lesson 6:
+- **compute.rs** matches Stage 10a through \`margin_health\` + 18 unit tests + 3 proptests. The last function (\`close_order_spec\`) and its 3 tests are Lesson 7.
+- **lib.rs** has 5 of 6 compute re-exports. The final one (\`close_order_spec\`) lands in Lesson 7.
 
 ## Common questions
 
@@ -2237,9 +2237,9 @@ Because callers typically invoke \`margin_health\` once per account in a per-blo
 
 Rust's \`match\` does support exclusive-range patterns (since 1.26), so syntactically yes. But the patterns would be \`i64::MIN..0\`, \`0..maintenance_bps\`, \`maintenance_bps..initial_bps\`, \`initial_bps..=i64::MAX\`. The need for *named* boundaries (referring to variables, not literals) means each pattern requires a guard clause anyway. The if/else cascade reads cleaner here. **Use \`match\` for structural cases; use \`if/else\` for inequality cascades on the same value.**
 
-## Next lesson (L7)
+## Next lesson (Lesson 7)
 
-L7 closes Stage 10a with \`close_order_spec\` — the function that turns a snapshot into the \`CloseOrderSpec\` the bridge consumes. Three unit tests for long-closes-with-Sell, short-closes-with-Buy, and the flat-position edge case (qty = 0). Shorter than L6 — by L7 you have the full compute module behind you, and the lesson is mostly the bridge between L4's \`unsigned_abs\` discipline and the engine's outward-facing interface.
+Lesson 7 closes Stage 10a with \`close_order_spec\` — the function that turns a snapshot into the \`CloseOrderSpec\` the bridge consumes. Three unit tests for long-closes-with-Sell, short-closes-with-Buy, and the flat-position edge case (qty = 0). Shorter than Lesson 6 — by Lesson 7 you have the full compute module behind you, and the lesson is mostly the bridge between Lesson 4's \`unsigned_abs\` discipline and the engine's outward-facing interface.
 `,
                 },
                 {
@@ -2256,7 +2256,7 @@ L7 closes Stage 10a with \`close_order_spec\` — the function that turns a snap
 Concepts you'll grasp in this lesson:
 
 - **The elementary close-the-position rule** — long is closed by *selling*, short is closed by *buying*. Side is always the opposite of the position direction; the engine doesn't decide a side, it inverts one.
-- **\`unsigned_abs\` at the public boundary** — the discipline from L4 (use \`unsigned_abs\` over \`abs\` for \`i64\`) shows up at the function that talks to the bridge. The output \`Qty(u64)\` is the type the CLOB matching engine expects; the engine pushes the sign-conversion to its own boundary.
+- **\`unsigned_abs\` at the public boundary** — the discipline from Lesson 4 (use \`unsigned_abs\` over \`abs\` for \`i64\`) shows up at the function that talks to the bridge. The output \`Qty(u64)\` is the type the CLOB matching engine expects; the engine pushes the sign-conversion to its own boundary.
 - **Why \`close_order_spec\` doesn't filter flat positions** — a flat position generates a spec with \`qty == 0\`. The bridge filters before submitting. Keeping \`close_order_spec\` total and side-effect-free makes it composable with the Stage 10c multi-account scanner.
 - **Single-responsibility scoping** — \`close_order_spec\` doesn't take \`MarkPrice\` (market orders carry no price) or \`LiquidationParams\` (the decision-to-liquidate happens in \`margin_health\`). One snapshot in, one spec out.
 
@@ -2266,23 +2266,23 @@ Verification:
 cargo test -p openhl-liquidation
 \`\`\`
 
-…passes 24 tests (21 from L4–L6 + 3 new tests for the three close-side cases). **Stage 10a is now byte-for-byte complete against \`22eedf9\`.**
+…passes 24 tests (21 from Lessons 4–6 + 3 new tests for the three close-side cases). **Stage 10a is now byte-for-byte complete against \`22eedf9\`.**
 
 Specific changes:
 
 - **\`src/compute.rs\`** — appends \`close_order_spec\` after \`margin_health\` + 3 unit tests inside the existing test module.
 - **\`src/lib.rs\`** — extends the compute re-export to include \`close_order_spec\`.
 
-L7 is the shortest lesson in Stage 10a. The function itself is 11 lines; the lesson exists to lock in the side-inversion rule and to mark the completion of the pure-compute module.
+Lesson 7 is the shortest lesson in Stage 10a. The function itself is 11 lines; the lesson exists to lock in the side-inversion rule and to mark the completion of the pure-compute module.
 
 ## Recap
 
-After L6:
+After Lesson 6:
 - \`compute.rs\` has \`notional_value\`, \`unrealized_pnl\`, \`account_equity\`, \`margin_ratio\`, \`margin_health\`, plus the \`saturate_i128_to_i64\` helper and 18 unit tests + 3 proptests.
 - \`lib.rs\` re-exports 5 of 6 compute functions (everything except \`close_order_spec\`).
 - \`cargo test\` runs 21 tests, all green.
 
-L7 closes Stage 10a. After this lesson, the answer-key diff against \`22eedf9\` is fully clean for both \`compute.rs\` and \`lib.rs\`.
+Lesson 7 closes Stage 10a. After this lesson, the answer-key diff against \`22eedf9\` is fully clean for both \`compute.rs\` and \`lib.rs\`.
 
 ## Plan
 
@@ -2320,7 +2320,7 @@ At its core, \`close_order_spec\` is just **flipping the side of a position**. D
 
    ※ \`close_order_spec\` decides only two things: "invert the direction" and
      "extract the magnitude via \`unsigned_abs\`."
-     - The "should we liquidate?" decision is already settled by L6's \`margin_health\`.
+     - The "should we liquidate?" decision is already settled by Lesson 6's \`margin_health\`.
      - The "at what price?" decision happens in the matching engine (CLOB) against the book.
      - The "don't submit flat specs" filter is the bridge's job before submission.
    Each layer owns exactly one concern; they compose in series.
@@ -2366,7 +2366,7 @@ Five things to notice about this 11-line function:
 
 1. **Side is *always the opposite* of position direction.** The trader holds \`size\` units (positive = long, negative = short). To close, the engine submits an order on the other side: a long unwinds by selling, a short unwinds by buying. **The matching engine doesn't care about the close's *intent*; it only sees an order on a side. The "opposite side" rule is the entire bridge between position direction and order side.**
 
-2. **\`unsigned_abs()\` returns the magnitude as \`u64\`.** Same L4 discipline applied to the public boundary. \`Qty\` wraps a \`u64\`, so the magnitude flows directly into \`Qty(abs_size)\` without an intermediate \`as u64\` cast. **The function does sign conversion exactly once, at the boundary where signed position-size meets unsigned order-quantity.**
+2. **\`unsigned_abs()\` returns the magnitude as \`u64\`.** Same Lesson 4 discipline applied to the public boundary. \`Qty\` wraps a \`u64\`, so the magnitude flows directly into \`Qty(abs_size)\` without an intermediate \`as u64\` cast. **The function does sign conversion exactly once, at the boundary where signed position-size meets unsigned order-quantity.**
 
 3. **\`if snapshot.position_size.0 > 0\` — strict greater-than.** A flat position (\`size == 0\`) falls into the \`else\` branch and gets \`Side::Buy\`. That's harmless because qty will also be 0 — the spec exists but it's meaningless. **We don't special-case the flat path inside the function**; the bridge filters specs with \`qty == 0\` before submitting.
 
@@ -2480,7 +2480,7 @@ test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 Common errors:
 
 - **\`close_short_with_buy\` fails with \`Side::Sell\`** — you accidentally wrote \`if snapshot.position_size.0 >= 0\`. Flat positions don't matter here, but using \`>=\` makes shorts of \`0\` (which don't exist) flip to Sell — and the test for \`size = -10\` would still see \`size > 0\` as false. Re-check the direction.
-- **\`close_flat_has_zero_qty\` fails because the function panics** — you might have added \`.abs()\` instead of \`.unsigned_abs()\`. \`i64(0).abs()\` is fine, but if you wrote \`i64(-10).abs() as u64\` you'd risk the i64::MIN footgun from L4. Stick with \`unsigned_abs\`.
+- **\`close_flat_has_zero_qty\` fails because the function panics** — you might have added \`.abs()\` instead of \`.unsigned_abs()\`. \`i64(0).abs()\` is fine, but if you wrote \`i64(-10).abs() as u64\` you'd risk the i64::MIN footgun from Lesson 4. Stick with \`unsigned_abs\`.
 
 ## Design reflection
 
@@ -2501,10 +2501,10 @@ diff -u ~/code/my-openhl/crates/liquidation/src/compute.rs ./crates/liquidation/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-After L7:
+After Lesson 7:
 - **compute.rs** matches Stage 10a's \`compute.rs\` **byte-for-byte**.
 - **lib.rs** matches Stage 10a's \`lib.rs\` **byte-for-byte**.
-- **Cargo.toml** has matched since L1.
+- **Cargo.toml** has matched since Lesson 1.
 
 The full Stage 10a crate is now in your workspace.
 
@@ -2524,17 +2524,17 @@ Syntactically yes — \`impl AccountSnapshot { pub fn close_order_spec(&self) ->
 
 **Q4: What if \`position_size = i64::MIN\`? Does \`unsigned_abs\` handle it?**
 
-Yes, by design. \`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808u64\` (\`u64::MAX / 2 + 1\`). The signed \`i64::MIN.abs()\` would overflow (it has no positive counterpart in i64); \`unsigned_abs\` returns the magnitude as \`u64\`, which always has room. **This is exactly the L4 discipline: \`unsigned_abs\` for magnitudes, \`abs\` only when you're sure the value isn't \`MIN\`.**
+Yes, by design. \`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808u64\` (\`u64::MAX / 2 + 1\`). The signed \`i64::MIN.abs()\` would overflow (it has no positive counterpart in i64); \`unsigned_abs\` returns the magnitude as \`u64\`, which always has room. **This is exactly the Lesson 4 discipline: \`unsigned_abs\` for magnitudes, \`abs\` only when you're sure the value isn't \`MIN\`.**
 
 **Q5: Why does the test fixture's \`snapshot\` function take \`(size, entry, collateral)\` rather than \`(size, entry, mark, collateral)\` — the function under test takes a snapshot and we typically also need a mark?**
 
-\`close_order_spec\` takes only the snapshot — no mark. The shared \`snapshot\` fixture from L4 takes the snapshot's three meaningful fields (account is hardcoded) and doesn't carry mark. Mark gets passed as a separate \`MarkPrice(...)\` argument to the function under test. **The fixture builds what the *type* needs; the test supplies what the *call* needs.**
+\`close_order_spec\` takes only the snapshot — no mark. The shared \`snapshot\` fixture from Lesson 4 takes the snapshot's three meaningful fields (account is hardcoded) and doesn't carry mark. Mark gets passed as a separate \`MarkPrice(...)\` argument to the function under test. **The fixture builds what the *type* needs; the test supplies what the *call* needs.**
 
-## Next lesson (L8) — Stage 10b begins
+## Next lesson (Lesson 8) — Stage 10b begins
 
-L8 starts Stage 10b — the insurance fund. The pure-compute module you finished in L7 is the *what should happen* layer. Stage 10b adds *the bookkeeping that records what happened* — the \`InsuranceFund\` state machine that tracks the fund's balance, absorbs deficits from underwater liquidations, and credits liquidation fees from solvent closes. After Stage 10b, the engine knows not just "this account is Liquidatable" but "this close credited 1.5% to the fund" or "this close drained $400 from the fund."
+Lesson 8 starts Stage 10b — the insurance fund. The pure-compute module you finished in Lesson 7 is the *what should happen* layer. Stage 10b adds *the bookkeeping that records what happened* — the \`InsuranceFund\` state machine that tracks the fund's balance, absorbs deficits from underwater liquidations, and credits liquidation fees from solvent closes. After Stage 10b, the engine knows not just "this account is Liquidatable" but "this close credited 1.5% to the fund" or "this close drained $400 from the fund."
 
-**Stage 10b is not yet shipped in openhl** as of this lesson's draft — L8 lands in rethlab when the openhl-side implementation does.
+**Stage 10b is not yet shipped in openhl** as of this lesson's draft — Lesson 8 lands in rethlab when the openhl-side implementation does.
 `,
                 },
               ],
@@ -2559,7 +2559,7 @@ L8 starts Stage 10b — the insurance fund. The pure-compute module you finished
 Concepts you'll grasp in this lesson:
 
 - **The pure → stateful boundary.** Stage 10a's \`compute.rs\` is pure: every function is a deterministic projection of its arguments. Stage 10b introduces the first state in the liquidation crate — the insurance fund's accumulating balance — because the fund is genuinely a fact about *history*, not a fact about a single snapshot. **State appears in code only when the value can't be re-derived from its inputs.**
-- **The \`balance ≥ 0\` type invariant.** Every public operation on \`InsuranceFund\` preserves it. The field type is \`i64\` (for arithmetic uniformity with the rest of the crate), but **the invariant is enforced in code, not in the type system**. \`new(-500)\` clamps to 0; \`deposit(-50)\` is a no-op; \`withdraw_shortfall(...)\` saturates at 0 with the unfilled portion surfaced via \`WithdrawOutcome\` (L9). The discipline: **make every public method a transition that preserves the invariant.**
+- **The \`balance ≥ 0\` type invariant.** Every public operation on \`InsuranceFund\` preserves it. The field type is \`i64\` (for arithmetic uniformity with the rest of the crate), but **the invariant is enforced in code, not in the type system**. \`new(-500)\` clamps to 0; \`deposit(-50)\` is a no-op; \`withdraw_shortfall(...)\` saturates at 0 with the unfilled portion surfaced via \`WithdrawOutcome\` (Lesson 9). The discipline: **make every public method a transition that preserves the invariant.**
 - **Defensive boundaries vs. defensive functions.** The \`compute\` module trusts its inputs; the \`insurance\` module doesn't. Why the difference? \`compute\` is a pure projection — its caller already constructed a valid \`AccountSnapshot\`. \`InsuranceFund\` is *the boundary* — bridges, scanners, and (later) ADL routines all call it from different layers, and any of them can be buggy. **Defensive coding earns its keep at boundaries that aggregate many callers.**
 - **Saturating arithmetic in consensus state.** \`deposit\` uses \`saturating_add\` instead of \`+\`. The reason isn't just "to avoid panics in dev." Rust's \`+\` operator has *two* failure modes across build profiles: **debug builds panic on overflow** (one validator crashes, others continue → fork), and **release builds silently wrap** in two's-complement (every validator produces a *different* \`i64\` from its peers → fork). The release wrap is the deceptive one — no crash, no error, just disagreement. \`saturating_add\` clamps to \`i64::MAX\` (or \`MIN\`) under every build profile, so every validator sees the same value regardless of which compiler flags they used. **Saturation is the consensus-safe arithmetic discipline.**
 
@@ -2569,36 +2569,36 @@ Verification:
 cargo test -p openhl-liquidation
 \`\`\`
 
-…passes 33 tests (24 from L0–L7 + 9 new tests for construction + deposit). The 22 additional withdrawal / proptest cases land in L9.
+…passes 33 tests (24 from Lessons 0–7 + 9 new tests for construction + deposit). The 22 additional withdrawal / proptest cases land in Lesson 9.
 
 Specific changes:
 
 - **\`src/insurance.rs\`** — new module file. Adds \`InsuranceFund\` struct, three constructors (\`new\` / \`empty\` / \`Default::default\`), \`balance()\` accessor, \`deposit()\` mutator, and 9 unit tests.
 - **\`src/lib.rs\`** — adds \`pub mod insurance;\` and re-exports \`InsuranceFund\`.
 
-L8 lands roughly half of \`insurance.rs\`. The withdraw path — including the \`WithdrawOutcome\` enum — is the L9 capstone of the insurance-fund module.
+Lesson 8 lands roughly half of \`insurance.rs\`. The withdraw path — including the \`WithdrawOutcome\` enum — is the Lesson 9 capstone of the insurance-fund module.
 
 ## Recap
 
-After L7:
+After Lesson 7:
 - \`compute.rs\` is complete for Stage 10a: 6 functions (\`notional_value\`, \`unrealized_pnl\`, \`account_equity\`, \`margin_ratio\`, \`margin_health\`, \`close_order_spec\`) plus the \`saturate_i128_to_i64\` helper.
 - \`lib.rs\` re-exports all 6 compute functions and the Stage 10a types.
 - \`cargo test\` runs 24 tests, all green.
 - The crate is **purely functional**: no \`&mut self\`, no module-level state, every function returns a value derived from its arguments alone.
 
-L8 starts Stage 10b. The first thing that changes is that the crate is no longer purely functional.
+Lesson 8 starts Stage 10b. The first thing that changes is that the crate is no longer purely functional.
 
 ## Plan
 
 Three edits:
 
-1. **Create \`crates/liquidation/src/insurance.rs\`** — a new module file with the \`InsuranceFund\` struct, two constructors, the \`balance()\` accessor, the \`deposit()\` mutator, the \`WithdrawOutcome\` enum scaffold (used in L9), and 9 unit tests covering construction + deposit.
+1. **Create \`crates/liquidation/src/insurance.rs\`** — a new module file with the \`InsuranceFund\` struct, two constructors, the \`balance()\` accessor, the \`deposit()\` mutator, the \`WithdrawOutcome\` enum scaffold (used in Lesson 9), and 9 unit tests covering construction + deposit.
 2. **Add \`pub mod insurance;\`** and the re-exports to \`crates/liquidation/src/lib.rs\`.
 3. **Update \`lib.rs\`'s top-of-file roadmap** to mark Stage 10b in progress.
 
 > 🛑 **Predict.** Before reading further: in a state machine with a single non-negative balance field, what's the smallest defensive surface that preserves \`balance ≥ 0\` across an open set of callers? Specifically: **\`new(initial: i64)\`, \`deposit(fee: i64)\`, \`withdraw(amount: i64)\`** — at which of these three call sites do you need to defend, and against what bad input shape?
 
-(Answer: **All three.** \`new\` defends against a negative initial — clamp to 0. \`deposit\` defends against a negative fee — treat as no-op (a negative fee would silently drain the fund). \`withdraw\` defends against (a) a negative shortfall — treat as a 0-amount Covered, (b) an amount exceeding the balance — drain to 0 and surface the unfilled portion. Each defense exists because the public API is callable from many layers and **any single bad call must not violate the type invariant**. L8 covers \`new\` + \`deposit\`; L9 covers \`withdraw\`.)
+(Answer: **All three.** \`new\` defends against a negative initial — clamp to 0. \`deposit\` defends against a negative fee — treat as no-op (a negative fee would silently drain the fund). \`withdraw\` defends against (a) a negative shortfall — treat as a 0-amount Covered, (b) an amount exceeding the balance — drain to 0 and surface the unfilled portion. Each defense exists because the public API is callable from many layers and **any single bad call must not violate the type invariant**. Lesson 8 covers \`new\` + \`deposit\`; Lesson 9 covers \`withdraw\`.)
 
 The architectural picture of why state appears here:
 
@@ -2630,14 +2630,14 @@ The architectural picture of why state appears here:
                                   │
                                   ▼
    ┌────────────────────────────────────────────────────────────────┐
-   │ Stage 10c — scanner (scanner.rs, L11–L12)                      │
+   │ Stage 10c — scanner (scanner.rs, Lessons 11–12)                      │
    │                                                                │
    │  Owns an InsuranceFund; calls .deposit / .withdraw_shortfall   │
    │  per liquidation event; threads outcomes back into ScanReport. │
    └────────────────────────────────────────────────────────────────┘
 \`\`\`
 
-The point: **pure compute returns; stateful modules accumulate.** Stage 10a told the engine *what* the world looks like for each account. Stage 10b lets the engine remember *what happened* across accounts and across blocks. The scanner (L11–L12) is the layer that orchestrates the two.
+The point: **pure compute returns; stateful modules accumulate.** Stage 10a told the engine *what* the world looks like for each account. Stage 10b lets the engine remember *what happened* across accounts and across blocks. The scanner (Lessons 11–12) is the layer that orchestrates the two.
 
 ## Walk-through
 
@@ -2761,7 +2761,7 @@ Five things to notice:
 
 ### Step 3: Add the \`WithdrawOutcome\` enum scaffold
 
-Even though L8 doesn't implement \`withdraw_shortfall\`, we declare \`WithdrawOutcome\` now so the L9 changes are purely additive in \`impl InsuranceFund\` (no enum-introduction churn). Add this **above the \`impl InsuranceFund\` block**:
+Even though Lesson 8 doesn't implement \`withdraw_shortfall\`, we declare \`WithdrawOutcome\` now so the Lesson 9 changes are purely additive in \`impl InsuranceFund\` (no enum-introduction churn). Add this **above the \`impl InsuranceFund\` block**:
 
 \`\`\`rust
 /// Outcome of attempting to absorb a shortfall via
@@ -2798,10 +2798,10 @@ pub enum WithdrawOutcome {
 }
 \`\`\`
 
-This enum is **declared now and used in L9**. L8 introduces it because:
+This enum is **declared now and used in Lesson 9**. Lesson 8 introduces it because:
 
-1. **The enum's existence is part of the public surface story.** A reader who skims \`insurance.rs\` after L8 should see the full type vocabulary of the module, even if some methods are deferred. **Vocabulary before mechanism.**
-2. **Each variant carries its own payload.** \`Covered\` and \`PartiallyDrained\` both carry \`amount\` (what was actually paid out), and \`PartiallyDrained\` and \`Depleted\` both carry \`unfilled\` (what the scanner must escalate). The L9 proptest \`withdraw_amount_plus_unfilled_equals_shortfall\` is the conservation law that ties them together — but you can already see the shape of the law in the variant payloads. **Self-describing variants are documentation that the compiler enforces.**
+1. **The enum's existence is part of the public surface story.** A reader who skims \`insurance.rs\` after Lesson 8 should see the full type vocabulary of the module, even if some methods are deferred. **Vocabulary before mechanism.**
+2. **Each variant carries its own payload.** \`Covered\` and \`PartiallyDrained\` both carry \`amount\` (what was actually paid out), and \`PartiallyDrained\` and \`Depleted\` both carry \`unfilled\` (what the scanner must escalate). The Lesson 9 proptest \`withdraw_amount_plus_unfilled_equals_shortfall\` is the conservation law that ties them together — but you can already see the shape of the law in the variant payloads. **Self-describing variants are documentation that the compiler enforces.**
 3. **\`Layer 2 → Layer 3 boundary\`** in the doc comment names the cascade architecture explicitly: margin (Layer 1, Stage 10a) → fund (Layer 2, Stage 10b) → ADL (Layer 3, Stage 10d). The reader gets the map every time they look at this enum. **When a type sits at an architectural seam, say so in its doc.**
 
 ### Step 4: Add the \`deposit\` method
@@ -2855,7 +2855,7 @@ pub use types::{
 };
 \`\`\`
 
-Both re-exports — the type and the enum — go on one line. Why both now? Because **users of the crate import what they call**, and the L9 path that calls \`withdraw_shortfall\` will pattern-match on \`WithdrawOutcome\` immediately. Re-exporting the enum at L8 means L9 needs no changes to \`lib.rs\`. **Re-export the public surface once per module, not per method.**
+Both re-exports — the type and the enum — go on one line. Why both now? Because **users of the crate import what they call**, and the Lesson 9 path that calls \`withdraw_shortfall\` will pattern-match on \`WithdrawOutcome\` immediately. Re-exporting the enum at Lesson 8 means Lesson 9 needs no changes to \`lib.rs\`. **Re-export the public surface once per module, not per method.**
 
 ### Step 6: Add the 9 unit tests
 
@@ -2932,7 +2932,7 @@ mod tests {
 
 Six things to notice about how this test module is shaped:
 
-1. **\`// ─── construction ───\` section headers.** Box-drawing-character comments mark the four logical groups (construction · deposit · in L9: withdrawal-covered · withdrawal-partial · withdrawal-depleted · sequencing · proptests). The headers exist because the eventual module has ~22 tests; scanning the file by section name beats scrolling by line number. **In a test file with more than ~10 tests, group them.**
+1. **\`// ─── construction ───\` section headers.** Box-drawing-character comments mark the four logical groups (construction · deposit · in Lesson 9: withdrawal-covered · withdrawal-partial · withdrawal-depleted · sequencing · proptests). The headers exist because the eventual module has ~22 tests; scanning the file by section name beats scrolling by line number. **In a test file with more than ~10 tests, group them.**
 2. **\`new_with_zero_is_empty\` exists even though it's trivially derivable from the \`new\` source.** It's not redundant — it locks the behaviour in. A future refactor that accidentally added \`if initial_balance >= 0\` instead of \`> 0\` would still pass this test (because 0 falls through both predicates correctly), but a refactor that flipped to \`if initial_balance < 0\` *with* a typo would break exactly this case. **Boundary tests on small predicates catch typos that bigger tests miss.**
 3. **\`new_with_negative_clamps_to_zero\` directly tests the defensive surface.** The test isn't there to verify the *function works*; it's there to verify the *invariant is preserved*. If a future refactor "fixed" the apparent dead code in \`new\` by removing the clamp, this test would catch it. **Tests for defensive code defend the defensive code.**
 4. **\`default_is_empty\` is a one-liner that proves the \`Default\` impl points at \`Self::empty()\`** and didn't accidentally get derived (which would also produce \`balance: 0\`, but with different intent). **Tests can lock in *which path* produces a result, not just the result.**
@@ -2967,7 +2967,7 @@ test insurance::tests::new_with_zero_is_empty ... ok
 test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**33 tests passing. The insurance fund module exists, its invariant is enforced, and deposit semantics are locked in.** Withdraw (and the \`WithdrawOutcome\` payload semantics) land in L9.
+**33 tests passing. The insurance fund module exists, its invariant is enforced, and deposit semantics are locked in.** Withdraw (and the \`WithdrawOutcome\` payload semantics) land in Lesson 9.
 
 Common errors:
 
@@ -2995,9 +2995,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/insurance.rs ./crates/liquidatio
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-After L8:
-- **insurance.rs** matches Stage 10b's \`insurance.rs\` **up through line 118** (everything except \`withdraw_shortfall\`, the proptest section, and the sequencing test, which land in L9). Specifically: doc comment + struct + \`WithdrawOutcome\` enum + \`impl\` block ending at \`deposit\` + \`impl Default\` + tests up through \`deposit_saturates_at_max\`.
-- **lib.rs** matches Stage 10b's \`lib.rs\` **byte-for-byte** for the \`pub mod\` lines and \`InsuranceFund / WithdrawOutcome\` re-exports. (The roadmap comment at the top of \`lib.rs\` is also updated — that's an optional cosmetic edit in this lesson; L9 brings it in line with the answer key anyway.)
+After Lesson 8:
+- **insurance.rs** matches Stage 10b's \`insurance.rs\` **up through line 118** (everything except \`withdraw_shortfall\`, the proptest section, and the sequencing test, which land in Lesson 9). Specifically: doc comment + struct + \`WithdrawOutcome\` enum + \`impl\` block ending at \`deposit\` + \`impl Default\` + tests up through \`deposit_saturates_at_max\`.
+- **lib.rs** matches Stage 10b's \`lib.rs\` **byte-for-byte** for the \`pub mod\` lines and \`InsuranceFund / WithdrawOutcome\` re-exports. (The roadmap comment at the top of \`lib.rs\` is also updated — that's an optional cosmetic edit in this lesson; Lesson 9 brings it in line with the answer key anyway.)
 
 ## Common questions
 
@@ -3009,9 +3009,9 @@ Because every consumer in \`compute.rs\` would have to unwrap the option to do a
 
 No. There's no failure mode worth distinguishing at the call site. Saturation is silent because it's the right behaviour (the fund really does cap at \`i64::MAX\`); negative fees are silent because the caller is buggy (a \`Result\` here would force a thread of error handling through every scanner site, just to ignore the error). **Use \`Result\` when the caller has a meaningful action to take; here they don't.**
 
-**Q3: Why does \`WithdrawOutcome\` get declared in L8 if \`withdraw_shortfall\` is in L9?**
+**Q3: Why does \`WithdrawOutcome\` get declared in Lesson 8 if \`withdraw_shortfall\` is in Lesson 9?**
 
-Three reasons. (1) Re-exports — \`lib.rs\` exports the enum at L8 so L9 doesn't touch \`lib.rs\` again. (2) Public-surface vocabulary — a reader who lands on \`insurance.rs\` after L8 sees the full type vocabulary of the module, even if some methods are deferred. (3) The variants document the safety-cascade architecture; their *shapes* tell the reader where the fund sits in Layer 2→3 transitions. **Types are documentation that compile; declare them when you can describe them, not when you call them.**
+Three reasons. (1) Re-exports — \`lib.rs\` exports the enum at Lesson 8 so Lesson 9 doesn't touch \`lib.rs\` again. (2) Public-surface vocabulary — a reader who lands on \`insurance.rs\` after Lesson 8 sees the full type vocabulary of the module, even if some methods are deferred. (3) The variants document the safety-cascade architecture; their *shapes* tell the reader where the fund sits in Layer 2→3 transitions. **Types are documentation that compile; declare them when you can describe them, not when you call them.**
 
 **Q4: Could \`InsuranceFund\` be a free-standing \`i64\` value with module-level functions that mutate it, like global state?**
 
@@ -3021,9 +3021,9 @@ Technically yes, mechanically no. The Stage 10c scanner owns the fund as a field
 
 \`new\` reads only its argument and the \`Self\` constructor; nothing it does involves mutation through \`&mut self\`. \`deposit\` mutates \`self.balance\` — which Rust currently doesn't allow in \`const fn\` for non-trivially-const types. \`new\` being const lets \`static FUND: InsuranceFund = InsuranceFund::new(0);\` compile, which is useful for tests and (later) for default-config constants. **\`const fn\` what you can; the boundary is usually whether the function mutates state.**
 
-## Next lesson (L9) — \`withdraw_shortfall\`
+## Next lesson (Lesson 9) — \`withdraw_shortfall\`
 
-L9 closes out \`insurance.rs\` with the withdrawal path. The \`WithdrawOutcome\` enum we declared in L8 finally gets used: \`withdraw_shortfall(amount)\` returns \`Covered { amount }\` when the fund has enough, \`PartiallyDrained { amount, unfilled }\` when it drains to zero, and \`Depleted { unfilled }\` when it was already empty.
+Lesson 9 closes out \`insurance.rs\` with the withdrawal path. The \`WithdrawOutcome\` enum we declared in Lesson 8 finally gets used: \`withdraw_shortfall(amount)\` returns \`Covered { amount }\` when the fund has enough, \`PartiallyDrained { amount, unfilled }\` when it drains to zero, and \`Depleted { unfilled }\` when it was already empty.
 
 The two interesting parts: (1) the three-variant outcome is **exactly** the three transitions across the Layer 2 → Layer 3 boundary in the safety-net cascade, and (2) four proptests enforce conservation laws — \`balance_never_negative\`, \`deposit_is_additive\`, \`withdraw_amount_matches_balance_delta\`, and \`withdraw_amount_plus_unfilled_equals_shortfall\`. The proptests are where the cascade math becomes a property the type-system-but-not-quite enforces.
 `,
@@ -3052,24 +3052,24 @@ Verification:
 cargo test -p openhl-liquidation
 \`\`\`
 
-…passes 45 tests (24 compute + 21 insurance: 9 from L8 + 8 new unit tests + 4 new proptests). The full \`insurance.rs\` module is byte-for-byte against \`260883b\` after L9.
+…passes 45 tests (24 compute + 21 insurance: 9 from Lesson 8 + 8 new unit tests + 4 new proptests). The full \`insurance.rs\` module is byte-for-byte against \`260883b\` after Lesson 9.
 
 Specific changes:
 
 - **\`src/insurance.rs\`** — adds \`withdraw_shortfall\` to the \`impl InsuranceFund\` block, 7 unit tests covering the three variants and the negative/zero edge cases, 1 sequencing test that combines deposit + withdraw, and 4 proptests.
-- **No changes to \`lib.rs\`** — \`WithdrawOutcome\` was already re-exported in L8.
+- **No changes to \`lib.rs\`** — \`WithdrawOutcome\` was already re-exported in Lesson 8.
 
-L9 closes the insurance fund module. After this lesson the answer-key diff against \`260883b\` is fully clean for \`insurance.rs\`.
+Lesson 9 closes the insurance fund module. After this lesson the answer-key diff against \`260883b\` is fully clean for \`insurance.rs\`.
 
 ## Recap
 
-After L8:
+After Lesson 8:
 - \`insurance.rs\` exists, with the \`InsuranceFund\` struct, \`WithdrawOutcome\` enum (declared, unused), three constructors, the \`balance()\` accessor, and the \`deposit()\` mutator.
 - \`lib.rs\` re-exports both \`InsuranceFund\` and \`WithdrawOutcome\`.
 - \`cargo test\` runs 33 tests, all green.
 - The fund **accumulates** deposits (with the \`balance ≥ 0\` invariant defended at every public method), but it doesn't yet **drain**.
 
-L9 wires the drain path. The enum the reader met in L8 finally has a method that returns its variants.
+Lesson 9 wires the drain path. The enum the reader met in Lesson 8 finally has a method that returns its variants.
 
 ## Plan
 
@@ -3154,7 +3154,7 @@ Six things to notice about this 20-line method:
 
 1. **The early-return ladder handles four cases in evaluation order.** Non-positive shortfall first (defensive). Empty fund second (no balance can be moved). Sufficient balance third (the happy path). Partial drain fourth (fallthrough). **Each guard is independent — none cascades into the next.** A guarded early-return ladder beats a nested \`match\` here because the cases don't share structure: each one's input shape is different (\`shortfall <= 0\` vs \`balance == 0\` vs \`balance >= shortfall\` vs everything else).
 2. **\`shortfall <= 0\` covers both negative and zero in one branch.** Zero shortfall is a meaningful caller call ("the fee was 0; nothing to draw from the fund"); negative shortfall is a caller bug. Both produce the same \`Covered { amount: 0 }\` because the caller-facing semantics are identical: nothing was drawn, nothing escalates. **Group input cases by their *outcome*, not by their *intent*.**
-3. **\`self.balance -= shortfall\` is plain \`-\`, not \`saturating_sub\`.** Because the previous guard (\`self.balance >= shortfall\`) has *already proven* — deterministically and identically across every validator — that the \`i64\` subtraction cannot underflow. This isn't a contradiction of L8's "consensus state must never panic" rule: it's the narrow exception where a static control-flow guard makes the panic probability *provably zero*, so the redundant saturation can be dropped. **A type invariant that holds at the precondition of a subtraction makes saturating arithmetic redundant.** This is the inverse pattern to \`deposit\`'s \`saturating_add\` — there we couldn't prove the precondition, so we saturated; here we *did* prove it (the \`if\` is the proof), so we use plain subtraction.
+3. **\`self.balance -= shortfall\` is plain \`-\`, not \`saturating_sub\`.** Because the previous guard (\`self.balance >= shortfall\`) has *already proven* — deterministically and identically across every validator — that the \`i64\` subtraction cannot underflow. This isn't a contradiction of Lesson 8's "consensus state must never panic" rule: it's the narrow exception where a static control-flow guard makes the panic probability *provably zero*, so the redundant saturation can be dropped. **A type invariant that holds at the precondition of a subtraction makes saturating arithmetic redundant.** This is the inverse pattern to \`deposit\`'s \`saturating_add\` — there we couldn't prove the precondition, so we saturated; here we *did* prove it (the \`if\` is the proof), so we use plain subtraction.
 4. **\`PartiallyDrained\` reads \`prior\` into a local first, then sets \`balance = 0\`, then constructs the variant.** The order matters: if you wrote \`WithdrawOutcome::PartiallyDrained { amount: self.balance, unfilled: shortfall - self.balance }\` and then \`self.balance = 0\`, the construction would be fine (it captures \`self.balance\` before any mutation), but the assignment after struct construction looks like an afterthought to readers. Storing \`prior\` first makes the temporal order obvious: read → mutate → construct. **For state-machine transitions, name the prior state explicitly when you'll reference it after the mutation.**
 5. **\`Covered { amount: shortfall }\` uses \`shortfall\` directly, not \`self.balance\` before subtraction.** That's fine because we've already checked \`self.balance >= shortfall\`, so \`shortfall\` is exactly what we paid out. **Use the *requested* amount in the payload, not the *available* amount, when they're equal — it matches the caller's mental model better.**
 6. **The method takes \`&mut self\` and returns by value.** No reference, no lifetime, no \`Result\`. The variant *is* the success-shape; the borrow checker treats this exactly like \`deposit\`'s \`-> i64\`. **Outcome enums by-value compose smoothly with \`match\` at call sites; they don't force the caller to manage a borrow.**
@@ -3163,7 +3163,7 @@ Six things to notice about this 20-line method:
 
 ### Step 2: Add the 8 unit tests
 
-Inside the existing \`#[cfg(test)] mod tests { ... }\` block in \`insurance.rs\`, add three test sections after the existing L8 deposit tests:
+Inside the existing \`#[cfg(test)] mod tests { ... }\` block in \`insurance.rs\`, add three test sections after the existing Lesson 8 deposit tests:
 
 \`\`\`rust
     // ─── withdraw_shortfall: Covered ───────────────────────────────
@@ -3255,7 +3255,7 @@ Six things to notice about how these tests are grouped:
 3. **\`withdraw_partial_drains_to_zero\` is the *only* test for the \`PartiallyDrained\` variant.** One test is enough because the variant's path is unique: it fires when \`0 < balance < shortfall\`, and the math (\`amount = balance\`, \`unfilled = shortfall - balance\`) is a direct read from the struct construction. **Single-path code needs single-path coverage; the proptest below covers the conservation law across all paths.**
 4. **\`withdraw_after_full_drain_is_depleted\` tests the state transition, not just the variant.** A naive "no setup" test (\`withdraw on empty\`) is already covered by \`withdraw_depleted_no_change\`. This second \`Depleted\` test catches a different bug: a future refactor that accidentally cached the balance before mutation (so the *second* call sees the *first* call's pre-drain balance). **Multiple tests for one variant should each catch a *different* class of regression.**
 5. **\`deposit_after_drain_recovers\` is the only sequencing test.** It chains four operations (\`new\`, \`withdraw_shortfall\`, \`deposit\`, \`withdraw_shortfall\`) and asserts the final balance and outcome. The test exists because the per-operation tests verify each method in isolation, but a real liquidation event sequence is exactly this kind of multi-operation chain. **Unit tests verify methods; sequencing tests verify state-machine transitions across method boundaries.**
-6. **The negative-shortfall test has \`// Defensive\` as a marker comment**, same pattern as L8's \`deposit_negative_is_noop\`. A future maintainer who looks at this test and thinks "we never pass negatives, this is dead code" gets stopped by the one-word comment. **Marker comments are how tests defend defensive code from refactor removal.**
+6. **The negative-shortfall test has \`// Defensive\` as a marker comment**, same pattern as Lesson 8's \`deposit_negative_is_noop\`. A future maintainer who looks at this test and thinks "we never pass negatives, this is dead code" gets stopped by the one-word comment. **Marker comments are how tests defend defensive code from refactor removal.**
 
 ### Step 3: Add the 4 proptests
 
@@ -3347,8 +3347,8 @@ Then, after the unit tests, add the proptest block:
 
 Eight things to notice about these four properties:
 
-1. **\`balance_never_negative\` is *the* type invariant from L8.** This is the proptest that proves the \`balance ≥ 0\` discipline holds across arbitrary sequences. The input — a vector of \`(is_deposit, amount)\` pairs of length 0 to 20 — covers virtually every reachable state-machine trajectory in fewer than a thousand cases. **The proptest of the type invariant is the strongest possible statement that defensive coding works.**
-2. **\`deposit_is_additive\` uses bounded ranges (\`0..1_000_000\`)**, not \`i64::MIN..i64::MAX\`. Why? Because we'd otherwise need to encode saturation into the property. With the bounded range, \`a + b ≤ 2_000_000\` never approaches \`i64::MAX\`, so saturation never fires and we can use exact equality. **Bound proptest inputs to the operating range where the property is simply expressible; let unit tests cover the boundary cases.** (The \`deposit_saturates_at_max\` unit test from L8 owns the saturation boundary; proptests own the arithmetic identity.)
+1. **\`balance_never_negative\` is *the* type invariant from Lesson 8.** This is the proptest that proves the \`balance ≥ 0\` discipline holds across arbitrary sequences. The input — a vector of \`(is_deposit, amount)\` pairs of length 0 to 20 — covers virtually every reachable state-machine trajectory in fewer than a thousand cases. **The proptest of the type invariant is the strongest possible statement that defensive coding works.**
+2. **\`deposit_is_additive\` uses bounded ranges (\`0..1_000_000\`)**, not \`i64::MIN..i64::MAX\`. Why? Because we'd otherwise need to encode saturation into the property. With the bounded range, \`a + b ≤ 2_000_000\` never approaches \`i64::MAX\`, so saturation never fires and we can use exact equality. **Bound proptest inputs to the operating range where the property is simply expressible; let unit tests cover the boundary cases.** (The \`deposit_saturates_at_max\` unit test from Lesson 8 owns the saturation boundary; proptests own the arithmetic identity.)
 3. **\`withdraw_amount_matches_balance_delta\` uses one of Rust's most powerful pattern-matching features — the or-pattern: \`Covered { amount } | PartiallyDrained { amount, .. }\`.** Distinct variants can share a single bind site as long as they expose the same field name and type (\`amount: i64\` here); Rust 1.53+ strengthened this to support nested or-patterns too. Both variants carry an \`amount\` field; the property is the same for both ("delta equals the reported \`amount\`"). The \`..\` skips the \`unfilled\` field on \`PartiallyDrained\` that we don't need. **Or-patterns flatten conditional logic when distinct variants share a payload field.**
 4. **The proptest doesn't try to predict *which* variant fires.** Given \`initial=300, shortfall=500\`, the test doesn't compute "this should be \`PartiallyDrained\`"; it lets the method decide and then asserts the property. **Proptests assert properties, not paths.** A test that re-implements the method under test to predict its output isn't testing — it's a mirror.
 5. **\`withdraw_amount_plus_unfilled_equals_shortfall\` has \`shortfall in 1..1_000_000\`** (positive only). The boundary at zero is \`Covered { amount: 0 }\` and falls into the conservation as \`0 + 0 = 0\`, but the property is most informative when there's actually a shortfall to conserve. Restricting the range puts the test on the meaningful regime. **Restrict input ranges to where the property *says* something.**
@@ -3394,7 +3394,7 @@ test insurance::tests::withdraw_zero_is_covered_noop ... ok
 test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**45 tests passing. The insurance fund module is byte-for-byte against \`260883b\`.** Stage 10b's stateful core is complete; only the close-outcome decomposition (\`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`) remains for L10.
+**45 tests passing. The insurance fund module is byte-for-byte against \`260883b\`.** Stage 10b's stateful core is complete; only the close-outcome decomposition (\`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`) remains for Lesson 10.
 
 Common errors:
 
@@ -3411,7 +3411,7 @@ Three load-bearing decisions in this lesson:
 
 2. **The four-case early-return ladder.** Cases are checked in order of "is this trivially the answer?": negative shortfall (defensive), empty fund (no work possible), sufficient balance (happy path), partial drain (fallthrough). The ordering matters operationally: it's the *cost-ordered* sequence — cheapest check first, structural mutation last. **State-machine methods should evaluate guards in order of cost.**
 
-3. **The proptest suite encodes invariants the type system can't.** \`balance_never_negative\` is the proptest of the L8 type invariant. \`withdraw_amount_plus_unfilled_equals_shortfall\` is the conservation law for the cascade math. \`deposit_is_additive\` proves the abelian-group structure of deposits. \`withdraw_amount_matches_balance_delta\` ties the variant payload to the observable state change. **Together, these four properties make every public method's contract a thing the test suite can *prove*, not just *probe*.**
+3. **The proptest suite encodes invariants the type system can't.** \`balance_never_negative\` is the proptest of the Lesson 8 type invariant. \`withdraw_amount_plus_unfilled_equals_shortfall\` is the conservation law for the cascade math. \`deposit_is_additive\` proves the abelian-group structure of deposits. \`withdraw_amount_matches_balance_delta\` ties the variant payload to the observable state change. **Together, these four properties make every public method's contract a thing the test suite can *prove*, not just *probe*.**
 
 ## Answer key
 
@@ -3421,11 +3421,11 @@ git checkout 260883b
 diff -u ~/code/my-openhl/crates/liquidation/src/insurance.rs ./crates/liquidation/src/insurance.rs
 \`\`\`
 
-After L9:
+After Lesson 9:
 - **insurance.rs** matches Stage 10b's \`insurance.rs\` **byte-for-byte**. The full state machine — struct, enum, three constructors, accessor, deposit, withdraw_shortfall, Default impl, 12 unit tests, 4 proptests — is in the file.
-- **lib.rs** was already byte-for-byte after L8.
+- **lib.rs** was already byte-for-byte after Lesson 8.
 
-If you also re-ran \`lib.rs\`'s \`mod\` ordering or re-export styling differently in L8, fix it now: the answer key lists \`pub mod compute; pub mod insurance; pub mod types;\` and \`pub use insurance::{InsuranceFund, WithdrawOutcome};\` on a single line. Minor whitespace differences are harmless.
+If you also re-ran \`lib.rs\`'s \`mod\` ordering or re-export styling differently in Lesson 8, fix it now: the answer key lists \`pub mod compute; pub mod insurance; pub mod types;\` and \`pub use insurance::{InsuranceFund, WithdrawOutcome};\` on a single line. Minor whitespace differences are harmless.
 
 ## Common questions
 
@@ -3439,7 +3439,7 @@ They're identical in \`Covered\`'s eligibility window (\`shortfall ≤ balance\`
 
 **Q3: Why is the proptest input range \`0..1_000_000\` instead of \`i64::MIN..i64::MAX\`?**
 
-For two reasons. (1) The interesting properties hold in the *operating* range; the boundary saturation cases are unit-tested separately (L8's \`deposit_saturates_at_max\`). (2) Wider ranges would force the properties to encode saturation logic in their assertions, making them harder to read. **Proptest ranges should match the regime where the property is simply expressible — boundary cases belong to unit tests.**
+For two reasons. (1) The interesting properties hold in the *operating* range; the boundary saturation cases are unit-tested separately (Lesson 8's \`deposit_saturates_at_max\`). (2) Wider ranges would force the properties to encode saturation logic in their assertions, making them harder to read. **Proptest ranges should match the regime where the property is simply expressible — boundary cases belong to unit tests.**
 
 **Q4: Why no proptest for "if balance > 0, the next withdraw never returns Depleted"?**
 
@@ -3453,11 +3453,11 @@ You could write it that way, but it conflates *categories of success* with *fail
 
 Two reasons. (1) 20 operations is enough to exercise every reachable transition in the state machine multiple times; longer sequences don't increase coverage. (2) Proptest's shrinker can shrink a 20-op failure case down to the minimal subsequence in a reasonable time; shrinking a 100-op failure can take seconds and produce a less-readable counterexample. **Pick proptest sizes for shrinkage cost, not for "more is better."**
 
-## Next lesson (L10) — \`liquidation_fee\` + close-outcome decomposition
+## Next lesson (Lesson 10) — \`liquidation_fee\` + close-outcome decomposition
 
-L10 returns to \`compute.rs\` and adds the three Stage 10b pure-compute functions that bridge \`compute\` and \`insurance\`: \`liquidation_fee(notional, params)\`, \`solvent_close_outcome(snapshot, mark, params)\`, and \`underwater_close_outcome(snapshot, mark, params)\`. Together they decompose every liquidation event into a \`(fund credit, residual to trader)\` or \`(fund debit, partial fee captured)\` tuple — exactly the shape the Stage 10c scanner needs to call \`InsuranceFund::deposit\` / \`InsuranceFund::withdraw_shortfall\` per close.
+Lesson 10 returns to \`compute.rs\` and adds the three Stage 10b pure-compute functions that bridge \`compute\` and \`insurance\`: \`liquidation_fee(notional, params)\`, \`solvent_close_outcome(snapshot, mark, params)\`, and \`underwater_close_outcome(snapshot, mark, params)\`. Together they decompose every liquidation event into a \`(fund credit, residual to trader)\` or \`(fund debit, partial fee captured)\` tuple — exactly the shape the Stage 10c scanner needs to call \`InsuranceFund::deposit\` / \`InsuranceFund::withdraw_shortfall\` per close.
 
-After L10, the \`compute\` and \`insurance\` modules talk to each other through the cascade math: pure functions produce the credit/debit numbers, the state machine accumulates them. L11 wraps this loop in the \`LiquidationScanner\` and the safety-net cascade has a runnable scanner.
+After Lesson 10, the \`compute\` and \`insurance\` modules talk to each other through the cascade math: pure functions produce the credit/debit numbers, the state machine accumulates them. Lesson 11 wraps this loop in the \`LiquidationScanner\` and the safety-net cascade has a runnable scanner.
 `,
                 },
                 {
@@ -3484,7 +3484,7 @@ Verification:
 cargo test -p openhl-liquidation
 \`\`\`
 
-…passes 55 tests (34 compute + 21 insurance). The full Stage 10b crate is byte-for-byte against \`260883b\` after L10.
+…passes 55 tests (34 compute + 21 insurance). The full Stage 10b crate is byte-for-byte against \`260883b\` after Lesson 10.
 
 Specific changes:
 
@@ -3492,17 +3492,17 @@ Specific changes:
 - **\`src/compute.rs\`** — adds \`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`, plus 10 new unit tests (4 fee + 3 solvent + 3 underwater).
 - **\`src/lib.rs\`** — extends the compute re-export to include the three new functions; extends the types re-export to include \`SolventClose\` + \`UnderwaterClose\`.
 
-L10 closes Stage 10b. After this lesson the answer-key diff against \`260883b\` is fully clean across all three liquidation crate files.
+Lesson 10 closes Stage 10b. After this lesson the answer-key diff against \`260883b\` is fully clean across all three liquidation crate files.
 
 ## Recap
 
-After L9:
+After Lesson 9:
 - \`insurance.rs\` is byte-for-byte against \`260883b\` — the \`InsuranceFund\` state machine + \`WithdrawOutcome\` enum + all 12 unit tests + 4 proptests are in place.
 - \`lib.rs\` re-exports \`InsuranceFund\` and \`WithdrawOutcome\`.
 - \`cargo test\` runs 45 tests, all green.
 - The fund *can* receive deposits and surface drains, but **nothing yet computes how much to deposit or drain on a given close.**
 
-L10 closes that gap. The three new compute functions are the numeric source-of-truth that Stage 10c's scanner will feed into the state machine.
+Lesson 10 closes that gap. The three new compute functions are the numeric source-of-truth that Stage 10c's scanner will feed into the state machine.
 
 ## Plan
 
@@ -3518,9 +3518,9 @@ Four edits:
 
 > 🛑 **Predict.** Before reading further: a trader holds 1 BTC long, entry $100k, $10k collateral. The position is force-closed at $80,500 (a $19,500 loss). The Hyperliquid-default \`liquidation_fee_bps\` is 150 (1.5%). Question: **does the insurance fund credit or debit on this close, and by how much?**
 
-(Answer: **The fund debits — it must absorb a $10,707 shortfall.** Walk through: notional at close is $80,500. Fee = $80,500 × 150 / 10,000 = $1,207.50, rounded to $1,207 (integer math). The trader's realized PnL is −$19,500, so post-close equity = $10,000 collateral + (−$19,500 PnL) = −$9,500 — already underwater *before* the fee. No fee is collected (you can't bill a negative balance), and the fund must cover both the desired fee *and* the negative equity: $1,207 + $9,500 = $10,707. This is the \`underwater_close_outcome\` "already underwater" sub-case, and it's identical to the scenario from the Perp Primer L3 lesson — the same numbers reappear in code form here.)
+(Answer: **The fund debits — it must absorb a $10,707 shortfall.** Walk through: notional at close is $80,500. Fee = $80,500 × 150 / 10,000 = $1,207.50, rounded to $1,207 (integer math). The trader's realized PnL is −$19,500, so post-close equity = $10,000 collateral + (−$19,500 PnL) = −$9,500 — already underwater *before* the fee. No fee is collected (you can't bill a negative balance), and the fund must cover both the desired fee *and* the negative equity: $1,207 + $9,500 = $10,707. This is the \`underwater_close_outcome\` "already underwater" sub-case, and it's identical to the scenario from the Perp Primer Lesson 3 lesson — the same numbers reappear in code form here.)
 
-The decomposition picture for L10:
+The decomposition picture for Lesson 10:
 
 \`\`\`
    ┌────────────────────────────────────────────────────────────┐
@@ -3555,7 +3555,7 @@ The decomposition picture for L10:
    │  Stage 10c scanner uses:                                   │
    │    fund.deposit(fee_to_fund)            ← may be 0          │
    │    fund.withdraw_shortfall(shortfall_to_fund)               │
-   │      ↑ returns WithdrawOutcome (L9)                         │
+   │      ↑ returns WithdrawOutcome (Lesson 9)                         │
    │      ↑ Depleted/PartiallyDrained variants escalate to ADL   │
    │                                                            │
    └────────────────────────────────────────────────────────────┘
@@ -3619,7 +3619,7 @@ pub struct UnderwaterClose {
 
 Four things to notice about these types:
 
-1. **Both fields in both structs are \`i64\`, not \`u64\`** — same type-uniformity reasoning as L8's \`InsuranceFund::balance\`. The whole crate computes in \`i64\`; the structs document non-negativity in their doc comments instead. **Type uniformity inside a crate compounds over time; per-field unsignedness is local convenience that costs casts at every boundary.**
+1. **Both fields in both structs are \`i64\`, not \`u64\`** — same type-uniformity reasoning as Lesson 8's \`InsuranceFund::balance\`. The whole crate computes in \`i64\`; the structs document non-negativity in their doc comments instead. **Type uniformity inside a crate compounds over time; per-field unsignedness is local convenience that costs casts at every boundary.**
 2. **Same derive set on both: \`Clone + Copy + Debug + PartialEq + Eq\`** — same set as \`WithdrawOutcome\` and \`InsuranceFund\`. These are 16-byte POD types; values are cheaper than references. **Pure-value types in this crate use one consistent derive list. Predictability is its own virtue.**
 3. **Doc comments name the *destination* of each field, not the *source*.** \`fee_to_fund\` says where it goes (insurance fund), not where it came from (trader's collateral). \`shortfall_to_fund\` says where it goes (paid *to* the close from the fund), not the negative-equity arithmetic that produced it. **Name fields by what the caller does with them, not by how the producer computed them.**
 4. **\`UnderwaterClose\` carries \`shortfall_to_fund\` even though \`fee_to_fund\` is sometimes zero.** The field is always present in the struct regardless of which sub-case fired. The caller pattern-matches on the *value* (\`if shortfall_to_fund > 0 { fund.withdraw_shortfall(...) }\`), not on the struct shape. **Total field presence > sub-case-specific shape; the caller does one match against zero.**
@@ -3779,14 +3779,14 @@ Seven things to notice:
 
 ### Step 5: Add the 10 unit tests to compute.rs
 
-Inside the existing \`#[cfg(test)] mod tests\` block, add three test sections after the existing L7 close-order-spec tests:
+Inside the existing \`#[cfg(test)] mod tests\` block, add three test sections after the existing Lesson 7 close-order-spec tests:
 
 \`\`\`rust
     // ─── Stage 10b: liquidation_fee ────────────────────────────────
 
     #[test]
     fn fee_basic() {
-        // 1.5% of $80,400 = $1,206 — matches the Perp Primer L3 example.
+        // 1.5% of $80,400 = $1,206 — matches the Perp Primer Lesson 3 example.
         let params = LiquidationParams::hyperliquid_default();
         assert_eq!(liquidation_fee(80_400, &params), 1_206);
     }
@@ -3871,7 +3871,7 @@ Inside the existing \`#[cfg(test)] mod tests\` block, add three test sections af
 
     #[test]
     fn underwater_close_already_underwater_pre_fee() {
-        // Perp Primer L3 scenario: 1 BTC long, entry $100k, $10k collateral,
+        // Perp Primer Lesson 3 scenario: 1 BTC long, entry $100k, $10k collateral,
         // close at $80,500. Realized PnL = −$19,500, post_close_equity = −$9,500.
         // Notional = $80,500; fee = 1_207 (80_500 × 150 / 10_000)
         // shortfall = fee − post_close_equity = 1_207 − (−9_500) = $10,707
@@ -3913,17 +3913,17 @@ Inside the existing \`#[cfg(test)] mod tests\` block, add three test sections af
 
 Seven things to notice about the test design:
 
-1. **Section dividers match the function names** — \`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`. Same grep-friendly grouping discipline as L9. **Group tests by the function they exercise; let the file structure document the API.**
-2. **\`fee_basic\` uses Perp Primer L3 numbers.** $80,400 × 1.5% = $1,206 is the same calculation the Perp Primer L3 lesson walked through conceptually. Seeing the same numbers in concrete code is **curriculum-to-implementation reinforcement** — the reader who came in through the Primer feels the abstraction landing on real arithmetic.
+1. **Section dividers match the function names** — \`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`. Same grep-friendly grouping discipline as Lesson 9. **Group tests by the function they exercise; let the file structure document the API.**
+2. **\`fee_basic\` uses Perp Primer Lesson 3 numbers.** $80,400 × 1.5% = $1,206 is the same calculation the Perp Primer Lesson 3 lesson walked through conceptually. Seeing the same numbers in concrete code is **curriculum-to-implementation reinforcement** — the reader who came in through the Primer feels the abstraction landing on real arithmetic.
 3. **\`fee_zero_bps\` constructs \`LiquidationParams\` inline** instead of using the \`hyperliquid_default()\`. Why? Because the default has \`liquidation_fee_bps = 150\`, and the test needs \`bps = 0\`. **When a parameter under test diverges from the default, construct the params inline rather than mutating the default.** It makes the test's intent visible at the top.
 4. **\`fee_saturates_on_pathological_input\` uses both \`u64::MAX\` and \`u32::MAX\`.** That's the only test that exercises the i128 saturation path. The math: \`u64::MAX × u32::MAX ≈ 2^96\`, which fits in i128 but would catastrophically overflow \`i64\`. The saturating-mul caps at \`i128::MAX\`, then the final saturate-to-i64 yields \`i64::MAX\`. **The pathological input test is the *only* place this code path runs; without it, the saturation is dead-code-equivalent.**
 5. **\`solvent_close_short_profit\` exists as a complement to the long-loss case.** Long → loss → solvent close is the expected scenario; short → profit → solvent close ("favorable" liquidation) is the case where a trader gets *more* back than they put in. Both produce a \`SolventClose\` with the same struct shape, but the residual numbers are wildly different (3,575 vs 18,650). **Tests must cover both signs of every signed-input function.**
 6. **\`solvent_close_fee_consumes_all_residual\` has *the comment that explains the construction*.** The math to find inputs where \`post_close_equity == fee\` requires solving \`fee = notional × 150 / 10_000\`. The comment in the test walks the reader through the construction. **A test whose values look magic deserves a comment explaining why they're those values.**
-7. **\`underwater_close_already_underwater_pre_fee\` reuses the Perp Primer L3 numbers.** Same $100k entry, $10k collateral, close at $80,500, same $19,500 PnL — the conceptual scenario from the Primer now produces a \`UnderwaterClose\` with \`fee_to_fund: 0, shortfall_to_fund: 10_707\` against the answer-key code. **Curriculum reinforcement compounds across the course; reusing the Primer's numbers in L10 closes the loop.**
+7. **\`underwater_close_already_underwater_pre_fee\` reuses the Perp Primer Lesson 3 numbers.** Same $100k entry, $10k collateral, close at $80,500, same $19,500 PnL — the conceptual scenario from the Primer now produces a \`UnderwaterClose\` with \`fee_to_fund: 0, shortfall_to_fund: 10_707\` against the answer-key code. **Curriculum reinforcement compounds across the course; reusing the Primer's numbers in Lesson 10 closes the loop.**
 
 ### Step 6: Update \`src/lib.rs\`
 
-Extend the existing re-exports. Find the \`pub use compute::{ ... };\` block and extend it. Was (after L7):
+Extend the existing re-exports. Find the \`pub use compute::{ ... };\` block and extend it. Was (after Lesson 7):
 
 \`\`\`rust
 pub use compute::{
@@ -3957,7 +3957,7 @@ pub use types::{
 };
 \`\`\`
 
-Three new function names (\`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`) and two new type names (\`SolventClose\`, \`UnderwaterClose\`), all inserted alphabetically. After L10, the crate's public surface includes 9 compute functions and 8 types.
+Three new function names (\`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`) and two new type names (\`SolventClose\`, \`UnderwaterClose\`), all inserted alphabetically. After Lesson 10, the crate's public surface includes 9 compute functions and 8 types.
 
 ### Step 7: Run the tests
 
@@ -3983,7 +3983,7 @@ test compute::tests::solvent_close_typical_liquidatable ... ok
 test compute::tests::underwater_close_already_underwater_pre_fee ... ok
 test compute::tests::underwater_close_partial_fee_collection ... ok
 test compute::tests::underwater_close_zero_equity_at_fee ... ok
-... (insurance tests from L8 + L9)
+... (insurance tests from Lessons 8 + 9)
 
 test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
@@ -3994,14 +3994,14 @@ Common errors:
 
 - **\`underwater_close_already_underwater_pre_fee\` fails with \`shortfall_to_fund: 1_207 - 9_500\` (i.e. negative).** You wrote \`fee - post_close_equity\` with a plain \`i64 - i64\`, which works arithmetically, but you got the sign of the subtraction wrong: it should be \`fee.saturating_sub(post_close_equity)\` = \`1_207 - (-9_500)\` = \`+10_707\`. Re-read the doc comment on \`fee.saturating_sub(post_close_equity)\`: the trick is that subtracting a negative adds the magnitude.
 - **\`underwater_close_partial_fee_collection\` fails with \`fee_to_fund: 0, shortfall_to_fund: 1_357\`** — you wrote the \`if\` branch as \`>=\` instead of \`>\`. With \`>=\`, equity = 0 routes into the partial-fee branch (still produces correct math: \`fee_to_fund = 0, shortfall = fee - 0 = fee\`), but with the wrong intent. The doc says "positive but insufficient" — strictly positive.
-- **\`solvent_close_typical_liquidatable\` panics with the debug-assert message.** Your \`account_equity\` or \`notional_value\` from L4/L5 is returning a wrong sign. The expected \`post_close_equity\` is +$5,000; if you're getting something else, walk through the Stage 10a math and fix the upstream function first.
+- **\`solvent_close_typical_liquidatable\` panics with the debug-assert message.** Your \`account_equity\` or \`notional_value\` from Lessons 4 / 5 is returning a wrong sign. The expected \`post_close_equity\` is +$5,000; if you're getting something else, walk through the Stage 10a math and fix the upstream function first.
 - **\`fee_saturates_on_pathological_input\` fails with overflow panic.** You wrote \`n * bps\` (plain \`*\`) instead of \`n.saturating_mul(bps)\`. \`i128\` overflow on multiplication still panics in debug.
 
 ## Design reflection
 
 Three load-bearing decisions in this lesson:
 
-1. **The \`(fund movement, account outcome)\` decomposition is what makes the cascade composable.** Stage 10c's scanner is fundamentally a loop: for each Liquidatable account, decide solvent vs. underwater, call the right outcome function, route the credits/debits to the fund and trader. That loop is trivial *because* L10 packaged the math into two functions with named-field outputs. **A clean decomposition between math and state lets the state-machine layer stay dumb.**
+1. **The \`(fund movement, account outcome)\` decomposition is what makes the cascade composable.** Stage 10c's scanner is fundamentally a loop: for each Liquidatable account, decide solvent vs. underwater, call the right outcome function, route the credits/debits to the fund and trader. That loop is trivial *because* Lesson 10 packaged the math into two functions with named-field outputs. **A clean decomposition between math and state lets the state-machine layer stay dumb.**
 
 2. **\`debug_assert!\` is the contract; \`saturating_sub\` is the seatbelt.** The assertion documents the precondition and catches caller bugs in development. The saturation catches the same bug in production (where assertions compile out) and clamps it to a sane value. **Neither is sufficient alone** — and that's the whole point of the pairing: \`debug_assert!\` alone would, in release, let an upstream bug (a bad oracle, a corrupted snapshot) underflow into a silent wrap; \`saturating_sub\` alone would silently absorb a *routing* bug (the caller invoked the wrong function entirely), masking the symptom and leaving the cause un-debugged. Two layers, two failure modes: **dev-time assertions explode where the bug lives so it gets fixed; prod-time saturation guarantees the chain doesn't fork if a bug slips through to mainnet anyway.** **Defensive coding in pure compute uses dev-time assertions + prod-time saturation as a pair.**
 
@@ -4017,11 +4017,11 @@ diff -u ~/code/my-openhl/crates/liquidation/src/types.rs ./crates/liquidation/sr
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-After L10:
+After Lesson 10:
 - **compute.rs** matches Stage 10b's \`compute.rs\` **byte-for-byte**.
 - **types.rs** matches Stage 10b's \`types.rs\` **byte-for-byte**.
 - **lib.rs** matches Stage 10b's \`lib.rs\` **byte-for-byte**.
-- **insurance.rs** has been byte-for-byte since L9.
+- **insurance.rs** has been byte-for-byte since Lesson 9.
 
 **Stage 10b is complete.** The whole \`openhl-liquidation\` crate at commit \`260883b\` is in your workspace. Module 3 (insurance fund) of the rethlab Liquidation course wraps here.
 
@@ -4033,7 +4033,7 @@ Consensus determinism requires every validator to compute the same number, and R
 
 **Q2: Should \`solvent_close_outcome\` and \`underwater_close_outcome\` be methods on \`AccountSnapshot\`?**
 
-Same answer as L7's Q3 for \`close_order_spec\`: they live in \`compute.rs\` alongside the other margin math functions because that's the architectural home. \`AccountSnapshot\` is a data carrier (in \`types.rs\`); compute lives in \`compute.rs\`. **Co-locate by concept, not by receiver.**
+Same answer as Lesson 7's Q3 for \`close_order_spec\`: they live in \`compute.rs\` alongside the other margin math functions because that's the architectural home. \`AccountSnapshot\` is a data carrier (in \`types.rs\`); compute lives in \`compute.rs\`. **Co-locate by concept, not by receiver.**
 
 **Q3: Why does \`underwater_close_outcome\` not return zero \`shortfall_to_fund\` for the trivially-not-underwater boundary case (equity exactly equal to fee)?**
 
@@ -4051,11 +4051,11 @@ You could, but it conflates two questions: "did the function complete?" and "did
 
 The semantics are *the same*: both fields say "this much of the close's fee flowed to the insurance fund." In \`SolventClose\`, that's the full fee (collected from positive collateral residual). In \`UnderwaterClose\`, that's a partial fee (collected from positive-but-insufficient equity) or zero (collected from negative equity). The *amount* differs; the *destination* doesn't. **Name fields by destination, not by the math that produced them.**
 
-## Next lesson (L11) — \`LiquidationScanner\` introduction (Stage 10c)
+## Next lesson (Lesson 11) — \`LiquidationScanner\` introduction (Stage 10c)
 
-L11 begins Stage 10c — the multi-account scanner. The scanner is the state-machine consumer of everything L4–L10 produced. It takes a slice of \`&[AccountSnapshot]\`, classifies each one (Liquidatable, Underwater, Safe, At-Risk) using \`margin_health\` from L6, calls either \`solvent_close_outcome\` or \`underwater_close_outcome\` per Liquidatable account, threads the credits/debits into an owned \`InsuranceFund\`, and returns a \`ScanReport\` summarizing the batch: which accounts were closed, which ADL trigger amounts surfaced, and where the fund stands afterwards.
+Lesson 11 begins Stage 10c — the multi-account scanner. The scanner is the state-machine consumer of everything Lessons 4–10 produced. It takes a slice of \`&[AccountSnapshot]\`, classifies each one (Liquidatable, Underwater, Safe, At-Risk) using \`margin_health\` from Lesson 6, calls either \`solvent_close_outcome\` or \`underwater_close_outcome\` per Liquidatable account, threads the credits/debits into an owned \`InsuranceFund\`, and returns a \`ScanReport\` summarizing the batch: which accounts were closed, which ADL trigger amounts surfaced, and where the fund stands afterwards.
 
-After L11, the cascade has its first *runnable* layer: not just math + state, but math + state + orchestration loop. The SHA pin advances from \`260883b\` to \`0a8464e\` (Stage 10c).
+After Lesson 11, the cascade has its first *runnable* layer: not just math + state, but math + state + orchestration loop. The SHA pin advances from \`260883b\` to \`0a8464e\` (Stage 10c).
 `,
                 },
               ],
@@ -4080,7 +4080,7 @@ After L11, the cascade has its first *runnable* layer: not just math + state, bu
 Concepts you'll grasp in this lesson:
 
 - **The orchestration layer has its own type vocabulary, distinct from compute or insurance.** Stage 10a produced \`MarginHealth\` (per-account classification). Stage 10b produced \`SolventClose\` / \`UnderwaterClose\` (per-close decomposition) and \`WithdrawOutcome\` (per-fund-call outcome). Stage 10c introduces *batch-level* types: \`CloseOutcomeKind\` (which kind of close this account had), \`LiquidationRecord\` (one row per liquidated account), and \`ScanReport\` (everything that happened in one scan). **Each architectural layer needs its own type vocabulary because each layer answers different questions.**
-- **\`CloseOutcomeKind\` is a discriminated union of \`SolventClose\` and \`UnderwaterClose\` — same shape as L9's \`WithdrawOutcome\`, different vocabulary.** Two variants, each carrying a struct produced by the corresponding Stage 10b function. The scanner pattern-matches on this enum to dispatch the post-close work (fund deposit, fund withdraw, escalation aggregation). **When a higher layer routes between two lower-layer outputs, an enum variant carrying each output is the cleanest mechanical bridge.**
+- **\`CloseOutcomeKind\` is a discriminated union of \`SolventClose\` and \`UnderwaterClose\` — same shape as Lesson 9's \`WithdrawOutcome\`, different vocabulary.** Two variants, each carrying a struct produced by the corresponding Stage 10b function. The scanner pattern-matches on this enum to dispatch the post-close work (fund deposit, fund withdraw, escalation aggregation). **When a higher layer routes between two lower-layer outputs, an enum variant carrying each output is the cleanest mechanical bridge.**
 - **\`ScanReport\` includes both per-account records AND aggregate fund-flow totals.** The records vector is the *audit trail* (one row per liquidation, in iteration order). The three aggregate \`i64\`s (\`fund_deposits\`, \`fund_withdrawals\`, \`unfilled_deficit\`) are the *telemetry summary* (sums the bridge can read without iterating the records). Pre-computing them inside the scan loop costs nothing — the bridge wanted them anyway. **Aggregate fields next to a record vector save the caller a fold; they're not redundant, they're convenient.**
 - **\`LiquidationScanner\` owns the \`InsuranceFund\` directly, not via \`Arc<Mutex<...>>\`.** The scanner is a per-bridge component, not a shared resource. The bridge holds the scanner, the scanner holds the fund, the fund holds the balance. Mutation flows down the ownership tree without lock contention. **State machines that change exactly once per block don't need synchronization primitives.**
 
@@ -4090,42 +4090,42 @@ Verification:
 cargo check -p openhl-liquidation
 \`\`\`
 
-…compiles clean. We don't add new tests in L11 — the type vocabulary doesn't have behavior to test yet. L12 adds the \`scan\` method and its 4 simplest tests; L13 adds the nuanced cases + 4 proptests. After L13, 68 tests total.
+…compiles clean. We don't add new tests in Lesson 11 — the type vocabulary doesn't have behavior to test yet. Lesson 12 adds the \`scan\` method and its 4 simplest tests; Lesson 13 adds the nuanced cases + 4 proptests. After Lesson 13, 68 tests total.
 
 Specific changes:
 
 - **\`src/scanner.rs\`** — new module file. Adds the module-level doc, \`CloseOutcomeKind\` enum, \`LiquidationRecord\` struct, \`ScanReport\` struct, \`LiquidationScanner\` struct, plus 5 accessor methods (\`new\`, \`with_empty_fund\`, \`fund_balance\`, \`fund\`, \`into_fund\`). No \`scan\` method yet.
 - **\`src/lib.rs\`** — adds \`pub mod scanner;\` and re-exports the four scanner types.
 
-L11 stages the type vocabulary; L12 implements \`scan\`.
+Lesson 11 stages the type vocabulary; Lesson 12 implements \`scan\`.
 
 ## Recap
 
-After L10:
+After Lesson 10:
 - \`compute.rs\`, \`insurance.rs\`, \`types.rs\`, \`lib.rs\` all match Stage 10b's \`260883b\` byte-for-byte.
 - \`cargo test\` runs 55 tests, all green.
 - We have *all the parts* for a multi-account orchestration loop: margin classification (\`margin_health\`), close-order generation (\`close_order_spec\`), fee math (\`liquidation_fee\`), close-outcome decomposition (\`solvent_close_outcome\` / \`underwater_close_outcome\`), and the insurance fund state machine (\`InsuranceFund::deposit\` / \`::withdraw_shortfall\`).
 - The bridge would have to hand-wire those parts itself for every block.
 
-Stage 10c assembles them once, in a reusable component the bridge owns. The orchestration loop is \`scan\` (L12); the contract — what \`scan\` takes and returns — is L11.
+Stage 10c assembles them once, in a reusable component the bridge owns. The orchestration loop is \`scan\` (Lesson 12); the contract — what \`scan\` takes and returns — is Lesson 11.
 
 ## Plan
 
 Three edits:
 
-1. **Create \`crates/liquidation/src/scanner.rs\`** — new module file with \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`, and the 5 accessor methods. No \`scan\` method (lands in L12).
+1. **Create \`crates/liquidation/src/scanner.rs\`** — new module file with \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`, and the 5 accessor methods. No \`scan\` method (lands in Lesson 12).
 2. **Add \`pub mod scanner;\`** and the re-exports to \`crates/liquidation/src/lib.rs\`. The four types become part of the crate's public surface.
 3. **Update \`lib.rs\`'s top-of-file roadmap** to mark Stage 10c in progress.
 
-> 🛑 **Predict.** Before reading further: the scanner's \`scan\` method (L12 territory) will produce a \`ScanReport\` per block. What fields belong in the report? List as many as you can. Then: what fields belong in the *per-account record* inside the report?
+> 🛑 **Predict.** Before reading further: the scanner's \`scan\` method (Lesson 12 territory) will produce a \`ScanReport\` per block. What fields belong in the report? List as many as you can. Then: what fields belong in the *per-account record* inside the report?
 
 (Answer: **Scan report:** (a) one record per liquidated account, (b) aggregate fees deposited to fund, (c) aggregate amount the fund actually paid out, (d) aggregate unfilled deficit the fund couldn't cover. **Per-account record:** (a) the account ID, (b) the close-order spec the bridge will submit, (c) the pre-close classification (for traceability), (d) the post-close outcome decomposition (solvent or underwater). The scanner gives the bridge two views of the same data: per-account records for the CLOB submit step, and aggregate totals for telemetry / ADL escalation in one O(1) read.)
 
-The type layering picture for L11:
+The type layering picture for Lesson 11:
 
 \`\`\`
    ┌────────────────────────────────────────────────────────────┐
-   │  L11 — orchestration layer types                            │
+   │  Lesson 11 — orchestration layer types                            │
    ├────────────────────────────────────────────────────────────┤
    │                                                            │
    │  Per-account, post-classification:                         │
@@ -4160,7 +4160,7 @@ The type layering picture for L11:
 
 Three things to notice about the layering:
 
-1. **\`CloseOutcomeKind\` is the *only* new enum in Stage 10c.** Everything else is a struct. Why? Because the routing decision (solvent vs. underwater) was already made by \`compute\`'s \`debug_assert!\` pair (L10); the enum exists to *carry* the decision through the scan loop, not to *re-make* it. **Enums encode irreducible dispatch; struct fields encode parallel data.**
+1. **\`CloseOutcomeKind\` is the *only* new enum in Stage 10c.** Everything else is a struct. Why? Because the routing decision (solvent vs. underwater) was already made by \`compute\`'s \`debug_assert!\` pair (Lesson 10); the enum exists to *carry* the decision through the scan loop, not to *re-make* it. **Enums encode irreducible dispatch; struct fields encode parallel data.**
 2. **\`LiquidationRecord\` carries \`classification\` (the pre-close \`MarginHealth\`) even though the bridge can derive it.** The bridge submitting the close order doesn't actually need it; what needs it is the *telemetry consumer* — a dashboard that wants to chart "how many Liquidatable vs Underwater closes per hour." Keeping it in the record makes the audit trail self-contained. **Record fields are for downstream consumers, not just the immediate caller.**
 3. **\`ScanReport\`'s three aggregate \`i64\` fields are computed by the scanner during the loop, not by a separate fold.** Adding them to the scan loop costs three \`saturating_add\` calls per record — effectively free, since the scanner already touches each record once. **Pre-computing aggregates inside a single-pass loop is free; computing them in a second pass is wasteful.**
 
@@ -4216,7 +4216,7 @@ Five things to notice about this preamble:
 1. **It defines *who calls what* in the first sentence.** "The bridge owns a \`LiquidationScanner\`, calls \`LiquidationScanner::scan\` once per block, and consumes the returned \`ScanReport\`." A reader who reads only the first sentence already knows the ownership and call-pattern. **For orchestration modules, the first sentence of the module doc is the call-pattern.**
 2. **The \`Determinism\` section names *who is responsible for what*.** The scanner is deterministic *given a deterministic ordering of accounts*; the *bridge* is responsible for the ordering. Splitting the determinism contract this way is honest: the scanner can't enforce something it doesn't own. **A module that depends on a caller-provided invariant should name the invariant and credit the caller for upholding it.**
 3. **The \`Fairness when the fund is partially drained\` section names the v0 policy AND its successors.** First-come-first-served is the simplest deterministic choice; pro-rata draw and leverage-priority are future designs. Naming both makes the policy *replaceable* without the public-type shape changing. **When picking a policy, name the alternatives the public type leaves room for.**
-4. **The \`ADL handoff\` section explains how the scanner integrates with a stage that doesn't exist yet.** Stage 10d is the next stage in the openhl roadmap; L11's scanner already produces the signal Stage 10d needs (\`unfilled_deficit\`). **Forward references in docs aren't speculation — they're integration contracts that the next stage will fulfill.**
+4. **The \`ADL handoff\` section explains how the scanner integrates with a stage that doesn't exist yet.** Stage 10d is the next stage in the openhl roadmap; Lesson 11's scanner already produces the signal Stage 10d needs (\`unfilled_deficit\`). **Forward references in docs aren't speculation — they're integration contracts that the next stage will fulfill.**
 5. **The escalation alternatives ("panic vs log and continue")** explicitly name the trade-off until Stage 10d ships. The reader who deploys an early-stage chain knows their options. **Doc the operational decisions a deployer faces, not just the API.**
 
 Below the doc, add the imports the scanner uses:
@@ -4258,8 +4258,8 @@ Four things to notice:
 
 1. **The enum is a *tuple variant* enum, not a struct-variant enum.** Each variant carries one positional payload. The alternative — \`Solvent { close: SolventClose }\` — would require named-field destructuring (\`CloseOutcomeKind::Solvent { close } => ...\`). Tuple variants give you the cleaner \`CloseOutcomeKind::Solvent(close) => ...\`. **Tuple variants beat struct variants when the variant carries exactly one payload type.**
 2. **The enum is \`Copy\`** because both \`SolventClose\` and \`UnderwaterClose\` are \`Copy\` (each is two \`i64\` fields). Pass by value, pattern-match by value, no borrow management. **Composing \`Copy\` types produces a \`Copy\` enum at zero engineering cost.**
-3. **The doc comment names the *two payloads* explicitly** — full-fee solvent vs. partial-or-zero underwater. A reader who sees the enum signature without the doc would not know that \`Underwater\` includes the "zero fee, full shortfall" case (which the L10 doc made clear). The cross-reference here saves a hop. **When a higher-layer enum carries a lower-layer struct with subtle internal cases, name those cases in the higher-layer doc.**
-4. **No \`match\`-exhaustiveness helper variant.** No \`_ => unreachable!()\`-style catch-all is needed because the enum has exactly two variants and they exhaust the discriminated-dispatch space we set up in L10. **Two-variant enums are the smallest possible discriminated dispatch — nothing to catch.**
+3. **The doc comment names the *two payloads* explicitly** — full-fee solvent vs. partial-or-zero underwater. A reader who sees the enum signature without the doc would not know that \`Underwater\` includes the "zero fee, full shortfall" case (which the Lesson 10 doc made clear). The cross-reference here saves a hop. **When a higher-layer enum carries a lower-layer struct with subtle internal cases, name those cases in the higher-layer doc.**
+4. **No \`match\`-exhaustiveness helper variant.** No \`_ => unreachable!()\`-style catch-all is needed because the enum has exactly two variants and they exhaust the discriminated-dispatch space we set up in Lesson 10. **Two-variant enums are the smallest possible discriminated dispatch — nothing to catch.**
 
 ### Step 3: Add \`LiquidationRecord\`
 
@@ -4290,8 +4290,8 @@ Six things to notice:
 
 1. **Four fields, three of which are \`Copy\` types from earlier modules.** \`AccountId\` (from \`openhl-clob\`), \`CloseOrderSpec\` (Stage 10a), \`MarginHealth\` (Stage 10a), \`CloseOutcomeKind\` (this module). Composing existing types into a record is free. **A record struct that doesn't introduce new fields is purely a vocabulary widening — name it and move on.**
 2. **\`classification\` carries \`MarginHealth\`, an enum with four variants** (\`Safe\`, \`AtRisk\`, \`Liquidatable\`, \`Underwater\`). The doc says only two appear in records — the other two would never be in a \`LiquidationRecord\` because the scanner skips them. The type *allows* four values; the contract narrows to two. **A type can carry more cases than the API actually produces; document the contract narrowing in the doc, not in a separate sub-enum.**
-3. **The note about \`Liquidatable\`-classified → \`Underwater\`-outcome is the key teaching point.** A reader who reads only the field name would assume \`classification == outcome\` always — but the *classification* uses pre-close equity, while the *outcome* uses post-close equity (which the fee reduces). Stage 10a's \`margin_health\` and Stage 10b's \`solvent_close_outcome\` / \`underwater_close_outcome\` can disagree on which side of the fee-threshold an account lands. The concrete case is L10's \`underwater_close_partial_fee_collection\` test: account is \`Liquidatable\` pre-close (positive equity above the maintenance margin), but the close-plus-fee tips post-close equity below the desired fee — so the *outcome* lands in the \`Underwater\` branch even though the *classification* was \`Liquidatable\`. **Document the cases where two related fields can disagree — readers will assume they always agree otherwise.**
-4. **The struct is \`Copy\`** because all four fields are \`Copy\`. Even though \`LiquidationRecord\` will be pushed into a \`Vec\` (which never requires \`Copy\`), keeping it \`Copy\` makes the per-iteration loop body in L12's \`scan\` method ergonomic — no \`.clone()\`, no borrow management. **Make record types \`Copy\` when their fields permit; the cost is zero and the ergonomics compound.**
+3. **The note about \`Liquidatable\`-classified → \`Underwater\`-outcome is the key teaching point.** A reader who reads only the field name would assume \`classification == outcome\` always — but the *classification* uses pre-close equity, while the *outcome* uses post-close equity (which the fee reduces). Stage 10a's \`margin_health\` and Stage 10b's \`solvent_close_outcome\` / \`underwater_close_outcome\` can disagree on which side of the fee-threshold an account lands. The concrete case is Lesson 10's \`underwater_close_partial_fee_collection\` test: account is \`Liquidatable\` pre-close (positive equity above the maintenance margin), but the close-plus-fee tips post-close equity below the desired fee — so the *outcome* lands in the \`Underwater\` branch even though the *classification* was \`Liquidatable\`. **Document the cases where two related fields can disagree — readers will assume they always agree otherwise.**
+4. **The struct is \`Copy\`** because all four fields are \`Copy\`. Even though \`LiquidationRecord\` will be pushed into a \`Vec\` (which never requires \`Copy\`), keeping it \`Copy\` makes the per-iteration loop body in Lesson 12's \`scan\` method ergonomic — no \`.clone()\`, no borrow management. **Make record types \`Copy\` when their fields permit; the cost is zero and the ergonomics compound.**
 5. **All four fields are \`pub\`.** A \`LiquidationRecord\` is a *value type* — the bridge reads its fields directly. Hiding them behind accessors would impose \`record.account()\` instead of \`record.account\`, and gain nothing because there are no invariants to defend. **For records that exist purely to carry data, public fields beat methods.**
 6. **No \`Default\` derive.** What would a default record even mean? An empty \`AccountId\`, a zero-qty \`CloseOrderSpec\`, a \`Safe\` classification, a \`Solvent(SolventClose::default())\` outcome? Nothing about that has meaning. **Don't derive \`Default\` for records whose meaning is "something specific happened" — there's no neutral state to encode.**
 
@@ -4323,11 +4323,11 @@ pub struct ScanReport {
 Six things to notice:
 
 1. **\`ScanReport\` is \`Clone + Default\` but **NOT** \`Copy\`.** Because it contains a \`Vec\`, which is heap-allocated and can't be bitwise-copied. The compiler enforces this; you can't accidentally derive \`Copy\` on a \`Vec\`-containing struct. **The presence of a \`Vec\` is the compiler-enforced "I have a heap allocation" signal.**
-2. **\`Default\` is derived — and it's meaningful.** An empty scan (no liquidatable accounts) produces \`ScanReport { records: vec![], fund_deposits: 0, fund_withdrawals: 0, unfilled_deficit: 0 }\`. That's exactly what \`Default::default()\` gives, and it's exactly what L12's \`scan\` method initializes with. **\`Default\` is meaningful when the default value represents a real domain state — here, "scan returned nothing."**
+2. **\`Default\` is derived — and it's meaningful.** An empty scan (no liquidatable accounts) produces \`ScanReport { records: vec![], fund_deposits: 0, fund_withdrawals: 0, unfilled_deficit: 0 }\`. That's exactly what \`Default::default()\` gives, and it's exactly what Lesson 12's \`scan\` method initializes with. **\`Default\` is meaningful when the default value represents a real domain state — here, "scan returned nothing."**
 3. **Three \`i64\` aggregates next to the \`Vec\`** — \`fund_deposits\`, \`fund_withdrawals\`, \`unfilled_deficit\`. The alternative — computing them via \`report.records.iter().map(|r| r.outcome.fee()).sum()\` — would require iterating the records every time the bridge reads them. Pre-computing inside the scan loop is O(1) extra work per record and saves the bridge an O(n) fold. **Aggregate fields next to a record vector save the caller a fold; they're not redundant.**
 4. **\`fund_withdrawals\` is the sum of \`amount\`, not of \`shortfall\`.** Read it twice. The bridge wants to know "how much did the fund actually pay out?", not "how much was requested." The two differ when the fund is partially drained (\`amount < shortfall\`). The field name reflects what was *paid out*, not what was *asked for*. **Aggregate fields measure what *happened*, not what was *requested*.**
 5. **\`unfilled_deficit\` is the sum across two \`WithdrawOutcome\` variants.** Specifically \`PartiallyDrained.unfilled\` AND \`Depleted.unfilled\`. The doc names both contributors. A reader who only knew \`PartiallyDrained\` would miss the \`Depleted\` case (where the fund was already empty before the call). **When an aggregate sums across enum variants, name every variant that contributes.**
-6. **\`unfilled_deficit\` is *the* signal to Stage 10d.** The doc comment names it. L11's contract is that this field exists and is computed correctly; Stage 10d's contract is that it consumes this field to drive ADL. **The handoff between two stages is an i64 field with a clear name and a documented consumer.**
+6. **\`unfilled_deficit\` is *the* signal to Stage 10d.** The doc comment names it. Lesson 11's contract is that this field exists and is computed correctly; Stage 10d's contract is that it consumes this field to drive ADL. **The handoff between two stages is an i64 field with a clear name and a documented consumer.**
 
 ### Step 5: Add \`LiquidationScanner\` struct + accessors
 
@@ -4443,19 +4443,19 @@ Expected output:
     Finished \`dev\` profile [optimized + debuginfo] target(s) in 1.2s
 \`\`\`
 
-**Clean compile.** No tests run — we don't have a \`scan\` method yet, so there's nothing testable. The 55 existing tests from L10 still pass (\`cargo test -p openhl-liquidation\` confirms), but L11 doesn't add or modify any of them.
+**Clean compile.** No tests run — we don't have a \`scan\` method yet, so there's nothing testable. The 55 existing tests from Lesson 10 still pass (\`cargo test -p openhl-liquidation\` confirms), but Lesson 11 doesn't add or modify any of them.
 
 Common errors:
 
-- **\`unresolved import \\\`openhl_clob::AccountId\\\`** — the scanner depends on \`openhl-clob\` and \`openhl-funding\` for \`AccountId\` and \`MarkPrice\`. Make sure \`crates/liquidation/Cargo.toml\` lists both in \`[dependencies]\`. The answer-key crate already has them (L0's lesson set them up).
-- **\`unused import: \\\`account_equity\\\`** — clippy / rustc may warn that some imports are unused because L11 doesn't have a \`scan\` method that uses them. **These warnings are intentional at L11** — the imports are *staged* for L12, which consumes every one of them. If you keep a zero-warnings discipline, add \`#[allow(unused_imports)]\` to the top of \`scanner.rs\` for L11 only and delete the attribute when L12 lands; otherwise just leave the warnings — they go away the moment L12's \`scan\` body compiles. The answer-key doesn't \`allow\` because it ships L11 and L12 together. **No warning at L11 indicates a real issue; every unused-import warning here is expected.**
+- **\`unresolved import \\\`openhl_clob::AccountId\\\`** — the scanner depends on \`openhl-clob\` and \`openhl-funding\` for \`AccountId\` and \`MarkPrice\`. Make sure \`crates/liquidation/Cargo.toml\` lists both in \`[dependencies]\`. The answer-key crate already has them (Lesson 0's lesson set them up).
+- **\`unused import: \\\`account_equity\\\`** — clippy / rustc may warn that some imports are unused because Lesson 11 doesn't have a \`scan\` method that uses them. **These warnings are intentional at Lesson 11** — the imports are *staged* for Lesson 12, which consumes every one of them. If you keep a zero-warnings discipline, add \`#[allow(unused_imports)]\` to the top of \`scanner.rs\` for Lesson 11 only and delete the attribute when Lesson 12 lands; otherwise just leave the warnings — they go away the moment Lesson 12's \`scan\` body compiles. The answer-key doesn't \`allow\` because it ships Lesson 11 and Lesson 12 together. **No warning at Lesson 11 indicates a real issue; every unused-import warning here is expected.**
 - **\`pub mod scanner;\` placement** — if you put it after \`pub mod types;\`, the alphabetical order breaks. The answer-key has them in alphabetical order inside \`lib.rs\`. Match that order.
 
 ## Design reflection
 
 Three load-bearing decisions in this lesson:
 
-1. **Type vocabulary before mechanism, again.** Same pattern as L8 (where \`WithdrawOutcome\` was declared in L8 but used in L9) and L10 (where \`SolventClose\` / \`UnderwaterClose\` were declared and immediately used). L11 declares the orchestration-layer types so L12's \`scan\` method has somewhere to put its return values. **A reader who lands on the file after L11 sees a complete type API surface; L12 fills in the verb.**
+1. **Type vocabulary before mechanism, again.** Same pattern as Lesson 8 (where \`WithdrawOutcome\` was declared in Lesson 8 but used in Lesson 9) and Lesson 10 (where \`SolventClose\` / \`UnderwaterClose\` were declared and immediately used). Lesson 11 declares the orchestration-layer types so Lesson 12's \`scan\` method has somewhere to put its return values. **A reader who lands on the file after Lesson 11 sees a complete type API surface; Lesson 12 fills in the verb.**
 
 2. **The scanner owns the insurance fund by value.** Not \`&'a mut\`, not \`Arc<Mutex<...>>\`, not \`Rc<RefCell<...>>\`. The ownership decision is what makes the scanner usable without lifetime gymnastics or runtime overhead. **State-machine components that have a single mutator and a clear shutdown point should own their state by value.**
 
@@ -4470,8 +4470,8 @@ diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-After L11:
-- **scanner.rs** matches Stage 10c's \`scanner.rs\` **up through the \`impl LiquidationScanner\` block** for the accessors (everything except the \`scan\` method and the tests, which land in L12 + L13). Specifically: doc + imports + \`CloseOutcomeKind\` + \`LiquidationRecord\` + \`ScanReport\` + \`LiquidationScanner\` struct + \`new\` / \`with_empty_fund\` / \`fund_balance\` / \`fund\` / \`into_fund\`.
+After Lesson 11:
+- **scanner.rs** matches Stage 10c's \`scanner.rs\` **up through the \`impl LiquidationScanner\` block** for the accessors (everything except the \`scan\` method and the tests, which land in Lessons 12 + 13). Specifically: doc + imports + \`CloseOutcomeKind\` + \`LiquidationRecord\` + \`ScanReport\` + \`LiquidationScanner\` struct + \`new\` / \`with_empty_fund\` / \`fund_balance\` / \`fund\` / \`into_fund\`.
 - **lib.rs** matches Stage 10c's \`lib.rs\` **byte-for-byte** for the \`pub mod scanner;\` line and the \`pub use scanner::{...}\` re-export.
 
 ## Common questions
@@ -4500,17 +4500,17 @@ Use \`fund()\` (returns \`&InsuranceFund\`) and call \`.balance()\` or read othe
 
 The bridge *could* re-derive it, but only if it kept the pre-close snapshots around — which it usually doesn't. The scanner already has them (it iterated through them); storing the classification in the record is O(1) extra space per record and saves the bridge from having to maintain its own snapshot history. **A record that captures a derivation made earlier saves callers from having to redo the upstream work.**
 
-## Next lesson (L12) — \`scan\` method + first 4 unit tests
+## Next lesson (Lesson 12) — \`scan\` method + first 4 unit tests
 
-L12 implements the orchestration heart — the \`scan\` method. The method takes \`&[AccountSnapshot]\` and \`MarkPrice\`, classifies every account via L6's \`margin_health\`, dispatches Liquidatable/Underwater accounts through L10's \`solvent_close_outcome\` / \`underwater_close_outcome\`, mutates the fund in place via L9's \`InsuranceFund::deposit\` and \`::withdraw_shortfall\`, and builds a \`ScanReport\` along the way.
+Lesson 12 implements the orchestration heart — the \`scan\` method. The method takes \`&[AccountSnapshot]\` and \`MarkPrice\`, classifies every account via Lesson 6's \`margin_health\`, dispatches Liquidatable/Underwater accounts through Lesson 10's \`solvent_close_outcome\` / \`underwater_close_outcome\`, mutates the fund in place via Lesson 9's \`InsuranceFund::deposit\` and \`::withdraw_shortfall\`, and builds a \`ScanReport\` along the way.
 
-L12 also adds the four simplest unit tests:
+Lesson 12 also adds the four simplest unit tests:
 - \`scan_empty_accounts_returns_empty_report\` — sanity check.
 - \`scan_all_safe_accounts_does_nothing\` — no liquidations means no records.
 - \`scan_atrisk_does_not_liquidate\` — AtRisk is a *warning*, not a trigger.
 - \`scan_skips_flat_positions\` — defensive guard for misclassified flats.
 
-After L12, the scanner is *runnable* — 59 tests pass total (34 compute + 21 insurance + 4 new scanner tests). L13 stress-tests it with 5 more nuanced unit tests and 4 conservation-law proptests, bringing the final count to 68.
+After Lesson 12, the scanner is *runnable* — 59 tests pass total (34 compute + 21 insurance + 4 new scanner tests). Lesson 13 stress-tests it with 5 more nuanced unit tests and 4 conservation-law proptests, bringing the final count to 68.
 `,
                 },
                 {
@@ -4526,10 +4526,10 @@ After L12, the scanner is *runnable* — 59 tests pass total (34 compute + 21 in
 
 Concepts you'll grasp in this lesson:
 
-- **The \`scan\` method is the *only verb* in the orchestration layer; everything else is noun.** L11 declared four types that describe state; L12 implements one method that produces state from input. The method takes \`(accounts, mark)\` and returns a \`ScanReport\` — and inside its body, every Stage 10a + 10b primitive you've built across L4–L10 is called exactly once per liquidatable account. **Composition is the architecture; one verb consumes ten nouns.**
+- **The \`scan\` method is the *only verb* in the orchestration layer; everything else is noun.** Lesson 11 declared four types that describe state; Lesson 12 implements one method that produces state from input. The method takes \`(accounts, mark)\` and returns a \`ScanReport\` — and inside its body, every Stage 10a + 10b primitive you've built across Lessons 4–10 is called exactly once per liquidatable account. **Composition is the architecture; one verb consumes ten nouns.**
 - **\`match\` on \`MarginHealth\` with a \`continue\`-guard is the cleanest "skip non-liquidatable accounts" pattern.** The alternative — \`if !matches!(c, MarginHealth::Liquidatable | MarginHealth::Underwater) { continue; }\` — is shorter but loses exhaustiveness. The \`match\` form makes the compiler enforce that *every* \`MarginHealth\` variant has been considered, which is the discipline that catches the future bug where someone adds a fifth variant. **Exhaustive \`match\` over an enum beats predicate-with-\`!\` whenever the enum might grow.**
-- **The solvent-vs-underwater dispatch inside the loop directly mirrors L10's \`debug_assert!\` pair.** \`if post_close_equity >= fee_desired\` routes to \`solvent_close_outcome\`; the \`else\` routes to \`underwater_close_outcome\`. The scanner is doing exactly the routing that L10's debug-asserts said the caller would do. **The runtime predicate in the caller is identical to the contract enforced in the callee.**
-- **The underwater branch's \`WithdrawOutcome\` pattern-match decomposes the L9 enum into a \`(paid, unfilled)\` tuple — that's the *only* place in the loop where L9's three-variant enum needs more than one line of handling.** Solvent closes never touch \`withdraw_shortfall\`; they only \`deposit\`. Underwater closes call \`withdraw_shortfall\` and pattern-match on the result. The aggregation into \`ScanReport\`'s i64 fields is a \`saturating_add\` per record. **The orchestration layer translates between L9's variants and L11's i64 aggregates in exactly one pattern-match.**
+- **The solvent-vs-underwater dispatch inside the loop directly mirrors Lesson 10's \`debug_assert!\` pair.** \`if post_close_equity >= fee_desired\` routes to \`solvent_close_outcome\`; the \`else\` routes to \`underwater_close_outcome\`. The scanner is doing exactly the routing that Lesson 10's debug-asserts said the caller would do. **The runtime predicate in the caller is identical to the contract enforced in the callee.**
+- **The underwater branch's \`WithdrawOutcome\` pattern-match decomposes the Lesson 9 enum into a \`(paid, unfilled)\` tuple — that's the *only* place in the loop where Lesson 9's three-variant enum needs more than one line of handling.** Solvent closes never touch \`withdraw_shortfall\`; they only \`deposit\`. Underwater closes call \`withdraw_shortfall\` and pattern-match on the result. The aggregation into \`ScanReport\`'s i64 fields is a \`saturating_add\` per record. **The orchestration layer translates between Lesson 9's variants and Lesson 11's i64 aggregates in exactly one pattern-match.**
 
 Verification:
 
@@ -4537,23 +4537,23 @@ Verification:
 cargo test -p openhl-liquidation
 \`\`\`
 
-…passes 59 tests (34 compute + 21 insurance + 4 new scanner tests). The next 5 unit tests and 4 proptests land in L13; after L13, 68 tests total.
+…passes 59 tests (34 compute + 21 insurance + 4 new scanner tests). The next 5 unit tests and 4 proptests land in Lesson 13; after Lesson 13, 68 tests total.
 
 Specific changes:
 
-- **\`src/scanner.rs\`** — adds the \`scan\` method to the existing \`impl LiquidationScanner\` block. The L11 imports finally have a consumer; the unused-import warnings go away. Adds the \`#[cfg(test)] mod tests\` scaffolding (helpers + \`use\` block + first section divider) and the 4 simplest unit tests.
+- **\`src/scanner.rs\`** — adds the \`scan\` method to the existing \`impl LiquidationScanner\` block. The Lesson 11 imports finally have a consumer; the unused-import warnings go away. Adds the \`#[cfg(test)] mod tests\` scaffolding (helpers + \`use\` block + first section divider) and the 4 simplest unit tests.
 
-L12 makes the scanner *runnable*. L13 stress-tests it.
+Lesson 12 makes the scanner *runnable*. Lesson 13 stress-tests it.
 
 ## Recap
 
-After L11:
+After Lesson 11:
 - \`scanner.rs\` has the type vocabulary (\`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`) and 5 accessors (\`new\`, \`with_empty_fund\`, \`fund_balance\`, \`fund\`, \`into_fund\`).
 - \`lib.rs\` re-exports all four scanner types.
-- \`cargo check\` compiles cleanly, with unused-import warnings on \`account_equity\`, \`close_order_spec\`, \`liquidation_fee\`, \`margin_health\`, \`notional_value\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`, and \`WithdrawOutcome\` — all *staged for L12*.
-- \`cargo test\` still runs L0–L10's 55 tests, all green.
+- \`cargo check\` compiles cleanly, with unused-import warnings on \`account_equity\`, \`close_order_spec\`, \`liquidation_fee\`, \`margin_health\`, \`notional_value\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`, and \`WithdrawOutcome\` — all *staged for Lesson 12*.
+- \`cargo test\` still runs Lessons 0–10's 55 tests, all green.
 
-L12 cashes in every one of those staged imports.
+Lesson 12 cashes in every one of those staged imports.
 
 ## Plan
 
@@ -4564,7 +4564,7 @@ Two edits:
 
 > 🛑 **Predict.** Before reading further: you're writing a single function that, for each account in a slice, either liquidates it (with the fund moving in some direction) or skips it. List the *six* distinct branches the function body needs — including the two skip cases (Safe/AtRisk continue, flat-position continue) and the four work cases (solvent → fund deposit; underwater positive equity → partial fee + withdraw; underwater zero equity → no fee + full withdraw; underwater negative equity → no fee + extra-large withdraw).
 
-(Answer in the body: the function has exactly two \`continue\` branches and two routing branches (solvent vs underwater), with the underwater branch unifying the three positive/zero/negative equity sub-cases under one \`underwater_close_outcome\` call — the call internally branches but presents one return type. So at the scanner level: **two skips + one solvent + one underwater = four branches**. The "six" you might have predicted collapses to four because L10's \`underwater_close_outcome\` already handled the sub-case unification. **Encapsulating sub-cases inside a callee shrinks the caller's branch count.**)
+(Answer in the body: the function has exactly two \`continue\` branches and two routing branches (solvent vs underwater), with the underwater branch unifying the three positive/zero/negative equity sub-cases under one \`underwater_close_outcome\` call — the call internally branches but presents one return type. So at the scanner level: **two skips + one solvent + one underwater = four branches**. The "six" you might have predicted collapses to four because Lesson 10's \`underwater_close_outcome\` already handled the sub-case unification. **Encapsulating sub-cases inside a callee shrinks the caller's branch count.**)
 
 The scan-method shape:
 
@@ -4616,7 +4616,7 @@ Three things to notice about the shape:
 
 1. **The outer iteration is \`for snapshot in accounts\` — a simple ordered loop.** No \`iter().filter().map().collect()\` chain. Why? Because each iteration has *side effects* (fund mutation, report mutation). Iterator chains compose well over pure transformations; for stateful per-iteration work, a plain \`for\` is more readable and easier to debug. **\`for\` loops beat iterator chains when iteration side-effects mutate state outside the closure.**
 2. **The two \`continue\` branches are at the *top* of the loop body.** They reject inputs before the function commits to any work — classification first, flat-skip second. The "happy path" code (after the skips) sits inline at the same indent level, not nested inside an \`if\`. **Top-of-loop rejection is the cleanest pattern for skip-conditions; nesting would push the work deeper than it needs to go.**
-3. **The aggregation into \`ScanReport\` fields uses \`saturating_add\` per iteration, not a final \`.iter().sum()\`.** L11's design choice (aggregate fields next to record vector) demands per-iteration accumulation. The cost is one \`saturating_add\` per scalar per record — a microsecond next to the work being done. **Single-pass accumulation matches the L11 design contract.**
+3. **The aggregation into \`ScanReport\` fields uses \`saturating_add\` per iteration, not a final \`.iter().sum()\`.** Lesson 11's design choice (aggregate fields next to record vector) demands per-iteration accumulation. The cost is one \`saturating_add\` per scalar per record — a microsecond next to the work being done. **Single-pass accumulation matches the Lesson 11 design contract.**
 
 ## Walk-through
 
@@ -4720,9 +4720,9 @@ match classification {
 
 Three things to notice:
 
-1. **The \`match\` is exhaustive — and the compiler enforces it.** L6's \`MarginHealth\` has exactly four variants; the two arms cover all four. If someone adds a fifth variant tomorrow (e.g., \`LiquidatableButOnHold\`), this \`match\` will fail to compile, and the build break tells us we need to decide which side it goes on. **The non-exhaustive alternative — \`if !matches!(c, Liquidatable | Underwater) { continue; }\` — would silently accept the new variant as a skip, hiding the design question.**
+1. **The \`match\` is exhaustive — and the compiler enforces it.** Lesson 6's \`MarginHealth\` has exactly four variants; the two arms cover all four. If someone adds a fifth variant tomorrow (e.g., \`LiquidatableButOnHold\`), this \`match\` will fail to compile, and the build break tells us we need to decide which side it goes on. **The non-exhaustive alternative — \`if !matches!(c, Liquidatable | Underwater) { continue; }\` — would silently accept the new variant as a skip, hiding the design question.**
 2. **The work-path arm is \`{} \`, not a body.** The arm exists *only* to make exhaustiveness work; the actual work happens after the \`match\`. This is the Rust idiom for "filter and fall through to the rest of the function." **Empty arms in \`match\` are how you fall through after exhaustiveness checking.**
-3. **Or-patterns (\`Safe | AtRisk\`)** unify the two skip cases under one arm. The same trick L9's proptest used (\`Covered { amount } | PartiallyDrained { amount, .. }\`) reappears here for variant grouping. **Or-patterns are the rhythm of exhaustive-match code in Rust.**
+3. **Or-patterns (\`Safe | AtRisk\`)** unify the two skip cases under one arm. The same trick Lesson 9's proptest used (\`Covered { amount } | PartiallyDrained { amount, .. }\`) reappears here for variant grouping. **Or-patterns are the rhythm of exhaustive-match code in Rust.**
 
 Before Phase 2, the rejection-ladder structure that Phase 1's \`match\` and Phase 2's flat-check form together is worth pausing on. Both guards live at the top of the loop body and *exit the iteration* if they fire; the happy path then runs at the same indent level as the guards themselves, never nested inside an \`if\`:
 
@@ -4754,7 +4754,7 @@ if snapshot.position_size.0 == 0 {
 }
 \`\`\`
 
-This is a defensive guard against a *theoretically-impossible* state: the only way for a flat position to reach this point is for \`margin_health\` to misclassify it as \`Liquidatable\` or \`Underwater\`, which L6's classification rules forbid (flat → ratio MAX → \`Safe\`). But the bridge can submit unsanitized snapshots, and L7's \`close_order_spec\` would produce a zero-qty \`CloseOrderSpec\` that the CLOB rejects. **The skip is cheap defensive coding — *protect downstream consumers from upstream bugs we can't enforce away.***
+This is a defensive guard against a *theoretically-impossible* state: the only way for a flat position to reach this point is for \`margin_health\` to misclassify it as \`Liquidatable\` or \`Underwater\`, which Lesson 6's classification rules forbid (flat → ratio MAX → \`Safe\`). But the bridge can submit unsanitized snapshots, and Lesson 7's \`close_order_spec\` would produce a zero-qty \`CloseOrderSpec\` that the CLOB rejects. **The skip is cheap defensive coding — *protect downstream consumers from upstream bugs we can't enforce away.***
 
 #### Phase 3: Generate close order (line 15)
 
@@ -4762,7 +4762,7 @@ This is a defensive guard against a *theoretically-impossible* state: the only w
 let close_order = close_order_spec(snapshot);
 \`\`\`
 
-One line. L7's pure function does all the work. **A single-line call to a Stage 10a function is what the orchestration layer's "use the primitives" look like.**
+One line. Lesson 7's pure function does all the work. **A single-line call to a Stage 10a function is what the orchestration layer's "use the primitives" look like.**
 
 #### Phase 4: Routing decision (lines 17-24)
 
@@ -4780,9 +4780,9 @@ let outcome = if post_close_equity >= fee_desired {
 
 Five things to notice:
 
-1. **The predicate is exactly the inverse of L10's \`underwater_close_outcome\` \`debug_assert!\` (\`equity < fee\`).** L10's assertion said "underwater means equity < fee"; here we use \`>=\` for solvent. The scanner's runtime check matches L10's compile-time contract. **The scanner does *no math* L10 didn't already document.**
+1. **The predicate is exactly the inverse of Lesson 10's \`underwater_close_outcome\` \`debug_assert!\` (\`equity < fee\`).** Lesson 10's assertion said "underwater means equity < fee"; here we use \`>=\` for solvent. The scanner's runtime check matches Lesson 10's compile-time contract. **The scanner does *no math* Lesson 10 didn't already document.**
 2. **Three local variables (\`notional\`, \`fee_desired\`, \`post_close_equity\`) before the predicate.** Each is named, each is one line, each is an existing function call. The reader walks down the local-variable cascade and arrives at the predicate knowing exactly what's on each side. **Locally-named intermediate values are the cheapest readability win.**
-3. **\`solvent_close_outcome\` and \`underwater_close_outcome\` are called *separately* in each branch — they're not unified into one routed call.** A unified call (\`let outcome = if is_solvent { solvent_close_outcome(...) } else { underwater_close_outcome(...) }\`) would force one of them to be called with a precondition violation in the *other* branch, triggering L10's \`debug_assert!\`. Keeping them in separate branches makes each call self-consistent with its precondition. **Separate the dispatch from the call; each callee gets its precondition met cleanly.**
+3. **\`solvent_close_outcome\` and \`underwater_close_outcome\` are called *separately* in each branch — they're not unified into one routed call.** A unified call (\`let outcome = if is_solvent { solvent_close_outcome(...) } else { underwater_close_outcome(...) }\`) would force one of them to be called with a precondition violation in the *other* branch, triggering Lesson 10's \`debug_assert!\`. Keeping them in separate branches makes each call self-consistent with its precondition. **Separate the dispatch from the call; each callee gets its precondition met cleanly.**
 4. **The local variable \`outcome\` is set inside the \`if\`/\`else\` and used after.** It's a \`let outcome = if ... { ... } else { ... };\` pattern. Rust's if-as-expression returns a value, so this is idiomatic. **\`let x = if y { a } else { b };\` is the Rust way of conditionally computing a value.**
 5. **Both branches return a \`CloseOutcomeKind\` variant.** The two variants share a parent type; the \`if\`/\`else\` types out cleanly. **An \`if\`/\`else\` returning two variants of the same enum is the safest pattern for variant-routing.**
 
@@ -4798,7 +4798,7 @@ CloseOutcomeKind::Solvent(solvent)
 Three things to notice:
 
 1. **\`fee_to_fund\` is read three times: once into \`deposit\`, once into the aggregate, once as part of the moved \`solvent\` value into \`CloseOutcomeKind::Solvent\`.** Because \`SolventClose\` is \`Copy\`, this is free — no clones, no borrows. **\`Copy\`-derived types let you spread fields across multiple writes without ownership ceremony.**
-2. **No conditional on \`fee_to_fund == 0\`.** Solvent closes always have positive \`fee_to_fund\` (per L10's contract — the precondition was \`equity >= fee\`, and fee is positive). If we wrote \`if solvent.fee_to_fund > 0 { ... }\` here, we'd be checking a condition that's guaranteed false-or-impossible. **Don't defend against conditions the type contract has already ruled out.**
+2. **No conditional on \`fee_to_fund == 0\`.** Solvent closes always have positive \`fee_to_fund\` (per Lesson 10's contract — the precondition was \`equity >= fee\`, and fee is positive). If we wrote \`if solvent.fee_to_fund > 0 { ... }\` here, we'd be checking a condition that's guaranteed false-or-impossible. **Don't defend against conditions the type contract has already ruled out.**
 3. **No call to \`withdraw_shortfall\`.** Solvent closes credit the fund and pay residual back to the trader; the fund is *never* drawn from. The bridge does the trader-balance crediting (using \`solvent.residual_to_account\`) — that's outside the scanner's scope. **The scanner only mutates the fund; the bridge handles trader balances.**
 
 #### Phase 5b: Underwater branch (8 lines)
@@ -4824,16 +4824,16 @@ CloseOutcomeKind::Underwater(underwater)
 
 Six things to notice:
 
-1. **The \`if underwater.fee_to_fund > 0\` guard exists** because L10's \`underwater_close_outcome\` *can* return \`fee_to_fund == 0\` (the "already underwater pre-fee" sub-case). \`deposit(0)\` is a no-op per L8, but the guard saves the \`saturating_add\` and the function-call overhead. **Predicates that gate "do nothing" actions are cheap correctness.**
+1. **The \`if underwater.fee_to_fund > 0\` guard exists** because Lesson 10's \`underwater_close_outcome\` *can* return \`fee_to_fund == 0\` (the "already underwater pre-fee" sub-case). \`deposit(0)\` is a no-op per Lesson 8, but the guard saves the \`saturating_add\` and the function-call overhead. **Predicates that gate "do nothing" actions are cheap correctness.**
 2. **The pattern-match on \`WithdrawOutcome\` destructures into \`(paid, unfilled)\`.** All three variants collapse to one tuple shape:
 
    - \`WithdrawOutcome::Covered { amount }\` → \`(amount, 0)\` — fund paid out the full requested shortfall; nothing escalates.
    - \`WithdrawOutcome::PartiallyDrained { amount, unfilled }\` → \`(amount, unfilled)\` — fund paid out everything it had; the remainder is recorded as protocol-level unfilled deficit.
    - \`WithdrawOutcome::Depleted { unfilled }\` → \`(0, unfilled)\` — fund was already empty; nothing paid out, full shortfall escalates.
 
-   The conservation law \`amount + unfilled = requested_shortfall\` holds in all three rows (L9's proptest proved it). L13 will lift that law from the per-call level to the per-scan level via \`report_unfilled_equals_sum_of_unfilled_shortfalls\`. **The tuple is the *normalized form* of L9's variant payloads — three different shapes collapse to one \`(i64, i64)\`, and conservation carries forward.**
+   The conservation law \`amount + unfilled = requested_shortfall\` holds in all three rows (Lesson 9's proptest proved it). Lesson 13 will lift that law from the per-call level to the per-scan level via \`report_unfilled_equals_sum_of_unfilled_shortfalls\`. **The tuple is the *normalized form* of Lesson 9's variant payloads — three different shapes collapse to one \`(i64, i64)\`, and conservation carries forward.**
 3. **The match arms use *or-pattern destructuring* indirectly.** Strictly speaking they're three separate arms, but each arm computes the same tuple shape \`(paid, unfilled)\`. The visual symmetry makes the code easy to scan. **Pattern-match arms that compute a uniform output type are visually parallel — make them line up.**
-4. **The \`paid\` and \`unfilled\` are immediately consumed by \`saturating_add\` on the report.** Both per-variant aggregations happen in two lines. The match → tuple → aggregate cascade is the standard "enum-to-scalar" pattern across the crate. **L9's \`WithdrawOutcome\` returns *information*; the scanner converts it to *numbers*.**
+4. **The \`paid\` and \`unfilled\` are immediately consumed by \`saturating_add\` on the report.** Both per-variant aggregations happen in two lines. The match → tuple → aggregate cascade is the standard "enum-to-scalar" pattern across the crate. **Lesson 9's \`WithdrawOutcome\` returns *information*; the scanner converts it to *numbers*.**
 5. **\`saturating_add\` on both \`fund_withdrawals\` and \`unfilled_deficit\`.** Even though both running totals are bounded by realistic protocol scale (~$10^15 max), saturation is the consistent discipline. **Saturating arithmetic everywhere costs nothing and consistently respects the determinism contract.**
 6. **The final line — \`CloseOutcomeKind::Underwater(underwater)\` — moves \`underwater\` into the enum.** This is the only place \`underwater\` is consumed after its fields are read; \`UnderwaterClose\` is \`Copy\`, so the move is just a value-copy. **\`Copy\` types let "read fields, then move into enum" feel like a free operation.**
 
@@ -4881,9 +4881,9 @@ mod tests {
 
 Three things to notice:
 
-1. **\`use proptest::prelude::*;\` is imported even though L12 has no proptests.** Staged for L13. Same staging discipline as L11's \`account_equity\` import. **Tests in this course are written *forward-compatibly* — L12's \`use\` block is L13's \`use\` block.**
-2. **The \`snapshot\` helper packages 4 fields into the full \`AccountSnapshot\` struct.** Mirroring L4's \`compute::tests::snapshot\` helper (same name, same return type). This keeps every test's first line readable: \`let s = snapshot(1, 1, 100_000, 50_000);\` reads as "account 1, long 1 BTC, entry $100k, $50k collateral." **Test helpers that hide irrelevant construction noise are worth their weight; here, the alternative would be 8 lines per test.**
-3. **The section divider \`// ─── empty / non-liquidatable input ───\` matches the style we established in L8/L9.** The Liquidation course's test files use box-drawing dividers consistently. **Consistent test-file structure across modules is a small but compounding readability win.**
+1. **\`use proptest::prelude::*;\` is imported even though Lesson 12 has no proptests.** Staged for Lesson 13. Same staging discipline as Lesson 11's \`account_equity\` import. **Tests in this course are written *forward-compatibly* — Lesson 12's \`use\` block is Lesson 13's \`use\` block.**
+2. **The \`snapshot\` helper packages 4 fields into the full \`AccountSnapshot\` struct.** Mirroring Lesson 4's \`compute::tests::snapshot\` helper (same name, same return type). This keeps every test's first line readable: \`let s = snapshot(1, 1, 100_000, 50_000);\` reads as "account 1, long 1 BTC, entry $100k, $50k collateral." **Test helpers that hide irrelevant construction noise are worth their weight; here, the alternative would be 8 lines per test.**
+3. **The section divider \`// ─── empty / non-liquidatable input ───\` matches the style we established in Lessons 8 / 9.** The Liquidation course's test files use box-drawing dividers consistently. **Consistent test-file structure across modules is a small but compounding readability win.**
 
 ### Step 3: Add the 4 simple unit tests
 
@@ -4939,10 +4939,10 @@ Eight things to notice about the test design:
 
 1. **\`scan_empty_accounts_returns_empty_report\` asserts *all four* \`ScanReport\` fields.** Records empty, three aggregates at 0. The four assertions catch a future bug where the \`ScanReport::default()\` initialization stops being all-zero — a regression even smaller than a logic bug. **Default-state tests assert every field of the default.**
 2. **\`scan_all_safe_accounts_does_nothing\` uses *two* accounts, not one.** Why two? Because one-account tests can mask a "loop ran for the first iteration but skipped the second" bug. Two accounts force the loop to iterate twice, both times producing nothing. **Multi-account skip tests beat single-account skip tests at catching loop-control bugs.**
-3. **The arithmetic comments in \`scan_all_safe_accounts_does_nothing\` document the expected classification.** "50% ratio = Safe" lets a reader follow the L1–L6 logic mentally without re-deriving it. **Test comments that name the classification path are how curriculum reinforcement happens here.**
+3. **The arithmetic comments in \`scan_all_safe_accounts_does_nothing\` document the expected classification.** "50% ratio = Safe" lets a reader follow the Lessons 1–6 logic mentally without re-deriving it. **Test comments that name the classification path are how curriculum reinforcement happens here.**
 4. **\`scan_atrisk_does_not_liquidate\` is the *most pedagogically important* of the four.** It establishes that \`AtRisk\` is a *warning state*, not a *trigger state*. If a future maintainer "promotes" AtRisk to trigger liquidation (by adding it to the match arm), this test fails immediately. **Tests for stable architectural boundaries are how the course's design choices survive refactoring.**
 5. **The 5% boundary in \`scan_atrisk_does_not_liquidate\` is *deliberately* close to the maintenance margin (2%) and the initial margin (10%).** A value at 1% (< maintenance) would be Liquidatable; a value at 15% (> initial) would be Safe; 5% is the *middle* — both sides of the AtRisk boundary feel testable from here. **Boundary tests pick values that exercise the *interior* of the classification, not just the edges.**
-6. **\`scan_skips_flat_positions\` uses \`snapshot(1, 0, 100_000, 1_000)\`.** Notice \`size = 0\` — the flat case. Even though L6's \`margin_ratio\` returns MAX for flat positions (which would classify as Safe and skip via the Phase-1 \`continue\`), the test exercises the Phase-2 defensive guard *in case* an upstream change promotes flats to Liquidatable. **Defense-in-depth tests verify the second layer of protection independent of the first.**
+6. **\`scan_skips_flat_positions\` uses \`snapshot(1, 0, 100_000, 1_000)\`.** Notice \`size = 0\` — the flat case. Even though Lesson 6's \`margin_ratio\` returns MAX for flat positions (which would classify as Safe and skip via the Phase-1 \`continue\`), the test exercises the Phase-2 defensive guard *in case* an upstream change promotes flats to Liquidatable. **Defense-in-depth tests verify the second layer of protection independent of the first.**
 7. **All four tests use \`LiquidationScanner::with_empty_fund(default_params())\`.** No starting fund balance, default Hyperliquid params. Consistency lets the reader scan all four tests and absorb only the *differences* (accounts, mark). **Per-test isolation lets you read the diff between tests at a glance.**
 8. **The test names form a 4-step narrative:** empty → all-Safe → all-AtRisk → flat. The reader learning "what scan skips" walks through them in order and builds a complete mental model. **Test ordering can encode pedagogical progression.**
 
@@ -4957,9 +4957,9 @@ Expected output (abbreviated):
 \`\`\`
 running 59 tests
 test compute::tests::close_flat_has_zero_qty ... ok
-... (33 more compute tests from L0–L10)
+... (33 more compute tests from Lessons 0–10)
 test insurance::tests::balance_never_negative ... ok
-... (20 more insurance tests from L8–L9)
+... (20 more insurance tests from Lessons 8–9)
 test scanner::tests::scan_all_safe_accounts_does_nothing ... ok
 test scanner::tests::scan_atrisk_does_not_liquidate ... ok
 test scanner::tests::scan_empty_accounts_returns_empty_report ... ok
@@ -4968,14 +4968,14 @@ test scanner::tests::scan_skips_flat_positions ... ok
 test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**59 tests passing. The scanner is *runnable*.** L13 stress-tests it with 5 nuanced unit tests (solvent fee deposit, underwater fully/partially/depleted, mixed batch, FIFO fairness) plus 4 proptests (conservation laws across scans). After L13, 68 tests total.
+**59 tests passing. The scanner is *runnable*.** Lesson 13 stress-tests it with 5 nuanced unit tests (solvent fee deposit, underwater fully/partially/depleted, mixed batch, FIFO fairness) plus 4 proptests (conservation laws across scans). After Lesson 13, 68 tests total.
 
 Common errors:
 
-- **Compile error: \`cannot find function \\\`account_equity\\\` in this scope\`** — the L11 imports staged six compute functions; if you forgot one (or removed an unused-import warning by deleting an import you actually need), \`scan\` won't compile. Re-add the missing function from the \`use crate::compute::{...}\` line at the top of \`scanner.rs\`.
-- **Test fail: \`assertion failed: report.records.is_empty()\` on \`scan_all_safe_accounts_does_nothing\`** — your \`margin_health\` is misclassifying 50% ratio. L6 said 50% > 10% initial = Safe; if your \`match\` arm reads \`MarginHealth::Safe | MarginHealth::Liquidatable\` (typo), then Safe gets liquidated. Re-read the \`match\`'s arm 1.
+- **Compile error: \`cannot find function \\\`account_equity\\\` in this scope\`** — the Lesson 11 imports staged six compute functions; if you forgot one (or removed an unused-import warning by deleting an import you actually need), \`scan\` won't compile. Re-add the missing function from the \`use crate::compute::{...}\` line at the top of \`scanner.rs\`.
+- **Test fail: \`assertion failed: report.records.is_empty()\` on \`scan_all_safe_accounts_does_nothing\`** — your \`margin_health\` is misclassifying 50% ratio. Lesson 6 said 50% > 10% initial = Safe; if your \`match\` arm reads \`MarginHealth::Safe | MarginHealth::Liquidatable\` (typo), then Safe gets liquidated. Re-read the \`match\`'s arm 1.
 - **Test fail: \`report.fund_deposits != 0\` on \`scan_empty_accounts_returns_empty_report\`** — your \`ScanReport::default()\` is mis-derived. The \`derive(Default)\` on \`ScanReport\` is what makes this test green; if you \`impl Default\` manually with non-zero defaults, you break the contract.
-- **Compile error: \`the trait bound \\\`SomeType: Copy\\\` is not satisfied\`** — somewhere in the \`outcome = if ... { ... }\` branches you have a type that the compiler thinks is non-\`Copy\`. Check that \`SolventClose\` and \`UnderwaterClose\` both have \`#[derive(Clone, Copy, Debug, PartialEq, Eq)]\` (they do, from L10) — if they don't, the \`if\`/\`else\` returning these variants needs them.
+- **Compile error: \`the trait bound \\\`SomeType: Copy\\\` is not satisfied\`** — somewhere in the \`outcome = if ... { ... }\` branches you have a type that the compiler thinks is non-\`Copy\`. Check that \`SolventClose\` and \`UnderwaterClose\` both have \`#[derive(Clone, Copy, Debug, PartialEq, Eq)]\` (they do, from Lesson 10) — if they don't, the \`if\`/\`else\` returning these variants needs them.
 
 ## Design reflection
 
@@ -4985,7 +4985,7 @@ Three load-bearing decisions in this lesson:
 
 2. **Exhaustive \`match\` beats predicate-with-\`!\`.** The \`MarginHealth\` \`match\` in Phase 1 is the discipline that catches future enum-variant additions. If we wrote \`if !matches!(c, Liquidatable | Underwater) { continue; }\`, adding a fifth variant tomorrow would silently classify it as a skip. **Exhaustive \`match\` is how an enum and its consumers stay in sync across refactors.**
 
-3. **The \`WithdrawOutcome → (paid, unfilled)\` tuple destructuring is the *only* place L9's enum needs more than one line of orchestration handling.** Three variants collapse to one \`(i64, i64)\` because the aggregation contract is uniform. **L9's \`WithdrawOutcome\` returns information; the scanner converts it to numbers.**
+3. **The \`WithdrawOutcome → (paid, unfilled)\` tuple destructuring is the *only* place Lesson 9's enum needs more than one line of orchestration handling.** Three variants collapse to one \`(i64, i64)\` because the aggregation contract is uniform. **Lesson 9's \`WithdrawOutcome\` returns information; the scanner converts it to numbers.**
 
 ## Answer key
 
@@ -4995,8 +4995,8 @@ git checkout 0a8464e
 diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/src/scanner.rs
 \`\`\`
 
-After L12:
-- **scanner.rs** matches Stage 10c's \`scanner.rs\` **through the test module's \`scan_skips_flat_positions\` test**. Specifically: doc + imports + \`CloseOutcomeKind\` + \`LiquidationRecord\` + \`ScanReport\` + \`LiquidationScanner\` struct + 5 accessors + \`scan\` method + test module scaffolding + 4 simple unit tests. The 5 nuanced unit tests and 4 proptests land in L13.
+After Lesson 12:
+- **scanner.rs** matches Stage 10c's \`scanner.rs\` **through the test module's \`scan_skips_flat_positions\` test**. Specifically: doc + imports + \`CloseOutcomeKind\` + \`LiquidationRecord\` + \`ScanReport\` + \`LiquidationScanner\` struct + 5 accessors + \`scan\` method + test module scaffolding + 4 simple unit tests. The 5 nuanced unit tests and 4 proptests land in Lesson 13.
 
 ## Common questions
 
@@ -5014,7 +5014,7 @@ Yes, but the index isn't needed — \`LiquidationRecord\` carries \`account: Acc
 
 **Q4: Why doesn't \`scan\` early-return after the loop body if the scanner reaches a "fund fully depleted" state?**
 
-Because the L11 design contract says aggregate fields capture *everything* that happens during the scan, including post-depletion underwater closes. An early return would cut off the audit trail; a Liquidatable account in iteration position 50 would never produce a \`LiquidationRecord\`, and the bridge would miss it. **Scan completes the batch even if the fund's been emptied; the aggregate \`unfilled_deficit\` is the bridge's signal that more aggressive policy (ADL) is needed.**
+Because the Lesson 11 design contract says aggregate fields capture *everything* that happens during the scan, including post-depletion underwater closes. An early return would cut off the audit trail; a Liquidatable account in iteration position 50 would never produce a \`LiquidationRecord\`, and the bridge would miss it. **Scan completes the batch even if the fund's been emptied; the aggregate \`unfilled_deficit\` is the bridge's signal that more aggressive policy (ADL) is needed.**
 
 **Q5: What if two snapshots in the slice have the same \`AccountId\`?**
 
@@ -5024,9 +5024,9 @@ The scanner processes them in iteration order. The first one's \`LiquidationReco
 
 The \`+=\` operator's behavior changes between build profiles: **panics on overflow in debug, silently *wraps* (two's-complement modular arithmetic) in release**. The release-build wrap is the actual consensus danger — it doesn't crash, so an overflowing add on one validator quietly produces a different \`i64\` than the others. The result is a state disagreement → a chain fork. The debug panic is the easy failure mode; the silent release wrap is the *deceptive* one. \`saturating_add\` clamps to \`i64::MAX\` (or \`i64::MIN\`) under every build profile, so every validator sees the same value regardless of which compiler flags they used. **\`+=\` is fine for non-consensus arithmetic; \`saturating_add\` is the standard for state that validators must agree on byte-for-byte.**
 
-## Next lesson (L13) — Module 4 capstone: 5 nuanced unit tests + 4 proptests
+## Next lesson (Lesson 13) — Module 4 capstone: 5 nuanced unit tests + 4 proptests
 
-L13 closes Module 4 — and Stage 10c — and Module 10 of openhl entirely. The 5 nuanced unit tests cover:
+Lesson 13 closes Module 4 — and Stage 10c — and Module 10 of openhl entirely. The 5 nuanced unit tests cover:
 - \`scan_liquidatable_solvent_deposits_fee\` — happy path: trader's collateral covers everything.
 - \`scan_underwater_fully_covered_drains_fund_partially\` — fund drains but covers.
 - \`scan_underwater_partial_drain_surfaces_unfilled\` — fund partially drains; some shortfall escalates.
@@ -5036,12 +5036,12 @@ L13 closes Module 4 — and Stage 10c — and Module 10 of openhl entirely. The 
 Plus a \`scan_mixed_batch_processes_only_unhealthy\` to verify the loop handles heterogeneous batches.
 
 The 4 proptests verify conservation laws across scans:
-- \`fund_balance_never_negative_across_scans\` — the L8 invariant extends to multi-account scans.
+- \`fund_balance_never_negative_across_scans\` — the Lesson 8 invariant extends to multi-account scans.
 - \`report_unfilled_equals_sum_of_unfilled_shortfalls\` — \`unfilled_deficit\` is consistent with per-account unfilled amounts.
 - \`fund_deposits_minus_withdrawals_equals_balance_change\` — fund accounting closes.
 - \`scan_preserves_account_order_in_records\` — determinism: records appear in input order.
 
-After L13, the Liquidation crate is *complete* — 68 tests, byte-for-byte against \`0a8464e\`. The reader has built an entire pure-compute + state-machine + orchestration cascade in 13 lessons.
+After Lesson 13, the Liquidation crate is *complete* — 68 tests, byte-for-byte against \`0a8464e\`. The reader has built an entire pure-compute + state-machine + orchestration cascade in 13 lessons.
 `,
                 },
                 {
@@ -5057,18 +5057,18 @@ After L13, the Liquidation crate is *complete* — 68 tests, byte-for-byte again
 
 Concepts you'll grasp in this lesson:
 
-- **The 6 nuanced unit tests form a 4×2 matrix.** Four outcomes (solvent-close, fully-covered-underwater, partial-drain-underwater, depleted-underwater) crossed with two batch shapes (single-account-batch, multi-account-batch). The mixed-batch test is the explicit 4-state proof; the FIFO test is the multi-underwater fairness proof. **Together they exercise every reachable interaction between L6 classification, L10 close-outcomes, and L8/L9 fund operations.**
+- **The 6 nuanced unit tests form a 4×2 matrix.** Four outcomes (solvent-close, fully-covered-underwater, partial-drain-underwater, depleted-underwater) crossed with two batch shapes (single-account-batch, multi-account-batch). The mixed-batch test is the explicit 4-state proof; the FIFO test is the multi-underwater fairness proof. **Together they exercise every reachable interaction between Lesson 6 classification, Lesson 10 close-outcomes, and Lessons 8 / 9 fund operations.**
 - **The 4 proptests encode invariants the type system can't.** Fund accounting closes (\`before + deposits − withdrawals = after\`). Unfilled deficit implies an empty fund (\`unfilled > 0 ⇒ balance == 0\`). Record count is bounded by input count (\`|records| ≤ |accounts|\`). Determinism holds (\`scan(same inputs) ≡ scan(same inputs)\`). **Each invariant is a contract the scanner must keep across every scan, every block, every validator.**
 - **Conservation laws compose vertically across the crate.** Three layers, three identities, one math story:
 
   \`\`\`
-  L9  (single fund call):       amount + unfilled                    = shortfall
-  L10 (single position close):  fee_to_fund + residual_to_account    = post_close_equity
-  L13 (per-block scan batch):   balance_before + Σ deposits − Σ withdrawals = balance_after
+  Lesson 9 (single fund call):       amount + unfilled                    = shortfall
+  Lesson 10 (single position close):  fee_to_fund + residual_to_account    = post_close_equity
+  Lesson 13 (per-block scan batch):   balance_before + Σ deposits − Σ withdrawals = balance_after
   \`\`\`
 
   **Each layer's conservation law is consumed by the next layer's invariant; the crate's math closes.**
-- **Stage 10 is *three* stages plus *one* trilogy.** Stage 10a (margin math) built the pure-compute classifier. Stage 10b (insurance fund + close-outcome decomposition) introduced state and the credit/debit decomposition. Stage 10c (multi-account scanner) tied them together with one orchestration loop. **L13 closes the trilogy: 69 tests, 4 modules, byte-for-byte against \`0a8464e\`.**
+- **Stage 10 is *three* stages plus *one* trilogy.** Stage 10a (margin math) built the pure-compute classifier. Stage 10b (insurance fund + close-outcome decomposition) introduced state and the credit/debit decomposition. Stage 10c (multi-account scanner) tied them together with one orchestration loop. **Lesson 13 closes the trilogy: 69 tests, 4 modules, byte-for-byte against \`0a8464e\`.**
 
 Verification:
 
@@ -5078,22 +5078,22 @@ cargo test -p openhl-liquidation
 
 …passes 69 tests (34 compute + 21 insurance + 14 scanner = 10 unit + 4 proptest). The liquidation crate is *complete* against Stage 10c's answer key.
 
-> **Note on the count:** L11 and L12's next-lesson previews said "68 total" — that was an off-by-one. The actual L13 adds 6 nuanced unit tests, not 5; the FIFO-fairness test is its own test, distinct from the mixed-batch test. The correct total is 69. (The cascade-math reasoning is unaffected.)
+> **Note on the count:** Lesson 11 and Lesson 12's next-lesson previews said "68 total" — that was an off-by-one. The actual Lesson 13 adds 6 nuanced unit tests, not 5; the FIFO-fairness test is its own test, distinct from the mixed-batch test. The correct total is 69. (The cascade-math reasoning is unaffected.)
 
 Specific changes:
 
-- **\`src/scanner.rs\`** — adds 6 nuanced unit tests after the 4 simple ones from L12, and a \`proptest!\` block with 4 invariant properties.
+- **\`src/scanner.rs\`** — adds 6 nuanced unit tests after the 4 simple ones from Lesson 12, and a \`proptest!\` block with 4 invariant properties.
 
-After L13, the Liquidation course is complete. Stage 10d (ADL) is the next openhl roadmap entry but is a separate course.
+After Lesson 13, the Liquidation course is complete. Stage 10d (ADL) is the next openhl roadmap entry but is a separate course.
 
 ## Recap
 
-After L12:
-- \`scanner.rs\` has the type vocabulary (L11), the \`scan\` method (L12), and 4 simple unit tests covering the skip paths.
+After Lesson 12:
+- \`scanner.rs\` has the type vocabulary (Lesson 11), the \`scan\` method (Lesson 12), and 4 simple unit tests covering the skip paths.
 - \`cargo test\` runs 59 tests, all green.
 - The scanner *works* — it iterates, classifies, dispatches, mutates, aggregates, returns. But the only tests so far cover the "skip" cases. The four "work" outcomes — solvent, fully-covered, partial-drain, depleted — have no per-scan assertions yet.
 
-L13 fills that gap, then locks the invariants with proptests, then steps back for the Stage 10 retrospective.
+Lesson 13 fills that gap, then locks the invariants with proptests, then steps back for the Stage 10 retrospective.
 
 ## Plan
 
@@ -5105,7 +5105,7 @@ Three edits:
 
 > 🛑 **Predict.** Before reading further: name the four "fund state transitions" a single liquidation can cause, and pair each one with the \`WithdrawOutcome\` variant or \`deposit\` call that drives it. Then: which of those transitions can *not* happen if the input is \`Solvent\` (i.e., \`Liquidatable && post_close_equity ≥ fee\`)?
 
-(Answer: **Four transitions** are (a) \`+fee\` only (solvent close — \`deposit\`, no withdraw), (b) \`+fee_partial − shortfall_full\` (underwater with positive equity — \`deposit\` + \`withdraw_shortfall\` returning \`Covered\`), (c) \`0 − shortfall_partial\` (underwater already underwater, fund partially drained — \`withdraw_shortfall\` returning \`PartiallyDrained\`), (d) \`0 − 0_with_unfilled\` (underwater with depleted fund — \`withdraw_shortfall\` returning \`Depleted\`). **Transitions b, c, d cannot happen on a Solvent input** — L10's \`debug_assert!\` would fire. Solvent inputs only drive transition (a). **The 4 nuanced unit tests exercise transitions a, b, c, d. The 5th (mixed batch) and 6th (FIFO) verify that the orchestration loop processes multi-account batches correctly.**)
+(Answer: **Four transitions** are (a) \`+fee\` only (solvent close — \`deposit\`, no withdraw), (b) \`+fee_partial − shortfall_full\` (underwater with positive equity — \`deposit\` + \`withdraw_shortfall\` returning \`Covered\`), (c) \`0 − shortfall_partial\` (underwater already underwater, fund partially drained — \`withdraw_shortfall\` returning \`PartiallyDrained\`), (d) \`0 − 0_with_unfilled\` (underwater with depleted fund — \`withdraw_shortfall\` returning \`Depleted\`). **Transitions b, c, d cannot happen on a Solvent input** — Lesson 10's \`debug_assert!\` would fire. Solvent inputs only drive transition (a). **The 4 nuanced unit tests exercise transitions a, b, c, d. The 5th (mixed batch) and 6th (FIFO) verify that the orchestration loop processes multi-account batches correctly.**)
 
 The scan-coverage matrix:
 
@@ -5144,7 +5144,7 @@ Two things to notice about the matrix:
 
 ### Step 1: Add the 6 nuanced unit tests
 
-Inside the existing \`#[cfg(test)] mod tests\` block in \`scanner.rs\`, after the 4 simple tests from L12, append the 6 nuanced cases. The tests are grouped by single-vs-multi-account and by outcome.
+Inside the existing \`#[cfg(test)] mod tests\` block in \`scanner.rs\`, after the 4 simple tests from Lesson 12, append the 6 nuanced cases. The tests are grouped by single-vs-multi-account and by outcome.
 
 #### Test 1: Solvent close deposits fee
 
@@ -5186,7 +5186,7 @@ Five things to notice:
 1. **The comment block walks the math step-by-step from primitives.** notional → fee → pnl → equity → ratio → classification → routing decision → outputs. A reader debugging a failing test reads this comment and re-derives the expected values from the snapshot's 4 inputs. **Math-walk comments turn a single test into a worked example of the full Stage 10a + 10b pipeline.** (A subtle bind-name note: the test introduces \`let mut s = LiquidationScanner::...\` and *also* shadows \`s\` inside the \`match\` arm via \`CloseOutcomeKind::Solvent(s)\`. Inside the arm, \`s\` is the \`SolventClose\` payload; the moment the arm closes, the outer scanner \`s\` is back in scope, which is why \`s.fund_balance()\` two lines later works. This is a deliberate Rust idiom — shadowing inside a match arm is scope-bounded — but new readers should recognize the dual binding for what it is.)
 2. **The chosen numbers — entry=1_000, collateral=20, mark=999 — pick a *boundary case*** where ratio (190 bps) is just barely below maintenance (200 bps). A bug that flipped the inequality (\`>\` instead of \`>=\`, etc.) would land 190 in the wrong bucket. **Boundary inputs make tests catch off-by-one in classification predicates.**
 3. **The \`match\` on \`outcome\` uses \`panic!("expected Solvent")\` for the wrong variant.** Failure messages name the *expected* variant; a future reader of a failing test log immediately knows which branch they meant to hit. **Panic messages name the expected variant, not the unexpected one.**
-4. **All four \`ScanReport\` fields are asserted, plus \`fund_balance()\`.** The aggregate fields are checked even though the per-record \`outcome\` already implies them. Why? Because the L11 design contract said aggregates are first-class — a regression that breaks the aggregation math is a different bug class than one that breaks the per-record decomposition. **Aggregate fields and per-record fields get separate assertions; they're separate invariants.**
+4. **All four \`ScanReport\` fields are asserted, plus \`fund_balance()\`.** The aggregate fields are checked even though the per-record \`outcome\` already implies them. Why? Because the Lesson 11 design contract said aggregates are first-class — a regression that breaks the aggregation math is a different bug class than one that breaks the per-record decomposition. **Aggregate fields and per-record fields get separate assertions; they're separate invariants.**
 5. **\`s.fund_balance() == 14\` proves the fund actually mutated** — not just that the report claims it did. The fund is *state*, not derivation; a separate read confirms the report doesn't lie. **State changes deserve a separate post-call read; reports describing them deserve their own assertions.**
 
 #### Test 2: Underwater account, fully covered by fund
@@ -5222,8 +5222,8 @@ Five things to notice:
 
 Four things to notice:
 
-1. **The Perp Primer L3 scenario reappears for the fourth time** in this course: $100k entry, $10k collateral, $80,500 close, $19,500 PnL, $9,500 negative equity. The numbers thread through L10's \`fee_basic\`, L10's \`underwater_close_already_underwater_pre_fee\`, and now L13's scanner-level test. **Curriculum reinforcement compounds: by L13 the reader recognizes the numbers without re-deriving them.**
-2. **\`fee_to_fund == 0\`** — confirmed at the scanner level. The L10 contract said "negative equity pre-fee → no fee collected"; L13 verifies the contract is preserved through the orchestration layer. **Cross-layer contract tests verify that orchestration doesn't *break* the lower-layer guarantees.**
+1. **The Perp Primer Lesson 3 scenario reappears for the fourth time** in this course: $100k entry, $10k collateral, $80,500 close, $19,500 PnL, $9,500 negative equity. The numbers thread through Lesson 10's \`fee_basic\`, Lesson 10's \`underwater_close_already_underwater_pre_fee\`, and now Lesson 13's scanner-level test. **Curriculum reinforcement compounds: by Lesson 13 the reader recognizes the numbers without re-deriving them.**
+2. **\`fee_to_fund == 0\`** — confirmed at the scanner level. The Lesson 10 contract said "negative equity pre-fee → no fee collected"; Lesson 13 verifies the contract is preserved through the orchestration layer. **Cross-layer contract tests verify that orchestration doesn't *break* the lower-layer guarantees.**
 3. **\`fund_deposits == 0\` AND \`fund_withdrawals == 10_707\`** — the aggregate fields show *zero deposit* (because \`fee_to_fund == 0\`) and *full withdrawal* (because the fund had enough). The two aggregates together describe the full balance-flow story. **Aggregate fields are the bridge's read-once telemetry; they should be precise.**
 4. **\`s.fund_balance() == 20_000 - 10_707\`** — the post-scan fund balance is computed from the inputs, not asserted as a literal. This makes the test self-documenting: the reader sees \`20_000 - 10_707\` and knows where each number came from. **Arithmetic expressions in assertions make the test self-explain better than hardcoded literals.**
 
@@ -5271,7 +5271,7 @@ Three things to notice:
 Three things to notice:
 
 1. **\`with_empty_fund\` instead of \`new(0)\`** — the named constructor at the call site says "empty fund" instead of "0 balance fund." Reading the test, the reader sees the intent immediately. **Named constructors at test call sites are documentation.**
-2. **\`fund_withdrawals == 0\`** — *not* the full shortfall. The L8 \`Depleted\` variant returns \`(0, unfilled)\`, meaning the fund pays *zero* (because it had nothing) and escalates the *full* shortfall. The aggregate fields preserve this distinction. **\`Depleted\` and \`Covered { amount: 0 }\` are different outcomes; the aggregates must show different numbers.**
+2. **\`fund_withdrawals == 0\`** — *not* the full shortfall. The Lesson 8 \`Depleted\` variant returns \`(0, unfilled)\`, meaning the fund pays *zero* (because it had nothing) and escalates the *full* shortfall. The aggregate fields preserve this distinction. **\`Depleted\` and \`Covered { amount: 0 }\` are different outcomes; the aggregates must show different numbers.**
 3. **The test is shorter than Test 2 and Test 3** — fewer assertions, simpler setup, cleaner narrative. The depleted state is the "edge of the cliff" of the cascade — the boundary where Stage 10d (ADL) would have to fire. **Edge-case tests should be terse; their *being there* is most of their value.**
 
 #### Test 5: Mixed batch processes only unhealthy accounts
@@ -5306,9 +5306,9 @@ Three things to notice:
 
 Six things to notice:
 
-1. **Four accounts in one slice — each calibrated to land in a different \`MarginHealth\` state.** Account 1 → Safe, 2 → AtRisk, 3 → Liquidatable, 4 → Underwater. The slice exercises *every* arm of L6's classification cascade in a single call. **Mixed-batch tests are the cheapest way to verify the classification cascade is complete.**
+1. **Four accounts in one slice — each calibrated to land in a different \`MarginHealth\` state.** Account 1 → Safe, 2 → AtRisk, 3 → Liquidatable, 4 → Underwater. The slice exercises *every* arm of Lesson 6's classification cascade in a single call. **Mixed-batch tests are the cheapest way to verify the classification cascade is complete.**
 2. **\`report.records.len() == 2\`** — *not* 4. Safe and AtRisk produce no records; only Liquidatable and Underwater do. The test catches a future bug where someone misclassifies AtRisk as a liquidation trigger. **Length assertions on filtered outputs catch "wrong filter" bugs at the orchestration level.**
-3. **\`report.records[0].account == AccountId(3)\` and \`[1].account == AccountId(4)\`** — the records preserve *input order*. Account 3 came before account 4 in the input slice; the records appear in the same order. This is the FIFO ordering policy from L11's module-level doc. **Ordered iteration → ordered records; the policy is enforced by the test.**
+3. **\`report.records[0].account == AccountId(3)\` and \`[1].account == AccountId(4)\`** — the records preserve *input order*. Account 3 came before account 4 in the input slice; the records appear in the same order. This is the FIFO ordering policy from Lesson 11's module-level doc. **Ordered iteration → ordered records; the policy is enforced by the test.**
 4. **The math comments are *per-account*, not per-test.** Each account gets its own classification math worked out inline. **For mixed-batch tests, math comments belong next to the accounts they describe.**
 5. **\`InsuranceFund::new(1_000)\` — non-empty fund.** A fund of $1,000 covers any solvent fee and any small underwater shortfall in this batch. The fund-state mutations are validated but not the primary point of the test; the primary point is the *classification + filtering* behavior. **One test, one primary point; fund state is incidental here.**
 6. **No assertion on \`fund_deposits\`/\`fund_withdrawals\`/\`unfilled_deficit\`.** Those are derivative of the per-account outcomes (which the records carry). Asserting them would duplicate test #1-#4's coverage; mixed-batch tests should focus on what's *new* — the orchestration of multiple accounts. **Assert the new behavior; don't re-assert what's already covered.**
@@ -5345,7 +5345,7 @@ Five things to notice:
 2. **The fund balance ($12,000) is *exactly* \`first shortfall + partial second payment\`** — $10,707 + $1,293 = $12,000. The reader sees the fund deplete *exactly* through the first underwater account, with the partial remainder going to the second. **Carefully-chosen fund balances make the fairness policy visible in the assertions.**
 3. **\`fund_withdrawals == 12_000\`** — the *total* withdrawal, summed across both accounts. The aggregate field doesn't distinguish "first account got 10,707, second got 1,293"; it just shows the sum. **Aggregate fields summarize; per-record fields differentiate.**
 4. **The comment includes the arithmetic explicitly**: \`10_707 + 1_293\`. A reader debugging a failure traces the unfilled-deficit number back to the FIFO rule via the comment. **Test comments that show the FIFO arithmetic are how the policy stays auditable.**
-5. **The \`unfilled_deficit == 10_707 − 1_293\` assertion is the *only* signal Stage 10d would consume.** The next stage (ADL) would force-close enough profitable counter-positions to cover this \`9_414\` shortfall. L13's test fixes the contract that Stage 10d will read. **Per-stage handoff tests fix the contract the next stage will consume.**
+5. **The \`unfilled_deficit == 10_707 − 1_293\` assertion is the *only* signal Stage 10d would consume.** The next stage (ADL) would force-close enough profitable counter-positions to cover this \`9_414\` shortfall. Lesson 13's test fixes the contract that Stage 10d will read. **Per-stage handoff tests fix the contract the next stage will consume.**
 
 ### Step 2: Add the 4 invariant proptests
 
@@ -5458,7 +5458,7 @@ The 4 proptests together encode the *invariants of the orchestration layer*. Eac
 
 #### Proptest #1: \`fund_balance_delta_matches_report\`
 
-**The conservation law for the fund.** \`before + ∑deposits − ∑withdrawals = after\`. The L8 invariant (\`balance ≥ 0\`) extends per-call; L13 extends it across an entire scan. Every deposit the report claims must show up in the fund balance; every withdrawal must too. **If this proptest passes, the report and the fund agree on what happened.**
+**The conservation law for the fund.** \`before + ∑deposits − ∑withdrawals = after\`. The Lesson 8 invariant (\`balance ≥ 0\`) extends per-call; Lesson 13 extends it across an entire scan. Every deposit the report claims must show up in the fund balance; every withdrawal must too. **If this proptest passes, the report and the fund agree on what happened.**
 
 Three things to notice:
 
@@ -5468,14 +5468,14 @@ Three things to notice:
 
 #### Proptest #2: \`unfilled_implies_empty_fund\`
 
-**The fund-exhaustion contract.** If the report shows \`unfilled_deficit > 0\`, the fund *must* be empty at the end. This catches the bug where the scanner reports "unfilled exists" but the fund still has money — a contradiction. The contract holds because L9's \`withdraw_shortfall\` drains the fund to 0 before reporting any unfilled deficit. **L9's per-call contract scales to a per-scan invariant.**
+**The fund-exhaustion contract.** If the report shows \`unfilled_deficit > 0\`, the fund *must* be empty at the end. This catches the bug where the scanner reports "unfilled exists" but the fund still has money — a contradiction. The contract holds because Lesson 9's \`withdraw_shortfall\` drains the fund to 0 before reporting any unfilled deficit. **Lesson 9's per-call contract scales to a per-scan invariant.**
 
 Three things to notice:
 
 1. **The \`if report.unfilled_deficit > 0 { ... }\` filter inside the proptest body.** Only the cases where unfilled exists trigger the assertion; cases where the fund had enough to cover everything are valid "no assertion fires" cases. **Conditional assertions inside proptests are how you express "when X is true, Y must hold."**
 2. **The input range is *adverse* — \`mark in 50..70\`.** Long positions at entry $100 face severe losses at mark $50-70, making underwater outcomes likely. This biases the test toward triggering the \`unfilled > 0\` branch. **Proptest inputs should be biased toward triggering the *interesting* condition; otherwise most cases skip the assertion silently.** This is the *proptest density problem*: with a wide range like \`mark in 50..150\`, the majority of randomly generated inputs would land Safe or Solvent, the conditional assertion would never fire, and across the proptest's default 100-250 iterations *the property could pass without ever being tested* — an invisible dead-code test. Bias inputs toward the regime where the assertion actually fires; otherwise your property test is exercising no property at all.
 3. **\`initial_fund in 0..5_000\` — capped at the bottom range.** The fund is sized to be insufficient for the expected aggregate shortfall (which scales with the number of underwater accounts). **Sizing the fund below the expected shortfall maximizes the chance of an unfilled deficit.**
-4. **In L13 we prefer Strategy-side pre-biasing over heavy \`prop_assume!\` rejection.** The goal of this property is high-density execution of the \`unfilled > 0\` branch, so pushing the generator directly into the adverse regime is more efficient. That keeps reject counts low and lowers \`TooManyAssumptions\` risk. **Use L5-style \`prop_assume!\` when you need to state a mathematical precondition; use L13-style Strategy shaping when you need branch-density.**
+4. **In Lesson 13 we prefer Strategy-side pre-biasing over heavy \`prop_assume!\` rejection.** The goal of this property is high-density execution of the \`unfilled > 0\` branch, so pushing the generator directly into the adverse regime is more efficient. That keeps reject counts low and lowers \`TooManyAssumptions\` risk. **Use Lesson 5-style \`prop_assume!\` when you need to state a mathematical precondition; use Lesson 13-style Strategy shaping when you need branch-density.**
 
 #### Proptest #3: \`records_count_bounded_by_accounts\`
 
@@ -5494,7 +5494,7 @@ Four things to notice:
 
 1. **The proptest constructs *two* scanners, not one, and scans the same input through both.** A single scanner that scans twice could mask nondeterminism if the second scan's state inherits something from the first. Two fresh scanners catch any state that survives an \`InsuranceFund::new(initial_fund)\` reset. **Determinism tests must use independent state at every run.**
 2. **The assertion is on *both* \`report == report\` AND \`fund_balance == fund_balance\`.** A scanner that produces a deterministic report but a nondeterministic fund-balance change would pass a report-only test but be a real bug. The two-way assertion catches both. **Determinism tests assert on every observable side effect.**
-3. **\`PartialEq\` on \`ScanReport\` is *what enables this test*.** L11's derive \`#[derive(Clone, Debug, PartialEq, Eq, Default)]\` is what lets \`prop_assert_eq!(r1, r2)\` compile. Without \`PartialEq\`, this proptest couldn't be written. **Standard-derive traits unlock standard-test patterns; derive them eagerly.**
+3. **\`PartialEq\` on \`ScanReport\` is *what enables this test*.** Lesson 11's derive \`#[derive(Clone, Debug, PartialEq, Eq, Default)]\` is what lets \`prop_assert_eq!(r1, r2)\` compile. Without \`PartialEq\`, this proptest couldn't be written. **Standard-derive traits unlock standard-test patterns; derive them eagerly.**
 4. **No \`Hash\` derive needed.** The determinism test compares by \`==\`, not by hashing. \`Hash\` would be redundant for this test (and most others). **Derive what tests actually need; resist the urge to derive \`Hash\` defensively.**
 
 ### Step 3: Run the tests
@@ -5534,19 +5534,19 @@ test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 Common errors:
 
 - **\`scan_is_deterministic\` flakes on some runs and passes on others** — your scanner has a hidden non-determinism. The most common cause: iterating a \`HashMap\` (whose iteration order varies). Stage 10c never uses \`HashMap\`; if you introduced one, switch to \`BTreeMap\` or \`Vec\`. **Hidden non-determinism is a chain-fork risk; the proptest catches it before mainnet.**
-- **\`fund_balance_delta_matches_report\` fails with \`5000 vs 4999\`** — off-by-one in the \`saturating_add\` order. Re-check the production code: \`before + deposits − withdrawals\`, in that order. Reversing to \`before − withdrawals + deposits\` looks arithmetically identical but is actually different: the intermediate \`before − withdrawals\` can go negative in *some* invocations and, *in release builds without saturation*, silently *wraps* to a huge positive number — every validator producing a different \`i64\` than its peers, every chain forking. Saturating arithmetic in the L12 order is the cheap defense; the proptest is what catches the order if you reverse it.
-- **\`unfilled_implies_empty_fund\` fails with \`unfilled=500, balance=1000\`** — your \`scan\` exits early when the fund depletes (skipping further underwater accounts). The L11 design contract says the scan continues; you should be aggregating across *every* underwater account in the slice. Re-read the L12 fan-out logic.
+- **\`fund_balance_delta_matches_report\` fails with \`5000 vs 4999\`** — off-by-one in the \`saturating_add\` order. Re-check the production code: \`before + deposits − withdrawals\`, in that order. Reversing to \`before − withdrawals + deposits\` looks arithmetically identical but is actually different: the intermediate \`before − withdrawals\` can go negative in *some* invocations and, *in release builds without saturation*, silently *wraps* to a huge positive number — every validator producing a different \`i64\` than its peers, every chain forking. Saturating arithmetic in the Lesson 12 order is the cheap defense; the proptest is what catches the order if you reverse it.
+- **\`unfilled_implies_empty_fund\` fails with \`unfilled=500, balance=1000\`** — your \`scan\` exits early when the fund depletes (skipping further underwater accounts). The Lesson 11 design contract says the scan continues; you should be aggregating across *every* underwater account in the slice. Re-read the Lesson 12 fan-out logic.
 - **\`records_count_bounded_by_accounts\` fails with \`records=21, accounts=20\`** — somewhere your loop double-pushed. Most likely cause: you wrote \`report.records.push(...)\` *inside* the \`if\`/\`else\` branches AND once more outside. Re-check the loop body — the push should be exactly once at the bottom.
 
 ## Design reflection — the Stage 10 trilogy
 
 Three load-bearing decisions that shaped Stage 10 across all 13 lessons:
 
-1. **Layered conservation laws.** L9's \`amount + unfilled = shortfall\` (per call), L10's \`fee_to_fund + residual_to_account = post_close_equity\` (per close), L13's \`before + ∑deposits − ∑withdrawals = after\` (per scan). Each layer's law is consumed by the next layer's invariant. The crate's math closes from the smallest unit (one \`withdraw_shortfall\` call) to the largest (one \`scan\` batch). **Layered conservation is how consensus state machines stay *provably* correct under composition.**
+1. **Layered conservation laws.** Lesson 9's \`amount + unfilled = shortfall\` (per call), Lesson 10's \`fee_to_fund + residual_to_account = post_close_equity\` (per close), Lesson 13's \`before + ∑deposits − ∑withdrawals = after\` (per scan). Each layer's law is consumed by the next layer's invariant. The crate's math closes from the smallest unit (one \`withdraw_shortfall\` call) to the largest (one \`scan\` batch). **Layered conservation is how consensus state machines stay *provably* correct under composition.**
 
-2. **\`debug_assert!\` pair + \`saturating_arithmetic\` everywhere.** Every function in the crate uses one or both. The L10 dispatch (\`solvent_close_outcome\` / \`underwater_close_outcome\`) is a debug-assert pair; the L8 deposit and L9 withdraw use saturating arithmetic. The L12 scan combines both — debug-asserts via the routing predicates, saturation via the report aggregation. **The dev-assertion + prod-saturation discipline scales from one function to one crate.**
+2. **\`debug_assert!\` pair + \`saturating_arithmetic\` everywhere.** Every function in the crate uses one or both. The Lesson 10 dispatch (\`solvent_close_outcome\` / \`underwater_close_outcome\`) is a debug-assert pair; the Lesson 8 deposit and Lesson 9 withdraw use saturating arithmetic. The Lesson 12 scan combines both — debug-asserts via the routing predicates, saturation via the report aggregation. **The dev-assertion + prod-saturation discipline scales from one function to one crate.**
 
-3. **Vocabulary before mechanism, four times in a row.** L1-L3 declared \`LiquidationParams\`, \`MarginRatio\`, \`MarginHealth\`, \`AccountSnapshot\`, \`CloseOrderSpec\` before any \`margin_health\` was implemented. L8 declared \`InsuranceFund\`, \`WithdrawOutcome\` before \`withdraw_shortfall\`. L10 declared \`SolventClose\`, \`UnderwaterClose\` while implementing them. L11 declared \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\` before \`scan\`. **The pattern is consistent across the course because *vocabulary defines the contract; mechanism implements it*.**
+3. **Vocabulary before mechanism, four times in a row.** Lessons 1–3 declared \`LiquidationParams\`, \`MarginRatio\`, \`MarginHealth\`, \`AccountSnapshot\`, \`CloseOrderSpec\` before any \`margin_health\` was implemented. Lesson 8 declared \`InsuranceFund\`, \`WithdrawOutcome\` before \`withdraw_shortfall\`. Lesson 10 declared \`SolventClose\`, \`UnderwaterClose\` while implementing them. Lesson 11 declared \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\` before \`scan\`. **The pattern is consistent across the course because *vocabulary defines the contract; mechanism implements it*.**
 
 ## Answer key
 
@@ -5556,19 +5556,19 @@ git checkout 0a8464e
 diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/src/scanner.rs
 \`\`\`
 
-After L13:
+After Lesson 13:
 - **scanner.rs** matches Stage 10c's \`scanner.rs\` **byte-for-byte**. The full file — module-level doc + imports + 4 types + 5 accessors + \`scan\` method + 10 unit tests + 4 proptests — is in your workspace.
-- **All other files** in \`crates/liquidation/src/\` have been byte-for-byte stable since L10.
+- **All other files** in \`crates/liquidation/src/\` have been byte-for-byte stable since Lesson 10.
 
-**The Liquidation course is complete.** Module 0 (Orientation, L0) + Module 1 (Types, L1-L3) + Module 2 (Pure compute, L4-L7) + Module 3 (Insurance fund, L8-L10) + Module 4 (Scanner + capstone, L11-L13) = 13 lessons across 5 modules.
+**The Liquidation course is complete.** Module 0 (Orientation, Lesson 0) + Module 1 (Types, Lessons 1–3) + Module 2 (Pure compute, Lessons 4–7) + Module 3 (Insurance fund, Lessons 8–10) + Module 4 (Scanner + capstone, Lessons 11–13) = 13 lessons across 5 modules.
 
 ## Common questions
 
-**Q1: Why does L13 add 6 unit tests and not 4 or 8?**
+**Q1: Why does Lesson 13 add 6 unit tests and not 4 or 8?**
 
 Because the test coverage matrix has 4 outcomes × 2 batch shapes, and the multi-account column collapses 3 of the 4 outcomes into the mixed-batch test. The remaining 4 single-account outcomes (Solvent, FullyCovered, PartialDrain, Depleted) need their own tests, and the multi-account column needs the mixed-batch test plus the FIFO-fairness test (because identical-account-iteration-order is the *only* thing that distinguishes the two underwater iterations). 4 + 1 (mixed) + 1 (FIFO) = 6. **Coverage math, not arbitrary count.**
 
-**Q2: Why doesn't L13 add a "scanner runs after fund depletes mid-batch" test?**
+**Q2: Why doesn't Lesson 13 add a "scanner runs after fund depletes mid-batch" test?**
 
 Because that case is already covered by \`unfilled_implies_empty_fund\` proptest #2 (which triggers exactly when the fund depletes mid-scan) and by \`scan_first_underwater_gets_paid_then_second_unfilled\` unit test #6 (which constructs a deterministic version). Adding a dedicated "mid-batch depletion" test would duplicate either of those. **The 6 unit tests + 4 proptests already cover the case; redundant tests are noise.**
 
@@ -5580,13 +5580,13 @@ You *could* (\`fund_balance_delta_matches_report ∧ unfilled_implies_empty_fund
 
 Because two iterations is what catches the nondeterminism. If two runs differ, *any* number of runs would differ. Three runs would catch the same bug; four runs same. The "many runs" defense is for *flaky* tests where the bug occurs probabilistically (which scanner determinism shouldn't have — it's deterministic by construction). **Test the property at minimum-multiplicity; multiplicity beyond that is wasted iteration.**
 
-**Q5: What's not tested by L13's tests + proptests?**
+**Q5: What's not tested by Lesson 13's tests + proptests?**
 
-A few things — deliberately. **Out of scope:** (a) the precise byte-layout of \`ScanReport\` (it's only used in-process, never serialized to disk in Stage 10c); (b) thread-safety (\`LiquidationScanner\` isn't \`Send + Sync\`-tested because Stage 10c uses single-threaded execution by design); (c) panic-safety (the bridge handles panics at a higher level). **In scope:** every classification → routing → aggregation path that affects fund state. **L13's tests cover what consensus actually needs.**
+A few things — deliberately. **Out of scope:** (a) the precise byte-layout of \`ScanReport\` (it's only used in-process, never serialized to disk in Stage 10c); (b) thread-safety (\`LiquidationScanner\` isn't \`Send + Sync\`-tested because Stage 10c uses single-threaded execution by design); (c) panic-safety (the bridge handles panics at a higher level). **In scope:** every classification → routing → aggregation path that affects fund state. **Lesson 13's tests cover what consensus actually needs.**
 
-**Q6: What does Stage 10d (ADL) consume from L13's scanner?**
+**Q6: What does Stage 10d (ADL) consume from Lesson 13's scanner?**
 
-Exactly \`ScanReport.unfilled_deficit\` — the i64 that means "this many quote units of shortfall the fund couldn't absorb." Stage 10d would (a) read this field after every block's scan, (b) if non-zero, walk the *profitable* counter-positions in deterministic order, (c) force-close enough of them to cover the deficit. The L13 proptest \`unfilled_implies_empty_fund\` *guarantees* that this field is the only place the bridge needs to look — there's no second escalation signal hiding elsewhere. **Stage 10d gets one number; it knows what to do with it.**
+Exactly \`ScanReport.unfilled_deficit\` — the i64 that means "this many quote units of shortfall the fund couldn't absorb." Stage 10d would (a) read this field after every block's scan, (b) if non-zero, walk the *profitable* counter-positions in deterministic order, (c) force-close enough of them to cover the deficit. The Lesson 13 proptest \`unfilled_implies_empty_fund\` *guarantees* that this field is the only place the bridge needs to look — there's no second escalation signal hiding elsewhere. **Stage 10d gets one number; it knows what to do with it.**
 
 ## Module 4 + Stage 10 retrospective
 
@@ -5594,21 +5594,21 @@ The 13 lessons of the Liquidation course, in one table:
 
 | # | Module | Lessons | Stage | What was built |
 |---|---|---|---|---|
-| M0 | Orientation | L0 | — | Course overview, openhl context |
-| M1 | Types | L1, L2, L3 | 10a | \`LiquidationParams\`, \`MarginRatio\`, \`MarginHealth\`, \`AccountSnapshot\`, \`CloseOrderSpec\` |
-| M2 | Pure compute | L4, L5, L6, L7 | 10a | \`notional_value\`, \`unrealized_pnl\`, \`account_equity\`, \`margin_ratio\`, \`margin_health\`, \`close_order_spec\` |
-| M3 | Insurance fund | L8, L9, L10 | 10b | \`InsuranceFund\` state machine, \`WithdrawOutcome\` 3-variant enum, \`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`, \`SolventClose\`, \`UnderwaterClose\` |
-| M4 | Scanner + capstone | **L11, L12, L13** | 10c | \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`, \`scan\` method, 10 unit tests + 4 proptests |
+| M0 | Orientation | Lesson 0 | — | Course overview, openhl context |
+| M1 | Types | Lessons 1, 2, 3 | 10a | \`LiquidationParams\`, \`MarginRatio\`, \`MarginHealth\`, \`AccountSnapshot\`, \`CloseOrderSpec\` |
+| M2 | Pure compute | Lessons 4, 5, 6, 7 | 10a | \`notional_value\`, \`unrealized_pnl\`, \`account_equity\`, \`margin_ratio\`, \`margin_health\`, \`close_order_spec\` |
+| M3 | Insurance fund | Lessons 8, 9, 10 | 10b | \`InsuranceFund\` state machine, \`WithdrawOutcome\` 3-variant enum, \`liquidation_fee\`, \`solvent_close_outcome\`, \`underwater_close_outcome\`, \`SolventClose\`, \`UnderwaterClose\` |
+| M4 | Scanner + capstone | **Lessons 11, 12, 13** | 10c | \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`, \`scan\` method, 10 unit tests + 4 proptests |
 
 **69 tests. 4 modules. 13 lessons. 3 openhl commit SHAs.** The Liquidation crate is now a complete, deterministic, defensively-coded multi-account orchestration layer that the openhl bridge can call once per block to drive the entire safety-net cascade up to (but not including) ADL.
 
-The next course in the openhl curriculum — Stage 10d, ADL — will consume \`ScanReport.unfilled_deficit\` as its only input, walk profitable counter-positions, and force-close them to absorb whatever the fund couldn't. The contract L13's proptests fix is what Stage 10d will read.
+The next course in the openhl curriculum — Stage 10d, ADL — will consume \`ScanReport.unfilled_deficit\` as its only input, walk profitable counter-positions, and force-close them to absorb whatever the fund couldn't. The contract Lesson 13's proptests fix is what Stage 10d will read.
 
 ## Next course — Stage 10d, ADL (separate course)
 
-L13 is the *last* lesson in the Liquidation course. The cascade's Layer 3 — ADL (auto-deleveraging) — is its own dedicated future course. The handoff:
+Lesson 13 is the *last* lesson in the Liquidation course. The cascade's Layer 3 — ADL (auto-deleveraging) — is its own dedicated future course. The handoff:
 
-1. **The scanner produces \`unfilled_deficit > 0\`** when the fund couldn't absorb all underwater shortfalls (L13 proptest #2 guarantees this is the *only* signal).
+1. **The scanner produces \`unfilled_deficit > 0\`** when the fund couldn't absorb all underwater shortfalls (Lesson 13 proptest #2 guarantees this is the *only* signal).
 2. **Stage 10d's ADL routine** would read this field after each block's scan.
 3. **The ADL routine** walks all *profitable* counter-positions in deterministic order (likely \`(pnl_pct × leverage)\` descending, with \`account_id\` as tiebreaker), force-closes them in sequence, and credits the recovered margin back to the insolvent positions.
 4. **The ADL outcome** is a separate \`AdlReport\` type, with its own conservation law and its own proptests.

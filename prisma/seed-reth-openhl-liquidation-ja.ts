@@ -80,7 +80,7 @@ Funding と同じ答え: consensus determinism のためだ。あるアカウン
 ## 14 レッスン
 
 ### セクション0 — Orientation
-- **L0**（本レッスン）— なぜ liquidation か、なぜ margin model か、3 サブステージの roadmap。
+- **レッスン0**（本レッスン）— なぜ liquidation か、なぜ margin model か、3 サブステージの roadmap。
 
 ### セクション1 — 型（レッスン1〜3）
 - **レッスン1** — \`MARGIN_SCALE = 1e4\`（bps）+ \`LiquidationParams\` + \`hyperliquid_default()\`（10% / 2% / 1.5%）。bps を選ぶ理由、このデフォルト値の根拠。
@@ -109,7 +109,7 @@ Funding と同じ答え: consensus determinism のためだ。あるアカウン
 
 | Module | レッスン | openhl SHA |
 |---|---|---|
-| 0 | L0 | \`22eedf9\` (Liquidation参照実装（計算パート）) |
+| 0 | レッスン0 | \`22eedf9\` (Liquidation参照実装（計算パート）) |
 | 1 | レッスン1〜3 | \`22eedf9\` (Liquidation参照実装（計算パート）) |
 | 2 | レッスン4〜7 | \`22eedf9\` (Liquidation参照実装（計算パート）) |
 | 3 | レッスン8〜10 | *Liquidation参照実装（保険基金パート） — TBD* |
@@ -2560,7 +2560,7 @@ Flat（\`size == 0\`）は long *でもなく* short *でもない* — long/sho
 cargo test -p openhl-liquidation
 \`\`\`
 
-…で 33 テストが pass する（L0-レッスン7 の 24 + 構築 + deposit の新規テスト 9）。残りの withdraw・proptest 系 22 ケースは レッスン9 で着地する。
+…で 33 テストが pass する（レッスン0〜7 の 24 + 構築 + deposit の新規テスト 9）。残りの withdraw・proptest 系 22 ケースは レッスン9 で着地する。
 
 具体的な変更:
 
@@ -4542,7 +4542,7 @@ cargo test -p openhl-liquidation
 - \`scanner.rs\` に型語彙（\`CloseOutcomeKind\`、\`LiquidationRecord\`、\`ScanReport\`、\`LiquidationScanner\`）と 5 個の accessor（\`new\`、\`with_empty_fund\`、\`fund_balance\`、\`fund\`、\`into_fund\`）が揃う。
 - \`lib.rs\` は scanner 型 4 つを re-export 済み。
 - \`cargo check\` はクリーンに compile する — ただし \`account_equity\`、\`close_order_spec\`、\`liquidation_fee\`、\`margin_health\`、\`notional_value\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`、\`WithdrawOutcome\` に unused-import 警告が出る。すべて *レッスン12 用に staged* されている。
-- \`cargo test\` は依然 L0-レッスン10 の 55 テストを走らせ、すべて green。
+- \`cargo test\` は依然 レッスン0〜10 の 55 テストを走らせ、すべて green。
 
 レッスン12 がそれらの staged import をすべて引き換える。
 
@@ -4948,7 +4948,7 @@ cargo test -p openhl-liquidation
 \`\`\`
 running 59 tests
 test compute::tests::close_flat_has_zero_qty ... ok
-... (L0-レッスン10 由来の compute テストがさらに 33 個)
+... (レッスン0〜10 由来の compute テストがさらに 33 個)
 test insurance::tests::balance_never_negative ... ok
 ... (レッスン8-レッスン9 由来の insurance テストがさらに 20 個)
 test scanner::tests::scan_all_safe_accounts_does_nothing ... ok
@@ -5551,7 +5551,7 @@ diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/
 - **scanner.rs** は Liquidation参照実装（スキャナパート） の \`scanner.rs\` と **byte-for-byte 一致**。ファイル全体 — module-level doc + imports + 4 types + 5 accessor + \`scan\` メソッド + 10 unit test + 4 proptest — が workspace に揃う。
 - **\`crates/liquidation/src/\` の他のファイル** は レッスン10 以降 byte-for-byte 安定。
 
-**Liquidation コース完成。** セクション0（Orientation、L0） + セクション1（Types、レッスン1〜3） + セクション2（Pure compute、レッスン4〜7） + セクション3（Insurance fund、レッスン8〜10） + セクション4（Scanner + capstone、レッスン11〜13） = 5 modules を跨ぐ 13 レッスンだ。
+**Liquidation コース完成。** セクション0（Orientation、レッスン0） + セクション1（Types、レッスン1〜3） + セクション2（Pure compute、レッスン4〜7） + セクション3（Insurance fund、レッスン8〜10） + セクション4（Scanner + capstone、レッスン11〜13） = 5 modules を跨ぐ 14 レッスンだ。
 
 ## よくある質問
 
@@ -5585,7 +5585,7 @@ Liquidation コースの 13 レッスン、表 1 つで:
 
 | # | セクション | レッスン | 対応パート | 何を構築したか |
 |---|---|---|---|---|
-| M0 | Orientation | L0 | — | コース概観、openhl context |
+| M0 | Orientation | レッスン0 | — | コース概観、openhl context |
 | M1 | Types | レッスン1, レッスン2, レッスン3 | 計算パート | \`LiquidationParams\`、\`MarginRatio\`、\`MarginHealth\`、\`AccountSnapshot\`、\`CloseOrderSpec\` |
 | M2 | Pure compute | レッスン4, レッスン5, レッスン6, レッスン7 | 計算パート | \`notional_value\`、\`unrealized_pnl\`、\`account_equity\`、\`margin_ratio\`、\`margin_health\`、\`close_order_spec\` |
 | M3 | Insurance fund | レッスン8, レッスン9, レッスン10 | 保険基金パート | \`InsuranceFund\` state machine、\`WithdrawOutcome\` 3-variant enum、\`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`、\`SolventClose\`、\`UnderwaterClose\` |

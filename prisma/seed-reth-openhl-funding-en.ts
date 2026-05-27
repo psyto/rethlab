@@ -69,7 +69,7 @@ Funding rate is assembled in stages:
 4. Settlement = size × mark × Capped                 ← quote-currency amount each non-zero position settles per tick
 \`\`\`
 
-The \`(mark - index) / index\` premium introduced here is a **raw ratio**, and this course never implements it as \`f64\`. Module 1 (L1) bridges it to a signed integer scaled by \`RATE_SCALE = 1_000_000_000\` (parts-per-billion), and every Premium / Rate / Capped / Settlement computation downstream lives entirely in that fixed-point representation, deterministically. Longs pay, shorts receive — or vice versa, depending on the sign of the premium.
+The \`(mark - index) / index\` premium introduced here is a **raw ratio**, and this course never implements it as \`f64\`. Module 1 (Lesson 1) bridges it to a signed integer scaled by \`RATE_SCALE = 1_000_000_000\` (parts-per-billion), and every Premium / Rate / Capped / Settlement computation downstream lives entirely in that fixed-point representation, deterministically. Longs pay, shorts receive — or vice versa, depending on the sign of the premium.
 
 ## Why funding can't use floats
 
@@ -89,38 +89,38 @@ This is the same constraint Solana's compute budget, Ethereum's EVM, and every o
 ## The 12 lessons
 
 ### Module 0 — Orientation
-- **L0** (this lesson) — Why funding, why fixed-point, why state machine.
+- **Lesson 0** (this lesson) — Why funding, why fixed-point, why state machine.
 
-### Module 1 — Determinism + types (L1-L3)
-- **L1** — \`RATE_SCALE = 1e9\`: fixed-point scheme, why integers, what 9 decimal digits buys you.
-- **L2** — Money types: \`MarkPrice\`, \`IndexPrice\`, \`Premium\`, \`Notional\`. Why each is its own newtype, not just \`i64\`.
-- **L3** — Position types: \`PositionSize\`, \`Position\`, \`Settlement\`, \`FundingParams\`. The HL defaults and what each parameter encodes.
+### Module 1 — Determinism + types (Lessons 1–3)
+- **Lesson 1** — \`RATE_SCALE = 1e9\`: fixed-point scheme, why integers, what 9 decimal digits buys you.
+- **Lesson 2** — Money types: \`MarkPrice\`, \`IndexPrice\`, \`Premium\`, \`Notional\`. Why each is its own newtype, not just \`i64\`.
+- **Lesson 3** — Position types: \`PositionSize\`, \`Position\`, \`Settlement\`, \`FundingParams\`. The HL defaults and what each parameter encodes.
 
-### Module 2 — Pure compute (L4-L7)
-- **L4** — \`compute_premium\`: the \`(mark - index) / index\` derivation. Tests for sign symmetry.
-- **L5** — \`saturate_i128_to_i64\` + overflow philosophy. Why saturate, why not panic.
-- **L6** — \`compute_rate\`: divisor, cap, HL-style defaults. The clamp behavior.
-- **L7** — \`apply_funding\`: longs-pay-shorts sign convention. Balanced-book zero-sum invariant.
+### Module 2 — Pure compute (Lessons 4–7)
+- **Lesson 4** — \`compute_premium\`: the \`(mark - index) / index\` derivation. Tests for sign symmetry.
+- **Lesson 5** — \`saturate_i128_to_i64\` + overflow philosophy. Why saturate, why not panic.
+- **Lesson 6** — \`compute_rate\`: divisor, cap, HL-style defaults. The clamp behavior.
+- **Lesson 7** — \`apply_funding\`: longs-pay-shorts sign convention. Balanced-book zero-sum invariant.
 
-### Module 3 — Clock state machine (L8-L10)
-- **L8** — \`FundingClock\` structure + \`tick()\` interface.
-- **L9** — Interval-gating invariant: at most one settlement per interval. Tests at the boundary.
-- **L10** — No-catch-up invariant: 10-interval gap settles ONCE, not ten times. Why.
+### Module 3 — Clock state machine (Lessons 8–10)
+- **Lesson 8** — \`FundingClock\` structure + \`tick()\` interface.
+- **Lesson 9** — Interval-gating invariant: at most one settlement per interval. Tests at the boundary.
+- **Lesson 10** — No-catch-up invariant: 10-interval gap settles ONCE, not ten times. Why.
 
-### Module 4 — Capstone (L11)
-- **L11** — Synthesis. Bridge integration preview (where funding plugs into \`LiveRethEvmBridge\`). Honest deferred: oracle, liquidations, basis-vs-fixed funding.
+### Module 4 — Capstone (Lesson 11)
+- **Lesson 11** — Synthesis. Bridge integration preview (where funding plugs into \`LiveRethEvmBridge\`). Honest deferred: oracle, liquidations, basis-vs-fixed funding.
 
 ## SHA pinning per module
 
-Every lesson cites the openhl commit it builds against. For this course, all 12 lessons cite **Stage 8b \`cd94137\`** — funding is a single self-contained commit. (Compare to Course 8, which spanned 5 commits across Stage 9a-9d.) The clean SHA mapping means the answer-key diff at the end of L11 is \`crates/funding/\` byte-identical against \`cd94137\`.
+Every lesson cites the openhl commit it builds against. For this course, all 12 lessons cite **Stage 8b \`cd94137\`** — funding is a single self-contained commit. (Compare to Course 8, which spanned 5 commits across Stage 9a-9d.) The clean SHA mapping means the answer-key diff at the end of Lesson 11 is \`crates/funding/\` byte-identical against \`cd94137\`.
 
 | Module | Lessons | SHA |
 |---|---|---|
-| 0 | L0 | \`cd94137\` |
-| 1 | L1-L3 | \`cd94137\` |
-| 2 | L4-L7 | \`cd94137\` |
-| 3 | L8-L10 | \`cd94137\` |
-| 4 | L11 | \`cd94137\` |
+| 0 | Lesson 0 | \`cd94137\` |
+| 1 | Lessons 1–3 | \`cd94137\` |
+| 2 | Lessons 4–7 | \`cd94137\` |
+| 3 | Lessons 8–10 | \`cd94137\` |
+| 4 | Lesson 11 | \`cd94137\` |
 
 ## Prerequisites
 
@@ -142,7 +142,7 @@ You do NOT need:
 # In your openhl workspace root:
 cd ~/code/my-openhl
 git checkout main
-cargo build --workspace  # baseline — should pass before L1
+cargo build --workspace  # baseline — should pass before Lesson 1
 \`\`\`
 
 Reference checkout (for the answer-key diff at the end of each lesson):
@@ -172,7 +172,7 @@ The math content (especially Modules 2-3) is more concept-heavy than code-heavy 
 
 ## Ready
 
-Onward to L1, where we set up the \`RATE_SCALE\` constant and the fixed-point scheme that everything else builds on.`,
+Onward to Lesson 1, where we set up the \`RATE_SCALE\` constant and the fixed-point scheme that everything else builds on.`,
                 },
               ],
             },
@@ -210,22 +210,22 @@ cargo build -p openhl-funding
 
 Specific changes:
 
-- **Cargo.toml** wiring an \`openhl-clob\` dependency (we'll need \`AccountId\` from there later, but the dep goes in now so it's not a surprise at L3) and a \`[dev-dependencies]\` block ready for \`proptest\` (used at L4 / L7).
+- **Cargo.toml** wiring an \`openhl-clob\` dependency (we'll need \`AccountId\` from there later, but the dep goes in now so it's not a surprise at Lesson 3) and a \`[dev-dependencies]\` block ready for \`proptest\` (used at Lessons 4 / 7).
 - **\`src/types.rs\`** — newly created, containing the module doc + \`pub const RATE_SCALE: i64 = 1_000_000_000\`. Nothing else yet.
 - **\`src/lib.rs\`** — was empty, now declares \`pub mod types;\` + re-exports \`RATE_SCALE\` at the crate root.
 
 That's the lesson. **One constant, the most important constant in the entire crate.** Every rate, every premium, every settlement in the next 10 lessons will be expressed in terms of \`RATE_SCALE\`. Get this right and the rest of the math is straightforward; get it wrong and validators fork.
 
-There are no tests in L1 — \`RATE_SCALE\` is a value, not a behavior. L2's first money type will get the first test.
+There are no tests in Lesson 1 — \`RATE_SCALE\` is a value, not a behavior. Lesson 2's first money type will get the first test.
 
 ## Recap
 
-After L0:
+After Lesson 0:
 - You understand why funding payments exist (mark/index drift correction).
 - You understand why floats are a consensus fork hazard.
 - The funding crate scaffold (Cargo.toml + empty \`src/lib.rs\`) was already in your workspace from before Stage 8b.
 
-L1 turns the empty crate into a real crate with one publicly-visible value.
+Lesson 1 turns the empty crate into a real crate with one publicly-visible value.
 
 ## Plan
 
@@ -312,8 +312,8 @@ workspace = true
 
 Two changes:
 
-1. **\`openhl-clob = { path = "../clob" }\`** in \`[dependencies]\`. The funding crate will need \`AccountId\` from \`openhl-clob\` (it appears in \`Position\` at L3). Adding the dep now keeps the diff focused at L3. **Cost: ~0** — declaring a path dep doesn't recompile anything until the first \`use\`.
-2. **\`[dev-dependencies]\` block** with \`proptest\`. Used at L4 (premium antisymmetry test) and L7 (balanced-book zero-sum). Same logic: declare the dev-dep now, use it later. Production builds don't include proptest.
+1. **\`openhl-clob = { path = "../clob" }\`** in \`[dependencies]\`. The funding crate will need \`AccountId\` from \`openhl-clob\` (it appears in \`Position\` at Lesson 3). Adding the dep now keeps the diff focused at Lesson 3. **Cost: ~0** — declaring a path dep doesn't recompile anything until the first \`use\`.
+2. **\`[dev-dependencies]\` block** with \`proptest\`. Used at Lesson 4 (premium antisymmetry test) and Lesson 7 (balanced-book zero-sum). Same logic: declare the dev-dep now, use it later. Production builds don't include proptest.
 
 > 🛑 **Anti-fluency.** "Why not also add \`openhl-clob\` as a dev-dependency, since tests use it too?" **Because the production code uses \`openhl_clob::AccountId\` in \`Position\`, not just tests.** If \`AccountId\` were test-only we'd dev-dep it; since it's part of the production type signature, it has to be a regular dep. Dev-deps are only for things the tests pull in *that production never touches*.
 
@@ -346,8 +346,8 @@ pub const RATE_SCALE: i64 = 1_000_000_000;
 
 Four things to notice about this 15-line file:
 
-1. **Module doc has a "Why fixed-point integers, not floats" section.** This is the load-bearing rationale for the entire crate. The next engineer reading \`types.rs\` six months from now needs to see this explanation at the top — not buried in a commit message. The phrase at the end of the module doc — "**callers can pass snapshots without lifetime gymnastics**" — encodes a design choice that drives the rest of the crate: "**snapshot**" means values are passed by-value (a copy of the state at a point in time, not a reference into someone's storage); "**lifetime gymnastics**" is Rust's idiom for the cascade of \`'a\` / \`'b\` annotations that creep into signatures when you start holding \`&'a T\` everywhere. Every money type added in L2+ (\`MarkPrice\`, \`Premium\`, etc.) is a \`Copy\` newtype precisely so that callers can hand values around freely without those lifetime annotations.
-2. **The \`[\`FundingRate\`]\` and \`[\`Premium\`]\` cross-references.** Those types don't exist yet (L2 / L3). Rustdoc will warn about broken links during the L1 build. **Tolerate the warnings** — they resolve as we add types in L2/L3. If you really want zero warnings now, use \`[FundingRate]\` (no backticks) in plain text rather than \`[\`FundingRate\`]\` — but the cross-reference style matches the source convention.
+1. **Module doc has a "Why fixed-point integers, not floats" section.** This is the load-bearing rationale for the entire crate. The next engineer reading \`types.rs\` six months from now needs to see this explanation at the top — not buried in a commit message. The phrase at the end of the module doc — "**callers can pass snapshots without lifetime gymnastics**" — encodes a design choice that drives the rest of the crate: "**snapshot**" means values are passed by-value (a copy of the state at a point in time, not a reference into someone's storage); "**lifetime gymnastics**" is Rust's idiom for the cascade of \`'a\` / \`'b\` annotations that creep into signatures when you start holding \`&'a T\` everywhere. Every money type added in Lesson 2+ (\`MarkPrice\`, \`Premium\`, etc.) is a \`Copy\` newtype precisely so that callers can hand values around freely without those lifetime annotations.
+2. **The \`[\`FundingRate\`]\` and \`[\`Premium\`]\` cross-references.** Those types don't exist yet (Lessons 2 / 3). Rustdoc will warn about broken links during the Lesson 1 build. **Tolerate the warnings** — they resolve as we add types in Lessons 2/3. If you really want zero warnings now, use \`[FundingRate]\` (no backticks) in plain text rather than \`[\`FundingRate\`]\` — but the cross-reference style matches the source convention.
 3. **\`pub const RATE_SCALE: i64 = 1_000_000_000\`** — \`i64\`, not \`u64\`. Rates and premiums are *signed* (longs paying = positive premium, shorts paying = negative). Signed integers also let the arithmetic in \`compute.rs\` flow without sign-checking, since \`i128\` intermediates absorb the products naturally.
 4. **The doc says \`1.0\` = \`100%\`.** That's a unit-of-account decision. A raw \`RATE_SCALE\` value (1e9) means a 100% funding rate per interval. \`40_000_000\` means 4%. \`1_000_000\` means 0.1%. **Read it as parts-per-billion of "1 unit notional."**
 
@@ -384,14 +384,14 @@ pub mod types;
 pub use types::RATE_SCALE;
 \`\`\`
 
-Notice what's missing compared to the L11-end version: \`pub mod clock\`, \`pub mod compute\`, the rest of the \`pub use types::{...}\` re-exports. Those come in lessons L4-L10 as we add the modules. **L1 lib.rs is the minimum that compiles.**
+Notice what's missing compared to the Lesson 11-end version: \`pub mod clock\`, \`pub mod compute\`, the rest of the \`pub use types::{...}\` re-exports. Those come in Lessons 4–10 as we add the modules. **Lesson 1's lib.rs is the minimum that compiles.**
 
 The crate-level doc (\`//! ...\`) explains:
 - This is a pure state machine. No I/O.
 - A 1-paragraph HL funding recap — for any reader who lands on the crate root without context.
 - Where integration happens (the bridge, not here).
 
-The cross-reference \`[\`FundingClock\`]\` will be broken until L8 adds it; same handling as types.rs cross-refs.
+The cross-reference \`[\`FundingClock\`]\` will be broken until Lesson 8 adds it; same handling as types.rs cross-refs.
 
 > 🛑 **Predict.** What happens if you write \`pub mod compute;\` here without creating \`compute.rs\`? Hint: think about what \`pub mod foo;\` actually does.
 
@@ -413,12 +413,12 @@ warning: unresolved link to \`FundingClock\`
     Finished \`dev\` profile [unoptimized + debuginfo] in 0.5s
 \`\`\`
 
-Three rustdoc warnings about unresolved links. Those are expected — the linked types arrive in L2/L3 (types.rs) and L8 (clock.rs). **All three resolve by L11.** Don't suppress them with \`#[allow(rustdoc::broken_intra_doc_links)]\` — they're useful "you still need to add X" indicators while building.
+Three rustdoc warnings about unresolved links. Those are expected — the linked types arrive in Lessons 2/3 (types.rs) and Lesson 8 (clock.rs). **All three resolve by Lesson 11.** Don't suppress them with \`#[allow(rustdoc::broken_intra_doc_links)]\` — they're useful "you still need to add X" indicators while building.
 
 Common errors:
 
-- **\`error[E0463]: can't find crate for 'openhl_clob'\`** — you forgot the \`openhl-clob = { path = "../clob" }\` line in Cargo.toml. We don't use \`openhl_clob\` in L1 code, but if you preempted L3 and added the \`use openhl_clob::AccountId\` import to types.rs without the dep, this fires.
-- **\`error[E0583]: file not found for module 'clock'\`** or \`'compute'\` — you preemptively added \`pub mod clock;\` to lib.rs. Remove it; we'll add it back in L8.
+- **\`error[E0463]: can't find crate for 'openhl_clob'\`** — you forgot the \`openhl-clob = { path = "../clob" }\` line in Cargo.toml. We don't use \`openhl_clob\` in Lesson 1 code, but if you preempted Lesson 3 and added the \`use openhl_clob::AccountId\` import to types.rs without the dep, this fires.
+- **\`error[E0583]: file not found for module 'clock'\`** or \`'compute'\` — you preemptively added \`pub mod clock;\` to lib.rs. Remove it; we'll add it back in Lesson 8.
 - **\`error: failed to parse manifest\`** — Cargo.toml syntax. Double-check the \`[dev-dependencies]\` block isn't typo'd as \`[dev-dependences]\`.
 
 ## Design reflection
@@ -441,9 +441,9 @@ diff -u ~/code/my-openhl/crates/funding/src/types.rs ./crates/funding/src/types.
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 \`\`\`
 
-After L1:
+After Lesson 1:
 - **Cargo.toml** matches Stage 8b exactly.
-- **types.rs** matches the *first ~30 lines* of Stage 8b's types.rs — module doc + \`RATE_SCALE\`. Everything below (the type definitions) is L2/L3.
+- **types.rs** matches the *first ~30 lines* of Stage 8b's types.rs — module doc + \`RATE_SCALE\`. Everything below (the type definitions) is Lessons 2/3.
 - **lib.rs** is shorter than Stage 8b's lib.rs — only \`pub mod types;\` + the one \`pub use\`. The other module decls and re-exports come in later lessons.
 
 Return:
@@ -454,8 +454,8 @@ git checkout main
 
 ## Common questions
 
-**Q: Why declare \`[dev-dependencies] proptest\` now if L1 has no tests?**
-Because the Cargo.toml is a single diff target. Adding proptest at L4 would mean two Cargo.toml touches across the course; doing it once at L1 means the file stops changing after this lesson. **Cargo.toml stability is worth a small unused dep declaration.**
+**Q: Why declare \`[dev-dependencies] proptest\` now if Lesson 1 has no tests?**
+Because the Cargo.toml is a single diff target. Adding proptest at Lesson 4 would mean two Cargo.toml touches across the course; doing it once at Lesson 1 means the file stops changing after this lesson. **Cargo.toml stability is worth a small unused dep declaration.**
 
 **Q: What's a "parts-per-billion" interpretation in practice?**
 A funding rate of \`1_250_000\` raw means \`0.00125\` (0.125% per interval). Read it as "1,250,000 out of 1,000,000,000" — i.e., 0.125%. With HL's 8 settlements per day and a 4% cap, the range of values you'll see in practice is \`±40_000_000\` raw = \`±4%/interval\` = \`±32%/day\` worst case. **All comfortably representable in i64.**
@@ -464,11 +464,11 @@ A funding rate of \`1_250_000\` raw means \`0.00125\` (0.125% per interval). Rea
 **No.** \`RATE_SCALE\` is a chain-consensus constant. Every persisted balance, every historical settlement, every test fixture is calibrated against \`RATE_SCALE = 1e9\`. Changing it requires a coordinated network upgrade. **Treat it as immutable post-deployment.** This is why we set it once, in a \`const\`, at the start of the crate.
 
 **Q: Why no test for \`RATE_SCALE\`?**
-What would the test assert? \`assert_eq!(RATE_SCALE, 1_000_000_000)\` is tautological — it tests the constant against itself. The constant's meaning lives in how *other* code uses it. **L2's first money type gets the first meaningful test.**
+What would the test assert? \`assert_eq!(RATE_SCALE, 1_000_000_000)\` is tautological — it tests the constant against itself. The constant's meaning lives in how *other* code uses it. **Lesson 2's first money type gets the first meaningful test.**
 
-## Next lesson (L2)
+## Next lesson (Lesson 2)
 
-L2 adds the four "money types" — \`MarkPrice\`, \`IndexPrice\`, \`Premium\`, \`Notional\`. Each is a newtype wrapping a primitive. The teaching focus shifts from "why fixed-point" to "why newtypes": preventing accidental cross-feeding (e.g., passing an \`IndexPrice\` where a \`MarkPrice\` is expected). The four types add ~30 lines to \`types.rs\` and prove out the newtype pattern that the remaining types (L3) will follow.`,
+Lesson 2 adds the four "money types" — \`MarkPrice\`, \`IndexPrice\`, \`Premium\`, \`Notional\`. Each is a newtype wrapping a primitive. The teaching focus shifts from "why fixed-point" to "why newtypes": preventing accidental cross-feeding (e.g., passing an \`IndexPrice\` where a \`MarkPrice\` is expected). The four types add ~30 lines to \`types.rs\` and prove out the newtype pattern that the remaining types (Lesson 3) will follow.`,
                 },
                 {
                   title: "Lesson 2 — Money types — newtypes for prices, premiums, and notional",
@@ -506,18 +506,18 @@ Specific changes:
 - **\`Premium(pub i64)\`** — signed \`(mark - index) / index\`, scaled by \`RATE_SCALE\`. Positive when longs are overpaying.
 - **\`Notional(pub i64)\`** — signed quote-currency delta. Positive = account receives, negative = pays.
 
-Each is \`Copy + Default + PartialEq + Eq + PartialOrd + Ord + Hash + Debug\`. No tests yet — these types have no behavior beyond the wrapper. **L4's \`compute_premium\` is the first lesson where these types get exercised in code that can have bugs.**
+Each is \`Copy + Default + PartialEq + Eq + PartialOrd + Ord + Hash + Debug\`. No tests yet — these types have no behavior beyond the wrapper. **Lesson 4's \`compute_premium\` is the first lesson where these types get exercised in code that can have bugs.**
 
-The teaching point of this lesson isn't the math — it's the **newtype pattern**. Why wrap a \`u64\` instead of using \`u64\` directly? L2 is the answer to that question, demonstrated on 4 concrete types.
+The teaching point of this lesson isn't the math — it's the **newtype pattern**. Why wrap a \`u64\` instead of using \`u64\` directly? Lesson 2 is the answer to that question, demonstrated on 4 concrete types.
 
 ## Recap
 
-After L1:
+After Lesson 1:
 - \`RATE_SCALE = 1_000_000_000\` is the load-bearing constant.
 - \`types.rs\` exists with module doc + \`RATE_SCALE\`.
 - \`lib.rs\` re-exports \`RATE_SCALE\` at the crate root.
 
-L2 fills \`types.rs\` with the first half of the actual types (the "money" half). L3 fills the second half (positions, settlement, params).
+Lesson 2 fills \`types.rs\` with the first half of the actual types (the "money" half). Lesson 3 fills the second half (positions, settlement, params).
 
 ## Plan
 
@@ -639,7 +639,7 @@ The matrix of (Premium sign) × (position direction) → which account gets whic
 └──────────────────────────────┴─────────────────────┴─────────────────────┘
 \`\`\`
 
-Read it as: **\`Notional\`'s sign = the delta to add to that account's quote balance**. The choice of viewpoint isn't market direction; it's whatever lets the bridge apply the value with one line, \`balance += notional.0\`, with no conditional flipping. L7's \`apply_funding\` implements exactly these four cells in four lines of code.
+Read it as: **\`Notional\`'s sign = the delta to add to that account's quote balance**. The choice of viewpoint isn't market direction; it's whatever lets the bridge apply the value with one line, \`balance += notional.0\`, with no conditional flipping. Lesson 7's \`apply_funding\` implements exactly these four cells in four lines of code.
 
 ### Step 2: Update \`lib.rs\` re-exports
 
@@ -686,13 +686,13 @@ warning: unresolved link to \`FundingClock\`
     Finished \`dev\` profile [unoptimized + debuginfo] in 0.4s
 \`\`\`
 
-Two rustdoc warnings now (down from three at L1). The \`[Premium]\` link in \`RATE_SCALE\`'s doc resolves; the \`[FundingRate]\` and \`[FundingClock]\` links still don't. **Expected progress** — L3 will add \`FundingRate\` and clear the second warning.
+Two rustdoc warnings now (down from three at Lesson 1). The \`[Premium]\` link in \`RATE_SCALE\`'s doc resolves; the \`[FundingRate]\` and \`[FundingClock]\` links still don't. **Expected progress** — Lesson 3 will add \`FundingRate\` and clear the second warning.
 
 Common errors:
 
 - **\`error[E0381]: missing field 'value' in initializer of MarkPrice\`** — you forgot \`pub\` on the inner field and wrote \`MarkPrice { value: u64 }\` instead of \`MarkPrice(pub u64)\`. Use the tuple-struct form per the openhl convention.
 - **\`error[E0277]: 'i64' is not 'u64'\`** — you wrote \`Premium(pub u64)\` instead of \`Premium(pub i64)\`. Premium is signed; check the inner type.
-- **Missing derive** — you forgot one of the derives. The full set is \`Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash\`. \`Default\` is needed because tests will use \`MarkPrice::default()\` in some L4 fixture builders.
+- **Missing derive** — you forgot one of the derives. The full set is \`Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash\`. \`Default\` is needed because tests will use \`MarkPrice::default()\` in some Lesson 4 fixture builders.
 
 ## Design reflection
 
@@ -713,9 +713,9 @@ diff -u ~/code/my-openhl/crates/funding/src/types.rs ./crates/funding/src/types.
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 \`\`\`
 
-After L2:
-- **types.rs** matches Stage 8b through \`Notional\` (the first 4 newtypes). The next types — \`FundingRate\`, \`PositionSize\`, \`Position\`, \`Settlement\`, \`FundingParams\` — are L3.
-- **lib.rs** has the 4-type re-export. The full Stage 8b re-export adds 5 more names (\`FundingParams\`, \`FundingRate\`, \`Notional\` is already there, \`Position\`, \`PositionSize\`, \`Settlement\`). All come in L3.
+After Lesson 2:
+- **types.rs** matches Stage 8b through \`Notional\` (the first 4 newtypes). The next types — \`FundingRate\`, \`PositionSize\`, \`Position\`, \`Settlement\`, \`FundingParams\` — are Lesson 3.
+- **lib.rs** has the 4-type re-export. The full Stage 8b re-export adds 5 more names (\`FundingParams\`, \`FundingRate\`, \`Notional\` is already there, \`Position\`, \`PositionSize\`, \`Settlement\`). All come in Lesson 3.
 
 Return:
 
@@ -732,17 +732,17 @@ Because prices are always positive (negative price would be a system invariant v
 \`Default::default()\` returns \`MarkPrice(0)\`, \`Premium(0)\`, etc. Useful in test fixtures: \`let mark: MarkPrice = Default::default();\` is shorter than \`MarkPrice(0)\`. Also enables \`#[derive(Default)]\` on containing structs that use these types. **Cheap derive; no behavioral cost.**
 
 **Q: Why eagerly derive \`Hash\` / \`Ord\` / \`PartialOrd\` on every newtype?**
-To unlock the future moments where these types want to be keys or sort keys without having to revisit every type definition. L3's \`Position { account, size }\`, L7's settlements \`Vec\`, any later \`HashMap<AccountId, MarkPrice>\` (snapshot map), \`BTreeMap<Premium, Vec<Settlement>>\` (bucketing), or \`settlements.sort_by_key(|s| s.delta)\` (deterministic test ordering) — each of those needs one of these trait bounds the moment it appears. **For newtypes over primitives, deriving the full \`Copy + Default + PartialEq + Eq + PartialOrd + Ord + Hash + Debug\` set is free at the derive site (the behavior is inherited verbatim from the inner \`i64\`/\`u64\`), so the convention is to paste the same one-line attribute on every newtype up front.** You're buying out the future cost of editing N type definitions to add \`#[derive(Hash)]\` later — one line, now.
+To unlock the future moments where these types want to be keys or sort keys without having to revisit every type definition. Lesson 3's \`Position { account, size }\`, Lesson 7's settlements \`Vec\`, any later \`HashMap<AccountId, MarkPrice>\` (snapshot map), \`BTreeMap<Premium, Vec<Settlement>>\` (bucketing), or \`settlements.sort_by_key(|s| s.delta)\` (deterministic test ordering) — each of those needs one of these trait bounds the moment it appears. **For newtypes over primitives, deriving the full \`Copy + Default + PartialEq + Eq + PartialOrd + Ord + Hash + Debug\` set is free at the derive site (the behavior is inherited verbatim from the inner \`i64\`/\`u64\`), so the convention is to paste the same one-line attribute on every newtype up front.** You're buying out the future cost of editing N type definitions to add \`#[derive(Hash)]\` later — one line, now.
 
 **Q: Should \`Premium\` and \`Notional\` implement \`Add\` / \`Sub\` / \`Mul\`?**
 Tempting — \`Premium(5) + Premium(3) == Premium(8)\` reads nicely. But Stage 8b chose not to: the math operations in \`compute.rs\` need to upcast to \`i128\` for overflow safety, and providing \`Add\` for \`Premium\` would tempt callers to use it without the i128 dance. **The crate's API contract is: do arithmetic on the inner field with explicit i128 upcasting.** That contract is easier to enforce when the types don't have arithmetic ops.
 
 **Q: Why aren't there tests for these types?**
-What would the test assert? \`assert_eq!(MarkPrice(100), MarkPrice(100))\` tests \`PartialEq\` (a derive). \`assert_eq!(MarkPrice(100).0, 100)\` tests the pub field (a language feature). **Newtypes that only wrap a primitive have no behavior to test.** L4's \`compute_premium\` is where these types start participating in code that could have bugs.
+What would the test assert? \`assert_eq!(MarkPrice(100), MarkPrice(100))\` tests \`PartialEq\` (a derive). \`assert_eq!(MarkPrice(100).0, 100)\` tests the pub field (a language feature). **Newtypes that only wrap a primitive have no behavior to test.** Lesson 4's \`compute_premium\` is where these types start participating in code that could have bugs.
 
-## Next lesson (L3)
+## Next lesson (Lesson 3)
 
-L3 finishes the type roster: \`FundingRate(i64)\`, \`PositionSize(i64)\`, \`Position { account, size }\`, \`Settlement { account, delta }\`, \`FundingParams { interval_secs, rate_cap, divisor }\`. The teaching focus shifts from "newtype pattern" to "the parameter object pattern" (\`FundingParams\`) and the **HL-style defaults** — why 8 settlements per day, why 4% cap. The \`Position\` struct introduces the \`AccountId\` dependency from \`openhl_clob\` that we set up in L1's Cargo.toml.`,
+Lesson 3 finishes the type roster: \`FundingRate(i64)\`, \`PositionSize(i64)\`, \`Position { account, size }\`, \`Settlement { account, delta }\`, \`FundingParams { interval_secs, rate_cap, divisor }\`. The teaching focus shifts from "newtype pattern" to "the parameter object pattern" (\`FundingParams\`) and the **HL-style defaults** — why 8 settlements per day, why 4% cap. The \`Position\` struct introduces the \`AccountId\` dependency from \`openhl_clob\` that we set up in Lesson 1's Cargo.toml.`,
                 },
                 {
                   title: "Lesson 3 — Position types — finishing the roster + HL defaults",
@@ -781,24 +781,24 @@ Specific changes:
 - **\`Settlement { account, delta }\`** — output of \`apply_funding\`: who pays/receives, how much.
 - **\`FundingParams { interval_secs, rate_cap, divisor }\`** + \`hyperliquid_default()\` — network-level configuration with HL-shape defaults.
 
-This closes **Module 1**. After L3:
+This closes **Module 1**. After Lesson 3:
 - All types defined; no behavior yet.
 - Cross-references resolve in rustdoc (no more "unresolved link" warnings).
 - The crate is a pure data-types library — useful as documentation, not yet doing math.
 
-**Module 2 (L4-L7) starts the pure compute** — \`compute_premium\`, \`compute_rate\`, \`apply_funding\`. The first tests live there.
+**Module 2 (Lessons 4–7) starts the pure compute** — \`compute_premium\`, \`compute_rate\`, \`apply_funding\`. The first tests live there.
 
 The teaching focus this lesson is the **parameter-object pattern** and the HL-default rationale. Why bundle three parameters into a \`FundingParams\` struct instead of passing them as positional args? Why 1-hour interval, why 4% cap, why divisor of 8?
 
 ## Recap
 
-After L2:
+After Lesson 2:
 - 4 money newtypes (\`MarkPrice\`, \`IndexPrice\`, \`Premium\`, \`Notional\`) defined.
 - \`types.rs\` has module doc + \`RATE_SCALE\` + 4 types.
 - \`lib.rs\` re-exports 5 names (the constant + 4 types).
 - 2 unresolved rustdoc warnings remain (\`FundingRate\`, \`FundingClock\`).
 
-L3 adds 5 more types (closing the type roster) + the \`openhl_clob::AccountId\` import.
+Lesson 3 adds 5 more types (closing the type roster) + the \`openhl_clob::AccountId\` import.
 
 ## Plan
 
@@ -822,7 +822,7 @@ At the top of \`crates/funding/src/types.rs\`, after the module doc but before \
 use openhl_clob::AccountId;
 \`\`\`
 
-This import was set up in L1's Cargo.toml (the \`openhl-clob = { path = "../clob" }\` dep). It activates here because \`Position\` and \`Settlement\` will reference \`AccountId\` as a struct field type.
+This import was set up in Lesson 1's Cargo.toml (the \`openhl-clob = { path = "../clob" }\` dep). It activates here because \`Position\` and \`Settlement\` will reference \`AccountId\` as a struct field type.
 
 > 🛑 **Anti-fluency.** "Should we re-export \`AccountId\` from \`openhl-funding\` so callers don't need to import from \`openhl-clob\`?" **No — it's not ours.** \`AccountId\` is \`openhl-clob\`'s type, and callers should import it from where it's defined. Re-exporting it through \`openhl-funding\` would create two import paths for the same thing (\`openhl_clob::AccountId\` vs \`openhl_funding::AccountId\`) and obscure the dependency. **Re-export your own types; let callers import their dependencies' types directly.**
 
@@ -865,7 +865,7 @@ pub struct PositionSize {
 
 The signed-integer representation is **smaller** (8 bytes vs ~16+), **faster** (no enum dispatch in the hot path), and **simpler at the math layer** (just multiply by \`size.0\`; the sign carries through naturally). The tradeoff: the inner value's sign is implicit. The doc comment names it explicitly: *"Positive = long, negative = short, zero = flat."*
 
-**The note "Accounts with zero size aren't included in settlement snapshots"** is load-bearing. \`apply_funding\` will filter zero-size positions out — they have no economic exposure, so settling them produces a zero delta that adds noise. We'll see that filter in L7.
+**The note "Accounts with zero size aren't included in settlement snapshots"** is load-bearing. \`apply_funding\` will filter zero-size positions out — they have no economic exposure, so settling them produces a zero delta that adds noise. We'll see that filter in Lesson 7.
 
 ### Step 4: Append \`Position\`
 
@@ -1021,13 +1021,13 @@ warning: unresolved link to \`FundingClock\`
     Finished \`dev\` profile [unoptimized + debuginfo] in 0.4s
 \`\`\`
 
-**One rustdoc warning remaining** (from L0 we had 3; L1 still 3; L2 had 2; L3 has 1). The last unresolved link is \`FundingClock\` — resolved by L8.
+**One rustdoc warning remaining** (from Lesson 0 we had 3; Lesson 1 still 3; Lesson 2 had 2; Lesson 3 has 1). The last unresolved link is \`FundingClock\` — resolved by Lesson 8.
 
 Actually — depending on rustdoc's link-resolution behavior, the \`[FundingRate]\` and \`[Premium]\` cross-refs in the various doc comments may all resolve now (those types now exist). Verify with \`cargo doc -p openhl-funding --no-deps\`. The exact warning count may differ.
 
 Common errors:
 
-- **\`error[E0432]: unresolved import 'openhl_clob::AccountId'\`** — Cargo.toml dep not in place. Re-check L1's \`[dependencies]\` block has \`openhl-clob = { path = "../clob" }\`.
+- **\`error[E0432]: unresolved import 'openhl_clob::AccountId'\`** — Cargo.toml dep not in place. Re-check Lesson 1's \`[dependencies]\` block has \`openhl-clob = { path = "../clob" }\`.
 - **\`error: cannot find type 'Notional' in this scope\`** in \`Settlement\` — you didn't import the local type. \`Notional\` is in the same module, no \`use\` needed, but the type name must be spelled exactly.
 - **\`error: function calls are not allowed in const fn\`** on \`hyperliquid_default\` — you wrote \`FundingRate::from(40_000_000)\` or similar. Use the tuple-struct literal \`FundingRate(40_000_000)\` directly.
 
@@ -1052,11 +1052,11 @@ diff -u ~/code/my-openhl/crates/funding/src/types.rs ./crates/funding/src/types.
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 \`\`\`
 
-After L3:
+After Lesson 3:
 - **types.rs** matches Stage 8b **completely** — all 9 types + \`RATE_SCALE\` + \`hyperliquid_default\`.
 - **lib.rs** has the full type re-export; only the \`compute\` / \`clock\` re-exports are missing.
 
-**Module 1 is complete.** From L4 onward we shift to \`compute.rs\` — pure functions over these types, with tests.
+**Module 1 is complete.** From Lesson 4 onward we shift to \`compute.rs\` — pure functions over these types, with tests.
 
 Return:
 
@@ -1080,20 +1080,20 @@ They look similar but they're at different lifecycle stages. \`Position\` is an 
 
 ## The data pipeline cutting through Module 1
 
-The 9 types defined so far are exactly the **vocabulary** of the pure-compute pipeline that Module 2 (L4-L7) will assemble. The whole arrangement on one page:
+The 9 types defined so far are exactly the **vocabulary** of the pure-compute pipeline that Module 2 (Lessons 4–7) will assemble. The whole arrangement on one page:
 
 \`\`\`
 [Inputs (snapshots)]                [Pure compute (Module 2)]              [Outputs]
 
   MarkPrice  ──┐
-               ├─► (L4: compute_premium) ─► Premium ──┐
+               ├─► (Lesson 4: compute_premium) ─► Premium ──┐
   IndexPrice ──┘                                       │
                                                        ▼
-  FundingParams ───────────────────────────► (L6: compute_rate)
+  FundingParams ───────────────────────────► (Lesson 6: compute_rate)
    { rate_cap, divisor, … }                            │
                                                        ▼
                                                   FundingRate ──┐
-                                                                ├─► (L7: apply_funding) ──► Vec<Settlement>
+                                                                ├─► (Lesson 7: apply_funding) ──► Vec<Settlement>
   Position (snapshot)             ──────────────────────────────┘                            { account, delta: Notional }
    { account, size: PositionSize }
 \`\`\`
@@ -1103,19 +1103,19 @@ Three properties this picture enforces at the type level:
 2. **Inputs (\`Position\`) and outputs (\`Settlement\`) are separate types** — the owning layer can't accidentally feed a \`Settlement\` back as if it were a position; the types block that path.
 3. **\`FundingParams\` runs alongside as a side-branch** — it's a config argument referenced by each settlement computation, not a value on the main pipeline. Adding \`min_settlement_threshold\` later doesn't grow the number of arrows.
 
-Module 2 fills in the three functions in this diagram, in order. Every argument and return value will use only the types defined in L1-L3.
+Module 2 fills in the three functions in this diagram, in order. Every argument and return value will use only the types defined in Lessons 1–3.
 
 ## Module 1 milestone — what you've built
 
-After L3 you have:
+After Lesson 3 you have:
 - 9 newtypes + 1 struct-with-method (\`FundingParams\`).
 - ~110 lines of \`types.rs\` matching Stage 8b exactly.
 - A full vocabulary for talking about funding — every value in the math pipeline (premium, rate, settlement, position) has a type.
 - Zero behavior yet. **Modules 2-3 add the behavior.**
 
-## Next lesson (L4)
+## Next lesson (Lesson 4)
 
-L4 starts \`compute.rs\`. We create the file with the module doc + \`compute_premium\` function — the first math in the crate. The function is 8 lines but encodes 3 design decisions: (a) handle \`index == 0\` by returning \`Premium(0)\` instead of erroring; (b) use \`i128\` intermediates to avoid overflow on the subtraction-times-scale; (c) saturate back to \`i64\` rather than wrapping. The lesson also adds the first 4 unit tests — premium-zero-when-equal, premium-positive/negative cases, and the \`index == 0\` saturation test. **First tests in the crate.**`,
+Lesson 4 starts \`compute.rs\`. We create the file with the module doc + \`compute_premium\` function — the first math in the crate. The function is 8 lines but encodes 3 design decisions: (a) handle \`index == 0\` by returning \`Premium(0)\` instead of erroring; (b) use \`i128\` intermediates to avoid overflow on the subtraction-times-scale; (c) saturate back to \`i64\` rather than wrapping. The lesson also adds the first 4 unit tests — premium-zero-when-equal, premium-positive/negative cases, and the \`index == 0\` saturation test. **First tests in the crate.**`,
                 },
               ],
             },
@@ -1170,11 +1170,11 @@ This is the first lesson with **actual math**. From now on, every code change ha
 
 ## Recap
 
-After L3:
+After Lesson 3:
 - 9 types + \`RATE_SCALE\` in \`types.rs\` — Stage 8b's complete type roster.
 - Zero behavior yet. The crate compiles but does nothing.
 
-L4 introduces the first function. The function is short (~10 lines of body) but encodes 3 design decisions: graceful handling of \`index == 0\`, \`i128\` intermediates for overflow safety, and saturation rather than wrap/panic.
+Lesson 4 introduces the first function. The function is short (~10 lines of body) but encodes 3 design decisions: graceful handling of \`index == 0\`, \`i128\` intermediates for overflow safety, and saturation rather than wrap/panic.
 
 ## Plan
 
@@ -1214,11 +1214,11 @@ use crate::types::{
 
 Two things to notice:
 
-**The module doc previews 3 functions but we only ship 1 in L4.** The cross-references \`[compute_rate]\` and \`[apply_funding]\` will be broken until L6 and L7. **Tolerate the warnings** — same as the L1/L2 \`[FundingRate]\` cross-refs we let resolve incrementally.
+**The module doc previews 3 functions but we only ship 1 in Lesson 4.** The cross-references \`[compute_rate]\` and \`[apply_funding]\` will be broken until Lessons 6 and 7. **Tolerate the warnings** — same as the Lesson 1/2 \`[FundingRate]\` cross-refs we let resolve incrementally.
 
-**The \`use\` statement imports types we don't all use yet.** \`FundingParams\`, \`FundingRate\`, \`Notional\`, \`Position\`, \`Settlement\` are needed by L6/L7's functions. Importing them now means the import block stabilizes after L4 — same logic as L1's \`[dev-dependencies] proptest\`. **Stabilize boilerplate early; iterate on logic.**
+**The \`use\` statement imports types we don't all use yet.** \`FundingParams\`, \`FundingRate\`, \`Notional\`, \`Position\`, \`Settlement\` are needed by Lesson 6/7's functions. Importing them now means the import block stabilizes after Lesson 4 — same logic as Lesson 1's \`[dev-dependencies] proptest\`. **Stabilize boilerplate early; iterate on logic.**
 
-> 🛑 **Anti-fluency.** "Shouldn't we suppress the unused-import warnings between L4 and L6?" **The unused-import warning fires on items the *compiler* sees as unused, not items rustdoc references.** Since we'll use \`FundingRate\`, \`Notional\`, etc. by L7, the compiler doesn't complain — it sees \`use\` declarations whose items will get used later in the same module. Only the rustdoc cross-refs \`[compute_rate]\` and \`[apply_funding]\` produce warnings, and those resolve when L6/L7 land.
+> 🛑 **Anti-fluency.** "Shouldn't we suppress the unused-import warnings between Lessons 4 and 6?" **The unused-import warning fires on items the *compiler* sees as unused, not items rustdoc references.** Since we'll use \`FundingRate\`, \`Notional\`, etc. by Lesson 7, the compiler doesn't complain — it sees \`use\` declarations whose items will get used later in the same module. Only the rustdoc cross-refs \`[compute_rate]\` and \`[apply_funding]\` produce warnings, and those resolve when Lessons 6/7 land.
 
 ### Step 2: Add \`compute_premium\`
 
@@ -1301,7 +1301,7 @@ Three lines of body. **\`i64::try_from(v)\` returns \`Result\`** — \`Ok(value)
 
 This function is **private to the module** (\`fn\`, not \`pub fn\`). Callers don't need it — they pass \`MarkPrice\` / \`IndexPrice\` in, get \`Premium\` back, and the saturation happens behind the scenes. Keeping it private prevents accidental misuse and keeps the public surface clean.
 
-L7's \`apply_funding\` will be the second caller of this helper; that's why it's a helper and not inlined into \`compute_premium\`.
+Lesson 7's \`apply_funding\` will be the second caller of this helper; that's why it's a helper and not inlined into \`compute_premium\`.
 
 > 🛑 **Predict.** What would the test \`assert_eq!(saturate_i128_to_i64(i128::MAX), ???)\` expect?
 
@@ -1355,7 +1355,7 @@ Four hand-traced tests. Each is short, but each pins a specific *meaning*:
 
 The comment \`// mark 101, index 100 → premium = 1/100 = 0.01 → 10_000_000 ppb\` in test 2 is the **paper math, written in the test**. Anyone debugging this in the future can verify by hand that the assertion is correct — no need to trust the test author got it right.
 
-> 🛑 **Anti-fluency.** "Shouldn't we test edge cases like \`MarkPrice(u64::MAX)\` or \`IndexPrice(1)\`?" **Yes, but in L5.** Those are the saturation-edge tests — they exercise the \`saturate_i128_to_i64\` helper at its boundary, which is L5's main pedagogical focus. **L4's tests pin the normal-input semantics; L5 pins the pathological-input behavior.** Both classes of test matter; separating them by lesson keeps the per-lesson scope tight.
+> 🛑 **Anti-fluency.** "Shouldn't we test edge cases like \`MarkPrice(u64::MAX)\` or \`IndexPrice(1)\`?" **Yes, but in Lesson 5.** Those are the saturation-edge tests — they exercise the \`saturate_i128_to_i64\` helper at its boundary, which is Lesson 5's main pedagogical focus. **Lesson 4's tests pin the normal-input semantics; Lesson 5 pins the pathological-input behavior.** Both classes of test matter; separating them by lesson keeps the per-lesson scope tight.
 
 ### Step 5: Update \`lib.rs\`
 
@@ -1420,7 +1420,7 @@ test compute::tests::premium_zero_when_mark_equals_index ... ok
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**4 tests pass.** First green run in the crate. The 3 rustdoc warnings are still expected (\`compute_rate\`/\`apply_funding\`/\`FundingClock\` — resolved by L6/L7/L8).
+**4 tests pass.** First green run in the crate. The 3 rustdoc warnings are still expected (\`compute_rate\`/\`apply_funding\`/\`FundingClock\` — resolved by Lessons 6/7/8).
 
 Common errors:
 
@@ -1450,9 +1450,9 @@ diff -u ~/code/my-openhl/crates/funding/src/compute.rs ./crates/funding/src/comp
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 \`\`\`
 
-After L4:
-- **compute.rs** matches Stage 8b through \`compute_premium\` + \`saturate_i128_to_i64\` + the 4 hand-traced premium tests. \`compute_rate\`, \`apply_funding\`, the rate tests, and the proptests are L5-L7.
-- **lib.rs** has \`pub mod compute;\` and the \`compute_premium\` re-export. \`apply_funding\`, \`compute_rate\`, and the clock module are L5-L8.
+After Lesson 4:
+- **compute.rs** matches Stage 8b through \`compute_premium\` + \`saturate_i128_to_i64\` + the 4 hand-traced premium tests. \`compute_rate\`, \`apply_funding\`, the rate tests, and the proptests are Lessons 5–7.
+- **lib.rs** has \`pub mod compute;\` and the \`compute_premium\` re-export. \`apply_funding\`, \`compute_rate\`, and the clock module are Lessons 5–8.
 
 Return:
 
@@ -1474,9 +1474,9 @@ The conversion \`i128::from(u64)\` is free (it's just a zero-extend). Doing the 
 **Q: Should \`compute_premium\` be \`pub(crate)\` instead of \`pub\`?**
 \`pub\` because external callers (the bridge integration in course 10, or external observers querying funding state for telemetry) need it. \`pub(crate)\` would forbid that. **The function is part of the public API.** \`saturate_i128_to_i64\` is the implementation detail; \`compute_premium\` is the contract.
 
-## Next lesson (L5)
+## Next lesson (Lesson 5)
 
-L5 doesn't add a new function. Instead, it does a deep dive on the overflow philosophy: why saturation is the only acceptable behavior for consensus-critical math, what the alternatives look like and why they fork the chain, and how \`saturate_i128_to_i64\`'s edges behave under pathological inputs. The lesson also adds 1 proptest (\`premium_is_antisymmetric_in_mark_index\`) — the property that swapping mark and index flips the premium sign. **First proptest in the crate.**`,
+Lesson 5 doesn't add a new function. Instead, it does a deep dive on the overflow philosophy: why saturation is the only acceptable behavior for consensus-critical math, what the alternatives look like and why they fork the chain, and how \`saturate_i128_to_i64\`'s edges behave under pathological inputs. The lesson also adds 1 proptest (\`premium_is_antisymmetric_in_mark_index\`) — the property that swapping mark and index flips the premium sign. **First proptest in the crate.**`,
                 },
                 {
                   title: "Lesson 5 — Overflow philosophy + the first proptest",
@@ -1505,7 +1505,7 @@ Verification:
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 5 tests (4 from L4 + 1 new proptest).
+…passes 5 tests (4 from Lesson 4 + 1 new proptest).
 
 Specific changes:
 
@@ -1520,12 +1520,12 @@ But the larger payload of this lesson is **conceptual, not code**. We walk throu
 
 ## Recap
 
-After L4:
+After Lesson 4:
 - \`compute_premium\` computes a signed premium with \`i128\` intermediates.
 - \`saturate_i128_to_i64\` clamps overflow to i64 boundaries.
 - 4 hand-traced tests pin the function's behavior at normal inputs.
 
-L4's tests don't exercise pathological inputs (e.g., \`MarkPrice(u64::MAX)\`), and they don't exercise the saturate helper at its boundaries. L5 explores both gaps via philosophy + a proptest.
+Lesson 4's tests don't exercise pathological inputs (e.g., \`MarkPrice(u64::MAX)\`), and they don't exercise the saturate helper at its boundaries. Lesson 5 explores both gaps via philosophy + a proptest.
 
 ## Plan
 
@@ -1592,7 +1592,7 @@ The *funding rate* at saturation is effectively the cap (after \`saturate_i128_t
 
 ### Step 2: \`saturate_i128_to_i64\` boundary cases
 
-Recall the helper from L4:
+Recall the helper from Lesson 4:
 
 \`\`\`rust
 fn saturate_i128_to_i64(v: i128) -> i64 {
@@ -1649,7 +1649,7 @@ Open \`crates/funding/src/compute.rs\`. The current test module starts:
 mod tests {
     use super::*;
 
-    // ... 4 unit tests from L4 ...
+    // ... 4 unit tests from Lesson 4 ...
 }
 \`\`\`
 
@@ -1669,17 +1669,17 @@ mod tests {
         }
     }
 
-    // ... 4 unit tests from L4 ...
+    // ... 4 unit tests from Lesson 4 ...
 }
 \`\`\`
 
 Three things to notice:
 
-1. **\`use openhl_clob::AccountId;\`** — needed for the \`pos\` helper. Not used by L4's tests, but used by L5's proptest (we won't need it in this exact proptest, but L7's apply_funding tests will, and we add it now to stabilize the test module imports).
+1. **\`use openhl_clob::AccountId;\`** — needed for the \`pos\` helper. Not used by Lesson 4's tests, but used by Lesson 5's proptest (we won't need it in this exact proptest, but Lesson 7's apply_funding tests will, and we add it now to stabilize the test module imports).
 2. **\`use proptest::prelude::*;\`** — brings \`proptest!\`, \`prop_assert_eq!\`, \`prop_assert!\`, and the strategy combinators (\`1u64..1_000_000\`) into scope.
-3. **\`fn pos(account: u64, size: i64) -> Position\`** — a tiny helper that constructs a \`Position\`. Used by L7. Adding now to stabilize the imports/helpers section.
+3. **\`fn pos(account: u64, size: i64) -> Position\`** — a tiny helper that constructs a \`Position\`. Used by Lesson 7. Adding now to stabilize the imports/helpers section.
 
-**Stabilize boilerplate; iterate on tests.** Same logic as L1's deps and L4's \`use\` block — we add now what we'll need later, so the per-lesson diff stays focused on what's actually new.
+**Stabilize boilerplate; iterate on tests.** Same logic as Lesson 1's deps and Lesson 4's \`use\` block — we add now what we'll need later, so the per-lesson diff stays focused on what's actually new.
 
 ### Step 4: Add the antisymmetry proptest
 
@@ -1729,7 +1729,7 @@ The naive version of "antisymmetry" would be: \`compute_premium(MarkPrice(M), In
 
 > 🛑 **Predict.** Why does the strategy use \`1u64..1_000_000\` (excluding zero) instead of \`0u64..1_000_000\`?
 
-(Answer: **Because \`index == 0\` is the \`Premium(0)\` early-return case, already tested as a hand-traced unit test in L4.** Including 0 in the proptest would either: (a) cause the proptest to assert \`signs are opposite\` when they're both zero, breaking the property, or (b) require special-casing zero inside the proptest, complicating the test. Excluding zero keeps the property clean. **Proptests should exercise the interesting range, not the trivial-or-already-tested range.**)
+(Answer: **Because \`index == 0\` is the \`Premium(0)\` early-return case, already tested as a hand-traced unit test in Lesson 4.** Including 0 in the proptest would either: (a) cause the proptest to assert \`signs are opposite\` when they're both zero, breaking the property, or (b) require special-casing zero inside the proptest, complicating the test. Excluding zero keeps the property clean. **Proptests should exercise the interesting range, not the trivial-or-already-tested range.**)
 
 ### Step 5: Run the test
 
@@ -1782,7 +1782,7 @@ Five load-bearing decisions in this lesson:
 
 2. **Test the property that's actually invariant, not the aspirational one.** Naive antisymmetry would require equal magnitudes; integer rounding breaks that. We test the weaker property (opposite signs) and document the rounding caveat in the test comment. **Aspirational tests fail in production; invariant tests fail in development.**
 
-3. **Stabilize test-module boilerplate early.** Adding \`use proptest::prelude::*\`, \`use openhl_clob::AccountId\`, and the \`pos\` helper now means the test module's imports stay stable for L6 / L7. **Boilerplate churn obscures the actual diff per lesson.**
+3. **Stabilize test-module boilerplate early.** Adding \`use proptest::prelude::*\`, \`use openhl_clob::AccountId\`, and the \`pos\` helper now means the test module's imports stay stable for Lessons 6 / 7. **Boilerplate churn obscures the actual diff per lesson.**
 
 4. **The \`unwrap_or\` sign-aware fallback expression in \`saturate_i128_to_i64\` is required.** A fixed override would flip negative overflows to positive. Reading the saturate helper carefully reveals why this branch is *necessary*, not just defensive.
 
@@ -1796,8 +1796,8 @@ git checkout cd94137
 diff -u ~/code/my-openhl/crates/funding/src/compute.rs ./crates/funding/src/compute.rs
 \`\`\`
 
-After L5:
-- **compute.rs** matches Stage 8b through \`compute_premium\` + \`saturate_i128_to_i64\` + the 4 hand-traced premium tests + the antisymmetry proptest + the test-module imports/helpers. \`compute_rate\`, \`apply_funding\`, and the rest of the proptests are L6/L7.
+After Lesson 5:
+- **compute.rs** matches Stage 8b through \`compute_premium\` + \`saturate_i128_to_i64\` + the 4 hand-traced premium tests + the antisymmetry proptest + the test-module imports/helpers. \`compute_rate\`, \`apply_funding\`, and the rest of the proptests are Lessons 6/7.
 
 Return:
 
@@ -1819,9 +1819,9 @@ Both are property-testing crates for Rust; both work fine. \`proptest\` has stro
 **Q: What's the relationship between \`saturating_mul\` and \`saturate_i128_to_i64\`?**
 \`saturating_mul\` is a built-in method on \`i128\` (and other integers) that produces the saturated product within the type's own range. \`saturate_i128_to_i64\` is our user-defined helper that clamps an \`i128\` to the \`i64\` range. They serve different boundaries: \`saturating_mul\` defends against in-type overflow, \`saturate_i128_to_i64\` defends against the cross-type narrowing. **Both are needed because the math uses both i128 (for products) and i64 (for storage).**
 
-## Next lesson (L6)
+## Next lesson (Lesson 6)
 
-L6 adds \`compute_rate\` — the function that takes a \`Premium\` and \`FundingParams\` and produces a \`FundingRate\`. The function is ~10 lines but encodes 3 decisions: (a) \`divisor == 0\` returns \`FundingRate(0)\` (funding disabled), (b) the divisor reduces the premium before clamping, (c) the \`rate_cap\` clamps absolute value (so negative caps and positive caps share the same \`params.rate_cap\`). The lesson also adds 4 unit tests covering the divisor, the cap on both sides, and the disabled-funding case. After L6, two of the three pure-compute functions are done.`,
+Lesson 6 adds \`compute_rate\` — the function that takes a \`Premium\` and \`FundingParams\` and produces a \`FundingRate\`. The function is ~10 lines but encodes 3 decisions: (a) \`divisor == 0\` returns \`FundingRate(0)\` (funding disabled), (b) the divisor reduces the premium before clamping, (c) the \`rate_cap\` clamps absolute value (so negative caps and positive caps share the same \`params.rate_cap\`). The lesson also adds 4 unit tests covering the divisor, the cap on both sides, and the disabled-funding case. After Lesson 6, two of the three pure-compute functions are done.`,
                 },
                 {
                   title: "Lesson 6 — compute_rate — divisor + cap",
@@ -1848,7 +1848,7 @@ Verification:
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 10 tests (5 from L4-L5 + 5 new).
+…passes 10 tests (5 from Lessons 4–5 + 5 new).
 
 Specific changes:
 
@@ -1857,18 +1857,18 @@ Specific changes:
 - **\`compute_rate(premium, params) -> FundingRate\`** — turns a raw premium into a per-interval rate by dividing by \`params.divisor\` and clamping to \`±params.rate_cap\`.
 - **5 unit tests** covering: the divisor effect, the positive cap clamp, the negative cap clamp, the disabled-when-divisor-zero case, the disabled-when-cap-zero case.
 
-After L6, two of \`compute.rs\`'s three pure functions are done. **\`apply_funding\` is the only one left** — L7.
+After Lesson 6, two of \`compute.rs\`'s three pure functions are done. **\`apply_funding\` is the only one left** — Lesson 7.
 
 The teaching focus is the **order of operations**: divide *then* clamp. Reversing that order would change the rate cap's meaning entirely — and it's the kind of off-by-one design bug that's easy to introduce and hard to detect.
 
 ## Recap
 
-After L5:
+After Lesson 5:
 - \`compute_premium\` produces a signed premium from mark/index.
 - The antisymmetry proptest exercises 256 random pairs.
 - \`saturate_i128_to_i64\` is in place but only used by \`compute_premium\` so far.
 
-L6 adds the second pure function. \`compute_rate\` is shorter than \`compute_premium\` (no overflow gymnastics — the values it processes already fit in i64) but encodes its own set of design decisions.
+Lesson 6 adds the second pure function. \`compute_rate\` is shorter than \`compute_premium\` (no overflow gymnastics — the values it processes already fit in i64) but encodes its own set of design decisions.
 
 ## Plan
 
@@ -2062,7 +2062,7 @@ Becomes:
 pub use compute::{compute_premium, compute_rate};
 \`\`\`
 
-Two functions now in the public API. **Alphabetical order maintained** — \`compute_premium\` before \`compute_rate\`. The pattern continues with L7 when \`apply_funding\` arrives.
+Two functions now in the public API. **Alphabetical order maintained** — \`compute_premium\` before \`compute_rate\`. The pattern continues with Lesson 7 when \`apply_funding\` arrives.
 
 ### Step 5: Run tests
 
@@ -2118,9 +2118,9 @@ diff -u ~/code/my-openhl/crates/funding/src/compute.rs ./crates/funding/src/comp
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 \`\`\`
 
-After L6:
-- **compute.rs** matches Stage 8b through \`compute_premium\` + \`compute_rate\` + \`saturate_i128_to_i64\` + the 4 premium tests + 5 rate tests + 1 proptest. The only remaining gap is \`apply_funding\` and the balanced-book proptest (L7).
-- **lib.rs** re-exports \`compute_premium\` and \`compute_rate\`. \`apply_funding\` is L7's addition.
+After Lesson 6:
+- **compute.rs** matches Stage 8b through \`compute_premium\` + \`compute_rate\` + \`saturate_i128_to_i64\` + the 4 premium tests + 5 rate tests + 1 proptest. The only remaining gap is \`apply_funding\` and the balanced-book proptest (Lesson 7).
+- **lib.rs** re-exports \`compute_premium\` and \`compute_rate\`. \`apply_funding\` is Lesson 7's addition.
 
 Return:
 
@@ -2143,9 +2143,9 @@ In production, this is usually blocked earlier: governance/config ingestion vali
 **Q: Why no proptest for \`compute_rate\`?**
 There's no obvious algebraic property to test. "Divide and clamp" doesn't have an antisymmetry, commutativity, or other invariant that proptest would shine on. The 5 hand-traced tests cover the input regions (normal divide, positive clamp, negative clamp, divisor zero, cap zero) well. **Proptest is great for properties; hand-traced tests are great for distinct input regions.** Don't force a proptest where there's no property to test.
 
-## Next lesson (L7)
+## Next lesson (Lesson 7)
 
-L7 adds \`apply_funding\` — the third and final pure function. It takes a slice of \`Position\`s, a \`MarkPrice\`, and a \`FundingRate\`, and returns a \`Vec<Settlement>\` (one per non-flat position). The function is ~25 lines but encodes the *longs-pay-shorts* sign convention and includes the **balanced-book zero-sum** proptest — for every set of equal-and-opposite positions, the settlement deltas sum to zero (funding redistributes; it doesn't create or destroy quote currency). This is the second proptest in the crate and closes Module 2.`,
+Lesson 7 adds \`apply_funding\` — the third and final pure function. It takes a slice of \`Position\`s, a \`MarkPrice\`, and a \`FundingRate\`, and returns a \`Vec<Settlement>\` (one per non-flat position). The function is ~25 lines but encodes the *longs-pay-shorts* sign convention and includes the **balanced-book zero-sum** proptest — for every set of equal-and-opposite positions, the settlement deltas sum to zero (funding redistributes; it doesn't create or destroy quote currency). This is the second proptest in the crate and closes Module 2.`,
                 },
                 {
                   title: "Lesson 7 — apply_funding — sign convention + zero-sum proptest",
@@ -2172,7 +2172,7 @@ Verification:
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 15 tests (10 from L4-L6 + 5 new).
+…passes 15 tests (10 from Lessons 4–6 + 5 new).
 
 Specific changes:
 
@@ -2186,19 +2186,19 @@ Specific changes:
   - \`apply_funding_returns_empty_on_zero_rate\`
 - **1 proptest** — \`balanced_book_settlements_sum_to_zero\` — for any equal-and-opposite pair of positions, the settlements sum to zero. **The fundamental conservation law for funding: it redistributes, it doesn't create or destroy.**
 
-**Module 2 closes** after this lesson. All three pure functions (\`compute_premium\`, \`compute_rate\`, \`apply_funding\`) are in place. Module 3 (the clock state machine) starts at L8.
+**Module 2 closes** after this lesson. All three pure functions (\`compute_premium\`, \`compute_rate\`, \`apply_funding\`) are in place. Module 3 (the clock state machine) starts at Lesson 8.
 
 The teaching focus is the **sign convention** (longs-pay-shorts), specifically *how* the code expresses it: a single \`-\` in front of \`delta_unscaled\`. One character carries the entire sign contract.
 
 ## Recap
 
-After L6:
+After Lesson 6:
 - \`compute_premium\` → \`Premium\`
 - \`compute_rate\` → \`FundingRate\`
 - 10 tests passing, 1 proptest passing
 - \`saturate_i128_to_i64\` has one user (\`compute_premium\`)
 
-L7 wires the final stage of the pipeline — turning a rate into per-account settlements — and adds the second user of the saturate helper.
+Lesson 7 wires the final stage of the pipeline — turning a rate into per-account settlements — and adds the second user of the saturate helper.
 
 ## Plan
 
@@ -2379,7 +2379,7 @@ After the existing rate tests (and before the proptest block — we'll add the n
 
 4. **\`apply_funding_returns_empty_on_zero_rate\`** — the fast-path. Non-empty positions, zero rate → empty output. **Confirms the early return runs before any per-position work.**
 
-The \`pos(account, size)\` helper was added in L5's test-module setup; we use it freely here.
+The \`pos(account, size)\` helper was added in Lesson 5's test-module setup; we use it freely here.
 
 ### Step 4: Add the balanced-book zero-sum proptest
 
@@ -2467,12 +2467,12 @@ test compute::tests::apply_funding_shorts_pay_longs_when_rate_negative ... ok
 test compute::tests::apply_funding_skips_flat_positions ... ok
 test compute::tests::balanced_book_settlements_sum_to_zero ... ok
 test compute::tests::premium_is_antisymmetric_in_mark_index ... ok
-... (rest of L4-L6 tests)
+... (rest of Lessons 4–6 tests)
 
 test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**15 tests, all green.** Only one rustdoc warning left (\`FundingClock\` — resolves at L8). **Module 2 closes.**
+**15 tests, all green.** Only one rustdoc warning left (\`FundingClock\` — resolves at Lesson 8). **Module 2 closes.**
 
 Common errors:
 
@@ -2502,11 +2502,11 @@ diff -u ~/code/my-openhl/crates/funding/src/compute.rs ./crates/funding/src/comp
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 \`\`\`
 
-After L7:
+After Lesson 7:
 - **compute.rs** matches Stage 8b **exactly**. All three pure functions, all helpers, all tests, all proptests.
-- **lib.rs** re-exports \`apply_funding\`, \`compute_premium\`, \`compute_rate\`. The remaining gap is \`pub mod clock;\` and its re-exports — L8.
+- **lib.rs** re-exports \`apply_funding\`, \`compute_premium\`, \`compute_rate\`. The remaining gap is \`pub mod clock;\` and its re-exports — Lesson 8.
 
-**Module 2 is complete.** Module 3 starts at L8.
+**Module 2 is complete.** Module 3 starts at Lesson 8.
 
 Return:
 
@@ -2523,14 +2523,14 @@ Determinism. Sorting would impose an ordering choice; preserving input order mak
 With \`size = 1M\`, \`mark = 1M\`, \`rate = 1e7\` (1% of RATE_SCALE = 1% per interval): \`notional = 1e12\`, \`delta_unscaled = 1e19\`. This is right around \`i64::MAX\` (~9.2e18), so we're in the saturation regime already with these "reasonable" inputs. **i128 intermediates are not optional for realistic deployments.**
 
 **Q: Why no tests for the saturation behavior of \`apply_funding\`?**
-The saturation cases are tested *via the helper* (\`saturate_i128_to_i64\`'s boundary behavior is explored in L5). Testing the same boundary again at this function call would be redundant. **Test the helper once; trust it everywhere else.** A composition test (\`size = u64::MAX, mark = u64::MAX, rate = i64::MAX\`) might be worth adding for completeness, but Stage 8b chose not to — the saturation guarantees come from the helper, and the helper is tested.
+The saturation cases are tested *via the helper* (\`saturate_i128_to_i64\`'s boundary behavior is explored in Lesson 5). Testing the same boundary again at this function call would be redundant. **Test the helper once; trust it everywhere else.** A composition test (\`size = u64::MAX, mark = u64::MAX, rate = i64::MAX\`) might be worth adding for completeness, but Stage 8b chose not to — the saturation guarantees come from the helper, and the helper is tested.
 
 **Q: Could \`apply_funding\` be a \`parallel_iter\` for huge position lists?**
 Yes, with \`rayon\`. At v0 the position list is at most a few thousand accounts (HL's actual user count for any single market). Parallelization overhead exceeds the work. **At 10K+ positions per tick, rayon would pay off.** Defer until production traffic demands it.
 
 ## Module 2 milestone — what you've built
 
-After L7:
+After Lesson 7:
 - **3 pure functions**: \`compute_premium\`, \`compute_rate\`, \`apply_funding\`.
 - **1 private helper**: \`saturate_i128_to_i64\`.
 - **15 tests**: 9 hand-traced + 2 proptests (antisymmetry, zero-sum).
@@ -2539,9 +2539,9 @@ After L7:
 
 The crate now produces a fully-determined \`Vec<Settlement>\` from a \`(positions, mark, index, params)\` tuple. **The math is done.** Module 3 wraps this in tick-gating state — when to compute, when to skip, when to settle.
 
-## Next lesson (L8)
+## Next lesson (Lesson 8)
 
-L8 creates \`crates/funding/src/clock.rs\` — a new module — with the \`FundingClock\` struct + the \`FundingTick\` output type. The first version of \`tick()\` is added: a function that combines \`compute_premium\` + \`compute_rate\` + \`apply_funding\` behind a "has enough time elapsed?" guard. **The clock is the discrete event loop that calls the pure math on the right cadence.** Tests in L8 are simple sanity tests; the *invariants* (at-most-one-per-interval, no-catch-up) get their own lessons in L9 and L10.`,
+Lesson 8 creates \`crates/funding/src/clock.rs\` — a new module — with the \`FundingClock\` struct + the \`FundingTick\` output type. The first version of \`tick()\` is added: a function that combines \`compute_premium\` + \`compute_rate\` + \`apply_funding\` behind a "has enough time elapsed?" guard. **The clock is the discrete event loop that calls the pure math on the right cadence.** Tests in Lesson 8 are simple sanity tests; the *invariants* (at-most-one-per-interval, no-catch-up) get their own lessons in Lessons 9 and 10.`,
                 },
               ],
             },
@@ -2568,7 +2568,7 @@ Concepts you'll grasp in this lesson:
 - **\`Option<FundingTick>\` over always-return** — \`None\` cheaply signals "no state change" without forcing callers to inspect the tick. \`if let Some(tick) = clock.tick(...)\` is the natural shape; always-return would force \`if !tick.settlements.is_empty()\` checks that don't even capture the right meaning.
 - **Layered composition without reimplementation** — \`tick()\` chains \`compute_premium → compute_rate → apply_funding\`; it knows the order, not the contents. Math computes, clock gates — separation of concerns at the file level.
 - **Surface intermediates for telemetry** — \`FundingTick\` carries \`premium\` and \`rate\` even though only \`settlements\` drives state. Observers that want to log "rate at tick 12345 was 0.125%" read them directly; recomputing invites divergence.
-- **Promise the contract in the module doc; defend it in code and tests** — both invariants (at-most-one-per-interval, no-catch-up) are named at the top of \`clock.rs\` before any code appears. L8 establishes structure; L9 + L10 enforce the invariants test-side. Three places to find the rationale: doc, code, test.
+- **Promise the contract in the module doc; defend it in code and tests** — both invariants (at-most-one-per-interval, no-catch-up) are named at the top of \`clock.rs\` before any code appears. Lesson 8 establishes structure; Lessons 9 + 10 enforce the invariants test-side. Three places to find the rationale: doc, code, test.
 - **Single-threaded by contract** — concurrency belongs to the caller, not the data structure. \`AtomicU64\` for \`last_settled_at\` would add complexity for a serialization problem that doesn't actually exist at this layer.
 
 Verification:
@@ -2577,7 +2577,7 @@ Verification:
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 18 tests (15 from L4-L7 + 3 new).
+…passes 18 tests (15 from Lessons 4–7 + 3 new).
 
 Specific changes:
 
@@ -2593,19 +2593,19 @@ The crate gains its **third and final module**:
   - \`empty_positions_yield_empty_settlements_but_still_advance_clock\`
 - **\`crates/funding/src/lib.rs\`** — declares \`pub mod clock;\` and re-exports \`FundingClock\` + \`FundingTick\`. **Last rustdoc warning resolves.**
 
-L8 is the **module opener**. The invariants that make this clock subtle — *at most one settlement per interval*, *no catch-up after long gaps* — get their own dedicated lessons (L9 and L10). This lesson establishes the structure.
+Lesson 8 is the **module opener**. The invariants that make this clock subtle — *at most one settlement per interval*, *no catch-up after long gaps* — get their own dedicated lessons (Lessons 9 and 10). This lesson establishes the structure.
 
 The teaching focus is **state machines with discrete event loops**: how a pure function (the math) gets gated by a stateful object (the clock) without losing determinism.
 
 ## Recap
 
-After L7:
+After Lesson 7:
 - 3 pure functions (\`compute_premium\`, \`compute_rate\`, \`apply_funding\`) all green.
 - 15 tests passing including 2 proptests.
 - \`compute.rs\` byte-identical to Stage 8b.
 - The crate computes funding *math*; it doesn't yet know *when* to apply it.
 
-L8 wires the "when." The clock is a thin layer that calls the math at the right times — and crucially, that *doesn't* call the math at the wrong times.
+Lesson 8 wires the "when." The clock is a thin layer that calls the math at the right times — and crucially, that *doesn't* call the math at the wrong times.
 
 ## Plan
 
@@ -2648,9 +2648,9 @@ use crate::types::{
 
 Two parts to notice:
 
-**The module doc names both invariants up front.** The actual enforcement is in \`tick()\` (interval guard) and the tests of L9 / L10. But the *contract* is here at the top — anyone reading the module sees both invariants before any code. **Promise the contract; defend it with code and tests below.**
+**The module doc names both invariants up front.** The actual enforcement is in \`tick()\` (interval guard) and the tests of Lessons 9 / 10. But the *contract* is here at the top — anyone reading the module sees both invariants before any code. **Promise the contract; defend it with code and tests below.**
 
-**The imports pull in everything we'll need.** \`apply_funding\`, \`compute_premium\`, \`compute_rate\` (Module 2). \`FundingParams\`, \`FundingRate\`, \`IndexPrice\`, \`MarkPrice\`, \`Position\`, \`Premium\`, \`Settlement\` (Module 1). **Same logic as L4's compute.rs imports: stabilize boilerplate early.**
+**The imports pull in everything we'll need.** \`apply_funding\`, \`compute_premium\`, \`compute_rate\` (Module 2). \`FundingParams\`, \`FundingRate\`, \`IndexPrice\`, \`MarkPrice\`, \`Position\`, \`Premium\`, \`Settlement\` (Module 1). **Same logic as Lesson 4's compute.rs imports: stabilize boilerplate early.**
 
 ### Step 2: Add the \`FundingClock\` struct
 
@@ -2825,11 +2825,11 @@ The heart of the clock. Three logical phases stack as **temporal guard → state
 
 3. **Update state + return**: advance \`last_settled_at\` to \`now\`, return \`Some(FundingTick { ... })\`.
 
-**Crucially, the clock advances to \`now\`, not to \`last_settled_at + interval_secs\`.** This is the "no catch-up" invariant in action — when ticks fire late, they reset the deadline forward rather than catching up. L10's lesson explains why this matters.
+**Crucially, the clock advances to \`now\`, not to \`last_settled_at + interval_secs\`.** This is the "no catch-up" invariant in action — when ticks fire late, they reset the deadline forward rather than catching up. Lesson 10's lesson explains why this matters.
 
 > 🛑 **Predict.** With \`last_settled_at = 1_000_000\`, \`interval_secs = 3600\`, and a \`tick()\` at \`now = 1_010_000\` (= +10000s, i.e., ~2.8 intervals), what's \`last_settled_at\` after the tick?
 
-(Answer: **\`1_010_000\`.** Not \`1_003_600\` (1 interval after genesis) and not \`1_007_200\` (2 intervals after genesis). The clock advances to \`now\` — see the doc comment in \`tick()\`. The next tick won't fire until \`now ≥ 1_010_000 + 3600 = 1_013_600\`. **This is the design choice; L10 explains the reasoning.**)
+(Answer: **\`1_010_000\`.** Not \`1_003_600\` (1 interval after genesis) and not \`1_007_200\` (2 intervals after genesis). The clock advances to \`now\` — see the doc comment in \`tick()\`. The next tick won't fire until \`now ≥ 1_010_000 + 3600 = 1_013_600\`. **This is the design choice; Lesson 10 explains the reasoning.**)
 
 ### Step 5: Add 3 sanity tests
 
@@ -2898,9 +2898,9 @@ mod tests {
 
 Three things to notice about the test setup:
 
-**The test module imports \`Notional\` and \`PositionSize\`** even though only \`PositionSize\` is used in this file (\`Notional\` is used in L9). Same boilerplate-stabilization pattern as L5's test module.
+**The test module imports \`Notional\` and \`PositionSize\`** even though only \`PositionSize\` is used in this file (\`Notional\` is used in Lesson 9). Same boilerplate-stabilization pattern as Lesson 5's test module.
 
-**Two helpers: \`pos(account, size)\` and \`balanced_book()\`.** The first echoes L5's helper. The second produces a canonical 2-position book that L8/L9 tests use repeatedly. **Helpers earn their keep when they're used in 3+ tests** — both these helpers are.
+**Two helpers: \`pos(account, size)\` and \`balanced_book()\`.** The first echoes Lesson 5's helper. The second produces a canonical 2-position book that Lessons 8/9 tests use repeatedly. **Helpers earn their keep when they're used in 3+ tests** — both these helpers are.
 
 **Three tests, three concerns:**
 
@@ -2910,7 +2910,7 @@ Three things to notice about the test setup:
 
 3. **\`empty_positions_yield_empty_settlements_but_still_advance_clock\`** — the composition works even with zero positions. \`apply_funding(&[])\` returns empty; the clock still advances. **Catches: "I gated tick() on having positions"** or any other shortcut that mishandles the empty-input case.
 
-> 🛑 **Anti-fluency.** "Should we test what happens if \`mark\` or \`index\` is zero?" **Already covered by L4's premium tests.** The clock just passes inputs through to \`compute_premium\`. If we didn't trust \`compute_premium\`, we'd add more tests in \`compute.rs\`, not duplicate them here. **Don't test the same behavior through two abstraction levels.**
+> 🛑 **Anti-fluency.** "Should we test what happens if \`mark\` or \`index\` is zero?" **Already covered by Lesson 4's premium tests.** The clock just passes inputs through to \`compute_premium\`. If we didn't trust \`compute_premium\`, we'd add more tests in \`compute.rs\`, not duplicate them here. **Don't test the same behavior through two abstraction levels.**
 
 ### Step 6: Update \`lib.rs\`
 
@@ -2940,7 +2940,7 @@ pub use compute::{apply_funding, compute_premium, compute_rate};
 pub use types::{ ... };
 \`\`\`
 
-Module declarations stay alphabetical (\`clock\` before \`compute\` before \`types\`). Re-exports likewise. **L8's lib.rs is the final lib.rs shape** — L9 and L10 don't add any new module-level names.
+Module declarations stay alphabetical (\`clock\` before \`compute\` before \`types\`). Re-exports likewise. **Lesson 8's lib.rs is the final lib.rs shape** — Lessons 9 and 10 don't add any new module-level names.
 
 ### Step 7: Run tests
 
@@ -2958,7 +2958,7 @@ running 18 tests
 test clock::tests::empty_positions_yield_empty_settlements_but_still_advance_clock ... ok
 test clock::tests::first_tick_at_exact_interval_fires ... ok
 test clock::tests::first_tick_before_interval_returns_none ... ok
-test compute::tests::... (all 15 from L4-L7)
+test compute::tests::... (all 15 from Lessons 4–7)
 
 test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
@@ -3001,13 +3001,13 @@ Five load-bearing decisions in this lesson:
 
 1. **\`Option<FundingTick>\` instead of always-return.** \`None\` cheaply signals "no state change." Callers don't need to inspect a \`FundingTick\` to decide whether anything happened. **Use the type system to encode the "did this fire?" dichotomy.**
 
-2. **Clock advances to \`now\`, not \`last_settled + interval\`.** The first big difference from "perfectly periodic" — the clock's deadline resets on every fire, regardless of how much elapsed. **L10 will defend this; here we just note it.**
+2. **Clock advances to \`now\`, not \`last_settled + interval\`.** The first big difference from "perfectly periodic" — the clock's deadline resets on every fire, regardless of how much elapsed. **Lesson 10 will defend this; here we just note it.**
 
 3. **Module 2 functions composed without reimplementation.** \`tick()\` chains \`compute_premium\`, \`compute_rate\`, \`apply_funding\`. The clock doesn't know how any of them work — only the order. **Layering: math computes; clock gates.**
 
 4. **\`FundingTick\` exposes intermediate values for telemetry.** Premium and rate are surfaced in the output, not just the final settlements. Downstream observers don't need to recompute. **Surface useful intermediates; recomputation invites divergence.**
 
-5. **Module doc names both invariants up front.** The actual code that enforces them comes piece by piece (L8 guard, L9 boundary tests, L10 advancement choice). But the *contract* is documented before any of the code. **Documentation as design intent.**
+5. **Module doc names both invariants up front.** The actual code that enforces them comes piece by piece (Lesson 8 guard, Lesson 9 boundary tests, Lesson 10 advancement choice). But the *contract* is documented before any of the code. **Documentation as design intent.**
 
 ## Answer key
 
@@ -3018,8 +3018,8 @@ diff -u ~/code/my-openhl/crates/funding/src/clock.rs ./crates/funding/src/clock.
 diff -u ~/code/my-openhl/crates/funding/src/lib.rs ./crates/funding/src/lib.rs
 \`\`\`
 
-After L8:
-- **clock.rs** matches Stage 8b through \`FundingClock\` + \`FundingTick\` + \`impl FundingClock { ... }\` + 3 of the 7 tests. The remaining 4 tests are split across L9 (3 tests on interval-gating + premium-driving) and L10 (1 milestone test on no-catch-up).
+After Lesson 8:
+- **clock.rs** matches Stage 8b through \`FundingClock\` + \`FundingTick\` + \`impl FundingClock { ... }\` + 3 of the 7 tests. The remaining 4 tests are split across Lesson 9 (3 tests on interval-gating + premium-driving) and Lesson 10 (1 milestone test on no-catch-up).
 - **lib.rs** matches Stage 8b **exactly**. Final shape.
 
 Return:
@@ -3042,15 +3042,15 @@ Because they change every tick. \`mark\` and \`index\` come from oracle/orderboo
 **Q: Why no proptest for the clock?**
 The clock's properties are mostly *interval semantics* (one settlement per interval, no catch-up) which are easier to express as hand-traced tests. There's no algebraic property like the antisymmetry or zero-sum of Module 2. **The clock is an event loop; event loops are tested with scenarios, not algebra.**
 
-## Next lesson (L9)
+## Next lesson (Lesson 9)
 
-L9 adds 3 more tests to \`clock.rs\`, exercising the **interval-gating invariant** in increasing depth:
+Lesson 9 adds 3 more tests to \`clock.rs\`, exercising the **interval-gating invariant** in increasing depth:
 
 - \`premium_drives_settlement_signs\` — when mark > index, settlements flow long→short (full math composition test).
 - \`second_tick_requires_another_full_interval\` — after a successful tick, the next one needs another \`interval_secs\`. The interval isn't a one-time check.
 - \`capped_rate_when_premium_extreme\` — at saturation premiums, the rate clamps to the cap. Confirms \`compute_rate\`'s cap behavior surfaces correctly through the clock.
 
-The lesson is mostly about *testing* and the *interval-gating* invariant. **L10 closes Module 3 with the no-catch-up invariant.**`,
+The lesson is mostly about *testing* and the *interval-gating* invariant. **Lesson 10 closes Module 3 with the no-catch-up invariant.**`,
                 },
                 {
                   title: "Lesson 9 — Interval-gating invariant — three deeper tests",
@@ -3065,9 +3065,9 @@ The lesson is mostly about *testing* and the *interval-gating* invariant. **L10 
 
 Concepts you'll grasp in this lesson:
 
-- **Single-call tests verify behavior; multi-call tests verify state machines** — L8 confirmed the guard can return \`Some\` once. L9's \`second_tick_requires_another_full_interval\` confirms the guard *re-engages* after firing. A buggy implementation could fire once and never gate again; you need three sequential calls to catch that.
+- **Single-call tests verify behavior; multi-call tests verify state machines** — Lesson 8 confirmed the guard can return \`Some\` once. Lesson 9's \`second_tick_requires_another_full_interval\` confirms the guard *re-engages* after firing. A buggy implementation could fire once and never gate again; you need three sequential calls to catch that.
 - **Composition tests catch wiring errors** — even when every step is unit-tested, the wiring between steps is a separate concern. \`tick()\` could call \`apply_funding\` before \`compute_rate\`, or pass \`index\` where \`mark\` is expected. A full math composition test (\`premium_drives_settlement_signs\`) catches what unit tests can't.
-- **Invariants must be re-verified at every layer they traverse** — \`compute_rate\`'s cap is unit-tested in L6, but \`capped_rate_when_premium_extreme\` re-verifies it through \`tick()\`. A wiring bug (e.g., overwriting \`params.rate_cap\` mid-call) would slip past lower-layer tests.
+- **Invariants must be re-verified at every layer they traverse** — \`compute_rate\`'s cap is unit-tested in Lesson 6, but \`capped_rate_when_premium_extreme\` re-verifies it through \`tick()\`. A wiring bug (e.g., overwriting \`params.rate_cap\` mid-call) would slip past lower-layer tests.
 - **Boundary tests as pairs: just-before and exactly-at** — \`now == last_settled_at + interval - 1\` (none) and \`now == last_settled_at + interval\` (fires) is the standard pair. Both directions catch off-by-one in the guard condition. Adding \`+1\` doesn't catch a different class of bug.
 - **Failure leaves state unchanged** — when \`tick()\` returns \`None\`, \`last_settled_at\` stays put. Three sequential calls (fire, gated, fire) reveal this sub-invariant by the success time of the third call.
 
@@ -3077,7 +3077,7 @@ Verification:
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 21 tests (18 from L4-L8 + 3 new).
+…passes 21 tests (18 from Lessons 4–8 + 3 new).
 
 Specific changes:
 
@@ -3087,26 +3087,26 @@ Specific changes:
 - **\`second_tick_requires_another_full_interval\`** — interval-gating is persistent across ticks. A successful tick doesn't permanently unlock the clock.
 - **\`capped_rate_when_premium_extreme\`** — \`compute_rate\`'s cap behavior surfaces correctly through \`tick()\`. Layers compose without losing semantics.
 
-The teaching focus is **invariants across multiple operations**, not just one. L8's tests verified the guard works *once*; L9's tests verify it works *across ticks* and that the layered composition doesn't introduce subtle bugs.
+The teaching focus is **invariants across multiple operations**, not just one. Lesson 8's tests verified the guard works *once*; Lesson 9's tests verify it works *across ticks* and that the layered composition doesn't introduce subtle bugs.
 
 ## Recap
 
-After L8:
+After Lesson 8:
 - \`FundingClock\` exists with \`tick()\` returning \`Option<FundingTick>\`.
 - 3 sanity tests confirm: guard works, boundary fires, empty positions still advance.
 - All 3 Module 2 functions compose through \`tick()\`.
 
-L8's tests run the clock at most *once*. L9 exercises the clock across multiple calls, with non-trivial inputs, to validate the **invariant holds beyond a single operation**.
+Lesson 8's tests run the clock at most *once*. Lesson 9 exercises the clock across multiple calls, with non-trivial inputs, to validate the **invariant holds beyond a single operation**.
 
 ## Plan
 
 One file edit:
 
-1. **Append 3 tests to \`crates/funding/src/clock.rs\`** — inside the existing \`#[cfg(test)] mod tests\` block, after the 3 sanity tests from L8.
+1. **Append 3 tests to \`crates/funding/src/clock.rs\`** — inside the existing \`#[cfg(test)] mod tests\` block, after the 3 sanity tests from Lesson 8.
 
-No production code, no \`lib.rs\` changes, no imports beyond what L8 already added.
+No production code, no \`lib.rs\` changes, no imports beyond what Lesson 8 already added.
 
-> 🛑 **Predict.** Before scrolling: L8's \`first_tick_at_exact_interval_fires\` test fires \`tick(1_003_600, ...)\` once and asserts it returned \`Some\`. Why isn't that enough to verify the interval-gating invariant?
+> 🛑 **Predict.** Before scrolling: Lesson 8's \`first_tick_at_exact_interval_fires\` test fires \`tick(1_003_600, ...)\` once and asserts it returned \`Some\`. Why isn't that enough to verify the interval-gating invariant?
 
 (Answer: **One successful tick says the guard *can* return \`Some\`. It doesn't say the guard *re-engages* afterward.** A buggy implementation could fire on the first interval boundary, then never gate again — every subsequent \`tick()\` would return \`Some\` regardless of time. The invariant "at most one settlement per interval" requires testing that the second tick is rejected unless another full interval has passed. **Single-operation tests verify behavior; multi-operation tests verify state machines.**)
 
@@ -3114,7 +3114,7 @@ No production code, no \`lib.rs\` changes, no imports beyond what L8 already add
 
 ### Step 1: Add \`premium_drives_settlement_signs\`
 
-After the L8 tests in \`mod tests\`, add:
+After the Lesson 8 tests in \`mod tests\`, add:
 
 \`\`\`rust
     #[test]
@@ -3178,13 +3178,13 @@ After \`premium_drives_settlement_signs\`:
 
 **Three tick calls, three assertions.** The structure tells the story:
 
-1. **First tick at \`1_003_600\`** — fires (boundary case from L8). After this, \`last_settled_at = 1_003_600\`.
+1. **First tick at \`1_003_600\`** — fires (boundary case from Lesson 8). After this, \`last_settled_at = 1_003_600\`.
 2. **Second tick at \`1_007_199\`** — \`1_007_199 - 1_003_600 = 3599\`. One second short of an interval. Returns \`None\`.
 3. **Third tick at \`1_007_200\`** — \`1_007_200 - 1_003_600 = 3600\`. Exactly an interval. Returns \`Some\`.
 
 **The invariant being tested**: "the interval guard re-engages after every successful tick." A naive implementation that only checks against \`genesis_time\` (instead of \`last_settled_at\`) would fire on every tick after \`1_003_600\` — and this test catches it.
 
-**The minimal counterexample**: between L8's \`first_tick_at_exact_interval_fires\` and L9's \`second_tick_requires_another_full_interval\`, the only thing being verified is that \`last_settled_at\` is the *gating reference*, not \`genesis_time\`. **Three calls is the minimum to test state-machine persistence.**
+**The minimal counterexample**: between Lesson 8's \`first_tick_at_exact_interval_fires\` and Lesson 9's \`second_tick_requires_another_full_interval\`, the only thing being verified is that \`last_settled_at\` is the *gating reference*, not \`genesis_time\`. **Three calls is the minimum to test state-machine persistence.**
 
 > 🛑 **Predict.** What's \`clock.last_settled_at()\` after each of the three ticks above?
 
@@ -3251,7 +3251,7 @@ After \`second_tick_requires_another_full_interval\`:
 
 **Why does this test exist if \`compute_rate\`'s tests already cover clamping?** Because we need to know \`tick()\` doesn't unwrap, fiddle with, or bypass the rate before applying it. **The cap surfaces through the clock unchanged.**
 
-What this test really protects is the invariant that the **type-safe relay** assembled across L4–L6 stays lossless inside \`tick()\`. Drawing the data path:
+What this test really protects is the invariant that the **type-safe relay** assembled across Lessons 4–6 stays lossless inside \`tick()\`. Drawing the data path:
 
 \`\`\`
 [MarkPrice(200), IndexPrice(100)] ──► compute_premium ──► Premium(1_000_000_000)
@@ -3288,18 +3288,18 @@ test clock::tests::first_tick_at_exact_interval_fires ... ok
 test clock::tests::first_tick_before_interval_returns_none ... ok
 test clock::tests::premium_drives_settlement_signs ... ok
 test clock::tests::second_tick_requires_another_full_interval ... ok
-... (15 tests from L4-L7 compute.rs)
+... (15 tests from Lessons 4–7 compute.rs)
 
 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**21 tests, all green.** 6 of them now live in \`clock::tests\` (3 from L8 + 3 from L9).
+**21 tests, all green.** 6 of them now live in \`clock::tests\` (3 from Lesson 8 + 3 from Lesson 9).
 
 Common errors:
 
 - **\`premium_drives_settlement_signs\` fails with \`Notional(-13)\` or \`Notional(-11)\`** — off-by-one from rounding. Re-check the math: \`100 × 101 × 1_250_000 = 12_625_000_000\`. Divided by \`1_000_000_000\` is \`12.625\`. Integer division truncates toward zero → \`12\`. The sign flip → \`-12\`. If your number is different, check whether you're using \`*\` (which panics on debug overflow), \`saturating_mul\`, or \`wrapping_mul\`.
-- **\`second_tick_requires_another_full_interval\` fails on the second tick** — your guard is comparing to \`genesis_time\` instead of \`last_settled_at\`. Re-read the L8 code: the guard is \`now < self.last_settled_at.saturating_add(...)\`, *not* \`now < self.params.genesis_time + ...\`.
-- **\`capped_rate_when_premium_extreme\` returns \`FundingRate(125_000_000)\`** — your \`compute_rate\` isn't clamping. Re-check L6: the \`raw.clamp(-cap, cap)\` line should be present.
+- **\`second_tick_requires_another_full_interval\` fails on the second tick** — your guard is comparing to \`genesis_time\` instead of \`last_settled_at\`. Re-read the Lesson 8 code: the guard is \`now < self.last_settled_at.saturating_add(...)\`, *not* \`now < self.params.genesis_time + ...\`.
+- **\`capped_rate_when_premium_extreme\` returns \`FundingRate(125_000_000)\`** — your \`compute_rate\` isn't clamping. Re-check Lesson 6: the \`raw.clamp(-cap, cap)\` line should be present.
 
 ## Design reflection
 
@@ -3321,8 +3321,8 @@ git checkout cd94137
 diff -u ~/code/my-openhl/crates/funding/src/clock.rs ./crates/funding/src/clock.rs
 \`\`\`
 
-After L9:
-- **clock.rs** matches Stage 8b through 6 of 7 tests. Only \`no_catchup_after_long_gap\` remains — that's L10's milestone test.
+After Lesson 9:
+- **clock.rs** matches Stage 8b through 6 of 7 tests. Only \`no_catchup_after_long_gap\` remains — that's Lesson 10's milestone test.
 
 Return:
 
@@ -3344,9 +3344,9 @@ Because that wouldn't add information. The second tick at \`+3600\` already esta
 **Q: What if the test author had \`genesis_time = 0\` instead of \`1_000_000\`?**
 The math would be identical, but the test would be less helpful. Using \`1_000_000\` (and the corresponding \`1_003_600\`, etc.) makes the "clock advanced by 3600 seconds" pattern visible at every assertion. **Test data should be readable, not just correct.**
 
-## Next lesson (L10)
+## Next lesson (Lesson 10)
 
-L10 closes Module 3 with the **no-catch-up invariant**: the milestone test \`no_catchup_after_long_gap\`. The scenario: validator reboots after 10 hours of downtime, so \`now - last_settled_at = 36000\` (10 intervals). The naive expectation might be "catch up by replaying 10 ticks," but the design choice is to **settle once and advance to \`now\`**. The lesson explains why catch-up would be worse than skipping ticks, and the test confirms the design choice is enforced. **One test, one invariant, the design philosophy in action.**`,
+Lesson 10 closes Module 3 with the **no-catch-up invariant**: the milestone test \`no_catchup_after_long_gap\`. The scenario: validator reboots after 10 hours of downtime, so \`now - last_settled_at = 36000\` (10 intervals). The naive expectation might be "catch up by replaying 10 ticks," but the design choice is to **settle once and advance to \`now\`**. The lesson explains why catch-up would be worse than skipping ticks, and the test confirms the design choice is enforced. **One test, one invariant, the design philosophy in action.**`,
                 },
                 {
                   title: "Lesson 10 — No-catch-up invariant — the design philosophy in one test",
@@ -3373,28 +3373,28 @@ Verification:
 cargo test -p openhl-funding
 \`\`\`
 
-…passes 22 tests (21 from L4-L9 + 1 new).
+…passes 22 tests (21 from Lessons 4–9 + 1 new).
 
 Specific changes:
 
 The new test is **\`no_catchup_after_long_gap\`** — the milestone test that pins openhl's design choice on what happens when a validator misses multiple intervals.
 
-After L10:
+After Lesson 10:
 - \`crates/funding/\` is **byte-identical to Stage 8b** (\`cd94137\`).
 - All 22 tests pass: 20 hand-traced + 2 proptests.
 - Module 3 (Clock state machine) is **complete**.
 - The funding state machine is **production-shape** as a standalone crate.
 
-The teaching focus is **design philosophy under failure modes**: when the clock falls behind, what's the right semantics? The naive answer (catch up by replaying ticks) is wrong, and L10 explains why.
+The teaching focus is **design philosophy under failure modes**: when the clock falls behind, what's the right semantics? The naive answer (catch up by replaying ticks) is wrong, and Lesson 10 explains why.
 
 ## Recap
 
-After L9:
+After Lesson 9:
 - 6 of 7 clock tests pass.
 - Both interval-gating sub-invariants verified (boundary, persistence).
 - The math composition surfaces correctly through \`tick()\`.
 
-L9 covered the "normal operation" invariant. L10 covers the "abnormal operation" invariant — what happens when the clock is *late*.
+Lesson 9 covered the "normal operation" invariant. Lesson 10 covers the "abnormal operation" invariant — what happens when the clock is *late*.
 
 ## The scenario
 
@@ -3475,7 +3475,7 @@ The key thing this picture pins down is that **under Choice B, \`last_settled_at
 
 One file edit:
 
-1. **Append \`no_catchup_after_long_gap\` to \`crates/funding/src/clock.rs\`** — inside the existing \`#[cfg(test)] mod tests\` block, after the L9 tests.
+1. **Append \`no_catchup_after_long_gap\` to \`crates/funding/src/clock.rs\`** — inside the existing \`#[cfg(test)] mod tests\` block, after the Lesson 9 tests.
 
 No production code, no \`lib.rs\` changes.
 
@@ -3557,7 +3557,7 @@ test clock::tests::first_tick_before_interval_returns_none ... ok
 test clock::tests::no_catchup_after_long_gap ... ok
 test clock::tests::premium_drives_settlement_signs ... ok
 test clock::tests::second_tick_requires_another_full_interval ... ok
-... (15 tests from L4-L7)
+... (15 tests from Lessons 4–7)
 
 test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
@@ -3590,9 +3590,9 @@ git checkout cd94137
 diff -u ~/code/my-openhl/crates/funding/ ./crates/funding/ --recursive
 \`\`\`
 
-After L10, \`crates/funding/\` is **byte-identical to Stage 8b**. The diff is empty.
+After Lesson 10, \`crates/funding/\` is **byte-identical to Stage 8b**. The diff is empty.
 
-**Module 3 closes.** Module 4 (capstone) is L11.
+**Module 3 closes.** Module 4 (capstone) is Lesson 11.
 
 Return:
 
@@ -3630,7 +3630,7 @@ Logging is a side effect. The clock is pure (no I/O). A wrapper can log the gap 
 
 ## Module 3 milestone — what you've built
 
-After L10:
+After Lesson 10:
 - **Module 3 complete.** Clock state machine + 7 tests covering interval-gating, no-catch-up, math composition, cap surfacing.
 - **Entire crate byte-identical to Stage 8b.** ~635 LOC across types.rs / compute.rs / clock.rs.
 - **22 tests** total: 20 hand-traced + 2 proptest.
@@ -3639,12 +3639,12 @@ After L10:
 The funding state machine is now a **complete, tested, production-shape** crate. It computes funding deterministically, gates on the right cadence, and refuses to introduce path-dependent settlements after gaps.
 
 What's left:
-- **Module 4 (Capstone, L11)** — synthesis, deferred items, bridge-integration preview. No code.
+- **Module 4 (Capstone, Lesson 11)** — synthesis, deferred items, bridge-integration preview. No code.
 - **Future course** — wiring this crate into the bridge (oracle integration, balance updates, liquidation triggers).
 
-## Next lesson (L11)
+## Next lesson (Lesson 11)
 
-L11 is the capstone — no new code. We sketch the architecture, name the items deferred from this course (oracle integration, balance updates, liquidations, multi-market funding, funding-as-EVM-event), and trace where each will live when shipped. The lesson is for cementing the mental model and seeing the funding state machine as a piece of the larger openhl architecture.`,
+Lesson 11 is the capstone — no new code. We sketch the architecture, name the items deferred from this course (oracle integration, balance updates, liquidations, multi-market funding, funding-as-EVM-event), and trace where each will live when shipped. The lesson is for cementing the mental model and seeing the funding state machine as a piece of the larger openhl architecture.`,
                 },
               ],
             },
@@ -3721,14 +3721,14 @@ Track-level topology note: this \`Vec<Settlement>\` lane is still running outsid
 
 ## What each module delivered
 
-**Module 1 (Determinism + types, L1-L3)** — Fixed-point vocabulary:
+**Module 1 (Determinism + types, Lessons 1–3)** — Fixed-point vocabulary:
 
 - \`RATE_SCALE = 1_000_000_000\` (ppb): the load-bearing constant.
 - 9 newtypes: \`MarkPrice\`, \`IndexPrice\`, \`Premium\`, \`FundingRate\`, \`Notional\`, \`PositionSize\`, \`Position\`, \`Settlement\`, \`FundingParams\`.
 - \`hyperliquid_default()\`: 3600s interval, ±4% cap, divisor 8.
 - **Lesson learned**: newtypes prevent argument-order bugs at compile time; sign conventions live in doc comments at definition site.
 
-**Module 2 (Pure compute, L4-L7)** — Stateless math:
+**Module 2 (Pure compute, Lessons 4–7)** — Stateless math:
 
 - \`compute_premium(mark, index) → Premium\` — graceful on \`index == 0\`, i128 intermediates, saturate.
 - \`compute_rate(premium, params) → FundingRate\` — divide-then-clamp, defensive \`.abs()\` on cap.
@@ -3737,7 +3737,7 @@ Track-level topology note: this \`Vec<Settlement>\` lane is still running outsid
 - **15 tests**: 13 hand-traced + 2 proptests (antisymmetry, balanced-book zero-sum).
 - **Lesson learned**: panic-vs-wrap-vs-saturate as a 3-way design tension; saturation is the only consensus-safe choice.
 
-**Module 3 (Clock state machine, L8-L10)** — Discrete event loop:
+**Module 3 (Clock state machine, Lessons 8–10)** — Discrete event loop:
 
 - \`FundingClock\` + \`FundingTick\` + \`tick()\`.
 - 7 tests covering: guard semantics, boundary cases, interval persistence, no-catch-up.
@@ -3873,7 +3873,7 @@ git checkout cd94137
 diff -u ~/code/my-openhl/crates/funding/ ./crates/funding/ --recursive
 \`\`\`
 
-After L11, **the entire \`crates/funding/\` directory should be byte-identical** to Stage 8b. You've reproduced 1 commit (~635 LOC across 3 files) by hand, with full understanding of why each line is there. **The crate compiles standalone, tests pass standalone, no external dependencies beyond \`openhl-clob\` (for \`AccountId\`).**
+After Lesson 11, **the entire \`crates/funding/\` directory should be byte-identical** to Stage 8b. You've reproduced 1 commit (~635 LOC across 3 files) by hand, with full understanding of why each line is there. **The crate compiles standalone, tests pass standalone, no external dependencies beyond \`openhl-clob\` (for \`AccountId\`).**
 
 Return:
 

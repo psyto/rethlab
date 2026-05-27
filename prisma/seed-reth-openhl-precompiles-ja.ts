@@ -60,7 +60,7 @@ export async function seedRethOpenHlPrecompilesJA(prisma: PrismaClient) {
 - **Custom EVM machinery** (\`openhl_evm.rs\`) — Reth の executor に precompile を組み込む \`EvmFactory\` + \`ExecutorBuilder\`。
 - **Bridge 統合** — \`LiveRethEvmBridge\` が custom EVM 付きの Reth node を spawn するため、precompile へのスマートコントラクト call は bridge が所有するのと同じ CLOB instance に触れる。
 
-openhl では **6 commit 分** の作業 (~860 LOC)、12 レッスン（L0〜L11、最終 L11 が capstone）に分割。End-to-end テストは ~3 秒: Reth を bootstrap し、薄い Solidity wrapper を deploy する (もしくはエンジン経由で直接 call)、precompile を trigger、約定を assert する。
+openhl では **6 commit 分** の作業 (~860 LOC)、12 レッスン（レッスン0〜レッスン11、最終 レッスン11 が capstone）に分割。End-to-end テストは ~3 秒: Reth を bootstrap し、薄い Solidity wrapper を deploy する (もしくはエンジン経由で直接 call)、precompile を trigger、約定を assert する。
 
 ## 2. 終了時にも手にしないもの
 

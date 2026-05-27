@@ -115,7 +115,7 @@ Liquidation参照実装（スキャナパート） の scanner は close order �
 
 契約は **i64 1 個 in, i64 1 個 out**。Bridge の wiring:
 - レッスン13 が \`unfilled_deficit > 0 ⇒ fund_balance == 0\` を証明した (proptest #2)。
-- 本 L0 が、レッスン13 のその契約こそが \`execute_adl\` を trigger する条件だと教える。
+- 本 レッスン0 が、レッスン13 のその契約こそが \`execute_adl\` を trigger する条件だと教える。
 
 ## Score: 「最も lucky な winner が haircut を受ける」
 
@@ -156,7 +156,7 @@ $$\\text{レッスン4 (per ADL pass):} \\quad \\text{deficit\\_absorbed} + \\te
 ## 5 つのレッスン
 
 ### セクション0 — Orientation
-- **L0** (本レッスン) — なぜ ADL、なぜ orderbook bypass、Liquidation参照実装（スキャナパート）→ ADL handoff、score preview、保存則 preview。
+- **レッスン0** (本レッスン) — なぜ ADL、なぜ orderbook bypass、Liquidation参照実装（スキャナパート）→ ADL handoff、score preview、保存則 preview。
 
 ### セクション1 — ADL implementation
 - **レッスン1** — \`AdlScore\` newtype + \`AdlRecord\` + \`AdlReport\` 型 + \`adl_score(snapshot, mark) -> Option<AdlScore>\` 関数。Flat / 損失 / collateral 0 ケースでの \`None\` を含む pure-compute scoring。5 個の score テスト。
@@ -176,7 +176,7 @@ Liquidation〜ADLカスケード は完成する。openhl ロードマップは�
 
 ## License / SHA discipline
 
-L0–レッスン4 は ADL参照実装パート の SHA \`d66b44a\` を引用する。Single-file の diff は \`crates/liquidation/src/adl.rs\` にある。Liquidation参照実装（スキャナパート） (\`0a8464e\`) と ADL参照実装パート (\`d66b44a\`) の間で他の crate ファイルは変わらない — ADL は pure additive なモジュールだ。
+レッスン0〜4 は ADL参照実装パート の SHA \`d66b44a\` を引用する。Single-file の diff は \`crates/liquidation/src/adl.rs\` にある。Liquidation参照実装（スキャナパート） (\`0a8464e\`) と ADL参照実装パート (\`d66b44a\`) の間で他の crate ファイルは変わらない — ADL は pure additive なモジュールだ。
 `,
                 },
               ],
@@ -1753,7 +1753,7 @@ Typical workload には comparable だ。\`proptest!\` は 2026 Rust エコシ�
 
 これが *Building OpenHL ADL* の最終レッスンだ。5 レッスンを経て、こうなった。
 
-- L0: ADL の役割を safety-net cascade の Layer 3 として理解した
+- レッスン0: ADL の役割を safety-net cascade の Layer 3 として理解した
 - レッスン1: \`AdlScore\`、\`AdlRecord\`、\`AdlReport\` + \`adl_score\` — ranking 関数を定義した
 - レッスン2: \`execute_adl\` を 5 フェーズパイプライン + 5 degenerate テストとして実装した
 - レッスン3: 6 つの nuanced absorption テストでパイプラインを証明した
