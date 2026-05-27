@@ -29,7 +29,7 @@ export async function seedRethPerpPrimerEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: "L0 — What perpetual futures are, and why they have no expiry",
+                  title: "Lesson 0 — What perpetual futures are, and why they have no expiry",
                   slug: "perp-primer-what-is-a-perp-en",
                   type: 'CONTENT',
                   sortOrder: 0,
@@ -42,7 +42,7 @@ export async function seedRethPerpPrimerEN(prisma: PrismaClient) {
 Concepts you'll grasp in this lesson:
 
 - **What a perpetual future actually is** — a derivative contract with no expiry date, no settlement event, and no convergence-to-spot mechanism baked into time. The whole shape of the rest of this primer follows from that one design choice.
-- **Why "no expiry" was a real engineering problem** — and why solving it required inventing a new economic mechanism (which we cover in L1).
+- **Why "no expiry" was a real engineering problem** — and why solving it required inventing a new economic mechanism (which we cover in Lesson 1).
 - **How perps differ from spot and from traditional futures** — three markets, three pricing dynamics, three sets of trader incentives.
 - **Why Hyperliquid is the canonical example** for this course — closed-source today, the rethlab DIY Perp track teaches you to build the open equivalent.
 
@@ -90,7 +90,7 @@ So perps can drift. A lot.
 
 Without a corrective mechanism, perps would just be "futures with extra steps" — and the steps would all be in the wrong direction. The contract claims to track BTC, but its price doesn't.
 
-**The solution: funding payments.** This is L1's topic. The 30-second version: when mark drifts above index, longs pay shorts a small periodic fee proportional to the gap. The fee is the economic incentive that pulls mark back. Symmetrically when mark drifts below.
+**The solution: funding payments.** This is Lesson 1's topic. The 30-second version: when mark drifts above index, longs pay shorts a small periodic fee proportional to the gap. The fee is the economic incentive that pulls mark back. Symmetrically when mark drifts below.
 
 Funding is to perps what expiry is to traditional futures — the convergence force, just implemented continuously instead of at a single point. **That's the entire innovation.**
 
@@ -112,14 +112,14 @@ Hyperliquid is the largest perpetual DEX by volume, processing over **$300B in 2
 
 A short list of Hyperliquid-specific design choices worth remembering as you go through the rest of the primer:
 
-- **Funding interval**: 1 hour (L1 covers this)
-- **Funding rate divisor**: 8 (L1)
-- **Funding rate cap**: ±4% per interval (L1)
-- **Initial margin**: ~10% (L2)
-- **Maintenance margin**: ~2% (L2; varies by tier)
-- **Liquidation fee**: ~1.5% of notional (L3)
-- **Cross-margin by default** (L2)
-- **Insurance fund** present, **ADL** as fallback (L3)
+- **Funding interval**: 1 hour (Lesson 1 covers this)
+- **Funding rate divisor**: 8 (Lesson 1)
+- **Funding rate cap**: ±4% per interval (Lesson 1)
+- **Initial margin**: ~10% (Lesson 2)
+- **Maintenance margin**: ~2% (Lesson 2; varies by tier)
+- **Liquidation fee**: ~1.5% of notional (Lesson 3)
+- **Cross-margin by default** (Lesson 2)
+- **Insurance fund** present, **ADL** as fallback (Lesson 3)
 
 These numbers will reappear in every subsequent primer lesson and in every DIY Perp course's example calculations.
 
@@ -131,15 +131,15 @@ These numbers will reappear in every subsequent primer lesson and in every DIY P
 
 **"Hyperliquid is a smart contract on Ethereum."** No — Hyperliquid is its **own L1**. The whole point of building the DIY Perp track is that an app-chain optimized for perps beats a smart contract on a general-purpose L1 for the user experience perps need (sub-second latency, no gas, deep orderbook).
 
-## Next lesson (L1)
+## Next lesson (Lesson 1)
 
-L1 — **Mark, index, and funding**. We build the picture of how mark price stays anchored to the index when there's no expiry. You'll see the premium formula \`(mark − index) / index\`, the divisor that converts it to a per-interval rate, the cap that bounds worst-case payments, and worked numerical examples at Hyperliquid's actual parameter values.
+Lesson 1 — **Mark, index, and funding**. We build the picture of how mark price stays anchored to the index when there's no expiry. You'll see the premium formula \`(mark − index) / index\`, the divisor that converts it to a per-interval rate, the cap that bounds worst-case payments, and worked numerical examples at Hyperliquid's actual parameter values.
 
-After L1, the Build OpenHL — Funding course's L4 — \`compute_premium\` — will read as "implementing the formula you already understand" instead of "what is a premium?".
+After Lesson 1, the Build OpenHL — Funding course's Lesson 4 — \`compute_premium\` — will read as "implementing the formula you already understand" instead of "what is a premium?".
 `,
                 },
                 {
-                  title: "L1 — Mark, index, and funding — how perps stay anchored without expiry",
+                  title: "Lesson 1 — Mark, index, and funding — how perps stay anchored without expiry",
                   slug: "perp-primer-mark-index-funding-en",
                   type: 'CONTENT',
                   sortOrder: 1,
@@ -165,9 +165,9 @@ After this lesson you can answer:
 
 ## Recap
 
-L0 set up the problem: perps have no expiry, so traditional futures' built-in convergence force doesn't apply. Something else has to keep the perp's price tracking the underlying.
+Lesson 0 set up the problem: perps have no expiry, so traditional futures' built-in convergence force doesn't apply. Something else has to keep the perp's price tracking the underlying.
 
-L1 introduces that something else.
+Lesson 1 introduces that something else.
 
 ## Two prices, two markets
 
@@ -337,15 +337,15 @@ It's not "funding moves mark directly." It's "funding moves trader balances, tra
 
 **"Funding always pulls mark back to index."** Eventually, yes. But during sustained imbalances (months of bull market with retail longs), funding can stay positive for a long time, transferring wealth from longs to shorts while mark stays above index. The mechanism creates *pressure*, not an instant correction.
 
-## Next lesson (L2)
+## Next lesson (Lesson 2)
 
-L2 — **Margin model**. We've established mark and funding. Now we tackle what it means for a trader to "be long 10 BTC with $10k collateral" — the leverage and margin math that determines who can hold a position and for how long. You'll see initial vs maintenance margin, cross vs isolated, and walk a concrete position from "Safe" through "AtRisk" toward "Liquidatable" as mark moves against it.
+Lesson 2 — **Margin model**. We've established mark and funding. Now we tackle what it means for a trader to "be long 10 BTC with $10k collateral" — the leverage and margin math that determines who can hold a position and for how long. You'll see initial vs maintenance margin, cross vs isolated, and walk a concrete position from "Safe" through "AtRisk" toward "Liquidatable" as mark moves against it.
 
-After L2, the Build OpenHL — Liquidation course's L1 — \`MARGIN_SCALE\` + \`LiquidationParams\` — will read as "implementing the parameters you already understand" instead of "what's a \`LiquidationParams\`?".
+After Lesson 2, the Build OpenHL — Liquidation course's Lesson 1 — \`MARGIN_SCALE\` + \`LiquidationParams\` — will read as "implementing the parameters you already understand" instead of "what's a \`LiquidationParams\`?".
 `,
                 },
                 {
-                  title: "L2 — Margin model — collateral, leverage, equity, and the four states",
+                  title: "Lesson 2 — Margin model — collateral, leverage, equity, and the four states",
                   slug: "perp-primer-margin-model-en",
                   type: 'CONTENT',
                   sortOrder: 2,
@@ -371,9 +371,9 @@ After this lesson you can answer:
 
 ## Recap
 
-L0 established what a perp is. L1 established how funding keeps mark anchored to index. Both treated the trader as a single entity holding "a position" — abstractly.
+Lesson 0 established what a perp is. Lesson 1 established how funding keeps mark anchored to index. Both treated the trader as a single entity holding "a position" — abstractly.
 
-L2 zooms into that abstraction. What is "a position" *concretely*, in dollars and ratios? When is the venue allowed to force-close it? That's the margin model.
+Lesson 2 zooms into that abstraction. What is "a position" *concretely*, in dollars and ratios? When is the venue allowed to force-close it? That's the margin model.
 
 ## The five quantities
 
@@ -426,7 +426,7 @@ The two thresholds are different on purpose:
 - Initial > maintenance: a trader who barely passes initial margin has room to take a small adverse mark move before they hit liquidation
 - Without the gap, every position opened at the limit would liquidate immediately on any unfavorable tick
 - The gap is the *buffer* the venue gives traders to make decisions (add collateral, partial-close, etc.) before forced liquidation
-- **It's also a defense line for the system itself.** Maintenance isn't a "you die instantly" line — the gap buys the liquidation engine **enough slippage room + startup latency** to submit force-close orders into the market and have them fill. The L3 force-close flow burns through this room as its budget — the thinner the room, the more the insurance fund has to absorb the shortfall.
+- **It's also a defense line for the system itself.** Maintenance isn't a "you die instantly" line — the gap buys the liquidation engine **enough slippage room + startup latency** to submit force-close orders into the market and have them fill. The Lesson 3 force-close flow burns through this room as its budget — the thinner the room, the more the insurance fund has to absorb the shortfall.
 - **Why this is non-negotiable (Initial = Maintenance counterexample)**: if initial and maintenance were both 2%, a position opened at 2.01% would become Liquidatable after a tiny adverse tick. In fast markets, the account can cross from maintenance breach to negative equity during the short delay before force-close fills. **So the initial/maintenance gap is not only trader UX buffer; it is the system's slippage cushion for preserving venue-wide solvency.**
 
 **Margin ratio** is the central quantity:
@@ -448,7 +448,7 @@ The engine classifies each non-flat position into one of four states based on it
 | **Safe** | \`ratio ≥ initial_margin_bps\` (≥ 10%) | Allow trader to open/increase positions |
 | **AtRisk** | \`ratio ∈ [maintenance, initial)\` (2% ≤ x < 10%) | Allow holding; prohibit new risk |
 | **Liquidatable** | \`ratio < maintenance, equity ≥ 0\` (< 2% but not underwater) | Force-close at market; remaining collateral returned |
-| **Underwater** | \`equity < 0\` (loss exceeds collateral) | Force-close + insurance fund absorbs deficit (L3 topic) |
+| **Underwater** | \`equity < 0\` (loss exceeds collateral) | Force-close + insurance fund absorbs deficit (Lesson 3 topic) |
 
 The Liquidatable / Underwater distinction matters because it determines *who covers the residual*. In Liquidatable, the trader's remaining collateral covers the close + fee. In Underwater, the close still happens but the venue's insurance fund covers what the trader can't.
 
@@ -490,7 +490,7 @@ Lay \`margin_ratio\` out as a single number line from high to low, and the four 
         ───────────────────────────────────────────────────────────────────────────┘
 \`\`\`
 
-This is the picture: the \`MarginHealth\` decision reduces to **a 4-interval classification on a single scalar** (margin_ratio, plus the sign of equity). L3 walks through what the engine actually does in each interval — \`Safe\` and \`AtRisk\` do nothing (the trader is in control), \`Liquidatable\` triggers a market force-close, \`Underwater\` adds an insurance-fund draw on top. **Each code branch maps 1-to-1 to one interval on the number line** — which is why \`match MarginHealth { Safe => …, AtRisk => …, Liquidatable => …, Underwater => … }\` reads so cleanly in Rust.
+This is the picture: the \`MarginHealth\` decision reduces to **a 4-interval classification on a single scalar** (margin_ratio, plus the sign of equity). Lesson 3 walks through what the engine actually does in each interval — \`Safe\` and \`AtRisk\` do nothing (the trader is in control), \`Liquidatable\` triggers a market force-close, \`Underwater\` adds an insurance-fund draw on top. **Each code branch maps 1-to-1 to one interval on the number line** — which is why \`match MarginHealth { Safe => …, AtRisk => …, Liquidatable => …, Underwater => … }\` reads so cleanly in Rust.
 
 ## Worked example — same position, five mark prices
 
@@ -534,7 +534,7 @@ Hyperliquid defaults to cross because most traders want the buffering. Isolated 
 - **Initial margin tiers**: Hyperliquid actually uses tiered initial margin. The "~10%" baseline applies to small positions. As position size grows past per-asset thresholds, initial margin requirements scale up (large BTC positions might require 20% or 30%). This caps systemic exposure to a single trader.
 - **Maintenance margin tiers**: same idea — maintenance is higher for larger positions. The DIY Perp track simplifies to flat thresholds for pedagogical clarity, but production deployments are tiered.
 - **Cross-margin default**: traders deposit USDC once and trade any market.
-- **Margin calculation is in-consensus**: every validator computes the same margin ratio from the same snapshot. This is the determinism property that L1 of the Build OpenHL — Liquidation course teaches.
+- **Margin calculation is in-consensus**: every validator computes the same margin ratio from the same snapshot. This is the determinism property that Lesson 1 of the Build OpenHL — Liquidation course teaches.
 
 ## Common misconceptions
 
@@ -544,15 +544,15 @@ Hyperliquid defaults to cross because most traders want the buffering. Isolated 
 
 **"Cross-margin is always better than isolated."** Wrong. Cross is better if all your positions are correlated favorably (e.g., a portfolio of longs). Cross is *worse* if one position blows up disproportionately — it can liquidate the entire portfolio. Isolated quarantines that risk. Choosing cross vs isolated is a real risk-management decision, not a default.
 
-## Next lesson (L3)
+## Next lesson (Lesson 3)
 
-L3 — **Liquidation, insurance fund, and ADL**. We've classified states. Now we walk through what *actually happens* when a position crosses into Liquidatable or Underwater. The engine submits a close order, the matching engine settles it, fees flow into the insurance fund, deficits drain it, and (rarely) ADL kicks in when the insurance fund is depleted.
+Lesson 3 — **Liquidation, insurance fund, and ADL**. We've classified states. Now we walk through what *actually happens* when a position crosses into Liquidatable or Underwater. The engine submits a close order, the matching engine settles it, fees flow into the insurance fund, deficits drain it, and (rarely) ADL kicks in when the insurance fund is depleted.
 
-After L3, you'll have a complete model of perp mechanics — and the Build OpenHL — Liquidation course's L4-L7 (margin math + classification + close order generation) will read as the Rust implementation of what you already understand.
+After Lesson 3, you'll have a complete model of perp mechanics — and the Build OpenHL — Liquidation course's Lessons 4–7 (margin math + classification + close order generation) will read as the Rust implementation of what you already understand.
 `,
                 },
                 {
-                  title: "L3 — Liquidation, insurance fund, and ADL — the safety net mechanics",
+                  title: "Lesson 3 — Liquidation, insurance fund, and ADL — the safety net mechanics",
                   slug: "perp-primer-liquidation-insurance-adl-en",
                   type: 'CONTENT',
                   sortOrder: 3,
@@ -578,13 +578,13 @@ After this lesson you can answer:
 
 ## Recap
 
-L0 established what perps are. L1 made mark anchor to index via funding. L2 classified positions into the four states. L3 walks through what *actually happens* at the boundary between AtRisk and Liquidatable, and between Liquidatable and Underwater.
+Lesson 0 established what perps are. Lesson 1 made mark anchor to index via funding. Lesson 2 classified positions into the four states. Lesson 3 walks through what *actually happens* at the boundary between AtRisk and Liquidatable, and between Liquidatable and Underwater.
 
 This is the lesson where the perp model becomes load-bearing for the entire chain: every other trader's safety depends on liquidation working correctly.
 
 ## The trigger
 
-Recap from L2: an account is **Liquidatable** when \`margin_ratio < maintenance_margin_bps\` AND \`equity ≥ 0\`. **Underwater** when \`equity < 0\` (PnL has exceeded collateral).
+Recap from Lesson 2: an account is **Liquidatable** when \`margin_ratio < maintenance_margin_bps\` AND \`equity ≥ 0\`. **Underwater** when \`equity < 0\` (PnL has exceeded collateral).
 
 The engine evaluates margin ratio every block for every non-flat account. The moment an account crosses below the maintenance threshold, the engine fires the liquidation pipeline for that account in the current block. No human in the loop, no waiting, no second chances — every validator, every block, on the same data.
 
@@ -613,7 +613,7 @@ This is mechanically the same as a normal trade. The trader's position closes. T
 > | Failure modes | Can fail on signature / nonce / gas / RPC outage | Cannot structurally fail — the consensus itself emits the order |
 > | Cancelable | Yes, by the trader | No — once the state machine decides to fire, it fills |
 >
-> Retail-facing copy sometimes describes liquidation as "an automatic stop-loss when margin runs out," but from the engine's point of view they're not the same thing at all. **Force-close is a *privileged order*** — an order written into the orderbook by the engine itself, on a code path no external caller can reach. The \`Liquidatable\` arm of the \`MarginHealth\` enum from L2 is exactly the trigger for that privileged emission.
+> Retail-facing copy sometimes describes liquidation as "an automatic stop-loss when margin runs out," but from the engine's point of view they're not the same thing at all. **Force-close is a *privileged order*** — an order written into the orderbook by the engine itself, on a code path no external caller can reach. The \`Liquidatable\` arm of the \`MarginHealth\` enum from Lesson 2 is exactly the trigger for that privileged emission.
 
 A worked example:
 
@@ -767,11 +767,11 @@ Hyperliquid's design is to make ADL **very rare**:
 
 ## The safety-net cascade
 
-From L2's margin requirement down to ADL, four layers cascade through the loss-absorption stack. **The higher in the stack you stop, the less damage everyone takes:**
+From Lesson 2's margin requirement down to ADL, four layers cascade through the loss-absorption stack. **The higher in the stack you stop, the less damage everyone takes:**
 
 \`\`\`
    ┌─────────────────────────────────────────────────────────────────┐
-   │ Layer 0: Margin requirement (covered in L2)                      │
+   │ Layer 0: Margin requirement (covered in Lesson 2)                      │
    │   Initial 10% / Maintenance 2% cap the risk a trader can take    │
    │   → "The trader's own collateral covers their own losses"        │
    │   Stops here if: ratio ≥ maintenance and the market bounces      │
@@ -805,7 +805,7 @@ From L2's margin requirement down to ADL, four layers cascade through the loss-a
 **How to read this cascade:**
 
 - **Damage spreads as you fall further down**: at Layer 1 only the trader pays. At Layer 2 the venue pays from its pooled fee reserve. At Layer 3 unrelated (profitable) traders get pulled in.
-- **Each layer is designed to absorb as much as possible before handing off to the next**: the 8% gap between initial and maintenance margin (from L2) is the room Layer 1 has to absorb, the 1.5% liquidation fee is the rate Layer 2 refills at, cross-margin (offsetting losses with profits within one account) delays the trip into Layer 1 — and so on. **Venue design is essentially a set of numerical choices for "keep work out of the layer below you."**
+- **Each layer is designed to absorb as much as possible before handing off to the next**: the 8% gap between initial and maintenance margin (from Lesson 2) is the room Layer 1 has to absorb, the 1.5% liquidation fee is the rate Layer 2 refills at, cross-margin (offsetting losses with profits within one account) delays the trip into Layer 1 — and so on. **Venue design is essentially a set of numerical choices for "keep work out of the layer below you."**
 - **How this maps to code branches**: Stage 10c's \`MarginHealth\` enum transitions are exactly the Layer 1-3 transitions. \`Safe\` / \`AtRisk\` = Layer 0, \`Liquidatable\` = Layer 1, \`Underwater\` with a non-empty insurance fund = Layer 2, \`Underwater\` with a depleted fund = Layer 3. **The four-state enum maps 1-to-1 onto the four defensive layers.**
 
 ## Hyperliquid specifics
@@ -827,10 +827,10 @@ From L2's margin requirement down to ADL, four layers cascade through the loss-a
 
 You now understand:
 
-- **What a perp is** (L0)
-- **How funding anchors mark to index** (L1)
-- **How margin and the four states work** (L2)
-- **How liquidation, insurance fund, and ADL handle the worst cases** (L3)
+- **What a perp is** (Lesson 0)
+- **How funding anchors mark to index** (Lesson 1)
+- **How margin and the four states work** (Lesson 2)
+- **How liquidation, insurance fund, and ADL handle the worst cases** (Lesson 3)
 
 That's the complete model the DIY Perp track assumes. Every formula in \`compute_premium\`, every variant of \`MarginHealth\`, every line of \`close_order_spec\` — they all implement a piece of what this primer covered.
 
@@ -840,9 +840,9 @@ That's the complete model the DIY Perp track assumes. Every formula in \`compute
 
 Or, if you've already covered the consensus and orderbook material and want to start with the perp-specific layers:
 
-→ **Build OpenHL — Funding** (implements what you saw in L1)
+→ **Build OpenHL — Funding** (implements what you saw in Lesson 1)
 
-→ **Build OpenHL — Liquidation** (implements what you saw in L2 + L3)
+→ **Build OpenHL — Liquidation** (implements what you saw in Lesson 2 + Lesson 3)
 `,
                 },
               ],

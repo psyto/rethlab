@@ -846,7 +846,7 @@ Reth・Revm・Alloyの役割と立ち位置を理解できたか確認する。`
                         '世界唯一のRust製EVMだから',
                         'モジュラーなライブラリとして設計され、カスタマイズしやすく性能が高いから',
                         'Solidityがコンパイル不要で動くから',
-                        '無料で使えるEVMはRevmだけだから',
+                        'Ethereum Foundation が公式に開発しているから',
                       ],
                       correctIndex: 1,
                       explanation: 'Revmは「部品として使える」設計と、Rustによる高速さ・安全性を兼ね備えるため、Foundry・OP-Reth・zkVM・Hyperliquidなどで幅広く採用される。',

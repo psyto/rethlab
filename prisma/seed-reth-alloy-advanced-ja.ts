@@ -40,7 +40,7 @@ export async function seedRethAlloyAdvancedJA(prisma: PrismaClient) {
 - **Inside Reth** — Reth の内側: Staged Sync・ExEx・Reth SDK
 - **Inside Alloy**（あなたはここ）— Alloy の内側: Provider・Network・Signer
 
-Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い、Revm は alloy の primitive を使い、Rust から Ethereum と通信する dapp / MEV ボット / インデクサはすべて alloy の \`Provider\` を使いる。本コースが教えるのは **alloy のソースを読む** スキル — Inside Revm が revm を読む力を養うのと同じ形である。
+Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い、Revm は alloy の primitive を使い、Rust から Ethereum と通信する dapp / MEV ボット / インデクサはすべて alloy の \`Provider\` を使う。本コースが教えるのは **alloy のソースを読む** スキル — Inside Revm が revm を読む力を養うのと同じ形である。
 
 > 📋 **中級ティアは初めて?** 始める前に *中級への橋渡し* の末尾にある **「中級コースの読み方」** に目を通してしてほしい。編集スタイル（Predict プロンプト、クイズゲート、build-up → walkthrough → quiz → drill のチェーン構造）とペース配分を説明している。3 つの中級コース全てに共通なので、1 度だけ読めば十分。
 
@@ -49,7 +49,7 @@ Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い
 [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) のソースを 1 行ずつ読む:
 
 - **\`Provider\` トレイト** — Ethereum ノードと話すための中心的なトレイト
-- **\`Network\` トレイト** — alloy が Ethereum・Optimism・Anvil・カスタム レッスン2を同じ API で扱う仕組み
+- **\`Network\` トレイト** — alloy が Ethereum・Optimism・Anvil・カスタム L2を同じ API で扱う仕組み
 - **\`Signer\` / \`Filler\` トレイト** — トランザクション署名、ガス推定、nonce 管理を層状のプロバイダに合成する仕組み
 
 トピックチェーンは 3 本、それぞれ build-up + walkthrough + quiz + drill の構成。
@@ -64,9 +64,9 @@ Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い
 - \`async\` / \`Future\` の基礎、Tokio ランタイムモデル
 - \`auto_impl\` マクロと手続き属性
 
-**EVM 内部の知識は不要。** Alloy は EVM の上で動きます — 通信相手はノードであって opcode ではない。(3 つの中級コース全てを受けるなら、EVM 内部は Inside Revm で扱いる。)
+**EVM 内部の知識は不要。** Alloy は EVM の上で動きます — 通信相手はノードであって opcode ではない。(3 つの中級コース全てを受けるなら、EVM 内部は Inside Revm で扱う。)
 
-**alloy をユーザーとして使った経験** — \`Provider::get_balance\`、\`ProviderBuilder\`、tx 署名 — は Fundamentals（\`alloy-primitives-signing\`、\`alloy-provider\`）で扱いる。心もとなければ Fundamentals レッスンを先に。本コースが教えるのは alloy を *使う* ことではなく *読む* ことである。
+**alloy をユーザーとして使った経験** — \`Provider::get_balance\`、\`ProviderBuilder\`、tx 署名 — は Fundamentals（\`alloy-primitives-signing\`、\`alloy-provider\`）で扱う。心もとなければ Fundamentals レッスンを先に。本コースが教えるのは alloy を *使う* ことではなく *読む* ことである。
 
 ## セットアップ — 一度だけ
 
@@ -208,7 +208,7 @@ pub trait Provider<N: Network> {
 
 > 🛑 **予測。** デフォルト型パラメータ付きの \`N: Network = Ethereum\` が、デフォルトなしの \`N: Network\` より優れている理由は?
 
-理由は **ユーザーの 99% は Ethereum を使いたい** から。デフォルトのおかげで \`Provider<Ethereum>\` と書かずに \`Provider\` で済む。書き換えが必要なのは Optimism / カスタム レッスン2のユーザーだけ。デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示にする。
+理由は **ユーザーの 99% は Ethereum を使いたい** から。デフォルトのおかげで \`Provider<Ethereum>\` と書かずに \`Provider\` で済む。書き換えが必要なのは Optimism / カスタム L2のユーザーだけ。デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示にする。
 
 本物の alloy トレイトもまさにそのデフォルトを持つ: \`pub trait Provider<N: Network = Ethereum>\`。
 
@@ -583,12 +583,12 @@ provider.send_transaction(tx).with_required_confirmations(3).get_receipt().await
                       question: "`Provider<N: Network = Ethereum>` が、単なる `Provider<N: Network>` ではなく *デフォルト付きの* 型パラメータでパラメータ化されているのはなぜか?",
                       options: [
                         "Rust はジェネリックトレイトに対する `dyn Trait` を成立させるためにデフォルトを要求する。",
-                        "ユーザーの大多数は Ethereum を使う。デフォルトのおかげで、皆が `Provider<Ethereum>` ではなく `Provider` と書ける — 書き換えるのは Optimism / カスタム レッスン2のユーザーだけ。",
+                        "ユーザーの大多数は Ethereum を使う。デフォルトのおかげで、皆が `Provider<Ethereum>` ではなく `Provider` と書ける — 書き換えるのは Optimism / カスタム L2のユーザーだけ。",
                         "`Network` は本物のトレイトではなく、ドキュメント目的のマーカーにすぎないから。",
                         "Alloy は Ethereum 専用ライブラリとして始まり、ジェネリックパラメータは後方互換のための名残だから。",
                       ],
                       correctIndex: 1,
-                      explanation: "デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示的に保つ。デフォルトがなければ、Ethereum ユーザーは至るところで `Provider<Ethereum>` を書く羽目になる。トレイト自体は設計上 Ethereum 専用ではない — alloy は Optimism、Anvil、カスタム レッスン2を明示的にサポートしている — が、Ethereum が 95% のケースなので API はそちらに寄せている。Revm の `IT: ITy` ジェネリックと同じ形 — 変動するところを抽象化し、支配的なケースをデフォルトに据える。",
+                      explanation: "デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示的に保つ。デフォルトがなければ、Ethereum ユーザーは至るところで `Provider<Ethereum>` を書く羽目になる。トレイト自体は設計上 Ethereum 専用ではない — alloy は Optimism、Anvil、カスタム L2を明示的にサポートしている — が、Ethereum が 95% のケースなので API はそちらに寄せている。Revm の `IT: ITy` ジェネリックと同じ形 — 変動するところを抽象化し、支配的なケースをデフォルトに据える。",
                     },
                     {
                       question: "`get_balance` が `impl Future<Output = U256>` ではなく `RpcWithBlock<Address, U256>` を返すのはなぜか?",
@@ -1215,7 +1215,7 @@ fn build_request<N: Network>() -> N::TransactionRequest {
 }
 \`\`\`
 
-同じコードで Ethereum、Optimism、AnyNetwork、カスタム レッスン2のいずれでも動く。**型レベル辞書 + ヘルパートレイト ＝ チェーン横断で移植可能なコード。**
+同じコードで Ethereum、Optimism、AnyNetwork、カスタム L2のいずれでも動く。**型レベル辞書 + ヘルパートレイト ＝ チェーン横断で移植可能なコード。**
 
 ## \`AnyNetwork\` — 寛容な逃げ道
 
