@@ -9,7 +9,7 @@ export async function seedRethOpenHlLiquidationEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-liquidation-en",
-      title: "Step 5. Liquidation: perpetual position liquidation engine",
+      title: "Build OpenHL Liquidation — perpetual position liquidation engine",
       description:
         "Build the perpetual-position liquidation engine end-to-end: the pure-compute layer that classifies accounts (Safe / AtRisk / Liquidatable / Underwater) from margin ratios and generates close-order specs, the insurance-fund state machine that absorbs deficits via a three-variant outcome enum (Covered / PartiallyDrained / Depleted), and the multi-account scanner that ties them into a single orchestration loop the bridge calls once per block. Includes the leveraged-regime non-monotonicity discovery, three layers of conservation-law proptests that compose vertically, the credit/debit decomposition that bridges pure compute and stateful book-keeping, and the discriminated-dispatch pattern via debug_assert! pairs. 14 lessons (L0–L13) across 5 modules, byte-for-byte against openhl's full Stage 10 trilogy (margin math + insurance fund + scanner). The fifth course in the DIY Perp series.",
       difficulty: "EXPERT",
@@ -29,7 +29,7 @@ export async function seedRethOpenHlLiquidationEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: "Step 5. Liquidation: perpetual position liquidation engine",
+                  title: "Build OpenHL Liquidation — perpetual position liquidation engine",
                   slug: "openhl-liquidation-orientation-en",
                   type: 'CONTENT',
                   sortOrder: 0,
@@ -77,7 +77,7 @@ The fix: signed integers + **saturating arithmetic (operations that, on overflow
 
 (Funding used \`RATE_SCALE = 1_000_000_000\` because it needed parts-per-billion precision for tiny per-interval rates. Liquidation needs less precision but the same discipline.)
 
-## The 12 lessons
+## The 14 lessons
 
 ### Module 0 — Orientation
 - **L0** (this lesson) — Why liquidations, why margin model, three-sub-stage roadmap.

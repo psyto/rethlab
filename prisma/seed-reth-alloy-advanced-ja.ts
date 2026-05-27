@@ -49,7 +49,7 @@ Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い
 [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) のソースを 1 行ずつ読む:
 
 - **\`Provider\` トレイト** — Ethereum ノードと話すための中心的なトレイト
-- **\`Network\` トレイト** — alloy が Ethereum・Optimism・Anvil・カスタム L2 を同じ API で扱う仕組み
+- **\`Network\` トレイト** — alloy が Ethereum・Optimism・Anvil・カスタム レッスン2を同じ API で扱う仕組み
 - **\`Signer\` / \`Filler\` トレイト** — トランザクション署名、ガス推定、nonce 管理を層状のプロバイダに合成する仕組み
 
 トピックチェーンは 3 本、それぞれ build-up + walkthrough + quiz + drill の構成。
@@ -208,7 +208,7 @@ pub trait Provider<N: Network> {
 
 > 🛑 **予測。** デフォルト型パラメータ付きの \`N: Network = Ethereum\` が、デフォルトなしの \`N: Network\` より優れている理由は?
 
-理由は **ユーザーの 99% は Ethereum を使いたい** から。デフォルトのおかげで \`Provider<Ethereum>\` と書かずに \`Provider\` で済む。書き換えが必要なのは Optimism / カスタム L2 のユーザーだけ。デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示にする。
+理由は **ユーザーの 99% は Ethereum を使いたい** から。デフォルトのおかげで \`Provider<Ethereum>\` と書かずに \`Provider\` で済む。書き換えが必要なのは Optimism / カスタム レッスン2のユーザーだけ。デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示にする。
 
 本物の alloy トレイトもまさにそのデフォルトを持つ: \`pub trait Provider<N: Network = Ethereum>\`。
 
@@ -583,12 +583,12 @@ provider.send_transaction(tx).with_required_confirmations(3).get_receipt().await
                       question: "`Provider<N: Network = Ethereum>` が、単なる `Provider<N: Network>` ではなく *デフォルト付きの* 型パラメータでパラメータ化されているのはなぜか?",
                       options: [
                         "Rust はジェネリックトレイトに対する `dyn Trait` を成立させるためにデフォルトを要求する。",
-                        "ユーザーの大多数は Ethereum を使う。デフォルトのおかげで、皆が `Provider<Ethereum>` ではなく `Provider` と書ける — 書き換えるのは Optimism / カスタム L2 のユーザーだけ。",
+                        "ユーザーの大多数は Ethereum を使う。デフォルトのおかげで、皆が `Provider<Ethereum>` ではなく `Provider` と書ける — 書き換えるのは Optimism / カスタム レッスン2のユーザーだけ。",
                         "`Network` は本物のトレイトではなく、ドキュメント目的のマーカーにすぎないから。",
                         "Alloy は Ethereum 専用ライブラリとして始まり、ジェネリックパラメータは後方互換のための名残だから。",
                       ],
                       correctIndex: 1,
-                      explanation: "デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示的に保つ。デフォルトがなければ、Ethereum ユーザーは至るところで `Provider<Ethereum>` を書く羽目になる。トレイト自体は設計上 Ethereum 専用ではない — alloy は Optimism、Anvil、カスタム L2 を明示的にサポートしている — が、Ethereum が 95% のケースなので API はそちらに寄せている。Revm の `IT: ITy` ジェネリックと同じ形 — 変動するところを抽象化し、支配的なケースをデフォルトに据える。",
+                      explanation: "デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示的に保つ。デフォルトがなければ、Ethereum ユーザーは至るところで `Provider<Ethereum>` を書く羽目になる。トレイト自体は設計上 Ethereum 専用ではない — alloy は Optimism、Anvil、カスタム レッスン2を明示的にサポートしている — が、Ethereum が 95% のケースなので API はそちらに寄せている。Revm の `IT: ITy` ジェネリックと同じ形 — 変動するところを抽象化し、支配的なケースをデフォルトに据える。",
                     },
                     {
                       question: "`get_balance` が `impl Future<Output = U256>` ではなく `RpcWithBlock<Address, U256>` を返すのはなぜか?",
@@ -814,7 +814,7 @@ let bal = provider.get_balance(addr).await?;
                   xpReward: 25,
                   content: `# \`Network\` トレイトをステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層のチェーン抽象**。ひとつのクライアントが「互換性のある複数のプロトコル」を話す必要に直面したときに必ず現れる、型システム設計の問題。gRPC が複数サービス間でメッセージ型を再利用するのも、データベースドライバが PostgreSQL / MySQL / SQLite に同じ接続 API を出すのも、根は同じ問題。\`Network\` は「Ethereum・Optimism・将来の任意の L2 で同じ API」を成立させるために、その解法を持ち込んだもの。
+> 🧭 **systems engineering スタックでの位置:** **ネットワーク層のチェーン抽象**。ひとつのクライアントが「互換性のある複数のプロトコル」を話す必要に直面したときに必ず現れる、型システム設計の問題。gRPC が複数サービス間でメッセージ型を再利用するのも、データベースドライバが PostgreSQL / MySQL / SQLite に同じ接続 API を出すのも、根は同じ問題。\`Network\` は「Ethereum・Optimism・将来の任意の レッスン2で同じ API」を成立させるために、その解法を持ち込んだもの。
 
 Optimism のトランザクションは L1 \`mint\` フィールドを持つ。レシートには \`l1_fee\` と \`l1_block_number\` が乗る。Polygon zkEVM の tx エンベロープにはシーケンサ署名がある。各 L2 は独自の tx・レシート・ブロックの形を持つ — それでも同じ \`Provider\` API がそのすべてで動く。**どうやって?** \`Network\` を通してだ: alloy の *型レベル辞書*（1 つのトレイトで、その関連型が、あるチェーンが使うチェーン固有の型一式を選ぶ）。
 
@@ -1215,7 +1215,7 @@ fn build_request<N: Network>() -> N::TransactionRequest {
 }
 \`\`\`
 
-同じコードで Ethereum、Optimism、AnyNetwork、カスタム L2 のいずれでも動く。**型レベル辞書 + ヘルパートレイト ＝ チェーン横断で移植可能なコード。**
+同じコードで Ethereum、Optimism、AnyNetwork、カスタム レッスン2のいずれでも動く。**型レベル辞書 + ヘルパートレイト ＝ チェーン横断で移植可能なコード。**
 
 ## \`AnyNetwork\` — 寛容な逃げ道
 
@@ -1488,7 +1488,7 @@ let s = block_summary::<Optimism, _>(&eth_provider, BlockId::latest()).await?;
 
 このドリルを終えた時点で、本番のインデクサやエクスプローラが投入しているのと同じ形のマルチチェーンツール — \`N: Network\` 上ジェネリックな中核関数 1 つを、コンパイル時にチェーンごとに特殊化させる形 — を投入したことになる。**次のチェーン: \`Signer\` トレイト — alloy が署名、ガス、nonce の充填を層状の Provider に合成する仕組み。**
 
-> **🧭 ここまでで積み上げたもの:** **ネットワーク層のチェーン抽象** を完成 — \`Send + Sync + 'static\` 境界を持つ関連型 10 個、型レベルの辞書、コンパイル時の特殊化。\`Provider\` 本体ひとつで、Ethereum・Optimism・将来の任意 L2 を型安全にカバーできるかたちになった。次のチェーンでは次元が切り替わる: 「どのチェーンか」から、「誰が署名し、nonce やガスがどう充填されるか」へ。`,
+> **🧭 ここまでで積み上げたもの:** **ネットワーク層のチェーン抽象** を完成 — \`Send + Sync + 'static\` 境界を持つ関連型 10 個、型レベルの辞書、コンパイル時の特殊化。\`Provider\` 本体ひとつで、Ethereum・Optimism・将来の任意 レッスン2を型安全にカバーできるかたちになった。次のチェーンでは次元が切り替わる: 「どのチェーンか」から、「誰が署名し、nonce やガスがどう充填されるか」へ。`,
                 },
                 {
                   title: '\`Signer\` トレイトをステップごとに組み立てる',
@@ -1801,7 +1801,7 @@ pub trait Signer<Sig = Signature>: Send + Sync {
 
 ### \`Sig = Signature\` — デフォルト付きのジェネリックパラメータ
 
-組み立てでは \`Signer<Sig = Signature>\` と書いた。\`Sig\` というパラメータがあるのは、すべてのチェーンが ECDSA secp256k1 署名を使うわけではないからだ（Ethereum の曲線 — 65 バイトの (r, s, v) タプル）。L2 のなかには BLS（集約に向く）を使うものや、ed25519（Solana の曲線）を使うもの、耐量子計算スキームを使うものもある。\`Signature\`（alloy の secp256k1 型）をデフォルトにすれば、\`impl Signer\` を書くと暗黙に \`impl Signer<Signature>\` になる — 一般ケースの取り回しを保ちつつ、別スキームを差し込める。
+組み立てでは \`Signer<Sig = Signature>\` と書いた。\`Sig\` というパラメータがあるのは、すべてのチェーンが ECDSA secp256k1 署名を使うわけではないからだ（Ethereum の曲線 — 65 バイトの (r, s, v) タプル）。レッスン2のなかには BLS（集約に向く）を使うものや、ed25519（Solana の曲線）を使うもの、耐量子計算スキームを使うものもある。\`Signature\`（alloy の secp256k1 型）をデフォルトにすれば、\`impl Signer\` を書くと暗黙に \`impl Signer<Signature>\` になる — 一般ケースの取り回しを保ちつつ、別スキームを差し込める。
 
 > 🛑 **予測。** なぜ \`Sig\` は *関連型* ではなく、*トレイトのジェネリックパラメータ* なのか?（\`Network::TxEnvelope\` のように関連型にせず。)
 

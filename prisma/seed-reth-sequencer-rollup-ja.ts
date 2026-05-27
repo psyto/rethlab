@@ -8,7 +8,7 @@ export async function seedRethSequencerRollupJA(prisma: PrismaClient) {
       slug: 'reth-sequencer-rollup-ja',
       title: 'Sequencer & Rollup アーキテクチャ — 中央集権ブロック生成から共有 sequencer まで',
       description:
-        '現代の L2 が実際どう動くか: sequencer の役割、batch 投稿と data availability、fraud proof vs validity (ZK) proof、op-rbuilder と op-batcher を読み、Reth 上で最小 sequencer を作り、単一オペレータから共有 sequencer までの分散化パス。Tempo Moderato 級の L2 を architect、OP Stack chain を出荷、次の共有 sequencer を作る準備ができる。',
+        '現代の L2 が実際どう動くか: sequencer の役割、batch 投稿と data availability、fraud proof vs validity (ZK) proof、op-rbuilder と op-batcher を読み、Reth 上で最小 sequencer を作り、単一オペレータから共有 sequencer までの分散化パス。Tempo Moderato 級の L2を architect、OP Stack chain を出荷、次の共有 sequencer を作る準備ができる。',
       difficulty: 'ADVANCED',
       duration: 165,
       xpReward: 500,
@@ -36,7 +36,7 @@ export async function seedRethSequencerRollupJA(prisma: PrismaClient) {
 
 Base で swap を送る。1 秒未満で confirm。Wallet に tx が表示される。その順序を決め、自社サーバで実行し、**いずれ** Ethereum に投稿するのは **1 企業** — Coinbase。慣習的な定義に従えばこれは中央集権システム。それなのになぜ Base は「分散化された rollup」と呼ばれるのか?
 
-本レッスンがその答え。**Sequencer**(rollup 上で transaction を順序付ける主体)は Base、Optimism、Arbitrum、Mantle、ほぼ全ての本番 L2 で中央集権。分散化はどこでも「ロードマップ上」、しかも何年もロードマップ上のまま。これは恥ではなく — 設計の選択である。
+本レッスンがその答え。**Sequencer**(rollup 上で transaction を順序付ける主体)は Base、Optimism、Arbitrum、Mantle、ほぼ全ての本番 レッスン2で中央集権。分散化はどこでも「ロードマップ上」、しかも何年もロードマップ上のまま。これは恥ではなく — 設計の選択である。
 
 > 🛑 **スクロール前に予測。** Optimism は OP Labs チームが運用する **sequencer を 1 つだけ持つ**。**なぜこれが許容可能なのか?** Single sequencer であっても、rollup アーキテクチャがなければ可能になる攻撃のうち、緩和できるものは何か?
 
@@ -50,9 +50,9 @@ Rollup は 2 つの要素の組み合わせ:
 Sequencer が担うのは part 1。具体的には:
 - ユーザ tx を受信する
 - 順序付ける
-- L2 で実行する
+- レッスン2で実行する
 - L2 ブロックを生成する
-- L1 に batch を提出する
+- レッスン1に batch を提出する
 
 \`\`\`mermaid
 flowchart TB
@@ -63,7 +63,7 @@ flowchart TB
     L1 -->|finalize after challenge| L2
 \`\`\`
 
-アーキテクチャ上の見返り: **中央集権 sequencer であってもユーザ資金は危険にさらされない**。検閲されたら、ユーザは L1 の force-inclusion contract に直接 tx を提出できる — プロトコルが期限付きで sequencer に含めることを強制する。State について嘘をついたら、L1 contract が withdrawal を拒否する。
+アーキテクチャ上の見返り: **中央集権 sequencer であってもユーザ資金は危険にさらされない**。検閲されたら、ユーザは L1の force-inclusion contract に直接 tx を提出できる — プロトコルが期限付きで sequencer に含めることを強制する。State について嘘をついたら、L1 contract が withdrawal を拒否する。
 
 これが rollup モデルの売り: **sequencer を UX については信頼する、資金については信頼しない**。
 
@@ -75,7 +75,7 @@ flowchart TB
 | :--- | :--- | :--- |
 | **Ordering** | 各 L2 ブロックの tx 順序を選ぶ | L2 上 |
 | **Execution** | revm で実行し post-state を生成する | L2 上 |
-| **Batching** | L2 ブロックをまとめて L1 に投稿する | Off-chain → L1 |
+| **Batching** | L2 ブロックをまとめて L1に投稿する | Off-chain → L1 |
 
 OP Stack chain では、これらは 3 つの repo に対応する:
 - **op-rbuilder**(または op-geth): 実行 + 順序付け
@@ -154,7 +154,7 @@ Rollup はスペクトラム上のどこかに位置する:
 
 ### Tempo Zones — アンカー型の confidential パターン
 
-Sequencer アーキテクチャのバリエーションとして押さえておく価値がある。[\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) は **Tempo にアンカーされた** プライベートブロックチェーン。各 Zone は自前の sequencer を **250ms のブロック時間** で運用し、confidential な tx(暗号化された残高と受取人)を処理し、**Tempo のブロックごと(約 500ms)に、バッチ化された withdrawal を Tempo へ提出する**。コンプライアンスポリシー(TIP-403)は Tempo L1 から継承され、Zone 内で強制される。アーキテクチャ上の学び: 自分が同時に運用する L1 の上に乗る「ロールアップ的」なプライバシー chain、アンカー型の finality と継承された compliance を伴う — 大半の L2 設計がまだ名前を持っていないパターンである。
+Sequencer アーキテクチャのバリエーションとして押さえておく価値がある。[\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) は **Tempo にアンカーされた** プライベートブロックチェーン。各 Zone は自前の sequencer を **250ms のブロック時間** で運用し、confidential な tx(暗号化された残高と受取人)を処理し、**Tempo のブロックごと(約 500ms)に、バッチ化された withdrawal を Tempo へ提出する**。コンプライアンスポリシー(TIP-403)は Tempo L1から継承され、Zone 内で強制される。アーキテクチャ上の学び: 自分が同時に運用する L1の上に乗る「ロールアップ的」なプライバシー chain、アンカー型の finality と継承された compliance を伴う — 大半の L2 設計がまだ名前を持っていないパターンである。
 
 ### 仮想「自分の L2」
 
@@ -195,13 +195,13 @@ OP Stack で chain を立ち上げる:
 
 2024 年 3 月以前、Ethereum に rollup data を 1MB 投稿するコストは **batch あたり約 $300** だった。EIP-4844 後、同じ 1MB が **$3〜$30** に下がった。10 倍のコスト低下は rollup 史上最大のコスト改善で、Base の tx 手数料がドル単位ではなくセント単位で済むようになった理由でもある。
 
-この改善はより深い問いの上に成り立つ: **そもそもなぜ rollup は L1 に data を投稿しなければならないのか?** 答えが **data availability**(DA — sequencer 以外でも誰もが transaction data を取得できる、という性質)である。これがなければ sequencer の state root は検証不可能になり、1 企業を信頼するという話に逆戻りしてしまう。本レッスンでは DA とは何か、4 つの DA モデル、それを安くした EIP-4844 blob の仕掛け、そして op-batcher が実際にどう投稿するかを扱う。
+この改善はより深い問いの上に成り立つ: **そもそもなぜ rollup は レッスン1に data を投稿しなければならないのか?** 答えが **data availability**(DA — sequencer 以外でも誰もが transaction data を取得できる、という性質)である。これがなければ sequencer の state root は検証不可能になり、1 企業を信頼するという話に逆戻りしてしまう。本レッスンでは DA とは何か、4 つの DA モデル、それを安くした EIP-4844 blob の仕掛け、そして op-batcher が実際にどう投稿するかを扱う。
 
-> 🛑 **スクロール前に予測。** Rollup が 12 分ごとに L1 に 1MB の transaction data を投稿するとする。**Ethereum mainnet のガス価格で 1 日あたりいくらかかるか?** EIP-4844 の前と後ではコスト差はどれだけになるか?
+> 🛑 **スクロール前に予測。** Rollup が 12 分ごとに レッスン1に 1MB の transaction data を投稿するとする。**Ethereum mainnet のガス価格で 1 日あたりいくらかかるか?** EIP-4844 の前と後ではコスト差はどれだけになるか?
 
 ## 1. なぜ data availability が重要か
 
-Rollup は **state root** を介して L1 にコミットする。だが state root は 32 byte だけで、L2 state が *何* なのかは教えてくれない。L2 state を再構築するには次の 2 つが必要:
+Rollup は **state root** を介して レッスン1にコミットする。だが state root は 32 byte だけで、L2 state が *何* なのかは教えてくれない。L2 state を再構築するには次の 2 つが必要:
 
 1. **State root**(安価 — batch あたり 32 byte)
 2. State root を生成した **transaction data**(高価 — 各 tx の各 byte)
@@ -220,11 +220,11 @@ Rollup は **state root** を介して L1 にコミットする。だが state r
 | **Volition** | ユーザが tx ごとに選ぶ(rollup か validium か) | 混合 | dYdX v4 系のハイブリッド |
 | **Optimium** | Fraud proof 付きの DA 委員会 | DA 委員会 + fraud proof | より新しい設計 |
 
-Tempo、Hyperliquid、関心のある大半の chain は **rollup** モデルを採る。Data は何らかの形で L1 に流れる。
+Tempo、Hyperliquid、関心のある大半の chain は **rollup** モデルを採る。Data は何らかの形で レッスン1に流れる。
 
 ## 3. EIP-4844 — blob 革命
 
-2024 年 3 月以前、rollup は **calldata**(通常の Ethereum transaction の input bytes)として L1 に data を投稿していた。Calldata は byte あたりおよそ 16 gas で、50 gwei では byte あたり約 $0.02、1MB の batch で約 $300 になっていた。
+2024 年 3 月以前、rollup は **calldata**(通常の Ethereum transaction の input bytes)として レッスン1に data を投稿していた。Calldata は byte あたりおよそ 16 gas で、50 gwei では byte あたり約 $0.02、1MB の batch で約 $300 になっていた。
 
 EIP-4844 はまったく新しい transaction type — **blob transaction** — を導入し、独自の fee market を持たせ、たった 1 つのユースケース、すなわち rollup の DA に向けて価格付けした。
 
@@ -270,7 +270,7 @@ sequenceDiagram
 | サービス | 頻度 | 目的 |
 | :--- | :--- | :--- |
 | Sequencer | L2 ブロックごと(約 2 秒) | ブロック構築 |
-| Batcher | 約 60 秒ごと | 圧縮した batch を L1 に提出 |
+| Batcher | 約 60 秒ごと | 圧縮した batch を レッスン1に提出 |
 | Proposer | 約 1 時間ごと | State root の commitment を提出 |
 
 L1 コストの大半を占めるのは **batcher**(データ量が多い)と **proposer**(データは少ないが commitment ごとに gas がかかる)。
@@ -293,7 +293,7 @@ for {
     // 3. blob サイズチャンクに分割 (~128KB each)
     chunks := chunk(compressed, BLOB_SIZE)
 
-    // 4. L1 に blob tx 提出
+    // 4. レッスン1に blob tx 提出
     for _, chunk := range chunks {
         submitBlobTx(chunk)
     }
@@ -331,7 +331,7 @@ Rollup は必ずしも Ethereum に投稿する必要はない:
 
 ### 7.1 Celestia
 
-[\`celestia\`](https://github.com/celestiaorg/celestia-app) は専用の DA 層。Rollup は Celestia に data を投稿し、DA の証明を取得し、その証明だけを L1 に投稿する。
+[\`celestia\`](https://github.com/celestiaorg/celestia-app) は専用の DA 層。Rollup は Celestia に data を投稿し、DA の証明を取得し、その証明だけを L1に投稿する。
 
 コスト: Ethereum blob より安い(byte あたり約 $0.0001、blob では約 $0.001)。
 
@@ -345,7 +345,7 @@ Rollup は必ずしも Ethereum に投稿する必要はない:
 
 [\`avail\`](https://github.com/availproject/avail) は Polygon の DA 層で、構造的には Celestia と似ている。
 
-Tempo の場合: Paradigm 製の L1 として、Tempo は当初は Ethereum DA を使う可能性が高い。Celestia/EigenDA への切り替えはコストを下げる一方で、分散化の度合いは下がる(DA validator set が小さくなるため)。
+Tempo の場合: Paradigm 製の レッスン1として、Tempo は当初は Ethereum DA を使う可能性が高い。Celestia/EigenDA への切り替えはコストを下げる一方で、分散化の度合いは下がる(DA validator set が小さくなるため)。
 
 ## 8. 練習
 
@@ -508,7 +508,7 @@ Tx の順序を選ぶ者が、誰が利益を得るかを選ぶ。OP Stack chain
 
 op-rbuilder は 3 つ目をサポートしており、chain ごとに **builder/searcher(最も価値の高いブロックを構築しようと競い合う第三者のブロック構築者)からの外部 bundle を受け入れるかどうか** を設定できる。Bundle market が sequencer にブロックスペース代を支払う構図になる。
 
-ここに **Flashbots 系の PBS**(proposer-builder separation — ブロックを *選ぶ* 者と *構築する* 者を分離する)が L2 に降りてくる: builder が最も収益的なブロックの構築を競い、sequencer が勝った入札を受け入れる。
+ここに **Flashbots 系の PBS**(proposer-builder separation — ブロックを *選ぶ* 者と *構築する* 者を分離する)が レッスン2に降りてくる: builder が最も収益的なブロックの構築を競い、sequencer が勝った入札を受け入れる。
 
 ## 5. Pre-confirmation のゲーム
 
@@ -532,7 +532,7 @@ Tempo の sequencer(Paradigm が運用)はほぼ確実に次のような構成�
 - Merchant 優先の bump 付き priority-fee 順序付けをサポートする
 - 不正検知用の緊急停止権限を備える
 
-アーキテクチャ・パターン自体はどの OP Stack L2 とも同じで、その上に乗るビジネスロジック(merchant 優先、不正検知)が特化部分になる。
+アーキテクチャ・パターン自体はどの OP Stack レッスン2とも同じで、その上に乗るビジネスロジック(merchant 優先、不正検知)が特化部分になる。
 
 ## 7. 練習
 
@@ -566,7 +566,7 @@ Rollup の L1 contract は、sequencer の state root クレームを **一定�
 
 ## 1. State root commitment の問題
 
-Sequencer が約 1 時間ごとに L1 に state root を提出する。L1 contract は次を判断する必要がある: **この state root は正しいのか?**
+Sequencer が約 1 時間ごとに L1に state root を提出する。L1 contract は次を判断する必要がある: **この state root は正しいのか?**
 
 選択肢は 3 つ:
 1. **常に信頼する** — 純粋な信頼、proof なし(validium / sidechain)
@@ -578,7 +578,7 @@ Sequencer が約 1 時間ごとに L1 に state root を提出する。L1 contra
 ## 2. Fraud proof — optimistic モデル
 
 流れ:
-1. Sequencer が L1 に state root S を投稿する
+1. Sequencer が L1に state root S を投稿する
 2. チャレンジ window が開く(OP Stack では 7 日)
 3. Window の間、**誰でも** S が誤りだと示す **fraud proof** を提出できる
 4. 有効な fraud proof が提出されれば、S は拒否され chain は reorg される
@@ -609,7 +609,7 @@ sequenceDiagram
 流れ:
 1. Sequencer が L2 ブロックを生成する
 2. Sequencer(または別の prover)が L2 実行が正しい旨の **ZK proof** を生成する
-3. Proof を新しい state root と一緒に L1 に提出する
+3. Proof を新しい state root と一緒に レッスン1に提出する
 4. L1 contract が **proof を検証する**(安価 — およそ 100k gas)
 5. Proof が検証されれば、state root は **即時最終確定**
 
@@ -659,7 +659,7 @@ ZK が勝つ場面:
 
 ## 5. Fraud proof のコードを読み解く — OP Stack Cannon
 
-OP Stack の fraud proof システムは **Cannon** だ。自明でない設計上のひねりとして、L2 全体を L1 で再実行する(コストが高すぎて不可能)のではなく、Cannon は L1 上で動く制約付き MIPS VM の中で **disputed な 1 つの MIPS 命令だけ** を再実行する。
+OP Stack の fraud proof システムは **Cannon** だ。自明でない設計上のひねりとして、L2 全体を L1で再実行する(コストが高すぎて不可能)のではなく、Cannon は L1 上で動く制約付き MIPS VM の中で **disputed な 1 つの MIPS 命令だけ** を再実行する。
 
 流れ:
 1. Challenger が「step X が間違っている」と主張する
@@ -669,7 +669,7 @@ OP Stack の fraud proof システムは **Cannon** だ。自明でない設計�
 
 [\`ethereum-optimism/optimism/cannon\`](https://github.com/ethereum-optimism/optimism/tree/develop/cannon) がコードベース。
 
-1 命令まで絞り込むこのパターンこそが、fraud proof を *そもそも実現可能にしている* — これがなければ L1 に何年分もの L2 履歴を再実行させることになる。
+1 命令まで絞り込むこのパターンこそが、fraud proof を *そもそも実現可能にしている* — これがなければ L1に何年分もの L2 履歴を再実行させることになる。
 
 ## 6. ZK proof のコードを読み解く — SP1 + Reth
 
@@ -731,7 +731,7 @@ Tempo Moderato が現時点で中央集権だとすると、分散化のパス�
                   xpReward: 55,
                   content: `# Reth 上で最小 sequencer を作る
 
-動く L2 sequencer は **Rust 約 270 行** で書ける。これがオーケストレーション層のすべて: ブロック生成ループ、mempool、L1 inbox watcher、batcher。それがこれほど小さく収まる理由は、**本当に難しいところを Reth がすべて引き受けてくれる** からだ — revm の実行、MDBX のストレージ、state 管理、P2P。Sequencer の仕事は Engine API 経由で Reth を駆動し、結果を L1 に投稿することだけ。
+動く L2 sequencer は **Rust 約 270 行** で書ける。これがオーケストレーション層のすべて: ブロック生成ループ、mempool、L1 inbox watcher、batcher。それがこれほど小さく収まる理由は、**本当に難しいところを Reth がすべて引き受けてくれる** からだ — revm の実行、MDBX のストレージ、state 管理、P2P。Sequencer の仕事は Engine API 経由で Reth を駆動し、結果を L1に投稿することだけ。
 
 この約 270 行という数字は、大半の本番 L2 が launch するときの実際のアーキテクチャに近い。本レッスンはその全体像をなぞる。
 
@@ -755,8 +755,8 @@ flowchart TB
 1 プロセスに 4 つのコンポーネント:
 1. **Sequencer loop** — Engine API 経由でブロック生成を駆動する
 2. **Mempool** — ユーザ tx を受け入れ、fee で優先順位を付ける
-3. **L1 inbox watcher** — L1 の deposit イベントを subscribe し、force-include 用 tx として mempool に流し込む
-4. **Batcher** — 定期的に L1 に投稿する
+3. **L1 inbox watcher** — L1の deposit イベントを subscribe し、force-include 用 tx として mempool に流し込む
+4. **Batcher** — 定期的に L1に投稿する
 
 最小 MVP では、これらを 1 つのバイナリで走らせる。本番では分割してスケールさせる。
 
@@ -904,7 +904,7 @@ impl Mempool {
 
 ## 4. L1 inbox watcher
 
-L1 から L2 への deposit のために、L1 inbox contract を watch する:
+L1から L2 への deposit のために、L1 inbox contract を watch する:
 
 \`\`\`rust
 pub struct L1InboxWatcher {
@@ -930,11 +930,11 @@ impl L1InboxWatcher {
 }
 \`\`\`
 
-L1 で deposit イベントが発火されたら、それに対応する L2 transaction をエンコードし、mempool 経由で force-include する。Mempool 側はブロック構築時に deposit を優先する。
+L1で deposit イベントが発火されたら、それに対応する L2 transaction をエンコードし、mempool 経由で force-include する。Mempool 側はブロック構築時に deposit を優先する。
 
 ## 5. Batcher
 
-L2 ブロックを定期的に L1 に投稿する:
+L2 ブロックを定期的に L1に投稿する:
 
 \`\`\`rust
 pub struct Batcher {
@@ -981,7 +981,7 @@ impl Batcher {
 }
 \`\`\`
 
-およそ 50 行。60 秒ごとに、前回の batch 以降のすべての L2 ブロックが圧縮されて blob として L1 に提出される。
+およそ 50 行。60 秒ごとに、前回の batch 以降のすべての L2 ブロックが圧縮されて blob として L1に提出される。
 
 ## 6. システム全体
 
@@ -1048,7 +1048,7 @@ Tempo の sequencer(Paradigm が運用)はおそらく:
                   xpReward: 45,
                   content: `# 分散化パス — 共有 sequencer と MEV 認識 auction
 
-Optimism が「sequencer を分散化する」と発表したのは 2023 年。3 年経った今でも、sequencer は OP Labs の 1 つの箱の中にある。Arbitrum も同じことを言っている。Base も同様。分散化のロードマップは本物だが、**L2 のライフサイクルの後半に来る話** なのだ。最終地点として競合する 2 つのアーキテクチャパターンがある: **分散化された sequencer セット**(chain が自分のバリデータを走らせる)と **共有 sequencer**(複数の rollup が順序付けを共通のセットに外部委託する)。
+Optimism が「sequencer を分散化する」と発表したのは 2023 年。3 年経った今でも、sequencer は OP Labs の 1 つの箱の中にある。Arbitrum も同じことを言っている。Base も同様。分散化のロードマップは本物だが、**レッスン2のライフサイクルの後半に来る話** なのだ。最終地点として競合する 2 つのアーキテクチャパターンがある: **分散化された sequencer セット**(chain が自分のバリデータを走らせる)と **共有 sequencer**(複数の rollup が順序付けを共通のセットに外部委託する)。
 
 本レッスンはその地図。なぜ分散化が進まないのか? 各パスは実際どう見えるのか? Espresso、Astria、Polygon zkEVM、Linea はどちらに賭けていて、それはなぜか?
 
@@ -1101,7 +1101,7 @@ Optimism が「sequencer を分散化する」と発表したのは 2023 年。3
 
 ## 3. PoS sequencer セット — 自然な延長
 
-分散化の最初のステップは、Ethereum 系の PoS を L2 で再現することだ。
+分散化の最初のステップは、Ethereum 系の PoS を レッスン2で再現することだ。
 
 \`\`\`mermaid
 flowchart TB
@@ -1246,18 +1246,18 @@ Tempo の sequencer とのやり取りがインタフェース上の接点にな
                   xpReward: 50,
                   content: `# ファイナルクイズ: sequencer & rollup アーキテクチャ
 
-L2 アーキテクトとしての最終チェック。Rollup の出荷、Tempo の sequencer との統合、新規 L2 の設計のいずれにも必要になる。`,
+L2 アーキテクトとしての最終チェック。Rollup の出荷、Tempo の sequencer との統合、新規L2の設計のいずれにも必要になる。`,
                   quizQuestions: [
                     {
-                      question: 'なぜ **中央集権 sequencer** は rollup には許容できても、**permissionless L1 には許容できない** のか?',
+                      question: 'なぜ **中央集権 sequencer** は rollup には許容できても、**permissionless レッスン1には許容できない** のか?',
                       options: [
                         'Rollup のユーザは期待値が低いから。',
-                        'Rollup は safety のフォールバックとして L1 の contract を使う: sequencer が検閲しても、ユーザは L1 の force-include contract 経由で tx を提出できるし、sequencer が state について嘘をついても、L1 contract が withdrawal を拒否する。Sequencer は UX(速度、順序付け)については信頼するが、資金については信頼しない。Permissionless L1 にはそのフォールバックがない — コンセンサスがセキュリティそのものだからだ。',
+                        'Rollup は safety のフォールバックとして L1の contract を使う: sequencer が検閲しても、ユーザは L1の force-include contract 経由で tx を提出できるし、sequencer が state について嘘をついても、L1 contract が withdrawal を拒否する。Sequencer は UX(速度、順序付け)については信頼するが、資金については信頼しない。Permissionless L1にはそのフォールバックがない — コンセンサスがセキュリティそのものだからだ。',
                         '中央集権 rollup は実は permissioned ではないから。',
                         'L2 transaction は可逆だから。',
                       ],
                       correctIndex: 1,
-                      explanation: 'Rollup のセキュリティモデルは、sequencer は UX について信頼し、safety については L1 のコンセンサスを信頼する、というもの。根本的な洞察は、ユーザが L1 経由の escape hatch を持つため、sequencer が中央集権でも chain 自体が中央集権になるわけではない、ということ。これがまさに本番 L2 が単一 sequencer のまま出荷している理由 — UX を最大化しつつ、escape hatch が資金を守る。',
+                      explanation: 'Rollup のセキュリティモデルは、sequencer は UX について信頼し、safety については L1のコンセンサスを信頼する、というもの。根本的な洞察は、ユーザが L1 経由の escape hatch を持つため、sequencer が中央集権でも chain 自体が中央集権になるわけではない、ということ。これがまさに本番 L2 が単一 sequencer のまま出荷している理由 — UX を最大化しつつ、escape hatch が資金を守る。',
                     },
                     {
                       question: 'Rollup が calldata ではなく **EIP-4844 blob** として data を投稿するようになった。**なぜ 10 倍安いのか、そして落とし穴は何か?**',
@@ -1271,10 +1271,10 @@ L2 アーキテクトとしての最終チェック。Rollup の出荷、Tempo �
                       explanation: "EIP-4844 は rollup の DA 専用に、別の fee market を持つ blob 運搬用の transaction を導入した。コストが下がる理由は blob が prune 可能だから — Ethereum のノードは proof window 経過後に blob を捨てられる。長期アーカイブは外部サービス(IPFS、専用アーカイブ)を使う。価格と可用性のトレードオフが成立するのは、セキュリティ上 DA が必要なのは fraud proof の window 中だけだからだ。",
                     },
                     {
-                      question: 'OP Stack では、**deposit transaction** は L1 から来て L2 ブロックの **先頭** に含まれなければならない。**なぜこれが sequencer のポリシーではなくプロトコル強制なのか?**',
+                      question: 'OP Stack では、**deposit transaction** は L1から来て L2 ブロックの **先頭** に含まれなければならない。**なぜこれが sequencer のポリシーではなくプロトコル強制なのか?**',
                       options: [
                         'Top-of-block が最も MEV を取れるから。',
-                        'Deposit は L1 から L2 に移動するユーザ資金。Sequencer が優先度を下げられるなら、deposit は無期限に遅延されうる — それでは「sequencer が検閲しても資金は安全」という rollup のセキュリティモデルが崩れる。Top-of-block を強制することで、deposit が明確に定義されたタイミングで処理されることを保証する。',
+                        'Deposit は レッスン1から レッスン2に移動するユーザ資金。Sequencer が優先度を下げられるなら、deposit は無期限に遅延されうる — それでは「sequencer が検閲しても資金は安全」という rollup のセキュリティモデルが崩れる。Top-of-block を強制することで、deposit が明確に定義されたタイミングで処理されることを保証する。',
                         'Top of block では低い transaction fee が適用されるから。',
                         'Top of block では gas コストが下がるから。',
                       ],
@@ -1285,7 +1285,7 @@ L2 アーキテクトとしての最終チェック。Rollup の出荷、Tempo �
                       question: '**Fraud proof** と **validity(ZK)proof** の選択が withdrawal の遅延を決める。**構造的な違いは何か?**',
                       options: [
                         "Fraud proof のほうが速い。",
-                        'Fraud proof: デフォルトで sequencer の state root クレームを信頼し、window の間(OP Stack では 7 日)誰でもチャレンジできる; チャレンジャが現れなければ state は最終確定する。Validity proof: sequencer が正確性の暗号的 proof を提供する必要があり、proof は L1 で即時に検証される。Validity → チャレンジ window なし → 即時 finality だが proof のコストが高い。',
+                        'Fraud proof: デフォルトで sequencer の state root クレームを信頼し、window の間(OP Stack では 7 日)誰でもチャレンジできる; チャレンジャが現れなければ state は最終確定する。Validity proof: sequencer が正確性の暗号的 proof を提供する必要があり、proof は レッスン1で即時に検証される。Validity → チャレンジ window なし → 即時 finality だが proof のコストが高い。',
                         "ZK proof は fraud proof より単純だから。",
                         '両者とも同じ withdrawal 遅延を生むから。',
                       ],
@@ -1334,7 +1334,7 @@ L2 アーキテクトとしての最終チェック。Rollup の出荷、Tempo �
                         "Tempo は sequencer を持たない — 純粋に on-chain で動く。",
                       ],
                       correctIndex: 1,
-                      explanation: '標準的な L2 の軌跡。Paradigm が launch をコントロールし、bonded バリデータが sequencing を分散化し、最終的に ZK proof が withdrawal の遅延を圧縮する。各ステップが 1〜2 年がかりで出荷される。大半の L2 がまさにこのパスを辿っており、Tempo も同じ流れになる。Soltempo と mppsol はこの軌跡を前提に組んでおく必要がある。',
+                      explanation: '標準的な レッスン2の軌跡。Paradigm が launch をコントロールし、bonded バリデータが sequencing を分散化し、最終的に ZK proof が withdrawal の遅延を圧縮する。各ステップが 1〜2 年がかりで出荷される。大半の L2 がまさにこのパスを辿っており、Tempo も同じ流れになる。Soltempo と mppsol はこの軌跡を前提に組んでおく必要がある。',
                     },
                   ],
                 },

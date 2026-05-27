@@ -1216,7 +1216,7 @@ crates/trie/
 
 今日のメインネットで Reth フルノードを動かすには **~3 TB のディスク** と、それに見合う IOPS が必要である。このレッスンを読んでいる人のほとんどはそれを動かせません — ラップトップでは無理、一般的な VPS でも無理、趣味の NUC でも無理。だからフルノードを実際に動かす人々は小さな祭司階級になり、Ethereum の「誰でも検証できる」という主張は、バリデータ層では静かに事実でなくなる。
 
-**ステートレスクライアント** がその出口である。Paradigm の [\`ress\`](https://github.com/paradigmxyz/ress) は **14 GB** のディスクでメインネットの全ブロックを再検証する。MegaETH の [\`stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) は高 TPS の L2 をコモディティハードウェアで再検証する。両方とも Rust。両方とも Ethereum 等価の状態遷移を検証する。そして興味深いすべてのレイヤで **異なる設計選択** をしています — 並べて読むのが、その選択肢が何なのかを学ぶ最も安い方法である。
+**ステートレスクライアント** がその出口である。Paradigm の [\`ress\`](https://github.com/paradigmxyz/ress) は **14 GB** のディスクでメインネットの全ブロックを再検証する。MegaETH の [\`stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) は高 TPS の レッスン2をコモディティハードウェアで再検証する。両方とも Rust。両方とも Ethereum 等価の状態遷移を検証する。そして興味深いすべてのレイヤで **異なる設計選択** をしています — 並べて読むのが、その選択肢が何なのかを学ぶ最も安い方法である。
 
 > 🛑 **スクロール前に予測。** 「ステートレス」ノードはフル状態を持たずにブロックを検証する。**ブロックプロポーザーは普通のノードに送らないものを、ステートレスノードには何を送らないといけない?** その追加ペイロードは何と呼ばれる? Ethereum の典型的なブロックでサイズを見積もってほしい。両方の答えはセクション 3 で出てくる。
 
@@ -1224,10 +1224,10 @@ crates/trie/
 
 ress に付随する [Paradigm のブログ記事](https://www.paradigm.xyz/2025/03/stateless-reth-nodes) は 4 つのユースケースを挙げている。どれも「HDD を節約する」ではありません。
 
-- **L1 の分散化。** ラップトップを持つ誰もが、完全検証する実行クライアントを動かせる。バリデータ集合がハードウェアでゲートされなくなる。
+- **レッスン1の分散化。** ラップトップを持つ誰もが、完全検証する実行クライアントを動かせる。バリデータ集合がハードウェアでゲートされなくなる。
 - **L1 ガス上限の拡張。** 現在のガス上限は「**ステートフル** なフルノードが追従できる範囲」がボトルネック — state read のランダム I/O が支配的だから。ステートレス検証者はメモリから witness を読む。I/O の天井が動く。
-- **Optimistic L2 のセキュリティ。** Fraud-proof の見張り役は、見張る L2 ごとに \`reth\` を動かしたくない。チェーンごとのステートレス検証者なら安い。
-- **Native rollups.** Vitalik が描いた「サービスとしての EVM」方向には、L1 に埋め込んだ再実行可能な検証者が要る — そしてその検証者は 3 TB の状態を抱えられない。
+- **Optimistic レッスン2のセキュリティ。** Fraud-proof の見張り役は、見張る L2 ごとに \`reth\` を動かしたくない。チェーンごとのステートレス検証者なら安い。
+- **Native rollups.** Vitalik が描いた「サービスとしての EVM」方向には、レッスン1に埋め込んだ再実行可能な検証者が要る — そしてその検証者は 3 TB の状態を抱えられない。
 
 つまりステートレスは「小さいノード」のための機能ではない。**検証者層の機能**で、Ethereum を安く・繰り返し・場合によっては zkVM 内で・場合によっては数百のチェーンで同時に — 再実行する必要がある特定クラスのクライアントのためのもの。
 
@@ -1273,7 +1273,7 @@ witness はどこからか来なくてはならない。あらゆるステート
 
 | 観点 | \`ress\` (Paradigm) | \`stateless-validator\` (MegaETH) |
 | :--- | :--- | :--- |
-| **対象チェーン** | Ethereum メインネット (L1) | MegaETH (L2) |
+| **対象チェーン** | Ethereum メインネット (レッスン1) | MegaETH (レッスン2) |
 | **Witness フォーマット** | MPT 証明 | SALT 証明 (Banderwagon + IPA) |
 | **Witness ソース** | Reth ピア、\`ress\` RLPx サブプロトコル経由 | Sequencer、\`--witness-endpoint\` JSON-RPC 経由 |
 | **バイトコード処理** | ピアからオンデマンド取得・キャッシュ | RPC からオンデマンド取得、\`ContractCache\` にキャッシュ |
@@ -2127,7 +2127,7 @@ reth-transaction-pool.workspace = true
 # ...
 \`\`\`
 
-これがまさに Inside Reth の Reth SDK パターン (\`with_types\` / \`with_components\` / \`with_add_ons\` / \`launch\`) の、実戦投入版。Tempo Zones は標準の Reth ノードに対して、カスタムプリコンパイル (前述の \`zone-precompiles\` クレート)、カスタムペイロード検証 (プライバシー修正)、プライベート RPC を差し込んで、動く L2 を得ている。
+これがまさに Inside Reth の Reth SDK パターン (\`with_types\` / \`with_components\` / \`with_add_ons\` / \`launch\`) の、実戦投入版。Tempo Zones は標準の Reth ノードに対して、カスタムプリコンパイル (前述の \`zone-precompiles\` クレート)、カスタムペイロード検証 (プライバシー修正)、プライベート RPC を差し込んで、動く レッスン2を得ている。
 
 > 🛑 **予測。** なぜ Tempo Zones は Reth をフォークするのか? なぜノードをゼロから書かないのか?
 
@@ -2219,7 +2219,7 @@ Tempo の TIP-403 レジストリに 1 度凍結をプッシュすればよい�
                   xpReward: 60,
                   content: `# Chaos engineering を Rust EVM ノードに — 誰かが壊す前に、自分で壊す
 
-> 🧭 **systems engineering スタックでの位置:** **他のすべての層を横断する信頼性層**。Netflix の Chaos Monkey がマイクロサービスに対して解いた問題と同じ — 良好な条件下でテストが通っても、部分的な故障下で生き残るとは限らない。L1 にとっては失敗モードの空間がさらに広く (Byzantine ピア、ディスク破損、ネットワーク分断、バリデータの時計ずれ)、賭け金もさらに大きい (サイレントな状態破損は分岐したフォークを生み、復旧に何日もかかる)。本レッスンは differential fuzzing のレッスンと対になる — fuzzing は正しさを検証し、chaos は生存を検証する。
+> 🧭 **systems engineering スタックでの位置:** **他のすべての層を横断する信頼性層**。Netflix の Chaos Monkey がマイクロサービスに対して解いた問題と同じ — 良好な条件下でテストが通っても、部分的な故障下で生き残るとは限らない。レッスン1にとっては失敗モードの空間がさらに広く (Byzantine ピア、ディスク破損、ネットワーク分断、バリデータの時計ずれ)、賭け金もさらに大きい (サイレントな状態破損は分岐したフォークを生み、復旧に何日もかかる)。本レッスンは differential fuzzing のレッスンと対になる — fuzzing は正しさを検証し、chaos は生存を検証する。
 
 > 📌 **動く標的。** ツールセクションは Toxiproxy、chaosfs、libfaketime などの特定プロジェクトを参照する — このスペースのプロジェクトは動き、API も変わる。下に示すパターンは安定しているが、具体的なコマンドは調整が必要になることがある。
 
@@ -2298,7 +2298,7 @@ chaosfs --backend ./reth-data --mount ./reth-mdbx --corrupt-rate 0.001
 
 **確認すること:**
 - Reth は破損を検出すか? (MDBX ページのチェックサムが大半のケースを捕まえるはず)
-- 検出す場合、ノードを優雅に停止させるか、サイレントに不正な state を serve するか? (サイレントな破損は L1 にとって最悪の失敗モード — ノード間で分岐したフォークが生まれる)
+- 検出す場合、ノードを優雅に停止させるか、サイレントに不正な state を serve するか? (サイレントな破損は レッスン1にとって最悪の失敗モード — ノード間で分岐したフォークが生まれる)
 - 破損は release ビルドで表面化するか、debug ビルドだけか?
 
 **Linux カーネルの代替:** \`fail/fail_injection\` で任意の syscall に任意の失敗を注入できる。100 回ごとに \`read()\` を失敗させるには:
@@ -2386,7 +2386,7 @@ Chaos を補完する 3 つの隣接する規律:
 
 1. **Differential fuzzing と chaos engineering は、それぞれ異なるクラスのバグを捕まえる。それぞれが捕まえるクラスを挙げる。**
 2. **4 バリデータの BFT テストネットでテストしている。1 つのバリデータに 80% のパケット損失を 30 秒間注入する。**起きるべき** 3 つのことは何か? **起きるべきでない** 1 つのことは?**
-3. **サイレントなディスク破損は「L1 にとって最悪の失敗モード」。なぜか? ここで「サイレント」とは何を意味し、どんなカスケード的な帰結を生むか?**
+3. **サイレントなディスク破損は「レッスン1にとって最悪の失敗モード」。なぜか? ここで「サイレント」とは何を意味し、どんなカスケード的な帰結を生むか?**
 4. **\`libfaketime\` は何をシミュレートするか? また、シミュレートしない重要な時間関連の失敗モードは何か?**
 5. **Byzantine chaos のために、なぜ \`tc\` や \`chaosfs\` ではなく、カスタム Reth フォークが必要なのか?**
 
@@ -2402,7 +2402,7 @@ Chaos を補完する 3 つの隣接する規律:
 
 ---
 
-**🧭 ここまでで積み上げたもの:** あなたのツールキットに chaos engineering を加えた。次のレッスンでは、信頼性トライアングルの第 3 の柱を扱う — **systems-code auditing**: まだトリガされていないために fuzzing も chaos も捕まえられない、潜在的な設計バグを見つける規律。これら 3 つの規律をそろえれば、「動く Revm コード」と「L1 の心臓部として ship するのに安全な Revm コード」が区別できるようになる。`,
+**🧭 ここまでで積み上げたもの:** あなたのツールキットに chaos engineering を加えた。次のレッスンでは、信頼性トライアングルの第 3 の柱を扱う — **systems-code auditing**: まだトリガされていないために fuzzing も chaos も捕まえられない、潜在的な設計バグを見つける規律。これら 3 つの規律をそろえれば、「動く Revm コード」と「レッスン1の心臓部として ship するのに安全な Revm コード」が区別できるようになる。`,
                 },
                 {
                   title: 'Systems-code auditing — Reth / Revm / consensus 実装のバグを見つける',
@@ -3004,7 +3004,7 @@ Reth ベースの chain が典型的に override するスロット:
 
 - **\`ChainSpec\`** — fork 高、gas params、precompile schedule、genesis
 - **\`ConfigureEvm\` / block execution strategy** — 実行レイヤー、custom precompile、deposit tx 処理
-- **\`PayloadBuilder\`** — block 生成 (L2 の sequencer mode)
+- **\`PayloadBuilder\`** — block 生成 (レッスン2の sequencer mode)
 - **Pool / mempool policy** — どの tx をどの順序で受け入れるか
 - **Custom RPC namespace** — \`extend_rpc_modules\` 経由で chain 固有のエンドポイントを公開
 - **Custom consensus** — Ethereum-PoS 以外の chain 向け
@@ -3042,13 +3042,13 @@ Reth ベース chain に触れるもの (bridge、settlement layer、custom node
 > 最終チェック: Reth ベース chain が reth のソースをほぼ patch せずに済む構造的理由を、1 文で答えてほしい。**trait-based extension** と **NodeBuilder composition** に触れていないなら、まだ定着していない — §1、§2 を再読。`,
                 },
                 {
-                  title: 'op-stack-on-reth を読む — Reth ベース L2 の解剖',
+                  title: 'op-stack-on-reth を読む — Reth ベース レッスン2の解剖',
                   slug: 'reading-op-stack-on-reth-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 16,
                   xpReward: 45,
-                  content: `# op-stack-on-reth を読む — Reth ベース L2 の解剖
+                  content: `# op-stack-on-reth を読む — Reth ベース レッスン2の解剖
 
 Optimism は「Reth ベース L2」の正典である。その node コードは \`paradigmxyz/reth/crates/optimism/\` にある。Tempo の node crate も同様の構造で公開済み ([\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo))、ここを読めれば向こうも読める。本レッスンの目的は、**ディレクトリ構造を一目で読み解けるようにする** ことである。
 
@@ -3066,7 +3066,7 @@ Optimism は「Reth ベース L2」の正典である。その node コードは
 | \`node/\` | トップレベルの \`NodeBuilder\` 配線 — 「これが OP node である」を定義 |
 | \`evm/\` | EVM config — custom precompile、deposit tx semantics、L1 cost logic |
 | \`payload/\` | Payload builder — sequencer mode での block 生成 |
-| \`consensus/\` | OP の consensus engine (finality は L1 に委ねる) |
+| \`consensus/\` | OP の consensus engine (finality は レッスン1に委ねる) |
 | \`rpc/\` | Custom RPC namespace (\`optimism_*\` メソッド) |
 | \`txpool/\` (または類似) | Deposit-tx を認識する mempool policy |
 | \`hardforks/\` | Bedrock、Canyon、Ecotone、Fjord、... の fork activation logic |
@@ -3163,7 +3163,7 @@ mainnet では検証が通るブロックが、あなたの chain では reject 
 | **Precompile schedule** | 各 fork でアクティブになる precompile アドレス |
 | **その他のレガシー params** | Block gas limit、DAO fork、mining difficulty (legacy) |
 
-Reth ベース L2 では、chain は *拡張された* ChainSpec を提供します — たとえば OP chain spec は base \`ChainSpec\` をラップし、OP 固有の fork 追跡 (Bedrock、Canyon、Ecotone、Fjord、…) を追加している。
+Reth ベース レッスン2では、chain は *拡張された* ChainSpec を提供します — たとえば OP chain spec は base \`ChainSpec\` をラップし、OP 固有の fork 追跡 (Bedrock、Canyon、Ecotone、Fjord、…) を追加している。
 
 > 🛑 **現物を確認。** \`crates/optimism/chainspec/\` を開いて、OP chain spec を表す正確な型を特定してほしい。\`ChainSpec\` のラッパー struct ですか? Trait 拡張? **その両方?** 答えが出るまで先に進まない。
 
@@ -3216,14 +3216,14 @@ chain を監査するなら、**コード上の genesis state root が実ネッ�
 
 ## 5. L2 chainspec の特殊性
 
-L2 の chainspec (Optimism、Base、…) はさらに以下も追跡します:
+レッスン2の chainspec (Optimism、Base、…) はさらに以下も追跡します:
 
 - **L1 chain ID** — L2 がアンカーされている先 (cross-domain message verification 用)
 - **L1 block oracle** address on L2 — 現在の L1 block hash を記録するコントラクト
 - **Sequencer address** — sequencer 署名つき batch の検証用
 - **Withdrawal config** — L2 → L1 withdrawal の時間遅延
 
-Tempo のような L1 にはこれらは適用されませんが、拡張された ChainSpec にどんな *種類* の情報が住むかという例として参考になる。
+Tempo のような レッスン1にはこれらは適用されませんが、拡張された ChainSpec にどんな *種類* の情報が住むかという例として参考になる。
 
 ## 6. 読解演習
 
@@ -3292,7 +3292,7 @@ precompile を登録するコードが物理的に住む場所が、この EVM c
 
 ## 4. L1 cost 計算 (なぜ良い例か)
 
-OP Stack は tx すべてに *L1 data cost* — その tx の calldata を L1 に投稿する分の償却コスト — を課金する。これは厳しい要求で、全ノードが寸分違わず同じ L1 cost を計算できないと block validation が失敗する。
+OP Stack は tx すべてに *L1 data cost* — その tx の calldata を L1に投稿する分の償却コスト — を課金する。これは厳しい要求で、全ノードが寸分違わず同じ L1 cost を計算できないと block validation が失敗する。
 
 Executor 内では以下のように実装される:
 1. 各 tx の実行前に、既知の storage slot から現在の L1 base fee と blob gas price を読み出す
@@ -3359,7 +3359,7 @@ Tempo の executor は現在公開されている — [\`tempoxyz/tempo\`](https
 
 Ethereum mainnet では、block は **validator** が consensus client を動かし、execution client から提案された payload を pull することで生成される。一方、L2 や中央集権 sequencer の chain では block 生成モデルが違います: **sequencer がそのまま block producer になる**、それだけ。Payload builder は、その「どうやって作るか」を担うコンポーネントである。
 
-> 🛑 **予測。** 中央集権 sequencer の L2 において、block 内の **tx ordering を決める** のは誰/何ですか? sequencer は何を最適化していて、MEV 上の含意はどうなる? 自分の予測を立ててから読み進めてほしい。
+> 🛑 **予測。** 中央集権 sequencer の レッスン2において、block 内の **tx ordering を決める** のは誰/何ですか? sequencer は何を最適化していて、MEV 上の含意はどうなる? 自分の予測を立ててから読み進めてほしい。
 
 ## 1. Trait の境界
 
@@ -3370,7 +3370,7 @@ Ethereum mainnet では、block は **validator** が consensus client を動か
 - Pending transaction の pool
 - Timestamp / slot
 
-…返すものは、構築済みの block ("payload")。Mainnet では validator 側の consensus client が Engine API 経由でこれをトリガーする。Sequencer L2 では sequencer が直接トリガーする。
+…返すものは、構築済みの block ("payload")。Mainnet では validator 側の consensus client が Engine API 経由でこれをトリガーする。Sequencer レッスン2では sequencer が直接トリガーする。
 
 ## 2. 本番で出てくる 3 種類の builder
 
@@ -3384,14 +3384,14 @@ Reth エコシステムには複数の payload builder が存在します:
 
 最初の 2 つは reth 本体に入っている。**op-rbuilder** は別 repo で、MEV と ordering policy にずっと積極的、複数の OP Stack chain が本番で使用している。
 
-## 3. L2 の builder が違うこと
+## 3. レッスン2の builder が違うこと
 
 Sequencer モードでの block 生成では、典型的に以下を行います:
 
 1. **Deposit tx を block の先頭に強制 include する** (既知の L1 oracle queue から)
 2. **残りを FIFO か priority-fee でソート**
 3. **最初の state write として L1 block oracle の storage slot を更新**
-4. **L2 の gas limit で block をキャップ** (mainnet limit ではない)
+4. **レッスン2の gas limit で block をキャップ** (mainnet limit ではない)
 5. **Sequencer signature で block にタグ付け** (一部 L2 は sequencer identity にコミットする)
 
 これらのいくつかは **executor 側にはない** — *builder* 側にある。なぜか。Builder は *block に何が入るか* を制御し、executor は *block に入っているもの* を実行するだけだからである。
@@ -3502,8 +3502,8 @@ Tempo に何が入っているかを予測したいなら、**最近 alphanet �
 - **Tempo Moderato** が公開テストネット。
 - **Chainlink CCIP** が cross-chain rail (CCTP は Tempo をカバーしていない)。
 
-L1 と同時に出荷された隣接 crate:
-- **[\`tempoxyz/zones\`](https://github.com/tempoxyz/zones)** — Tempo にアンカーされた confidential blockchain。暗号化された deposit/withdrawal、250ms ブロック時間、L1 から継承される compliance ポリシー (TIP-403)。
+レッスン1と同時に出荷された隣接 crate:
+- **[\`tempoxyz/zones\`](https://github.com/tempoxyz/zones)** — Tempo にアンカーされた confidential blockchain。暗号化された deposit/withdrawal、250ms ブロック時間、レッスン1から継承される compliance ポリシー (TIP-403)。
 - **[\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs)** — Machine Payments Protocol: agent/machine 決済用の HTTP-402 ベース支払いプロトコル。IETF draft。Payment-method agnostic (Tempo、Stripe、ACH)。
 - **[\`tempoxyz/tempo-foundry\`](https://github.com/tempoxyz/tempo-foundry)** — Tempo サポートつきの Foundry fork (これも薄い fork — 同じ compose-don't-fork パターン)。
 - **[\`tempoxyz/tidx\`](https://github.com/tempoxyz/tidx)** — PostgreSQL + ClickHouse のハイブリッドインデクサ (OLTP の point lookup + OLAP analytics)。
@@ -3536,16 +3536,16 @@ Tempo が SDK の **浅い端** (数コンポーネントだけ差し替え、�
 
 op-stack-on-reth を読むこと、そして将来 tempo-on-reth を読むことは、構造的には似ていますが以下の点で異なります:
 
-| 観点 | OP Stack (L2) | Tempo (L1) |
+| 観点 | OP Stack (レッスン2) | Tempo (レッスン1) |
 | :--- | :--- | :--- |
-| **Deposit tx** | あり (L1 から) | なし |
+| **Deposit tx** | あり (レッスン1から) | なし |
 | **L1 cost charge** | あり | なし |
 | **L1 block oracle slot** | あり | なし |
-| **独立 consensus** | なし (L1 にアンカー) | あり (Tempo は自前の consensus を持つ) |
+| **独立 consensus** | なし (レッスン1にアンカー) | あり (Tempo は自前の consensus を持つ) |
 | **Sequencer モデル** | ローンチ時は中央集権、分散化ロードマップあり | おそらく中央集権、決済レールという正当化あり |
 | **ネイティブ資産** | ETH 相当 | おそらく USD ステーブル |
 
-Tempo が L1 であるということは、**consensus layer もカスタマイズポイントになる** ということ — execution layer だけではありません。これは大半の L2 chain がスキップするスロットである。
+Tempo が レッスン1であるということは、**consensus layer もカスタマイズポイントになる** ということ — execution layer だけではありません。これは大半の L2 chain がスキップするスロットである。
 
 ## 7. 自分の作るものへの含意
 
@@ -3652,7 +3652,7 @@ alphanet を end-to-end で読んだことがないなら、それを先に練�
                       explanation: 'alphanet は遊び場で、Tempo は本番のレール。選択肢 1、2 は両者を混同している。選択肢 4 は依存関係の順序が逆 — どちらも直接 Reth に依存しており、互いに依存しているわけではない。選択肢 5 は弱すぎる: precompile 実験の技術的な系譜は実在し、追跡できる。',
                     },
                     {
-                      question: '中央集権 sequencer の L2 において、payload builder が決め、executor が決めないことは?',
+                      question: '中央集権 sequencer の レッスン2において、payload builder が決め、executor が決めないことは?',
                       options: [
                         'Payload builder は gas pricing を、executor は ordering を決める',
                         'Payload builder は block にどの tx をどの順序で入れるかを決める。executor は、渡された tx を渡された順序で実行するだけ',

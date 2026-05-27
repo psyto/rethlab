@@ -11,7 +11,7 @@ export async function seedRethOpenHlLiquidationJA(prisma: PrismaClient) {
       slug: "building-openhl-liquidation-ja",
       title: "Step 5. Liquidation：レバレッジ環境における非単調性の発見と清算エンジンの構築",
       description:
-        "永久先物（Perpetual Futures）の清算エンジン中核をEnd-to-Endで実装する、DIY Perpシリーズ第5弾。\n\nアカウントの4フェーズ分類（pure compute）、保険基金（Insurance Fund）のステートマシン、そしてマルチアカウント・スキャナーを1つのオーケストレーション・ループへ結合する。さらに、レバレッジ環境特有の「非単調性」を proptest で炙り出す手法や、debug_assert! による契約検証まで網羅する。Stage 10三部作に対応する全14レッスンを通じ、バイト単位（Byte-for-byte）で一致する堅牢な実装を構築する。",
+        "永久先物（Perpetual Futures）の清算エンジン中核をEnd-to-Endで実装する、DIY Perpシリーズ第5弾。\n\nアカウントの4フェーズ分類（pure compute）、保険基金（Insurance Fund）のステートマシン、そしてマルチアカウント・スキャナーを1つのオーケストレーション・ループへ結合する。さらに、レバレッジ環境特有の「非単調性」を proptest で炙り出す手法や、debug_assert! による契約検証まで網羅する。Liquidation三部作に対応する全13レッスンを通じ、バイト単位（Byte-for-byte）で一致する堅牢な実装を構築する。",
       difficulty: "EXPERT",
       duration: 440,
       xpReward: 870,
@@ -44,8 +44,8 @@ export async function seedRethOpenHlLiquidationJA(prisma: PrismaClient) {
 本コースを終えると、以下を完成させている:
 
 - 新しい \`openhl-liquidation\` crate に **3 ソースファイル / ~600 LOC**。
-- Stage 10a マイルストーン時点で **24+ tests passing**、capstone までにさらに増える。各 compute 関数の hand-traced unit test、margin-ratio の単調性と determinism を狙う proptest、insurance fund の保存則 invariant が並ぶ。
-- **3 つの building block**。fixed-point types モジュール、純粋な compute モジュール（margin math）、そして state machine（insurance fund、Stage 10b）と multi-account scanner（Stage 10c）。
+- Liquidation参照実装（計算パート） マイルストーン時点で **24+ tests passing**、capstone までにさらに増える。各 compute 関数の hand-traced unit test、margin-ratio の単調性と determinism を狙う proptest、insurance fund の保存則 invariant が並ぶ。
+- **3 つの building block**。fixed-point types モジュール、純粋な compute モジュール（margin math）、そして state machine（insurance fund、Liquidation参照実装（保険基金パート））と multi-account scanner（Liquidation参照実装（スキャナパート））。
 - 全 validator が同じ結果に到達する **4 状態の margin classification**（\`Safe\` / \`AtRisk\` / \`Liquidatable\` / \`Underwater\`）。
 
 理解できるようになることは:
@@ -55,13 +55,13 @@ export async function seedRethOpenHlLiquidationJA(prisma: PrismaClient) {
 - Margin health の 4 状態と、それぞれが engine に何を許可するか。
 - \`margin_ratio\` の **非単調エッジケース**。collateral が notional を支配するとき、ratio が mark の方向と逆に動くケースが生じる。それでもなお liquidation が壊れない理由。
 - insurance fund を**単なる \`u64\` の残高変数 (balance entry) ではなく、独自の遷移ルール (\`deposit\` / \`withdraw\` / \`absorb_deficit\` の不変条件) を持つ pure state machine** として作る理由。
-- Auto-deleveraging (ADL) がこの設計の端でどう位置づけられるか。そして Stage 10 では扱わない理由。
+- Auto-deleveraging (ADL) がこの設計の端でどう位置づけられるか。そして Liquidationコースでは扱わない理由。
 
 ## なぜ liquidation が重要か（perp 1 段落）
 
 永久先物はレバレッジの効いたポジションだ。トレーダーは \`collateral\` (USDC) を預け、\`entry\` 価格で \`size\` のポジション（符号付き: 正 = ロング、負 = ショート）を開く。ポジションの *unrealized PnL* は mark 価格とともに動く。ロングは mark > entry で利益、mark < entry で損失だ。損失が collateral を食って \`equity / notional\` が **maintenance margin** 要件を下回ると、アカウントはもう損失をカバーしきれない。ここで engine が動く — market でポジションを force-close し（反対 side、フルサイズ）、**liquidation fee** を collateral から差し引いて insurance fund に積み立て、equity がまだ正なら残りをアカウントに返す。Close する前に equity が *負* になっていたら — いわゆる「underwater」ケース — 不足分は insurance fund が吸収する。これがメカニズムのすべてだ。
 
-## なぜ L1 perp DEX は consensus 内で liquidation を実行するのか
+## なぜ レッスン1 perp DEX は consensus 内で liquidation を実行するのか
 
 ある種のデリバティブ venue は liquidation をオフチェーンの liquidator プロセスに外注する。アカウント状態を scan して \`liquidate(account)\` endpoint を呼ぶ bot だ。低頻度の settlement system（クレジットデフォルトスワップなど）ならこれで機能するが、perp のスピードでは破綻する。50× のレバレッジを賭けた HYPE position は、ニュースの cascade で数秒のうちに healthy から underwater に反転しうる。検知から close までの RPC ラウンドトリップの遅延は、丸ごと chain 側の損失として残る。
 
@@ -77,51 +77,52 @@ Funding と同じ答え: consensus determinism のためだ。あるアカウン
 
 （Funding は parts-per-billion の精度が必要だったので \`RATE_SCALE = 1_000_000_000\` を選んだ。Liquidation はそこまでの精度を要求しないが、規律自体は同じだ。）
 
-## 12 レッスン
+## 14 レッスン
 
-### Module 0 — Orientation
+### セクション0 — Orientation
 - **L0**（本レッスン）— なぜ liquidation か、なぜ margin model か、3 サブステージの roadmap。
 
-### Module 1 — 型（L1-L3）
-- **L1** — \`MARGIN_SCALE = 1e4\`（bps）+ \`LiquidationParams\` + \`hyperliquid_default()\`（10% / 2% / 1.5%）。bps を選ぶ理由、このデフォルト値の根拠。
-- **L2** — \`MarginRatio\` newtype + \`MarginHealth\` enum（\`Safe\` / \`AtRisk\` / \`Liquidatable\` / \`Underwater\`）。4 状態にする理由と、各状態が許可する挙動。
-- **L3** — \`AccountSnapshot\` + \`CloseOrderSpec\`。\`funding::Position\` を流用せず新しい snapshot 型を起こす理由 (**read-only な不変 snapshot 型に分離して、リスク計算のコアロジックを上流レイヤー (bridge / clearing) のミュータブルな state shape から疎結合に保つ**)、そして bridge レイヤーがどう組み立てるか。
+### セクション1 — 型（レッスン1〜3）
+- **レッスン1** — \`MARGIN_SCALE = 1e4\`（bps）+ \`LiquidationParams\` + \`hyperliquid_default()\`（10% / 2% / 1.5%）。bps を選ぶ理由、このデフォルト値の根拠。
+- **レッスン2** — \`MarginRatio\` newtype + \`MarginHealth\` enum（\`Safe\` / \`AtRisk\` / \`Liquidatable\` / \`Underwater\`）。4 状態にする理由と、各状態が許可する挙動。
+- **レッスン3** — \`AccountSnapshot\` + \`CloseOrderSpec\`。\`funding::Position\` を流用せず新しい snapshot 型を起こす理由 (**read-only な不変 snapshot 型に分離して、リスク計算のコアロジックを上流レイヤー (bridge / clearing) のミュータブルな state shape から疎結合に保つ**)、そして bridge レイヤーがどう組み立てるか。
 
-### Module 2 — 純粋な compute（L4-L7）— Stage 10a
-- **L4** — \`notional_value\` + \`unrealized_pnl\`。ロング・ショートいずれでも符号が正しく揃う signed-multiplication のトリック。
-- **L5** — \`account_equity\` + \`margin_ratio\`。Collateral が notional を支配するときに姿を現す **非単調エッジケース (= 価格が好転しているように見えるのに、特定の条件下ではマージン比率が逆に悪化して見える現象)** を proptest で検出し、\`prop_assume!\` がなぜ正しい修正なのかを見る。
-- **L6** — \`margin_health\` 分類。境界条件にすべて strict less-than を採用する理由と、それが何を保証するか。
-- **L7** — \`close_order_spec\`。Market order の規律 — liquidation は利用可能な任意の価格を取る。ここで Stage 10a が完成する。
+### セクション2 — 純粋な compute（レッスン4〜7）— Liquidation参照実装（計算パート）
+- **レッスン4** — \`notional_value\` + \`unrealized_pnl\`。ロング・ショートいずれでも符号が正しく揃う signed-multiplication のトリック。
+- **レッスン5** — \`account_equity\` + \`margin_ratio\`。Collateral が notional を支配するときに姿を現す **非単調エッジケース (= 価格が好転しているように見えるのに、特定の条件下ではマージン比率が逆に悪化して見える現象)** を proptest で検出し、\`prop_assume!\` がなぜ正しい修正なのかを見る。
+- **レッスン6** — \`margin_health\` 分類。境界条件にすべて strict less-than を採用する理由と、それが何を保証するか。
+- **レッスン7** — \`close_order_spec\`。Market order の規律 — liquidation は利用可能な任意の価格を取る。ここで Liquidation参照実装（計算パート） が完成する。
 
-### Module 3 — Insurance fund（L8-L10）— Stage 10b
-- **L8** — \`InsuranceFund\` 構造体 + \`deposit\` / \`withdraw\`。Single-balance な state machine。
-- **L9** — \`absorb_deficit\`。Underwater liquidation が fund をどう drain するか。
-- **L10** — \`credit_fee\`。liquidation fee が collateral から fund へ流れる。Composition test として、1 回の liquidation が deeply underwater な場合に fee を credit し *かつ* deficit を absorb する複合ケースを扱う。
+### セクション3 — Insurance fund（レッスン8〜10）— Liquidation参照実装（保険基金パート）
+- **レッスン8** — \`InsuranceFund\` 構造体 + \`deposit\` / \`withdraw\`。Single-balance な state machine。
+- **レッスン9** — \`absorb_deficit\`。Underwater liquidation が fund をどう drain するか。
+- **レッスン10** — \`credit_fee\`。liquidation fee が collateral から fund へ流れる。Composition test として、1 回の liquidation が deeply underwater な場合に fee を credit し *かつ* deficit を absorb する複合ケースを扱う。
 
-### Module 4 — Scanner + Capstone（L11-L12）— Stage 10c
-- **L11** — \`LiquidationScanner\`。\`&[AccountSnapshot]\` を順に辿り、各アカウントを分類し、\`Liquidatable\` と \`Underwater\` には close order を emit し、insurance-fund delta を返す。Composition layer の本体。
-- **L12** — Capstone。総合、bridge integration の preview、そして市場構造コンテキスト — on-chain CLOB liquidation が CEX の liquidation や ADL とどう違うか。
+### セクション4 — Scanner + Capstone（レッスン11〜13）— Liquidation参照実装（スキャナパート）
+- **レッスン11** — \`LiquidationScanner\`。\`&[AccountSnapshot]\` を順に辿り、各アカウントを分類し、\`Liquidatable\` と \`Underwater\` には close order を emit し、insurance-fund delta を返す。Composition layer の本体。
+- **レッスン12** — Scanner の挙動を拡張し、複数アカウントの集計ロジックを確定する。
+- **レッスン13** — Capstone。総合、bridge integration の preview、そして市場構造コンテキスト — on-chain CLOB liquidation が CEX の liquidation や ADL とどう違うか。
 
 ## モジュールごとの SHA pinning
 
-各レッスンは build に使う openhl commit を引用する。本コースは Stage 10a → 10c の 3 commit にまたがる:
+各レッスンは build に使う openhl commit を引用する。本コースは Liquidation参照実装の3パート（計算・保険基金・スキャナ）にまたがる:
 
 | Module | レッスン | openhl SHA |
 |---|---|---|
-| 0 | L0 | \`22eedf9\` (Stage 10a) |
-| 1 | L1-L3 | \`22eedf9\` (Stage 10a) |
-| 2 | L4-L7 | \`22eedf9\` (Stage 10a) |
-| 3 | L8-L10 | *Stage 10b — TBD* |
-| 4 | L11-L12 | *Stage 10c — TBD* |
+| 0 | L0 | \`22eedf9\` (Liquidation参照実装（計算パート）) |
+| 1 | レッスン1〜3 | \`22eedf9\` (Liquidation参照実装（計算パート）) |
+| 2 | レッスン4〜7 | \`22eedf9\` (Liquidation参照実装（計算パート）) |
+| 3 | レッスン8〜10 | *Liquidation参照実装（保険基金パート） — TBD* |
+| 4 | レッスン11〜13 | *Liquidation参照実装（スキャナパート） — TBD* |
 
-TBD の行は Stage 10b と 10c が ship した時点で更新する。それまで Module 3、4 はスケルトン状態だ。一方で Module 1-2 のコンテンツ（pure-compute 側のすべて）は \`22eedf9\` に対して完全に書き起こしてあり、Stage 10a を end-to-end で進められる状態になっている。
+TBD の行は Liquidation参照実装（保険基金パート） と Liquidation参照実装（スキャナパート） が ship した時点で更新する。それまで セクション3、4 はスケルトン状態だ。一方で セクション1-2 のコンテンツ（pure-compute 側のすべて）は \`22eedf9\` に対して完全に書き起こしてあり、Liquidation参照実装（計算パート） を end-to-end で進められる状態になっている。
 
 ## 前提
 
 本コースを最大限活用するには、以下があるとよい:
 
-- **Course 9（openhl-funding）** が頭の中にあること。全レッスンを覚えている必要はないが、funding で使った fixed-point / saturating 演算 / pure state machine というパターンは本コースでもそのまま再登場する。Funding が難しかったなら本コースも難しい。
-- **Course 7（openhl-clob）** の \`AccountId\`、\`Side\`、\`Qty\`。これらを直接再利用するため。Matching engine の内部まで遡る必要はない。
+- **Step 4 (Funding)（openhl-funding）** が頭の中にあること。全レッスンを覚えている必要はないが、funding で使った fixed-point / saturating 演算 / pure state machine というパターンは本コースでもそのまま再登場する。Funding が難しかったなら本コースも難しい。
+- **Step 2 (CLOB)（openhl-clob）** の \`AccountId\`、\`Side\`、\`Qty\`。これらを直接再利用するため。Matching engine の内部まで遡る必要はない。
 - **基本レベルの margin math への親しみ**。「initial margin = 10%、maintenance = 2%」を見て混乱しないなら準備完了。そうでなければ、上の perp recap と Hyperliquid の help center で十分だ。
 - **EVM や precompile の知識は不要**。Liquidation は funding と同じく純粋な state-machine math に閉じている。
 
@@ -136,7 +137,7 @@ TBD の行は Stage 10b と 10c が ship した時点で更新する。それま
 # openhl workspace root で:
 cd ~/code/my-openhl
 git checkout main
-cargo build --workspace  # ベースライン — L1 前にこれが通ること
+cargo build --workspace  # ベースライン — レッスン1 前にこれが通ること
 \`\`\`
 
 リファレンスチェックアウト（各レッスン末の答え合わせ diff 用）:
@@ -150,7 +151,7 @@ git checkout 22eedf9
 
 ## コーススタイル
 
-各レッスンはコース 6-9 で確立した build-along フォーマットに従う:
+各レッスンは Step 1（Consensus）〜 Step 4（Funding）で確立した build-along フォーマットに従う:
 - **ゴール** — 終了時点で何が pass し、何が build されているか。
 - **おさらい** — 前のレッスンがどこで終わったか。
 - **計画** — 番号付きで具体的な編集。
@@ -162,11 +163,11 @@ git checkout 22eedf9
 - **答え合わせ** — openhl reference SHA に対する \`git diff\`。
 - **よくある質問** — 3-5 問、それぞれ根拠まで添えた回答。
 
-Module 2（pure compute）はコース 7 の matching engine と比べて proof-heavy で code-light な作りだ。**エッジケースの前ではペースを落とすこと。** L5 の levered-regime 非単調性は、ほとんどの読者にとって最初のメンタルモデルが壊れる場所だ。そこを丁寧に再構築する。
+セクション2（pure compute）はStep 2（CLOB） の matching engine と比べて proof-heavy で code-light な作りだ。**エッジケースの前ではペースを落とすこと。** レッスン5 の levered-regime 非単調性は、ほとんどの読者にとって最初のメンタルモデルが壊れる場所だ。そこを丁寧に再構築する。
 
 ## 準備完了
 
-L1 に進む。\`MARGIN_SCALE\` を整え、ネットワークのリスクパラメータを収める \`LiquidationParams\` 構造体を作る。
+レッスン1 に進む。\`MARGIN_SCALE\` を整え、ネットワークのリスクパラメータを収める \`LiquidationParams\` 構造体を作る。
 `,
                 },
               ],
@@ -209,22 +210,22 @@ cargo build -p openhl-liquidation
 - **\`src/types.rs\`** を新規作成。モジュール docs、\`MARGIN_SCALE\` 定数、\`LiquidationParams\` 構造体、デフォルトと accessor を載せた impl ブロックを置く。
 - **\`src/lib.rs\`** を空のままから書き起こす。クレート docs、\`pub mod types;\`、そして \`MARGIN_SCALE\` と \`LiquidationParams\` をクレートルートに re-export する行を加える。
 
-L1 にテストはない。\`MARGIN_SCALE\` は値、\`LiquidationParams\` は受動的な構造体だからだ。L2 で初めて挙動を持つ型（\`MarginHealth\` enum）が登場し、最初の unit test もそこで生まれる。
+レッスン1 にテストはない。\`MARGIN_SCALE\` は値、\`LiquidationParams\` は受動的な構造体だからだ。レッスン2 で初めて挙動を持つ型（\`MarginHealth\` enum）が登場し、最初の unit test もそこで生まれる。
 
 ## おさらい
 
-L0 の後:
+レッスン0の後:
 - perp DEX が liquidation をオフチェーンではなく consensus 内で実行する理由を理解している。
 - float が chain-fork hazard になる理由を理解している（funding と同じ論理）。
-- Liquidation クレートのスキャフォールド（Cargo.toml + 空の \`src/lib.rs\`）は Stage 10a 前から workspace に置かれている — funding crate のときと同じ流儀だ。
+- Liquidation クレートのスキャフォールド（Cargo.toml + 空の \`src/lib.rs\`）は Liquidation参照実装（計算パート） 前から workspace に置かれている — funding crate のときと同じ流儀だ。
 
-L1 では、この空の crate を、公開された scale 定数 1 つと、エンジン全体を支配するパラメータを持つ実体ある crate に育てていく。
+レッスン1 では、この空の crate を、公開された scale 定数 1 つと、エンジン全体を支配するパラメータを持つ実体ある crate に育てていく。
 
 ## 計画
 
-編集は 3 つ。Funding L1 と同じ形だが、依存が 1 つではなく 2 つになる:
+編集は 3 つ。Funding レッスン1 と同じ形だが、依存が 1 つではなく 2 つになる:
 
-1. **\`crates/liquidation/Cargo.toml\`** — \`[dependencies]\` に \`openhl-clob = { path = "../clob" }\` と \`openhl-funding = { path = "../funding" }\` を追加する。L5 / L6 で使う \`proptest\` を含めた \`[dev-dependencies]\` ブロックも併せて足す。
+1. **\`crates/liquidation/Cargo.toml\`** — \`[dependencies]\` に \`openhl-clob = { path = "../clob" }\` と \`openhl-funding = { path = "../funding" }\` を追加する。レッスン5 / レッスン6 で使う \`proptest\` を含めた \`[dev-dependencies]\` ブロックも併せて足す。
 2. **\`crates/liquidation/src/types.rs\` を作成。** bps の根拠を説明するモジュール docs、\`MARGIN_SCALE\` 定数、\`LiquidationParams\` 構造体、impl ブロックを置く。
 3. **\`crates/liquidation/src/lib.rs\`** を空のままから書き起こし、クレート docs、\`pub mod types;\`、\`pub use types::{LiquidationParams, MARGIN_SCALE};\` を加える。
 
@@ -235,7 +236,7 @@ L1 では、この空の crate を、公開された scale 定数 1 つと、エ
 \`RATE_SCALE\` と \`MARGIN_SCALE\` の解像度差を 1 枚で並べると、なぜそれぞれが「自分のドメインに対して必要十分」なのかが直感で見える:
 
 \`\`\`
-                       Course 9 (funding)              Course 10 (liquidation)
+                       Step 4（Funding）              Step 5（Liquidation）
                        ─────────────────────           ────────────────────────
 スケール定数             RATE_SCALE = 1_000_000_000      MARGIN_SCALE = 10_000
                        (parts-per-billion, 10⁹)        (basis points, 10⁴)
@@ -301,9 +302,9 @@ workspace = true
 
 1. **\`openhl-clob = { path = "../clob" }\`** — \`AccountId\`、\`Side\`、\`Qty\` を取り込むため。bridge レイヤーは liquidation order でこれらを再利用するし、\`AccountSnapshot\` は \`AccountId\` を持ち回る。
 2. **\`openhl-funding = { path = "../funding" }\`** — \`MarkPrice\`、\`PositionSize\`、\`Notional\` を取り込むため。これらは funding と liquidation の接点に立つ型で、両方の crate が同じ通貨で会話するための語彙だ。
-3. **\`[dev-dependencies]\` ブロック** に \`proptest\` を入れる。L5（margin-ratio の単調性テスト）と L6（margin-health の determinism テスト）で使うので、宣言だけ先に済ませておく。
+3. **\`[dev-dependencies]\` ブロック** に \`proptest\` を入れる。レッスン5（margin-ratio の単調性テスト）と レッスン6（margin-health の determinism テスト）で使うので、宣言だけ先に済ませておく。
 
-> 🛑 **やりがちな勘違い。** 「L5 / L6 で使うならテスト用、両方 dev-dep でよいのでは?」 **そうではない。production コードのほうも \`MarkPrice\` や \`AccountId\` を \`compute.rs\` の関数シグネチャで使う — テスト専用ではない。** Funding でも L1 で同じ判断をした。ルールは単純で、\`pub fn\` シグネチャに現れる型は dev-only ではなく通常の dep に置く必要がある。
+> 🛑 **やりがちな勘違い。** 「レッスン5 / レッスン6 で使うならテスト用、両方 dev-dep でよいのでは?」 **そうではない。production コードのほうも \`MarkPrice\` や \`AccountId\` を \`compute.rs\` の関数シグネチャで使う — テスト専用ではない。** Funding でも レッスン1 で同じ判断をした。ルールは単純で、\`pub fn\` シグネチャに現れる型は dev-only ではなく通常の dep に置く必要がある。
 
 ### Step 2: \`src/types.rs\` を作成
 
@@ -315,7 +316,7 @@ workspace = true
 //! Pure data — no I/O, no allocation. Every type is \`Copy\`-friendly so the
 //! engine can be invoked on snapshots taken at the bridge layer without
 //! lifetime gymnastics. The convention follows \`openhl-funding\`: the
-//! liquidation crate never owns mutable state in Stage 10a; it computes
+//! liquidation crate never owns mutable state in Liquidation参照実装（計算パート）; it computes
 //! over snapshots that the caller assembled.
 //!
 //! ### Why fixed-point integers, not floats
@@ -343,7 +344,7 @@ pub const MARGIN_SCALE: i64 = 10_000;
 ///
 /// \`liquidation_fee_bps\` is charged on the notional being closed, paid
 /// out of the account's collateral, and credited to the insurance fund
-/// (Stage 10b). A typical HL-style value is 1–2% (100–200 bps).
+/// (Liquidation参照実装（保険基金パート）). A typical HL-style value is 1–2% (100–200 bps).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LiquidationParams {
     /// Initial margin requirement in bps (e.g., 1000 = 10%).
@@ -357,7 +358,7 @@ pub struct LiquidationParams {
 impl LiquidationParams {
     /// Hyperliquid-style defaults: 10% initial, 2% maintenance, 1.5% fee.
     /// Real production deployments use tiered maintenance (higher margin
-    /// for larger position sizes) — out of scope for Stage 10a.
+    /// for larger position sizes) — out of scope for Liquidation参照実装（計算パート）.
     #[must_use]
     pub const fn hyperliquid_default() -> Self {
         Self {
@@ -405,7 +406,7 @@ impl LiquidationParams {
 \`\`\`rust
 //! \`openhl-liquidation\` — perpetual-position liquidation engine.
 //!
-//! Pure compute in Stage 10a: no I/O, no async, no networking. Liquidation
+//! Pure compute in Liquidation参照実装（計算パート）: no I/O, no async, no networking. Liquidation
 //! decisions are deterministic functions over \`(account_snapshot, mark,
 //! params)\`. Every validator on the chain must reach the same
 //! [\`MarginHealth\`] from the same inputs; if two validators classify the
@@ -429,11 +430,11 @@ pub mod types;
 pub use types::{LiquidationParams, MARGIN_SCALE};
 \`\`\`
 
-L11 終了時のバージョンと比べて欠けているものは、\`pub mod compute\`、それから \`MarginHealth\`、\`MarginRatio\`、\`AccountSnapshot\`、\`CloseOrderSpec\` の \`pub use types::{...}\` 再エクスポートだ。これらは L2-L7 で型と compute 関数を加える流れで揃ってくる。**L1 の lib.rs はコンパイルが通る最小構成にとどめる。**
+レッスン11 終了時のバージョンと比べて欠けているものは、\`pub mod compute\`、それから \`MarginHealth\`、\`MarginRatio\`、\`AccountSnapshot\`、\`CloseOrderSpec\` の \`pub use types::{...}\` 再エクスポートだ。これらは レッスン2-レッスン7 で型と compute 関数を加える流れで揃ってくる。**レッスン1 の lib.rs はコンパイルが通る最小構成にとどめる。**
 
-クロスリファレンスの \`[\`MarginHealth\`]\` は L2 で enum が登場するまで未解決のままだ。Rustdoc は warning を出すが、これは受け入れる（funding L1 と同じ扱い）。
+クロスリファレンスの \`[\`MarginHealth\`]\` は レッスン2 で enum が登場するまで未解決のままだ。Rustdoc は warning を出すが、これは受け入れる（funding レッスン1 と同じ扱い）。
 
-> 🛑 **予測。** 名前を明示した 2-name の再エクスポートではなく、\`pub use types::*;\` と書いたら何が起きるか? ヒント: L1 後と L7 後の \`types.rs\` にどんな型が住むか、そしてどの API surface に commit したいのかを考える。
+> 🛑 **予測。** 名前を明示した 2-name の再エクスポートではなく、\`pub use types::*;\` と書いたら何が起きるか? ヒント: レッスン1 後と レッスン7 後の \`types.rs\` にどんな型が住むか、そしてどの API surface に commit したいのかを考える。
 
 （答え: **\`pub use types::*\` は将来 \`types.rs\` に住むものを丸ごと、つまり誤って \`pub\` を付けた helper や private support 型まで含めて再エクスポートしてしまう。** 一方、明示的に \`pub use types::{LiquidationParams, MARGIN_SCALE}\` と書けば、クレートの public surface は意図的な決定の集合になる。\`types.rs\` に public 型を増やすたびに lib.rs の re-export 行を直す必要が生じ、「これは本当に public API の一部か?」と立ち止まる瞬間が強制的に生まれる。Glob re-export は保守の落とし穴で、将来 \`pub(crate)\` の代わりに \`pub\` で helper を生やすと、本人の知らない間に public API の一部になっている。**明示的 re-export は public API surface のチェックリストとして働く。**）
 
@@ -451,12 +452,12 @@ warning: unresolved link to \`MarginHealth\`
     Finished \`dev\` profile [unoptimized + debuginfo] in 0.4s
 \`\`\`
 
-\`MarginHealth\` への未解決リンクが残るので rustdoc warning が 1 つ出る（L2 で型が追加されれば消える）。**ここで抑制しないこと。** 何が欠けているかを build が教えてくれている合図だ。
+\`MarginHealth\` への未解決リンクが残るので rustdoc warning が 1 つ出る（レッスン2 で型が追加されれば消える）。**ここで抑制しないこと。** 何が欠けているかを build が教えてくれている合図だ。
 
 エラーが出た場合に多い原因:
 
-- **\`error[E0463]: can't find crate for 'openhl_clob'\` または \`'openhl_funding'\`** — Cargo.toml の \`path = "..."\` 依存を片方入れ忘れている。L1 のコード本体ではまだ使っていないが、L3 の import を先取りして書いていると発火する。
-- **\`error[E0583]: file not found for module 'compute'\`** — lib.rs に \`pub mod compute;\` を先取りして書いてしまった。削除すれば直る。L4 で改めて戻ってくる。
+- **\`error[E0463]: can't find crate for 'openhl_clob'\` または \`'openhl_funding'\`** — Cargo.toml の \`path = "..."\` 依存を片方入れ忘れている。レッスン1 のコード本体ではまだ使っていないが、レッスン3 の import を先取りして書いていると発火する。
+- **\`error[E0583]: file not found for module 'compute'\`** — lib.rs に \`pub mod compute;\` を先取りして書いてしまった。削除すれば直る。レッスン4 で改めて戻ってくる。
 - **\`error: failed to parse manifest\`** — Cargo.toml の syntax エラー。よくあるのは \`[dev-dependences]\` のような typo。
 
 ## 設計の振り返り
@@ -467,7 +468,7 @@ warning: unresolved link to \`MarginHealth\`
 
 2. **Default constructor は \`const fn\` で書き、\`Default\` impl は使わない。** 両方とも正しくない理由を整理しよう。\`Default::default()\` は多くの型で「妥当な zero っぽい」デフォルトを返すが、\`LiquidationParams::default()\` が「margin ゼロ、fee ゼロ」を示唆するのは **危険** だ — その値で動かしたネットワークでは liquidation がそもそも起きない。**\`hyperliquid_default()\` は名前付きで意図的なデフォルトとして立てる。** 呼び出し側に名前で要求させることで、安全性に関わる性質を視界に残し続けられる。
 
-3. **3 つの独立した \`u32\` フィールドにする。ネスト型 \`LiquidationConfig\` 構造体は作らない。** 将来 tiered maintenance margin（HL 流の「大きな position には高い maintenance %」）に移行する局面では \`Vec<MaintenanceTier>\` フィールドが欲しくなるかもしれない。だが今は加えない — 先取りした一般化になってしまう。**Stage 10a は flat margin で進める。Stage 10c+ で tiered が必要になったら、そのときに再検討する。**
+3. **3 つの独立した \`u32\` フィールドにする。ネスト型 \`LiquidationConfig\` 構造体は作らない。** 将来 tiered maintenance margin（HL 流の「大きな position には高い maintenance %」）に移行する局面では \`Vec<MaintenanceTier>\` フィールドが欲しくなるかもしれない。だが今は加えない — 先取りした一般化になってしまう。**Liquidation参照実装（計算パート） は flat margin で進める。Liquidation参照実装（スキャナパート）+ で tiered が必要になったら、そのときに再検討する。**
 
 ## 答え合わせ
 
@@ -479,10 +480,10 @@ diff -u ~/code/my-openhl/crates/liquidation/src/types.rs ./crates/liquidation/sr
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L1 の後:
-- **Cargo.toml** は Stage 10a と完全一致する。
-- **types.rs** は Stage 10a の types.rs の *最初の ~50 行* と一致する。モジュール doc、\`MARGIN_SCALE\`、\`LiquidationParams\`、impl までだ。残り（\`MarginRatio\`、\`MarginHealth\`、\`AccountSnapshot\`、\`CloseOrderSpec\`）は L2 / L3 で追加する。
-- **lib.rs** は Stage 10a の lib.rs の *最初の ~25 行* と一致する。クレート doc、\`pub mod types;\`、2 つの再エクスポートまで。残りの再エクスポートはそれぞれの型を加えるタイミングで揃えていく。
+レッスン1 の後:
+- **Cargo.toml** は Liquidation参照実装（計算パート） と完全一致する。
+- **types.rs** は Liquidation参照実装（計算パート） の types.rs の *最初の ~50 行* と一致する。モジュール doc、\`MARGIN_SCALE\`、\`LiquidationParams\`、impl までだ。残り（\`MarginRatio\`、\`MarginHealth\`、\`AccountSnapshot\`、\`CloseOrderSpec\`）は レッスン2 / レッスン3 で追加する。
+- **lib.rs** は Liquidation参照実装（計算パート） の lib.rs の *最初の ~25 行* と一致する。クレート doc、\`pub mod types;\`、2 つの再エクスポートまで。残りの再エクスポートはそれぞれの型を加えるタイミングで揃えていく。
 
 ## よくある質問
 
@@ -492,7 +493,7 @@ L1 の後:
 
 **Q2: \`LiquidationParams\` の constructor で \`maintenance ≤ initial\` を検証すべきか?**
 
-Stage 10a では検証しない。構造体は任意の組み合わせを受け入れる。Stage 10c で \`validated()\` constructor を別途追加し、genesis を読み込む側のコードから呼ばれたときに \`Result<Self, ParamsError>\` を返す形にする。検証なしの素の constructor は、test や proptest generator が *病的な* 入力を食わせたい場合のためにそのまま残す。
+Liquidation参照実装（計算パート） では検証しない。構造体は任意の組み合わせを受け入れる。Liquidation参照実装（スキャナパート） で \`validated()\` constructor を別途追加し、genesis を読み込む側のコードから呼ばれたときに \`Result<Self, ParamsError>\` を返す形にする。検証なしの素の constructor は、test や proptest generator が *病的な* 入力を食わせたい場合のためにそのまま残す。
 
 **Q3: なぜ \`hyperliquid_default()\` が 10% / 2% / 1.5% で、他の値ではないのか?**
 
@@ -500,15 +501,15 @@ HL の実際の maintenance margin tier は position size に応じて 1.25% か
 
 **Q4: Margin ratio の計算で実際の i64 overflow リスクは?**
 
-\`margin_ratio = equity * MARGIN_SCALE / notional\`。\`MARGIN_SCALE = 10_000\` のもと、\`equity\` と \`notional\` が \`i64::MAX\` で bound されているとすると、積 \`equity * MARGIN_SCALE\` は \`equity > i64::MAX / 10_000 ≈ 9.2e14\` で i64 を overflow しうる。現実的な取引所スケールに直すと 920 兆ドルの equity だ — 妥当な入力からははるか上にある。ただし L5 では依然として乗算を \`i128\` で行い、i64 に saturate して戻す。**設計の規律としては funding と同じ — i64 を超えうる積は、敵対的な入力では必ず超えるものと想定する。**
+\`margin_ratio = equity * MARGIN_SCALE / notional\`。\`MARGIN_SCALE = 10_000\` のもと、\`equity\` と \`notional\` が \`i64::MAX\` で bound されているとすると、積 \`equity * MARGIN_SCALE\` は \`equity > i64::MAX / 10_000 ≈ 9.2e14\` で i64 を overflow しうる。現実的な取引所スケールに直すと 920 兆ドルの equity だ — 妥当な入力からははるか上にある。ただし レッスン5 では依然として乗算を \`i128\` で行い、i64 に saturate して戻す。**設計の規律としては funding と同じ — i64 を超えうる積は、敵対的な入力では必ず超えるものと想定する。**
 
 **Q5: \`MARGIN_SCALE\` と bps に \`u32\` を使って、i64 への変換ノイズを避けられないか?**
 
 避けられる。\`i64::from(...)\` の呼び出しが数回減るのも事実だ。代償として、あらゆる margin-ratio 計算が \`equity\`（signed）と \`notional\`（unsigned）を含むので、演算で signed と unsigned を混ぜるたびに各サイトで明示的キャストが必要になる。境界で 1 回 i64 にアップキャスト（\`i64::from(params.initial_margin_bps)\`）してしまい、その後の演算は signed で通すほうが綺麗だ。**境界で変換し、計算は 1 つの型で揃える。**
 
-## 次のレッスン (L2)
+## 次のレッスン (レッスン2)
 
-L2 では \`MarginRatio\` newtype と \`MarginHealth\` enum を追加する。\`MarginHealth\` は load-bearing な分類型で、これ以降の 5 レッスンはどれもこの型を return するか consume するかのいずれかだ。\`bool\` でも \`u8\` でもなく 4-variant enum を選んだ理由を見ていく。
+レッスン2 では \`MarginRatio\` newtype と \`MarginHealth\` enum を追加する。\`MarginHealth\` は load-bearing な分類型で、これ以降の 5 レッスンはどれもこの型を return するか consume するかのいずれかだ。\`bool\` でも \`u8\` でもなく 4-variant enum を選んだ理由を見ていく。
 `,
                 },
                 {
@@ -539,19 +540,19 @@ cargo build -p openhl-liquidation
 
 具体的な変更:
 
-- **\`src/types.rs\`** — 既存の \`MARGIN_SCALE\` 定数と \`LiquidationParams\` 構造体の下に、\`MARGIN_SCALE\` スケールの \`MarginRatio\` newtype と \`MarginHealth\` enum を加える。L1 で書いた部分には触らない。
+- **\`src/types.rs\`** — 既存の \`MARGIN_SCALE\` 定数と \`LiquidationParams\` 構造体の下に、\`MARGIN_SCALE\` スケールの \`MarginRatio\` newtype と \`MarginHealth\` enum を加える。レッスン1 で書いた部分には触らない。
 - **\`src/lib.rs\`** — 既存の \`pub use types::{...}\` 再エクスポートに \`MarginRatio\` と \`MarginHealth\` を足す。
 
-L2 にもテストはない。\`MarginRatio\` と \`MarginHealth\` はどちらも受動的なデータ型だからだ。L3 で \`AccountSnapshot\` と \`CloseOrderSpec\` を加え、types モジュールを閉じる流れになる（こちらもテストなし）。最初の挙動テストは L4 の \`notional_value\` でようやく登場する。
+レッスン2 にもテストはない。\`MarginRatio\` と \`MarginHealth\` はどちらも受動的なデータ型だからだ。レッスン3 で \`AccountSnapshot\` と \`CloseOrderSpec\` を加え、types モジュールを閉じる流れになる（こちらもテストなし）。最初の挙動テストは レッスン4 の \`notional_value\` でようやく登場する。
 
 ## おさらい
 
-L1 の後:
+レッスン1 の後:
 - クレートには \`MARGIN_SCALE\`（10⁴）と、\`hyperliquid_default()\` を備えた \`LiquidationParams\` がある。
 - \`lib.rs\` は両方を \`types\` から再エクスポートしている。
 - \`cargo build -p openhl-liquidation\` が pass する。\`MarginHealth\` への rustdoc warning が 1 つ残っているはずだ（この時点ではまだ未解決）。
 
-L2 ではエンジンの残り部分が言葉として使う 2 つの分類型を追加する。L4 以降、\`margin_ratio\` は \`MarginRatio\` を返し、\`margin_health\` は \`MarginHealth\` を返す形になる。
+レッスン2 ではエンジンの残り部分が言葉として使う 2 つの分類型を追加する。レッスン4 以降、\`margin_ratio\` は \`MarginRatio\` を返し、\`margin_health\` は \`MarginHealth\` を返す形になる。
 
 ## 計画
 
@@ -577,7 +578,7 @@ L2 ではエンジンの残り部分が言葉として使う 2 つの分類型�
                     │                    │                   │   fund が吸収        │
    ─────────────────┴────────────────────┴───────────────────┴─────────────────────┘
 
-下流のエンジン挙動 (L7 / Module 3 で実装):
+下流のエンジン挙動 (レッスン7 / セクション3 で実装):
    Safe         ─► trader はそのまま運用継続
    AtRisk       ─► UI で警告、新規ポジは拒否、close は trader 自身に任せる
    Liquidatable ─► 自動 close order を発行、fee を差し引き、残 equity を返却
@@ -598,7 +599,7 @@ L2 ではエンジンの残り部分が言葉として使う 2 つの分類型�
 /// Sign: usually non-negative; can be negative when the account is
 /// "underwater" — accumulated losses have driven equity below zero, and
 /// liquidating the position alone cannot cover the deficit. The insurance
-/// fund absorbs that shortfall (Stage 10b).
+/// fund absorbs that shortfall (Liquidation参照実装（保険基金パート）).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MarginRatio(pub i64);
 
@@ -619,7 +620,7 @@ pub enum MarginHealth {
     Liquidatable,
     /// Margin ratio < 0 (equity is negative). Closing the position at
     /// any price won't fully cover losses. The insurance fund absorbs
-    /// the shortfall — handled in Stage 10b.
+    /// the shortfall — handled in Liquidation参照実装（保険基金パート）.
     Underwater,
 }
 \`\`\`
@@ -628,7 +629,7 @@ pub enum MarginHealth {
 
 1. **\`MarginRatio(pub i64)\` は newtype。** \`type MarginRatio = i64\` の alias ではない。Newtype は型チェッカーに足場を与える — \`MarginRatio\` を取る関数を、balance や account ID、\`MarkPrice\` のつもりで渡した生の \`i64\` 値では呼べなくなる。\`pub i64\` フィールドにしてあるので、呼び出し側は \`MarginRatio(1000)\` で組み立てて \`ratio.0\` で読み出せる。**内部に不正な状態を持ち得ない (= どんな \`i64\` 値が入っても型として不正にならない、つまり守るべきカプセル化不変量がない) ため、無駄にゲッター/セッターで隠蔽せず、透明なデータコンテナとしてシンプルに保っている。**「\`Vec\` を \`MyVec\` の private フィールドにラップして \`len()\` を再公開する」ような防壁は、不変量を守るためのコストであって不変量がないところに払うべきではない。
 
-2. **\`MarginRatio\` は \`Default\`、\`PartialOrd\`、\`Ord\`、\`Hash\` まで広めに derive している。** これらが engine 側から要求されているわけではないが、下流のコード（telemetry、Stage 10c の worst-health 順 scanner、ダッシュボード）が \`MarginRatio\` を他の比較可能な値型と同じように扱えるようにしておく狙いがある。\`MarginRatio::default()\` は \`MarginRatio(0)\` で、意味としては「ratio 未計算」または「ゼロ初期化済み」だ。Engine 自身は \`default()\` を読むことはなく、必ず snapshot から計算する。
+2. **\`MarginRatio\` は \`Default\`、\`PartialOrd\`、\`Ord\`、\`Hash\` まで広めに derive している。** これらが engine 側から要求されているわけではないが、下流のコード（telemetry、Liquidation参照実装（スキャナパート） の worst-health 順 scanner、ダッシュボード）が \`MarginRatio\` を他の比較可能な値型と同じように扱えるようにしておく狙いがある。\`MarginRatio::default()\` は \`MarginRatio(0)\` で、意味としては「ratio 未計算」または「ゼロ初期化済み」だ。Engine 自身は \`default()\` を読むことはなく、必ず snapshot から計算する。
 
 3. **\`MarginHealth\` は \`PartialOrd\` / \`Ord\` を derive *していない*。** variants は自然に順序を成す（Safe < AtRisk < Liquidatable < Underwater が worsening 方向）が、enum に順序比較を入れるのはコード臭だ。\`if health > MarginHealth::AtRisk\` よりも、\`if matches!(health, MarginHealth::Liquidatable | MarginHealth::Underwater)\` のほうが意図がはっきり読める。コンパイラに明示的なパターンを書かせれば、将来の保守者は分岐がどの variants をカバーしているかを過不足なく確認できる。**安易な enum の順序比較はバグの温床 (コード臭) になりがち — まずは \`matches!\` による明示的なパターンマッチに手を伸ばす規律を持とう。** 順序比較が真に欲しい場面 (severity 順のテレメトリソート等) では、明示的な \`severity_rank()\` メソッドを生やすほうが意図が見える。
 
@@ -654,7 +655,7 @@ pub use types::{LiquidationParams, MarginHealth, MarginRatio, MARGIN_SCALE};
 
 \`lib.rs\` への変更はこれだけだ。クレートルートに public で並ぶ名前は 3 つで、アルファベット順に並ぶ。定数は慣例的に末尾なので、\`MARGIN_SCALE\` は最後のままに置いておく。
 
-L1 で出ていた \`[\`MarginHealth\`]\` への rustdoc warning は、型が実体を得たことでここで解消する。
+レッスン1 で出ていた \`[\`MarginHealth\`]\` への rustdoc warning は、型が実体を得たことでここで解消する。
 
 ### Step 3: コンパイル
 
@@ -669,7 +670,7 @@ cargo build -p openhl-liquidation
     Finished \`dev\` profile [unoptimized + debuginfo] in 0.4s
 \`\`\`
 
-Warning はゼロ。L1 で残っていた \`MarginHealth\` の rustdoc warning も消える。
+Warning はゼロ。レッスン1 で残っていた \`MarginHealth\` の rustdoc warning も消える。
 
 エラーが出た場合に多い原因:
 
@@ -695,9 +696,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/types.rs ./crates/liquidation/sr
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L2 の後:
-- **types.rs** は Stage 10a の types.rs の 1 行目から \`MarginHealth::Underwater\` までと一致する。L1 で書いた \`MARGIN_SCALE\` + \`LiquidationParams\` に、新たに \`MarginRatio\` と \`MarginHealth\` を載せた形だ。次に来る 2 型（\`AccountSnapshot\`、\`CloseOrderSpec\`）は L3 で扱う。
-- **lib.rs** は Stage 10a の lib.rs から \`compute\` モジュールと追加 6 件の再エクスポートを除いた状態と一致する。これらは L4-L7 で揃える。
+レッスン2 の後:
+- **types.rs** は Liquidation参照実装（計算パート） の types.rs の 1 行目から \`MarginHealth::Underwater\` までと一致する。レッスン1 で書いた \`MARGIN_SCALE\` + \`LiquidationParams\` に、新たに \`MarginRatio\` と \`MarginHealth\` を載せた形だ。次に来る 2 型（\`AccountSnapshot\`、\`CloseOrderSpec\`）は レッスン3 で扱う。
+- **lib.rs** は Liquidation参照実装（計算パート） の lib.rs から \`compute\` モジュールと追加 6 件の再エクスポートを除いた状態と一致する。これらは レッスン4〜7 で揃える。
 
 ## よくある質問
 
@@ -711,7 +712,7 @@ Payload を持たない 4 variants の場合、Rust の enum レイアウトは�
 
 **Q3: Variant に payload を持たせるべきか（例: \`AtRisk { headroom_bps: u32 }\`）?**
 
-魅力的に見えるが時期尚早だ。下流の consumer（Stage 10c scanner、ダッシュボード）は、必要な情報を背後の margin_ratio から再導出する。Variant payload を持たせると構築コストが乗り、\`match\` の使い勝手も複雑になる。**すべての consumer が payload から利益を得るのでない限り、enum は payload なしに保つ。**
+魅力的に見えるが時期尚早だ。下流の consumer（Liquidation参照実装（スキャナパート） scanner、ダッシュボード）は、必要な情報を背後の margin_ratio から再導出する。Variant payload を持たせると構築コストが乗り、\`match\` の使い勝手も複雑になる。**すべての consumer が payload から利益を得るのでない限り、enum は payload なしに保つ。**
 
 **Q4: \`Liquidatable\` が「close + 場合によって deficit absorb」を含意できるなら、なぜ \`Underwater\` を別 variant にするのか?**
 
@@ -721,9 +722,9 @@ bridge が両ケースで *別の挙動* を取らねばならないからだ。
 
 いいえ。flat なポジションは \`MarginHealth::Safe\` を返す（notional がなく、満たすべき margin 要件もないため）。\`Option\` で包んでしまうと、すべての呼び出し側に \`None\` を明示処理させる— 「flat = safe」は曖昧さがないのに、だ。**型システムですでに扱える状態をわざわざ \`Option\` で表現しない。**
 
-## 次のレッスン (L3)
+## 次のレッスン (レッスン3)
 
-L3 では、すべての margin 関数の入力となる \`AccountSnapshot\` と、エンジンが bridge へ渡す出力となる \`CloseOrderSpec\` を加え、types モジュールを閉じる。L3 を終えれば types モジュールは完成だ。L4 からは compute モジュールに移り、\`notional_value\` から書き始める。
+レッスン3 では、すべての margin 関数の入力となる \`AccountSnapshot\` と、エンジンが bridge へ渡す出力となる \`CloseOrderSpec\` を加え、types モジュールを閉じる。レッスン3 を終えれば types モジュールは完成だ。レッスン4 からは compute モジュールに移り、\`notional_value\` から書き始める。
 `,
                 },
                 {
@@ -754,19 +755,19 @@ cargo build -p openhl-liquidation
 
 具体的な変更:
 
-- **\`src/types.rs\`** — 既存の \`MarginHealth\` enum の下に \`AccountSnapshot\` と \`CloseOrderSpec\` を追記する。L1 や L2 で書いた部分には触らない。
+- **\`src/types.rs\`** — 既存の \`MarginHealth\` enum の下に \`AccountSnapshot\` と \`CloseOrderSpec\` を追記する。レッスン1 や レッスン2 で書いた部分には触らない。
 - **\`src/lib.rs\`** — \`pub use types::{...}\` 再エクスポートに \`AccountSnapshot\` と \`CloseOrderSpec\` を加える。
 
-L3 にもテストはない。どちらの新しい構造体も受動的なデータコンテナだからだ。L4 で \`compute\` モジュールに着手し、そこで最初の挙動テスト（\`notional_value\`）が登場する。
+レッスン3 にもテストはない。どちらの新しい構造体も受動的なデータコンテナだからだ。レッスン4 で \`compute\` モジュールに着手し、そこで最初の挙動テスト（\`notional_value\`）が登場する。
 
 ## おさらい
 
-L2 の後:
-- \`types.rs\` には \`MARGIN_SCALE\` と \`LiquidationParams\`（L1）に加え、\`MarginRatio\` と \`MarginHealth\`（L2）が並んでいる。
+レッスン2 の後:
+- \`types.rs\` には \`MARGIN_SCALE\` と \`LiquidationParams\`（レッスン1）に加え、\`MarginRatio\` と \`MarginHealth\`（レッスン2）が並んでいる。
 - \`lib.rs\` は 4 つの名前 — \`LiquidationParams\`、\`MarginHealth\`、\`MarginRatio\`、\`MARGIN_SCALE\` — を再エクスポートしている。
 - \`cargo build -p openhl-liquidation\` が warning ゼロで pass する。
 
-L3 では 2 つの **I/O 型**を加える。あらゆる margin 関数が consume する入力 \`AccountSnapshot\` と、エンジンが bridge に渡す出力 \`CloseOrderSpec\` だ。L3 を終えると types モジュールが完成し、Course 10 の Module 1 が閉じる。
+レッスン3 では 2 つの **I/O 型**を加える。あらゆる margin 関数が consume する入力 \`AccountSnapshot\` と、エンジンが bridge に渡す出力 \`CloseOrderSpec\` だ。レッスン3 を終えると types モジュールが完成し、Step 5 (Liquidation) の セクション1 が閉じる。
 
 ## 計画
 
@@ -780,7 +781,7 @@ L3 では 2 つの **I/O 型**を加える。あらゆる margin 関数が consu
 
 （答え: **\`avg_entry\`（PnL の項を計算するため）と \`collateral\`（equity を計算するため）の 2 つだ。** Funding の式に \`entry\` 係数は出てこない — ポジションがどこで開かれたかに関係なく、現在の mark に rate を掛けてスケールするだけだ。Funding はまた collateral を読まない。Funding が emit する settlement delta は bridge レイヤーで balance に適用され、balance 台帳の管理は bridge 側に閉じている。Liquidation の仕事は、\`collateral + unrealized PnL\` がしきい値を下回ったかを *測る* ことなので、両方の値が手元に揃っている必要がある。仕事が違えば snapshot も違う。）
 
-L3 で完成する \`types\` モジュールが、エンジン全体に対して **どんな入力を受け、どんな出力を返すか**を 1 枚で見ると、Module 1 (型) から Module 2 (純粋計算) へ向かう接続点がはっきりする:
+レッスン3 で完成する \`types\` モジュールが、エンジン全体に対して **どんな入力を受け、どんな出力を返すか**を 1 枚で見ると、セクション1 (型) から セクション2 (純粋計算) へ向かう接続点がはっきりする:
 
 \`\`\`
                     [ 上流: bridge / clearing レイヤー (台帳の所有者) ]
@@ -791,18 +792,18 @@ L3 で完成する \`types\` モジュールが、エンジン全体に対して
    ┌────────────────────────────────────────────────────────────────────┐
    │ 入力: AccountSnapshot { account, position_size, avg_entry,          │
    │                         collateral }                                │
-   │   ※ 不変・read-only・Copy。L3 で確定。                                │
+   │   ※ 不変・read-only・Copy。レッスン3 で確定。                                │
    └────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
    ┌────────────────────────────────────────────────────────────────────┐
-   │ ★ liquidation エンジン (Module 2-4 で実装するすべて)                 │
+   │ ★ liquidation エンジン (セクション2-4 で実装するすべて)                 │
    │                                                                     │
-   │   L4: notional_value / unrealized_pnl  (純粋計算)                    │
-   │   L5: account_equity / margin_ratio   (純粋計算)                    │
-   │   L6: margin_health                    (分類: 4 状態 enum)           │
-   │   L7: close_order_spec                 (Liquidatable/Underwater 用)  │
-   │   ↑↑ L1-L2 の定数・型 (MARGIN_SCALE, LiquidationParams,             │
+   │   レッスン4: notional_value / unrealized_pnl  (純粋計算)                    │
+   │   レッスン5: account_equity / margin_ratio   (純粋計算)                    │
+   │   レッスン6: margin_health                    (分類: 4 状態 enum)           │
+   │   レッスン7: close_order_spec                 (Liquidatable/Underwater 用)  │
+   │   ↑↑ レッスン1〜2 の定数・型 (MARGIN_SCALE, LiquidationParams,             │
    │                       MarginRatio, MarginHealth) も全レイヤーで参照 │
    └────────────────────────────────────────────────────────────────────┘
                               │
@@ -810,8 +811,8 @@ L3 で完成する \`types\` モジュールが、エンジン全体に対して
    ┌────────────────────────────────────────────────────────────────────┐
    │ 出力: CloseOrderSpec { account, side, qty }                         │
    │   ※ price なし (market order) / Liquidatable・Underwater アカウントに  │
-   │      対してのみ emit。L3 で確定。                                    │
-   │   さらに Module 3-4 で InsuranceFundDelta も並行して emit する        │
+   │      対してのみ emit。レッスン3 で確定。                                    │
+   │   さらに セクション3-4 で InsuranceFundDelta も並行して emit する        │
    └────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -820,7 +821,7 @@ L3 で完成する \`types\` モジュールが、エンジン全体に対して
                               ・Underwater 分は insurance fund を credit/debit
 \`\`\`
 
-ポイントは 2 つ: (a) **L3 で完成する 2 つの型 (\`AccountSnapshot\` 入力 / \`CloseOrderSpec\` 出力) が、エンジンと外界の唯一の接触面になる** — エンジン本体は L4 以降で書くが、その関数たちは型シグネチャの上ではすべて「AccountSnapshot を受けて何かを返す」「最終的に CloseOrderSpec を emit する」という形に揃う。(b) **入力 (snapshot) は不変、出力 (spec) も不変** — エンジンは台帳を更新しない、台帳の所有権は完全に bridge 側に残る。これが L0 で予告した「**リスク計算専用の不変な snapshot 型を分離して依存関係をクリーンに保つ**」の具体形だ。
+ポイントは 2 つ: (a) **レッスン3 で完成する 2 つの型 (\`AccountSnapshot\` 入力 / \`CloseOrderSpec\` 出力) が、エンジンと外界の唯一の接触面になる** — エンジン本体は レッスン4 以降で書くが、その関数たちは型シグネチャの上ではすべて「AccountSnapshot を受けて何かを返す」「最終的に CloseOrderSpec を emit する」という形に揃う。(b) **入力 (snapshot) は不変、出力 (spec) も不変** — エンジンは台帳を更新しない、台帳の所有権は完全に bridge 側に残る。これが レッスン0で予告した「**リスク計算専用の不変な snapshot 型を分離して依存関係をクリーンに保つ**」の具体形だ。
 
 ## 手を動かす walk-through
 
@@ -852,9 +853,9 @@ pub struct AccountSnapshot {
 
 2. **\`avg_entry\` は \`MarkPrice\` 型で持つ。新しい \`EntryPrice\` 型は作らない。** ポジションが開かれた価格と、現在ポジションを測っている mark price は、同じ unit-of-account に住む。別途 \`EntryPrice\` newtype を作ると、すべての PnL 計算サイトで変換が必要になり、意味的な利益は何もない。**2 つのフィールドが同じ物理量を測るなら、型を共有する。**
 
-3. **\`collateral: Notional\` は signed にしている。** Collateral は *預け入れ* 資金として慣例的に非負だが、\`Notional\`（signed）に揃えるのは \`account_equity = collateral + unrealized_pnl\` を signed sum のまま流したいからだ。\`collateral\` を unsigned にすると、すべての equity 計算で \`as i64\` キャストが入り込む。**境界で変換し、計算は 1 つの signed 型で揃える。これにより、キャスト漏れや signed / unsigned の混在に伴う静かなランタイムバグ (アンダーフロー、\`as\` キャストでの最上位ビット化け、減算で負になるはずの値が大きな正の数に化けるなど) を、コンパイル時の型不一致として根絶できる**。L4 の符号トリック (\`(mark − entry) × size\` を 4 象限すべて branchless で正しく計算する) は、まさにこの「計算経路をすべて signed で統一する」前提の上に成り立つ。
+3. **\`collateral: Notional\` は signed にしている。** Collateral は *預け入れ* 資金として慣例的に非負だが、\`Notional\`（signed）に揃えるのは \`account_equity = collateral + unrealized_pnl\` を signed sum のまま流したいからだ。\`collateral\` を unsigned にすると、すべての equity 計算で \`as i64\` キャストが入り込む。**境界で変換し、計算は 1 つの signed 型で揃える。これにより、キャスト漏れや signed / unsigned の混在に伴う静かなランタイムバグ (アンダーフロー、\`as\` キャストでの最上位ビット化け、減算で負になるはずの値が大きな正の数に化けるなど) を、コンパイル時の型不一致として根絶できる**。レッスン4 の符号トリック (\`(mark − entry) × size\` を 4 象限すべて branchless で正しく計算する) は、まさにこの「計算経路をすべて signed で統一する」前提の上に成り立つ。
 
-4. **\`pub\` フィールド、コンストラクタ関数なし。** L1 の \`LiquidationParams\` と同じ慣例だ。透明な構造体で、カプセル化不変量はない。Bridge レイヤーは \`AccountSnapshot { account: …, position_size: …, … }\` を直接組み立てる。\`AccountSnapshot::new()\` を置かないのは、コンストラクタが強制すべき不変量がないからだ。
+4. **\`pub\` フィールド、コンストラクタ関数なし。** レッスン1 の \`LiquidationParams\` と同じ慣例だ。透明な構造体で、カプセル化不変量はない。Bridge レイヤーは \`AccountSnapshot { account: …, position_size: …, … }\` を直接組み立てる。\`AccountSnapshot::new()\` を置かないのは、コンストラクタが強制すべき不変量がないからだ。
 
 5. **Doc コメントが呼び出し側の契約を明示する。** "*The owning layer (vault / clearing) is responsible for maintaining this across fills.*" この 1 文に \`avg_entry\` 不変量がまとまっている — liquidation は fill を track しないし、entry を再計算しないし、partial close を reconcile もしない。それらの責務は 1 つ上のレイヤーが負う。**Crate doc は *この* crate が保証することを書く。呼び出し側に要求することは、型の doc コメントに書く。**
 
@@ -884,15 +885,15 @@ pub struct CloseOrderSpec {
 
 気づきたい点が 3 つ:
 
-1. **\`price\` フィールドはない。** Liquidation は価格を選ばない。エンジンは market order の仕様を組み立てるところまでで、あとは matching engine が板に存在する深さで約定する。Stage 10c で \`AccountSnapshot\` のスライスを順に辿り、\`Liquidatable\` か \`Underwater\` のアカウントごとに \`CloseOrderSpec\` を 1 つずつ emit する流れになる。どれも limit を持たない。
+1. **\`price\` フィールドはない。** Liquidation は価格を選ばない。エンジンは market order の仕様を組み立てるところまでで、あとは matching engine が板に存在する深さで約定する。Liquidation参照実装（スキャナパート） で \`AccountSnapshot\` のスライスを順に辿り、\`Liquidatable\` か \`Underwater\` のアカウントごとに \`CloseOrderSpec\` を 1 つずつ emit する流れになる。どれも limit を持たない。
 
 2. **\`side: Side\` は \`openhl_clob::Side\` を再利用する。** Matching engine は \`Side::{Buy, Sell}\` で話す。\`liquidation::Side\` を別に定義して bridge で変換するようにすると、**将来的に型の乖離 (drift) を引き起こす原因となる、不要な翻訳レイヤー (\`impl From\` などの変換ロジック) を導入してしまう** — たとえば片方の crate に 3 番目の side variant (\`Closing\` など) を足したのにもう片方に足し忘れる、\`Buy ↔ Sell\` のマッピングを 1 箇所でうっかり反転させる、といった事故が静かに発生する。**1 つの enum、1 つの真実の源泉。** 境界を跨ぐメッセージの語彙 (\`Side\` / \`Qty\`) は crate 境界に関係なく共通化して、永続的な型変換処理のコスト (調整税) を払い続ける羽目にならないようにする。
 
-3. **\`qty: Qty\` は \`openhl_clob::Qty(u64)\` を再利用する。** Doc コメントが言うとおり「position size の絶対値」だ。\`PositionSize\` は \`i64\`（signed）だが、close する数量は常に正の値になる。変換（\`Qty(position_size.0.unsigned_abs())\`）は L7 の \`compute::close_order_spec\` で行う。ここでは *出力型* が unsigned であることに commit するだけにとどめる。
+3. **\`qty: Qty\` は \`openhl_clob::Qty(u64)\` を再利用する。** Doc コメントが言うとおり「position size の絶対値」だ。\`PositionSize\` は \`i64\`（signed）だが、close する数量は常に正の値になる。変換（\`Qty(position_size.0.unsigned_abs())\`）は レッスン7 の \`compute::close_order_spec\` で行う。ここでは *出力型* が unsigned であることに commit するだけにとどめる。
 
 > 🛑 **予測。** スクロール前に: \`CloseOrderSpec\` は、close が起きた *理由*（Liquidatable か Underwater か）を表す \`Reason\` フィールドを持っていない。これは持たせるべきか? ヒント: spec を consume するのは誰で、その消費者がどんな情報を必要とするかを考える。
 
-（答え: **持たせない。** Bridge は spec を consume して 2 つのことをする — close order を submit すること、そして Underwater アカウントに対しては insurance fund を credit することだ。エンジンはどちらも signal する。Stage 10c の scanner は \`CloseOrderSpec\` を emit するのと同時に、Underwater だったアカウントに対して \`InsuranceFundDelta\` も emit する。\`CloseOrderSpec\` に \`Reason\` フィールドを足すと、spec と insurance-fund delta のあいだで signal が二重化され、将来のリファクタリングが両者を乖離させうる。**同じ事実を 2 箇所に書かない。上流の出力を真実の源泉として、下流の consumer は必要なものだけを運ぶ。**）
+（答え: **持たせない。** Bridge は spec を consume して 2 つのことをする — close order を submit すること、そして Underwater アカウントに対しては insurance fund を credit することだ。エンジンはどちらも signal する。Liquidation参照実装（スキャナパート） の scanner は \`CloseOrderSpec\` を emit するのと同時に、Underwater だったアカウントに対して \`InsuranceFundDelta\` も emit する。\`CloseOrderSpec\` に \`Reason\` フィールドを足すと、spec と insurance-fund delta のあいだで signal が二重化され、将来のリファクタリングが両者を乖離させうる。**同じ事実を 2 箇所に書かない。上流の出力を真実の源泉として、下流の consumer は必要なものだけを運ぶ。**）
 
 ### Step 3: \`src/lib.rs\` を更新
 
@@ -929,7 +930,7 @@ Warning も error もゼロ。Liquidation crate の \`types\` モジュールは
 
 エラーが出た場合に多い原因:
 
-- **\`error[E0432]: unresolved import 'openhl_clob::Qty'\`** — \`types.rs\` 冒頭の import 行はすでに \`Qty\` を名指しているはずだ（L1 の types.rs scaffold で加えてある）。発火するのは import を削ってしまった場合に限る。出たときは、L1 時点の冒頭行が依然として \`use openhl_clob::{AccountId, Qty, Side};\` と \`use openhl_funding::{MarkPrice, Notional, PositionSize};\` のままになっているか確認する — この import が L2 / L3 の両方をカバーする。
+- **\`error[E0432]: unresolved import 'openhl_clob::Qty'\`** — \`types.rs\` 冒頭の import 行はすでに \`Qty\` を名指しているはずだ（レッスン1 の types.rs scaffold で加えてある）。発火するのは import を削ってしまった場合に限る。出たときは、レッスン1 時点の冒頭行が依然として \`use openhl_clob::{AccountId, Qty, Side};\` と \`use openhl_funding::{MarkPrice, Notional, PositionSize};\` のままになっているか確認する — この import が レッスン2 / レッスン3 の両方をカバーする。
 - **\`error: cannot find type 'Notional'\`** — 根本原因は同じだ。\`use openhl_funding::{…}\` 行に \`Notional\` が含まれているかを確認する。
 
 ## 設計の振り返り
@@ -951,9 +952,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/types.rs ./crates/liquidation/sr
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L3 の後:
-- **types.rs** は **Stage 10a の types.rs と byte-for-byte で完全一致する**。Course 10 の Module 1 はこの types モジュールをそのまま ship する。
-- **lib.rs** はまだ \`pub mod compute;\` と、compute まわりの再エクスポートが揃っていない。これらは L4-L7 で順に加える。
+レッスン3 の後:
+- **types.rs** は **Liquidation参照実装（計算パート） の types.rs と byte-for-byte で完全一致する**。Step 5 (Liquidation) の セクション1 はこの types モジュールをそのまま ship する。
+- **lib.rs** はまだ \`pub mod compute;\` と、compute まわりの再エクスポートが揃っていない。これらは レッスン4〜7 で順に加える。
 
 ## よくある質問
 
@@ -971,15 +972,15 @@ L3 の後:
 
 **Q4: \`CloseOrderSpec\` に上流の文脈用として \`bridge_metadata: Bytes\` フィールドを持たせるべきか?**
 
-いいえ。Stage 10c は \`CloseOrderSpec\` をエンベロープなしでそのまま bridge に渡す。Close を trigger と関連付けたい局面（監査ログ、telemetry）でも、bridge は spec の外側で \`(snapshot.account, current_block_height)\` を使えば足りる。**下流の機能のために上流の型を膨らませない。**
+いいえ。Liquidation参照実装（スキャナパート） は \`CloseOrderSpec\` をエンベロープなしでそのまま bridge に渡す。Close を trigger と関連付けたい局面（監査ログ、telemetry）でも、bridge は spec の外側で \`(snapshot.account, current_block_height)\` を使えば足りる。**下流の機能のために上流の型を膨らませない。**
 
 **Q5: なぜ両構造体が \`Copy\` なのか?**
 
 安価で便利だからだ。\`AccountSnapshot\` は 32 バイト、\`CloseOrderSpec\` は 24 バイトで、このサイズなら Copy は実質タダ。Copy が乗っていないと、2 つ目の参照が欲しいたびに呼び出し側で clone する。**小さな Plain-Old-Data 型は \`Copy\` にする。\`Clone\` に手を伸ばすのは、所有権セマンティクスが本当に意味を持つときだけだ。**
 
-## 次のレッスン (L4)
+## 次のレッスン (レッスン4)
 
-L4 で \`compute\` モジュールが始まる。最初の 2 関数 — \`notional_value\` と \`unrealized_pnl\` — が、liquidation crate にとって最初の挙動テストを呼び込む。同じコードパスがロング・ショートいずれのポジションに対しても正しい符号を生み出す signed-multiplication のトリックを見ていく。さらに、network-pathological な入力に対して乗算を i64 オーバーフローから守るために i128 中間値を経由させる規律も改めて確認する。
+レッスン4 で \`compute\` モジュールが始まる。最初の 2 関数 — \`notional_value\` と \`unrealized_pnl\` — が、liquidation crate にとって最初の挙動テストを呼び込む。同じコードパスがロング・ショートいずれのポジションに対しても正しい符号を生み出す signed-multiplication のトリックを見ていく。さらに、network-pathological な入力に対して乗算を i64 オーバーフローから守るために i128 中間値を経由させる規律も改めて確認する。
 `,
                 },
               ],
@@ -1022,22 +1023,22 @@ cargo test -p openhl-liquidation
 - **\`crates/liquidation/src/compute.rs\` を新規作成。** このファイルはまだ存在しない。モジュール doc、import、公開関数 2 つ、private ヘルパー 1 つ、unit test 8 個を載せた \`#[cfg(test)]\` ブロックを、一気に流し込む。
 - **\`src/lib.rs\` を更新。** \`pub mod compute;\` を追加し、re-export に \`notional_value\` と \`unrealized_pnl\` を足す。
 
-L4 は本クレートで初めてテストが走るレッスンだ。ここから L8（\`close_order_spec\`、Stage 10a の挙動の最後）まで、各レッスンがテストを積み増していく。
+レッスン4 は本クレートで初めてテストが走るレッスンだ。ここから レッスン8（\`close_order_spec\`、Liquidation参照実装（計算パート） の挙動の最後）まで、各レッスンがテストを積み増していく。
 
 ## おさらい
 
-L3 の後:
-- Types モジュールは Stage 10a に対して byte-for-byte 完成している — \`MARGIN_SCALE\`、\`LiquidationParams\`、\`MarginRatio\`、\`MarginHealth\`、\`AccountSnapshot\`、\`CloseOrderSpec\`。
+レッスン3 の後:
+- Types モジュールは Liquidation参照実装（計算パート） に対して byte-for-byte 完成している — \`MARGIN_SCALE\`、\`LiquidationParams\`、\`MarginRatio\`、\`MarginHealth\`、\`AccountSnapshot\`、\`CloseOrderSpec\`。
 - Compute モジュールはまだ存在しない。
 - \`cargo build\` は通る。\`cargo test\` は走るテストがゼロ件だ。
 
-L4 で compute モジュールを作る。最初の 2 関数が答えるのは「このアカウントは *いま* どう見えるか」 — notional exposure と unrealized PnL の 2 つだ。L5 ではその上に equity と margin ratio を積み上げる。
+レッスン4 で compute モジュールを作る。最初の 2 関数が答えるのは「このアカウントは *いま* どう見えるか」 — notional exposure と unrealized PnL の 2 つだ。レッスン5 ではその上に equity と margin ratio を積み上げる。
 
 ## 計画
 
 編集は 2 つ:
 
-1. **\`crates/liquidation/src/compute.rs\` を新規作成。** モジュール doc、L1-L3 から \`AccountSnapshot\` と \`MarkPrice\` を import する \`use\` 文、\`notional_value\`、\`unrealized_pnl\`、private な \`saturate_i128_to_i64\` ヘルパー、\`#[cfg(test)]\` テストブロック（notional 3 個 + PnL 5 個）まで。
+1. **\`crates/liquidation/src/compute.rs\` を新規作成。** モジュール doc、レッスン1〜3 から \`AccountSnapshot\` と \`MarkPrice\` を import する \`use\` 文、\`notional_value\`、\`unrealized_pnl\`、private な \`saturate_i128_to_i64\` ヘルパー、\`#[cfg(test)]\` テストブロック（notional 3 個 + PnL 5 個）まで。
 2. **\`src/lib.rs\` を更新。** \`pub mod compute;\` を追加し、公開 re-export に新関数 2 つを足す。
 
 > 🛑 **予測。** スクロール前に考えてほしい。\`unrealized_pnl\` は long が利益を出しているときも short が利益を出しているときも *正* の値を返してほしい。素朴に書くとこうなる:
@@ -1107,9 +1108,9 @@ use openhl_clob::{Qty, Side};
 use openhl_funding::MarkPrice;
 \`\`\`
 
-モジュール doc に挙げているのは 6 関数だが、L4 で着地するのはそのうちの 2 つ。残り 4 つ（\`account_equity\`、\`margin_ratio\`、\`margin_health\`、\`close_order_spec\`）は L5–L7 で順に追加していく。6 つ全部をいま列挙しておけば、レッスンごとにモジュール doc を編集し直さなくて済む。文脈なしでここに辿り着いた読者にとっても、ロードマップとして機能する。
+モジュール doc に挙げているのは 6 関数だが、レッスン4 で着地するのはそのうちの 2 つ。残り 4 つ（\`account_equity\`、\`margin_ratio\`、\`margin_health\`、\`close_order_spec\`）は レッスン5–レッスン7 で順に追加していく。6 つ全部をいま列挙しておけば、レッスンごとにモジュール doc を編集し直さなくて済む。文脈なしでここに辿り着いた読者にとっても、ロードマップとして機能する。
 
-> 🛑 **やりがちな勘違い。** 「L4 で使うのは \`AccountSnapshot\` と \`MarkPrice\` だけだ。なぜ \`CloseOrderSpec\`、\`Side\`、\`Qty\`、\`LiquidationParams\`、\`MarginHealth\`、\`MarginRatio\` まで import するのか?」 **後のレッスンが全部使うからだ。** L4 でまとめて import を入れておけば、各レッスンの diff は「今回追加する関数」だけに絞れる。L5 以降に到達するまで Rust は unused import の warning を出し続けるが、Funding L1 で後から来る型の rustdoc warning を許容したのと同じ理屈で、ここでも許容する。代わりに \`use\` 行を L4–L7 で 6 回いじる選択肢は busywork でしかなく、各レッスンが実際に追加している部分を見えにくくしてしまう。
+> 🛑 **やりがちな勘違い。** 「レッスン4 で使うのは \`AccountSnapshot\` と \`MarkPrice\` だけだ。なぜ \`CloseOrderSpec\`、\`Side\`、\`Qty\`、\`LiquidationParams\`、\`MarginHealth\`、\`MarginRatio\` まで import するのか?」 **後のレッスンが全部使うからだ。** レッスン4 でまとめて import を入れておけば、各レッスンの diff は「今回追加する関数」だけに絞れる。レッスン5 以降に到達するまで Rust は unused import の warning を出し続けるが、Funding レッスン1 で後から来る型の rustdoc warning を許容したのと同じ理屈で、ここでも許容する。代わりに \`use\` 行を レッスン4–レッスン7 で 6 回いじる選択肢は busywork でしかなく、各レッスンが実際に追加している部分を見えにくくしてしまう。
 
 ### Step 2: \`notional_value\` を追加
 
@@ -1131,11 +1132,11 @@ pub fn notional_value(snapshot: &AccountSnapshot, mark: MarkPrice) -> u64 {
 
 この 7 行の関数で押さえておく点が 3 つ:
 
-1. **返り型は \`u64\`、\`i64\` ではない。** Notional は exposure の *magnitude* なので、常に非負だ。\`u64\` を返せば、呼び出し側が abs を取り忘れる可能性を型レベルで潰せる。Notional を signed な計算に流したい呼び出し側（L5 の \`margin_ratio\` の割り算など）は、呼び出しサイトで明示的に \`i64::from(notional_value(...))\` を書く。**変換は 1 行で済む。代わりに防げるのは、production まで生き残る silent な符号バグの群れだ。**
+1. **返り型は \`u64\`、\`i64\` ではない。** Notional は exposure の *magnitude* なので、常に非負だ。\`u64\` を返せば、呼び出し側が abs を取り忘れる可能性を型レベルで潰せる。Notional を signed な計算に流したい呼び出し側（レッスン5 の \`margin_ratio\` の割り算など）は、呼び出しサイトで明示的に \`i64::from(notional_value(...))\` を書く。**変換は 1 行で済む。代わりに防げるのは、production まで生き残る silent な符号バグの群れだ。**
 
 2. **\`snapshot.position_size.0.unsigned_abs()\` を使う。\`.abs()\` ではない。** \`i64::abs\` は \`i64\` を返すが、\`i64::MIN.abs()\` は safe Rust では未定義動作だ（debug では panic、release では wrap）。一方 \`unsigned_abs\` は \`u64\` を返し、\`i64::MIN\` を含むあらゆる入力に対してきちんと定義されている（\`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808\`）。**Signed integer の magnitude が必要なら、迷わず \`unsigned_abs\`。\`abs\` を使ってよいのは、値が \`MIN\` を取り得ないと確信できるときに限る。**
 
-3. **\`u64::saturating_mul\` であって、\`u64::checked_mul\` ではない。** どちらもオーバーフローを検知するが、\`saturating_mul\` はオーバーフロー時に \`u64::MAX\` を返し、\`checked_mul\` は \`None\` を返す。\`Option<u64>\` を返してしまうと、L5 の \`margin_ratio\` を含むすべての呼び出し側が、*network-pathological な入力でしか起きない* \`None\` を扱うハメになる。Saturating なら、極端な入力に対しても — 数学的には間違っていても — 使える値を返す。どのみちその極端な入力では margin engine はそのアカウントを \`Liquidatable\` と分類するので、上流的な意味でも整合が取れる。**「値は極端だが境界内に収まっている」という保証が、「すべての呼び出しサイトに \`Option\` 型の伝播とボイラープレート (\`?\` / \`unwrap_or\` / 早期 return) を強いるコスト」を上回るとき、正しい failure mode は saturation だ。**
+3. **\`u64::saturating_mul\` であって、\`u64::checked_mul\` ではない。** どちらもオーバーフローを検知するが、\`saturating_mul\` はオーバーフロー時に \`u64::MAX\` を返し、\`checked_mul\` は \`None\` を返す。\`Option<u64>\` を返してしまうと、レッスン5 の \`margin_ratio\` を含むすべての呼び出し側が、*network-pathological な入力でしか起きない* \`None\` を扱うハメになる。Saturating なら、極端な入力に対しても — 数学的には間違っていても — 使える値を返す。どのみちその極端な入力では margin engine はそのアカウントを \`Liquidatable\` と分類するので、上流的な意味でも整合が取れる。**「値は極端だが境界内に収まっている」という保証が、「すべての呼び出しサイトに \`Option\` 型の伝播とボイラープレート (\`?\` / \`unwrap_or\` / 早期 return) を強いるコスト」を上回るとき、正しい failure mode は saturation だ。**
 
 ### Step 3: \`unrealized_pnl\` を追加
 
@@ -1280,7 +1281,7 @@ mod tests {
 
 2. **PnL 4 ケースが、予測コールアウトの 4 通りの符号の組み合わせと一対一に対応している。** \`pnl_long_profit\`、\`pnl_long_loss\`、\`pnl_short_profit\`、\`pnl_short_loss\`。加えて size がゼロのパスをカバーする \`pnl_flat_is_zero\`。これで到達可能な符号の組み合わせはすべてテスト下に入る。**符号の組み合わせの網羅性が load-bearing で、1 つでも漏らすと、将来のリファクタリングで side が silent に反転する余地が残る。**
 
-3. **L4 ではまだ proptest を使わないのに \`use proptest::prelude::*;\` を書いておく。** L5 / L8 で proptest を足すとき、import はすでにここにある状態になる。\`compute.rs\` 本体の bulk import と同じ理屈で、境界で一度だけ書き、それまでの数レッスンは unused import の warning を許容する。
+3. **レッスン4 ではまだ proptest を使わないのに \`use proptest::prelude::*;\` を書いておく。** レッスン5 / レッスン8 で proptest を足すとき、import はすでにここにある状態になる。\`compute.rs\` 本体の bulk import と同じ理屈で、境界で一度だけ書き、それまでの数レッスンは unused import の warning を許容する。
 
 4. **テスト名は文として読める形にする。** \`pnl_long_profit\` は「PnL when long is in profit」と読める。テストが失敗したとき、出力で最初に目に入るのはテスト名だ — 本体を読まなくても何が壊れたか分かる程度には説明的にしておく。**\`fn test_1\` / \`fn test_2\` は CI のノイズだが、文の断片で名付けるなら CI のシグナルになる。**
 
@@ -1311,7 +1312,7 @@ pub use types::{
 変更は 2 箇所:
 
 1. **\`pub mod compute;\`** を \`pub mod types;\` の上に置く — アルファベット順、既存の慣例どおり。
-2. **\`pub use compute::{notional_value, unrealized_pnl};\`** — 新しい re-export 行で、\`types\` の re-export とは別の行に分ける。モジュールごとに自分の行を持たせる方針だ。L5–L7 で関数が増えたら、この compute 側のリストを伸ばしていく。
+2. **\`pub use compute::{notional_value, unrealized_pnl};\`** — 新しい re-export 行で、\`types\` の re-export とは別の行に分ける。モジュールごとに自分の行を持たせる方針だ。レッスン5–レッスン7 で関数が増えたら、この compute 側のリストを伸ばしていく。
 
 ### Step 7: テストを走らせる
 
@@ -1339,7 +1340,7 @@ test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 よくあるエラー:
 
-- **\`warning: unused import: ...\`** — まとめて入れた import に対する warning だ。想定どおりで、L7 までには消える。
+- **\`warning: unused import: ...\`** — まとめて入れた import に対する warning だ。想定どおりで、レッスン7 までには消える。
 - **\`error[E0599]: no method named 'unsigned_abs' found for type 'i64'\`** — Rust のバージョンが古い。\`unsigned_abs\` は Rust 1.51（2021）で安定化された。プロジェクトの \`rust-toolchain.toml\` で十分新しいバージョンが pin されているはずだ。
 - **テストが \`attempt to multiply with overflow\` で落ちる。** debug ビルドで \`saturating_mul\` の代わりに \`*\` を書いてしまっている。置き換える。
 
@@ -1362,8 +1363,8 @@ diff -u ~/code/my-openhl/crates/liquidation/src/compute.rs ./crates/liquidation/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L4 の後:
-- **compute.rs** は Stage 10a の \`compute.rs\` の最初の ~80 行と一致する — モジュール doc、import、\`notional_value\`、\`unrealized_pnl\`、ヘルパー、最初の 8 テストまで。それ以降（残り 4 関数とそのテスト、proptest 3 つ）は L5–L7 で着地する。
+レッスン4 の後:
+- **compute.rs** は Liquidation参照実装（計算パート） の \`compute.rs\` の最初の ~80 行と一致する — モジュール doc、import、\`notional_value\`、\`unrealized_pnl\`、ヘルパー、最初の 8 テストまで。それ以降（残り 4 関数とそのテスト、proptest 3 つ）は レッスン5–レッスン7 で着地する。
 - **lib.rs** はまだ compute 側の追加 re-export 4 つ（\`account_equity\`、\`margin_ratio\`、\`margin_health\`、\`close_order_spec\`）を持たない。これらは順次到着する。
 
 ## よくある質問
@@ -1388,9 +1389,9 @@ L4 の後:
 
 \`MarkPrice\` は \`Copy\` で、サイズは 8 byte（\`u64\`）だ。このサイズの \`Copy\` 型なら、値渡しのほうが参照渡しより安い — ポインタ間接参照もなく、aliasing の懸念もない。**型のサイズが大きくコピーが高価なとき、あるいは所有権セマンティクスに意味があるときに \`&\` へ手を伸ばす。プリミティブをラップした \`Copy\` newtype については、値渡しが正しいデフォルトだ。**
 
-## 次のレッスン (L5)
+## 次のレッスン (レッスン5)
 
-L5 では \`account_equity\` と \`margin_ratio\` を追加する。そこで **Stage 10a で最も教育的に load-bearing な発見**に出会う: levered regime での \`margin_ratio\` の非単調性だ。読者はまず proptest を書く（「long に対して mark が上がれば margin_ratio も上がるはず」）。それが小さな入力群で失敗するのを目にする。なぜそれが「バグではなく本物の失敗」なのかを辿り、\`prop_assume!\` を使って実際に成り立つ不変量を表現するように proptest を refine する。学習者が margin math について最初に持っていたメンタルモデルが、いったん壊されてから再構築されるレッスンだ。
+レッスン5 では \`account_equity\` と \`margin_ratio\` を追加する。そこで **Liquidation参照実装（計算パート） で最も教育的に load-bearing な発見**に出会う: levered regime での \`margin_ratio\` の非単調性だ。読者はまず proptest を書く（「long に対して mark が上がれば margin_ratio も上がるはず」）。それが小さな入力群で失敗するのを目にする。なぜそれが「バグではなく本物の失敗」なのかを辿り、\`prop_assume!\` を使って実際に成り立つ不変量を表現するように proptest を refine する。学習者が margin math について最初に持っていたメンタルモデルが、いったん壊されてから再構築されるレッスンだ。
 `,
                 },
                 {
@@ -1419,23 +1420,23 @@ L5 では \`account_equity\` と \`margin_ratio\` を追加する。そこで **
 cargo test -p openhl-liquidation
 \`\`\`
 
-…で 16 テストが pass する（L4 の 8 + 新規 unit test 5 + proptest 3、proptest は各デフォルトの 256 ケース）。
+…で 16 テストが pass する（レッスン4 の 8 + 新規 unit test 5 + proptest 3、proptest は各デフォルトの 256 ケース）。
 
 具体的な変更:
 
-- **\`src/compute.rs\`。** L4 の内容の下に、\`account_equity\`、\`margin_ratio\`、unit test 5 個、proptest 3 個を追記する。
+- **\`src/compute.rs\`。** レッスン4 の内容の下に、\`account_equity\`、\`margin_ratio\`、unit test 5 個、proptest 3 個を追記する。
 - **\`src/lib.rs\`。** \`pub use compute::{...}\` の re-export に \`account_equity\` と \`margin_ratio\` を足す。
 
-L5 は Stage 10a の教育的な中心だ。急がないこと。「書く → 失敗する → トレースする → refine する」という proptest の discovery loop こそ、本レッスンが教えるために存在する load-bearing なスキルだ。
+レッスン5 は Liquidation参照実装（計算パート） の教育的な中心だ。急がないこと。「書く → 失敗する → トレースする → refine する」という proptest の discovery loop こそ、本レッスンが教えるために存在する load-bearing なスキルだ。
 
 ## おさらい
 
-L4 の後:
+レッスン4 の後:
 - Compute モジュールが存在し、\`notional_value\`、\`unrealized_pnl\`、private な \`saturate_i128_to_i64\` ヘルパーがある。
 - 8 個の unit test が、PnL の 4 つの符号の組み合わせと notional の 3 ケース（long、short、flat）をカバーする。
 - \`cargo test\` が 8 テスト全部 green。
 
-L5 では次のレイヤーを積む: PnL を account equity に変換し（collateral を足す）、その equity を notional で割って margin ratio を得る。それから最初の proptest を書き、本ステージを定義するサプライズに出会う。
+レッスン5 では次のレイヤーを積む: PnL を account equity に変換し（collateral を足す）、その equity を notional で割って margin ratio を得る。それから最初の proptest を書き、本ステージを定義するサプライズに出会う。
 
 ## 計画
 
@@ -1468,7 +1469,7 @@ L5 では次のレイヤーを積む: PnL を account equity に変換し（coll
 /// A negative equity means losses have exceeded deposited collateral —
 /// the account is underwater. The liquidation engine still attempts to
 /// close the position; any residual deficit falls to the insurance fund
-/// (Stage 10b).
+/// (Liquidation参照実装（保険基金パート）).
 #[must_use]
 pub fn account_equity(snapshot: &AccountSnapshot, mark: MarkPrice) -> i64 {
     snapshot
@@ -1515,7 +1516,7 @@ pub fn margin_ratio(snapshot: &AccountSnapshot, mark: MarkPrice) -> MarginRatio 
 
 この関数で押さえておく点が 5 つ:
 
-1. **\`notional == 0\` の early return で \`i64::MAX\` を返す。** Flat ポジションは exposure ゼロ → 下回るべき margin 要件もない。表現可能な最大の ratio を返すことが「無限に safe」のシグナルになり、下流の \`margin_health\` の比較すべてを自然に short-circuit させる（\`margin_health\` 側に special-case はいらない）。**具体的には、次レッスン (L6) で実装する \`if ratio >= params.initial_margin_bps { Safe } else { ... }\` という一方向の比較式が、flat なアカウントに対しても追加の特例分岐なしでそのまま機能し、\`i64::MAX >= initial_margin_bps\` が常に真なので自動的に \`Safe\` と判定される**。つまり \`i64::MAX\` は **「下流の比較演算が短絡的に通り抜けるための magic boundary」** として効いている。代替案 — \`Option<MarginRatio>\` や \`Result<MarginRatio>\` — はすべての呼び出し側に flat ケースを明示的に扱わせる。**「制約なし」のケースを、システム上最も safe な上限値で表現する設計規律だ。**
+1. **\`notional == 0\` の early return で \`i64::MAX\` を返す。** Flat ポジションは exposure ゼロ → 下回るべき margin 要件もない。表現可能な最大の ratio を返すことが「無限に safe」のシグナルになり、下流の \`margin_health\` の比較すべてを自然に short-circuit させる（\`margin_health\` 側に special-case はいらない）。**具体的には、次レッスン (レッスン6) で実装する \`if ratio >= params.initial_margin_bps { Safe } else { ... }\` という一方向の比較式が、flat なアカウントに対しても追加の特例分岐なしでそのまま機能し、\`i64::MAX >= initial_margin_bps\` が常に真なので自動的に \`Safe\` と判定される**。つまり \`i64::MAX\` は **「下流の比較演算が短絡的に通り抜けるための magic boundary」** として効いている。代替案 — \`Option<MarginRatio>\` や \`Result<MarginRatio>\` — はすべての呼び出し側に flat ケースを明示的に扱わせる。**「制約なし」のケースを、システム上最も safe な上限値で表現する設計規律だ。**
 
 2. **乗算を除算より *先* に置く。** \`equity × MARGIN_SCALE / notional\` を i128 で計算すれば、小さい ratio（例えば 1% margin = 100 bps）も割り算を生き残る。先に除算する（\`equity / notional × MARGIN_SCALE\` を i64 で）と、スケーリングの前に整数パーセントに切り捨てられ、精度が失われる。**整数除算が混じるとき、演算順序が効く。**
 
@@ -1527,7 +1528,7 @@ pub fn margin_ratio(snapshot: &AccountSnapshot, mark: MarkPrice) -> MarginRatio 
 
 ### Step 3: unit test を 5 個追加
 
-既存の \`#[cfg(test)] mod tests { ... }\` ブロックの中、L4 の PnL テストの後に追加:
+既存の \`#[cfg(test)] mod tests { ... }\` ブロックの中、レッスン4 の PnL テストの後に追加:
 
 \`\`\`rust
     // ─── account_equity ────────────────────────────────────────────
@@ -1577,7 +1578,7 @@ pub fn margin_ratio(snapshot: &AccountSnapshot, mark: MarkPrice) -> MarginRatio 
 
 2. **\`ratio_can_be_negative\` は \`assert_eq!(r, MarginRatio(-8000))\` ではなく \`assert!(r.0 < 0)\` を使う。** 厳密な ratio 値は割り算の i64 rounding に依存する。bps を厳密に固定すると、唯一正典的な答えのない演算をロックインしてしまう（rounding mode が違えば LSB が変わる）。*符号* だけを assert することで、「equity が負なら ratio も負」という load-bearing な性質をテストし、rounding artifact はテストしない形になる。**Property をテストする、artifact をテストしない。**
 
-3. **\`ratio_flat_returns_max\` は \`MarginRatio(i64::MAX)\` を直接使う。** Sentinel 値は契約の一部で、L6 の \`margin_health\` がそれに依存する。
+3. **\`ratio_flat_returns_max\` は \`MarginRatio(i64::MAX)\` を直接使う。** Sentinel 値は契約の一部で、レッスン6 の \`margin_health\` がそれに依存する。
 
 ### Step 4: Proptest を書く — 素朴な初版
 
@@ -1696,7 +1697,7 @@ mark が上がるにつれて margin ratio は 400% から 250% に下がった�
       という暗黙の前提**の下では正しい。proptest はその前提を可視化させる装置だ。
 \`\`\`
 
-この図は L6 / L7 で classifier やリクイデーション規律を書くときにも参照する: 健康な trader はほぼ levered 領域に居るが、極端に over-collateralize した「擬似ロング」のアカウントが cash-heavy 領域に紛れ込む可能性は常にあるので、エンジンは両 regime で正しく動かなければならない。
+この図は レッスン6 / レッスン7 で classifier やリクイデーション規律を書くときにも参照する: 健康な trader はほぼ levered 領域に居るが、極端に over-collateralize した「擬似ロング」のアカウントが cash-heavy 領域に紛れ込む可能性は常にあるので、エンジンは両 regime で正しく動かなければならない。
 
 失敗した入力では \`entry × size = 100 × 1 = 100\`、\`collateral = 103\`。\`collateral > entry × size\` なので、mark が上がると ratio が下がる cash-heavy regime に居る。
 
@@ -1888,9 +1889,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/compute.rs ./crates/liquidation/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L5 の後:
-- **compute.rs** は Stage 10a を \`margin_ratio\` + 最初の 13 unit test + 3 proptest すべてまで一致する。残る 2 関数（L6 の \`margin_health\`、L7 の \`close_order_spec\`）とそのテストは pending。
-- **lib.rs** は compute の re-export を 6 個中 4 個持つ — \`notional_value\`、\`unrealized_pnl\`、\`account_equity\`、\`margin_ratio\`。残り 2 つは L6 / L7 で着地する。
+レッスン5 の後:
+- **compute.rs** は Liquidation参照実装（計算パート） を \`margin_ratio\` + 最初の 13 unit test + 3 proptest すべてまで一致する。残る 2 関数（レッスン6 の \`margin_health\`、レッスン7 の \`close_order_spec\`）とそのテストは pending。
+- **lib.rs** は compute の re-export を 6 個中 4 個持つ — \`notional_value\`、\`unrealized_pnl\`、\`account_equity\`、\`margin_ratio\`。残り 2 つは レッスン6 / レッスン7 で着地する。
 
 ## よくある質問
 
@@ -1914,9 +1915,9 @@ Margin ratio は \`equity / notional\` のスケールにすぎない。数学�
 
 \`collateral ≥ entry × size\` のとき。cash-heavy regime で、ポジションが over-collateralized すぎて liquidation できない領域だ。その regime では mark が動くと margin ratio は上下するが、maintenance を下回ることはない。エンジンは何もする必要がない。**Monotonicity が破れるケースは、ちょうどエンジンが気にしないケースに重なる — だから \`prop_assume!\` で除外するのは workaround ではなく、正しい動きだ。**
 
-## 次のレッスン (L6)
+## 次のレッスン (レッスン6)
 
-L6 では \`margin_health\` を追加する — \`MarginRatio\` を params と比較して、4 つの \`MarginHealth\` variant のどれか 1 つにマップする関数だ。境界の unit test 5 個（Safe / AtRisk / Liquidatable / Underwater / ちょうど maintenance の端）と、各しきい値で strict-less-than を使う理由の議論を載せる。L5 より短い — L6 までに規律は内面化されている。L6 は応用編だ。
+レッスン6 では \`margin_health\` を追加する — \`MarginRatio\` を params と比較して、4 つの \`MarginHealth\` variant のどれか 1 つにマップする関数だ。境界の unit test 5 個（Safe / AtRisk / Liquidatable / Underwater / ちょうど maintenance の端）と、各しきい値で strict-less-than を使う理由の議論を載せる。レッスン5 より短い — レッスン6 までに規律は内面化されている。レッスン6 は応用編だ。
 `,
                 },
                 {
@@ -1943,23 +1944,23 @@ L6 では \`margin_health\` を追加する — \`MarginRatio\` を params と�
 cargo test -p openhl-liquidation
 \`\`\`
 
-…で 21 テストが pass する（L4-L5 の 16 + 新規境界テスト 5）。
+…で 21 テストが pass する（レッスン4-レッスン5 の 16 + 新規境界テスト 5）。
 
 具体的な変更:
 
 - **\`src/compute.rs\`。** \`margin_ratio\` の後に \`margin_health\` を追記し、既存のテストモジュールに unit test 5 個を加える。
 - **\`src/lib.rs\`。** Compute の re-export を \`margin_health\` で拡張する。
 
-L6 は応用編だ。ここまでに i128 / saturate / proptest の規律は内面化されている。分類カスケードは短い — だが design hill（カスケード順 + strict-less-than）こそが、不注意な実装でバグが潜みやすい場所だ。
+レッスン6 は応用編だ。ここまでに i128 / saturate / proptest の規律は内面化されている。分類カスケードは短い — だが design hill（カスケード順 + strict-less-than）こそが、不注意な実装でバグが潜みやすい場所だ。
 
 ## おさらい
 
-L5 の後:
+レッスン5 の後:
 - \`compute.rs\` には \`notional_value\`、\`unrealized_pnl\`、\`account_equity\`、\`margin_ratio\`、\`saturate_i128_to_i64\` ヘルパー、加えて 13 unit test と 3 proptest が揃っている。
 - 非単調エッジケースは \`long_ratio_monotonic_in_mark_when_levered\` の \`prop_assume!\` で表現済み。
 - \`cargo test\` は 16 テストを走らせ、すべて green。
 
-L6 では \`MarginRatio\` の値を \`MarginHealth\` の variant にマップする。関数は短い。決定は短くない。
+レッスン6 では \`MarginRatio\` の値を \`MarginHealth\` の variant にマップする。関数は短い。決定は短くない。
 
 ## 計画
 
@@ -2007,7 +2008,7 @@ L6 では \`MarginRatio\` の値を \`MarginHealth\` の variant にマップす
             silent に流される。数学が解けていない不足を、帳簿は solvent な close として記録する。
 \`\`\`
 
-ポイント: **カスケードを「最も極端な領域から先に切り出していく narrowing」として書くと、各分岐の条件は自然に上の分岐の補集合の中だけで成立する**。逆に「広い領域から先に check」にすると、より極端な領域 (Underwater) が広い領域 (Liquidatable) に吸収されてしまい、本来 4 つあるはずの分類が 3 つに退化する。L7 で \`close_order_spec\` がこの 4 状態を見て発火するかどうかを決めるので、この narrowing が崩れると下流の挙動全体が壊れる。
+ポイント: **カスケードを「最も極端な領域から先に切り出していく narrowing」として書くと、各分岐の条件は自然に上の分岐の補集合の中だけで成立する**。逆に「広い領域から先に check」にすると、より極端な領域 (Underwater) が広い領域 (Liquidatable) に吸収されてしまい、本来 4 つあるはずの分類が 3 つに退化する。レッスン7 で \`close_order_spec\` がこの 4 状態を見て発火するかどうかを決めるので、この narrowing が崩れると下流の挙動全体が壊れる。
 
 ## 手を動かす walk-through
 
@@ -2054,7 +2055,7 @@ pub fn margin_health(
 
 3. **\`i64::from(params.initial_margin_bps)\` が u32 → i64 を widen する。** フィールドは \`u32\`（メモリ節約。bps 値は ~40 億まで十分な範囲だ）。Ratio は \`i64\`（\`margin_ratio\` の signed 除算によって型がそうなっている）。Rust では異なる integer 型同士の比較はコンパイルエラーになる。境界で widening しておけば、本体の比較はクリーンに保てる。**Params ごとに 1 回キャストする。カスケード本体は純粋な i64 < i64 として読める。**
 
-4. **Flat ポジション用の special case がない。** \`margin_ratio\` は flat アカウントに対して \`MarginRatio(i64::MAX)\` を返す。\`i64::MAX\` は妥当な \`initial_margin_bps\` のどれよりも遥かに大きいので、カスケードはそのまま \`Safe\` まで fall through する。**Flat-as-Safe の性質は \`margin_ratio\` の flat-position ガードに既に反映されている。\`margin_health\` はそれを知らなくてよい。** これは **関数の合成 (function composition) によって、上流が確立した不変量を下流が自然に継承する** という設計の実例だ — \`margin_ratio\` 側で「flat なら i64::MAX」を 1 箇所だけ決めれば、それを呼ぶすべての下流関数 (この \`margin_health\` も、L7 の \`close_order_spec\` も) が「flat = 必ず Safe に着地する」を**追加コードゼロで**手にする。「関数内で何でもフラグ分岐を足す」癖を持つ開発者は、ここでパラダイムを切り替える価値がある: **不変量の責務を 1 箇所に閉じ込め、下流は信頼するだけ**。Flat-position セマンティクスを将来微調整したくなったとき、変更は *1 箇所*（\`margin_ratio\`）で済む — 2 つの同期した分岐を抱えずに済む。
+4. **Flat ポジション用の special case がない。** \`margin_ratio\` は flat アカウントに対して \`MarginRatio(i64::MAX)\` を返す。\`i64::MAX\` は妥当な \`initial_margin_bps\` のどれよりも遥かに大きいので、カスケードはそのまま \`Safe\` まで fall through する。**Flat-as-Safe の性質は \`margin_ratio\` の flat-position ガードに既に反映されている。\`margin_health\` はそれを知らなくてよい。** これは **関数の合成 (function composition) によって、上流が確立した不変量を下流が自然に継承する** という設計の実例だ — \`margin_ratio\` 側で「flat なら i64::MAX」を 1 箇所だけ決めれば、それを呼ぶすべての下流関数 (この \`margin_health\` も、レッスン7 の \`close_order_spec\` も) が「flat = 必ず Safe に着地する」を**追加コードゼロで**手にする。「関数内で何でもフラグ分岐を足す」癖を持つ開発者は、ここでパラダイムを切り替える価値がある: **不変量の責務を 1 箇所に閉じ込め、下流は信頼するだけ**。Flat-position セマンティクスを将来微調整したくなったとき、変更は *1 箇所*（\`margin_ratio\`）で済む — 2 つの同期した分岐を抱えずに済む。
 
 5. **関数は \`&LiquidationParams\` を受け取る。値の \`LiquidationParams\` ではない。** \`LiquidationParams\` は \`Copy\`（12 byte）だが、参照シグネチャは「これは読むだけで consume しない」と読み手にシグナルする。Bridge は同じ \`params\` を、スキャン中のすべての \`margin_health\` 呼び出しに渡す。参照渡しなら、呼び出しごとの（技術的には無償の）move を避けられる。
 
@@ -2124,7 +2125,7 @@ pub fn margin_health(
 
 3. **\`health_boundary_at_maintenance\` は \`hyperliquid_default()\` ではなく、独自に params を組み立てる。** Hyperliquid default は \`liquidation_fee_bps = 150\` を持つが、このテストには無関係だ。明示的に struct を構築することで、「このテストが *実際に* どのフィールドに依存するか」が文書化される。他のテストは fee フィールドが load-bearing でないので default を使う。
 
-4. **\`MarginHealth::Underwater\` は L5 の underwater ケース**（薄い collateral の long ポジションに対する \`mark = 50\`）で exercise する。L5 の \`ratio_can_be_negative\` と同じセットアップだ — 負の ratio テストが数学を保証し、variant テストが分類を保証する、という形になる。
+4. **\`MarginHealth::Underwater\` は レッスン5 の underwater ケース**（薄い collateral の long ポジションに対する \`mark = 50\`）で exercise する。レッスン5 の \`ratio_can_be_negative\` と同じセットアップだ — 負の ratio テストが数学を保証し、variant テストが分類を保証する、という形になる。
 
 ### Step 3: \`src/lib.rs\` を更新
 
@@ -2203,9 +2204,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/compute.rs ./crates/liquidation/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L6 の後:
-- **compute.rs** は Stage 10a を \`margin_health\` + 18 unit test + 3 proptest まで一致する。最後の関数（\`close_order_spec\`）とその 3 テストは L7。
-- **lib.rs** は compute の re-export を 6 個中 5 個持つ。最後の 1 つ（\`close_order_spec\`）は L7 で着地する。
+レッスン6 の後:
+- **compute.rs** は Liquidation参照実装（計算パート） を \`margin_health\` + 18 unit test + 3 proptest まで一致する。最後の関数（\`close_order_spec\`）とその 3 テストは レッスン7。
+- **lib.rs** は compute の re-export を 6 個中 5 個持つ。最後の 1 つ（\`close_order_spec\`）は レッスン7 で着地する。
 
 ## よくある質問
 
@@ -2229,27 +2230,27 @@ L6 の後:
 
 Rust の \`match\` は exclusive-range pattern をサポートする（1.26 から）ので、構文的にはイエス。だがパターンは \`i64::MIN..0\`、\`0..maintenance_bps\`、\`maintenance_bps..initial_bps\`、\`initial_bps..=i64::MAX\` になる。*名前付き* の境界（リテラルではなく変数）を参照する必要があるので、各パターンに結局 guard 句が必要だ。If/else カスケードのほうがここではクリーンに読める。**Structural なケースには \`match\`、同じ値に対する不等式カスケードには \`if/else\`。**
 
-## 次のレッスン (L7)
+## 次のレッスン (レッスン7)
 
-L7 では \`close_order_spec\` で Stage 10a を閉じる — snapshot を bridge が consume する \`CloseOrderSpec\` に変換する関数だ。Unit test は 3 つ: long-closes-with-Sell、short-closes-with-Buy、flat-position エッジケース（qty = 0）。L6 より短い — L7 の時点で compute モジュール全体は背後に揃っていて、レッスンの大半は L4 の \`unsigned_abs\` 規律と、エンジンの外向きインターフェースとの間を橋渡しすることに費やされる。
+レッスン7 では \`close_order_spec\` で Liquidation参照実装（計算パート） を閉じる — snapshot を bridge が consume する \`CloseOrderSpec\` に変換する関数だ。Unit test は 3 つ: long-closes-with-Sell、short-closes-with-Buy、flat-position エッジケース（qty = 0）。レッスン6 より短い — レッスン7 の時点で compute モジュール全体は背後に揃っていて、レッスンの大半は レッスン4 の \`unsigned_abs\` 規律と、エンジンの外向きインターフェースとの間を橋渡しすることに費やされる。
 `,
                 },
                 {
-                  title: "レッスン 7 — close_order_spec — Stage 10a の最後の関数",
+                  title: "レッスン 7 — close_order_spec — Liquidation参照実装（計算パート） の最後の関数",
                   slug: "openhl-liquidation-close-order-spec-ja",
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 20,
                   xpReward: 40,
-                  content: `# レッスン 7 — \`close_order_spec\` — Stage 10a の最後の関数
+                  content: `# レッスン 7 — \`close_order_spec\` — Liquidation参照実装（計算パート） の最後の関数
 
 ## ゴール
 
 このレッスンで掴む概念:
 
 - **ポジションを close する基本ルール。** Long は *売って* close、short は *買って* close。Side は常にポジション方向の反対 — エンジンは side を決めるのではなく、ただ反転させるだけだ。
-- **Public 境界での \`unsigned_abs\`。** L4 の規律（\`i64\` には \`abs\` ではなく \`unsigned_abs\`）が、bridge と会話する関数で表に出てくる。出力の \`Qty(u64)\` は CLOB matching engine が期待する型 — エンジンは符号変換を自分の境界に押し付ける。
-- **\`close_order_spec\` が flat ポジションをフィルタしない理由。** Flat ポジションは \`qty == 0\` の spec を生成する。Bridge が submit 前にフィルタする。\`close_order_spec\` を total かつ side-effect-free に保つことで、Stage 10c の multi-account scanner と compose しやすくなる。
+- **Public 境界での \`unsigned_abs\`。** レッスン4 の規律（\`i64\` には \`abs\` ではなく \`unsigned_abs\`）が、bridge と会話する関数で表に出てくる。出力の \`Qty(u64)\` は CLOB matching engine が期待する型 — エンジンは符号変換を自分の境界に押し付ける。
+- **\`close_order_spec\` が flat ポジションをフィルタしない理由。** Flat ポジションは \`qty == 0\` の spec を生成する。Bridge が submit 前にフィルタする。\`close_order_spec\` を total かつ side-effect-free に保つことで、Liquidation参照実装（スキャナパート） の multi-account scanner と compose しやすくなる。
 - **単一責任のスコープ。** \`close_order_spec\` は \`MarkPrice\` を受け取らない（market order は price を持たない）し、\`LiquidationParams\` も受け取らない（liquidate するか否かの判断は \`margin_health\` の仕事だ）。Snapshot を 1 つ入れて、spec を 1 つ出す。
 
 確認:
@@ -2258,23 +2259,23 @@ L7 では \`close_order_spec\` で Stage 10a を閉じる — snapshot を bridg
 cargo test -p openhl-liquidation
 \`\`\`
 
-…で 24 テストが pass する（L4-L6 の 21 + close-side の 3 ケース用の新規テスト 3）。**Stage 10a が \`22eedf9\` に対して byte-for-byte で完成する。**
+…で 24 テストが pass する（レッスン4-レッスン6 の 21 + close-side の 3 ケース用の新規テスト 3）。**Liquidation参照実装（計算パート） が \`22eedf9\` に対して byte-for-byte で完成する。**
 
 具体的な変更:
 
 - **\`src/compute.rs\`。** \`margin_health\` の後に \`close_order_spec\` を追記し、既存のテストモジュールに unit test 3 個を加える。
 - **\`src/lib.rs\`。** Compute の re-export を \`close_order_spec\` で拡張する。
 
-L7 は Stage 10a で最短のレッスンだ。関数自体は 11 行 — このレッスンの存在理由は、side-inversion ルールをロックし、pure-compute モジュールの完成をマークすることにある。
+レッスン7 は Liquidation参照実装（計算パート） で最短のレッスンだ。関数自体は 11 行 — このレッスンの存在理由は、side-inversion ルールをロックし、pure-compute モジュールの完成をマークすることにある。
 
 ## おさらい
 
-L6 の後:
+レッスン6 の後:
 - \`compute.rs\` には \`notional_value\`、\`unrealized_pnl\`、\`account_equity\`、\`margin_ratio\`、\`margin_health\` + \`saturate_i128_to_i64\` ヘルパー + 18 unit test + 3 proptest が揃っている。
 - \`lib.rs\` は compute 関数 6 個中 5 個を re-export 済み（\`close_order_spec\` だけが残っている）。
 - \`cargo test\` は 21 テストを走らせ、すべて green。
 
-L7 で Stage 10a を閉じる。本レッスンの後、\`22eedf9\` に対する答え合わせ diff は \`compute.rs\` と \`lib.rs\` の両方で完全にクリーンになる。
+レッスン7 で Liquidation参照実装（計算パート） を閉じる。本レッスンの後、\`22eedf9\` に対する答え合わせ diff は \`compute.rs\` と \`lib.rs\` の両方で完全にクリーンになる。
 
 ## 計画
 
@@ -2310,7 +2311,7 @@ L7 で Stage 10a を閉じる。本レッスンの後、\`22eedf9\` に対する
    └─────────────────────────────┘                  └─────────────────────────────┘
 
    ※ \`close_order_spec\` が決めるのは「方向を反転」「magnitude を \`unsigned_abs\` で取り出す」の 2 つだけ。
-     ・「liquidate するかどうか」の意思決定は L6 \`margin_health\` が完了させている。
+     ・「liquidate するかどうか」の意思決定は レッスン6 \`margin_health\` が完了させている。
      ・「いくらで close するか」の価格決定は matching engine (CLOB) の板が決める。
      ・「flat の spec を出さない」のフィルタは Bridge が submit 前に行う。
    各レイヤーがちょうど 1 つの関心事を持ち、それらが直列に compose されている。
@@ -2356,13 +2357,13 @@ pub fn close_order_spec(snapshot: &AccountSnapshot) -> CloseOrderSpec {
 
 1. **Side は *常にポジション方向の反対*。** トレーダーは \`size\` ユニットを保有している（正 = long、負 = short）。Close するために、エンジンは反対 side の order を submit する: long は売って unwind、short は買って unwind。**Matching engine は close の *意図* を気にしない。Side が乗った order が来た、と見えるだけだ。「反対 side」ルールが、ポジション方向と order side との間の橋を成立させている全部だ。**
 
-2. **\`unsigned_abs()\` が magnitude を \`u64\` として返す。** L4 と同じ規律が public 境界に現れている。\`Qty\` は \`u64\` をラップしているので、magnitude は \`Qty(abs_size)\` にそのまま流れ込む。中間の \`as u64\` キャストはいらない。**関数は符号変換を、ちょうど 1 度、符号付き position-size と符号なし order-quantity が出会う境界で行う。**
+2. **\`unsigned_abs()\` が magnitude を \`u64\` として返す。** レッスン4 と同じ規律が public 境界に現れている。\`Qty\` は \`u64\` をラップしているので、magnitude は \`Qty(abs_size)\` にそのまま流れ込む。中間の \`as u64\` キャストはいらない。**関数は符号変換を、ちょうど 1 度、符号付き position-size と符号なし order-quantity が出会う境界で行う。**
 
 3. **\`if snapshot.position_size.0 > 0\` — strict greater-than。** Flat ポジション（\`size == 0\`）は \`else\` 分岐に落ちて \`Side::Buy\` を受け取る。Qty も 0 になるので無害だ — spec は存在するものの、意味は持たない。**関数の中で flat path を special-case しない。** Bridge が submit 前に \`qty == 0\` の spec をフィルタする。
 
 4. **\`mark\` なし、\`params\` なし。** \`close_order_spec\` に必要なのは snapshot だけだ。「Close するか否か」の判断は \`margin_health\` に住み、price discovery は matching engine で起きる。**各関数がちょうど 1 つの関心事を所有する。Bridge がそれらを compose する: スキャン → 分類 → close spec 生成 → submit、という流れになる。**
 
-5. **\`Option<CloseOrderSpec>\` ではなく \`CloseOrderSpec\` を値で返す。** 関数は total（全域関数）だ — flat ポジション（\`qty == 0\`）でも常に spec を返す。代替案として \`Option\` を返すと、スキャン内のすべての flat アカウントに対して呼び出し側に \`None\` を扱わせる— close ステップに到達する頃にはそれらのアカウントはすでに前段でフィルタされているのに、だ。**Total な関数は圧倒的に compose（結合）しやすい。Optional な関数は、すべての呼び出し側に空ケースの処理（ボイラープレート）を強用する。** 具体的に効いてくるのは Stage 10c で実装する \`LiquidationScanner\` だ: 全アカウントのスナップショットを \`filter_map\` や \`Option\` chaining なしに**単なる \`map\` や平坦な \`for\` ループで均質に処理**できる。\`close_order_spec\` が total だからこそ、scanner は「\`Liquidatable\` か \`Underwater\` か」の分類フィルタを 1 箇所で書けば済み、close-spec 生成側で再度フィルタする必要がない。**エッジケース (flat → qty 0 の spec は submit しない) のフィルタリングは、入出力の最外殻である bridge レイヤーにのみ集約する** — これが crate を貫く規律になっている。
+5. **\`Option<CloseOrderSpec>\` ではなく \`CloseOrderSpec\` を値で返す。** 関数は total（全域関数）だ — flat ポジション（\`qty == 0\`）でも常に spec を返す。代替案として \`Option\` を返すと、スキャン内のすべての flat アカウントに対して呼び出し側に \`None\` を扱わせる— close ステップに到達する頃にはそれらのアカウントはすでに前段でフィルタされているのに、だ。**Total な関数は圧倒的に compose（結合）しやすい。Optional な関数は、すべての呼び出し側に空ケースの処理（ボイラープレート）を強用する。** 具体的に効いてくるのは Liquidation参照実装（スキャナパート） で実装する \`LiquidationScanner\` だ: 全アカウントのスナップショットを \`filter_map\` や \`Option\` chaining なしに**単なる \`map\` や平坦な \`for\` ループで均質に処理**できる。\`close_order_spec\` が total だからこそ、scanner は「\`Liquidatable\` か \`Underwater\` か」の分類フィルタを 1 箇所で書けば済み、close-spec 生成側で再度フィルタする必要がない。**エッジケース (flat → qty 0 の spec は submit しない) のフィルタリングは、入出力の最外殻である bridge レイヤーにのみ集約する** — これが crate を貫く規律になっている。
 
 > 🛑 **やりがちな勘違い。** 「\`if size >= 0 { Sell } else { Buy }\` ではダメか — そうすれば flat が Sell として扱われ、一部のテスト取引所と挙動が揃う」 **問題が 3 つある。** (1) Flat-as-Sell は挙動の選択であり、pure compute ではなく bridge に属する判断だ。(2) 現在の \`> 0\` は「flat ポジションは long でも short でもない」という事実を正しく反映している。(3) \`qty == 0 + Side::Sell\` の本番セマンティクスは matching engine では未定義。Bridge はどのみちフィルタしなければならない。**呼び出し側に最もクリーンな契約を提供する慣例を選ぶ — エッジケースを隠す慣例ではなく。**
 
@@ -2465,12 +2466,12 @@ test compute::tests::short_ratio_monotonic_in_mark ... ok
 test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**24 テスト pass、Stage 10a の内容が完成。** Liquidation crate の pure-compute モジュール — margin math + 分類 + close-order 生成 — があなたの workspace に揃い、\`22eedf9\` に対する答え合わせ diff は完全にクリーンになる。
+**24 テスト pass、Liquidation参照実装（計算パート） の内容が完成。** Liquidation crate の pure-compute モジュール — margin math + 分類 + close-order 生成 — があなたの workspace に揃い、\`22eedf9\` に対する答え合わせ diff は完全にクリーンになる。
 
 エラー時にありがちなパターン:
 
 - **\`close_short_with_buy\` が \`Side::Sell\` で失敗。** 誤って \`if snapshot.position_size.0 >= 0\` と書いてしまっている。Flat ポジションはこのテストには関係ないが、\`>=\` だと size = 0 の short（存在しない概念）が Sell に flip してしまう — そして size = −10 のテストは \`size > 0\` が false なので失敗する。方向を再確認する。
-- **\`close_flat_has_zero_qty\` が関数の panic で失敗。** \`unsigned_abs()\` ではなく \`.abs()\` を入れてしまっている可能性がある。\`i64(0).abs()\` は OK だが、\`i64(-10).abs() as u64\` のパターンは L4 で挙げた \`i64::MIN\` footgun のリスクを抱える。\`unsigned_abs\` で通す。
+- **\`close_flat_has_zero_qty\` が関数の panic で失敗。** \`unsigned_abs()\` ではなく \`.abs()\` を入れてしまっている可能性がある。\`i64(0).abs()\` は OK だが、\`i64(-10).abs() as u64\` のパターンは レッスン4 で挙げた \`i64::MIN\` footgun のリスクを抱える。\`unsigned_abs\` で通す。
 
 ## 設計の振り返り
 
@@ -2478,9 +2479,9 @@ test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 1. **Side はポジション方向の反対 — それ以外のケースはない。** Long → Sell、Short → Buy。関数は「曖昧なケース」のための 3 つ目の分岐も、「不明なケース」のためのフォールバックも要らない。ポジションは符号を持つか、さもなくば flat。Spec は符号を反転するか、ゼロを運ぶ。**ポジション方向の単純な反転 (インバージョン) こそが、「ポジションをクローズ (清算) する」という行為を最もシンプルかつ正確に表現したコードである。**
 
-2. **\`close_order_spec\` は flat ポジションに対しても side-effect-free。** 関数内でフィルタする代わりに zero-qty spec を返すことで、\`close_order_spec\` を total に、かつ compose しやすく保てる。Stage 10c の scanner は分岐なしで \`for snapshot in snapshots { specs.push(close_order_spec(snapshot)); }\` と書ける。Bridge が submit 時にフィルタする。**Pure 関数は返す。Impure な境界レイヤーがフィルタする。**
+2. **\`close_order_spec\` は flat ポジションに対しても side-effect-free。** 関数内でフィルタする代わりに zero-qty spec を返すことで、\`close_order_spec\` を total に、かつ compose しやすく保てる。Liquidation参照実装（スキャナパート） の scanner は分岐なしで \`for snapshot in snapshots { specs.push(close_order_spec(snapshot)); }\` と書ける。Bridge が submit 時にフィルタする。**Pure 関数は返す。Impure な境界レイヤーがフィルタする。**
 
-3. **関数は \`mark\` も \`params\` も受け取らない。** 各 compute 関数がちょうど 1 つの関心事を所有する: \`margin_health\` は close するか *否か* を決め、\`close_order_spec\` は *どう* close するかを決める。これらを混ぜると — 例えば \`params\` を取って liquidation fee を qty に適用すると — 2 つの責任が結合してしまう。Fee は Stage 10b（insurance fund）に属する — collateral と fee の数学が一緒に住む場所だ。**単一責任が、bridge の composition path を明白にする。**
+3. **関数は \`mark\` も \`params\` も受け取らない。** 各 compute 関数がちょうど 1 つの関心事を所有する: \`margin_health\` は close するか *否か* を決め、\`close_order_spec\` は *どう* close するかを決める。これらを混ぜると — 例えば \`params\` を取って liquidation fee を qty に適用すると — 2 つの責任が結合してしまう。Fee は Liquidation参照実装（保険基金パート）（insurance fund）に属する — collateral と fee の数学が一緒に住む場所だ。**単一責任が、bridge の composition path を明白にする。**
 
 ## 答え合わせ
 
@@ -2491,12 +2492,12 @@ diff -u ~/code/my-openhl/crates/liquidation/src/compute.rs ./crates/liquidation/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L7 の後:
-- **compute.rs** は Stage 10a の \`compute.rs\` と **byte-for-byte 一致**。
-- **lib.rs** は Stage 10a の \`lib.rs\` と **byte-for-byte 一致**。
-- **Cargo.toml** は L1 以来一致している。
+レッスン7 の後:
+- **compute.rs** は Liquidation参照実装（計算パート） の \`compute.rs\` と **byte-for-byte 一致**。
+- **lib.rs** は Liquidation参照実装（計算パート） の \`lib.rs\` と **byte-for-byte 一致**。
+- **Cargo.toml** は レッスン1 以来一致している。
 
-Stage 10a クレートのすべてがあなたの workspace に揃った。
+Liquidation参照実装（計算パート） クレートのすべてがあなたの workspace に揃った。
 
 ## よくある質問
 
@@ -2514,17 +2515,17 @@ Flat（\`size == 0\`）は long *でもなく* short *でもない* — long/sho
 
 **Q4: \`position_size = i64::MIN\` の場合、\`unsigned_abs\` はそれを処理するか?**
 
-イエス、設計どおりだ。\`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808u64\`（\`u64::MAX / 2 + 1\`）になる。Signed の \`i64::MIN.abs()\` はオーバーフローする（i64 には正の対応物が表現できない）。\`unsigned_abs\` は magnitude を \`u64\` で返すので、常に余裕がある。**これがそのまま L4 の規律だ: magnitude には \`unsigned_abs\`、\`abs\` を使ってよいのは値が \`MIN\` ではないと確信できるときだけ。**
+イエス、設計どおりだ。\`i64::MIN.unsigned_abs() == 9_223_372_036_854_775_808u64\`（\`u64::MAX / 2 + 1\`）になる。Signed の \`i64::MIN.abs()\` はオーバーフローする（i64 には正の対応物が表現できない）。\`unsigned_abs\` は magnitude を \`u64\` で返すので、常に余裕がある。**これがそのまま レッスン4 の規律だ: magnitude には \`unsigned_abs\`、\`abs\` を使ってよいのは値が \`MIN\` ではないと確信できるときだけ。**
 
 **Q5: テスト fixture の \`snapshot\` 関数が \`(size, entry, mark, collateral)\` ではなく \`(size, entry, collateral)\` を取るのはなぜか — テスト対象の関数は snapshot を取り、通常 mark も必要なのに?**
 
-\`close_order_spec\` は snapshot しか取らない — mark を要求しない。L4 から共有してきた \`snapshot\` fixture は、snapshot のうち意味のある 3 フィールド（account はハードコード）だけを取り、mark は運ばない。Mark は、テスト対象の関数へ別途 \`MarkPrice(...)\` 引数として渡される。**Fixture は *型* が要求するものを構築する。テストは *呼び出し* が要求するものを供給する。**
+\`close_order_spec\` は snapshot しか取らない — mark を要求しない。レッスン4 から共有してきた \`snapshot\` fixture は、snapshot のうち意味のある 3 フィールド（account はハードコード）だけを取り、mark は運ばない。Mark は、テスト対象の関数へ別途 \`MarkPrice(...)\` 引数として渡される。**Fixture は *型* が要求するものを構築する。テストは *呼び出し* が要求するものを供給する。**
 
-## 次のレッスン (L8) — Stage 10b が始まる
+## 次のレッスン (レッスン8) — Liquidation参照実装（保険基金パート） が始まる
 
-L8 で Stage 10b — insurance fund — が始まる。L7 で完成した pure-compute モジュールが *何が起きるべきか* のレイヤーだとすると、Stage 10b は *何が起きたかを記録する帳簿* を足すレイヤーだ。Fund の balance を track し、underwater liquidation からの不足を吸収し、solvent な close から liquidation fee を credit する \`InsuranceFund\` state machine が入る。Stage 10b の後、エンジンは「このアカウントは Liquidatable」だけでなく「この close は fund に 1.5% を credit した」あるいは「この close は fund から $400 を drain した」も知る。
+レッスン8 で Liquidation参照実装（保険基金パート） — insurance fund — が始まる。レッスン7 で完成した pure-compute モジュールが *何が起きるべきか* のレイヤーだとすると、Liquidation参照実装（保険基金パート） は *何が起きたかを記録する帳簿* を足すレイヤーだ。Fund の balance を track し、underwater liquidation からの不足を吸収し、solvent な close から liquidation fee を credit する \`InsuranceFund\` state machine が入る。Liquidation参照実装（保険基金パート） の後、エンジンは「このアカウントは Liquidatable」だけでなく「この close は fund に 1.5% を credit した」あるいは「この close は fund から $400 を drain した」も知る。
 
-**本レッスンのドラフト時点で、Stage 10b はまだ openhl に ship されていない。** L8 は、openhl 側の実装が来たタイミングで rethlab に着地する。
+**本レッスンのドラフト時点で、Liquidation参照実装（保険基金パート） はまだ openhl に ship されていない。** レッスン8 は、openhl 側の実装が来たタイミングで rethlab に着地する。
 `,
                 },
               ],
@@ -2548,8 +2549,8 @@ L8 で Stage 10b — insurance fund — が始まる。L7 で完成した pure-c
 
 このレッスンで掴む概念:
 
-- **Pure → stateful の境界。** Stage 10a の \`compute.rs\` は pure だった。どの関数も引数からの決定的な投影でしかなく、いつでも再計算できた。Stage 10b で liquidation crate に初めて state が登場する — insurance fund の蓄積される balance だ。なぜか。Fund は単一のスナップショットに閉じた事実ではなく、そこに至る **履歴そのもの** の事実だからだ。**State がコードに現れるのは、入力から再導出できなくなる地点だけ。**
-- **\`balance ≥ 0\` という型不変条件。** すべての public 操作がこれを保つ。フィールドの型は \`i64\`（crate の他のところと算術の型を揃えるため）だが、**不変条件はコードで守られる — 型システムが守るのではない**。\`new(-500)\` は 0 にクランプする。\`deposit(-50)\` は no-op になる。\`withdraw_shortfall(...)\` は 0 で飽和して、不足分は \`WithdrawOutcome\`（L9 で）として表面化する。規律はこうだ: **すべての public メソッドを「不変条件を保つ遷移」として書く。**
+- **Pure → stateful の境界。** Liquidation参照実装（計算パート） の \`compute.rs\` は pure だった。どの関数も引数からの決定的な投影でしかなく、いつでも再計算できた。Liquidation参照実装（保険基金パート） で liquidation crate に初めて state が登場する — insurance fund の蓄積される balance だ。なぜか。Fund は単一のスナップショットに閉じた事実ではなく、そこに至る **履歴そのもの** の事実だからだ。**State がコードに現れるのは、入力から再導出できなくなる地点だけ。**
+- **\`balance ≥ 0\` という型不変条件。** すべての public 操作がこれを保つ。フィールドの型は \`i64\`（crate の他のところと算術の型を揃えるため）だが、**不変条件はコードで守られる — 型システムが守るのではない**。\`new(-500)\` は 0 にクランプする。\`deposit(-50)\` は no-op になる。\`withdraw_shortfall(...)\` は 0 で飽和して、不足分は \`WithdrawOutcome\`（レッスン9 で）として表面化する。規律はこうだ: **すべての public メソッドを「不変条件を保つ遷移」として書く。**
 - **境界の防御 vs 関数の防御。** \`compute\` モジュールは入力を信用する。\`insurance\` モジュールは信用しない。違いはこうだ。\`compute\` は pure な投影 — 呼び出し側が valid な \`AccountSnapshot\` をすでに組み立てている。\`InsuranceFund\` は *境界そのもの* — bridge、scanner、（後の）ADL ルーチンがそれぞれ異なるレイヤーから呼んでくる。どれか 1 つに bug が混入しうる。**多くの呼び出し側を集約する境界でこそ、defensive coding が意味を持つ。**
 - **コンセンサス state における saturating 演算。** \`deposit\` は \`+\` ではなく \`saturating_add\` を使う。理由は「dev で panic を避けるため」だけではない。Rust の \`+\` 演算子はビルドプロファイルで *2 つの* failure mode を持つ。**Debug ビルドでは overflow に panic する** (1 つの validator がクラッシュ、他は走り続け → fork)、**release ビルドではサイレントに wrap する** (2 の補数の剰余演算で、validator ごとに異なる \`i64\` を生む → fork)。Release の wrap こそが厄介だ — クラッシュなし、エラーなし、ただ state の不一致が起きる。\`saturating_add\` は \`i64::MAX\` (または \`MIN\`) にあらゆるビルドプロファイルで clamp する。全 validator が同じ値を見る、コンパイラフラグが何であれ。**Saturation はコンセンサス安全な算術規律だ。**
 
@@ -2559,42 +2560,42 @@ L8 で Stage 10b — insurance fund — が始まる。L7 で完成した pure-c
 cargo test -p openhl-liquidation
 \`\`\`
 
-…で 33 テストが pass する（L0-L7 の 24 + 構築 + deposit の新規テスト 9）。残りの withdraw・proptest 系 22 ケースは L9 で着地する。
+…で 33 テストが pass する（L0-レッスン7 の 24 + 構築 + deposit の新規テスト 9）。残りの withdraw・proptest 系 22 ケースは レッスン9 で着地する。
 
 具体的な変更:
 
 - **\`src/insurance.rs\`。** 新規モジュールファイル。\`InsuranceFund\` 構造体、3 種類のコンストラクタ（\`new\` / \`empty\` / \`Default::default\`）、\`balance()\` アクセサ、\`deposit()\` 変更子、9 個の unit test を追加。
 - **\`src/lib.rs\`。** \`pub mod insurance;\` と \`InsuranceFund\` の re-export を追加。
 
-L8 で \`insurance.rs\` のおおよそ半分を着地させる。Withdraw path —\`WithdrawOutcome\` enum を含む — は L9 で閉じ、insurance fund モジュールの capstone になる。
+レッスン8 で \`insurance.rs\` のおおよそ半分を着地させる。Withdraw path —\`WithdrawOutcome\` enum を含む — は レッスン9 で閉じ、insurance fund モジュールの capstone になる。
 
 ## おさらい
 
-L7 の後:
-- \`compute.rs\` は Stage 10a で完成: 6 関数（\`notional_value\`、\`unrealized_pnl\`、\`account_equity\`、\`margin_ratio\`、\`margin_health\`、\`close_order_spec\`）と \`saturate_i128_to_i64\` ヘルパー。
-- \`lib.rs\` は compute 関数 6 個と Stage 10a の型をすべて re-export 済み。
+レッスン7 の後:
+- \`compute.rs\` は Liquidation参照実装（計算パート） で完成: 6 関数（\`notional_value\`、\`unrealized_pnl\`、\`account_equity\`、\`margin_ratio\`、\`margin_health\`、\`close_order_spec\`）と \`saturate_i128_to_i64\` ヘルパー。
+- \`lib.rs\` は compute 関数 6 個と Liquidation参照実装（計算パート） の型をすべて re-export 済み。
 - \`cargo test\` は 24 テストを走らせ、すべて green。
 - クレートは **純粋関数的**だった: \`&mut self\` なし、モジュール level state なし、すべての関数が引数だけから返り値を導く。
 
-L8 で Stage 10b が始まる。最初の変化は、クレートが純粋関数的でなくなることだ。
+レッスン8 で Liquidation参照実装（保険基金パート） が始まる。最初の変化は、クレートが純粋関数的でなくなることだ。
 
 ## 計画
 
 編集は 3 つ:
 
-1. **\`crates/liquidation/src/insurance.rs\` を新規作成。** \`InsuranceFund\` 構造体、コンストラクタ 2 種類、\`balance()\` アクセサ、\`deposit()\` 変更子、\`WithdrawOutcome\` enum scaffold（L9 で使う）、9 個の unit test（構築 + deposit）。
+1. **\`crates/liquidation/src/insurance.rs\` を新規作成。** \`InsuranceFund\` 構造体、コンストラクタ 2 種類、\`balance()\` アクセサ、\`deposit()\` 変更子、\`WithdrawOutcome\` enum scaffold（レッスン9 で使う）、9 個の unit test（構築 + deposit）。
 2. **\`crates/liquidation/src/lib.rs\` に \`pub mod insurance;\` と re-export を追加。**
-3. **\`lib.rs\` 冒頭の roadmap コメントを更新。** Stage 10b が進行中であることをマーク。
+3. **\`lib.rs\` 冒頭の roadmap コメントを更新。** Liquidation参照実装（保険基金パート） が進行中であることをマーク。
 
 > 🛑 **予測。** 続きを読む前に考えてほしい。「balance フィールド 1 つの state machine」で、複数の呼び出し側にまたがって \`balance ≥ 0\` を保つために必要な最小限の防御面はどこか? 具体的には: **\`new(initial: i64)\`、\`deposit(fee: i64)\`、\`withdraw(amount: i64)\`** — この 3 つのうち、どこで何を防御する必要があるか?
 
-（答え: **3 つすべて。** \`new\` は負の初期値を防ぐ — 0 にクランプする。\`deposit\` は負の fee を防ぐ — no-op にする（負の fee を素通ししたら fund がこっそり drain される）。\`withdraw\` は (a) 負の shortfall を防ぐ — amount = 0 の Covered として扱う、(b) balance を超える amount を防ぐ — 0 まで drain して残りを surface する。それぞれの防御が必要なのは、public API が複数のレイヤーから呼ばれるからだ。**bad な呼び出しが 1 つ来ただけで、型不変条件を破ってはならない。** L8 は \`new\` と \`deposit\` をカバーする。L9 が \`withdraw\` を扱う。）
+（答え: **3 つすべて。** \`new\` は負の初期値を防ぐ — 0 にクランプする。\`deposit\` は負の fee を防ぐ — no-op にする（負の fee を素通ししたら fund がこっそり drain される）。\`withdraw\` は (a) 負の shortfall を防ぐ — amount = 0 の Covered として扱う、(b) balance を超える amount を防ぐ — 0 まで drain して残りを surface する。それぞれの防御が必要なのは、public API が複数のレイヤーから呼ばれるからだ。**bad な呼び出しが 1 つ来ただけで、型不変条件を破ってはならない。** レッスン8 は \`new\` と \`deposit\` をカバーする。レッスン9 が \`withdraw\` を扱う。）
 
 なぜ state がここに現れるのか — アーキテクチャ図で押さえておく:
 
 \`\`\`
    ┌────────────────────────────────────────────────────────────────┐
-   │ Stage 10a — pure compute (compute.rs)                          │
+   │ Liquidation参照実装（計算パート） — pure compute (compute.rs)                          │
    │                                                                │
    │  margin_health(snapshot, mark, params) → MarginHealth          │
    │  margin_ratio(snapshot, mark)          → MarginRatio           │
@@ -2605,7 +2606,7 @@ L8 で Stage 10b が始まる。最初の変化は、クレートが純粋関数
                                   │
                                   ▼
    ┌────────────────────────────────────────────────────────────────┐
-   │ Stage 10b — state machine (insurance.rs)                       │
+   │ Liquidation参照実装（保険基金パート） — state machine (insurance.rs)                       │
    │                                                                │
    │  InsuranceFund { balance: i64 }   ← fund が蓄積する             │
    │      .deposit(fee)                ← fee が fund に CREDIT       │
@@ -2619,7 +2620,7 @@ L8 で Stage 10b が始まる。最初の変化は、クレートが純粋関数
                                   │
                                   ▼
    ┌────────────────────────────────────────────────────────────────┐
-   │ Stage 10c — scanner (scanner.rs, L11–L12)                      │
+   │ Liquidation参照実装（スキャナパート） — scanner (scanner.rs, レッスン11–レッスン12)                      │
    │                                                                │
    │  InsuranceFund を所有し、liquidation event ごとに                │
    │  .deposit / .withdraw_shortfall を呼ぶ。結果を ScanReport に     │
@@ -2627,7 +2628,7 @@ L8 で Stage 10b が始まる。最初の変化は、クレートが純粋関数
    └────────────────────────────────────────────────────────────────┘
 \`\`\`
 
-ポイントは「**pure compute は返す。Stateful なモジュールは蓄積する。**」 Stage 10a はエンジンに「各アカウントについて世界がどう見えるか」を教えた。Stage 10b はエンジンに「アカウント間・ブロック間で何が起きたかを記憶する」能力を与える。両者を orchestrate するのが scanner（L11-L12）だ。
+ポイントは「**pure compute は返す。Stateful なモジュールは蓄積する。**」 Liquidation参照実装（計算パート） はエンジンに「各アカウントについて世界がどう見えるか」を教えた。Liquidation参照実装（保険基金パート） はエンジンに「アカウント間・ブロック間で何が起きたかを記憶する」能力を与える。両者を orchestrate するのが scanner（レッスン11〜13）だ。
 
 ## 手を動かす walk-through
 
@@ -2636,12 +2637,12 @@ L8 で Stage 10b が始まる。最初の変化は、クレートが純粋関数
 \`crates/liquidation/src/insurance.rs\` を新規作成する。まずモジュール全体の doc コメントから。このプリアンブルはモジュール内で最も読まれる散文だ — doc generator も \`cargo doc\` の読者も、すべての関数より先にここを見る。
 
 \`\`\`rust
-//! Insurance fund state machine (Stage 10b).
+//! Insurance fund state machine (Liquidation参照実装（保険基金パート）).
 //!
 //! The insurance fund is the venue's pooled buffer that absorbs the
 //! deficit when a Liquidatable account's close turns underwater, or when
 //! an Underwater account is liquidated outright. It accumulates the
-//! liquidation fees that solvent closes pay in. Stage 10c's scanner will
+//! liquidation fees that solvent closes pay in. Liquidation参照実装（スキャナパート）'s scanner will
 //! own an [\`InsuranceFund\`] and call its deposit / withdraw operations
 //! from the per-account liquidation loop.
 //!
@@ -2661,8 +2662,8 @@ L8 で Stage 10b が始まる。最初の変化は、クレートが純粋関数
 //! [\`crate::compute\`], but the type invariant is **\`balance ≥ 0\`** —
 //! every public operation preserves it. Withdrawals that exceed the
 //! balance saturate at 0 and surface the unfilled portion via
-//! [\`WithdrawOutcome\`]. Stage 10c's scanner reads the unfilled portion
-//! as the trigger to escalate to ADL (Stage 10d).
+//! [\`WithdrawOutcome\`]. Liquidation参照実装（スキャナパート）'s scanner reads the unfilled portion
+//! as the trigger to escalate to ADL (ADL参照実装パート).
 //!
 //! ### Deposit semantics
 //!
@@ -2675,7 +2676,7 @@ L8 で Stage 10b が始まる。最初の変化は、クレートが純粋関数
 このプリアンブルで押さえる点が 4 つ:
 
 1. **冒頭は *型* ではなく *役割* から始まる。** 「The insurance fund is the venue's pooled buffer that absorbs the deficit…」 — 最初の 1 文だけ読んだ読者でも、このモジュールが safety-net cascade のどこに座っているかが分かる。**モジュール doc は「続きを読むかどうか」を決める人が読む。役割から始めろ。**
-2. **Stage 10c と Stage 10d を名指しで引用している。** 読者のチェックアウトにはまだ存在しないステージだが、doc は先回りして引用する。読者は「このモジュールは計画された arc の一部だ — 単発の追加ではない」と分かる。**Doc の forward reference は未来との契約だ:「これはどこかへ向かっている」と言っている。**
+2. **Liquidation参照実装（スキャナパート） と ADL参照実装パート を名指しで引用している。** 読者のチェックアウトにはまだ存在しないステージだが、doc は先回りして引用する。読者は「このモジュールは計画された arc の一部だ — 単発の追加ではない」と分かる。**Doc の forward reference は未来との契約だ:「これはどこかへ向かっている」と言っている。**
 3. **Sign-discipline セクションは Rust の型システムの話 *ではない*。** 型が *enforce しない* 不変条件についての話だ。**コンパイラがチェックできない不変条件を doc に書け。チェックできるものはコンパイラがすでに doc 化している。**
 4. **\`openhl_funding::clock\`** はクロスモジュール引用で、読者がすでに見たパターン — 小さい state machine、bridge が所有、境界イベントだけで mutation — を指している。新しいモジュールを既知のモジュールに錨で結べば、学習曲線が短くなる。**新しいパターンを導入するときは、コードベース内の同じパターンの先例を指せ。**
 
@@ -2686,7 +2687,7 @@ Doc コメントの下に、構造体定義と 3 種類のコンストラクタ�
 \`\`\`rust
 /// The insurance fund's accumulating balance.
 ///
-/// Owned by the bridge (Stage 10c+), exposed via deposit / withdraw
+/// Owned by the bridge (Liquidation参照実装（スキャナパート）+), exposed via deposit / withdraw
 /// operations that maintain the \`balance ≥ 0\` invariant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InsuranceFund {
@@ -2751,7 +2752,7 @@ impl Default for InsuranceFund {
 
 ### Step 3: \`WithdrawOutcome\` enum scaffold を追加
 
-L8 は \`withdraw_shortfall\` を実装しないが、L9 の変更が \`impl InsuranceFund\` への純粋な追加 (enum 導入による churn なし) で済むよう、\`WithdrawOutcome\` を今宣言しておく。**\`impl InsuranceFund\` ブロックの上**に追加:
+レッスン8 は \`withdraw_shortfall\` を実装しないが、レッスン9 の変更が \`impl InsuranceFund\` への純粋な追加 (enum 導入による churn なし) で済むよう、\`WithdrawOutcome\` を今宣言しておく。**\`impl InsuranceFund\` ブロックの上**に追加:
 
 \`\`\`rust
 /// Outcome of attempting to absorb a shortfall via
@@ -2788,11 +2789,11 @@ pub enum WithdrawOutcome {
 }
 \`\`\`
 
-この enum は **L8 で宣言し、L9 で使う**。L8 で導入する理由:
+この enum は **レッスン8 で宣言し、レッスン9 で使う**。レッスン8 で導入する理由:
 
-1. **Enum の存在自体が public surface の物語の一部だ。** L8 後に \`insurance.rs\` を眺める読者は、メソッドが後回しでも、モジュールの型語彙を一目で見られる必要がある。**メカニズムの前に語彙を見せる。**
-2. **各 variant が自分の payload を運ぶ。** \`Covered\` と \`PartiallyDrained\` はどちらも \`amount\`（実際に支払われた額）を運び、\`PartiallyDrained\` と \`Depleted\` はどちらも \`unfilled\`（scanner がエスカレートすべき額）を運ぶ。L9 の proptest \`withdraw_amount_plus_unfilled_equals_shortfall\` は両者を結ぶ保存則だ — だが variant の payload の形を見るだけで、保存則の輪郭はすでに読める。**Self-describing な variant は、コンパイラが enforce する文書だ。**
-3. **doc コメントの \`Layer 2 → Layer 3 boundary\` がカスケード・アーキテクチャを明示する**: margin（Layer 1、Stage 10a） → fund（Layer 2、Stage 10b） → ADL（Layer 3、Stage 10d）。読者はこの enum を見るたびに地図を手に入れる。**アーキテクチャの継ぎ目に座る型には、doc でその役割を書け。**
+1. **Enum の存在自体が public surface の物語の一部だ。** レッスン8 後に \`insurance.rs\` を眺める読者は、メソッドが後回しでも、モジュールの型語彙を一目で見られる必要がある。**メカニズムの前に語彙を見せる。**
+2. **各 variant が自分の payload を運ぶ。** \`Covered\` と \`PartiallyDrained\` はどちらも \`amount\`（実際に支払われた額）を運び、\`PartiallyDrained\` と \`Depleted\` はどちらも \`unfilled\`（scanner がエスカレートすべき額）を運ぶ。レッスン9 の proptest \`withdraw_amount_plus_unfilled_equals_shortfall\` は両者を結ぶ保存則だ — だが variant の payload の形を見るだけで、保存則の輪郭はすでに読める。**Self-describing な variant は、コンパイラが enforce する文書だ。**
+3. **doc コメントの \`Layer 2 → Layer 3 boundary\` がカスケード・アーキテクチャを明示する**: margin（Layer 1、Liquidation参照実装（計算パート）） → fund（Layer 2、Liquidation参照実装（保険基金パート）） → ADL（Layer 3、ADL参照実装パート）。読者はこの enum を見るたびに地図を手に入れる。**アーキテクチャの継ぎ目に座る型には、doc でその役割を書け。**
 
 ### Step 4: \`deposit\` メソッドを追加
 
@@ -2845,7 +2846,7 @@ pub use types::{
 };
 \`\`\`
 
-型と enum、両方を一度に re-export する。なぜ両方を今? **クレートの利用者は呼ぶものを import するから**だ。L9 の \`withdraw_shortfall\` を呼ぶ path はすぐに \`WithdrawOutcome\` でパターンマッチする。L8 で enum を re-export しておけば、L9 では \`lib.rs\` に触れる必要がない。**Public surface はモジュール単位で一度だけ re-export する。メソッド単位ではない。**
+型と enum、両方を一度に re-export する。なぜ両方を今? **クレートの利用者は呼ぶものを import するから**だ。レッスン9 の \`withdraw_shortfall\` を呼ぶ path はすぐに \`WithdrawOutcome\` でパターンマッチする。レッスン8 で enum を re-export しておけば、レッスン9 では \`lib.rs\` に触れる必要がない。**Public surface はモジュール単位で一度だけ re-export する。メソッド単位ではない。**
 
 ### Step 6: 9 個の unit test を追加
 
@@ -2922,7 +2923,7 @@ mod tests {
 
 このテストモジュールの形について 6 点:
 
-1. **\`// ─── construction ───\` のセクション見出し。** 罫線文字のコメントで 4 つの論理グループ（construction · deposit · L9 で: withdraw-covered · withdraw-partial · withdraw-depleted · sequencing · proptest）をマークする。最終的にこのモジュールは ~22 テスト持つ — セクション名で走査するほうが行番号でスクロールするより速い。**テストファイルが ~10 を超えるなら、グループ化する。**
+1. **\`// ─── construction ───\` のセクション見出し。** 罫線文字のコメントで 4 つの論理グループ（construction · deposit · レッスン9 で: withdraw-covered · withdraw-partial · withdraw-depleted · sequencing · proptest）をマークする。最終的にこのモジュールは ~22 テスト持つ — セクション名で走査するほうが行番号でスクロールするより速い。**テストファイルが ~10 を超えるなら、グループ化する。**
 2. **\`new_with_zero_is_empty\` は \`new\` のソースから自明に導けるのに、それでも存在する。** 冗長ではない — 挙動を lock するためのものだ。将来 \`> 0\` を \`>= 0\` に書き換えた場合（0 は両方の述語を正しく通すので）このテストでは捕れないが、typo を伴う書き換え（例: \`if initial_balance < 0\` への flip）は exactly このケースで落ちる。**小さい述語に対する境界テストは、大きいテストが取り逃す typo を捕える。**
 3. **\`new_with_negative_clamps_to_zero\` は防御 surface を直接テストする。** *関数が動くこと* を検証するためのテストではない — *不変条件が保たれること* を検証するためのテストだ。将来のリファクタリングが \`new\` 内の見かけ上のデッドコード（クランプ）を「クリーンアップ」したら、このテストが捕える。**Defensive code のテストは defensive code を守る。**
 4. **\`default_is_empty\` は 1 行で \`Default\` impl が \`Self::empty()\` を指していることを証明する** — derive されてないこと（derive でも \`balance: 0\` にはなるが、意図が違う）を locks。**テストは結果だけでなく、*どの経路がその結果を生むか* も lock できる。**
@@ -2943,7 +2944,7 @@ test compute::tests::close_flat_has_zero_qty ... ok
 test compute::tests::close_long_with_sell ... ok
 test compute::tests::close_short_with_buy ... ok
 test compute::tests::equity_can_go_negative ... ok
-... (Stage 10a のテスト 21 個)
+... (Liquidation参照実装（計算パート） のテスト 21 個)
 test insurance::tests::default_is_empty ... ok
 test insurance::tests::deposit_accumulates ... ok
 test insurance::tests::deposit_negative_is_noop ... ok
@@ -2957,7 +2958,7 @@ test insurance::tests::new_with_zero_is_empty ... ok
 test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**33 テスト pass。** Insurance fund モジュールが存在し、不変条件は enforce され、deposit のセマンティクスは locked。Withdraw（と \`WithdrawOutcome\` payload のセマンティクス）は L9 で着地する。
+**33 テスト pass。** Insurance fund モジュールが存在し、不変条件は enforce され、deposit のセマンティクスは locked。Withdraw（と \`WithdrawOutcome\` payload のセマンティクス）は レッスン9 で着地する。
 
 エラー時にありがちなパターン:
 
@@ -2970,7 +2971,7 @@ test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 このレッスンに焼き込んだ load-bearing な決定は 3 つ:
 
-1. **State は履歴が effective なレイヤーに現れる。** Fund の balance は「fund に対してこれまで起きたすべての deposit と withdraw」の事実だ。Snapshot 型はそれを表現できない — snapshot は「1 アカウント、1 瞬間」の事実だから。**入力からの再導出が不可能になる境界で初めて、コードに state が現れる。** Stage 10a は一方向の境界、Stage 10b は意図して反対側を踏み出した境界。
+1. **State は履歴が effective なレイヤーに現れる。** Fund の balance は「fund に対してこれまで起きたすべての deposit と withdraw」の事実だ。Snapshot 型はそれを表現できない — snapshot は「1 アカウント、1 瞬間」の事実だから。**入力からの再導出が不可能になる境界で初めて、コードに state が現れる。** Liquidation参照実装（計算パート） は一方向の境界、Liquidation参照実装（保険基金パート） は意図して反対側を踏み出した境界。
 
 2. **\`balance ≥ 0\` の不変条件はコードで enforce、型システムでは enforce しない。** \`balance: u64\` にしてコンパイラに守らせることもできた。しなかった理由は、クレート他箇所が \`i64\` で計算しているからだ — u64 フィールドにすればすべての交差点でキャストを書かされる。判断は **型規律のトレードオフ**: クレート内部コードが最もきれいになる表現を選び、外部から untyped 入力を受け取るメソッドで不変条件を防御する。**クロスクレートの一様性が、フィールド単位の型安全性に勝つ — 不変条件が 1 行コードで済むなら。**
 
@@ -2985,9 +2986,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/insurance.rs ./crates/liquidatio
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L8 の後:
-- **insurance.rs** は Stage 10b の \`insurance.rs\` の **118 行目まで一致**（\`withdraw_shortfall\`、proptest セクション、sequencing テストは L9 で着地）。具体的には: doc コメント + 構造体 + \`WithdrawOutcome\` enum + \`deposit\` で終わる \`impl\` ブロック + \`impl Default\` + \`deposit_saturates_at_max\` までのテスト。
-- **lib.rs** は Stage 10b の \`lib.rs\` の \`pub mod\` 行と \`InsuranceFund / WithdrawOutcome\` re-export について **byte-for-byte 一致**。（\`lib.rs\` 冒頭の roadmap コメントも更新する — このレッスンでは optional な cosmetic edit だ。L9 で答え合わせと完全一致に持っていく。）
+レッスン8 の後:
+- **insurance.rs** は Liquidation参照実装（保険基金パート） の \`insurance.rs\` の **118 行目まで一致**（\`withdraw_shortfall\`、proptest セクション、sequencing テストは レッスン9 で着地）。具体的には: doc コメント + 構造体 + \`WithdrawOutcome\` enum + \`deposit\` で終わる \`impl\` ブロック + \`impl Default\` + \`deposit_saturates_at_max\` までのテスト。
+- **lib.rs** は Liquidation参照実装（保険基金パート） の \`lib.rs\` の \`pub mod\` 行と \`InsuranceFund / WithdrawOutcome\` re-export について **byte-for-byte 一致**。（\`lib.rs\` 冒頭の roadmap コメントも更新する — このレッスンでは optional な cosmetic edit だ。レッスン9 で答え合わせと完全一致に持っていく。）
 
 ## よくある質問
 
@@ -2999,21 +3000,21 @@ L8 の後:
 
 返さない。呼び出し地点で区別する価値のある failure mode が存在しないからだ。Saturation は silent でいい（正しい挙動だから — fund は実際に \`i64::MAX\` で頭打ちになる）。負の fee も silent でいい（呼び出し側の bug だから — \`Result\` を返せば scanner のすべての呼び出し地点でエラーハンドリングをスレッドさせられる、しかも結局そのエラーは無視するだけ）。**\`Result\` は呼び出し側に意味のあるアクションが取れるときに使え。ここではない。**
 
-**Q3: \`withdraw_shortfall\` が L9 なのに、なぜ \`WithdrawOutcome\` を L8 で宣言するのか?**
+**Q3: \`withdraw_shortfall\` が レッスン9 なのに、なぜ \`WithdrawOutcome\` を レッスン8 で宣言するのか?**
 
-理由が 3 つ。(1) Re-export 観点 — L8 で \`lib.rs\` が enum を export しておけば、L9 は \`lib.rs\` に触らない。(2) Public-surface の語彙観点 — L8 後に \`insurance.rs\` を眺める読者は、メソッドが後回しでも、モジュールの型語彙を一目で見られる必要がある。(3) Variant 群が safety-cascade アーキテクチャを文書化する — *形* が Layer 2 → 3 遷移のどこに fund が座るかを読者に教える。**型はコンパイルされるドキュメント。語れるときに宣言する、呼ぶときではなく。**
+理由が 3 つ。(1) Re-export 観点 — レッスン8 で \`lib.rs\` が enum を export しておけば、レッスン9 は \`lib.rs\` に触らない。(2) Public-surface の語彙観点 — レッスン8 後に \`insurance.rs\` を眺める読者は、メソッドが後回しでも、モジュールの型語彙を一目で見られる必要がある。(3) Variant 群が safety-cascade アーキテクチャを文書化する — *形* が Layer 2 → 3 遷移のどこに fund が座るかを読者に教える。**型はコンパイルされるドキュメント。語れるときに宣言する、呼ぶときではなく。**
 
 **Q4: \`InsuranceFund\` を独立した \`i64\` 値 + モジュールレベルの mutation 関数（global state っぽい形）にできるか?**
 
-技術的にはイエス、メカニズム的にはノー。Stage 10c の scanner は fund を \`LiquidationScanner\` のフィールドとして所有する。Bridge が scanner を所有する。Fund を呼び出しスタックでスレッディングすれば（global state に手を伸ばす代わりに）、scanner が単体テスト可能になる。**コンセンサスに触れる state は既知のコンポーネントに所有させなければならない。「スタック位置による所有」が、複数の scanner を干渉なく共存させる規律になる。**
+技術的にはイエス、メカニズム的にはノー。Liquidation参照実装（スキャナパート） の scanner は fund を \`LiquidationScanner\` のフィールドとして所有する。Bridge が scanner を所有する。Fund を呼び出しスタックでスレッディングすれば（global state に手を伸ばす代わりに）、scanner が単体テスト可能になる。**コンセンサスに触れる state は既知のコンポーネントに所有させなければならない。「スタック位置による所有」が、複数の scanner を干渉なく共存させる規律になる。**
 
 **Q5: なぜ \`new\` は \`const fn\` で \`deposit\` は違うのか?**
 
 \`new\` は引数と \`Self\` コンストラクタしか読まない — \`&mut self\` 経由の mutation を含む処理がない。\`deposit\` は \`self.balance\` を mutate する — Rust は現状、非自明な const 型に対する \`const fn\` での mutation を許していない。\`new\` が const なら \`static FUND: InsuranceFund = InsuranceFund::new(0);\` がコンパイルできる — これがテストや（後の）default-config 定数に役立つ。**\`const fn\` にできるものは \`const fn\` にする — 境界は通常「関数が state を mutate するかどうか」。**
 
-## 次のレッスン (L9) — \`withdraw_shortfall\`
+## 次のレッスン (レッスン9) — \`withdraw_shortfall\`
 
-L9 は withdraw path で \`insurance.rs\` を閉じる。L8 で宣言した \`WithdrawOutcome\` enum がついに使われる: \`withdraw_shortfall(amount)\` は fund に十分な balance があれば \`Covered { amount }\` を、0 まで drain したら \`PartiallyDrained { amount, unfilled }\` を、すでに空だったら \`Depleted { unfilled }\` を返す。
+レッスン9 は withdraw path で \`insurance.rs\` を閉じる。レッスン8 で宣言した \`WithdrawOutcome\` enum がついに使われる: \`withdraw_shortfall(amount)\` は fund に十分な balance があれば \`Covered { amount }\` を、0 まで drain したら \`PartiallyDrained { amount, unfilled }\` を、すでに空だったら \`Depleted { unfilled }\` を返す。
 
 おもしろい点が 2 つ。(1) 3-variant の outcome は、safety-net cascade の Layer 2 → Layer 3 境界の **3 つの遷移そのもの** だ。(2) 4 つの proptest が保存則を enforce する — \`balance_never_negative\`、\`deposit_is_additive\`、\`withdraw_amount_matches_balance_delta\`、\`withdraw_amount_plus_unfilled_equals_shortfall\`。Proptest こそが、カスケード数学を「型システムでは表現しきれないが、プロパティとして検証可能」な形に押し上げる場所だ。
 `,
@@ -3031,7 +3032,7 @@ L9 は withdraw path で \`insurance.rs\` を閉じる。L8 で宣言した \`Wi
 
 このレッスンで掴む概念:
 
-- **3-variant の outcome enum はカスケード境界を型で表現したもの。** \`WithdrawOutcome::Covered\` は「Layer 2 が完全に吸収した」。\`PartiallyDrained\` は「Layer 2 が吸収できた分だけ吸収し、残りはエスカレートする」。\`Depleted\` は「Layer 2 には何もなく、すべてがエスカレートする」。Stage 10d の ADL ルーチンはこの enum で pattern-match して、自分が何をすべきかを決める。**複数ステージにまたがるアーキテクチャの継ぎ目は、複数の呼び出し地点にまたがる enum variant になる。**
+- **3-variant の outcome enum はカスケード境界を型で表現したもの。** \`WithdrawOutcome::Covered\` は「Layer 2 が完全に吸収した」。\`PartiallyDrained\` は「Layer 2 が吸収できた分だけ吸収し、残りはエスカレートする」。\`Depleted\` は「Layer 2 には何もなく、すべてがエスカレートする」。ADL参照実装パート の ADL ルーチンはこの enum で pattern-match して、自分が何をすべきかを決める。**複数ステージにまたがるアーキテクチャの継ぎ目は、複数の呼び出し地点にまたがる enum variant になる。**
 - **全域関数 (total function) のための early-return はしご (ladder)。** \`withdraw_shortfall\` は 4 つの異なるケース（非正な shortfall、空 fund、十分な balance、部分 drain）を扱う。ネストした \`match\` ではなく、4 つの guarded early return で並べる。はしごは上から「これは *この* ケースか? Yes なら return、No なら次へ」と読める。**各ケースが独立しているとき、early return は条件構造を平坦化する。**
 - **保存則を proptest で encode する。** 型システムは「この enum は 3 variant ある」までは表現できる。だが「どの variant が発火しても \`amount + unfilled = 元の shortfall\`」までは表現できない。\`(initial_balance, requested_shortfall)\` のペアに対する proptest が、何千ものランダム入力で保存則を証明してくれる。**Proptest は、コンパイラが enforce できない不変条件をテストスイートが *enforce する* 形に格上げする道具だ。**
 - **新しい state ではなく *outcome* を返す \`&mut self\` メソッド。** \`deposit\`（新しい balance を返す）と違い、\`withdraw_shortfall\` はパスごとに *質的に異なる shape* を返す。3 variant × 異なる payload = 同じメソッドに対する「いま何が起きたか」の 3 種類の応答。**Mutation が質的に異なる成功モードを持つときは、その違いを型で返せ。**
@@ -3042,24 +3043,24 @@ L9 は withdraw path で \`insurance.rs\` を閉じる。L8 で宣言した \`Wi
 cargo test -p openhl-liquidation
 \`\`\`
 
-…で 45 テストが pass する（compute 24 + insurance 21: L8 の 9 + 新規 unit test 8 + 新規 proptest 4）。L9 の後、\`insurance.rs\` は \`260883b\` と byte-for-byte 一致する。
+…で 45 テストが pass する（compute 24 + insurance 21: レッスン8 の 9 + 新規 unit test 8 + 新規 proptest 4）。レッスン9 の後、\`insurance.rs\` は \`260883b\` と byte-for-byte 一致する。
 
 具体的な変更:
 
 - **\`src/insurance.rs\`。** \`impl InsuranceFund\` ブロックに \`withdraw_shortfall\` を追加し、3 variant と negative・zero エッジケースをカバーする 7 個の unit test、deposit + withdraw を組み合わせた 1 個の sequencing test、4 個の proptest を追加。
-- **\`lib.rs\` に変更なし。** \`WithdrawOutcome\` は L8 で再 export 済み。
+- **\`lib.rs\` に変更なし。** \`WithdrawOutcome\` は レッスン8 で再 export 済み。
 
-L9 で insurance fund モジュールを閉じる。本レッスンの後、\`260883b\` に対する答え合わせ diff は \`insurance.rs\` で完全にクリーンになる。
+レッスン9 で insurance fund モジュールを閉じる。本レッスンの後、\`260883b\` に対する答え合わせ diff は \`insurance.rs\` で完全にクリーンになる。
 
 ## おさらい
 
-L8 の後:
+レッスン8 の後:
 - \`insurance.rs\` が存在する。\`InsuranceFund\` 構造体、\`WithdrawOutcome\` enum（宣言済みだが未使用）、3 種類のコンストラクタ、\`balance()\` アクセサ、\`deposit()\` 変更子が揃っている。
 - \`lib.rs\` は \`InsuranceFund\` と \`WithdrawOutcome\` の両方を re-export 済み。
 - \`cargo test\` は 33 テストを走らせ、すべて green。
 - Fund は deposit を **蓄積する**（\`balance ≥ 0\` の不変条件は public メソッドすべてで守られている）。まだ **drain しない**。
 
-L9 で drain path を配線する。L8 で読者が出会った enum が、ついに variant を返すメソッドを得る。
+レッスン9 で drain path を配線する。レッスン8 で読者が出会った enum が、ついに variant を返すメソッドを得る。
 
 ## 計画
 
@@ -3070,7 +3071,7 @@ L9 で drain path を配線する。L8 で読者が出会った enum が、つ�
 
 > 🛑 **予測。** 続きを読む前に考えてほしい。Balance 300 の fund に \`withdraw_shortfall(500)\` が来た。新しい balance は? メソッドが返すべき \`WithdrawOutcome\` の variant は? payload の値も含めて答える。次に、同じ fund に対する次の呼び出し \`withdraw_shortfall(100)\` を想像する。同じ問いに答える。
 
-（答え: **1 回目:** balance は 0 になり、outcome は \`PartiallyDrained { amount: 300, unfilled: 200 }\`。Fund は持っていた 300 すべてを cover し、200 を ADL にエスカレートする必要がある。**2 回目:** balance は 0 のまま、outcome は \`Depleted { unfilled: 100 }\`。この呼び出しが始まる前から fund は空だったので、\`PartiallyDrained { amount: 0, unfilled: 100 }\` ではなく \`Depleted\` を返す。区別は重要だ。\`PartiallyDrained\` は「何かは支払った」、\`Depleted\` は「何も支払っていない」。Stage 10c の scanner はこの 2 つを別々にログに残す — オペレーション上、片方は「fund が drain しつつある」状態を表し、もう片方は「fund がすでに枯渇した」状態を表すからだ。）
+（答え: **1 回目:** balance は 0 になり、outcome は \`PartiallyDrained { amount: 300, unfilled: 200 }\`。Fund は持っていた 300 すべてを cover し、200 を ADL にエスカレートする必要がある。**2 回目:** balance は 0 のまま、outcome は \`Depleted { unfilled: 100 }\`。この呼び出しが始まる前から fund は空だったので、\`PartiallyDrained { amount: 0, unfilled: 100 }\` ではなく \`Depleted\` を返す。区別は重要だ。\`PartiallyDrained\` は「何かは支払った」、\`Depleted\` は「何も支払っていない」。Liquidation参照実装（スキャナパート） の scanner はこの 2 つを別々にログに残す — オペレーション上、片方は「fund が drain しつつある」状態を表し、もう片方は「fund がすでに枯渇した」状態を表すからだ。）
 
 3 つの variant のメンタルモデル:
 
@@ -3089,7 +3090,7 @@ L9 で drain path を配線する。L8 で読者が出会った enum が、つ�
 
    ── 各呼び出し後 ─────────────────────────────────────────────────────────
    新しい balance         payout の \`amount\` 累計          常に ≥ 0
-   \`unfilled\` payload      ADL（Stage 10d）にエスカレート   Layer 3 の入力を運ぶ
+   \`unfilled\` payload      ADL（ADL参照実装パート）にエスカレート   Layer 3 の入力を運ぶ
 \`\`\`
 
 Variant の割り当てで押さえる点が 3 つ:
@@ -3144,16 +3145,16 @@ Variant の割り当てで押さえる点が 3 つ:
 
 1. **Early-return はしごが 4 ケースを評価順で扱う。** 非正な shortfall が最初（defensive）。空 fund が 2 番目（balance を動かせない）。十分な balance が 3 番目（happy path）。部分 drain が 4 番目（fallthrough）。**各 guard は独立している — どれもカスケードしない。** Guarded early-return はしごがここでネスト \`match\` に勝つのは、ケースが構造を共有しないからだ。それぞれの入力 shape が異なる（\`shortfall <= 0\` vs \`balance == 0\` vs \`balance >= shortfall\` vs それ以外）。
 2. **\`shortfall <= 0\` で負とゼロを 1 分岐で扱う。** ゼロ shortfall は意味のある呼び出し（「fee はゼロだった、fund から引くものがない」）、負の shortfall は呼び出し側の bug。両方とも同じ \`Covered { amount: 0 }\` を返す — caller-facing なセマンティクスが同一だからだ。何も引かれず、何もエスカレートしない。**入力ケース（の分類）は、呼び出し側の「意図 (intent)」ではなく、最終的な「結果 (outcome)」を基準にグループ化しろ。**
-3. **\`self.balance -= shortfall\` は \`saturating_sub\` ではなく素の \`-\`。** 直前の guard（\`self.balance >= shortfall\`）が、\`i64\` のアンダーフローが構造的に発生しえないことを **全 validator に対して決定論的に証明** しているからだ。L8 の「コンセンサス state では panic が絶対悪」原則と矛盾しているように見えるが、矛盾していない: 静的な条件分岐で panic 確率が 0% だと保証されている文脈に限り、冗長な saturating 演算を外して素の減算を使える。**減算の前提条件で型不変条件が成立しているなら、saturating 演算は冗長になる。** これは \`deposit\` の \`saturating_add\` の逆パターン: あちらでは前提条件を証明できなかったので saturate した。こちらでは証明できた（\`if\` がその証明）ので素の subtraction を使う。
+3. **\`self.balance -= shortfall\` は \`saturating_sub\` ではなく素の \`-\`。** 直前の guard（\`self.balance >= shortfall\`）が、\`i64\` のアンダーフローが構造的に発生しえないことを **全 validator に対して決定論的に証明** しているからだ。レッスン8 の「コンセンサス state では panic が絶対悪」原則と矛盾しているように見えるが、矛盾していない: 静的な条件分岐で panic 確率が 0% だと保証されている文脈に限り、冗長な saturating 演算を外して素の減算を使える。**減算の前提条件で型不変条件が成立しているなら、saturating 演算は冗長になる。** これは \`deposit\` の \`saturating_add\` の逆パターン: あちらでは前提条件を証明できなかったので saturate した。こちらでは証明できた（\`if\` がその証明）ので素の subtraction を使う。
 4. **\`PartiallyDrained\` の構築では、\`prior\` を最初に局所変数に保存し、その後 \`balance = 0\` を実行し、最後に variant を構築する。** 順序が重要だ。\`WithdrawOutcome::PartiallyDrained { amount: self.balance, unfilled: shortfall - self.balance }\` と書いてから \`self.balance = 0\` を実行しても、構築は問題なく動く（\`self.balance\` は mutation 前にキャプチャされる）。だが struct 構築の後に代入を置くと、後付けっぽく読める。\`prior\` を先に保存すれば、時間的順序が明白になる。read → mutate → construct。**State-machine の遷移では、mutation 後に参照する prior state を明示的に名前付けする。**
 5. **\`Covered { amount: shortfall }\` は subtraction 前の \`self.balance\` ではなく \`shortfall\` を直接使う。** これで OK な理由は、すでに \`self.balance >= shortfall\` をチェックしているので、\`shortfall\` がまさに支払った額だからだ。**両者が等しいとき、payload には *available* な額ではなく *requested* な額を載せる — そのほうが呼び出し側のメンタルモデルに合う。**
 6. **メソッドは \`&mut self\` を取り、値を返す。** Reference なし、lifetime なし、\`Result\` なし。Variant *それ自体* が成功の shape だ。Borrow checker はこのメソッドを \`deposit\` の \`-> i64\` と同じに扱う。**値返しの outcome enum は呼び出し地点での \`match\` と滑らかに compose する。Caller に borrow 管理を強制しない。**
 
-> 🛑 **やりがちな勘違い。** 「\`Result<i64, FundError>\` にして、\`FundError::PartiallyDrained(amount, unfilled)\` と \`FundError::Depleted(unfilled)\` を error にすれば?」 問題が 3 つ。(1) \`PartiallyDrained\` と \`Depleted\` は *エラーではない* — エスカレート作業を caller に surface する成功 outcome だ。これを error にタグ付けすると、「メソッドが失敗した」と「メソッドが caveat 付きで成功した」の境界がぼやける。(2) \`Result\` に対する \`?\` 演算子は caller を short-circuit させる。だがここでは short-circuit を *望まない* — caller には pattern-match して route してほしい。(3) \`WithdrawOutcome\` は後の signed-outcome wrapper（Stage 10c）からも返される。\`Result\` にすると、すべての consumer がヘルパーを \`Result\` propagation で包まされる。**\`Result\` は「巻き戻すべきか?」のためのもの。Enum は「いまどんな成功をしたか?」のためのもの。**
+> 🛑 **やりがちな勘違い。** 「\`Result<i64, FundError>\` にして、\`FundError::PartiallyDrained(amount, unfilled)\` と \`FundError::Depleted(unfilled)\` を error にすれば?」 問題が 3 つ。(1) \`PartiallyDrained\` と \`Depleted\` は *エラーではない* — エスカレート作業を caller に surface する成功 outcome だ。これを error にタグ付けすると、「メソッドが失敗した」と「メソッドが caveat 付きで成功した」の境界がぼやける。(2) \`Result\` に対する \`?\` 演算子は caller を short-circuit させる。だがここでは short-circuit を *望まない* — caller には pattern-match して route してほしい。(3) \`WithdrawOutcome\` は後の signed-outcome wrapper（Liquidation参照実装（スキャナパート））からも返される。\`Result\` にすると、すべての consumer がヘルパーを \`Result\` propagation で包まされる。**\`Result\` は「巻き戻すべきか?」のためのもの。Enum は「いまどんな成功をしたか?」のためのもの。**
 
 ### Step 2: 8 個の unit test を追加
 
-\`insurance.rs\` の既存 \`#[cfg(test)] mod tests { ... }\` ブロックの中、L8 の deposit テストの後に 3 つのテストセクションを追加:
+\`insurance.rs\` の既存 \`#[cfg(test)] mod tests { ... }\` ブロックの中、レッスン8 の deposit テストの後に 3 つのテストセクションを追加:
 
 \`\`\`rust
     // ─── withdraw_shortfall: Covered ───────────────────────────────
@@ -3245,7 +3246,7 @@ Variant の割り当てで押さえる点が 3 つ:
 3. **\`withdraw_partial_drains_to_zero\` は \`PartiallyDrained\` の *唯一の* テスト。** 1 個で十分なのは、variant のパスがユニークだからだ。\`0 < balance < shortfall\` のときに発火し、計算（\`amount = balance\`、\`unfilled = shortfall - balance\`）は struct 構築の直接読み出しに過ぎない。**Single-path コードは single-path カバレッジで足りる。下の proptest が全パス横断の保存則を担当する。**
 4. **\`withdraw_after_full_drain_is_depleted\` は variant だけでなく state 遷移をテストする。** Setup なしの素朴なテスト（empty fund に withdraw）は \`withdraw_depleted_no_change\` でカバー済み。この 2 つ目の \`Depleted\` テストは別クラスの bug を捕える。Mutation 前の balance をキャッシュしてしまい、*2 回目* の呼び出しが *1 回目* の drain 前 balance を見るような future リファクタリングだ。**1 つの variant に対する複数テストは、それぞれ *違うクラスの regression* を捕えるべき。**
 5. **\`deposit_after_drain_recovers\` が唯一の sequencing テスト。** 4 つの操作（\`new\`、\`withdraw_shortfall\`、\`deposit\`、\`withdraw_shortfall\`）をチェーンし、最終 balance と outcome を assert する。Per-operation テストは各メソッドを単体で検証するが、現実の liquidation event 系列はまさにこのタイプの多段チェーンだ。**Unit test はメソッドを検証する。Sequencing test はメソッド境界を跨ぐ state-machine 遷移を検証する。**
-6. **Negative-shortfall テストには \`// Defensive\` のマーカーコメントがある。** L8 の \`deposit_negative_is_noop\` と同じパターン。「我々は負を渡さない、このテストは dead code」と判断しようとする将来のメンテナーが、この 1 ワードコメントで足を止める。**マーカーコメントは、リファクタリング除去から defensive code を守るためのテストの方法だ。**
+6. **Negative-shortfall テストには \`// Defensive\` のマーカーコメントがある。** レッスン8 の \`deposit_negative_is_noop\` と同じパターン。「我々は負を渡さない、このテストは dead code」と判断しようとする将来のメンテナーが、この 1 ワードコメントで足を止める。**マーカーコメントは、リファクタリング除去から defensive code を守るためのテストの方法だ。**
 
 ### Step 3: 4 個の proptest を追加
 
@@ -3337,8 +3338,8 @@ Proptest は \`insurance.rs\` の保存則だ。特定の input → output の�
 
 4 つのプロパティで押さえる点が 8 つ:
 
-1. **\`balance_never_negative\` は L8 の型不変条件 *そのもの* のテストだ。** \`balance ≥ 0\` の規律が任意の系列上で成立することを証明する proptest。入力 — 長さ 0 から 20 までの \`(is_deposit, amount)\` ペアのベクター — は、state-machine の到達可能トラジェクトリのほぼすべてを 1000 ケース未満でカバーする。**型不変条件の proptest は、defensive coding が機能することを示す最強の言明だ。**
-2. **\`deposit_is_additive\` は \`i64::MIN..i64::MAX\` ではなく bounded な範囲（\`0..1_000_000\`）を使う。** なぜか。範囲が広いと、プロパティに saturation 挙動を encode させる必要が出てくる。Bounded 範囲なら \`a + b ≤ 2_000_000\` で \`i64::MAX\` には届かない。Saturation は発火せず、厳密等価を使える。**Proptest の入力範囲は、プロパティが素直に表現できる operating range に合わせる。境界ケースは unit test に任せる。** （L8 の \`deposit_saturates_at_max\` unit test が saturation 境界を担当する。Proptest は算術恒等性を担当する。）
+1. **\`balance_never_negative\` は レッスン8 の型不変条件 *そのもの* のテストだ。** \`balance ≥ 0\` の規律が任意の系列上で成立することを証明する proptest。入力 — 長さ 0 から 20 までの \`(is_deposit, amount)\` ペアのベクター — は、state-machine の到達可能トラジェクトリのほぼすべてを 1000 ケース未満でカバーする。**型不変条件の proptest は、defensive coding が機能することを示す最強の言明だ。**
+2. **\`deposit_is_additive\` は \`i64::MIN..i64::MAX\` ではなく bounded な範囲（\`0..1_000_000\`）を使う。** なぜか。範囲が広いと、プロパティに saturation 挙動を encode させる必要が出てくる。Bounded 範囲なら \`a + b ≤ 2_000_000\` で \`i64::MAX\` には届かない。Saturation は発火せず、厳密等価を使える。**Proptest の入力範囲は、プロパティが素直に表現できる operating range に合わせる。境界ケースは unit test に任せる。** （レッスン8 の \`deposit_saturates_at_max\` unit test が saturation 境界を担当する。Proptest は算術恒等性を担当する。）
 3. **\`withdraw_amount_matches_balance_delta\` は Rust のパターンマッチの強力な機能である or-pattern を使う: \`Covered { amount } | PartiallyDrained { amount, .. }\`。** 異なる variant でも同名・同型のフィールド（ここでは \`amount: i64\`）であれば \`|\` で束縛を統合できる（Rust 1.53+ でネストパターンも含めて強化されている）。両 variant とも \`amount\` フィールドを持ち、プロパティは両者で同じ（「delta は報告された \`amount\` に等しい」）。\`..\` は \`PartiallyDrained\` の \`unfilled\` フィールドを — ここで必要ないので — スキップする。**Or-pattern は、別 variant 同士が payload フィールドを共有するとき、条件ロジックを平坦化する。**
 4. **Proptest は *どの* variant が発火するかを予測しない。** \`initial=300, shortfall=500\` のとき「これは \`PartiallyDrained\` のはず」を計算したりはしない。メソッドに決めさせて、その後プロパティを assert する。**Proptest はプロパティを assert する、パスを assert するのではない。** テスト対象のメソッドを再実装してその出力を予測する「テスト」は、テストではなく鏡だ。
 5. **\`withdraw_amount_plus_unfilled_equals_shortfall\` は \`shortfall in 1..1_000_000\`（正のみ）。** ゼロ境界は \`Covered { amount: 0 }\` で、保存則は \`0 + 0 = 0\` として trivially 成立する。だがプロパティは「実際に shortfall がある regime」で最も情報価値がある。範囲制限がテストを意味のある領域に置く。**入力範囲は、プロパティが *何かを語る* 領域に絞る。**
@@ -3384,7 +3385,7 @@ test insurance::tests::withdraw_zero_is_covered_noop ... ok
 test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**45 テスト pass。Insurance fund モジュールは \`260883b\` と byte-for-byte 一致。** Stage 10b の stateful core が完成した。残るは close-outcome decomposition（\`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`）で、L10 で着地する。
+**45 テスト pass。Insurance fund モジュールは \`260883b\` と byte-for-byte 一致。** Liquidation参照実装（保険基金パート） の stateful core が完成した。残るは close-outcome decomposition（\`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`）で、レッスン10 で着地する。
 
 エラー時にありがちなパターン:
 
@@ -3397,11 +3398,11 @@ test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 このレッスンに焼き込んだ load-bearing な決定は 3 つ:
 
-1. **\`Option\` でも \`Result\` でもなく、3-variant の outcome enum。** \`Option<i64>\` は「N を支払ったか、何も支払わなかったか」を表現できるが、「持っていた全額を支払った」と「持っていなかった」の区別が消える。\`Result<i64, FundError>\` は両方を運べるが、partial-drain を *失敗* としてタグ付けする — 失敗ではないのに。**正しい shape は、caller の実際の決定木にマッチする enum**。Caller（Stage 10c の scanner）には 3 つの異なる routing 判断がある。完全 absorb をログ、部分 absorb + escalate をログ、depletion + escalate をログ。
+1. **\`Option\` でも \`Result\` でもなく、3-variant の outcome enum。** \`Option<i64>\` は「N を支払ったか、何も支払わなかったか」を表現できるが、「持っていた全額を支払った」と「持っていなかった」の区別が消える。\`Result<i64, FundError>\` は両方を運べるが、partial-drain を *失敗* としてタグ付けする — 失敗ではないのに。**正しい shape は、caller の実際の決定木にマッチする enum**。Caller（Liquidation参照実装（スキャナパート） の scanner）には 3 つの異なる routing 判断がある。完全 absorb をログ、部分 absorb + escalate をログ、depletion + escalate をログ。
 
 2. **4 ケースの early-return はしご。** ケースは「これは自明に答えか?」順でチェックされる。負 shortfall（defensive）、空 fund（仕事ができない）、十分 balance（happy path）、部分 drain（fallthrough）。順序は operational に意味がある。*コスト順* の系列だ — 最も安いチェックが先、構造的 mutation は最後。**State-machine メソッドの guard はコスト順で評価する。**
 
-3. **Proptest suite が型システムでは表現できない不変条件を encode する。** \`balance_never_negative\` は L8 の型不変条件の proptest。\`withdraw_amount_plus_unfilled_equals_shortfall\` はカスケード数学の保存則。\`deposit_is_additive\` は deposit の abelian-group 構造を証明する。\`withdraw_amount_matches_balance_delta\` は variant payload と観測される state 変化を結ぶ。**4 つのプロパティを合わせれば、すべての public メソッドの契約は、テストスイートが *probe* するものではなく *prove* できるものになる。**
+3. **Proptest suite が型システムでは表現できない不変条件を encode する。** \`balance_never_negative\` は レッスン8 の型不変条件の proptest。\`withdraw_amount_plus_unfilled_equals_shortfall\` はカスケード数学の保存則。\`deposit_is_additive\` は deposit の abelian-group 構造を証明する。\`withdraw_amount_matches_balance_delta\` は variant payload と観測される state 変化を結ぶ。**4 つのプロパティを合わせれば、すべての public メソッドの契約は、テストスイートが *probe* するものではなく *prove* できるものになる。**
 
 ## 答え合わせ
 
@@ -3411,11 +3412,11 @@ git checkout 260883b
 diff -u ~/code/my-openhl/crates/liquidation/src/insurance.rs ./crates/liquidation/src/insurance.rs
 \`\`\`
 
-L9 の後:
-- **insurance.rs** は Stage 10b の \`insurance.rs\` と **byte-for-byte 一致**。State machine 全体 — struct、enum、3 コンストラクタ、accessor、deposit、withdraw_shortfall、Default impl、12 unit test、4 proptest — がファイルに揃う。
-- **lib.rs** は L8 以降すでに byte-for-byte 一致している。
+レッスン9 の後:
+- **insurance.rs** は Liquidation参照実装（保険基金パート） の \`insurance.rs\` と **byte-for-byte 一致**。State machine 全体 — struct、enum、3 コンストラクタ、accessor、deposit、withdraw_shortfall、Default impl、12 unit test、4 proptest — がファイルに揃う。
+- **lib.rs** は レッスン8 以降すでに byte-for-byte 一致している。
 
-L8 で \`lib.rs\` の \`mod\` 順序や re-export スタイルを微妙に変えてしまった場合、ここで答え合わせと揃える。答え合わせは \`pub mod compute; pub mod insurance; pub mod types;\` と \`pub use insurance::{InsuranceFund, WithdrawOutcome};\` を 1 行で書く。空白の差は無害だ。
+レッスン8 で \`lib.rs\` の \`mod\` 順序や re-export スタイルを微妙に変えてしまった場合、ここで答え合わせと揃える。答え合わせは \`pub mod compute; pub mod insurance; pub mod types;\` と \`pub use insurance::{InsuranceFund, WithdrawOutcome};\` を 1 行で書く。空白の差は無害だ。
 
 ## よくある質問
 
@@ -3429,7 +3430,7 @@ L8 で \`lib.rs\` の \`mod\` 順序や re-export スタイルを微妙に変え
 
 **Q3: Proptest の入力範囲が \`i64::MIN..i64::MAX\` ではなく \`0..1_000_000\` なのはなぜか?**
 
-理由が 2 つ。(1) 興味のあるプロパティは *operating* range で成立する。境界 saturation ケースは別途 unit test 化されている（L8 の \`deposit_saturates_at_max\`）。(2) より広い範囲だと、プロパティの assertion 内に saturation ロジックを encode しなければならず、読みにくくなる。**Proptest の範囲は、プロパティが素直に表現できる regime に合わせる — 境界ケースは unit test に属する。**
+理由が 2 つ。(1) 興味のあるプロパティは *operating* range で成立する。境界 saturation ケースは別途 unit test 化されている（レッスン8 の \`deposit_saturates_at_max\`）。(2) より広い範囲だと、プロパティの assertion 内に saturation ロジックを encode しなければならず、読みにくくなる。**Proptest の範囲は、プロパティが素直に表現できる regime に合わせる — 境界ケースは unit test に属する。**
 
 **Q4: 「balance > 0 のとき、次の withdraw は決して Depleted を返さない」の proptest がないのはなぜか?**
 
@@ -3437,17 +3438,17 @@ L8 で \`lib.rs\` の \`mod\` 順序や re-export スタイルを微妙に変え
 
 **Q5: \`WithdrawOutcome\` を \`WithdrawResult\`、\`Covered\` を \`Ok\` variant、他 2 つを \`Err\` にできないか?**
 
-書けるが、*成功のカテゴリー* と *失敗* を混同する。カスケード数学が言うのは、3 variant すべて「それぞれのレイヤーで成功している」ことだ — Covered は Layer 2 で absorb する、他 2 つは Layer 3 に正しく委譲する。これらを「エラー」と呼ぶと、Stage 10b の内部 regime が Stage 10c の語彙に漏れる。**命名はアーキテクチャ上の役割を反映すべきだ。エラー vs 成功は 1 ビットの区別で、この 3 ビットの決定木には収まらない。**
+書けるが、*成功のカテゴリー* と *失敗* を混同する。カスケード数学が言うのは、3 variant すべて「それぞれのレイヤーで成功している」ことだ — Covered は Layer 2 で absorb する、他 2 つは Layer 3 に正しく委譲する。これらを「エラー」と呼ぶと、Liquidation参照実装（保険基金パート） の内部 regime が Liquidation参照実装（スキャナパート） の語彙に漏れる。**命名はアーキテクチャ上の役割を反映すべきだ。エラー vs 成功は 1 ビットの区別で、この 3 ビットの決定木には収まらない。**
 
 **Q6: \`balance_never_negative\` の proptest が \`proptest::collection::vec(..., 0..20)\` を使う。なぜ 20 で、100 ではないのか?**
 
 理由が 2 つ。(1) 20 操作で state-machine の到達可能遷移を複数回 exercise できる — 長い系列はカバレッジを増やさない。(2) Proptest の shrinker は 20 操作の失敗を妥当な時間で最小サブ系列に shrink できる。100 操作の失敗を shrink するには秒単位かかり、結果も読みにくくなる。**Proptest のサイズは「多いほど良い」ではなく shrinkage コストで選ぶ。**
 
-## 次のレッスン (L10) — \`liquidation_fee\` + close-outcome decomposition
+## 次のレッスン (レッスン10) — \`liquidation_fee\` + close-outcome decomposition
 
-L10 は \`compute.rs\` に戻り、\`compute\` と \`insurance\` の橋渡しをする Stage 10b の 3 つの pure-compute 関数を加える: \`liquidation_fee(notional, params)\`、\`solvent_close_outcome(snapshot, mark, params)\`、\`underwater_close_outcome(snapshot, mark, params)\`。3 つを合わせると、liquidation event を \`(fund credit, trader への残額)\` あるいは \`(fund debit, 部分的に取れた fee)\` のタプルに分解する — まさに Stage 10c の scanner が close ごとに \`InsuranceFund::deposit\` / \`InsuranceFund::withdraw_shortfall\` を呼ぶために必要な shape だ。
+レッスン10 は \`compute.rs\` に戻り、\`compute\` と \`insurance\` の橋渡しをする Liquidation参照実装（保険基金パート） の 3 つの pure-compute 関数を加える: \`liquidation_fee(notional, params)\`、\`solvent_close_outcome(snapshot, mark, params)\`、\`underwater_close_outcome(snapshot, mark, params)\`。3 つを合わせると、liquidation event を \`(fund credit, trader への残額)\` あるいは \`(fund debit, 部分的に取れた fee)\` のタプルに分解する — まさに Liquidation参照実装（スキャナパート） の scanner が close ごとに \`InsuranceFund::deposit\` / \`InsuranceFund::withdraw_shortfall\` を呼ぶために必要な shape だ。
 
-L10 の後、\`compute\` モジュールと \`insurance\` モジュールはカスケード数学を介して会話するようになる。Pure 関数が credit/debit の数字を生み、state machine がそれらを蓄積する。L11 はこのループを \`LiquidationScanner\` で包み、safety-net cascade が runnable な scanner を持つ。
+レッスン10 の後、\`compute\` モジュールと \`insurance\` モジュールはカスケード数学を介して会話するようになる。Pure 関数が credit/debit の数字を生み、state machine がそれらを蓄積する。レッスン11 はこのループを \`LiquidationScanner\` で包み、safety-net cascade が runnable な scanner を持つ。
 `,
                 },
                 {
@@ -3463,7 +3464,7 @@ L10 の後、\`compute\` モジュールと \`insurance\` モジュールはカ�
 
 このレッスンで掴む概念:
 
-- **すべての liquidation event は \`(fund movement, account residual)\` のペアに分解できる。** Solvent な close は fund に credit し、正の residual を trader に返す。Underwater な close は fund に debit し、場合によっては partial fee を回収する。本レッスンの 2 つの関数がこの分解を一度コード化すれば、Stage 10c の scanner は数学が生成した *正確な* 数字に対して \`InsuranceFund::deposit\` と \`InsuranceFund::withdraw_shortfall\` を呼べる。**Pure compute は credit/debit を生み、state machine がそれを蓄積する。**
+- **すべての liquidation event は \`(fund movement, account residual)\` のペアに分解できる。** Solvent な close は fund に credit し、正の residual を trader に返す。Underwater な close は fund に debit し、場合によっては partial fee を回収する。本レッスンの 2 つの関数がこの分解を一度コード化すれば、Liquidation参照実装（スキャナパート） の scanner は数学が生成した *正確な* 数字に対して \`InsuranceFund::deposit\` と \`InsuranceFund::withdraw_shortfall\` を呼べる。**Pure compute は credit/debit を生み、state machine がそれを蓄積する。**
 - **\`debug_assert!\` を routing contract として使う。** \`solvent_close_outcome\` と \`underwater_close_outcome\` は *非重複* (non-overlapping) だ。それぞれが「*もう一方* の呼び出しではなかった」ことを debug-assert で表明する。このペアは「caller が routing 義務を負う discriminated dispatch」であり、関数は前提条件のウィンドウ内でのみ total になる。**\`debug_assert!\` は、型システムが encode できない契約を文書化する。**
 - **\`fee.saturating_sub(post_close_equity)\` が \`post_close_equity\` 負値のとき何をするか。** レッスン中で最もきれいな算術だ: \`i64 − (負の i64) = i64 + |負の i64|\`。「already-underwater」サブケースが「partial fee」サブケースと同じ式を再利用できるのは、負値の減算が magnitude の加算になるからだ。**\`if\` の分岐が signed なオペランドの場合、1 つの式で両方の分岐をカバーできる。**
 - **\`Result\` でも 1 つの enum でもなく、2 つの異なる戻り型。** \`SolventClose { fee_to_fund, residual_to_account }\` と \`UnderwaterClose { fee_to_fund, shortfall_to_fund }\` は \`fee_to_fund\` フィールドを共有するが、もう一方のフィールドは完全に異なる意味を持つ。意味の差が重い — residual は trader へ *出ていく*、shortfall は fund から *入ってくる*。\`Option<i64>\` で 1 スロットに押し込むと dispatch がぼやける。**2 つのパスが質的に異なるフィールド意味を生むとき、2 つの struct 型が 1 つの enum に勝つ。**
@@ -3474,7 +3475,7 @@ L10 の後、\`compute\` モジュールと \`insurance\` モジュールはカ�
 cargo test -p openhl-liquidation
 \`\`\`
 
-…で 55 テストが pass する（compute 34 + insurance 21）。L10 後、Stage 10b の crate 全体が \`260883b\` と byte-for-byte 一致する。
+…で 55 テストが pass する（compute 34 + insurance 21）。レッスン10 後、Liquidation参照実装（保険基金パート） の crate 全体が \`260883b\` と byte-for-byte 一致する。
 
 具体的な変更:
 
@@ -3482,17 +3483,17 @@ cargo test -p openhl-liquidation
 - **\`src/compute.rs\`。** \`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\` を追加。新規 unit test 10 個（fee 4 + solvent 3 + underwater 3）。
 - **\`src/lib.rs\`。** compute の re-export に 3 関数、types の re-export に \`SolventClose\` + \`UnderwaterClose\` を追加。
 
-L10 で Stage 10b を閉じる。本レッスンの後、\`260883b\` に対する答え合わせ diff は liquidation crate の全ファイルで完全にクリーンになる。
+レッスン10 で Liquidation参照実装（保険基金パート） を閉じる。本レッスンの後、\`260883b\` に対する答え合わせ diff は liquidation crate の全ファイルで完全にクリーンになる。
 
 ## おさらい
 
-L9 の後:
+レッスン9 の後:
 - \`insurance.rs\` は \`260883b\` と byte-for-byte 一致 — \`InsuranceFund\` state machine + \`WithdrawOutcome\` enum + 12 unit test + 4 proptest が揃う。
 - \`lib.rs\` は \`InsuranceFund\` と \`WithdrawOutcome\` を re-export 済み。
 - \`cargo test\` は 45 テストを走らせ、すべて green。
 - Fund は deposit を受け取り、drain を surface できる。**だが、特定の close に対して「いくら deposit するか / drain するか」を計算するものはまだ存在しない。**
 
-L10 がそのギャップを埋める。新しい compute 関数 3 つが、Stage 10c の scanner が state machine に流し込む「数値の出どころ (source of truth)」になる。
+レッスン10 がそのギャップを埋める。新しい compute 関数 3 つが、Liquidation参照実装（スキャナパート） の scanner が state machine に流し込む「数値の出どころ (source of truth)」になる。
 
 ## 計画
 
@@ -3508,13 +3509,13 @@ L10 がそのギャップを埋める。新しい compute 関数 3 つが、Stag
 
 > 🛑 **予測。** 続きを読む前に考えてほしい。Trader が 1 BTC を long で保有。Entry $100k、collateral $10k。$80,500 で force-close される（$19,500 の損失）。Hyperliquid デフォルトの \`liquidation_fee_bps\` は 150（1.5%）。問: **このクローズで insurance fund は credit するか debit するか、そして金額はいくらか?**
 
-（答え: **Fund は debit する — $10,707 の shortfall を吸収しなければならない。** 流れを追う。Close 時の notional は $80,500。Fee = $80,500 × 150 / 10,000 = $1,207.50、整数演算で $1,207 に切り捨て。Trader の realized PnL は −$19,500、post-close equity = $10,000 collateral + (−$19,500 PnL) = −$9,500 — *fee を引く前* にすでに underwater。Fee は徴収できない（負の残高に課金はできない）。Fund は「望ましかった fee」と「負の equity」の両方を cover する必要がある: $1,207 + $9,500 = $10,707。これが \`underwater_close_outcome\` の「already underwater」サブケースであり、Perp Primer L3 で扱ったシナリオと同一の数字だ。概念で学んだ計算がコードで再登場する。）
+（答え: **Fund は debit する — $10,707 の shortfall を吸収しなければならない。** 流れを追う。Close 時の notional は $80,500。Fee = $80,500 × 150 / 10,000 = $1,207.50、整数演算で $1,207 に切り捨て。Trader の realized PnL は −$19,500、post-close equity = $10,000 collateral + (−$19,500 PnL) = −$9,500 — *fee を引く前* にすでに underwater。Fee は徴収できない（負の残高に課金はできない）。Fund は「望ましかった fee」と「負の equity」の両方を cover する必要がある: $1,207 + $9,500 = $10,707。これが \`underwater_close_outcome\` の「already underwater」サブケースであり、Perp Primer レッスン3 で扱ったシナリオと同一の数字だ。概念で学んだ計算がコードで再登場する。）
 
-L10 の decomposition picture:
+レッスン10 の decomposition picture:
 
 \`\`\`
    ┌────────────────────────────────────────────────────────────┐
-   │  Stage 10b compute が生成する per-close 分解               │
+   │  Liquidation参照実装（保険基金パート） compute が生成する per-close 分解               │
    ├────────────────────────────────────────────────────────────┤
    │                                                            │
    │  SOLVENT パス                                              │
@@ -3524,7 +3525,7 @@ L10 の decomposition picture:
    │                                residual_to_account:   +Y   │  ←── Trader へ返金
    │                              }                             │
    │                                                            │
-   │  Stage 10c scanner はこう使う:                             │
+   │  Liquidation参照実装（スキャナパート） scanner はこう使う:                             │
    │    fund.deposit(fee_to_fund)                ← Layer 2 成長  │
    │    trader_balance += residual_to_account    ← 払い戻し      │
    │                                                            │
@@ -3542,10 +3543,10 @@ L10 の decomposition picture:
    │                                    shortfall_to_fund: +Z   │  ←── Fund から引き出し
    │                                  }                         │
    │                                                            │
-   │  Stage 10c scanner はこう使う:                             │
+   │  Liquidation参照実装（スキャナパート） scanner はこう使う:                             │
    │    fund.deposit(fee_to_fund)            ← 0 のこともある    │
    │    fund.withdraw_shortfall(shortfall_to_fund)               │
-   │      ↑ WithdrawOutcome を返す (L9)                          │
+   │      ↑ WithdrawOutcome を返す (レッスン9)                          │
    │      ↑ Depleted/PartiallyDrained は ADL へエスカレート       │
    │                                                            │
    └────────────────────────────────────────────────────────────┘
@@ -3555,7 +3556,7 @@ L10 の decomposition picture:
 
 1. **\`SolventClose\` の出力はシステムから *出ていく*。\`UnderwaterClose\` の出力はシステムへ *入ってくる*。** Residual は trader に返る（account への正のフロー）。Shortfall は fund から引かれる（close への正のフロー）。Magnitude の shape は同じ（\`i64 ≥ 0\`）。逆なのは方向だけ。**お金の *方向* は符号ではなくフィールド名に住む。**
 2. **\`UnderwaterClose\` は 2 つのサブケースを 1 つの shape にコンパイルする。** \`i64\` フィールド 2 つの単一構造体が「partial fee, partial shortfall」と「zero fee, full shortfall」の両方をカバーする。\`kind\` 判別子は要らない — \`fee_to_fund\` の *値* (zero or positive) が区別を運ぶ。**フィールド値ですでに分かることに、サブケースのタグを付けない。**
-3. **この分解こそが Stage 10c を可能にする。** Scanner は close が solvent か underwater か、*なぜそうなのか* を知る必要がない。名前付き semantics を持つ 2 つの i64 が返ってくれば十分。**数学と state の間にクリーンな分解があれば、state-machine 層は dumb なままでいられる。**
+3. **この分解こそが Liquidation参照実装（スキャナパート） を可能にする。** Scanner は close が solvent か underwater か、*なぜそうなのか* を知る必要がない。名前付き semantics を持つ 2 つの i64 が返ってくれば十分。**数学と state の間にクリーンな分解があれば、state-machine 層は dumb なままでいられる。**
 
 ## 手を動かす walk-through
 
@@ -3564,7 +3565,7 @@ L10 の decomposition picture:
 \`crates/liquidation/src/types.rs\` を開く。既存の \`CloseOrderSpec\` 定義の後に追記:
 
 \`\`\`rust
-/// Solvent-close outcome (Stage 10b).
+/// Solvent-close outcome (Liquidation参照実装（保険基金パート）).
 ///
 /// Produced by [\`crate::compute::solvent_close_outcome\`] for a Liquidatable
 /// account whose post-close equity covers the liquidation fee in full.
@@ -3580,7 +3581,7 @@ pub struct SolventClose {
     pub residual_to_account: i64,
 }
 
-/// Underwater-close outcome (Stage 10b).
+/// Underwater-close outcome (Liquidation参照実装（保険基金パート）).
 ///
 /// Produced by [\`crate::compute::underwater_close_outcome\`] when the
 /// account's post-close equity cannot cover the full liquidation fee.
@@ -3609,7 +3610,7 @@ pub struct UnderwaterClose {
 
 型について押さえる点が 4 つ:
 
-1. **両方の struct の両フィールドが \`i64\`、\`u64\` ではない。** L8 の \`InsuranceFund::balance\` と同じ型統一性の理由だ。Crate 全体が \`i64\` で計算する。非負性は型ではなく doc コメントで document する。**Crate 内の型統一性は時間とともに複利で効く。フィールド単位の符号なしは局所的な便利さに過ぎず、境界ごとにキャストを発生させる。**
+1. **両方の struct の両フィールドが \`i64\`、\`u64\` ではない。** レッスン8 の \`InsuranceFund::balance\` と同じ型統一性の理由だ。Crate 全体が \`i64\` で計算する。非負性は型ではなく doc コメントで document する。**Crate 内の型統一性は時間とともに複利で効く。フィールド単位の符号なしは局所的な便利さに過ぎず、境界ごとにキャストを発生させる。**
 2. **どちらの struct も同じ derive 集合: \`Clone + Copy + Debug + PartialEq + Eq\`** — \`WithdrawOutcome\` と \`InsuranceFund\` と同じ集合だ。これらは 16 バイトの POD 型。値渡しが reference より安い。**この crate の pure-value 型は一貫した derive リストを使う。予測可能性そのものが美徳だ。**
 3. **Doc コメントはフィールドの *行き先* を名指す。*出どころ* ではない。** \`fee_to_fund\` は「ここに行く（insurance fund）」と言い、「ここから来た（trader の collateral）」とは言わない。\`shortfall_to_fund\` は「行き先（fund からクローズへ）」を言い、それを生んだ負 equity の算術は言わない。**フィールド名は caller がそれを *どう使うか* で名付け、producer が *どう計算したか* では名付けない。**
 4. **\`UnderwaterClose\` はサブケースに関わらず \`shortfall_to_fund\` を常に運ぶ。** どちらのサブケースが発火しても、構造体の shape は変わらない。Caller は struct shape ではなく *値* に対してパターンマッチする（\`if shortfall_to_fund > 0 { fund.withdraw_shortfall(...) }\`）。**Total field presence > サブケース固有 shape。Caller はゼロに対して 1 度マッチするだけで済む。**
@@ -3622,7 +3623,7 @@ pub struct UnderwaterClose {
 /// Liquidation fee on a closed notional, in quote units.
 ///
 /// \`fee = notional × fee_bps / MARGIN_SCALE\`, saturating on overflow.
-/// Pure math — the caller (Stage 10c scanner / bridge) supplies the
+/// Pure math — the caller (Liquidation参照実装（スキャナパート） scanner / bridge) supplies the
 /// actual fill notional from the matching engine.
 ///
 /// Returns \`0\` for a zero notional (flat positions; should never reach
@@ -3663,8 +3664,8 @@ pub fn liquidation_fee(closed_notional: u64, params: &LiquidationParams) -> i64 
 /// has \`residual_to_account ≤ 0\` — caller should have routed to
 /// [\`underwater_close_outcome\`] instead.
 ///
-/// Stage 10b never mutates state — this is pure compute that produces
-/// the credit/debit pair for the caller (Stage 10c scanner) to apply
+/// Liquidation参照実装（保険基金パート） never mutates state — this is pure compute that produces
+/// the credit/debit pair for the caller (Liquidation参照実装（スキャナパート） scanner) to apply
 /// against [\`crate::insurance::InsuranceFund\`] and the trader's balance.
 #[must_use]
 pub fn solvent_close_outcome(
@@ -3689,7 +3690,7 @@ pub fn solvent_close_outcome(
 
 押さえる点が 6 つ:
 
-1. **関数は Stage 10a の関数 *3 つを compose* する。** \`notional_value\`、\`liquidation_fee\`（Step 2 で追加）、\`account_equity\` がすべて inline で呼ばれる。新しい数学はない。3 つの既存プリミティブからパッケージ化された outcome を生む *routing 関数* だ。**High-level な outcome 関数は low-level な数学を compose すべきだ。複製してはいけない。**
+1. **関数は Liquidation参照実装（計算パート） の関数 *3 つを compose* する。** \`notional_value\`、\`liquidation_fee\`（Step 2 で追加）、\`account_equity\` がすべて inline で呼ばれる。新しい数学はない。3 つの既存プリミティブからパッケージ化された outcome を生む *routing 関数* だ。**High-level な outcome 関数は low-level な数学を compose すべきだ。複製してはいけない。**
 2. **\`debug_assert!\` が契約そのもの。** 前提条件（\`post_close_equity >= fee\`）は caller がすでに行った *routing 判断*「これは solvent な close だ」と等価だ。Underwater な close で \`solvent_close_outcome\` を呼ぶのは *caller の bug* であり、ランタイム分岐ではない。\`debug_assert!\` は debug ビルドで発火し、release ではコンパイルアウトされる。**ランタイム挙動は変わらない。開発時に caller の bug を捕まえ、本番では消える。**
 3. **\`debug_assert!\` のエラーメッセージは *名前付き値* を含む。** このアサートを発火させた開発者は、行番号ではなく \`post_close_equity=-500 < fee=1207\` を見る。Format-string capture（\`{post_close_equity}\`）を使えば、成功パスでの文字列アロケーションコストはゼロ。**Assertion メッセージでの format-string capture は、assertion が pass する限りゼロコスト。失敗したときに大きく払い戻す。**
 4. **\`debug_assert!\` が \`equity ≥ fee\` を保証するのに \`post_close_equity.saturating_sub(fee)\`。** なぜか。Release ビルドでは \`debug_assert!\` は発火しない。Caller の bug がリリースで assertion をスキップしても、素の \`-\` はサブトラクションを完了させる。だが他所の bug — たとえば上流のオーバーフローで \`equity\` が \`i64::MIN\` になる — が \`equity - fee\` を underflow させうる。Saturation はどんなケースでも clamp された i64 を返す。**Saturating 算術は \`debug_assert!\` のベルト＆サスペンダー的補完だ。両者で dev と prod 両方をカバーする。**
@@ -3765,18 +3766,18 @@ pub fn underwater_close_outcome(
 6. **\`debug_assert!\` の述語が \`solvent_close_outcome\` から反転する。** 意図的だ: 2 つの assertion は入力空間の *非重複カバー* を成す。\`solvent ⇔ equity ≥ fee\` と \`underwater ⇔ equity < fee\` が入力空間を網羅的に partition する。ペアは discriminated dispatch であり、assertion がそれを証明する。**反対前提条件を持つ 2 つの pure 関数のペアは、慣例による discriminated dispatch だ — 型システムが助けてくれないが、assert のペアがその役を果たす。**
 7. **\`post_close_equity == 0\` への early return はない。** 「ちょうどゼロ」が common な境界だから fast path を加えるべきと思う読者もいるかもしれない。加えない。\`else\` 分岐がすでに正しい答えを生み、分岐評価コストは比較 1 回。**境界 fast-path を加えるのは、境界で数学が *実際に* 違うときだけ。**
 
-> 🛑 **やりがちな勘違い。** 「\`solvent_close_outcome\` と \`underwater_close_outcome\` を 1 つの関数にまとめて \`Result<SolventClose, UnderwaterClose>\` を返せばいいのでは?」 問題が 3 つ。(1) どちらの outcome もエラーではない。両方とも *成功* した close で、別々の state-machine 操作に route される。(2) Stage 10c の scanner はマージン健康度チェックを *すでに* 行って *適切なほう* を呼ぶ。Dispatch を \`Result\` 経由でやると、scanner がすでにやった仕事を繰り返す。(3) \`debug_assert!\` のペアは 2 つの別関数のほうが意味を持つ。各関数が自分の契約を表明する。Tagged union を返す 1 関数では「partition のこちら側はここでだけ正しい」が表現できない。**反対前提条件の 2 つの関数は、tagged union を返す 1 つの関数より discriminated dispatch を上手く表現する。**
+> 🛑 **やりがちな勘違い。** 「\`solvent_close_outcome\` と \`underwater_close_outcome\` を 1 つの関数にまとめて \`Result<SolventClose, UnderwaterClose>\` を返せばいいのでは?」 問題が 3 つ。(1) どちらの outcome もエラーではない。両方とも *成功* した close で、別々の state-machine 操作に route される。(2) Liquidation参照実装（スキャナパート） の scanner はマージン健康度チェックを *すでに* 行って *適切なほう* を呼ぶ。Dispatch を \`Result\` 経由でやると、scanner がすでにやった仕事を繰り返す。(3) \`debug_assert!\` のペアは 2 つの別関数のほうが意味を持つ。各関数が自分の契約を表明する。Tagged union を返す 1 関数では「partition のこちら側はここでだけ正しい」が表現できない。**反対前提条件の 2 つの関数は、tagged union を返す 1 つの関数より discriminated dispatch を上手く表現する。**
 
 ### Step 5: 10 個の unit test を compute.rs に追加
 
-既存の \`#[cfg(test)] mod tests\` ブロック内、L7 の close-order-spec テストの後に 3 つのテストセクションを追加:
+既存の \`#[cfg(test)] mod tests\` ブロック内、レッスン7 の close-order-spec テストの後に 3 つのテストセクションを追加:
 
 \`\`\`rust
-    // ─── Stage 10b: liquidation_fee ────────────────────────────────
+    // ─── Liquidation参照実装（保険基金パート）: liquidation_fee ────────────────────────────────
 
     #[test]
     fn fee_basic() {
-        // 1.5% of $80,400 = $1,206 — matches the Perp Primer L3 example.
+        // 1.5% of $80,400 = $1,206 — matches the Perp Primer レッスン3 example.
         let params = LiquidationParams::hyperliquid_default();
         assert_eq!(liquidation_fee(80_400, &params), 1_206);
     }
@@ -3810,7 +3811,7 @@ pub fn underwater_close_outcome(
         assert_eq!(fee, i64::MAX);
     }
 
-    // ─── Stage 10b: solvent_close_outcome ──────────────────────────
+    // ─── Liquidation参照実装（保険基金パート）: solvent_close_outcome ──────────────────────────
 
     #[test]
     fn solvent_close_typical_liquidatable() {
@@ -3857,11 +3858,11 @@ pub fn underwater_close_outcome(
         assert_eq!(outcome.residual_to_account, 0);
     }
 
-    // ─── Stage 10b: underwater_close_outcome ────────────────────────
+    // ─── Liquidation参照実装（保険基金パート）: underwater_close_outcome ────────────────────────
 
     #[test]
     fn underwater_close_already_underwater_pre_fee() {
-        // Perp Primer L3 scenario: 1 BTC long, entry $100k, $10k collateral,
+        // Perp Primer レッスン3 scenario: 1 BTC long, entry $100k, $10k collateral,
         // close at $80,500. Realized PnL = −$19,500, post_close_equity = −$9,500.
         // Notional = $80,500; fee = 1_207 (80_500 × 150 / 10_000)
         // shortfall = fee − post_close_equity = 1_207 − (−9_500) = $10,707
@@ -3903,17 +3904,17 @@ pub fn underwater_close_outcome(
 
 テスト設計で押さえる点が 7 つ:
 
-1. **セクション区切りが関数名と一致する** — \`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`。L9 と同じ grep-friendly なグルーピングだ。**テストは exercise する関数でグループ化する。ファイル構造に API を documented させる。**
-2. **\`fee_basic\` は Perp Primer L3 の数字を使う。** $80,400 × 1.5% = $1,206 は Perp Primer L3 で概念的に walk-through した計算と同じだ。同じ数字を具体的なコードで見ること自体が **curriculum-to-implementation の reinforcement** になる。Primer 経由で来た読者は、抽象が実際の算術に着地する瞬間を感じる。
+1. **セクション区切りが関数名と一致する** — \`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`。レッスン9 と同じ grep-friendly なグルーピングだ。**テストは exercise する関数でグループ化する。ファイル構造に API を documented させる。**
+2. **\`fee_basic\` は Perp Primer レッスン3 の数字を使う。** $80,400 × 1.5% = $1,206 は Perp Primer レッスン3 で概念的に walk-through した計算と同じだ。同じ数字を具体的なコードで見ること自体が **curriculum-to-implementation の reinforcement** になる。Primer 経由で来た読者は、抽象が実際の算術に着地する瞬間を感じる。
 3. **\`fee_zero_bps\` は \`LiquidationParams\` を inline で構築する** — \`hyperliquid_default()\` を使わずに。なぜか。デフォルトは \`liquidation_fee_bps = 150\` で、このテストは \`bps = 0\` が必要。**テストするパラメータがデフォルトから divergence するとき、デフォルトを mutate するのではなく inline で構築する。** テストの意図がトップで可視化される。
 4. **\`fee_saturates_on_pathological_input\` は \`u64::MAX\` と \`u32::MAX\` の両方を使う。** これが i128 saturation path を exercise する *唯一の* テストだ。算術: \`u64::MAX × u32::MAX ≈ 2^96\`。i128 には収まるが、\`i64\` には壊滅的に overflow する。Saturating-mul は \`i128::MAX\` で頭打ちにし、最後の saturate-to-i64 で \`i64::MAX\` を生む。**Pathological input テストは、このコードパスが *唯一* 実行される場所。これがないと saturation は dead-code 同然になる。**
 5. **\`solvent_close_short_profit\` は long-loss の補完として存在する。** Long → loss → solvent close が想定シナリオ。Short → profit → solvent close（「favorable」liquidation）は trader が投入分より *多く* 戻ってくるケース。両方とも同じ shape の \`SolventClose\` を生むが、residual の数字は大きく異なる（3,575 vs 18,650）。**符号付き入力関数のテストは両方の符号をカバーしなければならない。**
 6. **\`solvent_close_fee_consumes_all_residual\` には *構築を説明するコメント* がある。** \`post_close_equity == fee\` となる入力を求めるには、\`fee = notional × 150 / 10_000\` を解く必要がある。テスト内のコメントが読者を構築過程に通す。**値が magic に見えるテストには、なぜその値なのかを説明するコメントを書く。**
-7. **\`underwater_close_already_underwater_pre_fee\` は Perp Primer L3 の数字を再利用する。** 同じ $100k entry、$10k collateral、$80,500 でクローズ、同じ $19,500 の PnL — Primer の概念シナリオがいまや \`UnderwaterClose { fee_to_fund: 0, shortfall_to_fund: 10_707 }\` を生成し、答え合わせコードに対して検証される。**Curriculum reinforcement はコース全体で複利化する。Primer の数字を L10 で再利用することでループが閉じる。**
+7. **\`underwater_close_already_underwater_pre_fee\` は Perp Primer レッスン3 の数字を再利用する。** 同じ $100k entry、$10k collateral、$80,500 でクローズ、同じ $19,500 の PnL — Primer の概念シナリオがいまや \`UnderwaterClose { fee_to_fund: 0, shortfall_to_fund: 10_707 }\` を生成し、答え合わせコードに対して検証される。**Curriculum reinforcement はコース全体で複利化する。Primer の数字を レッスン10 で再利用することでループが閉じる。**
 
 ### Step 6: \`src/lib.rs\` を更新
 
-既存の re-export を拡張。\`pub use compute::{ ... };\` ブロックを見つけて拡張する。L7 後はこうだった:
+既存の re-export を拡張。\`pub use compute::{ ... };\` ブロックを見つけて拡張する。レッスン7 後はこうだった:
 
 \`\`\`rust
 pub use compute::{
@@ -3947,7 +3948,7 @@ pub use types::{
 };
 \`\`\`
 
-新規関数名 3 つ（\`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`）と新規型名 2 つ（\`SolventClose\`、\`UnderwaterClose\`）、すべて alphabetical に挿入。L10 後、crate の public surface は compute 関数 9 個 + types 8 個になる。
+新規関数名 3 つ（\`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`）と新規型名 2 つ（\`SolventClose\`、\`UnderwaterClose\`）、すべて alphabetical に挿入。レッスン10 後、crate の public surface は compute 関数 9 個 + types 8 個になる。
 
 ### Step 7: テストを走らせる
 
@@ -3961,7 +3962,7 @@ cargo test -p openhl-liquidation
 running 55 tests
 test compute::tests::close_flat_has_zero_qty ... ok
 test compute::tests::close_long_with_sell ... ok
-... (Stage 10a の 8 テスト)
+... (Liquidation参照実装（計算パート） の 8 テスト)
 test compute::tests::fee_basic ... ok
 test compute::tests::fee_saturates_on_pathological_input ... ok
 test compute::tests::fee_zero_bps ... ok
@@ -3973,25 +3974,25 @@ test compute::tests::solvent_close_typical_liquidatable ... ok
 test compute::tests::underwater_close_already_underwater_pre_fee ... ok
 test compute::tests::underwater_close_partial_fee_collection ... ok
 test compute::tests::underwater_close_zero_equity_at_fee ... ok
-... (L8 + L9 の insurance テスト)
+... (レッスン8 + レッスン9 の insurance テスト)
 
 test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**55 テスト pass。Stage 10b 完成。** Crate 全体 — \`compute.rs\`、\`insurance.rs\`、\`types.rs\`、\`lib.rs\` — が \`260883b\` と byte-for-byte 一致。Pure math、stateful な fund、decomposition outcomes が並んで揃った。
+**55 テスト pass。Liquidation参照実装（保険基金パート） 完成。** Crate 全体 — \`compute.rs\`、\`insurance.rs\`、\`types.rs\`、\`lib.rs\` — が \`260883b\` と byte-for-byte 一致。Pure math、stateful な fund、decomposition outcomes が並んで揃った。
 
 エラー時にありがちなパターン:
 
 - **\`underwater_close_already_underwater_pre_fee\` が \`shortfall_to_fund: 1_207 - 9_500\`（つまり負）で失敗。** 素の \`i64 - i64\` で \`fee - post_close_equity\` を書いた。算術的には動くが、サブトラクションの符号を取り違えている。正しくは \`fee.saturating_sub(post_close_equity)\` = \`1_207 - (-9_500)\` = \`+10_707\`。\`fee.saturating_sub(post_close_equity)\` の doc コメントを読み直す。トリックは「負値の減算は magnitude の加算になる」だ。
 - **\`underwater_close_partial_fee_collection\` が \`fee_to_fund: 0, shortfall_to_fund: 1_357\` で失敗。** \`if\` 分岐を \`>\` ではなく \`>=\` と書いた。\`>=\` だと equity = 0 が partial-fee 分岐に route される（数学的には正しい: \`fee_to_fund = 0, shortfall = fee - 0 = fee\`）が、意図が違う。Doc は「positive but insufficient」と言う。厳密に positive だ。
-- **\`solvent_close_typical_liquidatable\` が \`debug_assert!\` メッセージで panic。** L4/L5 の \`account_equity\` か \`notional_value\` が誤った符号を返している。期待される \`post_close_equity\` は +$5,000。それ以外が返るなら、Stage 10a の算術を walk-through して上流の関数をまず修正する。
+- **\`solvent_close_typical_liquidatable\` が \`debug_assert!\` メッセージで panic。** レッスン4/レッスン5 の \`account_equity\` か \`notional_value\` が誤った符号を返している。期待される \`post_close_equity\` は +$5,000。それ以外が返るなら、Liquidation参照実装（計算パート） の算術を walk-through して上流の関数をまず修正する。
 - **\`fee_saturates_on_pathological_input\` が overflow panic で失敗。** \`n.saturating_mul(bps)\` ではなく素の \`n * bps\` を書いた。i128 上のオーバーフロー乗算も debug でまだ panic する。
 
 ## 設計の振り返り
 
 このレッスンに焼き込んだ load-bearing な決定は 3 つ:
 
-1. **\`(fund movement, account outcome)\` の分解こそが cascade を composable にする。** Stage 10c の scanner は本質的にループだ。各 Liquidatable アカウントについて solvent/underwater を判定し、適切な outcome 関数を呼び、credit/debit を fund と trader にルーティングする。このループが trivial になるのは、L10 が数学を「名前付きフィールドの出力を持つ 2 関数」にパッケージ化したからだ。**数学と state の間にクリーンな分解があれば、state-machine 層は dumb なままでいられる。**
+1. **\`(fund movement, account outcome)\` の分解こそが cascade を composable にする。** Liquidation参照実装（スキャナパート） の scanner は本質的にループだ。各 Liquidatable アカウントについて solvent/underwater を判定し、適切な outcome 関数を呼び、credit/debit を fund と trader にルーティングする。このループが trivial になるのは、レッスン10 が数学を「名前付きフィールドの出力を持つ 2 関数」にパッケージ化したからだ。**数学と state の間にクリーンな分解があれば、state-machine 層は dumb なままでいられる。**
 
 2. **\`debug_assert!\` は契約、\`saturating_sub\` はシートベルト。** Assertion は前提条件を文書化し、開発時に caller の bug を捕まえる。Saturation は本番（assertion がコンパイルアウトされる場所）で同じ bug を捕まえて sane な値に clamp する。**どちらも単独では十分でない** — そしてそれがペアリングの本質だ。\`debug_assert!\` 単独では、release で上流バグ（オラクル異常値、壊れた snapshot など）が来たときに underflow して silently wrap する。\`saturating_sub\` 単独では、caller の *routing バグ*（本来 underwater なのに solvent パスに迷い込んだ呼び出し）を黙って吸収し、症状を隠したまま原因が debug されないまま残る。二段構え、二つの failure mode: **開発時には bug が住むその場所で爆発させて修正させる (assert)、本番では bug が mainnet にすり抜けたとしても chain を fork させない (saturate)。** **Pure compute での defensive coding は dev-time assertion + prod-time saturation のペアを使う。**
 
@@ -4007,13 +4008,13 @@ diff -u ~/code/my-openhl/crates/liquidation/src/types.rs ./crates/liquidation/sr
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L10 の後:
-- **compute.rs** は Stage 10b の \`compute.rs\` と **byte-for-byte 一致**。
-- **types.rs** は Stage 10b の \`types.rs\` と **byte-for-byte 一致**。
-- **lib.rs** は Stage 10b の \`lib.rs\` と **byte-for-byte 一致**。
-- **insurance.rs** は L9 以来 byte-for-byte 一致している。
+レッスン10 の後:
+- **compute.rs** は Liquidation参照実装（保険基金パート） の \`compute.rs\` と **byte-for-byte 一致**。
+- **types.rs** は Liquidation参照実装（保険基金パート） の \`types.rs\` と **byte-for-byte 一致**。
+- **lib.rs** は Liquidation参照実装（保険基金パート） の \`lib.rs\` と **byte-for-byte 一致**。
+- **insurance.rs** は レッスン9 以来 byte-for-byte 一致している。
 
-**Stage 10b 完成。** \`openhl-liquidation\` crate 全体（コミット \`260883b\`）が workspace に揃った。rethlab Liquidation コースの Module 3（insurance fund）はここで完結する。
+**Liquidation参照実装（保険基金パート） 完成。** \`openhl-liquidation\` crate 全体（コミット \`260883b\`）が workspace に揃った。rethlab Liquidation コースの セクション3（insurance fund）はここで完結する。
 
 ## よくある質問
 
@@ -4023,7 +4024,7 @@ L10 の後:
 
 **Q2: \`solvent_close_outcome\` と \`underwater_close_outcome\` を \`AccountSnapshot\` のメソッドにすべきか?**
 
-しない。L7 Q3 の \`close_order_spec\` と同じ答えだ。両関数は \`compute.rs\` に住む。他の margin math 関数と隣り合うのがアーキテクチャ上の家だからだ。\`AccountSnapshot\` はデータ運搬役で \`types.rs\` に住む。Compute は \`compute.rs\` に住む。**Receiver ではなく概念で co-locate する。**
+しない。レッスン7 Q3 の \`close_order_spec\` と同じ答えだ。両関数は \`compute.rs\` に住む。他の margin math 関数と隣り合うのがアーキテクチャ上の家だからだ。\`AccountSnapshot\` はデータ運搬役で \`types.rs\` に住む。Compute は \`compute.rs\` に住む。**Receiver ではなく概念で co-locate する。**
 
 **Q3: \`underwater_close_outcome\` の「ほぼ underwater でない」境界（equity がちょうど fee と等しい）で \`shortfall_to_fund\` がゼロにならないのはなぜか?**
 
@@ -4041,11 +4042,11 @@ L10 の後:
 
 セマンティクスは *同じ* だ。両フィールドが「この close の fee のうちこれだけが insurance fund に流れた」を意味する。\`SolventClose\` では full fee（正の collateral residual から徴収）。\`UnderwaterClose\` では partial fee（正だが不十分な equity から徴収）またはゼロ（負の equity から徴収）。*金額* は違うが、*行き先* は同じ。**フィールド名は行き先で名付ける。それを生んだ算術で名付けない。**
 
-## 次のレッスン (L11) — \`LiquidationScanner\` 導入 (Stage 10c)
+## 次のレッスン (レッスン11) — \`LiquidationScanner\` 導入 (Liquidation参照実装（スキャナパート）)
 
-L11 で Stage 10c — multi-account scanner — が始まる。Scanner は L4-L10 が生んだものすべての state-machine consumer だ。\`&[AccountSnapshot]\` のスライスを取り、それぞれを L6 の \`margin_health\` で分類（Liquidatable、Underwater、Safe、At-Risk）し、Liquidatable アカウントごとに \`solvent_close_outcome\` か \`underwater_close_outcome\` を呼び、credit/debit を所有する \`InsuranceFund\` にスレッディングし、\`ScanReport\` を返す — どのアカウントが close されたか、どの ADL trigger amount が surface したか、scan 後に fund がどこに立っているか、をまとめたバッチサマリだ。
+レッスン11 で Liquidation参照実装（スキャナパート） — multi-account scanner — が始まる。Scanner は レッスン4-レッスン10 が生んだものすべての state-machine consumer だ。\`&[AccountSnapshot]\` のスライスを取り、それぞれを レッスン6 の \`margin_health\` で分類（Liquidatable、Underwater、Safe、At-Risk）し、Liquidatable アカウントごとに \`solvent_close_outcome\` か \`underwater_close_outcome\` を呼び、credit/debit を所有する \`InsuranceFund\` にスレッディングし、\`ScanReport\` を返す — どのアカウントが close されたか、どの ADL trigger amount が surface したか、scan 後に fund がどこに立っているか、をまとめたバッチサマリだ。
 
-L11 の後、cascade は最初の *runnable* なレイヤーを得る: 数学 + state ではなく、数学 + state + orchestration loop。SHA pin は \`260883b\` から \`0a8464e\`（Stage 10c）に進む。
+レッスン11 の後、cascade は最初の *runnable* なレイヤーを得る: 数学 + state ではなく、数学 + state + orchestration loop。SHA pin は \`260883b\` から \`0a8464e\`（Liquidation参照実装（スキャナパート））に進む。
 `,
                 },
               ],
@@ -4069,8 +4070,8 @@ L11 の後、cascade は最初の *runnable* なレイヤーを得る: 数学 + 
 
 このレッスンで掴む概念:
 
-- **Orchestration 層には compute や insurance とは別の型語彙が必要だ。** Stage 10a は \`MarginHealth\`（per-account 分類）を生んだ。Stage 10b は \`SolventClose\` / \`UnderwaterClose\`（per-close 分解）と \`WithdrawOutcome\`（per-fund-call outcome）を生んだ。Stage 10c は *batch-level* の型を導入する。\`CloseOutcomeKind\`（このアカウントの close はどの kind だったか）、\`LiquidationRecord\`（liquidate されたアカウント 1 件あたりの row）、\`ScanReport\`（1 回の scan で起きたすべて）。**アーキテクチャの各層は異なる問いに答える。だから各層が独自の型語彙を持つ。**
-- **\`CloseOutcomeKind\` は \`SolventClose\` と \`UnderwaterClose\` の discriminated union — L9 の \`WithdrawOutcome\` と同じ shape、別の語彙。** Variant が 2 つ。それぞれが対応する Stage 10b 関数の生んだ struct を運ぶ。Scanner はこの enum を pattern-match して post-close の仕事（fund deposit、fund withdraw、escalation 集計）を dispatch する。**上位層が下位層の 2 つの出力を route するとき、各出力を運ぶ variant が最もきれいな機械的橋渡しになる。**
+- **Orchestration 層には compute や insurance とは別の型語彙が必要だ。** Liquidation参照実装（計算パート） は \`MarginHealth\`（per-account 分類）を生んだ。Liquidation参照実装（保険基金パート） は \`SolventClose\` / \`UnderwaterClose\`（per-close 分解）と \`WithdrawOutcome\`（per-fund-call outcome）を生んだ。Liquidation参照実装（スキャナパート） は *batch-level* の型を導入する。\`CloseOutcomeKind\`（このアカウントの close はどの kind だったか）、\`LiquidationRecord\`（liquidate されたアカウント 1 件あたりの row）、\`ScanReport\`（1 回の scan で起きたすべて）。**アーキテクチャの各層は異なる問いに答える。だから各層が独自の型語彙を持つ。**
+- **\`CloseOutcomeKind\` は \`SolventClose\` と \`UnderwaterClose\` の discriminated union — レッスン9 の \`WithdrawOutcome\` と同じ shape、別の語彙。** Variant が 2 つ。それぞれが対応する Liquidation参照実装（保険基金パート） 関数の生んだ struct を運ぶ。Scanner はこの enum を pattern-match して post-close の仕事（fund deposit、fund withdraw、escalation 集計）を dispatch する。**上位層が下位層の 2 つの出力を route するとき、各出力を運ぶ variant が最もきれいな機械的橋渡しになる。**
 - **\`ScanReport\` は per-account record の vector AND aggregate な fund-flow 合計の両方を含む。** Records vector は *audit trail*（liquidation 1 件あたり 1 行、iteration 順）。3 つの aggregate \`i64\`（\`fund_deposits\`、\`fund_withdrawals\`、\`unfilled_deficit\`）は *telemetry summary* — bridge が records を iterate せずに読める合計値だ。Scan loop 内で事前計算するのはコスト 0、bridge は両方ともほしい。**Record vector の隣にある aggregate フィールドは、caller が fold をする手間を省く。冗長ではなく、便利だ。**
 - **\`LiquidationScanner\` は \`InsuranceFund\` を直接所有する。\`Arc<Mutex<...>>\` 経由ではない。** Scanner は per-bridge コンポーネントだ。共有リソースではない。Bridge が scanner を持ち、scanner が fund を持ち、fund が balance を持つ。Mutation は ownership tree をロック競合なしに下に流れる。**ブロックごとにちょうど 1 回 mutate される state machine は、同期プリミティブを必要としない。**
 
@@ -4080,42 +4081,42 @@ L11 の後、cascade は最初の *runnable* なレイヤーを得る: 数学 + 
 cargo check -p openhl-liquidation
 \`\`\`
 
-…がクリーンに compile する。L11 では新規 test を追加しない。型語彙にはまだ testable な behavior がないからだ。L12 で \`scan\` メソッドと最初の 4 個の simple test、L13 で nuanced ケース + 4 proptest を追加する。L13 後で test 数は 68 になる。
+…がクリーンに compile する。レッスン11 では新規 test を追加しない。型語彙にはまだ testable な behavior がないからだ。レッスン12 で \`scan\` メソッドと最初の 4 個の simple test、レッスン13 で nuanced ケース + 4 proptest を追加する。レッスン13 後で test 数は 68 になる。
 
 具体的な変更:
 
 - **\`src/scanner.rs\`。** 新規モジュールファイル。Module-level doc、\`CloseOutcomeKind\` enum、\`LiquidationRecord\` 構造体、\`ScanReport\` 構造体、\`LiquidationScanner\` 構造体、5 個の accessor（\`new\`、\`with_empty_fund\`、\`fund_balance\`、\`fund\`、\`into_fund\`）を追加。\`scan\` メソッドはまだない。
 - **\`src/lib.rs\`。** \`pub mod scanner;\` と scanner 型 4 つの re-export を追加。
 
-L11 で型語彙を整え、L12 で \`scan\` を実装する。
+レッスン11 で型語彙を整え、レッスン12 で \`scan\` を実装する。
 
 ## おさらい
 
-L10 の後:
-- \`compute.rs\`、\`insurance.rs\`、\`types.rs\`、\`lib.rs\` が Stage 10b の \`260883b\` と byte-for-byte 一致。
+レッスン10 の後:
+- \`compute.rs\`、\`insurance.rs\`、\`types.rs\`、\`lib.rs\` が Liquidation参照実装（保険基金パート） の \`260883b\` と byte-for-byte 一致。
 - \`cargo test\` は 55 テストを走らせ、すべて green。
 - Multi-account orchestration loop の *すべての部品* が揃った: margin 分類（\`margin_health\`）、close-order 生成（\`close_order_spec\`）、fee math（\`liquidation_fee\`）、close-outcome 分解（\`solvent_close_outcome\` / \`underwater_close_outcome\`）、insurance fund state machine（\`InsuranceFund::deposit\` / \`::withdraw_shortfall\`）。
 - だが bridge はこれらの部品を毎ブロック自分で hand-wire しなければならない。
 
-Stage 10c でそれらを再利用可能なコンポーネントに 1 回だけ組み立てる。Bridge がそれを所有する。Orchestration loop が \`scan\`（L12）、その契約 — \`scan\` が何を取って何を返すか — が L11 だ。
+Liquidation参照実装（スキャナパート） でそれらを再利用可能なコンポーネントに 1 回だけ組み立てる。Bridge がそれを所有する。Orchestration loop が \`scan\`（レッスン12）、その契約 — \`scan\` が何を取って何を返すか — が レッスン11 だ。
 
 ## 計画
 
 編集は 3 つ:
 
-1. **\`crates/liquidation/src/scanner.rs\` を新規作成。** \`CloseOutcomeKind\`、\`LiquidationRecord\`、\`ScanReport\`、\`LiquidationScanner\` を含む新規モジュール + 5 個の accessor。\`scan\` メソッドはなし（L12 で着地）。
+1. **\`crates/liquidation/src/scanner.rs\` を新規作成。** \`CloseOutcomeKind\`、\`LiquidationRecord\`、\`ScanReport\`、\`LiquidationScanner\` を含む新規モジュール + 5 個の accessor。\`scan\` メソッドはなし（レッスン12 で着地）。
 2. **\`crates/liquidation/src/lib.rs\` に \`pub mod scanner;\` と re-export を追加。** 型 4 つが crate の public surface に加わる。
-3. **\`lib.rs\` 冒頭の roadmap コメントを更新。** Stage 10c が進行中であることをマーク。
+3. **\`lib.rs\` 冒頭の roadmap コメントを更新。** Liquidation参照実装（スキャナパート） が進行中であることをマーク。
 
-> 🛑 **予測。** 続きを読む前に考えてほしい。L12 で実装する \`scan\` メソッドは、毎ブロック \`ScanReport\` を返す。Report にどんなフィールドが入るべきか、思いつくだけ挙げてみる。次に、report 内部の *per-account record* にどんなフィールドが入るべきか?
+> 🛑 **予測。** 続きを読む前に考えてほしい。レッスン12 で実装する \`scan\` メソッドは、毎ブロック \`ScanReport\` を返す。Report にどんなフィールドが入るべきか、思いつくだけ挙げてみる。次に、report 内部の *per-account record* にどんなフィールドが入るべきか?
 
 （答え: **Scan report:** (a) liquidate されたアカウントごとの record 1 件、(b) fund に deposit した fee の合計、(c) fund が実際に支払った金額の合計、(d) fund が cover できなかった unfilled deficit の合計。**Per-account record:** (a) account ID、(b) bridge が submit する close-order spec、(c) pre-close 分類（traceability のため）、(d) post-close outcome 分解（solvent or underwater）。Scanner は同じデータの 2 つの view を bridge に渡す。CLOB submit ステップ用の per-account records と、telemetry / ADL escalation を O(1) で読める aggregate 合計だ。）
 
-L11 の型レイヤリング画:
+レッスン11 の型レイヤリング画:
 
 \`\`\`
    ┌────────────────────────────────────────────────────────────┐
-   │  L11 — orchestration 層の型                                  │
+   │  レッスン11 — orchestration 層の型                                  │
    ├────────────────────────────────────────────────────────────┤
    │                                                            │
    │  Per-account（classification 後）:                          │
@@ -4150,8 +4151,8 @@ L11 の型レイヤリング画:
 
 レイヤリングで押さえる点が 3 つ:
 
-1. **\`CloseOutcomeKind\` は Stage 10c で *唯一* の新しい enum だ。** 他はすべて struct。なぜか。Routing 判断（solvent vs underwater）は \`compute\` の \`debug_assert!\` ペア（L10）ですでに行われている。Enum は judgment を *carry through* するために存在する。*再判定する* ためではない。**Enum は還元不能な dispatch を encode する。Struct フィールドは並列なデータを encode する。**
-2. **\`LiquidationRecord\` は \`classification\`（pre-close の \`MarginHealth\`）を運ぶ — bridge が derive できるにもかかわらず。** Close order を submit する bridge には実は要らない。必要としているのは *telemetry consumer* — 「Liquidatable と Underwater の close が時間別に何件か」をチャートにしたいダッシュボードだ。Record 内に保持すれば audit trail が self-contained になる。**Record フィールドは即時の caller ではなく downstream consumer のためにある。**
+1. **\`CloseOutcomeKind\` は Liquidation参照実装（スキャナパート） で *唯一* の新しい enum だ。** 他はすべて struct。なぜか。Routing 判断（solvent vs underwater）は \`compute\` の \`debug_assert!\` ペア（レッスン10）ですでに行われている。Enum は judgment を *carry through* するために存在する。*再判定する* ためではない。**Enum は還元不能な dispatch を encode する。Struct フィールドは並列なデータを encode する。**
+2. **\`LiquidationRecord\` は \`classification\`（pre-close の \`MarginHealth\`）を運ぶ — bridge が derive できるにもかかわらず。** Close order を submit する bridge には実は要らない。必要としているのは *telemetry consumer* — 「Liquidatable と Underwater の close が時間別に何件か」をチャートにしたいダッシュボードだ。Record 内に保持すれば audit trail が 自己完結 になる。**Record フィールドは即時の caller ではなく downstream consumer のためにある。**
 3. **\`ScanReport\` の 3 つの aggregate \`i64\` フィールドは別の fold ではなく scan loop 中で計算される。** Loop に足すコストは record 1 件あたり 3 回の \`saturating_add\` — 実質無料だ（scanner は record 1 件あたり既に 1 回触っているので）。**Single-pass loop 内で aggregate を事前計算するのは無料。Second pass で計算するのは無駄。**
 
 ## 手を動かす walk-through
@@ -4161,10 +4162,10 @@ L11 の型レイヤリング画:
 \`crates/liquidation/src/scanner.rs\` を新規作成する。最初にモジュール全体の doc コメント — 決定性の契約と FIFO-fairness ポリシーを説明するアーキテクチャ概観だ:
 
 \`\`\`rust
-//! Multi-account liquidation scanner (Stage 10c).
+//! Multi-account liquidation scanner (Liquidation参照実装（スキャナパート）).
 //!
-//! The scanner is the orchestration layer that ties Stage 10a (margin
-//! classification + close-order generation) and Stage 10b (insurance
+//! The scanner is the orchestration layer that ties Liquidation参照実装（計算パート） (margin
+//! classification + close-order generation) and Liquidation参照実装（保険基金パート） (insurance
 //! fund + close-outcome decomposition) together. The bridge owns a
 //! [\`LiquidationScanner\`], calls [\`LiquidationScanner::scan\`] once per
 //! block (or per market-event tick) with the current accounts and mark,
@@ -4175,7 +4176,7 @@ L11 の型レイヤリング画:
 //!
 //! Every validator must produce byte-identical [\`ScanReport\`]s from the
 //! same \`(accounts, mark, params, fund_state)\`. The scanner only uses
-//! \`Vec\`'s ordered iteration and the fully-deterministic Stage 10a/10b
+//! \`Vec\`'s ordered iteration and the fully-deterministic Liquidation参照実装（計算パート）／Liquidation参照実装（保険基金パート）
 //! primitives, so determinism follows from caller-side ordering of the
 //! accounts slice — **the bridge is responsible for handing accounts in
 //! a deterministic order** (typically \`account_id\`-sorted).
@@ -4190,12 +4191,12 @@ L11 の型レイヤリング画:
 //! priority by account leverage) can be layered on later without
 //! changing the public type shape.
 //!
-//! ### ADL handoff (Stage 10d)
+//! ### ADL handoff (ADL参照実装パート)
 //!
 //! [\`ScanReport::unfilled_deficit\`] is the load-bearing signal that the
-//! fund couldn't absorb everything. Stage 10c records it; a future
-//! Stage 10d would consume it to drive ADL ranking and force-close
-//! profitable counter-positions. Until Stage 10d ships, the bridge can
+//! fund couldn't absorb everything. Liquidation参照実装（スキャナパート） records it; a future
+//! ADL参照実装パート would consume it to drive ADL ranking and force-close
+//! profitable counter-positions. Until ADL参照実装パート ships, the bridge can
 //! either panic on \`unfilled_deficit > 0\` (conservative — halt the
 //! chain) or log and continue (permissive — accept the deficit as a
 //! protocol loss).
@@ -4206,8 +4207,8 @@ L11 の型レイヤリング画:
 1. **冒頭の 1 文で *誰が何を呼ぶか* を定義している。** 「The bridge owns a \`LiquidationScanner\`, calls \`LiquidationScanner::scan\` once per block, and consumes the returned \`ScanReport\`.」 最初の 1 文だけ読んだ読者でも、所有関係と呼び出しパターンが分かる。**Orchestration モジュールの doc は、最初の 1 文を呼び出しパターンに使う。**
 2. **\`Determinism\` セクションが *誰が何の責任を持つか* を名指す。** Scanner は決定的だ — *accounts の決定的な順序が与えられれば*。順序の責任は *bridge* にある。決定性の契約をこう分けて書くのは誠実だ。Scanner は自分が所有しないものを enforce できない。**Caller が提供する不変条件に依存するモジュールは、その不変条件を名指し、caller を credit する。**
 3. **\`Fairness when the fund is partially drained\` セクションが v0 ポリシー AND その後継を名指す。** First-come-first-served は最も simple な決定的選択。Pro-rata draw と leverage-priority は将来の設計。両方を名指すことで、ポリシーは public-type shape を変えずに *replaceable* になる。**ポリシーを選ぶときは、public type が余地を残す代替案を名指せ。**
-4. **\`ADL handoff\` セクションが、まだ存在しない stage との統合方法を説明している。** Stage 10d は openhl roadmap の次の stage。L11 の scanner はすでに Stage 10d が必要とする signal（\`unfilled_deficit\`）を生んでいる。**Doc の forward reference は speculation ではない。次の stage が果たす integration contract だ。**
-5. **Escalation の代替案（「panic vs log and continue」）** が Stage 10d shipping までのトレードオフを明示的に名指す。Early-stage chain をデプロイする読者は自分の選択肢を知る。**Deployer が直面する operational decision を doc に書く。API だけではなく。**
+4. **\`ADL handoff\` セクションが、まだ存在しない stage との統合方法を説明している。** ADL参照実装パート は openhl roadmap の次の stage。レッスン11 の scanner はすでに ADL参照実装パート が必要とする signal（\`unfilled_deficit\`）を生んでいる。**Doc の forward reference は speculation ではない。次の stage が果たす integration contract だ。**
+5. **Escalation の代替案（「panic vs log and continue」）** が ADL参照実装パート shipping までのトレードオフを明示的に名指す。Early-stage chain をデプロイする読者は自分の選択肢を知る。**Deployer が直面する operational decision を doc に書く。API だけではなく。**
 
 Doc の下に、scanner が使う import を追加:
 
@@ -4224,7 +4225,7 @@ use openhl_clob::AccountId;
 use openhl_funding::MarkPrice;
 \`\`\`
 
-Import ブロックがやけに広いのは、scanner が *すべてを compose する* からだ。Compute 関数 6 つ、insurance 型 2 つ、type-module 型 5 つ、cross-crate 型 2 つ。広さは意図的だ。「Stage 10c とは 10a + 10b のすべてが組み合わさったもの」という bill of materials になっている。**Import ブロックは、それが依存関係のインベントリであるとき、ドキュメントとして機能する。**
+Import ブロックがやけに広いのは、scanner が *すべてを compose する* からだ。Compute 関数 6 つ、insurance 型 2 つ、type-module 型 5 つ、cross-crate 型 2 つ。広さは意図的だ。「Liquidation参照実装（スキャナパート） とは Liquidation参照実装（計算パート）+ Liquidation参照実装（保険基金パート） のすべてが組み合わさったもの」という bill of materials になっている。**Import ブロックは、それが依存関係のインベントリであるとき、ドキュメントとして機能する。**
 
 ### Step 2: \`CloseOutcomeKind\` を追加
 
@@ -4248,8 +4249,8 @@ pub enum CloseOutcomeKind {
 
 1. **Enum は *tuple variant* enum だ。struct-variant enum ではない。** 各 variant が 1 つの positional payload を運ぶ。代替案の \`Solvent { close: SolventClose }\` は named-field destructuring（\`CloseOutcomeKind::Solvent { close } => ...\`）を要求する。Tuple variant なら \`CloseOutcomeKind::Solvent(close) => ...\` とクリーンに書ける。**Variant がちょうど 1 つの payload type を運ぶとき、tuple variant が struct variant に勝つ。**
 2. **Enum は \`Copy\`** — \`SolventClose\` と \`UnderwaterClose\` がどちらも \`Copy\`（各々 i64 フィールド 2 つ）だからだ。値渡し、値での pattern-match、borrow 管理なし。**\`Copy\` 型を compose すると、エンジニアリングコスト 0 で \`Copy\` enum が生まれる。**
-3. **Doc コメントが *2 つの payload* を明示的に名指す** — full-fee solvent vs partial-or-zero underwater。Enum signature を doc なしで見た読者は、\`Underwater\` に「zero fee, full shortfall」ケースが含まれることを知らない（L10 の doc は明らかにしたが）。ここでの cross-reference が読者の手間を省く。**上位層 enum が下位層 struct を運び、その下位 struct に subtle な internal ケースがあるとき、上位層の doc でそれらを名指す。**
-4. **\`match\` 網羅性ヘルパー variant なし。** \`_ => unreachable!()\` 風の catch-all は要らない。Enum は variant がちょうど 2 つで、L10 で確立した discriminated-dispatch 空間を網羅する。**2-variant enum は最小の discriminated dispatch。拾うものがない。**
+3. **Doc コメントが *2 つの payload* を明示的に名指す** — full-fee solvent vs partial-or-zero underwater。Enum signature を doc なしで見た読者は、\`Underwater\` に「zero fee, full shortfall」ケースが含まれることを知らない（レッスン10 の doc は明らかにしたが）。ここでの cross-reference が読者の手間を省く。**上位層 enum が下位層 struct を運び、その下位 struct に subtle な internal ケースがあるとき、上位層の doc でそれらを名指す。**
+4. **\`match\` 網羅性ヘルパー variant なし。** \`_ => unreachable!()\` 風の catch-all は要らない。Enum は variant がちょうど 2 つで、レッスン10 で確立した discriminated-dispatch 空間を網羅する。**2-variant enum は最小の discriminated dispatch。拾うものがない。**
 
 ### Step 3: \`LiquidationRecord\` を追加
 
@@ -4278,10 +4279,10 @@ pub struct LiquidationRecord {
 
 押さえる点が 6 つ:
 
-1. **フィールド 4 つ、うち 3 つが既存モジュールの \`Copy\` 型。** \`AccountId\`（\`openhl-clob\` から）、\`CloseOrderSpec\`（Stage 10a）、\`MarginHealth\`（Stage 10a）、\`CloseOutcomeKind\`（このモジュール）。既存の型を record に compose するのは無料だ。**新規フィールドを導入しない record 構造体は、純粋な語彙拡張 — 名前を付けて前に進む。**
+1. **フィールド 4 つ、うち 3 つが既存モジュールの \`Copy\` 型。** \`AccountId\`（\`openhl-clob\` から）、\`CloseOrderSpec\`（Liquidation参照実装（計算パート））、\`MarginHealth\`（Liquidation参照実装（計算パート））、\`CloseOutcomeKind\`（このモジュール）。既存の型を record に compose するのは無料だ。**新規フィールドを導入しない record 構造体は、純粋な語彙拡張 — 名前を付けて前に進む。**
 2. **\`classification\` は \`MarginHealth\`、4 variant enum を運ぶ**（\`Safe\`、\`AtRisk\`、\`Liquidatable\`、\`Underwater\`）。Doc は record に現れるのは 2 つだけだと言う — 他の 2 つは \`LiquidationRecord\` に決して入らない（scanner が skip するからだ）。型は 4 値を *許す*; 契約は 2 値に narrow する。**型が実際に API が生む以上のケースを運ぶことはある。契約の narrowing は doc に書く、別の sub-enum ではなく。**
-3. **\`Liquidatable\`-classified → \`Underwater\`-outcome のノートが key となる教授点だ。** フィールド名だけ読んだ読者は \`classification == outcome\` が常に成り立つと仮定するだろう。だが *classification* は pre-close equity を、*outcome* は post-close equity（fee が減らした）を使う。Stage 10a の \`margin_health\` と Stage 10b の \`solvent_close_outcome\` / \`underwater_close_outcome\` は、アカウントが fee-threshold のどちら側に着地するかで disagree しうる。具体例は L10 の \`underwater_close_partial_fee_collection\` テストだ: pre-close は \`Liquidatable\`（maintenance margin より上の正の equity を持つ）だが、close + fee で post-close equity が「ほしかった fee」を下回る — そのため *classification* は \`Liquidatable\` でも、*outcome* は \`Underwater\` 分岐に着地する。**関連する 2 つのフィールドが disagree しうるケースは document する。読者はそれ以外は常に agree すると仮定する。**
-4. **構造体は \`Copy\`** — 4 フィールドすべてが \`Copy\` だからだ。\`LiquidationRecord\` は \`Vec\` に push される（\`Vec\` は \`Copy\` を要求しない）が、\`Copy\` のままにしておくと L12 の \`scan\` メソッドの per-iteration loop body が ergonomic になる — \`.clone()\` なし、borrow 管理なし。**フィールドが許すなら record 型を \`Copy\` にする。コストは 0、ergonomics は複利化する。**
+3. **\`Liquidatable\`-classified → \`Underwater\`-outcome のノートが key となる教授点だ。** フィールド名だけ読んだ読者は \`classification == outcome\` が常に成り立つと仮定するだろう。だが *classification* は pre-close equity を、*outcome* は post-close equity（fee が減らした）を使う。Liquidation参照実装（計算パート） の \`margin_health\` と Liquidation参照実装（保険基金パート） の \`solvent_close_outcome\` / \`underwater_close_outcome\` は、アカウントが fee-threshold のどちら側に着地するかで disagree しうる。具体例は レッスン10 の \`underwater_close_partial_fee_collection\` テストだ: pre-close は \`Liquidatable\`（maintenance margin より上の正の equity を持つ）だが、close + fee で post-close equity が「ほしかった fee」を下回る — そのため *classification* は \`Liquidatable\` でも、*outcome* は \`Underwater\` 分岐に着地する。**関連する 2 つのフィールドが disagree しうるケースは document する。読者はそれ以外は常に agree すると仮定する。**
+4. **構造体は \`Copy\`** — 4 フィールドすべてが \`Copy\` だからだ。\`LiquidationRecord\` は \`Vec\` に push される（\`Vec\` は \`Copy\` を要求しない）が、\`Copy\` のままにしておくと レッスン12 の \`scan\` メソッドの per-iteration loop body が ergonomic になる — \`.clone()\` なし、borrow 管理なし。**フィールドが許すなら record 型を \`Copy\` にする。コストは 0、ergonomics は複利化する。**
 5. **4 フィールドすべて \`pub\`。** \`LiquidationRecord\` は *value type* — bridge はフィールドを直接読む。Accessor で隠すと \`record.account()\` を強制し、\`record.account\` より得るものは何もない（守るべき invariant がない）。**データを運ぶためだけに存在する record では、public フィールドがメソッドに勝つ。**
 6. **\`Default\` derive なし。** Default record は何を意味する? 空の \`AccountId\`、qty 0 の \`CloseOrderSpec\`、\`Safe\` classification、\`Solvent(SolventClose::default())\` outcome? どれも意味がない。**意味が「何か特定のことが起きた」である record では、\`Default\` を derive しない — encode すべき中立 state がない。**
 
@@ -4304,7 +4305,7 @@ pub struct ScanReport {
     /// withdrawals).
     pub fund_withdrawals: i64,
     /// Total shortfall the fund could NOT cover (sum across
-    /// \`PartiallyDrained.unfilled\` and \`Depleted.unfilled\`). Stage 10d
+    /// \`PartiallyDrained.unfilled\` and \`Depleted.unfilled\`). ADL参照実装パート
     /// consumes this as the ADL trigger.
     pub unfilled_deficit: i64,
 }
@@ -4313,11 +4314,11 @@ pub struct ScanReport {
 押さえる点が 6 つ:
 
 1. **\`ScanReport\` は \`Clone + Default\` だが、\`Copy\` ではない。** \`Vec\` を含むからだ — heap-allocated でビット単位のコピーができない。Compiler がこれを enforce する: \`Vec\`-containing struct に \`Copy\` を派生させることはできない。**\`Vec\` の存在は compiler-enforced な「私は heap allocation を持つ」シグナルだ。**
-2. **\`Default\` が derive されている — そして意味がある。** Empty scan（liquidatable アカウントなし）は \`ScanReport { records: vec![], fund_deposits: 0, fund_withdrawals: 0, unfilled_deficit: 0 }\` を生む。それはちょうど \`Default::default()\` がくれるもの、L12 の \`scan\` メソッドが initialize するものだ。**Default 値が実際の domain state を表すとき、\`Default\` は意味がある — ここでは「scan は何も返さなかった」。**
+2. **\`Default\` が derive されている — そして意味がある。** Empty scan（liquidatable アカウントなし）は \`ScanReport { records: vec![], fund_deposits: 0, fund_withdrawals: 0, unfilled_deficit: 0 }\` を生む。それはちょうど \`Default::default()\` がくれるもの、レッスン12 の \`scan\` メソッドが initialize するものだ。**Default 値が実際の domain state を表すとき、\`Default\` は意味がある — ここでは「scan は何も返さなかった」。**
 3. **\`Vec\` の隣に 3 つの \`i64\` aggregate** — \`fund_deposits\`、\`fund_withdrawals\`、\`unfilled_deficit\`。代替案 — \`report.records.iter().map(|r| r.outcome.fee()).sum()\` で計算する — は bridge が読むたびに records を iterate することを要求する。Scan loop 内で事前計算するのは record 1 件あたり O(1) extra で、bridge の O(n) fold を省ける。**Record vector の隣にある aggregate フィールドは caller が fold をする手間を省く。冗長ではない。**
 4. **\`fund_withdrawals\` は \`amount\` の合計であって、\`shortfall\` の合計ではない。** 二度読む。Bridge が知りたいのは「fund が実際にいくら支払ったか?」、「いくら要求されたか?」ではない。2 つは fund が partial drain したときに違ってくる（\`amount < shortfall\`）。フィールド名は *支払われた* ものを反映し、*要求された* ものではない。**Aggregate フィールドは *起きたこと* を測る。*要求されたこと* ではない。**
 5. **\`unfilled_deficit\` は 2 つの \`WithdrawOutcome\` variant にわたる合計だ。** 具体的には \`PartiallyDrained.unfilled\` AND \`Depleted.unfilled\`。Doc コメントが両方を名指す。\`PartiallyDrained\` しか頭にない読者は \`Depleted\` ケース（fund が呼び出し前から空だった）を見落とす。**Aggregate が enum variant にわたって合計されるとき、寄与する variant すべてを名指す。**
-6. **\`unfilled_deficit\` は Stage 10d への *signal そのもの*。** Doc コメントがそう名指す。L11 の契約はこのフィールドが存在し正しく計算されること。Stage 10d の契約はこのフィールドを consume して ADL を駆動すること。**2 つの stage 間の handoff は、明確な名前と document された consumer を持つ i64 フィールドだ。**
+6. **\`unfilled_deficit\` は ADL参照実装パート への *signal そのもの*。** Doc コメントがそう名指す。レッスン11 の契約はこのフィールドが存在し正しく計算されること。ADL参照実装パート の契約はこのフィールドを consume して ADL を駆動すること。**2 つの stage 間の handoff は、明確な名前と document された consumer を持つ i64 フィールドだ。**
 
 ### Step 5: \`LiquidationScanner\` 構造体 + accessors を追加
 
@@ -4418,7 +4419,7 @@ pub use types::{
 
 Scanner 型 4 つ（enum + struct 3 つ）を 1 行で re-export、\`{ }\` 内は alphabetical。
 
-3 つ目、\`lib.rs\` 冒頭の roadmap コメントを Stage 10c 進行中に更新する。具体的な変更は今の \`lib.rs\` preamble の内容次第だが、答え合わせは「scanner shipping in this commit」とマークしている。そこに揃える。
+3 つ目、\`lib.rs\` 冒頭の roadmap コメントを Liquidation参照実装（スキャナパート） 進行中に更新する。具体的な変更は今の \`lib.rs\` preamble の内容次第だが、答え合わせは「scanner shipping in this commit」とマークしている。そこに揃える。
 
 ### Step 7: \`cargo check\` を走らせる
 
@@ -4433,19 +4434,19 @@ cargo check -p openhl-liquidation
     Finished \`dev\` profile [optimized + debuginfo] target(s) in 1.2s
 \`\`\`
 
-**Clean compile。** テストは走らない — \`scan\` メソッドがまだないので、testable なものがない。L10 の 55 既存テストは依然 pass する（\`cargo test -p openhl-liquidation\` で確認）が、L11 はそれらの追加・修正をしない。
+**Clean compile。** テストは走らない — \`scan\` メソッドがまだないので、testable なものがない。レッスン10 の 55 既存テストは依然 pass する（\`cargo test -p openhl-liquidation\` で確認）が、レッスン11 はそれらの追加・修正をしない。
 
 エラー時にありがちなパターン:
 
-- **\`unresolved import \\\`openhl_clob::AccountId\\\`** — scanner は \`openhl-clob\` と \`openhl-funding\` に \`AccountId\` と \`MarkPrice\` で依存する。\`crates/liquidation/Cargo.toml\` の \`[dependencies]\` に両方をリストしているか確認する。答え合わせ crate には既に両方がある（L0 のレッスンで設定済み）。
-- **\`unused import: \\\`account_equity\\\`** — clippy / rustc が「L11 に \`scan\` メソッドがないので import がいくつか使われていない」と警告するかもしれない。**これらの警告は L11 では意図されたものだ** — import は L12 用に *staged* されており、L12 がそのすべてを consume する。「警告 0 件」規律で進めたい読者は、L11 だけ \`scanner.rs\` 冒頭に \`#[allow(unused_imports)]\` を入れ、L12 着地時に attribute を削除する。それ以外は警告をそのままにする — L12 の \`scan\` 本体が compile した瞬間に消える。答え合わせは L11 と L12 を一緒に ship するので \`allow\` しない。**L11 で警告が 0 件だったら逆にどこかおかしい。ここで出る unused-import 警告はすべて想定内だ。**
+- **\`unresolved import \\\`openhl_clob::AccountId\\\`** — scanner は \`openhl-clob\` と \`openhl-funding\` に \`AccountId\` と \`MarkPrice\` で依存する。\`crates/liquidation/Cargo.toml\` の \`[dependencies]\` に両方をリストしているか確認する。答え合わせ crate には既に両方がある（レッスン0のレッスンで設定済み）。
+- **\`unused import: \\\`account_equity\\\`** — clippy / rustc が「レッスン11 に \`scan\` メソッドがないので import がいくつか使われていない」と警告するかもしれない。**これらの警告は レッスン11 では意図されたものだ** — import は レッスン12 用に *staged* されており、レッスン12 がそのすべてを consume する。「警告 0 件」規律で進めたい読者は、レッスン11 だけ \`scanner.rs\` 冒頭に \`#[allow(unused_imports)]\` を入れ、レッスン12 着地時に attribute を削除する。それ以外は警告をそのままにする — レッスン12 の \`scan\` 本体が compile した瞬間に消える。答え合わせは レッスン11 と レッスン12 を一緒に ship するので \`allow\` しない。**レッスン11 で警告が 0 件だったら逆にどこかおかしい。ここで出る unused-import 警告はすべて想定内だ。**
 - **\`pub mod scanner;\` の配置** — \`pub mod types;\` の後に置くと alphabetical な順序が壊れる。答え合わせは \`lib.rs\` 内で alphabetical な順序に揃えている。それに合わせる。
 
 ## 設計の振り返り
 
 このレッスンに焼き込んだ load-bearing な決定は 3 つ:
 
-1. **語彙先、メカニズム後 — もう一度。** L8（\`WithdrawOutcome\` が L8 で宣言、L9 で使用）、L10（\`SolventClose\` / \`UnderwaterClose\` が宣言と同時に使用）と同じパターン。L11 は orchestration 層の型を宣言し、L12 の \`scan\` メソッドが return value を置く場所を作る。**L11 後にファイルを開く読者は、完全な型 API surface を見る。L12 が動詞を埋める。**
+1. **語彙先、メカニズム後 — もう一度。** レッスン8（\`WithdrawOutcome\` が レッスン8 で宣言、レッスン9 で使用）、レッスン10（\`SolventClose\` / \`UnderwaterClose\` が宣言と同時に使用）と同じパターン。レッスン11 は orchestration 層の型を宣言し、レッスン12 の \`scan\` メソッドが return value を置く場所を作る。**レッスン11 後にファイルを開く読者は、完全な型 API surface を見る。レッスン12 が動詞を埋める。**
 
 2. **Scanner は insurance fund を値で所有する。** \`&'a mut\` でも、\`Arc<Mutex<...>>\` でも、\`Rc<RefCell<...>>\` でもない。Ownership 判断こそが scanner を lifetime gymnastics や runtime overhead なしに使える状態にする。**Single mutator と明確な shutdown point を持つ state-machine コンポーネントは、自分の state を値で所有すべき。**
 
@@ -4460,9 +4461,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L11 の後:
-- **scanner.rs** は Stage 10c の \`scanner.rs\` の **\`impl LiquidationScanner\` ブロック内 accessor まで一致**（\`scan\` メソッドとテストは L12 + L13 で着地）。具体的には: doc + imports + \`CloseOutcomeKind\` + \`LiquidationRecord\` + \`ScanReport\` + \`LiquidationScanner\` struct + \`new\` / \`with_empty_fund\` / \`fund_balance\` / \`fund\` / \`into_fund\`。
-- **lib.rs** は Stage 10c の \`lib.rs\` の \`pub mod scanner;\` 行と \`pub use scanner::{...}\` re-export について **byte-for-byte 一致**。
+レッスン11 の後:
+- **scanner.rs** は Liquidation参照実装（スキャナパート） の \`scanner.rs\` の **\`impl LiquidationScanner\` ブロック内 accessor まで一致**（\`scan\` メソッドとテストは レッスン12 + レッスン13 で着地）。具体的には: doc + imports + \`CloseOutcomeKind\` + \`LiquidationRecord\` + \`ScanReport\` + \`LiquidationScanner\` struct + \`new\` / \`with_empty_fund\` / \`fund_balance\` / \`fund\` / \`into_fund\`。
+- **lib.rs** は Liquidation参照実装（スキャナパート） の \`lib.rs\` の \`pub mod scanner;\` 行と \`pub use scanner::{...}\` re-export について **byte-for-byte 一致**。
 
 ## よくある質問
 
@@ -4490,17 +4491,17 @@ balance は trader のアカウント上に住んでいて、liquidation engine 
 
 Bridge *は* re-derive できる。ただし pre-close snapshot を保持していた場合に限る。だが通常は保持しない。Scanner はそれらを既に持っている（iterate したのだから）。Classification を record に store するのは record 1 件あたり O(1) extra space で、bridge が独自の snapshot history を持つ手間を省く。**以前なされた derivation を capture する record は、caller が upstream の仕事をやり直す手間を省く。**
 
-## 次のレッスン (L12) — \`scan\` メソッド + 最初の 4 unit test
+## 次のレッスン (レッスン12) — \`scan\` メソッド + 最初の 4 unit test
 
-L12 で orchestration の心臓 — \`scan\` メソッド — を実装する。メソッドは \`&[AccountSnapshot]\` と \`MarkPrice\` を取り、L6 の \`margin_health\` で各アカウントを分類、Liquidatable/Underwater アカウントを L10 の \`solvent_close_outcome\` / \`underwater_close_outcome\` に dispatch、L9 の \`InsuranceFund::deposit\` と \`::withdraw_shortfall\` で fund を in-place mutate、そして道中で \`ScanReport\` を構築する。
+レッスン12 で orchestration の心臓 — \`scan\` メソッド — を実装する。メソッドは \`&[AccountSnapshot]\` と \`MarkPrice\` を取り、レッスン6 の \`margin_health\` で各アカウントを分類、Liquidatable/Underwater アカウントを レッスン10 の \`solvent_close_outcome\` / \`underwater_close_outcome\` に dispatch、レッスン9 の \`InsuranceFund::deposit\` と \`::withdraw_shortfall\` で fund を in-place mutate、そして道中で \`ScanReport\` を構築する。
 
-L12 は 4 つの最もシンプルな unit test も加える:
+レッスン12 は 4 つの最もシンプルな unit test も加える:
 - \`scan_empty_accounts_returns_empty_report\` — sanity check。
 - \`scan_all_safe_accounts_does_nothing\` — liquidation がないなら record もない。
 - \`scan_atrisk_does_not_liquidate\` — AtRisk は *警告* であって、トリガではない。
 - \`scan_skips_flat_positions\` — 誤分類された flat への defensive guard。
 
-L12 後、scanner は *runnable* になる。59 テスト pass（34 compute + 21 insurance + 4 件の新規 scanner test）。L13 がさらに 5 個の nuanced unit test と 4 個の conservation-law proptest で stress テストし、最終的に 68 件まで持っていく。
+レッスン12 後、scanner は *runnable* になる。59 テスト pass（34 compute + 21 insurance + 4 件の新規 scanner test）。レッスン13 がさらに 5 個の nuanced unit test と 4 個の conservation-law proptest で stress テストし、最終的に 68 件まで持っていく。
 `,
                 },
                 {
@@ -4516,10 +4517,10 @@ L12 後、scanner は *runnable* になる。59 テスト pass（34 compute + 21
 
 このレッスンで掴む概念:
 
-- **\`scan\` メソッドは orchestration 層で *唯一の動詞*。他はすべて名詞だ。** L11 は状態を記述する型 4 つを宣言した。L12 は入力から状態を生む 1 つのメソッドを実装する。メソッドは \`(accounts, mark)\` を取り、\`ScanReport\` を返す。本体内では、L4-L10 にわたって構築した Stage 10a + 10b プリミティブのすべてが、liquidate 対象アカウント 1 件あたりちょうど 1 度ずつ呼ばれる。**Composition がアーキテクチャ。1 つの動詞が 10 個の名詞を consume する。**
+- **\`scan\` メソッドは orchestration 層で *唯一の動詞*。他はすべて名詞だ。** レッスン11 は状態を記述する型 4 つを宣言した。レッスン12 は入力から状態を生む 1 つのメソッドを実装する。メソッドは \`(accounts, mark)\` を取り、\`ScanReport\` を返す。本体内では、レッスン4-レッスン10 にわたって構築した Liquidation参照実装（計算パート） + Liquidation参照実装（保険基金パート） プリミティブのすべてが、liquidate 対象アカウント 1 件あたりちょうど 1 度ずつ呼ばれる。**Composition がアーキテクチャ。1 つの動詞が 10 個の名詞を consume する。**
 - **\`MarginHealth\` に対する \`match\` + \`continue\`-guard は「liquidate 対象でないアカウントは skip」の最もきれいな pattern。** 代替案 — \`if !matches!(c, MarginHealth::Liquidatable | MarginHealth::Underwater) { continue; }\` — のほうが短いが、exhaustiveness を失う。\`match\` 形は compiler に「*すべての* \`MarginHealth\` variant が考慮されたか」を enforce させる — それが将来 5 つ目の variant が追加されたときに bug を捕まえる規律だ。**Enum が将来成長しうるとき、exhaustive \`match\` が predicate-with-\`!\` に勝つ。**
-- **Loop 内の solvent vs underwater dispatch は L10 の \`debug_assert!\` ペアを直接 mirror する。** \`if post_close_equity >= fee_desired\` が \`solvent_close_outcome\` に route、\`else\` が \`underwater_close_outcome\` に route。L10 の debug-assert が「呼び出し側がやってくれる」と言った routing を、scanner がまさに実行している。**Caller の runtime predicate は callee の compile-time 契約と同一だ。**
-- **Underwater 分岐の \`WithdrawOutcome\` pattern-match は L9 の enum を \`(paid, unfilled)\` タプルに分解する — loop 内で L9 の 3-variant enum が 1 行以上の handling を必要とする *唯一の場所* だ。** Solvent close は \`withdraw_shortfall\` を一度も触らない。\`deposit\` だけ。Underwater close は \`withdraw_shortfall\` を呼んで結果に pattern-match する。\`ScanReport\` の i64 フィールドへの集計は record 1 件あたり \`saturating_add\` だ。**Orchestration 層は L9 の variant と L11 の i64 aggregate の間を、ちょうど 1 つの pattern-match で翻訳する。**
+- **Loop 内の solvent vs underwater dispatch は レッスン10 の \`debug_assert!\` ペアを直接 mirror する。** \`if post_close_equity >= fee_desired\` が \`solvent_close_outcome\` に route、\`else\` が \`underwater_close_outcome\` に route。レッスン10 の debug-assert が「呼び出し側がやってくれる」と言った routing を、scanner がまさに実行している。**Caller の runtime predicate は callee の compile-time 契約と同一だ。**
+- **Underwater 分岐の \`WithdrawOutcome\` pattern-match は レッスン9 の enum を \`(paid, unfilled)\` タプルに分解する — loop 内で レッスン9 の 3-variant enum が 1 行以上の handling を必要とする *唯一の場所* だ。** Solvent close は \`withdraw_shortfall\` を一度も触らない。\`deposit\` だけ。Underwater close は \`withdraw_shortfall\` を呼んで結果に pattern-match する。\`ScanReport\` の i64 フィールドへの集計は record 1 件あたり \`saturating_add\` だ。**Orchestration 層は レッスン9 の variant と レッスン11 の i64 aggregate の間を、ちょうど 1 つの pattern-match で翻訳する。**
 
 確認:
 
@@ -4527,34 +4528,34 @@ L12 後、scanner は *runnable* になる。59 テスト pass（34 compute + 21
 cargo test -p openhl-liquidation
 \`\`\`
 
-…で 59 テストが pass する（compute 34 + insurance 21 + 新規 scanner test 4）。次の 5 個の unit test と 4 個の proptest は L13 で着地する。L13 後は 68 件。
+…で 59 テストが pass する（compute 34 + insurance 21 + 新規 scanner test 4）。次の 5 個の unit test と 4 個の proptest は レッスン13 で着地する。レッスン13 後は 68 件。
 
 具体的な変更:
 
-- **\`src/scanner.rs\`。** 既存の \`impl LiquidationScanner\` ブロックに \`scan\` メソッドを追加する。L11 の imports がついに consumer を得て、unused-import 警告が消える。\`#[cfg(test)] mod tests\` の足場（ヘルパー + \`use\` ブロック + 最初のセクション区切り）と最もシンプルな unit test 4 個も追加する。
+- **\`src/scanner.rs\`。** 既存の \`impl LiquidationScanner\` ブロックに \`scan\` メソッドを追加する。レッスン11 の imports がついに consumer を得て、unused-import 警告が消える。\`#[cfg(test)] mod tests\` の足場（ヘルパー + \`use\` ブロック + 最初のセクション区切り）と最もシンプルな unit test 4 個も追加する。
 
-L12 で scanner が *runnable* になる。L13 で stress test に入る。
+レッスン12 で scanner が *runnable* になる。レッスン13 で stress test に入る。
 
 ## おさらい
 
-L11 の後:
+レッスン11 の後:
 - \`scanner.rs\` に型語彙（\`CloseOutcomeKind\`、\`LiquidationRecord\`、\`ScanReport\`、\`LiquidationScanner\`）と 5 個の accessor（\`new\`、\`with_empty_fund\`、\`fund_balance\`、\`fund\`、\`into_fund\`）が揃う。
 - \`lib.rs\` は scanner 型 4 つを re-export 済み。
-- \`cargo check\` はクリーンに compile する — ただし \`account_equity\`、\`close_order_spec\`、\`liquidation_fee\`、\`margin_health\`、\`notional_value\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`、\`WithdrawOutcome\` に unused-import 警告が出る。すべて *L12 用に staged* されている。
-- \`cargo test\` は依然 L0-L10 の 55 テストを走らせ、すべて green。
+- \`cargo check\` はクリーンに compile する — ただし \`account_equity\`、\`close_order_spec\`、\`liquidation_fee\`、\`margin_health\`、\`notional_value\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`、\`WithdrawOutcome\` に unused-import 警告が出る。すべて *レッスン12 用に staged* されている。
+- \`cargo test\` は依然 L0-レッスン10 の 55 テストを走らせ、すべて green。
 
-L12 がそれらの staged import をすべて引き換える。
+レッスン12 がそれらの staged import をすべて引き換える。
 
 ## 計画
 
 編集は 2 つ:
 
-1. **\`crates/liquidation/src/scanner.rs\` の \`impl LiquidationScanner\` ブロックに \`scan\` メソッドを追加する。** メソッド本体は約 50 行 — Stage 10a の margin 分類、Stage 10b の close-outcome 分解、InsuranceFund state machine を 1 つの batch 操作に結ぶ orchestration loop。
+1. **\`crates/liquidation/src/scanner.rs\` の \`impl LiquidationScanner\` ブロックに \`scan\` メソッドを追加する。** メソッド本体は約 50 行 — Liquidation参照実装（計算パート） の margin 分類、Liquidation参照実装（保険基金パート） の close-outcome 分解、InsuranceFund state machine を 1 つの batch 操作に結ぶ orchestration loop。
 2. **\`#[cfg(test)] mod tests\` ブロックを追加する。** ヘルパー 3 つの import、\`snapshot\` factory、\`default_params\` ヘルパー、そして 4 個の最もシンプルな unit test。
 
 > 🛑 **予測。** 続きを読む前に考えてほしい。スライス内のアカウントごとに、liquidate するか（fund がどちらかに動く）skip するかを決める単一関数を書いている。関数本体に必要な *6 つ* の異なる分岐をリストアップする — 2 つの skip ケース（Safe/AtRisk continue、flat-position continue）と 4 つの work ケース（solvent → fund deposit、underwater positive equity → partial fee + withdraw、underwater zero equity → no fee + full withdraw、underwater negative equity → no fee + extra-large withdraw）を含めて。
 
-（答えは本文で: 関数の分岐は厳密に 2 つの \`continue\` 分岐と 2 つの routing 分岐（solvent vs underwater）だ。Underwater 分岐は positive/zero/negative equity の 3 つのサブケースを 1 回の \`underwater_close_outcome\` 呼び出しの下に統合する — 呼び出しは内部で分岐するが、1 つの return type を提示する。Scanner レベルでは: **2 つの skip + 1 つの solvent + 1 つの underwater = 4 つの分岐**。予測した「6 つ」は 4 つに収束する。L10 の \`underwater_close_outcome\` がすでにサブケースの統合を済ませているからだ。**Callee 内でサブケースを encapsulate すれば、caller の分岐数が縮む。**）
+（答えは本文で: 関数の分岐は厳密に 2 つの \`continue\` 分岐と 2 つの routing 分岐（solvent vs underwater）だ。Underwater 分岐は positive/zero/negative equity の 3 つのサブケースを 1 回の \`underwater_close_outcome\` 呼び出しの下に統合する — 呼び出しは内部で分岐するが、1 つの return type を提示する。Scanner レベルでは: **2 つの skip + 1 つの solvent + 1 つの underwater = 4 つの分岐**。予測した「6 つ」は 4 つに収束する。レッスン10 の \`underwater_close_outcome\` がすでにサブケースの統合を済ませているからだ。**Callee 内でサブケースを encapsulate すれば、caller の分岐数が縮む。**）
 
 \`scan\` メソッドの shape:
 
@@ -4606,7 +4607,7 @@ Shape で押さえる点が 3 つ:
 
 1. **外側の iteration は \`for snapshot in accounts\` — シンプルな順序つき loop だ。** \`iter().filter().map().collect()\` chain ではない。理由: 各 iteration が *side effects* を持つからだ（fund の mutation、report の mutation）。Iterator chain は pure な transformation を compose するときに映える。Stateful な per-iteration の仕事には、素朴な \`for\` のほうが読みやすく debug もしやすい。**\`for\` loop は、本体が closure の外側の state を mutate するとき iterator chain に勝つ。**
 2. **2 つの \`continue\` 分岐は loop body の *先頭* にある。** どんな仕事も commit する前に入力を reject する — 分類が最初、flat-skip が 2 番目。「Happy path」コード（skip の後）は同じ indent level に inline で並ぶ。\`if\` の中にネストされていない。**Loop の先頭での rejection は skip 条件で最もきれいなパターン。ネストは仕事を必要以上に深く押し込む。**
-3. **\`ScanReport\` フィールドへの集計は最終的な \`.iter().sum()\` ではなく、per-iteration の \`saturating_add\` を使う。** L11 の設計選択（record vector の隣の aggregate フィールド）が per-iteration accumulation を要求する。コストは record 1 件あたり scalar 1 つにつき \`saturating_add\` 1 回 — 実行中の仕事に比べてマイクロ秒オーダーだ。**Single-pass accumulation は L11 の設計契約と一致する。**
+3. **\`ScanReport\` フィールドへの集計は最終的な \`.iter().sum()\` ではなく、per-iteration の \`saturating_add\` を使う。** レッスン11 の設計選択（record vector の隣の aggregate フィールド）が per-iteration accumulation を要求する。コストは record 1 件あたり scalar 1 つにつき \`saturating_add\` 1 回 — 実行中の仕事に比べてマイクロ秒オーダーだ。**Single-pass accumulation は レッスン11 の設計契約と一致する。**
 
 ## 手を動かす walk-through
 
@@ -4710,9 +4711,9 @@ match classification {
 
 押さえる点が 3 つ:
 
-1. **\`match\` は exhaustive で、compiler が enforce する。** L6 の \`MarginHealth\` は variant がちょうど 4 つ。2 つの arm が 4 つすべてを cover する。明日誰かが 5 つ目の variant（例: \`LiquidatableButOnHold\`）を追加すると、この \`match\` は compile に失敗する。Build break が「どちら側に入れるか判断しろ」と促してくれる。**Non-exhaustive な代替案 — \`if !matches!(c, Liquidatable | Underwater) { continue; }\` — は新しい variant を黙って skip 扱いし、設計上の判断を隠してしまう。**
+1. **\`match\` は exhaustive で、compiler が enforce する。** レッスン6 の \`MarginHealth\` は variant がちょうど 4 つ。2 つの arm が 4 つすべてを cover する。明日誰かが 5 つ目の variant（例: \`LiquidatableButOnHold\`）を追加すると、この \`match\` は compile に失敗する。Build break が「どちら側に入れるか判断しろ」と促してくれる。**Non-exhaustive な代替案 — \`if !matches!(c, Liquidatable | Underwater) { continue; }\` — は新しい variant を黙って skip 扱いし、設計上の判断を隠してしまう。**
 2. **Work-path の arm は \`{}\`、body がない。** Arm は exhaustiveness を成立させる *ためだけに* 存在する。実際の仕事は \`match\` の後に起きる。これが「filter して関数の残りに fall through」の Rust イディオムだ。**\`match\` 内の空 arm が exhaustiveness check 後の fall-through の書き方だ。**
-3. **Or-pattern（\`Safe | AtRisk\`）が 2 つの skip ケースを 1 つの arm に統合する。** L9 の proptest が使ったのと同じトリック（\`Covered { amount } | PartiallyDrained { amount, .. }\`）が variant grouping のためにここで再登場する。**Or-pattern は Rust の exhaustive-match コードの rhythm だ。**
+3. **Or-pattern（\`Safe | AtRisk\`）が 2 つの skip ケースを 1 つの arm に統合する。** レッスン9 の proptest が使ったのと同じトリック（\`Covered { amount } | PartiallyDrained { amount, .. }\`）が variant grouping のためにここで再登場する。**Or-pattern は Rust の exhaustive-match コードの rhythm だ。**
 
 フェーズ 2 に進む前に、フェーズ 1 の \`match\` とフェーズ 2 の flat-check が一緒に作る rejection-ladder の構造を一度立ち止まって眺める。どちらの guard も loop body の先頭に住み、発火すれば *iteration から exit する*。Happy path はその下を、\`if\` にネストされることなく、guard と同じ indent level で走る:
 
@@ -4744,7 +4745,7 @@ if snapshot.position_size.0 == 0 {
 }
 \`\`\`
 
-これは *理論上は不可能な* 状態に対する defensive guard だ。flat position がここに到達する唯一の道は、\`margin_health\` が \`Liquidatable\` または \`Underwater\` に misclassify することだ — L6 の分類ルールはそれを禁じている（flat → ratio MAX → \`Safe\`）。だが bridge は sanitize されていない snapshot を submit しうる。そして L7 の \`close_order_spec\` は zero-qty な \`CloseOrderSpec\` を生み、CLOB が reject する。**Skip は安価な defensive coding — *enforce で消せない上流のバグから downstream consumer を守る*。**
+これは *理論上は不可能な* 状態に対する defensive guard だ。flat position がここに到達する唯一の道は、\`margin_health\` が \`Liquidatable\` または \`Underwater\` に misclassify することだ — レッスン6 の分類ルールはそれを禁じている（flat → ratio MAX → \`Safe\`）。だが bridge は sanitize されていない snapshot を submit しうる。そして レッスン7 の \`close_order_spec\` は zero-qty な \`CloseOrderSpec\` を生み、CLOB が reject する。**Skip は安価な defensive coding — *enforce で消せない上流のバグから downstream consumer を守る*。**
 
 #### フェーズ 3: Close order の生成（15 行）
 
@@ -4752,7 +4753,7 @@ if snapshot.position_size.0 == 0 {
 let close_order = close_order_spec(snapshot);
 \`\`\`
 
-1 行。L7 の pure 関数がすべての仕事をする。**Stage 10a 関数への 1 行呼び出しは、orchestration 層の「プリミティブを使う」の見かけだ。**
+1 行。レッスン7 の pure 関数がすべての仕事をする。**Liquidation参照実装（計算パート） 関数への 1 行呼び出しは、orchestration 層の「プリミティブを使う」の見かけだ。**
 
 #### フェーズ 4: Routing 判断（17-24 行）
 
@@ -4770,9 +4771,9 @@ let outcome = if post_close_equity >= fee_desired {
 
 押さえる点が 5 つ:
 
-1. **Predicate は L10 の \`underwater_close_outcome\` \`debug_assert!\`（\`equity < fee\`）の正反対。** L10 の assertion は「underwater は equity < fee」と言った。ここでは \`>=\` で solvent に当たる。Scanner の runtime check が L10 の compile-time 契約と揃う。**Scanner は L10 が document していない数学を *何もしていない*。**
+1. **Predicate は レッスン10 の \`underwater_close_outcome\` \`debug_assert!\`（\`equity < fee\`）の正反対。** レッスン10 の assertion は「underwater は equity < fee」と言った。ここでは \`>=\` で solvent に当たる。Scanner の runtime check が レッスン10 の compile-time 契約と揃う。**Scanner は レッスン10 が document していない数学を *何もしていない*。**
 2. **Predicate の前に 3 つのローカル変数（\`notional\`、\`fee_desired\`、\`post_close_equity\`）。** どれも名前付き、どれも 1 行、どれも既存の関数呼び出し。読者は local-variable cascade を下って predicate に到達する頃には、両側に何があるか正確に把握している。**ローカルに名前付けした中間値は、最も安い readability の勝利。**
-3. **\`solvent_close_outcome\` と \`underwater_close_outcome\` は各分岐で *別々* に呼ばれる — 1 つの routed call に統合されない。** 統合した形（\`let outcome = if is_solvent { solvent_close_outcome(...) } else { underwater_close_outcome(...) }\`）は、*もう一方* の分岐で precondition 違反で呼び出されることになり、L10 の \`debug_assert!\` を発火させる。別々の分岐に置けば、各 callee は自分の precondition と一貫した状態で呼ばれる。**Dispatch を call から分離する。各 callee が precondition を clean に満たした状態で呼ばれる。**
+3. **\`solvent_close_outcome\` と \`underwater_close_outcome\` は各分岐で *別々* に呼ばれる — 1 つの routed call に統合されない。** 統合した形（\`let outcome = if is_solvent { solvent_close_outcome(...) } else { underwater_close_outcome(...) }\`）は、*もう一方* の分岐で precondition 違反で呼び出されることになり、レッスン10 の \`debug_assert!\` を発火させる。別々の分岐に置けば、各 callee は自分の precondition と一貫した状態で呼ばれる。**Dispatch を call から分離する。各 callee が precondition を clean に満たした状態で呼ばれる。**
 4. **ローカル変数 \`outcome\` は \`if\`/\`else\` 内で代入され、その後で使われる。** \`let outcome = if ... { ... } else { ... };\` パターン。Rust の if-as-expression が値を返すので、これは idiomatic だ。**\`let x = if y { a } else { b };\` が、Rust で値を条件付き計算する書き方だ。**
 5. **両分岐とも \`CloseOutcomeKind\` variant を返す。** 2 variant は同じ parent type を共有する。\`if\`/\`else\` の型がきれいに揃う。**同じ enum の 2 variant を返す \`if\`/\`else\` は、variant routing で最も安全なパターン。**
 
@@ -4788,7 +4789,7 @@ CloseOutcomeKind::Solvent(solvent)
 押さえる点が 3 つ:
 
 1. **\`fee_to_fund\` は 3 回読まれる: \`deposit\` に 1 回、aggregate に 1 回、\`CloseOutcomeKind::Solvent\` に move された \`solvent\` の一部として 1 回。** \`SolventClose\` が \`Copy\` なので、これは無料 — clone なし、borrow なし。**\`Copy\` 派生型は、フィールドを複数 write にまたがって広げる際に ownership の儀式を不要にする。**
-2. **\`fee_to_fund == 0\` 条件がない。** Solvent close は常に positive な \`fee_to_fund\` を持つ（L10 の契約より — precondition が \`equity >= fee\` で、fee は positive）。ここに \`if solvent.fee_to_fund > 0 { ... }\` を書くと、保証された false-or-impossible 条件をチェックする。**型契約がすでに排除した条件には defend しない。**
+2. **\`fee_to_fund == 0\` 条件がない。** Solvent close は常に positive な \`fee_to_fund\` を持つ（レッスン10 の契約より — precondition が \`equity >= fee\` で、fee は positive）。ここに \`if solvent.fee_to_fund > 0 { ... }\` を書くと、保証された false-or-impossible 条件をチェックする。**型契約がすでに排除した条件には defend しない。**
 3. **\`withdraw_shortfall\` の呼び出しがない。** Solvent close は fund に credit して trader に residual を返す。Fund から *引かれることはない*。Trader balance の credit は bridge の仕事だ（\`solvent.residual_to_account\` を使う）。Scanner のスコープ外。**Scanner は fund だけを mutate する。Trader balance は bridge の仕事。**
 
 #### フェーズ 5b: Underwater 分岐（8 行）
@@ -4814,16 +4815,16 @@ CloseOutcomeKind::Underwater(underwater)
 
 押さえる点が 6 つ:
 
-1. **\`if underwater.fee_to_fund > 0\` guard を入れている理由は、L10 の \`underwater_close_outcome\` が \`fee_to_fund == 0\` を返しうるからだ**（「already underwater pre-fee」サブケース）。\`deposit(0)\` は L8 より no-op だが、guard が \`saturating_add\` と関数呼び出しのオーバーヘッドを省く。**「何もしない」アクションを gate する predicate は安価な正しさ。**
+1. **\`if underwater.fee_to_fund > 0\` guard を入れている理由は、レッスン10 の \`underwater_close_outcome\` が \`fee_to_fund == 0\` を返しうるからだ**（「already underwater pre-fee」サブケース）。\`deposit(0)\` は レッスン8 より no-op だが、guard が \`saturating_add\` と関数呼び出しのオーバーヘッドを省く。**「何もしない」アクションを gate する predicate は安価な正しさ。**
 2. **\`WithdrawOutcome\` への pattern-match が \`(paid, unfilled)\` に分解する。** 3 variant すべてが 1 つのタプル shape に collapse する:
 
    - \`WithdrawOutcome::Covered { amount }\` → \`(amount, 0)\`: 要求された shortfall が全額支払われた。escalate なし。
    - \`WithdrawOutcome::PartiallyDrained { amount, unfilled }\` → \`(amount, unfilled)\`: fund は持っていた全額を支払い、残りはプロトコルレベルの unfilled deficit として記録される。
    - \`WithdrawOutcome::Depleted { unfilled }\` → \`(0, unfilled)\`: fund はすでに空。支払いはゼロ、要求の全額が escalate する。
 
-   保存則 \`amount + unfilled = requested_shortfall\` は 3 行すべてで成立する（L9 の proptest が証明した）。L13 でこの法則が per-call レベルから per-scan レベルに \`report_unfilled_equals_sum_of_unfilled_shortfalls\` で持ち上がる。**タプルは L9 variant payload の *正規化形* — 3 つの異なる shape が 1 つの \`(i64, i64)\` に collapse し、保存則が引き継がれる。**
+   保存則 \`amount + unfilled = requested_shortfall\` は 3 行すべてで成立する（レッスン9 の proptest が証明した）。レッスン13 でこの法則が per-call レベルから per-scan レベルに \`report_unfilled_equals_sum_of_unfilled_shortfalls\` で持ち上がる。**タプルは レッスン9 variant payload の *正規化形* — 3 つの異なる shape が 1 つの \`(i64, i64)\` に collapse し、保存則が引き継がれる。**
 3. **Match の arm は間接的に *or-pattern destructuring* を使う。** 厳密には 3 つの別個の arm だが、各 arm が同じタプル shape \`(paid, unfilled)\` を計算する。視覚的な symmetry がコードの scan を楽にする。**統一された出力型を計算する pattern-match arm は視覚的に並列だ — 揃えて並べる。**
-4. **\`paid\` と \`unfilled\` は即座に \`saturating_add\` で report に consume される。** Variant ごとの集計が 2 行で起きる。Match → タプル → aggregate のカスケードが、crate を貫く標準の「enum-to-scalar」パターンだ。**L9 の \`WithdrawOutcome\` は *情報* を返す。Scanner はそれを *数字* に変換する。**
+4. **\`paid\` と \`unfilled\` は即座に \`saturating_add\` で report に consume される。** Variant ごとの集計が 2 行で起きる。Match → タプル → aggregate のカスケードが、crate を貫く標準の「enum-to-scalar」パターンだ。**レッスン9 の \`WithdrawOutcome\` は *情報* を返す。Scanner はそれを *数字* に変換する。**
 5. **\`fund_withdrawals\` と \`unfilled_deficit\` の両方に \`saturating_add\`。** Running total は両方とも現実的なプロトコル規模（最大 ~$10^15）で bound されているとはいえ、saturation は一貫した規律だ。**全所で saturating な算術はコスト 0、決定性の契約を一貫して尊重する。**
 6. **最後の行 — \`CloseOutcomeKind::Underwater(underwater)\` — \`underwater\` を enum に move する。** \`underwater\` がフィールド読み出し後に consume される唯一の場所だ。\`UnderwaterClose\` は \`Copy\` なので、move はただの value-copy。**\`Copy\` 型なら「フィールドを read してから enum に move」は実質コスト 0 だ。**
 
@@ -4871,9 +4872,9 @@ mod tests {
 
 押さえる点が 3 つ:
 
-1. **L12 に proptest がないのに \`use proptest::prelude::*;\` を import する。** L13 用に staged。L11 の \`account_equity\` import と同じ staging 規律だ。**本コースのテストは *forward-compatibly* に書かれている — L12 の \`use\` ブロックは L13 の \`use\` ブロックだ。**
-2. **\`snapshot\` ヘルパーが 4 フィールドを \`AccountSnapshot\` 構造体全体に packaging する。** L4 の \`compute::tests::snapshot\` ヘルパーを mirror（同じ名前、同じ return type）。これで各テストの最初の行が読みやすく保たれる: \`let s = snapshot(1, 1, 100_000, 50_000);\` は「account 1、long 1 BTC、entry $100k、collateral $50k」と読める。**Test ヘルパーは無関係な構築ノイズを隠す価値がある。代替案は test 1 件あたり 8 行になる。**
-3. **セクション区切り \`// ─── empty / non-liquidatable input ───\` が L8/L9 で確立したスタイルに合う。** Liquidation コースのテストファイルは罫線文字区切りを一貫して使う。**モジュール間で一貫したテストファイル構造は、小さいが累積する readability の勝利だ。**
+1. **レッスン12 に proptest がないのに \`use proptest::prelude::*;\` を import する。** レッスン13 用に staged。レッスン11 の \`account_equity\` import と同じ staging 規律だ。**本コースのテストは *forward-compatibly* に書かれている — レッスン12 の \`use\` ブロックは レッスン13 の \`use\` ブロックだ。**
+2. **\`snapshot\` ヘルパーが 4 フィールドを \`AccountSnapshot\` 構造体全体に packaging する。** レッスン4 の \`compute::tests::snapshot\` ヘルパーを mirror（同じ名前、同じ return type）。これで各テストの最初の行が読みやすく保たれる: \`let s = snapshot(1, 1, 100_000, 50_000);\` は「account 1、long 1 BTC、entry $100k、collateral $50k」と読める。**Test ヘルパーは無関係な構築ノイズを隠す価値がある。代替案は test 1 件あたり 8 行になる。**
+3. **セクション区切り \`// ─── empty / non-liquidatable input ───\` が レッスン8/レッスン9 で確立したスタイルに合う。** Liquidation コースのテストファイルは罫線文字区切りを一貫して使う。**モジュール間で一貫したテストファイル構造は、小さいが累積する readability の勝利だ。**
 
 ### Step 3: 4 つの simple unit test を追加
 
@@ -4929,10 +4930,10 @@ Test モジュール内に追記:
 
 1. **\`scan_empty_accounts_returns_empty_report\` は \`ScanReport\` *4 フィールドすべて* を assert する。** Records empty、3 つの aggregate が 0。4 つの assertion が「\`ScanReport::default()\` が全 0 でなくなる」future bug を捕える — logic bug よりさらに小さい regression だ。**Default-state テストは default のすべてのフィールドを assert する。**
 2. **\`scan_all_safe_accounts_does_nothing\` はアカウントを *2 件* 使う、1 件ではない。** なぜ 2 件か。1 件のテストは「loop は最初の iteration を走らせたが 2 回目を skip した」bug を mask しうる。2 件あれば loop は 2 回 iterate を強制され、両方とも何も生まない。**Multi-account skip テストは single-account skip テストよりも loop-control bug を捕まえる。**
-3. **\`scan_all_safe_accounts_does_nothing\` の算術コメントが期待される分類を document する。** 「50% ratio = Safe」と書いておけば、読者は L1-L6 のロジックを再導出せず頭の中で追える。**分類パスを名指す test コメントが、本コースの curriculum reinforcement の起き方だ。**
+3. **\`scan_all_safe_accounts_does_nothing\` の算術コメントが期待される分類を document する。** 「50% ratio = Safe」と書いておけば、読者は レッスン1-レッスン6 のロジックを再導出せず頭の中で追える。**分類パスを名指す test コメントが、本コースの curriculum reinforcement の起き方だ。**
 4. **\`scan_atrisk_does_not_liquidate\` は 4 つのうち *最も pedagogical に重要*。** 「AtRisk は *warning state* であって *trigger state* ではない」を確立する。将来の maintainer が AtRisk を liquidation trigger に「promote」したら（match arm に追加して）、このテストが即座に落ちる。**安定したアーキテクチャ境界に対するテストは、本コースの設計選択が refactoring を生き延びる方法だ。**
 5. **\`scan_atrisk_does_not_liquidate\` の 5% 境界は maintenance margin（2%）と initial margin（10%）に *意図的に* 近い。** 1%（< maintenance）なら Liquidatable、15%（> initial）なら Safe。5% は *中間* で、AtRisk 境界の両側がここからテストできる。**境界テストは分類の *エッジ* だけでなく *内部* を exercise する値を選ぶ。**
-6. **\`scan_skips_flat_positions\` は \`snapshot(1, 0, 100_000, 1_000)\` を使う。** \`size = 0\` に注目 — flat ケース。L6 の \`margin_ratio\` が flat ポジションに MAX を返す（Safe と分類されてフェーズ 1 \`continue\` で skip）にもかかわらず、テストはフェーズ 2 の defensive guard を exercise する。将来の変更が flat を Liquidatable に promote する *場合に備えて* だ。**Defense-in-depth テストは、第 1 層から独立して第 2 層の防御を verify する。**
+6. **\`scan_skips_flat_positions\` は \`snapshot(1, 0, 100_000, 1_000)\` を使う。** \`size = 0\` に注目 — flat ケース。レッスン6 の \`margin_ratio\` が flat ポジションに MAX を返す（Safe と分類されてフェーズ 1 \`continue\` で skip）にもかかわらず、テストはフェーズ 2 の defensive guard を exercise する。将来の変更が flat を Liquidatable に promote する *場合に備えて* だ。**Defense-in-depth テストは、第 1 層から独立して第 2 層の防御を verify する。**
 7. **4 つのテストすべてが \`LiquidationScanner::with_empty_fund(default_params())\` を使う。** Starting fund balance なし、Hyperliquid のデフォルト params。一貫性が読者に「4 つすべてを通して読み、*差分* だけを吸収する」を許す（accounts、mark）。**Per-test の isolation が test 間の diff を一目で読ませる。**
 8. **テスト名が 4 ステップの narrative を成す:** empty → all-Safe → all-AtRisk → flat。「scan が何を skip するか」を学ぶ読者は順番に walk して完全な mental model を構築する。**Test ordering は教育的な progression を encode できる。**
 
@@ -4947,9 +4948,9 @@ cargo test -p openhl-liquidation
 \`\`\`
 running 59 tests
 test compute::tests::close_flat_has_zero_qty ... ok
-... (L0-L10 由来の compute テストがさらに 33 個)
+... (L0-レッスン10 由来の compute テストがさらに 33 個)
 test insurance::tests::balance_never_negative ... ok
-... (L8-L9 由来の insurance テストがさらに 20 個)
+... (レッスン8-レッスン9 由来の insurance テストがさらに 20 個)
 test scanner::tests::scan_all_safe_accounts_does_nothing ... ok
 test scanner::tests::scan_atrisk_does_not_liquidate ... ok
 test scanner::tests::scan_empty_accounts_returns_empty_report ... ok
@@ -4958,24 +4959,24 @@ test scanner::tests::scan_skips_flat_positions ... ok
 test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**59 テスト pass。Scanner が *runnable* になった。** L13 で 5 個の nuanced unit test（solvent fee deposit、underwater fully/partially/depleted、mixed batch、FIFO fairness）と 4 個の proptest（scan 全体にわたる保存則）が stress テストを担う。L13 後は 68 件。
+**59 テスト pass。Scanner が *runnable* になった。** レッスン13 で 5 個の nuanced unit test（solvent fee deposit、underwater fully/partially/depleted、mixed batch、FIFO fairness）と 4 個の proptest（scan 全体にわたる保存則）が stress テストを担う。レッスン13 後は 68 件。
 
 エラー時にありがちなパターン:
 
-- **Compile エラー: \`cannot find function \\\`account_equity\\\` in this scope\`** — L11 の imports は compute 関数 6 つを staged にした。どれか 1 つでも忘れた（または unused-import 警告を消そうとして実際必要な import を削った）と、\`scan\` は compile しない。\`scanner.rs\` 冒頭の \`use crate::compute::{...}\` 行から欠けた関数を再追加する。
-- **テスト失敗: \`assertion failed: report.records.is_empty()\` on \`scan_all_safe_accounts_does_nothing\`** — あなたの \`margin_health\` が 50% ratio を mis-classify している。L6 は 50% > 10% initial = Safe と言った。\`match\` arm が \`MarginHealth::Safe | MarginHealth::Liquidatable\`（typo）と書かれていると、Safe が liquidate される。\`match\` の arm 1 を読み直す。
+- **Compile エラー: \`cannot find function \\\`account_equity\\\` in this scope\`** — レッスン11 の imports は compute 関数 6 つを staged にした。どれか 1 つでも忘れた（または unused-import 警告を消そうとして実際必要な import を削った）と、\`scan\` は compile しない。\`scanner.rs\` 冒頭の \`use crate::compute::{...}\` 行から欠けた関数を再追加する。
+- **テスト失敗: \`assertion failed: report.records.is_empty()\` on \`scan_all_safe_accounts_does_nothing\`** — あなたの \`margin_health\` が 50% ratio を mis-classify している。レッスン6 は 50% > 10% initial = Safe と言った。\`match\` arm が \`MarginHealth::Safe | MarginHealth::Liquidatable\`（typo）と書かれていると、Safe が liquidate される。\`match\` の arm 1 を読み直す。
 - **テスト失敗: \`report.fund_deposits != 0\` on \`scan_empty_accounts_returns_empty_report\`** — \`ScanReport::default()\` の derivation が間違っている。\`derive(Default)\` on \`ScanReport\` がこのテストを green にする。\`impl Default\` を手動で非 0 のデフォルトと書くと契約が壊れる。
-- **Compile エラー: \`the trait bound \\\`SomeType: Copy\\\` is not satisfied\`** — \`outcome = if ... { ... }\` の分岐のどこかに、compiler が non-\`Copy\` だと考える型がある。\`SolventClose\` と \`UnderwaterClose\` の両方が \`#[derive(Clone, Copy, Debug, PartialEq, Eq)]\` を持つか確認する（L10 から持っているはず） — もし持っていなければ、これらの variant を返す \`if\`/\`else\` がそれを要求する。
+- **Compile エラー: \`the trait bound \\\`SomeType: Copy\\\` is not satisfied\`** — \`outcome = if ... { ... }\` の分岐のどこかに、compiler が non-\`Copy\` だと考える型がある。\`SolventClose\` と \`UnderwaterClose\` の両方が \`#[derive(Clone, Copy, Debug, PartialEq, Eq)]\` を持つか確認する（レッスン10 から持っているはず） — もし持っていなければ、これらの variant を返す \`if\`/\`else\` がそれを要求する。
 
 ## 設計の振り返り
 
 このレッスンに焼き込んだ load-bearing な決定は 3 つ:
 
-1. **\`scan\` メソッドは *thin orchestrator* であって、*fat coordinator* ではない。** \`scan\` のすべての行は、Stage 10a/10b プリミティブを呼ぶか、\`ScanReport\` フィールドへの \`saturating_add\` を apply するかのどちらかだ。新しい数学なし、新しいポリシーなし、新しいデータ shape なし。**Orchestration 層はプリミティブを呼ぶべきだ。複製してはいけない。**
+1. **\`scan\` メソッドは *thin orchestrator* であって、*fat coordinator* ではない。** \`scan\` のすべての行は、Liquidation参照実装（計算パート）／Liquidation参照実装（保険基金パート） プリミティブを呼ぶか、\`ScanReport\` フィールドへの \`saturating_add\` を apply するかのどちらかだ。新しい数学なし、新しいポリシーなし、新しいデータ shape なし。**Orchestration 層はプリミティブを呼ぶべきだ。複製してはいけない。**
 
 2. **Exhaustive \`match\` が predicate-with-\`!\` に勝つ。** フェーズ 1 の \`MarginHealth\` \`match\` こそが、将来の enum-variant 追加を捕まえる規律だ。\`if !matches!(c, Liquidatable | Underwater) { continue; }\` と書いたら、明日 5 つ目の variant が追加されたとき、それを黙って skip 扱いしてしまう。**Exhaustive \`match\` が、enum とその consumer を refactor 越しに同期させる方法だ。**
 
-3. **\`WithdrawOutcome → (paid, unfilled)\` タプル分解は、L9 の enum が orchestration handling で 1 行を超える *唯一の場所*だ。** 3 variant が 1 つの \`(i64, i64)\` に collapse する。集計契約が統一されているからだ。**L9 の \`WithdrawOutcome\` は情報を返す。Scanner はそれを数字に変換する。**
+3. **\`WithdrawOutcome → (paid, unfilled)\` タプル分解は、レッスン9 の enum が orchestration handling で 1 行を超える *唯一の場所*だ。** 3 variant が 1 つの \`(i64, i64)\` に collapse する。集計契約が統一されているからだ。**レッスン9 の \`WithdrawOutcome\` は情報を返す。Scanner はそれを数字に変換する。**
 
 ## 答え合わせ
 
@@ -4985,8 +4986,8 @@ git checkout 0a8464e
 diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/src/scanner.rs
 \`\`\`
 
-L12 の後:
-- **scanner.rs** は Stage 10c の \`scanner.rs\` の **test モジュール内 \`scan_skips_flat_positions\` テストまで一致**。具体的には: doc + imports + \`CloseOutcomeKind\` + \`LiquidationRecord\` + \`ScanReport\` + \`LiquidationScanner\` 構造体 + 5 個の accessor + \`scan\` メソッド + test モジュール足場 + 4 個の simple unit test。L13 で 5 個の nuanced unit test と 4 個の proptest が着地する。
+レッスン12 の後:
+- **scanner.rs** は Liquidation参照実装（スキャナパート） の \`scanner.rs\` の **test モジュール内 \`scan_skips_flat_positions\` テストまで一致**。具体的には: doc + imports + \`CloseOutcomeKind\` + \`LiquidationRecord\` + \`ScanReport\` + \`LiquidationScanner\` 構造体 + 5 個の accessor + \`scan\` メソッド + test モジュール足場 + 4 個の simple unit test。レッスン13 で 5 個の nuanced unit test と 4 個の proptest が着地する。
 
 ## よくある質問
 
@@ -5004,7 +5005,7 @@ Scanner は snapshot に書く必要が *ない* — まさにそれが理由だ
 
 **Q4: \`scan\` は loop body の後に「fund が完全に depleted」状態に達したら early-return しないのか?**
 
-しない。L11 の設計契約が aggregate フィールドに「scan 中に起きたすべて」を capture すると言っているからだ。depletion 後の underwater close も含む。Early return は audit trail を切る。Iteration position 50 にいる Liquidatable アカウントが \`LiquidationRecord\` を生まなくなり、bridge はそれを見落とす。**Scan は fund が空になっても batch を完了する。Aggregate な \`unfilled_deficit\` が、より aggressive なポリシー（ADL）が必要だと bridge に告げる signal だ。**
+しない。レッスン11 の設計契約が aggregate フィールドに「scan 中に起きたすべて」を capture すると言っているからだ。depletion 後の underwater close も含む。Early return は audit trail を切る。Iteration position 50 にいる Liquidatable アカウントが \`LiquidationRecord\` を生まなくなり、bridge はそれを見落とす。**Scan は fund が空になっても batch を完了する。Aggregate な \`unfilled_deficit\` が、より aggressive なポリシー（ADL）が必要だと bridge に告げる signal だ。**
 
 **Q5: スライス内の 2 つの snapshot が同じ \`AccountId\` を持っていたら?**
 
@@ -5014,9 +5015,9 @@ Scanner は iteration 順に処理する。1 つ目の \`LiquidationRecord\` と
 
 \`+=\` 演算子の挙動はビルドプロファイルで変わる: **debug ビルドでは overflow に panic、release ビルドではサイレントに *wrap*（2 の補数の剰余演算）する**。Release-build の wrap こそが本当のコンセンサス上の危険だ — クラッシュしないので、1 つの validator で overflow した加算が静かに他と異なる \`i64\` を生む。結果は state の不一致 → チェーンフォーク。Debug の panic は分かりやすい failure mode、release の silent wrap は *騙される* failure mode だ。\`saturating_add\` はどんなビルドプロファイルでも \`i64::MAX\`（または \`i64::MIN\`）に clamp する。全 validator が同じ値を見る — どんなコンパイラフラグでビルドされていても。**\`+=\` は非コンセンサスの算術なら OK。\`saturating_add\` は validator が byte-for-byte で agree しなければならない state の標準だ。**
 
-## 次のレッスン (L13) — Module 4 capstone: 5 個の nuanced unit test + 4 個の proptest
+## 次のレッスン (レッスン13) — セクション4 capstone: 5 個の nuanced unit test + 4 個の proptest
 
-L13 が Module 4 を閉じる — そして Stage 10c を閉じる — そして openhl の Module 10 全体を閉じる。5 個の nuanced unit test は:
+レッスン13 が セクション4 を閉じる — そして Liquidation参照実装（スキャナパート） を閉じる — そして openhl の Liquidation 実装 全体を閉じる。5 個の nuanced unit test は:
 - \`scan_liquidatable_solvent_deposits_fee\` — happy path: trader の collateral がすべてを cover する。
 - \`scan_underwater_fully_covered_drains_fund_partially\` — fund が drain するが cover する。
 - \`scan_underwater_partial_drain_surfaces_unfilled\` — fund が partial drain、shortfall の一部が escalate。
@@ -5026,39 +5027,39 @@ L13 が Module 4 を閉じる — そして Stage 10c を閉じる — そして
 そして \`scan_mixed_batch_processes_only_unhealthy\` で loop が heterogeneous な batch を扱えるか verify する。
 
 4 個の proptest は scan 全体にわたる保存則を verify する:
-- \`fund_balance_never_negative_across_scans\` — L8 の不変条件が multi-account scan に拡張する。
+- \`fund_balance_never_negative_across_scans\` — レッスン8 の不変条件が multi-account scan に拡張する。
 - \`report_unfilled_equals_sum_of_unfilled_shortfalls\` — \`unfilled_deficit\` が per-account unfilled 量と一致する。
 - \`fund_deposits_minus_withdrawals_equals_balance_change\` — fund 会計が閉じる。
 - \`scan_preserves_account_order_in_records\` — 決定性: records が input 順に現れる。
 
-L13 後、Liquidation crate は *完成* する — 68 テスト、\`0a8464e\` と byte-for-byte 一致。読者は pure-compute + state-machine + orchestration cascade をまるごと 13 レッスンで構築した。
+レッスン13 後、Liquidation crate は *完成* する — 68 テスト、\`0a8464e\` と byte-for-byte 一致。読者は pure-compute + state-machine + orchestration cascade をまるごと 13 レッスンで構築した。
 `,
                 },
                 {
-                  title: "レッスン 13 — Scanner capstone — 6 個の nuanced unit test + 4 個の invariant proptest + Stage 10 retrospective",
+                  title: "レッスン 13 — Scanner capstone — 6 個の nuanced unit test + 4 個の invariant proptest + Liquidation三部作の振り返り",
                   slug: "openhl-liquidation-scanner-capstone-ja",
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 40,
                   xpReward: 80,
-                  content: `# レッスン 13 — Scanner capstone — 6 個の nuanced unit test + 4 個の invariant proptest + Stage 10 retrospective
+                  content: `# レッスン 13 — Scanner capstone — 6 個の nuanced unit test + 4 個の invariant proptest + Liquidation三部作の振り返り
 
 ## ゴール
 
 このレッスンで掴む概念:
 
-- **6 個の nuanced unit test は 4×2 行列を成す。** 4 つの outcome（solvent-close、fully-covered-underwater、partial-drain-underwater、depleted-underwater）× 2 つの batch shape（single-account-batch、multi-account-batch）。Mixed-batch test が明示的な 4-state 証明、FIFO test が multi-underwater の fairness 証明。**両者を合わせれば、L6 分類・L10 close-outcome・L8/L9 fund 操作の間で reachable なすべての相互作用が exercise される。**
+- **6 個の nuanced unit test は 4×2 行列を成す。** 4 つの outcome（solvent-close、fully-covered-underwater、partial-drain-underwater、depleted-underwater）× 2 つの batch shape（single-account-batch、multi-account-batch）。Mixed-batch test が明示的な 4-state 証明、FIFO test が multi-underwater の fairness 証明。**両者を合わせれば、レッスン6 分類・レッスン10 close-outcome・レッスン8/レッスン9 fund 操作の間で reachable なすべての相互作用が exercise される。**
 - **4 個の proptest は型システムが encode できない不変条件を encode する。** Fund 会計が閉じる（\`before + deposits − withdrawals = after\`）。Unfilled deficit が存在すれば fund は空（\`unfilled > 0 ⇒ balance == 0\`）。Record 数は input 数で bound される（\`|records| ≤ |accounts|\`）。決定性が成立する（\`scan(同じ入力) ≡ scan(同じ入力)\`）。**いずれも scanner が、あらゆる scan・あらゆる block・あらゆる validator で守らねばならない契約だ。**
 - **保存則は crate を縦に compose する。** 3 つの層、3 つの恒等式、1 つの数学的物語:
 
   \`\`\`
-  L9  (single fund call):       amount + unfilled                    = shortfall
-  L10 (single position close):  fee_to_fund + residual_to_account    = post_close_equity
-  L13 (per-block scan batch):   balance_before + Σ deposits − Σ withdrawals = balance_after
+  レッスン9  (single fund call):       amount + unfilled                    = shortfall
+  レッスン10 (single position close):  fee_to_fund + residual_to_account    = post_close_equity
+  レッスン13 (per-block scan batch):   balance_before + Σ deposits − Σ withdrawals = balance_after
   \`\`\`
 
   **各層の保存則が次の層の invariant に consume される。Crate の数学が閉じる。**
-- **Stage 10 は *3 つの* stage と *1 つの* trilogy だ。** Stage 10a（margin math）は pure-compute な分類器を構築した。Stage 10b（insurance fund + close-outcome 分解）は state と credit/debit 分解を導入した。Stage 10c（multi-account scanner）が両者を 1 つの orchestration loop で結ぶ。**L13 が trilogy を閉じる。69 テスト、4 modules、\`0a8464e\` と byte-for-byte 一致。**
+- **Liquidation実装は「計算パート・保険基金パート・スキャナパート」の3段構成だ。** Liquidation参照実装（計算パート）（margin math）は pure-compute な分類器を構築した。Liquidation参照実装（保険基金パート）（insurance fund + close-outcome 分解）は state と credit/debit 分解を導入した。Liquidation参照実装（スキャナパート）（multi-account scanner）が両者を 1 つの orchestration loop で結ぶ。**レッスン13 が trilogy を閉じる。69 テスト、4 modules、\`0a8464e\` と byte-for-byte 一致。**
 
 確認:
 
@@ -5066,24 +5067,24 @@ L13 後、Liquidation crate は *完成* する — 68 テスト、\`0a8464e\` �
 cargo test -p openhl-liquidation
 \`\`\`
 
-…で 69 テストが pass する（compute 34 + insurance 21 + scanner 14 = 10 unit + 4 proptest）。Liquidation crate が Stage 10c 答え合わせに対して *完成* する。
+…で 69 テストが pass する（compute 34 + insurance 21 + scanner 14 = 10 unit + 4 proptest）。Liquidation crate が Liquidation参照実装（スキャナパート） 答え合わせに対して *完成* する。
 
-> **テスト数についての注記:** L11 と L12 の次レッスン preview で「68 件」と書いたが、off-by-one だった。実際の L13 は 6 個の nuanced unit test を加える（5 個ではない）。FIFO-fairness test が mixed-batch test とは別の独立した test だからだ。正しい合計は 69 件。（カスケード数学の推論には影響しない。）
+> **テスト数についての注記:** レッスン11 と レッスン12 の次レッスン preview で「68 件」と書いたが、off-by-one だった。実際の レッスン13 は 6 個の nuanced unit test を加える（5 個ではない）。FIFO-fairness test が mixed-batch test とは別の独立した test だからだ。正しい合計は 69 件。（カスケード数学の推論には影響しない。）
 
 具体的な変更:
 
-- **\`src/scanner.rs\`。** L12 の 4 個の simple test の後ろに 6 個の nuanced unit test、test モジュールの末尾に 4 個の invariant proptest を含む \`proptest!\` ブロックを追加。
+- **\`src/scanner.rs\`。** レッスン12 の 4 個の simple test の後ろに 6 個の nuanced unit test、test モジュールの末尾に 4 個の invariant proptest を含む \`proptest!\` ブロックを追加。
 
-L13 後、Liquidation コースは完成する。Stage 10d（ADL）は openhl の次のロードマップ項目だが、別コースになる。
+レッスン13 後、Liquidation コースは完成する。ADL参照実装パート（ADL）は openhl の次のロードマップ項目だが、別コースになる。
 
 ## おさらい
 
-L12 の後:
-- \`scanner.rs\` には型語彙（L11）、\`scan\` メソッド（L12）、skip path を扱う 4 個の simple unit test が揃う。
+レッスン12 の後:
+- \`scanner.rs\` には型語彙（レッスン11）、\`scan\` メソッド（レッスン12）、skip path を扱う 4 個の simple unit test が揃う。
 - \`cargo test\` は 59 テストを走らせ、すべて green。
 - Scanner は *動く* — iterate し、classify し、dispatch し、mutate し、aggregate し、return する。だがこれまでのテストがカバーするのは「skip」ケースだけ。4 つの「work」outcome — solvent、fully-covered、partial-drain、depleted — には per-scan の assertion がまだない。
 
-L13 でそのギャップを埋め、不変条件を proptest で lock し、Stage 10 retrospective で一歩引いて全体を眺める。
+レッスン13 でそのギャップを埋め、不変条件を proptest で lock し、Liquidation三部作の振り返り で一歩引いて全体を眺める。
 
 ## 計画
 
@@ -5095,13 +5096,13 @@ L13 でそのギャップを埋め、不変条件を proptest で lock し、Sta
 
 > 🛑 **予測。** 続きを読む前に考えてほしい。1 件の liquidation が引き起こす「fund state の遷移」を 4 つ挙げ、それぞれを駆動する \`WithdrawOutcome\` variant または \`deposit\` 呼び出しとペアにする。次に: それらのうち *どれが* \`Solvent\` 入力（\`Liquidatable && post_close_equity ≥ fee\`）では起こり得ないか?
 
-（答え: **4 つの遷移**は (a) \`+fee\` のみ（solvent close — \`deposit\`、withdraw なし）、(b) \`+fee_partial − shortfall_full\`（positive equity を持つ underwater — \`deposit\` + \`Covered\` を返す \`withdraw_shortfall\`）、(c) \`0 − shortfall_partial\`（既に underwater で fund が partial drain — \`PartiallyDrained\` を返す \`withdraw_shortfall\`）、(d) \`0 − 0_with_unfilled\`（fund が空の underwater — \`Depleted\` を返す \`withdraw_shortfall\`）。**遷移 b、c、d は Solvent 入力では起こり得ない。** L10 の \`debug_assert!\` が発火する。Solvent 入力は遷移 (a) だけを駆動する。**4 つの nuanced unit test が遷移 a、b、c、d を exercise する。5 つ目（mixed batch）と 6 つ目（FIFO）が、orchestration loop が multi-account batch を正しく処理するかを verify する。**）
+（答え: **4 つの遷移**は (a) \`+fee\` のみ（solvent close — \`deposit\`、withdraw なし）、(b) \`+fee_partial − shortfall_full\`（positive equity を持つ underwater — \`deposit\` + \`Covered\` を返す \`withdraw_shortfall\`）、(c) \`0 − shortfall_partial\`（既に underwater で fund が partial drain — \`PartiallyDrained\` を返す \`withdraw_shortfall\`）、(d) \`0 − 0_with_unfilled\`（fund が空の underwater — \`Depleted\` を返す \`withdraw_shortfall\`）。**遷移 b、c、d は Solvent 入力では起こり得ない。** レッスン10 の \`debug_assert!\` が発火する。Solvent 入力は遷移 (a) だけを駆動する。**4 つの nuanced unit test が遷移 a、b、c、d を exercise する。5 つ目（mixed batch）と 6 つ目（FIFO）が、orchestration loop が multi-account batch を正しく処理するかを verify する。**）
 
 Scan-coverage 行列:
 
 \`\`\`
    ┌─────────────────────────────────────────────────────────────┐
-   │  Test coverage 行列 — Stage 10c                                │
+   │  Test coverage 行列 — Liquidation参照実装（スキャナパート）                                │
    ├─────────────────────────────────────────────────────────────┤
    │                                                              │
    │  4 outcome × 2 batch shape:                                  │
@@ -5134,7 +5135,7 @@ Scan-coverage 行列:
 
 ### Step 1: 6 個の nuanced unit test を追加
 
-既存の \`#[cfg(test)] mod tests\` ブロック内、L12 の 4 個の simple test の後に 6 個の nuanced ケースを追記する。テストは single-vs-multi-account と outcome でグルーピングしてある。
+既存の \`#[cfg(test)] mod tests\` ブロック内、レッスン12 の 4 個の simple test の後に 6 個の nuanced ケースを追記する。テストは single-vs-multi-account と outcome でグルーピングしてある。
 
 #### Test 1: Solvent close が fee を deposit
 
@@ -5173,10 +5174,10 @@ Scan-coverage 行列:
 
 押さえる点が 5 つ:
 
-1. **コメントブロックが数学をプリミティブから step-by-step で walk する。** notional → fee → pnl → equity → ratio → 分類 → routing 判断 → 出力。失敗したテストを debug する読者は、このコメントを読んで snapshot の 4 入力から期待値を再導出できる。**数学を walk するコメントは、1 つの test を Stage 10a + 10b パイプライン全体の worked example にする。**（バインド名についての細かい注記: テストは \`let mut s = LiquidationScanner::...\` を導入し、*さらに* \`match\` arm 内で \`CloseOutcomeKind::Solvent(s)\` を使って \`s\` を shadow している。Arm 内では \`s\` は \`SolventClose\` payload を指す。Arm が閉じた瞬間、外側の scanner \`s\` が再び scope に戻る — だからこそ 2 行後の \`s.fund_balance()\` が動く。これは意図的な Rust イディオムだ — match arm 内の shadowing は scope-bounded だ — が、新しい読者は二重 binding を正体として認識すべきだ。）
+1. **コメントブロックが数学をプリミティブから step-by-step で walk する。** notional → fee → pnl → equity → ratio → 分類 → routing 判断 → 出力。失敗したテストを debug する読者は、このコメントを読んで snapshot の 4 入力から期待値を再導出できる。**数学を walk するコメントは、1 つの test を Liquidation参照実装（計算パート） + Liquidation参照実装（保険基金パート） パイプライン全体の worked example にする。**（バインド名についての細かい注記: テストは \`let mut s = LiquidationScanner::...\` を導入し、*さらに* \`match\` arm 内で \`CloseOutcomeKind::Solvent(s)\` を使って \`s\` を shadow している。Arm 内では \`s\` は \`SolventClose\` payload を指す。Arm が閉じた瞬間、外側の scanner \`s\` が再び scope に戻る — だからこそ 2 行後の \`s.fund_balance()\` が動く。これは意図的な Rust イディオムだ — match arm 内の shadowing は scope-bounded だ — が、新しい読者は二重 binding を正体として認識すべきだ。）
 2. **選ばれた数字 — entry=1_000、collateral=20、mark=999 — は ratio（190 bps）が maintenance（200 bps）のすぐ下に着地する *境界ケース*。** 不等号を flip させた bug（\`>\` の代わりに \`>=\` など）が 190 を間違ったバケットに落とす。**境界の入力は、分類 predicate での off-by-one を捕える test を作る。**
 3. **\`outcome\` への \`match\` は別 variant に \`panic!("expected Solvent")\` を使う。** 失敗メッセージは *期待する* variant を名指す。失敗ログを読む将来の読者には、どちらの分岐を狙ったかが即座に分かる。**Panic メッセージは「想定外の variant」ではなく「期待した variant」を名指す。**
-4. **\`ScanReport\` の 4 フィールドすべて + \`fund_balance()\` を assert する。** Per-record の \`outcome\` がすでに含意していても、aggregate フィールドもチェックする。なぜか。L11 の設計契約が aggregate を first-class と宣言した以上、集計の数学を破る regression は、per-record の分解を破るものとは別の bug クラスだからだ。**Aggregate フィールドと per-record フィールドは別々の assertion を得る。別々の invariant だからだ。**
+4. **\`ScanReport\` の 4 フィールドすべて + \`fund_balance()\` を assert する。** Per-record の \`outcome\` がすでに含意していても、aggregate フィールドもチェックする。なぜか。レッスン11 の設計契約が aggregate を first-class と宣言した以上、集計の数学を破る regression は、per-record の分解を破るものとは別の bug クラスだからだ。**Aggregate フィールドと per-record フィールドは別々の assertion を得る。別々の invariant だからだ。**
 5. **\`s.fund_balance() == 14\` で fund が実際に mutate したことを証明する** — report が claim しただけではない。Fund は *state* であり、derivation ではない。別途読み直すことで「report が嘘をついていない」を確認する。**State 変更は call 後の別 read を要する。それを describe する report は独自の assertion を要する。**
 
 #### Test 2: Underwater、fund が完全 cover
@@ -5212,8 +5213,8 @@ Scan-coverage 行列:
 
 押さえる点が 4 つ:
 
-1. **Perp Primer L3 シナリオが本コース 4 度目の再登場**: $100k entry、$10k collateral、$80,500 close、$19,500 PnL、$9,500 負 equity。数字は L10 の \`fee_basic\`、L10 の \`underwater_close_already_underwater_pre_fee\`、そしていま L13 の scanner-level test を貫く。**Curriculum reinforcement は複利化する。L13 までに読者は数字を再導出せずに認識する。**
-2. **\`fee_to_fund == 0\`** — scanner レベルで確認する。L10 の契約は「fee 前に負の equity → fee は徴収されない」と言った。L13 では、契約が orchestration 層を通過しても保たれているかを verify する。**Cross-layer の契約テストは、orchestration が下位層の保証を *壊さない* かを verify する。**
+1. **Perp Primer レッスン3 シナリオが本コース 4 度目の再登場**: $100k entry、$10k collateral、$80,500 close、$19,500 PnL、$9,500 負 equity。数字は レッスン10 の \`fee_basic\`、レッスン10 の \`underwater_close_already_underwater_pre_fee\`、そしていま レッスン13 の scanner-level test を貫く。**Curriculum reinforcement は複利化する。レッスン13 までに読者は数字を再導出せずに認識する。**
+2. **\`fee_to_fund == 0\`** — scanner レベルで確認する。レッスン10 の契約は「fee 前に負の equity → fee は徴収されない」と言った。レッスン13 では、契約が orchestration 層を通過しても保たれているかを verify する。**Cross-layer の契約テストは、orchestration が下位層の保証を *壊さない* かを verify する。**
 3. **\`fund_deposits == 0\` AND \`fund_withdrawals == 10_707\`** — aggregate フィールドは *deposit ゼロ*（\`fee_to_fund == 0\` だから）と *full withdrawal*（fund が十分にあったから）を示す。2 つの aggregate が揃って完全な balance-flow の物語を描く。**Aggregate フィールドは bridge の read-once な telemetry。正確であるべき。**
 4. **\`s.fund_balance() == 20_000 - 10_707\`** — scan 後の fund balance は input から計算し、リテラルとしては assert しない。こうすると test が self-documenting になる。読者は \`20_000 - 10_707\` を見て、各数字がどこから来たか分かる。**Assertion 内の算術式は、hardcoded リテラルよりもテスト自身を説明する。**
 
@@ -5261,8 +5262,8 @@ Scan-coverage 行列:
 押さえる点が 3 つ:
 
 1. **\`new(0)\` ではなく \`with_empty_fund\`** — call site の named constructor が「empty fund」と語る。「balance 0 の fund」ではない。テストを読めば意図が即座に見える。**テスト call site での named constructor は documentation だ。**
-2. **\`fund_withdrawals == 0\`** — *full shortfall ではない*。L8 の \`Depleted\` variant は \`(0, unfilled)\` を返す。Fund は *0* を支払い（何もなかったから）、*full* shortfall を escalate する。Aggregate フィールドはこの区別を preserve する。**\`Depleted\` と \`Covered { amount: 0 }\` は別の outcome。Aggregate は異なる数を見せねばならない。**
-3. **テストは Test 2 と Test 3 より短い。** Assertion が少なく、setup がシンプル、narrative がクリーン。Depleted state はカスケードの「崖の端」 — Stage 10d（ADL）が発火する境界だ。**Edge-case test は terse であるべき。*その存在自体* が価値の大半。**
+2. **\`fund_withdrawals == 0\`** — *full shortfall ではない*。レッスン8 の \`Depleted\` variant は \`(0, unfilled)\` を返す。Fund は *0* を支払い（何もなかったから）、*full* shortfall を escalate する。Aggregate フィールドはこの区別を preserve する。**\`Depleted\` と \`Covered { amount: 0 }\` は別の outcome。Aggregate は異なる数を見せねばならない。**
+3. **テストは Test 2 と Test 3 より短い。** Assertion が少なく、setup がシンプル、narrative がクリーン。Depleted state はカスケードの「崖の端」 — ADL参照実装パート（ADL）が発火する境界だ。**Edge-case test は terse であるべき。*その存在自体* が価値の大半。**
 
 #### Test 5: Mixed batch が unhealthy アカウントのみを処理
 
@@ -5296,9 +5297,9 @@ Scan-coverage 行列:
 
 押さえる点が 6 つ:
 
-1. **1 つのスライスに 4 アカウント — それぞれが異なる \`MarginHealth\` state に着地するよう calibrate してある。** Account 1 → Safe、2 → AtRisk、3 → Liquidatable、4 → Underwater。スライスは L6 分類カスケードの *すべての* arm を 1 回の呼び出しで exercise する。**Mixed-batch test は分類カスケードの完全性を verify する最も安い方法。**
+1. **1 つのスライスに 4 アカウント — それぞれが異なる \`MarginHealth\` state に着地するよう calibrate してある。** Account 1 → Safe、2 → AtRisk、3 → Liquidatable、4 → Underwater。スライスは レッスン6 分類カスケードの *すべての* arm を 1 回の呼び出しで exercise する。**Mixed-batch test は分類カスケードの完全性を verify する最も安い方法。**
 2. **\`report.records.len() == 2\`** — *4 ではない*。Safe と AtRisk は record を生まない。Liquidatable と Underwater だけが生む。Test は AtRisk を liquidation trigger に誤分類する future bug を捕える。**Filter された出力での length assertion は orchestration レベルの「wrong filter」bug を捕える。**
-3. **\`report.records[0].account == AccountId(3)\` と \`[1].account == AccountId(4)\`** — record は *input 順序* を preserve する。Account 3 が account 4 より先にスライスに現れ、record も同じ順序で並ぶ。L11 のモジュール doc が定めた FIFO 順序ポリシーだ。**Ordered iteration → ordered records。Policy は test が enforce する。**
+3. **\`report.records[0].account == AccountId(3)\` と \`[1].account == AccountId(4)\`** — record は *input 順序* を preserve する。Account 3 が account 4 より先にスライスに現れ、record も同じ順序で並ぶ。レッスン11 のモジュール doc が定めた FIFO 順序ポリシーだ。**Ordered iteration → ordered records。Policy は test が enforce する。**
 4. **数学コメントは *per-account*。Per-test ではない。** 各アカウントが自分の分類数学を inline で得る。**Mixed-batch test では、数学コメントはそれが描くアカウントの隣に住む。**
 5. **\`InsuranceFund::new(1_000)\` — 非空 fund。** $1,000 の fund はこの batch の任意の solvent fee と任意の小さい underwater shortfall を cover する。Fund-state の mutation は validate されるが、test の primary point ではない。Primary point は *分類 + filtering* の挙動だ。**1 つのテスト、1 つの primary point。Fund state はここでは incidental。**
 6. **\`fund_deposits\` / \`fund_withdrawals\` / \`unfilled_deficit\` への assertion なし。** これらは per-account outcome（record が運ぶ）から derive される。Assert すれば test #1-#4 のカバレッジと重複する。Mixed-batch test は *新しい* 振る舞い — multi-account orchestration — に focus すべきだ。**新しい振る舞いを assert する。すでにカバー済みのものは再 assert しない。**
@@ -5335,7 +5336,7 @@ Scan-coverage 行列:
 2. **Fund balance（$12,000）が *ちょうど* \`1 つ目の shortfall + 2 つ目への partial payment\`** — $10,707 + $1,293 = $12,000。読者には、fund が *正確に* 1 つ目の underwater アカウントで底をつき、部分残額が 2 つ目に渡るのが見える。**慎重に選んだ fund balance が fairness policy を assertion で可視化する。**
 3. **\`fund_withdrawals == 12_000\`** — 両アカウントを跨いだ *合計* 引き出し。Aggregate フィールドは「1 つ目が 10,707、2 つ目が 1,293」を区別しない。合計だけを見せる。**Aggregate フィールドは要約する。Per-record フィールドが区別する。**
 4. **コメントが算術を explicit に含む** — \`10_707 + 1_293\`。失敗を debug する読者は unfilled-deficit の数値から FIFO ルールにたどり着ける。**FIFO 算術を見せる test コメントは、policy を監査可能に保つ。**
-5. **\`unfilled_deficit == 10_707 − 1_293\` の assertion は、Stage 10d が consume する *唯一の* シグナルだ。** 次の stage（ADL）は、この \`9_414\` shortfall を cover するに足るだけの profitable counter-position を force-close する。L13 の test が、Stage 10d が read する契約を固定する。**Per-stage handoff の test は、次の stage が consume する契約を固定する。**
+5. **\`unfilled_deficit == 10_707 − 1_293\` の assertion は、ADL参照実装パート が consume する *唯一の* シグナルだ。** 次の stage（ADL）は、この \`9_414\` shortfall を cover するに足るだけの profitable counter-position を force-close する。レッスン13 の test が、ADL参照実装パート が read する契約を固定する。**Per-stage handoff の test は、次の stage が consume する契約を固定する。**
 
 ### Step 2: 4 個の invariant proptest を追加
 
@@ -5448,7 +5449,7 @@ Scan-coverage 行列:
 
 #### Proptest #1: \`fund_balance_delta_matches_report\`
 
-**Fund の保存則。** \`before + ∑deposits − ∑withdrawals = after\`。L8 の invariant（\`balance ≥ 0\`）は per-call の主張だった。L13 でこれを scan 全体に拡張する。Report が claim する deposit はすべて fund balance に現れねばならない。Withdrawal も同じ。**この proptest が pass すれば、report と fund は何が起きたかについて agree している。**
+**Fund の保存則。** \`before + ∑deposits − ∑withdrawals = after\`。レッスン8 の invariant（\`balance ≥ 0\`）は per-call の主張だった。レッスン13 でこれを scan 全体に拡張する。Report が claim する deposit はすべて fund balance に現れねばならない。Withdrawal も同じ。**この proptest が pass すれば、report と fund は何が起きたかについて agree している。**
 
 押さえる点が 3 つ:
 
@@ -5458,14 +5459,14 @@ Scan-coverage 行列:
 
 #### Proptest #2: \`unfilled_implies_empty_fund\`
 
-**Fund-exhaustion 契約。** Report に \`unfilled_deficit > 0\` が現れたら、fund は終了時に *必ず* 空でなければならない。これで「unfilled は存在するが fund はまだ money を持っている」という矛盾型の bug が捕まる。契約が成立するのは、L9 の \`withdraw_shortfall\` が unfilled deficit を report する前に fund を 0 まで drain するからだ。**L9 の per-call 契約が per-scan の invariant に scale する。**
+**Fund-exhaustion 契約。** Report に \`unfilled_deficit > 0\` が現れたら、fund は終了時に *必ず* 空でなければならない。これで「unfilled は存在するが fund はまだ money を持っている」という矛盾型の bug が捕まる。契約が成立するのは、レッスン9 の \`withdraw_shortfall\` が unfilled deficit を report する前に fund を 0 まで drain するからだ。**レッスン9 の per-call 契約が per-scan の invariant に scale する。**
 
 押さえる点が 3 つ:
 
 1. **Proptest body 内の \`if report.unfilled_deficit > 0 { ... }\` filter。** Unfilled が存在するケースだけが assertion を発火させる。Fund がすべてを cover できたケースは valid な「assertion が発火しないケース」だ。**Proptest 内の条件付き assertion は「X が true なら Y も成立する」の表現方法。**
 2. **入力範囲が *adverse* — \`mark in 50..70\`。** Entry $100 の long position は mark $50-70 で深刻な損失に直面し、underwater outcome が起こりやすくなる。これで test は \`unfilled > 0\` 分岐をトリガする方向に bias する。**Proptest input は *interesting な* 条件をトリガする方向に bias すべき。さもないと、ほとんどのケースが assertion を静かに skip する。** これが *proptest の密度（density）問題* だ: \`mark in 50..150\` のような広い範囲だと、ランダム入力の大多数が Safe か Solvent に着地し、条件付き assertion は一度も発火しない。Proptest のデフォルト 100-250 iteration を通じて *プロパティは実際にテストされないまま pass する* — 見えない dead-code test だ。Assertion が実際に発火する regime に向けて入力を bias する。さもないと、プロパティテストは何もテストしていない。
 3. **\`initial_fund in 0..5_000\` — 下の範囲で cap してある。** Fund は予想される aggregate shortfall（underwater account 数で scale する）に対して不十分にサイズされる。**予想される shortfall より下に fund をサイズすれば、unfilled deficit の可能性が最大化される。**
-4. **L13 では \`prop_assume!\` 多用よりも Strategy 側の事前バイアスを優先する。** このプロパティの目的は \`unfilled > 0\` 分岐を高密度で発火させることなので、生成器を最初から adverse 領域へ寄せるほうが効率が良い。こうすると reject 数が抑えられ、\`TooManyAssumptions\` のリスクも下がる。**数理前提を明示したいときは L5 のように \`prop_assume!\`、発火密度を作りたいときは L13 のように Strategy で先に寄せる**、という使い分けが本コースの規律だ。
+4. **レッスン13 では \`prop_assume!\` 多用よりも Strategy 側の事前バイアスを優先する。** このプロパティの目的は \`unfilled > 0\` 分岐を高密度で発火させることなので、生成器を最初から adverse 領域へ寄せるほうが効率が良い。こうすると reject 数が抑えられ、\`TooManyAssumptions\` のリスクも下がる。**数理前提を明示したいときは レッスン5 のように \`prop_assume!\`、発火密度を作りたいときは レッスン13 のように Strategy で先に寄せる**、という使い分けが本コースの規律だ。
 
 #### Proptest #3: \`records_count_bounded_by_accounts\`
 
@@ -5484,7 +5485,7 @@ Scan-coverage 行列:
 
 1. **Proptest は 1 つではなく *2 つ* の scanner を構築し、同じ input を両方に通す。** 同じ scanner が 2 回 scan すると、2 回目の state が 1 回目から何かを inherit して非決定性を mask しうる。Fresh な scanner 2 つなら、\`InsuranceFund::new(initial_fund)\` reset を生き延びる state を catch できる。**決定性テストは毎 run で independent state を使わねばならない。**
 2. **Assertion は *両方* \`report == report\` AND \`fund_balance == fund_balance\` に対して行う。** 決定的な report を生むが非決定的な fund-balance 変化を持つ scanner は、report-only test を pass する。だが本当の bug だ。Two-way assertion なら両方 catch できる。**決定性テストはあらゆる observable な side effect に対して assert する。**
-3. **\`ScanReport\` の \`PartialEq\` が *このテストを可能にする*。** L11 の derive \`#[derive(Clone, Debug, PartialEq, Eq, Default)]\` が \`prop_assert_eq!(r1, r2)\` の compile を可能にする。\`PartialEq\` なしでは、この proptest は書けない。**標準 derive trait が標準 test pattern を unlock する。Eagerly derive する。**
+3. **\`ScanReport\` の \`PartialEq\` が *このテストを可能にする*。** レッスン11 の derive \`#[derive(Clone, Debug, PartialEq, Eq, Default)]\` が \`prop_assert_eq!(r1, r2)\` の compile を可能にする。\`PartialEq\` なしでは、この proptest は書けない。**標準 derive trait が標準 test pattern を unlock する。Eagerly derive する。**
 4. **\`Hash\` derive は不要。** 決定性テストは \`==\` で比較するだけで hashing しない。\`Hash\` はこのテスト（とほとんどの test）には冗長だ。**Test が実際に要求するものを derive する。Defensively に \`Hash\` を derive する誘惑には抵抗する。**
 
 ### Step 3: テストを走らせる
@@ -5519,24 +5520,24 @@ test scanner::tests::unfilled_implies_empty_fund ... ok
 test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**69 テスト pass。Liquidation crate は \`0a8464e\` と byte-for-byte 一致。** Stage 10c が完成し、Stage 10 — margin math + insurance fund + scanner の trilogy — が *閉じた*。
+**69 テスト pass。Liquidation crate は \`0a8464e\` と byte-for-byte 一致。** Liquidation参照実装（スキャナパート） が完成し、Liquidation三部作（計算・保険基金・スキャナ） — が *閉じた*。
 
 エラー時にありがちなパターン:
 
-- **\`scan_is_deterministic\` が時々 flake する** — scanner に隠された非決定性がある。最も一般的な原因: \`HashMap\` の iterate（順序が変わる）。Stage 10c は \`HashMap\` を使わない。導入したなら \`BTreeMap\` か \`Vec\` に切り替える。**隠れた非決定性は chain-fork リスク。Proptest が mainnet 前に catch する。**
-- **\`fund_balance_delta_matches_report\` が \`5000 vs 4999\` で失敗** — \`saturating_add\` の順序での off-by-one。Production コードを再確認: \`before + deposits − withdrawals\`、この順序。\`before − withdrawals + deposits\` への反転は算術的には同一に見えるが、実は違う: 中間値の \`before − withdrawals\` は *一部の呼び出し* で負になりうる。*saturation を欠いた release ビルドでは*、これがサイレントに巨大な正値に *wrap* する — validator ごとに異なる \`i64\` が生まれ、validator 間の決定性が破壊され、chain が fork する。L12 の順序での saturating arithmetic が安価な防御だ。Proptest こそが、順序を逆にしたときにそれを catch する道具だ。
-- **\`unfilled_implies_empty_fund\` が \`unfilled=500, balance=1000\` で失敗** — fund が depletes すると scan が early-exit してしまう（後続の underwater アカウントを skip）。L11 設計契約は scan を続けるべきと言う。スライス内の *すべての* underwater アカウントで aggregate すべきだ。L12 の fan-out ロジックを読み直す。
+- **\`scan_is_deterministic\` が時々 flake する** — scanner に隠された非決定性がある。最も一般的な原因: \`HashMap\` の iterate（順序が変わる）。Liquidation参照実装（スキャナパート） は \`HashMap\` を使わない。導入したなら \`BTreeMap\` か \`Vec\` に切り替える。**隠れた非決定性は chain-fork リスク。Proptest が mainnet 前に catch する。**
+- **\`fund_balance_delta_matches_report\` が \`5000 vs 4999\` で失敗** — \`saturating_add\` の順序での off-by-one。Production コードを再確認: \`before + deposits − withdrawals\`、この順序。\`before − withdrawals + deposits\` への反転は算術的には同一に見えるが、実は違う: 中間値の \`before − withdrawals\` は *一部の呼び出し* で負になりうる。*saturation を欠いた release ビルドでは*、これがサイレントに巨大な正値に *wrap* する — validator ごとに異なる \`i64\` が生まれ、validator 間の決定性が破壊され、chain が fork する。レッスン12 の順序での saturating arithmetic が安価な防御だ。Proptest こそが、順序を逆にしたときにそれを catch する道具だ。
+- **\`unfilled_implies_empty_fund\` が \`unfilled=500, balance=1000\` で失敗** — fund が depletes すると scan が early-exit してしまう（後続の underwater アカウントを skip）。レッスン11 設計契約は scan を続けるべきと言う。スライス内の *すべての* underwater アカウントで aggregate すべきだ。レッスン12 の fan-out ロジックを読み直す。
 - **\`records_count_bounded_by_accounts\` が \`records=21, accounts=20\` で失敗** — どこかで loop が double-push している。最も可能性の高い原因: \`report.records.push(...)\` を \`if\`/\`else\` 分岐 *内部* AND もう一度外で書いている。Loop body を再確認 — push は最後にちょうど 1 回でなければならない。
 
-## 設計の振り返り — Stage 10 trilogy
+## 設計の振り返り — Liquidation三部作
 
-13 レッスンを通して Stage 10 を形作った load-bearing な決定が 3 つ:
+13 レッスンを通して Liquidation三部作を形作った load-bearing な決定が 3 つ:
 
-1. **層を成す保存則。** L9 の \`amount + unfilled = shortfall\`（per call）、L10 の \`fee_to_fund + residual_to_account = post_close_equity\`（per close）、L13 の \`before + ∑deposits − ∑withdrawals = after\`（per scan）。各層の法則が次の層の invariant に consume される。Crate の数学が最小単位（1 回の \`withdraw_shortfall\` 呼び出し）から最大単位（1 回の \`scan\` batch）まで閉じる。**層を成す保存則こそが、コンセンサス state machine を composition の下で *証明可能に* 正しく保つ方法だ。**
+1. **層を成す保存則。** レッスン9 の \`amount + unfilled = shortfall\`（per call）、レッスン10 の \`fee_to_fund + residual_to_account = post_close_equity\`（per close）、レッスン13 の \`before + ∑deposits − ∑withdrawals = after\`（per scan）。各層の法則が次の層の invariant に consume される。Crate の数学が最小単位（1 回の \`withdraw_shortfall\` 呼び出し）から最大単位（1 回の \`scan\` batch）まで閉じる。**層を成す保存則こそが、コンセンサス state machine を composition の下で *証明可能に* 正しく保つ方法だ。**
 
-2. **\`debug_assert!\` ペア + saturating arithmetic を、どこにでも。** Crate 内のすべての関数が両方かどちらかを使う。L10 の dispatch（\`solvent_close_outcome\` / \`underwater_close_outcome\`）は debug-assert pair。L8 deposit と L9 withdraw は saturating arithmetic を使う。L12 scan は両方を組み合わせる — routing predicate 経由の debug-assert、report aggregation 経由の saturation。**Dev-assertion + prod-saturation 規律は 1 つの関数から 1 つの crate まで scale する。**
+2. **\`debug_assert!\` ペア + saturating arithmetic を、どこにでも。** Crate 内のすべての関数が両方かどちらかを使う。レッスン10 の dispatch（\`solvent_close_outcome\` / \`underwater_close_outcome\`）は debug-assert pair。レッスン8 deposit と レッスン9 withdraw は saturating arithmetic を使う。レッスン12 scan は両方を組み合わせる — routing predicate 経由の debug-assert、report aggregation 経由の saturation。**Dev-assertion + prod-saturation 規律は 1 つの関数から 1 つの crate まで scale する。**
 
-3. **メカニズムの前に語彙、4 回連続で。** L1-L3 が \`LiquidationParams\`、\`MarginRatio\`、\`MarginHealth\`、\`AccountSnapshot\`、\`CloseOrderSpec\` を \`margin_health\` 実装前に宣言した。L8 が \`InsuranceFund\`、\`WithdrawOutcome\` を \`withdraw_shortfall\` 前に宣言した。L10 が \`SolventClose\`、\`UnderwaterClose\` を実装中に宣言した。L11 が \`CloseOutcomeKind\`、\`LiquidationRecord\`、\`ScanReport\`、\`LiquidationScanner\` を \`scan\` 前に宣言した。パターンがコース全体で一貫しているのは、*語彙が契約を定義し、メカニズムがそれを実装する* からだ。**語彙が先、メカニズムが後。**
+3. **メカニズムの前に語彙、4 回連続で。** レッスン1〜3 が \`LiquidationParams\`、\`MarginRatio\`、\`MarginHealth\`、\`AccountSnapshot\`、\`CloseOrderSpec\` を \`margin_health\` 実装前に宣言した。レッスン8 が \`InsuranceFund\`、\`WithdrawOutcome\` を \`withdraw_shortfall\` 前に宣言した。レッスン10 が \`SolventClose\`、\`UnderwaterClose\` を実装中に宣言した。レッスン11 が \`CloseOutcomeKind\`、\`LiquidationRecord\`、\`ScanReport\`、\`LiquidationScanner\` を \`scan\` 前に宣言した。パターンがコース全体で一貫しているのは、*語彙が契約を定義し、メカニズムがそれを実装する* からだ。**語彙が先、メカニズムが後。**
 
 ## 答え合わせ
 
@@ -5546,19 +5547,19 @@ git checkout 0a8464e
 diff -u ~/code/my-openhl/crates/liquidation/src/scanner.rs ./crates/liquidation/src/scanner.rs
 \`\`\`
 
-L13 の後:
-- **scanner.rs** は Stage 10c の \`scanner.rs\` と **byte-for-byte 一致**。ファイル全体 — module-level doc + imports + 4 types + 5 accessor + \`scan\` メソッド + 10 unit test + 4 proptest — が workspace に揃う。
-- **\`crates/liquidation/src/\` の他のファイル** は L10 以降 byte-for-byte 安定。
+レッスン13 の後:
+- **scanner.rs** は Liquidation参照実装（スキャナパート） の \`scanner.rs\` と **byte-for-byte 一致**。ファイル全体 — module-level doc + imports + 4 types + 5 accessor + \`scan\` メソッド + 10 unit test + 4 proptest — が workspace に揃う。
+- **\`crates/liquidation/src/\` の他のファイル** は レッスン10 以降 byte-for-byte 安定。
 
-**Liquidation コース完成。** Module 0（Orientation、L0） + Module 1（Types、L1-L3） + Module 2（Pure compute、L4-L7） + Module 3（Insurance fund、L8-L10） + Module 4（Scanner + capstone、L11-L13） = 5 modules を跨ぐ 13 レッスンだ。
+**Liquidation コース完成。** セクション0（Orientation、L0） + セクション1（Types、レッスン1〜3） + セクション2（Pure compute、レッスン4〜7） + セクション3（Insurance fund、レッスン8〜10） + セクション4（Scanner + capstone、レッスン11〜13） = 5 modules を跨ぐ 13 レッスンだ。
 
 ## よくある質問
 
-**Q1: L13 がなぜ 6 個の unit test で、4 個や 8 個ではないのか?**
+**Q1: レッスン13 がなぜ 6 個の unit test で、4 個や 8 個ではないのか?**
 
 Coverage math から落ちる数字だ。Test coverage 行列が 4 outcome × 2 batch shape で、multi-account 列が 4 つの outcome のうち 3 つを mixed-batch test に collapse する。残る 4 つの single-account outcome（Solvent、FullyCovered、PartialDrain、Depleted）にはそれぞれ自分の test が必要。Multi-account 列には mixed-batch test と FIFO-fairness test が必要（identical-account-iteration-order が 2 つの underwater iteration を区別する *唯一の* ものだから）。4 + 1（mixed） + 1（FIFO） = 6。**任意の数ではなく、coverage math。**
 
-**Q2: なぜ L13 は「scanner が batch 中で fund が depleted した後も走る」test を加えないのか?**
+**Q2: なぜ レッスン13 は「scanner が batch 中で fund が depleted した後も走る」test を加えないのか?**
 
 すでにカバー済みだからだ。Proptest #2 \`unfilled_implies_empty_fund\` が scan 中に fund が depletes したときちょうど発火し、unit test #6 \`scan_first_underwater_gets_paid_then_second_unfilled\` が決定的バージョンを構築する。「mid-batch depletion」専用 test を追加すれば両者と重複する。**6 unit test + 4 proptest がすでにケースをカバーする。冗長 test はノイズだ。**
 
@@ -5570,40 +5571,40 @@ Coverage math から落ちる数字だ。Test coverage 行列が 4 outcome × 2 
 
 2 回で非決定性は catch できる。2 run が違えば、*どれだけ多い* run でも違う。3 run でも同じ bug を catch する。4 run も同じだ。「Many runs」防御は flaky テスト用 — bug が確率的に起きる場合だが、scanner 決定性ではそうはならない（構造上決定的だからだ）。**Property を minimum-multiplicity でテストする。それを超える multiplicity は無駄な iteration。**
 
-**Q5: L13 の test + proptest がテストしないものは何か?**
+**Q5: レッスン13 の test + proptest がテストしないものは何か?**
 
-意図的に外したものがいくつかある。**スコープ外:** (a) \`ScanReport\` の precise なバイトレイアウト（Stage 10c では in-process のみで使われ、ディスクに serialize されない）、(b) スレッド安全性（\`LiquidationScanner\` は \`Send + Sync\`-test されない。Stage 10c は設計上シングルスレッド）、(c) panic-safety（bridge が higher level で panic を扱う）。**スコープ内:** fund state に影響する分類 → routing → 集計のあらゆる path。**L13 の test はコンセンサスが実際に必要とするものを cover する。**
+意図的に外したものがいくつかある。**スコープ外:** (a) \`ScanReport\` の precise なバイトレイアウト（Liquidation参照実装（スキャナパート） では in-process のみで使われ、ディスクに serialize されない）、(b) スレッド安全性（\`LiquidationScanner\` は \`Send + Sync\`-test されない。Liquidation参照実装（スキャナパート） は設計上シングルスレッド）、(c) panic-safety（bridge が higher level で panic を扱う）。**スコープ内:** fund state に影響する分類 → routing → 集計のあらゆる path。**レッスン13 の test はコンセンサスが実際に必要とするものを cover する。**
 
-**Q6: Stage 10d（ADL）は L13 scanner から何を consume するのか?**
+**Q6: ADL参照実装パート（ADL）は レッスン13 scanner から何を consume するのか?**
 
-正確に \`ScanReport.unfilled_deficit\` — 「これだけの quote 単位の shortfall を fund が absorb できなかった」を意味する i64 だ。Stage 10d は (a) 各 block の scan 後にこのフィールドを read、(b) ゼロでなければ *profitable* な counter-position を決定的な順序で walk、(c) deficit を cover するのに十分な数を force-close する。L13 proptest \`unfilled_implies_empty_fund\` が、bridge が見るべき *唯一の場所* がこのフィールドであることを *保証* する。他に隠れた escalation signal はない。**Stage 10d は 1 つの数字を得る。それで何をすべきか知っている。**
+正確に \`ScanReport.unfilled_deficit\` — 「これだけの quote 単位の shortfall を fund が absorb できなかった」を意味する i64 だ。ADL参照実装パート は (a) 各 block の scan 後にこのフィールドを read、(b) ゼロでなければ *profitable* な counter-position を決定的な順序で walk、(c) deficit を cover するのに十分な数を force-close する。レッスン13 proptest \`unfilled_implies_empty_fund\` が、bridge が見るべき *唯一の場所* がこのフィールドであることを *保証* する。他に隠れた escalation signal はない。**ADL参照実装パート は 1 つの数字を得る。それで何をすべきか知っている。**
 
-## Module 4 + Stage 10 retrospective
+## セクション4 + Liquidation三部作の振り返り
 
 Liquidation コースの 13 レッスン、表 1 つで:
 
-| # | Module | Lessons | Stage | 何を構築したか |
+| # | セクション | レッスン | 対応パート | 何を構築したか |
 |---|---|---|---|---|
 | M0 | Orientation | L0 | — | コース概観、openhl context |
-| M1 | Types | L1, L2, L3 | 10a | \`LiquidationParams\`、\`MarginRatio\`、\`MarginHealth\`、\`AccountSnapshot\`、\`CloseOrderSpec\` |
-| M2 | Pure compute | L4, L5, L6, L7 | 10a | \`notional_value\`、\`unrealized_pnl\`、\`account_equity\`、\`margin_ratio\`、\`margin_health\`、\`close_order_spec\` |
-| M3 | Insurance fund | L8, L9, L10 | 10b | \`InsuranceFund\` state machine、\`WithdrawOutcome\` 3-variant enum、\`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`、\`SolventClose\`、\`UnderwaterClose\` |
-| M4 | Scanner + capstone | **L11, L12, L13** | 10c | \`CloseOutcomeKind\`、\`LiquidationRecord\`、\`ScanReport\`、\`LiquidationScanner\`、\`scan\` メソッド、10 unit test + 4 proptest |
+| M1 | Types | レッスン1, レッスン2, レッスン3 | 計算パート | \`LiquidationParams\`、\`MarginRatio\`、\`MarginHealth\`、\`AccountSnapshot\`、\`CloseOrderSpec\` |
+| M2 | Pure compute | レッスン4, レッスン5, レッスン6, レッスン7 | 計算パート | \`notional_value\`、\`unrealized_pnl\`、\`account_equity\`、\`margin_ratio\`、\`margin_health\`、\`close_order_spec\` |
+| M3 | Insurance fund | レッスン8, レッスン9, レッスン10 | 保険基金パート | \`InsuranceFund\` state machine、\`WithdrawOutcome\` 3-variant enum、\`liquidation_fee\`、\`solvent_close_outcome\`、\`underwater_close_outcome\`、\`SolventClose\`、\`UnderwaterClose\` |
+| M4 | Scanner + capstone | **レッスン11, レッスン12, レッスン13** | スキャナパート | \`CloseOutcomeKind\`、\`LiquidationRecord\`、\`ScanReport\`、\`LiquidationScanner\`、\`scan\` メソッド、10 unit test + 4 proptest |
 
 **69 テスト。4 modules。13 レッスン。openhl コミット SHA 3 つ。** Liquidation crate はいまや完全で決定的で defensively-coded な multi-account orchestration 層であり、openhl bridge が block ごとに 1 回呼んで safety-net cascade を ADL の手前まで駆動できる。
 
-openhl カリキュラムの次のコース — Stage 10d、ADL — は \`ScanReport.unfilled_deficit\` を唯一の入力として consume し、profitable counter-position を walk し、fund が absorb できなかった分を force-close する。Stage 10d が read する契約こそ、L13 proptest が固定したものだ。
+openhl カリキュラムの次のコース — ADL参照実装パート、ADL — は \`ScanReport.unfilled_deficit\` を唯一の入力として consume し、profitable counter-position を walk し、fund が absorb できなかった分を force-close する。ADL参照実装パート が read する契約こそ、レッスン13 proptest が固定したものだ。
 
-## 次のコース — Stage 10d、ADL（別コース）
+## 次のコース — ADL参照実装パート、ADL（別コース）
 
-L13 は Liquidation コースの *最後の* レッスンだ。Cascade の Layer 3 — ADL（auto-deleveraging） — は別の専用 future コースになる。Handoff は:
+レッスン13 は Liquidation コースの *最後の* レッスンだ。Cascade の Layer 3 — ADL（auto-deleveraging） — は別の専用 future コースになる。Handoff は:
 
-1. **Scanner が \`unfilled_deficit > 0\` を生む。** Fund がすべての underwater shortfall を absorb できなかったときだ（L13 proptest #2 が、これが *唯一の* signal であることを保証する）。
-2. **Stage 10d の ADL routine** はこのフィールドを各 block の scan 後に read する。
+1. **Scanner が \`unfilled_deficit > 0\` を生む。** Fund がすべての underwater shortfall を absorb できなかったときだ（レッスン13 proptest #2 が、これが *唯一の* signal であることを保証する）。
+2. **ADL参照実装パート の ADL routine** はこのフィールドを各 block の scan 後に read する。
 3. **ADL routine** は *profitable* な counter-position を決定的順序で walk（おそらく \`(pnl_pct × leverage)\` 降順、\`account_id\` を tiebreaker として）、順番に force-close、insolvent ポジションに margin を credit back する。
 4. **ADL outcome** は別の \`AdlReport\` 型で、独自の保存則と独自の proptest を持つ。
 
-Stage 10d は openhl のコミット \`d66b44a\` で実装されている。Rethlab の ADL コースは、レッスンが draft されたら着地する。
+ADL参照実装パート は openhl のコミット \`d66b44a\` で実装されている。Rethlab の ADL コースは、レッスンが draft されたら着地する。
 `,
                 },
               ],

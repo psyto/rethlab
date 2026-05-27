@@ -39,7 +39,7 @@ This is a serious training program — not a casual tutorial.
 
 ## The course catalog
 
-**18 courses split across two pedagogical modes**: source-reading + skill progression (Reth stack, 13 courses), and project build-alongs (DIY Perp, 5 courses).
+**21 courses per locale (EN/JA), split across two pedagogical modes**: source-reading + skill progression, and project build-alongs (DIY Perp).
 
 ### Reth stack — source-first courses
 
@@ -65,7 +65,7 @@ This is a serious training program — not a casual tutorial.
 
 [`psyto/openhl`](https://github.com/psyto/openhl) is the **open-source implementation of Hyperliquid** (a reference implementation, not THE Hyperliquid): a Rust workspace that wires real Reth (EVM execution) into real Malachite (BFT consensus) and adds three pure state-machine subsystems on top — a CLOB matching engine, funding/oracle/liquidation, and a protocol-native vault primitive. The CL/EL boundary is exactly four messages (`build_payload`, `payload_ready`, `validate_payload`, `commit`); the state machines are I/O-free and deterministic, validated by proptest at microseconds per case. See the [openhl architecture doc](https://github.com/psyto/openhl/blob/main/docs/architecture.md) for the full design.
 
-The DIY Perp track in rethlab is the **build-along course series** for openhl. You start from `cargo init` on an empty directory and reach a runnable open-source implementation of Hyperliquid over four courses, with openhl as the byte-identical answer key — each lesson pins to a specific openhl commit SHA and ends with `git diff` against that revision as the verification step.
+The DIY Perp track in rethlab is the **build-along course series** for openhl. You start from `cargo init` on an empty directory and progress through **Step 0 → Step 6** (`Perp Primer → Consensus → CLOB → Precompiles → Funding → Liquidation → ADL`), with openhl as the byte-identical answer key — each lesson pins to a specific openhl commit SHA and ends with `git diff` against that revision as the verification step.
 
 | rethlab course | openhl module | Lessons | What you ship + highlight |
 | :--- | :--- | :--- | :--- |
@@ -73,11 +73,12 @@ The DIY Perp track in rethlab is the **build-along course series** for openhl. Y
 | **Build OpenHL — CLOB** | Module 2: CLOB matching engine | 13 | Pure-state price-time-priority matching engine. Bridge integration pushes fills through `LiveRethEvmBridge::build_payload` into consensus-committed payloads |
 | **Build OpenHL — Precompiles** | Module 3: Core ↔ EVM precompiles | 12 | Smart contracts read CLOB state and place orders via custom EVM precompiles at `0x...0c1b` (read) and `0x...0c1c` (write). The `EvmFactory` "swap one slot" pattern, process-global `CLOB_STATE`, fill-sink routing back to the bridge |
 | **Build OpenHL — Funding** | Module 4 (partial): Funding state machine | 12 | Deterministic fixed-point funding math (`RATE_SCALE = 1e9` parts-per-billion) gated by an interval clock with no-catch-up semantics. Saturate-not-panic philosophy, balanced-book zero-sum proptest |
-| **Build OpenHL — Liquidation** | Module 4 (partial): Liquidation engine | 8 (Stage 10a) | Pure-compute margin engine with 4-state classification (Safe / AtRisk / Liquidatable / Underwater) and the leveraged-regime non-monotonicity discovery: write the proptest, watch it fail, trace the failure, refine with `prop_assume!`. Stage 10a [shipped in openhl](https://github.com/psyto/openhl/commit/22eedf9). Lessons for Stage 10b (insurance fund) and 10c (multi-account scanner) will land when those openhl sub-stages do. |
+| **Build OpenHL — Liquidation** | Module 4 (partial): Liquidation engine | 8 (Stage 10a) | Pure-compute margin engine with 4-state classification (Safe / AtRisk / Liquidatable / Underwater) and the leveraged-regime non-monotonicity discovery: write the proptest, watch it fail, trace the failure, refine with `prop_assume!`. Stage 10a [shipped in openhl](https://github.com/psyto/openhl/commit/22eedf9). |
+| **Build OpenHL — ADL** | Module 4 (partial): ADL engine | 5 | Auto-deleveraging safety-net logic on top of liquidation outcomes, including ranking, orchestration, and capstone invariants. |
 
 Module 4 oracle integration and Module 5 vault primitive are still openhl work-in-progress — the matching rethlab courses land when the reference code does.
 
-**Total: 18 courses (× EN + JA), 54 modules, 212 lessons per locale (424 lesson records in DB).**
+**Current seed totals: 42 courses, 126 modules, 467 lessons (EN+JA combined).**
 
 All courses are free. Reading every lesson works without an account. Anonymous visitors get **browser-local completion tracking** (lesson checkmarks + per-course progress bars persisted in `localStorage`); sign-in adds cross-device sync, XP, and a profile page.
 
@@ -119,12 +120,12 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ### What `db seed` does
 
-The seeder lives in `prisma/seed.ts` and pulls from 18 generated course files (`prisma/seed-reth-*-{en,ja}.ts`). It clears all course tables and re-creates 18 courses / 54 modules / 212 lessons per locale (424 lesson records combined) in one shot.
+The seeder lives in `prisma/seed.ts` and pulls from generated course files (`prisma/seed-reth-*-{en,ja}.ts`). It clears all course tables and re-creates the full catalog in one shot (currently 42 courses / 126 modules / 467 lessons combined).
 
 Two pedagogical formats live in those seeds:
 
 - **Reth stack courses** — markdown bodies are inlined directly in `prisma/seed-reth-{beginner,fundamentals,...}-{en,ja}.ts`. Edit those files to update lesson content.
-- **DIY Perp build-along courses** — markdown bodies live in `drafts/openhl_{consensus,clob,precompiles,funding,liquidation}_l<N>_{en,ja}.md`. The `prisma/seed-reth-openhl-*-{en,ja}.ts` files are **auto-generated** from those drafts by builder scripts under `.github/scripts/build-openhl-*-seed.ts`. To edit a build-along lesson, edit the markdown draft and re-run the relevant builder.
+- **DIY Perp build-along courses** — lesson bodies are maintained directly in `prisma/seed-reth-openhl-*-{en,ja}.ts` (source-of-truth).
 
 Lesson URLs key on the **slug** (stable across reseeds), not the database CUID, so a full reseed never breaks shared links.
 
@@ -155,12 +156,7 @@ rethlab/
 │   │              cross-chain-bridges,sequencer-rollup,p2p-networking,
 │   │              validator-ops}-{en,ja}.ts
 │   └── seed-reth-openhl-{consensus,clob,precompiles,funding,liquidation}-{en,ja}.ts
-│                                              # DIY Perp courses — auto-generated
-│                                              # from drafts/ by .github/scripts/
-├── drafts/
-│   └── openhl_{l<N>,clob_l<N>,precompiles_l<N>,funding_l<N>,liquidation_l<N>}_{en,ja}.md
-│                                              # Build-along lesson markdown drafts.
-│                                              # Edit these, then re-run the builder.
+│                                              # DIY Perp courses — source-of-truth
 ├── .github/
 │   └── scripts/
 │       ├── build-openhl-seed.ts               # Build seed-reth-openhl-consensus
@@ -230,20 +226,18 @@ When adding a lesson that references real source code, please use the same shape
 
 > **real source excerpt (with GitHub deep-link) → line-by-line walkthrough → design intent → drill**
 
-**DIY Perp build-along courses** — lesson bodies live in `drafts/openhl_*_{en,ja}.md`; the `prisma/seed-reth-openhl-*-{en,ja}.ts` files are auto-generated. To add or modify content:
+**DIY Perp build-along courses** — lesson bodies are maintained directly in `prisma/seed-reth-openhl-*-{en,ja}.ts`. To add or modify content:
 
-1. Edit the markdown draft in `drafts/`
-2. Re-run the builder, e.g. `npx tsx .github/scripts/build-openhl-funding-seed.ts --locale=ja`
-3. `npm run seed:upsert`
+1. Edit the relevant `prisma/seed-reth-openhl-*-{en,ja}.ts` file
+2. `npm run seed:upsert`
 
-### Draft safety policy
+### Source safety policy
 
-- `drafts/` is an editorial source directory, not a runtime content source.
 - Production/runtime code must read from database content seeded by `prisma/seed-reth-*.ts`.
 - Guardrails:
   - `npm run check:runtime-no-drafts` verifies runtime code does not reference `drafts/`.
-  - `npm run check:generated-seeds-clean` verifies generated seed files are in sync with drafts.
-4. Refresh the browser
+  - `npm run check:generated-seeds-clean` verifies generated seed files remain reproducible only when `drafts/` exists; otherwise it is skipped by design.
+3. Refresh the browser
 
 Build-along lessons follow a different structure than source-reading lessons:
 
@@ -278,3 +272,9 @@ In plain language:
 If you want to use the lesson content for something the license doesn't clearly
 cover (corporate training, conference workshop, a derived non-commercial project
 that needs different terms), open an issue and let's talk.
+
+## L1 Engineer Expansion
+
+For production-grade L1 training extensions (ops, economics, testnet, performance, security), see [docs/l1-engineer-curriculum-extension.md](docs/l1-engineer-curriculum-extension.md).
+
+Implementation blueprint for turning this into Prisma seeds: [prisma/l1-engineer-extension-blueprint.md](prisma/l1-engineer-extension-blueprint.md).

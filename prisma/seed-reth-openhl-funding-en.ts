@@ -9,7 +9,7 @@ export async function seedRethOpenHlFundingEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-funding-en",
-      title: "Step 4. Funding: perpetual funding state machine",
+      title: "Build OpenHL Funding — perpetual funding state machine",
       description:
         "Build the perpetual-funding state machine — a deterministic fixed-point pipeline (premium → rate → settlement) gated by an interval clock that enforces no-catch-up semantics. Pure state, no I/O; the integration into the bridge belongs to a later course. The fourth course in the DIY Perp series.",
       difficulty: "EXPERT",
@@ -29,7 +29,7 @@ export async function seedRethOpenHlFundingEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: "Step 4. Funding: perpetual funding state machine",
+                  title: "Build OpenHL Funding — perpetual funding state machine",
                   slug: "openhl-funding-orientation-en",
                   type: 'CONTENT',
                   sortOrder: 0,
@@ -370,7 +370,7 @@ Open \`crates/funding/src/lib.rs\`. Currently empty (\`e69de29\` blob). Replace 
 //! from the spot ("index") price. Funding payments push it back: when mark >
 //! index (longs are overpaying), longs pay shorts; when mark < index, shorts
 //! pay longs. The premium \`(mark - index) / index\` is divided by a
-//! per-day-interval count (HL: 8 — one settlement every 3 hours) to derive a
+//! per-day-interval count (HL: divisor 8 — one settlement every 1 hour, scaled to a daily rate) to derive a
 //! per-interval rate, capped at a network-set absolute max. At each tick
 //! every account with an open position settles \`position_size * mark * rate\`
 //! in quote currency.

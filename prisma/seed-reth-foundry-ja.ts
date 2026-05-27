@@ -85,7 +85,7 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
    └──────────────────────────────────────────────────────────────┘
 \`\`\`
 
-右列のすべての行を、L6 までにあなたは自分の手で書く。Capstone こそが、左列と右列が同じことを言っている *証明* になる。
+右列のすべての行を、レッスン6までにあなたは自分の手で書く。Capstone こそが、左列と右列が同じことを言っている *証明* になる。
 
 ## なぜ Hardhat / Truffle / Brownie ではなく Foundry なのか
 
@@ -133,9 +133,9 @@ rethlab の openhl 系コース（Consensus、CLOB、Funding、Liquidation、ADL
 
 ## 規律の transfer — port する 3 つの具体的不変条件
 
-L2、L3、L6 で歩く内容のプレビュー。
+L2、L3、レッスン6で歩く内容のプレビュー。
 
-### Liquidation L9 から（Rust proptest）:
+### Liquidation レッスン9から（Rust proptest）:
 
 $$\\text{amount} + \\text{unfilled} = \\text{shortfall}$$
 
@@ -154,7 +154,7 @@ proptest! {
 }
 \`\`\`
 
-### Foundry へ（forge fuzz） — L2 で教える内容。
+### Foundry へ（forge fuzz） — レッスン2で教える内容。
 
 \`\`\`solidity
 function testFuzz_AmountPlusUnfilledEqualsShortfall(
@@ -169,7 +169,7 @@ function testFuzz_AmountPlusUnfilledEqualsShortfall(
 }
 \`\`\`
 
-同じ定理、違う syntax。Rust の shrinker と Foundry の shrinker は反例に対して同じ挙動をする。**L6 が終わる頃には \`InsuranceFund\` 全体と L9 の 4 つの invariant をすべて port し終えている。同じ定理、2 言語、両方とも mechanical に証明済みだ。**
+同じ定理、違う syntax。Rust の shrinker と Foundry の shrinker は反例に対して同じ挙動をする。**L6 が終わる頃には \`InsuranceFund\` 全体と レッスン9の 4 つの invariant をすべて port し終えている。同じ定理、2 言語、両方とも mechanical に証明済みだ。**
 
 ## 7 つのレッスン
 
@@ -178,26 +178,26 @@ function testFuzz_AmountPlusUnfilledEqualsShortfall(
 
 ### Module 1 — Test discipline (L1–L3) — コア
 - **L1** — \`forge test\` — first invariants、basic assertions、\`assertEq\` / \`vm.expectRevert\`、\`-vvv\` での実行。Solidity 版の \`cargo test\`。
-- **L2** — \`forge fuzz\` — Solidity の \`proptest!\`。Single-parameter fuzzing、shrinking、corpus persistence。Liquidation L9 を cross-reference する。
-- **L3** — \`forge invariant\` — \`Handler\` contract と \`targetContract\` で回す multi-call invariant testing。Liquidation L13 の scanner proptest（per-scan な保存則）を cross-reference する。
+- **L2** — \`forge fuzz\` — Solidity の \`proptest!\`。Single-parameter fuzzing、shrinking、corpus persistence。Liquidation レッスン9を cross-reference する。
+- **L3** — \`forge invariant\` — \`Handler\` contract と \`targetContract\` で回す multi-call invariant testing。Liquidation レッスン13の scanner proptest（per-scan な保存則）を cross-reference する。
 
 ### Module 2 — CLI + state-aware testing (L4–L5)
 - **L4** — \`cast\` — chain CLI の deep dive。\`call\` / \`send\` / \`storage\` / \`abi-decode\` / \`4byte\`。\`ethereum.reth.rs/rpc\` 経由のメインネット例。
 - **L5** — \`anvil --fork-url\` + cheatcodes — \`vm.deal\` / \`vm.warp\` / \`vm.prank\` で回す state-aware testing。Cheatcodes-as-precompiles の framing（openhl Precompiles コースを cross-reference）。
 
-### Module 3 — Capstone (L6)
-- **L6** — **InsuranceFund.sol + forge invariants** — openhl-liquidation Stage 10b の \`InsuranceFund\` を Rust から Solidity に port し、L9 の保存則 invariant を Foundry で書き、10K iteration を回し、同じ定理を 2 言語で mechanical に証明する。答え合わせの contract + tests は rethlab の \`examples/foundry-capstone/\` 内。
+### Module 3 — Capstone (レッスン6)
+- **L6** — **InsuranceFund.sol + forge invariants** — openhl-liquidation Stage 10b の \`InsuranceFund\` を Rust から Solidity に port し、レッスン9の保存則 invariant を Foundry で書き、10K iteration を回し、同じ定理を 2 言語で mechanical に証明する。答え合わせの contract + tests は rethlab の \`examples/foundry-capstone/\` 内。
 
 ## このコースに *含まれない* もの
 
 - **Gas optimization の deep dive** — \`forge inspect\` の gas snapshot 自体は real な topic だが、optimization は規律ではない。スコープ外。（将来コース候補: 「L1 エンジニアのための Solidity — gas、storage layout、bytecode」）
 - **Slither / Mythril / formal verification** — Foundry 隣接だが別の tooling family。扱わない。
 - **Frontend / ethers.js / viem** — dApp stack の JS 側。rethlab の読者は L1 / contract / engine エンジニアであり、UI は別の関心事だ。
-- **Foundry script (\`forge script\` での deployment)** — L4 の \`cast send\` セクションで軽く触れる程度。Deployment story は本コースが教える testing 規律とは別のスキルだ。
+- **Foundry script (\`forge script\` での deployment)** — レッスン4の \`cast send\` セクションで軽く触れる程度。Deployment story は本コースが教える testing 規律とは別のスキルだ。
 
 ## License / asset discipline
 
-本コースの reference asset — L6 の \`InsuranceFund.sol\` capstone + \`forge\` test corpus — は rethlab の \`examples/foundry-capstone/\` に in-repo で住む。レッスンが ship される rethlab git SHA に pin される。読者は \`git checkout <sha>\` で byte-for-byte に動く copy を手に入れる。
+本コースの reference asset — レッスン6の \`InsuranceFund.sol\` capstone + \`forge\` test corpus — は rethlab の \`examples/foundry-capstone/\` に in-repo で住む。レッスンが ship される rethlab git SHA に pin される。読者は \`git checkout <sha>\` で byte-for-byte に動く copy を手に入れる。
 
 Foundry 自体は頻繁に update される。コースは \`foundry-rs/foundry\` rev に pin する（コースが ship する時点での \`foundryup\` デフォルト）。将来の Foundry version がレッスンを壊したら rethlab issue を立てる — コースは current stable Foundry を追随する設計だ。
 
@@ -206,7 +206,7 @@ Foundry 自体は頻繁に update される。コースは \`foundry-rs/foundry\
 以下に慣れていること:
 - 基本的な Solidity 構文 (\`function\` 定義が読め、\`mapping\` と \`struct\` を区別できる)。
 - Rust crate での \`cargo test\` の実行 (rethlab の openhl 系コース全体で使うパターン)。
-- rethlab の openhl-liquidation コースを少なくとも L9 まで読了している (最初の \`WithdrawOutcome\` proptest が登場するレッスン)。L6 capstone は、そのコースから \`InsuranceFund\` のセマンティクスを内面化していることを前提にする。
+- rethlab の openhl-liquidation コースを少なくとも レッスン9まで読了している (最初の \`WithdrawOutcome\` proptest が登場するレッスン)。L6 capstone は、そのコースから \`InsuranceFund\` のセマンティクスを内面化していることを前提にする。
 
 どれか心許なくても問題ない。openhl-liquidation コースが自然な前提知識で、基本 Solidity は solidity-by-example.org で 1 日で拾える。
 `,
@@ -250,13 +250,13 @@ forge test
 - **\`src/Counter.sol\`** — \`forge init\` デフォルトから変更なし（編集ではなく *読む* 対象）。
 - **\`test/Counter.t.sol\`** — 新しい test 関数 (\`test_RevertWhen_DecrementBelowZero\`) を 1 つ追加。Underflow-revert path を exercise する。Solidity 0.8 の built-in overflow check に対する \`vm.expectRevert\` のデモ。
 
-合計で約 10 行の test code を追加。L1 の主題は ergonomics と test-discovery loop であって、賢い assertion ではない。
+合計で約 10 行の test code を追加。レッスン1の主題は ergonomics と test-discovery loop であって、賢い assertion ではない。
 
 ## おさらい
 
-L0 の後はこうなっている。
+レッスン0の後はこうなっている。
 - コースの positioning は明確: 同じ定理、2 言語、rethlab の Rust 規律を Solidity に port する。
-- ロードマップは 7 レッスン: orientation (L0) → test discipline (L1–L3) → CLI + state-aware testing (L4–L5) → capstone (L6)。
+- ロードマップは 7 レッスン: orientation (レッスン0) → test discipline (L1–L3) → CLI + state-aware testing (L4–L5) → capstone (レッスン6)。
 - Foundry を install 済み (\`curl -L https://foundry.paradigm.xyz | bash && foundryup\`)、\`forge\`, \`cast\`, \`anvil\`, \`chisel\` の binary が \`$PATH\` に乗っている。
 
 ここから L1 が test-discipline track を始める。最初の動詞は \`forge test\`。
@@ -288,7 +288,7 @@ L0 の後はこうなっている。
    │   └── Counter.sol       ←   デフォルトの starter コントラクト
    ├── test/                 ← tests/ 相当: integration test はここに住む
    │   └── Counter.t.sol     ←   デフォルトの starter test (.t.sol 慣例に注目)
-   ├── script/               ← Foundry 専用: deployment script はここに住む (L4 でカバー)
+   ├── script/               ← Foundry 専用: deployment script はここに住む (レッスン4でカバー)
    │   └── Counter.s.sol     ←   デフォルトの deploy script
    ├── lib/                  ← Cargo の deps cache 相当、ただし git submodule
    │   └── forge-std/        ←   standard test library — 常に存在
@@ -301,7 +301,7 @@ L0 の後はこうなっている。
 1. **\`.t.sol\` と \`.s.sol\` はファイル命名慣例であって、コンパイラが enforce するものではない。** Foundry は \`test/\` 内のコントラクトで関数名が \`test\` で始まるものを test として扱う。\`.t.sol\` サフィックスは人間可読のための慣例で、\`*.t.sol\` で grep すれば全 test ファイルが見つかる。\`.s.sol\` で script ファイルも同様。**Foundry は naming convention を使い、Rust は attribute を使う。規律は同じ。**
 2. **\`lib/forge-std\` は git submodule で、npm/cargo dep ではない。** \`forge init\` が \`forge install foundry-rs/forge-std\` を走らせ、\`lib/\` に clone する。Versioning は git tag か commit。Cargo/npm の依存解決の複雑性より genuinely simple だが、dep ごとに 1 つの git submodule が要る。**Foundry の dep モデルは、semver の複雑性を git の透明性と引き換えにする — \`cd lib/forge-std && git log\` で依存しているコードを正確に見られる。**
 3. **\`out/\` と \`cache/\` はデフォルトで gitignore されている。** \`out/\` はコンパイル済み bytecode + ABI JSON を保持する（Rust の \`target/debug/\` 相当）。\`cache/\` は incremental compilation state を保持する。どちらも安全に消して再生成できる。そしてどちらも絶対に commit してはいけない。
-4. **\`script/\` は deployment script 用 (L4 で簡単に触れる)。** Foundry は testing と scripting を同じ \`forge\` binary 下に統合する。Hardhat は 2 つのツールに split する (\`hardhat test\` vs \`hardhat run\`)。統合は小さいが、1 日の context-switching コストを削減する。**1 つの binary、1 つの config、1 つのメンタルモデル。**
+4. **\`script/\` は deployment script 用 (レッスン4で簡単に触れる)。** Foundry は testing と scripting を同じ \`forge\` binary 下に統合する。Hardhat は 2 つのツールに split する (\`hardhat test\` vs \`hardhat run\`)。統合は小さいが、1 日の context-switching コストを削減する。**1 つの binary、1 つの config、1 つのメンタルモデル。**
 
 ## 手を動かす walk-through
 
@@ -340,7 +340,7 @@ Ran 1 test suite in 12.46ms (5.67ms CPU time): 2 tests passed, 0 failed, 0 skipp
 出力フォーマットで押さえる点が 3 つ。
 
 1. **\`(gas: 31303)\`** — すべての test が消費した gas を報告する。Hardhat はデフォルトで表示しない。Foundry は gas を first-class metric として扱う。（コンセンサス決定性に慣れた engineer 向けに補足: gas は EVM の「コンセンサスコスト」相当だ。同じ transaction に対してすべての validator が同じ gas を計算する。Tracking は規律の一部。）
-2. **\`(runs: 256, μ: 31000, ~: 31161)\`** — その test は fuzz test (理由は L2 で説明)。\`runs: 256\` は 256 個のランダム入力で走らせたという意味。\`μ\` は mean gas、\`~\` は median。Foundry は fuzz の統計を inline で表示する。
+2. **\`(runs: 256, μ: 31000, ~: 31161)\`** — その test は fuzz test (理由は レッスン2で説明)。\`runs: 256\` は 256 個のランダム入力で走らせたという意味。\`μ\` は mean gas、\`~\` は median。Foundry は fuzz の統計を inline で表示する。
 3. **\`5.67ms CPU time\`** — Foundry は wall-clock と CPU time を別々に表示する。並列 test suite では CPU time が wall-clock を超える。2-test suite では同じになる。
 
 ### Step 2: \`src/Counter.sol\` を読む
@@ -405,7 +405,7 @@ contract CounterTest is Test {
 2. **\`contract CounterTest is Test\`** — test ファイル自体が \`forge-std\` の \`Test\` を継承するコントラクト。関数継承で \`assertEq\` と \`vm.*\` への access を得る。**Solidity の継承は tooling の API surface だ。Rust は trait + \`use\` を使う。**
 3. **\`function setUp() public\`** — *すべての* test 関数の前に走る。Rust の \`#[test]\` ごとの init と同じ役割を 1 つの関数に集約したものだ。**Test contract あたり \`setUp\` 1 つ。Per-test の setup が欲しければ、個別の test 関数内に wrap する。**
 4. **\`function test_Increment() public\`** — 名前が \`test\` で始まり、\`public\` でマーク。それだけ、annotation なし。Foundry の test discovery は *name-based*。**「underscore-suffix-or-prefix が kind を名付ける」慣例は Solidity 版の Rust attribute システムだ。**
-5. **\`testFuzz_SetNumber(uint256 x)\`** — 名前が \`testFuzz\` で始まり、かつ parameter を取る。Foundry はこれを fuzz test と解釈する (L2 でカバー)。\`setNumber(x)\` が 256 個のランダム \`uint256\` 値で呼ばれる。Assertion はそのすべてに対して成立する必要がある。
+5. **\`testFuzz_SetNumber(uint256 x)\`** — 名前が \`testFuzz\` で始まり、かつ parameter を取る。Foundry はこれを fuzz test と解釈する (レッスン2でカバー)。\`setNumber(x)\` が 256 個のランダム \`uint256\` 値で呼ばれる。Assertion はそのすべてに対して成立する必要がある。
 6. **\`assertEq(counter.number(), 1)\`** — equality assertion。\`forge-std\` の \`Test\` は \`assertEq\` を *すべての* Solidity primitive 型 (\`uint\`, \`int\`, \`bool\`, \`address\`, \`bytes\`, \`string\`, \`bytes32\`, ...) に対して overload する。型付きの variant を選ぶ必要はない。引数の型から正しい overload が選ばれる。**1 行 assertion、Rust の \`let x = ...; let y = ...; assert_eq!(x, y);\` の cascade はなし。**
 
 ### Step 4: \`vm.expectRevert\` で negative-path test を追加
@@ -443,7 +443,7 @@ Counter コントラクトには \`increment\` はあるが \`decrement\` はな
 押さえる点が 6 つ。
 
 1. **\`test_RevertWhen_<condition>\` は negative-path test の Foundry docs での命名慣例。** Test runner は強制しない (\`forge test\` はサフィックスを気にしない)。だが慣例が test 一覧を self-documenting にする。**Tooling が構造を強制しないとき、命名慣例がドキュメントになる。**
-2. **\`vm.expectRevert()\` を引数なしで** — *任意の* revert reason に一致する。具体的な reason を気にしないときは引数なし形を使う。具体的な reason を assert したいときは \`vm.expectRevert(bytes)\` を使う (L3 で custom error と一緒に見る)。
+2. **\`vm.expectRevert()\` を引数なしで** — *任意の* revert reason に一致する。具体的な reason を気にしないときは引数なし形を使う。具体的な reason を assert したいときは \`vm.expectRevert(bytes)\` を使う (レッスン3で custom error と一緒に見る)。
 3. **\`vm.expectRevert\` は revert を期待する call の *直前* に呼ばなければならない。** Wrapper ではなく、次の external call を arm する one-shot cheatcode だ。\`expectRevert\` と target の間に何か別の呼び出しを挟むと、cheatcode は wrong call で trigger し、test が紛らわしく失敗する。Lifetime はちょうど 1 call ぶん:
 
    \`\`\`
@@ -476,7 +476,7 @@ Counter コントラクトには \`increment\` はあるが \`decrement\` はな
    - **外部コントラクト内でのパニック（一般的なケース）**： 対照的に、もし \`Counter\` コントラクト側に \`decrement()\` 関数が存在し、その内部で \`number - 1\` を実行してアンダーフローさせた場合、パニックは **外部の \`Counter\` コントラクトのコンテキスト（EVM の別実行フレーム）** で発生し、呼び出し元であるテストコントラクトへ revert データ（\`Panic(0x11)\`）がバブルアップする。この場合、\`-vvvv\` トレースには明示的に \`Counter::decrement()\` へのコールと、それが \`Panic(0x11)\` で失敗したログが残る。
    
    Rust のメンタルモデルで例えるなら、前者は関数の実引数を評価する際（呼び出し側）に \`panic!\` が発生する状態であり、後者は呼び出された関数（被呼び出し側）の内部で \`panic!\` が発生し、呼び出し境界を越えてスタックトレースが伝播してくる状態に相当する。このように、パニックがどのレイヤーで発生しているかをトレースから見極めることは、複雑な統合テストのデバッグにおいて不可欠なスキルとなる。
-5. **コメントブロックが test の意図を step-by-step で walk する。** openhl-liquidation L13 の test と同じ \`math-walk in comments\` 規律だ。失敗を debug する将来の reader はコメントを読んで期待される挙動を再導出できる。**Math-walk コメントが 1 つの test を、テスト対象の EVM 挙動の worked example に変える。**
+5. **コメントブロックが test の意図を step-by-step で walk する。** openhl-liquidation レッスン13の test と同じ \`math-walk in comments\` 規律だ。失敗を debug する将来の reader はコメントを読んで期待される挙動を再導出できる。**Math-walk コメントが 1 つの test を、テスト対象の EVM 挙動の worked example に変える。**
 6. **\`Counter.sol\` に \`decrement()\` を追加していない** — underflow を test 内部で直接 trigger した。Production contract を変更せずに挙動を exercise できるという意味だ。Real な \`decrement\` メソッドがある production contract では、test は \`counter.decrement()\` を直接呼ぶ。**Test は contract を変更せずに minimal シナリオを構築できる。**
 
 ### Step 5: \`forge test -vvv\` で走らせる
@@ -544,7 +544,7 @@ Foundry の \`forge test\` を形作った load-bearing な決定が 3 つ。
 
 2. **Test discovery は attribute ではなく name で行う。** Foundry が \`@Test\` annotation を必要としないのは、Solidity に decorator がないからだ。\`test*\` で名付けられた関数が test。慣例は \`forge\` の test contract の関数リストへの grep で enforce される。**Tooling 出力に documented された慣例は、人間 reader にとって attribute と等価だ。両方とも「これは test」signal を生む。**
 
-3. **\`vm.*\` cheatcodes は precompile であって、JS 側 wrapper ではない。** Hardhat の \`evm_snapshot\` は RPC method。Foundry の \`vm.expectRevert\` は precompile call。Cheatcode はアドレス \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` に住み、Foundry の REVM fork がそのアドレスへの call を intercept する。まさに openhl Stage 9 の precompile-as-EVM-superpower パターン。**L1 では \`vm.expectRevert\` だけを使った。L2 と L3 でさらに cheatcode が登場する。それぞれが precompile だ。**
+3. **\`vm.*\` cheatcodes は precompile であって、JS 側 wrapper ではない。** Hardhat の \`evm_snapshot\` は RPC method。Foundry の \`vm.expectRevert\` は precompile call。Cheatcode はアドレス \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` に住み、Foundry の REVM fork がそのアドレスへの call を intercept する。まさに openhl Stage 9 の precompile-as-EVM-superpower パターン。**レッスン1では \`vm.expectRevert\` だけを使った。レッスン2と レッスン3でさらに cheatcode が登場する。それぞれが precompile だ。**
 
 ## 答え合わせ
 
@@ -559,18 +559,18 @@ Foundry の \`forge test\` を形作った load-bearing な決定が 3 つ。
    └── lib/forge-std/        (git submodule、変更なし)
 \`\`\`
 
-L1 の後:
+レッスン1の後:
 - \`forge test\` が 3 つの test を pass する
 - \`Counter.sol\` と \`Counter.t.sol\` の各行を読み、慣例を理解した
 - \`vm.expectRevert\` test を追加し、\`-vvv\` が何を見せるか確認した
 
-L1–L5 には in-repo の答え合わせがない。\`forge init\` の出力が答え合わせだからだ。同じ Foundry version なら、すべての reader に対して同じ出力が出る。L6 の capstone がこれを変える: L6 では \`rethlab/examples/foundry-capstone/\` の特定の \`InsuranceFund.sol\` + test に対して作業する。
+L1–レッスン5には in-repo の答え合わせがない。\`forge init\` の出力が答え合わせだからだ。同じ Foundry version なら、すべての reader に対して同じ出力が出る。レッスン6の capstone がこれを変える: レッスン6では \`rethlab/examples/foundry-capstone/\` の特定の \`InsuranceFund.sol\` + test に対して作業する。
 
 ## よくある質問
 
 **Q1: なぜ本コースが deployment を本格的にカバーしないのに \`forge init\` が \`script/\` を作るのか?**
 
-\`forge\` が testing と deployment scripting の両方を扱う 1 つの binary だから。プロジェクトレイアウトには両方のための slot がある。片方しか使わなくても、だ。\`script/\` は L4 で軽く触れる (\`cast send\` + \`forge script\` 経由のシンプルな deploy)。Full な deployment ワークフローはそれ自体が別コース (スコープ外、L0 の「含まれないもの」リスト通り)。
+\`forge\` が testing と deployment scripting の両方を扱う 1 つの binary だから。プロジェクトレイアウトには両方のための slot がある。片方しか使わなくても、だ。\`script/\` は レッスン4で軽く触れる (\`cast send\` + \`forge script\` 経由のシンプルな deploy)。Full な deployment ワークフローはそれ自体が別コース (スコープ外、レッスン0の「含まれないもの」リスト通り)。
 
 **Q2: なぜ \`setUp()\` が全 test の前に走り、contract 全体に 1 度ではないのか?**
 
@@ -600,7 +600,7 @@ Foundry の test isolation が各 test を *fresh* な EVM state に対して走
 
 言語進化モデルが違うから。Rust の edition は *epoch* で、古い構文を壊さずに default を変える (例: 2024 が新しいキーワード予約を有効化)。Solidity の pragma はどの compiler version が file をビルドできるかを制約する。Solidity では compiler bug が一般的で、コンセンサス決定性が mid-deploy version 不一致を catastrophic にする。だからこちらのほうが重い。**Solidity の pragma は Cargo.toml の \`edition = "2024"\` よりも \`rust-version = "1.85"\` に近い。**
 
-## 次のレッスン (L2) — \`forge fuzz\` — Solidity の \`proptest!\`
+## 次のレッスン（レッスン2） — \`forge fuzz\` — Solidity の \`proptest!\`
 
 L2 は \`testFuzz_SetNumber\` test を property-based testing の real な working example に変える。openhl-liquidation の L9 が "proptest" と呼ぶものだ。学ぶこと:
 
@@ -609,7 +609,7 @@ L2 は \`testFuzz_SetNumber\` test を property-based testing の real な worki
 - Shrinking — Foundry が 32-byte counterexample を、failure を trigger する最小 \`uint256\` まで reduce する仕組み
 - Corpus persistence — \`cache/fuzz/\` が失敗入力を保存し、re-run が同じ counterexample を即座に replay する
 
-L2 後、Solidity で最初の保存則 fuzz test を書き終えている。openhl-liquidation L8 の \`balance_never_negative\` proptest に 1:1 で map するものだ。
+レッスン2後、Solidity で最初の保存則 fuzz test を書き終えている。openhl-liquidation レッスン8の \`balance_never_negative\` proptest に 1:1 で map するものだ。
 `,
                 },
                 {
@@ -625,8 +625,8 @@ L2 後、Solidity で最初の保存則 fuzz test を書き終えている。ope
 
 このレッスンで掴む概念:
 
-- **\`forge fuzz\` は別構文の \`proptest!\`。** 同じ「定理先行（Theorem-first）」のマインドセット: assertion が *すべての valid な入力に対して* 成立するべきと書き（hand-picked example だけではなく）、runner に入力空間の counterexample を探させる。同じ shrinker が 32-byte の失敗入力を、bug を trigger する最小の \`uint256\` に reduce する。同じ corpus persistence が既知の counterexample を次回 run で即座に replay する。openhl-liquidation L9 で \`proptest! { #[test] fn balance_never_negative(...) { ... } }\` を書いたなら、\`testFuzz_*\` 関数の形はすでに知っている。Solidity が contract 構文で包むだけだ。
-- **\`vm.assume(condition)\` は \`prop_assume!\` の Solidity 等価物。** どちらも前提条件に違反する入力を、assertion が走る *前* に filter する。Test は property の well-defined な regime だけを exercise する。Liquidation L9 の \`prop_assume!(entry * size > collateral)\` と同じパターン: 入力が test の意味ある domain から外れるなら捨てる。Fuzzer は別の入力を生成して再試行する。それだけ。
+- **\`forge fuzz\` は別構文の \`proptest!\`。** 同じ「定理先行（Theorem-first）」のマインドセット: assertion が *すべての valid な入力に対して* 成立するべきと書き（hand-picked example だけではなく）、runner に入力空間の counterexample を探させる。同じ shrinker が 32-byte の失敗入力を、bug を trigger する最小の \`uint256\` に reduce する。同じ corpus persistence が既知の counterexample を次回 run で即座に replay する。openhl-liquidation レッスン9で \`proptest! { #[test] fn balance_never_negative(...) { ... } }\` を書いたなら、\`testFuzz_*\` 関数の形はすでに知っている。Solidity が contract 構文で包むだけだ。
+- **\`vm.assume(condition)\` は \`prop_assume!\` の Solidity 等価物。** どちらも前提条件に違反する入力を、assertion が走る *前* に filter する。Test は property の well-defined な regime だけを exercise する。Liquidation レッスン9の \`prop_assume!(entry * size > collateral)\` と同じパターン: 入力が test の意味ある domain から外れるなら捨てる。Fuzzer は別の入力を生成して再試行する。それだけ。
 - **デフォルト 256 iteration は *最小* であって、ゴールではない。** \`foundry.toml\` の \`fuzz.runs = 256\` が out-of-the-box デフォルト。明らかな bug を数秒で catch するには十分、property を証明するには不十分。Production codebase は CI で 10_000 や 100_000 まで bump し、より高い count は nightly run のために予約する。Rust の \`proptest!\` が \`CASES = 256\` デフォルトで取るのと同じ trade-off。
 - **Shrinking は「test がどこかで失敗した」と「test が *正確にこの入力で* 失敗した」の差。** \`forge fuzz\` が counterexample (例えば \`x = 0xa3b8...4d2f\` — ランダムな 32 バイト値) を見つけたとき、失敗を報告して終わりではない。Binary-search スタイルの reduction を走らせ、失敗を再現する *最小* の \`x\` を見つける。出力に現れるのは minimal counterexample (しばしば 1 桁の数字) で、「ある入力で壊れた」より一桁速く debug できる。
 
@@ -643,12 +643,12 @@ forge test
 - **\`foundry.toml\`** — \`[fuzz]\` profile セクション (\`runs = 1000\`) と、heavy run 用のプロファイル alias \`[profile.ci]\` (\`runs = 100000\`) を追加。各 test に hard-coding せずに iteration count を tune するやり方のデモ。
 - **\`test/Counter.t.sol\`** — 新規 fuzz test を 1 つ追加: \`testFuzz_IncrementPreservesPlusOne(uint256 x)\`。\`vm.assume(x < type(uint256).max)\` で overflow ケースを assertion 前に filter する。
 
-合計で約 15 行の新規コード。L2 の主題は *fuzzing とは何か* と *なぜ shrinker が重要か* であって、賢い fuzz coverage ではない。
+合計で約 15 行の新規コード。レッスン2の主題は *fuzzing とは何か* と *なぜ shrinker が重要か* であって、賢い fuzz coverage ではない。
 
 ## おさらい
 
-L1 の後はこうなっている。
-- \`forge test\` が 3 つの test (forge init デフォルトの 2 + L1 で追加した \`vm.expectRevert\` test) を clean に走らせる。
+レッスン1の後はこうなっている。
+- \`forge test\` が 3 つの test (forge init デフォルトの 2 + レッスン1で追加した \`vm.expectRevert\` test) を clean に走らせる。
 - プロジェクト形、\`setUp\` per-test isolation パターン、\`-v\` から \`-vvvvv\` までの verbosity ladder を内面化済み。
 - \`testFuzz_SetNumber(uint256 x)\` test が 256 runs で pass するのを見た。ただし説明はなかった。L2 がその *中身* を説明する。
 
@@ -659,10 +659,10 @@ L2 がその謎の 256-run 行を property-based testing の中心ツールに�
 編集は 3 つ。
 
 1. **\`foundry.toml\` を開く** — \`[fuzz]\` セクションを追加してデフォルト iteration count を tune する。Heavy run 用に \`[profile.ci]\` を追加。(まだ新規 contract code なし。設定のみ。)
-2. **L1 の \`Counter.t.sol\` の \`testFuzz_SetNumber(uint256 x)\` を読む。** Foundry が fuzz test として扱う理由、runner が各 iteration で何をするか、結果行 \`(runs: 256, μ: 31000, ~: 31161)\` がどう生成されるかを理解する。
+2. **レッスン1の \`Counter.t.sol\` の \`testFuzz_SetNumber(uint256 x)\` を読む。** Foundry が fuzz test として扱う理由、runner が各 iteration で何をするか、結果行 \`(runs: 256, μ: 31000, ~: 31161)\` がどう生成されるかを理解する。
 3. **新規 fuzz test を 1 つ追加** — \`testFuzz_IncrementPreservesPlusOne(uint256 x)\`。\`counter\` を \`x\` にセット、\`counter.increment()\` を呼ぶ、\`counter.number() == x + 1\` を assert する。\`vm.assume(x < type(uint256).max)\` で overflow ケースを filter する。\`forge test -vvv\` で走らせる。
 
-> 🛑 **予測。** 続きを読む前に: openhl-liquidation L9 の \`proptest!\` で \`CASES\` のデフォルトは \`256\`。\`forge fuzz\` でも \`fuzz.runs\` のデフォルトは \`256\`。Production codebase がよく使う CI-tier の実用値は? \`1_000_000\` に bump するとトレードオフは?
+> 🛑 **予測。** 続きを読む前に: openhl-liquidation レッスン9の \`proptest!\` で \`CASES\` のデフォルトは \`256\`。\`forge fuzz\` でも \`fuzz.runs\` のデフォルトは \`256\`。Production codebase がよく使う CI-tier の実用値は? \`1_000_000\` に bump するとトレードオフは?
 
 (答え: **ほとんどの production CI は \`10_000\` か \`100_000\` で回す**。Nightly fuzzer は \`1_000_000\` まで push する。トレードオフはこう。各 iteration が full test (setUp → call → assertion → state cleanup) を走らせる。256 iteration なら単一の fuzz test は ~50ms、100_000 で ~20 秒、1_000_000 で ~200 秒。100_000 を超えると収穫逓減（Diminishing returns）が始まる。巨大な入力空間を exercise していない限り、だが。ほとんどの uint256 fuzz test には *de facto* 小さい interesting region があり、100_000 でそこに到達する。**High count は専用 nightly CI で、デフォルト count は PR CI で、低 count はローカル開発で。**)
 
@@ -683,7 +683,7 @@ flowchart TD
 
 Loop で押さえる点が 3 つ。
 
-1. **\`setUp()\` が *毎* iteration 走る。** これが per-iteration state isolation。L1 の per-test isolation と同じ規律だが、より細かい粒度だ。失敗する iteration が次の iteration を poison できない。各 run は fresh。**Per-iteration isolation が fuzz failure を reproducible にする。**
+1. **\`setUp()\` が *毎* iteration 走る。** これが per-iteration state isolation。レッスン1の per-test isolation と同じ規律だが、より細かい粒度だ。失敗する iteration が次の iteration を poison できない。各 run は fresh。**Per-iteration isolation が fuzz failure を reproducible にする。**
 2. **Fuzz test 内の \`vm.assume(cond)\` は、condition が false なら iteration を暗黙的に破棄（Discard）する。** Test を失敗させず、pass としてもカウントしない。新しい入力を生成するだけだ。これが入力 filtering メカニズム。**Precondition には \`vm.assume\`、negative-path test には \`vm.expectRevert\`。** 似て聞こえるが、逆のことをする。
 3. **Gas 統計 (μ と ~) は *pass した* iteration から来る。** 失敗 iteration は寄与しない。Fuzz test がほぼ pass するが時々高コストな edge case に当たる場合、cheap iteration が dominant で μ は低く報告される。Fuzz gas 値を worst-case として読まない。typical-case だ。**Worst-case gas が欲しければ、特定の high-gas 入力に対する unit test を使う。**
 
@@ -753,7 +753,7 @@ forge test
 [PASS] testFuzz_SetNumber(uint256) (runs: 1000, μ: 31000, ~: 31161)
 \`\`\`
 
-### Step 2: L1 の \`testFuzz_SetNumber\` を読む
+### Step 2: レッスン1の \`testFuzz_SetNumber\` を読む
 
 \`forge init\` 由来の test (すでに持っている):
 
@@ -794,12 +794,12 @@ function testFuzz_SetNumber(uint256 x) public {
 
 押さえる点が 6 つ。
 
-1. **\`vm.assume(x < type(uint256).max)\` が、property が成立しない唯一の入力を filter する** — 最大値、\`x + 1\` が overflow する場所。Filter なしだと test は *正しく* その 1 つの入力で失敗する。Filter ありだと、test は *意味ある* 入力範囲で property を証明する。**\`vm.assume\` が、property が assert される regime を定義する。** これは L1 の \`vm.expectRevert\` とは目的が真逆だ。\`vm.expectRevert\` は「リバートが起きること」を期待する negative-path test であり、リバート発生こそが成功条件。一方 \`vm.assume\` は「そもそもリバートを引き起こす入力を試験空間から除外する」positive-path test の保護機構で、property assertion が well-defined な domain で走れるようにする。物理現象は同じ（このコントラクトはこの入力でリバートする）— だが test 規律上の意図は正反対。
-2. **コメントが openhl-liquidation L9 の \`prop_assume!\` を cross-reference する。** 同じ役割、同じパターン、別の構文。そのコースを通った読者はこの規律を認識する。**Cross-language pattern recognition がこのコース全体の load-bearing pedagogical move。**
+1. **\`vm.assume(x < type(uint256).max)\` が、property が成立しない唯一の入力を filter する** — 最大値、\`x + 1\` が overflow する場所。Filter なしだと test は *正しく* その 1 つの入力で失敗する。Filter ありだと、test は *意味ある* 入力範囲で property を証明する。**\`vm.assume\` が、property が assert される regime を定義する。** これは レッスン1の \`vm.expectRevert\` とは目的が真逆だ。\`vm.expectRevert\` は「リバートが起きること」を期待する negative-path test であり、リバート発生こそが成功条件。一方 \`vm.assume\` は「そもそもリバートを引き起こす入力を試験空間から除外する」positive-path test の保護機構で、property assertion が well-defined な domain で走れるようにする。物理現象は同じ（このコントラクトはこの入力でリバートする）— だが test 規律上の意図は正反対。
+2. **コメントが openhl-liquidation レッスン9の \`prop_assume!\` を cross-reference する。** 同じ役割、同じパターン、別の構文。そのコースを通った読者はこの規律を認識する。**Cross-language pattern recognition がこのコース全体の load-bearing pedagogical move。**
 3. **Property \`counter.number() == x + 1\` が保存則。** Increment 前: \`x\`。Increment 後: \`x + 1\`。差はちょうど 1。そして *すべての valid な \`x\`* で成立する。L9 proptest \`withdraw_amount_plus_unfilled_equals_shortfall\` と同じ shape。**Fuzz test は保存則を表現する、unit test は特定の case を表現する。**
 4. **\`x + 1\` は assertion 内、\`vm.assume\` が \`type(uint256).max\` を reject した後に起きる。** だから \`+1\` の算術は常に安全 (never overflow)。\`vm.assume\` がこの assertion を misfire から protect する。**Precondition が算術を guard する。Precondition は property の一部だ。**
 5. **\`counter.setNumber(x)\` が assertion 前に state を mutate する。** 各 fuzz iteration は fresh (Step 1 の図にある per-iteration \`setUp\`) なので、mutation はこの iteration の contract instance だけに影響する。**State setup + property assertion = 1 iteration、isolation が leak を防ぐ。**
-6. **\`expectRevert\` なし。** これは positive-path fuzz test だ。overflow case を test しているのではない (それは L1 の仕事だった)。Overflow が起きない *とき* に保存則が成立することを test している。**Property 1 つにつき 1 つの test、test 1 つにつき 1 つの property。**
+6. **\`expectRevert\` なし。** これは positive-path fuzz test だ。overflow case を test しているのではない (それは レッスン1の仕事だった)。Overflow が起きない *とき* に保存則が成立することを test している。**Property 1 つにつき 1 つの test、test 1 つにつき 1 つの property。**
 
 走らせる:
 
@@ -920,17 +920,17 @@ FOUNDRY_PROFILE=ci forge test
 
 ## 答え合わせ
 
-L2 の後:
+レッスン2の後:
 
 \`\`\`
    my-foundry-lab/
    ├── foundry.toml         (+ [fuzz] runs = 1000、+ [profile.ci.fuzz] runs = 100000)
-   ├── src/Counter.sol       (L1 から変更なし)
+   ├── src/Counter.sol       (レッスン1から変更なし)
    ├── test/Counter.t.sol    (+ testFuzz_IncrementPreservesPlusOne)
    └── lib/forge-std/        (変更なし)
 \`\`\`
 
-L2 の後:
+レッスン2の後:
 - \`forge test\` が 1000 iteration で 4 test を pass する
 - \`FOUNDRY_PROFILE=ci forge test\` が 100,000 iteration で 4 test を pass する
 - Shrinker が失敗 counterexample を minimal form に reduce するのを見た
@@ -950,9 +950,9 @@ L2 の後:
 
 理想的には yes。state を mutate する external function はすべて、関連する invariant を証明する fuzz test を少なくとも 1 つ持つべきだ。実務的には優先順位を付ける。算術 (overflow boundary)、access control (caller check)、保存則を持つ関数 (deposit/withdraw、mint/burn)。**行ではなく property の fuzz coverage を目指す。**
 
-**Q4: \`forge fuzz\` は \`forge invariant\` (L3) とどう違うのか?**
+**Q4: \`forge fuzz\` は \`forge invariant\` (レッスン3) とどう違うのか?**
 
-\`forge fuzz\` は single-call: 各 iteration が *1 つ* の関数をランダムパラメータで呼び、assertion を check する。\`forge invariant\` (L3) は multi-call: 各 iteration が *多くの* 関数をランダム系列で呼び、各 call 後に invariant を check する。**Fuzz は 1 関数を isolation で test、invariant は関数 call の系列を test。両方とも property test だが、粒度が違う。**
+\`forge fuzz\` は single-call: 各 iteration が *1 つ* の関数をランダムパラメータで呼び、assertion を check する。\`forge invariant\` (レッスン3) は multi-call: 各 iteration が *多くの* 関数をランダム系列で呼び、各 call 後に invariant を check する。**Fuzz は 1 関数を isolation で test、invariant は関数 call の系列を test。両方とも property test だが、粒度が違う。**
 
 **Q5: Fuzz test が内部で \`vm.assume\` を呼ぶ関数を call したらどうなるか?**
 
@@ -962,9 +962,9 @@ L2 の後:
 
 Yes。\`bytes\` には shrinker が短いスライスを試す。\`string\` には短い文字列 + simpler な文字セットを試す。両方とも動くが、\`uint256\` shrinking より遅い (各 shrinking step がより長い比較を要するため)。**\`bytes\`/\`string\` fuzz test を shrink が遅いという理由だけで避けない。Shrinker は依然動く。wall-clock 秒数が多くかかるだけだ。**
 
-## 次のレッスン (L3) — \`forge invariant\` — multi-call invariant testing
+## 次のレッスン（レッスン3） — \`forge invariant\` — multi-call invariant testing
 
-L3 が single-call fuzz testing から *multi-call invariant testing* に graduate する。openhl-liquidation L13 の per-scan 保存則に最も近い Solidity primitive だ。
+L3 が single-call fuzz testing から *multi-call invariant testing* に graduate する。openhl-liquidation レッスン13の per-scan 保存則に最も近い Solidity primitive だ。
 
 Key concept: \`Handler\` contract を定義する。その関数が「システムができること」(deposit、withdraw、increment 等) を表す。Foundry に「この Handler を fuzz する surface area として扱え」と告げる。Foundry はランダムなメソッド call *系列* を生成し (\`deposit(100), withdraw(50), increment(), withdraw(75)\`)、各 step 後に \`invariant_*\` 関数を check する。
 
@@ -984,9 +984,9 @@ Key concept: \`Handler\` contract を定義する。その関数が「システ�
 
 このレッスンで掴む概念:
 
-- **\`forge invariant\` は、fuzz testing を 1 call から call の *系列* へと格上げする。** \`forge fuzz\` (L2) は各 iteration で 1 つの関数をランダム parameter で呼び、property を assert する。\`forge invariant\` は method call の *ランダム系列* — \`increment, increment, setNumber(0), increment, increment\` — を生成し、系列の各 step 後に *すべての* \`invariant_*\` 関数を再 check する。これが、特定の *順序* で初めて顔を出すバグを catch する。token-balance reentrancy、withdraw-during-deposit のレース、1 call は survive するが 2 call 後に壊れる ghost-state divergence。Single-call の系譜ではこれらは見えない。**L2 は単一入力で存在するバグを見つけた。L3 は履歴を必要とするバグを見つける。**
+- **\`forge invariant\` は、fuzz testing を 1 call から call の *系列* へと格上げする。** \`forge fuzz\` (レッスン2) は各 iteration で 1 つの関数をランダム parameter で呼び、property を assert する。\`forge invariant\` は method call の *ランダム系列* — \`increment, increment, setNumber(0), increment, increment\` — を生成し、系列の各 step 後に *すべての* \`invariant_*\` 関数を再 check する。これが、特定の *順序* で初めて顔を出すバグを catch する。token-balance reentrancy、withdraw-during-deposit のレース、1 call は survive するが 2 call 後に壊れる ghost-state divergence。Single-call の系譜ではこれらは見えない。**L2 は単一入力で存在するバグを見つけた。L3 は履歴を必要とするバグを見つける。**
 - **Handler は、target contract に対する「test 制御の API surface area」ラッパーだ。** \`forge invariant\` を target contract に直接向けることは普通しない。代わりに Handler contract に向ける。Handler は target の method を wrap し、入力を bound し（例: \`bound(amount, 1, target.balance())\`）、ghost variable（invariant が比較するための mirror state）を track する \`public\` method を一握り公開する。Foundry はその Handler の method をランダムに呼ぶのであって、target の method を直接呼ぶのではない。一見、冗長な手続き（Ceremony）に思えるが、これが load-bearing な問題を解く。target contract の大半は「ランダム parameter だと precondition を即座に violate する」method を持つ（\`withdraw(uint256)\` に \`uint256 > balance\` を渡すなど）。直接 fuzz すると iteration の大半が \`vm.assume\` rejection で無駄になる。Handler は入力を意味ある range に clip するので、iteration の 100% が target を exercise する。**Handler なしの \`forge invariant\` は iteration の大半をナンセンス拒否で消費する。Handler ありなら、各 iteration が真の adversary move になる。**
-- **\`invariant_*\` 関数は、*系列の各 call 後に* 成立すべき保存則（Conservation law）を名指す。** \`test_\` / \`testFuzz_\` と同じ prefix 規律で \`invariant_\` を使う。Body は何が起きようと成立するべき equality か bound を assert する。古典的な例は \`balance + sum_of_withdrawals == sum_of_deposits\`。どんな deposit/withdraw 系列でも成立する保存則だ。これは openhl-liquidation L13 の \`before + deposits - withdrawals == after\` per-scan proptest と *まったく同じ* 形状。**\`invariant_*\` は Rust で使った保存則規律の Solidity bindings。構文は \`assertEq(handler.ghostSum(), target.actualBalance())\`。**
+- **\`invariant_*\` 関数は、*系列の各 call 後に* 成立すべき保存則（Conservation law）を名指す。** \`test_\` / \`testFuzz_\` と同じ prefix 規律で \`invariant_\` を使う。Body は何が起きようと成立するべき equality か bound を assert する。古典的な例は \`balance + sum_of_withdrawals == sum_of_deposits\`。どんな deposit/withdraw 系列でも成立する保存則だ。これは openhl-liquidation レッスン13の \`before + deposits - withdrawals == after\` per-scan proptest と *まったく同じ* 形状。**\`invariant_*\` は Rust で使った保存則規律の Solidity bindings。構文は \`assertEq(handler.ghostSum(), target.actualBalance())\`。**
 - **Invariant が失敗すると、反例（Counterexample）は単一入力ではなく call 系列全体になる。** \`forge fuzz\` の counterexample は \`args=[5]\`。\`forge invariant\` は \`deposit(100), withdraw(50), increment(), withdraw(75)\` という *trace* を報告し、どの call がどの invariant を壊したかを教える。Shrinker は *系列を* reduce する。load-bearing でない call を drop し、残る引数値を半分にし、invariant をまだ違反する最小長・最小値の call 系列に到達するまで続ける。**200-call 反例が 3 calls まで縮む。それなら debug できる。Sequence shrinking がなければ、invariant testing は読めない失敗を吐き出すだけだ。**
 
 確認:
@@ -1003,11 +1003,11 @@ forge test --match-test invariant
 - **\`test/CounterHandler.sol\`** — 新規ファイル。\`wrappedIncrement()\` と（後で）\`wrappedSetNumber(uint256)\` を ghost-variable tracking 付きで公開する Handler contract。
 - **\`test/Counter.invariant.t.sol\`** — 新規ファイル。Handler を \`targetContract(...)\` に wire し、\`invariant_*\` 関数を宣言する invariant test contract。
 
-合計で約 50 行の新規コードを 2 つの新規 test ファイルにまたがって書く。L3 の主題は *Handler パターンを理解すること* であって、賢い invariant 算術ではない。
+合計で約 50 行の新規コードを 2 つの新規 test ファイルにまたがって書く。レッスン3の主題は *Handler パターンを理解すること* であって、賢い invariant 算術ではない。
 
 ## おさらい
 
-L2 の後はこうなっている。
+レッスン2の後はこうなっている。
 - \`forge fuzz\` が 1 つの test 関数を 256+ iteration、ランダム parameter で走らせる。
 - \`vm.assume\` は precondition を filter し、\`vm.expectRevert\` は negative-path test のためのもので、目的は真逆。
 - Shrinker が 32-byte の失敗入力を minimal counterexample まで reduce する。\`cache/fuzz/\` がそれらを persist する。
@@ -1025,9 +1025,9 @@ L3 はその保存則 property を call の *系列* で走らせる。同じ定
 4. **\`forge test --match-contract CounterInvariantTest -vvv\` を走らせる** — \`(runs: 256, calls: 12800, reverts: 0)\` を観察し、何千ものランダム系列を超えて invariant が成立し続けるのを見る。
 5. **\`setNumber\` を ghost 更新なしで公開して意図的に壊す** — \`wrappedIncrement(), wrappedIncrement(), badSetNumber(0), wrappedIncrement()\` のような multi-call counterexample を Foundry が生成するのを観察する。
 
-> 🛑 **予測。** 続きを読む前に: openhl-liquidation L13 の cascade-conservation proptest は、insurance fund に適用される operation 系列にわたって \`before_balance + sum(deposits) - sum(withdrawals) == after_balance\` を assert する。この test を \`InsuranceFund.sol\` contract に対する \`forge invariant\` へ port するとき、Handler は ghost variable として何を track する必要があり、\`invariant_*\` 関数は何を assert する?
+> 🛑 **予測。** 続きを読む前に: openhl-liquidation レッスン13の cascade-conservation proptest は、insurance fund に適用される operation 系列にわたって \`before_balance + sum(deposits) - sum(withdrawals) == after_balance\` を assert する。この test を \`InsuranceFund.sol\` contract に対する \`forge invariant\` へ port するとき、Handler は ghost variable として何を track する必要があり、\`invariant_*\` 関数は何を assert する?
 
-(答え: **Handler は \`ghostSumDeposits\` と \`ghostSumWithdrawals\` の両方を track する必要がある。** どちらも \`wrappedDeposit(uint256)\` と \`wrappedWithdraw(uint256)\` の内部で増分する。構築時に 1 回 capture される \`ghostInitialBalance\` も必要。Invariant は \`target.balance() == handler.ghostInitialBalance() + handler.ghostSumDeposits() - handler.ghostSumWithdrawals()\` を assert する。L13 proptest と *まったく同じ* 算術形状だ。同じ定理、2 言語。本コースの L6 capstone がまさに openhl-liquidation Stage 10b の \`InsuranceFund\` についてこの port を行う。)
+(答え: **Handler は \`ghostSumDeposits\` と \`ghostSumWithdrawals\` の両方を track する必要がある。** どちらも \`wrappedDeposit(uint256)\` と \`wrappedWithdraw(uint256)\` の内部で増分する。構築時に 1 回 capture される \`ghostInitialBalance\` も必要。Invariant は \`target.balance() == handler.ghostInitialBalance() + handler.ghostSumDeposits() - handler.ghostSumWithdrawals()\` を assert する。レッスン13 の proptest と *まったく同じ* 算術形状だ。同じ定理、2 言語。本コースの レッスン6 capstone がまさに openhl-liquidation Step 5（Liquidation）中の \`InsuranceFund\` についてこの port を行う。)
 
 ## \`forge invariant\` が \`forge fuzz\` とどう違うか
 
@@ -1048,9 +1048,9 @@ flowchart TD
 
 Loop で押さえる点が 5 つ。
 
-1. **2 つのネストしたランダム軸がある。method 選択と parameter 選択だ。** L2 の \`forge fuzz\` は軸が 1 つ。固定された test 関数があり、parameter を選ぶだけ。L3 の \`forge invariant\` は軸が 2 つ。各 step で *どの* Handler method を呼ぶかと、その parameter を選ぶ。探索空間は \`(num_methods × param_space)^depth\`。Depth 50 で 3 つの method、32-byte parameter なら \`(3 × 2^256)^50\`。総当たり（Exhaustive）など到底不可能であり、biased random + shrinking だけが頼みの綱。**この組み合わせ爆発こそが Handler-bounded inputs が重要な理由だ。Precondition 違反に費やす iteration は、真の adversary move に費やさない iteration だ。**
+1. **2 つのネストしたランダム軸がある。method 選択と parameter 選択だ。** レッスン2の \`forge fuzz\` は軸が 1 つ。固定された test 関数があり、parameter を選ぶだけ。レッスン3の \`forge invariant\` は軸が 2 つ。各 step で *どの* Handler method を呼ぶかと、その parameter を選ぶ。探索空間は \`(num_methods × param_space)^depth\`。Depth 50 で 3 つの method、32-byte parameter なら \`(3 × 2^256)^50\`。総当たり（Exhaustive）など到底不可能であり、biased random + shrinking だけが頼みの綱。**この組み合わせ爆発こそが Handler-bounded inputs が重要な理由だ。Precondition 違反に費やす iteration は、真の adversary move に費やさない iteration だ。**
 2. **\`fail_on_revert\` が test の strict 度合いを制御する dial。** \`fail_on_revert = true\` のとき、Handler call からの *任意の* revert が run を失敗させる。Handler は target を panic させてはならない、という strict mode で、Handler が無効入力を素通りさせるバグを catch する。\`fail_on_revert = false\` のとき、revert は許容され、invariant 違反だけが run を失敗させる。Handler を iterate している間の緩い default だ。**まず \`fail_on_revert = false\` で始める。Handler が tight になったら \`true\` に flip して、Handler が許した入力で target が panic するバグを catch する。**
-3. **Invariant は終わりだけでなく *毎 call 後に* check される。** これが L2 の per-iteration assertion の multi-call 等価物だ。\`total >= 0\` invariant が call 1 と call 3 の後では成立するが call 2 の後に壊れる場合、失敗は call 2 で検出される。「いつか気づく」ではない。これが invariant testing を「self-heal する一過性の inconsistency」を catch するのに有用にする所以だ。**一貫した 2 つの状態の間で 1 call の間だけ存在するバグは、single-call fuzzing には絶対に見えない種類だ。**
+3. **Invariant は終わりだけでなく *毎 call 後に* check される。** これが レッスン2の per-iteration assertion の multi-call 等価物だ。\`total >= 0\` invariant が call 1 と call 3 の後では成立するが call 2 の後に壊れる場合、失敗は call 2 で検出される。「いつか気づく」ではない。これが invariant testing を「self-heal する一過性の inconsistency」を catch するのに有用にする所以だ。**一貫した 2 つの状態の間で 1 call の間だけ存在するバグは、single-call fuzzing には絶対に見えない種類だ。**
 4. **\`depth\` parameter が coverage と実行時間を trade off する。** \`depth = 50\` は各 run が 50 ランダム call を行う。\`runs = 256\` はその run が 256 回起きる。1 回の \`forge test\` invocation あたりの total call は \`runs × depth = 12,800\`。各 call が setUp、method 選択、parameter 選択、Handler 呼び出し、invariant check を走らせる。Depth 50 で typical run は ~100ms、depth 500 で ~1s。**Depth を増やす = 順序バグを catch しやすい。Runs を増やす = 初期状態への sensitivity を catch しやすい。\`fuzz.runs\` と同じく、環境ごとに両方を tune する。**
 5. **Sequence shrinking が killer feature だ。** Invariant が 50-call 系列の後で失敗するとき、生の失敗は読めない。Shrinker は個々の call を drop してみる。call #23 なしでも invariant はまだ失敗するか。call #7 なしでも。そうやって系列を、失敗をまだ trigger する最小 subset まで reduce する。報告される counterexample はしばしば 2–5 calls。失敗が call 47 で発見されたとしてもだ。**Sequence shrinking なしでは、invariant testing は debug できない失敗を吐く。**
 
@@ -1077,7 +1077,7 @@ call_override = false
 1. **\`runs = 256\` は \`fuzz.runs\` default と同じ** — 同じ「試行回数」概念だ。各 run は fresh な \`setUp()\` の後に \`depth\` 回のランダム call。Production CI はこれを \`1000\` 以上まで bump する。
 2. **\`depth = 50\` は run あたり 50 ランダム Handler call を意味する。** これが各 run が call-history 空間にどれだけ深く分け入るかだ。Newer Foundry の default は 500。50 は学習中の小さく速い値だ。Handler が正しくなったら 500 まで bump して real な adversary coverage を得る。
 3. **\`fail_on_revert = false\`** は Handler method が revert しても run を失敗させない。Iterate 中は便利だ。Handler 内部で \`try/catch\` を使って expected revert を飲み込める。Production codebase は Handler が tight になったら \`true\` に flip する。その時点で revert があれば Handler が入力 bounding に失敗した signal だからだ。**開発中は \`false\`、証明には \`true\`。**
-4. **\`call_override = false\`** は Foundry が call ごとに \`msg.sender\` を override できるかを制御する。L3 では \`false\` のまま。\`msg.sender\` 操作は L4 で \`vm.prank\` 経由で見る。
+4. **\`call_override = false\`** は Foundry が call ごとに \`msg.sender\` を override できるかを制御する。レッスン3では \`false\` のまま。\`msg.sender\` 操作は レッスン4で \`vm.prank\` 経由で見る。
 
 ### Step 2: \`test/CounterHandler.sol\` を書く
 
@@ -1150,11 +1150,11 @@ contract CounterInvariantTest is Test {
 
 押さえる点が 5 つ。
 
-1. **\`setUp()\` は call ごとではなく *run ごと* に走る。** 各 run の内部では、同じ \`counter\` と \`handler\` instance が 50 call すべてにわたって再利用される。それが state が系列にわたって蓄積する仕組みだ。Run 間では fresh instance。**L2 の per-iteration isolation と同じ規律だが、外側のループで起きる。**
+1. **\`setUp()\` は call ごとではなく *run ごと* に走る。** 各 run の内部では、同じ \`counter\` と \`handler\` instance が 50 call すべてにわたって再利用される。それが state が系列にわたって蓄積する仕組みだ。Run 間では fresh instance。**レッスン2の per-iteration isolation と同じ規律だが、外側のループで起きる。**
 2. **\`targetContract(address(handler))\` が Foundry にどこを fuzz するか教える。** これがないと、Foundry は到達できる *すべての* contract の method を呼ぼうとする。\`Counter\` も含めて直接、だ。Uncontrolled な \`counter.setNumber(x)\` call は ghost を bypass するから invariant を即座に壊す。\`targetContract\` 登録は探索を Handler の \`public\` method のみに scope する。**\`targetContract\` は invariant runner の discovery scope。何を登録するかで何が fuzz されるかをコントロールする。**
 3. **\`invariant_NumberEqualsIncrementCount\` は \`view\` でマークされている。** State を変えず、ただ読んで assert するだけだ。Foundry は系列の各 Handler call 後にこれを呼ぶ。\`view\` を忘れても runner はそれでも呼ぶが gas コストが高くなる。\`view\` ならその call は事実上 free だ。**Performance のために invariant は \`view\` であるべき。Assertion の意味はどちらでも同じ。**
-4. **関数名が \`invariant_\` で始まる。** \`test_\` や \`testFuzz_\` と同じ naming-convention discovery だ。Foundry の runner は \`invariant_*\` 関数を scan し、Handler call ごとに各 invariant を呼ぶ。1 つの test contract に複数の invariant を持てる。それらすべてが各 call 後に check される。**Test contract あたり複数 invariant = 複数の保存則を同時に check する。L13 の 4 つの独立した proptest と同じ構造だ。**
-5. **Assertion は L1 と同じ \`assertEq\` だ。** 異質なものはない。invariant は単に常に成立するべき assertion。新規性は *いつ* check されるか（ランダム call ごと）であって、*何を* check するか（plain Solidity の equality）ではない。**\`forge invariant\` は新しい assertion vocabulary ではなく、discovery loop が違う \`forge fuzz\` だ。**
+4. **関数名が \`invariant_\` で始まる。** \`test_\` や \`testFuzz_\` と同じ naming-convention discovery だ。Foundry の runner は \`invariant_*\` 関数を scan し、Handler call ごとに各 invariant を呼ぶ。1 つの test contract に複数の invariant を持てる。それらすべてが各 call 後に check される。**Test contract あたり複数 invariant = 複数の保存則を同時に check する。レッスン13の 4 つの独立した proptest と同じ構造だ。**
+5. **Assertion は レッスン1と同じ \`assertEq\` だ。** 異質なものはない。invariant は単に常に成立するべき assertion。新規性は *いつ* check されるか（ランダム call ごと）であって、*何を* check するか（plain Solidity の equality）ではない。**\`forge invariant\` は新しい assertion vocabulary ではなく、discovery loop が違う \`forge fuzz\` だ。**
 
 ### Step 4: Invariant suite を走らせる
 
@@ -1250,7 +1250,7 @@ forge test --match-contract CounterInvariantTest -vvv
 
 **Invariant は再び成立する。** Foundry の runner は今、\`wrappedIncrement()\` と \`wrappedSetNumber(uint256)\` の call からランダムに選び、両 Handler method が ghost を lockstep で維持する。Invariant は同じ 1 行の \`assertEq\` だが、test surface area は広い。それでも invariant は 2 つの operation を混ぜた 12,800 のランダム系列にわたって成立する。
 
-**これが L3 の punchline だ。** Invariant は Handler 媒介の mutation と保存則の間の *契約* だ。Handler method を ghost 更新なしで追加 → invariant 失敗。Ghost を正しく更新 → invariant がどんな unit test もカバーできない指数的に大きな系列空間にわたって成立する。
+**これが レッスン3の punchline だ。** Invariant は Handler 媒介の mutation と保存則の間の *契約* だ。Handler method を ghost 更新なしで追加 → invariant 失敗。Ghost を正しく更新 → invariant がどんな unit test もカバーできない指数的に大きな系列空間にわたって成立する。
 
 ## よくある失敗パターン
 
@@ -1271,19 +1271,19 @@ forge test --match-contract CounterInvariantTest -vvv
 
 ## 答え合わせ
 
-L3 の後:
+レッスン3の後:
 
 \`\`\`
    my-foundry-lab/
    ├── foundry.toml                      (+ [invariant] セクション)
-   ├── src/Counter.sol                    (L1 から変更なし)
-   ├── test/Counter.t.sol                 (L2 から変更なし)
+   ├── src/Counter.sol                    (レッスン1から変更なし)
+   ├── test/Counter.t.sol                 (レッスン2から変更なし)
    ├── test/CounterHandler.sol            (新規 — wrappedIncrement + wrappedSetNumber を持つ Handler)
    ├── test/Counter.invariant.t.sol       (新規 — targetContract を持つ invariant test)
    └── lib/forge-std/                     (変更なし)
 \`\`\`
 
-L3 の後:
+レッスン3の後:
 - \`forge test --match-contract CounterInvariantTest\` が \`(runs: 256, calls: 12800, reverts: 0)\` で pass する
 - Multi-call counterexample 形式を見た (単一引数ではなく call の系列)
 - Shrinker が 30+ call の失敗を 2-call minimal example まで reduce するのを見た
@@ -1303,7 +1303,7 @@ Yes、持つべきだ。openhl-liquidation L13 capstone は 4 つの独立した
 
 \`targetContract(address)\` は Foundry に「この contract のすべての \`public\`/\`external\` method を fuzz しろ」と告げる。\`targetSelector(FuzzSelector({addr: address, selectors: [bytes4[]]}))\` はより細かい。「この contract のこれら特定の method *だけ* を fuzz しろ」だ。Fuzz したくない method を持つ Handler に使う (view-only ヘルパーなど、簡単に private にできない場合)。ほとんどの Handler には \`targetContract\` と慎重な \`public\`/\`internal\` 規律で十分。**\`targetContract\` から始める。Surgical scoping が必要になったら \`targetSelector\` を出す。**
 
-**Q4: これは openhl-liquidation L13 の proptest とどう違う?**
+**Q4: これは openhl-liquidation レッスン13の proptest とどう違う?**
 
 L13 は Rust の \`proptest!\` macro と手書きの test を使い、insurance fund method を系列で呼んで保存則を assert する。Pattern は \`forge invariant\` がやることと同一だ。ランダム operation 系列、call ごとに assert する保存則。鍵となる違いはこれだ。\`forge invariant\` は sequencing + shrinking machinery を built-in として提供する (Handler と invariant だけ書く)。Rust では sequencing は通常自分で書くか \`proptest-state-machine\` を使う。Foundry の tooling は stateful testing でより turnkey、Rust の tooling はより細かい制御を与える。**同じ定理、Foundry の tooling が ceremony をより多く持ち上げる。**
 
@@ -1315,7 +1315,7 @@ L13 は Rust の \`proptest!\` macro と手書きの test を使い、insurance 
 
 No。\`view\` か \`pure\` でなければならない。Foundry は Handler call の間に呼ぶからだ。Invariant 内部の state mutation は test 系列を破壊する。Check 前に work が必要なら、Handler 内部か \`setUp()\` で行う。**Invariant は state の純粋な観察。決して mutate しない。**
 
-## 次のレッスン (L4) — \`cast\` — Solidity CLI の swiss army knife
+## 次のレッスン（レッスン4） — \`cast\` — Solidity CLI の swiss army knife
 
 L4 が testing primitive を後にして、Foundry に同梱される CLI ツール \`cast\` を導入する。\`forge\` がビルドと test を行うのに対し、\`cast\` は chain と対話し、data を decode し、ABI encoding を terminal から計算する。HTTP の \`curl\` と同じワークフロー ergonomics だ。\`alloy\` (Reth と同様、\`cast\` の構築基盤) への cross-reference が、このレッスンを Rust エンジニアにとって「\`alloy::Provider\` を grok しているなら、cast の mental model はすでに知っている」という payoff にする。
 
@@ -1368,13 +1368,13 @@ cast call --rpc-url https://ethereum.reth.rs/rpc \\
 具体的な変更:
 
 - **ソースファイル編集なし。** L4 はすべて CLI invocation。Mainnet に対して ~8 種類の \`cast\` コマンドを走らせ、（option として）ローカル anvil に対しても走らせる。
-- **\`.env\`**（option）— \`ETH_RPC_URL=https://ethereum.reth.rs/rpc\` を設定して、毎コマンドに \`--rpc-url\` を渡すのを避けたいかもしれない。L5 で anvil を扱う際、terminal session ごとに \`ETH_RPC_URL\` を mainnet と forked anvil の間で切り替えるデモをする。
+- **\`.env\`**（option）— \`ETH_RPC_URL=https://ethereum.reth.rs/rpc\` を設定して、毎コマンドに \`--rpc-url\` を渡すのを避けたいかもしれない。レッスン5で anvil を扱う際、terminal session ごとに \`ETH_RPC_URL\` を mainnet と forked anvil の間で切り替えるデモをする。
 
 合計で Solidity ゼロ行。L4 は shell time。Pedagogical move は alloy-method ↔ cast-subcommand マッピングを内面化すること。次に Rust の \`Provider\` に手を伸ばすとき、まず \`cast\` に手を伸ばすようになる。
 
 ## おさらい
 
-L3 の後はこうなっている。
+レッスン3の後はこうなっている。
 - \`forge invariant\` が Handler に対してランダム call 系列を走らせ、毎 call 後に \`invariant_*\` を check する。
 - Handler が target を wrap し、入力を bound し、ghost variable (shadow specification) を track する。
 - Sequence shrinking が 30+ call の失敗を 2-call minimal counterexample まで reduce する。
@@ -1473,7 +1473,7 @@ cast call --rpc-url https://ethereum.reth.rs/rpc \\
    > \`\`\`
    > このアプローチは、コマンドライン引数のパース時よりも permissive（寛容）なコンテキストで ABI デコーダーが実行されるため、複雑なネスト構造やカスタムデータ型であっても確実にデコードできる。実運用において、通常の型シグネチャでデコードできない場合は、即座にこのパイプライン方式に切り替えるのが定石だ。
 3. **Private key 不要。** \`cast call\` は read-only。Broadcast せずノードの state view に対して実行する。これが production debug のワークホースだ。mainnet に対して任意の view 関数を 1 wei も使わずに simulate できる。
-4. **\`--rpc-url\` は shell 環境の \`ETH_RPC_URL\` で代替できる。** \`export ETH_RPC_URL=https://ethereum.reth.rs/rpc\` を 1 回設定し、以降のコマンドからフラグを落とす。L5 で anvil を扱う際、terminal session ごとに \`ETH_RPC_URL\` を mainnet と forked anvil の間で切り替えるデモをする。
+4. **\`--rpc-url\` は shell 環境の \`ETH_RPC_URL\` で代替できる。** \`export ETH_RPC_URL=https://ethereum.reth.rs/rpc\` を 1 回設定し、以降のコマンドからフラグを落とす。レッスン5で anvil を扱う際、terminal session ごとに \`ETH_RPC_URL\` を mainnet と forked anvil の間で切り替えるデモをする。
 5. **出力 decimal は人間フォーマットされていない、raw integer だ。** USDC は decimal 6 桁。\`35,234,876,543,210,000,000\` raw は \`35,234,876,543,210.000000 USDC\` を意味する。cast は decimal scaling を適用しない。それは自分の仕事だ。あるいは \`cast --to-unit <value> ether\` で変換する (名前にもかかわらず、unit conversion は汎用)。
 6. **\`cast call\` で使われる mainnet block は default ではチェーンの現在の head だ。** 特定 block に対して call するには \`--block <number-or-hash-or-tag>\` を追加する。過去 state の replay に便利。\`--block 12345678\` がその block 時点で \`totalSupply()\` が返したであろう値を simulate する。
 
@@ -1633,7 +1633,7 @@ L5 (次のレッスン) が anvil に mainnet forking で戻る。そこで \`ca
 
 ## 答え合わせ
 
-L4 の後、shell history はこんな具合に含む。
+レッスン4の後、shell history はこんな具合に含む。
 
 \`\`\`bash
 # Mainnet を読む
@@ -1656,12 +1656,12 @@ cast send --rpc-url http://localhost:8545 \\
   --private-key 0xac09... 0xA0b8... "transfer(address,uint256)" 0x47ac... 1000000
 \`\`\`
 
-L4 の後はこれができる。
+レッスン4の後はこれができる。
 - 任意の chain 上の任意の contract の任意の view 関数を terminal から読む
 - Block explorer を開かずに block と transaction を検査する
 - Multisig 提案、governance、scripts 用に calldata を build / decode する
 - 4byte 経由で unknown function selector を lookup する
-- ローカル anvil に対して transaction を送る (L5 で anvil を full に扱う)
+- ローカル anvil に対して transaction を送る (レッスン5で anvil を full に扱う)
 
 ## よくある質問
 
@@ -1694,7 +1694,7 @@ Yes。\`--from <address>\` フラグが transaction の見かけ上の sender �
 
 Yes。標準 JSON-RPC interface を喋るものなら何でも動く。Optimism、Arbitrum、Base、Polygon、BNB Chain、自分のカスタム L2 — すべて同一に動く。\`--rpc-url\` を正しい endpoint に向けるだけだ。例外は非標準 RPC method を持つ chain (Tron、NEAR、non-EVM Solana 等)。明らかに当てはまらない。**任意の EVM 互換 chain には cast がある。Non-EVM chain には chain 自身の tooling が要る。**
 
-## 次のレッスン (L5) — \`anvil\` + cheatcodes — real な mainnet state でのローカル開発
+## 次のレッスン（レッスン5） — \`anvil\` + cheatcodes — real な mainnet state でのローカル開発
 
 L5 が最後の piece を wire する。\`anvil --fork-url\` 経由で *real な* mainnet state に対するローカル開発だ。学ぶこと。
 
@@ -1721,7 +1721,7 @@ L5 完走後、laptop を離れずに real な mainnet state に対して開発�
 このレッスンで掴む概念:
 
 - **\`anvil --fork-url <URL>\` が \`localhost:8545\` にあなた専用の mainnet を与える。** Anvil は in-process な REVM だ。\`--fork-url\` で起動すると、リモートノードから state を lazy に fetch し、それを canonical chain であるかのようにローカルで serve する。Block N の state、contract storage、account balance — すべて fork block 時点の mainnet 上の姿で anvil から読める。そして real mainnet に触れずに変更できる。Uniswap の実 pool を読む contract を deploy する、real な Aave position に対して liquidation cascade を simulate する、実 DAO state に対して governance proposal を test する — すべて \`Ctrl-C\` 1 つで reset できる。**Forked anvil は、ローカルマシン上に 2 秒で瞬時に展開される「パーソナル・メインネット・クローン（Personal mainnet clone）」だ。**
-- **\`anvil_*\` RPC method は、test 内部で \`vm.*\` cheatcode が露出するのと同じ機構の CLI surface だ。** L1–L3 の test で \`vm.prank(0xWhale)\` を書いたとき、Foundry の test runner は REVM の内部 \`tx.origin\` を次の call に対して mutate する magic precompile address への call を送った。Forked anvil に対して \`cast rpc anvil_impersonateAccount 0xWhale\` を走らせるとき、あなたは REVM の *同じ* 内部 state を mutate する \`anvil_*\` JSON-RPC method を送っている。違いは EVM の内部からではなく外部から、それだけだ。2 つの surface、1 つの機構。**L0 で先送りにしたレッスンが今着地する: test 内では cheatcode-as-precompile、test 外では \`anvil_*\` RPC、下層は同一の REVM state mutation だ。**
+- **\`anvil_*\` RPC method は、test 内部で \`vm.*\` cheatcode が露出するのと同じ機構の CLI surface だ。** L1–レッスン3の test で \`vm.prank(0xWhale)\` を書いたとき、Foundry の test runner は REVM の内部 \`tx.origin\` を次の call に対して mutate する magic precompile address への call を送った。Forked anvil に対して \`cast rpc anvil_impersonateAccount 0xWhale\` を走らせるとき、あなたは REVM の *同じ* 内部 state を mutate する \`anvil_*\` JSON-RPC method を送っている。違いは EVM の内部からではなく外部から、それだけだ。2 つの surface、1 つの機構。**レッスン0で先送りにしたレッスンが今着地する: test 内では cheatcode-as-precompile、test 外では \`anvil_*\` RPC、下層は同一の REVM state mutation だ。**
 - **anvil が seed する 10 個の決定的（Deterministic）アカウントは feature であって curiosity ではない。** Anvil は固定の BIP-39 mnemonic (\`test test test ... junk\`) を使い、標準 derivation path で 10 個の account を導出する。それぞれ事前に 10,000 ETH funded されている。決定的シード（Deterministic seed）は、すべての開発者の account が同じ address を持つことを意味する。同じ \`--private-key\` が地球上の任意の anvil instance で動く。これが reproducible なチュートリアル、shareable なスクリプト、CI determinism を可能にする。引き換えは明らかな完全な insecure さだ (これらの key を任意の real network に対して決して使ってはならない)。**機密性（Secrecy）を完全に犠牲にし、確定性（Determinism）を選択した意図的なトレードオフ（Deliberate trade-off）。Anvil は開発用であって deployment 用ではない。**
 - **「Fork してから impersonate」パターンが、任意の production state に対する test を解き放つ。** 典型的な L5 ワークフロー: block N で mainnet を fork → USDC whale を impersonate → whale から自分の test address へ \`transfer\` を call → 後続の call でその USDC を使って自分の contract を real-balance position に対して test する。Synthetic token を mint する fixture を書く必要はない。*実 USDC* を使っているのだ。同じ trick が任意の account に対して動く。governance contract、multisig、deployer — impersonate して彼らとして動く。これが production-debug パターンだ。Foundry 以前は、これに手書きの local-node fork とカスタム RPC handler が要った。Foundry はそれを 3 つの \`cast rpc\` call まで圧縮した。**Forked-anvil impersonation は、責任を持ってできる「production state を編集する」に最も近いものだ。**
 
@@ -1745,11 +1745,11 @@ cast balance 0xF977814e90dA44bFA03b6295A0616a897441aceC \\
 - **ソースファイル編集なし。** L5 は shell + RPC。1 つの terminal で \`anvil\` を走らせ、別 terminal で \`cast rpc\` / \`cast call\` / \`cast send\` を走らせる。
 - **オプション**。2 つ目の terminal session で \`ETH_RPC_URL=http://localhost:8545\` を設定し、以降の \`cast\` invocation から \`--rpc-url\` を落とす。
 
-合計で Solidity ゼロ行。Pedagogical move は、test 内部で書いた L1–L3 の \`vm.*\` cheatcode と CLI から call する \`anvil_*\` RPC method が、異なる 2 つの transport を通った同じ REVM 内部 mutation だと認識することだ。
+合計で Solidity ゼロ行。Pedagogical move は、test 内部で書いた L1–レッスン3の \`vm.*\` cheatcode と CLI から call する \`anvil_*\` RPC method が、異なる 2 つの transport を通った同じ REVM 内部 mutation だと認識することだ。
 
 ## おさらい
 
-L4 の後はこうなっている。
+レッスン4の後はこうなっている。
 - \`cast\` は \`alloy::Provider\` を terminal command として露出させたもの。Subcommand は alloy method に 1:1 で map する。
 - \`cast call\` は読み、\`cast send\` は書く。\`--rpc-url\` がチェーンを per-command parameter にする。
 - \`cast abi-encode\` / \`cast abi-decode\` / \`cast 4byte\` が calldata 操作の surface をカバーする。
@@ -1765,7 +1765,7 @@ invocation のカテゴリが 6 つ。
 3. **\`anvil_setBalance\` / \`anvil_setStorageAt\`** — account 残高と contract storage を直接 mutate する。チェーンの絶対的な創造主として振る舞う（God-mode）ための RPC method。
 4. **\`anvil_mine\` / \`anvil_setNextBlockTimestamp\`** — タイムトラベル: N block を瞬時に mine する、または次 block の timestamp を前方にジャンプさせる。7 日待たずに時間依存のロジックを test するのに有用。
 5. **Forked-impersonation flow** — mainnet を fork → USDC whale を impersonate → 自分の test address に USDC を transfer → contract call でそれを使う。エンドツーエンドのデモ。
-6. **\`vm.*\` ↔ \`anvil_*\` マッピング表** — L4 の \`cast\` ↔ \`alloy::Provider\` 表と同じ pedagogical な役割だが、cheatcode 用。
+6. **\`vm.*\` ↔ \`anvil_*\` マッピング表** — レッスン4の \`cast\` ↔ \`alloy::Provider\` 表と同じ pedagogical な役割だが、cheatcode 用。
 
 > 🛑 **予測。** 続きを読む前に: L1 test で \`vm.deal(alice, 10 ether)\` と書き、test 用に alice に fresh 残高を与えた。Anvil は同じ機構を RPC で露出する。\`localhost:8545\` で走っている forked anvil に対して同じことをする \`cast rpc anvil_*\` invocation は何か?
 
@@ -1803,7 +1803,7 @@ flowchart TD
 └────────────────────────────────────┴──────────────────────────────────────────────┘
 \`\`\`
 
-構造的に押さえるべきこと。**\`vm.*\` と \`anvil_*\` は、同じ REVM state-mutation API の上にある 2 つの transport surface だ。** Solidity test の内部では cheatcode が Foundry の precompile-intercept パスを通る。Shell からは同じ mutation が anvil の JSON-RPC handler を通る。両者とも、REVM の \`accounts\` / \`storage\` / \`block\` フィールドに書き込む同じ Rust 関数を呼ぶ。**L1–L3 の \`vm.*\` を grok 済みなら、すべての \`anvil_*\` が何をするかをすでに知っている。RPC method 名を覚えるだけだ。**
+構造的に押さえるべきこと。**\`vm.*\` と \`anvil_*\` は、同じ REVM state-mutation API の上にある 2 つの transport surface だ。** Solidity test の内部では cheatcode が Foundry の precompile-intercept パスを通る。Shell からは同じ mutation が anvil の JSON-RPC handler を通る。両者とも、REVM の \`accounts\` / \`storage\` / \`block\` フィールドに書き込む同じ Rust 関数を呼ぶ。**L1–レッスン3の \`vm.*\` を grok 済みなら、すべての \`anvil_*\` が何をするかをすでに知っている。RPC method 名を覚えるだけだ。**
 
 ## 手を動かす walk-through
 
@@ -1895,7 +1895,7 @@ export ETH_RPC_URL=http://localhost:8545
 cast call 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 "totalSupply()(uint256)"
 \`\`\`
 
-L4 で real mainnet に対して見たのと同じ出力だ。anvil の forking layer が fork source から contract code + storage を最初のクエリ時に透過的に fetch し、ローカルに cache し、以降のクエリを瞬時に serve する。**遅延フェッチ（Lazy fetching）。anvil は state を on-demand でのみ pull する。だから fork の立ち上げは速く (秒単位)、cached state はセッション中ローカルに残る。**
+レッスン4で real mainnet に対して見たのと同じ出力だ。anvil の forking layer が fork source から contract code + storage を最初のクエリ時に透過的に fetch し、ローカルに cache し、以降のクエリを瞬時に serve する。**遅延フェッチ（Lazy fetching）。anvil は state を on-demand でのみ pull する。だから fork の立ち上げは速く (秒単位)、cached state はセッション中ローカルに残る。**
 
 ### Step 3: Real な mainnet address を impersonate する
 
@@ -2076,7 +2076,7 @@ cast call $TOKEN "balanceOf(address)(uint256)" $ME
 
 ## 答え合わせ
 
-L5 の後、shell history にはこんなものが残る:
+レッスン5の後、shell history にはこんなものが残る:
 
 \`\`\`bash
 # Terminal 1
@@ -2092,7 +2092,7 @@ cast rpc anvil_setNextBlockTimestamp <unix-ts>
 cast send --unlocked --from 0x... 0x<contract> "<sig>" <args...>
 \`\`\`
 
-L5 の後はこれができる:
+レッスン5の後はこれができる:
 - Forked mainnet をローカルに 2 秒で立ち上げる
 - 任意の account (key 不要) を impersonate し、それとして動く
 - 任意の account の balance や任意の contract の storage を直接 mutate する
@@ -2127,7 +2127,7 @@ Yes。\`anvil_impersonateAccount\` は任意の address で動く。EOA であ�
 
 **Q7: 私の fork は Chain ID 1 で、real mainnet と同じだ。これが chain-ID safety check を骨抜きにしないか?**
 
-Yes — そしてこれが L5 で内面化すべき罠だ。
+Yes — そしてこれが レッスン5で内面化すべき罠だ。
 
 Mainnet を fork すると、ローカル anvil は Chain ID \`1\` を返す。chain-ID check は endpoint 間の chain ID を比較するだけなので、両方が \`1\` なら silently に pass する。  
 その状態で、real mainnet RPC URL が別の env var や shell 履歴に残っていると、\`cast send --private-key <REAL-KEY> --rpc-url $REAL_RPC\` を誤実行したとき transaction は real mainnet に broadcast される。
@@ -2140,15 +2140,15 @@ Mainnet を fork すると、ローカル anvil は Chain ID \`1\` を返す。c
 
 **Fork 開始後の唯一の防御は \`--rpc-url\` 規律だ。chain-ID check が守るのは「異なるチェーン間」であり、「fork と元チェーン間」ではない。**
 
-## 次のレッスン (L6) — Capstone — openhl-liquidation の \`InsuranceFund\` を Solidity へ port する
+## 次のレッスン（レッスン6） — Capstone — openhl-liquidation の \`InsuranceFund\` を Solidity へ port する
 
-L6 が capstone で、そこで L0–L5 のすべてが集結する。openhl-liquidation Stage 10b の \`InsuranceFund\` — openhl-liquidation コースで書いた (あるいは研究した) Rust 実装 — を取り、それを Solidity へ port する。同じ 4 つの保存則、同じ precondition check、同じ close-outcome decomposition。それから 4 つの invariant を \`forge invariant\` で証明する。Handler は L13 の Rust \`proptest!\` shape をミラーする。Capstone deliverable は in-repo で \`examples/foundry-capstone/\` に住む:
+L6 が capstone で、そこで L0–レッスン5のすべてが集結する。openhl-liquidation Stage 10b の \`InsuranceFund\` — openhl-liquidation コースで書いた (あるいは研究した) Rust 実装 — を取り、それを Solidity へ port する。同じ 4 つの保存則、同じ precondition check、同じ close-outcome decomposition。それから 4 つの invariant を \`forge invariant\` で証明する。Handler は レッスン13の Rust \`proptest!\` shape をミラーする。Capstone deliverable は in-repo で \`examples/foundry-capstone/\` に住む:
 
 - \`examples/foundry-capstone/src/InsuranceFund.sol\` — Solidity port
 - \`examples/foundry-capstone/test/InsuranceFundHandler.sol\` — \`wrappedDeposit\` / \`wrappedWithdraw\` / \`wrappedAbsorb\` と 3 つの ghost 変数を持つ Handler
 - \`examples/foundry-capstone/test/InsuranceFund.invariant.t.sol\` — 4 つの \`invariant_*\` 関数: conservation、monotonicity-of-deposits、non-negative-balance、fee-residual-equivalence
 
-L6 完走後、同じ定理を 2 言語で機械的に証明している。L3 で学んだ同じ \`forge invariant\` engine に対してだ。**それが rethlab framework 全体を腹落ちさせる discipline transfer だ: それは決して Rust *か* Solidity の話ではなかった — それは言語境界を survive する保存則規律の話だった。**
+L6 完走後、同じ定理を 2 言語で機械的に証明している。レッスン3で学んだ同じ \`forge invariant\` engine に対してだ。**それが rethlab framework 全体を腹落ちさせる discipline transfer だ: それは決して Rust *か* Solidity の話ではなかった — それは言語境界を survive する保存則規律の話だった。**
 `,
                 },
               ],
@@ -2172,10 +2172,10 @@ L6 完走後、同じ定理を 2 言語で機械的に証明している。L3 �
 
 このレッスンで掴む概念:
 
-- **Capstone は、コースの thesis を散文ではなくコードで証明する。** L0–L5 のすべては 1 つの主張のための setup だった。openhl-liquidation で使った保存則（Conservation law）規律は Solidity に機械的に転写でき、\`forge invariant\` は \`proptest!\` と同じやり方でそれを証明する — この主張だ。L6 はその主張を読むのをやめ、*実行する* 場所だ。openhl-liquidation Stage 10b の \`InsuranceFund\` (システムの最後の防衛線となる資本を保持する Rust contract) を取り、field-by-field で Solidity に port する。L13 の \`proptest!\` state-machine の形状をミラーする \`Handler\` を書く。そして L13 が Rust で証明したのと同じ 4 つの保存則 invariant を、Solidity で証明する。緑の \`(runs: 256, calls: 12800, reverts: 0)\` 行が表示された瞬間にコースは終わる。規律転写（Discipline transfer）が言語境界を survive したと、その時に実演し終えている。
-- **4 つの invariant、1 つの形状。contract state と ghost accounting の間の等価性として書かれた保存則だ。** この capstone のすべての invariant は \`<contract observable> == <ghost variable の関数>\` の形を取る。(1) **Conservation:** \`fund.balance() == ghostSumDeposits - ghostSumWithdrawn - ghostSumAbsorbed\`。(2) **Deposit accounting:** \`fund.totalDeposited() == ghostSumDeposits\`。(3) **Withdraw accounting:** \`fund.totalWithdrawn() == ghostSumWithdrawn\`。(4) **Absorb decomposition:** \`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested\`。これらは openhl-liquidation L13 の proptest と *同じ* 4 つの保存則だ。同じ算術、違う構文。**1 つの保存則形状を、4 つの異なる observable に対して 4 回使う。**
-- **Handler こそが Rust↔Solidity の同型対応（Isomorphism）が住む場所だ。** \`InsuranceFundHandler\` は Solidity contract で、\`wrappedDeposit(uint256)\` / \`wrappedWithdraw(uint256)\` / \`wrappedAbsorb(uint256)\` を公開し、5 つの ghost 変数を維持する。各 method は入力を bound し (\`forge invariant\` のランダム parameter が常に productive な call を生むため、\`vm.assume\` rejection を避けるため)、ghost を target と lockstep で更新する。Solidity Handler の各 method は、Rust L13 capstone の \`proptest!\` state-machine 遷移関数に 1:1 で対応する。**Handler と L13 の \`proptest!\` block を side-by-side で見ると、同じ操作が同じ順序で同じ accounting で行われている。翻訳されたのであって、再設計されたのではない。**
-- **レッスンの deliverable は permanent。\`examples/foundry-capstone/\` に住む。** このレッスンで build するすべて (\`src/InsuranceFund.sol\`、\`test/InsuranceFundHandler.sol\`、\`test/InsuranceFund.invariant.t.sol\`) は、コースの答え合わせとして in-repo に残る。L5 を卒業する将来の reader は、自分の作業をまさにこのディレクトリに対して check する。Capstone は disposable ではない。コースが動くことを証明する最終 artifact だ。
+- **Capstone は、コースの thesis を散文ではなくコードで証明する。** L0–レッスン5のすべては 1 つの主張のための setup だった。openhl-liquidation で使った保存則（Conservation law）規律は Solidity に機械的に転写でき、\`forge invariant\` は \`proptest!\` と同じやり方でそれを証明する — この主張だ。L6 はその主張を読むのをやめ、*実行する* 場所だ。openhl-liquidation Stage 10b の \`InsuranceFund\` (システムの最後の防衛線となる資本を保持する Rust contract) を取り、field-by-field で Solidity に port する。レッスン13の \`proptest!\` state-machine の形状をミラーする \`Handler\` を書く。そして L13 が Rust で証明したのと同じ 4 つの保存則 invariant を、Solidity で証明する。緑の \`(runs: 256, calls: 12800, reverts: 0)\` 行が表示された瞬間にコースは終わる。規律転写（Discipline transfer）が言語境界を survive したと、その時に実演し終えている。
+- **4 つの invariant、1 つの形状。contract state と ghost accounting の間の等価性として書かれた保存則だ。** この capstone のすべての invariant は \`<contract observable> == <ghost variable の関数>\` の形を取る。(1) **Conservation:** \`fund.balance() == ghostSumDeposits - ghostSumWithdrawn - ghostSumAbsorbed\`。(2) **Deposit accounting:** \`fund.totalDeposited() == ghostSumDeposits\`。(3) **Withdraw accounting:** \`fund.totalWithdrawn() == ghostSumWithdrawn\`。(4) **Absorb decomposition:** \`ghostSumAbsorbed + ghostSumUnabsorbed == ghostSumLossRequested\`。これらは openhl-liquidation レッスン13の proptest と *同じ* 4 つの保存則だ。同じ算術、違う構文。**1 つの保存則形状を、4 つの異なる observable に対して 4 回使う。**
+- **Handler こそが Rust↔Solidity の同型対応（Isomorphism）が住む場所だ。** \`InsuranceFundHandler\` は Solidity contract で、\`wrappedDeposit(uint256)\` / \`wrappedWithdraw(uint256)\` / \`wrappedAbsorb(uint256)\` を公開し、5 つの ghost 変数を維持する。各 method は入力を bound し (\`forge invariant\` のランダム parameter が常に productive な call を生むため、\`vm.assume\` rejection を避けるため)、ghost を target と lockstep で更新する。Solidity Handler の各 method は、Rust L13 capstone の \`proptest!\` state-machine 遷移関数に 1:1 で対応する。**Handler と レッスン13の \`proptest!\` block を side-by-side で見ると、同じ操作が同じ順序で同じ accounting で行われている。翻訳されたのであって、再設計されたのではない。**
+- **レッスンの deliverable は permanent。\`examples/foundry-capstone/\` に住む。** このレッスンで build するすべて (\`src/InsuranceFund.sol\`、\`test/InsuranceFundHandler.sol\`、\`test/InsuranceFund.invariant.t.sol\`) は、コースの答え合わせとして in-repo に残る。レッスン5を卒業する将来の reader は、自分の作業をまさにこのディレクトリに対して check する。Capstone は disposable ではない。コースが動くことを証明する最終 artifact だ。
 
 確認:
 
@@ -2184,7 +2184,7 @@ cd examples/foundry-capstone
 forge test --match-contract InsuranceFundInvariantTest -vvv
 \`\`\`
 
-…で 4 つの invariant それぞれに対して \`[PASS] invariant_Conservation() (runs: 256, calls: 12800, reverts: 0)\` が表示される。本レッスン完走後はこれらを手にする。Full な capstone を build した経験、12,800 ランダム系列にわたって invariant が成立し続けるのを観察した経験、意図的に 1 つを壊して multi-call counterexample を読んだ経験、そして openhl-liquidation L13 の Rust \`proptest!\` との side-by-side diff を読んだ経験。
+…で 4 つの invariant それぞれに対して \`[PASS] invariant_Conservation() (runs: 256, calls: 12800, reverts: 0)\` が表示される。本レッスン完走後はこれらを手にする。Full な capstone を build した経験、12,800 ランダム系列にわたって invariant が成立し続けるのを観察した経験、意図的に 1 つを壊して multi-call counterexample を読んだ経験、そして openhl-liquidation レッスン13の Rust \`proptest!\` との side-by-side diff を読んだ経験。
 
 具体的な変更:
 
@@ -2195,17 +2195,17 @@ L6 は密度が高い。60 分が時間予算で、半分が Solidity port、半
 
 ## おさらい
 
-L5 の後はこうなっている。
-- L0 — Foundry が commodity prerequisite として positioned + REVM が統一エンジン
+レッスン5の後はこうなっている。
+- レッスン0 — Foundry が commodity prerequisite として positioned + REVM が統一エンジン
 - L1–L3 — Solidity testing 規律。\`forge test\`、\`forge fuzz\`、\`forge invariant\` (Handler パターン、ghost 変数、sequence counterexample)
-- L4 — \`cast\` が \`alloy::Provider\` 上の CLI surface
-- L5 — \`anvil\` がローカル mainnet クローン + 3-surface REVM アーキテクチャ
+- レッスン4 — \`cast\` が \`alloy::Provider\` 上の CLI surface
+- レッスン5 — \`anvil\` がローカル mainnet クローン + 3-surface REVM アーキテクチャ
 
-L6 がループを閉じる。L0–L5 のすべての概念が capstone で使われる。
-- L1 の \`vm.expectRevert\` — InsuranceFund の revert path を test する
-- L3 の \`forge invariant\` — multi-call sequencing engine
-- L3 の Handler パターン — \`InsuranceFundHandler\` が \`CounterHandler\` の形状をミラーする
-- L3 の openhl-liquidation L13 cross-reference からの 4 つの invariant — 前に名指された、今 port する
+L6 がループを閉じる。L0–レッスン5のすべての概念が capstone で使われる。
+- レッスン1の \`vm.expectRevert\` — InsuranceFund の revert path を test する
+- レッスン3の \`forge invariant\` — multi-call sequencing engine
+- レッスン3の Handler パターン — \`InsuranceFundHandler\` が \`CounterHandler\` の形状をミラーする
+- レッスン3の openhl-liquidation L13 cross-reference からの 4 つの invariant — 前に名指された、今 port する
 
 コースは常にこの artifact を指していた。中間レッスンはすべて prerequisite だった。
 
@@ -2219,9 +2219,9 @@ L6 がループを閉じる。L0–L5 のすべての概念が capstone で使�
 4. **\`test/InsuranceFundHandler.sol\` を書く** — \`wrappedDeposit\` / \`wrappedWithdraw\` / \`wrappedAbsorb\` と、5 つの ghost 変数 (\`ghostSumDeposits\`、\`ghostSumWithdrawn\`、\`ghostSumAbsorbed\`、\`ghostSumUnabsorbed\`、\`ghostSumLossRequested\`) を持つ Handler。
 5. **\`test/InsuranceFund.invariant.t.sol\` を書く** — 4 つの invariant。\`invariant_Conservation\`、\`invariant_DepositAccounting\`、\`invariant_WithdrawAccounting\`、\`invariant_AbsorbDecomposition\`。
 6. **\`forge invariant\` を走らせる** — 4 つの invariant すべてが default の 256 runs × 50 depth = 12,800 call で成立する。Proof-of-the-day には 100,000 call まで bump する。
-7. **意図的な break デモ + side-by-side L13 diff** — Handler の ghost update を 1 つ壊し、multi-call counterexample が現れるのを見る。次に Solidity capstone を L13 の Rust に対して \`diff\` し、同じ操作が同じ順序で起きているのを目で確認する。
+7. **意図的な break デモ + side-by-side L13 diff** — Handler の ghost update を 1 つ壊し、multi-call counterexample が現れるのを見る。次に Solidity capstone を レッスン13の Rust に対して \`diff\` し、同じ操作が同じ順序で起きているのを目で確認する。
 
-> 🛑 **予測。** 続きを読む前に: openhl-liquidation L13 の cascade-conservation proptest は \`assert_eq!(fund.balance(), initial + sum_deposits - sum_withdrawals - sum_absorbed)\` の形だった。この *exact* な assertion を Solidity に port するなら、最も近い 1 行の forge invariant コードは何か? (Handler が 3 つの sum-of-* ghost を track していると仮定する。)
+> 🛑 **予測。** 続きを読む前に: openhl-liquidation レッスン13の cascade-conservation proptest は \`assert_eq!(fund.balance(), initial + sum_deposits - sum_withdrawals - sum_absorbed)\` の形だった。この *exact* な assertion を Solidity に port するなら、最も近い 1 行の forge invariant コードは何か? (Handler が 3 つの sum-of-* ghost を track していると仮定する。)
 
 (答え: **\`assertEq(fund.balance(), handler.ghostSumDeposits() - handler.ghostSumWithdrawn() - handler.ghostSumAbsorbed());\`**。同じ算術、同じオペランド、同じ assert。違いは 2 点。Solidity の \`assertEq\` は (actual, expected) を取る (Rust の \`(left, right)\` 順序ではない)。そして ghost アクセサは明示的な \`handler.X()\` method 呼び出しになる (Solidity は別 contract からのフィールド直接アクセスを持たないため)。**変換が機械的になるのは、下層の定理が言語非依存だからだ。保存則は構文ではなく数学だ。**)
 
@@ -2238,7 +2238,7 @@ examples/foundry-capstone/
 └── lib/forge-std/                            ← standard な forge-std submodule
 \`\`\`
 
-L6 を完了したとき、このツリーのすべてのファイルが存在し、\`forge test\` が 12,800+ ランダム系列で 4 つの invariant assertion を pass させる。
+レッスン6を完了したとき、このツリーのすべてのファイルが存在し、\`forge test\` が 12,800+ ランダム系列で 4 つの invariant assertion を pass させる。
 
 ## Rust ↔ Solidity フィールド マッピング
 
@@ -2467,7 +2467,7 @@ contract InsuranceFundHandler is Test {
 
 押さえる点が 5 つ。Handler 規律のパターンだ。
 
-1. **Handler は \`Test\` を継承して \`bound()\` と \`vm.*\` アクセスを得る。** \`bound(x, min, max)\` は forge-std のヘルパーで、任意の uint256 を modular bias なしで target range に map する。\`vm.prank(owner)\` が次の call を owner address から来たかのように見せる (L1 + L5 で学んだ test 内 impersonation)。**\`Test\` 継承が標準 Handler パターン。入力 bounding と認可 simulation のための cheatcode アクセスを与える。**
+1. **Handler は \`Test\` を継承して \`bound()\` と \`vm.*\` アクセスを得る。** \`bound(x, min, max)\` は forge-std のヘルパーで、任意の uint256 を modular bias なしで target range に map する。\`vm.prank(owner)\` が次の call を owner address から来たかのように見せる (L1 + レッスン5で学んだ test 内 impersonation)。**\`Test\` 継承が標準 Handler パターン。入力 bounding と認可 simulation のための cheatcode アクセスを与える。**
 2. **すべての wrapped method が call と lockstep で ghost を更新する。** \`wrappedDeposit\` は \`fund.deposit(amount)\` が成功した後に \`ghostSumDeposits\` を増分する。Call が revert すれば increment は起きない。これが正しい挙動だ。Fund の state も変わっていないからだ。**Lockstep は per-method。Revert は fund state と would-be ghost update の両方を unwind する。**
 3. **\`wrappedWithdraw\` は balance がゼロのとき short-circuit する。** これがないと \`[1, currentBalance=0]\` への bound が失敗するか (\`min > max\`)、\`fund.withdraw(amount)\` が \`InsufficientBalance\` で revert し、\`fail_on_revert = false\` が単に revert を数えて先に進む (これは fine だが iteration を無駄にする)。**Handler 内部の defensive short-circuit が無駄な iteration に勝つ。**
 4. **\`wrappedAbsorb\` は 3 つの ghost を更新する。** \`ghostSumLossRequested\` (入力)、\`ghostSumAbsorbed\` (fund が実際に absorb したもの)、\`ghostSumUnabsorbed\` (remaining = fund がカバーできなかった超過 loss)。これが \`invariant_AbsorbDecomposition\` を provable にする。handler が 3 量すべてを track するから、invariant がその conservation を assert できる。**Ghost が多いことは code smell ではない。それが invariant を provable にする方法だ。**
@@ -2630,7 +2630,7 @@ Shrinker は、おそらく 50-call だった元系列をこの 3 calls まで r
 
 **コメントアウトした行を restore する。再実行する。4 つすべて緑に戻る。**
 
-今度は L13 に対して diff する。openhl の \`crates/openhl-liquidation/tests/insurance_fund_proptests.rs\` (SHA \`0a8464e\`) を開き、自分の \`InsuranceFund.invariant.t.sol\` と side-by-side に置く:
+今度は レッスン13に対して diff する。openhl の \`crates/openhl-liquidation/tests/insurance_fund_proptests.rs\` (SHA \`0a8464e\`) を開き、自分の \`InsuranceFund.invariant.t.sol\` と side-by-side に置く:
 
 \`\`\`
 ┌────────────────────────────────────────┬──────────────────────────────────────────┐
@@ -2675,7 +2675,7 @@ Capstone の設計に焼き込んだ load-bearing な決定が 3 つ。
 
 ## 答え合わせ
 
-L6 の後、ディレクトリは exact にこの形になる:
+レッスン6の後、ディレクトリは exact にこの形になる:
 
 \`\`\`
 examples/foundry-capstone/
@@ -2692,13 +2692,13 @@ examples/foundry-capstone/
 
 \`FOUNDRY_PROFILE=ci forge test --match-contract InsuranceFundInvariantTest\` が同じことを invariant あたり \`runs: 2000, calls: 200000\` で行う。
 
-このディレクトリを openhl-liquidation L13 の \`proptest!\` block と \`diff\` すれば、両側に同じ形が現れる。
+このディレクトリを openhl-liquidation レッスン13の \`proptest!\` block と \`diff\` すれば、両側に同じ形が現れる。
 
 ## よくある質問
 
 **Q1: なぜ Rust に留まらず Solidity に port するのか?**
 
-違う deployment surface だ。Rust + openhl は実行環境をコントロールできる chain (自分の L1/L2) 向け。Solidity + forge invariant は EVM 向けで、固定された bytecode target にコンパイルしなければならない。Capstone が存在するのは、EVM chain 上の production-deployable な insurance fund (Aave の safety module、Compound の reserve など) が Solidity だからだ。そして同じ保存則規律が適用される。**Port は規律が platform-agnostic であることを証明する。Deployment target が言語を決める。**
+違う deployment surface だ。Rust + openhl は実行環境をコントロールできる chain (自分の レッスン1/レッスン2) 向け。Solidity + forge invariant は EVM 向けで、固定された bytecode target にコンパイルしなければならない。Capstone が存在するのは、EVM chain 上の production-deployable な insurance fund (Aave の safety module、Compound の reserve など) が Solidity だからだ。そして同じ保存則規律が適用される。**Port は規律が platform-agnostic であることを証明する。Deployment target が言語を決める。**
 
 **Q2: 自分の port が *正しい* と知るには? 自分の設計でしかないと感じるが?**
 
@@ -2706,11 +2706,11 @@ Cross-check は 2 つだ。(a) Rust と Solidity の test が *同じ* counterex
 
 **Q3: invariant をもっと追加できる?**
 
-Yes、できるしすべきだ。ここの 4 つは L13 からの最小限だ。Real な production-ready insurance fund はもっと加える。access-control invariant (owner だけが withdraw できる)、upper-bound invariant (total absorbed が total deposited - balance を決して超えない)、rate-limit invariant (Y ブロックあたり X% より多くは withdraw されない)。どれも同じ形に従う。observable を選び、ghost state に対する等価性を書き、invariant test に追加する。**Invariant は compound する。Test ファイルは safety property と線形に成長する。**
+Yes、できるしすべきだ。ここの 4 つは レッスン13からの最小限だ。Real な production-ready insurance fund はもっと加える。access-control invariant (owner だけが withdraw できる)、upper-bound invariant (total absorbed が total deposited - balance を決して超えない)、rate-limit invariant (Y ブロックあたり X% より多くは withdraw されない)。どれも同じ形に従う。observable を選び、ghost state に対する等価性を書き、invariant test に追加する。**Invariant は compound する。Test ファイルは safety property と線形に成長する。**
 
 **Q4: \`examples/foundry-capstone/\` ディレクトリは何を ship するのか — commit されたコード? それともテンプレート?**
 
-Commit された動作するコードだ。ディレクトリはコースの答え合わせ。L0–L5 を完了する新しい読者は、自分の L6 作業をこの exact なソースに対して比較できる。Capstone は reference implementation だ。Walk-through に従って自分のバージョンを build し、答え合わせはそこに検証用として置かれている (既に快適なら飛ばすためにも)。**Commit された reference implementation こそが、instructor review なしでコースが複数読者にスケールする仕組みだ。**
+Commit された動作するコードだ。ディレクトリはコースの答え合わせ。L0–レッスン5を完了する新しい読者は、自分の L6 作業をこの exact なソースに対して比較できる。Capstone は reference implementation だ。Walk-through に従って自分のバージョンを build し、答え合わせはそこに検証用として置かれている (既に快適なら飛ばすためにも)。**Commit された reference implementation こそが、instructor review なしでコースが複数読者にスケールする仕組みだ。**
 
 **Q5: なぜ \`examples/foundry-capstone/\` が rethlab Next.js build の一部ではないのか?**
 
@@ -2726,7 +2726,7 @@ Invariant は public ABI と storage layout を保つアップグレードを su
 
 ## コース総括
 
-これが *Mastering Foundry* の最終レッスンだ。6 レッスンを経て、「Foundry pragma とは何か」(L1) から「Rust-to-Solidity port に対して 4 つの保存則 invariant を機械的に 60 分で証明した」まで歩いた。これが rethlab thesis だ。**規律は言語を超えて転写する。下層の数学は、どのコンパイラが走るかを気にしないからだ。**
+これが *Mastering Foundry* の最終レッスンだ。6 レッスンを経て、「Foundry pragma とは何か」(レッスン1) から「Rust-to-Solidity port に対して 4 つの保存則 invariant を機械的に 60 分で証明した」まで歩いた。これが rethlab thesis だ。**規律は言語を超えて転写する。下層の数学は、どのコンパイラが走るかを気にしないからだ。**
 
 次にどこへ行くか。
 
@@ -2734,7 +2734,7 @@ Invariant は public ABI と storage layout を保つアップグレードを su
 - **openhl からもう 1 つコンポーネントを port する。** openhl-liquidation から \`Scanner\`、\`MarginEngine\`、\`OrderBook\` のいずれかを選ぶ。同じパターンだ。state + operation + invariant を特定し、Solidity を書き、\`forge invariant\` で証明する。
 - **規律を自分の production code に適用する。** 自分が書いた保存則形状の property (token balance、累積 fee、vesting schedule) を持つ contract は候補だ。Handler パターン + 1 行 \`assertEq\` invariant が何にでもスケールする。
 - **openhl-fundamentals + openhl-liquidation の Rust ソースをもう一度読む。** 1 つコンポーネントを port した今、パターンは違って読める。\`proptest!\` macro が \`invariant_*\` のように見える。Rust ではあるが、骨格は同じだ。
-- **Building OpenHL ADL コースの L4 capstone を読む — 本レッスンの Rust 側 sibling capstone だ。** 同じ定理（cascade を貫く保存則）、同じ Handler 形状の規律、違うツール: あちらは \`proptest!\` (Rust)、ここは \`forge invariant\` (Solidity)。2 つの capstone を合わせると、規律が *両方向* で転写することが証明される — ここでは Rust → Solidity、あちらは Stage 10 四部作のレトロスペクティブとして。
+- **Building OpenHL ADL コースの レッスン4 capstone を読む — 本レッスンの Rust 側 sibling capstone だ。** 同じ定理（cascade を貫く保存則）、同じ Handler 形状の規律、違うツール: あちらは \`proptest!\` (Rust)、ここは \`forge invariant\` (Solidity)。2 つの capstone を合わせると、規律が *両方向* で転写することが証明される — ここでは Rust → Solidity、あちらは Step 5（Liquidation）〜 Step 6（ADL）のレトロスペクティブとして。
 
 Capstone を走らせ終わったその瞬間、画面には 4 行の緑が並んでいる。書いたのは Solidity、走らせたのは \`forge invariant\`、証明したのは Rust で先に証明したのと同じ 4 つの保存則。コードは 2 つ、定理は 1 つ。これがコース全体が指していた一点だ。
 

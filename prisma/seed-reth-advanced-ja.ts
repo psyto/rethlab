@@ -1360,7 +1360,7 @@ Holesky は時々 reorg を生成する。数時間動かす。
                   xpReward: 25,
                   content: `# ノードビルダー API をステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** ノード全体の **組み立て / DI 層**。Spring のコンテナ、Kubernetes operator、Linux init system が共通して直面する問題 — 「ユーザがコンポーネントを 1 つだけ差し替えても、残りには触らずに済み、触らないものにはデフォルトが効く」。Reth SDK は、その発想を型付きビルダーとして表現し、L1 / L2 の構築に持ち込んだもの。
+> 🧭 **systems engineering スタックでの位置:** ノード全体の **組み立て / DI 層**。Spring のコンテナ、Kubernetes operator、Linux init system が共通して直面する問題 — 「ユーザがコンポーネントを 1 つだけ差し替えても、残りには触らずに済み、触らないものにはデフォルトが効く」。Reth SDK は、その発想を型付きビルダーとして表現し、L1/L2の構築に持ち込んだもの。
 
 ExEx は既存の Ethereum ノードを拡張するもの。**Reth SDK** はコンポーネントを組み立てて *自前の* App-chain を Rust で構築できる仕組みである。「purpose-built EVM L1」という thesis が **コンパイル可能なバイナリ** に化けるのはここ。
 
@@ -1390,7 +1390,7 @@ fn main() {
 
 ## ステップ 0 — 素朴な App-chain: Reth 全体を fork する
 
-何も考えずにカスタム L1 を出すならこんな形:
+何も考えずにカスタム レッスン1を出すならこんな形:
 
 \`\`\`bash
 git clone https://github.com/paradigmxyz/reth my-chain
@@ -1602,7 +1602,7 @@ let handle = builder
                   xpReward: 25,
                   content: `# 6 コンポーネント — それぞれが何を解放するか
 
-Tempo は payments L1 を Reth 上で構築中。Berachain は bera-reth を出荷済み。MegaETH は高スループット L1 を Reth 上で構築中。Hyperliquid は HyperEVM (独自の Reth 近接の実行レイヤ) を動かしている。**どれも Reth を fork していません** — いずれも Reth の 6 コンポーネントのうち数個だけを差し替え、残りを継承している。これが SDK の最大の売りです: **Rust EVM クライアントを書き直すのではなく、自分の thesis に合う部分だけを差し替える。** このレッスンではその 6 コンポーネントを巡り、本番チェーンが各差し替えで何を解放したかを示する。
+Tempo は payments レッスン1を Reth 上で構築中。Berachain は bera-reth を出荷済み。MegaETH は高スループット レッスン1を Reth 上で構築中。Hyperliquid は HyperEVM (独自の Reth 近接の実行レイヤ) を動かしている。**どれも Reth を fork していません** — いずれも Reth の 6 コンポーネントのうち数個だけを差し替え、残りを継承している。これが SDK の最大の売りです: **Rust EVM クライアントを書き直すのではなく、自分の thesis に合う部分だけを差し替える。** このレッスンではその 6 コンポーネントを巡り、本番チェーンが各差し替えで何を解放したかを示する。
 
 今日時点の経験的証拠:
 
@@ -1661,9 +1661,9 @@ Tempo のソースは現在公開されている（[\`tempoxyz/tempo\`](https://
 - **\`add_ons\`** — payment 固有エンドポイント用のカスタム RPC ネームスペース、加えて [Machine Payments Protocol](https://github.com/tempoxyz/mpp-specs)（エージェント決済用の HTTP-402 レイヤ）との統合。
 - **\`consensus\` / \`executor\`** — Reth デフォルトで十分。カスタム EVM もカスタムコンセンサスも不要でした。
 
-L1 と同時に出荷された隣接 crate（Reth コンポーネント差し替えそのものではないが、Reth を未改造のまま依存できることで成立しているもの）:
+レッスン1と同時に出荷された隣接 crate（Reth コンポーネント差し替えそのものではないが、Reth を未改造のまま依存できることで成立しているもの）:
 
-- **[Zones](https://github.com/tempoxyz/zones)** — Tempo にアンカーされた confidential blockchain。暗号化された deposit/withdrawal、250ms ブロック時間、L1 から継承される compliance ポリシー（TIP-403）。
+- **[Zones](https://github.com/tempoxyz/zones)** — Tempo にアンカーされた confidential blockchain。暗号化された deposit/withdrawal、250ms ブロック時間、レッスン1から継承される compliance ポリシー（TIP-403）。
 - **[tidx](https://github.com/tempoxyz/tidx)** — hot point lookup と analytics 用の PostgreSQL+ClickHouse ハイブリッドインデクサ。
 
 パターン: **thesis に合う部分を差し替え、それ以外はそのまま。** Tempo の thesis は payments-priority で、差し替えたコンポーネントがそれを反映している。カスタム executor（カスタム Opcode なし）やカスタム consensus（標準 L1 PoS で OK）は不要だったので、書きませんでした。
@@ -1679,7 +1679,7 @@ L1 と同時に出荷された隣接 crate（Reth コンポーネント差し替
 
 ## MegaETH — 何を差し替えているか
 
-MegaETH ([\`megaeth-labs/\`](https://github.com/megaeth-labs)) は Reth 上に構築された 100K+ TPS L1 の thesis。Tempo よりカスタマイズは深い — thesis (生スループット) が execution と storage の奥まで届く必要があるからです:
+MegaETH ([\`megaeth-labs/\`](https://github.com/megaeth-labs)) は Reth 上に構築された 100K+ TPS レッスン1の thesis。Tempo よりカスタマイズは深い — thesis (生スループット) が execution と storage の奥まで届く必要があるからです:
 
 - **\`executor\`** — sequencer 上で JIT/AOT コンパイルされた EVM (Paradigm の [\`revmc\`](https://github.com/paradigmxyz/revmc) ベース)。[\`megaeth-labs/mega-evm\`](https://github.com/megaeth-labs/mega-evm) が revm を MegaETH 固有の仕様でラップ。
 - **storage / state** — **MDBX を [\`SALT\`](https://github.com/megaeth-labs/salt) (Small Authentication Large Trie) に置き換え** — 30 億アイテムを 1 GB のメモリで保持し、state-root 更新中のランダムディスク I/O を排除する authenticated KV store。標準の 6 コンポーネントスロットではなく、Reth のストレージ抽象を経由してプラグインしている。
@@ -1712,7 +1712,7 @@ MegaETH の事例が教育的に重要なのは、SDK の天井を見せてく�
 - **JSON-RPC サーバーランタイム、engine API サーバー**
 - **Tokio ランタイム、トレース、メトリクス**
 
-これが「fork ではなく組み立てる」が、何年も運用する L1 にとって唯一の保守可能な物語である理由である。**Paradigm のアップデートは 80% に流れ込み、あなたの fork 由来の表面積は書いた 20% に留まる。**
+これが「fork ではなく組み立てる」が、何年も運用する レッスン1にとって唯一の保守可能な物語である理由である。**Paradigm のアップデートは 80% に流れ込み、あなたの fork 由来の表面積は書いた 20% に留まる。**
 
 ## クイズ前の想起
 
@@ -1721,7 +1721,7 @@ MegaETH の事例が教育的に重要なのは、SDK の天井を見せてく�
 1. 6 コンポーネントの中で Hyperliquid が最も大きくカスタマイズするのはどれで、なぜか?
 2. なぜ payments-priority には \`pool\` が正しい差し替え先で、\`consensus\` ではないのか?
 3. 「fork ではなく組み立てる」の保守上の論拠は?
-4. プライバシー L1 を出すための *最小* のコンポーネント差し替え集合をスケッチしてほしい。
+4. プライバシー レッスン1を出すための *最小* のコンポーネント差し替え集合をスケッチしてほしい。
 
 次のレッスンはクイズ。曖昧な答えがあるなら今、想起してほしい。
 `,
@@ -1751,7 +1751,7 @@ MegaETH の事例が教育的に重要なのは、SDK の天井を見せてく�
                       explanation: "コンポーネントは型に依存する。`with_components` が先頭なら、各ビルダーは未確定の型でジェネリックにする必要がある。チェーンの順序が依存グラフをエンコードする — 型が先、その上にコンポーネントが乗る。",
                     },
                     {
-                      question: "あなたが payment-priority L1 を作ろうとしている。どのコンポーネントが最も直接的にそれを実現しますか?",
+                      question: "あなたが payment-priority レッスン1を作ろうとしている。どのコンポーネントが最も直接的にそれを実現しますか?",
                       options: [
                         "`consensus` — payment priority はコンセンサスルール。",
                         "`pool`（受付と順序付けルール）と `payload`（ブロックビルダー）。Pool が次のブロックに先に入る tx を決め、payload ビルダーが最終的な順序を決める。",
@@ -1776,7 +1776,7 @@ MegaETH の事例が教育的に重要なのは、SDK の天井を見せてく�
                       question: "ExEx を使うことと Reth SDK を使うことの違いは何ですか?",
                       options: [
                         "違いはない — 同じものの別名。",
-                        "ExEx は既存の Ethereum ノードを chain commit にフックして拡張する（あなたはゲスト）。SDK はコンポーネントを組み立てて *自前のチェーン* を作る（あなたはホスト）。ExEx はインデクサ・MEV ボット・ロールアップ向け; SDK は L1/L2 向け。",
+                        "ExEx は既存の Ethereum ノードを chain commit にフックして拡張する（あなたはゲスト）。SDK はコンポーネントを組み立てて *自前のチェーン* を作る（あなたはホスト）。ExEx はインデクサ・MEV ボット・ロールアップ向け; SDK は レッスン1/レッスン2 向け。",
                         "ExEx は L1 向け、SDK はインデクサ向け。",
                         "SDK は ExEx の非推奨バージョン。",
                       ],
@@ -2115,7 +2115,7 @@ Building tier の *Read a Real Production Indexer — tidx* レッスンはこ�
 > 2. \`Database\` と \`DatabaseRef\` がなぜ別トレイトなのか? \`auto_impl\` リストの非対称（\`&mut, Box\` vs \`&, &mut, Box, Rc, Arc\`）が何を語っているか?
 > 3. \`ExExEvent::FinishedHeight\` が Reth の pruner に何を伝えるか — 忘れた場合のディスク帰結は?
 > 4. なぜ \`MerkleStage\` がハッシング後で、間に挟まれていないのか?
-> 5. Tempo のような purpose-built L1 を出荷するために、Reth のどのコンポーネントを差し替えるか?
+> 5. Tempo のような purpose-built L1を出荷するために、Reth のどのコンポーネントを差し替えるか?
 >
 > **正解が 4 未満なら?** 進まないこと。該当の Inside Reth レッスンに戻る。次のティアはこれらを「再調査する概念」ではなく「流暢な語彙」として前提する。
 
@@ -2123,9 +2123,9 @@ Building tier の *Read a Real Production Indexer — tidx* レッスンはこ�
 
 しかし「読める」は半分。次の **2 ティア** が待っています、目的に応じて選択 (両方やる人も多い):
 
-## Advanced ティア — L1 を architect する (5 コース、難易度 ADVANCED)
+## Advanced ティア — レッスン1を architect する (5 コース、難易度 ADVANCED)
 
-Inside で読んだソースを使って、自分の L1 を設計する。Hyperliquid・Tempo クラスの chain アーキテクチャに必要な実装スキル。
+Inside で読んだソースを使って、自分の レッスン1を設計する。Hyperliquid・Tempo クラスの chain アーキテクチャに必要な実装スキル。
 
 | コース | 焦点 |
 | :--- | :--- |
@@ -2148,7 +2148,7 @@ Inside で読んだソースを使って、自分の L1 を設計する。Hyperl
 
 両方とも Inside Reth から直接ジャンプ可能、独立しています:
 
-- **Advanced (L1 Architect) を先に** — 自分で L1 を architect したい、Hyperliquid・Tempo を理解したい
+- **Advanced (L1 Architect) を先に** — 自分でL1を architect したい、Hyperliquid・Tempo を理解したい
 - **Expert を先に** — 既存 chain で本番アプリを ship したい、運用 / 性能エンジニアリングが必要
 
 順序にこだわらず、興味とプロジェクトに合うほうから。両方終えれば「読める + 設計できる + 出荷できる」の三拍子。

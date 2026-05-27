@@ -9,7 +9,7 @@ export async function seedRethOpenHlPrecompilesEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-precompiles-en",
-      title: "Step 3. Precompiles: connecting CLOB state to smart contracts",
+      title: "Build OpenHL Precompiles — connecting CLOB state to smart contracts",
       description:
         "Connect the CLOB from `building-openhl-clob` to smart contracts via custom EVM precompiles. Smart contracts gain read and write access to the matching engine at well-known precompile addresses, and the resulting fills route back through the bridge into the next payload. The third course in the DIY Perp series.",
       difficulty: "EXPERT",
@@ -29,7 +29,7 @@ export async function seedRethOpenHlPrecompilesEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: "Step 3. Precompiles: connecting CLOB state to smart contracts",
+                  title: "Build OpenHL Precompiles — connecting CLOB state to smart contracts",
                   slug: "openhl-precompiles-orientation-en",
                   type: 'CONTENT',
                   sortOrder: 0,
@@ -58,7 +58,7 @@ A new \`crates/evm/src/precompiles/\` module containing:
 - **Custom EVM machinery** (\`openhl_evm.rs\`) — an \`EvmFactory\` + \`ExecutorBuilder\` that wires the precompiles into Reth's executor.
 - **Bridge integration** — \`LiveRethEvmBridge\` spawns its underlying Reth node with the custom EVM, so smart contract calls to the precompiles touch the same CLOB instance the bridge owns.
 
-About **6 commits worth of work** in openhl (~860 LOC), broken into 11 lessons + capstone. The end-to-end test takes ~3 seconds: bootstrap Reth, deploy a thin solidity wrapper (or call directly via the engine), trigger the precompile, assert the fill.
+About **6 commits worth of work** in openhl (~860 LOC), broken into 12 lessons (L0–L11, with L11 as the capstone). The end-to-end test takes ~3 seconds: bootstrap Reth, deploy a thin solidity wrapper (or call directly via the engine), trigger the precompile, assert the fill.
 
 ## 2. What you won't have at the end
 

@@ -9,7 +9,7 @@ export async function seedRethPerpPrimerEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "perp-primer-en",
-      title: "Step 0. Perp DEX Primer: the perpetual-futures mechanics behind the DIY Perp track",
+      title: "Perp DEX Primer — the perpetual-futures mechanics behind the DIY Perp track",
       description:
         "Concept-only prerequisite course for the DIY Perp track. Four lessons covering: (1) what perpetual futures are and why they have no expiry, (2) mark, index, and funding rates, (3) margin model and the four health states, (4) liquidation, insurance fund, and ADL. No Rust code — just the perp domain knowledge the build-along courses quietly assume. Worked numerical examples at Hyperliquid's actual parameter values throughout.",
       difficulty: "INTERMEDIATE",
@@ -36,17 +36,6 @@ export async function seedRethPerpPrimerEN(prisma: PrismaClient) {
                   duration: 30,
                   xpReward: 50,
                   content: `# What perpetual futures are — and why they have no expiry
-
-## 30-second summary
-
-- Audience: engineers who want perp domain clarity before touching Rust implementation details.
-- What you get: a practical model of spot vs futures vs perps, and why funding exists.
-- Why now: Step 1+ implementation lessons become much easier to read.
-
-## Completion criteria
-
-- You can explain in 2-3 sentences why perps need funding.
-- You can explain at least one concrete difference between spot and perps.
 
 ## Goal
 

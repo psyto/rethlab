@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     template: '%s | RethLab',
   },
   description:
-    'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — five systems-engineering disciplines implemented in Rust by Reth, Revm, and Alloy. HyperEVM, Tempo, OP-Reth, MegaETH, Berachain all build on it. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
+    'Rust Ethereum Systems Engineering. Learn Reth, Revm, Alloy, and Foundry through source-first lessons and build-along courses. Step 0–6 covers Perp Primer, Consensus, CLOB, Precompiles, Funding, Liquidation, and ADL. English + Japanese, free.',
   keywords: [
     'Reth',
     'Revm',
@@ -56,14 +56,14 @@ export const metadata: Metadata = {
     siteName: 'RethLab',
     title: 'RethLab — Rust Ethereum Systems Engineering',
     description:
-      'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — five systems-engineering disciplines implemented in Rust by Reth, Revm, and Alloy. HyperEVM, Tempo, OP-Reth, MegaETH, Berachain all build on it. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
+      'Rust Ethereum Systems Engineering. Learn Reth, Revm, Alloy, and Foundry through source-first lessons and build-along courses. Step 0–6 covers Perp Primer, Consensus, CLOB, Precompiles, Funding, Liquidation, and ADL. English + Japanese, free.',
     // images are auto-derived from app/opengraph-image.tsx (PNG, 1200x630)
   },
   twitter: {
     card: 'summary_large_image',
     title: 'RethLab — Rust Ethereum Systems Engineering',
     description:
-      'Rust Ethereum Systems Engineering. Ethereum is a database + distributed system + compiler + networking + concurrency runtime — five systems-engineering disciplines implemented in Rust by Reth, Revm, and Alloy. HyperEVM, Tempo, OP-Reth, MegaETH, Berachain all build on it. RethLab walks the source line by line across 4 tiers — foundations, source-reading, L1 architecture, production. 13 courses, English + Japanese, free.',
+      'Rust Ethereum Systems Engineering. Learn Reth, Revm, Alloy, and Foundry through source-first lessons and build-along courses. Step 0–6 covers Perp Primer, Consensus, CLOB, Precompiles, Funding, Liquidation, and ADL. English + Japanese, free.',
     creator: '@psyto',
     site: '@psyto',
     // images are auto-derived from app/opengraph-image.tsx

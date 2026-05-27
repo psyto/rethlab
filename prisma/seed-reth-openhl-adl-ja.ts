@@ -11,7 +11,7 @@ export async function seedRethOpenHlAdlJA(prisma: PrismaClient) {
       slug: "building-openhl-adl-ja",
       title: "Step 6. ADL：auto-deleveraging、safety-net cascade の Layer 3",
       description:
-        "保険基金が損失を吸収しきれなかった際の発火回路、最終防衛線「Auto-deleveraging (ADL)」を実装するDIY Perpシリーズ第6弾。\n\n利益の出ているカウンターポジションをランキングし、オーダーブックをバイパスした「帳簿の直接書き換え（Bookkeeping mutation）」による強制クローズとヘアカットを実装する。さらに、破綻を防ぐ「Feedback-loop crash」のメカニズム解説や、システムの決定性を証明する4つの不変条件（Invariant）プロパティテストも網羅する。全5レッスンを通じ、Stage 10dに対応するByte-for-byteの一致を達成する。",
+        "保険基金が損失を吸収しきれなかった際の発火回路、最終防衛線「Auto-deleveraging (ADL)」を実装するDIY Perpシリーズ第6弾。\n\n利益の出ているカウンターポジションをランキングし、オーダーブックをバイパスした「帳簿の直接書き換え（Bookkeeping mutation）」による強制クローズとヘアカットを実装する。さらに、破綻を防ぐ「Feedback-loop crash」のメカニズム解説や、システムの決定性を証明する4つの不変条件（Invariant）プロパティテストも網羅する。全5レッスンを通じ、ADL参照実装パートに対応するByte-for-byteの一致を達成する。",
       difficulty: "EXPERT",
       duration: 170,
       xpReward: 330,
@@ -39,14 +39,14 @@ export async function seedRethOpenHlAdlJA(prisma: PrismaClient) {
 
 ## このコースで作るもの
 
-前のコース (\`building-openhl-liquidation\`) で multi-account scanner — Liquidatable / Underwater なアカウントを 1 つの \`ScanReport\` にまとめる orchestration loop — を出荷した。L13 の最後に、\`ScanReport.unfilled_deficit > 0\` こそが「insurance fund が absorb しきれなかった」を意味する *唯一の* signal であり、Stage 10d (本コース) がそれを consume する、と書いた。
+前のコース (\`building-openhl-liquidation\`) で multi-account scanner — Liquidatable / Underwater なアカウントを 1 つの \`ScanReport\` にまとめる orchestration loop — を出荷した。直前コースの最終レッスンで、\`ScanReport.unfilled_deficit > 0\` こそが「insurance fund が absorb しきれなかった」を意味する *唯一の* signal であり、本コース（ADL参照実装パート）がそれを consume する、と整理した。
 
 本コースがその consumer を実装する。完走後にはこうなる:
 
 - **新規ソースファイル 1 つ / 約 530 LOC** が \`crates/liquidation/src/adl.rs\` に。
-- **21 個のテストが pass する** (SHA \`d66b44a\` 時点): score / no-candidate / single-winner / multi-winner / tiebreaker をカバーする 12 個の unit test + 4 個の invariant proptest + 5 個の score helper test。crate 全体のテスト数は **69 → 90** に。
+- **21 個のテストが pass する** (SHA \`d66b44a\` 時点): score / no-candidate / single-winner / multi-winner / tiebreaker / nuanced-absorption をカバーする 16 個の unit test + 5 個の invariant proptest。crate 全体のテスト数は **69 → 90** に。
 - **新規 3 型** (\`AdlScore\`, \`AdlRecord\`, \`AdlReport\`) と **新規 2 関数** (\`adl_score\`, \`execute_adl\`) — scanner と比べて clean で small なモジュール。
-- **完成した 4 層の safety cascade**: 証拠金維持 (Layer 0) → 強制 close fee (Layer 1) → insurance fund (Layer 2) → **ADL (Layer 3)** → **socialized loss / プロトコル破綻 (Layer 4)**。Layer 4 こそが Layer 0-3 によって到達不能にすべき領域だ。本コース L4 終了時点で \`AdlReport.deficit_remaining > 0\` なら、チェーンは正式に Layer 4 に入っている — 全 depositor が haircut を受けるか、プロトコルが halt する。
+- **完成した 4 層の safety cascade**: 証拠金維持 (Layer 0) → 強制 close fee (Layer 1) → insurance fund (Layer 2) → **ADL (Layer 3)** → **socialized loss / プロトコル破綻 (Layer 4)**。Layer 4 こそが Layer 0-3 によって到達不能にすべき領域だ。本コース レッスン4 終了時点で \`AdlReport.deficit_remaining > 0\` なら、チェーンは正式に Layer 4 に入っている — 全 depositor が haircut を受けるか、プロトコルが halt する。
 
 掴むこと:
 
@@ -60,7 +60,7 @@ export async function seedRethOpenHlAdlJA(prisma: PrismaClient) {
 
 本コースで最も重要な概念的飛躍はここだ。コードに入る前に立ち止まる価値がある。
 
-Stage 10c の scanner は close order を **CLOB** (matching engine) に submit する。Liquidatable なアカウントのポジションは、既存の bid/ask stack を consume する market order で unwind される。市場が落ち着いていて liquidation が数件なら、これで問題ない。
+Liquidation参照実装（スキャナパート） の scanner は close order を **CLOB** (matching engine) に submit する。Liquidatable なアカウントのポジションは、既存の bid/ask stack を consume する market order で unwind される。市場が落ち着いていて liquidation が数件なら、これで問題ない。
 
 だが ADL が設計された対象ケースを考える: **violent な値動きで多数の underwater close が発生し、insurance fund が drain した状態**。ADL でも同じメカニズム — profitable counter-position に対して market order を matching engine 経由で出す — を使うとどうなるか。
 
@@ -74,13 +74,13 @@ Stage 10c の scanner は close order を **CLOB** (matching engine) に submit 
 - 「Force-close」は bookkeeping mutation: trader の collateral に \`pnl - haircut\` を credit、ポジションサイズを 0 に、open-positions テーブルから除去。
 - Matching engine は ADL close を一切見ない。Bid/ask stack は無事。Mark が動くのは *他の誰か* が取引したときだけ。
 
-各 \`AdlRecord\` で依然 emit する \`CloseOrderSpec\` は純粋に telemetry 目的 — Stage 10a の他の close path との shape parity と、後段の auditing のために残す。**Bridge** (openhl の integration 層。\`LiquidationScanner::scan\` と、本コース以降の \`execute_adl\` をブロックごとに呼ぶコンポーネント — Liquidation コースの L10 以降で繰り返し登場している同じ component) **がこれを account-state mutation として apply する、CLOB submission としてではない。**
+各 \`AdlRecord\` で依然 emit する \`CloseOrderSpec\` は純粋に telemetry 目的 — Liquidation参照実装（計算パート） の他の close path との shape parity と、後段の auditing のために残す。**Bridge** (openhl の integration 層。\`LiquidationScanner::scan\` と、本コース以降の \`execute_adl\` をブロックごとに呼ぶコンポーネント — Liquidation コースの レッスン10 以降で繰り返し登場している同じ component) **がこれを account-state mutation として apply する、CLOB submission としてではない。**
 
-## Stage 10c → 10d の handoff を 1 枚で
+## Liquidation参照実装（スキャナパート） → ADL の handoff を 1 枚で
 
 \`\`\`
    ┌──────────────────────────────────────────────────────────────┐
-   │  Stage 10c scanner（直前のブロック）                            │
+   │  Liquidation参照実装（スキャナパート） scanner（直前のブロック）                            │
    ├──────────────────────────────────────────────────────────────┤
    │  ScanReport {                                                  │
    │      records:          Vec<LiquidationRecord>,                 │
@@ -92,7 +92,7 @@ Stage 10c の scanner は close order を **CLOB** (matching engine) に submit 
                             │
                             ▼ unfilled_deficit > 0 のとき
    ┌──────────────────────────────────────────────────────────────┐
-   │  Stage 10d execute_adl                                         │
+   │  ADL参照実装パート execute_adl                                         │
    ├──────────────────────────────────────────────────────────────┤
    │  入力: candidates  &[AccountSnapshot]   ← 全 open ポジション     │
    │        mark         MarkPrice                                  │
@@ -112,12 +112,12 @@ Stage 10c の scanner は close order を **CLOB** (matching engine) に submit 
 \`\`\`
 
 契約は **i64 1 個 in, i64 1 個 out**。Bridge の wiring:
-- L13 が \`unfilled_deficit > 0 ⇒ fund_balance == 0\` を証明した (proptest #2)。
-- 本 L0 が、L13 のその契約こそが \`execute_adl\` を trigger する条件だと教える。
+- レッスン13 が \`unfilled_deficit > 0 ⇒ fund_balance == 0\` を証明した (proptest #2)。
+- 本 L0 が、レッスン13 のその契約こそが \`execute_adl\` を trigger する条件だと教える。
 
 ## Score: 「最も lucky な winner が haircut を受ける」
 
-L1 で実装する。今のところ要点だけ:
+レッスン1 で実装する。今のところ要点だけ:
 
 $$\\text{pnl\\_pct\\_bps} = \\frac{\\text{pnl} \\times \\text{MARGIN\\_SCALE}}{\\text{collateral}}$$
 
@@ -125,7 +125,7 @@ $$\\text{leverage\\_bps} = \\frac{\\text{notional} \\times \\text{MARGIN\\_SCALE
 
 $$\\text{score} = \\frac{\\text{pnl\\_pct\\_bps} \\times \\text{leverage\\_bps}}{\\text{MARGIN\\_SCALE}}$$
 
-（Stage 10a のおさらい: \`equity = collateral + unrealized_pnl\`、\`notional = |position_size| × mark\`。つまり \`collateral\` は預けた元本、\`equity\` はそのポジションの現在価値、\`notional\` は総エクスポージャ。）
+（Liquidation参照実装（計算パート） のおさらい: \`equity = collateral + unrealized_pnl\`、\`notional = |position_size| × mark\`。つまり \`collateral\` は預けた元本、\`equity\` はそのポジションの現在価値、\`notional\` は総エクスポージャ。）
 
 両方の factor は bps 単位 (10000 = 100%)。積は一度 renormalize される。10× ポジションで +50% のトレーダーは、1× ポジションで +100% のトレーダーより **高い** score になる — Hyperliquid の選択だ。高 leverage の winner はより「構造的に lucky」とみなされる (最大のリスクを取って最大の勝ちを得た)。
 
@@ -133,48 +133,48 @@ $$\\text{score} = \\frac{\\text{pnl\\_pct\\_bps} \\times \\text{leverage\\_bps}}
 
 ## 保存則 (load-bearing な不変条件)
 
-L9 / L10 / L13 と同じ規律:
+レッスン9 / レッスン10 / レッスン13 と同じ規律:
 
 $$\\text{deficit\\_absorbed} + \\text{deficit\\_remaining} = \\text{入力\\_deficit}$$
 
-\`execute_adl\` は deficit を全額 absorb する (\`deficit_remaining = 0\`) か、できる限り absorb して残りを surface する。**ADL 自身は deficit を生成も消滅もさせない。** L4 の proptest が、ランダムな \`(candidates, mark, deficit)\` triple 全体でこの不変条件を lock する。
+\`execute_adl\` は deficit を全額 absorb する (\`deficit_remaining = 0\`) か、できる限り absorb して残りを surface する。**ADL 自身は deficit を生成も消滅もさせない。** レッスン4 の proptest が、ランダムな \`(candidates, mark, deficit)\` triple 全体でこの不変条件を lock する。
 
 これで cascade 数学が閉じる — 4 つの層、4 つの保存恒等式:
 
-$$\\text{L9 (per fund call):} \\quad \\text{amount} + \\text{unfilled} = \\text{shortfall}$$
+$$\\text{レッスン9 (per fund call):} \\quad \\text{amount} + \\text{unfilled} = \\text{shortfall}$$
 
-$$\\text{L10 (per position close):} \\quad \\text{fee\\_to\\_fund} + \\text{residual\\_to\\_account} = \\text{post\\_close\\_equity}$$
+$$\\text{レッスン10 (per position close):} \\quad \\text{fee\\_to\\_fund} + \\text{residual\\_to\\_account} = \\text{post\\_close\\_equity}$$
 
-$$\\text{L13 (per scan batch):} \\quad \\text{balance\\_before} + \\sum \\text{deposits} - \\sum \\text{withdrawals} = \\text{balance\\_after}$$
+$$\\text{レッスン13 (per scan batch):} \\quad \\text{balance\\_before} + \\sum \\text{deposits} - \\sum \\text{withdrawals} = \\text{balance\\_after}$$
 
-$$\\text{L4 (per ADL pass):} \\quad \\text{deficit\\_absorbed} + \\text{deficit\\_remaining} = \\text{入力\\_deficit}$$
+$$\\text{レッスン4 (per ADL pass):} \\quad \\text{deficit\\_absorbed} + \\text{deficit\\_remaining} = \\text{入力\\_deficit}$$
 
 4 つの層、4 つの恒等式。本コース完走後、openhl-liquidation crate の数学は **あらゆる操作の下で閉じる**。
 
 ## 5 つのレッスン
 
-### Module 0 — Orientation
-- **L0** (本レッスン) — なぜ ADL、なぜ orderbook bypass、Stage 10c → 10d handoff、score preview、保存則 preview。
+### セクション0 — Orientation
+- **L0** (本レッスン) — なぜ ADL、なぜ orderbook bypass、Liquidation参照実装（スキャナパート）→ ADL handoff、score preview、保存則 preview。
 
-### Module 1 — ADL implementation
-- **L1** — \`AdlScore\` newtype + \`AdlRecord\` + \`AdlReport\` 型 + \`adl_score(snapshot, mark) -> Option<AdlScore>\` 関数。Flat / 損失 / collateral 0 ケースでの \`None\` を含む pure-compute scoring。5 個の score テスト。
-- **L2** — \`execute_adl(candidates, mark, deficit) -> AdlReport\` — orchestration: \`Option<AdlScore>\` で filter、\`AccountId\` tiebreaker で stable-sort 降順、haircut loop。50 行の本体をフェーズごとに walk + 5 個の simple unit test (zero / no-candidate / no-profitable / single-winner-full / single-winner-partial)。
-- **L3** — Nuanced な absorption テスト: score 順の multi-winner、drain-first-then-partial、\`AccountId\` 昇順の tiebreaker、「loser / flat に触れない」防御。6 個の unit test。
-- **L4** — 4 個の invariant proptest + Stage 10 quartet retrospective。Per-pass から per-block への保存則、end-to-end で閉じた 4 層 cascade。
+### セクション1 — ADL implementation
+- **レッスン1** — \`AdlScore\` newtype + \`AdlRecord\` + \`AdlReport\` 型 + \`adl_score(snapshot, mark) -> Option<AdlScore>\` 関数。Flat / 損失 / collateral 0 ケースでの \`None\` を含む pure-compute scoring。5 個の score テスト。
+- **レッスン2** — \`execute_adl(candidates, mark, deficit) -> AdlReport\` — orchestration: \`Option<AdlScore>\` で filter、\`AccountId\` tiebreaker で stable-sort 降順、haircut loop。50 行の本体をフェーズごとに walk + 5 個の simple unit test (zero / no-candidate / no-profitable / single-winner-full / single-winner-partial)。
+- **レッスン3** — Nuanced な absorption テスト: score 順の multi-winner、drain-first-then-partial、\`AccountId\` 昇順の tiebreaker、「loser / flat に触れない」防御。6 個の unit test。
+- **レッスン4** — 5 個の invariant proptest + Liquidation〜ADL四部作の振り返り。Per-pass から per-block への保存則、end-to-end で閉じた 4 層 cascade。
 
 ## 本コース後に何があるか
 
-Stage 10 cascade は完成する。openhl ロードマップは続く:
+Liquidation〜ADLカスケード は完成する。openhl ロードマップは続く:
 
-- **Stage 11 — Oracle** (\`6495ffd\`、openhl では shipped 済み): median-aggregating な index-price feed と signed observation verify。Rethlab の将来コース。
-- **Stage 12 — Vault** (\`1e63e0b\`、shipped 済み): share-based な collateral pooling primitive。将来コース。
-- **Stages 13a-13k — bin/openhl** (複数 SHA、shipped 済み): 実際に走る single-validator node。将来コース。
+- **次の実装パート — Oracle** (\`6495ffd\`、openhl では shipped 済み): median-aggregating な index-price feed と signed observation verify。Rethlab の将来コース。
+- **次の実装パート — Vault** (\`1e63e0b\`、shipped 済み): share-based な collateral pooling primitive。将来コース。
+- **その次の実装群 — bin/openhl** (複数 SHA、shipped 済み): 実際に走る single-validator node。将来コース。
 
-本コースの L4 を完走後、あなたは publish 済みカリキュラムより 1 コース先行し、openhl の Stage 10 終端に到達する。そこから先は openhl が build の reference になる。
+本コースの レッスン4 を完走後、あなたは publish 済みカリキュラムより 1 コース先行し、openhl の Liquidation〜ADLパート終端に到達する。そこから先は openhl が 参照実装 になる。
 
 ## License / SHA discipline
 
-L0–L4 は Stage 10d の SHA \`d66b44a\` を引用する。Single-file の diff は \`crates/liquidation/src/adl.rs\` にある。Stage 10c (\`0a8464e\`) と Stage 10d (\`d66b44a\`) の間で他の crate ファイルは変わらない — ADL は pure additive なモジュールだ。
+L0–レッスン4 は ADL参照実装パート の SHA \`d66b44a\` を引用する。Single-file の diff は \`crates/liquidation/src/adl.rs\` にある。Liquidation参照実装（スキャナパート） (\`0a8464e\`) と ADL参照実装パート (\`d66b44a\`) の間で他の crate ファイルは変わらない — ADL は pure additive なモジュールだ。
 `,
                 },
               ],
@@ -199,9 +199,9 @@ L0–L4 は Stage 10d の SHA \`d66b44a\` を引用する。Single-file の diff
 このレッスンで掴む概念:
 
 - **\`AdlScore\` が newtype なのは、score の *意味* が ordering であって arithmetic ではないから。** \`i64\` を tuple struct (\`pub struct AdlScore(pub i64)\`) で wrap する。これで \`PartialOrd + Ord\` が derive でき、type-level で totally-ordered な型として扱える。素の \`i64\` だと、誤って 2 つの score を *足す*、*掛ける*、balance が期待される場所で *使う* — どれも意味を持たない操作 — を許してしまう。**Newtype は欲しい操作だけを encode し、欲しくないものを禁止する。**
-- **\`Option<AdlScore>\` で 4 つの「not a candidate」ケースを表現する。** Flat ポジション、loss を出しているポジション、equity ゼロのポジション、collateral ゼロのポジション — すべて「不適格」。Sentinel score (\`AdlScore(0)\` や \`AdlScore(-1)\`) を返して caller にチェックさせるのではなく、\`adl_score\` は \`None\` を返す。L2 の orchestration はそれを受けて \`candidates.iter().filter_map(...)\` を書ける。不適格は filter-out として encode される。**\`Option\` は「この入力からはこの型の値が出ない」を type level で言う方法だ。**
-- **Score は \`pnl_pct × leverage\`、\`MARGIN_SCALE\` で normalize して i64 に収める。** 両 factor は basis points (10000 = 100%)。積は bps² となり病的入力で i64 を overflow する。対策は 4 段: (a) i128 で計算、(b) saturate-multiply、(c) \`MARGIN_SCALE\` で割って bps に戻す renormalize、(d) 最後の i128 → i64 変換も saturating。Stage 10a の \`notional_value\` / \`unrealized_pnl\`、Stage 10b の \`liquidation_fee\` と同じ規律。
-- **「同じ pnl_pct でより高い leverage → より高い score」axiom が Hyperliquid 慣例を lock するテスト。** L1 の \`score_higher_for_higher_leverage_winner\` テストは、同一の \`pnl_pct\` を持ち leverage が異なる winner 2 人を構築し、score の ordering を assert する。将来の refactor で score formula を「lower-leverage winner を favor する」方向に flip すれば（一部の venue はそうしている）、この 1 つのテストが落ちる。**1 つのテストが慣例を固定する。Cascade の残りはそれに乗れる。**
+- **\`Option<AdlScore>\` で 4 つの「not a candidate」ケースを表現する。** Flat ポジション、loss を出しているポジション、equity ゼロのポジション、collateral ゼロのポジション — すべて「不適格」。Sentinel score (\`AdlScore(0)\` や \`AdlScore(-1)\`) を返して caller にチェックさせるのではなく、\`adl_score\` は \`None\` を返す。レッスン2 の orchestration はそれを受けて \`candidates.iter().filter_map(...)\` を書ける。不適格は filter-out として encode される。**\`Option\` は「この入力からはこの型の値が出ない」を type level で言う方法だ。**
+- **Score は \`pnl_pct × leverage\`、\`MARGIN_SCALE\` で normalize して i64 に収める。** 両 factor は basis points (10000 = 100%)。積は bps² となり病的入力で i64 を overflow する。対策は 4 段: (a) i128 で計算、(b) saturate-multiply、(c) \`MARGIN_SCALE\` で割って bps に戻す renormalize、(d) 最後の i128 → i64 変換も saturating。Liquidation参照実装（計算パート） の \`notional_value\` / \`unrealized_pnl\`、Liquidation参照実装（保険基金パート） の \`liquidation_fee\` と同じ規律。
+- **「同じ pnl_pct でより高い leverage → より高い score」axiom が Hyperliquid 慣例を lock するテスト。** レッスン1 の \`score_higher_for_higher_leverage_winner\` テストは、同一の \`pnl_pct\` を持ち leverage が異なる winner 2 人を構築し、score の ordering を assert する。将来の refactor で score formula を「lower-leverage winner を favor する」方向に flip すれば（一部の venue はそうしている）、この 1 つのテストが落ちる。**1 つのテストが慣例を固定する。Cascade の残りはそれに乗れる。**
 
 確認:
 
@@ -209,30 +209,30 @@ L0–L4 は Stage 10d の SHA \`d66b44a\` を引用する。Single-file の diff
 cargo test -p openhl-liquidation
 \`\`\`
 
-…で 74 テストが pass する（Liquidation コース由来の 69 + 新規 ADL score テスト 5）。L4 までに合計 90 に到達する（L1/L2/L3 で 5 + 6 + 5 unit test、L4 で 4 proptest）。
+…で 74 テストが pass する（Liquidation コース由来の 69 + 新規 ADL score テスト 5）。レッスン4 までに合計 90 に到達する（レッスン1/レッスン2/レッスン3 で 5 + 6 + 5 unit test、レッスン4 で 5 proptest）。
 
 具体的な変更:
 
 - **\`src/adl.rs\`。** 新規モジュールファイル。Module-level doc、imports、\`AdlScore\` newtype、\`AdlRecord\` 構造体、\`AdlReport\` 構造体、\`adl_score()\` 関数、テストモジュール 5 個（4 個の None ケース + 1 個の ordering テスト）を追加。
 - **\`src/lib.rs\`。** \`pub mod adl;\` と新規 4 名の public 名（\`AdlScore\`, \`AdlRecord\`, \`AdlReport\`, \`adl_score\`）を再 export。
 
-L1 で型語彙 + pure な scoring 関数を出荷する。L2 が両方を consume する orchestration、\`execute_adl\` を実装する。
+レッスン1 で型語彙 + pure な scoring 関数を出荷する。レッスン2 が両方を consume する orchestration、\`execute_adl\` を実装する。
 
 ## おさらい
 
-前のコース（\`building-openhl-liquidation\` の L13）の後:
+前のコース（\`building-openhl-liquidation\` の レッスン13）の後:
 - \`crates/liquidation/src/\` に source ファイルが 4 つ: \`compute.rs\`, \`insurance.rs\`, \`scanner.rs\`, \`types.rs\` + \`lib.rs\`。
 - 69 テスト pass（compute 34 + insurance 21 + scanner 14）。
 - Scanner が \`ScanReport.unfilled_deficit: i64\` を生む — ADL の trigger だ。
 - \`0a8464e\` 以降、\`crates/liquidation/src/\` の他ファイルは変更なし。
 
-L1 で ADL モジュールが始まる。Crate の Stage 10d に対する diff は、新規ファイル 1 つ（\`adl.rs\`）と \`lib.rs\` の 4 行編集だけ。
+レッスン1 で ADL モジュールが始まる。Crate の ADL参照実装パート に対する diff は、新規ファイル 1 つ（\`adl.rs\`）と \`lib.rs\` の 4 行編集だけ。
 
 ## 計画
 
 編集は 3 つ:
 
-1. **\`crates/liquidation/src/adl.rs\` を新規作成。** Doc preamble（L0 の「ADL が orderbook を bypass する理由」framing を引用）、imports、\`AdlScore\` newtype、\`AdlRecord\` 構造体、\`AdlReport\` 構造体、\`adl_score\` 関数を含む。\`execute_adl\` はまだなし（L2 で着地）。
+1. **\`crates/liquidation/src/adl.rs\` を新規作成。** Doc preamble（レッスン0の「ADL が orderbook を bypass する理由」framing を引用）、imports、\`AdlScore\` newtype、\`AdlRecord\` 構造体、\`AdlReport\` 構造体、\`adl_score\` 関数を含む。\`execute_adl\` はまだなし（レッスン2 で着地）。
 2. **\`adl_score\` の unit test を 5 個追加** — \`adl.rs\` の末尾に \`#[cfg(test)] mod tests { ... }\` で。4 個の None ケース（flat / losing / zero collateral / short-at-entry）+ 1 個の leverage-ordering テスト。
 3. **\`pub mod adl;\` と再 export を \`crates/liquidation/src/lib.rs\` に追加。**
 
@@ -281,10 +281,10 @@ L1 で ADL モジュールが始まる。Crate の Stage 10d に対する diff �
 
 ### Step 1: \`src/adl.rs\` を新規作成 — doc preamble + imports
 
-\`crates/liquidation/src/adl.rs\` を新規作成する。Module doc preamble は L0 で扱った最も重要な概念的コンテンツ（「ADL が orderbook を bypass する理由」framing）を運ぶ — \`cargo doc\` 読者が最初に見る:
+\`crates/liquidation/src/adl.rs\` を新規作成する。Module doc preamble は レッスン0で扱った最も重要な概念的コンテンツ（「ADL が orderbook を bypass する理由」framing）を運ぶ — \`cargo doc\` 読者が最初に見る:
 
 \`\`\`rust
-//! Auto-deleveraging (ADL) — Layer 3 of the safety-net cascade (Stage 10d).
+//! Auto-deleveraging (ADL) — Layer 3 of the safety-net cascade (ADL参照実装パート).
 //!
 //! When [\`crate::scanner::LiquidationScanner\`] finishes a scan with
 //! \`ScanReport::unfilled_deficit > 0\`, the insurance fund couldn't
@@ -301,7 +301,7 @@ L1 で ADL モジュールが始まる。Crate の Stage 10d に対する diff �
 //! positions underwater. The feedback loop runs away. ADL is designed
 //! to **close positions directly in the bookkeeping layer**, never
 //! touching the orderbook. The records this module produces carry the
-//! [\`CloseOrderSpec\`] for parity with Stage 10a's other paths, but the
+//! [\`CloseOrderSpec\`] for parity with Liquidation参照実装（計算パート）'s other paths, but the
 //! bridge is expected to apply them as account-state mutations rather
 //! than CLOB orders.
 //!
@@ -355,10 +355,10 @@ use openhl_funding::MarkPrice;
 このプリアンブルで押さえる点が 5 つ:
 
 1. **最初の 1 文が *trigger* と *response* を名指す。** "When \`ScanReport::unfilled_deficit > 0\`, the insurance fund couldn't absorb everything. ADL is the last-resort mechanism." 最初の 1 文だけ読んだ読者でも、ADL が cascade のどこに座るか分かる。**モジュール doc は実装詳細ではなく cascade position から始める。**
-2. **\`Why ADL bypasses the orderbook\` セクションが** L0 の load-bearing 概念をモジュール doc 内で繰り返す。L0 を経ずにここに到達した読者は、feedback-loop の理由が必要だ。そうでないと「なぜ market order を submit しないのか」と疑問に思う。**モジュール doc はコースレベル orientation の本質的概念を duplicate する。読者が context を chase する必要はない。**
+2. **\`Why ADL bypasses the orderbook\` セクションが** レッスン0の load-bearing 概念をモジュール doc 内で繰り返す。レッスン0を経ずにここに到達した読者は、feedback-loop の理由が必要だ。そうでないと「なぜ market order を submit しないのか」と疑問に思う。**モジュール doc はコースレベル orientation の本質的概念を duplicate する。読者が context を chase する必要はない。**
 3. **Score formula が \`rust\` ではなく \`text\` code block 内にある。** Formula は Rust ではなく algebra だからだ。\`text\` という指定は「monospace、no syntax highlighting、math 記法」のレンダースタイルを signal する。**Math には \`text\`、コードには \`rust\`。\`cargo doc\` HTML での区別が効く。**
 4. **\`Determinism\` セクションが 3 つの negative を名指す**: float arithmetic なし、\`HashMap\` iteration なし、clock read なし。**モジュールが *何をしないか* を documented にすることが、コンセンサス決定性が要求するものを signal する。** 将来 \`chrono::Utc::now()\` を呼ぼうとする contributor は、これを見て思いとどまる。
-5. **\`close_order_spec\` を import している** — L1 では使わないにもかかわらず（L2 の \`execute_adl\` が使う）。L11 の \`account_equity\` import と同じ staging 規律。**ファイルの完全なコードセットが使う import を入れる、現在のレッスンのコードが使うものではなく。** Unused-import 警告が L1 で出て、L2 で消える。
+5. **\`close_order_spec\` を import している** — レッスン1 では使わないにもかかわらず（レッスン2 の \`execute_adl\` が使う）。レッスン11 の \`account_equity\` import と同じ staging 規律。**ファイルの完全なコードセットが使う import を入れる、現在のレッスンのコードが使うものではなく。** Unused-import 警告が レッスン1 で出て、レッスン2 で消える。
 
 ### Step 2: \`AdlScore\` を追加
 
@@ -376,10 +376,10 @@ pub struct AdlScore(pub i64);
 
 押さえる点が 6 つ:
 
-1. **\`pub struct AdlScore(pub i64)\`** — tuple struct、public inner。Inner の \`pub\` は caller が \`AdlScore(42)\` と \`score.0\` を直接書けることを意味する。Inner を private にして \`pub fn new(v: i64) -> Self\` と \`pub fn value(&self) -> i64\` を加えることも *できる*。だが L1 の primary user は L2 \`execute_adl\` とテストモジュール — どちらも直接アクセスを望む。**Public-inner な tuple struct は、consumer が in-crate でかつ型が純粋に「label」wrapper のときに正しい。**
-2. **\`PartialOrd + Ord\` を derive する** — これこそが *newtype の存在理由*。\`i64\` 上の \`Ord\` は任意の caller が任意の i64 を別の i64 と order できる。\`AdlScore\` 上の \`Ord\` は score 同士を order するだけ。Stage 10c の \`LiquidationRecord\` は *unrelated* な \`i64\` の struct だった。意味的に order できないので \`Ord\` を derive しなかった。ここでは、score を order することこそが目的の操作だ。**比較が型の目的のときだけ \`Ord\` を derive する、単に i64 形状だからではない。**
+1. **\`pub struct AdlScore(pub i64)\`** — tuple struct、public inner。Inner の \`pub\` は caller が \`AdlScore(42)\` と \`score.0\` を直接書けることを意味する。Inner を private にして \`pub fn new(v: i64) -> Self\` と \`pub fn value(&self) -> i64\` を加えることも *できる*。だが レッスン1 の primary user は レッスン2 \`execute_adl\` とテストモジュール — どちらも直接アクセスを望む。**Public-inner な tuple struct は、consumer が in-crate でかつ型が純粋に「label」wrapper のときに正しい。**
+2. **\`PartialOrd + Ord\` を derive する** — これこそが *newtype の存在理由*。\`i64\` 上の \`Ord\` は任意の caller が任意の i64 を別の i64 と order できる。\`AdlScore\` 上の \`Ord\` は score 同士を order するだけ。Liquidation参照実装（スキャナパート） の \`LiquidationRecord\` は *unrelated* な \`i64\` の struct だった。意味的に order できないので \`Ord\` を derive しなかった。ここでは、score を order することこそが目的の操作だ。**比較が型の目的のときだけ \`Ord\` を derive する、単に i64 形状だからではない。**
 3. **\`Hash\` も derive している** — 将来 ADL 拡張が \`BTreeMap<AdlScore, _>\` や \`HashMap<AdlScore, _>\` を必要としたとき、両方とも動くようにするため。\`Hash\` の derive は安く、コストはゼロ。**Consumer が key として使うかもしれない value 型には \`Hash\` を defensively derive する。**
-4. **\`Default\` を derive している** — \`AdlScore::default()\` は \`AdlScore(0)\` を返す。これは意味がある。ゼロは「何も勝っていない、何も負けていない」sentinel value だ。L2 record の initialization はこの default に乗れる。**Newtype の \`Default\` は wrap された型の default に従う — ゼロが意味のある sentinel のとき。**
+4. **\`Default\` を derive している** — \`AdlScore::default()\` は \`AdlScore(0)\` を返す。これは意味がある。ゼロは「何も勝っていない、何も負けていない」sentinel value だ。レッスン2 record の initialization はこの default に乗れる。**Newtype の \`Default\` は wrap された型の default に従う — ゼロが意味のある sentinel のとき。**
 5. **\`Add\` / \`Mul\` / \`Sub\` の derive なし。** Score は合計可能でも差分可能でもない — 「score A プラス score B」の domain meaning は存在しない。Newtype はこれらを実装しないことで *禁止する*。素の \`i64\` は silently \`score_a + score_b\` を許容するが、newtype はそのような試みを compile しない。**Newtype は subtractive: 操作を table から外す、新しい操作を追加するのではない。**
 6. **Doc コメントが saturation 挙動を名指す** — saturation 自体は \`adl_score\` の body にあるにもかかわらず。\`AdlScore\` の consumer は doc を読む。関数は読まない。Value range を型レベルで document することで bug を防ぐ。**型の invariant は型自身に document する、コンストラクタだけではなく。**
 
@@ -393,7 +393,7 @@ pub struct AdlScore(pub i64);
 /// The bridge applies these as bookkeeping mutations: credit the
 /// trader's collateral by \`pnl_paid\`, set their position size to zero,
 /// remove the account from the open-positions table. \`close_order\`
-/// carries the spec for parity with Stage 10a's other paths and for
+/// carries the spec for parity with Liquidation参照実装（計算パート）'s other paths and for
 /// telemetry; the matching engine is **not** consulted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AdlRecord {
@@ -419,7 +419,7 @@ pub struct AdlRecord {
 
 押さえる点が 5 つ:
 
-1. **6 フィールド、すべて \`pub\`** — Stage 10c の \`LiquidationRecord\` と同じ data-carrier パターン。Bridge が全フィールドを直接読む。Accessor は不要。**All-public な record 型は、consumer が in-crate または downstream auditor のときに正しい。Accessor は何の invariant も protect せずに friction だけを増やす。**
+1. **6 フィールド、すべて \`pub\`** — Liquidation参照実装（スキャナパート） の \`LiquidationRecord\` と同じ data-carrier パターン。Bridge が全フィールドを直接読む。Accessor は不要。**All-public な record 型は、consumer が in-crate または downstream auditor のときに正しい。Accessor は何の invariant も protect せずに friction だけを増やす。**
 2. **\`pnl_paid = pnl_gross - haircut\` は 1 record の保存則 invariant。** 3 フィールドが同じ情報を 2 回 encode する（gross、haircut、paid）。冗長性は *意図的*。読者は trader が何を得たか算術せずに分かる。**Audit-trail record では、冗長フィールドは minimal フィールドより明快だ。**
 3. **\`close_order\` が存在する — CLOB に submit しないにもかかわらず。** これを運ぶことで \`AdlRecord\` の shape が \`LiquidationRecord\` と互換になる。将来「すべての close を 1 つの log に」merge する場合、close_order_spec の計算を再実行せずに 2 つの型を union できる。**関連 record 間の shape consistency は downstream の merge コードで pay off する。**
 4. **\`score: AdlScore\`（\`i64\` ではない）。** Record は *score 型* を運ぶ、raw 数字ではない。Record の consumer は score を他の score と比較する。Newtype が score を balance や deficit と比較することを禁じる。**Record は値を domain 型で保持する、primitive 型ではない。**
@@ -448,9 +448,9 @@ pub struct AdlReport {
 押さえる点が 4 つ:
 
 1. **3 フィールド: vec + 2 つの i64 aggregate。** \`ScanReport\`（vec + 3 つの i64 aggregate）と同じ shape。パターンが確立: orchestration の出力は audit trail と aggregate の両方を運ぶ。**同じ crate 内の先行モジュールの report shape に合わせる。予測可能性が美徳だ。**
-2. **\`Default\` derive は意味がある** — 空の \`Vec<AdlRecord>\`、ゼロの deficit_absorbed、ゼロの deficit_remaining。L2 orchestration の「deficit 入力ゼロ」early-return が \`AdlReport::default()\` を使う。**Default-derived な report 型は、happy-path の early return を 1 行で書ける。**
+2. **\`Default\` derive は意味がある** — 空の \`Vec<AdlRecord>\`、ゼロの deficit_absorbed、ゼロの deficit_remaining。レッスン2 orchestration の「deficit 入力ゼロ」early-return が \`AdlReport::default()\` を使う。**Default-derived な report 型は、happy-path の early return を 1 行で書ける。**
 3. **\`Clone + Debug + PartialEq + Eq + Default\` セット、ただし \`Copy\` は NOT。** \`ScanReport\` と同じ理由 — \`Vec\` は heap-allocated。**Vec-containing な report は \`Clone\`、Vec-free な report は \`Copy\`。**
-4. **\`deficit_remaining > 0\` は chain-insolvent signal。** Doc がそう言う。L4 retrospective でこれを「fourth layer」exit として名指す。**Edge value の operational meaning を型と並べて document する。**
+4. **\`deficit_remaining > 0\` は chain-insolvent signal。** Doc がそう言う。レッスン4 retrospective でこれを「fourth layer」exit として名指す。**Edge value の operational meaning を型と並べて document する。**
 
 ### Step 5: \`adl_score\` を追加
 
@@ -497,16 +497,16 @@ pub fn adl_score(snapshot: &AccountSnapshot, mark: MarkPrice) -> Option<AdlScore
 
 押さえる点が 8 つ:
 
-1. **4 つの early-return guard、コスト昇順。** Flat チェック（比較 1 回）→ pnl（関数呼び出し、比較 1 回）→ collateral（read 1 回、比較 1 回）→ equity（関数呼び出し、比較 1 回）。安い predicate が最初、高いものが後。**L12 scanner の exit-fast-on-rejection パターンが再登場する。**
+1. **4 つの early-return guard、コスト昇順。** Flat チェック（比較 1 回）→ pnl（関数呼び出し、比較 1 回）→ collateral（read 1 回、比較 1 回）→ equity（関数呼び出し、比較 1 回）。安い predicate が最初、高いものが後。**レッスン12 scanner の exit-fast-on-rejection パターンが再登場する。**
 2. **\`unrealized_pnl\` と \`account_equity\` は *別々に* 呼ばれる**、1 つの snapshot-derive helper に collapse されていない。それぞれ \`(snapshot, mark)\` を取って 1 つの \`i64\` を返す。別々に呼ぶことで、関数が algebra として top-to-bottom で読める。**読者が math を辿る必要があるとき、直列の関数呼び出しが one-shot bundle に勝つ。**
 3. **\`pnl <= 0\` は losing AND at-entry ポジションの両方を reject する。** Entry で \`pnl == 0\` → winner ではない → ADL candidate ではない。Unified なチェックが両方をカバーする。**「non-positive」predicate が「winner」セマンティクスの正しい境界だ、「strictly negative」predicate ではない。**
-4. **\`collateral <= 0\` と \`equity <= 0\` は *defensive*** — divide-by-zero（および divide-by-negative、score の符号を nonsensically flip する）から protect する。Stage 10b の \`liquidation_fee\` にはこれらの guard がない — collateral や equity で割らないからだ。**Division は pre-check が要る。Multiplication は要らない。**
+4. **\`collateral <= 0\` と \`equity <= 0\` は *defensive*** — divide-by-zero（および divide-by-negative、score の符号を nonsensically flip する）から protect する。Liquidation参照実装（保険基金パート） の \`liquidation_fee\` にはこれらの guard がない — collateral や equity で割らないからだ。**Division は pre-check が要る。Multiplication は要らない。**
 5. **全 arithmetic で i128 中間値を使う。** \`pnl × MARGIN_SCALE\` は大きな pnl で i64 を overflow しうる（\`MARGIN_SCALE = 10000\` なので）。Product が i128 になり、collateral での divide が i128 に保ち、次の multiplication が i128 に保ち、最後の renormalize が i128 に保ち、\`saturate_i128_to_i64\` で narrow するのは最後だけ。**i128 中間値は、overflow しうる multiplication の consensus-arithmetic イディオム。**
 6. **i128 product にも \`saturating_mul\` — i128 が 128 bit あるにもかかわらず。** Belt-and-suspenders。「sane の境界」入力（例: 1000% pnl × 1000× leverage at $1B notional）では、product が i128 の range に近づく。各 multiplication step で 1 度 saturate するコストはゼロ。**全 multiplication を saturate する。コストはゼロで、bug class を 1 つまるごと消せる。**
 7. **素の \`/\` division、\`saturating_div\` ではない。** 2 つの正の i128 値の integer division は overflow しえない（\`i128::MIN / -1\` だけが overflow できるが、ここの値はすべて正）。**Saturating 演算は overflow しうる arithmetic のためのもの。正-正な division はしえない。**
 8. **最後の \`saturate_i128_to_i64\` こそが情報を失う *可能性* のある cast。** Raw i128 score が \`2^70\` なら、narrow するときに bit を失う。Saturating な変換が wrap ではなく \`i64::MAX\` に clamp する。**Width-narrowing な変換は consensus コードで明示的な saturation を要する。**
 
-> 🛑 **やりがちな勘違い。** 「なぜ \`adl_score\` は Stage 10b の \`liquidation_fee\` のように \`LiquidationParams\` を取らないのか?」 ADL に tunable knob がないからだ。Stage 10b の \`liquidation_fee_bps\` は governance が変えられる network parameter。Score formula は固定の慣例（Hyperliquid の）。将来のプロトコルアップグレードが governance に score weight を tune させれば、その時 parameter が入る。**未使用の parameter を pre-add しない。型 signature は API surface、param 追加は breaking change だ。**
+> 🛑 **やりがちな勘違い。** 「なぜ \`adl_score\` は Liquidation参照実装（保険基金パート） の \`liquidation_fee\` のように \`LiquidationParams\` を取らないのか?」 ADL に tunable knob がないからだ。Liquidation参照実装（保険基金パート） の \`liquidation_fee_bps\` は governance が変えられる network parameter。Score formula は固定の慣例（Hyperliquid の）。将来のプロトコルアップグレードが governance に score weight を tune させれば、その時 parameter が入る。**未使用の parameter を pre-add しない。型 signature は API surface、param 追加は breaking change だ。**
 
 ### Step 6: 5 個の unit test を追加
 
@@ -584,13 +584,13 @@ mod tests {
 
 押さえる点が 7 つ:
 
-1. **テストモジュールが \`snapshot\` helper パターンを再利用する** — Liquidation コースの L4/L8/L11 から — 同じシグネチャ \`(account, size, entry, collateral)\`、同じ返り型。1 度学んだ読者は crate を跨いで認識する。**Test helper は crate 全体で同じ見た目にする。**
+1. **テストモジュールが \`snapshot\` helper パターンを再利用する** — Liquidation コースの レッスン4/レッスン8/レッスン11 から — 同じシグネチャ \`(account, size, entry, collateral)\`、同じ返り型。1 度学んだ読者は crate を跨いで認識する。**Test helper は crate 全体で同じ見た目にする。**
 2. **4 つの None テスト + 1 つの ordering テスト。** None テストが eligibility filter の各 branch を exercise する。Ordering テストが score の *唯一の* 意味のある性質（relative magnitude）を exercise する。一緒に \`adl_score\` の約束をカバーする。**\`Option<T>\` を返す pure 関数では、各 None branch + 1 つの happy-path 性質をテストする。**
 3. **Ordering テストが \`assert!(sb > sa, "…")\` を使う、\`assert_eq!\` ではない。** 正確な score 値は fragile（固定小数点 rounding に sensitive）だが、relative ordering こそが load-bearing 性質だからだ。**Property-style な assertion（\`>\`, \`<\`, \`>=\`）は、ordering を意図とするテストで value-style な assertion（\`==\`）に勝つ。**
-4. **Ordering テストのコメントが math を歩く。** 読者は \`pnl_pct_bps = 100 × 10_000 / 50 = 20_000\` を見て再導出できる。L13 のテストコメントと同じ \`math-walk in comments\` 規律。**テスト内の math コメントが test を worked example に変える。**
+4. **Ordering テストのコメントが math を歩く。** 読者は \`pnl_pct_bps = 100 × 10_000 / 50 = 20_000\` を見て再導出できる。レッスン13 のテストコメントと同じ \`math-walk in comments\` 規律。**テスト内の math コメントが test を worked example に変える。**
 5. **\`score_none_for_short_at_entry\` が最も subtle な None ケース。** Entry の short ポジションは \`pnl = 0\`（negative ではなく、entry にちょうど一致）。テストは \`pnl <= 0\` predicate が単に negative だけでなく 0 も正しく catch することを確認する。**Signed predicate の境界テストが missing-equals bug を catch する。**
 6. **\`score_none_for_zero_collateral\` は mark 120（profitable!）で実行。** テスト setup は *意図的に* 誤解を招く — ポジションは勝っている。だが divide-by-zero 防御が catch する。**Defensive な guard は、それ以外なら成功する入力でテストする。**
-7. **\`proptest::prelude::*;\` が import されている、ただし L1 に proptest はない。** L4（proptest レッスン）用に staged。**Forward-staged な import が L4 を純粋に additive なレッスンに保つ。**
+7. **\`proptest::prelude::*;\` が import されている、ただし レッスン1 に proptest はない。** レッスン4（proptest レッスン）用に staged。**Forward-staged な import が レッスン4 を純粋に additive なレッスンに保つ。**
 
 ### Step 7: \`lib.rs\` を配線
 
@@ -624,7 +624,7 @@ pub use types::{
 
 新規 public 名 4 つを 1 行で: \`adl_score, AdlRecord, AdlReport, AdlScore\` — \`{ }\` 内 alphabetical。
 
-3 つ目、\`lib.rs\` 冒頭の roadmap コメントを Stage 10d in-progress に更新（任意）。具体的な更新内容は今の \`lib.rs\` preamble 次第。答え合わせは Stage 10d をこのコミットで in-progress、L4 capstone で complete とマークする。
+3 つ目、\`lib.rs\` 冒頭の roadmap コメントを ADL参照実装パート in-progress に更新（任意）。具体的な更新内容は今の \`lib.rs\` preamble 次第。答え合わせは ADL参照実装パート をこのコミットで in-progress、レッスン4 capstone で complete とマークする。
 
 ### Step 8: テストを走らせる
 
@@ -646,14 +646,14 @@ test adl::tests::score_none_for_zero_collateral ... ok
 test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 \`\`\`
 
-**74 テスト pass。** ADL モジュールが型語彙と scoring 関数とともに存在する。L2 が \`execute_adl\`（orchestration verb）と 5 個の unit test を追加し、合計を 79 に持っていく。
+**74 テスト pass。** ADL モジュールが型語彙と scoring 関数とともに存在する。レッスン2 が \`execute_adl\`（orchestration verb）と 5 個の unit test を追加し、合計を 79 に持っていく。
 
 エラー時にありがちなパターン:
 
 - **\`cannot find function \\\`account_equity\\\` in this scope\`** — \`use crate::compute::{ ... }\` import から 6 つの名前のうち 1 つが欠けている。Import block を再確認: \`account_equity, close_order_spec, notional_value, saturate_i128_to_i64, unrealized_pnl\`。
 - **\`type \\\`Option<AdlScore>\\\` does not implement \\\`PartialEq\\\`** — テスト失敗が derive を忘れたと言う。\`AdlScore\` に \`#[derive(PartialEq, Eq)]\` を追加する。\`Option<T>: PartialEq\` の blanket impl は \`T: PartialEq\` を必要とする。
 - **\`score_higher_for_higher_leverage_winner\` が \`score_a >= score_b\` で失敗** — \`adl_score\` の division 順序が間違っている。Formula を読み直す: \`pnl_pct = pnl × MARGIN_SCALE / collateral\`（numerator が先、その後 divide）。\`pnl × (MARGIN_SCALE / collateral)\` と書くと、integer truncation が精度を殺し、一部の入力で relative ordering が flip する。
-- **\`score_none_for_short_at_entry\` が失敗（\`None\` ではなく \`Some(...)\` を返す）** — \`pnl <= 0\` を \`pnl < 0\`（strict）で書いている。Strict version では 0 は profitable とみなされる。L1 が指定するのは unified な \`<= 0\`。
+- **\`score_none_for_short_at_entry\` が失敗（\`None\` ではなく \`Some(...)\` を返す）** — \`pnl <= 0\` を \`pnl < 0\`（strict）で書いている。Strict version では 0 は profitable とみなされる。レッスン1 が指定するのは unified な \`<= 0\`。
 
 ## 設計の振り返り
 
@@ -661,7 +661,7 @@ test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 1. **\`AdlScore\` が newtype なのは ordering を *enable する* ためかつ arithmetic を *forbid する* ため。** 素の \`i64\` だと、2 つの score を足す（semantic meaning なし）、引く（同様に meaning なし）、balance と比較する（real な bug class）を許してしまう。Newtype は domain がサポートする *正確な* 操作 — 比較、等価 — を encode し、それ以外は何も encode しない。**Newtype は subtractive: 操作を table から外す。**
 
-2. **不適格には \`Option<AdlScore>\`、sentinel value ではない。** 「不適格」に \`AdlScore(0)\` を返すと、全 caller が値をチェックして「0 = 不適格」か「0 = 適格だが unlucky」を判断させられる。\`Option\` を使えば L2 orchestration は \`filter_map\` を使って不適格ケースを一切見ない。**\`Option<T>\` は「不適格」の type-level encoding。Sentinel value は全 caller に predicate を re-implement させる。**
+2. **不適格には \`Option<AdlScore>\`、sentinel value ではない。** 「不適格」に \`AdlScore(0)\` を返すと、全 caller が値をチェックして「0 = 不適格」か「0 = 適格だが unlucky」を判断させられる。\`Option\` を使えば レッスン2 orchestration は \`filter_map\` を使って不適格ケースを一切見ない。**\`Option<T>\` は「不適格」の type-level encoding。Sentinel value は全 caller に predicate を re-implement させる。**
 
 3. **4 つの eligibility predicate すべてが \`<=\` を使う、\`<\` ではない。** ゼロは *not* candidate state — flat ポジション、ゼロ PnL、ゼロ collateral、ゼロ equity すべて edge ケースで score を生むべきではない。Unified な \`<=\` 境界が追加の \`== 0\` チェックなしでゼロケースを catch する。**Signed value 上の境界 predicate は通常 \`<=\` / \`>=\` が欲しい。Strict-less-than 形はゼロを取り逃す。**
 
@@ -674,9 +674,9 @@ diff -u ~/code/my-openhl/crates/liquidation/src/adl.rs ./crates/liquidation/src/
 diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/lib.rs
 \`\`\`
 
-L1 の後:
-- **adl.rs** が Stage 10d の \`adl.rs\` の **\`score_higher_for_higher_leverage_winner\` テストまで** 一致。\`execute_adl\` 関数と残りの 16 テスト + 4 proptest は L2 / L3 / L4 で着地。
-- **lib.rs** が Stage 10d の \`lib.rs\` と **byte-for-byte 一致** — \`pub mod adl;\` 行と \`pub use adl::{...}\` 再 export について。
+レッスン1 の後:
+- **adl.rs** が ADL参照実装パート の \`adl.rs\` の **\`score_higher_for_higher_leverage_winner\` テストまで** 一致。\`execute_adl\` 関数と残りの 16 テスト + 5 proptest は レッスン2 / レッスン3 / レッスン4 で着地。
+- **lib.rs** が ADL参照実装パート の \`lib.rs\` と **バイト単位で 一致** — \`pub mod adl;\` 行と \`pub use adl::{...}\` 再 export について。
 
 ## よくある質問
 
@@ -702,15 +702,15 @@ Yes — それが Drift が insurance fund draw 用に使う score だ（別名�
 
 **Q6: \`adl_score\` を closure \`score_fn: F\` で parameterize して、将来のプロトコルが慣例を swap できるようにできるか?**
 
-できるが、コストは real だ。全 call site が closure を渡す必要があり、L2 orchestration が generic parameter を全 signature に運ぶ。1 つの production score（\`pnl_pct × leverage\`）があるなら、concrete 関数のほうがクリーン。将来の governance 機能が validator に score weight を tune させるなら、そのとき parameterization が来る — *そしてそれは \`LiquidationParams\` 風 struct で、closure ではない*。**Closure は関数を parameterize する、struct はプロトコルを parameterize する。実際に configurable なものに合うほうを選ぶ。**
+できるが、コストは real だ。全 call site が closure を渡す必要があり、レッスン2 orchestration が generic parameter を全 signature に運ぶ。1 つの production score（\`pnl_pct × leverage\`）があるなら、concrete 関数のほうがクリーン。将来の governance 機能が validator に score weight を tune させるなら、そのとき parameterization が来る — *そしてそれは \`LiquidationParams\` 風 struct で、closure ではない*。**Closure は関数を parameterize する、struct はプロトコルを parameterize する。実際に configurable なものに合うほうを選ぶ。**
 
-## 次のレッスン (L2) — \`execute_adl\` — orchestration の心臓
+## 次のレッスン (レッスン2) — \`execute_adl\` — orchestration の心臓
 
-L2 が \`execute_adl(candidates, mark, deficit) -> AdlReport\` を実装する。5 テスト validated な \`adl_score\` を取り、candidate スライスに apply し、結果を sort し、deficit が absorb されるか candidate が exhaust されるまで haircut loop を走らせる関数だ。
+レッスン2 が \`execute_adl(candidates, mark, deficit) -> AdlReport\` を実装する。5 テスト validated な \`adl_score\` を取り、candidate スライスに apply し、結果を sort し、deficit が absorb されるか candidate が exhaust されるまで haircut loop を走らせる関数だ。
 
 フェーズ構造（5 フェーズ）: 非正 deficit で early-return → score と filter → tiebreaker 付き stable-sort → iterate して haircut → report を構築。さらに 5 個の simple unit test: zero deficit、negative deficit、no candidates、no profitable candidates、single winner full absorb。
 
-L2 の後、scanner が *ADL に対して runnable* になる — 79 テスト pass（L1 から 74 + L2 で 5 新規）。L3 で 6 個の nuanced absorption テスト、L4 で 4 個の invariant proptest と Stage 10 quartet retrospective が追加される。
+レッスン2 の後、scanner が *ADL に対して runnable* になる — 79 テスト pass（レッスン1 から 74 + レッスン2 で 5 新規）。レッスン3 で 6 個の nuanced absorption テスト、レッスン4 で 5 個の invariant proptest と Liquidation〜ADL四部作の振り返り が追加される。
 `,
                 },
                 {
@@ -727,9 +727,9 @@ L2 の後、scanner が *ADL に対して runnable* になる — 79 テスト p
 このレッスンで掴む概念:
 
 - **\`execute_adl\` は、scanner の \`unfilled_deficit > 0\` のとき bridge が呼ぶ関数だ。** Layer 1 (margin compute) はすでにアカウントを分類済み。Layer 2 (insurance fund) は吸収できる分を吸収済み。Scanner が \`ScanReport { unfilled_deficit > 0, .. }\` を返した時点で、カスケード（Cascade）は 3 つ目で最後の層に到達している。Bridge が \`execute_adl(remaining_accounts, mark, unfilled_deficit) -> AdlReport\` を呼ぶ — この 1 つの関数が Layer 3 の契約全体を担う。利益の出ている counter-position をランク付けし、順番に haircut し、「どれだけの deficit を吸収したか」「どれだけ残ったか」を 2 つのフィールドで bridge に正確に伝える report を返す。**セーフティネット・カスケードの 3 層、各層に 1 つの関数。**
-- **この関数は単一ロジックの塊ではなく、5 フェーズのパイプラインだ。** Phase 1: 非正の deficit に対する早期リターン（防御的契約（Defensive contract））。Phase 2: \`adl_score\`（L1 の関数）で各候補をスコア化し、ineligible (\`None\`) を filter out、PnL とともに collect。Phase 3: \`(score 降順、account_id 昇順)\` で stable-sort — tiebreaker が決定論性（Determinism）の鍵だ。Phase 4: ランク順に iterate し、\`haircut = min(remaining_deficit, pnl_gross)\` を適用してアカウントごとの record を蓄積。Phase 5: ループ最終状態から \`deficit_remaining\` を assign し、report を return。各フェーズに固有の正しさ義務がある。本レッスンは 1 つずつ歩く。**5 フェーズ、5 つの検証可能な不変条件。**
-- **保存則（Conservation law） \`deficit_absorbed + deficit_remaining == input_deficit\` は本レッスンでセットアップし、L4 で証明する。** Phase 4 の各 iteration で \`haircut + new_remaining == old_remaining\` が成立する。ループの終端状態は \`deficit_remaining = remaining\` かつ \`deficit_absorbed = sum_of_haircuts\`。構造上、この 2 つのフィールドの和は入力に等しい — コードから直接読み取れる保存則だ。L4 の proptest \`conservation_absorbed_plus_remaining_equals_deficit\` がランダム入力に対してこれを検証する。L2 ではループ自体から構造的議論を読む。**保存則は後で検証する付け足しではない。ループ本体が明白にする性質だ。**
-- **すべての算術は saturating op を使い、Phase 4 をビザンチン障害耐性にする。** absorbed accumulator に \`haircut.saturating_add\`、ループ変数に \`remaining.saturating_sub\`、record ごとの payout に \`pnl_gross.saturating_sub(haircut)\`。実際には overflow しない（入力は i64 で、マグニチュードは i64::MAX に対して小さい）。それでも \`saturating_*\` はコードの契約を明示する。**「もし何かが wrap したら、panic より clamp を選ぶ」**。L1 の debug_assert! 規律と対になる規律だ — test では debug_assert!、prod では saturating_*、目的はどちらも同じで、未定義動作を観測可能な失敗に変えること。**openhl-liquidation L8 の InsuranceFund と同じ規律 — prod では saturating、test では debug_assert。**
+- **この関数は単一ロジックの塊ではなく、5 フェーズのパイプラインだ。** Phase 1: 非正の deficit に対する早期リターン（防御的契約（Defensive contract））。Phase 2: \`adl_score\`（レッスン1 の関数）で各候補をスコア化し、ineligible (\`None\`) を filter out、PnL とともに collect。Phase 3: \`(score 降順、account_id 昇順)\` で stable-sort — tiebreaker が決定論性（Determinism）の鍵だ。Phase 4: ランク順に iterate し、\`haircut = min(remaining_deficit, pnl_gross)\` を適用してアカウントごとの record を蓄積。Phase 5: ループ最終状態から \`deficit_remaining\` を assign し、report を return。各フェーズに固有の正しさ義務がある。本レッスンは 1 つずつ歩く。**5 フェーズ、5 つの検証可能な不変条件。**
+- **保存則（Conservation law） \`deficit_absorbed + deficit_remaining == input_deficit\` は本レッスンでセットアップし、レッスン4 で証明する。** Phase 4 の各 iteration で \`haircut + new_remaining == old_remaining\` が成立する。ループの終端状態は \`deficit_remaining = remaining\` かつ \`deficit_absorbed = sum_of_haircuts\`。構造上、この 2 つのフィールドの和は入力に等しい — コードから直接読み取れる保存則だ。レッスン4 の proptest \`conservation_absorbed_plus_remaining_equals_deficit\` がランダム入力に対してこれを検証する。レッスン2 ではループ自体から構造的議論を読む。**保存則は後で検証する付け足しではない。ループ本体が明白にする性質だ。**
+- **すべての算術は saturating op を使い、Phase 4 をビザンチン障害耐性にする。** absorbed accumulator に \`haircut.saturating_add\`、ループ変数に \`remaining.saturating_sub\`、record ごとの payout に \`pnl_gross.saturating_sub(haircut)\`。実際には overflow しない（入力は i64 で、マグニチュードは i64::MAX に対して小さい）。それでも \`saturating_*\` はコードの契約を明示する。**「もし何かが wrap したら、panic より clamp を選ぶ」**。レッスン1 の debug_assert! 規律と対になる規律だ — test では debug_assert!、prod では saturating_*、目的はどちらも同じで、未定義動作を観測可能な失敗に変えること。**openhl-liquidation レッスン8 の InsuranceFund と同じ規律 — prod では saturating、test では debug_assert。**
 
 確認:
 
@@ -737,23 +737,23 @@ L2 の後、scanner が *ADL に対して runnable* になる — 79 テスト p
 cargo test -p openhl-liquidation adl::tests::adl_
 \`\`\`
 
-…で本レッスンで追加する 5 つの新 unit test (\`adl_zero_deficit_is_noop\`、\`adl_negative_deficit_clamps_remaining_to_zero\`、\`adl_no_candidates_keeps_full_deficit\`、\`adl_no_profitable_keeps_full_deficit\`、\`adl_single_winner_fully_absorbs_small_deficit\`) が走る。本レッスン完走後、scanner は *ADL に対して runnable* になる — 79 テスト pass (L1 から 74 + L2 で新規 5)。L3 で 6 つの nuanced absorption テストを execute_adl に対して追加。L4 で 4 つの invariant proptest と Stage 10 四部作のレトロスペクティブを追加する。
+…で本レッスンで追加する 5 つの新 unit test (\`adl_zero_deficit_is_noop\`、\`adl_negative_deficit_clamps_remaining_to_zero\`、\`adl_no_candidates_keeps_full_deficit\`、\`adl_no_profitable_keeps_full_deficit\`、\`adl_single_winner_fully_absorbs_small_deficit\`) が走る。本レッスン完走後、scanner は *ADL に対して runnable* になる — 79 テスト pass (レッスン1 から 74 + レッスン2 で新規 5)。レッスン3 で 6 つの nuanced absorption テストを execute_adl に対して追加。レッスン4 で 5 つの invariant proptest と Liquidation〜ADL四部作の振り返りを追加する。
 
 具体的な変更:
 
-- **\`crates/liquidation/src/adl.rs\`** — L1 の type 定義と \`adl_score\` の下に \`execute_adl\` 関数 (~50 行) を append。既存の \`#[cfg(test)] mod tests\` ブロックに 5 つの unit test を append。
+- **\`crates/liquidation/src/adl.rs\`** — レッスン1 の type 定義と \`adl_score\` の下に \`execute_adl\` 関数 (~50 行) を append。既存の \`#[cfg(test)] mod tests\` ブロックに 5 つの unit test を append。
 
 それだけ。Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5、そして 5 つの degenerate パスを exercise するテストだ。
 
 ## おさらい
 
-L1 の後はこうなっている:
+レッスン1 の後はこうなっている:
 - \`AdlScore(i64)\` — i64 ranking を wrap する newtype。sort 用に Ord derive、ゼロ用に Default derive、dedup 用に Hash derive。
 - \`AdlRecord\` — アカウントごとの row: \`{account, close_order, pnl_gross, haircut, pnl_paid, score}\`。Telemetry-shaped。Bridge は *帳簿変更（Bookkeeping mutation）* として適用する。CLOB 注文としてではない。
 - \`AdlReport\` — \`{records, deficit_absorbed, deficit_remaining}\`。Bridge は \`deficit_remaining\` を読み、chain が解決不能な状態に達したかを判定する。
 - \`adl_score(snapshot, mark) -> Option<AdlScore>\` — ranking 関数。4 つの ineligibility ケース（flat position、non-profitable、zero collateral、zero/negative equity）には \`None\`、valid な winner には \`Some(score)\`。
 
-L2 はこれらのプリミティブを取り、オーケストレーションする。\`adl_score\` が Phase 2 の filter 述語、\`AdlReport\` が Phase 4 で埋めて Phase 5 で finalize する accumulator になる。
+レッスン2 はこれらのプリミティブを取り、オーケストレーションする。\`adl_score\` が Phase 2 の filter 述語、\`AdlReport\` が Phase 4 で埋めて Phase 5 で finalize する accumulator になる。
 
 ## 計画
 
@@ -768,7 +768,7 @@ L2 はこれらのプリミティブを取り、オーケストレーション�
 
 その後、\`tests\` モジュールの末尾に 5 つの unit test を append。
 
-> 🛑 **予測。** 下のコードを読む前に: openhl-liquidation L13 の \`scan\` も似た shape を持っていた — accumulator を空で初期化、候補ごとのループ、最終 assignment。\`scan\` と \`execute_adl\` の間の構造的な違いを 1 つ予想せよ。ヒントは、ADL は *quota*（deficit）を持ち、scanner は *quota なし*（すべてのアカウントを処理）だという点だ。
+> 🛑 **予測。** 下のコードを読む前に: openhl-liquidation レッスン13 の \`scan\` も似た shape を持っていた — accumulator を空で初期化、候補ごとのループ、最終 assignment。\`scan\` と \`execute_adl\` の間の構造的な違いを 1 つ予想せよ。ヒントは、ADL は *quota*（deficit）を持ち、scanner は *quota なし*（すべてのアカウントを処理）だという点だ。
 
 (答え: **\`execute_adl\` は \`remaining <= 0\` のときループに \`break\` を持つ。\`scan\` は持たない。** Scanner は入力のすべてのアカウントを処理する (quota なし — 清算が必要な分をすべて測定する役目だ)。ADL は *deficit が覆われるまで* アカウントを処理し、覆われたら停止する (quota 束縛)。\`break\` が quota 束縛ループの構造的サインだ。Performance にも効く。最初の winner が十分な PnL を持てば、ADL は 100 候補のうち 1 人だけ haircut すれば済む。\`break\` なしならループは 100 全部を歩く。**Quota 束縛ループは \`break\` を持つ。Quota フリーは持たない。**)
 
@@ -881,7 +881,7 @@ let mut ranked: Vec<(AccountSnapshot, AdlScore, i64)> = candidates
 
 押さえる点が 5 つ。
 
-1. **\`filter_map\` がここでの正しい combinator だ。** \`adl_score(s, mark)\` は \`Option<AdlScore>\` を返す (L1 の設計)。\`filter_map\` は \`Some\` ケースを残し \`None\` を drop する。\`filter\` + \`map\` を別々に使うと \`adl_score\` を 2 回評価する (filter 用に 1 回、map 用に 1 回)。\`filter_map\` は 1 パスで両方をやり、\`Some\` を unwrap する。**\`filter_map\` は「filter して unwrap、1 パスで」。\`T -> Option<U>\` の関数があるときはいつでも使う。**
+1. **\`filter_map\` がここでの正しい combinator だ。** \`adl_score(s, mark)\` は \`Option<AdlScore>\` を返す (レッスン1 の設計)。\`filter_map\` は \`Some\` ケースを残し \`None\` を drop する。\`filter\` + \`map\` を別々に使うと \`adl_score\` を 2 回評価する (filter 用に 1 回、map 用に 1 回)。\`filter_map\` は 1 パスで両方をやり、\`Some\` を unwrap する。**\`filter_map\` は「filter して unwrap、1 パスで」。\`T -> Option<U>\` の関数があるときはいつでも使う。**
 2. **クロージャ内部の \`?\` 演算子がエレガントな部分だ。** \`adl_score(s, mark)?\` は \`adl_score\` が \`None\` を返した時点で**その要素を処理中のクロージャ本体だけ**を short-circuit し、\`filter_map\` へ \`None\` を返す。\`filter_map\` 自体はそれを「この要素は drop」として扱い、次の要素の反復へ進む。\`?\` なしだと explicit な \`match\` か \`let Some(score) = ... else { return None }\` が必要だ。**\`?\` はイテレータ全体を \`break\` しない。現在のクロージャから \`None\` を返して次要素へ進めるための短絡規則だ。**
 3. **\`unrealized_pnl\` を filter pass の *後* で計算する。** 順序が重要だ。\`unrealized_pnl\` は cheap だが、expensive なら eligibility filter を pass したアカウントだけ計算したい。**先に filter、後で derive。捨てるかもしれない量は決して decide しない。**
 4. **\`(snapshot, score, pnl)\` のタプルがループの 3 つのニーズをパックする。** Phase 3 はソート用に \`score\`、tiebreaker 用に \`account_id\` (\`snapshot\` 経由) が要る。Phase 4 は \`AdlRecord\` を build するために \`snapshot\`、\`score\`、\`pnl_gross\` が要る。3 つすべてを 1 つのタプルにパッケージすれば、Phase 4 で何も re-derive する必要がない。**タプルは pre-computed 値をループ間で再導出なしに carry する方法だ。**
@@ -926,10 +926,10 @@ for (snapshot, score, pnl_gross) in ranked {
 
 押さえる点が 6 つ。
 
-1. **\`AdlReport::default()\` で空 records、0 absorbed、0 remaining が得られる。** Report struct に \`Default\` を derive している (L1 の設計) おかげで、\`AdlReport { records: Vec::new(), deficit_absorbed: 0, deficit_remaining: 0 }\` を手書きする必要がない。**Accumulator 型には \`Default\` を derive する。常にゼロで初期化される。**
+1. **\`AdlReport::default()\` で空 records、0 absorbed、0 remaining が得られる。** Report struct に \`Default\` を derive している (レッスン1 の設計) おかげで、\`AdlReport { records: Vec::new(), deficit_absorbed: 0, deficit_remaining: 0 }\` を手書きする必要がない。**Accumulator 型には \`Default\` を derive する。常にゼロで初期化される。**
 2. **\`if remaining <= 0 break;\` が quota guard だ。** 十分な deficit が absorb されたら、もう winner は haircut されない。これが quota 束縛ループの構造的サインだ。openhl の各 quota 束縛ループがこのパターンを持つ。**Quota 束縛ループは early break、quota フリーループはすべてを処理する。**
 3. **\`haircut = remaining.min(pnl_gross)\` が absorption の formula だ。** Deficit が必要とするだけ PnL を取るか、winner が持っているだけ取るか、どちらか小さい方。これが Phase 4 を構造上 conservative にする。すべての haircut が \`remaining\` と \`pnl_gross\` の両方で bounded されているため、\`deficit_absorbed\` は入力 deficit やすべての PnL の合計を決して超えない。**\`min\` は 2 つの upper bound が同時に効くときの conservative な選択だ。**
-4. **\`pnl_paid = pnl_gross.saturating_sub(haircut)\` が record ごとの decomposition。** Decomposition 則: \`pnl_paid + haircut == pnl_gross\` (L4 の \`each_record_balances_pnl\` proptest で検証)。ここの \`saturating_sub\` は belt-and-suspenders だ。\`haircut <= pnl_gross\` が構造上保証されている (数行前の \`.min\` の適用から) ので、subtraction は実際には underflow しない。**正しさがすでに overflow なしを保証していても、defensive な習慣として saturating ops を使う。**
+4. **\`pnl_paid = pnl_gross.saturating_sub(haircut)\` が record ごとの decomposition。** Decomposition 則: \`pnl_paid + haircut == pnl_gross\` (レッスン4 の \`each_record_balances_pnl\` proptest で検証)。ここの \`saturating_sub\` は belt-and-suspenders だ。\`haircut <= pnl_gross\` が構造上保証されている (数行前の \`.min\` の適用から) ので、subtraction は実際には underflow しない。**正しさがすでに overflow なしを保証していても、defensive な習慣として saturating ops を使う。**
 5. **\`deficit_absorbed.saturating_add(haircut)\` が累積する。** これが haircut の running sum で、Phase 5 までに total absorbed と等しくなる。\`saturating_add\` は同じ defensive な習慣だ。ここで overflow は不可能だが (haircut は deficit で bounded、deficit は i64)、\`+\` ではなく \`saturating_add\` と書くのは、関数内で唯一の \`+\` になってしまうからだ。**1 つの関数内での saturating ops の一貫性が、規律を読者に明白にする。**
 6. **\`remaining.saturating_sub(haircut)\` がループ変数を decrement する。** Conservation invariant: 各 iteration 境界で \`(initial_deficit) == deficit_absorbed + remaining + sum_of_unprocessed_pnls_we_haven't_reached_yet\`。最後の iteration (または \`break\`) の後、3 番目の項はゼロになり、\`initial_deficit == deficit_absorbed + remaining\` だけが残る。**ループ本体が 2 つの accumulator を慎重に扱う副作用として、保存則の不変条件を保つ。**
 
@@ -1017,13 +1017,13 @@ fn adl_single_winner_fully_absorbs_small_deficit() {
 cargo test -p openhl-liquidation adl::tests::adl_
 \`\`\`
 
-期待: 5 つの新テストが pass。L1 の 4 つの score-eligibility テスト + 1 つの score-ordering テストと合わせて、\`adl.rs\` 内には合計 10 テスト。残りの 4 つの nuanced-absorption テストは L3 で、5 つの invariant proptest は L4 で追加する。
+期待: 5 つの新テストが pass。レッスン1 の 4 つの score-eligibility テスト + 1 つの score-ordering テストと合わせて、\`adl.rs\` 内には合計 10 テスト。残りの 4 つの nuanced-absorption テストは レッスン3 で、5 つの invariant proptest は レッスン4 で追加する。
 
 ## クロスリファレンス
 
-この \`execute_adl\` オーケストレーションは **openhl-liquidation L13 の \`scan\`** と構造的 shape を共有する。両者とも「各候補に対して何をするか decide し、結果を report に蓄積する」パイプラインだ。名指すべき違いは以下。
+この \`execute_adl\` オーケストレーションは **openhl-liquidation レッスン13 の \`scan\`** と構造的 shape を共有する。両者とも「各候補に対して何をするか decide し、結果を report に蓄積する」パイプラインだ。名指すべき違いは以下。
 
-| | \`scan\` (openhl-liquidation L13) | \`execute_adl\` (本レッスン L2) |
+| | \`scan\` (openhl-liquidation レッスン13) | \`execute_adl\` (本レッスン レッスン2) |
 |---|---|---|
 | Trigger | 毎ブロック (常に走る) | 条件付き (\`unfilled_deficit > 0\` のときだけ) |
 | Quota | なし (すべてのアカウントを処理) | \`deficit\` で bounded (early break) |
@@ -1031,9 +1031,9 @@ cargo test -p openhl-liquidation adl::tests::adl_
 | Sort | なし (挿入順) | \`(score desc, account_id asc)\` で |
 | アカウントごとの仕事 | \`LiquidationRecord\` を build | haircut decomposition 付き \`AdlRecord\` を build |
 | 「fully resolve できなかった」の出力フィールド | \`unfilled_deficit\` (ここで consume) | \`deficit_remaining\` (bridge で consume) |
-| 保存則 | \`sum(closed_pnls) - sum(deposits) = ...\` (L13 の per-scan) | \`deficit_absorbed + deficit_remaining == input_deficit\` (L4 proptest) |
+| 保存則 | \`sum(closed_pnls) - sum(deposits) = ...\` (レッスン13 の per-scan) | \`deficit_absorbed + deficit_remaining == input_deficit\` (レッスン4 proptest) |
 
-この 2 つの関数は構造的に sibling だ。同じ「各候補に対して decide、accumulate」パイプラインで、filter 述語、sort 規律、quota semantics だけが違う。**L13 を 1 度読めば L2 の構造がクリックする。L2 を読めば L13 の \`scan\` が「同じ shape、違う filter」として読める。**
+この 2 つの関数は構造的に sibling だ。同じ「各候補に対して decide、accumulate」パイプラインで、filter 述語、sort 規律、quota semantics だけが違う。**レッスン13 を 1 度読めば レッスン2 の構造がクリックする。レッスン2 を読めば レッスン13 の \`scan\` が「同じ shape、違う filter」として読める。**
 
 ## よくある質問
 
@@ -1061,9 +1061,9 @@ cargo test -p openhl-liquidation adl::tests::adl_
 
 3 つの帳簿変更だ。各 record について、(a) \`pnl_paid\` (haircut 調整済み payout) でトレーダーの collateral を credit、(b) ポジションサイズをゼロに set (force-close)、(c) アクティブポジション集合からアカウントを remove。Record 上の \`close_order\` フィールドは CLOB に submit *されない*。telemetry と、\`LiquidationRecord\` との shape parity のために (bridge が両層に同じ record 処理コードを使えるように) 存在するだけだ。**ADL は帳簿変更であって、オーダーブック執行ではない。\`close_order\` はコメントであって、コマンドではない。**
 
-## 次のレッスン (L3) — 6 つの nuanced absorption テスト
+## 次のレッスン (レッスン3) — 6 つの nuanced absorption テスト
 
-L3 は \`execute_adl\` が取り得る nuanced absorption パスを exercise する 6 つの unit test を追加する:
+レッスン3 は \`execute_adl\` が取り得る nuanced absorption パスを exercise する 6 つの unit test を追加する:
 - \`adl_single_winner_partial_haircut_at_full_pnl\` — haircut == pnl_gross → pnl_paid = 0
 - \`adl_single_winner_exhausted_with_remaining_deficit\` — pnl_gross < deficit、単一 haircut、remainder propagate
 - \`adl_multiple_winners_in_score_order\` — 複数入力に対して rank order を証明
@@ -1071,7 +1071,7 @@ L3 は \`execute_adl\` が取り得る nuanced absorption パスを exercise す
 - \`adl_tiebreaker_by_account_id_ascending\` — equal score が account_id で deterministic に resolve
 - \`adl_does_not_touch_losers_or_flats\` — eligibility filter が mixed population でも honor される
 
-L3 の後、unit-test マトリクスは完成する (L1+L2+L3 で 16 テスト)。L4 で 5 つの proptest invariant と Stage 10 四部作のレトロスペクティブを追加し、コースを 5 レッスン / 4 モジュール / SHA pin \`d66b44a\` で閉じる。
+レッスン3 の後、unit-test マトリクスは完成する (レッスン1+レッスン2+レッスン3 で 16 テスト)。レッスン4 で 5 つの proptest invariant と Liquidation〜ADL四部作の振り返りを追加し、コースを 5 レッスン / 4 モジュール / SHA pin \`d66b44a\` で閉じる。
 `,
                 },
                 {
@@ -1087,8 +1087,8 @@ L3 の後、unit-test マトリクスは完成する (L1+L2+L3 で 16 テスト)
 
 このレッスンで掴む概念:
 
-- **L3 は \`execute_adl\` の unit-test capstone だ — マトリクス（Matrix）を span する 6 つのテスト。** L2 で 5 フェーズのパイプライン + 5 つの degenerate-path テスト（zero/negative deficit、no candidates、no profitable、single happy-path winner）を ship した。L3 は *interesting* な中域を埋める。単一 winner が完全に haircut されるケース、複数 winner が deficit を share するケース、tie が break されるケース、loser と flat が winner と共存するケース。各テストは 2 軸マトリクス \`{single winner, multiple winners} × {full absorb, partial absorb, mixed eligibility}\` の 1 セルだ。L3 完走後、\`execute_adl\` を読めば任意の入力に対してどのテストがカバーしているか分かる。**1 つの関数に 6 テストは過剰ではない。マトリクスのサイズだ。**
-- **各テストは、コメントに math が書かれた hand-computed worked example だ。** openhl-liquidation L13 の capstone テストと同じ \`math-walk in comments\` 規律。コメントが期待出力を step-by-step で導出し、デバッガが導出する必要をなくす。\`adl_multiple_winners_in_score_order\` が「B のスコアは 26,666 vs A の 10,000」と言うとき、その数字は \`(pnl_pct_bps × leverage_bps) / MARGIN_SCALE\` から計算され、読者のためにテストコメントに再現されている。L4 の proptest が、ここで特定の入力に対して証明することを普遍化（Generalization）する。ここでの入力は math を明白にする *ために* 選ばれている。**Math-walk が各テストを 5 行の worked example に変える。Black-box assertion ではなく。**
+- **レッスン3 は \`execute_adl\` の unit-test capstone だ — マトリクス（Matrix）を span する 6 つのテスト。** レッスン2 で 5 フェーズのパイプライン + 5 つの degenerate-path テスト（zero/negative deficit、no candidates、no profitable、single happy-path winner）を ship した。レッスン3 は *interesting* な中域を埋める。単一 winner が完全に haircut されるケース、複数 winner が deficit を share するケース、tie が break されるケース、loser と flat が winner と共存するケース。各テストは 2 軸マトリクス \`{single winner, multiple winners} × {full absorb, partial absorb, mixed eligibility}\` の 1 セルだ。レッスン3 完走後、\`execute_adl\` を読めば任意の入力に対してどのテストがカバーしているか分かる。**1 つの関数に 6 テストは過剰ではない。マトリクスのサイズだ。**
+- **各テストは、コメントに math が書かれた hand-computed worked example だ。** openhl-liquidation レッスン13 の capstone テストと同じ \`math-walk in comments\` 規律。コメントが期待出力を step-by-step で導出し、デバッガが導出する必要をなくす。\`adl_multiple_winners_in_score_order\` が「B のスコアは 26,666 vs A の 10,000」と言うとき、その数字は \`(pnl_pct_bps × leverage_bps) / MARGIN_SCALE\` から計算され、読者のためにテストコメントに再現されている。レッスン4 の proptest が、ここで特定の入力に対して証明することを普遍化（Generalization）する。ここでの入力は math を明白にする *ために* 選ばれている。**Math-walk が各テストを 5 行の worked example に変える。Black-box assertion ではなく。**
 - **6 つのテストは simple から compound へと進む。** Test 1-2 は Phase 4 の single-iteration regime 内に留まる（1 winner）。Test 3-4 は Phase 3 のソート + Phase 4 の multi-iteration ループを導入する。Test 5 は tiebreaker を isolate する（Phase 3 の \`then_with\`）。Test 6 は Phase 2 の \`filter_map\` が loser と flat を正しく drop することを証明する — *winner が同じ入力にいるときでも*。Eligibility filter は mixed population で動かねばならない。Pure ones だけでなく。**Arc: single winner → multi-winner → ソート規律 → tiebreaker → integration。**
 - **テスト名は \`adl_<scenario>_<expected_outcome>\` の命名規約に従う。** \`adl_single_winner_partial_haircut_at_full_pnl\`、\`adl_drains_first_winner_then_partially_second\`、\`adl_tiebreaker_by_account_id_ascending\` — 各テスト名がそのテストが証明する仮説として読める。Production codebase はこの規律を使う。\`cargo test --list\`（または \`cargo test -- --quiet\`）が関数の挙動の *仕様* を生成するためであって、arbitrary な名前のリストを生成するためではない。**テスト名が文になるとき、テストはドキュメントになる。**
 
@@ -1098,26 +1098,26 @@ L3 の後、unit-test マトリクスは完成する (L1+L2+L3 で 16 テスト)
 cargo test -p openhl-liquidation adl::tests::adl_
 \`\`\`
 
-…で 16 テスト pass する: L1 の 5 score-eligibility/ordering テスト + L2 の 5 pipeline-degenerate テスト + L3 の 6 nuanced-absorption テスト。Full な ADL テストマトリクスが *特定の* 入力に対してカバーされる。L4 でこの specific cases をランダム入力へと普遍化する 5 つの proptest を追加する。
+…で 16 テスト pass する: レッスン1 の 5 score-eligibility/ordering テスト + レッスン2 の 5 pipeline-degenerate テスト + レッスン3 の 6 nuanced-absorption テスト。Full な ADL テストマトリクスが *特定の* 入力に対してカバーされる。レッスン4 でこの specific cases をランダム入力へと普遍化する 5 つの proptest を追加する。
 
 具体的な変更:
 
-- **\`crates/liquidation/src/adl.rs\`** — 既存の \`#[cfg(test)] mod tests\` ブロックに 6 つのテストを append。Production コードの変更なし。L2 の実装を richer な入力に対して証明する。
+- **\`crates/liquidation/src/adl.rs\`** — 既存の \`#[cfg(test)] mod tests\` ブロックに 6 つのテストを append。Production コードの変更なし。レッスン2 の実装を richer な入力に対して証明する。
 
 6 つのテスト、新規テストコード ~80 行。本レッスンは各テストを worked example として walk する。
 
 ## おさらい
 
-L2 の後はこうなっている:
+レッスン2 の後はこうなっている:
 - \`execute_adl(candidates, mark, deficit) -> AdlReport\` — 5 フェーズのパイプラインが ship 済み（defensive guard、score+filter、tiebreaker 付き stable-sort、保存則 accounting 付き haircut loop、finalize）。
-- \`adl.rs\` 内に今までで 10 テスト: L1 の 5（score eligibility 4 + score ordering 1）、L2 の 5（degenerate path 4 + single-winner happy path 1）。
-- 保存則 \`deficit_absorbed + deficit_remaining == input_deficit\` は loop body によって *構造的に* preserve されている。まだ *普遍的に* 証明されてはいない（それは L4）。
+- \`adl.rs\` 内に今までで 10 テスト: レッスン1 の 5（score eligibility 4 + score ordering 1）、レッスン2 の 5（degenerate path 4 + single-winner happy path 1）。
+- 保存則 \`deficit_absorbed + deficit_remaining == input_deficit\` は loop body によって *構造的に* preserve されている。まだ *普遍的に* 証明されてはいない（それは レッスン4）。
 
-L3 は 5 フェーズのパイプラインを取り、load-bearing パスを exercise する: full-haircut decomposition、multi-winner ordering、tiebreaker 決定論性、mixed-eligibility filtering。同じ \`execute_adl\`、richer な入力。
+レッスン3 は 5 フェーズのパイプラインを取り、load-bearing パスを exercise する: full-haircut decomposition、multi-winner ordering、tiebreaker 決定論性、mixed-eligibility filtering。同じ \`execute_adl\`、richer な入力。
 
 ## 計画
 
-6 つのテスト、それぞれ L2 のテストの下に \`#[cfg(test)] mod tests\` ブロックに append:
+6 つのテスト、それぞれ レッスン2 のテストの下に \`#[cfg(test)] mod tests\` ブロックに append:
 
 1. **\`adl_single_winner_partial_haircut_at_full_pnl\`** — Phase 4 edge case: haircut == pnl_gross → pnl_paid = 0
 2. **\`adl_single_winner_exhausted_with_remaining_deficit\`** — Phase 4 edge case: pnl_gross < deficit → record absorbed、remainder propagate
@@ -1128,7 +1128,7 @@ L3 は 5 フェーズのパイプラインを取り、load-bearing パスを exe
 
 > 🛑 **予測。** 下のテストを読む前に: \`execute_adl(candidates=[A_pnl_100, B_pnl_100], deficit=80)\` が走り、A が score 10,000 を、B が score 26,666 を持つとき、report は *ちょうど* \`[B with haircut 80]\` を持ち、A は untouched だ。なぜ A の record が report に zero-haircut として含まれず、record 自体が無いのか?
 
-(答え: **Phase 4 の \`if remaining <= 0 break;\` が、A が処理される *前* に loop を exit するからだ。** B が 80 で haircut された後、\`remaining\` は 0 になる。Loop が break する。A は loop body に入らない。だから A に対する record は作られない。これが \`break\` の構造的 payoff だ（L2 の predict callout を recall）。Quota 束縛 loop は *実際に* haircut を受けたアカウントに対する record のみを生成する。Zero-haircut padding ではない。Report の \`records.len()\` は意味あるカウントになる: 「この ADL pass でいくつのアカウントが force-close されたか」。**\`break\` が report の record count を意味あるものに保つ。**)
+(答え: **Phase 4 の \`if remaining <= 0 break;\` が、A が処理される *前* に loop を exit するからだ。** B が 80 で haircut された後、\`remaining\` は 0 になる。Loop が break する。A は loop body に入らない。だから A に対する record は作られない。これが \`break\` の構造的 payoff だ（レッスン2 の predict callout を recall）。Quota 束縛 loop は *実際に* haircut を受けたアカウントに対する record のみを生成する。Zero-haircut padding ではない。Report の \`records.len()\` は意味あるカウントになる: 「この ADL pass でいくつのアカウントが force-close されたか」。**\`break\` が report の record count を意味あるものに保つ。**)
 
 ## 6 つのテスト
 
@@ -1153,7 +1153,7 @@ fn adl_single_winner_partial_haircut_at_full_pnl() {
 
 1. **\`haircut == pnl_gross\` が、winner がすべてを支払う boundary case だ。** \`min(remaining=100, pnl_gross=100) = 100\`。Decomposition \`pnl_paid = pnl_gross - haircut = 0\` が成立するが、トレーダーは何も受け取らない。システムの最後の防衛線だった。**Winner の full PnL が ADL に食われる case。トレーダーにとっては倫理的に最悪の case、構造的にはただ \`min\` が仕事をしているだけ。**
 2. **\`deficit_remaining = 0\`、winner を drain したにもかかわらず。** Deficit はちょうど covered だから、何も残らない。Test 2 と比較するとよい。そちらでは deficit が winner の PnL を *超え*、\`deficit_remaining > 0\` で chain は unresolved trouble に入る。
-3. **\`report.records.len()\` への assertion なし。** L2 のテストは record count を explicit に assert した。ここでは単に \`records[0]\` を index する。両 style とも valid。このテストは L2-tested invariant「ちょうど 1 つの winner がちょうど 1 つの record を生む」を信頼する。**先行テストが既に証明したことを over-assert しない。**
+3. **\`report.records.len()\` への assertion なし。** レッスン2 のテストは record count を explicit に assert した。ここでは単に \`records[0]\` を index する。両 style とも valid。このテストは レッスン2-tested invariant「ちょうど 1 つの winner がちょうど 1 つの record を生む」を信頼する。**先行テストが既に証明したことを over-assert しない。**
 
 ### Test 2: Deficit が winner の PnL を超える — remainder が propagate
 
@@ -1172,7 +1172,7 @@ fn adl_single_winner_exhausted_with_remaining_deficit() {
 押さえる点が 3 つ。
 
 1. **\`min(250, 100) = 100\` — winner の PnL が haircut を cap する。Deficit ではない。** Phase 4 の \`haircut = remaining.min(pnl_gross)\` は「deficit が必要とするだけ取るか、winner が持っているだけ取るか、小さい方」と読める。ここでは winner が小さい。だから \`haircut = pnl_gross = 100\`。**2 つの upper bound の \`min\`。両方適用、小さい方が勝つ。**
-2. **\`deficit_absorbed + deficit_remaining == 250\` — 保存則が成立する。** \`100 + 150 == 250\`。L2 で setup し L4 の proptest で普遍化する構造的保存則だ。L3 の各テストが implicit に検証し、L4 の proptest が *普遍的に* 検証する。**保存則は L3 テストでは implicit、L4 proptest では explicit。**
+2. **\`deficit_absorbed + deficit_remaining == 250\` — 保存則が成立する。** \`100 + 150 == 250\`。レッスン2 で setup し レッスン4 の proptest で普遍化する構造的保存則だ。レッスン3 の各テストが implicit に検証し、レッスン4 の proptest が *普遍的に* 検証する。**保存則は レッスン3 テストでは implicit、レッスン4 proptest では explicit。**
 3. **\`deficit_remaining = 150\` が bridge へのシグナルだ: 「これを cover できなかった」。** Bridge が \`deficit_remaining > 0\` を読み、何をするか decide する（chain を halt、protocol loss として accept、alert を raise）。関数の仕事は reporting で終わる。Policy は bridge の責任だ。**\`execute_adl\` は deficit 状態を report する。Bridge が policy を decide する。**
 
 ### Test 3: Multi-winner ranking — より高い leverage が勝つ
@@ -1181,7 +1181,7 @@ fn adl_single_winner_exhausted_with_remaining_deficit() {
 #[test]
 fn adl_multiple_winners_in_score_order() {
     // Two long winners; the higher-leverage one ranks first.
-    // A: coll 100, pnl 100 → score 10_000 (per L1's score derivation)
+    // A: coll 100, pnl 100 → score 10_000 (per レッスン1's score derivation)
     // B: coll 50,  pnl 100 → score 26_666
     // deficit = 80 → B haircut = 80, pnl_paid = 20; A untouched.
     let candidates = vec![snapshot(1, 1, 100, 100), snapshot(2, 1, 100, 50)];
@@ -1226,7 +1226,7 @@ fn adl_drains_first_winner_then_partially_second() {
 
 1. **Test 3 と同じ入力（A と B）、大きい deficit (150)。** これが *quota exhaustion* 挙動を isolate する。Test 3 は deficit = 80（B 単独より小さい）→ B 後に loop exit。Test 4 は deficit = 150（B 単独より大きい）→ loop が A に進む。**Test 3 と 4 のペアが deficit 軸を walk する: 1 winner 未満、1 winner 超。**
 2. **B が完全に haircut（100）、それから A が residual（50）を得る。** Phase 4 iteration: rank #1 = B、\`haircut = min(150, 100) = 100\`、\`remaining = 50\`。Rank #2 = A、\`haircut = min(50, 100) = 50\`、\`remaining = 0\`。Loop が次 iteration の \`break\` で naturally exit する（rank #3 もないが）。**Quota が winner 1 を完全に exhaust し、それから winner 2 に partial に噛みつく。**
-3. **\`records[0]\` が B、\`records[1]\` が A。Score 降順でソート済み。** L2 の Phase 3 ソートが仕事をしている。テストが順序を explicit に assert する。Phase 3 の \`b.1.cmp(&a.1)\` が \`a.1.cmp(&b.1)\` に swap されたら、このテストが loudly 失敗する。**テスト内の順序 assertion は、将来の refactor からソート規律を守る方法だ。**
+3. **\`records[0]\` が B、\`records[1]\` が A。Score 降順でソート済み。** レッスン2 の Phase 3 ソートが仕事をしている。テストが順序を explicit に assert する。Phase 3 の \`b.1.cmp(&a.1)\` が \`a.1.cmp(&b.1)\` に swap されたら、このテストが loudly 失敗する。**テスト内の順序 assertion は、将来の refactor からソート規律を守る方法だ。**
 4. **\`deficit_absorbed = 150\` かつ \`deficit_remaining = 0\`。** 保存則: \`100 + 50 + 0 == 150\`。Deficit のすべての wei が accounted for だ。**動作中の保存則。テストが 2-iteration 入力で loop-body invariant を verify する。**
 5. **A の \`pnl_paid = 50\` — A は PnL の半分を keep する。** これが math の背後にある人間ストーリーだ。高 leverage トレーダー（B）はすべてを失い、低 leverage トレーダー（A）は半分を失う。System が A を B より protect するのは、\`pnl_pct × leverage\` でランクすると less-leveraged winner に対して conservative だからだ。**Score 規律は arbitrary ではない。最も leveraged な winner に最初に burden を allocate する。**
 
@@ -1272,8 +1272,8 @@ fn adl_does_not_touch_losers_or_flats() {
 
 押さえる点が 3 つ。
 
-1. **Acct 1 と acct 2 は両方とも適格性チェックを通過するが、acct 2 は touch されない — 別の理由で。** すべての候補は同じ mark（200）で evaluate される。Acct 1 (long 1 @ entry 100, mark 200) と acct 2 (long 1 @ entry 100, mark 200) は両方とも PnL = +100 で profitable だ。L1 の \`adl_score\` は collateral の高さでは \`None\` を返さないので、両方とも Phase 2 を通過して \`ranked\` に入る。だが acct 2 は collateral が高い (1000 vs acct 1 の 50) → leverage が低い → score が低い → rank #2。\`deficit = 10\` は top-ranked の acct 1 への haircut だけで完全に exhaust される → Phase 4 の \`break\` で acct 2 は touch されないまま loop が終わる。**Acct 3 は Phase 2 で filter out された (eligibility)。Acct 2 は Phase 4 で touch されないまま loop が終わった (quota)。1 つのテストが 2 つの異なる防衛 layer を同時に証明する。** コメントの \`// loser?\` は当初の設計意図の名残 (surprise) を honest に残したものだ。
-2. **Acct 3 は flat（position_size = 0）→ \`adl_score\` は \`None\` を返す（L1 の first eligibility check）。** Phase 2 の \`filter_map\` が \`None\` を drop → acct 3 は \`ranked\` に入らない → record なし。**L1 の eligibility テストは \`adl_score\` を isolation の入力で証明する。このテストは、filter が full pipeline と統合することを証明する。**
+1. **Acct 1 と acct 2 は両方とも適格性チェックを通過するが、acct 2 は touch されない — 別の理由で。** すべての候補は同じ mark（200）で evaluate される。Acct 1 (long 1 @ entry 100, mark 200) と acct 2 (long 1 @ entry 100, mark 200) は両方とも PnL = +100 で profitable だ。レッスン1 の \`adl_score\` は collateral の高さでは \`None\` を返さないので、両方とも Phase 2 を通過して \`ranked\` に入る。だが acct 2 は collateral が高い (1000 vs acct 1 の 50) → leverage が低い → score が低い → rank #2。\`deficit = 10\` は top-ranked の acct 1 への haircut だけで完全に exhaust される → Phase 4 の \`break\` で acct 2 は touch されないまま loop が終わる。**Acct 3 は Phase 2 で filter out された (eligibility)。Acct 2 は Phase 4 で touch されないまま loop が終わった (quota)。1 つのテストが 2 つの異なる防衛 layer を同時に証明する。** コメントの \`// loser?\` は当初の設計意図の名残 (surprise) を honest に残したものだ。
+2. **Acct 3 は flat（position_size = 0）→ \`adl_score\` は \`None\` を返す（レッスン1 の first eligibility check）。** Phase 2 の \`filter_map\` が \`None\` を drop → acct 3 は \`ranked\` に入らない → record なし。**レッスン1 の eligibility テストは \`adl_score\` を isolation の入力で証明する。このテストは、filter が full pipeline と統合することを証明する。**
 3. **\`deficit = 10\` は意図的なテスト設計の選択 — acct 1 の後で Phase 4 の \`break\` を trigger するのに十分小さい。** 大きい deficit なら loop が acct 2 に続き、このテストが証明したいことを obscure しただろう。Deficit のサイズ自体がテスト設計の一部だ — 「Phase 2 での filter + Phase 4 の early-break」の composition を exercise するように deficit を選んでいる。**テスト入力は単なるデータではない。Proof を visible にするように選ばれている。**
 
 ## テストの進展を俯瞰する
@@ -1307,7 +1307,7 @@ fn adl_does_not_touch_losers_or_flats() {
 | 5. \`adl_tiebreaker_by_account_id_ascending\` | Phase 3 (\`then_with\`) | Score tie 下の決定論性 — バリデータ間で同じ入力が同じ出力を produce |
 | 6. \`adl_does_not_touch_losers_or_flats\` | Phase 2 (\`filter_map\`) + integration | Eligibility filter が mixed population で full pipeline と統合 |
 
-6 つのテストが集合的に、L2 のパイプラインが load-bearing な入力ケースで正しいことを証明する。L4 の 5 つの proptest がこれを普遍化する: 同じ保存則、同じ decomposition、同じ決定論性を、ランダム入力に対して。
+6 つのテストが集合的に、レッスン2 のパイプラインが load-bearing な入力ケースで正しいことを証明する。レッスン4 の 5 つの proptest がこれを普遍化する: 同じ保存則、同じ decomposition、同じ決定論性を、ランダム入力に対して。
 
 ## 走らせる
 
@@ -1315,13 +1315,13 @@ fn adl_does_not_touch_losers_or_flats() {
 cargo test -p openhl-liquidation adl::tests::adl_
 \`\`\`
 
-期待: 16 テスト pass（L1 の 5 + L2 の 5 + L3 の 6）。Full な ADL unit-test マトリクスがカバーされる。
+期待: 16 テスト pass（レッスン1 の 5 + レッスン2 の 5 + レッスン3 の 6）。Full な ADL unit-test マトリクスがカバーされる。
 
 ## よくある質問
 
 **Q1: 1 つの関数に 6 テスト — 多すぎないか?**
 
-多くない。これだけの surface area を持つ関数には。\`execute_adl\` は 5 phase × 複数の入力次元（deficit size、candidate count、score distribution、eligibility mix）を持つ。マトリクスは 6 よりずっと大きい。L1+L2+L3 を合わせて 16 テスト、「最小カバレッジ」に近く「過剰」ではない。L4 の proptest が specific case の証明することを *generalize* する。Hand-picked 入力でまず verify していないものは generalize できない。**Specific test が関数の shape を証明する。Proptest が関数の universality を証明する。両 layer とも必要だ。**
+多くない。これだけの surface area を持つ関数には。\`execute_adl\` は 5 phase × 複数の入力次元（deficit size、candidate count、score distribution、eligibility mix）を持つ。マトリクスは 6 よりずっと大きい。レッスン1+レッスン2+レッスン3 を合わせて 16 テスト、「最小カバレッジ」に近く「過剰」ではない。レッスン4 の proptest が specific case の証明することを *generalize* する。Hand-picked 入力でまず verify していないものは generalize できない。**Specific test が関数の shape を証明する。Proptest が関数の universality を証明する。両 layer とも必要だ。**
 
 **Q2: なぜ単に assert するのではなく、期待値を hand-compute してコメントに書くのか?**
 
@@ -1339,39 +1339,39 @@ cargo test -p openhl-liquidation adl::tests::adl_
 
 テストは正しい。コメントが honestly flagged されているだけだ。Acct 2 は mark = 200 で実際は loser *ではない*（PnL = +100、acct 1 と同じ）。Acct 2 入力は earlier draft で loser として意図されていたが、コメントが完全に update されなかった。Test 6 #1 で詳述したとおり、テストは依然 claim していること（acct 3 が Phase 2 で filter、acct 2 が Phase 4 で untouched）を証明するが、inline \`// loser?\` コメントが drafting 履歴を betray する。**Honest な about-the-test コメントは有用だ。「このテストは育った。粗い縁がここにある」を signal する。Airbrush し out しない。**
 
-## 次のレッスン (L4) — Capstone — 5 invariant proptest + Stage 10 四部作のレトロスペクティブ
+## 次のレッスン (レッスン4) — Capstone — 5 invariant proptest + Liquidation〜ADL四部作の振り返り
 
-L4 が ADL コース（および Stage 10 四部作）を、5 つの invariant proptest をランダム入力に対して走らせることで閉じる:
+レッスン4 が ADL コース（および Liquidation〜ADL四部作）を、5 つの invariant proptest をランダム入力に対して走らせることで閉じる:
 
-1. \`conservation_absorbed_plus_remaining_equals_deficit\` — L3 Test 2 & 4 を普遍化
-2. \`each_record_balances_pnl\` — L3 Test 1, 2 & 4 を普遍化 (decomposition law)
+1. \`conservation_absorbed_plus_remaining_equals_deficit\` — レッスン3 Test 2 & 4 を普遍化
+2. \`each_record_balances_pnl\` — レッスン3 Test 1, 2 & 4 を普遍化 (decomposition law)
 3. \`total_haircut_equals_deficit_absorbed\` — per-record/aggregate accounting consistency を普遍化
-4. \`execute_adl_is_deterministic\` — L3 Test 5 の tiebreaker 規律を「同じ入力 → 同じ出力、常に」として普遍化
-5. \`records_in_rank_order\` — L3 Test 3 & 4 の ordering 規律を普遍化
+4. \`execute_adl_is_deterministic\` — レッスン3 Test 5 の tiebreaker 規律を「同じ入力 → 同じ出力、常に」として普遍化
+5. \`records_in_rank_order\` — レッスン3 Test 3 & 4 の ordering 規律を普遍化
 
-加えて Stage 10 のレトロスペクティブ: Stage 10a（margin classification） + 10b（insurance fund） + 10c（scanner） + 10d（ADL）が Layer 1 → Layer 2 → Layer 3 のセーフティネット・カスケードに compose する仕組み。4 stage、4 layer の bookkeeping、1 つの byte-for-byte-reproducible なシステム。
+加えて Liquidation〜ADL のレトロスペクティブ: Liquidation参照実装（計算パート）（margin classification） + 保険基金パート + スキャナパート + ADLパートが Layer 1 → Layer 2 → Layer 3 のセーフティネット・カスケードに compose する仕組み。4 stage、4 layer の bookkeeping、1 つの バイト単位で-reproducible なシステム。
 
-L4 後、ADL コースは complete: 5 レッスン 2 モジュール、16 unit test + 5 proptest、openhl Stage 10d \`d66b44a\` に対して byte-for-byte。DIY Perp シリーズが第 6 弾を閉じる。
+レッスン4 後、ADL コースは complete: 5 レッスン 2 モジュール、16 unit test + 5 proptest、openhl ADL参照実装パート \`d66b44a\` に対して バイト単位で。DIY Perp シリーズが第 6 弾を閉じる。
 `,
                 },
                 {
-                  title: "レッスン 4 — Capstone — 5 つの invariant proptest + Stage 10 四部作のレトロスペクティブ",
+                  title: "レッスン 4 — Capstone — 5 つの invariant proptest + Liquidation〜ADL四部作の振り返り",
                   slug: "openhl-adl-capstone-ja",
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 45,
                   xpReward: 90,
-                  content: `# レッスン 4 — Capstone — 5 つの invariant proptest + Stage 10 四部作のレトロスペクティブ
+                  content: `# レッスン 4 — Capstone — 5 つの invariant proptest + Liquidation〜ADL四部作の振り返り
 
 ## ゴール
 
 このレッスンで掴む概念:
 
-- **L4 は 2 つを同時に閉じる。ADL コースと Stage 10 四部作だ。** Stage 10a（margin classification、pure compute）+ 10b（insurance fund、stateful absorption）+ 10c（scanner、orchestration）+ 10d（ADL、off-orderbook fallback）が full なセーフティネット・カスケード（Safety-net cascade）を構成する。L4 後、ストレス下の任意のアカウント状態遷移を指差して、(a) どの layer が扱ったか、(b) どの保存則が preserve したか、(c) どの proptest が普遍的に証明するか、を名指せるようになる。**4 つの stage、4 つの layer、1 つの規律。**
-- **5 つの invariant proptest が、L2+L3 が特定入力で証明したことを普遍化する。** L2 の 5 degenerate-path テストと L3 の 6 nuanced-absorption テストは、hand-picked 入力で \`execute_adl\` を証明した。L4 の 5 proptest は同じ properties を *ランダム* 入力で証明する。(1) \`conservation_absorbed_plus_remaining_equals_deficit\` — load-bearing な保存則。(2) \`each_record_balances_pnl\` — per-record decomposition。(3) \`total_haircut_equals_deficit_absorbed\` — per-record と aggregate accounting の consistency。(4) \`execute_adl_is_deterministic\` — 同じ入力 → 同じ出力、常に。(5) \`records_in_rank_order\` — 任意の入力に対してソート規律が成立する。**Specific tests が関数の shape を証明する。Proptest が関数の普遍性を証明する。**
-- **Proptest の input strategy が「何が valid 入力か」の spec だ。** \`collaterals in proptest::collection::vec(1_i64..1_000_000, 0..15)\` は「0 から 15 の候補アカウント、各 collateral は 1 から 1,000,000」と言う。\`mark in 1_u64..1_000\` は「mark 価格は 1 から 1000 の範囲」。\`deficit in 0_i64..1_000_000\` は「deficit は 0 から 1M」。これらの range が *意味ある operating regime* を定義する。それ以外で proptest が入力を生成することはない（overflow/underflow edge case は L2 で導入した saturating ops が扱う。proptest の責任ではない）。**Input strategy は単なる「任意の入力」ではない。「operating regime 内の任意の入力」だ。**
-- **L4 は L5 型の \`prop_assume!\` 事後リジェクトより、Strategy 側の事前絞り込みを優先する。** このレッスンの 5 つの property は「分岐に十分な密度で当てる」ことが目的なので、生成器レンジを最初から適切に寄せるほうが reject を減らし、\`TooManyAssumptions\` リスクを構造的に避けられる。**数理前提を明示したいときは \`prop_assume!\`、発火密度を作りたいときは Strategy 設計で先に寄せる。**
-- **Stage 10 レトロスペクティブはコース全体を跨ぐ thesis statement だ。** 4 つの stage が単一の per-block orchestration に compose する。scanner が classify し、insurance fund が absorb し、ADL が fallback し、各層の failure mode が *機械的に証明された構造的 invariant で bound されている*。これが rethlab thesis を 1 つの production cascade に適用したものだ。規律は layer 境界を超えて転写される。保存則が layer 境界を気にしないからだ。**保存則は付け加えるプロパティではない。Layer 1 から Layer 3 まで preserve する規律だ。**
+- **レッスン4 は 2 つを同時に閉じる。ADL コースと Liquidation〜ADL四部作だ。** Liquidation参照実装（計算パート）（margin classification、pure compute） + 保険基金パート（stateful absorption） + スキャナパート（orchestration） + ADLパート（off-orderbook fallback）が full なセーフティネット・カスケード（Safety-net cascade）を構成する。レッスン4 後、ストレス下の任意のアカウント状態遷移を指差して、(a) どの layer が扱ったか、(b) どの保存則が preserve したか、(c) どの proptest が普遍的に証明するか、を名指せるようになる。**4 つの stage、4 つの layer、1 つの規律。**
+- **5 つの invariant proptest が、レッスン2+レッスン3 が特定入力で証明したことを普遍化する。** レッスン2 の 5 degenerate-path テストと レッスン3 の 6 nuanced-absorption テストは、hand-picked 入力で \`execute_adl\` を証明した。レッスン4 の 5 proptest は同じ properties を *ランダム* 入力で証明する。(1) \`conservation_absorbed_plus_remaining_equals_deficit\` — load-bearing な保存則。(2) \`each_record_balances_pnl\` — per-record decomposition。(3) \`total_haircut_equals_deficit_absorbed\` — per-record と aggregate accounting の consistency。(4) \`execute_adl_is_deterministic\` — 同じ入力 → 同じ出力、常に。(5) \`records_in_rank_order\` — 任意の入力に対してソート規律が成立する。**Specific tests が関数の shape を証明する。Proptest が関数の普遍性を証明する。**
+- **Proptest の input strategy が「何が valid 入力か」の spec だ。** \`collaterals in proptest::collection::vec(1_i64..1_000_000, 0..15)\` は「0 から 15 の候補アカウント、各 collateral は 1 から 1,000,000」と言う。\`mark in 1_u64..1_000\` は「mark 価格は 1 から 1000 の範囲」。\`deficit in 0_i64..1_000_000\` は「deficit は 0 から 1M」。これらの range が *意味ある operating regime* を定義する。それ以外で proptest が入力を生成することはない（overflow/underflow edge case は レッスン2 で導入した saturating ops が扱う。proptest の責任ではない）。**Input strategy は単なる「任意の入力」ではない。「operating regime 内の任意の入力」だ。**
+- **レッスン4 は レッスン5 型の \`prop_assume!\` 事後リジェクトより、Strategy 側の事前絞り込みを優先する。** このレッスンの 5 つの property は「分岐に十分な密度で当てる」ことが目的なので、生成器レンジを最初から適切に寄せるほうが reject を減らし、\`TooManyAssumptions\` リスクを構造的に避けられる。**数理前提を明示したいときは \`prop_assume!\`、発火密度を作りたいときは Strategy 設計で先に寄せる。**
+- **Liquidation〜ADLの振り返りはコース全体を跨ぐ thesis statement だ。** 4 つの stage が単一の per-block orchestration に compose する。scanner が classify し、insurance fund が absorb し、ADL が fallback し、各層の failure mode が *機械的に証明された構造的 invariant で bound されている*。これが rethlab thesis を 1 つの production cascade に適用したものだ。規律は layer 境界を超えて転写される。保存則が layer 境界を気にしないからだ。**保存則は付け加えるプロパティではない。Layer 1 から Layer 3 まで preserve する規律だ。**
 
 確認:
 
@@ -1379,22 +1379,22 @@ L4 後、ADL コースは complete: 5 レッスン 2 モジュール、16 unit t
 cargo test -p openhl-liquidation adl::tests
 \`\`\`
 
-…で **21 テスト pass** する（L1: 5 score-eligibility/ordering + L2: 5 degenerate + L3: 6 nuanced + L4: 5 proptest）。Full な ADL surface（score eligibility、pipeline correctness、保存則、decomposition、決定論性、ordering）が specific 入力と random 入力の両方に対して証明される。
+…で **21 テスト pass** する（レッスン1: 5 score-eligibility/ordering + レッスン2: 5 degenerate + レッスン3: 6 nuanced + レッスン4: 5 proptest）。Full な ADL surface（score eligibility、pipeline correctness、保存則、decomposition、決定論性、ordering）が specific 入力と random 入力の両方に対して証明される。
 
 具体的な変更:
 
 - **\`crates/liquidation/src/adl.rs\`** — \`#[cfg(test)] mod tests\` モジュールの末尾に、5 つの invariant を含む \`proptest! { ... }\` ブロックを append。
 
-5 つの proptest、新規テストコード ~60 行。加えて Stage 10 四部作レトロスペクティブが cascade アーキテクチャを walk する。コードなし、コースを閉じる architectural framing だけだ。
+5 つの proptest、新規テストコード ~60 行。加えて Liquidation〜ADL四部作レトロスペクティブが cascade アーキテクチャを walk する。コードなし、コースを閉じる architectural framing だけだ。
 
 ## おさらい
 
-L3 の後はこうなっている。
-- \`execute_adl(candidates, mark, deficit) -> AdlReport\` は ship 済み（L2）、16 specific 入力に対して tested（L1 の 5 + L2 の 5 + L3 の 6 = 16 unit test）。
+レッスン3 の後はこうなっている。
+- \`execute_adl(candidates, mark, deficit) -> AdlReport\` は ship 済み（レッスン2）、16 specific 入力に対して tested（レッスン1 の 5 + レッスン2 の 5 + レッスン3 の 6 = 16 unit test）。
 - 5 フェーズのパイプライン（early-return + filter_map + sort_by + haircut loop + finalize）は hand-picked 入力すべてに対して構造的に正しい。
-- 保存則 \`deficit_absorbed + deficit_remaining == input_deficit\` は L3 各テストで *implicit* に検証されている（per-input）。だがまだ *普遍的* ではない（for-all-inputs ではない）。
+- 保存則 \`deficit_absorbed + deficit_remaining == input_deficit\` は レッスン3 各テストで *implicit* に検証されている（per-input）。だがまだ *普遍的* ではない（for-all-inputs ではない）。
 
-L4 は同じ \`execute_adl\` を取り、同じプロパティを普遍的に証明する。同じ関数、同じ定理、無限に多くの入力。
+レッスン4 は同じ \`execute_adl\` を取り、同じプロパティを普遍的に証明する。同じ関数、同じ定理、無限に多くの入力。
 
 ## 計画
 
@@ -1402,15 +1402,15 @@ L4 は同じ \`execute_adl\` を取り、同じプロパティを普遍的に証
 
 1. **5 proptest** を \`adl.rs\` の \`#[cfg(test)] mod tests\` ブロックに、\`proptest! { ... }\` macro invocation 内へ append。各 proptest が \`(collaterals, mark, deficit)\` の input strategy を取り、5 つの invariant のうち 1 つを証明する。
 
-2. **Stage 10 四部作レトロスペクティブ** — コードなし。10a + 10b + 10c + 10d が safety-net cascade に compose する architectural walkthrough。各 stage の保存則を名指す。
+2. **Liquidation〜ADL四部作レトロスペクティブ** — コードなし。Liquidation 3パート（計算・保険基金・スキャナ）  + ADLパート が safety-net cascade に compose する architectural walkthrough。各 stage の保存則を名指す。
 
-> 🛑 **予測。** 下の proptest を読む前に: openhl-liquidation L13 の capstone は 4 proptest を持っていた。L4 はここでは 5 つだ。L13 が必要としなかった追加の proptest は何か? ヒント: ADL は *return value*（report）を持ち、L13 の scanner も似た return value を持つ。
+> 🛑 **予測。** 下の proptest を読む前に: openhl-liquidation レッスン13 の capstone は 4 proptest を持っていた。レッスン4 はここでは 5 つだ。レッスン13 が必要としなかった追加の proptest は何か? ヒント: ADL は *return value*（report）を持ち、レッスン13 の scanner も似た return value を持つ。
 
-(答え: **\`records_in_rank_order\`**。ADL の *ソート規律* を普遍化する。L13 の scanner はその record をソートしない（挿入順で処理する）。ADL の record は \`(score 降順、account_id 昇順)\` の順でなければならない。この proptest が任意の入力に対してそれを証明する。他の 4 proptest（保存則、decomposition、accounting consistency、決定論性）は L13 に直接 analogue がある。5 番目だけが、ADL が scanner より強い ordering 契約を持つから存在する。**出力に構造が多いほど、preserve するための invariant も多くなる。**)
+(答え: **\`records_in_rank_order\`**。ADL の *ソート規律* を普遍化する。レッスン13 の scanner はその record をソートしない（挿入順で処理する）。ADL の record は \`(score 降順、account_id 昇順)\` の順でなければならない。この proptest が任意の入力に対してそれを証明する。他の 4 proptest（保存則、decomposition、accounting consistency、決定論性）は レッスン13 に直接 analogue がある。5 番目だけが、ADL が scanner より強い ordering 契約を持つから存在する。**出力に構造が多いほど、preserve するための invariant も多くなる。**)
 
 ## 5 つの proptest
 
-L3 unit test の後、同じ \`#[cfg(test)] mod tests\` ブロック内に append する。
+レッスン3 unit test の後、同じ \`#[cfg(test)] mod tests\` ブロック内に append する。
 
 \`\`\`rust
 proptest! {
@@ -1528,9 +1528,9 @@ prop_assert_eq!(report.deficit_absorbed + report.deficit_remaining, deficit);
 
 押さえる点が 3 つ。
 
-1. **これが L2 の Phase 5 + Phase 4 loop body から来る load-bearing な保存則だ。** 各 iteration の \`haircut + new_remaining == old_remaining\` が蓄積し、最終的に \`deficit_absorbed + deficit_remaining == initial_deficit\` になる。Proptest がこれを、operating regime 内の *任意の* \`(collaterals, mark, deficit)\` タプルに対して verify する。
+1. **これが レッスン2 の Phase 5 + Phase 4 loop body から来る load-bearing な保存則だ。** 各 iteration の \`haircut + new_remaining == old_remaining\` が蓄積し、最終的に \`deficit_absorbed + deficit_remaining == initial_deficit\` になる。Proptest がこれを、operating regime 内の *任意の* \`(collaterals, mark, deficit)\` タプルに対して verify する。
 2. **\`deficit in 0_i64..1_000_000\` がゼロを含む。** これが Phase 1 の \`deficit <= 0\` 早期リターンを catch する。\`deficit = 0\` なら \`deficit_absorbed = 0\`、\`deficit_remaining = 0\` が produce され、\`0 + 0 == 0\` が成立する。**入力 range は boundary を含む。保存則は boundary で成立する。**
-3. **L3 Test 2（\`single_winner_exhausted_with_remaining_deficit\`）と Test 4（\`drains_first_winner_then_partially_second\`）** はそれぞれ 1 つの特定入力で保存則を verify した。この proptest はデフォルト 256 ランダム入力で verify する（CI では 100,000+ に設定可能）。**2 つの unit test が 2 入力で assert することを、1 proptest が 256 入力で assert する。**
+3. **レッスン3 Test 2（\`single_winner_exhausted_with_remaining_deficit\`）と Test 4（\`drains_first_winner_then_partially_second\`）** はそれぞれ 1 つの特定入力で保存則を verify した。この proptest はデフォルト 256 ランダム入力で verify する（CI では 100,000+ に設定可能）。**2 つの unit test が 2 入力で assert することを、1 proptest が 256 入力で assert する。**
 
 ### Proptest 2: Per-record decomposition
 
@@ -1547,7 +1547,7 @@ for rec in &report.records {
 
 1. **Record ごとに 4 つの sub-assertion がある。** non-negative haircut、pnl_gross で bounded された haircut、non-negative pnl_paid、decomposition equation。各々が別の \`prop_assert!\` だ。Failure が起きたとき、どの sub-property が壊れたかを正確に教える。**Granular な assertion が proptest failure を debuggable にする。**
 2. **\`for rec in &report.records\` が *実際に* produce された record を iterate する。** Report に 0 record（degenerate 入力ケース）なら、loop は no-op、proptest は vacuously に pass する。**No record の proptest は vacuous proof だ。それで fine。interesting case ではないからだ。**
-3. **L3 Test 1, 2, 4 がそれぞれ特定入力で 1 record の decomposition を verify した。この proptest がランダム入力ですべての record を verify する。** Phase 4 の \`pnl_gross.saturating_sub(haircut)\` から来る算術 identity \`pnl_paid = pnl_gross - haircut\` が、ここで普遍的になる。**Saturating subtraction はここでは matter しない。\`haircut <= pnl_gross\` が Phase 4 の \`.min\` で enforce されているから、subtraction で underflow が発生することは構造上あり得ない。**
+3. **レッスン3 Test 1, 2, 4 がそれぞれ特定入力で 1 record の decomposition を verify した。この proptest がランダム入力ですべての record を verify する。** Phase 4 の \`pnl_gross.saturating_sub(haircut)\` から来る算術 identity \`pnl_paid = pnl_gross - haircut\` が、ここで普遍的になる。**Saturating subtraction はここでは matter しない。\`haircut <= pnl_gross\` が Phase 4 の \`.min\` で enforce されているから、subtraction で underflow が発生することは構造上あり得ない。**
 
 ### Proptest 3: Aggregate accounting consistency
 
@@ -1573,7 +1573,7 @@ prop_assert_eq!(r1, r2);
 押さえる点が 3 つ。
 
 1. **同じ関数、同じ入力、2 回。full report の equality を assert する。** これが *任意の* 隠れた non-determinism を catch する。順序をランダム化する \`HashMap\` iteration、異なる値を返す clock read、tie を異なる方法で break する \`sort_unstable_by\` — どれも。これらは \`execute_adl\` には存在しない。だが将来の refactor が誤って導入したら、この proptest が catch する。
-2. **\`AdlReport\` は \`PartialEq\` を derive している（L1 の設計経由）。** それが \`prop_assert_eq!(r1, r2)\` を動作させる。equality がすべての field（records、deficit_absorbed、deficit_remaining）を byte-identical match で比較する。**Report 型すべてに \`PartialEq\` derive を付けるのは consensus code で non-optional。なしでは決定論性 proptest が存在し得ない。**
+2. **\`AdlReport\` は \`PartialEq\` を derive している（レッスン1 の設計経由）。** それが \`prop_assert_eq!(r1, r2)\` を動作させる。equality がすべての field（records、deficit_absorbed、deficit_remaining）を byte-identical match で比較する。**Report 型すべてに \`PartialEq\` derive を付けるのは consensus code で non-optional。なしでは決定論性 proptest が存在し得ない。**
 3. **\`0..10\` candidate count（他の proptest の \`0..15\` より小さい）が高速さを保つ。** 決定論性のテストはより expensive だ（各 iteration が \`execute_adl\` を 2 回呼ぶ）。小さい input range はパフォーマンスの trade-off だ。Property は任意のサイズで成立するから、range を小さくしても proof は弱まらない。**Performance budget が proptest の input-range 選択を shape する。**
 
 ### Proptest 5: Rank order
@@ -1627,7 +1627,7 @@ PROPTEST_CASES=10000 cargo test -p openhl-liquidation adl::tests
 
 これが各 proptest をデフォルト 256 ではなく 10,000 回走らせる。モダンハードウェアで ~10-30 秒。Production CI は nightly で \`PROPTEST_CASES=100000\` を走らせ、full proof-of-the-day にする。
 
-## Stage 10 四部作レトロスペクティブ — セーフティネット・カスケード
+## Liquidation〜ADL四部作レトロスペクティブ — セーフティネット・カスケード
 
 4 つの stage が単一の per-block orchestration に compose する。各 layer は独自の保存則を持ち、failure は bounded かつ observable な方法で下流の layer へ cascade する。
 
@@ -1671,7 +1671,7 @@ PROPTEST_CASES=10000 cargo test -p openhl-liquidation adl::tests
    ║  Per-block orchestration loop (the bridge calls this each block) ║
    ╠══════════════════════════════════════════════════════════════════╣
    ║                                                                  ║
-   ║  ┌─ Layer 1 — Stage 10a: Margin classification (pure compute) ─┐ ║
+   ║  ┌─ Layer 1 — Liquidation参照実装（計算パート）: Margin classification (pure compute) ─┐ ║
    ║  │  Inputs:  account snapshots × mark price                    │ ║
    ║  │  Output:  MarginPhase per account (Safe/AtRisk/             │ ║
    ║  │           Liquidatable/Underwater)                          │ ║
@@ -1679,7 +1679,7 @@ PROPTEST_CASES=10000 cargo test -p openhl-liquidation adl::tests
    ║  │           mark, params)                                     │ ║
    ║  └─────────────────────────────────────────────────────────────┘ ║
    ║                              ↓                                   ║
-   ║  ┌─ Layer 1.5 — Stage 10c: Scanner (orchestrator) ────────────┐  ║
+   ║  ┌─ Layer 1.5 — Liquidation参照実装（スキャナパート）: Scanner (orchestrator) ────────────┐  ║
    ║  │  Inputs:  classified accounts × mark price                 │  ║
    ║  │  Output:  ScanReport { closes, unfilled_deficit }          │  ║
    ║  │  Law:     before_balance + ∑deposits − ∑withdrawals =      │  ║
@@ -1688,7 +1688,7 @@ PROPTEST_CASES=10000 cargo test -p openhl-liquidation adl::tests
    ║                              ↓                                   ║
    ║                if scan.unfilled_deficit > 0:                     ║
    ║                              ↓                                   ║
-   ║  ┌─ Layer 2 — Stage 10b: InsuranceFund (stateful absorption) ─┐  ║
+   ║  ┌─ Layer 2 — Liquidation参照実装（保険基金パート）: InsuranceFund (stateful absorption) ─┐  ║
    ║  │  Inputs:  ScanReport closes, fund state                    │  ║
    ║  │  Output:  WithdrawOutcome (Covered/PartiallyDrained/       │  ║
    ║  │           Depleted)                                        │  ║
@@ -1697,7 +1697,7 @@ PROPTEST_CASES=10000 cargo test -p openhl-liquidation adl::tests
    ║                              ↓                                   ║
    ║              if WithdrawOutcome != Covered:                      ║
    ║                              ↓                                   ║
-   ║  ┌─ Layer 3 — Stage 10d: ADL (off-orderbook fallback) ───────┐   ║
+   ║  ┌─ Layer 3 — ADL参照実装パート: ADL (off-orderbook fallback) ───────┐   ║
    ║  │  Inputs:  remaining accounts × mark × unfilled_deficit    │   ║
    ║  │  Output:  AdlReport { records, deficit_absorbed,          │   ║
    ║  │           deficit_remaining }                             │   ║
@@ -1719,7 +1719,7 @@ PROPTEST_CASES=10000 cargo test -p openhl-liquidation adl::tests
 
 1. **各 layer の出力が次の layer の入力になる。** Scanner の \`unfilled_deficit\` が InsuranceFund の入力になる。InsuranceFund の \`WithdrawOutcome\` が ADL の起動を gate する。ADL の \`deficit_remaining\` が protocol policy の起動を gate する。**情報フローは downstream-only。どの layer も上の layer を読まない。**
 2. **各 layer の failure mode は構造的に bounded だ。** Margin classification は valid 入力で crash しない（pure compute、allocation なし）。InsuranceFund は drain し得る。だが \`WithdrawOutcome\` enum が exact な failure shape を名指す。ADL は \`deficit_remaining > 0\` を持ち得る。だが保存則がそれの上限を bound する。Protocol policy だけが in-system bound を持たない layer だ。By design — そこが deployment policy が enter する場所だからだ。**Failure semantics は最後まで typed されている。**
-3. **各 layer に保存則があり、対応するコースで proptest によって証明される。** L13 の per-scan conservation（Stage 10c）、Stage 10b の fee/residual decomposition、ADL の \`deficit_absorbed + deficit_remaining = deficit\`（本レッスン）。Stage 10 四部作は 4 つの別個 feature ではない。同じ規律を異なる layer で 4 回証明したものだ。**1 つの規律、4 つの layer、byte-for-byte reproducible end-to-end。**
+3. **各 layer に保存則があり、対応するコースで proptest によって証明される。** レッスン13 の per-scan conservation（Liquidation参照実装（スキャナパート））、Liquidation参照実装（保険基金パート） の fee/residual decomposition、ADL の \`deficit_absorbed + deficit_remaining = deficit\`（本レッスン）。Liquidation〜ADL四部作は 4 つの別個 feature ではない。同じ規律を異なる layer で 4 回証明したものだ。**1 つの規律、4 つの layer、バイト単位で reproducible end-to-end。**
 
 ## よくある質問
 
@@ -1733,7 +1733,7 @@ Inner-loop dev cycle のスピードだ。\`cargo test\` は開発中に秒で�
 
 **Q3: Proptest が偶然 pass する — 実際のバグに hit しない — ことはあり得るか?**
 
-原理的には yes（256 iteration がすべての edge case を hit する保証はない）。実際にはほぼない。Input strategy が operating regime を密に hit するように calibrate されている。疑う specific failure mode があれば L1-L3 で unit test として追加できる。L4 ship 後でもだ。**Proptest は necessary だが sufficient ではない。unit test を補完するもので、置き換えるものではない。**
+原理的には yes（256 iteration がすべての edge case を hit する保証はない）。実際にはほぼない。Input strategy が operating regime を密に hit するように calibrate されている。疑う specific failure mode があれば レッスン1〜3 で unit test として追加できる。レッスン4 ship 後でもだ。**Proptest は necessary だが sufficient ではない。unit test を補完するもので、置き換えるものではない。**
 
 **Q4: なぜ \`records_in_rank_order\` proptest の \`deficit\` が他よりずっと大きいのか?**
 
@@ -1745,27 +1745,27 @@ Typical workload には comparable だ。\`proptest!\` は 2026 Rust エコシ�
 
 **Q6: これは \`forge invariant\`（Foundry）とどう比較されるか?**
 
-同じ定理、違うメカニクスだ。\`forge invariant\` は Handler に対してランダムな *メソッド call 系列* を生成し、各 call 後に invariant を check する。ここの \`proptest!\` はランダム *parameter set* を生成し、入力 1 つにつき関数を 1 回走らせる。両方が「すべての valid 入力に対して、このプロパティが成立する」を証明する。\`forge invariant\` は multi-call、ここの \`proptest!\` は single-call だ（別 \`proptest-state-machine\` crate が Rust で stateful プロパティを扱う）。**同じ規律、違う surface。Rust は single-call に \`proptest!\`、multi-call に state-machine を使う。Solidity は両方に \`forge invariant\` を使う。** *Mastering Foundry* の L6 capstone が本レッスンの Solidity 側 sibling だ — openhl-liquidation Stage 10b の \`InsuranceFund\` を Solidity に port し、4 invariant を \`forge invariant\` で証明する。本 L4 capstone と並べて読むと、規律が両言語方向に転写することが実感できる。
+同じ定理、違うメカニクスだ。\`forge invariant\` は Handler に対してランダムな *メソッド call 系列* を生成し、各 call 後に invariant を check する。ここの \`proptest!\` はランダム *parameter set* を生成し、入力 1 つにつき関数を 1 回走らせる。両方が「すべての valid 入力に対して、このプロパティが成立する」を証明する。\`forge invariant\` は multi-call、ここの \`proptest!\` は single-call だ（別 \`proptest-state-machine\` crate が Rust で stateful プロパティを扱う）。**同じ規律、違う surface。Rust は single-call に \`proptest!\`、multi-call に state-machine を使う。Solidity は両方に \`forge invariant\` を使う。** *Mastering Foundry* の レッスン6 capstone が本レッスンの Solidity 側 sibling だ — openhl-liquidation Liquidation参照実装（保険基金パート） の \`InsuranceFund\` を Solidity に port し、4 invariant を \`forge invariant\` で証明する。本 レッスン4 capstone と並べて読むと、規律が両言語方向に転写することが実感できる。
 
 ## コース総括 — DIY Perp シリーズ第 6 弾完結
 
 これが *Building OpenHL ADL* の最終レッスンだ。5 レッスンを経て、こうなった。
 
 - L0: ADL の役割を safety-net cascade の Layer 3 として理解した
-- L1: \`AdlScore\`、\`AdlRecord\`、\`AdlReport\` + \`adl_score\` — ranking 関数を定義した
-- L2: \`execute_adl\` を 5 フェーズパイプライン + 5 degenerate テストとして実装した
-- L3: 6 つの nuanced absorption テストでパイプラインを証明した
-- L4: 5 つの invariant proptest で proof を普遍化し、AND Stage 10 四部作を閉じた
+- レッスン1: \`AdlScore\`、\`AdlRecord\`、\`AdlReport\` + \`adl_score\` — ranking 関数を定義した
+- レッスン2: \`execute_adl\` を 5 フェーズパイプライン + 5 degenerate テストとして実装した
+- レッスン3: 6 つの nuanced absorption テストでパイプラインを証明した
+- レッスン4: 5 つの invariant proptest で proof を普遍化し、AND Liquidation〜ADL四部作を閉じた
 
-コースは openhl Stage 10d の \`d66b44a\` に対して byte-for-byte だ。Stage 10 四部作（10a + 10b + 10c + 10d）が complete。margin classification → insurance fund → scanner → ADL → bounded protocol policy。ADL だけで 16 unit test + 5 proptest。openhl-liquidation コースの 10a/b/c のテストと合わせて、full な quartet には 60+ unit test と 9+ invariant proptest があり、cascade を機械的に証明する。
+コースは openhl ADL参照実装パート の \`d66b44a\` に対して バイト単位で だ。Liquidation〜ADL四部作（Liquidation 3パート（計算・保険基金・スキャナ）  + ADLパート）が complete。margin classification → insurance fund → scanner → ADL → bounded protocol policy。ADL だけで 16 unit test + 5 proptest。openhl-liquidation コースの Liquidation三部作 のテストと合わせて、full な quartet には 60+ unit test と 9+ invariant proptest があり、cascade を機械的に証明する。
 
 次にどこへ行くか。
 
-- **Stage 11（oracle）と Stage 12（vault）** が openhl に landed したら、同じ build-along パターンで同じ保存則規律を新 layer に適用する。
-- **openhl-liquidation L13 の capstone を ADL の目で読み直す。** L13 の per-scan conservation law が今や「Layer 1.5 の cascade への貢献」として visible になる。2 つの capstone（L13 と本 L4）は sibling artifact だ。
+- **次の実装パート（Oracle）と 次の実装パート（Vault）** が openhl に landed したら、同じ build-along パターンで同じ保存則規律を新 layer に適用する。
+- **openhl-liquidation レッスン13 の capstone を ADL の目で読み直す。** レッスン13 の per-scan conservation law が今や「Layer 1.5 の cascade への貢献」として visible になる。2 つの capstone（レッスン13 と本 レッスン4）は sibling artifact だ。
 - **規律を他で適用する。** \`before/after/delta\` state 遷移を持つ任意のシステム（トークン vesting、fee accumulation、prediction-market settlement）が、この exact なパターンを admit する。Per-step conservation を定義し、それを exercise する Handler-equivalent を書き、invariant を証明する。
 
-Stage 10 四部作は単なる 4 feature ではない。同じ規律を異なる layer で 4 回証明したものだ。書いたのは Rust、走らせたのは \`cargo test\`、証明したのは 1 つの保存則規律が cascade を 4 段通して preserve するという事実。Layer は 4 つ、定理は 1 つ。これがコース全体が指していた一点だ。
+Liquidation〜ADL四部作は単なる 4 feature ではない。同じ規律を異なる layer で 4 回証明したものだ。書いたのは Rust、走らせたのは \`cargo test\`、証明したのは 1 つの保存則規律が cascade を 4 段通して preserve するという事実。Layer は 4 つ、定理は 1 つ。これがコース全体が指していた一点だ。
 
 **1 つの規律。4 つの layer。Byte-for-byte reproducible end-to-end。**
 `,

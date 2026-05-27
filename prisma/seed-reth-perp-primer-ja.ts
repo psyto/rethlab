@@ -29,7 +29,7 @@ export async function seedRethPerpPrimerJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: "L0 — 永久先物とは何か、そしてなぜ期限がないのか",
+                  title: "レッスン0 — 永久先物とは何か、そしてなぜ期限がないのか",
                   slug: "perp-primer-what-is-a-perp-ja",
                   type: 'CONTENT',
                   sortOrder: 0,
@@ -53,7 +53,7 @@ export async function seedRethPerpPrimerJA(prisma: PrismaClient) {
 このレッスンで掴む概念:
 
 - **永久先物（perpetual future）の正体。** 期限がない、決済イベントもない、満期で spot 価格に収束する仕組みも持たない、そういう派生商品だ。本 primer の残り 3 レッスンの形状は、この 1 つの設計選択から導かれる。
-- **「期限なし」が実際に解くべきエンジニアリング課題だった理由。** その課題を解くために新しい経済メカニズム（L1 で扱う）を発明する必要があった。
+- **「期限なし」が実際に解くべきエンジニアリング課題だった理由。** その課題を解くために新しい経済メカニズム（レッスン1 で扱う）を発明する必要があった。
 - **perp、spot、伝統的 futures の違い。** 3 つの市場、3 つの価格動態、3 つのトレーダーインセンティブ。
 - **なぜ本コースで Hyperliquid を例に取るのか。** 現状は closed-source。rethlab DIY Perp track は、その open 版を作ることを教える。
 
@@ -101,7 +101,7 @@ Spot は最もシンプル。資産を保有しているので、価格の動き
 
 補正メカニズムがなければ、perp は「ステップが余計に多い futures」になる。しかもその余計なステップはすべて誤った方向に作用する。BTC を追うはずの契約の価格が、BTC を追わない。
 
-**解決策が funding payment。** これが L1 のテーマだ。30 秒版で言うと: mark が index より上に離れたとき、long は short に少額の周期的な手数料を gap に比例して支払う。この手数料が mark を引き戻す経済インセンティブになる。Mark が index より下に離れたときは、対称的に short が long に支払う。
+**解決策が funding payment。** これが レッスン1 のテーマだ。30 秒版で言うと: mark が index より上に離れたとき、long は short に少額の周期的な手数料を gap に比例して支払う。この手数料が mark を引き戻す経済インセンティブになる。Mark が index より下に離れたときは、対称的に short が long に支払う。
 
 Funding が perp に対して果たす役割は、expiry が伝統的 futures に対して果たす役割と同じだ。収束させる力。違いは、1 点ではなく連続的に作用する点。**それが innovation のすべてだ。**
 
@@ -110,10 +110,10 @@ Funding が perp に対して果たす役割は、expiry が伝統的 futures �
 | Venue タイプ | 例 | 補足 |
 | :--- | :--- | :--- |
 | **CEX**（中央集権）| Binance、OKX、Bybit、BitMEX | BitMEX が 2016 年に現代型 perp を発明。Binance は世界最大の出来高。 |
-| **既存 L1 上の DEX** | dYdX（Cosmos）、Drift（Solana）、Aevo（Optimism rollup） | Composable で on-chain だが、ホストチェーンの latency と gas を継承する。 |
-| **専用 L1 上の DEX** | **Hyperliquid**、Aevo、Vertex | Perp UX に最適化した purpose-built L1。Hyperliquid は出来高で最大。 |
+| **既存L1上の DEX** | dYdX（Cosmos）、Drift（Solana）、Aevo（Optimism rollup） | Composable で on-chain だが、ホストチェーンの latency と gas を継承する。 |
+| **専用L1上の DEX** | **Hyperliquid**、Aevo、Vertex | Perp UX に最適化した purpose-built L1。Hyperliquid は出来高で最大。 |
 
-「専用 L1 上の DEX」カテゴリが、Rust エンジニア視点で最も興味深い。Perp DEX を Ethereum L1 上のアプリとして作ると遅くて高い。Rollup として作ると速度のために集権性を引き換える。**Perp 専用 L1 として作れば、UX に必要なすべての層を perp 向けにチューニングできる。** これが Hyperliquid のやったことで、DIY Perp track が教えることだ。
+「専用L1上の DEX」カテゴリが、Rust エンジニア視点で最も興味深い。Perp DEX を Ethereum L1上のアプリとして作ると遅くて高い。Rollup として作ると速度のために集権性を引き換える。**Perp 専用L1として作れば、UX に必要なすべての層を perp 向けにチューニングできる。** これが Hyperliquid のやったことで、DIY Perp track が教えることだ。
 
 ## なぜ Hyperliquid を例に取るのか
 
@@ -123,16 +123,16 @@ Hyperliquid は出来高で最大の perpetual DEX、**2025 年に $300B+** を�
 
 primer の残りで何度も出てくる Hyperliquid 固有の数値を、ここでまとめて挙げる:
 
-- **Funding interval**: 1 時間（L1）
-- **Funding rate divisor**: 8（L1）
-- **Funding rate cap**: ±4% / interval（L1）
-- **Initial margin**: ~10%（L2）
-- **Maintenance margin**: ~2%（L2; tier で変わる）
-- **Liquidation fee**: notional の ~1.5%（L3）
-- **Cross-margin がデフォルト**（L2）
-- **Insurance fund** あり、最後の手段として **ADL**（L3）
+- **Funding interval**: 1 時間（レッスン1）
+- **Funding rate divisor**: 8（レッスン1）
+- **Funding rate cap**: ±4% / interval（レッスン1）
+- **Initial margin**: ~10%（レッスン2）
+- **Maintenance margin**: ~2%（レッスン2; tier で変わる）
+- **Liquidation fee**: notional の ~1.5%（レッスン3）
+- **Cross-margin がデフォルト**（レッスン2）
+- **Insurance fund** あり、最後の手段として **ADL**（レッスン3）
 
-L1 / L2 / L3 の計算例ではこれらの数値が繰り返し登場する。DIY Perp track のコード例も同じ数値を使う。
+レッスン1 / レッスン2 / レッスン3 の計算例ではこれらの数値が繰り返し登場する。DIY Perp track のコード例も同じ数値を使う。
 
 ## よくある誤解
 
@@ -140,17 +140,17 @@ L1 / L2 / L3 の計算例ではこれらの数値が繰り返し登場する。D
 
 **「perp は spot より危険だ」。** 比較の方向が誤っている。Perp が追加するのは **leverage の risk**（underwater になれば預けた collateral 以上を失いうる。ただし regulated な venue では insurance fund が通常それを吸収する）。Leverage を使わなければ、1× の perp position は spot とほぼ同じ risk しか持たない。差し引きの funding コストだけ違う。
 
-**「Hyperliquid は Ethereum 上のスマートコントラクトだ」。** 違う — Hyperliquid は **独立した L1** だ。DIY Perp track を作る理由は、汎用 L1 上のスマートコントラクトより、perp UX（sub-second の latency、gas なし、深い orderbook）に最適化した app-chain のほうが勝るから、というのが核心。
+**「Hyperliquid は Ethereum 上のスマートコントラクトだ」。** 違う — Hyperliquid は **独立したL1** だ。DIY Perp track を作る理由は、汎用L1上のスマートコントラクトより、perp UX（sub-second の latency、gas なし、深い orderbook）に最適化した app-chain のほうが勝るから、というのが核心。
 
-## 次のレッスン (L1)
+## 次のレッスン（レッスン1）
 
-L1 — **Mark、index、funding**。期限がない中で mark price が index に anchor され続ける仕組みを組み立てていく。Premium の式 \`(mark − index) / index\`、それを per-interval rate に変換する divisor、最悪ケースを抑える cap、Hyperliquid の実パラメータでの計算例 — それぞれを順に見る。
+レッスン1 — **Mark、index、funding**。期限がない中で mark price が index に anchor され続ける仕組みを組み立てていく。Premium の式 \`(mark − index) / index\`、それを per-interval rate に変換する divisor、最悪ケースを抑える cap、Hyperliquid の実パラメータでの計算例 — それぞれを順に見る。
 
-L1 を終えると、Build OpenHL — Funding コースの L4「\`compute_premium\`」が「premium とは何か?」ではなく「すでに理解している式の実装」として読めるようになる。
+レッスン1 を終えると、Build OpenHL — Funding コースの レッスン4「\`compute_premium\`」が「premium とは何か?」ではなく「すでに理解している式の実装」として読めるようになる。
 `,
                 },
                 {
-                  title: "L1 — Mark、index、funding — 期限なしで perp が anchor を保つ仕組み",
+                  title: "レッスン1 — Mark、index、funding — 期限なしで perp が anchor を保つ仕組み",
                   slug: "perp-primer-mark-index-funding-ja",
                   type: 'CONTENT',
                   sortOrder: 1,
@@ -176,9 +176,9 @@ L1 を終えると、Build OpenHL — Funding コースの L4「\`compute_premiu
 
 ## おさらい
 
-L0 で問題を整理した。Perp には期限がないので、伝統的 futures に組み込まれている収束力は使えない。Perp 価格を原資産に追従させるには、別の何かが必要だ。
+レッスン0 で問題を整理した。Perp には期限がないので、伝統的 futures に組み込まれている収束力は使えない。Perp 価格を原資産に追従させるには、別の何かが必要だ。
 
-L1 ではその「別の何か」を導入する。
+レッスン1 ではその「別の何か」を導入する。
 
 ## 2 つの価格、2 つの市場
 
@@ -347,15 +347,15 @@ Funding payment は mark を直接動かさない。動かすのは *トレー�
 
 **「Funding は常に mark を index に引き戻す」。** 結局は引き戻す。しかし持続的な不均衡（retail long が支配する数ヶ月の bull market など）では、funding がプラスのまま長期間続き、long から short に富を移転しながら mark が index 上に留まることがありうる。メカニズムが生み出すのは *圧力* であって、即時の補正ではない。
 
-## 次のレッスン (L2)
+## 次のレッスン（レッスン2）
 
-L2 — **Margin model**。Mark と funding を立てたので、次は「$10k の collateral で 10 BTC long を持つ」の意味を解きほぐす。誰がどれだけのポジションをどれだけ持てるかを決める leverage と margin の数学だ。Initial vs maintenance margin、cross vs isolated を見て、ある具体的 position が mark の動きで「Safe」から「AtRisk」を経て「Liquidatable」に至るまでを順に辿る。
+レッスン2 — **Margin model**。Mark と funding を立てたので、次は「$10k の collateral で 10 BTC long を持つ」の意味を解きほぐす。誰がどれだけのポジションをどれだけ持てるかを決める leverage と margin の数学だ。Initial vs maintenance margin、cross vs isolated を見て、ある具体的 position が mark の動きで「Safe」から「AtRisk」を経て「Liquidatable」に至るまでを順に辿る。
 
-L2 を終えると、Build OpenHL — Liquidation コースの L1「\`MARGIN_SCALE\` + \`LiquidationParams\`」が「すでに理解しているパラメータの実装」として読めるようになる。
+レッスン2 を終えると、Build OpenHL — Liquidation コースの レッスン1「\`MARGIN_SCALE\` + \`LiquidationParams\`」が「すでに理解しているパラメータの実装」として読めるようになる。
 `,
                 },
                 {
-                  title: "L2 — Margin model — collateral、leverage、equity、4 状態",
+                  title: "レッスン2 — Margin model — collateral、leverage、equity、4 状態",
                   slug: "perp-primer-margin-model-ja",
                   type: 'CONTENT',
                   sortOrder: 2,
@@ -381,9 +381,9 @@ L2 を終えると、Build OpenHL — Liquidation コースの L1「\`MARGIN_SCA
 
 ## おさらい
 
-L0 で perp とは何かを立て、L1 で funding が mark を index に anchor する仕組みを見た。どちらも「ポジションを持っているトレーダー」を抽象的に扱った。
+レッスン0 で perp とは何かを立て、レッスン1 で funding が mark を index に anchor する仕組みを見た。どちらも「ポジションを持っているトレーダー」を抽象的に扱った。
 
-L2 ではその抽象に踏み込む。「ポジション」が具体的にドルと比率で何なのか。Venue はどんなときに force-close できるのか。これが margin model だ。
+レッスン2 ではその抽象に踏み込む。「ポジション」が具体的にドルと比率で何なのか。Venue はどんなときに force-close できるのか。これが margin model だ。
 
 ## 5 つの量
 
@@ -436,7 +436,7 @@ Leverage は informational だ。エンジンは「leverage 上限」を直接�
 - Initial > maintenance: initial を辛うじてクリアして開いたトレーダーには、liquidation に達する前に少し adverse な mark の動きを耐える余裕がある
 - ギャップがなければ、ぎりぎりで開いた position は不利な tick が来た瞬間に必ず liquidate する
 - ギャップは venue がトレーダーに与える *バッファ*。Liquidation に至る前に意思決定する（collateral を足す、partial close する、など）時間を確保する
-- **同時に、これはシステム側の防衛ラインでもある。** Maintenance を割った瞬間に「即破綻」ではなく、清算エンジンが force-close 注文を市場に流し込んで約定するまでの **スリッページ + 起動レイテンシの吸収余地** を、このギャップが用意している。L3 で見る force-close 注文は、この余地を予算として使って執行される — 余地が薄ければ薄いほど、insurance fund が負担する不足分が膨らむ。
+- **同時に、これはシステム側の防衛ラインでもある。** Maintenance を割った瞬間に「即破綻」ではなく、清算エンジンが force-close 注文を市場に流し込んで約定するまでの **スリッページ + 起動レイテンシの吸収余地** を、このギャップが用意している。レッスン3 で見る force-close 注文は、この余地を予算として使って執行される — 余地が薄ければ薄いほど、insurance fund が負担する不足分が膨らむ。
 - **反例で見る必然性 (Initial = Maintenance が危険な理由)**: もし initial と maintenance が同じ 2% なら、2.01% で開いたポジションは 1 tick の微小逆行だけで即 Liquidatable になる。急変時は、清算注文が板に入り約定するまでの短い遅延中に ratio が 0% を割って Underwater へ突き抜ける確率が高い。**Initial と Maintenance のギャップは、トレーダー保護だけでなく、システム全体のソルベンシーを守る「スリッページ・クッション」** そのものだ。
 
 **Margin ratio** が中心的な量:
@@ -458,7 +458,7 @@ margin_ratio = equity / notional
 | **Safe** | \`ratio ≥ initial_margin_bps\`（≥ 10%）| トレーダーは新規 / 追加できる |
 | **AtRisk** | \`ratio ∈ [maintenance, initial)\`（2% ≤ x < 10%）| 保持は可、新規リスクは禁止 |
 | **Liquidatable** | \`ratio < maintenance, equity ≥ 0\`（< 2% だが underwater ではない）| Market で force-close、残額をトレーダーに返す |
-| **Underwater** | \`equity < 0\`（損失が collateral を超えた）| Force-close + insurance fund が不足を吸収（L3 のトピック）|
+| **Underwater** | \`equity < 0\`（損失が collateral を超えた）| Force-close + insurance fund が不足を吸収（レッスン3 のトピック）|
 
 Liquidatable と Underwater の区別は、*残余を誰が負担するか* を決めるので重要だ。Liquidatable ではトレーダーの残 collateral が close + fee をカバーする。Underwater でも close は実行されるが、トレーダーが払いきれない分は venue の insurance fund が負担する。
 
@@ -500,7 +500,7 @@ Liquidatable と Underwater の区別は、*残余を誰が負担するか* を�
         ───────────────────────────────────────────────────────────────────────────┘
 \`\`\`
 
-この図のとおり、\`MarginHealth\` enum の判定は **margin_ratio (および equity の符号) という単一スカラーに対する 4 区間分類** に還元できる。L3 ではこの 4 区間それぞれで「engine が実際に何をするか」を順に辿る — \`Safe\` と \`AtRisk\` は何もしない (=トレーダー側の自由)、\`Liquidatable\` は force-close 注文を market に流す、\`Underwater\` は force-close + insurance fund 引き出し。**コードの分岐は数直線の区間に 1 対 1 で対応する** — これが Rust の \`match MarginHealth { Safe => …, AtRisk => …, Liquidatable => …, Underwater => … }\` で綺麗に書ける理由だ。
+この図のとおり、\`MarginHealth\` enum の判定は **margin_ratio (および equity の符号) という単一スカラーに対する 4 区間分類** に還元できる。レッスン3 ではこの 4 区間それぞれで「engine が実際に何をするか」を順に辿る — \`Safe\` と \`AtRisk\` は何もしない (=トレーダー側の自由)、\`Liquidatable\` は force-close 注文を market に流す、\`Underwater\` は force-close + insurance fund 引き出し。**コードの分岐は数直線の区間に 1 対 1 で対応する** — これが Rust の \`match MarginHealth { Safe => …, AtRisk => …, Liquidatable => …, Underwater => … }\` で綺麗に書ける理由だ。
 
 ## 計算例 — 同じ position、5 つの mark 価格
 
@@ -544,7 +544,7 @@ Hyperliquid はバッファ効果を望むトレーダーが大半なので cros
 - **Initial margin の tier**: Hyperliquid は実際には tiered initial margin を使う。「~10%」は小さい position に対するベースライン。Position size が asset ごとのしきい値を超えると、initial margin 要件が上がる（大口 BTC position だと 20% / 30% を要求されうる）。単独トレーダーへの systemic exposure に上限を当てる仕組み。
 - **Maintenance margin の tier**: 同じく — 大きい position ほど maintenance も高い。DIY Perp track では教育目的で flat なしきい値に単純化しているが、本番デプロイは tiered。
 - **Cross-margin がデフォルト**: トレーダーは USDC を 1 度 deposit して、どの market でも取引できる。
-- **Margin 計算は consensus 内**: すべての validator が同じ snapshot から同じ margin ratio を計算する。これが Build OpenHL — Liquidation コースの L1 が教える determinism property の根拠。
+- **Margin 計算は consensus 内**: すべての validator が同じ snapshot から同じ margin ratio を計算する。これが Build OpenHL — Liquidation コースの レッスン1 が教える determinism property の根拠。
 
 ## よくある誤解
 
@@ -554,15 +554,15 @@ Hyperliquid はバッファ効果を望むトレーダーが大半なので cros
 
 **「Cross-margin は isolated より常に良い」。** 違う。Cross が良いのは、すべての position が好意的に相関しているとき（long だけの portfolio など）。Cross が *悪い* のは、1 つの position が不釣り合いに吹き飛んだとき — portfolio 全体を liquidate しうる。Isolated はその risk を隔離する。Cross vs isolated は本物の risk management の判断であって、ただのデフォルトではない。
 
-## 次のレッスン (L3)
+## 次のレッスン（レッスン3）
 
-L3 — **Liquidation、insurance fund、ADL**。状態を分類した。次は position が Liquidatable や Underwater に渡ったとき *何が起きるか* を順に辿る。エンジンが close order を出す、matching engine が約定させる、fee が insurance fund に流れる、不足が fund を drain する、稀に insurance fund が枯渇すると ADL が発動する。
+レッスン3 — **Liquidation、insurance fund、ADL**。状態を分類した。次は position が Liquidatable や Underwater に渡ったとき *何が起きるか* を順に辿る。エンジンが close order を出す、matching engine が約定させる、fee が insurance fund に流れる、不足が fund を drain する、稀に insurance fund が枯渇すると ADL が発動する。
 
-L3 を終えると、perp の機構の完全なモデルが手に入る。そして Build OpenHL — Liquidation コースの L4-L7（margin math + 分類 + close order 生成）が「すでに理解している内容の Rust 実装」として読めるようになる。
+レッスン3 を終えると、perp の機構の完全なモデルが手に入る。そして Build OpenHL — Liquidation コースの レッスン4〜7（margin math + 分類 + close order 生成）が「すでに理解している内容の Rust 実装」として読めるようになる。
 `,
                 },
                 {
-                  title: "L3 — Liquidation、insurance fund、ADL — セーフティネットの仕組み",
+                  title: "レッスン3 — Liquidation、insurance fund、ADL — セーフティネットの仕組み",
                   slug: "perp-primer-liquidation-insurance-adl-ja",
                   type: 'CONTENT',
                   sortOrder: 3,
@@ -588,13 +588,13 @@ L3 を終えると、perp の機構の完全なモデルが手に入る。そし
 
 ## おさらい
 
-L0 で perp を立て、L1 で funding が mark を anchor する仕組みを示し、L2 で position を 4 状態に分類した。L3 では、AtRisk と Liquidatable の境界、Liquidatable と Underwater の境界で *実際に何が起きるか* を辿る。
+レッスン0 で perp を立て、レッスン1 で funding が mark を anchor する仕組みを示し、レッスン2 で position を 4 状態に分類した。レッスン3 では、AtRisk と Liquidatable の境界、Liquidatable と Underwater の境界で *実際に何が起きるか* を辿る。
 
 ここで perp のモデルが chain 全体にとって load-bearing になる。他のトレーダーの安全は、liquidation が正しく動くことに依存する。
 
 ## トリガー
 
-L2 のおさらい: \`margin_ratio < maintenance_margin_bps\` かつ \`equity ≥ 0\` なら **Liquidatable**。\`equity < 0\`（PnL が collateral を超えた）なら **Underwater**。
+レッスン2 のおさらい: \`margin_ratio < maintenance_margin_bps\` かつ \`equity ≥ 0\` なら **Liquidatable**。\`equity < 0\`（PnL が collateral を超えた）なら **Underwater**。
 
 エンジンは block ごとに、すべての非 flat なアカウントの margin ratio を評価する。Maintenance しきい値を下回った瞬間、そのアカウントの liquidation パイプラインを当該 block で発火させる。人間が間に入ることもなく、待つこともなく、second chance もない。すべての validator、すべての block、同じデータで。
 
@@ -623,7 +623,7 @@ L2 のおさらい: \`margin_ratio < maintenance_margin_bps\` かつ \`equity �
 > | 失敗モード | 署名エラー / nonce 衝突 / ガス不足 / RPC ダウン等で失敗しうる | 失敗が構造的にあり得ない (注文を流す主体がコンセンサス自身) |
 > | キャンセル可 | トレーダーが取り消せる | 取り消し不能 (state machine が「発射」と決めたら必ず約定する) |
 >
-> 一般のトレーダー向け解説では「マージン不足になるとストップロスが自動発火する」と表現されることがあるが、エンジン視点では別物だ。**清算は『特権注文 (privileged order)』** — \`block_execute\` の中でエンジンが自ら orderbook に書き込む、外部からは到達不可能な経路の注文 — として実装される。L2 で見た \`MarginHealth\` enum の \`Liquidatable\` 分岐が、まさにこの特権注文の発火元になる。
+> 一般のトレーダー向け解説では「マージン不足になるとストップロスが自動発火する」と表現されることがあるが、エンジン視点では別物だ。**清算は『特権注文 (privileged order)』** — \`block_execute\` の中でエンジンが自ら orderbook に書き込む、外部からは到達不可能な経路の注文 — として実装される。レッスン2 で見た \`MarginHealth\` enum の \`Liquidatable\` 分岐が、まさにこの特権注文の発火元になる。
 
 具体例:
 
@@ -755,11 +755,11 @@ Hyperliquid の設計は ADL を **極めて稀** にすることを狙ってい
 
 ## セーフティネットの階層構造
 
-L2 のマージン要件から ADL まで、損失を吸収する 4 層が下にカスケードしている。**上の層で止まれば止まるほど、トレーダーにも venue にもダメージが小さい:**
+レッスン2 のマージン要件から ADL まで、損失を吸収する 4 層が下にカスケードしている。**上の層で止まれば止まるほど、トレーダーにも venue にもダメージが小さい:**
 
 \`\`\`
    ┌─────────────────────────────────────────────────────────────────┐
-   │ Layer 0: Margin requirement (L2 で見た)                          │
+   │ Layer 0: Margin requirement (レッスン2 で見た)                          │
    │   Initial 10% / Maintenance 2% でリスク量を上限規制              │
    │   → 「トレーダー自身の collateral で損失をカバーできる範囲」      │
    │   止まる条件: ratio ≥ maintenance のまま市場が反発する            │
@@ -793,7 +793,7 @@ L2 のマージン要件から ADL まで、損失を吸収する 4 層が下に
 **この階層の読み方:**
 
 - **下の層に落ちるほど痛みが拡散する**: Layer 1 ではトレーダー本人だけが損する。Layer 2 では venue が venue 全体の資金から払う。Layer 3 では関係のない (勝っている) 別トレーダーまで巻き込む。
-- **各層が「次の層に渡す前に absorb する」量を最大化する設計**: Initial と Maintenance の差 (L2 で見た 8% のギャップ) は Layer 1 が吸収できる余地、liquidation fee の 1.5% は Layer 2 の補充ペース、cross-margin (1 口座内の利益で他の損失を相殺) は Layer 1 の到達を遅らせる、といった具合。**venue 設計とは、上の層が下の層に「仕事を渡さない」ための数値選択そのもの。**
+- **各層が「次の層に渡す前に absorb する」量を最大化する設計**: Initial と Maintenance の差 (レッスン2 で見た 8% のギャップ) は Layer 1 が吸収できる余地、liquidation fee の 1.5% は Layer 2 の補充ペース、cross-margin (1 口座内の利益で他の損失を相殺) は Layer 1 の到達を遅らせる、といった具合。**venue 設計とは、上の層が下の層に「仕事を渡さない」ための数値選択そのもの。**
 - **コード分岐との対応**: Stage 10c の \`MarginHealth\` enum 分岐は、この階層の Layer 1-3 への遷移ロジックそのもの。\`Safe\` / \`AtRisk\` = Layer 0、\`Liquidatable\` = Layer 1、\`Underwater\` + insurance fund 残高あり = Layer 2、\`Underwater\` + insurance fund 枯渇 = Layer 3。**4 状態の enum と 4 層の防御は 1 対 1 で対応する。**
 
 ## Hyperliquid 固有の点
@@ -815,22 +815,22 @@ L2 のマージン要件から ADL まで、損失を吸収する 4 層が下に
 
 これで以下を理解した: 
 
-- **Perp とは何か**（L0）
-- **Funding が mark を index に anchor する仕組み**（L1）
-- **Margin と 4 状態の動作**（L2）
-- **Liquidation、insurance fund、ADL が最悪ケースを扱う仕組み**（L3）
+- **Perp とは何か**（レッスン0）
+- **Funding が mark を index に anchor する仕組み**（レッスン1）
+- **Margin と 4 状態の動作**（レッスン2）
+- **Liquidation、insurance fund、ADL が最悪ケースを扱う仕組み**（レッスン3）
 
 DIY Perp track が前提にしているモデルの全体だ。\`compute_premium\` の各式、\`MarginHealth\` の各 variant、\`close_order_spec\` の各行 — すべてが本 primer のどこかをコードで実装している。
 
 **DIY Perp track に進む準備ができた。** 出発点は:
 
-→ **Build OpenHL — Consensus Substrate**（Module 1: BFT + Reth substrate を作る）
+→ **Build OpenHL — Consensus Substrate**（基盤編: BFT + Reth を接続する）
 
 すでに consensus と orderbook を経験済みで、perp 固有レイヤーから入りたい場合:
 
-→ **Build OpenHL — Funding**（L1 で見た内容を実装する）
+→ **Build OpenHL — Funding**（レッスン1 で見た内容を実装する）
 
-→ **Build OpenHL — Liquidation**（L2 + L3 で見た内容を実装する）
+→ **Build OpenHL — Liquidation**（レッスン2 + レッスン3 で見た内容を実装する）
 `,
                 },
               ],

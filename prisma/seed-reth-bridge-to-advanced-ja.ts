@@ -1701,7 +1701,7 @@ Intermediate ティアが要求するのは別の能力である。**Reth・Revm
 
 ## Intermediate の先 — Advanced ティア (L1 Architect)
 
-Intermediate のソース読解を完走すると、次は **Advanced ティア**（5 コース、難易度 **ADVANCED**、track \`reth-l1-architect\`）である。Intermediate が本番ソースを **読む** 力を育てるのに対し、Advanced は自分で L1 を **設計する** 実装力を扱う。
+Intermediate のソース読解を完走すると、次は **Advanced ティア**（5 コース、難易度 **ADVANCED**、track \`reth-l1-architect\`）である。Intermediate が本番ソースを **読む** 力を育てるのに対し、Advanced は自分で レッスン1を **設計する** 実装力を扱う。
 
 - **Consensus Engineering** — PoS / BFT / Tendermint の内部、レイテンシ・ライブネス・finality の設計トレードオフ
 - **Cross-Chain Bridges** — CCIP・OP Standard Bridge・light client を本番ソースで読み、自分で書く

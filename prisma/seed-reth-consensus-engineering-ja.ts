@@ -6,9 +6,9 @@ export async function seedRethConsensusEngineeringJA(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: 'reth-consensus-engineering-ja',
-      title: 'Consensus Engineering — Reth で L1 のコンセンサスを作る',
+      title: 'Consensus Engineering — Reth で L1のコンセンサスを作る',
       description:
-        '「reth を読める」から「L1 を出荷できる」までの最大のギャップを埋めるコース。コンセンサスは Rust EVM スタックの残りの層 — DB、VM、ネットワーク、並行性 — を **ひとつのチェーンとして束ねる** 層。コンセンサス理論を一から (BFT、safety/liveness、FLP)、Rust 製コンセンサスエンジンの実コード (reth の Consensus trait、Malachite、bera-reth の Proof-of-Liquidity) を読み、Reth ベース chain にカスタムコンセンサスを配線する。HyperBFT を読んで Tempo クラスの L1 を出荷する準備ができる。',
+        '「reth を読める」から「レッスン1を出荷できる」までの最大のギャップを埋めるコース。コンセンサスは Rust EVM スタックの残りの層 — DB、VM、ネットワーク、並行性 — を **ひとつのチェーンとして束ねる** 層。コンセンサス理論を一から (BFT、safety/liveness、FLP)、Rust 製コンセンサスエンジンの実コード (reth の Consensus trait、Malachite、bera-reth の Proof-of-Liquidity) を読み、Reth ベース chain にカスタムコンセンサスを配線する。HyperBFT を読んで Tempo クラスの レッスン1を出荷する準備ができる。',
       difficulty: 'ADVANCED',
       duration: 220,
       xpReward: 650,
@@ -225,7 +225,7 @@ Bitcoin、Ethereum、Hyperliquid はすべてコンセンサスを走らせて�
 
 光速で地球を一周すると約 140 ms。2 ラウンドの投票で最小 ~300 ms。実 BFT chain はバリデータを低レイテンシな地域に集めてサブ秒に収める。
 
-**評定**: 古典 BFT は、finality > バリデータ数となる新規 L1 のデフォルト。**Hyperliquid (HotStuff 派生)、Tempo (おそらく Tendermint か HotStuff 系)、ほとんどの app-chain**。
+**評定**: 古典 BFT は、finality > バリデータ数となる新規 レッスン1のデフォルト。**Hyperliquid (HotStuff 派生)、Tempo (おそらく Tendermint か HotStuff 系)、ほとんどの app-chain**。
 
 ## 4. ハイブリッド PoS — Ethereum の道
 
@@ -428,7 +428,7 @@ sequenceDiagram
 
 ## 6. 自分の L1 への含意
 
-Tempo クラスの L1 を作るなら:
+Tempo クラスの レッスン1を作るなら:
 
 - **おそらく** Ethereum の CL は走らせない — 独自の validator set、異なる slot time、異なる finality 周期になる
 - **おそらく** Reth 互換の Engine API は使う — 別の consensus client を差し替えられるように
@@ -463,7 +463,7 @@ Ethereum ハイブリッドの 2 つの半分 (LMD-GHOST + Casper FFG) は、新
                   xpReward: 45,
                   content: `# HotStuff と HyperBFT — 単一リーダー BFT 系統
 
-Hyperliquid は秒間約 20 万件の perp 取引をサブ秒 finality で処理する。その下のコンセンサスが **HyperBFT** — そして HyperBFT は奇抜な新設計ではない。HotStuff の variant である。HotStuff (2018) はさらに PBFT (1999) の派生で、この系統全体が、即時 finality を要する現代のほぼすべての非 Ethereum L1 の選択肢になっている。
+Hyperliquid は秒間約 20 万件の perp 取引をサブ秒 finality で処理する。その下のコンセンサスが **HyperBFT** — そして HyperBFT は奇抜な新設計ではない。HotStuff の variant である。HotStuff (2018) はさらに PBFT (1999) の派生で、この系統全体が、即時 finality を要する現代のほぼすべての非Ethereum L1の選択肢になっている。
 
 Hyperliquid は HyperBFT をオープンソース化していない。しかし HotStuff は公開されており、それを読むことが HYPE の下で実際に走っているものに最も近い参照になる。
 
@@ -752,7 +752,7 @@ Ethereum mainnet 向けに、Reth は \`EthBeaconConsensus\` を提供する (\`
 
 ## 5. Tempo / Hyperliquid 向け — 何が変わるか
 
-BFT コンセンサス付きのカスタム L1 では次を override する:
+BFT コンセンサス付きのカスタム レッスン1では次を override する:
 
 - **\`HeaderValidator\`**: proposer 署名の検証、validator set への包含、view/round 番号
 - **\`validate_block_post_execution\`**: コンセンサス固有の post-state チェックを含める (例: HyperEVM の orderbook 状態)
@@ -967,7 +967,7 @@ Astria は本番環境での「Reth + BFT コンセンサス」のオープン�
 
 ## 8. Tempo 系 L1 向け
 
-Malachite で Tempo クラスの L1 を出荷するなら:
+Malachite で Tempo クラスの レッスン1を出荷するなら:
 
 \`\`\`rust
 // 自分の context
@@ -1064,7 +1064,7 @@ bera-reth/
 └── rpc/                ← bera_* RPC namespace
 \`\`\`
 
-カスタマイズの要点 (Tempo や任意の Reth ベース L1 でも同じパターン):
+カスタマイズの要点 (Tempo や任意の Reth ベース レッスン1でも同じパターン):
 
 ### 3.1 \`consensus/\`
 
@@ -1127,9 +1127,9 @@ bera-reth を参照として学ぶ:
 1. bera-reth を clone する (または GitHub 上で閲覧する)
 2. Expert Module 3 で見た reth 本体の \`crates/optimism/\` のディレクトリ構造と比較する
 3. PoL に最も特化したファイルを 3 つ特定する (別の L1 向けに最もカスタマイズが必要になる箇所)
-4. 推定する: bera-reth を fork して Tempo 系 L1 を作るなら、何を変えて何を残すか?
+4. 推定する: bera-reth を fork して Tempo 系 レッスン1を作るなら、何を変えて何を残すか?
 
-> 最終チェック: 一文で、「Reth 上にカスタム L1 をどう出荷するか?」の構造的な答えは? **「Consensus trait の実装 + カスタム executor hook + NodeBuilder への配線」以上のものを答えていたら過剰**。`,
+> 最終チェック: 一文で、「Reth 上にカスタム レッスン1をどう出荷するか?」の構造的な答えは? **「Consensus trait の実装 + カスタム executor hook + NodeBuilder への配線」以上のものを答えていたら過剰**。`,
                 },
                 {
                   title: 'クイズ: コンセンサス内部を読む',
@@ -1151,7 +1151,7 @@ bera-reth を参照として学ぶ:
                         'Reth は RocksDB を使い、consensus client は MDBX を使う。',
                       ],
                       correctIndex: 1,
-                      explanation: 'EL/CL 分離が基本。Reth (EL) はブロックを検証する — このブロックはルールに従っているか? Lighthouse (CL) は決める — 次にどの有効ブロックの上に積むべきか? カスタム L1 では **CL** (例えば Malachite) **と Reth の Consensus 実装** の両方を差し替える。',
+                      explanation: 'EL/CL 分離が基本。Reth (EL) はブロックを検証する — このブロックはルールに従っているか? Lighthouse (CL) は決める — 次にどの有効ブロックの上に積むべきか? カスタム レッスン1では **CL** (例えば Malachite) **と Reth の Consensus 実装** の両方を差し替える。',
                     },
                     {
                       question: 'Tendermint で、投票が **2 ラウンド** (Prevote、その後 Precommit) になっていて、1 ラウンドでないのはなぜか?',
@@ -1192,7 +1192,7 @@ bera-reth を参照として学ぶ:
                         'revm ではなく別の EVM 実装を使うため。',
                         '標準 Reth はバリデータには十分だが **コンセンサス固有のコードパス** を欠いている。PoL を認識するブロック検証、流動性報酬の流れ向けのカスタム executor hook、BGT 対応の chainspec、validator set を LP 状態と結合させる precompile が必要になる。',
                         'ライセンス上の理由 — Reth は GPL だから。',
-                        'Berachain は別の L1 で動いており、bera-reth は L2 専用だから。',
+                        'Berachain は別の L1で動いており、bera-reth は L2 専用だから。',
                       ],
                       correctIndex: 1,
                       explanation: 'PoL がバリデータ経済の関係を根本から変える。Consensus 実装、executor hook、chainspec のすべてがそれを知っている必要がある。vanilla Reth の上に約 2000 行のカスタマイズ。op-stack-on-reth と同じパターン: 最小だがコンセンサスクリティカルなカスタマイズ。',
@@ -1220,7 +1220,7 @@ bera-reth を参照として学ぶ:
                       explanation: '数学的には、n=3f+1 ノードのネットワークでサイズ 2f+1 の 2 quorum は 2(2f+1)-n = f+1 ノードで重なり、少なくとも 1 つは正直。基礎的な quorum 交差の議論。PBFT から HyperBFT まで、すべての BFT システムが 3f+1 を前提にしている。',
                     },
                     {
-                      question: "Reth ベース L1 に Malachite を組み込む際、**Malachite の Driver / VoteKeeper / RoundStateMachine の分離** が重要な理由は?",
+                      question: "Reth ベース レッスン1に Malachite を組み込む際、**Malachite の Driver / VoteKeeper / RoundStateMachine の分離** が重要な理由は?",
                       options: [
                         'プロトコルを非同期にできる。',
                         "明確に分離されているおかげで、**application 側は `Context` trait (ブロック型、validator set、署名方式) を実装するだけ** で済み、プロトコルロジックはすべて Malachite が処理する。Tendermint を書き直すのではなく、配線する。",
@@ -1251,7 +1251,7 @@ bera-reth を参照として学ぶ:
 
 カスタム \`Consensus\` 実装がある (前レッスンで書いた)。Malachite か自前エンジンが票を駆動する。**この 2 つはどうやって動くノードになるのか?** 答え: NodeBuilder 上で 1 つのビルダー、1 つの実装、1 つのチェーンメソッド呼び出しだけ — カスタム mempool やカスタム EVM を差し込むのと完全に同じ形だ。
 
-本レッスンではその呼び出し箇所を一つずつ辿る。読み終わる頃には、新 L1 の配線をホワイトボードでスケッチできるようになっているはず。
+本レッスンではその呼び出し箇所を一つずつ辿る。読み終わる頃には、新 レッスン1の配線をホワイトボードでスケッチできるようになっているはず。
 
 > 🛑 **スクロール前に予測。** Reth の NodeBuilder にカスタムコンセンサスを配線する。**ビルダーに渡すべき 4 つは何か?** (ヒント: trait 実装、validator set、署名方式、もう 1 つ。)
 
@@ -1669,7 +1669,7 @@ impl MultisigSequencer {
 - liveness モードの追加: 1 鍵がダウンしても他の 2 鍵で生成を続けられる
 - Byzantine 耐性はまだない (署名者が正直であることを前提にしている)
 
-経済的な転換点: 2-of-3 multisig は **多くの本番 L2 の launch 時のパターン**。Optimism、Arbitrum、Base — どれもこの形で launch しており、multisig の鍵はチーム + 監査人 + ノードオペレータが持つ。
+経済的な転換点: 2-of-3 multisig は **多くの本番 レッスン2の launch 時のパターン**。Optimism、Arbitrum、Base — どれもこの形で launch しており、multisig の鍵はチーム + 監査人 + ノードオペレータが持つ。
 
 ## 6. 分散化のステップ 2: 適格性付きのリーダーローテーション
 
@@ -1698,7 +1698,7 @@ slot ごとに別のリーダーが、決定論的に選ばれる。リーダー
 | **Month 12** | ローテーション proposer | ~10 バリデータ | 1 つでも生きていれば liveness |
 | **Year 2** | 本物の BFT (Tendermint/HotStuff) | 30 以上のバリデータ | 2/3+ Byzantine 耐性 |
 
-**Day 0 で L1 を出荷できる** — その後、段階的に分散化していく。Tempo や Hyperliquid は今日おそらく stage 2〜3 にいて、stage 4 を年単位の計画として進めているところ。
+**Day 0 で レッスン1を出荷できる** — その後、段階的に分散化していく。Tempo や Hyperliquid は今日おそらく stage 2〜3 にいて、stage 4 を年単位の計画として進めているところ。
 
 ## 8. 練習
 
@@ -1867,7 +1867,7 @@ Hyperliquid の約 20 バリデータは、バリデータあたり非常に高�
 
 ## 8. Launch 時の問題 — Day 1 から slashing を入れるか?
 
-L1 を slashing 有効で launch すべきか?
+レッスン1を slashing 有効で launch すべきか?
 
 **賛成論**: Day 1 から経済的セキュリティが効き、「我々を信頼してほしい」期間がなくなる
 **反対論**: Slashing ロジックのバグは壊滅的で、検証に時間がかかる
@@ -1878,7 +1878,7 @@ Hyperliquid は slashing 付きで launch した。OP-Stack chain は知られ�
 
 ## 9. 練習
 
-仮想の L1 で計算してみる:
+仮想の レッスン1で計算してみる:
 
 1. Validator set サイズ: 50
 2. バリデータあたりの stake: 1000 万ドル
@@ -1899,7 +1899,7 @@ Hyperliquid は slashing 付きで launch した。OP-Stack chain は知られ�
                   xpReward: 50,
                   content: `# ファイナルクイズ: L1 コンセンサスを作る
 
-最終的なコンセンサスのチェック。Tempo クラスの L1 を出荷するために必要。`,
+最終的なコンセンサスのチェック。Tempo クラスの レッスン1を出荷するために必要。`,
                   quizQuestions: [
                     {
                       question: '新規の決済特化 L1 (Tempo クラス) のコンセンサスを設計しているとする。バリデータ数: 30。Finality 目標: サブ秒。**どのコンセンサス系統** を選び、**その理由は**?',
@@ -1924,7 +1924,7 @@ Hyperliquid は slashing 付きで launch した。OP-Stack chain は知られ�
                       explanation: 'EL/CL の分離: Reth (EL) はブロックを検証する。CL はどのブロックの上に積むかを決め (fork choice)、投票を走らせる。標準 Ethereum (Reth + Lighthouse) でもカスタム L1 (Consensus 実装 + Malachite/CometBFT 等) でも同じ分離になる。',
                     },
                     {
-                      question: '中央集権 sequencer の L1 をできるだけ速く出荷したい。Sequencer コードがブロックごとに行う 3 つは?',
+                      question: '中央集権 sequencer の レッスン1をできるだけ速く出荷したい。Sequencer コードがブロックごとに行う 3 つは?',
                       options: [
                         '2f+1 の票を集め、その後で署名し、その後でブロードキャストする。',
                         'Payload を構築し (tx 選択 + 順序付け)、得られたブロック hash に署名し (authority の証明)、Engine API 経由で Reth に、P2P 経由で他ノードにブロードキャストする。',
@@ -1957,7 +1957,7 @@ Hyperliquid は slashing 付きで launch した。OP-Stack chain は知られ�
                       explanation: '暗号が不正を証明し、slashing がそれをコストの高い行為に変える。Slashing がなければ、Byzantine バリデータは無コストで double-sign でき、プロトコルの 3f+1 という境界は無意味になる。Slashing が「double-sign すべきでない」を「double-sign を経済的に賄えない」に変える。',
                     },
                     {
-                      question: "Malachite は Driver / VoteKeeper / RoundStateMachine を分離している。**Reth ベース L1 に Malachite を組み込むときに何ができるようになるか**?",
+                      question: "Malachite は Driver / VoteKeeper / RoundStateMachine を分離している。**Reth ベース レッスン1に Malachite を組み込むときに何ができるようになるか**?",
                       options: [
                         'Reth と異なるマシンで Malachite を動かせる。',
                         '`Context` trait (ブロック型、validator set、署名方式) を実装するだけでよくなる — Malachite が Tendermint プロトコルのロジック (投票、quorum、view change、タイムアウト) をすべて処理する。Tendermint を書き直すのではなく、配線する。これは revm の `Database` trait と同じパターン: 基盤側を自分が提供し、エンジンがプロトコルを処理する。',
@@ -1979,7 +1979,7 @@ Hyperliquid は slashing 付きで launch した。OP-Stack chain は知られ�
                       explanation: 'Expert Module 3 の見出しの通り、Reth ベース chain は *拡張* で作られるのであって fork ではない。bera-reth の vanilla Reth に対する差分は小さいがコンセンサスクリティカル。公開されている `tempoxyz/tempo` も同じパターン (彼らの `tempoxyz/reth` は upstream に対して 0 commits ahead)。',
                     },
                     {
-                      question: 'L1 を launch する。Day 0 のコンセンサス: 単一 sequencer。**最初の 2 年における現実的な分散化の軌跡** は?',
+                      question: 'レッスン1を launch する。Day 0 のコンセンサス: 単一 sequencer。**最初の 2 年における現実的な分散化の軌跡** は?',
                       options: [
                         '無期限に単一 sequencer のまま。',
                         '単一 sequencer (Day 0) → 2-of-3 multisig sequencer (Month 3) → 約 10 バリデータでのローテーション proposer (Month 12) → 30+ バリデータと slashing による完全 BFT (Year 2)。各ステップで liveness を保ちつつ、段階的に Byzantine 耐性を加えていく。',

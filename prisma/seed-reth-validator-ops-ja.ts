@@ -8,7 +8,7 @@ export async function seedRethValidatorOpsJA(prisma: PrismaClient) {
       slug: 'reth-validator-ops-ja',
       title: 'Validator 運用 — 鍵、slashing、協調アップグレード',
       description:
-        'コンセンサスのコードを書くことと、本番でコンセンサスを動かし続けることの間にある運用層を扱う。Validator の鍵管理 (hot 鍵、HSM、MPC、閾値署名)、slashing 検知と double-signing の防止、協調 hardfork アップグレードまで。動くコンセンサス実装を、オペレータが stake を失わずに済む本番 L1 に変えるためのスキル。',
+        'コンセンサスのコードを書くことと、本番でコンセンサスを動かし続けることの間にある運用層を扱う。Validator の鍵管理 (hot 鍵、HSM、MPC、閾値署名)、slashing 検知と double-signing の防止、協調 hardfork アップグレードまで。動くコンセンサス実装を、オペレータが stake を失わずに済む本番 レッスン1に変えるためのスキル。',
       difficulty: 'ADVANCED',
       duration: 110,
       xpReward: 350,
@@ -190,7 +190,7 @@ Tempo が分散化して validator を運用するフェーズに入る場合:
 - コンセンサスクライアントと統合された slashing-protection データベース
 - Withdrawal 鍵は専用ハードウェアウォレットでオフライン保管
 
-これが任意の L1 で validator を担うときの **ローンチ運用チェックリスト** になる。
+これが任意の レッスン1で validator を担うときの **ローンチ運用チェックリスト** になる。
 
 ### Soltempo / mppsol relayer の運用
 
@@ -563,7 +563,7 @@ Tempo にとっては、大規模 incident 時の **outage は設計上の選択
                   xpReward: 40,
                   content: `# ファイナルクイズ: Validator 運用
 
-Validator ops の最終チェック。任意の validator 運用、L1 の経済設計、本番 chain がなぜ壊れるかを理解するために必要な内容を確認する。`,
+Validator ops の最終チェック。任意の validator 運用、レッスン1の経済設計、本番 chain がなぜ壊れるかを理解するために必要な内容を確認する。`,
                   quizQuestions: [
                     {
                       question: 'なぜ validator 鍵向けの **MPC (Multi-Party Computation)** が、**N ホストに鍵を分散して置く方式** と構造的に異なるのか?',

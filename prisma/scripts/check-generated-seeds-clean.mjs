@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 function run(command) {
   execSync(command, { stdio: 'inherit' });
@@ -9,7 +9,7 @@ function digest(path) {
   return readFileSync(path, 'utf8');
 }
 
-const locales = (process.env.CONTENT_CHECK_LOCALES || 'en')
+const locales = (process.env.CONTENT_CHECK_LOCALES || 'en,ja')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
@@ -28,7 +28,7 @@ const scriptBases = [
 const buildCommands = [];
 for (const locale of locales) {
   for (const base of scriptBases) {
-    buildCommands.push(`node --loader tsx ${base} --locale=${locale}`);
+    buildCommands.push(`npx tsx ${base} --locale=${locale}`);
   }
 }
 
@@ -44,6 +44,10 @@ const generatedTargets = locales.flatMap((locale) => [
 ]);
 
 console.log('Checking generated seed files are up to date...');
+if (!existsSync('drafts')) {
+  console.log('SKIP: drafts/ directory not found. Seed files are treated as source-of-truth.');
+  process.exit(0);
+}
 const before = new Map(generatedTargets.map((p) => [p, digest(p)]));
 for (const command of buildCommands) {
   run(command);

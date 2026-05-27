@@ -9,7 +9,7 @@ export async function seedRethOpenHlClobEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-clob-en",
-      title: "Step 2. CLOB: adding the matching engine",
+      title: "Build OpenHL CLOB — adding the matching engine",
       description:
         "Add a price-time-priority matching engine to the consensus substrate from `building-openhl-consensus`. Build the CLOB as a pure state machine, then wire its fills through the bridge into consensus-committed blocks. The second course in the DIY Perp series.",
       difficulty: "EXPERT",
@@ -36,17 +36,6 @@ export async function seedRethOpenHlClobEN(prisma: PrismaClient) {
                   duration: 15,
                   xpReward: 50,
                   content: `# Build OpenHL CLOB — adding the matching engine on top of the Reth substrate
-
-## 30-second summary
-
-- Audience: engineers who finished Consensus and now need real fill-generation logic.
-- What you get: a deterministic CLOB matching engine and payload fill pipeline.
-- Why now: this unlocks the next step (precompiles) for contract-level integration.
-
-## Completion criteria
-
-- You can pass \`cargo test clob_fills_flow_into_payload\`.
-- You can explain price-time-priority behavior in the CLOB.
 
 The previous course (\`building-openhl-consensus\`) ended with a single-validator BFT chain that decides blocks through a real Reth EVM in 0.02 seconds. **It decides empty blocks.** No transactions. No matching. No price discovery.
 

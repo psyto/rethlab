@@ -9,9 +9,9 @@ export async function seedRethOpenHlAdlEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "building-openhl-adl-en",
-      title: "Step 6. ADL: auto-deleveraging, Layer 3 of the safety-net cascade",
+      title: "Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade",
       description:
-        "Build auto-deleveraging (ADL) — the cascade's last line of defense when the insurance fund couldn't absorb everything. Ranks profitable counter-positions by (pnl_pct × leverage) using Hyperliquid's convention, force-closes them via bookkeeping mutation rather than orderbook submission, and applies a haircut that absorbs the unfilled deficit. Includes the feedback-loop crash explanation (why ADL bypasses the orderbook entirely), the layered conservation law that closes the Stage 10 cascade math, and 4 invariant proptests proving determinism. 5 lessons across 2 modules, byte-for-byte against openhl Stage 10d (d66b44a). Course 6 of the DIY Perp series.",
+        "Build auto-deleveraging (ADL) — the cascade's last line of defense when the insurance fund couldn't absorb everything. Ranks profitable counter-positions by (pnl_pct × leverage) using Hyperliquid's convention, force-closes them via bookkeeping mutation rather than orderbook submission, and applies a haircut that absorbs the unfilled deficit. Includes the feedback-loop crash explanation (why ADL bypasses the orderbook entirely), the layered conservation law that closes the Stage 10 cascade math, and 5 invariant proptests proving determinism. 5 lessons across 2 modules, byte-for-byte against openhl Stage 10d (d66b44a). Course 6 of the DIY Perp series.",
       difficulty: "EXPERT",
       duration: 170,
       xpReward: 330,
@@ -29,7 +29,7 @@ export async function seedRethOpenHlAdlEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: "Step 6. ADL: auto-deleveraging, Layer 3 of the safety-net cascade",
+                  title: "Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade",
                   slug: "openhl-adl-orientation-en",
                   type: 'CONTENT',
                   sortOrder: 0,
@@ -44,7 +44,7 @@ The previous course (\`building-openhl-liquidation\`) shipped the multi-account 
 This course implements that consumer. By the end you'll have shipped:
 
 - **1 new source file / ~530 LOC** in \`crates/liquidation/src/adl.rs\`.
-- **21 tests passing** at SHA \`d66b44a\`: 12 unit tests covering score / no-candidate / single-winner / multi-winner / tiebreaker cases, plus 4 invariant proptests; total crate test count **69 → 90** after this course.
+- **21 tests passing** at SHA \`d66b44a\`: 16 unit tests covering score / no-candidate / single-winner / multi-winner / tiebreaker / nuanced-absorption cases, plus 5 invariant proptests; total crate test count **69 → 90** after this course.
 - **3 new types** (\`AdlScore\`, \`AdlRecord\`, \`AdlReport\`) and **2 new functions** (\`adl_score\`, \`execute_adl\`) — a clean, small module compared to the scanner.
 - **A complete 4-layer safety cascade**: margin requirement (Layer 0) → force-close fee (Layer 1) → insurance fund (Layer 2) → **ADL (Layer 3)** → **socialized loss / protocol insolvency (Layer 4)**. Layer 4 is the regime that 0–3 are designed to make unreachable; if \`AdlReport.deficit_remaining > 0\` at the end of L4 of this course, the chain has formally entered Layer 4 — every depositor takes a haircut, or the protocol halts.
 
@@ -160,7 +160,7 @@ Four layers, four identities. After this course, the openhl-liquidation crate's 
 - **L1** — \`AdlScore\` newtype + \`AdlRecord\` + \`AdlReport\` types + the \`adl_score(snapshot, mark) -> Option<AdlScore>\` function. The pure-compute scoring with \`None\` for flat / losing / zero-collateral cases. 5 score tests.
 - **L2** — \`execute_adl(candidates, mark, deficit) -> AdlReport\` — the orchestration: filter by \`Option<AdlScore>\`, stable-sort descending with \`AccountId\` tiebreaker, haircut loop. Phase-by-phase walkthrough of the 50-line body + 5 simple unit tests (zero / no-candidate / no-profitable / single-winner-full / single-winner-partial).
 - **L3** — Nuanced absorption tests: multi-winner in score order, drain-first-then-partial, tiebreaker by AccountId ascending, "doesn't touch losers or flats" defense. 6 unit tests.
-- **L4** — 4 invariant proptests + Stage 10 quartet retrospective. The conservation law from per-pass to per-block, the 4-layer cascade closed end-to-end.
+- **L4** — 5 invariant proptests + Stage 10 quartet retrospective. The conservation law from per-pass to per-block, the 4-layer cascade closed end-to-end.
 
 ## What's next after this course
 
@@ -209,7 +209,7 @@ Verification:
 cargo test -p openhl-liquidation
 \`\`\`
 
-…passes 74 tests (69 from the Liquidation course + 5 new ADL score tests). Test count climbs to 90 by L4 (5 + 6 + 5 unit tests across L1/L2/L3 + 4 proptests in L4).
+…passes 74 tests (69 from the Liquidation course + 5 new ADL score tests). Test count climbs to 90 by L4 (5 + 6 + 5 unit tests across L1/L2/L3 + 5 proptests in L4).
 
 Specific changes:
 
@@ -675,7 +675,7 @@ diff -u ~/code/my-openhl/crates/liquidation/src/lib.rs ./crates/liquidation/src/
 \`\`\`
 
 After L1:
-- **adl.rs** matches Stage 10d's \`adl.rs\` **through the \`score_higher_for_higher_leverage_winner\` test**. The \`execute_adl\` function and the remaining 16 tests + 4 proptests land in L2 / L3 / L4.
+- **adl.rs** matches Stage 10d's \`adl.rs\` **through the \`score_higher_for_higher_leverage_winner\` test**. The \`execute_adl\` function and the remaining 16 tests + 5 proptests land in L2 / L3 / L4.
 - **lib.rs** matches Stage 10d's \`lib.rs\` **byte-for-byte** for the \`pub mod adl;\` line and the \`pub use adl::{...}\` re-export.
 
 ## Common questions
@@ -710,7 +710,7 @@ L2 implements \`execute_adl(candidates, mark, deficit) -> AdlReport\` — the fu
 
 The phase structure (5 phases): early-return on non-positive deficit → score and filter → stable-sort with tiebreaker → iterate and haircut → build report. Plus 5 simple unit tests: zero deficit, negative deficit, no candidates, no profitable candidates, single winner full absorb.
 
-After L2, the scanner is *runnable for ADL* — 79 tests pass (74 from L1 + 5 new in L2). L3 adds the 6 nuanced absorption tests, L4 adds the 4 invariant proptests and the Stage 10 quartet retrospective.
+After L2, the scanner is *runnable for ADL* — 79 tests pass (74 from L1 + 5 new in L2). L3 adds the 6 nuanced absorption tests, L4 adds the 5 invariant proptests and the Stage 10 quartet retrospective.
 `,
                 },
                 {
@@ -737,7 +737,7 @@ Verification:
 cargo test -p openhl-liquidation adl::tests::adl_
 \`\`\`
 
-…runs the new 5 unit tests added in this lesson (\`adl_zero_deficit_is_noop\`, \`adl_negative_deficit_clamps_remaining_to_zero\`, \`adl_no_candidates_keeps_full_deficit\`, \`adl_no_profitable_keeps_full_deficit\`, \`adl_single_winner_fully_absorbs_small_deficit\`). After this lesson the scanner is *runnable for ADL* — 79 tests pass (74 from L1 + 5 new in L2). L3 will add 6 nuanced absorption tests against execute_adl; L4 will add the 4 invariant proptests and the Stage 10 quartet retrospective.
+…runs the new 5 unit tests added in this lesson (\`adl_zero_deficit_is_noop\`, \`adl_negative_deficit_clamps_remaining_to_zero\`, \`adl_no_candidates_keeps_full_deficit\`, \`adl_no_profitable_keeps_full_deficit\`, \`adl_single_winner_fully_absorbs_small_deficit\`). After this lesson the scanner is *runnable for ADL* — 79 tests pass (74 from L1 + 5 new in L2). L3 will add 6 nuanced absorption tests against execute_adl; L4 will add the 5 invariant proptests and the Stage 10 quartet retrospective.
 
 Specific changes:
 

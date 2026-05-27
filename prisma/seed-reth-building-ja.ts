@@ -352,7 +352,7 @@ trait の分割は理論的な綺麗さではない — **MEV ロジックを触
 
 artemis で 2-hop Uniswap アービ searcher を出す場合の最小手順:
 
-1. **再利用:** pending swap に \`MempoolCollector\`、新 head に \`BlockCollector\`、\`FlashbotsExecutor\` (または対象 L1 の bundle エンドポイント相当)。全部そのまま。
+1. **再利用:** pending swap に \`MempoolCollector\`、新 head に \`BlockCollector\`、\`FlashbotsExecutor\` (または対象 レッスン1の bundle エンドポイント相当)。全部そのまま。
 2. **書く:** \`Event = { NewBlock, PendingTx }\` / \`Action = { SubmitBundle }\` を持つ \`UniArbStrategy\` を 1 つ。\`process_event\` の \`PendingTx\` 分岐: swap をデコード、Revm で fork シミュレート、クロスプール spread を検出、bundle を構築。\`NewBlock\` 分岐: reserve cache をリフレッシュ、古くなった opportunity を捨てる。
 3. **配線:** \`engine.add_collector(...)\` ×2、\`engine.add_strategy(UniArbStrategy::new(...))\`、\`engine.add_executor(...)\`、\`engine.run().await\`。
 
@@ -470,7 +470,7 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 > 🧭 **systems engineering スタックでの位置:** **DB 層**、とくに OLTP + OLAP のデュアルストレージ設計。要点は、point lookup と range scan を同じエンジンに無理に載せないこと。 \`tidx\` はこの発想をチェーンデータへ適用した実例である。
 
-Etherscan や Dune も indexer だが、内部設計は公開されない。[\`tidx\`](https://github.com/tempoxyz/tidx) は公開実装で、Tempo の EVM L1 で実運用されている。本レッスンでは、このコードから設計判断とトレードオフを読む。
+Etherscan や Dune も indexer だが、内部設計は公開されない。[\`tidx\`](https://github.com/tempoxyz/tidx) は公開実装で、Tempo の EVM レッスン1で実運用されている。本レッスンでは、このコードから設計判断とトレードオフを読む。
 
 リポを開く。読む。本レッスンはそのガイド。
 
@@ -2802,9 +2802,9 @@ QuoterV2 differential が pass するまでレッスンは **未完了**。数�
 
 この capstone は、既存レッスンの実装を 1 サービスに統合する。入力は swap intent（JSON）である。
 
-Router は次を順に行う。L7 のクオート、L1 の mempool 監視、Revm での脅威シミュレーション、L5 の sponsor。脅威が高ければ Flashbots Protect へ、低ければ public mempool へ送る。要するに L1 / L4 / L5 / L7 を束ね、追加実装は決定レイヤーに集中させる。
+Router は次を順に行う。レッスン7のクオート、レッスン1の mempool 監視、Revm での脅威シミュレーション、レッスン5の sponsor。脅威が高ければ Flashbots Protect へ、低ければ public mempool へ送る。要するに L1 / L4 / L5 / レッスン7を束ね、追加実装は決定レイヤーに集中させる。
 
-> 📌 **スコープ。** 本キャップストーンは L1 / L4 / L5 / L7 の統合が主眼である。新規実装は **frontrun 検出** と **private submission パス**。実装先は Flashbots Protect だが、同型の private RPC に横展開できる。
+> 📌 **スコープ。** 本キャップストーンは L1 / L4 / L5 / レッスン7の統合が主眼である。新規実装は **frontrun 検出** と **private submission パス**。実装先は Flashbots Protect だが、同型の private RPC に横展開できる。
 
 ## 受け入れ条件
 
@@ -2814,7 +2814,7 @@ Router は次を順に行う。L7 のクオート、L1 の mempool 監視、Revm
 2. **\`detected_threat_routes_through_private_mempool\`** — sandwich 設定 tx が mempool に存在。router が PRIVATE を選び Flashbots Protect 経由で submit。
 3. **\`respects_min_out\`** — スリッページシナリオ。router が submit を拒否し \`SlippageExceeded\` を返す。
 
-**Test-first 読法。** 先に受け入れ条件を確認する。以下では、テストが直接行使する決定レイヤー（新規部分）を示す。残りは L1/L4/L5/L7 の再利用である。
+**Test-first 読法。** 先に受け入れ条件を確認する。以下では、テストが直接行使する決定レイヤー（新規部分）を示す。残りは レッスン1/レッスン4/レッスン5/レッスン7 の再利用である。
 
 ## 何を作るか
 
@@ -2842,15 +2842,15 @@ $ curl -X POST http://localhost:9000/route \\
 \`\`\`mermaid
 flowchart TB
     User["POST /route"] --> Router["Router service"]
-    Router -->|fork mainnet| Aggregator["Aggregator (L7)<br/>quotes + best venue"]
+    Router -->|fork mainnet| Aggregator["Aggregator (レッスン7)<br/>quotes + best venue"]
     Router -->|scan pending txs| Detector["Frontrun detector<br/>(L1 mempool watch +<br/>L7 simulation)"]
     Detector -->|adversarial tx found?| Decide{"Risk?"}
     Aggregator --> Decide
     Decide -->|HIGH| PrivPath["Private mempool<br/>(Flashbots Protect)"]
     Decide -->|LOW| PubPath["Public mempool"]
-    PrivPath --> Sponsor["EIP-7702 sponsor (L5)"]
+    PrivPath --> Sponsor["EIP-7702 sponsor (レッスン5)"]
     PubPath --> Sponsor
-    Sponsor --> Wallet["Wallet backend (L4)<br/>nonce/gas/replace"]
+    Sponsor --> Wallet["Wallet backend (レッスン4)<br/>nonce/gas/replace"]
     Wallet --> Chain
 \`\`\`
 
@@ -3193,7 +3193,7 @@ async fn route_handler(
 
 Drill 5 後、チューニング済みで観察可能、正しく動く frontrun-resistant router が手に入る。**これがユーザの信頼を真剣に受け取る wallet チームに対して production に出すもの。**
 
-> 🛑 **最終チェック (本レッスンの最終チェック)。** 一文で: このティアのレッスンのうち、なぜ *capstone* が他のどのコンポーネントよりも **シミュレーション** (L1) に依存するのか? 答えに「ユーザの損失と同じ単位で脅威を測らずに、防御するかを決められない」が含まれていないなら、capstone はまだ完全には届いていない — Step 4 を読み直す。
+> 🛑 **最終チェック (本レッスンの最終チェック)。** 一文で: このティアのレッスンのうち、なぜ *capstone* が他のどのコンポーネントよりも **シミュレーション** (レッスン1) に依存するのか? 答えに「ユーザの損失と同じ単位で脅威を測らずに、防御するかを決められない」が含まれていないなら、capstone はまだ完全には届いていない — Step 4 を読み直す。
 
 ## Test gate
 
@@ -3245,7 +3245,7 @@ async fn respects_min_out() {
 5. EIP-7702 sponsor (Type 4 tx + paymaster パターン)
 6. Foundry スタイル cheatcode (custom precompile + ハーネス)
 7. Swap aggregator (Revm fork + venue 横断 quote)
-8. **Frontrun-resistant order router (本レッスン)** — L1 / L4 / L5 / L7 を統合
+8. **Frontrun-resistant order router (本レッスン)** — L1 / L4 / L5 / レッスン7を統合
 
 この先: L9 (validate-revm クロスクライアントハーネス) と L10 (HTTP 402 / MPP machine-payments エンドポイント)。swap-router の弧の外側に立つが、同じティアで ship される。
 
@@ -3265,7 +3265,7 @@ async fn respects_min_out() {
 
 例を 1 つ置く。Revm fork は「2.95 WETH 取れる」と予測したのに、実チェーンでは 2.93 しか取れない。この差は、そのまま損失になる。
 
-同じリスクは本ティアの Revm 利用箇所すべてにある。L1 の searcher、L7 の aggregator、L8 の router が対象だ。Revm と mainnet 多数派クライアント（Geth / Nethermind）の挙動がずれると、誤差は静かに本番へ出る。ここでは約 200 行で差分検証ハーネスを作る。
+同じリスクは本ティアの Revm 利用箇所すべてにある。レッスン1の searcher、レッスン7の aggregator、レッスン8の router が対象だ。Revm と mainnet 多数派クライアント（Geth / Nethermind）の挙動がずれると、誤差は静かに本番へ出る。ここでは約 200 行で差分検証ハーネスを作る。
 
 > 📌 **スコープ。** ここでは単一 tx の \`gas + return data\` を JSON-RPC provider と照合する。実運用では state-diff、大量サンプル、fork 境界回帰、CI まで拡張する。学ぶ核は同じで、「一致の定義」と「低コスト検証の作法」である。
 
@@ -3381,7 +3381,7 @@ async fn provider_answer(
 
 ## Step 3: 同じ call をローカルで Revm 経由で走らせる
 
-L1 / L7 と同じ fork パターン。Step 2 と同じブロックにピン留めする:
+L1 / レッスン7と同じ fork パターン。Step 2 と同じブロックにピン留めする:
 
 \`\`\`rust
 use alloy_provider::{network::Ethereum, DynProvider};
@@ -3478,7 +3478,7 @@ async fn validate(rpc_url: &str, block: u64, to: Address, data: Bytes) -> eyre::
 | :--- | :--- | :--- |
 | **本来非ゼロのはずの出力が一貫して 0x もしくは空** | Revm の spec が違う (例: \`Context::mainnet()\` で構築したがチェーンは op-mainnet) | チェーン spec に合わせる: \`OpEvm\`、\`Context::op_mainnet()\` など |
 | **ハードフォーク境界でだけ出力が違う** | Revm のハードフォーク有効化ブロックがチェーンと不一致 | Revm の spec をそのブロックでアクティブな実ハードフォークにピン留めする — \`SpecId\` 参照 |
-| **contract が precompile を呼ぶときだけ出力が違う** | Revm にないカスタム precompile (例: 一部の L2 でアクティブな RIP-7212 secp256r1) | precompile を Revm の precompile registry に追加する (L6 参照) |
+| **contract が precompile を呼ぶときだけ出力が違う** | Revm にないカスタム precompile (例: 一部の レッスン2でアクティブな RIP-7212 secp256r1) | precompile を Revm の precompile registry に追加する (L6 参照) |
 | **出力がぶれる — 同じ入力で時々一致、時々違う** | RPC キャッシング。provider が違うブロックの古い state を返した | 確定ブロック (latest から ~32 引いた値) にピン留めして再実行する |
 | **ガスが固定オフセットでずれる** | intrinsic gas の会計が違う (21,000 base をスキップした、あるいは逆) | 整合性確認: 測っているのは call のガスだけか、tx 全体のガスか? |
 | **ガスがランダムにばらつく** | hot vs cold ストレージアクセス。provider が直近 call で warm state を持っている | クリーンなサイクル後に再実行するか、warm/cold を制御可能な合成 state で fork する |
@@ -3509,7 +3509,7 @@ async fn validate(rpc_url: &str, block: u64, to: Address, data: Bytes) -> eyre::
 
 Drill 5 を完成させれば、本気の Revm ベース searcher / wallet / aggregator チームが出荷している継続検証の規律と構造的に同じものができる。**「ラップトップで動く Revm コード」と「production で信頼できる Revm コード」を分ける規律。**
 
-> 🛑 **最終チェック。** 一文で: なぜこのティアで L1-L8 を作ることが、**同時に**この validation lesson を作ることを要求するのか? 答えに「Reth が ~7-12% のクライアントシェア」と「シミュレーションの正しさは Reth ではない 88-93% との一致に依存する」が繋がっていないなら、冒頭を読み直す — それがこのレッスンがティアの最後にいる全理由。
+> 🛑 **最終チェック。** 一文で: なぜこのティアで レッスン1〜8 を作ることが、**同時に**この validation lesson を作ることを要求するのか? 答えに「Reth が ~7-12% のクライアントシェア」と「シミュレーションの正しさは Reth ではない 88-93% との一致に依存する」が繋がっていないなら、冒頭を読み直す — それがこのレッスンがティアの最後にいる全理由。
 
 ## Test gate
 
@@ -3547,7 +3547,7 @@ async fn coverage_includes_create_and_call_paths() {
 }
 \`\`\`
 
-両方が実 recent-block 範囲で pass するまで — 延いてはあなたが L1–L8 で作ったもの全部への信頼まで — レッスンは **未完了**。1 件でも乖離したら、シミュレーションは何かについて嘘をついていて、L1–L8 の sim 依存判断のどれが間違いだったかを、それを最初に見つけずには知ることができない。
+両方が実 recent-block 範囲で pass するまで — 延いてはあなたが L1–レッスン8で作ったもの全部への信頼まで — レッスンは **未完了**。1 件でも乖離したら、シミュレーションは何かについて嘘をついていて、L1–レッスン8の sim 依存判断のどれが間違いだったかを、それを最初に見つけずには知ることができない。
 
 ## 📺 関連動画
 
@@ -3739,9 +3739,9 @@ tempo request https://aviationstack.mpp.tempo.xyz/v1/flights?flight_iata=AA100
 
 2 つの角度、どちらも実用的です:
 
-- **有料サービスを提供する側として。** エンドポイントを \`Mpp::create(tempo(...))\` (または Stripe、または両方) でラップしる。agent もアプリも 1 リクエストごとに支払える。請求インフラ不要、API キー発行不要、レートリミットダッシュボード不要、Stripe ポータルの統合も不要。各リクエストに見合う金額を charge すれば、プロトコルが決済まで済ませてくれる。L7 のアグリゲータ、L3 のカスタム RPC エンドポイント、L6 の cheatcode harness — どれもこの形で有料化できる。
+- **有料サービスを提供する側として。** エンドポイントを \`Mpp::create(tempo(...))\` (または Stripe、または両方) でラップしる。agent もアプリも 1 リクエストごとに支払える。請求インフラ不要、API キー発行不要、レートリミットダッシュボード不要、Stripe ポータルの統合も不要。各リクエストに見合う金額を charge すれば、プロトコルが決済まで済ませてくれる。レッスン7のアグリゲータ、レッスン3のカスタム RPC エンドポイント、レッスン6の cheatcode harness — どれもこの形で有料化できる。
 
-- **有料サービスを利用する側として。** \`PaymentMiddleware\` を reqwest クライアントに足すだけ。agent — もしくはインデクサ、バリデータの監視スタック — がベンダごとの統合なしに、MPP 対応エンドポイントに支払える。L1 の MEV searcher が有料 mempool feed を欲しい? MPP を差し込む。L4 の wallet backend が有料 data oracle を欲しい? MPP を差し込む。L8 capstone のルータが有料 private order flow を欲しい? MPP を差し込む。
+- **有料サービスを利用する側として。** \`PaymentMiddleware\` を reqwest クライアントに足すだけ。agent — もしくはインデクサ、バリデータの監視スタック — がベンダごとの統合なしに、MPP 対応エンドポイントに支払える。レッスン1の MEV searcher が有料 mempool feed を欲しい? MPP を差し込む。レッスン4の wallet backend が有料 data oracle を欲しい? MPP を差し込む。L8 capstone のルータが有料 private order flow を欲しい? MPP を差し込む。
 
 追いかける価値のある実プロダクトのアイデア: *この粒度では agent しか欲しがらない* 有料サービス — 単発のフライト状況、単発のプライシング oracle、トークン単位課金の単発 LLM 補完など。人間向け API はこの粒度では小さすぎて値付けできない、しかし agent 向け API ならできる。MPP がリクエスト単位の決済を安価にしているからである。
 
@@ -3761,9 +3761,9 @@ tempo request https://aviationstack.mpp.tempo.xyz/v1/flights?flight_iata=AA100
 
 1. **IETF ドラフトを読む。** [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md) を開く。\`Payment\` スキームが定義するヘッダフィールド 3 つと、各々が何を運ぶかを自分の言葉で言えるまで読む。(45 分)
 2. **有料エンドポイントを立てる。** [\`mpp-rs\`](https://github.com/tempoxyz/mpp-rs) を clone し、[\`examples/\`](https://github.com/tempoxyz/mpp-rs/tree/main/examples) を参考に、1 ルートで 0.01 を charge する axum サーバを動かす。curl で叩いて 402 を観察、\`tempo request\` で叩いて 200 を観察する。(2 時間)
-3. **既存サービスをラップする。** これまでのレッスンで作った成果物のうち 1 つを選ぶ — たとえば L3 のカスタム RPC エンドポイント。\`mpp\` の axum 統合を追加し、コールごとに charge する。ウォレットで検証。(3 時間)
+3. **既存サービスをラップする。** これまでのレッスンで作った成果物のうち 1 つを選ぶ — たとえば レッスン3のカスタム RPC エンドポイント。\`mpp\` の axum 統合を追加し、コールごとに charge する。ウォレットで検証。(3 時間)
 4. **セッションをトレースする。** 有料 SSE エンドポイントに対してセッションモードで \`tempo request\` を実行し、ネットワークをトレースする: チャネルはいつ open するか? voucher はいつ交換されるか? いつ決済されるか? \`tempo wallet sessions list\` と \`close\` で状態を確認する。(1.5 時間)
-5. **カスタム provider を実装する。** SDK にない payment rail を 1 つ選ぶ (好きな L2 のネイティブ資産など)。\`PaymentProvider\` (クライアント側) と \`ChargeMethod\` (サーバ側) を実装。自分の有料エンドポイントに対してテストする。*抽象が本当に役に立つかどうかのテスト* である。(4 時間)
+5. **カスタム provider を実装する。** SDK にない payment rail を 1 つ選ぶ (好きな レッスン2のネイティブ資産など)。\`PaymentProvider\` (クライアント側) と \`ChargeMethod\` (サーバ側) を実装。自分の有料エンドポイントに対してテストする。*抽象が本当に役に立つかどうかのテスト* である。(4 時間)
 
 ドリル 3 まで進めば、本物のインフラにデプロイ可能な有料エンドポイントを持っていることになる。ドリル 5 まで進めば、プロトコルを自分で拡張できるレベルまで内在化できたと言える。
 

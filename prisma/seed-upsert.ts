@@ -49,6 +49,16 @@ import { seedRethP2PNetworkingEN } from './seed-reth-p2p-networking-en';
 import { seedRethP2PNetworkingJA } from './seed-reth-p2p-networking-ja';
 import { seedRethValidatorOpsEN } from './seed-reth-validator-ops-en';
 import { seedRethValidatorOpsJA } from './seed-reth-validator-ops-ja';
+import { seedRethValidatorOpsBootcampEN } from './seed-reth-validator-ops-bootcamp-en';
+import { seedRethValidatorOpsBootcampJA } from './seed-reth-validator-ops-bootcamp-ja';
+import { seedRethConsensusEconomicsEN } from './seed-reth-consensus-economics-en';
+import { seedRethConsensusEconomicsJA } from './seed-reth-consensus-economics-ja';
+import { seedRethMultinodeTestnetEN } from './seed-reth-multinode-testnet-en';
+import { seedRethMultinodeTestnetJA } from './seed-reth-multinode-testnet-ja';
+import { seedRethPerformanceCapacityEN } from './seed-reth-performance-capacity-en';
+import { seedRethPerformanceCapacityJA } from './seed-reth-performance-capacity-ja';
+import { seedRethSecurityGovernanceEN } from './seed-reth-security-governance-en';
+import { seedRethSecurityGovernanceJA } from './seed-reth-security-governance-ja';
 import { seedRethOpenHlConsensusEN } from './seed-reth-openhl-consensus-en';
 import { seedRethOpenHlConsensusJA } from './seed-reth-openhl-consensus-ja';
 import { seedRethOpenHlClobEN } from './seed-reth-openhl-clob-en';
@@ -96,6 +106,16 @@ const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethP2PNetworkingJA,
   seedRethValidatorOpsEN,
   seedRethValidatorOpsJA,
+  seedRethValidatorOpsBootcampEN,
+  seedRethValidatorOpsBootcampJA,
+  seedRethConsensusEconomicsEN,
+  seedRethConsensusEconomicsJA,
+  seedRethMultinodeTestnetEN,
+  seedRethMultinodeTestnetJA,
+  seedRethPerformanceCapacityEN,
+  seedRethPerformanceCapacityJA,
+  seedRethSecurityGovernanceEN,
+  seedRethSecurityGovernanceJA,
   seedRethOpenHlConsensusEN,
   seedRethOpenHlConsensusJA,
   seedRethOpenHlClobEN,

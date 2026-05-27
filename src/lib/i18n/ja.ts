@@ -136,8 +136,8 @@ export const ja: TranslationKeys = {
     },
     diyPerpSeries: {
       title: 'DIY Perp シリーズについて',
-      intro: 'Hyperliquid は取引量で世界最大のPerp DEX で、そのスタック（HyperBFT consensus、HyperCore マッチングエンジン、HyperEVM execution）はすべてクローズドソース。`psyto/openhl` はそのオープンソース・リファレンス実装 — 実 Reth (EVM) と実 Malachite (BFT) を 1 つの Rust workspace に組み込み、その上に CLOB・funding・vault の pure state machine を載せた構成。CL/EL の境界はわずか 4 メッセージで、各 state machine は I/O フリーで決定的。',
-      mapping: 'DIY Perp シリーズは openhl の build-along コース群。`cargo init` から始め、Consensus → CLOB → Precompiles → Funding → Liquidation の 5 コースを通じて、Hyperliquid のオープンソース実装を完成させる。各レッスンは openhl の特定 commit SHA に pin され、その revision との `git diff` が答え合わせ。',
+      intro: 'Hyperliquidの実装スタックはクローズドソースです。`psyto/openhl` は、その設計思想を学ぶためのオープンな参照実装で、Reth（EVM）とMalachite（BFT）を同一Rust workspaceで接続し、CLOB・Funding・Vaultを決定的なstate machineとして構成しています。',
+      mapping: 'DIY Perp シリーズは openhl の build-along コースです。`cargo init` から始め、Consensus → CLOB → Precompiles → Funding → Liquidation を順に実装します。各レッスンは特定の commit SHA に対応し、`git diff` で答え合わせできます。',
       openhlLinkText: 'psyto/openhl',
       architectureLinkText: 'アーキテクチャ概要 →',
     },

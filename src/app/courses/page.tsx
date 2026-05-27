@@ -117,7 +117,7 @@ export default function CourseCatalogPage() {
             : 'Upper-tier L1 architecture and operations',
         };
 
-        const isFlagship = (slug: string, track?: string) =>
+        const isFlagship = (slug: string, track?: string | null) =>
           track === 'diy-perp' || slug.includes('openhl');
         const isPrereq = (slug: string) =>
           slug.includes('beginner') ||

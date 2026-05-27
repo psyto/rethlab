@@ -9,7 +9,7 @@ export async function seedRethOpenHlConsensusEN(prisma: PrismaClient) {
   await prisma.course.create({
     data: {
       slug: "reth-openhl-consensus-en",
-      title: "Step 1. Consensus: from `cargo init` to a single-validator devnet",
+      title: "Build OpenHL — from `cargo init` to a single-validator devnet",
       description:
         "Build the consensus substrate for an HL-shape L1 from scratch — wire real Reth (EVM) and real Malachite (BFT) into a single Rust workspace that produces blocks end-to-end. The reference implementation is `psyto/openhl`. The first course in the DIY Perp series.",
       difficulty: "EXPERT",
@@ -36,17 +36,6 @@ export async function seedRethOpenHlConsensusEN(prisma: PrismaClient) {
                   duration: 20,
                   xpReward: 60,
                   content: `# Build OpenHL — from \`cargo init\` to a single-validator devnet
-
-## 30-second summary
-
-- Audience: engineers who want to implement Hyperliquid-style architecture in Rust.
-- What you get: a minimal consensus substrate that connects real Reth + real Malachite.
-- Why now: this is the foundation for CLOB, precompiles, funding, and liquidation.
-
-## Completion criteria
-
-- You can pass \`cargo test first_block_via_engine_actors\`.
-- You can explain the CL/EL connection points in your bridge contract.
 
 This is not a course you read. This is a course you **build**.
 
@@ -90,7 +79,7 @@ This course covers **openhl Build arc Module 1 only** — the consensus substrat
 
 Those each become their own rethlab course later in the L1 Architect tier. When you finish this course you have the **substrate** — the BFT-EVM contract, the actor wiring, the live-Reth integration. You do **not** have a working perp DEX. The perp DEX is Modules 2 through 5 on top of what you build here.
 
-This is honest scoping. A "build your own Hyperliquid" course that promises everything in 15 lessons would be lying to you.
+This is honest scoping. A "build your own Hyperliquid" course that promises everything in 16 lessons would be lying to you.
 
 ## 3. How this course works
 
@@ -155,7 +144,7 @@ If \`cargo check\` in \`openhl-reference\` passes, you have the right toolchain.
 
 > 🛑 **Anti-fluency.** "I'll just edit \`openhl-reference\` directly." **No.** That repo is your answer key, not your workspace. Treat it as read-only. Edits to \`my-openhl/\` are yours; edits to \`openhl-reference/\` are confusing — you'll lose track of what you wrote vs what was already there.
 
-## 6. The 15-lesson map
+## 6. The 16-lesson map
 
 Each row is one lesson. Each lesson ends with a passing \`cargo test\`.
 

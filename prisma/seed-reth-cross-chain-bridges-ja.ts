@@ -295,7 +295,7 @@ Reth EVM は mainnet と同一なので、任意の Solidity light client (Helio
 1. [\`a16z/helios\`](https://github.com/a16z/helios) を眺める — 時間があれば clone してみる
 2. BLS 署名検証ロジックを含むファイルを特定する
 3. 推定: 自分の L1 が 30 validator (Ethereum の 512 と比較) だとしたら、light client 検証はどれだけ安くなるか?
-4. スケッチ: カスタム L1 の block ヘッダーが light client 向けに公開すべきフィールドは何か?
+4. スケッチ: カスタム レッスン1の block ヘッダーが light client 向けに公開すべきフィールドは何か?
 
 ## 7. 読み物
 
@@ -303,7 +303,7 @@ Reth EVM は mainnet と同一なので、任意の Solidity light client (Helio
 - [Ethereum light client spec](https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md) — 正式仕様
 - [SP1 light client](https://github.com/succinctlabs/sp1) — ZK light client 実装
 
-> 最終チェック: 一文で、自分の L1 の light client が他 chain からの自分の state 検証を **最も trust 最小化** にする理由を答える。**答えに「source chain のコンセンサスだけ信頼」が出てこなければ §1 を再読**。`,
+> 最終チェック: 一文で、自分の レッスン1の light client が他 chain からの自分の state 検証を **最も trust 最小化** にする理由を答える。**答えに「source chain のコンセンサスだけ信頼」が出てこなければ §1 を再読**。`,
                 },
               ],
             },
@@ -410,9 +410,9 @@ Canonical な OP bridge コードは [\`ethereum-optimism/optimism\`](https://gi
 1. L2 上で withdrawal の開始を観測する
 2. ただちに L1 トークンをユーザに送る (手数料を差し引いた額)
 3. 7 日待つ
-4. 期間経過後に L1 で withdrawal をクレームする
+4. 期間経過後に レッスン1で withdrawal をクレームする
 
-LP は **withdrawal リスク** (L1 の state proof が失敗するリスク) を引き受ける代わりに手数料を得る。Across、Hop、Connext のような市場がこれを大規模に運営している。
+LP は **withdrawal リスク** (レッスン1の state proof が失敗するリスク) を引き受ける代わりに手数料を得る。Across、Hop、Connext のような市場がこれを大規模に運営している。
 
 これは trust の意味では **bridge ではない** — trustless bridge の上に重ねた金融商品だ。trust の分担はこうなる:
 - Bridge 自体: trustless (rollup コンセンサス)
@@ -425,7 +425,7 @@ OP Stack は両方を持っている:
 - **Standard Bridge**: ERC20 をマッピング — 任意トークン用
 - **Native Bridge**: ETH (と OP トークン) を直接扱う
 
-Standard Bridge 経由でトークンを bridge するには、**登録** が必要だ — L1 と L2 のトークンアドレスを対応付ける。これがないと、bridge は L2 側でどのトークンを mint すべきか判断できない。
+Standard Bridge 経由でトークンを bridge するには、**登録** が必要だ — L1とL2のトークンアドレスを対応付ける。これがないと、bridge は L2 側でどのトークンを mint すべきか判断できない。
 
 Tempo にとって重要な点: Tempo がそのチェーンネイティブの stablecoin を持ち、それを Ethereum に持っていきたいなら、Tempo-Ethereum 間のトークンペア登録を伴う **Standard Bridge 相当の仕組み** が必要になる。
 
@@ -897,7 +897,7 @@ async fn main() -> eyre::Result<()> {
     let l2_provider = ProviderBuilder::new()
         .on_http("https://tempo-rpc.url".parse()?);
 
-    // L1 の latest finalized block 取得
+    // レッスン1の latest finalized block 取得
     let block = l1_provider
         .get_block(BlockId::finalized())
         .full()
@@ -916,7 +916,7 @@ async fn main() -> eyre::Result<()> {
         // Inclusion proof 構築
         let proof = build_inclusion_proof(&log, &block).await?;
 
-        // L2 に提出
+        // L2に提出
         let tx = l2_provider
             .send_transaction(TransactionRequest::default()
                 .with_to(L2_BRIDGE)
@@ -1098,7 +1098,7 @@ Tempo (Reth ベースの BFT) の場合、Ethereum 上の light client は **Eth
                   xpReward: 50,
                   content: `# ファイナルクイズ: クロスチェーン bridge
 
-クロスチェーンの最終チェック。Tempo、Hyperliquid、あるいは任意の Reth ベース L1 に触れる bridge を設計するために必要な内容だ。`,
+クロスチェーンの最終チェック。Tempo、Hyperliquid、あるいは任意の Reth ベース レッスン1に触れる bridge を設計するために必要な内容だ。`,
                   quizQuestions: [
                     {
                       question: 'なぜ **最大級の bridge ハック** は資産コントラクトのバグではなく、鍵 / 運用侵害やクロスチェーン trust ロジックのバグから出続けるのか?',
@@ -1117,7 +1117,7 @@ Tempo (Reth ベースの BFT) の場合、Ethereum 上の light client は **Eth
                         '速度、コスト、セキュリティ。CCIP は速度とセキュリティを選んでいる。',
                         'Trustlessness、generality、extensibility。どの 2 つは満たせるが 3 つ全部は満たせない。CCIP は **general** (多 chain) + **extensible** (chain 追加が容易) を取り **trustless** を犠牲にしている — 純粋暗号ではなく PoS DON + RMN に依存する。',
                         'レイテンシ、スループット、コスト。CCIP はスループットとコストを選んでいる。',
-                        'L1、L2、サイドチェーン。CCIP は L1 と L2 をサポートする。',
+                        'L1、L2、サイドチェーン。CCIP は レッスン1と レッスン2をサポートする。',
                       ],
                       correctIndex: 1,
                       explanation: 'トリレンマはアーキテクチャ上の制約: trustless + general + extensible のうち 2 つしか取れない。CCIP は general + extensible (マルチチェーン、追加容易)。IBC は trustless + general (Cosmos chain)。OP Standard は trustless + extensible (OP Stack 内のみ)。3 つすべてを満たすシステムは存在しない。',
@@ -1169,8 +1169,8 @@ Tempo (Reth ベースの BFT) の場合、Ethereum 上の light client は **Eth
                     {
                       question: '最小 trust 最小化 bridge の構築には 3 つのコンポーネントが必要: L1 contract、relayer、L2 contract。**Relayer は何を信頼するか、そしてそれがなぜ重要なのか?**',
                       options: [
-                        'Relayer は L1 と L2 の sequencer を信頼する。',
-                        'Relayer は **permissionless で、何も信頼しない**。誰でも relayer を動かせる。L1 イベントを観測し、Merkle proof を構築し、L2 に提出する。L2 コントラクト内の light client がその proof を検証すれば、アクションが実行される。Relayer の正直さは関係ない — 重要なのは暗号 proof だけだ。',
+                        'Relayer は レッスン1と レッスン2の sequencer を信頼する。',
+                        'Relayer は **permissionless で、何も信頼しない**。誰でも relayer を動かせる。L1 イベントを観測し、Merkle proof を構築し、L2に提出する。L2 コントラクト内の light client がその proof を検証すれば、アクションが実行される。Relayer の正直さは関係ない — 重要なのは暗号 proof だけだ。',
                         'Relayer はユーザを信頼し、KYC を要求する。',
                         'Relayer は Chainlink が運用しており、その oracle ネットワークを信頼する。',
                       ],
