@@ -444,15 +444,15 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 **Building with the Stack** ティアは 10 lesson 全部 ship 済み。ここから:
 
-- **L2** — Reorg-aware Postgres indexer (ExEx 駆動、in-process)
-- **L3** — \`extend_rpc_modules\` 経由のカスタム RPC エンドポイント
-- **L4** — Wallet backend (signer pool + nonce manager + replace-on-stuck)
-- **L5** — EIP-7702 sponsor service (Type 4 tx + paymaster パターン)
-- **L6** — Foundry スタイル cheatcode (custom precompile + 最小ハーネス)
-- **L7** — Swap aggregator (Revm fork + 横断 venue クオート)
-- **L8 (Capstone)** — 上記すべてを統合する frontrun-resistant order router
-- **L9** — Validate-revm クロスクライアントハーネス (production provider と比較)
-- **L10** — HTTP 402 / MPP machine-payments エンドポイント (Tempo の payments スタック)
+- **レッスン 2** — Reorg-aware Postgres indexer (ExEx 駆動、in-process)
+- **レッスン 3** — \`extend_rpc_modules\` 経由のカスタム RPC エンドポイント
+- **レッスン 4** — Wallet backend (signer pool + nonce manager + replace-on-stuck)
+- **レッスン 5** — EIP-7702 sponsor service (Type 4 tx + paymaster パターン)
+- **レッスン 6** — Foundry スタイル cheatcode (custom precompile + 最小ハーネス)
+- **レッスン 7** — Swap aggregator (Revm fork + 横断 venue クオート)
+- **レッスン 8 (Capstone)** — 上記すべてを統合する frontrun-resistant order router
+- **レッスン 9** — Validate-revm クロスクライアントハーネス (production provider と比較)
+- **レッスン 10** — HTTP 402 / MPP machine-payments エンドポイント (Tempo の payments スタック)
 
 各々が自己完結した 約 200〜300 行の build、同じ predict / find-in-repo / anti-fluency スタイル。ターゲットユースケースに合うものから選ぶ。
 
@@ -1956,7 +1956,7 @@ async fn main() -> eyre::Result<()> {
 | **Authorization 検証** | \`signed_auth.recover_authority()\` で復号して、申告された user と一致するかを (ガス支払い前に) 検証する。本サービスは入力を信頼するが、production ではチェックする |
 | **再送防止** | tx 後にユーザの nonce が変わる。提出 *前* に authorization の nonce が現在の EOA nonce と一致するかチェックし、古い authorization は同期的に拒否すべき |
 | **支出制限** | ユーザ単位の日次上限、call ごとの value 上限、delegate アドレスの allowlist。(あなたがガスを払うので、誰のために sponsor するかはあなたが決める) |
-| **Watcher** | [Lesson 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) の replace-on-stuck ロジック。EIP-7702 tx は同じ mempool を通るので、引き上げパターンは同一 |
+| **Watcher** | [レッスン 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) の replace-on-stuck ロジック。EIP-7702 tx は同じ mempool を通るので、引き上げパターンは同一 |
 | **マルチユーザバッチング** | 1 つの tx で \`auth_list = [Alice's auth, Bob's auth, Carol's auth]\` + \`multicall\` スタイルの delegate call。ユーザ単位のガス償却が下がる |
 | **ガス sponsor 会計** | ユーザごとの支出量を追跡、\`/balance\` エンドポイントを公開、Stripe / オンチェーン入金 / アプリ subscription で補充 |
 | **Delegate バージョンピン留め** | 特定の delegate アドレス (監査済みセット) のみ許可する。未知の delegate への authorization は拒否 — 悪意の可能性 |
@@ -1970,7 +1970,7 @@ async fn main() -> eyre::Result<()> {
 2. **Nonce 鮮度チェック。** 提出前に現在のユーザ nonce を取得し、authorization の \`nonce\` と一致するか検証する。(15分)
 3. **マルチユーザバッチング。** \`/sponsor\` を \`(user, user_authorization, calls)\` トリプルのリストを受け取るよう変更。全 authorization + multicall スタイルの delegate call を持つ 1 tx を構築。**1 ユーザの auth がバッチ中で無効だったら最悪何が起きる?** (1.5時間)
 4. **支出上限。** \`HashMap<Address, U256>\` でユーザ単位のガス支出を追跡。設定可能な日次上限を超えるリクエストは拒否。(45分)
-5. **Replace-on-stuck。** [Lesson 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) の watcher を持ってきて統合する。(30分 — パターンを理解していれば大半コピペ)
+5. **Replace-on-stuck。** [レッスン 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) の watcher を持ってきて統合する。(30分 — パターンを理解していれば大半コピペ)
 
 Drill 5 まで終えれば、内部アプリ向け sponsor サービスとしては実用水準に到達する。SDK、支出ポリシー、観測基盤を加えれば外部提供レベルへ進める。
 
@@ -2389,7 +2389,7 @@ contract MeasureGasDifferential is Test {
 ## 📺 関連動画
 
 \`\`\`youtube
-sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッスンが reverse-engineer した cheatcode パターン)
+sJpレッスン 21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッスンが reverse-engineer した cheatcode パターン)
 \`\`\`
 
 > **🧭 ここまでで積み上げたもの:** **VM 層の拡張機構** を出荷した — 高アドレスに登録したカスタム precompile が、VM から Rust 関数を呼ぶかたちを、Solidity リファレンスとの differential fuzz で固めた。JNI や V8 のネイティブバインディングと同じパターンを、Revm に持ち込んだかたち。次のレッスンでは **DB 層の consistent snapshot read** に移る: fork した DEX 状態に対する swap aggregator。
@@ -2738,9 +2738,9 @@ async fn main() -> eyre::Result<()> {
 2. **ガス会計。** 各 quote から推定ガスコストを引く (\`evm.estimate_gas\` を仮想的な swap に対して使う)。「best」ルートは今や \`amount_out − gas_cost_in_out_token\` を最大化するルートのはず。(2時間)
 3. **マルチホップ探索。** 2-hop 探索を構築: A → WETH → B。WETH 経由の各候補に対して連鎖 quote を計算し、直接ルートと比較する。(3時間)
 4. **Split routing。** トップ 2 venue の 50/50 split を実装し、合計 output が単独より大きいかチェックする。(2時間)
-5. **クロスティア:** aggregator を wallet backend ([Lesson 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja)) に \`POST /quote-and-swap\` として組み込み、submission 用の署名済み tx を返す。(3時間)
+5. **クロスティア:** aggregator を wallet backend ([レッスン 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja)) に \`POST /quote-and-swap\` として組み込み、submission 用の署名済み tx を返す。(3時間)
 
-Drill 5 を完成させれば、構造的に aggregator-as-a-service ができる。MEV 保護 ([Lesson 8](/courses/reth-building-ja/lessons/build-capstone-router-ja)) を組み込めば、2023 年に出荷されたものと同等水準。
+Drill 5 を完成させれば、構造的に aggregator-as-a-service ができる。MEV 保護 ([レッスン 8](/courses/reth-building-ja/lessons/build-capstone-router-ja)) を組み込めば、2023 年に出荷されたものと同等水準。
 
 > 🛑 **最終チェック。** 一文で: なぜ aggregator にとって **fork** が **N 並列の \`eth_call\`** より厳密に優れているのか? 答えに「全 read を貫く atomic state」が含まれていないなら、Step 1 を読み直す — その atomicity こそが比較を健全にする。
 
@@ -2802,9 +2802,9 @@ QuoterV2 differential が pass するまでレッスンは **未完了**。数�
 
 この capstone は、既存レッスンの実装を 1 サービスに統合する。入力は swap intent（JSON）である。
 
-Router は次を順に行う。レッスン7のクオート、レッスン1の mempool 監視、Revm での脅威シミュレーション、レッスン5の sponsor。脅威が高ければ Flashbots Protect へ、低ければ public mempool へ送る。要するに L1 / L4 / L5 / レッスン7を束ね、追加実装は決定レイヤーに集中させる。
+Router は次を順に行う。レッスン7のクオート、レッスン1の mempool 監視、Revm での脅威シミュレーション、レッスン5の sponsor。脅威が高ければ Flashbots Protect へ、低ければ public mempool へ送る。要するに レッスン 1 / レッスン 4 / レッスン 5 / レッスン7を束ね、追加実装は決定レイヤーに集中させる。
 
-> 📌 **スコープ。** 本キャップストーンは L1 / L4 / L5 / レッスン7の統合が主眼である。新規実装は **frontrun 検出** と **private submission パス**。実装先は Flashbots Protect だが、同型の private RPC に横展開できる。
+> 📌 **スコープ。** 本キャップストーンは レッスン 1 / レッスン 4 / レッスン 5 / レッスン7の統合が主眼である。新規実装は **frontrun 検出** と **private submission パス**。実装先は Flashbots Protect だが、同型の private RPC に横展開できる。
 
 ## 受け入れ条件
 
@@ -2843,7 +2843,7 @@ $ curl -X POST http://localhost:9000/route \\
 flowchart TB
     User["POST /route"] --> Router["Router service"]
     Router -->|fork mainnet| Aggregator["Aggregator (レッスン7)<br/>quotes + best venue"]
-    Router -->|scan pending txs| Detector["Frontrun detector<br/>(L1 mempool watch +<br/>L7 simulation)"]
+    Router -->|scan pending txs| Detector["Frontrun detector<br/>(レッスン 1 mempool watch +<br/>レッスン 7 simulation)"]
     Detector -->|adversarial tx found?| Decide{"Risk?"}
     Aggregator --> Decide
     Decide -->|HIGH| PrivPath["Private mempool<br/>(Flashbots Protect)"]
@@ -2860,11 +2860,11 @@ flowchart TB
 
 | コンポーネント | 出典 | ここで新規なもの |
 | :--- | :--- | :--- |
-| **DEX 横断クオート** | [L7](/courses/reth-building-ja/lessons/build-swap-aggregator-ja) | そのまま再利用 |
-| **Mempool 監視** | [L1](/courses/reth-building-ja/lessons/build-mev-searcher-ja) (searcher の入力!) | 防御として再利用 — 機会ではなく敵候補を見つける |
-| **Revm fork シミュレーション** | [L1](/courses/reth-building-ja/lessons/build-mev-searcher-ja) | 「この敵 tx はユーザを傷つけるか?」のスコアリングに使う |
-| **EIP-7702 sponsor** | [L5](/courses/reth-building-ja/lessons/build-7702-sponsor-ja) | パスに統合してユーザがガスを払わないようにする |
-| **Wallet backend submission + replace** | [L4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) | public-mempool パスに使う |
+| **DEX 横断クオート** | [レッスン 7](/courses/reth-building-ja/lessons/build-swap-aggregator-ja) | そのまま再利用 |
+| **Mempool 監視** | [レッスン 1](/courses/reth-building-ja/lessons/build-mev-searcher-ja) (searcher の入力!) | 防御として再利用 — 機会ではなく敵候補を見つける |
+| **Revm fork シミュレーション** | [レッスン 1](/courses/reth-building-ja/lessons/build-mev-searcher-ja) | 「この敵 tx はユーザを傷つけるか?」のスコアリングに使う |
+| **EIP-7702 sponsor** | [レッスン 5](/courses/reth-building-ja/lessons/build-7702-sponsor-ja) | パスに統合してユーザがガスを払わないようにする |
+| **Wallet backend submission + replace** | [レッスン 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) | public-mempool パスに使う |
 | **Private orderflow submission** | NEW | Flashbots Protect / MEV-Share 統合 |
 | **決定ロジック (route + risk → submission パス)** | NEW | Capstone の貢献部分 |
 
@@ -3143,24 +3143,24 @@ async fn route_handler(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RouteRequest>,
 ) -> Result<Json<RouteDecision>, (axum::http::StatusCode, String)> {
-    // 1. venue 横断 quote (L7 持ち込み)
+    // 1. venue 横断 quote (レッスン 7 持ち込み)
     let mut db = build_fork().await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let (best, venue) = best_quote(&mut db, &req).await
         .map_err(|e| (axum::http::StatusCode::BAD_GATEWAY, e.to_string()))?;
 
-    // 2. ~2 秒間 mempool で adversarial tx を監視 (L1 反転)
+    // 2. ~2 秒間 mempool で adversarial tx を監視 (レッスン 1 反転)
     let pool_for_route = address_for_venue(venue, req.in_token, req.out_token);
     let adversaries = scan_for_adversaries(&state.public_provider, pool_for_route, req.in_token, Duration::from_secs(2)).await
         .unwrap_or_default();
 
-    // 3. シミュレーションでリスクをスコア (L1 + L7 結合)
+    // 3. シミュレーションでリスクをスコア (レッスン 1 + レッスン 7 結合)
     let mut risk_db = build_fork().await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let risk = score_risk(&mut risk_db, &adversaries, best.amount_out, &req).await
         .unwrap_or(FrontrunRisk::Low);
 
-    // 4. 一致する submission パスで実行 (L4 + L5 持ち込み)
+    // 4. 一致する submission パスで実行 (レッスン 4 + レッスン 5 持ち込み)
     let decision = execute_decision(&state, &req, venue, best.amount_out, risk).await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -3245,9 +3245,9 @@ async fn respects_min_out() {
 5. EIP-7702 sponsor (Type 4 tx + paymaster パターン)
 6. Foundry スタイル cheatcode (custom precompile + ハーネス)
 7. Swap aggregator (Revm fork + venue 横断 quote)
-8. **Frontrun-resistant order router (本レッスン)** — L1 / L4 / L5 / レッスン7を統合
+8. **Frontrun-resistant order router (本レッスン)** — レッスン 1 / レッスン 4 / レッスン 5 / レッスン7を統合
 
-この先: L9 (validate-revm クロスクライアントハーネス) と L10 (HTTP 402 / MPP machine-payments エンドポイント)。swap-router の弧の外側に立つが、同じティアで ship される。
+この先: レッスン 9 (validate-revm クロスクライアントハーネス) と レッスン 10 (HTTP 402 / MPP machine-payments エンドポイント)。swap-router の弧の外側に立つが、同じティアで ship される。
 
 > **🧭 ここまでで積み上げたもの:** **ネットワーク層 + コンパイラ層 + 認証層の統合** を出荷した — マルチソース入力 → simulation → 経路判断 → 適切な submission チャネル、これを benign / threat / slippage の E2E テスト群で固めた。HFT の order router や CDN の edge router と同じ構造を、MEV 下の EVM トランザクションルーティングに持ち込んだかたち。次のレッスンでは **VM 層の正しさ検証** に移る: production provider に対する Revm の differential testing。
 `,
@@ -3381,7 +3381,7 @@ async fn provider_answer(
 
 ## Step 3: 同じ call をローカルで Revm 経由で走らせる
 
-L1 / レッスン7と同じ fork パターン。Step 2 と同じブロックにピン留めする:
+レッスン 1 / レッスン7と同じ fork パターン。Step 2 と同じブロックにピン留めする:
 
 \`\`\`rust
 use alloy_provider::{network::Ethereum, DynProvider};
@@ -3478,7 +3478,7 @@ async fn validate(rpc_url: &str, block: u64, to: Address, data: Bytes) -> eyre::
 | :--- | :--- | :--- |
 | **本来非ゼロのはずの出力が一貫して 0x もしくは空** | Revm の spec が違う (例: \`Context::mainnet()\` で構築したがチェーンは op-mainnet) | チェーン spec に合わせる: \`OpEvm\`、\`Context::op_mainnet()\` など |
 | **ハードフォーク境界でだけ出力が違う** | Revm のハードフォーク有効化ブロックがチェーンと不一致 | Revm の spec をそのブロックでアクティブな実ハードフォークにピン留めする — \`SpecId\` 参照 |
-| **contract が precompile を呼ぶときだけ出力が違う** | Revm にないカスタム precompile (例: 一部の レッスン2でアクティブな RIP-7212 secp256r1) | precompile を Revm の precompile registry に追加する (L6 参照) |
+| **contract が precompile を呼ぶときだけ出力が違う** | Revm にないカスタム precompile (例: 一部の レッスン2でアクティブな RIP-7212 secp256r1) | precompile を Revm の precompile registry に追加する (レッスン 6 参照) |
 | **出力がぶれる — 同じ入力で時々一致、時々違う** | RPC キャッシング。provider が違うブロックの古い state を返した | 確定ブロック (latest から ~32 引いた値) にピン留めして再実行する |
 | **ガスが固定オフセットでずれる** | intrinsic gas の会計が違う (21,000 base をスキップした、あるいは逆) | 整合性確認: 測っているのは call のガスだけか、tx 全体のガスか? |
 | **ガスがランダムにばらつく** | hot vs cold ストレージアクセス。provider が直近 call で warm state を持っている | クリーンなサイクル後に再実行するか、warm/cold を制御可能な合成 state で fork する |
@@ -3547,7 +3547,7 @@ async fn coverage_includes_create_and_call_paths() {
 }
 \`\`\`
 
-両方が実 recent-block 範囲で pass するまで — 延いてはあなたが L1–レッスン8で作ったもの全部への信頼まで — レッスンは **未完了**。1 件でも乖離したら、シミュレーションは何かについて嘘をついていて、L1–レッスン8の sim 依存判断のどれが間違いだったかを、それを最初に見つけずには知ることができない。
+両方が実 recent-block 範囲で pass するまで — 延いてはあなたが レッスン 1–レッスン8で作ったもの全部への信頼まで — レッスンは **未完了**。1 件でも乖離したら、シミュレーションは何かについて嘘をついていて、レッスン 1–レッスン8の sim 依存判断のどれが間違いだったかを、それを最初に見つけずには知ることができない。
 
 ## 📺 関連動画
 
@@ -3574,7 +3574,7 @@ Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が productio
 
 ターゲットの雇用主 / プロジェクトに最も近い build を選ぶ。Production ギャップを埋める。小さな public リポとして公開する。**それが会話に持っていく成果物。**
 
-> **🧭 ここまでで積み上げたもの:** **コンパイラ / VM 層の正しさ検証** を出荷した — Revm fork と production JSON-RPC provider の differential trace 比較を、ガス + 戻り値の一致と CREATE / CALL のカバレッジでテストゲートとして固めた。IEEE 754 準拠検証や TLS interop と同じ規律を、Revm に持ち込んだかたち。本ティアの他のアプリ (L1、L7、L8) はすべて、この検証層に依存している。次のレッスンでは **ネットワーク層の支払いプロトコル** — HTTP 402 + MPP — を、本ティア全体の上に乗せる有料化エッジとして見る。
+> **🧭 ここまでで積み上げたもの:** **コンパイラ / VM 層の正しさ検証** を出荷した — Revm fork と production JSON-RPC provider の differential trace 比較を、ガス + 戻り値の一致と CREATE / CALL のカバレッジでテストゲートとして固めた。IEEE 754 準拠検証や TLS interop と同じ規律を、Revm に持ち込んだかたち。本ティアの他のアプリ (レッスン 1、レッスン 7、レッスン 8) はすべて、この検証層に依存している。次のレッスンでは **ネットワーク層の支払いプロトコル** — HTTP 402 + MPP — を、本ティア全体の上に乗せる有料化エッジとして見る。
 `,
                 },
                 {
@@ -3741,7 +3741,7 @@ tempo request https://aviationstack.mpp.tempo.xyz/v1/flights?flight_iata=AA100
 
 - **有料サービスを提供する側として。** エンドポイントを \`Mpp::create(tempo(...))\` (または Stripe、または両方) でラップしる。agent もアプリも 1 リクエストごとに支払える。請求インフラ不要、API キー発行不要、レートリミットダッシュボード不要、Stripe ポータルの統合も不要。各リクエストに見合う金額を charge すれば、プロトコルが決済まで済ませてくれる。レッスン7のアグリゲータ、レッスン3のカスタム RPC エンドポイント、レッスン6の cheatcode harness — どれもこの形で有料化できる。
 
-- **有料サービスを利用する側として。** \`PaymentMiddleware\` を reqwest クライアントに足すだけ。agent — もしくはインデクサ、バリデータの監視スタック — がベンダごとの統合なしに、MPP 対応エンドポイントに支払える。レッスン1の MEV searcher が有料 mempool feed を欲しい? MPP を差し込む。レッスン4の wallet backend が有料 data oracle を欲しい? MPP を差し込む。L8 capstone のルータが有料 private order flow を欲しい? MPP を差し込む。
+- **有料サービスを利用する側として。** \`PaymentMiddleware\` を reqwest クライアントに足すだけ。agent — もしくはインデクサ、バリデータの監視スタック — がベンダごとの統合なしに、MPP 対応エンドポイントに支払える。レッスン1の MEV searcher が有料 mempool feed を欲しい? MPP を差し込む。レッスン4の wallet backend が有料 data oracle を欲しい? MPP を差し込む。レッスン 8 capstone のルータが有料 private order flow を欲しい? MPP を差し込む。
 
 追いかける価値のある実プロダクトのアイデア: *この粒度では agent しか欲しがらない* 有料サービス — 単発のフライト状況、単発のプライシング oracle、トークン単位課金の単発 LLM 補完など。人間向け API はこの粒度では小さすぎて値付けできない、しかし agent 向け API ならできる。MPP がリクエスト単位の決済を安価にしているからである。
 

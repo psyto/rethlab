@@ -431,15 +431,15 @@ vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu
 
 The full **Building with the Stack** tier ships ten lessons end to end. From here:
 
-- **L2** — Reorg-aware Postgres indexer (ExEx-driven, in-process)
-- **L3** — Custom RPC endpoint via \`extend_rpc_modules\`
-- **L4** — Wallet backend (signer pool + nonce manager + replace-on-stuck)
-- **L5** — EIP-7702 sponsor service (Type 4 tx + paymaster pattern)
-- **L6** — Foundry-style cheatcode (custom precompile + minimal harness)
-- **L7** — Swap aggregator (Revm fork + cross-venue quotes)
-- **L8 (Capstone)** — Frontrun-resistant order router that integrates everything above
-- **L9** — Validate-revm cross-client harness (compare your sim against a production provider)
-- **L10** — HTTP 402 / MPP machine-payments endpoint (Tempo's payments stack)
+- **Lesson 2** — Reorg-aware Postgres indexer (ExEx-driven, in-process)
+- **Lesson 3** — Custom RPC endpoint via \`extend_rpc_modules\`
+- **Lesson 4** — Wallet backend (signer pool + nonce manager + replace-on-stuck)
+- **Lesson 5** — EIP-7702 sponsor service (Type 4 tx + paymaster pattern)
+- **Lesson 6** — Foundry-style cheatcode (custom precompile + minimal harness)
+- **Lesson 7** — Swap aggregator (Revm fork + cross-venue quotes)
+- **Lesson 8 (Capstone)** — Frontrun-resistant order router that integrates everything above
+- **Lesson 9** — Validate-revm cross-client harness (compare your sim against a production provider)
+- **Lesson 10** — HTTP 402 / MPP machine-payments endpoint (Tempo's payments stack)
 
 Each is a self-contained ~200–300 line build with the same predict / find-in-repo / anti-fluency style. Pick the one that maps to your target use case.
 
@@ -2376,7 +2376,7 @@ Run \`forge test --match-test testFuzz_ -vvv\` with the default 256 fuzz iterati
 ## 📺 Further watching
 
 \`\`\`youtube
-sJpL21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (the cheatcode patterns this lesson reverse-engineers)
+sJpLesson 21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (the cheatcode patterns this lesson reverse-engineers)
 \`\`\`
 
 > **🧭 Where you are now in the stack:** you've shipped a **VM-layer extension** — a custom precompile registered at a high address that dispatches into a Rust function, with differential fuzz against a Solidity reference locking in correctness. Same pattern as JNI and V8 native bindings, applied to Revm. Next lesson moves to the **database layer's consistent-snapshot read**: a swap aggregator over forked DEX state.
@@ -2787,9 +2787,9 @@ The lesson is **not complete** until the QuoterV2 differential passes. If your m
 
 > 🧭 **Where this lives in the systems-engineering stack:** **integration across networking + compiler + authentication layers**. Same shape as an HFT order router, a CDN edge router, or an API gateway with adaptive routing — "multi-source input, simulate the consequences, decide a path, dispatch through the right submission channel." The router is that pattern realized for EVM transaction routing under MEV adversaries.
 
-The capstone. Patterns from across the tier, integrated into one service. A user posts a swap intent (JSON). The router: quotes across DEXes (Lesson 7), watches the mempool for adversarial txs that would sandwich the swap (Lesson 1, inverted), simulates the threat in Revm to **measure** how much output the user would lose, sponsors gas via EIP-7702 (Lesson 5), and — when the threat score is high — submits through Flashbots Protect so the order never appears in the public mempool. When threat is low, public submission is fine and saves the bundler markup. **One service, four earlier lessons stitched in (L1, L4, L5, L7), one new piece: the decision layer.**
+The capstone. Patterns from across the tier, integrated into one service. A user posts a swap intent (JSON). The router: quotes across DEXes (Lesson 7), watches the mempool for adversarial txs that would sandwich the swap (Lesson 1, inverted), simulates the threat in Revm to **measure** how much output the user would lose, sponsors gas via EIP-7702 (Lesson 5), and — when the threat score is high — submits through Flashbots Protect so the order never appears in the public mempool. When threat is low, public submission is fine and saves the bundler markup. **One service, four earlier lessons stitched in (Lesson 1, Lesson 4, Lesson 5, Lesson 7), one new piece: the decision layer.**
 
-> 📌 **Scope honesty.** This capstone integrates patterns from L1 / L4 / L5 / L7 of this tier. The novel build is the **frontrun-detection logic** + the **submission path that bypasses public mempool**. We use Flashbots Protect as the private RPC; the same shape works with MEV-Share, Beaverbuild's private endpoint, or any other private orderflow auction.
+> 📌 **Scope honesty.** This capstone integrates patterns from Lesson 1 / Lesson 4 / Lesson 5 / Lesson 7 of this tier. The novel build is the **frontrun-detection logic** + the **submission path that bypasses public mempool**. We use Flashbots Protect as the private RPC; the same shape works with MEV-Share, Beaverbuild's private endpoint, or any other private orderflow auction.
 
 ## Acceptance criteria
 
@@ -2799,7 +2799,7 @@ The lesson is complete when these tests pass (full code at the end in §Test gat
 2. **\`detected_threat_routes_through_private_mempool\`** — sandwich-setup tx in the mempool; the router decides PRIVATE and submits via Flashbots Protect.
 3. **\`respects_min_out\`** — slippage scenario; the router refuses to submit and returns \`SlippageExceeded\`.
 
-**Test-first reading.** The walkthrough below shows the decision layer (the only novel piece — the rest is L1/L4/L5/L7 stitched in) that these tests directly exercise.
+**Test-first reading.** The walkthrough below shows the decision layer (the only novel piece — the rest is Lesson 1/Lesson 4/Lesson 5/Lesson 7 stitched in) that these tests directly exercise.
 
 ## What you'll build
 
@@ -2827,15 +2827,15 @@ $ curl -X POST http://localhost:9000/route \\
 \`\`\`mermaid
 flowchart TB
     User["POST /route"] --> Router["Router service"]
-    Router -->|fork mainnet| Aggregator["Aggregator (L7)<br/>quotes + best venue"]
-    Router -->|scan pending txs| Detector["Frontrun detector<br/>(L1 mempool watch +<br/>L7 simulation)"]
+    Router -->|fork mainnet| Aggregator["Aggregator (Lesson 7)<br/>quotes + best venue"]
+    Router -->|scan pending txs| Detector["Frontrun detector<br/>(Lesson 1 mempool watch +<br/>Lesson 7 simulation)"]
     Detector -->|adversarial tx found?| Decide{"Risk?"}
     Aggregator --> Decide
     Decide -->|HIGH| PrivPath["Private mempool<br/>(Flashbots Protect)"]
     Decide -->|LOW| PubPath["Public mempool"]
-    PrivPath --> Sponsor["EIP-7702 sponsor (L5)"]
+    PrivPath --> Sponsor["EIP-7702 sponsor (Lesson 5)"]
     PubPath --> Sponsor
-    Sponsor --> Wallet["Wallet backend (L4)<br/>nonce/gas/replace"]
+    Sponsor --> Wallet["Wallet backend (Lesson 4)<br/>nonce/gas/replace"]
     Wallet --> Chain
 \`\`\`
 
@@ -2845,11 +2845,11 @@ flowchart TB
 
 | Component | From | What's new here |
 | :--- | :--- | :--- |
-| **Quote across DEXes** | [L7](/courses/reth-building-en/lessons/build-swap-aggregator-en) | Reused as-is |
-| **Mempool watching** | [L1](/courses/reth-building-en/lessons/build-mev-searcher-en) (the searcher's input!) | Repurposed as defense — find candidate adversaries instead of opportunities |
-| **Revm fork simulation** | [L1](/courses/reth-building-en/lessons/build-mev-searcher-en) | Used here to score "would this adversary tx hurt my user?" |
-| **EIP-7702 sponsorship** | [L5](/courses/reth-building-en/lessons/build-7702-sponsor-en) | Lifted into the path so the user pays no gas |
-| **Wallet backend submission + replace** | [L4](/courses/reth-building-en/lessons/build-wallet-backend-en) | Used for the public-mempool path |
+| **Quote across DEXes** | [Lesson 7](/courses/reth-building-en/lessons/build-swap-aggregator-en) | Reused as-is |
+| **Mempool watching** | [Lesson 1](/courses/reth-building-en/lessons/build-mev-searcher-en) (the searcher's input!) | Repurposed as defense — find candidate adversaries instead of opportunities |
+| **Revm fork simulation** | [Lesson 1](/courses/reth-building-en/lessons/build-mev-searcher-en) | Used here to score "would this adversary tx hurt my user?" |
+| **EIP-7702 sponsorship** | [Lesson 5](/courses/reth-building-en/lessons/build-7702-sponsor-en) | Lifted into the path so the user pays no gas |
+| **Wallet backend submission + replace** | [Lesson 4](/courses/reth-building-en/lessons/build-wallet-backend-en) | Used for the public-mempool path |
 | **Private orderflow submission** | NEW | Flashbots Protect / MEV-Share integration |
 | **Decision logic (route + risk → submission path)** | NEW | The capstone's contribution |
 
@@ -3128,24 +3128,24 @@ async fn route_handler(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RouteRequest>,
 ) -> Result<Json<RouteDecision>, (axum::http::StatusCode, String)> {
-    // 1. Quote across venues (L7 lifted)
+    // 1. Quote across venues (Lesson 7 lifted)
     let mut db = build_fork().await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let (best, venue) = best_quote(&mut db, &req).await
         .map_err(|e| (axum::http::StatusCode::BAD_GATEWAY, e.to_string()))?;
 
-    // 2. Watch mempool for ~2s for adversarial txs (L1 inverted)
+    // 2. Watch mempool for ~2s for adversarial txs (Lesson 1 inverted)
     let pool_for_route = address_for_venue(venue, req.in_token, req.out_token);
     let adversaries = scan_for_adversaries(&state.public_provider, pool_for_route, req.in_token, Duration::from_secs(2)).await
         .unwrap_or_default();
 
-    // 3. Score risk via simulation (L1 + L7 combined)
+    // 3. Score risk via simulation (Lesson 1 + Lesson 7 combined)
     let mut risk_db = build_fork().await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let risk = score_risk(&mut risk_db, &adversaries, best.amount_out, &req).await
         .unwrap_or(FrontrunRisk::Low);
 
-    // 4. Execute on the matching submission path (L4 + L5 lifted)
+    // 4. Execute on the matching submission path (Lesson 4 + Lesson 5 lifted)
     let decision = execute_decision(&state, &req, venue, best.amount_out, risk).await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -3178,7 +3178,7 @@ The architecture you wrote — quote → detect adversaries → score with sim �
 
 After drill 5 you have a tuned, observably-correct frontrun-resistant router. **This is what you'd ship to production for a wallet team that takes user trust seriously.**
 
-> 🛑 **Final check (this lesson's final check).** In one sentence: of the lessons in this tier, why does the *capstone* depend on **simulation** (L1) more than any other component? If your answer doesn't mention "you can't decide whether to defend without first measuring the threat in the same units as the user's loss", the capstone hasn't quite landed yet — re-read Step 4.
+> 🛑 **Final check (this lesson's final check).** In one sentence: of the lessons in this tier, why does the *capstone* depend on **simulation** (Lesson 1) more than any other component? If your answer doesn't mention "you can't decide whether to defend without first measuring the threat in the same units as the user's loss", the capstone hasn't quite landed yet — re-read Step 4.
 
 ## Test gate
 
@@ -3230,9 +3230,9 @@ Recap of what you've built up to this capstone:
 5. EIP-7702 sponsor (Type 4 tx + paymaster pattern)
 6. Foundry-style cheatcode (custom precompile + harness)
 7. Swap aggregator (Revm fork + cross-venue quotes)
-8. **Frontrun-resistant order router (this lesson)** — L1 / L4 / L5 / L7 integrated
+8. **Frontrun-resistant order router (this lesson)** — Lesson 1 / Lesson 4 / Lesson 5 / Lesson 7 integrated
 
-Still ahead: L9 (validate-revm cross-client harness) and L10 (HTTP 402 / MPP machine-payments endpoint). They sit outside the swap-router arc but ship in the same tier.
+Still ahead: Lesson 9 (validate-revm cross-client harness) and Lesson 10 (HTTP 402 / MPP machine-payments endpoint). They sit outside the swap-router arc but ship in the same tier.
 
 Pick the one that interests your target employer / project most. Open the production gaps. Ship it as a small public repo. **That's the artifact you bring to a Paradigm / Tempo / serious-team conversation.**
 
@@ -3250,7 +3250,7 @@ Pick the one that interests your target employer / project most. Open the produc
 
 > 🧭 **Where this lives in the systems-engineering stack:** the **compiler / VM layer's correctness verification** — specifically *differential testing* against a reference implementation. Same discipline that IEEE 754 floating-point conformance, TLS implementation interop, and POSIX certification all rely on: prove your implementation matches a trusted reference across a representative input set. This lesson is that practice applied to Revm vs production EVM clients.
 
-Your arb bot's Revm fork says the swap nets 2.95 WETH. The chain — running mostly Geth and Nethermind, since Reth is still only ~7-12% of execution-client share — actually delivers 2.93. **The bot just lost money to a bug in your simulation.** Every Revm-based system you built in this tier has the same exposure: the MEV searcher in L1 predicts arbs on Revm, the aggregator in L7 quotes on Revm, the capstone in L8 scores frontrun risk on Revm. If Revm disagrees with the Geth/Nethermind majority that actually runs mainnet, every one of those systems silently ships wrong answers. ~200 lines below build the cross-check.
+Your arb bot's Revm fork says the swap nets 2.95 WETH. The chain — running mostly Geth and Nethermind, since Reth is still only ~7-12% of execution-client share — actually delivers 2.93. **The bot just lost money to a bug in your simulation.** Every Revm-based system you built in this tier has the same exposure: the MEV searcher in Lesson 1 predicts arbs on Revm, the aggregator in Lesson 7 quotes on Revm, the capstone in Lesson 8 scores frontrun risk on Revm. If Revm disagrees with the Geth/Nethermind majority that actually runs mainnet, every one of those systems silently ships wrong answers. ~200 lines below build the cross-check.
 
 > 📌 **Scope honesty.** We diff Revm against a JSON-RPC provider for a single transaction's gas + return data. Production validation harnesses extend this to: full state-diff comparison via \`debug_traceTransaction\` prestate, statistical sampling across thousands of historical txs, hardfork-boundary regression tests, and CI integration. The kernel — *what does "they match" actually mean, and how do you check it cheaply?* — is the same.
 
@@ -3366,7 +3366,7 @@ Walk:
 
 ## Step 3: Run the same call locally via Revm
 
-Same fork pattern as L1 / L7. Pin to the same block as Step 2:
+Same fork pattern as Lesson 1 / Lesson 7. Pin to the same block as Step 2:
 
 \`\`\`rust
 use alloy_provider::{network::Ethereum, DynProvider};
@@ -3463,7 +3463,7 @@ Real validation runs find mismatches. Here's the diagnosis tree:
 | :--- | :--- | :--- |
 | **Output is consistently 0x or empty when it shouldn't be** | Revm spec mismatch (e.g., you built with \`Context::mainnet()\` but the chain is op-mainnet). | Match the chain spec: \`OpEvm\`, \`Context::op_mainnet()\`, etc. |
 | **Output differs only at a hardfork boundary** | Revm's hardfork-activation block disagrees with the chain. | Pin Revm's spec to the actual hardfork active at that block — see \`SpecId\` |
-| **Output differs only when the contract calls a precompile** | Custom precompile your Revm doesn't have (e.g., RIP-7212 secp256r1 active on some L2s). | Add the precompile to your Revm precompile registry (see L6). |
+| **Output differs only when the contract calls a precompile** | Custom precompile your Revm doesn't have (e.g., RIP-7212 secp256r1 active on some Lesson 2s). | Add the precompile to your Revm precompile registry (see Lesson 6). |
 | **Output flickers — sometimes match, sometimes don't, same input** | RPC caching. The provider returned a stale state from a different block. | Pin to a finalized block (subtract ~32 from latest), and re-run. |
 | **Gas mismatches by a constant offset** | Different intrinsic gas accounting (you skipped 21,000 base, or vice versa). | Reconcile: are you measuring just the call's gas or the full tx's gas? |
 | **Gas spreads with random variance** | Hot vs cold storage access. The provider may have warmer state due to recent calls. | Re-run after a clean cycle, or fork at a synthetic state where you control warm/cold. |
@@ -3487,14 +3487,14 @@ Build the kernel above, add the production-grade habits as your needs grow. Most
 ## Drill
 
 1. **Historical tx replay.** Pick a real mainnet tx hash. Fetch its receipt → use the parent block as fork point → diff its receipt.gas_used against your Revm replay's gas_used. (1 hour)
-2. **Custom precompile case.** Pick an op-stack chain (Base, Optimism). Try to validate a tx that uses a precompile present on op-stack but not on mainnet (e.g., L1 block info precompile). Watch the failure mode. **What does the diff show?** (1 hour)
+2. **Custom precompile case.** Pick an op-stack chain (Base, Optimism). Try to validate a tx that uses a precompile present on op-stack but not on mainnet (e.g., Lesson 1 block info precompile). Watch the failure mode. **What does the diff show?** (1 hour)
 3. **Sampling harness.** Wrap the validate function in a loop that walks the last 100 successful txs from a single contract (Uniswap V3 router is dense). Track pass/fail. **What's the failure rate? Is the failure pattern systematic or random?** (2 hours)
 4. **Multi-provider cross-check.** Run the same validation against QuickNode + Alchemy. If the two providers disagree on the same call at the same block, what does that say about your validation harness's underlying assumption? (1.5 hours)
 5. **CI wire-up.** Make the validation script exit-code 1 on any failure. Wire it into a GitHub Action that runs nightly against mainnet. Fail PRs that introduce >0.1% mismatch rate vs the baseline. (3 hours)
 
 Finish drill 5 and you have, structurally, the same continuous-validation discipline shipped at every serious Revm-based searcher / wallet / aggregator team. **The discipline is what separates "Revm code that works on my laptop" from "Revm code I trust in production."**
 
-> 🛑 **Final check.** In one sentence: why does building L1-L8 in this tier require **also** building this validation lesson? If your answer doesn't connect "Reth is ~7-12% of clients" to "your sim's correctness depends on agreeing with the 88-93% that aren't Reth," re-read the opening — that's the entire reason this lesson sits last in the tier.
+> 🛑 **Final check.** In one sentence: why does building Lesson 1-Lesson 8 in this tier require **also** building this validation lesson? If your answer doesn't connect "Reth is ~7-12% of clients" to "your sim's correctness depends on agreeing with the 88-93% that aren't Reth," re-read the opening — that's the entire reason this lesson sits last in the tier.
 
 ## Test gate
 
@@ -3532,7 +3532,7 @@ async fn coverage_includes_create_and_call_paths() {
 }
 \`\`\`
 
-The lesson — and by extension your trust in everything you built in L1–L8 — is **not complete** until both pass on a real recent-block range. A single divergent tx means your simulation lies about something, and you cannot know which sim-dependent decision in L1–L8 was wrong without first finding it.
+The lesson — and by extension your trust in everything you built in Lesson 1–Lesson 8 — is **not complete** until both pass on a real recent-block range. A single divergent tx means your simulation lies about something, and you cannot know which sim-dependent decision in Lesson 1–Lesson 8 was wrong without first finding it.
 
 ## 📺 Further watching
 
@@ -3559,7 +3559,7 @@ Ten lessons covering everything from "I have an arbitrage idea" to "I can guaran
 
 Pick the build that maps to your target employer / project most closely. Open the production gaps. Ship as a small public repo. **That's the artifact you bring to the conversation.**
 
-> **🧭 Where you are now in the stack:** you've shipped the **compiler / VM layer's correctness verification** — differential trace comparison of your Revm fork against a production JSON-RPC provider, with gas + return-data parity and CREATE/CALL coverage as the gate. Same discipline as IEEE 754 conformance and TLS interop, applied to Revm. Every other app in this tier (L1, L7, L8) depends on this verification layer. Next lesson moves to the **networking layer's payment protocol** — HTTP 402 + MPP — as the monetization edge on top of the whole tier.
+> **🧭 Where you are now in the stack:** you've shipped the **compiler / VM layer's correctness verification** — differential trace comparison of your Revm fork against a production JSON-RPC provider, with gas + return-data parity and CREATE/CALL coverage as the gate. Same discipline as IEEE 754 conformance and TLS interop, applied to Revm. Every other app in this tier (Lesson 1, Lesson 7, Lesson 8) depends on this verification layer. Next lesson moves to the **networking layer's payment protocol** — HTTP 402 + MPP — as the monetization edge on top of the whole tier.
 `,
                 },
                 {
@@ -3720,9 +3720,9 @@ This is the same trait-split discipline you saw in [artemis](./build-mev-searche
 
 Two angles, both real:
 
-- **You ship a paid service.** Wrap your endpoint with \`Mpp::create(tempo(...))\` (or Stripe, or both). Agents and apps can pay per-request. No billing infrastructure, no API-key issuance, no rate-limit dashboards, no Stripe-portal integration. You charge what each request is worth and the protocol handles settlement. The aggregator from L7, the RPC endpoint from L3, the cheatcode harness from L6 — any of them could expose a paid surface this way.
+- **You ship a paid service.** Wrap your endpoint with \`Mpp::create(tempo(...))\` (or Stripe, or both). Agents and apps can pay per-request. No billing infrastructure, no API-key issuance, no rate-limit dashboards, no Stripe-portal integration. You charge what each request is worth and the protocol handles settlement. The aggregator from Lesson 7, the RPC endpoint from Lesson 3, the cheatcode harness from Lesson 6 — any of them could expose a paid surface this way.
 
-- **You ship a paid consumer.** Bolt \`PaymentMiddleware\` onto a reqwest client. Now your agent — or your indexer, or your validator's observability stack — can pay any MPP-compatible endpoint without per-vendor integration. The MEV searcher from L1 wants paid mempool feeds? Plug in MPP. The wallet backend from L4 wants paid data oracles? Plug in MPP. The capstone router from L8 wants paid private order flow? Plug in MPP.
+- **You ship a paid consumer.** Bolt \`PaymentMiddleware\` onto a reqwest client. Now your agent — or your indexer, or your validator's observability stack — can pay any MPP-compatible endpoint without per-vendor integration. The MEV searcher from Lesson 1 wants paid mempool feeds? Plug in MPP. The wallet backend from Lesson 4 wants paid data oracles? Plug in MPP. The capstone router from Lesson 8 wants paid private order flow? Plug in MPP.
 
 The genuine product idea worth chasing: a paid service that *only an agent would want at this granularity* — single-shot flight-status lookups, single-shot pricing oracles, single-shot LLM completions billed per token. Human-grade APIs don't price small enough; agent-grade APIs do because MPP makes per-request settlement cheap.
 
@@ -3742,9 +3742,9 @@ If you stumbled on 2 or 4, re-read the Core/Intents/Methods section before the n
 
 1. **Read the IETF draft.** Open [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md). Skim until you can name three header fields the \`Payment\` scheme defines and what each one carries. (45 min)
 2. **Stand up a paid endpoint.** Clone [\`mpp-rs\`](https://github.com/tempoxyz/mpp-rs), look at [\`examples/\`](https://github.com/tempoxyz/mpp-rs/tree/main/examples), and run an axum server that charges 0.01 for one route. Hit it with curl, observe the 402. Hit it with \`tempo request\`, observe the 200. (2 hours)
-3. **Wrap an existing service.** Pick one of your earlier-tier builds — say, the custom RPC endpoint from L3. Add \`mpp\`'s axum integration. Charge per call. Verify with the wallet. (3 hours)
+3. **Wrap an existing service.** Pick one of your earlier-tier builds — say, the custom RPC endpoint from Lesson 3. Add \`mpp\`'s axum integration. Charge per call. Verify with the wallet. (3 hours)
 4. **Trace a session.** With session-mode \`tempo request\` against a paid SSE endpoint, walk the network: when does the channel open? when do vouchers exchange? when does it settle? Use \`tempo wallet sessions list\` and \`close\` to inspect state. (1.5 hours)
-5. **Implement a custom provider.** Pick a payment rail not in the SDK (your favorite L2's native asset). Implement \`PaymentProvider\` (client) and \`ChargeMethod\` (server). Test against your own paid endpoint. *This is the test of whether the abstraction earns its keep.* (4 hours)
+5. **Implement a custom provider.** Pick a payment rail not in the SDK (your favorite Lesson 2's native asset). Implement \`PaymentProvider\` (client) and \`ChargeMethod\` (server). Test against your own paid endpoint. *This is the test of whether the abstraction earns its keep.* (4 hours)
 
 Finish drill 3 and you have a paid endpoint deployable on real infrastructure. Finish drill 5 and you've internalized the protocol well enough to extend it.
 
