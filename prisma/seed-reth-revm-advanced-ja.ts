@@ -8,7 +8,7 @@ export async function seedRethRevmAdvancedJA(prisma: PrismaClient) {
       slug: 'revm-advanced-ja',
       title: 'Inside Revm — EVMエンジンを読む',
       description:
-        'Revm のインタープリターを 1 行ずつ読み解く — Rust EVM スタックの **コンパイラ / VM 層**。本物の `add` Opcode、カスタム Opcode、状態を供給する `Database` トレイト、並列実行 (block-stm)、そして EVM プライバシーのプリコンパイル設計を歩く。3 つの独立した中級コース（Revm・Reth・Alloy）の 1 つ — 順番は自由だが、Revm が提供する型の語彙は他の 2 つが前提にする。',
+        'Revm のインタープリターを 1 行ずつ読み解く — Rust EVM スタックの **コンパイラ / VM 層**。本物の `add` Opcode、カスタム Opcode、状態を供給する `Database` トレイト、並列実行 (block-stm) までを歩く。3 つの独立した中級コース（Revm・Reth・Alloy）の 1 つ — 順番は自由だが、Revm が提供する型の語彙は他の 2 つが前提にする。',
       difficulty: 'INTERMEDIATE',
       duration: 120,
       xpReward: 340,
