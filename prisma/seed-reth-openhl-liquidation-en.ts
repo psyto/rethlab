@@ -98,9 +98,10 @@ The fix: signed integers + **saturating arithmetic (operations that, on overflow
 - **L9** — \`absorb_deficit\`: how an Underwater liquidation drains the fund.
 - **L10** — \`credit_fee\`: liquidation fee flows from collateral into the fund. Composition test: a single liquidation can both credit a fee *and* absorb a deficit when the position is severely underwater.
 
-### Module 4 — Scanner + Capstone (L11-L12) — Stage 10c
-- **L11** — \`LiquidationScanner\`: iterate \`&[AccountSnapshot]\`, classify each, emit close orders for \`Liquidatable\` and \`Underwater\`, return insurance-fund deltas. The composition layer.
-- **L12** — Capstone. Synthesis, bridge integration preview, market structure context: how on-chain CLOB liquidations differ from CEX liquidations and from ADL.
+### Module 4 — Scanner + Capstone (L11-L13) — Stage 10c
+- **L11** — Scanner type vocabulary: \`CloseOutcomeKind\`, \`LiquidationRecord\`, \`ScanReport\`, \`LiquidationScanner\`. The scaffolding types and builder API that the scan loop will compose against.
+- **L12** — \`scan\` — the orchestration heart of the safety cascade: iterate \`&[AccountSnapshot]\`, classify each, emit close orders for \`Liquidatable\` and \`Underwater\`, return insurance-fund deltas. The composition layer.
+- **L13** — Capstone — 6 nuanced unit tests + 4 invariant proptests + the Stage 10 retrospective. Synthesis, bridge integration preview, market structure context: how on-chain CLOB liquidations differ from CEX liquidations and from ADL.
 
 ## SHA pinning per module
 

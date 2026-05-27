@@ -48,7 +48,7 @@ export async function seedRethOpenHlClobJA(prisma: PrismaClient) {
 - \`cargo test clob_fills_flow_into_payload\` を通せる。
 - CLOB の price-time-priority を説明できる。
 
-前コース (\`building-openhl-consensus\`) は、実 Reth EVM を通じて 0.02 秒で block を確定する single-validator BFT chain で終わった。**ただし確定していたのは空の block。** トランザクションもマッチングも価格発見もない。
+前コース (\`building-openhl-consensus\`) は、実 Reth EVM を通じて 0.02 秒で block を確定する single-validator BFT chain で終わった。**ただし確定していたのは空の block。** トランザクションもマッチングも価格発見（= 一方が値段を押し付けるのではなく、order book の best bid と best ask の競争から取引価格が立ち上がる仕組み）もない。
 
 本コースで **CLOB (Central Limit Order Book) matching engine** を追加する。CLOB は価格優先・時間優先で板を管理するマッチング方式で、「HYPE を 25 USD で 10 個買いたい」と「HYPE を 25 USD で 5 個売りたい」を実際の約定 (fill) に変換する Hyperliquid の核となる仕組みである。
 
@@ -71,7 +71,7 @@ export async function seedRethOpenHlClobJA(prisma: PrismaClient) {
 
 加えて \`crates/evm/\` に新規 integration test:
 
-- **\`clob_fills_flow_into_payload\`** — 実 Reth node を bootstrap し、bridge の CLOB に maker bid + crossing taker sell を submit し、結果の約定が次の \`build_payload\` 出力に現れることを assert、さらに **過去の payload に遡って約定が attach されない** ことを assert (drain semantics は forward-only)。
+- **\`clob_fills_flow_into_payload\`** — 実 Reth node を bootstrap し、bridge の CLOB に maker bid + crossing taker sell（**maker** = 先に book に置かれた resting order、**taker** = その流動性を消費する incoming order）を submit し、結果の約定が次の \`build_payload\` 出力に現れることを assert、さらに **過去の payload に遡って約定が attach されない** ことを assert (drain semantics は forward-only)。
 
 終了時には次ができるようになる:
 
@@ -409,7 +409,7 @@ pub enum OrderType {
 
 variant 2 個:
 
-- **\`Limit { price: Price }\`** — struct スタイルの enum variant。Order に価格があり、at-or-better でマッチできなければ残りが book に rest する。
+- **\`Limit { price: Price }\`** — struct スタイルの enum variant。Order に価格があり、**at-or-better**（buyer は limit *以下* で買い、seller は limit *以上* で売れる場合に限り match する規則）でマッチできなければ残りが book に rest する。
 - **\`Market\`** — unit variant。価格なし、任意の価格で利用可能な流動性を取り、残りは破棄。
 
 \`Limit { price: Price }\` を tuple スタイル \`Limit(Price)\` ではなく struct スタイルにしたのは意図的。コードが \`order.order_type\` をパターンマッチするとき、\`Limit { price }\` だと field 名 \`price\` がパターンに入る。tuple では \`Limit(p)\` と書いて \`p\` の意味を覚えておかなければならない。**Named field が型を self-documenting にする。**

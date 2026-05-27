@@ -68,6 +68,8 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
 
 ## 1. コース終了時点で手元にあるもの
 
+**先に 30 秒 BFT primer。** BFT consensus は *round* の繰り返しで動き、各 round は 3 phase からなる: **propose**（選ばれた validator が 1 人、ブロック提案を broadcast する）、**prevote**（全 validator が yes/no/nil の投票を broadcast する）、**precommit**（validator が投票を lock する）。≥ 2/3 の validator が precommit した時点でそのブロックは **decided**（= 最終確定）となる。各 round の **proposer** は validator set から決定論的に選ばれ、quorum が取れず round が失敗すると、別の proposer で次の round に進む。Malachite はこの state machine を駆動する Rust BFT engine で、本コースでの自分の仕事は、自分のアプリケーション（header 構築、EVM 実行）を \`Context\` trait 経由で Malachite に配線することだ。**propose / prevote / precommit / decided / proposer** — この 5 つを頭に入れておけば、以降のレッスンの語彙がクリーンに着地する。
+
 レッスン 15 を終える頃には、自分のマシンで \`cargo test first_block_via_engine_actors\` を走らせると、single-validator BFT consensus のラウンドが約 0.02 秒で pass する状態になる。EVM 層は実際の Reth、BFT 層は実際の Malachite。chain は **Consensus Layer (CL)** と **Execution Layer (EL)** の 2 層に分かれていて、本コースで両側を接続していく。コードのパスは次のようになる:
 
 \`\`\`
@@ -180,16 +182,16 @@ cargo check  # 初回は時間がかかる — Reth は大きい
 | **レッスン 5** | Reth-typed bridge | \`RethEvmBridge\` — 同じ contract、Reth 型を使う | RethEvmBridge tests pass |
 | **レッスン 6** | CL types | \`OpenHlContext\` + Context の 10 sub-types | context compiles |
 | **レッスン 7** | Signing | \`OpenHlSigningProvider\` — Ed25519 sign/verify | sign/verify round-trip |
-| **レッスン 8** | Codec + Node | \`OpenHlCodec\` + \`Node\` trait impl | engine start/stop smoke |
-| **レッスン 9** | App loop | \`run_engine_app\` — 全部を繋ぐ actor pipeline | **\`first_block_via_engine_actors\`** — 本コース前半の最大マイルストーン、BFT round が閉じる |
-| **レッスン 10** | Live Reth | テストで実 Reth dev-node を起動する | \`reth_dev_node_bootstraps\` |
-| **レッスン 11** | Live bridge — build path | \`LiveRethEvmBridge\` (build_payload 側) が live provider から parent を読む | \`live_bridge_builds_on_real_genesis\` |
-| **レッスン 12** | Live bridge — validate path | \`LiveRethEvmBridge\` (validate_payload 側) に \`EthBeaconConsensus\` を接続して実 header validation | validate-path tests |
+| **レッスン 8** | Codec | \`OpenHlCodec\` — engine が要求する codec スロット | codec round-trip |
+| **レッスン 9** | Node | \`OpenHlNode\` と最初の \`start_engine\` 呼び出し | engine start/stop smoke |
+| **レッスン 10** | App loop | \`run_engine_app\` — 全部を繋ぐ actor pipeline | **\`first_block_via_engine_actors\`** — 本コース前半の最大マイルストーン、BFT round が閉じる |
+| **レッスン 11** | Live Reth | テストで実 Reth dev-node を起動する | \`reth_dev_node_bootstraps\` |
+| **レッスン 12** | Live bridge — build path | \`LiveRethEvmBridge\` (build_payload 側) が live provider から parent を読む | \`live_bridge_builds_on_real_genesis\` |
 | **レッスン 13** | Live bridge — validate path | \`LiveRethEvmBridge\` (validate_payload 側) に \`EthBeaconConsensus\` を接続して実 header validation | validate-path tests |
 | **レッスン 14** | Live bridge — commit path | \`LiveRethEvmBridge\` (commit 側) を Reth の in-process Engine API に \`forkchoice_updated\` で接続 | \`commit_sends_forkchoice_to_engine\` |
 | **レッスン 15** | Capstone | 作ったものの総復習、未実装スコープ、次の実装ステップを整理する | (コード追加なし) |
 
-**レッスン 9 がコース最大の milestone だ。** レッスン 9 を終えた時点で、actor system 経由で BFT consensus が end-to-end でブロックを 1 つ生成するようになる。レッスン 10〜13 で stub Reth を実際の Reth に差し替え、レッスン 14 で commit を Engine API へ接続する。レッスン 15 は capstone として全体を整理し、次の実装ステップを明確化する。
+**レッスン 10 がコース最大の milestone だ。** レッスン 10 を終えた時点で、actor system 経由で BFT consensus が end-to-end でブロックを 1 つ生成するようになる。レッスン 11〜14 で stub Reth を実際の Reth に差し替え、最終的に commit を Engine API へ接続する。レッスン 15 は capstone として全体を統合し、次の実装ステップを明確化する。
 
 ## 7. 答え合わせの作法
 
@@ -285,17 +287,17 @@ Reth のコンパイルグラフだけで ~600 crates ある。最初の \`cargo
 
 ## 計画
 
-3 つの段階を順に進める:
+Rust workspace で最も摩擦が多いのは依存解決だ。Reth も Malachite も巨大で、transitive な依存ツリーが深く、クリーンに同居させるのは非自明だ。**「あとでやる」と決めると、アプリケーションコードを書いている最中に衝突に気付いて巻き戻すことになる。** 先に依存を確定させておけば、その後のレッスンはレッスン本来の主題に集中できる。*それが、以下の stage 順序がアプリケーションコードより前に依存セットアップを front-load している理由だ。*
+
+> 🛑 **考えてみよう。** スクロールする前に、workspace の Cargo.toml に書く \`members\` が何個で、それぞれ何かを手元で書き出す。ヒントはライブラリ crate 10 個 + binary crate 1 個。必要なら、このレッスン内の「3. 本コースの進め方」「4. 前提知識」を見返す。
+
+そのため、3 つの段階をこの順で進める:
 
 1. **Stage 1** — \`cargo init --lib\` の default 出力を消し、real workspace に置き換える: 空のライブラリ crate を 10 個、binary crate を 1 個、workspace 全体のデフォルトを定義する top-level \`Cargo.toml\`。**テスト**: 外部依存なしで \`cargo check --workspace\` が通る。
 2. **Stage 2** — Reth を workspace レベルで SHA pin の git 依存として宣言する。**テスト**: \`cargo check --workspace\` が引き続き通る (まだどの crate も Reth を使っていない — 依存が解決可能なことを確認するだけ)。
 3. **Stage 3** — Malachite を同じやり方で pin する。**テスト**: \`cargo check --workspace\` が引き続き通る。
 
 各 stage は \`psyto/openhl\` の実際の commit に対応する: \`75be9de\`、続いて \`5fc7ca1\`。
-
-**アプリケーションコードより先に依存グラフを組む理由**: Rust workspace で最も摩擦が多いのは依存解決だ。Reth も Malachite も巨大で、transitive な依存ツリーが深い。**「あとでやる」と決めると、アプリケーションコードを書いている最中に衝突に気付いて巻き戻す。** 先に依存を確定させておけば、その後のレッスンはレッスン本来の主題に集中できる。
-
-> 🛑 **考えてみよう。** スクロールする前に、workspace の Cargo.toml に書く \`members\` が何個で、それぞれ何かを手元で書き出す。ヒントはライブラリ crate 10 個 + binary crate 1 個。必要なら、このレッスン内の「3. 本コースの進め方」「4. 前提知識」を見返す。
 
 ## 手を動かす walk-through
 

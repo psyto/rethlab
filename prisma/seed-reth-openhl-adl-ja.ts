@@ -39,7 +39,7 @@ export async function seedRethOpenHlAdlJA(prisma: PrismaClient) {
 
 ## このコースで作るもの
 
-前のコース (\`building-openhl-liquidation\`) で multi-account scanner — Liquidatable / Underwater なアカウントを 1 つの \`ScanReport\` にまとめる orchestration loop — を出荷した。直前コースの最終レッスンで、\`ScanReport.unfilled_deficit > 0\` こそが「insurance fund が absorb しきれなかった」を意味する *唯一の* signal であり、本コース（ADL参照実装パート）がそれを consume する、と整理した。
+前のコース (\`building-openhl-liquidation\`) で multi-account scanner — Liquidatable / Underwater なアカウント（equity が maintenance margin を *下回った* 状態。Underwater は特に equity が *マイナス* に転じ、担保ではポジションを支えきれない局面）を 1 つの \`ScanReport\` にまとめる orchestration loop — を出荷した。直前コースの最終レッスンで、\`ScanReport.unfilled_deficit > 0\` こそが「insurance fund が absorb しきれなかった」を意味する *唯一の* signal であり、本コース（ADL参照実装パート）がそれを consume する（同じ値が ADL を抜けた後 \`AdlReport.deficit_remaining\` として再び姿を現す）、と整理した。
 
 本コースがその consumer を実装する。完走後にはこうなる:
 
@@ -59,6 +59,8 @@ export async function seedRethOpenHlAdlJA(prisma: PrismaClient) {
 ## ADL が orderbook をバイパスする理由 (feedback loop の話)
 
 本コースで最も重要な概念的飛躍はここだ。コードに入る前に立ち止まる価値がある。
+
+> 🛑 **予測。** Liquidation参照実装（スキャナパート）の scanner は Liquidatable アカウントを CLOB matching engine への market order で unwind していた — 市場が落ち着いていればそれで十分だった。ADL が走るのは insurance fund が *暴落で枯渇した後* だ。**ADL でも同じメカニズム — profitable な反対ポジションへ matching engine 経由で market sell を出す — を使うと、何が壊れるのか、そしてなぜか？** 30 秒考えてから先を読む。本セクションの残りはその答えだ。
 
 Liquidation参照実装（スキャナパート） の scanner は close order を **CLOB** (matching engine) に submit する。Liquidatable なアカウントのポジションは、既存の bid/ask stack を consume する market order で unwind される。市場が落ち着いていて liquidation が数件なら、これで問題ない。
 

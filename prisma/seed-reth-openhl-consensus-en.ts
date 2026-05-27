@@ -47,6 +47,8 @@ Hyperliquid moved $300B+ of perp volume in 2025 on a fully closed-source stack �
 
 ## 1. What you'll have at the end
 
+**A 30-second BFT primer first.** BFT consensus runs in *rounds* of three phases: **propose** (one chosen validator broadcasts a block proposal), **prevote** (every validator broadcasts a yes/no/nil vote on the proposal), **precommit** (validators lock their vote). A block is **decided** (= final) once ≥ 2/3 of validators have precommitted it. Within each round the **proposer** is selected deterministically from the validator set; if the round fails (no quorum), the protocol advances to the next round with a different proposer. Malachite is the Rust BFT engine that drives this state machine; your job in this course is to wire your application (header construction, EVM execution) into it via a \`Context\` trait. Keep five words in hand — *propose, prevote, precommit, decided, proposer* — and the rest of the course vocabulary lands cleanly.
+
 By the end of lesson 14, on your own machine, \`cargo test first_block_via_engine_actors\` will produce a passing single-validator BFT consensus round in roughly 0.02 seconds against real Reth as the EVM layer and real Malachite as the BFT layer. The code path is:
 
 \`\`\`
@@ -158,15 +160,16 @@ Each row is one lesson. Each lesson ends with a passing \`cargo test\`.
 | **L5** | Reth-typed bridge | \`RethEvmBridge\` — same contract, real Reth types | RethEvmBridge tests pass |
 | **L6** | CL types | \`OpenHlContext\` + 10 Context sub-types | context compiles |
 | **L7** | Signing | \`OpenHlSigningProvider\` — Ed25519 sign/verify | sign/verify round-trip |
-| **L8** | Codec + Node | \`OpenHlCodec\` + \`Node\` trait impl | engine start/stop smoke |
-| **L9** | App loop | \`run_engine_app\` — the actor pipeline that ties it all together | **\`first_block_via_engine_actors\`** — Module 1 milestone, BFT round closes |
-| **L10** | Live Reth | bootstrap a real Reth dev-node in a test | \`reth_dev_node_bootstraps\` |
-| **L11** | Live bridge — build path | \`LiveRethEvmBridge\` (build_payload side) reads parent from a live provider | \`live_bridge_builds_on_real_genesis\` |
-| **L12** | Live bridge — validate path | \`LiveRethEvmBridge\` (validate_payload side) wires \`EthBeaconConsensus\` for real header validation | validate-path tests |
-| **L13** | Live bridge — commit path | \`LiveRethEvmBridge\` (commit side) wires \`forkchoice_updated\` via Reth's in-process Engine API | \`commit_sends_forkchoice_to_engine\` |
-| **L14** | Capstone | write the end-to-end test that openhl doesn't have yet — \`run_engine_app\` + \`LiveRethEvmBridge\` together | your own integration test |
+| **L8** | Codec | \`OpenHlCodec\` — the codec slot the engine demands | codec round-trip |
+| **L9** | Node | \`OpenHlNode\` + the first \`start_engine\` call | engine start/stop smoke |
+| **L10** | App loop | \`run_engine_app\` — the actor pipeline that ties it all together | **\`first_block_via_engine_actors\`** — Module 1 milestone, BFT round closes |
+| **L11** | Live Reth | bootstrap a real Reth dev-node in a test | \`reth_dev_node_bootstraps\` |
+| **L12** | Live bridge — build path | \`LiveRethEvmBridge\` (build_payload side) reads parent from a live provider | \`live_bridge_builds_on_real_genesis\` |
+| **L13** | Live bridge — validate path | \`LiveRethEvmBridge\` (validate_payload side) wires \`EthBeaconConsensus\` for real header validation | validate-path tests |
+| **L14** | Live bridge — commit path | \`LiveRethEvmBridge\` (commit side) wires \`forkchoice_updated\` via Reth's in-process Engine API | \`commit_sends_forkchoice_to_engine\` |
+| **L15** | Capstone | write the end-to-end test that openhl doesn't have yet — \`run_engine_app\` + \`LiveRethEvmBridge\` together | your own integration test |
 
-**L9 is the major milestone.** Finishing L9, you have BFT consensus producing a block end-to-end through your actor system. L10-L13 swap your stub Reth for real Reth. L14 lets you exercise the combined whole — something \`psyto/openhl\` itself hasn't built yet (at SHA \`0844d58\`), so you'll be **ahead** of the reference at the end.
+**L10 is the major milestone.** Finishing L10, you have BFT consensus producing a block end-to-end through your actor system. L11-L14 swap your stub Reth for real Reth. L15 lets you exercise the combined whole — something \`psyto/openhl\` itself hasn't built yet (at SHA \`0844d58\`), so you'll be **ahead** of the reference at the end.
 
 ## 7. The answer-key discipline
 
@@ -260,17 +263,17 @@ This lesson edits files in \`~/code/my-openhl/\`. **Never** touch \`openhl-refer
 
 ## Plan
 
-You'll do three things, in order:
+Dependency resolution is the most common source of friction in a Rust workspace. Reth and Malachite are big crates with deep transitive dep trees — getting them to compile cleanly together is non-trivial. **If we deferred this to "later," we'd discover the conflicts in the middle of writing application code and have to backtrack.** Getting the deps right first means every subsequent lesson focuses on the lesson's actual topic, not yak-shaving dependencies. *That's why the stage order below front-loads dep setup before any application code.*
+
+> 🛑 **Predict.** Before you scroll, sketch: how many \`members\` should the workspace Cargo.toml have, and what should they be? Hint: 10 library crates + 1 binary crate. You learned the 5 subsystems in L0 §3; what 10 crates implement them? (Look at L0 §4 if you need to.)
+
+So you'll do three things, in this order:
 
 1. **Stage 1** — replace the default \`cargo init --lib\` output with a real workspace: 10 empty library crates, 1 binary crate, top-level \`Cargo.toml\` declaring all the workspace defaults. **Test**: \`cargo check --workspace\` succeeds with no external dependencies.
 2. **Stage 2** — pin Reth as a git dependency at a specific SHA, declared at the workspace level. **Test**: \`cargo check --workspace\` still succeeds (no crate uses Reth yet — we just verify the dep resolves).
 3. **Stage 3** — pin Malachite the same way. **Test**: \`cargo check --workspace\` still succeeds.
 
 Each stage is a real commit in \`psyto/openhl\`: \`75be9de\`, then \`5fc7ca1\`.
-
-The reason we set up the dep graph before writing application code: dependency resolution is the most common source of friction in a Rust workspace. Getting Reth + Malachite to compile cleanly together is non-trivial — they're both big crates with deep transitive dep trees. **If we deferred this to "later," we'd discover the conflicts in the middle of writing application code and have to backtrack.** Getting the deps right first means every subsequent lesson focuses on the lesson's actual topic, not yak-shaving dependencies.
-
-> 🛑 **Predict.** Before you scroll, sketch: how many \`members\` should the workspace Cargo.toml have, and what should they be? Hint: 10 library crates + 1 binary crate. You learned the 5 subsystems in L0 §3; what 10 crates implement them? (Look at L0 §4 if you need to.)
 
 ## Walk-through
 

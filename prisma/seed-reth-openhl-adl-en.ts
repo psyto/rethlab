@@ -39,7 +39,7 @@ export async function seedRethOpenHlAdlEN(prisma: PrismaClient) {
 
 ## What you'll build
 
-The previous course (\`building-openhl-liquidation\`) shipped the multi-account scanner — the orchestration loop that batches every Liquidatable / Underwater account into one \`ScanReport\`. At the end of L13 we noted that \`ScanReport.unfilled_deficit > 0\` is *the* signal the insurance fund couldn't absorb everything, and that Stage 10d (this course) would consume it.
+The previous course (\`building-openhl-liquidation\`) shipped the multi-account scanner — the orchestration loop that batches every Liquidatable / Underwater account (an account whose equity has fallen *below* the maintenance threshold; Underwater specifically means equity has gone *negative* — collateral can no longer cover the position) into one \`ScanReport\`. At the end of L13 we noted that \`ScanReport.unfilled_deficit > 0\` is *the* signal the insurance fund couldn't absorb everything, and that Stage 10d (this course) would consume it — surfacing it back as \`AdlReport.deficit_remaining\` (same number, post-ADL).
 
 This course implements that consumer. By the end you'll have shipped:
 
@@ -59,6 +59,8 @@ You'll understand:
 ## Why ADL bypasses the orderbook (the feedback-loop reason)
 
 This is the most important conceptual leap in the course, and it's worth stopping on it before any code.
+
+> 🛑 **Predict.** Stage 10c's scanner unwound Liquidatable accounts by submitting market orders into the CLOB matching engine — that worked fine when the venue was calm. ADL fires *after* the insurance fund has been drained by a violent move. **If we kept the same mechanism for ADL — market sells against the profitable counter-positions, through the matching engine — what fails, and why?** Take 30 seconds before reading on. The answer is what the rest of this section is about.
 
 Stage 10c's scanner submits close orders to the **CLOB** (matching engine). A Liquidatable account's position gets unwound by a market order that consumes the existing bid/ask stack. That's fine when there are a few liquidations in a quiet market.
 

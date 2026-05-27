@@ -39,10 +39,12 @@ export async function seedRethOpenHlPrecompilesEN(prisma: PrismaClient) {
 
 The previous course (\`building-openhl-clob\`) ended with the bridge owning a CLOB matching engine. Orders submit, fills flow into payloads, the integration test exercises the whole pipeline against a real Reth node. **But the fills are still a parallel list.** Smart contracts running inside that same Reth node can't see them. The CLOB state and the EVM state live in two different worlds.
 
-This course closes that gap. You'll add **custom EVM precompiles** — special addresses that, when called from Solidity (or any EVM caller), execute Rust code that reads or writes the CLOB. After course 8:
+> 🛑 **Predict.** Suppose we want a Solidity contract to read \`best_bid\` from the CLOB. The naive answer is "deploy a Rust HTTP service alongside, have the contract \`call()\` it." **Why doesn't that work for the consensus path — and what does that imply the read mechanism must look like instead?** Take 30 seconds before reading on. The shape of the answer is what the rest of this orientation builds toward.
 
-- A smart contract can call \`0x...0c1b\` to **read** the current best bid.
-- A smart contract can call \`0x...0c1c\` to **place an order** that the matching engine processes.
+This course closes that gap. You'll add **custom EVM precompiles** — EVM-native Rust functions registered at fixed addresses, callable from Solidity exactly like external contracts but executing native Rust (no EVM bytecode in between). Ethereum already reserves \`0x01\`–\`0x0a\` for standard precompiles like ECDSA recovery and SHA-256; we'll register our CLOB precompiles in a parallel custom range starting at \`0x0c00\`. After course 8:
+
+- A smart contract can call \`0x...0c1b\` (in our custom range) to **read** the current best bid.
+- A smart contract can call \`0x...0c1c\` (in the same range) to **place an order** that the matching engine processes.
 
 Once these two paths exist, the CLOB stops being a parallel structure beside the EVM and starts being a **state extension** the EVM can interact with. That's what makes the chain "Hyperliquid-shape" — Hyperliquid's whole novelty is that the perp matching engine is callable from smart contracts running on the same chain.
 

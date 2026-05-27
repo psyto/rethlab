@@ -99,9 +99,9 @@ Funding と同じ答え: consensus determinism のためだ。あるアカウン
 - **レッスン10** — \`credit_fee\`。liquidation fee が collateral から fund へ流れる。Composition test として、1 回の liquidation が deeply underwater な場合に fee を credit し *かつ* deficit を absorb する複合ケースを扱う。
 
 ### セクション4 — Scanner + Capstone（レッスン11〜13）— Liquidation参照実装（スキャナパート）
-- **レッスン11** — \`LiquidationScanner\`。\`&[AccountSnapshot]\` を順に辿り、各アカウントを分類し、\`Liquidatable\` と \`Underwater\` には close order を emit し、insurance-fund delta を返す。Composition layer の本体。
-- **レッスン12** — Scanner の挙動を拡張し、複数アカウントの集計ロジックを確定する。
-- **レッスン13** — Capstone。総合、bridge integration の preview、そして市場構造コンテキスト — on-chain CLOB liquidation が CEX の liquidation や ADL とどう違うか。
+- **レッスン11** — Scanner の型語彙: \`CloseOutcomeKind\`、\`LiquidationRecord\`、\`ScanReport\`、\`LiquidationScanner\`。Scan loop が後で組み合わせる scaffolding 型と builder API。
+- **レッスン12** — \`scan\` — セーフティ・カスケードの orchestration の心臓: \`&[AccountSnapshot]\` を順に辿り、各アカウントを分類し、\`Liquidatable\` と \`Underwater\` には close order を emit し、insurance-fund delta を返す。Composition layer の本体。
+- **レッスン13** — Capstone — 6 個の nuanced unit test + 4 個の invariant proptest + Liquidation三部作の振り返り。総合、bridge integration の preview、市場構造コンテキスト — on-chain CLOB liquidation が CEX の liquidation や ADL とどう違うか。
 
 ## モジュールごとの SHA pinning
 

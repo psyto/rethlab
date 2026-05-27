@@ -37,7 +37,7 @@ export async function seedRethOpenHlClobEN(prisma: PrismaClient) {
                   xpReward: 50,
                   content: `# Build OpenHL CLOB — adding the matching engine on top of the Reth substrate
 
-The previous course (\`building-openhl-consensus\`) ended with a single-validator BFT chain that decides blocks through a real Reth EVM in 0.02 seconds. **It decides empty blocks.** No transactions. No matching. No price discovery.
+The previous course (\`building-openhl-consensus\`) ended with a single-validator BFT chain that decides blocks through a real Reth EVM in 0.02 seconds. **It decides empty blocks.** No transactions. No matching. No price discovery — the mechanism by which a trade's price emerges from the competing best-bid and best-ask of the order book, rather than being dictated by one party.
 
 This course adds the **CLOB matching engine** — the part of Hyperliquid that turns "I want to buy 10 HYPE at $25" + "I want to sell 5 HYPE at $25" into a real fill. Stage 8a (701 lines) builds the pure state machine; Stage 8d (171 lines) wires it into the bridge so committed blocks now carry the fills the matching engine produced.
 
@@ -53,7 +53,7 @@ A new \`crates/clob/\` crate with:
 
 And a new integration test in \`crates/evm/\`:
 
-- **\`clob_fills_flow_into_payload\`** — bootstraps a real Reth node, submits a maker bid + crossing taker sell to the bridge's CLOB, asserts the resulting fill appears in the next \`build_payload\` output, and asserts that **earlier payloads weren't retroactively filled** (drain semantics are forward-only).
+- **\`clob_fills_flow_into_payload\`** — bootstraps a real Reth node, submits a maker bid + crossing taker sell (**maker** = a resting order placed earlier; **taker** = the incoming order that consumes that liquidity) to the bridge's CLOB, asserts the resulting fill appears in the next \`build_payload\` output, and asserts that **earlier payloads weren't retroactively filled** (drain semantics are forward-only).
 
 By the time you finish, you can:
 
@@ -392,7 +392,7 @@ pub enum OrderType {
 
 Two variants:
 
-- **\`Limit { price: Price }\`** — a struct-style enum variant. The order has a price; if you can't match at-or-better, the remainder rests on the book.
+- **\`Limit { price: Price }\`** — a struct-style enum variant. The order has a price; if you can't match **at-or-better** (a buyer pays *no more than* the limit; a seller receives *no less than* the limit), the remainder rests on the book.
 - **\`Market\`** — unit variant. No price; takes whatever's available at any price, then discards the remainder.
 
 The struct-style \`Limit { price: Price }\` is deliberate over a tuple-style \`Limit(Price)\`. When code reads \`order.order_type\` and pattern-matches, \`Limit { price }\` makes the field name \`price\` part of the pattern. Tuples force you to write \`Limit(p)\` and remember what \`p\` means. **Named fields make the type self-documenting**.

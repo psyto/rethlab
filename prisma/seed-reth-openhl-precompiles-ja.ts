@@ -39,10 +39,12 @@ export async function seedRethOpenHlPrecompilesJA(prisma: PrismaClient) {
 
 前コース (\`building-openhl-clob\`) は、bridge が CLOB matching engine を所有する地点で終わった。Order が submit され、約定 (fill) が payload に流れ、integration test が実際の Reth node に対して pipeline 全体を網羅的にテストする。**ただし約定はまだ並列リストにすぎない。** 同じ Reth node 上で動くスマートコントラクトからは見えない。CLOB の状態と EVM の状態は別世界に存在している。
 
-本コースではこのギャップを閉じる。**Custom EVM precompile** を追加する — Solidity (あるいは任意の EVM caller) から呼ばれると CLOB を read/write する Rust コードが走る、特殊な address のことだ。Step 3（Precompiles）を終えた時点で:
+> 🛑 **予測。** Solidity コントラクトから CLOB の \`best_bid\` を読みたいとする。素朴な答えは「Rust の HTTP サービスを並列に立てて、コントラクトから \`call()\` で読み出す」だ。**なぜそれが consensus パスでは破綻するのか — そして、そこから read メカニズムはどんな形でなければならないと結論できるか？** 30 秒考えてから先を読む。残りの orientation はその答えの形に向かって構築されていく。
 
-- スマートコントラクトは \`0x...0c1b\` を call して現在の **best bid を読める**。
-- スマートコントラクトは \`0x...0c1c\` を call して matching engine が処理する **order を発注できる**。
+本コースではこのギャップを閉じる。**Custom EVM precompile** を追加する — EVM の中に固定アドレスで登録される EVM ネイティブな Rust 関数で、Solidity からは外部コントラクトを呼ぶのと同じ呼び出しシェイプで使えるが、中身は EVM バイトコードではなくネイティブ Rust が実行される、というものだ。Ethereum は \`0x01\`〜\`0x0a\` を ECDSA recovery や SHA-256 などの標準 precompile に予約済み。本コースでは並列の custom range として \`0x0c00\` 以降を CLOB precompile 用に確保する。Step 3（Precompiles）を終えた時点で:
+
+- スマートコントラクトは \`0x...0c1b\`（custom range 内）を call して現在の **best bid を読める**。
+- スマートコントラクトは \`0x...0c1c\`（同じ range 内）を call して matching engine が処理する **order を発注できる**。
 
 この 2 つのパスが揃うと、CLOB は EVM の横に並ぶ独立した並列構造から、EVM が対話できる **state 拡張** に変わる。これがチェーンを「Hyperliquid 型」にする — Hyperliquid の本質的な新規性は、perp matching engine が同じチェーン上のスマートコントラクトから呼び出せる点にある。
 
