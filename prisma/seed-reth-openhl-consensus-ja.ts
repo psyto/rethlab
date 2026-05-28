@@ -68,7 +68,17 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
 
 ## 1. コース終了時点で手元にあるもの
 
-**先に 30 秒 BFT primer。** BFT consensus は *round* の繰り返しで動き、各 round は 3 phase からなる: **propose**（選ばれた validator が 1 人、ブロック提案を broadcast する）、**prevote**（全 validator が yes/no/nil の投票を broadcast する）、**precommit**（validator が投票を lock する）。≥ 2/3 の validator が precommit した時点でそのブロックは **decided**（= 最終確定）となる。各 round の **proposer** は validator set から決定論的に選ばれ、quorum が取れず round が失敗すると、別の proposer で次の round に進む。Malachite はこの state machine を駆動する Rust BFT engine で、本コースでの自分の仕事は、自分のアプリケーション（header 構築、EVM 実行）を \`Context\` trait 経由で Malachite に配線することだ。**propose / prevote / precommit / decided / proposer** — この 5 つを頭に入れておけば、以降のレッスンの語彙がクリーンに着地する。
+**先に 30 秒 BFT primer。** BFT consensus は *round* の繰り返しで動き、各 round は 3 phase からなる:
+
+- **propose** — 選ばれた validator が 1 人、ブロック提案を broadcast する
+- **prevote** — 全 validator が yes/no/nil の投票を broadcast する
+- **precommit** — validator が投票を lock する
+
+≥ 2/3 の validator が precommit した時点で、そのブロックは **decided**（= 最終確定）となる。各 round の **proposer** は validator set から決定論的に選ばれ、quorum が取れず round が失敗すると、別の proposer で次の round に進む。
+
+Malachite はこの state machine を駆動する Rust BFT engine だ。本コースでの自分の仕事は、自分のアプリケーション（header 構築、EVM 実行）を \`Context\` trait 経由で Malachite に配線すること。
+
+**propose / prevote / precommit / decided / proposer** — この 5 つを頭に入れておけば、以降のレッスンの語彙がクリーンに着地する。
 
 レッスン 15 を終える頃には、自分のマシンで \`cargo test first_block_via_engine_actors\` を走らせると、single-validator BFT consensus のラウンドが約 0.02 秒で pass する状態になる。EVM 層は実際の Reth、BFT 層は実際の Malachite。chain は **Consensus Layer (CL)** と **Execution Layer (EL)** の 2 層に分かれていて、本コースで両側を接続していく。コードのパスは次のようになる:
 

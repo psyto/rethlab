@@ -47,7 +47,17 @@ Hyperliquid moved $300B+ of perp volume in 2025 on a fully closed-source stack �
 
 ## 1. What you'll have at the end
 
-**A 30-second BFT primer first.** BFT consensus runs in *rounds* of three phases: **propose** (one chosen validator broadcasts a block proposal), **prevote** (every validator broadcasts a yes/no/nil vote on the proposal), **precommit** (validators lock their vote). A block is **decided** (= final) once ≥ 2/3 of validators have precommitted it. Within each round the **proposer** is selected deterministically from the validator set; if the round fails (no quorum), the protocol advances to the next round with a different proposer. Malachite is the Rust BFT engine that drives this state machine; your job in this course is to wire your application (header construction, EVM execution) into it via a \`Context\` trait. Keep five words in hand — *propose, prevote, precommit, decided, proposer* — and the rest of the course vocabulary lands cleanly.
+**A 30-second BFT primer first.** BFT consensus runs in *rounds* of three phases:
+
+- **propose** — one chosen validator broadcasts a block proposal
+- **prevote** — every validator broadcasts a yes/no/nil vote on the proposal
+- **precommit** — validators lock their vote
+
+A block is **decided** (= final) once ≥ 2/3 of validators have precommitted it. Within each round the **proposer** is selected deterministically from the validator set; if the round fails (no quorum), the protocol advances to the next round with a different proposer.
+
+Malachite is the Rust BFT engine that drives this state machine; your job in this course is to wire your application (header construction, EVM execution) into it via a \`Context\` trait.
+
+Keep five words in hand — *propose, prevote, precommit, decided, proposer* — and the rest of the course vocabulary lands cleanly.
 
 By the end of Lesson 15, on your own machine, \`cargo test first_block_via_engine_actors\` will produce a passing single-validator BFT consensus round in roughly 0.02 seconds against real Reth as the EVM layer and real Malachite as the BFT layer. The code path is:
 
