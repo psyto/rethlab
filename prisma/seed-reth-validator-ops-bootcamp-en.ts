@@ -34,6 +34,70 @@ export async function seedRethValidatorOpsBootcampEN(prisma: PrismaClient) {
                   xpReward: 90,
                   content: `# SLO/SLI for validator operations
 
+A validator that misses 30 minutes of attestations loses inflation rewards and may trigger a *liveness* slashing on chains that punish prolonged absence. A validator that double-signs even once can lose tens of percent of its stake. **The cost of degradation is non-linear, and you don't know which degradation will trigger the next loss.** That's why validator operations is a discipline of *budgets*: how much error is acceptable per quarter, how the team is allowed to spend that budget, and how the runbook turns "things look weird" into "page someone now."
+
+This lesson sets up the language — **SLI**, **SLO**, and **error budget** — that the rest of the bootcamp uses to talk about what's worth waking up for.
+
+## 1. SLI vs SLO — the two-line definition
+
+- **SLI (Service Level Indicator)**: a *number you can measure* about your validator. Examples: head lag in seconds, percent of slots attested in the last hour, p99 import latency, peer count.
+- **SLO (Service Level Objective)**: a *target* you commit to for an SLI over a window. Example: "head lag &lt; 6 seconds for 99.5% of the last 7 days."
+
+The SLO is what the on-call rotation defends. The SLI is what the dashboard shows. **An SLO without an SLI is wishful thinking; an SLI without an SLO is just telemetry.**
+
+## 2. The four SLIs that matter for a Reth validator
+
+You can instrument hundreds of metrics. These four are the load-bearing ones — every well-run validator team tracks at least these:
+
+| SLI | What it measures | Why it's load-bearing |
+| :--- | :--- | :--- |
+| **Head lag** | \`(network_head_block - local_head_block)\` in seconds | The single best summary signal. If you're behind the chain, you're attesting on stale state or missing slots entirely. |
+| **Attestation participation** | Percentage of expected attestations actually emitted in the last N slots | The direct economic signal — every missed attestation is forgone reward. |
+| **Import latency p99** | Time from "block received from peer" to "block executed and added to canonical chain" | Reveals slow EVM execution, disk pressure, or database compaction stalls before they cascade into head lag. |
+| **Peer churn rate** | Connections gained/lost per minute | An early warning for sync issues, network partitions, or eclipse attacks. |
+
+Other things you'll instrument (RAM, disk, network bandwidth, signer uptime) are *secondary* — they explain *why* the four SLIs above moved, but they aren't the front-line signals on their own.
+
+## 3. From SLI to SLO — picking the targets
+
+A target is just a number, but the wrong number is the difference between a useful page and alert fatigue. Three useful starting SLOs for a single-chain Reth validator on a fast network (Ethereum mainnet, OP-stack chain):
+
+| SLO | Target | Rationale |
+| :--- | :--- | :--- |
+| **Head lag** | < 6 seconds for **99.5%** of any 7-day window | One slot of slack is fine. Three slots is a problem. Six is a *liveness* issue. |
+| **Attestation participation** | ≥ **99.0%** over rolling 24h | Below 95% your inflation reward is meaningfully impacted; below 99% you should know why. |
+| **Import latency p99** | < 1500ms for **99.0%** of blocks over rolling 24h | The chain's block time is ~12s on Ethereum mainnet; if a single import takes >1.5s, you're eating most of the per-slot budget. |
+
+These are *starting* points. Real production teams tune them to their stake size, their chain's economics, and their team's tolerance for being paged on weekends. **The discipline isn't memorizing these numbers; it's writing them down and reviewing them quarterly.**
+
+## 4. Error budgets — the policy half of the discipline
+
+If your SLO is "99.5% head lag below 6s," you've implicitly given yourself a budget of **0.5% out-of-SLO time** per window — about 50 minutes per week. That budget is the *error budget*.
+
+The policy: **what does the team do when the budget is being burned?** Three tiers worth knowing:
+
+- **Green (budget healthy)** — ship upgrades, run drills, take risk.
+- **Yellow (budget &gt;50% burned, more than half the window remaining)** — pause non-urgent changes, post-mortem the recent burns, page the secondary on-call to investigate.
+- **Red (budget exhausted)** — freeze deploys, halt experimental features (custom precompiles, new gossip protocols), root-cause the spend before resuming.
+
+Two anti-patterns the bootcamp will train you out of: (a) **leaving the policy implicit** ("we'll figure it out when it happens" — you won't, you'll improvise badly), and (b) **treating green as "do nothing."** Green is when you do the prevention work; red is when you can't afford to.
+
+## 5. Alert tiers — turning SLIs into pages
+
+The SLI dashboard tells you what *is*; the alert routing tells you what *requires a human now*. A minimal three-tier scheme:
+
+| Tier | Trigger | Routing |
+| :--- | :--- | :--- |
+| **PAGE** | SLI breached and the breach has lasted > 60s (or any double-sign indicator) | Primary on-call's phone, secondary's chat after 5 min |
+| **TICKET** | SLI breach < 60s OR error budget &gt;50% burned with 5 days left | On-call channel, no phone, review in next standup |
+| **LOG** | Anomaly that doesn't reach a tier-2 threshold | Metrics archive, dashboards |
+
+The PAGE tier is for things the on-call *cannot* afford to acknowledge and ignore — anything that could be a double-sign, a stuck head, or a validator that's been offline more than a slot. Everything else is TICKET or LOG. **The cost of a false PAGE is high (sleep), but the cost of a missed real PAGE is much higher (slashing, lost rewards, reputational damage).** Err on the side of paging, but ruthlessly tune away pages that don't lead to real action.
+
+> 🛑 **Predict before scrolling.** A validator's head lag jumps from 2s to 9s and stays there for 90 seconds, then recovers. **Should this have paged the on-call?** Sketch the answer in terms of SLO breach + duration + error budget impact before continuing to the hands-on section below.
+
+(Answer: yes — 9s exceeds the 6s SLO target, and 90s is well past the 60s sustain threshold for the PAGE tier. Even after recovery, this event consumes ~3% of the weekly head-lag error budget and should produce a post-mortem in the next stand-up.)
+
 ## Prerequisites
 
 - You can run shell commands locally.
