@@ -1,15 +1,27 @@
 #!/usr/bin/env tsx
 /**
- * openhl SHA-pinned cite checker.
+ * openhl SHA + source-path cite checker.
  *
- * Greps every `path/to/file.rs:LINE@SHA` cite out of the openhl lesson
- * drafts in `drafts/openhl_*.md` and verifies each one resolves in a
- * local openhl git checkout — i.e., the file exists at that SHA AND the
- * line number is within the file's bounds at that SHA.
+ * Greps the openhl course seed files (`prisma/seed-reth-openhl-*.ts`) for
+ * two kinds of reference into the openhl codebase and verifies each against
+ * a local openhl git checkout:
+ *
+ *   1. **SHA references** — 7–40 char commit hashes the lessons pin against
+ *      (e.g. "Stage 10d (d66b44a)"). Verified to resolve to a real commit.
+ *   2. **Source-file paths** — `crates/.../*.rs` / `bin/.../*.rs` paths the
+ *      lessons tell readers to open. Verified to exist at openhl HEAD.
+ *
+ * History: this checker originally verified precise `path:line@SHA` cites in
+ * `drafts/openhl_*.md`. Those drafts were removed (the seeds became the
+ * source of truth, commit 3f7b413) and the seeds never carried the
+ * line-pinned cite form — so the check was rewritten to grep the seeds for
+ * the reference shapes they actually use. The line-bounds check is gone (no
+ * line pins to check); the existence checks (SHA resolves, file still there)
+ * catch the common drift modes: file rename, file deletion, and a SHA that
+ * was rebased / force-pushed away.
  *
  * Companion to check-source-links.ts (GitHub blob URLs) and
- * check-external-links.ts (everything else). This one watches for drift
- * between rethlab drafts and the openhl codebase they cite.
+ * check-external-links.ts (everything else).
  *
  * Run locally:
  *   npx tsx .github/scripts/check-openhl-cites.ts
@@ -17,18 +29,11 @@
  * Override the openhl checkout location (default: ../openhl sibling):
  *   OPENHL_REPO=/path/to/openhl npx tsx .github/scripts/check-openhl-cites.ts
  *
- * Override the drafts directory (default: ./drafts):
- *   DRAFTS_DIR=/path/to/drafts npx tsx .github/scripts/check-openhl-cites.ts
+ * Override the seeds directory (default: ./prisma):
+ *   SEEDS_DIR=/path/to/prisma npx tsx .github/scripts/check-openhl-cites.ts
  *
- * Exit code: 0 if every cite resolves; 1 if any cite is broken.
- *
- * Why this exists: the lessons in `drafts/` cite real openhl code by
- * `file:line@SHA`. As openhl evolves, line numbers drift. Catching the
- * drift before publish is what keeps the curriculum honest. The
- * existence + line-bounds check catches the common drift modes (file
- * rename, function move, deletion). A semantic check ("the cited line
- * still says what the lesson claims") is out of scope — that's editorial
- * review.
+ * Exit code: 0 if every reference resolves; 1 if any is broken; 2 on setup
+ * error (no openhl checkout, no seeds).
  */
 import { readdir, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
@@ -42,106 +47,35 @@ const RETHLAB_ROOT = resolve(SCRIPT_DIR, '..', '..');
 const OPENHL_REPO = process.env.OPENHL_REPO
   ? resolve(process.env.OPENHL_REPO)
   : resolve(RETHLAB_ROOT, '..', 'openhl');
-const DRAFTS_DIR = process.env.DRAFTS_DIR
-  ? resolve(process.env.DRAFTS_DIR)
-  : join(RETHLAB_ROOT, 'drafts');
+const SEEDS_DIR = process.env.SEEDS_DIR
+  ? resolve(process.env.SEEDS_DIR)
+  : join(RETHLAB_ROOT, 'prisma');
 
-// Pattern matches:
-//   crates/X.rs              — bare path (skipped; no SHA pin to check)
-//   crates/X.rs:N            — path with line (skipped; no SHA pin)
-//   crates/X.rs:N@SHA        — pinned single line
-//   crates/X.rs:N-M@SHA      — pinned range
-//   crates/X.rs@SHA          — whole-file pin (existence-only check)
-//   bin/X.rs@SHA (etc.)      — same shape under bin/
-const CITE_RE =
-  /\b(crates|bin)\/[a-zA-Z0-9_/.-]+\.rs(:[0-9]+(?:-[0-9]+)?)?@[a-f0-9]{7,40}\b/g;
+// SHA references. The seeds phrase commit pins a handful of ways, all of
+// which put the hash inside parens or backticks right after a marker word.
+// Anchoring on those markers avoids matching incidental hex (addresses,
+// hashes in code samples, etc.).
+//   "Stage 10d (d66b44a)"      "SHA `d66b44a`"      "at `d66b44a`"
+//   "(d66b44a)" after a Stage   "`0a8464e`"
+const SHA_RE =
+  /(?:Stage\s+[0-9]+[a-z]?\s*\(|SHA\s+`|at\s+`|pinned to\s+`|\bcommit\s+`)([a-f0-9]{7,40})`?\)?/gi;
 
-interface Cite {
-  raw: string;
-  path: string;
-  lineStart: number | null;
-  lineEnd: number | null;
-  sha: string;
-  file: string; // markdown file the cite came from
+// Source-file paths the lessons tell readers to open.
+const PATH_RE = /\b(?:crates|bin)\/[a-zA-Z0-9_/.-]+\.rs\b/g;
+
+interface Ref {
+  raw: string; // the SHA or path token
+  kind: 'sha' | 'path';
+  files: Set<string>; // seed files it appears in
 }
 
-interface CheckResult {
-  cite: Cite;
-  ok: boolean;
-  reason?: string;
-}
-
-function parseCite(raw: string, file: string): Cite | null {
-  // raw looks like "crates/x.rs:10-20@abc1234" or similar.
-  const atIdx = raw.lastIndexOf('@');
-  if (atIdx < 0) return null;
-  const sha = raw.slice(atIdx + 1);
-  const rest = raw.slice(0, atIdx);
-
-  const colonIdx = rest.indexOf(':');
-  if (colonIdx < 0) {
-    return { raw, path: rest, lineStart: null, lineEnd: null, sha, file };
-  }
-  const path = rest.slice(0, colonIdx);
-  const spec = rest.slice(colonIdx + 1);
-  const dashIdx = spec.indexOf('-');
-  if (dashIdx < 0) {
-    const n = Number.parseInt(spec, 10);
-    if (Number.isNaN(n)) return null;
-    return { raw, path, lineStart: n, lineEnd: null, sha, file };
-  }
-  const start = Number.parseInt(spec.slice(0, dashIdx), 10);
-  const end = Number.parseInt(spec.slice(dashIdx + 1), 10);
-  if (Number.isNaN(start) || Number.isNaN(end)) return null;
-  return { raw, path, lineStart: start, lineEnd: end, sha, file };
-}
-
-function checkCite(cite: Cite): CheckResult {
-  // Does the file exist at this SHA?
+function gitOk(args: string[]): boolean {
   try {
-    execFileSync('git', ['-C', OPENHL_REPO, 'cat-file', '-e', `${cite.sha}:${cite.path}`], {
-      stdio: 'pipe',
-    });
+    execFileSync('git', ['-C', OPENHL_REPO, ...args], { stdio: 'pipe' });
+    return true;
   } catch {
-    return { cite, ok: false, reason: 'file not found at SHA' };
+    return false;
   }
-
-  if (cite.lineStart === null) {
-    return { cite, ok: true };
-  }
-
-  // Read the file at the SHA and count lines.
-  let content: string;
-  try {
-    content = execFileSync('git', ['-C', OPENHL_REPO, 'show', `${cite.sha}:${cite.path}`], {
-      stdio: 'pipe',
-      encoding: 'utf8',
-    });
-  } catch (err) {
-    return {
-      cite,
-      ok: false,
-      reason: `git show failed: ${(err as Error).message}`,
-    };
-  }
-  const totalLines = content.split('\n').length;
-
-  const hi = cite.lineEnd ?? cite.lineStart;
-  if (cite.lineStart < 1 || cite.lineStart > totalLines) {
-    return {
-      cite,
-      ok: false,
-      reason: `line ${cite.lineStart} out of range (file has ${totalLines} lines)`,
-    };
-  }
-  if (hi < cite.lineStart || hi > totalLines) {
-    return {
-      cite,
-      ok: false,
-      reason: `line ${hi} out of range (file has ${totalLines} lines)`,
-    };
-  }
-  return { cite, ok: true };
 }
 
 async function main(): Promise<void> {
@@ -151,66 +85,90 @@ async function main(): Promise<void> {
     console.error('  set OPENHL_REPO=/path/to/openhl or place rethlab and openhl as siblings');
     process.exit(2);
   }
-  if (!existsSync(DRAFTS_DIR)) {
-    console.error(`ERROR: ${DRAFTS_DIR} does not exist`);
+  if (!existsSync(SEEDS_DIR)) {
+    console.error(`ERROR: ${SEEDS_DIR} does not exist`);
     process.exit(2);
   }
 
-  const files = (await readdir(DRAFTS_DIR))
-    .filter((f) => f.endsWith('.md'))
-    .map((f) => join(DRAFTS_DIR, f));
+  const files = (await readdir(SEEDS_DIR))
+    .filter((f) => /^seed-reth-openhl-.*\.ts$/.test(f))
+    .map((f) => join(SEEDS_DIR, f));
 
   if (files.length === 0) {
-    console.error(`ERROR: no .md files in ${DRAFTS_DIR}`);
+    console.error(`ERROR: no seed-reth-openhl-*.ts files in ${SEEDS_DIR}`);
     process.exit(2);
   }
 
-  console.log('openhl cite-check');
-  console.log(`  rethlab drafts:  ${DRAFTS_DIR}`);
-  console.log(`  openhl repo:     ${OPENHL_REPO}`);
-  console.log(`  files:           ${files.length}`);
-  console.log();
+  // Collect unique refs across all seed files.
+  const shaRefs = new Map<string, Ref>();
+  const pathRefs = new Map<string, Ref>();
 
-  let grandTotal = 0;
-  let grandFail = 0;
-
-  for (const file of files.sort()) {
+  for (const file of files) {
     const text = await readFile(file, 'utf8');
-    const matches = [...text.matchAll(CITE_RE)].map((m) => m[0]);
-    const unique = [...new Set(matches)];
+    const short = basename(file);
 
-    console.log(`── ${basename(file)} ──`);
-    if (unique.length === 0) {
-      console.log('  (no openhl SHA-pinned cites)');
-      continue;
+    for (const m of text.matchAll(SHA_RE)) {
+      const sha = m[1].toLowerCase();
+      const existing = shaRefs.get(sha) ?? { raw: sha, kind: 'sha' as const, files: new Set() };
+      existing.files.add(short);
+      shaRefs.set(sha, existing);
     }
-
-    let fileFail = 0;
-    for (const raw of unique.sort()) {
-      const cite = parseCite(raw, file);
-      if (!cite) {
-        console.log(`  ✗ ${raw}  — could not parse cite`);
-        fileFail++;
-        grandFail++;
-        grandTotal++;
-        continue;
-      }
-      grandTotal++;
-      const result = checkCite(cite);
-      if (!result.ok) {
-        console.log(`  ✗ ${cite.raw}  — ${result.reason}`);
-        fileFail++;
-        grandFail++;
-      }
-    }
-    if (fileFail === 0) {
-      console.log(`  ✓ ${unique.length} cite(s) OK`);
+    for (const m of text.matchAll(PATH_RE)) {
+      const p = m[0];
+      // Skip intentional "wrong path" teaching contrasts, where a lesson shows
+      // the correct path then explicitly names the incorrect one. Two shapes:
+      //   EN: "...`.../src/bridge.rs`, not `crates/consensus/bridge.rs`..."
+      //   JA: "...`.../src/bridge.rs` であって `crates/consensus/bridge.rs` ではない"
+      // Inside a TS template literal the backtick is escaped (\`), so allow an
+      // optional backslash adjacent to the backtick on either side.
+      const idx = m.index ?? 0;
+      const before = text.slice(Math.max(0, idx - 8), idx);
+      const after = text.slice(idx + p.length, idx + p.length + 12);
+      if (/not\s+\\?`$/i.test(before)) continue; // EN: "not `<wrong>`"
+      if (/^\\?`\s*ではない/.test(after)) continue; // JA: "`<wrong>` ではない"
+      const existing = pathRefs.get(p) ?? { raw: p, kind: 'path' as const, files: new Set() };
+      existing.files.add(short);
+      pathRefs.set(p, existing);
     }
   }
 
+  console.log('openhl cite-check (seed-based)');
+  console.log(`  seeds:       ${SEEDS_DIR} (${files.length} openhl seed files)`);
+  console.log(`  openhl repo: ${OPENHL_REPO}`);
+  console.log(`  SHA refs:    ${shaRefs.size}`);
+  console.log(`  path refs:   ${pathRefs.size}`);
   console.log();
-  console.log(`Summary: ${grandTotal} cite(s) checked, ${grandFail} failure(s)`);
-  process.exit(grandFail === 0 ? 0 : 1);
+
+  let fail = 0;
+
+  // 1. SHA references resolve to real commits.
+  console.log('── SHA references ──');
+  for (const sha of [...shaRefs.keys()].sort()) {
+    const ref = shaRefs.get(sha)!;
+    // `<sha>^{commit}` forces the object to resolve as a commit.
+    if (!gitOk(['cat-file', '-e', `${sha}^{commit}`])) {
+      console.log(`  ✗ ${sha}  — not a commit in openhl  (${[...ref.files].join(', ')})`);
+      fail++;
+    }
+  }
+  if (fail === 0) console.log(`  ✓ all ${shaRefs.size} SHA(s) resolve`);
+
+  // 2. Source-file paths exist at HEAD.
+  console.log('── source paths (at HEAD) ──');
+  let pathFail = 0;
+  for (const p of [...pathRefs.keys()].sort()) {
+    const ref = pathRefs.get(p)!;
+    if (!gitOk(['cat-file', '-e', `HEAD:${p}`])) {
+      console.log(`  ✗ ${p}  — not found at openhl HEAD  (${[...ref.files].join(', ')})`);
+      pathFail++;
+      fail++;
+    }
+  }
+  if (pathFail === 0) console.log(`  ✓ all ${pathRefs.size} path(s) exist at HEAD`);
+
+  console.log();
+  console.log(`Summary: ${shaRefs.size} SHA + ${pathRefs.size} path checked, ${fail} failure(s)`);
+  process.exit(fail === 0 ? 0 : 1);
 }
 
 main().catch((err: unknown) => {

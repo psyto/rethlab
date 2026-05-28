@@ -4431,7 +4431,7 @@ Builder にとって興味深い問いは「CLOB か RFQ か」ではなく、�
 - **Step 4（Funding） — Funding state machine** — openhl Stage 8b。
 
 **rethlab 外**:
-- **\`psyto/openhl\` Stage 9 ソース** — full custom-EVM build が public repo にある。Bridge を理解したら \`crates/evm/src/precompiles.rs\` を読むとよい。
+- **\`psyto/openhl\` Stage 9 ソース** — full custom-EVM build が public repo にある。Bridge を理解したら \`crates/evm/src/precompiles/mod.rs\` を読むとよい。
 - **参考用の production matching engine** — Project Serum (Solana CLOB、archived だが public)、dYdX v4 (Cosmos-based perp DEX、public)。データ構造を比較してみる価値がある。
 - **Property-based testing の文献** — proptest の doc と Hughes/Claessen の QuickCheck 論文。レッスン 8 の invariant は保守的に絞ってあるので、もっと多く追加できる。
 

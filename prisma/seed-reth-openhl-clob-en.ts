@@ -4413,7 +4413,7 @@ The interesting builder question isn't "CLOB or RFQ" — it's "which slice of wh
 - **Course 9 — Funding state machine** — openhl Stage 8b.
 
 **Outside rethlab**:
-- **\`psyto/openhl\` Stage 9 source** — the full custom-EVM build is in the public repo. Read \`crates/evm/src/precompiles.rs\` once you understand the bridge.
+- **\`psyto/openhl\` Stage 9 source** — the full custom-EVM build is in the public repo. Read \`crates/evm/src/precompiles/mod.rs\` once you understand the bridge.
 - **Production matching engines for reference** — Project Serum (Solana CLOB, archived but public), dYdX v4 (Cosmos-based perp DEX, public). Compare data structures.
 - **Property-based testing literature** — proptest's docs + Hughes/Claessen QuickCheck papers. The Lesson 8 invariants are conservative; you can do much more.
 
