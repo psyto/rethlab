@@ -754,7 +754,7 @@ g.greet();
 | \`impl Trait\` | 静的ディスパッチ（コンパイル時に型確定） |
 | \`dyn Trait\` | 動的ディスパッチ（実行時に解決、Boxが必要） |
 
-性能は \`impl\` の方が速いだが、ヘテロなコレクション（\`Vec<Box<dyn Trait>>\`）が必要なときは \`dyn\` を使いる。
+性能は \`impl\` の方が速いだが、ヘテロなコレクション（\`Vec<Box<dyn Trait>>\`）が必要なときは \`dyn\` を使う。
 
 > 🛑 **理解度チェック。** \`Box<dyn Greet>\` は呼び出し地点で \`Box<En>\` よりコストが高い。**そのコストは正確にどこにあるのか?** vtable とは何か? 答えられないなら、動的ディスパッチをまだ理解できていません — 読み直しを。
 
@@ -1058,7 +1058,7 @@ async fn exex_init<Node: FullNodeComponents>(
 
 \`exex_init\` はノード起動時に *1 度だけ* 呼ばれる。Reth が \`ExExContext\` を渡してくる — これは \`notifications\`（流れてくるチェーンイベントのストリーム）、\`events\`（Reth の pruner への返信チャンネル）、ノードコンポーネントへのハンドルをまとめた struct である。あなたは、Reth が永続的に poll する future を返す。
 
-この最小 ExEx は同期的セットアップを何もしません — \`ctx\` を \`exex\` にそのまま渡すだけ。**本物の ExEx** で \`File::open(...)\` や \`Database::connect(...)\` が必要なら、その処理は future を返す *前* に \`exex_init\` 内で行いる。
+この最小 ExEx は同期的セットアップを何もしません — \`ctx\` を \`exex\` にそのまま渡すだけ。**本物の ExEx** で \`File::open(...)\` や \`Database::connect(...)\` が必要なら、その処理は future を返す *前* に \`exex_init\` 内で行う。
 
 > 🔍 **リポジトリで確認。** \`tracking-state\` の例を開く。\`minimal\` がやっていないことを \`exex_init\` でやっているのは何か?
 
@@ -1428,7 +1428,7 @@ cargo build
 | **Payload** | ブロックビルダー | MEV-aware、アプリ固有の優先順 (Tempo の payments-first ordering) |
 | **Add-ons** | カスタム JSON-RPC ネームスペース、ExEx フック | tidx の \`tidx_*\` ネームスペース、検閲耐性監視の ExEx |
 
-これらが SDK が公開している差し替えポイントそのものである。それ *以外*（sync オーケストレータ、MDBX スキーマ、ヘッダーダウンロード、sender 復元、ハッシングステージ）は Reth からそのまま使いる。
+これらが SDK が公開している差し替えポイントそのものである。それ *以外*（sync オーケストレータ、MDBX スキーマ、ヘッダーダウンロード、sender 復元、ハッシングステージ）は Reth からそのまま使う。
 
 ## ステップ 2 — 最初の試案: 上書きを struct で渡す
 

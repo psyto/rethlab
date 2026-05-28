@@ -8,7 +8,7 @@ export async function seedRethConsensusEngineeringJA(prisma: PrismaClient) {
       slug: 'reth-consensus-engineering-ja',
       title: 'Consensus Engineering — Reth で L1のコンセンサスを作る',
       description:
-        '「reth を読める」から「レッスン1を出荷できる」までの最大のギャップを埋めるコース。コンセンサスは Rust EVM スタックの残りの層 — DB、VM、ネットワーク、並行性 — を **ひとつのチェーンとして束ねる** 層。コンセンサス理論を一から (BFT、safety/liveness、FLP)、Rust 製コンセンサスエンジンの実コード (reth の Consensus trait、Malachite、bera-reth の Proof-of-Liquidity) を読み、Reth ベース chain にカスタムコンセンサスを配線する。HyperBFT を読んで Tempo クラスの レッスン1を出荷する準備ができる。',
+        '「reth を読める」から「L1 chain を出荷できる」までの最大のギャップを埋めるコース。コンセンサスは Rust EVM スタックの残りの層 — DB、VM、ネットワーク、並行性 — を **ひとつのチェーンとして束ねる** 層。コンセンサス理論を一から (BFT、safety/liveness、FLP)、Rust 製コンセンサスエンジンの実コード (reth の Consensus trait、Malachite、bera-reth の Proof-of-Liquidity) を読み、Reth ベース chain にカスタムコンセンサスを配線する。HyperBFT を読んで Tempo クラスの L1 chainを出荷する準備ができる。',
       difficulty: 'ADVANCED',
       duration: 220,
       xpReward: 650,
@@ -428,7 +428,7 @@ sequenceDiagram
 
 ## 6. 自分の L1 への含意
 
-Tempo クラスの レッスン1を作るなら:
+Tempo クラスの L1 chainを作るなら:
 
 - **おそらく** Ethereum の CL は走らせない — 独自の validator set、異なる slot time、異なる finality 周期になる
 - **おそらく** Reth 互換の Engine API は使う — 別の consensus client を差し替えられるように
@@ -967,7 +967,7 @@ Astria は本番環境での「Reth + BFT コンセンサス」のオープン�
 
 ## 8. Tempo 系 L1 向け
 
-Malachite で Tempo クラスの レッスン1を出荷するなら:
+Malachite で Tempo クラスの L1 chainを出荷するなら:
 
 \`\`\`rust
 // 自分の context
@@ -1127,7 +1127,7 @@ bera-reth を参照として学ぶ:
 1. bera-reth を clone する (または GitHub 上で閲覧する)
 2. Expert Module 3 で見た reth 本体の \`crates/optimism/\` のディレクトリ構造と比較する
 3. PoL に最も特化したファイルを 3 つ特定する (別の L1 向けに最もカスタマイズが必要になる箇所)
-4. 推定する: bera-reth を fork して Tempo 系 レッスン1を作るなら、何を変えて何を残すか?
+4. 推定する: bera-reth を fork して Tempo 系の L1 chain を作るなら、何を変えて何を残すか?
 
 > 最終チェック: 一文で、「Reth 上にカスタム レッスン1をどう出荷するか?」の構造的な答えは? **「Consensus trait の実装 + カスタム executor hook + NodeBuilder への配線」以上のものを答えていたら過剰**。`,
                 },
@@ -1698,7 +1698,7 @@ slot ごとに別のリーダーが、決定論的に選ばれる。リーダー
 | **Month 12** | ローテーション proposer | ~10 バリデータ | 1 つでも生きていれば liveness |
 | **Year 2** | 本物の BFT (Tendermint/HotStuff) | 30 以上のバリデータ | 2/3+ Byzantine 耐性 |
 
-**Day 0 で レッスン1を出荷できる** — その後、段階的に分散化していく。Tempo や Hyperliquid は今日おそらく stage 2〜3 にいて、stage 4 を年単位の計画として進めているところ。
+**Day 0 で L1 chain を出荷できる** — その後、段階的に分散化していく。Tempo や Hyperliquid は今日おそらく stage 2〜3 にいて、stage 4 を年単位の計画として進めているところ。
 
 ## 8. 練習
 
@@ -1899,7 +1899,7 @@ Hyperliquid は slashing 付きで launch した。OP-Stack chain は知られ�
                   xpReward: 50,
                   content: `# ファイナルクイズ: L1 コンセンサスを作る
 
-最終的なコンセンサスのチェック。Tempo クラスの レッスン1を出荷するために必要。`,
+最終的なコンセンサスのチェック。Tempo クラスの L1 chainを出荷するために必要。`,
                   quizQuestions: [
                     {
                       question: '新規の決済特化 L1 (Tempo クラス) のコンセンサスを設計しているとする。バリデータ数: 30。Finality 目標: サブ秒。**どのコンセンサス系統** を選び、**その理由は**?',

@@ -423,7 +423,7 @@ tokio::task::spawn_blocking(|| {
 | \`tokio::sync::watch\` | 最新値ブロードキャスト（例：最新ブロック） |
 | \`tokio::sync::oneshot\` | 単一値、リクエスト/レスポンス |
 
-ExEx はチェーン通知に **broadcast** を使いる。すべてのExExがすべてのイベントを受け取るため。
+ExEx はチェーン通知に **broadcast** を使う。すべてのExExがすべてのイベントを受け取るため。
 
 > 🛑 **理解度チェック。** ExEx はなぜ \`mpsc\` を使わない? 3 つの ExEx を登録した場合、\`mpsc\` だとイベント配信に何が起きる? \`broadcast\` が防いでいる失敗モードを書き出してほしい。
 
@@ -654,7 +654,7 @@ cargo expand --bin my_app
                   xpReward: 45,
                   content: `# Tracing 内部 — Reth は自分自身をどう観測しているか
 
-性能チューニング、デッドロックのデバッグ、ステージが突然止まった理由の診断 — どれも、ノード自身が「何をしているか」を **教えてくれる** ことが前提になる。Reth がこの問いに用意した答えが \`tracing\`、Rust エコシステムの構造化ログ用 crate である。Reth の主要なコードパスは例外なく \`tracing\` の span と event で計装されていて、可観測性まわり（ログ・メトリクス・分散トレース）はすべてこの一枚岩の基盤の上に乗っている。本レッスンは、その仕組みと拡張方法を扱いる。
+性能チューニング、デッドロックのデバッグ、ステージが突然止まった理由の診断 — どれも、ノード自身が「何をしているか」を **教えてくれる** ことが前提になる。Reth がこの問いに用意した答えが \`tracing\`、Rust エコシステムの構造化ログ用 crate である。Reth の主要なコードパスは例外なく \`tracing\` の span と event で計装されていて、可観測性まわり（ログ・メトリクス・分散トレース）はすべてこの一枚岩の基盤の上に乗っている。本レッスンは、その仕組みと拡張方法を扱う。
 
 > 📌 **なぜ Performance & Systems モジュールに置いてあるか。** 計測できないものは最適化できないからである。\`tracing\` が計測層である。続く性能レッスン（flamegraph、MDBX チューニング、Tokio ランタイム）は、稼働中のノードから正しい信号を引き出せる前提で進む。その引き出し口がこの \`tracing\` である。
 
@@ -1261,7 +1261,7 @@ witness はどこからか来なくてはならない。あらゆるステート
 - **リポジトリ:** [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator)
 - **対象チェーン:** MegaETH (Ethereum 互換、高 TPS の L2、OP-Stack 系)。
 - **Witness ソース:** MegaETH の sequencer、専用 witness RPC エンドポイント (\`--witness-endpoint\`) で配信。
-- **Witness フォーマット:** **SALT** の証明、MPT ではない — [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) 参照。SALT は静的な 4-レベル 256-ary trie で、葉が SHI ハッシュテーブルのバケット。Banderwagon + IPA でコミットする。約 1 GB のメモリで 30 億アイテムを authenticate。
+- **Witness フォーマット:** **SALT** の証明、MPT ではない — [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) 参照。SALT は静的な 4-レベル 256-ary trie で、葉が SHI ハッシュテーブルのバケット。**Banderwagon + IPA** でコミットする — Banderwagon は Bandersnatch から派生した prime-order elliptic curve (BLS12-381 の scalar field 上で定義され、vector commitment 効率のために選ばれた)、IPA は Inner Product Argument (Bulletproofs 由来の logarithmic-size proof primitive で、Ethereum の Verkle tree 研究にも転用されている)。約 1 GB のメモリで 30 億アイテムを authenticate。
 - **バイトコード:** **部分ステートレス**。コントラクトコードは witness に **含まない**。バリデータはパブリック RPC からオンデマンドで取得し、有界 \`ContractCache\` (\`crates/stateless-db/src/cache.rs\`) にローカルキャッシュする。
 - **検証フロー:** [\`crates/stateless-core/src/pipeline\`](https://github.com/megaeth-labs/stateless-validator/tree/main/crates/stateless-core/src/pipeline) で定義された 3 ステージのパイプライン (FETCH → PROCESS → ADVANCE)。複数の検証ワーカーが異なるブロックを並列処理する — 各ブロックが自分の witness と自分の pre-state root を持つので embarrassingly parallel。
 - **実行エンジン:** **プラガブル**。デフォルトはバニラ revm。第二バックエンドは Pi² と共同開発した [EVM の形式 K セマンティクス](https://github.com/Pi-Squared-Inc/evm-semantics)。JIT コンパイルされた sequencer エクゼキュータと合わせて、MegaETH は同一の状態遷移関数に対して **3 つの独立クライアント実装** を持つ。
@@ -1789,9 +1789,9 @@ for block in mainnet[recent_1000]:
 
 フォークを ship したとする。カスタム precompile、独自の payload builder、いじったガススケジュール。ユニットテストは通っている。前のレッスンの「バニラ Reth に対する diff テスト」は、*変更した* 部分が *変更していない* パスでも以前と同じに振る舞うことを教えてくれる。**だが、*変更していない* パスが、あなたの変更によって壊れていないことはどう知ればいいのでしょうか?** さらに難しいのは、*誰もテストを書かなかったパス* に潜むバグを見つけることである。
 
-答えは、**2 つの方向からの自動的な正しさの圧力** である。\`execution-spec-tests\` で仕様への準拠を構造的に保証し、**differential fuzzing** で誰も探そうと思わなかったバグを浮かび上がらせる。本番で Revm/Reth フォークを動かしている L1 チームは、全員この 2 つを回している。本レッスンはその方法を扱いる。
+答えは、**2 つの方向からの自動的な正しさの圧力** である。\`execution-spec-tests\` で仕様への準拠を構造的に保証し、**differential fuzzing** で誰も探そうと思わなかったバグを浮かび上がらせる。本番で Revm/Reth フォークを動かしている L1 チームは、全員この 2 つを回している。本レッスンはその方法を扱う。
 
-> 📌 **位置付け。** Inside REVM の *Revm 自身のテスト* のレッスンは、フォーマット（state tests、EOF tests、execution-spec-tests）の説明でした。**本レッスンはその本番運用版** — チェーンチームがこれらの道具を *vanilla Revm に対してではなく、自分たちのフォークに* どう適用するか、を扱いる。
+> 📌 **位置付け。** Inside REVM の *Revm 自身のテスト* のレッスンは、フォーマット（state tests、EOF tests、execution-spec-tests）の説明でした。**本レッスンはその本番運用版** — チェーンチームがこれらの道具を *vanilla Revm に対してではなく、自分たちのフォークに* どう適用するか、を扱う。
 
 ## 1. execution-spec-tests を自分のフォークに適用する
 

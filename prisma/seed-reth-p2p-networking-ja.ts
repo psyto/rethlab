@@ -513,7 +513,7 @@ Tempo が sequencer を分散化するタイミングが来れば、2026 年中�
 
 ### mppsol (cross-VM 決済)
 
-Tempo から Solana への決済 attestation 自体は CCIP 経由で扱いる (これは既に別レッスンで扱った内容)。一方、**Tempo 内部の coordination** にはカスタム gossip が向いている:
+Tempo から Solana への決済 attestation 自体は CCIP 経由で扱う (これは既に別レッスンで扱った内容)。一方、**Tempo 内部の coordination** にはカスタム gossip が向いている:
 - chain に到達する前の、pending な merchant 決済をアナウンスする
 - HA を目的とした、merchant ノード同士の協調
 
