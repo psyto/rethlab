@@ -234,7 +234,7 @@ flowchart LR
 
 全体が wasm 経由でブラウザでも動く。**ここが要点** — wallet が Infura を信頼せず Ethereum を検証できる。
 
-> 🔍 **リポで探す。** Helios の [\`consensus/src/consensus.rs\`](https://github.com/a16z/helios/blob/master/consensus/src/consensus.rs) を開く。sync committee 署名が検証される箇所を見つける。**どのような BLS 集約が起きているか?** 検証フローを追って読む。
+> 🔍 **リポで探す。** Helios の [\`consensus/src/consensus.rs\`](https://github.com/a16z/helios/blob/master/ethereum/src/consensus.rs) を開く。sync committee 署名が検証される箇所を見つける。**どのような BLS 集約が起きているか?** 検証フローを追って読む。
 
 ## 4. Reth ベース chain での light client
 
@@ -300,7 +300,7 @@ Reth EVM は mainnet と同一なので、任意の Solidity light client (Helio
 ## 7. 読み物
 
 - [Helios source](https://github.com/a16z/helios) — 本番 Rust light client
-- [Ethereum light client spec](https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md) — 正式仕様
+- [Ethereum light client spec](https://github.com/ethereum/consensus-specs/blob/master/specs/altair/light-client/sync-protocol.md) — 正式仕様
 - [SP1 light client](https://github.com/succinctlabs/sp1) — ZK light client 実装
 
 > 最終チェック: 一文で、自分の レッスン1の light client が他 chain からの自分の state 検証を **最も trust 最小化** にする理由を答える。**答えに「source chain のコンセンサスだけ信頼」が出てこなければ §1 を再読**。`,

@@ -2613,7 +2613,7 @@ If any answer is shaky, re-read the section.
 
 ## 📂 Reference audits worth reading
 
-- [Sigma Prime — security audits](https://sigmaprime.io/security-audits/) — the closest industry reference for systems-code audit format
+- [Sigma Prime — public audits](https://github.com/sigp/public-audits) — the closest industry reference for systems-code audit format
 - [Trail of Bits — publications](https://github.com/trailofbits/publications) — many Rust audits; good examples
 - [OpenZeppelin — security audits](https://blog.openzeppelin.com/security-audits/) — strong on consensus invariant analysis
 - [ConsenSys Diligence — audit reports](https://consensys.io/diligence/audits/) — broad coverage including infrastructure
@@ -2835,7 +2835,7 @@ If any answer is shaky, re-read the section.
 ## 📂 References worth keeping open
 
 - [paradigmxyz/reth — CONTRIBUTING.md](https://github.com/paradigmxyz/reth/blob/main/CONTRIBUTING.md)
-- [bluealloy/revm — CONTRIBUTING.md](https://github.com/bluealloy/revm/blob/main/CONTRIBUTING.md)
+- [bluealloy/revm — repository + book](https://github.com/bluealloy/revm)
 - [alloy-rs/alloy — CONTRIBUTING.md](https://github.com/alloy-rs/alloy/blob/main/CONTRIBUTING.md)
 - [Reth's recent merged PRs](https://github.com/paradigmxyz/reth/pulls?q=is%3Apr+is%3Amerged) — the calibration source
 - [Reth Discord](https://discord.gg/reth) — \`#contributing\` channel for the lurking phase

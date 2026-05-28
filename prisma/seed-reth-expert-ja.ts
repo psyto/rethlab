@@ -2602,7 +2602,7 @@ Systems-code audit はレポートを produce する。業界標準の構造 (Tr
 
 ## 📂 読む価値のある reference audit
 
-- [Sigma Prime — security audits](https://sigmaprime.io/security-audits/) — systems-code audit フォーマットに最も近い業界 reference
+- [Sigma Prime — public audits](https://github.com/sigp/public-audits) — systems-code audit フォーマットに最も近い業界 reference
 - [Trail of Bits — publications](https://github.com/trailofbits/publications) — 多数の Rust 監査; 良い例
 - [OpenZeppelin — security audits](https://blog.openzeppelin.com/security-audits/) — コンセンサス不変量分析が強い
 - [ConsenSys Diligence — audit reports](https://consensys.io/diligence/audits/) — インフラ含む幅広いカバレッジ
@@ -2824,7 +2824,7 @@ PR を確実に無視させる方法の non-exhaustive リスト:
 ## 📂 開いておくべき参考資料
 
 - [paradigmxyz/reth — CONTRIBUTING.md](https://github.com/paradigmxyz/reth/blob/main/CONTRIBUTING.md)
-- [bluealloy/revm — CONTRIBUTING.md](https://github.com/bluealloy/revm/blob/main/CONTRIBUTING.md)
+- [bluealloy/revm — repository + book](https://github.com/bluealloy/revm)
 - [alloy-rs/alloy — CONTRIBUTING.md](https://github.com/alloy-rs/alloy/blob/main/CONTRIBUTING.md)
 - [Reth の最近 merged された PR](https://github.com/paradigmxyz/reth/pulls?q=is%3Apr+is%3Amerged) — calibration ソース
 - [Reth Discord](https://discord.gg/reth) — ルーキング期間の \`#contributing\` チャネル

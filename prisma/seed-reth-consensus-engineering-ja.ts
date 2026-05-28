@@ -440,7 +440,7 @@ Ethereum ハイブリッドの 2 つの半分 (LMD-GHOST + Casper FFG) は、新
 
 - [Ethereum consensus spec](https://github.com/ethereum/consensus-specs) — \`specs/phase0/beacon-chain.md\`
 - [Vitalik の Casper FFG 論文](https://arxiv.org/abs/1710.09437) — 2017 の原典
-- [Engine API 仕様](https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md) — JSON-RPC インタフェース
+- [Engine API 仕様](https://github.com/ethereum/execution-apis/blob/main/src/engine/paris.md) — JSON-RPC インタフェース
 
 ## 8. 練習
 
@@ -903,7 +903,7 @@ impl<Ctx: Context> VoteKeeper<Ctx> {
 
 操作は 3 つ — 票の追加、polka の確認、commit の確認。**それだけ**。Tendermint の quorum ロジックがすべてこの struct に収まっている。
 
-> 🔍 **リポで探す。** [\`code/crates/vote/src/lib.rs\`](https://github.com/informalsystems/malachite/blob/main/code/crates/vote/src/lib.rs) を開いて \`add_vote\` を追う。**何が何で加重されているか?** 2f+1 の閾値はどこから来ているか?
+> 🔍 **リポで探す。** [\`code/crates/vote/src/lib.rs\`](https://github.com/informalsystems/malachite/blob/main/code/crates/core-votekeeper/src/lib.rs) を開いて \`add_vote\` を追う。**何が何で加重されているか?** 2f+1 の閾値はどこから来ているか?
 
 ## 5. Driver — オーケストレータ
 
@@ -1814,7 +1814,7 @@ slash_amount = (slashed_stake / total_stake) * stake * multiplier
 
 **これが協調攻撃に対する経済的な堀になる**。偶発的な小規模 slash はコストが小さく、本物の攻撃はフルコストを払うことになる。
 
-> 🔍 **リポで探す。** [Ethereum consensus spec](https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md) を開き、「slashing」または「process_slashing」を検索する。正確な公式がそこにある。**Multiplier はいくつか?**
+> 🔍 **リポで探す。** [Ethereum consensus spec](https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/beacon-chain.md) を開き、「slashing」または「process_slashing」を検索する。正確な公式がそこにある。**Multiplier はいくつか?**
 
 ## 5. 報酬 — もう半分
 

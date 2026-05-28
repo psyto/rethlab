@@ -234,7 +234,7 @@ Key files to read:
 
 The whole thing runs in a browser via wasm. **That's the point** — a wallet can verify Ethereum without trusting Infura.
 
-> 🔍 **Find in repo.** Open Helios's [\`consensus/src/consensus.rs\`](https://github.com/a16z/helios/blob/master/consensus/src/consensus.rs). Find where the sync committee signature is verified. **What BLS aggregation is happening?** Trace the verification flow.
+> 🔍 **Find in repo.** Open Helios's [\`consensus/src/consensus.rs\`](https://github.com/a16z/helios/blob/master/ethereum/src/consensus.rs). Find where the sync committee signature is verified. **What BLS aggregation is happening?** Trace the verification flow.
 
 ## 4. Light clients on Reth-based chains
 
@@ -300,7 +300,7 @@ Reth's EVM runs the same as mainnet, so any Solidity light client (Helios's cont
 ## 7. Reading list
 
 - [Helios source](https://github.com/a16z/helios) — production Rust light client
-- [Ethereum light client spec](https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md) — the formal protocol
+- [Ethereum light client spec](https://github.com/ethereum/consensus-specs/blob/master/specs/altair/light-client/sync-protocol.md) — the formal protocol
 - [SP1 light client](https://github.com/succinctlabs/sp1) — ZK light client implementation
 
 > Final check: in one sentence, why is a light client of your L1 the **most trust-minimized** way for other chains to verify your state? **If your answer doesn't reference "trust only the source chain's consensus," re-read §1.**`,

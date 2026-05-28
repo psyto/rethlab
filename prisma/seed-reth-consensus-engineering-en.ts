@@ -440,7 +440,7 @@ The two halves of Ethereum's hybrid (LMD-GHOST + Casper FFG) are the **mental mo
 
 - [Ethereum consensus spec](https://github.com/ethereum/consensus-specs) — \`specs/phase0/beacon-chain.md\`
 - [Vitalik's Casper FFG paper](https://arxiv.org/abs/1710.09437) — original 2017
-- [Engine API spec](https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md) — JSON-RPC interface
+- [Engine API spec](https://github.com/ethereum/execution-apis/blob/main/src/engine/paris.md) — JSON-RPC interface
 
 ## 8. Practice
 
@@ -903,7 +903,7 @@ impl<Ctx: Context> VoteKeeper<Ctx> {
 
 Three operations: add a vote, check for polka, check for commit. **That's it.** All of Tendermint's quorum logic is in this struct.
 
-> 🔍 **Find in repo.** Open [\`code/crates/vote/src/lib.rs\`](https://github.com/informalsystems/malachite/blob/main/code/crates/vote/src/lib.rs) and trace through \`add_vote\`. **What weighted by what?** Where does the 2f+1 threshold come from?
+> 🔍 **Find in repo.** Open [\`code/crates/vote/src/lib.rs\`](https://github.com/informalsystems/malachite/blob/main/code/crates/core-votekeeper/src/lib.rs) and trace through \`add_vote\`. **What weighted by what?** Where does the 2f+1 threshold come from?
 
 ## 5. The Driver — orchestrator
 
@@ -1814,7 +1814,7 @@ Where \`slashed_stake\` is the stake of all slashed validators in a recent windo
 
 **This is the economic moat against coordinated attacks.** A small accidental slash costs little; a real attack costs everything.
 
-> 🔍 **Find in repo.** [Ethereum consensus spec](https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md), search for "slashing" or "process_slashing". The exact formula is there. **What's the multiplier?**
+> 🔍 **Find in repo.** [Ethereum consensus spec](https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/beacon-chain.md), search for "slashing" or "process_slashing". The exact formula is there. **What's the multiplier?**
 
 ## 5. Rewards — the other half
 
