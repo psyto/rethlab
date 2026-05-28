@@ -11,7 +11,7 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
       slug: "reth-openhl-consensus-ja",
       title: "Step 1. Consensus：`cargo init` から始める single-validator devnet 構築",
       description:
-        "Hyperliquid シェイプの レッスン 1 コンセンサス層をスクラッチで構築する。プロダクションクオリティの Reth (EVM) と Malachite (BFT) を単一の Rust workspace へ統合し、end-to-end でのブロック生成機構を実装。リファレンス実装（psyto/openhl）をベースに手を動かしながら学ぶ、「DIY Perp シリーズ」の記念すべきファーストステップである。",
+        "Hyperliquid シェイプの L1 コンセンサス層をスクラッチで構築する。プロダクションクオリティの Reth (EVM) と Malachite (BFT) を単一の Rust workspace へ統合し、end-to-end でのブロック生成機構を実装。リファレンス実装（psyto/openhl）をベースに手を動かしながら学ぶ、「DIY Perp シリーズ」の記念すべきファーストステップである。",
       difficulty: "EXPERT",
       duration: 660,
       xpReward: 1270,
@@ -1442,7 +1442,7 @@ cargo check --workspace
 
 このレッスンで encode した本質的な決定が 3 つ:
 
-1. **メソッドは 4 つ。3 でも 5 でもない。** すべての BFT-レッスン1 実装がきっかりこの 4 つに収束する。\`build_payload\` + \`payload_ready\` を 1 つにすると、投票中の先行ビルドができなくなる。5 つ目 (例: \`notify_view_change\`) を足すと、consensus 内部イベントを EL 側 API が知る設計になってしまい、責務分離が崩れる。数は BFT round 構造 (propose → vote → decide) で決まり、言語の好みでは決まらない。
+1. **メソッドは 4 つ。3 でも 5 でもない。** すべての BFT-L1 実装がきっかりこの 4 つに収束する。\`build_payload\` + \`payload_ready\` を 1 つにすると、投票中の先行ビルドができなくなる。5 つ目 (例: \`notify_view_change\`) を足すと、consensus 内部イベントを EL 側 API が知る設計になってしまい、責務分離が崩れる。数は BFT round 構造 (propose → vote → decide) で決まり、言語の好みでは決まらない。
 
 2. **trait に \`Send + Sync\` bound。** すべての impl が thread-safe であることを強制する。これが無いと、actor 間で共有される \`Arc<dyn ConsensusBridge>\` がコンパイルできない。これがあれば、実装者は「mutable state は Mutex か atomic の裏に置く必要がある」と最初から分かる。Runtime バグへの discipline を compiler が enforce してくれる形だ。
 
@@ -5839,7 +5839,7 @@ Stage 6 はこれで完了だ。Stage 7 開始: \`InMemoryEvmBridge\` を 実際
 このレッスンで掴む概念:
 
 - **bootstrap-only test も一級の成果物。** このレッスンのテストは Reth を spin up して chain ID を読む以外何もしない。ビジネスロジックが何もない段階で、依存解決と runtime bootstrap の regression を捕まえる。これが失敗したら レッスン 12〜15 は何ひとつ動かない。
-- **Reth と Malachite の共存を証明する。** Rust レッスン 1 エコシステム最大級の 2 つの crate tree が、同一の tokio runtime を共有して 1 つの workspace に同居する。ここで追加する dev-dep は単一の SHA-coherent な依存閉包に解決する。
+- **Reth と Malachite の共存を証明する。** Rust L1 エコシステム最大級の 2 つの crate tree が、同一の tokio runtime を共有して 1 つの workspace に同居する。ここで追加する dev-dep は単一の SHA-coherent な依存閉包に解決する。
 - **production-dep は薄く、dev-dep は厚く。** \`crates/evm/Cargo.toml\` は production dep を 6 個 (レッスン 5 から変わらず) に保ちつつ、dev-dep を 11 個に増やす。\`openhl-evm\` を使う下流 crate は libp2p / MDBX / rpc を引き込まず、テストバイナリだけが引き込む。
 - **\`NodeConfig::test().dev()\` のセマンティクス。** \`test()\` = ephemeral tempdir + ephemeral port + peer discovery 無し。\`dev()\` = 単一 block producer モード、mempool gossip 無し。組み合わせると、CI 上で再現可能な完全に isolated な dev/test 環境になる。
 - **なぜ chain ID は 2600 なのか。** Reth の upstream \`custom-dev-node\` example と一致し、public chain とも衝突しない。数字自体に OpenHL 的な意味はなく、diff を取れるよう example と合わせるための調整値だ。
@@ -6965,7 +6965,7 @@ reth-primitives-traits    = "0.3"
 - **\`reth-ethereum-consensus\`** — \`EthBeaconConsensus<ChainSpec>\` を提供する — Reth の post-merge Ethereum 用 production header validator だ。
 - **\`reth-primitives-traits\` (crates.io \`0.3\` から)** — \`SealedHeader\` を提供する。\`Header\` とその hash をペアにするラッパーだ。**これは crates.io 由来であって、git ではない** — stable foundation crate として spin out された。
 
-> 🛑 **やりがちな勘違い。** 「なぜ \`reth-primitives-traits\` だけ crates.io で、他は git-pin なのか?」 **\`reth-primitives-traits\` が、Reth の中で public Rust エコシステム crate として **stabilize** された部分だからだ。** 他の crate (alloy、foundry、custom レッスン 2) もすべてこれに依存している。Git SHA で pin すると、crates.io から import している全員とバージョン衝突する — そして皆 crates.io から import している。**Git-pin reth-* dep は主に Reth の「内部」表面で、\`reth-primitives-traits\` は **外部** 表面だ。**
+> 🛑 **やりがちな勘違い。** 「なぜ \`reth-primitives-traits\` だけ crates.io で、他は git-pin なのか?」 **\`reth-primitives-traits\` が、Reth の中で public Rust エコシステム crate として **stabilize** された部分だからだ。** 他の crate (alloy、foundry、custom L2) もすべてこれに依存している。Git SHA で pin すると、crates.io から import している全員とバージョン衝突する — そして皆 crates.io から import している。**Git-pin reth-* dep は主に Reth の「内部」表面で、\`reth-primitives-traits\` は **外部** 表面だ。**
 >
 > *(背景にあるのは Cargo の厳格な制約だ: **crates.io に publish されたパッケージは、Git の特定 revision を \`git = "...", rev = "..."\` で直接指している crate を依存ツリーに含められない** (publish-time に弾かれる)。エコシステム全体で共有される共通トレイト (\`SealedHeader\` / \`BlockHeader\` 等) が Git 依存のままだと、crates.io 上の他のあらゆるライブラリから事実上利用できなくなる。だから「外部表面」になるこのレイヤーだけが Reth から早期に切り出され、crates.io 上に独立して publish (stabilize) されている。型レイアウトの mismatch を防ぐため、こちら側でも workspace で pin したバージョンを継承する。)*
 
@@ -7542,7 +7542,7 @@ alloy-rpc-types-engine = { version = "2.0", default-features = false }
 
 2 個の dep、2 つの役割:
 
-- **\`reth-ethereum-engine-primitives\`** — \`EthEngineTypes\` を提供する。「Ethereum mainnet の engine surface」を表す type bundle だ (Optimism や custom レッスン 2 との対比で)。こちらの \`ConsensusEngineHandle<EthEngineTypes>\` はこれに対してパラメータ化される。
+- **\`reth-ethereum-engine-primitives\`** — \`EthEngineTypes\` を提供する。「Ethereum mainnet の engine surface」を表す type bundle だ (Optimism や custom L2 との対比で)。こちらの \`ConsensusEngineHandle<EthEngineTypes>\` はこれに対してパラメータ化される。
 - **\`alloy-rpc-types-engine\`** — \`ForkchoiceState { head_block_hash, safe_block_hash, finalized_block_hash }\` を提供する。\`engine_forkchoiceUpdatedV4\` 呼び出しの canonical な wire-format payload だ。同じ struct を CL クライアント (Lighthouse、Prysm) が EL クライアントに JSON-RPC 越しに送る — こちらは in-process で使う。
 
 **\`alloy-rpc-types-engine\` のバージョンに注意**: \`2.0\` に pin して、Reth v2.2.0 自身が pin している \`alloy-rpc-types-engine\` \`2.0.4\` と一致させる。ここでバージョン不一致があると \`ForkchoiceState\` が 2 つの異なる型になり、engine handle が呼び出しを拒否する。
