@@ -10,7 +10,7 @@ export async function seedRethSequencerRollupV3JA(prisma: PrismaClient) {
       description:
         '現代の L2 が実際どう動くか: sequencer の役割、batch 投稿と data availability、fraud proof vs validity (ZK) proof、op-rbuilder と op-batcher を読み、Reth 上で最小 sequencer を作り、単一オペレータから共有 sequencer までの分散化パス。Tempo Moderato 級の L2 を architect、OP Stack chain を出荷、次の共有 sequencer を作る準備ができる。',
       difficulty: 'ADVANCED',
-      duration: 165,
+      duration: 114,
       xpReward: 500,
       track: 'reth-l1-architect',
       tags,
@@ -675,6 +675,8 @@ Optimistic = $1-5 batch + 7 日 / ZK = $50-500 batch + 数時間。**高頻度�
 
 動く L2 sequencer は **Rust 約 270 行** で書ける。**Reth が難しい部分（revm 実行 + MDBX ストレージ + state 管理 + P2P）をすべて引き受けてくれる** から。Sequencer の仕事は Engine API 経由で Reth を駆動し L1 に投稿することだけ。**その 270 行は何か？**
 
+> 注: 以下のコードは教材向けの概念実装（最小骨格）です。実運用にはエラーハンドリング、型定義、再試行、監視、完全な P2P 実装が追加で必要です。
+
 ## 原理（最小モデル）
 
 - **1 プロセスに 4 コンポーネント.** Sequencer loop（Engine API 駆動）+ Mempool（user tx 受け入れ + fee 優先）+ L1 inbox watcher（deposit subscribe + force-include）+ Batcher（定期 L1 投稿）。
@@ -811,6 +813,11 @@ impl Mempool {
         let hash = tx.hash();
         self.pending.write().unwrap().push(tx);
         Ok(hash)
+    }
+
+    pub fn submit_deposit(&self, tx: TxEnvelope) -> eyre::Result<TxHash> {
+        // 実装上は通常 tx と同じ受け口に流し込む。
+        self.submit(tx)
     }
 
     pub fn drain_pending(&self, limit: usize) -> Vec<TxEnvelope> {
