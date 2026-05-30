@@ -1,41 +1,56 @@
-// AUTO-GENERATED from drafts/openhl_adl_*_en.md by .github/scripts/build-openhl-adl-seed.ts
-// Do not hand-edit. Re-run the build script when drafts change.
-
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethOpenHlAdlEN(prisma: PrismaClient) {
-  const tags = ["reth","evm","liquidation","adl","perpetual","l1","openhl","expert"];
+  const tags = ['openhl', 'adl', 'liquidation', 'safety-net', 'expert'];
 
   await prisma.course.create({
     data: {
-      slug: "building-openhl-adl-en",
-      title: "Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade",
+      slug: 'building-openhl-adl-en',
+      title: 'Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade',
       description:
-        "Build auto-deleveraging (ADL) — the cascade's last line of defense when the insurance fund couldn't absorb everything. Ranks profitable counter-positions by (pnl_pct × leverage) using Hyperliquid's convention, force-closes them via bookkeeping mutation rather than orderbook submission, and applies a haircut that absorbs the unfilled deficit. Includes the feedback-loop crash explanation (why ADL bypasses the orderbook entirely), the layered conservation law that closes the Stage 10 cascade math, and 5 invariant proptests proving determinism. 5 lessons across 2 modules, byte-for-byte against openhl Stage 10d (d66b44a). Course 6 of the DIY Perp series.",
-      difficulty: "EXPERT",
+        'Build openhl\'s ADL (auto-deleveraging) layer in Rust. The last layer of the safety-net cascade — used when the scanner leaves a deficit and the insurance fund cannot fully absorb it. AdlScore + AdlRecord + AdlReport types and the adl_score ranking function, the 5-phase execute_adl orchestration, 6 nuanced absorption tests, then a Capstone with 5 invariant proptests + a Stage 10 quartet retrospective. Pinned to openhl SHA `d66b44a` for byte-for-byte answer-keys.',
+      difficulty: 'EXPERT',
       duration: 170,
       xpReward: 330,
-      track: "diy-perp",
+      track: 'building-openhl-adl',
       tags,
       isPublished: true,
-      sortOrder: 1010,
-      locale: "en",
-      instructorName: "RethLab",
+      sortOrder: 1500,
+      locale: 'en',
+      instructorName: 'RethLab',
       modules: {
         create: [
           {
-            title: "Orientation",
+            title: 'Orientation',
             sortOrder: 0,
             lessons: {
               create: [
                 {
-                  title: "Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade",
-                  slug: "openhl-adl-orientation-en",
+                  title: 'Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade',
+                  slug: 'openhl-adl-orientation-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 15,
                   xpReward: 50,
                   content: `# Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade
+
+## Question
+
+When the liquidation scanner leaves a deficit that the insurance fund cannot fully absorb, the system has one last move. Why does it do that move **not via the orderbook, but by directly rewriting the books**? That is ADL — auto-deleveraging — Layer 3 of the safety-net cascade.
+
+## Principle (minimum model)
+
+- **ADL is Layer 3 of a three-layer cascade.** Layer 1 = liquidation scanner (force-close). Layer 2 = insurance fund (absorb shortfall). Layer 3 = ADL (when even the fund cannot cover the deficit, haircut the most-profitable opposite-side traders).
+- **Three things to internalise.** (1) ADL is the last resort, never the first move. (2) It bypasses the orderbook by rewriting positions directly. (3) The trigger is "scanner left a deficit + insurance fund cannot absorb it".
+- **Why not the orderbook?** The orderbook needs counterparties willing to take the other side. When the market is one-sided enough to need ADL, there are no counterparties at any reasonable price. The book-rewrite is the only mechanism that scales here.
+- **Why this is controversial.** ADL takes profit from a trader who did nothing wrong. Mitigations: well-funded insurance fund (ADL never fires) + transparent ranking (the "lucky" winner is known in advance) + position-size cap (no one is ADL'd more than their position).
+- **Four-lesson structure.** L1 (types + adl_score = ranking function) → L2 (execute_adl = 5-phase orchestration heart) → L3 (6 nuanced absorption tests) → L4 (Capstone — 5 invariant proptests + Stage 10 quartet retrospective).
+- **Stage 10 reference SHA: \`d66b44a\`.** Every code example pins to this SHA from openhl; the answer key at end of Capstone is byte-for-byte against this SHA.
+- **Prerequisite: openhl Liquidation track.** This course assumes Lesson 9's \`WithdrawOutcome\` proptest semantics and Lesson 13's scanner per-scan conservation law are internalised.
+
+## Worked example + steps
+
+# Build OpenHL ADL — auto-deleveraging, Layer 3 of the safety-net cascade
 
 ## What you'll build
 
@@ -60,7 +75,6 @@ You'll understand:
 
 This is the most important conceptual leap in the course, and it's worth stopping on it before any code.
 
-> 🛑 **Predict.** Stage 10c's scanner unwound Liquidatable accounts by submitting market orders into the CLOB matching engine — that worked fine when the venue was calm. ADL fires *after* the insurance fund has been drained by a violent move. **If we kept the same mechanism for ADL — market sells against the profitable counter-positions, through the matching engine — what fails, and why?** Take 30 seconds before reading on. The answer is what the rest of this section is about.
 
 Stage 10c's scanner submits close orders to the **CLOB** (matching engine). A Liquidatable account's position gets unwound by a market order that consumes the existing bid/ask stack. That's fine when there are a few liquidations in a quiet market.
 
@@ -177,24 +191,48 @@ After Lesson 4 of this course, you'll be one course ahead of the published curri
 ## License / SHA discipline
 
 Lessons 0–4 cite Stage 10d at SHA \`d66b44a\`. The single-file diff lives at \`crates/liquidation/src/adl.rs\`. No other crate files change between Stage 10c (\`0a8464e\`) and Stage 10d — ADL is a pure additive module.
+
+## Summary (3 lines)
+
+- ADL = Layer 3 of the safety-net cascade. Last resort when scanner leaves a deficit + insurance fund cannot absorb. Bypasses orderbook by rewriting positions directly.
+- Why not orderbook: no counterparties at a reasonable price when the market is one-sided enough for ADL. Why controversial: takes profit from someone who did nothing wrong; mitigated by transparent ranking + position-size cap.
+- 4 lessons: types + ranking → 5-phase orchestration → 6 absorption tests → 5 invariant proptests Capstone. Pinned to SHA \`d66b44a\`. Prerequisite: openhl Liquidation track.
 `,
                 },
               ],
             },
           },
           {
-            title: "ADL implementation",
+            title: 'ADL implementation',
             sortOrder: 1,
             lessons: {
               create: [
                 {
-                  title: "Lesson 1 — AdlScore, AdlRecord, AdlReport + adl_score — the ranking function",
-                  slug: "openhl-adl-score-en",
+                  title: 'Lesson 1 — AdlScore, AdlRecord, AdlReport + adl_score — the ranking function',
+                  slug: 'openhl-adl-score-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 35,
                   xpReward: 60,
-                  content: `# Lesson 1 — \`AdlScore\`, \`AdlRecord\`, \`AdlReport\` + \`adl_score\` — the ranking function
+                  content: `# Lesson 1 — AdlScore, AdlRecord, AdlReport + adl_score — the ranking function
+
+## Question
+
+How do you **rank** ADL candidates by "how lucky they were" — and how do you **express in the type system** that "this trader is not even a candidate"? Three types + one ranking function form the foundation of every later layer.
+
+## Principle (minimum model)
+
+- **Three design decisions are the lesson core.** (1) \`AdlScore\` newtype prevents accidental ratio confusion. (2) \`AdlRecord\` records what happened (position size + entry + mark + pnl + score). (3) \`AdlReport\` is the return type of \`execute_adl\` — a transparent log of who was haircut and by how much.
+- **\`AdlScore = (mark - entry) / |position_size|\`.** Larger profit per unit of position = higher score = earlier in the ADL queue. Symbolic; the actual representation is fixed-point i128 to preserve consensus determinism.
+- **Type-state "not a candidate".** \`Option<AdlScore>\` — \`None\` means "this position is not an ADL candidate" (e.g. it's on the same side as the deficit, or it's already flat). \`Some(score)\` means "candidate with rank score".
+- **\`AdlRecord\` fields.** \`position_size\` (signed) + \`entry_price\` + \`mark_price\` + \`unrealized_pnl\` + \`score\` (\`Option<AdlScore>\`) + post-haircut position size after ADL. Each \`execute_adl\` call produces a \`Vec<AdlRecord>\`.
+- **\`AdlReport\` aggregates.** Total deficit absorbed + per-trader records + how much remains uncovered (almost always 0 — ADL is designed to fully absorb the deficit; uncovered is a system-level error).
+- **\`adl_score\` is pure compute.** No I/O, no async, no state mutation. Reusable in proptest! and unit tests. Same shape as openhl-liquidation's pure-compute discipline.
+- **Saturating arithmetic.** Score computation uses \`saturating_sub\` + \`saturating_div\` to avoid panics on edge cases (e.g. position_size = 0 → not a candidate, no division-by-zero).
+
+## Worked example + steps
+
+# Lesson 1 — \`AdlScore\`, \`AdlRecord\`, \`AdlReport\` + \`adl_score\` — the ranking function
 
 ## Goal
 
@@ -238,12 +276,6 @@ Three edits:
 2. **Add the 5 \`adl_score\` unit tests** in \`#[cfg(test)] mod tests { ... }\` at the bottom of \`adl.rs\`. Four None-case tests (flat / losing / zero collateral / short-at-entry) + one leverage-ordering test.
 3. **Add \`pub mod adl;\`** and the re-exports to \`crates/liquidation/src/lib.rs\`.
 
-> 🛑 **Predict.** Before reading further: rank these four traders by ADL score (highest = first to be haircut). All long 1 BTC, all profitable. Use Hyperliquid's \`pnl_pct × leverage\` convention.
-> 
-> - **A**: collateral $200, entry $100k, mark $200k (200% gain on $200 = 100% of equity; 1× leverage)
-> - **B**: collateral $20, entry $100k, mark $200k (same notional but 10× leverage; 100% gain on collateral)
-> - **C**: collateral $200, entry $100k, mark $150k (50% gain, 1× leverage)
-> - **D**: collateral $200, entry $100k, mark $250k (75% gain on collateral, but 0.8× leverage post-PnL)
 
 (Answer: **B → A → D → C.** B is the highest-leverage profitable winner (10× leverage * 500% pnl_pct). A has 50% pnl_pct × 1× leverage. D has 75% × ~0.8× = lower than A. C has 50% × ~0.6× leverage = lowest. The exact numbers depend on equity-vs-collateral framing; the key intuition is **leverage is a multiplier on PnL ranking**, which is why Hyperliquid uses the product convention.)
 
@@ -508,7 +540,6 @@ Eight things to notice:
 7. **Plain \`/\` division, not \`saturating_div\`.** Integer division of two positive i128 values cannot overflow (only \`i128::MIN / -1\` can overflow division, and our values are all positive). **Saturating operations are for arithmetic that *can* overflow; positive-positive division cannot.**
 8. **The final \`saturate_i128_to_i64\` is the cast that *can* lose information.** If the raw i128 score is \`2^70\`, we lose bits when narrowing. The saturating conversion clamps to \`i64::MAX\` instead of wrapping. **Width-narrowing conversions need explicit saturation in consensus code.**
 
-> 🛑 **Anti-fluency.** "Why doesn't \`adl_score\` take \`LiquidationParams\` like \`liquidation_fee\` does in Stage 10b?" Because ADL doesn't have a tunable knob. Stage 10b's \`liquidation_fee_bps\` is a network parameter that governance can change; the score formula is a fixed convention (Hyperliquid's). If a future protocol upgrade lets governance tune the score weights, the parameter goes in then. **Don't pre-add unused parameters; the type signature is the API surface, and adding a param is a breaking change.**
 
 ### Step 6: Add the 5 unit tests
 
@@ -713,16 +744,41 @@ Lesson 2 implements \`execute_adl(candidates, mark, deficit) -> AdlReport\` — 
 The phase structure (5 phases): early-return on non-positive deficit → score and filter → stable-sort with tiebreaker → iterate and haircut → build report. Plus 5 simple unit tests: zero deficit, negative deficit, no candidates, no profitable candidates, single winner full absorb.
 
 After Lesson 2, the scanner is *runnable for ADL* — 79 tests pass (74 from Lesson 1 + 5 new in Lesson 2). Lesson 3 adds the 6 nuanced absorption tests, Lesson 4 adds the 5 invariant proptests and the Stage 10 quartet retrospective.
+
+## Summary (3 lines)
+
+- Three types: \`AdlScore\` newtype (ratio-confusion safety) + \`AdlRecord\` (per-trader log: position + entry + mark + pnl + score) + \`AdlReport\` (the \`execute_adl\` return type).
+- \`adl_score = (mark - entry) / |position_size|\` — saturating arithmetic for consensus determinism. \`Option<AdlScore>\` for "not a candidate"; \`Some(score)\` for candidates.
+- Pure compute; same shape as openhl-liquidation's discipline. Next lesson: \`execute_adl\` — the 5-phase orchestration heart.
 `,
                 },
                 {
-                  title: "Lesson 2 — execute_adl — the 5-phase orchestration heart",
-                  slug: "openhl-adl-execute-en",
+                  title: 'Lesson 2 — execute_adl — the 5-phase orchestration heart',
+                  slug: 'openhl-adl-execute-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 40,
                   xpReward: 70,
-                  content: `# Lesson 2 — \`execute_adl\` — the 5-phase orchestration heart
+                  content: `# Lesson 2 — execute_adl — the 5-phase orchestration heart
+
+## Question
+
+When the scanner leaves a deficit, **who do we haircut, in what order, and by how much**? Fold this into one deterministic function. **\`execute_adl(candidates, mark, deficit) -> AdlReport\` is a 5-phase pipeline.**
+
+## Principle (minimum model)
+
+- **5 phases.** (1) Filter candidates (\`Option<AdlScore>::Some\`). (2) Sort by score descending (highest score = first to haircut). (3) Walk the sorted list and haircut until deficit is absorbed. (4) Update each \`AdlRecord\` with post-haircut position. (5) Aggregate into \`AdlReport\`.
+- **Phase 1: filter.** \`.filter_map(|c| c.score.map(|s| (c, s)))\` removes non-candidates upfront. Reduces sort cost + keeps the rest of the pipeline clean.
+- **Phase 2: sort.** \`.sort_by(|a, b| b.1.cmp(&a.1))\` descending. Tie-break by \`position_size\` (larger position first); never by hash (consensus determinism — same input must produce the same order on every node).
+- **Phase 3: walk + haircut.** For each candidate in order: compute haircut share = \`min(position_size, remaining_deficit / mark)\`. Update \`position_size -= haircut_share\`. Update \`remaining_deficit -= haircut_share * mark\`. Stop when \`remaining_deficit == 0\`.
+- **Phase 4: update \`AdlRecord\`.** For each candidate haircut, record the pre-state + post-state. Transparent log.
+- **Phase 5: aggregate.** \`AdlReport { total_absorbed, per_trader_records, remaining_uncovered }\`. \`remaining_uncovered > 0\` is a system error (insurance fund + ADL combined should always cover).
+- **\`saturating_sub\` is critical.** When a haircut would over-deplete a position, saturating arithmetic clamps it to 0; no panic, no consensus divergence.
+- **Determinism guarantees.** Same \`(candidates, mark, deficit)\` input → byte-for-byte same \`AdlReport\` output, every node, every replay.
+
+## Worked example + steps
+
+# Lesson 2 — \`execute_adl\` — the 5-phase orchestration heart
 
 ## Goal
 
@@ -770,7 +826,6 @@ One function, five phases, five tests.
 
 Then append the 5 unit tests at the bottom of the \`tests\` module.
 
-> 🛑 **Predict.** Before reading the code below: openhl-liquidation Lesson 13's \`scan\` had a similar shape — accumulator initialized empty, per-candidate loop, final assignment. What's the one structural difference between \`scan\` and \`execute_adl\` you'd expect, given that ADL has a *quota* (the deficit) but the scanner has *no quota* (it processes every account)?
 
 (Answer: **\`execute_adl\` has a \`break\` in the loop when \`remaining <= 0\`; \`scan\` does not.** Scanner processes every account in its input (no quota — it's measuring everything that needs liquidation); ADL processes accounts *until the deficit is covered* and then stops (quota-bounded). The \`break\` is the structural signature of a quota-bounded loop. It also matters for performance — ADL might haircut just 1 of 100 candidates when the first winner has enough PnL; without the \`break\`, the loop would walk all 100. **Quota-bounded loops have \`break\`; quota-free loops don't.**)
 
@@ -1074,16 +1129,41 @@ Lesson 3 adds the 6 unit tests that exercise the nuanced absorption paths \`exec
 - \`adl_does_not_touch_losers_or_flats\` — eligibility filter is honored even in mixed populations
 
 After Lesson 3, the unit-test matrix is complete (16 tests across Lessons 1 + 2 + 3). Lesson 4 adds 5 proptest invariants and the Stage 10 quartet retrospective — closing the course at 5 lessons / 4 modules / SHA-pinned to \`d66b44a\`.
+
+## Summary (3 lines)
+
+- \`execute_adl\` is a 5-phase pipeline: filter → sort (descending by score, tie-break by position size) → walk + haircut → update \`AdlRecord\`s → aggregate \`AdlReport\`.
+- \`saturating_sub\` is critical for not-panicking on edge cases. Tie-break by position size (never by hash) preserves consensus determinism.
+- Pure deterministic; same input → same \`AdlReport\`. Next lesson: 6 absorption tests covering the matrix of single-winner / multi-winner × full / partial / mixed eligibility.
 `,
                 },
                 {
-                  title: "Lesson 3 — 6 nuanced absorption tests — proving execute_adl against the matrix",
-                  slug: "openhl-adl-absorption-tests-en",
+                  title: 'Lesson 3 — 6 nuanced absorption tests — proving execute_adl against the matrix',
+                  slug: 'openhl-adl-absorption-tests-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 35,
                   xpReward: 60,
-                  content: `# Lesson 3 — 6 nuanced absorption tests — proving \`execute_adl\` against the matrix
+                  content: `# Lesson 3 — 6 nuanced absorption tests — proving execute_adl against the matrix
+
+## Question
+
+L2 shipped 5 degenerate-path tests. **Now prove the *interesting middle* of \`execute_adl\`** (multiple winners share the deficit, ties are broken, losers and flats coexist with winners). What inputs are needed?
+
+## Principle (minimum model)
+
+- **The 6 tests cover a 2-axis matrix.** Axis 1 = \`{single winner, multiple winners}\`. Axis 2 = \`{full absorb, partial absorb, mixed eligibility}\`. Each cell = one test.
+- **Single winner / full absorb.** One ADL candidate whose position is large enough to absorb the entire deficit. Verifies: position is haircut by exactly \`deficit / mark\`; no remaining uncovered.
+- **Single winner / partial absorb.** One candidate whose position is smaller than the deficit / mark. Verifies: position is haircut to 0; remaining_uncovered > 0 (system error in production, but the function should still return cleanly).
+- **Single winner / mixed eligibility.** One ADL candidate + several losers + several flats. Verifies: only the candidate is touched; losers and flats are untouched.
+- **Multiple winners / full absorb.** Multiple candidates ranked by score; deficit distributed across them top-down. Verifies: highest-score is haircut first; if partial, the haircut respects position-size caps; deficit fully absorbed.
+- **Multiple winners / partial absorb.** Multiple candidates but their combined positions cannot cover the deficit. All candidates are haircut to 0; \`remaining_uncovered > 0\`.
+- **Multiple winners / mixed eligibility.** Candidates + losers + flats + ties (two candidates with the same score). Verifies: ties are broken by position size; losers and flats are untouched.
+- **Why these 6 specifically.** Single + multiple covers the "one or many" axis. Full + partial + mixed covers the "deficit cover spectrum" axis. The 6 cells together cover every interesting structural variation.
+
+## Worked example + steps
+
+# Lesson 3 — 6 nuanced absorption tests — proving \`execute_adl\` against the matrix
 
 ## Goal
 
@@ -1128,7 +1208,6 @@ Six tests, each appended to the \`#[cfg(test)] mod tests\` block below Lesson 2'
 5. **\`adl_tiebreaker_by_account_id_ascending\`** — Phase 3 \`then_with\`: identical scores → ascending account_id picks the winner
 6. **\`adl_does_not_touch_losers_or_flats\`** — Phase 2 \`filter_map\`: ineligible accounts in mixed populations are correctly skipped
 
-> 🛑 **Predict.** Before reading the tests below: when \`execute_adl(candidates=[A_pnl_100, B_pnl_100], deficit=80)\` runs, and A has score 10,000 and B has score 26,666, the report has *exactly* \`[B with haircut 80]\` — A is untouched. Why is A's record not in the report at all (instead of being included with haircut = 0)?
 
 (Answer: **Phase 4's \`if remaining <= 0 break;\` exits the loop *before* A is processed.** After B is haircut by 80, \`remaining\` becomes 0; the loop breaks; A never enters the loop body, so no record is created for A. This is the structural payoff of the \`break\` (recall Lesson 2's predict callout): a quota-bounded loop produces records only for the accounts that *actually* received haircuts, not zero-haircut padding. The report's \`records.len()\` becomes a meaningful count: "how many accounts got force-closed by this ADL pass." **\`break\` keeps the report's record count meaningful.**)
 
@@ -1354,16 +1433,40 @@ Lesson 4 closes the ADL course (and the Stage 10 quartet) with 5 invariant propt
 Plus a Stage 10 retrospective: how Stage 10a (margin classification) + 10b (insurance fund) + 10c (scanner) + 10d (ADL) compose into the full Layer 1 → Layer 2 → Layer 3 safety-net cascade. The 4 stages, 4 layers of bookkeeping, 1 byte-for-byte-reproducible system.
 
 After Lesson 4, the ADL course is complete: 5 lessons across 2 modules, 16 unit tests + 5 proptests, byte-for-byte against openhl Stage 10d at \`d66b44a\`. The DIY Perp series closes its 6th installment.
+
+## Summary (3 lines)
+
+- 6 absorption tests = 2-axis matrix: \`{single, multiple} × {full absorb, partial absorb, mixed eligibility}\`. Each cell exercises a different structural variation of \`execute_adl\`.
+- Single winner = entire deficit goes to one trader. Multiple winners = deficit distributed by score-ranked order. Tie-break by position size; losers and flats untouched.
+- Full absorb verifies deficit is fully covered. Partial absorb verifies clean termination when not. Mixed eligibility verifies only candidates are touched. Next lesson: Capstone with 5 invariant proptests.
 `,
                 },
                 {
-                  title: "Lesson 4 — Capstone — 5 invariant proptests + Stage 10 quartet retrospective",
-                  slug: "openhl-adl-capstone-en",
+                  title: 'Lesson 4 — Capstone — 5 invariant proptests + Stage 10 quartet retrospective',
+                  slug: 'openhl-adl-capstone-en',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 45,
                   xpReward: 90,
                   content: `# Lesson 4 — Capstone — 5 invariant proptests + Stage 10 quartet retrospective
+
+## Question
+
+L2 and L3 proved \`execute_adl\` with hand-picked inputs. **Now generalise to "this holds for all valid inputs"** — and compose four courses (Compute / Insurance fund / Scanner / ADL) into a single cascade. Five invariant proptests on top of the 5-degenerate + 6-absorption tests; one retrospective on Stage 10.
+
+## Principle (minimum model)
+
+- **proptest universalises specific tests.** Unit tests prove "this concrete example works"; proptests prove "all valid inputs work". Both are needed — "specifics prove shape, proptests prove universality".
+- **Five invariants.** (1) \`total_absorbed + remaining_uncovered == deficit\` (conservation of deficit). (2) Sum of haircuts equals \`total_absorbed * mark\` (conservation of position notional). (3) Every haircut respects position-size cap (no negative positions). (4) Score-descending order is preserved through the haircut walk. (5) Non-candidates are never touched.
+- **Proptest input generation.** \`prop_assume!(deficit > 0)\` + \`vec(any_position(), 1..50)\` + \`mark in 1..1_000_000\`. Filters invalid inputs (zero deficit, empty candidate set) before the assertion runs.
+- **Stage 10 quartet retrospective.** All four courses (Funding compute / Insurance fund / Liquidation scanner / ADL) compose into the cascade: scanner leaves deficit → insurance fund absorbs as much as it can → ADL absorbs the rest.
+- **Composition guarantee.** Each layer's output is the next layer's input. Type-system enforced: \`LiquidationReport\` → \`InsuranceFundOutcome\` → \`AdlReport\`. No layer can be skipped, no layer can emit garbage to the next.
+- **SHA \`d66b44a\` answer-key.** The proptests + retrospective code is pinned. \`git checkout d66b44a\` gives byte-for-byte the same answers as the author.
+- **Why a retrospective matters here.** Four courses, four mental models. The retrospective glues them together — by the end you can hold the whole cascade in your head and reason about edge cases that span layers.
+
+## Worked example + steps
+
+# Lesson 4 — Capstone — 5 invariant proptests + Stage 10 quartet retrospective
 
 ## Goal
 
@@ -1406,7 +1509,6 @@ Two artifacts:
 
 2. **Stage 10 quartet retrospective** — no code; an architectural walkthrough of how 10a + 10b + 10c + 10d compose into the safety-net cascade, with the conservation laws of each stage named.
 
-> 🛑 **Predict.** Before reading the proptests below: openhl-liquidation Lesson 13's capstone had 4 proptests; Lesson 4 here has 5. What's the extra proptest here that Lesson 13 didn't need, given that ADL has a *return value* (the report) and Lesson 13's scanner has a similar one?
 
 (Answer: **\`records_in_rank_order\`** — universalizes ADL's *sort discipline*. Lesson 13's scanner doesn't sort its records (it processes accounts in insertion order); ADL's records must be in \`(score descending, account_id ascending)\` order, and this proptest proves it for any input. The other 4 proptests (conservation, decomposition, accounting consistency, determinism) have direct Lesson 13 analogues; the 5th exists only because ADL has a stronger ordering contract than the scanner did. **More structure in the output requires more invariants to preserve it.**)
 
@@ -1770,6 +1872,12 @@ Where to go next:
 The Stage 10 quartet isn't just 4 features. It's 4 proofs of the same discipline at different layers.
 
 **One discipline. Four layers. Byte-for-byte reproducible end-to-end.**
+
+## Summary (3 lines)
+
+- Capstone = 5 invariant proptests (deficit conservation, notional conservation, position-size cap, score-order preservation, non-candidates untouched) + Stage 10 quartet retrospective.
+- proptest generalises hand-picked tests to "holds for all valid inputs". Composition guarantee: \`LiquidationReport\` → \`InsuranceFundOutcome\` → \`AdlReport\`, type-enforced.
+- Pinned to SHA \`d66b44a\` for byte-for-byte answer-key. The retrospective glues four courses (Compute / Insurance / Scanner / ADL) into one mental model — the safety-net cascade end-to-end.
 `,
                 },
               ],
