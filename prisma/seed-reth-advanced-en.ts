@@ -1,17 +1,17 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethAdvancedEN(prisma: PrismaClient) {
-  const tags = ['reth', 'rust', 'advanced', 'exex', 'staged-sync', 'reth-sdk'];
+  const tags = ['reth', 'staged-sync', 'exex', 'sdk', 'intermediate'];
 
   await prisma.course.create({
     data: {
       slug: 'reth-advanced-en',
       title: 'Inside Reth — Sync, Extensions, and the SDK',
       description:
-        'Read the real Reth source — the **database + distributed-system + concurrency layers** of the Rust EVM stack. Staged Sync (the 10-stage ETL pipeline), ExEx (Execution Extensions for in-process indexers / MEV / risk engines), and the Reth SDK (compose your own App-chain). One of three independent Intermediate courses (Revm, Reth, Alloy) — Inside Revm is the recommended prerequisite since several lessons here assume comfort with the `Database` trait and Revm execution model.',
+        'Walk paradigmxyz/reth source through three topic chains: Staged Sync (Stage trait + 10-stage pipeline + SenderRecoveryStage drill), ExEx (Execution Extension API + reorg handling + reorg-safe indexer drill), SDK (NodeBuilder + 6 components + custom pool drill). Plus Rust lifetimes / Arc / dyn deep dive, Testing patterns (fixture chains + ExEx test harness), Bridge to Advanced / Expert, and a final quiz. By the end you can read any part of reth\'s source confidently and ship a custom L1 component.',
       difficulty: 'INTERMEDIATE',
-      duration: 145,
-      xpReward: 470,
+      duration: 172,
+      xpReward: 440,
       track: 'reth-advanced',
       tags,
       isPublished: true,
@@ -26,13 +26,29 @@ export async function seedRethAdvancedEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Welcome to Inside Reth — how this course works',
+                  title: 'Lesson 0 — Welcome to Inside Reth',
                   slug: 'reth-advanced-welcome-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Welcome to Inside Reth — how this course works
+                  content: `# Lesson 0 — Welcome to Inside Reth
+
+## Question
+
+**Inside Reth** is one of three Intermediate courses (Revm / Reth / Alloy). Reth is the canonical Rust Ethereum full node; this course walks **Staged Sync + ExEx + SDK** — the three load-bearing internals.
+
+## Principle (minimum model)
+
+- **3 Intermediate courses.** Inside Revm / Inside Reth (this) / Inside Alloy. Take in any order; Reth depends on Revm + Alloy types.
+- **Three topic chains.** Staged Sync (10 pipelined stages) / ExEx (Execution Extension API for indexers and observers) / SDK (NodeBuilder + 6 components for custom L1s).
+- **Each topic = buildup → walkthrough → quiz → drill.** Plus a Rust lifetimes/Arc/dyn lesson + a Testing lesson + Bridge to Advanced + final quiz.
+- **Reading approach.** Open \`paradigmxyz/reth\` in another tab; verify every claim against source.
+- **Prerequisites.** Inside Revm or Inside Alloy completed; intermediate Rust; light Ethereum primitives.
+
+## Worked example + steps
+
+# Welcome to Inside Reth — how this course works
 
 This course is one of three independent Intermediate-tier courses on RethLab:
 
@@ -84,7 +100,14 @@ The "Find in repo" prompts only work if you actually have the repos open. Close 
 
 Scroll back to the course detail and start with **Building the \`Stage\` trait step by step**.
 
-After Inside Reth: head to **Inside Alloy** if you haven't yet — or move on to **Expert** for the procedural-macro and zkVM-integration deep dives.`,
+After Inside Reth: head to **Inside Alloy** if you haven't yet — or move on to **Expert** for the procedural-macro and zkVM-integration deep dives.
+
+## Summary (3 lines)
+
+- Inside Reth = one of three Intermediate courses. Three topic chains: Staged Sync + ExEx + SDK.
+- Each = buildup → walkthrough → quiz → drill. Plus Rust + Testing + Bridge lessons. Verify against paradigmxyz/reth source.
+- Prerequisites: Inside Revm or Inside Alloy + intermediate Rust.
+`,
                 },
               ],
             },
@@ -95,15 +118,32 @@ After Inside Reth: head to **Inside Alloy** if you haven't yet — or move on to
             lessons: {
               create: [
                 {
-                  title: 'Building the \`Stage\` trait step by step',
+                  title: 'Lesson 1 — Building the Stage trait step by step',
                   slug: 'staged-sync-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Building the \`Stage\` trait step by step
+                  content: `# Lesson 1 — Building the Stage trait step by step
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **database layer × concurrency layer**, intersected. Staged sync is the ETL-pipeline pattern from data engineering, applied to chain sync — each stage is independent but ordered, each one amortizes I/O across batches. Airflow DAGs, Kafka Streams topologies, and database backfills all wrestle with the same shape. Reth's pipeline is that pattern's chain-sync incarnation.
+## Question
+
+**Build the \`Stage\` trait from scratch**. Naive single-pass sync is wrong (no resumability, no checkpoints, no parallelism). Six steps add what production needs.
+
+## Principle (minimum model)
+
+- **Step 0 — naive.** \`async fn sync_block_to_state(block)\`. No checkpoint; if it crashes halfway, restart from scratch.
+- **Step 1 — checkpoint.** Persist progress after each batch; resume from there.
+- **Step 2 — backward direction.** Some stages run forward; some need backward (rollback on reorg). Two methods.
+- **Step 3 — Result with done flag.** Stage may complete part of work; return \`(progress, done)\`.
+- **Step 4 — generic over DB.** DB type as a generic; tests can use in-memory; production uses MDBX.
+- **Step 5 — Send + Sync + 'static.** Required for Tokio task spawning.
+- **Step 6 — 6 trait methods.** id + execute + unwind + execute_progress + unwind_progress + post_unwind. Each has a specific role.
+
+## Worked example + steps
+
+# Building the \`Stage\` trait step by step
+
 
 Staged Sync is the spine of Reth. **It also looks intimidating** — the real \`Stage\` trait has 6 methods, async readiness, two-direction symmetry, and an \`auto_impl(Box)\` attribute. Walk it cold and you get six new ideas at once.
 
@@ -148,7 +188,6 @@ fn sync_to_tip(client: &mut RethNode) -> Result<(), Error> {
 
 One block at a time. Each block goes through every phase before the next block starts.
 
-> 🛑 **Predict.** Without scrolling: name three reasons this naive design is *catastrophically* slow at 20M blocks. (Hint: each is a different *kind of* inefficiency.)
 
 The three:
 
@@ -181,7 +220,6 @@ Now sender recovery batches across blocks, Merkle roots are amortized, and you c
 
 ## Step 2 — The first stab at \`Stage\`
 
-> 🛑 **Predict.** Sketch the trait. What method does the orchestrator call? What does the stage return? Hold your guess.
 
 First attempt:
 
@@ -197,7 +235,6 @@ This works for forward sync — but it has a critical hole.
 
 ## Step 3 — \`unwind\`: reorgs are not optional
 
-> 🛑 **Predict.** Ethereum reorgs aren't a special case — they happen routinely. Without scrolling: how does this single-method \`Stage\` handle a reorg from block 1000 → block 980?
 
 You'd need a *separate* method, not on this trait — and a separate code path in the orchestrator. Half the codebase becomes "the reorg path." That's exactly what other Ethereum clients have, and exactly what Reth was designed to avoid.
 
@@ -240,7 +277,6 @@ pub struct UnwindInput {
 }
 \`\`\`
 
-> 🛑 **Anti-fluency.** Why is \`done\` returned as a *flag inside* \`ExecOutput\`, not a separate \`has_more()\` method? What design constraint is that choice serving?
 
 Atomic call/return. The orchestrator wants exactly one piece of feedback per turn: "I made progress to checkpoint X; whether you call me again is your decision." A separate \`has_more()\` would force the orchestrator into two calls per turn and open a class of bugs where checkpoint and has_more disagree.
 
@@ -319,16 +355,42 @@ Without scrolling:
 If any answer is shaky, scroll back. The next lesson is Reth's actual pipeline.
 
 > **🧭 Where you are now in the stack:** you've built the **database × concurrency layer's ETL pipeline abstraction** — \`Stage\`'s \`execute\` / \`unwind\` symmetry, explicit \`ExecInput\` / \`ExecOutput\`, \`poll_execute_ready\` for I/O readiness, \`auto_impl\` for \`Box\` dispatch. Same shape as Airflow / dbt / Kafka Streams pipelines, applied to chain sync. Next lesson walks the real 10-stage pipeline Reth ships with.
+
+## Summary (3 lines)
+
+- 6-step buildup: naive → checkpoint → backward → done flag → generic DB → Send/Sync/'static → 6 methods.
+- Each step adds a production requirement. Final trait has 6 methods covering forward + backward + progress tracking.
+- Next: Reth's 10 stages, in order.
 `,
                 },
                 {
-                  title: "Reth's pipeline: 10 stages, in order",
+                  title: 'Lesson 2 — Reth\'s pipeline: 10 stages, in order',
                   slug: 'staged-sync-pipeline-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Reth's pipeline: 10 stages, in order
+                  content: `# Lesson 2 — Reth's pipeline: 10 stages, in order
+
+## Question
+
+**Reth runs 10 stages in sequence**. Each is a \`Stage\` impl; the pipeline runs them top-down for sync. **What each does + the parallelisation opportunities.**
+
+## Principle (minimum model)
+
+- **1. HeaderStage.** Fetches block headers from peers; validates parent chain.
+- **2. BodyStage.** Fetches block bodies (txs + uncles); pairs with headers.
+- **3. SenderRecoveryStage.** Recovers tx sender addresses from signatures. Embarrassingly parallel; rayon par_iter for speed.
+- **4. ExecutionStage.** Executes every tx through revm; updates state. The expensive stage; ~70 % of sync time.
+- **5. MerkleStage.** Builds the state Merkle Patricia Trie; computes state root.
+- **6. AccountHashingStage** + **7. StorageHashingStage** + **8. AccountHistoryIndexStage** + **9. StorageHistoryIndexStage.** Indexes for fast historical queries.
+- **10. TransactionLookupStage.** Indexes tx hashes for fast lookup.
+- **Pipelining.** Each stage hands off to the next; they can run in parallel up to a checkpoint.
+- **Why this many.** Each is a known bottleneck; isolating them allows optimisation. SenderRecovery uses rayon; Execution uses revm parallel; hashing batches.
+
+## Worked example + steps
+
+# Reth's pipeline: 10 stages, in order
 
 Picture your node a minute after it joins the network. It has just pulled down 10 million blocks worth of headers from peers. Now it has to turn that pile of headers into a fully validated chain — execute every transaction, recompute every state root, build every index. Done block-by-block the way old clients did it, that takes **weeks**. Reth does it in **hours**.
 
@@ -366,7 +428,6 @@ Open \`crates/stages/stages/src/stages/\` in the Reth repo as you read.
 | 9 | \`IndexAccountHistoryStage\` + \`IndexStorageHistoryStage\` | Historical access indices | sort + write |
 | 10 | \`FinishStage\` | Bookkeep, finalize | none |
 
-> 🛑 **Compare your prediction from last lesson.** What stages did you list that *aren't* here? Sometimes the omissions are more revealing than the inclusions — Paradigm chose not to bundle "PrunerStage" into this list (pruning runs separately, on its own schedule).
 
 ## Order matters: three constraints
 
@@ -374,7 +435,6 @@ The pipeline's order is fixed by three constraints. Each one forces one stage to
 
 ### Constraint 1 — \`MerkleStage\` must come *after* hashing
 
-> 🛑 **Predict.** A Merkle Patricia Trie root needs leaves in sorted-by-hashed-key order. **What does that say about how hashing must be staged?**
 
 The Merkle stage consumes sorted hashed keys. Account hashing and storage hashing must finish — and commit their sort — before Merkle starts. Interleaving doesn't work: the Merkle stage needs the *whole sorted set* for the block range it's processing.
 
@@ -395,7 +455,6 @@ The Frontiers 2025 talk (linked at the bottom) discusses exactly this trade-off 
 
 ### Constraint 3 — \`SenderRecoveryStage\` is the parallelism win
 
-> 🛑 **Predict.** Of all 10 stages, which one benefits *most* from parallelism, and why?
 
 \`SenderRecoveryStage\`. ECDSA recovery — turning a transaction signature back into the signer's address — is pure CPU, no shared state, embarrassingly parallel. Reth uses Rayon (Rust's data-parallelism library) to fan it out across all CPU cores.
 
@@ -415,7 +474,6 @@ Block-by-block sync (geth's old default) does ~50–100 blocks/sec at full tilt.
 2. **Stage-level parallelism.** Within a stage (especially \`SenderRecoveryStage\`), Rayon fans work across all cores.
 3. **I/O amortization.** Disk writes happen in big sorted batches at stage boundaries, not after every block.
 
-> 🛑 **Final predict.** Try to attribute the 100× to specific stages before reading on. Which one contributes the most?
 
 Roughly: ECDSA recovery batched + parallelized contributes ~10×; Merkle root computed once per range instead of per block contributes another ~10×; sorted batched writes that MDBX handles efficiently contribute ~3×. Multiplied: ~300× theoretical; the practical number lands around 100–200× depending on hardware.
 
@@ -439,75 +497,118 @@ zntRpCKHyDc | Georgios Konstantopoulos — Reth: A New Rust Ethereum Client (arc
 \`\`\`youtube
 z3tj8Lk_Ydo | Alexey Shekhirin & Dan Cline — Hyperoptimizing Reth (Frontiers 2025, pipeline perf)
 \`\`\`
+
+## Summary (3 lines)
+
+- 10 stages: HeaderStage → BodyStage → SenderRecoveryStage (rayon parallel) → ExecutionStage (~70 % time, revm) → MerkleStage (state root) → 4 indexing stages → TransactionLookupStage.
+- Each is independently optimisable. Pipelining hands off checkpoints between stages.
+- Why 10: every known bottleneck is isolated. Next: quiz.
 `,
                 },
                 {
-                  title: 'Quiz: did the Stage trait + pipeline shape stick?',
+                  title: 'Quiz — Staged Sync',
                   slug: 'staged-sync-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 2,
                   duration: 4,
                   xpReward: 25,
-                  content: `# Quiz: did the Stage trait + pipeline shape stick?
+                  content: `# Quiz — Staged Sync
+
+## Question
+
+Confirm: 6-method Stage trait, 10-stage pipeline order, SenderRecovery parallelism, ExecutionStage as the 70 % bottleneck.
+
+## Principle (minimum model)
+
+- Stage trait 6 methods + 10 stages in order + parallel patterns per stage.
+
+## Worked example + steps
+
+# Quiz: did the Stage trait + pipeline shape stick?
 
 Four questions covering the trait design and the pipeline ordering constraints. Same rule: **you can't nod past a quiz.**
 
-If you miss two or more, scroll back to *Building the Stage trait* before going on to the drill.`,
+If you miss two or more, scroll back to *Building the Stage trait* before going on to the drill.
+
+## Summary (3 lines)
+
+- Quiz confirms Staged Sync understanding.
+- Get two+ wrong → re-read buildup + pipeline.
+- Pass → drill: read SenderRecoveryStage end-to-end.
+`,
                   quizQuestions: [
                     {
-                      question: "Why is `unwind` a method on the same `Stage` trait as `execute`, instead of a separate 'reorg' trait or method?",
-                      options: [
+                      "question": "Why is `unwind` a method on the same `Stage` trait as `execute`, instead of a separate 'reorg' trait or method?",
+                      "options": [
                         "Reorgs are rare enough that it's a stylistic choice.",
                         "Rust requires symmetric methods on traits.",
                         "Reorgs are a normal mode of operation; putting them on the same trait makes 'forward over a range' and 'back over a range' structurally identical, which removes a parallel 'reorg path' from the codebase.",
-                        "It's a backwards-compat shim from an older Reth version.",
+                        "It's a backwards-compat shim from an older Reth version."
                       ],
-                      correctIndex: 2,
-                      explanation: "Reth's design treats reorgs as routine, not special. Same trait → same orchestrator scheduler, same per-stage logic. A separate reorg trait would force every stage to be implemented twice and would split the orchestrator into a forward path and a reverse path — exactly what other clients have, and exactly what Reth was built to avoid.",
+                      "correctIndex": 2,
+                      "explanation": "Reth's design treats reorgs as routine, not special. Same trait → same orchestrator scheduler, same per-stage logic. A separate reorg trait would force every stage to be implemented twice and would split the orchestrator into a forward path and a reverse path — exactly what other clients have, and exactly what Reth was built to avoid."
                     },
                     {
-                      question: "Why does `ExecOutput.done` return a flag inside the result instead of being a separate `has_more()` method?",
-                      options: [
+                      "question": "Why does `ExecOutput.done` return a flag inside the result instead of being a separate `has_more()` method?",
+                      "options": [
                         "It's stylistic — both work equally well.",
                         "A separate `has_more()` would force the orchestrator into two calls per turn (execute, then has_more) and open a class of bugs where checkpoint and has_more disagree. The flag inside the output makes the call atomic — `execute` returns one snapshot of its state.",
                         "Rust's type system can't express `has_more()`.",
-                        "To enable async cancellation.",
+                        "To enable async cancellation."
                       ],
-                      correctIndex: 1,
-                      explanation: "Atomic call/return matters here. The orchestrator wants exactly one piece of feedback per turn: 'I made progress to checkpoint X; whether you call me again is your decision.' Splitting that into two methods opens reasoning gaps about what happens between them.",
+                      "correctIndex": 1,
+                      "explanation": "Atomic call/return matters here. The orchestrator wants exactly one piece of feedback per turn: 'I made progress to checkpoint X; whether you call me again is your decision.' Splitting that into two methods opens reasoning gaps about what happens between them."
                     },
                     {
-                      question: "Why is `MerkleStage` placed *after* both `AccountHashingStage` and `StorageHashingStage`, not interleaved?",
-                      options: [
+                      "question": "Why is `MerkleStage` placed *after* both `AccountHashingStage` and `StorageHashingStage`, not interleaved?",
+                      "options": [
                         "It's a historical accident; the order could be different.",
                         "A Merkle Patricia Trie root requires leaves in sorted-by-hashed-key order. The hashing stages produce that sorted order; Merkle needs the full sorted set for its block range, so hashing must complete and commit before Merkle starts.",
                         "`MerkleStage` is slower than hashing; it's placed last for performance.",
-                        "To save memory.",
+                        "To save memory."
                       ],
-                      correctIndex: 1,
-                      explanation: "An algorithmic constraint: Merkle root computation cannot start until its sorted leaves are committed. Hashing is the producer, Merkle is the consumer. Producer completes, then consumer runs. Interleaving would force partial Merkle recomputation, which costs more than just batching properly.",
+                      "correctIndex": 1,
+                      "explanation": "An algorithmic constraint: Merkle root computation cannot start until its sorted leaves are committed. Hashing is the producer, Merkle is the consumer. Producer completes, then consumer runs. Interleaving would force partial Merkle recomputation, which costs more than just batching properly."
                     },
                     {
-                      question: "Of Reth's 10 stages, `SenderRecoveryStage` benefits most from parallelism. Why is it the one, not (say) `ExecutionStage`?",
-                      options: [
+                      "question": "Of Reth's 10 stages, `SenderRecoveryStage` benefits most from parallelism. Why is it the one, not (say) `ExecutionStage`?",
+                      "options": [
                         "`SenderRecoveryStage` has more transactions to process than `ExecutionStage`.",
                         "Sender recovery is embarrassingly parallel: each ECDSA recovery is independent of every other, no shared state. Execution has sequential state dependencies — block N's storage writes affect block N+1's reads — so it can't be trivially parallelized.",
                         "Rayon doesn't work inside `ExecutionStage`.",
-                        "`ExecutionStage` already saturates a single core, so parallelism wouldn't help.",
+                        "`ExecutionStage` already saturates a single core, so parallelism wouldn't help."
                       ],
-                      correctIndex: 1,
-                      explanation: "ECDSA recovery is independent across signatures; you can fan it across all cores trivially. Execution has consensus-defined sequential state dependencies — parallelizing it requires optimistic execution (Block-STM, etc.) with its own complications. Sender recovery is the standout because its work shape matches Rayon's model perfectly.",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "ECDSA recovery is independent across signatures; you can fan it across all cores trivially. Execution has consensus-defined sequential state dependencies — parallelizing it requires optimistic execution (Block-STM, etc.) with its own complications. Sender recovery is the standout because its work shape matches Rayon's model perfectly."
+                    }
                   ],
                 },
                 {
-                  title: 'Drill: read \`SenderRecoveryStage\` end-to-end',
+                  title: 'Lesson 4 — Drill: read SenderRecoveryStage end-to-end',
                   slug: 'staged-sync-drill-en',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Drill: read \`SenderRecoveryStage\` end-to-end
+                  content: `# Lesson 4 — Drill: read SenderRecoveryStage end-to-end
+
+## Question
+
+**Read \`SenderRecoveryStage\` line by line**. ~150 lines of Rust. Sees: rayon \`par_iter\`, batched DB writes, atomic checkpoint updates.
+
+## Principle (minimum model)
+
+- **Structure.** \`pub struct SenderRecoveryStage { batch_size: usize }\`. Stateless except for batch size.
+- **\`execute\` method.** Read uncomputed senders from \`block_meta\` table; batch process via \`recover_signers(...)\`; write back to \`tx_senders\` table.
+- **Rayon parallelism.** \`senders.par_iter().map(|tx| recover_signer(tx))\` — embarrassingly parallel; uses all cores.
+- **Batched DB writes.** Group all writes per batch; one transaction per batch. Reduces lock contention.
+- **Checkpoint.** Update \`tx_senders.last_processed_block\` atomically with the batch write.
+- **Tests use TestStageDB.** In-memory DB + injected blocks; assert stage produces correct senders. ~50 lines per test.
+- **Why this drill.** SenderRecovery is the simplest non-trivial stage. Read it; see the pattern; apply it to every other stage.
+
+## Worked example + steps
+
+# Drill: read \`SenderRecoveryStage\` end-to-end
 
 Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about staged sync" to "I have read \`SenderRecoveryStage\` line by line and answered three architectural questions about it from the source."
 
@@ -528,7 +629,6 @@ Open it. We'll work through it in order.
 
 ## Drill 1 — Find the \`Stage\` impl
 
-> 🛑 **Predict before scrolling.** What does \`SenderRecoveryStage::execute\` do, in one sentence? What's the "compute" inside it? What's the "I/O" around the compute? Hold your sentences.
 
 Open the file. Find \`impl<Provider> Stage<Provider> for SenderRecoveryStage\`. The \`execute\` method is your target.
 
@@ -546,7 +646,6 @@ The stage doesn't process *every* block in \`ExecInput.target\` at once. It batc
 
 > 🔍 **Find the batch loop.** Search for \`commit_threshold\` or \`chunk\` or \`batch\` in the file.
 
-> 🛑 **Question (write it down):** Why batch? Why not process every block in the range in one shot?
 
 Two reasons:
 
@@ -559,7 +658,6 @@ The \`commit_threshold\` field on the stage struct controls the batch size. **Fi
 
 Search for \`done: false\` or \`ExecOutput { done\` in the method body.
 
-> 🛑 **Question:** What condition makes \`done\` flip to \`true\`?
 
 When the stage has processed all blocks up to \`ExecInput.target\` (no more work in this range). Until then, \`done: false\` tells the orchestrator "call me again on the next batch." Once true, the orchestrator advances to the next stage.
 
@@ -579,7 +677,6 @@ chunk.par_iter()
 
 Each transaction's sender recovery is independent → safe to fan across cores → Rayon does the work.
 
-> 🛑 **Final question (write your answer down):** If the chain had 20× more transactions per block but the same number of cores, would \`SenderRecoveryStage\` get *20×* slower? Why or why not?
 
 It scales sub-linearly. With more transactions per block, each Rayon batch grows but core count stays the same — wall-clock time grows roughly linearly with total signatures, but per-batch overhead (chunking, channel coordination) is amortized over more work, so total throughput improves slightly. **Net: ~15–18× slower for 20× more signatures**, depending on cache behavior.
 
@@ -606,32 +703,47 @@ RUST_LOG=reth_stages=debug,reth_stages_api=debug \\
 
 \`--dev\` boots a single-node devnet; \`--dev.block-time 5s\` mines a block every 5 s. Stage transition logs start streaming — \`headers\`, \`bodies\`, \`sender_recovery\`, \`execution\`, \`hashing\`, \`merkle\`, \`tx_lookup\` spans run **in the order you read them in the build-up**, for each block.
 
-> 🛑 **What to observe:** for one block number, watch the \`sender_recovery\` start → \`commit\` → finish flow. Count **how many times \`execute()\` was called** for that block (small batch sizes mean multiple calls — the \`done: false\` return pattern, made physical).
 
 This is the real thing. The "return \`done: false\` to backpressure the orchestrator" model from the build-up shows up directly in the \`tracing\` output. **The match between mental model and log output is what promotes the lesson from "I understood it" to "I understood it because I saw it work."**
 
-After this drill, you've read the same code Paradigm uses to keep Reth in sync.`,
+After this drill, you've read the same code Paradigm uses to keep Reth in sync.
+
+## Summary (3 lines)
+
+- SenderRecoveryStage = rayon par_iter + batched DB writes + atomic checkpoint. ~150 lines.
+- Embarrassingly parallel (per-tx signature recovery). Tests use TestStageDB.
+- Pattern transfers to every other stage. Next: Rust lifetimes / Arc / dyn deep dive.
+`,
                 },
                 {
-                  title: 'Rust: lifetimes, Box, Arc, dyn Trait',
+                  title: 'Lesson 5 — Rust: lifetimes, Box, Arc, dyn Trait',
                   slug: 'rust-lifetimes-arc-dyn-en',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 15,
                   xpReward: 30,
-                  content: `# Rust: lifetimes, Box, Arc, dyn Trait
+                  content: `# Lesson 5 — Rust: lifetimes, Box, Arc, dyn Trait
+
+## Question
+
+**Reading Reth source requires deeper Rust than dapp work**. Lifetimes (\`<'a>\`), \`Box<dyn Trait>\`, \`Arc<dyn Trait + Send + Sync>\` — what they mean, when each is right.
+
+## Principle (minimum model)
+
+- **Lifetimes (\`<'a>\`).** Compile-time guarantee that references outlive what they point to. Most uses are inferred; rarely-written.
+- **\`Box<dyn Trait>\`.** Owned trait object on the heap. Used when you need polymorphism but ownership.
+- **\`Arc<dyn Trait>\`.** Shared trait object across tasks. Add \`+ Send + Sync\` for Tokio. Most Reth components are \`Arc<dyn ComponentTrait + Send + Sync>\`.
+- **\`&dyn Trait\` / \`&mut dyn Trait\`.** Borrowed; cheaper than Box. Use when you don't need ownership.
+- **\`impl Trait\` (sugar).** Sugar for "anonymous generic". \`fn foo() -> impl Future<...>\` returns a Future without naming the concrete type.
+- **Generics vs \`dyn Trait\` trade-off.** Generics monomorphise (compile-time); each concrete type generates its own code. \`dyn\` dispatches at runtime via vtable; smaller binary; slightly slower.
+- **Reth conventions.** Components passed as \`Arc<dyn ... + Send + Sync>\`; per-call hot-path uses generics; mid-frequency uses \`dyn\`.
+
+## Worked example + steps
+
+# Rust: lifetimes, Box, Arc, dyn Trait
 
 Open any ExEx source file. The first ten lines will throw \`Arc<>\`, \`'static\`, \`dyn Trait\`, and \`Box<>\` at you. Four "advanced but actually simple" Rust features — and you need every one to read the code Reth ships with. **This lesson tests you, not teaches you** — if you stumble on the predict prompts, the gap is real and worth closing.
 
-> 🛑 **Cold start: define each in one sentence.** Without scrolling:
-> - \`'a\` (a lifetime parameter)
-> - \`'static\`
-> - \`Box<T>\`
-> - \`Arc<T>\` (vs \`Rc<T>\`)
-> - \`Mutex<T>\`
-> - \`dyn Trait\`
->
-> If you stumbled on more than two, this lesson earns its place. If you breezed through, the lesson tests whether your definitions are *actually right*.
 
 ## 1. Lifetimes \`'a\`
 
@@ -647,7 +759,6 @@ fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
 - Both inputs and the output share the same \`'a\` → "the returned reference lives at least as long as both inputs"
 - Often the compiler infers them — **most signatures don't need explicit lifetimes**
 
-> 🛑 **Anti-fluency.** Delete the \`'a\` annotations from \`longest\`. What error does the compiler give? Be precise — name the rule it cites.
 
 ### \`'static\`
 
@@ -659,7 +770,6 @@ let s: &'static str = "hello";
 
 Long-running tasks (like ExEx) often require \`'static\` bounds because they can outlive any local scope.
 
-> 🛑 **Predict.** When does a closure passed to \`tokio::spawn\` (Tokio is Rust's async runtime — the executor that drives futures) need to be \`'static\`? Why? Answer before continuing — this exact bound shows up in every ExEx file you'll ever read.
 
 ## 2. \`Box<T>\` — heap allocation
 
@@ -676,7 +786,6 @@ Common reasons:
 - Holding a **dynamically-sized** value (\`dyn Trait\`)
 - **Move** large values cheaply instead of copying
 
-> 🛑 **Predict.** Without \`Box\`, why can't you write \`enum List { Cons(i32, List), Nil }\`? Spell out the compiler's complaint.
 
 ## 3. \`Rc<T>\` and \`Arc<T>\` — shared ownership
 
@@ -700,7 +809,6 @@ std::thread::spawn(move || println!("{}", clone1));
 
 **Reth and ExEx code is full of \`Arc<...>\`** — multiple async tasks need to read the same component.
 
-> 🛑 **Anti-fluency.** \`Arc::clone(&x)\` doesn't deep-copy the inner \`T\`. So what does it copy, exactly? What's the cost? Why "atomic" in "Arc"?
 
 ## 4. \`Mutex\` / \`RwLock\` — shared mutability
 
@@ -723,7 +831,6 @@ std::thread::spawn(move || {
 | \`Mutex\` | exclusive read/write |
 | \`RwLock\` | many readers OR one writer |
 
-> 🛑 **Predict.** What does \`.lock().unwrap()\` panic on? When does that happen? (Hint: search for "poisoning" if you don't know.) **Reth code uses \`.lock().unwrap()\` everywhere — understand when it can crash.**
 
 ## 5. \`dyn Trait\` — dynamic dispatch
 
@@ -756,7 +863,6 @@ g.greet();
 
 \`impl\` is faster, but \`dyn\` lets you have heterogeneous collections like \`Vec<Box<dyn Trait>>\`.
 
-> 🛑 **Anti-fluency.** \`Box<dyn Greet>\` is more expensive than \`Box<En>\` at the call site. **Where exactly is the cost?** What's a vtable? If you can't answer, you don't yet understand dynamic dispatch — re-read.
 
 ## 6. What you'll see in ExEx code
 
@@ -771,7 +877,6 @@ async fn my_exex<Node: FullNodeComponents>(
 }
 \`\`\`
 
-> 🛑 **Stop. Annotate this signature in your head before scrolling.** Which piece is generics? Which is a trait bound? Which uses shared ownership internally? Which lifetime is implicit?
 
 - \`Node: FullNodeComponents\` — trait bound
 - \`ExExContext<Node>\` — generic over the node bundle
@@ -788,18 +893,41 @@ async fn my_exex<Node: FullNodeComponents>(
 | \`Mutex<T>\` | safely mutate shared data |
 | \`dyn Trait\` | runtime method dispatch |
 
-> Final check: close this tab. Write the ExEx \`my_exex\` signature from memory. If you can't, you don't yet own the vocabulary — open it back up. The next lesson reads ExEx in detail; you'll need each of these without the cheat sheet.`,
+> Final check: close this tab. Write the ExEx \`my_exex\` signature from memory. If you can't, you don't yet own the vocabulary — open it back up. The next lesson reads ExEx in detail; you'll need each of these without the cheat sheet.
+
+## Summary (3 lines)
+
+- Lifetimes (\`<'a>\`) + Box<dyn Trait> + Arc<dyn Trait + Send + Sync> + &dyn Trait + impl Trait. Each has a specific use case.
+- Reth conventions: components as Arc<dyn ... + Send + Sync>; hot-path generics; mid-frequency dyn.
+- Reading Reth needs this fluency. Next: ExEx buildup.
+`,
                 },
                 {
-                  title: 'Building the ExEx API step by step',
+                  title: 'Lesson 6 — Building the ExEx API step by step',
                   slug: 'reth-exex-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Building the ExEx API step by step
+                  content: `# Lesson 6 — Building the ExEx API step by step
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **database layer's pub-sub interface**, plus an **upstream pruning protocol**. Same problem PostgreSQL logical replication, Kafka consumer offset tracking, and CDC pipelines all solve — "let downstream consumers read committed events without forcing upstream to retain everything forever." ExEx is that pattern realized for Reth: in-process consumers that signal "I've finished reading up to height N" so the node can safely prune.
+## Question
+
+**ExEx = "Execution Extension"** = Reth's plug-in for indexing / observing chain state. Tempo's tidx is built on it. Build the API from scratch.
+
+## Principle (minimum model)
+
+- **Step 0 — naive subscriber.** \`subscribe_blocks(|block| index(block))\`. Doesn't handle reorgs; can't see state diffs.
+- **Step 1 — three notification variants.** \`enum ExExEvent { Committed(...) / ChainReorged(...) / Reverted(...) }\`. Production needs all three.
+- **Step 2 — ExExContext.** Per-subscriber context with \`init\`, \`run\`, lifecycle hooks. Lets ExEx do setup before subscribing.
+- **Step 3 — \`install_exex(...)\`.** NodeBuilder method to register ExExs. Multiple ExExs share the same node.
+- **Step 4 — backfill API.** When ExEx restarts, replay from a known block. Reth provides this.
+- **Step 5 — pause/resume.** Mid-run management. Used by Tempo's tidx for schema migrations.
+
+## Worked example + steps
+
+# Building the ExEx API step by step
+
 
 **ExEx (Execution Extension)** is Reth's mechanism for injecting Rust code into the execution loop. With it you build node-speed indexers, MEV bots, and live risk engines — directly in the same process as the chain itself.
 
@@ -831,7 +959,6 @@ fn main() {
 
 A separate process. Polls the RPC every second. Indexes any new blocks.
 
-> 🛑 **Predict.** Without scrolling: name three reasons this naive design is *significantly worse* than running in-process inside Reth. (Hint: each is a different *kind of* problem.)
 
 The three:
 
@@ -853,7 +980,6 @@ fn on_new_block<F: Fn(&Block)>(reth: &mut Reth, callback: F) {
 
 Reth calls your closure for every new block. Simple.
 
-> 🛑 **Predict.** What's missing? (Two big things.)
 
 The two:
 
@@ -878,7 +1004,6 @@ Each variant carries enough information for the indexer to undo or redo derived 
 - **\`ChainReorged { old, new }\`** — undo \`old\`'s state, apply \`new\`'s state. Atomic swap.
 - **\`ChainReverted { old }\`** — undo \`old\`'s state, wait. Reth will follow up with a future \`ChainCommitted\` once it picks a new tip.
 
-> 🛑 **Anti-fluency.** You're indexing transactions to a \`HashMap\`. You handle only \`ChainCommitted\`. The chain reorgs 5 blocks deep. **What's wrong with your HashMap?** Be specific — write the failure mode in two sentences.
 
 The HashMap contains the *old* chain's transactions, but the canonical chain is now the *new* chain. Any later read off your index will return transactions that no longer exist on the canonical chain — a phantom-data bug. Worse: the *new* chain's transactions never got indexed (you didn't see a \`ChainCommitted\` for them — you saw a \`ChainReorged\` you ignored).
 
@@ -894,7 +1019,6 @@ ctx.events.send(ExExEvent::FinishedHeight(block_number_hash))?;
 
 \`ctx.events\` is a write-only channel back to Reth. Whenever your handler finishes a block (or chain), you send \`FinishedHeight(N)\`. Reth aggregates the minimum across all installed ExExes and prunes below that.
 
-> 🛑 **Predict the disk consequence.** You ship an ExEx without the \`FinishedHeight\` event. Six months later your node is at block 21M. What's the disk usage relative to a node without ExEx? Why?
 
 The node retains *all* historical state Reth would otherwise prune — because it can't safely prune anything your ExEx might want to read later. **Disk usage compounds.** Without \`FinishedHeight\`, an "innocuous indexer" turns Reth into a full-archive node by accident.
 
@@ -930,7 +1054,6 @@ Two functions:
 - **\`exex_init\`** — runs *once* at node startup. Synchronous setup. Returns a future.
 - **\`exex\`** (the future) — runs *forever* (or until shutdown). Polls the notification stream.
 
-> 🛑 **Predict.** Why is the init/run split necessary? What concrete bug would happen if you put file-open inside \`exex\` instead of \`exex_init\`?
 
 Reth needs to *acknowledge* the ExEx is alive before it starts pushing notifications. If you put \`File::open(...)\` inside \`exex\`, the file open happens *after* Reth has already started buffering notifications — and if it fails (permissions, missing path), notifications pile up while Reth thinks the ExEx is healthy. The init/run split lets Reth distinguish "ExEx couldn't start" from "ExEx ran for a while and crashed."
 
@@ -953,7 +1076,6 @@ The first arg is a name (used in metrics and logs); the second is the init funct
 - **Crashes are independent.** If one ExEx panics, the others and Reth itself keep running (unless init fails, which fails node startup).
 - **Metrics are per-ExEx.** The first-arg name labels the \`reth_exex_<name>_*\` metrics.
 
-> 🛑 **Recall check.** Your indexer dies overnight from an OOM, but the MEV watcher is still running fine. How many hours of history does the pruner start hoarding? Why?
 
 The pruner freezes at the indexer's last \`FinishedHeight\` — every block after that is treated as "the indexer might still want to read this," so nothing prunes. Until you restart the indexer and let it advance \`FinishedHeight\`, Reth accumulates history for **the entire window the indexer was down**. This is the canonical production failure mode of "an unmonitored dead ExEx eats your disk."
 
@@ -981,16 +1103,40 @@ Without scrolling:
 If any answer is shaky, scroll back. The next lesson reads the real minimal ExEx in detail.
 
 > **🧭 Where you are now in the stack:** you've built the **database layer's pub-sub + prune protocol** — 3-variant \`ExExNotification\`, \`FinishedHeight\` backpressure, stream pull, \`init/run\` split, \`install_exex\` injection. Same shape as Kafka consumer offset management and Postgres logical replication slots, applied to EVM chain sync. Next lesson reads the minimal ExEx's real source against this model.
+
+## Summary (3 lines)
+
+- 6-step buildup: naive subscriber → three notification variants → ExExContext → install_exex registration → backfill + pause/resume.
+- Production-grade indexers (Tempo tidx) use the full pattern.
+- Next: walkthrough the minimal ExEx.
 `,
                 },
                 {
-                  title: 'Reading the minimal ExEx, line by line',
+                  title: 'Lesson 7 — Reading the minimal ExEx, line by line',
                   slug: 'reth-exex-walkthrough-en',
                   type: 'CONTENT',
                   sortOrder: 6,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Reading the minimal ExEx, line by line
+                  content: `# Lesson 7 — Reading the minimal ExEx, line by line
+
+## Question
+
+**Read the canonical minimal ExEx** from \`reth-exex-examples\`. ~40 lines of Rust; shows the three-variant notification handling.
+
+## Principle (minimum model)
+
+- **\`ExExNotification\` enum.** Three variants matched in a \`match\` block. Each variant has a different action: Committed (apply forward), ChainReorged (undo old + apply new), Reverted (undo last N).
+- **\`async fn install_exex(ctx: ExExContext) -> Self\`.** Constructor; loads state from disk; returns the ExEx struct.
+- **\`async fn run(&mut self, mut notifications: Receiver<ExExNotification>)\`.** Event loop. \`while let Some(n) = notifications.recv().await\` then match.
+- **Block iteration.** \`Committed(chain)\` gives a \`Chain\` of new blocks; iterate with \`chain.blocks_iter()\`.
+- **State diffs.** \`block.state_diff()\` returns the post-execution state diff; index accounts that changed.
+- **Backfill state.** Reth's \`ExExContext::backfill(...)\` lets you replay from a known block. Used at startup.
+- **Type-safety.** Reth's \`Chain\` type ensures you can't mix Committed with Reorged at the type level.
+
+## Worked example + steps
+
+# Reading the minimal ExEx, line by line
 
 A working ExEx is 40 lines of Rust. That's it — no fork of Reth, no separate process, just a function you hand to the node builder and Reth runs it inside the same binary. Below is the entire \`main.rs\` of [\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal). By the end of this lesson, every line maps back to a build-up step from the previous one.
 
@@ -1094,7 +1240,6 @@ This is the load-bearing decision. **All three arms must be present** in any non
 
 The minimal ExEx logs each variant; that's instructive but not useful. **Real ExExes update derived state** — and getting all three arms right is what separates a working indexer from a phantom-data bug.
 
-> 🛑 **Anti-fluency.** Read the \`ChainReorged\` arm. The \`old\` and \`new\` chains are both passed. **Why both?** Why not just \`new\` (the post-reorg tip)?
 
 Because the indexer needs to *undo* \`old\`'s state changes before *applying* \`new\`'s. If you only got \`new\`, you'd have no way to roll back the old chain's effect on your derived state — and you'd silently double-count or skip transactions.
 
@@ -1156,75 +1301,118 @@ Without scrolling:
 4. What does a "rollup as an ExEx" rely on for finality and data availability?
 
 The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
+
+## Summary (3 lines)
+
+- Minimal ExEx ~40 lines. Three-variant match (Committed / ChainReorged / Reverted) + ExExContext + async run loop.
+- Iterate Chain.blocks_iter(); read block.state_diff() for changes.
+- Backfill via ExExContext::backfill. Type-safety via Chain. Next: quiz.
 `,
                 },
                 {
-                  title: 'Quiz: did the ExEx API stick?',
+                  title: 'Quiz — ExEx',
                   slug: 'reth-exex-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 7,
                   duration: 4,
                   xpReward: 25,
-                  content: `# Quiz: did the ExEx API stick?
+                  content: `# Quiz — ExEx
+
+## Question
+
+Confirm: 3-variant ExEx notifications, ExExContext lifecycle, install_exex registration, backfill API.
+
+## Principle (minimum model)
+
+- Three variants + ExExContext + install_exex + backfill.
+
+## Worked example + steps
+
+# Quiz: did the ExEx API stick?
 
 Four questions covering the API design and the failure modes the design prevents. Same rule: **you can't nod past a quiz.**
 
-If you miss two or more, scroll back to *Building the ExEx API* before going on to the drill.`,
+If you miss two or more, scroll back to *Building the ExEx API* before going on to the drill.
+
+## Summary (3 lines)
+
+- Quiz confirms ExEx understanding.
+- Get two+ wrong → re-read buildup + walkthrough.
+- Pass → drill: build a reorg-safe indexer.
+`,
                   quizQuestions: [
                     {
-                      question: "Why is the ExEx API an init/run split (`exex_init` returns a future) rather than a single `async fn`?",
-                      options: [
+                      "question": "Why is the ExEx API an init/run split (`exex_init` returns a future) rather than a single `async fn`?",
+                      "options": [
                         "Rust requires a setup function for `async` traits.",
                         "It's a backwards-compat shim from an older Reth version.",
                         "Init/run lets you do synchronous setup (open files, init DBs) at node startup before the long-running notification loop begins. Reth distinguishes 'ExEx couldn't start' from 'ExEx ran for a while and crashed.'",
-                        "Performance — split functions inline better.",
+                        "Performance — split functions inline better."
                       ],
-                      correctIndex: 2,
-                      explanation: "A single `async fn` would force setup into the future itself — making 'ExEx never started' indistinguishable from 'ExEx crashed during the loop.' The init/run split gives Reth a clean acknowledgment moment for 'this extension is alive and ready' before notifications start.",
+                      "correctIndex": 2,
+                      "explanation": "A single `async fn` would force setup into the future itself — making 'ExEx never started' indistinguishable from 'ExEx crashed during the loop.' The init/run split gives Reth a clean acknowledgment moment for 'this extension is alive and ready' before notifications start."
                     },
                     {
-                      question: "You implement an ExEx that only handles `ChainCommitted`, ignoring `ChainReorged` and `ChainReverted`. The chain reorgs 5 blocks deep. What's wrong with your derived state?",
-                      options: [
+                      "question": "You implement an ExEx that only handles `ChainCommitted`, ignoring `ChainReorged` and `ChainReverted`. The chain reorgs 5 blocks deep. What's wrong with your derived state?",
+                      "options": [
                         "It contains 5 extra blocks that should have been pruned.",
                         "It contains the *old* chain's data (from the segment that's no longer canonical) AND is missing the *new* chain's data (because no `ChainCommitted` fires for replaced segments). Phantom data + missing data simultaneously.",
                         "It crashes with a panic.",
-                        "The state is fine; Reth re-emits `ChainCommitted` for the new chain.",
+                        "The state is fine; Reth re-emits `ChainCommitted` for the new chain."
                       ],
-                      correctIndex: 1,
-                      explanation: "This is the #1 ExEx bug. `ChainReorged` carries both `old` and `new` so the indexer can undo `old`'s effects and apply `new`'s. Ignoring it leaves both halves wrong — old data still indexed, new data never indexed.",
+                      "correctIndex": 1,
+                      "explanation": "This is the #1 ExEx bug. `ChainReorged` carries both `old` and `new` so the indexer can undo `old`'s effects and apply `new`'s. Ignoring it leaves both halves wrong — old data still indexed, new data never indexed."
                     },
                     {
-                      question: "What does `ctx.events.send(ExExEvent::FinishedHeight(N))` tell Reth?",
-                      options: [
+                      "question": "What does `ctx.events.send(ExExEvent::FinishedHeight(N))` tell Reth?",
+                      "options": [
                         "'Stop sending me notifications below block N.'",
                         "'I've processed up to block N; you can safely prune historical state below N.' Reth aggregates the minimum across all installed ExExes for its pruning decision.",
                         "'Block N is bad — discard it.'",
-                        "'Resume from block N on next restart.'",
+                        "'Resume from block N on next restart.'"
                       ],
-                      correctIndex: 1,
-                      explanation: "Without `FinishedHeight`, Reth can't safely prune anything your ExEx might want to read later — it conservatively keeps everything forever. Forgetting this event turns an 'innocuous indexer' into an accidental archive node.",
+                      "correctIndex": 1,
+                      "explanation": "Without `FinishedHeight`, Reth can't safely prune anything your ExEx might want to read later — it conservatively keeps everything forever. Forgetting this event turns an 'innocuous indexer' into an accidental archive node."
                     },
                     {
-                      question: "An ExEx-based indexer is faster than a separate process polling the RPC. What's the *primary* architectural reason?",
-                      options: [
+                      "question": "An ExEx-based indexer is faster than a separate process polling the RPC. What's the *primary* architectural reason?",
+                      "options": [
                         "The indexer runs on a faster CPU.",
                         "Same process, no I/O round trip. The ExEx receives a notification the moment Reth commits a block — no RPC request/response, no polling interval, no atomicity gap. Plus full chain context (including reorg structure) Reth already computed.",
                         "ExEx skips the EVM execution step.",
-                        "The RPC has a rate limiter; ExEx doesn't.",
+                        "The RPC has a rate limiter; ExEx doesn't."
                       ],
-                      correctIndex: 1,
-                      explanation: "The architectural unlock is colocation. Polling RPC = at best ~1s lag, often more under load, plus reorgs are seen second-hand. ExEx = zero-lag, full context, no IPC.",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "The architectural unlock is colocation. Polling RPC = at best ~1s lag, often more under load, plus reorgs are seen second-hand. ExEx = zero-lag, full context, no IPC."
+                    }
                   ],
                 },
                 {
-                  title: 'Drill: build a reorg-safe indexer',
+                  title: 'Lesson 9 — Drill: build a reorg-safe indexer',
                   slug: 'reth-exex-drill-en',
                   type: 'CONTENT',
                   sortOrder: 8,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Drill: build a reorg-safe indexer
+                  content: `# Lesson 9 — Drill: build a reorg-safe indexer
+
+## Question
+
+**Build a minimal reorg-safe transfer indexer.** Subscribes via ExEx; on each Committed, index Transfer events. Handles reorgs by undoing old block effects.
+
+## Principle (minimum model)
+
+- **Indexer struct.** \`HashMap<Address, U256>\` (account → balance) + a Tokio-based ExEx event loop.
+- **Committed branch.** For each block, scan for Transfer events; update balances.
+- **ChainReorged branch.** Undo balances for the old chain; apply for the new. Reuse the same logic.
+- **Reverted branch.** Undo last N blocks; reset balances to the pre-block state.
+- **Idempotency.** If the same block is replayed, balances must end up the same. Critical for correctness.
+- **Test with anvil-like setup.** Spin up Reth + the ExEx; mine some blocks; cause a fake reorg via the test harness; assert balances are correct.
+- **~200 lines of Rust.** Smaller than a real production indexer (no DB persistence) but covers the reorg pattern.
+
+## Worked example + steps
+
+# Drill: build a reorg-safe indexer
 
 Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about ExEx" to "I have written one and watched it survive a reorg correctly."
 
@@ -1246,7 +1434,6 @@ You need an existing Reth node, or run with \`--chain holesky\` for a small test
 cargo run -- node --chain holesky
 \`\`\`
 
-> 🛑 **Question (write it down):** What gets logged for the first 10 blocks? Is every log line a \`ChainCommitted\`, or do you see other variants?
 
 For a fresh sync, you'll see \`ChainCommitted\` for every block. \`ChainReorged\` and \`ChainReverted\` are rarer — they require an actual chain disagreement, which holesky generates more often than mainnet (lower hashpower → more contested forks).
 
@@ -1263,7 +1450,6 @@ ExExNotification::ChainCommitted { new } => {
 }
 \`\`\`
 
-> 🛑 **Predict.** Run again. What's the average transaction count per holesky block? Per mainnet block?
 
 Holesky: low — usually 5–20 tx per block, sometimes 0. Mainnet: 100–300, depending on block fullness. **You're now reading real chain data at zero latency.**
 
@@ -1317,7 +1503,6 @@ while let Some(notification) = ctx.notifications.try_next().await? {
 
 (Adjust the API names to your local reth's current shape — \`block.body.transactions()\` vs \`.transactions\`, \`tx.signer()\` vs \`tx.recover_signer()\`. The point is the *structure*, not the exact identifier.)
 
-> 🛑 **Question:** Read the three arms. **What invariant must hold for \`tx_count\` to be correct after any sequence of notifications?**
 
 **For every \`Address\`, the count equals (txs sent on the *canonical* chain) − (txs sent on segments that were committed-then-reverted).** The reorg arm is the trick: it undoes \`old\` *and* applies \`new\` in a single notification, atomically.
 
@@ -1336,7 +1521,6 @@ Holesky generates reorgs occasionally. Run for a few hours.
 
 If yes — your indexer is reorg-safe. **You've written the same kind of code production-grade indexers (e.g., goldsky, the graph) ship.**
 
-> 🛑 **Final question:** Why does the *order* of operations in the \`ChainReorged\` arm matter? Specifically: does it matter if you apply \`new\` *before* undoing \`old\`?
 
 It matters in exactly one case: when \`old\` and \`new\` share a common prefix that the runtime helpfully *omits* from both — but if the implementation does include any shared blocks in both, applying \`new\` first would double-count them, then \`old\`'s undo would zero them out. The convention is **undo \`old\` first, then apply \`new\`**, which mirrors the chronological order Reth itself processes the reorg.
 
@@ -1349,18 +1533,42 @@ Without scrolling, in your own words:
 3. If you forget \`FinishedHeight\`, what specifically grows on disk over time?
 4. What's the one architectural reason an ExEx beats a separate RPC-polling indexer?
 
-After this drill, you've shipped a reorg-safe node-speed indexer. **The same tool now lets you build MEV bots, live risk engines, and rollups.**`,
+After this drill, you've shipped a reorg-safe node-speed indexer. **The same tool now lets you build MEV bots, live risk engines, and rollups.**
+
+## Summary (3 lines)
+
+- Drill: reorg-safe transfer indexer. Committed = forward; ChainReorged = undo old + apply new; Reverted = undo last N.
+- Idempotency is the core invariant. ~200 lines. Tests via Reth + injected reorg.
+- Pattern extends to any chain indexer. Next: SDK buildup.
+`,
                 },
                 {
-                  title: 'Building the node-builder API step by step',
+                  title: 'Lesson 10 — Building the node-builder API step by step',
                   slug: 'reth-sdk-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 9,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Building the node-builder API step by step
+                  content: `# Lesson 10 — Building the node-builder API step by step
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **assembly / dependency-injection layer** for the whole node. Same problem Spring containers, Kubernetes operators, and Linux init systems all face — "let the user swap one component without rewriting the others, while keeping a default for everything they don't want to think about." The Reth SDK is that pattern expressed as a typed builder, applied to L1 / L2 construction.
+## Question
+
+**Reth SDK's NodeBuilder is how custom L1s are built.** OP-Reth / bera-reth / Tempo all use it. Build the API from scratch.
+
+## Principle (minimum model)
+
+- **Step 0 — naive.** \`EthereumNode::new(config).run()\`. Hardcoded Ethereum.
+- **Step 1 — generic over types.** \`NodeBuilder<Types>::new()\`. Types parameter holds chain-specific types (TxEnvelope etc).
+- **Step 2 — component slots.** \`.consensus(...).network(...).pool(...).executor(...).validator(...).rpc(...)\`. Six slots; each is a trait impl that can be swapped.
+- **Step 3 — add_ons.** \`.add_ons(your_custom_layer)\`. Lets you stack additional behaviour.
+- **Step 4 — \`launch()\`.** Triggers component setup; returns a \`Handle\`.
+- **Step 5 — \`Handle::await_run().await\`.** Run the node; can \`.shutdown()\` gracefully.
+- **Why a builder.** Each component is independent; the builder makes the wiring explicit; type-checked at compile time.
+
+## Worked example + steps
+
+# Building the node-builder API step by step
+
 
 ExEx extends an existing Ethereum node. The **Reth SDK** lets you build *your own* App-chain in Rust by composing components. This is where "purpose-built EVM L1" stops being a thesis and starts being a binary you can compile.
 
@@ -1401,7 +1609,6 @@ cargo build
 
 Fork all 200K+ lines of Reth, edit whatever you need, ship the result.
 
-> 🛑 **Predict.** Without scrolling: name three reasons this naive approach is *catastrophic* if you plan to ship and maintain a chain for years. (Hint: each is a different *kind of* cost.)
 
 The three:
 
@@ -1415,7 +1622,6 @@ The fix: **don't fork. Compose.** Override only the subsystems you actually want
 
 What subsystems would you actually want to customize for a real chain?
 
-> 🛑 **Predict.** You're building Tempo (payments-focused L1). Which of Reth's subsystems would you swap? (Hint: there are 4–6 candidates.)
 
 The candidates that show up across real production chains:
 
@@ -1457,7 +1663,6 @@ fn main() {
 
 Pass a struct of overrides. Works, but clunky.
 
-> 🛑 **Predict.** Two specific user-experience problems with this shape?
 
 The two:
 
@@ -1505,7 +1710,6 @@ Why is this its own step? Because the *types* are load-bearing for everything el
 
 \`EthereumNode\` ships defaults (Ethereum block + tx + header). You can also pass \`OpNode\` (Optimism types) or your own \`NodeTypes\` impl.
 
-> 🛑 **Anti-fluency.** What concrete bug would happen if \`with_types\` came *after* \`with_components\` in the chain? Sketch the failure mode.
 
 The components would have to be specified *before* the types they operate on are known. Either every component-builder would need to be generic over not-yet-chosen types (compiler-hostile), or you'd commit to types implicitly via \`.with_components\`'s arguments (silent and confusing). **\`with_types\` first** lets the rest of the chain be type-aware.
 
@@ -1532,7 +1736,6 @@ Same override-only-what-you-need pattern from Step 3, applied to the runtime sub
 
 You wrote one custom builder. The rest came from Reth.
 
-> 🛑 **Predict.** Sketch the trait \`PoolBuilder\` (the one \`CustomPoolBuilder\` implements). Just method signatures, no real impl. What does Reth need from a pool builder?
 
 Roughly:
 
@@ -1591,16 +1794,41 @@ Without scrolling:
 If any answer is shaky, scroll back. The next lesson tours the 6 components and what real chains do with them.
 
 > **🧭 Where you are now in the stack:** you've built the **node's assembly / DI layer** — typed builder of \`with_types\` → \`with_components\` → \`with_add_ons\` → \`launch\`, where you swap one component while defaults stay implicit. Rust's answer to the same problem Kubernetes operators and Spring containers solve: how to compose 6 subsystems without 6-of-everything boilerplate. Next lesson tours those 6 components.
+
+## Summary (3 lines)
+
+- 6-step buildup: naive → generic Types → 6 component slots → add_ons → launch → Handle.await_run.
+- Each component is a trait impl; type-checked wiring; custom L1s replace components selectively.
+- OP-Reth / bera-reth / Tempo all use this. Next: the 6 components in detail.
 `,
                 },
                 {
-                  title: 'The 6 components — what each one unlocks',
+                  title: 'Lesson 11 — The 6 components — what each one unlocks',
                   slug: 'reth-sdk-components-en',
                   type: 'CONTENT',
                   sortOrder: 10,
                   duration: 10,
                   xpReward: 25,
-                  content: `# The 6 components — what each one unlocks
+                  content: `# Lesson 11 — The 6 components — what each one unlocks
+
+## Question
+
+**6 components: Consensus / Network / Pool / Executor / Validator / RPC.** Each is a trait you can implement. What customising each one unlocks.
+
+## Principle (minimum model)
+
+- **Consensus.** Replace Ethereum PoS with anything (PoL / HotStuff / Custom). bera-reth uses this.
+- **Network.** Customise the P2P stack (devp2p / libp2p / custom). HyperLiquid uses this.
+- **Pool.** Transaction mempool policy. Tempo uses this for stable-coin filtering.
+- **Executor.** EVM execution. revm is the default; you could swap to a custom interpreter (revmc JIT).
+- **Validator.** Block / tx validation. Custom L2s differ here (Optimism / Arbitrum).
+- **RPC.** JSON-RPC server. Add custom methods (per-chain features).
+- **Default impls.** Reth provides default Ethereum impls for all 6. You replace only what you customise.
+- **Composition.** Each component depends on others via trait bounds. The type system ensures you compose them correctly.
+
+## Worked example + steps
+
+# The 6 components — what each one unlocks
 
 Tempo is building a payments L1 on Reth. Berachain ships bera-reth. MegaETH is building a high-throughput L1 on Reth. Hyperliquid runs HyperEVM (their own Reth-adjacent execution layer). **None of them forked Reth** — they each swapped a few of Reth's 6 components and inherited the rest. That's the SDK's whole pitch: **don't rewrite a Rust EVM client, swap the parts that matter to your thesis.** This lesson walks those 6 components — and shows what each swap unlocked for production chains.
 
@@ -1639,7 +1867,6 @@ flowchart TB
 
 Each gets a \`*Builder\` trait — \`PoolBuilder\`, \`NetworkBuilder\`, etc. — that the SDK calls during \`.launch()\` to construct the actual subsystem.
 
-> 🛑 **Predict.** Of these 6 components, which is the one Hyperliquid most heavily customized for HyperEVM? Which is the one Tempo most heavily customized for payments? Hold both guesses.
 
 ## Hyperliquid HyperEVM — what they swap
 
@@ -1648,7 +1875,6 @@ Each gets a \`*Builder\` trait — \`PoolBuilder\`, \`NetworkBuilder\`, etc. —
 - **\`pool\`** — Admission rules tuned for high-frequency perp updates.
 - **everything else** — Reth defaults.
 
-> 🛑 **Anti-fluency.** Hyperliquid swapped \`consensus\` and \`executor\`. **Why didn't they fork all of Reth and rewrite from scratch?** The honest answer is what makes the SDK matter — they wanted everything *else* (sync, MDBX, header downloads, sender recovery, RPC) to track upstream Reth so they can pull Paradigm's updates without a rebase nightmare. Component composition is the maintenance story.
 
 ## Tempo — what they swap
 
@@ -1724,75 +1950,118 @@ Without scrolling:
 4. Sketch the *minimum* set of components you'd swap to ship a privacy-focused L1.
 
 The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
+
+## Summary (3 lines)
+
+- 6 components: Consensus / Network / Pool / Executor / Validator / RPC. Default impls for all 6; replace selectively.
+- bera-reth (Consensus) / HyperLiquid (Network) / Tempo (Pool) / custom L2s (Validator) — each customises a few.
+- Type-system composition. Next: quiz.
 `,
                 },
                 {
-                  title: 'Quiz: did the SDK component model stick?',
+                  title: 'Quiz — SDK',
                   slug: 'reth-sdk-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 11,
                   duration: 4,
                   xpReward: 25,
-                  content: `# Quiz: did the SDK component model stick?
+                  content: `# Quiz — SDK
+
+## Question
+
+Confirm: NodeBuilder pattern + 6 components + customisation examples (bera-reth / HyperLiquid / Tempo).
+
+## Principle (minimum model)
+
+- NodeBuilder builder + 6 components + which production chain customises each.
+
+## Worked example + steps
+
+# Quiz: did the SDK component model stick?
 
 Four questions covering the builder pattern and the component menu. Same rule: **you can't nod past a quiz.**
 
-If you miss two or more, scroll back to *Building the node-builder API* before going on to the drill.`,
+If you miss two or more, scroll back to *Building the node-builder API* before going on to the drill.
+
+## Summary (3 lines)
+
+- Quiz confirms SDK understanding.
+- Get two+ wrong → re-read buildup + components.
+- Pass → drill: ship a custom pool builder.
+`,
                   quizQuestions: [
                     {
-                      question: "Why does `.with_types::<EthereumNode>()` come *first* in the builder chain, before `.with_components(...)`?",
-                      options: [
+                      "question": "Why does `.with_types::<EthereumNode>()` come *first* in the builder chain, before `.with_components(...)`?",
+                      "options": [
                         "Stylistic — order doesn't matter to the compiler.",
                         "Performance — types-first compiles faster.",
                         "Types are load-bearing for components: tx and block types determine what the pool, executor, payload, etc. operate on. The chain commits to a type bundle first so subsequent component builders can be type-aware.",
-                        "Backwards compatibility with older Reth versions.",
+                        "Backwards compatibility with older Reth versions."
                       ],
-                      correctIndex: 2,
-                      explanation: "Components depend on types. If `with_components` came first, every builder would have to be generic over not-yet-chosen types. The chain's order encodes the dependency graph — types first, then components built on top.",
+                      "correctIndex": 2,
+                      "explanation": "Components depend on types. If `with_components` came first, every builder would have to be generic over not-yet-chosen types. The chain's order encodes the dependency graph — types first, then components built on top."
                     },
                     {
-                      question: "You're building a payment-priority L1. Which component(s) most directly enable that?",
-                      options: [
+                      "question": "You're building a payment-priority L1. Which component(s) most directly enable that?",
+                      "options": [
                         "`consensus` — payment priority is a consensus rule.",
                         "`pool` (admission and ordering rules) plus `payload` (block builder). The pool decides which txs get into the next block first; the payload builder decides their final order.",
                         "`executor` — payment priority is encoded in opcodes.",
-                        "`network` — the P2P layer routes payments.",
+                        "`network` — the P2P layer routes payments."
                       ],
-                      correctIndex: 1,
-                      explanation: "Pool surfaces high-priority payments early; payload finalizes the block ordering. Consensus, executor, and network are unrelated to admission/ordering. This maps to Tempo's actual customization.",
+                      "correctIndex": 1,
+                      "explanation": "Pool surfaces high-priority payments early; payload finalizes the block ordering. Consensus, executor, and network are unrelated to admission/ordering. This maps to Tempo's actual customization."
                     },
                     {
-                      question: "Why is 'compose components, don't fork all of Reth' the only viable strategy for a chain you maintain for years?",
-                      options: [
+                      "question": "Why is 'compose components, don't fork all of Reth' the only viable strategy for a chain you maintain for years?",
+                      "options": [
                         "Forking is faster.",
                         "Forking gives you ownership of 200K+ lines you don't actually want to change. Component composition lets you own only the parts you swap (typically <10K lines), while Paradigm's upstream updates flow into the 80% you depend on as a library.",
                         "Forking violates Reth's license.",
-                        "It doesn't matter — both work equally well.",
+                        "It doesn't matter — both work equally well."
                       ],
-                      correctIndex: 1,
-                      explanation: "This is the maintenance argument. Forks accumulate divergence with every upstream release. Composition keeps the upgrade path open: Reth ships an update, you bump a Cargo dep, and your custom builders keep working because they only touched the override surface.",
+                      "correctIndex": 1,
+                      "explanation": "This is the maintenance argument. Forks accumulate divergence with every upstream release. Composition keeps the upgrade path open: Reth ships an update, you bump a Cargo dep, and your custom builders keep working because they only touched the override surface."
                     },
                     {
-                      question: "What's the difference between using ExEx and using the Reth SDK?",
-                      options: [
+                      "question": "What's the difference between using ExEx and using the Reth SDK?",
+                      "options": [
                         "There's no difference — they're aliases for the same thing.",
                         "ExEx extends an existing Ethereum node by hooking into chain commits (you're a guest). The SDK lets you build *your own chain* by composing Reth's components (you're the host). ExEx is for indexers, MEV bots, rollups; the SDK is for L1s/L2s.",
                         "ExEx is for L1s, SDK is for indexers.",
-                        "SDK is a deprecated version of ExEx.",
+                        "SDK is a deprecated version of ExEx."
                       ],
-                      correctIndex: 1,
-                      explanation: "ExEx = listen to chain events, derive state, prune-friendly. SDK = define the chain, swap components, ship a node binary. They're complementary tools at different levels of the stack — and a real production deployment often uses both (the SDK to define the chain, then ExEx to add an indexer).",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "ExEx = listen to chain events, derive state, prune-friendly. SDK = define the chain, swap components, ship a node binary. They're complementary tools at different levels of the stack — and a real production deployment often uses both (the SDK to define the chain, then ExEx to add an indexer)."
+                    }
                   ],
                 },
                 {
-                  title: 'Drill: ship a custom pool builder',
+                  title: 'Lesson 13 — Drill: ship a custom pool builder',
                   slug: 'reth-sdk-drill-en',
                   type: 'CONTENT',
                   sortOrder: 12,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Drill: ship a custom pool builder
+                  content: `# Lesson 13 — Drill: ship a custom pool builder
+
+## Question
+
+**Build a custom transaction pool that filters out high-gas-price spam.** Replace Reth's default pool with yours; node still works.
+
+## Principle (minimum model)
+
+- **Pool trait impl.** \`impl Pool for SpamFilteringPool\`. ~80 lines.
+- **Filter logic.** On \`add(tx)\`, reject if \`tx.max_priority_fee > MAX_TIP_GAS_PRICE\`. Otherwise accept.
+- **NodeBuilder integration.** \`NodeBuilder::new().pool(SpamFilteringPool::default()).launch()\`. One line.
+- **Test.** Boot the node; submit a high-gas-price tx; assert rejected. Submit a normal tx; assert accepted.
+- **Why this matters.** Production chains differ in tx policy: rollups have L1-fee considerations; payment chains have specific filters. Each is a custom Pool.
+- **Composability.** A custom Pool composes with default consensus, executor, validator, RPC. Only the slot you customise changes.
+- **Production parallel.** Tempo uses a custom Pool for stable-coin tx prioritisation.
+
+## Worked example + steps
+
+# Drill: ship a custom pool builder
 
 Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about the SDK" to "I have written a custom pool builder, swapped it in, and watched my code run inside a node binary."
 
@@ -1809,7 +2078,6 @@ The example builds standalone — no need to build the rest of Reth.
 
 Open \`src/main.rs\`. The example overrides exactly one component: \`pool\`. Find the \`CustomPoolBuilder\` struct and its \`PoolBuilder\` impl.
 
-> 🛑 **Predict.** In one sentence, what does \`CustomPoolBuilder::build_pool\` do? Hold your guess.
 
 Skim the impl. Three sections:
 
@@ -1882,19 +2150,11 @@ cast send \\
 
 (Use the dev account's private key — \`--dev\` ships a known one; the one above is the standard Anvil/Reth dev key.)
 
-> 🛑 **Watch your terminal.** You should see:
->
-> \`\`\`
-> Pool: validating transaction tx_hash=0x... gas_price=...
-> \`\`\`
->
-> If you don't, the wiring is wrong. Common cause: you constructed \`LoggingValidator\` but the builder still hands the *inner* validator to the pool. Fix the wiring; rerun.
 
 ## Drill 4 — One more swap, sketched
 
 You've owned \`pool\`. Now sketch what changes for one more component.
 
-> 🛑 **Question (write it down):** You want to add a custom precompile (e.g., a fast ed25519 verifier) for your chain. Which component do you swap? What does the swap roughly look like?
 
 You swap \`executor\`. The custom precompile lives inside the EVM configuration. The skeleton:
 
@@ -1925,16 +2185,41 @@ After this drill, you've shipped a 1-line component swap. **Scale this pattern t
 \`\`\`youtube
 cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
 \`\`\`
+
+## Summary (3 lines)
+
+- Drill: SpamFilteringPool rejects high-tip txs. ~80-line trait impl + 1-line NodeBuilder wiring.
+- Tests verify reject + accept paths. Other slots (consensus / executor / validator / RPC) unchanged.
+- Production parallel: Tempo's stable-coin pool. Next: testing.
 `,
                 },
                 {
-                  title: 'Testing Stage and ExEx — fixture chains, in-process nodes, golden state',
+                  title: 'Lesson 14 — Testing Stage and ExEx — fixture chains, in-process nodes, golden state',
                   slug: 'reth-testing-en',
                   type: 'CONTENT',
                   sortOrder: 13,
                   duration: 24,
                   xpReward: 50,
-                  content: `# Testing Stage and ExEx — fixture chains, in-process nodes, golden state
+                  content: `# Lesson 14 — Testing Stage and ExEx — fixture chains, in-process nodes, golden state
+
+## Question
+
+**Testing patterns specific to Reth components.** Fixture chains (small chains for stage tests), in-process node tests (full pipeline), golden state (deterministic reproducibility).
+
+## Principle (minimum model)
+
+- **Fixture chains.** Hardcoded sequences of blocks for stage unit tests. ~10 blocks; fast; deterministic.
+- **\`TestStageDB\`.** In-memory DB + injected blocks + assertions. Used for every stage test.
+- **In-process node.** \`EthereumNode::test_instance().launch()\` spins up the whole pipeline in one process. Slower (~1s); used for integration tests.
+- **Golden state files.** After running a stage on a fixture chain, save the resulting DB state to a file. Future tests assert against this file.
+- **Why golden state.** Bug fixes that change semantics produce a different golden state. CI catches it; you review the diff.
+- **ExEx test harness.** \`ExExTestHarness::new(ctx)\` lets you inject ExEx notifications and assert your ExEx behaviour.
+- **\`test_exex_context\`.** Test-only ExExContext with pre-set backfill state. Lets you skip the real-Reth-boot overhead.
+- **Reorg simulation.** Test harness can simulate reorgs by re-injecting blocks at an earlier height. Critical for ExEx correctness tests.
+
+## Worked example + steps
+
+# Testing Stage and ExEx — fixture chains, in-process nodes, golden state
 
 You walked the \`Stage\` trait, the ExEx API, and the NodeBuilder SDK. **Now: how does Reth — and the apps that extend it — verify any of this works?** A node component that "looks correct" in dev silently corrupts state for thousands of users in production. The patterns below are how Reth's own CI guards against that, and how every ExEx-based app you ship in the Building tier needs to be tested.
 
@@ -2092,32 +2377,45 @@ That is **§2 of this lesson** at the application layer. The Reth-internal patte
 
 After drill 5, you can write tests for any custom Reth component you ship — no different from how the Reth maintainers test their own.
 
-> 🛑 **Final check.** In one sentence: why does Reth ship a separate \`reth-exex-test-utils\` crate instead of just expecting users to construct \`ExExNotification\` values manually? If your answer doesn't mention "the harness owns the back-channel for events / completion signals so the test can synchronize without polling," re-read §2 — that synchronization is what makes ExEx tests deterministic.
 
 ## 📺 Further reading
 
 - [\`reth_exex_test_utils\`](https://reth.rs/docs/reth_exex_test_utils/) — generated docs for the ExEx test harness
 - [Reth Book — Testing chapter](https://reth.rs/) — official guidance on stage and node tests
+
+## Summary (3 lines)
+
+- Fixture chains + TestStageDB for stage tests. In-process EthereumNode::test_instance for integration. Golden state files for reproducibility.
+- ExExTestHarness + test_exex_context for ExEx tests. Reorg simulation for correctness.
+- Production CI runs all of these. Pattern transfers to any Reth-based codebase.
 `,
                 },
                 {
-                  title: 'Bridge to what comes next — Advanced and Expert',
+                  title: 'Lesson 15 — Bridge to what comes next — Advanced and Expert',
                   slug: 'reth-bridge-to-expert-en',
                   type: 'CONTENT',
                   sortOrder: 14,
                   duration: 10,
                   xpReward: 20,
-                  content: `# Bridge to what comes next — Advanced (L1 Architect) and Expert
+                  content: `# Lesson 15 — Bridge to what comes next — Advanced and Expert
 
-> 🛑 **Gate check.** Before claiming you've finished Inside Reth, answer these — out loud or on paper, no scrolling back through previous lessons:
->
-> 1. What does \`popn_top!\` expand to? Why does it use \`unwrap_unchecked()\` inside \`unsafe\`?
-> 2. Why are \`Database\` and \`DatabaseRef\` separate traits? What does the asymmetric \`auto_impl\` list (\`&mut, Box\` vs \`&, &mut, Box, Rc, Arc\`) tell you?
-> 3. What does \`ExExEvent::FinishedHeight\` tell Reth's pruner — and what's the disk consequence of forgetting it?
-> 4. Why is \`MerkleStage\` *after* hashing, not interleaved?
-> 5. To ship a purpose-built L1 like Tempo, which Reth components do you swap?
->
-> **Got fewer than 4 right?** Don't continue. Go back to the relevant Inside Reth lesson. What comes next assumes these as fluent vocabulary, not concepts you'll re-look-up.
+## Question
+
+**Finishing Inside Reth = ready for the Advanced and Expert tracks** + the openhl track. **What comes next.**
+
+## Principle (minimum model)
+
+- **Advanced tracks.** Consensus engineering / P2P / Sequencer + rollup / Cross-chain bridges / Validator ops. Each builds on Inside Reth + production-deep.
+- **Expert track.** Production engineering at L1 scale; merging Advanced topics into a single coherent operator skillset.
+- **Building track.** 10 labs across MEV / indexer / wallet / sponsor / cheatcode / aggregator / router / revm differential / MPP. Each ships with passing tests.
+- **openhl track.** Build a full Hyperliquid clone over 6 courses (Consensus / CLOB / Precompiles / Funding / Liquidation / ADL). The Capstone is one of the deepest pieces in the curriculum.
+- **Sequencing recommendation.** Advanced topics in any order; Expert after Advanced + Building; openhl can be done in parallel.
+- **Career angle.** Custom L1 / sequencer / MEV / payment-rail roles all need this pipeline. Real demand.
+
+## Worked example + steps
+
+# Bridge to what comes next — Advanced (L1 Architect) and Expert
+
 
 If you cleared the gate: you've climbed **Alloy → Revm → Reth (Staged Sync, ExEx, custom NodeBuilder)**. You can read the source of all three with intent.
 
@@ -2157,12 +2455,6 @@ No strict order. Pick whichever matches your interest and project. Finishing bot
 
 Inside (Intermediate) taught you the **structures**. The next tiers teach you the **decisions** behind them.
 
-> 🛑 **Predict the answers before reading mine.** Have an opinion first — even a wrong one. Engineers shipping infra do.
->
-> - *Why* does Reth use MDBX and not RocksDB?
-> - *Why* does Revm pop one and write through a reference instead of pop/pop/push?
-> - *Why* does \`#[track_caller]\` matter on \`Database::tx()\`?
-> - *Why* are Foundry cheatcodes precompiles and not opcodes?
 
 ---
 
@@ -2181,52 +2473,78 @@ If the Gate check at the top felt easy, jump into Advanced or Expert.
 
 If any of the five questions sent you back to a previous lesson — re-read them now. Both next tiers are denser. Running the linked code locally as you go is no longer optional.
 
-> The first three months in infra learning are the hardest. Documentation is sparse — **the source code is the textbook**. The Advanced and Expert tiers are where that lesson pays off.`,
+> The first three months in infra learning are the hardest. Documentation is sparse — **the source code is the textbook**. The Advanced and Expert tiers are where that lesson pays off.
+
+## Summary (3 lines)
+
+- Inside Reth complete = unlocks Advanced (5 tracks) + Expert (production engineering) + Building (10 labs) + openhl (6 courses).
+- Recommend: Advanced any order; Expert after Advanced + Building; openhl in parallel.
+- Career: custom L1 / sequencer / MEV / payment-rail roles all need this. Final quiz next.
+`,
                 },
                 {
-                  title: 'Inside Reth final quiz',
+                  title: 'Quiz — Inside Reth (final)',
                   slug: 'reth-advanced-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 15,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Inside Reth final quiz
+                  content: `# Quiz — Inside Reth (final)
 
-Final check across Staged Sync, ExEx, and the Reth SDK. Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant build-up before claiming you're done with Inside Reth.`,
+## Question
+
+Final Inside Reth quiz across Staged Sync + ExEx + SDK + Testing.
+
+## Principle (minimum model)
+
+- Staged Sync (6-method Stage + 10-stage pipeline) + ExEx (3 variants + ExExContext) + SDK (NodeBuilder + 6 components) + Testing (fixture chains + golden state).
+
+## Worked example + steps
+
+# Inside Reth final quiz
+
+Final check across Staged Sync, ExEx, and the Reth SDK. Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant build-up before claiming you're done with Inside Reth.
+
+## Summary (3 lines)
+
+- Final quiz; 8 questions span all four chains.
+- Get three+ wrong → re-read the relevant lesson chain.
+- Pass → Inside Reth complete; advance to Advanced / Expert / Building / openhl.
+`,
                   quizQuestions: [
                     {
-                      question: "What's the actual advantage of Reth's Staged Sync over block-by-block sync?",
-                      options: [
-                        'Allows blocks to be downloaded but never executed, saving disk',
-                        'Processing in stages over block ranges maximizes I/O, CPU, and cache efficiency — and makes reorgs symmetrical via unwind',
-                        'Skips Merkle root computation by deferring it indefinitely',
-                        'Removes the database — state is derived on demand at query time',
+                      "question": "What's the actual advantage of Reth's Staged Sync over block-by-block sync?",
+                      "options": [
+                        "Allows blocks to be downloaded but never executed, saving disk",
+                        "Processing in stages over block ranges maximizes I/O, CPU, and cache efficiency — and makes reorgs symmetrical via unwind",
+                        "Skips Merkle root computation by deferring it indefinitely",
+                        "Removes the database — state is derived on demand at query time"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Staged Sync (Headers → Bodies → Senders → Execution → Hashing → Merkle → TxLookup → Indexes → Finish) processes ranges per stage. Sender recovery parallelizes via Rayon. Hashing is sorted before MerkleStage runs. And every stage has both `execute` and `unwind` — making reorgs a normal mode of operation, not a special case.',
+                      "correctIndex": 1,
+                      "explanation": "Staged Sync (Headers → Bodies → Senders → Execution → Hashing → Merkle → TxLookup → Indexes → Finish) processes ranges per stage. Sender recovery parallelizes via Rayon. Hashing is sorted before MerkleStage runs. And every stage has both `execute` and `unwind` — making reorgs a normal mode of operation, not a special case."
                     },
                     {
-                      question: 'What can you do with ExEx (Execution Extensions)?',
-                      options: [
-                        'Inject custom logic into the JSON-RPC pipeline before responses are sent',
-                        'Run Rust code in-process on every chain commit, reorg, or revert at near-execution-time latency',
-                        'Override how transactions are gossiped on the P2P network',
-                        "Replace Reth's consensus engine with a custom one",
+                      "question": "What can you do with ExEx (Execution Extensions)?",
+                      "options": [
+                        "Inject custom logic into the JSON-RPC pipeline before responses are sent",
+                        "Run Rust code in-process on every chain commit, reorg, or revert at near-execution-time latency",
+                        "Override how transactions are gossiped on the P2P network",
+                        "Replace Reth's consensus engine with a custom one"
                       ],
-                      correctIndex: 1,
-                      explanation: 'ExEx receives ChainCommitted / ChainReorged / ChainReverted notifications in-process — perfect for indexers, MEV pipelines, and real-time risk engines. (RPC customization is via add_ons, network and consensus customization is via with_components — different SDK surfaces.)',
+                      "correctIndex": 1,
+                      "explanation": "ExEx receives ChainCommitted / ChainReorged / ChainReverted notifications in-process — perfect for indexers, MEV pipelines, and real-time risk engines. (RPC customization is via add_ons, network and consensus customization is via with_components — different SDK surfaces.)"
                     },
                     {
-                      question: 'Which of these is the realistic customization surface when building an App-chain with the Reth SDK?',
-                      options: [
-                        'Only the chain ID and gas limit at the genesis level',
-                        'Pool, network, payload, executor (EVM), and consensus components — plus RPC and ExEx via add-ons',
-                        'Only Stage<Provider> implementations — the rest is locked',
-                        'Database tables and indices only — the EVM itself is fixed',
+                      "question": "Which of these is the realistic customization surface when building an App-chain with the Reth SDK?",
+                      "options": [
+                        "Only the chain ID and gas limit at the genesis level",
+                        "Pool, network, payload, executor (EVM), and consensus components — plus RPC and ExEx via add-ons",
+                        "Only Stage<Provider> implementations — the rest is locked",
+                        "Database tables and indices only — the EVM itself is fixed"
                       ],
-                      correctIndex: 1,
-                      explanation: 'The SDK exposes `with_components.{pool, network, payload, executor, consensus}` plus `with_add_ons` for RPC and ExEx. Everything from a custom mempool (Tempo-style priority lanes) to a custom consensus (HyperBFT) to a custom EVM (custom opcodes / precompiles) is one builder swap away.',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "The SDK exposes `with_components.{pool, network, payload, executor, consensus}` plus `with_add_ons` for RPC and ExEx. Everything from a custom mempool (Tempo-style priority lanes) to a custom consensus (HyperBFT) to a custom EVM (custom opcodes / precompiles) is one builder swap away."
+                    }
                   ],
                 },
               ],
