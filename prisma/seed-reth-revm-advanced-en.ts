@@ -1,17 +1,17 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethRevmAdvancedEN(prisma: PrismaClient) {
-  const tags = ['revm', 'rust', 'advanced', 'opcode', 'evm-internals'];
+  const tags = ['revm', 'opcode', 'database', 'evm', 'intermediate'];
 
   await prisma.course.create({
     data: {
       slug: 'revm-advanced-en',
       title: 'Inside Revm — Reading the EVM Engine',
       description:
-        'Read the Revm interpreter line by line — the **compiler / VM layer** of the Rust EVM stack. Walk the real `add` opcode, custom opcodes, the `Database` trait that supplies state, and parallel execution (block-stm). One of three independent Intermediate courses (Revm, Reth, Alloy) you can take in any order — though Revm gives you the type vocabulary the others assume.',
+        'Walk bluealloy/revm source through three topic chains: \`add\` opcode (buildup → walkthrough → quiz → drill), Custom opcodes (instruction table + wiring + ship a fork), Database trait (4 methods + companions + ZeroDb drill). Plus bonus lessons on Revm Testing (state tests / EOF / execution-spec), Parallel execution (block-stm), and JIT/AOT via revmc. By the end you can read any revm source and ship a custom EVM opcode or fork.',
       difficulty: 'INTERMEDIATE',
-      duration: 120,
-      xpReward: 340,
+      duration: 182,
+      xpReward: 475,
       track: 'revm-advanced',
       tags,
       isPublished: true,
@@ -26,13 +26,29 @@ export async function seedRethRevmAdvancedEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Welcome to Inside Revm — how this course works',
+                  title: 'Lesson 0 — Welcome to Inside Revm',
                   slug: 'revm-advanced-welcome-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Welcome to Inside Revm — how this course works
+                  content: `# Lesson 0 — Welcome to Inside Revm
+
+## Question
+
+**Inside Revm = one of three Intermediate courses** (Revm / Reth / Alloy). Revm is the **execution engine** every Rust EVM stack runs (Reth / Foundry / Hyperliquid / Tempo / Berachain). Same opcode loop / gas accounting / state-read discipline.
+
+## Principle (minimum model)
+
+- **3 Intermediate courses; recommended order: Alloy → Revm → Reth.** Revm depends on Alloy types; Reth depends on Revm execution.
+- **3 topic chains.** add Opcode (buildup → walkthrough → quiz → drill) / Custom Opcodes (build the instruction table; ship your own opcode) / Database trait (revm's state-providing abstraction).
+- **Plus 3 bonus lessons.** Revm Testing (state tests / EOF tests / execution-spec compliance), Parallel Execution (block-stm), JIT/AOT via revmc (the next-generation execution).
+- **Read along.** Open \`bluealloy/revm\` in another tab; verify every claim against source.
+- **Prerequisites.** Inside Alloy or intermediate Rust + light EVM primitives.
+
+## Worked example + steps
+
+# Welcome to Inside Revm — how this course works
 
 Revm is the **execution engine** inside every Rust EVM client: Reth, Hyperliquid's HyperEVM, Berachain's bera-reth, Tempo. When a chain says "we run Revm," it means: the opcode loop, the gas accounting, the way state gets read — *that's the same code*, no matter whose fork you're looking at. Read it once and you can read all of them.
 
@@ -82,18 +98,41 @@ The "Find in repo" prompts only work if you actually have the repos open. Close 
 
 Scroll back to the course detail and start with **Building \`add\` step by step: signature and body**.
 
-After Inside Revm: head to **Inside Reth** for the Reth-specific sync pipeline + ExEx + SDK, or **Inside Alloy** when it's available.`,
+After Inside Revm: head to **Inside Reth** for the Reth-specific sync pipeline + ExEx + SDK, or **Inside Alloy** when it's available.
+
+## Summary (3 lines)
+
+- Inside Revm = execution-engine deep dive; one of three Intermediate courses (Alloy → Revm → Reth recommended).
+- Three topic chains: add Opcode / Custom Opcodes / Database trait. Plus Testing + Parallel + JIT bonus lessons.
+- Verify against bluealloy/revm source. Prerequisites: Alloy or intermediate Rust.
+`,
                 },
                 {
-                  title: 'Building \`add\` step by step: signature and body',
+                  title: 'Lesson 1 — Building `add` step by step: signature and body',
                   slug: 'revm-add-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 8,
                   xpReward: 20,
-                  content: `# Building \`add\` step by step: signature and body
+                  content: `# Lesson 1 — Building \`add\` step by step: signature and body
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **compiler / VM layer**, at the per-opcode level. The same problem CPython, JVM, and LuaJIT have written volumes about — "implement this trivial primitive in the fewest possible instructions, parameterized so the same source compiles into traced / inspected / production builds." This lesson is that lineage applied to EVM \`ADD\`.
+## Question
+
+**Build the \`add\` opcode from naive to canonical**. 5 steps; each adds a real constraint.
+
+## Principle (minimum model)
+
+- **Step 0 — naive.** \`fn add(stack: &mut Vec<U256>) { let b = stack.pop().unwrap(); let a = stack.pop().unwrap(); stack.push(a + b); }\`. Three problems: no overflow handling + uses \`Vec::pop\` (slow) + concrete Vec type (not generic).
+- **Step 1 — \`&mut H\` generic Host.** Replace \`Vec<U256>\` with \`&mut H\` where \`H: ?Sized\` lets us pass \`&mut dyn Host\`. Generic over the host.
+- **Step 2 — \`?Sized\`.** Add \`?Sized\` bound so \`H\` can be a dynamic-sized type. Allows \`&mut dyn Host\`.
+- **Step 3 — \`IT: ITy\`.** Add an inner-type parameter. Lets the opcode work with different inner stack representations (e.g. RAM vs in-cache).
+- **Step 4 — in-place stack ops.** \`stack.last_mut()\` instead of \`pop + push\` + \`wrapping_add\` for safety. Faster and consensus-safe.
+- **Step 5 — real signature.** \`pub fn add<H: ?Sized, IT: ITy>(interp: &mut Interpreter<H, IT>)\`. Five generics; the canonical form.
+
+## Worked example + steps
+
+# Building \`add\` step by step: signature and body
+
 
 \`ADD\` is the simplest non-trivial EVM opcode: pop two numbers, push their sum. A weekend hobby EVM would do it in five lines of Rust. Revm does it in **four**, but those four lines hide a generic signature with two type parameters, a \`?Sized\` opt-out, a macro that compiles to a stack-underflow guard with a branch-prediction hint, and a \`wrapping_add\` whose alternative would fork your client off mainnet on the first overflow.
 
@@ -126,7 +165,6 @@ pub fn add(stack: &mut Vec<U256>) -> Result<(), &'static str> {
 
 Pop two values. Add them. Push the result. Done.
 
-> 🛑 **Predict.** Without scrolling: name **two** things this version does that revm's real \`add\` deliberately avoids. (Hint: one is in the signature, one is in the body.) Hold your guesses — we'll fix each.
 
 The two are:
 
@@ -156,7 +194,6 @@ pub fn add<H: Host>(host: &mut H) -> Result {
 
 \`H: Host\` reads as "any type that implements the \`Host\` trait." One source. **One specialized binary per concrete \`H\`** at compile time (Rust's *monomorphization* — the compiler stamps out a copy per type that uses it).
 
-> 🛑 **Predict.** What's the catch with \`<H: Host>\`? Why might revm not stop here?
 
 Two catches:
 
@@ -181,7 +218,6 @@ pub fn add<H: Host + ?Sized>(host: &mut H) -> Result {
 
 Now \`host: &mut dyn Host\` is a valid argument. **One compiled \`add\` works against any \`Host\` impl,** at the cost of a vtable indirection per host call.
 
-> 🛑 **Anti-fluency check.** "It opts out of \`Sized\`" is parroting. In your own words: *why* must we accept an unknown-size type at all? If you can't motivate it without scrolling, re-read.
 
 > 🔍 **Open \`revm/src/host.rs\`.** Find one place where \`dyn Host\` is actually constructed. That's the empirical proof this opt-out earns its complexity.
 
@@ -229,7 +265,6 @@ let b = stack.last_mut().ok_or(StackUnderflow)?;  // &mut to new top
 
 One pop, one in-place write. **No push.**
 
-> 🛑 **Predict.** Now that the body writes through \`&mut\`, what does the function actually need to *return* on success?
 
 Just \`Ok(())\` — there's nothing to return because the data flow happens through the reference, not the return value. Look back at the real signature: \`-> Result\` with no associated value. That's why.
 
@@ -243,7 +278,6 @@ One detail left. Replace \`+\` with \`wrapping_add\`:
 
 Why? **EVM consensus requires \`ADD\` to wrap modulo 2²⁵⁶.** Use \`+\` and you have a release/debug-divergent client (Rust's \`+\` panics in debug, wraps in release). Use \`saturating_add\` and you fork the network on first overflow — you'll prove that empirically in the drill lesson.
 
-> 🛑 **Predict.** What hex value does \`U256::MAX.wrapping_add(U256::from(1))\` produce?
 
 If your answer wasn't \`0x0\`, pause. EVM consensus depends on this exact behavior.
 
@@ -272,16 +306,40 @@ Without scrolling, in your own words:
 If any answer is shaky, scroll back. The next lesson refactors the body into a macro — you can't follow the refactor if you don't own the version we just built.
 
 > **🧭 Where you are now in the stack:** you've built one **VM-layer opcode** to functional parity with the real Revm source, in 4 lines that exercise \`IT: ITy\`, \`?Sized\`, in-place stack ops, and \`wrapping_add\`. Next lesson extracts the body into a macro — the boilerplate-reduction pattern CPython and the JVM have practiced for decades, EVM-flavored.
+
+## Summary (3 lines)
+
+- 5-step buildup: naive → \`&mut H\` generic → \`?Sized\` → \`IT: ITy\` → in-place stack ops with \`wrapping_add\` → real signature.
+- Each step adds a constraint: host generality + dynamic-size + inner-type + consensus safety + speed.
+- Final: \`pub fn add<H: ?Sized, IT: ITy>(interp: &mut Interpreter<H, IT>)\`. Next: macro factoring.
 `,
                 },
                 {
-                  title: 'Reading \`add\`: factoring out the macro',
+                  title: 'Lesson 2 — Reading `add`: factoring out the macro',
                   slug: 'revm-add-macro-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Reading \`add\`: factoring out the macro
+                  content: `# Lesson 2 — Reading \`add\`: factoring out the macro
+
+## Question
+
+**Real \`add\` uses two macros: \`popn_top!\` and \`gas!\`.** Read both; understand the load-bearing details (cold_path / unwrap_unchecked / variable arity).
+
+## Principle (minimum model)
+
+- **\`popn_top!([a, b], stack)\` macro.** Pre-checks stack length; \`pop\`s N values; binds the names; uses \`unwrap_unchecked\` after the length check (the unsafe is sound).
+- **\`unwrap_unchecked\` justification.** The length check just-proved \`stack.len() >= N\`; \`unwrap_unchecked\` removes the runtime check. Pre-conditioned by the macro.
+- **\`cold_path()\` hint.** Marks an unlikely branch (e.g. underflow) so the compiler doesn't reserve registers for it. Free perf.
+- **\`gas!(interp, opcode_cost)\` macro.** Pre-checks gas; emits OOG if exhausted. Three lines collapsed into one macro.
+- **\`gas!\` for fixed-cost opcodes** vs **\`gas!_dynamic!\` for variable-cost** (e.g. mstore that depends on memory expansion). Same shape; different cost model.
+- **Why macros, not functions.** Macros expand at compile time → no function-call overhead in the hot path. EVM opcode dispatch is hot; every nanosecond counts.
+- **Why these specific details.** Each one removes a runtime check that a competent reader can prove redundant. The macros encode the proofs.
+
+## Worked example + steps
+
+# Reading \`add\`: factoring out the macro
 
 Open \`crates/interpreter/src/instructions/arithmetic.rs\` and you'll see \`add\`, \`mul\`, \`sub\`, \`div\`, \`mod\`, \`lt\`, \`gt\`, \`eq\`, \`and\`, \`or\`, \`xor\` — 30+ binary opcodes. **Every one of them starts with the same two lines of stack-popping boilerplate.** That's a refactor begging to happen, and revm did it: one macro, \`popn_top!\`, replaces those two lines everywhere.
 
@@ -319,7 +377,6 @@ let op2 = ctx.interpreter.stack.last_mut().ok_or(StackUnderflow)?;
 
 Repeated 30+ times across the codebase. The question isn't *whether* to factor that — it's *how*.
 
-> 🛑 **Predict.** Why a \`macro_rules!\` (Rust's pattern-matching macro system that operates on syntax at compile time) and not a regular function? (Two reasons; name at least one.)
 
 Two reasons:
 
@@ -348,7 +405,6 @@ macro_rules! popn_top_naive {
 
 That works. It's also slower than the real version, in two ways revm cares about.
 
-> 🛑 **Predict.** Where is the slowness? (Hint: think about (a) repeated bounds checks per pop, and (b) what the optimizer can prove.)
 
 ## Step 3 — Pre-check the underflow once
 
@@ -374,7 +430,6 @@ if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
 }
 \`\`\`
 
-> 🛑 **Predict.** What does \`cold_path()\` actually compile to?
 
 It compiles to **nothing at runtime.** It's a compile-time hint to LLVM: "the code reachable through this branch is statistically rare." The optimizer responds by laying out the rare-branch code far from the hot path's machine instructions, keeping the hot path one straight line of cache-warm assembly.
 
@@ -395,7 +450,6 @@ let ([$( $x ),*], $top) = unsafe {
 
 \`unwrap_unchecked()\` skips the runtime \`Some\` check. **It's only safe when you can prove the value is \`Some\` — and the guard we wrote in Step 3 just proved exactly that.** The \`unsafe\` block is the contract: *"I checked, so don't double-check."* Delete the guard and you've made it instant UB.
 
-> 🛑 **Anti-fluency.** Without scrolling: why doesn't the compiler optimize the \`Some\` check away itself? Why force \`unwrap_unchecked\`?
 
 The compiler can't prove the relationship between \`stack.len() >= N\` and \`popn_top\` returning \`Some\` — that's a domain invariant (we know what \`popn_top\` does), not a type invariant the type system can see. \`unwrap_unchecked\` is the seam between domain knowledge and type-system limits — how you tell the compiler "trust me, I checked."
 
@@ -461,88 +515,131 @@ The next lesson is a quiz that gates progression. **You can't nod through a quiz
 \`\`\`youtube
 Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough
 \`\`\`
+
+## Summary (3 lines)
+
+- Real \`add\` = \`popn_top!([a, b], stack)\` + \`gas!(interp, opcode_cost)\` + \`add\` itself. Macros collapse 5-10 lines each.
+- Load-bearing: unwrap_unchecked (post-length-check) + cold_path() (branch hint) + variable arity (single macro for many opcodes).
+- Macros over functions because compile-time expansion = no function-call overhead in hot path. Next: quiz.
 `,
                 },
                 {
-                  title: 'Quiz: did \`add\` actually stick?',
+                  title: 'Quiz — `add` opcode',
                   slug: 'revm-add-opcode-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 3,
                   duration: 5,
                   xpReward: 30,
-                  content: `# Quiz: did \`add\` actually stick?
+                  content: `# Quiz — \`add\` opcode
+
+## Question
+
+Confirm: 5-step buildup + 2 macros + load-bearing details.
+
+## Principle (minimum model)
+
+- Buildup steps + popn_top! + gas! + unwrap_unchecked justification + cold_path() + why macros.
+
+## Worked example + steps
+
+# Quiz: did \`add\` actually stick?
 
 This quiz isn't decoration. It exists because the previous two lessons' "predict" prompts are easy to nod past — and a day from now, "I read it, nodded, and couldn't reproduce it" is the failure mode that breaks Intermediate.
 
 Five questions, covering both the build-up and the macro refactor. **If you find yourself guessing**, stop and re-read the relevant section before answering. The quiz will still be here.
 
-If you miss two or more, the lessons haven't internalized — re-read both *Building \`add\` step by step* and *Reading \`add\`: factoring out the macro* before going on to the drill.`,
+If you miss two or more, the lessons haven't internalized — re-read both *Building \`add\` step by step* and *Reading \`add\`: factoring out the macro* before going on to the drill.
+
+## Summary (3 lines)
+
+- Quiz confirms \`add\` opcode understanding.
+- Get two+ wrong → re-read buildup + macro lessons.
+- Pass → drill: prove you can read interpreter source.
+`,
                   quizQuestions: [
                     {
-                      question: 'What does removing the `?` from `H: ?Sized` actually break in the `add` function signature?',
-                      options: [
-                        'Nothing — `?Sized` is a stylistic hint the compiler ignores.',
-                        '`add` would no longer compile, because `H` is implicitly `?Sized` already.',
-                        '`&mut dyn Host` would no longer be a valid argument — only concrete, sized types could be passed as `H`.',
-                        '`unwrap_unchecked()` inside `popn_top!` would become undefined behavior.',
+                      "question": "What does removing the `?` from `H: ?Sized` actually break in the `add` function signature?",
+                      "options": [
+                        "Nothing — `?Sized` is a stylistic hint the compiler ignores.",
+                        "`add` would no longer compile, because `H` is implicitly `?Sized` already.",
+                        "`&mut dyn Host` would no longer be a valid argument — only concrete, sized types could be passed as `H`.",
+                        "`unwrap_unchecked()` inside `popn_top!` would become undefined behavior."
                       ],
-                      correctIndex: 2,
-                      explanation: 'Rust adds an implicit `Sized` bound to every generic type parameter by default. `?Sized` opts out of that bound. Without it, `H` must be a type whose size is known at compile time — which excludes trait objects like `dyn Host` (their size depends on the runtime concrete type). The whole reason `&mut dyn Host` compiles is the `?Sized` opt-out.',
+                      "correctIndex": 2,
+                      "explanation": "Rust adds an implicit `Sized` bound to every generic type parameter by default. `?Sized` opts out of that bound. Without it, `H` must be a type whose size is known at compile time — which excludes trait objects like `dyn Host` (their size depends on the runtime concrete type). The whole reason `&mut dyn Host` compiles is the `?Sized` opt-out."
                     },
                     {
-                      question: 'Why is the `unwrap_unchecked()` call inside `popn_top!` not undefined behavior?',
-                      options: [
-                        'Because `unsafe` blocks suspend UB checks at runtime.',
+                      "question": "Why is the `unwrap_unchecked()` call inside `popn_top!` not undefined behavior?",
+                      "options": [
+                        "Because `unsafe` blocks suspend UB checks at runtime.",
                         "Because the macro's preceding `if stack.len() < ...` guard just proved the popped value would be `Some`.",
-                        'Because `cold_path()` ensures the underflow branch can never execute.',
-                        'Because Rust automatically validates `Option` types inside `unsafe` blocks.',
+                        "Because `cold_path()` ensures the underflow branch can never execute.",
+                        "Because Rust automatically validates `Option` types inside `unsafe` blocks."
                       ],
-                      correctIndex: 1,
-                      explanation: "`unwrap_unchecked` is undefined behavior if the value is `None`. The macro's `if` guard returns early when the stack has fewer items than required — so by the time `unwrap_unchecked` runs, the value is provably `Some`. Delete the guard and it becomes instant UB. The `unsafe` block is the contract: *\"I checked manually, so the runtime doesn't need to.\"*",
+                      "correctIndex": 1,
+                      "explanation": "`unwrap_unchecked` is undefined behavior if the value is `None`. The macro's `if` guard returns early when the stack has fewer items than required — so by the time `unwrap_unchecked` runs, the value is provably `Some`. Delete the guard and it becomes instant UB. The `unsafe` block is the contract: *\"I checked manually, so the runtime doesn't need to.\"*"
                     },
                     {
-                      question: 'What does `cold_path()` actually compile to in the generated assembly?',
-                      options: [
-                        'An unconditional jump to a panic handler.',
+                      "question": "What does `cold_path()` actually compile to in the generated assembly?",
+                      "options": [
+                        "An unconditional jump to a panic handler.",
                         "Nothing at runtime — it's a hint to LLVM that the branch is statistically rare.",
-                        'A `std::process::abort()` call.',
-                        'A logging call that prints a stack trace.',
+                        "A `std::process::abort()` call.",
+                        "A logging call that prints a stack trace."
                       ],
-                      correctIndex: 1,
-                      explanation: "`cold_path()` emits no instructions. It tells LLVM \"the code reachable through this branch is rare,\" and the optimizer responds by laying that branch's code out away from the hot instruction cache. The happy path stays as one straight line of cache-warm assembly — that's the entire point.",
+                      "correctIndex": 1,
+                      "explanation": "`cold_path()` emits no instructions. It tells LLVM \"the code reachable through this branch is rare,\" and the optimizer responds by laying that branch's code out away from the hot instruction cache. The happy path stays as one straight line of cache-warm assembly — that's the entire point."
                     },
                     {
-                      question: 'What hex value does `U256::MAX.wrapping_add(U256::from(1))` produce?',
-                      options: [
-                        '`0xFFFF...FF` — saturated at the maximum.',
-                        'A panic on overflow.',
-                        '`0x0` — wraps modulo 2²⁵⁶.',
-                        'The transaction reverts.',
+                      "question": "What hex value does `U256::MAX.wrapping_add(U256::from(1))` produce?",
+                      "options": [
+                        "`0xFFFF...FF` — saturated at the maximum.",
+                        "A panic on overflow.",
+                        "`0x0` — wraps modulo 2²⁵⁶.",
+                        "The transaction reverts."
                       ],
-                      correctIndex: 2,
-                      explanation: "EVM's `ADD` opcode is *required* by consensus to wrap modulo 2²⁵⁶. `wrapping_add` implements exactly that. Replace it with `saturating_add` or `checked_add` and your client forks the network the first time anyone overflows — which the drill lesson makes you prove empirically.",
+                      "correctIndex": 2,
+                      "explanation": "EVM's `ADD` opcode is *required* by consensus to wrap modulo 2²⁵⁶. `wrapping_add` implements exactly that. Replace it with `saturating_add` or `checked_add` and your client forks the network the first time anyone overflows — which the drill lesson makes you prove empirically."
                     },
                     {
-                      question: 'The `add` function body never visibly returns the sum. Where does the EVM observe the new top of stack?',
-                      options: [
-                        'Through the `Result` return value, which carries the sum on success.',
-                        'Through `*op2 = ...` — `op2` is a mutable reference into the stack, so writing through it mutates the stack in place.',
-                        'Through a thread-local side channel maintained by the interpreter.',
-                        "Through `popn_top!`'s implicit return value, which the dispatch loop reads.",
+                      "question": "The `add` function body never visibly returns the sum. Where does the EVM observe the new top of stack?",
+                      "options": [
+                        "Through the `Result` return value, which carries the sum on success.",
+                        "Through `*op2 = ...` — `op2` is a mutable reference into the stack, so writing through it mutates the stack in place.",
+                        "Through a thread-local side channel maintained by the interpreter.",
+                        "Through `popn_top!`'s implicit return value, which the dispatch loop reads."
                       ],
-                      correctIndex: 1,
-                      explanation: "`popn_top!` binds `op2` as `&mut U256` pointing at the new top of stack (the slot just below where `op1` was). Writing `*op2 = ...` mutates the stack in place — one memory write, no pop-then-push. That's why the function's `Result` only carries success/failure: the data flow is through the reference, not the return value.",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "`popn_top!` binds `op2` as `&mut U256` pointing at the new top of stack (the slot just below where `op1` was). Writing `*op2 = ...` mutates the stack in place — one memory write, no pop-then-push. That's why the function's `Result` only carries success/failure: the data flow is through the reference, not the return value."
+                    }
                   ],
                 },
                 {
-                  title: 'Drill: prove you can read interpreter source',
+                  title: 'Lesson 4 — Drill: prove you can read interpreter source',
                   slug: 'revm-add-opcode-drill-en',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Drill: prove you can read interpreter source
+                  content: `# Lesson 4 — Drill: prove you can read interpreter source
+
+## Question
+
+**Drill: read 3 more opcodes** — mul / sub / exp — without help. Verify each uses the same macro pattern + understand what differs.
+
+## Principle (minimum model)
+
+- **\`mul\`.** Same shape as \`add\`. \`wrapping_mul\` instead of \`wrapping_add\`. Identical macro pattern.
+- **\`sub\`.** Same shape. \`wrapping_sub\`. Identical macros.
+- **\`exp\` is different.** Uses \`gas!_dynamic!\` because the cost depends on the exponent's byte length. Read the cost calculation.
+- **Static-cost opcodes.** Reuse the same \`gas!(interp, OPCODE_GAS)\` macro for fixed costs.
+- **Dynamic-cost opcodes.** Use \`gas!_dynamic!(interp, cost_fn)\` where \`cost_fn(state)\` computes the cost. Memory-expansion-aware.
+- **Why this drill.** If you can read mul / sub / exp unaided, you can read the rest of arithmetic.rs unaided. Pattern transferred.
+- **Hot-path discipline.** Every arithmetic opcode is hot. Macros + inline + \`wrapping_*\` are not optional. Production parallel: every Rust EVM uses the same discipline.
+
+## Worked example + steps
+
+# Drill: prove you can read interpreter source
 
 You've read \`add\` and its macro. **Now prove you can read the rest of the file without the lesson holding your hand.** Three drills, run in a real revm checkout with \`cargo\` open in another window. Every one is *do, then write down what you observed* — not "read about."
 
@@ -560,7 +657,6 @@ If \`cargo build\` failed, fix that before proceeding. The remaining drills assu
 
 Open \`crates/interpreter/src/instructions/arithmetic.rs\`. Find the \`mul\` function. Compare it line-by-line to \`add\`.
 
-> 🛑 **Question (write the answer down before scrolling):** \`mul\` and \`add\` are structurally identical down to the line count. **Why?** Not "because they're both arithmetic" — be specific about *what mechanical property* of the EVM forces them into the same shape.
 
 The answer: both are **2-stack-in, 1-stack-out, fixed-gas, no-side-effect** opcodes. Anything matching that profile compiles to the exact same control-flow shape: \`popn_top!([a], b, ctx.interpreter); *b = a.OP(*b); Ok(())\`. The differences are the \`OP\` (\`wrapping_add\` vs \`wrapping_mul\`) and the gas charge (both happen to be 3, in current Ethereum).
 
@@ -575,7 +671,6 @@ If your written answer was less specific than that, you didn't earn this drill �
 
 > 🔍 **Find** the \`gas!\` macro call inside \`exp\` that charges *per byte* of the exponent. Read its arithmetic.
 
-> 🛑 **Question (write it down):** Why is \`exp\` charged dynamically when \`add\` is charged statically by the dispatch loop?
 
 The answer: dispatch can charge a *fixed* cost up-front, but \`exp\`'s cost depends on a runtime value (the size of the exponent operand). You can only know that cost *inside* the function body, after you've inspected the operand. So \`exp\` charges itself.
 
@@ -639,18 +734,43 @@ Without scrolling, in your own words on paper:
 
 If any answer is shaky, the lesson isn't done with you. Re-run the drill or re-read.
 
-After this, you've read more EVM source than 99% of Solidity developers ever will — and you've proven it by making the chain disagree with itself, then putting it back. The next lesson zooms out from one opcode to the table that dispatches all 256.`,
+After this, you've read more EVM source than 99% of Solidity developers ever will — and you've proven it by making the chain disagree with itself, then putting it back. The next lesson zooms out from one opcode to the table that dispatches all 256.
+
+## Summary (3 lines)
+
+- Drill: read mul / sub / exp unaided. mul/sub use same shape as add; exp uses \`gas!_dynamic!\`.
+- Static vs dynamic cost gates are the differentiator. Same macro pattern throughout arithmetic.rs.
+- Pattern transferred. Next: custom opcodes module.
+`,
                 },
                 {
-                  title: 'Building the instruction table step by step',
+                  title: 'Lesson 5 — Building the instruction table step by step',
                   slug: 'custom-opcodes-table-en',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Building the instruction table step by step
+                  content: `# Lesson 5 — Building the instruction table step by step
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **compiler / VM layer's instruction dispatch** — the universal pattern in every interpreter built since 1990. Function-pointer tables, computed gotos, threaded code — CPython, JVM, Lua, Erlang's BEAM all wrestle with the same problem ("turn one byte into one function call, cheaply, deterministically"). This lesson is that pattern realized for EVM.
+## Question
+
+**Build the opcode dispatch table from scratch**. 256 slots; each maps a byte to a function pointer.
+
+## Principle (minimum model)
+
+- **Step 0 — naive.** \`match opcode { 0x01 => add(...), 0x02 => mul(...), ... }\`. Match on byte. Works but slow (jump table).
+- **Step 1 — function pointer array.** \`[InstrFn; 256]\` indexed by opcode byte. O(1) dispatch.
+- **Step 2 — const fn for compile-time fill.** \`const fn build_table() -> [InstrFn; 256] { ... }\`. Table computed at compile time; zero runtime cost.
+- **Step 3 — generic over (host, inner-type).** \`[InstrFn<H, IT>; 256]\`. Lets us reuse for different host types.
+- **Step 4 — full instruction table.** Complete; ~150 entries (256 slots but many are STOP or INVALID for unused bytes).
+- **Step 5 — wire it into the interpreter.** \`interp.next() -> opcode_byte → table[opcode_byte](interp)\`. Two lookups; very fast.
+- **Why this matters.** Every EVM tick goes through this table. Performance differentiator.
+- **Production parallel.** Hyperliquid customises this table to add HyperEVM precompiles.
+
+## Worked example + steps
+
+# Building the instruction table step by step
+
 
 > 📋 **Recall before reading.** Three questions from the last lessons. If any are shaky, scroll back to *Building \`add\` step by step* or its drill — the rest of this lesson assumes the answers are vocabulary you own.
 >
@@ -695,7 +815,6 @@ fn dispatch(byte: u8, ctx: &mut Context) -> Result {
 
 256 match arms. The compiler *might* turn this into a jump table — or might not. Worse: every time you add or rename an opcode, you touch this giant match.
 
-> 🛑 **Predict.** Without scrolling: name two reasons revm doesn't ship this naive version. (One is about the compiler, one is about maintenance.)
 
 The two:
 
@@ -718,7 +837,6 @@ fn dispatch(byte: u8, ctx: &mut Context) -> Result {
 
 Dispatch is now **one indexed lookup** — no match, no jump table the compiler builds for you. The shape is guaranteed.
 
-> 🛑 **Predict.** Why is the array sized exactly \`256\` and not \`usize::MAX\` or whatever fits the defined opcodes?
 
 Because the EVM opcode is one byte. There are only 256 possible values, period. A fixed-size array exhausts the space — every byte either has an opcode or maps to \`unknown\`.
 
@@ -739,7 +857,6 @@ const TABLE: [fn(&mut Context) -> Result; 256] = build_table();
 
 \`const fn\` reads as "this function can be evaluated at compile time." The compiler executes \`build_table()\` *during compilation*, freezes the resulting array, and bakes it into the binary's data section. Dispatch never runs \`build_table\` at runtime — it just reads from the baked array.
 
-> 🛑 **Anti-fluency.** "It runs at compile time" is parroting. In your own words: what *exactly* runs zero times that would otherwise run once? Be specific.
 
 What runs zero times: the loop/sequence that populates the table slots. The runtime \`TABLE\` is identical to a literal \`[unknown, add, mul, sub, ...; 256]\` written by hand. **Zero runtime cost to set up dispatch.** That's the whole point.
 
@@ -761,7 +878,6 @@ impl<W: InterpreterTypes, H: Host + ?Sized> Instruction<W, H> {
 }
 \`\`\`
 
-> 🛑 **Predict.** Why a struct around a single field \`fn_:\`? What does this enable that a bare \`fn\` doesn't?
 
 Two things:
 
@@ -779,13 +895,11 @@ Two things:
 
 The generics \`W: InterpreterTypes, H: ?Sized\` are exactly the same \`IT\`/\`H\` we built up two lessons ago. Same reasoning — let one table work across all execution modes and host types.
 
-> 🛑 **Recall check.** Why does \`Instruction\` carry the \`<W, H>\` generics? What breaks if you hardcode the concrete types as \`Instruction { fn_: fn(InstructionContext) -> InstructionExecResult }\`?
 
 You'd need a separate \`Instruction\` type per execution mode (production / tracing / Inspector sandbox) and per host type — meaning a separate table and a separate dispatcher per combination. \`Instruction<W, H>\` lets one table + one dispatcher cover all modes × all hosts. Same reasoning that made \`add\` itself generic in the previous lesson.
 
 ## Step 4 — The full real instruction table
 
-> 🛑 **Predict.** What does combining Steps 1–3 produce? Sketch the signature: a function returning a table, it'll be a \`const fn\`, the generics are…?
 
 Putting it together, the actual revm code from [\`crates/interpreter/src/instructions.rs\`](https://github.com/bluealloy/revm/blob/main/crates/interpreter/src/instructions.rs):
 
@@ -851,16 +965,41 @@ Next lesson: now that you have the table, slot in your own opcode.
 > 🛣️ **The road not taken (Solana):** Solana programs don't dispatch through a table like this — they compile to **SBPF**, an eBPF-derived **register VM**. Operands live in registers (not on a stack), instructions are JIT-compiled into native code, and dispatch happens through the JIT-emitted control flow, not through a function-pointer table. EVM's stack-machine + table-dispatch choice keeps the bytecode tiny, the interpreter portable, and formal reasoning about execution tractable. Solana's register-VM + JIT choice optimizes for raw throughput and lets a single compiled program execute at near-native speed. Two valid VM-design answers; the choice between them is a tradeoff between provability + portability and runtime throughput.
 
 > **🧭 Where you are now in the stack:** you've built the **VM-layer instruction dispatch** — 256-slot const table + \`Instruction<W,H>\` wrapper, O(1) dispatch guaranteed at compile time. Same shape as CPython's bytecode dispatcher and the JVM's interpreter tables. Next lesson inserts your own opcode into this table — the dispatch surface is the extension point.
+
+## Summary (3 lines)
+
+- 6-step buildup: match → array → const fn → generic → full table → wire to interpreter. O(1) dispatch.
+- ~150 valid entries; 256 slots (others = STOP / INVALID). Compile-time table.
+- Production: Hyperliquid customises for HyperEVM. Next: custom opcode wiring + failure modes.
 `,
                 },
                 {
-                  title: 'Wiring a custom opcode — and the failure modes',
+                  title: 'Lesson 6 — Wiring a custom opcode — and the failure modes',
                   slug: 'custom-opcodes-wiring-en',
                   type: 'CONTENT',
                   sortOrder: 6,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Wiring a custom opcode — and the failure modes
+                  content: `# Lesson 6 — Wiring a custom opcode — and the failure modes
+
+## Question
+
+**Wire a custom opcode into the table** + understand the failure modes (network forking, gas mispricing, etc.).
+
+## Principle (minimum model)
+
+- **Choose an unused opcode byte.** 0xCL or 0xC0-0xCF range is convention for custom. Avoid Ethereum-reserved.
+- **Implement.** \`fn my_opcode<H: ?Sized, IT: ITy>(interp: &mut Interpreter<H, IT>) { gas!(interp, MY_GAS); /* stack ops */ }\`. Same shape as standard opcodes.
+- **Wire into table.** \`instructions[0xCL] = my_opcode;\`. Replaces the INVALID default.
+- **Failure mode 1: network forking.** Your custom opcode means anyone running your chain sees different state than mainnet. Hard fork required.
+- **Failure mode 2: gas mispricing.** Underprice → DoS attack vector. Overprice → unusable. Benchmark thoroughly.
+- **Failure mode 3: undocumented behaviour.** Other clients don't implement; can't verify your chain. Coordinate with implementations.
+- **Production examples.** OP Stack adds \`L1MESSENGER\` opcode for L1 → L2 messages. HyperEVM adds order-book opcodes.
+- **Tests.** Spin up Revm with custom opcode; deploy a contract using it; assert correct behaviour + gas charge.
+
+## Worked example + steps
+
+# Wiring a custom opcode — and the failure modes
 
 Hyperliquid runs perpetuals on its own EVM and added a handful of order-book-specific opcodes — direct calls into native code, dispatched as a single byte instead of a 200-instruction Solidity function. **That's what a custom opcode buys you: a 100× shortcut on your own chain.** The wiring is *three lines.* The shortcut is real. The reason most chains *don't* ship 50 of them is three caveats that are not optional.
 
@@ -909,7 +1048,6 @@ Two compounding wins:
 
 A complex options pricer can drop from **500K gas in Solidity → 5K gas as a single custom opcode**. That's why Hyperliquid added perp-specific opcodes; that's the kind of compression payment-layer chains (Tempo, etc.) explore for stablecoin operations.
 
-> 🛑 **Predict the failure modes** before scrolling. You're shipping a custom opcode tomorrow. List 3 things that will go wrong if you treat this casually. Hold your list — compare to the caveats below.
 
 ## Caveats — these aren't optional
 
@@ -923,7 +1061,6 @@ Deviating from standard EVM means **you can't share blocks with other Ethereum c
 
 A powerful shortcut needs a properly priced gas cost — otherwise it's a DoS vector.
 
-> 🛑 **Question (write it down):** How would you derive the gas price for \`my_hyper_fast_swap\`? If you can't sketch a methodology in three sentences, you can't safely ship this opcode.
 
 A defensible methodology:
 
@@ -955,75 +1092,118 @@ Without scrolling:
 4. If you wanted to ship a custom opcode that does pairing-friendly elliptic curve operations, **which caveat hits hardest?**
 
 Next: a quiz that gates progression, then a drill where you actually wire one in a fork.
+
+## Summary (3 lines)
+
+- Wiring = pick byte + implement + write into table[byte]. Custom opcode lives in your fork.
+- Three failure modes: network fork + gas mispricing + undocumented behaviour. Each is fixable but requires discipline.
+- Production examples: OP L1MESSENGER + HyperEVM order-book opcodes. Next: quiz.
 `,
                 },
                 {
-                  title: 'Quiz: did the table mechanics stick?',
+                  title: 'Quiz — Instruction Table',
                   slug: 'custom-opcodes-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 7,
                   duration: 4,
                   xpReward: 25,
-                  content: `# Quiz: did the table mechanics stick?
+                  content: `# Quiz — Instruction Table
+
+## Question
+
+Confirm: instruction table structure + custom opcode wiring + 3 failure modes.
+
+## Principle (minimum model)
+
+- Table 256 slots + const fn + wiring custom opcodes + network fork + gas mispricing + undocumented behaviour.
+
+## Worked example + steps
+
+# Quiz: did the table mechanics stick?
 
 Four questions covering the instruction table and the wiring mechanics. Same rule as before: **you can't nod past a quiz.** These are gates, not decoration.
 
-If you miss two or more, scroll back to *Building the instruction table* before going on to the drill.`,
+If you miss two or more, scroll back to *Building the instruction table* before going on to the drill.
+
+## Summary (3 lines)
+
+- Quiz confirms instruction table understanding.
+- Get two+ wrong → re-read buildup + wiring.
+- Pass → drill: ship a fork.
+`,
                   quizQuestions: [
                     {
-                      question: "Why is the instruction table a fixed-size `[Instruction; 256]` array, not a `HashMap<u8, Instruction>` or a `match` statement?",
-                      options: [
+                      "question": "Why is the instruction table a fixed-size `[Instruction; 256]` array, not a `HashMap<u8, Instruction>` or a `match` statement?",
+                      "options": [
                         "A HashMap would handle missing opcodes more elegantly than the array.",
                         "The compiler optimizes a 256-arm match identically to an indexed array — they're equivalent.",
                         "An indexed array gives guaranteed O(1) dispatch with no hashing or compiler-dependent jump-table compilation, and 256 slots exhausts the byte space.",
-                        "HashMap is unsafe at compile time.",
+                        "HashMap is unsafe at compile time."
                       ],
-                      correctIndex: 2,
-                      explanation: "Opcode bytes are 1 byte = 256 possible values, so a fixed array exhausts the space. Indexing is guaranteed O(1) — no hashing, no compiler hand-waving about whether `match` becomes a jump table. Every byte either has a defined opcode or maps to `unknown`. Both shape and worst-case latency are part of the contract.",
+                      "correctIndex": 2,
+                      "explanation": "Opcode bytes are 1 byte = 256 possible values, so a fixed array exhausts the space. Indexing is guaranteed O(1) — no hashing, no compiler hand-waving about whether `match` becomes a jump table. Every byte either has a defined opcode or maps to `unknown`. Both shape and worst-case latency are part of the contract."
                     },
                     {
-                      question: "What does `const fn` do for `instruction_table_impl()`?",
-                      options: [
+                      "question": "What does `const fn` do for `instruction_table_impl()`?",
+                      "options": [
                         "It forces the function to be inlined at every call site.",
                         "It allows the compiler to evaluate the function at compile time, baking the populated table directly into the binary so no setup runs at startup.",
                         "It marks the function as thread-safe.",
-                        "It disables runtime mutation of the resulting table.",
+                        "It disables runtime mutation of the resulting table."
                       ],
-                      correctIndex: 1,
-                      explanation: "`const fn` reads as 'this function can be evaluated at compile time.' The table-population code runs during compilation; the runtime `TABLE` is identical to a hand-written array literal. Zero startup cost to set up dispatch — that's the whole point of using `const fn` here.",
+                      "correctIndex": 1,
+                      "explanation": "`const fn` reads as 'this function can be evaluated at compile time.' The table-population code runs during compilation; the runtime `TABLE` is identical to a hand-written array literal. Zero startup cost to set up dispatch — that's the whole point of using `const fn` here."
                     },
                     {
-                      question: "Why is every slot initialized to `Instruction::unknown()` before defined opcodes overwrite their slots?",
-                      options: [
+                      "question": "Why is every slot initialized to `Instruction::unknown()` before defined opcodes overwrite their slots?",
+                      "options": [
                         "It's a debugging hint — `unknown` is just a placeholder name.",
                         "It ensures every byte 0x00–0xFF maps to a halt-cleanly handler, so undefined opcodes can't be silently skipped or cause memory unsafety.",
                         "It's the only way to satisfy Rust's array initialization syntax.",
-                        "It's a pre-allocation step that gets optimized away.",
+                        "It's a pre-allocation step that gets optimized away."
                       ],
-                      correctIndex: 1,
-                      explanation: "Two reasons combined, but the safety one dominates: every undefined byte should produce a clean `Unknown` halt rather than UB or a silent miss. `Instruction::unknown()` is the safe default; defined opcodes overwrite. Rust's array init does need all slots filled, but `MaybeUninit` would let you defer — using `unknown()` is a deliberate safety choice.",
+                      "correctIndex": 1,
+                      "explanation": "Two reasons combined, but the safety one dominates: every undefined byte should produce a clean `Unknown` halt rather than UB or a silent miss. `Instruction::unknown()` is the safe default; defined opcodes overwrite. Rust's array init does need all slots filled, but `MaybeUninit` would let you defer — using `unknown()` is a deliberate safety choice."
                     },
                     {
-                      question: "You're shipping a custom opcode that does an expensive cryptographic operation (e.g., pairing-friendly EC). Which caveat is the *highest-cost item* in practice?",
-                      options: [
+                      "question": "You're shipping a custom opcode that does an expensive cryptographic operation (e.g., pairing-friendly EC). Which caveat is the *highest-cost item* in practice?",
+                      "options": [
                         "Consensus compatibility — you can't share blocks with mainnet.",
                         "Gas pricing — getting it wrong creates a DoS vector.",
                         "Provability inside a zkVM — every new opcode is potentially weeks of zkVM integration work, and crypto ops are notoriously hard to constrain.",
-                        "Type-system limits in Rust.",
+                        "Type-system limits in Rust."
                       ],
-                      correctIndex: 2,
-                      explanation: "All three caveats apply, but provability is the killer for crypto ops specifically. ZK-unfriendly cryptography (pairing, certain hash functions) can take weeks of zkVM specification work per opcode — vastly more than designing the gas pricing or accepting the consensus split. Production chains' small custom-opcode counts are partly governed by exactly this cost.",
-                    },
+                      "correctIndex": 2,
+                      "explanation": "All three caveats apply, but provability is the killer for crypto ops specifically. ZK-unfriendly cryptography (pairing, certain hash functions) can take weeks of zkVM specification work per opcode — vastly more than designing the gas pricing or accepting the consensus split. Production chains' small custom-opcode counts are partly governed by exactly this cost."
+                    }
                   ],
                 },
                 {
-                  title: 'Drill: ship a fork',
+                  title: 'Lesson 8 — Drill: ship a fork',
                   slug: 'custom-opcodes-drill-en',
                   type: 'CONTENT',
                   sortOrder: 8,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Drill: ship a fork
+                  content: `# Lesson 8 — Drill: ship a fork
+
+## Question
+
+**Drill: fork revm + add a custom opcode + ship a working binary.** ~50 lines of Rust + a cargo workspace.
+
+## Principle (minimum model)
+
+- **Fork revm via Cargo workspace.** \`revm = { git = "https://github.com/your-fork/revm" }\`.
+- **Pick byte 0xC0.** Currently INVALID; safe to repurpose.
+- **Implement DOUBLE opcode.** \`fn double<H: ?Sized, IT: ITy>(interp: &mut Interpreter<H, IT>) { gas!(interp, 5); let val = interp.stack.pop(); interp.stack.push(val.wrapping_mul(U256::from(2))); }\`.
+- **Write into table.** Edit revm's instruction table; add \`instructions[0xC0] = double;\`.
+- **Test.** Deploy Solidity that uses \`assembly { let x := /* push 5 */ /* call 0xC0 */ }\`; assert stack ends with 10.
+- **Document.** README explains: this fork adds DOUBLE at 0xC0 with gas cost 5. Anyone running your fork can verify.
+- **Why this drill.** Production custom-L1 builders do this every day. Hyperliquid + OP-Stack + Berachain all maintain forks. You're building the same skill.
+
+## Worked example + steps
+
+# Drill: ship a fork
 
 You've read the three-line mechanics and the three caveats. **Now wire one yourself.** This drill takes you from "I've read about custom opcodes" to "I have wired one in a real revm checkout and watched it execute." Three lines plus the surrounding harness — bring \`cargo\` up in another window.
 
@@ -1045,7 +1225,6 @@ The lesson showed \`0x0C–0x0F\` as unallocated. **Verify on the actual file** 
 
 > 🔍 **Open** \`crates/interpreter/src/instructions.rs\`. Scan the table-construction function. Any byte that *does not appear* on the left side of an assignment is unallocated.
 
-> 🛑 **Question (write it down before scrolling):** What's the most surprising unallocated byte you found? (One that's adjacent to allocated ones — the gaps tell you which proposals were considered and rejected, or are reserved for future EIPs.)
 
 There's no single right answer — but if your answer is "I just trusted the lesson's table," you skipped the drill. Verify against source.
 
@@ -1063,7 +1242,6 @@ pub fn double_top<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 }
 \`\`\`
 
-> 🛑 **Question:** Why \`popn_top!([], op, ...)\` and not \`popn_top!([op1], op2, ...)\`? What's the structural difference, and what is it telling you about this opcode's stack profile?
 
 The empty \`[]\` means **no values popped** — only \`op\` is bound, as a \`&mut\` to the current top of stack. That's how you express a 1-stack-in, 1-stack-out, in-place-mutating opcode (vs. \`add\`'s 2-in, 1-out). The macro's arity matcher pays off here — same macro, different stack profiles, no second function.
 
@@ -1124,18 +1302,41 @@ Without scrolling, in your own words:
 
 If any answer is shaky, the lesson isn't done with you. Re-do the drill or re-read.
 
-After this drill, you've actually shipped a custom opcode in code. **More importantly: you've felt the cost.** Next: how revm gets state — the \`Database\` trait.`,
+After this drill, you've actually shipped a custom opcode in code. **More importantly: you've felt the cost.** Next: how revm gets state — the \`Database\` trait.
+
+## Summary (3 lines)
+
+- Drill: fork revm + add DOUBLE opcode at 0xC0 + ship binary. ~50 lines + cargo workspace.
+- Same skill production custom-L1 builders use daily. Hyperliquid / OP-Stack / Berachain all maintain forks.
+- Documentation matters: README explains the custom opcode. Next: Database trait module.
+`,
                 },
                 {
-                  title: 'Building the \`Database\` trait — read API',
+                  title: 'Lesson 9 — Building the Database trait — read API',
                   slug: 'revm-database-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 9,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Building the \`Database\` trait — read API
+                  content: `# Lesson 9 — Building the Database trait — read API
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **seam between the VM / compiler layer and the database layer**. Same problem any embedded compute engine faces — "let the engine ask 'give me this value' without coupling to a specific storage backend." JDBC, ODBC, the LLVM \`MemoryBuffer\` API, SQLite's VFS layer all solve variations of this. The Revm \`Database\` trait is that pattern for EVM state access.
+## Question
+
+**\`Database\` is revm's state-providing abstraction**. Revm doesn't hold state; it asks via the Database trait. Build it step by step.
+
+## Principle (minimum model)
+
+- **Step 0 — naive.** Hardcoded \`HashMap<Address, Account>\`. Works for tests; useless in production (no MDBX integration).
+- **Step 1 — \`Database\` trait.** 4 read methods: \`basic(addr)\` / \`code_by_hash(hash)\` / \`storage(addr, key)\` / \`block_hash(number)\`. Revm calls these during execution.
+- **Step 2 — error association.** \`type Error: Debug\`. Different backends have different error types.
+- **Step 3 — \`&mut self\`** (not \`&self\`). Revm may mutate the DB during execution; explicit mut. Trade-off: harder to share via Arc.
+- **Step 4 — \`Send + Sync\` bounds.** Required for parallel execution and cross-task DB access.
+- **Step 5 — auto_impl(&mut, Box).** Two wrappers; not 5 like Provider because \`&mut self\` methods.
+
+## Worked example + steps
+
+# Building the \`Database\` trait — read API
+
 
 When the EVM hits an \`SLOAD\`, where does the value come from? Not from Revm — Revm is the **execution engine** and doesn't own state. The answer comes through a trait called \`Database\`, and **implementing that trait is how you connect Revm to anything**: an in-memory map for tests, a remote JSON-RPC node to fork mainnet, MDBX for a real Reth client, a network of shards for an exotic L1. Same four-method shape, four wildly different backends.
 
@@ -1170,7 +1371,6 @@ pub struct Revm {
 
 The interpreter calls \`self.storage.get(...)\` directly. Simple. Works for a toy.
 
-> 🛑 **Predict.** Without scrolling: name three production scenarios this naive design *can't* handle. (Hint: each is a different *kind of* state source.)
 
 The three:
 
@@ -1195,7 +1395,6 @@ pub trait Database {
 
 Now the interpreter takes \`db: &mut dyn Database\` instead of owning storage. Anyone can implement the trait — your forked-mainnet impl, your MDBX impl, your in-memory impl all fit the same socket.
 
-> 🛑 **Predict.** Why \`&mut self\`, not \`&self\`? What does \`&mut\` allow that \`&self\` would forbid?
 
 **Caching.** A real implementation (forked mainnet, RPC-backed) wants to cache reads — first call to \`storage(addr, key)\` hits the network; subsequent calls return from a local cache. Cache mutation requires \`&mut self\`. \`&self\` would force every impl to wrap its cache in \`RwLock\` or \`RefCell\` — fine sometimes, but a tax overall. Default to \`&mut\`. (Lesson 2 covers the \`&self\` case via a companion trait.)
 
@@ -1217,7 +1416,6 @@ Code stays separate, addressed by *hash*:
 fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
 \`\`\`
 
-> 🛑 **Predict.** Why split \`code_by_hash\` from \`basic\`? Why is code addressed by *hash*, not by address?
 
 Because contract code is **content-addressed.** A given bytecode (a popular DEX router, say) is shared across many addresses — caching by hash dedupes automatically. \`basic\` returns just the hash; \`code_by_hash\` materializes the bytes only if you actually need to execute. Lazy load with content addressing.
 
@@ -1239,7 +1437,6 @@ type Error: DBErrorMarker;
 
 \`DBErrorMarker\` is a vacuous bound (auto-implemented for any sensible type). Its purpose: **document intent** ("this is the kind of error a database can produce") and give revm a hook to add bounds later (e.g. \`Send\`, \`Sync\`) without breaking impls.
 
-> 🛑 **Anti-fluency.** "It's open for extension" is parroting. In your own words: imagine you're writing a fork-mainnet impl using \`reqwest\`. What *specifically* breaks if \`Error\` is a fixed \`DatabaseError\` enum?
 
 You'd have to flatten \`reqwest::Error\`, \`serde_json::Error\`, network timeouts, and parse errors into the closed enum's variants — and *every* new failure mode would require a PR against revm. The associated type lets your error stay yours.
 
@@ -1262,7 +1459,6 @@ Eight method bodies of identical forwarding boilerplate just for \`Database\` (4
 
 \`auto_impl\` is a procedural macro that generates these forwarding impls automatically. With \`#[auto_impl(&mut, Box)]\`, both \`&mut MyDb\` and \`Box<MyDb>\` automatically implement \`Database\` if \`MyDb\` does. **No user-written boilerplate.**
 
-> 🛑 **Predict.** What if you want \`Database\` to also work for \`Arc<MyDb>\`? Why doesn't \`auto_impl(&mut, Box, Arc)\` solve it?
 
 You can't — at least not directly. \`Arc<T>\` only gives you \`&T\`, not \`&mut T\`. Since \`Database\`'s methods take \`&mut self\`, \`Arc<MyDb>\` cannot implement \`Database\`. **This forces a design split** that the next lesson resolves: revm has a *companion* read-only trait (\`DatabaseRef\`) for exactly the \`Arc\` case.
 
@@ -1304,16 +1500,40 @@ If any answer is shaky, scroll back. Next lesson: the read/write split.
 > 🛣️ **The road not taken (Solana):** Solana's \`Database\`-equivalent has a different shape. Solana state is a flat map of accounts, each storing its own data blob — *not* a trie of slots within contracts. So Solana's "database trait" is account-keyed, with no \`storage(address, key)\` method: storage isn't an indirection layer, just an account field. The four-method shape you just built — \`basic\` / \`code_by_hash\` / \`storage\` / \`block_hash\` — is the trait-level fingerprint of EVM's "trie + per-contract storage" design choice. Different state models lead to different decoupling seams.
 
 > **🧭 Where you are now in the stack:** you've built the **VM–DB seam** (read API) — 4 methods + associated \`Error\` + \`auto_impl\`. The same Revm now runs against an in-memory map, a remote JSON-RPC, MDBX, or a shard network without any of them touching the VM. Next lesson opens the read/write split — the design decision that lets \`Arc\` work and decouples eager vs lazy fetch.
+
+## Summary (3 lines)
+
+- 6-step buildup: hardcoded HashMap → 4 read methods → error type → &mut self → Send + Sync → auto_impl(&mut, Box).
+- 4 methods: basic + code_by_hash + storage + block_hash. Each fetches one piece of state.
+- auto_impl(&mut, Box) — 2 wrappers (not 5 like Provider). Next: companion traits.
 `,
                 },
                 {
-                  title: 'Companion traits, optimizations, and real impls',
+                  title: 'Lesson 10 — Companion traits, optimizations, and real impls',
                   slug: 'revm-database-companions-en',
                   type: 'CONTENT',
                   sortOrder: 10,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Companion traits, optimizations, and real impls
+                  content: `# Lesson 10 — Companion traits, optimizations, and real impls
+
+## Question
+
+**Database has 3 companion traits + 2 optimisations + 3 real implementations.** Read each.
+
+## Principle (minimum model)
+
+- **\`DatabaseRef\` (read-only).** Same methods as \`Database\` but \`&self\` (immutable). Lets multiple readers share via Arc.
+- **\`DatabaseCommit\` (writes).** \`commit(state_changes)\`. Production DBs may persist; tests don't.
+- **\`DatabaseAsync\` (async).** For non-blocking I/O. \`AlloyDb\` (mainnet fork) uses this.
+- **Optimisation 1: caching.** Wrap a slow DB (mainnet RPC) in a CacheDB; reads cached after first fetch.
+- **Optimisation 2: \`with_block_hashes\`.** Pre-fetch the recent block hashes (last 256) at start; avoids per-opcode round trips.
+- **3 real impls.** (1) \`EmptyDB\` (tests: returns empty for everything). (2) \`CacheDB<T>\` (production: wraps any Database). (3) \`AlloyDB\` (mainnet fork: uses Alloy Provider).
+- **\`StateProviderDatabase\` in Reth.** Bridges Reth's MDBX state to revm's Database. Production hot path.
+
+## Worked example + steps
+
+# Companion traits, optimizations, and real impls
 
 You finished the last lesson holding a four-method \`Database\` trait that takes \`&mut self\` — and an awkward dangling problem: \`Arc<MyDb>\` (Rust's atomic reference-counted pointer, the standard way to share data across threads) only hands out \`&T\`, never \`&mut T\`. So **parallel readers can't share a \`Database\` at all.** Production needs that, so revm solves it with three more pieces: a read-only companion trait, a separate write-back trait, and one perf escape hatch that lives in the trait API itself. Plus three reference impls that show the same shape stretching from 50 lines to thousands.
 
@@ -1336,7 +1556,6 @@ Same four methods as \`Database\`. Two differences:
 - **\`&self\` instead of \`&mut self\`.** No interior mutation allowed (without \`RwLock\` / \`OnceLock\` etc.).
 - **\`auto_impl\` list is longer** — \`&, &mut, Box, Rc, Arc\` (five wrappers vs. \`Database\`'s two).
 
-> 🛑 **Predict.** Why is the \`auto_impl\` list longer for \`DatabaseRef\`? What does the asymmetry tell you?
 
 Because \`&self\` access is *strictly less restrictive* than \`&mut self\`. \`Arc<T>\` and \`Rc<T>\` give you cheap, shareable \`&T\` but never \`&mut T\`. So \`DatabaseRef\` works through them; \`Database\` doesn't. The longer list is mechanical, not a design choice.
 
@@ -1353,7 +1572,6 @@ pub trait DatabaseCommit {
 
 A separate trait for write-back. Why?
 
-> 🛑 **Predict.** Without scrolling: why isn't \`commit\` just another method on \`Database\`?
 
 Two reasons:
 
@@ -1381,7 +1599,6 @@ fn storage_by_account_id(
 
 Note: it has a **default implementation** that ignores \`account_id\` and forwards to \`storage\`. That default is the key feature.
 
-> 🛑 **Predict.** Why is this method here at all? When does the default's "ignore \`account_id\`, fall through to \`storage\`" *not* satisfy revm's needs?
 
 For impls with **internal account indexing** — e.g., MDBX-backed Reth, where the account has been resolved to an internal numeric ID earlier in the call frame. Passing \`account_id\` skips a redundant address-to-account-ID lookup on each storage hit. The default forwards safely; impls that *can* go faster override.
 
@@ -1404,7 +1621,6 @@ Same trait, three radically different backends:
 >
 > Three different worlds, one trait shape.
 
-> 🛑 **Anti-fluency.** Without scrolling: which would you reach for to *fork mainnet at block N* and run arbitrary transactions on top? Why?
 
 \`AlloyDB\`. It fetches state lazily over RPC — no need to download a full archive node. The first time your tx hits a slot or account, \`AlloyDB\` queries the upstream node; subsequent reads come from its in-memory cache. **The fork-mainnet pattern is exactly 150 lines of glue around \`Database\`.**
 
@@ -1418,75 +1634,121 @@ Without scrolling:
 4. Among \`InMemoryDB\`, \`AlloyDB\`, \`StateProviderDatabase\` — which would you pick to fork mainnet?
 
 The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
+
+## Summary (3 lines)
+
+- 3 companions: DatabaseRef (read-only) + DatabaseCommit (writes) + DatabaseAsync (non-blocking I/O).
+- 2 optimisations: CacheDB wrapper + with_block_hashes pre-fetch.
+- 3 real impls: EmptyDB / CacheDB / AlloyDB. Reth uses StateProviderDatabase. Next: quiz.
 `,
                 },
                 {
-                  title: 'Quiz: did the \`Database\` trait shape stick?',
+                  title: 'Quiz — Database trait',
                   slug: 'revm-database-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 11,
                   duration: 4,
                   xpReward: 25,
-                  content: `# Quiz: did the \`Database\` trait shape stick?
+                  content: `# Quiz — Database trait
+
+## Question
+
+Confirm: 4 read methods + 3 companions + optimisations + 3 real impls.
+
+## Principle (minimum model)
+
+- Database trait + DatabaseRef + DatabaseCommit + DatabaseAsync + CacheDB + AlloyDB + EmptyDB + StateProviderDatabase.
+
+## Worked example + steps
+
+# Quiz: did the \`Database\` trait shape stick?
 
 Four questions covering the trait's design decisions and the read/write split. Same rule: **you can't nod past a quiz.**
 
-If you miss two or more, scroll back to *Building the \`Database\` trait* before going on to the drill.`,
+If you miss two or more, scroll back to *Building the \`Database\` trait* before going on to the drill.
+
+## Summary (3 lines)
+
+- Quiz confirms Database trait understanding.
+- Get two+ wrong → re-read buildup + companions.
+- Pass → drill: implement ZeroDb and watch revm read state.
+`,
                   quizQuestions: [
                     {
-                      question: "Why does `Database` take `&mut self` instead of `&self` on its methods?",
-                      options: [
+                      "question": "Why does `Database` take `&mut self` instead of `&self` on its methods?",
+                      "options": [
                         "To prevent shared concurrent access from multiple threads.",
                         "To allow implementations to mutate internal caches (e.g., a forked-mainnet impl caching the result of a network read) without RefCell/RwLock scaffolding.",
                         "Because the EVM needs to *write* state through `Database` methods.",
-                        "It's a Rust requirement — `&self` traits can't be `dyn`-compatible.",
+                        "It's a Rust requirement — `&self` traits can't be `dyn`-compatible."
                       ],
-                      correctIndex: 1,
-                      explanation: "`&mut self` lets impls mutate caches directly. A networked impl wants to cache RPC results across calls; `&self` would force interior-mutability scaffolding (RwLock/RefCell). For users who genuinely need shared `&self` access (Arc-wrapped, parallel tasks), revm provides the companion `DatabaseRef` trait — a deliberate design split.",
+                      "correctIndex": 1,
+                      "explanation": "`&mut self` lets impls mutate caches directly. A networked impl wants to cache RPC results across calls; `&self` would force interior-mutability scaffolding (RwLock/RefCell). For users who genuinely need shared `&self` access (Arc-wrapped, parallel tasks), revm provides the companion `DatabaseRef` trait — a deliberate design split."
                     },
                     {
-                      question: "Why is `Error` an associated type bounded by the marker trait `DBErrorMarker`?",
-                      options: [
+                      "question": "Why is `Error` an associated type bounded by the marker trait `DBErrorMarker`?",
+                      "options": [
                         "It's an open extension point: each impl picks its own error type, but revm can tighten bounds (Send, Sync) later via the marker without breaking impls.",
                         "It's a Rust limitation — traits can't have generic methods.",
                         "The marker is a vacuous bound; it serves no design purpose.",
-                        "It's a back-compat shim for an older revm API.",
+                        "It's a back-compat shim for an older revm API."
                       ],
-                      correctIndex: 0,
-                      explanation: "A fixed `enum DatabaseError` would force you to flatten `reqwest::Error`, `serde_json::Error`, MDBX errors, etc., into closed variants — and require a revm PR every time you needed a new failure mode. The associated type leaves your error yours. The marker trait gives revm a place to *tighten* requirements without breaking impls.",
+                      "correctIndex": 0,
+                      "explanation": "A fixed `enum DatabaseError` would force you to flatten `reqwest::Error`, `serde_json::Error`, MDBX errors, etc., into closed variants — and require a revm PR every time you needed a new failure mode. The associated type leaves your error yours. The marker trait gives revm a place to *tighten* requirements without breaking impls."
                     },
                     {
-                      question: "Why is `auto_impl` longer for `DatabaseRef` (`&, &mut, Box, Rc, Arc`) than for `Database` (`&mut, Box`)?",
-                      options: [
+                      "question": "Why is `auto_impl` longer for `DatabaseRef` (`&, &mut, Box, Rc, Arc`) than for `Database` (`&mut, Box`)?",
+                      "options": [
                         "`Rc` and `Arc` aren't thread-safe, so they can't implement `Database`.",
                         "`DatabaseRef` is older; the list grew over time.",
                         "`Rc<T>` and `Arc<T>` give shared `&T` access but cannot provide `&mut T`. `DatabaseRef`'s methods take `&self`, so they fit through Rc/Arc. `Database`'s `&mut self` methods don't.",
-                        "`DatabaseRef` requires `Send + Sync`; `Database` doesn't.",
+                        "`DatabaseRef` requires `Send + Sync`; `Database` doesn't."
                       ],
-                      correctIndex: 2,
-                      explanation: "Mechanical, not stylistic. `Arc<T>` only gives out `&T`. So any `&self`-only trait works through `Arc`, but `&mut self` traits don't. The longer list is a consequence of `DatabaseRef`'s read-only methods — it's not a design choice in the trait itself.",
+                      "correctIndex": 2,
+                      "explanation": "Mechanical, not stylistic. `Arc<T>` only gives out `&T`. So any `&self`-only trait works through `Arc`, but `&mut self` traits don't. The longer list is a consequence of `DatabaseRef`'s read-only methods — it's not a design choice in the trait itself."
                     },
                     {
-                      question: "Among `InMemoryDB`, `AlloyDB`, and `StateProviderDatabase`, which is the right choice for 'fork mainnet at block N and run arbitrary transactions'?",
-                      options: [
+                      "question": "Among `InMemoryDB`, `AlloyDB`, and `StateProviderDatabase`, which is the right choice for 'fork mainnet at block N and run arbitrary transactions'?",
+                      "options": [
                         "`InMemoryDB` — pre-load all of mainnet state into RAM.",
                         "`AlloyDB` — fetch state lazily over JSON-RPC; the upstream node is the source of truth.",
                         "`StateProviderDatabase` — direct MDBX access requires a full Reth archive locally.",
-                        "Any of them, equally — they're interchangeable.",
+                        "Any of them, equally — they're interchangeable."
                       ],
-                      correctIndex: 1,
-                      explanation: "`AlloyDB` is purpose-built for this — it queries an upstream RPC for state slots and accounts as the EVM touches them, then caches. `InMemoryDB` would need you to pre-load all of mainnet (impractical). `StateProviderDatabase` requires a local MDBX with an actual Reth node behind it.",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "`AlloyDB` is purpose-built for this — it queries an upstream RPC for state slots and accounts as the EVM touches them, then caches. `InMemoryDB` would need you to pre-load all of mainnet (impractical). `StateProviderDatabase` requires a local MDBX with an actual Reth node behind it."
+                    }
                   ],
                 },
                 {
-                  title: 'Drill: implement \`ZeroDb\` and watch revm read state',
+                  title: 'Lesson 12 — Drill: implement `ZeroDb` and watch revm read state',
                   slug: 'revm-database-drill-en',
                   type: 'CONTENT',
                   sortOrder: 12,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Drill: implement \`ZeroDb\` and watch revm read state
+                  content: `# Lesson 12 — Drill: implement \`ZeroDb\` and watch revm read state
+
+## Question
+
+**Drill: implement \`ZeroDb\` that returns zero for everything**. Then trace what revm reads during a tx execution. Sees how often the Database is hit.
+
+## Principle (minimum model)
+
+- **\`struct ZeroDb;\` + impl Database.** Each method returns the zero value: \`Account::default()\` / \`Bytecode::default()\` / \`U256::ZERO\` / \`B256::ZERO\`.
+- **\`type Error = Infallible;\`.** Never fails.
+- **Test.** Run a tx with ZeroDb backing; assert it succeeds. Use Solidity that touches some state.
+- **Add \`println!\` to each method.** Now you can see what revm reads.
+- **Observation 1.** \`basic(tx.from)\` is called first (sender lookup). Always.
+- **Observation 2.** \`code_by_hash(tx.to)\` is called next (target contract code). If \`to\` is None, this is skipped.
+- **Observation 3.** \`storage(addr, key)\` is called per SLOAD. The frequency depends on the contract.
+- **Observation 4.** \`block_hash(number)\` is called only by BLOCKHASH opcode. Most txs never hit this.
+- **Takeaway.** Revm is read-heavy at the start; gets light during pure computation. Caching the early reads helps.
+- **Production parallel.** Reth's StateProviderDatabase caches aggressively after first read. Same pattern.
+
+## Worked example + steps
+
+# Drill: implement \`ZeroDb\` and watch revm read state
 
 You've read the trait shape and the three reference impls. **Now build your own — the smallest one anyone can write.** A \`Database\` that always says "balance zero, slot zero, no code." Stub four methods, plug it into Revm, run a transaction, and watch exactly which reads the EVM actually performs. (Spoiler: fewer than you'd guess. The EVM is *very* lazy about state.)
 
@@ -1519,13 +1781,6 @@ impl Database for ZeroDb {
 
 ## Drill 1 — Predict before plugging it in
 
-> 🛑 **Question (write your answers down before scrolling):** Each of these EVM operations runs against \`ZeroDb\`. What happens?
->
-> 1. \`BALANCE\` of any address.
-> 2. \`SLOAD\` of any slot.
-> 3. \`EXTCODESIZE\` of any address.
-> 4. \`CALL\` to an address with no code, transferring 0 ETH.
-> 5. \`BLOCKHASH(N)\` for any block number \`N\`.
 
 Answers:
 
@@ -1558,7 +1813,6 @@ fn main() {
 }
 \`\`\`
 
-> 🛑 **Predict.** Will this transaction succeed against \`ZeroDb\`?
 
 Yes. \`SSTORE\` is a *write*, not a read — and \`Database\` doesn't see writes (those go through \`DatabaseCommit\`, which we deliberately didn't implement). The pre-existing slot value is read via \`storage\` (returns 0, fine). The new value 0x42 is staged in revm's journaling layer and never reaches \`ZeroDb\`. The tx commits successfully.
 
@@ -1630,16 +1884,43 @@ If any answer is shaky, the lesson isn't done with you. Re-run the drill or re-r
 
 After this drill, you have a working mental model of how revm gets state — every other database is just \`ZeroDb\` with real data behind it.
 
-Two lessons left before the final quiz. First, **how Revm itself is tested** — the harness that proves correctness against the Ethereum spec for every fork. Then revmc, the JIT/AOT compilation path. After both, Inside Revm is done.`,
+Two lessons left before the final quiz. First, **how Revm itself is tested** — the harness that proves correctness against the Ethereum spec for every fork. Then revmc, the JIT/AOT compilation path. After both, Inside Revm is done.
+
+## Summary (3 lines)
+
+- ZeroDb = returns zero for everything. Trace revm's read pattern with println!.
+- basic(tx.from) + code_by_hash(tx.to) at start; storage(addr, key) per SLOAD; block_hash only on BLOCKHASH.
+- Read-heavy start; light middle. Caching pays off. Reth's StateProviderDatabase uses this insight. Next: testing.
+`,
                 },
                 {
-                  title: 'How Revm tests itself — state tests, EOF tests, and execution-spec compliance',
+                  title: 'Lesson 13 — How Revm tests itself — state tests, EOF tests, and execution-spec compliance',
                   slug: 'revm-testing-en',
                   type: 'CONTENT',
                   sortOrder: 13,
                   duration: 22,
                   xpReward: 45,
-                  content: `# How Revm tests itself — state tests, EOF tests, and execution-spec compliance
+                  content: `# Lesson 13 — How Revm tests itself — state tests, EOF tests, and execution-spec compliance
+
+## Question
+
+**How does revm verify it matches Ethereum?** State tests + EOF tests + execution-spec compliance. Each is a different layer of assurance.
+
+## Principle (minimum model)
+
+- **Ethereum state tests.** 1000+ JSON files describing pre-state + tx + expected post-state. Revm runs each; asserts the post-state matches.
+- **Where state tests live.** \`tests/EthereumTests/GeneralStateTests/\`. Subdirectories per category (Berlin / Cancun / Prague).
+- **EOF tests.** Tests for EVM Object Format (Prague-era). Reject malformed EOF bytecode; validate well-formed.
+- **Execution-spec tests.** Compliance against the Ethereum execution-spec (\`execution-specs/\`). Format-agnostic.
+- **Why three layers.** State tests catch wrong opcode behaviour. EOF tests catch wrong bytecode validation. Execution-spec catches wrong semantics. Defence in depth.
+- **Test runner.** \`cargo test --test ethereum\`. Iterates JSON files; runs revm; compares results.
+- **CI integration.** Every PR runs the full suite. Slowdowns + failures gate the merge.
+- **Why this matters.** Revm is embedded in Reth + Foundry + Hyperliquid + Tempo. A bug here breaks everything downstream. Testing is non-optional.
+- **Production parallel.** All Ethereum clients (geth / nethermind / besu / reth) run the same state tests. Cross-client compatibility.
+
+## Worked example + steps
+
+# How Revm tests itself — state tests, EOF tests, and execution-spec compliance
 
 You walked the interpreter, the instruction table, and the Database trait. **Now: how does the Revm team prove that Revm actually executes the EVM correctly?** The answer is not "we read it and nodded." A consensus-critical engine — one bug ships a chain split — is held to a different bar. This lesson reads the test infrastructure that bar requires.
 
@@ -1727,7 +2008,6 @@ You will not (usually) write state tests yourself — they're written upstream a
 2. **Differential against a non-Revm reference** is the "I'm not the spec, but I match it" pattern. The Building tier's *Validate Your Revm Simulation Against a Production Provider* lesson is exactly this discipline applied at the application layer.
 3. **Generated tests ≥ hand-written** when the spec is authoritative. If you build something with formal semantics (a custom CFMM, a sponsorship policy), generating tests from the semantics catches the bugs hand-written tests miss.
 
-> 🛑 **Predict before scrolling.** Suppose a new EIP changes the gas cost of \`SLOAD\` for cold accounts. Walk through which of the three test surfaces would catch a Revm bug that miscomputes the new gas cost. **Hold your guess.**
 
 ---
 
@@ -1748,23 +2028,48 @@ The lesson: **the three test surfaces are not redundant — they partition the c
 
 After drill 4 you've seen the full feedback loop: spec changes → tests generated → Revm fails → Revm fixed → regression test added → consensus protected.
 
-> 🛑 **Final check.** In one sentence: why does Revm — a library, not a chain — need to run state tests at all, when state tests are usually associated with full clients? If your answer doesn't mention "every client embedding Revm inherits Revm's correctness; a Revm bug is a bug in *every* downstream client," re-read the opening — that's the entire reason this discipline exists at the engine layer.
 
 ## 📺 Further reading
 
 - [Ethereum tests README](https://github.com/ethereum/tests) — the canonical state-test corpus
 - [execution-spec-tests docs](https://eest.ethereum.org/) — the test-generation framework
 - [EIP-3540 — EOF v1](https://eips.ethereum.org/EIPS/eip-3540) — the format whose validator the EOF tests cover
+
+## Summary (3 lines)
+
+- 3-layer testing: state tests (1000+ JSON pre/post-state) + EOF tests (bytecode validation) + execution-spec (semantics).
+- Run via \`cargo test --test ethereum\`. CI runs full suite on every PR.
+- Cross-client compatible (geth / nethermind / besu / reth all run same state tests). Non-optional given revm's downstream reach.
 `,
                 },
                 {
-                  title: 'Parallel execution — beyond the serial interpreter loop',
+                  title: 'Lesson 14 — Parallel execution — beyond the serial interpreter loop',
                   slug: 'revm-parallel-execution-en',
                   type: 'CONTENT',
                   sortOrder: 14,
                   duration: 24,
                   xpReward: 50,
-                  content: `# Parallel execution — beyond the serial interpreter loop
+                  content: `# Lesson 14 — Parallel execution — beyond the serial interpreter loop
+
+## Question
+
+**Can revm execute multiple transactions in parallel?** Yes — via block-stm optimistic concurrency. Solana does it differently (deterministic conflict-detection). Each has trade-offs.
+
+## Principle (minimum model)
+
+- **Serial baseline.** Revm's default: execute tx-by-tx in order. Easy to reason about; cannot use multiple cores.
+- **block-stm pattern.** Execute multiple txs optimistically; track read/write sets; if a conflict arises, re-execute the conflicting tx. Used by Aptos / Move.
+- **Conflict detection.** Each tx has a \`read_set\` + \`write_set\`. If tx_a writes a slot tx_b read, tx_b must re-execute with the new value.
+- **Re-execution.** Track per-tx state version; on conflict, roll back tx_b's state changes and retry.
+- **block-stm in revm.** \`revm_parallel\` crate wraps the default revm; adds the conflict-detection layer. Optional; opt-in.
+- **Solana's deterministic parallelism.** Solana requires tx to pre-declare its account locks. No conflict possible at runtime; pure parallelism. Trade-off: harder DX.
+- **Block-stm vs deterministic.** Block-stm = easier DX (no lock declarations) but extra runtime cost on conflict. Deterministic = harder DX but predictable cost.
+- **Production examples.** Aptos uses block-stm. Solana uses deterministic. Some Ethereum L2s experiment with block-stm (e.g. Monad).
+- **Speedup.** Up to 4× on conflict-light workloads. Lower on heavy contention. Depends on workload.
+
+## Worked example + steps
+
+# Parallel execution — beyond the serial interpreter loop
 
 Every Inside Revm lesson so far has treated execution as serial: one transaction at a time, through the interpreter, then commit, then next. This is how Reth and revm ship today and how mainnet has worked for a decade. **It is also the single biggest performance ceiling on the EVM**, and a list of teams — Sei, Monad, MegaETH, Aptos (origin of the technique) — have shipped or are shipping parallel EVMs. Reth itself has experimental parallel-execution paths in the source tree. This lesson teaches you the model.
 
@@ -1774,7 +2079,6 @@ Every Inside Revm lesson so far has treated execution as serial: one transaction
 
 A block contains N transactions. The interpreter executes them one at a time because each tx might read state another tx wrote. If tx 5 reads slot \`X\` and tx 3 wrote slot \`X\`, you have to run 3 before 5.
 
-> 🛑 **Predict before scrolling.** A mainnet block has ~200 transactions. How many of them actually conflict with each other (i.e., one writes a slot another reads)? Take a guess as a percentage.
 
 Empirically: **roughly 10–20%** of mainnet transactions touch state another tx in the same block also touches. The rest are independent — DEX swaps on different pools, transfers to different accounts, oracle updates that nobody else reads in that block. **80% of the block is being executed serially for no semantic reason.** That gap is the prize parallel EVM goes for.
 
@@ -1793,7 +2097,6 @@ Block-stm (block-level Software Transactional Memory) was introduced by Aptos fo
 
 This is **optimistic concurrency control**: assume conflicts are rare, run in parallel, fix the ones that actually conflict. The 80% non-conflicting case runs once in parallel. The 20% conflicting case re-runs serially. Net throughput: 3–8× depending on workload.
 
-> 🛑 **Predict.** A block has 100 transactions. 90 of them are independent (different addresses, different storage slots). 10 of them are all sandwich-arb attempts on the same Uniswap pool. **What does block-stm do?**
 
 The 90 independent ones execute in parallel and commit cleanly on first pass. The 10 sandwich-arb ones all read and write the same pool state — they get speculatively executed in parallel, then 9 of them detect they used stale read sets and re-execute. After ~2 re-execution waves the 10 commit serially. Total wall-clock: ~1 parallel pass + 2 small re-execution waves, instead of 100 serial steps. **The conflicts cost you, but only proportionally.**
 
@@ -1860,7 +2163,6 @@ The last row is the consensus-critical one. Parallel EVM's bug surface is *huge*
 - **Reth**: experimental. The mainline interpreter is serial; parallel execution work exists in branches and crates (Compass is one such effort) but is not production default.
 - **Mainnet Ethereum**: serial. Parallel execution at the protocol layer is a long-running discussion (EIP-7960 family) but not active.
 
-> 🛑 **Predict.** Why is mainnet conservative about parallel execution while Sei / Monad / MegaETH ship it eagerly?
 
 Mainnet's conservatism is about *consensus risk* and *backward compatibility*. A bug in parallel execution affects every node simultaneously and could split the chain — and mainnet has $400B+ on it. New chains can ship aggressive parallel execution because their TVL starts low and they iterate fast. **The same code, same risk profile, different cost of failure.** This is why new L1s eat mainnet's lunch on raw throughput — they can take the bet mainnet can't.
 
@@ -1886,23 +2188,47 @@ The path forward, if you want to make this your specialization:
 
 The next lesson covers JIT/AOT compilation via revmc. **Parallel and JIT are the two "beyond interpretation" frontiers** — they attack the same throughput ceiling from different angles (parallel: more cores, JIT: faster cores). Production high-performance EVMs (Sei, Monad, MegaETH) are starting to combine both. After both lessons you have the vocabulary to read either path's source and understand what trade-offs each team picked.
 
-> 🛑 **Final check.** In one sentence: why does the \`Database\` trait shape make parallel execution possible without rewriting the interpreter? If your answer doesn't mention "wrap with read/write tracking, executor unchanged," re-read §3 — that composability is the load-bearing piece.
 
 ## 📺 Further reading
 
 - [Aptos block-stm paper (arxiv:2203.06871)](https://arxiv.org/abs/2203.06871) — the original
 - [Sei's parallel EVM technical post](https://blog.sei.io/) — production case study
 - Monad's blog — different architecture, similar principles
+
+## Summary (3 lines)
+
+- Parallel execution = block-stm optimistic (track read/write sets; re-execute on conflict) or Solana-style deterministic (pre-declared locks).
+- revm has \`revm_parallel\` crate for block-stm. Opt-in; up to 4× speedup on conflict-light workloads.
+- Solana = deterministic = harder DX, predictable cost. Aptos / Monad pioneer block-stm in EVM space. Next: JIT/AOT.
 `,
                 },
                 {
-                  title: 'Beyond interpretation — JIT/AOT compilation with revmc',
+                  title: 'Lesson 15 — Beyond interpretation — JIT/AOT compilation with revmc',
                   slug: 'revm-jit-aot-revmc-en',
                   type: 'CONTENT',
                   sortOrder: 15,
                   duration: 16,
                   xpReward: 40,
-                  content: `# Beyond interpretation — JIT/AOT compilation with revmc
+                  content: `# Lesson 15 — Beyond interpretation — JIT/AOT compilation with revmc
+
+## Question
+
+**Revm is an interpreter; revmc is a JIT/AOT compiler.** Revmc compiles EVM bytecode to native machine code. ~10× faster on hot contracts.
+
+## Principle (minimum model)
+
+- **Why JIT/AOT?** Interpreter dispatch is ~5 ns per opcode. JIT/AOT eliminates dispatch + inlines hot code. ~10× faster.
+- **revmc architecture.** Crate \`revmc\` separate from revm. Same Database trait; same Host trait. Drop-in replacement for the interpreter.
+- **AOT mode.** Compile contracts ahead of time; cache the compiled artifacts. Used for system contracts (high-traffic, known shape).
+- **JIT mode.** Compile on first execution; cache. Used for arbitrary contracts (broad shape, unknown until runtime).
+- **Compiler backends.** LLVM (mature, slow compile, fast output) or Cranelift (fast compile, decent output). revmc supports both.
+- **Trade-off.** JIT adds compile-time overhead; AOT adds storage overhead; interpreter has neither but is slow. Choose per use case.
+- **Production examples.** Production sequencers + MEV builders use AOT for system contracts. zkVMs (Risc0 / Succinct) use interpreter for proof-friendliness.
+- **Future direction.** All major EVMs (geth / reth / nethermind) are moving to JIT/AOT for system contracts. Revmc is the Rust reference impl.
+
+## Worked example + steps
+
+# Beyond interpretation — JIT/AOT compilation with revmc
 
 Everything in this course so far treats Revm as an **interpreter**: read an opcode byte, dispatch to a Rust function, mutate the stack, advance the program counter, loop. That's still revm's main mode of operation — and for normal mainnet workloads it's fast enough that no one cares.
 
@@ -1912,7 +2238,6 @@ The escape hatch is to **stop interpreting and start compiling.** Take EVM bytec
 
 revmc is **experimental** — the README says so up front — but it's the most legible Rust-native answer to the question "what comes after the interpreter?", and it's the toolchain real L1 teams are watching. This lesson is the bridge between "I can read revm's interpreter" (the rest of this course) and "I know what 'compiled EVM' actually means."
 
-> 🛑 **Anti-fluency check, before we start.** Without scrolling: predict what "compile EVM bytecode" means concretely. Output format? Where does the compiled artifact live? When does it run? Hold your guess.
 
 ## What "compile EVM bytecode" actually means
 
@@ -1934,7 +2259,6 @@ A naive reading of "compile EVM bytecode to native code" makes it sound like a n
 
 Gas is **consensus-critical state.** Every opcode has a defined gas cost; every block's gas used is part of the header; nodes that disagree on gas usage fork the chain. The interpreter satisfies this by deducting gas inside each opcode handler before running it. The compiler has to do the same — except the compiler's whole job is to *delete code that isn't necessary for correctness*.
 
-> 🛑 **Predict.** Without scrolling: what's an "optimization" that looks safe on normal code but breaks gas accounting?
 
 Three landmines, at least:
 
@@ -1960,7 +2284,6 @@ SLOAD reads chain state. SSTORE writes chain state. CALL recursively invokes ano
 
 In revmc, every such opcode lowers to a call to a runtime *builtin* — a Rust function in [\`revmc-builtins\`](https://github.com/paradigmxyz/revmc/tree/main/crates/revmc-builtins) that does the host callout via the same \`EvmContext\` the interpreter would use. The optimizer treats builtin calls as opaque side-effecting calls (LLVM \`call\`, not \`readonly\`/\`readnone\`) and won't reorder them.
 
-> 🛑 **Recall check.** Without scrolling: of the three problems above, which is the one that constrains the LLVM optimizer most aggressively? (Answer: #3 — opaque calls block almost all optimizer reordering. #1 is solved by making gas IR-explicit, #2 is mostly a perf ceiling rather than a correctness issue.)
 
 ## How revmc plugs into revm
 
@@ -2020,54 +2343,80 @@ Without scrolling, in your own words:
 
 If any answer is shaky, re-skim the relevant section. Don't carry the gap into the final quiz.
 
-This is the last content lesson of Inside Revm. The final quiz is next — and after that, the natural next stop is **Inside Reth** (Staged Sync, ExEx, the Reth SDK), where the same source-first treatment continues at the node layer.`,
+This is the last content lesson of Inside Revm. The final quiz is next — and after that, the natural next stop is **Inside Reth** (Staged Sync, ExEx, the Reth SDK), where the same source-first treatment continues at the node layer.
+
+## Summary (3 lines)
+
+- Revmc = JIT/AOT compiler for EVM. ~10× faster than interpreter; drop-in replacement (same Database / Host traits).
+- AOT = compile-ahead-of-time, cache. JIT = compile-on-first-execution. Both useful; pick per use case.
+- LLVM or Cranelift backends. Production sequencers + MEV builders use AOT. Future: all major EVMs adopt. Final quiz next.
+`,
                 },
                 {
-                  title: 'Inside Revm final quiz',
+                  title: 'Quiz — Inside Revm (final)',
                   slug: 'revm-advanced-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 16,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Inside Revm final quiz
+                  content: `# Quiz — Inside Revm (final)
+
+## Question
+
+Final Inside Revm quiz: across add Opcode + Custom Opcodes + Database + Testing + Parallel + JIT.
+
+## Principle (minimum model)
+
+- add opcode + macros + instruction table + custom opcode wiring + Database trait + companions + testing + block-stm + JIT/AOT.
+
+## Worked example + steps
+
+# Inside Revm final quiz
 
 Final check across Revm internals: the interpreter, custom opcodes, and the Database trait.
 
-Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant build-up before claiming you're done with Inside Revm.`,
+Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant build-up before claiming you're done with Inside Revm.
+
+## Summary (3 lines)
+
+- Final quiz; 8 questions across the topic chains.
+- Get three+ wrong → re-read the relevant lesson chain.
+- Pass → Inside Revm complete; advance to Inside Reth / Inside Alloy / Advanced / Expert / Building / openhl.
+`,
                   quizQuestions: [
                     {
-                      question: "Which of these is `crates/interpreter` in Revm responsible for?",
-                      options: [
-                        'Defining the EVM type system primitives (Address, U256, B256)',
-                        'Implementing each EVM opcode in Rust',
-                        'Holding the Database trait and the state-supply interface',
-                        'Building the instruction dispatch table at runtime',
+                      "question": "Which of these is `crates/interpreter` in Revm responsible for?",
+                      "options": [
+                        "Defining the EVM type system primitives (Address, U256, B256)",
+                        "Implementing each EVM opcode in Rust",
+                        "Holding the Database trait and the state-supply interface",
+                        "Building the instruction dispatch table at runtime"
                       ],
-                      correctIndex: 1,
-                      explanation: 'crates/interpreter holds the per-opcode implementations: ADD, MUL, PUSH, JUMP, SLOAD, SSTORE, etc. (Primitives live in crates/primitives. The Database trait lives in crates/database-interface. The dispatch table is built at compile time, not runtime.) If you guessed runtime dispatch — re-read the custom opcodes lesson.',
+                      "correctIndex": 1,
+                      "explanation": "crates/interpreter holds the per-opcode implementations: ADD, MUL, PUSH, JUMP, SLOAD, SSTORE, etc. (Primitives live in crates/primitives. The Database trait lives in crates/database-interface. The dispatch table is built at compile time, not runtime.) If you guessed runtime dispatch — re-read the custom opcodes lesson."
                     },
                     {
-                      question: 'What does adding a custom opcode to a Revm-based fork actually let you do?',
-                      options: [
-                        'Override how a standard opcode (like ADD) computes its result for all clients',
-                        'Provide a fast, single-instruction shortcut on your own chain — consensus-incompatible with mainnet',
-                        'Add a precompile callable at a fixed address from any Solidity contract on mainnet',
-                        'Reduce gas costs for the same opcode without forking',
+                      "question": "What does adding a custom opcode to a Revm-based fork actually let you do?",
+                      "options": [
+                        "Override how a standard opcode (like ADD) computes its result for all clients",
+                        "Provide a fast, single-instruction shortcut on your own chain — consensus-incompatible with mainnet",
+                        "Add a precompile callable at a fixed address from any Solidity contract on mainnet",
+                        "Reduce gas costs for the same opcode without forking"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Custom opcodes occupy unallocated bytes (e.g. 0x0C). Mainnet does not know your opcode, so any block using it cannot be replayed by go-ethereum. The shortcut is real *inside your fork*. Precompiles are a different mechanism (reserved addresses, not new opcode bytes) and gas costs cannot be cheaper without forking consensus.',
+                      "correctIndex": 1,
+                      "explanation": "Custom opcodes occupy unallocated bytes (e.g. 0x0C). Mainnet does not know your opcode, so any block using it cannot be replayed by go-ethereum. The shortcut is real *inside your fork*. Precompiles are a different mechanism (reserved addresses, not new opcode bytes) and gas costs cannot be cheaper without forking consensus."
                     },
                     {
-                      question: "The main role of Revm's `Database` trait is:",
-                      options: [
-                        'To commit EVM state changes back to the underlying storage',
-                        'To supply account info, contract code, storage slots, and past block hashes that the EVM needs to execute',
-                        'To handle the gas-accounting hot path',
-                        'To provide the dispatch table from opcode bytes to functions',
+                      "question": "The main role of Revm's `Database` trait is:",
+                      "options": [
+                        "To commit EVM state changes back to the underlying storage",
+                        "To supply account info, contract code, storage slots, and past block hashes that the EVM needs to execute",
+                        "To handle the gas-accounting hot path",
+                        "To provide the dispatch table from opcode bytes to functions"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Database is the read-side state source. Writes go through DatabaseCommit. Gas accounting is internal to the interpreter. Dispatch is the instruction table. Different Database impls let you back the EVM with in-memory data, JSON-RPC (forked mainnet), production MDBX, or anything else.',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "Database is the read-side state source. Writes go through DatabaseCommit. Gas accounting is internal to the interpreter. Dispatch is the instruction table. Different Database impls let you back the EVM with in-memory data, JSON-RPC (forked mainnet), production MDBX, or anything else."
+                    }
                   ],
                 },
               ],
