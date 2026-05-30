@@ -2035,6 +2035,13 @@ After drill 4 you've seen the full feedback loop: spec changes → tests generat
 - [execution-spec-tests docs](https://eest.ethereum.org/) — the test-generation framework
 - [EIP-3540 — EOF v1](https://eips.ethereum.org/EIPS/eip-3540) — the format whose validator the EOF tests cover
 
+## Expert continuation
+
+This lesson covers state-test discipline as a property of *revm itself*. Two Expert lessons extend it at the systems level:
+
+- [Differential fuzzing & execution-spec-tests](/courses/reth-expert-en/lessons/expert-differential-fuzzing-en) — random-sequence diff testing across multiple EVM implementations
+- [Systems-code auditing](/courses/reth-expert-en/lessons/systems-code-auditing-en) — how to read a Reth/revm patch the way an auditor does
+
 ## Summary (3 lines)
 
 - 3-layer testing: state tests (1000+ JSON pre/post-state) + EOF tests (bytecode validation) + execution-spec (semantics).

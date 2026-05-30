@@ -2383,6 +2383,13 @@ After drill 5, you can write tests for any custom Reth component you ship — no
 - [\`reth_exex_test_utils\`](https://reth.rs/docs/reth_exex_test_utils/) — generated docs for the ExEx test harness
 - [Reth Book — Testing chapter](https://reth.rs/) — official guidance on stage and node tests
 
+## Expert continuation
+
+Test discipline at the Reth-component level. At the systems level, two Expert lessons take this further:
+
+- [Differential fuzzing & execution-spec-tests](/courses/reth-expert-en/lessons/expert-differential-fuzzing-en) — multi-implementation consensus-correctness testing
+- [Systems-code auditing](/courses/reth-expert-en/lessons/systems-code-auditing-en) — reading Reth patches with an auditor's eye
+
 ## Summary (3 lines)
 
 - Fixture chains + TestStageDB for stage tests. In-process EthereumNode::test_instance for integration. Golden state files for reproducibility.

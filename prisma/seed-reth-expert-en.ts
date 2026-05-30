@@ -2001,6 +2001,14 @@ You now have a complete picture: develop, profile, extend, deploy, monitor. Welc
 
 > Final check: in one sentence, why is "diff testing against vanilla Reth" the highest-value test you can write for a fork? **What class of bug does it catch that no unit test ever will?** If your answer doesn't mention "consensus" or "the only output that matters is stateRoot," re-read Section 5.
 
+## Expert continuation
+
+Running a Reth fork in production sits at the intersection of three Expert lessons in this course:
+
+- [Systems-code auditing](/courses/reth-expert-en/lessons/systems-code-auditing-en) — reviewing your fork diff with auditor discipline before every upgrade
+- [Chaos engineering for Rust EVM nodes](/courses/reth-expert-en/lessons/chaos-engineering-rust-evm-en) — controlled failure injection so your fork survives the same failure modes upstream Reth survives
+- [Open-source contributor workflow](/courses/reth-expert-en/lessons/oss-contributor-workflow-en) — upstreaming generic fixes back to Paradigm/Reth so your fork's diff stays small
+
 ## Summary (3 lines)
 
 - Production Reth fork = chainspec + upgrade path + monitoring + emergency response.

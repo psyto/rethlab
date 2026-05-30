@@ -1657,6 +1657,13 @@ Revm 埋め込み全クライアントが正しさ継承 = エンジン層の規
 - **execution-spec-tests が「pass = 仕様一致」を保証する根拠**: テストが **spec-aware DSL で書かれ仕様から自動生成** = テスト pass = 構造的に仕様と一致。手書きテストは「自分が書いたものとは一致」しか保証しない、仕様との乖離を捕まえられない。新 EIP（新 opcode / precompile / ガス規則変更）がカバレッジを得る方法。
 - **Revm が state tests を走らせる必要性**: Revm は ライブラリだが、**埋め込み全クライアント（Reth / Hyperliquid / Tempo / Berachain）が Revm の正しさを継承** = Revm のバグは全下流クライアントのバグ = mainnet 起動前に互換性報告する必要 = **エンジン層に住む規律**。「ライブラリだから関係ない」が成立しない構造。
 
+## Expert への接続
+
+このレッスンは *revm 本体* の性質としての state-test 規律を扱う。Expert tier ではこれを systems 層に広げる 2 レッスンがある:
+
+- [Differential fuzzing と execution-spec-tests](/courses/reth-expert-ja/lessons/expert-differential-fuzzing-ja) — 複数 EVM 実装にわたる random-sequence の diff testing
+- [Systems-code auditing](/courses/reth-expert-ja/lessons/systems-code-auditing-ja) — Reth/revm の patch を監査人の目で読む方法
+
 ## 合格基準
 
 - 3 テスト面（State / EOF / execution-spec）の役割を即答できる。

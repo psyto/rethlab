@@ -2168,6 +2168,13 @@ tidx の test gate = §2 のアプリケーション層適用。
 - **Fixture-chain テストが Reth の CI に必須な理由**: 任意 stage の回帰が **state-root 不一致** として現れる = コンセンサスクリティカルバグを mainnet 前に捕獲。fixture は既知正常ノードから 1 回キャプチャ、CI が push のたびに再生 → state 一致なら全 stage 正しい。
 - **2 層テストの補完関係**: ユニット = trait 実装単体の正しさ（速い、純 Rust）+ 統合 = コンポーネント間相互作用（~1 秒、ノード組み立て）。**どちらかを省くと特定クラスのバグが通り抜ける**。
 
+## Expert への接続
+
+Reth コンポーネント層のテスト規律。Systems 層では Expert tier の 2 レッスンがこれを発展させる:
+
+- [Differential fuzzing と execution-spec-tests](/courses/reth-expert-ja/lessons/expert-differential-fuzzing-ja) — 複数実装にわたるコンセンサス正しさのテスト
+- [Systems-code auditing](/courses/reth-expert-ja/lessons/systems-code-auditing-ja) — Reth patch を監査人の目で読む
+
 ## 合格基準
 
 - 2 テスト層と各々が何をテストするかを言える。

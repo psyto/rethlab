@@ -1702,6 +1702,14 @@ App-chain 最低トポロジ:
 - **diff テスト発見時の 3 容疑**: ① 自分の最近の変更が他コードパスに副作用、② 共有 utility（gas 計算、precompile、state root 計算）の改変、③ 状態管理の境界条件（reorg、empty block、過去 hardfork 境界）。**自分のコミット履歴を再読** が最初の手。
 - **3 アップグレード未完バリデータが見る現実**: ブロック 1000 で 3 が新ルール、1 が旧ルール → ブロック 1001 で旧ルールバリデータは新ルールブロックを reject → 「自分から見ると」分岐 → quorum 不足で投票しなくなる → 残り 3 で多数決継続 → 旧バリデータは脱落（slashing 対象または inactivity ペナルティ）。回復は新バイナリに上げて DB を再 sync。
 
+## Expert への接続
+
+本番で Reth fork を走らせるのは、Expert tier の 3 レッスンの交差点に位置する:
+
+- [Systems-code auditing](/courses/reth-expert-ja/lessons/systems-code-auditing-ja) — fork diff をアップグレード前に監査人の規律で review する
+- [Chaos engineering を Rust EVM ノードに](/courses/reth-expert-ja/lessons/chaos-engineering-rust-evm-ja) — 上流 Reth が耐える失敗モードに自分の fork も耐えることを確認するための制御された故障注入
+- [OSS 貢献ワークフロー](/courses/reth-expert-ja/lessons/oss-contributor-workflow-ja) — 汎用的な fix を Paradigm/Reth に upstream して fork の diff を小さく保つ
+
 ## 合格基準
 
 - 4 本番ビルドフラグを暗唱できる。

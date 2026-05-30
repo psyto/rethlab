@@ -1012,6 +1012,10 @@ The key concept: define a \`Handler\` contract whose functions are the "things t
 
 This is what catches multi-call bugs that single-call fuzzing never sees: token-balance reentrancy, ordering-dependent state corruption, the kind of bug that crashed Mt. Gox in slow-motion. **Lesson 3 is where \`forge\` becomes a real adversary, not just a parameter generator.**
 
+## Expert continuation
+
+Single-call fuzzing is the Solidity-side primitive. The Expert tier takes the same property-testing idea down to the consensus layer — see [Differential fuzzing & execution-spec-tests](/courses/reth-expert-en/lessons/expert-differential-fuzzing-en) for cross-client diff testing of EVM implementations against the canonical spec.
+
 ## Summary (3 lines)
 
 - \`forge fuzz\` = Solidity-side \`proptest!\`. \`vm.assume\` = \`prop_assume!\`; shrinking, corpus persistence, profile-per-environment are the same disciplines. Function-name + parameter signature = fuzz signal.
@@ -1392,6 +1396,10 @@ You'll learn:
 - The full read-eval pattern: write contract → forge test → cast call against a forked anvil to verify behavior on real state
 
 After Lesson 4 you can interact with deployed contracts from a shell loop without writing a Solidity script — the CLI equivalent of \`curl\`+\`jq\` for the EVM.
+
+## Expert continuation
+
+Invariant testing catches multi-call bugs at the contract layer. The same discipline at the EVM-implementation layer is [Differential fuzzing & execution-spec-tests](/courses/reth-expert-en/lessons/expert-differential-fuzzing-en) — random transaction sequences across multiple EVM implementations, asserting they agree at every step.
 
 ## Summary (3 lines)
 

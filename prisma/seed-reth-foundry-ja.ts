@@ -1044,6 +1044,10 @@ Key concept: \`Handler\` contract を定義する。その関数が「システ�
 
 これが single-call fuzzing が決して見ない multi-call bug を catch する。token-balance reentrancy、ordering-dependent な state corruption、Mt. Gox をスローモーションでクラッシュさせたタイプの bug。**レッスン 3 は \`forge\` が単なるパラメータ生成器ではなく、real な adversary になる場所だ。**
 
+## Expert への接続
+
+Single-call fuzzing は Solidity 側の primitive だ。Expert tier では同じ property-testing の発想をコンセンサス層まで降ろす — [Differential fuzzing と execution-spec-tests](/courses/reth-expert-ja/lessons/expert-differential-fuzzing-ja) で複数 EVM 実装の cross-client diff testing を正典 spec に対して行う。
+
 ## 合格基準
 
 - \`vm.assume\` と \`prop_assume!\` の役割等価性を 1 文で説明できる。
@@ -1435,6 +1439,10 @@ No。\`view\` か \`pure\` でなければならない。Foundry は Handler cal
 - Full read-eval パターン: contract を書く → forge test → forked anvil に対して cast call を打って real state で挙動を検証する
 
 レッスン 4 完走後は、Solidity script を書かずに shell loop からデプロイされた contract と対話できるようになる。EVM 用の \`curl\`+\`jq\` の CLI 等価物だ。
+
+## Expert への接続
+
+Invariant testing は contract 層で multi-call bug を catch する。同じ規律を EVM 実装層に持ち込んだのが [Differential fuzzing と execution-spec-tests](/courses/reth-expert-ja/lessons/expert-differential-fuzzing-ja) — ランダム transaction sequence を複数 EVM 実装に対して走らせ、各 step で一致を assert する。
 
 ## 合格基準
 
