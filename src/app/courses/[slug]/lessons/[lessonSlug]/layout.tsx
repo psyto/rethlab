@@ -9,6 +9,40 @@ const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
+/**
+ * Distill a clean meta description out of lesson markdown.
+ * Strips HTML comments, fenced code, headings, list/quote markers, emphasis,
+ * tables, links/images, and HTML — then collapses whitespace and trims to
+ * a word boundary so the result reads as prose, not as mangled markdown.
+ */
+function distillDescription(content: string | null | undefined, maxLen: number): string | null {
+  if (!content) return null;
+  const cleaned = content
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^#+\s+.*$/gm, '')
+    .replace(/^>+\s*/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/(^|[^_])_([^_\n]+)_(?!\w)/g, '$1$2')
+    .replace(/<[^>]+>/g, '')
+    .replace(/^[-:|\s]+$/gm, '')
+    .replace(/\|/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return null;
+  if (cleaned.length <= maxLen) return cleaned;
+  const sliced = cleaned.slice(0, maxLen);
+  const trimmed = sliced.replace(/\s+\S*$/, '');
+  return (trimmed || sliced) + '…';
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, lessonSlug } = await params;
 
@@ -30,10 +64,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: 'Lesson Not Found' };
   }
 
-  // Extract first ~155 chars of content as description (strip markdown)
-  const description = lesson.content
-    ? lesson.content.replace(/[#*`\[\]()>_~|\\-]/g, '').replace(/\n+/g, ' ').trim().slice(0, 155) + '...'
-    : `${lesson.title} — ${course.title} on RethLab`;
+  const description =
+    distillDescription(lesson.content, 155) ?? `${lesson.title} — ${course.title} on RethLab`;
 
   // Compute hreflang siblings: this course slug ↔ its EN/JA twin
   const isJa = slug.endsWith('-ja');
@@ -81,11 +113,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       languages,
     },
     openGraph: {
+      type: 'article',
       title: `${lesson.title} — ${course.title} | RethLab`,
       description,
       url: canonicalAbs,
       locale: isJa ? 'ja_JP' : 'en_US',
       alternateLocale: isJa ? 'en_US' : 'ja_JP',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${lesson.title} — ${course.title}`,
+      description,
+      creator: '@psyto',
+      site: '@psyto',
     },
   };
 }
@@ -123,9 +163,8 @@ export default async function LessonLayout({
   const coursePath = `/courses/${slug}`;
   const courseUrl = `${siteUrl}${coursePath}`;
 
-  const plainText = lesson.content
-    ? lesson.content.replace(/[#*`\[\]()>_~|\\-]/g, '').replace(/\n+/g, ' ').trim().slice(0, 200)
-    : `${lesson.title} — ${course.title}`;
+  const plainText =
+    distillDescription(lesson.content, 200) ?? `${lesson.title} — ${course.title}`;
 
   const articleJsonLd = {
     '@context': 'https://schema.org',

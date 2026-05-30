@@ -27,5 +27,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  return [...staticPages, ...coursePages];
+  const lessons = await prisma.lesson.findMany({
+    where: { module: { course: { isPublished: true } } },
+    select: {
+      slug: true,
+      updatedAt: true,
+      module: { select: { course: { select: { slug: true } } } },
+    },
+  });
+
+  const lessonPages: MetadataRoute.Sitemap = lessons.map((lesson) => ({
+    url: `${root}/courses/${lesson.module.course.slug}/lessons/${lesson.slug}`,
+    lastModified: lesson.updatedAt,
+    changeFrequency: 'monthly',
+    priority: 0.7,
+  }));
+
+  return [...staticPages, ...coursePages, ...lessonPages];
 }
