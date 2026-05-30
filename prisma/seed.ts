@@ -74,6 +74,7 @@ import { seedRethFoundryV3JA } from './seed-reth-foundry-v3-ja';
 import { seedRethPerpPrimerV3JA } from './seed-reth-perp-primer-v3-ja';
 import { seedRethFundamentalsV3JA } from './seed-reth-fundamentals-v3-ja';
 import { seedRethBeginnerV3JA } from './seed-reth-beginner-v3-ja';
+import { seedRethBridgeToAdvancedV3JA } from './seed-reth-bridge-to-advanced-v3-ja';
 import { seedRethFoundryEN } from './seed-reth-foundry-en';
 import { seedRethFoundryJA } from './seed-reth-foundry-ja';
 import { seedRethFoundryV2JA } from './seed-reth-foundry-v2-ja';
@@ -234,6 +235,7 @@ async function main() {
   await seedRethPerpPrimerV3JA(prisma);
   await seedRethFundamentalsV3JA(prisma);
   await seedRethBeginnerV3JA(prisma);
+  await seedRethBridgeToAdvancedV3JA(prisma);
   console.log('  Seeded Building OpenHL — ADL (EN + JA)');
   await seedRethFoundryEN(prisma);
   await seedRethFoundryJA(prisma);

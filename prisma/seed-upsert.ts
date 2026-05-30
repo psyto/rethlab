@@ -88,6 +88,7 @@ import { seedRethFoundryV3JA } from './seed-reth-foundry-v3-ja';
 import { seedRethPerpPrimerV3JA } from './seed-reth-perp-primer-v3-ja';
 import { seedRethFundamentalsV3JA } from './seed-reth-fundamentals-v3-ja';
 import { seedRethBeginnerV3JA } from './seed-reth-beginner-v3-ja';
+import { seedRethBridgeToAdvancedV3JA } from './seed-reth-bridge-to-advanced-v3-ja';
 import { seedRethOpenHlClobEN } from './seed-reth-openhl-clob-en';
 import { seedRethOpenHlClobJA } from './seed-reth-openhl-clob-ja';
 import { seedRethOpenHlPrecompilesEN } from './seed-reth-openhl-precompiles-en';
@@ -183,6 +184,7 @@ const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethPerpPrimerV3JA,
   seedRethFundamentalsV3JA,
   seedRethBeginnerV3JA,
+  seedRethBridgeToAdvancedV3JA,
   seedRethFoundryEN,
   seedRethFoundryJA,
   seedRethFoundryV2JA,
