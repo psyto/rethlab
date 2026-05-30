@@ -454,6 +454,52 @@ Merkle はハッシング後 / AccountHashing と StorageHashing は順次（MDB
 
 \`Stage\` トレイトの 6 メソッド、10 ステージパイプラインの順序制約、SenderRecovery の並列化、100× 高速化の 3 要因 を確認する。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "なぜ `unwind` は別の reorg トレイトやメソッドではなく、`Stage` トレイトの中で `execute` と同じ場所にあるのですか?",
+                      "options": [
+                        "Reorg はまれなので様式上の選択。",
+                        "Rust はトレイトに対称的なメソッドを要求する。",
+                        "Reorg は通常運用の一部で、同じトレイトに置くと「範囲を前進」と「範囲を後退」が構造的に同一になり、コードベースから並行する「reorg パス」を取り除ける。",
+                        "古い Reth バージョンの後方互換シム。"
+                      ],
+                      "correctIndex": 2,
+                      "explanation": "Reth の設計は reorg を特殊ではなく日常として扱う。同じトレイト → 同じオーケストレータスケジューラ、同じステージ単位ロジック。reorg を別トレイトにすると各ステージを2回実装することになり、オーケストレータが前進パスと後退パスに分裂 — まさに他のクライアントが持っていて Reth が避けるよう作られた形。"
+                    },
+                    {
+                      "question": "なぜ `ExecOutput.done` は別の `has_more()` メソッドではなく、結果の中のフラグとして返されるのですか?",
+                      "options": [
+                        "様式 — どちらでも同じ。",
+                        "別の `has_more()` だとオーケストレータがターンに2回呼ぶ羽目になり（execute、それから has_more）、checkpoint と has_more が食い違うバグの種類を開く。出力の中のフラグなら呼び出しがアトミック — `execute` が状態のスナップショットを1つ返すだけ。",
+                        "Rust の型システムが `has_more()` を表現できない。",
+                        "非同期キャンセルを可能にするため。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "アトミックな呼び出し/戻り値が肝心。オーケストレータはターンごとに正確に1つのフィードバックが欲しい:「チェックポイント X まで進めた; また呼ぶかどうかはあなた次第」。これを2つのメソッドに分けると、その間に何が起きるかについての推論ギャップが開く。"
+                    },
+                    {
+                      "question": "なぜ `MerkleStage` は `AccountHashingStage` と `StorageHashingStage` の *後* に配置され、間に挟まれないのですか?",
+                      "options": [
+                        "歴史的な事故; 順序は違ってもよい。",
+                        "Merkle Patricia Trie のルートには葉がハッシュ化キーでソートされている必要がある。ハッシングステージがそのソートを生成し、Merkle はブロック範囲のソート集合全体を必要とするので、ハッシングは Merkle が始まる前に完了して commit しなければならない。",
+                        "`MerkleStage` はハッシングより遅いので、性能のために最後。",
+                        "メモリを節約するため。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "アルゴリズム上の制約: Merkle ルートの計算はソートされた葉が commit されるまで始められない。ハッシングがプロデューサ、Merkle がコンシューマ。プロデューサが完了し、それからコンシューマが走る。インターリーブすると部分的な Merkle 再計算が強制され、適切なバッチ化よりコストがかかる。"
+                    },
+                    {
+                      "question": "Reth の10ステージのうち、`SenderRecoveryStage` が並列化で最も得をする。なぜ（例えば）`ExecutionStage` ではなく、これなのか?",
+                      "options": [
+                        "`SenderRecoveryStage` の方が処理する tx 数が多い。",
+                        "Sender 復元は embarrassingly parallel: 各 ECDSA 復元が他から独立、共有状態なし。Execution には順次の状態依存がある — ブロック N のストレージ書き込みがブロック N+1 の読み込みに影響 — ので簡単には並列化できない。",
+                        "Rayon は `ExecutionStage` の中では動かない。",
+                        "`ExecutionStage` は既に1コアを飽和させているので、並列化で得しない。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "ECDSA 復元は署名間で独立、全コアに簡単に展開できる。Execution にはコンセンサスで決まった順次の状態依存があり、並列化には optimistic execution（Block-STM など）が必要で独自の複雑さを持つ。Sender 復元は作業の形が Rayon のモデルと完全に合うので、特別なケース。"
+                    }
+                  ],
                 },
                 {
                   title: 'レッスン3 — ドリル: \`SenderRecoveryStage\` を端から端まで読む',
@@ -1126,6 +1172,52 @@ NodeBuilder にチェイン、複数 install で拡張コンポーズ。
 
 ExEx の 3 バリアント通知、\`FinishedHeight\` の役割、init/run 分割、\`install_exex\` の複数拡張パターンを確認する。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "ExEx API が単一の `async fn` ではなく init/run の分割（`exex_init` が future を返す）になっているのはなぜですか?",
+                      "options": [
+                        "Rust が `async` トレイトにセットアップ関数を要求するため。",
+                        "古い Reth バージョンの後方互換シム。",
+                        "init/run なら長時間の通知ループが始まる前に同期的セットアップ（ファイル開放、DB 初期化）ができる。Reth は「ExEx が起動できなかった」と「ExEx が動いた後でクラッシュした」を区別できる。",
+                        "性能 — 分割した関数の方がインライン化される。"
+                      ],
+                      "correctIndex": 2,
+                      "explanation": "単一の `async fn` だとセットアップが future の中に押し込まれる — 「ExEx が起動しなかった」と「ループ中にクラッシュした」が区別不能になる。init/run の分割は Reth に「この拡張は起動して準備完了」のクリーンな確認の瞬間を与える、通知が始まる前に。"
+                    },
+                    {
+                      "question": "ExEx を実装し、`ChainCommitted` だけ扱い、`ChainReorged` と `ChainReverted` を無視する。チェーンが 5 ブロック深く reorg した。派生状態に何が起きる?",
+                      "options": [
+                        "prune されるべき余分な 5 ブロックが含まれる。",
+                        "*古い* チェーン（もう canonical でないセグメント）のデータを含み、*同時に* *新しい* チェーンのデータが欠落（置換されたセグメントには `ChainCommitted` が来ない）。Phantom データと欠落データが同時。",
+                        "panic でクラッシュする。",
+                        "状態は無事; Reth が新チェーン用に `ChainCommitted` を再送する。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "これが ExEx の #1 バグ。`ChainReorged` は `old` と `new` を両方運ぶので、インデクサが `old` の効果を undo して `new` を apply できる。無視すると両半分とも間違う — 古いデータがインデックスされたまま、新しいデータは決してインデックスされない。"
+                    },
+                    {
+                      "question": "`ctx.events.send(ExExEvent::FinishedHeight(N))` は Reth に何を伝えるのですか?",
+                      "options": [
+                        "「ブロック N より下の通知を送らないで。」",
+                        "「ブロック N まで処理した; N より下の歴史的状態は安全に prune してよい。」Reth はインストールされたすべての ExEx の最小値を集約して prune の判断に使う。",
+                        "「ブロック N は不正 — 捨てて。」",
+                        "「次の再起動でブロック N から再開して。」"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "`FinishedHeight` なしでは、Reth は ExEx が後で読みたいかもしれないものを安全に prune できない — 保守的にすべてを永久に保持する。このイベントを忘れると「無害なインデクサ」が偶然のアーカイブノードに変わる。"
+                    },
+                    {
+                      "question": "ExEx ベースのインデクサは別プロセスで RPC をポーリングするインデクサより速い。*主な* アーキテクチャ的理由は?",
+                      "options": [
+                        "インデクサが速い CPU で動いている。",
+                        "同じプロセス、I/O ラウンドトリップなし。Reth がブロックをコミットした瞬間に ExEx が通知を受け取る — RPC リクエスト/レスポンスもポーリング間隔もアトミック性のギャップもない。さらに Reth が既に計算したフルチェーンコンテキスト（reorg 構造を含む）。",
+                        "ExEx は EVM 実行ステップをスキップする。",
+                        "RPC にはレートリミッターがある; ExEx にはない。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "アーキテクチャ的アンロックは co-location（同居）。RPC ポーリング = 最良で〜1 秒のラグ、負荷時はもっと長く、reorg は二次情報。ExEx = ゼロラグ、フルコンテキスト、IPC なし。"
+                    }
+                  ],
                 },
                 {
                   title: 'レッスン7 — ドリル: reorg-safe なインデクサを作る',
@@ -1665,6 +1757,52 @@ sync + ストレージ + MPT + RPC + Tokio = 価値の大半、ここを差し�
 
 NodeBuilder API の 3 軸（types / components / add_ons）、6 コンポーネント、実本番チェーン（Tempo / Berachain / MegaETH / Hyperliquid）の差し替えパターンを確認する。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "なぜ `.with_types::<EthereumNode>()` がビルダーチェーンで `.with_components(...)` の *先* に来るのですか?",
+                      "options": [
+                        "様式 — コンパイラに順序は関係ない。",
+                        "性能 — 型先頭のほうがコンパイルが速い。",
+                        "型はコンポーネントの load-bearing: tx と block の型が pool、executor、payload などが操作する対象を決める。チェーンが先に型バンドルに commit して、後続のコンポーネントビルダーが型認識可能になる。",
+                        "古い Reth バージョンとの後方互換性。"
+                      ],
+                      "correctIndex": 2,
+                      "explanation": "コンポーネントは型に依存する。`with_components` が先頭なら、各ビルダーは未確定の型でジェネリックにする必要がある。チェーンの順序が依存グラフをエンコードする — 型が先、その上にコンポーネントが乗る。"
+                    },
+                    {
+                      "question": "あなたが payment-priority レッスン1を作ろうとしている。どのコンポーネントが最も直接的にそれを実現しますか?",
+                      "options": [
+                        "`consensus` — payment priority はコンセンサスルール。",
+                        "`pool`（受付と順序付けルール）と `payload`（ブロックビルダー）。Pool が次のブロックに先に入る tx を決め、payload ビルダーが最終的な順序を決める。",
+                        "`executor` — payment priority は Opcode にエンコードされる。",
+                        "`network` — P2P レイヤが payment をルーティングする。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Pool が高優先 payment を早めに surface する; payload がブロックの最終順序を決める。Consensus、executor、network は受付/順序付けに関係ない。これは Tempo の実際のカスタマイズに対応する。"
+                    },
+                    {
+                      "question": "「Reth 全体を fork ではなく、コンポーネントを組み立てる」が、何年も運用するチェーンの唯一の実行可能な戦略であるのはなぜですか?",
+                      "options": [
+                        "Fork のほうが速い。",
+                        "Fork は実際には変えたくない 200K 行以上の所有権を与える。コンポーネント合成なら差し替える部分（通常 10K 行未満）だけを所有しつつ、Paradigm のアップストリームのアップデートが依存ライブラリの 80% に流れ込む。",
+                        "Fork が Reth のライセンスに違反する。",
+                        "関係ない — どちらも同じくらい有効。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "これが保守の議論。Fork はアップストリームのリリースごとに分岐を蓄積する。合成はアップグレードパスを開けたままにする: Reth がアップデートを出し、Cargo の依存をバンプし、カスタムビルダーは差し替え表面しか触っていないので動き続ける。"
+                    },
+                    {
+                      "question": "ExEx を使うことと Reth SDK を使うことの違いは何ですか?",
+                      "options": [
+                        "違いはない — 同じものの別名。",
+                        "ExEx は既存の Ethereum ノードを chain commit にフックして拡張する（あなたはゲスト）。SDK はコンポーネントを組み立てて *自前のチェーン* を作る（あなたはホスト）。ExEx はインデクサ・MEV ボット・ロールアップ向け; SDK は レッスン1/レッスン2 向け。",
+                        "ExEx は L1 向け、SDK はインデクサ向け。",
+                        "SDK は ExEx の非推奨バージョン。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "ExEx = チェーンイベントを聞く、派生状態、prune に優しい。SDK = チェーンを定義、コンポーネントを差し替え、ノードバイナリを出荷。スタックの違うレイヤの相補的な道具で、本番デプロイは両方使うことが多い（SDK でチェーンを定義、ExEx でインデクサを足す）。"
+                    }
+                  ],
                 },
                 {
                   title: 'レッスン10 — ドリル: カスタム pool ビルダーを出荷する',
@@ -2170,6 +2308,41 @@ architect 優先 = Advanced / 出荷優先 = Expert。
 
 3 トピックチェーン（Staged Sync / ExEx / SDK）+ Testing + Bridge to Expert の構造的事実を確認する。次ティア（Advanced or Expert）へ進む前のゲート。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "Reth の Staged Sync が、ブロック単位の同期に対して持つ実利は？",
+                      "options": [
+                        "ブロックをダウンロードするだけで実行しない設計でディスクを節約できる",
+                        "範囲をステージごとに処理することで I/O・CPU・キャッシュ効率を最大化 — かつ unwind により reorg を対称的に扱える",
+                        "Merkle ルート計算を無期限に遅延することでスキップする",
+                        "データベース不要 — 状態はクエリ時に都度導出す"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Staged Sync (Headers → Bodies → Senders → Execution → Hashing → Merkle → TxLookup → Indexes → Finish) は範囲をステージごとに処理。Sender 復元は Rayon で並列化。Hashing でソートしてから MerkleStage が動く。すべてのステージが `execute` と `unwind` を持つから、reorg は特殊ケースではなく通常運用。"
+                    },
+                    {
+                      "question": "ExEx（Execution Extensions）で何ができる？",
+                      "options": [
+                        "JSON-RPC パイプラインの応答送信前にカスタムロジックを注入する",
+                        "チェーンの commit / reorg / revert ごとに、ノードプロセス内で実行時間に近いレイテンシで Rust コードを動かす",
+                        "P2P ネットワークでのトランザクションの gossip 方法を上書きする",
+                        "Reth のコンセンサスエンジンを独自のものに置き換える"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "ExEx は ChainCommitted / ChainReorged / ChainReverted の通知を in-process で受け取り、インデクサ・MEV パイプライン・リアルタイムリスクエンジンに最適。(RPC カスタマイズは add_ons、ネットワークやコンセンサスのカスタマイズは with_components 経由 — 別の SDK 表面。)"
+                    },
+                    {
+                      "question": "Reth SDK で App-chain を作るとき、現実的なカスタマイズ表面は？",
+                      "options": [
+                        "genesis レベルの chain ID と gas limit のみ",
+                        "pool・network・payload・executor (EVM)・consensus コンポーネント、加えて RPC と ExEx を add-ons 経由で",
+                        "`Stage<Provider>` 実装のみ — それ以外はロックされている",
+                        "Database テーブルとインデックスのみ — EVM 自体は固定"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "SDK は `with_components.{pool, network, payload, executor, consensus}` と RPC/ExEx 用の `with_add_ons` を露出。カスタムメンプール (Tempo 風優先レーン) からカスタムコンセンサス (HyperBFT)、カスタム EVM (custom opcode / precompile) まで、すべてビルダー差し替え 1 つの距離。"
+                    }
+                  ],
                 },
               ],
             },

@@ -2475,6 +2475,118 @@ Issue tracker + PR queue + Discord + TODO コメント。複利で効く。
 
 レッスン0-15 を通じて: パフォーマンス（flamegraph / Criterion / jemalloc / maxperf）/ ストレージ（MDBX / B+tree / SALT 対比）/ 並行性（Tokio work-stealing / TaskExecutor）/ コンパイル時（proc macros / sol! / tracing）/ Precompile / MPT / Stateless / MEV / zkEVM / フォーク運用 / Differential fuzzing / EVM プライバシー / Chaos / Auditing / OSS 貢献ワークフロー の構造的事実を確認する。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "Rethがチェーン状態に RocksDB ではなく MDBX を採用する理由は？",
+                      "options": [
+                        "RocksDB の LSM ツリーのコンパクションは書き込みスループットを上げるが読み取りレイテンシを不安定にする — Reth は予測可能なレイテンシとロックフリー読み取りのため MDBX (B+tree + mmap + MVCC) を選ぶ",
+                        "MDBX はネイティブで範囲スキャンをサポートし、RocksDB はセカンダリインデックスの構築が必要",
+                        "MDBX は Rust 製なので Reth の他のスタックと統合しやすい",
+                        "MDBX の mmap 設計は読み取りごとのカーネル/ユーザ空間コピーを排除する — RocksDB ではできない"
+                      ],
+                      "correctIndex": 0,
+                      "explanation": "Ethereum は読み取り重く・レイテンシ敏感。MDBX は C 製で Rust ではない (選択肢 3 を除外)。RocksDB はイテレータ経由で範囲スキャンをサポート (選択肢 2 を除外)。選択肢 4 の mmap 主張は部分的に正しいが帰結であって設計の動機ではない — 動機は validator レイテンシのためのコンパクションストール回避。"
+                    },
+                    {
+                      "question": "Reth フォークの Rust パフォーマンス最適化で最初にやるべきは？",
+                      "options": [
+                        "ホットだと疑う関数に #[inline] ヒントを付ける",
+                        "グローバルアロケータを jemalloc に切り替える — Reth は既にこれをやっている",
+                        "プロファイル (flamegraph) とベンチマーク (Criterion) で **実際の** ホットパスを特定してから何かを変える",
+                        "ホットループを std::simd 組み込みでベクトル化する"
+                      ],
+                      "correctIndex": 2,
+                      "explanation": "早すぎる最適化は悪、見えない遅さはもっと悪い。他の 3 つの選択肢はそれぞれ本物の擁護可能な最適化 — しかし測定なしに適用するのが、このレッスンが防ごうとする失敗モードそのもの。"
+                    },
+                    {
+                      "question": "Tokio ランタイム内で CPU 重い処理をやる正しい方法は？",
+                      "options": [
+                        "tokio::spawn でラップして他の async タスクと並行に実行する",
+                        "tokio::task::spawn_blocking — ブロッキング作業用にサイズ調整された別のスレッドプールに逃がす",
+                        "std::thread::spawn を直接使い、CPU 作業が Tokio に触らないようにする",
+                        "関数に #[tokio::task] アノテーションを付けて Tokio に適切にルーティングさせる"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "tokio::spawn (選択肢 1) も作業を非同期ワーカープールに置く — 直接呼ぶのと同じくランタイムを飢えさせる。std::thread::spawn (選択肢 3) は Tokio を完全にバイパスし JoinHandle 統合を失う。#[tokio::task] 属性は存在しない (選択肢 4 は捏造)。spawn_blocking が規律。"
+                    },
+                    {
+                      "question": "手続きマクロはいつ実行される？",
+                      "options": [
+                        "実行時、ただし結果は初回呼び出し後にキャッシュされる",
+                        "コンパイル時、入力 TokenStream を出力 TokenStream に変換する",
+                        "パース時、レキサが走る前 — だから proc macro は raw バイトを使える",
+                        "コンパイル後、リンク前、ビルドスクリプトパイプラインの一部として"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "proc macro はコンパイラがコードをパースする最中に走る — レキサの後 (選択肢 3 を除外)、リンクのずっと前 (選択肢 4 を除外)。実行時には呼ばれない (選択肢 1 を除外)。cargo expand で結果が見える。"
+                    },
+                    {
+                      "question": "Revm における「カスタム Opcode」と「カスタム Precompile」の主要な違いは？",
+                      "options": [
+                        "Opcode は EVM インタープリターループで実行される; Precompile は別プロセスで動き IPC 経由で通信する",
+                        "Opcode は EVM 命令セットを変更する (バニラ EVM とのコンセンサスを破る); Precompile は予約アドレスへの CALL で呼べるネイティブ関数 (Solidity / ABI ツールにほぼ透過)",
+                        "カスタム Opcode はメインネットで有効; カスタム Precompile は App-chain に限定される",
+                        "Opcode は任意のコントラクトアドレスから呼べる; Precompile は特別な precompile 対応コンパイラを必要とする"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "両方とも in-process で動く — IPC はない (選択肢 1 を除外)。カスタム Opcode はコンセンサスを破り、カスタム Precompile は破らない (選択肢 3 の **逆** が正しい)。Precompile は標準 CALL で呼べる — 特別なコンパイラ不要 (選択肢 4 を除外)。"
+                    },
+                    {
+                      "question": "Ethereum が状態に Merkle Patricia Trie (MPT) を使う理由は？",
+                      "options": [
+                        "Patricia trie は任意の 256 ビットキーに対する最速のインデックスデータ構造",
+                        "世界状態全体を単一の 32 バイトハッシュにコミットでき、包含 / 非包含証明が可能で、パス圧縮で空間効率が高い",
+                        "ハッシュ衝突攻撃に強い — 各木のレベルで異なるハッシュ関数を使うから",
+                        "すべての葉を並列に変更でき、ロック不要 — staged sync に critical"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "MPT は最速のルックアップ構造ではない (選択肢 1 を除外 — HashMap のほうが速いが何にもコミットしない)。レベルごとに違うハッシュではなく keccak256 を全レベルで使う (選択肢 3 を除外)。並列変更は MPT の性質ではない — ルートまでの逐次再ハッシュが必要 (選択肢 4 を除外)。暗号学的コミットメントが全てのポイント。"
+                    },
+                    {
+                      "question": "Revm を使った本番 zkEVM プルービングパイプラインで「witness」とは？",
+                      "options": [
+                        "mempool でトランザクションを観測したことを証言するノード運用者からの暗号学的署名",
+                        "ブロックがアクセスした状態値 (アカウント・コード・ストレージスロット・最近のブロックハッシュ) の集合 — zkVM 内ではディスクが読めないのでプローバが消費する",
+                        "ブロックで使用された全 Opcode のガスコストを事前計算したテーブル",
+                        "証明対象ブロックでスナップショットされたフルチェーン状態を zkVM に送り込む"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "署名は関係ない (選択肢 1 を除外)。ガスコストは EVM 仕様の定数で witness の一部ではない (選択肢 3 を除外)。*フル* 状態を送ると目的が破綻する — witness は最小サブセット、スナップショットではない (選択肢 4 を除外)。witness にない値をブロックが読めば証明は失敗する。"
+                    },
+                    {
+                      "question": "MEV サーチャーにとって ExEx が価値ある理由は？",
+                      "options": [
+                        "標準のメインネット RPC より速く動く JSON-RPC シミュレーションエンドポイントを内蔵している",
+                        "チェーンの commit / reorg / revert 通知をほぼゼロレイテンシで in-process でフル状態アクセスとともに受け取れる — ウォームキャッシュと高速シミュレーションに最適",
+                        "Ethereum コンセンサスルールをバイパスし、サーチャーが代替順序を決定論的にシミュレーションできる",
+                        "OS スケジューラが予約した CPU コアで動き、他のワークロードがプリエンプトできない"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "ExEx は RPC エンドポイントではない (選択肢 1 を除外) — Rust コードへのコールバック。コンセンサスをバイパスできない; 通知が従うルールそのもの (選択肢 3 を除外)。Tokio スケジューリングは OS レベルの CPU pinning と関係ない (選択肢 4 を除外)。本領は各チェーンイベントで得られる in-process のレイテンシ。"
+                    },
+                    {
+                      "question": "カスタム Precompile の価格設定で守るべき大原則は？",
+                      "options": [
+                        "同等の Solidity 実装の約 1/10 のガスに設定して採用を促進する",
+                        "ガスコストは CPU コストに追従 — 典型的に最遅の現実的入力でベンチ、2〜5 倍の悪用係数を掛け、敵対的入力で検証",
+                        "ユーザに対してガスモデルを予測可能に保つため、フラットな per-call コストを課す",
+                        "最も似た標準 precompile (例: ecrecover) のガスコストをベースラインとして使う"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "採用のための安すぎ (選択肢 1) こそ EIP-2929 が retrofit を強いられた DoS ベクター。フラットコスト (選択肢 3) は入力サイズが効く瞬間に破綻。他の precompile の数字を借りる (選択肢 4) は健全性チェックとしては良いが自分の CPU プロファイルを無視する。本物のワークフローは ベンチ → 悪用係数 → 敵対的検証。"
+                    },
+                    {
+                      "question": "カスタム Reth フォークで App-chain を運用するときの現実的な最低限の本番デプロイは？",
+                      "options": [
+                        "単一データセンター内に 1 つのロードバランサ越しに 3 バリデータを共存させる (最低レイテンシ)",
+                        "3 データセンターに ≥4 バリデータを地理分散、各バリデータの前に sentry ノード、解析用に別 archive ノード、レート制限付き RPC フリート — バリデータと公開 RPC は決して同居させない",
+                        "同じクラウドリージョン内に 5 バリデータ (リージョン跨ぎは合意レイテンシが増えすぎる)",
+                        "active-passive failover の 2 バリデータとホットスタンバイ (運用チームを小さく保つ)"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "BFT 安全性は障害ドメイン跨ぎの定足数を要求 — 単一 DC (選択肢 1) と単一リージョン (選択肢 3) は 1 障害で崩壊。2 バリデータ (選択肢 4) はビザンチン振る舞いに耐えられない。現実的最低限は 地理分散 + sentry 分離 + 専用 RPC フリート、なぜなら公開 RPC への 1 度の DDoS でコンセンサスを止めてはいけないから。"
+                    }
+                  ],
                 },
               ],
             },
@@ -3241,6 +3353,97 @@ Deposit / L1 cost / L1 oracle / 独立 consensus / Sequencer / Native 資産。
 
 レッスン17-22 を通じて: Extension model（fork ではなくライブラリ）/ op-stack-on-reth 解剖 / Custom ChainSpec / Custom executor / Custom payload builder / Paradigm スタックケーススタディ の構造的事実を確認する。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "なぜ大半の Reth ベース chain は geth 流のフォークモデルではなく拡張モデルを採用しているのか?",
+                      "options": [
+                        "Reth が geth より速いため、性能を求めて chain は採用せざるを得ない",
+                        "Reth のモジュラーな trait アーキテクチャ (NodeBuilder + ChainSpec + ExecutorBuilder + PayloadBuilder) により、必要な部分だけをカスタマイズし、残りはライブラリとして利用できるため — rebase コストが消える",
+                        "Rust のモジュールシステムが source レベルの fork を阻止するため",
+                        "Paradigm が Reth を使うすべての chain に対して「拡張のみ」のポリシーを強制しているため"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "速度 (選択肢 1) は副産物であってアーキテクチャ上の理由ではない。Rust は fork を阻止しない (選択肢 3 は誤り)。Paradigm が独立 chain に何かを強制している事実もない (選択肢 4 は誤り)。本当の駆動要因は trait アーキテクチャそのもの — 重要なスロットだけを override し、残りを継承する設計が成り立つ。"
+                    },
+                    {
+                      "question": "Reth ベース chain の hardfork activation のロジックはどこに住むか?",
+                      "options": [
+                        "Payload builder — builder が各 fork で block を生成するため",
+                        "ChainSpec — ある block height / timestamp でどの fork がアクティブかは consensus rule であり、それを所有するのは ChainSpec だから",
+                        "Executor — fork によって execution の振る舞いが変わるため",
+                        "Genesis JSON — 初期 state allocation と並べて記述されるため"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "複数の層が fork state を「読む」が、所有しているのは ChainSpec 一つだけ。Builder (1) や executor (3) は判断のために fork state を参照するが、その都度 ChainSpec に問い合わせる — activation 自体を所有しているわけではない。Genesis (4) は *初期* state を担うもので、fork schedule ではない。"
+                    },
+                    {
+                      "question": "OP Stack は L2 gas に加えて L1 data cost を課金する。このロジックを含む trait の impl はどれで、なぜか?",
+                      "options": [
+                        "Custom precompile — precompile が native な fee logic を置く自然な場所だから",
+                        "Mempool policy — fee は admission 時に計算されるため",
+                        "Block execution strategy / executor — tx 実行前にアカウントから控除する操作は consensus-critical な state mutation であり、全ノードが寸分違わず同じ計算を行わなければならないから",
+                        "RPC layer — クライアントが tx 提出前に L1 cost を知る必要があるため"
+                      ],
+                      "correctIndex": 2,
+                      "explanation": "Precompile (1) は単独では任意アカウントから控除できない — executor の権限が必要。Mempool (2) は cost を *推定* できるが consensus 上の state change を強制することはできない。RPC (4) は情報提供であって consensus-critical ではない。権限と consensus-critical な位置の両方を持っているのは executor だけ。"
+                    },
+                    {
+                      "question": "Reth ベース L2 が、すべての block の先頭に deposit tx を強制的に含める必要がある。これを処理するのはどの trait か?",
+                      "options": [
+                        "ChainSpec — deposit の取り扱いは chain rule の一部だから",
+                        "Payload builder — block に何が入るか、どの順序で入るかを決めるのは payload builder だから",
+                        "Mempool — deposit tx は別 queue にあり、mempool がそこから先に drain するから",
+                        "Custom consensus — ordering を強制できるのは consensus だけだから"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "ChainSpec (1) は deposit tx の *定義* を持つが、選び出し方は持たない。Mempool (3) は deposit queue を追跡できるかもしれないが、「先頭に置く」は block composition の決定。Consensus (4) は過剰 — これは選択の問題であって finality の問題ではない。Block composition と順序を決定する単一コンポーネントが payload builder。"
+                    },
+                    {
+                      "question": "Reth ベース chain で custom precompile を書いたとき、その *登録* はどこで行われるか?",
+                      "options": [
+                        "Precompile crate 内部、static registry を経由して",
+                        "Chain の EVM config (ConfigureEvm impl) 内 — revm にアクティブな precompile セットを手渡し、chain の hardfork schedule で gate する",
+                        "Reth core 内部、precompile dispatch table を直接編集して",
+                        "Genesis JSON、初期 code allocation の一部として"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Static registry (1) では chain rule で gate できない。Reth core を編集 (3) は、まさに避けたい fork-model アンチパターンそのもの。Genesis (4) は state を保持する場所であり、protocol レベルの関数を置く場所ではない。EVM config こそが正しいスロット — ChainSpec (どの fork か) と revm (実際に走るもの) を結ぶ役。"
+                    },
+                    {
+                      "question": "alphanet と Tempo の関係を最も正確に表す説明は?",
+                      "options": [
+                        "同じプロジェクトの呼び名違い",
+                        "alphanet は Tempo のテストデプロイ",
+                        "alphanet は Paradigm が EVM 拡張 (custom precompile など) を検証する R&D testnet で、そこで成熟した実験は Tempo のような本番 chain に出荷されたり、Ethereum EIP として提案されたりする",
+                        "Tempo は alphanet の上に建てられ、alphanet は Reth の上に建てられている",
+                        "メンテナーが共通である以外はほぼ無関係"
+                      ],
+                      "correctIndex": 2,
+                      "explanation": "alphanet は遊び場で、Tempo は本番のレール。選択肢 1、2 は両者を混同している。選択肢 4 は依存関係の順序が逆 — どちらも直接 Reth に依存しており、互いに依存しているわけではない。選択肢 5 は弱すぎる: precompile 実験の技術的な系譜は実在し、追跡できる。"
+                    },
+                    {
+                      "question": "中央集権 sequencer の レッスン2において、payload builder が決め、executor が決めないことは?",
+                      "options": [
+                        "Payload builder は gas pricing を、executor は ordering を決める",
+                        "Payload builder は block にどの tx をどの順序で入れるかを決める。executor は、渡された tx を渡された順序で実行するだけ",
+                        "両者の決定範囲は同じ — builder は executor の薄いラッパーにすぎない",
+                        "Payload builder は署名を検証し、executor は state change を適用する"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Gas pricing (選択肢 1 は逆) は主に chainspec の問題で、builder と executor の対比軸ではない。両者同じ (3) は誤り — この分離こそが要点。署名検証 (4) は executor / tx validator 側の責務で、builder ではない。クリーンな分割: builder = 選択 + 順序づけ、executor = 言われたとおりに実行。"
+                    },
+                    {
+                      "question": "`tempoxyz/tempo` を初めて開き、Paradigm が「compose, don't fork」モデルに従ったかを確認したい。最もシグナルが強い 1 手は?",
+                      "options": [
+                        "README と発表ブログを読む",
+                        "`tempoxyz/reth` を開き、`paradigmxyz/reth` に対する commits-ahead/behind を確認する",
+                        "`tempoxyz/tempo` ワークスペース内の crate 数を数える",
+                        "Tempo と upstream Reth のスループットを比較するベンチマークを走らせる"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "README / ブログ (1) は正しいことを言っているが証明にはならない。Crate 数 (3) は緩い相関しかなくノイジー。ベンチマーク (4) は性能を測るのであって fork したかどうかではない。Fork チェック (2) が決定的な構造的テスト — そして答えは \"0 ahead, 1374 behind\"、これが「compose, don't fork」テーゼに対する最強の経験的証明。"
+                    }
+                  ],
                 },
               ],
             },

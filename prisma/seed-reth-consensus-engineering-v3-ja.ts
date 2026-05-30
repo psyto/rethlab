@@ -867,6 +867,96 @@ consensus / evm / chainspec / node + rpc。各 ~200-600 行。
 
 レッスン4（Reth Consensus trait）/ レッスン5（Malachite）/ レッスン6（bera-reth）の構造的事実を確認する。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "Reth の `Consensus` trait と Lighthouse のような consensus client の **構造的な違い** は?",
+                      "options": [
+                        "同じもの — Reth は内部にコンセンサスエンジンを含む。",
+                        "Reth の `Consensus` trait はブロックを chain ルールに対して **検証** する。Lighthouse のような consensus client は fork choice を通じてどのブロックを head にするかを **選択** する。EL/CL 境界で交差する 2 つの異なる仕事。",
+                        "Reth の `Consensus` はネットワーク層で動き、consensus client はアプリケーション層で動く。",
+                        "Reth は RocksDB を使い、consensus client は MDBX を使う。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "EL/CL 分離が基本。Reth (EL) はブロックを検証する — このブロックはルールに従っているか? Lighthouse (CL) は決める — 次にどの有効ブロックの上に積むべきか? カスタム レッスン1では **CL** (例えば Malachite) **と Reth の Consensus 実装** の両方を差し替える。"
+                    },
+                    {
+                      "question": "Tendermint で、投票が **2 ラウンド** (Prevote、その後 Precommit) になっていて、1 ラウンドでないのはなぜか?",
+                      "options": [
+                        "性能 — 2 ラウンドは 1 ラウンドより並列化しやすい。",
+                        "最初のラウンド (Prevote) はバリデータがブロックを見たことを確認する。2 ラウンド目 (Precommit) は 2f+1 が **同じ** ブロックを見たことを確認する — Byzantine リーダーが異なるブロックを異なるバリデータに送る攻撃を防ぐためだ。",
+                        "PBFT (1999) からの伝統で、HotStuff など現代の variant は 1 ラウンドで動く。",
+                        "2 ラウンド目で uncle ブロックを参照できるようにするため。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "2 ラウンドが split-brain に対する safety を担う。Byzantine リーダーは異なるブロックを異なる部分集合に送れる。2 ラウンド目なしでは、矛盾する 2 ブロックを commit させられる。Prevote は「何かを見た」、Precommit は「2f+1 で同じものを見た」を確認する。"
+                    },
+                    {
+                      "question": "PBFT (1999) と HotStuff (2018) の **見出し級の構造的な違い** は?",
+                      "options": [
+                        "PBFT は純粋 Rust で走り、HotStuff は Solidity コントラクトで動く。",
+                        "HotStuff は **閾値署名** によって PBFT の O(n²) all-to-all 通信を O(n) のリーダー fan-out に圧縮し、連続するブロックをパイプライン化してスループットを上げる。",
+                        "PBFT は finality gadget で、HotStuff は fork choice ルール。",
+                        "PBFT はパーミッションレスで、HotStuff は validator set を必要とする。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "暗号 (閾値署名) によって 1 つの集約署名が n 個の個別署名を置き換える。これが n² → n の圧縮。pipelining が 2 つ目の発明で、ブロックを異なるフェーズで同時並行に進められるようになる結果、スループットが「3 ブロック時間に 1 commit」から「1 ブロック時間に 1 commit」になる。"
+                    },
+                    {
+                      "question": "**Ethereum PoS の finality 周期** は何か、その構造的な理由は?",
+                      "options": [
+                        "毎 slot (12s) — スループットを最大化するため。",
+                        "最短 2 epoch (~13 分)。**100 万を超えるバリデータ** では BFT 系の即時 finality は不可能なので、stake 加重 2/3+ 票による epoch checkpoint で finalize する (Casper FFG)。",
+                        "確率的 — Ethereum PoS は Bitcoin 系の longest-chain を使う。",
+                        "設定可能で、オペレータが 1 slot と 1 epoch から選ぶ。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "ハイブリッド PoS: 高速な head 選択 (LMD-GHOST、毎 slot) + 遅い finality (Casper FFG、2 epoch ごと)。13 分は 100 万バリデータの分散化に対するコスト。Tempo クラスの chain は小さな validator set + 即時 finality を選ぶ。"
+                    },
+                    {
+                      "question": "Berachain はなぜ標準 Reth + カスタムバリデータではなく **bera-reth** を必要とするのか?",
+                      "options": [
+                        "revm ではなく別の EVM 実装を使うため。",
+                        "標準 Reth はバリデータには十分だが **コンセンサス固有のコードパス** を欠いている。PoL を認識するブロック検証、流動性報酬の流れ向けのカスタム executor hook、BGT 対応の chainspec、validator set を LP 状態と結合させる precompile が必要になる。",
+                        "ライセンス上の理由 — Reth は GPL だから。",
+                        "Berachain は別の L1で動いており、bera-reth は L2 専用だから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "PoL がバリデータ経済の関係を根本から変える。Consensus 実装、executor hook、chainspec のすべてがそれを知っている必要がある。vanilla Reth の上に約 2000 行のカスタマイズ。op-stack-on-reth と同じパターン: 最小だがコンセンサスクリティカルなカスタマイズ。"
+                    },
+                    {
+                      "question": "Reth の `Consensus` trait で、どのメソッドが **state root を検証** するか?",
+                      "options": [
+                        "`validate_header` — state root を含む header の全フィールドをチェックする。",
+                        "`validate_body_against_header` — body と header の構造的整合性をチェックする。",
+                        "`validate_block_post_execution` — EVM が tx を実行した後に走り、計算済みの post-state root を header の値と比較できる。",
+                        "なし — state root は別の prover によって外部で検証される。"
+                      ],
+                      "correctIndex": 2,
+                      "explanation": "State root は実行 *後* にしか存在しない。tx 全部を revm に流し、状態変更を適用し、結果状態を merkle 化して計算する。pre-execution のチェック (header 構造、gas limit の数式) が先に来て、post-execution のチェックに state root の比較が含まれる。"
+                    },
+                    {
+                      "question": "BFT コンセンサスで **3f+1** は何を意味し、なぜそれが tight なのか?",
+                      "options": [
+                        "ブロックサイズ上限 — 3 tx と 1 coinbase。",
+                        "f 個の Byzantine を許容するために必要な最小の総バリデータ数。tight である理由は、2 つの quorum が少なくとも 1 つの正直なバリデータで交わらなければならないから (Lamport 1982 の数学的証明)。",
+                        "投票ラウンド数 — 3 フェーズ + 1 commit。",
+                        "コンセンサス税率 — stake の 3% + 1% の手数料。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "数学的には、n=3f+1 ノードのネットワークでサイズ 2f+1 の 2 quorum は 2(2f+1)-n = f+1 ノードで重なり、少なくとも 1 つは正直。基礎的な quorum 交差の議論。PBFT から HyperBFT まで、すべての BFT システムが 3f+1 を前提にしている。"
+                    },
+                    {
+                      "question": "Reth ベース レッスン1に Malachite を組み込む際、**Malachite の Driver / VoteKeeper / RoundStateMachine の分離** が重要な理由は?",
+                      "options": [
+                        "プロトコルを非同期にできる。",
+                        "明確に分離されているおかげで、**application 側は `Context` trait (ブロック型、validator set、署名方式) を実装するだけ** で済み、プロトコルロジックはすべて Malachite が処理する。Tendermint を書き直すのではなく、配線する。",
+                        "コンセンサスのゼロ知識証明を可能にする。",
+                        "on-chain コンセンサスのガスコストを下げる。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "アーキテクチャ上の価値は API の接合面にある。Reth ベース chain がブロック型と validator set で `Context` を実装し、Malachite の Driver が BFT プロトコルの詳細 (投票ラウンド、view change、タイムアウト、2f+1 検知) を処理する。revm の `Database` trait と同じパターン — コンセンサスにとっての Malachite は、実行にとっての revm に当たる。"
+                    }
+                  ],
                 },
               ],
             },
@@ -1482,6 +1572,96 @@ liveness（1/3+） → inactivity leak で復元
 
 レッスン7（NodeBuilder 配線）/ レッスン8（単一リーダー BFT）/ レッスン9（バリデータ経済）の総合確認。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "新規の決済特化 L1 (Tempo クラス) のコンセンサスを設計しているとする。バリデータ数: 30。Finality 目標: サブ秒。**どのコンセンサス系統** を選び、**その理由は**?",
+                      "options": [
+                        "Nakamoto PoW — 実戦検証済みで分散化されている。",
+                        "Ethereum 系のハイブリッド PoS — ベストプラクティスで、大規模 validator にも対応する。",
+                        "純粋 BFT 系 (Tendermint または HotStuff) — 30 バリデータは sweet spot、BFT が即時 finality を与え、決済ユースケースは決定論的な決済を求めるため。",
+                        "単一 sequencer — 最速、最もシンプル。"
+                      ],
+                      "correctIndex": 2,
+                      "explanation": "ハイブリッド PoS (選択肢 2) は 30 バリデータには過剰 — 直接 BFT が使えて finality gadget は不要。PoW (選択肢 1) は finality を犠牲にする。単一 sequencer (選択肢 4) は launch 時には機能するが「コンセンサス設計」ではない。30 バリデータでの純粋 BFT は教科書通りの選択 — Hyperliquid は約 20 でこれを採用、Tempo も類似のはず。"
+                    },
+                    {
+                      "question": "Reth の `Consensus` trait の **目的** と、明示的に行わないことは?",
+                      "options": [
+                        "投票プロトコルを走らせる — Reth は内部に BFT を持っている。",
+                        "ブロックを chain ルールに照らして検証する (pre-execution の構造、post-execution の state root、gas の数式)。Head 選択 / fork choice は行わない — それは consensus client の仕事 (Ethereum なら Lighthouse、Tendermint chain なら Malachite、自前 L1 ならカスタム)。",
+                        "バリデータの代理でブロックに署名する。",
+                        "Validator set を管理する。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "EL/CL の分離: Reth (EL) はブロックを検証する。CL はどのブロックの上に積むかを決め (fork choice)、投票を走らせる。標準 Ethereum (Reth + Lighthouse) でもカスタム L1 (Consensus 実装 + Malachite/CometBFT 等) でも同じ分離になる。"
+                    },
+                    {
+                      "question": "中央集権 sequencer の レッスン1をできるだけ速く出荷したい。Sequencer コードがブロックごとに行う 3 つは?",
+                      "options": [
+                        "2f+1 の票を集め、その後で署名し、その後でブロードキャストする。",
+                        "Payload を構築し (tx 選択 + 順序付け)、得られたブロック hash に署名し (authority の証明)、Engine API 経由で Reth に、P2P 経由で他ノードにブロードキャストする。",
+                        "バリデータ票を待ち、署名を集約し、その後 commit する。",
+                        "価格 oracle に問い合わせ、margin を決済し、その後ブロックを作る。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "単一リーダー BFT = 投票なし。3 つの仕事 — 構築 (Engine API forkchoiceUpdated + PayloadAttributes 経由)、署名 (ブロック hash を ECDSA 署名者に渡す)、ブロードキャスト (Engine API + P2P)。Lesson 10 §3 の Rust 約 100 行。"
+                    },
+                    {
+                      "question": "Tendermint/HotStuff では validator set が有界 (約 20〜100)。**この上限を決めている構造的な制約** は何か?",
+                      "options": [
+                        "ディスク容量 — 各バリデータが chain の状態を保存するため。",
+                        "通信複雑度: PBFT はブロックあたり O(n²) メッセージ、閾値署名付きの HotStuff でもラウンドあたり O(n)。ネットワーク帯域とレイテンシによって、実用上 n は約 100〜200 が上限になる。",
+                        "トークン供給 — バリデータを増やすためのトークンが足りない。",
+                        "法的制約 — 1 つのプロトコルに 100 を超えるエンティティは関われない。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "ネットワークがボトルネックになる。PBFT の n² メッセージは、n = 100 で 1 万、n = 1,000 で 100 万メッセージ。HotStuff の O(n) で楽にはなるが、帯域とレイテンシのせいで実用上の最大値は依然上限がある。Ethereum 系のハイブリッド PoS は、fork choice (毎 slot、サンプリングベース) と finality (毎 epoch、フル参加) を分けることでこれを解決している。"
+                    },
+                    {
+                      "question": "なぜ **slashing** が BFT の経済的セキュリティの荷重を担う基盤になるのか?",
+                      "options": [
+                        "Slashing がインフラを走らせるバリデータに報酬を支払うから。",
+                        "不正行為のコスト (失う stake) が攻撃の利益 (抽出可能価値) を上回るため、攻撃が経済的に非合理になるから。Slashing がなければ、バリデータはコストなしで矛盾するメッセージに投票でき、プロトコルの safety 保証は蒸発する。",
+                        "Slashing がブロック生成を速くするから。",
+                        "Slashing は EVM の機能であり、コンセンサスではないから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "暗号が不正を証明し、slashing がそれをコストの高い行為に変える。Slashing がなければ、Byzantine バリデータは無コストで double-sign でき、プロトコルの 3f+1 という境界は無意味になる。Slashing が「double-sign すべきでない」を「double-sign を経済的に賄えない」に変える。"
+                    },
+                    {
+                      "question": "Malachite は Driver / VoteKeeper / RoundStateMachine を分離している。**Reth ベース レッスン1に Malachite を組み込むときに何ができるようになるか**?",
+                      "options": [
+                        "Reth と異なるマシンで Malachite を動かせる。",
+                        "`Context` trait (ブロック型、validator set、署名方式) を実装するだけでよくなる — Malachite が Tendermint プロトコルのロジック (投票、quorum、view change、タイムアウト) をすべて処理する。Tendermint を書き直すのではなく、配線する。これは revm の `Database` trait と同じパターン: 基盤側を自分が提供し、エンジンがプロトコルを処理する。",
+                        "Rust のコードを書かずに Malachite を使える。",
+                        "2f+1 の quorum チェックをスキップできる。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Malachite がプロトコルを提供し、自分の `Context` 実装が chain 固有の型を提供する。完全な BFT で守られた L1 への統合コードは約 100 行 — Tendermint を自分で書いたら約 1 万行になることと比べると桁違い。これが「Rust BFT エンジンを使う」のアーキテクチャ的な勝ち筋。"
+                    },
+                    {
+                      "question": "Berachain はカスタマイズ済みの Reth ディストリビューション **bera-reth** を出荷している。**vanilla Reth に対して実際に変更しているのは何 % か?**",
+                      "options": [
+                        "約 95% — Proof-of-Liquidity はまったく別の chain だから。",
+                        "約 10% — Reth の大半はそのまま再利用される。カスタマイズは約 2000 行で、カスタム Consensus 実装、流動性報酬用のカスタム executor hook、カスタム chainspec、BLS 対応の validator set 追跡が含まれる。",
+                        "約 50% — Reth の EVM を PoL 用に書き直す必要があるから。",
+                        "0% — bera-reth はただの config ファイルだから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Expert Module 3 の見出しの通り、Reth ベース chain は *拡張* で作られるのであって fork ではない。bera-reth の vanilla Reth に対する差分は小さいがコンセンサスクリティカル。公開されている `tempoxyz/tempo` も同じパターン (彼らの `tempoxyz/reth` は upstream に対して 0 commits ahead)。"
+                    },
+                    {
+                      "question": "レッスン1を launch する。Day 0 のコンセンサス: 単一 sequencer。**最初の 2 年における現実的な分散化の軌跡** は?",
+                      "options": [
+                        "無期限に単一 sequencer のまま。",
+                        "単一 sequencer (Day 0) → 2-of-3 multisig sequencer (Month 3) → 約 10 バリデータでのローテーション proposer (Month 12) → 30+ バリデータと slashing による完全 BFT (Year 2)。各ステップで liveness を保ちつつ、段階的に Byzantine 耐性を加えていく。",
+                        "Day 1 でいきなり 1000 バリデータの PoS に飛ぶ。",
+                        "分散化はマーケティング上の関心事であって技術の話ではない。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "実 L1 はこの軌跡をたどる。信頼を担保にして速く出荷し、TVL と運用が成熟するにつれて段階的に信頼仮定を緩める。Hyperliquid、Tempo、すべての OP-Stack chain — 全部このバージョンだ。プロトコル設計上、その場での upgrade は可能だが、コンセンサス設計は最初から軌跡を受け入れる形にしておかなければならない (例えば、header フォーマットには、1 署名者から始まる場合でも「validator set 証明」を含めるべき)。"
+                    }
+                  ],
                 },
               ],
             },

@@ -594,6 +594,85 @@ Telos（intent matching）/ mppsol（決済 attestation）/ Hyperliquid（独自
 
 レッスン0-2 を通じて: P2P 基礎（2 層 = Discovery + Transport / devp2p vs libp2p / Kademlia XOR distance / RLPx ≈ TLS の差 / eth/68 hash-first）/ Reth network crate（6 サブ crate / NetworkManager 入力 3 本 + dispatcher 1 つ / Swarm 5 状態 / カスタムサブプロトコル 4 要素）/ カスタム gossip 構築（eth/68 の 3 前提を破る / bundle/1 4 メッセージ / Private discovery 3 パターン / MEV-Boost 4 役割 / DOS 対策 4 軸）の構造的事実を確認する。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "devp2p (Ethereum) と libp2p (Polkadot、IPFS) の **構造的な違い** は何か?",
+                      "options": [
+                        "devp2p は libp2p より速い。",
+                        "devp2p は Ethereum 専用に設計されており、Ethereum 固有のプロトコルを前提とする。一方 libp2p はモジュラーかつマルチチェーン対応で、transport、encryption、multiplexing を組み合わせ可能なピースに分離している。Ethereum が libp2p を使わない主な理由は歴史的なもので、devp2p の方が先に存在していた。",
+                        "devp2p は Solana のみ、libp2p は Ethereum のみで動く。",
+                        "libp2p は peer discovery をサポートしない。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "2 つの異なる設計哲学である: 専用設計 (devp2p) と モジュラー設計 (libp2p)。どちらも実運用に耐えており、それぞれにトレードオフがある。Ethereum の execution 層は devp2p、consensus 層 (Lighthouse) は libp2p を採用している。Reth ベースの chain にとっては、devp2p をそのまま引き継ぐのが自然な選択である。"
+                    },
+                    {
+                      "question": "**discv5** は Kademlia DHT を採用している。**なぜ中央ディレクトリではなく Kademlia が peer discovery に選ばれたのか?**",
+                      "options": [
+                        "Kademlia の方が中央集権型より速いから。",
+                        "中央ディレクトリは単一障害点になりやすく、検閲のレバーにもなる。Kademlia は分散型で、すべてのノードが他の peer の発見を助け、特定の当事者がネットワークを支配することはない。トレードオフは O(log N) の lookup vs O(1) だが、セキュリティと分散性で得るものの方が大きい。",
+                        "Kademlia の方がメモリ効率が良いから。",
+                        "他に選択肢がなかったから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "中央集権型は、検閲や操作の単一障害点になる。Kademlia は分散型だが、その分だけ複雑である。Permissionless な blockchain ネットワークでは、効率性よりも分散性が優先される。わずかなレイテンシのコストは、得られるセキュリティ上の利点と引き換えに許容できる範囲である。"
+                    },
+                    {
+                      "question": "eth/68 では、**transaction はまず hash でアナウンスされ**、フルボディでは送られない。**なぜか?**",
+                      "options": [
+                        "Hash の方がサイズが小さいから。",
+                        "ほとんどの peer は、ほとんどの tx を既に持っている (伝播の過程で目にしている)。Hash でアナウンスし、手元にないものだけをフルボディで要求すれば、**すべての tx をフルサイズですべての peer に再ブロードキャストするのを避けられる**。ネットワーク規模で見れば、莫大な帯域の節約になる。",
+                        "Tx のフルボディは暗号化されるが、hash は暗号化されないから。",
+                        "Hash でのアナウンスは EIP-1559 で必須化されたから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "帯域の最適化である。Tx がネットワーク内を伝播すれば、すべての peer が hash を素早く目にする。手元にないものだけフルボディを要求すれば事足りるため、ネットワーク全体の総帯域は、フル tx をブロードキャストする場合と比較して約 10 分の 1 に削減される。スケーリングを考えるうえで決定的な工夫である。"
+                    },
+                    {
+                      "question": "**Reth の NetworkManager** は中央オーケストレータの役割を担っている。**poll される 3 つのストリームは何か?**",
+                      "options": [
+                        "CPU、メモリ、ディスク。",
+                        "Swarm (アクティブな接続から流れてくる peer メッセージ)、Discovery (discv5 や DNS から得られる新規 peer)、from_handle_rx (アプリケーションコードから送られてくるコマンド — tx のブロードキャスト、block の要求など)。",
+                        "RPC、WebSocket、IPC。",
+                        "Block、transaction、receipt。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "中央のイベントループが、3 つの入力ストリームを統合する: 外部からのトラフィック (Swarm)、新規 peer (Discovery)、アプリケーションからのコマンド (handle チャネル)。NetworkManager がそれらをすべて poll し、dispatch する — これが Reth ネットワーキングの心臓部である。"
+                    },
+                    {
+                      "question": "Reth ベースの chain に **カスタム gossip** を追加する場合 (例: MEV bundle マーケットプレイス向けなど)、アーキテクチャ的にはどう取り組むか?",
+                      "options": [
+                        "eth/68 を修正して新しいメッセージタイプを追加する。",
+                        "**カスタムサブプロトコル** を実装し、eth/68 と同じ RLPx 接続の上で動かす。メッセージの enum を定義し (RLP エンコード)、SubProtocol トレイトを実装し、NetworkManager に登録する。カスタムプロトコルは eth/68 と干渉せず、並走する。",
+                        "reth を fork してコアにプロトコルを追加する。",
+                        "devp2p ではなく libp2p を使う。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "サブプロトコルパターンが答えである。reth のネットワーキングは、設計の段階から拡張可能になっている。プロトコルを一つの「層」として追加し、複数のプロトコルが同じ RLPx 接続を共有する。eth/68、snap (state sync)、そして自作のカスタムプロトコルが、すべて並行して動く。インフラはこの仕組みでスケールする。"
+                    },
+                    {
+                      "question": "Reth の **Peer scoring** は不正な振る舞いにペナルティを与える。では、不正検知だけを見ていると見落としがちな **積極的なユースケース** とは何か?",
+                      "options": [
+                        "積極的な使い方は存在しない。",
+                        "Peer scoring は **特定の peer を優遇する** 用途にも使える。たとえば sequencer が、既知の良質な merchant インフラをランダムな peer よりも高くスコアリングし、そうした peer からのフローを優先的に処理したり、低レイテンシを保証したりできる。これによって peer scoring は、防御的 (悪い peer をブロック) なものから、戦略的 (良い peer にルーティング) なものへとシフトする。",
+                        "積極的 scoring はマーケティング上の概念で、技術的な実体はない。",
+                        "Peer scoring はフルノードにしか関係しない。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "デフォルトの scoring は反応的なもの (悪い peer を drop する) だが、特化型 chain にとっては戦略的な道具にもなります — MEV 関連の情報を既知の builder に、決済データを merchant ノードに、といった形でルーティングできるのである。これこそが、chain 固有のネットワーキング戦略における Reth の拡張ポイントである。"
+                    },
+                    {
+                      "question": "MEV-Boost のような仕組みになぜ **カスタム gossip プロトコル** が必要なのか? **デフォルトの eth/68 transaction gossip** がすでに存在しているにもかかわらず。",
+                      "options": [
+                        "カスタム gossip の方が eth/68 より速いから。",
+                        "eth/68 は canonical chain data (block、tx、receipt) を運ぶためのもので、public-by-default かつ cooperative-relay を前提としている。一方 MEV-Boost には、**private なルーティング** (特定の peer にしか bundle が見えない)、**アプリケーション層のオークション** (bundle に値段がつく)、**プロトコル外の認証** (relayer の identity) が必要となる。これらは on-chain の semantics には乗らない、アプリケーション固有の関心事である。",
+                        "MEV-Boost は HTTPS を要求するが、eth/68 はそれをサポートしないから。",
+                        "カスタム gossip は EVM 仕様で要求されているから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "eth/68 は、chain に乗らないメッセージを運ぶには間違った抽象である。カスタムプロトコルこそが、private なルーティング、アプリケーション層のシグナリング、chain から独立した semantics を提供する。MEV-Boost、共有 sequencer の coordination、決済レールの routing — これらはすべてこの層に居場所がある。"
+                    }
+                  ],
                 },
               ],
             },

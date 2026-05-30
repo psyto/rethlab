@@ -1142,6 +1142,96 @@ L2 アーキテクトとしての最終チェック。Rollup の出荷、Tempo �
 
 レッスン0-5 を通じて: Sequencer 基礎（rollup モデル / 3 役割 / 検閲時経路）/ Data availability（4 モデル / EIP-4844 blob / 圧縮）/ op-rbuilder（OP Stack 5 ルール / 「選べる」vs「選べない」/ MEV 3 立場）/ Fraud proof vs ZK proof（170× 差 / Cannon bisection / SP1 + Reth）/ 最小 sequencer（270 行 / 4 コンポーネント）/ 分散化（5 ステージ / 5 難所 / 共有 sequencer 4+4）の構造的事実を確認する。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "なぜ **中央集権 sequencer** は rollup には許容できても、**permissionless L1には許容できない** のか?",
+                      "options": [
+                        "Rollup のユーザは期待値が低いから。",
+                        "Rollup は safety のフォールバックとして L1の contract を使う: sequencer が検閲しても、ユーザは L1の force-include contract 経由で tx を提出できるし、sequencer が state について嘘をついても、L1 contract が withdrawal を拒否する。Sequencer は UX(速度、順序付け)については信頼するが、資金については信頼しない。Permissionless L1にはそのフォールバックがない — コンセンサスがセキュリティそのものだからだ。",
+                        "中央集権 rollup は実は permissioned ではないから。",
+                        "L2 transaction は可逆だから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Rollup のセキュリティモデルは、sequencer は UX について信頼し、safety については L1のコンセンサスを信頼する、というもの。根本的な洞察は、ユーザが L1 経由の escape hatch を持つため、sequencer が中央集権でも chain 自体が中央集権になるわけではない、ということ。これがまさに本番 L2 が単一 sequencer のまま出荷している理由 — UX を最大化しつつ、escape hatch が資金を守る。"
+                    },
+                    {
+                      "question": "Rollup が calldata ではなく **EIP-4844 blob** として data を投稿するようになった。**なぜ 10 倍安いのか、そして落とし穴は何か?**",
+                      "options": [
+                        "Blob は Ethereum ではなく Bitcoin に保存されるから。",
+                        "Blob のガスは calldata のガスとは別建てで価格が決まり、はるかに安い(byte あたり 0.1〜1 gas に対し、calldata は 16 gas)。落とし穴は、blob はおよそ 18 日で prune される点 — 長期 data が必要なら別途アーカイブが要る。18 日という window は fraud proof の window と一致しており、safety を保つには十分長く、コストを抑えるには十分短い。",
+                        "Blob は Layer 2 のノードしか検証しないから。",
+                        "Blob のコストは同じで、EIP-4844 は calldata を名前を変えただけだから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "EIP-4844 は rollup の DA 専用に、別の fee market を持つ blob 運搬用の transaction を導入した。コストが下がる理由は blob が prune 可能だから — Ethereum のノードは proof window 経過後に blob を捨てられる。長期アーカイブは外部サービス(IPFS、専用アーカイブ)を使う。価格と可用性のトレードオフが成立するのは、セキュリティ上 DA が必要なのは fraud proof の window 中だけだからだ。"
+                    },
+                    {
+                      "question": "OP Stack では、**deposit transaction** は L1から来て L2 ブロックの **先頭** に含まれなければならない。**なぜこれが sequencer のポリシーではなくプロトコル強制なのか?**",
+                      "options": [
+                        "Top-of-block が最も MEV を取れるから。",
+                        "Deposit は L1から L2に移動するユーザ資金。Sequencer が優先度を下げられるなら、deposit は無期限に遅延されうる — それでは「sequencer が検閲しても資金は安全」という rollup のセキュリティモデルが崩れる。Top-of-block を強制することで、deposit が明確に定義されたタイミングで処理されることを保証する。",
+                        "Top of block では低い transaction fee が適用されるから。",
+                        "Top of block では gas コストが下がるから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Deposit はユーザが L1 経由でコミットした資金であり、必ず処理されなければならない。プロトコルは最強の inclusion 保証を与える。Sequencer が優先度を下げられるなら、資金の safety 保証は丸ごと崩れる。これが「Deposit が先頭」が sequencer のポリシーではなく L1 contract 経由でコンセンサスから強制される理由だ。"
+                    },
+                    {
+                      "question": "**Fraud proof** と **validity(ZK)proof** の選択が withdrawal の遅延を決める。**構造的な違いは何か?**",
+                      "options": [
+                        "Fraud proof のほうが速い。",
+                        "Fraud proof: デフォルトで sequencer の state root クレームを信頼し、window の間(OP Stack では 7 日)誰でもチャレンジできる; チャレンジャが現れなければ state は最終確定する。Validity proof: sequencer が正確性の暗号的 proof を提供する必要があり、proof は L1で即時に検証される。Validity → チャレンジ window なし → 即時 finality だが proof のコストが高い。",
+                        "ZK proof は fraud proof より単純だから。",
+                        "両者とも同じ withdrawal 遅延を生むから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Fraud proof は「誰かが誤りを証明しない限り信頼する」+ 7 日の window。Validity proof は「常に暗号的正確性を要求する」+ 即時。トレードオフ: fraud proof は正常時には安価(proof 不要)だが finality が遅い。Validity proof は batch ごとに高価だが finality が即時。違う rollup は違うところを最適化している。"
+                    },
+                    {
+                      "question": "Reth 上の最小 sequencer は **Rust 約 270 行** で足りる。**なぜそれだけで済むのか?**",
+                      "options": [
+                        "Rust が異常に簡潔だから。",
+                        "Reth が難しい実行まわり(revm、MDBX、state 管理、P2P)をすべて引き受けるため。Sequencer がやるべきなのは、(1)Engine API でブロック生成を駆動する、(2)mempool を維持する、(3)L1 inbox を deposit のために監視する、(4)L2 ブロックを L1 投稿用に batch する、の 4 つだけ。それぞれおよそ 50〜80 行のオーケストレーションコードに収まる。",
+                        "Rollup が L1 より単純だから。",
+                        "大半の rollup ロジックが JavaScript で書かれているから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "アーキテクチャ上の分離の恩恵: Reth = 実行、sequencer = オーケストレーション。Sequencer は Engine API 経由で Reth を駆動する薄い調整層で、難しい部分(EVM、ストレージ、state)は Reth 側に寄せている。これが多くの本番 sequencer が Reth 上の Rust 300〜500 行に収まる理由だ。"
+                    },
+                    {
+                      "question": "なぜ **Optimism、Arbitrum、Base** はどれも分散化ロードマップを掲げていながら、何年も中央集権 sequencer を維持しているのか?",
+                      "options": [
+                        "分散化が優先事項ではないから。",
+                        "実問題が 5 つあるから:(1)コンセンサスでレイテンシが 2〜5 倍悪化する、(2)MEV のコーディネーションが複雑になる、(3)N オペレータでは liveness の確保が難しくなる、(4)運用コストが上昇する、(5)経済的セキュリティのインフラ(staking、slashing)が自明ではない。最初の 1 つ — ユーザ体験 — だけでも中央集権を実用上のデフォルトとして残すのに十分。大半のユーザにとって UX は分散化より上にくる。",
+                        "コードベースが汚すぎて分散化できないから。",
+                        "分散化には法的な再構築が必要だから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "分散化が難しいのはコードの問題ではなくシステムエンジニアリングの問題: レイテンシ、liveness、MEV のコーディネーション、運用コスト、セキュリティ・インフラ。個別には解けても、本番で 5 つを同時に組み合わせるのが本当の難所。大半の L2 は UX を優先する(中央集権)し、ユーザも分散化より速さと安さを好む。"
+                    },
+                    {
+                      "question": "Espresso や Astria のような **共有 sequencer** の **アーキテクチャ上の賭け** は何か?",
+                      "options": [
+                        "個別に sequencer を走らせるより安いから。",
+                        "1 つの sequencer セットが N 個の rollup にサービスを提供することで、次が可能になる:(1)クロス rollup の atomic transaction(同じ sequencer が両方を順序付ける)、(2)rollup ごとの分散化コストが下がる、(3)クロス rollup MEV を捕捉できる。トレードオフは、rollup が順序付けの主権を諦める — 難しい問題を外部委託する点にある。",
+                        "Rollup が data availability をスキップできるから。",
+                        "State root commitment の必要性を排除できるから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "共有 sequencer は、**マルチ rollup の composability が十分に重要** で、rollup が主権的な sequencer 制御を諦める価値がある、という賭け。Espresso、Astria、Radius が本番での試み。賭けの帰趨は未確定で、多くの L2 は運用独立性と MEV 戦略のために sequencer を自前で持つことを好む。今後 2〜3 年でどちらが勝つかが見えてくる。"
+                    },
+                    {
+                      "question": "Tempo Moderato(Tempo の testnet)について、**中央集権 → 分散化の軌跡** はどう描けるか?",
+                      "options": [
+                        "Day 1 から完全に分散化された validator set にいきなりジャンプする。",
+                        "ありうるシナリオ:(1)今日: 中央集権 sequencer(Paradigm が運用)、(2)1 年後: PoS の validator set(20〜30 オペレータ程度)、(3)2〜3 年後: 経済性が合えば共有 sequencer、(4)全期間を通じて: 最終的に高速 withdrawal 用の ZK proof。各ステップは運用コストと引き換えに信頼の最小化を段階的に進めるものだ。",
+                        "無期限に中央集権を維持する。",
+                        "Tempo は sequencer を持たない — 純粋に on-chain で動く。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "標準的な L2の軌跡。Paradigm が launch をコントロールし、bonded バリデータが sequencing を分散化し、最終的に ZK proof が withdrawal の遅延を圧縮する。各ステップが 1〜2 年がかりで出荷される。大半の L2 がまさにこのパスを辿っており、Tempo も同じ流れになる。Soltempo と mppsol はこの軌跡を前提に組んでおく必要がある。"
+                    }
+                  ],
                 },
               ],
             },

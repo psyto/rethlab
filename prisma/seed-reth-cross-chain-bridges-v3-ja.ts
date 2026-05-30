@@ -1067,6 +1067,96 @@ Trusted setup（初期 checkpoint のみ）+ Replay 防止（claimed mapping）+
 
 レッスン0-5 を通じて: Trust モデル（5 段階スペクトラム / bridge トリレンマ / $2B+ 攻撃の根本原因）/ Light client（できる/できない / sync committee + BLS / Helios / ZK 漸近勝利）/ OP Standard Bridge（Deposit ~2 分 vs Withdrawal 7 日 / 5 contract / Fast withdrawal market）/ Chainlink CCIP（DON + RMN / トークンプール burn-mint / Soltempo 採用）/ Wormhole + IBC（multisig vs light client 両極 / IBC が Cosmos に閉じる構造的理由）/ 最小 bridge 構築（4 コンポーネント / trust 仮定 1 つ）の構造的事実を確認する。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "なぜ **最大級の bridge ハック** は資産コントラクトのバグではなく、鍵 / 運用侵害やクロスチェーン trust ロジックのバグから出続けるのか?",
+                      "options": [
+                        "スマートコントラクトは形式検証されているのでバグは稀だから。",
+                        "Multisig bridge はセキュリティを鍵保持者に依存する; 鍵の十分なサブセット (phishing、malware、内部者) が侵害されれば、コントラクトのコードは無関係になる — 署名は正しく検証されてしまう。運用セキュリティが最弱リンクであり、それ以外で発生するバグも、トークン本体ではなく bridge のクロスチェーン trust 機構側に出る。",
+                        "ハッカーは取引所のような容易なターゲットを好むから。",
+                        "スマートコントラクトハックは bridge ハックに分類されないから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Ronin ($625M) と Orbit ($80M) は純粋な鍵侵害 — bridge のコードは本来やるべきこと (署名検証) を正しく行い、攻撃が成功したのは鍵そのものが盗まれたから。残る大規模損失 (Wormhole、Nomad、Poly Network) は、資産トークンのコントラクトではなく bridge のクロスチェーン trust / 検証ロジック側のバグ — 署名チェック、初期化、ストレージレイアウト仮定。いずれにせよ、systemic な攻撃面は multisig と trust 機構の複雑さであって、トークン層ではない。"
+                    },
+                    {
+                      "question": "**bridge トリレンマ** とは何か、Chainlink CCIP はそのうちどの 2 つを選んでいるか?",
+                      "options": [
+                        "速度、コスト、セキュリティ。CCIP は速度とセキュリティを選んでいる。",
+                        "Trustlessness、generality、extensibility。どの 2 つは満たせるが 3 つ全部は満たせない。CCIP は **general** (多 chain) + **extensible** (chain 追加が容易) を取り **trustless** を犠牲にしている — 純粋暗号ではなく PoS DON + RMN に依存する。",
+                        "レイテンシ、スループット、コスト。CCIP はスループットとコストを選んでいる。",
+                        "L1、L2、サイドチェーン。CCIP は レッスン1と レッスン2をサポートする。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "トリレンマはアーキテクチャ上の制約: trustless + general + extensible のうち 2 つしか取れない。CCIP は general + extensible (マルチチェーン、追加容易)。IBC は trustless + general (Cosmos chain)。OP Standard は trustless + extensible (OP Stack 内のみ)。3 つすべてを満たすシステムは存在しない。"
+                    },
+                    {
+                      "question": "OP Standard Bridge では、なぜ **withdrawal は 7 日** かかるのに **deposit は 2 分** で済むのか?",
+                      "options": [
+                        "L2 が L1 より遅いから。",
+                        "Deposit は強制 inclusion で、rollup コンセンサスが「L2 はこれを処理しなければならない」と強制する; withdrawal には **7 日のチャレンジ期間** が必要 — sequencer が L2 state について嘘をついた場合、誰でも fraud proof を提出できるようにするためだ。この非対称性は optimistic セキュリティモデルに由来する。",
+                        "エンジニアが適当に数字を選んだから。",
+                        "Withdrawal が deposit より多くのガスを使うから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Deposit: L1 イベントは rollup が必ず処理しなければならない (プロトコルに組み込まれている)。Withdrawal: L2 state の正直さに依存するため、チャレンジ期間の経過を待つ必要がある。7 日は、悪意ある sequencer に対する fraud proof の検出と提出に必要な時間として置かれている。"
+                    },
+                    {
+                      "question": "なぜ **chain Y 上で動く chain X の light client** は **trust 最小化** とみなされ、**13-of-19 multisig** はそうみなされないのか?",
+                      "options": [
+                        "Light client のほうが multisig より validator が多いから。",
+                        "Light client は chain X のコンセンサスルールを直接検証する — これを騙すには chain X 自身を騙さねばならない。Multisig は鍵を侵害するだけで済み、source chain を腐敗させる必要はない。Light client の trust 仮定 = source chain のセキュリティ。multisig の trust 仮定はそれより遥かに弱い。",
+                        "Multisig は一部の司法管轄区で違法だから。",
+                        "Light client は Rust、multisig は Solidity で書かれているから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Trust 最小化が問うのは *bridge を攻撃するために何を侵害する必要があるか* だ。Light client では source chain のコンセンサスを破る必要がある ($billions の stake がリスクに晒される)。Multisig では ~13 鍵を侵害すれば足りる (遥かに安く、ソーシャルエンジニアリングも可能)。Bridge のセキュリティを決めるのは validator 数ではなく trust 要件だ。"
+                    },
+                    {
+                      "question": "Tempo は merchant 決済層に **Chainlink CCIP** を使っている。**なぜ Wormhole、IBC、OP Standard ではなく CCIP なのか?**",
+                      "options": [
+                        "CCIP が最安の選択肢だから。",
+                        "CCIP は次の 3 点で勝る: (1) 本番品質の Solana サポート (Tempo は ETH ↔ Tempo ↔ Solana のフローが必要); (2) pause/veto 権限を持つ Risk Management Network; (3) Chainlink の確立された地位による機関 / 規制面での扱いやすさ。Wormhole は multisig リスクを抱え、Tempo が扱うのは規制された支払いだ。IBC は EVM↔Solana をカバーしない。OP Standard は OP Stack 内でしか動かない。",
+                        "Solana 互換性のために CCIP が必須だから。",
+                        "CCIP が唯一の EVM 互換 bridge だから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "規制された merchant フローを扱う支払いレールでは、CCIP のポジショニングのほうが絶対的な手数料よりも重要になる。RMN は Tempo に対する安全ブレーキとして働く (悪意あるメッセージを pause できる)。Chainlink の機関採用はコンプライアンス上の議論を単純化する。Trust モデルは「最良」ではないが「本番の支払いには十分」 — Wormhole は規制フローには向かない。"
+                    },
+                    {
+                      "question": "Light-client 検証 bridge は、destination chain が **source chain のコンセンサスルールを検証** することを要求する。**なぜこれが Cosmos の IBC では高価だが、OP Standard Bridge では安価なのか?**",
+                      "options": [
+                        "OP Standard が ZK proof を使うから。",
+                        "Cosmos IBC は source chain の Tendermint コンセンサスを実際に検証する (フルな BFT 署名検証、header あたり ~5000 gas)。OP Standard Bridge は optimistic セキュリティを採用する: destination chain は on-chain での fraud proof 提出を 7 日待ち、その後で state root を信頼する。セキュリティモデルが違えば検証コストも違う、ということだ。",
+                        "OP Standard は layer-2 なので安価だから。",
+                        "IBC はカスタムハードウェアを必要とし、OP Standard は汎用ノードで動くから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "IBC は本物の light client 検証 — 高価だが trustless。OP Standard は optimistic で、検証を遅延させる (オンデマンドの fraud proof で対応する) ため安価。7 日の window が trust の代替として働く。両者とも trust 最小化だが、その実現方法が異なる。"
+                    },
+                    {
+                      "question": "最小 trust 最小化 bridge の構築には 3 つのコンポーネントが必要: L1 contract、relayer、L2 contract。**Relayer は何を信頼するか、そしてそれがなぜ重要なのか?**",
+                      "options": [
+                        "Relayer は レッスン1と レッスン2の sequencer を信頼する。",
+                        "Relayer は **permissionless で、何も信頼しない**。誰でも relayer を動かせる。L1 イベントを観測し、Merkle proof を構築し、L2に提出する。L2 コントラクト内の light client がその proof を検証すれば、アクションが実行される。Relayer の正直さは関係ない — 重要なのは暗号 proof だけだ。",
+                        "Relayer はユーザを信頼し、KYC を要求する。",
+                        "Relayer は Chainlink が運用しており、その oracle ネットワークを信頼する。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Relayer が permissionless であることがすべての要点だ。Bridge は特定の relayer の正直さには依存しない — relayer が少なくとも 1 つ存在することにだけ依存する。これが検閲耐性を生む; CCIP ノードが全部 offline になっても、誰でも中継に入れる。"
+                    },
+                    {
+                      "question": "Soltempo の **Tempo↔Solana** において、ZK light client が trust 最小化の endgame であるにもかかわらず、**なぜ今日それを動かせない** のか?",
+                      "options": [
+                        "Solana がスマートコントラクトをサポートしないから。",
+                        "EVM↔非 EVM の ZK light client では、source chain のコンセンサス (Solana の Tower BFT) を zkVM 内で証明し、その後 Solana 上で検証する必要がある。暗号が特殊で、成熟した本番実装はまだ存在しない (2026 時点)。CCIP が DON+RMN の multisig モデルでこのギャップを埋めている。",
+                        "Solana がクロスチェーン bridge を許可しないから。",
+                        "ZK proof の生成コストが高すぎるから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "EVM↔EVM の ZK light client は既に存在する (例: Polyhedra、SP1)。EVM↔非 EVM はより難しい — source chain のコンセンサス構造が zkVM 内で効率的に表現でき、かつ destination chain 側に ZK proof 検証機構がある、という両方の条件が必要だからだ。Solana はそこに非 EVM 暗号という難しさを上乗せする。成熟した本番ケースが 2026 から現れ始めているが、まだ table-stakes ではない。"
+                    }
+                  ],
                 },
               ],
             },

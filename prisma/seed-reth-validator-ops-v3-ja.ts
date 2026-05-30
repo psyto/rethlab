@@ -580,6 +580,85 @@ Validator 運用の最終チェック。本番 L1 で validator を担うとき�
 
 レッスン0-2 を通じて: 鍵管理（5 要件 / 4 解 = 設定ファイル → HSM → MPC → 閾値署名 / 2 鍵パターン / リモート signer / マルチリージョン active-passive）/ Slashing 検知（2 経路 = 能動 / 受動 / 3 種違反 = double / surround / equivocation / slashing-protection DB の atomicity / whistleblower 報酬 / inactivity leak / 分断時 fail-closed）/ 協調アップグレード（height-gate ルール / chain spec / 5 ステップ / pre-fork dry run / 緊急対応 4 段階 / BFT halt-and-recover）の構造的事実を確認する。
 `,
+                  quizQuestions: [
+                    {
+                      "question": "なぜ validator 鍵向けの **MPC (Multi-Party Computation)** が、**N ホストに鍵を分散して置く方式** と構造的に異なるのか?",
+                      "options": [
+                        "MPC のほうが処理が速いから。",
+                        "MPC は **どのデバイスもフル鍵を絶対に持たない** ことを保証する — 各デバイスは share を保持し、署名には N-of-M の協力が必要で、1 デバイスを攻撃しても攻撃者は役に立たない fraction しか得られない。一方、N ホストに鍵を分散して置く方式では、各ホストがフル鍵 (あるいは再構築可能なピース) を持つため、1 ホストが破られると壊滅的になる。",
+                        "MPC は EIP-2335 で要求されているから。",
+                        "MPC のほうがストレージ消費が少ないから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "MPC は暗号的に「署名中に鍵を再構築しない」ことを保証する。安易に鍵を「分散」させる設計は、複数ホストにフル鍵を漏らしてしまう。MPC は、単一の信頼点を作らずに validator 鍵のセキュリティを本当の意味でスケールさせられる、数少ない手段のひとつである。"
+                    },
+                    {
+                      "question": "なぜ **2 台のマシンで validator を重複稼働させる** と、たいてい冗長化ではなく **slashing** につながるのか?",
+                      "options": [
+                        "Slashing は validator の構成とは無関係だから。",
+                        "両マシンが同じ鍵を持つことになる。両方が同じ height/round で attestation に署名し、両署名は valid である。ネットワークから見ると、同じアイデンティティから矛盾する 2 つの署名が出てきている — まさに **slashable な equivocation** だ。冗長化の試みが slashing 違反に化けてしまう。",
+                        "2 マシン構成は Ethereum の仕様で禁止されているから。",
+                        "重複 validator は帯域を消費しすぎるから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "これが古典的な「慎重にやろうとして slashed される」パターンである。正しい修正は、failover を厳格に行う active-passive 構成 (常に 1 ノードだけが署名権限を持ち、遷移はコンセンサスプロトコル経由のみ)。さらに望ましいのは、鍵を持つ側がプロトコルレベルで single-signing を強制する remote signer アーキテクチャを採用することだ。"
+                    },
+                    {
+                      "question": "なぜ **slashing-protection データベース** は **署名者と同じマシン上** に置く必要があるのか?",
+                      "options": [
+                        "レイテンシの問題に過ぎないから。",
+                        "DB への書き込みと署名操作が **atomic** に行われなければならないからだ — 両方成功するか、両方失敗するかのいずれかしかありえない。ネットワーク越しのリモート DB を挟むと、署名は済んだのに DB 更新が失敗するという窓 (たとえばネットワーク不調時) が生まれ、再試行によって同じ高さに再度署名してしまう可能性がある。Atomicity は、再試行時の double-sign を防ぐために必須である。",
+                        "EIP-3076 が明示的にそう要求しているから。",
+                        "ネットワーク呼び出しは遅すぎるから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "本質は atomic 操作の要件である。同一プロセス内のローカル DB + signer なら atomic に保てる。リモート DB を挟むとレースコンディションが入り込む。この「atomic」保証こそが slashing-protection 全体のセキュリティモデルの土台になっている。"
+                    },
+                    {
+                      "question": "Validator がネットワーク分断の片側にいる。**分断中に署名を続けるべきか?**",
+                      "options": [
+                        "Yes、ただちに署名を再開する。",
+                        "**No、分断中は署名を停止する**。続行すれば fork 側にいる可能性があり、ネットワークの残りが目にしないブロックを生成しているかもしれない。分断が解消したとき、自分の chain が誤っていれば canonical chain と equivocate することになり、slashed される。小さな inactivity ペナルティを払うほうが、大きな slashing ペナルティを払うよりはるかに良い。",
+                        "オペレータの指示があったときだけ署名を停止する。",
+                        "分断中は署名そのものが不可能である。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "署名を止めるのが正しいデフォルトだ。Inactivity ペナルティは小さく、slashing ペナルティは大きい。Validator は「自分は分断側にいるかもしれない」ことを検知し、>2/3 の peer との接続性を確認できるまで署名を拒否すべきである。これが「不確実なときは fail-closed」というコアな safety 性質である。"
+                    },
+                    {
+                      "question": "協調 hardfork において **validator が全員同時にアップグレードしない** のはなぜか? 正しい瞬間に新ルールへ切り替わることを保証しているのは何か?",
+                      "options": [
+                        "Hardfork はチャットルームを使った手動協調を要するから。",
+                        "Chain spec に **activation block height (またはタイムスタンプ)** がエンコードされている: そのブロックに到達した時点で新ルールが適用される。Validator は activation の *前* にアップグレードしておけばよく、早くても遅くてもかまわない。Activation block の到来とともに、コンセンサスが新ルールを強制する。アップグレードしていない validator は旧ルールのまま動き続けて fork から脱落するが、アップグレードして sync すれば再合流できる。",
+                        "Fork は runtime に過半数の投票によって発火するから。",
+                        "Hardfork は Ethereum のみがサポートしているから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Height-gate ルールこそが鍵である。オペレータには各自アップグレードする時間が数週間与えられる。Activation block の瞬間、全員が同じルールに揃い、間に合わなかった者だけが脱落する。回復経路もシンプル (アップグレードして sync するだけ)。主要なすべての chain がこの方式でアップグレードを協調している。"
+                    },
+                    {
+                      "question": "なぜ **withdrawal 鍵** は cold で、**署名鍵** はオンラインなのか?",
+                      "options": [
+                        "すべての鍵を cold storage に置くべきだから。",
+                        "関心事の分離を行うためである。署名鍵は attestation/proposal を行うためオンラインである必要があり (漏洩すれば slashable となり、最悪の場合 hot stake を失う)、一方 withdrawal 鍵は実際に staked された資金を支配するため cold に保たれる。こうしておけば、署名鍵を侵害されたとしても攻撃者は資金そのものを動かせない。",
+                        "EIP-2335 が withdrawal 鍵を cold にすることを要求しているから。",
+                        "Hot 鍵は withdrawal に使えないから。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Defense in depth の典型例である。署名鍵が漏れたときの最悪ケースは validator が slashed されることだが、withdrawal credential が cold にあれば staked balance の全額は守られる。真剣な validator 構成における標準であり、これを欠くと鍵漏洩は壊滅的な結末を招く。"
+                    },
+                    {
+                      "question": "PoS chain の **whistleblower 報酬** とは何で、何を可能にしているのか?",
+                      "options": [
+                        "すべての validator に対する固定の日次支払い。",
+                        "誰かが slashing proof (矛盾する 2 つの署名) を提出すると、slashed された stake のごく一部 (典型的には ~1/512) を受け取れる仕組みである。これが **独立した watcher** が chain を監視して slashing proof を提出するための経済的インセンティブを生み、誰が見張るかを誰も指定しなくてもプロトコルが強制される — つまり permissionless な強制が成立する。",
+                        "完璧な uptime を維持する validator に支払われるボーナス。",
+                        "遅延した attestation に対するペナルティ。"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Whistleblower 報酬は slashing 検知を経済ゲームに変える。Double-sign を見つけられる者なら誰でも利益を得られる。プロトコルの integrity が中央集権的な当事者に依存しなくなり、見張ろうとする者なら誰でも強制できる — permissionless な分散化にとって決定的に重要な仕組みである。"
+                    }
+                  ],
                 },
               ],
             },
