@@ -1,21 +1,21 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethAlloyAdvancedEN(prisma: PrismaClient) {
-  const tags = ['alloy', 'rust', 'advanced', 'rpc', 'provider'];
+  const tags = ['alloy', 'provider', 'network', 'signer', 'intermediate'];
 
   await prisma.course.create({
     data: {
       slug: 'alloy-advanced-en',
       title: 'Inside Alloy — Reading the Rust Ethereum Library',
       description:
-        'Read the alloy source line by line — the **networking + authentication layers** of the Rust EVM stack, via the `Provider`, `Network`, and `Signer`/`Filler` trait families. One of three independent Intermediate courses (Revm, Reth, Alloy) you can take in any order. Alloy is the foundation Reth and dapps build on, so this course pays back wherever you build Rust Ethereum code.',
+        'Walk the alloy-rs/core source line by line through three topic chains: Provider (Transport + Network + RootProvider + FillProvider + auto_impl), Network (10 associated types, Ethereum / Optimism impls, TransactionBuilder<N>, AnyNetwork), Signer (Signer / TxSigner<N> / SignerSync split, PrivateKeySigner + AwsSigner + WalletFiller). Each topic = buildup → walkthrough → quiz → drill. Plus a testing-alloy-consumers lesson and a final quiz. By the end you can read any alloy source confidently and write generic-over-N code that works across chains.',
       difficulty: 'INTERMEDIATE',
-      duration: 120,
-      xpReward: 340,
+      duration: 145,
+      xpReward: 385,
       track: 'alloy-advanced',
       tags,
       isPublished: true,
-      sortOrder: 200,
+      sortOrder: 230,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {
@@ -26,13 +26,29 @@ export async function seedRethAlloyAdvancedEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Welcome to Inside Alloy — how this course works',
+                  title: 'Lesson 0 — Welcome to Inside Alloy',
                   slug: 'alloy-advanced-welcome-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Welcome to Inside Alloy — how this course works
+                  content: `# Lesson 0 — Welcome to Inside Alloy
+
+## Question
+
+**Inside Alloy is one of three Intermediate courses** (Revm, Reth, Alloy). Alloy is the type foundation that Reth + dapps + indexers / MEV bots all depend on. **Where to start, what to assume.**
+
+## Principle (minimum model)
+
+- **3 Intermediate courses.** Inside Revm (execution engine) / Inside Reth (Staged Sync + ExEx + SDK) / Inside Alloy (Provider + Network + Signer). Take in any order; Alloy is the lowest-level (recommended start).
+- **3 topic chains.** Provider trait + macro stack / Network associated types + Optimism multi-chain / Signer + SigningProvider + WalletFiller. Each = buildup → walkthrough → quiz → drill.
+- **Reading approach.** Open \`alloy-rs/core\` in another tab; verify every claim against the source.
+- **Prerequisites.** Rust intermediate (generics + trait bounds + ?Sized + dyn Trait vs impl Trait + Arc + macros). Light Ethereum primitives.
+- **Setup.** \`git clone https://github.com/alloy-rs/core\` + \`cargo install cargo-expand\` + second monitor for source viewing.
+
+## Worked example + steps
+
+# Welcome to Inside Alloy — how this course works
 
 This is one of three independent Intermediate-tier courses on RethLab:
 
@@ -82,18 +98,41 @@ The "Find in repo" prompts only work if you actually have the repo open. Close t
 
 Scroll back to the course detail and start with **Building the \`Provider\` trait step by step**.
 
-After Inside Alloy: you've completed all three Intermediate courses. **Expert** picks up the procedural-macro and zkVM-integration deep dives.`,
+After Inside Alloy: you've completed all three Intermediate courses. **Expert** picks up the procedural-macro and zkVM-integration deep dives.
+
+## Summary (3 lines)
+
+- Inside Alloy = one of three Intermediate courses; Alloy is the type foundation. Start here if you want the lowest layer.
+- 3 topic chains (Provider / Network / Signer) + buildup → walkthrough → quiz → drill. Verify against alloy-rs/core source.
+- Prerequisites: intermediate Rust + light Ethereum. Setup: clone alloy-rs/core + cargo-expand + second monitor.
+`,
                 },
                 {
-                  title: 'Building the \`Provider\` trait step by step',
+                  title: 'Lesson 1 — Building the Provider trait step by step',
                   slug: 'alloy-provider-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Building the \`Provider\` trait step by step
+                  content: `# Lesson 1 — Building the Provider trait step by step
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **networking layer** seen from the client side. Same problem as designing a JSON-RPC / HTTP / gRPC client library — how do you expose one consistent API over many transports (HTTP, WS, IPC) and many chains (Ethereum, Optimism, L2s)? Reqwest, tonic, and OkHttp all wrestle with the same shape; alloy is that shape applied to Ethereum RPC.
+## Question
+
+**\`Provider\` is alloy's top abstraction over "talking to an Ethereum node"**. Build it step by step from a naive RPC client. Six steps; each removes one assumption from the naive version.
+
+## Principle (minimum model)
+
+- **Step 0 — naive.** \`async fn get_balance(addr) -> Result<U256>\` that hard-codes the URL, transport, and chain. Three things hardcoded; three things to abstract.
+- **Step 1 — Transport abstraction.** \`<T: Transport>\` removes URL/transport hardcoding. Now HTTP / WebSocket / IPC / Anvil-fork all work behind the same generic.
+- **Step 2 — Network abstraction.** \`<N: Network>\` removes Ethereum hardcoding. Ethereum / Optimism / custom L2 all work behind \`N::TxEnvelope\` etc.
+- **Step 3 — RootProvider + root() indirection.** Wrappers forward via \`self.root()\`; one indirection enables FillProvider layering.
+- **Step 4 — FillProvider stacking.** \`FillProvider<F, P, N>\` wraps a Provider with fillers (gas / nonce / signer / chain id). Layered composition; each filler is independent.
+- **Step 5 — \`auto_impl(&, &mut, Box, Rc, Arc)\`.** Five wrapper types automatically implement the trait. \`Arc<P>\` is a shared provider across tasks.
+
+## Worked example + steps
+
+# Building the \`Provider\` trait step by step
+
 
 Every Rust program that talks to an Ethereum node — your MEV bot, your indexer, your dapp backend, your Reth-SDK app — routes through [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy)'s \`Provider\`. It's the single abstraction over RPC. Open \`crates/provider/src/provider/trait.rs\` and the trait header looks like this (excerpted):
 
@@ -140,7 +179,6 @@ async fn get_balance(addr: Address) -> Result<U256, Box<dyn Error>> {
 
 A free function. Hardcoded URL. Hardcoded transport (HTTP). Hardcoded chain (Ethereum-shaped JSON-RPC).
 
-> 🛑 **Predict.** Without scrolling: name three reasons this naive design doesn't survive contact with production. Hint — each is a different *kind of* problem.
 
 The three:
 
@@ -206,7 +244,6 @@ pub trait Provider<N: Network> {
 }
 \`\`\`
 
-> 🛑 **Predict.** Why is \`N: Network = Ethereum\` (with a default type parameter) better than \`N: Network\` with no default?
 
 Because **99% of users want Ethereum.** A default lets them write \`Provider\` instead of \`Provider<Ethereum>\` everywhere. Only Optimism / custom-L2 users override. Default type parameters keep the common case ergonomic and the rare case explicit.
 
@@ -277,7 +314,6 @@ pub struct RootProvider<N: Network = Ethereum> {
 
 \`RootProvider\` is the **concrete struct that owns the transport**. Every other Provider impl just holds an inner provider and forwards \`root()\` to that inner. The trait's default methods can fall back to \`self.root()\` for transport access — so wrapper authors only override what they specifically want to change.
 
-> 🛑 **Anti-fluency check.** Without scrolling: imagine you're writing \`SignerProvider\`. Which method do you override, which do you let the default handle? Why does the \`root()\` indirection make this clean?
 
 You override \`send_transaction\` (sign the tx, then forward to inner). For everything else (\`get_balance\`, \`call\`, etc.), you let the trait's default impls fire — they use \`self.root()\` to get the transport. **You write 1 method body instead of 30.**
 
@@ -364,16 +400,38 @@ Without scrolling:
 4. Why is \`auto_impl(Arc, ...)\` important for production usage of alloy?
 
 If any answer is shaky, scroll back. The next lesson is a guided walkthrough of the real alloy \`Provider\` source.
+
+## Summary (3 lines)
+
+- Six steps from naive \`get_balance\` to real \`Provider\`: Transport + Network + RootProvider/root() + FillProvider + auto_impl.
+- Each step removes one hardcoded assumption. Final shape supports HTTP / WebSocket / IPC / Anvil-fork × Ethereum / Optimism × Arc-shared.
+- Next: walk through the real trait source.
 `,
                 },
                 {
-                  title: 'Reading the real \`Provider\` trait',
+                  title: 'Lesson 2 — Reading the real Provider trait',
                   slug: 'alloy-provider-walkthrough-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Reading the real \`Provider\` trait
+                  content: `# Lesson 2 — Reading the real Provider trait
+
+## Question
+
+**Read the actual \`Provider\` trait** in \`alloy-rs/core\`. Verify what we built matches.
+
+## Principle (minimum model)
+
+- **Trait header.** \`#[auto_impl(&, &mut, Box, Rc, Arc)] pub trait Provider<N: Network = Ethereum>: Send + Sync\`. Default \`N = Ethereum\` removes typing noise for the common case.
+- **\`root()\` is the only required method.** All other RPC methods have default impls that forward via \`self.root()\`. ~30 methods; only one to override.
+- **\`Database\`-like asymmetry.** \`Provider\`'s \`auto_impl\` has 5 variants (& + &mut + Box + Rc + Arc); Revm's \`Database\` has 2 (&mut + Box). Asymmetric because Provider methods are \`&self\` (cache via internal mutability) and Database methods are \`&mut self\` (cache in place).
+- **3 return types.** \`ProviderCall<R>\` (basic future), \`RpcWithBlock<R>\` (block-parameterised), \`EthCall<R>\` (call-specific). Different RPC methods return different builders.
+- **Why 30+ methods.** Each EVM RPC is a method. Generic users only override \`root()\`; specific producers override the methods they need.
+
+## Worked example + steps
+
+# Reading the real \`Provider\` trait
 
 You built \`Provider\` from a naive RPC client up to the real trait shape. Now open the source — [\`crates/provider/src/provider/trait.rs\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) — and read the production version line by line. Each piece you read should snap back to the buildup step that motivated it.
 
@@ -409,7 +467,6 @@ Every \`Provider\` implementation must be safe to send across threads (\`Send\` 
 
 Five wrappers. Same shape as \`DatabaseRef\` from Inside Revm, and for the same reason: \`Provider\` only needs \`&self\` to read state — no \`&mut self\` mutation in the method signatures — so all five wrapper types work through the trait. \`Arc<P>\` and \`Rc<P>\` give you cheap shareable handles.
 
-> 🛑 **Predict.** \`Database\` (in revm) had \`auto_impl(&mut, Box)\` — only two wrappers. \`Provider\` (here) has five. **What's the structural difference between \`Database\` and \`Provider\` that drives the asymmetry?**
 
 \`Database\`'s methods take \`&mut self\` (so impls can cache reads in place). That excludes \`&\`/\`Rc\`/\`Arc\` because those don't give out \`&mut T\`. \`Provider\`'s methods take \`&self\` — caching, if needed, has to use interior mutability inside the implementation (\`Mutex\`, \`OnceLock\`, atomic primitives). The wider \`auto_impl\` list is a direct consequence of the \`&self\` choice. Same trade-off shape, different decision per use case.
 
@@ -472,7 +529,6 @@ provider.get_balance(addr).pending().await                  // pending block
 
 Hardcoding "latest" inside \`get_balance\` would force users who want historical or pending queries to construct different method calls. The builder pattern keeps **one method, many ways to query**.
 
-> 🛑 **Anti-fluency.** Why is the block selector chosen at the call site (via \`.block_id(...)\`) rather than passed as a function argument like \`get_balance(addr, block_id)\`?
 
 Because most calls want \`latest\` and bloating every method's signature with a \`block_id\` parameter would be noisy at every call site. The builder pattern keeps the common case (\`get_balance(addr).await\`) terse and the rare case (\`...block_id(N).await\`) explicit. Same trade-off as default type parameters — bias the API toward the 95% case.
 
@@ -553,75 +609,118 @@ Without scrolling:
 4. \`weak_client()\` exists alongside \`client()\`. When would you use the weak version?
 
 The next lesson is a quiz that gates progression. **You can't nod past a quiz** — engage with these recalls now if any answer is shaky.
+
+## Summary (3 lines)
+
+- Real \`Provider\` trait: \`<N: Network = Ethereum>\` default, \`auto_impl(&, &mut, Box, Rc, Arc)\`, \`root()\` as the only required method.
+- 5-wrapper asymmetry vs Revm Database (\`&mut, Box\` only) because Provider methods are \`&self\` (internal mutability).
+- 3 return-type builders (\`ProviderCall\` / \`RpcWithBlock\` / \`EthCall\`). Next: quiz.
 `,
                 },
                 {
-                  title: 'Quiz: did the \`Provider\` trait shape stick?',
+                  title: 'Quiz — Provider',
                   slug: 'alloy-provider-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 3,
                   duration: 4,
                   xpReward: 25,
-                  content: `# Quiz: did the \`Provider\` trait shape stick?
+                  content: `# Quiz — Provider
+
+## Question
+
+Confirm: 6-step buildup, real trait shape, \`Network = Ethereum\` default, \`auto_impl(&, &mut, Box, Rc, Arc)\`, \`root()\` indirection, 3 return-type builders.
+
+## Principle (minimum model)
+
+- Six buildup steps + real trait shape + Network default + auto_impl pattern + root() + 3 return-type builders.
+
+## Worked example + steps
+
+# Quiz: did the \`Provider\` trait shape stick?
 
 Four questions covering the design decisions across the buildup and walkthrough. Same rule as the other Intermediate quizzes: **you can't nod past a quiz.**
 
-If you miss two or more, scroll back to *Building the \`Provider\` trait step by step* before going on to the drill.`,
+If you miss two or more, scroll back to *Building the \`Provider\` trait step by step* before going on to the drill.
+
+## Summary (3 lines)
+
+- Five questions confirm Provider trait understanding.
+- Get two+ wrong → re-read buildup + walkthrough lessons.
+- Pass → drill: build a logging wrapper.
+`,
                   quizQuestions: [
                     {
-                      question: "`Provider` has `auto_impl(&, &mut, Box, Rc, Arc)` (5 wrappers) while Revm's `Database` has `auto_impl(&mut, Box)` (2 wrappers). What's the load-bearing structural difference between the two traits that drives this asymmetry?",
-                      options: [
+                      "question": "`Provider` has `auto_impl(&, &mut, Box, Rc, Arc)` (5 wrappers) while Revm's `Database` has `auto_impl(&mut, Box)` (2 wrappers). What's the load-bearing structural difference between the two traits that drives this asymmetry?",
+                      "options": [
                         "`Database` is older; the auto_impl list grew over time as newer wrappers were added.",
                         "`Provider` requires `Send + Sync`; `Database` doesn't, so more wrapper types are valid.",
                         "`Provider`'s methods take `&self` (caching is delegated to interior mutability inside the impl). `Database`'s methods take `&mut self` so impls can mutate caches in place — but `&mut self` excludes `&`/`Rc`/`Arc` because those only yield `&T`.",
-                        "The auto_impl crate doesn't support `Rc`/`Arc` for traits with operations that may fail.",
+                        "The auto_impl crate doesn't support `Rc`/`Arc` for traits with operations that may fail."
                       ],
-                      correctIndex: 2,
-                      explanation: "The receiver type drives wrapper compatibility. `&mut self` excludes `&`/`Rc`/`Arc` because those only give out `&T`. `&self` works through all wrappers because they all give out `&T`. Both designs are valid — the trade-off is between in-place caching (Database's choice) and shared concurrent access (Provider's choice). Database picks &mut to avoid forcing every impl to wrap its cache in `RwLock`. Provider picks &self because production users want to share one provider across many tasks via `Arc<P>`.",
+                      "correctIndex": 2,
+                      "explanation": "The receiver type drives wrapper compatibility. `&mut self` excludes `&`/`Rc`/`Arc` because those only give out `&T`. `&self` works through all wrappers because they all give out `&T`. Both designs are valid — the trade-off is between in-place caching (Database's choice) and shared concurrent access (Provider's choice). Database picks &mut to avoid forcing every impl to wrap its cache in `RwLock`. Provider picks &self because production users want to share one provider across many tasks via `Arc<P>`."
                     },
                     {
-                      question: "Why is `Provider<N: Network = Ethereum>` parameterized with a *default* type parameter rather than just `Provider<N: Network>`?",
-                      options: [
+                      "question": "Why is `Provider<N: Network = Ethereum>` parameterized with a *default* type parameter rather than just `Provider<N: Network>`?",
+                      "options": [
                         "Rust requires generic traits to have defaults to support `dyn Trait`.",
                         "The vast majority of users want Ethereum. The default lets them write `Provider` instead of `Provider<Ethereum>` everywhere — only Optimism / custom-L2 users override.",
                         "`Network` is not a real trait — it's a marker for documentation purposes only.",
-                        "Alloy started as an Ethereum-only library and the generic parameter is a backwards-compat shim.",
+                        "Alloy started as an Ethereum-only library and the generic parameter is a backwards-compat shim."
                       ],
-                      correctIndex: 1,
-                      explanation: "Default type parameters keep the common case ergonomic and the rare case explicit. Without the default, every Ethereum user would have to spell out `Provider<Ethereum>` everywhere. The trait isn't Ethereum-only by design — alloy explicitly supports Optimism, Anvil, and custom L2s — but Ethereum is the 95% case so the API biases toward it. Same shape as Revm's `IT: ITy` generic — abstract over the variation, default to the dominant case.",
+                      "correctIndex": 1,
+                      "explanation": "Default type parameters keep the common case ergonomic and the rare case explicit. Without the default, every Ethereum user would have to spell out `Provider<Ethereum>` everywhere. The trait isn't Ethereum-only by design — alloy explicitly supports Optimism, Anvil, and custom L2s — but Ethereum is the 95% case so the API biases toward it. Same shape as Revm's `IT: ITy` generic — abstract over the variation, default to the dominant case."
                     },
                     {
-                      question: "Why does `get_balance` return `RpcWithBlock<Address, U256>` instead of `impl Future<Output = U256>`?",
-                      options: [
+                      "question": "Why does `get_balance` return `RpcWithBlock<Address, U256>` instead of `impl Future<Output = U256>`?",
+                      "options": [
                         "`RpcWithBlock` is faster than `Future` — it implements lazy evaluation that `Future` cannot.",
                         "`RpcWithBlock` is a builder that lets the user pick which block to query at the call site (`.block_id(N)`, `.hash(...)`, `.pending()`) before awaiting. Hardcoding 'latest' inside `get_balance` would force users with historical queries into a different method.",
                         "Rust doesn't allow trait methods to return `impl Future` directly.",
-                        "`RpcWithBlock` is a backwards-compat wrapper around the eventual `impl Future`; future versions of alloy will drop it.",
+                        "`RpcWithBlock` is a backwards-compat wrapper around the eventual `impl Future`; future versions of alloy will drop it."
                       ],
-                      correctIndex: 1,
-                      explanation: "Each RPC method has a specific *optionality structure* — `eth_getBalance` can be queried at any block. The builder return type exposes those options as chainable methods. The common case (`.await` for latest) stays terse; the rare case (`.block_id(N).await`) is explicit. `EthCall` does the same thing for `eth_call`'s 4-5 optional parameters. The shape is **type-driven discoverability**: the IDE shows you the legal optionals via the builder methods on the return type.",
+                      "correctIndex": 1,
+                      "explanation": "Each RPC method has a specific *optionality structure* — `eth_getBalance` can be queried at any block. The builder return type exposes those options as chainable methods. The common case (`.await` for latest) stays terse; the rare case (`.block_id(N).await`) is explicit. `EthCall` does the same thing for `eth_call`'s 4-5 optional parameters. The shape is **type-driven discoverability**: the IDE shows you the legal optionals via the builder methods on the return type."
                     },
                     {
-                      question: "You're writing `SignerProvider` — a wrapper provider that signs outgoing transactions before forwarding them to an inner provider. The trait has 30+ methods. How many method bodies do you actually write?",
-                      options: [
+                      "question": "You're writing `SignerProvider` — a wrapper provider that signs outgoing transactions before forwarding them to an inner provider. The trait has 30+ methods. How many method bodies do you actually write?",
+                      "options": [
                         "30+ — every method has to be implemented because the trait is non-default.",
                         "1 — just `send_transaction`. The other methods come from `auto_impl`.",
                         "2 — `root()` (forward to `self.inner.root()`) and `send_transaction` (sign, then forward to inner). Every other method's default impl uses `self.root()` automatically — routing through the inner provider's transport.",
-                        "Around 5 — `root()`, `send_transaction`, plus the related methods `estimate_gas`, `get_transaction_count`, and `chain_id` for nonce / gas / chain handling.",
+                        "Around 5 — `root()`, `send_transaction`, plus the related methods `estimate_gas`, `get_transaction_count`, and `chain_id` for nonce / gas / chain handling."
                       ],
-                      correctIndex: 2,
-                      explanation: "Two methods total. `root()` is the only *required* method (one line forwarding to `self.inner.root()`). `send_transaction` is the one we want to customize. Everything else gets the trait's default impl, which uses `self.root()` to access the transport — and that automatically routes through the inner provider's transport because the inner's `root()` is what we forwarded to. This is why the `root()` indirection from Step 4 of the buildup is the **load-bearing** design choice. (Nonce, gas, and chain-id filling are handled by separate `Fillers` — composed alongside `SignerProvider` in a `FillProvider` chain.)",
-                    },
+                      "correctIndex": 2,
+                      "explanation": "Two methods total. `root()` is the only *required* method (one line forwarding to `self.inner.root()`). `send_transaction` is the one we want to customize. Everything else gets the trait's default impl, which uses `self.root()` to access the transport — and that automatically routes through the inner provider's transport because the inner's `root()` is what we forwarded to. This is why the `root()` indirection from Step 4 of the buildup is the **load-bearing** design choice. (Nonce, gas, and chain-id filling are handled by separate `Fillers` — composed alongside `SignerProvider` in a `FillProvider` chain.)"
+                    }
                   ],
                 },
                 {
-                  title: 'Drill: build a logging Provider wrapper',
+                  title: 'Lesson 4 — Drill: build a logging Provider wrapper',
                   slug: 'alloy-provider-drill-en',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Drill: build a logging Provider wrapper
+                  content: `# Lesson 4 — Drill: build a logging Provider wrapper
+
+## Question
+
+**Build \`LoggingProvider\` that wraps any Provider and logs every RPC call**. Same pattern as FillProvider; just doing nothing useful except logging. The wrapper pattern is the key idea.
+
+## Principle (minimum model)
+
+- **Struct.** \`LoggingProvider<P, N> { inner: P, _phantom: PhantomData<N> }\`. Wraps; doesn't hold extra state.
+- **Implement \`Provider\`.** Override \`root() -> &RootProvider<N>\` returning \`self.inner.root()\`. All other methods inherit via default impls but go through logging.
+- **Logging.** Override the methods you want to log: \`get_balance\` etc. Call \`tracing::info!(...)\` before delegating.
+- **Anvil setup.** \`Anvil::new().fork(MAINNET).fork_block_number(BLOCK).spawn()\` + \`ProviderBuilder::new().on_http(anvil.endpoint().parse()?)\`.
+- **Wrap.** \`let logged = LoggingProvider { inner: provider, _phantom: PhantomData }\`.
+- **Call.** \`logged.get_balance(addr).await?\`. Logging fires; result is identical to unwrapped.
+- **Stacking.** \`LoggingProvider<FillProvider<...>>\` works — wrappers compose because each forwards via \`root()\`.
+
+## Worked example + steps
+
+# Drill: build a logging Provider wrapper
 
 Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about wrapper providers" to "I have written one, run it against a real RPC endpoint, and watched my code on the path of every call."
 
@@ -671,7 +770,6 @@ crates/provider/src/fillers/mod.rs
 > 2. Which RPC methods does \`FillProvider\` explicitly override? *(should be a small handful — \`send_transaction\`, maybe \`call\`/\`estimate_gas\` for gas filling)*
 > 3. The methods that AREN'T overridden — they fall through to the trait's default impls. **What gives those defaults access to the inner provider's transport?**
 
-> 🛑 **Question (write it down before scrolling):** \`FillProvider\` overrides ~3-5 methods out of 30+. The other ~25 methods route correctly without any code in \`FillProvider\`. **How?**
 
 Because the trait's default impls call \`self.client()\`, which falls back to \`self.root().client()\`. \`FillProvider\`'s \`root()\` returns \`self.inner.root()\` — so every default-impl method automatically routes through the inner provider's transport. **No code per method.** This is the payoff of the \`root()\` indirection from the buildup.
 
@@ -714,7 +812,6 @@ where
 
 (The exact return type of \`get_balance\` may have a slightly different alias in your version of alloy. Adjust to match what your IDE shows for the trait's signature; the structure is the same.)
 
-> 🛑 **Predict before continuing.** You wrote 2 method bodies (\`root\` + \`get_balance\`). Will calling \`logging_provider.get_block_number().await\` log anything? Why or why not?
 
 It won't — you only intercepted \`get_balance\`. \`get_block_number\` falls through to the trait's default impl, which uses \`self.client()\` to route directly to the underlying transport via \`self.root()\`. **Logging is opt-in per method**: the wrapper only sees what you explicitly intercept.
 
@@ -767,7 +864,6 @@ balance: 10000000000000000000000
 block: 0
 \`\`\`
 
-> 🛑 **Watch the output.** Confirm the log fires *only* for \`get_balance\`, not for \`get_block_number\`. If both log, your code is wrong (you accidentally overrode something else). If neither logs, the wrapper isn't being used (you forgot to wrap, or \`tracing_subscriber\` isn't initialized).
 
 ## Drill 4 — Stack it with \`ProviderBuilder\`'s Fillers
 
@@ -803,18 +899,41 @@ If any answer is shaky, the lesson isn't done with you. Re-run the drill or re-r
 
 After this drill, you've shipped the same kind of code MEV pipelines and indexers use in production — observability layered on top of alloy without forking it. **Next chain: the \`Network\` abstraction.**
 
-> **🧭 Where you are now in the stack:** you've built the **networking layer's client abstraction** from scratch — \`N: Network\` generic, \`root()\` indirection, Filler composition, \`auto_impl\`. Five pieces that turn one trait into an arbitrarily composable observability + filling tower. Next chain re-uses these same pieces to open up the chain dimension (Optimism, Polygon, future L2s).`,
+> **🧭 Where you are now in the stack:** you've built the **networking layer's client abstraction** from scratch — \`N: Network\` generic, \`root()\` indirection, Filler composition, \`auto_impl\`. Five pieces that turn one trait into an arbitrarily composable observability + filling tower. Next chain re-uses these same pieces to open up the chain dimension (Optimism, Polygon, future L2s).
+
+## Summary (3 lines)
+
+- \`LoggingProvider<P, N>\` wraps any Provider. \`root()\` forwards via \`self.inner.root()\`; log + delegate per method.
+- Anvil fork harness; same Provider trait everywhere; wrapping is type-clean.
+- Stacking works — \`LoggingProvider<FillProvider<...>>\` because of \`root()\` indirection. Next module: Network.
+`,
                 },
                 {
-                  title: 'Building the \`Network\` trait step by step',
+                  title: 'Lesson 5 — Building the Network trait step by step',
                   slug: 'alloy-network-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Building the \`Network\` trait step by step
+                  content: `# Lesson 5 — Building the Network trait step by step
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **networking layer's chain abstraction** — a type-system design problem that shows up whenever one client needs to speak multiple wire-compatible protocols. gRPC reuses message types across services for the same reason; database drivers expose one connection API across PostgreSQL / MySQL / SQLite for the same reason. \`Network\` is that pattern applied to "the same API on Ethereum, Optimism, and any future L2."
+## Question
+
+**\`Network\` lets one Provider work across Ethereum / Optimism / custom L2s**. 10 associated types capture each chain's tx envelope / receipt / header shape. Build it step by step.
+
+## Principle (minimum model)
+
+- **Step 0 — Ethereum hardcoded.** \`TxEnvelope\` is Ethereum-specific. Same code can't talk to Optimism (which adds \`L1Cost\` fields).
+- **Step 1 — Split tx into 4 states.** \`TxEnvelope\` (signed) / \`UnsignedTx\` / \`TransactionRequest\` / \`TransactionResponse\`. Each chain might differ in each state.
+- **Step 2 — 10 associated types.** TxEnvelope + UnsignedTx + TransactionRequest + TransactionResponse + ReceiptEnvelope + ReceiptResponse + Header + HeaderResponse + Block + BlockResponse. The full chain typing.
+- **Step 3 — Send + Sync + 'static bounds.** All types must be cross-thread + program-lifetime. Tokio + cross-task compatibility.
+- **Step 4 — Generic vs associated types.** Associated types lock per-Network; generic would multiply types. Chosen for clarity.
+- **Step 5 — Default \`N = Ethereum\`.** Removes typing noise.
+
+## Worked example + steps
+
+# Building the \`Network\` trait step by step
+
 
 Optimism's transactions carry an L1 \`mint\` field. Their receipts carry \`l1_fee\` and \`l1_block_number\`. Polygon zkEVM's tx envelope has a sequencer signature. Each L2 has its own tx, receipt, and block shapes — but the same \`Provider\` API still works on all of them. **How?** Through \`Network\`: alloy's *type-level dictionary* (one trait whose associated types select the bundle of chain-specific shapes a given chain uses).
 
@@ -851,7 +970,6 @@ fn send_transaction(&self, tx: EthereumTransactionRequest) -> SendTransaction;
 
 Hardcoded \`EthereumTransactionRequest\`. Hardcoded receipts. Hardcoded block headers. Works on mainnet — and only on mainnet.
 
-> 🛑 **Predict.** Without scrolling: name three production chains where this hardcoded design breaks. Hint — each is a *different shape* of transaction or receipt.
 
 The three:
 
@@ -902,7 +1020,6 @@ A single transaction passes through several representations:
 
 Each role has different fields, validation, serialization. Hammering them into one \`Transaction\` type would force every method to take a wide union and validate at runtime. Splitting them lets the type system enforce "you can't broadcast a \`TransactionRequest\`" or "you can't sign a \`TransactionResponse\`."
 
-> 🛑 **Anti-fluency.** "Same data, different states" sounds plausible but it's not the right framing. **What's wrong with one type that has optional signature, optional block_hash, etc.?**
 
 Validation gets pushed to runtime. \`broadcast(&tx)\` would have to check "is the signature actually present? is block_hash absent (because broadcasting a tx that already has a block_hash is nonsense)?" — runtime errors that the compiler should reject. Splitting into \`TransactionRequest\` / \`UnsignedTx\` / \`TxEnvelope\` / \`TransactionResponse\` makes those impossible-by-construction. Each function's signature only accepts the right state.
 
@@ -921,7 +1038,6 @@ trait Network {
 
 Six associated types. **Notice:** the same reason that forced "one transaction type per lifecycle stage" applies to Receipts and Blocks too.
 
-> 🛑 **Predict.** If you split Receipts and Blocks by the same principle, how many associated types do you end up with for each? Why?
 
 Write down your guess before scrolling. The answer follows.
 
@@ -971,7 +1087,6 @@ Here's the design choice that confused me when I first read alloy: **why is this
 struct Provider<TxRequest, TxEnvelope, Receipt, Block, ...> { ... }
 \`\`\`
 
-> 🛑 **Predict.** Without scrolling: what's wrong with the multi-generic struct?
 
 Three problems:
 
@@ -994,7 +1109,6 @@ Three bounds.
 - **\`Send + Sync\`** — for the same reason \`Provider\` requires them: production users wrap providers in \`Arc<Provider<N>>\` and clone across tasks. The associated types and the network type itself need to be safe to send/share. Without these, \`Arc<Provider<MyNetwork>>\` wouldn't compile.
 - **\`'static\`** — \`Provider\` stores \`PhantomData<N>\`. If \`N\` had a non-static lifetime parameter, every \`Provider\` instance would be lifetime-bounded — a sharp constraint that breaks the "stash a Provider in a global Arc" pattern.
 
-> 🛑 **Anti-fluency.** "\`'static\` means it lives forever" is parroting. In your own words: what *concretely* breaks if \`Network\` impls were allowed to have non-\`'static\` lifetime parameters? Sketch the failure.
 
 If \`MyNetwork\` had a borrowed lifetime (e.g., \`MyNetwork<'a>\` where \`'a\` was the lifetime of some external config), \`Provider<MyNetwork<'a>>\` would inherit that lifetime. Storing the provider in an \`Arc\` (\`Arc<Provider<MyNetwork<'a>>>\`) means the \`Arc\` is also bounded by \`'a\`. **The Arc can't outlive whatever the config was borrowed from.** \`'static\` rules out that pattern: \`MyNetwork\` impls own all their data, no borrows. Arcs become free-standing.
 
@@ -1037,16 +1151,39 @@ Without scrolling:
 4. Optimism deposits include an L1 \`mint\` field. **Which associated type would need to differ between \`Ethereum\` and \`Optimism\` to support that?**
 
 If any answer is shaky, scroll back. The next lesson reads alloy's real \`Network\` trait + the \`Ethereum\` and \`Optimism\` impls in detail.
+
+## Summary (3 lines)
+
+- 6-step buildup: Ethereum hardcoded → split tx into 4 states → 10 associated types → Send + Sync + 'static bounds → associated (not generic) → default Ethereum.
+- Associated types lock the chain typing; generic would multiply.
+- Next: walk the real trait + Ethereum / Optimism impls.
 `,
                 },
                 {
-                  title: 'Reading the real \`Network\` trait + Ethereum / Optimism impls',
+                  title: 'Lesson 6 — Reading the real Network trait + Ethereum/Optimism impls',
                   slug: 'alloy-network-walkthrough-en',
                   type: 'CONTENT',
                   sortOrder: 6,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Reading the real \`Network\` trait + Ethereum / Optimism impls
+                  content: `# Lesson 6 — Reading the real Network trait + Ethereum/Optimism impls
+
+## Question
+
+**Walk the real Network trait + Ethereum and Optimism impls**. 10 associated types, side by side.
+
+## Principle (minimum model)
+
+- **\`pub trait Network: Sized + Send + Sync + 'static\`**. The whole substrate for typing.
+- **Ethereum impl.** \`type TxEnvelope = TxEnvelope; type UnsignedTx = TypedTransaction;\` etc. Ethereum-canonical for each slot.
+- **Optimism impl.** 8 slots differ from Ethereum (different envelope / receipt / etc with L1Cost). 2 slots match (Header / Block — Optimism inherits these).
+- **\`TransactionBuilder<N>\` helper trait.** Lets you build transactions generically over Network. \`with_to(addr).with_value(...)\` works for any N.
+- **\`AnyNetwork\` escape hatch.** When you don't know the chain at compile time. Loses type-safety; can call \`with_to\` but not envelope-specific things.
+- **Trait bounds: \`Send + Sync + 'static\`.** Required because Providers are Arc-shared across tasks.
+
+## Worked example + steps
+
+# Reading the real \`Network\` trait + Ethereum / Optimism impls
 
 You motivated all 10 associated types and the trait bounds from a naive starting point. Now read the real source — the per-associated-type bounds the buildup glossed over, alloy's \`Ethereum\` impl, the \`Optimism\` impl side-by-side, and the helper trait (\`TransactionBuilder\`) that makes \`TransactionRequest\` fluent across chains.
 
@@ -1093,7 +1230,6 @@ The buildup mentioned \`Send + Sync + 'static\`. The real trait adds:
 - **\`Clone + Copy\`** — \`Network\` impls are *zero-sized marker types*. \`struct Ethereum;\` is one byte (or zero, depending on alignment). \`Copy\` lets you pass them by value freely without lifetime concerns.
 - **\`Sized\`** — explicit, even though it's the default. Makes \`PhantomData<N>\` work in struct fields.
 
-> 🛑 **Predict.** Why is \`Network\` deliberately a zero-sized marker, not a struct that holds chain configuration?
 
 Because chain configuration (chain ID, hardfork schedule, etc.) varies *per provider connection*, not per network type. A user pointing at mainnet vs Sepolia uses *the same* \`Ethereum\` network type — the difference is in the chain spec, which lives elsewhere. \`Network\` answers "*which family of types* do I use?" — that's a static, type-level question, not a runtime configuration. Marker structs encode that perfectly.
 
@@ -1175,7 +1311,6 @@ impl Network for Optimism {
 - The *header* type and \`HeaderResponse\` are **shared with Ethereum**. Optimism's blocks have the same header structure (it's a side-effect of OP being EVM-compatible at the consensus header level).
 - \`BlockResponse\` differs because *the block's transaction list* contains OP-typed transactions. Reusing Ethereum's \`Block\` would force serialization of OP deposits as Ethereum-typed txs — wrong.
 
-> 🛑 **Anti-fluency.** A naive design would have every chain define all 10 types from scratch — even when most chains share most types with Ethereum. **Why is "associated type from a separate crate" the right pattern here, instead of "every Network impl reimplements every type"?**
 
 Because the cohesion property is *bidirectional*. Where types differ, you must override. Where they don't, you must share — otherwise multiple chains can't interop with shared tooling (e.g., a generic block explorer that reads any chain's headers). The associated-type approach lets you mix: override the slots that vary, share the slots that don't. **Optimism's \`Header\` literally being \`alloy_consensus::Header\` means a header parser written generic-over-N works on Ethereum and Optimism without recompilation.**
 
@@ -1244,75 +1379,117 @@ Without scrolling:
 4. When would you use \`AnyNetwork\` over a concrete \`Ethereum\` / \`Optimism\` impl?
 
 The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
+
+## Summary (3 lines)
+
+- Real Network trait: 10 associated types; Ethereum and Optimism impls side by side; 8/10 differ + 2/10 match (Header / Block).
+- \`TransactionBuilder<N>\` helper lets you build generically. \`AnyNetwork\` for unknown-chain.
+- Send + Sync + 'static required for Arc-sharing. Next: quiz.
 `,
                 },
                 {
-                  title: 'Quiz: did the \`Network\` trait shape stick?',
+                  title: 'Quiz — Network',
                   slug: 'alloy-network-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 7,
                   duration: 4,
                   xpReward: 25,
-                  content: `# Quiz: did the \`Network\` trait shape stick?
+                  content: `# Quiz — Network
+
+## Question
+
+Confirm: 10 associated types, 4-state tx split, Ethereum/Optimism impl differences (8/10 differ), TransactionBuilder<N> helper, AnyNetwork escape hatch.
+
+## Principle (minimum model)
+
+- 10 associated types + 4-state tx split + Ethereum/Optimism delta + TransactionBuilder<N> + AnyNetwork.
+
+## Worked example + steps
+
+# Quiz: did the \`Network\` trait shape stick?
 
 Four questions covering the design decisions across the buildup and walkthrough. Same rule as the other Intermediate quizzes: **you can't nod past a quiz.**
 
-If you miss two or more, scroll back to *Building the \`Network\` trait step by step* before going on to the drill.`,
+If you miss two or more, scroll back to *Building the \`Network\` trait step by step* before going on to the drill.
+
+## Summary (3 lines)
+
+- Quiz confirms Network trait understanding.
+- Get two+ wrong → re-read buildup + walkthrough.
+- Pass → drill: generic-over-N code that works on Ethereum AND Optimism.
+`,
                   quizQuestions: [
                     {
-                      question: "`Network` uses *associated types* for its 10 chain-specific shapes (TxType, TxEnvelope, TransactionRequest, etc.) rather than 10 generic parameters on a struct. What's the load-bearing benefit of that choice for code that's generic over Network?",
-                      options: [
+                      "question": "`Network` uses *associated types* for its 10 chain-specific shapes (TxType, TxEnvelope, TransactionRequest, etc.) rather than 10 generic parameters on a struct. What's the load-bearing benefit of that choice for code that's generic over Network?",
+                      "options": [
                         "Associated types compile faster than generic parameters.",
                         "Cohesion + concision: associated types group 'these go together' (so `Provider<EthereumTxRequest, OptimismReceipt>` can't be constructed by accident), and call sites only spell out one parameter (`<N: Network>`) instead of 10.",
                         "Generic parameters can't appear inside trait method signatures, only inside trait bodies.",
-                        "Associated types support `dyn Trait`; generic parameters don't.",
+                        "Associated types support `dyn Trait`; generic parameters don't."
                       ],
-                      correctIndex: 1,
-                      explanation: "The cohesion property is the killer feature. Generic parameters express 'any combination is valid'; associated types express 'these go together.' For chain primitives — where `EthereumTxRequest` has to be paired with `EthereumTxEnvelope` — you need the latter semantics. Bonus: every signature mentioning Provider would have to spell out 10 parameters with raw generics; one `N: Network` pulls them all in. (The compile-time and `dyn`-compatibility distractors are technically wrong; both work fine for either approach.)",
+                      "correctIndex": 1,
+                      "explanation": "The cohesion property is the killer feature. Generic parameters express 'any combination is valid'; associated types express 'these go together.' For chain primitives — where `EthereumTxRequest` has to be paired with `EthereumTxEnvelope` — you need the latter semantics. Bonus: every signature mentioning Provider would have to spell out 10 parameters with raw generics; one `N: Network` pulls them all in. (The compile-time and `dyn`-compatibility distractors are technically wrong; both work fine for either approach.)"
                     },
                     {
-                      question: "`Network` has separate associated types for `TransactionRequest`, `UnsignedTx`, `TxEnvelope`, and `TransactionResponse` — four representations of what feels like the same data. Why the split?",
-                      options: [
+                      "question": "`Network` has separate associated types for `TransactionRequest`, `UnsignedTx`, `TxEnvelope`, and `TransactionResponse` — four representations of what feels like the same data. Why the split?",
+                      "options": [
                         "Backward compatibility — older alloy versions used different types.",
                         "Each representation is the same data with optional fields; the split is decorative for documentation purposes.",
                         "Each representation has a different role in the transaction lifecycle (build → fill → sign → return). Splitting them makes invalid states impossible: the type system rejects `broadcast(&request)` or `sign(&response)` at compile time. A unified type would push validation to runtime.",
-                        "Performance — each type has its own optimized memory layout.",
+                        "Performance — each type has its own optimized memory layout."
                       ],
-                      correctIndex: 2,
-                      explanation: "Validation gets pushed to runtime if you have one type with optional signature, optional block_hash, etc. `broadcast(&tx)` would have to check 'is the signature present? is block_hash absent?' — runtime errors the compiler should reject. Splitting makes those states impossible by construction. Each function signature only accepts the right lifecycle state. Same trade-off as Rust's typestate pattern, applied to Ethereum txs.",
+                      "correctIndex": 2,
+                      "explanation": "Validation gets pushed to runtime if you have one type with optional signature, optional block_hash, etc. `broadcast(&tx)` would have to check 'is the signature present? is block_hash absent?' — runtime errors the compiler should reject. Splitting makes those states impossible by construction. Each function signature only accepts the right lifecycle state. Same trade-off as Rust's typestate pattern, applied to Ethereum txs."
                     },
                     {
-                      question: "Optimism's `Network` impl defines its own `BlockResponse` but reuses Ethereum's `Header`. Why the asymmetry?",
-                      options: [
+                      "question": "Optimism's `Network` impl defines its own `BlockResponse` but reuses Ethereum's `Header`. Why the asymmetry?",
+                      "options": [
                         "`BlockResponse` was added to alloy more recently than `Header`; the Optimism type just hasn't been refactored yet.",
                         "`Header` is consensus-defined and Optimism is EVM-compatible at the header level — same structure (number, hash, timestamp). But `BlockResponse` includes the *block's transaction list*, and Optimism's transactions include the OP-specific Deposit variant. Reusing Ethereum's `Block` would force OP deposits to serialize as Ethereum-typed txs — wrong.",
                         "Headers are smaller than blocks, so reusing them costs less memory.",
-                        "`BlockResponse` is a newer concept than `Header`; Optimism eventually plans to share Ethereum's.",
+                        "`BlockResponse` is a newer concept than `Header`; Optimism eventually plans to share Ethereum's."
                       ],
-                      correctIndex: 1,
-                      explanation: "This is the cohesion property's subtlety. Where types are *content-identical* across chains, the trait lets you share — Optimism's header literally IS `alloy_consensus::Header`. Where types embed chain-specific content (like a tx list containing OP-typed txs), you must override — otherwise tooling can't correctly serialize. **The choice is forced by data, not stylistic.** Same logic applies to ReceiptResponse (different because L1 fee fields).",
+                      "correctIndex": 1,
+                      "explanation": "This is the cohesion property's subtlety. Where types are *content-identical* across chains, the trait lets you share — Optimism's header literally IS `alloy_consensus::Header`. Where types embed chain-specific content (like a tx list containing OP-typed txs), you must override — otherwise tooling can't correctly serialize. **The choice is forced by data, not stylistic.** Same logic applies to ReceiptResponse (different because L1 fee fields)."
                     },
                     {
-                      question: "`TransactionBuilder<N>` is a *separate* trait that `Network::TransactionRequest` is bound to implement, rather than methods directly on the associated type. What does the separation enable?",
-                      options: [
+                      "question": "`TransactionBuilder<N>` is a *separate* trait that `Network::TransactionRequest` is bound to implement, rather than methods directly on the associated type. What does the separation enable?",
+                      "options": [
                         "Each `Network::TransactionRequest` impl can override the builder methods individually.",
                         "Rust requires methods on associated types to be defined via separate traits.",
                         "It enables generic-over-N code: `fn build_request<N: Network>() -> N::TransactionRequest { <N::TransactionRequest>::default().with_to(addr).with_value(v) }`. The same code works for Ethereum, Optimism, and AnyNetwork because `TransactionBuilder<N>` is a trait with the same method names regardless of which chain's `TransactionRequest` is selected.",
-                        "It's a backward-compat shim; future versions of alloy will inline the methods.",
+                        "It's a backward-compat shim; future versions of alloy will inline the methods."
                       ],
-                      correctIndex: 2,
-                      explanation: "The pattern is **type-level dictionary (Network) + helper traits parameterized by the dictionary key (TransactionBuilder<N>) = portable code across chains.** Without the separate trait, `with_to(...)` and `with_value(...)` would be inherent methods on `EthereumTransactionRequest` and `OpTransactionRequest` — not callable through `N::TransactionRequest`. The separate trait + bound makes `<N::TransactionRequest>::default().with_to(...)` work generically. Same idiom: `TransactionEnvelope<Self>` on `TxEnvelope`, `BlockResponse<Self>` on `BlockResponse`.",
-                    },
+                      "correctIndex": 2,
+                      "explanation": "The pattern is **type-level dictionary (Network) + helper traits parameterized by the dictionary key (TransactionBuilder<N>) = portable code across chains.** Without the separate trait, `with_to(...)` and `with_value(...)` would be inherent methods on `EthereumTransactionRequest` and `OpTransactionRequest` — not callable through `N::TransactionRequest`. The separate trait + bound makes `<N::TransactionRequest>::default().with_to(...)` work generically. Same idiom: `TransactionEnvelope<Self>` on `TxEnvelope`, `BlockResponse<Self>` on `BlockResponse`."
+                    }
                   ],
                 },
                 {
-                  title: 'Drill: write generic-over-N code that works on Ethereum *and* Optimism',
+                  title: 'Lesson 8 — Drill: write generic-over-N code that works on Ethereum *and* Optimism',
                   slug: 'alloy-network-drill-en',
                   type: 'CONTENT',
                   sortOrder: 8,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Drill: write generic-over-N code that works on Ethereum *and* Optimism
+                  content: `# Lesson 8 — Drill: write generic-over-N code that works on Ethereum *and* Optimism
+
+## Question
+
+**Build \`block_summary<N: Network, P: Provider<N>>\` — same function works on Ethereum and Optimism**. Generic over N.
+
+## Principle (minimum model)
+
+- **Generic signature.** \`fn block_summary<N: Network, P: Provider<N>>(provider: &P) -> Result<String>\`. The Network type is propagated through.
+- **Implementation.** \`let block = provider.get_block(BlockNumberOrTag::Latest).await?; format!("{}", block.header.number)\`. No chain-specific code.
+- **Ethereum test.** \`let provider = ProviderBuilder::new().on_http(MAINNET_HTTP)?; block_summary(&provider).await?\`. Works.
+- **Optimism test.** Same code; \`OptimismProvider\` with \`<N=Optimism>\`. Works without modification.
+- **Compile-time mismatch.** Try \`block_summary::<Optimism, _>(&ethereum_provider)\`. Compiler refuses (type mismatch on TxEnvelope). The N-bound prevents wrong-chain bugs.
+- **Why this is the win.** One function; both chains; no runtime checks; compile-time safety. The pattern extends to any cross-chain library.
+
+## Worked example + steps
+
+# Drill: write generic-over-N code that works on Ethereum *and* Optimism
 
 Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about \`Network\` as a type-level dictionary" to "I have written one function that runs against both Ethereum and Optimism with no per-chain code."
 
@@ -1370,7 +1547,6 @@ Read each associated type's RHS:
 | \`HeaderResponse\` | \`alloy_rpc_types_eth::Header\` | \`alloy_rpc_types_eth::Header\` (likely) | ✅ |
 | \`BlockResponse\` | \`alloy_rpc_types_eth::Block\` | OP analog | ❌ |
 
-> 🛑 **Question (write down the answer before scrolling):** Verify the table on the actual code. **How many slots differ from Ethereum?** It should be ~7-8 out of 10. The exact count tells you where Optimism's chain-specific shape lives — and it's exactly where the cohesion property forces overrides.
 
 The two slots that *don't* differ (\`Header\` and \`HeaderResponse\`) are the ones whose data is content-identical across the two chains. Everywhere a tx, receipt, or block payload is involved, the tx-list cohesion forces an override.
 
@@ -1409,7 +1585,6 @@ where
 
 (Method names approximate to current alloy. Your IDE will show you the exact \`HeaderResponse\` and \`BlockResponse\` trait methods. The point is: **\`block.header()\` and \`header.number()\` work generically, regardless of \`N\`.**)
 
-> 🛑 **Predict.** Before writing main, ask: this function takes \`&P: Provider<N>\` and \`N: Network\` is generic. **What does the call site look like for Ethereum vs Optimism — is it the same code or different code?**
 
 Same code, different type parameters. The call site instantiates \`N\` to either \`Ethereum\` or \`op_alloy::network::Optimism\`. The function body is unchanged.
 
@@ -1471,7 +1646,6 @@ let eth_block = eth_provider.get_block(BlockId::latest()).await?;
 let s = block_summary::<Optimism, _>(&eth_provider, BlockId::latest()).await?;
 \`\`\`
 
-> 🛑 **Predict the error before running.** \`block_summary\` is parameterized over \`N: Network\` and the provider must be \`Provider<N>\`. \`eth_provider\` is \`Provider<Ethereum>\`. **What does the compiler reject?**
 
 The compiler rejects the second call because \`eth_provider\`'s associated types don't match \`Optimism\`'s. The error will mention something like "expected \`Optimism::TransactionRequest\`, found \`Ethereum::TransactionRequest\`."
 
@@ -1488,18 +1662,41 @@ Without scrolling, in your own words:
 
 After this drill, you've shipped the same shape multi-chain tooling production indexers and explorers ship: one core function, generic over \`N: Network\`, specialized at compile time per chain. **Next chain: the \`Signer\` model — how alloy composes signing, gas, and nonce filling into layered Providers.**
 
-> **🧭 Where you are now in the stack:** you've built the **networking layer's chain abstraction** — 10 associated types with \`Send + Sync + 'static\` bounds, type-level dictionary, compile-time specialization. One \`Provider\` body now safely covers Ethereum, Optimism, and any future L2. Next chain switches dimension: from "which chain" to "who signs and how nonces / gas get filled."`,
+> **🧭 Where you are now in the stack:** you've built the **networking layer's chain abstraction** — 10 associated types with \`Send + Sync + 'static\` bounds, type-level dictionary, compile-time specialization. One \`Provider\` body now safely covers Ethereum, Optimism, and any future L2. Next chain switches dimension: from "which chain" to "who signs and how nonces / gas get filled."
+
+## Summary (3 lines)
+
+- Drill: \`block_summary<N, P>\` works on Ethereum AND Optimism. Generic-over-N is the win.
+- Anvil tests verify both chains work; compiler refuses chain-mismatched calls.
+- Pattern extends to any cross-chain library — one function, type-safe. Next module: Signer.
+`,
                 },
                 {
-                  title: 'Building the \`Signer\` trait step by step',
+                  title: 'Lesson 9 — Building the Signer trait step by step',
                   slug: 'alloy-signer-buildup-en',
                   type: 'CONTENT',
                   sortOrder: 9,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Building the \`Signer\` trait step by step
+                  content: `# Lesson 9 — Building the Signer trait step by step
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **cryptographic-authentication layer's signer abstraction** — the same problem TLS / PKCS#11 / SSH-agent solved decades ago. How do you let the same caller use a local secret key, an HSM, a cloud KMS, or a hardware token without rewriting the caller? Banks, certificate authorities, and TLS stacks all built this abstraction; alloy's \`Signer\` is the EVM version.
+## Question
+
+**\`Signer\` is alloy's abstraction over "something that can sign"** — PrivateKeySigner (in-memory key) / AwsSigner (HSM) / Ledger / etc. Build it step by step.
+
+## Principle (minimum model)
+
+- **Naive sign function.** \`fn sign(msg: &[u8]) -> Signature\`. Four problems: async signing needed (AWS HSM is async) + multi-chain signing (Ethereum vs Optimism tx differ) + signing variants (transaction / message / typed_data) + signer holds a private key in-memory.
+- **Step 1 — async.** Sign needs to be async (AwsSigner uses async HTTP). \`async fn sign(msg: &[u8]) -> Signature\`.
+- **Step 2 — TxSigner<N> separate trait.** Transaction-specific signing has chain-specific encoding. Separate from \`Signer\`.
+- **Step 3 — SignerSync wrapper.** Tests don't want async; \`SignerSync\` wraps \`Signer\` and provides sync API.
+- **Step 4 — WalletFiller bridge.** Connects the Signer to the FillProvider chain. Signer signs; WalletFiller injects into tx.
+- **Step 5 — Default \`Sig = Signature\` generic.** Lets you use a custom signature type if needed (advanced).
+
+## Worked example + steps
+
+# Building the \`Signer\` trait step by step
+
 
 A MEV searcher signs with an AWS KMS key (cloud key — the private key never leaves AWS). A treasury operator signs with a Ledger (hardware wallet — key on a USB device, requires a button press). A test suite signs with raw secp256k1 bytes in process. **The same alloy application code has to drive all three.** That's the constraint that shapes the \`Signer\` trait.
 
@@ -1544,7 +1741,6 @@ fn sign_tx(privkey: B256, mut tx: TypedTransaction) -> Result<TxEnvelope> {
 
 A function. Hardcoded \`B256\` private key. Hardcoded \`TypedTransaction\` (an Ethereum type). Hardcoded \`secp256k1_sign\` (in-process, sync, no I/O).
 
-> 🛑 **Predict.** Without scrolling: name three production scenarios this naive design fails. (Hint: each is a *different category* of signing — none of them have raw private keys in process.)
 
 The three:
 
@@ -1599,7 +1795,6 @@ trait Signer {
 
 \`sign_message\` has a *default impl* that does the EIP-191 prefixing and calls \`sign_hash\`. **Every \`Signer\` gets \`sign_message\` for free**, but a remote signer can override it if the remote service has its own prefix logic.
 
-> 🛑 **Anti-fluency.** Why a default impl, not a free function \`fn sign_message<S: Signer>(s: &S, msg: &[u8])\`?
 
 Because **default impls let signers override behavior.** AWS KMS might want to forward the message bytes to a service that does its own prefixing — overriding \`sign_message\` on \`AwsSigner\` lets it do that without changing callers. A free function can't be overridden. Default impls are the right tool when you want "common behavior with optional per-impl customization."
 
@@ -1627,7 +1822,6 @@ Two options:
 - **Option A:** Make \`Signer\` generic over network: \`Signer<N: Network>\` with \`sign_transaction(&N::UnsignedTx)\`.
 - **Option B:** Split tx-signing into a *separate trait* that handles the chain-aware part, while \`Signer\` stays chain-agnostic.
 
-> 🛑 **Predict.** Which option does alloy pick, and why? (Hint — think about how often you sign a tx vs how often you sign a raw hash.)
 
 Alloy picks **Option B**: \`Signer\` stays simple (chain-agnostic, just hashes); \`TxSigner<N>\` is a separate trait for tx-signing. Reasons:
 
@@ -1670,7 +1864,6 @@ pub trait SignerSync<Sig = Signature> {
 
 Generic-over-S code can require either bound: \`fn foo<S: Signer>\` for code that must be async-tolerant, \`fn bar<S: SignerSync>\` for code that needs the cheaper path.
 
-> 🛑 **Anti-fluency.** Why is \`SignerSync\` not just \`Signer\` with a non-async \`sign_hash\`? Why are they distinct traits?
 
 Because **traits with \`async fn\` and traits without \`async fn\` are different kinds of things in Rust.** An \`async fn foo() -> T\` is really \`fn foo() -> impl Future<Output = T>\` — it returns a Future rather than the result, forcing every caller to \`.await\`. Exposing the same method in sync and async forms means two completely different signatures.
 
@@ -1758,16 +1951,39 @@ Without scrolling:
 If any answer is shaky, scroll back. The next lesson reads alloy's real \`Signer\` source + concrete impls.
 
 > **🧭 Where you are now in the stack:** you've built the **authentication layer's signer abstraction** — \`Signer\` for hashes, \`TxSigner<N>\` for tx envelopes, async/sync split for cloud vs local, and \`WalletFiller\` to graft signing into the FillProvider chain. The same user code now drives local keys, cloud KMS, and hardware wallets without any of them knowing about the others. Next lesson opens up the real implementations.
+
+## Summary (3 lines)
+
+- 6-step buildup: async sign → TxSigner<N> separate trait → SignerSync wrapper → WalletFiller bridge → default Sig generic.
+- Real signing tree: Signer (async / Sig generic) + TxSigner<N> (chain-specific tx) + SignerSync (sync wrapper).
+- WalletFiller is how signer plugs into FillProvider chain. Next: walk real impls.
 `,
                 },
                 {
-                  title: 'Reading the real \`Signer\` trait + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\`',
+                  title: 'Lesson 10 — Reading the real Signer trait + PrivateKeySigner / AwsSigner / WalletFiller',
                   slug: 'alloy-signer-walkthrough-en',
                   type: 'CONTENT',
                   sortOrder: 10,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Reading the real \`Signer\` trait + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\`
+                  content: `# Lesson 10 — Reading the real Signer trait + PrivateKeySigner / AwsSigner / WalletFiller
+
+## Question
+
+**Walk the real Signer trait + PrivateKeySigner / AwsSigner / WalletFiller**.
+
+## Principle (minimum model)
+
+- **\`pub trait Signer<Sig = Signature>\`** with default-Signature generic; ~5 methods (\`sign_hash\`, \`sign_message\`, \`address\`, \`chain_id\`, \`set_chain_id\`).
+- **\`PrivateKeySigner\` impl.** Holds \`SecretKey\`; 5 constructors (\`random\`, \`from_bytes\`, \`from_str\`, \`from_slice\`, \`random_with_rng\`); sync.
+- **\`AwsSigner\` impl.** Async — calls AWS KMS for signing. Needs special handling: DER decoding + v=0/v=1 recovery to figure out the right v.
+- **\`SignerSync\` wrapper.** Wraps an async Signer and exposes sync API via Tokio runtime-block.
+- **\`WalletFiller\` = TxFiller<N>.** Inserts the signer into the FillProvider chain. Calls signer.sign_transaction at fill time.
+- **\`auto_impl(&mut, Box, Arc)\`.** 3 wrappers; not 5 like Provider because Signer methods are \`&mut self\` (key state can mutate).
+
+## Worked example + steps
+
+# Reading the real \`Signer\` trait + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\`
 
 You motivated the three-trait split (\`Signer\` / \`TxSigner\` / \`SignerSync\`) and the \`WalletFiller\` bridge. Now read the real source — the trait header with all its bounds, the in-process \`PrivateKeySigner\`, the cloud \`AwsSigner\` (where the recovery byte has to be brute-forced because AWS won't return it), the \`SignableTransaction\` glue, and \`WalletFiller\`'s integration into the FillProvider chain.
 
@@ -1803,7 +2019,6 @@ Three things to look hard at:
 
 The buildup wrote \`Signer<Sig = Signature>\`. The \`Sig\` parameter exists because not every chain uses ECDSA secp256k1 signatures (Ethereum's curve — 65-byte (r, s, v) tuple). Some L2s use BLS (aggregate-friendly), some use ed25519 (Solana's curve), some use post-quantum schemes. Defaulting to \`Signature\` (alloy's secp256k1 type) keeps the common case ergonomic — \`impl Signer\` is implicitly \`impl Signer<Signature>\` — while letting alternative schemes plug in.
 
-> 🛑 **Predict.** Why is \`Sig\` a *generic parameter on the trait*, not an *associated type* (the way \`Network::TxEnvelope\` is)?
 
 Because **the same signer might produce different signature types for different operations**. A single \`PrivateKeySigner\` that holds an ECDSA key could implement both \`Signer<Signature>\` (for hash signing) and \`TxSigner<Signature>\` (for tx signing) — or, if you wanted, \`Signer<RawBytes>\` for a raw-bytes-out variant. Generic parameter = "I can implement this trait multiple times with different \`Sig\`." Associated type = "I commit to exactly one \`Sig\` per impl." For signers, generic is the right shape.
 
@@ -1904,7 +2119,6 @@ Three things worth noting:
 2. **Recovery ID isn't returned by AWS.** AWS only returns r and s. The \`v\` (recovery byte) has to be *recovered* by trying both possibilities and checking which one produces the cached \`address\`. **One AWS call → two address-derivation attempts → one matched signature.**
 3. **No \`SignerSync\` impl.** AWS calls cross the network, so there's no sync path. Generic-over-S code that needs sync must accept that AWS signers are excluded.
 
-> 🛑 **Anti-fluency.** \`PrivateKeySigner\` caches \`address\` at construction (one-shot pubkey derivation). \`AwsSigner\` caches it because it's looked up via \`describe_key\`. **Why does every signer cache the address? What goes wrong if \`address()\` were a network call every time?**
 
 Because \`address()\` is called *for every transaction*, often *multiple times per tx* (for tracking, logging, signing-eligibility checks, building call frames). If it were a network call, every transaction would incur AWS round-trip latency *just to learn whose key signed it*. Caching at construction trades a one-time setup for amortized zero per-call cost.
 
@@ -1997,75 +2211,118 @@ Without scrolling:
 4. The user calls \`ProviderBuilder.wallet(signer)\`. Trace through the \`WalletFiller\` machinery: what's the layered structure of the resulting provider, and where does the signer's \`sign_transaction\` actually get invoked?
 
 The next lesson is a quiz. Engage with these recalls now if any answer is shaky.
+
+## Summary (3 lines)
+
+- Real Signer trait: \`<Sig = Signature>\` default + 5 methods. PrivateKeySigner sync; AwsSigner async (KMS + recovery).
+- SignerSync wraps async via Tokio runtime-block. WalletFiller = TxFiller<N> plugs signer into FillProvider chain.
+- \`auto_impl(&mut, Box, Arc)\` 3 wrappers — \`&mut self\` methods mean no shared \`&\` impl. Next: quiz.
 `,
                 },
                 {
-                  title: 'Quiz: did the \`Signer\` model stick?',
+                  title: 'Quiz — Signer',
                   slug: 'alloy-signer-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 11,
                   duration: 4,
                   xpReward: 25,
-                  content: `# Quiz: did the \`Signer\` model stick?
+                  content: `# Quiz — Signer
+
+## Question
+
+Confirm: 3-trait split (Signer + TxSigner<N> + SignerSync), 5 PrivateKeySigner constructors, AwsSigner DER + recovery, WalletFiller as TxFiller<N>.
+
+## Principle (minimum model)
+
+- Signer / TxSigner / SignerSync split + PrivateKeySigner 5 constructors + AwsSigner KMS + DER recovery + WalletFiller TxFiller<N>.
+
+## Worked example + steps
+
+# Quiz: did the \`Signer\` model stick?
 
 Four questions covering the design decisions across the Signer buildup and walkthrough. Same rule as the other Intermediate quizzes: **you can't nod past a quiz.**
 
-If you miss two or more, scroll back to *Building the \`Signer\` trait step by step* before going on to the drill.`,
+If you miss two or more, scroll back to *Building the \`Signer\` trait step by step* before going on to the drill.
+
+## Summary (3 lines)
+
+- Quiz confirms Signer trait understanding.
+- Get two+ wrong → re-read buildup + walkthrough.
+- Pass → drill: ship end-to-end signed tx via FillProvider chain.
+`,
                   quizQuestions: [
                     {
-                      question: "Alloy splits signing into two traits: `Signer` (chain-agnostic, signs hashes/messages) and `TxSigner<Sig>` (chain-aware, signs transactions via `SignableTransaction`). Why is `TxSigner` a *separate* trait, not just a method on `Signer`?",
-                      options: [
+                      "question": "Alloy splits signing into two traits: `Signer` (chain-agnostic, signs hashes/messages) and `TxSigner<Sig>` (chain-aware, signs transactions via `SignableTransaction`). Why is `TxSigner` a *separate* trait, not just a method on `Signer`?",
+                      "options": [
                         "Backward compatibility — older alloy versions had only `Signer`, and `TxSigner` was added later as a non-breaking addition.",
                         "Most signing operations aren't tx-signing (EIP-191 messages and EIP-712 typed data dominate dapp usage). Forcing every `Signer` to be chain-parameterized for the rare tx case would bloat every signer's signature. Plus, `Signer` impls (like `PrivateKeySigner`) are chain-agnostic and reusable across networks — tagging them with `N` would force one signer struct per chain.",
                         "Rust's trait coherence rules forbid putting both a sync and async method in the same trait.",
-                        "`Signer` is implemented by external libraries; `TxSigner` is implemented by alloy. Splitting maintains a clear boundary.",
+                        "`Signer` is implemented by external libraries; `TxSigner` is implemented by alloy. Splitting maintains a clear boundary."
                       ],
-                      correctIndex: 1,
-                      explanation: "Two reasons compound. First, signing isn't usually tx-signing — most production code signs EIP-191 messages or EIP-712 typed data. Putting tx-signing on `Signer` would make every signer parameterized over the rare case. Second, `PrivateKeySigner` is chain-agnostic by nature (a secp256k1 key doesn't care if the chain is Ethereum or Optimism). Tagging `Signer` with `N` would force `PrivateKeySigner<Ethereum>` and `PrivateKeySigner<Optimism>` as distinct types — wasteful. The split keeps `Signer` chain-agnostic and reusable, while `TxSigner<N>` carries the chain-specific tx-signing capability that a *single* `Signer` impl can provide for *multiple* chains.",
+                      "correctIndex": 1,
+                      "explanation": "Two reasons compound. First, signing isn't usually tx-signing — most production code signs EIP-191 messages or EIP-712 typed data. Putting tx-signing on `Signer` would make every signer parameterized over the rare case. Second, `PrivateKeySigner` is chain-agnostic by nature (a secp256k1 key doesn't care if the chain is Ethereum or Optimism). Tagging `Signer` with `N` would force `PrivateKeySigner<Ethereum>` and `PrivateKeySigner<Optimism>` as distinct types — wasteful. The split keeps `Signer` chain-agnostic and reusable, while `TxSigner<N>` carries the chain-specific tx-signing capability that a *single* `Signer` impl can provide for *multiple* chains."
                     },
                     {
-                      question: "`Signer<Sig = Signature>` parameterizes `Sig` as a *generic parameter on the trait*, not an associated type (the way `Network::TxEnvelope` is). What's the load-bearing reason?",
-                      options: [
+                      "question": "`Signer<Sig = Signature>` parameterizes `Sig` as a *generic parameter on the trait*, not an associated type (the way `Network::TxEnvelope` is). What's the load-bearing reason?",
+                      "options": [
                         "Generic parameters compile faster than associated types.",
                         "Associated types can't have defaults; generic parameters can. Defaulting to `Signature` is the only reason.",
                         "A single signer might want to implement the trait *multiple times* with different `Sig` types — e.g., `impl Signer<Signature> for X` and `impl Signer<RawBytes> for X` for the same struct. Generic parameter = 'I can implement this trait with any compatible Sig.' Associated type = 'I commit to exactly one Sig per impl.' For signers, multi-impl is the right semantics.",
-                        "Generic parameters allow `dyn Trait`; associated types don't.",
+                        "Generic parameters allow `dyn Trait`; associated types don't."
                       ],
-                      correctIndex: 2,
-                      explanation: "The choice is determined by whether multiple impls per type make sense. Network's `TxEnvelope` is fixed per chain (you can't have two valid TxEnvelope types for Ethereum) — associated type. Signer's `Sig` is per-operation: an ECDSA-key signer might produce `Signature` for normal use but `Bytes` for a raw-output API — generic parameter lets you implement both. **Generic = 'multiple impls valid.' Associated = 'one impl per type.'** Same trait shape decision, different answer per use case. (Default values work for both forms — that's not the reason.)",
+                      "correctIndex": 2,
+                      "explanation": "The choice is determined by whether multiple impls per type make sense. Network's `TxEnvelope` is fixed per chain (you can't have two valid TxEnvelope types for Ethereum) — associated type. Signer's `Sig` is per-operation: an ECDSA-key signer might produce `Signature` for normal use but `Bytes` for a raw-output API — generic parameter lets you implement both. **Generic = 'multiple impls valid.' Associated = 'one impl per type.'** Same trait shape decision, different answer per use case. (Default values work for both forms — that's not the reason.)"
                     },
                     {
-                      question: "Both `PrivateKeySigner` and `AwsSigner` cache the `address` at construction rather than computing it on each `address()` call. Why does this matter — what's the cost model?",
-                      options: [
+                      "question": "Both `PrivateKeySigner` and `AwsSigner` cache the `address` at construction rather than computing it on each `address()` call. Why does this matter — what's the cost model?",
+                      "options": [
                         "Because `address()` is private — it's not actually called from outside the signer crate, so caching is a stylistic choice.",
                         "`address()` is called *for every transaction* (often multiple times per tx — for tracking, logging, signing-eligibility checks, building call frames). For `AwsSigner`, an uncached `address()` would be an AWS network round-trip *per call*, adding ~50-200ms latency per transaction. For `PrivateKeySigner`, uncached means one keccak256-of-pubkey per call — cheaper but still wasteful. Caching at construction trades a one-time setup for amortized zero per-call cost.",
                         "The Ethereum protocol requires `address()` to return a stable value across all calls within a session.",
-                        "Rust's borrow checker doesn't allow `address()` to be a method that does work — it must read a precomputed value.",
+                        "Rust's borrow checker doesn't allow `address()` to be a method that does work — it must read a precomputed value."
                       ],
-                      correctIndex: 1,
-                      explanation: "The access pattern is the key. Every transaction touches `address()` at least once (sender check, signing eligibility), often more (logging, monitoring, call-frame building). For `AwsSigner` specifically, uncached would mean `describe_key` round-trips per tx — making *every* transaction wait for AWS network latency just to learn whose key is signing. Caching once at construction (in `AwsSigner::new`) means the cost is paid one time. For `PrivateKeySigner` the per-call cost is keccak256-of-uncompressed-pubkey-take-last-20-bytes — cheap but pointless to redo. **Cache costs that recur per-tx; don't cache costs that are already cheap.**",
+                      "correctIndex": 1,
+                      "explanation": "The access pattern is the key. Every transaction touches `address()` at least once (sender check, signing eligibility), often more (logging, monitoring, call-frame building). For `AwsSigner` specifically, uncached would mean `describe_key` round-trips per tx — making *every* transaction wait for AWS network latency just to learn whose key is signing. Caching once at construction (in `AwsSigner::new`) means the cost is paid one time. For `PrivateKeySigner` the per-call cost is keccak256-of-uncompressed-pubkey-take-last-20-bytes — cheap but pointless to redo. **Cache costs that recur per-tx; don't cache costs that are already cheap.**"
                     },
                     {
-                      question: "User code calls `ProviderBuilder.wallet(signer).build()`. Tracing through alloy: what's the actual layered structure of the resulting provider, and where does `sign_transaction` get invoked?",
-                      options: [
+                      "question": "User code calls `ProviderBuilder.wallet(signer).build()`. Tracing through alloy: what's the actual layered structure of the resulting provider, and where does `sign_transaction` get invoked?",
+                      "options": [
                         "`ProviderBuilder.wallet(signer)` directly stores the signer on the provider; `send_transaction` calls `signer.sign_transaction()` internally before forwarding to the inner provider.",
                         "`.wallet(signer)` desugars to `.layer(WalletFiller::new(signer))` — installing a `WalletFiller<W>` as a `TxFiller<N>` in the FillProvider chain (alongside `NonceFiller`, `GasFiller`, `ChainIdFiller`). When the user calls `provider.send_transaction(...)`, each filler's `fill()` runs in chain order; `WalletFiller::fill` invokes `wallet.sign_transaction()` on the populated unsigned tx and attaches the signature.",
                         "`.wallet(signer)` is purely a convenience method — the signer is moved into the request type and signing happens at the transport layer, after RPC encoding.",
-                        "`.wallet(signer)` is a marker that tells the next provider layer to expect signed requests; signing happens externally before `send_transaction` is called.",
+                        "`.wallet(signer)` is a marker that tells the next provider layer to expect signed requests; signing happens externally before `send_transaction` is called."
                       ],
-                      correctIndex: 1,
-                      explanation: "`.wallet(signer)` is sugar for `.layer(WalletFiller::new(signer))`. The signer enters the Provider chain via the same Filler machinery as nonce/gas/chain-id — the `WalletFiller<W>` is a `TxFiller<N>` that runs in the FillProvider chain. When a request flows through, each filler runs in stack order (typically: nonce → gas → chain-id → wallet → send). The wallet filler is positioned last because it needs the unsigned tx to be fully populated (nonce/gas/chainid filled in) before it can compute the signature hash. The cross-chain composition pattern from the Provider chain is the same here, just with signing as the new participant.",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "`.wallet(signer)` is sugar for `.layer(WalletFiller::new(signer))`. The signer enters the Provider chain via the same Filler machinery as nonce/gas/chain-id — the `WalletFiller<W>` is a `TxFiller<N>` that runs in the FillProvider chain. When a request flows through, each filler runs in stack order (typically: nonce → gas → chain-id → wallet → send). The wallet filler is positioned last because it needs the unsigned tx to be fully populated (nonce/gas/chainid filled in) before it can compute the signature hash. The cross-chain composition pattern from the Provider chain is the same here, just with signing as the new participant."
+                    }
                   ],
                 },
                 {
-                  title: 'Drill: ship an end-to-end signed tx via the FillProvider chain',
+                  title: 'Lesson 12 — Drill: ship an end-to-end signed tx via the FillProvider chain',
                   slug: 'alloy-signer-drill-en',
                   type: 'CONTENT',
                   sortOrder: 12,
-                  xpReward: 25,
                   duration: 12,
-                  content: `# Drill: ship an end-to-end signed tx via the FillProvider chain
+                  xpReward: 25,
+                  content: `# Lesson 12 — Drill: ship an end-to-end signed tx via the FillProvider chain
+
+## Question
+
+**Build a Provider + sign + send a transaction end-to-end**. \`ProviderBuilder::new().wallet(signer).on_http(url)?\` is the user API; FillProvider chain handles fill order.
+
+## Principle (minimum model)
+
+- **\`ProviderBuilder::new().wallet(signer).on_http(url)?\`** = Provider with FillProvider chain (Nonce + Gas + ChainId + Signer).
+- **Fill order.** Nonce → Gas → ChainId → Signer. Sign last because earlier fields go into the signed payload.
+- **Anvil setup.** Local node with hardcoded test keys.
+- **Send.** \`provider.send_transaction(tx).await?.get_receipt().await?\`. Tx propagates through fill chain; signer signs at the end; broadcast to node.
+- **Assert.** Receipt has expected from/to/value; nonce incremented.
+- **Why the order matters.** If signer fills first, sign payload missing nonce/gas → wrong signature. Order forced by FillProvider design.
+- **Production parallel.** This is how every Alloy-based dapp signs txs.
+
+## Worked example + steps
+
+# Drill: ship an end-to-end signed tx via the FillProvider chain
 
 Reading is rehearsal. **Doing is memory.** This drill takes you from "I've read about \`Signer\` and \`WalletFiller\`" to "I have wired a real signer into a real ProviderBuilder, sent a signed transaction against Anvil, and observed the FillProvider chain do nonce / gas / chain-id / signing in stack order."
 
@@ -2134,7 +2391,6 @@ async fn main() -> eyre::Result<()> {
 
 \`cargo run\`. You should see the signer's address, then a recovered address that matches.
 
-> 🛑 **Question (write it down):** \`signer.sign_hash(&hash)\` returns a \`Result<Signature>\`. \`Signature\` is alloy's \`(r, s, v)\` tuple. **What did the signer have to do internally to compute \`v\` (the recovery byte)?**
 
 For \`PrivateKeySigner\`, \`v\` falls out of the \`k256\` ECDSA-recoverable signing primitive directly — the secp256k1 sign-recoverable function returns it as part of the signature. **No extra work.** This is why \`PrivateKeySigner::sign_hash\` is one line of crypto: \`(r, s, v) = k256::sign_recoverable(privkey, hash)\`.
 
@@ -2200,7 +2456,6 @@ The recipient balance is exactly 1 ETH (1_000_000_000_000_000_000 wei). **The si
 
 The \`with_recommended_fillers()\` + \`.wallet(signer)\` calls layered four \`TxFiller\`s into the chain. Before \`send_transaction\` could submit anything, each filler ran in stack order on the outgoing \`TransactionRequest\`.
 
-> 🛑 **Predict (write it down before scrolling):** Your \`TransactionRequest::default().with_to(recipient).with_value(value)\` set only \`to\` and \`value\`. The receipt shows the tx had nonce, gas limit, gas price (or maxFeePerGas), chain_id, and a signature. **For each missing field, name *which filler* populated it and *what action* it took.**
 
 The four fillers and their actions:
 
@@ -2234,7 +2489,6 @@ let result = provider_no_fillers
 println!("no-filler result: {:?}", result);
 \`\`\`
 
-> 🛑 **Predict before running.** What error do you expect? Hint — the WalletFiller still runs (it's the wallet), but everything else is missing.
 
 You'll see something like \`"Error: missing nonce"\` or \`"Error: missing gas\`/\`maxFeePerGas\`"\`, depending on which validation fires first. **The error proves the fillers do real work** — without them, the request is incomplete. Adding them back makes the program work.
 
@@ -2270,16 +2524,41 @@ Without scrolling, in your own words:
 
 If any answer is shaky, the lesson isn't done with you. Re-run the drills or re-read the buildup.
 
-After this drill, you've shipped a *signed transaction through the full Provider/Network/Signer trio* — the same shape every dapp, MEV bot, and indexer uses in production. **Provider, Network, and Signer chains are complete.** The course's final quiz is the next stop.`,
+After this drill, you've shipped a *signed transaction through the full Provider/Network/Signer trio* — the same shape every dapp, MEV bot, and indexer uses in production. **Provider, Network, and Signer chains are complete.** The course's final quiz is the next stop.
+
+## Summary (3 lines)
+
+- End-to-end: \`ProviderBuilder::new().wallet(signer).on_http(url)?\` → FillProvider chain (Nonce → Gas → ChainId → Signer).
+- Sign last because earlier fields go into signed payload. Anvil for test; send_transaction → get_receipt; assert receipt.
+- Production parallel: every Alloy dapp signs this way. Next: testing alloy consumers.
+`,
                 },
                 {
-                  title: 'Testing alloy consumers — anvil, Provider mocks, and trait substitution',
+                  title: 'Lesson 13 — Testing alloy consumers — anvil, Provider mocks, and trait substitution',
                   slug: 'alloy-testing-en',
                   type: 'CONTENT',
                   sortOrder: 13,
                   duration: 22,
                   xpReward: 45,
-                  content: `# Testing alloy consumers — anvil, Provider mocks, and trait substitution
+                  content: `# Lesson 13 — Testing alloy consumers — anvil, Provider mocks, and trait substitution
+
+## Question
+
+**Test alloy consumers** — three patterns: programmatic anvil (most common), forked anvil (production-state tests), trait substitution (rare).
+
+## Principle (minimum model)
+
+- **Programmatic anvil.** \`Anvil::new().spawn()\` → 50ms startup; full local node; cheap. Most common pattern.
+- **Forked anvil.** \`Anvil::new().fork(MAINNET).fork_block_number(BLOCK).spawn()\` → real mainnet state at a pinned block. Tests against production contracts; pinned block ensures determinism.
+- **Trait substitution.** Implement \`Provider\` for a mock; inject in tests. Rare — anvil is faster and matches production behavior.
+- **\`AnvilApi\` cheatcodes.** \`vm.warp\` / \`vm.deal\` / \`vm.prank\` — same precompile pattern as Foundry.
+- **Why pinned blocks matter.** Without it, "test passes today, fails tomorrow when mainnet drifts". With it, byte-for-byte determinism.
+- **Why anvil dominates.** Same Rust crate as Reth; in-process Revm; instant.
+- **Test discipline.** Always use invariants over snapshots. Brittle snapshots break; invariants survive mainnet drift.
+
+## Worked example + steps
+
+# Testing alloy consumers — anvil, Provider mocks, and trait substitution
 
 You walked the \`Provider\`, \`Network\`, and \`Signer\` trait shapes. **Now: how do you test code that depends on them?** Every app you'll build in the Building tier — MEV searcher, indexer, wallet backend, swap aggregator — instantiates a \`Provider\`, signs with a \`Signer\`, fills via the filler chain. If you can't unit-test that code without standing up a real RPC endpoint, you have no test gate. This lesson is the answer.
 
@@ -2417,59 +2696,83 @@ let provider = forked_provider_at(FORK_RPC, PINNED_BLOCK).await;
 
 Finish drill 3 and you can write the test gate for any Building tier lesson without further reference. Drill 4 makes you appreciate when *not* to bother with mocks.
 
-> 🛑 **Final check.** In one sentence: why does using \`Anvil::new().spawn()\` in tests give you better fidelity than a hand-rolled \`MockProvider\`? If your answer doesn't mention "the same Provider trait you use in production runs in tests; cheats are layered on the same surface," re-read §2 — that surface-equivalence is the whole reason this pattern beats mock-heavy approaches.
 
 ## 📺 Further reading
 
 [Alloy book — Anvil chapter](https://alloy.rs/) covers the full programmatic anvil API + cheat surface.
+
+## Summary (3 lines)
+
+- Three testing patterns: programmatic anvil (most common, 50ms boot) + forked anvil (mainnet state, pinned block) + trait substitution (rare).
+- AnvilApi cheatcodes (vm.warp / vm.deal / vm.prank). Pinned blocks for determinism.
+- Anvil dominates because in-process Revm. Always use invariants over snapshots. Final quiz next.
 `,
                 },
                 {
-                  title: 'Inside Alloy final quiz',
+                  title: 'Quiz — Inside Alloy (final)',
                   slug: 'alloy-advanced-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 14,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Inside Alloy final quiz
+                  content: `# Quiz — Inside Alloy (final)
+
+## Question
+
+Final Inside Alloy quiz: across Provider + Network + Signer + testing.
+
+## Principle (minimum model)
+
+- Provider (6 buildup + auto_impl + root) + Network (10 associated types + Eth/Op delta) + Signer (3-trait split + WalletFiller) + testing (anvil + invariants).
+
+## Worked example + steps
+
+# Inside Alloy final quiz
 
 Final check across the three chains: \`Provider\`, \`Network\`, \`Signer\`.
 
-Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant chain's build-up before claiming you're done with Inside Alloy.`,
+Three questions. Same rule: **you can't nod past a quiz.** Miss two and re-read the relevant chain's build-up before claiming you're done with Inside Alloy.
+
+## Summary (3 lines)
+
+- Final quiz across all four topics. 8 questions.
+- Get three+ wrong → re-read the relevant lesson chain.
+- Pass → Inside Alloy complete. Next: Inside Revm + Inside Reth + Advanced + Expert tracks.
+`,
                   quizQuestions: [
                     {
-                      question: "`Provider`'s `root()` method is the only required method on the trait — every other RPC method has a default impl. What's its load-bearing architectural purpose?",
-                      options: [
+                      "question": "`Provider`'s `root()` method is the only required method on the trait — every other RPC method has a default impl. What's its load-bearing architectural purpose?",
+                      "options": [
                         "It returns the provider's name for logging/tracing.",
                         "It enables wrapper providers (signing, filler chains, custom layers) to delegate transport access without re-implementing all 30+ RPC methods. Wrappers forward `root()` to their inner provider's `root()`; the trait's default impls then route through `self.root()` to the actual transport — automatically threaded through the wrapper stack.",
                         "It's a backward-compat method retained for API stability.",
-                        "It's required by Rust's `dyn Provider` infrastructure.",
+                        "It's required by Rust's `dyn Provider` infrastructure."
                       ],
-                      correctIndex: 1,
-                      explanation: "The `root()` indirection is what makes the FillProvider stack work. Wrapper authors write *one method body* (root forwarding) plus whatever specific methods they want to override; the other 30+ methods come for free via the trait's default impls. This is what lets `LoggingProvider`, `FillProvider`, `WalletFiller`, and arbitrary custom layers compose without N×M wrapper-method-body explosion. The pattern from the Provider chain's Step 4.",
+                      "correctIndex": 1,
+                      "explanation": "The `root()` indirection is what makes the FillProvider stack work. Wrapper authors write *one method body* (root forwarding) plus whatever specific methods they want to override; the other 30+ methods come for free via the trait's default impls. This is what lets `LoggingProvider`, `FillProvider`, `WalletFiller`, and arbitrary custom layers compose without N×M wrapper-method-body explosion. The pattern from the Provider chain's Step 4."
                     },
                     {
-                      question: "`Network` uses 10 *associated types* (TxType, TxEnvelope, TransactionRequest, TransactionResponse, ReceiptEnvelope, ReceiptResponse, Header, HeaderResponse, BlockResponse, UnsignedTx) rather than 10 generic parameters on the trait. What's the load-bearing benefit for code that's generic over Network?",
-                      options: [
+                      "question": "`Network` uses 10 *associated types* (TxType, TxEnvelope, TransactionRequest, TransactionResponse, ReceiptEnvelope, ReceiptResponse, Header, HeaderResponse, BlockResponse, UnsignedTx) rather than 10 generic parameters on the trait. What's the load-bearing benefit for code that's generic over Network?",
+                      "options": [
                         "Associated types compile faster than generic parameters.",
                         "Cohesion + concision: associated types group 'these go together' (Ethereum's TxRequest must pair with Ethereum's TxEnvelope, never with Optimism's), AND call sites only spell out one parameter (`<N: Network>`) instead of 10 raw generics.",
                         "Generic parameters can't be used in trait method signatures, only in the trait body.",
-                        "Associated types support `dyn Trait`; generic parameters don't.",
+                        "Associated types support `dyn Trait`; generic parameters don't."
                       ],
-                      correctIndex: 1,
-                      explanation: "Cohesion is the killer feature: `Provider<EthereumTxRequest, OptimismReceipt>` would compile if these were raw generics — there's nothing stopping you from mixing types from different chains. Associated types group them under one `Network` impl, so picking `Ethereum` selects a coherent set. Plus every signature mentioning Provider would have to spell out 10 parameters with raw generics; one `N: Network` pulls them all in. Same idiom in the rest of alloy: \`TransactionEnvelope<Self>\`, \`BlockResponse<Self>\` — helper traits parameterized by the dictionary key keep code generic-over-N portable.",
+                      "correctIndex": 1,
+                      "explanation": "Cohesion is the killer feature: `Provider<EthereumTxRequest, OptimismReceipt>` would compile if these were raw generics — there's nothing stopping you from mixing types from different chains. Associated types group them under one `Network` impl, so picking `Ethereum` selects a coherent set. Plus every signature mentioning Provider would have to spell out 10 parameters with raw generics; one `N: Network` pulls them all in. Same idiom in the rest of alloy: `TransactionEnvelope<Self>`, `BlockResponse<Self>` — helper traits parameterized by the dictionary key keep code generic-over-N portable."
                     },
                     {
-                      question: "User code calls `ProviderBuilder.wallet(signer).on_http(url)`. Tracing through alloy: what's the actual mechanism that integrates `signer` into the Provider chain?",
-                      options: [
+                      "question": "User code calls `ProviderBuilder.wallet(signer).on_http(url)`. Tracing through alloy: what's the actual mechanism that integrates `signer` into the Provider chain?",
+                      "options": [
                         "`.wallet(signer)` directly stores the signer on the provider; `send_transaction` calls `signer.sign_transaction()` internally.",
                         "`.wallet(signer)` desugars to `.layer(WalletFiller::new(signer))` — installing a `WalletFiller<W>` as a `TxFiller<N>` in the FillProvider chain, alongside `NonceFiller`/`GasFiller`/`ChainIdFiller`. When `send_transaction` runs, each filler's `fill()` runs in stack order; `WalletFiller::fill` invokes `signer.sign_transaction()` on the populated unsigned tx and attaches the signature.",
                         "`.wallet(signer)` is a marker that tells the next provider layer to expect signed requests; signing happens externally.",
-                        "`.wallet(signer)` mutates the underlying transport to inject signatures into outgoing JSON-RPC payloads.",
+                        "`.wallet(signer)` mutates the underlying transport to inject signatures into outgoing JSON-RPC payloads."
                       ],
-                      correctIndex: 1,
-                      explanation: "`.wallet(signer)` is sugar for `.layer(WalletFiller::new(signer))`. The signer enters the Provider chain via the same Filler machinery as nonce/gas/chain-id — the `WalletFiller<W>` is a `TxFiller<N>` that runs in the FillProvider chain. Order matters: `WalletFiller` runs *last* because it needs nonce/gas/chain_id filled in before it can compute the signature hash. Three chains (Provider's `Filler`, Network's `TxFiller<N>`, Signer's `Signer` + `WalletFiller`) compose into one runnable program — the architectural payoff of doing all three.",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "`.wallet(signer)` is sugar for `.layer(WalletFiller::new(signer))`. The signer enters the Provider chain via the same Filler machinery as nonce/gas/chain-id — the `WalletFiller<W>` is a `TxFiller<N>` that runs in the FillProvider chain. Order matters: `WalletFiller` runs *last* because it needs nonce/gas/chain_id filled in before it can compute the signature hash. Three chains (Provider's `Filler`, Network's `TxFiller<N>`, Signer's `Signer` + `WalletFiller`) compose into one runnable program — the architectural payoff of doing all three."
+                    }
                   ],
                 },
               ],
