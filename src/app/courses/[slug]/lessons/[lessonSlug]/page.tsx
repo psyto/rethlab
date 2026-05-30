@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useLocale } from '@/contexts/locale-context';
@@ -43,6 +43,8 @@ const CodeEditor = dynamic(() => import('@/components/editor/code-editor'), {
 export default function LessonPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const versionQuery = searchParams.get('version') === 'v2' ? '?version=v2' : '';
   const { t, formatT, locale } = useLocale();
   const slug = params.slug as string;
   const lessonSlug = params.lessonSlug as string;
@@ -51,9 +53,9 @@ export default function LessonPage() {
   useEffect(() => {
     const isJaSlug = slug.endsWith('-ja');
     if ((locale === 'ja' && !isJaSlug) || (locale === 'en' && isJaSlug)) {
-      router.replace('/courses');
+      router.replace(`/courses${versionQuery}`);
     }
-  }, [locale, slug, router]);
+  }, [locale, slug, router, versionQuery]);
 
   const { data: session } = useSession();
   const { data: lesson, isLoading, error } = useLesson(slug, lessonSlug);
@@ -177,7 +179,7 @@ export default function LessonPage() {
           )}
           {lesson.prevLesson && (
             <button
-              onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.prevLesson!.slug}`)}
+              onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.prevLesson!.slug}${versionQuery}`)}
               className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary"
               title={t('lesson.previousLesson')}
             >
@@ -186,7 +188,7 @@ export default function LessonPage() {
           )}
           {lesson.nextLesson && (
             <button
-              onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}`)}
+              onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}${versionQuery}`)}
               className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary"
               title={t('lesson.nextLesson')}
             >
@@ -259,12 +261,14 @@ export default function LessonPage() {
                 isCompleted={isCompleted}
                 onNext={
                   lesson.nextLesson
-                    ? () => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}`)
+                    ? () => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}${versionQuery}`)
                     : undefined
                 }
                 nextLessonTitle={lesson.nextLesson?.title}
               />
-              {isCompleted && <LessonCompletionNav lesson={lesson} router={router} t={t} />}
+              {isCompleted && (
+                <LessonCompletionNav lesson={lesson} router={router} t={t} versionQuery={versionQuery} />
+              )}
             </div>
           )}
 
@@ -296,7 +300,7 @@ export default function LessonPage() {
               <div className="flex gap-3">
                 {lesson.prevLesson && (
                   <button
-                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.prevLesson!.slug}`)}
+                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.prevLesson!.slug}${versionQuery}`)}
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
                     <ArrowLeft className="h-4 w-4" />
@@ -305,7 +309,7 @@ export default function LessonPage() {
                 )}
                 {lesson.nextLesson ? (
                   <button
-                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}`)}
+                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}${versionQuery}`)}
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
                     {t('lesson.nextLesson')}
@@ -313,7 +317,7 @@ export default function LessonPage() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => router.push(`/courses`)}
+                    onClick={() => router.push(`/courses${versionQuery}`)}
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
                     {t('lesson.backToCourses')}
@@ -399,7 +403,7 @@ export default function LessonPage() {
                 </div>
                 {lesson.nextLesson ? (
                   <button
-                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}`)}
+                    onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}${versionQuery}`)}
                     className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient py-3 text-sm font-semibold text-fabrknt-dark transition-all hover:opacity-90"
                   >
                     {t('lesson.nextLesson')}: {lesson.nextLesson.title}
@@ -455,10 +459,12 @@ function LessonCompletionNav({
   lesson,
   router,
   t,
+  versionQuery,
 }: {
   lesson: import('@/hooks').LessonDetail;
   router: ReturnType<typeof useRouter>;
   t: (key: string) => string;
+  versionQuery: string;
 }) {
   const { formatT } = useLocale();
 
@@ -466,7 +472,7 @@ function LessonCompletionNav({
   if (lesson.nextLesson) {
     return (
       <button
-        onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}`)}
+        onClick={() => router.push(`/courses/${lesson.courseSlug}/lessons/${lesson.nextLesson!.slug}${versionQuery}`)}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient py-3 text-sm font-semibold text-fabrknt-dark transition-all hover:opacity-90"
       >
         {t('lesson.nextLesson')}: {lesson.nextLesson.title}
@@ -487,7 +493,7 @@ function LessonCompletionNav({
       </p>
       <div className="mt-4 flex flex-col gap-2">
         <button
-          onClick={() => router.push('/courses')}
+          onClick={() => router.push(`/courses${versionQuery}`)}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient py-3 text-sm font-semibold text-fabrknt-dark transition-all hover:opacity-90"
         >
           <BookOpen className="h-4 w-4" />

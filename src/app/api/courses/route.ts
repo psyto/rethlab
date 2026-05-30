@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { apiSuccess, withErrorHandler } from '@/lib/api/utils';
 import { getCourses as getCMSCourses, type CMSCourse } from '@/lib/cms/client';
+import { resolveCourseVersion } from '@/lib/course-version';
 import type { CourseCard } from '@/types';
 
 export const GET = withErrorHandler(async (req) => {
@@ -9,8 +10,10 @@ export const GET = withErrorHandler(async (req) => {
   const search = searchParams.get('search') || '';
   const difficulty = searchParams.get('difficulty') || 'all';
   const locale = searchParams.get('locale') || 'en';
+  const version = resolveCourseVersion(searchParams.get('version'));
 
   const where: Record<string, unknown> = { isPublished: true, locale };
+  where.slug = version === 'v2' ? { contains: '-v2-' } : { not: { contains: '-v2-' } };
 
   if (difficulty !== 'all') {
     where.difficulty = difficulty;
@@ -86,6 +89,7 @@ export const GET = withErrorHandler(async (req) => {
       lessonSlugs: course.modules.flatMap((m) => m.lessons.map((l) => l.slug)),
       enrolledCount: course._count.enrollments,
       userProgress: enrollments[course.id],
+      version,
     };
   });
 

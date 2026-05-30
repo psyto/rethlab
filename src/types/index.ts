@@ -39,6 +39,7 @@ export interface CourseCard {
   lessonSlugs: string[];
   enrolledCount: number;
   userProgress?: number; // 0-100 if enrolled
+  version?: 'v1' | 'v2';
 }
 
 export interface ModuleWithLessons {
@@ -82,4 +83,3 @@ export interface QuizQuestion {
   correctIndex: number;
   explanation: string;
 }
-

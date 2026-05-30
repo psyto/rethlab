@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useLocale } from '@/contexts/locale-context';
@@ -44,6 +44,8 @@ const TRACK_COLORS: Record<string, string> = {
 export default function CourseDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const versionQuery = searchParams.get('version') === 'v2' ? '?version=v2' : '';
   const slug = params.slug as string;
   const { t, locale } = useLocale();
   const { data: session } = useSession();
@@ -53,12 +55,14 @@ export default function CourseDetailPage() {
   // Redirect to correct locale version when language switches
   useEffect(() => {
     const isJaSlug = slug.endsWith('-ja');
+    const toJaSlug = slug.endsWith('-en') ? slug.replace(/-en$/, '-ja') : `${slug}-ja`;
+    const toEnSlug = slug.endsWith('-ja') ? slug.replace(/-ja$/, '-en') : slug;
     if (locale === 'ja' && !isJaSlug) {
-      router.replace(`/courses/${slug}-ja`);
+      router.replace(`/courses/${toJaSlug}${versionQuery}`);
     } else if (locale === 'en' && isJaSlug) {
-      router.replace(`/courses/${slug.replace(/-ja$/, '')}`);
+      router.replace(`/courses/${toEnSlug}${versionQuery}`);
     }
-  }, [locale, slug, router]);
+  }, [locale, slug, router, versionQuery]);
 
   const { data: course, isLoading, error } = useCourse(slug);
   const enrollMutation = useEnroll(slug);
@@ -230,7 +234,7 @@ export default function CourseDetailPage() {
                         return (
                           <Link
                             key={lesson.id}
-                            href={`/courses/${course.slug}/lessons/${lesson.slug}`}
+                            href={`/courses/${course.slug}/lessons/${lesson.slug}${versionQuery}`}
                             className="flex items-center justify-between border-b border-border/50 px-4 py-3 last:border-b-0 hover:bg-secondary/50 transition-colors"
                           >
                             <div className="flex items-center gap-3">
@@ -300,7 +304,7 @@ export default function CourseDetailPage() {
             {/* Enroll CTA */}
             {!session ? (
               <Link
-                href={`/courses/${course.slug}/lessons/${course.modules[0]?.lessons[0]?.slug}`}
+                href={`/courses/${course.slug}/lessons/${course.modules[0]?.lessons[0]?.slug}${versionQuery}`}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-fabrknt-gradient px-6 py-3 text-base font-semibold text-fabrknt-dark transition-all hover:opacity-90"
               >
                 {t('landing.hero.cta')}

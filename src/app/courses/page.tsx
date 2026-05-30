@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useLocale } from '@/contexts/locale-context';
 import { Search, Clock, BookOpen, Loader2 } from 'lucide-react';
 import { cn, formatDuration } from '@/lib/utils';
@@ -20,17 +21,34 @@ const TRACK_COLORS: Record<string, string> = {
 
 export default function CourseCatalogPage() {
   const { t, locale } = useLocale();
+  const searchParams = useSearchParams();
+  const version = searchParams.get('version') === 'v2' ? 'v2' : 'v1';
+  const versionQuery = version === 'v2' ? '?version=v2' : '';
   const [search, setSearch] = useState('');
   const isJA = locale === 'ja';
-  const conceptCourseSlug = isJA ? 'reth-beginner-ja' : 'reth-beginner-en';
+  const conceptCourseSlug = isJA
+    ? version === 'v2'
+      ? 'reth-beginner-v2-ja'
+      : 'reth-beginner-ja'
+    : version === 'v2'
+      ? 'reth-beginner-v2-en'
+      : 'reth-beginner-en';
   const conceptSystemsSlug = isJA
-    ? 'ethereum-as-systems-engineering-ja'
-    : 'ethereum-as-systems-engineering-en';
+    ? version === 'v2'
+      ? 'why-rust-ethereum-stack-ja'
+      : 'ethereum-as-systems-engineering-ja'
+    : version === 'v2'
+      ? 'why-rust-ethereum-stack-en'
+      : 'ethereum-as-systems-engineering-en';
   const conceptAdversarialSlug = isJA
-    ? 'ethereum-adversarial-forces-ja'
-    : 'ethereum-adversarial-forces-en';
+    ? version === 'v2'
+      ? 'three-pillars-ja'
+      : 'ethereum-adversarial-forces-ja'
+    : version === 'v2'
+      ? 'three-pillars-en'
+      : 'ethereum-adversarial-forces-en';
 
-  const { data: courses, isLoading, error } = useCourses(search, 'all', locale);
+  const { data: courses, isLoading, error } = useCourses(search, 'all', locale, version);
   const localCompletion = useLocalCompletion();
 
   return (
@@ -39,6 +57,26 @@ export default function CourseCatalogPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold">{t('courses.catalog.title')}</h1>
         <p className="mt-2 text-muted-foreground">{t('courses.catalog.subtitle')}</p>
+        <div className="mt-4 flex gap-2 text-sm">
+          <Link
+            href="/courses"
+            className={cn(
+              'rounded-lg border px-3 py-1.5',
+              version === 'v1' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-secondary'
+            )}
+          >
+            Curriculum v1
+          </Link>
+          <Link
+            href="/courses?version=v2"
+            className={cn(
+              'rounded-lg border px-3 py-1.5',
+              version === 'v2' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-secondary'
+            )}
+          >
+            Curriculum v2
+          </Link>
+        </div>
       </div>
 
       {/* Concept-first entry points */}
@@ -53,13 +91,13 @@ export default function CourseCatalogPage() {
         </p>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <Link
-            href={`/courses/${conceptCourseSlug}/lessons/${conceptSystemsSlug}`}
+            href={`/courses/${conceptCourseSlug}/lessons/${conceptSystemsSlug}${versionQuery}`}
             className="rounded-lg border border-primary/30 px-3 py-1.5 hover:bg-primary/10"
           >
             {isJA ? 'Ethereumをシステムエンジニアリングとして捉える' : 'Ethereum as Systems Engineering'}
           </Link>
           <Link
-            href={`/courses/${conceptCourseSlug}/lessons/${conceptAdversarialSlug}`}
+            href={`/courses/${conceptCourseSlug}/lessons/${conceptAdversarialSlug}${versionQuery}`}
             className="rounded-lg border border-primary/30 px-3 py-1.5 hover:bg-primary/10"
           >
             {isJA ? 'Ethereumを動かす敵対的な力学' : 'Ethereum Adversarial Forces'}
@@ -154,7 +192,7 @@ export default function CourseCatalogPage() {
           return (
             <Link
               key={course.id}
-              href={`/courses/${course.slug}`}
+              href={`/courses/${course.slug}${versionQuery}`}
               className="group rounded-2xl border border-border bg-card transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5"
             >
               <div className="flex h-40 items-center justify-center rounded-t-2xl bg-fabrknt-gradient-subtle">
