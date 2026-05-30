@@ -15,7 +15,7 @@ export async function seedRethOpenHlClobEN(prisma: PrismaClient) {
       track: 'building-openhl-clob',
       tags,
       isPublished: true,
-      sortOrder: 1012,
+      sortOrder: 1011,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {

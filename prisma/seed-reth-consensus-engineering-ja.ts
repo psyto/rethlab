@@ -15,7 +15,7 @@ export async function seedRethConsensusEngineeringJA(prisma: PrismaClient) {
       track: 'reth-l1-architect',
       tags,
       isPublished: true,
-      sortOrder: 1300,
+      sortOrder: 1400,
       locale: 'ja',
       instructorName: 'RethLab',
       modules: {

@@ -13,7 +13,7 @@ export async function seedRethPerformanceCapacityJA(prisma: PrismaClient) {
       xpReward: 560,
       track: 'reth-l1-architect',
       tags,
-      isPublished: true,
+      isPublished: false,
       sortOrder: 380,
       locale: 'ja',
       instructorName: 'RethLab',

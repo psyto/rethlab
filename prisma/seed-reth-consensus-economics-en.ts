@@ -13,7 +13,7 @@ export async function seedRethConsensusEconomicsEN(prisma: PrismaClient) {
       xpReward: 500,
       track: 'reth-l1-architect',
       tags,
-      isPublished: true,
+      isPublished: false,
       sortOrder: 360,
       locale: 'en',
       instructorName: 'RethLab',

@@ -118,12 +118,13 @@ export default function CourseCatalogPage() {
         };
 
         const isFlagship = (slug: string, track?: string | null) =>
-          track === 'diy-perp' || slug.includes('openhl');
+          track === 'diy-perp' ||
+          slug.includes('openhl') ||
+          slug.includes('perp-primer');
         const isPrereq = (slug: string) =>
           slug.includes('beginner') ||
           slug.includes('fundamentals') ||
-          slug.includes('bridge-to-advanced') ||
-          slug.includes('perp-primer');
+          slug.includes('bridge-to-advanced');
         const isDeepDive = (slug: string) =>
           slug.includes('mastering-foundry') ||
           slug.includes('revm-advanced') ||

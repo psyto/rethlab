@@ -15,7 +15,7 @@ export async function seedRethFoundryEN(prisma: PrismaClient) {
       track: 'mastering-foundry',
       tags,
       isPublished: true,
-      sortOrder: 1300,
+      sortOrder: 1200,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {

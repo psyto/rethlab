@@ -15,7 +15,7 @@ export async function seedRethOpenHlLiquidationEN(prisma: PrismaClient) {
       track: 'building-openhl-liquidation',
       tags,
       isPublished: true,
-      sortOrder: 1015,
+      sortOrder: 1014,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {

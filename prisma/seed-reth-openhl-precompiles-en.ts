@@ -15,7 +15,7 @@ export async function seedRethOpenHlPrecompilesEN(prisma: PrismaClient) {
       track: 'building-openhl-precompiles',
       tags,
       isPublished: true,
-      sortOrder: 1013,
+      sortOrder: 1012,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {

@@ -13,7 +13,7 @@ export async function seedRethSecurityGovernanceEN(prisma: PrismaClient) {
       xpReward: 520,
       track: 'reth-l1-architect',
       tags,
-      isPublished: true,
+      isPublished: false,
       sortOrder: 390,
       locale: 'en',
       instructorName: 'RethLab',

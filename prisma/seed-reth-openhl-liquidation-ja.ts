@@ -15,7 +15,7 @@ export async function seedRethOpenHlLiquidationJA(prisma: PrismaClient) {
       track: "diy-perp",
       tags,
       isPublished: true,
-      sortOrder: 1015,
+      sortOrder: 1014,
       locale: "ja",
       instructorName: "RethLab",
       modules: {

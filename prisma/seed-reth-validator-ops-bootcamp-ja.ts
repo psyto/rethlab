@@ -14,7 +14,7 @@ export async function seedRethValidatorOpsBootcampJA(prisma: PrismaClient) {
       xpReward: 520,
       track: 'reth-l1-architect',
       tags,
-      isPublished: true,
+      isPublished: false,
       sortOrder: 350,
       locale: 'ja',
       instructorName: 'RethLab',
