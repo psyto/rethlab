@@ -698,7 +698,7 @@ Geth と ethers-rs が悪いわけではない。Rust EVM エコシステムが�
                   title: 'レッスン7 — rustup と VS Code の準備',
                   slug: 'setup-rust-ja',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 7,
                   duration: 10,
                   xpReward: 15,
                   content: `# レッスン7 — rustup と VS Code の準備
@@ -773,7 +773,7 @@ cargo run
                   title: 'レッスン8 — Rust クイックリファレンス',
                   slug: 'rust-quick-reference-ja',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 8,
                   duration: 12,
                   xpReward: 20,
                   content: `# レッスン8 — Rust クイックリファレンス
@@ -916,7 +916,7 @@ println!("{:?}", v);  // [10]
                   title: 'クイズ — 小さな宿題：0xチェック',
                   slug: 'first-homework-ja',
                   type: 'QUIZ',
-                  sortOrder: 2,
+                  sortOrder: 9,
                   duration: 15,
                   xpReward: 25,
                   content: `# クイズ — 小さな宿題：0xチェック
@@ -1051,7 +1051,7 @@ fn main() {
                   title: 'クイズ — 初級まとめ',
                   slug: 'beginner-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 3,
+                  sortOrder: 10,
                   duration: 10,
                   xpReward: 25,
                   content: `# クイズ — 初級まとめ

@@ -711,7 +711,7 @@ async fn main() -> eyre::Result<()> {
                   title: 'レッスン6 — EVMはスタックマシンだ',
                   slug: 'evm-stack-machine-ja',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 5,
                   duration: 12,
                   xpReward: 25,
                   content: `# レッスン6 — EVMはスタックマシンだ
@@ -831,7 +831,7 @@ Revm の **本物の** \`add\` ソース（中級ティアで一行ずつ分解�
                   title: 'クイズ — ミニEVMスタック',
                   slug: 'mini-evm-stack-ja',
                   type: 'QUIZ',
-                  sortOrder: 1,
+                  sortOrder: 6,
                   duration: 15,
                   xpReward: 30,
                   content: `# クイズ — ミニEVMスタック
@@ -975,7 +975,7 @@ fn main() {
                   title: 'レッスン8 — Rust：async・トレイト・ジェネリクス',
                   slug: 'rust-async-traits-generics-ja',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 7,
                   duration: 15,
                   xpReward: 30,
                   content: `# レッスン8 — Rust：async・トレイト・ジェネリクス
@@ -1136,7 +1136,7 @@ async fn my_exex<Node: FullNodeComponents>(
                   title: 'レッスン9 — Revmという「実行エンジン」',
                   slug: 'revm-introduction-ja',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 8,
                   duration: 12,
                   xpReward: 25,
                   content: `# レッスン9 — Revmという「実行エンジン」
@@ -1229,7 +1229,7 @@ xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024)
                   title: 'レッスン10 — Foundry — Rust EVMツールチェイン',
                   slug: 'foundry-toolchain-ja',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 9,
                   duration: 10,
                   xpReward: 20,
                   content: `# レッスン10 — Foundry — Rust EVMツールチェイン
@@ -1319,7 +1319,7 @@ forge snapshot
                   title: 'クイズ — Fundamentals まとめ',
                   slug: 'fundamentals-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 5,
+                  sortOrder: 10,
                   duration: 12,
                   xpReward: 30,
                   content: `# クイズ — Fundamentals まとめ
