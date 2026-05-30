@@ -62,6 +62,7 @@ import { seedRethOpenHlFundingV3JA } from './seed-reth-openhl-funding-v3-ja';
 import { seedRethOpenHlLiquidationV3JA } from './seed-reth-openhl-liquidation-v3-ja';
 import { seedRethBuildingV3JA } from './seed-reth-building-v3-ja';
 import { seedRethConsensusEngineeringV3JA } from './seed-reth-consensus-engineering-v3-ja';
+import { seedRethExpertV3JA } from './seed-reth-expert-v3-ja';
 import { seedRethFoundryEN } from './seed-reth-foundry-en';
 import { seedRethFoundryJA } from './seed-reth-foundry-ja';
 import { seedRethFoundryV2JA } from './seed-reth-foundry-v2-ja';
@@ -210,6 +211,7 @@ async function main() {
   await seedRethOpenHlLiquidationV3JA(prisma);
   await seedRethBuildingV3JA(prisma);
   await seedRethConsensusEngineeringV3JA(prisma);
+  await seedRethExpertV3JA(prisma);
   console.log('  Seeded Building OpenHL — ADL (EN + JA)');
   await seedRethFoundryEN(prisma);
   await seedRethFoundryJA(prisma);

@@ -2479,6 +2479,772 @@ App-chain 最低トポロジ:
               ],
             },
           },
+          {
+            title: 'Reth ベースのチェーン — 拡張パターンを読む',
+            sortOrder: 2,
+            lessons: {
+              create: [
+                {
+                  title: 'レッスン17 — Reth 拡張パターン（フォークではなくライブラリ）',
+                  slug: 'reth-extension-pattern-ja',
+                  type: 'CONTENT',
+                  sortOrder: 0,
+                  duration: 14,
+                  xpReward: 40,
+                  content: `# レッスン17 — Reth 拡張パターン（フォークではなくライブラリ）
+
+## 問い
+
+op-geth / bsc-geth / bor を触った経験があれば、geth-fork パターンの苦しみは知っている。upstream をクローンしてパッチを当て、ずっと rebase。upstream マージのたびに週末がコンフリクト解消で潰れ、監査対象が徐々に mainline からドリフトする。**Reth はこのモデルを終わらせるために設計された — どう機能するか？**
+
+## 原理（最小モデル）
+
+- **2 モデル.** Fork（geth 流）= ソース patch + 定期 rebase → ドリフトコスト超線形 / Extension（reth 流）= crate 依存 + trait 別 crate impl → コスト局所化（trait シグネチャ変更時のみ）。
+- **Reth アーキ全体が extension モデル軸.** NodeBuilder / components / ChainSpec パターンはまさに **reth ソース patch せず chain を出荷する** ためにある。
+- **Paradigm が選んだ 3 理由.** ① Rebase 痛みは実証済み（op-geth は Optimism 自身が書き直しに資金 → \`crates/optimism/\`）+ ② 監査範囲（fork = upstream diff + 全 patch 理由づけ vs node crate = 1 repo + trait impl 集合）+ ③ コンポーザビリティ（Berachain PoL / Scroll zk-friendly state / Seismic 暗号化 tx が共存）。
+- **6 カスタマイズスロット.** ChainSpec / ConfigureEvm / BlockExecutionStrategy / PayloadBuilder / Pool / RPC namespace / Consensus。他（P2P / MDBX / staged sync / ExEx / trie commitment）は何もしなくても reth が提供。
+- **読むべき具体例 4 つ.** \`crates/optimism/\`（本番運用最大）/ alphanet（R&D）/ sova-reth（Bitcoin EL）/ seismic-reth（暗号化 tx）。
+- **Tempo は extension モデルの実証.** \`tempoxyz/tempo\` = node crate、\`tempoxyz/reth\` = upstream に 0 commits ahead, 1374 commits behind。L1 全体が依存レベル拡張。
+
+## 具体例
+
+2 モデル比較:
+
+| Model | やり方 | 時間が経つほどのコスト |
+| :--- | :--- | :--- |
+| Fork model (geth 流) | upstream をクローン、ソースに patch、定期的に rebase | ドリフトコスト **超線形に増大** — パッチと upstream の距離が開き続け、コンフリクトが複利で効く |
+| Extension model (reth 流) | reth crate に依存、chain 固有 trait を別 crate で実装 | ドリフトコスト **局所化** — trait のシグネチャが変わったときだけ手を入れる |
+
+7 カスタマイズスロット（reth NodeBuilder）:
+
+| スロット | 何を制御 |
+| :--- | :--- |
+| \`ChainSpec\` | fork 高、gas params、precompile schedule、genesis |
+| \`ConfigureEvm\` / block execution strategy | 実行レイヤー、custom precompile、deposit tx |
+| \`PayloadBuilder\` | block 生成（sequencer mode） |
+| Pool / mempool policy | どの tx をどの順序で受け入れるか |
+| Custom RPC namespace | \`extend_rpc_modules\` で chain 固有エンドポイント |
+| Custom consensus | Ethereum-PoS 以外向け |
+| Add-ons | Custom 追加（ExEx、メトリクスなど） |
+
+実例:
+
+1. **\`crates/optimism/\`** in [paradigmxyz/reth](https://github.com/paradigmxyz/reth) — Optimism / Base / Mode / OP Stack。世界で最も本番運用された extension。
+2. **[paradigmxyz/alphanet](https://github.com/paradigmxyz/alphanet)** — Paradigm 自身の OP Stack 互換テストネット。mainnet 実装前の precompile（EIP-7212 P-256）試す場。
+3. **[SovaNetwork/sova-reth](https://github.com/SovaNetwork/sova-reth)** — Bitcoin の execution layer として Reth。
+4. **[SeismicSystems/seismic-reth](https://github.com/SeismicSystems/seismic-reth)** — 暗号化 tx 対応の Reth。
+
+Tempo の構造証拠:
+
+- \`tempoxyz/tempo\` = node crate（Rust、L1）
+- \`tempoxyz/reth\` = upstream Paradigm Reth に対して **0 commits ahead, 1374 commits behind**
+
+**Reth を一切 fork していない**。payments 固有カスタマイズすべて \`tempoxyz/tempo\` crate に依存レベル拡張。
+
+## 失敗例（誤解）
+
+「Berachain は PoL を入れるために reth を fork した」— **間違い**。bera-reth は依存レベル拡張で reth crate に依存、独自 crate（consensus / evm / chainspec / node / rpc）で PoL を実装。**Reth 本体は触らない**。「fork」ではなく「**extend**」「**compose**」が正しい動詞。
+
+「依存レベル拡張は性能を犠牲にする」— **間違い**。コンパイラがインライン化、性能差なし。trait による拡張は **ゼロコスト抽象** — 静的ディスパッチで最終バイナリは fork と同じ性能。
+
+「全 chain は深いカスタマイズが必要」— **間違い**。実例 4 つは深さが違う（alphanet < Optimism < Tempo < MegaETH）。SDK は浅い端から深い端まで対応 + 必要分だけ書く。
+
+> 🛑 **予測。** geth-fork チェーンが 18 ヶ月遅れの security patch を取り込みたい。rebase にどれくらいかかる？ rebase 自体が consensus bug を引き起こす経路 3 つ？（答え: **時間** = 数週間 - 数ヶ月（fork が 18 ヶ月分の patch を持つ → 各 patch をコンフリクト解消 + テスト + 監査）。**bug 経路** = ① patch の意味解釈ミス（upstream の意図と違う形で適用）+ ② 上流の関連変更（chainspec、共通 utility）を引き継ぎ忘れ → 自分の patch が暗黙前提を破る + ③ rebase 後の rebuild で hidden コンパイラ最適化変化 → 確率的バグ。**rebase 自体が consensus-critical**。）
+
+## ステップで組み立てる
+
+### Step 1: 2 モデルの差を即答
+
+Fork = 超線形ドリフトコスト / Extension = 局所化（trait シグネチャ変更時のみ）。
+
+### Step 2: 7 カスタマイズスロット
+
+ChainSpec / ConfigureEvm / PayloadBuilder / Pool / RPC namespace / Consensus / Add-ons。他は reth が提供。
+
+### Step 3: 4 実例を見比べる
+
+\`crates/optimism/\`（本番最大）/ alphanet（R&D 教育）/ sova-reth（Bitcoin）/ seismic-reth（プライバシー）。
+
+### Step 4: Tempo の構造証拠を確認
+
+\`tempoxyz/reth\` の commits ahead / behind を見る → 0 / 1374 → fork ゼロ証明。
+
+### Step 5: 自分の chain 設計
+
+「6 スロットのうちどれを差し替え、どれを継承？」を明示化。**Reth に対する diff だけ書く**。
+
+## 答え合わせ
+
+- **Berachain の正しい言い直し**: 「Berachain は PoL を入れるために bera-reth crate を書き、Reth crate に依存している」または「reth を **extend** した」。fork ではない（reth リポを copy していない、reth-core crate を import している）。
+- **Extension モデルが Reth で成立する構造的理由**: trait-based aggregation（NodeBuilder composition）+ ゼロコスト抽象（静的ディスパッチ）+ chainspec / EVM / payload / consensus / pool / RPC が独立 trait → 各 chain が必要な分だけ別 crate で impl → reth-core は変更不要。
+- **Tempo / MegaETH / Berachain が同じパターンを使う理由**: 各々が異なる深さのカスタマイズ（Tempo 浅、MegaETH 深、Berachain 中）でも **Reth fork なし** で済む = extension モデルは深さに依存しない。MegaETH は MDBX を SALT で完全置換 + 別 validator binary を書きつつ \`megaeth-labs/reth\` は 0 ahead, 7666 behind。
+
+## 合格基準
+
+- 2 モデル（fork / extension）の差を即答できる。
+- 7 カスタマイズスロットを言える。
+- Berachain が「fork ではなく extend」と正しく言える。
+- Tempo の \`0 ahead, 1374 behind\` の意味を即答できる。
+- 4 実例の深さ順を言える。
+
+## まとめ（3行）
+
+- Fork model（geth 流）はドリフトコスト超線形、Extension model（reth 流）は局所化 — Reth アーキ全体が extension 軸。
+- 7 カスタマイズスロット（ChainSpec / ConfigureEvm / PayloadBuilder / Pool / RPC / Consensus / Add-ons）+ 他は reth が提供 + 必要分だけ別 crate で impl。
+- Tempo / MegaETH / Berachain / Seismic / Sova すべて **Reth fork なし** = extension モデルは深さに依存しない実証。
+`,
+                },
+                {
+                  title: 'レッスン18 — op-stack-on-reth を読む',
+                  slug: 'reading-op-stack-on-reth-ja',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 16,
+                  xpReward: 45,
+                  content: `# レッスン18 — op-stack-on-reth を読む
+
+## 問い
+
+Optimism は「Reth ベース L2」の正典。node コードは \`paradigmxyz/reth/crates/optimism/\`。Tempo の node crate も同様の構造で公開済み（\`tempoxyz/tempo\`）。**ここを読めれば向こうも読める — ディレクトリ構造を一目で解く方法は？**
+
+## 原理（最小モデル）
+
+- **Reth ベース chain の sub-crate 構造.** chainspec / node / evm / payload / consensus / rpc / txpool / hardforks。
+- **依存関係は extension model の証拠.** \`reth-optimism-node\` は \`reth-node-builder\` + \`reth-chainspec\` などの core crate に依存 + OP 固有 sibling crate に依存、\`reth-node-ethereum\` には依存しない（**並列 mainnet node crate**）。
+- **5 分で辿る背骨.** ① NodeBuilder composition / ② ChainSpec / ③ Executor / EVM config / ④ Payload builder / ⑤ Genesis JSON。
+- **初回読書 4 ステップ.** \`README.md\` + \`Cargo.toml\` → \`chainspec/\` → \`node/\`（NodeBuilder composition）→ NodeBuilder 順に各カスタマイズ crate → tests。
+- **Tempo の構造予測.** tempo-chainspec / tempo-node / tempo-evm / tempo-payload-builder / tempo-pool / tempo-consensus（L1 なので存在）。
+
+## 具体例
+
+OP Stack の sub-crate（reth バージョンで揺れるのでソース確認推奨）:
+
+| Subdirectory | 担当 |
+| :--- | :--- |
+| \`chainspec/\` | OP chain spec — fork、genesis、gas params、precompile schedule |
+| \`node/\` | トップレベル \`NodeBuilder\` 配線 — 「これが OP node である」 |
+| \`evm/\` | EVM config — custom precompile、deposit tx semantics、L1 cost logic |
+| \`payload/\` | Payload builder — sequencer mode での block 生成 |
+| \`consensus/\` | OP の consensus engine（finality は L1 に委ねる） |
+| \`rpc/\` | Custom RPC namespace（\`optimism_*\` メソッド） |
+| \`txpool/\`（または類似） | Deposit-tx を認識する mempool policy |
+| \`hardforks/\` | Bedrock、Canyon、Ecotone、Fjord、... の fork activation logic |
+
+依存関係探索:
+
+\`\`\`bash
+cargo tree -p reth-optimism-node
+\`\`\`
+
+見えるもの:
+- \`reth-optimism-node\` → \`reth-node-builder\` / \`reth-chainspec\` / \`reth-evm\` / \`reth-payload-builder\` / \`reth-rpc-builder\` / \`revm\` / \`alloy-*\`
+- OP 固有 sibling: \`reth-optimism-chainspec\` / \`reth-optimism-evm\` / \`reth-optimism-payload-builder\` / ...
+- \`reth-node-ethereum\` には依存しない（並列 mainnet node）
+
+5 分背骨:
+
+1. **NodeBuilder composition** — \`*-node/src/lib.rs\` か \`node/builder.rs\`
+2. **ChainSpec** — \`*-chainspec/src/\`
+3. **Executor / EVM config** — \`*-evm/src/\`
+4. **Payload builder** — \`*-payload-builder/src/\` か \`*-payload/src/\`
+5. **Genesis JSON** — chainspec crate インラインまたは独立 \`.json\`
+
+初回読書順:
+
+1. \`README.md\` + \`Cargo.toml\` — どの crate が存在するか把握
+2. \`chainspec/\` — fork activation を声に出す
+3. \`node/\` — NodeBuilder composition、どこがカスタマイズされているか
+4. **NodeBuilder で名前が出てきた順** に各 crate
+5. Tests — 特に state-transition test
+
+Tempo 予測構造:
+
+- \`tempo-chainspec\` 相当 — Tempo 固有 fork 高、gas params、決済固有 precompile
+- \`tempo-node\` 相当 — NodeBuilder composition
+- \`tempo-evm\` 相当 — 決済 primitives 用 precompile（FX rate / settlement-proof / regulated-asset）
+- \`tempo-payload-builder\` 相当 — sequencer 用
+- \`tempo-pool\` 相当 — 決済固有 mempool policy（merchant 認可）
+- \`tempo-consensus\` 相当 — Tempo は L1 なので存在
+
+メタ観察: \`tempoxyz/reth\` = **0 commits ahead, 1374 commits behind**。Reth 本体は触られていない。
+
+## 失敗例（誤解）
+
+「OP は \`reth-node-ethereum\` に依存する」— **間違い**。並列関係。両者は共有 reth-core crate（\`reth-node-builder\` / \`reth-chainspec\`）を消費するが、互いに依存しない。**OP も Ethereum も「chain」の選択肢**、Ethereum が特権ではない。
+
+「Reth ベース chain の構造は chain ごとに完全に違う」— **間違い**。**SDK が共通骨格を強制**: chainspec / node / evm / payload / consensus / rpc の sub-crate 構造。chain 固有部分は各 sub-crate 内、骨格は同じ。
+
+「Tempo は L2 なので OP と同構造」— **間違い**。Tempo は L1（独立 consensus 持つ）→ tempo-consensus が存在、Deposit tx / L1 cost / L1 block oracle なし。OP は L2（L1 にアンカー）。**観点で違いがある**。
+
+> 🛑 **予測。** \`node.rs\` というファイルに \`OpNode\` という型を見つけた。\`OpNode\` が **何であるか** と **何をするか** を理解するために、次にどこを見る？ 実装している trait を予測してから。（答え: ① \`impl FullNodeTypes for OpNode\` を探す（Node primitives 定義）+ ② \`impl NodeAdapter for OpNode\` または \`impl Node for OpNode\` を探す（NodeBuilder 配線）+ ③ \`OpNode::components()\` メソッド（6 コンポーネント差し替え）。trait は \`reth_node_api\` / \`reth_node_builder\` から来る。**何であるか = NodeBuilder 型パラメータ**、**何をするか = components() で chain 固有部品を差し込む**。）
+
+## ステップで組み立てる
+
+### Step 1: 8 sub-crate を列挙
+
+chainspec / node / evm / payload / consensus / rpc / txpool / hardforks。
+
+### Step 2: \`cargo tree\` で依存可視化
+
+\`cargo tree -p reth-optimism-node\` → 共有 core crate + OP 固有 sibling + Ethereum non-dependency。
+
+### Step 3: 5 分背骨を辿れる
+
+NodeBuilder → ChainSpec → Executor/EVM → Payload → Genesis。
+
+### Step 4: 初回読書 4 ステップ
+
+README+Cargo.toml → chainspec → node → NodeBuilder 順 + tests。
+
+### Step 5: Tempo を予測構造で読む
+
+8 sub-crate 相当を予測 → 実際の repo で検証 → L1 vs L2 観点で違い理解。
+
+## 答え合わせ
+
+- **op と Ethereum が並列関係である構造的理由**: NodeBuilder + ChainSpec が「複数 chain を同 SDK で扱う」設計。Ethereum は「mainnet」chain の実装、OP は「Optimism」chain の実装、両者が同 substrate（reth-node-builder / reth-chainspec / reth-evm）を消費。一方が「親」ではない、両方が「兄弟」。
+- **SDK が骨格を強制する理由**: NodeBuilder の API（\`.with_types::<ChainNode>().with_components(...)\`）が「6 コンポーネント差し替え」パターンを強制 → 各 chain が同じ場所に同じ種類の crate を置く → 新しい chain repo を 5 分で navigate 可能。
+- **L1 vs L2 の観点別差分**: L1（Tempo）= 独立 consensus + Deposit tx なし + L1 cost なし + L1 block oracle なし。L2（OP）= 親 chain consensus 依存 + Deposit tx あり + L1 cost あり + L1 block oracle あり。両者とも extension モデルだが「何を差し替えるか」が違う。
+
+## 合格基準
+
+- 8 sub-crate を即答できる。
+- \`cargo tree\` で extension model を確認できる。
+- 5 分背骨（NodeBuilder → ChainSpec → Executor → Payload → Genesis）を辿れる。
+- 初回読書 4 ステップを言える。
+- L1 と L2 の観点別差分を 4 つ言える。
+
+## まとめ（3行）
+
+- Reth ベース chain は 8 sub-crate 構造（chainspec / node / evm / payload / consensus / rpc / txpool / hardforks）、SDK が骨格を強制。
+- 5 分背骨（NodeBuilder → ChainSpec → Executor → Payload → Genesis）+ 初回読書 4 ステップ（README → chainspec → node → NodeBuilder 順 + tests）。
+- L1（Tempo）と L2（OP）は extension モデル共通だが Deposit / L1 cost / consensus の有無で差分 — 観点で読めば両方読める。
+`,
+                },
+                {
+                  title: 'レッスン19 — Custom ChainSpec（fork / genesis / precompile schedule）',
+                  slug: 'custom-chainspec-ja',
+                  type: 'CONTENT',
+                  sortOrder: 2,
+                  duration: 14,
+                  xpReward: 40,
+                  content: `# レッスン19 — Custom ChainSpec（fork / genesis / precompile schedule）
+
+## 問い
+
+mainnet では検証が通るブロックが、あなたの chain では reject される。同じブロック、同じクライアントバイナリ、同じ Revm — なのに結果が違う。**\`ChainSpec\` のどこかが「この高さでは、ここのルールが違う」と言っているから — 何が入っているか？**
+
+## 原理（最小モデル）
+
+- **\`ChainSpec\` = chain のプロトコル定義.** Chain ID / Hardfork activation / Base fee params / Genesis / Precompile schedule / レガシー params。
+- **6 カテゴリ.** Chain ID（EIP-155 replay protection）+ Hardfork activation（block-height / timestamp スイッチ）+ Base fee（EIP-1559 elasticity / change denominator）+ Genesis（初期 allocation / state root / gas limit）+ Precompile schedule（各 fork でアクティブな precompile アドレス）+ レガシー（block gas limit / DAO fork / mining difficulty）。
+- **拡張 ChainSpec.** L2 chain は base \`ChainSpec\` をラップし chain 固有 fork（Bedrock / Canyon / Ecotone / Fjord）+ 独自 precompile schedule を追加。
+- **Hardfork enum がプロトコル史.** 声に出して読むのが chain 理解の最速ルート。
+- **Precompile activation は ChainSpec に住む.** EVM config 単独ではなく ChainSpec → activation 自体がコンセンサスルール。
+- **L2 chainspec の追加項目.** L1 chain ID / L1 block oracle / Sequencer address / Withdrawal config。
+
+## 具体例
+
+ChainSpec 6 カテゴリ:
+
+| カテゴリ | 何を制御 |
+| :--- | :--- |
+| Chain ID | EIP-155 replay protection キー |
+| Hardfork activation | Protocol upgrade を切り替える block-height / timestamp スイッチ |
+| Base fee params | EIP-1559 elasticity、change denominator |
+| Genesis | 初期 allocation、state root、gas limit |
+| Precompile schedule | 各 fork でアクティブな precompile アドレス |
+| その他レガシー | Block gas limit、DAO fork、mining difficulty（legacy） |
+
+OP Hardfork enum 例:
+
+\`\`\`rust
+pub enum OptimismHardfork {
+    Bedrock,
+    Regolith,
+    Canyon,
+    Ecotone,
+    Fjord,
+    Granite,
+    Holocene,
+    // ...
+}
+\`\`\`
+
+Precompile schedule の対応:
+
+\`\`\`
+Fork F において、アドレス A は ネイティブ関数 impl I にマップされる
+\`\`\`
+
+実体は chain の EVM config crate、**activation 判定は ChainSpec**（activation 自体がコンセンサスルール）。
+
+Genesis 出荷物:
+
+- Genesis JSON ファイル（allocation / gas limit / 初期 difficulty/seal）
+- chainspec crate 内 \`Genesis\` Rust struct（JSON からロード可能）
+- 計算済み genesis state root — 全ノード合意が必要
+
+L2 chainspec 追加項目:
+
+- **L1 chain ID** — L2 がアンカーされている先（cross-domain message verification）
+- **L1 block oracle** address on L2 — 現 L1 block hash を記録するコントラクト
+- **Sequencer address** — sequencer 署名つき batch の検証用
+- **Withdrawal config** — L2 → L1 withdrawal の時間遅延
+
+## 失敗例（誤解）
+
+「Precompile activation は EVM config 単独で十分」— **間違い**。Block N でどの precompile がアクティブかを 2 ノードが食い違って判定 → 一方が「成功」もう一方が「revert」→ stateRoot 乖離 → コンセンサス分裂。**activation はコンセンサスルール → ChainSpec に置く**（EVM config はその指示を実行するだけ）。
+
+「Genesis state root はどうでもいい」— **間違い**。コード上の root と実ネットワークの root が食い違えば、全ノードが block 1 で食い違う → chain が起動しない / 1 ブロックで分岐。
+
+「ChainSpec は単なる config ファイル」— **半分間違い**。**6 カテゴリすべてがコンセンサスクリティカル**。chain ID 違い = replay 攻撃、hardfork 高さ違い = 分裂、precompile schedule 違い = stateRoot 乖離。「config」より「プロトコル定義」が正確。
+
+> 🛑 **予測。** "ChainSpec" は config 風に聞こえるが何が入っているか **カテゴリを 5 つ** 予想する。5 つに届かない / 全部 gas 関連 → consensus rule の範囲を過小評価。（答え: Chain ID / Hardfork activation / Base fee params / Genesis / Precompile schedule / レガシー params。**6 カテゴリすべて consensus rule**、ChainSpec 1 つ間違えると chain が分裂する。）
+
+## ステップで組み立てる
+
+### Step 1: 6 カテゴリ即答
+
+Chain ID / Hardfork / Base fee / Genesis / Precompile schedule / レガシー。
+
+### Step 2: Hardfork enum を音読
+
+\`OptimismHardfork::Bedrock / Regolith / Canyon / Ecotone / Fjord / ...\` を声に出す → chain のプロトコル史。
+
+### Step 3: 「fork F は block H、timestamp T でアクティブか？」関数
+
+OP chainspec の \`is_fork_active_at_block\` / \`is_fork_active_at_timestamp\` を辿る。
+
+### Step 4: OP mainnet と Base の Bedrock activation block
+
+両方が異なる block を持つ → OP mainnet は本番、Base は別。同じ \`OptimismHardfork::Bedrock\` でも chain ごとに高さが違う。
+
+### Step 5: L2 chainspec の追加 4 項目
+
+L1 chain ID / L1 block oracle / Sequencer address / Withdrawal config。
+
+## 答え合わせ
+
+- **Precompile activation を ChainSpec に置く理由**: 2 ノードが block N で精コンパイル set を食い違うと → 一方が呼び出し成功、もう一方が「アドレスは empty」と revert → stateRoot 乖離 → 分裂。activation はコンセンサスルール → 全ノード合意必要 → ChainSpec（プロトコル定義）に住む。
+- **Genesis state root のコード ↔ 実ネットワーク食い違いの結末**: 新ノード起動時、ChainSpec の genesis root を「正しい root」として使う → 実ネットワークのノードが違う root を持つ → block 1 をネットワークから受信 → 自分の post-state root と食い違う → block 1 を invalid と判定 → ネットワークから孤立。
+- **L1 chainspec と L2 chainspec の追加 4 項目の存在理由**: L2 は親 chain（L1）にアンカーされる → ① L1 chain ID（どの L1）+ ② L1 block oracle（L1 状態へのアクセス）+ ③ Sequencer address（sequencer 認証）+ ④ Withdrawal config（cross-layer 時間遅延）。L1 自体はアンカー先がない → 不要。
+
+## 合格基準
+
+- 6 カテゴリを即答できる。
+- Hardfork enum を音読 → activation table が読める。
+- Precompile activation が ChainSpec に住む理由を説明できる。
+- Genesis state root の重要性を言える。
+- L2 chainspec の追加 4 項目を即答できる。
+
+## まとめ（3行）
+
+- ChainSpec = 6 カテゴリ（Chain ID / Hardfork activation / Base fee / Genesis / Precompile schedule / レガシー）、すべて consensus-critical。
+- Hardfork enum はプロトコル史、activation table は「fork F が block H、timestamp T でアクティブか」を答える関数。
+- L2 chainspec は L1 chain ID / L1 block oracle / Sequencer / Withdrawal の 4 項目を追加 — L1 は自分でアンカーされないので不要。
+`,
+                },
+                {
+                  title: 'レッスン20 — Custom executor（execution layer を差し替える）',
+                  slug: 'custom-executor-ja',
+                  type: 'CONTENT',
+                  sortOrder: 3,
+                  duration: 18,
+                  xpReward: 45,
+                  content: `# レッスン20 — Custom executor（execution layer を差し替える）
+
+## 問い
+
+Executor は「tx を実行して post-state を生成するもの」。Ethereum mainnet では vanilla revm、Optimism では revm + deposit-tx 処理 + L1 cost 計算 + 異なる precompile。**Reth がこの実行レイヤーをどう差し替えさせるか？**
+
+## 原理（最小モデル）
+
+- **3 trait の境界.** \`ConfigureEvm\`（block context → 適切な precompile / gas schedule で revm 構成）+ \`BlockExecutionStrategy\`（block から tx 取り出し → revm 流し → receipt + state change 蓄積）+ \`ExecutorBuilder\`（NodeBuilder スロット）。
+- **Optimism が override する 4 つ.** Custom precompile リスト（L1 block hash アクセスなど）+ Deposit transaction 処理（署名検証スキップ）+ L1 cost 計算（calldata の L1 投稿コスト）+ Pre-execution hook（L1 block oracle slot 更新）。
+- **Precompile は \`ConfigureEvm\`、L1 cost は実行戦略.** Custom precompile = config、L1 cost = executor メインループ（precompile に収まらない consensus-critical ロジック）。
+- **配線.** ChainSpec → [どの fork アクティブ？] → EVM config → [アクティブ precompile set] → revm。
+- **Execution loop は mainnet + 2 行差.** Deposit tx 判定 + L1 cost apply 以外は mainnet と同じ。
+
+## 具体例
+
+3 trait:
+
+- **\`ConfigureEvm\`** — block コンテキスト → revm インスタンス構成
+- **\`BlockExecutionStrategy\`**（または類似）— block から tx 取り出し → revm 流し → receipt + state change 蓄積
+- **\`ExecutorBuilder\`** — NodeBuilder スロット
+
+Optimism の override:
+
+| Override | 理由 |
+| :--- | :--- |
+| Custom precompile リスト | OP は L1 block hash アクセスなど追加 |
+| Deposit transaction 処理 | Deposit tx は署名検証スキップ（L1 で認証済み） |
+| L1 cost 計算 | OP tx は L2 gas に加え L1 data cost 支払い |
+| Pre-execution hook | block 内最初の tx 実行前、L1 block oracle slot 更新 |
+
+配線:
+
+\`\`\`
+ChainSpec  ──[どの fork がアクティブ?]──▶  EVM config  ──[アクティブな precompile set]──▶  revm
+\`\`\`
+
+Execution loop 擬似コード:
+
+\`\`\`
+for tx in block.body:
+    if is_deposit_tx(tx) and current_fork.allows_deposits():
+        skip_signature_verify()
+    else:
+        verify_signature(tx)?
+
+    db = state_provider.load_relevant_accounts(tx)
+    cfg = configure_evm(chainspec, block, db)   // precompile、gas schedule をセット
+    result = revm.transact(cfg, tx)
+    apply_l1_cost(tx, result, db)               // L2 固有
+    state.commit(result.state_changes)
+    receipts.push(result.receipt)
+return post_state_root(state), receipts
+\`\`\`
+
+Mainnet では 3 行目（deposit 判定）と 9 行目（L1 cost）が消えるだけ。**他はまったく同じ**。
+
+L1 cost 計算ステップ:
+
+1. 各 tx 実行前に既知の storage slot から L1 base fee + blob gas price を読む
+2. \`l1_cost = calldata_gas × l1_base_fee + blob_overhead\` を計算
+3. L2 gas 課金 **に加えて** 送信者残高から控除
+4. Fee vault に入金
+
+Tempo（L1）で予測される差分:
+
+- "deposit tx" 概念なし（親 chain なし）
+- L1 cost 課金なし
+- ただし: 決済 primitives 用 custom precompile（FX、settlement attestation）+ Pre-execution hook（FX rate oracle slot）+ 異なる fee 市場構造（stablecoin-native）
+
+## 失敗例（誤解）
+
+「L1 cost charging を precompile で実装すれば speed が出る」— **間違い**。precompile は「tx 実行中の特定 CALL に応じる」もの → tx 実行 **前** に送信者残高から控除できない。L1 cost は実行戦略レベル → executor メインループ。
+
+「Custom precompile は executor に直書きすれば良い」— **間違い**。\`ConfigureEvm\` impl が revm に precompile セットを手渡す → ChainSpec の hardfork schedule で gate → 各 fork で正しい precompile set。直書きすると hardfork transition で壊れる。
+
+「Deposit tx は通常 tx と同じ実行で良い」— **間違い**。Deposit tx は L1 で既に認証済み（L1 コントラクトが認証）→ L2 側で署名検証する署名がない / 検証する必要なし。**OP の deposit tx は署名フィールドが空または特殊値**、署名検証スキップが必須。
+
+> 🛑 **予測。** OP の L1 cost charging はなぜ precompile として実装できないのか？ 「performance のため」だけなら掘り下げが足りない — precompile が tx 実行前に任意のアカウントから控除できない **consensus 上の理由** は？（答え: precompile は **tx 実行中の特定 CALL に応じる純粋関数** → 任意のアカウント残高を tx 実行 **前** に控除する権限がない（既存の precompile アドレス \`0x01\`-\`0x0a\` も全部入出力ベースで、ホスト state を勝手に書き換えない）。L1 cost は ① tx 実行前、② 送信者残高から、③ block 内全 tx に適用 → これは executor の責務、Yellow Paper の framework 外。**consensus-critical ロジックは executor に住む** — precompile では tx-scoped、executor は block-scoped。）
+
+## ステップで組み立てる
+
+### Step 1: 3 trait 境界を即答
+
+\`ConfigureEvm\` / \`BlockExecutionStrategy\` / \`ExecutorBuilder\`。
+
+### Step 2: Optimism の 4 override
+
+Custom precompile / Deposit tx / L1 cost / Pre-execution hook。
+
+### Step 3: Precompile vs Executor の判断軸
+
+「tx-scoped 入出力か」= precompile / 「block-scoped、tx 実行前後、ホスト state 任意書き換え」= executor。
+
+### Step 4: Execution loop 擬似コード暗唱
+
+mainnet との差分 2 行（deposit 判定 + L1 cost apply）= **extension model の最小差分**。
+
+### Step 5: Tempo の予測差分
+
+L1 なので deposit / L1 cost / L1 block oracle なし、代わりに決済 primitives + FX oracle + stablecoin fee 市場。
+
+## 答え合わせ
+
+- **L1 cost が executor のみに住む理由**: precompile = tx 実行中の特定 CALL に応じる純粋関数（入出力）、executor = block 全体の制御（tx 実行前後、ホスト state 書き換え）。L1 cost は ① 全 tx に適用 + ② tx 実行前に控除 + ③ ホスト state 書き換え → 3 つとも precompile の責務外。
+- **Custom precompile が ChainSpec を経由する理由**: 各 fork で異なる precompile set が必要（hardfork で precompile 追加 / 削除）→ EVM config が単独で hardfork 状態を知らないと正しい precompile set を渡せない → ChainSpec が「現 block での fork 状態」を提供 → EVM config が「fork に対応する precompile set」を選ぶ → revm が受け取る。
+- **mainnet と OP のメインループ差分**: 3 行目（deposit tx 判定 + 署名検証スキップ）+ 9 行目（apply_l1_cost）の 2 行だけ。他のすべて（state load / configure_evm / transact / state.commit / receipts.push）は mainnet と同じ。**extension model の最小差分 = consensus 互換性 + コード共有率最大**。
+
+## 合格基準
+
+- 3 trait（ConfigureEvm / BlockExecutionStrategy / ExecutorBuilder）を即答できる。
+- Optimism の 4 override を即答できる。
+- Precompile vs Executor の判断軸を言える。
+- Execution loop の mainnet との 2 行差分を言える。
+- L1 cost が executor のみに住む理由を 3 つ言える。
+
+## まとheme（3行）
+
+- 3 trait（ConfigureEvm / BlockExecutionStrategy / ExecutorBuilder）が execution layer の差し替え API、ChainSpec → EVM config → revm の配線。
+- Optimism の 4 override（Custom precompile / Deposit tx / L1 cost / Pre-execution hook）= mainnet との最小差分（2 行）。
+- Precompile = tx-scoped 純粋関数、Executor = block-scoped、ホスト state 任意書き換え可 — L1 cost は executor のみ。
+`,
+                },
+                {
+                  title: 'レッスン21 — Custom payload builder（sequencer モードの block 生成）',
+                  slug: 'custom-payload-builder-ja',
+                  type: 'CONTENT',
+                  sortOrder: 4,
+                  duration: 16,
+                  xpReward: 45,
+                  content: `# レッスン21 — Custom payload builder（sequencer モードの block 生成）
+
+## 問い
+
+Ethereum mainnet では block を **validator** が consensus client 動かして execution client から pull。L2 や中央集権 sequencer chain では **sequencer がそのまま block producer**。**Payload builder が「どうやって作るか」を担う — 何を制御し、何を制御しないか？**
+
+## 原理（最小モデル）
+
+- **\`PayloadBuilder\` の入出力.** 入力 = Parent block / chain state / Pending tx pool / Timestamp / slot、出力 = 構築済み block（"payload"）。
+- **3 種の本番 builder.** Default Ethereum builder（mainnet validator）+ OP payload builder（OP Stack sequencer）+ **op-rbuilder**（[flashbots/rbuilder](https://github.com/flashbots/rbuilder)、OP 向け高性能 external block builder）。
+- **L2 builder の 5 つの追加責務.** ① Deposit tx 強制 include（L1 oracle queue から）+ ② FIFO or priority-fee ソート + ③ L1 block oracle slot 更新（最初の state write）+ ④ L2 gas limit でキャップ + ⑤ Sequencer signature でタグ付け。
+- **Builder と executor の境界.** Builder = **block に何が入るか** を制御、Executor = **block に入っているもの** を実行。
+- **MEV 3 立場.** MEV-blind（厳格 FIFO）/ MEV-aware public（MEV-share bid）/ MEV-extracting（内部 searcher）。**chain の MEV policy は payload builder ソースに現れる**。
+- **op-rbuilder.** Bundle merging + Sealing strategy + Builder API、OP Stack 向け本番グレードリファレンス。
+
+## 具体例
+
+3 種 builder:
+
+| Builder | 場所 | 用途 |
+| :--- | :--- | :--- |
+| Default Ethereum builder | \`crates/payload/builder/\` | Mainnet validator |
+| OP payload builder | \`crates/optimism/payload/\` | OP Stack sequencer |
+| **op-rbuilder** | [flashbots/rbuilder](https://github.com/flashbots/rbuilder) | OP Stack 向け高性能 external builder |
+
+L2 builder の 5 責務:
+
+1. Deposit tx を block 先頭に強制 include（既知の L1 oracle queue から）
+2. 残りを FIFO か priority-fee でソート
+3. 最初の state write として L1 block oracle storage slot を更新
+4. L2 gas limit で block をキャップ（mainnet limit ではない）
+5. Sequencer signature で block にタグ付け（一部 L2 は sequencer identity にコミット）
+
+MEV 3 立場:
+
+| Position | 意味 | 例 |
+| :--- | :--- | :--- |
+| MEV-blind | 厳格 FIFO、tx 意味に踏み込まない | 一部小規模 L2 が主張 |
+| MEV-aware public | 公開 order flow、builder が MEV-share 風 bid 受ける | OP Stack + op-rbuilder |
+| MEV-extracting | Sequencer が内部 searcher 運用 | 不透明、中央集権 chain は何でも可能 |
+
+op-rbuilder の特徴:
+
+- **Bundle merging**（private order flow + public mempool）
+- **Sealing strategy**（greedy、並列化可能）
+- **Builder API**（第三者 bundle 提出可能）
+- オープンソースで「本物の」本番 block builder に最も近い
+
+Tempo 予測:
+
+- 決済認識型 payload builder — 決済 tx が汎用 tx より優先される可能性
+- Builder レベル merchant 認可フィルタ
+- merchant 単位レート制限
+- ローンチ時公開 mempool なし（sequencer-private）
+
+## 失敗例（誤解）
+
+「mempool を FIFO に流せば sequencer 完成」— **間違い**。3 攻撃が抜けている: ① tx 提出の latency 攻撃（低レイテンシピアが優位）、② toxic order flow（malicious tx が次の被害者を釣る）、③ reorg 攻撃（sequencer 自身が短期 reorg）。**FIFO + 防御層が必要**。
+
+「builder と executor は同じこと」— **間違い**。Builder = **何を入れるか**（順序 + フィルタ）、Executor = **入っているものをどう走らせるか**（state 遷移）。順序は builder が決定 + executor が忠実に実行。
+
+「MEV-blind が常に倫理的」— **半分間違い**。MEV-blind 主張でも実際は order flow の見え方で抽出可能（mempool 公開 vs sequencer 専有）。**公開された主張ではなく builder source code が真実**。
+
+> 🛑 **予測。** ジュニアエンジニアが「mempool を FIFO に流せば sequencer 完成」と言う。**そこに考慮が抜けている攻撃を 3 つ**。（答え: ① **tx 提出 latency 攻撃** — 低レイテンシピアが MEV 機会を独占（先着 FIFO で）、② **toxic order flow** — bait tx が後続 tx の被害者を釣る、sequencer が一律 FIFO だと罠が成功、③ **reorg / sequencer 自身の MEV** — sequencer 自身が短期 reorg で過去 block を書き換えて利益抽出（中央集権なので何でもできる）。FIFO は **公平に見えて公平でない** — 防御層必要。）
+
+## ステップで組み立てる
+
+### Step 1: 3 種 builder を即答
+
+Default / OP payload / op-rbuilder（external）。
+
+### Step 2: L2 builder の 5 責務
+
+Deposit tx 強制 / FIFO or priority-fee / L1 oracle slot 更新 / L2 gas cap / Sequencer signature。
+
+### Step 3: Builder vs Executor の境界
+
+Builder = 何を入れるか（順序 + フィルタ）、Executor = 入っているものを実行。
+
+### Step 4: MEV 3 立場の判別
+
+source code を読む — \`extend_builder_with_mev_share\` のような feature flag、external builder 統合の有無、internal searcher hook。
+
+### Step 5: op-rbuilder を読む準備
+
+OP Stack 向けの「本物の」本番 builder 参考実装、Bundle merging + Sealing + Builder API。
+
+## 答え合わせ
+
+- **3 攻撃（latency / toxic flow / reorg）が FIFO で防げない理由**: ① latency は network 層の話 → application 層の順序付けでは介入不能、低レイテンシピアが mempool の自分の tx を先に入れる、② toxic flow は順序付けロジックが意味解釈しない FIFO だと罠 tx + 被害者 tx を順に通す、③ sequencer 自身の reorg は順序付けではなく consensus 層の問題、中央集権 sequencer は何でも可能。**FIFO は平等の幻想**、防御層必要。
+- **Tempo の予測差分（5 つ）**: 決済認識型優先 / merchant 認可フィルタ / merchant rate limit / 公開 mempool なし / sequencer signature。各々が payload-builder crate の trait impl として現れる。
+- **MEV policy が source code に現れる理由**: feature flag や external builder 統合は public API 露出 / 内部 searcher hook は private 関数だが GitHub source で見える / Bundle merging の有無 / Order flow privacy 設定。**主張ではなくコードを読む** — 「MEV-blind」と言いながら \`internal_searcher::bid()\` が呼ばれているかもしれない。
+
+## 合格基準
+
+- 3 種 builder を即答できる。
+- L2 builder の 5 責務を言える。
+- Builder vs Executor の境界を 1 文で説明できる。
+- MEV 3 立場を判別できる。
+- 3 攻撃（latency / toxic / reorg）が FIFO で防げない理由を言える。
+
+## まとめ（3行）
+
+- Payload builder = block 内容（順序 + フィルタ）を制御、Executor = 内容を実行。Mainnet validator vs L2 sequencer で「誰がトリガーするか」が違うだけ。
+- L2 builder の 5 責務（Deposit tx / FIFO or priority-fee / L1 oracle slot / L2 gas cap / Sequencer signature）+ MEV 3 立場が source code に現れる。
+- op-rbuilder が OP Stack 向け本番グレードリファレンス、Bundle merging + Sealing + Builder API。
+`,
+                },
+                {
+                  title: 'レッスン22 — ケーススタディ（Paradigm スタック: alphanet / Tempo / MegaETH）',
+                  slug: 'paradigm-stack-case-study-ja',
+                  type: 'CONTENT',
+                  sortOrder: 5,
+                  duration: 18,
+                  xpReward: 50,
+                  content: `# レッスン22 — ケーススタディ（Paradigm スタック: alphanet / Tempo / MegaETH）
+
+## 問い
+
+ここまでで 4 つの拡張スロット（ChainSpec / executor / payload / RPC）+ Reth ベース chain の依存形を見てきた。**Paradigm の全スタックはどう見えるか、Tempo / MegaETH のソースをこのレンズでどう読むか？**
+
+## 原理（最小モデル）
+
+- **6 層スタック.** EVM core（revm）→ Toolkit（alloy）→ Execution client（reth）→ Reth ベース chain（\`crates/optimism/\`）→ R&D testnet（alphanet）→ 本番 L1（Tempo）。
+- **下層は上層にしか依存しない.** Tempo は reth を fork しない、**reth の上に建てる**。
+- **alphanet = precompile R&D 遊び場.** OP Stack 互換 testnet、mainnet 実装前の EIP（7212 P-256 / 3074 / 7702）を試す。**「chain に precompile を追加する」最もクリーンな実例**。
+- **Alphanet → 本番への軌跡.** mainnet Ethereum に EIP として graduate / 本番 Reth ベース chain に graduate。Tempo に何が入るかを予測したいなら **最近 alphanet で検証されたもの** を見る。
+- **Tempo（浅い端）.** L1 node crate、3-5 コンポーネント差し替え、残り upstream 継承。\`tempoxyz/reth\` = 0 commits ahead, 1374 commits behind。
+- **MegaETH（深い端）.** カスタム EVM（mega-evm）+ カスタム storage（SALT で MDBX 置換）+ 別 validator binary（stateless-validator）— それでも \`megaeth-labs/reth\` = 0 commits ahead, 7666 commits behind。
+- **SDK はカスタマイズの深さを制約しない.** Tempo 浅、MegaETH 深、両方とも reth fork なし。
+
+## 具体例
+
+スタック層:
+
+| Layer | Component | 役割 |
+| :--- | :--- | :--- |
+| EVM core | revm | バイトレベル EVM インタプリタ |
+| Toolkit | alloy | Rust 型 / provider / signer / ABI |
+| Execution client | reth | フル Ethereum node（staged sync / mempool / RPC / MDBX / P2P） |
+| Reth ベース chain | reth \`crates/optimism/\` | OP Stack execution を reth node crate として |
+| R&D testnet | alphanet | EIP-X precompile 試す遊び場 |
+| 本番 L1 | Tempo | Paradigm 決済レール |
+
+Alphanet の実装事例:
+
+- EIP-7212 — \`secp256r1\` (P-256) verification precompile（WebAuthn / Passkey）
+- EIP-3074 / 7702 — account abstraction primitives
+- 各種 opcode / gas 微調整
+
+Tempo 公開:
+
+- [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo)（900+★、Rust）— "the blockchain for payments"。L1 node crate
+- [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) — **0 commits ahead, 1374 commits behind** = fork ゼロ証拠
+- Tempo Moderato が公開テストネット
+- Chainlink CCIP（cross-chain rail）
+
+隣接 crate:
+
+- [\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) — confidential blockchain anchored to Tempo（250ms ブロック、TIP-403 compliance 継承）
+- [\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs) — Machine Payments Protocol（HTTP-402 ベース、IETF draft）
+- [\`tempoxyz/tempo-foundry\`](https://github.com/tempoxyz/tempo-foundry) — Tempo サポート Foundry fork（薄い fork）
+- [\`tempoxyz/tidx\`](https://github.com/tempoxyz/tidx) — PostgreSQL + ClickHouse ハイブリッドインデクサ
+
+Tempo の予測 4 観点:
+
+- Custom ChainSpec — Tempo 固有 fork + precompile schedule
+- Custom executor — 決済 precompile（FX rate / settlement attestation / regulated-asset）
+- Custom payload builder — merchant 認識 ordering + rate limit
+- Custom RPC namespace — \`tempo_*\` + Machine Payments Protocol 統合
+
+MegaETH（深い端）:
+
+- [\`megaeth-labs/reth\`](https://github.com/megaeth-labs/reth) — 空 fork（0 ahead, 7666 behind）
+- [\`megaeth-labs/mega-evm\`](https://github.com/megaeth-labs/mega-evm) — revm + op-revm 上に MegaETH 固有仕様（\`EQUIVALENCE\` から \`REX4\`）。sequencer は [\`revmc\`](https://github.com/paradigmxyz/revmc) で JIT/AOT
+- [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) — MDBX 置換、30 億アイテム ~1 GB メモリ認証、state-root ランダム I/O ゼロ
+- [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) — sequencer と完全別バイナリ、SALT witness 読む + バニラ revm 実行
+
+L1 vs L2 observation 表:
+
+| 観点 | OP Stack (L2) | Tempo (L1) |
+| :--- | :--- | :--- |
+| Deposit tx | あり（L1 から） | なし |
+| L1 cost charge | あり | なし |
+| L1 block oracle slot | あり | なし |
+| 独立 consensus | なし（L1 にアンカー） | あり（自前 consensus） |
+| Sequencer モデル | ローンチ中央集権、分散化ロードマップ | おそらく中央集権、決済レール正当化 |
+| ネイティブ資産 | ETH 相当 | おそらく USD ステーブル |
+
+## 失敗例（誤解）
+
+「SDK は浅いカスタマイズしかできない」— **間違い**。MegaETH が深い端の証拠: EVM 完全置換 + storage 完全置換 + validator binary 別 = それでも \`megaeth-labs/reth\` は 0 ahead。**深さに依存しない**。
+
+「Tempo は L2 と同じ構造」— **間違い**。Tempo = L1 → 独立 consensus + Deposit / L1 cost / L1 oracle なし。L1 と L2 で 6 観点違う。
+
+「alphanet は単なる testnet」— **間違い**。Paradigm が **mainnet 実装前の EIP を試す** R&D 遊び場 → 最近 alphanet で検証されたもの = 「次に本番 chain に来るもの」のヒント。Tempo に何が入るかを予測したい人は alphanet を見る。
+
+> 🛑 **予測。** Paradigm はこの順で出荷: revm → alloy → reth → alphanet → op-stack-on-reth → Tempo。このシーケンスは何の軌跡？（答え: **下から上に substrate を構築 → R&D → 本番**。① revm = EVM 解釈器、② alloy = Rust 抽象、③ reth = full client、④ alphanet = R&D 遊び場、⑤ op-stack-on-reth = 本番 L2 リファレンス、⑥ Tempo = Paradigm 自身の L1 本番。各層が次層を可能にし、各層が独立価値を持つ。「製品を縦に切る」より「substrate を横に厚く積む」戦略 — Paradigm 全社が同 substrate に乗る + 外部 chain も同 substrate を使える。）
+
+## ステップで組み立てる
+
+### Step 1: 6 層スタックを即答
+
+revm → alloy → reth → \`crates/optimism/\` → alphanet → Tempo。
+
+### Step 2: 「下層は上層にしか依存しない」不変量
+
+各層が独立価値 + 上層が下層を消費するが下層は上層を知らない。
+
+### Step 3: alphanet で「次に来るもの」を予測
+
+最近実装された EIP / opcode 微調整 → Tempo / 本番 chain に来る可能性。
+
+### Step 4: Tempo の予測 4 観点
+
+ChainSpec / executor / payload / RPC。\`tempoxyz/tempo\` の Cargo.toml で実コンポーネントを検証。
+
+### Step 5: MegaETH を深い端として読む
+
+mega-evm / salt / stateless-validator + \`megaeth-labs/reth\` 0 ahead 証拠。
+
+### Step 6: L1 vs L2 観点 6 つ
+
+Deposit / L1 cost / L1 oracle / 独立 consensus / Sequencer / Native 資産。
+
+## 答え合わせ
+
+- **Paradigm シーケンスの軌跡解釈**: substrate を下から積み上げる戦略 — revm（最小単位）→ alloy（型システム）→ reth（フルノード）→ alphanet（R&D）→ \`crates/optimism/\`（L2 リファレンス）→ Tempo（自社 L1）。**各層が独立価値**を持つ → Paradigm 内製品も外部 chain も同 substrate に乗る。
+- **Tempo / MegaETH の同じ extension model + 異なる深さ**: SDK のカスタマイズスロットを Tempo は 3-5 つ使い（payments 固有 precompile / payload builder / RPC）、MegaETH は全部 + EVM 置換 + storage 置換 + validator binary 別。深さ問わず reth fork なし（0 ahead）= **fork する必要がない設計**。
+- **alphanet 観察の実用**: 最近 alphanet で検証された EIP / precompile / opcode 微調整 → 1-2 年内に Tempo / 本番 chain に graduate する可能性。**「次に来るもの」を予測したい人は alphanet を週次で見る** — 公開 R&D ロードマップ。
+
+## 合格基準
+
+- 6 層スタックを即答できる。
+- alphanet の 3 実装事例（EIP-7212 / 3074 / 7702）を言える。
+- Tempo の予測 4 観点 + 隣接 4 crate を言える。
+- MegaETH の深いカスタマイズ 4 つ（mega-evm / salt / stateless-validator + fork なし）を言える。
+- L1 vs L2 観点 6 つを言える。
+
+## まとめ（3行）
+
+- 6 層スタック（revm → alloy → reth → \`crates/optimism/\` → alphanet → Tempo）、下層は上層に依存しない不変量で各層独立価値。
+- Tempo = 浅いカスタマイズ（3-5 コンポーネント差し替え）、MegaETH = 深いカスタマイズ（EVM 置換 + storage 置換 + validator 別）、両方 reth fork なし = SDK は深さに依存しない。
+- alphanet は Paradigm の R&D 公開遊び場、最近実装された EIP / precompile が本番 chain への graduate 候補 — 「次に来るもの」を予測したい人の必読源。
+`,
+                },
+                {
+                  title: 'クイズ — Reth ベース chain まとめ',
+                  slug: 'reth-chains-quiz-ja',
+                  type: 'QUIZ',
+                  sortOrder: 6,
+                  duration: 15,
+                  xpReward: 50,
+                  content: `# クイズ — Reth ベース chain まとめ
+
+拡張パターン総まとめ。
+
+レッスン17-22 を通じて: Extension model（fork ではなくライブラリ）/ op-stack-on-reth 解剖 / Custom ChainSpec / Custom executor / Custom payload builder / Paradigm スタックケーススタディ の構造的事実を確認する。
+`,
+                },
+              ],
+            },
+          },
         ],
       },
     },

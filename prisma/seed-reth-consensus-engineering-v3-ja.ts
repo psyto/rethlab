@@ -38,9 +38,11 @@ export async function seedRethConsensusEngineeringV3JA(prisma: PrismaClient) {
 
 午前 3 時。30 ノードの chain で、1 バリデータが矛盾する 2 つのブロックに同時に署名した。他のバリデータは両方に投票している。Chain は split-brain。**まず何を見にいくか？** なぜこれが起こりうるのか — コンセンサスがそもそもどんな故障を生き延びるための仕組みなのか — のメンタルモデルがなければ、次の 8 時間を当てずっぽうで過ごすことになる。
 
+> 注: このコースのコードブロックは「実行可能な最小例」と「概念説明の抜粋」が混在する。\`...\` や \`todo!()\` を含むブロックは概念スニペット（コンパイル不要）。
+
 ## 原理（最小モデル）
 
-- **3 つの性質を同時には満たせない。** Safety（split-brain にならない）、Validity（誰も提案していない値を勝手に決めない）、Liveness（いつかは決定する）。任意のネットワーク条件下で 3 つすべてを同時に得ることはできない — コンセンサス研究の分野全体が、どのユースケースに対してどのトレードオフなら許容できるかを見極めることに費やされてきた。
+- **3 つの性質は条件なしには同時に満たせない。** Safety（split-brain にならない）、Validity（誰も提案していない値を勝手に決めない）、Liveness（いつかは決定する）。特に「完全非同期 + 故障あり」では 3 つを同時に得ることはできない（FLP）。コンセンサス研究の分野全体が、どのユースケースに対してどのトレードオフなら許容できるかを見極めることに費やされてきた。
 - **故障モードは crash / omission / partition / Byzantine の 4 つ。** Byzantine が最難（嘘をつくノード、A と ¬A 両方に署名）。Crash + omission は相対的に扱いやすい。
 - **3f+1 ルール。** f 個の Byzantine を許容するには常に 3f+1 ノードが必要。数学的に厳密な結果（Lamport-Pease-Shostak 1982）であって設計選択ではない。
 - **FLP 不可能性（1985）。** 完全非同期 + 1 crash で、決定論的プロトコルは safety と liveness を同時に保証できない。実プロトコルは「タイムアウト」「ランダム性」「view change」のいずれかで脱出する。
@@ -325,7 +327,7 @@ Hyperliquid は秒間約 20 万件の perp 取引をサブ秒 finality で処理
 
 ## 原理（最小モデル）
 
-- **PBFT は O(n²)、HotStuff は O(n).** n = 100 で 10000 倍のメッセージ削減。可能にしたのは ① 閾値署名（BLS）と ② pipelined commit。
+- **PBFT は O(n²)、HotStuff は O(n).** n = 100 で約 100 倍のメッセージ削減。可能にしたのは ① 閾値署名（BLS）と ② pipelined commit。
 - **閾値署名で n² → n.** 2f+1 バリデータの部分署名を **サイズ O(1) の 1 つの集約署名** にまとめる。リーダーは集約だけをブロードキャスト、バリデータ同士の直接交信は不要。
 - **Pipelined commit.** Block N、N+1、N+2 が異なるフェーズで同時並行に進む。スループットは 3 ブロック時間に 1 commit → 1 ブロック時間に 1 commit。
 - **3 つの不変条件.** Quorum Certificate（2f+1 投票の集約署名証明）/ View 番号（リーダー切り替え単位）/ Lock（view change 中の safety 違反防止）。
@@ -364,7 +366,7 @@ HotStuff の派生:
 
 「HyperBFT は HotStuff そのまま」— **間違い**。HyperBFT は HotStuff 派生だが、Hyperliquid は実装をオープンソース化していない。orderbook 取引のホットパスに合わせた低レイテンシ最適化（pipelining 深さ、リーダーローテーション、ネットワークトランスポート）が入っていると推測される。
 
-> 🛑 **予測。** PBFT は O(n²)、HotStuff は O(n)。n = 100 で 10000 倍のメッセージ削減を可能にした変更は何か？（ヒント: 暗号。答え: 閾値署名（BLS）。2f+1 バリデータの部分署名を 1 つの集約署名にまとめてサイズ O(1) に圧縮、all-to-all 通信が不要になる。）
+> 🛑 **予測。** PBFT は O(n²)、HotStuff は O(n)。n = 100 で約 100 倍のメッセージ削減を可能にした変更は何か？（ヒント: 暗号。答え: 閾値署名（BLS）。2f+1 バリデータの部分署名を 1 つの集約署名にまとめてサイズ O(1) に圧縮、all-to-all 通信が不要になる。）
 
 ## ステップで組み立てる
 
@@ -661,6 +663,8 @@ pub trait Context {
 
 Tempo クラスの統合例:
 
+> 以下は概念スニペット（associated type と配線の形を示すための抜粋）。
+
 \`\`\`rust
 struct TempoContext;
 impl Context for TempoContext {
@@ -931,6 +935,8 @@ pub trait ConsensusBuilder<Node: FullNodeTypes>: Send {
 
 カスタム Consensus impl + ビルダー + NodeBuilder 配線:
 
+> 以下は概念スニペット（配線ポイント説明のための抜粋。実行時は不足型・実装を補う）。
+
 \`\`\`rust
 use reth_node_builder::{NodeBuilder, NodeHandle};
 use reth_chainspec::ChainSpec;
@@ -1100,6 +1106,8 @@ OP Stack のドキュメントを開く。Arbitrum のドキュメントを開�
 ## 具体例
 
 CentralizedSequencer 実装（~100 行）:
+
+> 以下は概念スニペット（流れを示すための抜粋。実行時は不足型・実装を補う）。
 
 \`\`\`rust
 use alloy_primitives::{Address, B256};
@@ -1382,7 +1390,7 @@ slash_amount = (slashed_stake / total_stake) * stake * multiplier
 | Double-sign | 同じ高さで 2 ブロックに署名し fork choice を混乱 | Slashing |
 | Surround vote | 矛盾する 2 つの checkpoint を finalize に投票 | Slashing |
 | Long-range attack | 古い期間のバリデータを買収して履歴を書き換え | 弱い主観性（クライアントは最近の状態を信頼） |
-| 51% finality attack | stake の 2/3+ を握り全部で署名 | ETH 換算で >330 億ドル、不可能 |
+| 2/3 finality attack | stake の 2/3+ を握り全部で署名 | ETH 換算で >330 億ドル、不可能 |
 | Liveness attack | stake の 1/3+ で投票拒否 | chain 停止、safety は維持 |
 
 ## 失敗例（誤解）
@@ -1391,7 +1399,7 @@ slash_amount = (slashed_stake / total_stake) * stake * multiplier
 
 「Long-range attack は slashing で防げる」— **間違い**。古いバリデータは引退済み = stake はすでに取り戻せる場所にある。Slashing で防げない。代わりに **弱い主観性**（new client は信頼できる checkpoint から同期、古い chain は無視）で防ぐ。
 
-> 🛑 **予測。** Ethereum mainnet には約 500 億ドル以上がステークされている。finality に対する 51% 攻撃を試みる際の、ドル単位のコストは？（答え: stake の 2/3+ が必要 = ~330 億ドル分の ETH を取得。slashing で **全額焼失** = 330 億ドル損失。これが PoS のセキュリティ議論。経済的に非合理 → 攻撃者が存在しない。）
+> 🛑 **予測。** Ethereum mainnet には約 500 億ドル以上がステークされている。finality に対する 2/3 攻撃を試みる際の、ドル単位のコストは？（答え: stake の 2/3+ が必要 = ~330 億ドル分の ETH を取得。slashing で **最大で全損級の損失** が発生しうる（条件依存）。これが PoS のセキュリティ議論。経済的に非合理 → 攻撃者が存在しにくい。）
 
 ## ステップで組み立てる
 
