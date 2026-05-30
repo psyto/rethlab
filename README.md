@@ -46,7 +46,8 @@ This is a serious training program — not a casual tutorial.
 | Course | Focus | Highlight |
 | :--- | :--- | :--- |
 | **Beginner** | Why Rust EVM matters, environment setup | First Rust program, three-pillar overview |
-| **Fundamentals** | Alloy + EVM internals + **Foundry** | Real `sign_message.rs`, real Provider, real Revm Stack, forge/cast/anvil |
+| **Fundamentals** | Alloy + EVM internals (concept-first) | Real `sign_message.rs`, real Provider, real Revm Stack |
+| **Mastering Foundry** | forge / cast / anvil end-to-end, including the cheatcode precompile internals | Standalone deep dive — separated from Fundamentals so the Foundry track can move at its own pace |
 | **Bridge to Advanced** | EVM at the bytes level (dispatch loop, world state, gas, call frames, reorgs) + intermediate Rust (generics, ?Sized, dyn, Arc, unsafe, macros) | Smooth tutorial bridge for Solidity-native developers — closes the gap before source-walking begins |
 | **Reth + Alloy Advanced** | Alloy Provider/Network/Signer at production scale | Reading real `eth_call` paths through Alloy types, custom signer impls |
 | **Reth + Revm Advanced** | Revm interpreter and Database trait, line by line | Reading the actual ADD opcode, custom opcodes, the `Database` interface |
@@ -69,6 +70,7 @@ The DIY Perp track in rethlab is the **build-along course series** for openhl. Y
 
 | rethlab course | openhl module | Lessons | What you ship + highlight |
 | :--- | :--- | :--- | :--- |
+| **Perp Primer** | Step 0: perp mechanics primer | 1 | Standalone primer covering the perpetual-futures mechanics (mark/index price, funding, leverage, liquidation, ADL) underneath the DIY Perp track — read this first if you haven't priced or hedged a perp before |
 | **Build OpenHL — Consensus** | Module 1: Consensus substrate | 16 | Real Reth (EVM) + real Malachite (BFT) producing blocks end-to-end. Final lesson: `cargo test first_block_via_engine_actors` runs a single-validator round in ~0.02 s against code you wrote yourself |
 | **Build OpenHL — CLOB** | Module 2: CLOB matching engine | 13 | Pure-state price-time-priority matching engine. Bridge integration pushes fills through `LiveRethEvmBridge::build_payload` into consensus-committed payloads |
 | **Build OpenHL — Precompiles** | Module 3: Core ↔ EVM precompiles | 12 | Smart contracts read CLOB state and place orders via custom EVM precompiles at `0x...0c1b` (read) and `0x...0c1c` (write). The `EvmFactory` "swap one slot" pattern, process-global `CLOB_STATE`, fill-sink routing back to the bridge |
@@ -78,7 +80,7 @@ The DIY Perp track in rethlab is the **build-along course series** for openhl. Y
 
 Module 4 oracle integration and Module 5 vault primitive are still openhl work-in-progress — the matching rethlab courses land when the reference code does.
 
-**Current seed totals: 42 courses, 126 modules, 467 lessons (EN+JA combined).**
+**Current seed totals: 42 courses, 126 modules, 466 lessons (EN+JA combined).**
 
 All courses are free. Reading every lesson works without an account. Anonymous visitors get **browser-local completion tracking** (lesson checkmarks + per-course progress bars persisted in `localStorage`); sign-in adds cross-device sync, XP, and a profile page.
 
@@ -120,7 +122,7 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ### What `db seed` does
 
-The seeder lives in `prisma/seed.ts` and pulls from generated course files (`prisma/seed-reth-*-{en,ja}.ts`). It clears all course tables and re-creates the full catalog in one shot (currently 42 courses / 126 modules / 467 lessons combined).
+The seeder lives in `prisma/seed.ts` and pulls from generated course files (`prisma/seed-reth-*-{en,ja}.ts`). It clears all course tables and re-creates the full catalog in one shot (currently 42 published courses / 126 modules / 466 lessons combined, plus 5 Beta courses kept hidden until promoted).
 
 Two pedagogical formats live in those seeds:
 
@@ -131,13 +133,25 @@ Lesson URLs key on the **slug** (stable across reseeds), not the database CUID, 
 
 ### Re-seeding without losing user data
 
-Use the admin endpoint instead:
+Two options, both preserve users, enrollments, lesson progress, XP, and streaks:
 
 ```bash
+# Recommended: idempotent upsert by slug, runs against whichever DB DATABASE_URL points to
+npm run seed:upsert
+
+# Alternative: admin endpoint (mode=add inserts new courses only; for content updates use seed:upsert)
 curl -X POST "http://localhost:3000/api/admin/seed?key=$AUTH_SECRET&mode=add"
 ```
 
-`mode=add` only adds courses that don't exist yet (preserves user enrollments and lesson-completion progress).
+The upsert preserves user state because it keys on stable `slug` values (lesson URLs are slug-based too, so external links survive content rewrites).
+
+For prod, the DB URL is **not** in `.env`; pull it from `.env.production.local` and prefix explicitly:
+
+```bash
+DATABASE_URL=$(grep '^DATABASE_URL' .env.production.local | cut -d'"' -f2) npm run seed:upsert
+```
+
+Without the prefix, the upsert silently runs against your local DB and the prod site stays stale.
 
 ---
 
@@ -155,15 +169,23 @@ rethlab/
 │   │              advanced,expert,building,consensus-engineering,
 │   │              cross-chain-bridges,sequencer-rollup,p2p-networking,
 │   │              validator-ops}-{en,ja}.ts
-│   └── seed-reth-openhl-{consensus,clob,precompiles,funding,liquidation}-{en,ja}.ts
-│                                              # DIY Perp courses — source-of-truth
+│   ├── seed-reth-openhl-{consensus,clob,precompiles,funding,liquidation,adl}-{en,ja}.ts
+│   │                                          # DIY Perp openhl steps — source-of-truth
+│   ├── seed-reth-perp-primer-{en,ja}.ts       # DIY Perp Step 0 (perp mechanics primer)
+│   └── seed-reth-foundry-{en,ja}.ts           # Mastering Foundry — source-of-truth
 ├── .github/
 │   └── scripts/
 │       ├── build-openhl-seed.ts               # Build seed-reth-openhl-consensus
 │       ├── build-openhl-clob-seed.ts          # Build seed-reth-openhl-clob
 │       ├── build-openhl-precompiles-seed.ts
 │       ├── build-openhl-funding-seed.ts
-│       └── build-openhl-liquidation-seed.ts
+│       ├── build-openhl-liquidation-seed.ts
+│       ├── build-openhl-adl-seed.ts
+│       ├── build-foundry-seed.ts
+│       ├── build-perp-primer-seed.ts
+│       ├── check-external-links.ts            # Lint: external URLs in lessons
+│       ├── check-openhl-cites.ts              # Lint: openhl pin-SHA references
+│       └── check-source-links.ts              # Lint: upstream Reth/Revm source links
 ├── src/
 │   ├── app/                                   # Next.js App Router pages
 │   │   ├── courses/                           # Course catalog + detail + lesson pages
@@ -204,9 +226,21 @@ Both surfaces are presented post-value (after a quiz pass, on course completion,
 
 ---
 
-## Sharing
+## Sharing & SEO
 
-Lesson and completion screens include a one-click "Share on X" button that opens a Twitter intent prefilled with the page URL. The OG card is the real ADD opcode in a terminal-style frame, so a posted link previews as a code excerpt rather than generic marketing.
+Lesson and completion screens include a one-click "Share on X" button that opens a Twitter intent prefilled with the page URL.
+
+OG cards are **dynamic per lesson** — the headline is the actual lesson title, the course is shown as a context pill, and the visual identity matches the site OG (terminal-frame motif, orange accent). A posted lesson link previews as *that lesson*, not as generic site marketing. The card is generated at request time by `opengraph-image.tsx` next to each route.
+
+Each lesson page also emits:
+
+- **hreflang** `en` / `ja` / `x-default` so Google serves the right locale per query
+- **JSON-LD** `Article` + `BreadcrumbList` schema so search results can render rich breadcrumbs
+- A **distilled meta description** — stripped of markdown noise (frontmatter, fenced code, headings) and trimmed at a word boundary
+- A **Twitter card** matching the lesson title, not the static site copy
+- A **canonical** URL pinned to the locale-correct twin
+
+The sitemap (`/sitemap.xml`) enumerates every published lesson, not just the course catalog, so all 466 lesson URLs are directly discoverable.
 
 Lesson URLs are slug-based (`/courses/<course-slug>/lessons/<lesson-slug>`) and stay valid across content updates, so a link posted today still resolves after the next reseed.
 
@@ -237,7 +271,7 @@ When adding a lesson that references real source code, please use the same shape
 - Guardrails:
   - `npm run check:runtime-no-drafts` verifies runtime code does not reference `drafts/`.
   - `npm run check:generated-seeds-clean` verifies generated seed files remain reproducible only when `drafts/` exists; otherwise it is skipped by design.
-3. Refresh the browser
+  - `npm run check:editorial-style` lints lesson prose for style drift across EN/JA seeds.
 
 Build-along lessons follow a different structure than source-reading lessons:
 

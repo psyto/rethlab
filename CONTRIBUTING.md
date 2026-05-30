@@ -107,17 +107,12 @@ After editing, run `npm run seed:upsert` (preserves user data) or `npx prisma db
 
 ### DIY Perp build-along courses (project construction)
 
-The openhl courses (consensus, clob, precompiles, funding, liquidation) use a different pattern. Lesson bodies live in **markdown drafts** under `drafts/`, and the seed files are **auto-generated** by builder scripts. To edit:
+The openhl courses (consensus, clob, precompiles, funding, liquidation, adl) use a different pattern. Lesson bodies live in **markdown drafts** under `drafts/`, and the seed files were **originally auto-generated** by builder scripts under `.github/scripts/build-openhl-*-seed.ts`. Today the seed files in `prisma/seed-reth-openhl-*-{en,ja}.ts` are the source of truth — edit them directly; the drafts and builders are kept as historical scaffolding. To edit:
 
-1. Edit `drafts/openhl_{l<N>,clob_l<N>,precompiles_l<N>,funding_l<N>,liquidation_l<N>}_{en,ja}.md`. Each draft file wraps the lesson body in a ` ```` markdown ... ```` ` fence; the builder extracts the fenced block.
-2. Re-run the builder for that course, e.g.:
-   ```bash
-   npx tsx .github/scripts/build-openhl-funding-seed.ts
-   npx tsx .github/scripts/build-openhl-funding-seed.ts --locale=ja
-   ```
-3. `npm run seed:upsert` to apply.
+1. Edit the lesson body inline in `prisma/seed-reth-openhl-{module}-{en,ja}.ts` (`content: \`...\``). Same shape as the Reth stack seeds — just a Markdown template literal.
+2. `npm run seed:upsert` to apply.
 
-Each builder uses three matching fields per lesson — `draftFile`, `h1Marker`, `startSignature` — to find the right fenced block in the draft. If you change the H1 or the opening line of the body, update the matching field in the builder.
+**Historical workflow (kept for reference):** the openhl seeds were originally generated from `drafts/openhl_*_{en,ja}.md` via `.github/scripts/build-openhl-*-seed.ts`. Each builder used `draftFile`, `h1Marker`, and `startSignature` to pick the right fenced block out of a draft. If you ever need to re-run a builder (e.g. to bulk-import a refreshed draft), the scripts still work and emit the same seed file shape — but day-to-day edits go straight into the seed, since that's the source of truth the upsert pipeline reads.
 
 Build-along lessons follow a 3-part Goal section convention introduced after extensive UX review:
 
