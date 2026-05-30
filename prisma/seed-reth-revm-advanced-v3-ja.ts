@@ -180,7 +180,63 @@ pub fn add(stack: &mut Vec<U256>) -> Result<(), &'static str> {
 }
 \`\`\`
 
-ステップ 5 — 到達:
+2 つ落とし穴: ① \`&mut Vec<U256>\` は具象型、トレーサー / ファザー / Inspector のスタックに差し替え不能、② pop + pop + push = 3 回スタック操作。
+
+ステップ 1 — ホストジェネリック:
+
+\`\`\`rust
+pub fn add<H: Host>(host: &mut H) -> Result {
+    // ... 本体は同じだが、具象 Vec ではなく H に対して呼ぶ
+}
+\`\`\`
+
+\`<H: Host>\` = 「\`Host\` トレイトを実装する任意の型」、コンパイラがモノモーフ化で具象 \`H\` ごとに特殊化バイナリ出力。落とし穴: trait object \`&mut dyn Host\` を渡せない（\`<H: Host>\` はコンパイル時サイズ既知のみ）。
+
+ステップ 2 — \`?Sized\` で trait object 許可:
+
+\`\`\`rust
+pub fn add<H: Host + ?Sized>(host: &mut H) -> Result {
+    // ...
+}
+\`\`\`
+
+\`?Sized\` で Rust の暗黙の \`Sized\` 制約を外す = \`&mut dyn Host\` が有効引数に = 1 バイナリで全 \`Host\` 実装、vtable 間接化と引き換え。
+
+ステップ 3 — \`IT: ITy\` で実行モード抽象化:
+
+\`\`\`rust
+pub fn add<IT: ITy, H: Host + ?Sized>(host: &mut H) -> Result {
+    // ...
+}
+\`\`\`
+
+\`IT\` = 「interpreter-types」マーカー、ストラテジパラメータ。同じソースが本番 / トレース / Inspector サンドボックスごとに特殊化バイナリへコンパイル。本物の \`add\` シグネチャ:
+
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+\`\`\`
+
+（\`Host\` 制約は \`Ictx\` 側に移っている — \`add\` に残るのは \`IT: ITy\` と \`H: ?Sized\`。）
+
+ステップ 4 — 本体を \`&mut\` その場書き込み:
+
+\`\`\`rust
+let a = stack.pop().ok_or(StackUnderflow)?;       // op1 を pop
+let b = stack.last_mut().ok_or(StackUnderflow)?;  // 新トップ &mut
+*b = a + *b;                                       // その場上書き
+\`\`\`
+
+pop 1 + その場書き込み 1 = **push なし**。\`-> Result\` に連結値なし、データの流れは参照経由。
+
+ステップ 5 — \`wrapping_add\`:
+
+\`\`\`rust
+*b = a.wrapping_add(*b);
+\`\`\`
+
+EVM コンセンサス = \`ADD\` mod 2²⁵⁶ wrap、\`+\` は debug panic / release wrap で分岐、\`saturating_add\` は最初のオーバーフローでネットワークフォーク。\`U256::MAX.wrapping_add(U256::from(1))\` = \`0x0\`。
+
+到達した本物の形:
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -264,6 +320,15 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 
 ## 具体例
 
+ステップ 1 — マクロ化対象の 2 行:
+
+\`\`\`rust
+let op1 = ctx.interpreter.stack.pop().ok_or(StackUnderflow)?;
+let op2 = ctx.interpreter.stack.last_mut().ok_or(StackUnderflow)?;
+\`\`\`
+
+コードベース全体で 30 回以上繰り返される。問題は *リファクタするかどうか* ではなく *どうやるか*。
+
 ステップ 2 — 素朴マクロ:
 
 \`\`\`rust
@@ -277,7 +342,40 @@ macro_rules! popn_top_naive {
 }
 \`\`\`
 
-\`$($x:ident),*\` = カンマ区切り識別子リスト、\`$( ... )*\` = リスト要素ごとに繰り返し。
+\`$($x:ident),*\` = カンマ区切り識別子リスト、\`$( ... )*\` = リスト要素ごとに繰り返し。これは動く、ただし遅い 2 点で。
+
+ステップ 3 — アンダーフロー 1 回事前チェック:
+
+\`\`\`rust
+if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
+    return Err(StackUnderflow);
+}
+// ... 以降は再チェックなしで pop
+\`\`\`
+
+\`.pop()\` を N 回呼ぶ = 内部境界チェック N 回。最初に 1 回だけチェック → 以降の pop は静的に安全。
+
+ステップ 4 — \`cold_path()\` で LLVM ヒント:
+
+\`\`\`rust
+if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
+    $crate::primitives::hints_util::cold_path();
+    return Err(StackUnderflow);
+}
+\`\`\`
+
+\`cold_path()\` は **実行時には何にもコンパイルされない**、LLVM への「この分岐から到達するコードはレア」というヒント。レア分岐コードをホット icache から離れた場所へ配置、ハッピーパス 1 本直線アセンブリ。ゼロコスト最適化ヒント。
+
+ステップ 5 — \`unwrap_unchecked()\` でガード恩恵回収:
+
+\`\`\`rust
+let ([$( $x ),*], $top) = unsafe {
+    $crate::interpreter_types::StackTr::popn_top(&mut $interpreter.stack)
+        .unwrap_unchecked()
+};
+\`\`\`
+
+\`unwrap_unchecked()\` は実行時の \`Some\` チェックをスキップ。**安全なのは値が \`Some\` であることを証明できるときだけ — ステップ 3 のガードがそれを証明済み**。\`unsafe\` ブロックは契約: 「自分でチェックした、二重チェック不要」。
 
 ステップ 6 — 本物:
 
@@ -579,9 +677,42 @@ fn dispatch(byte: u8, ctx: &mut Context) -> Result {
 }
 \`\`\`
 
-インデックス参照 1 回、O(1) 保証、ハッシュなし。
+インデックス参照 1 回、O(1) 保証、ハッシュなし。Opcode は 1 バイト = 256 通り、固定サイズ配列がバイト空間網羅。
 
-ステップ 4 — \`Instruction\` 構造体ラップ:
+ステップ 2 — テーブルを \`const\` にする:
+
+\`\`\`rust
+const fn build_table() -> [fn(&mut Context) -> Result; 256] {
+    let mut t = [unknown; 256];
+    t[0x01] = add;
+    t[0x02] = mul;
+    // ...
+    t
+}
+const TABLE: [fn(&mut Context) -> Result; 256] = build_table();
+\`\`\`
+
+\`const fn\` = コンパイル時に評価可能。コンパイラが \`build_table()\` をコンパイル中に実行、結果配列を凍結してバイナリのデータセクションに焼き込む。**実行時の \`TABLE\` は手書き配列リテラルと同一**、ディスパッチ準備の実行時コストはゼロ。
+
+ステップ 3 — 関数ポインタを構造体で包む:
+
+\`\`\`rust
+#[derive(Debug)]
+pub struct Instruction<W: InterpreterTypes, H: ?Sized> {
+    fn_: fn(InstructionContext<'_, H, W>) -> InstructionExecResult,
+}
+
+impl<W: InterpreterTypes, H: Host + ?Sized> Instruction<W, H> {
+    #[inline]
+    pub const fn new(fn_: fn(InstructionContext<'_, H, W>) -> InstructionExecResult) -> Self {
+        Self { fn_ }
+    }
+}
+\`\`\`
+
+2 利点: ① 将来のメタデータ拡張（\`gas_cost\` / \`name\` 等）をディスパッチシグネチャを変えずに追加、② **型規律** = \`Instruction::new(arithmetic::add)\` は裸の関数ポインタ代入より型安全、シグネチャ不一致は **代入の行** でコンパイルエラー（バグを実行時から構築時へ前倒し）。ジェネリクス \`W: InterpreterTypes, H: ?Sized\` は 2 レッスン前に積み上げた \`IT\` と \`H\` と同形。
+
+ステップ 4 — 完成形:
 
 \`\`\`rust
 #[derive(Debug)]
@@ -1003,7 +1134,41 @@ pub trait Database {
 }
 \`\`\`
 
-インタープリターが \`db: &mut dyn Database\` を取る、ストレージ非所有、誰でも実装可能。
+インタープリターが \`db: &mut dyn Database\` を取る、ストレージ非所有、誰でも実装可能。\`&mut self\` の理由 = キャッシュ変更（ネットワーク実装が読み込み結果をキャッシュ）、\`&self\` だと \`RwLock\` / \`RefCell\` ラップ強制。
+
+ステップ 2 — メソッドを正しくグループ化:
+
+\`\`\`rust
+fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
+fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
+\`\`\`
+
+\`balance\` / \`code\` / \`nonce\` 分離 → 1 アカウント 3 ラウンドトリップ。\`AccountInfo\` で束 → **1 ラウンドトリップで 3 データ**、\`Option\` で未知アカウント綺麗にシグナル。コード本体は \`code_by_hash\` で **コンテンツアドレス指定**、人気バイトコード（DEX ルーター）が多アドレスで共有 → ハッシュキャッシュで自動デデュプ。
+
+ステップ 3 — \`Result\` + 関連型 \`Error\`:
+
+\`\`\`rust
+fn basic(&mut self, ...) -> Result<Option<AccountInfo>, Self::Error>;
+// ...
+type Error: DBErrorMarker;
+\`\`\`
+
+ネットワーク実装は失敗する（RPC タイムアウト / MDBX 古いロック / Arc poisoned）。\`Self::Error\` = 各実装が独自エラー型を選べる、\`DBErrorMarker\` は無内容な制約（拡張に開いた接点）、Revm が後から \`Send\` / \`Sync\` 追加するフック。固定 enum だと \`reqwest::Error\` / \`serde_json::Error\` / タイムアウト / パースエラーを潰す羽目 + 新失敗モードごとに Revm PR 必要。
+
+ステップ 4 — \`#[auto_impl(&mut, Box)]\`:
+
+\`\`\`rust
+impl<T: Database> Database for &mut T {
+    type Error = T::Error;
+    fn basic(&mut self, addr: Address) -> Result<Option<AccountInfo>, T::Error> {
+        (**self).basic(addr)
+    }
+    // ... 残り 3 メソッドも全部同じパターン
+}
+impl<T: Database> Database for Box<T> { /* ... 同じ 4 メソッド ... */ }
+\`\`\`
+
+属性なしだと 4 メソッド × 2 ラッパー = 8 個の転送ボイラープレート。\`#[auto_impl(&mut, Box)]\` がこれを自動生成。\`Arc<MyDb>\` 不可（\`Arc<T>\` は \`&T\` のみ、\`&mut self\` メソッド不可）→ 仲間トレイト \`DatabaseRef\` で次レッスンに解決。
 
 ステップ 5 — 本物:
 
