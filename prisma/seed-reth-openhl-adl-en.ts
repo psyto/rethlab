@@ -15,7 +15,7 @@ export async function seedRethOpenHlAdlEN(prisma: PrismaClient) {
       track: 'building-openhl-adl',
       tags,
       isPublished: true,
-      sortOrder: 1500,
+      sortOrder: 1011,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {

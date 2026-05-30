@@ -15,7 +15,7 @@ export async function seedRethValidatorOpsEN(prisma: PrismaClient) {
       track: 'reth-validator-ops',
       tags,
       isPublished: true,
-      sortOrder: 350,
+      sortOrder: 1340,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {

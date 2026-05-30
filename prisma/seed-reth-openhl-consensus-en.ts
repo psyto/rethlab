@@ -15,7 +15,7 @@ export async function seedRethOpenHlConsensusEN(prisma: PrismaClient) {
       track: 'reth-openhl-consensus',
       tags,
       isPublished: true,
-      sortOrder: 1510,
+      sortOrder: 602,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {

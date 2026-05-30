@@ -15,7 +15,7 @@ export async function seedRethP2PNetworkingEN(prisma: PrismaClient) {
       track: 'reth-p2p-networking',
       tags,
       isPublished: true,
-      sortOrder: 330,
+      sortOrder: 1330,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {

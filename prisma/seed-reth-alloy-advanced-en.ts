@@ -15,7 +15,7 @@ export async function seedRethAlloyAdvancedEN(prisma: PrismaClient) {
       track: 'alloy-advanced',
       tags,
       isPublished: true,
-      sortOrder: 230,
+      sortOrder: 1200,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {
