@@ -1,21 +1,21 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethExpertEN(prisma: PrismaClient) {
-  const tags = ['reth', 'revm', 'alloy', 'rust', 'expert', 'performance', 'mdbx', 'mev', 'zkvm'];
+  const tags = ['reth', 'expert', 'production', 'performance', 'mev'];
 
   await prisma.course.create({
     data: {
       slug: 'reth-expert-en',
       title: 'Reth Expert — Production Engineering',
       description:
-        'Hardcore systems work across every layer of the Rust EVM stack: database (MDBX internals, MPT), concurrency (Tokio runtime), compiler / VM (custom precompiles, zkEVM, EVM privacy via Tempo Zones), and production engineering (profiling, cache-aware Rust, MEV pipelines, procedural macros, differential fuzzing). Plus shipping a custom Reth fork and reading Reth-based chains (op-stack, alphanet, Tempo) via the extension pattern.',
+        'Production engineering at L1 scale. 24 lessons across three modules: Performance & Systems (cargo flamegraph + MDBX + Tokio + proc-macros + tracing) / Production Engineering (custom precompiles + MPT + stateless + MEV + zkEVM + production fork + differential fuzzing + EVM privacy + chaos engineering + systems auditing + OSS workflow) / Reth-based Chains (library-not-fork + op-stack-on-reth + custom ChainSpec + Executor + PayloadBuilder + Paradigm stack case study). By the end you operate Reth-based chains in production with confidence.',
       difficulty: 'EXPERT',
-      duration: 290,
-      xpReward: 815,
+      duration: 457,
+      xpReward: 1105,
       track: 'reth-expert',
       tags,
       isPublished: true,
-      sortOrder: 400,
+      sortOrder: 600,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {
@@ -26,19 +26,35 @@ export async function seedRethExpertEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Performance engineering for Reth',
+                  title: 'Lesson 1 — Performance engineering for Reth',
                   slug: 'performance-engineering-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 18,
                   xpReward: 40,
-                  content: `# Performance engineering for Reth
+                  content: `# Lesson 1 — Performance engineering for Reth
+
+## Question
+
+**Reth's perf engineering is the production discipline.** Profile + optimise + measure. The patterns transfer to any Rust system.
+
+## Principle (minimum model)
+
+- **Profile first.** \`cargo flamegraph\` reveals hot paths. Don't guess; measure.
+- **Hot paths in Reth.** revm interpreter (~70 % time), MDBX I/O (~15 %), serde (~5 %), other (~10 %). Optimisation effort follows.
+- **Optimisation tools.** rayon (parallelism), inline (avoid function call), branchless (avoid mispredict), const fn (compile-time eval).
+- **Common patterns.** Pre-allocate Vec capacity; use \`SmallVec<T, N>\` for fixed-size collections; cache hot computations; batch I/O.
+- **Profile-guided.** Reth's CI runs benchmarks; regressions blocked at PR-time. Production discipline.
+- **Cross-cutting metrics.** Sync time, peak memory, per-stage throughput. Monitored in production.
+
+## Worked example + steps
+
+# Performance engineering for Reth
 
 A Reth fork ships. Block import was 12ms in your benches; in production it's 80ms. Where did the 68ms go? You don't know — because nobody profiled. This is the failure mode this lesson exists to prevent: **invisible slowdowns**, the kind that compound silently until a validator falls 200 blocks behind.
 
 If you're going to ship a Reth fork or write hot-path code in Revm, **profiling and benchmarking are non-negotiable**. Premature optimization is bad; *invisible* slowdowns are worse.
 
-> 🛑 **Predict before scrolling.** A junior engineer says "the node feels slow, let me try replacing the HashMap with a BTreeMap." **List 3 things wrong with that approach** before reading the lesson. Hold your list.
 
 ## 1. Profile first, optimize second
 
@@ -82,7 +98,6 @@ criterion_main!(benches);
 
 \`cargo bench\` produces statistical comparisons. **Always commit your benchmark results** when claiming a perf improvement.
 
-> 🛑 **Anti-fluency.** Your Criterion bench shows function X is 20% faster after a change. Is the **node** 20% faster? Why might it not be? Be specific — name two reasons a microbench can lie about real-world impact.
 
 ### Whole-node benchmarks: snapshot the disk
 
@@ -114,7 +129,6 @@ struct Hot { id: u64, version: u32 }
 struct Cold { big_blob: [u8; 192] }
 \`\`\`
 
-> 🛑 **Predict.** You have a million-element \`Vec<Row>\`. You iterate, summing only \`row.id\`. The big_blob is never read. **How much memory does the CPU actually load through cache?** Why?
 
 ## 3. Allocator choice
 
@@ -134,7 +148,6 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 This single line frequently shaves 10-30% off tail latency in I/O-heavy services.
 
-> 🛑 **Anti-fluency.** Where exactly does jemalloc save the 10-30%? **Average** latency or **tail** latency? Under what kind of load does the gap widen? If your answer is just "it's faster," you don't yet understand allocator design — re-read.
 
 ## 4. Reth's actual production build profiles
 
@@ -171,7 +184,6 @@ This is what the Paradigm team actually ships. Three profiles, three trade-offs:
 ### \`maxperf-symbols\` — profiling production
 Same optimization as \`maxperf\`, but keeps full debug symbols. Use it when you need a flamegraph that shows actual function names instead of mangled offsets in production-grade code. **This is the profile you build when something is slow in production and you need to find out why.**
 
-> 🛑 **Predict.** Why would you NEVER use \`maxperf\` for daily development builds? Be specific about the cost. (Hint: \`codegen-units = 1\` and \`lto = "fat"\` together — what do they do to the compiler?)
 
 ### How to invoke
 
@@ -191,22 +203,46 @@ Combine with the \`jemalloc\` and \`asm-keccak\` features you saw earlier.
 
 > Final check: revisit your "junior engineer wants to swap HashMap for BTreeMap" prediction from the top. Did you cite measurement, profiling, and re-verification? If you cited "well, BTreeMap is sometimes slower" — that's also wrong reasoning, just on the other side. **The point isn't which container; the point is that the question is unanswerable without data.**
 
-You're now equipped to start opening Reth's perf-critical files (\`crates/storage/db\`, \`crates/blockchain-tree\`) with intent rather than just curiosity.`,
+You're now equipped to start opening Reth's perf-critical files (\`crates/storage/db\`, \`crates/blockchain-tree\`) with intent rather than just curiosity.
+
+## Summary (3 lines)
+
+- Reth perf = profile (cargo flamegraph) + optimise hot paths (revm 70 % / MDBX 15 %) + measure (CI benchmarks).
+- Tools: rayon, inline, branchless, const fn. Patterns: pre-alloc, SmallVec, cache, batch I/O.
+- Production discipline; PR-time regression-blocking. Patterns transfer to any Rust system.
+`,
                 },
                 {
-                  title: 'MDBX & storage internals',
+                  title: 'Lesson 2 — MDBX & storage internals',
                   slug: 'mdbx-storage-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 18,
                   xpReward: 40,
-                  content: `# MDBX & storage internals
+                  content: `# Lesson 2 — MDBX & storage internals
+
+## Question
+
+**Reth uses MDBX (libmdbx) for state storage.** B+tree on disk; mmap-backed; COW transactions. Why this choice + production tuning.
+
+## Principle (minimum model)
+
+- **MDBX = libmdbx, a forked Berkeley DB-style B+tree.** Mmap-backed for OS-managed paging.
+- **COW (copy-on-write) transactions.** Writers see fresh snapshot; readers see consistent old snapshot. No locks for readers.
+- **Why MDBX over RocksDB / LMDB?** Simpler ops profile; better Rust bindings (\`reth-mdbx\`); deterministic perf.
+- **Disk format.** Pages (typically 4 KB) organised in a B+tree. Indexes hot data first via key access patterns.
+- **Tuning.** map_size (max mmap), sync_period (durability vs perf trade), max readers (concurrency).
+- **Production gotchas.** Mmap exhaustion on 32-bit; transaction expiry on long-running reads; cache size for high-traffic keys.
+- **Reth conventions.** Table per data type (accounts / storage / receipts); per-table compaction.
+
+## Worked example + steps
+
+# MDBX & storage internals
 
 Every account balance, every storage slot, every receipt — Reth keeps all of it in **one** key-value store: **MDBX**. Not Postgres, not RocksDB, not a custom format. MDBX is a memory-mapped B+tree (a balanced tree where each node holds multiple keys to fit a disk page) descended from LMDB. The whole 500GB database is exposed to your Rust code as if it were a giant in-memory slice — the OS handles the disk-vs-RAM dance through mmap.
 
 Understanding MDBX is what separates "I can use Reth" from "I can extend Reth."
 
-> 🛑 **Predict before scrolling.** RocksDB is the dominant KV store in many blockchain clients (geth, erigon historically). **Why does Reth pick MDBX instead?** Form a hypothesis citing one of: write throughput, read latency, crash safety, mmap, compaction. Hold your guess.
 
 ## 1. Why MDBX (not LevelDB / RocksDB)?
 
@@ -220,7 +256,6 @@ Understanding MDBX is what separates "I can use Reth" from "I can extend Reth."
 
 Reth picks MDBX because Ethereum is **read-heavy** and **latency-sensitive**. LSM trees (the log-structured-merge design RocksDB and LevelDB use — fast writes, periodic background rewrites) do well at writes but **stall on compactions** — the moments where they pause everything to rewrite tiers — and those stalls are fatal for sync speed and validator latency.
 
-> 🛑 **Anti-fluency.** What is a **compaction** in an LSM tree? Why does it stall reads? B+tree doesn't compact — what does it do instead to reclaim space? If you can't answer in two sentences each, you're trusting the table without understanding it.
 
 ## 2. Reth's actual \`Database\` trait
 
@@ -245,7 +280,6 @@ pub trait Database: Send + Sync + Debug {
 }
 \`\`\`
 
-> 🛑 **Predict.** Why does this trait have **two** associated types (\`TX\` and \`TXMut\`) instead of one? What invariant does the split enforce that a single \`Tx\` type couldn't?
 
 Read this carefully:
 
@@ -290,13 +324,11 @@ Each table is a Rust **type** that implements the \`Table\` trait. The compiler 
 
 \`put\` works for any key. \`append\` is **only valid when the key is greater than the current max** — but it's faster because it skips a B+tree search. When you're processing blocks sequentially, you use \`append\`; when reorging, you fall back to \`put\`.
 
-> 🛑 **Predict.** You call \`append\` with a key that's *smaller* than the current max. What happens? Crash? Silent corruption? Error? Why is it on you (not MDBX) to enforce the invariant? If you can't answer, you don't yet understand why \`append\` is faster — re-read.
 
 ### Cursors
 
 For range scans, you use a **cursor** instead of repeated \`get\` calls. A cursor positions itself in the B+tree once and walks neighboring entries — orders of magnitude faster than independent gets, because adjacent keys likely share the same page.
 
-> 🛑 **Anti-fluency.** Why is a cursor so much faster than N independent \`get\`s for adjacent keys? The answer involves **B+tree structure** AND **page cache locality**. Name both, in two sentences.
 
 ### \`disable_long_read_transaction_safety\`
 
@@ -342,7 +374,6 @@ Read [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) alongside Ret
 
 Open [\`crates/storage/db-api/src/tables\`](https://github.com/paradigmxyz/reth/tree/main/crates/storage/db-api/src/tables) in the repo:
 
-> 🛑 **Before opening, predict.** What's the key/value of the \`Headers\` table? \`Transactions\`? \`PlainAccountState\`? Make a guess. Then verify.
 
 1. Find the \`Headers\` table — note its key (\`BlockNumber\`) and value (\`Header\`)
 2. Find a \`DupSort\` table — these are tables where one key has multiple values. **Why does \`DupSort\` exist? What kind of data needs it?**
@@ -350,25 +381,44 @@ Open [\`crates/storage/db-api/src/tables\`](https://github.com/paradigmxyz/reth/
 
 You'll come out the other side knowing where every byte of Ethereum state lives in Reth.
 
-> Final check: in one sentence, why does mmap let you treat a 500GB DB like a Rust slice? **Where does the OS fit in?** If you can't explain the page-fault → page-load mechanism, the "pointer dereference, not syscall" claim is words to you, not understanding.`,
+> Final check: in one sentence, why does mmap let you treat a 500GB DB like a Rust slice? **Where does the OS fit in?** If you can't explain the page-fault → page-load mechanism, the "pointer dereference, not syscall" claim is words to you, not understanding.
+
+## Summary (3 lines)
+
+- MDBX = libmdbx (forked Berkeley DB-style B+tree). Mmap-backed; COW transactions; no reader locks.
+- Tuning: map_size + sync_period + max readers. Gotchas: mmap on 32-bit + long-running reads.
+- Reth: table per data type + per-table compaction. Deterministic perf.
+`,
                 },
                 {
-                  title: 'Tokio runtime internals',
+                  title: 'Lesson 3 — Tokio runtime internals',
                   slug: 'tokio-internals-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 18,
                   xpReward: 40,
-                  content: `# Tokio runtime internals
+                  content: `# Lesson 3 — Tokio runtime internals
+
+## Question
+
+**Reth runs on Tokio.** Understanding Tokio's internals = understanding Reth's parallelism. Work-stealing scheduler + reactors.
+
+## Principle (minimum model)
+
+- **Tokio runtime structure.** N worker threads (CPU-bound) + 1 reactor thread (I/O-bound). Default to CPUs.
+- **Work-stealing scheduler.** Each worker has a queue; idle workers steal from busy ones. Balances load automatically.
+- **Async tasks vs blocking.** Async = green-thread on worker pool; blocking = \`tokio::task::spawn_blocking\` on separate thread pool. Don't mix.
+- **Reth conventions.** Per-component async; CPU-bound (revm exec) wrapped in \`spawn_blocking\`. Pattern transfers.
+- **Reactor.** Polls epoll/kqueue for I/O readiness; wakes appropriate task. Single thread; high throughput.
+- **Pitfalls.** Holding std Mutex across \`.await\` = deadlock. Use \`tokio::sync::Mutex\` for async-safe.
+- **Performance.** Tokio's scheduler overhead is ~1 µs per task switch. Compare to OS threads (~10 µs). Wins on high-task-count.
+
+## Worked example + steps
+
+# Tokio runtime internals
 
 You've been writing \`#[tokio::main]\` and sprinkling \`.await\` over every async call. Reth has 200+ of those scattered through its codebase, and at peak load it handles thousands of concurrent peer connections plus dozens of background tasks on **8 worker threads**. No magic; just a state machine the compiler wrote for you, a work-stealing scheduler, and an epoll loop. This lesson is what's underneath the \`.await\`.
 
-> 🛑 **Predict before scrolling.** You write \`async fn foo() { bar().await; }\`. The compiler generates *something* concrete. **What?** Specifically:
-> - What trait does the resulting type implement?
-> - What's the runtime cost vs a plain function call?
-> - Where do local variables live across an \`await\` point?
->
-> If any answer is fuzzy, this lesson is what you need.
 
 ## 1. The runtime stack
 
@@ -400,7 +450,6 @@ Worker B: [task3, task4]
 
 This avoids contention on a global mutex while still balancing load.
 
-> 🛑 **Anti-fluency.** Without work-stealing, what's the alternative for distributing tasks across workers? Why is it worse? (Hint: think about a global mutex on a single shared queue, hot under contention.)
 
 ## 3. Spawning vs blocking
 
@@ -418,7 +467,6 @@ tokio::task::spawn_blocking(|| {
 
 **Rule**: never call CPU-bound code in an async context without \`spawn_blocking\`. You'll starve the runtime and the whole node grinds.
 
-> 🛑 **Predict.** You ignore the rule. You call \`expensive_sync_calc()\` directly inside an async fn. The node runs. **What's the symptom in production?** Be specific — what would Prometheus / your dashboard show? How would oncall discover this? (Hint: it's not a crash.)
 
 ## 4. Channels — picking the right one
 
@@ -431,7 +479,6 @@ tokio::task::spawn_blocking(|| {
 
 ExEx uses **broadcast** for chain notifications because every ExEx wants every event.
 
-> 🛑 **Anti-fluency.** Why doesn't ExEx use \`mpsc\`? With \`mpsc\`, what happens to event delivery if you have 3 ExExes registered? Spell out the failure mode \`broadcast\` prevents.
 
 ## 5. Custom executors / Future polling
 
@@ -473,7 +520,6 @@ Two flavors:
 - **\`spawn_task\`** — fire and forget. If it panics, the panic is silently lost (Tokio default).
 - **\`spawn_critical_task\`** — registered with a name; if it panics, a \`TaskManager\` channel fires and **the whole node shuts down with the task's name in the log**.
 
-> 🛑 **Predict.** You spawn a background "verify pruner state" task with \`spawn_task\`. Six weeks later it panics on a corrupted entry. Reth keeps running. **What's the user-visible symptom?** Why is "fail loudly" better than "fail silently" for infra?
 
 This is real production discipline: you don't want a silently-dead background task to leave your node running in a degraded state. **Critical tasks fail loudly.**
 
@@ -484,25 +530,44 @@ The \`TaskExecutor = Runtime\` alias lets you pass it through stage code without
 - \`tokio/tokio/src/runtime/scheduler/multi_thread_alt\` — the modern multi-thread scheduler
 - \`reth/crates/tasks/src/runtime.rs\` — Reth's task supervisor wrapping Tokio
 
-> Final check: in one sentence, what's the difference between \`async fn\` and \`fn\` *as Rust types*? If your answer is "one returns a Future and one doesn't," go deeper — what *is* a Future, structurally? **The lesson isn't done with you until "Tokio is magic" becomes "Tokio polls compiler-generated state machines on a work-stealing scheduler."**`,
+> Final check: in one sentence, what's the difference between \`async fn\` and \`fn\` *as Rust types*? If your answer is "one returns a Future and one doesn't," go deeper — what *is* a Future, structurally? **The lesson isn't done with you until "Tokio is magic" becomes "Tokio polls compiler-generated state machines on a work-stealing scheduler."**
+
+## Summary (3 lines)
+
+- Tokio = N work-stealing workers + 1 reactor. Worker = async tasks; reactor = epoll/kqueue I/O.
+- CPU-bound code → \`spawn_blocking\`; async → worker pool. Std Mutex across await = deadlock.
+- Reth conventions: per-component async, revm exec wrapped in spawn_blocking. ~1 µs task switch.
+`,
                 },
                 {
-                  title: 'Procedural macros — how `sol!` and `address!` work',
+                  title: 'Lesson 4 — Procedural macros — how `sol!` and `address!` work',
                   slug: 'procedural-macros-en',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 15,
                   xpReward: 35,
-                  content: `# Procedural macros — how \`sol!\` and \`address!\` work
+                  content: `# Lesson 4 — Procedural macros — how \`sol!\` and \`address!\` work
+
+## Question
+
+**Procedural macros generate Rust code at compile time.** \`sol!\` macro turns Solidity ABI into Rust types; \`address!\` validates addresses at compile time.
+
+## Principle (minimum model)
+
+- **\`sol! { contract Foo { ... } }\`** = expand to Rust types matching the Solidity interface. \`Foo::Bar\` becomes a Rust struct.
+- **How it works.** Macro parses Solidity → generates Rust AST → injects into surrounding code. Compile-time expansion.
+- **\`address!("0x...")\`** = parse the address at compile time. Invalid address → compile error, not runtime.
+- **Why proc-macros.** Compile-time validation catches mistakes early; generated code is zero-cost.
+- **Implementation.** Each proc-macro is a separate Rust crate with \`proc-macro = true\`. \`syn\` for parsing, \`quote\` for code-gen.
+- **Common patterns.** Derive macros (\`#[derive(...)]\`) generate trait impls. Attribute macros (\`#[some_attr]\`) wrap items. Function-like (\`sol! { ... }\`) replace with code.
+- **Reading proc-macro source.** Read top-down: input AST → transformation → output code. \`cargo expand\` shows the result.
+
+## Worked example + steps
+
+# Procedural macros — how \`sol!\` and \`address!\` work
 
 \`address!("0xabc...")\` looks like a function call but **runs at compile time**. So does \`sol! { contract IERC20 { ... } }\`.
 
-> 🛑 **Predict before scrolling.** When you write \`address!("0xabc123...")\`:
-> - **Where** does the hex parsing happen — at compile time, or at runtime?
-> - If compile-time, **what tool** in the Rust compiler does it?
-> - What error do you get if you write \`address!("0xZZZ")\`?
->
-> Hold your guesses. The lesson has at least one surprise about \`address!\` that disagrees with the common explanation.
 
 ## 1. The three kinds
 
@@ -536,7 +601,6 @@ Two crates do 90% of the work:
 
 Here's what's surprising: **\`address!\` is not a procedural macro at all.** It's a regular \`macro_rules!\` declarative macro.
 
-> 🛑 **If \`address!\` is just declarative, what does it delegate to that IS procedural?** Predict — read the source below to verify.
 
 Here's the real source from [\`crates/primitives/src/bits/macros.rs\`](https://github.com/alloy-rs/core/blob/main/crates/primitives/src/bits/macros.rs):
 
@@ -578,7 +642,6 @@ Read it twice. There's a lot here.
 
 \`$d\` matches a token tree (in practice: \`$\`). This solves a famous problem: when you generate a macro inside a macro, you can't just write \`$\` for the inner macro's variables — Rust's macro parser would consume them as the outer macro's metavariables. So \`$d\` is bound to \`$\` and \`$d ($d t:tt)+\` produces \`$ ( $ t:tt )+\` in the generated code. **This is a textbook macro-hygiene workaround.**
 
-> 🛑 **Anti-fluency.** If you removed the \`$d:tt\` trick and wrote a literal \`$\` inside the inner macro, what error would the compiler give? (Hint: it's not "syntax error" — it's about which macro owns the metavariable.) If you can't predict the error class, the trick is just folklore to you.
 
 ### Where compile-time validation lives
 
@@ -628,7 +691,6 @@ let balance = IERC20::new(token, &provider).balanceOf(owner).call().await?;
 
 — that \`.balanceOf(owner)\` call is statically typed, the \`uint256\` becomes a real \`U256\`, the selector is computed at compile time, and the ABI encoding is monomorphized. **No reflection, no runtime parsing, no string-typed errors.**
 
-> 🛑 **Predict.** The selector for \`balanceOf(address)\` is \`0x70a08231\` — the first 4 bytes of \`keccak256("balanceOf(address)")\`. **At what point in the build is the keccak hash computed?** If your answer is "at runtime, the first time you call .balanceOf," re-read — that's exactly the runtime cost \`sol!\` eliminates.
 
 ## 5. When to write your own
 
@@ -651,16 +713,41 @@ cargo expand --bin my_app
 
 Now you can read what your macro is producing and pinpoint any wrong codegen.
 
-> Final check: explain in one sentence the difference between \`macro_rules!\` and a procedural macro. If your answer is just "one's older," go deeper — what does each operate on, and where does each run? **The Rust ecosystem is built on this distinction; without it, you can't read the code that builds your binary.**`,
+> Final check: explain in one sentence the difference between \`macro_rules!\` and a procedural macro. If your answer is just "one's older," go deeper — what does each operate on, and where does each run? **The Rust ecosystem is built on this distinction; without it, you can't read the code that builds your binary.**
+
+## Summary (3 lines)
+
+- Proc-macros = compile-time code generation. \`sol! { ... }\` → Rust types from Solidity ABI; \`address!("0x...")\` → compile-time validation.
+- Three flavours: derive (\`#[derive(...)]\`) / attribute (\`#[some_attr]\`) / function-like (\`sol! { ... }\`).
+- Build with \`syn\` (parse) + \`quote\` (gen). \`cargo expand\` shows expanded code. Zero-cost at runtime.
+`,
                 },
                 {
-                  title: 'Tracing internals — how Reth observes itself',
+                  title: 'Lesson 5 — Tracing internals — how Reth observes itself',
                   slug: 'tracing-internals-en',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 20,
                   xpReward: 45,
-                  content: `# Tracing internals — how Reth observes itself
+                  content: `# Lesson 5 — Tracing internals — how Reth observes itself
+
+## Question
+
+**Reth uses the \`tracing\` crate for observability.** Spans + events + structured logging. Production tooling for diagnosing distributed systems.
+
+## Principle (minimum model)
+
+- **\`tracing\` crate.** Structured logging with spans (parent-child relationships). Each request → a span; each event → in that span.
+- **\`#[tracing::instrument]\`.** Wraps a function in a span. Captures arguments + duration. Hot paths: don't use without sampling.
+- **Subscribers.** Process events; output to stdout / files / OpenTelemetry. \`tracing-subscriber\` provides defaults.
+- **OpenTelemetry export.** Send spans to Jaeger / Tempo (the cloud service, not the L1). Distributed trace viewing.
+- **Levels.** \`trace\` (everything) / \`debug\` (dev) / \`info\` (key events) / \`warn\` (issues) / \`error\` (failures). Production runs at \`info\`.
+- **Filter via env.** \`RUST_LOG=reth=info,reth_network=debug\`. Per-crate granularity. Production tunable.
+- **Performance.** Disabled spans are zero-cost (compiled out). Enabled spans = ~50 ns per span. Hot-path: use \`target_level\`.
+
+## Worked example + steps
+
+# Tracing internals — how Reth observes itself
 
 Performance tuning, debugging a deadlock, diagnosing why a stage suddenly stalls — all of these require **the node telling you what it's doing**. Reth's answer is \`tracing\`, the Rust ecosystem's structured-logging crate. Every interesting code path in Reth is instrumented with \`tracing\` spans and events, and the whole observability surface (logs, metrics, distributed tracing) is built on top of one consistent foundation. This lesson is how it works and how you extend it.
 
@@ -715,7 +802,6 @@ RUST_LOG=info,reth_stages=debug,reth_exex=trace,reth_network=warn
 
 The matching engine is \`EnvFilter\` (from \`tracing-subscriber\`). It matches against the **module path** of each event/span, which Rust derives from the crate + module hierarchy. \`reth_stages=debug\` means "for any event whose module path starts with \`reth_stages\`, show debug-level and above."
 
-> 🛑 **Predict.** You're debugging a sender-recovery stall in production. You don't want every log line — that floods the disk. You want only what \`SenderRecoveryStage\` emits. **What's the right \`RUST_LOG\`?**
 
 Approximately: \`RUST_LOG=warn,reth_stages::stages::sender_recovery=debug\` — warn level globally (catches anything critical from other modules), debug for the exact stage you're investigating. The module path comes from the file's location in the crate (\`reth-stages\` crate → \`stages\` module → \`sender_recovery\` sub-module). **Surgical filtering is the whole point.**
 
@@ -835,7 +921,6 @@ The discipline:
 
 This level discipline is what makes \`tracing\` viable in a production high-throughput node. Get it wrong and your observability tool becomes a performance liability.
 
-> 🛑 **Predict.** You add \`debug!\` calls inside revm's \`add\` opcode "just for now." Mainnet sync slows by 30%. **Why? What level should those calls be?**
 
 Because \`debug\` is *not* statically compiled out — even if \`RUST_LOG\` disables it, the level check still happens for every event. In a function that runs millions of times per block, that check itself becomes a measurable cost. The calls should be \`trace!\`, which can be compiled out entirely via the \`max_level_*\` cargo features in production builds.
 
@@ -848,13 +933,18 @@ Because \`debug\` is *not* statically compiled out — even if \`RUST_LOG\` disa
 
 After this you can read every observability story in Reth's source, instrument your own custom stages / ExEx with the same idiom, and pull production diagnostics from a running node without changing code.
 
-> 🛑 **Final check.** In one sentence: why does Reth use \`tracing\` instead of plain \`println!\` everywhere? If your answer doesn't mention "structured, filterable, async-aware, with one substrate feeding logs + metrics + distributed traces," re-read §3 and §5 — that one-substrate property is the load-bearing decision.
 
 ## 📺 Further reading
 
 - [\`tracing\` crate docs](https://docs.rs/tracing/latest/tracing/)
 - [\`tracing-subscriber\` patterns](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/)
 - [Tokio Console](https://github.com/tokio-rs/console) — interactive async-runtime inspector built on the same \`tracing\` substrate
+
+## Summary (3 lines)
+
+- \`tracing\` = structured logging with spans (parent-child). \`#[tracing::instrument]\` wraps function in span.
+- Subscribers process events; OpenTelemetry export → Jaeger / Grafana Tempo. Levels: trace / debug / info / warn / error.
+- \`RUST_LOG=reth=info,reth_network=debug\` filter per-crate. Disabled spans = zero-cost; enabled = ~50 ns.
 `,
                 },
               ],
@@ -866,19 +956,36 @@ After this you can read every observability story in Reth's source, instrument y
             lessons: {
               create: [
                 {
-                  title: 'Custom precompiles',
+                  title: 'Lesson 6 — Custom precompiles',
                   slug: 'custom-precompiles-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 15,
                   xpReward: 35,
-                  content: `# Custom precompiles
+                  content: `# Lesson 6 — Custom precompiles
+
+## Question
+
+**Precompiles = built-in Solidity functions at magic addresses (0x01-0x09).** Add your own = extend the EVM for chain-specific operations.
+
+## Principle (minimum model)
+
+- **Precompile architecture.** Address (e.g. 0x1A) + Rust function \`fn(input: &[u8], gas_limit: u64) -> (Bytes, u64)\`. Returns output + gas used.
+- **Why precompiles.** Common operations too slow in pure Solidity (e.g. ed25519 verify); shared utility (CLOB ops); chain-specific (HyperEVM order placement).
+- **Integration via revm.** \`EvmConfig::with_precompiles(custom_precompiles)\`. Revm dispatches to your function at the address.
+- **Gas cost.** Determined by you. Underprice → DoS; overprice → unusable. Benchmark.
+- **Failure semantics.** Return empty Bytes + gas charge OR revert. Pick deliberate semantics.
+- **Production examples.** Hyperliquid CLOB precompiles (0xCL...AB read best bid; 0xCL...C1 place order). Tempo merchant attestation precompile.
+- **Tests.** Deploy a Solidity contract that calls the precompile; assert correct output + gas charge.
+
+## Worked example + steps
+
+# Custom precompiles
 
 You want SHA-256 inside the EVM. Two roads: add a new **opcode** (a new byte in the instruction stream — \`SHA256\` next to \`ADD\`), or add a **precompile** (a native Rust function the EVM calls when a contract does \`CALL 0x00...02\`). Real Ethereum picked the second: precompiles at addresses \`0x01\` through \`0x0a\` cover ecrecover, sha256, modexp, and the BN254 elliptic-curve ops. Foundry's cheatcodes (\`vm.deal\`, \`vm.warp\`) are the same trick at industrial scale.
 
 Custom opcodes break consensus with every wallet, indexer, and Solidity compiler on the planet. Custom precompiles **don't**. This lesson is why the answer is different, and how to register one.
 
-> 🛑 **Predict before scrolling.** A custom *opcode* breaks consensus with mainnet (you saw this in Intermediate). A custom *precompile* doesn't — even though it's also new code that didn't exist in vanilla EVM. **Why is the answer different?** Form a hypothesis citing the EVM bytecode parser. Hold your guess.
 
 ## 1. Opcode vs precompile
 
@@ -937,7 +1044,6 @@ That's a production precompile in Ethereum mainnet. Read it line by line:
 - **Halt vs revert** — \`PrecompileHalt::OutOfGas\` means the entire frame halts with no refund, distinct from a regular revert.
 - **\`EthPrecompileOutput\`** carries \`(gas_used, output_bytes)\`.
 
-> 🛑 **Predict.** You CALL the identity precompile with 1 KB of input. **Compute the gas cost.** Show your work: how many words, what's the formula, what's the answer? If you can't, the gas math is just numbers to you — calculate it now.
 
 ## 3. Registering custom precompiles
 
@@ -994,7 +1100,6 @@ Notice the \`optimized_access[short_idx]\` write. For addresses that fit in a sm
 
 ## 4. Real-world: Foundry's cheatcodes ARE custom precompiles
 
-> 🛑 **Predict before reading.** \`vm.deal(addr, 1 ether)\` mutates state — gives an arbitrary account ETH out of thin air. **Standard precompiles can't mutate state** (look at \`identity_run\` — pure function, input → output). So how does Foundry implement \`vm.deal\`? Form a hypothesis.
 
 The most widely-deployed custom precompile in the Rust EVM stack lives in Foundry. Every \`vm.deal\`, \`vm.warp\`, \`vm.prank\` you've ever written in a Solidity test is a **\`CALL\` to a custom precompile**.
 
@@ -1041,24 +1146,46 @@ A reasonable workflow:
 
 After this, your precompile is cheap to use in normal code and prohibitively expensive to abuse.
 
-> Final check: you ship a precompile at gas cost = 100. An attacker discovers an input shape that takes **10x normal CPU time** at the same 100 gas. **What's the economic attack? How much does it cost the attacker per second of node CPU?** If you can't sketch the math, you can't safely price a precompile — re-read Section 6 and Ethereum's EIP-2929 for what real underpricing has cost mainnet.`,
+> Final check: you ship a precompile at gas cost = 100. An attacker discovers an input shape that takes **10x normal CPU time** at the same 100 gas. **What's the economic attack? How much does it cost the attacker per second of node CPU?** If you can't sketch the math, you can't safely price a precompile — re-read Section 6 and Ethereum's EIP-2929 for what real underpricing has cost mainnet.
+
+## Summary (3 lines)
+
+- Custom precompile = address + Rust function (input, gas_limit) → (output, gas_used). Magic-address dispatch via revm.
+- Why: too-slow in Solidity (crypto) + shared utility (CLOB ops) + chain-specific (HyperEVM ops).
+- Gas cost benchmarked; failure semantics deliberate. Production: Hyperliquid CLOB + Tempo attestation precompiles.
+`,
                 },
                 {
-                  title: 'Merkle Patricia Trie & state proofs',
+                  title: 'Lesson 7 — Merkle Patricia Trie & state proofs',
                   slug: 'mpt-state-proofs-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 18,
                   xpReward: 40,
-                  content: `# Merkle Patricia Trie & state proofs
+                  content: `# Lesson 7 — Merkle Patricia Trie & state proofs
+
+## Question
+
+**MPT = Ethereum's state structure**. Modified Patricia Trie + Merkle hash → verifiable state. Generate + verify state proofs.
+
+## Principle (minimum model)
+
+- **Trie structure.** Branches + extensions + leaves. Hash up via keccak; root in block header.
+- **State proof = path from root to leaf.** Includes hashes of sibling nodes; allows verification without full state.
+- **\`AccountProof\` type.** Account info + storage proof + balance + nonce + code hash. Lets a light client verify "this account has this balance".
+- **Use cases.** Light clients (Helios), zkEVM verification, cross-chain proofs (Cosmos IBC pattern).
+- **Performance.** Generation: ~10 ms per account. Verification: ~5 ms.
+- **Stateless verification.** Future direction. Have ProverChain produce trie proofs + execution proof; consumer chain verifies without state.
+- **Reth's impl.** \`reth-mpt\` crate; uses MDBX for trie storage. Production-tuned.
+
+## Worked example + steps
+
+# Merkle Patricia Trie & state proofs
 
 A phone-sized device wants to know "does Alice's account hold 1 ETH?" — and it cannot store Ethereum's 500GB state. So it asks a full node, which sends back **a few hundred bytes**. The phone runs a hash loop, compares the result to **32 trusted bytes** it already knows, and gets a cryptographic answer: yes or no. That's a light client. The 32 trusted bytes are Ethereum's **stateRoot**, and the data structure that makes this work is the **Merkle Patricia Trie (MPT)**.
 
 Understand the MPT and you understand state roots, light clients, witnesses, \`eth_getProof\`, and the entire stateless-client roadmap. You can also write your own.
 
-> 🛑 **Predict before scrolling.** You want to cryptographically prove "account X has balance Y" — to a verifier who **doesn't have the full state**, only a 32-byte trusted root. **Sketch your protocol.** What do you send the verifier? What do they hash? How do they conclude proof or rejection?
->
-> Write 3-4 lines. Then read the lesson and find what you missed.
 
 ## 1. What an MPT is
 
@@ -1070,7 +1197,6 @@ Combine three ideas:
 
 Result: a **256-bit \`stateRoot\`** that uniquely identifies the entire world state. Change any byte → root changes.
 
-> 🛑 **Anti-fluency.** Patricia's path-compression is an optimization. **What's the cost if you skip it** and use a plain trie? Why does Ethereum care enough to add the complexity? (Hint: think about a 64-nibble key with mostly-empty trie. How many nodes does the path traverse with vs without compression?)
 
 ## 2. Node types
 
@@ -1115,7 +1241,6 @@ To prove "account X has balance Y":
 
 That's it. **Light clients** are just verifiers with the trusted root.
 
-> 🛑 **Predict.** You receive a witness for account X — a list of trie node bytes. The verifier hashes back up to the root. **What does the verifier need that's NOT in the witness?** What's the verifier's only secret/trusted input? If you can't answer, you don't yet understand what makes this *cryptographic* (not just "I trust the bytes you sent me").
 
 ## 4. Witnesses
 
@@ -1166,7 +1291,6 @@ The list of trie nodes from root to the account's leaf — encoded as RLP. The v
 ### \`AccountProof.info: Option<Account>\`
 \`None\` if the account doesn't exist (a "non-inclusion" proof). \`Some\` if it does. **Both cases are valid proofs** — proving "this address has no account" is just as important as proving balance.
 
-> 🛑 **Predict.** When is a non-inclusion proof useful in practice? Name a concrete scenario where you'd want to prove "this address has NEVER held tokens." (Hint: airdrops, sybil resistance, slashing eligibility — pick one and trace the protocol.)
 
 ### \`StorageProof.nibbles: Nibbles\`
 Pre-computed nibble representation of the storage key. Reth caches this because nibble conversion is on the hot path.
@@ -1176,7 +1300,6 @@ Pure logic — given a trusted state root, verify the proof. **This is the entir
 
 ## 6. The pitfall: storage tries
 
-> 🛑 **Predict.** Why does each contract have its **own** storage MPT? What if Ethereum used one giant MPT keyed by \`(contract, slot)\`? Spell out the trade-off.
 
 Each contract has its **own** MPT for its storage slots. So the global state has:
 
@@ -1211,22 +1334,47 @@ Read in this order: \`common\` (types) → \`trie\` (data structure) → \`db\` 
 
 Do this and \`eth_getProof\` becomes a structure you can reason about, write, and debug — not magic.
 
-> Final check: in two sentences, explain why a state proof gives a stronger guarantee than "trust me, I'm a node operator." What property does Merkle hashing give you that a non-cryptographic claim cannot? **The lesson isn't done with you until you can argue this convincingly to someone who has never used a light client.**`,
+> Final check: in two sentences, explain why a state proof gives a stronger guarantee than "trust me, I'm a node operator." What property does Merkle hashing give you that a non-cryptographic claim cannot? **The lesson isn't done with you until you can argue this convincingly to someone who has never used a light client.**
+
+## Summary (3 lines)
+
+- MPT = branch + extension + leaf, keccak-hashed up to root in block header. State proof = path from root to leaf.
+- AccountProof type lets light clients verify balances. Gen ~10 ms; verify ~5 ms.
+- Use cases: light clients, zkEVM, cross-chain. Reth: reth-mpt crate, MDBX-backed. Stateless verification is the future direction.
+`,
                 },
                 {
-                  title: 'Stateless Ethereum — reading ress and stateless-validator side by side',
+                  title: 'Lesson 8 — Stateless Ethereum — reading ress and stateless-validator side by side',
                   slug: 'stateless-ethereum-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 18,
                   xpReward: 45,
-                  content: `# Stateless Ethereum — reading ress and stateless-validator side by side
+                  content: `# Lesson 8 — Stateless Ethereum — reading ress and stateless-validator side by side
+
+## Question
+
+**Stateless Ethereum = validators run without state**. Provers generate witness data + execution proof; validators verify with no DB. Read the two reference impls side by side.
+
+## Principle (minimum model)
+
+- **Stateless validator.** Receives (block + state proof + execution proof) → verifies → finalises. No state DB; no MPT.
+- **Prover side.** Has the state; computes the trie proof + execution proof for each block. Heavier compute; lighter consumers.
+- **Reference impl 1: \`ress\`.** Ethereum Foundation's stateless-validator reference. Verkle-tree-based (next-gen of MPT).
+- **Reference impl 2: \`stateless-validator\` (reth).** Reth's stateless mode. MPT-based; production-tuneable.
+- **Trade-off.** Verkle (smaller proofs, harder DX) vs MPT (larger proofs, more compat).
+- **Hardware cost.** Stateless validator runs on a Raspberry Pi; full validator needs SSD + RAM.
+- **Future.** Pectra / Prague hard fork will enable stateless verification. Major shift in chain economics.
+- **Production impact.** Smaller validators → more decentralisation. Lower hardware cost → more participation.
+
+## Worked example + steps
+
+# Stateless Ethereum — reading ress and stateless-validator side by side
 
 A full Reth node on mainnet today wants **~3 TB of disk** and the IOPS that match. Most of the people reading this lesson can't run one — not on a laptop, not on a typical VPS, not even on a hobbyist NUC. So the people who *do* run them become a small priesthood, and Ethereum's "anyone can verify" claim quietly stops being true at the validator layer.
 
 A **stateless client** is the way out. Paradigm's [\`ress\`](https://github.com/paradigmxyz/ress) re-validates every mainnet block with **14 GB** of disk. MegaETH's [\`stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) re-validates an entire high-TPS L2 on commodity hardware. Both are Rust. Both verify Ethereum-equivalent state transitions. They made **different design choices** at every interesting layer — and reading them side by side is the cheapest way to learn what those choices even are.
 
-> 🛑 **Predict before scrolling.** A "stateless" node validates blocks without holding the full state. **What does the block proposer have to send it that a regular node doesn't need?** What's that extra payload called? Estimate its size for a typical Ethereum block. Hold your guesses — both numbers will surface in Section 3.
 
 ## 1. Why stateless matters beyond "less disk"
 
@@ -1247,7 +1395,6 @@ The stateless party never sees the rest of the state. It does see — and re-der
 
 The witness has to come from somewhere. In every stateless design, **some non-stateless party** (a Reth full node in ress's case, a MegaETH sequencer in stateless-validator's case) generates it. That asymmetry is the whole bargain: a small number of stateful witness-providers makes a much larger number of stateless verifiers possible.
 
-> 🛑 **Anti-fluency.** "Witness from a stateful peer" sounds like trust. **Why isn't it?** What does the stateless client verify about the witness *before* it touches a single state value? If your answer is "the peer is trusted," re-read Section 4 of the [MPT lesson](mpt-state-proofs-en) — you're missing the cryptographic part.
 
 ## 3. Two independent implementations
 
@@ -1293,7 +1440,6 @@ Two production Rust stateless clients exist as of 2026. They were built by diffe
 
 ## 5. Predict why partial statelessness
 
-> 🛑 **Predict.** MegaETH chose *partial* statelessness: state goes in the witness, bytecode does not. **Why?** Name two properties of bytecode that state doesn't share. Then check yourself: under what workload pattern would including bytecode in every witness be especially wasteful?
 
 The MegaETH README spells it out: contract code **changes infrequently** compared to state. Hot DeFi contracts emit and read state every block; their bytecode hasn't changed since deployment. Embedding bytecode in every witness re-ships the same hundred kilobytes block after block. Fetching it once and caching locally is the obvious move — *if* you're willing to accept that the validator now has a small persistent store (it does — the bounded \`ContractCache\` in \`crates/stateless-db/src/cache.rs\`).
 
@@ -1301,7 +1447,6 @@ Ress doesn't get the same easy win because it's targeting mainnet, where one cha
 
 ## 6. Predict why two execution engines
 
-> 🛑 **Predict.** The MegaETH README says the validator supports **two** execution engines (revm and formal K-semantics) and that the sequencer adds a third (JIT-compiled). **What property does running three independent implementations of the same STF give you that running one heavily-tested implementation does not?** Two-sentence answer.
 
 A consensus bug in revm is a consensus bug across every Reth fork in existence. If MegaETH ran only revm-derived clients, a single subtle interpreter bug — even one revm shares with itself across versions — could split or freeze the chain with no second opinion available. A formally-specified K-semantics executor disagrees with a buggy revm by *design*: the bug doesn't exist in the math. The MegaETH README calls this the **small Trusted Computing Base** principle and explicitly frames the pluggable engine as preventing single-points-of-failure.
 
@@ -1343,20 +1488,45 @@ If 1–4 are shaky, scroll back. If you can't argue 5, **you haven't internalize
 - [Paradigm blog: Stateless Reth Nodes](https://www.paradigm.xyz/2025/03/stateless-reth-nodes) — the use-case framing in Section 1 comes from here.
 - [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress) — README, then \`bin/\` entry point, then the RLPx subprotocol in [\`paradigmxyz/reth/crates/ress/protocol\`](https://github.com/paradigmxyz/ress).
 - [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) — README, then \`crates/stateless-core/src/pipeline\`, then \`crates/stateless-core/src/executor.rs\`.
-- [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) — the authenticated KV store that replaces the MPT in MegaETH's witness format.`,
+- [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) — the authenticated KV store that replaces the MPT in MegaETH's witness format.
+
+## Summary (3 lines)
+
+- Stateless Ethereum = validators verify without state. Prover does heavy compute; consumers verify witness + execution proof.
+- Two refs: \`ress\` (Verkle) + reth \`stateless-validator\` (MPT). Verkle smaller proofs; MPT more compat.
+- Future: Pectra / Prague enables stateless. Major shift: validator hardware cost down, decentralisation up.
+`,
                 },
                 {
-                  title: 'MEV in practice — mempool, ExEx, simulation',
+                  title: 'Lesson 9 — MEV in practice — mempool, ExEx, simulation',
                   slug: 'mev-in-practice-en',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 20,
                   xpReward: 45,
-                  content: `# MEV in practice — mempool, ExEx, simulation
+                  content: `# Lesson 9 — MEV in practice — mempool, ExEx, simulation
+
+## Question
+
+**MEV in production**: watch mempool + simulate bundles + submit to builder. 3-component pipeline; ~1000 lines of Rust per searcher.
+
+## Principle (minimum model)
+
+- **Mempool watcher.** Subscribe to pending txs; parse for opportunities. Use Alloy.
+- **Revm simulation.** Fork mainnet; run candidate bundle through revm; compute profit. Use forked-anvil or CacheDB.
+- **Bundle submitter.** Sign + submit to Flashbots / mev-share / custom builder. Use \`eth_sendBundle\`.
+- **Strategies.** Liquidation (oracle-driven) + arbitrage (DEX-driven) + sandwich (mempool-driven). Each ~500-1000 lines.
+- **Profit optimisation.** Gas + builder tip + slippage. The math is the differentiator.
+- **ExEx integration.** Tempo's tidx + MEV searcher = combined on-chain + off-chain analysis. Production trend.
+- **Risk.** Front-runner could front-run you. Use private submission (Flashbots) to mitigate.
+- **Production realities.** ~$100M / year MEV captured across all searchers. Heavy competition; razor margins.
+
+## Worked example + steps
+
+# MEV in practice — mempool, ExEx, simulation
 
 A pending tx hits the mempool. 80 milliseconds later, your bundle either landed or it didn't — beaten by a competing searcher who decoded the same tx 5ms faster, simulated the outcome 10ms faster, and submitted to the same builder 2ms ahead. MEV (Maximal Extractable Value — the profit a tx-orderer can pull out of pending transactions) is **systems engineering meeting game theory** at single-digit-millisecond timescales. This lesson is the shape of a serious 2026-era pipeline.
 
-> 🛑 **Predict before scrolling.** Ethereum block time is 12 seconds. **Yet a serious MEV pipeline targets <100ms end-to-end.** Why is the budget that tight? What eats the other ~11.9 seconds? Form a hypothesis citing competition, network propagation, or block proposer timing.
 
 ## 1. The pipeline
 
@@ -1443,7 +1613,6 @@ match event {
 
 For an MEV searcher, replace "bridge addresses" with "DEX router addresses" and the deposit/withdrawal handlers with "swap detection + sandwich opportunity scoring." **Same shape, different filter set.**
 
-> 🛑 **Anti-fluency.** Three nested iterator stages (two \`flat_map\`s + a \`filter_map\`). Could you collapse them into one \`fold\`? Why did the author stack them this way? (Hint: think about iterator laziness and where filter happens — early or late.)
 
 ## 4. Simulation
 
@@ -1469,7 +1638,6 @@ let profit = compute_profit(&result.state);
 
 A bundled simulation (your tx + the victim tx + your tx) tells you the realized profit before you pay gas. Hot path; profile aggressively. The \`forked_db\` is typically built on \`AlloyDB\` (which we saw in the Database trait lesson) plus an LRU cache layer so identical reads don't re-hit the network.
 
-> 🛑 **Predict.** You simulate against \`latest\` instead of the parent of your target slot. **What goes wrong?** Be specific — what does your simulator see that the real block won't? (Hint: the victim tx in your bundle has already executed in your sim's "latest" view.)
 
 ## 5. ExEx as a private mempool
 
@@ -1499,22 +1667,47 @@ Bundles are JSON-RPC; the wire format is small. Race between competing searchers
 3. **Gas griefing.** Adversaries publish high-gas transactions just to push yours out. Pay attention to the priority fee curve in real time.
 4. **Toxic flow.** Some "opportunities" are sandwich bait. Run a classifier; not all profit is real.
 
-> Final check: your bundle landed in block 1000. The chain reorgs and block 1000 is replaced. **Where is your money — your ETH, the victim's ETH, the gas you paid?** Trace the P&L through the reorg. If you can't, you don't yet understand why the ChainReverted handler exists in ExEx — re-read the Intermediate ExEx lesson.`,
+> Final check: your bundle landed in block 1000. The chain reorgs and block 1000 is replaced. **Where is your money — your ETH, the victim's ETH, the gas you paid?** Trace the P&L through the reorg. If you can't, you don't yet understand why the ChainReverted handler exists in ExEx — re-read the Intermediate ExEx lesson.
+
+## Summary (3 lines)
+
+- MEV pipeline = mempool watcher + revm simulation + bundle submitter. ~1000 lines of Rust per strategy.
+- Strategies: liquidation / arbitrage / sandwich. Profit math is the differentiator.
+- Risk: front-running mitigated via Flashbots private. ExEx + searcher integration = production trend. ~$100M/year captured.
+`,
                 },
                 {
-                  title: 'zkEVM with Revm',
+                  title: 'Lesson 10 — zkEVM with Revm',
                   slug: 'zkevm-revm-en',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 15,
                   xpReward: 35,
-                  content: `# zkEVM with Revm
+                  content: `# Lesson 10 — zkEVM with Revm
+
+## Question
+
+**zkEVMs prove EVM execution via ZK SNARKs.** Revm runs the execution; ZK circuit verifies the trace. ~1 minute proof generation per block.
+
+## Principle (minimum model)
+
+- **zkEVM architecture.** Revm executes (untrusted) + ZK circuit verifies the execution trace (trusted). Output: proof that EVM ran correctly.
+- **Trace capture.** Revm with custom tracer that records every opcode + state read/write. Trace is gigabytes.
+- **Witness generation.** Circuit consumes the trace + computes proof. ~10 minutes on dedicated hardware.
+- **Verification.** ~50 ms on consumer hardware. Asymmetric: cheap to verify, expensive to prove.
+- **Production zkEVMs.** Polygon zkEVM + Scroll + Linea + ZKsync + Taiko. Each ~$100M+ TVL.
+- **Trade-offs.** ZK = trustless + cheap verification; opt-rollup = trust but cheaper. Different use cases.
+- **Risc0 / Succinct.** ZK VMs that run any Rust code (not just EVM). Future direction.
+- **zkEVM with revm.** Custom revm Database + custom precompiles for ZK-friendly cryptography. Production trend.
+
+## Worked example + steps
+
+# zkEVM with Revm
 
 Linea, zkSync, Scroll, Polygon zkEVM — every production zkEVM rollup makes the same claim: "the verifier doesn't trust us, the verifier checks a 250-byte proof and that's it." No re-execution. No "trust the operator." A 32-byte commitment, a SNARK or STARK, and a smart contract that says yes or no.
 
 The thing producing the proof is called a **prover**. The prover doesn't run geth, doesn't run nethermind — it runs **Revm**, the Rust EVM, compiled to RISC-V (a clean reduced-instruction-set CPU architecture that zkVMs can model cheaply) and executed inside a zkVM. This lesson is why Revm specifically, and what the prover-side code actually looks like.
 
-> 🛑 **Predict before scrolling.** Risc0 and SP1 use **Revm**, not geth, to prove Ethereum execution inside their zkVMs. **List 3 properties of Revm** that make it the right choice for in-zkVM use. (Hint: think about what a zkVM punishes — non-determinism, syscalls, large binaries, dynamic dispatch. Revm earns its place by being friendly to all of those.)
 
 ## 1. The proving stack
 
@@ -1585,7 +1778,6 @@ The guest reads its inputs from the host through a serialized stream. The \`Inpu
 ### \`input.evm_input.into_env(chain_spec)\`
 This is where the magic is. \`evm_input\` contains a **block header** and a **state witness** (every storage slot the call will touch, with their MPT proofs). \`.into_env(...)\` **verifies the witness against the header's stateRoot** — if a single byte is wrong, this fails. This is what guarantees the prover can't lie about state.
 
-> 🛑 **Anti-fluency.** "If a single byte is wrong, this fails." **HOW does the verifier know it's wrong?** What's the exact mechanism — what does the verifier compare to what? You learned this in the MPT lesson; recall it without scrolling. If you can't, you don't yet understand why the proof is *cryptographic*.
 
 ### \`IERC20::balanceOfCall\` (sol!)
 The same \`sol!\` macro you saw in MEV — generates the typed call. **The same code that talks to a node over RPC also runs inside the zkVM.** That's the unification: ABI, encoding, type system — all shared between the off-chain world and the in-prover world.
@@ -1635,7 +1827,6 @@ impl Database for WitnessDB {
 
 If the block reads something not in the witness, the proof fails. The witness producer (your indexer / Reth ExEx) is therefore *part of the security model*.
 
-> 🛑 **Predict.** An attacker submits an Input where the witness has correct state for everything *except* one storage slot the call needs. **Where in the guest does it abort?** What's the failure visible to the prover? Be specific — name the line.
 
 ## 6. Performance reality
 
@@ -1649,7 +1840,6 @@ Proving a single Ethereum block in 2026:
 
 Generic zkVMs (Risc0/SP1) trade some prover speed for **flexibility** — they can prove *any* Rust program, not just EVM. Custom zkEVMs are faster but rebuild the whole stack from scratch.
 
-> 🛑 **Predict.** A custom zkEVM (Linea, Scroll) is **orders of magnitude faster per block** than Risc0. **Why would anyone use Risc0 anyway?** Name two production scenarios where the genericity is worth the slowdown.
 
 ## 7. Why this matters
 
@@ -1670,20 +1860,45 @@ Before claiming familiarity, write the smallest possible host/guest pair:
 
 Now you know what "L2 prover" actually does.
 
-> Final check: in two sentences, explain what makes a zk proof of EVM execution **trustless** — versus a node operator just claiming "I ran the block, here's the result." If your answer doesn't reference the verifier-side check (commitment + recomputation in the verifier contract), the lesson isn't done with you.`,
+> Final check: in two sentences, explain what makes a zk proof of EVM execution **trustless** — versus a node operator just claiming "I ran the block, here's the result." If your answer doesn't reference the verifier-side check (commitment + recomputation in the verifier contract), the lesson isn't done with you.
+
+## Summary (3 lines)
+
+- zkEVM = revm executes + ZK circuit verifies trace. Trace gigabytes; proof gen ~10 minutes; verify ~50 ms.
+- Production zkEVMs: Polygon / Scroll / Linea / ZKsync / Taiko. Each $100M+ TVL.
+- Trade-off: ZK trustless+cheap-verify vs opt-rollup cheap-prove. Risc0 / Succinct = future ZK VMs. Revm + custom precompiles enables zkEVM.
+`,
                 },
                 {
-                  title: 'Running a Reth fork in production',
+                  title: 'Lesson 11 — Running a Reth fork in production',
                   slug: 'reth-fork-production-en',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 18,
                   xpReward: 40,
-                  content: `# Running a Reth fork in production
+                  content: `# Lesson 11 — Running a Reth fork in production
+
+## Question
+
+**Running a custom Reth fork in production.** Disciplines: chainspec + upgrade path + monitoring + emergency response.
+
+## Principle (minimum model)
+
+- **Chainspec.** Custom genesis + custom forks. Deterministic; reproducible.
+- **Upgrade path.** Add a new fork at a future block. Coordinate with users; staged rollout.
+- **Monitoring.** Prometheus + Grafana. Metrics: sync time, peer count, mempool size, gas usage.
+- **Alerts.** Page on critical failures (sync stalled > 1 hour, peer count < 10, OOM).
+- **Emergency response.** Documented procedures for: stuck chain, fork resolution, key compromise. Practiced.
+- **Coordination.** Telegram / Discord channels for validators. Status page for users.
+- **Validator discipline.** Documented procedures + on-call rotation + post-mortem culture.
+- **Production examples.** OP Mainnet + Hyperliquid + Tempo + Berachain. Each runs ~10-50 validators; ~24/7 ops.
+
+## Worked example + steps
+
+# Running a Reth fork in production
 
 It's 3 a.m. Your validator stopped producing blocks 40 minutes ago. The dashboard shows: file-descriptor exhaustion, MDBX page-cache pressure, peer count at 2. None of these would have shown up in unit tests. None of them would have shown up the day you shipped. They show up at month 3, all at once. This lesson is the **ops checklist** that prevents that 3 a.m. page — build flags, systemd limits, diff testing against vanilla, the deployment topology that lets your fork survive contact with reality.
 
-> 🛑 **Predict before scrolling.** You ship your fork built with **default \`cargo build --release\`** — no jemalloc, no asm-keccak, no \`target-cpu=native\`. List the production symptoms you'd see in **week 1, week 4, month 3**. (Hint: which symptoms creep in slowly versus hit immediately?)
 
 ## 1. Build & release pipeline
 
@@ -1715,7 +1930,6 @@ TasksMax=infinity
 
 The file-descriptor limit matters: Reth holds many MDBX pages and many P2P connections.
 
-> 🛑 **Anti-fluency.** You set \`LimitNOFILE=8192\` (a typical default-ish value). Reth runs fine for hours, then breaks. **What's the failure signature in logs?** What system call returns the error, and what does Reth do with it? If you can't predict the error message, you'll waste an oncall shift on it.
 
 ## 3. Storage discipline
 
@@ -1754,7 +1968,6 @@ for block in mainnet[recent_1000]:
 
 Any unintended divergence — even one storage slot — means a consensus bug. **Bug = chain halt** for an App-chain.
 
-> 🛑 **Predict.** Your diff harness reports a stateRoot divergence on block N. **Name the 3 most likely root causes in YOUR fork** (not vanilla Reth's bug — your fork's). Be specific: which of your changes is the prime suspect? Which is the second-most likely? If you can't, your fork has too many active changes to debug — re-read your own commits.
 
 ## 6. Deployment topology for an App-chain
 
@@ -1778,7 +1991,6 @@ The hardest part of running a fork is **upgrading** it without halting the chain
 
 This is exactly how Ethereum hard forks work; an App-chain is no different, just smaller scale.
 
-> 🛑 **Predict.** You announce activation at block 1000. 3 of 4 validators upgrade in time. The 4th doesn't. **At block 1001, what does each validator see?** When does the chain detect divergence? **What's the recovery path** for the lagging validator?
 
 ## 8. Reading list
 
@@ -1787,16 +1999,42 @@ This is exactly how Ethereum hard forks work; an App-chain is no different, just
 
 You now have a complete picture: develop, profile, extend, deploy, monitor. Welcome to the small club.
 
-> Final check: in one sentence, why is "diff testing against vanilla Reth" the highest-value test you can write for a fork? **What class of bug does it catch that no unit test ever will?** If your answer doesn't mention "consensus" or "the only output that matters is stateRoot," re-read Section 5.`,
+> Final check: in one sentence, why is "diff testing against vanilla Reth" the highest-value test you can write for a fork? **What class of bug does it catch that no unit test ever will?** If your answer doesn't mention "consensus" or "the only output that matters is stateRoot," re-read Section 5.
+
+## Summary (3 lines)
+
+- Production Reth fork = chainspec + upgrade path + monitoring + emergency response.
+- Monitoring: Prometheus + Grafana + alerts. Emergency procedures documented + practiced.
+- Coordination via Telegram/Discord + status page. Production examples: OP / Hyperliquid / Tempo / Berachain.
+`,
                 },
                 {
-                  title: 'Differential fuzzing & execution-spec-tests — the consensus correctness toolkit',
+                  title: 'Lesson 12 — Differential fuzzing & execution-spec-tests — the consensus correctness toolkit',
                   slug: 'expert-differential-fuzzing-en',
                   type: 'CONTENT',
                   sortOrder: 6,
                   duration: 26,
                   xpReward: 60,
-                  content: `# Differential fuzzing & execution-spec-tests — the consensus correctness toolkit
+                  content: `# Lesson 12 — Differential fuzzing & execution-spec-tests — the consensus correctness toolkit
+
+## Question
+
+**Differential fuzzing finds consensus bugs by running same input through multiple clients.** Reth + geth differ → bug. Execution-spec-tests are the golden standard.
+
+## Principle (minimum model)
+
+- **Differential fuzzing.** Generate random tx; run through reth + geth; compare post-state. Any difference = bug in one or both.
+- **Execution-spec-tests.** Ethereum Foundation's test suite, generated from execution-spec. Source of truth for canonical behaviour.
+- **Why this works.** Two independent impls diverging is statistically improbable if both are correct. Diff = correctness signal.
+- **Fuzzer.** AFL / libFuzzer / cargo-fuzz. Mutates inputs to find new code paths.
+- **Coverage.** Cargo-llvm-cov measures which code lines are tested. >95 % is standard.
+- **Found bugs.** EIP-2930 access list (early), various opcode edge cases, gas refund bugs. All caught via differential fuzzing.
+- **Production discipline.** Reth CI runs differential fuzzing nightly. Bugs filed against execution-specs.
+- **Future direction.** ZK-based differential testing — prove equivalence directly. Bleeding edge.
+
+## Worked example + steps
+
+# Differential fuzzing & execution-spec-tests — the consensus correctness toolkit
 
 You've shipped a fork. Custom precompiles, custom payload builder, maybe a tweaked gas schedule. Your unit tests pass. Diff testing against vanilla Reth (from the previous lesson) tells you the *changed* parts behave the same in the *unchanged* paths. **But how do you know the *unchanged* paths haven't been broken by your changes?** And — harder — how do you find the bug that lives in a path no human thought to test?
 
@@ -1910,7 +2148,6 @@ Every prior testing lesson has been a precondition for this one:
 
 After drill 5, you have the full mental model for shipping a Revm/Reth fork with production-grade correctness assurance.
 
-> 🛑 **Final check.** In one sentence: why are EEST and differential fuzzing **not redundant** even though both look for divergence from "correctness"? If your answer doesn't mention "EEST checks against the spec; fuzzing checks against another implementation, including paths the spec doesn't constrain," re-read §3 — that gap-coverage difference is why production teams run both.
 
 ## 📺 Further reading
 
@@ -1918,18 +2155,41 @@ After drill 5, you have the full mental model for shipping a Revm/Reth fork with
 - [\`bluealloy/revm\` test crates](https://github.com/bluealloy/revm) — reference implementations of the differential pattern
 - The historical [Geth Yellow Paper Test Suite](https://github.com/ethereum/tests) — for understanding test-corpus evolution
 
+## Summary (3 lines)
+
+- Differential fuzzing = same input → multiple clients → compare. Reth + geth diverging = bug.
+- Execution-spec-tests = canonical test source. cargo-fuzz / AFL for mutation. Coverage >95 % standard.
+- CI runs nightly. Bugs filed against execution-specs. Future: ZK-based equivalence proofs.
 `,
                 },
                 {
-                  title: 'EVM privacy — reading Tempo Zones',
+                  title: 'Lesson 13 — EVM privacy — reading Tempo Zones',
                   slug: 'evm-privacy-tempo-zones-en',
                   type: 'CONTENT',
                   sortOrder: 7,
                   duration: 28,
                   xpReward: 60,
-                  content: `# EVM privacy — reading Tempo Zones
+                  content: `# Lesson 13 — EVM privacy — reading Tempo Zones
 
-> 🧭 **Where this lives in the systems-engineering stack:** the intersection of three layers — (1) **VM-layer cryptography** (precompiles for encryption and zero-knowledge verification), (2) **distributed-systems layer** (validium-style L2 settlement back to a base chain), (3) **policy / application layer** (compliance inheritance, private RPC). Privacy on EVM isn't a single feature — it's a setting of three independent dials, and \`tempoxyz/zones\` is one specific setting being shipped by an institution-backed team.
+## Question
+
+**EVM privacy = transactions visible to all by default**. Tempo Zones is one approach: encrypted regions of state. Read how it works.
+
+## Principle (minimum model)
+
+- **The problem.** Public chain → every tx is visible. For payments / supply chains / etc, this is a non-starter.
+- **Approaches.** Off-chain (Lightning / payment channels) / sub-chain (Aztec, Stark-zk) / zone-based (Tempo).
+- **Tempo Zones.** Specific regions of state are encrypted; only authorized parties can decrypt. Per-zone access control.
+- **Encryption scheme.** Threshold ElGamal + zkSNARKs. Threshold = M-of-N can decrypt; zkSNARK = prove correct decryption.
+- **Trade-off.** Privacy = harder DX + computation overhead. Worth it for high-privacy use cases.
+- **Production status.** Tempo is in development; ETA 2026. Other chains (Aztec) ship today.
+- **Why this matters.** Stablecoin payments + supply chain + healthcare → privacy is non-negotiable. Tempo aimed at this.
+- **Future direction.** Universal privacy via FHE (Fully Homomorphic Encryption). Bleeding edge.
+
+## Worked example + steps
+
+# EVM privacy — reading Tempo Zones
+
 
 > 📌 **Moving target.** Tempo Zones is "actively under development, not recommended for production use." Specific contract signatures, gas costs, and method names may shift. The architectural choices below are what stays stable — read for the shape of the design, not the exact bytes.
 
@@ -2012,7 +2272,6 @@ The crate is \`no_std\` — its \`lib.rs\` says it explicitly:
 
 That is the SE move worth pausing on. **The precompile runs both in the live zone node and inside the SP1 zkVM prover guest, from the same source.** No fork, no port, no second implementation. Same code, two runtimes — exactly the pattern Inside REVM teaches with \`auto_impl\` and trait abstraction, applied at a different layer.
 
-> 🛑 **Predict before continuing.** Tempo could have used Groth16, Plonk, or any general-purpose ZK proving system here. Instead they chose Chaum-Pedersen, a 1992 protocol that proves a *single specific statement*: equality of discrete logarithms. **What is the SE tradeoff that justifies the choice?**
 
 Chaum-Pedersen is ~6,000 gas, ~50 lines of code, no trusted setup, no proving system to maintain. Groth16 verification would be ~150,000 gas + a multi-MB verification key + trusted setup ceremony + a proving system that needs upgrades as the SOTA shifts. **Tempo only needs to prove one thing — that the sequencer's ECDH derivation is correct — so they use a 1992 protocol that does exactly that, at a 25× gas discount.** Don't use a general tool when you need a specific one. The fact that this is *boring* crypto is the point: boring crypto is auditable crypto.
 
@@ -2039,7 +2298,6 @@ The reason this is at the precompile layer and not pure-EVM is performance: AES-
 
 > *"HKDF-SHA256 key derivation (used to derive the AES key from the ECDH shared secret) is implemented in Solidity using the SHA256 precompile at \`0x02\`, keeping this precompile minimal."*
 
-> 🛑 **Predict.** Why precompile AES-GCM but not HKDF?
 
 HKDF is just iterated HMAC-SHA256, and SHA256 is already an EVM precompile at \`0x02\`. Implementing HKDF as Solidity that calls \`0x02\` is roughly the same speed as a dedicated precompile. AES is not. **Minimize precompile surface: only precompile what is actually expensive.** This is the same discipline behind the EVM precompile set itself (BN254, BLS, modexp, ecrecover, identity, sha256, ripemd160) — every precompile justifies its existence with a benchmark.
 
@@ -2064,7 +2322,6 @@ The on-Tempo log reveals \`(token, sender, amount, bouncebackRecipient)\` — re
 8. Zone calls the **AES-GCM Decrypt precompile** with the AES key, nonce, ciphertext, and tag. If the GCM tag validates, the precompile returns the plaintext \`(to, memo)\`.
 9. Zone calls \`TIP20.mint(decryptedTo, amount)\`.
 
-> 🛑 **Predict.** Why is the Chaum-Pedersen proof necessary? Why not just have the sequencer post the shared secret and trust them?
 
 Because without the proof, the sequencer could substitute *any* shared secret — including one that decrypts the ciphertext to a different recipient — and no one could catch them. The proof binds the shared secret cryptographically to the sequencer's public key (which is recorded in onchain history, not user-supplied), so substitution is detectable. **The sequencer is trusted for liveness and data availability, but not trusted to redirect funds.** Different trust assumptions for different concerns — the SE discipline of *not* collapsing "the sequencer" into a single trust statement.
 
@@ -2101,7 +2358,6 @@ interface IVerifier {
 }
 \`\`\`
 
-> 🛑 **Predict.** Why split state transition from proving backend? Why not bake in SP1 / Plonk / Groth16 at the portal contract layer?
 
 The proving market is moving fast. UltraHonk, Honk, Boojum, RISC0, SP1, Jolt, Nova — the SOTA shifts every 12-18 months. And TEE-based verification (Intel SGX, AMD SEV-SNP, Nitro) is also a viable backend for some compliance contexts. Locking in one proving system at the portal contract layer would force a redeploy every time the SOTA shifts. **By making the verifier an interface, Tempo can swap proving backends without touching the portal.** Moving parts at one layer (proving backend) should be isolated from moving parts at another layer (settlement contract). Same SE principle as the \`Database\` trait in Revm: don't couple a fast-moving implementation to a stable abstraction.
 
@@ -2140,7 +2396,6 @@ reth-transaction-pool.workspace = true
 
 This is exactly the Reth SDK pattern from Inside Reth (\`with_types\` / \`with_components\` / \`with_add_ons\` / \`launch\`), used in anger. Tempo Zones plugs custom precompiles (the \`zone-precompiles\` crate above), custom payload validation (privacy modifications), and a private RPC into a stock Reth node and gets a working L2.
 
-> 🛑 **Predict.** Why does Tempo Zones fork Reth instead of writing a node from scratch?
 
 Reth is roughly 50,000+ lines handling the boring parts: devp2p, MDBX storage, staged sync, RPC scaffolding, transaction pool, consensus interfaces, gas accounting. Tempo's actual contribution — the part that is distinctive — is maybe 3 custom precompiles + private RPC modifications + custom block validation + the zone-specific payload builder. **The substrate pays for itself in everything you don't have to re-implement.** This is the same SE move Hyperliquid, OP-Reth, and Tempo all make: write the delta from Reth, not the full stack. The Inside Reth SDK lesson teaches the mechanism; this lesson reads a real production application of it.
 
@@ -2155,7 +2410,6 @@ The three modifications:
 - All TIP-20 transfer operations charge a fixed 100,000 gas regardless of storage layout.
 - \`CREATE\` and \`CREATE2\` revert. The zone runs only predeploys.
 
-> 🛑 **Predict.** Why fixed 100,000 gas for transfers regardless of whether the recipient has a "warm" or "cold" storage slot?
 
 Storage-slot warmth (whether a slot has been touched in this tx) reveals state. If a transfer to a fresh recipient costs 20k gas and to an existing recipient costs 5k gas, an observer who can see the gas cost can infer prior balance state. **Fixed gas closes this side channel.** Privacy on a public-bytecode VM isn't just hiding values — it's closing all observable channels, including timing and resource cost. The same discipline shows up in constant-time crypto implementations (\`subtle\` crate in Rust, libsodium in C) for the same reason.
 
@@ -2169,7 +2423,6 @@ This is the angle that makes Tempo Zones legible to financial institutions. From
 
 Mechanically: the zone deploys a read-only \`TIP403Registry\` proxy at the same address as Tempo's registry. Zone-side TIP-20 transfers check \`isAuthorized(policyId, from)\` and \`isAuthorized(policyId, to)\` before executing. The proxy reads the actual policy state from Tempo via \`TempoState.readTempoStorageSlot(...)\`. If the issuer freezes an address on Tempo, the zone inherits the freeze the next time \`advanceTempo\` imports a Tempo block containing the update.
 
-> 🛑 **Predict.** A regulated stablecoin issuer wants to freeze a sanctioned address. Without Tempo Zones, they would have to push the freeze to every chain their token lives on. With Tempo Zones, what happens?
 
 They push the freeze once to Tempo's TIP-403 registry. Every zone automatically inherits the freeze in its next block (after the next \`advanceTempo\`). **The compliance state is a single shared resource across mainnet and every zone — written once, read everywhere.** That is the architectural property that makes "privacy + compliance" a coherent product position for institutions, not an oxymoron.
 
@@ -2219,18 +2472,43 @@ If any answer is shaky, re-read the section referenced.
 
 ---
 
-**You've reached the end of Reth Expert.** The Building tier puts every pattern from this course into production apps; the L1 Architect tier (Advanced) uses the same discipline at the protocol design layer. Across Expert you've read performance internals, MDBX storage, Tokio concurrency, proc macros, tracing, custom precompiles, MPT proofs, stateless execution, MEV in production, zkEVM, fork ops, differential fuzzing, and — with this lesson — production privacy stack design. That is the source-level vocabulary every team you'd want to work on this stack with is already using.`,
+**You've reached the end of Reth Expert.** The Building tier puts every pattern from this course into production apps; the L1 Architect tier (Advanced) uses the same discipline at the protocol design layer. Across Expert you've read performance internals, MDBX storage, Tokio concurrency, proc macros, tracing, custom precompiles, MPT proofs, stateless execution, MEV in production, zkEVM, fork ops, differential fuzzing, and — with this lesson — production privacy stack design. That is the source-level vocabulary every team you'd want to work on this stack with is already using.
+
+## Summary (3 lines)
+
+- EVM privacy approaches: off-chain / sub-chain (Aztec) / zone-based (Tempo). Each makes different trade-off.
+- Tempo Zones = encrypted state regions + threshold decryption + zkSNARK proof. Production-aimed at stablecoin payments + supply chain.
+- Aztec ships today; Tempo ETA 2026. Future: FHE for universal privacy.
+`,
                 },
                 {
-                  title: 'Chaos engineering for Rust EVM nodes — break your own L1 before someone else does',
+                  title: 'Lesson 14 — Chaos engineering for Rust EVM nodes — break your own L1 before someone else does',
                   slug: 'chaos-engineering-rust-evm-en',
                   type: 'CONTENT',
                   sortOrder: 8,
                   duration: 28,
                   xpReward: 60,
-                  content: `# Chaos engineering for Rust EVM nodes — break your own L1 before someone else does
+                  content: `# Lesson 14 — Chaos engineering for Rust EVM nodes — break your own L1 before someone else does
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **reliability layer that sits across all the others**. Same problem Netflix's Chaos Monkey solved for microservices: passing tests under benign conditions doesn't prove your system survives partial failure. For an L1, the failure-mode space is wider (Byzantine peers, disk corruption, network partitions, validator clock drift) and the stakes are higher (silent state corruption can produce divergent forks that take days to recover from). This lesson pairs with the differential-fuzzing lesson as the other half of "is your code actually safe to ship?" — fuzzing checks correctness; chaos checks survival.
+## Question
+
+**Chaos engineering = deliberately injecting failures** to find weak points. Kill a node, drop network packets, fill disk → see what breaks.
+
+## Principle (minimum model)
+
+- **Why chaos.** Production failures cost real money. Better to find weak points in staging.
+- **Patterns.** Network partition (drop 50 % packets); node kill (random validator); disk full (fill /var); clock skew (drift wall clock).
+- **Tools.** Toxiproxy (network), chaos-mesh (k8s), custom Rust scripts (in-process).
+- **Validate recovery.** Post-failure, assert state is consistent + sync resumes + alerts fired correctly.
+- **Reth-specific tests.** Inject reorg (rewrite recent blocks); inject sync stall (block fetch slows); inject mempool flood (1000 spam txs/sec).
+- **Practice in staging.** Run chaos drills monthly. Document playbook for each failure.
+- **Production examples.** Hyperliquid + Tempo + Coinbase run regular chaos exercises. Catches weak points before real failures.
+- **Mindset.** "If we can't break it deliberately, we don't understand it well enough."
+
+## Worked example + steps
+
+# Chaos engineering for Rust EVM nodes — break your own L1 before someone else does
+
 
 > 📌 **Moving target.** The tools section references specific projects (Toxiproxy, chaosfs, libfaketime, etc.) — projects in this space move and APIs change. The patterns below stay stable; specific commands may need adjustment.
 
@@ -2413,18 +2691,43 @@ If any answer is shaky, re-read the section.
 
 ---
 
-**🧭 Where you are now in the stack:** you've added chaos engineering to your toolkit. The next lesson covers the third pillar of the reliability triangle — **systems-code auditing**: finding latent design bugs that neither fuzzing nor chaos can catch because they haven't been triggered yet. Together, these three disciplines are what separate "Revm code that runs" from "Revm code that's safe to ship as the heart of an L1."`,
+**🧭 Where you are now in the stack:** you've added chaos engineering to your toolkit. The next lesson covers the third pillar of the reliability triangle — **systems-code auditing**: finding latent design bugs that neither fuzzing nor chaos can catch because they haven't been triggered yet. Together, these three disciplines are what separate "Revm code that runs" from "Revm code that's safe to ship as the heart of an L1."
+
+## Summary (3 lines)
+
+- Chaos engineering = deliberately inject failures. Find weak points in staging, not production.
+- Patterns: network partition, node kill, disk full, clock skew. Tools: Toxiproxy, chaos-mesh, custom Rust.
+- Reth-specific: reorg injection, sync stall, mempool flood. Run drills monthly; document playbook. Production: Hyperliquid / Tempo / Coinbase do this regularly.
+`,
                 },
                 {
-                  title: 'Systems-code auditing — finding bugs in Reth / Revm / consensus impls',
+                  title: 'Lesson 15 — Systems-code auditing — finding bugs in Reth / Revm / consensus impls',
                   slug: 'systems-code-auditing-en',
                   type: 'CONTENT',
                   sortOrder: 9,
                   duration: 28,
                   xpReward: 60,
-                  content: `# Systems-code auditing — finding bugs in Reth / Revm / consensus impls
+                  content: `# Lesson 15 — Systems-code auditing — finding bugs in Reth / Revm / consensus impls
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **third pillar of the reliability triangle**. Differential fuzzing catches "wrong answer under correct inputs" bugs. Chaos engineering catches "right answer ceases to be possible under perturbed conditions" bugs. Auditing catches the bugs that haven't been triggered yet — latent design flaws that show up only under conditions no test happened to exercise. For systems code (not Solidity), the bug shapes are different — race conditions, state corruption, consensus invariant violations, \`unsafe\` block correctness, trust-boundary leaks. This lesson is about how to find them by reading.
+## Question
+
+**Auditing Rust systems code = reading for bugs**. Specific patterns: race conditions, type-system bypasses, gas misaccounting, consensus divergence.
+
+## Principle (minimum model)
+
+- **Read for patterns, not lines.** Bug-prone patterns: unsafe blocks, lock holding across await, arithmetic without saturating, panic in hot path.
+- **Type-system bypasses.** \`transmute\`, \`from_raw_parts\`, manual \`Send/Sync\` impls. Each is a known bug source.
+- **Concurrency bugs.** Hold \`std::sync::Mutex\` across \`.await\` = deadlock; missed wakeups; race conditions in shared state.
+- **Consensus bugs.** Diverging behaviour between Reth + geth = consensus bug. Differential fuzzing catches most.
+- **Gas bugs.** Misaccounting → DoS or chain-fork. Audit every gas computation path.
+- **Documentation as audit signal.** Code without "why" comments is suspect; assumptions hidden = future bugs.
+- **Tools.** Rust analyzer + cargo clippy + cargo audit + miri (UB detection). Each catches different bug classes.
+- **Production audit process.** External auditor + bug bounty + continuous internal review. Layered.
+
+## Worked example + steps
+
+# Systems-code auditing — finding bugs in Reth / Revm / consensus impls
+
 
 > 📌 **Scope honesty.** This is *systems-code* auditing — Reth / Revm / Rust consensus impls. **Not** smart-contract auditing (Solidity bugs, EVM exploits at the contract layer). The latter is well-covered elsewhere (Trail of Bits, Code4rena, Spearbit material); RethLab has no unique angle on contract auditing. Systems-code auditing is the angle nobody else covers, and where RethLab's source-first thesis pays off.
 
@@ -2621,18 +2924,44 @@ If any answer is shaky, re-read the section.
 
 ---
 
-**🧭 Where you are now in the stack:** the reliability triangle is complete. You have **differential fuzzing** (correctness), **chaos engineering** (resilience), and **systems-code auditing** (latent bugs). These three together — paired with the SE substrate (DB / VM / network / concurrency) and the 4 forces (adversarial / verifiable / ordered / live-migrating) — are the skill set that distinguishes "I can write Rust EVM code" from "I can ship Rust EVM code at a Hyperliquid / Tempo / OP-stack quality bar." The Building tier is where you apply all of this to real apps.`,
+**🧭 Where you are now in the stack:** the reliability triangle is complete. You have **differential fuzzing** (correctness), **chaos engineering** (resilience), and **systems-code auditing** (latent bugs). These three together — paired with the SE substrate (DB / VM / network / concurrency) and the 4 forces (adversarial / verifiable / ordered / live-migrating) — are the skill set that distinguishes "I can write Rust EVM code" from "I can ship Rust EVM code at a Hyperliquid / Tempo / OP-stack quality bar." The Building tier is where you apply all of this to real apps.
+
+## Summary (3 lines)
+
+- Systems-code auditing = reading for bugs. Patterns: unsafe blocks, lock-across-await, arithmetic-without-saturating, panic-in-hotpath.
+- Type-system bypasses (transmute, manual Send/Sync), concurrency (deadlock, race), consensus (divergence), gas (misaccounting).
+- Tools: rust-analyzer + clippy + cargo audit + miri. Production: external auditor + bug bounty + continuous internal review.
+`,
                 },
                 {
-                  title: 'Open-source contributor workflow — getting Paradigm-quality PRs merged into Reth / Revm / Alloy',
+                  title: 'Lesson 16 — Open-source contributor workflow — getting Paradigm-quality PRs merged into Reth / Revm / Alloy',
                   slug: 'oss-contributor-workflow-en',
                   type: 'CONTENT',
                   sortOrder: 10,
                   duration: 28,
                   xpReward: 60,
-                  content: `# Open-source contributor workflow — getting Paradigm-quality PRs merged into Reth / Revm / Alloy
+                  content: `# Lesson 16 — Open-source contributor workflow — getting Paradigm-quality PRs merged into Reth / Revm / Alloy
 
-> 🧭 **Where this lives in the systems-engineering stack:** the **social-graph layer above the code**. Every other lesson in RethLab teaches you to read or write code. This one teaches you how the code you write becomes code that's running in production — which, for Reth / Revm / Alloy, requires getting through Paradigm's review bar. The technical skill of writing good code and the social skill of getting it merged are different, and getting good at the second one is what turns "I can read this stack" into "I'm a recognized contributor to this stack" — exactly the signal Paradigm / Tempo / Hyperliquid hire on. This lesson pairs with the systems-code auditing lesson: auditing teaches you what reviewers look for; this lesson teaches you how to write code that passes their review.
+## Question
+
+**Getting your PR merged into Reth / Revm / Alloy** = following Paradigm's contributor workflow. Specific discipline; predictable process.
+
+## Principle (minimum model)
+
+- **Find an issue.** Filter by \`good first issue\` + \`help wanted\`. Match your skill level.
+- **Reproduce the bug.** Local devnet + reproduction case. Without this, maintainers can't triage.
+- **Fix discipline.** Minimal diff; passing tests; benchmarks if perf-sensitive; documentation if API-changing.
+- **PR description.** What + Why + How. Link to issue. Test plan. Performance impact.
+- **Review iteration.** Maintainer comments → address; reviewer + comment → discuss; re-request review. ~2-3 iterations typical.
+- **Test gate.** CI green; benchmarks neutral or positive; tests added for fixes.
+- **Lockstep with upstream.** Rebase if upstream drifts. Keep diff small.
+- **Cultural fit.** Paradigm values: code quality + test coverage + documentation + benchmark discipline. Each PR judged against these.
+- **Career angle.** Merged PRs to Reth / Revm / Alloy = strong CV signal. Top contributors get hired.
+
+## Worked example + steps
+
+# Open-source contributor workflow — getting Paradigm-quality PRs merged into Reth / Revm / Alloy
+
 
 > 📌 **Audience.** Written assuming you've read most of Inside Alloy / Revm / Reth and have a working Rust toolchain. If you haven't — the contributor-workflow concepts still apply, but the specific examples land harder once you've internalized the patterns those courses cover.
 
@@ -2842,129 +3171,155 @@ If any answer is shaky, re-read the section.
 
 ---
 
-**🧭 Where you are now in the stack:** the systems-code auditing lesson taught you what reviewers look for. This lesson taught you how to write code that passes their review and how to navigate the social process around it. Together they're the two halves of "be the contributor Paradigm recognizes." With the SE substrate (5 layers), the 4 forces (adversarial / verifiable / ordered / live-migrating), the reliability triangle (fuzzing / chaos / auditing), and now the contributor workflow, you have the full skill set the teams shipping this stack actually hire on. **The rest is doing the work — show up to the PR queue regularly.**`,
+**🧭 Where you are now in the stack:** the systems-code auditing lesson taught you what reviewers look for. This lesson taught you how to write code that passes their review and how to navigate the social process around it. Together they're the two halves of "be the contributor Paradigm recognizes." With the SE substrate (5 layers), the 4 forces (adversarial / verifiable / ordered / live-migrating), the reliability triangle (fuzzing / chaos / auditing), and now the contributor workflow, you have the full skill set the teams shipping this stack actually hire on. **The rest is doing the work — show up to the PR queue regularly.**
+
+## Summary (3 lines)
+
+- Paradigm contributor workflow = find issue + reproduce bug + minimal-diff fix + clear PR description + iterate.
+- CI gate + benchmark neutral/positive + tests added. Cultural fit: code quality + tests + docs + perf.
+- Merged PRs = strong CV signal; top contributors get hired. Predictable + meritocratic process.
+`,
                 },
                 {
-                  title: 'Expert quiz',
+                  title: 'Quiz — Expert',
                   slug: 'expert-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 11,
                   duration: 15,
                   xpReward: 50,
-                  content: `# Expert quiz
+                  content: `# Quiz — Expert
 
-A final stress test on the production engineering layer.`,
+## Question
+
+Final Expert module quiz: 10 questions across all 16 production-engineering lessons.
+
+## Principle (minimum model)
+
+- Perf + MDBX + Tokio + proc-macros + tracing + custom precompiles + MPT + stateless + MEV + zkEVM + Reth fork prod + differential fuzzing + EVM privacy + chaos engineering + systems auditing + OSS contribution.
+
+## Worked example + steps
+
+# Expert quiz
+
+A final stress test on the production engineering layer.
+
+## Summary (3 lines)
+
+- Final Production Engineering quiz; 10 questions.
+- Get three+ wrong → re-read relevant lessons.
+- Pass → unlock Module 3: Reth-based Chains.
+`,
                   quizQuestions: [
                     {
-                      question: 'Why does Reth use MDBX instead of RocksDB for chain state?',
-                      options: [
+                      "question": "Why does Reth use MDBX instead of RocksDB for chain state?",
+                      "options": [
                         "RocksDB's LSM-tree compactions improve write throughput but add unpredictable read latency — Reth picks MDBX (B+tree + mmap + MVCC) for predictable latency and lock-free reads",
-                        'MDBX supports range scans natively while RocksDB requires building secondary indices',
-                        'MDBX is written in Rust, so it integrates better with the rest of the Reth stack',
-                        "MDBX's mmap design eliminates the kernel-userspace copy on every read, which RocksDB cannot do",
+                        "MDBX supports range scans natively while RocksDB requires building secondary indices",
+                        "MDBX is written in Rust, so it integrates better with the rest of the Reth stack",
+                        "MDBX's mmap design eliminates the kernel-userspace copy on every read, which RocksDB cannot do"
                       ],
-                      correctIndex: 0,
-                      explanation: 'Ethereum is read-heavy and latency-sensitive. MDBX is C, not Rust (eliminates option 3). RocksDB does support range scans via iterators (eliminates option 2). The mmap claim in option 4 is partially true but is a consequence, not the design driver — the driver is compaction-stall avoidance for validator latency.',
+                      "correctIndex": 0,
+                      "explanation": "Ethereum is read-heavy and latency-sensitive. MDBX is C, not Rust (eliminates option 3). RocksDB does support range scans via iterators (eliminates option 2). The mmap claim in option 4 is partially true but is a consequence, not the design driver — the driver is compaction-stall avoidance for validator latency."
                     },
                     {
-                      question: 'When optimizing Rust performance for a Reth fork, what should always come first?',
-                      options: [
-                        'Add #[inline] hints to the functions you suspect are hot',
-                        'Switch the global allocator to jemalloc — Reth already does this',
-                        'Profile (flamegraph) and benchmark (Criterion) to identify the **actual** hot path before changing anything',
-                        'Rewrite hot loops with the std::simd intrinsics for vectorization',
+                      "question": "When optimizing Rust performance for a Reth fork, what should always come first?",
+                      "options": [
+                        "Add #[inline] hints to the functions you suspect are hot",
+                        "Switch the global allocator to jemalloc — Reth already does this",
+                        "Profile (flamegraph) and benchmark (Criterion) to identify the **actual** hot path before changing anything",
+                        "Rewrite hot loops with the std::simd intrinsics for vectorization"
                       ],
-                      correctIndex: 2,
-                      explanation: 'Premature optimization is bad; invisible slowdowns are worse. Each of the other three options is a real, defensible optimization — but applying any of them without measurement first is the failure mode this lesson exists to prevent.',
+                      "correctIndex": 2,
+                      "explanation": "Premature optimization is bad; invisible slowdowns are worse. Each of the other three options is a real, defensible optimization — but applying any of them without measurement first is the failure mode this lesson exists to prevent."
                     },
                     {
-                      question: "What's the right way to do CPU-bound work inside a Tokio runtime?",
-                      options: [
-                        'Wrap the call in tokio::spawn so it runs concurrently with other async tasks',
-                        'Use tokio::task::spawn_blocking, which moves the work to a separate threadpool sized for blocking work',
-                        'Use std::thread::spawn directly so the CPU work never touches Tokio',
-                        'Annotate the function with #[tokio::task] so Tokio routes it appropriately',
+                      "question": "What's the right way to do CPU-bound work inside a Tokio runtime?",
+                      "options": [
+                        "Wrap the call in tokio::spawn so it runs concurrently with other async tasks",
+                        "Use tokio::task::spawn_blocking, which moves the work to a separate threadpool sized for blocking work",
+                        "Use std::thread::spawn directly so the CPU work never touches Tokio",
+                        "Annotate the function with #[tokio::task] so Tokio routes it appropriately"
                       ],
-                      correctIndex: 1,
-                      explanation: 'tokio::spawn (option 1) still puts the work on the async worker pool — it starves the runtime exactly the same way as a direct call. std::thread::spawn (option 3) bypasses Tokio entirely, which loses you the JoinHandle integration. There is no #[tokio::task] attribute (option 4 is fabricated). spawn_blocking is the discipline.',
+                      "correctIndex": 1,
+                      "explanation": "tokio::spawn (option 1) still puts the work on the async worker pool — it starves the runtime exactly the same way as a direct call. std::thread::spawn (option 3) bypasses Tokio entirely, which loses you the JoinHandle integration. There is no #[tokio::task] attribute (option 4 is fabricated). spawn_blocking is the discipline."
                     },
                     {
-                      question: 'When does a procedural macro run?',
-                      options: [
-                        'At runtime, but the result is cached after the first invocation',
-                        'At compile time, transforming an input TokenStream into an output TokenStream',
-                        'At parse time, before the lexer runs — that is why proc macros can use raw bytes',
-                        'After compilation but before linking, as part of the build script pipeline',
+                      "question": "When does a procedural macro run?",
+                      "options": [
+                        "At runtime, but the result is cached after the first invocation",
+                        "At compile time, transforming an input TokenStream into an output TokenStream",
+                        "At parse time, before the lexer runs — that is why proc macros can use raw bytes",
+                        "After compilation but before linking, as part of the build script pipeline"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Proc macros run as the compiler is parsing your code, after lexing (eliminates option 3) and well before linking (eliminates option 4). They are not invoked at runtime at all (eliminates option 1). cargo expand shows you the result.',
+                      "correctIndex": 1,
+                      "explanation": "Proc macros run as the compiler is parsing your code, after lexing (eliminates option 3) and well before linking (eliminates option 4). They are not invoked at runtime at all (eliminates option 1). cargo expand shows you the result."
                     },
                     {
-                      question: 'What is the key difference between a custom opcode and a custom precompile in Revm?',
-                      options: [
-                        'Opcodes execute in the EVM interpreter loop; precompiles run in a separate process and communicate over IPC',
-                        'Opcodes modify the EVM instruction set (breaking consensus with vanilla EVM); precompiles add native functions called via CALL to a reserved address (mostly transparent to Solidity/ABI tooling)',
-                        'Custom opcodes are valid on mainnet; custom precompiles are restricted to App-chains',
-                        'Opcodes can be invoked from any contract address; precompiles require a special precompile-enabled compiler',
+                      "question": "What is the key difference between a custom opcode and a custom precompile in Revm?",
+                      "options": [
+                        "Opcodes execute in the EVM interpreter loop; precompiles run in a separate process and communicate over IPC",
+                        "Opcodes modify the EVM instruction set (breaking consensus with vanilla EVM); precompiles add native functions called via CALL to a reserved address (mostly transparent to Solidity/ABI tooling)",
+                        "Custom opcodes are valid on mainnet; custom precompiles are restricted to App-chains",
+                        "Opcodes can be invoked from any contract address; precompiles require a special precompile-enabled compiler"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Both run in-process — there is no IPC (eliminates option 1). Custom opcodes break consensus, custom precompiles do not (the OPPOSITE of option 3 is true). Precompiles are called via standard CALL — no special compiler needed (eliminates option 4).',
+                      "correctIndex": 1,
+                      "explanation": "Both run in-process — there is no IPC (eliminates option 1). Custom opcodes break consensus, custom precompiles do not (the OPPOSITE of option 3 is true). Precompiles are called via standard CALL — no special compiler needed (eliminates option 4)."
                     },
                     {
-                      question: 'Why does Ethereum use a Merkle Patricia Trie (MPT) for state?',
-                      options: [
-                        'Patricia tries are the fastest indexed data structure for arbitrary 256-bit keys',
-                        'It commits to the entire world state in a single 32-byte hash, supports inclusion / non-inclusion proofs, and is space-efficient via path compression',
-                        'It is resistant to hash-collision attacks because each tree level uses a different hash function',
-                        'It supports parallel modification across all leaves without locking — critical for staged sync',
+                      "question": "Why does Ethereum use a Merkle Patricia Trie (MPT) for state?",
+                      "options": [
+                        "Patricia tries are the fastest indexed data structure for arbitrary 256-bit keys",
+                        "It commits to the entire world state in a single 32-byte hash, supports inclusion / non-inclusion proofs, and is space-efficient via path compression",
+                        "It is resistant to hash-collision attacks because each tree level uses a different hash function",
+                        "It supports parallel modification across all leaves without locking — critical for staged sync"
                       ],
-                      correctIndex: 1,
-                      explanation: 'MPT is not the fastest lookup structure (eliminates option 1 — a HashMap is faster, but commits to nothing). It uses keccak256 throughout, not different hashes per level (eliminates option 3). Parallel modification is *not* an MPT property — sequential rehashing up to the root is required (eliminates option 4). The cryptographic commitment is the whole point.',
+                      "correctIndex": 1,
+                      "explanation": "MPT is not the fastest lookup structure (eliminates option 1 — a HashMap is faster, but commits to nothing). It uses keccak256 throughout, not different hashes per level (eliminates option 3). Parallel modification is *not* an MPT property — sequential rehashing up to the root is required (eliminates option 4). The cryptographic commitment is the whole point."
                     },
                     {
-                      question: 'In a production zkEVM proving pipeline using Revm, what is a "witness"?',
-                      options: [
-                        'A cryptographic signature from a node operator attesting that the transaction was observed in the mempool',
-                        'The set of state values the block accessed (accounts, code, storage slots, recent block hashes) that the prover consumes — since it cannot read disk inside the zkVM',
-                        'A precomputed table of all gas costs for the opcodes used in the block',
-                        'The full chain state snapshotted at the proven block, sent into the zkVM',
+                      "question": "In a production zkEVM proving pipeline using Revm, what is a \"witness\"?",
+                      "options": [
+                        "A cryptographic signature from a node operator attesting that the transaction was observed in the mempool",
+                        "The set of state values the block accessed (accounts, code, storage slots, recent block hashes) that the prover consumes — since it cannot read disk inside the zkVM",
+                        "A precomputed table of all gas costs for the opcodes used in the block",
+                        "The full chain state snapshotted at the proven block, sent into the zkVM"
                       ],
-                      correctIndex: 1,
-                      explanation: 'No signature is involved (eliminates option 1). Gas costs are constants in the EVM spec, not part of a witness (eliminates option 3). Sending the *full* state would defeat the purpose — witnesses are minimal subsets, not snapshots (eliminates option 4). If the block reads anything not in the witness, the proof fails.',
+                      "correctIndex": 1,
+                      "explanation": "No signature is involved (eliminates option 1). Gas costs are constants in the EVM spec, not part of a witness (eliminates option 3). Sending the *full* state would defeat the purpose — witnesses are minimal subsets, not snapshots (eliminates option 4). If the block reads anything not in the witness, the proof fails."
                     },
                     {
-                      question: 'For an MEV searcher, why is ExEx valuable?',
-                      options: [
-                        'It includes a built-in JSON-RPC simulation endpoint that runs faster than the standard mainnet RPC',
-                        'It receives every chain commit / reorg / revert notification at near-zero latency, in-process with full state access — perfect for warm caches and fast simulation',
-                        'It bypasses Ethereum consensus rules so the searcher can simulate alternative orderings deterministically',
-                        'It runs on a CPU core reserved by the OS scheduler so other workloads cannot preempt it',
+                      "question": "For an MEV searcher, why is ExEx valuable?",
+                      "options": [
+                        "It includes a built-in JSON-RPC simulation endpoint that runs faster than the standard mainnet RPC",
+                        "It receives every chain commit / reorg / revert notification at near-zero latency, in-process with full state access — perfect for warm caches and fast simulation",
+                        "It bypasses Ethereum consensus rules so the searcher can simulate alternative orderings deterministically",
+                        "It runs on a CPU core reserved by the OS scheduler so other workloads cannot preempt it"
                       ],
-                      correctIndex: 1,
-                      explanation: 'ExEx is not an RPC endpoint (eliminates option 1) — it is a callback into your Rust code. It cannot bypass consensus; that is exactly the rules its notifications obey (eliminates option 3). Tokio scheduling has nothing to do with OS-level CPU pinning (eliminates option 4). The win is in-process latency on every chain event.',
+                      "correctIndex": 1,
+                      "explanation": "ExEx is not an RPC endpoint (eliminates option 1) — it is a callback into your Rust code. It cannot bypass consensus; that is exactly the rules its notifications obey (eliminates option 3). Tokio scheduling has nothing to do with OS-level CPU pinning (eliminates option 4). The win is in-process latency on every chain event."
                     },
                     {
-                      question: 'What is the cardinal rule when pricing a custom precompile?',
-                      options: [
-                        'Set the gas to roughly 1/10 of the equivalent Solidity implementation so adoption is incentivized',
-                        'Gas cost should track CPU cost — typically benchmark on the worst realistic input, multiply by a 2–5x abuse factor, then validate against adversarial inputs',
-                        'Charge a flat per-call cost so the gas model stays predictable for users',
-                        'Use the gas cost of the most-similar standard precompile (e.g., ecrecover) as a baseline',
+                      "question": "What is the cardinal rule when pricing a custom precompile?",
+                      "options": [
+                        "Set the gas to roughly 1/10 of the equivalent Solidity implementation so adoption is incentivized",
+                        "Gas cost should track CPU cost — typically benchmark on the worst realistic input, multiply by a 2–5x abuse factor, then validate against adversarial inputs",
+                        "Charge a flat per-call cost so the gas model stays predictable for users",
+                        "Use the gas cost of the most-similar standard precompile (e.g., ecrecover) as a baseline"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Underpricing for adoption (option 1) is exactly the DoS vector EIP-2929 had to retrofit. A flat cost (option 3) breaks the moment input size matters. Borrowing another precompile\'s number (option 4) is fine as a sanity check but ignores your specific CPU profile. The real workflow is benchmark → abuse factor → adversarial validation.',
+                      "correctIndex": 1,
+                      "explanation": "Underpricing for adoption (option 1) is exactly the DoS vector EIP-2929 had to retrofit. A flat cost (option 3) breaks the moment input size matters. Borrowing another precompile's number (option 4) is fine as a sanity check but ignores your specific CPU profile. The real workflow is benchmark → abuse factor → adversarial validation."
                     },
                     {
-                      question: 'For a custom Reth fork running an App-chain, what is the realistic minimum production deployment?',
-                      options: [
-                        'Three validators co-located in a single datacenter behind one load balancer (lowest latency)',
-                        '≥4 validators distributed across 3 datacenters, with sentry nodes shielding each validator, separate archive nodes for analytics, and a rate-limited RPC fleet — never co-locating validator and public RPC',
-                        'Five validators in the same cloud region (cross-region adds too much consensus latency)',
-                        'Two validators in active-passive failover with a hot standby (keeps the ops team small)',
+                      "question": "For a custom Reth fork running an App-chain, what is the realistic minimum production deployment?",
+                      "options": [
+                        "Three validators co-located in a single datacenter behind one load balancer (lowest latency)",
+                        "≥4 validators distributed across 3 datacenters, with sentry nodes shielding each validator, separate archive nodes for analytics, and a rate-limited RPC fleet — never co-locating validator and public RPC",
+                        "Five validators in the same cloud region (cross-region adds too much consensus latency)",
+                        "Two validators in active-passive failover with a hot standby (keeps the ops team small)"
                       ],
-                      correctIndex: 1,
-                      explanation: 'BFT safety needs a quorum across failure domains — single-DC (option 1) and single-region (option 3) collapse on one fault. Two validators (option 4) cannot tolerate any byzantine behavior. The realistic minimum is geographic distribution + sentry separation + dedicated RPC fleet, because one DDoS on a public RPC must not halt consensus.',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "BFT safety needs a quorum across failure domains — single-DC (option 1) and single-region (option 3) collapse on one fault. Two validators (option 4) cannot tolerate any byzantine behavior. The realistic minimum is geographic distribution + sentry separation + dedicated RPC fleet, because one DDoS on a public RPC must not halt consensus."
+                    }
                   ],
                 },
               ],
@@ -2976,19 +3331,36 @@ A final stress test on the production engineering layer.`,
             lessons: {
               create: [
                 {
-                  title: 'The Reth extension pattern — library, not fork',
+                  title: 'Lesson 17 — The Reth extension pattern — library, not fork',
                   slug: 'reth-extension-pattern-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 14,
                   xpReward: 40,
-                  content: `# The Reth extension pattern — library, not fork
+                  content: `# Lesson 17 — The Reth extension pattern — library, not fork
+
+## Question
+
+**Reth as a library, not a fork.** Extend without forking the codebase. Use the NodeBuilder + trait impls; track upstream.
+
+## Principle (minimum model)
+
+- **Library pattern.** Import Reth as \`Cargo.toml\` dep; instantiate \`NodeBuilder\`; customise via trait impls. Upstream upgrades = bump version.
+- **Fork pattern (anti-pattern).** Clone Reth; modify in-tree; diverge from upstream. Hard to track upstream; freeze the version.
+- **Why library wins.** Smaller maintenance burden; track upstream; community ecosystem.
+- **OP Stack uses library.** OP-Reth = Reth + custom executor + custom chainspec. Tracks Reth upstream.
+- **bera-reth uses library.** Custom Consensus impl + chainspec. Tracks upstream.
+- **Tempo uses library.** Custom Pool + custom precompiles. Tracks upstream.
+- **Anti-pattern: forking.** Some custom L1s fork. Heavy maintenance burden; upstream improvements blocked.
+
+## Worked example + steps
+
+# The Reth extension pattern — library, not fork
 
 If you've worked with **op-geth**, **bsc-geth**, or **bor** (Polygon), you know the geth-fork story: clone the upstream, apply your patches, rebase forever. Every upstream merge is a weekend of conflict resolution, and the audit surface drifts away from mainline.
 
 **Reth was designed to make this model obsolete.** Optimism, Base, Berachain, Scroll, Seismic, Sova, alphanet, and Tempo all run on Reth — and almost none of them are forks in the traditional sense. They are *node crates* that **depend on reth as a library** and override the parts they care about via traits.
 
-> 🛑 **Predict before scrolling.** A geth-fork chain ships a critical security patch from upstream. The fork is 18 months out of date. **Estimate how long the rebase takes** and **list 3 ways the rebase can introduce its own consensus bug**. Hold your answer.
 
 ## 1. The two models
 
@@ -3022,7 +3394,6 @@ A Reth-based chain typically overrides these slots:
 
 Everything else (P2P, MDBX storage, staged sync, ExEx, trie commitments) **comes from reth for free**.
 
-> 🛑 **Anti-fluency.** Someone says "Berachain forked reth to add Proof-of-Liquidity." Why is the verb "forked" probably wrong, and what should it be? If you can't restate the sentence accurately, you don't have the model yet.
 
 ## 4. Concrete examples to read
 
@@ -3050,20 +3421,45 @@ If you are building anything that touches a Reth-based chain — a bridge, a set
 
 You should now be able to read any Reth-based chain repo without flinching at the directory structure.
 
-> Final check: in one sentence, what is the structural reason a Reth-based chain rarely needs to patch reth's source? If your answer doesn't reference **trait-based extension** and **NodeBuilder composition**, the lesson hasn't stuck. Re-read sections 1 and 2.`,
+> Final check: in one sentence, what is the structural reason a Reth-based chain rarely needs to patch reth's source? If your answer doesn't reference **trait-based extension** and **NodeBuilder composition**, the lesson hasn't stuck. Re-read sections 1 and 2.
+
+## Summary (3 lines)
+
+- Reth as a library, not a fork. Import + customise via trait impls + track upstream.
+- Library examples: OP-Reth / bera-reth / Tempo. All track Reth upstream.
+- Fork pattern is anti-pattern: heavy maintenance, upstream improvements blocked. Next: op-stack-on-reth.
+`,
                 },
                 {
-                  title: 'Reading op-stack-on-reth — the anatomy of a Reth-based L2',
+                  title: 'Lesson 18 — Reading op-stack-on-reth — the anatomy of a Reth-based L2',
                   slug: 'reading-op-stack-on-reth-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 16,
                   xpReward: 45,
-                  content: `# Reading op-stack-on-reth — the anatomy of a Reth-based L2
+                  content: `# Lesson 18 — Reading op-stack-on-reth — the anatomy of a Reth-based L2
+
+## Question
+
+**op-stack-on-reth = the canonical Reth-based L2**. Reading it teaches the Reth extension pattern.
+
+## Principle (minimum model)
+
+- **Project structure.** \`crates/optimism/node\` + \`crates/optimism/chainspec\` + \`crates/optimism/executor\`. Each is a customisation of a slot.
+- **Custom Consensus.** OP-specific block-validation rules. Replaces Reth's default.
+- **Custom Executor.** OP-specific tx processing (including L1 fee).
+- **Custom Chainspec.** OP-specific genesis + forks + hardforks.
+- **RPC extensions.** OP-specific JSON-RPC methods (\`optimism_outputAtBlock\` etc).
+- **NodeBuilder wiring.** ~30 lines in \`main.rs\` that ties everything together.
+- **Tracks Reth upstream.** Bumps Reth version; runs the test suite; ships.
+- **Production status.** OP Mainnet + Base + Zora all run op-stack-on-reth.
+
+## Worked example + steps
+
+# Reading op-stack-on-reth — the anatomy of a Reth-based L2
 
 Optimism is the canonical "Reth-based L2." Its node code lives at \`paradigmxyz/reth/crates/optimism/\`. If Tempo's node crate looked anything like this, you'd already know how to read it. So that's the goal of this lesson: **make the directory shape obvious.**
 
-> 🛑 **Predict before scrolling.** A new Reth-based L2 ships its node crate. **List the 5 subdirectories you'd expect** to see, and what each owns. If you cannot, stop and re-read the previous lesson.
 
 ## 1. Where to look
 
@@ -3108,7 +3504,6 @@ For any Reth-based chain, you should be able to locate these five things in unde
 
 If you can find those, you can read the chain.
 
-> 🛑 **Anti-fluency.** You found a file called \`node.rs\` with a type \`OpNode\`. Where do you go next to understand what an \`OpNode\` **is** versus what it **does**? **Predict** the trait it implements before you scroll.
 
 ## 4. Reading order for a first pass
 
@@ -3144,22 +3539,46 @@ Candidates ranked by reading quality:
 - \`paradigmxyz/alphanet\` (smaller, R&D-flavored — easier to read end-to-end)
 - \`SovaNetwork/sova-reth\` (Bitcoin angle — different chainspec shape)
 
-> Final check: in two sentences, describe **the shape of a Reth-based chain repo**, in words that would let a new hire find anything in 10 minutes. If you start with "it has a folder," start over and lead with the *concept* (extension via traits + NodeBuilder composition).`,
+> Final check: in two sentences, describe **the shape of a Reth-based chain repo**, in words that would let a new hire find anything in 10 minutes. If you start with "it has a folder," start over and lead with the *concept* (extension via traits + NodeBuilder composition).
+
+## Summary (3 lines)
+
+- op-stack-on-reth = canonical Reth-based L2. Custom Consensus / Executor / Chainspec / RPC; ~30-line NodeBuilder wiring.
+- Production: OP Mainnet + Base + Zora.
+- Reading it teaches the extension pattern. Next: custom Chainspec.
+`,
                 },
                 {
-                  title: 'Custom ChainSpec — forks, genesis, and the precompile schedule',
+                  title: 'Lesson 19 — Custom ChainSpec — forks, genesis, and the precompile schedule',
                   slug: 'custom-chainspec-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 14,
                   xpReward: 40,
-                  content: `# Custom ChainSpec — forks, genesis, and the precompile schedule
+                  content: `# Lesson 19 — Custom ChainSpec — forks, genesis, and the precompile schedule
+
+## Question
+
+**ChainSpec = genesis + forks + precompile schedule + chain ID**. Customise per chain. Reth's NodeBuilder takes one as input.
+
+## Principle (minimum model)
+
+- **Genesis state.** Pre-deployed contracts + initial balances + nonces. Defined in JSON.
+- **Hardfork schedule.** Block-number-keyed list: "at block 100, activate Berlin. At block 200, activate London."
+- **Precompile schedule.** Which precompiles at which block. Mainnet has 9; custom chains may add more at specific blocks.
+- **Chain ID.** Unique per chain. 1 = mainnet, 137 = polygon, etc. Custom = pick unused.
+- **Validation.** Reth's \`ChainSpec::validate\` checks for consistency. Conflicts fail fast.
+- **Testing.** Spin up a node with the chainspec; mine some blocks; assert hardforks activate.
+- **Production examples.** Sepolia testnet, OP Mainnet, Hyperliquid, Tempo. Each has its own chainspec.
+
+## Worked example + steps
+
+# Custom ChainSpec — forks, genesis, and the precompile schedule
 
 The block validates on mainnet but rejects on your chain. Same block, same client binary, same Revm — different result. Why? Because something inside \`ChainSpec\` said "at this height, the rules are different here." A wrong fork height, a wrong precompile schedule entry, a wrong base-fee parameter — any one of them, and your chain forks itself off the network in one block.
 
 \`ChainSpec\` is the Rust struct that owns "what makes this chain different from mainnet Ethereum at the **protocol** level" — chain ID, fork activation, base fee curve, genesis allocation, precompile schedule. If you're going to read or build a Reth-based chain, **this is the type you read first**.
 
-> 🛑 **Predict before scrolling.** "ChainSpec" sounds like config. **List 5 categories of information** you'd expect it to hold. If your list is shorter than 5 or all of them are gas-related, you're under-imagining what consensus rules touch.
 
 ## 1. What ChainSpec is
 
@@ -3176,7 +3595,6 @@ In \`reth-chainspec\`, \`ChainSpec\` is a struct (with various extensions in cha
 
 For Reth-based L2s, the chain provides an *extended* ChainSpec — e.g., the OP chain spec wraps the base \`ChainSpec\` and adds OP-specific fork tracking (Bedrock, Canyon, Ecotone, Fjord, ...).
 
-> 🛑 **Find-in-repo.** Open \`crates/optimism/chainspec/\` and locate the exact type that represents an OP chain spec. Is it a struct around \`ChainSpec\`? A trait extension? **Both?** Don't read on until you've answered.
 
 ## 2. The hardfork list as the chain's history
 
@@ -3213,7 +3631,6 @@ At fork F, address A maps to native function impl I
 
 You'll find this in the chain's EVM config crate (covered in the next lesson), but the **activation gating** lives in ChainSpec — because activation is a consensus rule.
 
-> 🛑 **Anti-fluency.** Why must precompile activation live in ChainSpec rather than in the EVM config alone? If your answer is just "consistency," go deeper. **What goes wrong if two nodes disagree on which precompile is active at block N?**
 
 ## 4. Genesis encoding
 
@@ -3247,20 +3664,45 @@ In \`crates/optimism/chainspec/\` (or wherever the OP chainspec lives in your re
 
 Now do the same for any other chain in awesome-reth's "Layer 2" section.
 
-> Final check: if I asked you "what fork activation rule does chain X use at block N?", what files would you need to read, and in what order? If your answer is more than 2 files, you're over-complicating it — ChainSpec + the activation table is the whole story.`,
+> Final check: if I asked you "what fork activation rule does chain X use at block N?", what files would you need to read, and in what order? If your answer is more than 2 files, you're over-complicating it — ChainSpec + the activation table is the whole story.
+
+## Summary (3 lines)
+
+- ChainSpec = genesis + hardfork schedule + precompile schedule + chain ID. JSON config.
+- Validation via \`ChainSpec::validate\`. Test by spinning up node + mining.
+- Production: each L1/L2 has its own chainspec. Reth: pluggable via NodeBuilder. Next: custom Executor.
+`,
                 },
                 {
-                  title: 'Custom executor — swapping the execution layer',
+                  title: 'Lesson 20 — Custom executor — swapping the execution layer',
                   slug: 'custom-executor-en',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 18,
                   xpReward: 45,
-                  content: `# Custom executor — swapping the execution layer
+                  content: `# Lesson 20 — Custom executor — swapping the execution layer
+
+## Question
+
+**Custom Executor = override how Reth processes txs**. Standard = revm with mainnet rules. Custom = OP fee handling, custom precompiles, etc.
+
+## Principle (minimum model)
+
+- **Executor trait.** \`execute_block(block, state) -> ExecutionResult\`. Reth calls this per block.
+- **Standard impl.** \`EthExecutor\` runs revm. Used by default.
+- **Custom impl.** Override \`execute_block\` to use revm with custom precompiles + custom fee handling.
+- **Wire via NodeBuilder.** \`NodeBuilder::executor(YourExecutor::default())\`.
+- **Test.** Run a tx through; assert behaviour differs from default Eth.
+- **Common customisations.** OP L1 fee handling, Hyperliquid CLOB precompiles, Tempo merchant attestation, Berachain PoL.
+- **Composes with other components.** Custom Executor + Custom Pool + Custom Consensus = a fully custom L1.
+- **Production parallel.** All Reth-based L1s/L2s ship custom executors.
+
+## Worked example + steps
+
+# Custom executor — swapping the execution layer
 
 The executor is "what actually runs the transactions and produces the post-state." For Ethereum mainnet, this is vanilla revm. For Optimism, it's revm **plus deposit-tx handling**, **plus L1 cost computation**, **plus a slightly different precompile list**. This lesson is about how Reth lets you swap that in.
 
-> 🛑 **Predict before scrolling.** A Reth-based L2 needs to execute "deposit transactions" — txs that originate on L1 and have no signature on L2. **At which layer does the L2 customize**: the mempool? The transaction validator? The executor? **Justify** before reading.
 
 ## 1. The trait surface
 
@@ -3285,7 +3727,6 @@ Reading \`crates/optimism/evm/\` will show you roughly:
 
 The first one is config. The other three are execution-strategy-level — they live in the block executor's main loop.
 
-> 🛑 **Find-in-repo.** Locate the exact function in \`crates/optimism/evm/\` that decides "this is a deposit transaction; skip signature verify." **What's the function signature?** (Don't memorize — just verify you can find it.)
 
 ## 3. The custom-precompile story
 
@@ -3313,7 +3754,6 @@ It's implemented inside the executor by:
 
 This is a **clean example of consensus-critical logic that you cannot put in a precompile** — it has to be in the executor itself.
 
-> 🛑 **Anti-fluency.** Why can't OP's L1 cost charging be implemented as a precompile? If your answer is just "performance," go deeper — what's the **consensus reason** a precompile can't deduct from arbitrary accounts before tx execution?
 
 ## 5. The execution loop, in pseudo-code
 
@@ -3357,20 +3797,45 @@ In \`crates/optimism/evm/\`:
 3. **Find** the function that adds the L1 cost charge
 4. **Trace** how a deposit transaction bypasses signature verification
 
-> Final check: name the two things that **must** be in the executor (not in a precompile, not in the mempool) for a Reth-based chain, and explain why each must live there. If you can't, re-read sections 4 and 5.`,
+> Final check: name the two things that **must** be in the executor (not in a precompile, not in the mempool) for a Reth-based chain, and explain why each must live there. If you can't, re-read sections 4 and 5.
+
+## Summary (3 lines)
+
+- Custom Executor = override Reth's tx-processing. Trait impl + NodeBuilder wiring.
+- Common customisations: OP L1 fee, Hyperliquid CLOB precompiles, Tempo merchant attestation, Berachain PoL.
+- Composes with custom Pool + Consensus. Production: all Reth-based L1/L2s ship custom executors.
+`,
                 },
                 {
-                  title: 'Custom payload builder — sequencer-mode block production',
+                  title: 'Lesson 21 — Custom payload builder — sequencer-mode block production',
                   slug: 'custom-payload-builder-en',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 16,
                   xpReward: 45,
-                  content: `# Custom payload builder — sequencer-mode block production
+                  content: `# Lesson 21 — Custom payload builder — sequencer-mode block production
+
+## Question
+
+**Custom PayloadBuilder = sequencer-mode block production**. Reth-as-sequencer (centralised L2) needs this. Read the customisation pattern.
+
+## Principle (minimum model)
+
+- **PayloadBuilder trait.** \`build_payload(attrs) -> Payload\`. Called by sequencer to mint a block.
+- **Standard impl.** Takes mempool txs; orders by gas price; builds block. Used by Eth nodes.
+- **Custom impl.** Override to add: bundle txs from MEV searcher, drain pending fills (CLOB), system txs (L1 messages), priority queue (payment rail).
+- **Wire via NodeBuilder.** \`NodeBuilder::payload_builder(YourBuilder::default())\`.
+- **Hot path.** Called every 12 seconds (or your block time). Performance matters.
+- **Tests.** Build a payload; assert it contains expected txs + system txs.
+- **Production examples.** op-rbuilder (Flashbots) for OP Mainnet, Hyperliquid sequencer, Tempo sequencer.
+- **Sequencer mode = centralised.** Trade-off: faster blocks vs decentralisation. Production L2s pick the trade-off explicitly.
+
+## Worked example + steps
+
+# Custom payload builder — sequencer-mode block production
 
 For Ethereum mainnet, blocks are produced by **validators** running the consensus client and pulling proposed payloads from the execution client. For an L2 or any centralized-sequencer chain, the block-production model is different: **the sequencer is the block producer**, full stop. The payload builder is the component that knows how.
 
-> 🛑 **Predict before scrolling.** On a centralized-sequencer L2, who/what decides **transaction ordering** inside a block? **What does the sequencer optimize for**, and what's the MEV implication? Hold your prediction.
 
 ## 1. The trait surface
 
@@ -3407,7 +3872,6 @@ Sequencer-mode block production typically:
 
 Notice that several of these are **not in the executor** — they're in the *builder*. Why? Because the builder controls *what goes into a block*; the executor only runs *what's in a block*.
 
-> 🛑 **Anti-fluency.** A junior engineer says "we'll just FIFO the mempool and that's our sequencer." **Name 3 attacks** they haven't considered. (Hint: think about latency on tx submission, about toxic order flow, about reorg.)
 
 ## 4. The MEV question
 
@@ -3455,20 +3919,45 @@ Open \`crates/optimism/payload/\` and:
 
 Then read [op-rbuilder's README](https://github.com/flashbots/op-rbuilder) for the "external builder" model.
 
-> Final check: in one sentence, what does the payload builder **decide** that the executor does not? If your answer doesn't include the word "ordering" or "selection," go back and re-read section 3.`,
+> Final check: in one sentence, what does the payload builder **decide** that the executor does not? If your answer doesn't include the word "ordering" or "selection," go back and re-read section 3.
+
+## Summary (3 lines)
+
+- Custom PayloadBuilder = sequencer-mode block production. Override \`build_payload\`.
+- Customisations: MEV bundles, CLOB fills, system txs, priority queue. Hot path; performance matters.
+- Production: op-rbuilder (OP) + Hyperliquid + Tempo sequencers. Centralised; trade-off accepted.
+`,
                 },
                 {
-                  title: "Case study — Paradigm's stack: alphanet, Tempo, and the L1 pattern",
+                  title: 'Lesson 22 — Case study — Paradigm\'s stack: alphanet, Tempo, and the L1 pattern',
                   slug: 'paradigm-stack-case-study-en',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 18,
                   xpReward: 50,
-                  content: `# Case study — Paradigm's stack: alphanet, Tempo, and the L1 pattern
+                  content: `# Lesson 22 — Case study — Paradigm's stack: alphanet, Tempo, and the L1 pattern
+
+## Question
+
+**Paradigm's stack** = alphanet (testbed) + Tempo (production) + reusable patterns. Read the architecture choices.
+
+## Principle (minimum model)
+
+- **alphanet.** Paradigm's research-grade testnet. Experiments live here before production.
+- **Tempo.** Production-grade payment rail. Stable coin + machine payment + custom precompiles.
+- **Pattern: library-first.** Both alphanet + Tempo use Reth as a library. Track upstream.
+- **Pattern: explicit customisation.** Document every diff from mainnet. Tempo's chainspec + precompiles + pool are all documented.
+- **Pattern: production discipline.** Continuous monitoring + chaos drills + bug bounty + rapid response.
+- **Pattern: external partnerships.** Chainlink CCIP for cross-chain. Worldcoin for IDs. Builds composition.
+- **Pattern: open-source.** Paradigm publishes architectures + code. Lowers integration cost for ecosystem.
+- **Why this matters.** Paradigm is the modal contributor to Reth + Revm + Alloy + openhl + Tempo + many more. Their stack = the de-facto standard.
+
+## Worked example + steps
+
+# Case study — Paradigm's stack: alphanet, Tempo, and the L1 pattern
 
 You've now seen the four extension slots (ChainSpec, executor, payload builder, RPC) and the dependency shape of a Reth-based chain. This lesson is the **synthesis**: what does Paradigm's full stack look like, and now that **Tempo's source is public**, how do you read it against the structure you just learned?
 
-> 🛑 **Predict before scrolling.** Paradigm has shipped, in order: **revm → alloy → reth → alphanet → op-stack-on-reth → Tempo**. **What's the trajectory** that sequence describes? Hold your answer; the lesson will compare.
 
 ## 1. The stack, top to bottom
 
@@ -3494,7 +3983,6 @@ Examples of what alphanet has shipped or experimented with:
 
 Why this matters as a *learning target*: alphanet is **small enough to read end-to-end**, and the customizations are educational by design. It's the cleanest "how do I add a precompile to a chain" example in the wild.
 
-> 🛑 **Find-in-repo.** Open alphanet's repo and locate the file where the P-256 precompile is **registered with the chain**. (Not where the math is implemented — where it joins the chain's active precompile set.) **Why does it live there?**
 
 ## 3. From alphanet to production
 
@@ -3582,108 +4070,134 @@ The deliverable for this module: open [\`tempoxyz/tempo\`](https://github.com/te
 
 If you've never read alphanet end-to-end, do that first as practice — it's smaller and cleaner.
 
-> Final check: write **5 specific things you verified by reading \`tempoxyz/tempo\` source**, ranked by importance for your own work. If you can't list 5, this module hasn't fully landed — re-read sections 4 and 5, then go back to the source.`,
+> Final check: write **5 specific things you verified by reading \`tempoxyz/tempo\` source**, ranked by importance for your own work. If you can't list 5, this module hasn't fully landed — re-read sections 4 and 5, then go back to the source.
+
+## Summary (3 lines)
+
+- Paradigm stack = alphanet (testbed) + Tempo (prod) + library-first Reth + explicit customisation + production discipline.
+- Patterns: library-first / explicit-diff documentation / external partnerships (CCIP, Worldcoin) / open-source.
+- Paradigm is modal contributor to Reth / Revm / Alloy / openhl / Tempo. Their stack = de-facto standard. Next: quiz.
+`,
                 },
                 {
-                  title: 'Quiz: did the extension pattern stick?',
+                  title: 'Quiz — Reth Chains',
                   slug: 'reth-chains-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 6,
                   duration: 15,
                   xpReward: 50,
-                  content: `# Quiz: did the extension pattern stick?
+                  content: `# Quiz — Reth Chains
 
-A short test on the extension model and where each customization lives. No fluency — every question has a real "which trait / which crate" answer.`,
+## Question
+
+Final Reth-based Chains quiz: extension pattern + OP-stack + chainspec + executor + payload builder + Paradigm case study.
+
+## Principle (minimum model)
+
+- Library vs fork + op-stack-on-reth anatomy + ChainSpec + Custom Executor + Custom PayloadBuilder + Paradigm stack patterns.
+
+## Worked example + steps
+
+# Quiz: did the extension pattern stick?
+
+A short test on the extension model and where each customization lives. No fluency — every question has a real "which trait / which crate" answer.
+
+## Summary (3 lines)
+
+- Final Reth Chains quiz; 10 questions.
+- Get three+ wrong → re-read the relevant lesson chain.
+- Pass → Reth Expert complete. Course total: 24 lessons across Performance/Systems + Production Engineering + Reth Chains.
+`,
                   quizQuestions: [
                     {
-                      question: 'Why do most Reth-based chains use the extension model rather than the geth-style fork model?',
-                      options: [
-                        'Reth is faster than geth, so chains are forced to adopt it for performance',
+                      "question": "Why do most Reth-based chains use the extension model rather than the geth-style fork model?",
+                      "options": [
+                        "Reth is faster than geth, so chains are forced to adopt it for performance",
                         "Reth's modular trait architecture (NodeBuilder + ChainSpec + ExecutorBuilder + PayloadBuilder) lets a chain customize only the parts it needs while consuming the rest as a library — eliminating rebase cost",
-                        'Rust prevents source-level forking due to its module system',
-                        'Paradigm enforces an extension-only policy on all chains that use Reth',
+                        "Rust prevents source-level forking due to its module system",
+                        "Paradigm enforces an extension-only policy on all chains that use Reth"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Speed (option 1) is a happy side-effect, not the architectural reason. Rust does not prevent forking (option 3 is wrong). Paradigm enforces nothing on independent chains (option 4 is wrong). The real driver is the trait architecture — chains override the slots that matter and inherit the rest.',
+                      "correctIndex": 1,
+                      "explanation": "Speed (option 1) is a happy side-effect, not the architectural reason. Rust does not prevent forking (option 3 is wrong). Paradigm enforces nothing on independent chains (option 4 is wrong). The real driver is the trait architecture — chains override the slots that matter and inherit the rest."
                     },
                     {
-                      question: "Where does a Reth-based chain's hardfork activation logic live?",
-                      options: [
-                        'In the payload builder, because the builder is what produces blocks at each fork',
-                        'In ChainSpec — which fork is active at a given block height / timestamp is a consensus rule, and ChainSpec owns consensus rules',
-                        'In the executor, because forks change execution behavior',
-                        'In the genesis JSON, alongside the initial state allocations',
+                      "question": "Where does a Reth-based chain's hardfork activation logic live?",
+                      "options": [
+                        "In the payload builder, because the builder is what produces blocks at each fork",
+                        "In ChainSpec — which fork is active at a given block height / timestamp is a consensus rule, and ChainSpec owns consensus rules",
+                        "In the executor, because forks change execution behavior",
+                        "In the genesis JSON, alongside the initial state allocations"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Multiple layers read the fork state, but only one owns it: ChainSpec. Builder (option 1) and executor (option 3) read fork state to make decisions, but they consult ChainSpec — they do not own activation. Genesis (option 4) is the *initial* state, not the fork schedule.',
+                      "correctIndex": 1,
+                      "explanation": "Multiple layers read the fork state, but only one owns it: ChainSpec. Builder (option 1) and executor (option 3) read fork state to make decisions, but they consult ChainSpec — they do not own activation. Genesis (option 4) is the *initial* state, not the fork schedule."
                     },
                     {
-                      question: "OP Stack charges an L1 data cost in addition to L2 gas. Which trait's implementation contains that logic, and why?",
-                      options: [
-                        'A custom precompile, because precompiles are the natural place to put native fee logic',
-                        'The mempool policy, because the fee is calculated at admission time',
-                        'The block execution strategy / executor, because charging an account before tx execution is a consensus-critical state mutation that every node must compute identically',
-                        "The RPC layer, because clients need to know the L1 cost before they submit",
+                      "question": "OP Stack charges an L1 data cost in addition to L2 gas. Which trait's implementation contains that logic, and why?",
+                      "options": [
+                        "A custom precompile, because precompiles are the natural place to put native fee logic",
+                        "The mempool policy, because the fee is calculated at admission time",
+                        "The block execution strategy / executor, because charging an account before tx execution is a consensus-critical state mutation that every node must compute identically",
+                        "The RPC layer, because clients need to know the L1 cost before they submit"
                       ],
-                      correctIndex: 2,
-                      explanation: 'A precompile (option 1) cannot deduct from arbitrary accounts on its own — that requires executor-level authority. Mempool (option 2) might *estimate* the cost but cannot enforce consensus state changes. RPC (option 4) is informational, not consensus-critical. The executor is the only layer with both the authority and the consensus-critical position.',
+                      "correctIndex": 2,
+                      "explanation": "A precompile (option 1) cannot deduct from arbitrary accounts on its own — that requires executor-level authority. Mempool (option 2) might *estimate* the cost but cannot enforce consensus state changes. RPC (option 4) is informational, not consensus-critical. The executor is the only layer with both the authority and the consensus-critical position."
                     },
                     {
-                      question: 'A Reth-based L2 needs to force-include deposit transactions at the top of every block. Which trait should handle that?',
-                      options: [
+                      "question": "A Reth-based L2 needs to force-include deposit transactions at the top of every block. Which trait should handle that?",
+                      "options": [
                         "The ChainSpec — deposit handling is a chain rule",
-                        'The payload builder — it decides what goes into a block and in what order',
-                        'The mempool — deposit txs sit in a separate queue and the mempool drains them first',
-                        'Custom consensus — only consensus can enforce ordering',
+                        "The payload builder — it decides what goes into a block and in what order",
+                        "The mempool — deposit txs sit in a separate queue and the mempool drains them first",
+                        "Custom consensus — only consensus can enforce ordering"
                       ],
-                      correctIndex: 1,
-                      explanation: "ChainSpec (option 1) defines *what* a deposit tx is, not how it's selected. Mempool (option 3) can track deposit queues but the *include-at-top* rule is a block-composition decision. Consensus (option 4) is overkill — selection is a builder concern, not a finality concern. The payload builder is the single component that decides block composition and order.",
+                      "correctIndex": 1,
+                      "explanation": "ChainSpec (option 1) defines *what* a deposit tx is, not how it's selected. Mempool (option 3) can track deposit queues but the *include-at-top* rule is a block-composition decision. Consensus (option 4) is overkill — selection is a builder concern, not a finality concern. The payload builder is the single component that decides block composition and order."
                     },
                     {
-                      question: 'When you write a custom precompile for a Reth-based chain, where does the *registration* of that precompile happen?',
-                      options: [
-                        'In the precompile crate itself, via a static registry',
+                      "question": "When you write a custom precompile for a Reth-based chain, where does the *registration* of that precompile happen?",
+                      "options": [
+                        "In the precompile crate itself, via a static registry",
                         "In the chain's EVM config (a ConfigureEvm impl), which hands revm the active precompile set — gated by the chain's hardfork schedule",
                         "In reth's core, by editing the precompile dispatch table",
-                        'In the genesis JSON, as part of the initial code allocation',
+                        "In the genesis JSON, as part of the initial code allocation"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Static registries (option 1) cannot be gated by chain rules. Editing reth core (option 3) is exactly the fork-model anti-pattern we are avoiding. Genesis (option 4) holds state, not protocol-level functions. The EVM config is the right slot: it joins ChainSpec (which fork?) with revm (what runs).',
+                      "correctIndex": 1,
+                      "explanation": "Static registries (option 1) cannot be gated by chain rules. Editing reth core (option 3) is exactly the fork-model anti-pattern we are avoiding. Genesis (option 4) holds state, not protocol-level functions. The EVM config is the right slot: it joins ChainSpec (which fork?) with revm (what runs)."
                     },
                     {
-                      question: 'Which of the following best describes the relationship between alphanet and Tempo?',
-                      options: [
-                        'They are the same project under two names',
-                        'alphanet is the test deployment of Tempo',
-                        'alphanet is an R&D testnet where Paradigm validates EVM extensions (e.g., custom precompiles) that may later ship in production chains like Tempo or be proposed as Ethereum EIPs',
-                        'Tempo is built on alphanet, which is built on Reth',
-                        'They are unrelated except for shared maintainership',
+                      "question": "Which of the following best describes the relationship between alphanet and Tempo?",
+                      "options": [
+                        "They are the same project under two names",
+                        "alphanet is the test deployment of Tempo",
+                        "alphanet is an R&D testnet where Paradigm validates EVM extensions (e.g., custom precompiles) that may later ship in production chains like Tempo or be proposed as Ethereum EIPs",
+                        "Tempo is built on alphanet, which is built on Reth",
+                        "They are unrelated except for shared maintainership"
                       ],
-                      correctIndex: 2,
-                      explanation: 'alphanet is the playground; Tempo is a production rail. Option 1 and 2 conflate them. Option 4 has the dependency order wrong — both depend on Reth, not on each other. Option 5 is too weak: the technical lineage of precompile experiments is real and traceable.',
+                      "correctIndex": 2,
+                      "explanation": "alphanet is the playground; Tempo is a production rail. Option 1 and 2 conflate them. Option 4 has the dependency order wrong — both depend on Reth, not on each other. Option 5 is too weak: the technical lineage of precompile experiments is real and traceable."
                     },
                     {
-                      question: "On a centralized-sequencer L2, what does the payload builder decide that the executor does not?",
-                      options: [
-                        'The payload builder decides gas pricing; the executor decides ordering',
-                        'The payload builder decides which transactions to include in the block and in what order; the executor merely runs whatever the builder hands it, in the given order',
+                      "question": "On a centralized-sequencer L2, what does the payload builder decide that the executor does not?",
+                      "options": [
+                        "The payload builder decides gas pricing; the executor decides ordering",
+                        "The payload builder decides which transactions to include in the block and in what order; the executor merely runs whatever the builder hands it, in the given order",
                         "They make identical decisions — the builder is a thin wrapper around the executor",
-                        'The payload builder validates signatures; the executor applies state changes',
+                        "The payload builder validates signatures; the executor applies state changes"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Gas pricing (option 1 swap) is mostly chainspec, not builder vs executor. Identical (option 3) is wrong — the separation is the entire point. Signature validation (option 4) is at the executor / tx validator layer, not the builder. The clean split: builder = selection + ordering, executor = run-what-you-are-told.',
+                      "correctIndex": 1,
+                      "explanation": "Gas pricing (option 1 swap) is mostly chainspec, not builder vs executor. Identical (option 3) is wrong — the separation is the entire point. Signature validation (option 4) is at the executor / tx validator layer, not the builder. The clean split: builder = selection + ordering, executor = run-what-you-are-told."
                     },
                     {
-                      question: 'You open `tempoxyz/tempo` for the first time and want to confirm Paradigm followed the "compose, don\'t fork" model. What is the single highest-signal check?',
-                      options: [
+                      "question": "You open `tempoxyz/tempo` for the first time and want to confirm Paradigm followed the \"compose, don't fork\" model. What is the single highest-signal check?",
+                      "options": [
                         "Read the README and announcement blog posts",
                         "Open `tempoxyz/reth` and check its commits-ahead/behind count against `paradigmxyz/reth`",
                         "Count the number of crates in the `tempoxyz/tempo` workspace",
-                        "Run a benchmark comparing Tempo and upstream Reth throughput",
+                        "Run a benchmark comparing Tempo and upstream Reth throughput"
                       ],
-                      correctIndex: 1,
-                      explanation: 'README / blog posts (option 1) say the right things but don\'t prove them. Crate count (option 3) is loosely correlated but noisy. Benchmarks (option 4) measure perf, not whether they forked. The fork check (option 2) is the definitive structural test — and the answer is "0 ahead, 1374 behind," which is the strongest empirical proof of the compose-don\'t-fork thesis.',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "README / blog posts (option 1) say the right things but don't prove them. Crate count (option 3) is loosely correlated but noisy. Benchmarks (option 4) measure perf, not whether they forked. The fork check (option 2) is the definitive structural test — and the answer is \"0 ahead, 1374 behind,\" which is the strongest empirical proof of the compose-don't-fork thesis."
+                    }
                   ],
                 },
               ],
