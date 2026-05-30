@@ -1,18 +1,18 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethCrossChainBridgesEN(prisma: PrismaClient) {
-  const tags = ['reth', 'bridges', 'ccip', 'optimism', 'wormhole', 'ibc', 'light-client', 'l1', 'expert'];
+  const tags = ['bridges', 'cross-chain', 'light-client', 'ccip', 'wormhole', 'ibc', 'advanced'];
 
   await prisma.course.create({
     data: {
       slug: 'reth-cross-chain-bridges-en',
       title: 'Cross-Chain Bridges — From CCIP to Light Clients',
       description:
-        'The honest accounting of how value moves between chains: trust models from "trust this multisig" to "trust nothing but the source chain\'s consensus," attack history ($2B+ stolen), reading production bridge code (OP Standard Bridge, Chainlink CCIP, Wormhole, IBC), and building a minimal light-client-verified bridge on Reth. The course that prepares you to architect Tempo↔Solana settlement, OP-stack bridges, and ZK light clients.',
+        'Read every meaningful cross-chain trust model side by side. Bridge trilemma + five trust models, light clients as gold standard, production bridges (OP / CCIP / Wormhole / IBC) with their architectures and trade-offs, then build a minimal light-client-verified bridge on Reth (Solidity verifier + Rust relayer using Alloy + bridge contract). By the end you can defend a trust-model choice and read any production bridge for what it actually assumes.',
       difficulty: 'ADVANCED',
-      duration: 150,
-      xpReward: 450,
-      track: 'reth-l1-architect',
+      duration: 120,
+      xpReward: 315,
+      track: 'reth-cross-chain-bridges',
       tags,
       isPublished: true,
       sortOrder: 310,
@@ -26,19 +26,35 @@ export async function seedRethCrossChainBridgesEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'What is a bridge? Trust models and the bridge trilemma',
+                  title: 'Lesson 1 — What is a bridge? Trust models and the bridge trilemma',
                   slug: 'bridges-trust-models-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 16,
                   xpReward: 40,
-                  content: `# What is a bridge? Trust models and the bridge trilemma
+                  content: `# Lesson 1 — What is a bridge? Trust models and the bridge trilemma
+
+## Question
+
+You hold 1 ETH on Ethereum and want it on Optimism. The chains share consensus rules but not state — there is no native \`transfer\` that crosses chains. **A bridge fills the gap, but every bridge picks a trust model.** $2 B+ in bridge hacks since 2021 (Ronin / Wormhole / Nomad / Poly / Orbit) say the trust model is the architecture.
+
+## Principle (minimum model)
+
+- **A bridge is a protocol that moves value or messages between chains that can't directly verify each other.** Lock-mint / burn-mint / atomic-swap are different mechanisms; the trust model is the axis that matters.
+- **The bridge trilemma.** Trust-minimised + low cost + fast. Pick at most two. Light clients = trust-minimised + fast, expensive. Multi-sig = cheap + fast, trusted. Optimistic = trust-minimised + cheap, slow.
+- **Five trust models, in order of decreasing trust.** (1) Custodial bridge (Binance Bridge — wraps a CEX). (2) Multi-sig bridge (Wormhole — N-of-M validators). (3) Optimistic bridge (Nomad — challenge window). (4) Light-client bridge (Helios / IBC — cryptographic proof). (5) Atomic swap (HTLC — no third party at all).
+- **$2 B+ in bridge hacks since 2021.** Ronin ($625 M, key compromise) / Wormhole ($325 M, signature verification bug) / Nomad ($190 M, replay attack) / Poly ($600 M, role check bypass) / Orbit ($82 M, governance). The pattern: trust-anchor compromise dominates.
+- **The trilemma forces a choice.** Light clients are gold-standard but expensive on-chain. Optimistic challenge windows are cheap but slow (7 days for OP). Multi-sigs are fast and cheap but the validator set is the attack surface.
+- **Reth's role.** Reth nodes can run a light-client bridge contract; the SDK can host a light-client verifier on-chain. The "build a minimal bridge" lesson (L6) implements this.
+
+## Worked example + steps
+
+# What is a bridge? Trust models and the bridge trilemma
 
 **$2B+ has been stolen from bridges in the last five years.** Not from obscure DeFi corners — from the highest-TVL bridges run by the biggest teams in the industry: Ronin ($625M), Wormhole ($325M), Poly Network ($611M, returned), Nomad ($190M). Every cross-chain architecture decision is downstream of one question: **what do you have to trust for state on chain A to move state on chain B, and what attacks remain once you've minimized that trust?**
 
 A **bridge** is the system that answers it. The whole field of cross-chain infrastructure is variations on **how much trust** and **what residual attacks**.
 
-> 🛑 **Predict before scrolling.** Three of those four hacks were $300M+ each. **What's the common attack pattern?** (Hint: not smart contract bugs.)
 
 ## 1. The bridge primitive — value vs. message
 
@@ -73,7 +89,6 @@ External trust (worst)                                  Internal trust (best)
 
 The best bridge from a trust standpoint is **a ZK light client of the source chain on the destination chain**. The worst is **a multisig** — you're trusting humans not to collude.
 
-> 🛑 **Anti-fluency.** A 13-of-19 multisig bridge feels "decentralized" because 19 is many. **Why is it actually fragile?** What concrete attack works against multisigs that doesn't work against light clients?
 
 Multisig keys can be **stolen** (Ronin: $625M, attacker got 5 of 9 keys via spear-phishing). The signers themselves can **collude** (no enforcement). The signing infrastructure can be **compromised** (Wormhole: bug in signature verification, not key theft, but proves how brittle multisig infra is).
 
@@ -111,7 +126,6 @@ Real attacks, sorted by amount stolen, with the root cause:
 
 The takeaway: **multisig bridges are operationally dangerous**, not just theoretically suboptimal. Even with audited code, the keys themselves are the attack surface.
 
-> 🛑 **Predict.** You're designing a $1B+ TVL bridge today. **Which trust model do you pick, and what's your fallback?** Think about: speed of integration, cost, attack surface, time horizon.
 
 ## 5. What this means for your projects
 
@@ -144,7 +158,6 @@ For each trust model, the cost split between **prover** (whoever writes the brid
 
 For payment-rail bridges (Tempo): frequency is high (every merchant settlement). **ZK light client** is the right asymptote — high prover cost amortized over many verifications.
 
-> 🛑 **Anti-fluency.** A ZK light client costs $10/proof. Each proof unlocks 1000 messages worth $50K each. **Is the bridge "expensive"?** Show the math. Why is the right cost metric always "$/value-secured" not "$/proof"?
 
 ## 7. Reading list
 
@@ -162,22 +175,46 @@ For each chain pair, identify the realistic trust model today:
 4. Tempo ↔ Ethereum (per public info)
 5. Bitcoin ↔ any EVM chain
 
-> Final check: in one sentence, why is "trust model" the dimension to optimize when designing a bridge — even more than speed or cost? **If your answer doesn't reference attack history or the bridge trilemma, re-read §3 and §4.**`,
+> Final check: in one sentence, why is "trust model" the dimension to optimize when designing a bridge — even more than speed or cost? **If your answer doesn't reference attack history or the bridge trilemma, re-read §3 and §4.**
+
+## Summary (3 lines)
+
+- Bridges fill the gap between chains that can't verify each other directly. Trust model = the architecture; mechanism (lock-mint / burn-mint / atomic-swap) is downstream.
+- Bridge trilemma: trust-minimised + cheap + fast → pick two. Five trust models ranked by trust: custodial → multi-sig → optimistic → light client → atomic swap.
+- $2 B+ in bridge hacks since 2021 — trust-anchor compromise dominates the pattern. Next lesson reads the gold-standard primitive (light clients) in detail.
+`,
                 },
                 {
-                  title: 'Light clients — the gold standard verification primitive',
+                  title: 'Lesson 2 — Light clients — the gold-standard verification primitive',
                   slug: 'bridges-light-clients-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 16,
                   xpReward: 40,
-                  content: `# Light clients — the gold standard verification primitive
+                  content: `# Lesson 2 — Light clients — the gold-standard verification primitive
+
+## Question
+
+A light client verifies a chain's state **without running a full node** — it tracks just enough consensus to check Merkle proofs against block headers. For bridges this is the gold standard: zero trust in a third-party validator set, just cryptography. **What does a light client actually do, and what does it cost to run one in a smart contract?**
+
+## Principle (minimum model)
+
+- **A light client tracks a chain's consensus.** For Ethereum: track the sync committee (every 256 epochs ≈ 27 hours); verify BLS signatures from 2/3 of the committee against block headers; trust no one beyond the chain's consensus itself.
+- **State is verified by Merkle proof against the header.** Header → state root → MPT proof → storage slot. The light client doesn't store state; it verifies proofs against the header it already trusts.
+- **Helios is the reference Rust light client.** Built by a16z / Paradigm. Tracks the Ethereum sync committee, verifies block headers, exposes a JSON-RPC. ~5 K lines of Rust.
+- **On-chain light clients are expensive.** BLS signature verification = ~140 K gas on Ethereum. Tracking the sync committee = a state-root update every ~27 hours. Worth it for high-value bridges; overkill for low-value transfers.
+- **IBC light clients are the production gold standard.** Cosmos chains run each other's light clients on-chain → trust-minimised cross-chain messaging at the consensus layer. Tendermint's instant finality makes this cheap.
+- **Ethereum's post-Pectra light-client improvements.** Smaller sync committees / cheaper BLS verification / single-slot finality → on-chain light clients become viable for more chains.
+- **Counter-example: optimistic light clients.** Assume the light client is correct, allow challenges for N days. Cheaper but introduces a slow withdrawal window (same shape as OP rollups).
+
+## Worked example + steps
+
+# Light clients — the gold standard verification primitive
 
 A full Ethereum node stores ~1TB and runs ~200GB of RAM. A **light client** does the same job — verifying that the chain is what it claims to be — using a few megabytes and a phone-grade CPU. It downloads block headers, follows the same consensus rules a full node does, and trusts **only** what the protocol itself guarantees. Nothing else.
 
 That's why every serious cross-chain bridge eventually asks: can we put a light client of the source chain *inside the destination chain* and verify cross-chain messages cryptographically? When the answer is yes, you've reached the **trust-minimization gold standard**. And the production light clients that get there are written in Rust.
 
-> 🛑 **Predict before scrolling.** A light client uses ~MB; a full node uses ~1TB. **What can a light client NOT do?** Name three things before scrolling. (Hint: think about what *state* enables.)
 
 ## 1. What a light client is — and isn't
 
@@ -265,7 +302,6 @@ Production examples (in 2026):
 
 ZK light clients are the **endgame** for bridges. Trust = math.
 
-> 🛑 **Anti-fluency.** "ZK light clients are constant cost." **Sort of.** The verification cost on-chain is constant; the proof generation off-chain is expensive (~$1-10 per proof in 2026). Restate the cost model: when is ZK light client cheaper than naive light client?
 
 When throughput is high. Naive: O(N) cost where N = headers. ZK: O(1) on-chain + O(N) off-chain. ZK wins when you're verifying many headers and on-chain gas is the binding constraint.
 
@@ -303,7 +339,14 @@ Reth's EVM runs the same as mainnet, so any Solidity light client (Helios's cont
 - [Ethereum light client spec](https://github.com/ethereum/consensus-specs/blob/master/specs/altair/light-client/sync-protocol.md) — the formal protocol
 - [SP1 light client](https://github.com/succinctlabs/sp1) — ZK light client implementation
 
-> Final check: in one sentence, why is a light client of your L1 the **most trust-minimized** way for other chains to verify your state? **If your answer doesn't reference "trust only the source chain's consensus," re-read §1.**`,
+> Final check: in one sentence, why is a light client of your L1 the **most trust-minimized** way for other chains to verify your state? **If your answer doesn't reference "trust only the source chain's consensus," re-read §1.**
+
+## Summary (3 lines)
+
+- A light client tracks consensus (sync committee + BLS verification) and verifies Merkle proofs against block headers. No third-party trust — cryptographic only.
+- Helios = reference Rust light client (~5 K lines). On-chain light clients are expensive (~140 K gas / BLS verification + sync-committee updates every 27 h) but gold-standard for high-value bridges.
+- IBC is the production reference (Cosmos chains run each other's light clients on-chain). Ethereum's post-Pectra path makes more on-chain light clients viable. Next lesson reads OP's standard bridge — the canonical L2 deposit/withdrawal pattern.
+`,
                 },
               ],
             },
@@ -314,17 +357,34 @@ Reth's EVM runs the same as mainnet, so any Solidity light client (Helios's cont
             lessons: {
               create: [
                 {
-                  title: 'OP Standard Bridge — the canonical L2 deposit/withdrawal pattern',
+                  title: 'Lesson 3 — OP Standard Bridge — the canonical L2 deposit/withdrawal pattern',
                   slug: 'bridges-op-standard-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 18,
                   xpReward: 45,
-                  content: `# OP Standard Bridge — the canonical L2 deposit/withdrawal pattern
+                  content: `# Lesson 3 — OP Standard Bridge — the canonical L2 deposit/withdrawal pattern
+
+## Question
+
+OP Mainnet processes billions of dollars through its standard bridge. **The deposit path is fast (~10 min); the withdrawal path takes 7 days.** That asymmetry is forced by the optimistic rollup trust model. Read the actual contracts and trace exactly why.
+
+## Principle (minimum model)
+
+- **OP bridge has two contracts.** \`L1StandardBridge\` on Ethereum L1, \`L2StandardBridge\` on OP L2. Deposit goes L1 → L2 (fast); withdrawal goes L2 → L1 (slow, 7-day challenge window).
+- **Deposit path (~10 minutes).** User calls \`L1StandardBridge.depositETHTo(...)\` → contract emits \`DepositInitiated\` → \`OptimismPortal\` queues a deposit transaction → OP sequencer reads the L1 log → mints corresponding tokens on L2.
+- **Withdrawal path (7 days).** User calls \`L2StandardBridge.withdraw(...)\` → contract burns tokens on L2 → after the state root is published on L1, user proves their withdrawal → challenge window opens → after 7 days, finalise on L1.
+- **The 7-day window is the security model.** Anyone can challenge a fraudulent state root during the window. If a fraud proof succeeds, the bad state root is rolled back. After 7 days, the state root is final.
+- **OptimismPortal is the trust anchor.** The contract that holds all locked ETH. A bug there is catastrophic — the contract itself is the trust anchor.
+- **The \`messagePassing\` abstraction.** OP's \`CrossDomainMessenger\` is the general-purpose primitive; \`StandardBridge\` is a specialisation for ETH/ERC-20. Custom L2 apps use \`CrossDomainMessenger\` directly.
+- **Liquidity-provider bridges (Across / Hop) skip the 7-day wait.** They front the user funds on L1 and reclaim from the canonical bridge after 7 days. Trade-off: a small fee, but instant withdrawal.
+
+## Worked example + steps
+
+# OP Standard Bridge — the canonical L2 deposit/withdrawal pattern
 
 Every OP Stack chain — Optimism, Base, Mode, Worldchain, Zora — runs the same bridge. They don't each pick a multisig or stand up a validator set; they all use the rollup's own consensus as the bridge's security model. **The bridge is just an interface to the rollup**, and the rollup is the trust anchor. This is the canonical "trustless L1↔L2" reference, and reading it once teaches you a pattern you'll see (with variations) in every native L2 bridge you encounter.
 
-> 🛑 **Predict before scrolling.** You deposit 1 ETH from Ethereum to Optimism. It shows up in ~2 minutes. You withdraw 1 ETH back. **How long until you can spend it on Ethereum?** Why?
 
 ## 1. The deposit flow
 
@@ -380,7 +440,6 @@ Three things make this slow:
 
 **Total**: ~7 days from withdrawal initiation to L1 settlement.
 
-> 🛑 **Anti-fluency.** "7 days is unacceptable for users." **Why is it necessary?** What attack does the challenge period prevent? If your answer doesn't reference "rollup's optimistic security model," re-read.
 
 The challenge period exists so anyone can submit a **fraud proof** if the sequencer lies about the L2 state. Without it, the sequencer could submit fraudulent state roots and the L1 contract would trust them.
 
@@ -473,22 +532,46 @@ The same pattern works for Tempo: an ExEx on Tempo that watches CCIP bridge even
 - [OP Stack contracts-bedrock](https://github.com/ethereum-optimism/optimism/tree/develop/packages/contracts-bedrock) — the real code
 - [Across whitepaper](https://docs.across.to/) — fast withdrawal market design
 
-> Final check: in one sentence, why is the OP Standard Bridge "trustless" but requires a 7-day withdrawal delay? **If your answer doesn't reference "optimistic security + fraud proofs," re-read §2.**`,
+> Final check: in one sentence, why is the OP Standard Bridge "trustless" but requires a 7-day withdrawal delay? **If your answer doesn't reference "optimistic security + fraud proofs," re-read §2.**
+
+## Summary (3 lines)
+
+- OP bridge = \`L1StandardBridge\` + \`L2StandardBridge\`. Deposit ~10 min (fast); withdrawal 7 days (slow — the optimistic challenge window is the security model).
+- Trust anchor = \`OptimismPortal\` contract; bug there is catastrophic. \`CrossDomainMessenger\` is the general primitive; \`StandardBridge\` is a specialisation for ETH/ERC-20.
+- Liquidity-provider bridges (Across / Hop) front user funds for instant withdrawal and reclaim from the canonical bridge after 7 days — fee in exchange for speed. Next lesson reads CCIP, Chainlink's cross-chain rail.
+`,
                 },
                 {
-                  title: 'Chainlink CCIP — the cross-chain rail Tempo uses',
+                  title: 'Lesson 4 — Chainlink CCIP — the cross-chain rail Tempo uses',
                   slug: 'bridges-ccip-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 18,
                   xpReward: 45,
-                  content: `# Chainlink CCIP — the cross-chain rail Tempo uses
+                  content: `# Lesson 4 — Chainlink CCIP — the cross-chain rail Tempo uses
+
+## Question
+
+Chainlink CCIP (Cross-Chain Interoperability Protocol) is Tempo's stablecoin-payment cross-chain rail. **A 12-node decentralised oracle network signs message attestations.** Not a light-client bridge, not a multi-sig — a hybrid that trades full trust-minimisation for low latency + chain-agnosticism.
+
+## Principle (minimum model)
+
+- **CCIP architecture.** A 12-node Decentralised Oracle Network (DON) observes messages on the source chain, signs an attestation, and the destination chain's \`CCIPReceiver\` verifies the signature.
+- **Trust model.** 12 nodes signing → trust the DON. Not a full light client. Not a 1-of-N multi-sig either. M-of-N (e.g. 9-of-12) — a known set of professional operators, slashable on Chainlink staking.
+- **Two settlement modes.** Lock-mint (canonical for cross-chain ERC-20s, source has lock contract / destination has mint contract) and burn-mint (cheaper, no liquidity locked, but every chain needs the mint contract).
+- **Risk Management Network (RMN).** A separate set of nodes that monitor for malicious activity. If the RMN flags a transfer, it's paused until manual review. Defence in depth against the DON.
+- **Tempo uses CCIP for stablecoin transfers.** Specifically chosen because: (1) low latency (~15 min vs 7 days for OP), (2) chain-agnostic (supports Ethereum / Polygon / Arbitrum / etc. with the same API), (3) regulator-friendly (Chainlink Labs is a known entity).
+- **Trade-off.** Lower trust-minimisation than a light client; higher than a 1-of-N multi-sig. Suitable for payment-rail use cases where 15-minute settlement and known operators are acceptable.
+- **\`CCIPReceiver\` contract.** Destination chains inherit \`CCIPReceiver\` and override \`_ccipReceive\` — exactly like inheriting Solidity contracts. Boilerplate is small; the receiver pattern is canonical.
+
+## Worked example + steps
+
+# Chainlink CCIP — the cross-chain rail Tempo uses
 
 A merchant accepts USDC payment in Tempo. Behind the scenes, that USDC must settle on Ethereum (for treasury) and Solana (for DeFi yield) — across three chains, two of which can't speak to each other directly. **This cross-chain settlement is not theoretical; Tempo runs it in production today on Chainlink CCIP** (Cross-Chain Interoperability Protocol). Not a light client. Not a fork of Wormhole. A production bridge designed for arbitrary chain pairs.
 
 Hyperliquid doesn't use CCIP — they ship their own bridge. But for mppsol and soltempo, CCIP is the **operational reality**, not a theoretical alternative. Understanding it isn't optional if you're going to architect anything that touches Tempo's payments stack.
 
-> 🛑 **Predict before scrolling.** CCIP has a "Risk Management Network" with the power to **block** messages. **Why?** What kind of attack does this defend against that pure cryptography can't?
 
 ## 1. CCIP's architecture in 60 seconds
 
@@ -516,7 +599,6 @@ So CCIP is **technically a multisig** — but a multisig built specifically for 
 - Token-pool architecture for asset bridges
 - Per-chain configurable risk parameters
 
-> 🛑 **Anti-fluency.** "CCIP is trustless." **Wrong.** It's a multisig with sophisticated safeguards. State the actual trust assumption: who can collude to steal funds, and what stops them?
 
 The committing DON + executing DON could collude to forge messages. The **RMN** is the backup — if the DON misbehaves, RMN can pause specific lanes. This adds a second layer of defense, but it's still trust-based, not cryptographically trustless.
 
@@ -650,7 +732,6 @@ Merchant payment ──[CCIP]── Solana DeFi ──[CCIP]── Tempo merchan
 
 The whole architecture is **CCIP-mediated cross-VM message passing**. Tempo's bridge layer for merchant ops = CCIP. No alternative was viable at scale.
 
-> 🛑 **Predict.** A merchant settles $1M through soltempo via CCIP, with $0.50 fee. **Is the fee model viable?** What if 1000 merchants settle simultaneously — does CCIP scale?
 
 For settlement-scale: $0.50 on $1M = 0.005% fee. Hugely viable. Throughput: CCIP supports ~10-100 msgs/sec per lane currently, so 1000 simultaneous settlements would queue. Acceptable for non-instant flows; problematic if merchants demand real-time UX.
 
@@ -667,20 +748,44 @@ For settlement-scale: $0.50 on $1M = 0.005% fee. Hugely viable. Throughput: CCIP
 3. Trace a message from \`ccipSend\` on source to \`ccipReceive\` on destination
 4. Identify the 3 trust boundaries (committing DON, executing DON, RMN)
 
-> Final check: in one sentence, why is CCIP the **operational choice** for Tempo↔Solana even though it's not the most trust-minimized option? **If your answer doesn't reference "Solana support + regulatory comfort + production maturity," re-read §6.**`,
+> Final check: in one sentence, why is CCIP the **operational choice** for Tempo↔Solana even though it's not the most trust-minimized option? **If your answer doesn't reference "Solana support + regulatory comfort + production maturity," re-read §6.**
+
+## Summary (3 lines)
+
+- CCIP = 12-node Decentralised Oracle Network signing message attestations + a separate Risk Management Network for monitoring. Hybrid trust model — more than a multi-sig, less than a light client.
+- Two settlement modes (lock-mint / burn-mint). Tempo chose CCIP for stablecoin transfers because of ~15-min latency, chain-agnosticism, and regulator-friendly known operators.
+- \`CCIPReceiver\` is the canonical receiver-side inheritance pattern. Trade-off: trust the DON for speed. Next lesson reads Wormhole + IBC for the multi-chain message protocols.
+`,
                 },
                 {
-                  title: 'Wormhole and IBC — multi-chain message protocols',
+                  title: 'Lesson 5 — Wormhole and IBC — multi-chain message protocols',
                   slug: 'bridges-wormhole-ibc-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 14,
                   xpReward: 40,
-                  content: `# Wormhole and IBC — multi-chain message protocols
+                  content: `# Lesson 5 — Wormhole and IBC — multi-chain message protocols
+
+## Question
+
+Wormhole connects Solana, Aptos, Sui, Ethereum, and 20+ other chains. IBC connects every Cosmos chain (~100 chains). **They solve the same problem with different trust models** — Wormhole = 19-validator guardian set, IBC = on-chain light clients. Read both, see the design space.
+
+## Principle (minimum model)
+
+- **Wormhole architecture.** 19 Guardians (professional validators — Jump Crypto, Certus, Figment, etc.) observe messages on the source chain, sign attestations (VAAs — Verified Action Approvals), the destination chain verifies 13-of-19 signatures.
+- **The 2022 Wormhole hack ($325 M).** A signature-verification bug allowed the attacker to forge a guardian quorum and mint wrapped ETH on Solana for free. Jump Crypto refunded users. Patched, but the architecture-level trust assumption (guardians honest) didn't change.
+- **IBC (Inter-Blockchain Communication) architecture.** Each Cosmos chain runs on-chain light clients of every chain it communicates with. Trust-minimised — cryptographic only.
+- **IBC flow.** Source chain → Tendermint header → IBC light client on destination → Merkle proof verification → message accepted. Native to Tendermint chains because Tendermint has instant finality.
+- **Why IBC works only on Cosmos.** Tendermint finality is single-slot → light client updates are cheap. Ethereum sync committee updates every 27 h → expensive on-chain. EVM-to-Cosmos IBC bridges (e.g. Polymer) are emerging but require optimistic rollup-style mechanisms.
+- **Polymer / Composable IBC.** Adapt IBC to EVM by running IBC clients as on-chain contracts plus optimistic challenge windows. Gold-standard cryptographic message-passing, retrofitted to chains that don't have native instant finality.
+- **Design-space summary.** Wormhole = federated trust (15 of 19) + fast + chain-agnostic. IBC = trust-minimised + fast (within Cosmos) + native-only. Both legitimate; pick by your trust tolerance.
+
+## Worked example + steps
+
+# Wormhole and IBC — multi-chain message protocols
 
 If CCIP is the bridge a regulated Tempo merchant uses, **Wormhole is what every Solana DeFi protocol used in 2022 to reach Ethereum** — fast, cheap, and held together with a 19-key multisig that's been hacked once. **IBC is what every Cosmos chain has used since 2019** — slower, more secure, and structurally unable to leave the Cosmos ecosystem. Two production protocols, very different audiences, both important to understand because they bracket the trust spectrum CCIP sits in the middle of.
 
-> 🛑 **Predict before scrolling.** Wormhole connects 30+ chains. IBC connects only Cosmos chains. **Why can't IBC just add Ethereum support and become the dominant bridge?**
 
 ## 1. Wormhole — the multisig that scales
 
@@ -700,7 +805,6 @@ February 2022: an attacker walked away with **$325M** of Wormhole-bridged ETH. T
 
 **Takeaway**: multisig bridges fail at the **verification logic** as often as at the keys. 19 guardians don't help if the contract checking them has a bug.
 
-> 🛑 **Anti-fluency.** Wormhole has 19 guardians. **What's f?** And why is "more guardians = more secure" the wrong way to think about multisig?
 
 f = ⌊(19-1)/3⌋ = 6 Byzantine tolerance. But the real failure mode isn't Byzantine collusion — it's **operational compromise** (keys stolen) or **verification bugs** (Wormhole 2022). Adding more guardians doesn't help if your contract has a bug.
 
@@ -805,7 +909,14 @@ Where each protocol sits:
 2. Browse \`ibc-go\` — find the light client interface
 3. Compare: how many lines of code is "verify a cross-chain message" in each system?
 
-> Final check: in one sentence, why are Wormhole and IBC **complementary** rather than competing? **If your answer doesn't reference "different ecosystems with different trust appetites," re-read §3.**`,
+> Final check: in one sentence, why are Wormhole and IBC **complementary** rather than competing? **If your answer doesn't reference "different ecosystems with different trust appetites," re-read §3.**
+
+## Summary (3 lines)
+
+- Wormhole = 19-Guardian federated signing (13-of-19 quorum) connecting 20+ chains. The 2022 hack ($325 M) was a signature-verification bug, not an architecture failure — but the federated trust assumption remains.
+- IBC = on-chain light clients between every Cosmos chain. Trust-minimised; works because Tendermint has single-slot finality. Polymer / Composable extend it to EVM via optimistic rollup-style adaptations.
+- Design space: federated trust (Wormhole) vs cryptographic (IBC). Both have legitimate use cases; the trust tolerance picks the design. Next lesson builds a minimal bridge with light-client-verified messaging.
+`,
                 },
               ],
             },
@@ -816,17 +927,34 @@ Where each protocol sits:
             lessons: {
               create: [
                 {
-                  title: 'Building a minimal bridge on Reth — light-client-verified messaging',
+                  title: 'Lesson 6 — Building a minimal bridge on Reth — light-client-verified messaging',
                   slug: 'bridges-build-minimal-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 22,
                   xpReward: 55,
-                  content: `# Building a minimal bridge on Reth — light-client-verified messaging
+                  content: `# Lesson 6 — Building a minimal bridge on Reth — light-client-verified messaging
+
+## Question
+
+You want a custom bridge between your Reth-based L2 (e.g. Tempo) and Ethereum. **Build it. Three components: a light-client verifier on-chain, a relayer (off-chain), and a bridge contract (on-chain).** This is what Tempo, Berachain, Hyperliquid all built in some form.
+
+## Principle (minimum model)
+
+- **Three components.** (1) Light-client verifier (on-chain) — verifies Ethereum block headers against the sync committee. (2) Relayer (off-chain Rust process) — fetches headers and messages from Ethereum, submits to the bridge contract on the L2. (3) Bridge contract (on-chain L2) — accepts verified messages, executes mint/transfer.
+- **Light-client verifier (Solidity).** Stores the sync committee public keys; on each header update verifies BLS signatures from 2/3 of the committee; updates the canonical Ethereum state root.
+- **Relayer (Rust, ~50 lines using Alloy).** Watches Ethereum for new headers via \`Provider::subscribe_blocks()\`; fetches messages emitted via \`eth_getLogs\`; submits \`headerUpdate + message + merkleProof\` to the L2 bridge contract.
+- **Bridge contract (Solidity, \`TempoBridge\`).** Receives \`relayMessage(header, proof, message)\` → calls the light-client verifier to validate the header → verifies the Merkle proof against the validated state root → executes the message (mint / transfer / function call).
+- **Why this is gold-standard.** No trusted validators. No multi-sig. The trust anchor is Ethereum's consensus itself; the bridge contract verifies that consensus on-chain. Same security as IBC, on EVM.
+- **Trade-offs.** BLS verification = ~140 K gas per header update (every ~27 hours). Relayer must be live — but anyone can run it (the contract is permissionless). For high-frequency low-value transfers, optimistic rollup-style adaptations are cheaper.
+- **Reth SDK angle.** A custom L2 built on Reth SDK can include the light-client verifier as a precompile (cheaper than Solidity) or as a system contract. Stage 9 precompiles in the openhl track show how.
+
+## Worked example + steps
+
+# Building a minimal bridge on Reth — light-client-verified messaging
 
 You've read the theory. You've read the production code. **Now you build the smallest possible trust-minimized bridge** — an Ethereum→Tempo flow where Tempo runs an Ethereum light client and verifies inclusion proofs of source-chain events. No multisig, no guardians, no fast-withdrawal LP. Just: source chain emits an event, light client says "yes, that event is in a finalized Ethereum block," destination chain mints. Three contracts, one relayer, one trust assumption.
 
-> 🛑 **Predict before scrolling.** The bridge has 3 components: a contract on Ethereum, a relayer, and a contract on Tempo. **What does each one do, and what does each one trust?**
 
 ## 1. The architecture
 
@@ -1087,107 +1215,136 @@ For Tempo (Reth-based BFT), the light client on Ethereum is **much simpler than 
 - [LayerZero V2](https://docs.layerzero.network) — modular bridge architecture
 - [Espresso shared sequencer](https://docs.espressosys.com/sequencer) — production shared bridge
 
-> Final check: in one sentence, what's the **single trust assumption** of a light-client-verified bridge, and what makes it the **gold standard**? **If your answer doesn't reference "the source chain's consensus + nothing else," re-read §1.**`,
+> Final check: in one sentence, what's the **single trust assumption** of a light-client-verified bridge, and what makes it the **gold standard**? **If your answer doesn't reference "the source chain's consensus + nothing else," re-read §1.**
+
+## Summary (3 lines)
+
+- Minimal light-client-verified bridge has three components: light-client verifier (on-chain Solidity), relayer (off-chain Rust ~50 lines using Alloy), bridge contract (on-chain Solidity).
+- Trust anchor = Ethereum consensus itself. No validators / multi-sigs / federated guardians — same security as IBC, on EVM. Permissionless relayer.
+- ~140 K gas per header update (every 27 h) is the cost; precompile light-client verifier on Reth SDK reduces this further. Tempo / Berachain / Hyperliquid built variations of this. Next: final quiz.
+`,
                 },
                 {
-                  title: 'Final quiz: cross-chain bridges',
+                  title: 'Quiz — Cross-Chain Bridges',
                   slug: 'bridges-final-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 1,
-                  duration: 12,
+                  duration: 16,
                   xpReward: 50,
-                  content: `# Final quiz: cross-chain bridges
+                  content: `# Quiz — Cross-Chain Bridges
 
-The cross-chain final check. You'll need this to architect any bridge that touches Tempo, Hyperliquid, or any Reth-based L1.`,
+## Question
+
+Recap the six lessons: bridge trilemma + five trust models, light clients as gold standard, OP Standard Bridge + CCIP + Wormhole + IBC, and the minimal Rust-relayer + Solidity-verifier bridge.
+
+## Principle (minimum model)
+
+- **Trust-model recap.** Five models (custodial / multi-sig / optimistic / light client / atomic swap). Bridge trilemma forces a trade-off (trust-minimised + cheap + fast → pick two). $2 B+ in hacks since 2021 — trust-anchor compromise dominates.
+- **Light-client primitive.** Tracks consensus (sync committee + BLS verification), verifies Merkle proofs against headers. Helios = Rust reference. Expensive on-chain (~140 K gas) but trust-minimised.
+- **Production bridge zoo.** OP Standard Bridge = optimistic rollup deposit/withdrawal (7-day window). CCIP = 12-node DON for Tempo stablecoin transfers. Wormhole = 19-Guardian federated (2022 $325 M hack). IBC = on-chain light clients between Cosmos chains.
+- **Minimal bridge build.** Three components (Solidity light-client verifier + Rust relayer using Alloy + Solidity bridge contract). Reth SDK can host the verifier as a precompile.
+
+## Worked example + steps
+
+# Final quiz: cross-chain bridges
+
+The cross-chain final check. You'll need this to architect any bridge that touches Tempo, Hyperliquid, or any Reth-based L1.
+
+## Summary (3 lines)
+
+- Seven questions spanning trust models, light clients, production bridges, and the minimal-build pattern.
+- Get three or more wrong → re-read the relevant lesson before moving on.
+- Pass → cross-chain track complete. Next: sequencer / validator / p2p Advanced tracks, or jump into Building OpenHL for the practical openhl Rust implementation.
+`,
                   quizQuestions: [
                     {
-                      question: 'Why do **the largest bridge hacks** keep coming from key/operational compromises and cross-chain trust-logic bugs rather than asset-contract bugs?',
-                      options: [
-                        'Smart contracts are formally verified, so bugs are rare.',
-                        'Multisig bridges rely on key holders for security; once a sufficient subset of keys is compromised (phishing, malware, insider), the contract\'s code is irrelevant because the signatures verify correctly. Operational security is the weakest link — and the bugs that do hit are in the bridge\'s cross-chain trust apparatus, not the underlying tokens.',
-                        'Hackers prefer easier targets like exchanges.',
-                        'Smart contract hacks are not categorized as bridge hacks.',
+                      "question": "Why do **the largest bridge hacks** keep coming from key/operational compromises and cross-chain trust-logic bugs rather than asset-contract bugs?",
+                      "options": [
+                        "Smart contracts are formally verified, so bugs are rare.",
+                        "Multisig bridges rely on key holders for security; once a sufficient subset of keys is compromised (phishing, malware, insider), the contract's code is irrelevant because the signatures verify correctly. Operational security is the weakest link — and the bugs that do hit are in the bridge's cross-chain trust apparatus, not the underlying tokens.",
+                        "Hackers prefer easier targets like exchanges.",
+                        "Smart contract hacks are not categorized as bridge hacks."
                       ],
-                      correctIndex: 1,
-                      explanation: 'Ronin ($625M) and Orbit ($80M) were outright key compromises — the bridge code did exactly what it was supposed to do (verify signatures) and the attack succeeded because the keys themselves were stolen. The other big losses (Wormhole, Nomad, Poly Network) were bugs not in the asset token contracts but in the bridge\'s cross-chain trust/verification logic — signature checks, initialization, storage-layout assumptions. Either way: multisig and trust-apparatus complexity are the systemic risk surface, not the token layer.',
+                      "correctIndex": 1,
+                      "explanation": "Ronin ($625M) and Orbit ($80M) were outright key compromises — the bridge code did exactly what it was supposed to do (verify signatures) and the attack succeeded because the keys themselves were stolen. The other big losses (Wormhole, Nomad, Poly Network) were bugs not in the asset token contracts but in the bridge's cross-chain trust/verification logic — signature checks, initialization, storage-layout assumptions. Either way: multisig and trust-apparatus complexity are the systemic risk surface, not the token layer."
                     },
                     {
-                      question: "What's the **bridge trilemma**, and which two corners does Chainlink CCIP pick?",
-                      options: [
-                        'Speed, cost, security. CCIP picks speed and security.',
-                        'Trustlessness, generality, extensibility. You can have any two but not all three. CCIP picks **general** (many chains) + **extensible** (easy to add chains) but sacrifices **trustless** — it relies on a PoS DON + RMN, not pure cryptography.',
-                        'Latency, throughput, cost. CCIP picks throughput and cost.',
-                        'L1, L2, sidechain. CCIP supports L1 and L2.',
+                      "question": "What's the **bridge trilemma**, and which two corners does Chainlink CCIP pick?",
+                      "options": [
+                        "Speed, cost, security. CCIP picks speed and security.",
+                        "Trustlessness, generality, extensibility. You can have any two but not all three. CCIP picks **general** (many chains) + **extensible** (easy to add chains) but sacrifices **trustless** — it relies on a PoS DON + RMN, not pure cryptography.",
+                        "Latency, throughput, cost. CCIP picks throughput and cost.",
+                        "L1, L2, sidechain. CCIP supports L1 and L2."
                       ],
-                      correctIndex: 1,
-                      explanation: 'The trilemma is the architectural constraint: trustless + general + extensible — pick 2. CCIP is general + extensible (multi-chain, easy to add). IBC is trustless + general (Cosmos chains). OP Standard is trustless + extensible (only OP Stack). No system gets all three.',
+                      "correctIndex": 1,
+                      "explanation": "The trilemma is the architectural constraint: trustless + general + extensible — pick 2. CCIP is general + extensible (multi-chain, easy to add). IBC is trustless + general (Cosmos chains). OP Standard is trustless + extensible (only OP Stack). No system gets all three."
                     },
                     {
-                      question: 'In the OP Standard Bridge, why does **withdrawal take 7 days** while **deposit takes 2 minutes**?',
-                      options: [
-                        'L2 is slower than L1.',
-                        'Deposits are forced inclusions (rollup consensus enforces L2 must process them); withdrawals require a **7-day challenge period** so anyone can submit fraud proofs if the sequencer lies about L2 state. The asymmetry comes from the optimistic security model.',
-                        'Engineers chose arbitrary numbers.',
-                        'It costs more gas to withdraw than deposit.',
+                      "question": "In the OP Standard Bridge, why does **withdrawal take 7 days** while **deposit takes 2 minutes**?",
+                      "options": [
+                        "L2 is slower than L1.",
+                        "Deposits are forced inclusions (rollup consensus enforces L2 must process them); withdrawals require a **7-day challenge period** so anyone can submit fraud proofs if the sequencer lies about L2 state. The asymmetry comes from the optimistic security model.",
+                        "Engineers chose arbitrary numbers.",
+                        "It costs more gas to withdraw than deposit."
                       ],
-                      correctIndex: 1,
-                      explanation: 'Deposits: L1 events MUST be processed by the rollup (built into the protocol). Withdrawals: depend on L2 state being honest, which requires waiting for the challenge period. The 7 days is the time needed to detect and submit fraud proofs against a malicious sequencer.',
+                      "correctIndex": 1,
+                      "explanation": "Deposits: L1 events MUST be processed by the rollup (built into the protocol). Withdrawals: depend on L2 state being honest, which requires waiting for the challenge period. The 7 days is the time needed to detect and submit fraud proofs against a malicious sequencer."
                     },
                     {
-                      question: 'Why is a **light client of chain X on chain Y** considered **trust-minimized** while a **13-of-19 multisig** is not?',
-                      options: [
-                        'Light clients have more validators than multisigs.',
-                        'A light client verifies chain X\'s consensus rules directly — to fool it, you must fool chain X itself. A multisig requires only compromising the keys; you don\'t need to corrupt the source chain. The light client\'s trust assumption equals the source chain\'s security; the multisig\'s trust assumption is much weaker.',
-                        'Multisigs are illegal in some jurisdictions.',
-                        'Light clients are written in Rust, multisigs in Solidity.',
+                      "question": "Why is a **light client of chain X on chain Y** considered **trust-minimized** while a **13-of-19 multisig** is not?",
+                      "options": [
+                        "Light clients have more validators than multisigs.",
+                        "A light client verifies chain X's consensus rules directly — to fool it, you must fool chain X itself. A multisig requires only compromising the keys; you don't need to corrupt the source chain. The light client's trust assumption equals the source chain's security; the multisig's trust assumption is much weaker.",
+                        "Multisigs are illegal in some jurisdictions.",
+                        "Light clients are written in Rust, multisigs in Solidity."
                       ],
-                      correctIndex: 1,
-                      explanation: 'Trust minimization is about *what you have to compromise* to attack the bridge. Light client: must break source chain consensus ($billions of stake at risk). Multisig: must compromise ~13 keys (much cheaper, social engineering possible). Bridge security = trust requirement, not validator count.',
+                      "correctIndex": 1,
+                      "explanation": "Trust minimization is about *what you have to compromise* to attack the bridge. Light client: must break source chain consensus ($billions of stake at risk). Multisig: must compromise ~13 keys (much cheaper, social engineering possible). Bridge security = trust requirement, not validator count."
                     },
                     {
-                      question: 'Tempo uses **Chainlink CCIP** for its merchant settlement layer. **Why CCIP over Wormhole, IBC, or OP Standard?**',
-                      options: [
-                        'CCIP is the cheapest option.',
-                        'CCIP has: (1) production Solana support (Tempo needs ETH ↔ Tempo ↔ Solana flows); (2) Risk Management Network for pause/veto authority; (3) institutional/regulatory comfort from Chainlink\'s established position. Wormhole has multisig risk and Tempo handles regulated payments. IBC doesn\'t span EVM↔Solana. OP Standard only works inside OP Stack.',
-                        'CCIP is required by Solana for compatibility.',
-                        'CCIP is the only EVM-compatible bridge.',
+                      "question": "Tempo uses **Chainlink CCIP** for its merchant settlement layer. **Why CCIP over Wormhole, IBC, or OP Standard?**",
+                      "options": [
+                        "CCIP is the cheapest option.",
+                        "CCIP has: (1) production Solana support (Tempo needs ETH ↔ Tempo ↔ Solana flows); (2) Risk Management Network for pause/veto authority; (3) institutional/regulatory comfort from Chainlink's established position. Wormhole has multisig risk and Tempo handles regulated payments. IBC doesn't span EVM↔Solana. OP Standard only works inside OP Stack.",
+                        "CCIP is required by Solana for compatibility.",
+                        "CCIP is the only EVM-compatible bridge."
                       ],
-                      correctIndex: 1,
-                      explanation: 'For a payments rail handling regulated merchant flows, CCIP\'s positioning matters more than absolute fees. RMN gives Tempo a safety brake (can pause bad messages). Chainlink\'s institutional adoption simplifies compliance conversations. The trust model isn\'t "best" but is "good enough for production payments" — which Wormhole isn\'t for regulated flows.',
+                      "correctIndex": 1,
+                      "explanation": "For a payments rail handling regulated merchant flows, CCIP's positioning matters more than absolute fees. RMN gives Tempo a safety brake (can pause bad messages). Chainlink's institutional adoption simplifies compliance conversations. The trust model isn't \"best\" but is \"good enough for production payments\" — which Wormhole isn't for regulated flows."
                     },
                     {
-                      question: 'A light-client-verified bridge requires the destination chain to **verify the source chain\'s consensus rules**. **Why is this expensive for Cosmos\'s IBC but cheap for OP Standard Bridge?**',
-                      options: [
-                        'OP Standard uses ZK proofs.',
+                      "question": "A light-client-verified bridge requires the destination chain to **verify the source chain's consensus rules**. **Why is this expensive for Cosmos's IBC but cheap for OP Standard Bridge?**",
+                      "options": [
+                        "OP Standard uses ZK proofs.",
                         "Cosmos IBC verifies the source chain's Tendermint consensus (full BFT signature verification, ~5000 gas per header). OP Standard Bridge uses optimistic security: the destination chain just waits 7 days for fraud proofs to be submitted on-chain, then trusts the state root. Different security models = different verification costs.",
-                        'OP Standard is cheaper because it\'s a layer-2.',
-                        'IBC requires custom hardware while OP Standard runs on commodity nodes.',
+                        "OP Standard is cheaper because it's a layer-2.",
+                        "IBC requires custom hardware while OP Standard runs on commodity nodes."
                       ],
-                      correctIndex: 1,
-                      explanation: "IBC is genuine light client verification — expensive but trustless. OP Standard is optimistic — cheap because verification is deferred (fraud proofs on demand), with a 7-day window as the trust replacement. Both are trust-minimized but in different ways.",
+                      "correctIndex": 1,
+                      "explanation": "IBC is genuine light client verification — expensive but trustless. OP Standard is optimistic — cheap because verification is deferred (fraud proofs on demand), with a 7-day window as the trust replacement. Both are trust-minimized but in different ways."
                     },
                     {
-                      question: 'Building a minimal trust-minimized bridge requires 3 components: L1 contract, relayer, and L2 contract. **What does the relayer trust, and why is this important?**',
-                      options: [
-                        'The relayer trusts the L1 and L2 sequencers.',
-                        'The relayer is **permissionless and trusts nothing**. Anyone can run a relayer. It observes L1 events, builds Merkle proofs, submits them to L2. If the L2 contract\'s light client verifies the proof, the action executes. The relayer\'s honesty doesn\'t matter — only the cryptographic proof matters.',
-                        'The relayer trusts the user, requires KYC.',
-                        'The relayer is operated by Chainlink and trusts their oracle network.',
+                      "question": "Building a minimal trust-minimized bridge requires 3 components: L1 contract, relayer, and L2 contract. **What does the relayer trust, and why is this important?**",
+                      "options": [
+                        "The relayer trusts the L1 and L2 sequencers.",
+                        "The relayer is **permissionless and trusts nothing**. Anyone can run a relayer. It observes L1 events, builds Merkle proofs, submits them to L2. If the L2 contract's light client verifies the proof, the action executes. The relayer's honesty doesn't matter — only the cryptographic proof matters.",
+                        "The relayer trusts the user, requires KYC.",
+                        "The relayer is operated by Chainlink and trusts their oracle network."
                       ],
-                      correctIndex: 1,
-                      explanation: 'Relayer permissionlessness is the entire point. The bridge doesn\'t depend on any particular relayer being honest — only on at least one relayer existing. This is censorship-resistant; if all CCIP nodes go offline, anyone can step in to relay.',
+                      "correctIndex": 1,
+                      "explanation": "Relayer permissionlessness is the entire point. The bridge doesn't depend on any particular relayer being honest — only on at least one relayer existing. This is censorship-resistant; if all CCIP nodes go offline, anyone can step in to relay."
                     },
                     {
-                      question: 'For **Tempo↔Solana** in soltempo, **why does ZK light client not work today** even though it\'s the trust-minimized endgame?',
-                      options: [
-                        'Solana doesn\'t support smart contracts.',
-                        'EVM↔non-EVM ZK light clients require proving the source chain\'s consensus (Solana\'s Tower BFT) inside a zkVM, then verifying on Solana. The cryptography is unique enough that mature production implementations don\'t exist yet (as of 2026). CCIP fills the gap with its DON+RMN multisig model.',
-                        'Solana doesn\'t allow cross-chain bridges.',
-                        'ZK proofs are too expensive to produce.',
+                      "question": "For **Tempo↔Solana** in soltempo, **why does ZK light client not work today** even though it's the trust-minimized endgame?",
+                      "options": [
+                        "Solana doesn't support smart contracts.",
+                        "EVM↔non-EVM ZK light clients require proving the source chain's consensus (Solana's Tower BFT) inside a zkVM, then verifying on Solana. The cryptography is unique enough that mature production implementations don't exist yet (as of 2026). CCIP fills the gap with its DON+RMN multisig model.",
+                        "Solana doesn't allow cross-chain bridges.",
+                        "ZK proofs are too expensive to produce."
                       ],
-                      correctIndex: 1,
-                      explanation: 'EVM↔EVM ZK light clients exist (e.g., for Polyhedra, SP1). EVM↔non-EVM is harder because the source chain\'s consensus structure must be efficient inside a zkVM, AND the destination chain must have ZK proof verification. Solana adds non-EVM cryptography. Mature production cases are emerging in 2026 but not yet table-stakes.',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "EVM↔EVM ZK light clients exist (e.g., for Polyhedra, SP1). EVM↔non-EVM is harder because the source chain's consensus structure must be efficient inside a zkVM, AND the destination chain must have ZK proof verification. Solana adds non-EVM cryptography. Mature production cases are emerging in 2026 but not yet table-stakes."
+                    }
                   ],
                 },
               ],
