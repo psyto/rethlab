@@ -78,6 +78,7 @@ import { seedRethBuildingV3JA } from './seed-reth-building-v3-ja';
 import { seedRethConsensusEngineeringV3JA } from './seed-reth-consensus-engineering-v3-ja';
 import { seedRethExpertV3JA } from './seed-reth-expert-v3-ja';
 import { seedRethSequencerRollupV3JA } from './seed-reth-sequencer-rollup-v3-ja';
+import { seedRethCrossChainBridgesV3JA } from './seed-reth-cross-chain-bridges-v3-ja';
 import { seedRethOpenHlClobEN } from './seed-reth-openhl-clob-en';
 import { seedRethOpenHlClobJA } from './seed-reth-openhl-clob-ja';
 import { seedRethOpenHlPrecompilesEN } from './seed-reth-openhl-precompiles-en';
@@ -163,6 +164,7 @@ const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethConsensusEngineeringV3JA,
   seedRethExpertV3JA,
   seedRethSequencerRollupV3JA,
+  seedRethCrossChainBridgesV3JA,
   seedRethFoundryEN,
   seedRethFoundryJA,
   seedRethFoundryV2JA,
