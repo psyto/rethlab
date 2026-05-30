@@ -12,7 +12,7 @@ export async function seedRethOpenHlAdlEN(prisma: PrismaClient) {
       difficulty: 'EXPERT',
       duration: 170,
       xpReward: 330,
-      track: 'building-openhl-adl',
+      track: 'diy-perp',
       tags,
       isPublished: true,
       sortOrder: 1015,

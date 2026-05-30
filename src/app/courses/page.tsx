@@ -118,9 +118,7 @@ export default function CourseCatalogPage() {
         };
 
         const isFlagship = (slug: string, track?: string | null) =>
-          track === 'diy-perp' ||
-          slug.includes('openhl') ||
-          slug.includes('perp-primer');
+          track === 'diy-perp' || slug.includes('openhl');
         const isPrereq = (slug: string) =>
           slug.includes('beginner') ||
           slug.includes('fundamentals') ||

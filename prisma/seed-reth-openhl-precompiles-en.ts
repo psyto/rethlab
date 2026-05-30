@@ -12,7 +12,7 @@ export async function seedRethOpenHlPrecompilesEN(prisma: PrismaClient) {
       difficulty: 'EXPERT',
       duration: 400,
       xpReward: 820,
-      track: 'building-openhl-precompiles',
+      track: 'diy-perp',
       tags,
       isPublished: true,
       sortOrder: 1012,

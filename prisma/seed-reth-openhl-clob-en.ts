@@ -12,7 +12,7 @@ export async function seedRethOpenHlClobEN(prisma: PrismaClient) {
       difficulty: 'EXPERT',
       duration: 365,
       xpReward: 800,
-      track: 'building-openhl-clob',
+      track: 'diy-perp',
       tags,
       isPublished: true,
       sortOrder: 1011,

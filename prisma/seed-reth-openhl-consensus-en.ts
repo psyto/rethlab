@@ -12,7 +12,7 @@ export async function seedRethOpenHlConsensusEN(prisma: PrismaClient) {
       difficulty: 'EXPERT',
       duration: 660,
       xpReward: 1270,
-      track: 'reth-openhl-consensus',
+      track: 'diy-perp',
       tags,
       isPublished: true,
       sortOrder: 602,

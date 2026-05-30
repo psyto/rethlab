@@ -12,7 +12,7 @@ export async function seedRethPerpPrimerJA(prisma: PrismaClient) {
       difficulty: 'INTERMEDIATE',
       duration: 140,
       xpReward: 240,
-      track: 'perp-primer',
+      track: 'diy-perp',
       tags,
       isPublished: true,
       sortOrder: 500,
