@@ -261,7 +261,7 @@ export const ja: TranslationKeys = {
     },
     use: {
       title: '寄付の使い道',
-      item1: '既存カリキュラム（17 コース・約 200+ レッスン）を全員に無料で提供し続けること',
+      item1: '既存カリキュラム（21 コース・約 230+ レッスン）を全員に無料で提供し続けること',
       item2: '上流の Reth / Revm / Alloy / Foundry に対する各レッスンの随時更新',
       item3: 'ホスティング・インフラ・翻訳作業',
     },
@@ -361,7 +361,7 @@ export const ja: TranslationKeys = {
       title: 'RethLabについて',
     },
     tracks: {
-      title: '17 コース・3 つの学習導線',
+      title: '21 コース・5 つの学習導線',
       sourceReadingHeader: 'Concept / Deep Dive',
       sourceReadingSubheader: '考え方の土台と、詰まった時に掘るための読解コース',
       buildAlongHeader: 'Build Path',

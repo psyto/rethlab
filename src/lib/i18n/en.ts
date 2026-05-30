@@ -259,7 +259,7 @@ export const en = {
     },
     use: {
       title: 'What your support funds',
-      item1: 'Keeping the curriculum (17 courses, ~200+ lessons) free and open for everyone',
+      item1: 'Keeping the curriculum (21 courses, ~230+ lessons) free and open for everyone',
       item2: 'Keeping every lesson updated against upstream Reth / Revm / Alloy / Foundry',
       item3: 'Hosting, infrastructure, and translation work',
     },
@@ -359,7 +359,7 @@ export const en = {
       title: 'About RethLab',
     },
     tracks: {
-      title: '17 Courses Across Three Learning Paths',
+      title: '21 Courses Across Five Learning Paths',
       sourceReadingHeader: 'Concept / Deep Dive',
       sourceReadingSubheader: 'Foundation thinking plus source-reading tracks for unblock moments',
       buildAlongHeader: 'Build Path',
