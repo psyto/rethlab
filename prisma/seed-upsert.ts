@@ -75,6 +75,7 @@ import { seedRethOpenHlPrecompilesV3JA } from './seed-reth-openhl-precompiles-v3
 import { seedRethOpenHlFundingV3JA } from './seed-reth-openhl-funding-v3-ja';
 import { seedRethOpenHlLiquidationV3JA } from './seed-reth-openhl-liquidation-v3-ja';
 import { seedRethBuildingV3JA } from './seed-reth-building-v3-ja';
+import { seedRethConsensusEngineeringV3JA } from './seed-reth-consensus-engineering-v3-ja';
 import { seedRethOpenHlClobEN } from './seed-reth-openhl-clob-en';
 import { seedRethOpenHlClobJA } from './seed-reth-openhl-clob-ja';
 import { seedRethOpenHlPrecompilesEN } from './seed-reth-openhl-precompiles-en';
@@ -157,6 +158,7 @@ const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethOpenHlFundingV3JA,
   seedRethOpenHlLiquidationV3JA,
   seedRethBuildingV3JA,
+  seedRethConsensusEngineeringV3JA,
   seedRethFoundryEN,
   seedRethFoundryJA,
   seedRethFoundryV2JA,
