@@ -32,7 +32,10 @@ function distillDescription(content: string | null | undefined, maxLen: number):
     .replace(/\*([^*\n]+)\*/g, '$1')
     .replace(/(^|[^_])_([^_\n]+)_(?!\w)/g, '$1$2')
     .replace(/<[^>]+>/g, '')
-    .replace(/^[-:|\s]+$/gm, '')
+    // Strip pure-separator lines like `|---|---|` left by markdown tables.
+    // Pattern intentionally built via `new RegExp` so the Tailwind v4 source
+    // scanner does not interpret the bracket form as an arbitrary class.
+    .replace(new RegExp('^[\\s\\-:|]+$', 'gm'), '')
     .replace(/\|/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
