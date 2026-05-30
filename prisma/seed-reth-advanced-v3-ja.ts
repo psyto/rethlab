@@ -10,7 +10,7 @@ export async function seedRethAdvancedV3JA(prisma: PrismaClient) {
       description:
         'Reth の本物のソースを読む — Rust EVM スタックの **DB + 分散システム + 並行性層**。Staged Sync (10 ステージの ETL パイプライン)、ExEx (Execution Extensions — インプロセスのインデクサ・MEV・リスクエンジン用)、Reth SDK (自前の App-chain を組み立てる)。3 つの独立した中級コース (Revm・Reth・Alloy) の 1 つ — `Database` トレイトと Revm 実行モデルへの慣れを前提にする箇所があるので、Inside Revm を先にやることを推奨。',
       difficulty: 'INTERMEDIATE',
-      duration: 145,
+      duration: 172,
       xpReward: 470,
       track: 'reth-advanced',
       tags,
@@ -1678,6 +1678,8 @@ NodeBuilder API の 3 軸（types / components / add_ons）、6 コンポーネ�
 ## 問い
 
 読むのはリハーサル、**実装するのが記憶**。カスタム pool ビルダーを書いて差し替え、ノードバイナリの中で自分のコードが動くのを観察。**\`CustomPoolBuilder::build_pool\` の 3 要素 + LoggingValidator のラップパターン + Dev チェーンで確認 — どこにあるか？**
+
+> 注: 以下のコード断片は拡張ポイント理解のための概念スニペットです（`...` は省略箇所）。そのまま実行する用途ではありません。
 
 ## 原理（最小モデル）
 
