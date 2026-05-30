@@ -10,12 +10,12 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
       description:
         'Reth の本物のソースを読む — Rust EVM スタックの **DB + 分散システム + 並行性層**。Staged Sync (10 ステージの ETL パイプライン)、ExEx (Execution Extensions — インプロセスのインデクサ・MEV・リスクエンジン用)、Reth SDK (自前の App-chain を組み立てる)。3 つの独立した中級コース (Revm・Reth・Alloy) の 1 つ — `Database` トレイトと Revm 実行モデルへの慣れを前提にする箇所があるので、Inside Revm を先にやることを推奨。',
       difficulty: 'INTERMEDIATE',
-      duration: 145,
+      duration: 172,
       xpReward: 470,
       track: 'reth-advanced',
       tags,
       isPublished: true,
-      sortOrder: 220,
+      sortOrder: 1220,
       locale: 'ja',
       instructorName: 'RethLab',
       modules: {
@@ -26,65 +26,87 @@ export async function seedRethAdvancedJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Inside Reth へようこそ — このコースの読み方',
+                  title: 'レッスン0 — Inside Reth へようこそ',
                   slug: 'reth-advanced-welcome-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Inside Reth へようこそ — このコースの読み方
+                  content: `# レッスン0 — Inside Reth へようこそ
 
-これは RethLab の 3 つの独立した中級ティアコースの 1 つです:
+## 問い
 
-- **Inside Revm** — EVM エンジンの内部 *(まだなら先に推奨)*
-- **Inside Reth**（あなたはここ）— Reth の内部: Staged Sync・ExEx・Reth SDK
-- **Inside Alloy** — Alloy の内部: Provider・Network・Signer
+これは RethLab の 3 つの独立した中級ティアコースの 1 つ。**どこから始め、何を前提に読むか？**
 
-3 つは独立していますが、**ここのいくつかのレッスンは Inside Revm で学ぶ \`Database\` トレイトと Revm 実行モデルへの慣れを前提にしています**。それが不安なら、Inside Revm を先に。
+## 原理（最小モデル）
 
-> 📋 **中級ティアは初めてか?** *中級への橋渡し* の最後にある **「中級コースの読み方」** を先に読む。編集スタイル（Predict プロンプト・クイズゲート・積み上げ→ウォークスルー→クイズ→ドリルのチェーン構造）とペースを説明する、3 つの中級コース共通の案内である。
+- **3 中級コースは独立だが順序がある.** Inside Revm（EVM エンジン）→ **Inside Reth**（このコース、Staged Sync + ExEx + SDK）→ Inside Alloy（Provider + Network + Signer）。Inside Revm を先に推奨（\`Database\` trait + Revm 実行モデルが前提）。
+- **3 トピックチェーン.** Staged Sync（10 ステージ ETL パイプライン）+ ExEx（インプロセス Rust 注入）+ Reth SDK（自前 App-chain）。各々が「積み上げ → ウォークスルー → クイズ → ドリル」の 4 部構成。
+- **前提知識 3 領域.** Revm 内部（\`Database\` trait の形）+ ブロックレベル Ethereum（header / body / receipts、reorg は通常運用）+ 中級 Rust（generics + trait bounds、Arc、async/Future、auto_impl）。
 
-## このコースで学ぶこと
+## 具体例
 
-[\`paradigmxyz/reth\`](https://github.com/paradigmxyz/reth) のソースを 1 行ずつ読みます: \`Stage\` トレイトと 10 ステージの sync パイプライン、**ExEx (Execution Extensions)** — インプロセスのインデクサ・MEV・リスクエンジン用、そして自前の App-chain を組み立てる **Reth SDK**。3 つのトピックチェーン、それぞれが積み上げ + ウォークスルー + クイズ + ドリル。
+3 中級コースの分担:
 
-終わりには、ノード速度のインデクサや独自の App-chain を出荷できるだけの Reth 内部を読み解いていることになる。
+| コース | 焦点 |
+| :--- | :--- |
+| Inside Revm | EVM エンジン内部 — **未受講なら先に推奨** |
+| **Inside Reth**（ここ） | Reth: Staged Sync・ExEx・Reth SDK |
+| Inside Alloy | Alloy: Provider・Network・Signer |
 
-## 前提知識
+セットアップ（一度だけ）:
 
-**Revm 内部**（Inside Revm を未受講の場合）:
-- \`Database\` トレイトの形と、Revm がそれを通じて状態を読む仕組み
+\`\`\`bash
+# 1. paradigmxyz/reth を clone
+git clone https://github.com/paradigmxyz/reth
+
+# 2. bluealloy/revm を clone（ExEx / SDK レッスンで横断参照）
+git clone https://github.com/bluealloy/revm
+
+# 3. 動く cargo ツールチェイン確認
+rustc --version
+
+# 4. cargo-expand（両リポの手続きマクロ）
+cargo install cargo-expand
+\`\`\`
+
+セカンドモニタか分割端末で、レッスンを読みながらソースを参照する形が想定。
+
+## ステップで組み立てる
+
+### Step 1: Inside Revm への自己チェック
+
+- \`Database\` trait の形、Revm が状態を読む仕組み
 - \`ExecutionStage\` で \`Stage\` と \`Database\` がどう相互作用するか
 
-**ブロックレベルの Ethereum**（中級への橋渡し でカバー）:
-- ブロック構造 (header / body / receipts)、reorg は通常運用
+不安なら Inside Revm を先に。
+
+### Step 2: ブロックレベル Ethereum
+
+- header / body / receipts、reorg は通常運用
 - sender 復元、tx body デコード、receipt の中身
 
-**中級 Rust**（同じく 中級への橋渡し で。このコース内の *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンが自己チェック用）:
+中級への橋渡し でカバー済。
+
+### Step 3: 中級 Rust 語彙
+
 - Generics + trait bounds、\`?Sized\`、\`dyn Trait\` vs \`impl Trait\`
-- \`Arc<T>\`、\`Mutex<T>\`、\`RwLock<T>\` — どれをいつ使うか
+- \`Arc<T>\`、\`Mutex<T>\`、\`RwLock<T>\`
 - \`async\` / \`Future\` / \`Stream\` の基礎
 - \`auto_impl\` マクロと手続き属性
 
-**Revm が不安?** Inside Revm を先に。Stage トレイトも SDK も Revm 型を直接参照する。
+このコース内の *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンが自己チェック用。
 
-## セットアップ — 一度だけ
+### Step 4: コース構造を把握
 
-レッスン 1 の前に、別ウィンドウでこれらを準備:
+3 トピックチェーン（Staged Sync / ExEx / SDK）+ Testing + Bridge to Expert。各チェーンは「buildup → walkthrough → quiz → drill」の 4 段。
 
-1. **\`paradigmxyz/reth\` を clone** — \`git clone https://github.com/paradigmxyz/reth\`
-2. **\`bluealloy/revm\` を clone** — \`git clone https://github.com/bluealloy/revm\` (ExEx と SDK レッスンで横断参照)
-3. **動く \`cargo\` ツールチェイン** — \`rustc --version\` でモダンなバージョンが出ること
-4. **\`cargo-expand\`** — \`cargo install cargo-expand\` (両リポジトリの手続きマクロ)
-5. **セカンドモニタか分割端末** — レッスンを読みながらソースを参照する
+## まとめ（3行）
 
-「Find in repo」プロンプトはリポジトリを実際に開いていないと意味がない。レッスン 1 の前にここまで済ませる。
-
-## 準備完了
-
-コース詳細に戻って **「\`Stage\` トレイトをステップで組み立てる」** から始める。
-
-Inside Reth の後: **Inside Alloy**（未受講なら）か、手続きマクロや zkVM 統合の深掘りがある **Expert** へ。`,
+- Inside Reth は RethLab の 3 中級コースの 1 つ、\`Database\` trait と Revm 実行モデルへの慣れを前提（不安なら Inside Revm を先に）。
+- 3 トピックチェーン（Staged Sync 10 ステージ ETL / ExEx インプロセス注入 / SDK 自前 App-chain）、各々が「積み上げ → ウォークスルー → クイズ → ドリル」の 4 部構成。
+- セットアップ（reth + revm clone + cargo-expand）を済ませて Lesson 1 「\`Stage\` トレイトをステップで組み立てる」から始める。
+`,
                 },
               ],
             },
@@ -95,19 +117,30 @@ Inside Reth の後: **Inside Alloy**（未受講なら）か、手続きマク�
             lessons: {
               create: [
                 {
-                  title: '\`Stage\` トレイトをステップで組み立てる',
+                  title: 'レッスン1 — \`Stage\` トレイトをステップで組み立てる',
                   slug: 'staged-sync-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 10,
                   xpReward: 25,
-                  content: `# \`Stage\` トレイトをステップで組み立てる
+                  content: `# レッスン1 — \`Stage\` トレイトをステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** **DB 層と並行性層が交わる場所**。staged sync は、データエンジニアリングの ETL パイプライン設計をチェーン同期に持ち込んだもの — 各 stage は独立だが順序があり、I/O をバッチ全体で償却する。Airflow の DAG、Kafka Streams のトポロジ、データベースのバックフィル — どれも同じ構造と格闘している。Reth のパイプラインは、その「チェーン同期版」。
+## 問い
 
-Staged Sync は Reth の背骨である。**そして、見た目は威圧的** — 本物の \`Stage\` トレイトは6つのメソッド、非同期の準備チェック、双方向の対称性、そして \`auto_impl(Box)\` 属性を抱えている。素のまま読むと、新しい概念が一度に6つ降ってくる。
+Staged Sync は Reth の背骨。本物の \`Stage\` トレイトは 6 メソッド + 非同期準備チェック + 双方向対称性 + \`auto_impl(Box)\` 属性 = 一度に概念が 6 つ降ってくる。**素朴な同期ループから組み立てると、各要素の理由が見えるか？**
 
-このレッスンでは、最も素朴な同期ループからこのトレイトを積み上げていく。最後まで通せば、以下の全要素を自分の手で組み立てたことになる:
+## 原理（最小モデル）
+
+- **素朴な「1 ブロックずつ」が遅い 3 理由.** バッチなし + I/O 償却なし + 並列化なし。修正方針 = ステージに分割、ブロック範囲を端から端まで処理。
+- **\`execute\` / \`unwind\` 対称性が要石.** Reorg を特殊ケースではなく通常運用に。**同じトレイト、2 方向**。
+- **\`ExecInput\` / \`ExecOutput\` で明示的再開可能.** target + checkpoint で「どこで止め、どこから再開」を表現。\`done: bool\` が戻り値内にあるのは **アトミック呼び出し/戻り値** のため。
+- **\`poll_execute_ready\` で非同期準備.** Rust async 形式の poll、ネットワーク I/O 待ちのステージがオーバーライド。pending を返してもパイプライン全体は止まらない。
+- **\`post_*_commit\` で opt-in ライフサイクル.** \`ExecutionStage\` が ExEx 通知を流す、Pruner が古いインデックス開放、など。
+- **\`#[auto_impl(Box)]\` でヘテロリスト.** \`Vec<Box<dyn Stage>>\` に格納可能、\`Box<S>\` への転送 impl を自動生成。
+
+## 具体例
+
+最終的に組み立てる本物のトレイト:
 
 \`\`\`rust
 #[auto_impl::auto_impl(Box)]
@@ -124,11 +157,7 @@ pub trait Stage<Provider>: Send {
 }
 \`\`\`
 
-> 📂 **別タブで \`paradigmxyz/reth\` を開く。** 各ステップで照合する。
-
-## ステップ 0 — 素朴な同期: 1ブロックずつ
-
-何も考えずに書くと、Ethereum の同期はこんな形:
+素朴な 1 ブロックずつ:
 
 \`\`\`rust
 fn sync_to_tip(client: &mut RethNode) -> Result<(), Error> {
@@ -146,19 +175,7 @@ fn sync_to_tip(client: &mut RethNode) -> Result<(), Error> {
 }
 \`\`\`
 
-1ブロックずつ。各ブロックが次のブロックを始める前に全フェーズを通る。
-
-> 🛑 **予測。** スクロールせずに、この素朴な設計が 2000 万ブロックで *破滅的に* 遅い理由を 3 つ挙げる。（ヒント: それぞれ *別種の* 非効率。）
-
-3つ:
-
-1. **バッチがない。** ECDSA sender 復元は1ブロックあたり同じ操作が 200 回。それを 200 回別々の呼び出しでやると、セットアップコストを 200 回分払うことになる。
-2. **I/O 償却がない。** ブロックごとに Merkle ルートを書く = 2000 万回の \`commit()\` — そのたびにディスクへ触る。バッチ化すれば、Merkle ルートは100万ブロックに1回書けば済む。
-3. **並列化がない。** ヘッダー取得は tx 実行に依存しない。Sender 復元は前ブロックに依存しない。それでもループは各フェーズでブロックする。
-
-修正方針: **作業をステージに分割する。** 各ステージが *ブロック範囲* を端から端まで処理してから次に渡す。
-
-## ステップ 1 — ステージをスケッチする
+ステージのスケッチ:
 
 \`\`\`rust
 let stages = vec![
@@ -177,13 +194,7 @@ for stage in &mut stages {
 }
 \`\`\`
 
-これで sender 復元はブロック間でバッチ化でき、Merkle ルートは償却され、ステージ内で並列化もできる。**データ構造はステージのリスト、各ステージは1つのトレイトを実装する。** 次にそのトレイトを組み立てる。
-
-## ステップ 2 — \`Stage\` の最初の試案
-
-> 🛑 **予測。** トレイトをスケッチする。オーケストレータが呼ぶメソッドは何か。ステージは何を返すか。予想を立ててから先へ進む。
-
-最初の試み:
+\`Stage\` の最初の試案（メソッド 1 つだけ）:
 
 \`\`\`rust
 trait Stage {
@@ -191,17 +202,7 @@ trait Stage {
 }
 \`\`\`
 
-メソッド1つ。呼び出し側が範囲を渡し、ステージが処理する。それで完了。
-
-前進同期だけならこれで動きます — ただし致命的な穴がある。
-
-## ステップ 3 — \`unwind\`: reorg はオプションではない
-
-> 🛑 **予測。** Ethereum の reorg は特殊ケースではなく日常的に起きる。スクロールせずに: この単一メソッドの \`Stage\` でブロック 1000 → 980 への reorg をどう扱うか?
-
-このトレイトには無い *別の* メソッドが必要になり、オーケストレータにも別のコードパスが必要になる。気付けばコードベースの半分が「reorg パス」になる。これが他の Ethereum クライアントが取った形であり、Reth が避けるよう設計された形である。
-
-Reth の答え: **同じトレイトに \`unwind\` を加える**:
+\`unwind\` 追加（reorg は通常運用）:
 
 \`\`\`rust
 trait Stage {
@@ -210,19 +211,7 @@ trait Stage {
 }
 \`\`\`
 
-前進 = 範囲に対して \`execute\`。後退 = 範囲に対して \`unwind\`。**同じトレイト、2方向。** Reorg は特殊ケースではなく通常運用の一部になる。**この対称性がアーキテクチャの要石である。**
-
-## ステップ 4 — \`ExecInput\` / \`ExecOutput\`: 明示的な再開可能性
-
-\`BlockRange\` だけでは情報が足りません。オーケストレータはステージに次のことを伝える必要があります:
-
-- *どこで止まるか。* ターゲットブロック。
-- *どこから再開するか。* 前回のチェックポイント（ノード再起動後）。
-
-ステージはオーケストレータに次のことを伝える必要があります:
-
-- *どこで止まったか。* 新しいチェックポイント。
-- *終わったかどうか。* \`false\` ならオーケストレータがまた呼ぶ — backpressure 制御。
+入出力 struct:
 
 \`\`\`rust
 pub struct ExecInput {
@@ -240,13 +229,7 @@ pub struct UnwindInput {
 }
 \`\`\`
 
-> 🛑 **理解度チェック。** \`done\` が \`ExecOutput\` の *中のフラグ* として返されるのはなぜ? \`has_more()\` のような別メソッドにしないのは? この設計選択はどんな制約に応えているのか?
-
-アトミックな呼び出し/戻り値にするためである。オーケストレータは1ターンごとに正確に1つのフィードバックが欲しい:「チェックポイント X まで進めた。また呼ぶかどうかは任せる」。\`has_more()\` を別メソッドにするとオーケストレータが1ターンで2回呼ぶことになり、checkpoint と has_more が食い違うバグの余地を生む。
-
-## ステップ 5 — 非同期の準備: \`poll_execute_ready\`
-
-ヘッダーをダウンロードするステージは即座に \`execute\` できない — ネットワーク応答を待つ必要があるからである。とはいえオーケストレータは、1つの遅いステージのせいでパイプライン全体を止めたくない。
+非同期準備:
 
 \`\`\`rust
 fn poll_execute_ready(&mut self, _cx: &mut Context<'_>, _input: ExecInput)
@@ -256,35 +239,18 @@ fn poll_execute_ready(&mut self, _cx: &mut Context<'_>, _input: ExecInput)
 }
 \`\`\`
 
-Rust の async 形式の poll メソッドである。
+\`Poll<T>\` の意味: \`Future\` の内部関数が \`Poll::Ready(value)\`（完了）か \`Poll::Pending\`（まだ準備中）を返す。Pending → ランタイムが脇に置き別ステージを poll → 準備完了で起こされ再 poll。**スレッドをブロックせずに「待つ」を表現**。
 
-> **\`Poll<T>\` とは:** Rust の \`Future\` は内部で \`fn poll(...) -> Poll<T>\` という関数を持ち、呼ばれるたびに \`Poll::Ready(value)\`（完了）か \`Poll::Pending\`（まだ準備中）のどちらかを返す。\`Pending\` を返したら、ランタイムはそのステージを脇に置き、別のステージを poll する。準備が整ったら別の経路で起こされ、再度 poll される。**スレッドをブロックせずに「待つ」を表現する仕組み。**
-
-常に準備完了のステージ（多くがそう）はデフォルトをそのまま使う。I/O を待つステージはオーバーライドして、futures が動いている間は \`Poll::Pending\` を返す。
-
-**オーケストレータは各ステージを poll し、pending なら次へ進む。** どのステージも他のステージをブロックしません。
-
-## ステップ 6 — Commit フック: \`post_execute_commit\` / \`post_unwind_commit\`
-
-ステージによっては、データがディスクに commit された *後* に作業をしたい場合がある。これらのフックを使えば、「commit 完了したか?」というロジックで \`execute\` を汚さずに、そうした仕事をこなせる。
+コミットフック（opt-in）:
 
 \`\`\`rust
 fn post_execute_commit(&mut self) -> Result<(), StageError> { Ok(()) }
 fn post_unwind_commit(&mut self) -> Result<(), StageError> { Ok(()) }
 \`\`\`
 
-デフォルトは no-op、必要なステージだけオーバーライドする。Reth 内の具体例:
+具体例: \`ExecutionStage\` が ExEx 通知を流す（subscriber が commit 済みデータを読みに来るので tx body のコミットが先に完了している保証が必要）/ Pruner 系が checkpoint 書き込み後にディスクから古いインデックスを開放。
 
-- **\`ExecutionStage\`** が \`post_execute_commit\` でブロック実行通知を ExEx subscriber へ流す — トランザクション本体のコミットが先に完了している保証が必要だから (subscriber は commit 済みデータを読みに来る)
-- **Pruner 系ステージ** がチェックポイント書き込み後にディスクから古いインデックスを開放する
-
-**ほとんどのステージはオーバーライドしません。** opt-in のライフサイクルであって、必須の配線ではない。
-
-## ステップ 7 — \`#[auto_impl(Box)]\`: ヘテロなステージリスト
-
-オーケストレータはステージを \`Vec<Box<dyn Stage<...>>>\` に格納する。そのためには、\`S: Stage\` のとき \`Box<S>\` も \`Stage\` を実装している必要がある。
-
-属性がなければ、これを手書きする必要がある:
+\`#[auto_impl(Box)]\` の転送:
 
 \`\`\`rust
 impl<S: Stage<P>> Stage<P> for Box<S> {
@@ -292,49 +258,89 @@ impl<S: Stage<P>> Stage<P> for Box<S> {
 }
 \`\`\`
 
-\`auto_impl\` は手続きマクロで、この転送コードを自動生成する。\`#[auto_impl(Box)]\` が付いていれば、オーケストレータは型の違うステージをリストで保持し、同じトレイトオブジェクト経由で全部呼べる。
+手書きせず属性で自動生成、\`Vec<Box<dyn Stage<...>>>\` に格納可能に。
 
-## ここまでに組み立てたもの
+## 失敗例（誤解）
 
-各要素がきちんと役割を果たしています:
+「reorg は特殊コードパスで扱う」— **間違い**。他クライアントの形 = コードベース半分が「reorg パス」化、Reth は **同じトレイトに \`unwind\`** で通常運用に。
 
-- **\`execute\` / \`unwind\`**（ステップ 3–4）— 対称性: 前進と reorg が同じ表面を使う
-- **\`ExecInput\` / \`ExecOutput\`**（ステップ 4）— 再起動を跨いだ明示的な再開
-- **フラグとしての \`done\`**（ステップ 4）— アトミックな呼び出し/戻り値
-- **\`poll_execute_ready\`**（ステップ 5）— 非同期の準備、ノンブロッキングなスケジュール
-- **\`post_*_commit\`**（ステップ 6）— opt-in のライフサイクルフック
-- **\`#[auto_impl(Box)]\`**（ステップ 7）— ヘテロなステージリスト
+「\`done\` を \`has_more()\` メソッドで返す」— **間違い**。オーケストレータが 1 ターンで 2 回呼ぶ = checkpoint と has_more が食い違うバグ余地。**戻り値内のフラグでアトミック**。
 
-次のレッスンでは Reth の本物の10ステージパイプラインを巡る — 各ステージが何をするか、なぜこの順序か。
+「同期セットアップを \`exex\` future 内に置く」— **間違い**。Reth が通知バッファ後に init が失敗 → ExEx 健全と誤認しつつ通知積上り。**\`exex_init\` と \`exex\` 分割で「起動できなかった」と「動いた後でクラッシュ」を区別**。
 
-## 進む前の想起
+## ステップで組み立てる
 
-スクロールせずに:
+### Step 1: 素朴な「1 ブロックずつ」の 3 失敗
 
-1. なぜ \`unwind\` は \`execute\` と同じトレイトにあるのか?
-2. \`done: bool\` は \`has_more()\` ではできない何を可能にするか?
-3. なぜ \`poll_execute_ready\` が存在する? どのステージがオーバーライドするか?
-4. \`#[auto_impl(Box)]\` は何の手書きを省いてくれるか?
+バッチなし（200 回 ECDSA セットアップ）+ I/O 償却なし（2000 万 commit）+ 並列化なし。**ステージ分割で全部解決**。
 
-どれか曖昧なら戻る。次のレッスンは Reth の本物のパイプラインである。
+### Step 2: \`execute\` / \`unwind\` 対称性
 
-> **🧭 ここまでで積み上げたもの:** **DB 層 × 並行性層の ETL パイプライン抽象** が完成 — \`Stage\` の \`execute\` / \`unwind\` 対称性、明示的な \`ExecInput\` / \`ExecOutput\`、I/O 準備のための \`poll_execute_ready\`、\`Box\` ディスパッチのための \`auto_impl\`。Airflow・dbt・Kafka Streams のパイプラインと同じ構造を、チェーン同期に持ち込んだかたち。次のレッスンでは、Reth に同梱されている本物の 10 ステージパイプラインを巡る。
+同じトレイト、2 方向。前進 = \`execute\`、後退 = \`unwind\`。Reorg は通常運用の一部に。
+
+### Step 3: \`ExecInput\` / \`ExecOutput\` で再開可能
+
+target（どこで止め）+ checkpoint（どこから再開）+ done フラグ（戻り値内、アトミック）。
+
+### Step 4: \`poll_execute_ready\` で非同期準備
+
+デフォルト Ready、ネットワーク I/O 待ちステージのみオーバーライド。
+
+### Step 5: \`post_*_commit\` で opt-in ライフサイクル
+
+デフォルト no-op、必要なステージのみ（\`ExecutionStage\` が ExEx 通知、Pruner がディスク開放）。
+
+### Step 6: \`#[auto_impl(Box)]\` で転送自動化
+
+\`Vec<Box<dyn Stage>>\` に格納可能、属性で 6 メソッドの転送 impl を自動生成。
+
+## 答え合わせ
+
+- **\`unwind\` を同トレイトにする利点**: 前進と reorg が **同じ表面** を使う = コードベースが「通常パス + reorg パス」に二分されない。Reth のアーキ要石。
+- **\`done\` が戻り値内のフラグである理由**: アトミック呼び出し/戻り値。オーケストレータは 1 ターンで「checkpoint X、また呼ぶ／呼ばない」の 1 フィードバックを得る。別メソッド = 2 回呼びで食い違いバグ。
+- **\`poll_execute_ready\` の存在理由**: ネットワーク I/O 待ち（HeaderStage など）が他ステージをブロックしないように pending 返す。常時 Ready のステージはデフォルト使用。
+
+## 合格基準
+
+- 6 メソッドの \`Stage\` トレイトを役割で言える。
+- 素朴 1 ブロックずつの 3 失敗（バッチ / I/O / 並列）を即答できる。
+- \`execute\` / \`unwind\` 対称性が要石である理由を 1 文で説明できる。
+- \`ExecInput\` / \`ExecOutput\` / \`UnwindInput\` の主要フィールドを言える。
+- \`#[auto_impl(Box)]\` が省く手書きを言える。
+
+## まとめ（3行）
+
+- \`Stage\` トレイト 6 メソッド = 素朴「1 ブロックずつ」の 3 失敗（バッチ / I/O / 並列）を解決する 6 設計判断の積み重ね。
+- \`execute\` / \`unwind\` 対称性 + \`ExecInput\` / \`ExecOutput\` の明示的再開 + \`poll_execute_ready\` の非同期準備 + \`post_*_commit\` の opt-in + \`#[auto_impl(Box)]\` のヘテロリスト。
+- 次のレッスンで Reth の本物の 10 ステージパイプラインを巡る、各ステージが何をするか + なぜこの順序か。
 `,
                 },
                 {
-                  title: 'Reth のパイプライン — 順序のある 10 ステージ',
+                  title: 'レッスン2 — Reth のパイプライン: 10 ステージ、順番付き',
                   slug: 'staged-sync-pipeline-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 10,
                   xpReward: 25,
-                  content: `# Reth のパイプライン: 10ステージ、順番付き
+                  content: `# レッスン2 — Reth のパイプライン: 10 ステージ、順番付き
 
-ノードがネットワークに参加して1分後を想像してほしい。ピアからすでに 10M ブロック分のヘッダーを引っ張ってきた。ここから、その大量のヘッダーを完全に検証されたチェーンに変換しなければならない — すべての tx を実行し、すべての state root を再計算し、すべてのインデックスを構築する。古いクライアントのようにブロックごとに処理すると、**数週間** かかる。Reth は **数時間** で終わらせる。
+## 問い
 
-トリックはこれ: 一度に1ブロックずつ処理するのではなく、**1つの *操作* を、数千ブロックにまたがって処理する** — まず全部の sender を復元、次に全部の tx を実行、次に全アカウントをハッシュ化、と続ける。これが「Staged Sync」。10ステージあり、固定された順序で走り、**順序は恣意的ではない** — ステージ間のすべての制約はどのステージがいつ走るかにエンコードされている。
+ノードがネットワーク参加 1 分後、10M ブロック分のヘッダーを引っ張った。**1 ブロックずつ処理 = 数週間 vs Reth の Staged Sync = 数時間** — トリックは「1 つの *操作* を数千ブロックにまたがって処理」。10 ステージ、固定順序、**順序は恣意的ではない** — どの制約がどの順序を強いるか？
 
-（前のレッスンで \`Stage\` トレイトを組み立てました。下の10ステージはその実装である。）
+## 原理（最小モデル）
+
+- **10 ステージのパイプライン.** Header → Body → SenderRecovery → Execution → AccountHashing → StorageHashing → Merkle → TransactionLookup → IndexHistory → Finish。
+- **3 制約が順序を規定.** Merkle はハッシング後 + AccountHashing/StorageHashing は理論並列だが順次実行（MDBX 競合 + DAG 複雑性）+ SenderRecovery が並列化の最大勝ち。
+- **MerkleStage がハッシング後である理由.** ソート済みハッシュ化キーを消費 → 全ソート集合が必要 → インターリーブ不可。
+- **AccountHashing と StorageHashing が並列実行されない理由.** MDBX 書き込み競合 + パイプライン単純性（DAG スケジューラ複雑化）。
+- **SenderRecoveryStage が並列化の勝ち.** 巨大バッチサイズ（10-30M 署名）+ データ依存なし + 純粋計算。Rayon で全 CPU コア展開。
+- **ExecutionStage は順次の状態依存.** ブロック N のストレージ書き込みがブロック N+1 の読み込みに影響 → Optimistic execution（Block-STM）なしでは並列化困難。
+- **100× 高速化の 3 要因.** バッチ化（~10×）+ ステージ内並列化（~10×）+ I/O 償却（~3×）。
+
+## 具体例
+
+10 ステージのフロー:
 
 \`\`\`mermaid
 flowchart LR
@@ -349,227 +355,205 @@ flowchart LR
     I --> F[FinishStage]
 \`\`\`
 
-読みながら Reth リポジトリの \`crates/stages/stages/src/stages/\` を開く。
-
-## 10ステージ
-
 | # | ステージ | 何をする | ホットループ |
 | - | -------- | -------- | ------------ |
 | 1 | \`HeaderStage\` | ブロックヘッダーをダウンロード | ネットワーク I/O |
 | 2 | \`BodyStage\` | tx 本体 + uncle をダウンロード | ネットワーク I/O |
-| 3 | \`SenderRecoveryStage\` | 各 tx の sender を ECDSA で復元（署名を、それを生成したアドレスに戻す） | CPU（並列） |
+| 3 | \`SenderRecoveryStage\` | 各 tx の sender を ECDSA で復元 | CPU（並列） |
 | 4 | \`ExecutionStage\` | Revm を走らせ、状態差分を蓄積 | CPU（Revm） |
 | 5 | \`AccountHashingStage\` | アカウント変更をハッシュ化キーでソート | sort + write |
 | 6 | \`StorageHashingStage\` | ストレージ変更をハッシュ化キーでソート | sort + write |
-| 7 | \`MerkleStage\` | Merkle Patricia Trie ルートを更新（Ethereum の state ツリーのハッシュ構造） | tree compute |
-| 8 | \`TransactionLookupStage\` | \`tx_hash → (block, index)\` インデックスを構築 | sort + write |
-| 9 | \`IndexAccountHistoryStage\` + \`IndexStorageHistoryStage\` | 履歴アクセスインデックス | sort + write |
+| 7 | \`MerkleStage\` | MPT ルートを更新 | tree compute |
+| 8 | \`TransactionLookupStage\` | \`tx_hash → (block, index)\` インデックス | sort + write |
+| 9 | \`IndexAccount/StorageHistoryStage\` | 履歴アクセスインデックス | sort + write |
 | 10 | \`FinishStage\` | 帳簿付け、確定 | なし |
 
-> 🛑 **前のレッスンの予想と比較。** 予想にあって *ここに無い* ステージは何? 含まれていないものが含まれているものよりも雄弁な場合がある — Paradigm はこのリストに「PrunerStage」を含めないことを選んだ（pruning は別のスケジュールで走る）。
+3 順序制約:
 
-## 順序が物を言う: 3つの制約
+**制約 1: \`MerkleStage\` はハッシング後**:
+- Merkle はソート済みハッシュ化キーを消費
+- AccountHashing/StorageHashing が Merkle 開始前にソート完了 + commit 必要
+- インターリーブ不可 = Merkle が処理するブロック範囲について全ソート集合が必要
 
-パイプラインの順序は3つの制約で決まる。それぞれが特定のステージを別のステージの前に置くことを強いる。
+**制約 2: AccountHashing と StorageHashing は順次実行（理論並列だが）**:
+- 両方 ExecutionStage 出力を消費、独立ソート済み変更集合を生成 → 理論並列可能
+- なぜ順次? ① MDBX 書き込み競合（並列でロック争い、計算面の利得なし）+ ② パイプライン単純性（並列分岐 = DAG スケジューラ複雑化、利得限界的）
 
-### 制約 1 — \`MerkleStage\` はハッシング *の後* でなければならない
+**制約 3: \`SenderRecoveryStage\` が並列化の最大勝ち**:
+- ECDSA 復元 = 純粋 CPU、共有状態なし、embarrassingly parallel
+- Rayon で全 CPU コア展開
+- 巨大バッチサイズ: 各ブロック 100-300 tx × 100K+ ブロック = 1 呼び出しで 10-30M 署名
+- データ依存なし + 純粋計算
+- \`ExecutionStage\` は順次状態依存（ブロック N のストレージ書き込み → ブロック N+1 の読み込み）→ Optimistic execution（Block-STM）なしでは並列化困難
 
-> 🛑 **予測。** Merkle Patricia Trie のルートには葉がハッシュ化キーでソートされている必要がある。**それがハッシングのステージ分けに何を強いるか?**
+100× 高速化の内訳:
+- **バッチ化** ~10×: Sender 復元 + ハッシング + Merkle ルート計算が 1 呼び出しで数千ブロックに償却
+- **ステージ内並列化** ~10×: 特に SenderRecoveryStage の Rayon 全コア展開
+- **I/O 償却** ~3×: ディスク書き込みがブロックごとではなくステージ境界の大きなソート済みバッチ
+- 掛け合わせ ~300× 理論値、実際は 100-200× に着地（ハードウェア依存）
 
-Merkle ステージはソート済みハッシュ化キーを消費する。アカウントハッシングとストレージハッシングは Merkle が始まる前にソートを完了して commit する必要がある。インターリーブは効かない — Merkle ステージが処理するブロック範囲について *全ソート集合* が必要。
+## 失敗例（誤解）
 
-これが \`AccountHashingStage\`(5) と \`StorageHashingStage\`(6) が \`MerkleStage\`(7) より前にある理由。**この特定の順序で、間に完全な commit を挟んで。**
+「Merkle ステージはハッシング中にインターリーブ可能」— **間違い**。Merkle はソート済みハッシュ化キーを消費 → 全ソート集合が必要 → AccountHashing/StorageHashing が完全に commit 完了してから Merkle が始まる。
 
-### 制約 2 — \`AccountHashingStage\` と \`StorageHashingStage\` は *並列実行できる*
+「並列化 = どこでも勝つ」— **間違い**。AccountHashing/StorageHashing は理論並列だが MDBX 書き込み競合で利得なし + パイプライン複雑化。**並列化は条件付きの勝ち**：embarrassingly parallel + データ依存なし + 純粋計算が揃ったときだけ。
 
-両方 \`ExecutionStage\` の出力を消費する。独立したソート済み変更集合を生成する（アカウントキーで vs ストレージキーで）。なのにパイプラインが順次実行するのはなぜ?
+「ExecutionStage を Block-STM で並列化すれば 10×」— **可能だが複雑**。ブロック N のストレージ書き込み → ブロック N+1 の読み込み = 順次状態依存。Block-STM は投機的並列実行 + 衝突再実行で並列化可能だが独自のコンセンサス的複雑性を伴う。
 
-> 🔍 **\`account_hashing.rs\` と \`storage_hashing.rs\` を開く。** それぞれ最初の30行を読む。何を共有している? Reth が2スレッドに分けない実用的な理由は?
+## ステップで組み立てる
 
-理由は2つ:
+### Step 1: 10 ステージを順に言える
 
-1. **ディスク書き込みの競合。** どちらのステージも MDBX（Reth の組み込みキーバリューストア）に書く。並列実行するとデータベースロックで競合し、計算面の利得はない。
-2. **パイプラインの単純さ。** 順次実行ならオーケストレータのスケジューラはフラットなリストのまま。並列分岐を加えると DAG スケジューラ（独立したステージを並行実行できるもの）が必要 — 複雑さが増えるが利得は限界的。
+Header → Body → SenderRecovery → Execution → AccountHashing → StorageHashing → Merkle → TransactionLookup → IndexHistory → Finish。
 
-下で紹介する Frontiers 2025 のトークがまさにこのトレードオフを論じている — 何が *並列化された* かと何が順次のままかを、それぞれの理由とともに。
+### Step 2: 3 順序制約
 
-### 制約 3 — \`SenderRecoveryStage\` が並列化の勝ちパターン
+Merkle はハッシング後 / AccountHashing と StorageHashing は順次（MDBX 競合 + DAG 複雑性）/ SenderRecovery が並列化の最大勝ち。
 
-> 🛑 **予測。** 10ステージの中で、並列化で *最も* 得をするのはどれ? なぜ?
+### Step 3: なぜ SenderRecovery が勝つか
 
-\`SenderRecoveryStage\`。ECDSA 復元 — tx の署名を署名者のアドレスに戻す処理 — は純粋な CPU、共有状態なし、embarrassingly parallel。Reth は Rayon（Rust のデータ並列ライブラリ）で全 CPU コアに展開する。
+巨大バッチ + データ依存なし + 純粋計算 = Rayon で全コア展開。
 
-このステージが特別な理由:
+### Step 4: ExecutionStage が並列化困難な理由
 
-- **巨大なバッチサイズ。** 各ブロックは 100–300 tx; ステージ呼び出しは 100K+ ブロックを一度に処理 = 1呼び出しで 10–30M 個の署名。
-- **データ依存なし。** 各復元は他から独立 — 前の結果を待つ必要がない。
-- **純粋計算。** 復元の合間に I/O なし。
+順次状態依存（ブロック N → N+1）、Block-STM は可能だが複雑。
 
-\`ExecutionStage\`(4) も CPU バウンドだが *順次の* 状態依存がある — ブロック N のストレージ書き込みがブロック N+1 の読み込みに影響。Optimistic execution（Block-STM など、ブロックを投機的に並列実行して衝突したら再実行する方式）なしには簡単に並列化できず、独自のコンセンサス的な複雑さを伴う。
+### Step 5: 100× の 3 要因
 
-## なぜ Staged Sync が勝つのか
+バッチ化 ~10× + ステージ内並列化 ~10× + I/O 償却 ~3× = 掛けて ~300×、実際 100-200×。
 
-ブロックバイブロック同期（geth の昔のデフォルト）は最大時でも〜50–100 blocks/sec。Staged sync は 10K+ blocks/sec。この 100× は3つの複利的な要因の積:
+## 答え合わせ
 
-1. **バッチ化。** Sender 復元、ハッシング、Merkle ルート計算 — すべて1呼び出しで数千ブロックに償却される。
-2. **ステージ内並列化。** ステージ内で（特に \`SenderRecoveryStage\`）、Rayon が全コアに作業を展開。
-3. **I/O 償却。** ディスク書き込みはブロックごとではなくステージ境界の大きなソート済みバッチで起きる。
+- **AccountHashing と StorageHashing を並列実行しない理由**: ① **ディスク書き込み競合**（両方 MDBX に書く → ロック争い → 計算面の利得を打ち消す）、② **パイプライン単純性**（並列分岐 = DAG スケジューラが必要 → 複雑性増 vs 利得限界的）。Frontiers 2025 トークがこのトレードオフを論じる。
+- **SenderRecovery がパイプラインで特別な理由**: ① 巨大バッチ（100K+ ブロック × 100-300 tx = 10-30M 署名 / 呼び出し）、② データ依存なし（各復元独立）、③ 純粋計算（復元の合間に I/O なし）。Rayon で全コア展開できる embarrassingly parallel の教科書例。
+- **100× 高速化の帰属**: バッチ化（~10×）が ECDSA セットアップを 100K+ ブロックに償却 + Merkle ルートを範囲ごとに 1 回（ブロックごとではない）でさらに ~10× + MDBX が効率的に書ける大きなソート済みバッチで ~3× = 掛けて ~300× 理論、ハードウェア依存で実際 100-200×。
 
-> 🛑 **最後の予測。** 読み進める前に、この 100× を具体的なステージに帰属させてみてほしい。最も寄与するのはどれ?
+## 合格基準
 
-おおよそ: ECDSA 復元のバッチ化＋並列化が〜10×、Merkle ルートを範囲ごとに1回（ブロックごとではない）でさらに〜10×、MDBX が効率的に書ける大きなソート済みバッチが〜3×。掛け合わせて〜300× が理論値; ハードウェア依存で実際は 100〜200× に着地。
+- 10 ステージを順に即答できる。
+- 3 順序制約を言える。
+- SenderRecovery が並列化の勝ちである 3 理由を言える。
+- ExecutionStage が並列化困難な順次状態依存を 1 文で説明できる。
+- 100× 高速化を 3 要因に分解できる。
 
-## クイズ前の想起
+## まとめ（3行）
 
-スクロールせずに:
-
-1. なぜ \`MerkleStage\` はハッシングの *後* でインターリーブされていないのか?
-2. \`AccountHashingStage\` と \`StorageHashingStage\` は並列実行できるのに、なぜしないのか?
-3. 10ステージの中で、並列化で最大の勝ちを得るのはどれ? なぜ?
-4. Staged sync がブロックバイブロックより速い3つの理由?
-
-次のレッスンはクイズ。曖昧な答えがあるなら今、想起してほしい。
-
-## 📺 関連動画
-
-\`\`\`youtube
-zntRpCKHyDc | Georgios Konstantopoulos — Reth: A New Rust Ethereum Client (アーキテクチャ概論)
-\`\`\`
-
-\`\`\`youtube
-z3tj8Lk_Ydo | Alexey Shekhirin & Dan Cline — Hyperoptimizing Reth (Frontiers 2025, pipeline perf)
-\`\`\`
+- 10 ステージパイプライン（Header → Body → SenderRecovery → Execution → AccountHashing → StorageHashing → Merkle → TransactionLookup → IndexHistory → Finish）、固定順序、3 制約が順序を規定。
+- SenderRecovery が並列化最大勝ち（embarrassingly parallel + Rayon 全コア）、AccountHashing/StorageHashing は理論並列だが順次（MDBX 競合 + DAG 複雑性）、ExecutionStage は順次状態依存。
+- 100× 高速化 = バッチ化 ~10× × ステージ内並列化 ~10× × I/O 償却 ~3× = ~300× 理論、実際 100-200×。
 `,
                 },
                 {
-                  title: 'クイズ: Stage トレイト + パイプラインの形は身についた?',
+                  title: 'クイズ — Staged Sync',
                   slug: 'staged-sync-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 2,
                   duration: 4,
                   xpReward: 25,
-                  content: `# クイズ: Stage トレイト + パイプラインの形は身についた?
+                  content: `# クイズ — Staged Sync
 
-トレイトの設計とパイプラインの順序制約をカバーする4問。同じルール: **クイズはうなずきで通せない。**
-
-2問以上落としたら、ドリルへ進む前に「\`Stage\` トレイトをステップで組み立てる」を読み直す。`,
+\`Stage\` トレイトの 6 メソッド、10 ステージパイプラインの順序制約、SenderRecovery の並列化、100× 高速化の 3 要因 を確認する。
+`,
                   quizQuestions: [
                     {
-                      question: "なぜ `unwind` は別の reorg トレイトやメソッドではなく、`Stage` トレイトの中で `execute` と同じ場所にあるのですか?",
-                      options: [
+                      "question": "なぜ `unwind` は別の reorg トレイトやメソッドではなく、`Stage` トレイトの中で `execute` と同じ場所にあるのですか?",
+                      "options": [
                         "Reorg はまれなので様式上の選択。",
                         "Rust はトレイトに対称的なメソッドを要求する。",
                         "Reorg は通常運用の一部で、同じトレイトに置くと「範囲を前進」と「範囲を後退」が構造的に同一になり、コードベースから並行する「reorg パス」を取り除ける。",
-                        "古い Reth バージョンの後方互換シム。",
+                        "古い Reth バージョンの後方互換シム。"
                       ],
-                      correctIndex: 2,
-                      explanation: "Reth の設計は reorg を特殊ではなく日常として扱う。同じトレイト → 同じオーケストレータスケジューラ、同じステージ単位ロジック。reorg を別トレイトにすると各ステージを2回実装することになり、オーケストレータが前進パスと後退パスに分裂 — まさに他のクライアントが持っていて Reth が避けるよう作られた形。",
+                      "correctIndex": 2,
+                      "explanation": "Reth の設計は reorg を特殊ではなく日常として扱う。同じトレイト → 同じオーケストレータスケジューラ、同じステージ単位ロジック。reorg を別トレイトにすると各ステージを2回実装することになり、オーケストレータが前進パスと後退パスに分裂 — まさに他のクライアントが持っていて Reth が避けるよう作られた形。"
                     },
                     {
-                      question: "なぜ `ExecOutput.done` は別の `has_more()` メソッドではなく、結果の中のフラグとして返されるのですか?",
-                      options: [
+                      "question": "なぜ `ExecOutput.done` は別の `has_more()` メソッドではなく、結果の中のフラグとして返されるのですか?",
+                      "options": [
                         "様式 — どちらでも同じ。",
                         "別の `has_more()` だとオーケストレータがターンに2回呼ぶ羽目になり（execute、それから has_more）、checkpoint と has_more が食い違うバグの種類を開く。出力の中のフラグなら呼び出しがアトミック — `execute` が状態のスナップショットを1つ返すだけ。",
                         "Rust の型システムが `has_more()` を表現できない。",
-                        "非同期キャンセルを可能にするため。",
+                        "非同期キャンセルを可能にするため。"
                       ],
-                      correctIndex: 1,
-                      explanation: "アトミックな呼び出し/戻り値が肝心。オーケストレータはターンごとに正確に1つのフィードバックが欲しい:「チェックポイント X まで進めた; また呼ぶかどうかはあなた次第」。これを2つのメソッドに分けると、その間に何が起きるかについての推論ギャップが開く。",
+                      "correctIndex": 1,
+                      "explanation": "アトミックな呼び出し/戻り値が肝心。オーケストレータはターンごとに正確に1つのフィードバックが欲しい:「チェックポイント X まで進めた; また呼ぶかどうかはあなた次第」。これを2つのメソッドに分けると、その間に何が起きるかについての推論ギャップが開く。"
                     },
                     {
-                      question: "なぜ `MerkleStage` は `AccountHashingStage` と `StorageHashingStage` の *後* に配置され、間に挟まれないのですか?",
-                      options: [
+                      "question": "なぜ `MerkleStage` は `AccountHashingStage` と `StorageHashingStage` の *後* に配置され、間に挟まれないのですか?",
+                      "options": [
                         "歴史的な事故; 順序は違ってもよい。",
                         "Merkle Patricia Trie のルートには葉がハッシュ化キーでソートされている必要がある。ハッシングステージがそのソートを生成し、Merkle はブロック範囲のソート集合全体を必要とするので、ハッシングは Merkle が始まる前に完了して commit しなければならない。",
                         "`MerkleStage` はハッシングより遅いので、性能のために最後。",
-                        "メモリを節約するため。",
+                        "メモリを節約するため。"
                       ],
-                      correctIndex: 1,
-                      explanation: "アルゴリズム上の制約: Merkle ルートの計算はソートされた葉が commit されるまで始められない。ハッシングがプロデューサ、Merkle がコンシューマ。プロデューサが完了し、それからコンシューマが走る。インターリーブすると部分的な Merkle 再計算が強制され、適切なバッチ化よりコストがかかる。",
+                      "correctIndex": 1,
+                      "explanation": "アルゴリズム上の制約: Merkle ルートの計算はソートされた葉が commit されるまで始められない。ハッシングがプロデューサ、Merkle がコンシューマ。プロデューサが完了し、それからコンシューマが走る。インターリーブすると部分的な Merkle 再計算が強制され、適切なバッチ化よりコストがかかる。"
                     },
                     {
-                      question: "Reth の10ステージのうち、`SenderRecoveryStage` が並列化で最も得をする。なぜ（例えば）`ExecutionStage` ではなく、これなのか?",
-                      options: [
+                      "question": "Reth の10ステージのうち、`SenderRecoveryStage` が並列化で最も得をする。なぜ（例えば）`ExecutionStage` ではなく、これなのか?",
+                      "options": [
                         "`SenderRecoveryStage` の方が処理する tx 数が多い。",
                         "Sender 復元は embarrassingly parallel: 各 ECDSA 復元が他から独立、共有状態なし。Execution には順次の状態依存がある — ブロック N のストレージ書き込みがブロック N+1 の読み込みに影響 — ので簡単には並列化できない。",
                         "Rayon は `ExecutionStage` の中では動かない。",
-                        "`ExecutionStage` は既に1コアを飽和させているので、並列化で得しない。",
+                        "`ExecutionStage` は既に1コアを飽和させているので、並列化で得しない。"
                       ],
-                      correctIndex: 1,
-                      explanation: "ECDSA 復元は署名間で独立、全コアに簡単に展開できる。Execution にはコンセンサスで決まった順次の状態依存があり、並列化には optimistic execution（Block-STM など）が必要で独自の複雑さを持つ。Sender 復元は作業の形が Rayon のモデルと完全に合うので、特別なケース。",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "ECDSA 復元は署名間で独立、全コアに簡単に展開できる。Execution にはコンセンサスで決まった順次の状態依存があり、並列化には optimistic execution（Block-STM など）が必要で独自の複雑さを持つ。Sender 復元は作業の形が Rayon のモデルと完全に合うので、特別なケース。"
+                    }
                   ],
                 },
                 {
-                  title: 'ドリル: \`SenderRecoveryStage\` を端から端まで読む',
+                  title: 'レッスン3 — ドリル: \`SenderRecoveryStage\` を端から端まで読む',
                   slug: 'staged-sync-drill-ja',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 12,
                   xpReward: 25,
-                  content: `# ドリル: \`SenderRecoveryStage\` を端から端まで読む
+                  content: `# レッスン3 — ドリル: \`SenderRecoveryStage\` を端から端まで読む
 
-読むのはリハーサル。**実装するのが記憶。** このドリルは「Staged Sync について読んだ」から「\`SenderRecoveryStage\` を1行ずつ読み、ソースから3つのアーキテクチャ上の問いに答えた」まで連れて行く。
+## 問い
 
-## セットアップ
+読むのはリハーサル、**実装するのが記憶**。\`SenderRecoveryStage\` を 1 行ずつ読み、3 つのアーキ問いに答える。**読み / 計算 / 書きの構造、バッチループ、Rayon 並列化、\`done\` フラグの戻り — どこにあるか？**
+
+## 原理（最小モデル）
+
+- **ターゲットファイル.** \`crates/stages/stages/src/stages/sender_recovery.rs\`。
+- **\`execute\` の 3 セクション.** 読み（MDBX から tx エンベロープ取得）+ 計算（Rayon で ECDSA 復元）+ 書き（MDBX に sender 書き戻し + checkpoint 更新）。
+- **バッチループ = \`commit_threshold\`.** 全ブロックを一度に処理せず分割 → メモリ有界 + backpressure（\`done: false\` でオーケストレータに「次のバッチ呼んで」）。
+- **\`done: true\` の条件.** \`ExecInput.target\` までの全ブロック処理完了。
+- **Rayon は内側 ECDSA ループに.** \`chunk.par_iter()\` で各 tx の sender 復元を並列、MDBX 書き込みは順次（シングル writer）。
+- **サブ線形スケール.** tx 20 倍でも実時間は 15-18 倍程度（バッチごとのオーバーヘッドが増えた仕事に償却）。
+- **\`tracing\` で動作観測.** \`RUST_LOG=reth_stages=debug\` で本物のステージ遷移ログを観察。
+
+## 具体例
+
+セットアップ:
 
 \`\`\`bash
 git clone https://github.com/paradigmxyz/reth
 cd reth
 \`\`\`
 
-ビルドする必要はありません — これは読みのドリルで、コンパイルのドリルではありません。
+ビルド不要（読みのドリル、コンパイルのドリルではない）。
 
-## ターゲットファイル
+ターゲットファイル: \`crates/stages/stages/src/stages/sender_recovery.rs\`
 
-\`crates/stages/stages/src/stages/sender_recovery.rs\`
-
-開く。順番に進める。
-
-## ドリル 1 — \`Stage\` 実装を見つける
-
-> 🛑 **スクロール前に予測。** \`SenderRecoveryStage::execute\` は何をするか、一文で? 中の「計算」は? その周りの「I/O」は? 文を書き留めてから先へ。
-
-ファイルを開く。\`impl<Provider> Stage<Provider> for SenderRecoveryStage\` を見つける。\`execute\` メソッドが目標である。
-
-メソッド本体をざっと読み、3つのセクションを特定:
+メソッド本体の 3 セクション:
 
 1. **読み** — 入力範囲のブロックの tx エンベロープを MDBX から取得
-2. **計算** — 各 tx の sender を ECDSA で復元（ここで Rayon が登場）
-3. **書き** — 復元した sender を MDBX に書き戻し、checkpoint を更新
+2. **計算** — 各 tx の sender を ECDSA で復元（Rayon が登場）
+3. **書き** — 復元した sender を MDBX に書き戻し、checkpoint 更新
 
-予測した文がこの読み/計算/書きの分割を捉えていなかったら、組み立てレッスンのステップ1に戻ってください — この形はパイプライン全体のパターンで、このステージ固有のものではありません。
+バッチループの検索キーワード: \`commit_threshold\`、\`chunk\`、\`batch\`。
 
-## ドリル 2 — バッチループを見つける
+バッチ化の 2 理由:
+- **メモリ**: 1000 万署名分のエンベロープバッファ = 高コスト RAM。バッチで working set 有界に
+- **Backpressure**: 各バッチ後に \`done: false\` 返し → オーケストレータが「commit して次に進むか、また呼ぶか」判断
 
-ステージは \`ExecInput.target\` の *全* ブロックを一度に処理するわけではありません。バッチ化する。
+\`commit_threshold\` フィールドがバッチサイズ制御、本番でチューニング可能。
 
-> 🔍 **バッチループを見つける。** ファイル内で \`commit_threshold\`、\`chunk\`、\`batch\` を検索。
+\`done: true\` への切替条件: \`ExecInput.target\` までの全ブロック処理完了 = 「この範囲でこれ以上仕事なし」。それまで \`done: false\` でオーケストレータに「次のバッチでまた呼んで」。
 
-> 🛑 **質問（書き留めて）:** なぜバッチ化するのか? なぜ範囲の全ブロックを一度に処理しないのか?
-
-理由は2つ:
-
-1. **メモリ。** 1000 万署名分のエンベロープバッファを RAM に保持するのは高コスト。バッチを切ることで working set を有界に保てる。
-2. **Backpressure。** 各バッチの後、ステージは \`done: false\` を返してオーケストレータに「commit して次に進むか、また呼ぶか」を判断させる。バッチ化しないと、ステージは all-or-nothing でしか commit できない。
-
-ステージ struct の \`commit_threshold\` フィールドがバッチサイズを制御する。**デフォルト値を見つけてほしい** — これは本番でチューニングできる値である。
-
-## ドリル 3 — \`done: false\` が返される箇所を見つける
-
-メソッド本体で \`done: false\` または \`ExecOutput { done\` を検索。
-
-> 🛑 **質問:** \`done\` が \`true\` に切り替わる条件は?
-
-ステージが \`ExecInput.target\` までの全ブロックを処理し終わったとき（この範囲でこれ以上仕事がない）。それまでは \`done: false\` がオーケストレータに「次のバッチでまた呼んで」と伝える。true になったら、オーケストレータは次のステージに進む。
-
-## ドリル 4 — Rayon の並列化を見つける
-
-ファイル内で \`par_iter\` または \`rayon::\` を検索。
-
-> 🔍 **質問:** Rayon はどこで登場? どのデータに?
-
-内側の ECDSA 復元ループ — 通常はこんな形です:
+Rayon の並列化（内側 ECDSA 復元ループ）:
 
 \`\`\`rust
 chunk.par_iter()
@@ -577,26 +561,11 @@ chunk.par_iter()
     .collect::<Vec<_>>()
 \`\`\`
 
-各 tx の sender 復元は独立 → コア間に展開しても安全 → Rayon が仕事を捌く。
+各 tx の sender 復元は独立 → コア間展開安全 → Rayon が捌く。
 
-> 🛑 **最終質問（答えを書き留めて）:** チェーンが1ブロックあたり 20 倍の tx を持つようになり、コア数は変わらないとする。\`SenderRecoveryStage\` は *20 倍* 遅くなるでしょうか? なぜ、あるいはなぜそうならないのか?
+スケール分析: tx 20 倍でコア数同じ → 各 Rayon バッチも大きくなる + 実時間は総署名数に概ね線形だがバッチごとオーバーヘッドが償却 → **20 倍の署名でも ~15-18 倍程度の遅さ** にとどまる。
 
-サブ線形にスケールする。1ブロックあたりの tx が増えると各 Rayon バッチも大きくなるが、コア数は同じ — 実時間は総署名数に対して概ね線形に伸びるものの、バッチごとのオーバーヘッド（chunking、チャンネル調整）が増えた仕事に償却されるため、総スループットは少し改善する。**結果として、20倍の署名でも〜15–18倍程度の遅さ** にとどまります（キャッシュ挙動次第）。
-
-## レッスン終了の想起
-
-スクロールせずに、自分の言葉で:
-
-1. \`SenderRecoveryStage::execute\` の読み/計算/書きの構造は?
-2. \`commit_threshold\` は何を制御する? なぜ存在するのか?
-3. なぜ Rayon の並列化は ECDSA 復元に適用され、（例えば）MDBX 書き込みには適用されないのか?
-4. なぜ \`done: false\` が戻り値の状態として存在するのか? 全 \`execute\` が範囲全体を完了する必要があったら何が壊れるか?
-
-どれか曖昧なら、ここで足止めである。関連する組み立てステップを読み直すか、ファイルを開き直してほしい。
-
-## ドリル 5 — \`tracing\` 経由でステージが実行される様子を観測する（任意）
-
-これまで全部「読む」だった。最後に **動かして見る** 1 段。Reth はあらゆるステージに \`tracing\` の span / event を仕込んでいる。debug レベルで動かせば、本番ノードでステージが何をしているかが行ごとに見える:
+\`tracing\` で観測（任意）:
 
 \`\`\`bash
 # reth リポジトリのルートで:
@@ -604,38 +573,88 @@ RUST_LOG=reth_stages=debug,reth_stages_api=debug \\
   cargo run --bin reth --release -- node --dev --dev.block-time 5s
 \`\`\`
 
-\`--dev\` は単一ノードの devnet を起動し、\`--dev.block-time 5s\` で 5 秒ごとにブロックを mine する。ターミナルにステージ遷移ログが流れ始めるはず — \`headers\`、\`bodies\`、\`sender_recovery\`、\`execution\`、\`hashing\`、\`merkle\`、\`tx_lookup\` などの span が、各ブロックに対して **読んだとおりの順序で** 走る。
+\`--dev\` = 単一ノード devnet、\`--dev.block-time 5s\` = 5 秒ごとブロック生成。ターミナルにステージ遷移ログ（\`headers\`、\`bodies\`、\`sender_recovery\`、\`execution\`、\`hashing\`、\`merkle\`、\`tx_lookup\`）が読んだ順序で。
 
-> 🛑 **何を観察すべきか:** 特定のブロック番号で \`sender_recovery\` の開始 → \`commit\` → 完了の流れが現れる。その間に \`execute()\` が **何回呼ばれているか** を数える（バッチサイズが小さいと複数回 — \`done: false\` の戻りパターンの実物）。
+観察ポイント: 特定ブロック番号で \`sender_recovery\` の開始 → \`commit\` → 完了の流れ。\`execute()\` が **何回呼ばれているか** を数える（バッチサイズ小なら複数回 = \`done: false\` 戻りパターンの実物）。
 
-これが本物。組み立てで読んだ「\`done: false\` を返してオーケストレータに backpressure を伝える」 が、\`tracing\` 出力にそのまま現れる。**メンタルモデルとログの一致が、レッスンを「分かった」から「動くと分かった」へ昇格させる。**
+## 失敗例（誤解）
 
-このドリルを終えた時点で、Paradigm が Reth を同期させているのと同じコードを読めるようになっている。`,
+「Rayon は全ループに適用すれば速くなる」— **間違い**。Rayon が効くのは **独立計算 + 共有状態なし + 純粋関数** が揃ったとき。MDBX 書き込みは順次（シングル writer）なので Rayon 化しても勝てない。ECDSA 復元のみ並列化対象。
+
+「バッチサイズは大きいほど速い」— **間違い**。大きすぎると ① RAM 圧迫、② コミット間隔長すぎでクラッシュ時の損失大、③ backpressure 効かず他ステージが詰まる。**\`commit_threshold\` のデフォルトは経験的最適点**、本番で調整。
+
+「\`done: false\` を返すと次のバッチを自動で実行」— **半分間違い**。オーケストレータが判断して「次のバッチ呼ぶ vs 次のステージに進む」を決める。**\`done: false\` は backpressure シグナル**、自動実行ではない。
+
+## ステップで組み立てる
+
+### Step 1: \`Stage\` 実装の場所を見つける
+
+\`impl<Provider> Stage<Provider> for SenderRecoveryStage\` → \`execute\` メソッド。
+
+### Step 2: 3 セクション特定
+
+読み（MDBX → tx エンベロープ）+ 計算（Rayon → ECDSA）+ 書き（MDBX → sender + checkpoint）。
+
+### Step 3: バッチループ確認
+
+\`commit_threshold\` / \`chunk\` / \`batch\` で検索 → メモリ + backpressure の 2 理由。
+
+### Step 4: Rayon 並列化を辿る
+
+\`par_iter\` / \`rayon::\` 検索 → 内側 ECDSA ループに限定。
+
+### Step 5: \`tracing\` で実動作を観察
+
+\`RUST_LOG=reth_stages=debug\` で dev チェーンを起動 → ステージ遷移ログ + \`execute()\` 呼び出し回数を数える。
+
+## 答え合わせ
+
+- **読み/計算/書きの構造の意味**: パイプライン全体のパターン、このステージ固有ではない。**全ステージが読み（MDBX 範囲取得）+ 計算（ステージ固有処理）+ 書き（MDBX commit）の 3 セクション構成**。
+- **\`commit_threshold\` の存在理由**: メモリ有界化（10M 署名バッファ回避）+ Backpressure シグナル（\`done: false\` でオーケストレータに「また呼んで」）。デフォルトは経験的最適、本番でチューニング可能。
+- **Rayon が ECDSA に適用され MDBX 書き込みに適用されない理由**: ① ECDSA = embarrassingly parallel（独立 + 純粋 + 共有状態なし）→ Rayon の勝ち、② MDBX 書き込み = シングル writer 制約（並列化不可）+ 順次書き込みで十分速い → Rayon 化しても勝てない。
+
+## 合格基準
+
+- \`SenderRecoveryStage::execute\` の読み / 計算 / 書き 3 セクションを言える。
+- \`commit_threshold\` の 2 理由（メモリ + backpressure）を即答できる。
+- Rayon が ECDSA に適用される 3 条件を言える。
+- \`done: false\` が backpressure シグナルである意味を 1 文で説明できる。
+- \`tracing\` で実動作を観測する手順を辿れる。
+
+## まとめ（3行）
+
+- \`SenderRecoveryStage::execute\` = 読み（MDBX → tx）+ 計算（Rayon → ECDSA）+ 書き（MDBX → sender + checkpoint）の 3 セクション。
+- \`commit_threshold\` でバッチ化（メモリ有界 + backpressure シグナル）、\`done: false\` がオーケストレータに「次のバッチ呼んで」を伝える。
+- Rayon は内側 ECDSA に限定、MDBX 書き込みはシングル writer。\`tracing\` で実動作を観測 + \`execute()\` 呼び出し回数を数えると backpressure パターンが実コードで見える。
+`,
                 },
                 {
-                  title: 'Rust：ライフタイム・Box・Arc・dyn Trait',
+                  title: 'レッスン4 — Rust: ライフタイム・Box・Arc・dyn Trait',
                   slug: 'rust-lifetimes-arc-dyn-ja',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 15,
                   xpReward: 30,
-                  content: `# Rust：ライフタイム・Box・Arc・dyn Trait
+                  content: `# レッスン4 — Rust: ライフタイム・Box・Arc・dyn Trait
 
-ExEx のソースファイルを開いてみてほしい。最初の 10 行で \`Arc<>\`、\`'static\`、\`dyn Trait\`、\`Box<>\` が立て続けに出てくる。Rust の **「上級だが実は単純」** な4つの機能 — Reth が出荷するコードを読むには、そのいずれもが必要である。**このレッスンはあなたを試すもので、教えるものではありません** — 予測プロンプトでつまずくなら、そのギャップは本物で、埋める価値がある。
+## 問い
 
-> 🛑 **コールドスタート: 各概念を一文で定義してほしい。** スクロールせずに：
-> - \`'a\`（ライフタイムパラメータ）
-> - \`'static\`
-> - \`Box<T>\`
-> - \`Arc<T>\` (\`Rc<T>\` との違い)
-> - \`Mutex<T>\`
-> - \`dyn Trait\`
->
-> 2 つ以上つまずいたら、このレッスンには十分価値がある。すらすら答えられたなら、レッスンはあなたの定義が **本当に正しいか** をテストする。
+ExEx ソースの最初の 10 行で \`Arc<>\`、\`'static\`、\`dyn Trait\`、\`Box<>\` が立て続けに登場。**Rust の「上級だが実は単純」な 4 機能 — Reth ソースを読むには全部必要、ExEx シグネチャを記憶から書けるか？**
 
-## 1. ライフタイム \`'a\`
+## 原理（最小モデル）
 
-ライフタイムは「**この借用は何のスコープと同じくらい生きるか**」をコンパイラに教える注釈である。
+- **\`'a\` = この借用は何のスコープと同じくらい生きるか.** コンパイラへの注釈、多くは推論で省略可能。
+- **\`'static\` = プログラム終了まで生きる.** \`&'static str\` リテラル、ExEx のような「いつ終わるか分からないバックグラウンドタスク」に頻出。
+- **\`Box<T>\` = ヒープに置く.** 再帰データ構造 / 動的サイズ値（\`dyn Trait\`）/ ムーブで安価。
+- **\`Rc<T>\` vs \`Arc<T>\`.** Rc = シングルスレッド参照カウント / Arc = マルチスレッド対応（Atomic 参照カウント）。Reth/ExEx は \`Arc<...>\` だらけ。
+- **\`Mutex<T>\` / \`RwLock<T>\` で共有 + 書き換え.** Arc 単独 = 読み取り専用、書き換えるなら Mutex（読み書き排他）or RwLock（読み並列、書き排他）。\`.lock().unwrap()\` は poisoning で panic。
+- **\`dyn Trait\` = 動的ディスパッチ.** 実行時メソッド解決、Java/TS interface 風。コストは vtable 経由の呼び出し。
+- **\`impl Trait\` vs \`dyn Trait\`.** impl = 静的（コンパイル時）、dyn = 動的（実行時 + Box 必要）。ヘテロコレクションは dyn。
+- **ExEx シグネチャの語彙.** \`async fn my_exex<Node: FullNodeComponents>(mut ctx: ExExContext<Node>) -> eyre::Result<()>\`。
+
+## 具体例
+
+ライフタイム \`'a\`:
 
 \`\`\`rust
 fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
@@ -643,49 +662,29 @@ fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
 }
 \`\`\`
 
-- \`'a\` は「ある寿命」というラベル
-- 引数2つと戻り値が **同じ \`'a\`** ＝ 戻りの参照は引数のどちらかと同じ寿命
-- 多くの場合、コンパイラが推論してくれる（**省略可**）
-
-> 🛑 **理解度チェック。** \`longest\` から \`'a\` 注釈を削除してほしい。コンパイラは何のエラーを出す? 具体的に — 引用されるルール名は何?
-
-### \`'static\`
-
-\`'static\` は **「プログラム終了まで生きる」** という特別なライフタイム。文字列リテラル \`"hello"\` の型は \`&'static str\` である。
+\`'static\` の例:
 
 \`\`\`rust
 let s: &'static str = "hello";
 \`\`\`
 
-ExEx のような **「いつ終わるか分からないバックグラウンドタスク」** には \`'static\` 制約が頻出す。
+\`tokio::spawn\` に渡すクロージャが \`'static\` を必要とする理由: spawn は future を独立タスクとして駆動、いつ終わるか分からない → クロージャがキャプチャするデータも「いつまでも生き続ける」必要 → \`'static\` 制約。
 
-> 🛑 **予測。** \`tokio::spawn\`（Tokio は Rust の非同期ランタイム — future を駆動する実行系）に渡すクロージャが \`'static\` を必要とするのはどんなときか? なぜ? 続ける前に答えてほしい — この境界は今後読むすべての ExEx ファイルに出てくる。
-
-## 2. \`Box<T>\` — ヒープに置く
-
-スタックではなくヒープに値を置きたいとき、\`Box<T>\` で包む。
+\`Box<T>\` でヒープ:
 
 \`\`\`rust
 let boxed: Box<i64> = Box::new(42);
 println!("{}", *boxed);   // 42
 \`\`\`
 
-主な用途：
+3 用途: 再帰データ構造（\`enum List { Cons(i32, Box<List>), Nil }\` — Box なしだとサイズ無限大でコンパイル不可）+ 動的サイズ値（\`Box<dyn Trait>\`）+ 大きい値の安価ムーブ。
 
-- **再帰的なデータ構造**（連結リストなど）でサイズを固定したい
-- **動的サイズ** の値（\`dyn Trait\`）を保持したい
-- 大きい値を **コピーではなくムーブ** で安価に扱いたい
-
-> 🛑 **予測。** \`Box\` がない場合、\`enum List { Cons(i32, List), Nil }\` を書けないのはなぜか。コンパイラの不満を文字に起こす。
-
-## 3. \`Rc<T>\` と \`Arc<T>\` — 所有権の共有
-
-Rustの所有権ルールは「ただ一人のオーナー」が原則。でも **複数の場所から同じ値を共有したい** ときがある。
+\`Rc\` vs \`Arc\`:
 
 | 型 | 用途 |
 | :--- | :--- |
 | \`Rc<T>\` | シングルスレッドで参照カウント共有 |
-| \`Arc<T>\` | **マルチスレッド対応**（Atomic参照カウント） |
+| \`Arc<T>\` | **マルチスレッド対応**（Atomic 参照カウント） |
 
 \`\`\`rust
 use std::sync::Arc;
@@ -698,13 +697,9 @@ let clone2 = Arc::clone(&shared);   // 参照カウント+2
 std::thread::spawn(move || println!("{}", clone1));
 \`\`\`
 
-**Reth/ExEx では \`Arc<...>\` だらけ** になる。「複数のタスクが同じデータを読む」のが典型的な場面だからである。
+**Arc::clone は内部 T をディープコピーしない** → 参照カウントを atomic に +1 するだけ（low コスト）。"A" = Atomic（Compare-And-Swap で thread-safe）。
 
-> 🛑 **理解度チェック。** \`Arc::clone(&x)\` は内部の \`T\` をディープコピーしません。では正確に **何を** コピーしているのか? そのコストは? なぜ "Arc" の "A" は "Atomic" なのか?
-
-## 4. \`Mutex\` / \`RwLock\` — 共有 + 書き換え
-
-\`Arc<T>\` だけだと **読み取り専用の共有** である。書き換えたい場合は \`Mutex\` / \`RwLock\` で包む。
+\`Mutex\` で書き換え:
 
 \`\`\`rust
 use std::sync::{Arc, Mutex};
@@ -723,11 +718,9 @@ std::thread::spawn(move || {
 | \`Mutex\` | 読み書き両方を排他 |
 | \`RwLock\` | 読みは並列、書きは排他 |
 
-> 🛑 **予測。** \`.lock().unwrap()\` はどんなときに panic するか? それはいつ起きるか? (ヒント: 知らなければ "poisoning" で検索。) **Reth のコードには \`.lock().unwrap()\` が至る所にあります** — いつクラッシュし得るのかは理解しておいてほしい。
+\`.lock().unwrap()\` の panic = **poisoning**（あるスレッドが lock 中に panic で死ぬ → 後続の lock が panic 連鎖）。Reth のコードに \`.lock().unwrap()\` 至る所、クラッシュタイミングを理解。
 
-## 5. \`dyn Trait\` — 動的ディスパッチ
-
-トレイトオブジェクト。**「実行時にメソッドを解決する」** という意味で、Java/TS の interface に近い挙動になる。
+\`dyn Trait\`:
 
 \`\`\`rust
 trait Greet {
@@ -747,18 +740,16 @@ let g: Box<dyn Greet> = if std::env::var("LANG").unwrap_or_default().starts_with
 g.greet();
 \`\`\`
 
-### \`impl Trait\` vs \`dyn Trait\`
+\`impl Trait\` vs \`dyn Trait\`:
 
 | 構文 | 意味 |
 | :--- | :--- |
 | \`impl Trait\` | 静的ディスパッチ（コンパイル時に型確定） |
-| \`dyn Trait\` | 動的ディスパッチ（実行時に解決、Boxが必要） |
+| \`dyn Trait\` | 動的ディスパッチ（実行時に解決、Box が必要） |
 
-性能は \`impl\` の方が速いだが、ヘテロなコレクション（\`Vec<Box<dyn Trait>>\`）が必要なときは \`dyn\` を使う。
+\`Box<dyn Greet>\` のコスト = **vtable 経由**（実行時に「実装の関数ポインタテーブル」を引いてメソッド呼び出し）。\`Box<En>\` は静的に展開、vtable 不要。性能は impl 勝つが、ヘテロコレクション（\`Vec<Box<dyn Trait>>\`）が必要なら dyn。
 
-> 🛑 **理解度チェック。** \`Box<dyn Greet>\` は呼び出し地点で \`Box<En>\` よりコストが高い。**そのコストは正確にどこにあるのか?** vtable とは何か? 答えられないなら、動的ディスパッチをまだ理解できていません — 読み直しを。
-
-## 6. これから ExEx コードで見る形
+ExEx シグネチャ:
 
 \`\`\`rust
 async fn my_exex<Node: FullNodeComponents>(
@@ -771,47 +762,94 @@ async fn my_exex<Node: FullNodeComponents>(
 }
 \`\`\`
 
-> 🛑 **止まる。スクロール前にこのシグネチャに頭の中で注釈を付けてほしい。** どこがジェネリクス? どこがトレイト境界? 内部で共有所有権を使うのは? 暗黙のライフタイムは?
+注釈:
+- \`Node: FullNodeComponents\` = トレイト境界
+- \`ExExContext<Node>\` = ノードバンドルにジェネリック
+- 内部で \`Arc<...>\` でコンポーネント共有
+- ライフタイム省略だが \`'static\` 要求
 
-- \`Node: FullNodeComponents\` ：トレイト境界
-- \`ExExContext<Node>\` ：ノードバンドルにジェネリック
-- 内部では \`Arc<...>\` でコンポーネントが共有
-- ライフタイムの注釈は省略されているが、\`'static\` が要求される
+## 失敗例（誤解）
 
-## まとめ
+「Rc を別スレッドに送れる」— **間違い**。Rc は \`!Send\`（コンパイラが拒否）、参照カウントが atomic でないので競合データレース可能性。マルチスレッド共有は **Arc 必須**。
 
-| 機能 | 一言 |
-| :--- | :--- |
-| \`'a\` / \`'static\` | 借用がどれだけ生きるか |
-| \`Box<T>\` | ヒープ確保 |
-| \`Rc<T>\` / \`Arc<T>\` | 所有権の共有（Arcはスレッド対応） |
-| \`Mutex<T>\` | 共有データの書き換え |
-| \`dyn Trait\` | 実行時のメソッド解決 |
+「\`.lock().unwrap()\` は OK」— **危険**。poisoning（lock 保持中のスレッドが panic）で連鎖 panic。本番では \`.lock().expect("...")\` でメッセージ + 致命的なら適切なリカバリ。
 
-> 最終チェック: タブを閉じて、ExEx の \`my_exex\` シグネチャを記憶から書き出してほしい。書けないなら、語彙をまだ自分のものにできていません — もう一度開き直してほしい。次のレッスンは ExEx を詳細に読む。カンニングペーパーなしで各概念が必要になる。`,
+「\`impl Trait\` が常に dyn より速い」— **半分間違い**。impl は静的ディスパッチで vtable なし → ホットループで速い。ただし dyn は **コードサイズ** が小さい（モノモーフ化爆発回避）+ ヘテロコレクション可能。**用途次第**。
+
+## ステップで組み立てる
+
+### Step 1: ライフタイム 2 種を即答
+
+\`'a\` = スコープ注釈、\`'static\` = プログラム終了まで（バックグラウンドタスク頻出）。
+
+### Step 2: \`Box<T>\` の 3 用途
+
+再帰データ + 動的サイズ + 安価ムーブ。
+
+### Step 3: Rc vs Arc
+
+シングル vs マルチスレッド、Atomic 参照カウント。Reth/ExEx は Arc。
+
+### Step 4: Mutex / RwLock の使い分け
+
+Mutex = 読み書き排他、RwLock = 読み並列 + 書き排他。poisoning に注意。
+
+### Step 5: dyn Trait と vtable
+
+実行時メソッド解決、Box 必要、ヘテロコレクション可能、vtable 経由のコスト。
+
+### Step 6: ExEx シグネチャを記憶
+
+\`async fn my_exex<Node: FullNodeComponents>(mut ctx: ExExContext<Node>) -> eyre::Result<()>\`。
+
+## 答え合わせ
+
+- **\`'static\` がバックグラウンドタスクに頻出する理由**: \`tokio::spawn\` の future はいつ終わるか不明 → クロージャがキャプチャするデータも「いつまでも生き続ける」必要 → \`'static\` 制約。ExEx のような「ノード寿命と同じくらい生きる」タスクで頻出。
+- **\`Arc::clone\` の正確なコスト**: 参照カウンタを atomic に +1 するだけ（コンペア & スワップ 1 回）= ナノ秒オーダー。**T のディープコピーは起きない** → 共有が安価。"A" = Atomic（thread-safe な参照カウント増減）。
+- **\`dyn Trait\` の vtable コスト**: 実行時に「実装の関数ポインタテーブル」を引く間接呼び出し（branch prediction が効きにくい + キャッシュミス可能性）= ホットループで impl Trait より遅い。ただし **ヘテロコレクション必須**（\`Vec<Box<dyn Stage>>\` など）の場合は dyn 一択。
+
+## 合格基準
+
+- \`'a\` と \`'static\` の差を即答できる。
+- \`Box<T>\` の 3 用途を言える。
+- Rc / Arc の使い分けと Atomic の意味を言える。
+- Mutex / RwLock の使い分けと poisoning を言える。
+- impl Trait と dyn Trait の使い分けを言える。
+- ExEx シグネチャを記憶から書ける。
+
+## まとめ（3行）
+
+- ライフタイム（\`'a\` / \`'static\`）+ \`Box\`（ヒープ）+ Arc（マルチスレッド共有）+ Mutex/RwLock（書き換え）+ dyn Trait（動的ディスパッチ）= Reth ソース読みの 5 語彙。
+- Arc::clone は atomic +1（ナノ秒、ディープコピーなし）、Mutex.lock の panic は poisoning で連鎖、dyn は vtable コストとヘテロコレクション可能のトレードオフ。
+- ExEx シグネチャ \`async fn my_exex<Node: FullNodeComponents>(mut ctx: ExExContext<Node>) -> eyre::Result<()>\` を記憶から書けるのが習得証拠。
+`,
                 },
                 {
-                  title: 'ExEx API をステップで組み立てる',
+                  title: 'レッスン5 — ExEx API をステップで組み立てる',
                   slug: 'reth-exex-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 10,
                   xpReward: 25,
-                  content: `# ExEx API をステップで組み立てる
+                  content: `# レッスン5 — ExEx API をステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** **DB 層の pub-sub インタフェース** と **上流への prune プロトコル** の組み合わせ。PostgreSQL の logical replication、Kafka consumer の offset 追跡、CDC パイプラインが共通して解いてきた問題 — 「下流コンシューマが commit 済みイベントを読めるようにしつつ、上流に永久保持を強いない」。ExEx は、その発想を Reth に持ち込んだもの — インプロセスのコンシューマが「N まで読み終えた」と伝え、ノードが安全に prune できるようにする。
+## 問い
 
-**ExEx（Execution Extension）** は Reth が提供する「実行ループに Rust コードを注入する」仕組みである。これでノード速度のインデクサ・MEV ボット・リアルタイムリスクエンジンを **チェーン本体と同じプロセス内で** 構築できる。
+**ExEx**（Execution Extension）= Reth が提供する「実行ループに Rust コードを注入する」仕組み。ノード速度のインデクサ・MEV ボット・リアルタイムリスクエンジンを **チェーン本体と同じプロセス内で** 構築可能。**素朴な「RPC ポーリング」インデクサから組み立てると、API の 4 要素の理由が見えるか？**
 
-ただ API には重そうな部分が4つあります: init/run の分割、3 つのバリアントを持つ通知 *enum*、prune ヒント用のイベントチャンネル、ノードビルダーへの install メソッド。素のまま読むと、4 つのアイデアが一度に降ってくる。
+## 原理（最小モデル）
 
-このレッスンでは、最も素朴な「ブロックリスナー」から API を積み上げていく。最後まで通せば、本物の最小 ExEx の全要素を自分で組み立てたことになる — 次のレッスンでそれを詳細に読む。
+- **素朴な RPC ポーリングが劣る 3 理由.** レイテンシ（数秒遅れ）+ アトミック性（Reth コミット → インデクサ間の race）+ Reorg 弱い情報。修正方針 = **同プロセスで動かす**。
+- **\`ExExNotification\` の 3 バリアント.** \`ChainCommitted { new }\`（追加）+ \`ChainReorged { old, new }\`（置換、アトミックスワップ）+ \`ChainReverted { old }\`（削除のみ）。
+- **3 アーム必須が ExEx #1 バグ防止.** \`ChainReorged\` 欠落 → 派生状態に古いチェーンのデータ phantom 化 + 新チェーンのデータ欠落。
+- **\`FinishedHeight\` で「終わった」を Reth に伝える.** Pruner が安全に prune できる最下位を集約。**忘れると Reth がフルアーカイブに変質**。
+- **ストリーム pull（コールバックではない）.** \`ctx.notifications.try_next().await\` でハンドラ自分のペース、Reth はハンドラ速度に縛られない。
+- **init/run 分割.** \`exex_init\`（同期セットアップ + future 返す）+ \`exex\`（永続 future、ストリーム poll）。Reth が「起動失敗」と「動いた後クラッシュ」を区別可能。
+- **\`install_exex\` で複数拡張.** 独立通知ストリーム、独立 \`FinishedHeight\`、互いに干渉しない。Pruner は **最遅の 1 つ** に合わせる。
 
-> 📂 **別タブで \`paradigmxyz/reth-exex-examples/minimal\` を開く。** これが組み立て先のファイル。
+## 具体例
 
-## ステップ 0 — 素朴なインデクサ: RPC をポーリングする別プロセス
-
-何も考えずに書くと、Ethereum のインデックスはこんな形:
+素朴な RPC ポーリング:
 
 \`\`\`rust
 fn main() {
@@ -829,21 +867,12 @@ fn main() {
 }
 \`\`\`
 
-別プロセス。1秒ごとに RPC をポーリング。新ブロックがあればインデックス。
+劣る 3 理由:
+1. **レイテンシ** — RPC ポーリング = req/res オーバーヘッド、tip から数秒遅れ → MEV / リスク / リアルタイム UX に使えない
+2. **アトミック性** — Reth が新ブロックをコミット → インデクサが見るまでに期間 = race condition
+3. **Reorg** — ポーリングで \`head = N\` を 2 回見るが中身違うブロック = インデクサが外側で reorg 検出する羽目、しかも Reth より弱い情報
 
-> 🛑 **予測。** スクロールせずに: この素朴な設計が Reth の中で動かす場合と比べて *大幅に劣る* 理由を 3 つ挙げてほしい。（ヒント: それぞれ *別種の* 問題である。）
-
-3つ:
-
-1. **レイテンシ。** RPC ポーリングにはリクエスト/レスポンスのオーバーヘッドがある。インデクサは tip から数秒遅れる — MEV、リスク、リアルタイム UX には使えない。
-2. **アトミック性。** Reth は新ブロックを *先に* ディスクへコミットし、その後にあなたのインデクサが見る。Reth がブロックを持っていてあなたのコードがまだ処理していない期間が必ず存在する。あなたのコードが派生ビューの正典であれば、その期間は race condition になる。
-3. **Reorg。** ポーリングでは \`head = N\` を見て、後で \`head = N\`（だが中身は違うブロック）を見ることになる。インデクサは外側で reorg を検出して扱う必要がある — しかも Reth 自体より弱い情報で。
-
-修正方針: **Reth と同じプロセスで動かす。** ブロックがコミットされた瞬間に、フルチェーンコンテキスト付きで通知を受け取る。
-
-## ステップ 1 — 最初の試案: ブロックごとのコールバック
-
-素朴なインプロセス API:
+最初の試案（コールバック）:
 
 \`\`\`rust
 fn on_new_block<F: Fn(&Block)>(reth: &mut Reth, callback: F) {
@@ -851,18 +880,11 @@ fn on_new_block<F: Fn(&Block)>(reth: &mut Reth, callback: F) {
 }
 \`\`\`
 
-Reth が新ブロックごとにクロージャを呼ぶ。シンプルである。
+足りないもの 2 つ:
+1. **Reorg は append-only ではない** — 「新ブロック追加」だけのコールバックでは「ブロック N のハッシュ X が Y に置換」を表現不能 → 派生状態が静かに壊れる
+2. **Reth に「終わった」を伝える方法なし** — N-100,000 のデータを prune してよいか Reth は判断不可
 
-> 🛑 **予測。** 何が足りないか?（大きく2つある。）
-
-2つ:
-
-1. **Reorg は append-only ではない。** 「新ブロック追加」だけのコールバックでは「ブロック N のハッシュ X がハッシュ Y に置換された」を表現できない。インデクサの導出状態は reorg のたびに静かに壊れる。
-2. **Reth に「終わった」を伝える方法がない。** インデクサがブロック N を処理中なら、Reth はブロック N-100,000 のデータを prune してよいか判断できない。このシグナルがないと **Reth は何も捨てられません。**
-
-## ステップ 2 — リッチな通知: 3 つのチェーンイベント
-
-裸のコールバックを、チェーンに起こり得る 3 種類の出来事を捉える enum に置き換えます:
+3 バリアントの通知:
 
 \`\`\`rust
 enum ExExNotification {
@@ -872,35 +894,27 @@ enum ExExNotification {
 }
 \`\`\`
 
-各バリアントが、インデクサが派生状態を undo / redo するのに十分な情報を運びます:
+各バリアントの扱い:
+- **\`ChainCommitted { new }\`** — 新ブロック状態をインデックスに追記
+- **\`ChainReorged { old, new }\`** — \`old\` の状態を undo し、\`new\` の状態を apply（アトミックスワップ）
+- **\`ChainReverted { old }\`** — \`old\` の状態を undo して待つ、Reth は新 tip を選んだら後続 \`ChainCommitted\` を送る
 
-- **\`ChainCommitted { new }\`** — 新しいブロックの状態をインデックスに追記。
-- **\`ChainReorged { old, new }\`** — \`old\` の状態を undo し、\`new\` の状態を適用。アトミックなスワップ。
-- **\`ChainReverted { old }\`** — \`old\` の状態を undo して待つ。Reth は新しい tip を選んだら後続の \`ChainCommitted\` を送る。
+\`ChainReorged\` 欠落の失敗モード（**ExEx #1 バグ**）:
+- HashMap に **古いチェーン** の tx + canonical チェーンは **新しいチェーン**
+- インデックスを後で読むと canonical 上に存在しない tx が返る = **phantom-data バグ**
+- さらに悪い: 新しいチェーンの tx はインデックスされていない（\`ChainCommitted\` 未受信、無視した \`ChainReorged\` 受信）
 
-> 🛑 **理解度チェック。** トランザクションを \`HashMap\` にインデックスしている。\`ChainCommitted\` だけを扱う。チェーンが 5 ブロック深く reorg した。**HashMap の何がおかしくなるか?** 失敗モードを 2 文で具体的に書いてほしい。
-
-HashMap には *古い* チェーンのトランザクションが入っている一方、canonical チェーンは *新しい* チェーン。インデックスを後で読むと、canonical 上に存在しないトランザクションが返ってくる — phantom-data バグである。さらに悪いことに、*新しい* チェーンのトランザクションはインデックスされなかった（\`ChainCommitted\` を見ていない、無視した \`ChainReorged\` を見た）。
-
-これが **ExEx の #1 バグ** である。3 バリアントの enum はこれを防ぐために存在している。
-
-## ステップ 3 — Reth に「終わった」と伝える: \`FinishedHeight\`
-
-インデクサがブロック N を処理し終わったら、Reth にそれを知らせる必要がある。さもないと N 以下を安全に prune できません。
+\`FinishedHeight\`:
 
 \`\`\`rust
 ctx.events.send(ExExEvent::FinishedHeight(block_number_hash))?;
 \`\`\`
 
-\`ctx.events\` は Reth への書き込み専用チャンネルである。ハンドラがブロック（あるいはチェーン）を終えるたびに \`FinishedHeight(N)\` を送る。Reth はインストールされた全 ExEx の最小値を集約し、その下を prune する。
+\`ctx.events\` = Reth への書き込み専用チャンネル。ブロック終了ごと送信、Reth が全 ExEx の最小値を集約してその下を prune。
 
-> 🛑 **ディスクへの影響を予測。** \`FinishedHeight\` イベントなしで ExEx をリリースしたとする。半年後、ノードはブロック 21M。ExEx なしのノードと比べてディスク使用量はどうなるか? なぜか?
+**忘れたディスク帰結**: Reth が prune すべき履歴を全保持 → 半年後にディスク使用量複利膨張 → 「無害なインデクサ」がノードをフルアーカイブに変質。
 
-Reth が通常なら prune するはずの履歴をすべて抱え込む — ExEx が後から読みたがるかもしれないものを安全には prune できないからである。**ディスク使用量は複利で膨らんでいく。** \`FinishedHeight\` を忘れると、「無害なインデクサ」が知らぬ間に Reth をフルアーカイブノードに変えてしまう。
-
-## ステップ 4 — 通知ストリーム: コールバックではなく非同期 pull
-
-コールバック方式だと、Reth はブロックごとにあなたの遅いコードを待つことになる。望ましい形は、通知をストリームに push し、ハンドラが準備できたときに pull する方式です:
+ストリーム pull:
 
 \`\`\`rust
 while let Some(notification) = ctx.notifications.try_next().await? {
@@ -908,13 +922,9 @@ while let Some(notification) = ctx.notifications.try_next().await? {
 }
 \`\`\`
 
-\`ctx.notifications\` は \`ExExNotification\` の \`Stream\` である。\`try_next\` は async で、ハンドラは Reth と同じ async ランタイム上で動く。**Reth の進捗があなたのインデックス速度に縛られない**、それでいてハンドラは全イベントを順番に観測する。
+非同期 + ハンドラのペース + Reth がハンドラ速度に縛られない + イベント順序保証。
 
-Reth が停止するかチャンネルが閉じると、ループはきれいに \`Ok(())\` で抜ける。
-
-## ステップ 5 — init/run の分割
-
-ユーザーは async ループを開始する前に *同期的なセットアップ*（ファイルを開く、DB を初期化する、バッファを確保するなど）を済ませたい。単一の \`async fn\` だと、このセットアップを future の中に押し込むことになり、推論しづらくなります:
+init/run 分割:
 
 \`\`\`rust
 async fn exex_init<Node: FullNodeComponents>(
@@ -925,18 +935,13 @@ async fn exex_init<Node: FullNodeComponents>(
 }
 \`\`\`
 
-関数2つ:
+2 関数:
+- **\`exex_init\`** — ノード起動時に 1 度だけ、同期セットアップ、future を返す
+- **\`exex\`** — 永続 future、通知ストリームを poll
 
-- **\`exex_init\`** — ノード起動時に *1度だけ* 走る。同期的セットアップ。future を返す。
-- **\`exex\`**（その future）— *永続的に*（または停止まで）走り続ける。通知ストリームを poll する。
+分割理由: ファイル open 等を \`exex\` に入れると Reth が通知バッファ後に init 失敗 → ExEx 健全と誤認しつつ通知積上り。分割で「起動失敗」と「動いた後クラッシュ」を区別可能。
 
-> 🛑 **予測。** init/run の分割がなぜ必要なのか? ファイルを開く処理を \`exex_init\` ではなく \`exex\` に入れると、どんな具体的なバグが発生するか?
-
-Reth は通知の push を始める前に、ExEx が生きていることを *確認する* 必要がある。\`File::open(...)\` を \`exex\` の中に入れてしまうと、Reth がすでに通知をバッファし始めた *後* にファイルを開くことになる — 失敗（権限なし、パス不存在）すると、Reth は ExEx が健全だと思い込んでいる間に通知が積み上がる。init/run の分割により、Reth は「ExEx が起動できなかった」と「ExEx が動いた後でクラッシュした」を区別できる。
-
-## ステップ 6 — \`install_exex\`: 複数の拡張
-
-\`main\` で ExEx をノードビルダーに配線する:
+複数拡張:
 
 \`\`\`rust
 .install_exex("MyIndexer", exex_init)
@@ -944,55 +949,90 @@ Reth は通知の push を始める前に、ExEx が生きていることを *�
 .install_exex("RiskEngine", risk_init)
 \`\`\`
 
-第 1 引数は名前（メトリクスとログで使われる）、第 2 引数は init 関数である。**\`.install_exex(...)\` は複数チェインできる** — 各 ExEx は独立した通知ストリームと \`FinishedHeight\` チャンネルを持つ。
+実用的含意:
+- **互いに干渉しない** — 各ストリーム独立バッファ
+- **Pruner は最遅の 1 つに合わせる** — 全 ExEx の \`FinishedHeight\` の **最小値** より下しか prune しない
+- **クラッシュは独立** — 1 つ panic でも他 ExEx + Reth は動き続ける
+- **メトリクスは ExEx ごと** — 第 1 引数の名前が \`reth_exex_<name>_*\` メトリクスラベル
 
-**実用的な含意:**
+## 失敗例（誤解）
 
-- **互いに干渉しない。** インデクサが遅延しても MEV Watcher の処理は止まらない（各 stream が独立にバッファされる）
-- **Pruner は最遅の 1 つに合わせる。** Pruner はインストールされた全 ExEx の \`FinishedHeight\` の **最小値** より下しか prune しない — インデクサがブロック 100 で止まれば、Reth は MEV Watcher が 1000 まで進んでいてもブロック 100 以下を保持する
-- **クラッシュは独立。** ある ExEx が panic しても他の ExEx と Reth 本体は動き続ける（init で失敗した場合は除く — その場合はノード起動が失敗）
-- **メトリクスは ExEx ごと。** 第 1 引数の名前が \`reth_exex_<name>_*\` 系メトリクスのラベルになる
+「\`ChainCommitted\` だけ扱えば十分」— **間違い**（ExEx #1 バグ）。Reorg 5 ブロック深く → HashMap に phantom data + 新チェーン未インデックス。3 アーム全部必要。
 
-> 🛑 **理解度チェック。** あなたのインデクサがある日 OOM で落ちて、別 ExEx の MEV Watcher は問題なく走り続けたとする。Pruner は何時間ぶんの履歴を抱え込み始めるか? なぜか?
+「\`FinishedHeight\` 送信は任意」— **間違い**。忘れると Pruner が止まる → ディスク膨張複利 → 半年後にフルアーカイブ。**毎 commit ごとに必須**。
 
-インデクサが落ちた時点での \`FinishedHeight\` で Pruner は固まる — その瞬間以降に到達したブロックは全部「インデクサがまだ読みたいかも」という扱いになり、prune できない。インデクサを再起動して \`FinishedHeight\` を進めるまで、Reth は **インデクサが落ちていた間ずっと** 全履歴を蓄積する。これが本番で「監視を忘れた死んだ ExEx がディスクを食い潰す」事故の典型形である。
+「同プロセスならパフォーマンスは同じ」— **間違い**。RPC ポーリング = req/res オーバーヘッド + tip から数秒遅れ + race。ExEx = ゼロレイテンシ + アトミック + 構造化 reorg 情報。**MEV / リアルタイムに必要**。
 
-## ここまでに組み立てたもの
+## ステップで組み立てる
 
-各要素がきちんと役割を果たしています:
+### Step 1: RPC ポーリングの 3 失敗
 
-- **3 バリアントの \`ExExNotification\`**（ステップ 2）— append、reorg、revert を扱う
-- **\`FinishedHeight\` イベント**（ステップ 3）— opt-in の prune、ディスク膨張を防ぐ
-- **ストリーム pull の通知**（ステップ 4）— Reth がハンドラでブロックしない
-- **init/run の分割**（ステップ 5）— async ループ前の同期的セットアップ
-- **\`install_exex\`**（ステップ 6）— 複数の拡張、それぞれ独立したストリーム
+レイテンシ + アトミック性 + Reorg 弱情報 → 同プロセス（ExEx）で全解決。
 
-次のレッスンでは最小 ExEx — \`main.rs\` の約 40 行 — を読み、5 つの要素が実コードでどう組み合わさるかを示する。
+### Step 2: 3 バリアント通知
 
-## 進む前の想起
+ChainCommitted（追加）+ ChainReorged（置換）+ ChainReverted（削除のみ）。**全 3 アーム必須**。
 
-スクロールせずに:
+### Step 3: \`FinishedHeight\` の役割
 
-1. なぜ API はコールバックではなくストリームで通知を push するのか?
-2. \`ExExNotification\` の 3 バリアントは何で、なぜすべて必要なのか?
-3. \`FinishedHeight\` は Reth に何を伝える? 忘れたときのディスク帰結は?
-4. なぜ API は \`exex_init\`（同期）と \`exex\`（async future）に分かれているのか?
+Reth に「終わった」を伝え、Pruner が安全 prune。忘れると ディスク膨張。
 
-どれか曖昧なら戻る。次のレッスンでは本物の最小 ExEx を詳細に読む。
+### Step 4: ストリーム pull の利点
 
-> **🧭 ここまでで積み上げたもの:** **DB 層の pub-sub + prune プロトコル** が完成 — 3 バリアントの \`ExExNotification\`、\`FinishedHeight\` によるバックプレッシャ、ストリームの pull、\`init/run\` の分離、\`install_exex\` による注入。Kafka コンシューマの offset 管理や Postgres の論理レプリケーションスロットと同じ構造を、EVM チェーン同期に持ち込んだかたち。次のレッスンでは、最小 ExEx の本物のソースを、このモデルに突き合わせて読む。
+ハンドラのペース、Reth がブロックされない、順序保証。
+
+### Step 5: init/run 分割の理由
+
+「起動失敗」と「動いた後クラッシュ」を区別可能、ファイル open は \`exex_init\` で。
+
+### Step 6: \`install_exex\` で複数拡張
+
+独立通知 + Pruner は最遅に合わせる + クラッシュ独立 + メトリクス別。
+
+## 答え合わせ
+
+- **3 アーム必須が ExEx #1 バグ防止である理由**: \`ChainReorged\` 欠落 → HashMap に古いチェーン phantom + 新チェーン未インデックス。**任意の通知シーケンスの後、各 Address のカウントが正しい不変条件** を保つには、reorg で old 全 undo → new 全 apply を 1 通知でアトミックに必要。
+- **\`FinishedHeight\` を忘れたディスク帰結**: Reth が prune すべき履歴を「ExEx が後で読みたいかも」で全保持 → 半年でディスク複利膨張 → ノードがフルアーカイブに変質。**「無害なインデクサ」の典型本番事故**。
+- **クラッシュした ExEx の Pruner への影響**: 落ちた時点の \`FinishedHeight\` で Pruner 固まる → 以降ブロック全部「再起動したら読みたい」扱い → 全履歴蓄積。再起動して \`FinishedHeight\` 進めるまで蓄積継続。
+
+## 合格基準
+
+- 3 バリアント（ChainCommitted / ChainReorged / ChainReverted）を即答できる。
+- 3 アーム必須の理由を ExEx #1 バグで説明できる。
+- \`FinishedHeight\` の役割と忘却時のディスク帰結を言える。
+- init/run 分割の理由を「起動失敗 vs 後でクラッシュ」で説明できる。
+- 複数 ExEx の Pruner ルール（最遅に合わせる）を即答できる。
+
+## まとめ（3行）
+
+- ExEx = 同プロセス Rust 注入、RPC ポーリングの 3 失敗（レイテンシ + アトミック性 + Reorg 弱情報）を全解決。
+- 3 バリアント通知（ChainCommitted / ChainReorged / ChainReverted）の **全アーム必須**（ExEx #1 バグ防止）+ \`FinishedHeight\` で Pruner 制御（忘却 → ディスク複利膨張）。
+- init/run 分割で起動失敗を検出 + \`install_exex\` で複数拡張独立、Pruner は **最遅の 1 つに合わせる**。
 `,
                 },
                 {
-                  title: '最小 ExEx を 1 行ずつ読む',
+                  title: 'レッスン6 — 最小 ExEx を 1 行ずつ読む',
                   slug: 'reth-exex-walkthrough-ja',
                   type: 'CONTENT',
                   sortOrder: 6,
                   duration: 10,
                   xpReward: 25,
-                  content: `# 最小 ExEx を 1 行ずつ読む
+                  content: `# レッスン6 — 最小 ExEx を 1 行ずつ読む
 
-動く ExEx は Rust 約 40 行で書ける。それだけ — Reth を fork する必要も、別プロセスを立てる必要もなく、ノードビルダーに渡す関数を 1 つ書けば、Reth が同じバイナリ内で走らせてくれる。下は [\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal) の \`main.rs\` 全体である。このレッスンの最後には、各行が前レッスンの組み立てステップに対応していることが分かるはずである。
+## 問い
+
+動く ExEx は Rust 約 40 行で書ける。**Reth を fork せず、別プロセスを立てず、ノードビルダーに渡す関数 1 つ — その各行が前レッスンの組み立てステップにどう対応するか？**
+
+## 原理（最小モデル）
+
+- **40 行で完成する 5 要素.** init/run 分割 + 永続 future + 3 アーム match + \`committed_chain()\` + \`install_exex\` 配線。
+- **\`committed_chain()\` は便利アクセサ.** \`ChainCommitted\` と \`ChainReorged\`（new）には \`Some(Chain)\`、\`ChainReverted\` には \`None\`。
+- **\`new_payload_for_finalized\` パターン.** commit を伴う通知ごとに \`FinishedHeight\` 送信、忘れるとディスク膨張。
+- **本物の ExEx の 4 系統.** backfill（起動時過去ブロック再生）+ in_memory_state（カスタムインデックス保持）+ tracking-state（別 DB 永続化）+ rollup（ExEx フックだけで最小ロールアップ）。
+
+## 具体例
+
+最小 ExEx 全コード（[\`paradigmxyz/reth-exex-examples/minimal\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/minimal) の \`main.rs\`）:
 
 \`\`\`rust
 use futures::{Future, TryStreamExt};
@@ -1042,193 +1082,169 @@ fn main() -> eyre::Result<()> {
 }
 \`\`\`
 
-では順に追っていく。
+各部の対応:
 
-## 1 行ずつ追う
+**\`exex_init\`（init/run 分割）**: ノード起動時に 1 度、Reth が \`ExExContext\` を渡す（notifications + events + ノードコンポーネントへのハンドル）、長時間動く future を返す。最小版は同期セットアップなし。
 
-### \`exex_init\` — init/run の分割（ステップ 5）
+**\`exex\`（長時間動く future）**: メインループ、\`ctx.notifications\` は非同期チャンネル、\`try_next()\` で next イベント await（スレッドブロックなし、未完なら他 ExEx + Reth 自体を走らせる）。チャンネル閉じる → \`Ok(None)\` → \`while let\` 抜ける → 関数 \`Ok(())\` 返す。
 
-\`\`\`rust
-async fn exex_init<Node: FullNodeComponents>(
-    ctx: ExExContext<Node>,
-) -> eyre::Result<impl Future<Output = eyre::Result<()>>> {
-    Ok(exex(ctx))
-}
-\`\`\`
+**3 アーム match**: ChainCommitted / ChainReorged / ChainReverted。**最小版はログのみ、本物は派生状態更新**。3 アーム正しく扱えるかが「動くインデクサ vs phantom-data バグ」を分ける。
 
-\`exex_init\` はノード起動時に *1 度だけ* 呼ばれる。Reth が \`ExExContext\` を渡してくる — これは \`notifications\`（流れてくるチェーンイベントのストリーム）、\`events\`（Reth の pruner への返信チャンネル）、ノードコンポーネントへのハンドルをまとめた struct である。あなたは、Reth が永続的に poll する future を返す。
+**\`committed_chain()\` + \`FinishedHeight\`**:
+- \`notification.committed_chain()\` — ChainCommitted と ChainReorged（new）には \`Some(Chain)\`、ChainReverted には \`None\`
+- \`ctx.events.send(ExExEvent::FinishedHeight(...))\` — Reth pruner に「このブロックまで処理した」
+- **commit を伴う通知ごとに送信、忘却 → ディスク膨張**
 
-この最小 ExEx は同期的セットアップを何もしません — \`ctx\` を \`exex\` にそのまま渡すだけ。**本物の ExEx** で \`File::open(...)\` や \`Database::connect(...)\` が必要なら、その処理は future を返す *前* に \`exex_init\` 内で行う。
+**\`main\` 配線**: 通常 Reth ノード + 拡張 1 つ。\`install_exex("Minimal", exex_init)\` が ExEx 固有の唯一の行、複数 install で拡張コンポーズ可能。
 
-> 🔍 **リポジトリで確認。** \`tracking-state\` の例を開く。\`minimal\` がやっていないことを \`exex_init\` でやっているのは何か?
-
-### \`exex\` — 長時間動く future
-
-\`\`\`rust
-async fn exex<Node: FullNodeComponents>(mut ctx: ExExContext<Node>) -> eyre::Result<()> {
-    while let Some(notification) = ctx.notifications.try_next().await? {
-        // ...
-    }
-    Ok(())
-}
-\`\`\`
-
-メインループである。\`ctx.notifications\` は非同期チャンネル（Reth がチェーンイベントを push してくる型付きキュー）。\`try_next()\` はスレッドをブロックせずに次のイベントを await する — 利用可能な通知がなければ、ランタイムはタスクを park して他の ExEx や Reth 自体を走らせる。協調的並行、ブロッキングなし。
-
-チャンネルが閉じる（ノード停止）と、\`try_next()\` は \`Ok(None)\` を返し、\`while let\` が抜け、関数は \`Ok(())\` を返す。きれいな終了。
-
-### 3 アームの match（ステップ 2）
-
-\`\`\`rust
-match &notification {
-    ExExNotification::ChainCommitted { new } => { /* ... */ }
-    ExExNotification::ChainReorged { old, new } => { /* ... */ }
-    ExExNotification::ChainReverted { old } => { /* ... */ }
-};
-\`\`\`
-
-ここが load-bearing な判断である。**3 アームすべてが必要** — おもちゃ以上の ExEx であれば:
-
-- **\`ChainReorged\` 欠落** → 派生状態に *古い* チェーンのデータが残り続け、新 canonical チェーンのデータは欠落（\`ChainCommitted\` が来ないため）。
-- **\`ChainReverted\` 欠落** → reorg をトリガーした後、Reth が新 tip を選ぶ前の状態で、あなたの状態は canonical より 1 チェーン分進んでしまっていて、巻き戻す手段がない。
-
-最小 ExEx は各バリアントをログするだけである。学習用には有益だが実用ではない。**本物の ExEx は派生状態を更新する** — そして 3 アームを正しく扱えるかどうかが、動くインデクサと phantom-data バグを分ける。
-
-> 🛑 **理解度チェック。** \`ChainReorged\` アームを読む。\`old\` と \`new\` の両方が渡される。**なぜ両方なのか?** \`new\`（reorg 後の tip）だけではダメか?
-
-インデクサは \`new\` を *apply* する前に \`old\` の状態変更を *undo* する必要があるからである。\`new\` だけだと、古いチェーンの効果を派生状態から巻き戻せず、静かに二重カウントするか取りこぼする。
-
-### \`committed_chain()\` と \`FinishedHeight\`（ステップ 3）
-
-\`\`\`rust
-if let Some(committed_chain) = notification.committed_chain() {
-    ctx.events.send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
-}
-\`\`\`
-
-知っておくべき 2 メソッド:
-
-- **\`notification.committed_chain()\`** — \`ChainCommitted\` *と* \`ChainReorged\`（new チェーン）には \`Some(Chain)\` を、\`ChainReverted\` には \`None\` を返す。**「この通知後の canonical 状態は何か」を取り出すアクセサである。**
-- **\`ctx.events.send(ExExEvent::FinishedHeight(...))\`** — Reth の pruner に「このブロックまで処理した、これ以下は prune してよい」と伝える。
-
-**commit を伴う通知ごとに \`FinishedHeight\` を送ること。** 忘れると、ノードはアーカイブデータを永久に蓄積し続けます（前レッスンのステップ 3 のディスク膨張シナリオです）。
-
-> 🔍 **検証。** \`reth-exex\` の \`notification.committed_chain()\` のソースを開き、今説明した 3 ケースの挙動を確認。
-
-### \`main\`: ExEx をノードに配線
-
-\`\`\`rust
-fn main() -> eyre::Result<()> {
-    reth::cli::Cli::parse_args().run(|builder, _| async move {
-        let handle = builder
-            .node(EthereumNode::default())
-            .install_exex("Minimal", exex_init)
-            .launch_with_debug_capabilities()
-            .await?;
-
-        handle.wait_for_node_exit().await
-    })
-}
-\`\`\`
-
-これは「通常の Reth ノード + 拡張 1 つ」である。\`install_exex("Minimal", exex_init)\` が ExEx 固有の唯一の行。**\`install_exex\` を重ねていけば**、拡張をコンポーズできる。
-
-## 本物の ExEx は何をやっているか
-
-同じリポジトリにより本格的な例があります:
+本物の ExEx 4 系統:
 
 | 例 | 内容 |
 | :--- | :--- |
-| \`backfill\` | 起動時に過去ブロックを自分のハンドラに再生 |
-| \`in_memory_state\` | 各ブロックから派生したカスタムインデックス状態を保持 |
-| \`tracking-state\` | ExEx 内部状態を別 DB に永続化（再起動が安い） |
-| \`rollup\` | ExEx フックだけで最小ロールアップを実装 |
+| backfill | 起動時に過去ブロックを自分のハンドラに再生 |
+| in_memory_state | 各ブロックから派生したカスタムインデックス状態を保持 |
+| tracking-state | ExEx 内部状態を別 DB に永続化（再起動が安い） |
+| rollup | ExEx フックだけで最小ロールアップを実装 |
 
-> 🔍 **\`rollup\` を開く。** state 変更をコミットしている箇所まで読む。**ExEx としてのロールアップの意味** を考える。これはアーキテクチャ上のアンロックであり、ロールアップは Reth fork ではなく拡張として作れる。
+## 失敗例（誤解）
 
-## クイズ前の想起
+「\`ChainReorged\` の \`new\` だけで十分」— **間違い**。\`new\` apply 前に \`old\` の状態変更を **undo** 必要、\`new\` だけだと古いチェーンの効果を派生状態から巻き戻せず → 静かに二重カウント or 取りこぼし。
 
-スクロールせずに:
+「\`exex_init\` で同期セットアップを書かなくても良い」— **間違い**。\`File::open\` 等を \`exex\` 内に入れると Reth が通知バッファ後 init 失敗 → ExEx 健全と誤認しつつ通知積上り。**\`exex_init\` でセットアップ + future 返す**。
 
-1. \`exex_init\` でできて \`exex\`（future）でできないことは何か?
-2. なぜおもちゃ以上の ExEx は 3 つの通知バリアントを全部扱う必要があるのか?
-3. \`notification.committed_chain()\` は 3 つのバリアントそれぞれで何を返すか?
-4. 「ExEx としてのロールアップ」は finality と data availability を何に頼っているか?
+「\`install_exex\` を 1 回で十分」— **不足**。複数 ExEx を install すれば独立通知 + 独立 \`FinishedHeight\` + 互いに干渉なし。1 つ落ちても他は動く。
 
-次のレッスンはクイズ。曖昧な答えがあるなら今、想起してほしい。
+## ステップで組み立てる
+
+### Step 1: \`exex_init\` の役割
+
+ノード起動時 1 度、同期セットアップ + future 返す。
+
+### Step 2: \`exex\` の永続ループ
+
+\`while let Some(notification) = ctx.notifications.try_next().await?\` の構造、チャンネル閉じれば抜ける。
+
+### Step 3: 3 アーム match の load-bearing 性
+
+本物の ExEx は派生状態更新、3 アーム正しく扱えるかが phantom-data バグ防止。
+
+### Step 4: \`committed_chain()\` の 3 バリアント挙動
+
+ChainCommitted → \`Some(new)\` / ChainReorged → \`Some(new)\` / ChainReverted → \`None\`。
+
+### Step 5: \`FinishedHeight\` の送信タイミング
+
+commit を伴う通知ごと、ディスク膨張を防ぐ。
+
+### Step 6: \`install_exex\` を main で配線
+
+NodeBuilder にチェイン、複数 install で拡張コンポーズ。
+
+## 答え合わせ
+
+- **\`ChainReorged\` で old/new 両方渡される理由**: インデクサは \`new\` を apply する前に \`old\` の状態変更を undo 必要。\`new\` だけだと古いチェーンの効果を派生状態から巻き戻せず、静かに二重カウント or 取りこぼし。**アトミック undo+apply のために両方必要**。
+- **\`committed_chain()\` の 3 バリアント挙動**: ChainCommitted と ChainReorged（new）には \`Some(Chain)\`、ChainReverted には \`None\`。「この通知後の canonical 状態は何か」を取り出すアクセサ、\`if let Some(...) = ...\` パターンで \`FinishedHeight\` 送信判定に使う。
+- **「ExEx としてのロールアップ」が依存するもの**: finality と data availability を **Reth 本体** に依存。ロールアップは Reth fork ではなく ExEx フックだけで実装可能 = アーキテクチャ上のアンロック。
+
+## 合格基準
+
+- 40 行の最小 ExEx の 5 要素（init/run + 永続 future + 3 アーム + committed_chain + install_exex）を即答できる。
+- \`committed_chain()\` の 3 バリアント挙動を言える。
+- \`FinishedHeight\` 送信タイミング（commit を伴う通知ごと）を即答できる。
+- 本物の ExEx 4 系統（backfill / in_memory_state / tracking-state / rollup）を言える。
+- 「ExEx としてのロールアップ」の依存（Reth の finality + DA）を 1 文で説明できる。
+
+## まとめ（3行）
+
+- 40 行の最小 ExEx = init/run 分割 + 永続 future（\`try_next().await\`）+ 3 アーム match + \`committed_chain()\` で \`FinishedHeight\` 送信 + \`install_exex\` 配線。
+- \`committed_chain()\` が ChainCommitted/Reorged（new）→ \`Some\`、ChainReverted → \`None\`、これで \`FinishedHeight\` 判定。
+- 本物の ExEx 4 系統（backfill / in_memory_state / tracking-state / rollup）、ロールアップは ExEx フックだけで Reth fork なしに実装可能 = アーキテクチャ上のアンロック。
 `,
                 },
                 {
-                  title: 'クイズ: ExEx API は身についた?',
+                  title: 'クイズ — ExEx',
                   slug: 'reth-exex-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 7,
                   duration: 4,
                   xpReward: 25,
-                  content: `# クイズ: ExEx API は身についた?
+                  content: `# クイズ — ExEx
 
-API 設計と、その設計が防ぐ失敗モードをカバーする 4 問。同じルール: **クイズはうなずきで通せない。**
-
-2 問以上落としたら、ドリルへ進む前に「ExEx API をステップで組み立てる」を読み直す。`,
+ExEx の 3 バリアント通知、\`FinishedHeight\` の役割、init/run 分割、\`install_exex\` の複数拡張パターンを確認する。
+`,
                   quizQuestions: [
                     {
-                      question: "ExEx API が単一の `async fn` ではなく init/run の分割（`exex_init` が future を返す）になっているのはなぜですか?",
-                      options: [
+                      "question": "ExEx API が単一の `async fn` ではなく init/run の分割（`exex_init` が future を返す）になっているのはなぜですか?",
+                      "options": [
                         "Rust が `async` トレイトにセットアップ関数を要求するため。",
                         "古い Reth バージョンの後方互換シム。",
                         "init/run なら長時間の通知ループが始まる前に同期的セットアップ（ファイル開放、DB 初期化）ができる。Reth は「ExEx が起動できなかった」と「ExEx が動いた後でクラッシュした」を区別できる。",
-                        "性能 — 分割した関数の方がインライン化される。",
+                        "性能 — 分割した関数の方がインライン化される。"
                       ],
-                      correctIndex: 2,
-                      explanation: "単一の `async fn` だとセットアップが future の中に押し込まれる — 「ExEx が起動しなかった」と「ループ中にクラッシュした」が区別不能になる。init/run の分割は Reth に「この拡張は起動して準備完了」のクリーンな確認の瞬間を与える、通知が始まる前に。",
+                      "correctIndex": 2,
+                      "explanation": "単一の `async fn` だとセットアップが future の中に押し込まれる — 「ExEx が起動しなかった」と「ループ中にクラッシュした」が区別不能になる。init/run の分割は Reth に「この拡張は起動して準備完了」のクリーンな確認の瞬間を与える、通知が始まる前に。"
                     },
                     {
-                      question: "ExEx を実装し、`ChainCommitted` だけ扱い、`ChainReorged` と `ChainReverted` を無視する。チェーンが 5 ブロック深く reorg した。派生状態に何が起きる?",
-                      options: [
+                      "question": "ExEx を実装し、`ChainCommitted` だけ扱い、`ChainReorged` と `ChainReverted` を無視する。チェーンが 5 ブロック深く reorg した。派生状態に何が起きる?",
+                      "options": [
                         "prune されるべき余分な 5 ブロックが含まれる。",
                         "*古い* チェーン（もう canonical でないセグメント）のデータを含み、*同時に* *新しい* チェーンのデータが欠落（置換されたセグメントには `ChainCommitted` が来ない）。Phantom データと欠落データが同時。",
                         "panic でクラッシュする。",
-                        "状態は無事; Reth が新チェーン用に `ChainCommitted` を再送する。",
+                        "状態は無事; Reth が新チェーン用に `ChainCommitted` を再送する。"
                       ],
-                      correctIndex: 1,
-                      explanation: "これが ExEx の #1 バグ。`ChainReorged` は `old` と `new` を両方運ぶので、インデクサが `old` の効果を undo して `new` を apply できる。無視すると両半分とも間違う — 古いデータがインデックスされたまま、新しいデータは決してインデックスされない。",
+                      "correctIndex": 1,
+                      "explanation": "これが ExEx の #1 バグ。`ChainReorged` は `old` と `new` を両方運ぶので、インデクサが `old` の効果を undo して `new` を apply できる。無視すると両半分とも間違う — 古いデータがインデックスされたまま、新しいデータは決してインデックスされない。"
                     },
                     {
-                      question: "`ctx.events.send(ExExEvent::FinishedHeight(N))` は Reth に何を伝えるのですか?",
-                      options: [
+                      "question": "`ctx.events.send(ExExEvent::FinishedHeight(N))` は Reth に何を伝えるのですか?",
+                      "options": [
                         "「ブロック N より下の通知を送らないで。」",
                         "「ブロック N まで処理した; N より下の歴史的状態は安全に prune してよい。」Reth はインストールされたすべての ExEx の最小値を集約して prune の判断に使う。",
                         "「ブロック N は不正 — 捨てて。」",
-                        "「次の再起動でブロック N から再開して。」",
+                        "「次の再起動でブロック N から再開して。」"
                       ],
-                      correctIndex: 1,
-                      explanation: "`FinishedHeight` なしでは、Reth は ExEx が後で読みたいかもしれないものを安全に prune できない — 保守的にすべてを永久に保持する。このイベントを忘れると「無害なインデクサ」が偶然のアーカイブノードに変わる。",
+                      "correctIndex": 1,
+                      "explanation": "`FinishedHeight` なしでは、Reth は ExEx が後で読みたいかもしれないものを安全に prune できない — 保守的にすべてを永久に保持する。このイベントを忘れると「無害なインデクサ」が偶然のアーカイブノードに変わる。"
                     },
                     {
-                      question: "ExEx ベースのインデクサは別プロセスで RPC をポーリングするインデクサより速い。*主な* アーキテクチャ的理由は?",
-                      options: [
+                      "question": "ExEx ベースのインデクサは別プロセスで RPC をポーリングするインデクサより速い。*主な* アーキテクチャ的理由は?",
+                      "options": [
                         "インデクサが速い CPU で動いている。",
                         "同じプロセス、I/O ラウンドトリップなし。Reth がブロックをコミットした瞬間に ExEx が通知を受け取る — RPC リクエスト/レスポンスもポーリング間隔もアトミック性のギャップもない。さらに Reth が既に計算したフルチェーンコンテキスト（reorg 構造を含む）。",
                         "ExEx は EVM 実行ステップをスキップする。",
-                        "RPC にはレートリミッターがある; ExEx にはない。",
+                        "RPC にはレートリミッターがある; ExEx にはない。"
                       ],
-                      correctIndex: 1,
-                      explanation: "アーキテクチャ的アンロックは co-location（同居）。RPC ポーリング = 最良で〜1 秒のラグ、負荷時はもっと長く、reorg は二次情報。ExEx = ゼロラグ、フルコンテキスト、IPC なし。",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "アーキテクチャ的アンロックは co-location（同居）。RPC ポーリング = 最良で〜1 秒のラグ、負荷時はもっと長く、reorg は二次情報。ExEx = ゼロラグ、フルコンテキスト、IPC なし。"
+                    }
                   ],
                 },
                 {
-                  title: 'ドリル: reorg-safe なインデクサを作る',
+                  title: 'レッスン7 — ドリル: reorg-safe なインデクサを作る',
                   slug: 'reth-exex-drill-ja',
                   type: 'CONTENT',
                   sortOrder: 8,
                   duration: 12,
                   xpReward: 25,
-                  content: `# ドリル: reorg-safe なインデクサを作る
+                  content: `# レッスン7 — ドリル: reorg-safe なインデクサを作る
 
-読むのはリハーサル。**実装するのが記憶。** このドリルは「ExEx について読んだ」から「自分で書いて、それが reorg を正しく乗り越える様子を観察した」までを連れて行く。
+## 問い
 
-## セットアップ
+読むのはリハーサル、**実装するのが記憶**。reorg を正しく乗り越える HashMap インデクサを書く。**holesky で reorg を実際に観測、tx_count の不変条件を保つには？**
+
+## 原理（最小モデル）
+
+- **セットアップ.** \`reth-exex-examples\` を clone + minimal で build。
+- **holesky テストネット.** 初期同期速い + reorg 頻度高い（ハッシュパワー低、contested fork 多い）= 学習に最適。
+- **トランザクションカウンター追加.** \`ChainCommitted\` で tx 数を sum + log。
+- **HashMap インデックスの reorg-safe 設計.** ChainCommitted += / ChainReorged old -= then new += / ChainReverted -=。
+- **3 アーム不変条件.** 各 Address のカウント = (canonical チェーンで送られた tx 数) − (commit 後 revert されたセグメントで送られた tx 数)。
+- **\`ChainReorged\` の操作順序.** old を先に undo してから new を apply（Reth が reorg を処理する時系列順と一致）。
+- **観察ポイント.** Reorg ログ前後で高 tx アドレスの \`tx_count\` をスポットチェック、古い/新しいチェーンセグメントの差と一致確認。
+
+## 具体例
+
+セットアップ:
 
 \`\`\`bash
 git clone https://github.com/paradigmxyz/reth-exex-examples
@@ -1236,23 +1252,13 @@ cd reth-exex-examples/minimal
 cargo build
 \`\`\`
 
-ビルドが失敗したら、進む前に直してほしい。
-
-## ドリル 1 — ノードに対して minimal ExEx を実行
-
-既存の Reth ノードが必要、あるいは小さなテストネット用に \`--chain holesky\`（初期同期が速く、reorg 頻度も高い）:
+holesky で実行:
 
 \`\`\`bash
 cargo run -- node --chain holesky
 \`\`\`
 
-> 🛑 **質問（書き留めて）:** 最初の 10 ブロックで何がログされるか? すべてのログ行が \`ChainCommitted\` か、それとも他のバリアントも見えるか?
-
-新規同期中は、すべてのブロックで \`ChainCommitted\` が見える。\`ChainReorged\` と \`ChainReverted\` はもっと珍しい — 実際のチェーン不一致が必要で、holesky はメインネットより頻繁に発生させます（ハッシュパワーが低い → contested fork が増える）。
-
-## ドリル 2 — トランザクションカウンターを追加
-
-\`ChainCommitted\` アームを修正してブロックごとの tx 数を出力:
+トランザクションカウンター（\`ChainCommitted\` アーム拡張）:
 
 \`\`\`rust
 ExExNotification::ChainCommitted { new } => {
@@ -1263,13 +1269,9 @@ ExExNotification::ChainCommitted { new } => {
 }
 \`\`\`
 
-> 🛑 **予測。** 再実行してみてほしい。holesky のブロックあたりの平均 tx 数は? メインネットでは?
+実測値: holesky 5-20 tx/block（たまに 0）、mainnet 100-300（混雑度次第）= **ゼロレイテンシで本物のチェーンデータ読み**。
 
-Holesky: 低め — 通常 5〜20 tx/ブロック、たまに 0。メインネット: 100〜300、ブロックの混雑度次第。**ゼロレイテンシで本物のチェーンデータを読んでいることになる。**
-
-## ドリル 3 — reorg-safe な HashMap を追加
-
-各アドレスが送ったトランザクション数を追跡する。**reorg を正しく乗り越える** — そこが要点である。
+Reorg-safe HashMap（フル実装）:
 
 \`\`\`rust
 use std::collections::HashMap;
@@ -1315,58 +1317,104 @@ while let Some(notification) = ctx.notifications.try_next().await? {
 }
 \`\`\`
 
-（API 名は手元の reth の現状に合わせて調整してほしい — \`block.body.transactions()\` vs \`.transactions\`、\`tx.signer()\` vs \`tx.recover_signer()\` など。重要なのは *構造* であって、正確な識別子ではありません。）
+3 アーム不変条件: 各 Address のカウント = (canonical で送られた tx 数) − (commit 後 revert で送られた tx 数)。
 
-> 🛑 **質問:** 3 アームを読む。**任意の通知シーケンスの後で \`tx_count\` が正しい状態であるために保たれるべき不変条件は?**
+操作順序が重要: \`old\` を先に undo してから \`new\` を apply（Reth の reorg 時系列順と一致）。\`new\` 先 + \`old\` 後 の場合、共通プレフィックスがあると一旦二重カウント → \`old\` undo で復旧、ただし慣習は old-first。
 
-**各 \`Address\` について、カウント = (canonical チェーンで送られた tx 数) − (commit された後で revert されたセグメントで送られた tx 数)。** Reorg アームがコツ: \`old\` を undo して \`new\` を apply、これを 1 通知でアトミックに行う。
+Reorg 検証手順:
+1. \`from_chain\` / \`to_chain\` 範囲メモ
+2. Reorg ログ前に高 tx アドレスの \`tx_count\` スポットチェック → 記録
+3. Reorg ログ後に再記録
+4. 手動確認: 古い/新しいチェーンセグメントの差と一致するか
 
-\`ChainReverted\` で \`-=\` を忘れると、カウントは永久に膨らみ続ける。\`ChainReorged\` で \`-=\` を忘れると、カウントは canonical ではなく、古いチェーンと新しいチェーンの和を表すことになる。
+一致すれば **本番グレードインデクサ**（goldsky、The Graph 等が出荷するコード）相当。
 
-## ドリル 4 — Reorg ハンドリングを検証
+## 失敗例（誤解）
 
-Holesky は時々 reorg を生成する。数時間動かす。
+「\`ChainReverted\` で \`-=\` しなくても \`ChainCommitted\` で正しくなる」— **間違い**。Revert された tx は **canonical ではなくなった**、\`-=\` 忘れるとカウント永久膨張。
 
-> 🔍 **Reorg を見つける。** ログで「Received reorg」を検索。出てきたら:
->
-> 1. \`from_chain\` と \`to_chain\` の範囲をメモ。
-> 2. Reorg ログ行 *の前に* 高 tx アドレスの \`tx_count\` をスポットチェック — カウントを記録。
-> 3. Reorg ログ行 *の後に* 再度記録。
-> 4. 手動で確認: そのアドレスでの古いチェーンと新しいチェーンセグメントの差と一致してカウントが変化したか?
+「順序は \`new\` 先で良い」— **危険**。共通プレフィックスがある場合、\`new\` 先 apply で一旦二重カウント → \`old\` undo で復旧、ただし中間状態が不正。**Reth と同じ time-line 順（old-first）が慣習**。
 
-一致していれば、インデクサは reorg-safe である。**本番グレードのインデクサ（goldsky、the graph など）が出荷しているのと同種のコードを書いたことになる。**
+「再起動後にカウントは再構築できる」— **半分間違い**。在庫が永続化されていないと再起動で全消失 → 再 sync 必要。tracking-state パターン（別 DB 永続化）を見る。
 
-> 🛑 **最終質問:** \`ChainReorged\` アームでの操作の *順序* がなぜ重要なのか? 具体的に: \`new\` を apply してから \`old\` を undo しても問題ないか?
+## ステップで組み立てる
 
-問題になるケースは厳密に 1 つ: \`old\` と \`new\` が共通プレフィックスを共有していて、ランタイムがそれを *両方から省く* 場合 — ただし、実装が共有ブロックを両方に含めると、\`new\` を先に apply した場合に一旦二重カウントになり、その後 \`old\` の undo でゼロに戻ることになる。慣習は **\`old\` を先に undo してから \`new\` を apply** で、これは Reth 自体が reorg を処理する時系列順と一致する。
+### Step 1: セットアップ
 
-## レッスン終了の想起
+\`reth-exex-examples\` clone + minimal build。
 
-スクロールせずに、自分の言葉で:
+### Step 2: holesky で実行
 
-1. \`ChainReorged\` で \`old\` と \`new\` を同じ通知で扱う論理的根拠は?
-2. 3 アームのパターンが派生状態について保つ不変条件は?
-3. \`FinishedHeight\` を忘れると、ディスク上で時間と共に何が膨らむか?
-4. ExEx が別プロセスの RPC ポーリングインデクサに勝つ、唯一のアーキテクチャ上の理由は?
+reorg 頻度が高い + 初期同期速い = 学習に最適。
 
-このドリルを終えれば、reorg-safe でノード速度のインデクサを出荷したことになる。**同じ道具で MEV ボット、リアルタイムリスクエンジン、ロールアップも作れる。**`,
+### Step 3: tx カウンター追加
+
+\`ChainCommitted\` で sum + log、実測値を確認（holesky 5-20、mainnet 100-300）。
+
+### Step 4: 3 アーム HashMap 実装
+
+ChainCommitted += / ChainReorged old -= then new += / ChainReverted -=。
+
+### Step 5: 不変条件を理解
+
+各 Address のカウント = canonical で送られた tx 数 − revert されたセグメントで送られた tx 数。
+
+### Step 6: 操作順序を守る
+
+\`old\` を先に undo、\`new\` を後で apply（Reth の reorg 時系列順）。
+
+### Step 7: Reorg を検証
+
+ログ前後でスポットチェック、差と一致確認 → 一致すれば本番グレード。
+
+## 答え合わせ
+
+- **\`ChainReorged\` で old/new を同通知で扱う論理的根拠**: アトミック swap、reorg を 1 トランザクションとして扱う。**old を先に undo + new を後で apply** で 1 通知の処理を Reth の time-line 順と一致させる。\`new\` 先だと共通プレフィックスで一旦二重カウント。
+- **3 アームの不変条件**: 各 Address のカウント = (canonical で送られた tx 数) − (commit 後 revert で送られた tx 数)。**revert アームで \`-=\` を忘れると永久膨張、reorg アームで \`-=\` を忘れると古い + 新しいチェーンの和**になる。
+- **本番グレードの定義**: holesky で実際の reorg を検知 + 前後の \`tx_count\` 差が古い/新しいチェーンセグメントの差と一致 → goldsky や The Graph が出荷するコード相当。**MEV ボット、リアルタイムリスクエンジン、ロールアップも同じ道具で実装可能**。
+
+## 合格基準
+
+- holesky で reorg 観測の理由（頻度高 + 同期速い）を即答できる。
+- 3 アーム HashMap の += / -= パターンを書ける。
+- 不変条件（canonical − revert）を 1 文で言える。
+- 操作順序（old undo first）の理由を Reth time-line で説明できる。
+- Reorg 検証手順（前後スポットチェック）を辿れる。
+
+## まとめ（3行）
+
+- holesky で 3 アーム HashMap インデクサ実装（ChainCommitted += / ChainReorged old -= then new += / ChainReverted -=）、不変条件 = canonical − revert。
+- 操作順序は old を先に undo + new を後で apply（Reth time-line 順）、\`new\` 先だと共通プレフィックスで二重カウント可能。
+- Reorg 観測 + スポットチェックで一致確認 → 本番グレード（goldsky / The Graph 相当）、MEV / リスクエンジン / ロールアップも同じ道具で実装。
+`,
                 },
                 {
-                  title: 'ノードビルダー API をステップで組み立てる',
+                  title: 'レッスン8 — ノードビルダー API をステップで組み立てる',
                   slug: 'reth-sdk-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 9,
                   duration: 10,
                   xpReward: 25,
-                  content: `# ノードビルダー API をステップで組み立てる
+                  content: `# レッスン8 — ノードビルダー API をステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** ノード全体の **組み立て / DI 層**。Spring のコンテナ、Kubernetes operator、Linux init system が共通して直面する問題 — 「ユーザがコンポーネントを 1 つだけ差し替えても、残りには触らずに済み、触らないものにはデフォルトが効く」。Reth SDK は、その発想を型付きビルダーとして表現し、L1/L2の構築に持ち込んだもの。
+## 問い
 
-ExEx は既存の Ethereum ノードを拡張するもの。**Reth SDK** はコンポーネントを組み立てて *自前の* App-chain を Rust で構築できる仕組みである。「purpose-built EVM L1」という thesis が **コンパイル可能なバイナリ** に化けるのはここ。
+ExEx は既存 Ethereum ノードを拡張。**Reth SDK** はコンポーネントを組み立てて自前の App-chain を Rust で構築可能。「purpose-built EVM L1」thesis がコンパイル可能なバイナリに化けるのはここ。**\`with_types\` → \`with_components\` → \`with_add_ons\` → \`launch\` の理由は？**
 
-ただ API は流れるような呼び出し — \`with_types\`、\`with_components\`、\`with_add_ons\`、\`launch\` — が並び、それぞれがアーキテクチャ上まったく違うことを決めている。このレッスンでは「最も素朴に動くもの」から積み上げて、各メソッドがなぜ意味を持つかを示する。
+## 原理（最小モデル）
 
-最後まで通せば、以下の全要素を自分の手で組み立てたことになる:
+- **素朴な「Reth 全体 fork」が破滅的 3 理由.** アップストリーム分岐（毎週 update、rebase 地獄）+ 抱え込みたくない表面積（1 サブシステム変えたいのに 200K 行抱え込み）+ レビューコスト（監査 / セキュリティ / 規制が新クライアント扱い）。
+- **修正方針 = fork ではなく組み立てる.** 実際に変えたいサブシステムだけ上書き、残りは Reth をライブラリ依存。
+- **6 差し替えポイント.** pool / network / executor / consensus / payload / add_ons。
+- **Builder パターンが「変えるものだけ書く」を実現.** struct 渡しは型推論早々に崩れる + all-or-nothing 強制 → 流れるようなチェーン呼び出しに。
+- **3 軸ビルダー.** types（block/tx/header レイアウト、他の全てを支える）→ components（ランタイムサブシステム）→ add_ons（RPC、ExEx）。
+- **\`with_types\` 先頭の理由.** 型が他全てを支える load-bearing、未確定型でコンポーネント指定すると静かに混乱 or コンパイラと戦う。
+- **\`with_components\` で base.method() チェイン.** EthereumNode::components() 取って .pool(...) / .network(...) で個別上書き、デフォルトは見えないまま。
+- **\`launch\` の本物の仕事.** MDBX 開く + P2P 起動 + sync Tokio タスク spawn + RPC サーバー配線。
+
+## 具体例
+
+最終形:
 
 \`\`\`rust
 fn main() {
@@ -1386,11 +1434,7 @@ fn main() {
 }
 \`\`\`
 
-> 📂 **別タブで \`paradigmxyz/reth/examples/custom-node-components/src/main.rs\` を開く。** これが組み立て先のファイル。
-
-## ステップ 0 — 素朴な App-chain: Reth 全体を fork する
-
-何も考えずにカスタム レッスン1を出すならこんな形:
+素朴な fork:
 
 \`\`\`bash
 git clone https://github.com/paradigmxyz/reth my-chain
@@ -1399,40 +1443,25 @@ cd my-chain
 cargo build
 \`\`\`
 
-200K 行以上の Reth を丸ごと fork し、必要箇所を編集してリリース。
+破滅的 3 理由:
+1. **アップストリーム分岐** — Paradigm 毎週リリース、fork は rebase 地獄 → 半年で安全アップグレード不可
+2. **抱え込みたくない表面積** — 1 サブシステム変えたくて fork したのに **全て** 抱え込み（読んだことないコードのバグ、セキュリティパッチ、決して触らないがビルドし続けるモジュール）
+3. **レビューコスト** — レビュアーには変更 50 行と未変更 200K 行の区別不可 → 監査 / セキュリティ会社 / 規制当局が新クライアント扱い
 
-> 🛑 **予測。** スクロールせずに: 何年もチェーンを運用するなら、この素朴なアプローチが *破滅的* になる理由を 3 つ挙げてほしい。（ヒント: それぞれ *別種の* コストである。）
-
-3つ:
-
-1. **アップストリームの分岐。** Paradigm は Reth のアップデートを毎週リリースしている。あなたの fork はそれをきれいに取り込む手段がない — リリースのたびに rebase 地獄。半年も経つと安全にアップグレードできなくなる。
-2. **抱え込みたくない表面積。** *1 つの* サブシステムを変えたいから fork したのに、今では *すべて* を抱え込むことになる — 読んだことのないコードのバグ、追跡しなければならないセキュリティパッチ、決して触らないがビルドし続けるモジュール。
-3. **レビューコスト。** レビュアーには、あなたが実際に変更した 50 行と、触っていない 200K 行の区別がつかない。監査、セキュリティ会社、規制当局 — 全員があなたの fork を新しいクライアントとして扱うことになる。
-
-修正方針: **fork するのではなく、組み立てる。** 実際に変えたいサブシステムだけを上書きし、残りは Reth をライブラリとして依存する。
-
-## ステップ 1 — 差し替えポイントを特定する
-
-実際にカスタマイズしたくなるサブシステムは何か?
-
-> 🛑 **予測。** Tempo（payments 特化型 L1）を作るなら、Reth のどのサブシステムを差し替える?（ヒント: 候補は 4〜6 個。）
-
-実本番のチェーンに登場する候補:
+6 差し替えポイント:
 
 | サブシステム | 何を変えるか | 本番例 |
 | :--- | :--- | :--- |
-| **Pool** | 受付ルール、優先レーン | Tempo は payments tx を gas 価格より優先するレーンを実装 |
-| **Network** | ピアポリシー、プライベートサブネット | バリデータが互いを優先する private gossip subnet など |
-| **Executor** | カスタム Opcode、precompile、ガス表 | Hyperliquid は HyperBFT 専用 precompile を追加 |
-| **Consensus** | PoS → HyperBFT、PoA、Tendermint | Hyperliquid の HyperBFT、Berachain の Polaris |
-| **Payload** | ブロックビルダー | MEV-aware、アプリ固有の優先順 (Tempo の payments-first ordering) |
-| **Add-ons** | カスタム JSON-RPC ネームスペース、ExEx フック | tidx の \`tidx_*\` ネームスペース、検閲耐性監視の ExEx |
+| **Pool** | 受付ルール、優先レーン | Tempo は payments tx を gas 価格より優先するレーン |
+| **Network** | ピアポリシー、プライベートサブネット | バリデータが互いを優先する private gossip subnet |
+| **Executor** | カスタム Opcode、precompile、ガス表 | Hyperliquid は HyperBFT 専用 precompile 追加 |
+| **Consensus** | PoS → HyperBFT、PoA、Tendermint | Hyperliquid HyperBFT、Berachain Polaris |
+| **Payload** | ブロックビルダー | MEV-aware、アプリ固有順序（Tempo payments-first） |
+| **Add-ons** | カスタム JSON-RPC、ExEx | tidx の \`tidx_*\` namespace、検閲耐性監視 ExEx |
 
-これらが SDK が公開している差し替えポイントそのものである。それ *以外*（sync オーケストレータ、MDBX スキーマ、ヘッダーダウンロード、sender 復元、ハッシングステージ）は Reth からそのまま使う。
+残り（sync オーケストレータ / MDBX スキーマ / ヘッダーダウンロード / sender 復元 / ハッシングステージ）は Reth デフォルト。
 
-## ステップ 2 — 最初の試案: 上書きを struct で渡す
-
-素朴な合成 API:
+最初の試案（struct 渡し）の 2 UX 問題:
 
 \`\`\`rust
 struct NodeConfig<P, N, E, C, Pl> {
@@ -1442,44 +1471,12 @@ struct NodeConfig<P, N, E, C, Pl> {
     consensus: C,
     payload: Pl,
 }
-
-fn main() {
-    let cfg = NodeConfig {
-        pool: CustomPool::default(),
-        network: DefaultNetwork::default(),
-        executor: DefaultExecutor::default(),
-        consensus: DefaultConsensus::default(),
-        payload: DefaultPayload::default(),
-    };
-    Reth::run(cfg);
-}
 \`\`\`
 
-上書きを struct で渡す形。動くことは動きますが、ぎこちない。
+1. **毎回全フィールド書く羽目** — カスタマイズしていないものまで（all-or-nothing 強制）
+2. **型推論早々に崩れる** — 各コンポーネントが独自ジェネリックパラメータ、単一 struct にまとめると推論効かず行き詰まった型シグネチャ
 
-> 🛑 **予測。** この形には UX 上の問題が 2 つある。何でしょう?
-
-2つ:
-
-1. **毎回全フィールドを書く羽目になる** — カスタマイズしていないものまで。struct が all-or-nothing を強制する。
-2. **型推論が早々に崩れる。** 各コンポーネントが独自のジェネリックパラメータを持つ。それを単一 struct にまとめると推論が効かず、行き詰まった型シグネチャになる。具体的にはこんな形:
-
-\`\`\`rust
-// pool だけ差し替えたいのに、コンパイラが全パラメータの specification を要求
-let cfg: NodeConfig<
-    CustomPool,
-    DefaultNetwork<EthereumPrimitives, DefaultDiscovery>,
-    DefaultExecutor<EthereumChainSpec, EthereumPrimitives>,
-    DefaultConsensus<EthereumChainSpec>,
-    DefaultPayload<EthereumPayloadBuilder, EthereumPrimitives>,
-> = NodeConfig { /* ... */ };
-\`\`\`
-
-毎行に Reth 内部の具体型を書く羽目になり、ライブラリのバージョンアップで型が変わるたびに全ファイル書き直し。実用上、ユーザコードは触れません。
-
-**Builder パターンが両方を解決する。** 各メソッドが 1 つの上書きを受け取り、新しいビルダー型を返す — Rust の型システムが変更を追跡し、デフォルトは暗黙のまま据え置ける。
-
-## ステップ 3 — Builder パターン: 流れるようなチェーン呼び出し
+Builder パターン:
 
 \`\`\`rust
 let handle = builder
@@ -1489,35 +1486,16 @@ let handle = builder
     .await?;
 \`\`\`
 
-各 \`with_*\` 呼び出しが新しいビルダー型を返す。デフォルトは見えないまま。**実際に上書きしたものだけを書く。**
+各 \`with_*\` が新しいビルダー型を返す、デフォルトは見えないまま。
 
-ただ「コンポーネントごとに 1 メソッド」だけでは Reth のカスタマイズ表面を捉えきれません。もう一段上のグルーピングがあります: *types*（block/tx/header レイアウト）、*components*（上のランタイムサブシステム）、*add-ons*（RPC、ExEx）。本物の SDK はビルダーをこの 3 軸に分けている。
+3 軸ビルダー:
+- **types**: block/tx/header レイアウト、engine API
+- **components**: ランタイムサブシステム
+- **add-ons**: RPC、ExEx
 
-## ステップ 4 — \`.with_types::<EthereumNode>()\`
+\`with_types::<EthereumNode>()\` が先頭の理由: 型が他全てを支える。tx 構造を変えると pool/executor/payload/network 全てがその新 tx 型を使う必要 → SDK は **型バンドルを先に commit** させる。
 
-\`\`\`rust
-.with_types::<EthereumNode>()
-\`\`\`
-
-これは **型バンドル** を選びます — chain spec、primitives（block・tx・header 型）、engine API。
-
-なぜこれが独立したステップなのか? *型* が他のすべてを支えているからである。tx 構造を変えると、各コンポーネント（pool、executor、payload、network）はその新しい tx 型を使う必要がある。だから SDK は型バンドルを *先に* commit させる — コンポーネント設定よりも前に。
-
-\`EthereumNode\` はデフォルト（Ethereum block + tx + header）。\`OpNode\`（Optimism 型）や独自の \`NodeTypes\` 実装も渡せる。
-
-> 🛑 **理解度チェック。** \`with_types\` がチェーンで \`with_components\` の *後* に来たら、どんな具体的なバグが発生するか? 失敗モードをスケッチしてほしい。
-
-コンポーネントが、依存する型がまだ確定していない時点で指定されることになる。各コンポーネントビルダーを未確定の型でジェネリックにする（コンパイラと戦う羽目になる）か、\`.with_components\` の引数で型を暗黙に commit する（静かに混乱を招く）かしかない。**\`with_types\` を先頭に置く** ことで、残りのチェーンを型認識可能にしている。
-
-## ステップ 5 — \`.with_components(...)\`: カスタマイズの中心
-
-\`\`\`rust
-.with_components(EthereumNode::components().pool(CustomPoolBuilder::default()))
-\`\`\`
-
-仕組みはこう: コンポーネントの *基本セット*（\`EthereumNode::components()\`）を取って、\`.pool(...)\`、\`.network(...)\`、\`.executor(...)\` などをチェインして個別ビルダーを上書きする。
-
-ステップ 3 の「変えるものだけ上書き」パターンを、ランタイムサブシステムに適用したものである。デフォルトは見えないまま:
+\`with_components\` の base.method() チェイン:
 
 \`\`\`rust
 .with_components(
@@ -1530,11 +1508,7 @@ let handle = builder
 )
 \`\`\`
 
-カスタムビルダーを 1 つ書いた。残りは Reth から来る。
-
-> 🛑 **予測。** \`CustomPoolBuilder\` が実装するトレイト \`PoolBuilder\` をスケッチする。メソッドシグネチャだけでよい。Reth は pool ビルダーから何を必要とするか。
-
-おおよそ:
+\`PoolBuilder\` トレイト（おおよそ）:
 
 \`\`\`rust
 trait PoolBuilder<Node>: Send {
@@ -1544,75 +1518,111 @@ trait PoolBuilder<Node>: Send {
 }
 \`\`\`
 
-メソッドは 1 つ: コンテキスト（chain spec、primitives などを含む）が与えられたら pool を作る。**コンポーネントは事前に構築されて渡されるのではなく、遅延ビルドされる** — 前のビルダーステップが組み立てたコンテキストを必要とするからである。（次のレッスンで、6 つのビルダー全部に同じ形が現れるのを見る。）
+**コンポーネントは事前に構築されて渡されるのではなく、遅延ビルドされる** — 前のビルダーステップが組み立てたコンテキストを必要とするから。同じ形が 6 ビルダー全部に。
 
-## ステップ 6 — \`.with_add_ons(...)\` と \`.launch()\`
+\`with_add_ons\` + \`launch\`:
 
 \`\`\`rust
 .with_add_ons(EthereumAddOns::default())
 .launch()
 \`\`\`
 
-Add-ons はランタイムを支える load-bearing ではない要素です: RPC ネームスペース、engine API 拡張、ExEx インストールなど。\`EthereumAddOns::default()\` で標準 Ethereum RPC。ここに \`.install_exex(...)\` をチェインすれば前レッスンの ExEx パターンが使える。
+Add-ons = load-bearing でない（RPC namespace、engine API 拡張、ExEx インストール）。\`.launch()\` で本物の仕事: MDBX 開く + P2P 起動 + sync Tokio タスク spawn + RPC サーバー配線 → \`NodeHandle\` 返す。
 
-\`.launch()\` で本物の仕事が起きます: MDBX を開き、P2P スタックを起動し、sync ステージ用に Tokio タスクを spawn し、RPC サーバーを配線する。これらすべてを駆動する \`NodeHandle\` を返す。
+## 失敗例（誤解）
 
-## ここまでに組み立てたもの
+「fork してから時間と共に rebase で追従」— **間違い**。半年で rebase 不可能化、Paradigm の毎週 update 取り込み困難 → 安全アップグレード不可。**fork は何年も運用するチェーンに通用しない**。
 
-\`\`\`rust
-let handle = builder
-    .with_types::<EthereumNode>()              // (ステップ 4) 型バンドル
-    .with_components(                          // (ステップ 5) ランタイムサブシステム
-        EthereumNode::components().pool(CustomPoolBuilder::default())
-    )
-    .with_add_ons(EthereumAddOns::default())   // (ステップ 6) RPC + ExEx
-    .launch()                                  // (ステップ 6) すべて起動
-    .await?;
-\`\`\`
+「\`with_components\` を先に書いてもよい」— **間違い**。型が未確定でコンポーネント指定 → ① 各コンポーネントビルダーを未確定型でジェネリックにする（コンパイラと戦う）か、② \`.with_components\` 引数で型を暗黙 commit（静かに混乱）。**\`with_types\` を先頭に置く**。
 
-各ステップがきちんと役割を果たしています:
+「全フィールド明示が安全」— **逆効果**。デフォルトを書くと Reth のライブラリバージョンアップで型が変わるたびに全ファイル書き直し。**変えるものだけ書く + デフォルトは暗黙据え置き**。
 
-- **\`with_types\` 先頭**（ステップ 4）— 型が他のすべてを支える load-bearing な要素
-- **\`with_components\` のチェイン上書き**（ステップ 5）— 変えるものだけ上書きし、残りはデフォルト
-- **\`with_add_ons\`**（ステップ 6）— load-bearing ではない拡張
-- **\`launch\`**（ステップ 6）— 起動
+## ステップで組み立てる
 
-次のレッスンでは **6 つのコンポーネント** を巡る — それぞれが何をして、差し替えで何が出荷でき、本番のどのチェーンが何を差し替えているのか。
+### Step 1: fork の 3 破滅理由
 
-## 進む前の想起
+アップストリーム分岐 / 抱え込み表面積 / レビューコスト → 何年も運用に通用しない。
 
-スクロールせずに:
+### Step 2: 6 差し替えポイント
 
-1. なぜ「Reth 全体を fork」は何年も運用するチェーンに通用しないのか?
-2. なぜ \`.with_types::<EthereumNode>()\` がチェーンで *先頭* に来るのか?
-3. *1 つの* コンポーネントを上書きして残りを Reth デフォルトにするパターンは?
-4. \`.launch()\` が実際に起動するのは何?
+pool / network / executor / consensus / payload / add_ons。
 
-どれか曖昧なら戻る。次のレッスンでは 6 コンポーネントと、本物のチェーンが何を差し替えているかを巡る。
+### Step 3: Builder パターンの 2 UX 解決
 
-> **🧭 ここまでで積み上げたもの:** **ノード全体の組み立て / DI 層** が完成 — \`with_types\` → \`with_components\` → \`with_add_ons\` → \`launch\` の typed builder で、デフォルトを暗黙のまま 1 コンポーネントだけ差し替えられるかたちになった。Kubernetes operator や Spring container が解いているのと同じ問題（6 つのサブシステムを、6 個ぶんのボイラープレートなしで合成する）への、Rust 流の解答。次のレッスンでは、6 つのコンポーネントを順に巡る。
+毎回全フィールド書かない + 型推論崩れない。
+
+### Step 4: 3 軸ビルダー
+
+types（先頭、load-bearing）→ components（ランタイム）→ add_ons（RPC、ExEx）。
+
+### Step 5: \`with_components\` の base.method() パターン
+
+\`EthereumNode::components()\` で base、\`.pool(CustomBuilder)\` で上書き、デフォルトは暗黙。
+
+### Step 6: \`PoolBuilder\` トレイトの遅延ビルド
+
+\`build_pool(self, ctx)\` でコンテキスト渡し、6 ビルダー全部に同じ形。
+
+### Step 7: \`launch\` の本物の仕事
+
+MDBX 開く + P2P 起動 + sync Tokio タスク spawn + RPC サーバー配線。
+
+## 答え合わせ
+
+- **fork が「何年も運用するチェーン」に通用しない理由**: ① Paradigm の毎週 update を rebase で追従不可能（半年で限界）、② 1 サブシステム変えたいのに 200K 行抱え込み、③ 監査 / セキュリティ / 規制が新クライアント扱い → コスト爆発。
+- **\`with_types::<EthereumNode>()\` が先頭である理由**: 型が他全てを支える load-bearing。tx 構造を変えると pool/executor/payload/network 全てがその新型を使う必要、SDK は型バンドルを **先に commit** させてチェーン残りを型認識可能にする。
+- **「変えるものだけ書く + デフォルトは暗黙」が成立する仕組み**: \`EthereumNode::components()\` が base、\`.pool(CustomBuilder)\` が個別上書き。Reth のライブラリバージョンアップで残り 5 のデフォルト型が変わってもユーザコードは触れない → **80% 継承 + 20% カスタム** で長期メンテ可能。
+
+## 合格基準
+
+- fork の 3 破滅理由を即答できる。
+- 6 差し替えポイント（pool / network / executor / consensus / payload / add_ons）を言える。
+- Builder パターンの 2 UX 解決を即答できる。
+- 3 軸ビルダー（types / components / add_ons）の順序と理由を言える。
+- \`launch\` の 4 起動仕事を言える。
+
+## まとめ（3行）
+
+- 「fork ではなく組み立てる」= 何年も運用するチェーンの保守可能な唯一の物語、6 差し替えポイント（pool / network / executor / consensus / payload / add_ons）+ 残りは Reth デフォルト。
+- 3 軸ビルダー（types 先頭 = load-bearing / components ランタイム / add_ons RPC + ExEx）+ Builder パターンで「変えるものだけ書く + デフォルト暗黙」。
+- \`launch\` が MDBX + P2P + sync Tokio + RPC を配線、Paradigm の毎週 update が 80% に流れ込み + あなたの fork 由来表面積は 20% に留まる。
 `,
                 },
                 {
-                  title: '6 コンポーネント — それぞれが何を解放するか',
+                  title: 'レッスン9 — 6 コンポーネント — それぞれが何を解放するか',
                   slug: 'reth-sdk-components-ja',
                   type: 'CONTENT',
                   sortOrder: 10,
                   duration: 10,
                   xpReward: 25,
-                  content: `# 6 コンポーネント — それぞれが何を解放するか
+                  content: `# レッスン9 — 6 コンポーネント — それぞれが何を解放するか
 
-Tempo は payments レッスン1を Reth 上で構築中。Berachain は bera-reth を出荷済み。MegaETH は高スループット レッスン1を Reth 上で構築中。Hyperliquid は HyperEVM (独自の Reth 近接の実行レイヤ) を動かしている。**どれも Reth を fork していません** — いずれも Reth の 6 コンポーネントのうち数個だけを差し替え、残りを継承している。これが SDK の最大の売りです: **Rust EVM クライアントを書き直すのではなく、自分の thesis に合う部分だけを差し替える。** このレッスンではその 6 コンポーネントを巡り、本番チェーンが各差し替えで何を解放したかを示する。
+## 問い
 
-今日時点の経験的証拠:
+Tempo / Berachain / MegaETH / Hyperliquid — **どれも Reth を fork していない**。Reth の 6 コンポーネントのうち数個だけ差し替え、残りを継承。**SDK の最大の売り = Rust EVM クライアントを書き直すのではなく、自分の thesis に合う部分だけ差し替える — 各コンポーネントが何を解放するか？**
+
+## 原理（最小モデル）
+
+- **fork なしの経験的証拠.** Tempo（0 ahead, 1374 behind） / MegaETH（0 ahead, 7666 behind） / Berachain（独立 repo、fork ですらない）。
+- **6 コンポーネント.** pool（受付・順序付け・追い出し）/ network（P2P・ピア）/ executor（EVM / Opcode / ガス）/ consensus（ブロック検証ルール）/ payload（ブロック構築）/ add_ons（RPC + ExEx）。
+- **Hyperliquid の差し替え.** consensus（HyperBFT）+ executor（オーダーブック結合）+ pool（高頻度 perp 更新）。
+- **Tempo の差し替え.** pool（payments 優先レーン）+ payload（payment finality）+ add_ons（payment RPC + MPP 統合）。**consensus / executor は Reth デフォルト**。
+- **Berachain（bera-reth）の差し替え.** consensus（Proof of Liquidity、流動性 stake）+ executor（PoL 報酬分配）+ add_ons（DEX-aware RPC）。
+- **MegaETH の深いカスタマイズ.** executor（JIT/AOT EVM、revmc ベース）+ storage（MDBX → SALT）+ バリデータ別バイナリ（stateless-validator）= **それでも fork なし**。
+- **Thesis → コンポーネント差し替えマッピング.** チェーンの thesis 1 文で 1-3 コンポーネント差し替えに対応。
+- **不変の 80%.** sync オーケストレータ + MDBX スキーマ + ヘッダーダウンロード + sender 復元 + ハッシング + Merkle + インデックス + JSON-RPC ランタイム + engine API + Tokio + tracing + メトリクス = 価値の大半。
+
+## 具体例
+
+経験的証拠:
 
 | Chain | Reth との関係 | 証拠 |
 | :--- | :--- | :--- |
-| **Tempo** | 空 fork | [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth): upstream に対して 0 commits ahead, 1374 behind |
-| **MegaETH** | 空 fork | [\`megaeth-labs/reth\`](https://github.com/megaeth-labs/reth): upstream に対して 0 commits ahead, 7666 behind |
-| **Berachain** | fork ですらない | [\`berachain/bera-reth\`](https://github.com/berachain/bera-reth): Reth crate を依存として使う独立 repo |
+| Tempo | 空 fork | [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth): upstream に対して 0 commits ahead, 1374 behind |
+| MegaETH | 空 fork | [\`megaeth-labs/reth\`](https://github.com/megaeth-labs/reth): upstream に対して 0 commits ahead, 7666 behind |
+| Berachain | fork ですらない | [\`berachain/bera-reth\`](https://github.com/berachain/bera-reth): Reth crate を依存として使う独立 repo |
 
-Reth に触れるチェーンはいずれも upstream-as-library のスタンスである。カスタマイズは完全に自分たちの crate 内に収まっている。
+builder フロー:
 
 \`\`\`mermaid
 flowchart TB
@@ -1626,204 +1636,217 @@ flowchart TB
     AddOns --> Launch[".launch — あなたのチェーン"]
 \`\`\`
 
-## 6 コンポーネント、歩く
+6 コンポーネント表:
 
 | コンポーネント | 差し替える対象 | 解放されるもの |
 | :--- | :--- | :--- |
-| \`pool\` | tx 受付・順序付け・追い出し | 優先レーン、payments-first 順序、アプリ固有の MEV ルール |
+| \`pool\` | tx 受付・順序付け・追い出し | 優先レーン、payments-first 順序、アプリ固有 MEV ルール |
 | \`network\` | P2P トランスポート、ピアポリシー | プライベートサブネット、許可リスト、独自プロトコル |
 | \`executor\` | EVM 設定 | **カスタム Opcode**、カスタム precompile、カスタムガス表 |
 | \`consensus\` | ブロック検証ルール | PoS → HyperBFT、PoA、Tendermint、何でも |
-| \`payload\` | ブロックビルダー | MEV-aware 順序、アプリ固有のバッチング |
-| \`add_ons\` | ランタイム外の拡張 | カスタム JSON-RPC ネームスペース、ExEx インストール |
+| \`payload\` | ブロックビルダー | MEV-aware 順序、アプリ固有バッチング |
+| \`add_ons\` | ランタイム外拡張 | カスタム JSON-RPC namespace、ExEx インストール |
 
-それぞれに \`*Builder\` トレイト（\`PoolBuilder\`、\`NetworkBuilder\` など）があり、SDK が \`.launch()\` 中にそれらを呼んで実際のサブシステムを構築する。
+それぞれに \`*Builder\` トレイト（\`PoolBuilder\`、\`NetworkBuilder\` 等）、SDK が \`.launch()\` 中に呼び出してサブシステム構築。
 
-> 🛑 **予測。** これら 6 コンポーネントの中で、Hyperliquid が HyperEVM 用に最も大きくカスタマイズしたのはどれか? Tempo が payments 用に最も大きくカスタマイズしたのはどれか? 両方の予想を書き留めてから先へ。
+**Hyperliquid HyperEVM の差し替え**:
+- \`consensus\` — Ethereum PoS ではなく **HyperBFT**
+- \`executor\` — オーダーブック直結（Opcode が perp オーダーブックと相互作用）
+- \`pool\` — 高頻度 perp 更新ルール
+- その他 — Reth デフォルト
 
-## Hyperliquid HyperEVM — 何を差し替えているか
+**Tempo の差し替え**:
+- \`pool\` — payments 優先レーン（マーチャント決済が高 gas DeFi tx の後ろで待たされない）
+- \`payload\` — payment finality パターンに合わせたブロック構築
+- \`add_ons\` — payment RPC namespace + [Machine Payments Protocol](https://github.com/tempoxyz/mpp-specs)（HTTP-402 エージェント決済）統合
+- \`consensus\` / \`executor\` — Reth デフォルトで十分
 
-- **\`consensus\`** — Ethereum PoS ではなく **HyperBFT**（独自の Byzantine-fault-tolerant コンセンサスプロトコル）。コンセンサスサブシステムを置き換えている。
-- **\`executor\`** — オーダーブック直結の実行: 一部の Opcode が EVM と並走する perp オーダーブックと相互作用する。カスタム executor。
-- **\`pool\`** — 高頻度な perp 更新に合わせた受付ルール。
-- **その他すべて** — Reth デフォルト。
+隣接 crate（Reth 差し替えそのものではないが、Reth 未改造依存で成立）:
+- **[Zones](https://github.com/tempoxyz/zones)** — confidential blockchain、250ms ブロック、TIP-403 compliance
+- **[tidx](https://github.com/tempoxyz/tidx)** — PostgreSQL+ClickHouse ハイブリッドインデクサ
 
-> 🛑 **理解度チェック。** Hyperliquid は \`consensus\` と \`executor\` を差し替えました。**なぜ Reth 全体を fork してゼロから書き直さなかったのか?** 率直な答えは、SDK が重要である理由そのものです — 彼らは *それ以外* すべて（sync、MDBX、ヘッダーダウンロード、sender 復元、RPC）をアップストリームの Reth に追従させたかった。Paradigm のアップデートを rebase 地獄なしに取り込めるようにするためである。コンポーネント合成は、保守をめぐる物語である。
+**Berachain (bera-reth) の差し替え**:
+- \`consensus\` — **Proof of Liquidity**（流動性を BEX stake）
+- \`executor\` — PoL 報酬分配が実行と相互作用
+- \`add_ons\` — DEX-aware RPC namespace
+- 構造: GitHub fork ですらなく、Reth crate を依存とする独立 repo = 「compose, don't fork」の最鮮明表現
 
-## Tempo — 何を差し替えているか
+**MegaETH の深いカスタマイズ**（thesis = 100K+ TPS L1）:
+- \`executor\` — JIT/AOT EVM（[revmc](https://github.com/paradigmxyz/revmc) ベース）、[mega-evm](https://github.com/megaeth-labs/mega-evm) が revm を MegaETH 仕様でラップ
+- **storage / state** — MDBX を [SALT](https://github.com/megaeth-labs/salt) に置き換え（30 億アイテム / 1 GB メモリ、state-root ランダム I/O 排除）
+- **バリデータ別バイナリ** — [stateless-validator](https://github.com/megaeth-labs/stateless-validator) が SALT witness でステートレス検証
+- \`consensus\` / \`pool\` / \`network\` — Reth デフォルト + 性能最適化
+- それでも \`megaeth-labs/reth\`: 0 ahead, 7666 behind
 
-Tempo のソースは現在公開されている（[\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) — 900+★、"the blockchain for payments"）。中を開く前に押さえておくと有用なのが、Tempo の Reth fork [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) が upstream Paradigm Reth に対して **0 commits ahead, 1374 commits behind** であること。つまり Reth を fork していません。payments 固有のカスタマイズはすべて \`tempoxyz/tempo\` crate にあり、それが upstream Reth をライブラリとして依存している。
-
-これは SDK の売りに対する最強の経験的証拠であり、Paradigm の設計が、継承する 80% を触らずにどのコンポーネントを差し替えられるよう作られたかを的確に示しています:
-
-- **\`pool\`** — payments 優先レーン。マーチャント決済が高 gas な DeFi tx の後ろで待たされるべきではない。pool がそれらを別扱いで前に出す。
-- **\`payload\`** — payment finality パターンに合わせたブロック構築。
-- **\`add_ons\`** — payment 固有エンドポイント用のカスタム RPC ネームスペース、加えて [Machine Payments Protocol](https://github.com/tempoxyz/mpp-specs)（エージェント決済用の HTTP-402 レイヤ）との統合。
-- **\`consensus\` / \`executor\`** — Reth デフォルトで十分。カスタム EVM もカスタムコンセンサスも不要でした。
-
-レッスン1と同時に出荷された隣接 crate（Reth コンポーネント差し替えそのものではないが、Reth を未改造のまま依存できることで成立しているもの）:
-
-- **[Zones](https://github.com/tempoxyz/zones)** — Tempo にアンカーされた confidential blockchain。暗号化された deposit/withdrawal、250ms ブロック時間、レッスン1から継承される compliance ポリシー（TIP-403）。
-- **[tidx](https://github.com/tempoxyz/tidx)** — hot point lookup と analytics 用の PostgreSQL+ClickHouse ハイブリッドインデクサ。
-
-パターン: **thesis に合う部分を差し替え、それ以外はそのまま。** Tempo の thesis は payments-priority で、差し替えたコンポーネントがそれを反映している。カスタム executor（カスタム Opcode なし）やカスタム consensus（標準 L1 PoS で OK）は不要だったので、書きませんでした。
-
-## Berachain (bera-reth) — 何を差し替えているか
-
-- **\`consensus\`** — **Proof of Liquidity**: バリデータがネイティブトークンを単独で stake するのではなく、流動性を BEX（彼らの DEX）に stake する。コンセンサスルールが Ethereum PoS と異なる。
-- **\`executor\`** — PoL と結合しているため、報酬分配が実行と相互作用する。
-- **\`add_ons\`** — DEX-aware な RPC ネームスペース。
-- **その他すべて** — Reth デフォルト。
-
-[\`berachain/bera-reth\`](https://github.com/berachain/bera-reth) は構造的にも興味深い: そもそも upstream Reth の GitHub fork ですらなく、Reth crate を依存として使う独立 repo になっている。Tempo / MegaETH の空 fork パターンよりさらに鮮明な「compose, don't fork」の表現である。
-
-## MegaETH — 何を差し替えているか
-
-MegaETH ([\`megaeth-labs/\`](https://github.com/megaeth-labs)) は Reth 上に構築された 100K+ TPS レッスン1の thesis。Tempo よりカスタマイズは深い — thesis (生スループット) が execution と storage の奥まで届く必要があるからです:
-
-- **\`executor\`** — sequencer 上で JIT/AOT コンパイルされた EVM (Paradigm の [\`revmc\`](https://github.com/paradigmxyz/revmc) ベース)。[\`megaeth-labs/mega-evm\`](https://github.com/megaeth-labs/mega-evm) が revm を MegaETH 固有の仕様でラップ。
-- **storage / state** — **MDBX を [\`SALT\`](https://github.com/megaeth-labs/salt) (Small Authentication Large Trie) に置き換え** — 30 億アイテムを 1 GB のメモリで保持し、state-root 更新中のランダムディスク I/O を排除する authenticated KV store。標準の 6 コンポーネントスロットではなく、Reth のストレージ抽象を経由してプラグインしている。
-- **バリデータは別バイナリを走らせる** — [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) が SALT witness を使ってブロックをステートレスに検証する。バリデータは sequencer の数分の一のハードウェアで済む。
-- **\`consensus\` / \`pool\` / \`network\`** — Reth デフォルト + 性能最適化。
-
-MegaETH の事例が教育的に重要なのは、SDK の天井を見せてくれるからです: コア Reth を fork せずにカスタマイズはどこまで深く行けるか。Tempo は数コンポーネントだけ差し替えて残りはそのまま。MegaETH は EVM executor と storage layer を置き換え、**それでも Reth を fork していません** (\`megaeth-labs/reth\`: 0 ahead, 7666 behind)。
-
-## パターン: thesis が要求する部分を差し替える
-
-チェーンの thesis を 1 文で言えるなら、たいてい 1〜3 個のコンポーネント差し替えにマッピングできる:
+Thesis → コンポーネント差し替えマッピング:
 
 | Thesis | 差し替えるコンポーネント |
 | :--- | :--- |
-| 「オーダーブック結合した perp 高速実行」 | \`consensus\`、\`executor\`、\`pool\` |
-| 「payment-priority L1」 | \`pool\`、\`payload\`、\`add_ons\` |
-| 「流動性 stake PoS」 | \`consensus\`、\`executor\`、\`add_ons\` |
-| 「JIT EVM + stateless validator による 100K+ TPS」 | \`executor\`、storage layer、validator client |
-| 「shielded tx 対応のプライバシー L1」 | \`pool\`、\`executor\`、\`add_ons\`（カスタム RPC） |
+| 「オーダーブック結合 perp 高速実行」 | consensus、executor、pool |
+| 「payment-priority L1」 | pool、payload、add_ons |
+| 「流動性 stake PoS」 | consensus、executor、add_ons |
+| 「JIT EVM + stateless validator で 100K+ TPS」 | executor、storage layer、validator client |
+| 「shielded tx プライバシー L1」 | pool、executor、add_ons（カスタム RPC） |
 
-> 🔍 **リポジトリで確認。** \`EthereumNode::components()\` の定義を開く。各コンポーネントのデフォルトビルダーがそこに並んでいます — それが「無料で手に入るもの」のメニューである。
+不変の 80%:
+- Sync オーケストレータ（M1 で読んだ \`Stage\` パイプライン）
+- MDBX スキーマとストレージレイヤ
+- ヘッダーダウンロード、sender 復元、ハッシング、Merkle、インデックス
+- JSON-RPC サーバーランタイム、engine API サーバー
+- Tokio ランタイム、トレース、メトリクス
 
-## 不変のもの: load-bearing な 80%
+## 失敗例（誤解）
 
-差し替え *ない* コンポーネントが価値の大半を占めます:
+「全 6 コンポーネント差し替えが本物のカスタマイズ」— **間違い**。Tempo は 3 つだけ差し替え。**thesis が要求する部分だけ差し替える** が正解、不要なコンポーネントを差し替えても無意味 + メンテコスト増。
 
-- **Sync オーケストレータ**（Module 1 で読んだ \`Stage\` パイプライン）
-- **MDBX スキーマとストレージレイヤ**
-- **ヘッダーダウンロード、sender 復元、ハッシング、Merkle、インデックス**
-- **JSON-RPC サーバーランタイム、engine API サーバー**
-- **Tokio ランタイム、トレース、メトリクス**
+「MegaETH の SALT は標準 6 スロットではないので不可能」— **間違い**。Reth のストレージ抽象を経由してプラグイン、6 コンポーネントを超えるカスタマイズも fork なしで可能。**SDK の天井は標準 6 スロットを大きく超える**。
 
-これが「fork ではなく組み立てる」が、何年も運用する レッスン1にとって唯一の保守可能な物語である理由である。**Paradigm のアップデートは 80% に流れ込み、あなたの fork 由来の表面積は書いた 20% に留まる。**
+「Reth デフォルトでは性能不足」— **間違い**。不変の 80% が価値の大半（sync、ストレージ、MPT、Tokio）= 数年の最適化結果。差し替えるべきは thesis 固有部分のみ。
 
-## クイズ前の想起
+## ステップで組み立てる
 
-スクロールせずに:
+### Step 1: fork なし証拠
 
-1. 6 コンポーネントの中で Hyperliquid が最も大きくカスタマイズするのはどれで、なぜか?
-2. なぜ payments-priority には \`pool\` が正しい差し替え先で、\`consensus\` ではないのか?
-3. 「fork ではなく組み立てる」の保守上の論拠は?
-4. プライバシー レッスン1を出すための *最小* のコンポーネント差し替え集合をスケッチしてほしい。
+Tempo / MegaETH = 0 ahead、Berachain = 独立 repo（fork ですらない）。
 
-次のレッスンはクイズ。曖昧な答えがあるなら今、想起してほしい。
+### Step 2: 6 コンポーネントを役割で言える
+
+pool / network / executor / consensus / payload / add_ons。
+
+### Step 3: 実本番チェーンの差し替えパターン
+
+Hyperliquid（3 = consensus + executor + pool）/ Tempo（3 = pool + payload + add_ons）/ Berachain（3 = consensus + executor + add_ons）/ MegaETH（深 = executor + storage + validator）。
+
+### Step 4: Thesis → 差し替えマッピング
+
+チェーン thesis 1 文 = 1-3 コンポーネント差し替えに対応。
+
+### Step 5: 不変の 80% を理解
+
+sync + ストレージ + MPT + RPC + Tokio = 価値の大半、ここを差し替えない。
+
+## 答え合わせ
+
+- **Hyperliquid が最も大きくカスタマイズしたコンポーネント**: consensus（HyperBFT）+ executor（オーダーブック結合）。**全 Reth fork ではなく差し替えだけ** にした理由 = それ以外（sync、MDBX、ヘッダーダウンロード、sender 復元、RPC）を upstream Reth に追従、Paradigm のアップデートを rebase 地獄なしに取り込む。
+- **Payments-priority に pool が正しい差し替え先である理由**: 受付・順序付け・追い出しの場、merchant 決済を高 gas DeFi tx の前に出すレーンを定義可能。**consensus はブロック検証ルール** = 何が valid ブロックかを決める、優先順位ではない。
+- **「fork ではなく組み立てる」の保守上の論拠**: Paradigm の毎週 update が **80% に流れ込む** + 自分の fork 由来の表面積は書いた **20% に留まる**。何年も運用するチェーンで唯一の保守可能パス。
+
+## 合格基準
+
+- 6 コンポーネントを役割で即答できる。
+- Hyperliquid / Tempo / Berachain / MegaETH の差し替えパターンを言える。
+- Thesis → コンポーネントマッピングを 5 例で言える。
+- 不変の 80% を 5 領域で言える。
+- 「fork ではなく組み立てる」の保守上の論拠を 1 文で説明できる。
+
+## まとめ（3行）
+
+- 6 コンポーネント（pool / network / executor / consensus / payload / add_ons）の差し替えで Tempo / Berachain / MegaETH / Hyperliquid が **fork なし** で出荷。
+- Thesis が要求する 1-3 コンポーネントだけ差し替え、不変の 80%（sync + ストレージ + MPT + RPC + Tokio）は Reth 継承 = 数年の最適化結果を活用。
+- MegaETH が SDK 天井実証（executor + storage + validator client 差し替え + 0 ahead 維持）、Berachain が「compose, don't fork」最鮮明表現（独立 repo）。
 `,
                 },
                 {
-                  title: 'クイズ: SDK のコンポーネントモデルは身についた?',
+                  title: 'クイズ — Reth SDK',
                   slug: 'reth-sdk-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 11,
                   duration: 4,
                   xpReward: 25,
-                  content: `# クイズ: SDK のコンポーネントモデルは身についた?
+                  content: `# クイズ — Reth SDK
 
-ビルダーパターンとコンポーネントメニューをカバーする 4 問。同じルール: **クイズはうなずきで通せない。**
-
-2 問以上落としたら、ドリルへ進む前に「ノードビルダー API をステップで組み立てる」を読み直す。`,
+NodeBuilder API の 3 軸（types / components / add_ons）、6 コンポーネント、実本番チェーン（Tempo / Berachain / MegaETH / Hyperliquid）の差し替えパターンを確認する。
+`,
                   quizQuestions: [
                     {
-                      question: "なぜ `.with_types::<EthereumNode>()` がビルダーチェーンで `.with_components(...)` の *先* に来るのですか?",
-                      options: [
+                      "question": "なぜ `.with_types::<EthereumNode>()` がビルダーチェーンで `.with_components(...)` の *先* に来るのですか?",
+                      "options": [
                         "様式 — コンパイラに順序は関係ない。",
                         "性能 — 型先頭のほうがコンパイルが速い。",
                         "型はコンポーネントの load-bearing: tx と block の型が pool、executor、payload などが操作する対象を決める。チェーンが先に型バンドルに commit して、後続のコンポーネントビルダーが型認識可能になる。",
-                        "古い Reth バージョンとの後方互換性。",
+                        "古い Reth バージョンとの後方互換性。"
                       ],
-                      correctIndex: 2,
-                      explanation: "コンポーネントは型に依存する。`with_components` が先頭なら、各ビルダーは未確定の型でジェネリックにする必要がある。チェーンの順序が依存グラフをエンコードする — 型が先、その上にコンポーネントが乗る。",
+                      "correctIndex": 2,
+                      "explanation": "コンポーネントは型に依存する。`with_components` が先頭なら、各ビルダーは未確定の型でジェネリックにする必要がある。チェーンの順序が依存グラフをエンコードする — 型が先、その上にコンポーネントが乗る。"
                     },
                     {
-                      question: "あなたが payment-priority レッスン1を作ろうとしている。どのコンポーネントが最も直接的にそれを実現しますか?",
-                      options: [
+                      "question": "あなたが payment-priority レッスン1を作ろうとしている。どのコンポーネントが最も直接的にそれを実現しますか?",
+                      "options": [
                         "`consensus` — payment priority はコンセンサスルール。",
                         "`pool`（受付と順序付けルール）と `payload`（ブロックビルダー）。Pool が次のブロックに先に入る tx を決め、payload ビルダーが最終的な順序を決める。",
                         "`executor` — payment priority は Opcode にエンコードされる。",
-                        "`network` — P2P レイヤが payment をルーティングする。",
+                        "`network` — P2P レイヤが payment をルーティングする。"
                       ],
-                      correctIndex: 1,
-                      explanation: "Pool が高優先 payment を早めに surface する; payload がブロックの最終順序を決める。Consensus、executor、network は受付/順序付けに関係ない。これは Tempo の実際のカスタマイズに対応する。",
+                      "correctIndex": 1,
+                      "explanation": "Pool が高優先 payment を早めに surface する; payload がブロックの最終順序を決める。Consensus、executor、network は受付/順序付けに関係ない。これは Tempo の実際のカスタマイズに対応する。"
                     },
                     {
-                      question: "「Reth 全体を fork ではなく、コンポーネントを組み立てる」が、何年も運用するチェーンの唯一の実行可能な戦略であるのはなぜですか?",
-                      options: [
+                      "question": "「Reth 全体を fork ではなく、コンポーネントを組み立てる」が、何年も運用するチェーンの唯一の実行可能な戦略であるのはなぜですか?",
+                      "options": [
                         "Fork のほうが速い。",
                         "Fork は実際には変えたくない 200K 行以上の所有権を与える。コンポーネント合成なら差し替える部分（通常 10K 行未満）だけを所有しつつ、Paradigm のアップストリームのアップデートが依存ライブラリの 80% に流れ込む。",
                         "Fork が Reth のライセンスに違反する。",
-                        "関係ない — どちらも同じくらい有効。",
+                        "関係ない — どちらも同じくらい有効。"
                       ],
-                      correctIndex: 1,
-                      explanation: "これが保守の議論。Fork はアップストリームのリリースごとに分岐を蓄積する。合成はアップグレードパスを開けたままにする: Reth がアップデートを出し、Cargo の依存をバンプし、カスタムビルダーは差し替え表面しか触っていないので動き続ける。",
+                      "correctIndex": 1,
+                      "explanation": "これが保守の議論。Fork はアップストリームのリリースごとに分岐を蓄積する。合成はアップグレードパスを開けたままにする: Reth がアップデートを出し、Cargo の依存をバンプし、カスタムビルダーは差し替え表面しか触っていないので動き続ける。"
                     },
                     {
-                      question: "ExEx を使うことと Reth SDK を使うことの違いは何ですか?",
-                      options: [
+                      "question": "ExEx を使うことと Reth SDK を使うことの違いは何ですか?",
+                      "options": [
                         "違いはない — 同じものの別名。",
                         "ExEx は既存の Ethereum ノードを chain commit にフックして拡張する（あなたはゲスト）。SDK はコンポーネントを組み立てて *自前のチェーン* を作る（あなたはホスト）。ExEx はインデクサ・MEV ボット・ロールアップ向け; SDK は レッスン1/レッスン2 向け。",
                         "ExEx は L1 向け、SDK はインデクサ向け。",
-                        "SDK は ExEx の非推奨バージョン。",
+                        "SDK は ExEx の非推奨バージョン。"
                       ],
-                      correctIndex: 1,
-                      explanation: "ExEx = チェーンイベントを聞く、派生状態、prune に優しい。SDK = チェーンを定義、コンポーネントを差し替え、ノードバイナリを出荷。スタックの違うレイヤの相補的な道具で、本番デプロイは両方使うことが多い（SDK でチェーンを定義、ExEx でインデクサを足す）。",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "ExEx = チェーンイベントを聞く、派生状態、prune に優しい。SDK = チェーンを定義、コンポーネントを差し替え、ノードバイナリを出荷。スタックの違うレイヤの相補的な道具で、本番デプロイは両方使うことが多い（SDK でチェーンを定義、ExEx でインデクサを足す）。"
+                    }
                   ],
                 },
                 {
-                  title: 'ドリル: カスタム pool ビルダーを出荷する',
+                  title: 'レッスン10 — ドリル: カスタム pool ビルダーを出荷する',
                   slug: 'reth-sdk-drill-ja',
                   type: 'CONTENT',
                   sortOrder: 12,
                   duration: 12,
                   xpReward: 25,
-                  content: `# ドリル: カスタム pool ビルダーを出荷する
+                  content: `# レッスン10 — ドリル: カスタム pool ビルダーを出荷する
 
-読むのはリハーサル。**実装するのが記憶。** このドリルは「SDK について読んだ」から「カスタム pool ビルダーを書いて差し替え、自分のコードがノードバイナリの中で動くのを観察した」までを連れて行く。
+## 問い
 
-## セットアップ
+読むのはリハーサル、**実装するのが記憶**。カスタム pool ビルダーを書いて差し替え、ノードバイナリの中で自分のコードが動くのを観察。**\`CustomPoolBuilder::build_pool\` の 3 要素 + LoggingValidator のラップパターン + Dev チェーンで確認 — どこにあるか？**
+
+> 注: 以下のコード断片は拡張ポイント理解のための概念スニペットです（\`...\` は省略箇所）。そのまま実行する用途ではありません。
+
+## 原理（最小モデル）
+
+- **\`CustomPoolBuilder::build_pool\` の 3 要素.** Validators（署名 / nonce チェック）+ Ordering（デフォルト \`CoinbaseTipOrdering\`）+ Construction（\`InMemoryBlobStore\` + 上記合成 → \`EthTransactionPool\`）。
+- **\`LoggingValidator\` ラップパターン.** \`inner: V\` フィールド + \`validate_transaction\` で log + 委譲 = pool に副作用差し込む clean な方法。
+- **Dev チェーンで確認.** \`cargo run -- --dev\` で 1 ノードエフェメラル、tx 送信で log 発火確認。
+- **配線ミスの典型.** \`LoggingValidator\` 構築したが Builder が内側 validator を pool に渡したまま → log 発火せず。
+- **カスタム precompile の差し替え.** executor を差し替える、同パターン転用（\`ExecutorBuilder\` 実装、\`CustomPoolBuilder\` と同形）。
+- **1 コンポーネント差し替えたら他は機械的.** SDK の要点 = パターンが転用可能。
+
+## 具体例
+
+セットアップ:
 
 \`\`\`bash
 git clone https://github.com/paradigmxyz/reth
 cd reth/examples/custom-node-components
 \`\`\`
 
-この例は単独でビルドできる — Reth 全体をビルドする必要はありません。
+ビルド不要（Reth 全体ビルドは不要）。
 
-## ドリル 1 — \`CustomPoolBuilder\` を読む
+\`CustomPoolBuilder::build_pool\` の 3 セクション:
+1. **Validators** — 署名 / nonce / その他のチェック
+2. **Ordering** — tx 順序付け戦略選択（デフォルト \`CoinbaseTipOrdering\`）
+3. **Construction** — \`InMemoryBlobStore\` + 上記選択を合成して \`EthTransactionPool\` 構築
 
-\`src/main.rs\` を開く。例はちょうど 1 つのコンポーネント \`pool\` を上書きしている。\`CustomPoolBuilder\` 構造体とその \`PoolBuilder\` 実装を見つけてほしい。
+**Pool は単体機能ではなく (validator、ordering、blob store) の合成**。
 
-> 🛑 **予測。** \`CustomPoolBuilder::build_pool\` は何をするか、一文で? 予想を立ててから先へ。
-
-実装をざっと読み、3 つのセクションを特定:
-
-1. **Validators** — トランザクションバリデータをセットアップ（署名や nonce などのチェック）。
-2. **Ordering** — tx の順序付け戦略を選ぶ（デフォルトは \`CoinbaseTipOrdering\`）。
-3. **Construction** — 上記の選択と \`InMemoryBlobStore\` を組み合わせて \`EthTransactionPool\` を構築。
-
-予測がこの 3 つのいずれかを取り逃していたら、戻って実装を読み直す。Pool は単体機能ではなく、(validator、ordering、blob store) の合成である。
-
-## ドリル 2 — 各トランザクションでログを追加
-
-自分のカスタムコードが実際に動いていることを確認したいですよね。バリデータが受け入れるトランザクションごとにログを出すよう追加する。
-
-きれいなアプローチ: 既存のバリデータを、ログ + 委譲を行う自前のバリデータでラップする:
+\`LoggingValidator\` ラップパターン:
 
 \`\`\`rust
 struct LoggingValidator<V> {
@@ -1848,9 +1871,9 @@ impl<V: TransactionValidator> TransactionValidator for LoggingValidator<V> {
 }
 \`\`\`
 
-（手元の Reth の \`TransactionValidator\` トレイトの正確な形に合わせて調整してほしい — API はドリフトする。重要なのは *構造* である。）
+（API 名は手元 reth の \`TransactionValidator\` トレイトの正確な形に合わせて調整。重要なのは **構造** であって正確な識別子ではない。）
 
-そして \`CustomPoolBuilder::build_pool\` の中で、内側のバリデータをラップします:
+\`CustomPoolBuilder::build_pool\` 内で wrap:
 
 \`\`\`rust
 let inner_validator = TransactionValidationTaskExecutor::eth_builder(...)
@@ -1862,15 +1885,13 @@ let validator = LoggingValidator { inner: inner_validator };
 // inner_validator の代わりに validator を pool に渡す
 \`\`\`
 
-> 🔧 **配線はドリルとして残する。** 正確な呼び出し方は使っている \`reth-pool\` のバージョン次第。要点は、pool に入る各 tx の経路上に自分のコードを置くことである。
-
-## ドリル 3 — Dev チェーンを実行してログが発火するのを観察
+Dev チェーンで確認:
 
 \`\`\`bash
 cargo run -- --dev
 \`\`\`
 
-\`--dev\` はブロックを高速にマインする 1 ノードのエフェメラルチェーンを起動する。tx を送ってみます（任意の方法で — \`cast send\`、\`localhost:8545\` を向けた MetaMask、自前スクリプトなど）:
+\`--dev\` = 1 ノードエフェメラル + 高速マイン。tx 送信例:
 
 \`\`\`bash
 cast send \\
@@ -1880,23 +1901,15 @@ cast send \\
   0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
 \`\`\`
 
-（dev アカウントの秘密鍵を使います — \`--dev\` は既知のものを使い、上記は標準的な Anvil/Reth dev 鍵である。）
+ターミナル出力:
 
-> 🛑 **ターミナルを観察。** こう出るはず:
->
-> \`\`\`
-> Pool: validating transaction tx_hash=0x... gas_price=...
-> \`\`\`
->
-> 出ないなら配線が間違っている。よくある原因: \`LoggingValidator\` を構築したものの、ビルダーがまだ *内側の* バリデータを pool に渡している。配線を直して再実行してほしい。
+\`\`\`
+Pool: validating transaction tx_hash=0x... gas_price=...
+\`\`\`
 
-## ドリル 4 — もう 1 つの差し替え、スケッチ
+出ない場合: 配線ミス。よくある原因 = \`LoggingValidator\` 構築したが Builder が **内側** validator を pool に渡したまま。配線を直して再実行。
 
-\`pool\` を自分のものにしました。次は、もう 1 つのコンポーネントを差し替えると何が変わるかをスケッチする。
-
-> 🛑 **質問（書き留めて）:** チェーンにカスタム precompile（例: 高速 ed25519 検証器）を追加したい。どのコンポーネントを差し替えるか? 差し替えはおおよそどんな形になるか?
-
-\`executor\` を差し替える。カスタム precompile は EVM 設定の中に置かれる。スケルトン:
+カスタム precompile を追加したい場合:
 
 \`\`\`rust
 .with_components(
@@ -1905,51 +1918,100 @@ cast send \\
 )
 \`\`\`
 
-\`CustomPoolBuilder\` が \`PoolBuilder\` を実装するのと同じやり方で \`ExecutorBuilder\` を実装する。**パターンがそのまま転用できる** — これが SDK の要点である。1 つのコンポーネントを差し替えたら、別のを差し替えるのは機械的な作業になる。
+\`CustomPoolBuilder\` が \`PoolBuilder\` 実装と同じやり方で \`ExecutorBuilder\` を実装。**パターンがそのまま転用** — これが SDK の要点。1 コンポーネント差し替えたら、別のは機械的作業。
 
-> 🔍 **\`examples/custom-node-precompiles/\` を開く**（手元のリポジトリのバージョンに存在すれば）— executor を差し替える例である。
+## 失敗例（誤解）
 
-## レッスン終了の想起
+「pool は validator だけ」— **間違い**。Pool は (validator、ordering、blob store) の **合成**。3 要素どれも独立に差し替え可能。
 
-スクロールせずに、自分の言葉で:
+「\`LoggingValidator\` を構築しただけで log 発火」— **間違い**。Builder で **内側 validator を渡してしまっている** ことが典型ミス。\`validator\` 変数を pool に渡す必要、構築だけでは効果なし。
 
-1. \`CustomPoolBuilder::build_pool\` はどの 3 要素を合成しているか?
-2. なぜバリデータをラップするのが、pool にロギングを差し込むきれいな方法なのか?
-3. カスタム precompile を追加したい場合、どのコンポーネントを差し替えるか?
-4. 別のコンポーネントビルダーを使うために必要な \`main.rs\` の *1 行* の変更は?
+「executor 差し替えは pool 差し替えと別の作法」— **間違い**。\`ExecutorBuilder\` が \`PoolBuilder\` と同形（\`build_executor\` メソッド + コンテキスト引数）。**1 コンポーネント差し替え方を学んだら他は機械的**。
 
-このドリルを終えれば、1 行のコンポーネント差し替えで動くものを出荷したことになる。**同じパターンを consensus や executor に拡大すれば、HyperEVM クラスのインフラを構築していることになる。**
+## ステップで組み立てる
 
-## 📺 関連動画
+### Step 1: \`CustomPoolBuilder\` を読む
 
-\`\`\`youtube
-cc45Rcmrro4 | The Future of Reth (Frontiers 2025)
-\`\`\`
+\`src/main.rs\` で \`CustomPoolBuilder\` 構造体 + \`PoolBuilder\` 実装。
+
+### Step 2: 3 要素を特定
+
+Validators + Ordering + Construction。
+
+### Step 3: \`LoggingValidator\` でラップ
+
+\`inner: V\` フィールド + \`validate_transaction\` で log + 委譲。
+
+### Step 4: Builder 内で wrap
+
+\`let validator = LoggingValidator { inner: inner_validator };\` → pool に \`validator\` を渡す。
+
+### Step 5: Dev チェーンで確認
+
+\`cargo run -- --dev\` + tx 送信 → ターミナルログ確認。
+
+### Step 6: カスタム precompile スケッチ
+
+\`ExecutorBuilder\` 実装、\`extra_precompiles\` フィールド + \`PoolBuilder\` 同形。
+
+### Step 7: 1 行で別コンポーネント差し替え
+
+\`.pool(...)\` → \`.executor(...)\` の **1 行変更**。
+
+## 答え合わせ
+
+- **\`CustomPoolBuilder::build_pool\` の 3 合成要素**: Validators（署名 / nonce 等のチェック）+ Ordering（tx 順序、デフォルト \`CoinbaseTipOrdering\`）+ Construction（\`InMemoryBlobStore\` + 上記合成 → \`EthTransactionPool\`）。Pool は **単体機能ではなく合成**、3 要素どれも独立に差し替え可能。
+- **\`LoggingValidator\` ラップが clean な理由**: \`inner: V\` フィールドで委譲、既存 validator の全機能保持 + ログだけ追加 = decorator パターン。pool 内部に手を入れず、新しい validator として登録するだけ。
+- **executor 差し替えに pool パターンが転用できる理由**: \`ExecutorBuilder\` が \`PoolBuilder\` と同形（\`build_executor(self, ctx)\` メソッド + コンテキスト引数 + コンポーネント返す）。**1 コンポーネント差し替えの作法を学んだら他は機械的** = SDK の最大の売り。
+
+## 合格基準
+
+- \`CustomPoolBuilder::build_pool\` の 3 合成要素を言える。
+- \`LoggingValidator\` ラップパターンを書ける。
+- Dev チェーン + tx 送信で log 確認手順を辿れる。
+- カスタム precompile = executor 差し替え と判断できる。
+- \`main.rs\` の 1 行変更で別コンポーネント差し替え可能と理解している。
+
+## まとめ（3行）
+
+- カスタム pool ビルダー = (validators + ordering + blob store) の合成、\`LoggingValidator\` で wrap して副作用注入が clean パターン。
+- Dev チェーン（\`cargo run -- --dev\`）+ \`cast send\` で動作確認、ログが出なければ Builder が内側 validator を渡してしまうのが典型ミス。
+- パターンは全コンポーネントに転用可能（\`ExecutorBuilder\` で precompile 追加 etc）= SDK の最大の売り、1 コンポーネント差し替え覚えたら他は機械的。
 `,
                 },
                 {
-                  title: 'Stage と ExEx のテスト — fixture chain・インプロセスノード・golden state',
+                  title: 'レッスン11 — Stage と ExEx のテスト — fixture chain・インプロセスノード・golden state',
                   slug: 'reth-testing-ja',
                   type: 'CONTENT',
                   sortOrder: 13,
                   duration: 24,
                   xpReward: 50,
-                  content: `# Stage と ExEx のテスト — fixture chain・インプロセスノード・golden state
+                  content: `# レッスン11 — Stage と ExEx のテスト — fixture chain・インプロセスノード・golden state
 
-ここまでで \`Stage\` トレイト・ExEx API・NodeBuilder SDK を歩いてきました。**次の問いは、Reth — そして Reth を拡張するアプリ — がこれらの動作をどう検証しているか** である。dev 環境で「動いて見える」ノードコンポーネントは、本番で何千人ものユーザの状態を静かに壊する。以下のパターンが、Reth 自身の CI がそれを防いでいる方法であり、Building tier で出荷する ExEx ベースのアプリすべてがテストされるべき形である。
+## 問い
 
-## Reth を拡張するアプリに必要な 2 つのテスト層
+\`Stage\` トレイト・ExEx API・NodeBuilder SDK を歩いてきた。**Reth と Reth を拡張するアプリは、これらの動作をどう検証しているか？** dev で「動いて見える」コンポーネントは本番で何千人ものユーザの状態を静かに壊する。Reth 自身の CI がそれを防ぐパターンは？
+
+## 原理（最小モデル）
+
+- **2 テスト層が必要.** Stage/ExEx ユニットテスト（trait 実装単体、純 Rust + fixture）+ NodeBuilder 統合テスト（ノード全体、インプロセス起動）。
+- **Stage ユニットテスト = 一時 DB + 事前状態 + execute + assert.** \`TestStageDB\` + \`create_test_provider_factory\` がephemeral MDBX 提供。
+- **ExEx ユニットテスト = ハーネス + 合成通知.** \`test_exex_context()\` がフルノード起動なしで ExEx 駆動可能。
+- **NodeBuilder 統合テスト = インプロセス起動.** カスタムコンポーネント間相互作用を検証、~1 秒/テスト。
+- **Fixture-chain テスト = canned data 再生.** 既知正常ノードからキャプチャ + golden state-root と完全一致 assert。
+- **Reth 自身の CI が両層使う.** stage コードの全変更が state-root 不一致として検出 → mainnet 前にコンセンサスバグ捕獲。
+- **Building tier との接続.** *Read a Real Production Indexer — tidx* の test gate がこの §2 ExEx ユニットテストパターンをアプリケーション層で適用。
+
+## 具体例
+
+2 テスト層:
 
 | 層 | 何をテストするか | 何を起動するか |
 | :--- | :--- | :--- |
-| **Stage / ExEx のユニットテスト** | trait 実装単体に、用意したチェーンイベントを与える | 何も起動しない — 純 Rust + fixture |
-| **NodeBuilder の統合テスト** | 自前コンポーネントを差したノード全体 | Reth ノードをインプロセスで起動し、fixture か anvil チェーンに当てる |
+| Stage / ExEx ユニットテスト | trait 実装単体に、用意したチェーンイベントを与える | 何も起動しない — 純 Rust + fixture |
+| NodeBuilder 統合テスト | 自前コンポーネントを差したノード全体 | Reth ノードをインプロセスで起動 |
 
-Reth 自身の crate も両方を使っている。本番の拡張（\`tidx\`、MEV ExEx、独自 App-chain）でも両方が必要である。どちらかを省くと、特定クラスのバグが必ず通り抜ける。
-
-## 1. Stage のユニットテスト — 標準パターン
-
-\`Stage\` の実装はメソッド 2 つ — \`execute\`（前進方向の同期）と \`unwind\`（reorg のロールバック）。どちらも、与えられたチェックポイントとステージ DB の状態に対する純粋関数である。ユニットテストの形は次の流れです: 一時 DB を作り、事前状態を流し込み、\`execute\` を呼んで事後状態を assert する。次に \`unwind\` を呼んで巻き戻しを assert する。
+Stage ユニットテスト:
 
 \`\`\`rust
 use reth_provider::test_utils::create_test_provider_factory;
@@ -1988,13 +2050,9 @@ async fn unwind_rolls_back_to_checkpoint() {
 }
 \`\`\`
 
-要のツール: **\`create_test_provider_factory\`** と **\`TestStageDB\`**（\`reth_provider::test_utils\` および \`reth_stages::test_utils\` 配下）。これらがテストごとに ephemeral MDBX DB を提供する — 共有状態なし、cleanup 定型コードなし、stale fixture なし。
+要のツール: **\`create_test_provider_factory\`** と **\`TestStageDB\`**（\`reth_provider::test_utils\` および \`reth_stages::test_utils\`）。テストごとに ephemeral MDBX DB = 共有状態なし + cleanup 定型コードなし + stale fixture なし。
 
-> 🔍 **リポジトリで確認。** [\`paradigmxyz/reth\`](https://github.com/paradigmxyz/reth) を開き、\`crates/stages/\` 配下で \`test_utils\` を検索。既存 stage テスト（例: \`SenderRecoveryStage\` テスト）を 1 つ読む。**Reth 同梱の全 stage がこの形のユニットテストを持つ。** 自前 stage も同じ形であるべき。
-
-## 2. ExEx ユニットテスト — ハーネスパターン
-
-\`reth-exex-test-utils\` は、フルノードを起動せずに合成通知で ExEx を駆動できるハーネスを export:
+ExEx ユニットテスト（ハーネス）:
 
 \`\`\`rust
 use reth_exex_test_utils::{test_exex_context, PollOnce};
@@ -2019,11 +2077,9 @@ async fn handles_committed_then_reverted() {
 }
 \`\`\`
 
-このハーネスが ExEx 開発を実用可能にする。**無ければフルノードを起動し本物のチェーンデータを再生してイベントを待つ必要がある** — テストサイクルあたり数分。あれば各通知が単一の関数呼び出し。
+ハーネスなしの場合: フルノード起動 + 本物チェーンデータ再生 + イベント待ち = テストサイクル数分。ハーネスあり: 各通知が単一関数呼び出し = テスト時間が数秒に。
 
-## 3. NodeBuilder integration テスト — Reth をインプロセスで
-
-ユニットテスト層では足りない場合がある。コードがコンポーネント間の *相互作用* に依存する場合（カスタム pool ビルダーがカスタム payload validator から read する、など）、組み立てたノードが必要:
+NodeBuilder 統合テスト:
 
 \`\`\`rust
 use reth_node_builder::NodeBuilder;
@@ -2049,11 +2105,9 @@ async fn custom_pool_builder_filters_blob_txs() {
 }
 \`\`\`
 
-パターン: \`NodeBuilder::new(...).testing_node(...)\` がカスタムコンポーネント付きでノードをインプロセス起動し、handle（\`node.pool()\`、\`node.provider()\`、\`node.network()\`）を露出す — 直接駆動可能。ユニットテストより遅い（テストあたり ~1 秒）が、コンポーネント間挙動には不可欠。
+パターン: \`NodeBuilder::new(...).testing_node(...)\` がカスタムコンポーネント付きでノードをインプロセス起動 → ハンドル（\`node.pool()\`、\`node.provider()\`、\`node.network()\`）露出 → 直接駆動。ユニットテストより遅い（~1 秒/テスト）が、コンポーネント間挙動には不可欠。
 
-## 4. Fixture-chain テスト — canned data では足りないとき
-
-最重量のテスト — フル sync 検証、複数ブロック reorg シナリオ — のためには、捕獲済みの本物のチェーンデータを再生できる:
+Fixture-chain テスト:
 
 \`\`\`rust
 #[tokio::test]
@@ -2072,161 +2126,222 @@ async fn full_sync_to_pinned_block_matches_golden_state() {
 }
 \`\`\`
 
-これが Reth が史実データに対して sync 正しさを検証する方法。fixture は既知正常ノードからの 1 回キャプチャ; CI が push のたびに再生する。**任意 stage の回帰が state-root 不一致として現れる — それはコンセンサスバグで、mainnet 前に捕まる。**
+これが Reth が史実データに対して sync 正しさを検証する方法。fixture は既知正常ノードからの 1 回キャプチャ、CI が push のたびに再生。**任意 stage の回帰が state-root 不一致として現れる = コンセンサスバグで mainnet 前に捕獲**。
 
-## Building tier との接続
+## 失敗例（誤解）
 
-Building tier の *Read a Real Production Indexer — tidx* レッスンはこの test gate を提示:
+「ユニットテストだけで十分」— **間違い**。コンポーネント間相互作用（カスタム pool ビルダーがカスタム payload validator から read）はユニットテストでは見えない。**統合テスト必須**。
 
-> **Fixture chain replay** — 既知の \`Notification::ChainCommitted\` / \`ChainReverted\` の列を流し込み、導出状態が golden reference と完全一致することを assert。
+「ExEx は手で \`ExExNotification\` 値を構築すれば良い」— **間違い**。ハーネスがイベント / 完了シグナルの **裏チャンネルを所有** → テストが poll なしで同期可能。手作りだと race condition + flaky test。
 
-それは **本レッスンの §2** をアプリケーション層で適用したもの。Reth 内部のパターン（テストハーネス + 合成通知）こそが、tidx test gate が要求する適用方法そのもの。Building に着いたとき、本レッスンが前提となる。
+「Fixture-chain は重すぎて CI で回せない」— **間違い**。Reth 自身が push のたびに再生。**コンセンサスクリティカルバグを mainnet 前に捕獲する唯一の方法**。
 
-## ドリル
+## ステップで組み立てる
 
-1. **Reth の stage テストを 1 つ end-to-end で読む。** \`paradigmxyz/reth\` を開き、\`crates/stages\` 配下の \`SenderRecoveryStage\` テストを見つける。1 件のテストを最初から最後まで読む。各ヘルパ（\`TestStageDB\`、\`create_test_provider_factory\`、\`ExecInput\`）がテスト内のどこに現れるかをマップ。30 分。
-2. **ハーネスを使った ExEx テストを 1 つ読む。** [\`reth-exex-test-utils\`](https://github.com/paradigmxyz/reth/tree/main/crates/exex/test-utils) の使用例を Reth リポジトリで検索し 1 つ選ぶ。\`test_exex_context()\` が何を返し、テストがどう通知を駆動するかを追う。30 分。
-3. **stage ユニットテストをゼロから書く。** ブロックを数えるだけの自明な stage（\`output.checkpoint.block_number = input.target\`）を取る。\`execute\` がチェックポイントを進め、\`unwind\` がロールバックすることをテスト。\`create_test_provider_factory\` を使う。**\`cargo test\` を green にする。** 1.5 時間。
-4. **ExEx ユニットテストをゼロから書く。** 各 \`ChainCommitted\` でカウンタをインクリメント、\`ChainReverted\` でデクリメントするだけの自明な ExEx。\`test_exex_context()\` を使い 3 commit + 1 revert を駆動; カウンタが 2 で終わることを assert。1 時間。
-5. **NodeBuilder integration テストを 1 つ走らせる。** \`crates/node/builder/\` で \`testing_node()\` を使う最も単純なテストを選ぶ。\`cargo test\` でローカル実行。テストが何を assert するか読む。1 時間。
+### Step 1: 2 テスト層を即答
 
-ドリル 5 後、自分が出荷する任意のカスタム Reth コンポーネントのテストを書ける — Reth メンテナが自分のコンポーネントをテストするのと同じ方法で。
+ユニット（trait 実装単体）+ 統合（ノード全体）。
 
-> 🛑 **最終チェック。** 一文で: なぜ Reth は \`reth-exex-test-utils\` を別 crate で同梱するのか? ユーザに \`ExExNotification\` 値を手で構築させるだけでよいのに。答えに「ハーネスがイベント / 完了シグナルの裏チャンネルを所有することで、テストが poll 無しで同期できる」が無いなら §2 を読み直す — その同期が ExEx テストを決定的にする。
+### Step 2: Stage ユニットテストパターン
 
-## 📺 関連リンク
+\`TestStageDB\` + seed_blocks + execute + assert + unwind + assert。
 
-- [\`reth_exex_test_utils\`](https://reth.rs/docs/reth_exex_test_utils/) — ExEx テストハーネスの自動生成ドキュメント
-- [Reth Book — Testing chapter](https://reth.rs/) — stage / node テストの公式ガイダンス
+### Step 3: ExEx ユニットテストハーネス
+
+\`test_exex_context()\` + \`send_notification_*\` + \`assert_event_finished_height\`。
+
+### Step 4: NodeBuilder 統合テスト
+
+\`testing_node()\` でインプロセス起動 + ハンドル露出 + 直接駆動。
+
+### Step 5: Fixture-chain テスト
+
+既知正常ノードからキャプチャ + 全 stage 駆動 + golden state-root 比較。
+
+### Step 6: Building tier との接続
+
+tidx の test gate = §2 のアプリケーション層適用。
+
+## 答え合わせ
+
+- **\`reth-exex-test-utils\` を別 crate で同梱する理由**: ハーネスがイベント / 完了シグナルの **裏チャンネルを所有** → テストが poll なしで同期可能。手作り通知だと race condition で flaky test、ハーネスで決定的テストに。**同期がテストの決定性を保証**。
+- **Fixture-chain テストが Reth の CI に必須な理由**: 任意 stage の回帰が **state-root 不一致** として現れる = コンセンサスクリティカルバグを mainnet 前に捕獲。fixture は既知正常ノードから 1 回キャプチャ、CI が push のたびに再生 → state 一致なら全 stage 正しい。
+- **2 層テストの補完関係**: ユニット = trait 実装単体の正しさ（速い、純 Rust）+ 統合 = コンポーネント間相互作用（~1 秒、ノード組み立て）。**どちらかを省くと特定クラスのバグが通り抜ける**。
+
+## 合格基準
+
+- 2 テスト層と各々が何をテストするかを言える。
+- \`TestStageDB\` + \`create_test_provider_factory\` のパターンを書ける。
+- \`test_exex_context()\` のハーネスパターンを言える。
+- \`testing_node()\` での統合テスト構造を即答できる。
+- Fixture-chain テストの golden state-root 検証を 1 文で説明できる。
+
+## まとめ（3行）
+
+- 2 テスト層（ユニット = trait 単体 / 統合 = ノード全体）+ Fixture-chain テスト = Reth 自身の CI 規律、両方が補完関係。
+- \`TestStageDB\` + \`test_exex_context()\` + \`testing_node()\` で ephemeral / 決定的 / 高速テスト、手作り通知だと flaky test 化。
+- Fixture-chain テスト + golden state-root = コンセンサスクリティカルバグを mainnet 前に捕獲、tidx の test gate がこの §2 ExEx ユニットテストパターンをアプリケーション層で適用。
 `,
                 },
                 {
-                  title: '次のティアへの橋渡し — Advanced と Expert',
+                  title: 'レッスン12 — 次のティアへの橋渡し — Advanced (L1 Architect) と Expert',
                   slug: 'reth-bridge-to-expert-ja',
                   type: 'CONTENT',
                   sortOrder: 14,
                   duration: 10,
                   xpReward: 20,
-                  content: `# 次のティアへの橋渡し — Advanced (L1 Architect) と Expert
+                  content: `# レッスン12 — 次のティアへの橋渡し — Advanced (L1 Architect) と Expert
 
-> 🛑 **ゲートチェック。** Inside Reth 終了を主張する前に、**前のレッスンに戻らずに** これらに答えてほしい — 声に出すか紙に書いて：
->
-> 1. \`popn_top!\` は何に展開される? なぜ \`unsafe\` 内で \`unwrap_unchecked()\` を使うのか?
-> 2. \`Database\` と \`DatabaseRef\` がなぜ別トレイトなのか? \`auto_impl\` リストの非対称（\`&mut, Box\` vs \`&, &mut, Box, Rc, Arc\`）が何を語っているか?
-> 3. \`ExExEvent::FinishedHeight\` が Reth の pruner に何を伝えるか — 忘れた場合のディスク帰結は?
-> 4. なぜ \`MerkleStage\` がハッシング後で、間に挟まれていないのか?
-> 5. Tempo のような purpose-built L1を出荷するために、Reth のどのコンポーネントを差し替えるか?
->
-> **正解が 4 未満なら?** 進まないこと。該当の Inside Reth レッスンに戻る。次のティアはこれらを「再調査する概念」ではなく「流暢な語彙」として前提する。
+## 問い
 
-ゲートを通過したら: **Alloy → Revm → Reth（Staged Sync、ExEx、カスタム NodeBuilder）** の階段を上ってきたことになる。3 プロジェクトすべてのソースを目的を持って読める。
+**Alloy → Revm → Reth（Staged Sync、ExEx、カスタム NodeBuilder）** の階段を上ってきた。「読める」は半分、**次のティアは何を教え、どこから始めるか？**
 
-しかし「読める」は半分。次の **2 ティア** が待っています、目的に応じて選択 (両方やる人も多い):
+## 原理（最小モデル）
 
-## Advanced ティア — レッスン1を architect する (5 コース、難易度 ADVANCED)
+- **ゲートチェック 5 問.** \`popn_top!\` 展開 / \`Database\` vs \`DatabaseRef\` 非対称 / \`ExExEvent::FinishedHeight\` 役割 / \`MerkleStage\` の位置 / Tempo のコンポーネント差し替え。**4 未満なら戻る**。
+- **Advanced ティア = L1 を architect.** 5 コース（Consensus Engineering / Cross-Chain Bridges / Sequencer & Rollup / P2P Networking / Validator Operations）、難易度 ADVANCED。
+- **Expert ティア = 本番に出す.** 2 コース（Reth Expert / Building with the Stack）、難易度 EXPERT。
+- **マインドセット転換.** Intermediate = **構造** を教える / 次ティア = その構造の **背後にある決定** を教える。
+- **「なぜ」を読む前に意見を持つ.** インフラ出荷エンジニアの規律、間違っていても先に意見。
+- **両ティア独立、興味と project に合うほうから.**
 
-Inside で読んだソースを使って、自分の レッスン1を設計する。Hyperliquid・Tempo クラスの chain アーキテクチャに必要な実装スキル。
+## 具体例
 
-| コース | 焦点 |
-| :--- | :--- |
-| **Consensus Engineering** | PoS / BFT / Tendermint 内部、レイテンシ・ライブネス・finality の設計トレードオフ |
-| **Cross-Chain Bridges** | CCIP（Chainlink のクロスチェーンプロトコル）・OP Standard Bridge・light client を本番ソースで読み、自分で書く |
-| **Sequencer & Rollup アーキテクチャ** | 中央集権 sequencer から共有 sequencer、MEV 防衛、forced inclusion（sequencer に検閲されてもユーザが tx をオンチェーンに乗せられる仕組み） |
-| **P2P Networking Internals** | devp2p（Ethereum のトランスポート）・libp2p（多くの L1 が採用するモジュラー代替）・gossip サブプロトコル・ピアスコアリング |
-| **Validator Operations** | 鍵管理、slashing 条件、協調アップグレード |
+ゲートチェック 5 問:
+1. \`popn_top!\` は何に展開される? なぜ \`unsafe\` 内で \`unwrap_unchecked()\` を使うのか?
+2. \`Database\` と \`DatabaseRef\` がなぜ別トレイト? \`auto_impl\` リストの非対称（\`&mut, Box\` vs \`&, &mut, Box, Rc, Arc\`）が何を語るか?
+3. \`ExExEvent::FinishedHeight\` が Reth pruner に何を伝えるか — 忘れた場合のディスク帰結は?
+4. なぜ \`MerkleStage\` がハッシング後で、間に挟まれていないのか?
+5. Tempo のような purpose-built L1 を出荷するために Reth のどのコンポーネントを差し替えるか?
 
-## Expert ティア — 本番に出す (2 コース、難易度 EXPERT)
+**4 正解未満なら進まない**、該当 Inside Reth レッスンに戻る。
 
-「読める」から「本番に出せる」への跳躍。性能、運用、application 開発。
+Advanced ティア（5 コース、ADVANCED）:
 
 | コース | 焦点 |
 | :--- | :--- |
-| **Reth Expert** | パフォーマンス、MDBX、Tokio 内部、手続きマクロ、カスタム precompile、MPT、本番 MEV、zkEVM、Reth フォーク運用 |
-| **Building with the Stack** | 動くアプリ 10 本 — MEV searcher、indexer、wallet backend、cheatcode、swap aggregator、order router capstone、cross-client 検証、HTTP 402 / MPP の machine-payments エンドポイント |
+| Consensus Engineering | PoS / BFT / Tendermint 内部、レイテンシ・ライブネス・finality |
+| Cross-Chain Bridges | CCIP・OP Standard Bridge・light client、自分で書く |
+| Sequencer & Rollup アーキテクチャ | 中央集権 sequencer → 共有 sequencer、MEV 防衛、forced inclusion |
+| P2P Networking Internals | devp2p・libp2p・gossip サブプロトコル・ピアスコアリング |
+| Validator Operations | 鍵管理、slashing 条件、協調アップグレード |
 
-## どちらから始める?
+Expert ティア（2 コース、EXPERT）:
 
-両方とも Inside Reth から直接ジャンプ可能、独立しています:
+| コース | 焦点 |
+| :--- | :--- |
+| Reth Expert | パフォーマンス、MDBX、Tokio 内部、手続きマクロ、カスタム precompile、MPT、本番 MEV、zkEVM、Reth フォーク運用 |
+| Building with the Stack | 動くアプリ 10 本 — MEV searcher、indexer、wallet backend、cheatcode、swap aggregator、order router capstone、cross-client 検証、HTTP 402 / MPP machine-payments |
 
-- **Advanced (L1 Architect) を先に** — 自分でL1を architect したい、Hyperliquid・Tempo を理解したい
-- **Expert を先に** — 既存 chain で本番アプリを ship したい、運用 / 性能エンジニアリングが必要
+順序:
+- **Advanced を先に**: 自分で L1 を architect したい、Hyperliquid / Tempo を理解したい
+- **Expert を先に**: 既存 chain で本番アプリを ship したい、運用 / 性能エンジニアリングが必要
+- **両方終えれば「読める + 設計できる + 出荷できる」の三拍子**
 
-順序にこだわらず、興味とプロジェクトに合うほうから。両方終えれば「読める + 設計できる + 出荷できる」の三拍子。
+マインドセット転換 — 「なぜ」を予測:
+- **MDBX vs RocksDB**: コンパクションストールでの読み取りレイテンシ
+- **pop-1-write-through**: ADD あたりメモリ書き込みが 1 回減る
+- **\`#[track_caller]\`**: パニックのバックトレースがトレイトメソッドではなく、バグった呼び出し元を指す
+- **cheatcodes が precompile**: バニラ EVM とのコンセンサス互換性（precompile は予約アドレス、新 Opcode ではない）
 
-## マインドセットの転換
+ポイントは私の言い回しと一致したかではなく: **読む前に意見があったか?** 一度この *なぜ* を内部化すれば、Paradigm のエンジニアや Hyperliquid validator 運用者と設計判断を議論可能 = grant 応募可能な仕事への入口。
 
-Inside (Intermediate) は **構造** を教えた。次のティアはその構造の **背後にある決定** を教える。
+## 失敗例（誤解）
 
-> 🛑 **私の答えを読む前に、答えを予測してほしい。** 先に意見を持つ — 間違っていてもいい。インフラを出荷するエンジニアはそうする。
->
-> - *なぜ* Reth は MDBX で、RocksDB ではないのか?
-> - *なぜ* Revm は pop / pop / push ではなく 1 つ pop して参照経由で書き戻すのか?
-> - *なぜ* \`Database::tx()\` に \`#[track_caller]\` が必要か?
-> - *なぜ* Foundry の cheatcodes は Opcode ではなく precompile なのか?
+「ゲートで 3 問正解なら進んで良い」— **間違い**。次ティアは「再調査する概念」ではなく「**流暢な語彙**」として前提する。4 未満で進むと密度に詰まる。
 
----
+「Advanced を先に Expert を後にすべき」— **半分間違い**。両ティア独立、興味と project 次第。Hyperliquid / Tempo 理解優先なら Advanced、本番アプリ出荷優先なら Expert。
 
-私の答え:
+「『なぜ』を予測しなくても読めば分かる」— **間違い**。インフラ出荷エンジニアの規律 = 読む前に意見を持つ、間違っていても先に。「内部化」が grant 応募可能な仕事への入口。
 
-- **MDBX vs RocksDB** — コンパクションストールでの読み取りレイテンシ。
-- **pop-1-write-through** — ADD あたりメモリ書き込みが 1 回減る。
-- **\`#[track_caller]\`** — パニックのバックトレースがトレイトメソッドではなく、バグった呼び出し元を指す。
-- **cheatcodes が precompile** — バニラ EVM とのコンセンサス互換性 (precompile は予約アドレス、新 Opcode ではない — fork でもメインネット bytecode をパースできる)。
+## ステップで組み立てる
 
-ポイントは私の言い回しと一致したかではなく: **読む前に意見があったか?** 一度この *なぜ* を内部化すれば、Paradigm のエンジニアや Hyperliquid の validator 運用者と設計判断を議論できる — それが grant 応募可能な仕事への入口である。
+### Step 1: ゲートチェック 5 問
 
-## 進む前に
+\`popn_top!\` / \`Database\` 非対称 / \`FinishedHeight\` / \`MerkleStage\` 位置 / Tempo コンポーネント差し替え。
 
-冒頭のゲートチェックが楽だったなら、Advanced か Expert に飛び込んでしてほしい。
+### Step 2: 4 未満なら戻る
 
-5 問のどれかで前のレッスンに戻った場合 — 今、再読してほしい。次のティアはどちらも密度が高い。リンクされたコードをローカルで動かしながら読むのは、もはや任意ではありません。
+該当 Inside Reth レッスンを再読、次ティア前提を満たす。
 
-> インフラレイヤーの学習は、最初の 3 ヶ月が一番苦しいである。ドキュメントが不十分なことも多く、**「ソースコードこそが最強の教科書」**。Advanced と Expert はこの教訓が報われるティアである。`,
+### Step 3: Advanced or Expert を選ぶ
+
+architect 優先 = Advanced / 出荷優先 = Expert。
+
+### Step 4: マインドセット転換
+
+構造 → 構造の背後の決定。**「なぜ」を予測してから読む**。
+
+### Step 5: 両ティア完走を目指す
+
+「読める + 設計できる + 出荷できる」三拍子。
+
+## 答え合わせ
+
+- **ゲートチェック 4 未満で戻るべき理由**: 次ティアは「流暢な語彙」前提、再調査する概念扱いではない。密度高 + リンクされたコード再現が必須 + デフォルトで言える状態でないと付いていけない。**前提を満たすことが進む条件**。
+- **マインドセット転換の意味**: Intermediate = 構造を教える（\`Stage\` trait、ExEx API、NodeBuilder の形）/ 次ティア = 構造の **背後にある決定** を教える（なぜ MDBX、なぜ pop-1-write-through、なぜ \`#[track_caller]\`、なぜ cheatcodes が precompile）。意見 → 検証 → 内部化のサイクル。
+- **「読める + 設計できる + 出荷できる」の三拍子の意味**: Inside Reth で読める / Advanced (L1 Architect) で設計できる / Expert で出荷できる。3 つ揃って Paradigm / Hyperliquid / Tempo エンジニアと議論可能 = grant 応募可能な仕事の入口。
+
+## 合格基準
+
+- ゲートチェック 5 問に答えられる。
+- Advanced ティア 5 コースと Expert ティア 2 コースを役割で言える。
+- マインドセット転換（構造 → 背後の決定）を 1 文で説明できる。
+- 「なぜ」を予測する規律の意味を言える。
+- 「読める + 設計できる + 出荷できる」三拍子を即答できる。
+
+## まとめ（3行）
+
+- Inside Reth 完走後 = Advanced (L1 Architect, 5 コース) / Expert (本番に出す, 2 コース) の 2 ティアに進む、両ティア独立で興味と project 次第。
+- ゲートチェック 5 問で 4 未満なら戻る、次ティアは「流暢な語彙」前提で密度高 + リンクコード再現必須。
+- マインドセット転換 = 構造（Intermediate）→ 構造の背後の決定（次ティア）、「なぜ」を予測してから読む規律 = grant 応募可能な仕事への入口。
+`,
                 },
                 {
-                  title: 'Inside Reth ファイナルクイズ',
+                  title: 'クイズ — Inside Reth 完走',
                   slug: 'reth-advanced-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 15,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Inside Reth ファイナルクイズ
+                  content: `# クイズ — Inside Reth 完走
 
-Staged Sync・ExEx・Reth SDK の最終チェック。3 問。同じルール: **クイズはうなずきで通せない。** 2 問落としたら、Inside Reth を「完了」と称する前に該当する積み上げレッスンを読み直す。`,
+3 トピックチェーン（Staged Sync / ExEx / SDK）+ Testing + Bridge to Expert の構造的事実を確認する。次ティア（Advanced or Expert）へ進む前のゲート。
+`,
                   quizQuestions: [
                     {
-                      question: 'Reth の Staged Sync が、ブロック単位の同期に対して持つ実利は？',
-                      options: [
-                        'ブロックをダウンロードするだけで実行しない設計でディスクを節約できる',
-                        '範囲をステージごとに処理することで I/O・CPU・キャッシュ効率を最大化 — かつ unwind により reorg を対称的に扱える',
-                        'Merkle ルート計算を無期限に遅延することでスキップする',
-                        'データベース不要 — 状態はクエリ時に都度導出す',
+                      "question": "Reth の Staged Sync が、ブロック単位の同期に対して持つ実利は？",
+                      "options": [
+                        "ブロックをダウンロードするだけで実行しない設計でディスクを節約できる",
+                        "範囲をステージごとに処理することで I/O・CPU・キャッシュ効率を最大化 — かつ unwind により reorg を対称的に扱える",
+                        "Merkle ルート計算を無期限に遅延することでスキップする",
+                        "データベース不要 — 状態はクエリ時に都度導出す"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Staged Sync (Headers → Bodies → Senders → Execution → Hashing → Merkle → TxLookup → Indexes → Finish) は範囲をステージごとに処理。Sender 復元は Rayon で並列化。Hashing でソートしてから MerkleStage が動く。すべてのステージが `execute` と `unwind` を持つから、reorg は特殊ケースではなく通常運用。',
+                      "correctIndex": 1,
+                      "explanation": "Staged Sync (Headers → Bodies → Senders → Execution → Hashing → Merkle → TxLookup → Indexes → Finish) は範囲をステージごとに処理。Sender 復元は Rayon で並列化。Hashing でソートしてから MerkleStage が動く。すべてのステージが `execute` と `unwind` を持つから、reorg は特殊ケースではなく通常運用。"
                     },
                     {
-                      question: 'ExEx（Execution Extensions）で何ができる？',
-                      options: [
-                        'JSON-RPC パイプラインの応答送信前にカスタムロジックを注入する',
-                        'チェーンの commit / reorg / revert ごとに、ノードプロセス内で実行時間に近いレイテンシで Rust コードを動かす',
-                        'P2P ネットワークでのトランザクションの gossip 方法を上書きする',
-                        'Reth のコンセンサスエンジンを独自のものに置き換える',
+                      "question": "ExEx（Execution Extensions）で何ができる？",
+                      "options": [
+                        "JSON-RPC パイプラインの応答送信前にカスタムロジックを注入する",
+                        "チェーンの commit / reorg / revert ごとに、ノードプロセス内で実行時間に近いレイテンシで Rust コードを動かす",
+                        "P2P ネットワークでのトランザクションの gossip 方法を上書きする",
+                        "Reth のコンセンサスエンジンを独自のものに置き換える"
                       ],
-                      correctIndex: 1,
-                      explanation: 'ExEx は ChainCommitted / ChainReorged / ChainReverted の通知を in-process で受け取り、インデクサ・MEV パイプライン・リアルタイムリスクエンジンに最適。(RPC カスタマイズは add_ons、ネットワークやコンセンサスのカスタマイズは with_components 経由 — 別の SDK 表面。)',
+                      "correctIndex": 1,
+                      "explanation": "ExEx は ChainCommitted / ChainReorged / ChainReverted の通知を in-process で受け取り、インデクサ・MEV パイプライン・リアルタイムリスクエンジンに最適。(RPC カスタマイズは add_ons、ネットワークやコンセンサスのカスタマイズは with_components 経由 — 別の SDK 表面。)"
                     },
                     {
-                      question: 'Reth SDK で App-chain を作るとき、現実的なカスタマイズ表面は？',
-                      options: [
-                        'genesis レベルの chain ID と gas limit のみ',
-                        'pool・network・payload・executor (EVM)・consensus コンポーネント、加えて RPC と ExEx を add-ons 経由で',
-                        '`Stage<Provider>` 実装のみ — それ以外はロックされている',
-                        'Database テーブルとインデックスのみ — EVM 自体は固定',
+                      "question": "Reth SDK で App-chain を作るとき、現実的なカスタマイズ表面は？",
+                      "options": [
+                        "genesis レベルの chain ID と gas limit のみ",
+                        "pool・network・payload・executor (EVM)・consensus コンポーネント、加えて RPC と ExEx を add-ons 経由で",
+                        "`Stage<Provider>` 実装のみ — それ以外はロックされている",
+                        "Database テーブルとインデックスのみ — EVM 自体は固定"
                       ],
-                      correctIndex: 1,
-                      explanation: 'SDK は `with_components.{pool, network, payload, executor, consensus}` と RPC/ExEx 用の `with_add_ons` を露出。カスタムメンプール (Tempo 風優先レーン) からカスタムコンセンサス (HyperBFT)、カスタム EVM (custom opcode / precompile) まで、すべてビルダー差し替え 1 つの距離。',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "SDK は `with_components.{pool, network, payload, executor, consensus}` と RPC/ExEx 用の `with_add_ons` を露出。カスタムメンプール (Tempo 風優先レーン) からカスタムコンセンサス (HyperBFT)、カスタム EVM (custom opcode / precompile) まで、すべてビルダー差し替え 1 つの距離。"
+                    }
                   ],
                 },
               ],

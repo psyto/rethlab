@@ -23,38 +23,19 @@
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
 
-import { seedRethBeginnerJA } from './seed-reth-beginner-ja';
 import { seedRethBeginnerEN } from './seed-reth-beginner-en';
-import { seedRethBeginnerV2JA } from './seed-reth-beginner-v2-ja';
-import { seedRethBeginnerV2EN } from './seed-reth-beginner-v2-en';
-import { seedRethFundamentalsJA } from './seed-reth-fundamentals-ja';
 import { seedRethFundamentalsEN } from './seed-reth-fundamentals-en';
 import { seedRethBridgeToAdvancedEN } from './seed-reth-bridge-to-advanced-en';
-import { seedRethBridgeToAdvancedJA } from './seed-reth-bridge-to-advanced-ja';
 import { seedRethAlloyAdvancedEN } from './seed-reth-alloy-advanced-en';
-import { seedRethAlloyAdvancedJA } from './seed-reth-alloy-advanced-ja';
-import { seedRethAlloyAdvancedV2JA } from './seed-reth-alloy-advanced-v2-ja';
-import { seedRethRevmAdvancedJA } from './seed-reth-revm-advanced-ja';
 import { seedRethRevmAdvancedEN } from './seed-reth-revm-advanced-en';
-import { seedRethRevmAdvancedV2JA } from './seed-reth-revm-advanced-v2-ja';
-import { seedRethAdvancedJA } from './seed-reth-advanced-ja';
 import { seedRethAdvancedEN } from './seed-reth-advanced-en';
-import { seedRethAdvancedV2JA } from './seed-reth-advanced-v2-ja';
-import { seedRethExpertJA } from './seed-reth-expert-ja';
 import { seedRethExpertEN } from './seed-reth-expert-en';
 import { seedRethBuildingEN } from './seed-reth-building-en';
-import { seedRethBuildingJA } from './seed-reth-building-ja';
 import { seedRethConsensusEngineeringEN } from './seed-reth-consensus-engineering-en';
-import { seedRethConsensusEngineeringJA } from './seed-reth-consensus-engineering-ja';
-import { seedRethConsensusEngineeringV2JA } from './seed-reth-consensus-engineering-v2-ja';
 import { seedRethCrossChainBridgesEN } from './seed-reth-cross-chain-bridges-en';
-import { seedRethCrossChainBridgesJA } from './seed-reth-cross-chain-bridges-ja';
 import { seedRethSequencerRollupEN } from './seed-reth-sequencer-rollup-en';
-import { seedRethSequencerRollupJA } from './seed-reth-sequencer-rollup-ja';
 import { seedRethP2PNetworkingEN } from './seed-reth-p2p-networking-en';
-import { seedRethP2PNetworkingJA } from './seed-reth-p2p-networking-ja';
 import { seedRethValidatorOpsEN } from './seed-reth-validator-ops-en';
-import { seedRethValidatorOpsJA } from './seed-reth-validator-ops-ja';
 import { seedRethValidatorOpsBootcampEN } from './seed-reth-validator-ops-bootcamp-en';
 import { seedRethValidatorOpsBootcampJA } from './seed-reth-validator-ops-bootcamp-ja';
 import { seedRethConsensusEconomicsEN } from './seed-reth-consensus-economics-en';
@@ -67,80 +48,51 @@ import { seedRethSecurityGovernanceEN } from './seed-reth-security-governance-en
 import { seedRethSecurityGovernanceJA } from './seed-reth-security-governance-ja';
 import { seedRethOpenHlConsensusEN } from './seed-reth-openhl-consensus-en';
 import { seedRethOpenHlConsensusJA } from './seed-reth-openhl-consensus-ja';
-import { seedRethOpenHlConsensusV2JA } from './seed-reth-openhl-consensus-v2-ja';
-import { seedRethOpenHlConsensusV3JA } from './seed-reth-openhl-consensus-v3-ja';
-import { seedRethOpenHlAdlV3JA } from './seed-reth-openhl-adl-v3-ja';
-import { seedRethOpenHlClobV3JA } from './seed-reth-openhl-clob-v3-ja';
-import { seedRethOpenHlPrecompilesV3JA } from './seed-reth-openhl-precompiles-v3-ja';
-import { seedRethOpenHlFundingV3JA } from './seed-reth-openhl-funding-v3-ja';
-import { seedRethOpenHlLiquidationV3JA } from './seed-reth-openhl-liquidation-v3-ja';
-import { seedRethBuildingV3JA } from './seed-reth-building-v3-ja';
-import { seedRethConsensusEngineeringV3JA } from './seed-reth-consensus-engineering-v3-ja';
-import { seedRethExpertV3JA } from './seed-reth-expert-v3-ja';
-import { seedRethSequencerRollupV3JA } from './seed-reth-sequencer-rollup-v3-ja';
-import { seedRethCrossChainBridgesV3JA } from './seed-reth-cross-chain-bridges-v3-ja';
-import { seedRethP2PNetworkingV3JA } from './seed-reth-p2p-networking-v3-ja';
-import { seedRethValidatorOpsV3JA } from './seed-reth-validator-ops-v3-ja';
-import { seedRethAdvancedV3JA } from './seed-reth-advanced-v3-ja';
-import { seedRethAlloyAdvancedV3JA } from './seed-reth-alloy-advanced-v3-ja';
-import { seedRethRevmAdvancedV3JA } from './seed-reth-revm-advanced-v3-ja';
-import { seedRethFoundryV3JA } from './seed-reth-foundry-v3-ja';
-import { seedRethPerpPrimerV3JA } from './seed-reth-perp-primer-v3-ja';
-import { seedRethFundamentalsV3JA } from './seed-reth-fundamentals-v3-ja';
-import { seedRethBeginnerV3JA } from './seed-reth-beginner-v3-ja';
-import { seedRethBridgeToAdvancedV3JA } from './seed-reth-bridge-to-advanced-v3-ja';
-import { seedRethOpenHlClobEN } from './seed-reth-openhl-clob-en';
-import { seedRethOpenHlClobJA } from './seed-reth-openhl-clob-ja';
-import { seedRethOpenHlPrecompilesEN } from './seed-reth-openhl-precompiles-en';
-import { seedRethOpenHlPrecompilesJA } from './seed-reth-openhl-precompiles-ja';
-import { seedRethOpenHlFundingEN } from './seed-reth-openhl-funding-en';
-import { seedRethOpenHlFundingJA } from './seed-reth-openhl-funding-ja';
-import { seedRethOpenHlLiquidationEN } from './seed-reth-openhl-liquidation-en';
-import { seedRethOpenHlLiquidationJA } from './seed-reth-openhl-liquidation-ja';
-import { seedRethOpenHlAdlEN } from './seed-reth-openhl-adl-en';
 import { seedRethOpenHlAdlJA } from './seed-reth-openhl-adl-ja';
-import { seedRethFoundryEN } from './seed-reth-foundry-en';
+import { seedRethOpenHlClobJA } from './seed-reth-openhl-clob-ja';
+import { seedRethOpenHlPrecompilesJA } from './seed-reth-openhl-precompiles-ja';
+import { seedRethOpenHlFundingJA } from './seed-reth-openhl-funding-ja';
+import { seedRethOpenHlLiquidationJA } from './seed-reth-openhl-liquidation-ja';
+import { seedRethBuildingJA } from './seed-reth-building-ja';
+import { seedRethConsensusEngineeringJA } from './seed-reth-consensus-engineering-ja';
+import { seedRethExpertJA } from './seed-reth-expert-ja';
+import { seedRethSequencerRollupJA } from './seed-reth-sequencer-rollup-ja';
+import { seedRethCrossChainBridgesJA } from './seed-reth-cross-chain-bridges-ja';
+import { seedRethP2PNetworkingJA } from './seed-reth-p2p-networking-ja';
+import { seedRethValidatorOpsJA } from './seed-reth-validator-ops-ja';
+import { seedRethAdvancedJA } from './seed-reth-advanced-ja';
+import { seedRethAlloyAdvancedJA } from './seed-reth-alloy-advanced-ja';
+import { seedRethRevmAdvancedJA } from './seed-reth-revm-advanced-ja';
 import { seedRethFoundryJA } from './seed-reth-foundry-ja';
-import { seedRethFoundryV2JA } from './seed-reth-foundry-v2-ja';
-import { seedRethPerpPrimerEN } from './seed-reth-perp-primer-en';
 import { seedRethPerpPrimerJA } from './seed-reth-perp-primer-ja';
+import { seedRethFundamentalsJA } from './seed-reth-fundamentals-ja';
+import { seedRethBeginnerJA } from './seed-reth-beginner-ja';
+import { seedRethBridgeToAdvancedJA } from './seed-reth-bridge-to-advanced-ja';
+import { seedRethOpenHlClobEN } from './seed-reth-openhl-clob-en';
+import { seedRethOpenHlPrecompilesEN } from './seed-reth-openhl-precompiles-en';
+import { seedRethOpenHlFundingEN } from './seed-reth-openhl-funding-en';
+import { seedRethOpenHlLiquidationEN } from './seed-reth-openhl-liquidation-en';
+import { seedRethOpenHlAdlEN } from './seed-reth-openhl-adl-en';
+import { seedRethFoundryEN } from './seed-reth-foundry-en';
+import { seedRethPerpPrimerEN } from './seed-reth-perp-primer-en';
 
 const prisma = new PrismaClient();
 
 // All seed functions in order
 const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethBeginnerEN,
-  seedRethBeginnerJA,
-  seedRethBeginnerV2EN,
-  seedRethBeginnerV2JA,
   seedRethFundamentalsEN,
-  seedRethFundamentalsJA,
   seedRethBridgeToAdvancedEN,
-  seedRethBridgeToAdvancedJA,
   seedRethAlloyAdvancedEN,
-  seedRethAlloyAdvancedJA,
-  seedRethAlloyAdvancedV2JA,
   seedRethRevmAdvancedEN,
-  seedRethRevmAdvancedJA,
-  seedRethRevmAdvancedV2JA,
   seedRethAdvancedEN,
-  seedRethAdvancedJA,
-  seedRethAdvancedV2JA,
   seedRethExpertEN,
-  seedRethExpertJA,
   seedRethBuildingEN,
-  seedRethBuildingJA,
   seedRethConsensusEngineeringEN,
-  seedRethConsensusEngineeringJA,
-  seedRethConsensusEngineeringV2JA,
   seedRethCrossChainBridgesEN,
-  seedRethCrossChainBridgesJA,
   seedRethSequencerRollupEN,
-  seedRethSequencerRollupJA,
   seedRethP2PNetworkingEN,
-  seedRethP2PNetworkingJA,
   seedRethValidatorOpsEN,
-  seedRethValidatorOpsJA,
   seedRethValidatorOpsBootcampEN,
   seedRethValidatorOpsBootcampJA,
   seedRethConsensusEconomicsEN,
@@ -153,43 +105,33 @@ const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethSecurityGovernanceJA,
   seedRethOpenHlConsensusEN,
   seedRethOpenHlConsensusJA,
-  seedRethOpenHlConsensusV2JA,
-  seedRethOpenHlConsensusV3JA,
   seedRethOpenHlClobEN,
-  seedRethOpenHlClobJA,
   seedRethOpenHlPrecompilesEN,
-  seedRethOpenHlPrecompilesJA,
   seedRethOpenHlFundingEN,
-  seedRethOpenHlFundingJA,
   seedRethOpenHlLiquidationEN,
-  seedRethOpenHlLiquidationJA,
   seedRethOpenHlAdlEN,
   seedRethOpenHlAdlJA,
-  seedRethOpenHlAdlV3JA,
-  seedRethOpenHlClobV3JA,
-  seedRethOpenHlPrecompilesV3JA,
-  seedRethOpenHlFundingV3JA,
-  seedRethOpenHlLiquidationV3JA,
-  seedRethBuildingV3JA,
-  seedRethConsensusEngineeringV3JA,
-  seedRethExpertV3JA,
-  seedRethSequencerRollupV3JA,
-  seedRethCrossChainBridgesV3JA,
-  seedRethP2PNetworkingV3JA,
-  seedRethValidatorOpsV3JA,
-  seedRethAdvancedV3JA,
-  seedRethAlloyAdvancedV3JA,
-  seedRethRevmAdvancedV3JA,
-  seedRethFoundryV3JA,
-  seedRethPerpPrimerV3JA,
-  seedRethFundamentalsV3JA,
-  seedRethBeginnerV3JA,
-  seedRethBridgeToAdvancedV3JA,
-  seedRethFoundryEN,
+  seedRethOpenHlClobJA,
+  seedRethOpenHlPrecompilesJA,
+  seedRethOpenHlFundingJA,
+  seedRethOpenHlLiquidationJA,
+  seedRethBuildingJA,
+  seedRethConsensusEngineeringJA,
+  seedRethExpertJA,
+  seedRethSequencerRollupJA,
+  seedRethCrossChainBridgesJA,
+  seedRethP2PNetworkingJA,
+  seedRethValidatorOpsJA,
+  seedRethAdvancedJA,
+  seedRethAlloyAdvancedJA,
+  seedRethRevmAdvancedJA,
   seedRethFoundryJA,
-  seedRethFoundryV2JA,
-  seedRethPerpPrimerEN,
   seedRethPerpPrimerJA,
+  seedRethFundamentalsJA,
+  seedRethBeginnerJA,
+  seedRethBridgeToAdvancedJA,
+  seedRethFoundryEN,
+  seedRethPerpPrimerEN,
 ];
 
 // Capture seed data without writing to DB

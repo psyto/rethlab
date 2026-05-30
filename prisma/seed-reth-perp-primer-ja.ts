@@ -1,41 +1,56 @@
-// AUTO-GENERATED from drafts/perp_primer_*_ja.md by .github/scripts/build-perp-primer-seed.ts
-// Do not hand-edit. Re-run the build script when drafts change.
-
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethPerpPrimerJA(prisma: PrismaClient) {
-  const tags = ["perpetual","concept","primer","prerequisite","hyperliquid"];
+  const tags = ['perp', 'hyperliquid', 'derivatives', 'funding', 'liquidation'];
 
   await prisma.course.create({
     data: {
-      slug: "perp-primer-ja",
-      title: "Step 0. Perp DEX Primer：DIY Perp track の前提となる永久先物の仕組み",
+      slug: 'perp-primer-ja',
+      title: 'Perp DEX Primer — DIY Perp track の前提となる永久先物の仕組み',
       description:
-        "DIY Perp track の prerequisite となる概念コース。4 レッスン: (1) 永久先物とは何か、なぜ期限がないのか、(2) mark / index / funding rate、(3) margin model と 4 つの health state、(4) liquidation、insurance fund、ADL。Rust コードは扱わない — build-along コースが暗黙のうちに前提にしている perp 領域の知識のみ。全レッスンを通じて Hyperliquid の実パラメータでの計算例。",
-      difficulty: "INTERMEDIATE",
+        'DIY Perp track（Build OpenHL コース群）の実装レッスンが暗黙のうちに前提にしていた perp（永久先物）の概念レイヤーを 4 レッスンで明示化する。コードなし、openhl reference なし — その後の Rust コードを読み解くために必要な perp メカニズムだけを扱う。Spot / 伝統的 futures / perp の違い、funding が anchor を保つ仕組み、margin model の 4 状態、liquidation + insurance fund + ADL の 3 段セーフティネット。Funding / Liquidation コース実装は本 primer の式の Rust 化として読める状態に到達する。',
+      difficulty: 'INTERMEDIATE',
       duration: 140,
       xpReward: 240,
-      track: "diy-perp",
+      track: 'perp-primer',
       tags,
       isPublished: true,
       sortOrder: 500,
-      locale: "ja",
-      instructorName: "RethLab",
+      locale: 'ja',
+      instructorName: 'RethLab',
       modules: {
         create: [
           {
-            title: "Perp Primer",
+            title: 'Perp Primer',
             sortOrder: 0,
             lessons: {
               create: [
                 {
-                  title: "レッスン0 — 永久先物とは何か、そしてなぜ期限がないのか",
-                  slug: "perp-primer-what-is-a-perp-ja",
+                  title: 'レッスン0 — 永久先物とは何か、そしてなぜ期限がないのか',
+                  slug: 'perp-primer-what-is-a-perp-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 30,
                   xpReward: 50,
-                  content: `# 永久先物とは何か — そしてなぜ期限がないのか
+                  content: `# レッスン0 — 永久先物とは何か、そしてなぜ期限がないのか
+
+## 問い
+
+DIY Perp track の実装レッスンは「premium = (mark − index) / index、divisor 8、cap ±4%」のように 15 文字に perp 用語 6 つを詰め込む。Rust infra から来たエンジニアには「数式が難しいパート」に見えるが、**実は数式は易しい。難しいのはメカニズムのほうだ。** Perp とは何か、なぜ期限がないのに価格が anchor され続けるのか？
+
+## 原理（最小モデル）
+
+- **3 つの市場、3 つの契約.** Spot（現物保有、即時決済）/ 伝統的 futures（期限あり、満期で spot に収束）/ Perp（期限なし、収束メカニズムは内蔵されない）。
+- **「期限なし」が本物のエンジニアリング課題.** 伝統的 futures の収束力は「満期そのものが anchor」、Perp はその anchor を外す = 価格は orderbook 需給だけで決まる → 投機的熱狂で 5-10% 乖離、パニックで反対側に走る、bull market で premium 持続。
+- **解決策 = funding payment（L1 で詳述）.** Mark が index より上に離れたとき long → short に gap 比例の周期的手数料、下に離れたとき short → long、収束させる経済インセンティブ。**Funding が perp に対して果たす役割は expiry が伝統的 futures に対して果たす役割と同じ**、違いは 1 点でなく連続的に作用する点。
+- **Perp が存在する場所.** CEX（Binance / OKX / Bybit / BitMEX — BitMEX が 2016 年に現代型 perp 発明）/ 既存 L1 上の DEX（dYdX / Drift / Aevo）/ **専用 L1 上の DEX（Hyperliquid 最大、出来高 $300B+ /year）**。
+- **なぜ Hyperliquid を例に取るか.** 専用 L1 = perp UX に必要な全層（latency / gas / orderbook 深さ）を perp 向けにチューニング可能、現状 closed-source（HyperBFT / HyperCore / HyperEVM）、\`psyto/openhl\` がオープンリファレンス、rethlab DIY Perp track はそれを作ることを教える。
+- **Hyperliquid 固有のパラメータ（残りレッスンで繰り返し登場）.** Funding interval 1 時間 / divisor 8 / cap ±4% / interval / Initial margin ~10% / Maintenance margin ~2% / Liquidation fee ~1.5% notional / Cross-margin デフォルト / Insurance fund + ADL。
+- **よくある 3 誤解.** ① 「perp = 自動 roll futures」（違う、roll は basis cost が乗る、perp は funding が代替）、② 「perp は spot より危険」（leverage 使わなければ 1× perp ≈ spot、funding コストだけ違う）、③ 「Hyperliquid は Ethereum スマコン」（違う、独立 L1）。
+
+## 具体例 + ステップで組み立てる
+
+# 永久先物とは何か — そしてなぜ期限がないのか
 
 ## 30秒要約
 
@@ -147,16 +162,51 @@ primer の残りで何度も出てくる Hyperliquid 固有の数値を、ここ
 レッスン1 — **Mark、index、funding**。期限がない中で mark price が index に anchor され続ける仕組みを組み立てていく。Premium の式 \`(mark − index) / index\`、それを per-interval rate に変換する divisor、最悪ケースを抑える cap、Hyperliquid の実パラメータでの計算例 — それぞれを順に見る。
 
 レッスン1 を終えると、Build OpenHL — Funding コースの レッスン4「\`compute_premium\`」が「premium とは何か?」ではなく「すでに理解している式の実装」として読めるようになる。
+
+## 合格基準
+
+- 3 市場（spot / futures / perp）の決済の違いを即答できる。
+- 「期限なし」が解くべき課題（anchor 不在 → 乖離持続）を 1 文で説明できる。
+- Funding payment が解決策である理由（連続的な収束インセンティブ）を 1 文で説明できる。
+- Perp が存在する 3 venue タイプ（CEX / 既存 L1 DEX / 専用 L1 DEX）を即答できる。
+- Hyperliquid を例に取る理由（出来高最大 + closed-source + openhl オープン化）を即答できる。
+- Hyperliquid 固有 8 パラメータ（interval / divisor / cap / margin 2 種 / fee / cross-margin / insurance + ADL）を即答できる。
+- 3 誤解（自動 roll / 危険度 / Ethereum スマコン）を即答 + 各々の正解を言える。
+
+## まとめ（3行）
+
+- Perp = 期限なし leverage 付き futures、現代デリバティブ最重要の設計選択、anchor 不在 → 乖離持続 → funding payment が連続的に補正（expiry が伝統 futures に対して果たす役割を 1 点でなく連続で）。
+- 3 venue タイプ（CEX / 既存 L1 DEX / 専用 L1 DEX）、Hyperliquid が出来高最大（$300B+ /year）の専用 L1 perp DEX、closed-source、\`psyto/openhl\` がオープンリファレンス。
+- 次レッスン以降の前提パラメータ（interval 1h / divisor 8 / cap ±4% / margin 10%-2% / liquidation fee 1.5% / cross-margin / insurance + ADL）を内面化、L1 で funding 詳細、L2 で margin model、L3 で liquidation + insurance + ADL。
 `,
                 },
                 {
-                  title: "レッスン1 — Mark、index、funding — 期限なしで perp が anchor を保つ仕組み",
-                  slug: "perp-primer-mark-index-funding-ja",
+                  title: 'レッスン1 — Mark、index、funding — 期限なしで perp が anchor を保つ仕組み',
+                  slug: 'perp-primer-mark-index-funding-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 35,
                   xpReward: 60,
-                  content: `# Mark、index、funding — 期限なしで perp が anchor を保つ仕組み
+                  content: `# レッスン1 — Mark、index、funding — 期限なしで perp が anchor を保つ仕組み
+
+## 問い
+
+L0 で「期限なし → anchor 不在 → 乖離持続 → funding が解決」を立てた。**L1 は funding の中身を組み立てる**。Mark と index の役割分担、premium 式 \`(mark − index) / index\`、divisor で 1 時間レートに変換、cap で最悪ケース抑制 — Hyperliquid の実パラメータ（interval 1h / divisor 8 / cap ±4%）で計算例を回しながら。
+
+## 原理（最小モデル）
+
+- **Mark price と index price は別物.** Mark = perp venue 自体の orderbook 需給（fill / mid / smoothing）、Index = 原資産 spot 市場の加重平均（Binance / Coinbase / Kraken + outlier フィルタ）。Spot 出来高 ≫ perp、index は perp orderbook に対してゆっくり動く。
+- **Premium 式.** \`premium = (mark − index) / index\` = perp が anchor からどれだけ符号付き分数で離れたか、+ なら mark > index、− なら mark < index、0 で完全 anchor。
+- **Premium → Funding rate.** 1 interval（Hyperliquid = 1 時間）あたり \`funding_rate = clamp(premium / divisor, -cap, +cap)\`、divisor で小さい rate を頻繁に支払う + cap で最悪ケース支払いを bound。
+- **Hyperliquid 実パラメータ.** Interval = 1 時間 / divisor = 8 / cap = ±4% per interval、premium 1% → rate = 1% / 8 = 0.125% per hour。
+- **支払い方向と量.** \`payment = funding_rate × notional\`、rate > 0（mark > index）→ long → short、rate < 0（mark < index）→ short → long、絶対値は notional × |rate|。**プロトコルが手数料を取るのではない、トレーダー間の付け替え。**
+- **経済インセンティブで mark が引き戻される.** Long が funding 支払い続けるなら long を解消するか short を立てる動機、orderbook bid が消え ask が増える → mark 下がる、逆も対称 = **funding 自体が price を動かすのでなく、トレーダーの行動を変えることで mark を anchor に戻す**。
+- **Cap が当たるケース.** Premium > 32%（cap × divisor = 4% × 8）で rate が cap 張り付き、premium がさらに広がっても rate は ±4% で頭打ち、最悪ケース支払いを 1 時間あたり notional の 4% に bound。
+- **Funding interval が 1 時間である理由.** 短すぎ（5 分）= 計算オーバーヘッド + 統計ノイズ、長すぎ（24 時間）= anchor 力弱い、1 時間が「経済シグナル + 実装コスト」の trade-off。
+
+## 具体例 + ステップで組み立てる
+
+# Mark、index、funding — 期限なしで perp が anchor を保つ仕組み
 
 ## ゴール
 
@@ -352,16 +402,51 @@ Funding payment は mark を直接動かさない。動かすのは *トレー�
 レッスン2 — **Margin model**。Mark と funding を立てたので、次は「$10k の collateral で 10 BTC long を持つ」の意味を解きほぐす。誰がどれだけのポジションをどれだけ持てるかを決める leverage と margin の数学だ。Initial vs maintenance margin、cross vs isolated を見て、ある具体的 position が mark の動きで「Safe」から「AtRisk」を経て「Liquidatable」に至るまでを順に辿る。
 
 レッスン2 を終えると、Build OpenHL — Liquidation コースの レッスン1「\`MARGIN_SCALE\` + \`LiquidationParams\`」が「すでに理解しているパラメータの実装」として読めるようになる。
+
+## 合格基準
+
+- Mark と index の違い（perp orderbook 需給 vs spot 加重平均）を即答できる。
+- Premium 式 \`(mark − index) / index\` と意味（符号付き乖離分数）を即答できる。
+- Premium → funding rate の 2 ステップ（divisor で割る + cap で clamp）を即答できる。
+- Hyperliquid のパラメータ（interval 1h / divisor 8 / cap ±4%）と計算例を即答できる。
+- 支払い方向（rate > 0 で long → short、rate < 0 で short → long）と量（notional × |rate|）を即答できる。
+- 「funding が price でなくトレーダー行動を変えることで anchor」のメカニズムを 1 文で説明できる。
+- Cap が当たる premium 閾値（divisor × cap = 32%）と最悪ケース支払い率を即答できる。
+
+## まとめ（3行）
+
+- Funding 機構 = Mark - Index 観測 → premium 計算 → divisor で 1 時間レート化 → cap で最悪ケース抑制 → notional × rate で支払い、Hyperliquid は interval 1h / divisor 8 / cap ±4%。
+- 支払いはトレーダー間付け替え（プロトコル手数料でない）、rate > 0 で long → short、経済インセンティブが orderbook 行動を変えることで mark を index に anchor、price そのものを直接動かすのでない。
+- 次レッスンで margin model（collateral / position_size / notional / unrealized_pnl / equity の 5 量 + 4 状態）に踏み込み、funding を支払う「ポジション」が具体的に何かを定義、Funding コース実装は本式の Rust 化。
 `,
                 },
                 {
-                  title: "レッスン2 — Margin model — collateral、leverage、equity、4 状態",
-                  slug: "perp-primer-margin-model-ja",
+                  title: 'レッスン2 — Margin model — collateral、leverage、equity、4 状態',
+                  slug: 'perp-primer-margin-model-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 40,
                   xpReward: 70,
-                  content: `# Margin model — collateral、leverage、equity、4 状態
+                  content: `# レッスン2 — Margin model — collateral、leverage、equity、4 状態
+
+## 問い
+
+L0 で perp、L1 で funding を立てた。どちらも「ポジションを持っているトレーダー」を抽象的に扱った。**L2 はその抽象に踏み込む** — 「ポジション」が具体的にドルと比率で何か、venue はどんなときに force-close できるか、それが margin model。
+
+## 原理（最小モデル）
+
+- **Position を記述する 5 量.** \`collateral\`（入金 USDC）/ \`position_size\`（符号付き、+ long / − short BTC unit）/ \`notional\`（\\|position_size\\| × mark = 現在ドル exposure）/ \`unrealized_pnl\`（(mark − entry) × position_size = mark で閉じたときの未確定損益）/ \`equity\`（collateral + unrealized_pnl = venue 上での実質純資産）。
+- **トレーダー直接操作は 2 量のみ.** \`collateral\`（入出金）+ \`position_size\`（取引）。残り 3 量（notional / unrealized_pnl / equity）は venue が block ごとに mark から計算。
+- **Initial margin と maintenance margin.** Initial = ポジション開設時に必要な collateral ratio（Hyperliquid ~10%、leverage 10× 相当）/ Maintenance = ポジション保持時の最低ライン（Hyperliquid ~2%、tier で変動）= 開設後、損失で margin ratio が initial 以下に落ちても open のまま、maintenance を下回ると force-close。
+- **4 状態.** Safe（margin ratio ≥ initial）/ AtRisk（initial > ratio ≥ maintenance、追加取引禁止 / ポジション増額禁止 / 縮小と入金は OK）/ Liquidatable（ratio < maintenance かつ equity ≥ 0、venue が force-close）/ Underwater（equity < 0、損失が collateral を超えた、insurance fund 出動）。
+- **4 状態 → engine 動作対応.** Safe = 全操作 OK、AtRisk = 新規取引拒否、Liquidatable = engine が force-close 発火（L3 で詳述）、Underwater = force-close + 不足分を insurance fund 補填。
+- **Cross-margin vs isolated margin.** Cross = アカウント全 collateral が全ポジションの裏付け（1 つの含み益が別の含み損を相殺）、Isolated = ポジションごとに collateral 分離（1 つ liquidate されても他は無傷）。Hyperliquid デフォルト cross（積極的資金効率、洗練ユーザー向け）、isolated はオプション。
+- **Funding が equity に効く経路.** 各 interval で \`equity += -funding_payment\`（支払えば減、受け取れば増）→ margin ratio 変化 → 状態境界を越えうる、Funding が単に「コスト」でなく **liquidation を早める力** にもなる。
+- **1 ポジションを 5 mark で追う「経路」.** entry $100k → mark $90k（含み損、AtRisk 寸前）→ $80k（Liquidatable、force-close 発火）→ $70k（Underwater、insurance fund 出動）の段階を 4 状態で追える。
+
+## 具体例 + ステップで組み立てる
+
+# Margin model — collateral、leverage、equity、4 状態
 
 ## ゴール
 
@@ -559,16 +644,51 @@ Hyperliquid はバッファ効果を望むトレーダーが大半なので cros
 レッスン3 — **Liquidation、insurance fund、ADL**。状態を分類した。次は position が Liquidatable や Underwater に渡ったとき *何が起きるか* を順に辿る。エンジンが close order を出す、matching engine が約定させる、fee が insurance fund に流れる、不足が fund を drain する、稀に insurance fund が枯渇すると ADL が発動する。
 
 レッスン3 を終えると、perp の機構の完全なモデルが手に入る。そして Build OpenHL — Liquidation コースの レッスン4〜7（margin math + 分類 + close order 生成）が「すでに理解している内容の Rust 実装」として読めるようになる。
+
+## 合格基準
+
+- 5 量（collateral / position_size / notional / unrealized_pnl / equity）の計算式と意味を即答できる。
+- トレーダー直接操作の 2 量と venue 計算の 3 量を区別できる。
+- Initial vs maintenance margin の意味（開設しきい値 vs 保持しきい値）を即答できる。
+- 4 状態（Safe / AtRisk / Liquidatable / Underwater）と各々の engine 動作を即答できる。
+- Cross-margin vs isolated margin の trade-off と Hyperliquid のデフォルト選択を即答できる。
+- Funding が equity に効く経路と状態境界を越えうる仕組みを 1 文で説明できる。
+- 1 ポジションを mark を下げながら 4 状態で追う「経路」を順に説明できる。
+
+## まとめ（3行）
+
+- Margin model = 5 量（collateral / position_size / notional / unrealized_pnl / equity）+ 2 しきい値（initial ~10% / maintenance ~2%）+ 4 状態（Safe / AtRisk / Liquidatable / Underwater）。
+- Cross-margin デフォルト（Hyperliquid）= アカウント全 collateral が全ポジションを裏付け、isolated はオプション、funding が equity に効くことで状態境界を越えうる。
+- 次レッスン L3 で AtRisk → Liquidatable → Underwater 境界での実動作（force-close + insurance fund 補填 + 最終手段 ADL）を辿り、Liquidation コース実装はこの 4 状態を Rust 状態機械として表現したもの。
 `,
                 },
                 {
-                  title: "レッスン3 — Liquidation、insurance fund、ADL — セーフティネットの仕組み",
-                  slug: "perp-primer-liquidation-insurance-adl-ja",
+                  title: 'レッスン3 — Liquidation、insurance fund、ADL — セーフティネットの仕組み',
+                  slug: 'perp-primer-liquidation-insurance-adl-ja',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 35,
                   xpReward: 60,
-                  content: `# Liquidation、insurance fund、ADL — セーフティネットの仕組み
+                  content: `# レッスン3 — Liquidation、insurance fund、ADL — セーフティネットの仕組み
+
+## 問い
+
+L2 で 4 状態（Safe / AtRisk / Liquidatable / Underwater）を立てた。**L3 はその境界で実際に何が起きるか辿る** — AtRisk から Liquidatable への遷移で何が発火するか、equity が collateral を超えたとき insurance fund がどう吸収するか、それも枯渇したら最終手段 ADL がどう発動するか、なぜ ADL は controversial か。
+
+## 原理（最小モデル）
+
+- **トリガー.** Engine が block ごと全非 flat アカウントの margin ratio を評価、\`margin_ratio < maintenance_margin_bps\` かつ \`equity ≥ 0\` で **Liquidatable**、\`equity < 0\` で **Underwater**、人間介在なし、second chance なし、全 validator 同じデータで同じ判定。
+- **Force-close の仕組み.** Engine が 3 フィールド close order spec 生成（\`side\` = position 方向の反対、\`qty\` = \`|size|\` フルサイズ、\`type\` = MARKET）→ 通常 orderbook に流す → 反対側の trader が約定。
+- **Liquidation fee.** Close notional の 1.5%（Hyperliquid）が **insurance fund に流れる**、プロトコル取り分でなく「リスクを負ってもらっている家賃」。
+- **Solvent close vs underwater close.** Solvent（equity ≥ close cost + fee）= 残額がトレーダーに返る / Underwater（equity < close cost + fee）= 不足分を **insurance fund が吸収**、トレーダー責任は 0 までで止まる（規制ある venue では更に保護）。
+- **Insurance fund の正体.** Solvent close から fee で積み上がり、underwater close で目減りする、プロトコル所有のバッファ、loss を chain 全体に転嫁しないための緩衝材。
+- **ADL (Auto-Deleveraging) — 最終手段.** Insurance fund 枯渇かつ underwater 発生 → engine が **reverse side で最も儲かっているトレーダー** から強制的に position を奪い、underwater 側を相殺、儲かったトレーダーは利益を「失う」（自分のせいでもない）= controversial、回避は insurance fund を厚く保つこと。
+- **ADL が controversial な 3 理由.** ① 無関係なトレーダーが利益を失う（counterparty risk が分散される）、② 予測不可能（誰が ADL されるか事前に分からない）、③ winning trade の「上限」になる（無限の利益が ADL で頭打ち）。
+- **3 段セーフティネット.** Liquidation fee → insurance fund（通常の損失吸収）→ ADL（極端な market 崩壊時の最終手段）。Insurance fund を厚く保てば ADL は出動しない、これが「liquidation fee = 家賃」の根拠。
+
+## 具体例 + ステップで組み立てる
+
+# Liquidation、insurance fund、ADL — セーフティネットの仕組み
 
 ## ゴール
 
@@ -831,6 +951,23 @@ DIY Perp track が前提にしているモデルの全体だ。\`compute_premium
 → **Build OpenHL — Funding**（レッスン1 で見た内容を実装する）
 
 → **Build OpenHL — Liquidation**（レッスン2 + レッスン3 で見た内容を実装する）
+
+## 合格基準
+
+- \`margin_ratio < maintenance\` と \`equity < 0\` の境界 2 判定（Liquidatable と Underwater）を即答できる。
+- Force-close の 3 フィールド close order spec（side / qty / type）を即答できる。
+- Liquidation fee の行き先（insurance fund）と「家賃」のメタファーを即答できる。
+- Solvent close と underwater close の差（残額返却 vs insurance fund 吸収）を即答できる。
+- Insurance fund の収支（fee で積上、underwater で目減り）を 1 文で説明できる。
+- ADL の発動条件（insurance fund 枯渇 + underwater）と仕組み（reverse side の儲け頭から強制）を即答できる。
+- ADL が controversial な 3 理由（無関係者損失 / 予測不可 / 利益上限）を即答できる。
+- 3 段セーフティネット（fee → insurance → ADL）を即答できる。
+
+## まとめ（3行）
+
+- Liquidation engine = block ごと margin ratio 監視、\`< maintenance\` で force-close（3 フィールド close order spec → 通常 orderbook）、fee 1.5% notional が insurance fund に。
+- Insurance fund = solvent close fee で積上 + underwater close で目減り、プロトコル所有バッファ = loss を chain 全体に転嫁しないための緩衝材、トレーダー責任は 0 までで止まる。
+- ADL = insurance fund 枯渇 + underwater 同時発生時の最終手段、reverse side の儲け頭から強制 deleverage = controversial（無関係者損失 / 予測不可 / 利益上限）、回避は insurance fund を厚く保つこと、これで perp primer 完走、DIY Perp track コードが「すでに理解した式の実装」として読める状態に到達。
 `,
                 },
               ],

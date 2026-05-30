@@ -1,21 +1,21 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethRevmAdvancedJA(prisma: PrismaClient) {
-  const tags = ['revm', 'rust', 'advanced', 'opcode', 'evm-internals'];
+  const tags = ['revm', 'rust', 'evm', 'interpreter', 'opcode'];
 
   await prisma.course.create({
     data: {
       slug: 'revm-advanced-ja',
-      title: 'Inside Revm — EVMエンジンを読む',
+      title: 'Inside Revm — EVM エンジンを読む',
       description:
-        'Revm のインタープリターを 1 行ずつ読み解く — Rust EVM スタックの **コンパイラ / VM 層**。本物の `add` Opcode、カスタム Opcode、状態を供給する `Database` トレイト、並列実行 (block-stm) までを歩く。3 つの独立した中級コース（Revm・Reth・Alloy）の 1 つ — 順番は自由だが、Revm が提供する型の語彙は他の 2 つが前提にする。',
+        'revm のソースを 1 行ずつ読み解く — Rust EVM スタックの **実行エンジン**を、`add` Opcode + 命令テーブル + カスタム Opcode + `Database` トレイト + テスト + 並列 + JIT/AOT のチェーンで歩く。3 つの独立した中級コース（Revm・Reth・Alloy）の 1 つで、受講順は自由。Reth は revm を実行エンジンに、dapp は revm を bytecode シミュレーションに使うので、Rust で EVM を触るあらゆる場面で本コースは効いてくる。',
       difficulty: 'INTERMEDIATE',
-      duration: 120,
-      xpReward: 340,
+      duration: 182,
+      xpReward: 475,
       track: 'revm-advanced',
       tags,
       isPublished: true,
-      sortOrder: 210,
+      sortOrder: 1100,
       locale: 'ja',
       instructorName: 'RethLab',
       modules: {
@@ -26,94 +26,152 @@ export async function seedRethRevmAdvancedJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Inside Revm へようこそ — このコースの読み方',
+                  title: 'レッスン0 — Inside Revm へようこそ',
                   slug: 'revm-advanced-welcome-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Inside Revm へようこそ — このコースの読み方
+                  content: `# レッスン0 — Inside Revm へようこそ
 
-Revm は Rust 製 EVM クライアント全ての **実行エンジン**です: Reth・Hyperliquid の HyperEVM・Berachain の bera-reth・Tempo。「うちは Revm を使っている」と言うチェーンは、Opcode ループ・ガス会計・状態読み出しの作法 — *全部同じコード* を走らせている。誰のフォークを見ても同じ。一度読めば全てが読めるようになる。
+## 問い
 
-これは RethLab の 3 つの独立した中級ティアコースの 1 つです:
+これは RethLab の 3 つの独立した中級ティアコースの 1 つ。**Revm は Rust 製 EVM クライアントすべての *実行エンジン***。Reth・Hyperliquid の HyperEVM・Berachain の bera-reth・Tempo — 「うちは Revm を使う」と言うチェーンは全部同じ Opcode ループ・ガス会計・状態読み出しを走らせている。**どこから始め、何を前提に読むか？**
 
-- **Inside Revm**（あなたはここ）— EVM エンジンの内部
-- **Inside Reth** — Reth の内部: Staged Sync・ExEx・Reth SDK
-- **Inside Alloy** — Alloy の内部: Provider・Network・Signer
+> 注: このコースのコード断片は「実行可能な最小例」と「構造説明のための概念スニペット（\`...\` を含む）」が混在する。\`...\` を含むものはそのまま実行する用途ではない。
 
-Revm を最初に置く理由は、その型（\`Address\`・\`U256\`・\`B256\`・\`Database\` トレイト）が Reth と Alloy の多くの部分の前提になるから。ただし 3 コースは独立しているので、構築しているものに合わせて選んで OK。
+## 原理（最小モデル）
 
-> 📋 **中級ティアは初めて?** *中級への橋渡し* の最後にある **「中級コースの読み方」** を先に読んでほしい。編集スタイル（Predict プロンプト・クイズゲート・積み上げ→ウォークスルー→クイズ→ドリルのチェーン構造）とペースを説明している — 3 つの中級コース全てに適用される、1 度読めば済む内容である。
+- **3 中級コース**: Inside Revm（ここ）/ Inside Reth（Staged Sync・ExEx・SDK）/ Inside Alloy（Provider・Network・Signer）。受講順は自由、Revm が一番下層なので推奨スタート。
+- **3 トピックチェーン構造**: \`add\` Opcode + マクロ / 命令ディスパッチテーブル + カスタム Opcode / \`Database\` トレイト。各々 buildup → walkthrough → quiz → drill の 4 連。
+- **追加 3 レッスン**: テスト（state test / EOF / execution-spec）+ 並列実行（block-stm）+ JIT/AOT（revmc）。
+- **読み方**: 別タブで [\`bluealloy/revm\`](https://github.com/bluealloy/revm) を開き、レッスンで主張する全ソース箇所を実ファイルで照合。「読んでうなずいた」を信用しない、ドリルで証明する。
+- **前提知識**: EVM 内部（バイトコード dispatch loop、stack/memory/calldata/storage、cold/warm gas (EIP-2929)、CALL/DELEGATECALL/STATICCALL）+ 中級 Rust（generics + trait bounds、\`?Sized\`、\`dyn Trait\`、\`Arc<T>\`、\`unsafe\`、\`macro_rules!\`）。
 
-## このコースで学ぶこと
+## 具体例
 
-[\`bluealloy/revm\`](https://github.com/bluealloy/revm) のソースを 1 行ずつ読む: \`add\` Opcode とその周りのマクロスタック、カスタム Opcode と命令ディスパッチテーブル、EVM に状態を供給する \`Database\` トレイト。3 つのトピックチェーン、それぞれが積み上げ + ウォークスルー + クイズ + ドリル。
-
-終わりには revm のホットパスの全行を読み、各ピースが何をしているか自分の言葉で説明できるようになっている。
-
-## 前提知識
-
-**EVM 内部**（中級への橋渡し でカバー — 不安なら戻る）:
-- バイトコードと dispatch loop（バイトとしての opcode、PC、命令テーブル）
-- スタック / メモリ / calldata / ストレージ — 各々何で、どう違うか
-- cold vs warm ガス (EIP-2929)
-- コールフレーム: CALL / DELEGATECALL / STATICCALL のセマンティクス
-- ブロック構造 (header / body / receipts)、reorg は通常運用
-
-**中級 Rust**（同じく 中級への橋渡し で。Inside Reth 内の *Rust: ライフタイム・Box・Arc・dyn Trait* レッスンが自己チェック用）:
-- Generics + trait bounds、\`?Sized\`、\`dyn Trait\` vs \`impl Trait\`
-- \`Arc<T>\`、\`Mutex<T>\`、\`RwLock<T>\` — どれをいつ使うか
-- \`unsafe\` ブロックと \`unwrap_unchecked()\`
-- \`macro_rules!\` 構文 (\`$x:ident\`、\`$($x),*\`、フラグメント specifier)
-
-## セットアップ — 一度だけ
-
-レッスン 1 の前に、別ウィンドウでこれらを準備:
-
-1. **\`bluealloy/revm\` を clone** — \`git clone https://github.com/bluealloy/revm\`
-2. **動く \`cargo\` ツールチェイン** — \`rustc --version\` でモダンなバージョンが出ること
-3. **\`cargo-expand\`** — \`cargo install cargo-expand\` (Expert の手続きマクロレッスンで欲しくなる)
-4. **セカンドモニタか分割端末** — レッスンを読みながらソースを参照する
-
-「Find in repo」プロンプトはリポジトリを実際に開いていなければ機能しません。レッスン 1 を始める前にこの準備を済ませておく。
-
-## 準備完了
-
-コース詳細に戻って **「\`add\` をステップで組み立てる：シグネチャと本体」** から始める。
-
-Inside Revm の後: **Inside Reth** で Reth 固有の sync パイプライン + ExEx + SDK へ、または **Inside Alloy**（公開後）へ。`,
-                },
-                {
-                  title: '\`add\` をステップで組み立てる：シグネチャと本体',
-                  slug: 'revm-add-buildup-ja',
-                  type: 'CONTENT',
-                  sortOrder: 1,
-                  duration: 8,
-                  xpReward: 20,
-                  content: `# \`add\` をステップで組み立てる：シグネチャと本体
-
-> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層** の opcode レベル。CPython・JVM・LuaJIT が長年研究してきた問題そのもの — 「自明な命令を最少の Rust 命令で実装しつつ、同じソースからトレース・検査・本番の各ビルドを派生させる」。その系譜を EVM の \`ADD\` に当てはめるのが、本レッスン。
-
-\`ADD\` は EVM の Opcode の中でいちばん単純な非自明: 数値を2つ pop して、和を push。週末に自作 EVM を書く人なら Rust 5行で済ませる。Revm は **4行** で済ませているが、その4行には型パラメータ2つを持つジェネリックシグネチャ、\`?Sized\` opt-out、スタックアンダーフローガードと分岐予測ヒントへ展開されるマクロ、そして代わりに使うと最初のオーバーフローでクライアントがメインネットから分岐する \`wrapping_add\` が詰まっている。
-
-[\`bluealloy/revm\`](https://github.com/bluealloy/revm) の本物のソース:
+このコースで触る revm ソース:
 
 \`\`\`rust
+// 1. crates/interpreter/src/instructions/arithmetic.rs (L1-L4)
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
     popn_top!([op1], op2, context.interpreter);
     *op2 = op1.wrapping_add(*op2);
     Ok(())
 }
+
+// 2. crates/interpreter/src/instructions.rs (L5-L8)
+const fn instruction_table_impl<WIRE: InterpreterTypes, H: Host>() -> InstructionTable<WIRE, H> {
+    let mut table = [Instruction::unknown(); 256];
+    table[ADD as usize] = Instruction::new(arithmetic::add);
+    // ...
+}
+
+// 3. crates/database-interface/src/lib.rs (L9-L12)
+#[auto_impl(&mut, Box)]
+pub trait Database {
+    type Error: DBErrorMarker;
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
+    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
+    fn storage(&mut self, address: Address, index: StorageKey) -> Result<StorageValue, Self::Error>;
+    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error>;
+}
 \`\`\`
 
-1行ずつ読むと、新しい概念が一度に6つ降ってくる。もっと楽な道: **積み上げる。** 一番素朴な \`add\` から始めて、複雑さを1つずつ獲得していく。このレッスンの終わりには、2行目のマクロ以外の全てを自分で組み立てたことになる — マクロは次へ。
+3 トピック、各 ~10 行のソース、それぞれ buildup + walkthrough + quiz + drill で計 12 レッスン。終わりにホットパス全行を読み、各ピースが何をしているか自分の言葉で説明できる。
 
-> 📂 **別タブで \`bluealloy/revm\` を開いてほしい。** 積み上げの結果と本物のソースを照合しながら読む。
+## セットアップ — 一度だけ
 
-## ステップ 0 — 素朴な \`add\`
+レッスン 1 の前に、別ウィンドウで:
 
-Rust で EVM を書くとき、何も考えずに書いた \`add\` はこんな形:
+1. \`git clone https://github.com/bluealloy/revm\`
+2. \`rustc --version\` でモダンなツールチェーン確認
+3. \`cargo install cargo-expand\`（Expert の手続きマクロで欲しい）
+4. セカンドモニタか分割端末でソース参照
+
+「Find in repo」プロンプトはリポを実際に開いていなければ機能しない。
+
+## 失敗例（誤解）
+
+「Revm = フルクライアント」— **間違い**。Revm は **実行エンジン**のみ、状態は持たない。状態は \`Database\` トレイト経由で外部供給される（L9-L12 で組み立てる）。Reth / Hyperliquid / Tempo は revm をラップして P2P + DB + コンセンサスを足す。
+
+「Inside Reth から先に読むべき」— **間違いではないが**、Revm が一番下層（Reth は revm の型を使う、Alloy も revm の primitive を使う）。Reth から始めても OK だが、Revm が固まってから Reth に戻ったほうが「なぜこの型なのか」が腑に落ちる。
+
+「読むだけで身に付く」— **致命的**。各トピックチェーンの 4 番目（ドリル）が「読んだことを本当に解いた証明」。読んでうなずく → 1 日後に再現できない、が中級を壊す失敗モード。**ドリルは飛ばさない**。
+
+## ステップで組み立てる
+
+### Step 1: セットアップを完了
+
+revm clone + ツールチェーン + cargo-expand + 2 モニタ。これがないと「Find in repo」プロンプトが機能しない。
+
+### Step 2: トピック 1（\`add\` Opcode）— L1 → L4
+
+buildup → walkthrough → quiz → drill。\`add\` を素朴版から本物まで 5 ステップで積み上げ、マクロ \`popn_top!\` を読み、進行をゲートするクイズ、最後にコンセンサスをわざと壊して直すドリル。
+
+### Step 3: トピック 2（命令ディスパッチテーブル）— L5 → L8
+
+256 スロット const テーブルを組み立て、カスタム Opcode を 3 行で配線、3 注意点（コンセンサス互換 / ガス価格 / 検証性）を学び、ドリルでフォークを出荷。
+
+### Step 4: トピック 3（\`Database\` トレイト）— L9 → L12
+
+4 メソッド + 関連型 + auto_impl を組み立て、仲間トレイト（\`DatabaseRef\` / \`DatabaseCommit\`）と 3 本番実装を読み、ドリルで \`ZeroDb\` を実装して revm の状態読みを観察。
+
+### Step 5: 追加 3 レッスン — L13 → L15
+
+テスト（state test / EOF / execution-spec）+ 並列実行（block-stm）+ JIT/AOT（revmc）。コンセンサスクリティカルなテスト規律 + 性能フロンティア。
+
+### Step 6: ファイナルクイズ — L16
+
+3 トピックチェーンの構造的事実を確認。3 中級コース（Revm・Reth・Alloy）完走に向けたゲート。
+
+## 答え合わせ
+
+- **Revm を 1 番下層に置く理由**: Reth は revm の型（\`Address\`・\`U256\`・\`B256\`・\`Database\` トレイト）を前提に組まれる、Alloy も revm の primitive を使う → **Revm の型システムは Rust EVM スタック全体の語彙の土台**。Revm を固めてから Reth に行くと「なぜこの型なのか」が腑に落ちる。
+- **ドリル必須の理由**: 中級を壊す失敗モード = 「読んでうなずいた」を 1 日後に再現できない。各トピック 4 番目（ドリル）が「本当に解いた証明」 = 別端末で revm に手を入れ、テストを走らせ、出力を読み、観測したことを書き留める = **記憶への定着**。
+- **追加 3 レッスンの位置づけ**: コア（L1-L12）は revm のホットパス読み。L13-L15 は「revm をどう信頼するか（テスト）+ スループットの先（並列 + JIT）」 = **コア以後の世界**を覗く窓。
+
+## 合格基準
+
+- 3 中級コース（Revm・Reth・Alloy）の関係と受講順自由を即答できる。
+- 3 トピックチェーン構造（add / dispatch / Database）+ 各 4 連（buildup → walkthrough → quiz → drill）を言える。
+- セットアップ 4 項目（revm clone + ツールチェーン + cargo-expand + 2 モニタ）を即答できる。
+- 中級を壊す失敗モード（読みうなずき → 再現不能）とドリル必須の理由を 1 文で説明できる。
+- 前提知識（EVM 内部 5 項目 + 中級 Rust 4 項目）を即答できる。
+
+## まとめ（3行）
+
+- Inside Revm = RethLab 3 中級コースの 1 つ、Revm は Rust EVM スタックの実行エンジン（Reth / Hyperliquid / Tempo 等全部同じソースを走らせる）。
+- 3 トピックチェーン（add Opcode + マクロ / 命令ディスパッチテーブル + カスタム Opcode / Database トレイト）各 buildup → walkthrough → quiz → drill の 4 連 + テスト + 並列 + JIT/AOT + 最終クイズ = 17 レッスン。
+- セットアップ 4 項目（revm clone + ツールチェーン + cargo-expand + 2 モニタ）必須、ドリルは飛ばさない、読みうなずきを信用しない。
+`,
+                },
+                {
+                  title: 'レッスン1 — `add` をステップで組み立てる：シグネチャと本体',
+                  slug: 'revm-add-buildup-ja',
+                  type: 'CONTENT',
+                  sortOrder: 1,
+                  duration: 8,
+                  xpReward: 20,
+                  content: `# レッスン1 — \`add\` をステップで組み立てる：シグネチャと本体
+
+## 問い
+
+\`ADD\` は EVM Opcode で最も単純な非自明: 数値 2 つ pop、和を push。**Revm は 4 行で済ませているが、その 4 行に型パラメータ 2 つのジェネリック + \`?Sized\` opt-out + アンダーフローガード + 分岐予測ヒントへ展開されるマクロ + \`wrapping_add\`（\`+\` だと最初のオーバーフローでメインネットから分岐）が詰まっている — どうやって到達するか？**
+
+## 原理（最小モデル）
+
+- **本物の形.** \`pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result { popn_top!(...); *op2 = op1.wrapping_add(*op2); Ok(()) }\`。
+- **5 ステップ積み上げ.** 素朴版 → \`<H: Host>\` → \`?Sized\` → \`IT: ITy\` → \`&mut\` その場 + \`wrapping_add\`。
+- **モノモーフ化.** \`<H: Host>\` は具象 \`H\` ごとに特殊化バイナリ = 静的ディスパッチ、vtable なし。
+- **\`?Sized\` opt-out.** Rust の暗黙 \`Sized\` を外すと \`&mut dyn Host\` が渡せる、vtable 間接化と引き換え。
+- **\`IT: ITy\`.** 実行モード（本番 / トレース / Inspector）をコンパイル時に選ぶ marker、特殊化バイナリで実行時切替コストゼロ。
+- **\`&mut\` その場書き込み.** 3 スタック操作（pop + pop + push）→ 1 操作（pop + 上書き）。
+- **\`wrapping_add\` 必須.** EVM コンセンサスは mod 2²⁵⁶ wrap を要求、\`+\` は debug panic / release wrap で分岐、\`saturating_add\` はネットワークフォーク。
+
+## 具体例
+
+ステップ 0 — 素朴版:
 
 \`\`\`rust
 pub fn add(stack: &mut Vec<U256>) -> Result<(), &'static str> {
@@ -124,29 +182,9 @@ pub fn add(stack: &mut Vec<U256>) -> Result<(), &'static str> {
 }
 \`\`\`
 
-2つ pop。足す。push。終わり。
+2 つ落とし穴: ① \`&mut Vec<U256>\` は具象型、トレーサー / ファザー / Inspector のスタックに差し替え不能、② pop + pop + push = 3 回スタック操作。
 
-> 🛑 **予測。** スクロールせずに: このバージョンが本物の \`add\` でわざと避けていることを **2つ** 挙げてほしい。（ヒント: 1つはシグネチャ、もう1つは本体。）答えを書き留めて、各ステップで照合してほしい。
-
-2つはこれ:
-
-1. **1つのホスト環境にしか対応しない。** \`&mut Vec<U256>\` は具象型。トレーサーのスタック、ファザーのスタック、Inspector サンドボックスのスタックを差し替えるには関数を書き直すしかない。
-2. **pop も push もやる — 計3回のスタック操作。** 本物の \`add\` は *1回* — 新しいトップを *その場で上書き*。
-
-#1 を先に直し（シグネチャ）、次に #2（本体）。
-
-## ステップ 1 — ホストに対してジェネリックにする
-
-Revm は複数の環境に組み込まれる必要がある:
-
-- **本番実行**（メインパス）
-- **トレース**（デバッグ用にスタック操作を全記録）
-- **Inspector サンドボックス**（外部観測者が EVM をステップ実行）
-- **ファザー、メインネットフォーク、ステートテストランナー**
-
-それぞれスタック/状態の形が少しずつ違う。\`add\` のコピーを6種類書きたくはない。
-
-最初のジェネリック化: \`Host\` トレイト（Rust の trait は共有インターフェース — Java の interface に似ているが、コンパイル時に解決される）に対してジェネリックにする。
+ステップ 1 — ホストジェネリック:
 
 \`\`\`rust
 pub fn add<H: Host>(host: &mut H) -> Result {
@@ -154,24 +192,9 @@ pub fn add<H: Host>(host: &mut H) -> Result {
 }
 \`\`\`
 
-\`H: Host\` は「\`Host\` トレイトを実装するどんな型でも可」と読む。1つのソース。**コンパイル時に具象 \`H\` ごとに特殊化されたバイナリが1つ**（Rust の *モノモーフ化* — その型を使う場所ごとにコンパイラが1コピーずつ展開する）。
+\`<H: Host>\` = 「\`Host\` トレイトを実装する任意の型」、コンパイラがモノモーフ化で具象 \`H\` ごとに特殊化バイナリ出力。落とし穴: trait object \`&mut dyn Host\` を渡せない（\`<H: Host>\` はコンパイル時サイズ既知のみ）。
 
-> 🛑 **予測。** \`<H: Host>\` の落とし穴は何? なぜ revm はここで止まらないのか?
-
-落とし穴は2つ:
-
-1. ホスト型が増えるとモノモーフ化でコンパイル時間が爆発する。
-2. **トレイトオブジェクト** \`&mut dyn Host\` を渡せない（\`dyn Trait\` は Rust の実行時ディスパッチのトレイトポインタ。Java のインターフェース参照に相当）。\`<H: Host>\` はコンパイル時にサイズが決まる型しか受け付けない。
-
-なぜトレイトオブジェクトを渡したいのか? 設定フラグや動的なテストハーネスから *実行時* にホストを構築したい場合があるから。トレイトオブジェクトは「具象 \`Host\` 実装が実行時まで分からない — vtable で扱って」とコンパイラに伝える方法。
-
-そこで \`?Sized\` の出番。
-
-## ステップ 2 — トレイトオブジェクトを許す: \`H: ?Sized\`
-
-Rust は **すべての** ジェネリックパラメータに暗黙の \`Sized\` 制約を加える。\`?Sized\` がないと \`H\` はコンパイル時にサイズが分かる型でなければならず、\`dyn Host\` は除外される（トレイトオブジェクトのサイズは背後の具象型に依存して実行時に決まる）。
-
-\`?Sized\` を足す:
+ステップ 2 — \`?Sized\` で trait object 許可:
 
 \`\`\`rust
 pub fn add<H: Host + ?Sized>(host: &mut H) -> Result {
@@ -179,17 +202,9 @@ pub fn add<H: Host + ?Sized>(host: &mut H) -> Result {
 }
 \`\`\`
 
-これで \`host: &mut dyn Host\` が有効な引数に。**1つの \`add\` バイナリでどんな \`Host\` 実装にも対応**、ホスト呼び出しごとの vtable 間接化と引き換えに。
+\`?Sized\` で Rust の暗黙の \`Sized\` 制約を外す = \`&mut dyn Host\` が有効引数に = 1 バイナリで全 \`Host\` 実装、vtable 間接化と引き換え。
 
-> 🛑 **理解度チェック。** 「\`Sized\` を外す」は単なるオウム返し。自分の言葉で: *なぜ* サイズ未知の型を受ける必要があるのか? スクロールせずに動機を語れないなら、読み直し。
-
-> 🔍 **\`revm/src/host.rs\` を開いて、\`dyn Host\` が実際に作られている箇所を1つ見つけてほしい。** この \`?Sized\` opt-out が複雑さに見合うだけの価値を持つ具体的な根拠になる。
-
-## ステップ 3 — 2つ目のジェネリクス: \`IT: ITy\`
-
-\`H\` でホストの差し替えが可能になりました。では **実行モード** — 本番 vs トレース vs Inspector サンドボックス — はどう扱う?
-
-Revm は **2つ目の** ジェネリクス \`IT\` でこれをコンパイル時に選びます:
+ステップ 3 — \`IT: ITy\` で実行モード抽象化:
 
 \`\`\`rust
 pub fn add<IT: ITy, H: Host + ?Sized>(host: &mut H) -> Result {
@@ -197,59 +212,33 @@ pub fn add<IT: ITy, H: Host + ?Sized>(host: &mut H) -> Result {
 }
 \`\`\`
 
-\`IT\` は "interpreter-types" マーカー — ストラテジパラメータと考えてほしい。同じソースが実行モードごとに **特殊化されたバイナリ** にコンパイルされる。\`IT\` がなければ、\`add\` を3回書くことに（本番用・トレース用・サンドボックス用）。
-
-これで本物の \`add\` のシグネチャに到達:
+\`IT\` = 「interpreter-types」マーカー、ストラテジパラメータ。同じソースが本番 / トレース / Inspector サンドボックスごとに特殊化バイナリへコンパイル。本物の \`add\` シグネチャ:
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 \`\`\`
 
-（パラメータ型は revm の \`Ictx<...>\` で人間工学的にラップされ、明示的な \`Host\` 制約は \`Ictx\` 側へ移っています — \`add\` に残ったジェネリクスは、いま積み上げた \`IT: ITy\` と \`H: ?Sized\`。）
+（\`Host\` 制約は \`Ictx\` 側に移っている — \`add\` に残るのは \`IT: ITy\` と \`H: ?Sized\`。）
 
-ソースに一致。**自分で組み立てた。**
-
-## ステップ 4 — 本体を直す: 参照経由で書き込む
-
-素朴な本体:
-
-\`\`\`rust
-let a = stack.pop().ok_or(StackUnderflow)?;
-let b = stack.pop().ok_or(StackUnderflow)?;
-stack.push(a + b);
-\`\`\`
-
-スタック操作は3回。それぞれメモリ書き込みか容量チェック。インタープリターのホットパス（あらゆるトランザクションで Opcode ごとに1回回る内側のループ）はこれを *tx あたり数千〜数万回、メインネットブロック全体で数百万回、CI / fuzz では秒間数億回* 走らせる — このオーバーヘッドが、競争力のあるスループットとそうでないものの境目。
-
-もっと良い: 1つだけ pop して、新しいトップを \`&mut\` 経由で **その場で書き換える**。
+ステップ 4 — 本体を \`&mut\` その場書き込み:
 
 \`\`\`rust
 let a = stack.pop().ok_or(StackUnderflow)?;       // op1 を pop
-let b = stack.last_mut().ok_or(StackUnderflow)?;  // 新しいトップへの &mut
-*b = a + *b;                                       // その場で上書き
+let b = stack.last_mut().ok_or(StackUnderflow)?;  // 新トップ &mut
+*b = a + *b;                                       // その場上書き
 \`\`\`
 
-pop 1回、その場書き込み1回。**push なし。**
+pop 1 + その場書き込み 1 = **push なし**。\`-> Result\` に連結値なし、データの流れは参照経由。
 
-> 🛑 **予測。** 本体が \`&mut\` 経由で書き込むようになった今、関数は成功時に何を *返す* 必要がある?
-
-\`Ok(())\` だけ — 値を返す必要がない、データの流れは参照経由で起きているから。本物のシグネチャを見直すと: \`-> Result\` に連結値なし。それが理由。
-
-## ステップ 5 — \`wrapping_add\` を使う
-
-最後の細部。\`+\` を \`wrapping_add\` に置き換える:
+ステップ 5 — \`wrapping_add\`:
 
 \`\`\`rust
 *b = a.wrapping_add(*b);
 \`\`\`
 
-なぜ? **EVM のコンセンサスは \`ADD\` に mod 2²⁵⁶ の wrap を要求するから。** \`+\` を使うと release/debug で挙動が分岐する（Rust の \`+\` は debug で panic、release で wrap）。\`saturating_add\` を使うと最初のオーバーフローでネットワークがフォークする — ドリルレッスンで実証する。
+EVM コンセンサス = \`ADD\` mod 2²⁵⁶ wrap、\`+\` は debug panic / release wrap で分岐、\`saturating_add\` は最初のオーバーフローでネットワークフォーク。\`U256::MAX.wrapping_add(U256::from(1))\` = \`0x0\`。
 
-> 🛑 **予測。** \`U256::MAX.wrapping_add(U256::from(1))\` は16進で何になる?
-
-答えが \`0x0\` でなかったら、止まる。EVM のコンセンサスはこの正確な挙動に依存している。
-
-## ここまでに組み立てたもの
+到達した本物の形:
 
 \`\`\`rust
 pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -260,77 +249,89 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 }
 \`\`\`
 
-これは **本物の \`add\` と意味的に等価**、ただスタック操作を手書きしただけ。本物のソースは中央の2行を \`popn_top!\` というマクロにまとめている — それが次のレッスン。
+中央 2 行は次レッスンで \`popn_top!\` マクロに抽出。
 
-## 進む前の想起
+## 失敗例（誤解）
 
-スクロールせずに、自分の言葉で:
+「\`<H: Host>\` だけで十分」— **間違い**。trait object \`&mut dyn Host\`（設定フラグ / 動的テストハーネス）には \`?Sized\` 必須。
 
-1. \`IT: ITy\` はコンパイル時に何をくれる? なければ何が起きる?
-2. \`?Sized\` がデフォルトでは許されない何を許すのか?
-3. なぜ本体は pop-add-push ではなく1回のその場書き込みなのか?
-4. \`U256::MAX.wrapping_add(U256::from(1))\` は何を返す? なぜそれが重要?
+「\`IT: ITy\` は飾り」— **間違い**。これがないと \`add\` を本番 / トレース / Inspector の 3 回書く羽目、または実行時分岐で速度ペナルティ。
 
-どれか曖昧なら戻る。次のレッスンは本体をマクロにリファクタリングします — 私たちが組み立てた版を自分のものにできていなければ、リファクタを追えません。
+「\`+\` でも release ビルドなら大丈夫」— **致命的**。Rust の \`+\` は debug panic / release wrap = ビルド分岐 = コンセンサス契約に載せられない。**\`wrapping_add\` で明示** = EVM コンセンサスが要求する正確な挙動。
 
-> **🧭 ここまでで積み上げたもの:** **VM 層の opcode をひとつ**、本物の Revm ソースと機能的に等価な水準まで、\`IT: ITy\`、\`?Sized\`、その場スタック操作、\`wrapping_add\` の 4 行で組み上げた。次のレッスンでは、本体をマクロに抽出する — CPython や JVM が何十年もかけて積み重ねてきたボイラープレート削減の、EVM 版。
+## ステップで組み立てる
+
+### Step 1: 素朴版を確認
+\`pop + pop + push\`、3 操作、ホスト固定。
+
+### Step 2: \`<H: Host>\` でホストジェネリック
+モノモーフ化で特殊化バイナリ。
+
+### Step 3: \`+ ?Sized\` で trait object 許可
+\`&mut dyn Host\` 有効、vtable 間接化と引き換え。
+
+### Step 4: \`<IT: ITy, H: ?Sized>\` で実行モード抽象化
+\`IT\` ストラテジパラメータ、特殊化バイナリ。
+
+### Step 5: \`&mut\` その場書き込み + \`wrapping_add\`
+1 操作、\`-> Result\` 連結値なし、mod 2²⁵⁶ wrap。
+
+## 答え合わせ
+
+- **\`IT: ITy\` がくれるもの**: 実行モードの **静的選択**、特殊化バイナリで実行時切替コストゼロ。なければ 3 回書くか実行時分岐。
+- **\`?Sized\` が許すもの**: trait object \`&mut dyn Host\`。Rust の暗黙 \`Sized\` 制約を外す、vtable 間接化と引き換え。
+- **その場書き込みが勝つ理由**: 3 操作 → 1 操作、ホットパス（毎 tx 毎 Opcode 数万 + 毎ブロック数百万 + CI 秒間数億）で実測される差。
+- **\`U256::MAX.wrapping_add(U256::from(1))\`**: \`0x0\`（mod 2²⁵⁶ wrap）= EVM コンセンサス要求。\`saturating_add\` だと \`U256::MAX\` のまま → メインネットフォーク。
+
+## 合格基準
+
+- 本物の \`add\` 4 行を即書ける。
+- 5 ステップ積み上げを順に言える。
+- モノモーフ化と \`?Sized\` の trade-off を 1 文で説明できる。
+- \`IT: ITy\` の役割を即答できる。
+- \`wrapping_add\` 必須の理由を言える。
+
+## まとめ（3行）
+
+- 本物の \`add\` は 4 行: ジェネリック \`<IT: ITy, H: ?Sized>\` + \`popn_top!\` + \`wrapping_add\` その場書き込み + \`Ok(())\`。
+- 5 ステップ積み上げ（素朴 → \`<H: Host>\` → \`?Sized\` → \`IT: ITy\` → \`&mut\` + \`wrapping_add\`）、各ステップに明確な動機。
+- EVM コンセンサスは mod 2²⁵⁶ wrap を要求、\`+\` や \`saturating_add\` 置換は分岐 / フォーク、次レッスンで中央 2 行を \`popn_top!\` マクロに抽出。
 `,
                 },
                 {
-                  title: '\`add\` を読む：マクロを抽出する',
+                  title: 'レッスン2 — `add` を読む：マクロを抽出する',
                   slug: 'revm-add-macro-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 8,
                   xpReward: 25,
-                  content: `# \`add\` を読む：マクロを抽出する
+                  content: `# レッスン2 — \`add\` を読む：マクロを抽出する
 
-\`crates/interpreter/src/instructions/arithmetic.rs\` を開くと、\`add\`・\`mul\`・\`sub\`・\`div\`・\`mod\`・\`lt\`・\`gt\`・\`eq\`・\`and\`・\`or\`・\`xor\` — 二項 Opcode が 30 個以上並んでいる。**そのどれもが同じ2行のスタック pop ボイラープレートで始まる。** リファクタが叫んでいる状態で、revm はその通りにやった: \`popn_top!\` という1つのマクロが、その2行を全箇所で置き換える。
+## 問い
 
-前のレッスンで、手書きの版をここまで組み立てました:
+\`crates/interpreter/src/instructions/arithmetic.rs\` を開くと \`add\` / \`mul\` / \`sub\` / \`div\` / \`lt\` / \`gt\` / \`eq\` 等の二項 Opcode が 30 個以上、**全部同じ 2 行のスタック pop ボイラープレートで始まる**。revm は \`popn_top!\` という 1 マクロで全箇所を置き換える。**なぜ関数ではなくマクロか、3 ディテールの価値は？**
 
-\`\`\`rust
-pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
-    let op1 = context.interpreter.stack.pop().ok_or(StackUnderflow)?;
-    let op2 = context.interpreter.stack.last_mut().ok_or(StackUnderflow)?;
-    *op2 = op1.wrapping_add(*op2);
-    Ok(())
-}
-\`\`\`
+## 原理（最小モデル）
 
-本物のソースは、その中央2行をマクロ呼び出し1つに置き換えている:
+- **本物のリファクタ.** 前レッスンの \`add\` 中央 2 行を \`popn_top!([op1], op2, context.interpreter);\` に置換。
+- **マクロ選択の 2 理由.** ① 可変アリティ（Opcode により pop 数 1/2/3）、② Opcode 関数から直接 \`return Err(StackUnderflow);\` 発行（\`?\` 不要）。
+- **3 ディテール.** \`cold_path()\`（LLVM ヒント）+ アンダーフロー 1 回事前チェック + \`unwrap_unchecked()\`（ガード前提で実行時チェックスキップ）。
+- **\`gas!\` も同形.** チェック → cold ヒント → 早期リターン、5 行版。
+- **\`unsafe\` の契約.** \`unwrap_unchecked\` = ガードが証明したドメイン不変条件、ガード消すと即 UB。
+- **\`add\` は固定ガス本体課金なし.** ディスパッチが前払い、\`exp\` / \`sha3\` 等オペランド依存のみ本体課金。
 
-\`\`\`rust
-pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
-    popn_top!([op1], op2, context.interpreter);
-    *op2 = op1.wrapping_add(*op2);
-    Ok(())
-}
-\`\`\`
+## 具体例
 
-**このレッスンはこのリファクタリングだけ。** なぜマクロなのか、中に何があるか、3つの小さなディテールがなぜ価値を持つのか。
-
-## ステップ 1 — そもそもなぜマクロか
-
-全ての二項 Opcode が同じ2行で始まります:
+ステップ 1 — マクロ化対象の 2 行:
 
 \`\`\`rust
 let op1 = ctx.interpreter.stack.pop().ok_or(StackUnderflow)?;
 let op2 = ctx.interpreter.stack.last_mut().ok_or(StackUnderflow)?;
 \`\`\`
 
-コードベース全体で30回以上繰り返される。問題は *リファクタするかどうか* ではなく、*どうやるか*。
+コードベース全体で 30 回以上繰り返される。問題は *リファクタするかどうか* ではなく *どうやるか*。
 
-> 🛑 **予測。** なぜ通常の関数ではなく \`macro_rules!\`（Rust のパターンマッチ式マクロシステム。コンパイル時にシンタックスを操作する）を使うのか? 2つの理由のうち少なくとも1つを挙げてほしい。
-
-理由は2つ:
-
-1. **可変アリティ。** Opcode によって pop する数が違う（1つ、2つ、3つ）。マクロは \`[op1]\`、\`[op1, op2]\`、\`[op1, op2, op3]\` を同じアームでマッチできる — 関数だと \`popn_top1\`、\`popn_top2\`、\`popn_top3\` を書くか const ジェネリクス曲芸が必要。
-2. **直接の早期リターン。** \`Result\` を返す関数だと、呼び出し側で毎回 \`?\` のお決まり構文。マクロは *Opcode 関数* から直接 \`return Err(StackUnderflow);\` を発行できる — \`?\` も \`Result\` の取り回しもなし。
-
-## ステップ 2 — マクロの素朴版
-
-最適化を考えずに書くと:
+ステップ 2 — 素朴マクロ:
 
 \`\`\`rust
 macro_rules! popn_top_naive {
@@ -343,18 +344,9 @@ macro_rules! popn_top_naive {
 }
 \`\`\`
 
-**シンタックスをゆっくり読む:**
+\`$($x:ident),*\` = カンマ区切り識別子リスト、\`$( ... )*\` = リスト要素ごとに繰り返し。これは動く、ただし遅い 2 点で。
 
-- \`$($x:ident),*\` はカンマ区切りの識別子のリストにマッチ（0個以上）。\`[op1]\` は要素1つ、\`[op1, op2]\` は要素2つ。
-- \`$( ... )*\` は中身をリストの要素ごとに繰り返す。ここでは識別子1つにつき1回 pop する。
-
-これは動く。本物より遅くもなる、revm が気にする2つの点で。
-
-> 🛑 **予測。** どこが遅い? （ヒント: (a) pop ごとの境界チェック、(b) コンパイラが何を証明できるか。）
-
-## ステップ 3 — アンダーフローを1回だけ事前チェック
-
-\`.pop()\` を N 回呼ぶ = 内部の境界チェックが N 回。**もっと良い: 最初に1回だけチェックする。**
+ステップ 3 — アンダーフロー 1 回事前チェック:
 
 \`\`\`rust
 if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
@@ -363,11 +355,9 @@ if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
 // ... 以降は再チェックなしで pop
 \`\`\`
 
-\`_count!\` は繰り返し内の識別子数を数えるヘルパマクロ。\`[op1]\` ならガードは \`stack.len() < 2\` になる（pop する1つ + 可変借用する1つ）。このガードを通過すれば、**以降の pop は静的に安全** — 必要な数があることを今、確かめたから。
+\`.pop()\` を N 回呼ぶ = 内部境界チェック N 回。最初に 1 回だけチェック → 以降の pop は静的に安全。
 
-## ステップ 4 — \`cold_path()\`: 失敗側がレアであることを LLVM に伝える
-
-スタックアンダーフローはバグであり、通常パスではない。レアな失敗パスのコードをホットな命令キャッシュ（CPU の icache。現在実行中の関数のバイト列が住む場所）に置きたくない。コールドな命令がそこに入ると、ホットなものが追い出される。
+ステップ 4 — \`cold_path()\` で LLVM ヒント:
 
 \`\`\`rust
 if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
@@ -376,17 +366,9 @@ if $interpreter.stack.len() < (1 + $crate::_count!($($x)*)) {
 }
 \`\`\`
 
-> 🛑 **予測。** \`cold_path()\` は実行時に何にコンパイルされる?
+\`cold_path()\` は **実行時には何にもコンパイルされない**、LLVM への「この分岐から到達するコードはレア」というヒント。レア分岐コードをホット icache から離れた場所へ配置、ハッピーパス 1 本直線アセンブリ。ゼロコスト最適化ヒント。
 
-**実行時には何も** にコンパイルされる。これは LLVM へのコンパイル時ヒント:「この分岐から到達するコードは統計的にレア」。オプティマイザはレアな分岐のコードをホットパスのマシン命令から離れた場所に配置する。結果、ホットパスはキャッシュ温度を保ったまま1本の直線アセンブリ。
-
-ゼロコストの最適化ヒント。それがパターン全体である。
-
-## ステップ 5 — \`unwrap_unchecked()\`: ガードの恩恵を回収
-
-\`stack.len() >= N\` を手動で確認しました。でも Rust の \`pop()\` は \`Option<T>\` を返すので、素朴に書くと \`.unwrap()\`（\`None\` で panic）か \`.ok_or(...)?\`（再チェック）になる。どちらもガードが既にやった仕事を繰り返す。
-
-本物のマクロはこう:
+ステップ 5 — \`unwrap_unchecked()\` でガード恩恵回収:
 
 \`\`\`rust
 let ([$( $x ),*], $top) = unsafe {
@@ -395,15 +377,9 @@ let ([$( $x ),*], $top) = unsafe {
 };
 \`\`\`
 
-\`unwrap_unchecked()\` は実行時の \`Some\` チェックをスキップ。**安全なのは値が \`Some\` であることを証明できるときだけ — そしてステップ 3 のガードがちょうどそれを証明済み。** \`unsafe\` ブロックは契約: *「自分でチェックした、二重チェック不要」*。ガードを消した瞬間、即座に未定義動作。
+\`unwrap_unchecked()\` は実行時の \`Some\` チェックをスキップ。**安全なのは値が \`Some\` であることを証明できるときだけ — ステップ 3 のガードがそれを証明済み**。\`unsafe\` ブロックは契約: 「自分でチェックした、二重チェック不要」。
 
-> 🛑 **理解度チェック。** スクロールせずに: なぜコンパイラ自身が冗長な \`Some\` チェックを最適化で除去できないのか? なぜ \`unwrap_unchecked\` を強制する必要がある?
-
-コンパイラは \`stack.len() >= N\` と \`popn_top\` が \`Some\` を返すことの関係を証明できません — それはドメイン不変条件（私たちが \`popn_top\` の挙動を知っている）であって、型システムが見られる型不変条件ではない。\`unwrap_unchecked\` はドメイン知識と型システムの限界の継ぎ目 — 「自分でチェックした、信用して」とコンパイラに伝える方法である。
-
-## ステップ 6 — 完成形の \`popn_top!\`
-
-すべて組み合わせると:
+ステップ 6 — 本物:
 
 \`\`\`rust
 macro_rules! popn_top {
@@ -420,15 +396,12 @@ macro_rules! popn_top {
 }
 \`\`\`
 
-3つのディテール、それぞれ価値を持つ:
+3 ディテール:
+- **\`cold_path()\`** — LLVM へのコンパイル時ヒント「この分岐から到達するコードはレア」、レア分岐コードをホット icache から離れた場所へ配置、ハッピーパス 1 本直線アセンブリ
+- **アンダーフロー 1 回事前チェック** — N 回 \`.pop()\` 呼ぶ = 境界チェック N 回 → 最初に 1 回 \`stack.len() < (1 + N)\` で済ます
+- **\`unwrap_unchecked()\`** — ガードが \`Some\` を証明済み、実行時 \`Some\` チェックをスキップ
 
-- **\`cold_path()\`** — レアな失敗パスのコードをホット icache から外す（ゼロコストヒント）
-- **\`unwrap_unchecked\`** — ガードが既にやった実行時チェックをスキップ
-- **アリティ N のマッチャ** — N 個 pop する Opcode すべてに使える1つのマクロ
-
-> 🔍 **リポジトリで確認。** \`crates/interpreter/src/instructions/macros.rs\` を開いて \`popn_top!\` を見つけ、ここで歩いた内容と同じであること（フォーマットを除く）を確認してほしい。
-
-## ステップ 7 — \`gas!\`: 同じパターンを別の用途に
+\`gas!\`:
 
 \`\`\`rust
 macro_rules! gas {
@@ -441,292 +414,274 @@ macro_rules! gas {
 }
 \`\`\`
 
-同じ形: チェック → 失敗側に cold ヒント → 早期リターン。ガスを引いて、払えなければ \`OutOfGas\` で即時終了。\`popn_top!\` を消化していれば、\`gas!\` は同じパターンの5行版である。
+チェック → cold ヒント → 早期リターン、5 行版。
 
-> 🔍 **リポジトリで確認。** \`gas!\` が \`add\` の本体で呼ばれていないのはなぜ? \`arithmetic.rs\` を見て仮説を立てる。次に \`interpreter.rs\` で定数ガスの Opcode がどこで課金されるか探す。
+## 失敗例（誤解）
 
-ヒント: \`add\` は **固定の** ガスコスト（現行 Ethereum で 3）。固定コストはディスパッチループが各 Opcode 関数を実行する前に前払いする。**オペランドに依存する** コスト（\`exp\`、\`sha3\`、メモリ操作系）の Opcode だけが本体内で課金 — ドリルでそういうケースを1つ見る。
+「マクロでなく関数で十分」— **間違い**。① 可変アリティ（\`popn_top1/2/3\` 別関数 or const ジェネリクス曲芸）、② 関数だと呼び出し側で毎回 \`?\` のお決まり構文。
 
-## クイズ前の想起
+「\`cold_path()\` は panic ハンドラへのジャンプ」— **間違い**。**実行時には何にもコンパイルされない**、LLVM へのヒントのみ。
 
-スクロールせずに:
+「コンパイラが冗長な \`Some\` チェックを最適化で除去できる」— **間違い**。\`stack.len() >= N\` と \`popn_top\` が \`Some\` を返すことの関係は **ドメイン不変条件**、型システムが見える型不変条件ではない、コンパイラは証明できない、\`unwrap_unchecked\` がドメイン知識と型システムの継ぎ目。
 
-1. なぜ \`popn_top!\` は関数ではなくマクロなのか?（メカニズム的な理由を1つ。）
-2. \`cold_path()\` は実行時に何にコンパイルされる?
-3. \`popn_top!\` の中の \`unwrap_unchecked\` がなぜ未定義動作にならないのか?
-4. \`popn_top!\` と \`gas!\` の構造的な関係は?
+## ステップで組み立てる
 
-次のレッスンは進行をゲートするクイズである。**クイズはうなずきで通せない** — 曖昧な答えがあるなら今、想起してほしい。
+### Step 1: マクロを選ぶ 2 理由
+可変アリティ + 直接早期リターン。
 
-## 📺 関連動画
+### Step 2: 素朴マクロ
+\`$($x:ident),*\` 繰り返しで各 pop。
 
-\`\`\`youtube
-Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough
-\`\`\`
+### Step 3: アンダーフロー 1 回事前チェック
+\`stack.len() < (1 + N)\` で以降の pop は静的に安全。
+
+### Step 4: \`cold_path()\` で LLVM ヒント
+レア分岐コードをホット icache から離す、実行時コストゼロ。
+
+### Step 5: \`unwrap_unchecked()\` でガード恩恵回収
+ガードが \`Some\` 証明済み、実行時チェックスキップ、\`unsafe\` 契約。
+
+### Step 6: \`gas!\` も同形
+チェック → cold ヒント → 早期リターン、5 行版。
+
+## 答え合わせ
+
+- **マクロ選択の機構的理由**: ① **可変アリティ** = \`[op1]\` / \`[op1, op2]\` / \`[op1, op2, op3]\` を同じアームでマッチ、関数だと N 別関数、② **直接早期リターン** = \`return Err\` を Opcode 関数から発行、関数だと \`Result\` + \`?\`。
+- **\`cold_path()\` の実行時挙動**: **何にもコンパイルされない**、LLVM への「この分岐は統計的にレア」ヒント。レア分岐コードをホットパスから離れた場所に配置、ハッピーパスはキャッシュ温度維持の 1 本直線アセンブリ。
+- **\`unwrap_unchecked\` が UB にならない理由**: マクロ直前の \`if stack.len() < ...\` ガードが pop する値が \`Some\` であることを **静的に保証**、\`unwrap_unchecked\` 実行時には \`Some\` 証明済み。**ガード消すと即 UB**、\`unsafe\` = 「自分でチェックした、ランタイムは二重チェック不要」契約。
+
+## 合格基準
+
+- 本物の \`popn_top!\` 6 ステップ展開を即書ける。
+- マクロ選択の 2 理由を 1 文ずつ説明できる。
+- \`cold_path()\` の実行時挙動（何も生成しない LLVM ヒント）を即答できる。
+- \`unwrap_unchecked\` がガード前提で UB にならない理由を 1 文で説明できる。
+- \`add\` 固定ガス本体課金なし、\`exp\` / \`sha3\` 本体課金（オペランド依存）の差を言える。
+
+## まとめ（3行）
+
+- 本物の \`popn_top!\` = アンダーフロー 1 回事前チェック + \`cold_path()\` LLVM ヒント + \`unwrap_unchecked()\` ガード恩恵回収 + 可変アリティ識別子マッチ。
+- マクロ選択 2 理由 = 可変アリティ + 直接早期リターン、関数だと N 別関数 + \`?\` ボイラープレート。
+- \`gas!\` も同形（チェック → cold ヒント → 早期リターン）= \`popn_top!\` を消化すれば 5 行で読める、\`add\` は固定ガスで本体課金なし。
 `,
                 },
                 {
-                  title: 'クイズ: \`add\` は本当に身についた?',
+                  title: 'クイズ — `add` Opcode',
                   slug: 'revm-add-opcode-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 3,
                   duration: 5,
                   xpReward: 30,
-                  content: `# クイズ: \`add\` は本当に身についた?
+                  content: `# クイズ — \`add\` Opcode
 
-このクイズは飾りではありません。前のレッスンの「予測」プロンプトはうなずいて通り過ぎやすい — そして1日後の「読んでうなずいたけど再現できない」が、中級を壊す失敗モードである。
+\`add\` のシグネチャ（\`<IT: ITy, H: ?Sized>\`）、\`?Sized\` の役割、\`popn_top!\` 内の \`unwrap_unchecked\` がガード前提で UB にならない理由、\`cold_path()\` の実行時挙動、\`wrapping_add\` がコンセンサスに要求される理由、本体が \`Ok(())\` だけを返す理由を確認する。
 
-5問。前2レッスンの各ピースに1問ずつ対応。**自分が当て推量していると気づいたら**、止まって関連箇所を読み直してから答えてほしい。クイズは逃げません。
-
-2問以上落としたら、レッスンが内面化していない — ドリルへ進む前に「\`add\` をステップで組み立てる」と「マクロを抽出する」の2つを読み直してほしい。`,
+組み立てとマクロ抽出にまたがる設計判断を問う 5 問。**クイズはうなずきで通せない。** 2 問以上落としたら、ドリルへ進む前に「\`add\` をステップで組み立てる」と「マクロを抽出する」に戻ること。
+`,
                   quizQuestions: [
                     {
-                      question: "`add` のシグネチャの `H: ?Sized` から `?` を取ると、実際に何が壊れますか?",
-                      options: [
+                      "question": "`add` のシグネチャの `H: ?Sized` から `?` を取ると、実際に何が壊れますか?",
+                      "options": [
                         "何も壊れない — `?Sized` はコンパイラが無視する装飾的なヒント。",
                         "`add` がコンパイルできなくなる — `H` は既に暗黙的に `?Sized` だから。",
                         "`&mut dyn Host` を引数として渡せなくなる — `H` には具象でサイズが決まる型しか渡せなくなる。",
-                        "`popn_top!` の中の `unwrap_unchecked()` が未定義動作になる。",
+                        "`popn_top!` の中の `unwrap_unchecked()` が未定義動作になる。"
                       ],
-                      correctIndex: 2,
-                      explanation: "Rust はジェネリック型パラメータすべてに暗黙の `Sized` 制約を加える。`?Sized` はその制約を外す指定。これがないと `H` はコンパイル時にサイズが分かる型でなければならず、トレイトオブジェクト（`dyn Host` のように実行時の具象型でサイズが決まる型）は除外される。`&mut dyn Host` がコンパイルする唯一の理由が、この `?Sized` opt-out である。",
+                      "correctIndex": 2,
+                      "explanation": "Rust はジェネリック型パラメータすべてに暗黙の `Sized` 制約を加える。`?Sized` はその制約を外す指定。これがないと `H` はコンパイル時にサイズが分かる型でなければならず、トレイトオブジェクト（`dyn Host` のように実行時の具象型でサイズが決まる型）は除外される。`&mut dyn Host` がコンパイルする唯一の理由が、この `?Sized` opt-out である。"
                     },
                     {
-                      question: "`popn_top!` の中の `unwrap_unchecked()` がなぜ未定義動作にならないのですか?",
-                      options: [
+                      "question": "`popn_top!` の中の `unwrap_unchecked()` がなぜ未定義動作にならないのですか?",
+                      "options": [
                         "`unsafe` ブロックは実行時に UB チェックを停止するから。",
                         "マクロの直前にある `if stack.len() < ...` のガードが、pop する値が `Some` であることをちょうど証明したから。",
                         "`cold_path()` がアンダーフロー側の分岐を実行不可能にするから。",
-                        "Rust が `unsafe` ブロック内で自動的に `Option` 型を検証するから。",
+                        "Rust が `unsafe` ブロック内で自動的に `Option` 型を検証するから。"
                       ],
-                      correctIndex: 1,
-                      explanation: "`unwrap_unchecked` は値が `None` のときに未定義動作になる。マクロの `if` ガードはスタックの要素数が必要数より少ないときに早期リターンするので、`unwrap_unchecked` が走る時点では値が `Some` であることが静的に保証されている。ガードを消した瞬間、即座に UB。`unsafe` ブロックは契約です — 「自分でチェックした、ランタイムは二重チェック不要」。",
+                      "correctIndex": 1,
+                      "explanation": "`unwrap_unchecked` は値が `None` のときに未定義動作になる。マクロの `if` ガードはスタックの要素数が必要数より少ないときに早期リターンするので、`unwrap_unchecked` が走る時点では値が `Some` であることが静的に保証されている。ガードを消した瞬間、即座に UB。`unsafe` ブロックは契約です — 「自分でチェックした、ランタイムは二重チェック不要」。"
                     },
                     {
-                      question: "`cold_path()` は生成されるアセンブリで実際に何にコンパイルされますか?",
-                      options: [
+                      "question": "`cold_path()` は生成されるアセンブリで実際に何にコンパイルされますか?",
+                      "options": [
                         "panic ハンドラへの無条件ジャンプ。",
                         "実行時には何にもコンパイルされない — LLVM への「この分岐は統計的にレア」というヒント。",
                         "`std::process::abort()` の呼び出し。",
-                        "スタックトレースを出力するロギング呼び出し。",
+                        "スタックトレースを出力するロギング呼び出し。"
                       ],
-                      correctIndex: 1,
-                      explanation: "`cold_path()` は命令を生成しません。LLVM に「この分岐から到達するコードはレア」と伝える。オプティマイザはその分岐のコードをホットな命令キャッシュから遠ざけて配置する。ハッピーパスはキャッシュ温度を保ったまま1本の直線アセンブリに保たれる — それがこのパターンの目的である。",
+                      "correctIndex": 1,
+                      "explanation": "`cold_path()` は命令を生成しません。LLVM に「この分岐から到達するコードはレア」と伝える。オプティマイザはその分岐のコードをホットな命令キャッシュから遠ざけて配置する。ハッピーパスはキャッシュ温度を保ったまま1本の直線アセンブリに保たれる — それがこのパターンの目的である。"
                     },
                     {
-                      question: "`U256::MAX.wrapping_add(U256::from(1))` は16進で何を返しますか?",
-                      options: [
+                      "question": "`U256::MAX.wrapping_add(U256::from(1))` は16進で何を返しますか?",
+                      "options": [
                         "`0xFFFF...FF` — 最大値で飽和。",
                         "オーバーフローで panic。",
                         "`0x0` — mod 2²⁵⁶ で wrap する。",
-                        "トランザクションが revert する。",
+                        "トランザクションが revert する。"
                       ],
-                      correctIndex: 2,
-                      explanation: "EVM の `ADD` Opcode はコンセンサスにより mod 2²⁵⁶ の wrap が *要求* されている。`wrapping_add` がまさにその挙動である。`saturating_add` や `checked_add` に置き換えると、最初のオーバーフローでネットワークがフォークします — ドリルレッスンで実証する。",
+                      "correctIndex": 2,
+                      "explanation": "EVM の `ADD` Opcode はコンセンサスにより mod 2²⁵⁶ の wrap が *要求* されている。`wrapping_add` がまさにその挙動である。`saturating_add` や `checked_add` に置き換えると、最初のオーバーフローでネットワークがフォークします — ドリルレッスンで実証する。"
                     },
                     {
-                      question: "`add` の関数本体は加算結果をどこにも明示的に返していません。EVM はどこで新しいスタックトップを観測するのですか?",
-                      options: [
+                      "question": "`add` の関数本体は加算結果をどこにも明示的に返していません。EVM はどこで新しいスタックトップを観測するのですか?",
+                      "options": [
                         "成功時に和を載せた `Result` の戻り値を通じて。",
                         "`*op2 = ...` を通じて — `op2` はスタックへの可変参照なので、参照経由で書き込むとスタックがその場で書き換わる。",
                         "インタープリターが管理するスレッドローカルなサイドチャネル経由で。",
-                        "`popn_top!` の暗黙的な戻り値を通じて、ディスパッチループが読む。",
+                        "`popn_top!` の暗黙的な戻り値を通じて、ディスパッチループが読む。"
                       ],
-                      correctIndex: 1,
-                      explanation: "`popn_top!` は `op2` を `&mut U256` としてバインドし、新しいスタックトップ（`op1` を pop した直後の位置）を指する。`*op2 = ...` でその参照経由に書き込むとスタックがその場で書き換わる — メモリ書き込みは1回、pop してから push しません。だからこそ関数の `Result` は成功/失敗だけを運び、データの流れは参照経由で起きるのである。",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "`popn_top!` は `op2` を `&mut U256` としてバインドし、新しいスタックトップ（`op1` を pop した直後の位置）を指する。`*op2 = ...` でその参照経由に書き込むとスタックがその場で書き換わる — メモリ書き込みは1回、pop してから push しません。だからこそ関数の `Result` は成功/失敗だけを運び、データの流れは参照経由で起きるのである。"
+                    }
                   ],
                 },
                 {
-                  title: 'ドリル: インタープリターのソースが読めることを証明する',
+                  title: 'レッスン4 — ドリル: インタープリターのソースが読める証明',
                   slug: 'revm-add-opcode-drill-ja',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 12,
                   xpReward: 25,
-                  content: `# ドリル: インタープリターのソースが読めることを証明する
+                  content: `# レッスン4 — ドリル: インタープリターのソースが読める証明
 
-\`add\` とそのマクロは読んだ。**今度は、レッスンに手を引かれずに同じファイルの残りを読めることを証明する。** 別ウィンドウで \`cargo\` を開いた状態で、本物の revm チェックアウトの中で自分で走らせる3つのドリル。どれも「読むだけ」ではなく *やる、そして観測したことを書き留める*。
+## 問い
 
-## セットアップ
+\`add\` とマクロは読んだ。**手を引かれずに同じファイルの残りを読める証明 — 別ウィンドウで \`cargo\` を開いた状態で 4 ドリル、どれも「読むだけ」ではなく やる + 観測したことを書き留める。何を観察するか？**
+
+## 原理（最小モデル）
+
+- **セットアップ.** \`git clone https://github.com/bluealloy/revm && cd revm && cargo build\`。
+- **4 ドリル.** ① \`mul\` を読み \`add\` と比較、② \`exp\` の動的ガス課金、③ わざとコンセンサスを壊す（\`wrapping_add\` → \`saturating_add\`）、④ \`add\` を計装してデータ流を観察。
+- **\`add\` と \`mul\` の構造同一の根拠.** 両方とも 2-stack-in / 1-stack-out / 固定ガス / 副作用なし = 同じ制御フロー形にコンパイル、違うのは \`OP\`（\`wrapping_add\` vs \`wrapping_mul\`）とガス料金（現行両方 3）のみ。
+- **\`exp\` が本体課金の理由.** コストが指数バイト単位（実行時値）に依存 → ディスパッチが前払いできない → 本体で \`gas!\` 呼び出し。同パターン: \`sha3\` / \`mload\` / \`call\` 系。
+- **コンセンサスを壊す実証.** \`wrapping_add\` を \`saturating_add\` に変更 → \`cargo test -p revm-interpreter\` で数値不一致 → メインネットフォーク。
+- **\`eprintln!\` で計装.** \`cargo test -- --nocapture\` で出力可視化、ADD 実行回数を数える、データ流を物理的に観察。
+
+## 具体例
+
+ドリル 3 — コンセンサスを壊す:
 
 \`\`\`bash
-git clone https://github.com/bluealloy/revm
-cd revm
-cargo build  # ツールチェーンをウォームアップ
+# 1. crates/interpreter/src/instructions/arithmetic.rs の add で
+#    wrapping_add を saturating_add に変更、保存
+# 2. cargo test -p revm-interpreter
+# → テスト失敗、数値不一致（panic ではない）
+# 3. git checkout crates/interpreter/src/instructions/arithmetic.rs
+# 4. cargo test -p revm-interpreter で再びパス確認
 \`\`\`
 
-\`cargo build\` が失敗したら、先に進む前に直してほしい。残りのドリルはビルドが通っている前提です — 「読むだけ」のバージョンは存在しません。
+要点 = ライブラリ関数 1 つを書き換えた瞬間、クライアントは \`0xFFF...FF + 1\` の結果について世界中の他 Ethereum クライアントと不一致 = ADD オーバーフローする最初の tx でメインネットからフォーク。
 
-## ドリル 1 — \`mul\` を探して、形を証明する
+ドリル 4 — 計装:
 
-\`crates/interpreter/src/instructions/arithmetic.rs\` を開く。\`mul\` 関数を見つける。\`add\` と1行ずつ比較する。
+\`\`\`rust
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
+    eprintln!("ADD: {:#x} + {:#x} = ?", op1, *op2);  // ← 追加
+    *op2 = op1.wrapping_add(*op2);
+    eprintln!("ADD result: {:#x}", *op2);              // ← 追加
+    Ok(())
+}
+\`\`\`
 
-> 🛑 **質問（スクロール前に書き留めて）:** \`mul\` と \`add\` は行数まで構造的に同一である。**なぜ?** 「両方算術だから」ではなく — EVM の *メカニズム的にどんな性質* がこの2つを同じ形に強制するのか、具体的に。
+\`cargo test -p revm-interpreter -- --nocapture\` で出力。テストスイート全体で ADD 実行回数を数える = production の現実（mainnet 毎 tx × 数百万ノード × 数年）をターミナルに圧縮。
 
-答え: 両方とも **2スタック入力 / 1スタック出力 / 固定ガス / 副作用なし** の Opcode。このプロファイルに合致するものはすべて、まったく同じ制御フロー形にコンパイルされる: \`popn_top!([a], b, ctx.interpreter); *b = a.OP(*b); Ok(())\`。違うのは \`OP\`（\`wrapping_add\` vs \`wrapping_mul\`）とガス料金（現行 Ethereum では両方 3）だけ。
+## 失敗例（誤解）
 
-書き留めた答えがこれより抽象的だったら、このドリルを身につけていない — 読み直し。
+「\`add\` と \`mul\` が同形なのは『両方算術』だから」— **間違い**。根本理由 = **メカニクス的な同一プロファイル**（2-in / 1-out / 固定ガス / 副作用なし）、このプロファイル合致全 Opcode が同じ制御フロー形にコンパイル。
 
-## ドリル 2 — \`exp\` を探して、動的なガス課金を見つける
+「\`exp\` は数学が複雑だから本体課金」— **不十分**。根本理由 = **コストがオペランド依存**（指数バイト単位）→ ディスパッチが前払い不能 → 本体で \`gas!\`。\`sha3\` / \`mload\` / \`call\` も同じ理屈。
 
-\`exp\` は同じファイルにある。\`add\` や \`mul\` より長い。理由は2つ:
+「\`saturating_add\` 置換ぐらいでメインネットフォークはしない」— **致命的**。**1 tx 分の数値不一致 = state-root 不一致 = ブロック検証失敗 = ピアから切断**。コンセンサスはライブラリ関数 1 つ分の距離で失われる。
 
-1. 数学が複雑（単一演算ではなく冪乗）。
-2. ガス料金が **動的** — 指数のサイズに依存する。
+## ステップで組み立てる
 
-> 🔍 **\`exp\` の中に** 指数の *バイト単位で* 課金している \`gas!\` マクロ呼び出しを **見つけて**、その算術を読む。
+### Step 1: \`mul\` を \`add\` と比較
+構造同一の根拠 = 2-in/1-out/固定ガス/副作用なしプロファイル。
 
-> 🛑 **質問（書き留めて）:** なぜ \`exp\` は動的課金で、\`add\` はディスパッチループによる定数課金なのか?
+### Step 2: \`exp\` の動的ガス課金
+オペランド依存コスト → 本体内 \`gas!\`、同パターンを \`sha3\` / \`mload\` / \`call\` で。
 
-答え: ディスパッチは *固定の* コストを前払いできるが、\`exp\` のコストは実行時の値（指数オペランドのサイズ）に依存する。そのコストは関数本体内、オペランドを検査した *後* でしか分からない。だから \`exp\` は自分で課金する。
+### Step 3: わざとコンセンサスを壊す
+\`wrapping_add\` → \`saturating_add\` → test 数値不一致観察 → 戻す。
 
-これは一般化する。コストがオペランドに形作られる Opcode は本体内で課金しなければなりません。覚えておいてください — \`sha3\`、\`mload\`、\`call\` 系で同じパターンに出会いる。
+### Step 4: \`eprintln!\` で計装
+\`cargo test -- --nocapture\` で ADD 実行回数を数える、データ流を物理観察。
 
-## ドリル 3 — わざとコンセンサスを壊す
+## 答え合わせ
 
-これが定番の「理解した証明」ドリル。**コンセンサスがどれほど脆いかは、わざと壊してみるまで信じられません。**
+- **\`add\` と \`mul\` 同形の根拠**: 両方 **2-stack-in / 1-stack-out / 固定ガス / 副作用なし** プロファイル → \`popn_top!([a], b, ctx.interpreter); *b = a.OP(*b); Ok(())\` の同じ制御フロー形。違うのは \`OP\`（\`wrapping_add\` vs \`wrapping_mul\`）とガス料金（現行両方 3）のみ。
+- **\`exp\` が本体課金の理由**: コストが **指数オペランドのバイト単位**（実行時値）に依存 → ディスパッチが前払いできない → 本体内オペランド検査後に \`gas!\` 呼び出し。一般化: コストがオペランドに形作られる全 Opcode（\`sha3\` / \`mload\` / \`call\`）は本体内で課金。
+- **コンセンサスを壊す変更**: \`wrapping_add\` → \`saturating_add\`、最初のオーバーフロー tx で他クライアントと state-root 不一致 → メインネットフォーク。テスト失敗モード = panic ではなく **数値不一致**（特定の test ケースで期待値と実値が違う）= コンセンサス契約の実装ミスを CI が捕まえる。
 
-1. \`crates/interpreter/src/instructions/arithmetic.rs\` を開く。
-2. \`add\` を見つける。\`wrapping_add\` を \`saturating_add\` に変更。保存。
-3. リポジトリルートから: \`cargo test -p revm-interpreter\`。
-4. **テストが落ちるのを見る。** 少なくとも1つの失敗メッセージを読む — 失敗が panic ではなく数値の不一致であることを確認。
+## 合格基準
 
-今やったこと: ライブラリ関数1つを書き換えた。あなたのクライアントは今、\`0xFFF...FF + 1\` の結果について世界中の他の Ethereum クライアントと不一致になっている。\`ADD\` がオーバーフローする最初のトランザクションで、あなたのノードはメインネットからフォークされる。
+- \`add\` と \`mul\` の構造同一の根拠（2-in/1-out/固定ガス/副作用なし プロファイル）を即答できる。
+- \`exp\` が本体課金の理由（オペランド依存コスト）を即答 + 同パターン Opcode 3 つ（\`sha3\` / \`mload\` / \`call\`）を言える。
+- \`wrapping_add\` → \`saturating_add\` がコンセンサスを壊す瞬間を即答できる。
+- \`cargo test -- --nocapture\` で計装出力を読む手順を言える。
 
-> 🔧 **変更を元に戻し**、テストが再びパスすることを確認:
->
-> \`\`\`bash
-> git checkout crates/interpreter/src/instructions/arithmetic.rs
-> cargo test -p revm-interpreter
-> \`\`\`
->
-> 要点は変更ではなく、**コンセンサスがライブラリ関数1つ分の距離** で失われることの実証 — そしてあなたはそれを今、肌で感じた。
+## まとめ（3行）
 
-\`cargo test\` を実際に走らせて出力を見ていなければ、ドリルをスキップしました。ドリル *は* 走らせること。読んで「分かった」と思えるバージョンは存在しません。
-
-## ドリル 4 — \`add\` を計装してデータの流れを観測する
-
-ソースを読むのは 1 つのモード。*読んだソースをデータが流れていく様子を見る* のはもっと強い。
-
-1. \`crates/interpreter/src/instructions/arithmetic.rs\` を開く
-2. \`add\` の先頭と末尾に \`eprintln!\` を追加:
-
-   \`\`\`rust
-   pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
-       popn_top!([op1], op2, context.interpreter);
-       eprintln!("ADD: {:#x} + {:#x} = ?", op1, *op2);  // ← 追加
-       *op2 = op1.wrapping_add(*op2);
-       eprintln!("ADD result: {:#x}", *op2);              // ← 追加
-       Ok(())
-   }
-   \`\`\`
-
-3. 再実行: \`cargo test -p revm-interpreter -- --nocapture\`。\`--nocapture\` フラグで cargo が \`eprintln!\` 出力を見せる
-4. テスト出力を読む。**テストスイート全体で ADD が何回走ったか数える。**
-
-これが production の現実をターミナルに圧縮したもの: \`0x01\` を含む Ethereum mainnet の各トランザクションがこの正確な関数を、この正確なオペランドで実行し、この正確な結果を生む。何年もの間、数百万ノード上で。
-
-> 🔧 **終わったら戻す。** \`git checkout crates/interpreter/src/instructions/arithmetic.rs\`。\`eprintln!\` は学習用 — production コードは hot path をこの形で計装しない（既存の tracing 統合を使う、Inside Reth で扱う）。
-
-ADD が実行される様子を *見た* 後、「インタープリターはただの Rust 関数ループ」という枠組みが理論ではなくなる。
-
-## レッスン終了の想起
-
-スクロールせずに、紙に自分の言葉で:
-
-1. \`add\` と \`mul\` のソースが同一になる *メカニズム的な* 性質は何か?
-2. なぜ \`exp\` は本体内で課金するのか、ディスパッチ経由ではなく?
-3. \`add\` を EVM 準拠から非準拠に変える1つの変更は何か — そしてどんなテスト失敗モードを観測したか?
-
-どれか曖昧なら、ここで先に進まないこと。ドリルを走らせ直すか、読み直し。
-
-ここまで来れば、Solidity 開発者の 99% より EVM ソースを多く読んだことに — そしてチェーンに自分自身と矛盾させ、元に戻すことで、それを証明しました。次のレッスンは、1つの Opcode から256個全てをディスパッチするテーブルへとズームアウトする。`,
+- 4 ドリル = \`mul\` 構造比較 + \`exp\` 動的ガス + コンセンサスをわざと壊す + \`eprintln!\` 計装、どれも「やる + 観測したことを書き留める」。
+- \`add\` と \`mul\` 同形は機構的（2-in/1-out/固定ガス/副作用なしプロファイル）、\`exp\` 本体課金はオペランド依存コスト（同パターン: \`sha3\` / \`mload\` / \`call\`）。
+- \`wrapping_add\` → \`saturating_add\` でテスト数値不一致 → コンセンサスはライブラリ関数 1 つ分の距離で失われる、肌で感じてから戻す。
+`,
                 },
                 {
-                  title: '命令テーブルをステップで組み立てる',
+                  title: 'レッスン5 — 命令テーブルをステップで組み立てる',
                   slug: 'custom-opcodes-table-ja',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 10,
                   xpReward: 25,
-                  content: `# 命令テーブルをステップで組み立てる
+                  content: `# レッスン5 — 命令テーブルをステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層の命令ディスパッチ設計**。1990 年以降に作られたほぼすべてのインタプリタが採用してきた普遍パターン — 関数ポインタテーブル、computed goto、threaded code。CPython・JVM・Lua・Erlang BEAM が、いずれも同じ問題（「1 バイトを 1 回の関数呼び出しに、安く・決定的に変換する」）に取り組んできた。本レッスンでは、そのパターンを EVM に当てはめる。
+## 問い
 
-> 📋 **読む前に想起。** 直前のレッスンからの3問。どれか曖昧なら「\`add\` をステップで組み立てる」やそのドリルに戻ってほしい — このレッスンは、答えが「自分の語彙」になっている前提で進む。
->
-> 1. Opcode 関数の型シグネチャ \`<IT: ITy, H: ?Sized>\` はコンパイル時に何をくれるか?
-> 2. \`popn_top!\` マクロは \`op2\` を \`&mut\` でバインドする。なぜ値ではなく参照なのか?
-> 3. \`add\` は \`wrapping_add\` を使う。\`saturating_add\` に置き換えて \`cargo test -p revm-interpreter\` を再実行したとき、どんなテスト失敗モードを観測したか?
+EVM がバイトコード中に \`0x01\` を見たとき、**どんな仕組みで** \`add\` が呼ばれると決まるか？ それがディスパッチ — 1 バイトを 1 関数呼び出しに変換、ホットパスのホットパス。**素朴な \`match\` から本物の 256 スロット const テーブルまで、どう積み上げるか？**
 
----
+## 原理（最小モデル）
 
-EVM がバイトコード中に \`0x01\` を見たとき、**どんな仕組みで** \`add\` が呼ばれると決まるのか? それが *ディスパッチ* — 1バイトを1つの関数呼び出しに変換する仕組みで、あらゆるトランザクションのあらゆる Opcode で繰り返される。ホットパスの中のホットパス。間違えればクライアントは競争力を失い、正しくやればカスタム Opcode は3行で書ける（次のレッスン）。
+- **本物の形.** \`const fn instruction_table_impl<WIRE: InterpreterTypes, H: Host>() -> InstructionTable<WIRE, H> { let mut table = [Instruction::unknown(); 256]; table[ADD as usize] = Instruction::new(arithmetic::add); ... }\`。
+- **5 ステップ積み上げ.** 256 アーム \`match\` → 配列ルックアップ → \`const fn\` → \`Instruction\` 構造体ラップ → 完成形。
+- **配列が 256 サイズの理由.** Opcode は 1 バイト = 256 通り、固定サイズ配列が空間網羅、各バイトは Opcode を持つか \`unknown\` にマップ。
+- **\`const fn\` の意味.** コンパイル時に評価、構築済みテーブルがバイナリのデータセクションに焼き込まれる、起動コストゼロ、実行時の \`TABLE\` は手書き配列リテラルと同一。
+- **\`Instruction\` 構造体ラップ.** ① 将来のメタデータ拡張（gas_cost、name 等）、② 型規律（シグネチャ不一致は代入行でコンパイルエラー）。
+- **\`Instruction::unknown()\` 初期化.** 未定義 Opcode が UB や静かな見逃しではなくクリーン \`Unknown\` 停止を生む。
 
-最も素朴なディスパッチから始めて、revm の本物の命令テーブルまで積み上げる。レッスンの終わりには、これの全ピースを自分で組み立てたことに:
+## 具体例
 
-\`\`\`rust
-const fn instruction_table_impl<WIRE: InterpreterTypes, H: Host>()
-    -> InstructionTable<WIRE, H>
-{
-    let mut table = [Instruction::unknown(); 256];
-    table[ADD as usize] = Instruction::new(arithmetic::add);
-    table[MUL as usize] = Instruction::new(arithmetic::mul);
-    // ...
-}
-\`\`\`
-
-> 📂 **別タブで \`bluealloy/revm\` を開いてほしい。** 以前と同じく、以下のすべての主張を実ファイルで検証しながら読む。
-
-## ステップ 0 — 素朴なディスパッチ
-
-何も考えずに書くと、こんな形:
+ステップ 0 — 素朴 \`match\`:
 
 \`\`\`rust
 fn dispatch(byte: u8, ctx: &mut Context) -> Result {
     match byte {
         0x01 => add(ctx),
         0x02 => mul(ctx),
-        0x03 => sub(ctx),
-        // ... アーム256個
+        // ... アーム 256 個
         _ => return Err(Unknown),
     }
 }
 \`\`\`
 
-256個の match アーム。コンパイラはジャンプテーブルに変換 *してくれるかもしれないし、しないかもしれない*。さらに悪いことに: Opcode を1つ追加・改名するたび、この巨大な match を編集する必要がある。
+問題: ① ジャンプテーブル変換が LLVM 任せ（保証なし）、② 巨大 \`match\` 編集 UX。
 
-> 🛑 **予測。** スクロールせずに: revm がこの素朴版を採用しない理由を2つ挙げてほしい。（1つはコンパイラ関連、1つは保守関連。）
-
-2つ:
-
-1. **ジャンプテーブル変換が保証されない。** 256アームの match は LLVM が *普通* 正しくやってくれるが、「普通」はコンセンサスを載せる契約にならない。O(1) ルックアップは保証付きで欲しい。
-2. **Opcode の変更コストが高い。** カスタム Opcode を加えるには、この巨大な match を編集することになる。「ディスパッチ match を編集してほしい」という UX のモジュラリティは、設計時点で壊れている。
-
-## ステップ 1 — 配列に関数ポインタを入れる
-
-match を、Opcode バイトでインデックスする配列に置き換える。各スロットは関数ポインタ:
+ステップ 1 — 関数ポインタ配列:
 
 \`\`\`rust
 let mut table: [fn(&mut Context) -> Result; 256] = [unknown; 256];
 table[0x01] = add;
 table[0x02] = mul;
-// ...
 fn dispatch(byte: u8, ctx: &mut Context) -> Result {
     (table[byte as usize])(ctx)
 }
 \`\`\`
 
-ディスパッチはこれで **インデックス参照1回** — match なし、コンパイラに作らせるジャンプテーブルなし。形が保証される。
+インデックス参照 1 回、O(1) 保証、ハッシュなし。Opcode は 1 バイト = 256 通り、固定サイズ配列がバイト空間網羅。
 
-> 🛑 **予測。** 配列のサイズがちょうど \`256\` で、\`usize::MAX\` でも定義済み Opcode 数でもないのはなぜか?
-
-EVM の Opcode は1バイト。値は 256 通りしかない。固定サイズ配列は空間を網羅する — 各バイトは Opcode を持つか \`unknown\` にマップされる、それだけ。
-
-## ステップ 2 — テーブルを \`const\` にする
-
-素朴版はテーブルを *実行時* に構築する — 起動時に代入を順次プッシュして、オプティマイザが引き上げてくれることを期待する形。もっと良い方法: **コンパイル時に構築する**。バイナリがロードされた瞬間にはテーブルが既に出来上がっている。
+ステップ 2 — テーブルを \`const\` にする:
 
 \`\`\`rust
 const fn build_table() -> [fn(&mut Context) -> Result; 256] {
@@ -739,15 +694,9 @@ const fn build_table() -> [fn(&mut Context) -> Result; 256] {
 const TABLE: [fn(&mut Context) -> Result; 256] = build_table();
 \`\`\`
 
-\`const fn\` は「この関数はコンパイル時に評価できる」を意味する。コンパイラは \`build_table()\` を *コンパイル中に* 実行し、結果の配列を凍結してバイナリのデータセクションに焼き込む。実行時に \`build_table\` は走らない — 焼き込まれた配列を読むだけ。
+\`const fn\` = コンパイル時に評価可能。コンパイラが \`build_table()\` をコンパイル中に実行、結果配列を凍結してバイナリのデータセクションに焼き込む。**実行時の \`TABLE\` は手書き配列リテラルと同一**、ディスパッチ準備の実行時コストはゼロ。
 
-> 🛑 **理解度チェック。** 「コンパイル時に走る」は単なる受け売り。自分の言葉で: もし \`fn\` だったら *正確に* 何が*1回* 走るのか? \`const fn\` はそれを *0回* にしている。具体的に。
-
-0回になるもの: テーブルのスロットを埋めるループ/シーケンス。実行時の \`TABLE\` は手書きの配列リテラル \`[unknown, add, mul, sub, ...; 256]\` と同一。**ディスパッチ準備の実行時コストはゼロ。** それが目的そのもの。
-
-## ステップ 3 — 関数ポインタを \`Instruction\` 構造体で包む
-
-裸の \`fn\` ポインタでも動きますが、柔軟性に欠ける — メタデータ（ガスコスト、Opcode 名など）を後から付けると、ディスパッチの型が壊れる。Revm は関数ポインタを構造体で包む:
+ステップ 3 — 関数ポインタを構造体で包む:
 
 \`\`\`rust
 #[derive(Debug)]
@@ -763,115 +712,126 @@ impl<W: InterpreterTypes, H: Host + ?Sized> Instruction<W, H> {
 }
 \`\`\`
 
-> 🛑 **予測。** \`fn_:\` 1フィールドだけの構造体を作る理由は? 裸の \`fn\` では得られない何を得る?
+2 利点: ① 将来のメタデータ拡張（\`gas_cost\` / \`name\` 等）をディスパッチシグネチャを変えずに追加、② **型規律** = \`Instruction::new(arithmetic::add)\` は裸の関数ポインタ代入より型安全、シグネチャ不一致は **代入の行** でコンパイルエラー（バグを実行時から構築時へ前倒し）。ジェネリクス \`W: InterpreterTypes, H: ?Sized\` は 2 レッスン前に積み上げた \`IT\` と \`H\` と同形。
 
-2つ:
-
-1. **将来のメタデータ。** \`gas_cost: u16\`、\`name: &'static str\` などをディスパッチのシグネチャを変えずに追加できる。
-2. **型の規律。** \`Instruction::new(arithmetic::add)\` は裸の関数ポインタ代入よりも型安全 — コンパイラが呼び出し時点で関数シグネチャがテーブルのスロット型と一致するか検証する。具体的には、裸の \`fn\` だと次が **コンパイルしてしまう**:
-
-   \`\`\`rust
-   table[ADD as usize] = some_fn_with_wrong_signature;
-   // 例: fn(InstructionContext, ExtraArg) -> SomethingElse
-   // 関数ポインタの型が一致すれば代入は通る — 実行時に呼んで初めて気付く
-   \`\`\`
-
-   \`Instruction::new(...)\` は明示的な型付きコンストラクタなので、シグネチャ不一致は **代入の行** でコンパイルエラーになる。バグを実行時から構築時へ前倒し。
-
-ジェネリクス \`W: InterpreterTypes, H: ?Sized\` は2レッスン前に積み上げた \`IT\` と \`H\` と完全に同じである。同じ理屈 — 1つのテーブルで全ての実行モードとホスト型に対応する。
-
-> 🛑 **理解度チェック。** \`Instruction\` がジェネリクス \`<W, H>\` を持つ理由は? \`Instruction { fn_: fn(InstructionContext) -> InstructionExecResult }\` のように具体型でハードコードするとなにが壊れるか?
-
-各実行モード（本番・トレース・Inspector サンドボックス）と各ホスト型ごとに別の \`Instruction\` 型が必要になる — つまり別のテーブルも別のディスパッチ関数も必要。\`Instruction<W, H>\` ならテーブル 1 つ・ディスパッチ 1 つで全モード × 全ホスト対応。前レッスンで \`add\` 自身がジェネリックである理由と同じ。
-
-## ステップ 4 — 完成形の命令テーブル
-
-> 🛑 **予測。** ステップ 1〜3 を組み合わせるとどんな関数が出来上がる? シグネチャだけスケッチしてみる — テーブルを返すだろう、それは \`const fn\` だろう、ジェネリクスは…?
-
-組み合わせると、[\`crates/interpreter/src/instructions.rs\`](https://github.com/bluealloy/revm/blob/main/crates/interpreter/src/instructions.rs) の本物のコード:
+ステップ 4 — 完成形:
 
 \`\`\`rust
-const fn instruction_table_impl<WIRE: InterpreterTypes, H: Host>()
-    -> InstructionTable<WIRE, H>
-{
+#[derive(Debug)]
+pub struct Instruction<W: InterpreterTypes, H: ?Sized> {
+    fn_: fn(InstructionContext<'_, H, W>) -> InstructionExecResult,
+}
+
+impl<W: InterpreterTypes, H: Host + ?Sized> Instruction<W, H> {
+    #[inline]
+    pub const fn new(fn_: fn(InstructionContext<'_, H, W>) -> InstructionExecResult) -> Self {
+        Self { fn_ }
+    }
+}
+\`\`\`
+
+ステップ 5 — 完成形:
+
+\`\`\`rust
+const fn instruction_table_impl<WIRE: InterpreterTypes, H: Host>() -> InstructionTable<WIRE, H> {
     use bytecode::opcode::*;
     let mut table = [Instruction::unknown(); 256];
 
     table[ADD as usize] = Instruction::new(arithmetic::add);
     table[MUL as usize] = Instruction::new(arithmetic::mul);
     table[SUB as usize] = Instruction::new(arithmetic::sub);
-    table[DIV as usize] = Instruction::new(arithmetic::div);
-    table[SDIV as usize] = Instruction::new(arithmetic::sdiv);
-    // ...
+    // ... 残り全 Opcode
     table[LT as usize] = Instruction::new(bitwise::lt);
-    table[GT as usize] = Instruction::new(bitwise::gt);
     // ...
 
     table
 }
 \`\`\`
 
-各ピースを自分で組み立てた:
-
-- **Opcode バイトでインデックスする配列**（ステップ 1）— O(1) ディスパッチを保証
-- **\`const fn\`**（ステップ 2）— テーブルがコンパイル時に焼き込まれ、起動コストはゼロ
-- **最初に全部 \`Instruction::unknown()\`** — 未定義のバイトでも安全に停止、定義済み Opcode だけが自分のスロットを上書き
-- **\`Instruction::new(fn)\`**（ステップ 3）— 型付きラッパ、将来のメタデータ拡張に開いている
-
-## Opcode バイトマップ（リファレンス）
-
-[\`bytecode::opcode\`](https://github.com/bluealloy/revm/blob/main/crates/bytecode/src/opcode.rs) より:
+Opcode バイトマップ（参考）:
 
 | バイト | Opcode |
 | :--- | :--- |
 | 0x01 | ADD |
 | 0x02 | MUL |
-| 0x03 | SUB |
-| 0x10 | LT |
-| 0x14 | EQ |
-| 0x16 | AND |
 | 0x60–0x7F | PUSH1–PUSH32 |
 | 0x80–0x8F | DUP1–DUP16 |
 | 0xA0–0xA4 | LOG0–LOG4 |
 | **0x0C–0x0F** | **未割当** ← カスタム Opcode のためのギャップ |
 | **0x21–0x2F** | **未割当** |
 
-> 🔍 **信用せず、検証する。** リポジトリで \`bytecode::opcode\` を開く。\`0x0C\` が **あなたが実際にフォークするバージョンで** 本当に未割当か確認。レッスン内の表はスナップショット、契約ではありません — ハードフォークごとに隙間は動く。
+## 失敗例（誤解）
 
-## 進む前の想起
+「\`match\` を LLVM が必ずジャンプテーブルに変換する」— **間違い**。「普通」やってくれるがコンセンサス契約に「普通」は載せられない、配列インデックス参照が **O(1) 保証**。
 
-スクロールせずに:
+「\`HashMap<u8, Instruction>\` で十分」— **間違い**。ハッシュ計算オーバーヘッド + アロケーション + キャッシュミス、配列が最速。
 
-1. なぜ \`match\` 文や \`HashMap<u8, fn>\` ではなく、関数ポインタの配列なのか?
-2. \`const fn\` は実行時に何を節約しているのか?
-3. なぜ全スロットがまず \`Instruction::unknown()\` で初期化され、定義済み Opcode が上書きする形なのか?
-4. なぜ裸の \`fn\` ではなく \`Instruction { fn_ }\` の構造体で包むのか?
+「裸の \`fn\` ポインタで十分、構造体ラップは飾り」— **間違い**。① 将来のメタデータ拡張、② **型規律** = シグネチャ不一致が代入行でコンパイルエラー、裸 \`fn\` だと実行時まで気付かない。
 
-次のレッスン: テーブルが完成したので、自前の Opcode を差し込む。
+## ステップで組み立てる
 
-> 🛣️ **もう一つの道 (Solana):** Solana のプログラムは、このようなテーブルでディスパッチしない — eBPF 派生の **レジスタ VM** である **SBPF** にコンパイルされる。オペランドはスタックではなくレジスタに置かれ、命令は JIT でネイティブコードに変換され、ディスパッチは関数ポインタテーブルではなく JIT が生成した制御フローを通る。EVM の「スタックマシン + テーブルディスパッチ」の選択は、バイトコードを小さく、インタプリタを移植しやすく、実行についての形式的推論を扱いやすく保つ。Solana の「レジスタ VM + JIT」の選択は素のスループットを優先し、コンパイル済みのプログラムをほぼネイティブ速度で実行できるようにする。どちらも有効な VM 設計の答えで、選択は「証明可能性 + 移植性」と「ランタイムのスループット」のトレードオフ。
+### Step 1: 素朴 \`match\` の 2 問題
+ジャンプテーブル保証なし + 巨大 \`match\` 編集 UX。
 
-> **🧭 ここまでで積み上げたもの:** **VM 層の命令ディスパッチ機構** が完成 — 256 スロット const テーブル + \`Instruction<W,H>\` ラッパで、コンパイル時に O(1) のディスパッチが保証される。CPython のバイトコードディスパッチャや JVM のインタプリタテーブルと同じ設計。次のレッスンでは、自分の opcode をこのテーブルに挿入する — ディスパッチ面そのものが拡張点になる。
+### Step 2: 関数ポインタ配列
+インデックス参照 1 回、O(1) 保証、256 サイズで空間網羅。
+
+### Step 3: \`const fn\` でコンパイル時構築
+バイナリのデータセクションに焼き込み、起動コストゼロ。
+
+### Step 4: \`Instruction { fn_ }\` ラップ
+将来メタデータ + 型規律（シグネチャ不一致を代入時に検出）。
+
+### Step 5: 完成形
+\`const fn instruction_table_impl<WIRE, H>()\` + \`unknown()\` 初期化 + 定義済み Opcode 上書き。
+
+## 答え合わせ
+
+- **配列を \`match\` や \`HashMap\` でなく使う理由**: ① **O(1) 保証**（ハッシュなし、LLVM のジャンプテーブル変換の匙加減なし）、② **256 サイズでバイト空間網羅**、各バイトは定義済み Opcode か \`unknown\` にマップ、形と最悪レイテンシ両方が契約の一部。
+- **\`const fn\` の節約**: 実行時にテーブル構築コードは **走らない** = スロットを埋めるシーケンスがコンパイル時に解決、バイナリのデータセクションに焼き込まれた配列リテラルを読むだけ。ディスパッチ準備の起動コストゼロ。
+- **\`unknown()\` 初期化の理由**: 未定義バイトがどれも UB や静かな見逃しではなく **クリーン \`Unknown\` 停止** を生む。\`unknown()\` は安全なデフォルト、定義済み Opcode が上書き、意図的な安全選択。
+
+## 合格基準
+
+- 完成形の \`const fn instruction_table_impl<WIRE, H>()\` 4 構成要素を即書ける。
+- 配列が 256 サイズである理由（バイト空間網羅 + O(1) 保証）を即答できる。
+- \`const fn\` の実行時節約を 1 文で説明できる。
+- \`Instruction\` 構造体ラップの 2 利点（メタデータ + 型規律）を言える。
+- \`unknown()\` 初期化の安全選択理由を即答できる。
+
+## まとめ（3行）
+
+- 本物の命令テーブル = 256 スロット \`[Instruction; 256]\` 配列 + \`const fn\` でバイナリに焼き込み + \`unknown()\` 初期化 + 定義済み Opcode 上書き。
+- 5 ステップ積み上げ（\`match\` → 配列 → \`const fn\` → \`Instruction\` ラップ → 完成形）、各ステップに O(1) 保証 / 起動コストゼロ / 型規律の明確な動機。
+- ジェネリクス \`<WIRE, H>\` は前 2 レッスンの \`IT\` と \`H\` と同形 = 1 テーブルで全実行モード × 全ホスト型対応、次レッスンで自前 Opcode を配線。
 `,
                 },
                 {
-                  title: 'カスタム Opcode を配線する — そして失敗モード',
+                  title: 'レッスン6 — カスタム Opcode を配線する — そして失敗モード',
                   slug: 'custom-opcodes-wiring-ja',
                   type: 'CONTENT',
                   sortOrder: 6,
                   duration: 10,
                   xpReward: 25,
-                  content: `# カスタム Opcode を配線する — そして失敗モード
+                  content: `# レッスン6 — カスタム Opcode を配線する — そして失敗モード
 
-Hyperliquid は自前の EVM 上で perp を動かしていて、オーダーブック専用 Opcode をいくつか追加している — 200命令の Solidity 関数の代わりに、1バイトでネイティブコードへ直接ディスパッチ。**これがカスタム Opcode の対価: 自前チェーンでの 100 倍ショートカット。** 配線は *3行*。ショートカットは本物。それでも大半のチェーンが 50 個も出さない理由は、オプションではない3つの注意点。
+## 問い
 
-revm の命令テーブル — コンパイル時に焼き込まれた256スロットの \`Instruction\` 構造体配列 — は組み立てた。さあ、自前の Opcode を差し込む。
+Hyperliquid は perp 用オーダーブック専用 Opcode を追加 — 200 命令の Solidity 関数が 1 バイトのネイティブディスパッチに。**配線は 3 行、ショートカットは 100 倍ガス削減。それでも大半のチェーンが 50 個出さない理由は？ オプションではない 3 注意点。**
 
-このレッスンは半分メカニクス（短い）、もう半分は注意点（短くない）。メカニクスは付箋1枚で済む。注意点は「Hyperliquid が Revm を選んだのはモジュラーだから」という売り文句が *無料ランチではない* 理由。
+## 原理（最小モデル）
 
-## メカニクス — 3行
+- **メカニクス 3 行.** 未割当バイト選択 + \`standard_table\` をコピー + 1 スロット上書き = 配線完了、関数は前レッスンの \`add\` と同形。
+- **複利的勝ち 2 つ.** ① 内部ステップごとのインタープリターループ オーバーヘッドなし、② Rust 側で SIMD / FFI / 事前計算テーブル利用可能。
+- **実利の桁.** 複雑オプションプライサ = Solidity 500K ガス → カスタム Opcode 5K ガス（100 倍）。
+- **注意点 1: コンセンサス互換性.** 標準 EVM から外れる → メインネットとブロック共有不可、自前チェーン限定。
+- **注意点 2: ガス価格.** 強力ショートカットには適切ガス、誤価格 = DoS ベクター、方法論 = 最悪ケースベンチ + ガス予算変換 + 安全マージン 2-3 倍。
+- **注意点 3: 検証性 (ZK).** 新 Opcode の zkVM 統合 = Opcode あたり数週間の追加作業、暗号演算はさらに重い。
+- **正しい数.** 各 Opcode はコンセンサスリスク + 価格リスク + 検証コスト = 大半のチェーンの正解は **0-3 個**。
 
-未割当バイトを選ぶ。関数を差し込む:
+## 具体例
+
+メカニクス:
 
 \`\`\`rust
 const HYPER_FAST_SWAP: u8 = 0x0C;
@@ -880,7 +840,7 @@ let mut table = standard_table();
 table[HYPER_FAST_SWAP as usize] = Instruction::new(my_hyper_fast_swap);
 \`\`\`
 
-\`my_hyper_fast_swap\` は2レッスン前の \`add\` と全く同じ形:
+関数は \`add\` と同形:
 
 \`\`\`rust
 pub fn my_hyper_fast_swap<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
@@ -890,7 +850,7 @@ pub fn my_hyper_fast_swap<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Resul
 }
 \`\`\`
 
-**それで全部。** 標準テーブルを取って、コピーして、1スロットを上書き。これでディスパッチループはバイト \`0x0C\` をあなたの関数にルーティングする。
+フロー:
 
 \`\`\`mermaid
 flowchart LR
@@ -901,161 +861,148 @@ flowchart LR
     Custom --> Result[結果がスタックへ]
 \`\`\`
 
-## 実利
+ガス価格方法論 3 文:
+1. **最悪ケースをベンチ** — 病的入力（最大 pool ID、最大 amount）で実時間測定
+2. **ガス予算に変換** — スループット目標を最悪時間で割る
+3. **安全マージン 2-3 倍** — 分散・将来のハードウェア変化・あなたのベンチ vs 攻撃者のベンチギャップ
 
-複利的に効く2つの勝ち:
+## 失敗例（誤解）
 
-1. **内部ステップごとのインタープリターループのオーバーヘッドがない。** 複雑な Solidity 関数が 200 EVM 命令だとしても、カスタム Opcode 1つなら 1 ディスパッチ。
-2. **Rust 側で SIMD、FFI、事前計算済みテーブルが使える。** バイトコードからは触れない武器。
+「Revm がモジュラーだからカスタム Opcode は無料」— **間違い**。各 Opcode = コンセンサスリスク + 価格リスク + 検証コスト、大半のチェーンの正解は **0-3 個**。
 
-複雑なオプションプライサーが **Solidity の 500K ガス → カスタム Opcode 1つの 5K ガス** に落ちる。これが Hyperliquid が perp 専用 Opcode を追加した理由 — 決済レイヤーのチェーン（Tempo 等）が安定通貨オペレーション向けに探索しているのも同種の圧縮。
+「自前チェーンならコンセンサス互換性を無視できる」— **そのとおりだが代償**。メインネットとブロック共有不可 = go-ethereum とピア不可能、\`0x0C\` を触る最初の tx で state-root 不一致 → ピア切断。
 
-> 🛑 **失敗モードを予測。** あなたは明日カスタム Opcode をリリースする。**雑に扱った場合に発生する問題を3つ** リストアップ。リストを書き留めて、下の注意点と比較。
+「ガス価格は試行錯誤で決められる」— **致命的**。誤価格 = DoS ベクター、攻撃者が病的入力を低ガスで実行 = ノードリソース枯渇。**3 文の方法論なしにリリースしない**。
 
-## 注意点 — オプションではない
+## ステップで組み立てる
 
-### 1. コンセンサス互換性
+### Step 1: 未割当バイト選択
+\`crates/interpreter/src/instructions.rs\` で代入の左辺に出現しないバイト = 未割当。
 
-標準 EVM から外れると、**他の Ethereum クライアントとブロックを共有できなくなる。** **自前のチェーンでのみ** 有効。この Opcode 入りでメインネットからフォークして go-ethereum とピアしたら、\`0x0C\` を触る最初のトランザクションで即切断される。
+### Step 2: 関数を \`add\` 同形で書く
+\`<IT: ITy, H: ?Sized>\` + \`popn_top!\` + その場書き込み。
 
-> 🔍 **走らせるとどうなるかを推論。** 自分のカスタム Opcode 入りの Reth ノードを起動し、素の geth を同じチェーンヘッドに向けたら: geth はいつ切断する? 答え: \`0x0C\` を含むブロックを実行しようとした時点。geth は \`0x0C\` を INVALID として実行、あなたの Reth は swap として実行 → ブロックの state-root 検証が失敗。「ブロックを共有できない」は読み流すのではなく、*この具体例で腑に落とす* べき主張である。
+### Step 3: \`standard_table\` をコピーして 1 スロット上書き
+\`table[BYTE as usize] = Instruction::new(my_fn);\` = 配線完了。
 
-### 2. ガス価格はオプションではない
+### Step 4: 注意点 1 (コンセンサス) を理解
+自前チェーン限定、メインネット非互換、ブロック共有不可。
 
-強力なショートカットには適切なガスコストが必要 — でなければ DoS ベクター。
+### Step 5: 注意点 2 (ガス価格) の 3 文方法論
+最悪ケースベンチ + ガス予算変換 + 安全マージン 2-3 倍。
 
-> 🛑 **質問（書き留めて）:** \`my_hyper_fast_swap\` のガス価格をどう導出するか? 3 文で方法論を書けないなら、この Opcode を安全にリリースできません。
+### Step 6: 注意点 3 (検証性) で ZK ロードマップ確認
+zkVM 統合 = Opcode あたり数週間、暗号演算はさらに重い。
 
-擁護できる方法論:
+## 答え合わせ
 
-1. **最悪ケースをベンチマーク。** 病的入力（最大サイズ pool ID、最大 amount）に対して Opcode を走らせる。実時間を測る。
-2. **ガス予算に変換。** スループット目標（例: 純 Opcode 負荷でブロック1秒）を選ぶ。予算を最悪時間で割る。
-3. **安全マージンを足す。** 分散・将来のハードウェア変化・*あなたのベンチ* と *攻撃者のベンチ* のギャップ — 2〜3倍。
+- **メカニクスが 3 行で済む構造的理由**: 命令テーブルが **既にディスパッチを抽象化済み**（前レッスン）= 1 スロット上書きで配線完了、関数自体は \`add\` と同形（\`<IT: ITy, H: ?Sized>\` + \`popn_top!\` + その場書き込み）。テーブル設計の合成性が「ディスパッチに触れずに Opcode 追加」を可能にする。
+- **100 倍ガス削減の根拠**: 複雑 Solidity 関数 200 EVM 命令 = 200 ディスパッチ + 200 \`gas!\` + スタック移動、カスタム Opcode 1 = 1 ディスパッチ + Rust ネイティブコード（SIMD / FFI / 事前計算テーブル可）。Solidity 500K ガス → カスタム 5K ガス。
+- **大半のチェーンの正解が 0-3 個の理由**: 各 Opcode = **3 コスト**（コンセンサスリスク = 実装バグごとにフォーク、価格リスク = 誤価格で DoS、検証コスト = zkVM 統合に数週間）。利益（100 倍ガス削減）と費用（数週間 × 3 リスク領域）のバランスで、ホットパスに集中する 0-3 個が大半のチェーンの最適。
 
-3 文の答えがこの形でなかったら、あなたの Opcode は DoS 待ちである。
+## 合格基準
 
-### 3. 検証性 — ZK を載せるなら
+- メカニクス 3 行（バイト選択 + テーブルコピー + スロット上書き）を即書ける。
+- 関数が \`add\` 同形である理由を即答できる。
+- 注意点 3 つ（コンセンサス互換性 + ガス価格 + 検証性）を即答できる。
+- ガス価格 3 文方法論（最悪ケースベンチ + 予算変換 + 安全マージン）を即答できる。
+- 大半のチェーンの正解が 0-3 個の理由を 1 文で説明できる。
 
-チェーンが ZK 証明を欲しがるなら（L2 決済を狙うアプリチェーンには現実の懸念）、新しい Opcode を zkVM 内で証明可能にする必要がある。**Opcode あたり数週間の追加作業になる可能性。**
+## まとめ（3行）
 
-これが「Revm を選んだ理由はモジュラーだから」が「カスタム Opcode を 50 個出す」に翻訳されない理由である。各 Opcode は次を抱えます:
-
-- **コンセンサスリスク**（実装バグごとにフォークする）
-- **価格リスク**（誤価格なら DoS ベクター）
-- **検証コスト**（証明が欲しいなら zkVM 統合に数週間）
-
-ほとんどのチェーンにとって正しいカスタム Opcode 数は **0〜3個**。Hyperliquid は少数を追加。これを探索する本番アプリチェーンの大半は、同様に小さなフットプリントに収まる。
-
-## クイズ前の想起
-
-スクロールせずに:
-
-1. カスタム Opcode を差し込むメカニクスは **3行。** 記憶からスケッチしてほしい。
-2. 「モジュラー」の売り文句が隠している3つの注意点は何か?
-3. 複雑なロジックをカスタム Opcode にコンパイルするとガスはおおよそ何桁節約される? なぜ?
-4. ペアリング親和的な楕円曲線演算をするカスタム Opcode を出したい場合、**最も重い注意点はどれか?**
-
-次: 進行をゲートするクイズ、それから本物のフォークで配線するドリル。
+- カスタム Opcode 配線 = 3 行（未割当バイト + テーブルコピー + スロット上書き）、関数は \`add\` 同形（\`<IT: ITy, H: ?Sized>\` + \`popn_top!\`）、Solidity 500K → カスタム 5K ガス（100 倍削減）。
+- 注意点 3 = コンセンサス互換性（自前チェーン限定）+ ガス価格（DoS 防止の方法論必須）+ 検証性（zkVM 統合 Opcode あたり数週間）。
+- 大半のチェーンの正解 = 0-3 個、各 Opcode の 3 コスト（リスク + 価格 + 検証）がホットパスに集中させる、次レッスンでクイズ + ドリルでフォーク出荷。
 `,
                 },
                 {
-                  title: 'クイズ: テーブルのメカニクスは身についた?',
+                  title: 'クイズ — 命令テーブル + カスタム Opcode',
                   slug: 'custom-opcodes-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 7,
                   duration: 4,
                   xpReward: 25,
-                  content: `# クイズ: テーブルのメカニクスは身についた?
+                  content: `# クイズ — 命令テーブル + カスタム Opcode
 
-命令テーブルと配線メカニクスをカバーする4問。前回と同じルール: **クイズはうなずきで通せない。** これらはゲートで、飾りではありません。
+256 スロット const テーブル設計、\`const fn\` のコンパイル時評価、\`unknown()\` 初期化の安全選択、カスタム Opcode 3 注意点（特に暗号演算で zkVM 検証性が支配的）を確認する。
 
-2問以上落としたら、ドリルへ進む前に「命令テーブルをステップで組み立てる」を読み直してほしい。`,
+組み立てと配線にまたがる設計判断を問う 4 問。**クイズはうなずきで通せない。** 2 問以上落としたら、ドリルへ進む前に「命令テーブルをステップで組み立てる」に戻ること。
+`,
                   quizQuestions: [
                     {
-                      question: "命令テーブルが固定サイズ `[Instruction; 256]` 配列で、`HashMap<u8, Instruction>` でも `match` 文でもないのはなぜですか?",
-                      options: [
+                      "question": "命令テーブルが固定サイズ `[Instruction; 256]` 配列で、`HashMap<u8, Instruction>` でも `match` 文でもないのはなぜですか?",
+                      "options": [
                         "HashMap の方が、配列より見つからない Opcode をエレガントに扱える。",
                         "コンパイラは 256 アームの match を、インデックス配列と同等に最適化する — 等価。",
                         "インデックス配列はハッシュ計算もコンパイラ依存のジャンプテーブル変換も伴わずに O(1) ディスパッチを保証し、256スロットでバイト空間を網羅する。",
-                        "HashMap はコンパイル時に unsafe。",
+                        "HashMap はコンパイル時に unsafe。"
                       ],
-                      correctIndex: 2,
-                      explanation: "Opcode バイトは 1 バイト = 256 通り。固定配列はその空間を網羅。インデックス参照は O(1) を保証 — ハッシュなし、`match` がジャンプテーブルになるかどうかというコンパイラの匙加減もなし。各バイトは定義済み Opcode を持つか `unknown` にマップされる。形と最悪レイテンシの両方が契約の一部である。",
+                      "correctIndex": 2,
+                      "explanation": "Opcode バイトは 1 バイト = 256 通り。固定配列はその空間を網羅。インデックス参照は O(1) を保証 — ハッシュなし、`match` がジャンプテーブルになるかどうかというコンパイラの匙加減もなし。各バイトは定義済み Opcode を持つか `unknown` にマップされる。形と最悪レイテンシの両方が契約の一部である。"
                     },
                     {
-                      question: "`instruction_table_impl()` に対して `const fn` は何をしますか?",
-                      options: [
+                      "question": "`instruction_table_impl()` に対して `const fn` は何をしますか?",
+                      "options": [
                         "全呼び出し箇所で関数をインライン化することを強制する。",
                         "コンパイラが関数をコンパイル時に評価し、構築済みテーブルをバイナリに直接焼き込み、起動時にセットアップが走らないようにする。",
                         "関数をスレッドセーフとマークする。",
-                        "結果のテーブルの実行時改変を無効化する。",
+                        "結果のテーブルの実行時改変を無効化する。"
                       ],
-                      correctIndex: 1,
-                      explanation: "`const fn` は「この関数はコンパイル時に評価できる」を意味する。テーブル構築コードはコンパイル中に走り、実行時の `TABLE` は手書きの配列リテラルと同一である。ディスパッチ準備の起動コストがゼロ — それがここで `const fn` を使う狙いそのものである。",
+                      "correctIndex": 1,
+                      "explanation": "`const fn` は「この関数はコンパイル時に評価できる」を意味する。テーブル構築コードはコンパイル中に走り、実行時の `TABLE` は手書きの配列リテラルと同一である。ディスパッチ準備の起動コストがゼロ — それがここで `const fn` を使う狙いそのものである。"
                     },
                     {
-                      question: "なぜ全スロットがまず `Instruction::unknown()` で初期化され、その後で定義済み Opcode が自分のスロットを上書きするのですか?",
-                      options: [
+                      "question": "なぜ全スロットがまず `Instruction::unknown()` で初期化され、その後で定義済み Opcode が自分のスロットを上書きするのですか?",
+                      "options": [
                         "デバッグヒント — `unknown` は単なるプレースホルダ名。",
                         "バイト 0x00–0xFF が全部「安全に停止する」ハンドラにマップされ、未定義 Opcode が静かに飛ばされたりメモリ unsafety を起こしたりしないようにするため。",
                         "Rust の配列初期化構文を満たす唯一の方法だから。",
-                        "後で最適化で消される事前確保ステップ。",
+                        "後で最適化で消される事前確保ステップ。"
                       ],
-                      correctIndex: 1,
-                      explanation: "理由は2つ複合していますが、安全性が支配的: 未定義のバイトはどれも UB や静かな見逃しではなく、クリーンな `Unknown` 停止を生むべきである。`Instruction::unknown()` が安全なデフォルト、定義済み Opcode が上書きする。Rust の配列初期化は確かに全スロット埋める必要はあるが、`MaybeUninit` で先送りもできる — `unknown()` を使うのは意図的な安全選択である。",
+                      "correctIndex": 1,
+                      "explanation": "理由は2つ複合していますが、安全性が支配的: 未定義のバイトはどれも UB や静かな見逃しではなく、クリーンな `Unknown` 停止を生むべきである。`Instruction::unknown()` が安全なデフォルト、定義済み Opcode が上書きする。Rust の配列初期化は確かに全スロット埋める必要はあるが、`MaybeUninit` で先送りもできる — `unknown()` を使うのは意図的な安全選択である。"
                     },
                     {
-                      question: "高コストな暗号演算（例: ペアリング親和的な楕円曲線）を行うカスタム Opcode を出したい。実務上、*最も重い* 注意点はどれですか?",
-                      options: [
+                      "question": "高コストな暗号演算（例: ペアリング親和的な楕円曲線）を行うカスタム Opcode を出したい。実務上、*最も重い* 注意点はどれですか?",
+                      "options": [
                         "コンセンサス互換性 — メインネットとブロックを共有できない。",
                         "ガス価格 — 誤価格なら DoS ベクター。",
                         "zkVM 内での検証性 — 新しい Opcode は zkVM 統合に数週間かかる可能性があり、暗号演算は制約を書くのが特に難しい。",
-                        "Rust の型システムの限界。",
+                        "Rust の型システムの限界。"
                       ],
-                      correctIndex: 2,
-                      explanation: "3つの注意点は全て当てはまりますが、暗号演算では検証性が決定打である。ZK 親和的でない暗号（ペアリング、特定のハッシュ関数）は Opcode あたり数週間の zkVM 仕様作業を要する可能性があります — ガス価格設計やコンセンサス分割の受容より格段に重い。本番チェーンのカスタム Opcode 数が少ないのは、この検証コストに部分的に支配されている。",
-                    },
+                      "correctIndex": 2,
+                      "explanation": "3つの注意点は全て当てはまりますが、暗号演算では検証性が決定打である。ZK 親和的でない暗号（ペアリング、特定のハッシュ関数）は Opcode あたり数週間の zkVM 仕様作業を要する可能性があります — ガス価格設計やコンセンサス分割の受容より格段に重い。本番チェーンのカスタム Opcode 数が少ないのは、この検証コストに部分的に支配されている。"
+                    }
                   ],
                 },
                 {
-                  title: 'ドリル: フォークを出荷する',
+                  title: 'レッスン8 — ドリル: フォークを出荷する',
                   slug: 'custom-opcodes-drill-ja',
                   type: 'CONTENT',
                   sortOrder: 8,
                   duration: 12,
                   xpReward: 25,
-                  content: `# ドリル: フォークを出荷する
+                  content: `# レッスン8 — ドリル: フォークを出荷する
 
-3行のメカニクスと3つの注意点は読んだ。**今度は自分で配線する。** このドリルは「カスタム Opcode について読んだ」から「本物の revm チェックアウトに自分で配線して実行を見た」までを連れて行く。3 行 + 周辺ハーネス — 別ウィンドウで \`cargo\` を立ち上げて。
+## 問い
 
-## セットアップ
+3 行のメカニクスと 3 注意点は読んだ。**自分で配線する — 別ウィンドウで \`cargo\` を立ち上げて、5 ドリル。何を観測するか？**
 
-前のドリルで revm チェックアウトは既にあるはず。なければ:
+## 原理（最小モデル）
 
-\`\`\`bash
-git clone https://github.com/bluealloy/revm
-cd revm
-cargo build  # 進む前にクリーンビルドを確認
-\`\`\`
+- **セットアップ.** \`git clone https://github.com/bluealloy/revm && cd revm && cargo build\`。
+- **5 ドリル.** ① 未割当バイト探索（レッスンを信用しない）、② 自前 Opcode 定義（\`DOUBLE_TOP\` = 1-in/1-out）、③ テーブルに配線、④ バイトコード実行、⑤ \`eprintln!\` で観察。
+- **\`popn_top!([], op, ...)\` パターン.** 空 \`[]\` = pop なし、\`op\` だけがバインドされ現在スタックトップへの \`&mut\`、1-in/1-out/その場書き換え Opcode の表現。
+- **\`DOUBLE_TOP\` 実装.** \`*op = (*op).wrapping_mul(U256::from(2));\`、1 命令で「トップを 2 倍」。
+- **テスト用バイトコード.** \`PUSH1 0x05 DOUBLE_TOP STOP\` = \`60 05 0C 00\`、5 push → 2 倍 → スタック \`10\` で終わる。
+- **\`eprintln!\` 計装.** 1 行のバイトコード \`0x0C\` が 3 行 Rust 関数を起動する因果鎖を物理観察。
 
-\`cargo build\` が失敗したら、ドリル前に直してほしい。
+## 具体例
 
-## ドリル 1 — 未割当 Opcode バイトを探す（レッスンを信用しない）
-
-レッスンは \`0x0C–0x0F\` を未割当として示した。**あなたが実際にフォークするバージョンの実ファイルで** 検証してほしい。
-
-> 🔍 **\`crates/interpreter/src/instructions.rs\` を開く。** テーブル構築関数をスキャン。代入の左辺に *出現しない* バイトはどれも未割当。
-
-> 🛑 **質問（スクロール前に書き留めて）:** あなたが見つけた最も意外な未割当バイトは何か?（割当済みの隣接バイトと並んでいるもの — そのギャップは「検討されて却下された提案」や「未来の EIP のための予約」を物語る。）
-
-唯一の正解はない — でも答えが「レッスンの表をそのまま信用した」だったら、ドリルをスキップしました。ソースで検証してほしい。
-
-## ドリル 2 — 自分の Opcode を定義する
-
-未割当バイトを1つ選ぶ。定数を定義。\`add\` と同じ形 — ただしスタックプロファイルは **1-in / 1-out / その場書き換え**（「トップを2倍にする」Opcode）の関数を実装:
+ドリル 2 — \`DOUBLE_TOP\` 実装:
 
 \`\`\`rust
-const DOUBLE_TOP: u8 = 0x0C;  // 自分が選んだバイト
+const DOUBLE_TOP: u8 = 0x0C;  // 自分が選んだ未割当バイト
 
 pub fn double_top<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
     popn_top!([], op, context.interpreter);
@@ -1064,24 +1011,14 @@ pub fn double_top<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 }
 \`\`\`
 
-> 🛑 **質問:** なぜ \`popn_top!([op1], op2, ...)\` ではなく \`popn_top!([], op, ...)\` なのか? 構造的な違いは何で、それはこの Opcode のスタックプロファイルについて何を語っているか?
-
-空の \`[]\` は **pop する値がない** を意味する — \`op\` だけがバインドされ、現在のスタックトップへの \`&mut\`。これが 1-in / 1-out / その場書き換え型 Opcode（\`add\` の 2-in / 1-out との違い）の表現方法である。マクロのアリティマッチャがここで効いてくる — 同じマクロ、異なるスタックプロファイル、関数を二重に書く必要なし。
-
-## ドリル 3 — テーブルに配線する
-
-標準テーブルのコピーに追加:
+ドリル 3 — テーブル配線:
 
 \`\`\`rust
 let mut table = standard_table();
 table[DOUBLE_TOP as usize] = Instruction::new(double_top);
 \`\`\`
 
-これで配線完了。ディスパッチループはバイト \`0x0C\` を見たとき \`double_top\` を呼ぶ。
-
-## ドリル 4 — その Opcode を使うバイトコードを実行
-
-値をプッシュし、Opcode を実行し、停止するバイトコードをエンコード:
+ドリル 4 — バイトコード:
 
 \`\`\`
 PUSH1 0x05  // 5 をスタックに push — バイト: 0x60 0x05
@@ -1089,101 +1026,106 @@ DOUBLE_TOP  // カスタム Opcode — バイト: 0x0C
 STOP        // 0x00
 \`\`\`
 
-16進: \`60 05 0C 00\`。
+16 進: \`60 05 0C 00\`、最終スタック \`10\`（= 5 × 2）。
 
-このバイトコードを、テーブル付きのフォーク済み revm で実行。スタックは \`10\`（= 5 × 2）で終わるはずである。
-
-> 🔧 **配線はドリルとして残する。** revm の既存テストハーネス \`crates/interpreter/tests/\` を使うか、\`examples/\` にワンショットバイナリを書く。要点は: EVM コンテキストを構築し、改変したテーブルを差し込み、バイトコードを実行し、最終スタック値をアサートすること。
-
-スタックに \`10\` が出たら **フォークを出荷したことになる。** あなたのクライアントは今、メインネットと非互換なチェーンを実行している — そして「読んだ」と「やった」の差を体で感じた。
-
-## ドリル 5 — Opcode を計装して呼び出しを観測
-
-\`double_top\` 内に \`eprintln!\` を入れて、ディスパッチが本当にあなたの Rust 関数を呼んでいることを *見る*:
+ドリル 5 — 計装:
 
 \`\`\`rust
 pub fn double_top<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
     popn_top!([], op, context.interpreter);
     let before = *op;
     *op = (*op).wrapping_mul(U256::from(2));
-    eprintln!("DOUBLE_TOP: {:#x} -> {:#x}", before, *op);  // ← 追加
+    eprintln!("DOUBLE_TOP: {:#x} -> {:#x}", before, *op);
     Ok(())
 }
 \`\`\`
 
-\`cargo run\`（または \`cargo test -- --nocapture\`）で実行。バイトコード \`60 05 0C 00\` を流すと、ターミナルに **正確に 1 回** のログが出るはず: \`DOUBLE_TOP: 0x5 -> 0xa\`。これが、命令テーブルディスパッチがあなたが書いた Rust 関数に到達した瞬間の証跡。**1 行のバイトコード \`0x0C\` が、3 行の Rust 関数を起動した** — その因果の鎖を物理的に観測した。
+\`cargo run\` で \`DOUBLE_TOP: 0x5 -> 0xa\` 1 行 = ディスパッチがあなたの Rust 関数に到達した瞬間の証跡。
 
-ループや条件分岐入りのバイトコード（例: \`PUSH1 3 PUSH1 1 LT JUMPI ... DOUBLE_TOP\`）に変えると、\`eprintln!\` 行が分岐の挙動どおりに出る/出ないが見える。これがディスパッチの正味の挙動。
+## 失敗例（誤解）
 
-## レッスン終了の想起
+「\`popn_top!([op1], op2, ...)\` と \`popn_top!([], op, ...)\` は同じ」— **間違い**。空 \`[]\` = pop なし、\`op\` だけが現在スタックトップへの \`&mut\` = **1-in/1-out/その場書き換え** Opcode の表現（\`add\` は 2-in/1-out）。マクロのアリティマッチャがここで効く。
 
-スクロールせずに、自分の言葉で:
+「メインネットに出荷しても問題ない」— **致命的**。\`0x0C\` を含むブロックを go-ethereum が実行しようとした時点で state-root 検証失敗 → ピア切断、メインネットからフォーク。**自前チェーン限定**。
 
-1. \`popn_top!([op1], op2, ...)\` と \`popn_top!([], op, ...)\` のメカニクス的な違いは何か? 各々の Opcode のスタックプロファイルについて何を語っているか?
-2. あなたの \`double_top\` のスタックプロファイルは何か?（X-in、Y-out、副作用?）
-3. \`double_top\` をメインネットに出荷したい場合、*最初に* 壊れるのは何か — そしてどの瞬間に?
+「\`cargo test\` で出力が見える」— **不十分**。\`-- --nocapture\` フラグが必要、\`cargo\` がデフォルトで \`eprintln!\` 出力を抑制する。
 
-どれか曖昧なら、ここで先に進まないこと。ドリルをやり直すか、読み直し。
+## ステップで組み立てる
 
-このドリルの後、あなたは本当にカスタム Opcode をコードに配線しました。**より重要なのは、コストを身をもって理解したこと。** 次: revm がどう状態を取るか — \`Database\` トレイト。`,
+### Step 1: 未割当バイト探索
+\`crates/interpreter/src/instructions.rs\` でテーブル構築関数の代入左辺に **出現しない** バイトを探す（\`0x0C-0x0F\` 等）。
+
+### Step 2: \`DOUBLE_TOP\` を定義
+\`<IT: ITy, H: ?Sized>\` + \`popn_top!([], op, ...)\` + \`wrapping_mul(U256::from(2))\`。
+
+### Step 3: テーブルに配線
+\`standard_table()\` をコピー + \`table[DOUBLE_TOP as usize] = Instruction::new(double_top);\`。
+
+### Step 4: テストバイトコード実行
+\`60 05 0C 00\` 実行 → スタック \`10\` 確認。
+
+### Step 5: \`eprintln!\` で計装
+\`cargo run\` or \`cargo test -- --nocapture\` で因果鎖（バイト 0x0C → Rust 関数）を物理観察。
+
+## 答え合わせ
+
+- **\`popn_top!([], op, ...)\` のメカニクス**: 空 \`[]\` = **pop する値なし**、\`op\` だけが現在スタックトップへの \`&mut\`。1-in/1-out/その場書き換え Opcode（\`add\` の 2-in/1-out との違い）の表現方法。マクロのアリティマッチャが「同じマクロ、異なるスタックプロファイル、関数を二重に書く必要なし」を実現。
+- **\`DOUBLE_TOP\` のスタックプロファイル**: **1-in (現トップ) / 1-out (新トップ) / 副作用なし**、その場書き換え。\`add\` （2-in/1-out）よりさらに単純、\`mul\` / \`sub\` 等の 2-in 二項より純粋。
+- **メインネットに出荷した瞬間に壊れるもの**: **\`0x0C\` を含む最初のブロック**で他クライアントと state-root 不一致 → ピア切断。go-ethereum は \`0x0C\` を INVALID として実行、あなたの Reth は swap として実行 → ブロックの state-root 検証失敗 → メインネットからフォーク。
+
+## 合格基準
+
+- \`popn_top!([], op, ...)\` と \`popn_top!([op1], op2, ...)\` の構造的違いを即答できる。
+- \`DOUBLE_TOP\` のスタックプロファイル（1-in/1-out/副作用なし）を即答できる。
+- メインネット出荷時に最初に壊れるもの（\`0x0C\` 含むブロックの state-root 不一致）を即答できる。
+- \`cargo test -- --nocapture\` フラグの役割を言える。
+- 5 ドリルを通じて「読んだ」から「やった」への遷移を実体験できる。
+
+## まとめ（3行）
+
+- 5 ドリル = 未割当バイト探索 + \`DOUBLE_TOP\` 実装（1-in/1-out）+ テーブル配線 + バイトコード \`60 05 0C 00\` 実行 + \`eprintln!\` 計装。
+- \`popn_top!([], op, ...)\` 空ブラケット = pop なし、\`op\` だけが現スタックトップ \`&mut\`、1-in/1-out/その場書き換えの表現。
+- スタック \`10\` 確認 → **フォーク出荷完了**、メインネット非互換チェーンを実行、コストを身をもって理解、次は \`Database\` トレイトで状態供給。
+`,
                 },
                 {
-                  title: '\`Database\` トレイトを組み立てる — 読み API',
+                  title: 'レッスン9 — `Database` トレイトを組み立てる — 読み API',
                   slug: 'revm-database-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 9,
                   duration: 10,
                   xpReward: 25,
-                  content: `# \`Database\` トレイトを組み立てる — 読み API
+                  content: `# レッスン9 — \`Database\` トレイトを組み立てる — 読み API
 
-> 🧭 **systems engineering スタックでの位置:** **VM / コンパイラ層と DB 層の境目**。あらゆる組み込み計算エンジンが直面する同じ問題 — 「エンジンが『この値を渡してくれ』と問い合わせるとき、特定のストレージ実装と結合させない」。JDBC、ODBC、LLVM の \`MemoryBuffer\` API、SQLite の VFS 層 — いずれも同種の問題を解いてきた。Revm の \`Database\` トレイトは、その文法を EVM の状態アクセスに持ち込んだもの。
+## 問い
 
-EVM が \`SLOAD\` を実行したとき、値はどこから来るのか? Revm からではない — Revm は **実行エンジン**であり、状態は持っていない。答えは \`Database\` というトレイト経由で来る。そして **このトレイトの実装が、Revm を何にでも繋ぐ方法**: テスト用のインメモリ Map、メインネットをフォークするリモート JSON-RPC ノード、本物の Reth クライアントの MDBX、エキゾチック レッスン1のシャード網。同じ4メソッドの形で、4種類のまったく異なるバックエンド。
+EVM が \`SLOAD\` を実行したとき、値はどこから来るか？ Revm からではない — Revm は **実行エンジン**であり状態は持たない。**\`Database\` トレイトの実装が Revm を何にでも繋ぐ方法 — テスト用 \`HashMap\`、フォークメインネット JSON-RPC、本物 Reth の MDBX、エキゾチック L1 のシャード網。同じ 4 メソッド、4 種バックエンド。どう組み立てるか？**
 
-このレッスンは、最も素朴なスケッチからこのトレイトを積み上げる。終わりにはこれの全ピースを自分で組み立てたことに:
+## 原理（最小モデル）
 
-\`\`\`rust
-#[auto_impl(&mut, Box)]
-pub trait Database {
-    type Error: DBErrorMarker;
-    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
-    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
-    fn storage(&mut self, address: Address, index: StorageKey)
-        -> Result<StorageValue, Self::Error>;
-    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error>;
-}
-\`\`\`
+- **本物の形.** \`#[auto_impl(&mut, Box)] pub trait Database { type Error: DBErrorMarker; fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>; fn code_by_hash(&mut self, code_hash: B256) -> ...; fn storage(&mut self, address, index) -> ...; fn block_hash(&mut self, number: u64) -> ...; }\`
+- **4 ステップ積み上げ.** 素朴版（状態を内部所有）→ トレイト後ろに押し出す（依存性逆転）→ メソッド正しくグループ化（\`basic\` で AccountInfo 束、\`code_by_hash\` 別出し）→ \`Result\` + 関連型 \`Error\` → \`#[auto_impl(&mut, Box)]\`。
+- **\`&mut self\` の理由.** キャッシュ変更（ネットワーク実装が読み込み結果をキャッシュ）、\`&self\` だと \`RwLock\` / \`RefCell\` ラップ強制 = オーバーヘッド。
+- **\`basic\` が \`AccountInfo\` を返す理由.** balance + nonce + code hash 束 = **1 ラウンドトリップで 3 データ**、\`Option\` で未知アカウントを綺麗にシグナル。
+- **\`code_by_hash\` 別出しの理由.** コントラクトコードは **コンテンツアドレス指定**、人気バイトコード（DEX ルーター）が多アドレスで共有 → ハッシュキャッシュで自動デデュプ、実行必要時のみバイト実体化。
+- **\`type Error: DBErrorMarker\` の理由.** 各実装が独自エラー型を選べる + Revm が後から制約厳格化（\`Send\` / \`Sync\`）するフック、固定 enum は狭すぎ or 広すぎ。
+- **\`auto_impl\` リスト 2 種（\`&mut, Box\`）.** \`Database\` メソッドは \`&mut self\`、\`Arc<T>\` は \`&T\` しか出さないので不可 → \`DatabaseRef\` 仲間トレイトで解決（次レッスン）。
 
-> 📂 **別タブで \`bluealloy/revm\` を開いてほしい。** 各ステップで照合する。
+## 具体例
 
-## ステップ 0 — 素朴な Revm: 状態を内部に持つ
-
-何も考えずに書くと、Revm が状態を内部に持つ形:
+ステップ 0 — 素朴版:
 
 \`\`\`rust
 pub struct Revm {
     stack: Vec<U256>,
     storage: HashMap<(Address, U256), U256>,
     accounts: HashMap<Address, AccountInfo>,
-    // ...
 }
 \`\`\`
 
-インタープリターが \`self.storage.get(...)\` を直接呼ぶ。シンプル。おもちゃとしては動く。
+問題: フォークメインネット（リモート RPC）/ 本番 MDBX / 独自スキーマ各々で状態取得コード違う → Revm を 3 通りにフォークしたくない。
 
-> 🛑 **予測。** スクロールせずに: この素朴な設計が *扱えない* 本番シナリオを3つ挙げてほしい。（ヒント: 各々が *別種の* 状態ソース。）
-
-3つ:
-
-1. **フォークしたメインネット。** 状態はリモート RPC にあって、あなたの \`HashMap\` の中ではない。
-2. **本番の MDBX バックエンド。** 本物の Reth ノードはディスク上の MDBX を使っていて、インメモリ Map ではない。
-3. **独自スキーマ。** あなたのアプリチェーンはスパースなマークルストア、リモートシャード網、なんでもありえる。
-
-それぞれ状態を *取りに行く* コードが違う。Revm を3通りにフォークしたくない。
-
-## ステップ 1 — 状態をトレイトの後ろに押し出す
-
-修正は古典的な **依存性逆転**（Revm 自身が「具体的なストレージ実装」を抱える代わりに、抽象トレイトを通して問い合わせる側に回る — 「具体に依存」を「抽象に依存」に逆転させる設計）である。Revm にストレージを所有させず、インターフェース経由で *問い合わせさせる*。トレイトを定義して、Revm が状態に必要とすることを *記述する* — ストレージを所有せずに:
+ステップ 1 — 依存性逆転:
 
 \`\`\`rust
 pub trait Database {
@@ -1194,59 +1136,28 @@ pub trait Database {
 }
 \`\`\`
 
-これでインタープリターはストレージを所有する代わりに \`db: &mut dyn Database\` を取る。誰でもこのトレイトを実装できる — フォークメインネット実装も、MDBX 実装も、インメモリ実装も、同じソケットに刺さる。
+インタープリターが \`db: &mut dyn Database\` を取る、ストレージ非所有、誰でも実装可能。\`&mut self\` の理由 = キャッシュ変更（ネットワーク実装が読み込み結果をキャッシュ）、\`&self\` だと \`RwLock\` / \`RefCell\` ラップ強制。
 
-> 🛑 **予測。** なぜ \`&mut self\` で、\`&self\` ではないのか? \`&mut\` が許して \`&self\` が許さないのは何?
-
-**キャッシュ。** 本物の実装（フォークメインネット、RPC バックエンド）は読み込みをキャッシュしたい — \`storage(addr, key)\` の最初の呼び出しはネットワークを叩き、以降の呼び出しはローカルキャッシュから返す。キャッシュの変更には \`&mut self\` が必要。\`&self\` だと各実装が \`RwLock\` か \`RefCell\` でラップする羽目になる — 場合によっては良いが、デフォルトの選択としては余計なオーバーヘッドが大きすぎる。デフォルトを \`&mut\` に。（\`&self\` の場合は次レッスンの仲間トレイトでカバー。）
-
-## ステップ 2 — メソッドを正しくグループ化する
-
-素朴なトレイトを見ると: \`balance\` と \`code\` は両方ともアカウントについて聞いているのに、別メソッドになっている。**本当に独立?**
-
-実務では大抵両方欲しい。特にネットワーク実装 — 同じアカウントについて RPC のラウンドトリップを2回したくない。良い形: 1つのメソッドで *両方* 返し、実装に取得方法を任せる。
+ステップ 2 — メソッドを正しくグループ化:
 
 \`\`\`rust
 fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
-\`\`\`
-
-\`AccountInfo\` は balance、nonce、code hash を束ねる。**1ラウンドトリップで3つのデータ。** \`Option\` は実装が「そんなアカウントは存在しない」を綺麗にシグナルできるようにする — \`EXTCODEHASH\` が未知アカウントに特殊な意味を持つので便利。
-
-コード本体は別、*ハッシュ* でアドレッシング:
-
-\`\`\`rust
 fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
 \`\`\`
 
-> 🛑 **予測。** なぜ \`code_by_hash\` を \`basic\` から分けるのか? なぜコードはアドレスではなく *ハッシュ* で引くのか?
+\`balance\` / \`code\` / \`nonce\` 分離 → 1 アカウント 3 ラウンドトリップ。\`AccountInfo\` で束 → **1 ラウンドトリップで 3 データ**、\`Option\` で未知アカウント綺麗にシグナル。コード本体は \`code_by_hash\` で **コンテンツアドレス指定**、人気バイトコード（DEX ルーター）が多アドレスで共有 → ハッシュキャッシュで自動デデュプ。
 
-コントラクトコードは **コンテンツアドレス指定** だから。あるバイトコード（例: 人気の DEX ルーター）は多くのアドレスで共有されている — ハッシュでキャッシュすれば自動的にデデュプ。\`basic\` はハッシュだけ返し、\`code_by_hash\` は実際に実行が必要なときだけバイトを実体化。コンテンツアドレッシングによる遅延ロード。
-
-## ステップ 3 — \`Result\` と関連型 \`Error\` を加える
-
-ネットワーク実装は失敗する。RPC タイムアウト、MDBX が古いロックを返す、Arc が poisoned — **どのメソッドも失敗を許す必要がある。**
+ステップ 3 — \`Result\` + 関連型 \`Error\`:
 
 \`\`\`rust
 fn basic(&mut self, ...) -> Result<Option<AccountInfo>, Self::Error>;
-\`\`\`
-
-でも \`Self::Error\` — なぜ固定 enum ではなく関連型?
-
-**Revm にはあなたのエラー形状が分からない** から。RPC エラー、ディスク I/O エラー、ロック poison — 全部形が違う。固定 enum は狭すぎる（実装が本物のエラーを潰す羽目になる）か、広すぎる（Revm が50バリアントを処理する羽目になる）。
-
-\`\`\`rust
+// ...
 type Error: DBErrorMarker;
 \`\`\`
 
-\`DBErrorMarker\` は無内容な制約（まともな型ならどれでも自動実装）。目的は: **意図の文書化**（「これは Database が出すエラーの種類です」）と、Revm が後から制約を加える（\`Send\`、\`Sync\` など）ためのフックを残すこと、実装を壊さずに。
+ネットワーク実装は失敗する（RPC タイムアウト / MDBX 古いロック / Arc poisoned）。\`Self::Error\` = 各実装が独自エラー型を選べる、\`DBErrorMarker\` は無内容な制約（拡張に開いた接点）、Revm が後から \`Send\` / \`Sync\` 追加するフック。固定 enum だと \`reqwest::Error\` / \`serde_json::Error\` / タイムアウト / パースエラーを潰す羽目 + 新失敗モードごとに Revm PR 必要。
 
-> 🛑 **理解度チェック。** 「拡張に開いている」は単なる受け売り。自分の言葉で: \`reqwest\` を使ってフォークメインネット実装を書いていると想像してほしい。\`Error\` が固定 \`DatabaseError\` enum だと *具体的に* 何が壊れる?
-
-\`reqwest::Error\`、\`serde_json::Error\`、ネットワークタイムアウト、パースエラーを閉じた enum のバリアントに *潰す* 羽目になる — そして *新しい失敗モード* が出るたびに Revm への PR が必要。関連型ならエラーはあなたのもの。
-
-## ステップ 4 — \`#[auto_impl(&mut, Box)]\`
-
-この属性がなければ、同じ転送コードを手書き:
+ステップ 4 — \`#[auto_impl(&mut, Box)]\`:
 
 \`\`\`rust
 impl<T: Database> Database for &mut T {
@@ -1254,20 +1165,14 @@ impl<T: Database> Database for &mut T {
     fn basic(&mut self, addr: Address) -> Result<Option<AccountInfo>, T::Error> {
         (**self).basic(addr)
     }
-    // ... 残り3メソッドも全部同じパターン
+    // ... 残り 3 メソッドも全部同じパターン
 }
-impl<T: Database> Database for Box<T> { /* ... 同じ4メソッド ... */ }
+impl<T: Database> Database for Box<T> { /* ... 同じ 4 メソッド ... */ }
 \`\`\`
 
-\`Database\` だけで8個のメソッド本体が同一の転送ボイラープレート（4メソッド × \`&mut\` と \`Box\`）— そして同じパターンが \`DatabaseRef\` と \`DatabaseCommit\` でも繰り返される。
+属性なしだと 4 メソッド × 2 ラッパー = 8 個の転送ボイラープレート。\`#[auto_impl(&mut, Box)]\` がこれを自動生成。\`Arc<MyDb>\` 不可（\`Arc<T>\` は \`&T\` のみ、\`&mut self\` メソッド不可）→ 仲間トレイト \`DatabaseRef\` で次レッスンに解決。
 
-\`auto_impl\` はこの転送実装を自動生成する手続きマクロ。\`#[auto_impl(&mut, Box)]\` が付いていれば、\`MyDb\` が \`Database\` を実装していれば、\`&mut MyDb\` も \`Box<MyDb>\` も自動的に \`Database\` を実装する。**ユーザー側のボイラープレートゼロ。**
-
-> 🛑 **予測。** \`Database\` を \`Arc<MyDb>\` でも動かしたい場合は? なぜ \`auto_impl(&mut, Box, Arc)\` で解決しないのか?
-
-直接的には解決しない。\`Arc<T>\` は \`&T\` しか出さない、\`&mut T\` は出さない。\`Database\` のメソッドは \`&mut self\` を取るので、\`Arc<MyDb>\` は \`Database\` を実装できない。**この事実が、トレイトを 2 つに分ける設計判断を必然にする** — 次レッスンで解決します: Revm は \`Arc\` のために *仲間の* 読み専用トレイト（\`DatabaseRef\`）を持っている。
-
-## ここまでに組み立てたもの
+ステップ 5 — 本物:
 
 \`\`\`rust
 #[auto_impl(&mut, Box)]
@@ -1281,44 +1186,78 @@ pub trait Database {
 }
 \`\`\`
 
-各ピースが場所代を稼いでいる:
+## 失敗例（誤解）
 
-- **\`&mut self\`**（ステップ 1）— \`RefCell\`/\`RwLock\` のオーバーヘッドなしでキャッシュ
-- **\`AccountInfo\` を返す \`basic\`**（ステップ 2）— アカウントごとに1ラウンドトリップ
-- **\`code_by_hash\`**（ステップ 2）— コンテンツアドレッシング、コントラクト間でデデュプ
-- **\`type Error: DBErrorMarker\`**（ステップ 3）— 開いたエラー分類、マーカー制約
-- **\`#[auto_impl(&mut, Box)]\`**（ステップ 4）— 自動転送
+「\`&self\` で十分、不変なら」— **間違い**。本物実装（フォークメインネット、RPC バックエンド）はキャッシュ必要 → \`&mut self\` で素直、\`&self\` だと \`RwLock\` / \`RefCell\` 強制 = 各実装に余計オーバーヘッド。共有並列が本当に必要な場合は \`DatabaseRef\`（次レッスン）。
 
-次レッスン: \`auto_impl\` が *できないこと*（Arc）、Revm が読みと書きをどう分けるか、同じトレイトが 50 行から数千行までどうスケールするかを見せる3つの本物の実装。
+「\`balance\` / \`code\` / \`nonce\` を別メソッドに」— **間違い**。**1 アカウント = 1 ラウンドトリップ**、ネットワーク実装で各々別 RPC = 3 倍レイテンシ。\`basic\` で \`AccountInfo\` を束、code は \`code_by_hash\` で **コンテンツアドレス指定**（自動デデュプ）。
 
-## 進む前の想起
+「\`type Error = DatabaseError\` の固定 enum で十分」— **致命的**。\`reqwest::Error\` / \`serde_json::Error\` / ネットワークタイムアウト / パースエラーを閉じた enum バリアントに **潰す** 羽目 + 新失敗モードごとに Revm への PR 必要。**関連型ならあなたのエラーはあなたのもの**。
 
-スクロールせずに:
+## ステップで組み立てる
 
-1. なぜ \`Database\` は \`&self\` ではなく \`&mut self\` なのか?
-2. \`basic\` と \`code_by_hash\` の違いは? なぜ分けるのか?
-3. なぜ \`Error\` は固定 enum ではなく関連型なのか?
-4. \`#[auto_impl(&mut, Box)]\` は何の手書きを省いてくれるか?
+### Step 1: 素朴版（状態内部所有）の 3 問題
+フォークメインネット + 本番 MDBX + 独自スキーマで状態取得コード違う、Revm 3 フォーク不可避。
 
-どれか曖昧なら戻る。次のレッスンは読み/書き分離。
+### Step 2: トレイトに押し出す（依存性逆転）
+\`db: &mut dyn Database\`、Revm はストレージ非所有、誰でも実装可能。
 
-> 🛣️ **もう一つの道 (Solana):** Solana の \`Database\` 相当は、まったく別の形をしている。Solana の状態は、コントラクトごとに slot のトライを持つのではなく、アカウント単位のフラットなマップとして並ぶ — 各アカウントが独自の data blob を持つかたち。そのため Solana の「データベーストレイト」はアカウントをキーとして引き、\`storage(address, key)\` のようなメソッドは存在しない（storage は間接化のレイヤではなく、アカウントの 1 フィールドだから）。いま組み上げた 4 メソッド構成 — \`basic\` / \`code_by_hash\` / \`storage\` / \`block_hash\` — は、「トライ + コントラクトごとの storage」という EVM の設計選択の、トレイトレベルでの痕跡。違う状態モデルからは、違う分離点が生まれる。
+### Step 3: メソッドを正しくグループ化
+\`basic\` で \`AccountInfo\` 束（1 ラウンドトリップ 3 データ）、\`code_by_hash\` 別出し（コンテンツアドレス指定）。
 
-> **🧭 ここまでで積み上げたもの:** **VM 層と DB 層の境目**（読み API）が完成 — 4 メソッド + 関連型 \`Error\` + \`auto_impl\`。同じ Revm が、VM 側にいっさい手を入れずに、インメモリ Map・リモート JSON-RPC・MDBX・シャード網のどれの上でも動くかたちになった。次のレッスンでは、読み / 書きの分離に踏み込む — \`Arc\` を使えるようにし、eager / lazy fetch を切り分けるための設計判断。
+### Step 4: \`Result\` + 関連型 \`Error\`
+\`Self::Error: DBErrorMarker\`、各実装独自エラー型、Revm が後から制約厳格化可能。
+
+### Step 5: \`#[auto_impl(&mut, Box)]\`
+転送実装自動生成、\`MyDb: Database\` なら \`&mut MyDb\` と \`Box<MyDb>\` も自動実装、ユーザー側ボイラープレートゼロ。
+
+## 答え合わせ
+
+- **\`&mut self\` を選ぶ理由**: 本物実装はキャッシュ必要 = ネットワーク実装が \`storage(addr, key)\` 最初の呼び出しでネットワーク叩き、以降ローカルキャッシュから返す。\`&mut\` でキャッシュ変更を直接、\`&self\` だと \`RwLock\` / \`RefCell\` ラップ強制 = 各実装にオーバーヘッド。共有並列アクセスが必要なケース（並列 EVM、Arc 共有）は \`DatabaseRef\` 仲間トレイト（次レッスン）で別途。
+- **\`basic\` と \`code_by_hash\` の分離**: \`basic\` = balance + nonce + code hash 束 = **1 アカウント 1 ラウンドトリップ**、\`Option\` で未知アカウント綺麗にシグナル（\`EXTCODEHASH\` 特殊意味）。\`code_by_hash\` = コンテンツアドレス指定、人気バイトコード（DEX ルーター）が多アドレスで共有 → ハッシュキャッシュで **自動デデュプ**、実行必要時のみバイト実体化。
+- **関連型 \`Error\` の必要性**: Revm にあなたのエラー形状は分からない（RPC エラー / ディスク I/O / ロック poison 全部形違う）。固定 enum は **狭すぎ**（本物エラーを潰す）or **広すぎ**（Revm が 50 バリアント処理）。マーカー \`DBErrorMarker\` = 意図文書化 + Revm が後から \`Send\` / \`Sync\` 制約追加するフック、実装を壊さずに拡張可能。
+
+## 合格基準
+
+- 本物の \`Database\` トレイト 4 メソッド + 関連型 \`Error\` + \`auto_impl\` を即書ける。
+- \`&mut self\` の理由（キャッシュ + 余計ラップ回避）を 1 文で説明できる。
+- \`basic\` / \`code_by_hash\` 分離の 2 利点（1 ラウンドトリップ束 + コンテンツアドレス指定デデュプ）を即答できる。
+- 関連型 \`Error\` の必要性を即答できる。
+- \`auto_impl(&mut, Box)\` が \`Arc\` を含まない理由（\`&mut self\` メソッド + \`Arc<T>\` は \`&T\` のみ出す）を言える。
+
+## まとめ（3行）
+
+- 本物の \`Database\` トレイト = 4 メソッド（\`basic\` / \`code_by_hash\` / \`storage\` / \`block_hash\`）+ 関連型 \`Error: DBErrorMarker\` + \`#[auto_impl(&mut, Box)]\`。
+- 5 ステップ積み上げ = 素朴版（状態内部）→ トレイトに押し出す → メソッドグループ化 → \`Result\` + 関連型 → \`auto_impl\`、各ステップに動機（フォーク / 1 ラウンドトリップ / 拡張可能エラー / 転送ボイラープレートゼロ）。
+- \`Arc\` 不可問題（\`&mut self\` + \`Arc<T>\` は \`&T\` のみ）は次レッスンで \`DatabaseRef\` 仲間トレイトが解決。
 `,
                 },
                 {
-                  title: '仲間トレイト・最適化・本物の実装',
+                  title: 'レッスン10 — 仲間トレイト・最適化・本物の実装',
                   slug: 'revm-database-companions-ja',
                   type: 'CONTENT',
                   sortOrder: 10,
                   duration: 10,
                   xpReward: 25,
-                  content: `# 仲間トレイト・最適化・本物の実装
+                  content: `# レッスン10 — 仲間トレイト・最適化・本物の実装
 
-前のレッスンを終えた時点で、あなたは \`&mut self\` を取る4メソッドの \`Database\` トレイトと、宙ぶらりんの問題を抱えている: \`Arc<MyDb>\`（Rust の原子参照カウントポインタ。スレッド間でデータを共有する標準手段）は \`&T\` しか出さず、\`&mut T\` は出さない。**つまり並列リーダーは \`Database\` を共有できない、まったく。** 本番ではそれが必要で、Revm は3つの追加ピースで解決する: 読み専用の仲間トレイト、別個の書き戻しトレイト、そしてトレイト API 自体に住む性能の逃げ口が1つ。プラス、同じ形が 50 行から数千行へ伸びる様を見せる3つの参照実装。
+## 問い
 
-## ステップ 1 — \`DatabaseRef\`: 読み専用アクセス
+前レッスンで \`&mut self\` を取る 4 メソッド \`Database\` を組み立てた + 宙ぶらりんの問題: \`Arc<MyDb>\` は \`&T\` しか出さない = 並列リーダーは \`Database\` を共有できない。**Revm の 3 追加ピースで解決 — どう？**
+
+## 原理（最小モデル）
+
+- **\`DatabaseRef\` (読み専用仲間).** 4 メソッド同じ + 違い 2 つ: \`&self\` 化 + \`auto_impl(&, &mut, Box, Rc, Arc)\` 5 種（\`Database\` の 2 種に対し）。
+- **\`auto_impl\` リスト非対称の根拠.** \`&self\` アクセスは \`&mut self\` より厳密に弱い制約 = \`Arc<T>\` / \`Rc<T>\` は \`&T\` 出すが \`&mut T\` は出さない、機械的帰結。
+- **\`DatabaseCommit\` (書き戻し別トレイト).** \`fn commit(&mut self, changes: AddressMap<Account>);\`、\`Database\` から分離する 2 理由。
+- **\`DatabaseCommit\` 分離 2 理由.** ① 読み専用 Database（フォークメインネット）が存在 = \`commit\` 実装強制が panic スタブ要求、② ライフサイクル違う（読みは呼び出しごと、commit は tx 終了時）。
+- **\`storage_by_account_id\` 最適化.** デフォルト実装が \`account_id\` 無視で \`storage\` に転送、MDBX バックエンド等内部アカウントインデックス持つ実装はオーバーライドでアドレス→ID 検索省略。
+- **3 本番実装.** \`InMemoryDB\`（\`HashMap\` 群、~50 行）/ \`AlloyDB\`（JSON-RPC ネットワーク、~150 行）/ \`StateProviderDatabase\`（reth の MDBX、数千行）。
+- **メインネットフォークの選択.** \`AlloyDB\`、RPC 遅延取得 + キャッシュ、フルアーカイブダウンロード不要。
+
+## 具体例
+
+\`DatabaseRef\`:
 
 \`\`\`rust
 #[auto_impl(&, &mut, Box, Rc, Arc)]
@@ -1332,18 +1271,7 @@ pub trait DatabaseRef {
 }
 \`\`\`
 
-メソッド4つは \`Database\` と同じ。違いは2つ:
-
-- **\`&mut self\` ではなく \`&self\`。** 内部変更は許されない（\`RwLock\` / \`OnceLock\` などを使わない限り）。
-- **\`auto_impl\` のリストが長い** — \`&, &mut, Box, Rc, Arc\`（5種、\`Database\` の2種に対して）。
-
-> 🛑 **予測。** なぜ \`DatabaseRef\` の \`auto_impl\` リストが長いのか? この非対称は何を語っている?
-
-\`&self\` アクセスは \`&mut self\` より *厳密に弱い* 制約だから。\`Arc<T>\` と \`Rc<T>\` は安価で共有可能な \`&T\` を出すが、\`&mut T\` は決して出さない。だから \`DatabaseRef\` はそれらを通じて動くが、\`Database\` は動かない。長いリストは設計上の選択ではなく、機械的な帰結。
-
-パターン: **共有並列アクセスが必要? \`DatabaseRef\` を実装。キャッシュが必要? \`Database\` を実装。両方必要? 両方実装** — Revm には \`WrapDatabaseRef\` のような片方を片方に持ち上げるヘルパーがある。
-
-## ステップ 2 — \`DatabaseCommit\`: 書き戻しを別トレイトに
+\`DatabaseCommit\`:
 
 \`\`\`rust
 #[auto_impl(&mut, Box)]
@@ -1352,20 +1280,7 @@ pub trait DatabaseCommit {
 }
 \`\`\`
 
-書き戻し用の別トレイト。なぜ?
-
-> 🛑 **予測。** スクロールせずに: なぜ \`commit\` は \`Database\` のもう1つのメソッドではないのか?
-
-理由は2つ:
-
-1. **読み専用 Database が存在する。** フォークメインネット実装は RPC から読むだけで、commit する用事はない — 書き戻すべき本当のバッキングストアがない。\`commit\` の実装を強制すると panic スタブが必要か、嘘のメソッドで型を汚染することになる。
-2. **ライフサイクルが違う。** 読みは呼び出しごと、commit はトランザクション終了時。トレイトを分けることでこのライフサイクルを明示し、型システムに強制させる。
-
-Rust の \`std::io\` の \`Read\` と \`Write\` と同じパターン（標準ライブラリのストリーム向けの2トレイト分割）— 1つのトレイトに混ぜたら、すべての読み手が書きについて考えなければならなくなる。
-
-## ステップ 3 — \`storage_by_account_id\`（最適化）
-
-\`Database\` には前のレッスンで見せなかったメソッドがもう1つある:
+\`storage_by_account_id\` デフォルト実装:
 
 \`\`\`rust
 #[inline]
@@ -1380,17 +1295,7 @@ fn storage_by_account_id(
 }
 \`\`\`
 
-注目: **デフォルト実装** が \`account_id\` を無視して \`storage\` に転送している。このデフォルトが鍵。
-
-> 🛑 **予測。** なぜこのメソッドがそもそも存在するのか? いつデフォルトの「\`account_id\` を無視して \`storage\` にフォールバック」が Revm のニーズを満たさないのか?
-
-**内部のアカウントインデックスを持つ実装** のため — 例えば MDBX バックエンドの Reth では、コールフレームの早い段階でアカウントが内部の数値 ID に解決済み。\`account_id\` を渡せば、ストレージ読み込みごとに冗長なアドレス→アカウント ID 検索を省ける。デフォルトは安全に転送する; *もっと速くできる* 実装はオーバーライドする。
-
-**パフォーマンスがトレイト API の中に存在する**、実装の中だけではなく。素朴な実装（インメモリ）はデフォルトを取って普通に動く。本番実装（MDBX）はオーバーライドして仕事の見返りを得る。
-
-## ステップ 4 — 読むべき3つの本物の実装
-
-同じトレイト、3つの全く違うバックエンド:
+3 本番実装:
 
 | 実装 | 場所 | バッキング | 行数 |
 | :--- | :--- | :--- | :--- |
@@ -1398,102 +1303,141 @@ fn storage_by_account_id(
 | \`AlloyDB\` | \`crates/database/src/alloydb.rs\` | ネットワーク経由の JSON-RPC | 約150 |
 | \`StateProviderDatabase\` | reth: \`crates/storage/storage-api/src/database_provider.rs\` | MDBX、スパースマークル | 数千 |
 
-> 🔍 **3つ全ての出だしを読んでほしい。** 型定義と最初のメソッド（\`basic\`）だけ。比較:
-> - \`InMemoryDB::basic\` — 直接 \`HashMap::get\`、失敗しない
-> - \`AlloyDB::basic\` — 同期 façade に包まれた非同期 RPC 呼び出し、失敗しうる
-> - \`StateProviderDatabase::basic\` — MDBX カーソル lookup、失敗しうる
->
-> 3つの違う世界、1つのトレイト形。
+## 失敗例（誤解）
 
-> 🛑 **理解度チェック。** スクロールせずに: *メインネットをブロック N でフォーク* して任意のトランザクションを上で走らせたい場合、3つのうちどれを選ぶか? なぜ?
+「\`Database\` だけで \`Arc<MyDb>\` も動く」— **間違い**。\`Database\` メソッド \`&mut self\` + \`Arc<T>\` は \`&T\` のみ → 共有並列で \`Database\` 使用不可。**\`DatabaseRef\` 仲間トレイト + \`auto_impl\` 5 種** で解決。
 
-\`AlloyDB\`。RPC 経由で状態を遅延取得する — フルアーカイブノードをダウンロードする必要がない。tx が初めてスロットやアカウントに触れたとき、\`AlloyDB\` は上流ノードに問い合わせ、以降の読み込みはインメモリキャッシュから返る。**メインネットフォークの仕組みは結局、\`Database\` を 150 行で実装したグルーコードがすべて。**
+「\`commit\` を \`Database\` のメソッドに追加で済む」— **間違い**。読み専用 Database（フォークメインネット = RPC から読むだけ、バッキングストアなし）で \`commit\` 強制 = panic スタブ or 嘘メソッド、型汚染。\`std::io::Read\` と \`Write\` の分離と同じパターン。
 
-## クイズ前の想起
+「メインネットフォークは \`InMemoryDB\` で十分」— **間違い**。メインネット全状態を事前ロード = 非実用的（TB 級アーカイブ）。**\`AlloyDB\` が遅延取得 + キャッシュ**、tx が初触れスロットを上流ノードに問い合わせ、以降キャッシュから返る。
 
-スクロールせずに:
+## ステップで組み立てる
 
-1. なぜ \`DatabaseRef\` の \`auto_impl\` には \`Rc\` と \`Arc\` が含まれていて、\`Database\` には無いのか?
-2. なぜ \`commit\` は \`Database\` とは別トレイトなのか?
-3. \`storage_by_account_id\` のオーバーライドは MDBX 実装で何を節約するのか?
-4. \`InMemoryDB\`、\`AlloyDB\`、\`StateProviderDatabase\` の中で、メインネットフォークに選ぶのはどれ?
+### Step 1: \`DatabaseRef\` で読み専用アクセス
+4 メソッド同じ + \`&self\` + \`auto_impl(&, &mut, Box, Rc, Arc)\` 5 種で \`Arc\` 対応。
 
-次のレッスンはクイズ。曖昧な答えがあるなら今、想起してほしい。
+### Step 2: \`auto_impl\` リスト非対称の機械的帰結
+\`&self\` < \`&mut self\` 制約強度、\`Arc<T>\` / \`Rc<T>\` は \`&T\` のみ。
+
+### Step 3: \`DatabaseCommit\` で書き戻し分離
+読み専用 Database 存在 + ライフサイクル違い（読み = 呼び出しごと、commit = tx 終了時）。
+
+### Step 4: \`storage_by_account_id\` 最適化
+デフォルト実装で安全フォールバック、MDBX 等内部 ID 持つ実装はオーバーライドで検索省略 = **パフォーマンスがトレイト API に住む**。
+
+### Step 5: 3 本番実装を読む
+\`InMemoryDB\`（50 行 / \`HashMap\`）/ \`AlloyDB\`（150 行 / RPC）/ \`StateProviderDatabase\`（数千行 / MDBX）= 同形 3 世界。
+
+### Step 6: メインネットフォーク用に \`AlloyDB\` 選択
+遅延取得 + キャッシュ、フルアーカイブ不要、150 行のグルーコードがフォーク機構の全て。
+
+## 答え合わせ
+
+- **\`DatabaseRef\` \`auto_impl\` リスト 5 種の機械的根拠**: \`&self\` アクセスは \`&mut self\` より **厳密に弱い制約**。\`Arc<T>\` / \`Rc<T>\` は安価で共有可能な \`&T\` を出すが \`&mut T\` は決して出さない → \`DatabaseRef\` はこれら経由で動くが \`Database\` は動かない、設計選択でなく機械的帰結。
+- **\`DatabaseCommit\` 分離の 2 理由**: ① **読み専用 Database 存在**（フォークメインネット = RPC から読むだけ、バッキングストアなし）= \`commit\` 強制で panic スタブ要求 or 型汚染、② **ライフサイクル違い**（読み = 呼び出しごと、commit = tx 終了時）= トレイト分離で型システムに強制。\`std::io::Read\` / \`Write\` パターン、混ぜると全読み手が書きを考える羽目。
+- **メインネットフォーク用の \`AlloyDB\` 選択**: RPC 経由遅延取得（tx が初触れスロットを上流ノード問い合わせ）+ インメモリキャッシュ = フルアーカイブダウンロード不要。**メインネットフォークの仕組みは結局 \`Database\` を 150 行で実装したグルーコードがすべて**、\`InMemoryDB\` だとメインネット全状態事前ロード（非実用）、\`StateProviderDatabase\` はローカルフル Reth アーカイブ必要。
+
+## 合格基準
+
+- \`DatabaseRef\` / \`DatabaseCommit\` / \`storage_by_account_id\` 3 追加ピースの役割を即答できる。
+- \`auto_impl\` リスト非対称（5 種 vs 2 種）の機械的根拠を即答できる。
+- \`DatabaseCommit\` 分離 2 理由（読み専用存在 + ライフサイクル違い）を即答できる。
+- 3 本番実装（\`InMemoryDB\` / \`AlloyDB\` / \`StateProviderDatabase\`）の用途と行数感を即答できる。
+- メインネットフォーク用に \`AlloyDB\` を選ぶ理由を 1 文で説明できる。
+
+## まとめ（3行）
+
+- 3 追加ピース = \`DatabaseRef\`（\`&self\` 読み専用 + \`auto_impl\` 5 種で \`Arc\` 対応）+ \`DatabaseCommit\`（書き戻し分離）+ \`storage_by_account_id\` 最適化（パフォーマンスがトレイト API に住む）。
+- 3 本番実装（\`InMemoryDB\` 50 行 / \`AlloyDB\` 150 行 / \`StateProviderDatabase\` 数千行）= 同じ 4 メソッドトレイトで 3 つの全く違う世界、メインネットフォークは \`AlloyDB\`（RPC 遅延取得 + キャッシュ）。
+- \`auto_impl\` リスト非対称は設計でなく機械的帰結（\`&self\` < \`&mut self\` 制約強度）、次クイズで全体定着。
 `,
                 },
                 {
-                  title: 'クイズ: \`Database\` トレイトの形は身についた?',
+                  title: 'クイズ — `Database` トレイト',
                   slug: 'revm-database-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 11,
                   duration: 4,
                   xpReward: 25,
-                  content: `# クイズ: \`Database\` トレイトの形は身についた?
+                  content: `# クイズ — \`Database\` トレイト
 
-トレイトの設計判断と読み/書き分離をカバーする4問。前回と同じルール: **クイズはうなずきで通せない。**
+\`&mut self\` の理由（キャッシュ）、関連型 \`Error\` の必要性、\`auto_impl\` リスト非対称（5 種 vs 2 種）の機械的根拠、3 本番実装からメインネットフォーク用を選ぶ理由を確認する。
 
-2問以上落としたら、ドリルへ進む前に「\`Database\` トレイトを組み立てる」を読み直してほしい。`,
+組み立てと仲間トレイトにまたがる設計判断を問う 4 問。**クイズはうなずきで通せない。** 2 問以上落としたら、ドリルへ進む前に「\`Database\` トレイトを組み立てる」に戻ること。
+`,
                   quizQuestions: [
                     {
-                      question: "`Database` のメソッドが `&self` ではなく `&mut self` を取るのはなぜですか?",
-                      options: [
+                      "question": "`Database` のメソッドが `&self` ではなく `&mut self` を取るのはなぜですか?",
+                      "options": [
                         "複数スレッドからの共有並列アクセスを防ぐため。",
                         "実装が内部キャッシュ（例: フォークメインネット実装がネットワーク読み込みの結果をキャッシュする）を RefCell/RwLock のスキャフォールドなしに変更できるようにするため。",
                         "EVM が `Database` メソッド経由で状態を *書く* 必要があるため。",
-                        "Rust の制約 — `&self` トレイトは `dyn` 互換にできないため。",
+                        "Rust の制約 — `&self` トレイトは `dyn` 互換にできないため。"
                       ],
-                      correctIndex: 1,
-                      explanation: "`&mut self` で実装はキャッシュを直接変更できる。ネットワーク実装は呼び出し間で RPC 結果をキャッシュしたい; `&self` だと内部可変性スキャフォールド（RwLock/RefCell）を強制する。本当に共有 `&self` アクセスが必要なユーザー（Arc ラップ、並列タスク）には、Revm は仲間トレイト `DatabaseRef` を提供している — 意図的な設計分割。",
+                      "correctIndex": 1,
+                      "explanation": "`&mut self` で実装はキャッシュを直接変更できる。ネットワーク実装は呼び出し間で RPC 結果をキャッシュしたい; `&self` だと内部可変性スキャフォールド（RwLock/RefCell）を強制する。本当に共有 `&self` アクセスが必要なユーザー（Arc ラップ、並列タスク）には、Revm は仲間トレイト `DatabaseRef` を提供している — 意図的な設計分割。"
                     },
                     {
-                      question: "`Error` がマーカートレイト `DBErrorMarker` で制約された関連型なのはなぜですか?",
-                      options: [
+                      "question": "`Error` がマーカートレイト `DBErrorMarker` で制約された関連型なのはなぜですか?",
+                      "options": [
                         "拡張に開いた接点: 各実装が独自のエラー型を選べるが、Revm は後からマーカー経由で制約（Send、Sync）を厳しくでき、実装を壊さない。",
                         "Rust の制約 — トレイトはジェネリックメソッドを持てないため。",
                         "マーカーは無内容な制約; 設計上の目的は無い。",
-                        "古い Revm API の後方互換シム。",
+                        "古い Revm API の後方互換シム。"
                       ],
-                      correctIndex: 0,
-                      explanation: "固定 `enum DatabaseError` だと、`reqwest::Error`、`serde_json::Error`、MDBX エラーなどを閉じたバリアントに潰す羽目になる — そして新しい失敗モードが必要なたびに Revm への PR が必要。関連型ならあなたのエラーはあなたのもの。マーカートレイトは Revm が *制約を厳しくする* ための場所を残す、実装を壊さずに。",
+                      "correctIndex": 0,
+                      "explanation": "固定 `enum DatabaseError` だと、`reqwest::Error`、`serde_json::Error`、MDBX エラーなどを閉じたバリアントに潰す羽目になる — そして新しい失敗モードが必要なたびに Revm への PR が必要。関連型ならあなたのエラーはあなたのもの。マーカートレイトは Revm が *制約を厳しくする* ための場所を残す、実装を壊さずに。"
                     },
                     {
-                      question: "`auto_impl` のリストが `DatabaseRef`（`&, &mut, Box, Rc, Arc`）の方が `Database`（`&mut, Box`）より長いのはなぜですか?",
-                      options: [
+                      "question": "`auto_impl` のリストが `DatabaseRef`（`&, &mut, Box, Rc, Arc`）の方が `Database`（`&mut, Box`）より長いのはなぜですか?",
+                      "options": [
                         "`Rc` と `Arc` はスレッドセーフではないため、`Database` を実装できない。",
                         "`DatabaseRef` の方が古いため、リストが時間とともに伸びた。",
                         "`Rc<T>` と `Arc<T>` は共有 `&T` アクセスを提供するが `&mut T` は提供できない。`DatabaseRef` のメソッドは `&self` を取るので Rc/Arc 経由で動くが、`Database` の `&mut self` メソッドは動かない。",
-                        "`DatabaseRef` は `Send + Sync` を要求するが、`Database` は要求しない。",
+                        "`DatabaseRef` は `Send + Sync` を要求するが、`Database` は要求しない。"
                       ],
-                      correctIndex: 2,
-                      explanation: "様式ではなく機械的な帰結。`Arc<T>` は `&T` しか出さない。だから `&self` のみのトレイトは `Arc` 経由で動くが、`&mut self` のトレイトは動かない。長いリストは `DatabaseRef` の読み専用メソッドの帰結 — トレイト自体の設計上の選択ではない。",
+                      "correctIndex": 2,
+                      "explanation": "様式ではなく機械的な帰結。`Arc<T>` は `&T` しか出さない。だから `&self` のみのトレイトは `Arc` 経由で動くが、`&mut self` のトレイトは動かない。長いリストは `DatabaseRef` の読み専用メソッドの帰結 — トレイト自体の設計上の選択ではない。"
                     },
                     {
-                      question: "`InMemoryDB`、`AlloyDB`、`StateProviderDatabase` の中で、「メインネットをブロック N でフォークして任意のトランザクションを走らせる」用途に正しいのはどれですか?",
-                      options: [
+                      "question": "`InMemoryDB`、`AlloyDB`、`StateProviderDatabase` の中で、「メインネットをブロック N でフォークして任意のトランザクションを走らせる」用途に正しいのはどれですか?",
+                      "options": [
                         "`InMemoryDB` — メインネットの全状態を RAM に事前ロード。",
                         "`AlloyDB` — JSON-RPC 経由で状態を遅延取得; 上流ノードが正典。",
                         "`StateProviderDatabase` — 直接 MDBX アクセスにはローカルにフル Reth アーカイブが必要。",
-                        "どれでも同じ — 互換的。",
+                        "どれでも同じ — 互換的。"
                       ],
-                      correctIndex: 1,
-                      explanation: "`AlloyDB` がこの用途のために作られている — EVM が触れるたびに上流 RPC に状態スロットやアカウントを問い合わせ、キャッシュする。`InMemoryDB` だとメインネット全体の事前ロードが必要（非実用的）。`StateProviderDatabase` には実 Reth ノードを伴うローカル MDBX が必要。",
-                    },
+                      "correctIndex": 1,
+                      "explanation": "`AlloyDB` がこの用途のために作られている — EVM が触れるたびに上流 RPC に状態スロットやアカウントを問い合わせ、キャッシュする。`InMemoryDB` だとメインネット全体の事前ロードが必要（非実用的）。`StateProviderDatabase` には実 Reth ノードを伴うローカル MDBX が必要。"
+                    }
                   ],
                 },
                 {
-                  title: 'ドリル: \`ZeroDb\` を実装して Revm の状態読みを観測する',
+                  title: 'レッスン12 — ドリル: `ZeroDb` を実装して Revm の状態読みを観測する',
                   slug: 'revm-database-drill-ja',
                   type: 'CONTENT',
                   sortOrder: 12,
                   duration: 12,
                   xpReward: 25,
-                  content: `# ドリル: \`ZeroDb\` を実装して Revm の状態読みを観測する
+                  content: `# レッスン12 — ドリル: \`ZeroDb\` を実装して Revm の状態読みを観測する
 
-トレイトの形と3つの参照実装は読んだ。**今度は自分のものを作る — 誰でも書ける最小のやつ。** 「残高ゼロ、スロットゼロ、コードなし」と常に答える \`Database\`。4メソッドをスタブし、Revm に差し込み、トランザクションを走らせ、EVM が実際にどの読み込みを発行するかを観察する。（ネタバレ: あなたの想像より少ない。EVM は状態に対して *非常に* 怠惰。）
+## 問い
 
-## 目標
+トレイトの形と 3 参照実装は読んだ。**自分のものを作る — 「残高ゼロ、スロットゼロ、コードなし」と常に答える \`Database\` 最小版を 4 メソッドスタブ、Revm に差し込み、tx 走らせ、EVM が実際に発行する読みを観察。何が見えるか？（ネタバレ: 想像より少ない、EVM は状態に対して非常に怠惰。）**
 
-「残高ゼロ・コードなし・スロット 0」を返すだけの \`Database\` 実装:
+## 原理（最小モデル）
+
+- **\`ZeroDb\` 実装.** \`type Error = std::convert::Infallible\`（失敗できない慣用型）+ 4 メソッド全部 \`Ok(default())\`。
+- **4 メソッド戻り値.** \`basic\` → \`Some(AccountInfo::default())\`（残高 0 / nonce 0 / code hash 空）、\`code_by_hash\` → \`Bytecode::default()\`（長さ 0）、\`storage\` → \`StorageValue::ZERO\`、\`block_hash\` → \`B256::ZERO\`。
+- **\`basic\` が \`Ok(None)\` でなく \`Ok(Some(AccountInfo::default()))\` の理由.** \`None\` = アカウント不存在シグナル、\`Some(default)\` = 存在するが空 = Ethereum 上の新アカウント挙動と一致。
+- **5 EVM 操作の予測.** \`BALANCE\` = 0 / \`SLOAD\` = 0 / \`EXTCODESIZE\` = 0 / コードなし \`CALL\` = 実行なし成功 / \`BLOCKHASH(N)\` = \`B256::ZERO\`。
+- **\`SSTORE\` が \`ZeroDb\` メソッドを呼ばない理由.** 書きは \`DatabaseCommit\` 経由（意図的に未実装）、既存値読みは \`storage\`（0 を返す）、新値はジャーナリング層にステージ、\`ZeroDb\` には届かない。
+- **計装で観察するもの.** 標準 tx で \`basic(tx.from)\` 1 回 + \`storage(tx.to, 0)\` 1 回 = 2 読み、それで全部、**Revm 周りハーネス全体が見えた**。
+- **tx revert vs \`Database::Error\` の違い.** Revert = コンセンサス、Database エラー = インフラ、Revm は \`Self::Error\` を呼び出し元に bubble up（revert 変換せず）、ハーネスがリトライ / ログ / 伝播を選ぶ。
+
+## 具体例
+
+\`ZeroDb\`:
 
 \`\`\`rust
 struct ZeroDb;
@@ -1516,31 +1460,7 @@ impl Database for ZeroDb {
 }
 \`\`\`
 
-\`type Error = std::convert::Infallible\` — 文字通り失敗できない。すべての呼び出しが \`Ok(...)\` を返す。\`Infallible\` は「これはエラーを起こさない」を表す慣用型。
-
-## ドリル 1 — 繋ぐ前に予測
-
-> 🛑 **質問（スクロール前に答えを書き留めて）:** 以下の各 EVM 操作が \`ZeroDb\` に対して走る。何が起きる?
->
-> 1. 任意のアドレスへの \`BALANCE\`。
-> 2. 任意のスロットの \`SLOAD\`。
-> 3. 任意のアドレスへの \`EXTCODESIZE\`。
-> 4. コードのないアドレスへの 0 ETH 転送 \`CALL\`。
-> 5. 任意のブロック番号 \`N\` への \`BLOCKHASH(N)\`。
-
-答え:
-
-1. **0 を返す。** \`basic\` が \`AccountInfo::default()\`（残高 0）を返す。
-2. **0 を返す。** \`storage\` が \`U256::ZERO\` を返す — Ethereum の新規スロットと同じ。
-3. **0 を返す。** \`code_by_hash\` が空の \`Bytecode\`（長さ 0）を返す。
-4. **実行なしで成功。** コードのない EOA への \`CALL\` は有効な Ethereum 操作 — 値を転送（ここではゼロ）して return。**revert はしない。**
-5. **\`B256::ZERO\` を返す。** テストのプレースホルダーとして有用。
-
-どれか間違えたら、\`Database\` × EVM セマンティクスのメンタルモデルを作り直す必要があります — 組み立てレッスンを読み直してからドリルを続けてしてほしい。
-
-## ドリル 2 — \`ZeroDb\` を Revm に繋いで 1-tx ブロックを実行
-
-ワンショットの \`examples/zero_db_drill.rs\` を書く（または Revm の既存テストハーネスを使う）:
+Revm に繋ぐ:
 
 \`\`\`rust
 use revm::{database_interface::Database, Evm, primitives::*};
@@ -1551,21 +1471,13 @@ fn main() {
         .build();
 
     // PUSH1 0x42 PUSH1 0x00 SSTORE STOP
-    // 0x42 を push、0x00 を push、スロット 0 に 0x42 を書き込み、stop。
     let bytecode = hex::decode("604260005500").unwrap();
-
     let result = evm.transact(&bytecode);
     println!("{:?}", result);
 }
 \`\`\`
 
-> 🛑 **予測。** このトランザクションは \`ZeroDb\` に対して成功する?
-
-成功する。\`SSTORE\` は *書き* で、読みではない — そして \`Database\` は書きを見ない（書きは \`DatabaseCommit\` 経由で、これは意図的に実装していない）。スロットの既存値は \`storage\`（0 を返す、問題なし）で読まれる。新値 0x42 は Revm のジャーナリング層にステージされ、\`ZeroDb\` には届かない。tx は無事 commit。
-
-## ドリル 3 — 読みが起きるのを観察する
-
-\`ZeroDb\` に \`println!\` を追加:
+計装版:
 
 \`\`\`rust
 fn basic(&mut self, addr: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -1576,87 +1488,86 @@ fn storage(&mut self, addr: Address, key: StorageKey) -> Result<StorageValue, Se
     println!("[ZeroDb] storage({addr}, {key})");
     Ok(StorageValue::ZERO)
 }
-// ... code_by_hash と block_hash も同じパターン
 \`\`\`
 
-再実行。**Revm が必要とする読みが正確に見える** — そしてそれ *だけ*。幻のクエリなし。先取りの状態ロードなし。遅延、オンデマンド、正確。
+\`PUSH1 0x42 PUSH1 0x00 SSTORE STOP\` で観測:
+- 送信者の nonce/残高検証で \`basic(tx.from)\` 1 回
+- SSTORE 返金会計のためのスロット読み込みで \`storage(tx.to, 0)\` 1 回
 
-> 🔧 **質問:** 何種類のメソッド呼び出しを観測した? どのメソッド? どのキーで?
+合計 2 読み。
 
-正確な答えはバイトコードとハーネス次第だが、\`PUSH1 0x42 PUSH1 0x00 SSTORE STOP\` ならこんな感じ:
+## 失敗例（誤解）
 
-- 送信者の nonce/残高検証で \`basic(tx.from)\` 1回
-- SSTORE 返金会計のためのスロット読み込みで \`storage(tx.to, 0)\` 1回
+「\`SSTORE\` は \`storage\` を呼ぶ」— **間違い**。書きは \`DatabaseCommit\` 経由、\`ZeroDb\` は \`DatabaseCommit\` 未実装 → 書きは到達しない。既存値読みのみ \`storage\`、新値はジャーナリング層にステージ。
 
-読み込み2回。それで全部。**これで Revm 周りのハーネス全体が見えた — 他の Database はこれに本物のデータを足しただけ。**
+「コードなし \`CALL\` は revert する」— **間違い**。EOA への CALL は **有効な Ethereum 操作**、値転送して return、revert なし。
 
-## ドリル 4 — 失敗させる（オプション、難）
+「\`Database::Error\` は revert に変換される」— **間違い**。Revert = **コンセンサス**、Database エラー = **インフラ**、Revm は \`Self::Error\` を呼び出し元に bubble up（revert 変換せず）、ハーネスがリトライ / ログ / 伝播を選ぶ。**だから \`Error\` はあなたの型、Revm のではない**。
 
-\`Infallible\` をカスタムエラー型に置き換え、特定のキーで \`storage\` が \`Err(...)\` を返すようにする:
+## ステップで組み立てる
 
-\`\`\`rust
-#[derive(Debug)]
-struct DbErr(String);
-impl revm::database_interface::DBErrorMarker for DbErr {}
+### Step 1: \`ZeroDb\` 4 メソッドスタブ
+全部 \`Ok(default())\`、\`type Error = Infallible\`。
 
-struct PickyDb;
+### Step 2: 5 EVM 操作の予測
+\`BALANCE\` / \`SLOAD\` / \`EXTCODESIZE\` / コードなし CALL / \`BLOCKHASH\`。
 
-impl Database for PickyDb {
-    type Error = DbErr;
-    // basic、code_by_hash、block_hash はすべて Ok(...)
-    fn storage(&mut self, _: Address, key: StorageKey) -> Result<StorageValue, Self::Error> {
-        if key == StorageKey::from(13u64) {
-            Err(DbErr("slot 13 is unlucky".into()))
-        } else {
-            Ok(StorageValue::ZERO)
-        }
-    }
-    // ... 残り
-}
-\`\`\`
+### Step 3: 1-tx ブロック実行
+\`PUSH1 0x42 PUSH1 0x00 SSTORE STOP\` = \`604260005500\`、成功確認。
 
-\`SLOAD(13)\` を行う tx を実行。**Revm はどうする?**（ヒント: revert *ではない* — 別カテゴリの失敗。）
+### Step 4: \`println!\` で計装
+標準 tx で \`basic(tx.from)\` 1 + \`storage(tx.to, 0)\` 1 = 2 読み観察。
 
-tx は「致命的な外部エラー」として中断する — revert とは別物。Revert は *コンセンサス*、Database エラーは *インフラ*。Revm は \`Self::Error\` を呼び出し元に bubble up し、revert に変換しない。これにより、ハーネスがリトライ・ログ・伝播のどれを選ぶか決められる。**だから \`Error\` はあなたの型で、Revm の型ではない。**
+### Step 5: 失敗ドリル（オプション）
+\`Infallible\` をカスタムエラー型に置換、特定キーで \`Err\` 返す \`PickyDb\` で revert vs Database エラーの違いを観察。
 
-## レッスン終了の想起
+## 答え合わせ
 
-スクロールせずに、自分の言葉で:
+- **\`basic\` が \`Some(default)\` を返す理由**: \`None\` = アカウント不存在シグナル、\`Some(default)\` = 存在するが空 = **Ethereum 上の新アカウント挙動と一致**。EXTCODEHASH が未知アカウントに特殊な意味を持つので、不存在ではなく空アカウントを返すことが正しいセマンティクス。
+- **\`SSTORE\` が \`ZeroDb\` メソッドを呼ばない理由**: SSTORE = **書き**で、読みではない、書きは \`DatabaseCommit\` 経由（\`ZeroDb\` は意図的未実装）。スロット既存値は \`storage\`（0 返す、問題なし）で読まれる、新値 0x42 は Revm のジャーナリング層にステージ → \`ZeroDb\` には届かない、tx 無事 commit。
+- **revert vs \`Database::Error\` の違い**: Revert = **コンセンサス**（プロトコル定義の失敗、ガス消費、状態ロールバック）、Database エラー = **インフラ**（RPC タイムアウト / ロック poison / ディスク I/O）。Revm は \`Self::Error\` を呼び出し元に **bubble up**（revert 変換せず）、ハーネスがリトライ / ログ / 伝播を選ぶ。だから \`Error\` はあなたの型、Revm のではない。
 
-1. なぜ \`ZeroDb::basic\` は \`Ok(None)\` ではなく \`Ok(Some(AccountInfo::default()))\` を返すのか?
-2. ドリル 2 で \`SSTORE\` が *書き* のために \`ZeroDb\` のメソッドを呼ばなかったのはなぜか?
-3. tx の revert と \`Database::Error\` が bubble up するのとの違いは?
+## 合格基準
 
-どれか曖昧なら、ここで先に進まないこと。ドリルをやり直すか、組み立てレッスンを読み直し。
+- \`ZeroDb\` 4 メソッドの戻り値を即書ける。
+- 5 EVM 操作の予測（\`BALANCE\` / \`SLOAD\` / \`EXTCODESIZE\` / CALL / \`BLOCKHASH\`）を即答できる。
+- \`SSTORE\` が \`ZeroDb\` の \`storage\` を呼ばない理由を 1 文で説明できる。
+- 標準 tx で観測される 2 読み（\`basic(tx.from)\` + \`storage(tx.to, 0)\`）を即答できる。
+- revert と \`Database::Error\` の違い（コンセンサス vs インフラ）を即答できる。
 
-このドリルの後、Revm がどう状態を取るかの動くメンタルモデルがあります — 他のすべての Database はこの \`ZeroDb\` に本物のデータが乗っただけ。
+## まとめ（3行）
 
-ファイナルクイズの前に、あと 2 レッスン。まず **Revm 自身がどうテストされているか** — 各 fork で Ethereum 仕様への準拠を証明するテストハーネス。次に revmc、JIT/AOT コンパイル経路。両方を終えたら Inside Revm は完了。`,
+- \`ZeroDb\` = 「残高ゼロ、スロットゼロ、コードなし」最小実装、4 メソッド全部 \`Ok(default())\` + \`type Error = Infallible\`。
+- 計装で観測 = 標準 tx 2 読み（\`basic(tx.from)\` + \`storage(tx.to, 0)\`）、SSTORE は書きなので \`DatabaseCommit\` 経由（未実装）= \`ZeroDb\` に届かない、EVM は状態に対して非常に怠惰。
+- Revert（コンセンサス）vs \`Database::Error\`（インフラ）の違い = Revm が bubble up（変換せず）、ハーネスが対応決定 = **だから \`Error\` はあなたの型**。
+`,
                 },
                 {
-                  title: 'Revm 自身のテスト — state test、EOF test、execution-spec 準拠',
+                  title: 'レッスン13 — Revm 自身のテスト — state test / EOF / execution-spec',
                   slug: 'revm-testing-ja',
                   type: 'CONTENT',
                   sortOrder: 13,
                   duration: 22,
                   xpReward: 45,
-                  content: `# Revm 自身のテスト — state test、EOF test、execution-spec 準拠
+                  content: `# レッスン13 — Revm 自身のテスト — state test / EOF / execution-spec
 
-ここまでインタープリター、命令テーブル、Database トレイトを歩いてきました。**次の問いは、Revm チームが「Revm が EVM を正しく実行する」ことをどうやって証明しているか** である。答えは「読んでうなずいた」ではありません。コンセンサスクリティカルなエンジン — バグが 1 つでもチェーンを分裂させかねないソフトウェア — は、別の基準で計られる。本レッスンはその基準が要求するテスト基盤を読み解く。
+## 問い
 
-## EVM 実装が通すべき 3 つのテスト面
+インタープリター + 命令テーブル + Database トレイトは歩いた。**Revm チームが「Revm が EVM を正しく実行する」をどう証明しているか？ コンセンサスクリティカルなエンジン = バグ 1 つでチェーン分裂、別の基準で計られる。3 テスト面の役割と境界は？**
 
-| テスト面 | 在処 | 何を証明するか |
-| :--- | :--- | :--- |
-| **State tests** ([\`ethereum/tests\`](https://github.com/ethereum/tests)) | 標準の、複数クライアントを横断するテストコーパス | 1 つのトランザクションが事前状態を正しい事後状態へ遷移させ、ガスコストも正しいこと |
-| **EOF tests** ([\`ethereum/tests/EOFTests\`](https://github.com/ethereum/tests/tree/develop/EOFTests)) | EVM Object Format への準拠テスト | 新しいバイトコードコンテナ形式（検証、サブコンテナ）が仕様通りに受理／拒否すること |
-| **execution-spec-tests** ([\`ethereum/execution-spec-tests\`](https://github.com/ethereum/execution-spec-tests)) | 仕様から生成されるテスト群 | テストが *仕様から生成* されているので、通過すること自体が仕様との一致を意味する |
+## 原理（最小モデル）
 
-Revm はこの 3 つすべてを通する。**これが Reth・Hyperliquid の HyperEVM・Foundry・Tempo の中身として Revm を ship する根拠** であり、この規律がなければ下流の消費者すべてがコンセンサスバグにさらされる。
+- **3 テスト面.** State tests（[\`ethereum/tests\`](https://github.com/ethereum/tests)、複数クライアント横断、pre → tx → post）/ EOF tests（[\`ethereum/tests/EOFTests\`](https://github.com/ethereum/tests/tree/develop/EOFTests)、EOF コンテナ validation）/ execution-spec-tests（[\`ethereum/execution-spec-tests\`](https://github.com/ethereum/execution-spec-tests)、仕様から生成）。
+- **State test の形.** JSON 3 セクション = \`pre\`（実行前状態）/ \`transaction\`（適用）/ \`post\`（fork ごとに state-root + logs ハッシュ）。runner = pre 構築 → tx 実行 → post ハッシュ化 → 比較。
+- **EOF test の形.** バイトコードの validation 準拠、「validate される」or 「このエラーで reject される」アサーション、構造クリティカル（不正コンテナ accept / 有効 reject はチェーン分裂）。
+- **execution-spec-tests の強み.** Python フレームワークで spec-aware DSL で書く → 全 fork に対し具体的 state test 自動生成 → **pass = 構造的に仕様と一致**。
+- **3 面の役割分担.** State tests = 実行セマンティクス確定後、EOF tests = コンテナ validation（別クラスバグ）、execution-spec-tests = 仕様変更を最速で捕まえる（EIP draft 段階）。
+- **Revm 消費者の教訓.** ① pre → tx → post = EVM 実行の普遍形、② 他リファレンスへの differential（「自分は仕様ではないが一致」）= Building tier の Revm シミュレーション検証パターン、③ 生成テスト ≥ 手書き（仕様が権威時）。
+- **Revm が state tests を走らせる必要性.** Revm 埋め込み全クライアントは Revm の正しさを継承 = Revm のバグは全下流クライアントのバグ、エンジン層の規律。
 
-## 1. State tests — 標準フォーマット
+## 具体例
 
-state test は JSON ファイル。[\`ethereum/tests/GeneralStateTests\`](https://github.com/ethereum/execution-spec-tests) のどれかを開く。形:
+State test JSON:
 
 \`\`\`json
 {
@@ -1682,15 +1593,7 @@ state test は JSON ファイル。[\`ethereum/tests/GeneralStateTests\`](https:
 }
 \`\`\`
 
-3 セクション: \`pre\`（実行前のアカウント状態）、\`transaction\`（適用するもの）、\`post\`（fork ごとに、結果として得られるべき state-root + logs ハッシュ）。runner は pre-state を構築し、tx を実行、post-state をハッシュ化、\`post.Cancun[].hash\` と比較。一致 → pass、乖離 → バグ。
-
-> 🔍 **リポジトリで確認。** [\`bluealloy/revm\`](https://github.com/bluealloy/revm) で \`statetest\` を検索（\`bins/revme/\` あたりの runner crate）。runner は別バイナリで、ローカルで upstream テストスイートに対して走らせられる。**Geth、Erigon、Nethermind、Besu と同じスイート。**
-
-## 2. EOF tests — validation 準拠
-
-EOF（EVM Object Format、EIP-3540 ファミリ）は section、type 署名、構造 validation を持つ新バイトコードコンテナを導入。レガシーバイトコード（何でも有り）と違い、EOF は実行前にパース・validate される必要がある。validator はコンセンサスクリティカル: 不正なコンテナを accept したり、有効なものを reject したりはチェーン分裂。
-
-EOF tests は state test と同じく JSON だが、assertion は「このバイトコードは validate される」または「このバイトコードはこのエラーコードで reject される」だけ:
+EOF test:
 
 \`\`\`json
 {
@@ -1701,276 +1604,208 @@ EOF tests は state test と同じく JSON だが、assertion は「このバイ
 }
 \`\`\`
 
-数百件がエッジケースをカバー: section サイズの不整合、不正な type section、到達不能コード、sub-container を脱出する jump table。Revm の validator は CI 走行のたびに全部に対して走る。
-
-## 3. execution-spec-tests — 仕様から生成されるテスト
-
-最も強力な層。[\`ethereum/execution-spec-tests\`](https://github.com/ethereum/execution-spec-tests) は Python フレームワークで、テストシナリオを spec-aware DSL で書くと、フレームワークが全 fork に対して具体的な state test を生成する:
+execution-spec-test:
 
 \`\`\`python
 @pytest.mark.valid_from("Cancun")
 def test_my_opcode(state_test, fork):
     pre = { Address(0x1000): Account(code=Op.MY_NEW_OPCODE + Op.STOP) }
     tx = Transaction(to=Address(0x1000), gas_limit=100_000)
-    post = { Address(0x1000): Account(storage={0: 1}) }  # opcode が slot 0 に 1 を書いた
+    post = { Address(0x1000): Account(storage={0: 1}) }
     state_test(env=Environment(), pre=pre, post=post, tx=tx)
 \`\`\`
 
-フレームワークがこのテストを \`MY_NEW_OPCODE\` を定義した全 fork に対して走らせる — 仕様から正しい pre-state、ガスコスト、post-state ハッシュを自動生成する。**execution-spec-tests を pass する = 構造的に仕様と一致する**。「テストを書いたらたまたま一致した」ではない。
+3 面の捕まえタイミング:
 
-新 EIP がカバレッジを得る方法。**新 opcode、新 precompile、ガス規則変更** はすべて execution-spec-tests を伴う; クライアント実装（Geth、Erigon、Revm ベースのクライアント）は mainnet 起動前にそれらを走らせ互換性を報告する。
+| 面 | 捕まえタイミング | クラス |
+| :--- | :--- | :--- |
+| execution-spec-tests | EIP draft branch（活性化前） | 仕様変更 → 自動生成 |
+| State tests | fork ロールアウト中 | 確定挙動の正典 |
+| EOF tests | 別クラス（構造 validation） | コンテナ形式 |
 
-## Revm 消費者にとっての教訓
+## 失敗例（誤解）
 
-state test を *書く* ことは（普通は）無い — upstream で書かれたものを消費する。しかし *パターン* は EVM 挙動を再実装する任意のコードに効く:
+「3 テスト面は冗長」— **間違い**。**コンセンサス正しさの空間を分割**、execution-spec が仕様変更を最速で捕まえ、state tests が確定挙動を正典化、EOF tests がコンテナ validation を担当、各々別クラスのバグを捕まえる。
 
-1. **Pre-state → tx → post-state** は「EVM を正しく実行すると主張する」普遍的な形。tx を処理するもの（Foundry cheatcode、カスタム precompile、再実行する ExEx）を作るときには常にこの形を使う。
-2. **Revm 以外のリファレンスに対する differential** は「自分は仕様ではないが、それと一致する」パターン。Building tier の *Revm シミュレーションを Production Provider で検証する* レッスンは、まさにこの規律をアプリケーション層に適用したもの。
-3. **生成テスト ≥ 手書き** — 仕様が権威であるとき。形式的セマンティクスを持つもの（独自 CFMM、sponsor ポリシー）を作るなら、セマンティクスからテストを生成すれば、手書きテストが取り逃すバグを捕まえる。
+「Revm はライブラリだから state tests 走らせる必要なし」— **致命的**。**Revm 埋め込み全クライアント（Reth / Hyperliquid / Tempo / Berachain）は Revm の正しさを継承** = Revm のバグは全下流クライアントのバグ = エンジン層の規律。
 
-> 🛑 **スクロール前に予測。** 新 EIP が cold アカウントの \`SLOAD\` ガスコストを変えるとする。新ガスコストを誤計算する Revm バグが、3 つのテスト面のうちどれで捕まるか辿る。**答えを保留せよ。**
+「手書きテストで十分」— **間違い**（仕様が権威時）。execution-spec-tests = **テストが仕様から生成** = pass = 構造的に仕様と一致、手書きテストが取り逃すバグを捕まえる。
 
----
+## ステップで組み立てる
 
-3 つすべてが捕まえる、ただし違う遅延で:
+### Step 1: State tests の役割
+JSON 3 セクション（pre / tx / post）+ runner（pre 構築 → tx → post ハッシュ比較）= 確定挙動の正典、複数クライアント横断。
 
-- **execution-spec-tests** が *最初* に捕まえる — 仕様変更が新テストを自動生成し、活性化前の EIP draft branch で CI が回す。**EIP merge 前に issue が立つ。**
-- **State tests** が *次に* 捕まえる — 仕様確定後、Ethereum tests チームが新挙動の正典 state test を出す。CI が mainnet 活性化前に乖離を捕まえる。**fork ロールアウト中に issue が立つ。**
-- **EOF tests** はこのバグを捕まえない（ガスコストは opcode 挙動で、コンテナ validation ではない）。**EOF tests は別クラスのバグ — 構造 validation、実行セマンティクスではない — を捕まえる。**
+### Step 2: EOF tests の役割
+バイトコード validation 準拠、構造クリティカル（不正コンテナ accept / 有効 reject はチェーン分裂）。
 
-教訓: **3 つのテスト面は冗長ではない — コンセンサス正しさの空間を分割している。**
+### Step 3: execution-spec-tests の役割
+Python フレームワーク + spec-aware DSL → 全 fork に具体 state test 自動生成 = pass = 仕様一致、最速で仕様変更を捕まえる。
 
-## ドリル
+### Step 4: 3 面の役割分担
+実行セマンティクス（State）+ コンテナ validation（EOF）+ 仕様変更最速（execution-spec）= **冗長ではなく分割**。
 
-1. **state-test runner をローカルで走らせる。** [\`bluealloy/revm\`](https://github.com/bluealloy/revm) を clone し \`statetest\` バイナリ（多くは \`bins/revme/\` 配下）を見つける。[\`ethereum/tests\`](https://github.com/ethereum/tests) を clone。runner を小さなサブセット（例: \`GeneralStateTests/stArgsZeroOneBalance/\`）に対して実行。**全 pass を確認。** 30 分。
-2. **state test JSON を 1 つ end-to-end で読む。** 1 つテストを選び（例: \`stArgsZeroOneBalance\` 配下のどれか）、JSON の各フィールドが Revm runner のどこで使われるかをマッピング。**1 件の実行を頭の中で完全に追う。** 30 分。
-3. **execution-spec-test ソースを 1 つ読む。** [\`execution-spec-tests/tests/\`](https://github.com/ethereum/execution-spec-tests/tree/main/tests) から任意のテスト。DSL 演算子（\`Op.X\`、\`Account(...)\`、\`Transaction(...)\`）を識別し、ドキュメントを読み、それらがどう具体 state test を生成するかを理解。45 分。
-4. **Revm で解決済みのコンセンサス issue を探す。** [\`bluealloy/revm\` の closed issues](https://github.com/bluealloy/revm/issues?q=is%3Aissue+is%3Aclosed+state+test) で state test に捕まったものを 1 件。バグ・修正・追加された回帰テストを読む。**コンセンサス正しさが実務で何を要するか。** 45 分。
+### Step 5: Revm 消費者の教訓
+pre → tx → post の普遍形 / differential パターン / 生成 ≥ 手書き。
 
-ドリル 4 の後、フィードバックループ全体が見えている: 仕様変更 → テスト生成 → Revm fail → Revm 修正 → 回帰テスト追加 → コンセンサス防御。
+### Step 6: Revm が state tests 必須の理由
+Revm 埋め込み全クライアントが正しさ継承 = エンジン層の規律。
 
-> 🛑 **最終チェック。** 一文で: なぜ Revm — チェーンではなくライブラリ — が state tests を走らせる必要があるのか? state tests は通常フルクライアントと結びつくのに。答えに「Revm を埋め込む全クライアントは Revm の正しさを継承する; Revm のバグは *全* 下流クライアントのバグ」が無いなら、冒頭を読み直す — それがこの規律がエンジン層に存在する理由の全部。
+## 答え合わせ
 
-## 📺 関連リンク
+- **3 テスト面が分割する空間**: ① **State tests** = 実行セマンティクス確定後の正典挙動、② **EOF tests** = コンテナ validation（実行前のパース / validate、別クラスバグ）、③ **execution-spec-tests** = 仕様変更を最速で捕まえる（EIP draft 段階で CI が回す）。「ガスコスト変更」を例に: execution-spec が EIP merge 前に捕まえ、State tests が fork ロールアウト中に捕まえ、EOF tests は捕まえない（構造ではない）。
+- **execution-spec-tests が「pass = 仕様一致」を保証する根拠**: テストが **spec-aware DSL で書かれ仕様から自動生成** = テスト pass = 構造的に仕様と一致。手書きテストは「自分が書いたものとは一致」しか保証しない、仕様との乖離を捕まえられない。新 EIP（新 opcode / precompile / ガス規則変更）がカバレッジを得る方法。
+- **Revm が state tests を走らせる必要性**: Revm は ライブラリだが、**埋め込み全クライアント（Reth / Hyperliquid / Tempo / Berachain）が Revm の正しさを継承** = Revm のバグは全下流クライアントのバグ = mainnet 起動前に互換性報告する必要 = **エンジン層に住む規律**。「ライブラリだから関係ない」が成立しない構造。
 
-- [Ethereum tests README](https://github.com/ethereum/tests) — 正典 state-test コーパス
-- [execution-spec-tests docs](https://eest.ethereum.org/) — テスト生成フレームワーク
-- [EIP-3540 — EOF v1](https://eips.ethereum.org/EIPS/eip-3540) — EOF tests がカバーする validator のフォーマット
+## 合格基準
+
+- 3 テスト面（State / EOF / execution-spec）の役割を即答できる。
+- State test JSON 3 セクション（pre / tx / post）を即答できる。
+- EOF test の構造クリティカル理由を 1 文で説明できる。
+- execution-spec-tests が「pass = 仕様一致」を保証する根拠を即答できる。
+- Revm 消費者の 3 教訓（pre→tx→post / differential / 生成 ≥ 手書き）を即答できる。
+- 「Revm が state tests を走らせる必要性」の根拠（埋め込み全クライアント継承）を 1 文で説明できる。
+
+## まとめ（3行）
+
+- 3 テスト面 = State tests（確定挙動の正典）+ EOF tests（コンテナ validation）+ execution-spec-tests（仕様変更最速、自動生成）= 冗長でなく分割。
+- 「pass = 仕様一致」を保証するのは execution-spec-tests（DSL → 仕様から自動生成）、手書きテストは「自分が書いたものとは一致」しか保証しない、新 EIP カバレッジの正規ルート。
+- Revm 埋め込み全クライアント（Reth / Hyperliquid / Tempo / Berachain）が正しさ継承 = Revm のバグは全下流バグ = state tests 走らせるのはエンジン層の規律、次は並列実行（block-stm）。
 `,
                 },
                 {
-                  title: '並列実行 — 逐次インタープリターループの先へ',
+                  title: 'レッスン14 — 並列実行 — 逐次インタープリターループの先へ',
                   slug: 'revm-parallel-execution-ja',
                   type: 'CONTENT',
                   sortOrder: 14,
                   duration: 24,
                   xpReward: 50,
-                  content: `# 並列実行 — 逐次インタープリターループの先へ
+                  content: `# レッスン14 — 並列実行 — 逐次インタープリターループの先へ
 
-Inside Revm のこれまでのレッスンは、実行を逐次として扱ってきました — 1 つの tx をインタープリターに通し、コミットし、次へ。これが Reth と revm が現状で出荷している形であり、mainnet が 10 年間動いてきた形である。**そして、これが EVM の性能を縛る最大の天井** でもある。Sei・Monad・MegaETH・Aptos（技法の起源）など複数のチームが並列 EVM を出荷済み、あるいは出荷中である。Reth 自身もソースツリーに実験的な並列実行パスを持っている。本レッスンでは、そのモデルを学びる。
+## 問い
 
-> 📌 **正直なところ。** 並列 EVM は *動く標的* である。Sei・Monad・MegaETH・Reth の実験的作業で実装の細部は異なる。共通して変わらず、本レッスンで学ぶのは — **block-stm** パターン（読み書きの衝突検出を伴う楽観的並行制御）と、これまで歩いてきた \`Database\` トレイトへのマッピング、の 2 点である。
+ここまで実行を逐次として扱った = Reth と revm が現状で出荷、mainnet が 10 年動いてきた形。**そして EVM 性能を縛る最大の天井**。Sei / Monad / MegaETH / Aptos が並列 EVM を出荷済み、Reth 自身も実験的並列パスを持つ。**block-stm パターン + \`Database\` トレイトへのマッピング、どう動くか？**
 
-## 1. なぜ逐次実行が天井なのか
+## 原理（最小モデル）
 
-ブロックには N トランザクション。インタープリターはこれを 1 つずつ実行する。なぜなら、各 tx が別 tx の書き込んだ state を読む *かもしれない* から。tx 5 が slot \`X\` を読み、tx 3 が slot \`X\` に書いていれば、5 の前に 3 を走らせる必要がある。
+- **逐次の天井.** mainnet ブロック ~200 tx、衝突する（互いが読む slot に書く）のは **約 10-20%** = 残り 80% は意味的理由なしに逐次、これが並列 EVM が狙う賞品。
+- **block-stm（block-level Software Transactional Memory）.** Aptos が Move 向けに導入、Sei が EVM に移植、Monad / MegaETH 採用。
+- **アルゴリズム 4 ステップ.** ① N tx を並列で投機実行（複数 worker）、② 各 tx 中に read set + write set 記録、③ commit 順検証（tx i の read set が早い tx j > j の write set と重なるなら i 再実行）、④ N tx 全部逐次順 valid まで検証 + 再実行繰り返し。
+- **楽観的並行制御.** 衝突は稀と仮定、衝突しない 80% は並列で 1 回、衝突する 20% は逐次再実行、正味 3-8 倍スループット（ワークロード次第）。
+- **\`Database\` トレイトへのマッピング.** \`basic\` / \`storage\` 呼び出しが read-set entry、state 変更が write-set entry、tracker = 標準 \`Database\` をラップ。
+- **\`TrackedDatabase\` 構造.** \`inner: D\` + \`read_set\` + \`read_accounts\`、\`storage()\` 等のオーバーライドで read 記録 → \`inner\` 委譲、**executor / インタープリター書き換え不要**。
+- **本番複雑さ 6 領域.** Write set 伝播（MVCC）+ 再実行順序（thrash 防止）+ Read/write set 推定（実行後にしか分からない）+ Hot コントラクト（避けられない直列化）+ ガス会計（再実行で総ガス増）+ 決定論（並列 worker が毎回正確に同じ state root）。
+- **チェーン別ステータス.** Sei v2 デフォルト並列 / Monad 初日から / MegaETH ターゲット / Reth 実験的 / mainnet 逐次（コンセンサスリスクと TVL）。
 
-> 🛑 **スクロール前に予測。** mainnet ブロックには ~200 tx ある。そのうち実際に互いに衝突する（1 つが他の 1 つが読む slot に書く）のは何 % か? %% で推測。
+## 具体例
 
-経験的には: **およそ 10〜20%** の mainnet tx が同じブロック内の他の tx が触れる state に触れる。残りは独立 — 別 pool の DEX swap、別アカウントへの transfer、誰もそのブロックで読まない oracle 更新。**ブロックの 80% は意味的な理由なしに逐次実行されている。** その gap が並列 EVM が狙う賞品。
-
-## 2. block-stm パターン（主流アプローチ）
-
-block-stm (block-level Software Transactional Memory) は Move 向けに Aptos が導入、Sei が EVM に移植、Monad、MegaETH 他が採用。中核の発想:
-
-\`\`\`
-1. N 個の tx を並列で投機実行（複数 worker）
-2. 各 tx 実行中、読んだもの（read set）と書いたもの（write set）を記録
-3. 実行後、commit 順で検証:
-   - tx i の read set が、より早い tx j (j < i、i 開始後に j が commit) の write set と重なるなら、
-     i は古いデータを使った → i を再実行
-4. N 個の tx が全部逐次順で valid になるまで検証と再実行を繰り返す
-\`\`\`
-
-これは **楽観的並行制御**: 衝突は稀だと仮定して並列で走らせ、実際に衝突したものだけ直す。衝突しない 80% は並列で 1 回走る。衝突する 20% は逐次で再実行。正味スループット: ワークロード次第で 3〜8 倍。
-
-> 🛑 **予測。** ブロックに 100 tx ある。90 個は独立（別アドレス、別ストレージスロット）。10 個は全部同じ Uniswap pool に対する sandwich-arb 試み。**block-stm は何をするか?**
-
-90 個の独立 tx は並列実行され、1 パス目で綺麗に commit。10 個の sandwich-arb は全部同じ pool state を読み書き — 投機並列実行され、9 つが古い read set を使ったと検出して再実行。~2 回の再実行波の後、10 個が逐次 commit。総 wall-clock: 1 並列パス + 2 つの小さな再実行波、100 逐次ステップではなく。**衝突はコストになるが、比例的にしか効かない。**
-
-> 🛣️ **もう一つの道 (Solana):** Solana は同じスループット問題を、逆の賭けで解いている。Solana では、どの tx も読み / 書きするアカウント集合を *事前に* 宣言し、その宣言が tx メッセージ自体に書き込まれる。ランタイム（Banking Stage スケジューラ）は、重ならない tx を集めて **投機なし・再実行なし** で並列に走らせる — 依存関係が実行前に静的に分かっているので、依存関係を取り違えた tx を実行することは起きない。EVM の block-stm は逆の賭けに出る: 開発者モデルを緩く保ち（ロック集合の宣言は不要、コントラクトは任意のストレージに触れる）、その代わりにランタイム層で衝突追跡と再実行のコストを払う。同じ問題に対する 2 つの有効な答えで、選択は「開発者側の負担」と「ランタイムのコスト」のトレードオフ。どちらかが「正解」というわけではない。
-
-## 3. これが \`Database\` トレイトのどこに住むか
-
-Database チェーンで歩いた \`Database\` トレイトを思い出す:
-
-\`\`\`rust
-pub trait Database {
-    type Error: DBErrorMarker;
-    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error>;
-    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error>;
-    fn storage(&mut self, address: Address, key: StorageKey) -> Result<StorageValue, Self::Error>;
-    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error>;
-}
-\`\`\`
-
-逐次実行では、executor がこれらを呼んで値を得るだけ。**並列実行では、\`basic\` / \`storage\` の各呼び出しが read-set entry でもあり**、各 state 変更が write-set entry になる。block-stm スケジューラは標準 \`Database\` を tracking 層でラップする:
+\`TrackedDatabase\`:
 
 \`\`\`rust
 pub struct TrackedDatabase<D: Database> {
     inner: D,
-    read_set: HashSet<(Address, StorageKey)>,         // storage() で記入
-    read_accounts: HashSet<Address>,                  // basic() で記入
-    // write_set は executor のジャーナリング層に住む
+    read_set: HashSet<(Address, StorageKey)>,
+    read_accounts: HashSet<Address>,
 }
 
 impl<D: Database> Database for TrackedDatabase<D> {
     type Error = D::Error;
     fn storage(&mut self, addr: Address, key: StorageKey) -> Result<StorageValue, Self::Error> {
-        self.read_set.insert((addr, key));            // ← read を記録
-        self.inner.storage(addr, key)                 // ← 実 source に委譲
+        self.read_set.insert((addr, key));
+        self.inner.storage(addr, key)
     }
-    // ... basic()、code_by_hash()、block_hash() も同様に track
+    // basic / code_by_hash / block_hash も同様に track
 }
 \`\`\`
 
-**これが \`Database\` トレイトの形がここで重く報われる理由。** トレイトを歩いたレッスンは「これが並列実行が plug in する seam でもある」と言わなかったが、それが seam だ。\`Database\` に依存する任意のコードは、ラッパーが read を track する限り並列で動く; executor やインタープリターの書き換えは不要。
+100 tx ブロック例（90 独立 + 10 sandwich-arb 同 pool）:
 
-> 🔍 **リポジトリで確認。** [\`bluealloy/revm\`](https://github.com/bluealloy/revm) で \`parallel\` または \`stm\` を検索。実験的コード（多くは feature flag 内または別 crate）がまさに §3 の tracking-wrapper パターンをやっている。**その 50 行を読む。** 歩いてきた他の全てとどう合成するかを観察。
+| パス | tx | 結果 |
+| :--- | :--- | :--- |
+| 投機並列 1 | 90 独立 | 1 パス目で全部 commit |
+| 投機並列 1 | 10 sandwich | 9 個が古い read set 検出 |
+| 再実行波 1-2 | 10 sandwich | 逐次 commit |
 
-## 4. 難しい部分
+総 wall-clock = 1 並列パス + 2 小再実行波（100 逐次ステップでなく）= 衝突はコストになるが比例的にしか効かない。
 
-block-stm は抽象的には簡単に聞こえる; 本番の複雑さはここに住む:
+## 失敗例（誤解）
 
-| 問題 | 何が難しいか |
-| :--- | :--- |
-| **Write set の伝播** | tx i の書き込みは tx j>i が再実行するときに見える必要があるが、まだ commit していない tx k には見えてはいけない。バージョン付き storage 層（MVCC を考える）が必要 |
-| **再実行順序** | 無効化後、依存順に再実行。素朴な「失敗したものを再実行」ループは順序を間違えると thrash する |
-| **Read/write set の安価な推定** | tx の read set は実行 *後* にしか分からない。事前予測（静的解析や hint 経由）は研究領域 |
-| **Hot コントラクト** | 同じ pool への全 sandwich tx は避けられない直列化を形成する。block-stm は助けない; 単に悪化させない。修正はアプリケーション層（複数 pool、AMM 再設計） |
-| **ガス会計** | 並列実行は逐次より総ガスが多い（再実行）。誰が払うか? スキームは異なる |
-| **決定論** | 並列実行する複数 worker は毎回 *正確に同じ state root* を生む必要がある。tracker の競合状態 = コンセンサスバグ = チェーン分裂 |
+「並列 EVM = インタープリター書き換え」— **間違い**。**\`Database\` トレイトの合成性で executor / インタープリター不変**、tracking-wrapper パターンで read/write track、これが「\`Database\` トレイトの形が重く報われる」場所。
 
-最後の行がコンセンサスクリティカル。並列 EVM のバグ表面は逐次に比べて *膨大*; これが本番展開が慎重だった理由。
+「mainnet が並列実行に保守的なのは技術的問題」— **間違い**。**コンセンサスリスク + TVL（$400B+）**、並列バグは全ノード同時影響でチェーン分裂 = mainnet には取れない賭け、新チェーン（Sei / Monad / MegaETH）は TVL 低いところから始め速く iterate できる。
 
-## 5. 各チェーンが実際に何をしているか
+「block-stm は hot コントラクトを並列化できる」— **間違い**。同じ pool への全 sandwich tx は **避けられない直列化** = block-stm は助けない、悪化させないだけ、修正はアプリケーション層（複数 pool / AMM 再設計）。
 
-- **Sei v2**（block-stm の最初の本番 EVM）: デフォルトで並列実行。revm の fork に §3 の tracking-wrapper パターンが入っている
-- **Monad**: 初日から並列実行。独自インタープリター（revm ではない）だが、read/write set tracking モデルは類似
-- **MegaETH**: 並列実行ターゲット、その他の最適化（in-memory state、独自 consensus）
-- **Reth**: 実験的。本流インタープリターは逐次; 並列実行作業はブランチと crate（Compass がその 1 つ）に存在するが本番デフォルトではない
-- **mainnet Ethereum**: 逐次。プロトコル層での並列実行は長期議論（EIP-7960 系）だが active ではない
+## ステップで組み立てる
 
-> 🛑 **予測。** なぜ mainnet は並列実行に保守的で、Sei / Monad / MegaETH は積極的に ship するのか?
+### Step 1: 逐次の天井を理解
+mainnet ブロック ~200 tx、衝突 10-20%、残り 80% は意味的理由なしに逐次。
 
-mainnet の保守性は *コンセンサスリスク* と *後方互換性* について。並列実行のバグは全ノードに同時影響しチェーンを分裂させうる — そして mainnet には $400B+ が乗っている。新しいチェーンは TVL が低いところから始め速く iterate できるので積極的並列実行を ship できる。**同じコード、同じリスクプロファイル、異なる失敗コスト。** これが新 L1 が mainnet の昼食を raw throughput で食う理由 — mainnet が取れない賭けを彼らは取れる。
+### Step 2: block-stm アルゴリズム 4 ステップ
+投機並列 + read/write set 記録 + commit 順検証 + 再実行ループ。
 
-## 6. キャリアにとっての意味
+### Step 3: 楽観的並行制御の数字感覚
+衝突しない 80% は並列 1 回、衝突する 20% は逐次再実行、正味 3-8 倍。
 
-並列 EVM は 2026 年の execution-layer の最も active な研究と工学のフロンティア。ship しているチーム（Sei、Monad、MegaETH）は revm の tracking-wrapper を読み、block-stm を理解し、スケジューラまたは衝突検出層に貢献できるエンジニアを積極的に採用している。**この作業はどれも、今あなたが持つ Inside Revm + Inside Reth の基礎なしでは不可能。**
+### Step 4: \`Database\` トレイトへのマッピング
+\`TrackedDatabase\` でラップ、\`basic\` / \`storage\` を track、**executor 不変**。
 
-この specialization にしたいなら、進む道:
+### Step 5: 本番複雑さ 6 領域
+MVCC + 再実行順序 + set 推定 + hot コントラクト + ガス会計 + 決定論。
 
-1. Sei の revm fork を読んで本番 block-stm パターンを学ぶ（オープンソース）
-2. Aptos の元の [block-stm 論文](https://arxiv.org/abs/2203.06871) を読み理論的基礎を得る
-3. §3 の \`Database\` tracking パターンを使って revm に対する toy 並列 executor を build（このカリキュラム基礎があれば週末プロジェクト）
-4. Reth の実験的並列作業に貢献するか、Sei / Monad / MegaETH に応募
+### Step 6: チェーン別ステータス読み解き
+Sei / Monad / MegaETH 並列、Reth 実験的、mainnet 逐次（TVL + コンセンサスリスク）。
 
-## ドリル
+## 答え合わせ
 
-1. **本物の block-stm 実装を読む。** Sei の [\`sei-protocol/revm\`](https://github.com/sei-protocol/sei-chain) fork（または並列 EVM crate）を開く。tracking-wrapper struct を見つける。そのメソッドを歩いた \`Database\` トレイトにマップする。**30 分。**
-2. **並列化に適したブロックを特定。** Etherscan を開き、最近の mainnet ブロックを 1 つ選ぶ。tx リストを skim する。ユニーク contract に触れるもの（独立）と上位 3 contract に触れるもの（衝突しそう）を数える。**そのブロックの並列スピードアップ天井の推定は?** 30 分。
-3. **元の block-stm 論文を読む。** [arxiv:2203.06871](https://arxiv.org/abs/2203.06871)。セクション 1、3、4 を skim。Aptos モデルは Move 向けだが、セクション 3 の楽観的実行 + 検証ダイアグラムが普遍パターン。45 分。
-4. **自分の tracking wrapper をスケッチ。** revm の fork で \`Database\` を実装する \`TrackedDb\` を書き、全 read を print する。小さなバイトコード（過去のドリルの \`PUSH1 0x42 PUSH1 0x00 SSTORE STOP\` など）を流す。**どの read が起きるかを正確に見る。** これが block-stm が衝突を決定するために使うデータ。1.5 時間。
+- **\`Database\` トレイトが並列実行を可能にする理由**: トレイトの **合成性** = \`TrackedDatabase\` で標準 \`Database\` をラップ、\`basic\` / \`storage\` 呼び出しを track（read-set entry）、\`inner\` に委譲。**executor / インタープリターは書き換え不要**、ラッパーが read 記録すれば任意のコードが並列で動く。これが「\`Database\` トレイトの形が重く報われる」場所、設計時点では並列実行を考えていなくても合成性が後から賞金を返す。
+- **block-stm が 3-8 倍スループットを出す根拠**: mainnet ブロック ~200 tx で衝突 10-20%、残り 80% は独立 = 投機並列で 1 パス目に commit、衝突する 20% は再実行で逐次にコスト払う、正味 wall-clock = 1 並列パス + 小再実行波（200 逐次ステップでなく）。ワークロード次第で 3-8 倍、衝突多いほど効果薄い。
+- **mainnet が並列実行に保守的な理由**: **コンセンサスリスク + TVL**。並列実行のバグは全ノード同時影響でチェーン分裂、mainnet には $400B+ 載っている = 取れない賭け。新チェーン（Sei / Monad / MegaETH）は TVL 低いところから始め速く iterate できる、同じコード同じリスクプロファイル違う失敗コスト。
 
-## なぜこれが次のレッスンの前に重要か
+## 合格基準
 
-次のレッスンは revmc 経由の JIT/AOT コンパイル。**並列と JIT は 2 つの「インタープリターの先」のフロンティア** — 同じスループットの天井に異なる角度から attack する（並列: より多くのコア、JIT: より速いコア）。本番の高性能 EVM（Sei、Monad、MegaETH）は両方を組み合わせ始めている。両レッスンの後、どちらの path のソースを読んでも各チームが選んだ trade-off を理解できる語彙が揃う。
+- block-stm 4 ステップ（投機並列 + set 記録 + commit 順検証 + 再実行ループ）を即答できる。
+- 楽観的並行制御の数字（衝突 10-20% / 残り 80% / 正味 3-8 倍）を即答できる。
+- \`TrackedDatabase\` の構造（\`inner\` + \`read_set\` + \`read_accounts\`）と executor 不変の根拠を即答できる。
+- 本番複雑さ 6 領域を即答できる。
+- mainnet vs Sei / Monad / MegaETH の保守性差（TVL + コンセンサスリスク）を 1 文で説明できる。
 
-> 🛑 **最終チェック。** 一文で: なぜ \`Database\` トレイトの形が、インタープリターを書き換えずに並列実行を可能にするのか? 答えに「read/write tracking でラップ、executor は不変」が無いなら、§3 を読み直す — その合成性が load-bearing な部分。
+## まとめ（3行）
 
-## 📺 関連リンク
-
-- [Aptos block-stm 論文 (arxiv:2203.06871)](https://arxiv.org/abs/2203.06871) — 起源
-- [Sei の並列 EVM 技術記事](https://blog.sei.io/) — 本番ケーススタディ
-- Monad ブログ — 異なるアーキテクチャ、類似原則
+- block-stm = 楽観的並行制御（投機並列 → set 記録 → 検証 → 再実行ループ）、mainnet 衝突 10-20% / 残り 80% 並列 = 正味 3-8 倍スループット。
+- \`Database\` トレイトの合成性で \`TrackedDatabase\` ラッパーが read 記録、**executor / インタープリター不変** = トレイト設計の合成性が後から並列化の道を開く。
+- 本番複雑さ 6 領域（MVCC / 再実行順序 / set 推定 / hot コントラクト / ガス会計 / 決定論）、mainnet 保守的は TVL + コンセンサスリスク、Sei / Monad / MegaETH は速く iterate、次は JIT/AOT で同じ天井を別角度から attack。
 `,
                 },
                 {
-                  title: 'インタープリターの先へ — revmc による JIT/AOT コンパイル',
+                  title: 'レッスン15 — インタープリターの先へ — revmc による JIT/AOT コンパイル',
                   slug: 'revm-jit-aot-revmc-ja',
                   type: 'CONTENT',
                   sortOrder: 15,
                   duration: 16,
                   xpReward: 40,
-                  content: `# インタープリターの先へ — revmc による JIT/AOT コンパイル
+                  content: `# レッスン15 — インタープリターの先へ — revmc による JIT/AOT コンパイル
 
-ここまでのコースは Revm を **インタープリター** として扱ってきた: Opcode バイトを読み、Rust 関数にディスパッチし、スタックを変更し、プログラムカウンタを進める、ループ。これが今でも revm の主たる動作モードであり、通常のメインネット負荷には十分速い — 誰も気にしない。
+## 問い
 
-ただし、6 桁 TPS を狙う レッスン1ではその速さでは足りなくなる。MegaETH は EVM 上で 100K+ TPS を謳う; これはメインネットの秒あたり Opcode 予算のおよそ 1000 倍。スループットをそこまで上げると、**インタープリターループそのものがボトルネックになる** — Solidity のガスコストでも、状態アクセスでもなく、毎秒数億回の「ディスパッチ → 実行 → 進める」のコスト自体が。
+ここまで revm を **インタープリター** として扱った = Opcode → Rust 関数 → ループ、通常 mainnet 負荷には十分速い。**MegaETH 等 6 桁 TPS チェーンではインタープリターループ自体がボトルネック**、抜け穴 = インタープリトをやめてコンパイルする。Paradigm の [\`revmc\`](https://github.com/paradigmxyz/revmc) は revm 上に乗る = どう動くか？
 
-抜け穴は **インタープリトをやめてコンパイルする** こと。EVM バイトコードを受け取って、Opcode ごとのディスパッチを伴わずマシン速度で動くネイティブコードに変える。それが Paradigm の [\`paradigmxyz/revmc\`](https://github.com/paradigmxyz/revmc) がやることであり、しかも **revm の置き換えではなく revm の上に乗っている**。Revm のインタープリターは依然としてコンパイラが一致しなければならない仕様である。
+## 原理（最小モデル）
 
-revmc は **実験的** だ — README が冒頭でそう書いている — が、「インタープリターの次は何か」という問いに対する最も読みやすい Rust ネイティブの答えであり、実際の L1 チームが注視しているツールチェーンだ。このレッスンは「revm のインタープリターが読める」(本コースの残り) と「『コンパイル済み EVM』が具体的に何を意味するか分かる」の橋渡しになる。
+- **revmc は revm の置き換えではない.** revm の上の層、インタープリターは依然として **コンパイラが一致しなければならない仕様**、コンパイル失敗は revm にフォールバック。
+- **JIT vs AOT.** 目的地同じ（ネイティブ機械語）、タイミング違う。JIT = 実行時最初の呼び出しでコンパイル + code hash でキャッシュ、AOT = 既知ホット bytecode を事前にコンパイルしてバイナリ同梱。
+- **3 困難.** ① ガス会計の決定論性（LLVM 最適化が壊しうる）、② EVM スタック/メモリモデル非ネイティブ（U256 はレジスタに収まらない）、③ 副作用（SLOAD / SSTORE / CALL）はホスト呼び出し。
+- **ガス計測明示 IR の重要性.** revmc は各 Opcode のガス差し引きを明示的 IR（load → sub → compare → conditional branch to OutOfGas）で出力、**オプティマイザに推論させない**、観測可能な書きだから最適化で消せない。
+- **コンパイル済み EVM が C 並みに速くない理由.** EVM はスタックマシン + 256-bit ワード、U256 はネイティブレジスタに収まらない、算術 Opcode が load-load-op-store のシーケンスに下がる、勝ちは「ディスパッチループがなくなる + オプティマイザが Opcode 越しに見える」。
+- **副作用 = revmc-builtins ランタイム呼び出し.** SLOAD / SSTORE / CALL 等は不透明な副作用ありの呼び出し、LLVM は並べ替えない、ホスト環境（Database 実装）にルーティング。
+- **\`JitEvm\` 統合点.** \`crates/revmc-context\` の \`JitEvm\` が \`EvmTr\` ベース EVM をラップし \`frame_run\` を上書き、code hash がコンパイル済みマップにあれば直接ディスパッチ、なければ on_miss フック or revm インタープリターフォールバック。
+- **AOT vs JIT 選択.** AOT = ホットセット既知（システムコントラクト / WETH / DEX ルーター）+ 起動レイテンシ予測可能 / JIT = ホットセット負荷依存（汎用 RPC / インデクサ）+ コンパイルコスト稼働時間で償却。
 
-> 🛑 **アンチ流暢チェック、始める前に。** スクロールせずに予測: 「EVM バイトコードをコンパイルする」とは具体的に何を意味するか? 出力フォーマットは? コンパイル済みアーティファクトはどこに住む? いつ実行される? 推測を保留せよ。
+## 具体例
 
-## 「EVM バイトコードをコンパイルする」とは具体的に
-
-2 つの形がある。目的地は同じ (ネイティブ機械語)、タイミングが違う。
-
-**JIT (Just-In-Time)**。コントラクトが実行時に最初に呼ばれたとき、revmc はそのバイトコードを LLVM 経由でネイティブコードにコンパイルし、結果の関数ポインタを code hash でキャッシュする。2 回目以降はキャッシュに当たり、コンパイル済み関数に直接ディスパッチされる。コールドコールはコンパイルコストを払う; ウォームコールはネイティブ速度で走る。
-
-**AOT (Ahead-Of-Time)**。ホットになると分かっているバイトコードを選んで — Uniswap V2/V3 ルーター、チェーンのシステムコントラクト、ERC-20 transfer のホットパス — オフラインで共有オブジェクトか静的ライブラリにコンパイルし、ノードと一緒にそのバイナリを出荷する。実行時のコンパイルコストはゼロ; トレードオフはどのコントラクトを優遇するかを事前に決め打ちすること。
-
-どちらも同種のアーティファクトを生む: EVM コンテキストとスタックポインタを取って、コントラクトを完了 (またはホスト呼び出し) まで走らせる、固定された C ABI シグネチャのネイティブ関数。違いは *いつ* コンパイルするか。
-
-> 🔍 **リポジトリで探せ。** [\`crates/revmc/src/lib.rs\`](https://github.com/paradigmxyz/revmc/blob/main/crates/revmc/src/lib.rs) を開け。クレートが \`revmc-codegen\`・\`revmc-runtime\`・\`revmc-backend\`・\`revmc-context\` の薄い再エクスポートに過ぎないことに気付け。**なぜ 4 つではなくファサード 1 つ?** コンパイラ ([\`revmc-codegen\`])・バックエンドトレイト ([\`revmc-backend\`])・LLVM 実装 ([\`revmc-llvm\`])・ランタイム接着 ([\`revmc-context\`]) を独立に差し替えられるよう設計されているから — codegen に触れずに明日 Cranelift バックエンドを書ける。
-
-## なぜ難しいか — 自明でない 3 つの問題
-
-「EVM バイトコードをネイティブコードにコンパイルする」を素直に読むと、普通の LLVM フロントエンド演習に聞こえる。違う。EVM にはコンパイラと喧嘩する 3 つの性質がある。
-
-### 問題 1: ガス会計は決定論的でなければならない
-
-ガスは **コンセンサスクリティカルな状態** だ。各 Opcode に定義されたガスコストがあり; 各ブロックの gas used はヘッダの一部であり; ガス使用量で食い違うノードはチェーンをフォークする。インタープリターは Opcode ハンドラの中で実行前にガスを差し引いてこれを満たす。コンパイラも同じことをしなければならない — ただしコンパイラの本業は *正しさに不要なコードを削除すること* だ。
-
-> 🛑 **予測。** スクロールせずに: 通常のコードでは安全に見えるが、ガス会計を壊す「最適化」は何か?
-
-少なくとも 3 つの地雷:
-
-1. **Opcode 越しのデッドストア除去。** 素朴な LLVM オプティマイザは「この \`MSTORE\` は読まれる前に上書きされる値を書く」と気付いて書きを消すかもしれない。だが \`MSTORE\` には *メモリが拡張されるかどうかに依存するガスコスト* がある。データフロー上は dead でも、ガス上は alive。
-2. **算術 Opcode 越しの定数畳み込み。** \`PUSH1 2, PUSH1 3, ADD\` は「5 を push」に見える。コンパイラはこれを畳み込んでよい — ただし依然として 3 + 3 + 3 = 9 ガスを請求する場合に限る。畳み込まれたリテラルは 1 値を push し、3 値を push しない。
-3. **\`GAS\` Opcode を越えるループ不変コードの移動。** \`GAS\` Opcode は *現在の* 残ガスを読む。\`GAS\` を越えて作業をホイストすると \`GAS\` が読む値が変わる。観測可能な差。コンセンサスフォーク。
-
-revmc の防御: ガス計測は **明示的な IR** であって暗黙ではない。各 Opcode は \`gas.remaining\` を減らし、アンダーフローしたら \`OutOfGas\` ブロックに分岐し、それから走る IR を出す。**オプティマイザはガス書きが見えるので、観測不能だと証明できない限り消せない** — そしてほぼ常に観測可能だ。
-
-> 🔍 **リポジトリで探せ — IR のガス計測。** [\`crates/revmc-codegen/src/compiler/translate/mod.rs\`](https://github.com/paradigmxyz/revmc/blob/main/crates/revmc-codegen/src/compiler/translate/mod.rs) を開き、\`gas_cost_imm\` と \`gas_remaining_addr\` を検索せよ。すべての静的ガス差し引きが明示的な IR \`load → sub → compare → conditional branch to OutOfGas\` を出すのが見える — 全 Opcode で同じ形。これがコンパイラがガスを IR の第一級市民にしている証拠。\`gas_metering: bool\` の設定フラグもある — オフにすれば速いがコンセンサス外のコードが得られる。入力がガス的に妥当だと既に信頼できるオフチェーン再実行などで有用。
-
-### 問題 2: EVM のスタック/メモリモデルはネイティブではない
-
-EVM はスタックマシン: 256 ビットワード 1024 段のスタック + バイトアドレス可能な線形拡張メモリ領域。ネイティブコードはレジスタベースで、別個のマシンスタックとマシンメモリを持つ。
-
-revmc はこれを **EVM コンテキスト経由でヒープ確保のスタックとメモリをコンパイル済み関数に渡す** ことで扱う — EVM スタックをネイティブレジスタにマップするのではない。コンパイラは可能なところで静的にスタック深さを追跡し、スタックバッファに対する load/store を出す。\`U256\` は多くのターゲットでレジスタに収まらないので、算術 Opcode ですらレジスタ演算ではなくスタックバッファに対する load-load-op-store のシーケンスに下げられる。
-
-直感に反する帰結: **コンパイル済み EVM は、コンパイル済み C ほど速くない**。\`u64\` の \`a + b\` はネイティブで 1 命令。コンパイル済み EVM の \`U256\` 同等物は数命令。インタープリターに対する勝ちは「ネイティブコードと同じ速さ」ではなく「ディスパッチループがなくなり、オプティマイザが Opcode 越しに見える」だ。
-
-### 問題 3: 副作用はホストから見えなければならない
-
-SLOAD はチェーン状態を読む。SSTORE はチェーン状態を書く。CALL は他のコントラクトを再帰的に呼ぶ。BALANCE は任意のアカウントについてホストに問い合わせる。これらは消したり並べ替えたり畳んだりできない — これらは **コンパイル済み関数から revm のホスト環境への呼び出し** (前モジュールで読んだ \`Database\` 実装) だ。
-
-revmc では、そのような Opcode はすべて [\`revmc-builtins\`](https://github.com/paradigmxyz/revmc/tree/main/crates/revmc-builtins) のランタイム *ビルトイン* — インタープリターと同じ \`EvmContext\` 経由でホスト呼び出しを行う Rust 関数 — への呼び出しに下げられる。オプティマイザはビルトイン呼び出しを不透明な副作用ありの呼び出し (LLVM の \`call\`、\`readonly\`/\`readnone\` ではない) として扱うため、並べ替えない。
-
-> 🛑 **想起チェック。** スクロールせずに: 上の 3 問題のうち、LLVM オプティマイザを最も強く制約するのはどれ? (答え: #3 — 不透明呼び出しはほぼすべての並べ替えをブロックする。#1 はガスを IR 明示にすることで解決され、#2 は正しさではなくむしろ性能の天井。)
-
-## revmc は revm にどう差し込まれるか
-
-revmc は revm のフォークではない — その **上** の層だ。
-
-統合点は \`revmc-context\` の [\`JitEvm\`](https://github.com/paradigmxyz/revmc/blob/main/crates/revmc-context/src/jit_evm.rs)。\`JitEvm\` は任意の \`EvmTr\` ベースの EVM をラップし、\`frame_run\` を上書きする。フレームが始まると、code hash を引く:
+\`JitEvm\`（概念）:
 
 \`\`\`rust
-// 概念図 — 本物は crates/revmc-context/src/jit_evm.rs を参照。
 pub struct JitEvm<EVM, F = ...> {
     inner: EVM,
     functions: B256Map<RawEvmCompilerFn>, // code hash -> compiled fn
@@ -1978,97 +1813,126 @@ pub struct JitEvm<EVM, F = ...> {
 }
 \`\`\`
 
-code hash が事前コンパイル済みマップにあれば、ディスパッチはコンパイル済み関数に行く。なければ、任意の \`on_miss\` フックを呼ぶ (最初の呼び出しでコンパイル、つまり JIT)、または revm のインタープリターにフォールバックする。**インタープリターはセーフティネットだ**。revmc がコンパイルできないもの — 非対応 Opcode、デバッグビルド、何か変なもの — はすべて revm の通常のインタープリターパスに静かに流れる。「コンパイル経路が間違っている」失敗モードはない — 最悪「コンパイル経路が取られない」だけ。
+ガス計測 IR の出方:
 
-もう半分はランタイム: AOT コンパイル済みアーティファクトはリンク対象の Rust シンボル群 (ビルトイン) を必要とする。それが [\`revmc-build\`](https://github.com/paradigmxyz/revmc/tree/main/crates/revmc-build) のビルドスクリプト — ノードオペレータが AOT バイナリを出荷するときに走らせる。
+\`\`\`
+; 概念図 — 各 Opcode が明示的 IR を出力
+%gas_remaining = load i64, ptr %gas_remaining_addr
+%new_gas = sub i64 %gas_remaining, 3       ; ADD のコスト
+%underflow = icmp slt i64 %new_gas, 0
+br i1 %underflow, label %OutOfGas, label %Continue
+\`\`\`
 
-> 🔍 **リポジトリで探せ — ディスパッチを動かす。** [\`examples/runner/src/lib.rs\`](https://github.com/paradigmxyz/revmc/blob/main/examples/runner/src/lib.rs) を開け。統合の全体が: 普通の \`MainnetEvm\` を作り、\`JitEvm::new(inner, functions)\` でラップする。ここで \`functions\` は Fibonacci バイトコードのハッシュをそのコンパイル済み関数にマップする。それだけ。8 行。コンパイル済みフィボナッチが走り、他はインタープリトする。
+オプティマイザは:
+- %gas_remaining への書きを **観測可能** とみなす → デッドストア除去不可
+- \`OutOfGas\` 分岐は **実装の責任** → 投機実行で消せない
+- \`gas_metering: bool\` 設定フラグでオフ可能（速いがコンセンサス外、オフチェーン再実行向け）
 
-## 本番での AOT vs JIT
+3 困難の解決:
 
-AOT を選ぶ:
+| 困難 | 解決 |
+| :--- | :--- |
+| ガス会計決定論性 | 明示的 IR（load → sub → compare → branch）、観測可能で最適化で消せない |
+| EVM スタック非ネイティブ | コンパイル済み関数にヒープ確保スタック/メモリを渡す、U256 算術は load-load-op-store |
+| 副作用 | revmc-builtins へのランタイム呼び出し、LLVM は不透明とみなし並べ替えない |
 
-- ホットセットが分かっているとき。チェーンのシステムコントラクト。WETH。トップ DEX のルーター。ほぼ全ブロックで呼ばれるもの。
-- 起動レイテンシを予測可能にしたいとき。AOT アーティファクトはノード起動時に一度ロードされる; コントラクトごとのコンパイル停止はない。
-- とにかくノードバイナリを出荷していて、コンパイル済みコントラクトをリリースに焼き込む余裕があるとき。
+## 失敗例（誤解）
 
-JIT を選ぶ:
+「revmc は revm の置き換え」— **間違い**。revmc は **revm の上の層**、インタープリターは依然として仕様、コンパイル失敗 / 非対応 Opcode / デバッグビルドは revm インタープリターフォールバック = 「コンパイル経路が間違っている」失敗モードはない、最悪「コンパイル経路が取られない」だけ。
 
-- ホットセットが負荷依存のとき。汎用 RPC ノードやインデクサはユーザーが何を呼ぶか予測できない。
-- 一度コンパイルして以降キャッシュ、がノード稼働時間で十分償却するとき。
-- 単一バイナリで任意のチェーンに適応させたいとき。
+「ガス計測は LLVM に任せれば最適化される」— **致命的**。LLVM の通常最適化（デッドストア除去 / 定数畳み込み / ループ不変コード移動）が **コンセンサスを壊す**。ガス計測を明示 IR にして観測可能化、**オプティマイザに推論させない**。
 
-実際には、高スループット L1 は両方使う: 既知のホットセットには AOT、それ以外には JIT、その下にすべてのフォールバックとしてインタープリター。
+「コンパイル済み EVM = コンパイル済み C と同速」— **間違い**。EVM はスタックマシン + 256-bit ワード、U256 はネイティブレジスタに収まらない、算術が load-load-op-store のシーケンスに下がる、勝ちは「ディスパッチループ消失 + Opcode 越し最適化」、ネイティブコード並みではない。
 
-## ここから先はどこへ
+## ステップで組み立てる
 
-「EVM バイトコードはコンパイル可能だ」を受け入れると、隣接する問題群が同じ扱いを受けるようになる:
+### Step 1: revmc は revm の上の層
+インタープリターは仕様、コンパイル失敗時フォールバック。
 
-- **Native rollup / ステートレス再実行。** 証明生成のためのブロック再実行は同じバイトコードを何度も走らせる; 一度コンパイルしてコンパイル済みアーティファクトを再生するコストが支配的。
-- **zkEVM の証明生成。** 一部の zk スタックは EVM バイトコードを同様のパイプラインで下げる; revmc の IR 明示のガス計測は、最終バックエンドが LLVM ではなく SNARK 回路だとしても有用な原始要素。
-- **インデクサとトレーサ。** 派生データを抽出するために履歴ブロックを再実行する用途はすべてコンパイルの恩恵を受ける — 負荷は「同じバイトコードを百万回」だから。
+### Step 2: JIT vs AOT のタイミング
+JIT = 実行時 + code hash キャッシュ、AOT = 事前にバイナリ同梱。
 
-EVM-L1 エコシステム全体 (MegaETH、Reth フォーク系チェーン、Paradigm 隣接インフラ) もこの方向に動いている。「Revm は仕様、revmc は速い経路」は次世代の EVM レッスン1にとって守れるアーキテクチャだ。
+### Step 3: 3 困難を理解
+ガス会計決定論 + EVM スタック非ネイティブ + 副作用ホスト呼び出し。
 
-## レッスン終わりの想起
+### Step 4: ガス計測明示 IR の規律
+load → sub → compare → branch、観測可能で最適化で消せない、\`gas_metering: bool\` でオフ可。
 
-スクロールせずに、自分の言葉で:
+### Step 5: 副作用 = revmc-builtins ランタイム呼び出し
+不透明な副作用、LLVM 並べ替え不可、ホスト環境（Database 実装）にルーティング。
 
-1. なぜ revmc はガス計測を意図的に明示的 IR (load/sub/branch) にし、オプティマイザに推論させないのか?
-2. revmc と revm の統合境界は何か — \`JitEvm\` は何を実際にインターセプトするのか?
-3. JIT 後でもコンパイル済み EVM がコンパイル済み C ほど速くない理由を 2 つ挙げよ。
-4. 運用するノードについて AOT を JIT より選ぶのはどんなときか?
+### Step 6: \`JitEvm\` 統合点 + AOT vs JIT 選択
+\`frame_run\` 上書き + code hash マップ + on_miss フック、AOT = 既知ホット / JIT = 負荷依存。
 
-どれか曖昧ならその節を読み直し。穴を抱えたままファイナルクイズに進むな。
+## 答え合わせ
 
-これが Inside Revm の最後のコンテンツレッスン。次はファイナルクイズ — それを終えたら自然な次のステップは **Inside Reth** (Staged Sync・ExEx・Reth SDK)、同じソースファーストの扱いをノード層で続けることになる。`,
+- **revmc がガス計測を意図的に明示 IR にする理由**: LLVM 通常最適化がコンセンサスを壊しうる（デッドストア除去 → MSTORE のメモリ拡張ガスコスト消失、定数畳み込み → ガス課金回数不一致、ループ不変コード移動 → GAS Opcode の観測値変化）。明示 IR の \`load → sub → compare → branch\` で **書きを観測可能化**、オプティマイザは観測不能と証明できない限り消せない、ほぼ常に観測可能。
+- **revmc と revm の統合境界**: \`crates/revmc-context\` の \`JitEvm\` が \`EvmTr\` ベース EVM をラップし \`frame_run\` を上書き = フレームが始まると code hash 引く → 事前コンパイル済みマップにあればコンパイル済み関数に直接ディスパッチ、なければ \`on_miss\` フック（JIT-on-the-fly）or revm インタープリターフォールバック。**インタープリターはセーフティネット**、コンパイル失敗時に静かに流れる、「コンパイル経路間違い」失敗モードはない。
+- **コンパイル済み EVM が C 並みに速くない 2 理由**: ① **U256 はネイティブレジスタに収まらない** = 算術 Opcode が load-load-op-store のシーケンスに下がる、ネイティブ \`u64 a + b\` は 1 命令、コンパイル済み EVM U256 同等は数命令、② **EVM スタック/メモリは別領域** = コンパイル済み関数にヒープ確保のスタック/メモリを渡す、EVM スタックをネイティブレジスタにマップしない。勝ちはインタープリターループ消失 + オプティマイザが Opcode 越しに見える、ネイティブコード並みではない。
+
+## 合格基準
+
+- revmc が revm の置き換えではない（上の層 + フォールバック）ことを即答できる。
+- JIT vs AOT のタイミング差を即答できる。
+- 3 困難（ガス会計 / EVM スタック / 副作用）と各解決を即答できる。
+- ガス計測明示 IR の根拠（最適化で消せない観測可能性）を 1 文で説明できる。
+- \`JitEvm\` 統合点（\`frame_run\` 上書き + code hash マップ + フォールバック）を即答できる。
+- AOT vs JIT 選択基準（ホットセット既知 vs 負荷依存）を 1 文で説明できる。
+
+## まとめ（3行）
+
+- revmc = revm の上の層（インタープリターは仕様 + フォールバック）、JIT（実行時 + キャッシュ）+ AOT（事前バイナリ同梱）、目的地はネイティブ機械語。
+- 3 困難の解決 = ガス計測明示 IR（最適化で消せない観測可能）+ ヒープ確保 EVM スタック（U256 はレジスタに収まらない）+ revmc-builtins 不透明ランタイム呼び出し（LLVM 並べ替え不可）。
+- \`JitEvm\` が \`frame_run\` 上書き + code hash マップ、AOT = 既知ホット（システム / WETH / DEX）+ JIT = 負荷依存（汎用 RPC）+ 両方使う本番高スループット L1（MegaETH 等）、次はファイナルクイズ。
+`,
                 },
                 {
-                  title: 'Inside Revm ファイナルクイズ',
+                  title: 'クイズ — Inside Revm 完走',
                   slug: 'revm-advanced-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 16,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Inside Revm ファイナルクイズ
+                  content: `# クイズ — Inside Revm 完走
 
-Revm 内部の最終チェック: インタープリター、カスタム Opcode、Database トレイト。
+3 トピックチェーン（インタープリター / 命令テーブル / Database）+ テスト + 並列 + JIT/AOT の構造的事実を確認する。3 中級コース（Revm・Reth・Alloy）完走に向けたゲート。
 
-3 問。同じルール: **クイズはうなずきで通せない。** 2 問落としたら、Inside Revm を「完了」と称する前に該当する積み上げレッスンを読み直してほしい。`,
+3 問。**クイズはうなずきで通せない。** 2 問落としたら、Inside Revm を「完了」と称する前に該当する積み上げレッスンを読み直してほしい。
+`,
                   quizQuestions: [
                     {
-                      question: 'Revm の `crates/interpreter` が責任を持つのはどれですか?',
-                      options: [
-                        'EVM の型システムプリミティブ (Address、U256、B256) の定義',
-                        '各 EVM Opcode の Rust 実装',
-                        'Database トレイトと state 供給インターフェースの保持',
-                        '実行時の命令ディスパッチテーブルの構築',
+                      "question": "Revm の `crates/interpreter` が責任を持つのはどれですか?",
+                      "options": [
+                        "EVM の型システムプリミティブ (Address、U256、B256) の定義",
+                        "各 EVM Opcode の Rust 実装",
+                        "Database トレイトと state 供給インターフェースの保持",
+                        "実行時の命令ディスパッチテーブルの構築"
                       ],
-                      correctIndex: 1,
-                      explanation: '`crates/interpreter` は Opcode ごとの実装を持つ: ADD、MUL、PUSH、JUMP、SLOAD、SSTORE など。(プリミティブは `crates/primitives` にある。Database トレイトは `crates/database-interface`。ディスパッチテーブルは実行時ではなくコンパイル時に構築される。) 実行時ディスパッチを推測した方は、カスタム Opcode のレッスンを読み直すこと。',
+                      "correctIndex": 1,
+                      "explanation": "`crates/interpreter` は Opcode ごとの実装を持つ: ADD、MUL、PUSH、JUMP、SLOAD、SSTORE など。(プリミティブは `crates/primitives` にある。Database トレイトは `crates/database-interface`。ディスパッチテーブルは実行時ではなくコンパイル時に構築される。) 実行時ディスパッチを推測した方は、カスタム Opcode のレッスンを読み直すこと。"
                     },
                     {
-                      question: 'Revm ベースのフォークにカスタム Opcode を追加すると、実際に何ができますか?',
-                      options: [
-                        '標準 Opcode (ADD など) の結果計算をすべてのクライアントに対して上書きする',
-                        '自前のチェーンで高速な単一命令ショートカットを提供する — メインネットとはコンセンサス互換性はない',
-                        'メインネットの任意の Solidity コントラクトから固定アドレスで呼べる precompile を追加する',
-                        'フォークなしで同じ Opcode のガスコストを下げる',
+                      "question": "Revm ベースのフォークにカスタム Opcode を追加すると、実際に何ができますか?",
+                      "options": [
+                        "標準 Opcode (ADD など) の結果計算をすべてのクライアントに対して上書きする",
+                        "自前のチェーンで高速な単一命令ショートカットを提供する — メインネットとはコンセンサス互換性はない",
+                        "メインネットの任意の Solidity コントラクトから固定アドレスで呼べる precompile を追加する",
+                        "フォークなしで同じ Opcode のガスコストを下げる"
                       ],
-                      correctIndex: 1,
-                      explanation: 'カスタム Opcode は未割当バイト (例: 0x0C) を占める。メインネットはあなたの Opcode を知らないので、それを使うブロックは go-ethereum でリプレイできない。ショートカットは *自分のフォーク内で* 本物。Precompile は別の仕組み (予約済みアドレス、新しい Opcode バイトではない)。コンセンサスをフォークせずにガスコストを下げることはできない。',
+                      "correctIndex": 1,
+                      "explanation": "カスタム Opcode は未割当バイト (例: 0x0C) を占める。メインネットはあなたの Opcode を知らないので、それを使うブロックは go-ethereum でリプレイできない。ショートカットは *自分のフォーク内で* 本物。Precompile は別の仕組み (予約済みアドレス、新しい Opcode バイトではない)。コンセンサスをフォークせずにガスコストを下げることはできない。"
                     },
                     {
-                      question: 'Revm の `Database` トレイトの主な役割は:',
-                      options: [
-                        'EVM の状態変更を背後のストレージに commit して戻すこと',
-                        '実行に必要なアカウント情報・コントラクトコード・ストレージスロット・過去のブロックハッシュを供給すること',
-                        'ガス会計のホットパスを処理すること',
-                        'Opcode バイトから関数へのディスパッチテーブルを提供すること',
+                      "question": "Revm の `Database` トレイトの主な役割は:",
+                      "options": [
+                        "EVM の状態変更を背後のストレージに commit して戻すこと",
+                        "実行に必要なアカウント情報・コントラクトコード・ストレージスロット・過去のブロックハッシュを供給すること",
+                        "ガス会計のホットパスを処理すること",
+                        "Opcode バイトから関数へのディスパッチテーブルを提供すること"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Database は読み側の状態源。書きは DatabaseCommit を通る。ガス会計はインタープリター内部。ディスパッチは命令テーブル。Database 実装を差し替えれば、EVM をインメモリデータ・JSON-RPC (フォークメインネット)・本番 MDBX・他のあらゆるバックエンドの上で動かせる。',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "Database は読み側の状態源。書きは DatabaseCommit を通る。ガス会計はインタープリター内部。ディスパッチは命令テーブル。Database 実装を差し替えれば、EVM をインメモリデータ・JSON-RPC (フォークメインネット)・本番 MDBX・他のあらゆるバックエンドの上で動かせる。"
+                    }
                   ],
                 },
               ],

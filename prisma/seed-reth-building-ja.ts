@@ -15,7 +15,7 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
       track: 'reth-building',
       tags,
       isPublished: true,
-      sortOrder: 410,
+      sortOrder: 1016,
       locale: 'ja',
       instructorName: 'RethLab',
       modules: {
@@ -26,63 +26,30 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'テストゲート — このティアでは全アプリがテスト green で初めて完了',
+                  title: 'レッスン0 — テストゲート — このティアでは全アプリがテスト green で初めて完了',
                   slug: 'building-test-gate-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 18,
                   xpReward: 35,
-                  content: `# Test gate — この tier では全アプリがテスト green で初めて完了
+                  content: `# レッスン0 — テストゲート — この tier では全アプリがテスト green で初めて完了
 
-> 🧭 **systems engineering スタックでの位置:** 本気のインフラを動かしているチームが共通して採用している **品質保証 (QA) の規律**。TigerBeetle、Cloudflare、PostgreSQL — 「読んだら正しそうだった」を答えとしている組織はひとつもない。本ティアは、あなたのアプリにも同じ基準を要求しる。
+## 問い
 
-ここまでの 4 ティアは、主にソースを **読む** フェーズだった。ここからは **作る** フェーズである。
+ここまでの 4 ティアはソースを *読む* フェーズだった。ここからは *作る* フェーズに入る。だが「読んだ」「作った」「たぶん動く」を、どうやって「正しい」と区別するのか？ 自分で書いたコードの正しさは、誰がどうやって証明するのか？
 
-先に結論を書くと、このティアのルールは 1 つである。
+> 注: この Building コースのコードブロックは「実行可能な最小例」と「概念説明の抜粋」が混在する。各レッスンの指示（抜粋/実行）に従うこと。
 
-- **テストスイートが green になるまで、レッスンは完了ではない。**
+## 原理（最小モデル）
 
-「読んだ」「作った」「たぶん動く」は完了条件にならない。判定は次の2択だけである。
+- **テストスイートが green になるまで、レッスンは完了でない。** 判定は green か未完了の 2 択だけ。「読んだ」「作った」「たぶん動く」は完了条件にならない。本気のインフラを動かすチーム（TigerBeetle / Cloudflare / PostgreSQL）に「読んだら正しそうだった」を答えとする組織はひとつもない。
+- **なぜ Building だけ厳しいか。** Foundations / Intermediate は検証済みコードを *読む* フェーズだった。Building は自分でコードを *書く* フェーズ。書いたコードの正しさは作者が証明するしかなく、テストがなければ「正しさ」は主張にしかならない。
+- **2 つの再帰パターン。** ① pin した mainnet fork（\`PINNED_BLOCK\` を repo 内定数に — pin しないとテストが非決定的になり CI が意味を失う）② differential testing（参照実装 = Revm 以外の provider の \`debug_trace\` と一致を assert — 「見た目の妥当性」でなく「同じ入力で参照と一致」）。
+- **テストは検証手段でなく実行可能仕様。** 実装後に書くと仕様が「今の実装の追認」になる。先に書けば仕様を実装から独立に定義でき、実装を仕様へ合わせる設計になる。バグはこの差分から見つかる。
 
-- green
-- 未完了
+## 具体例
 
-> 🛑 **予測。** なぜこのルールは Building (Expert) では厳しく、Foundations / Intermediate では適用されないのか? 先を読む前に仮説を立てる。
-
----
-
-理由はシンプルである。
-
-- Foundations / Intermediate は、**すでに検証済みのコードを読む** フェーズだった。
-- Building は、**自分でコードを書く** フェーズになる。
-- 書いたコードの正しさは、作者であるあなたが証明するしかない。
-
-つまり、テストがなければ「正しさ」は主張にしかならない。
-
-このレッスンが gate を設定する。続く 10 レッスンは全部、その gate を越えさせる作りになっている。
-
-## アプリ種別ごとに「テスト済み」の最低ライン
-
-このティアの各アプリは形が違うので、テストの形も違う。種類別の最低ラインは次の通り：
-
-| アプリ | 最低テスト gate |
-| :--- | :--- |
-| **MEV searcher** | Forked-state テスト — 過去の実機会を再現し P&L が正であることを assert。Reorg テスト — 1 ブロック reorg を bundle が生き残るか正しく巻き戻る |
-| **ExEx インデクサ**（\`tidx\` walk-through） | Fixture chain replay — 既知の \`Notification::ChainCommitted\` / \`ChainReverted\` を流し込んで、導出状態が golden reference と一致することを assert |
-| **Custom RPC エンドポイント** | Integration テスト — ノードを in-process で起動、新メソッドを HTTP で叩いて JSON レスポンスを assert。エラーパス（不正パラメータ、欠損ブロック）も網羅 |
-| **ウォレットバックエンド** | Roundtrip テスト — 署名済み tx が元に decode で戻る。Nonce invariant — 連続呼び出しが連続 nonce を返し、欠損も重複も無い |
-| **EIP-7702 sponsor** | Replay 防止テスト — 同じ auth tuple は 2 度 sponsor できない。ガス会計テスト — sponsor が正しい額を払い、ユーザは 0 を払う |
-| **カスタム cheatcode** | Differential テスト — Rust precompile と参照実装の Solidity が、1000 件の fuzz 入力で同じ出力を返す |
-| **Swap aggregator** | Forked-state テスト — pin したブロックの実 Uniswap V3 pool に対して quote を取り、既知の正答との差が ε 以内 |
-| **Capstone（order router）** | End-to-end fork テスト — order を投入し、router が分割 / ルーティング / 着地 / fill 報告するまでを観察 |
-| **Revm validation** | Differential テスト — mainnet の小範囲の各ブロックで、Revm のトレースが Revm 以外のプロバイダの \`debug_traceTransaction\` 出力と一致 |
-| **Machine payments (HTTP 402)** | Integration テスト — 支払い無しのリクエストは 402、有効な micropayment 付きはリソースを返す。Replay 防止テスト — 同じ payment が 2 リクエストを満たせない |
-
-各行が最低ライン。実際の本番システムはこの上に fuzz、invariant、chaos テストを積みる。
-
-## scaffold
-
-このティアの全アプリが従う scaffold：
+全アプリが従う scaffold:
 
 \`\`\`
 my-app/
@@ -97,22 +64,7 @@ my-app/
     └── *.t.sol         # Solidity 側の forge テスト
 \`\`\`
 
-純 Rust アプリ（MEV searcher・インデクサ・ウォレットバックエンド・sponsor）は \`Cargo.toml\` + \`src\` + \`tests\` だけ。
-
-Solidity サーフェスを持つアプリ（カスタム cheatcode・swap aggregator・capstone）は Rust と Foundry の両方のテストスイート。Solidity 側は *Foundry でテストを書く*（Fundamentals tier）で学んだもの全て — \`vm.expectRevert\`、\`vm.expectEmit\`、fork test、fuzz — をそのまま使う。
-
-## このティア全体で再帰する 2 パターン
-
-### パターン 1 — pin した mainnet fork
-
-このティアのほぼ全アプリは、本物のチェーン状態に対してテストする必要がある。パターン：
-
-\`\`\`rust
-// Cargo.toml
-[dev-dependencies]
-alloy = { version = "...", features = ["providers"] }
-revm = "..."
-\`\`\`
+パターン 1 — pin した mainnet fork:
 
 \`\`\`rust
 // tests/integration.rs
@@ -133,11 +85,7 @@ async fn searcher_finds_known_opportunity() {
 }
 \`\`\`
 
-pin が規律：\`PINNED_BLOCK\` はリポジトリ内の定数。変えれば全テストが新ブロックに対して再現される。pin しなければテストは非決定的になり、CI は意味を失う。
-
-### パターン 2 — differential testing
-
-Revm ベースのシミュレータで重視すべき正しさは、**見た目の妥当性**ではない。**同じ入力で参照実装と一致すること**である。参照は Revm 以外の provider（Geth / Erigon / Alchemy の \`debug_trace\`）を使う。
+パターン 2 — differential testing:
 
 \`\`\`rust
 #[tokio::test]
@@ -150,13 +98,40 @@ async fn simulator_matches_geth_debug_trace() {
 }
 \`\`\`
 
-Differential testing はコンセンサスで定義された挙動を再実装するコードに対する gold standard。「本当に正しい?」への唯一の誠実な答えがこれ。
+differential testing は、コンセンサスで定義された挙動を再実装するコードに対する gold standard。「本当に正しい?」への唯一の誠実な答えがこれだ。
+
+## 失敗例（誤解）
+
+「先にプロトタイプを作り、設計が固まってからテストを書く」は誤り — 一見合理的だが、実装先行だと仕様が実装の追認になり本番品質に届かない。Reth / Revm / Foundry の開発現場は test-first か test-alongside が前提。このティアはその現場基準をそのまま採用する。
+
+---
+
+ここまでで「green か未完了の 2 択」「テストは実行可能仕様」は着地した。ここから 10 本のアプリを作る。各レッスンはこの gate を越えさせる作りになっている。
+
+> 🛑 **予測。** なぜこのルールは Building (Expert) では厳しく、Foundations / Intermediate では適用されないのか？（答え: 前者は検証済みコードを *読む* フェーズ、後者は自分で *書く* フェーズ。書いたコードの正しさは、テストでしか「主張」を「証明」に変えられない。だから書くフェーズでだけ gate が要る。）
+
+## アプリ種別ごとの「テスト済み」最低ライン
+
+| アプリ | 最低テスト gate |
+| :--- | :--- |
+| **MEV searcher** | Forked-state テスト — 過去の実機会を再現し P&L が正であることを assert。Reorg テスト — 1 ブロック reorg を bundle が生き残るか正しく巻き戻る |
+| **ExEx インデクサ**（\`tidx\` walk-through） | Fixture chain replay — 既知の \`Notification::ChainCommitted\` / \`ChainReverted\` を流し込んで、導出状態が golden reference と一致することを assert |
+| **Custom RPC エンドポイント** | Integration テスト — ノードを in-process で起動、新メソッドを HTTP で叩いて JSON レスポンスを assert。エラーパス（不正パラメータ、欠損ブロック）も網羅 |
+| **ウォレットバックエンド** | Roundtrip テスト — 署名済み tx が元に decode で戻る。Nonce invariant — 連続呼び出しが連続 nonce を返し、欠損も重複も無い |
+| **EIP-7702 sponsor** | Replay 防止テスト — 同じ auth tuple は 2 度 sponsor できない。ガス会計テスト — sponsor が正しい額を払い、ユーザは 0 を払う |
+| **カスタム cheatcode** | Differential テスト — Rust precompile と参照実装の Solidity が、1000 件の fuzz 入力で同じ出力を返す |
+| **Swap aggregator** | Forked-state テスト — pin したブロックの実 Uniswap V3 pool に対して quote を取り、既知の正答との差が ε 以内 |
+| **Capstone（order router）** | End-to-end fork テスト — order を投入し、router が分割 / ルーティング / 着地 / fill 報告するまでを観察 |
+| **Revm validation** | Differential テスト — mainnet の小範囲の各ブロックで、Revm のトレースが Revm 以外のプロバイダの \`debug_traceTransaction\` 出力と一致 |
+| **Machine payments (HTTP 402)** | Integration テスト — 支払い無しのリクエストは 402、有効な micropayment 付きはリソースを返す。Replay 防止テスト — 同じ payment が 2 リクエストを満たせない |
+
+各行が最低ライン。実際の本番システムはこの上に fuzz、invariant、chaos テストを積む。純 Rust アプリ（MEV searcher・インデクサ・ウォレットバックエンド・sponsor）は \`Cargo.toml\` + \`src\` + \`tests\` だけ。Solidity サーフェスを持つアプリ（cheatcode・aggregator・capstone）は Rust と Foundry の両スイート。
 
 ## 各レッスン終了時に ship するもの
 
-Building レッスン全てについて、完了とは **公開可能な artifact** が次を備えている状態：
+完了 = **公開可能な artifact** が次を備えた状態:
 
-1. リポジトリ（Git でも local でも好きに）
+1. リポジトリ（Git でも local でも）
 2. アプリの説明を書いた \`README\`
 3. 全依存を pin した \`Cargo.toml\`（適用可能なら \`foundry.toml\` も）
 4. 実装が入った \`src/\`
@@ -164,68 +139,45 @@ Building レッスン全てについて、完了とは **公開可能な artifac
 6. ローカルで再現可能に通る \`cargo test\`（適用可能なら \`forge test\`）
 7. pin した mainnet fork ブロック（または fixture chain）がテストファイルに記録されている
 
-どれか欠ければ、レッスンは未完了。**artifact と証明はセットで ship、もしくは ship しない。**
+どれか欠ければ未完了。**artifact と証明はセットで ship、もしくは ship しない。**
 
-> 🛑 **1 行ゲートチェック。** Building レッスンを「完了」と主張する前に答える：*「このアプリが正しいことを示すコマンドは何で、現在の終了コードは何か?」* 1 文で答えられないなら、まだ作っていない。
+## 合格基準
 
-## 「テストは後で書く」はなぜ危険か
+> **1 行ゲートチェック。** Building レッスンを「完了」と主張する前に答える: *「このアプリが正しいことを示すコマンドは何で、現在の終了コードは何か?」* 1 文で答えられないなら、まだ作っていない。
 
-よくある反論は「先にプロトタイプを作り、設計が固まってからテストを書く」である。一見合理的だが、このティアでは採用しない。
+## まとめ（3行）
 
-本番 EVM 工学でテストは、単なる検証手段ではない。**期待挙動を固定する実行可能仕様** である。実装後にテストを書くと、仕様が「今の実装の追認」になりやすい。逆に先にテストを書くと、仕様を実装から独立して定義できるため、実装を仕様へ合わせる設計になる。バグはこの差分から見つかる。
+- このティアの完了条件は 1 つ — テストスイートが green になること。green か未完了の 2 択で、「たぶん動く」は完了でない（読むフェーズと違い、書いたコードの正しさは作者がテストで証明する）。
+- 2 つの再帰パターン: pin した mainnet fork（\`PINNED_BLOCK\` 定数で決定的に）と differential testing（参照 provider の \`debug_trace\` と一致 = 再実装コードの gold standard）。
+- テストは実行可能仕様 — test-first / test-alongside で書き、実装を仕様に合わせる。次レッスンの MEV searcher から、受け入れテストを実装より先に置く。
 
-Reth・Revm・Foundry の開発現場では、test-first か test-alongside が前提である。実装先行で後からテストを足す流れでは、本番品質に届きにくい。**このティアはその現場基準をそのまま採用する。**
+## 次のレッスン（レッスン1）
 
-## 準備完了
-
-次のレッスン *最小限の MEV Searcher を Rust で作る* では、まず受け入れテストを書く。実装なしで fail を確認し、その後 pass するまで実装を進める。
-
-順序は固定である。**テストが先、コードが後。** これが gate だ。
-
-> **🧭 ここまでで積み上げたもの:** 品質保証の規律を、本ティアの入口に据えた。TigerBeetle・Cloudflare・PostgreSQL が共通して採用している「テストで証明してから出荷する」を、本ティアの 10 アプリすべてに一律で適用する。次のレッスンから建設開始 — MEV searcher が最初、テストゲートを実装の前に置く。
-`,
+*最小限の MEV Searcher を Rust で作る*。まず受け入れテストを書き、実装なしで fail を確認し、pass するまで実装を進める。順序は固定 — **テストが先、コードが後**。`,
                 },
                 {
-                  title: '最小限の MEV Searcher を Rust で作る',
+                  title: 'レッスン1 — 最小限の MEV Searcher を Rust で作る',
                   slug: 'build-mev-searcher-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 45,
                   xpReward: 80,
-                  content: `# 最小限の MEV Searcher を Rust で作る
+                  content: `# レッスン1 — 最小限の MEV Searcher を Rust で作る
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層 + 並行性層** の組み合わせ。searcher は、複数のソース（mempool、新ブロック）から pull してアクションを dispatch する event-driven なパイプライン — Kafka Streams のトポロジ、Flink のジョブ、HFT のオーダーハンドリングと同じ構造。\`artemis\` は、その発想を MEV に持ち込んだもの。
+## 問い
 
-「1 本の \`main.rs\` を書く」型のウォークスルーは、本番構造を隠しやすい。本物の searcher は **フレームワーク** から始める。読む対象は Paradigm の [\`artemis\`](https://github.com/paradigmxyz/artemis) である。
+mempool 監視・swap デコード・fork シミュレーション・bundle 構築は、どの searcher でも必要になる。問いは「1 回書けるか」ではなく「次の strategy 追加時に再利用できるか」だ。本番の searcher はどう構成するのか？（読む対象は Paradigm の [\`artemis\`](https://github.com/paradigmxyz/artemis)。）
 
-repo を開く。読む。本レッスンはそれを案内しる。
+## 原理（最小モデル）
 
-> 📌 **なぜこれが出発点か。** mempool 監視、swap デコード、fork シミュレーション、bundle 構築はどの searcher でも必要になる。問いは「1 回書けるか」ではなく「次の strategy 追加時に再利用できるか」である。artemis はこの再利用性に答える。MEV ロジックは自作し、オーケストレーションは借りる。
+- **searcher = イベント処理パイプライン。** 外部シグナルが入り、MEV ロジックが何をするか決め、アクションが出ていく。artemis はこれを 3 trait + engine に分割する: \`Collector<E>\`（外部→イベント）/ \`Strategy<E,A>\`（イベント→0 個以上のアクション、MEV の脳、opportunity ごとに書く唯一のファイル）/ \`Executor<A>\`（アクション→副作用）。
+- **broadcast channel で全 strategy が全イベント・全 executor が全アクションを受ける。** 不要なものは strategy で \`vec![]\`、executor で \`ExecutorMap\` が捨てる。新 strategy の ship = \`impl Strategy\` を 1 つ書いて \`engine.add_strategy(...)\` だけ（collector/executor は再利用）。
+- **Executor を Strategy から分離する理由。** 同じ opportunity でも提出先は複数ある（public mempool / Flashbots / MEV-Share）。\`Action\` を出して executor を差し替えられれば耐障害性が上がる。提出処理を strategy に直書きすると、提出先障害で全体が止まる。
+- **strategy 間の調整ロジックは存在しない。** engine は調整しない。必要なら collector を組み合わせ、単一 strategy 内で調整する。
 
-## 受け入れ条件
+## 具体例
 
-次のテストが pass したらレッスン完了（フルコードは末尾の §Test gate）:
-
-1. **\`finds_known_arb_at_pinned_block\`** — 既知の arb があった pin した mainnet ブロックで、strategy が正の期待 P&L を持つ \`Action\` を吐く。
-2. **\`retracts_action_on_reorg\`** — 合成 \`ChainReorged\` 通知に対し、reorg されたブロックに依存した pending \`Action\` を strategy が取り下げる。
-
-**Test-first 読法。** 先に受け入れ条件だけ確認する。以下の walkthrough は、テスト実装に必要な型（\`Strategy<E, A>\`、\`Action::SubmitBundle\`）とパターン（forked Revm、mempool collector）を説明する。
-
-## artemis アーキテクチャを一文で
-
-searcher は **イベント処理パイプライン** です: 外部シグナルが入り、MEV ロジックが何をするか決め、アクションが出ていく。artemis はそのパイプラインを 3 つの trait と、それらを配線する engine に分割している。
-
-| コンポーネント | trait | 役割 |
-| :--- | :--- | :--- |
-| **Collector** | \`Collector<E>\` | 外部世界 → 内部イベント \`E\`。pending tx、新ブロック、marketplace order、MEV-Share ヒント — それぞれが独自の collector を持つ |
-| **Strategy** | \`Strategy<E, A>\` | イベント \`E\` → 0 個以上のアクション \`A\`。MEV の脳。opportunity ごとに自分が書く唯一のファイル |
-| **Executor** | \`Executor<A>\` | アクション \`A\` → 副作用。Flashbots bundle 送信、public mempool 送信、オフチェーン注文 post |
-
-> 🛑 **予測。** なぜ Executor と Strategy は分離されているのか。統合した場合に壊れる点を一文で答える。答えは Step 5 で確認する。
-
-## Step 1: trait を開く
-
-中核の抽象は 1 ファイル、~120 行: [\`crates/artemis-core/src/types.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/artemis-core/src/types.rs)。今すぐ開いてしてほしい。
+中核の抽象は 1 ファイル ~120 行（\`crates/artemis-core/src/types.rs\`）:
 
 \`\`\`rust
 #[async_trait]
@@ -245,13 +197,7 @@ pub trait Executor<A>: Send + Sync {
 }
 \`\`\`
 
-これが契約の全体である。メソッドは 3 つ、型パラメータは 2 つ（\`E\` がイベント、\`A\` がアクション）。engine / channel / mapper は、この契約をつなぐ配管である。
-
-> 🔍 **リポで探す。** 同じファイル内で \`CollectorMap\` と \`ExecutorMap\` を探す。30 秒読む。**自分の言葉で:** \`CollectorMap\` は、新しい Collector を書かないと解けない問題を、何を解いてくれているか?
-
-## Step 2: イベントの流れ — engine を読む
-
-[\`crates/artemis-core/src/engine.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/artemis-core/src/engine.rs) を開く。\`Engine<E, A>\` は collector / strategy / executor の 3 系統を保持する。\`run\` は各コンポーネントを Tokio task として起動し、2 本の \`broadcast\` channel で接続する。
+engine がこの 3 系統を Tokio task として起動し、2 本の broadcast channel で接続する:
 
 \`\`\`
 collectors -- events --> [event channel] -- events --> strategies
@@ -261,20 +207,7 @@ collectors -- events --> [event channel] -- events --> strategies
 executors <-- actions <-- [action channel] <-- actions <--+
 \`\`\`
 
-broadcast なので、全 strategy が全イベントを受け取り、全 executor が全アクションを受け取る。不要なものは strategy 側で \`vec![]\`、executor 側で \`ExecutorMap\` により捨てる。
-
-**要点:** 新しい strategy を ship するには \`impl Strategy\` を 1 つ書いて \`engine.add_strategy(...)\` を呼ぶだけ。collector と executor は再利用される。
-
-> 🛑 **リコールチェックポイント。** スクロールせずに: strategy 間の調整ロジックはどこにあるか? (答え: ない。engine は調整しない。必要なら collector を組み合わせ、単一 strategy 内で調整する。)
-
-## Step 3: 実物の Collector と Executor を探す
-
-抽象を確認したら実装を読む。以下を開いて目を通す。
-
-- [\`crates/artemis-core/src/collectors/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/artemis-core/src/collectors): \`mempool_collector.rs\` (pending tx を subscribe)、\`block_collector.rs\` (新 head)、\`mevshare_collector.rs\` (private hint stream)、\`opensea_order_collector.rs\` (NFT marketplace)、\`log_collector.rs\` (フィルタ済みログ subscription)。
-- [\`crates/artemis-core/src/executors/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/artemis-core/src/executors): \`mempool_executor.rs\` (public 送信)、\`flashbots_executor.rs\` (Flashbots relay へ bundle)、\`mev_share_executor.rs\` (MEV-Share 提出)。
-
-各ファイルは小さい — 約 50〜100 行。特に \`mempool_collector.rs\` を開く:
+\`mempool_collector.rs\` の全体（MEV ロジックを含まない — 型付きストリーム供給に限定）:
 
 \`\`\`rust
 #[async_trait]
@@ -292,29 +225,7 @@ where
 }
 \`\`\`
 
-これが mempool collector の全体である。\`transactions_unordered(256)\` で tx 本体を並列取得する。重要なのは「書かれていないもの」で、MEV ロジック、デコード、strategy 固有処理は含まれない。collector の役割は型付きストリーム供給に限定される。
-
-## Step 4: 実物の Strategy — opensea-sudo-arb
-
-ここから strategy 本体を見る。[\`crates/strategies/opensea-sudo-arb/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/strategies/opensea-sudo-arb) は同梱唯一の strategy で、OpenSea と Sudoswap の間の NFT アービトラージを扱う。
-
-重要なファイルは 2 つ:
-
-- [\`src/types.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/strategies/opensea-sudo-arb/src/types.rs) — この strategy 固有の \`Event\` / \`Action\` enum を定義。
-- [\`src/strategy.rs\`](https://github.com/paradigmxyz/artemis/blob/main/crates/strategies/opensea-sudo-arb/src/strategy.rs) — \`impl Strategy<Event, Action> for OpenseaSudoArb\`。
-
-\`Event\` はこれだけ:
-
-\`\`\`rust
-pub enum Event {
-    NewBlock(NewBlock),
-    OpenseaOrder(Box<OpenseaOrder>),
-}
-\`\`\`
-
-入力源は 2 つだけで、block collector と OpenSea order collector である。
-
-\`process_event\` の本体が **MEV 判断のすべて**:
+同梱唯一の strategy \`opensea-sudo-arb\` の \`process_event\` が **MEV 判断のすべて**:
 
 \`\`\`rust
 async fn process_event(&mut self, event: Event) -> Vec<Action> {
@@ -330,82 +241,39 @@ async fn process_event(&mut self, event: Event) -> Vec<Action> {
 }
 \`\`\`
 
-\`process_order_event\` は、新規出品に対して Sudoswap 側の有利価格を探索し、成立するなら \`Action::SubmitTx\` を返す。
+\`process_order_event\` は新規出品に Sudoswap の有利価格を探し、成立すれば \`Action::SubmitTx\` を返す。\`process_new_block_event\` はブロックログから Sudo プール状態を更新する（アクションを出さず内部 state を保守）。アービ本体は別 Solidity（\`SudoOpenseaArb.sol\`）— strategy は機会検出と calldata 構築、原子的実行はコントラクト側。
 
-\`process_new_block_event\` は、ブロックログから Sudo プール状態を更新する。ここではアクションを出さず、内部 state を保守する。
+## 失敗例（誤解）
 
-> 🔍 **リポで探す。** 同じ \`strategy.rs\` 内で \`sync_state\` を探す。読む。**予測:** なぜこの strategy は開始前に「これまでに deploy された全 Sudo プール」を列挙する必要があるのか? 飛ばすと何が壊れる?
+「1 本の \`main.rs\` で書けばいい」は誤り — 一発書きは本番構造を隠し、次の strategy 追加で再利用できない。artemis（framework）は再利用性に答える: MEV ロジックは自作し、オーケストレーションは借りる。turnkey bot の subway が「何を走らせるか」を示すのに対し、artemis は「どう構成するか」を示す（subway=fork して書き換え、artemis=trait を実装）。世にない strategy を ship したいなら後者。
 
-アービ本体は別の Solidity ファイル（[\`contracts/src/SudoOpenseaArb.sol\`](https://github.com/paradigmxyz/artemis/blob/main/crates/strategies/opensea-sudo-arb/contracts/src/SudoOpenseaArb.sol)）にある。strategy は機会検出と calldata 構築を担い、原子的な売買実行はコントラクト側が担う。
+---
 
-## Step 5: Step 1 の予測に答える
+ここまでで「searcher = collector → strategy → executor のパイプライン」は着地した。ここから artemis を読み、自分の bot に落とす。コードは抜粋（実行時は repo 全体を参照）。
 
-**なぜ Executor を Strategy から分離するのか。** 同じ opportunity でも提出先は複数ある（public mempool / Flashbots / MEV-Share）。\`Action\` を出して executor を差し替えられる設計なら耐障害性が上がる。提出処理を strategy に直書きすると、提出先障害で全体が止まる。
+> 🛑 **予測。** Executor と Strategy を統合した場合に壊れる点を一文で。（答え: 提出を strategy に直書きすると、提出先（Flashbots relay 等）の障害で strategy 全体が止まる。分離していれば同じ \`Action\` を別 executor に流せ、提出経路を MEV ロジックに触れず入れ替えられる — trait の分割は理論的綺麗さでなく耐障害性のため。）
 
-trait の分割は理論的な綺麗さではない — **MEV ロジックを触らずに提出経路を入れ替えるため** の構造。
+## ステップで組み立てる
 
-> 🛑 **予測。** opensea-sudo-arb strategy に対して private mempool collector (例: Chainbound の Fiber、bloXroute) を足すなら、どこに足す? *具体的に:* どの trait を実装し、何を emit し、\`strategy.rs\` の何を (もしあれば) 変えるか?
+### Step 1-5: artemis を読む
 
-(答え: \`Collector<OpenseaOrder>\` か \`CollectorMap\` 経由の \`Collector<Event>\` を実装して engine に登録する。 \`strategy.rs\` の変更は不要。これが分離設計の効果である。)
+1. **trait を開く**（\`types.rs\`、上の 3 trait）。同ファイルの \`CollectorMap\`/\`ExecutorMap\` を 30 秒読む — *新しい Collector を書かずに型変換で解ける問題* を解いてくれる。
+2. **engine を読む**（\`engine.rs\`、上の broadcast 図）。要点: 新 strategy の ship は \`impl Strategy\` 1 つ + \`add_strategy\` だけ。
+3. **実物の collector/executor を読む**（\`collectors/\`: mempool / block / mevshare / opensea / log、\`executors/\`: mempool / flashbots / mev_share）。各 ~50-100 行。
+4. **実物の strategy を読む**（\`opensea-sudo-arb\`、\`Event = { NewBlock, OpenseaOrder }\` の 2 入力源）。\`sync_state\` がなぜ「deploy 済み全 Sudo プール」を列挙するか考える。
+5. **分離の効果を確認**（private mempool collector を足すなら \`Collector\` を実装して engine 登録、\`strategy.rs\` の変更は不要）。
 
-## Step 6: 読みから出荷へ — 自分の bot
+### Step 6: 読みから出荷へ — 自分の bot
 
-artemis で 2-hop Uniswap アービ searcher を出す場合の最小手順:
+2-hop Uniswap アービ searcher の最小手順:
 
-1. **再利用:** pending swap に \`MempoolCollector\`、新 head に \`BlockCollector\`、\`FlashbotsExecutor\` (または対象 レッスン1の bundle エンドポイント相当)。全部そのまま。
-2. **書く:** \`Event = { NewBlock, PendingTx }\` / \`Action = { SubmitBundle }\` を持つ \`UniArbStrategy\` を 1 つ。\`process_event\` の \`PendingTx\` 分岐: swap をデコード、Revm で fork シミュレート、クロスプール spread を検出、bundle を構築。\`NewBlock\` 分岐: reserve cache をリフレッシュ、古くなった opportunity を捨てる。
-3. **配線:** \`engine.add_collector(...)\` ×2、\`engine.add_strategy(UniArbStrategy::new(...))\`、\`engine.add_executor(...)\`、\`engine.run().await\`。
+1. **再利用:** pending swap に \`MempoolCollector\`、新 head に \`BlockCollector\`、\`FlashbotsExecutor\`。全部そのまま。
+2. **書く:** \`Event = { NewBlock, PendingTx }\` / \`Action = { SubmitBundle }\` を持つ \`UniArbStrategy\` を 1 つ。\`PendingTx\` 分岐: swap をデコード → Revm で fork シミュレート → クロスプール spread を検出 → bundle 構築。\`NewBlock\` 分岐: reserve cache をリフレッシュ、古い opportunity を捨てる。
+3. **配線:** \`add_collector\` ×2、\`add_strategy(UniArbStrategy::new(...))\`、\`add_executor\`、\`run().await\`。
 
-MEV ロジックの実装面積は 1 ファイルに集中し、周辺は再利用できる。
+## 答え合わせ（Test gate）
 
-## 正直な比較 — artemis vs subway
-
-artemis は README の [Acknowledgements](https://github.com/paradigmxyz/artemis/blob/main/README.md#acknowledgements) で系譜を明示している（[\`subway\`](https://github.com/libevm/subway)、\`subway-rs\`、\`rusty-sando\`）。これらは完成品寄りの MEV bot で、対象戦略が明確である。
-
-一方 artemis は **フレームワーク** で、例 strategy は 1 つだけである。subway が「何を走らせるか」を示すのに対し、artemis は「どう構成するか」を示す。
-
-| | subway | artemis |
-| :--- | :--- | :--- |
-| **形** | turnkey サンドイッチ bot | フレームワーク + 例 strategy 1 つ |
-| **言語** | TypeScript | Rust |
-| **カスタマイズ** | fork して書き換え | trait を実装 |
-| **自分が用意するもの** | API キー、資本 | MEV ロジック、資本 |
-| **正解な状況** | サンドイッチを今日、学習素材として欲しい | まだ世にない strategy を ship したい |
-
-このレッスンを読んでいるあなたは後者を ship する側。artemis はあなたの足場。
-
-## リコールチェックリスト
-
-次のレッスンに進む前に、スクロールせずに以下に答えられることを確認:
-
-1. artemis の 3 つの trait の名前と、それぞれが何を入力 / 出力するか。
-2. strategy 間の調整ロジックはコードベースのどこにあるか? (引っ掛け — Step 2 参照。)
-3. なぜ Action enum はフレームワーク全体ではなく strategy 単位なのか?
-4. \`opensea-sudo-arb\` で \`process_new_block_event\` は \`process_order_event\` がやらないことを何をするか?
-5. 提出を public mempool から Flashbots に切り替えるとき、Strategy 実装の何を変えるか? (答え: 何も変えない。登録する Executor だけを切り替える。)
-
-2 と 4 で詰まったら、次のレッスンに行く前に Step 2 と Step 4 を読み直し。
-
-## Drill
-
-1. **新しい strategy を紙で設計する。** 実在の MEV opportunity を 1 つ選び、必要な \`Event\` / \`Action\` と再利用する collector / executor を列挙する。(30 分)
-2. **1 イベントを end-to-end で追う。** pending tx 受信から \`SubmitTxToMempool\` 実行までの \`.await\` ポイントを列挙する。(45 分)
-3. **collector を移植する。** [\`crates/artemis-core/src/collectors/\`](https://github.com/paradigmxyz/artemis/tree/main/crates/artemis-core/src/collectors) から 1 つ選び、\`ethers-rs\` 版を Alloy 1.x へ置き換える。trait シグネチャは維持する。(2 時間)
-4. **run loop を読む。** \`engine.rs\` の \`run\` を再読し、collector \`A\` のイベントが strategy \`B\` に届く経路（channel 型と receiver）を答える。(30 分)
-5. **スタブ strategy を載せる。** \`Strategy<Event, Action>\` を実装した最小モジュールを追加し、\`MempoolCollector\` + no-op executor で起動するバイナリに配線して \`cargo run\` する。(3 時間)
-
-Drill 5 まで終えれば、任意の MEV ロジックを差し込める artemis ベース searcher の骨組みが手元に残る。
-
-> 🛑 **最終チェック。** 一文で答える: なぜ一発書きの \`main.rs\` ではなく artemis を使うのか。答えに *strategy 再利用* か *提出経路の差し替え* が入らない場合は Step 5 を再読する。
-
-## Test gate
-
-*Test gate* に従い、本レッスンの最低ラインは drill 5 のスタブ strategy に対する次の 2 テストである。
-
-1. **Forked-state 機会再現。** 既知の arb ブロックを pin し、\`AlloyDB\` バック Revm 上で strategy を実行する。正の期待 P&L を持つ \`Action\` が出ることを assert する。
-2. **Reorg 整合性。** 合成 \`ChainReorged\` 通知を流し、reorg 対象ブロックに依存する pending \`Action\` が取り下げられることを assert。（reorg 無視は典型的な本番障害である。）
-
-スケッチ：
+最低ラインは 2 テスト:
 
 \`\`\`rust
 // tests/integration.rs
@@ -429,7 +297,21 @@ async fn retracts_action_on_reorg() {
 }
 \`\`\`
 
-両方が green になるまでレッスンは **未完了**。mainnet で \`cargo run\` できても \`cargo test\` が通らなければ、まだ deliverable ではない。
+\`finds_known_arb_at_pinned_block\`（forked-state で実機会を再現し正の期待 P&L を assert）+ \`retracts_action_on_reorg\`（合成 \`ChainReorged\` で reorg 依存の pending \`Action\` を取り下げ — reorg 無視は典型的本番障害）。両方 green まで未完了。mainnet で \`cargo run\` できても \`cargo test\` が通らなければ deliverable でない。
+
+## 合格基準
+
+- 上記 2 テストが green。
+- artemis の 3 trait の名前と各入出力を言える。
+- 提出を public mempool→Flashbots に切り替えるとき Strategy 実装の何を変えるか即答できる（答え: 何も変えない、登録する Executor を切り替える）。
+
+## Drill
+
+1. 実在の MEV opportunity を 1 つ選び、必要な \`Event\`/\`Action\` と再利用する collector/executor を列挙（30 分）。
+2. pending tx 受信から \`SubmitTxToMempool\` 実行までの \`.await\` ポイントを列挙（45 分）。
+3. \`collectors/\` から 1 つ選び \`ethers-rs\` 版を Alloy 1.x へ置換（trait シグネチャは維持）（2 時間）。
+4. \`engine.rs\` の \`run\` を再読し、collector のイベントが strategy に届く経路（channel 型と receiver）を答える（30 分）。
+5. \`Strategy<Event, Action>\` を実装した最小モジュールを \`MempoolCollector\` + no-op executor に配線して \`cargo run\`（3 時間）。
 
 ## 📺 関連動画
 
@@ -437,74 +319,39 @@ async fn retracts_action_on_reorg() {
 vCCYFSAdCFo | Understanding MEV — Georgios Konstantopoulos, Dan Robinson, Hasu (Paradigm)
 \`\`\`
 
+## まとめ（3行）
 
----
+- searcher = イベント処理パイプライン。artemis が collector（外部→イベント）/ strategy（イベント→アクション、MEV の脳）/ executor（アクション→副作用）の 3 trait + engine に分割する。
+- 新 strategy の ship は \`impl Strategy\` 1 つ + \`add_strategy\` だけ。collector/executor は再利用、strategy 間調整は engine になく単一 strategy 内で。Executor 分離が提出経路の差し替えと耐障害性を生む。
+- Test gate: forked-state での既知 arb 再現（正の P&L）+ reorg 整合性。\`cargo test\` green まで未完了。次は DB 層の reorg-aware インデクサ。
 
-## このティアの先
+## 次のレッスン（レッスン2）
 
-**Building with the Stack** ティアは 10 lesson 全部 ship 済み。ここから:
-
-- **レッスン 2** — Reorg-aware Postgres indexer (ExEx 駆動、in-process)
-- **レッスン 3** — \`extend_rpc_modules\` 経由のカスタム RPC エンドポイント
-- **レッスン 4** — Wallet backend (signer pool + nonce manager + replace-on-stuck)
-- **レッスン 5** — EIP-7702 sponsor service (Type 4 tx + paymaster パターン)
-- **レッスン 6** — Foundry スタイル cheatcode (custom precompile + 最小ハーネス)
-- **レッスン 7** — Swap aggregator (Revm fork + 横断 venue クオート)
-- **レッスン 8 (Capstone)** — 上記すべてを統合する frontrun-resistant order router
-- **レッスン 9** — Validate-revm クロスクライアントハーネス (production provider と比較)
-- **レッスン 10** — HTTP 402 / MPP machine-payments エンドポイント (Tempo の payments スタック)
-
-各々が自己完結した 約 200〜300 行の build、同じ predict / find-in-repo / anti-fluency スタイル。ターゲットユースケースに合うものから選ぶ。
-
-> **🧭 ここまでで積み上げたもの:** **ネットワーク層 × 並行性層** のアプリケーションを出荷した — event-driven なパイプライン（artemis の collector → strategy → executor）を MEV に当てはめ、テストゲート（forked-state arb の再現 + reorg 整合性）で正しさを担保。Kafka Streams や HFT の order handler が動かしているのと同じ構造。次のレッスンでは **DB 層** に移る: ExEx 駆動の reorg-aware なインデクサ。
-`,
+ExEx 駆動の reorg-aware な Postgres インデクサ（Tempo の \`tidx\` を読む）。\`Notification::ChainCommitted\`/\`ChainReverted\` を fixture replay で流し、導出状態が golden reference と一致することを assert する。`,
                 },
                 {
-                  title: '本物の Production Indexer を読む — Tempo の tidx',
+                  title: 'レッスン2 — 本物の Production Indexer を読む — Tempo の tidx',
                   slug: 'build-exex-indexer-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 45,
                   xpReward: 80,
-                  content: `# 本物の Production Indexer を読む — Tempo の tidx
+                  content: `# レッスン2 — 本物の Production Indexer を読む — Tempo の tidx
 
-> 🧭 **systems engineering スタックでの位置:** **DB 層**、とくに OLTP + OLAP のデュアルストレージ設計。要点は、point lookup と range scan を同じエンジンに無理に載せないこと。 \`tidx\` はこの発想をチェーンデータへ適用した実例である。
+## 問い
 
-Etherscan や Dune も indexer だが、内部設計は公開されない。[\`tidx\`](https://github.com/tempoxyz/tidx) は公開実装で、Tempo の EVM レッスン1で実運用されている。本レッスンでは、このコードから設計判断とトレードオフを読む。
+本番 indexer が壊れるのは、異なるクエリ形が同時に来る瞬間だ — 「アドレス X の最新 10 件」（point lookup）と「過去 1 年の日次集計」（range scan）。1 つのストレージエンジンに両方を無理に載せると片方が死ぬ。どう設計するか？（読む対象は公開実装 [\`tidx\`](https://github.com/tempoxyz/tidx)、Tempo の EVM L1 で実運用。）
 
-リポを開く。読む。本レッスンはそのガイド。
+## 原理（最小モデル）
 
-> 📌 **なぜこの出発点か。** 本番で壊れるのは、異なるクエリ形が同時に来る瞬間である。  
-> 例: 「アドレス X の最新 10 件」（point lookup）と「過去 1 年の日次集計」（range scan）。  
-> \`tidx\` は両バックエンドへ並列書き込みし、読み取り時に振り分ける。ここが本レッスンの主題である。
+- **OLTP + OLAP のデュアルストレージ。** PostgreSQL の row store は point lookup に強い、ClickHouse の column store は広い期間集計に強い。互いに相手の質問をすると死ぬ（PG に日次 volume = 全ページ read で数十秒〜数分、CH に最新 10 件 = point index がなくスキャン）。tidx は両方に書き、read で振り分ける。
+- **dual sink: 1 reader、2 write。** \`SinkSet { pool, ch: Option<...> }\`、\`write_all\` が \`tokio::try_join!\` で PG/CH に同時書き込み（待ち時間 ≈ \`max(pg, ch)\`）。PG は 4 テーブルを 1 トランザクション、CH は append-only で部分失敗は retry 回復、CH は任意（未設定なら PG-only で OLAP だけ無効）。
+- **lazy event decoding。** event の事前登録を要求しない。\`logs\` に生バイト（selector/topics/data）を保持し、デコードはクエリ時に \`EventSignature::parse\` が行う（signature 文字列 → topic0 計算 → フィルタ + 射影 CTE 合成）。代償は保存量 5-10 倍、得るものは事前登録なしで新しい質問に即応（Subgraph は manifest で事前デコード、tidx は query 時）。
+- **realtime + gap sync の 2 ループ + 別 RPC client 2 本。** realtime は低遅延重視、backfill は帯域消費型 — 共有すると backfill が realtime を詰まらせる。\`sync_state\` の 4 カーソル（head/tip/synced/backfill）で 2 ループの干渉を防ぐ。
 
-## 受け入れ条件
+## 具体例
 
-次のテストが pass したらレッスン完了（フルコードは末尾の §Test gate）:
-
-1. **\`replays_committed_then_reverted\`** — N..N+5 を適用後 N+3..N+5 を reorg。各 height で PG の導出状態が golden reference と一致する。
-2. **\`idempotent_under_replay\`** — 同じ通知を 2 回流しても no-op になる（クラッシュ復旧シナリオ）。
-
-**Test-first 読法。** 先に受け入れ条件を確認する。以下では、テストに必要な fixture 入力、dual-sink アーキテクチャ、\`Notification::ChainCommitted\` / \`ChainReverted\` の形を整理する。
-
-## OLTP vs OLAP の設計テンション、具体に
-
-PostgreSQL の row store は、point lookup に強い。  
-ClickHouse の column store は、広い期間集計に強い。  
-\`tidx\` は両者を併用し、クエリ特性に合わせて使い分ける。
-
-それぞれに相手の質問をすると死ぬ:
-
-- PostgreSQL に *「過去 1 年の日次 volume」*: その範囲に Transfer を含む全ページの全行を read。ディスク律速。実データセットで数十秒〜数分。
-- ClickHouse に *「0xAlice からの最新 10 件」*: ClickHouse には point-lookup index がない; スキャンする。答えが 10 行のためのムダ IO。
-
-> 🛑 **予測。** PostgreSQL だけの場合と ClickHouse だけの場合で、indexer を壊すクエリを 1 つずつ挙げる。後続ではこの弱点を tidx がどう回避するかを見る。
-
-tidx の解は単純で、**両方に書き、read で振り分ける**。API は自動選択か \`?engine=\` 指定でエンジンを決める。
-
-## Step 1: Dual Sink — 1 つの reader、2 つの write
-
-[\`src/sync/sink.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/sink.rs) を開く。「2 回書く」抽象が ~120 行で全部入っている:
+「2 回書く」抽象（\`src/sync/sink.rs\`）:
 
 \`\`\`rust
 #[derive(Clone)]
@@ -535,19 +382,7 @@ impl SinkSet {
 }
 \`\`\`
 
-ポイント:
-
-- **\`tokio::try_join!\`** — PG と CH へ同時書き込みする。待ち時間は概ね \`max(pg, ch)\` になる。
-- **整合性モデルが違う。** PG は 4 テーブルを 1 トランザクションで書く。CH は append-only のため、部分失敗時は retry（[\`src/sync/ch_sink.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/ch_sink.rs)）で回復する。
-- **CH は任意。** 未設定なら PG-only で動作し、OLAP だけが無効になる。
-
-> 🛑 **予測。** dual-sink で \`write_all\` はどこまで順序を保証するか。ブロック N が PG にだけあり CH にない状態は起こり得るか。 \`try_join!\` の意味を前提に答える。
-
-(答え: 起き得るが短時間である。 \`try_join!\` は両成功時に return するため、途中で CH を先に読むと古い値を見うる。tidx はこれを許容し、\`ch_backfill_block\` で後から埋める。)
-
-## Step 2: Sync Engine — 1 つの fetcher、ファンアウト
-
-[\`src/sync/engine.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/engine.rs) を開く。Engine はチェーンを *1 回* 読んで、結果を \`SinkSet::write_all\` に渡す。構造体フィールドを読む:
+sync engine はチェーンを *1 回* 読んで結果を \`write_all\` に渡す（\`src/sync/engine.rs\`）:
 
 \`\`\`rust
 pub struct SyncEngine {
@@ -560,50 +395,7 @@ pub struct SyncEngine {
 }
 \`\`\`
 
-RPC client を 2 本に分ける理由は、realtime と backfill の性質が違うためである。前者は低遅延重視、後者は帯域消費型。共有すると backfill が realtime を詰まらせる。分離により並行度予算を個別に管理できる（\`REALTIME_RPC_CONCURRENCY\` と \`BACKFILL_RPC_CONCURRENCY\`）。
-
-> 🔍 **リポで探す。** 同じファイルで \`backfill_first\` と \`trust_rpc\` を見つける。それぞれ 30 秒ずつ読む。**自分の言葉で:** \`backfill_first\` はノード起動の何を変えるか? \`trust_rpc\` は何をオプトアウトするか?
-
-## Step 3: スキーマ — 同じデータ、2 つの形
-
-ここで OLTP/OLAP の二重性が抽象でなくなる。両方を並べて開く:
-
-- PostgreSQL: [\`db/blocks.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/blocks.sql), [\`txs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/txs.sql), [\`logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/logs.sql), [\`receipts.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/receipts.sql)
-- ClickHouse: [\`db/clickhouse/blocks.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/blocks.sql), [\`txs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/txs.sql), [\`logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/logs.sql), [\`receipts.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/receipts.sql)
-
-カラムは同じだが、エンジンと索引戦略が異なる。PG は point lookup 向け、CH は時系列スキャン向けに最適化される。
-
-また、\`txs\` / \`logs\` / \`receipts\` は \`block_timestamp\` を非正規化で持つ。狙いは JOIN 削減で、分析クエリの実行コストを下げることにある。
-
-> 🔍 **リポで探す。** [\`db/logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/logs.sql) と [\`db/clickhouse/logs.sql\`](https://github.com/tempoxyz/tidx/blob/main/db/clickhouse/logs.sql) を両方開く。片方にあり片方にないカラムまたは index を 1 つ特定。**自分の言葉で:** それぞれが最適化しているクエリクラスは何か?
-
-## Step 4: Lazy event decoding — キモの設計判断
-
-多くの indexer は event の事前登録を要求する。tidx は要求しない。\`logs\` には生バイト（\`selector/topics/data\`）を保持し、デコードはクエリ時に行う。
-
-[\`src/query/parser.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/query/parser.rs) を開く。\`EventSignature::parse\` は \`Transfer(address indexed from, address indexed to, uint256 value)\` のような文字列を受け取って:
-
-1. ABI param 型をパース
-2. \`topic0 = keccak256("Transfer(address,address,uint256)")\` を計算
-3. \`logs\` を \`selector = topic0\` でフィルタしデコード済みフィールドを名前付きカラムとして射影する CTE を router が **合成** するための \`EventSignature\` を返す
-
-ユーザの SQL はその event 名をテーブルとして参照できる:
-
-\`\`\`bash
-tidx query \\
-  --signature "Transfer(address indexed from, address indexed to, uint256 value)" \\
-  "SELECT * FROM Transfer WHERE from = '\\\\xAlice...' LIMIT 10"
-\`\`\`
-
-代償: 永遠に全コントラクトの全ログを保存する。Subgraph 方式の「これらのコントラクトだけ index する」と比べて生バイトで 約 5〜10 倍。
-
-得るものは、事前登録なしで新しい質問へ即応できること。代償は保存量増加だが、tidx はこの交換を採用する。
-
-> 🛑 **理解度チェック。** なぜ tidx は Subgraph の事前登録を不要にできるのか。両者で ABI デコードが起きる場所の違いを説明する。
-
-## Step 5: Query routing — engine 選択
-
-[\`src/query/router.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/query/router.rs) を開く。エンジン選択の契約はこれだけ:
+query routing の契約（\`src/query/router.rs\`）— エンジン 2 つ、HTTP API は \`?engine=\` 省略時に router が選ぶ:
 
 \`\`\`rust
 pub enum QueryEngine {
@@ -612,100 +404,56 @@ pub enum QueryEngine {
 }
 \`\`\`
 
-エンジン 2 つ。HTTP API ([\`/query\`](https://github.com/tempoxyz/tidx/tree/main/src/api)) はオプションの \`?engine=\` パラメータを受け取る; 省略すれば router が選ぶ。README の例:
+\`SELECT * FROM blocks WHERE num = 12345\` → point lookup → PG。\`SELECT type, COUNT(*) FROM txs GROUP BY type\` → 集計 → CH。振り分けはヒューリスティック（用途明確なら \`?engine=\` で明示）。CH の materialized view は insert 時に集計更新（read 時の重い再集計を避ける）。
 
-- \`SELECT * FROM blocks WHERE num = 12345\` → point lookup → PG。
-- \`SELECT type, COUNT(*) FROM txs GROUP BY type\` → 集計 → CH。
+## 失敗例（誤解）
 
-振り分けは魔法ではなくヒューリスティックである。用途が明確な場合、実運用では \`?engine=\` で明示指定する。エンジン分離が本質で、自動振り分けは利便機能にすぎない。
+「PostgreSQL だけ / ClickHouse だけで十分」は誤り — PG only は「過去 1 年の日次 volume」で死に（ディスク律速）、CH only は「最新 10 件」で死ぬ（point index なしでスキャン、答え 10 行のためのムダ IO）。それぞれが相手の得意クエリで律速する。tidx は両方に書き read で振り分ける — エンジン分離が本質、自動振り分けは利便機能にすぎない。
 
-## Step 6: Materialized views — CH 上の事前計算 analytics
+---
 
-[\`src/api/views.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/api/views.rs) を開く。ClickHouse の materialized view は、read 時ではなく insert 時に集計を更新する。tidx はこれを HTTP API で管理する。
+ここまでで「OLTP/OLAP デュアルストレージ + dual sink」は着地した。ここから tidx を読み、自分の indexer に落とす。コードは抜粋（実行時は repo 全体を参照）。
 
-\`\`\`bash
-curl -X POST "https://tidx.example.com/views" -d '{
-  "chainId": 4217,
-  "name": "top_holders",
-  "sql": "SELECT token, holder, sum(balance) AS balance
-          FROM token_balances GROUP BY token, holder HAVING balance > 0",
-  "orderBy": ["token", "holder"]
-}'
-\`\`\`
+> 🛑 **予測。** dual-sink で \`write_all\` はどこまで順序を保証するか。ブロック N が PG にだけあり CH にない状態は起こり得るか。（答え: 起き得るが短時間。\`try_join!\` は両成功時に return するため、途中で CH を先に読むと古い値を見うる。tidx はこれを許容し \`ch_backfill_block\` で後から埋める。整合性モデルが PG=トランザクション・CH=append-only retry で違うのが前提。）
 
-\`POST /views\` で CH は 3 つ行う。ターゲットテーブル作成、materialized view 作成、既存データの backfill。以後は新規 insert ごとに増分更新され、\`SELECT *\` は重い再集計を避けられる。
+## ステップで組み立てる
 
-認可は \`POST/DELETE\` のみ制限する。\`trusted_cidrs\`（例: Tailscale）からの接続を要求し、read は公開、write/admin は閉じる。
+### Step 1-7: tidx を読む
 
-> 🔍 **リポで探す。** [\`views.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/api/views.rs) で \`require_admin_mutation\` を見つける。trusted IP *かつ* \`x-tidx-admin: 1\` ヘッダの両方を要求していることに注意。**なぜ両方?** (Defense in depth — IP は誤設定されたネットワーク内ではスプーフできる; ヘッダは安価な 2 段目のチェック。)
+1. **Dual Sink**（\`sink.rs\`、上の \`SinkSet\`）— \`try_join!\` で PG/CH 同時書き込み。
+2. **Sync Engine**（\`engine.rs\`、上の struct）— RPC client 2 本の理由（realtime 低遅延 vs backfill 帯域消費、並行度予算を個別管理）。\`backfill_first\`/\`trust_rpc\` を読む。
+3. **スキーマ**（\`db/*.sql\` と \`db/clickhouse/*.sql\`）— 同じカラム、別のエンジン/索引戦略。\`txs/logs/receipts\` は \`block_timestamp\` を非正規化（JOIN 削減）。
+4. **Lazy event decoding**（\`query/parser.rs\` の \`EventSignature::parse\`）— 生バイト保持、query 時デコード。CLI から signature を渡せば event 名がテーブルとして見える:
 
-## Step 7: Sync アーキテクチャ — Realtime + Gap Sync
+   \`\`\`bash
+   tidx query \\
+     --signature "Transfer(address indexed from, address indexed to, uint256 value)" \\
+     "SELECT * FROM Transfer WHERE from = '\\\\xAlice...' LIMIT 10"
+   \`\`\`
 
-README の [Sync Architecture](https://github.com/tempoxyz/tidx/blob/main/README.md#sync-architecture) は 2 つの並行ループを示す:
+5. **Query routing**（\`router.rs\`、上の \`QueryEngine\`）— point lookup→PG / 集計→CH。
+6. **Materialized views**（\`api/views.rs\`）— insert 時集計。認可は \`require_admin_mutation\`（trusted IP **かつ** \`x-tidx-admin: 1\` ヘッダ = defense in depth）。HTTP で view を作る:
 
-- **Realtime** はチェーン head を追って ~0 lag を維持。
-- **Gap Sync** は不連続を検出し、最新から最古に向かって埋める。
+   \`\`\`bash
+   curl -X POST "https://tidx.example.com/views" -d '{
+     "chainId": 4217,
+     "name": "top_holders",
+     "sql": "SELECT token, holder, sum(balance) AS balance
+             FROM token_balances GROUP BY token, holder HAVING balance > 0",
+     "orderBy": ["token", "holder"]
+   }'
+   \`\`\`
 
-Gap sync が最新優先なのは、利用頻度の高い新しいデータを先に整えるためである。\`sync_state\` は \`head_num / tip_num / synced_num / backfill_num\` の 4 カーソルを管理し、2 ループの干渉を防ぐ。
+7. **Sync アーキ** — realtime（~0 lag）+ gap sync（最新→最古に埋める、利用頻度の高い新データを先に）。
 
-## Step 8: 読みから書きへ — 自分の indexer
+### Step 8: 読みから書きへ — 自分の indexer
 
-独自チェーン向けに tidx を採用する道は 2 つある。
+- **そのまま採用:** Ethereum JSON-RPC を話すなら \`rpc_url\` を変えて \`tidx up\`（テーブルはチェーン非依存、\`chain_id\` はデータ列）。
+- **Fork:** 独自フィールド（fee payer 等）が要るなら 3 箇所を拡張 — ① \`db/*.sql\` + \`db/clickhouse/*.sql\`（追加カラム）② \`src/sync/decoder.rs\`（追加フィールド抽出）③ \`src/types.rs\`（\`*Row\` struct 拡張）。sync engine / dual sink / query router / views API はそのまま。
 
-**そのまま採用。** Ethereum JSON-RPC を話すなら、\`rpc_url\` を変えて \`tidx up\` で動く。テーブルはチェーン非依存で、\`chain_id\` はデータ列として扱う。
+## 答え合わせ（Test gate）
 
-**Fork。** 独自フィールド（fee payer、独自 trace など）が必要なら、次の 3 箇所を拡張する:
-
-1. \`db/*.sql\` と \`db/clickhouse/*.sql\` — チェーン固有の追加カラム
-2. \`src/sync/decoder.rs\` — 各 block / tx / receipt から追加フィールドを抽出
-3. \`src/types.rs\` — decoder から sink に流れる \`*Row\` struct を拡張
-
-通常は sync engine、dual sink、query router、views API はそのまま使える。主な変更点はデータ定義側に寄る。
-
-## tidx vs Subgraph / Goldsky — 正直な比較
-
-| | tidx | Subgraph / Goldsky |
-| :--- | :--- | :--- |
-| **ホスティング** | セルフホスト (PG + CH を自分で運用) | マネージドサービス |
-| **定義** | SQL schema + on-the-fly ABI | Subgraph manifest + AssemblyScript handler |
-| **事前登録** | なし — どの event でも signature で query | 必須 — manifest で全 event 宣言 |
-| **ストレージコスト** | 高い (生 log を永続保存) | 低い (宣言された event のみ) |
-| **クエリ I/F** | SQL + REST | GraphQL |
-| **OLAP クエリ** | ネイティブ (ClickHouse) | 一般に弱い / export 必要 |
-| **正しい選択になるとき** | データを所有し、SQL を使い、熱い OLAP クエリを走らせる | zero-ops、GraphQL-native、event スコープが宣言済み |
-
-どちらが厳密に良いというわけではない。tidx は indexed chain data を **自分のデータベース** として扱う場合 (OLAP scan が重要なとき) の選択; マネージドサービスは「チェーンデータの上の API」で十分で運用キャパが制約のときの選択。
-
-## Recall チェックリスト
-
-次に進む前に、スクロールせずに以下に答えられるか確認:
-
-1. PostgreSQL が殺すクエリクラスを 1 つ; ClickHouse が殺すクエリクラスを 1 つ挙げよ。
-2. PG と CH の書き込みが単一の sync ステップからファンアウトするのはコードのどこか? (ファイル + 関数)
-3. なぜ tidx は sync engine で別々の RPC client を 2 つ使うのか?
-4. なぜ tidx は Subgraph が要求する event 事前登録をスキップできるのか? (ABI デコードはどこで起きる?)
-5. Materialized view が ad-hoc な \`GROUP BY\` query にない何を買ってくれるのか?
-6. 新チェーンのカスタム tx フィールド向けに tidx を fork するとして、触る 3 ファイルを挙げよ。
-
-3、4、6 でつまずいたら、次のレッスンに進む前に Step 2、4、8 を読み直し。
-
-## Drill
-
-1. **Dual sink をマップ。** [\`sink.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/sync/sink.rs) を開く。\`try_join!\` 内で \`writer::write_batch\` (PG) が成功して \`ch.write_blocks\` が失敗したら何が起きるかをトレース。PG トランザクションは roll back する? 次の sync iteration は何をする? (30分)
-2. **Routing rule を見つける。** [\`src/query/router.rs\`](https://github.com/tempoxyz/tidx/blob/main/src/query/router.rs) と周囲の \`mod.rs\` を開く。\`?engine=\` パラメータなしのクエリがどう振り分けられるかを正確に特定。常に PG? 常に CH? ヒューリスティック? 1 文でルールを書け。(45分)
-3. **両方のスキーマにカラム追加。** 1 つ選ぶ — 例えば L2 用途の per-tx \`l1_origin\` フィールド。\`db/txs.sql\`、\`db/clickhouse/txs.sql\`、\`src/types.rs\` の \`TxRow\` struct、そして decoder に追加。\`cargo build\` を通す。(2時間)
-4. **Materialized view を定義。** 実 analytics 質問を 1 つ選ぶ (送信数 top 100、日次アクティブアドレス、出来高 top トークンなど)。\`POST /views\` ボディを書く。CH が推定するスキーマを確認。(1時間)
-5. **公開チェーンに対して走らせる。** \`tidx init\`、\`rpc_url\` を free な Tempo または testnet エンドポイントに向ける、\`tidx up\`、\`tidx status --watch\` で realtime が追いつくのを見る。Query する。(1時間)
-
-Drill 5 を終えると、両エンジンで実チェーンを index する稼働中の tidx を得られる。
-
-> 🛑 **最終チェック。** 一文で答える: tidx の dual-storage は単一 DB に対して何を増やすか。答えに *point lookup レイテンシ* と *analytics スキャンスループット* の両方が入らなければ冒頭を再読する。
-
-## Test gate
-
-*Test gate* に従い、本レッスンの最低ラインは **fixture chain replay** である。既知の \`ChainCommitted\` / \`ChainReverted\` 列を流し、PG（CH を使う場合は CH も）の導出状態が golden reference と一致することを assert する。
-
-reorg ケースは必須である。\`ChainCommitted\` だけ処理する indexer は reorg で状態を壊す。\`ChainReverted\` が実際に巻き戻すことをテストで証明する。
+最低ラインは **fixture chain replay**。reorg ケースは必須（\`ChainCommitted\` だけ処理する indexer は reorg で状態を壊す）:
 
 \`\`\`rust
 // tests/fixture_replay.rs
@@ -734,7 +482,21 @@ async fn idempotent_under_replay() {
 }
 \`\`\`
 
-fixture は \`tests/fixtures/\` に \`ExExNotification\` をシリアライズして置く（\`reth\` ヘルパか実ノードキャプチャを利用）。2 テストが green で CI が常時回るまで、レッスンは **未完了**。
+fixture は \`tests/fixtures/\` に \`ExExNotification\` をシリアライズして置く。2 テスト green まで未完了。
+
+## 合格基準
+
+- 上記 2 テスト（reorg 巻き戻し + idempotent replay）が green。
+- PG が殺すクエリクラスと CH が殺すクエリクラスを 1 つずつ言える。
+- tidx を fork するとき触る 3 ファイル（schema / decoder / types）を即答できる。
+
+## Drill
+
+1. \`sink.rs\` で PG 成功・CH 失敗時に何が起きるかトレース（PG はロールバックする? 次の iteration は?）（30 分）。
+2. \`router.rs\` で \`?engine=\` なしの振り分けルールを 1 文で特定（45 分）。
+3. 両スキーマ + \`TxRow\` + decoder に L2 用 \`l1_origin\` カラムを追加して \`cargo build\`（2 時間）。
+4. 実 analytics 質問を 1 つ選び \`POST /views\` ボディを書く（1 時間）。
+5. \`tidx init\` → \`rpc_url\` を testnet に → \`tidx up\` → \`tidx status --watch\` で realtime が追いつくのを見る（1 時間）。
 
 ## 📺 関連動画
 
@@ -742,57 +504,37 @@ fixture は \`tests/fixtures/\` に \`ExExNotification\` をシリアライズ�
 GhEhzE9SFqY | Alexey Shekhirin — Using Reth Execution Extensions for next generation indexing (Devcon 2024)
 \`\`\`
 
-> **🧭 ここまでで積み上げたもの:** **DB 層** のアプリを出荷した。tidx の dual-storage 設計を読み、fixture replay で reorg 安全性まで確認した。次は **ネットワーク層** に移り、\`extend_rpc_modules\` でサーバサイド RPC を拡張する。
-`,
+## まとめ（3行）
+
+- 本番 indexer は OLTP（PG、point lookup）+ OLAP（ClickHouse、期間集計）のデュアルストレージ — 片方だけだと相手の得意クエリで律速する。tidx は両方に書き read で振り分ける。
+- dual sink が \`tokio::try_join!\` で同時書き込み（一時的に PG/CH がずれるのは許容し後埋め）。lazy event decoding で事前登録不要（保存量 5-10 倍と引き換え）。RPC client を realtime/backfill で分離。
+- Test gate: fixture chain replay で reorg 巻き戻し + idempotent replay。\`ChainReverted\` が実際に巻き戻すことを証明する（reorg 無視は典型的本番障害）。
+
+## 次のレッスン（レッスン3）
+
+Reth にカスタム RPC エンドポイントを足す（\`extend_rpc_modules\`）。ノードを in-process で起動し、新メソッドを HTTP で叩いて JSON レスポンスを assert、エラーパス（不正パラメータ・欠損ブロック）も網羅する。`,
                 },
                 {
-                  title: 'Reth にカスタム RPC エンドポイントを足す',
+                  title: 'レッスン3 — Reth にカスタム RPC エンドポイントを足す',
                   slug: 'build-custom-rpc-ja',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 40,
                   xpReward: 70,
-                  content: `# Reth にカスタム RPC エンドポイントを足す
+                  content: `# レッスン3 — Reth にカスタム RPC エンドポイントを足す
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層のサーバサイド拡張**。RPC を公開しているデータベースやサービスが共通して直面する問題 — 「クライアントに生のデータをラウンドトリップさせる代わりに、サーバ側で走るカスタムクエリを足せるようにする」。PostgreSQL のストアドプロシージャ、GraphQL のカスタムリゾルバ、gRPC のサービス拡張 — いずれも同種の問題。Reth のカスタム RPC は、その解法を Ethereum の execution client に持ち込んだもの。
+## 問い
 
-fee-bidding bot のために、pending tx の gas price ヒストグラムを 1 回の API 呼び出しで返してほしい。標準の \`txpool_content\` は *pending tx を全部フルで* 返す — 結局 10 個の数字にまとめるのに、数百 KB を転送することになる。正解の動きは、**ノード内で**集計してヒストグラムだけ返す独自メソッドを追加すること。Rust ~50 行。Reth fork なし。ネイティブネームスペース (\`eth_*\`、\`net_*\`、\`debug_*\`、\`txpool_*\` ...) と同じ HTTP / WebSocket / IPC エンドポイントで動き出す。
+fee-bidding bot が pending tx の gas price ヒストグラムを 1 回の API 呼び出しで欲しい。標準の \`txpool_content\` は pending tx を *全部フルで* 返す — 結局 10 個の数字にまとめるのに数百 KB を転送する。どうやって **ノード内で** 集計してヒストグラムだけ返すか？（読み取り専用メソッド 1 つ、Rust ~50 行、Reth fork なし。）
 
-> 📌 **スコープ。** 読み取り専用メソッド \`txpoolPlus_pendingByGasBucket\` を 1 つ追加する。認証、レート制限、書き込み系は対象外。学習対象は trait 組み込みの骨格である。
+## 原理（最小モデル）
 
-> 📚 **参考。** [QuickNode の *How to Build Custom RPC Methods with Reth*](https://www.quicknode.com/guides/infrastructure/build-custom-rpc-methods-with-reth) はカスタム RPC trait 登録の基礎をカバー。ここではそれを土台に、サーバーサイド集計、subscription バリアント、本物のカスタム RPC が埋めるべき production gap まで構築する。
+- **カスタム RPC = ノード内集計、Reth fork なし。** \`jsonrpsee\` の \`#[rpc(server, namespace=...)]\` が trait から server/client stub + JSON シリアライズを生成。impl は pool ハンドルを持つ struct に書き、\`extend_rpc_modules\` で既存サーバ（HTTP/WS/IPC）へ登録 — ネイティブ namespace と同じトランスポート・認証・ロギング。
+- **server-side 集計のスイートスポット。** client 側集計（RPC ラウンドトリップ + 全 tx 転送、数百 KB）vs 外部 indexer（µs だが glue + 運用に数日）vs カスタム RPC（µs の in-process スナップショット + 集計後ペイロード + 1 回 ~50 行）。しかもノードの一部として出荷される（別サービス・別デプロイ・ポート開放なし）。
+- **\`pool.pending()\` はスナップショット iterator で安価。** 具体プール型を固定せず \`Pool: TransactionPool\` で書く。集計は \`O(buckets × pending)\`。
+- **subscription は \`tokio::spawn\` で。** RPC ハンドラは即 return し、ストリーミングはバックグラウンドタスク（ここでブロックすると RPC サーバスレッドが止まる）。\`sink.send(...).is_err()\` で切断を検知してクリーンに return（subscription リークなし）。
 
-## 受け入れ条件
-
-次のテストが pass したらレッスン完了（フルコードは末尾の §Test gate）:
-
-1. **\`returns_buckets_for_known_state\`** — ノードをインプロセス起動、fixture tx で mempool を seed、\`txpoolPlus_pendingByGasBucket\` を HTTP で呼び出し、bucket 数と合計 tx 数を assert。
-2. **\`rejects_invalid_bucket_count\`** — 不正パラメータは正しい JSON-RPC エラーコード（\`-32602\` Invalid params、\`-32603\` Internal error ではない）を返す。
-3. **\`subscription_does_not_leak_on_disconnect\`** — subscription を開く → クライアントを drop → spawn したタスクが終了することを assert。
-
-**Test-first 読法。** 先に受け入れ条件を確認する。以下では、テストが使う trait 登録、パラメータ処理、subscription パターンを示す。
-
-## 何を作るか
-
-新 RPC メソッド、ネイティブと同じように呼べる:
-
-\`\`\`bash
-$ cast rpc txpoolPlus_pendingByGasBucket
-[
-  {"min_gwei": 0,   "max_gwei": 1,   "count": 12},
-  {"min_gwei": 1,   "max_gwei": 5,   "count": 47},
-  {"min_gwei": 5,   "max_gwei": 10,  "count": 89},
-  {"min_gwei": 10,  "max_gwei": 20,  "count": 134},
-  {"min_gwei": 20,  "max_gwei": 30,  "count": 56},
-  {"min_gwei": 30,  "max_gwei": 50,  "count": 21},
-  {"min_gwei": 50,  "max_gwei": 100, "count": 8},
-  {"min_gwei": 100, "max_gwei": 250, "count": 2},
-  {"min_gwei": 250, "max_gwei": 500, "count": 0},
-  {"min_gwei": 500, "max_gwei": 0,   "count": 1}
-]
-\`\`\`
-
-用途: gas-price oracle、ダッシュボード、料金入札戦略、MEV searcher (pending priority fee の 90 パーセンタイル超えで入札)。
+データ経路を 1 枚で:
 
 \`\`\`mermaid
 flowchart LR
@@ -802,47 +544,9 @@ flowchart LR
     Bucket -->|JSON| Client
 \`\`\`
 
-> 🛑 **予測。** なぜサーバーサイド集計が有利か。 \`txpool_content\` の返却内容とダッシュボードの必要データを、ペイロードサイズの観点で一文で答える。
+## 具体例
 
-## なぜカスタム RPC か (workaround との比較)
-
-| 方式 | レイテンシ | ペイロード | 労力 |
-| :--- | :--- | :--- | :--- |
-| **\`txpool_content\` を呼んでクライアント側で集計** | RPC ラウンドトリップ + 全 tx 転送 | 数百 KB | 簡単 |
-| **mempool を subscribe する外部 indexer** | µs/query (in-mem) | 小 | glue + 運用に数日 |
-| **カスタム RPC メソッド** | µs (in-process スナップショット) | bytes | 1 回 ~50 行 |
-
-カスタム RPC はスイートスポットに位置する: indexer 並みのレイテンシ、集計後のペイロード、Rust 数ページの労力。**しかもノードの一部として出荷される** — 別サービスなし、別デプロイなし、ポート開放なし。
-
-## Cargo.toml
-
-\`\`\`toml
-[package]
-name = "txpool-plus"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-# Reth — production ではタグにピン
-reth                = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-ethereum       = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-
-# jsonrpsee — Reth が end-to-end で使っている RPC フレームワーク
-jsonrpsee           = { version = "0.24", features = ["server", "macros"] }
-
-# CLI フラグ
-clap                = { version = "4", features = ["derive"] }
-
-# 配管
-serde               = { version = "1", features = ["derive"] }
-tokio               = { version = "1", features = ["macros", "rt-multi-thread"] }
-\`\`\`
-
-> Reth の RPC は \`jsonrpsee\` で構成される。カスタムメソッドは別サーバを立てず、\`extend_rpc_modules\` で既存サーバへ登録する。
-
-## Step 1: RPC trait を定義
-
-\`jsonrpsee\` は trait から RPC 配管を生成する手続きマクロを使う。trait の形を書けば、マクロが server stub、client stub、JSON シリアライズを派生させる:
+RPC trait（\`#[rpc]\` マクロが配管を生成）:
 
 \`\`\`rust
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
@@ -862,17 +566,7 @@ pub trait TxpoolPlusApi {
 }
 \`\`\`
 
-ポイント:
-
-- **\`#[rpc(server, namespace = "txpoolPlus")]\`** — \`TxpoolPlusApiServer\` を生成する。\`#[method]\` と合わせて wire 名は \`txpoolPlus_pendingByGasBucket\` になる。
-- **\`RpcResult<T>\`** — JSON-RPC エラー形式を保ったまま返せる。
-- **\`Serialize\`** — 戻り値構造体に付ければ JSON 化できる。
-
-> 🔍 **リポで探す。** [\`reth-rpc-api\`](https://github.com/paradigmxyz/reth/tree/main/crates/rpc/rpc-api) を開き、ネイティブ API trait の \`#[rpc(...)]\` 宣言を確認する。自作 trait と同じ構造であることを比較する。
-
-## Step 2: pool アクセス付きで実装
-
-trait は \`TxpoolPlusApiServer\` を派生させた。トランザクションプールへのハンドルを持つ struct に実装する:
+pool アクセス付きの実装（wire 名は \`txpoolPlus_pendingByGasBucket\`）:
 
 \`\`\`rust
 use reth_ethereum::pool::{PoolTransaction, TransactionPool};
@@ -916,33 +610,9 @@ where
 }
 \`\`\`
 
-ポイント:
-
-- **\`Pool: TransactionPool\`** — 具体プール型を固定せずに使える。
-- **\`pool.pending()\`** — pending tx のスナップショットを読む。
-- **\`max_priority_fee_per_gas\`** — 今回は priority fee のみで集計する。
-- **計算量** — \`O(buckets * pending)\`。通常サイズでは十分高速。
-
-> 🛑 **理解度チェック。** なぜ \`pool.pending()\` は軽く、\`txpool_content\` RPC は重いのか。返却データと wire 変換の差で説明する。
-
-## Step 3: NodeBuilder に組み込む
-
-ここが統合点。ノードビルダーは \`extend_rpc_modules\` を公開していて、context (pool, provider, network handle, ...) とモジュールレジストリへの mut handle を渡してくれる:
+NodeBuilder への統合点 \`extend_rpc_modules\`（起動時 1 回、pool 等のコンテキストを受け取る）:
 
 \`\`\`rust
-use clap::Parser;
-use reth_ethereum::{
-    cli::{chainspec::EthereumChainSpecParser, interface::Cli},
-    node::EthereumNode,
-};
-
-#[derive(Debug, Clone, Copy, Default, clap::Args)]
-struct Args {
-    /// txpoolPlus 拡張を有効化
-    #[arg(long)]
-    enable_txpool_plus: bool,
-}
-
 fn main() {
     Cli::<EthereumChainSpecParser, Args>::parse()
         .run(async move |builder, args| {
@@ -965,54 +635,37 @@ fn main() {
 }
 \`\`\`
 
-ポイント:
+メソッドはどの RPC クライアントから見てもネイティブと区別がつかない（\`cast rpc txpoolPlus_pendingByGasBucket\` や生 curl で叩ける）。これが \`extend_rpc_modules\` の約束。
 
-- **\`Cli<...>::parse()\`** — 標準 CLI に独自フラグを追加できる。
-- **\`extend_rpc_modules\`** — 起動時に 1 回実行され、pool などのコンテキストを受け取る。
-- **\`merge_configured(ext.into_rpc())\`** — 生成した RPC モジュールを既存トランスポート（HTTP/WS/IPC）へ登録する。
+## 失敗例（誤解）
 
-> 🔍 **リポで探す。** [\`reth/examples/node-custom-rpc\`](https://github.com/paradigmxyz/reth/tree/main/examples/node-custom-rpc) を開き、自作実装と並べて比較する。差分は namespace / メソッド名 / ハンドラ内部に限られる。
+「\`txpool_content\` を呼んで client 側で集計すればいい」は誤り — RPC ラウンドトリップ + 全 tx 転送（数百 KB）を、結局 10 個の数字のために払う。カスタム RPC は in-process スナップショットで µs + 集計後の bytes。もう 1 つの罠: 引数バリデーションで標準 JSON-RPC エラーコードを使い回す — \`-32603\`（internal error）は予約済み、不正パラメータは \`-32602\`（Invalid params）を返す。
 
-## Step 4: cast でテスト
+---
 
-ビルド、起動、クエリ:
+ここまでで「カスタム RPC = ノード内集計を既存サーバに登録」は着地した。ここから trait → impl → 統合 → test の順で組み立てる。コードは抜粋（実行時は補助コードが必要）。
+
+> 🛑 **予測。** なぜ \`pool.pending()\` は軽く、\`txpool_content\` RPC は重いのか。（答え: \`pool.pending()\` は in-process のスナップショット iterator を読むだけ — wire 変換なし。\`txpool_content\` は全 pending tx をフルで JSON 化して wire 転送する。差は「返却データ量」と「wire 変換コスト」。）
+
+## ステップで組み立てる
+
+### Step 1-3: trait → impl → 統合
+
+上の 3 ブロック。\`#[rpc(server, namespace="txpoolPlus")]\` が \`TxpoolPlusApiServer\` を生成 → pool ハンドルを持つ struct に impl → \`extend_rpc_modules\` で \`merge_configured(ext.into_rpc())\`。\`reth/examples/node-custom-rpc\` と並べると差分は namespace / メソッド名 / ハンドラ内部だけ。
+
+### Step 4: cast でテスト
 
 \`\`\`bash
-# 1 つのターミナル: ノード起動
 $ cargo run --release -- node --http --enable-txpool-plus
-
-# 別のターミナル: 新メソッドを叩く
 $ cast rpc txpoolPlus_pendingByGasBucket --rpc-url http://localhost:8545
 [{"min_gwei":0,"max_gwei":1,"count":12}, ...]
-
-# 生 curl
-$ curl -X POST http://localhost:8545 \\
-    -H "Content-Type: application/json" \\
-    -d '{"jsonrpc":"2.0","method":"txpoolPlus_pendingByGasBucket","params":[],"id":1}'
-{"jsonrpc":"2.0","result":[{"min_gwei":0,"max_gwei":1,"count":12}, ...],"id":1}
 \`\`\`
 
-メソッドはどの RPC クライアントから見てもネイティブと区別がつかない。**同じ認証、同じレート制限 (設定していれば)、同じロギング。** それが \`extend_rpc_modules\` の約束。
+### Step 5 (おまけ): subscription バリアント
 
-## Step 5 (おまけ): subscription バリアント
-
-WebSocket subscription は同じパターン、\`#[subscription(...)]\` 属性付き:
+\`#[subscription(...)]\` 属性 + \`tokio::spawn\` のバックグラウンドタスク:
 
 \`\`\`rust
-use jsonrpsee::{core::SubscriptionResult, PendingSubscriptionSink, SubscriptionMessage};
-use std::time::Duration;
-use tokio::time::sleep;
-
-#[rpc(server, namespace = "txpoolPlus")]
-pub trait TxpoolPlusApi {
-    #[method(name = "pendingByGasBucket")]
-    fn pending_by_gas_bucket(&self) -> RpcResult<Vec<GasBucket>>;
-
-    #[subscription(name = "subscribeBuckets", item = Vec<GasBucket>)]
-    fn subscribe_buckets(&self, interval_secs: Option<u64>) -> SubscriptionResult;
-}
-
-// impl 内:
 fn subscribe_buckets(
     &self,
     pending: PendingSubscriptionSink,
@@ -1034,45 +687,11 @@ fn subscribe_buckets(
 }
 \`\`\`
 
-ポイント:
+production gap: 認証（engine と同じ \`AUTH_SECRET\`、メソッドが尊重するか確認）/ レート制限（Reth はメソッド単位を同梱しない、\`tower\` で）/ バージョニング（形が変われば \`txpoolPlus_v2_*\`）/ メトリクス（ネイティブのみ自動、自分で \`metrics::counter!\`）/ 引数バリデーション（\`ErrorObjectOwned::owned\` で安定コード）。
 
-- **\`PendingSubscriptionSink\` → \`accept().await\` → \`sink.send(...)\`** — \`jsonrpsee\` 標準の subscription handshake。
-- **クロージャは \`tokio::spawn\` で走る** — RPC ハンドラは即 return し、実際のストリーミングはバックグラウンドタスクが担当。**ここでブロックすると RPC サーバスレッドが停止する。**
-- **\`sink.send(...).is_err()\`** — クライアント切断もしくは channel フル。クリーンに return してタスクを終了させる。**subscription のリークなし。**
+## 答え合わせ（Test gate）
 
-これでダッシュボードが \`eth_subscribe("txpoolPlus_subscribeBuckets", [10])\` で 10 秒ごとのライブヒストグラムをサーバ側集計済みで受け取れる。
-
-## Production に足りないもの
-
-| ギャップ | 本物のカスタム RPC が何をしているか |
-| :--- | :--- |
-| **認証** | engine API と同じ \`AUTH_SECRET\` 機構。Reth が \`extend_rpc_modules\` 経由で自動的に組み込むが、メソッドが尊重しているかは確認すべき (大半の \`ctx\` accessor は尊重する) |
-| **レート制限** | Reth はメソッド単位のレート制限を同梱しない。production では \`tower\` ミドルウェアでラップするか、impl 内で閾値超過を拒否する |
-| **クライアント単位の状態** | subscription はデフォルトで接続単位。クライアント間調整 (例: 共有キャッシュ無効化) には impl struct 内で \`Arc<RwLock<...>>\` |
-| **Self-hosted Reth 運用** | Reth を自分で動かしたくない場合、[QuickNode Dedicated Clusters](https://www.quicknode.com/guides/infrastructure/node-setup/how-to-run-a-reth-node) で Reth を execution client として選択し、自前のカスタム RPC バイナリを付加価値として提供できる |
-| **バージョニング** | レスポンス形が変わったら namespace を上げる (\`txpoolPlus_v2_*\`)。古いクライアントは動き続けるべき |
-| **メトリクス** | Reth の RPC レイヤーはメソッド単位の latency/count を metrics endpoint で公開するが、ネイティブメソッドのみ。ハンドラ内に自分で \`metrics::counter!(...)\` を追加する |
-| **引数バリデーション** | \`RpcResult\` で \`ErrorObjectOwned::owned(code, message, data)\` をクリーンに返せる。安定したコードを選ぶこと。標準 JSON-RPC エラーコードを使い回さない (-32603 = "internal error" は予約済み) |
-
-ここで書いたアーキテクチャ — trait 定義、コンポーネントアクセス付き impl、\`extend_rpc_modules\` 経由の登録 — **production の Reth カスタム RPC は全部こういう形をしている**。50 行のスケルトンは共通で、impl 本体に各プロジェクトの価値が宿る。
-
-## Drill
-
-1. **\`pendingByNonce(address)\` を追加。** 指定アドレスから現在 pending の tx 数を nonce ごとに返す 2 つ目のメソッド。パターン: 同じ trait、2 つ目の \`#[method]\`、2 つ目のハンドラ。(15分)
-2. **gas price (post-EIP-1559) でバケット化。** priority-fee バケット化を effective-gas-price バケット化に置き換える (\`base_fee + priority_fee\`、\`max_fee_per_gas\` で上限)。base fee を provider から取得する必要あり。**\`ctx\` は何を公開している?** (30分)
-3. **メソッドを認証ゲートで保護。** engine \`AUTH_SECRET\` を提示しない \`txpoolPlus_pendingByGasBucket\` 呼び出しは拒否する。(ヒント: Reth の debug メソッドがどうやっているか見る) (45分)
-4. **スナップショットの新鮮さ。** レスポンスにスナップショットごとのタイムスタンプ + monotonic ブロック高を追加。\`ctx.provider().best_block_number()\` が 2 つ目の真の出所。(30分)
-5. **クロスティア統合。** このティアの [lesson 1](/courses/reth-building-ja/lessons/build-mev-searcher-ja) の MEV searcher が \`txpoolPlus_pendingByGasBucket\` をクエリして 90 パーセンタイル超えで自分の入札を設定できる。\`jsonrpsee::http_client\` を使ってこれをやる Rust クライアントを追加。(2時間)
-
-Drill 5 を完成させればループが閉じる: ノード固有の insight を typed RPC として公開するノードと、その insight を mempool で勝つために使う別 Rust プロセスが消費する側。**そのラウンドトリップ — カスタム RPC 経由の observability、別 consumer 経由の挙動 — は本物の searcher / market-maker スタックの組織のされ方そのもの。**
-
-> 🛑 **最終チェック。** 一文で: なぜ \`extend_rpc_modules\` は、Reth の標準 RPC を呼ぶ sidecar サービスを動かすより厳密に強力なのか? 答えに「ノードコンポーネントへのインプロセスアクセス」が含まれていないなら、Step 3 を読み直す — そのアクセスがレバレッジ。
-
-## Test gate
-
-*Test gate — この tier では全アプリがテスト green で初めて完了* に従い、本レッスンの最低 gate は **インプロセス integration テスト**: ノードを自前 RPC 登録済みで起動し、HTTP で新メソッドを叩き、JSON 形を assert する — エラーパス込みで。
-
-「dev で正しそう」なカスタム RPC が production で壊れる定番は 3 つ: 不正パラメータで間違ったエラーコードを返す、subscription が disconnect でタスクをリークする、認証ゲートが必要なメソッドに無い。それぞれ秒で testable。
+最低 gate は **インプロセス integration テスト**（success + エラーコード + subscription リーク）:
 
 \`\`\`rust
 // tests/rpc_integration.rs
@@ -1110,39 +729,46 @@ async fn subscription_does_not_leak_on_disconnect() {
 }
 \`\`\`
 
-レッスン完了の条件: (1) success path が pass、(2) 少なくとも 1 つのエラーコードテストが pass（型不正・範囲外・必須欠落のいずれか）、(3) subscription cleanup テストが pass。mainnet に対する \`cargo run\` ではこのどれの代替にもならない。
+完了条件: (1) success path pass、(2) 少なくとも 1 つのエラーコードテスト pass、(3) subscription cleanup テスト pass。mainnet に対する \`cargo run\` はこのどれの代替にもならない。
 
-> **🧭 ここまでで積み上げたもの:** **ネットワーク層のサーバサイド拡張** を出荷した — jsonrpsee による集約 + subscription を Reth の pool ストリームに配線し、in-process integration + エラーコード + subscription リーク検出のテストで担保。GraphQL のカスタムリゾルバや Postgres のストアドプロシージャが解いてきた問題を、Reth RPC に持ち込んだかたち。次のレッスンでは **並行性 + 状態管理層** に移る: wallet backend。
+## 合格基準
 
-`,
+- 上記 3 テスト（success / 不正パラメータの \`-32602\` / subscription cleanup）が green。
+- なぜ server-side 集計が client 側集計より有利か（ペイロードサイズ）を 1 文で言える。
+- 不正パラメータに使うべきエラーコード（\`-32602\`、\`-32603\` でない）を即答できる。
+
+## Drill
+
+1. \`pendingByNonce(address)\` を 2 つ目の \`#[method]\` として追加（15 分）。
+2. priority-fee バケット化を effective-gas-price（\`base_fee + priority_fee\`）に置換 — base fee を provider から（\`ctx\` は何を公開している?）（30 分）。
+3. engine \`AUTH_SECRET\` を提示しない呼び出しを拒否（Reth の debug メソッドを参考に）（45 分）。
+4. レスポンスにスナップショットの timestamp + \`ctx.provider().best_block_number()\` を追加（30 分）。
+5. レッスン1 の MEV searcher が \`txpoolPlus_pendingByGasBucket\` をクエリして 90 パーセンタイル超えで入札するクライアント（\`jsonrpsee::http_client\`）を書く（2 時間）。
+
+## まとめ（3行）
+
+- カスタム RPC = \`jsonrpsee\` の \`#[rpc]\` trait + pool ハンドルを持つ impl + \`extend_rpc_modules\` 登録。ノード内で集計して bytes だけ返す（client 側集計の数百 KB 転送を避ける）、Reth fork なし。
+- ネイティブと同じトランスポート・認証・ロギングで出荷される（別サービスなし）。subscription は \`tokio::spawn\` で（ハンドラをブロックしない、切断時クリーンに return）。
+- Test gate: in-process integration で success + エラーコード（\`-32602\`）+ subscription リーク検出。次は並行性 + 状態管理層の wallet backend。
+
+## 次のレッスン（レッスン4）
+
+Wallet Backend を Rust で作る（signer pool + nonce manager + replace-on-stuck）。roundtrip テスト（署名済み tx が decode で戻る）と nonce invariant（連続呼び出しが連続 nonce、欠損も重複もなし）で担保する。`,
                 },
                 {
-                  title: 'Wallet Backend を Rust で作る',
+                  title: 'レッスン4 — Wallet Backend を Rust で作る',
                   slug: 'build-wallet-backend-ja',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Wallet Backend を Rust で作る
+                  content: `# レッスン4 — Wallet Backend を Rust で作る
 
-> 🧭 **systems engineering スタックでの位置:** **並行性層 + 状態管理層**。問題は共通で、並行送信、単調増加番号（nonce）、stuck 処理を同時に扱うこと。wallet backend はこの古典問題を EVM で解く実装である。
+## 問い
 
-ユーザーが 1 分で 50 回送信しても、nonce を衝突させずに署名・送信し続ける必要がある。さらにガス急騰時には stuck tx を置換し、セッションの詰まりを防ぐ。ここでは Rust 約 250 行で signer pool、nonce manager、send queue、replace-on-stuck、confirm watcher を組み立てる。
+ユーザーが 1 分で 50 回送信しても、nonce を衝突させずに署名・送信し続けたい。さらにガス急騰時には stuck tx を置換してセッションの詰まりを防ぐ。並行送信・単調増加 nonce・stuck 処理を同時に扱うバックエンドをどう組むか？（Rust ~250 行: signer pool + nonce manager + send queue + replace-on-stuck + confirm watcher。）
 
-> 📌 **スコープ。** signer pool / nonce manager / send queue / replace-on-stuck / confirm watcher を持つ最小 send service を作る。鍵カストディ、フィアット導線、JS SDK は対象外。
-
-## 受け入れ条件
-
-次のテストが pass したらレッスン完了（フルコードは末尾の §Test gate）:
-
-1. **\`signed_tx_roundtrips\`** — サービスが生成した署名済み tx は、元の \`TransactionRequest\` に正確に decode で戻る（送信者・to・value・nonce・gas パラメタ・data）。
-2. **\`no_nonce_gaps_under_concurrent_send\`** — 同じ \`from\` に 50 件並行で \`/send\` を投げ、結果の nonce が \`base..base+50\` で欠損も重複もない。
-
-**Test-first 読法。** 先に受け入れ条件を確認する。以下では、テストが使う signer pool、nonce manager、\`TransactionRequest\` フローを示す。
-
-## 何を作るか
-
-公開するバックエンドサービス:
+公開する HTTP API はこの形:
 
 \`\`\`bash
 $ curl -X POST http://localhost:7000/send \\
@@ -1156,7 +782,16 @@ $ curl -X POST http://localhost:7000/send \\
 { "tx_hash": "0xabc...", "queued_at": "2026-05-04T12:34:56Z" }
 \`\`\`
 
-1 回の POST で行う処理は、signer 取得、nonce 予約、ガス見積もり、署名、送信、監視である。30 秒以内に着地しなければ watcher が fee を引き上げて再送する。
+1 回の POST で signer 取得 → nonce 予約 → ガス見積もり → 署名 → 送信 → 監視まで行う。30 秒で着地しなければ watcher が fee を引き上げて再送する。
+
+## 原理（最小モデル）
+
+- **各アドレスは next nonce の真の source を 1 つだけ持つ — in-process 状態であって新しい RPC コールではない。** 初回だけ \`provider.get_transaction_count(addr).pending()\` で初期化し、以降の予約はローカル \`Arc<Mutex<HashMap<Address, u64>>>\` で進む。\`forget\` でキャッシュ破棄 → 次回 RPC で再同期（回復手段）。
+- **送信と確認を分離する。** \`send_raw_transaction\` 後は即 return し、確認は別タスクの watcher に任せる。tx hash は「受け付けた」であって「着地した」ではない。
+- **stuck は同一 nonce + 高 fee で置換する（待機でない）。** 先行 nonce が詰まると後続が全部止まる。大半のノードは fee を ≥10% 上げない置換を拒否するので、bump は 25%（最低置換幅 10% より余裕）。
+- **RPC 中はロックを保持しない。** watcher はキューをスナップショットしてから RPC を回す（キュー全体の直列化を避ける）。
+
+データ経路を 1 枚で:
 
 \`\`\`mermaid
 flowchart TB
@@ -1171,53 +806,9 @@ flowchart TB
     Bump --> Q
 \`\`\`
 
-> 🛑 **予測。** 「nonce 取得→署名→送信」を同一アドレスで 100ms 以内に 2 回実行すると何が壊れるか。一文で答える。
+## 具体例
 
-## なぜこれが難しいか
-
-| 問題 | ナイーブな方式 | 何が間違うか |
-| :--- | :--- | :--- |
-| **Nonce 競合** | 送信ごとに \`provider.get_transaction_count(from).await\` | 並行する 2 つの送信が両方 nonce N を読み、両方 N で署名し、1 つしか着地しない。もう 1 つは mempool で拒否される。 |
-| **Stuck tx** | gas price が十分高いことを祈る | mainnet ガスは数秒で 5 → 80 gwei に急騰する。あなたの tx は何時間も mempool に居座る。 |
-| **置換ロジック** | 「同じ nonce で再送信するだけ」 | 大半のノードは fee を ≥10% 引き上げない置換を拒否する。ナイーブな再送はサイレントに失敗する。 |
-| **Confirmation 喪失** | \`eth_sendRawTransaction\` の戻り値を信じる | tx hash は「受け付けた」を意味し、「着地した」を意味しない。Network reorg と peer drop は起きる。 |
-
-本物の wallet backend は各々を解決する。4 つ全部やる。
-
-## Cargo.toml
-
-\`\`\`toml
-[package]
-name = "wallet-backend"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-# Alloy
-alloy-primitives    = "1.5"
-alloy-provider      = "1.0"
-alloy-rpc-types     = "1.0"
-alloy-network       = "1.0"
-alloy-signer        = "1.0"
-alloy-signer-local  = "1.0"
-alloy-consensus     = "2.0"
-alloy-eips          = "1.0"
-
-# HTTP サーバ
-axum                = "0.7"
-
-# 配管
-tokio               = { version = "1", features = ["full"] }
-serde               = { version = "1", features = ["derive"] }
-serde_json          = "1"
-eyre                = "0.6"
-tracing             = "0.1"
-tracing-subscriber  = "0.3"
-\`\`\`
-
-## Step 1: Signer pool + nonce manager
-
-コア不変条件: **各アドレスは next nonce の真の source を 1 つだけ持つ**、その source は in-process 状態であって新しい RPC コールではない:
+signer pool + nonce manager（コア不変条件: 各アドレスの next nonce はローカル 1 source）:
 
 \`\`\`rust
 use alloy_primitives::Address;
@@ -1277,18 +868,7 @@ impl NonceManager {
 }
 \`\`\`
 
-ポイント:
-
-- **\`Arc<Mutex<HashMap>>\`** — nonce 管理を 1 箇所に集中させる。ここは短いクリティカルセクションなので、まずは単純実装でよい。
-- **\`pending()\` を使う。** confirmed-only だと in-flight nonce と衝突しやすい。
-- **初回だけ RPC。** 以降の予約はローカル状態で進む。
-- **\`forget\` は回復手段。** nonce 不整合時にキャッシュを破棄し、次回 RPC で再同期する。
-
-> 🔍 **リポで探す。** [\`alloy-signer-local\`](https://github.com/alloy-rs/alloy/tree/main/crates/signer-local) を開く。hex 文字列から parse した \`PrivateKeySigner\` は、keystore ファイル (\`PrivateKeySigner::decrypt_keystore\`) や mnemonic からも得られる同じ型。**send service はどれから来たかを気にしない。**
-
-## Step 2: ガス見積もり (EIP-1559)
-
-EIP-1559 ガス: \`max_priority_fee_per_gas\` (validator への tip) + \`base_fee\` (バーンされる、プロトコルがブロックごとに設定する)。\`max_fee_per_gas\` がその合計の上限。
+ガス見積もり（EIP-1559、推定を手書きせず provider に）+ bump:
 
 \`\`\`rust
 use alloy_eips::eip1559::Eip1559Estimation;
@@ -1316,13 +896,7 @@ pub fn bump(params: GasParams) -> GasParams {
 }
 \`\`\`
 
-ポイント:
-
-- **\`estimate_eip1559_fees()\` を使う。** fee 式を手書きせず、プロバイダ推定を使う。
-- **bump は 25%。** 最低置換幅（10%）より十分に上げ、置換拒否を減らす。
-- **見積もり失敗時は送信しない。** provider 不調時の強行送信を避ける。
-
-## Step 3: 送信 + 確認用キュー
+送信パス（nonce は署名前に予約、送信後は即 return）:
 
 \`\`\`rust
 use alloy_consensus::{TxEip1559, SignableTransaction};
@@ -1376,15 +950,7 @@ pub async fn send_one<P: alloy_provider::Provider>(
 }
 \`\`\`
 
-ポイント:
-
-- **nonce は署名前に予約する。** 並行送信時の競合を避けるためである。
-- **署名層は差し替え可能。** local signer でも remote signer でも、送信フロー本体は保てる。
-- **送信と確認を分離する。** \`send_raw_transaction\` 後は即 return し、確認は watcher に任せる。
-
-## Step 4: replace-on-stuck 付きの confirm watcher
-
-バックグラウンドループ。1 つの tokio タスクが全 queued tx を監視し、deadline 超過は fee を引き上げる:
+replace-on-stuck 付き confirm watcher（1 タスクが全 queued tx を監視、deadline 超過は bump + resubmit）:
 
 \`\`\`rust
 use std::collections::HashMap;
@@ -1454,16 +1020,7 @@ pub async fn watcher<P: alloy_provider::Provider + Clone>(
 }
 \`\`\`
 
-ポイント:
-
-- **先にスナップショット。** RPC 中にロックを保持しないため、キュー全体の直列化を避けられる。
-- **\`receipt = Some\` で着地判定。** RPC 反映遅延は 5 秒ポーリングで吸収する。
-- **25% bump を繰り返す。** 置換失敗を減らせるが、実運用では上限設定が必要。
-- **\`expect(\"signer missing\")\` は不変条件チェック。** キュー内 tx は pool の signer を持つ前提である。
-
-> 🛑 **理解度チェック。** なぜ watcher は待機ではなく、同一 nonce + 高 fee で置換するのか。先行 nonce が詰まると後続がどうなるかで説明する。
-
-## Step 5: HTTP API スケルトン (axum)
+HTTP API スケルトン（axum）— watcher を spawn して \`/send\` を配線:
 
 \`\`\`rust
 use axum::{extract::State, routing::post, Json, Router};
@@ -1515,9 +1072,9 @@ async fn handle_send<P: alloy_provider::Provider + Clone + 'static>(
 async fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt::init();
 
+    // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
     let provider = alloy_provider::ProviderBuilder::new()
-            // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
-.connect(&std::env::var("RPC_URL")?)
+        .connect(&std::env::var("RPC_URL")?)
         .await?;
 
     let state = AppState {
@@ -1545,42 +1102,72 @@ async fn main() -> eyre::Result<()> {
 }
 \`\`\`
 
-これで最小サービスは完成である（インポート込みで約 250 行）。
+これで最小サービスは完成（インポート込みで約 250 行）。
 
-> 🔍 **リポで探す。** [\`alloy-rpc-types\`](https://github.com/alloy-rs/alloy/tree/main/crates/rpc-types-eth) を開く。\`TransactionRequest\` を見つける。全 \`with_*\` builder メソッドが拡張するのは *同じ* 型。**あなたの wallet backend、arb bot、デプロイスクリプト — すべてこの同じ型から tx を組み立てる。** それが Alloy のレバレッジ。
+## 失敗例（誤解）
 
-## Production に足りないもの
+「送信ごとに \`provider.get_transaction_count(from).await\` で nonce を取ればいい」は誤り — 並行する 2 つの送信が両方 nonce N を読み、両方 N で署名し、1 つしか着地しない（もう 1 つは mempool で拒否）。同様に「同じ nonce で再送信するだけ」も誤り（fee を ≥10% 上げない置換はノードが拒否、サイレントに失敗）。「\`eth_sendRawTransaction\` の戻り値を信じる」も誤り（tx hash は受け付けで、着地でない）。
 
-| ギャップ | 本物の wallet backend が何をしているか |
-| :--- | :--- |
-| **鍵カストディ** | KMS / HSM / MPC へ移行する。\`PrivateKeySigner\` 直持ちは本番資金に不向き |
-| **冪等性** | \`/send\` に \`request_id\` を入れて重複送信を防ぐ |
-| **鍵単位レート制限** | from 単位で並行送信上限を設定する |
-| **永続キュー** | \`PendingTx\` を DB/Redis に保存し、再起動後に復元する |
-| **マルチ RPC ファンアウト** | 複数 provider へ同時送信し、単一障害点を減らす |
-| **Nonce ギャップ検出** | 欠落 nonce を検知し、必要なら no-op tx で埋める |
-| **Observability** | \`pending_count\` / \`oldest_pending_age\` / \`bumps_per_hour\` を監視する |
+---
 
-ここで作った構成（signer pool、nonce manager、送信パス、watcher）は、production wallet backend の共通骨格である。
+ここまでで「ローカル nonce 1 source + 送信/確認の分離 + 同一 nonce 高 fee 置換」は着地した。ここから 5 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
-## Drill
+> 🛑 **予測。** 「nonce 取得→署名→送信」を同一アドレスで 100ms 以内に 2 回実行すると何が壊れるか。（答え: 両方が同じ nonce N を読んで N で署名し、1 つだけ着地する。もう 1 つは「nonce too low / already known」で拒否され、ユーザの 2 件目の送信がサイレントに消える。ローカル nonce 予約はこの競合を mutex 下の \`nonce + 1\` で潰す。）
 
-1. **冪等性。** \`SendRequest\` に \`request_id: String\` フィールドを追加し、\`request_id → tx_hash\` を 1 時間キャッシュする。重複 POST にはキャッシュした hash を返す。(30分)
-2. **鍵単位レート制限。** \`/send\` を per-from semaphore (max 4 並行) でラップする。超過は 429 で拒否。(30分)
-3. **永続キュー。** \`PendingTx\` を insert 時に Redis に書き、着地時に削除する。起動時に復元。(1.5時間)
-4. **マルチ RPC ファンアウト。** 2 つの provider をラップして \`send_raw_transaction\` を両方にブロードキャストし、最初の \`Ok\` を返す \`MultiProvider\` を作る。(1時間)
-5. **キャンセル endpoint。** \`POST /cancel { from, nonce }\` を追加 — 同じ nonce で 50% 引き上げた 0-value 自送を提出する (stuck tx を確実にキャンセル)。(1時間)
+## ステップで組み立てる
 
-Drill 5 まで終えれば、鍵カストディを除く中核機能は揃う。HSM 連携を加えれば本番水準に近づく。
+### Step 0: プロジェクトと依存
 
-> 🛑 **最終チェック。** なぜ **ローカル nonce 状態** が核なのかを一文で答える。答えに「nonce ごとの RPC 往復なしで並行送信する」が入らない場合は Step 1 を再読する。
+\`\`\`toml
+# Cargo.toml
+[package]
+name = "wallet-backend"
+version = "0.1.0"
+edition = "2021"
 
-## Test gate
+[dependencies]
+alloy-primitives    = "1.5"
+alloy-provider      = "1.0"
+alloy-rpc-types     = "1.0"
+alloy-network       = "1.0"
+alloy-signer        = "1.0"
+alloy-signer-local  = "1.0"
+alloy-consensus     = "2.0"
+alloy-eips          = "1.0"
+axum                = "0.7"
+tokio               = { version = "1", features = ["full"] }
+serde               = { version = "1", features = ["derive"] }
+serde_json          = "1"
+eyre                = "0.6"
+tracing             = "0.1"
+tracing-subscriber  = "0.3"
+\`\`\`
 
-*Test gate* に従い、本レッスンの最低ラインは **wallet backend で必須の不変条件 2 つ**:
+秘密鍵は環境変数 \`SIGNERS\` にカンマ区切りで渡す（\`SIGNERS=0xabc...,0xdef...\`）。RPC エンドポイントは \`RPC_URL\` で渡す。
 
-1. **Tx エンコードのラウンドトリップ** — 署名済み tx が元の \`TransactionRequest\` に正確に decode できること。
-2. **並行下での nonce 単調性** — 同一 \`from\` の並行送信で nonce に欠損・重複がないこと。
+### Step 1-5
+
+上の 5 ブロック: ① signer pool + nonce manager（\`pending()\` を使う、初回だけ RPC、\`forget\` は回復手段）→ ② ガス見積もり（\`estimate_eip1559_fees()\`、bump 25%）→ ③ 送信パス（nonce を署名前に予約、送信と確認を分離）→ ④ watcher（先にスナップショット、receipt=Some で着地判定、deadline 超過で bump+resubmit）→ ⑤ axum API（watcher を \`tokio::spawn\`）。署名層は差し替え可能（local / keystore / mnemonic / KMS、send フロー本体は保てる）。
+
+production gap: 鍵カストディ（KMS/HSM/MPC へ）/ 冪等性（\`request_id\`）/ 鍵単位レート制限 / 永続キュー（DB/Redis）/ マルチ RPC ファンアウト / nonce ギャップ検出 / observability（\`pending_count\` 等）。
+
+### Step 6: 起動と疎通
+
+\`\`\`bash
+$ RPC_URL=https://sepolia.infura.io/v3/$KEY \\
+  SIGNERS=0xabc...,0xdef... \\
+  cargo run --release
+
+# 別ターミナルで送信テスト
+$ curl -s -X POST http://localhost:7000/send \\
+    -H "Content-Type: application/json" \\
+    -d '{"from":"0xAlice...","to":"0xBob...","value":"0x16345785d8a0000","data":"0x"}'
+{ "tx_hash": "0x...", "queued_at": "..." }
+\`\`\`
+
+## 答え合わせ（Test gate）
+
+最低ラインは不変条件 2 つ（roundtrip + 並行 nonce 単調性）:
 
 \`\`\`rust
 // tests/wallet_invariants.rs
@@ -1620,7 +1207,21 @@ async fn no_nonce_gaps_under_concurrent_send() {
 }
 \`\`\`
 
-両方 pass するまでレッスンは **未完了**。前者が崩れると不正 tx を作り、後者が崩れると nonce 詰まりで送信が停止する。
+両方 pass まで未完了。前者が崩れると不正 tx を作り、後者が崩れると nonce 詰まりで送信が停止する。
+
+## 合格基準
+
+- 上記 2 テスト（roundtrip + 50 並行送信で nonce \`base..base+50\` に欠損/重複なし）が green。
+- なぜローカル nonce 状態が核か（nonce ごとの RPC 往復なしで並行送信）を 1 文で言える。
+- bump 幅を 25% にする理由（最低置換幅 10% より余裕）を即答できる。
+
+## Drill
+
+1. \`SendRequest\` に \`request_id\` を足し \`request_id → tx_hash\` を 1 時間キャッシュ（重複 POST にキャッシュ hash を返す）（30 分）。
+2. \`/send\` を per-from semaphore（max 4 並行）でラップ、超過は 429（30 分）。
+3. \`PendingTx\` を insert 時に Redis、着地時に削除、起動時に復元（1.5 時間）。
+4. 2 provider に \`send_raw_transaction\` をブロードキャストし最初の \`Ok\` を返す \`MultiProvider\`（1 時間）。
+5. \`POST /cancel { from, nonce }\` を追加（同 nonce で 50% 引き上げた 0-value 自送）（1 時間）。
 
 ## 📺 関連動画
 
@@ -1628,50 +1229,30 @@ async fn no_nonce_gaps_under_concurrent_send() {
 wJnywGB33O4 | Georgios Konstantopoulos — Foundry, a portable, fast and modular toolkit (Foundry の tx パイプライン内で使われている同じ Alloy + Rust signer 機構)
 \`\`\`
 
-> **🧭 ここまでで積み上げたもの:** **並行性 + 状態管理層の wallet backend** を出荷した — signer pool、単調増加 nonce manager、send queue、replace-on-stuck、reorg を意識した watcher。Stripe の payment intent や Kafka producer の冪等性と同じパターンを、EVM tx に持ち込んだかたち。次のレッスンでは **認証層** に移る: EIP-7702 による委任認可。
-`,
+## まとめ（3行）
+
+- wallet backend の核はローカル nonce 状態 — 各アドレスの next nonce を in-process 1 source に置き、mutex 下の \`nonce + 1\` で並行送信の競合を潰す（送信ごとの RPC 往復なし）。
+- 送信と確認を分離: \`send_one\` は即 return、別タスクの watcher が receipt をポーリングし deadline 超過で同一 nonce + 25% bump で置換（待機でなく置換 — 先行詰まりが後続を止めるから）。
+- Test gate: tx エンコード roundtrip + 並行下の nonce 単調性。次は認証層の EIP-7702 sponsor。
+
+## 次のレッスン（レッスン5）
+
+最小限の EIP-7702 Sponsor サービス（Type 4 tx + paymaster パターン）。replay 防止（同じ auth tuple は 2 度 sponsor できない）と gas 会計（sponsor が払い、ユーザは 0）で担保する。`,
                 },
                 {
-                  title: '最小限の EIP-7702 Sponsor サービスを Rust で作る',
+                  title: 'レッスン5 — 最小限の EIP-7702 Sponsor サービスを Rust で作る',
                   slug: 'build-7702-sponsor-ja',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 45,
                   xpReward: 80,
-                  content: `# 最小限の EIP-7702 Sponsor サービスを Rust で作る
+                  content: `# レッスン5 — 最小限の EIP-7702 Sponsor サービスを Rust で作る
 
-> 🧭 **systems engineering スタックでの位置:** **認証層**、特に委任認可 (delegated authorization)。OAuth 2 の「あるエンティティが別のエンティティに代わって action を認可する」、DocuSign の署名委任、各種の meta-transaction relayer と同じ概念。EIP-7702 と sponsor サービスは、それを Ethereum 上で表現したもの — Alice が intent に署名し、sponsor がガスを払い、チェーンが委任を暗号的に強制する。
+## 問い
 
-Alice は EOA (Externally Owned Account — スマートコントラクトではない、ただの鍵ペアのウォレット) を持っている。ETH を事前に保有せず、smart-contract アカウントへの移行もせずに、1 クリックで 2 つのトークンを swap したい。EIP-7702 (Pectra フォーク以降、2025 年 3 月から mainnet で稼働) がその手段: 「この tx の間、私の EOA をこのコントラクトのコードを持つかのように扱え」と命じる *authorization* に、彼女がオフチェーンで署名する。**Sponsor** — あなたのサービス — がその authorization を Type 4 トランザクションに包んでガスを払う。Alice は atomic な batched call、custom validation、session key を得る。同じアドレス、同じ鍵、移行なし。以下、Rust ~200 行。
+Alice は EOA（ただの鍵ペア）を持ち、ETH を持たずに 1 クリックで 2 トークン swap したい。EIP-7702（Pectra 以降、2025-03 から mainnet）の手段:「この tx の間、私の EOA をこのコントラクトのコードを持つかのように扱え」という authorization に Alice がオフチェーン署名。**Sponsor** がそれを Type 4 tx に包んでガスを払う。Alice は atomic な batched call を得る。同じアドレス・同じ鍵・移行なし — どう組むか？
 
-> 📌 **スコープ。** 単一ユーザの EIP-7702 sponsor フローを実装する。入力はユーザ署名 authorization と call intent、出力は submit 後の tx hash。マルチユーザ bundling と AA ポリシー実装は対象外。
-
-## EIP-7702 を 90 秒で
-
-\`\`\`
-7702 なし: Alice の EOA → CALL → Contract
-7702 あり: Alice の EOA = (delegate された) → Contract code → Alice のアドレスとして実行
-\`\`\`
-
-メカニクス:
-
-- **Tx type 4** が新フィールドを運ぶ: \`authorization_list: Vec<SignedAuthorization>\`
-- \`Authorization { chain_id, address (delegate), nonce }\` がコードを設定される EOA によって署名される
-- tx 実行時、リスト内の各 authorization は **その EOA のアカウントコードを書き換える** — 23 byte の delegation pointer (\`0xef0100 || delegate_address\`) に、**その tx の残りの間**だけ
-- EOA のストレージ、残高、アドレスはそのまま。Delegate のコードが EOA 自身のコードであるかのように走る
-
-それだけ。プロトコル本体は 3 文で、残りは配管。
-
-## 受け入れ条件
-
-次のテストが pass したらレッスン完了（フルコードは末尾の §Test gate）:
-
-1. **\`rejects_duplicate_authorization\`** — 同じ \`SignedAuthorization\` は 2 回 sponsor できない。2 回目の \`/sponsor\` は submission 前にサービス境界で拒否される。
-2. **\`gas_accounting_matches_actual_cost\`** — 成功 sponsor 後、sponsor の残高は実払いガス分だけ減り、ユーザの残高は変わらない。
-
-**Test-first 読法。** 先に受け入れ条件を確認する。以下では、テストが使う Type 4 tx 構築、署名 authorization 処理、ガス会計パスを示す。
-
-## 何を作るか
+公開する HTTP API はこの形:
 
 \`\`\`bash
 $ curl -X POST http://localhost:8080/sponsor \\
@@ -1688,6 +1269,16 @@ $ curl -X POST http://localhost:8080/sponsor \\
 { "tx_hash": "0xabc..." }
 \`\`\`
 
+## 原理（最小モデル）
+
+- **EIP-7702 のメカニクス（3 文）。** ① Tx type 4 が新フィールド \`authorization_list: Vec<SignedAuthorization>\` を運ぶ。② \`Authorization { chain_id, address (delegate), nonce }\` が EOA によって署名される。③ tx 実行時、各 authorization は **その EOA のアカウントコード** を 23 byte の delegation pointer（\`0xef0100 || delegate_address\`）に **その tx の残りの間だけ** 書き換える。EOA のストレージ・残高・アドレスはそのまま。
+- **\`from = sponsor\`、\`to = user\`。** 外側 tx は sponsor が払い、実行主体は delegate 化された user 側に立つ。authorization の nonce はユーザの EOA nonce、外側 tx の nonce は sponsor の nonce — 役割が分かれる。
+- **MAGIC プレフィクスでドメイン分離。** \`Authorization::signature_hash\` が EIP-7702 専用 MAGIC を含む（同じ RLP が他の署名済みメッセージとして誤読されるのを防ぐ）。
+- **replay 防止は authorization の nonce が担う。** tx 後にユーザの EOA nonce が変わるので、古い authorization は無効化される。提出 *前* に nonce 鮮度をチェックすれば、submission 前の同期拒否で sponsor がガスを焼かずに済む。
+- **4337 より sponsorship が安い。** entry-point オーバーヘッドなし + 単一 tx（bundler マークアップなし）。
+
+データ経路を 1 枚で:
+
 \`\`\`mermaid
 flowchart TB
     User["Alice (EOA)"] -->|オフチェーンで Authorization 署名| AuthPayload["Authorization<br/>chain_id, delegate, nonce"]
@@ -1698,42 +1289,9 @@ flowchart TB
     Chain -->|delegated code が<br/>Alice のアドレスとして走る| Effects["Token transfer +<br/>Router swap atomically"]
 \`\`\`
 
-> 🛑 **予測。** なぜ Type 4 tx の \`from\` は Alice ではなく sponsor（Bob）でなければならないか。EIP-1559 の \`from\` の意味と authorization の役割を分けて一文で答える。
+## 具体例
 
-## なぜ sponsor サービスか (vs ネイティブ smart-account)
-
-| 方式 | UX | コスト | 移行 |
-| :--- | :--- | :--- | :--- |
-| **ネイティブ smart account (4337)** | 最高 — フル custom validation | 高 — 全 tx で bundler マークアップ | ユーザ資金 → 新アカウント |
-| **純 7702 (ユーザが自分のガスを払う)** | OK — batching は得られるが ETH は必要 | 低 — 単一 tx | なし — 同じ EOA |
-| **7702 + sponsor (本レッスン)** | onboarding に強い — ETH 不要 | sponsor がガス負担（サブスク/手数料で回収） | なし — 同じ EOA |
-
-プロダクト実装の現実解はここにある。既存 EOA を維持しつつ smart-account 機能を使い、UX 投資として backend がガスを負担する。
-
-## Cargo.toml
-
-\`\`\`toml
-[package]
-name = "eip7702-sponsor"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-alloy = { version = "1.0", features = [
-  "providers", "signer-local", "rpc-types", "network",
-  "consensus", "eips", "sol-types"
-] }
-axum                = "0.7"
-serde               = { version = "1", features = ["derive"] }
-serde_json          = "1"
-tokio               = { version = "1", features = ["full"] }
-hex                 = "0.4"
-eyre                = "0.6"
-\`\`\`
-
-## Step 1: Authorization ペイロード (ユーザが署名するもの)
-
-ユーザ（Alice）はオフチェーンで \`Authorization\` に署名し、その結果をサービスへ送る。ここでは、サービスが受け取る形式を示すため署名処理を再現する。
+ユーザ側で authorization に署名（フロントエンド/wallet）:
 
 \`\`\`rust
 // FRONTEND / wallet コード — ユーザのブラウザ / MetaMask で走る、サーバではない。
@@ -1759,13 +1317,7 @@ fn sign_authorization_for_user(
 }
 \`\`\`
 
-ポイント:
-
-- **\`Authorization { chain_id, address, nonce }\`** — \`address\` は delegate コントラクトである。
-- **\`auth.signature_hash()\`** — 署名対象ハッシュ。手計算せず Alloy に任せる。
-- **\`user_nonce\`** — authorization の再利用防止に効く。
-
-シリアライズされた \`SignedAuthorization\` がサービスに届くもの。EIP-2718 envelope エンコーディングが正規 wire 形式:
+シリアライズ（EIP-2718 envelope）— サービスに届く wire 形式:
 
 \`\`\`rust
 let bytes = signed_auth.encoded_2718();
@@ -1773,9 +1325,7 @@ let hex = format!("0x{}", hex::encode(bytes));
 // この hex 文字列を JSON ボディで送る
 \`\`\`
 
-> 🔍 **リポで探す。** [\`alloy-eips/src/eip7702\`](https://github.com/alloy-rs/eips/tree/main/crates/eip7702/src) を開く。\`Authorization::signature_hash\` を見つける。\`MAGIC\` 定数 — それが EIP-7702 プレフィクスで、同じ RLP が他の署名済みメッセージとして誤読されるのを防ぐ。**ドメイン分離、1 byte で。**
-
-## Step 2: サービスが受け取って Type 4 tx を構築
+サービスが受領 → Type 4 tx 構築（\`from=sponsor\`, \`to=user\`, \`authorization_list\` 入り）:
 
 \`\`\`rust
 use alloy::{
@@ -1842,16 +1392,7 @@ pub async fn build_sponsored_tx<P: Provider>(
 }
 \`\`\`
 
-ポイント:
-
-- **\`decode_2718\`** — 受信した wire 形式をそのまま復元する。
-- **\`from = sponsor\`、\`to = user\`** — 外側 tx は sponsor が払い、実行主体は delegate 化された user 側に立つ。
-- **\`with_authorization_list(...)\`** — Type 4 化の要点。複数 auth を入れればバッチにも拡張できる。
-- **\`executeBatch\`** — 慣例実装であり、プロトコル必須ではない。
-
-> 🛑 **理解度チェック。** Bob（sponsor）が提出する場合、増える nonce は誰のものか。外側 tx の nonce と authorization nonce の役割を分けて答える。
-
-## Step 3: 提出 + inclusion 待ち
+提出（sponsor 鍵で署名・送信、確認は分離可能）:
 
 \`\`\`rust
 use alloy::providers::WalletProvider;
@@ -1871,12 +1412,7 @@ pub async fn submit_and_track<P: WalletProvider + Provider>(
 }
 \`\`\`
 
-ポイント:
-
-- **\`send_transaction(req)\`** — sponsor 鍵で署名・送信する。
-- **確認処理は分離可能。** 必要なら wallet-backend の watcher をそのまま流用できる。
-
-## Step 4: HTTP サービスとして組み立て
+HTTP サービス（axum）— 全体 ~200 LOC:
 
 \`\`\`rust
 use axum::{extract::State, routing::post, Json, Router};
@@ -1924,10 +1460,10 @@ async fn sponsor_handler<P: Provider + WalletProvider + Clone + 'static>(
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let sponsor: PrivateKeySigner = std::env::var("SPONSOR_KEY")?.parse()?;
+    // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
     let provider = ProviderBuilder::new()
         .wallet(sponsor.clone())
-            // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
-.connect(&std::env::var("RPC_URL")?)
+        .connect(&std::env::var("RPC_URL")?)
         .await?;
 
     let state = AppState {
@@ -1945,45 +1481,65 @@ async fn main() -> eyre::Result<()> {
 }
 \`\`\`
 
-全体は約 200 LOC。フロントエンドが \`user_authorization\` を作り、サービスが構築・送信・追跡を担当する。
+## 失敗例（誤解）
 
-> 🔍 **リポで探す。** [\`alloy/examples/transactions/send_eip7702_transaction.rs\`](https://github.com/alloy-rs/examples/blob/main/examples/transactions/examples/send_eip7702_transaction.rs) を開く。公式 example が Bob 送信 + Alice 認可 — **作ったものと同じ分離**。公式 example は main() に全部ハードコードしているが、私たちはサービスとして包んだ。**同じパターンを production 化しただけ。**
+「サービスは入力 authorization を信頼してよい」は誤り — production では \`signed_auth.recover_authority()? == body.user\` を **ガス支払い前に** 検証する。さらに nonce 鮮度を確認しない sponsor は古い authorization で焼かれる（提出前に現ユーザ nonce と比較し、不一致は同期拒否）。delegate アドレスも allowlist 化する（未知 delegate への authorization = 悪意の可能性）。
 
-## Production に足りないもの
+---
 
-| ギャップ | 本物の sponsor サービスが何をしているか |
-| :--- | :--- |
-| **Authorization 検証** | \`signed_auth.recover_authority()\` で復号して、申告された user と一致するかを (ガス支払い前に) 検証する。本サービスは入力を信頼するが、production ではチェックする |
-| **再送防止** | tx 後にユーザの nonce が変わる。提出 *前* に authorization の nonce が現在の EOA nonce と一致するかチェックし、古い authorization は同期的に拒否すべき |
-| **支出制限** | ユーザ単位の日次上限、call ごとの value 上限、delegate アドレスの allowlist。(あなたがガスを払うので、誰のために sponsor するかはあなたが決める) |
-| **Watcher** | [レッスン 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) の replace-on-stuck ロジック。EIP-7702 tx は同じ mempool を通るので、引き上げパターンは同一 |
-| **マルチユーザバッチング** | 1 つの tx で \`auth_list = [Alice's auth, Bob's auth, Carol's auth]\` + \`multicall\` スタイルの delegate call。ユーザ単位のガス償却が下がる |
-| **ガス sponsor 会計** | ユーザごとの支出量を追跡、\`/balance\` エンドポイントを公開、Stripe / オンチェーン入金 / アプリ subscription で補充 |
-| **Delegate バージョンピン留め** | 特定の delegate アドレス (監査済みセット) のみ許可する。未知の delegate への authorization は拒否 — 悪意の可能性 |
-| **フロントエンド SDK** | \`(provider, calls)\` を受けて \`user_authorization\` の hex を返す TypeScript / Swift / Kotlin クライアント。アプリ開発者から署名フローを抽象化する |
+ここまでで「7702 = type 4 + auth_list、sponsor は外側 tx + ガス、authorization が delegation pointer を一時的に書き換える」は着地した。ここから 4 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
-ここで作った流れ（authorization 受領 → Type 4 構築 → sponsor 送信）は、production の 7702 paymaster が共通して持つ骨格である。
+> 🛑 **予測。** なぜ Type 4 tx の \`from\` は Alice ではなく sponsor（Bob）でなければならないか。（答え: EIP-1559 の \`from\` は「この tx に nonce を使い、gas を payer として課金される人」を意味する。Bob がガスを払うので Bob が \`from\`。Alice の役割は authorization の署名者 — 「私の EOA に delegate コードを認可する」を表明するだけ。外側 tx の nonce と authorization の nonce は別物。）
 
-## Drill
+## ステップで組み立てる
 
-1. **Authority 検証。** 健全性チェックを追加: \`signed_auth.recover_authority()? == body.user\`。不一致は 400 で拒否。(15分)
-2. **Nonce 鮮度チェック。** 提出前に現在のユーザ nonce を取得し、authorization の \`nonce\` と一致するか検証する。(15分)
-3. **マルチユーザバッチング。** \`/sponsor\` を \`(user, user_authorization, calls)\` トリプルのリストを受け取るよう変更。全 authorization + multicall スタイルの delegate call を持つ 1 tx を構築。**1 ユーザの auth がバッチ中で無効だったら最悪何が起きる?** (1.5時間)
-4. **支出上限。** \`HashMap<Address, U256>\` でユーザ単位のガス支出を追跡。設定可能な日次上限を超えるリクエストは拒否。(45分)
-5. **Replace-on-stuck。** [レッスン 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) の watcher を持ってきて統合する。(30分 — パターンを理解していれば大半コピペ)
+### Step 0: プロジェクトと依存
 
-Drill 5 まで終えれば、内部アプリ向け sponsor サービスとしては実用水準に到達する。SDK、支出ポリシー、観測基盤を加えれば外部提供レベルへ進める。
+\`\`\`toml
+# Cargo.toml
+[package]
+name = "eip7702-sponsor"
+version = "0.1.0"
+edition = "2021"
 
-> 🛑 **最終チェック。** なぜ 7702 は 4337 より sponsorship を安くしやすいか。一文で答える。\`entry-point オーバーヘッドなし\` と \`単一 tx\` が出なければ 90 秒リフレッシャを再読する。
+[dependencies]
+alloy = { version = "1.0", features = [
+  "providers", "signer-local", "rpc-types", "network",
+  "consensus", "eips", "sol-types"
+] }
+axum                = "0.7"
+serde               = { version = "1", features = ["derive"] }
+serde_json          = "1"
+tokio               = { version = "1", features = ["full"] }
+hex                 = "0.4"
+eyre                = "0.6"
+\`\`\`
 
-## Test gate
+sponsor の秘密鍵は \`SPONSOR_KEY\` に、RPC は \`RPC_URL\` に。
 
-*Test gate* に従い、本レッスンの最低ラインは sponsor 損失につながる失敗モード 2 つを潰すこと:
+### Step 1-4
 
-1. **Replay 防止** — 同じ \`SignedAuthorization\` を 2 回 sponsor しない。2 回目は submission 前に拒否する。
-2. **ガス会計の正直さ** — 成功後、sponsor 残高だけがガス分減り、ユーザ残高は変わらない。
+上の 4 ブロック: ① user が \`Authorization { chain_id, delegate, nonce }\` に署名（\`signature_hash\` は MAGIC でドメイン分離）→ \`encoded_2718\` で wire 形式に → ② サービスが \`decode_2718\` で復元、\`executeBatch\` 形式でバッチ call を ABI エンコード、\`with_authorization_list(vec![signed_auth])\` で Type 4 化 → ③ \`send_transaction\` で sponsor 鍵で送信、即 hash 返却 → ④ axum で \`/sponsor\` を配線。\`alloy/examples/transactions/send_eip7702_transaction.rs\` の Bob+Alice 分離をサービス化したのと同じパターン。
 
-\`anvil --hardfork prague\` インスタンス（または Pectra 後ブロックの forked mainnet）に対して両方走らせる:
+production gap: authority 検証（\`recover_authority\`）/ nonce 鮮度 / 支出制限（ユーザ単位日次・call value 上限）/ delegate allowlist / watcher（L4 の replace-on-stuck をそのまま流用、同じ mempool）/ マルチユーザバッチング（\`auth_list = [Alice, Bob, Carol]\` + multicall delegate）/ フロントエンド SDK。
+
+### Step 5: 起動と疎通
+
+\`\`\`bash
+$ RPC_URL=https://sepolia.infura.io/v3/$KEY \\
+  SPONSOR_KEY=0x... \\
+  cargo run --release
+
+# 別ターミナルで sponsor リクエスト
+$ curl -s -X POST http://localhost:8080/sponsor \\
+    -H "Content-Type: application/json" \\
+    -d @sample-sponsor-body.json
+{ "tx_hash": "0x..." }
+\`\`\`
+
+## 答え合わせ（Test gate）
+
+sponsor 損失につながる失敗モード 2 つを潰す（\`anvil --hardfork prague\` か Pectra 後の forked mainnet で）:
 
 \`\`\`rust
 // tests/sponsor_invariants.rs
@@ -2021,7 +1577,21 @@ async fn gas_accounting_matches_actual_cost() {
 }
 \`\`\`
 
-両方 pass するまでレッスンは **未完了**。前者が崩れると replay 試行でガスを焼き、後者が崩れると支出制御が壊れる。
+両方 pass まで未完了。前者が崩れると replay 試行でガスを焼き、後者が崩れると支出制御が壊れる。
+
+## 合格基準
+
+- 上記 2 テスト（replay 拒否 + sponsor 残高だけがガス分減る）が green。
+- なぜ 7702 が 4337 より sponsorship が安いか（entry-point オーバーヘッドなし + 単一 tx）を 1 文で言える。
+- 外側 tx の nonce と authorization の nonce の役割の違いを即答できる。
+
+## Drill
+
+1. \`signed_auth.recover_authority()? == body.user\` の検証を追加（15 分）。
+2. 提出前に現ユーザ nonce と auth の nonce 一致を検証（15 分）。
+3. \`/sponsor\` を \`(user, user_authorization, calls)\` トリプルのリストに変更、全 auth + multicall で 1 tx（1.5 時間）。
+4. \`HashMap<Address, U256>\` でユーザ単位日次ガス上限（45 分）。
+5. L4 の watcher を持ってきて統合（30 分）。
 
 ## 📺 関連動画
 
@@ -2033,54 +1603,37 @@ _k5fKlKBWV4 | EIP-7702: a technical deep dive — lightclient (Devcon SEA 2024)
 K2Tm1f8MIwg | Full code walkthrough of EIP-7702 in Revm — sponsor された tx を走らせるエンジン
 \`\`\`
 
-> **🧭 ここまでで積み上げたもの:** **認証層** のアプリケーションを出荷した — 7702 で委任認可を実装し、replay 防止とガス会計の正直さをテストゲートで担保。OAuth 2 や DocuSign の電子署名委任と同じ概念を、Ethereum 上でネイティブに表現したかたち。次のレッスンでは **VM 層** に移る: カスタム precompile による Foundry スタイルの cheatcode。
-`,
+## まとめ（3行）
+
+- EIP-7702 は Type 4 tx + \`authorization_list\` で EOA のコードを *その tx の残りの間だけ* delegate に書き換える。\`from=sponsor\`(ガス払い)、\`to=user\`(実行主体)、auth の nonce はユーザの EOA nonce、外側 tx の nonce は sponsor の nonce。
+- サービスは authorization を decode → \`executeBatch\` で ABI エンコード → \`with_authorization_list\` で Type 4 化 → sponsor 鍵で送信。production では \`recover_authority\` 検証と nonce 鮮度を *ガス支払い前* に。
+- Test gate: replay 防止（service 境界で同期拒否）+ ガス会計（sponsor 残高だけがガス分減る、ユーザ残高は変わらない）。次は VM 層のカスタム cheatcode。
+
+## 次のレッスン（レッスン6）
+
+Foundry スタイルのカスタム cheatcode を Rust で作る（custom precompile + 最小ハーネス）。differential テストで Rust precompile と参照実装 Solidity が 1000 件の fuzz 入力で同じ出力を返すことを assert する。`,
                 },
                 {
-                  title: 'Foundry スタイルのカスタム cheatcode を Rust で作る',
+                  title: 'レッスン6 — Foundry スタイルのカスタム cheatcode を Rust で作る',
                   slug: 'build-foundry-cheatcode-ja',
                   type: 'CONTENT',
                   sortOrder: 6,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Foundry スタイルのカスタム cheatcode を Rust で作る
+                  content: `# レッスン6 — Foundry スタイルのカスタム cheatcode を Rust で作る
 
-> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層の拡張機構**。JNI (Java Native Interface)、Python の C extension、V8 のネイティブバインディングと同じパターン — 「VM が安定した ABI を通じてネイティブコードを呼び出せるようにする」。Foundry の cheatcode は、それを EVM 流に実装したもの — マジックアドレスに置いたカスタム precompile が、VM から Rust 関数へ dispatch する。
+## 問い
 
-Foundry テストで \`vm.deal(alice, 100 ether)\` と書く時、**それは EVM opcode ではない**。Rust の関数 — *precompile* (EVM エンジンに組み込まれた「コードがチェーン上に存在しない」コントラクト) — を Foundry がマジックアドレス \`0x7109709E...\` にインストールし、\`Vm.sol\` インターフェース経由で Solidity から見えるようにしている。\`vm.warp()\`、\`vm.expectRevert()\` も全部同じ。**あなたも自前で出荷できる。** 本レッスンでは \`cheats.measureGas(target, data)\` を作る — Foundry が内部で使っているのと同じパターンで、テスト作者がサブコールのガスを手動でラップせずに測れる precompile を、だ。
+\`vm.deal(alice, 100 ether)\` は EVM opcode でも Solidity contract でもない。Foundry がマジックアドレス \`0x7109709E...\` に precompile（EVM エンジンに組み込まれた「コードがチェーン上にない」コントラクト）をインストールし、\`Vm.sol\` インターフェースで Solidity から見えるようにしている。自前 cheatcode（例: \`cheats.measureGas(target, data)\`）をどう出荷するか？
 
-> 📌 **スコープ。** Foundry 本体は fork せず、precompile と最小 Revm テストハーネスを作る。狙いは cheatcode パターン（高アドレス precompile + Solidity ABI）を透明な形で再現すること。
+## 原理（最小モデル）
 
-## 受け入れ条件
+- **precompile は executor に組み込まれ、プロトコル本体には入らない。** mainnet Revm はあなたの precompile を持たない、テストランナー Revm だけが持つ。コンセンサスを壊さず Rust のフルパワーを使える（普通の Solidity contract は EVM op しか呼べない、新 opcode はコンセンサス fork）。
+- **セレクタ dispatch + ABI decode で Solidity と同じ呼び出し感。** Solidity は「アドレスへの呼び出しを ABI エンコードする方法」を既に知っているので、precompile が \`input[..4]\` をセレクタとして分岐し \`sol!\` 生成コードで型安全に decode すれば、テスト作者から見て普通の contract と区別がつかない。
+- **入れ子 EVM 実行でガスを測る。** 同じ world state（または独立 DB）に対して fresh \`Context\` を立ち上げ、ワンショット tx を走らせ \`gas_used\` を返す。Success/Revert/Halt 全部で消費ガスは取れる。
+- **戻り値は \`Ok(EthPrecompileOutput)\` か \`Err(PrecompileHalt::*)\`。** 前者は結果 bytes、後者は呼び出し停止。
 
-次のテストが pass したらレッスン完了（フルコードは末尾の §Test gate）:
-
-1. **\`testMatches_referenceForKnownInput\`** — 1 つの固定入力で、Rust precompile と Solidity-only \`gasleft()\` リファレンスが ε 以内（数 gas）で一致する。
-2. **\`testFuzz_alwaysAgreesWithReference\`** — Foundry デフォルト 256 fuzz iteration で、precompile とリファレンスが全入力で一致する。
-
-**Test-first 読法。** 先に受け入れ条件を確認する。以下では、precompile の登録方法と出力算出を示す。ここが Solidity リファレンスとの一致を測る対象になる。
-
-## 何を作るか
-
-Solidity から呼べる新 cheatcode:
-
-\`\`\`solidity
-interface Cheats {
-    function measureGas(address target, bytes calldata data) external returns (uint256 gasUsed);
-}
-
-contract MyTest {
-    Cheats constant cheats = Cheats(0x7110000000000000000000000000000000000000);
-
-    function test_swap_gas() public {
-        uint256 gas = cheats.measureGas(
-            address(uniswapRouter),
-            abi.encodeWithSignature("swapExactTokensForTokens(...)", ...)
-        );
-        assertLt(gas, 200_000, "swap exceeded gas budget");
-    }
-}
-\`\`\`
+データ経路を 1 枚で（cheatcode の呼び出しから測定まで）:
 
 \`\`\`mermaid
 flowchart TB
@@ -2090,37 +1643,9 @@ flowchart TB
     Cheats -->|abi-encoded uint256| Test
 \`\`\`
 
-> 🛑 **予測。** なぜ通常の Solidity contract ではなく precompile で実装するのか。precompile でしかできない点を一文で答える。
+## 具体例
 
-## なぜ precompile か (contract でも opcode でもなく)
-
-| 方式 | Revm 内部を呼べる? | コンセンサス影響 | 労力 |
-| :--- | :--- | :--- | :--- |
-| **普通の Solidity contract** | NO — EVM op のみ | なし | 簡単 |
-| **新 EVM opcode** | YES — フル制御 | **即コンセンサスを fork する** (中級レッスン) | 莫大 |
-| **Precompile (Foundry の選択)** | YES — フル Rust アクセス | **あなたの** Revm ビルドにのみ存在、mainnet にはなし | ~50 行 |
-
-precompile は *executor* に組み込まれ、プロトコル本体には入らない。Mainnet Revm はあなたの precompile を持たない。あなたのテストランナー Revm だけが持つ。**コンセンサスは壊れず、Rust のフルパワー。** だから Foundry の cheatcode は precompile であって opcode ではない。
-
-## Cargo.toml
-
-\`\`\`toml
-[package]
-name = "rust-cheatcode"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-revm                = { version = "38" }
-revm-precompile     = { version = "34" }
-alloy-primitives    = "1.5"
-alloy-sol-types     = "1.5"
-eyre                = "0.6"
-\`\`\`
-
-## Step 1: precompile 関数
-
-Revm precompile は \`fn(input: &[u8], gas_limit: u64) -> PrecompileResult\` というシグネチャの Rust 関数。その中に cheatcode dispatch を積み上げる:
+precompile エントリーポイント（セレクタ dispatch）:
 
 \`\`\`rust
 use alloy_primitives::{Address, U256};
@@ -2166,15 +1691,7 @@ pub fn cheats_run(input: &[u8], gas_limit: u64) -> EthPrecompileResult {
 }
 \`\`\`
 
-ポイント:
-
-- **\`CHEATS_ADDRESS\`** — \`0x7110...\` を使う。Foundry の \`0x7109\` 近傍だが、衝突回避を優先する。
-- **セレクタディスパッチ** — Solidity と同じ 4-byte セレクタで分岐し、\`sol!\` 生成コードで型安全に decode する。
-- **戻り値経路** — \`Ok(EthPrecompileOutput)\` は結果 bytes、\`Err(PrecompileHalt::*)\` は呼び出し停止を表す。
-
-## Step 2: cheatcode ロジック
-
-面白い部分: \`measureGas\` は同じ world state に対して *入れ子*の EVM 実行を走らせ、ガスを測り、その数を返す。鍵となる API は、既存 journal に対する fresh \`Context\` を立ち上げて (state を共有するため) ワンショット tx を走らせる、というものだ:
+cheatcode ロジック（入れ子 EVM で測る、demo は独立 DB、本物は Inspector で親 state を共有）:
 
 \`\`\`rust
 fn run_measure_gas(target: Address, data: Vec<u8>, gas_limit: u64) -> Result<u64, PrecompileHalt> {
@@ -2203,17 +1720,7 @@ fn run_measure_gas(target: Address, data: Vec<u8>, gas_limit: u64) -> Result<u64
 }
 \`\`\`
 
-ポイント:
-
-- **内側 EVM** — [Lesson 1 (MEV searcher)](/courses/reth-building-ja/lessons/build-mev-searcher-ja) と同じ builder で、入れ子実行の最小形を作る。
-- **\`gas_used\` の扱い** — Success / Revert / Halt すべてで消費ガスを返す。revert でもガスは減る。
-- **\`EmptyDB\` は簡略化** — 本番は Inspector で親 EVM と state を共有する。Drill 3 で扱う。
-
-> 🛑 **理解度チェック。** ここでの **\`gas_used\`** はなぜ target contract 分だけを含むのか。precompile の固定コストが内側ではなく外側フレームに乗る点で説明する。
-
-## Step 3: Revm テストハーネスに組み込む
-
-precompile を登録し、Solidity テスト contract をそれに対して実行するテストランナーが必要。最小限のハーネス:
+ハーネスに登録（標準集合から拡張）:
 
 \`\`\`rust
 use revm::Context;
@@ -2275,17 +1782,7 @@ where
 }
 \`\`\`
 
-ポイント:
-
-- **標準集合から拡張** — \`Precompiles::new(PrecompileSpecId::OSAKA)\` を起点に custom precompile を追加する。
-- **登録 API** — \`with_precompiles(...)\` で cheatcode 群を一括注入できる。
-- **役割分担** — このハーネスは実行カーネル。Foundry は compile、検出、レポート、並列化を上に積む。
-
-> 🔍 **リポで探す。** [\`forge-std/src/Vm.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Vm.sol) を開いて cheatcode インターフェースをざっと眺める。そこの全関数が [Foundry の cheatcode crate](https://github.com/foundry-rs/foundry/tree/master/crates/cheatcodes) の Rust precompile への Solidity ABI の表面となっている。**Rust だと知らなかった cheatcode を 3 つ挙げられるまでスクロールする。**
-
-## Step 4: テストを書く
-
-Solidity 側からは、cheatcode を呼ぶのは \`vm.deal\` その他と同一:
+Solidity 側からは \`vm.deal\` と同じ呼び方:
 
 \`\`\`solidity
 // SPDX-License-Identifier: MIT
@@ -2312,38 +1809,51 @@ contract CounterTest {
 }
 \`\`\`
 
-\`solc\` でコンパイルし、bytecode と \`test_increment_gas_under_25k()\` のセレクタを \`run_test_contract\` に渡せば、Rust cheatcode を end-to-end で実行できる。
+## 失敗例（誤解）
 
-## Production レベルテストフレームワークに足りないもの
+「\`vm.deal\` 系の機能は普通の Solidity contract で実装できる」は誤り — Solidity contract は EVM op しか呼べず、Revm 内部（同じ world state での入れ子実行など）にアクセスできない。「新 EVM opcode を足せばいい」も誤り — opcode は **即コンセンサスを fork する**（mainnet が拒否）。precompile は **あなたの** Revm ビルドにだけ存在し、mainnet には影響しない（~50 行で全 Rust パワー）。
 
-| ギャップ | Foundry が何をしているか |
-| :--- | :--- |
-| **Solidity コンパイル** | \`forge\` が solc を呼び出し、artifact をキャッシュし、import を扱う。本当に必要な時だけ再現すればよい — ユーザに事前コンパイルさせる方が普通 |
-| **親 state の共有** | \`vm.deal()\` は *テスト* が見る balance を変更する。それには親 EVM への custom Inspector フックが必要 — 独立ハーネスからの非自明な拡張 |
-| **並列性** | Foundry はテストごとに独立 DB を持つスレッドで実行する。簡単に追加できる (テスト contract 1 つにつき 1 tokio タスク) |
-| **より良い失敗レポート** | スタックトレース、デコード済み revert reason、fuzz shrink。すべて上記カーネルの上に磨きを掛けたもの |
-| **呼び出し間の cheatcode 永続化** | 例: \`vm.expectRevert\` は *次の* call にだけ state を設定する。inspector state に保存され、precompile 自体に持たせるわけではない |
-| **パーミッションレスな cheatcode 発見** | 本物のプラグインシステムなら cheatcode を動的ライブラリとしてロードできるが、Foundry はそれをしない — コンパイル時統合。私たちもしない |
+---
 
-ここで作った「高アドレス precompile + セレクタ分岐 + ABI decode + 入れ子 EVM + ハーネス登録」が、Foundry cheatcode の中核である。Foundry はこの上に運用機能を重ねている。
+ここまでで「precompile = executor 拡張、セレクタ dispatch で Solidity contract に見える」は着地した。ここから 4 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
-## Drill
+> 🛑 **予測。** なぜ precompile で実装するのか、precompile でしかできない点は？（答え: Revm 内部（fresh \`Context\`、入れ子 EVM 実行、Inspector 経由の親 state 共有）にフル Rust でアクセスできる。普通の Solidity contract は EVM op しか持たず、新 opcode はコンセンサスを fork する。precompile は mainnet 影響なしで Rust 関数を VM から呼び出せる唯一の道。）
 
-1. **\`balanceOf(address)\` を追加。** \`evm.db.basic(addr).balance\` 経由で任意アドレスの残高を返す 2 つ目のセレクタを追加する。(15分)
-2. **呼び出しを \`payable\` にする。** \`measureGas\` に \`value\` 引数を追加し、内側の tx へ受け渡す。**cheatcode が payable になると Solidity 側で何が変わるか?** (30分)
-3. **共有 state cheatcode。** 親テストの state を *変更*する \`cheats.deal(address, uint256)\` を実装する。ヒント: 独立した入れ子 EVM ではなく custom Revm \`Inspector\` が必要。(3時間)
-4. **Solidity テスト発見。** ディレクトリを受け取って全 \`.sol\` を solc でコンパイルし、\`test_\` で始まる全関数を見つけ、各々を実行し、pass/fail を出力する最小テストランナーを作る。(4時間)
-5. **性能比較。** 同じテスト (Counter increment × 1000) を (a) 自前ハーネス、(b) \`forge test\` で実行する。**レイテンシギャップはどれだけか? どこから来ているか?** (プロファイリングに 1 時間)
+## ステップで組み立てる
 
-Drill 4 を完成させれば、構造的に Foundry の fork が完成する。fuzz testing + invariant testing を上に足せば、実運用されているものと同等水準。
+### Step 0: プロジェクトと依存
 
-> 🛑 **最終チェック。** 一文で: なぜ **セレクタディスパッチ + ABI デコードされた引数** が、テスト作者から見て precompile を Solidity contract のように感じさせるのか? 答えに「Solidity はアドレスへの呼び出しをエンコードする方法を既に知っている」が含まれていないなら、Step 1 を読み直す — その ABI 互換性が "騙し" を可能にしている。
+\`\`\`toml
+# Cargo.toml
+[package]
+name = "rust-cheatcode"
+version = "0.1.0"
+edition = "2021"
 
-## Test gate
+[dependencies]
+revm                = { version = "38" }
+revm-precompile     = { version = "34" }
+alloy-primitives    = "1.5"
+alloy-sol-types     = "1.5"
+eyre                = "0.6"
+\`\`\`
 
-*Test gate — この tier では全アプリがテスト green で初めて完了* に従い、本レッスンの最低 gate は **参照実装との differential テスト**。
+### Step 1-4
 
-カスタム cheatcode は dual-use である。Rust precompile で速度を取り、Solidity リファレンスで正しさを担保する。\`cheats.measureGas(target, data)\` が参照実装とずれたら、関連テストのガス会計は壊れている。
+上の 4 ブロック: ① precompile エントリ（セレクタ dispatch + ABI decode）→ ② cheatcode ロジック（入れ子 EVM、Success/Revert/Halt 全部で \`gas_used\` を返す、demo は \`EmptyDB\`、本物は Inspector で親 state 共有）→ ③ ハーネス登録（\`Precompiles::new(OSAKA).extend([CHEATS_PRECOMPILE])\`、\`Context::mainnet().with_precompiles(...)\`）→ ④ Solidity テスト（普通の interface call、\`solc\` でコンパイルし bytecode + selector を \`run_test_contract\` に渡す）。
+
+production gap: Solidity コンパイル（\`forge\` が solc を呼ぶ、ユーザに事前コンパイルさせる方が普通）/ 親 state 共有（custom Inspector）/ 並列性（テストごと独立 DB の tokio タスク）/ 失敗レポート（stack trace、decoded revert、fuzz shrink）/ 呼び出し間 state 永続化（\`vm.expectRevert\` は次の call にだけ状態を設定、Inspector に保存）。
+
+### Step 5: 実行
+
+\`\`\`bash
+$ cargo test --release -- --nocapture
+running 2 tests
+test tests::measures_gas_for_simple_call ... ok
+test tests::reports_zero_on_revert ... ok
+\`\`\`
+
+参照実装との **differential テスト**（dual-use: Rust で速度、Solidity で正しさ担保）:
 
 \`\`\`solidity
 // test/MeasureGasDifferential.t.sol
@@ -2384,54 +1894,67 @@ contract MeasureGasDifferential is Test {
 }
 \`\`\`
 
-\`forge test --match-test testFuzz_ -vvv\` を既定 256 fuzz iteration で実行する。256 入力すべてで一致する（数 gas の許容差内）までレッスンは未完了とする。1 件でも差分が出たら、その入力で cheatcode は誤計測する。
+\`forge test --match-test testFuzz_ -vvv\` を既定 256 fuzz iteration で実行。256 入力すべてで一致（数 gas の ε 内）まで未完了。1 件でも差分が出たら、その入力で cheatcode は誤計測する。
 
-## 📺 関連動画
+## 合格基準
 
-\`\`\`youtube
-sJpレッスン 21yJpgs | Horsefacts — Invariant Testing WETH with Foundry (本レッスンが reverse-engineer した cheatcode パターン)
-\`\`\`
+- 上記 2 テスト（固定入力 + 256 fuzz）が green（参照と数 gas 以内）。
+- なぜ precompile が contract/opcode より優れているか（コンセンサス壊さず Rust フルアクセス）を 1 文で言える。
+- セレクタ dispatch + ABI decode が「Solidity 既知の呼び出し規約」とどう噛むかを即答できる。
 
-> **🧭 ここまでで積み上げたもの:** **VM 層の拡張機構** を出荷した — 高アドレスに登録したカスタム precompile が、VM から Rust 関数を呼ぶかたちを、Solidity リファレンスとの differential fuzz で固めた。JNI や V8 のネイティブバインディングと同じパターンを、Revm に持ち込んだかたち。次のレッスンでは **DB 層の consistent snapshot read** に移る: fork した DEX 状態に対する swap aggregator。
-`,
+## Drill
+
+1. \`balanceOf(address)\` セレクタを追加（\`evm.db.basic(addr).balance\`）（15 分）。
+2. \`measureGas\` に \`value\` 引数を足し payable 化（30 分）。
+3. \`cheats.deal(address, uint256)\` を custom \`Inspector\` で親 state mutate（3 時間）。
+4. ディレクトリの \`.sol\` を solc でコンパイル → \`test_\` 関数を発見・実行・pass/fail 出力する最小ランナー（4 時間）。
+5. Counter increment × 1000 で自前 vs \`forge test\` のレイテンシ差を測る（1 時間）。
+
+## まとめ（3行）
+
+- cheatcode = executor に登録した precompile = mainnet コンセンサスに影響なし + フル Rust パワー（contract は EVM op のみ、新 opcode は fork を招く — precompile が唯一の道）。
+- セレクタ dispatch + \`sol!\` 生成 ABI decode + 入れ子 EVM で \`gas_used\` 計測。Solidity からは普通の interface call にしか見えない（ABI 互換性が「騙し」を可能にする）。
+- Test gate: 256 fuzz iteration で Rust precompile と Solidity-only \`gasleft()\` リファレンスが数 gas 以内で一致。次は DB 層 consistent snapshot の swap aggregator。
+
+## 次のレッスン（レッスン7）
+
+Swap Aggregator を作る（DEX state を fork して Rust で）。Revm fork で全 quote が同じ atomic state を読み、Uniswap V2 + Sushi + V3 から reserve を引いて出力を計算しベストを選ぶ。QuoterV2 differential で 5 bps まで担保。`,
                 },
                 {
-                  title: 'Swap Aggregator を作る — DEX state を fork して',
+                  title: 'レッスン7 — Swap Aggregator を作る — DEX state を fork して',
                   slug: 'build-swap-aggregator-ja',
                   type: 'CONTENT',
                   sortOrder: 7,
                   duration: 45,
                   xpReward: 80,
-                  content: `# Swap Aggregator を作る: DEX state を fork して、Rust で
+                  content: `# レッスン7 — Swap Aggregator を作る — DEX state を fork して、Rust で
 
-> 🧭 **systems engineering スタックでの位置:** **DB 層の consistent snapshot read** を、DEX の状態に持ち込んだもの。MVCC データベースが解いてきた問題と同じ — 「N 個の値を atomic に、同じ時点から read する」。mainnet を pin したブロックで fork すれば、すべての quote が同じデータベーススナップショットを参照できる。あとは、その整合性のあるビューの上で、DEX ごとに計算を回すだけ。
+## 問い
 
-ユーザが 10,000 USDC を ETH に swap したい。Uniswap V2 なら 2.948 WETH もらえる。Sushi なら 2.946。Uniswap V3 なら 2.951。Aggregator の仕事は: **同じクオートを全 venue に同じ瞬間にファンアウトし、比較し、勝者を選ぶこと。** これが 1inch、Paraswap、0x が裏でやっていること。以下、Rust ~250 行: Revm で mainnet をローカル fork し (全クオートが *同じ* atomic state を読むため)、Uniswap V2 + Sushi + Uniswap V3 から reserve を引き、出力を計算し、ベストを選ぶ。
+ユーザが 10K USDC を ETH に swap したい。Uniswap V2 / Sushi / Uniswap V3 のどれがベスト？ 各 pool を直接 RPC で叩くと、pool A の reserve がリードと pool B のリードの間に動いてしまい、「リンゴと梨」を比較することになる。**全 quote が同じ瞬間の state を読む** atomic な aggregation はどう組むか？
 
-> 📌 **スコープ。** 2 つの V2 pool（Uniswap V2 / Sushi）と 1 つの V3 pool（Uniswap V3）の 1-hop クオートを扱う。split routing、multi-hop、独自 CFMM、ガス最適化は拡張項目とする。
-
-## 受け入れ条件
-
-次のテストが pass したらレッスン完了（フルコードは末尾の §Test gate）:
-
-1. **\`matches_quoter_for_known_input\`** — pin した mainnet ブロックの 1 つの固定入力で、計算した V3 クオートが Uniswap 公式 QuoterV2 と 5 bps 以内で一致する。
-2. **\`picks_best_when_v3_dominates\`** — V3 が最良価格となるブロックで \`pick_best\` が V3 クオートを返す。
-
-**Test-first 読法。** 先に受け入れ条件を確認する。以下では、mainnet fork、reserve 読み取り、venue 別クオート計算、勝者選択を示す。いずれもテスト対象そのものだ。
-
-## 何を作るか
+CLI 出力イメージ:
 
 \`\`\`bash
 $ cargo run -- quote \\
-    --in-token  0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 \\  # USDC
-    --out-token 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 \\  # WETH
-    --amount-in 10000000000                                       # 10,000 USDC
+    --in-token  0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 \\
+    --out-token 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 \\
+    --amount-in 10000000000
 
 Quotes (10000 USDC -> WETH):
   Uniswap V2:    2.94821 WETH  (price 3393.08 USDC/WETH)
   Sushi V2:      2.94619 WETH  (price 3395.41 USDC/WETH)
   Uniswap V3:    2.95104 WETH  (price 3389.84 USDC/WETH)  ← BEST
 \`\`\`
+
+## 原理（最小モデル）
+
+- **1 回 fork = N quote の atomic snapshot。** N 並列 \`eth_call\` は各 read が別 state（pool A と pool B が微妙に違うブロック）から来うる。fork は MVCC データベースが「N 個の値を atomic に同じ時点から read する」を解いてきたのと同じ構造を DEX に持ち込む。初回 ~50ms（block fetch）、以降 ~200µs/pool、ガスコストも fork 内で測れる。
+- **V2 系は constant product + fee 調整、共通実装。** \`amount_in_with_fee = amount_in × (10000 - fee_bps)\`、\`amount_out = (amount_in_with_fee × reserve_out) / (reserve_in × 10000 + amount_in_with_fee)\`。bps を差し替えるだけで Uniswap V2 / Sushi 等の V2 fork を共通実装で扱える。
+- **V3 数式は非自明 → on-chain Quoter を fork 内で呼ぶ。** tick + concentrated range の数式を再実装せず、デプロイ済み \`IQuoterV2\` を Revm 経由で叩く（RPC ラウンドトリップなし）。
+- **\`token0\` 判定が要る。** pool はアドレス順で並ぶので、\`reserve_in\` が \`reserve0\` か \`reserve1\` かは都度判定。
+
+データ経路を 1 枚で:
 
 \`\`\`mermaid
 flowchart TB
@@ -2445,38 +1968,9 @@ flowchart TB
     Quote --> Pick["Pick best (post-fee, post-gas)"]
 \`\`\`
 
-> 🛑 **予測。** 各 pool を直接 RPC で叩かず、fork で state を読む理由は何か。RPC では得られず fork で得られる価値を一文で答える。
+## 具体例
 
-## なぜ fork か (vs 直接 RPC)
-
-| 方式 | N 個のクオートのレイテンシ | ガスコストシミュレーション? | マルチプールの atomic ビュー? |
-| :--- | :--- | :--- | :--- |
-| **N 回の RPC \`eth_call\`** | N × ~50ms = 10 pool で数秒 | NO (別途 \`eth_estimateGas\` が必要) | NO — 各 call は別々の state read で、pool A と pool B が微妙に違うブロックから来る可能性がある |
-| **1 回 fork して N 回 read** | 初回 ~50ms (block fetch)、以降 ~200µs/pool | **YES — 同じ Revm fork で仮想的な swap のガスを測れる** | **YES** — 全 read が同じ atomic snapshot から得られる |
-
-aggregation では特に atomicity が重要。pool A の reserve があなたの pool A read と pool B read の間に動いてしまえば、「ベストルート」の計算はリンゴと梨を比較していることになる。**Fork が世界の単一ビューを与えてくれる。**
-
-## Cargo.toml
-
-\`\`\`toml
-[package]
-name = "swap-aggregator"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-alloy-eips         = "1.0"
-alloy-primitives   = "1.5"
-alloy-provider     = "1.0"
-alloy-network      = "1.0"
-alloy-sol-types    = "1.5"
-revm               = { version = "38", features = ["alloydb"] }
-clap               = { version = "4", features = ["derive"] }
-tokio              = { version = "1", features = ["full"] }
-eyre               = "0.6"
-\`\`\`
-
-## Step 1: mainnet を fork (Lesson 1 と同じパターン)
+mainnet を fork（レッスン1 の MEV searcher と同じパターン）:
 
 \`\`\`rust
 use alloy_eips::BlockId;
@@ -2493,9 +1987,9 @@ use revm::{
 type ForkedDB = CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, DynProvider>>>;
 
 async fn build_fork() -> eyre::Result<ForkedDB> {
+    // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
     let provider = ProviderBuilder::new()
-            // Provider 例: QuickNode、Alchemy、Infura、または自前 Reth ノード。
-.connect(&std::env::var("ETH_RPC_URL")?)
+        .connect(&std::env::var("ETH_RPC_URL")?)
         .await?
         .erased();
     let alloy_db = WrapDatabaseAsync::new(AlloyDB::new(provider, BlockId::latest()))
@@ -2504,11 +1998,7 @@ async fn build_fork() -> eyre::Result<ForkedDB> {
 }
 \`\`\`
 
-[Lesson 1 (MEV searcher)](/courses/reth-building-ja/lessons/build-mev-searcher-ja) と同じで、それが要点。**同じ fork パターンがあちこちで現れる。1 つ作れれば、全部作れる。**
-
-## Step 2: V2 pool reserve を読む
-
-Uniswap V2 / Sushi / 任意の V2 fork: 同じ ABI、同じ constant-product 数学。
+V2 reserve を読む（汎用 \`call_view\` パターン）:
 
 \`\`\`rust
 use alloy_sol_types::{sol, SolCall};
@@ -2574,15 +2064,7 @@ fn call_view<C: SolCall>(
 }
 \`\`\`
 
-ポイント:
-
-- **再利用** — [Lesson 1 (MEV searcher)](/courses/reth-building-ja/lessons/build-mev-searcher-ja) の EVM call を、任意 \`SolCall\` を扱える \`call_view\` に一般化した。
-- **\`token0\` 判定** — pool はアドレス順で並ぶため、\`reserve_in\` が \`reserve0\` と \`reserve1\` のどちらかは都度判定が必要である。
-- **\`fee_bps\`** — V2 系は同じ式で扱え、fee だけを差し替える。
-
-> 🔍 **リポで探す。** [Uniswap V2 router のソース](https://github.com/Uniswap/v2-periphery/blob/master/contracts/libraries/UniswapV2Library.sol) を開く。\`getAmountOut\` を見つける。それが次のステップで実装する数式。**Rust と参照 Solidity を行単位で比較する。**
-
-## Step 3: V2 quote 数学 (constant product)
+V2 quote 数学（constant product + fee）— Uniswap V2 router の \`getAmountOut\` と行単位で同じ:
 
 \`\`\`rust
 fn quote_v2(pool: V2Pool, amount_in: U256) -> U256 {
@@ -2597,17 +2079,7 @@ fn quote_v2(pool: V2Pool, amount_in: U256) -> U256 {
 }
 \`\`\`
 
-ポイント:
-
-- **式の本体** — V2 は constant product を fee 調整付きで評価するだけである。
-- **整数演算** — \`U256\` のみで計算し、オンチェーンと同じ桁で一致させる。
-- **汎用性** — bps fee を差し替えるだけで V2 系 fork を共通実装で扱える。
-
-> 🛑 **理解度チェック。** なぜ \`amount_in_with_fee * pool.reserve_out\` は分子に来るのか。単位（次元）で説明する。
-
-## Step 4: V3 quote (より複雑な数式、よりシンプルなアプローチ)
-
-Uniswap V3 は流動性を *tick* と *concentrated range* で価格付けする。クオート公式は非自明だ。**近道**: V3 数式を再実装せず、on-chain Quoter に答えを聞く。ただし RPC のラウンドトリップを払わなくて済むよう Revm 経由で行う:
+V3 quote（on-chain Quoter を fork 内で呼ぶ、数式を再実装しない）:
 
 \`\`\`rust
 sol! {
@@ -2659,15 +2131,7 @@ fn quote_v3(
 }
 \`\`\`
 
-ポイント:
-
-- **Quoter 利用** — V3 数式を再実装せず、デプロイ済み Quoter で出力を取得する。
-- **\`sqrtPriceLimitX96 = 0\`** — 価格制限を無効化する設定である。実運用ではスリッページ制御値を入れる。
-- **fee tier** — fee 指定で pool tier を選ぶ。実運用は複数 tier を比較する。
-
-ここでも同じ \`call_view\` パターンで書けるが、V3 call の細部が見えるよう、ここでは inline で書いた。
-
-## Step 5: aggregate + best を選ぶ
+aggregate + best 選択（~250 LOC バイナリ全体）:
 
 \`\`\`rust
 #[derive(Debug)]
@@ -2716,39 +2180,63 @@ async fn main() -> eyre::Result<()> {
 }
 \`\`\`
 
-バイナリ全体: ~250 LOC、import + CLI parse 込み。
+## 失敗例（誤解）
 
-## Production に足りないもの
+「各 pool を直接 RPC で叩けばいい」は誤り — N 並列 \`eth_call\` では各 read が別 state（pool A read と pool B read の間に reserve が動く）から来うる。「ベストルート」の計算がリンゴと梨の比較になる。fork は世界の単一ビューを与え、aggregation を健全にする — atomicity こそが本質。
 
-| ギャップ | 本物の aggregator が何をしているか |
-| :--- | :--- |
-| **マルチホップルーティング** | pool 横断で A → WETH → B 経由のルーティング。グラフを構築し、output 量で重み付けされた Bellman-Ford |
-| **Split routing** | 合計 output が単独より大きくなるなら、40% を V3 経由、60% を V2 経由といった配分にする。重みに対する凸最適化 |
-| **Curve / Balancer / etc.** | 各 CFMM が独自の quote 関数を持つ。Curve は stableswap (Newton 法)、Balancer は weighted pool。**同じ fork、venue ごとに違う数式。** |
-| **ガス考慮** | 各 quote から推定ガスコスト (out-token 単位) を引く。$100 の swap で 50¢ の追加ガスを払うなら 0.1% の価格差は無価値 |
-| **Price-impact 閾値** | pool を X% 超えて動かすルートは却下 — 低流動性 venue における MEV sandwich 対策 |
-| **submission 時の再 quote** | Fork はブロック N での state、swap はブロック N+k で着地する。state drift を捕まえるために submission 直前に再 quote する |
-| **MEV 保護** | Flashbots Protect / MEV-Share 経由で submit して、frontrunner にルートを事前に見せない ([Lesson 8 — Capstone](/courses/reth-building-ja/lessons/build-capstone-router-ja) がこれをやる) |
+---
 
-ここで書いたアーキテクチャ — 1 回 fork、reserve を atomic に読む、venue ごとに quote を計算、勝者を選ぶ — **1inch と Paraswap が内部 pricing 層を組み立てている形そのもの**。彼らはスケール、より多くの venue、より良いルーティング最適化を加える。カーネルは同一。
+ここまでで「1 fork = atomic snapshot、V2 = constant product、V3 = Quoter 呼び」は着地した。ここから 5 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
-## Drill
+> 🛑 **予測。** 各 pool を直接 RPC で叩かず fork で state を読む理由は？（答え: 全 read が同じ atomic snapshot から得られる + 仮想 swap のガスも fork 内で測れる + 初回 fetch 後は ~200µs/pool で N 並列 RPC より遥かに速い。atomicity は「ベストルート」を健全にする最低条件 — pool 間 state drift を抑える唯一の道。）
 
-1. **Curve を追加。** Curve pool (例: 3pool) を選ぶ。state を読み、quote (stableswap) を実装し、\`get_dy(int128 i, int128 j, uint256 dx)\` を同じ \`call_view\` パターンで呼ぶ。(1.5時間)
-2. **ガス会計。** 各 quote から推定ガスコストを引く (\`evm.estimate_gas\` を仮想的な swap に対して使う)。「best」ルートは今や \`amount_out − gas_cost_in_out_token\` を最大化するルートのはず。(2時間)
-3. **マルチホップ探索。** 2-hop 探索を構築: A → WETH → B。WETH 経由の各候補に対して連鎖 quote を計算し、直接ルートと比較する。(3時間)
-4. **Split routing。** トップ 2 venue の 50/50 split を実装し、合計 output が単独より大きいかチェックする。(2時間)
-5. **クロスティア:** aggregator を wallet backend ([レッスン 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja)) に \`POST /quote-and-swap\` として組み込み、submission 用の署名済み tx を返す。(3時間)
+## ステップで組み立てる
 
-Drill 5 を完成させれば、構造的に aggregator-as-a-service ができる。MEV 保護 ([レッスン 8](/courses/reth-building-ja/lessons/build-capstone-router-ja)) を組み込めば、2023 年に出荷されたものと同等水準。
+### Step 0: プロジェクトと依存
 
-> 🛑 **最終チェック。** 一文で: なぜ aggregator にとって **fork** が **N 並列の \`eth_call\`** より厳密に優れているのか? 答えに「全 read を貫く atomic state」が含まれていないなら、Step 1 を読み直す — その atomicity こそが比較を健全にする。
+\`\`\`toml
+# Cargo.toml
+[package]
+name = "swap-aggregator"
+version = "0.1.0"
+edition = "2021"
 
-## Test gate
+[dependencies]
+alloy-eips         = "1.0"
+alloy-primitives   = "1.5"
+alloy-provider     = "1.0"
+alloy-network      = "1.0"
+alloy-sol-types    = "1.5"
+revm               = { version = "38", features = ["alloydb"] }
+clap               = { version = "4", features = ["derive"] }
+tokio              = { version = "1", features = ["full"] }
+eyre               = "0.6"
+\`\`\`
 
-*Test gate — この tier では全アプリがテスト green で初めて完了* に従い、本レッスンの最低 gate は **pin した mainnet ブロックで、既知の正答 quote に対する forked-state テスト**。
+\`ETH_RPC_URL\` を env に設定（QuickNode / Alchemy / Infura / 自前 Reth）。
 
-aggregator の正しさは二値: 同じ入力に対して \`Quoter\`（Uniswap 公式のオフチェーン quoter コントラクト、\`0x...3258\` にデプロイ済み）が同じブロックで返す出力と一致するか、しないか。Reserves を正しく読むのは必要条件で、CFMM 数学を正しく実行することがテストが強制する部分。
+### Step 1-5
+
+上の 5 ブロック: ① \`build_fork\`（\`AlloyDB\` + \`CacheDB\`、最新ブロック）→ ② \`read_v2_pool\`（\`token0\` 判定 + \`getReserves\` の \`call_view\`）→ ③ \`quote_v2\`（constant product + fee、\`U256\` のみ）→ ④ \`quote_v3\`（\`IQuoterV2\` を Revm 経由で呼ぶ、\`sqrtPriceLimitX96=0\` で価格制限無効）→ ⑤ \`aggregate\` + \`pick_best\`。
+
+production gap: マルチホップ（A → WETH → B のグラフ + 重み付き Bellman-Ford）/ split routing（40% V3、60% V2 の凸最適化）/ Curve（stableswap Newton 法）/ Balancer（weighted pool）/ ガス考慮（推定ガスを out-token で引く）/ price-impact 閾値（X% 超え動かすルートを却下、MEV sandwich 対策）/ submission 時の再 quote（state drift）/ MEV 保護（Flashbots Protect / MEV-Share、L8 capstone）。
+
+### Step 6: 実行
+
+\`\`\`bash
+$ ETH_RPC_URL=https://mainnet.infura.io/v3/$KEY cargo run --release -- quote \\
+    --in-token  0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 \\
+    --out-token 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 \\
+    --amount-in 10000000000
+Quotes (10000 USDC -> WETH):
+  Uniswap V2:    ... WETH
+  Sushi V2:      ... WETH
+  Uniswap V3:    ... WETH  ← BEST
+\`\`\`
+
+## 答え合わせ（Test gate）
+
+pin した mainnet で QuoterV2 differential（aggregator の正しさは「\`Quoter\` と同じ出力を返すか」の二値）:
 
 \`\`\`rust
 // tests/aggregator_quote_diff.rs
@@ -2783,40 +2271,46 @@ async fn picks_best_when_v3_dominates() {
 }
 \`\`\`
 
-QuoterV2 differential が pass するまでレッスンは **未完了**。数学が 50 bps 狂っていれば、全ユーザに静かに最適でないルートを推薦している。
+QuoterV2 differential が pass まで未完了。数学が 50 bps 狂っていれば、全ユーザに静かに最適でないルートを推薦している。
 
-> **🧭 ここまでで積み上げたもの:** **DB 層の consistent snapshot read** を DEX 状態に持ち込んだ aggregator を出荷した — 全クオートが、pin したブロックで Revm fork した同じスナップショットを参照し、QuoterV2 differential で 5 bps まで精度を担保。MVCC データベースの atomic な複数キー read と同じ構造。次のレッスンは **capstone**: ネットワーク層 + コンパイラ層 + 認証層を統合する、frontrun-resistant な order router。
+## 合格基準
 
-`,
+- 上記 2 テスト（QuoterV2 と 5 bps 以内 + V3 が dominant な block で \`pick_best\` が V3 を返す）が green。
+- なぜ fork が N 並列 RPC より厳密に優れているか（atomic state を貫く + ガス測れる）を 1 文で言える。
+- V2 の \`amount_in_with_fee × reserve_out\` が分子に来る理由（次元）を即答できる。
+
+## Drill
+
+1. Curve 3pool を追加（stableswap \`get_dy\`）（1.5 時間）。
+2. ガス会計（推定ガスを out-token で引く）（2 時間）。
+3. 2-hop 探索（A → WETH → B、直接と比較）（3 時間）。
+4. Split routing（top 2 venue 50/50、合計 > 単独 をチェック）（2 時間）。
+5. L4 wallet backend に \`POST /quote-and-swap\` として組み込み、署名済み tx を返す（3 時間）。
+
+## まとめ（3行）
+
+- 1 fork = 全 quote が同じ atomic state を読む（MVCC の N キー atomic read と同じ）— N 並列 RPC では pool 間 state drift で「リンゴと梨」になる。
+- V2 = constant product + fee の共通実装で fork 横断（bps を差し替えるだけ）、V3 = on-chain \`IQuoterV2\` を fork 内で呼んで数式の再実装を避ける（\`sqrtPriceLimitX96=0\`）。
+- Test gate: pin block で QuoterV2 differential を 5 bps 以内、V3 dominant な block で \`pick_best\` 検証。次は capstone の frontrun-resistant order router。
+
+## 次のレッスン（レッスン8）
+
+Capstone — Frontrun-Resistant Order Router を作る。L1/L2/L3 / L4-7 で築いた pattern を統合（searcher pipeline + custom RPC + wallet backend + 7702 sponsor + aggregator）し、end-to-end fork テストで order 投入から split routing → 着地 → fill 報告までを観察する。`,
                 },
                 {
-                  title: 'Capstone — Frontrun-Resistant Order Router を作る',
+                  title: 'レッスン8 — Capstone — Frontrun-Resistant Order Router を作る',
                   slug: 'build-capstone-router-ja',
                   type: 'CONTENT',
                   sortOrder: 8,
                   duration: 60,
                   xpReward: 100,
-                  content: `# Capstone — Frontrun-Resistant Order Router を作る
+                  content: `# レッスン8 — Capstone — Frontrun-Resistant Order Router を作る
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層 + コンパイラ層 + 認証層の統合**。HFT のオーダールータ、CDN のエッジルータ、適応的ルーティングを持つ API ゲートウェイと同じ構造 — 「複数ソースから入力を受け、結果をシミュレートし、経路を選び、適切な投入チャネルへ dispatch する」。本 router は、その発想を MEV 敵対者下の EVM トランザクションルーティングに持ち込んだもの。
+## 問い
 
-この capstone は、既存レッスンの実装を 1 サービスに統合する。入力は swap intent（JSON）である。
+ユーザの swap intent（JSON）を受け、ベスト venue を選び、mempool に sandwich 仕掛けの敵 tx がいるか検出し、シミュレーションで脅威スコアを出し、脅威が高ければ private mempool（Flashbots Protect）へ、低ければ public mempool へ送る。L1（searcher pipeline）+ L4（wallet）+ L5（sponsor）+ L7（aggregator）を統合し、追加実装は **決定レイヤー** だけに絞る — どう組むか？
 
-Router は次を順に行う。レッスン7のクオート、レッスン1の mempool 監視、Revm での脅威シミュレーション、レッスン5の sponsor。脅威が高ければ Flashbots Protect へ、低ければ public mempool へ送る。要するに レッスン 1 / レッスン 4 / レッスン 5 / レッスン7を束ね、追加実装は決定レイヤーに集中させる。
-
-> 📌 **スコープ。** 本キャップストーンは レッスン 1 / レッスン 4 / レッスン 5 / レッスン7の統合が主眼である。新規実装は **frontrun 検出** と **private submission パス**。実装先は Flashbots Protect だが、同型の private RPC に横展開できる。
-
-## 受け入れ条件
-
-次のテストが pass したらレッスン完了（フルコードは末尾の §Test gate）:
-
-1. **\`benign_path_uses_public_mempool\`** — mempool に敵対 tx 無し。router が PUBLIC を選び、swap が着地、出力 ≥ \`min_out\`。
-2. **\`detected_threat_routes_through_private_mempool\`** — sandwich 設定 tx が mempool に存在。router が PRIVATE を選び Flashbots Protect 経由で submit。
-3. **\`respects_min_out\`** — スリッページシナリオ。router が submit を拒否し \`SlippageExceeded\` を返す。
-
-**Test-first 読法。** 先に受け入れ条件を確認する。以下では、テストが直接行使する決定レイヤー（新規部分）を示す。残りは レッスン1/レッスン4/レッスン5/レッスン7 の再利用である。
-
-## 何を作るか
+公開する HTTP API はこの形:
 
 \`\`\`bash
 $ curl -X POST http://localhost:9000/route \\
@@ -2839,6 +2333,15 @@ $ curl -X POST http://localhost:9000/route \\
 }
 \`\`\`
 
+## 原理（最小モデル）
+
+- **決定レイヤーが本キャップストーンの新規。** 下のすべては L1/L4/L5/L7 を再利用（quote → 敵検出 → simulation でスコア → private vs public）。RouteRequest → RouteDecision の関数として書き、終端状態は 3 つ（EXECUTE_PRIVATE / EXECUTE_PUBLIC / REJECT_TOO_RISKY）。
+- **L1 mempool 監視を防御に転用。** searcher の入力（pending tx の購読）を「ユーザが使う pool を同じ方向に動かそうとする tx」の検出に転用する。緩い判定（substring or 既知 router へのターゲット）で false positive を許容 → 安全側（private へ逃がす）に倒す。
+- **「敵が先に着地したら出力はどれだけ落ちる?」を fork で測る。** 候補検出だけでは判定できない。敵 tx を fork に適用してから re-quote、差分 bps（\`(before - after) × 10000 / before\`）が脅威スコア。0-10 bps = Low、11-50 = Medium、51+ = High。
+- **2 つの provider（public + private）が設計の核。** 同じ Alloy コードに違うエンドポイント（\`rpc.flashbots.net/protect\` vs Infura/自前 Reth）— sandwich を打ち破る非対称性。
+
+データ経路を 1 枚で（前レッスンの再利用部 + 新規部）:
+
 \`\`\`mermaid
 flowchart TB
     User["POST /route"] --> Router["Router service"]
@@ -2854,47 +2357,9 @@ flowchart TB
     Wallet --> Chain
 \`\`\`
 
-> 🛑 **予測。** Lesson 1 の MEV searcherは、この router の脅威モデルそのものである。searcher の行動と router が防ぐ対象を一文で答える。
+## 具体例
 
-## どの lesson が入るか (そして新規部分)
-
-| コンポーネント | 出典 | ここで新規なもの |
-| :--- | :--- | :--- |
-| **DEX 横断クオート** | [レッスン 7](/courses/reth-building-ja/lessons/build-swap-aggregator-ja) | そのまま再利用 |
-| **Mempool 監視** | [レッスン 1](/courses/reth-building-ja/lessons/build-mev-searcher-ja) (searcher の入力!) | 防御として再利用 — 機会ではなく敵候補を見つける |
-| **Revm fork シミュレーション** | [レッスン 1](/courses/reth-building-ja/lessons/build-mev-searcher-ja) | 「この敵 tx はユーザを傷つけるか?」のスコアリングに使う |
-| **EIP-7702 sponsor** | [レッスン 5](/courses/reth-building-ja/lessons/build-7702-sponsor-ja) | パスに統合してユーザがガスを払わないようにする |
-| **Wallet backend submission + replace** | [レッスン 4](/courses/reth-building-ja/lessons/build-wallet-backend-ja) | public-mempool パスに使う |
-| **Private orderflow submission** | NEW | Flashbots Protect / MEV-Share 統合 |
-| **決定ロジック (route + risk → submission パス)** | NEW | Capstone の貢献部分 |
-
-新規性は **決定レイヤー**。その下はすべて、既に作ったパターン。
-
-## Cargo.toml
-
-\`\`\`toml
-[package]
-name = "frontrun-resistant-router"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-alloy = { version = "1.0", features = [
-  "providers", "signer-local", "rpc-types", "network",
-  "consensus", "eips", "sol-types"
-] }
-revm     = { version = "38", features = ["alloydb"] }
-axum     = "0.7"
-tokio    = { version = "1", features = ["full"] }
-serde    = { version = "1", features = ["derive"] }
-serde_json = "1"
-futures  = "0.3"
-eyre     = "0.6"
-\`\`\`
-
-## Step 1: 決定 struct (アーキテクチャを 1 つの型で)
-
-router 全体は \`RouteRequest\` から \`RouteDecision\` への関数。型を先にスケッチ; 残りは自分で書ける。
+決定 struct（アーキテクチャを 1 つの型で）:
 
 \`\`\`rust
 use alloy::primitives::{Address, B256, U256};
@@ -2917,40 +2382,14 @@ pub struct RouteDecision {
     pub decision:        &'static str,    // "EXECUTE_PRIVATE" | "EXECUTE_PUBLIC" | "REJECT_TOO_RISKY"
     pub venue:           Option<&'static str>,
     pub expected_out:    Option<U256>,
-    pub frontrun_risk:   String,          // serializable な FrontrunRisk
+    pub frontrun_risk:   String,
     pub tx_hash:         Option<B256>,
     pub submission:      Option<&'static str>,  // "flashbots-protect" | "public" | null
     pub reason:          Option<String>,
 }
 \`\`\`
 
-ポイント:
-
-- **終端状態は 3 つ** — private 送信、public 送信、拒否。拒否も安全機能である。
-- **\`expected_out\`** — Lesson 7 の見積もりを \`min_out\` と事前比較し、許容外なら送信しない。
-- **\`submission\`** — 提出先（public/private）を明示し、実行経路の可観測性を確保する。
-
-## Step 2: best quote を取る (Lesson 7 を再利用)
-
-\`\`\`rust
-// Lesson 7 から直接取り込み — 同じコード、変更なし
-use crate::aggregator::{aggregate, pick_best, Quote};
-
-async fn best_quote(
-    db: &mut ForkedDB,
-    req: &RouteRequest,
-) -> eyre::Result<(Quote, &'static str)> {
-    let quotes = aggregate(db, req.in_token, req.out_token, req.amount_in).await?;
-    let best   = pick_best(&quotes).clone();
-    Ok((best.clone(), best.venue))
-}
-\`\`\`
-
-実装は見もしない — Lesson 7 のもの。**過去のレッスンコードをインポートすること自体も Capstone の読みの一部。** モジュール化を保つ。
-
-## Step 3: Frontrun 検出 — 新しい部分
-
-Lesson 1 の MEV searcher は mempool で *機会* を監視する。視点を反転させれば、同じスキャンがユーザに対する *脅威* を見つける。具体的には: router が使おうとしているのと同じ pool を、router が価格を動かすのと同じ方向でターゲットにする pending tx だ。
+Frontrun 検出（L1 を視点反転、searcher の機会監視を脅威監視に）:
 
 \`\`\`rust
 use alloy::providers::{Provider, ProviderBuilder, WsConnect};
@@ -2984,9 +2423,6 @@ async fn scan_for_adversaries(
 }
 
 fn looks_like_swap_on(tx: &alloy::rpc::types::Transaction, pool: Address, in_token: Address) -> bool {
-    // ヒューリスティック: tx が known router をターゲット、かつ calldata に pool トークンが言及される。
-    // Production router は router ABI でデコードして path をチェックする。
-    // 明瞭性のためヒューリスティックを保つ。
     use alloy::primitives::address;
     const KNOWN_ROUTERS: &[Address] = &[
         address!("7a250d5630B4cF539739dF2C5dAcb4c659F2488D"), // UniV2
@@ -3006,17 +2442,7 @@ fn has_subseq(haystack: &[u8], needle: &[u8]) -> bool {
 }
 \`\`\`
 
-ポイント:
-
-- **入力源** — \`subscribe_pending_transactions\` を使い、Lesson 1 と同じ mempool ストリームを防御側に転用する。
-- **緩い判定** — ここは false positive を許容し、安全側（private へ逃がす）に倒す設計である。
-- **\`duration\`** — 数秒の look-ahead で候補を拾い、待ち時間を抑える。
-
-> 🛑 **理解度チェック。** なぜ swap の方向が sandwich 判定で重要なのか。同方向と逆方向での利益差で説明する。
-
-## Step 4: Revm シミュレーションで脅威をスコアリング
-
-怪しい tx のリストだけでは不十分。**もしこれらがユーザより先に着地したら、ユーザの期待 output はどれだけ落ちるか?** を知る必要がある。
+Revm シミュレーションで脅威をスコアリング:
 
 \`\`\`rust
 async fn score_risk(
@@ -3069,15 +2495,7 @@ async fn apply_tx_to_fork(
 }
 \`\`\`
 
-ポイント:
-
-- **実指標** — quote-before と quote-after の差分で被害を測る。候補検出だけでは判定できない。
-- **逐次適用は簡略版** — 本番では敵 tx を独立評価し、worst case を合成する。
-- **閾値調整** — bps 閾値はペア特性に合わせて運用側で設定する。
-
-## Step 5: 提出
-
-決定木:
+決定木 + 提出（2 provider の切り替え）:
 
 \`\`\`rust
 async fn execute_decision(
@@ -3099,7 +2517,7 @@ async fn execute_decision(
         });
     }
 
-    // EIP-7702 sponsored tx を構築 (Lesson 5、直接持ち込み)
+    // EIP-7702 sponsored tx を構築 (L5 持ち込み)
     let tx_request = build_sponsored_tx(
         &state.public_provider,
         &state.sponsor,
@@ -3134,33 +2552,31 @@ async fn execute_decision(
 }
 \`\`\`
 
-**2 つの provider** がこの設計の核となる部分。\`public_provider\` は普通の RPC (Infura、自前 Reth) に接続し、\`private_provider\` は https://rpc.flashbots.net/protect に接続する。**同じ Alloy コードに違うエンドポイント** — それが sandwich 攻撃を打ち破る非対称性。
-
-## Step 6: 統合
+統合（4 ステップ: quote → adversary scan → risk score → execute）:
 
 \`\`\`rust
 async fn route_handler(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RouteRequest>,
 ) -> Result<Json<RouteDecision>, (axum::http::StatusCode, String)> {
-    // 1. venue 横断 quote (レッスン 7 持ち込み)
+    // 1. venue 横断 quote (レッスン7 持ち込み)
     let mut db = build_fork().await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let (best, venue) = best_quote(&mut db, &req).await
         .map_err(|e| (axum::http::StatusCode::BAD_GATEWAY, e.to_string()))?;
 
-    // 2. ~2 秒間 mempool で adversarial tx を監視 (レッスン 1 反転)
+    // 2. ~2 秒間 mempool で adversarial tx を監視 (レッスン1 反転)
     let pool_for_route = address_for_venue(venue, req.in_token, req.out_token);
     let adversaries = scan_for_adversaries(&state.public_provider, pool_for_route, req.in_token, Duration::from_secs(2)).await
         .unwrap_or_default();
 
-    // 3. シミュレーションでリスクをスコア (レッスン 1 + レッスン 7 結合)
+    // 3. シミュレーションでリスクをスコア (レッスン1 + レッスン7 結合)
     let mut risk_db = build_fork().await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let risk = score_risk(&mut risk_db, &adversaries, best.amount_out, &req).await
         .unwrap_or(FrontrunRisk::Low);
 
-    // 4. 一致する submission パスで実行 (レッスン 4 + レッスン 5 持ち込み)
+    // 4. 一致する submission パスで実行 (レッスン4 + レッスン5 持ち込み)
     let decision = execute_decision(&state, &req, venue, best.amount_out, risk).await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -3168,36 +2584,65 @@ async fn route_handler(
 }
 \`\`\`
 
-本レッスンの新規コード合計: ~250 LOC。**router** 全体のコード: この 250 + 持ち込まれる lesson — 1 つのリポに収まる、動く frontrun-resistant order router。
+新規コード合計 ~250 LOC（持ち込み込みで動く router 全体）。
 
-## Production に足りないもの
+## 失敗例（誤解）
 
-| ギャップ | 本物の production router が何をしているか |
-| :--- | :--- |
-| **MEV-Share / OFA 統合** | Orderflow を最高入札の searcher にプライベートオークションし、リベートをユーザに戻す。(Flashbots Protect は単純化版) |
-| **ユーザ単位スリッページ予算** | 5% スリッページを超えて quote を出さない。ユーザに \`amount_in\` を減らすよう伝える |
-| **キャンセル + 返金フロー** | private bundle が 2 ブロックで着地しなければ、EIP-7702 authorization は無駄になる。ユーザ向け UI + 返金ロジックが必要 |
-| **マルチリージョン private RPC** | Flashbots、Beaverbuild、Titan、Rsync に同時 submit し、最初に着地したものが勝つ |
-| **ユーザ単位レート制限** | API アクセスを持つ悪意ある主体は quote をスパムできる (安価) が、各 quote は fork を消費するので上限を設ける |
-| **Observability** | 全 (venue, risk, submission) 決定をログに残す。1000 ルート後に評価する: private にルートしたとき、シミュレートされた drop は実オンチェーン結果と一致したか? 実データで閾値を調整する |
+「sandwich 検出は候補 tx を見つければ十分」は誤り — 「ユーザの output がどれだけ落ちるか」を fork で測らなければ防御するか決められない（候補ありで Low、候補なしで High もある）。「private mempool は常に安いから常に使う」も誤り — Flashbots は bundler markup を払う。Low risk は public で十分。risk-aware な切り替えが本筋。
 
-ここで書いたアーキテクチャ — quote → 敵検出 → シミュレーションでスコア → private vs public の決定 → 適切なパスで submit — **すべての defensive routing サービスの背骨**。CowSwap、MEV-Share consumer、リテール wallet backend — すべてこのバリエーションをやっている。**今やあなたも作った。**
+---
 
-## Drill (カリキュラム最長、意図的に)
+ここまでで「decision layer + 2 provider 非対称」は着地した。ここから 6 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
-1. **本物の router ABI デコード。** \`looks_like_swap_on\` の緩い substring ヒューリスティックを UniV2 / V3 / Sushi router calldata の正規の \`sol!\` デコードに置き換える。path に \`(in_token, out_token)\` がどちらかの方向で含まれるかチェックする。(3時間)
-2. **独立シミュレーション。** 各敵を独立にスコアする (各敵間で fork を snapshot + rollback)。worst-case の drop を取る。(2時間)
-3. **キャンセルフロー。** \`POST /cancel { tx_hash }\` を追加 — ユーザの authorization を払い戻す (具体的には、元のものを無効化する no-op tx を同じ nonce で署名する)。UI に組み込む。(3時間)
-4. **マルチ RPC の private submission。** 2 つの private エンドポイント (Flashbots Protect + Beaverbuild) に同時 submit する。最初に着地した方の hash を返す。(1.5時間)
-5. **閾値の自動チューニング。** 各 router 決定 + 実オンチェーン結果 (drop は予測より大きかったか小さかったか?) をログに残す。historical data に対して bps 閾値を fit する小さなオフラインスクリプトを書く。(5時間)
+> 🛑 **予測。** L1 の MEV searcher は、この router の脅威モデルそのもの。searcher の行動と router が防ぐ対象を一文で。（答え: searcher は pending tx に sandwich を仕掛けて利益を得る。router はその検出器を *防御側に転用* し、敵が先に着地したらユーザの output がどれだけ落ちるかを fork で測り、Medium/High なら private（Flashbots Protect）に逃がす。同じ mempool 監視・同じ fork simulation、視点だけが反転する。）
 
-Drill 5 後、チューニング済みで観察可能、正しく動く frontrun-resistant router が手に入る。**これがユーザの信頼を真剣に受け取る wallet チームに対して production に出すもの。**
+## ステップで組み立てる
 
-> 🛑 **最終チェック (本レッスンの最終チェック)。** 一文で: このティアのレッスンのうち、なぜ *capstone* が他のどのコンポーネントよりも **シミュレーション** (レッスン1) に依存するのか? 答えに「ユーザの損失と同じ単位で脅威を測らずに、防御するかを決められない」が含まれていないなら、capstone はまだ完全には届いていない — Step 4 を読み直す。
+### Step 0: プロジェクトと依存
 
-## Test gate
+\`\`\`toml
+# Cargo.toml
+[package]
+name = "frontrun-resistant-router"
+version = "0.1.0"
+edition = "2021"
 
-*Test gate — この tier では全アプリがテスト green で初めて完了* に従い、capstone の gate は **forked mainnet 上での end-to-end**: 本物の swap intent が入り、router がシミュレートした脅威に基づき PUBLIC vs PRIVATE を判定し、正しい submission パスが取られ、ユーザは少なくとも \`min_out\` を受け取る。決定レイヤーが新規部分で、テストが先行レッスンから持ち越せない唯一のもの。
+[dependencies]
+alloy = { version = "1.0", features = [
+  "providers", "signer-local", "rpc-types", "network",
+  "consensus", "eips", "sol-types"
+] }
+revm     = { version = "38", features = ["alloydb"] }
+axum     = "0.7"
+tokio    = { version = "1", features = ["full"] }
+serde    = { version = "1", features = ["derive"] }
+serde_json = "1"
+futures  = "0.3"
+eyre     = "0.6"
+\`\`\`
+
+env: \`PUBLIC_RPC=...\`、\`PRIVATE_RPC=https://rpc.flashbots.net/protect\`、\`SPONSOR_KEY=0x...\`。
+
+### Step 1-6
+
+上の 6 ブロック: ① 型 sketch（RouteRequest/Decision、3 終端状態）→ ② best quote（L7 \`aggregate\` + \`pick_best\` を再利用）→ ③ adversary scan（L1 の pending tx 購読を防御側に）→ ④ Revm simulation で risk score（敵 tx を fork に適用 → re-quote → 差分 bps）→ ⑤ execute decision（min_out チェック → L5 sponsored tx → risk で public/private 切り替え）→ ⑥ route_handler で統合。
+
+### Step 7: 起動と疎通
+
+\`\`\`bash
+$ PUBLIC_RPC=... PRIVATE_RPC=https://rpc.flashbots.net/protect \\
+  SPONSOR_KEY=0x... cargo run --release
+
+# 別ターミナル
+$ curl -s -X POST http://localhost:9000/route -d @sample-route-body.json
+{ "decision": "EXECUTE_PRIVATE", "venue": "Uniswap V3", ... }
+\`\`\`
+
+production gap: MEV-Share/OFA（private auction + リベート）/ user 単位スリッページ予算 / キャンセル + 返金 / マルチリージョン private RPC（Flashbots + Beaverbuild + Titan）/ 観測・閾値自動チューニング（drop の実測 vs 予測）。
+
+## 答え合わせ（Test gate — E2E）
+
+forked mainnet で benign / threat / slippage の 3 ケース:
 
 \`\`\`rust
 // tests/router_e2e.rs
@@ -3230,57 +2675,54 @@ async fn respects_min_out() {
 }
 \`\`\`
 
-3 つすべて forked-mainnet の \`anvil\` で pass するまで capstone は **未完了**。1 つ目は public パスが end-to-end で動くこと、2 つ目は決定レイヤーが脅威下でパスを切り替えること、3 つ目はスリッページ悪化時にユーザ資金を失わないことを証明する。
+3 つすべて forked-mainnet の \`anvil\` で pass まで未完了。
 
----
+## 合格基準
 
-## Capstone 完了 — 残り 2 レッスン
+- 上記 3 E2E テスト（public パス end-to-end / 脅威下の private 切り替え / slippage 拒否）が green。
+- なぜ capstone が他のどのコンポーネントよりも simulation（L1）に依存するか（ユーザ損失と同じ単位で脅威を測らずに防御を決められない）を 1 文で言える。
+- 2 provider 非対称（同じ Alloy code に違うエンドポイント）の効果を即答できる。
 
-ここまでに作ってきたものの総まとめ:
+## Drill
 
-1. 最小 MEV searcher (mempool → fork-sim → arb)
-2. Reorg-aware Postgres indexer (ExEx + reorg ディスパッチ)
-3. カスタム RPC エンドポイント (jsonrpsee + extend_rpc_modules)
-4. Wallet backend (signer pool + nonce mgr + replace-on-stuck)
-5. EIP-7702 sponsor (Type 4 tx + paymaster パターン)
-6. Foundry スタイル cheatcode (custom precompile + ハーネス)
-7. Swap aggregator (Revm fork + venue 横断 quote)
-8. **Frontrun-resistant order router (本レッスン)** — レッスン 1 / レッスン 4 / レッスン 5 / レッスン7を統合
+1. \`looks_like_swap_on\` の substring を UniV2/V3/Sushi router の正規 \`sol!\` デコードに置換（3 時間）。
+2. 各敵を独立に snapshot+rollback でスコア、worst-case を取る（2 時間）。
+3. \`POST /cancel { tx_hash }\` を追加（authorization 払い戻し）（3 時間）。
+4. Flashbots Protect + Beaverbuild に同時 submit、最初の着地を採用（1.5 時間）。
+5. 決定 + 実 drop をログ、historical data に bps 閾値を fit するオフラインスクリプト（5 時間）。
 
-この先: レッスン 9 (validate-revm クロスクライアントハーネス) と レッスン 10 (HTTP 402 / MPP machine-payments エンドポイント)。swap-router の弧の外側に立つが、同じティアで ship される。
+## まとめ（3行）
 
-> **🧭 ここまでで積み上げたもの:** **ネットワーク層 + コンパイラ層 + 認証層の統合** を出荷した — マルチソース入力 → simulation → 経路判断 → 適切な submission チャネル、これを benign / threat / slippage の E2E テスト群で固めた。HFT の order router や CDN の edge router と同じ構造を、MEV 下の EVM トランザクションルーティングに持ち込んだかたち。次のレッスンでは **VM 層の正しさ検証** に移る: production provider に対する Revm の differential testing。
-`,
+- decision layer が capstone の新規 — quote (L7) → adversary scan (L1 反転) → fork simulation で risk score → public/private 切り替え (L4+L5)。3 終端状態（EXECUTE_PRIVATE / PUBLIC / REJECT_TOO_RISKY）。
+- 脅威スコアは「敵が先に着地したら output bps drop」— 候補検出だけでは判定不能、fork で測る。0-10/11-50/51+ で Low/Medium/High。
+- 2 provider 非対称（public + Flashbots Protect、同じ Alloy code に違う URL）が sandwich を打ち破る。E2E test gate: benign/threat/slippage の 3 シナリオを forked mainnet で。
+
+## 次のレッスン（レッスン9）
+
+Revm シミュレーションを Production Provider で検証する（differential testing）。L1/L7/L8 すべてが Revm に依存しているので、Revm と mainnet 多数派 client（Geth/Erigon）の挙動がずれると全部に伝播する。\`debug_traceTransaction\` と一致を assert する。`,
                 },
                 {
-                  title: 'Revm シミュレーションを Production Provider で検証する',
+                  title: 'レッスン9 — Revm シミュレーションを Production Provider で検証する',
                   slug: 'build-validate-revm-ja',
                   type: 'CONTENT',
                   sortOrder: 9,
                   duration: 50,
                   xpReward: 90,
-                  content: `# Revm シミュレーションを Production Provider で検証する
+                  content: `# レッスン9 — Revm シミュレーションを Production Provider で検証する
 
-> 🧭 **systems engineering スタックでの位置:** **コンパイラ / VM 層の正しさ検証** — 特にリファレンス実装に対する *differential testing*。IEEE 754 浮動小数点の準拠検証、TLS 実装の interop、POSIX 認証 — いずれも同じ規律に依拠している: 代表的な入力集合に対して、自分の実装が信頼できるリファレンスと一致することを証明する。本レッスンでは、その技法を「Revm vs 本番 EVM クライアント」に持ち込む。
+## 問い
 
-例を 1 つ置く。Revm fork は「2.95 WETH 取れる」と予測したのに、実チェーンでは 2.93 しか取れない。この差は、そのまま損失になる。
+Revm fork が「2.95 WETH 取れる」と予測したのに、実チェーンでは 2.93 しか取れない。この差はそのまま損失になる。同じリスクは L1 searcher / L7 aggregator / L8 router すべてにある（Reth のクライアントシェア ~7-12%、Revm の正しさは Reth でない 88-93% との一致に依存）。Revm vs 本番 EVM クライアントを継続的に検証するハーネスをどう作る？
 
-同じリスクは本ティアの Revm 利用箇所すべてにある。レッスン1の searcher、レッスン7の aggregator、レッスン8の router が対象だ。Revm と mainnet 多数派クライアント（Geth / Nethermind）の挙動がずれると、誤差は静かに本番へ出る。ここでは約 200 行で差分検証ハーネスを作る。
+## 原理（最小モデル）
 
-> 📌 **スコープ。** ここでは単一 tx の \`gas + return data\` を JSON-RPC provider と照合する。実運用では state-diff、大量サンプル、fork 境界回帰、CI まで拡張する。学ぶ核は同じで、「一致の定義」と「低コスト検証の作法」である。
+- **differential testing が gold standard。** IEEE 754 準拠検証 / TLS interop / POSIX 認証と同じ規律 — 「代表入力で自分の実装が信頼できるリファレンスと一致することを証明」。ここでは Revm vs \`debug_traceTransaction\`（Geth/Erigon/Alchemy 等）。
+- **2 種のテストケース。** ① 歴史的 mainnet tx を parent block でリプレイ（receipt が gas_used の正解、provider の \`eth_call\` が return data の正解）② 現状 state に対する仮想 call（\`USDC.balanceOf(holder)\` を provider \`eth_call\` と Revm fork で同 block 実行、provider が正解）。後者の方が始めやすい。
+- **同一ブロックに pin。** provider と Revm を同じ block に固定（\`BlockId::number(block)\`）して比較条件を揃える。
+- **bytes は完全一致、gas は近似比較。** 1 byte 違えば下流 decode が変わる（厳密）。\`eth_estimateGas\` は安全バッファ含み（許容幅: \`max(prod_gas/10, 5000)\`）。
+- **不一致の上位 3 原因はチェーン spec / ハードフォーク / precompile。** symptom→原因マッピングを覚える。
 
-## 受け入れ条件
-
-次のテストが pass したらレッスン完了（フルコードは末尾の §Test gate）:
-
-1. **\`matches_provider_for_recent_blocks\`** — 直近 10 ブロックで、各 tx の Revm トレースが reference provider の \`debug_traceTransaction\` 出力と一致する。
-2. **\`coverage_includes_create_and_call_paths\`** — CREATE / CREATE2 / CALL / DELEGATECALL / STATICCALL を行使する既知 tx が、それぞれ個別に reference と一致する。
-
-**Test-first 読法。** 先に受け入れ条件を確認する。以下では、Revm トレースの構築と \`debug_traceTransaction\` 呼び出しを示す。ここが両テストの比較入力になる。
-
-## なぜこれが重要か (本当の理由)
-
-規律自体は安価。スキップした時のコストは現実 — bot の P&L、aggregator がユーザに見せる quote、router の脅威スコア、すべてがサイレントにズレる。[Reth チームのベンチマーキング哲学](https://www.paradigm.xyz/2024/04/reth-perf) より: 「mainnet 挙動からの逸脱はどれもバグ」。それが基準。
+データ経路を 1 枚で（同じ tx を 2 経路で実行 → diff）:
 
 \`\`\`mermaid
 flowchart LR
@@ -3294,36 +2736,9 @@ flowchart LR
     Diff --> Fail["❌ debug<br/>(hardfork? precompile?<br/>RPC caching?)"]
 \`\`\`
 
-> 🛑 **予測。** Revm の spec が mainnet とずれている場合、検証ハーネスにはどのような不一致として現れるか。答えを書いてから先へ進む。
+## 具体例
 
-## Cargo.toml
-
-\`\`\`toml
-[package]
-name = "revm-cross-validation"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-alloy-eips         = "1.0"
-alloy-primitives   = "1.5"
-alloy-provider     = "1.0"
-alloy-network      = "1.0"
-alloy-rpc-types    = "1.0"
-alloy-sol-types    = "1.5"
-revm               = { version = "38", features = ["alloydb"] }
-tokio              = { version = "1", features = ["full"] }
-eyre               = "0.6"
-\`\`\`
-
-## Step 1: テストケースを選ぶ
-
-テストターゲットは 2 種類。両方使う:
-
-1. **歴史的 mainnet トランザクション** — 既にマイニングされた tx を parent block でリプレイする。receipt が gas_used の正解で、provider の \`eth_call\` が parent block での return data の正解。
-2. **現状 state に対する仮想的な call** — contract + メソッド (例: \`USDC.balanceOf(some_holder)\`) を選び、provider の \`eth_call\` と Revm fork で同じブロックで実行する。provider のレスポンスが正解。
-
-種類 2 の方が始めるのが簡単 (歴史的 RPC が不要) なので、それを構築する。種類 1 は drill で扱う。
+テストケース（USDC.balanceOf を pin block で）:
 
 \`\`\`rust
 use alloy_primitives::{address, Address, Bytes, U256};
@@ -3341,7 +2756,7 @@ fn build_calldata() -> Bytes {
 }
 \`\`\`
 
-## Step 2: Production provider の答えを取る
+Production provider の答え（\`eth_call\` + \`eth_estimateGas\`、同 block 固定）:
 
 \`\`\`rust
 use alloy_eips::BlockId;
@@ -3371,17 +2786,7 @@ async fn provider_answer(
 }
 \`\`\`
 
-ポイント:
-
-- **\`eth_call\`** — state を永続化せず、実行結果 bytes を返す。
-- **\`eth_estimateGas\`** — 実行に必要なガス見積もりを返す（安全バッファ込み）。
-- **同一ブロック固定** — provider と Revm を同じ block に pin して比較条件をそろえる。
-
-> 🔍 **リポで探す。** [\`alloy_provider::Provider\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) を開く。\`call\` と \`estimate_gas\` が同じ trait に属している — provider を切り替えても (Infura → QuickNode → 自前 Reth ノード) 、検証コードには何の変更も要らない。**それが抽象化の見返り。**
-
-## Step 3: 同じ call をローカルで Revm 経由で走らせる
-
-レッスン 1 / レッスン7と同じ fork パターン。Step 2 と同じブロックにピン留めする:
+Revm の答え（同じ block を fork）:
 
 \`\`\`rust
 use alloy_provider::{network::Ethereum, DynProvider};
@@ -3426,13 +2831,7 @@ async fn revm_answer(
 }
 \`\`\`
 
-ポイント:
-
-- **fork の固定** — \`AlloyDB::new(..., BlockId::number(block))\` で比較対象と同じ世界状態にする。
-- **spec の一致** — \`Context::mainnet()\` は mainnet 用。L2 検証時は対応 spec に切り替える。
-- **caller** — view call なので \`Address::ZERO\` で十分である。
-
-## Step 4: Diff
+Diff（bytes 完全一致 / gas 許容幅付き）:
 
 \`\`\`rust
 async fn validate(rpc_url: &str, block: u64, to: Address, data: Bytes) -> eyre::Result<()> {
@@ -3462,60 +2861,58 @@ async fn validate(rpc_url: &str, block: u64, to: Address, data: Bytes) -> eyre::
 }
 \`\`\`
 
-ポイント:
+## 失敗例（誤解）
 
-- **bytes は完全一致** — 1 byte でも違えば下流 decode が変わるため、厳密比較する。
-- **gas は近似比較** — \`eth_estimateGas\` は安全バッファを含むため、許容幅付きで比較する。
-- **ログ拡張** — 最小実装は \`println!\` で十分。本番は構造化ログへ拡張する。
+「Revm をローカルで走らせば検証になる」は誤り — Revm を Revm でテストするだけ。検証は **Revm 以外の provider**（Geth/Erigon の \`debug_traceTransaction\`）との一致で行う。「直近 block の latest を使えばいい」も誤り — RPC キャッシングで違う block の古い state を返すことがある（確定 block = latest - 32 にピン留めして再現性を確保）。
 
-> 🛑 **理解度チェック。** なぜ byte 出力は完全一致比較で、ガスは近似比較なのか。 \`eth_estimateGas\` が \`evm.transact_one\` より広い範囲を扱う点で一文で答える。
+---
 
-## Step 5: 一致しないとき — デバッグ分類
+ここまでで「differential vs production provider」は着地した。ここから 5 ステップで組み立てる。コードは抜粋（実行時は補助コードが必要）。
 
-実際の validation を走らせると不一致が見つかる。診断ツリー:
+> 🛑 **予測。** Revm の spec が mainnet とずれている場合、検証ハーネスにはどんな不一致として現れるか？（答え: ① 出力が一貫して \`0x\`/空（spec 違い、例: mainnet 用に作ったが op-mainnet を見ている）② ハードフォーク境界でだけ出力が違う（Revm の有効化 block が実チェーンと不一致）③ 特定 precompile を呼ぶ tx だけ違う（Revm に未実装、例: RIP-7212 secp256r1）。上位 3 原因がチェーン spec / ハードフォーク / precompile の不一致。）
 
-| 症状 | 想定原因 | 修正 |
-| :--- | :--- | :--- |
-| **本来非ゼロのはずの出力が一貫して 0x もしくは空** | Revm の spec が違う (例: \`Context::mainnet()\` で構築したがチェーンは op-mainnet) | チェーン spec に合わせる: \`OpEvm\`、\`Context::op_mainnet()\` など |
-| **ハードフォーク境界でだけ出力が違う** | Revm のハードフォーク有効化ブロックがチェーンと不一致 | Revm の spec をそのブロックでアクティブな実ハードフォークにピン留めする — \`SpecId\` 参照 |
-| **contract が precompile を呼ぶときだけ出力が違う** | Revm にないカスタム precompile (例: 一部の レッスン2でアクティブな RIP-7212 secp256r1) | precompile を Revm の precompile registry に追加する (レッスン 6 参照) |
-| **出力がぶれる — 同じ入力で時々一致、時々違う** | RPC キャッシング。provider が違うブロックの古い state を返した | 確定ブロック (latest から ~32 引いた値) にピン留めして再実行する |
-| **ガスが固定オフセットでずれる** | intrinsic gas の会計が違う (21,000 base をスキップした、あるいは逆) | 整合性確認: 測っているのは call のガスだけか、tx 全体のガスか? |
-| **ガスがランダムにばらつく** | hot vs cold ストレージアクセス。provider が直近 call で warm state を持っている | クリーンなサイクル後に再実行するか、warm/cold を制御可能な合成 state で fork する |
+## ステップで組み立てる
 
-実用上、上位 3 行に大半が落ちる — チェーン spec / ハードフォーク / precompile の不一致。
+### Step 0: プロジェクトと依存
 
-## Production レベル validation に足りないもの
+\`\`\`toml
+# Cargo.toml
+[package]
+name = "revm-cross-validation"
+version = "0.1.0"
+edition = "2021"
 
-| ギャップ | 実 validation ハーネスが何をしているか |
-| :--- | :--- |
-| **サンプリング戦略** | 直近 7 日のランダムな歴史的 tx を 1000 件、全部 validate する。系統的なドリフトを見つける |
-| **State-diff 比較** | \`debug_traceTransaction\` の prestate + statediff モードで byte レベルの state 変化を取得し、Revm の journal entry と比較する (高コスト RPC なのでサンプリングは疎にする) |
-| **ハードフォーク回帰** | Revm 更新後、直近 5 個のハードフォークブロック周辺で再 validate する。新 Revm バージョンは spec の有効化を変えることがある |
-| **カスタム precompile への対応** | Revm のセットアップは対象チェーンの全 precompile を含む必要がある。RIP-7212、EIP-2537、カスタム op-stack precompile、MEV-Share ヘルパ precompile など |
-| **CI 統合** | validation を CI パイプラインに含める。diff の許容範囲を超えたら merge を失敗させる |
-| **マルチ provider クロスチェック** | 同じ validation を 2-3 個の provider (QuickNode、Infura、Alchemy) に対して走らせる。provider 同士が同意しないなら validation の前提が崩れているので、どれかを正解として選ぶ |
-| **Performance** | provider の答えをキャッシュし、変更されたレッスンのみ再 validation する。RPC 料金を削減 |
+[dependencies]
+alloy-eips         = "1.0"
+alloy-primitives   = "1.5"
+alloy-provider     = "1.0"
+alloy-network      = "1.0"
+alloy-rpc-types    = "1.0"
+alloy-sol-types    = "1.5"
+revm               = { version = "38", features = ["alloydb"] }
+tokio              = { version = "1", features = ["full"] }
+eyre               = "0.6"
+\`\`\`
 
-上記のカーネルを作り、production グレードな習慣はニーズに合わせて足していく。大半のチームは少数の手選びのテストケースから始めて育てていく。
+### Step 1-5
 
-## Drill
+上の 4 ブロック: ① テストケース選定（仮想 call が始めやすい、歴史的 tx は drill）→ ② provider answer（\`eth_call\` + \`eth_estimateGas\`、block pin）→ ③ Revm answer（\`AlloyDB\` + \`CacheDB\`、\`Context::mainnet\`、同 block pin）→ ④ diff（bytes 厳密、gas 許容幅）→ ⑤ 不一致デバッグ分類（spec / hardfork / precompile / RPC cache / intrinsic gas / hot vs cold）。
 
-1. **歴史的 tx の再実行。** 実 mainnet tx hash を選ぶ。receipt を取得 → parent block を fork ポイントに → receipt.gas_used を Revm 再実行時の gas_used と diff する。(1 時間)
-2. **カスタム precompile のケース。** op-stack チェーン (Base、Optimism) を選ぶ。op-stack にはあるが mainnet にはない precompile を使う tx (例: L1 block info precompile) の validation を試みる。失敗モードを観察する。**diff は何を示すか?** (1 時間)
-3. **サンプリングハーネス。** validate 関数を、単一 contract (Uniswap V3 router はトラフィックが多い) の直近 100 個の成功 tx を辿るループで包む。pass/fail を集計する。**失敗率は? 失敗パターンは系統的かランダムか?** (2 時間)
-4. **マルチ provider クロスチェック。** 同じ validation を QuickNode + Alchemy に対して走らせる。両者が同じブロックの同じ call で同意しないなら、validation ハーネスの前提について何が言えるか? (1.5 時間)
-5. **CI への組み込み。** 任意の失敗で exit-code 1 になるよう validation スクリプトを修正する。GitHub Action に組み込んで mainnet に対し nightly 実行する。baseline 比 >0.1% の不一致率を持ち込む PR は失敗扱いにする。(3 時間)
+production gap: サンプリング（直近 7 日のランダム 1000 件 historical tx）/ state-diff 比較（\`prestate + statediff\` モード）/ ハードフォーク回帰（Revm 更新後に直近 5 hardfork block 周辺で再 validate）/ カスタム precompile 対応（op-stack 等）/ CI 統合（diff 許容超過で merge fail）/ マルチ provider クロスチェック（QuickNode + Infura + Alchemy）/ キャッシング（変更レッスンだけ再 validate）。
 
-Drill 5 を完成させれば、本気の Revm ベース searcher / wallet / aggregator チームが出荷している継続検証の規律と構造的に同じものができる。**「ラップトップで動く Revm コード」と「production で信頼できる Revm コード」を分ける規律。**
+### Step 6: 実行
 
-> 🛑 **最終チェック。** 一文で: なぜこのティアで レッスン1〜8 を作ることが、**同時に**この validation lesson を作ることを要求するのか? 答えに「Reth が ~7-12% のクライアントシェア」と「シミュレーションの正しさは Reth ではない 88-93% との一致に依存する」が繋がっていないなら、冒頭を読み直す — それがこのレッスンがティアの最後にいる全理由。
+\`\`\`bash
+$ ETH_RPC_URL=https://mainnet.infura.io/v3/$KEY \\
+  cargo run --release
+provider: gas=21000  output=0x
+revm:     gas=21000  output=0x
+✅ match
+\`\`\`
 
-## Test gate
+## 答え合わせ（Test gate）
 
-*Test gate — この tier では全アプリがテスト green で初めて完了* に従い、**本レッスンはティアの残り全部の test gate そのもの** — だがそれ自身にも gate がある: **Revm 以外のプロバイダに対する、最近の小範囲ブロックでの differential トレーステスト**。
-
-レッスン全体の前提は「Revm のトレースが Geth/Erigon の \`debug_traceTransaction\` 出力と一致する」というもの。テストはその主張を機械的にチェック可能にする。
+最近の小範囲 block での Revm vs Geth/Erigon \`debug_traceTransaction\` 一致:
 
 \`\`\`rust
 // tests/revm_vs_provider.rs
@@ -3547,7 +2944,21 @@ async fn coverage_includes_create_and_call_paths() {
 }
 \`\`\`
 
-両方が実 recent-block 範囲で pass するまで — 延いてはあなたが レッスン 1–レッスン8で作ったもの全部への信頼まで — レッスンは **未完了**。1 件でも乖離したら、シミュレーションは何かについて嘘をついていて、レッスン 1–レッスン8の sim 依存判断のどれが間違いだったかを、それを最初に見つけずには知ることができない。
+両方が実 recent-block 範囲で pass まで未完了（延いては L1-L8 で作ったもの全部への信頼も）。1 件でも乖離したら simulation が嘘をついていて、L1-L8 の sim 依存判断のどれが間違いか先に見つけずに知ることができない。
+
+## 合格基準
+
+- 上記 2 テスト（直近 10 block × 全 tx の \`debug_traceTransaction\` 一致 + CREATE/CALL/DELEGATECALL/STATICCALL カバレッジ）が green。
+- なぜ bytes は厳密で gas は近似か（\`eth_estimateGas\` の安全バッファ）を 1 文で言える。
+- 不一致の上位 3 原因（spec / hardfork / precompile）を即答できる。
+
+## Drill
+
+1. 歴史的 tx を receipt.gas_used と Revm 再実行 gas_used で diff（1 時間）。
+2. op-stack precompile（Base/Optimism、L1 block info）を使う tx で validation を試み失敗モード観察（1 時間）。
+3. Uniswap V3 router の直近 100 成功 tx をループ validate、失敗率と pattern を集計（2 時間）。
+4. QuickNode + Alchemy の同 block 同 call で provider 同士の不一致を観察（1.5 時間）。
+5. CI 統合（exit-code 1、GitHub Action で nightly、baseline 比 >0.1% 不一致で fail）（3 時間）。
 
 ## 📺 関連動画
 
@@ -3555,66 +2966,37 @@ async fn coverage_includes_create_and_call_paths() {
 Nh19f_2fWLc | Dragan Rakita — EVM Technical walkthrough — Revm が production と一致するために従う必要のある spec
 \`\`\`
 
----
+## まとめ（3行）
 
-## Building tier 完走 (今度こそ本当に)
+- Revm の正しさは Reth でない 88-93% との一致に依存（Reth クライアントシェア ~7-12%）— L1/L7/L8 の sim はすべてこの仮定の上。\`debug_traceTransaction\` を gold standard に differential testing。
+- bytes 厳密一致 + gas 許容幅（\`max(prod_gas/10, 5000)\`、\`eth_estimateGas\` の安全バッファぶん）。同 block 固定、確定 block（latest-32）で RPC cache 回避。
+- 不一致の上位 3 原因 = チェーン spec / hardfork 有効化 block / 未実装 precompile。Test gate: 直近 10 block 全 tx の trace 一致 + CREATE/CALL paths カバレッジ。
 
-「arb のアイデアがある」から「Revm が production の Geth と一致することを保証できる」まで網羅する 10 lesson:
+## 次のレッスン（レッスン10）
 
-1. 最小 MEV searcher (mempool → fork-sim → arb)
-2. Reorg-aware Postgres indexer (ExEx + reorg ディスパッチ)
-3. カスタム RPC エンドポイント (jsonrpsee + extend_rpc_modules)
-4. Wallet backend (signer pool + nonce mgr + replace-on-stuck)
-5. EIP-7702 sponsor (Type 4 tx + paymaster パターン)
-6. Foundry スタイル cheatcode (custom precompile + ハーネス)
-7. Swap aggregator (Revm fork + venue 横断 quote)
-8. Frontrun-resistant order router (capstone — 1-7 統合)
-9. **Cross-client validation harness (本レッスン)** — 上記 8 本を「デモ」から「production-trusted」へ
-10. Machine-payments エンドポイント (HTTP 402 + MPP) — 上記の有料化レイヤ
-
-ターゲットの雇用主 / プロジェクトに最も近い build を選ぶ。Production ギャップを埋める。小さな public リポとして公開する。**それが会話に持っていく成果物。**
-
-> **🧭 ここまでで積み上げたもの:** **コンパイラ / VM 層の正しさ検証** を出荷した — Revm fork と production JSON-RPC provider の differential trace 比較を、ガス + 戻り値の一致と CREATE / CALL のカバレッジでテストゲートとして固めた。IEEE 754 準拠検証や TLS interop と同じ規律を、Revm に持ち込んだかたち。本ティアの他のアプリ (レッスン 1、レッスン 7、レッスン 8) はすべて、この検証層に依存している。次のレッスンでは **ネットワーク層の支払いプロトコル** — HTTP 402 + MPP — を、本ティア全体の上に乗せる有料化エッジとして見る。
-`,
+Machine Payments — HTTP 402 と Tempo MPP スタック。本ティアのアプリ（L3 カスタム RPC、L6 cheatcode harness、L7 aggregator、L8 router）を pay-per-call で有料化する protocol layer。replay 防止と支払いなし 402 / 有効支払いで 200 のテストゲートで担保する。`,
                 },
                 {
-                  title: 'Machine Payments — HTTP 402 と Tempo MPP スタック',
+                  title: 'レッスン10 — Machine Payments — HTTP 402 と Tempo MPP スタック',
                   slug: 'build-mpp-payments-ja',
                   type: 'CONTENT',
                   sortOrder: 10,
                   duration: 16,
                   xpReward: 40,
-                  content: `# Machine Payments — HTTP 402 と Tempo MPP スタック
+                  content: `# レッスン10 — Machine Payments — HTTP 402 と Tempo MPP スタック
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層の支払いプロトコル** — HTTP のセマンティクスを、暗号的な決済で拡張したもの。TLS が HTTP を暗号で拡張したのと同じ、OAuth が HTTP を委任認可で拡張したのと同じ、rate-limit ヘッダがコスト信号で拡張したのと同じパターン。MPP は「HTTP + リクエスト単位の決済」を表現するプロトコル層で、アカウントも API キーも持たずに pay-per-call を必要とする自律エージェントのために設計されている。
+## 問い
 
-2026 年の有料 API には同じ摩擦がある。サインアップ、メール認証、API キー、請求設定、プラン契約を経て、ようやく 1 回呼べる。
+2026 年の有料 API はサインアップ → メール認証 → API キー → 請求設定 → プラン契約を経て、ようやく 1 回呼べる。SaaS 利用者には許容できるが、単発呼び出しの自律エージェントには重すぎる。アカウントも API キーも持たずに pay-per-call できる protocol はどう作るか？
 
-SaaS 利用者には許容できても、単発呼び出しの自律エージェントには重すぎる。この摩擦自体が UX を壊している。
+## 原理（最小モデル）
 
-**Machine Payments Protocol (MPP)** はこの前提を変える。流れは単純で、\`402 challenge\` → 支払い → \`Authorization: Payment\` 付き再試行 → \`200 OK\` である。
+- **HTTP 402 + \`Payment\` 認証スキーム（30 年前から予約されたコードを本気で使う）。** フロー: \`GET /resource\` → \`402 Payment Required\` + \`WWW-Authenticate: Payment <challenge>\` → クライアントが **HTTP の外で** 支払い履行 → \`Authorization: Payment <credential>\` 付き再試行 → \`200 OK\`。アカウント登録不要、API キー不要、rail（Tempo / Stripe / Lightning 等）はサーバが受け付けるものなら何でも。
+- **rail 非依存（Core）+ rail 別 Methods + 抽象 Intents の 3 層。** Core が HTTP メカニクスと \`Payment\` ヘッダ文法（rail に依存しない）/ Methods が rail 固有実装（\`tempo/\`/\`stripe/\`/\`evm/\`/\`solana/\`/\`lightning/\`/\`card/\`）/ Intents が抽象パターン（charge / authorize / subscription）。1 つの rail を Core に埋め込むと別 rail 追加時に Core 再設計、分離すると Methods への追加だけで済む。
+- **支払い処理は HTTP ラウンドトリップ外。** プロトコル本体はハンドシェイク（402 challenge → credential → 200）のみを規定し、決済 rail は challenge で委譲する。この分離が拡張性を作る（artemis の Collector/Strategy/Executor 分割と同じ規律）。
+- **agent スケール問題に Intents が答える。** 1 分 1000 リクエストを都度オンチェーン決済すると遅延・手数料で破綻。Intents の \`authorize/subscription\` がオフチェーン voucher の交換（セッション、close 時に決済）でこれを解く。
 
-アカウント登録や API キー発行は不要。サーバが受け付ける rail（Tempo / Stripe / ACH / Lightning / card など）で、リクエスト単位の支払いを行える。
-
-本レッスンでは、3 つのソースを並行して読んでいきます: 仕様 ([\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs))、Rust SDK ([\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs))、そしてエンドツーエンドで動く CLI ([\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet))。
-
-> 📌 **仕様ステータス — 期待値を正しく持つ。** MPP は *IETF ドラフト* ([draft-ryan-httpauth-payment-00](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)) であり、批准済みの標準ではない。ワイヤフォーマットの細部はまだ変わる可能性がありる。今すぐ実装に使える程度に安定しているのは *全体像* — HTTP 402 + \`Payment\` 認証スキーム — と Tempo / Stripe のリファレンス実装である。細部はドラフト扱い、アーキテクチャ全体を学習対象として扱ってしてほしい。
-
-## 受け入れ条件
-
-次のテストが pass したらレッスン完了（フルコードは末尾の §Test gate）:
-
-1. **\`returns_402_without_payment\`** — \`X-PAYMENT\` 無しのリクエストは \`402\` を返し、コストと受取アドレスを含める。
-2. **\`returns_resource_with_valid_payment\`** — 同じリクエストに有効な micropayment を *付ければ* \`200\` + リソース本文を返す。
-3. **\`rejects_replayed_payment\`** — 同じ payment 受領は 2 リクエストを満たせない。2 回目は \`402\` または \`409\` を返す。
-
-**Test-first 読法。** 先に受け入れ条件を確認する。以下では、402 challenge 形式、payment 受領構造、replay 防止メカニズムを示す。これがテストで固定する契約である。
-
-## 誰も使わなかったステータスコード
-
-HTTP 402 は 30 年前に「将来の用途のため」予約されました。誰も使わないまま、web は API キー、OAuth、Stripe Checkout など「ネイティブな支払いステータスコードを *持たない* ことを補う回避策」によって成長してきた。MPP はこの 402 を本気で活用しようとした最初の仕様である。
-
-完全なフロー — [\`mpp-specs/README.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/README.md) のとおり:
+ハンドシェイクを 1 枚で（[\`mpp-specs/README.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/README.md) 準拠）:
 
 \`\`\`mermaid
 sequenceDiagram
@@ -3630,39 +3012,9 @@ sequenceDiagram
     Server-->>Client: 200 OK
 \`\`\`
 
-5 ステップ。各ステップの担当を読み解いてください:
+## 具体例
 
-1. クライアントが \`GET /resource\` — キャッシュなし・未認証の通常の GET と同じ形。
-2. サーバが \`402 Payment Required\` + \`WWW-Authenticate: Payment <challenge>\` を返す — challenge には *何の* 支払いが必要か、*どの rail* が受け付けられるかがエンコードされている。
-3. クライアントが **HTTP の外で**(out-of-band で)支払いを履行する — Tempo のオンチェーン charge、Stripe Shared Payment Token、Lightning invoice など。プロトコルはどの rail を使うかを問わない。
-4. クライアントが \`Authorization: Payment <credential>\` を付けて \`GET /resource\` を再試行。credential が支払い済みの証明になる。
-5. サーバが検証して \`200 OK\` を返す。
-
-設計の中立性はステップ 3 にある。支払い処理は HTTP ラウンドトリップ外に置き、プロトコル本体はハンドシェイク（1,2,4,5）のみを規定する。決済 rail は challenge で委譲する。この分離が拡張性を作る。
-
-> 🛑 **予測。** \`WWW-Authenticate: Payment\` を rail 非依存にする理由は何か。1 つの rail に固定したときに壊れる点を一文で答える。答え合わせは後半で行う。
-
-## 3 層 — Core / Intents / Methods
-
-仕様 repo がモジュール化されているのには明確な理由がありる。[\`tempoxyz/mpp-specs/specs/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs) を開いてしてほしい。重要な 3 つのサブディレクトリ:
-
-| 層 | パス | 何を定義するか |
-| :--- | :--- | :--- |
-| **Core** | [\`specs/core/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/core) | HTTP 402 のセマンティクス、\`Payment\` 認証スキーム、ヘッダ文法、IANA レジストリ。payment-rail 非依存 |
-| **Intents** | [\`specs/intents/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/intents) | 抽象パターン: charge、authorize、subscription。*どんな種類* の支払いかを規定するが、*どう* やるかは規定しない |
-| **Methods** | [\`specs/methods/\`](https://github.com/tempoxyz/mpp-specs/tree/main/specs/methods) | rail 別の具体実装: \`tempo/\`、\`stripe/\`、\`evm/\`、\`solana/\`、\`stellar/\`、\`lightning/\`、\`card/\` |
-
-この分割が解く問いは 1 つである。**複数 rail に対応する 1 つのクライアントをどう保つか。** 解は Core / Intents / Methods の分離だ。Core は HTTP メカニクス、Methods は rail 固有実装、Intents は両者の接続を担う。
-
-もし Core に Tempo 固有の前提を埋め込んでいたら、Stripe 追加時に Core 全体の再設計が必要だった。実際は Methods 層への追加で済むため、プロトコル本体を壊さずに拡張できる。
-
-> 🔍 **リポで探す。** [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md) の IANA セクションを確認する。新しい payment method 追加が Core 変更か、\`specs/methods/\` 追加かを答える。
-
-## Rust SDK を 30 秒で
-
-[\`tempoxyz/mpp-rs\`](https://github.com/tempoxyz/mpp-rs) を開いてしてほしい。SDK は仕様と同じ断層で分かれています — マーチャント側は [\`src/server/\`](https://github.com/tempoxyz/mpp-rs/tree/main/src/server)、購入側は [\`src/client/\`](https://github.com/tempoxyz/mpp-rs/tree/main/src/client)。
-
-**サーバ側** — challenge を発行し、credential を検証する:
+サーバ側（challenge 発行 + credential 検証、rail 非依存）:
 
 \`\`\`rust
 use mpp::server::{Mpp, tempo, TempoConfig};
@@ -3675,9 +3027,9 @@ let challenge = mpp.charge("1")?;             // WWW-Authenticate の値を返�
 let receipt = mpp.verify_credential(&credential).await?;
 \`\`\`
 
-\`Mpp::create\` は *payment provider* を引数に取ります — \`tempo(...)\`、\`stripe(...)\`、または自前のもの。返ってくる \`Mpp\` は challenge を発行し、credential を *rail に依存しない形で* 検証しる。provider を差し替えるだけでよく、サーバの他のコードは変更不要である。
+\`Mpp::create\` は payment provider（\`tempo(...)\`/\`stripe(...)\`/自前）を引数に取り、challenge 発行と credential 検証を rail 非依存で提供する。サーバの他コードは provider 差し替えで影響を受けない。
 
-**クライアント側** — 402 を透過的に扱う:
+クライアント側（402 を透過処理）:
 
 \`\`\`rust
 use mpp::client::{PaymentMiddleware, TempoProvider};
@@ -3692,21 +3044,9 @@ let client = ClientBuilder::new(reqwest::Client::new())
 let resp = client.get("https://mpp.dev/api/ping/paid").send().await?;
 \`\`\`
 
-\`PaymentMiddleware\` は reqwest クライアントをラップしる。ミドルウェアが 402 レスポンスを受け取り、challenge をパースし、provider を呼び出して支払いを履行し、\`Authorization: Payment\` ヘッダを付けて再試行する。呼び出し側から見れば、MPP 対応エンドポイントに対して \`.get(...).send()\` がそのまま機能しる。
+\`PaymentMiddleware\` が reqwest クライアントをラップ、402 を受けたら challenge をパース → provider で支払い履行 → \`Authorization: Payment\` を付けて再試行。呼び出し側からは普通の \`.get().send()\` に見える。
 
-> 🔍 **リポで探す。** [\`src/client/middleware.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/client/middleware.rs) の再試行処理と、[\`src/server/mpp.rs\`](https://github.com/tempoxyz/mpp-rs/blob/main/src/server/mpp.rs) の challenge 発行箇所を確認する。新しい provider 追加時の最小変更（\`PaymentProvider\` / \`ChargeMethod\` 実装）を説明する。
-
-## なぜ Intents が必要か — agent スケール問題
-
-> 🛑 **予測。** ある agent が 1 分間に 1000 件の有料 API リクエストを送るとしる。これを 1000 件のオンチェーン Tempo トランザクションで処理しようとすると、何が壊れるか? プロトコルの *Intents* 層は、これを解決するために何を提供しているか?
-
-(答え: 1000 件を都度オンチェーン決済すると遅延と手数料で破綻する。Intents は \`charge\` と \`authorize/subscription\` を分離し、セッション単位のまとめ払いを可能にする。Core は challenge/credential のみを扱い、チャネル詳細は Intents が担う。)
-
-該当ディレクトリ: [\`specs/intents/draft-payment-intent-charge-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/intents/draft-payment-intent-charge-00.md) が現時点で公開されている唯一の intent ドラフト。authorize と subscription は README によればロードマップに記載されている。
-
-## プロトコルから production へ — \`tempo wallet\`
-
-[\`tempoxyz/wallet\`](https://github.com/tempoxyz/wallet) は MPP の正規の動作統合例である。MPP がビルトインされた CLI ウォレットで、3 つのコマンドで全フローが実行できます:
+\`tempo wallet\` CLI（3 コマンドで全フロー）:
 
 \`\`\`bash
 tempo wallet login                        # passkey ログイン、ブラウザが開く
@@ -3714,67 +3054,36 @@ tempo wallet fund                         # 残高をトップアップ
 tempo request https://aviationstack.mpp.tempo.xyz/v1/flights?flight_iata=AA100
 \`\`\`
 
-3 番目がレッスンの中核である。\`tempo request <url>\` が 402 のやりとり全体 — challenge、署名、支払い、再試行 — を実行し、レスポンス本体を表示する。API キー不要、請求アカウント不要、*ウォレットがあって資金が入っているだけ* で済みる。
+3 番目が本丸 — 402 challenge / 署名 / 支払い / 再試行を全部実行。passkey は **スコープ付きセッションキー**（時限・上限金額・チェーンバウンド）を認可し、CLI は制限付きクレデンシャルだけを保持（root key は外に出ない）。
 
-ウォレットがサポートする支払い形態は 2 つ、[README](https://github.com/tempoxyz/wallet/blob/main/README.md) のとおり:
+支払い形態:
+- **One-shot（charge）** — リクエストごとに独立オンチェーン決済、セッション状態なし。単発・低頻度向け。
+- **Session（channel）** — オンチェーンチャネルを 1 度開き、オフチェーン voucher をリクエストごとに交換、close 時決済。ストリーミング・反復向け（agent スケールへの解）。
 
-| 形態 | トレードオフ | 使うとき |
-| :--- | :--- | :--- |
-| **One-shot (charge)** | リクエストごとに独立してオンチェーン決済。セッション状態なし | 単発の有料コール、低頻度のアクセス |
-| **Session (channel)** | オンチェーンチャネルを 1 度開く。オフチェーン voucher をリクエストごとに交換。close 時に決済 | ストリーミング (SSE のトークン単位課金など)、同一エンドポイントへの反復コール |
+## 失敗例（誤解）
 
-セッションモードは、先ほどの「1 分あたり 1000 リクエスト」予測に対する Intents 層からの答えを具体化したものである。
+「\`WWW-Authenticate: Payment\` に Tempo を埋め込めば simple」は誤り — 1 rail を Core に埋め込んだ瞬間、別 rail を使いたい人すべてからプロトコルを fork される。Stripe が MPP を共同 maintain できるのは Core が rail 中立だから（Stripe は \`methods/stripe/\` を寄贈、Core は触らない）。Lightning / ACH / 将来の rail も同形で追加。**メカニクス / ポリシー / 具体実装** の分離が rail ロックインを防ぐ。
 
-もう一歩踏み込んだ設計ポイント: ログインフローは **passkey** (Touch ID / Face ID / ハードウェアキー) を使って **スコープ付きセッションキー** — 時限・上限金額・チェーンバウンド — を認可し、CLI はそれを使って署名する。passkey 自体はブラウザの外に出ません。CLI が保持しているのは制限付きクレデンシャルであり、root キーではない。これは agent に権限を渡すときに採用すべきパターンと同じです — 全権の鍵は渡さず、期限と権限を絞ったキーを渡す。
+---
 
-> 🔍 **リポで探す。** [\`ARCHITECTURE.md\`](https://github.com/tempoxyz/wallet/blob/main/ARCHITECTURE.md) を確認し、(1) passkey 由来セッションキーの保持層、(2) \`PaymentProvider\` を MPP ミドルウェアへ渡す層、の 2 点を答える。
+ここまでで「HTTP 402 + Core/Intents/Methods 3 層 + rail 中立」は着地した。仕様は IETF ドラフト（\`draft-ryan-httpauth-payment-00\`）で、ワイヤ細部はまだ変わりうる — 全体像（402 + Payment スキーム）と Tempo/Stripe リファレンス実装を学習対象に。コードは抜粋（実行時は公式実装参照）。
 
-## 冒頭の予測に答える
+> 🛑 **予測。** agent が 1 分 1000 件の有料 API リクエストを送る。都度オンチェーン Tempo tx で処理すると何が壊れるか、Intents 層はこれをどう解決するか？（答え: 都度決済は遅延・手数料で破綻（オンチェーン finality 待ち + gas）。Intents が \`charge\` と \`authorize/subscription\` を分離し、authorize はチャネルを 1 度開いてオフチェーン voucher を交換、close 時に決済。セッション単位のまとめ払いで agent スケールに対応。）
 
-**なぜ \`WWW-Authenticate: Payment\` は Tempo に固定されず、拡張可能なのか?** 1 つの rail を埋め込んだ瞬間、別の rail を使いたい人すべてからプロトコルを fork されることになるからである。Stripe が MPP を共同 maintain できているのは、Core が rail 中立だからこそ — Stripe は \`methods/stripe/\` ディレクトリを寄贈しているのであり、Core を編集しているわけではない。Lightning、ACH、将来登場するあらゆる rail も同じ形で追加されていきる。
+## ステップで組み立てる
 
-これは [artemis](./build-mev-searcher-ja) (Collector / Strategy / Executor) や [validate-revm](./build-validate-revm-ja) のクロスチェック (Alloy \`Provider\` trait による provider 非依存) でも見たのと同じ trait 分割の規律である。本気のプロトコル/フレームワークは毎回これを繰り返す: *メカニクス* と *ポリシー* と *具体実装* を分離する、そうすれば将来の変更コストが下がる。
+### Step 1-4: 仕様 → SDK → ウォレット
 
-## なぜこれが「自分で作るもの」にとって重要か
+1. **Core/Intents/Methods を読む**（\`tempoxyz/mpp-specs\`）— Core は HTTP メカニクスのみ、Methods が rail 固有、Intents が両者の接続。新 method 追加は Core 変更でなく \`specs/methods/\` 追加だけ。
+2. **mpp-rs SDK**（\`tempoxyz/mpp-rs\`）— サーバ側 \`Mpp::create(tempo(...))\` / クライアント側 \`PaymentMiddleware\`。両者とも payment provider を差し替えるだけで rail 切り替え可能。
+3. **tempo wallet CLI**（\`tempoxyz/wallet\`）— passkey ログイン → fund → \`tempo request <url>\`。one-shot vs session の使い分け、passkey 由来セッションキーの保持層と PaymentProvider を MPP middleware に渡す層の 2 つを \`ARCHITECTURE.md\` で確認。
+4. **既存サービスを MPP でラップ** — L3 カスタム RPC、L6 cheatcode harness、L7 aggregator、L8 router を \`Mpp::create(tempo(...))\` で包めば、agent も人も 1 リクエストごとに支払える（請求インフラ・API キー・Stripe ポータル統合 すべて不要）。
 
-2 つの角度、どちらも実用的です:
+agent 向けプロダクトの伸びしろ: 単発のフライト状況 / プライシング oracle / token 単位課金の LLM 補完 — 人間向けには小さすぎて値付けできない粒度を、agent 向け API で開く（MPP がリクエスト単位決済を安価にしているから）。
 
-- **有料サービスを提供する側として。** エンドポイントを \`Mpp::create(tempo(...))\` (または Stripe、または両方) でラップしる。agent もアプリも 1 リクエストごとに支払える。請求インフラ不要、API キー発行不要、レートリミットダッシュボード不要、Stripe ポータルの統合も不要。各リクエストに見合う金額を charge すれば、プロトコルが決済まで済ませてくれる。レッスン7のアグリゲータ、レッスン3のカスタム RPC エンドポイント、レッスン6の cheatcode harness — どれもこの形で有料化できる。
+## 答え合わせ（Test gate）
 
-- **有料サービスを利用する側として。** \`PaymentMiddleware\` を reqwest クライアントに足すだけ。agent — もしくはインデクサ、バリデータの監視スタック — がベンダごとの統合なしに、MPP 対応エンドポイントに支払える。レッスン1の MEV searcher が有料 mempool feed を欲しい? MPP を差し込む。レッスン4の wallet backend が有料 data oracle を欲しい? MPP を差し込む。レッスン 8 capstone のルータが有料 private order flow を欲しい? MPP を差し込む。
-
-追いかける価値のある実プロダクトのアイデア: *この粒度では agent しか欲しがらない* 有料サービス — 単発のフライト状況、単発のプライシング oracle、トークン単位課金の単発 LLM 補完など。人間向け API はこの粒度では小さすぎて値付けできない、しかし agent 向け API ならできる。MPP がリクエスト単位の決済を安価にしているからである。
-
-## リコールチェックリスト
-
-次に進む前に、スクロールせずに次の問いに答えられることを確認してほしい:
-
-1. MPP が活用する HTTP ステータスコードは? サーバの \`WWW-Authenticate\` ヘッダはどう見えるか?
-2. 仕様の 3 層を挙げ、各層が何を定義しているか述べる。
-3. SDK サーバ側で \`Mpp::create(tempo(...))\` は何を提供してくれるか? クライアント側で \`PaymentMiddleware\` は何をするか?
-4. Intents 層が Core から分離されているのはなぜか? 具体的なシナリオを 1 つ挙げる。
-5. \`tempo request\` の one-shot モードとセッションモードのトレードオフは?
-
-2 か 4 でつまずいたら、次のレッスンに進む前に Core / Intents / Methods の章を読み直してしてほしい。
-
-## ドリル
-
-1. **IETF ドラフトを読む。** [\`specs/core/draft-httpauth-payment-00.md\`](https://github.com/tempoxyz/mpp-specs/blob/main/specs/core/draft-httpauth-payment-00.md) を開く。\`Payment\` スキームが定義するヘッダフィールド 3 つと、各々が何を運ぶかを自分の言葉で言えるまで読む。(45 分)
-2. **有料エンドポイントを立てる。** [\`mpp-rs\`](https://github.com/tempoxyz/mpp-rs) を clone し、[\`examples/\`](https://github.com/tempoxyz/mpp-rs/tree/main/examples) を参考に、1 ルートで 0.01 を charge する axum サーバを動かす。curl で叩いて 402 を観察、\`tempo request\` で叩いて 200 を観察する。(2 時間)
-3. **既存サービスをラップする。** これまでのレッスンで作った成果物のうち 1 つを選ぶ — たとえば レッスン3のカスタム RPC エンドポイント。\`mpp\` の axum 統合を追加し、コールごとに charge する。ウォレットで検証。(3 時間)
-4. **セッションをトレースする。** 有料 SSE エンドポイントに対してセッションモードで \`tempo request\` を実行し、ネットワークをトレースする: チャネルはいつ open するか? voucher はいつ交換されるか? いつ決済されるか? \`tempo wallet sessions list\` と \`close\` で状態を確認する。(1.5 時間)
-5. **カスタム provider を実装する。** SDK にない payment rail を 1 つ選ぶ (好きな レッスン2のネイティブ資産など)。\`PaymentProvider\` (クライアント側) と \`ChargeMethod\` (サーバ側) を実装。自分の有料エンドポイントに対してテストする。*抽象が本当に役に立つかどうかのテスト* である。(4 時間)
-
-ドリル 3 まで進めば、本物のインフラにデプロイ可能な有料エンドポイントを持っていることになる。ドリル 5 まで進めば、プロトコルを自分で拡張できるレベルまで内在化できたと言える。
-
-> 🛑 **最終チェック。** 一文で答えてほしい: API キーと Stripe Checkout の組み合わせでは agent に提供できないもののうち、MPP が提供してくれるものは何か? 答えに *リクエスト単位決済、アカウント不要、rail ロックイン不要* が入っていなければ、冒頭を読み直してほしい — その 3 点こそが本プロトコルが存在する理由のすべてである。
-
-## Test gate
-
-*Test gate — この tier では全アプリがテスト green で初めて完了* に従い、本レッスンの最低 gate は、有料ユーザを締め出すか攻撃者にダブルスペンドさせるかの失敗モード 2 つを潰す:
-
-1. **支払い無しで 402、有効な支払いで 200** — プロトコルの本契約。\`X-PAYMENT\` ヘッダ無しのリクエストは 402 を返し、コストと受取アドレスを含める。同じリクエストに有効な micropayment を *付ければ* 200 + リソースを返す。
-2. **Replay 防止** — 同じ micropayment 受領は 2 リクエストを満たせない。（これがないと、攻撃者が 1 つの有効な \`X-PAYMENT\` ヘッダを捕捉して、無制限にあなたのエンドポイントを drain できる。）使用済み受領を使った 2 回目のリクエストは 402 を（または設計次第で 409 \`Conflict\` を）返す。
+ユーザを締め出すか攻撃者にダブルスペンドさせる失敗モード 2 つを潰す:
 
 \`\`\`rust
 // tests/mpp_gate.rs
@@ -3826,10 +3135,33 @@ async fn rejects_replayed_payment() {
 }
 \`\`\`
 
-3 つすべてがエンドポイントをローカル起動した状態で pass するまで（payment leg は forked Tempo testnet か anvil で）、レッスンは **未完了**。replay テストで fail する 402 エンドポイントは、URL を見つけた誰かが来るのを待っている wallet drainer である。
+3 つすべてエンドポイント local 起動で pass まで未完了（payment leg は forked Tempo testnet か anvil で）。replay テストで fail する 402 エンドポイントは URL を見つけた誰かが来るのを待っている wallet drainer。
 
-> **🧭 ここまでで積み上げたもの:** **ネットワーク層の支払いプロトコル** を出荷した — HTTP 402 の challenge、micropayment receipt、replay 防止。TLS が HTTP を暗号で拡張したのと同じ抽象パターンを、決済に持ち込んだかたち。これで本ティア 11 レッスンが完了 — systems engineering スタックの各層（ネットワーク、DB、VM、認証、並行性）に対して、エンドツーエンドで構築されテストゲートで動作が証明されたアプリケーションが、それぞれ少なくともひとつ揃った。**本ティアの約束が、ここで履行された。**
-`,
+## 合格基準
+
+- 上記 3 テスト（402 なし / 有効支払い 200 / replay 拒否）が green。
+- MPP の 3 層（Core / Intents / Methods）と各層の責務を即答できる。
+- 「Stripe Checkout + API キー」では agent に提供できないもの（リクエスト単位決済 + アカウント不要 + rail ロックイン不要）を 1 文で言える。
+
+## Drill
+
+1. \`specs/core/draft-httpauth-payment-00.md\` の \`Payment\` スキーム 3 ヘッダフィールドを言える（45 分）。
+2. \`mpp-rs\` の examples を参考に 0.01 charge する axum サーバを動かす（curl で 402、\`tempo request\` で 200）（2 時間）。
+3. レッスン3 のカスタム RPC を MPP でラップ、コールごとに charge（3 時間）。
+4. 有料 SSE エンドポイントに session モードで \`tempo request\`、チャネル open / voucher 交換 / 決済をトレース（1.5 時間）。
+5. SDK にない rail（好きな L1 のネイティブ資産）の \`PaymentProvider\` + \`ChargeMethod\` を実装してテスト（4 時間）。
+
+## まとめ（3行）
+
+- MPP = HTTP 402 + \`WWW-Authenticate: Payment\` challenge + \`Authorization: Payment\` credential。アカウント不要・API キー不要・rail 非依存で、agent が pay-per-call できる protocol。
+- Core（HTTP メカニクス、rail 中立）/ Intents（抽象 charge/authorize/subscription）/ Methods（rail 別実装）の 3 層分離が rail ロックインを防ぎ、新 rail は Methods 追加で済む。Stripe が共同 maintain できるのはこの構造ゆえ。
+- Test gate: 402 なし / 有効支払い 200 / replay 拒否。replay 拒否のない 402 は wallet drainer。L3/L6/L7/L8 を MPP で有料化できる。
+
+## ティア完走
+
+「arb のアイデアがある」から「Revm が production と一致することを保証できる」+「pay-per-call で API を ship する」まで、systems engineering スタックの各層（ネットワーク / DB / VM / 認証 / 並行性）に対してエンドツーエンドで構築されテストゲートで動作証明されたアプリが少なくとも 1 つずつ揃った。**本ティアの約束が、ここで履行された。**
+
+雇用主・プロジェクトに最も近い build を選び、production gap を埋め、小さな public リポとして公開する — それが会話に持っていく成果物。`,
                 },
               ],
             },
@@ -3838,6 +3170,4 @@ async fn rejects_replayed_payment() {
       },
     },
   });
-
-  console.log('  Building (JA) seeded');
 }

@@ -1,17 +1,17 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethBridgeToAdvancedJA(prisma: PrismaClient) {
-  const tags = ['reth', 'revm', 'evm', 'rust', 'bridge'];
+  const tags = ['rust', 'evm', 'bridge', 'beginner-to-advanced', 'reth'];
 
   await prisma.course.create({
     data: {
       slug: 'reth-bridge-to-advanced-ja',
       title: 'スタックを読む — 中級への橋渡し',
       description:
-        'Beginner ティアの Rust と Alloy の基礎は固まった。次に来る Alloy / Revm / Inside Reth のソース読解とのギャップを、このコースで埋める。EVM をバイト単位（ディスパッチループ・ワールドステート・コールフレーム・reorg）で捉え、同時に Reth / Revm 読解に必要な中級 Rust（generics・dyn・Arc・unsafe・macro_rules）を整える。',
+        'Beginner（Reth Fundamentals / Reth 入門）を終えて、3 中級コース（Inside Revm / Inside Reth / Inside Alloy）に進む前の橋渡し。10 レッスンで Solidity → bytecode 翻訳、EVM の 5 記憶領域、ガス機構とコールフレーム、ブロック・レシート・reorg、Solidity → Rust 移行マップ、generics / trait bounds / ?Sized / dyn vs impl、Arc / Mutex / RwLock、unsafe Rust、macro_rules!、最後にソース読解コースの読み方。中級コースのソース読みに必要な語彙と Rust 文法の最小セットを揃える。',
       difficulty: 'BEGINNER',
-      duration: 100,
-      xpReward: 200,
+      duration: 119,
+      xpReward: 245,
       track: 'reth-bridge-to-advanced',
       tags,
       isPublished: true,
@@ -26,15 +26,32 @@ export async function seedRethBridgeToAdvancedJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Solidityからバイトコードへ — ディスパッチループ',
+                  title: 'レッスン0 — Solidity からバイトコードへ — ディスパッチループ',
                   slug: 'bytecode-dispatch-loop-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Solidityからバイトコードへ — ディスパッチループ
+                  content: `# レッスン0 — Solidity からバイトコードへ — ディスパッチループ
 
-> 🧭 **このレッスンの位置づけ:** **VM 層のディスパッチループ** に踏み込む — すべての EVM 実行の中心にある for ループ。Inside REVM の custom-opcodes-table 回が後ほど、同じループの「関数ポインタテーブル」設計を内側から開いていく。
+## 問い
+
+Solidity を書いて Foundry でデプロイしてきた。**デプロイ後の EVM が実際に何をしているか** — バイトの世界へ降りる。これがないと \`revm/crates/interpreter\` ソースは雑音にしか読めない。
+
+## 原理（最小モデル）
+
+- **Bytecode = バイト列.** \`0x60 0x80 0x60 0x40 0x52 ...\` 等、各バイトが opcode or リテラル、EVM 版の x86 機械語。
+- **\`PUSH1 0x60\` 等のリテラル付き opcode.** 1 バイトの literal を読み込んでスタックに push、PC は 2 進む（PUSH32 は 33 進む）。
+- **PC（Program Counter）+ コアループ.** \`loop { opcode = bytecode[pc]; handler = instruction_table[opcode]; handler(...); pc++; if halted break; }\` の擬似コード 3 行 = EVM の全部。
+- **256 エントリの instruction_table.** バイト値 0x00-0xFF 各 1 スロット、各スロットが opcode ハンドラへの関数ポインタ、O(1) ディスパッチ。
+- **Halt opcode.** STOP / RETURN / REVERT / INVALID / Out-Of-Gas、すべてループを break、結果（成功 / 失敗 / 状態巻き戻し）は異なる。
+- **JUMP / JUMPI で PC 任意設定.** Solidity の \`if\` / \`for\` / 関数呼び出しが JUMP に compile される、PC を直接動かす制御フロー。
+- **Solidity ABI と function selector.** コントラクト最初の 4 バイトが function selector（keccak256(signature)[..4]）、ディスパッチが「どの関数を呼ぶか」を判定。
+
+## 具体例 + ステップで組み立てる
+
+# Solidityからバイトコードへ — ディスパッチループ
+
 
 Solidity を書き、Foundry でデプロイとテストもしてきた。次の問いは、デプロイ後の EVM が実際に何をしているかである。このレッスンは 1 段下のレイヤー、つまりバイトの世界へ降りる。
 
@@ -199,18 +216,41 @@ match opcode {
 \`\`\`youtube
 RxL_1AfV7N4 | EVM: From Solidity to byte code, memory, and storage
 \`\`\`
+
+## まとめ（3行）
+
+- EVM コアループ = \`loop { fetch → table lookup → handler → pc++ }\` の擬似コード 3 行、256 エントリ関数ポインタテーブル、O(1) ディスパッチ。
+- \`PUSH1\` 等のリテラル付き opcode は PC を進めるバイト数が違う、JUMP/JUMPI は PC 任意設定、halt opcode が結果別れる。
+- 次レッスンでメモリ・ストレージ・ワールドステートの 5 記憶領域に踏み込み、bytecode が触る対象を理解する。
 `,
                 },
                 {
-                  title: 'メモリ・ストレージ・ワールドステート',
+                  title: 'レッスン1 — メモリ・ストレージ・ワールドステート',
                   slug: 'memory-storage-world-state-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 12,
                   xpReward: 25,
-                  content: `# メモリ・ストレージ・ワールドステート
+                  content: `# レッスン1 — メモリ・ストレージ・ワールドステート
 
-> 🧭 **このレッスンの位置づけ:** **VM 層と DB 層の境目** — コールフレームのメモリ、コントラクトのストレージ、world state — を導入する回。Inside REVM の \`Database\` トレイトが後で抽象化する 3 つの層を、ここで頭に入れておく。
+## 問い
+
+EVM の bytecode が触る対象 = **5 記憶領域**。Stack / Memory / Calldata / Storage / Code。それぞれ寿命・コスト・容量が違う。**どれが永続化される / どれが揮発 / どれが読み専用 / どれが世界状態か**。
+
+## 原理（最小モデル）
+
+- **Stack.** 1024 段の値置き場、tx 内のみ揮発、最も安価（3 gas / push）、現行計算の対象。
+- **Memory.** 線形配列、tx 内のみ揮発、\`MSTORE\` / \`MLOAD\` で読み書き、拡張するとガスコスト上昇（quadratic for large）。
+- **Calldata.** tx 入力の読み専用領域、外部呼び出し時のみセット、\`CALLDATALOAD\` / \`CALLDATASIZE\` で読み出し、最安。
+- **Storage.** **永続化される唯一の領域**、コントラクトごと、\`SLOAD\` 2,100 gas（cold）/ 100 gas（warm）、\`SSTORE\` 20K gas（新規）/ 5K（変更）、最も高い。
+- **Code.** デプロイ済みコントラクトのバイトコード、読み専用、\`EXTCODECOPY\` / \`CODECOPY\` で読み出し。
+- **World state.** 全コントラクトの全 Storage + すべての EOA 残高、Merkle Patricia Trie で管理、state root がブロックヘッダに。
+- **MPT（Merkle Patricia Trie）.** Ethereum 状態の永続化構造、3 種ノード（Branch / Extension / Leaf）+ keccak256 でルートハッシュ、L1 同期はこのトライを構築する。
+
+## 具体例 + ステップで組み立てる
+
+# メモリ・ストレージ・ワールドステート
+
 
 dispatch loop で opcode が何かは見えた。ほとんどの opcode は 4 つのストアのうち 1 つに触れる。本レッスンではそれらを順に見て、Solidity が隠している world state モデルも確認する。
 
@@ -356,18 +396,43 @@ Solidity 1 行とチェーンの state root の間に 5 つのレイヤー。**5
 - **ワールドステート** は \`Address → Account\` マップ。各 Account が自分のストレージ trie を指す。
 - Revm \`Database\` トレイトの 3 つのコアメソッド (\`basic\`、\`code_by_hash\`、\`storage\`) は **このワールドステートモデルを直接ミラー** している。
 
-中級レッスン 3 で Database トレイトを見たとき、これがまさにこの絵を Rust トレイトで表現したものだと認識できるはず。`,
+中級レッスン 3 で Database トレイトを見たとき、これがまさにこの絵を Rust トレイトで表現したものだと認識できるはず。
+
+## まとめ（3行）
+
+- 5 記憶領域 = Stack 1024 段揮発 / Memory 揮発 quadratic コスト / Calldata 読み専用入力 / Storage 永続化最高コスト / Code 読み専用 bytecode。
+- 永続化されるのは Storage のみ、World state = 全コントラクトの Storage + EOA 残高、MPT で管理して state root がブロックヘッダに。
+- 次レッスンでガス機構とコールフレームに踏み込み、各 opcode のコスト構造とコントラクト間呼び出しを理解。
+`,
                 },
                 {
-                  title: 'ガス機構の深掘りとコールフレーム',
+                  title: 'レッスン2 — ガス機構の深掘りとコールフレーム',
                   slug: 'gas-call-frames-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 12,
                   xpReward: 25,
-                  content: `# ガス機構の深掘りとコールフレーム
+                  content: `# レッスン2 — ガス機構の深掘りとコールフレーム
 
-> 🧭 **このレッスンの位置づけ:** **VM の計量モデル** — ガス、コールフレーム、revert — を導入する回。CPU の命令カウント予算と入れ子の関数フレームを合わせた構造を、敵対的実行向けに制約したかたち。
+## 問い
+
+EVM は **gas** で実行を計測 + 課金する。tx には gas limit、超えると停止。コントラクトが別コントラクトを呼ぶ（CALL / DELEGATECALL / STATICCALL）と **コールフレーム** が積まれる。**ガス課金の仕組みとフレーム間の親子関係**を理解する。
+
+## 原理（最小モデル）
+
+- **Intrinsic gas.** Tx 発火時の固定コスト（21K + calldata bytes 4/16 gas）+ access list の事前購入、これが消えた後 bytecode 実行。
+- **Per-opcode gas.** 各 opcode 固定 or 動的コスト、ADD = 3、SLOAD cold = 2100、SSTORE 新規 = 20K、EIP-2929 で cold/warm 概念導入。
+- **EIP-2929 cold/warm.** 同じスロット 2 回目以降は warm（100 gas）、初回は cold（2100 gas）= 状態アクセスの実コスト反映。
+- **Gas refund.** SSTORE で値を 0 に戻す等で refund、tx 終了時に gas_used の 1/5 まで返却、cap 制限あり。
+- **コールフレーム.** CALL / DELEGATECALL / STATICCALL で新フレーム積む、親フレームから子フレームへ gas 渡し（63/64 ルール）、子のリターン値が親のスタックに。
+- **CALL vs DELEGATECALL vs STATICCALL.** CALL = 新 context（msg.sender 変わる）、DELEGATECALL = 親 context（library パターン）、STATICCALL = 読み専用（state 変更不可）。
+- **Out-of-gas.** 子フレームで gas 枯渇 → REVERT で巻き戻し、親フレームは続行可能（CALL のリターン値が 0 = 失敗）。
+- **msg.sender / tx.origin の違い.** msg.sender = 直接呼び出し元（フレーム単位）、tx.origin = tx 発火 EOA（ずっと同じ）、攻撃面で重要。
+
+## 具体例 + ステップで組み立てる
+
+# ガス機構の深掘りとコールフレーム
+
 
 「ガスはお金がかかる」は知っているはず。本レッスンではもう 1 段掘り下げる — ガスが実際どこへ消えるか、そして 1 つのトランザクションがどう **コールフレーム** のツリーを生成するか、各フレームが独自のコンテキストを持つこと。
 
@@ -520,7 +585,14 @@ EOA がコントラクト X に tx 送信
 - tx は **コールフレームのツリー**。各フレームが独自の stack/memory/PC/gas を持つ。
 - **DELEGATECALL** は呼び先のコードを呼び出し元のコンテキストで走らせる call スタイル — プロキシパターンの基盤、多くのバグの元凶。
 
-中級レッスン 5 (カスタム precompile) でガス価格モデル、もしくは lesson 6 (ExEx) で複数のコミット済みトランザクションを跨いで再構成する話が出た時、コールフレームとガスモデルはすでに頭の中にある — 抽象概念ではなく、具体的な機械として。`,
+中級レッスン 5 (カスタム precompile) でガス価格モデル、もしくは lesson 6 (ExEx) で複数のコミット済みトランザクションを跨いで再構成する話が出た時、コールフレームとガスモデルはすでに頭の中にある — 抽象概念ではなく、具体的な機械として。
+
+## まとめ（3行）
+
+- Gas = intrinsic（21K + calldata）+ per-opcode（cold/warm）+ refund（cap 制限）、tx 終了時 gas_used の 1/5 まで返却。
+- コールフレーム = CALL / DELEGATECALL / STATICCALL で積む、63/64 ルールで子へ gas 渡し、CALL は新 context、DELEGATECALL は親 context（library）、STATICCALL は読み専用。
+- msg.sender はフレーム単位、tx.origin は tx 発火 EOA、Out-of-gas は子だけ REVERT、次モジュールでブロック・レシート・reorg。
+`,
                 },
               ],
             },
@@ -531,15 +603,33 @@ EOA がコントラクト X に tx 送信
             lessons: {
               create: [
                 {
-                  title: 'ブロック・レシート・reorg',
+                  title: 'レッスン3 — ブロック・レシート・reorg',
                   slug: 'blocks-receipts-reorgs-ja',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 3,
                   duration: 12,
                   xpReward: 25,
-                  content: `# ブロック・レシート・reorg
+                  content: `# レッスン3 — ブロック・レシート・reorg
 
-> 🧭 **このレッスンの位置づけ:** **分散システム層** — ブロック、レシート、reorg — を導入する回。データベースの WAL + レプリケーション + 競合解決の組み合わせを、合意プロトコルとして表現したもの。以降の ExEx / ステージドシンク回はすべて、このモデルを前提にする。
+## 問い
+
+tx の中身はこれまで見た。**1 段上 = ブロック**。ブロックは tx の列 + header + receipts + state root。**reorg** は信頼の浅いブロックが捨てられて別のチェーンに置き換わる現象、L1 同期コードの最大の複雑性源。
+
+## 原理（最小モデル）
+
+- **ブロック構造.** Header（親ハッシュ / state root / receipts root / timestamp / number / gas used / gas limit 等）+ Body（tx 列 + uncles）+ Receipts（tx 結果）。
+- **State root.** 全コントラクトの Storage + EOA 残高の MPT ルートハッシュ、ブロック実行前後で変化、validator が独立に検証可能。
+- **Receipts root.** 各 tx の結果（status / gas used / logs / events）の MPT ルート、tx の結果が証明可能。
+- **Reorg = 信頼の浅いブロックの差し替え.** PoS では概ね 2-3 ブロック以内が reorg 可能、\`finalized\` ブロックは reorg 不可（~12 ブロック後）。
+- **Reorg 時の挙動.** Old chain の tx を巻き戻し → new chain の tx を再実行、subscriber には \`ChainReorged\` イベント、state DB は old/new 両方の view を持つ必要。
+- **Finality 3 段.** \`latest\`（未確認）/ \`safe\`（~32 ブロック前、likely finalize）/ \`finalized\`（不可逆、~12 分後）= 開発時にどの段で読むか。
+- **Block-level data 例.** \`block.number\` / \`block.timestamp\` / \`block.coinbase\` / \`block.basefee\`、tx で読める EVM 露出データ。
+- **Reth の reorg 対応.** ExEx（Execution Extension）通知 で 3 バリアント（Committed / ChainReorged / Reverted）、indexer は 3 つ全部処理する必要。
+
+## 具体例 + ステップで組み立てる
+
+# ブロック・レシート・reorg
+
 
 ここまで 1 トランザクションずつ扱ってきました。チェーンは別のレベルで動きます: トランザクションの **ブロック**、何をしたかの **レシート**、そして時々起きる **reorg** (チェーンが直近の歴史を書き換えること)。
 
@@ -681,7 +771,14 @@ Reth の各 Stage は \`execute\` (forward) と \`unwind\` (backward) を持つ�
 - **Reorg** は直近の歴史を書き換える。オフチェーン消費者は巻き戻しを明示的に扱う必要がある。
 - Reth の Staged Sync は **対称** (execute / unwind) — それは reorg が例外ではなく通常運用だから。
 
-中級レッスン 4 で Stage トレイトを読むときも、lesson 6 で ExEx 通知型を読むときも、モデルはすでに頭にある。あとは実装された Rust を読むだけでよい。`,
+中級レッスン 4 で Stage トレイトを読むときも、lesson 6 で ExEx 通知型を読むときも、モデルはすでに頭にある。あとは実装された Rust を読むだけでよい。
+
+## まとめ（3行）
+
+- ブロック構造 = Header + Body（tx 列）+ Receipts、state root / receipts root が MPT ルートでブロックヘッダに、validator 独立検証。
+- Reorg = 信頼の浅いブロックの差し替え、PoS で 2-3 ブロック以内、finalized 不可、Reth ExEx 通知 3 バリアント（Committed / ChainReorged / Reverted）。
+- 3 段 finality（latest / safe / finalized）、indexer は reorg 対応必須、次モジュールで Solidity → Rust 移行マップに踏み込む。
+`,
                 },
               ],
             },
@@ -692,15 +789,35 @@ Reth の各 Stage は \`execute\` (forward) と \`unwind\` (backward) を持つ�
             lessons: {
               create: [
                 {
-                  title: 'Solidity エンジニアのための Rust — 移行マップ',
+                  title: 'レッスン4 — Solidity エンジニアのための Rust — 移行マップ',
                   slug: 'rust-for-solidity-ja',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 4,
                   duration: 18,
                   xpReward: 35,
-                  content: `# Solidity エンジニアのための Rust — 移行マップ
+                  content: `# レッスン4 — Solidity エンジニアのための Rust — 移行マップ
 
-> 🧭 **このレッスンの位置づけ:** Solidity 側の勘を、Rust のイディオムに対応付ける回。ツールを作る Solidity エンジニアが必ず通る、概念上の乗り換え。Inside ティアに入ってからやるより、ここで先に済ませる方が安い。
+## 問い
+
+Solidity を書いてきた人が Rust source（Reth / Revm / Alloy）を読むときの **移行マップ**。Solidity の概念と Rust の対応 + 違い + 注意点。**Solidity 経験が活きる場所と頭の切り替えが必要な場所**を整理。
+
+## 原理（最小モデル）
+
+- **型システム.** Solidity の \`uint256\` → Rust の \`U256\`（256 ビット）/ \`address\` → \`Address\`（20 バイト）/ \`bytes32\` → \`B256\`、Alloy primitive で 1:1 対応。
+- **所有権 = メモリ管理.** Solidity は EVM が自動管理、Rust はコンパイル時所有権 + 借用 = GC なし + 二重解放防止 + データ競合防止。
+- **Solidity の状態変数 = Rust の struct field.** \`contract C { uint x; }\` → \`struct C { x: U256 }\`、メソッドは \`impl C { fn ... }\`。
+- **Solidity の \`function\` = Rust の \`fn\`.** \`function add(uint a, uint b) public returns (uint)\` → \`fn add(&self, a: U256, b: U256) -> U256\`、Solidity の \`view\` / \`pure\` 修飾は Rust の \`&self\` / 引数のみで暗黙。
+- **Solidity の \`msg.sender\` = Rust では明示引数.** Solidity は EVM が暗黙提供、Rust では関数引数で受け取る or context 構造体経由、暗黙でない。
+- **Solidity の event = Rust では \`Event\` 構造体 + emit.** Alloy では \`sol!\` マクロで Solidity ABI を Rust 型に変換、type-safe な emit。
+- **Solidity の \`require\` / \`revert\` = Rust の \`Result<T, E>\`.** \`require(cond, "msg")\` → \`if !cond { return Err(...) }\`、\`?\` 演算子で伝播。
+- **Solidity の mapping = Rust の \`HashMap\`.** \`mapping(address => uint)\` → \`HashMap<Address, U256>\`、Rust ではキー / 値の型を明示。
+- **Solidity の inheritance = Rust の trait composition.** \`contract A is B, C\` → \`impl Trait1 + Trait2 for Struct\`、Rust は trait による mixin。
+- **Rust の async = Solidity にない.** Solidity は同期的、Rust は async/await + Future、Alloy / Reth の RPC は全部 async。
+
+## 具体例 + ステップで組み立てる
+
+# Solidity エンジニアのための Rust — 移行マップ
+
 
 Solidity でコントラクトを書いてきたなら、EVM 挙動で気にすべき点はすでに身についている。足りないのは、**そのコントラクトを走らせるエンジン側を読むための Rust の見方** だけである。本レッスンは、続く Rust 章に入る前の対訳表としてその差分を埋める。
 
@@ -888,18 +1005,42 @@ Reth のソースは **トレイト密度が高い**。\`Stage\`、\`Provider\`�
 3. **エラー処理を比較する。** \`require\` を 2 つ持つ Solidity 関数を選び、2 バリアントのカスタムエラー enum と \`Result\` を使う Rust へ書き換える。**型が** 失敗モードをどう文書化するかを観察する。45 分。
 
 このレッスンを終えると、続く Rust 章（ジェネリクス・Arc・unsafe・マクロ）を、既存モデルに追加される語彙として読める。**ゼロから Rust を学ぶのではなく、エンジン層コードへ Solidity の直感を翻訳する Rust 慣用句を学んでいる** と捉える。
+
+## まとめ（3行）
+
+- 型システム 1:1（U256 / Address / B256）、状態変数 → struct field、関数 → fn、msg.sender → 明示引数、require → Result<T, E>。
+- Mapping → HashMap、inheritance → trait composition、event → sol! マクロ + emit、Rust は all async（Solidity にない）。
+- 所有権 + 借用は新概念（最初の壁）だが、Solidity 経験で型システム / 制御フロー / ガス意識は持ち越せる、次は generics と trait bounds。
 `,
                 },
                 {
-                  title: 'Generics・trait bounds・?Sized・dyn vs impl',
+                  title: 'レッスン5 — Generics・trait bounds・?Sized・dyn vs impl',
                   slug: 'rust-generics-traits-bounds-ja',
                   type: 'CONTENT',
-                  sortOrder: 1,
+                  sortOrder: 5,
                   duration: 15,
                   xpReward: 30,
-                  content: `# Generics・trait bounds・?Sized・dyn vs impl
+                  content: `# レッスン5 — Generics・trait bounds・?Sized・dyn vs impl
 
-> 🧭 **このレッスンの位置づけ:** 抽象化の道具立て（generics + trait bounds + \`?Sized\` + \`dyn\` vs \`impl\`）は、alloy がチェーン横断で \`Provider\` を成立させ、Revm がバックエンド横断で \`Database\` を成立させるために使っているもの。ここで仕込んでおくと、Inside ティアのコードが「魔法」から「パターン」に見えるようになる。
+## 問い
+
+Reth / Revm / Alloy のソースで頻出する **ジェネリクス + trait bounds**。\`<T: Bound>\` / \`?Sized\` / \`dyn Trait\` / \`impl Trait\` — それぞれ何を意味し、なぜ使い分けるか。**コードを読むのに必須の 4 概念**。
+
+## 原理（最小モデル）
+
+- **ジェネリクス \`<T>\`.** 型パラメータ、コンパイル時に具象化（モノモーフ化）= 実行時オーバーヘッドなし + 各具象型用バイナリ生成。
+- **Trait bounds \`T: Trait\`.** 型パラメータに制約、\`fn print<T: Display>(x: T)\` で「Display 実装してれば何でも」、複数 bounds は \`T: A + B + \\'static\`。
+- **\`?Sized\`.** デフォルトの \`Sized\` 制約を外す、\`dyn Trait\`（実行時サイズ）を受け入れる、\`<T: ?Sized>\` で trait object を渡せる。
+- **\`dyn Trait\`.** 実行時ディスパッチ、vtable 経由、\`Box<dyn Trait>\` / \`&dyn Trait\`、複数具象型を統一して扱う、サイズ未知。
+- **\`impl Trait\`.** 引数 = 「Trait 実装の何か」（ジェネリクスの短縮）、戻り値 = 「具体的な型を隠蔽」、戻り値の場合は単一具象型に限定。
+- **ジェネリクス vs \`dyn\`.** ジェネリクス = 静的ディスパッチ + モノモーフ化（速い、コード膨張）、\`dyn\` = 動的ディスパッチ + vtable（柔軟、若干遅い）。
+- **\`Send + Sync\`.** スレッド間移動 / 共有可能性のマーカー trait、Tokio タスクには \`T: Send + \\'static\` 必要、Rust 並行性の土台。
+- **\`\\'static\` ライフタイム.** プログラム全体生存 or 借用なし、グローバル定数 / \`String::from("...")\` / \`Vec<T>\` 等、\`Send + \\'static\` でタスク移動可能。
+
+## 具体例 + ステップで組み立てる
+
+# Generics・trait bounds・?Sized・dyn vs impl
+
 
 これは \`pub fn add<IT: ITy, H: ?Sized>(...)\` を怯まず読めるようにするためのレッスンである。Reth / Revm のソースは **generics が密集** し、関数シグネチャに型パラメータ 3 つは珍しくない。本レッスンではその仕組みを 1 つずつ解きほぐす。
 
@@ -1090,18 +1231,43 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 - **\`dyn Trait\`** は実行時ディスパッチのポインタ + vtable; **\`impl Trait\`** はコンパイル時モノモーフ化。
 - Revm の重い generics 使用は **型レベルでのモジュラリティ** — 同じコード、複数特殊化。
 
-中級レッスン 1 でいきなり 1 行目に型パラメータ 3 つと \`?Sized\` をぶつけられた時、それを 5 つの威圧的なトークンではなく、1 つの繋がった文として読めるはず。`,
+中級レッスン 1 でいきなり 1 行目に型パラメータ 3 つと \`?Sized\` をぶつけられた時、それを 5 つの威圧的なトークンではなく、1 つの繋がった文として読めるはず。
+
+## まとめ（3行）
+
+- 4 概念 = ジェネリクス \`<T>\`（コンパイル時具象化）+ trait bounds \`T: Bound\`（制約）+ \`?Sized\`（trait object 許可）+ \`dyn\` / \`impl Trait\`（実行時 vs 静的）。
+- \`Send + Sync + \\'static\` でスレッド間移動 / 共有 / プログラム全体生存、Tokio タスクの土台。
+- 次は Arc / Mutex / RwLock で共有所有権、並行性プリミティブを理解。
+`,
                 },
                 {
-                  title: '所有権の共有: Arc・Mutex・RwLock',
+                  title: 'レッスン6 — 所有権の共有：Arc・Mutex・RwLock',
                   slug: 'rust-shared-ownership-ja',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 6,
                   duration: 12,
                   xpReward: 25,
-                  content: `# 所有権の共有: Arc・Mutex・RwLock
+                  content: `# レッスン6 — 所有権の共有：Arc・Mutex・RwLock
 
-> 🧭 **このレッスンの位置づけ:** \`Arc\` / \`Mutex\` / チャネルは、Reth のパイプラインが Tokio タスク間で状態を共有する手段であり、Inside REVM の \`Database\` 設計が複数のコンシューマに同じバックエンドを共有させる手段でもある。共有所有の道具立ては、スタックの並行性まわり全体の土台を成している。
+## 問い
+
+Rust の所有権は「1 つの所有者」だが、**複数スレッドで共有したい**ときは？ \`Arc\`（参照カウント）+ \`Mutex\` / \`RwLock\`（排他制御）の組み合わせ。**並行コードで頻出する 3 プリミティブ**を理解。
+
+## 原理（最小モデル）
+
+- **\`Rc<T>\`.** Reference Counted、同一スレッド内で複数所有、\`Rc::clone\` で参照カウント++、最後のドロップで解放、\`!Send\` / \`!Sync\`。
+- **\`Arc<T>\`.** Atomic Reference Counted、\`Rc\` のスレッド間版、\`Send + Sync\`、atomic 操作で参照カウント、Tokio タスクで頻出。
+- **\`Mutex<T>\`.** 排他制御、\`lock()\` で MutexGuard 取得 + ドロップで解放、デッドロック注意、同期版（\`std::sync::Mutex\`）と非同期版（\`tokio::sync::Mutex\`）。
+- **\`RwLock<T>\`.** 読み書き分離、\`read()\` 複数可 / \`write()\` 排他、読みが多い場合に有利、同様に同期版と非同期版。
+- **\`Arc<Mutex<T>>\`.** 最頻出パターン、複数スレッドで T を共有 + 排他制御、\`let shared = Arc::new(Mutex::new(value));\` + \`shared.clone()\` でスレッドへ。
+- **Atomic primitives.** \`AtomicUsize\` / \`AtomicBool\` 等、ロックなしで read-modify-write、\`Ordering\` で memory ordering 制御、最も軽量。
+- **\`Cell<T>\` / \`RefCell<T>\`.** 内部可変性、\`&self\` から内側を変更、\`Cell\` は Copy 型のみ、\`RefCell\` は実行時 borrow check、シングルスレッド限定。
+- **Tokio の \`tokio::sync::*\`.** async 版 Mutex / RwLock / oneshot / mpsc、\`.await\` で待機、async タスクで使う、\`std::sync::Mutex\` を \`.await\` 内で持つとデッドロック。
+
+## 具体例 + ステップで組み立てる
+
+# 所有権の共有: Arc・Mutex・RwLock
+
 
 Rust の「ただ一人のオーナー」ルールは厳しい — そして 90% の場合は助かる。残り 10% は **複数の場所から同じ値を保持** する必要があり、スレッド跨ぎだったり、変更ありだったりする。それがこのレッスン。
 
@@ -1326,16 +1492,42 @@ Reth ソースで \`Arc<RwLock<Foo>>\` の隣に \`Arc<Mutex<Bar>>\` を見た�
 - **\`tokio::sync::Mutex\`** は async-aware 版 — クリティカルセクションが \`.await\` を跨ぐ時に使う。
 - **\`Arc<Mutex<T>>\`** は正準の「共有可変状態」パターン — Reth/ExEx の至る所で見る。
 
-中級レッスン 6 (ExEx) で \`Arc<...>\` フィールドが 3 つある struct を見ても、「なぜラッパーだらけか」を説明できるはずだ。各ラッパーは、そのコンポーネントを runtime タスク間で共有するための必須部品である。`,
+中級レッスン 6 (ExEx) で \`Arc<...>\` フィールドが 3 つある struct を見ても、「なぜラッパーだらけか」を説明できるはずだ。各ラッパーは、そのコンポーネントを runtime タスク間で共有するための必須部品である。
+
+## まとめ（3行）
+
+- \`Arc<T>\` でスレッド間共有、\`Mutex<T>\` / \`RwLock<T>\` で排他制御、\`Arc<Mutex<T>>\` が最頻出パターン、Atomic はロックなしの軽量版。
+- 内部可変性 = \`Cell\` / \`RefCell\`（シングルスレッド）/ \`Mutex\` / \`RwLock\`（マルチスレッド）、\`&self\` から内側変更したいときに。
+- Tokio async 版（\`tokio::sync::*\`）を async タスクで使う、\`std::sync::Mutex\` を \`.await\` 内で持つとデッドロック、次は unsafe Rust。
+`,
                 },
                 {
-                  title: 'unsafe Rust',
+                  title: 'レッスン7 — unsafe Rust',
                   slug: 'rust-unsafe-ja',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 7,
                   duration: 10,
                   xpReward: 20,
-                  content: `# unsafe Rust
+                  content: `# レッスン7 — unsafe Rust
+
+## 問い
+
+Rust の安全保証を一時的に外す **\`unsafe\` ブロック**。本来は使わない、でも Reth / Revm のホットパスでは性能のために使われる。**いつ使う / なぜ安全 / どう読むか**。
+
+## 原理（最小モデル）
+
+- **\`unsafe\` で可能になる 5 操作.** ① raw pointer dereference、② mutable static 変更、③ unsafe 関数呼び出し、④ unsafe trait 実装、⑤ union field アクセス。
+- **Rust の安全保証.** メモリ安全 + データ競合なし + 未定義動作なし、所有権 / 借用 / ライフタイムでコンパイル時保証、\`unsafe\` でこれを一時的に外す。
+- **契約パターン.** \`unsafe\` ブロック内で「自分でチェックした不変条件」を符号化、コンパイラに「信用して」と伝える、契約破ると即 UB。
+- **\`unwrap_unchecked()\`.** \`Option::unwrap\` の unsafe 版、None で UB だが panic check スキップ、ホットパスで「事前に Some を保証」した後の高速化。
+- **Revm の \`popn_top!\` マクロ.** \`if stack.len() < N { return Err }\` でガード → \`unwrap_unchecked\` で実行時 Some チェックスキップ、ガードが不変条件を保証。
+- **\`unsafe fn\` の宣伝.** 関数自体が unsafe = 呼び出し側が契約を満たす責任、\`pub unsafe fn\` でドキュメントに契約を書く。
+- **Soundness.** unsafe コードは soundness（任意の入力で UB を起こさない性質）を満たすべき、契約を満たさない入力で UB なら soundness 違反。
+- **読むときの注意.** \`unsafe\` を見たら「なぜここで必要か」+ 「どの不変条件を前提にしているか」を理解、コメント / docs を必ず読む。
+
+## 具体例 + ステップで組み立てる
+
+# unsafe Rust
 
 標準 Rust 教科書が薄く、Revm インタープリタが深く踏み込む 2 領域の 1 つである。本レッスンでは \`unsafe { ... }\` を含む Revm ホットパスを読む語彙を身につける。（もう 1 つの領域 \`macro_rules!\` は次レッスンで扱う。）
 
@@ -1422,16 +1614,42 @@ Revm/Reth ソースを読むには、**上のパターン (手動安全性検証
 - **\`unwrap_unchecked()\`** + 直前の長さ/状態チェックは、Revm のホットパスで冗長な実行時チェックをスキップする正準パターン
 - **\`// SAFETY:\` コメント** 規律 — よく書かれた Rust の各 unsafe ブロックは、それを正当化する不変条件を文書化する
 
-次のレッスンは \`macro_rules!\` を扱う — Revm のインタープリタソースを読むのに必要な、もう一方の半分。`,
+次のレッスンは \`macro_rules!\` を扱う — Revm のインタープリタソースを読むのに必要な、もう一方の半分。
+
+## まとめ（3行）
+
+- \`unsafe\` = 5 操作可能 + Rust の安全保証を一時的に外す、契約パターンで「自分でチェックした不変条件」をコンパイラに伝える。
+- Revm の \`popn_top!\` 等のホットパスで \`unwrap_unchecked\` 使用、ガードが Some を保証 → 実行時チェックスキップで高速化。
+- 読むときは「なぜ必要 / どの不変条件 / soundness」を理解、\`unsafe\` は最後の手段、次は \`macro_rules!\` 基礎。
+`,
                 },
                 {
-                  title: 'macro_rules! 基礎',
+                  title: 'レッスン8 — `macro_rules!` 基礎',
                   slug: 'rust-macros-ja',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 8,
                   duration: 10,
                   xpReward: 20,
-                  content: `# macro_rules! 基礎
+                  content: `# レッスン8 — \`macro_rules!\` 基礎
+
+## 問い
+
+Rust の **マクロ** — \`println!\` / \`vec!\` / \`format!\` 等の \`!\` 付き呼び出し。コンパイル時にコード展開、関数より柔軟。Reth / Revm のソースで \`popn_top!\` / \`gas!\` 等のマクロが頻出する。**\`macro_rules!\` の読み方**。
+
+## 原理（最小モデル）
+
+- **マクロ = コンパイル時コード展開.** 関数の呼び出し時に AST に展開、関数より柔軟（可変アリティ / 任意の構文）、トレードオフはデバッグの難しさ。
+- **\`macro_rules!\` の構文.** \`macro_rules! name { ($x:expr) => { ... } }\`、パターン → 展開のルール、\`expr\` / \`ident\` / \`ty\` / \`pat\` / \`stmt\` 等の fragment specifier。
+- **可変アリティ.** \`$($x:expr),*\` でカンマ区切りの式リスト、\`$( ... )*\` で繰り返し展開、\`println!("{} {}", a, b)\` のような可変引数を実現。
+- **ヒジエン（hygiene）.** マクロ内の変数名がスコープ汚染しない、外側の同名変数と衝突しない、安全な抽象化。
+- **Revm の \`popn_top!\`.** スタック pop + アンダーフロー事前チェック + \`unwrap_unchecked\` を 1 マクロに集約、\`add\` / \`mul\` / \`sub\` 等 30+ opcode で再利用。
+- **\`gas!\` マクロ.** ガス課金 + cold_path ヒント + 早期 return を集約、5 行版、ホットパスのボイラープレート削減。
+- **手続きマクロ（proc-macro）.** \`#[derive(...)]\` / \`#[tokio::main]\` / \`sol!\` 等、\`macro_rules!\` より強力、Rust 関数として実装、Expert で深掘り。
+- **読むときの注意.** マクロ展開を \`cargo expand\` で見る、展開後コードを読めば理解できる、\`macro_rules!\` 自体の構文は慣れ。
+
+## 具体例 + ステップで組み立てる
+
+# macro_rules! 基礎
 
 標準 Rust 教科書が *薄い* 2 領域のうちのもう 1 つ。前のレッスンが \`unsafe\` をカバー、これが \`macro_rules!\`。両方合わせて Revm のホットパスソース — \`popn_top!\`、\`gas!\` 等 — を読むのに必要なもの。
 
@@ -1624,18 +1842,43 @@ pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
 
 中級ティアは **3 つの独立コース**（Revm・Reth・Alloy）で、いずれも同じ編集スタイル（Predict、クイズゲート、積み上げ→ウォークスルー→クイズ→ドリル）を共有する。次は **「中級コースの読み方」** を読む。3 コース共通で 1 度読めば済むメタオリエンテーションである。
 
-それから、コースを 1 つ選んで始める。`,
+それから、コースを 1 つ選んで始める。
+
+## まとめ（3行）
+
+- \`macro_rules!\` = コンパイル時コード展開、可変アリティ + ヒジエン + fragment specifier（expr / ident / ty 等）、関数より柔軟。
+- Revm の \`popn_top!\` / \`gas!\` 等は opcode 実装のボイラープレート削減、30+ opcode で再利用。
+- \`cargo expand\` で展開後コード確認、手続きマクロ（\`#[derive]\` / \`sol!\` 等）は Expert で深掘り、次は最後のレッスン（ソース読解コースの読み方）。
+`,
                 },
                 {
-                  title: 'ソース読解コースの読み方',
+                  title: 'レッスン9 — ソース読解コースの読み方',
                   slug: 'advanced-tier-orientation-ja',
                   type: 'CONTENT',
-                  sortOrder: 5,
+                  sortOrder: 9,
                   duration: 6,
                   xpReward: 15,
-                  content: `# ソース読解コースの読み方
+                  content: `# レッスン9 — ソース読解コースの読み方
 
-> 🧭 **このレッスンの位置づけ:** 中級ティアへのゲート — 「Rust EVM スタックをソースレベルで読む」が実際に何を要求するか、その契約を確認する回。Inside Alloy / REVM / Reth がどれくらいの深さを要求するか、ここで読み手側の期待値を整える。
+## 問い
+
+Bridge to Advanced 完走 = 中級 3 コース（Inside Revm / Inside Reth / Inside Alloy）への準備完了。**中級コースをどう読むか** — 編集スタイル / クイズゲート / 積み上げ→ウォークスルー→クイズ→ドリル のチェーン構造 + ペース配分。
+
+## 原理（最小モデル）
+
+- **3 中級コース.** Inside Revm（EVM 実行エンジン）/ Inside Reth（Staged Sync + ExEx + SDK）/ Inside Alloy（Provider + Network + Signer）= 順序自由、依存的には Alloy → Revm → Reth 推奨。
+- **チェーン構造.** 各トピック = buildup（素朴版 → 本物へ積み上げ）→ walkthrough（実ソース 1 行ずつ）→ クイズ（進行ゲート）→ ドリル（手を動かす証明）。
+- **Predict プロンプト + クイズゲート.** 「ここで止まって予測せよ」が至る所、クイズで 2 問以上落としたら前レッスンに戻る = 「読んだ気」を防ぐ強制。
+- **ペース配分.** レッスンあたり 30-40 分、1 日 1-2 レッスンが現実的、ドリルは別 30-60 分、週末 capstone は半日。
+- **セットアップ必須.** \`git clone bluealloy/revm\` / \`git clone paradigmxyz/reth\` / \`cargo-expand\` インストール / セカンドモニタ or 分割端末、これなしでドリルできない。
+- **コードを読むメンタルモデル.** トレイトヘッダーから読む → 主要 struct → 関数本体、\`grep\` / \`rg\` で関連箇所、\`cargo doc --open\` で API ドキュメント。
+- **詰まったときの対処.** 不明箇所はマークして先進む、後で戻る、Discord / GitHub で質問、答えを見る前に 30 分自力で。
+- **完走後.** Advanced / Expert で本番 production 視点、Foundry で Solidity 側、openhl DIY Perp で 1 つの本物を作る、選択肢が広がる。
+
+## 具体例 + ステップで組み立てる
+
+# ソース読解コースの読み方
+
 
 あなたは **Intermediate ティア** の入口にいる。**3 つの独立コース**（**Inside Revm**・**Inside Reth**・**Inside Alloy**）はいずれも同じスキル、つまり **本番 Rust ソースを 1 行ずつ読む力** を扱う。この短いレッスンは構成と学習姿勢をそろえるための共通ガイドである。
 
@@ -1711,7 +1954,14 @@ Intermediate のソース読解を完走すると、次は **Advanced ティア*
 
 各チェーンは Intermediate のソース読解チェーンの 1.5〜3 倍の長さ。**今は気にしないこと** — まずソース読解のチェーンを 1 つ完走するのが先。Advanced (L1 Architect) は遠い目的地としてだけ意識しておけば十分。
 
-準備完了。`,
+準備完了。
+
+## まとめ（3行）
+
+- 3 中級コース（Revm / Reth / Alloy）= buildup → walkthrough → クイズ → ドリル の 4 連、Predict プロンプト + クイズゲートで「読んだ気」防止。
+- セットアップ必須（revm / reth clone + cargo-expand + 2 モニタ）、ペース配分は 1 日 1-2 レッスン + ドリル別、週末 capstone は半日。
+- Bridge to Advanced 完走、3 中級コースへの準備完了、選択肢広がる（Advanced / Expert / Foundry / openhl DIY Perp）、Rust + Ethereum + systems キャリアの出発点。
+`,
                 },
               ],
             },

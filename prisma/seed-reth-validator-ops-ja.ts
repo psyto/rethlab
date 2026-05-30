@@ -1,21 +1,21 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethValidatorOpsJA(prisma: PrismaClient) {
-  const tags = ['reth', 'validator', 'hsm', 'mpc', 'slashing', 'hot-upgrade', 'ops', 'l1', 'expert'];
+  const tags = ['reth', 'validator', 'hsm', 'mpc', 'slashing', 'hot-upgrade', 'ops', 'l1', 'advanced'];
 
   await prisma.course.create({
     data: {
       slug: 'reth-validator-ops-ja',
       title: 'Validator 運用 — 鍵、slashing、協調アップグレード',
       description:
-        'コンセンサスのコードを書くことと、本番でコンセンサスを動かし続けることの間にある運用層を扱う。Validator の鍵管理 (hot 鍵、HSM、MPC、閾値署名)、slashing 検知と double-signing の防止、協調 hardfork アップグレードまで。動くコンセンサス実装を、オペレータが stake を失わずに済む本番 レッスン1に変えるためのスキル。',
+        'コンセンサスのコードを書くことと、本番でコンセンサスを動かし続けることの間にある運用層を扱う。Validator の鍵管理 (hot 鍵、HSM、MPC、閾値署名)、slashing 検知と double-signing の防止、協調 hardfork アップグレードまで。動くコンセンサス実装を、オペレータが stake を失わずに済む本番 L1 に変えるためのスキル。',
       difficulty: 'ADVANCED',
-      duration: 110,
+      duration: 60,
       xpReward: 350,
       track: 'reth-l1-architect',
       tags,
       isPublished: true,
-      sortOrder: 340,
+      sortOrder: 1340,
       locale: 'ja',
       instructorName: 'RethLab',
       modules: {
@@ -26,125 +26,87 @@ export async function seedRethValidatorOpsJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Validator 鍵管理 — hot 鍵、HSM、MPC、閾値署名',
+                  title: 'レッスン0 — Validator 鍵管理（hot 鍵、HSM、MPC、閾値署名）',
                   slug: 'validator-keys-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 18,
                   xpReward: 45,
-                  content: `# Validator 鍵管理 — hot 鍵、HSM、MPC、閾値署名
+                  content: `# レッスン0 — Validator 鍵管理（hot 鍵、HSM、MPC、閾値署名）
 
-ステーキングオペレータが午前 3 時にページを受け取る。スタンバイ機で 2 つ目の validator プロセスが誤って起動してしまった — 同じ鍵、両方オンライン、両方が height 9,801,442 で attestation に署名。気づいたときには、ネットワークはすでに同一アイデンティティから 2 つの valid な署名を観測している。これが **equivocation** (同じ slot で 2 つの矛盾するメッセージに署名することを指すコンセンサス用語) であり、プロトコルはこれを slashing する。重複プロセスを動かしたツケとして、$2M のペナルティとともに朝を迎える。
+## 問い
 
-Validator の署名鍵はそのまま **経済的アイデンティティ** である。失えば stake を失う。漏らせば攻撃者に double-sign され、slashing され、stake を失う。使い回せば同じ結末。本レッスンで扱うのは運用の現実だ: 本番チームがどう鍵を安全に保っているか、失敗するとどこから壊れるか、validator set をスケールさせるための暗号プリミティブとは何か。
+ステーキングオペレータが午前 3 時にページを受け取る。スタンバイ機で 2 つ目の validator プロセスが誤って起動 — 同じ鍵、両方オンライン、両方が同じ height で attestation 署名。ネットワークは同一アイデンティティから 2 つの valid な署名を観測 — **equivocation** = $2M ペナルティ。**Validator の署名鍵 = 経済的アイデンティティ、本番チームはどう守るか？**
 
-> 🛑 **スクロール前に予測。** ある validator が 100 ノードを稼働させている。**署名鍵のコピーは何個存在するか?** 最初に「1 (オリジナル) + 100 (稼働中)」と思ったなら、その状態が許してしまう攻撃は何か?
+## 原理（最小モデル）
 
-## 1. Validator 鍵の脅威モデル
+- **5 要件は単一解で満たせない.** 署名できる + 同 height/round で絶対に 2 署名しない + 公開インターネット非露出 + オペレータ離職を乗り越える + 災害（HW 障害 / DC 喪失）を乗り越える。
+- **4 つの解（洗練度順）.** 設定ファイル hot 鍵（開発のみ）→ HSM（耐タンパー HW + 鍵が外に出ない）→ MPC（N-of-M デバイスで分割）→ 閾値署名（BLS、暗号的に share、再構築不要）。
+- **MPC ≠ 閾値署名.** MPC = 汎用プロトコル（任意関数を秘密 share で計算）/ 閾値署名 = 特定の暗号プリミティブ（署名 scheme 自体が secret-sharing をネイティブ対応）。
+- **「2 鍵」パターン.** Withdrawal 鍵（cold、stake 資金支配）+ 署名鍵（hot、投票 / 提案 / slashable）。**漏洩時の被害有界化**：署名鍵漏洩でも資金は盗まれない（slashable のみ）。
+- **Slashing 防止 4 ルール.** アイデンティティごと署名者 1 つだけ + slashing-protection DB + 不確実なら fail-closed + ネットワーク分断耐性。
+- **リモート signer パターン.** Validator ノードは鍵なし → remote signer に署名要求 → HSM で署名 + slashing-protection 強制。Web3Signer / Eth-Signer / Tetuna が本番例。
+- **マルチリージョン active-passive.** DC1 active + DC2 standby + DC3 cold backup。**遷移は手動 + コンセンサス経由のみ**（両方同時署名で slash 防止）。
 
-Validator 鍵に求められる要件:
-- リーダ/voter のときにブロック/attestation に **署名できる** こと
-- 同じ height/round で 2 つの異なるメッセージに **絶対に署名しない** こと (slashing)
-- 公開インターネットに **絶対に露出させない** こと
-- オペレータの離職を **乗り越えられる** こと (ops 担当が複数いる)
-- 災害を **乗り越えられる** こと (ハードウェア障害、データセンタ喪失)
+## 具体例
 
-それぞれが別々のセキュリティ課題であり、**ひとつの解決策ですべてを満たすことはできない**。
+5 要件:
 
-## 2. 洗練度順に並べた 4 つの解決策
+- リーダ / voter のときに署名できる
+- 同 height/round で絶対に 2 署名しない（slashing）
+- 公開インターネット非露出
+- オペレータ離職を乗り越える（複数 ops 担当）
+- 災害を乗り越える（HW 障害、DC 喪失）
 
-### 2.1 設定ファイルに置く hot 鍵
+4 つの解:
+
+**1. 設定ファイル hot 鍵** — 危険な例:
 
 \`\`\`bash
 # これは危険
 echo "0xabc123..." > /var/lib/validator/key.txt
 \`\`\`
 
-Pros: シンプルで、そのまま機能する。
-Cons: ファイルシステムにアクセスできる者が全員鍵を握ることになる。バックアップ = 鍵のクローン。
+開発 OK、価値のある本番では使わない（FS アクセス = 鍵掌握、バックアップ = クローン）。
 
-**開発では使ってよいが、価値のある validator を本番で動かすときには使わない**。
+**2. HSM（Hardware Security Module）** — 耐タンパー HW、鍵が外に出ない:
+- Validator が HSM 内で鍵生成
+- 公開鍵だけ外に出る、秘密鍵はデバイスから出ない
+- 署名は validator software が hash を送る → HSM が署名を返す
+- Validator software 侵害でも鍵そのものは盗めない（任意メッセージへの valid 署名は作らせられる）
+- **Pros**: 鍵がディスク・メモリにない / **Cons**: 物理喪失で鍵消失、バックアップ難
+- AWS CloudHSM / YubiHSM / Thales、ETH ステーキングプロ向け
 
-### 2.2 HSM (Hardware Security Module)
+**3. MPC（Multi-Party Computation）** — 鍵を複数デバイスに分割、N-of-M 協力で署名:
+- 例: 3 DC × 3 デバイス、署名に 2/3 協力必要
+- 1 デバイス侵害でも鍵の 1/3 のみ取得 → 攻撃 2 施設侵害必要
+- **Pros**: どのデバイスも単独で鍵を持たない / **Cons**: 署名にレイテンシ、プロトコル複雑
+- Fireblocks / Coinbase Cloud などの極大規模ステーキング
 
-HSM とは **耐タンパー性を備えた物理デバイスで、秘密鍵を内部に保持したまま露出させずに署名するもの** である。AWS CloudHSM、YubiHSM、Thales といったベンダーが提供する専用ハードウェア。
+**4. 閾値署名（MPC の暗号版）** — BLS 閾値署名:
+- 各 validator が集約署名鍵の share
+- 部分署名を 1 つの最終署名に集約
+- Verifier 側からは通常の BLS 署名と区別不能
+- **Pros**: 暗号的にクリーン、再構築ステップなし / **Cons**: セットアップ複雑、鍵生成 ceremony 必要
+- Ethereum beacon chain / Aleo / Filecoin
 
-ワークフロー:
-1. Validator が HSM 内部で鍵を生成する
-2. 公開鍵は外に出るが、秘密鍵はデバイスから決して出ない
-3. 署名のときは、validator software が HSM に hash を送り、HSM が署名を返す
-4. Validator software が侵害されたとしても、攻撃者は任意のメッセージに **valid な** 署名を作らせることはできるが、鍵そのものは盗めない
+「2 鍵」パターン:
 
-Pros: 鍵がディスク上にも、validator プロセスのメモリ上にも存在しない。
-Cons: 単一デバイスであるため、物理的に失えば鍵を失う。バックアップが難しい。
+| 鍵 | モデル | 役割 |
+| :--- | :--- | :--- |
+| Withdrawal 鍵 | cold（オフライン保管） | staked 資金支配、紙 / HW wallet |
+| 署名鍵 | hot（オンライン） | 投票 / 提案、slashable |
 
-**ETH ステーキングプール向けのプロフェッショナル validator (Ledger Enterprise、Fireblocks など) が採用している**。
+**署名鍵漏洩 → slash されるが資金は盗まれない**（withdrawal 鍵が cold）。Ethereum: Withdrawal credentials (0x01...) cold + BLS validator 鍵 attestation 用 online。
 
-### 2.3 MPC (Multi-Party Computation)
+Slashing 防止 4 ルール:
 
-鍵を **複数デバイスに分割** し、署名には N-of-M の協力を必要とする。どのデバイスも単独では完全な鍵を持たない。
+1. **アイデンティティごとに署名者 1 つだけ** — 同鍵で 2 プロセス絶対動かさない
+2. **Slashing-protection データベース** — 全署名済みメッセージを記録、slashing 起こす署名を拒否
+3. **不確実なら fail-closed** — 直近履歴を検証できないなら署名しない
+4. **ネットワーク分断耐性** — 分断の向こうで sync を失っているなら署名しない（fork 上の可能性）
 
-例: 3 データセンタにまたがる 3 デバイス。署名には 3 つのうち 2 つが協力する必要がある。1 デバイスが侵害されても、攻撃者が手にするのは鍵の 1/3 でしかなく、それだけでは何もできない。2/3 を得るには、別々の施設を 2 つ侵害しなければならない。
-
-Pros: どのデバイスも単独では鍵を保持しない。
-Cons: 協力を要求するため、署名のたびにレイテンシが発生する。プロトコルも複雑。
-
-**極めて大規模なステーキング運用 (Fireblocks、Coinbase Cloud など) で使われている**。
-
-### 2.4 閾値署名 (MPC の暗号版)
-
-MPC と発想は同じだが、**閾値署名暗号** (N-of-M の share 保有者が、鍵を再構築することなく署名を生成できるよう設計された署名 scheme) を用いる。各デバイスは鍵の「share」を保持し、署名はフル鍵を再構築することなく、通常の署名と見分けがつかない形で生成される。
-
-BLS 閾値署名 (BLS = ペアリングベースの署名 scheme で、署名の集約がクリーンに行える) が Ethereum 系 PoS の標準である:
-- 各 validator が集約署名鍵の share を持つ
-- ブロックへの署名は、部分署名を 1 つの最終署名に集約する形で行う
-- Verifier 側からは閾値署名であることはわからず、ただの BLS 署名として見える
-
-Pros: 暗号的にクリーン。「再構築」ステップが存在しない。
-Cons: セットアップが複雑で、鍵生成 ceremony を要する。
-
-**マルチノード構成の Ethereum beacon chain validator や、Aleo、Filecoin などの chain で使われている**。
-
-> 🛑 **理解度チェック。** 「MPC と閾値署名は同じ」というのは **誤り** である。両者は異なる。違いを言語化せよ。(ヒント: 一方は任意の署名スキームの上に構築されるプロトコル、もう一方は暗号的性質。)
-
-MPC は **汎用プロトコル** であり、秘密 share 上の関数を露出させずに計算する仕組みで、任意の関数 (署名を含む) に適用できる。閾値署名は **特定の暗号プリミティブ** で、署名 scheme 自体が secret-sharing をネイティブにサポートしている。閾値署名のほうがクリーンで、MPC のほうが柔軟性が高い。
-
-## 3. 「2 鍵」パターン
-
-このパターンの目的は、鍵漏洩時の被害範囲を限定することにある。本番 validator の大半はこう分離している:
-
-- **Withdrawal 鍵** (cold): staked 資金を支配する。オフライン保管 (紙、ハードウェアウォレット)
-- **署名鍵** (hot): 投票/提案を支配する。オンラインで保持され、slashable
-
-署名鍵が侵害されても、攻撃者にできるのは validator を **slash させる** こと (コスト: hot stake) までで、**資金そのものは盗めない** (withdrawal 鍵は cold だから)。損失は有界に抑えられる。
-
-Ethereum の場合:
-- Withdrawal credentials (0x01...): cold storage
-- Validator 鍵 (BLS): attestation + proposal のためオンライン
-
-Hyperliquid の場合:
-- Validator 署名鍵: オンライン
-- 報酬/withdrawal 鍵: cold
-
-## 4. Slashing 防止チェックリスト
-
-「報酬を稼ぐ validator」と「slashed される validator」を分けるのは以下の 4 ルールである。次のすべてを保証する必要がある:
-1. **アイデンティティごとに署名者は 1 つだけ** — 同じ鍵で 2 つのプロセスを絶対に走らせない
-2. **Slashing-protection データベース** — 署名したメッセージをすべて記録し、slashing を引き起こすような署名は拒否する
-3. **不確実なときは fail-closed** — 直近の履歴を検証できないなら署名しない
-4. **ネットワーク分断への耐性** — 分断の向こう側にいて sync を失っているなら署名しない (fork 上にいる可能性がある)
-
-reth の \`crates/ethereum/blockchain-tree\` には Ethereum PoS 向けの slashing-protection ロジックが入っている。カスタム L1 は独自に実装する必要がある (Cosmos なら CometBFT のもの、Solana ならまとめて ledger を replay する仕組み)。
-
-> 🛑 **予測。** ある validator が冗長化のため 2 台のマシンで重複したプロセスを走らせている。**待ち構えている slashable な違反は何か?** 失敗シナリオを追ってみよ。
-
-両方のマシンに同じ鍵が入っている。両方が同じ epoch の attestation に署名する。一方は canonical となり、もう一方はネットワークから見ると **double-signing イベント** に見える。Slashed。冗長化のつもりが slashing 違反に化けてしまう。
-
-修正: **active-passive** 構成で failover を厳格に行う (常に 1 ノードだけが署名権限を持ち、遷移はコンセンサスプロトコル経由でのみ行う)。
-
-## 5. リモート signer パターン
-
-本番 validator では **リモート signer** を使う構成がしばしば採られる:
+リモート signer パターン:
 
 \`\`\`
 [Validator ノード] --API 経由ブロック署名-->  [HSM 付きリモート signer]
@@ -154,123 +116,149 @@ reth の \`crates/ethereum/blockchain-tree\` には Ethereum PoS 向けの slash
                                                   +--HSM 内に鍵を保持
 \`\`\`
 
-Validator ノード自体は鍵をいっさい保持しない。実際の署名を行う remote signer サービスに接続するだけだ。Remote signer が slashing-protection を強制し、矛盾する 2 つのメッセージへの署名を拒否する。
+本番実装:
+- **Web3Signer**（Ethereum、Java）
+- **Eth-Signer**（Rust 代替）
+- **Tetuna**（slashing-protection データベース）
 
-本番で使われる実装:
-- **Web3Signer** (Ethereum) — Java ベースの remote signer
-- **Eth-Signer** — Rust による代替実装
-- **Tetuna** — slashing-protection データベース
+マルチリージョン構成:
+- DC1 active（ブロック署名）
+- DC2 standby（引き継ぎ準備）
+- DC3 cold backup（DR）
 
-Tempo や Hyperliquid でも同様のパターンが採用される。Validator がコンセンサスノード + remote signer を動かし、鍵は HSM の中に置く。
+遷移は **自動化禁止**（両方同時署名リスク）→ 手動オペレータ確認 + コンセンサスプロトコル経由のみ。
+1. Active が block N に署名
+2. Active が伝播 + finalized 確認
+3. 手動オペレータが shutdown 確認
+4. Standby が署名権限引き取り
+5. Standby が block N+1 に署名
 
-## 6. マルチリージョン構成のデプロイ
+BFT chain なら 1 slot miss、Nakamoto 系なら更に影響小。
 
-データセンタ喪失を生き残るための構成:
-- **DC1 のアクティブ validator** (ブロックに署名)
-- **DC2 のスタンバイ** (引き継ぎ準備)
-- **DC3 のコールドバックアップ** (DR)
+## 失敗例（誤解）
 
-最も難しいのはアクティブとスタンバイ間の遷移である。**自動化してはならない** — 両方が同時に署名してしまうリスクがあるからだ。通常はこう進める:
+「バックアップ用に複数マシンに鍵をコピー」— **間違い**。**バックアップ = 鍵のクローン = 並行プロセスのリスク**。両マシン同時起動で双方が同 height 署名 → equivocation → slash。バックアップは **withdrawal 鍵のみ**（cold）、署名鍵はマルチ active-passive で手動遷移。
 
-1. アクティブが block N に署名する
-2. アクティブは block N の伝播と finalized を確認する
-3. 手動オペレータが shutdown を確認する
-4. スタンバイが署名権限を引き取る
-5. スタンバイが block N+1 に署名する
+「MPC と閾値署名は同じ」— **間違い**。**MPC は汎用プロトコル**（秘密 share 上で任意関数計算、署名も含む）/ **閾値署名は特定暗号プリミティブ**（署名 scheme 自体が secret-sharing をネイティブ対応）。閾値署名がクリーン、MPC が柔軟。
 
-View change を持つ BFT chain なら、コストは 1 slot を miss する程度。Nakamoto 系 chain ならさらに影響は小さい。
+「冗長化のため 2 マシンで重複プロセス」— **致命的**。両マシンで同鍵 → 両方が同 epoch attestation 署名 → 一方 canonical、もう一方 double-signing → slashed。冗長化のつもりが slashing 違反 → **active-passive 厳格 failover**（常に 1 ノードのみ署名権限、コンセンサス経由遷移）。
 
-## 7. 自分のプロジェクトに当てはめると
+> 🛑 **予測。** ある validator が 100 ノードを稼働。署名鍵のコピーは何個存在するか？「1 + 100」と思ったなら、その状態が許す攻撃は何か？（答え: 「1 + 100」= **危険な実装**。各 100 ノード上の鍵コピーは ① ファイルシステム侵害で 1 ノード分の鍵取得可能、② どこか 1 ノードでも誤動作で同 height 2 署名 → 全 100 が equivocation で slashed、③ 鍵ローテーション時に全 100 を一斉更新が必要 = 同期失敗で部分的に古鍵残る → 攻撃面拡大。**正しい設計** = ① HSM で鍵が物理デバイスから出ない（1 個のみ）+ ② リモート signer サービスを共有（100 ノードが 1 signer に署名要求）+ ③ active-passive で 1 時点 1 ノードのみ署名権限。「鍵コピー」は本番運用の anti-pattern。）
 
-### Tempo の validator 運用
+## ステップで組み立てる
 
-Tempo が分散化して validator を運用するフェーズに入る場合:
-- 署名鍵は HSM に
-- 3 リージョンの active-passive 構成
-- コンセンサスクライアントと統合された slashing-protection データベース
-- Withdrawal 鍵は専用ハードウェアウォレットでオフライン保管
+### Step 1: 5 要件を即答
 
-これが任意の レッスン1で validator を担うときの **ローンチ運用チェックリスト** になる。
+署名可能 + 同 height/round で 2 署名しない + 公開非露出 + 離職耐性 + 災害耐性。
 
-### Soltempo / mppsol relayer の運用
+### Step 2: 4 解の洗練度順
 
-CCIP、soltempo、mppsol の relayer は独自の鍵を使う。原則は同じ:
-- コードに鍵を埋め込まない
-- 本番では HSM か同等の仕組みを使う
-- 定期的に鍵をローテートする
-- バックアップを持つ
+設定ファイル（開発のみ）→ HSM（鍵が外に出ない）→ MPC（分割）→ 閾値署名（BLS、暗号的）。
 
-## 8. 練習
+### Step 3: MPC vs 閾値署名
 
-1. 計算: 3 ノードが t=2 で BLS 閾値署名を使う。何ノードまで compromised でも署名できるか? 何ノードを超えると合意なしに署名できてしまうか?
-2. [Web3Signer docs](https://docs.web3signer.consensys.net/) の slashing-protection セクションを読む
-3. 特定: 運用中に新しい HSM へ移行する際の slashing リスクはどこにあるか?
+MPC = 汎用プロトコル / 閾値署名 = 特定暗号プリミティブ。
 
-## 9. 読み物
+### Step 4: 2 鍵パターン
 
-- [EIP-2335 (BLS keystore)](https://eips.ethereum.org/EIPS/eip-2335)
-- [Web3Signer](https://github.com/Consensys/web3signer)
-- [Cosmos validator security](https://hub.cosmos.network/main/validators/security.html)
+Withdrawal（cold、資金）+ 署名（hot、slashable）。漏洩時の被害有界化。
 
-> 最終チェック: 一文で、「署名鍵のバックアップを持つ」がなぜ機能ではなく slashing 脆弱性なのか説明できるか? **答えに「重複した署名者が slashable な equivocation を生み出しうる」が含まれていなければ §4 を再読すること**。`,
+### Step 5: Slashing 防止 4 ルール
+
+1 アイデンティティ 1 署名者 + slashing-protection DB + fail-closed + 分断耐性。
+
+### Step 6: リモート signer + マルチリージョン
+
+Validator は鍵なし、remote signer に API 経由要求 + HSM 保管 + slashing-protection 強制。Active-passive で手動 + コンセンサス遷移。
+
+### Step 7: 自分の chain への適用
+
+Tempo / Hyperliquid validator のローンチ運用チェックリスト:
+- 署名鍵 HSM
+- 3 リージョン active-passive
+- slashing-protection DB 統合
+- Withdrawal 鍵は専用 HW wallet オフライン
+
+## 答え合わせ
+
+- **「鍵コピー」が anti-pattern の理由**: ① 攻撃面 N 倍化（各コピー = 侵害ターゲット）、② 並行プロセスで equivocation リスク（1 個誤動作で全コピー slashed）、③ ローテーション困難（同期失敗で旧鍵残る）。**正解 = HSM 1 物理 + リモート signer + active-passive**（1 時点 1 ノードのみ署名権限）。
+- **MPC と閾値署名の本質的違い**: **MPC** = 「汎用プロトコル」、秘密 share 上で任意関数を露出させず計算（署名も含む）→ 任意の署名 scheme に適用可能。**閾値署名** = 「特定の暗号プリミティブ」、署名 scheme 自体が secret-sharing をネイティブサポート → 部分署名を集約しても通常の BLS 署名と区別不能。閾値署名がクリーン（再構築なし）、MPC が柔軟（既存署名 scheme に適用）。
+- **「冗長化のための 2 マシン重複」の slashing**: 両マシン同鍵 → 両方が同 epoch attestation 署名 → 一方 canonical、もう一方 double-signing として見える → slashed。**冗長化が slashing 違反に化ける**。修正 = active-passive 厳格 failover（1 時点 1 ノードのみ署名権限、遷移はコンセンサス経由のみ）。
+
+## 合格基準
+
+- 5 要件と 4 解（洗練度順）を即答できる。
+- MPC ≠ 閾値署名の違いを 1 文で説明できる。
+- 2 鍵パターン（Withdrawal cold + 署名 hot）と漏洩時被害有界化を言える。
+- Slashing 防止 4 ルールを暗唱できる。
+- リモート signer + active-passive 構成を絵で書ける。
+
+## まとめ（3行）
+
+- Validator 署名鍵 = 経済的アイデンティティ、5 要件は単一解で満たせない、4 解（設定ファイル → HSM → MPC → 閾値署名）を洗練度順に選ぶ。
+- 「2 鍵」パターン（Withdrawal cold + 署名 hot）で漏洩時被害有界化、Slashing 防止 4 ルール（1 署名者 + DB + fail-closed + 分断耐性）。
+- リモート signer + HSM + マルチリージョン active-passive（手動 + コンセンサス遷移）= 本番 validator の標準解、「鍵コピー」は anti-pattern。
+`,
                 },
                 {
-                  title: 'Slashing 検知とオフライン validator',
+                  title: 'レッスン1 — Slashing 検知とオフライン validator',
                   slug: 'validator-slashing-detection-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 16,
                   xpReward: 40,
-                  content: `# Slashing 検知とオフライン validator
+                  content: `# レッスン1 — Slashing 検知とオフライン validator
 
-Validator が stake を失う方法は厳密に 2 通りしかない。高くつくほう: **矛盾する 2 メッセージに署名する** (slashing — 1 回のイベントで stake の大部分が消える)。じわじわ来るほう: **ネットワークが必要とするときにオフラインでいる** (inactivity ペナルティ — 数日かけて少しずつ削られる)。本レッスンに出てくる運用判断はすべて、何かが壊れたときにこの 2 つの損失のうち小さいほうを選ぶことに帰着する。
+## 問い
 
-> 🛑 **スクロール前に予測。** Validator が 2 日オフラインになった。**いくら失うか?** さらにその間、ネットワーク分断で 1/3 の validator が向こう側に持っていかれていたら?
+Validator が stake を失う方法は厳密に 2 通り。高くつくほう: **矛盾する 2 メッセージに署名**（slashing、1 回で stake の大部分消失）。じわじわ来るほう: **ネットワークが必要とするときにオフライン**（inactivity ペナルティ、数日で少しずつ削られる）。**運用判断はこの 2 損失の小さい方を選ぶことに帰着 — どの判断軸か？**
 
-## 1. Stake を失う 2 つの経路
+## 原理（最小モデル）
+
+- **Stake を失う 2 経路.** 能動的（slashing、暗号的に証明可能、壊滅的）+ 受動的（inactivity、緩やか、時間と共に少額）。
+- **3 種の slashable 違反.** Double voting（同 height で別ブロック）+ Surround voting（Casper FFG、後の票が前の票を包含）+ BFT equivocation（同 height/round で別 pre-commit）。
+- **Slashing-protection DB が標準.** 署名前に (H, R) で異なる署名済みメッセージをチェック → 存在すれば拒否 → 存在しなければ署名 + 記録。
+- **DB は永続化 + 再起動耐性 + ソフト更新耐性 + バックアップ要.**
+- **DB と署名は atomic 操作.** ネットワーク越しリモート DB は atomicity が崩れる窓を作る → 同マシン上必須。
+- **リモート signer + DB で defense in depth.** Validator ノード bug でも remote signer DB が最後の砦。
+- **Whistleblower 報酬.** Ethereum で slashed の ~1/512、$1M slashing で ~$2k = watcher を経済的に動機づけ。
+- **Inactivity leak.** >1/3 オフラインで finality 問題発生 → 1 epoch ごとオフライン stake を削る → chain が >2/3 オンラインに自己回復。
+- **ネットワーク分断時は fail-closed が正解.** 続けて slashing リスク vs 停止して小さな inactivity → 停止が常に正解。
+
+## 具体例
+
+Stake を失う 2 経路:
 
 | 経路 | 何が起きるか | なぜ |
 | :--- | :--- | :--- |
-| **能動的な不正動作 (slashing)** | 矛盾する 2 メッセージに署名 | 暗号的に証明可能; 主要なペナルティ |
-| **受動的な不正動作 (inactivity)** | まったく署名しない | 分断中にじわじわ削られるペナルティ |
+| 能動的（slashing） | 矛盾する 2 メッセージに署名 | 暗号的に証明可能、主要ペナルティ |
+| 受動的（inactivity） | まったく署名しない | 分断中にじわじわ削られる |
 
-どちらもプロトコルが強制し、どちらも stake を削減する。決定的な違いは、slashing が **壊滅的** (1 イベントで stake の大部分または全部を失う) であるのに対し、inactivity は **緩やか** (時間をかけて少額ずつ失う) なことだ。
+Ethereum 2026 概算:
+- Slashing: 最小 ~1 ETH、correlated slashing で増加
+- Inactivity leak: 非参加 1 日 ~0.1% / stake
 
-Ethereum mainnet の場合 (2026 年のパラメータの概算):
-- Slashing: 最小 ~1 ETH、correlated slashing が起きると増加
-- Inactivity leak: finality 問題が発生している期間、非参加 1 日あたり stake の ~0.1%
+3 種の slashable 違反:
 
-## 2. Slashable な違反の中身
-
-### 2.1 Double voting
-
-同じ height で別々のブロックに投票する例:
+**Double voting**:
 
 \`\`\`
 Vote1: { height: 1000, block: 0xA..., signature: SigA }
 Vote2: { height: 1000, block: 0xB..., signature: SigB }
 \`\`\`
 
-両方の票が valid で、いずれも validator V によって署名されていれば、V は slashable である。**両方の署名を持っている者であれば誰でも slashing proof を構築できる**。
+両 valid + V 署名 → V slashable。両署名を持つ者なら誰でも slashing proof 構築可能。
 
-修正: Validator software は署名したすべての票を **必ず** 追跡し、同じ height における 2 票目への署名を拒否しなければならない。これを担うのが **slashing-protection データベース** である。
+**Surround voting**（Casper FFG）:
+- Vote1: source A → target B
+- Vote2: source C → target D
+- C < A AND D > B → 2 つ目が 1 つ目を「surround」→ slashable
 
-### 2.2 Surround voting (Casper FFG 固有)
+**BFT equivocation**（Tendermint、HotStuff）:
+- 同 height/round で別ブロックに 2 つの pre-commit
+- Logic は double voting と同、slashing-protection DB で捕捉
 
-Casper FFG (Ethereum の finality gadget) では、validator は **source → target** のチェックポイントペアに投票する。Surround-vote とは、後の投票の範囲が先の投票の範囲を厳密に包含する形のもの:
-
-Vote1: source A → target B
-Vote2: source C → target D
-
-C < A かつ D > B (つまり 2 つ目が 1 つ目を「surround」している) なら slashable。修正: 投票した source/target ペアをすべて追跡し、先行する投票を surround するような票は拒否する。
-
-### 2.3 BFT (Tendermint、HotStuff) における equivocation
-
-同じ height/round で別々のブロックに対する 2 つの pre-commit (BFT ラウンドにおける「このブロックにコミットする」メッセージ) のこと。ロジックは double voting と同じであり、slashing-protection データベースで捕捉する必要がある。
-
-## 3. Slashing-protection データベース
-
-本番 validator は例外なくこれを走らせる。仕事は以下の通り:
+Slashing-protection DB ロジック:
 
 \`\`\`
 Height H、round R でメッセージ M に署名する前に:
@@ -281,19 +269,17 @@ Height H、round R でメッセージ M に署名する前に:
     M をデータベースに記録する
 \`\`\`
 
-データベースに求められる要件:
-- 再起動を跨いで永続化される
+DB 要件:
+- 再起動を跨いで永続化
 - ソフトウェア更新を生き延びる
-- バックアップを取る (新規データベースだと現実に追いつかない)
+- バックアップを取る（新規 DB だと現実に追いつかない）
 
-代表的な実装:
-- **EIP-3076 フォーマット** — Ethereum 標準
-- **CometBFT priv_validator_state.json** — Cosmos chain
-- **カスタムファイル** — chain 固有のフォーマット
+代表実装:
+- **EIP-3076 フォーマット**（Ethereum 標準）
+- **CometBFT priv_validator_state.json**（Cosmos）
+- **カスタムファイル**（chain 固有）
 
-## 4. リモート signer との統合
-
-本番 validator の大半は、**slashing-protection も強制する** remote signer を走らせる構成を取る:
+リモート signer + DB:
 
 \`\`\`
 [Validator ノード]  --署名要求-->  [Remote Signer]
@@ -303,111 +289,125 @@ Height H、round R でメッセージ M に署名する前に:
                                             +- 危険なら: 拒否
 \`\`\`
 
-この構成によって **defense in depth** が成立する。Validator ノードにバグがあっても、remote signer のデータベースが最後の砦になる。**Validator ノードが double-sign を試みても、remote signer がそれを拒否する**。
+**Defense in depth**: Validator ノードが double-sign を試みても remote signer DB が拒否。
 
-Web3Signer (Ethereum) はこのパターンを実装している。CometBFT validator も独自の variant を持つ。
+Whistleblower watcher:
 
-> 🛑 **理解度チェック。** なぜ slashing-protection DB は **署名者と同じマシン上** に置く必要があるのか? ネットワーク経由で呼び出すリモート DB ではダメな理由を答えよ。答えに「atomicity」または「署名中のネットワーク失敗」が含まれていなければ §3-4 を再読すること。
+- ブロックチェーン走査 → attestation 収集
+- (validator, height, round) でインデックス
+- 衝突検知 → slashing tx 提出
+- 報酬獲得（Ethereum で ~1/512）
 
-DB の書き込みと署名操作は **ひとつの atomic 操作** としてコミットされなければならない。署名してから記録しようとしてネットワーク失敗で記録できなかった場合、署名だけが記録なしに残り、再試行で同じ高さに再度署名してしまいうる。Atomicity とは「両方成功するか、両方失敗するか」のどちらかしかないこと。ネットワーク越しのリモート DB は、atomicity が崩れる窓を作ってしまう。
+Inactivity leak の動作:
 
-## 5. Whistleblower watcher
+- 通常運用中: 報酬取り逃し（日次小損失）
+- Finality 問題（>1/3 オフライン）: inactivity leak 発動
+- epoch ごとオフライン validator が stake 失う、finality 遅延長いほど率上昇
+- Chain は自己回復: 最終的にオンライン >2/3 回復 → finality 再開 → オフライン validator が削減後で残る
 
-プロトコルが slashing を実行するのは **誰かが proof を提出したとき** だけだ。そこで watcher の出番となる。Slashing は **暗号的に証明可能** であり、矛盾する 2 つの署名を持っている者であれば誰でも slashing transaction を提出できる。多くの chain は slash された stake のごく一部を **whistleblower 報酬** として提出者に支払う。
+ネットワーク分断シナリオ:
 
-Ethereum の場合、slashed 額の ~1/512 が proof 提出者に渡る。$1M の主要 slashing なら ~$2k — watcher を経済的に動機づけるには十分。
-
-Watcher の実装:
-- ブロックチェーンを走査して attestation を集める
-- (validator、height、round) でインデックスを張る
-- 衝突を検知する
-- Slashing tx を提出する
-
-自分で watcher を作るなら、ここはオープンソースの余地が残る領域だ。MEV searcher に似ているが、対象がプロトコルレベルの違反となる。
-
-## 6. オフライン状態の validator — inactivity ペナルティ
-
-Validator がオフラインになると:
-- 通常運用中なら、報酬を取り逃す (日次の小さな損失)
-- Finality に問題が発生している期間 (>1/3 がオフライン) なら、**inactivity leak** が発動する
-
-Inactivity leak とは、Ethereum が分断した chain を >2/3 のオンライン状態へ強制的に押し戻すための機構である。epoch ごとにオフラインの validator は stake を失っていき、finality 遅延が長くなるほどその率は上がる。**Chain は自己回復する** — 最終的にオンラインの validator が >2/3 を回復し、finality が再開し、オフラインだった validator は stake を削減された状態で残る。
-
-これが **BFT 系 chain における大規模オフラインイベントへの応答** の形だ。永久に halt させる代わりに、プロトコルがゆっくりとオフライン validator を削っていき、quorum が成立する地点まで戻す。
-
-## 7. ネットワーク分断のリスク
-
-古典的な災害シナリオ:
-1. ネットワーク分断によって validator set が二つに割れる
-2. 各分断が自分を majority だと誤認するおそれがある
-3. それぞれが別々の fork 上で署名を続けてしまう
-4. 分断が解消した瞬間に、fork をまたぐ大規模 slashing が発生する
+1. 分断で validator set が二分
+2. 各分断が自分を majority と誤認の可能性
+3. 各々が別 fork で署名継続
+4. 分断解消で fork 跨ぐ大規模 slashing
 
 緩和策:
-- **Liveness watchdog**: 分断を検知する (peer から最近ブロックを受け取れていない) — 署名を停止
-- **ネットワーク heartbeat**: 署名前に他の validator への接続性を確認
-- **強制 sync**: ネットワークに追いつくまで署名を拒否
+- **Liveness watchdog**: 分断検知（peer から最近ブロックなし）→ 署名停止
+- **ネットワーク heartbeat**: 署名前に他 validator 接続性確認
+- **強制 sync**: ネットワーク追いつくまで署名拒否
 
-しっかり構築された validator は複数のチェックを併用する。Validator software 自体が侵害されてこれらのチェックを無効化されるケースは、現実のリスクとして残る。
+## 失敗例（誤解）
 
-> 🛑 **予測。** Validator は DC1 にある。DC1 がインターネット接続を 30 分失った。**Validator は署名を続けるべきか?** 続けた場合の失敗モードは? 続けなかった場合は?
+「リモート DB（ネットワーク経由）で slashing-protection」— **間違い**。DB 書き込みと署名は **atomic 操作**。ネットワーク失敗 → 署名だけ記録なしで残る → 再試行で同 height に再署名 → slashed。**同マシン上必須**。
 
-続けた場合: 自分が分断側にいて、ネットワークの残りが目にしないブロックを生成してしまう可能性がある。やがてネットワークが回復し、自分の chain は間違いだったと判明し、double-sign に等価な状態となって slashed される。
+「冗長化バックアップ DB のメリット」— **半分間違い**。バックアップは持つべきだが **アクティブ DB はそのまま使う**（新規 DB だと現実に追いつかない、過去署名を知らない）。バックアップは復旧時の **最後の手段**。
 
-止めた場合: 30 分の inactivity (小さなペナルティ)。接続が戻ったら sync し直して再開すればよい。
+「Slashing は技術的問題、経済層は別」— **間違い**。Slashing 自体が **経済的セキュリティ**。検知メカニズムは暗号、執行は経済。Whistleblower 報酬で検知の経済的インセンティブも組み込まれる。
 
-**停止が正解** である。Slashing のリスクと引き換えに、小さな inactivity ペナルティを払うほうがはるかにマシだ。Validator software は自動でこれを検知して fail-closed すべきである。
+> 🛑 **予測。** Validator が DC1 にある。DC1 がインターネット接続を 30 分失った。署名を続けるべきか？ 続けた場合と止めた場合の失敗モードは？（答え: **止めるべき**。続けた場合 = 自分が分断側にいて、ネットワークの残りが目にしないブロックを生成しうる → 回復時に自 chain が間違いと判明 → double-sign 等価で slashed → 数百万 ETH 損失。止めた場合 = 30 分の inactivity ペナルティ（小さい）+ 接続戻ったら sync 再開可能。**slashing > inactivity** が常に成立、「不確実なら fail-closed」が validator の正しいデフォルト。Validator software は自動で検知して停止すべき。）
 
-## 8. 自分のプロジェクトに当てはめると
+## ステップで組み立てる
 
-### Tempo の validator を運用する場合
+### Step 1: Stake を失う 2 経路
 
-- 各 validator ノードと remote signer に slashing-protection DB を置く
-- 30 分の heartbeat チェック — 接続を失ったら署名を拒否する
-- 2 リージョンの active-passive 構成 (遷移はコンセンサスプロトコル経由でのみ)
-- バージョニング付きの S3 に日次で DB をバックアップ
+能動的（slashing、壊滅的）+ 受動的（inactivity、緩やか）。
 
-### Watcher のチャンス
+### Step 2: 3 種 slashable 違反
 
-Tempo には slashing watcher の市場が成立する可能性がある (ローンチ時点で slashing 機構が入る前提)。Watcher の構築は Rust 数百行 + インデキシングで足り、小規模な収益源になりうる。
+Double voting / Surround voting（Casper FFG）/ BFT equivocation。
 
-## 9. 練習
+### Step 3: Slashing-protection DB の擬似コード
 
-1. 計算: stake 1000 ETH の validator が、double-vote によって 5% slashed された。いくら失うか?
-2. 特定: Validator A は 95% の参加率でオンライン、validator B はオフライン。1 ヶ月後、stake が多いのはどちらか?
-3. Slashing-protection ロジックの擬似コードを書け
-4. [Web3Signer slashing protection](https://docs.web3signer.consensys.net/concepts/slashing-protection) を読む
+(H, R) で既存メッセージチェック → 同 height/round で異なるなら拒否、なければ署名 + 記録。
 
-## 10. 読み物
+### Step 4: DB の atomicity 要件
 
-- [EIP-3076 (slashing protection フォーマット)](https://eips.ethereum.org/EIPS/eip-3076)
-- [Web3Signer](https://github.com/Consensys/web3signer)
-- [Inactivity leak 設計](https://eth2book.info/altair/part2/incentives/inactivity)
+DB 書き込みと署名は単一 atomic 操作 → 同マシン上必須、リモート不可。
 
-> 最終チェック: 一文で、「不確実なときは署名停止」がなぜ validator の正しいデフォルトなのか説明できるか? **答えに「slashing ペナルティ > inactivity ペナルティ」が含まれていなければ §7 を再読すること**。`,
+### Step 5: リモート signer + DB の defense in depth
+
+Validator ノード bug でも remote signer DB が最後の砦。
+
+### Step 6: Whistleblower 報酬の経済設計
+
+slashed の ~1/512 → watcher を経済的に動機づけ、市場が形成。
+
+### Step 7: ネットワーク分断時の fail-closed
+
+「不確実なら署名停止」= slashing > inactivity が常に成立。
+
+## 答え合わせ
+
+- **DB と署名の atomicity 必要性**: 署名してから記録の順なら → ネットワーク失敗で記録なし → 再試行で同 height に再署名 → slashing。「両方成功するか両方失敗するか」しかない atomic 操作必要。ネットワーク越しの DB は atomicity 窓を作る → 同マシン上必須。
+- **Inactivity leak の自己回復メカニズム**: >1/3 オフラインで finality 問題 → epoch ごとオフライン stake を削る（finality 遅延長いほど率上昇）→ 最終的にオンライン >2/3 回復（オフラインが削られて active 比率上昇 / オフラインが復旧）→ finality 再開 → オフライン validator が stake 削減後で残る。**chain は永久 halt せず緩やかに回復**。
+- **「不確実なら停止」が正しい理由**: slashing ペナルティ（壊滅的、~1 ETH 最小～数 ETH）vs inactivity ペナルティ（日 0.1% / stake、30 分なら ~0.002%）→ **オーダー桁違い**。続けて slashing リスク vs 停止して inactivity → 期待値で停止が圧倒的。Validator software は自動 fail-closed すべき。
+
+## 合格基準
+
+- Stake を失う 2 経路を即答できる。
+- 3 種 slashable 違反を例で言える。
+- Slashing-protection DB の擬似コードを書ける。
+- DB と署名の atomicity 必要性を 1 文で説明できる。
+- Inactivity leak の自己回復を 4 段で辿れる。
+
+## まとめ（3行）
+
+- Stake を失う 2 経路（slashing 壊滅的 / inactivity 緩やか）、3 種 slashable 違反（double voting / surround voting / BFT equivocation）、slashing-protection DB が標準防御。
+- DB と署名は atomic 操作（同マシン上必須）、リモート signer + DB で defense in depth、whistleblower 報酬（~1/512）で検知市場形成。
+- Inactivity leak が >1/3 オフラインから chain を自己回復、ネットワーク分断時は fail-closed が正解（slashing > inactivity が常に成立）。
+`,
                 },
                 {
-                  title: 'Hot upgrade と協調 chain アップグレード',
+                  title: 'レッスン2 — Hot upgrade と協調 chain アップグレード',
                   slug: 'validator-hot-upgrades-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 16,
                   xpReward: 45,
-                  content: `# Hot upgrade と協調 chain アップグレード
+                  content: `# レッスン2 — Hot upgrade と協調 chain アップグレード
 
-メインネット hardfork 当日のことを想像してほしい。新しいバイナリはコンセンサスルールを書き換える。何万もの validator が、あらゆる大陸、あらゆるクラウド、あらゆる自宅セットアップに散らばって稼働している。マスタースイッチは存在しない。スケジュールされたメンテナンス窓もない。Chain を止めるわけにはいかない。それでも 14:13 UTC のその瞬間に、**canonical chain に残るすべての validator が一斉に新ルールでブロックを作り始める** — アップグレードしなかった者は静かに fork off して、無関係な存在になっていく。どうやって?
+## 問い
 
-この協調問題こそ **ブロックチェーン運用で最も難しい問題** だ。validator たちは互いに直接話すこともなく、足並みを揃えてルールを切り替えなければならない。本レッスンでは、それを成立させているプロトコル上の仕組みと、運用上の drill を見ていく。
+メインネット hardfork 当日。新バイナリがコンセンサスルールを書き換える。何万もの validator が散らばって稼働、マスタースイッチなし、メンテナンス窓なし、chain は止められない。**それでも 14:13 UTC に canonical chain に残る全 validator が一斉に新ルールでブロック生成 — どうやって？**
 
-> 🛑 **スクロール前に予測。** Ethereum は主要な outage を起こすことなく 10 以上の hardfork を実行してきた。**これを成立させているプロトコル機構は何か?** 「全員が同じ瞬間にアップグレードする」ではない — それでは協調できない。もっと強い仕組みが裏にあるはずだ。
+> 注: 以下のコード断片は運用フロー理解のための概念スニペットです（\`...\` は省略箇所）。そのまま実行する用途ではありません。
 
-## 1. コア機構 — height-gate ルール
+## 原理（最小モデル）
 
-仕掛けは **バイナリそのものが切り替えのタイミングを知っている** という点にある。Hardfork は次の 2 つで定義される:
-- 新ルールが activate される **block height (またはタイムスタンプ)**
-- **新ルールのセット** (コンセンサス、EVM、gas など)
+- **協調メカニズムは「全員同時アップグレード」ではない.** **バイナリそのものが切り替えタイミングを知っている** = height-gate ルール。
+- **Activation 4 方式.** Block height（決定論的、PoW/PoS 両対応）+ Timestamp（壁時計、精度低い）+ Difficulty（PoW 歴史的）+ Total difficulty（Ethereum Merge 1 回限り）。
+- **Activation 前にアップグレード済めば OK.** Activation 後、アップグレード済 validator は新ルール適用、未アップグレードは古ルールで stale fork → ネットワークから脱落。
+- **アップグレード 5 ステップ.** アナウンス受領 → 新バイナリ DL + 検証 → activation 前デプロイ → デプロイ検証 → activation 待ち。
+- **アップグレードされているのは chain spec.** \`activation_block_number\` テーブルがバイナリに同梱。
+- **Pre-fork dry run.** Testnet で 2-3 週間先に同 fork → 問題発見で mainnet 遅延。Pectra は 2 回遅延。
+- **Hot fork ≠ Hot software 更新.** Hot fork = コンセンサスルール / Hot software 更新 = 再起動なし。短い再起動は許容（slashing-protection DB が再起動越え）。
+- **緊急対応 4 段階.** Stale ブロック（自己回復）/ 不正 state（協調 rollback）/ 資金窃取（緊急 hardfork）/ コンセンサス halt（協調リセット、稀）。
+- **BFT chain は halt-and-recover.** >1/3 オフライン → halt → オペレータ復旧 → 再開。**halt は許容**（fork せず safety 維持）。
 
-Validator は全員が同時にアップグレードする必要はない。Activation height の **前まで** にアップグレードを済ませておけばよい。Activation block の到来とともに、アップグレード済みのすべての validator が同じブロック、同じ瞬間に新ルールを適用する — 協調はいらない。アップグレードしていない validator は古いルールで動き続け、ネットワークの残りが reject するブロックを生成して **脱落する**。
+## 具体例
+
+Height-gate ルールの動作:
 
 \`\`\`
 Block 999: 全 validator (旧コード + 新コード) がこのブロックを受け入れる
@@ -416,49 +416,30 @@ Block 1001: 旧コードの validator はこれを reject する (新ルール�
            新コードの validator は受け入れる
 \`\`\`
 
-Activation 以降、chain は新ルールに従って進む。旧コードは **明示的に invalid** になる。
+Activation 以降、chain は新ルール。旧コードは **明示的に invalid**。
 
-## 2. Activation 条件
-
-Activation は典型的には以下の方式を取る:
+4 方式:
 
 | タイプ | ユースケース | リスク |
 | :--- | :--- | :--- |
-| **Block height** | 決定論的な activation | 扱いやすい; PoW でも PoS でも動く |
-| **Timestamp** | 壁時計ベースの activation | 精度が低い; プロトコルが drift しうる |
-| **Difficulty** (PoW) | 歴史的な Ethereum | 時代遅れ |
-| **Total difficulty** | Ethereum Merge での遷移 | 1 回限りの利用 |
+| Block height | 決定論的 activation | 扱いやすい、PoW/PoS 両対応 |
+| Timestamp | 壁時計ベース | 精度低、プロトコル drift しうる |
+| Difficulty（PoW） | 歴史的 Ethereum | 時代遅れ |
+| Total difficulty | Ethereum Merge 遷移 | 1 回限り |
 
-現代の PoS chain は、人間にとっての読みやすさのために **timestamp**、精度のために **block height** を使い分ける。Casper FFG は **epoch 境界** を使う。
+現代 PoS = 人間可読のため timestamp、精度のため block height。Casper FFG = epoch 境界。
 
-Tempo や Hyperliquid なら timestamp ベースの activation を採用するだろう。「Unix timestamp X の地点で fork Y に切り替える」という形だ。
+5 ステップ:
 
-## 3. アップグレードの協調プロトコル
+1. アップグレードアナウンス受領（Github issue、Discord）
+2. 新バイナリ DL + 検証
+3. activation 前に全 validator ノードデプロイ
+4. デプロイ正常か検証
+5. Activation block 待ち（新ルール自動適用）
 
-オペレータが踏む手順:
-1. **アップグレードのアナウンスを受け取る** (Github issue、Discord など)
-2. **新バイナリをダウンロードして検証する**
-3. **activation 前に全 validator ノードへデプロイする**
-4. **デプロイが正しく行われたか検証する**
-5. **Activation block を待つ** — 新ルールは自動的に適用される
+ステップ 3 を逃すと activation 瞬間に chain から脱落。アップグレード + sync で再合流。
 
-ステップ 3 を逃した validator は、activation の瞬間に **chain から脱落する**。アップグレードして sync し直せば再合流できる。
-
-Ethereum の場合、Merge、Shanghai、Cancun、Pectra の activation はすべてまさにこの手順で行われた。Validator にはアップグレード 1〜2 週間前に通知が出る。
-
-> 🛑 **理解度チェック。** 「99% の validator がアップグレード、1% がしない、よって chain が fork する」 — **Yes だが、その先は?** 1% にはどんな結末が待っているか? 戻れるのか? 回復シナリオを追ってみよ。
-
-1% は旧ルールで「stale fork」を生成する。99% は新ルールの canonical chain についていく。99% 側から見れば、1% は単にオフラインに見える (生成されたブロックが reject されるため)。回復の流れ:
-1. オペレータが「自分の validator が rejected ブロックを生成している」ことに気づく
-2. バイナリをアップグレードする
-3. Validator が canonical chain に sync する (peer からブロックを取得)
-4. Canonical chain 上で署名を再開する
-
-Slashing のリスクはない (canonical 側で double-sign したのではなく、別の fork 上にいただけ)。負担するのは inactivity ペナルティだけ。
-
-## 4. アップグレードは chain spec に組み込む
-
-Reth ベースの chain では、アップグレードは **chain spec** (chain のアイデンティティ — genesis、fork height、chain ID — を定義する Rust の構造体) にエンコードされる。Course 1 (Consensus Engineering) の Lesson 5 より:
+Reth ベース chain spec パターン（Course 1 Consensus Engineering Lesson 5 より）:
 
 \`\`\`rust
 pub enum CustomHardfork {
@@ -479,169 +460,204 @@ impl CustomHardfork {
 }
 \`\`\`
 
-新しいバイナリのバージョンに更新された chain spec が同梱される。そのバージョンにアップグレードした validator は、新しい activation テーブルを手にすることになる。Activation block の到来とともに新ルールが発動する。
+新バイナリバージョンに更新済 chain spec 同梱 → 新 activation テーブル → activation block で新ルール発動。
 
-つまり、**アップグレードされているのは chain spec である**。
+**「アップグレードされているのは chain spec」**。
 
-## 5. Pre-fork dry run
+Pre-fork dry run:
+- Mainnet activation の 2-3 週間前
+- 同 fork を testnet で走らせる
+- 全動作検証
+- 問題発見で mainnet 遅延
+- **Pectra は 2 回遅延**
 
-本番 chain では **testnet で先に** アップグレードを回す:
-- Mainnet の activation はその 2〜3 週間後に設定する
-- 同じ fork を testnet で走らせる
-- すべてが正しく動くかを検証する
-- 問題が見つかれば mainnet を遅延させる
+Hot fork ≠ Hot software 更新:
 
-これが致命的なバグを事前に拾う仕組みである。Ethereum の Pectra fork が 2 回遅延したのも、dry run 中に testnet で発見された問題が原因だった。
+| | Hot fork | Hot software 更新 |
+| :--- | :--- | :--- |
+| 何が | コンセンサスルール変更 | バイナリ再起動 |
+| 影響 | プロトコルレベル | 運用レベルのみ |
+| ダウンタイム | なし（協調活性化） | 再起動分の inactivity |
+| Slashing リスク | activation 跨ぎで誤動作なら | DB が再起動越えなら安全 |
 
-Tempo の場合、まさにこの目的で Tempo Moderato (testnet) が設けられる可能性が高い。Fork のシーケンスは Moderato → Mainnet となり、間に数週間が挟まる。
-
-## 6. Hot software 更新 (hot fork ではない)
-
-これら 2 つは別物である:
-
-- **Hot fork** = コンセンサスルールのアップグレード。ここまで論じてきたもの。
-- **Hot software 更新** = 再起動なしで validator ソフトウェアをアップグレードすること。こちらは純粋に運用上の話。
-
-Hot software 更新の流れ:
-- Validator software を新バージョンで再起動する
-- 再起動中はオフラインになる (小さな inactivity ペナルティ)
-- 新バージョンは直前の chain 状態から処理を続行する
-
-多くの chain は **短い再起動なら許容する**。Slashing-protection データベースは再起動を跨いで生き残るため、double-sign のリスクはない。
-
-一部の高度な構成では以下を採用する:
-- **Active-passive failover** — まず passive ノードを再起動し、署名権限を移譲してから active ノードを再起動する
-- **Live コードパッチ** — 極めて稀。ダウンタイムが許容できない性能修正のときに限る
-
-## 7. 緊急対応プレイブック
-
-バグが **デプロイ後** に見つかったらどうするか?
+緊急対応:
 
 | 重大度 | 対応 |
 | :--- | :--- |
-| **Stale ブロック** | 待つ — peer が戻れば chain は自己回復する |
-| **不正な state を生成するバグ** | 協調 rollback (validator が chain セグメントを破棄することに合意する) |
-| **資金窃取バグ** | 機能を無効化する緊急 hardfork |
-| **コンセンサス halt** | 協調リセット (稀; 大事件) |
+| Stale ブロック | 待つ — peer 戻れば chain 自己回復 |
+| 不正 state 生成バグ | 協調 rollback（validator が chain セグメント破棄合意） |
+| 資金窃取バグ | 機能を無効化する緊急 hardfork |
+| コンセンサス halt | 協調リセット（稀、大事件） |
 
-2016 年の DAO 事件では盗まれた資金を取り戻すための協調 hardfork が行われた。2024 年の Polkadot 事件 (validator の不正動作) では協調 rollback が行われた。いずれも 24 時間程度の応答サイクルだった。
+歴史例:
+- **2016 DAO**: 盗まれた資金取り戻す協調 hardfork
+- **2024 Polkadot**: validator 不正動作で協調 rollback
+- **応答サイクル**: 24 時間程度
 
-Tempo の場合、いずれ何らかの incident は起きる。Validator set とガバナンスはローンチ前に文書化されたプレイブックを用意しておく必要がある。
+BFT chain の halt-and-recover:
+- 1/3 超オフラインで chain halt（>2/3 quorum 要件直接帰結）
+- オペレータが validator オンライン復帰
+- Chain 再開
 
-## 8. 「Halt して recover する」パターン
+**halt は許容**（chain fork せず、safety 失わず、ただ止まる）。Ethereum の inactivity leak とは異なる回復モデル。
 
-純粋 BFT 系の chain (Tempo、Hyperliquid) の場合:
-- 1/3 を超える validator がオフラインになると chain は halt する (BFT の >2/3 quorum 要件から直接導かれる帰結 — quorum がなければ進捗もない)
-- オペレータが validator をオンラインに戻す
-- Chain はブロック生成を再開する
+## 失敗例（誤解）
 
-Ethereum (inactivity leak で回復させる方式) と比べると、BFT chain は halt-and-recover をクリーンに行える。**Halt は許容できる** — chain が fork せず、safety を失わず、ただ止まるだけだからだ。
+「全 validator が正確に同瞬間にアップグレード必要」— **間違い**。**バイナリそのものが切り替えタイミングを知っている**。Activation block 前にアップグレード済めば OK、validator 間の協調は不要。アップグレード時刻はずれてもよい、activation block の瞬間に同時 fork。
 
-Tempo にとっては、大規模 incident 時の **outage は設計上の選択** である。fork するくらいなら halt するほうがマシだ。
+「Hot software 更新 = Hot fork」— **間違い**。Hot software 更新 = 再起動なし運用変更（slashing-protection DB が再起動越えるので安全）/ Hot fork = コンセンサスルール変更（chain spec の activation テーブル更新）。**別物**。
 
-## 9. 練習
+「Stale fork（アップグレードしなかった 1%）は slashing リスク」— **間違い**。Stale fork は canonical chain 上で double-sign したわけではない（別 fork 上にいただけ）→ slashing なし。負担は **inactivity ペナルティのみ**。アップグレード + sync で復帰可能。
 
-1. [Ethereum の Pectra アップグレード発表](https://eips.ethereum.org/EIPS/eip-7600) を読む
-2. 特定: その EIP に activation ロジックはどう書かれているか?
-3. スケッチ: L1 アップグレード用の validator 構成。デプロイのシーケンスはどうなる?
-4. 特定: どのような状況で fork activation を遅延させるべきか?
+> 🛑 **予測。** Ethereum は主要 outage なしで 10 以上の hardfork 実行。これを成立させているプロトコル機構は？「全員同瞬間アップグレード」ではない。（答え: **Height-gate ルール + chain spec activation テーブル**。バイナリそのものが「block N で新ルール」と知っている → validator は activation block 前にアップグレード済めばよい（協調は不要、アップグレード時刻はずれてもよい）→ activation block で全アップグレード済 validator が一斉に新ルール適用 → 未アップグレード validator は stale fork で脱落（slashing なし、復帰可能）。**chain spec が「いつ」を所有、validator が「どう」を実行**。Pectra など 10+ fork が outage なしで成立した理由。）
 
-## 10. 読み物
+## ステップで組み立てる
 
-- [Ethereum hardfork リスト](https://ethereum.org/en/history/) — 各 fork がどう協調されたか
-- [Ethereum execution-apis EngineAPI](https://github.com/ethereum/execution-apis) — EL/CL が fork activation をどう協調するか
-- [Cosmos chain upgrade docs](https://docs.cosmos.network/)
+### Step 1: 協調の本質を理解
 
-> 最終チェック: 一文で、「全 validator が正確に同じ瞬間にアップグレードする」がなぜ hardfork のメンタルモデルとして誤りなのか説明できるか? **答えに「chain spec に組み込まれた height-gate ルール」が含まれていなければ §1-2 を再読すること**。`,
+「全員同時アップグレード」ではなく **height-gate + chain spec**。
+
+### Step 2: 4 activation 方式
+
+Block height / Timestamp / Difficulty / Total difficulty。現代 PoS = timestamp or epoch 境界。
+
+### Step 3: 5 アップグレードステップ
+
+アナウンス → DL+検証 → デプロイ → 検証 → activation 待ち。
+
+### Step 4: chain spec の役割
+
+\`activation_block_number\` テーブルがバイナリに同梱 → 新バージョンで新ルール起点。
+
+### Step 5: Pre-fork dry run
+
+Testnet で 2-3 週間先 → 問題発見で mainnet 遅延 → Pectra は 2 回遅延。
+
+### Step 6: Hot fork ≠ Hot software 更新
+
+ルール変更 vs 再起動運用。slashing-protection DB が再起動越えなので software 更新は安全。
+
+### Step 7: 緊急対応 4 段階
+
+Stale（自己回復）/ 不正 state（rollback）/ 窃取（緊急 hardfork）/ halt（リセット）。
+
+### Step 8: BFT chain の halt-and-recover
+
+halt 許容（fork せず）vs Ethereum inactivity leak で削減。**BFT は outage を設計選択にできる**。
+
+## 答え合わせ
+
+- **協調メカニズムの本質**: 「全員同時アップグレード」は協調できない（人間の同期不可能）→ **バイナリそのものが切り替えタイミングを知っている** = height-gate ルール + chain spec の activation テーブル。validator は activation block 前にアップグレード済めばよい、アップグレード時刻はずれてよい → activation block で全アップグレード済が一斉新ルール適用。**chain spec が「いつ」を所有、validator が「どう」を実行**。
+- **1% 未アップグレードの結末と回復**: 1% は旧ルールで stale fork 生成、99% は新ルール canonical chain。99% 側から見ると 1% はオフラインに見える（生成ブロック reject）。回復 = ① 「自分が rejected ブロック生成」気づく → ② バイナリアップグレード → ③ canonical chain に sync → ④ canonical 上で署名再開。**slashing リスクなし**（別 fork 上にいただけ、canonical で double-sign したわけではない）、負担は inactivity ペナルティのみ。
+- **BFT chain が halt-and-recover を許容する理由**: 1/3 超オフラインで chain halt（>2/3 quorum 要件直接帰結）→ オペレータ復帰 → 再開。**halt = chain fork せず、safety 失わず、ただ止まる** = 大規模 incident で fork するくらいなら halt が望ましい設計選択。Ethereum の inactivity leak（chain 動き続けるが非参加 stake 削る）とは別モデル、BFT は単純 halt を選べる。
+
+## 合格基準
+
+- 協調メカニズムが「全員同時」ではなく「height-gate + chain spec」と理解している。
+- 4 activation 方式と現代 PoS の選択を即答できる。
+- 5 アップグレードステップを順に言える。
+- chain spec の \`activation_block_number\` テーブルを書ける。
+- Hot fork と Hot software 更新の違いを言える。
+- 緊急対応 4 段階を重大度順に言える。
+
+## まとめ（3行）
+
+- 協調 hardfork の本質 = height-gate ルール + chain spec の activation テーブル（バイナリが「いつ」を所有）、validator は activation block 前にアップグレード済めば OK、時刻ずれてよい。
+- 4 activation 方式（height / timestamp / difficulty / total difficulty）、5 ステップ、pre-fork dry run（Pectra は 2 回遅延）、Hot fork ≠ Hot software 更新。
+- 緊急対応 4 段階（自己回復 → rollback → 緊急 hardfork → halt）、BFT chain は halt-and-recover を許容（fork せず、safety 維持）= 設計選択肢。
+`,
                 },
                 {
-                  title: 'ファイナルクイズ: Validator 運用',
+                  title: 'ファイナルクイズ — Validator 運用',
                   slug: 'validator-final-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 3,
                   duration: 10,
                   xpReward: 40,
-                  content: `# ファイナルクイズ: Validator 運用
+                  content: `# ファイナルクイズ — Validator 運用
 
-Validator ops の最終チェック。任意の validator 運用、レッスン1の経済設計、本番 chain がなぜ壊れるかを理解するために必要な内容を確認する。`,
+Validator 運用の最終チェック。本番 L1 で validator を担うときに必要。
+
+レッスン0-2 を通じて: 鍵管理（5 要件 / 4 解 = 設定ファイル → HSM → MPC → 閾値署名 / 2 鍵パターン / リモート signer / マルチリージョン active-passive）/ Slashing 検知（2 経路 = 能動 / 受動 / 3 種違反 = double / surround / equivocation / slashing-protection DB の atomicity / whistleblower 報酬 / inactivity leak / 分断時 fail-closed）/ 協調アップグレード（height-gate ルール / chain spec / 5 ステップ / pre-fork dry run / 緊急対応 4 段階 / BFT halt-and-recover）の構造的事実を確認する。
+`,
                   quizQuestions: [
                     {
-                      question: 'なぜ validator 鍵向けの **MPC (Multi-Party Computation)** が、**N ホストに鍵を分散して置く方式** と構造的に異なるのか?',
-                      options: [
+                      "question": "なぜ validator 鍵向けの **MPC (Multi-Party Computation)** が、**N ホストに鍵を分散して置く方式** と構造的に異なるのか?",
+                      "options": [
                         "MPC のほうが処理が速いから。",
                         "MPC は **どのデバイスもフル鍵を絶対に持たない** ことを保証する — 各デバイスは share を保持し、署名には N-of-M の協力が必要で、1 デバイスを攻撃しても攻撃者は役に立たない fraction しか得られない。一方、N ホストに鍵を分散して置く方式では、各ホストがフル鍵 (あるいは再構築可能なピース) を持つため、1 ホストが破られると壊滅的になる。",
-                        'MPC は EIP-2335 で要求されているから。',
-                        "MPC のほうがストレージ消費が少ないから。",
+                        "MPC は EIP-2335 で要求されているから。",
+                        "MPC のほうがストレージ消費が少ないから。"
                       ],
-                      correctIndex: 1,
-                      explanation: "MPC は暗号的に「署名中に鍵を再構築しない」ことを保証する。安易に鍵を「分散」させる設計は、複数ホストにフル鍵を漏らしてしまう。MPC は、単一の信頼点を作らずに validator 鍵のセキュリティを本当の意味でスケールさせられる、数少ない手段のひとつである。",
+                      "correctIndex": 1,
+                      "explanation": "MPC は暗号的に「署名中に鍵を再構築しない」ことを保証する。安易に鍵を「分散」させる設計は、複数ホストにフル鍵を漏らしてしまう。MPC は、単一の信頼点を作らずに validator 鍵のセキュリティを本当の意味でスケールさせられる、数少ない手段のひとつである。"
                     },
                     {
-                      question: 'なぜ **2 台のマシンで validator を重複稼働させる** と、たいてい冗長化ではなく **slashing** につながるのか?',
-                      options: [
-                        'Slashing は validator の構成とは無関係だから。',
-                        '両マシンが同じ鍵を持つことになる。両方が同じ height/round で attestation に署名し、両署名は valid である。ネットワークから見ると、同じアイデンティティから矛盾する 2 つの署名が出てきている — まさに **slashable な equivocation** だ。冗長化の試みが slashing 違反に化けてしまう。',
-                        '2 マシン構成は Ethereum の仕様で禁止されているから。',
-                        "重複 validator は帯域を消費しすぎるから。",
+                      "question": "なぜ **2 台のマシンで validator を重複稼働させる** と、たいてい冗長化ではなく **slashing** につながるのか?",
+                      "options": [
+                        "Slashing は validator の構成とは無関係だから。",
+                        "両マシンが同じ鍵を持つことになる。両方が同じ height/round で attestation に署名し、両署名は valid である。ネットワークから見ると、同じアイデンティティから矛盾する 2 つの署名が出てきている — まさに **slashable な equivocation** だ。冗長化の試みが slashing 違反に化けてしまう。",
+                        "2 マシン構成は Ethereum の仕様で禁止されているから。",
+                        "重複 validator は帯域を消費しすぎるから。"
                       ],
-                      correctIndex: 1,
-                      explanation: 'これが古典的な「慎重にやろうとして slashed される」パターンである。正しい修正は、failover を厳格に行う active-passive 構成 (常に 1 ノードだけが署名権限を持ち、遷移はコンセンサスプロトコル経由のみ)。さらに望ましいのは、鍵を持つ側がプロトコルレベルで single-signing を強制する remote signer アーキテクチャを採用することだ。',
+                      "correctIndex": 1,
+                      "explanation": "これが古典的な「慎重にやろうとして slashed される」パターンである。正しい修正は、failover を厳格に行う active-passive 構成 (常に 1 ノードだけが署名権限を持ち、遷移はコンセンサスプロトコル経由のみ)。さらに望ましいのは、鍵を持つ側がプロトコルレベルで single-signing を強制する remote signer アーキテクチャを採用することだ。"
                     },
                     {
-                      question: 'なぜ **slashing-protection データベース** は **署名者と同じマシン上** に置く必要があるのか?',
-                      options: [
-                        'レイテンシの問題に過ぎないから。',
+                      "question": "なぜ **slashing-protection データベース** は **署名者と同じマシン上** に置く必要があるのか?",
+                      "options": [
+                        "レイテンシの問題に過ぎないから。",
                         "DB への書き込みと署名操作が **atomic** に行われなければならないからだ — 両方成功するか、両方失敗するかのいずれかしかありえない。ネットワーク越しのリモート DB を挟むと、署名は済んだのに DB 更新が失敗するという窓 (たとえばネットワーク不調時) が生まれ、再試行によって同じ高さに再度署名してしまう可能性がある。Atomicity は、再試行時の double-sign を防ぐために必須である。",
-                        'EIP-3076 が明示的にそう要求しているから。',
-                        "ネットワーク呼び出しは遅すぎるから。",
+                        "EIP-3076 が明示的にそう要求しているから。",
+                        "ネットワーク呼び出しは遅すぎるから。"
                       ],
-                      correctIndex: 1,
-                      explanation: '本質は atomic 操作の要件である。同一プロセス内のローカル DB + signer なら atomic に保てる。リモート DB を挟むとレースコンディションが入り込む。この「atomic」保証こそが slashing-protection 全体のセキュリティモデルの土台になっている。',
+                      "correctIndex": 1,
+                      "explanation": "本質は atomic 操作の要件である。同一プロセス内のローカル DB + signer なら atomic に保てる。リモート DB を挟むとレースコンディションが入り込む。この「atomic」保証こそが slashing-protection 全体のセキュリティモデルの土台になっている。"
                     },
                     {
-                      question: 'Validator がネットワーク分断の片側にいる。**分断中に署名を続けるべきか?**',
-                      options: [
-                        'Yes、ただちに署名を再開する。',
+                      "question": "Validator がネットワーク分断の片側にいる。**分断中に署名を続けるべきか?**",
+                      "options": [
+                        "Yes、ただちに署名を再開する。",
                         "**No、分断中は署名を停止する**。続行すれば fork 側にいる可能性があり、ネットワークの残りが目にしないブロックを生成しているかもしれない。分断が解消したとき、自分の chain が誤っていれば canonical chain と equivocate することになり、slashed される。小さな inactivity ペナルティを払うほうが、大きな slashing ペナルティを払うよりはるかに良い。",
                         "オペレータの指示があったときだけ署名を停止する。",
-                        '分断中は署名そのものが不可能である。',
+                        "分断中は署名そのものが不可能である。"
                       ],
-                      correctIndex: 1,
-                      explanation: '署名を止めるのが正しいデフォルトだ。Inactivity ペナルティは小さく、slashing ペナルティは大きい。Validator は「自分は分断側にいるかもしれない」ことを検知し、>2/3 の peer との接続性を確認できるまで署名を拒否すべきである。これが「不確実なときは fail-closed」というコアな safety 性質である。',
+                      "correctIndex": 1,
+                      "explanation": "署名を止めるのが正しいデフォルトだ。Inactivity ペナルティは小さく、slashing ペナルティは大きい。Validator は「自分は分断側にいるかもしれない」ことを検知し、>2/3 の peer との接続性を確認できるまで署名を拒否すべきである。これが「不確実なときは fail-closed」というコアな safety 性質である。"
                     },
                     {
-                      question: '協調 hardfork において **validator が全員同時にアップグレードしない** のはなぜか? 正しい瞬間に新ルールへ切り替わることを保証しているのは何か?',
-                      options: [
-                        'Hardfork はチャットルームを使った手動協調を要するから。',
-                        'Chain spec に **activation block height (またはタイムスタンプ)** がエンコードされている: そのブロックに到達した時点で新ルールが適用される。Validator は activation の *前* にアップグレードしておけばよく、早くても遅くてもかまわない。Activation block の到来とともに、コンセンサスが新ルールを強制する。アップグレードしていない validator は旧ルールのまま動き続けて fork から脱落するが、アップグレードして sync すれば再合流できる。',
-                        'Fork は runtime に過半数の投票によって発火するから。',
-                        'Hardfork は Ethereum のみがサポートしているから。',
+                      "question": "協調 hardfork において **validator が全員同時にアップグレードしない** のはなぜか? 正しい瞬間に新ルールへ切り替わることを保証しているのは何か?",
+                      "options": [
+                        "Hardfork はチャットルームを使った手動協調を要するから。",
+                        "Chain spec に **activation block height (またはタイムスタンプ)** がエンコードされている: そのブロックに到達した時点で新ルールが適用される。Validator は activation の *前* にアップグレードしておけばよく、早くても遅くてもかまわない。Activation block の到来とともに、コンセンサスが新ルールを強制する。アップグレードしていない validator は旧ルールのまま動き続けて fork から脱落するが、アップグレードして sync すれば再合流できる。",
+                        "Fork は runtime に過半数の投票によって発火するから。",
+                        "Hardfork は Ethereum のみがサポートしているから。"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Height-gate ルールこそが鍵である。オペレータには各自アップグレードする時間が数週間与えられる。Activation block の瞬間、全員が同じルールに揃い、間に合わなかった者だけが脱落する。回復経路もシンプル (アップグレードして sync するだけ)。主要なすべての chain がこの方式でアップグレードを協調している。',
+                      "correctIndex": 1,
+                      "explanation": "Height-gate ルールこそが鍵である。オペレータには各自アップグレードする時間が数週間与えられる。Activation block の瞬間、全員が同じルールに揃い、間に合わなかった者だけが脱落する。回復経路もシンプル (アップグレードして sync するだけ)。主要なすべての chain がこの方式でアップグレードを協調している。"
                     },
                     {
-                      question: 'なぜ **withdrawal 鍵** は cold で、**署名鍵** はオンラインなのか?',
-                      options: [
+                      "question": "なぜ **withdrawal 鍵** は cold で、**署名鍵** はオンラインなのか?",
+                      "options": [
                         "すべての鍵を cold storage に置くべきだから。",
                         "関心事の分離を行うためである。署名鍵は attestation/proposal を行うためオンラインである必要があり (漏洩すれば slashable となり、最悪の場合 hot stake を失う)、一方 withdrawal 鍵は実際に staked された資金を支配するため cold に保たれる。こうしておけば、署名鍵を侵害されたとしても攻撃者は資金そのものを動かせない。",
-                        'EIP-2335 が withdrawal 鍵を cold にすることを要求しているから。',
-                        "Hot 鍵は withdrawal に使えないから。",
+                        "EIP-2335 が withdrawal 鍵を cold にすることを要求しているから。",
+                        "Hot 鍵は withdrawal に使えないから。"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Defense in depth の典型例である。署名鍵が漏れたときの最悪ケースは validator が slashed されることだが、withdrawal credential が cold にあれば staked balance の全額は守られる。真剣な validator 構成における標準であり、これを欠くと鍵漏洩は壊滅的な結末を招く。',
+                      "correctIndex": 1,
+                      "explanation": "Defense in depth の典型例である。署名鍵が漏れたときの最悪ケースは validator が slashed されることだが、withdrawal credential が cold にあれば staked balance の全額は守られる。真剣な validator 構成における標準であり、これを欠くと鍵漏洩は壊滅的な結末を招く。"
                     },
                     {
-                      question: 'PoS chain の **whistleblower 報酬** とは何で、何を可能にしているのか?',
-                      options: [
+                      "question": "PoS chain の **whistleblower 報酬** とは何で、何を可能にしているのか?",
+                      "options": [
                         "すべての validator に対する固定の日次支払い。",
                         "誰かが slashing proof (矛盾する 2 つの署名) を提出すると、slashed された stake のごく一部 (典型的には ~1/512) を受け取れる仕組みである。これが **独立した watcher** が chain を監視して slashing proof を提出するための経済的インセンティブを生み、誰が見張るかを誰も指定しなくてもプロトコルが強制される — つまり permissionless な強制が成立する。",
-                        '完璧な uptime を維持する validator に支払われるボーナス。',
-                        '遅延した attestation に対するペナルティ。',
+                        "完璧な uptime を維持する validator に支払われるボーナス。",
+                        "遅延した attestation に対するペナルティ。"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Whistleblower 報酬は slashing 検知を経済ゲームに変える。Double-sign を見つけられる者なら誰でも利益を得られる。プロトコルの integrity が中央集権的な当事者に依存しなくなり、見張ろうとする者なら誰でも強制できる — permissionless な分散化にとって決定的に重要な仕組みである。',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "Whistleblower 報酬は slashing 検知を経済ゲームに変える。Double-sign を見つけられる者なら誰でも利益を得られる。プロトコルの integrity が中央集権的な当事者に依存しなくなり、見張ろうとする者なら誰でも強制できる — permissionless な分散化にとって決定的に重要な仕組みである。"
+                    }
                   ],
                 },
               ],

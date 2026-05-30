@@ -1,17 +1,17 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethFundamentalsJA(prisma: PrismaClient) {
-  const tags = ['reth', 'revm', 'alloy', 'rust', 'fundamentals', 'evm'];
+  const tags = ['rust', 'alloy', 'evm', 'fundamentals', 'beginner'];
 
   await prisma.course.create({
     data: {
       slug: 'reth-fundamentals-ja',
-      title: 'Reth Fundamentals — Alloyで動かす最初の一歩',
+      title: 'Reth Fundamentals — Alloy で動かす最初の一歩',
       description:
-        'Alloyを使ってEthereumノードに接続し、署名・残高取得・ブロック番号取得など実用的なRustコードを書く。さらにEVMの基本概念（スタック、メモリ、Opcode）を学び、Revmへの橋渡しを行う。',
+        'Rust × Ethereum の最初の道具立てを 11 レッスンで揃える — Rust の所有権 / Result / async、Alloy の Address / U256 / Signer / Provider、EVM のスタックマシンと 5 記憶領域、Revm 実行エンジン、Foundry ツールチェイン。BEGINNER 向け、3 クイズで定着確認、修了時に 3 中級コース（Inside Revm / Inside Reth / Inside Alloy）へ進む準備が整う。',
       difficulty: 'BEGINNER',
-      duration: 150,
-      xpReward: 250,
+      duration: 139,
+      xpReward: 290,
       track: 'reth-fundamentals',
       tags,
       isPublished: true,
@@ -26,15 +26,30 @@ export async function seedRethFundamentalsJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Rust：所有権と借用の5分入門',
+                  title: 'レッスン1 — Rust：所有権と借用の5分入門',
                   slug: 'rust-ownership-borrowing-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Rust：所有権と借用の5分入門
+                  content: `# レッスン1 — Rust：所有権と借用の5分入門
 
-> 🧭 **このレッスンの位置づけ:** ownership / borrowing は、スタックの並行性まわり全体の土台 — Reth の Tokio ランタイム、Revm の \`&mut\` 駆動の実行、alloy の Send 境界付き Provider。ここで一度頭に入れておけば、以降の並行性レッスンが「新しいルール」には見えなくなる。
+## 問い
+
+これから Alloy を書き始めると必ず突き当たるのが **所有権（ownership）**。Rust 最大の特徴で最初の壁。完璧な理解は不要、**「コードを読みながらルールを思い出せる」** 状態を目指す。
+
+## 原理（最小モデル）
+
+- **所有権 = コンパイル時のメモリ管理.** C/C++ は人間が、Java/JS は GC が、Rust はコンパイラが「誰が所有し、いつ解放するか」を検証 → GC なし安全 + 二重解放 / use-after-free 防止 + データ競合防止。
+- **3 ルール.** ① 各値には所有者がちょうど 1 人、② 所有者がスコープを抜けると値はドロップ、③ 値はムーブ or 借用される。
+- **借用 \`&\` と \`&mut\`.** \`&\` = 読み取り（複数同時可）/ \`&mut\` = 書き換え（同時に 1 つだけ）= データ競合をコンパイル時に防ぐ。
+- **\`&str\` = 文字列の借用.** \`String\` を所有 + その一部を \`&str\` として貸す、関数引数 \`&str\` は「読み取りで十分、所有権不要」の宣言。
+- **Alloy で頻出する 3 パターン.** \`"...".parse()?\`（文字列パース + エラー伝播）/ \`provider.get_balance(&address).await?\`（借用渡し）/ \`let mut signer = ...\`（書き換え許可）。
+
+## 具体例 + ステップで組み立てる
+
+# Rust：所有権と借用の5分入門
+
 
 これからAlloyを書き始めると、必ず突き当たるのが **所有権（ownership）** である。Rust最大の特徴であり、最初の壁でもある。完璧な理解は不要で、**「コードを読みながらルールを思い出せる」** 状態を目指す。
 
@@ -134,18 +149,40 @@ let mut signer = PrivateKeySigner::random();
 | \`&mut x\` | 借用（書き換え） |
 | \`mut x\` | 変数を書き換え可にする |
 
-所有権の感覚は **書きながら身につける** ものなので、いま完璧でなくて大丈夫。次へ進みましょう。`,
+所有権の感覚は **書きながら身につける** ものなので、いま完璧でなくて大丈夫。次へ進みましょう。
+
+## まとめ（3行）
+
+- 所有権 3 ルール = 各値 1 所有者、スコープ離脱でドロップ、ムーブ or 借用、コンパイル時メモリ管理 = GC なし安全。
+- \`&\` 読み取り（複数可）+ \`&mut\` 書き換え（1 つだけ）= データ競合防止、\`&str\` は \`String\` の借用。
+- 完璧な理解は不要、「コードを読みながら思い出せる」が目標、次レッスンで Alloy 基本型と署名へ。
+`,
                 },
                 {
-                  title: 'Alloyの基本型と署名',
+                  title: 'レッスン2 — Alloyの基本型と署名',
                   slug: 'alloy-primitives-signing-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Alloyの基本型と署名
+                  content: `# レッスン2 — Alloyの基本型と署名
 
-> 🧭 **このレッスンの位置づけ:** 型レベルのプリミティブ（\`Address\`・\`U256\`・\`B256\`）と署名 API を導入する。以降のネットワーク層・認証層のレッスンが、これらを共通の語彙として再利用する。Rust EVM スタックの基礎語彙。
+## 問い
+
+Alloy で Ethereum を扱うときの最初の道具立て — **アドレス / U256 / B256 / 署名**。型システムが「これは Address、これは uint256」と区別してくれるので、誤って混ぜることがない。本レッスンで Alloy 基本型を見て、Signer で鍵を作る。
+
+## 原理（最小モデル）
+
+- **3 primitive 型.** \`Address\`（20 バイト、コントラクト or EOA）/ \`U256\`（256 ビット符号なし整数、wei 金額）/ \`B256\`（32 バイト、ハッシュやスロットキー）。
+- **\`.parse::<Address>()\`.** 文字列 → \`Address\`、checksum 検証込み、不正なら \`Err\`。
+- **\`U256\` リテラル.** \`U256::from(1_000_000)\`（u64 から）/ \`"1000000".parse()?\`（文字列から）/ \`parse_ether("1")?\`（ETH 単位）。
+- **\`Signer\` トレイト.** 鍵を持って署名を作る抽象、\`PrivateKeySigner::random()\` で新規鍵、\`.address()\` で公開アドレス取得。
+- **Ledger / AWS KMS 等もSigner で抽象化.** 後の Inside Alloy で詳細、ここでは「Signer = 署名できる何か」で十分。
+
+## 具体例 + ステップで組み立てる
+
+# Alloyの基本型と署名
+
 
 最初に **Alloy** を直接触る。Alloyは「EthereumをRustで扱うためのライブラリ群」で、Rethも内部でこれを活用している。
 
@@ -256,18 +293,40 @@ Solidityも \`address\` 型を持ちますが、Rustの型システムはより�
 1. **同じメッセージ** を **異なる2つのチェーンID** で署名 — 署名は異なるはず
 2. \`recover_address_from_msg\` を **改ざんされたメッセージ** に対して呼ぶ — 復元アドレスが一致しない。**それがEIP-191の改ざん耐性**
 
-次は \`Result\`・\`Option\`・\`?\` — Provider に触れる前に押さえるべきエラーハンドリングの語彙。`,
+次は \`Result\`・\`Option\`・\`?\` — Provider に触れる前に押さえるべきエラーハンドリングの語彙。
+
+## まとめ（3行）
+
+- 3 primitive = \`Address\` 20 バイト / \`U256\` 256 ビット / \`B256\` 32 バイト、型システムが「これは Address、これは wei」を区別。
+- \`.parse()\` で文字列 → 型、\`U256::from()\` で数値 → U256、\`parse_ether("1")\` で ETH 単位、お金は f64 でなく U256。
+- \`Signer\` = 署名できる何か、\`PrivateKeySigner::random()\` で新規鍵、\`.address()\` で公開アドレス、次は Result/Option/?。
+`,
                 },
                 {
-                  title: 'Rust：Result・Option・`?` 演算子',
+                  title: 'レッスン3 — Rust：Result・Option・`?` 演算子',
                   slug: 'rust-result-option-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Rust：Result・Option・\`?\` 演算子
+                  content: `# レッスン3 — Rust：Result・Option・\`?\` 演算子
 
-> 🧭 **このレッスンの位置づけ:** \`Result\` と \`Option\` は、スタックの全層 — RPC エラー、EVM の halt、DB のキー欠落 — が「失敗を隠さずに表に出す」ための語彙。ここでまとめて頭に入れておく。
+## 問い
+
+Rust にはエラーを返す関数が大量にある。それらをすべて手動でアンラップすると、**コードが try/catch だらけになる**。Rust は \`?\` 演算子で「エラーなら早期 return、成功なら値を取り出す」を 1 文字で書ける。Alloy のコードを読むときに \`?\` が至る所に出てくる理由を理解する。
+
+## 原理（最小モデル）
+
+- **\`Result<T, E>\`.** 成功 = \`Ok(T)\`、失敗 = \`Err(E)\`、関数の戻り値型として「失敗しうる」を型で表現。
+- **\`Option<T>\`.** 値あり = \`Some(T)\`、なし = \`None\`、null の代わり、unwrap せずに済む。
+- **\`?\` 演算子.** \`result?\` = \`match result { Ok(v) => v, Err(e) => return Err(e.into()) }\` の糖衣、エラーは呼び出し元へ自動伝播。
+- **\`.await?\` 組み合わせ.** async 関数で頻出、\`.await\` で Future 完了待ち + \`?\` でエラー伝播 = 同期的に書ける async コード。
+- **\`unwrap()\` vs \`?\`.** \`unwrap()\` = エラーで panic（学習 / プロトタイプ）、\`?\` = エラーを呼び出し元へ伝播（本番コード）。
+
+## 具体例 + ステップで組み立てる
+
+# Rust：Result・Option・\`?\` 演算子
+
 
 Alloyコードでは、ほぼすべての行に \`.await?\` や \`.parse()?\` が出る。これは **Rustのエラーハンドリング** 構文である。
 
@@ -366,18 +425,40 @@ async fn main() -> eyre::Result<()> {
 
 ほぼすべての行で \`?\` が活躍する。**「成功ならそのまま、失敗なら呼び出し元へ返す」** と覚えればよい。
 
-次のレッスンでこれを実際のProvider接続コードに使う。`,
+次のレッスンでこれを実際のProvider接続コードに使う。
+
+## まとめ（3行）
+
+- \`Result<T, E>\` 成功 / 失敗 + \`Option<T>\` 値あり / なし = Rust のエラー / 不在表現、type system が「失敗しうる」を強制。
+- \`?\` 演算子 = エラー時に早期 return、\`.await?\` で async + エラー伝播、try/catch の地獄を 1 文字で避ける。
+- \`unwrap()\` は学習用 / \`?\` は本番、次は \`Provider\` でノードへ接続。
+`,
                 },
                 {
-                  title: 'Provider — ノードへ接続する',
+                  title: 'レッスン4 — Provider — ノードへ接続する',
                   slug: 'alloy-provider-ja',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Provider — ノードへ接続する
+                  content: `# レッスン4 — Provider — ノードへ接続する
 
-> 🧭 **このレッスンの位置づけ:** **ネットワーク層のクライアントトレイト** に正面から触れる最初の機会 — Inside Alloy で後ほど内側を覗くのと同じ \`Provider\` トレイト。本レッスンでは外側からの使い方を掴み、設計の中身は Inside Alloy の組み立て章で読む。
+## 問い
+
+ここまでの 3 レッスンで Rust と Alloy 型を扱えるようになった。**次は Ethereum ノードと話す方法** — \`Provider\` がそのインターフェース。HTTP / WebSocket / IPC / Anvil-fork どれでも、**同じ trait の同じメソッド** で叩ける。
+
+## 原理（最小モデル）
+
+- **\`Provider\` トレイト.** ノードへの RPC クライアント抽象、\`get_block_number\` / \`get_balance\` / \`call\` / \`send_transaction\` 等の動詞。
+- **\`ProviderBuilder::new().connect_http(url)\`.** HTTP 経由のプロバイダを作る、\`url.parse()?\` で \`Url\` 型に。
+- **Public RPC エンドポイント.** \`https://ethereum.reth.rs/rpc\`（rethlab 公式、無料）/ \`https://eth.llamarpc.com\`（llamarpc）/ Alchemy / Infura（API key 必要）。
+- **async メソッド.** \`provider.get_block_number().await?\` = ネットワーク往復、Tokio ランタイム上で実行。
+- **\`#[tokio::main]\`.** \`main()\` を async 化、ランタイム起動 + 最後まで待つ、初心者の boilerplate。
+
+## 具体例 + ステップで組み立てる
+
+# Provider — ノードへ接続する
+
 
 Alloyの **Provider** は「ノードへの窓口」である。これを通じてブロック番号・残高・トランザクション情報を取得する。
 
@@ -456,16 +537,39 @@ anvil
 
 ## 次のステップ
 
-これでAlloyの「Read」（読み取り）まで来た。次のモジュールでは、EVMが実際に「動く」中身（スタック、メモリ、Opcode）に踏み込む。`,
+これでAlloyの「Read」（読み取り）まで来た。次のモジュールでは、EVMが実際に「動く」中身（スタック、メモリ、Opcode）に踏み込む。
+
+## まとめ（3行）
+
+- \`Provider\` = ノードへの RPC クライアント抽象、HTTP / WebSocket / IPC / Anvil-fork どれでも同じ trait + 同じメソッド。
+- \`ProviderBuilder::new().connect_http(url)\` で作成、public RPC は \`ethereum.reth.rs/rpc\` 等、async メソッドで往復。
+- \`#[tokio::main]\` で main async 化、次は学んだ要素を組み合わせた残高チェッカークイズ。
+`,
                 },
                 {
-                  title: 'クイズ：残高チェッカー',
+                  title: 'クイズ — 残高チェッカー',
                   slug: 'balance-checker-challenge-ja',
                   type: 'QUIZ',
                   sortOrder: 4,
                   duration: 15,
                   xpReward: 30,
-                  content: `# クイズ：残高チェッカー
+                  content: `# クイズ — 残高チェッカー
+
+## 問い
+
+指定アドレスの ETH 残高がゼロなら \`true\` を返す関数を書く。**Provider + get_balance + \`.await?\` + Option/Result の組み合わせを 1 関数で使う実践クイズ**。Vitalik のアドレスで動作確認。
+
+## 原理（最小モデル）
+
+- **関数シグネチャ.** \`async fn is_empty_wallet(provider: &impl Provider, address: Address) -> eyre::Result<bool>\`。
+- **\`&impl Provider\`.** 任意の Provider 実装を受け取れる、トレイト境界によるポリモーフィズム = HTTP / WebSocket / Anvil-fork どれでも。
+- **\`get_balance(address).await?\`.** Future を完了まで待つ + エラー伝播、\`U256\` 残高を取り出す。
+- **\`.is_zero()\`.** \`U256\` のゼロ判定慣用表現、\`balance == 0u64\` は型不一致でコンパイルエラー。
+- **Wei 単位.** \`get_balance\` は **wei** を \`U256\` で返す、ETH は 10¹⁸ wei、\`format_ether\` で表示用変換、\`f64\` は精度損失で絶対 NG。
+
+## 具体例 + ステップで組み立てる
+
+# クイズ：残高チェッカー
 
 ゴール：指定したアドレスの ETH 残高がゼロなら \`true\`、それ以外なら \`false\` を返す関数を書く。
 
@@ -529,63 +633,70 @@ async fn main() -> eyre::Result<()> {
 
 \`cargo run\` で公開 Reth RPC に問い合わせ、Vitalik のウォレットが空かどうかを返す（空ではない）。
 
-## クイズ`,
+## クイズ
+
+## まとめ（3行）
+
+- \`async fn is_empty_wallet(&impl Provider, Address) -> eyre::Result<bool>\` + \`get_balance(addr).await?.is_zero()\` の 1 行。
+- \`impl Provider\` でトレイト境界ポリモーフィズム、\`is_zero()\` で U256 のゼロ判定、wei 単位を \`U256\` で扱う（\`f64\` 不可）。
+- 次は EVM の中身を覗くモジュール、まず EVM スタックマシンの基本構造へ。
+`,
                   quizQuestions: [
                     {
-                      question: 'ウォレット残高がゼロかをチェックする Rust + Alloy のスニペットとして正しいのは？',
-                      options: [
-                        '`provider.balance(addr) == 0`',
-                        '`provider.get_balance(addr).await?.is_zero()`',
-                        '`provider.is_zero(addr).await?`',
-                        '`provider.get_balance(addr) == U256::ZERO`',
+                      "question": "ウォレット残高がゼロかをチェックする Rust + Alloy のスニペットとして正しいのは？",
+                      "options": [
+                        "`provider.balance(addr) == 0`",
+                        "`provider.get_balance(addr).await?.is_zero()`",
+                        "`provider.is_zero(addr).await?`",
+                        "`provider.get_balance(addr) == U256::ZERO`"
                       ],
-                      correctIndex: 1,
-                      explanation: '`get_balance` は async で `Result<U256>` を返す。`await?` で完了を待ち、エラーは伝播する。`is_zero()` が `U256` のゼロ判定の慣用表現。',
+                      "correctIndex": 1,
+                      "explanation": "`get_balance` は async で `Result<U256>` を返す。`await?` で完了を待ち、エラーは伝播する。`is_zero()` が `U256` のゼロ判定の慣用表現。"
                     },
                     {
-                      question: '`get_balance` を呼ぶ行で `.await?` を書く理由は？',
-                      options: [
-                        '`.await` は飾り、`?` だけが必要',
-                        '`async fn` だから',
-                        '`.await` は Future を完了まで poll し、`?` は失敗時にエラーを呼び出し元へ伝播する',
-                        '`.await` で実行が速くなる',
+                      "question": "`get_balance` を呼ぶ行で `.await?` を書く理由は？",
+                      "options": [
+                        "`.await` は飾り、`?` だけが必要",
+                        "`async fn` だから",
+                        "`.await` は Future を完了まで poll し、`?` は失敗時にエラーを呼び出し元へ伝播する",
+                        "`.await` で実行が速くなる"
                       ],
-                      correctIndex: 2,
-                      explanation: '2つの別演算子の組み合わせ：`.await` は Future を完了まで進める（`get_balance` が async なので）、`?` は結果が `Err` のとき早期 return する。',
+                      "correctIndex": 2,
+                      "explanation": "2つの別演算子の組み合わせ：`.await` は Future を完了まで進める（`get_balance` が async なので）、`?` は結果が `Err` のとき早期 return する。"
                     },
                     {
-                      question: '`balance`（`U256`）と `0u64` を `==` で直接比較するとどうなる？',
-                      options: [
-                        '`0` は自動変換されるので動く',
-                        'コンパイルは通るが警告が出る',
-                        'コンパイルエラー — 型が違う',
-                        'ランタイムでパニック',
+                      "question": "`balance`（`U256`）と `0u64` を `==` で直接比較するとどうなる？",
+                      "options": [
+                        "`0` は自動変換されるので動く",
+                        "コンパイルは通るが警告が出る",
+                        "コンパイルエラー — 型が違う",
+                        "ランタイムでパニック"
                       ],
-                      correctIndex: 2,
-                      explanation: 'Rust は数値型を暗黙変換しない。`U256 == u64` はコンパイルエラー。`balance == U256::from(0)` か、より慣用的に `balance.is_zero()` を使う。',
+                      "correctIndex": 2,
+                      "explanation": "Rust は数値型を暗黙変換しない。`U256 == u64` はコンパイルエラー。`balance == U256::from(0)` か、より慣用的に `balance.is_zero()` を使う。"
                     },
                     {
-                      question: 'Provider の `get_balance` が返す残高の単位は？',
-                      options: [
-                        'ETH（浮動小数）',
-                        'Gwei',
-                        'Wei（`U256` 型）',
-                        'Lamport',
+                      "question": "Provider の `get_balance` が返す残高の単位は？",
+                      "options": [
+                        "ETH（浮動小数）",
+                        "Gwei",
+                        "Wei（`U256` 型）",
+                        "Lamport"
                       ],
-                      correctIndex: 2,
-                      explanation: '`get_balance` は **wei** を `U256` で返す。ETH 表示には 10^18 で割るが、お金の精度が重要なので `f64` は絶対NG。Alloy の `format_ether` を使う。',
+                      "correctIndex": 2,
+                      "explanation": "`get_balance` は **wei** を `U256` で返す。ETH 表示には 10^18 で割るが、お金の精度が重要なので `f64` は絶対NG。Alloy の `format_ether` を使う。"
                     },
                     {
-                      question: '関数シグネチャが具体型でなく `&impl Provider` を取る理由は？',
-                      options: [
-                        '`impl` は単なる省略記法で実質的な違いはない',
-                        '任意の Provider 実装（HTTP・WebSocket・Anvil-fork）を受け取れる — トレイト境界によるポリモーフィズム',
-                        '`await` のために必須',
-                        'メモリ節約のため',
+                      "question": "関数シグネチャが具体型でなく `&impl Provider` を取る理由は？",
+                      "options": [
+                        "`impl` は単なる省略記法で実質的な違いはない",
+                        "任意の Provider 実装（HTTP・WebSocket・Anvil-fork）を受け取れる — トレイト境界によるポリモーフィズム",
+                        "`await` のために必須",
+                        "メモリ節約のため"
                       ],
-                      correctIndex: 1,
-                      explanation: '`impl Provider` は「`Provider` トレイトを実装した何らかの具体型」を意味する。同じ関数を HTTP プロバイダ、WebSocket プロバイダ、テスト用インメモリプロバイダに対して書き直さずに使える。',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "`impl Provider` は「`Provider` トレイトを実装した何らかの具体型」を意味する。同じ関数を HTTP プロバイダ、WebSocket プロバイダ、テスト用インメモリプロバイダに対して書き直さずに使える。"
+                    }
                   ],
                 },
               ],
@@ -597,15 +708,30 @@ async fn main() -> eyre::Result<()> {
             lessons: {
               create: [
                 {
-                  title: 'EVMはスタックマシンだ',
+                  title: 'レッスン6 — EVMはスタックマシンだ',
                   slug: 'evm-stack-machine-ja',
                   type: 'CONTENT',
-                  sortOrder: 0,
+                  sortOrder: 5,
                   duration: 12,
                   xpReward: 25,
-                  content: `# EVMはスタックマシンだ
+                  content: `# レッスン6 — EVMはスタックマシンだ
 
-> 🧭 **このレッスンの位置づけ:** EVM を **スタックマシン** として導入する。以降の VM 層レッスン（Revm 内部、opcode、ガス、precompile）はすべて、この設計上の前提に立つ。JVM や CPython VM と同じ設計を、ブロックチェーンのコンセンサスのために制約したかたち。
+## 問い
+
+これまで Alloy で「外側から」Ethereum と話してきた。**ここから EVM の中身を覗く** — Ethereum Virtual Machine は何で、どう動くか。EVM は **スタックマシン**、レジスタもメモリアドレスもなく、ただ「上に積む / 下から取り出す」だけで計算する。
+
+## 原理（最小モデル）
+
+- **スタックマシン vs レジスタマシン.** スタック = 値の置き場が 1 つ（top）/ レジスタ = 名前付き場所が複数（R0, R1, ...）。EVM は 1024 段のスタックのみ。
+- **5 つの記憶領域.** Stack（1024 段、現行計算）/ Memory（揮発、tx 内のみ）/ Calldata（読み専用、tx の入力）/ Storage（永続化、ブロックチェーン状態）/ Code（読み専用、コントラクトコード）。
+- **Opcode = 1 バイト命令.** \`0x01 ADD\` / \`0x60 PUSH1\` / \`0x52 MSTORE\` / \`0x55 SSTORE\`、ADD はスタックトップ 2 値を pop して和を push。
+- **ガス.** 全 opcode が gas コスト持ち、tx に gas limit、消費でランタイム停止、Storage 書き込みが最も高い（永続化）。
+- **スタックマシン選択の理由.** 命令セット小 + オペランドエンコード単純 = コンセンサスバグ少 + 検証 / ZK 回路化容易、トレードオフはネイティブレジスタコードに対するランタイム効率。
+
+## 具体例 + ステップで組み立てる
+
+# EVMはスタックマシンだ
+
 
 EVM（Ethereum Virtual Machine）は **スタックマシン** と呼ばれる仮想機械の一種である。レジスタや関数呼び出し規約を持たず、ほぼすべての計算を **スタック** 上で行う。
 
@@ -692,18 +818,40 @@ Revm の **本物の** \`add\` ソース（中級ティアで一行ずつ分解�
 2. \`popn\` の実装 — const \`N\` でコンパイラがループを完全に省略する仕組み
 3. \`dup\` と \`swap\` メソッド — 確保せずインデックスを操作するだけ
 
-これで次のレッスンで自分のミニスタックマシンを書く準備ができました。`,
+これで次のレッスンで自分のミニスタックマシンを書く準備ができました。
+
+## まとめ（3行）
+
+- EVM = スタックマシン、1024 段スタック + 5 記憶領域（Stack / Memory / Calldata / Storage / Code）、Storage のみ永続化。
+- 1 バイト Opcode、\`ADD\` は pop 2 + push 1、wrapping arithmetic（mod 2²⁵⁶）、全 opcode が gas コスト持ち、Storage 書き込み最も高い。
+- スタックマシン選択 = 命令セット小 + 検証容易 + ZK 回路化容易、トレードオフはレジスタコードに対するランタイム効率、次はミニ EVM スタッククイズ。
+`,
                 },
                 {
-                  title: 'クイズ：ミニEVMスタック',
+                  title: 'クイズ — ミニEVMスタック',
                   slug: 'mini-evm-stack-ja',
                   type: 'QUIZ',
-                  sortOrder: 1,
+                  sortOrder: 6,
                   duration: 15,
                   xpReward: 30,
-                  content: `# クイズ：ミニEVMスタック
+                  content: `# クイズ — ミニEVMスタック
 
-> 🧭 **このレッスンの位置づけ:** **VM 層** に初めて手を動かす回 — スタックといくつかの opcode を備えたトイ EVM。Revm が EVM 全体へとスケールさせていくのと同じ設計の、種となる実装。
+## 問い
+
+EVM のスタック操作を **Rust の \`Vec\` で再現** する。\`pop\` + \`push\` + wrapping arithmetic + \`unwrap_unchecked\` の安全パターン — Revm のホットパスでも同じ仕組みが使われている。
+
+## 原理（最小モデル）
+
+- **\`Vec::pop\` の戻り値は \`Option<T>\`.** 空 → \`None\`、\`Some(v)\` → 値取り出し、null チェックを型システムで強制。
+- **EVM スタックリミット 1024.** Revm に \`pub const STACK_LIMIT: usize = 1024;\`、超えると \`StackOverflow\`。
+- **EVM ADD は \`wrapping_add\`.** mod 2²⁵⁶ wrap、\`saturating_add\` や \`checked_add\` はコンセンサス外、\`+\` は debug/release で挙動分岐。
+- **\`unwrap_unchecked()\` + \`unsafe\`.** 直前で長さチェック済 → パニックパスがデッドコード → \`unwrap_unchecked\` でホットパスから消去、手動チェック後 \`unsafe\` で不変条件を符号化する最適化。
+- **スタックマシン vs レジスタマシン.** 命令セット小 + オペランドエンコード単純 = ZK 回路化 / 形式検証容易、レジスタコード並みの速度は出ない。
+
+## 具体例 + ステップで組み立てる
+
+# クイズ：ミニEVMスタック
+
 
 Rust で小さな EVM 風スタックを 3 操作だけで作ります：
 
@@ -757,75 +905,98 @@ fn main() {
 
 動いたら、前のレッスンの本物の Revm \`Stack\` と頭の中で設計を比較してみてください — 同じ形のはず。
 
-## クイズ`,
+## クイズ
+
+## まとめ（3行）
+
+- \`Vec::pop -> Option<T>\` で空チェック型強制、EVM スタックリミット 1024 = Revm \`STACK_LIMIT\`、ADD は \`wrapping_add\`（mod 2²⁵⁶）。
+- \`unwrap_unchecked\` + \`unsafe\` = 事前長さチェック後の最適化、ホットパスからパニックパス消去、手動チェック後 unsafe で不変条件符号化。
+- スタックマシンは命令セット小 + ZK / 検証容易 = レジスタコードに対するランタイム速度とのトレードオフ、次は async / トレイト / ジェネリクス。
+`,
                   quizQuestions: [
                     {
-                      question: '`Vec::pop` の返り値の型は？',
-                      options: [
-                        '`T`',
-                        '`Option<T>` — `Some(value)` か空のとき `None`',
-                        '`Result<T, Error>`',
-                        '`&T`',
+                      "question": "`Vec::pop` の返り値の型は？",
+                      "options": [
+                        "`T`",
+                        "`Option<T>` — `Some(value)` か空のとき `None`",
+                        "`Result<T, Error>`",
+                        "`&T`"
                       ],
-                      correctIndex: 1,
-                      explanation: '`pop` は `Option<T>` を返す。「スタックが空かもしれない」という可能性が型システムに組み込まれているので、空のケースを処理しないまま値を取り出すことはできない。',
+                      "correctIndex": 1,
+                      "explanation": "`pop` は `Option<T>` を返す。「スタックが空かもしれない」という可能性が型システムに組み込まれているので、空のケースを処理しないまま値を取り出すことはできない。"
                     },
                     {
-                      question: 'EVM スタックのハードリミット（最大サイズ）は？',
-                      options: [
-                        '256',
-                        '512',
-                        '1024',
-                        '無制限（メモリ次第）',
+                      "question": "EVM スタックのハードリミット（最大サイズ）は？",
+                      "options": [
+                        "256",
+                        "512",
+                        "1024",
+                        "無制限（メモリ次第）"
                       ],
-                      correctIndex: 2,
-                      explanation: 'EVM は 1024 個までと厳密に決められている。Revm にも `pub const STACK_LIMIT: usize = 1024;` がそのまま定義されている。超えると `StackOverflow`。',
+                      "correctIndex": 2,
+                      "explanation": "EVM は 1024 個までと厳密に決められている。Revm にも `pub const STACK_LIMIT: usize = 1024;` がそのまま定義されている。超えると `StackOverflow`。"
                     },
                     {
-                      question: '本物の EVM の ADD opcode で正しい算術セマンティクスは？',
-                      options: [
-                        '`wrapping_add` — オーバーフロー時に mod 2²⁵⁶ でラップ',
-                        '`saturating_add` — オーバーフローで最大値に飽和',
-                        '`checked_add` — `Option` を返し、オーバーフロー時にパニック',
-                        'どれでもよい',
+                      "question": "本物の EVM の ADD opcode で正しい算術セマンティクスは？",
+                      "options": [
+                        "`wrapping_add` — オーバーフロー時に mod 2²⁵⁶ でラップ",
+                        "`saturating_add` — オーバーフローで最大値に飽和",
+                        "`checked_add` — `Option` を返し、オーバーフロー時にパニック",
+                        "どれでもよい"
                       ],
-                      correctIndex: 0,
-                      explanation: 'EVM はラップアラウンド（modulo 2²⁵⁶）の算術を使う。Solidity の `unchecked { ... }` ブロックがこれを露出している。コンセンサスを守るなら必ず wrapping。saturating や checked は仕様から外れる。',
+                      "correctIndex": 0,
+                      "explanation": "EVM はラップアラウンド（modulo 2²⁵⁶）の算術を使う。Solidity の `unchecked { ... }` ブロックがこれを露出している。コンセンサスを守るなら必ず wrapping。saturating や checked は仕様から外れる。"
                     },
                     {
-                      question: 'Revm の `popn_top!` マクロが（`unwrap()` ではなく）`unwrap_unchecked()` を `unsafe` で使うのはなぜ？',
-                      options: [
-                        'バグ — `unwrap()` でも動く',
-                        '直前で長さチェック済みなのでパニックパスはデッドコード；`unwrap_unchecked` でホットパスから消去できる',
-                        'スレッドセーフのため',
-                        'メモリ節約のため',
+                      "question": "Revm の `popn_top!` マクロが（`unwrap()` ではなく）`unwrap_unchecked()` を `unsafe` で使うのはなぜ？",
+                      "options": [
+                        "バグ — `unwrap()` でも動く",
+                        "直前で長さチェック済みなのでパニックパスはデッドコード；`unwrap_unchecked` でホットパスから消去できる",
+                        "スレッドセーフのため",
+                        "メモリ節約のため"
                       ],
-                      correctIndex: 1,
-                      explanation: 'マクロが事前に長さをチェックしているので、`unwrap_unchecked()` を使えばコンパイラがホットパスのパニックパスコードを省略できる。これは「手動チェックの後 `unsafe` で不変条件を符号化する」最適化テクニック。',
+                      "correctIndex": 1,
+                      "explanation": "マクロが事前に長さをチェックしているので、`unwrap_unchecked()` を使えばコンパイラがホットパスのパニックパスコードを省略できる。これは「手動チェックの後 `unsafe` で不変条件を符号化する」最適化テクニック。"
                     },
                     {
-                      question: 'レジスタマシンと比較した、EVM のようなスタックマシンの実利は？',
-                      options: [
-                        '現代ハードウェアでの素の実行速度',
-                        '命令セットが小さくオペランドのエンコードもシンプル — コンセンサスバグが少なく、検証しやすい',
-                        'キャッシュ局所性が良い',
-                        '消費電力が少ない',
+                      "question": "レジスタマシンと比較した、EVM のようなスタックマシンの実利は？",
+                      "options": [
+                        "現代ハードウェアでの素の実行速度",
+                        "命令セットが小さくオペランドのエンコードもシンプル — コンセンサスバグが少なく、検証しやすい",
+                        "キャッシュ局所性が良い",
+                        "消費電力が少ない"
                       ],
-                      correctIndex: 1,
-                      explanation: 'スタックマシンは命令セットが非常に小さい（レジスタ引数のエンコードが要らない）。Ethereum にとっては：インタープリターがシンプル、形式検証が容易、ZK 回路化も楽。トレードオフはネイティブのレジスタコードに対するランタイム効率。',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "スタックマシンは命令セットが非常に小さい（レジスタ引数のエンコードが要らない）。Ethereum にとっては：インタープリターがシンプル、形式検証が容易、ZK 回路化も楽。トレードオフはネイティブのレジスタコードに対するランタイム効率。"
+                    }
                   ],
                 },
                 {
-                  title: 'Rust：async・トレイト・ジェネリクス',
+                  title: 'レッスン8 — Rust：async・トレイト・ジェネリクス',
                   slug: 'rust-async-traits-generics-ja',
                   type: 'CONTENT',
-                  sortOrder: 2,
+                  sortOrder: 7,
                   duration: 15,
                   xpReward: 30,
-                  content: `# Rust：async・トレイト・ジェネリクス
+                  content: `# レッスン8 — Rust：async・トレイト・ジェネリクス
 
-> 🧭 **このレッスンの位置づけ:** async + トレイト + ジェネリクスの 3 つの交点で、Rust EVM スタック全体が動いている。Reth のパイプライン future、alloy の \`<N: Network>\` Provider、Revm の \`auto_impl\` トレイト — どれもこの交点の上に立っている。ここで一度まとめて頭に入れておく。
+## 問い
+
+Alloy も Reth も Revm も、コードを読むと必ず \`async\` / \`trait\` / \`<T: Bound>\` が出てくる。**この 3 つを最低限読めるようにする** — async は Future を返す関数、trait は Java の interface 相当、ジェネリクスは型パラメータでコード再利用。
+
+## 原理（最小モデル）
+
+- **\`async fn\`.** 戻り値は **Future**（未完了の計算）、\`.await\` で完了まで進める、Tokio 等のランタイム上で実行。
+- **\`trait\`.** 共有インターフェース、Java/Kotlin の interface に類似、\`impl Trait for Type\` で実装、コンパイル時解決。
+- **\`Box<dyn Trait>\` / \`&dyn Trait\`.** 実行時ディスパッチ、複数の具象型を統一で扱う、vtable 経由で遅い代わりに柔軟。
+- **ジェネリクス \`<T>\` + 境界 \`T: Bound\`.** コンパイル時に型パラメータを具象化、モノモーフ化で実行時オーバーヘッドなし。
+- **\`impl Trait\` 構文.** 引数 \`&impl Provider\` = 「\`Provider\` 実装の何か」、戻り値 \`impl Future<Output=T>\` = 具体的な型は隠蔽。
+- **\`async + trait\` = async-trait crate or Rust 1.75+ 標準.** トレイトメソッドが async を返す場合、過去は \`#[async_trait]\` 属性が必要、現在は標準対応。
+
+## 具体例 + ステップで組み立てる
+
+# Rust：async・トレイト・ジェネリクス
+
 
 Revmや Reth のコードを読む前に、**3つの言語機能** を押さえる。これがないとAlloy/Reth本体のコードはほぼ読めない。
 
@@ -952,18 +1123,40 @@ async fn my_exex<Node: FullNodeComponents>(
 
 すべて、ここまでで紹介した文法の組み合わせである。**読めれば、書ける。**
 
-次のレッスンで、実際のRevmの世界に入っていきましょう。`,
+次のレッスンで、実際のRevmの世界に入っていきましょう。
+
+## まとめ（3行）
+
+- \`async fn\` = Future を返す、\`.await\` で完了待ち、Tokio ランタイム上、Alloy の全 RPC メソッドが async。
+- \`trait\` = 共有インターフェース、ジェネリクス \`<T: Bound>\` でコンパイル時解決、\`impl Trait\` は引数 / 戻り値で短縮記法。
+- \`Box<dyn Trait>\` は実行時ディスパッチ（vtable）、ジェネリクスは静的ディスパッチ（モノモーフ化）、次は Revm 実行エンジン紹介。
+`,
                 },
                 {
-                  title: 'Revmという「実行エンジン」',
+                  title: 'レッスン9 — Revmという「実行エンジン」',
                   slug: 'revm-introduction-ja',
                   type: 'CONTENT',
-                  sortOrder: 3,
+                  sortOrder: 8,
                   duration: 12,
                   xpReward: 25,
-                  content: `# Revmという「実行エンジン」
+                  content: `# レッスン9 — Revmという「実行エンジン」
 
-> 🧭 **このレッスンの位置づけ:** **VM 層のエンジン本体** に踏み込む回。Inside REVM で後ほど \`add\`・opcode テーブル・\`Database\` を内側から読みに行く前に、ここで全体像を掴んでおく。
+## 問い
+
+**Revm = Rust 製の EVM 実行エンジン**。Reth、Foundry、Hyperliquid、Tempo、Berachain — Rust エコシステムで「EVM を実行する」必要がある場所すべてが Revm を使う。**なぜ Revm か、ライブラリとして何を提供するか？**
+
+## 原理（最小モデル）
+
+- **Revm はライブラリ.** チェーンでもノードでもない、**EVM の実行エンジン** のみ、Reth が状態 + コンセンサスを足し、Foundry がテストハーネスを足す。
+- **モジュラー設計.** インタープリター / 命令テーブル / Database トレイト / Inspector がそれぞれ独立、差し替え可能 = Hyperliquid がカスタム precompile を足したり、MEV ボットが Inspector で観測したり。
+- **Database トレイト.** state を供給する抽象、HashMap（テスト）/ JSON-RPC（メインネットフォーク）/ MDBX（本番）全部同じトレイトで動く。
+- **Foundry / Reth / OP-Reth / zkVM / MEV ボット採用.** Rust EVM が必要な場所すべてが Revm を使う、エコシステムの共通基盤。
+- **Inside Revm コース（中級）.** add Opcode / 命令テーブル / Database trait を 1 行ずつ歩く深掘り、本レッスンはその入口。
+
+## 具体例 + ステップで組み立てる
+
+# Revmという「実行エンジン」
+
 
 ここまででAlloy（外側のRPC）と、EVMがスタックマシンであることを学んだ。次の主役は **Revm**、実際にOpcodeを実行する **エンジン** そのものである。
 
@@ -1024,18 +1217,39 @@ Revmは「動かすための部品」が分かれば、コードを読み始め�
 \`\`\`youtube
 xRuDWTWuxKA | Dragan Rakita — Revm Endgame (Devcon SEA 2024)
 \`\`\`
+
+## まとめ（3行）
+
+- Revm = Rust 製 EVM 実行エンジン（ライブラリ）、Reth / Foundry / Hyperliquid / Tempo / Berachain 等が共通基盤として採用。
+- モジュラー設計（インタープリター / 命令テーブル / Database / Inspector 独立）、Database トレイトで HashMap / JSON-RPC / MDBX を同じ trait で扱う。
+- 中級 Inside Revm コースで内部を深掘り、次は Foundry ツールチェイン紹介で Solidity 側の手触り。
 `,
                 },
                 {
-                  title: 'Foundry — Rust EVMツールチェイン',
+                  title: 'レッスン10 — Foundry — Rust EVMツールチェイン',
                   slug: 'foundry-toolchain-ja',
                   type: 'CONTENT',
-                  sortOrder: 4,
+                  sortOrder: 9,
                   duration: 10,
                   xpReward: 20,
-                  content: `# Foundry — Rust EVMツールチェイン（導線）
+                  content: `# レッスン10 — Foundry — Rust EVMツールチェイン
 
-> 🧭 **このレッスンの位置づけ:** Fundamentals では「Foundry が Rust EVM スタックのどこにあるか」だけを押さえる。実装・テスト規律の本編は **mastering-foundry-ja** で扱う。
+## 問い
+
+**Foundry = Rust 製の Solidity 開発ツールチェイン**。\`forge\`（テスト + ビルド）/ \`cast\`（chain CLI）/ \`anvil\`（ローカルノード）/ \`chisel\`（Solidity REPL）の 4 binary、すべて Revm を内部で使う。**Hardhat / Truffle が JS だったところを、Foundry は Rust ネイティブで 20-30 倍速い**。
+
+## 原理（最小モデル）
+
+- **4 binary.** \`forge\`（テスト + コンパイル）/ \`cast\`（curl + jq for EVM）/ \`anvil\`（local node、\`--fork-url\` で mainnet fork）/ \`chisel\`（Solidity REPL）。
+- **\`foundryup\` でインストール.** \`curl -L https://foundry.paradigm.xyz | bash && foundryup\` の 1 行、ツールチェイン全体を更新。
+- **\`forge test\` = Solidity 版 \`cargo test\`.** \`.t.sol\` ファイル + \`test*\` 関数を自動発見、in-process REVM で sub-second フィードバック。
+- **Cheatcodes = precompile.** \`vm.warp\` / \`vm.deal\` / \`vm.prank\` がアドレス \`0x71097...\` の precompile call、Hardhat の \`evm_snapshot\` JSON-RPC とは同一プロセス + IPC なしで根本差。
+- **Foundry を極めるコース（中級）.** 規律の transfer（Rust proptest! → forge fuzz / forge invariant、Capstone で \`InsuranceFund\` 2 言語証明）、本レッスンはその入口。
+
+## 具体例 + ステップで組み立てる
+
+# Foundry — Rust EVMツールチェイン（導線）
+
 
 Foundry は Reth / Revm / Alloy と同じ Rust EVM 系譜のツールチェインで、主に次の 4 つから成る。
 
@@ -1093,74 +1307,102 @@ forge snapshot
 - fuzz 実践: \`/courses/mastering-foundry-ja/lessons/foundry-forge-fuzz-ja\`
 - invariant 実践: \`/courses/mastering-foundry-ja/lessons/foundry-forge-invariant-ja\`
 - cheatcode / fork 実践: \`/courses/mastering-foundry-ja/lessons/foundry-anvil-cheatcodes-ja\`
+
+## まとめ（3行）
+
+- Foundry = Rust 製 Solidity ツールチェイン、4 binary（forge / cast / anvil / chisel）、内部で Revm 使用、JS 系（Hardhat / Truffle）より 20-30 倍速い。
+- \`forge test\` = \`cargo test\` 等価、in-process REVM、cheatcode は precompile（\`vm.warp\` / \`vm.deal\` / \`vm.prank\` 等）。
+- 中級 Foundry コースで規律の transfer を深掘り、次は Fundamentals まとめクイズ。
 `,
                 },
                 {
-                  title: 'Fundamentalsまとめクイズ',
+                  title: 'クイズ — Fundamentals まとめ',
                   slug: 'fundamentals-quiz-ja',
                   type: 'QUIZ',
-                  sortOrder: 5,
+                  sortOrder: 10,
                   duration: 12,
                   xpReward: 30,
-                  content: `# Fundamentalsまとめクイズ
+                  content: `# クイズ — Fundamentals まとめ
 
-Alloy・EVM・Revmの基礎を理解できたか確認する。`,
+## 問い
+
+Fundamentals 11 レッスン完走の最終確認 — Alloy の Signer / Provider、EVM スタックマシンの ADD、Revm のモジュラー設計、永続化される記憶領域。**5 問で身についた基礎を確認**。
+
+## 原理（最小モデル）
+
+- **Alloy 復習.** \`PrivateKeySigner::random()\` で署名器、\`ProviderBuilder::new().connect_http(url)\` でノード接続、\`get_balance().await?\` で残高取得。
+- **EVM 復習.** ADD は pop 2 + push 1（wrapping）、5 記憶領域のうち **Storage のみ永続化**（Stack / Memory / Calldata / Code は揮発）。
+- **Revm 復習.** モジュラー設計で組み込みやすい + Rust 安全性 + 性能 = Foundry / Reth / OP-Reth / zkVM / MEV ボット採用。
+- **次のステップ.** Bridge to Advanced で中級への橋渡し、その後 3 中級コース（Inside Revm / Inside Reth / Inside Alloy）。
+
+## 具体例 + ステップで組み立てる
+
+# Fundamentalsまとめクイズ
+
+Alloy・EVM・Revmの基礎を理解できたか確認する。
+
+## まとめ（3行）
+
+- 5 問でこの 11 レッスンの基礎確認、Alloy の Signer / Provider、EVM の ADD + 5 記憶領域、Revm のモジュラー設計、Storage のみ永続化。
+- Fundamentals 完走、Bridge to Advanced で中級への橋渡し、3 中級コース（Revm / Reth / Alloy）へ進む準備完了。
+- rethlab の続きへ進む前に、\`cargo new\` / \`forge init\` / \`anvil\` を手元で 1 回ずつ動かすのを推奨。
+`,
                   quizQuestions: [
                     {
-                      question: 'Alloyの `PrivateKeySigner::random()` で得られるものは？',
-                      options: [
-                        '公開ノードへのRPC接続',
-                        'ランダムな秘密鍵から派生したシグナー（署名器）',
-                        'ガス代の見積もり',
-                        '監査済みのスマートコントラクト',
+                      "question": "Alloyの `PrivateKeySigner::random()` で得られるものは？",
+                      "options": [
+                        "公開ノードへのRPC接続",
+                        "ランダムな秘密鍵から派生したシグナー（署名器）",
+                        "ガス代の見積もり",
+                        "監査済みのスマートコントラクト"
                       ],
-                      correctIndex: 1,
-                      explanation: 'PrivateKeySignerは秘密鍵を保持し、署名を行うオブジェクトである。.address()で公開アドレスを取り出せる。',
+                      "correctIndex": 1,
+                      "explanation": "PrivateKeySignerは秘密鍵を保持し、署名を行うオブジェクトである。.address()で公開アドレスを取り出せる。"
                     },
                     {
-                      question: 'Alloyの `ProviderBuilder::new().connect_http(url)` で作るのは？',
-                      options: [
-                        'ローカルWebサーバー',
-                        'JSON-RPC経由でノードと通信するProviderインスタンス',
-                        'ウォレットアプリ',
-                        '新しいブロックチェーン',
+                      "question": "Alloyの `ProviderBuilder::new().connect_http(url)` で作るのは？",
+                      "options": [
+                        "ローカルWebサーバー",
+                        "JSON-RPC経由でノードと通信するProviderインスタンス",
+                        "ウォレットアプリ",
+                        "新しいブロックチェーン"
                       ],
-                      correctIndex: 1,
-                      explanation: 'ProviderはノードへのRPCクライアントであり、get_block_numberやget_balanceなどのメソッドを提供する。',
+                      "correctIndex": 1,
+                      "explanation": "ProviderはノードへのRPCクライアントであり、get_block_numberやget_balanceなどのメソッドを提供する。"
                     },
                     {
-                      question: 'EVM の `ADD` 命令はどのように動きますか？',
-                      options: [
-                        'メモリの先頭2バイトを足す',
-                        'スタックから2つpopして加算結果をpushする',
-                        'ストレージスロット0と1を足してスロット2に書く',
-                        'gasLimitを2倍にする',
+                      "question": "EVM の `ADD` 命令はどのように動きますか？",
+                      "options": [
+                        "メモリの先頭2バイトを足す",
+                        "スタックから2つpopして加算結果をpushする",
+                        "ストレージスロット0と1を足してスロット2に書く",
+                        "gasLimitを2倍にする"
                       ],
-                      correctIndex: 1,
-                      explanation: 'EVMはスタックマシンで、ADDはスタック上の2つの値をpopし、加算結果をpushする。オーバーフローはuint256でラップする。',
+                      "correctIndex": 1,
+                      "explanation": "EVMはスタックマシンで、ADDはスタック上の2つの値をpopし、加算結果をpushする。オーバーフローはuint256でラップする。"
                     },
                     {
-                      question: 'Revmが Foundry や Reth で使われている主な理由は？',
-                      options: [
-                        '無償で公開されているEVMはRevmだけだから',
-                        'モジュラー設計で「ライブラリとして」組み込みやすく、Rustによる安全性と性能を持つから',
-                        'Geth（Go言語）との互換性のために必要だから',
-                        'Solidityコンパイラが内蔵されているから',
+                      "question": "Revmが Foundry や Reth で使われている主な理由は？",
+                      "options": [
+                        "無償で公開されているEVMはRevmだけだから",
+                        "モジュラー設計で「ライブラリとして」組み込みやすく、Rustによる安全性と性能を持つから",
+                        "Geth（Go言語）との互換性のために必要だから",
+                        "Solidityコンパイラが内蔵されているから"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Revmはライブラリとして設計され、Foundry、Reth、OP-Reth、各種zkVM、MEVボットなどで採用されている。',
+                      "correctIndex": 1,
+                      "explanation": "Revmはライブラリとして設計され、Foundry、Reth、OP-Reth、各種zkVM、MEVボットなどで採用されている。"
                     },
                     {
-                      question: 'EVMで「永続化される」のはどの記憶領域ですか？',
-                      options: [
-                        'スタック（Stack）',
-                        'メモリ（Memory）',
-                        'ストレージ（Storage）',
-                        'コールデータ（Calldata）',
+                      "question": "EVMで「永続化される」のはどの記憶領域ですか？",
+                      "options": [
+                        "スタック（Stack）",
+                        "メモリ（Memory）",
+                        "ストレージ（Storage）",
+                        "コールデータ（Calldata）"
                       ],
-                      correctIndex: 2,
-                      explanation: 'スタックとメモリはトランザクション内のみ揮発し、Storageだけがブロックチェーン状態に永続化される。書き込みコストが高いのもStorageの特徴である。',
-                    },
+                      "correctIndex": 2,
+                      "explanation": "スタックとメモリはトランザクション内のみ揮発し、Storageだけがブロックチェーン状態に永続化される。書き込みコストが高いのもStorageの特徴である。"
+                    }
                   ],
                 },
               ],

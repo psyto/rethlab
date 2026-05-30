@@ -10,12 +10,12 @@ export async function seedRethAlloyAdvancedJA(prisma: PrismaClient) {
       description:
         'alloy のソースを 1 行ずつ読み解く — Rust EVM スタックの **ネットワーク層 + 認証層** を、`Provider`・`Network`・`Signer`/`Filler` のトレイトファミリ越しに歩く。3 つの独立した中級コース（Revm・Reth・Alloy）の 1 つで、受講順は自由。alloy は Reth と dapp が依拠する基盤なので、Rust で Ethereum を扱うあらゆる場面で本コースは効いてくる。',
       difficulty: 'INTERMEDIATE',
-      duration: 123,
-      xpReward: 340,
+      duration: 145,
+      xpReward: 385,
       track: 'alloy-advanced',
       tags,
       isPublished: true,
-      sortOrder: 200,
+      sortOrder: 1200,
       locale: 'ja',
       instructorName: 'RethLab',
       modules: {
@@ -26,76 +26,100 @@ export async function seedRethAlloyAdvancedJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Inside Alloy へようこそ — このコースの読み方',
+                  title: 'レッスン0 — Inside Alloy へようこそ',
                   slug: 'alloy-advanced-welcome-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 7,
                   xpReward: 15,
-                  content: `# Inside Alloy へようこそ — このコースの読み方
+                  content: `# レッスン0 — Inside Alloy へようこそ
 
-これは RethLab の 3 つの独立した中級ティアコースの 1 つです:
+## 問い
 
-- **Inside Revm** — EVM エンジンの内側
-- **Inside Reth** — Reth の内側: Staged Sync・ExEx・Reth SDK
-- **Inside Alloy**（あなたはここ）— Alloy の内側: Provider・Network・Signer
+これは RethLab の 3 つの独立した中級ティアコースの 1 つ。**Alloy は他のすべてが依拠する基盤** — Reth は alloy の型を使い、Revm は alloy の primitive を使い、Rust から Ethereum と通信する dapp / MEV ボット / インデクサはすべて alloy の \`Provider\` を使う。**どこから始め、何を前提に読むか？**
 
-Alloy はほかの全員が依拠する基盤 — Reth は alloy の型を使い、Revm は alloy の primitive を使い、Rust から Ethereum と通信する dapp / MEV ボット / インデクサはすべて alloy の \`Provider\` を使う。本コースが教えるのは **alloy のソースを読む** スキル — Inside Revm が revm を読む力を養うのと同じ形である。
+## 原理（最小モデル）
 
-> 📋 **中級ティアは初めて?** 始める前に *中級への橋渡し* の末尾にある **「中級コースの読み方」** に目を通してしてほしい。編集スタイル（Predict プロンプト、クイズゲート、build-up → walkthrough → quiz → drill のチェーン構造）とペース配分を説明している。3 つの中級コース全てに共通なので、1 度だけ読めば十分。
+- **3 中級コースの位置.** Inside Revm（EVM エンジン）+ Inside Reth（Staged Sync・ExEx・SDK）+ **Inside Alloy**（このコース、Provider・Network・Signer）。受講順は自由、3 つは独立。
+- **3 トピックチェーン.** Provider（Ethereum ノードと話す中心トレイト）+ Network（Ethereum / Optimism / カスタム L2 を同 API で扱う仕組み）+ Signer/Filler（署名・ガス推定・nonce 管理を層状プロバイダに合成）。各々が「積み上げ → ウォークスルー → クイズ → ドリル」の 4 部構成。
+- **教えるのは「alloy のソースを読む」スキル.** Inside Revm が revm を読む力を養うのと同じ形。Provider を *使う* ではなく *読む* ことを学ぶ。
+- **前提知識 2 領域.** 中級 Rust（generics + trait bounds + 関連型 + Arc + async/Future + auto_impl）+ alloy をユーザーとして使った経験（Provider::get_balance、ProviderBuilder、tx 署名）。
+- **EVM 内部の知識は不要.** Alloy は EVM の上で動く — 通信相手はノードであって opcode ではない。
 
-## このコースが教えること
+## 具体例
 
-[\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) のソースを 1 行ずつ読む:
+3 中級コースの分担:
 
-- **\`Provider\` トレイト** — Ethereum ノードと話すための中心的なトレイト
-- **\`Network\` トレイト** — alloy が Ethereum・Optimism・Anvil・カスタム L2を同じ API で扱う仕組み
-- **\`Signer\` / \`Filler\` トレイト** — トランザクション署名、ガス推定、nonce 管理を層状のプロバイダに合成する仕組み
+| コース | 焦点 |
+| :--- | :--- |
+| Inside Revm | EVM エンジン内部 — 未受講なら先に推奨 |
+| Inside Reth | Reth: Staged Sync・ExEx・Reth SDK |
+| **Inside Alloy**（ここ） | Alloy: Provider・Network・Signer |
 
-トピックチェーンは 3 本、それぞれ build-up + walkthrough + quiz + drill の構成。
+セットアップ（一度だけ）:
 
-読み終える頃には alloy のホットパスを読みこなし、カスタム Provider レイヤーを構築できるようになる — MEV パイプライン、インデクサ、Reth-SDK App-chain が本番に投入しているのと同じ種類のコードである。
+\`\`\`bash
+# 1. alloy-rs/alloy を clone
+git clone https://github.com/alloy-rs/alloy
 
-## 前提知識
+# 2. 動く cargo ツールチェイン確認
+rustc --version
 
-**中級 Rust**（中級への橋渡し でカバー）:
-- ジェネリクスとトレイト境界、関連型、デフォルト型パラメータ
-- \`Arc<T>\`、\`dyn Trait\`、層状の所有権
-- \`async\` / \`Future\` の基礎、Tokio ランタイムモデル
-- \`auto_impl\` マクロと手続き属性
+# 3. セカンドモニタか分割端末（読みながらソース参照）
+\`\`\`
 
-**EVM 内部の知識は不要。** Alloy は EVM の上で動きます — 通信相手はノードであって opcode ではない。(3 つの中級コース全てを受けるなら、EVM 内部は Inside Revm で扱う。)
+## ステップで組み立てる
 
-**alloy をユーザーとして使った経験** — \`Provider::get_balance\`、\`ProviderBuilder\`、tx 署名 — は Fundamentals（\`alloy-primitives-signing\`、\`alloy-provider\`）で扱う。心もとなければ Fundamentals レッスンを先に。本コースが教えるのは alloy を *使う* ことではなく *読む* ことである。
+### Step 1: 3 トピックチェーンを把握
 
-## セットアップ — 一度だけ
+Provider → Network → Signer。各々 buildup + walkthrough + quiz + drill の 4 段。
 
-レッスン 1 に入る前に、別ウィンドウで準備:
+### Step 2: 前提を自己チェック
 
-1. **\`alloy-rs/alloy\` を clone** — \`git clone https://github.com/alloy-rs/alloy\`
-2. **動作する \`cargo\` ツールチェイン** — \`rustc --version\` で現代的なバージョンが表示されること
-3. **セカンドモニタか分割端末** — 読みながらソースを参照するため
+中級 Rust + alloy 使用経験。心もとなければ Fundamentals（\`alloy-primitives-signing\`、\`alloy-provider\`）に戻る。
 
-「Find in repo」プロンプトはリポジトリを実際に開いていないと意味を成しません。始める前にここを済ませておく。
+### Step 3: セットアップを済ませる
 
-## 準備完了
+alloy clone + cargo 確認 + 別画面でソース参照。「Find in repo」プロンプトはリポを実際に開いていないと意味がない。
 
-コース詳細に戻り、**\`Provider\` トレイトをステップで組み立てる** から始めましょう。
+### Step 4: 終了後の到達点
 
-Inside Alloy を終えると、3 つの中級コースをすべて完了したことになる。続く **Expert** では手続きマクロと zkVM 統合を深掘りしる。`,
+alloy のホットパスを読みこなし、カスタム Provider レイヤーを構築できる — MEV パイプライン / インデクサ / Reth-SDK App-chain が本番投入しているコード相当。
+
+## まとめ（3行）
+
+- Inside Alloy = RethLab 3 中級コースの 1 つ、Alloy は他すべて（Reth + Revm + dapp）が依拠する基盤、本コースは alloy ソースを *読む* スキル。
+- 3 トピックチェーン（Provider / Network / Signer）+ Testing + 最終 quiz、各々 buildup + walkthrough + quiz + drill の 4 部構成。
+- 前提 = 中級 Rust + alloy 使用経験、EVM 内部の知識は不要、セットアップ（alloy clone + cargo）を済ませて Lesson 1 「\`Provider\` トレイトをステップで組み立てる」から始める。
+`,
                 },
                 {
-                  title: '\`Provider\` トレイトをステップで組み立てる',
+                  title: 'レッスン1 — `Provider` トレイトをステップで組み立てる',
                   slug: 'alloy-provider-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 10,
                   xpReward: 25,
-                  content: `# \`Provider\` トレイトをステップで組み立てる
+                  content: `# レッスン1 — \`Provider\` トレイトをステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** クライアント側から見た **ネットワーク層**。JSON-RPC / HTTP / gRPC クライアントライブラリの設計問題そのもの — 「複数のトランスポート（HTTP、WS、IPC）と複数のチェーン（Ethereum、Optimism、L2）に対して、いかにひとつの一貫した API を提供するか」。Reqwest、tonic、OkHttp が向き合ってきたのと同じ構造を、alloy が Ethereum RPC に持ち込んでいる。
+## 問い
 
-Ethereum ノードと通信する Rust プログラム — MEV ボット、インデクサ、dapp バックエンド、Reth-SDK アプリ — は、すべて [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) の \`Provider\` トレイトを経由する。alloy では生の JSON-RPC を直接叩くことはなく、Ethereum との通信は必ずこの \`Provider\` に集約されている。\`crates/provider/src/provider/trait.rs\` を開くと、トレイトヘッダーはこんな形（抜粋）になっている:
+Ethereum ノードと通信する Rust プログラム — MEV ボット / インデクサ / dapp バックエンド / Reth-SDK アプリ — は、すべて \`alloy-rs/alloy\` の \`Provider\` トレイトを経由する。**生 JSON-RPC は直接叩かず、必ずこの 1 つのトレイトに集約 — 6 つの新概念が一度に降ってくる、組み立てると理由が見えるか？**
+
+## 原理（最小モデル）
+
+- **素朴な RPC クライアントの 3 失敗.** URL ハードコード + トランスポートハードコード（HTTP のみ）+ チェーンハードコード（Ethereum 形式）。修正 = **3 軸をトレイトに抽象化**。
+- **Step 1: メソッドだけのトレイト.** Ethereum で動くが Optimism で破綻（tx envelope が違う）。
+- **Step 2: \`Network\` トレイトで型レベル辞書.** \`type TxEnvelope\` / \`type ReceiptEnvelope\` 等、関連型でチェーン固有型を一束に。Provider に \`N: Network\` ジェネリックパラメータ追加。
+- **\`N: Network = Ethereum\` デフォルト.** ユーザーの 99% は Ethereum、デフォルトで楽にし Optimism のみ明示。
+- **Step 3: トランスポート抽象トレイト.** プロバイダ実装 1 つで HTTP/WS/IPC 全対応、struct ごとに書かない。
+- **Step 4: \`RootProvider\` + \`root()\`.** ラッパープロバイダが 30 メソッドを再実装せずトランスポート委譲、書くのは 1 行（\`self.inner.root()\`）。
+- **Step 5: \`FillProvider\` / \`Filler\`.** Signer / Nonce / Gas / ChainId を合成可能な層に、ビルダーで積層。
+- **Step 6: \`#[auto_impl(&, &mut, Box, Rc, Arc)]\`.** \`Arc<P>\` がそのまま \`Provider\` として動く、タスク間で安価共有。
+
+## 具体例
+
+最終的に組み立てる本物のトレイトヘッダー:
 
 \`\`\`rust
 #[auto_impl(&, &mut, Box, Rc, Arc)]
@@ -113,15 +137,7 @@ pub trait Provider<N: Network = Ethereum>: Send + Sync {
 }
 \`\`\`
 
-いろいろなことが一度に起きている: デフォルト付きの \`N: Network\` ジェネリック（チェーンを表す — Ethereum、Optimism、カスタム L2）、別途定義された \`RootProvider\` 型を返す \`root()\` アクセサ、見慣れないラッパー型（\`ProviderCall\`、\`RpcWithBlock\`、\`EthCall\`）を返すメソッド群、そして 5 種類のラッパー型をカバーする \`auto_impl\`（\`&P\`、\`Box<P>\`、\`Arc<P>\` などに対するトレイト実装を導出するマクロ）。
-
-予備知識ゼロで読むと、一度に 6 つの新概念が押し寄せる。もう少し楽な道がある: **積み上げる**。書きうる最も素朴な RPC クライアントから始め、複雑さを 1 段ずつ獲得していく。最終的には本物の形（Network パラメータ化、トランスポート間接化、層状プロバイダ、その他もろもろ）を自分の手で組み立てたことになる。
-
-> 📂 **別タブで \`alloy-rs/alloy\` を開く。** 各ステップで突き合わせる。モジュールの正確なパスはリリースごとに動くが、組み立てる構造は変わらない。
-
-## ステップ 0 — 素朴な RPC クライアント
-
-なにも考えずに Rust ↔ Ethereum ブリッジを書くと、\`get_balance\` はおおむねこんな形になる:
+素朴な RPC クライアント:
 
 \`\`\`rust
 async fn get_balance(addr: Address) -> Result<U256, Box<dyn Error>> {
@@ -138,19 +154,12 @@ async fn get_balance(addr: Address) -> Result<U256, Box<dyn Error>> {
 }
 \`\`\`
 
-型に紐づかないただの関数。URL はハードコード。トランスポート（HTTP）もハードコード。チェーン（Ethereum 形式の JSON-RPC）もハードコード。
+3 失敗:
+1. **URL ハードコード** — Anvil / Alchemy / プライベートノード / フォークを切り替え不可
+2. **トランスポートハードコード** — HTTP のみ、WebSocket / IPC は別関数
+3. **チェーンハードコード** — Optimism の \`L1Cost\` フィールド / カスタム L2 の独自エンベロープに対応不可
 
-> 🛑 **予測。** スクロールせずに: この素朴な設計が本番運用で生き残れない理由を 3 つ挙げる。ヒント — それぞれ別 *種類* の問題。
-
-3 つ:
-
-1. **URL がハードコード。** Anvil、Alchemy 経由のメインネット、プライベートノード、フォークハーネス — 関数を書き直さなければ切り替えられない。
-2. **トランスポートがハードコード。** HTTP しか扱えない。WebSocket サブスクリプションや IPC 接続は別の伝送機構なので、HTTP を直接埋め込むと、3 種類のトランスポートに対して同じ関数を 3 度書く羽目になる。
-3. **チェーンがハードコード。** Optimism のトランザクションには \`L1Cost\` フィールドがある。カスタム L2 はそれぞれ独自のエンベロープ形状を持つ。JSON-RPC のメソッド名は共通だが、パラメータと応答型は異なる。Ethereum の形をハードコードすると、それ以外のチェーンとは通信できない。
-
-直しかた: **この 3 軸をトレイトに抽象化する。** 各軸はジェネリックパラメータとなり、ユーザーは構築時に一度だけ選び、トレイトメソッドの本体はそれに左右されない。
-
-## ステップ 1 — 最初のトレイト: RPC メソッドの上の Provider
+Step 1（メソッドだけ）:
 
 \`\`\`rust
 #[async_trait]
@@ -163,24 +172,16 @@ pub trait Provider {
 }
 \`\`\`
 
-\`Provider\` がトレイトになった。実装側が呼び出しの実現方法を選ぶ（HTTP、WebSocket、モックなど）。ユーザーはトレイトに対して書き、トランスポートのことは気にしない。
-
-これは *Ethereum* なら通用する。が、Optimism が欲しくなった瞬間にトレイトの形が足りないことに気づく。
-
-## ステップ 2 — 複数チェーン: \`Network\` トレイト
-
-Optimism の \`TransactionRequest\` には \`l1_block_number\` ヒントがある。Optimism のレシートには \`l1_fee\` フィールドがある。RPC のメソッド名は同じ（\`eth_sendTransaction\`、\`eth_getTransactionReceipt\`）でも *型* が違う。
-
-\`OptimismProvider\` を別建てのトレイトとして書きたくはない — 9 割は同一になってしまう。代わりに **チェーンプリミティブを \`Network\` トレイトの背後に抽象化する**:
+Step 2（Network ジェネリック追加）:
 
 \`\`\`rust
 pub trait Network: Send + Sync + 'static {
-    type TxEnvelope: ...;            // 署名済みトランザクション表現
-    type UnsignedTx: ...;            // 未署名 tx
-    type ReceiptEnvelope: ...;       // 署名済みレシート
-    type Header: ...;                // ブロックヘッダー
-    type TransactionRequest: ...;    // RPC 呼び出しの形
-    type TransactionResponse: ...;   // RPC 応答
+    type TxEnvelope: ...;
+    type UnsignedTx: ...;
+    type ReceiptEnvelope: ...;
+    type Header: ...;
+    type TransactionRequest: ...;
+    type TransactionResponse: ...;
     type ReceiptResponse: ...;
     type HeaderResponse: ...;
     type BlockResponse: ...;
@@ -193,42 +194,17 @@ pub struct Optimism;
 impl Network for Optimism { /* ...OP 固有型... */ }
 \`\`\`
 
-\`Network\` は *型レベルの辞書* — \`N: Network\` を選ぶと、そのチェーンが使う型一式が 1 か所でまとめて決まる。
-
-これで \`Provider\` は \`N\` でジェネリックになる:
+\`Provider\` を \`N\` でジェネリック化:
 
 \`\`\`rust
 pub trait Provider<N: Network> {
-    async fn get_balance(&self, address: Address) -> Result<U256>;  // 全チェーン共通 — 変わらず
+    async fn get_balance(&self, address: Address) -> Result<U256>;  // 全チェーン共通
     async fn call(&self, tx: N::TransactionRequest) -> Result<Bytes>;  // チェーン固有
     async fn send_transaction(&self, tx: N::TransactionRequest) -> Result<...>;  // チェーン固有
-    // ...
 }
 \`\`\`
 
-> 🛑 **予測。** デフォルト型パラメータ付きの \`N: Network = Ethereum\` が、デフォルトなしの \`N: Network\` より優れている理由は?
-
-理由は **ユーザーの 99% は Ethereum を使いたい** から。デフォルトのおかげで \`Provider<Ethereum>\` と書かずに \`Provider\` で済む。書き換えが必要なのは Optimism / カスタム L2のユーザーだけ。デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示にする。
-
-本物の alloy トレイトもまさにそのデフォルトを持つ: \`pub trait Provider<N: Network = Ethereum>\`。
-
-## ステップ 3 — 複数のトランスポート: 間接化を挟む
-
-実装が 2 つあると想像する: \`HttpProvider\` と \`WsProvider\`。どちらもトレイトを満たす。だが *基盤クライアント*（JSON-RPC ペイロードを送る当の主体）が違う — 片方は \`reqwest::Client\`、もう片方は WebSocket 接続。
-
-トランスポートを型の一部として持たせると:
-
-\`\`\`rust
-struct HttpProvider<N: Network> { client: reqwest::Client, url: Url, _phantom: PhantomData<N> }
-struct WsProvider<N: Network>   { conn: WsConnection, _phantom: PhantomData<N> }
-struct IpcProvider<N: Network>  { /* ... */ }
-\`\`\`
-
-> **\`PhantomData<N>\` とは:** struct のフィールドとしては値を持たないが、「この struct は型 \`N\` でジェネリックである」とコンパイラに伝えるためのゼロサイズ印。実行時オーバーヘッドゼロ、コンパイル時の型整合だけが目的。\`N\` を実体としては保持しないが、変動部分として参加させたいときに使う。
-
-同じトレイトメソッドを持つ struct が 3 つできて、本体はコピペ。これは筋が悪い。
-
-良い案: **トランスポートのトレイトを導入する**。プロバイダは JSON-RPC を送れる *何か* を保持する; その「何か」はトレイトオブジェクト:
+Step 3（トランスポート抽象）:
 
 \`\`\`rust
 pub trait Transport {
@@ -242,26 +218,7 @@ pub struct ProviderImpl<T: Transport, N: Network> {
 }
 \`\`\`
 
-> 🔍 **リポジトリで確認。** alloy で \`alloy-transport\` と \`alloy-transport-http\` を検索。トランスポートが別クレートに切り出されている点に注目。おかげで \`alloy-transport-http\` *だけ*、あるいは \`alloy-transport-ws\` *だけ* に依存できる — 両方を引き込まずに済む。
-
-(現行 alloy では、トランスポート抽象は \`tower::Service\` を内側に持つ \`Transport\` + \`TransportConnect\` という、より精緻な設計へ進化している。とはいえ構造的な決定 — トランスポートを抽象化して 1 つのプロバイダ実装ですべてを動かす — は不変の骨格である。)
-
-## ステップ 4 — \`RootProvider\` と \`root()\` による間接化
-
-ここまでで struct は 1 つ: \`ProviderImpl<T, N>\`。だが alloy を設計した側が直面した問題がある: **ユーザーはプロバイダをラップしたい**。
-
-外向きのトランザクションを *自動的に署名する* プロバイダが欲しいとする。\`SignerProvider\` を書く: 内側の \`Provider\` をラップし、\`send_transaction\` をオーバーライドする:
-
-\`\`\`rust
-pub struct SignerProvider<P: Provider, S: Signer> {
-    inner: P,
-    signer: S,
-}
-\`\`\`
-
-\`SignerProvider\` 自体が \`Provider\` を実装すれば（大半のメソッドは \`inner\` に転送し、\`send_transaction\` だけオーバーライド）、ユーザーは積層できる: \`SignerProvider<NonceFiller<HttpProvider>>\`。
-
-ただしこれらのラッパーは自前のトランスポートを持たない — トランスポートにアクセスするには *いちばん内側の* プロバイダへ委譲する必要がある。そこで \`root()\` メソッド:
+Step 4（\`RootProvider\` + \`root()\`）:
 
 \`\`\`rust
 pub trait Provider<N: Network = Ethereum> {
@@ -275,22 +232,7 @@ pub struct RootProvider<N: Network = Ethereum> {
 }
 \`\`\`
 
-\`RootProvider\` は **トランスポートを所有する具象 struct**。これ以外の Provider 実装は内側のプロバイダを保持し、その内側に \`root()\` を転送するだけでよい。トレイトのデフォルトメソッドは \`self.root()\` 経由でトランスポートにアクセスする — だからラッパーの作者は、変更したい箇所だけをオーバーライドすればよい。
-
-> 🛑 **理解度チェック。** スクロールせずに: \`SignerProvider\` を書いている状況を想定する。どのメソッドをオーバーライドし、どれをデフォルトに任せるか? \`root()\` の間接化がこれをすっきりさせるのはなぜか?
-
-オーバーライドするのは \`send_transaction\`（tx に署名してから inner に転送）。残り（\`get_balance\`、\`call\` など）はトレイトのデフォルト実装に任せる — それらは \`self.root()\` 経由でトランスポートを取得する。**メソッド本体を 30 個書く代わりに 1 個で済む。**
-
-## ステップ 5 — 層状プロバイダ: \`FillProvider\` と \`Filler\`
-
-ステップ 4 のラッパーパターンは一般化できる。よくある要求:
-
-- **外向きのトランザクションに署名する**（\`Signer\`）
-- **nonce を埋める**（ユーザーが指定していなければ \`get_transaction_count\` を問い合わせる）
-- **ガス見積もりを埋める**（ユーザーがガス上限を指定していなければ \`estimate_gas\` を実行）
-- **チェーン ID を埋める**（\`chain_id\` を 1 度問い合わせ、すべての tx に付与する）
-
-それぞれが \`Filler\` — 送信前に外向きの \`TransactionRequest\` に手を入れる、小さなロジックの単位。次のように合成する:
+Step 5（\`FillProvider\` / \`Filler\`）:
 
 \`\`\`rust
 pub struct FillProvider<F: Filler<N>, P: Provider<N>, N: Network> {
@@ -309,7 +251,7 @@ impl<F: Filler<N>, P: Provider<N>, N: Network> Provider<N> for FillProvider<F, P
 }
 \`\`\`
 
-これを積層する: \`FillProvider<NonceFiller, FillProvider<GasFiller, FillProvider<SignerFiller, RootProvider>>>\`。各層が 1 ピースを埋める。ユーザーはビルダーで組み立てる:
+ユーザービルダー:
 
 \`\`\`rust
 let provider = ProviderBuilder::new()
@@ -319,69 +261,95 @@ let provider = ProviderBuilder::new()
     .on_http(url);
 \`\`\`
 
-\`.filler(...)\` のたびに内側のプロバイダがさらに \`FillProvider\` 層でラップされる。**継承ではなく合成 — RPC クライアント構築に適用したかたち。**
-
-## ステップ 6 — 共有利用のための \`auto_impl\`
-
-最後のピース。本物の alloy はこうなっている:
+Step 6（\`auto_impl\` で \`Arc<P>\` 対応）:
 
 \`\`\`rust
 #[auto_impl(&, &mut, Box, Rc, Arc)]
 pub trait Provider<N: Network = Ethereum>: Send + Sync { /* ... */ }
 \`\`\`
 
-\`auto_impl\` は、\`P: Provider\` であれば \`&P\`、\`&mut P\`、\`Box<P>\`、\`Rc<P>\`、\`Arc<P>\` についても \`Provider\` 実装を導出する。なぜか?
+\`Arc<P>\` が \`Provider\` として動く → MEV ボット / インデクサが 1 プロバイダを多タスク共有可能。
 
-理由は **MEV ボット、インデクサ、dapp サーバーは、1 つのプロバイダを多数のタスクで共有したい** から。自然なかたちは \`Arc<Provider>\` — Arc は安価にクローンでき、1000 個のワーカータスクへ配り、全員が同じ接続プールに当たる。\`auto_impl\` が \`Arc<P>\` の \`Provider\` 実装を自動生成してくれるので、呼び出し側は \`Arc<dyn Provider>\` や \`Arc<P>\` を \`P\` 自身と互換に使える。
+## 失敗例（誤解）
 
-## ここまでに組み立てたもの
+「メソッドだけのトレイトで Ethereum 専用 → 後で Optimism 用に別トレイト」— **間違い**。9 割同一になる、Network 抽象で型レベル辞書化が正解。
 
-\`\`\`rust
-#[auto_impl(&, &mut, Box, Rc, Arc)]
-pub trait Provider<N: Network = Ethereum>: Send + Sync {
-    fn root(&self) -> &RootProvider<N>;
-    // self.root() を経由するデフォルト実装の RPC メソッド群
-}
-\`\`\`
+「Provider 実装ごとに HTTP / WS / IPC の 3 struct」— **間違い**。同じトレイトメソッドの本体コピペ = 筋が悪い。Transport トレイトで 1 implementation。
 
-どのピースも、それぞれ存在理由を稼いでいる:
+「ラッパーは 30 メソッド全部オーバーライド」— **間違い**。\`root()\` 1 行 + デフォルト実装が \`self.root()\` 経由 → ラッパー作者は **変えたいメソッドだけオーバーライド**。
 
-- **\`N: Network = Ethereum\`**（ステップ 2）— 型レベル辞書、デフォルトのおかげで Ethereum ユーザーは楽
-- **トランスポート抽象トレイト**（ステップ 3）— プロバイダ実装 1 つで HTTP / WS / IPC すべてに対応
-- **\`RootProvider\` + \`root()\`**（ステップ 4）— ラッパーが 30 個のメソッドを再実装せずにトランスポートへ委譲できる
-- **\`FillProvider\` / \`Filler\`**（ステップ 5）— 署名、nonce、ガスを合成可能な層に
-- **\`auto_impl\`**（ステップ 6）— \`Arc<P>\` がそのまま \`Provider\` として動く; タスク間で安価に共有できる
+## ステップで組み立てる
 
-次のレッスンでは、alloy 本体の \`crates/provider/src/provider/trait.rs\` を 1 行ずつ読み、各行を組み立てステップに対応づけていきる。
+### Step 1: 素朴な RPC の 3 失敗
 
-## 先に進む前のリコール
+URL + トランスポート + チェーンがすべてハードコード。
 
-スクロールせずに:
+### Step 2: 3 軸をトレイトに抽象化
 
-1. デフォルトつきの \`N: Network = Ethereum\` が、デフォルトなしの \`N: Network\` より優れる理由は?
-2. \`root()\` が解決している問題はなにか — 「各 Provider 実装が自分のトランスポートを持つ」では解けない部分はどこか?
-3. \`SignerProvider\` の \`Provider\` 実装をスケッチしてみる — どのメソッド本体を書き、どれをデフォルトに任せるか?
-4. \`auto_impl(Arc, ...)\` が alloy の本番利用で効いてくる理由は?
+トランスポート抽象 + Network 抽象 + デフォルト Ethereum。
 
-どれかが曖昧なら戻って読み直す。次のレッスンは、alloy 本体の \`Provider\` ソースのガイド付きウォークスルー。
+### Step 3: \`N: Network = Ethereum\` デフォルト
+
+ユーザー 99% は Ethereum、デフォルトで楽に + Optimism のみ明示。
+
+### Step 4: \`RootProvider\` + \`root()\` の間接化
+
+ラッパーは \`self.inner.root()\` の 1 行で 30 メソッド委譲完了。
+
+### Step 5: \`FillProvider\` で層状合成
+
+Signer / Nonce / Gas / ChainId を任意組み合わせ可能、ビルダーで積層。
+
+### Step 6: \`auto_impl\` で 5 種ラッパー
+
+\`&\` / \`&mut\` / \`Box\` / \`Rc\` / \`Arc\` → \`Arc<P>\` がタスク共有プリミティブ。
+
+## 答え合わせ
+
+- **デフォルト \`N: Network = Ethereum\` の利点**: ユーザーの 99% は Ethereum → \`Provider<Ethereum>\` ではなく \`Provider\` で済む。Optimism / カスタム L2 のユーザーだけ明示。**一般ケースを楽にし、まれなケースを明示にする**。
+- **\`root()\` が解決する問題**: ラッパープロバイダ（SignerProvider / Filler）が **30 メソッドを再実装する代わりに 1 メソッド（\`self.inner.root()\`）で委譲**。トレイトのデフォルトメソッドが \`self.root()\` 経由でトランスポートにアクセス → ラッパー作者は変えたいメソッドだけオーバーライド。
+- **\`auto_impl(Arc, ...)\` が本番で効く理由**: MEV ボット / インデクサ / dapp サーバーは 1 プロバイダを多タスクで共有したい → \`Arc<Provider>\` が自然 → Arc は安価クローン + 1000 ワーカーへ配布 + 全員同接続プール。\`auto_impl\` が \`Arc<P>\` の Provider 実装を自動生成。
+
+## 合格基準
+
+- 素朴な RPC の 3 失敗を即答できる。
+- \`N: Network = Ethereum\` デフォルトの理由を言える。
+- \`root()\` + デフォルト実装パターンが解く問題を即答できる。
+- \`FillProvider\` で層状合成（Signer / Nonce / Gas / ChainId）を組める。
+- \`auto_impl\` の 5 種ラッパーと \`Arc\` の本番用途を言える。
+
+## まとめ（3行）
+
+- \`Provider\` トレイト = 素朴な RPC の 3 失敗（URL / トランスポート / チェーン）を解決する 6 設計判断の積み重ね。
+- \`N: Network = Ethereum\` ジェネリック + トランスポート抽象 + \`RootProvider\` / \`root()\` の間接化 + \`FillProvider\` 層状合成 + \`auto_impl(Arc, ...)\` でタスク共有。
+- 次のレッスンで alloy 本体の \`crates/provider/src/provider/trait.rs\` を 1 行ずつ読み、各行を組み立てステップに対応づける。
 `,
                 },
                 {
-                  title: '本物の \`Provider\` トレイトを読む',
+                  title: 'レッスン2 — 本物の `Provider` トレイトを読む',
                   slug: 'alloy-provider-walkthrough-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 10,
                   xpReward: 25,
-                  content: `# 本物の \`Provider\` トレイトを読む
+                  content: `# レッスン2 — 本物の \`Provider\` トレイトを読む
 
-素朴な RPC クライアントから本物のトレイトの形まで \`Provider\` を組み立ててきました。今度はソースを開きます — [\`crates/provider/src/provider/trait.rs\`](https://github.com/alloy-rs/alloy/blob/main/crates/provider/src/provider/trait.rs) を開いて、本番版を 1 行ずつ読み解きる。読むピースのひとつひとつが、それを動機づけた組み立てステップに対応しているはずである。
+## 問い
 
-特に大事なのは、組み立てが意図的に省いた部分を埋めること — **戻り値型の機構**（\`ProviderCall\`、\`RpcWithBlock\`、\`EthCall\`、\`PendingTransactionBuilder\` — await する *前* に RPC 呼び出しをカスタマイズできる future ビルダー型）。これらのラッパー型は、alloy に初めて触れる人がもっとも奇妙に感じる部分です — が、存在理由が見えてくると、トレイトの面構えは恣意的なものではなくなりる。
+素朴な RPC から本物のトレイトの形まで \`Provider\` を組み立ててきた。**今度はソースを開く — 各行は組み立てステップにどう対応するか + 戻り値型の機構（\`ProviderCall\` / \`RpcWithBlock\` / \`EthCall\` / \`PendingTransactionBuilder\`）の存在理由は？**
 
-> 📂 **\`alloy-rs/alloy/crates/provider/src/provider/trait.rs\` を今開く。** 行番号やメソッド本体は動きますが、構造的なポイントは変わりません。レッスンが「現行 alloy main」と言っていても、引用部分は **必ず自分の手元で確認** してしてほしい。
+## 原理（最小モデル）
 
-## トレイトヘッダー
+- **\`Send + Sync\` スーパートレイト.** 本番ユーザーは \`Arc<P>\` をワーカータスクへクローン、これがないとコンパイル不可。
+- **\`auto_impl(&, &mut, Box, Rc, Arc)\` の 5 種.** \`Provider\` は状態読み取りに \`&self\` のみ → 5 種すべてが動く。\`Database\`（revm）の \`&mut self\` 制約とは非対称。
+- **\`root()\` だけが必須.** ほかは全部デフォルト実装、ラッパーは \`self.inner.root()\` の 1 行で済む。
+- **\`client()\` と \`weak_client()\` の 2 種.** 短命 RPC は client（強参照、ライフタイム束縛）/ 長寿命タスク（サブスクリプション、\`tokio::spawn\`）は weak_client（Weak 参照、drop を妨げない）。
+- **3 戻り値型パターン.** \`ProviderCall\`（パラメータなし）/ \`RpcWithBlock\`（ブロック選択）/ \`EthCall\`（多次元オプション）。各々が対応 RPC のオプション構造に合うビルダー。
+- **\`SendTransaction\` の複数ステップ.** 1. 送信 → 2. 確認数設定 → 3. await でレシート。「送信 → 採掘 → 確定」ステートマシン。
+
+## 具体例
+
+トレイトヘッダー:
 
 \`\`\`rust
 #[auto_impl(&, &mut, Box, Rc, Arc)]
@@ -399,47 +367,18 @@ pub trait Provider<N: Network = Ethereum>: Send + Sync {
 }
 \`\`\`
 
-注目すべき点が 3 つ:
+\`Database\` vs \`Provider\` の auto_impl 非対称:
 
-### \`Send + Sync\` スーパートレイト
+| トレイト | auto_impl | メソッド signature |
+| :--- | :--- | :--- |
+| \`Database\`（revm） | \`&mut, Box\` | \`&mut self\` — キャッシュその場書き換え |
+| \`Provider\`（alloy） | \`&, &mut, Box, Rc, Arc\` | \`&self\` — キャッシュは内部可変性で |
 
-すべての \`Provider\` 実装は、スレッド間で安全に move できる（\`Send\` — 値を別スレッドに渡せる）かつ、複数スレッドから安全に参照できる（\`Sync\` — \`&P\` を共有できる）必要がある。これは飾りではない — 本番ユーザーはプロバイダを \`Arc<P>\`（アトミック参照カウントの共有ポインタ）でラップし、Arc を多数のタスクハンドラ（ワーカー、MEV サーチャー、インデクサのストリーム処理）へクローンする。\`Send + Sync\` がなければ、そうした使い方はそもそもコンパイルしない。
+\`Database\` は \`&mut self\` → \`&\`/\`Rc\`/\`Arc\` 使えない（\`&mut T\` 取り出せない）。\`Provider\` は \`&self\` → 5 種全部 OK。
 
-### \`#[auto_impl(&, &mut, Box, Rc, Arc)]\`
+3 戻り値型パターン:
 
-5 種のラッパー。Inside Revm の \`DatabaseRef\` と同じ形、同じ理由: \`Provider\` は状態読み取りに \`&self\` しか必要としない — メソッドシグネチャに \`&mut self\` の変更系がない — ので、5 種のラッパー型すべてがトレイトを通して動く。\`Arc<P>\` と \`Rc<P\>\` は安価な共有ハンドルを提供する。
-
-> 🛑 **予測。** \`Database\`（revm）は \`auto_impl(&mut, Box)\` — 2 種だけ。\`Provider\`（こちら）は 5 種。**\`Database\` と \`Provider\` の構造上のどんな違いが、この非対称を生んでいるのか?**
-
-\`Database\` のメソッドは \`&mut self\` を取る（実装側がキャッシュをその場で書き換えられるように）。これだと \`&\`/\`Rc\`/\`Arc\` は使えない — それらは \`&mut T\` を取り出せないからだ。\`Provider\` のメソッドは \`&self\` を取る — キャッシュが必要なら実装側で内部可変性（\`Mutex\`、\`OnceLock\`、アトミックプリミティブ）を使う。\`auto_impl\` の幅広いリストは、\`&self\` を選んだことの直接的な帰結。同じ形のトレードオフだが、ユースケースに応じて答えが違う。
-
-### \`root()\` だけが必須メソッド
-
-ほかはすべてデフォルト実装。**実装側は root を指せばよいだけ。** ラップするプロバイダ（signer、ガス filler、nonce filler）は、\`root()\` を内側へ転送するだけで実装できる: \`self.inner.root()\`。トレイトのデフォルトメソッドは \`self.root()\` 経由でトランスポートにアクセスする。**ラッパー作者が書くのは 1 行。**
-
-> 🔍 **リポジトリで確認。** alloy 全体から \`fn root(&self) -> &RootProvider\` を検索する。実装の数を数えてみる — ラッパープロバイダにも、アダプタにも、テストフィクスチャにも 1 つずつ存在する。これが設計全体を支える要のメソッド。
-
-## トランスポートアクセサ: \`client()\` と \`weak_client()\`
-
-2 種類:
-
-\`\`\`rust
-fn client(&self) -> ClientRef<'_>     // 強参照、ライフタイム束縛
-fn weak_client(&self) -> WeakClient   // 所有 weak 参照、ライフタイムなし
-\`\`\`
-
-なぜ 2 種類か?
-
-- **\`client()\`** — 同期的な呼び出し向け: クライアントを短く借り、リクエストを送って応答を得る。ライフタイム束縛 — 借用元より長くは生きられない。
-- **\`weak_client()\`** — 借用元より長く生きるタスク向け: サブスクリプション、長寿命のバックグラウンドタスク、\`tokio::spawn\` で投入するもの — プロバイダを生かし続けたくないがクライアントへのハンドルは必要、というケース。\`Weak\` 参照は drop を妨げない; プロバイダが drop されればタスクは気づいてシャットダウンする。
-
-この非対称は、alloy がサポートする 2 つの運用モードに対応する: 短命な RPC 呼び出しと、長寿命なサブスクリプションのストリーム。
-
-## RPC メソッド群 — 代表的な 3 つの形
-
-30 以上あるメソッドを全部読もうとしないこと。*戻り値型のパターン* を示す 3 つを読む:
-
-### \`get_block_number\` — パラメータなし、シンプルな結果
+**\`get_block_number\`** — パラメータなし、シンプル結果:
 
 \`\`\`rust
 fn get_block_number(&self) -> ProviderCall<NoParams, U64, BlockNumber> {
@@ -447,11 +386,9 @@ fn get_block_number(&self) -> ProviderCall<NoParams, U64, BlockNumber> {
 }
 \`\`\`
 
-\`ProviderCall<P, R, F>\` は **future ビルダー** — まだ \`await\` していない、進行中の RPC 呼び出しを表す。型パラメータは 3 つ: \`P\` = パラメータ型、\`R\` = 生応答型、\`F\` = 最終的にユーザーに渡る型（例: \`BlockNumber\` は使い勝手のため \`U64\` を re-type したもの）。
+\`ProviderCall<P, R, F>\` = future ビルダー、\`P\` = パラメータ型、\`R\` = 生応答型、\`F\` = ユーザー型。\`impl Future\` ではなく builder にすることで全 RPC メソッドが同じ形 + カスタマイズの仕組み常備。
 
-\`impl Future<Output = u64>\` ではなく、なぜわざわざこの型か? **\`ProviderCall\` は await の前に呼び出しをカスタマイズさせる** ためだ。\`get_block_number\` にはカスタマイズの余地がほとんどないが、トレイトはすべての RPC メソッドに同じ形を使うので、カスタマイズの仕組みは常に手元にある。
-
-### \`get_balance\` — ビルダー経由でブロックを選択
+**\`get_balance\`** — ビルダー経由でブロック選択:
 
 \`\`\`rust
 fn get_balance(&self, address: Address) -> RpcWithBlock<Address, U256> {
@@ -461,7 +398,7 @@ fn get_balance(&self, address: Address) -> RpcWithBlock<Address, U256> {
 }
 \`\`\`
 
-\`RpcWithBlock\` は、**どのブロック** に対して問い合わせるかを呼び出し側に選ばせるビルダー:
+\`RpcWithBlock\` がブロック選択ビルダー:
 
 \`\`\`rust
 provider.get_balance(addr).await                            // latest（デフォルト）
@@ -470,13 +407,7 @@ provider.get_balance(addr).hash(some_hash).await            // ブロックハ�
 provider.get_balance(addr).pending().await                  // pending ブロック
 \`\`\`
 
-\`get_balance\` の内側に「latest」をハードコードしてしまうと、過去や pending を問い合わせたいユーザーは別のメソッドを組み立てざるを得ない。ビルダーパターンを使えば **メソッドは 1 つ、問い合わせ方は多数** を維持できる。
-
-> 🛑 **理解度チェック。** ブロックの選択を、\`get_balance(addr, block_id)\` のように関数引数で渡すのではなく、呼び出し側のメソッドチェーン（\`.block_id(...)\`）で行う設計にしたのはなぜか?
-
-ほとんどの呼び出しは \`latest\` を求めており、各メソッドのシグネチャに \`block_id\` パラメータを足すと呼び出し側ごとに煩雑になるから。ビルダーパターンは一般ケース（\`get_balance(addr).await\`）を簡潔に、まれなケース（\`...block_id(N).await\`）を明示的に保つ。デフォルト型パラメータと同種のトレードオフ — API を 95% のケースに寄せている。
-
-### \`call\` — カスタマイズの幅が大きいケース
+**\`call\`** — カスタマイズの幅大:
 
 \`\`\`rust
 fn call(&self, tx: N::TransactionRequest) -> EthCall<N> {
@@ -484,31 +415,20 @@ fn call(&self, tx: N::TransactionRequest) -> EthCall<N> {
 }
 \`\`\`
 
-\`EthCall\` はもっとも作り込まれたビルダー。チェーンできるメソッドを見ていく:
-
+\`EthCall\` チェーン可能メソッド:
 - \`.block(BlockId)\` — 特定ブロックに対する eth_call
-- \`.overrides(state_overrides)\` — 状態オーバーライド付き eth_call（アカウントなりすまし、残高上書き、コード上書き）
-- \`.gas(...)\`、\`.value(...)\`、\`.from(...)\` — 呼び出し直前に tx を補正
+- \`.overrides(state_overrides)\` — 状態オーバーライド付き（アカウントなりすまし、残高 / コード上書き）
+- \`.gas(...)\`、\`.value(...)\`、\`.from(...)\` — tx 補正
 
-\`eth_call\` の JSON-RPC メソッドは 4〜5 個のオプションパラメータを持つ。これを 1 つのメソッドシグネチャにすべて押し込むと、まず読めない代物になる。ビルダーパターンはそれを連鎖メソッド群に分解する。**各メソッドは \`EthCall\` 自身の \`fn\` であり、\`Provider\` からは独立している。**
-
-> 🔍 **リポジトリで確認。** \`crates/provider/src/provider/eth_call.rs\`（手元のバージョンで \`EthCall\` が定義されている場所）を開く。チェーン可能メソッドの数を数える。その数が \`eth_call\` の API 表面 — JSON-RPC メソッドのオプションフィールドと 1:1 に対応している。
-
-## パターン: ビルダー戻り値型
-
-3 つの戻り値形（\`ProviderCall\`、\`RpcWithBlock\`、\`EthCall\`）は、一見すると API のふくらみすぎに見えるかもしれない。が、そうではない。**それぞれが、対応する RPC メソッドのオプション構造に合わせた汎用ビルダーパターン。**
+3 戻り値型と RPC オプション構造の対応:
 
 | RPC メソッド | オプションパラメータ | 戻り値型 |
 | :--- | :--- | :--- |
-| \`eth_blockNumber\` | なし | \`ProviderCall\`（await するだけ）|
-| \`eth_getBalance\` | block | \`RpcWithBlock\`（オプション次元 1 つ）|
-| \`eth_call\` | block, from, gas, value, state | \`EthCall\`（オプション次元が多数）|
+| \`eth_blockNumber\` | なし | \`ProviderCall\`（await するだけ） |
+| \`eth_getBalance\` | block | \`RpcWithBlock\`（オプション次元 1 つ） |
+| \`eth_call\` | block, from, gas, value, state | \`EthCall\`（オプション次元が多数） |
 
-戻り値型はそのメソッドの JSON-RPC 仕様に合うカスタマイズだけを公開する。**型駆動の発見しやすさ** — IDE が戻り値型のビルダーメソッドを通じて妥当なオプションを提示する。
-
-## デフォルト実装の動作
-
-トレイト本体はほとんどがデフォルト実装。ほぼ全メソッドがこの形に従う:
+デフォルト実装パターン:
 
 \`\`\`rust
 fn get_X(&self, args...) -> SomeReturnType {
@@ -516,57 +436,89 @@ fn get_X(&self, args...) -> SomeReturnType {
 }
 \`\`\`
 
-クライアント経由でリクエストを構築する（\`self.client()\` は最終的に \`RootProvider\` のトランスポートまで届く）。最後の \`.into()\` で適切なビルダー / future 型へ変換する。
+クライアント経由でリクエスト構築 → \`.into()\` で適切なビルダー / future 型へ変換 → **ラッパーが変えたい部分以外をオーバーライドしなくて良い** 理由。
 
-これが **ラッパープロバイダが実際に変えたい部分以外をオーバーライドしなくてよい** 理由。\`SignerProvider\` は \`send_transaction\` をオーバーライドする; それ以外はデフォルトに任せ、自動的に \`self.root()\`（そしてその先のトランスポート）が使われる。
-
-## \`PendingTransactionBuilder\` — トランザクション送信
-
-個別に見ておきたいメソッドが 1 つ:
+\`send_transaction\` の複数ステップ:
 
 \`\`\`rust
 fn send_transaction(&self, tx: N::TransactionRequest) -> SendTransaction<N>
 \`\`\`
 
-\`SendTransaction\` は上のビルダーと似ているが、複数ステップのやり取りを扱う:
-
-1. トランザクションを送信する（\`PendingTransactionBuilder\` が返る）
-2. 必要に応じて設定: 待つ確認数、タイムアウトなど
-3. await — トランザクションが採掘されたらレシートを得る
-
-ビルダーはユーザーに「どこまで待つか」を選ばせる:
+ステートマシン:
 
 \`\`\`rust
 provider.send_transaction(tx).await?                       // tx ハッシュのみ、待たない
 provider.send_transaction(tx).with_required_confirmations(3).get_receipt().await? // 3 ブロック待つ
 \`\`\`
 
-同じビルダーパターンが、**「tx 送信 → 採掘 → 確定」のステートマシン** に対応する形に広がっている。
+## 失敗例（誤解）
 
-## クイズ前のリコール
+「\`Provider\` も \`Database\` も同じ auto_impl リスト」— **間違い**。\`Database\` = \`&mut, Box\`（2 種）/ \`Provider\` = \`&, &mut, Box, Rc, Arc\`（5 種）。差異は **\`&mut self\` vs \`&self\` のメソッド signature**、auto_impl リストは契約の厳密宣言。
 
-スクロールせずに:
+「\`get_balance\` は \`impl Future<Output = U256>\` を返せば十分」— **間違い**。**\`RpcWithBlock\`** で await 前にブロック選択カスタマイズ可能、全 RPC が同じビルダー形 → カスタマイズ仕組みが常備。
 
-1. \`Provider\` は \`auto_impl(&, &mut, Box, Rc, Arc)\`、\`Database\` は \`auto_impl(&mut, Box)\`。**この非対称を生んでいる、トレイト構造上の決め手はなにか?**
-2. \`get_balance\` が \`impl Future<Output = U256>\` ではなく \`RpcWithBlock\` を返すのはなぜか?
-3. \`SignerProvider\`（ラッパープロバイダ）は内側のプロバイダへ 30 以上のメソッドを転送しなければならない。作者が実際に書くメソッド本体はいくつか、そしてその理由は?
-4. \`weak_client()\` は \`client()\` と並んで存在する。weak のほうを使うのはどんなときか?
+「\`weak_client()\` は \`client()\` の劣化版」— **間違い**。長寿命タスク（サブスクリプション、\`tokio::spawn\`）用、Weak 参照は drop を妨げない → プロバイダ drop でタスクが気づいてシャットダウン。
 
-次のレッスンは進行をゲートするクイズ。**クイズはうなずきでは通せない** — 答えが曖昧なら、今のうちにリコールに取り組むこと。
+## ステップで組み立てる
+
+### Step 1: トレイトヘッダーの 3 注目点
+
+\`Send + Sync\` + \`auto_impl(5 種)\` + \`root()\` のみ必須。
+
+### Step 2: \`Database\` vs \`Provider\` 非対称の理由
+
+\`&mut self\` vs \`&self\` のメソッド signature。
+
+### Step 3: \`client()\` と \`weak_client()\` の使い分け
+
+短命 RPC = client / 長寿命タスク = weak_client。
+
+### Step 4: 3 戻り値型パターン
+
+\`ProviderCall\`（オプション 0）/ \`RpcWithBlock\`（オプション 1 次元）/ \`EthCall\`（多次元）。
+
+### Step 5: デフォルト実装パターン
+
+\`self.client().request(name, args).into()\` の 1 行、ラッパーは変える部分のみ override。
+
+### Step 6: \`send_transaction\` ステートマシン
+
+送信 → 確認数設定 → await でレシート。
+
+## 答え合わせ
+
+- **\`Provider\` と \`Database\` の auto_impl 非対称の決め手**: メソッド signature の違い。\`Database::basic(&mut self, addr)\` は \`&mut\` → \`&\`/\`Rc\`/\`Arc\` から取り出せない。\`Provider::get_balance(&self, addr)\` は \`&self\` → 5 種すべて OK。**キャッシュ戦略の選択（その場書き換え vs 内部可変性）が auto_impl 幅を決める**。
+- **\`get_balance\` が \`impl Future\` でなく \`RpcWithBlock\` を返す理由**: ほとんどの呼び出しは \`latest\` だが、ビルダーパターンで \`.block_id(N)\` / \`.hash(h)\` / \`.pending()\` で過去 / ハッシュ / pending を選択可能 → **メソッド 1 つで問い合わせ方多数**。関数引数で \`block_id\` を渡す設計だと全メソッドが煩雑化。
+- **\`SignerProvider\` ラッパーが書くメソッド数**: \`send_transaction\` の **1 つだけ**（tx 署名 + inner に転送）。残り 29 はトレイトのデフォルト実装に任せる → それらは \`self.root()\` 経由でトランスポート取得。**30 メソッド本体書く代わりに 1 個**。
+
+## 合格基準
+
+- \`auto_impl\` の 5 種を即答できる。
+- \`Database\` vs \`Provider\` の非対称を signature 差で説明できる。
+- \`client()\` と \`weak_client()\` の使い分けを言える。
+- 3 戻り値型と RPC オプション構造の対応を言える。
+- \`send_transaction\` ステートマシン 3 ステップを順に言える。
+
+## まとめ（3行）
+
+- \`Provider\` ヘッダー = \`Send + Sync\` + \`auto_impl(5 種、\`Database\` の 2 種と非対称)\` + \`root()\` のみ必須 + デフォルト実装 30 メソッド。
+- 3 戻り値型（\`ProviderCall\` / \`RpcWithBlock\` / \`EthCall\`）が各 RPC のオプション構造に合うビルダー、await 前カスタマイズで「1 メソッド + 問い合わせ方多数」を実現。
+- \`SignerProvider\` は \`send_transaction\` 1 つだけ override、残り 29 はデフォルト実装が \`self.root()\` 経由で動く = ラッパー作者の 30 メソッド本体書きが 1 個に。
 `,
                 },
                 {
-                  title: 'クイズ: \`Provider\` トレイトの形は身についた?',
+                  title: 'クイズ — Provider',
                   slug: 'alloy-provider-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 3,
                   duration: 4,
                   xpReward: 25,
-                  content: `# クイズ: \`Provider\` トレイトの形は身についた?
+                  content: `# クイズ — Provider
 
-組み立てとウォークスルーにまたがる設計判断を問う 4 問。ほかの中級クイズと同じルール: **クイズはうなずきでは通せない。**
+\`Provider\` トレイトの \`N: Network = Ethereum\` デフォルト、\`auto_impl(5 種)\`、\`root()\` 間接化、3 戻り値型（\`ProviderCall\` / \`RpcWithBlock\` / \`EthCall\`）、\`FillProvider\` 層状合成を確認する。
 
-2 問以上落としたら、ドリルへ進む前に *\`Provider\` トレイトをステップで組み立てる* に戻ること。`,
+組み立てとウォークスルーにまたがる設計判断を問う 4 問。**クイズはうなずきでは通せない。** 2 問以上落としたら、ドリルへ進む前に \`Provider\` のステップに戻ること。
+`,
                   quizQuestions: [
                     {
                       question: "`Provider` には `auto_impl(&, &mut, Box, Rc, Arc)`（5 種のラッパー）があり、Revm の `Database` には `auto_impl(&mut, Box)`（2 種のラッパー）しかない。この非対称を生んでいる、2 トレイト間の決定的な構造上の違いはなにか?",
@@ -583,12 +535,12 @@ provider.send_transaction(tx).with_required_confirmations(3).get_receipt().await
                       question: "`Provider<N: Network = Ethereum>` が、単なる `Provider<N: Network>` ではなく *デフォルト付きの* 型パラメータでパラメータ化されているのはなぜか?",
                       options: [
                         "Rust はジェネリックトレイトに対する `dyn Trait` を成立させるためにデフォルトを要求する。",
-                        "ユーザーの大多数は Ethereum を使う。デフォルトのおかげで、皆が `Provider<Ethereum>` ではなく `Provider` と書ける — 書き換えるのは Optimism / カスタム L2のユーザーだけ。",
+                        "ユーザーの大多数は Ethereum を使う。デフォルトのおかげで、皆が `Provider<Ethereum>` ではなく `Provider` と書ける — 書き換えるのは Optimism / カスタム L2 のユーザーだけ。",
                         "`Network` は本物のトレイトではなく、ドキュメント目的のマーカーにすぎないから。",
                         "Alloy は Ethereum 専用ライブラリとして始まり、ジェネリックパラメータは後方互換のための名残だから。",
                       ],
                       correctIndex: 1,
-                      explanation: "デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示的に保つ。デフォルトがなければ、Ethereum ユーザーは至るところで `Provider<Ethereum>` を書く羽目になる。トレイト自体は設計上 Ethereum 専用ではない — alloy は Optimism、Anvil、カスタム L2を明示的にサポートしている — が、Ethereum が 95% のケースなので API はそちらに寄せている。Revm の `IT: ITy` ジェネリックと同じ形 — 変動するところを抽象化し、支配的なケースをデフォルトに据える。",
+                      explanation: "デフォルト型パラメータは一般ケースを楽にし、まれなケースを明示的に保つ。デフォルトがなければ、Ethereum ユーザーは至るところで `Provider<Ethereum>` を書く羽目になる。トレイト自体は設計上 Ethereum 専用ではない — alloy は Optimism、Anvil、カスタム L2 を明示的にサポートしている — が、Ethereum が 95% のケースなので API はそちらに寄せている。Revm の `IT: ITy` ジェネリックと同じ形 — 変動するところを抽象化し、支配的なケースをデフォルトに据える。",
                     },
                     {
                       question: "`get_balance` が `impl Future<Output = U256>` ではなく `RpcWithBlock<Address, U256>` を返すのはなぜか?",
@@ -615,69 +567,52 @@ provider.send_transaction(tx).with_required_confirmations(3).get_receipt().await
                   ],
                 },
                 {
-                  title: 'ドリル: ログ Provider ラッパーを作る',
+                  title: 'レッスン3 — ドリル: ログ Provider ラッパーを作る',
                   slug: 'alloy-provider-drill-ja',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 12,
                   xpReward: 25,
-                  content: `# ドリル: ログ Provider ラッパーを作る
+                  content: `# レッスン3 — ドリル: ログ Provider ラッパーを作る
 
-読むだけではリハーサル。**手を動かすことで記憶になる。** このドリルでは、「ラッパープロバイダを読んだ」段階から「実際に書いて、実 RPC エンドポイントに当て、各呼び出しの経路に自分のコードが介在しているのを見届けた」段階まで進みる。
+## 問い
 
-任意の Provider をラップし、選んだ RPC 呼び出しを内側のプロバイダへ転送する前にログ出力する \`LoggingProvider\` を書きる。これは **本番のインデクサや MEV パイプラインで実際に動いているのとまったく同じ種類のコード**: alloy をフォークせずに、RPC クライアントの上に観測可能性を層として積み増す形である。
+読むだけではリハーサル、**手を動かすことで記憶**。任意の Provider をラップし、RPC 呼び出しを内側へ転送する前にログ出力する \`LoggingProvider\` を書く。**本番のインデクサ / MEV パイプラインが実際に動かしているコード相当 — alloy をフォークせず観測可能性を層として積む。どう実装する？**
 
-## セットアップ
+## 原理（最小モデル）
 
-必要なものは 3 つ:
+- **セットアップ 3 要素.** Foundry / Anvil（ローカルノード）+ 新規 cargo プロジェクト + Cargo.toml に alloy + tokio + tracing。
+- **\`FillProvider\` のオーバーライド数.** 30 以上のうち 3-5 個のみ（\`send_transaction\` + ガス充填まわりの \`call\`/\`estimate_gas\`）、残り ~25 個はデフォルト実装。
+- **\`LoggingProvider\` の最小実装.** \`inner: P\` + \`PhantomData<N>\` + \`root()\` 委譲 + 各 RPC メソッドで log + 委譲。
+- **メソッド単位 opt-in.** 明示的に override しないメソッドはデフォルト実装に落ち、ログを出さない。
+- **積層は自動.** \`LoggingProvider<FillProvider<NonceFiller, FillProvider<GasFiller, FillProvider<ChainIdFiller, RootProvider>>>>\` のタワー = 各ラッパーの \`root()\` が 1 段内側に転送、トレイトのデフォルト実装が \`self.root()\` 経由で root にアクセス → N 層でも実行時は 1 本の間接化チェーン。
+- **\`ProviderBuilder.with_recommended_fillers()\` で nonce / gas / chain-id 自動.**
 
-1. **Foundry / Anvil** — alloy が通信する相手となるローカル Ethereum 開発ノード:
+## 具体例
 
-   \`\`\`bash
-   curl -L https://foundry.paradigm.xyz | bash
-   foundryup
-   \`\`\`
+セットアップ:
 
-2. **新規の cargo プロジェクト** — alloy クローンとは別ディレクトリ。ただし alloy に依存させる:
+\`\`\`bash
+# 1. Foundry / Anvil
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
 
-   \`\`\`bash
-   cargo new alloy-logging-drill --bin
-   cd alloy-logging-drill
-   \`\`\`
-
-3. **\`Cargo.toml\` に alloy + tokio + tracing を追加**:
-
-   \`\`\`toml
-   [dependencies]
-   alloy = { version = "0.x", features = ["full", "provider-http", "node-bindings"] }
-   tokio = { version = "1", features = ["full"] }
-   tracing = "0.1"
-   tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-   \`\`\`
-
-   (find-in-repo プロンプト用にクローンしている現行 alloy のバージョンに合わせる。\`Provider\` の構造的な形はバージョン間で変わらないが、フィーチャーフラグは動くことがある。)
-
-## ドリル 1 — まず \`FillProvider\` を読む
-
-自分のラッパーを書く前に、alloy の既存実装を読む。\`alloy-rs/alloy\` クローンを開いて次を探す:
-
-\`\`\`
-crates/provider/src/fillers/mod.rs
+# 2. 新規 cargo プロジェクト
+cargo new alloy-logging-drill --bin
+cd alloy-logging-drill
 \`\`\`
 
-> 🔍 **\`impl<F, P, N> Provider<N> for FillProvider<F, P, N>\` を探す**（手元のバージョンで等価な形）。確認するポイント:
->
-> 1. \`root()\` メソッド — なにを返すか? *(\`self.inner.root()\` へ転送しているはず)*
-> 2. \`FillProvider\` が明示的にオーバーライドする RPC メソッドはどれか? *(数は少ないはず — \`send_transaction\`、ガス充填まわりで \`call\`/\`estimate_gas\` 程度)*
-> 3. オーバーライドされていないメソッドはトレイトのデフォルト実装に落ちる。**それらのデフォルトが内側プロバイダのトランスポートに到達できるのは、なんのおかげか?**
+\`Cargo.toml\`:
 
-> 🛑 **問い（スクロール前に書き留める）:** \`FillProvider\` は 30 以上あるうち 3〜5 個のメソッドしかオーバーライドしない。残りの約 25 個は \`FillProvider\` 内のコードなしで正しくルーティングされる。**なぜか?**
+\`\`\`toml
+[dependencies]
+alloy = { version = "0.x", features = ["full", "provider-http", "node-bindings"] }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+\`\`\`
 
-理由は、トレイトのデフォルト実装が \`self.client()\` を呼び、これは \`self.root().client()\` に落ちるから。\`FillProvider\` の \`root()\` は \`self.inner.root()\` を返す — だから各デフォルト実装メソッドは自動的に内側プロバイダのトランスポート経由でルーティングされる。**メソッドごとに書くコードはない。** これが組み立てで見た \`root()\` 間接化の見返り。
-
-## ドリル 2 — \`LoggingProvider\` をスケッチする
-
-\`src/main.rs\`（または好みで別ファイル \`src/logging_provider.rs\`）に:
+\`LoggingProvider\` 実装:
 
 \`\`\`rust
 use alloy::network::{Ethereum, Network};
@@ -712,25 +647,16 @@ where
 }
 \`\`\`
 
-(\`get_balance\` の正確な戻り値型は alloy のバージョンによってエイリアスが多少違うかもしれない。IDE がトレイトのシグネチャとして提示するものに合わせる; 構造は同じ。)
+**メソッド本体 2 つ書いた**: \`root\` + \`get_balance\`。
 
-> 🛑 **続ける前に予測。** メソッド本体は 2 つ書いた（\`root\` + \`get_balance\`）。\`logging_provider.get_block_number().await\` の呼び出しは、なにかログを出すか? 理由は?
+\`get_block_number\` を呼んでも **ログは出ない** — トレイトのデフォルト実装に落ち、\`self.client()\` 経由で基盤トランスポートへ直接ルーティング。**メソッド単位 opt-in**、明示的にインターセプトしたものしか目にしない。
 
-出さない — インターセプトしたのは \`get_balance\` だけ。\`get_block_number\` はトレイトのデフォルト実装に落ち、そこで \`self.client()\` を使い、\`self.root()\` 経由で基盤トランスポートへ直接ルーティングされる。**ログはメソッド単位の opt-in** で、ラッパーは明示的にインターセプトしたものしか目にしない。
-
-本番の観測性層なら、重要なメソッド（\`send_transaction\`、\`call\`、\`get_logs\`、\`get_balance\`）をインターセプトする — 30 個すべてではない。同じ見返り: 価値を生むメソッドの本体だけを書き、残りはデフォルトに任せる。
-
-## ドリル 3 — Anvil に配線する
-
-別のターミナルで Anvil を起動:
+Anvil + main 配線:
 
 \`\`\`bash
+# 別ターミナル
 anvil
 \`\`\`
-
-(デフォルト: \`http://localhost:8545\`、chain ID 31337、10 のプリファンドアカウント付き。)
-
-\`main.rs\` で:
 
 \`\`\`rust
 use alloy::providers::ProviderBuilder;
@@ -759,7 +685,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 \`\`\`
 
-\`cargo run\`。こう見えるはず:
+期待出力:
 
 \`\`\`
 INFO LoggingProvider: get_balance called address=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
@@ -767,13 +693,7 @@ balance: 10000000000000000000000
 block: 0
 \`\`\`
 
-> 🛑 **出力を確認する。** ログが \`get_balance\` でのみ発火し、\`get_block_number\` では発火していないことを確かめる。両方でログが出るならコードが間違っている（うっかり別のメソッドもオーバーライドしている）。どちらも出ないなら、ラッパー自体が使われていない（ラップを忘れている、または \`tracing_subscriber\` が初期化されていない）。
-
-## ドリル 4 — \`ProviderBuilder\` の Filler と積層する
-
-本番のプロバイダは通常 *すでに* nonce / ガス / チェーン ID 管理のために \`FillProvider\` でラップされている。\`LoggingProvider\` はこれらと合成すべきで、置き換えるべきではない。
-
-配線を変更して alloy の推奨 filler を含める:
+\`FillProvider\` と積層:
 
 \`\`\`rust
 let inner = ProviderBuilder::new()
@@ -785,42 +705,87 @@ let provider = LoggingProvider::new(inner);
 let bal = provider.get_balance(addr).await?;
 \`\`\`
 
-> 🔍 **問い:** 実行する。ログは引き続き発火するか? そして層化が動く理由は — \`LoggingProvider<FillProvider<NonceFiller, FillProvider<GasFiller, FillProvider<ChainIdFiller, RootProvider>>>>\` はラッパーの塔だ。**この合成を自動で成立させている、\`Provider\` のどんな性質か?**
+積層タワー: \`LoggingProvider<FillProvider<NonceFiller, FillProvider<GasFiller, FillProvider<ChainIdFiller, RootProvider>>>>\`。
 
-各ラッパーの \`root()\` がさらに 1 段内側に転送し、トレイトのデフォルト実装は \`self.root()\` 経由で root にアクセスできさえすればよいから。塔全体はトレイトのレベルで平坦化される — **N 層のラッパーがあっても、実行時には 1 本の間接化チェーン。**
+**自動合成の仕組み**: 各ラッパーの \`root()\` が 1 段内側に転送 → トレイトのデフォルト実装は \`self.root()\` で root に到達 → 塔全体がトレイトレベルで平坦化 → N 層でも実行時は 1 本の間接化チェーン。
 
-これがアーキテクチャ上の解放: ラッパーの組み合わせは任意、各ラッパーは互いを知らずに済み、新しいラッパー層の追加は純粋にコードを足すだけ。
+## 失敗例（誤解）
 
-## レッスン末のリコール
+「\`FillProvider\` は 30 メソッド全部 override」— **間違い**。3-5 個のみ（\`send_transaction\` + ガス充填まわり）、残りはデフォルト実装が \`self.root()\` 経由でルーティング。
 
-スクロールせずに、自分の言葉で:
+「ログを全 RPC メソッドに入れる」— **不適切**。本番観測性層は重要メソッド（\`send_transaction\` / \`call\` / \`get_logs\` / \`get_balance\`）のみ override、30 個全部ではない。
 
-1. \`FillProvider\` は 30 以上のうち 3〜5 個のメソッドをオーバーライドする。**オーバーライドしていないメソッドが、内側プロバイダのトランスポートに到達できるのはなんのおかげか?**
-2. あなたの \`LoggingProvider\` は \`get_balance\` だけログを出す。同じラッパー越しに呼ばれているのに、\`get_block_number\` がログを出さないのはなぜか?
-3. \`LoggingProvider<FillProvider<...>>\` はラッパーの積層。**各ラッパーが互いを知らないままで、この合成を自動的に成立させているトレイトレベルの 1 つの性質はなにか?**
+「ラッパーの積層は手動配線が必要」— **間違い**。\`root()\` + デフォルト実装の合成で **自動**、各ラッパーは互いを知らずに済む。新規ラッパーは純粋にコードを足すだけ。
 
-答えが曖昧なら、レッスンはあなたを掴んだままだ。ドリルをやり直すか、組み立てのステップ 4（\`root()\`）を読み直す。
+## ステップで組み立てる
 
-このドリルを終えた時点で、本番 MEV パイプラインやインデクサで使われているのと同じ種類のコード — alloy をフォークせずに観測可能性を層として積み増す — を投入したことになる。**次のチェーン: \`Network\` トレイト。**
+### Step 1: \`FillProvider\` を読む
 
-> **🧭 ここまでで積み上げたもの:** **ネットワーク層のクライアント抽象** をゼロから組み上げた — \`N: Network\` ジェネリック、\`root()\` による間接参照、Filler の合成、\`auto_impl\`。この 5 つの部品で、ひとつのトレイトが「観測と補完を自由に積層できる構造」に変わる。次のチェーンでは同じ部品を使い、チェーン側の次元（Optimism、Polygon、将来の L2）に踏み込む。`,
+\`crates/provider/src/fillers/mod.rs\` で \`impl Provider for FillProvider\`、\`root()\` が \`self.inner.root()\` 転送、override は 3-5 個。
+
+### Step 2: \`LoggingProvider\` スケッチ
+
+\`inner: P\` + \`PhantomData<N>\` + \`root()\` 委譲 + log メソッド。
+
+### Step 3: Anvil で動作確認
+
+\`get_balance\` でログ + \`get_block_number\` でログなしを観察。
+
+### Step 4: \`FillProvider\` と積層
+
+\`with_recommended_fillers()\` + \`.wallet(signer)\` でタワー構築。
+
+### Step 5: 積層自動合成の理解
+
+\`root()\` + デフォルト実装で各ラッパー独立、N 層でも実行時 1 本の間接化。
+
+## 答え合わせ
+
+- **\`FillProvider\` が 30 メソッド中 3-5 個しか override しない理由**: トレイトのデフォルト実装が \`self.client()\` を呼ぶ → これは \`self.root().client()\` に落ちる → \`FillProvider::root()\` が \`self.inner.root()\` 返す → 各デフォルト実装メソッドが **自動的に内側プロバイダのトランスポート経由でルーティング**。書くコードゼロ。
+- **\`LoggingProvider\` で \`get_block_number\` がログを出さない理由**: \`get_balance\` のみインターセプト。\`get_block_number\` はデフォルト実装に落ち、そこで \`self.client()\` を使い、\`self.root()\` 経由で基盤トランスポートへ直接ルーティング。**ログはメソッド単位の opt-in**。
+- **\`LoggingProvider<FillProvider<...>>\` の自動合成**: 各ラッパーの \`root()\` がさらに 1 段内側に転送 → トレイトのデフォルト実装は \`self.root()\` 経由で root にアクセス → 塔全体がトレイトレベルで平坦化 → **N 層あっても実行時は 1 本の間接化チェーン**。ラッパーの組み合わせ任意、互いに無知、新規追加は純粋にコード足すだけ。
+
+## 合格基準
+
+- \`FillProvider\` の override 数（3-5 個）を即答できる。
+- \`LoggingProvider\` の最小実装（\`root\` + 1 メソッド）を書ける。
+- メソッド単位 opt-in を 1 文で説明できる。
+- \`with_recommended_fillers()\` で nonce / gas / chain-id 自動追加を理解している。
+- 積層自動合成（\`root()\` + デフォルト実装）の仕組みを言える。
+
+## まとめ（3行）
+
+- \`LoggingProvider\` = \`inner: P\` + \`PhantomData<N>\` + \`root()\` 委譲 + 各 RPC メソッドで log + 委譲、本番観測性層の標準パターン。
+- メソッド単位 opt-in で重要メソッドのみ intercept、残りはデフォルト実装が \`self.root()\` 経由で動く → 書くコードゼロ。
+- 積層タワー（\`LoggingProvider<FillProvider<...>>\`）は \`root()\` + デフォルト実装で自動合成、N 層でも実行時 1 本の間接化、ラッパー互いに無知。
+`,
                 },
                 {
-                  title: '\`Network\` トレイトをステップで組み立てる',
+                  title: 'レッスン4 — `Network` トレイトをステップで組み立てる',
                   slug: 'alloy-network-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 10,
                   xpReward: 25,
-                  content: `# \`Network\` トレイトをステップで組み立てる
+                  content: `# レッスン4 — \`Network\` トレイトをステップで組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** **ネットワーク層のチェーン抽象**。ひとつのクライアントが「互換性のある複数のプロトコル」を話す必要に直面したときに必ず現れる、型システム設計の問題。gRPC が複数サービス間でメッセージ型を再利用するのも、データベースドライバが PostgreSQL / MySQL / SQLite に同じ接続 API を出すのも、根は同じ問題。\`Network\` は「Ethereum・Optimism・将来の任意の レッスン2で同じ API」を成立させるために、その解法を持ち込んだもの。
+## 問い
 
-Optimism のトランザクションは L1 \`mint\` フィールドを持つ。レシートには \`l1_fee\` と \`l1_block_number\` が乗る。Polygon zkEVM の tx エンベロープにはシーケンサ署名がある。各 L2 は独自の tx・レシート・ブロックの形を持つ — それでも同じ \`Provider\` API がそのすべてで動く。**どうやって?** \`Network\` を通してだ: alloy の *型レベル辞書*（1 つのトレイトで、その関連型が、あるチェーンが使うチェーン固有の型一式を選ぶ）。
+Optimism の tx には \`l1_block_number\` + \`mint\` フィールド、レシートに \`l1_fee\`。Polygon zkEVM の tx エンベロープにはシーケンサ署名。**各 L2 が独自 tx / レシート / ブロック形を持つ — それでも同じ \`Provider\` API がそのすべてで動く。どうやって？**
 
-Provider チェーンでは \`Network\` をブラックボックスとして扱いました。本チェーンではその中身を開けていきる。
+## 原理（最小モデル）
 
-このレッスンを終える頃には、以下のすべてを組み立てたことになる:
+- **素朴な「Ethereum ハードコード」の 3 失敗.** Optimism（\`l1_fee\`） + Anvil cheat + カスタム L2（独自エンベロープ）で破綻。
+- **\`Network\` = 型レベル辞書.** 1 トレイト + 関連型で「あるチェーンが使う型一式」を 1 か所で決まる。
+- **10 関連型の必要性.** TxType / TxEnvelope / UnsignedTx / TransactionRequest / TransactionResponse / ReceiptEnvelope / ReceiptResponse / Header / HeaderResponse / BlockResponse。各々が具体的失敗モードに対して存在理由。
+- **トランザクションのライフサイクル分割.** Request（ビルダーで組み立て）→ Unsigned（フィールド全部埋まり、署名前）→ Envelope（署名済み）→ Response（block_hash / index 焼き込み）。各々別の型 → コンパイラが「Request はブロードキャスト不可」「Response に署名不可」を強制。
+- **Receipt も Block も 2 種分割.** Envelope（コンセンサス形、Merkle ルート対象）+ Response（RPC 装飾フィールド付き）。
+- **関連型 > ジェネリックパラメータ 10 個.** 一貫性担保（混ぜ合わせ防止）+ 呼び出し側冗長性削減（\`Provider<N: Network>\` で 10 型引き込み）+ 型レベル同一性（\`N::TransactionRequest\` で関数書ける）。
+- **\`Network: Send + Sync + 'static\`.** Arc<Provider<N>> パターンに不可欠、'static で借用ライフタイム禁止。
+
+## 具体例
+
+最終形:
 
 \`\`\`rust
 pub trait Network: Send + Sync + 'static {
@@ -837,33 +802,12 @@ pub trait Network: Send + Sync + 'static {
 }
 \`\`\`
 
-10 個の関連型。各々を必要としている失敗モードを見るまでは、奇妙な形に映る。
+Ethereum ハードコードの 3 失敗:
+1. **Optimism**: Tx envelope に \`mint\` フィールド + レシートに \`l1_gas_used\` + \`l1_block_number\`
+2. **Anvil / Hardhat**: \`impersonateAccount\` で標準型に存在しないデバッグフィールド
+3. **カスタム L2**: Polygon zkEVM / Scroll / Linea が独自 tx エンベロープバリアント
 
-> 📂 **別タブで \`alloy-rs/alloy/crates/network\` を開く。** \`crates/consensus\` も用意 — 具象型（\`TxEnvelope\`、\`Header\` ほか）の大半はそちらに置かれている。
-
-## ステップ 0 — 素朴な Provider、Ethereum にハードコード
-
-Provider チェーンの早い段階では、\`send_transaction\` はこんな形でした:
-
-\`\`\`rust
-fn send_transaction(&self, tx: EthereumTransactionRequest) -> SendTransaction;
-\`\`\`
-
-\`EthereumTransactionRequest\` がハードコード。レシートもハードコード。ブロックヘッダーもハードコード。メインネットでは動く — しかしメインネットでしか動かない。
-
-> 🛑 **予測。** スクロールせずに: このハードコード設計が破綻する本番チェーンを 3 つ挙げる。ヒント — それぞれがトランザクションやレシートの *別の形* を要求する。
-
-3 つ:
-
-1. **Optimism。** Tx エンベロープには L1 デポジット由来 ETH のための \`mint\` フィールドが乗る。レシートには \`l1_gas_used\` と \`l1_block_number\`。ハードコードされた Ethereum 型ではこれらを運べない。
-2. **Anvil / Hardhat（カスタムハードフォーク付き）。** Anvil の \`impersonateAccount\` は、標準 Ethereum 型には存在しないデバッグフィールド付きのレシートを返す。
-3. **カスタム tx エンベロープを持つカスタム L2。** Polygon zkEVM、Scroll、Linea — それぞれ L1 データ手数料やシーケンサ署名のために独自の tx エンベロープバリアントを抱える。
-
-直しかた: **チェーン固有型をトレイトの背後に抽象化する。**
-
-## ステップ 1 — 最初のスケッチ: 概念ごとに 1 型
-
-素朴なトレイト:
+Step 1（素朴な 3 型）:
 
 \`\`\`rust
 trait Network {
@@ -887,26 +831,18 @@ impl Network for Optimism {
 }
 \`\`\`
 
-これは *おおむね* 正しい。関連型は 3 つ。Ethereum と Optimism がそれぞれ自分の型一式を選ぶ。Network 上ジェネリックなコード（\`Provider<N: Network>\` など）は、関連型を介して読み書きする。
+しかし「トランザクション」は 1 型ではなく **複数あり**:
 
-しかし「トランザクション」は 1 つの型ではない — *複数あり*、それぞれが異なる役割を担っている。
+| 状態 | 役割 | 検証 |
+| :--- | :--- | :--- |
+| \`TransactionRequest\` | ユーザーが組み立て | フィールドの大半オプション |
+| \`UnsignedTx\` | 全フィールド埋まり | nonce / gas / chain_id 解決済、署名直前 |
+| \`TxEnvelope\` | 署名済み | ブロードキャスト対象 |
+| \`TransactionResponse\` | RPC 戻り値 | block_hash / block_number / transaction_index 焼き込み |
 
-## ステップ 2 — トランザクションには複数のライフサイクルがある
+役割ごとにフィールド・検証・シリアライズが異なる → **1 つの和型に押し込むとランタイム検証が必要、分割すれば型システムが「Request はブロードキャスト不可」「Response に署名不可」を強制**。
 
-1 つのトランザクションは複数の表現を経て進む:
-
-- **\`TransactionRequest\`** — ユーザーが *組み立てる* もの。フィールドの大半はオプション。ビルダー API で組み立てる: \`TransactionRequest::default().with_to(addr).with_value(...)\`。
-- **\`UnsignedTx\`** — *すべてのフィールドが埋まった* リクエスト: nonce が解決され、ガスが見積もられ、chain_id がセットされ、署名用のハッシュを取れる状態。
-- **\`TxEnvelope\`** — 署名済みトランザクション。\`UnsignedTx\` + 署名。ワイヤに乗ってブロードキャストされる対象。
-- **\`TransactionResponse\`** — \`eth_getTransactionByHash\` が返すトランザクション。\`block_hash\`、\`block_number\`、\`transaction_index\` が焼き込まれている。
-
-役割ごとにフィールド、検証、シリアライズが異なる。これらを 1 つの \`Transaction\` 型に押し込むと、各メソッドは広すぎる和型に対してランタイム検証を行うはめになる。分けてしまえば、型システムが「\`TransactionRequest\` はブロードキャストできない」「\`TransactionResponse\` に署名できない」を強制できる。
-
-> 🛑 **理解度チェック。** 「同じデータ、状態が違うだけ」はもっともらしいが、正しい捉え方ではない。**署名がオプション、block_hash がオプション……の 1 つの型がなぜダメなのか?**
-
-検証がランタイムへ押し出されてしまう。\`broadcast(&tx)\` は「署名は本当に存在するか? block_hash は不在か（すでに block_hash を持つ tx をブロードキャストするのは無意味）」をチェックする羽目になる — 本来コンパイラが拒否すべきものがランタイムエラーになる。\`TransactionRequest\` / \`UnsignedTx\` / \`TxEnvelope\` / \`TransactionResponse\` に分けると、こうした不整合な状態はそもそも構築できない。各関数のシグネチャが正しい状態だけを受け取るようになる。
-
-そこでトレイトが膨らんでいく:
+Step 2（6 関連型）:
 
 \`\`\`rust
 trait Network {
@@ -919,149 +855,123 @@ trait Network {
 }
 \`\`\`
 
-関連型は 6 つ。**ここで気付いてほしい:** トランザクションを「ライフサイクルごとに別の型」に分けたのと同じ理由が、Receipt と Block にも当てはまる。
+Step 3（Receipt + Block も分割、+ \`TxType\`）:
 
-> 🛑 **予測。** Receipt と Block を分割するとしたら、それぞれ何種類の関連型が出てくる? なぜ?
+| 型 | 用途 |
+| :--- | :--- |
+| ReceiptEnvelope | コンセンサス形（Merkle ルート対象） |
+| ReceiptResponse | RPC 戻り値（transaction_hash / block_hash / block_number / index 装飾） |
+| Header | コンセンサスヘッダー |
+| HeaderResponse | RPC 整形済み（ハッシュ計算済、JSON 化のため gas_used が文字列） |
+| BlockResponse | RPC 完全ブロックペイロード |
+| TxType | tx 分類用 enum タグ（Legacy / EIP-1559 / EIP-4844 / OP-Deposit） |
 
-スクロール前に答えを書く。下に続きる。
+Step 4（関連型 vs ジェネリックパラメータ）:
 
-## ステップ 3 — レシートとヘッダーも分割される
-
-\`eth_getTransactionReceipt\` は、コンセンサスが定義するフィールド *に加えて* RPC が付ける装飾フィールド（transaction_hash、block_hash、block_number、transaction_index など）を持つレシート様のオブジェクトを返す。純粋なコンセンサス形 — Merkle ルートに入るもの — は API 応答とは別物だ。
-
-同じ分割を当てはめる:
-
-- **\`ReceiptEnvelope\`** — コンセンサス形。コンセンサスプロトコルが気にするもの。
-- **\`ReceiptResponse\`** — RPC 戻り値型。「チェーン上のどこにあるか」のメタデータが付く。
-
-ヘッダーも同じ形:
-
-- **\`Header\`** — コンセンサスヘッダー
-- **\`HeaderResponse\`** — RPC 整形済みヘッダー（ハッシュ計算済み、JSON 化のため gas_used が文字列、など）
-- **\`BlockResponse\`** — RPC 経由で返ってくる完全なブロックペイロード
-
-さらにもう 1 つ — Ethereum も Optimism も、扱っている tx が *どの種別* か（Legacy / EIP-1559 / EIP-4844 / OP-Deposit）を識別する必要がある:
-
-- **\`TxType\`** — トランザクション分類用の enum タグ
-
-これでトレイトはこうなる:
-
-\`\`\`rust
-trait Network {
-    type TxType;
-    type TxEnvelope;
-    type UnsignedTx;
-    type TransactionRequest;
-    type TransactionResponse;
-    type ReceiptEnvelope;
-    type ReceiptResponse;
-    type Header;
-    type HeaderResponse;
-    type BlockResponse;
-}
-\`\`\`
-
-関連型は 10 個。それぞれが具体的な失敗モードに対して存在理由を稼いでいる。
-
-## ステップ 4 — なぜ関連型なのか、ジェネリックパラメータではなく
-
-初めて alloy を読んだときに引っかかった設計選択がこれだ: **なぜこれは関連型のトレイトで、ジェネリックパラメータを持つ struct ではないのか?** 例えば:
+**ジェネリックパラメータ 10 個**:
 
 \`\`\`rust
 struct Provider<TxRequest, TxEnvelope, Receipt, Block, ...> { ... }
 \`\`\`
 
-> 🛑 **予測。** スクロールせずに: ジェネリックパラメータを多数並べた struct のなにがダメなのか?
+3 問題:
+1. **一貫性なし**: \`Provider<EthereumTxRequest, OptimismTxEnvelope, ...>\` がそのままコンパイル = 混ぜ合わせ自由
+2. **呼び出し側冗長**: \`Provider\` の全 signature に 10 パラメータ必要
+3. **型レベル同一性なし**: \`Network\` 名がトレイト → \`fn for_network<N: Network>(...) -> N::TransactionRequest\` 書ける、素ジェネリックは書けない
 
-問題は 3 つ:
+**関連型 = 「これらは組で動く」**、ジェネリックパラメータ = 「どんな組み合わせでも有効」。チェーンプリミティブには前者。
 
-1. **一貫性が担保されない。** \`Provider<EthereumTxRequest, OptimismTxEnvelope, ...>\` がそのままコンパイルしてしまう。違うチェーンの型を混ぜ合わせるのを止めるものが何もない。関連型なら 1 つの \`Network\` 実装の下にそれらを束ねられる — \`Ethereum\` か \`Optimism\` を選ぶだけで、整合した一式が手に入る。
-2. **呼び出し側ごとの冗長さ。** \`Provider\` に言及するシグネチャはすべて、10 個のジェネリックパラメータを書き並べる必要がある。\`Provider<N: Network>\` ならパラメータ 1 つで 10 型を引き込める。
-3. **型レベルの同一性がない。** \`Network\` は *トレイト* なので、\`fn for_network<N: Network>(...) -> N::TransactionRequest\` のような関数が書ける。Network 名そのものが同一性を運ぶ。素のジェネリックには、その同一性がない。
-
-**関連型は「これらは組で動く」を表現する。** ジェネリックパラメータは「どんな組み合わせでも有効」を表現する。チェーンプリミティブには前者が正しい意味論だ。
-
-本物の alloy はまさにこの理由で関連型を採用している。alloy の中で「あるチェーンの tx エンベロープ」に触れる関数を見ると、それは \`N::TxEnvelope\`（関連型アクセス）であって \`E\`（ジェネリックパラメータ）ではない。
-
-## ステップ 5 — トレイト境界: \`Send + Sync + 'static\`
+Step 5（トレイト境界 \`Send + Sync + 'static\`）:
 
 \`\`\`rust
 pub trait Network: Send + Sync + 'static { ... }
 \`\`\`
 
-境界は 3 つ。
+- **\`Send + Sync\`**: \`Arc<Provider<N>>\` パターンに不可欠、これがないとコンパイル不可
+- **\`'static\`**: \`PhantomData<N>\` を持つ Provider が借用ライフタイム継承 → \`Arc\` も借用元設定より長生きできない → 'static で借用禁止 → Arc 自立
 
-- **\`Send + Sync\`** — \`Provider\` が要求するのと同じ理由から: 本番ユーザーは \`Arc<Provider<N>>\` でラップしてタスク間でクローンする。関連型とネットワーク型そのものが、送受信・共有について安全である必要がある。これらがないと \`Arc<Provider<MyNetwork>>\` はコンパイルしない。
-- **\`'static\`** — \`Provider\` は \`PhantomData<N>\` を保持する。\`N\` が非 \`'static\` のライフタイムパラメータを持つと、各 \`Provider\` インスタンスがそのライフタイムに縛られる — 「グローバルな \`Arc\` に Provider を置く」パターンを壊す厳しい制約だ。
+## 失敗例（誤解）
 
-> 🛑 **理解度チェック。** 「\`'static\` は永遠に生きる」というのは受け売りの説明。自分の言葉で: \`Network\` 実装が非 \`'static\` のライフタイムパラメータを持てたら、*具体的に* なにが壊れるか? どんな失敗が起きるかをスケッチしてみる。
+「『同じデータ、状態が違うだけ』の 1 型で十分」— **間違い**。署名・block_hash がオプションの巨大 struct → \`broadcast(&tx)\` で「署名は存在するか? block_hash は不在か?」のランタイム検証必要。**4 状態を別型にすれば型システムが強制**。
 
-\`MyNetwork\` が借用ライフタイムを持つとする（例: \`MyNetwork<'a>\`、ここで \`'a\` は外部設定のライフタイム）。すると \`Provider<MyNetwork<'a>>\` もそのライフタイムを継承する。プロバイダを \`Arc\`（\`Arc<Provider<MyNetwork<'a>>>\`）に入れると、\`Arc\` 自身も \`'a\` に縛られることになる。**Arc は、借用元の設定より長生きできない。** \`'static\` を要求すればこのパターンを排除できる: \`MyNetwork\` 実装は自分のデータをすべて所有し、借用は持たない。Arc は自立できる。
+「関連型 10 個は冗長、ジェネリック 10 個と同じ」— **間違い**。関連型は **一貫性 + 呼び出し側簡潔さ + 型レベル同一性** の 3 利点。素ジェネリックでは混ぜ合わせ可能 + \`Provider\` signature に毎回 10 パラメータ。
 
-## ステップ 6 — 仕上げ
+「\`'static\` は『永遠に生きる』だけ」— **間違い**。具体的に: \`MyNetwork<'a>\` だと \`Provider<MyNetwork<'a>>\` も継承 → \`Arc<Provider<MyNetwork<'a>>>\` が \`'a\` に縛られ → Arc が借用元設定より長生き不可。**\`'static\` で borrowed パターン排除 → Arc 自立**。
 
-\`\`\`rust
-pub trait Network: Send + Sync + 'static {
-    type TxType: ...;
-    type TxEnvelope: ...;
-    type UnsignedTx: ...;
-    type ReceiptEnvelope: ...;
-    type Header: ...;
-    type TransactionRequest: ...;
-    type TransactionResponse: ...;
-    type ReceiptResponse: ...;
-    type HeaderResponse: ...;
-    type BlockResponse: ...;
-}
-\`\`\`
+## ステップで組み立てる
 
-関連型にはそれぞれ自分のトレイト境界が付いている（例: \`Serialize + DeserializeOwned\`、\`Clone\`、\`Encodable\`）— これらが応答を RPC シリアライズ可能に、エンベロープを RLP エンコード可能にしている。このレッスンではそれらの境界には踏み込まない; 次のレッスンで詳しく読む。
+### Step 1: 素朴な「Ethereum ハードコード」の 3 失敗
 
-並べてみる:
+Optimism / Anvil cheat / カスタム L2。
 
-- **TxType** — enum タグ（Legacy / EIP-1559 / EIP-4844 / チェーン固有バリアント）
-- **TxEnvelope / UnsignedTx** — 署名前 / 署名後のコンセンサス形
-- **TransactionRequest / TransactionResponse** — ユーザーが組み立てる側と RPC が返す側
-- **ReceiptEnvelope / ReceiptResponse** — コンセンサス形と RPC 戻り値
-- **Header / HeaderResponse / BlockResponse** — コンセンサスヘッダー、RPC ヘッダー、RPC ブロック
+### Step 2: トランザクションを 4 状態に分割
 
-alloy の具象実装は: \`Ethereum\`（\`alloy-network\` 内）、\`Optimism\`（\`alloy-op-network\` 内）、\`AnyNetwork\`（「事前にチェーンが分からない」ツール向けの寛容な実装で、serde 風の型を関連型に持つ）。
+Request / Unsigned / Envelope / Response、型システムが状態遷移強制。
 
-## 先に進む前のリコール
+### Step 3: Receipt と Block も 2 種分割
 
-スクロールせずに:
+Envelope（コンセンサス）+ Response（RPC 装飾）。
 
-1. \`TransactionRequest\` と \`TxEnvelope\` は別々の関連型。**この 2 つを統一した \`Transaction\` 型では強制できず、別々にすることで型システムが強制してくれるのは何か?**
-2. \`Network\` は *関連型* を使い、ジェネリックパラメータは使わない。**Network 上ジェネリックなコードにとって、この選択がもたらす具体的な帰結を 2 つ挙げる。**
-3. **\`'static\`** はトレイト境界のひとつ。\`Network: Send + Sync\`（\`'static\` なし）だったらどんなパターンが壊れるか?
-4. Optimism のデポジットには L1 \`mint\` フィールドが含まれる。**\`Ethereum\` と \`Optimism\` で値が異なる必要があるのはどの関連型か?**
+### Step 4: 10 関連型を即答
 
-答えが曖昧ならスクロールして戻る。次のレッスンでは、alloy 本体の \`Network\` トレイトと \`Ethereum\` / \`Optimism\` の実装を詳しく読みる。
+TxType + TxEnvelope + UnsignedTx + TransactionRequest + TransactionResponse + ReceiptEnvelope + ReceiptResponse + Header + HeaderResponse + BlockResponse。
+
+### Step 5: 関連型 vs ジェネリックパラメータ
+
+関連型 = これらは組で動く / ジェネリック = どんな組み合わせでも有効。チェーンには関連型。
+
+### Step 6: トレイト境界の意味
+
+\`Send + Sync + 'static\` → \`Arc<Provider<N>>\` パターン成立。
+
+## 答え合わせ
+
+- **\`TransactionRequest\` と \`TxEnvelope\` を別関連型にする型システムの強制**: 1 型 + オプションフィールドだと \`broadcast(&tx)\` で「署名は本当に存在するか?」のランタイム検証が必要 → \`TransactionRequest\` / \`UnsignedTx\` / \`TxEnvelope\` / \`TransactionResponse\` に分けると **不整合な状態はそもそも構築できない**、各関数 signature が正しい状態だけ受け取る。
+- **関連型がジェネリックパラメータ 10 個より優れる 3 帰結**: ① 一貫性担保（\`Provider<EthereumTxRequest, OptimismTxEnvelope>\` を構文的に禁止、チェーン型混ぜ防止）、② 呼び出し側冗長性削減（\`Provider<N: Network>\` で 10 型一括引き込み）、③ 型レベル同一性（\`N::TransactionRequest\` で N 上ジェネリックな関数書ける、素ジェネリックでは不可能）。
+- **\`'static\` 境界がないと壊れるパターン**: \`MyNetwork<'a>\` のような借用ライフタイム → \`Provider<MyNetwork<'a>>\` も継承 → \`Arc<Provider<MyNetwork<'a>>>\` が \`'a\` に縛られ → Arc が借用元の設定より長生き不可。Provider をグローバル \`Arc\` に置くパターンが壊れる。\`'static\` で borrowed パターン排除し Arc 自立。
+
+## 合格基準
+
+- 素朴 Ethereum ハードコードの 3 失敗を即答できる。
+- トランザクション 4 状態（Request / Unsigned / Envelope / Response）を順に言える。
+- 10 関連型を即答できる。
+- 関連型 vs ジェネリックパラメータの 3 帰結を言える。
+- \`Send + Sync + 'static\` 各境界の意味を言える。
+
+## まとめ（3行）
+
+- \`Network\` = 型レベル辞書、10 関連型（Tx 4 状態 + Receipt 2 種 + Block 関連 3 種 + TxType）が各々失敗モードに対する存在理由。
+- 関連型は「これらは組で動く」（混ぜ合わせ防止 + 呼び出し側簡潔 + 型レベル同一性）、ジェネリックパラメータでは実現不可能。
+- \`Send + Sync + 'static\` で \`Arc<Provider<N>>\` パターン成立、次のレッスンで本物の Ethereum + Optimism 実装を並列比較する。
 `,
                 },
                 {
-                  title: '本物の \`Network\` トレイト + Ethereum / Optimism 実装を読む',
+                  title: 'レッスン5 — 本物の `Network` トレイト + Ethereum / Optimism 実装を読む',
                   slug: 'alloy-network-walkthrough-ja',
                   type: 'CONTENT',
                   sortOrder: 6,
                   duration: 10,
                   xpReward: 25,
-                  content: `# 本物の \`Network\` トレイト + Ethereum / Optimism 実装を読む
+                  content: `# レッスン5 — 本物の \`Network\` トレイト + Ethereum / Optimism 実装を読む
 
-10 個の関連型とトレイト境界を、素朴な出発点から動機づけてきました。今度は本物のソースを読む — 組み立てで省いた関連型ごとのトレイト境界、alloy の \`Ethereum\` 実装、\`Optimism\` 実装の並列比較、そして \`TransactionRequest\` をチェーンをまたいで流暢に扱うためのヘルパートレイト（\`TransactionBuilder\`）まで。
+## 問い
 
-組み立てステップ 4 で見た「一貫性の性質」（関連型は『これらは組で動く』をひとまとめにする）が、ここで具体的な形になりる。並べて見ると、Optimism がどのスロットをオーバーライドし、どのスロットを Ethereum から再利用しているかが一目で分かりる。
+10 関連型 + トレイト境界を組み立ててきた。**本物のソースで関連型ごとのトレイト境界、alloy の Ethereum 実装、Optimism 実装の並列比較、TransactionBuilder ヘルパートレイトを確認。一貫性の性質は具体的にどう働くか？**
 
-> 📂 **3 つのファイルをタブで開く:**
-> - \`crates/network/src/lib.rs\` — \`Network\` トレイト
-> - \`crates/network/src/ethereum/mod.rs\` — \`Ethereum\` 実装
-> - \`alloy-rs/op-alloy\`（別リポジトリ）— \`Optimism\` 実装用
->
-> モジュールの正確なパスはリリースごとに動くが、形は変わらない。
+## 原理（最小モデル）
 
-## 全境界付きのトレイト
+- **\`Network\` 自身の境界 6 種.** \`Debug + Clone + Copy + Send + Sync + Sized + 'static\`。Copy = ゼロサイズマーカー型として値で気軽渡し。
+- **マーカー struct パターン.** \`struct Ethereum;\` は 1 バイト（Copy 可能）。チェーン設定（chain_id / hardfork）は別の場所、Network は「型ファミリの選択」のみ。
+- **\`TxType: Into<u8> + TryFrom<u8>\`.** EIP-2718 型付きエンベロープ仕様、高位 enum とワイヤ 1 バイトのマッピング。Optimism の \`0x7E\` (Deposit) で拡張。
+- **\`type TxEnvelope: TransactionEnvelope<Self>\`.** 関連型ごしに揃ったヘルパートレイト、Self でパラメータ化。
+- **Ethereum 実装.** \`alloy_consensus\`（コンセンサス形）+ \`alloy_rpc_types_eth\`（RPC 形）の 2 クレートにまたがる。クレート境界 = 概念境界。
+- **Optimism は 10 中 8 がオーバーライド.** Tx 5 スロット + Receipt 2 スロット + BlockResponse がオーバーライド、Header と HeaderResponse のみ共有。
+- **\`TransactionBuilder<N>\` ヘルパートレイト.** 流暢な \`.with_to(addr).with_value(eth(1))\` を chain-agnostic に。
+- **\`AnyNetwork\` = 寛容な逃げ道.** 任意フィールド受け入れる serde 風型、ブロックエクスプローラ / マルチチェーンインデクサ向け。
 
-本物の \`Network\` トレイトは関連型ごとにトレイト境界を持つ — 組み立てではそれらを \`...\` と省略していた。おおよその形:
+## 具体例
+
+トレイト全境界:
 
 \`\`\`rust
 pub trait Network: Debug + Clone + Copy + Send + Sync + Sized + 'static {
@@ -1083,40 +993,7 @@ pub trait Network: Debug + Clone + Copy + Send + Sync + Sized + 'static {
 }
 \`\`\`
 
-注目すべき点が 3 つ:
-
-### \`Network\` 自身の \`Debug + Clone + Copy + Send + Sync + Sized + 'static\`
-
-組み立てでは \`Send + Sync + 'static\` に触れた。本物のトレイトはさらに上乗せする:
-
-- **\`Debug\`** — Network 実装は \`{:?}\` で印字できる必要がある。主にトレースログ用（「Ethereum チェーンで Provider を構築...」）。
-- **\`Clone + Copy\`** — \`Network\` 実装は *ゼロサイズのマーカー型*。\`struct Ethereum;\` は 1 バイト（アラインメント次第ではゼロ）。\`Copy\` があるおかげで、ライフタイムを気にせず値で気軽に渡せる。
-- **\`Sized\`** — デフォルトではあるが明示している。\`PhantomData<N>\` が struct のフィールドとして動くようにするため。
-
-> 🛑 **予測。** \`Network\` が意図的にゼロサイズのマーカー型で、チェーン設定を保持する struct ではないのはなぜか?
-
-理由は、チェーン設定（chain ID、ハードフォークスケジュールなど）は *プロバイダ接続ごと* に変わるものであり、ネットワーク型ごとに変わるわけではないから。メインネットを指すか Sepolia を指すかでも、ユーザーは *同じ* \`Ethereum\` ネットワーク型を使う — 違いはチェーン仕様の側にあり、そちらは別の場所に置かれている。\`Network\` が答える問いは「*どの型ファミリ* を使うか」 — 静的で型レベルの問いであって、ランタイム設定ではない。マーカー struct はそれをぴたりと表現する。
-
-### \`TxType: Into<u8> + TryFrom<u8>\`
-
-これはコンセンサスシリアライゼーション用のフック。EIP-2718（Ethereum の型付きトランザクションエンベロープ仕様）は、各トランザクションを 1 バイトのプレフィックスで型付けする（0x01 = EIP-2930 アクセスリスト、0x02 = EIP-1559 base fee、0x03 = EIP-4844 blob tx）。\`Into<u8>\` と \`TryFrom<u8>\` の境界によって、高位の enum とワイヤ上のバイトのマッピングが可能になる:
-
-\`\`\`rust
-let tx_type: TxType = bytes[0].try_into()?;
-let byte: u8 = tx_type.into();
-\`\`\`
-
-\`TryFrom\` であって \`From\` ではない理由は、すべてのバイト値が有効な tx 型に対応するわけではないから。Optimism はこの集合を拡張する: \`0x7E\` が OP-Deposit トランザクションだ。だから Optimism の \`TxType\` は *別の* enum で、\`TryFrom\` 実装も別物になる。とはいえどちらも \`Into<u8>\` は実装する。**トレイトの形は同じで、バリアントの集合だけがチェーンごとに変わる。**
-
-### \`TransactionEnvelope<Self>\` — 関連型上のトレイト境界パターン
-
-\`type TxEnvelope: TransactionEnvelope<Self>\` を見てほしい。関連型自身が別のトレイト（\`TransactionEnvelope\`）を実装する必要があり、そのトレイトは *所属するネットワークでパラメータ化* されている。
-
-これは alloy のイディオム「関連型ごしに揃ったヘルパートレイト」: 各 \`Network::TxEnvelope\` が \`TransactionEnvelope<Self>\` を実装することで、Network 上ジェネリックなコードからチェーンによらず \`.tx_hash()\` や \`.signer()\` を呼び出す統一手段が得られる。
-
-\`ReceiptEnvelope<Self>\`、\`BlockResponse<Self>\`、\`TransactionBuilder<Self>\` も同じパターン。関連型は *Self でパラメータ化されたヘルパーを実装するよう制約される*。Provider 側で \`Provider<N>\` が使っているのと同じ手口だ。
-
-## \`Ethereum\` 実装
+Ethereum 実装:
 
 \`\`\`rust
 #[derive(Debug, Clone, Copy)]
@@ -1137,14 +1014,11 @@ impl Network for Ethereum {
 }
 \`\`\`
 
-注目すべき点が 2 つ:
+注目点 2 つ:
+1. **クレート境界 = 概念境界**: コンセンサス形（\`alloy-consensus\`）vs RPC 形（\`alloy-rpc-types-eth\`）
+2. **\`UnsignedTx = TypedTransaction\`**: EIP-2718 型付き tx バリアントのいずれか、完全埋まり署名直前
 
-1. **関連型は 2 つのクレートにまたがる。** コンセンサス形（\`TxEnvelope\`、\`Header\`、\`ReceiptEnvelope\`）は \`alloy-consensus\` 由来。RPC 形（\`Transaction\`、\`TransactionReceipt\`、\`Block\`）は \`alloy-rpc-types-eth\` 由来。**クレート境界が「コンセンサスが扱う領域」と「RPC が返すもの」という概念的な切り分けと一致している。**
-2. **\`UnsignedTx = TypedTransaction\`。** 命名が少し意外に見える。\`TypedTransaction\` は「EIP-2718 の型付きトランザクションバリアントのいずれか、完全に埋まっていて署名直前」を意味する alloy 側の名前。組み立てで言う「充填後・署名前」の状態だ。
-
-> 🔍 **リポジトリで確認。** \`alloy_consensus::TxEnvelope\` を開く。tx 型ごとに 1 バリアントを持つ enum（\`Legacy\`、\`Eip2930\`、\`Eip1559\`、\`Eip4844\`）。確認: \`TxEnvelope\` は *署名済み*（エンベロープ＝署名を含む）で、\`TypedTransaction\` は *未署名* — になっているか? **その通り。** これが組み立てステップ 2 で説明したライフサイクルだ。
-
-## \`Optimism\` 実装 — どこが変わるか
+Optimism 実装:
 
 \`\`\`rust
 #[derive(Debug, Clone, Copy)]
@@ -1166,22 +1040,13 @@ impl Network for Optimism {
 }
 \`\`\`
 
-(モジュールパスは大まか。現行 op-alloy を確認のこと。)
+10 スロット中 **8 がオーバーライド、2 が共有**:
+- 5 Tx 関連スロット（TxType、TxEnvelope、UnsignedTx、TransactionRequest、TransactionResponse）すべて違う = Optimism deposit-tx バリアントが波及
+- 2 Receipt 関連（ReceiptEnvelope、ReceiptResponse）違う = L1 ガス / L1 ブロック フィールド波及
+- Header と HeaderResponse 共有 = OP は コンセンサスヘッダレベルで EVM 互換
+- BlockResponse 違う = ブロックの tx リストに OP 型が含まれる
 
-**一貫性の性質の働きかた:**
-
-- 5 つの *トランザクション* 関連スロット（TxType、TxEnvelope、UnsignedTx、TransactionRequest、TransactionResponse）はすべて Ethereum と違う。Optimism の deposit-tx バリアントがすべてに波及するためだ。
-- 2 つの *レシート* 関連スロット（ReceiptEnvelope、ReceiptResponse）はどちらも違う。L1 ガス / L1 ブロックのフィールドが波及するためだ。
-- *ヘッダー* 型と \`HeaderResponse\` は **Ethereum と共有**。Optimism のブロックは同じヘッダー構造を持つから（OP がコンセンサスヘッダーのレベルで EVM 互換であることの副産物）。
-- \`BlockResponse\` は別物。なぜなら *ブロックのトランザクションリスト* に OP 型のトランザクションが含まれるから。Ethereum の \`Block\` を再利用すると、OP のデポジットが Ethereum 型 tx としてシリアライズされてしまう — それは誤り。
-
-> 🛑 **理解度チェック。** 素朴な設計なら、各チェーンが 10 個の型をゼロから定義する — ほとんどのチェーンが大半の型を Ethereum と共有していたとしても。**なぜここでは「別クレートから関連型を引く」が正しいパターンで、「Network 実装ごとに各型を再実装」ではないのか?**
-
-理由は、一貫性の性質が *双方向* に働くから。型が異なる箇所はオーバーライドしなければならない。同じ箇所は共有しなければならない — そうしないと、複数のチェーンを共通のツール（例えば任意のチェーンのヘッダーを読む汎用ブロックエクスプローラ）で相互運用できなくなる。関連型のアプローチはこの両立を可能にする: 変動するスロットだけをオーバーライドし、変動しないスロットは共有する。**Optimism の \`Header\` が文字どおり \`alloy_consensus::Header\` である事実は、Network 上ジェネリックに書かれたヘッダーパーサが、再コンパイルなしで Ethereum でも Optimism でも動くことを意味する。**
-
-## \`TransactionBuilder\` ヘルパートレイト
-
-関連型 \`TransactionRequest\` にはトレイト境界 \`TransactionBuilder<Self>\` が付く。これは流暢な構築メソッドを公開する *別の* トレイトだ:
+\`TransactionBuilder<N>\` ヘルパートレイト:
 
 \`\`\`rust
 pub trait TransactionBuilder<N: Network>: ... {
@@ -1197,15 +1062,11 @@ pub trait TransactionBuilder<N: Network>: ... {
     fn set_to(&mut self, to: Address);
     fn with_to(mut self, to: Address) -> Self { ... }
 
-    // ...with_value、with_gas_price、with_chain_id、with_nonce 等。
+    // ...with_value、with_gas_price、with_chain_id、with_nonce 等
 }
 \`\`\`
 
-これが \`TransactionRequest::default().with_to(addr).with_value(eth(1))\` のような流暢な構築感を生む。
-
-> 🔍 **リポジトリで確認。** \`crates/network/src/transaction/builder.rs\` を開く。\`with_*\` / \`set_*\` のメソッド数を数える。かなり多い。**なぜこれが \`Network\` とは別トレイトで、関連型に直接メソッドを置く形になっていないのか?**
-
-理由は、同じビルダーメソッドが Ethereum の \`TransactionRequest\` でも Optimism の \`TransactionRequest\` でも動く必要があるから — そして \`TransactionBuilder<N>\` をトレイトにすることで、リクエストを組み立てる N 上ジェネリックなコードが書けるようになる:
+chain-agnostic ジェネリック関数:
 
 \`\`\`rust
 fn build_request<N: Network>() -> N::TransactionRequest {
@@ -1215,11 +1076,9 @@ fn build_request<N: Network>() -> N::TransactionRequest {
 }
 \`\`\`
 
-同じコードで Ethereum、Optimism、AnyNetwork、カスタム L2のいずれでも動く。**型レベル辞書 + ヘルパートレイト ＝ チェーン横断で移植可能なコード。**
+Ethereum / Optimism / AnyNetwork / カスタム L2 すべてで動く。
 
-## \`AnyNetwork\` — 寛容な逃げ道
-
-\`alloy-network\` には 3 つ目の Network 実装 \`AnyNetwork\` がある。これは「事前にチェーンが分からない」モードで、任意のフィールドを受け入れる serde 風の型を使う:
+\`AnyNetwork\`（寛容な逃げ道）:
 
 \`\`\`rust
 impl Network for AnyNetwork {
@@ -1230,34 +1089,81 @@ impl Network for AnyNetwork {
 }
 \`\`\`
 
-ブロックエクスプローラ、マルチチェーンインデクサ、汎用 RPC プロキシのようなツールは \`AnyNetwork\` を使う。コンパイル時にはチェーンが特定できないまま、RPC 応答に現れる任意のフィールドを受け入れる必要があるからだ。代わりに払う代償は、チェーン固有フィールドの静的型付けを失い、\`.other()\` アクセサ経由で取り出さなければならなくなること。
+ブロックエクスプローラ / マルチチェーンインデクサ / 汎用 RPC プロキシ向け。代償 = チェーン固有フィールドの静的型付けを失い、\`.other()\` で取り出し。
 
-*アプリケーション* コードを書くときは \`Ethereum\` か \`Optimism\`（あるいは具体的な Network 実装）を選ぶ。*任意のチェーンを扱うツール* を書くときは \`AnyNetwork\` を選ぶ。
+## 失敗例（誤解）
 
-## クイズ前のリコール
+「\`Network\` はチェーン設定 struct」— **間違い**。**ゼロサイズマーカー型**、チェーン設定（chain_id / hardfork）は別の場所。\`Network\` の問いは「*どの型ファミリ* を使うか」 — 静的・型レベル。
 
-スクロールせずに:
+「Optimism は Ethereum 型を全部オーバーライド」— **間違い**。10 中 8 オーバーライド、Header と HeaderResponse は **共有**（OP コンセンサスヘッダレベルで EVM 互換）。一貫性の性質が共有を許す。
 
-1. \`Network\` は \`Debug + Clone + Copy + Send + Sync + Sized + 'static\` を要求する。とくに \`Copy\` がある理由は? \`Clone\` だけでは得られないものを、なにが可能にするか?
-2. Optimism の \`Network\` 実装は Ethereum の \`Header\` を再利用するが、\`BlockResponse\` は独自に定義する。**前者は同一でよいのに、後者が違う必要があるのはなぜか?**
-3. \`TransactionBuilder<N>\` は *別の* トレイトで、\`Network::TransactionRequest\` のメソッドではない。この分離があることで、どんなコードが書けるようになるか?
-4. \`Ethereum\` / \`Optimism\` のような具体的な実装ではなく、\`AnyNetwork\` を使うべきなのはどんなときか?
+「\`TransactionBuilder\` メソッドを関連型に直接置く」— **間違い**。**別トレイトにすることで N 上ジェネリック関数が書ける**（Ethereum / Optimism / AnyNetwork 横断で動く）、メソッドを関連型に置くと chain-agnostic コード書けない。
 
-次のレッスンはクイズ。答えが曖昧なら、今のうちにリコールに取り組む。
+## ステップで組み立てる
+
+### Step 1: Network 自身の 6 境界
+
+Debug + Clone + Copy + Send + Sync + Sized + 'static。Copy = ゼロサイズマーカー型。
+
+### Step 2: \`TxType: Into<u8> + TryFrom<u8>\`
+
+EIP-2718 wire-byte ↔ enum mapping、Optimism \`0x7E\` で拡張。
+
+### Step 3: 関連型ごしのヘルパートレイト
+
+\`type TxEnvelope: TransactionEnvelope<Self>\` パターン、Self でパラメータ化、chain-agnostic ヘルパー。
+
+### Step 4: Ethereum 実装の 2 クレート構造
+
+\`alloy-consensus\` + \`alloy-rpc-types-eth\` = コンセンサス vs RPC の概念境界。
+
+### Step 5: Optimism vs Ethereum を 10 スロット並列比較
+
+8 オーバーライド + 2 共有（Header / HeaderResponse）。
+
+### Step 6: \`TransactionBuilder<N>\` 別トレイトの利点
+
+chain-agnostic ジェネリック関数書ける。
+
+### Step 7: \`AnyNetwork\` の使い分け
+
+アプリ = 具体的 Network（Ethereum / Optimism）/ ツール = AnyNetwork。
+
+## 答え合わせ
+
+- **\`Network\` が \`Copy\` を要求する理由**: ゼロサイズマーカー型（\`struct Ethereum;\` は 1 バイト or 0）→ ライフタイムを気にせず値で気軽渡し可能。Clone だけだと借用が必要、Copy で関数引数 / フィールドに直接書ける。
+- **Header が共有で BlockResponse が違う理由**: Optimism コンセンサスヘッダは EVM 互換（同じ Merkle ルート構造）→ Header / HeaderResponse 共有 OK。BlockResponse は **ブロックの tx リストに OP 型が含まれる** → Ethereum の \`Block\` を再利用すると OP deposit が Ethereum 型 tx として誤シリアライズ → 別物必須。**tx リスト含むものは波及、ヘッダレベルは共有可能**。
+- **\`TransactionBuilder\` が別トレイトである利点**: 同じビルダーメソッドが Ethereum / Optimism / カスタム L2 で動く + N 上ジェネリック関数（\`fn build_request<N: Network>() -> N::TransactionRequest\`）が書ける = **型レベル辞書 + ヘルパートレイト = チェーン横断で移植可能なコード**。
+
+## 合格基準
+
+- Network 6 境界（Debug + Clone + Copy + Send + Sync + Sized + 'static）を即答できる。
+- マーカー struct パターンと Copy の意味を 1 文で説明できる。
+- Ethereum 実装の 2 クレート構造を言える。
+- Optimism vs Ethereum の 10 スロット並列比較（8 違 + 2 同）を即答できる。
+- \`TransactionBuilder<N>\` 別トレイトの利点を 1 文で説明できる。
+- \`AnyNetwork\` を使う場面を言える。
+
+## まとめ（3行）
+
+- \`Network\` 全境界 \`Debug + Clone + Copy + Send + Sync + Sized + 'static\`、関連型ごしのヘルパートレイト（\`type TxEnvelope: TransactionEnvelope<Self>\`）+ TxType の EIP-2718 マッピング。
+- Ethereum vs Optimism 並列 = 10 中 8 オーバーライド + 2 共有（Header / HeaderResponse）、コンセンサス（\`alloy-consensus\`）と RPC（\`alloy-rpc-types-eth\`）のクレート境界 = 概念境界。
+- \`TransactionBuilder<N>\` 別トレイト = chain-agnostic ジェネリック関数、\`AnyNetwork\` = 任意チェーン扱うツール向けの寛容な逃げ道。
 `,
                 },
                 {
-                  title: 'クイズ: \`Network\` トレイトの形は身についた?',
+                  title: 'クイズ — Network',
                   slug: 'alloy-network-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 7,
                   duration: 4,
                   xpReward: 25,
-                  content: `# クイズ: \`Network\` トレイトの形は身についた?
+                  content: `# クイズ — Network
 
-組み立てとウォークスルーにまたがる設計判断を問う 4 問。ほかの中級クイズと同じルール: **クイズはうなずきでは通せない。**
+\`Network\` トレイトの 10 関連型、トランザクション 4 状態分割、Ethereum 実装の 2 クレート構造、Optimism 並列（8 オーバーライド + 2 共有）、\`TransactionBuilder<N>\` ヘルパートレイトを確認する。
 
-2 問以上落としたら、ドリルへ進む前に *\`Network\` トレイトをステップで組み立てる* に戻ること。`,
+組み立てとウォークスルーにまたがる設計判断を問う 4 問。**クイズはうなずきでは通せない。** 2 問以上落としたら、ドリルへ進む前に \`Network\` のステップに戻ること。
+`,
                   quizQuestions: [
                     {
                       question: "`Network` はチェーン固有な 10 種の形（TxType、TxEnvelope、TransactionRequest ほか）を、struct のジェネリックパラメータ 10 個ではなく *関連型* として持っている。Network 上ジェネリックなコードにとって、この選択が決定的に効いてくる利点は?",
@@ -1306,77 +1212,68 @@ impl Network for AnyNetwork {
                   ],
                 },
                 {
-                  title: 'ドリル: Ethereum *と* Optimism で動く N 上ジェネリックなコードを書く',
+                  title: 'レッスン6 — ドリル: Ethereum *と* Optimism で動く N 上ジェネリックなコード',
                   slug: 'alloy-network-drill-ja',
                   type: 'CONTENT',
                   sortOrder: 8,
                   duration: 12,
                   xpReward: 25,
-                  content: `# ドリル: Ethereum *と* Optimism で動く N 上ジェネリックなコードを書く
+                  content: `# レッスン6 — ドリル: Ethereum *と* Optimism で動く N 上ジェネリックなコード
 
-読むだけではリハーサル。**手を動かすことで記憶になる。** このドリルでは、「\`Network\` が型レベル辞書だと読んだ」段階から、「チェーンごとのコードを書かずに、Ethereum でも Optimism でも動く 1 つの関数を書き上げた」段階まで進みる。
+## 問い
 
-本番での見返り: ブロックエクスプローラ、インデクサ、MEV ボット — 複数の EVM 互換チェーンをサポートしたいツールはすべて、中核ロジックを一度だけ \`N: Network\` 上ジェネリックに書きる。今回はその実演をしる。
+読むだけではリハーサル、**手を動かすことで記憶**。チェーンごとのコードを書かずに、Ethereum でも Optimism でも動く 1 関数を書く。**本番のブロックエクスプローラ / インデクサ / MEV ボットが投入するコード相当 — 何が「同じコード、違う型パラメータ」を可能にするか？**
 
-## セットアップ
+## 原理（最小モデル）
 
-ターミナルを 2 つ:
+- **セットアップ.** Anvil（ローカル）+ Optimism mainnet RPC + 新規 cargo + \`alloy\` + \`op-alloy\`。
+- **op-alloy の Network 実装を読む.** 10 関連型のうち 8 がオーバーライド、Header と HeaderResponse のみ共有。
+- **N 上ジェネリック関数.** \`fn block_summary<N, P>(provider: &P, block_id: BlockId) -> Result<String> where N: Network, P: Provider<N>\` で本体 1 つ。
+- **コンパイラの特殊化.** Ethereum / Optimism で具体化 → 2 つの特殊化コピー出力、各々最適化済。
+- **コンパイル時混ぜ防止.** \`block_summary::<Optimism, _>(&eth_provider, ...)\` は関連型不一致でコンパイルエラー、一貫性の性質がコンパイル時に守る。
+- **3 つ目チェーン追加 = 新 struct + impl Network のみ.** \`struct PolygonZkEvm; impl Network for PolygonZkEvm { ... }\` で関数本体は変えず。
 
-**ターミナル 1 — Anvil（ローカル Ethereum）:**
+## 具体例
+
+セットアップ:
 
 \`\`\`bash
+# ターミナル 1: Anvil
 anvil
-\`\`\`
 
-(Foundry を未インストールなら: \`curl -L https://foundry.paradigm.xyz | bash && foundryup\`。)
-
-**ターミナル 2 — プロジェクト:**
-
-\`\`\`bash
+# ターミナル 2: プロジェクト
 cargo new alloy-network-drill --bin
 cd alloy-network-drill
 \`\`\`
 
-\`Cargo.toml\` に追加:
+\`Cargo.toml\`:
 
 \`\`\`toml
 [dependencies]
 alloy = { version = "0.x", features = ["full", "provider-http"] }
-op-alloy = { version = "0.x" }   # Optimism Network 実装用
+op-alloy = { version = "0.x" }
 tokio = { version = "1", features = ["full"] }
 eyre = "0.6"
 \`\`\`
 
-(現行バージョンに pin する。\`op-alloy\` の正確なクレート名はリリースをまたいで動くことがある — crates.io で現在のパッケージングを確認すること。)
-
-## ドリル 1 — op-alloy の \`Network\` 実装を読む
-
-コードを書く前に、ウォークスルーで述べた主張を実ソースで裏取りする。
-
-> 🔍 **op-alloy の \`impl Network for Optimism\` ブロックを探す**。パスは時期により異なる — \`crates/network/src/lib.rs\` などをあたる。
-
-各関連型の右辺（RHS）を読む:
+10 スロット並列比較:
 
 | スロット | Ethereum の値 | Optimism の値 | 同じ? |
 | :--- | :--- | :--- | :--- |
-| \`TxType\` | \`alloy_consensus::TxType\` | \`op_alloy_consensus::OpTxType\` | ❌ |
-| \`TxEnvelope\` | \`alloy_consensus::TxEnvelope\` | \`op_alloy_consensus::OpTxEnvelope\` | ❌ |
-| \`UnsignedTx\` | \`alloy_consensus::TypedTransaction\` | OP 類似 | ❌ |
-| \`ReceiptEnvelope\` | \`alloy_consensus::ReceiptEnvelope\` | OP 類似 | ❌ |
-| \`Header\` | \`alloy_consensus::Header\` | \`alloy_consensus::Header\` | ✅ |
-| \`TransactionRequest\` | \`alloy_rpc_types_eth::TransactionRequest\` | OP 類似 | ❌ |
-| \`TransactionResponse\` | \`alloy_rpc_types_eth::Transaction\` | OP 類似 | ❌ |
-| \`ReceiptResponse\` | \`alloy_rpc_types_eth::TransactionReceipt\` | OP 類似 | ❌ |
-| \`HeaderResponse\` | \`alloy_rpc_types_eth::Header\` | \`alloy_rpc_types_eth::Header\`（おそらく）| ✅ |
-| \`BlockResponse\` | \`alloy_rpc_types_eth::Block\` | OP 類似 | ❌ |
+| TxType | \`alloy_consensus::TxType\` | \`op_alloy_consensus::OpTxType\` | ❌ |
+| TxEnvelope | \`alloy_consensus::TxEnvelope\` | \`op_alloy_consensus::OpTxEnvelope\` | ❌ |
+| UnsignedTx | \`alloy_consensus::TypedTransaction\` | OP 類似 | ❌ |
+| ReceiptEnvelope | \`alloy_consensus::ReceiptEnvelope\` | OP 類似 | ❌ |
+| Header | \`alloy_consensus::Header\` | \`alloy_consensus::Header\` | ✅ |
+| TransactionRequest | \`alloy_rpc_types_eth::TransactionRequest\` | OP 類似 | ❌ |
+| TransactionResponse | \`alloy_rpc_types_eth::Transaction\` | OP 類似 | ❌ |
+| ReceiptResponse | \`alloy_rpc_types_eth::TransactionReceipt\` | OP 類似 | ❌ |
+| HeaderResponse | \`alloy_rpc_types_eth::Header\` | \`alloy_rpc_types_eth::Header\` | ✅ |
+| BlockResponse | \`alloy_rpc_types_eth::Block\` | OP 類似 | ❌ |
 
-> 🛑 **問い（スクロール前に書き留める）:** 実コードに照らして表を検証する。**Ethereum と違うスロットはいくつあるか?** 10 中およそ 7〜8 のはず。その正確な数が、Optimism のチェーン固有な形がどこに住むかを教えてくれる — そしてそこは、まさに一貫性の性質がオーバーライドを強いる場所だ。
+**8 違う、2 共有**（Header と HeaderResponse）。一貫性の性質がオーバーライドを強制。
 
-違いがない 2 スロット（\`Header\` と \`HeaderResponse\`）は、両チェーンで内容的に同一なデータ。tx、レシート、ブロックペイロードが絡む箇所はどこでも、tx リストの一貫性がオーバーライドを強制する。
-
-## ドリル 2 — N 上ジェネリックなブロックサマリを書く
-
-\`src/main.rs\` で、*任意の* チェーンのブロックを取得しサマリ文字列を生成する関数を書く。関数は \`N: Network\` 上ジェネリック:
+N 上ジェネリックなブロックサマリ:
 
 \`\`\`rust
 use alloy::network::{primitives::BlockTransactionsKind, Network};
@@ -1394,7 +1291,6 @@ where
         .await?
         .ok_or_else(|| eyre::eyre!("block not found"))?;
 
-    // BlockResponse トレイトが .header() と .transactions() を与える
     use alloy::network::BlockResponse;
     let header = block.header();
 
@@ -1407,19 +1303,12 @@ where
 }
 \`\`\`
 
-(メソッド名は現行 alloy に近づけた目安。正確な \`HeaderResponse\` / \`BlockResponse\` トレイトメソッドは IDE が表示してくれる。要点は **\`block.header()\` も \`header.number()\` も、\`N\` に依らずジェネリックに動く** ということ。)
-
-> 🛑 **予測。** main を書く前に問いたい: この関数は \`&P: Provider<N>\` を取り、\`N: Network\` でジェネリック。**Ethereum と Optimism で呼び出し側はどう見えるか — 同じコードか、別物か?**
-
-同じコード、型パラメータだけが違う。呼び出し側は \`N\` を \`Ethereum\` か \`op_alloy::network::Optimism\` のいずれかに具体化する。関数本体は変わらない。
-
-## ドリル 3 — Ethereum（Anvil）に対して実行
-
-main を追加する:
+Ethereum + Optimism main:
 
 \`\`\`rust
 use alloy::network::Ethereum;
 use alloy::providers::ProviderBuilder;
+use op_alloy::network::Optimism;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -1429,83 +1318,106 @@ async fn main() -> eyre::Result<()> {
     let s = block_summary::<Ethereum, _>(&eth_provider, BlockId::latest()).await?;
     println!("ETH: {s}");
 
+    // Optimism mainnet
+    let op_provider = ProviderBuilder::<_, _, Optimism>::default()
+        .on_http("https://mainnet.optimism.io".parse()?);
+    let s = block_summary::<Optimism, _>(&op_provider, BlockId::latest()).await?;
+    println!(" OP: {s}");
+
     Ok(())
 }
 \`\`\`
 
-実行: \`cargo run\`。こんな出力になるはず:
-
-\`\`\`
-ETH: block 0 on chain — hash=0x...
-\`\`\`
-
-(Anvil はブロック 0 から始まる。もっと高い番号が欲しければ \`anvil_mine\` で採掘するが、本ドリルには不要。)
-
-## ドリル 4 — 同じ関数を op-mainnet（Optimism）に対して
-
-\`main\` に Optimism 呼び出しを追加する:
+混ぜると コンパイルエラー:
 
 \`\`\`rust
-use op_alloy::network::Optimism;
-
-// ... Ethereum 呼び出しの後 ...
-
-let op_provider = ProviderBuilder::<_, _, Optimism>::default()
-    .on_http("https://mainnet.optimism.io".parse()?);
-let s = block_summary::<Optimism, _>(&op_provider, BlockId::latest()).await?;
-println!(" OP: {s}");
-\`\`\`
-
-(非 Ethereum ネットワーク向けの \`ProviderBuilder\` 構文は若干異なる場合がある; op-alloy のサンプルを参照すること。構造上のポイントは「同じ関数、違う \`N\`」だ。)
-
-再度実行する。ブロックサマリが 2 件見えるはず — 1 つは Anvil（ブロック 0 など）、もう 1 つは op-mainnet（実際のブロック番号、執筆時点で 1.3 億近辺）。
-
-> 🔧 **同じ関数本体から両方の出力が出た。** これが型レベル辞書の見返り: \`block_summary\` は 1 度だけ書かれ、2 種類の \`N\` パラメータで具体化され、コンパイラはチェーンごとに適切な型に対して動く 2 つの特殊化コピーを出力する。
-
-## ドリル 5 — 理解度チェック: 混ぜると何が起きるか
-
-次を試す（**コンパイルしないはず**）:
-
-\`\`\`rust
-let eth_block = eth_provider.get_block(BlockId::latest()).await?;
+// コンパイルエラー
 let s = block_summary::<Optimism, _>(&eth_provider, BlockId::latest()).await?;
 \`\`\`
 
-> 🛑 **実行前にエラーを予測する。** \`block_summary\` は \`N: Network\` でパラメータ化され、プロバイダは \`Provider<N>\` でなければならない。\`eth_provider\` は \`Provider<Ethereum>\` だ。**コンパイラは何を拒否するか?**
+エラー: "expected \`Optimism::TransactionRequest\`, found \`Ethereum::TransactionRequest\`"。**一貫性の性質がコンパイル時にあなたを守る**。
 
-コンパイラは 2 つ目の呼び出しを拒否する。\`eth_provider\` の関連型が \`Optimism\` のものと一致しないからだ。エラーは「expected \`Optimism::TransactionRequest\`, found \`Ethereum::TransactionRequest\`」のような表現になるはず。
+## 失敗例（誤解）
 
-これがコンパイル時にあなたを守ってくれる一貫性の性質。**Ethereum 型の応答を、誤って Optimism 型のコードへ流し込めない。** これが組み立てステップ 4 で「関連型 10 個 > 素のジェネリックパラメータ 10 個」だった理由だ。
+「Network = ランタイム設定で切り替え」— **間違い**。**コンパイル時の型レベル選択**、ランタイム切り替えではない。各 chain に対して特殊化コピーがコンパイルされる。
 
-## レッスン末のリコール
+「ジェネリック関数だから動的ディスパッチ」— **間違い**。N: Network はトレイト境界、関連型は静的ディスパッチ → **コンパイラがチェーンごとに特殊化コピー出力**、vtable なし、性能ペナルティなし。
 
-スクロールせずに、自分の言葉で:
+「Polygon zkEVM 追加には alloy 自体を改造」— **間違い**。新 struct + \`impl Network for PolygonZkEvm { ... }\` のみ、関数本体は変えず。
 
-1. \`block_summary\` は関数本体ひとつ。**Ethereum と Optimism 両方で具体化された場合、コンパイラはいくつの特殊化コピーを出力するか?** それがなぜ性能上重要か?
-2. \`Header\` は Ethereum と Optimism で再利用されるが、\`BlockResponse\` は別物。**ドリル 1 の表は、*どんな種類のデータ* がオーバーライドを強制し、どんな種類が共有を許すかについて何を明らかにしたか?**
-3. コンパイラは \`block_summary::<Optimism>(&eth_provider, ...)\` を拒否する。経路を追う: どのトレイト境界に違反し、どの関連型の不一致がエラーを生むのか?
-4. 3 つ目のチェーンとして Polygon zkEVM を足したい場合、何を書くか?（ヒント: 新しい \`struct PolygonZkEvm; impl Network for PolygonZkEvm { ... }\` を書く。）
+## ステップで組み立てる
 
-このドリルを終えた時点で、本番のインデクサやエクスプローラが投入しているのと同じ形のマルチチェーンツール — \`N: Network\` 上ジェネリックな中核関数 1 つを、コンパイル時にチェーンごとに特殊化させる形 — を投入したことになる。**次のチェーン: \`Signer\` トレイト — alloy が署名、ガス、nonce の充填を層状の Provider に合成する仕組み。**
+### Step 1: 10 スロット並列比較表を読む
 
-> **🧭 ここまでで積み上げたもの:** **ネットワーク層のチェーン抽象** を完成 — \`Send + Sync + 'static\` 境界を持つ関連型 10 個、型レベルの辞書、コンパイル時の特殊化。\`Provider\` 本体ひとつで、Ethereum・Optimism・将来の任意 レッスン2を型安全にカバーできるかたちになった。次のチェーンでは次元が切り替わる: 「どのチェーンか」から、「誰が署名し、nonce やガスがどう充填されるか」へ。`,
+8 違う + 2 共有を理解。
+
+### Step 2: N 上ジェネリック関数を書く
+
+\`fn block_summary<N, P>(provider: &P, block_id: BlockId) where N: Network, P: Provider<N>\`。
+
+### Step 3: Ethereum (Anvil) で動かす
+
+\`block_summary::<Ethereum, _>(&eth_provider, BlockId::latest()).await\`。
+
+### Step 4: Optimism mainnet で動かす
+
+\`block_summary::<Optimism, _>(&op_provider, BlockId::latest()).await\`、**同じ関数、違う型パラメータ**。
+
+### Step 5: 混ぜると コンパイルエラー観察
+
+\`block_summary::<Optimism, _>(&eth_provider, ...)\` で関連型不一致エラー。
+
+### Step 6: Polygon zkEVM 追加方法
+
+新 struct + \`impl Network for PolygonZkEvm { ... }\` のみ、関数本体は変えず。
+
+## 答え合わせ
+
+- **コンパイラの特殊化コピー数**: Ethereum と Optimism の 2 種類で具体化 → **2 つの特殊化コピー出力**、各々最適化済。性能上重要 = vtable 経由の動的ディスパッチなし、静的ディスパッチで関連型解決 → ホットループでも遅くならない。
+- **Header 共有 + BlockResponse 違いの差**: Header = コンセンサスヘッダレベル（OP は EVM 互換）→ 共有。BlockResponse = **ブロックの tx リストに OP 型が含まれる** → Ethereum \`Block\` 再利用すると OP deposit が誤シリアライズ → 別物必須。**「tx リスト含むもの = 波及、ヘッダレベル = 共有可能」**。
+- **混ぜたときのコンパイルエラー経路**: \`block_summary::<Optimism, _>(&eth_provider, ...)\` で \`P: Provider<Optimism>\` 境界要求 → \`eth_provider: P_eth\` が \`Provider<Ethereum>\` 実装 → \`Provider<Optimism>\` 未実装 → **関連型不一致エラー**（"expected Optimism::TransactionRequest, found Ethereum::TransactionRequest"）→ コンパイル拒否。
+
+## 合格基準
+
+- 10 スロット並列比較表を即答できる。
+- N 上ジェネリック関数 signature を書ける。
+- 「同じ関数、違う型パラメータ」を 1 文で説明できる。
+- コンパイラの特殊化コピー数を即答できる。
+- Polygon zkEVM 追加方法（新 struct + impl Network のみ）を言える。
+
+## まとめ（3行）
+
+- N 上ジェネリック関数（\`fn block_summary<N, P>(provider: &P) where N: Network, P: Provider<N>\`）で Ethereum / Optimism / 任意のチェーンで動く 1 本体。
+- コンパイラが各 chain に対して特殊化コピー出力（静的ディスパッチ、vtable なし、性能ペナルティなし）、混ぜたら関連型不一致でコンパイルエラー。
+- Polygon zkEVM 追加 = 新 struct + impl Network のみ、関数本体不変 = 本番ブロックエクスプローラ / マルチチェーンインデクサのパターン。
+`,
                 },
                 {
-                  title: '\`Signer\` トレイトをステップごとに組み立てる',
+                  title: 'レッスン7 — `Signer` トレイトをステップごとに組み立てる',
                   slug: 'alloy-signer-buildup-ja',
                   type: 'CONTENT',
                   sortOrder: 9,
                   duration: 10,
                   xpReward: 25,
-                  content: `# \`Signer\` トレイトをステップごとに組み立てる
+                  content: `# レッスン7 — \`Signer\` トレイトをステップごとに組み立てる
 
-> 🧭 **systems engineering スタックでの位置:** **暗号認証層の署名者抽象**。TLS や PKCS#11、SSH-agent が数十年前から解いてきた問題そのもの — 「同じ呼び出し側コードが、ローカル秘密鍵・HSM・クラウド KMS・ハードウェアトークンを、書き換えなしで切り替えて使えるか」。銀行・認証局・TLS スタックが歴史的に作り込んできた抽象を、alloy の \`Signer\` が EVM の文脈に持ち込んでいる。
+## 問い
 
-MEV サーチャーは AWS KMS の鍵で署名する（クラウド鍵 — 秘密鍵は AWS の外に出ない）。トレジャリーのオペレータは Ledger で署名する（ハードウェアウォレット — 鍵は USB デバイス上にあり、毎回ボタン押下が要る）。テストスイートはプロセス内の生 secp256k1 バイトで署名する。**同じ alloy のアプリケーションコードが、この 3 つすべてを駆動できなければならない。** これが \`Signer\` トレイトの形を決めている制約だ。
+MEV サーチャーは AWS KMS で署名（秘密鍵が AWS の外に出ない）、トレジャリーは Ledger で署名（ハードウェアウォレット、毎回ボタン押下）、テストは生 secp256k1 バイトで署名。**同じ alloy アプリケーションコードが 3 つすべてを駆動する — 何が可能にするか？**
 
-本チェーンでは、それを可能にするトレイト群を組み立てる: \`Signer\` トレイト、チェーン固有版の \`TxSigner<N>\`、async / sync の分離、そして Provider ドリルで使った \`ProviderBuilder\` に署名を結びつける \`WalletFiller\`。
+## 原理（最小モデル）
 
-このレッスンを終える頃には、次のピース一式を組み立てたことになる:
+- **素朴 sign 関数の 4 失敗.** AWS KMS（async ネットワーク）+ Ledger（async USB + 人間押下）+ マルチチェーン（OP \`OpTypedTransaction\` ≠ Ethereum）+ 多種署名（EIP-191 / EIP-712 / 生ハッシュ）。
+- **3 軸抽象化.** 署名者の所在（プロセス内 / クラウド / ハードウェア）+ なにに署名するか（ハッシュ / メッセージ / tx）+ async か sync か。
+- **\`Signer\` = チェーン非依存のハッシュ/メッセージ署名.** async、\`sign_hash\` のみ必須、\`sign_message\` は EIP-191 プレフィックス付きのデフォルト実装。
+- **\`TxSigner<Sig>\` = 別トレイト.** Tx 署名はチェーン認識（\`SignableTransaction\` 経由）、\`Signer\` は chain-agnostic に保つ。
+- **\`SignerSync\` = sync 並列ミラー.** プロセス内署名者は両方実装、ネットワーク束縛は async のみ。
+- **\`WalletFiller\` で Provider に接続.** \`ProviderBuilder.wallet(signer)\` の糖衣、FillProvider チェーンに署名層を積む。
+- **デフォルト実装 + オーバーライド.** \`sign_message\` のデフォルトは EIP-191、AWS KMS が独自プレフィクシングする場合は \`AwsSigner\` 側でオーバーライド。
+
+## 具体例
+
+最終形:
 
 \`\`\`rust
 #[async_trait]
@@ -1526,13 +1438,7 @@ pub trait TxSigner<Sig> {
 pub trait SignerSync<Sig = Signature> { /* Signer の sync ミラー */ }
 \`\`\`
 
-トレイトは 3 つ。それぞれが、近道をしようとすると遭遇する具体的な失敗モードに対して存在理由を稼いでいる。
-
-> 📂 **別タブで \`alloy-rs/alloy/crates/signer\` を開く。**
-
-## ステップ 0 — 素朴な sign 関数
-
-なにも考えずに書けば、署名は型に紐づかない 1 つの関数になるだろう:
+素朴 sign 関数:
 
 \`\`\`rust
 fn sign_tx(privkey: B256, mut tx: TypedTransaction) -> Result<TxEnvelope> {
@@ -1542,21 +1448,13 @@ fn sign_tx(privkey: B256, mut tx: TypedTransaction) -> Result<TxEnvelope> {
 }
 \`\`\`
 
-関数。\`B256\` の秘密鍵がハードコード。\`TypedTransaction\`（Ethereum 型）がハードコード。\`secp256k1_sign\`（プロセス内、sync、I/O なし）もハードコード。
+4 失敗:
+1. **AWS KMS** — 秘密鍵が AWS の外に出ない、署名は async ネットワーク
+2. **Ledger** — 鍵はデバイス、async USB + 人間押下
+3. **マルチチェーン** — OP の \`OpTypedTransaction\` は Ethereum \`TypedTransaction\` ではない
+4. **多種署名** — EIP-191（personal_sign）、EIP-712（typed data）、生ハッシュ
 
-> 🛑 **予測。** スクロールせずに: この素朴な設計が破綻する本番シナリオを 3 つ挙げる。（ヒント: それぞれ *別カテゴリ* の署名 — どれもプロセス内に生秘密鍵を持っていない。）
-
-3 つ:
-
-1. **AWS KMS / Cloud HSM。** 秘密鍵は AWS の外に出ない。署名はリモートサービスへの *async なネットワーク呼び出し* になる。関数は署名を返すだけで、呼び出し側は鍵を保持しない。
-2. **ハードウェアウォレット（Ledger、Trezor）。** 鍵はデバイス上。署名は人間のボタン押下を待つ *async な USB / IPC* 呼び出し。
-3. **マルチチェーン。** Optimism の \`UnsignedTx\` は Ethereum の \`TypedTransaction\` ではなく \`OpTypedTransaction\`（deposit バリアントを含む）。1 つの型をハードコードすると、ほかのチェーンでは動かない。
-
-さらに横断的な 4 つ目: **署名はいつでも tx 署名とは限らない**。\`personal_sign\`（EIP-191 プレフィックス付きの \`eth_sign\`）、\`signTypedData_v4\`（EIP-712）、オフチェーンコミットメントの生ハッシュ署名 — どれも *なにかしらの* 署名能力を必要とするが、入力の種類が違う。
-
-直しかた: **3 軸で抽象化する。** 署名者の所在（プロセス内 / クラウド / ハードウェア）、なにに署名するか（ハッシュ / メッセージ / tx）、async か sync か。各軸が独自のトレイトかトレイトメソッドを得る。
-
-## ステップ 1 — 最初のスケッチ: 単一の \`Signer\` トレイト
+Step 1（async + 1 メソッド）:
 
 \`\`\`rust
 #[async_trait]
@@ -1574,16 +1472,7 @@ struct LedgerSigner { dev: LedgerDevice }
 impl Signer for LedgerSigner { /* USB 呼び出し */ }
 \`\`\`
 
-メソッドは 1 つ: 32 バイトハッシュを取り、署名を返す。async（クラウドとハードウェア実装が I/O できるように）。各 \`Signer\` 実装が鍵をどこに置くかを選ぶ。
-
-これで *生ハッシュ* 署名は動く。だがユーザーはほとんどの場合 \`sign_hash\` を直接は呼ばない — もっと高水準のメソッドを使う:
-
-- \`sign_message(b"hello")\` — EIP-191 プレフィックスを付け、ハッシュ化し、署名する
-- \`sign_transaction(tx)\` — tx をエンコードし、ハッシュ化し、署名する
-
-これらのメソッドはハッシュ化の *前に* 追加作業を行う。だから、それを追加していく。
-
-## ステップ 2 — デフォルト実装付きの \`sign_message\` を追加
+Step 2（\`sign_message\` デフォルト実装）:
 
 \`\`\`rust
 #[async_trait]
@@ -1597,45 +1486,14 @@ trait Signer {
 }
 \`\`\`
 
-\`sign_message\` は EIP-191 のプレフィックス処理を行ってから \`sign_hash\` を呼ぶ *デフォルト実装* を持つ。**すべての \`Signer\` が \`sign_message\` を追加コストなしで得られる** が、独自のプレフィックスロジックを持つリモート署名者は、それをオーバーライドできる。
+すべての Signer が \`sign_message\` をコストなしで得る + AWS KMS のような独自プレフィクシング実装はオーバーライド可能。
 
-> 🛑 **理解度チェック。** なぜデフォルト実装にするのか — トレイトメソッドではない関数 \`fn sign_message<S: Signer>(s: &S, msg: &[u8])\` ではいけないのか?
+Step 3（\`TxSigner\` を別トレイトに）:
 
-理由は、**デフォルト実装なら署名者側で挙動をオーバーライドできる** から。AWS KMS は、独自にプレフィクシングを行うサービスへメッセージのバイト列を転送したいかもしれない — \`AwsSigner\` 側で \`sign_message\` をオーバーライドすれば、呼び出し側のコードを変えずに済む。トレイト外の関数ではオーバーライドできない。「共通の挙動 + 実装単位のオプションカスタマイズ」が欲しいときには、デフォルト実装が正しい道具だ。
+選択肢 A: Signer をネットワーク上ジェネリック化 \`Signer<N: Network>\`
+選択肢 B: Tx 署名を別トレイトに、Signer は chain-agnostic
 
-これは \`Provider\` と同じ形（Provider チェーンのステップ 4）: デフォルト実装が共通ケースを、オーバーライドがチェーン固有ケースを引き受け、すべてを 1 つのトレイトの裏でまとめる。
-
-## ステップ 3 — Tx 署名はハッシュ署名にとどまらない
-
-\`sign_transaction\` を考える:
-
-\`\`\`rust
-async fn sign_transaction(&self, tx: TypedTransaction) -> Result<TxEnvelope> { ... }
-\`\`\`
-
-やるべきこと:
-
-1. tx の種別（Legacy / EIP-1559 / その他）に従ってエンコードする
-2. そのエンコードをハッシュ化する（*署名ハッシュ*。*トランザクションハッシュ* とは別物）
-3. ハッシュに署名する
-4. 署名を取り付けて \`TxEnvelope\` を作る
-
-ここで壁にぶつかる: **\`TypedTransaction\` は Ethereum 固有の型**。Optimism の deposit tx は \`TypedTransaction\` ではなく \`OpTypedTransaction\` だ。\`Signer\` に \`sign_transaction(&TypedTransaction)\` を持たせると、OP 用の署名者は Ethereum 専用に成り下がらない限り実装できない。
-
-選択肢は 2 つ:
-
-- **選択肢 A:** \`Signer\` をネットワーク上ジェネリックにする: \`sign_transaction(&N::UnsignedTx)\` を持つ \`Signer<N: Network>\`。
-- **選択肢 B:** tx 署名を *別トレイト* に分け、そちらがチェーン認識を担う; \`Signer\` はチェーン非依存のままにする。
-
-> 🛑 **予測。** alloy はどちらを選ぶか、その理由は?（ヒント — tx 署名と生ハッシュ署名のどちらをどれくらい頻繁に行うかを考える。)
-
-Alloy は **選択肢 B** を選ぶ。\`Signer\` はシンプルに保つ（チェーン非依存、ハッシュ専用）。\`TxSigner<N>\` を tx 署名用の別トレイトにする。理由:
-
-1. **署名操作の大部分は tx 署名ではない。** EIP-191 メッセージと EIP-712 typed data のほうが dapp ではずっと一般的だ。まれな tx ケースのために \`Signer\` 全体を \`N\` でパラメータ化すると、全署名者のシグネチャがふくらんでしまう。
-2. **\`Signer\` 実装はチェーン横断で再利用できる。** \`LocalSigner\` は Ethereum か Optimism かを気にしない — ハッシュに署名するだけだ。\`N\` でタグを付けると、チェーンごとに 1 つの署名者 struct を強いることになる。
-3. **Tx 署名は自然に多態的。** 1 つの署名者が \`TxSigner<Ethereum>\` と \`TxSigner<Optimism>\` をそれぞれ別のコードパスで実装できる。これらを 1 つのトレイトに束ねるとやりにくくなる。
-
-そこで:
+alloy は **選択肢 B**:
 
 \`\`\`rust
 #[async_trait]
@@ -1645,18 +1503,12 @@ pub trait TxSigner<Sig> {
 }
 \`\`\`
 
-(\`SignableTransaction\` は、各チェーンの \`UnsignedTx\` 型が実装するトレイト。\`Signer\` はチェーンの種類を知る必要はなく、与えられた \`SignableTransaction\` をどう署名するかを知っていればよい。)
+理由 3 つ:
+1. 署名操作の大部分は tx 署名ではない（EIP-191 + EIP-712 のほうが dapp で一般的）
+2. Signer 実装はチェーン横断で再利用可能（LocalSigner は Ethereum か Optimism か気にしない）
+3. Tx 署名は自然に多態的（1 Signer が \`TxSigner<Ethereum>\` と \`TxSigner<Optimism>\` を別実装）
 
-## ステップ 4 — async と sync: \`SignerSync\` の分離
-
-async は AWS や Ledger では妥当だ。しかしもっとも一般的なケース — プロセス内鍵による署名 — では、async はオーバーヘッドになる。\`sign_hash\` 呼び出しは I/O がなくても future を経由してしまう。
-
-対処は 2 通り:
-
-- オーバーヘッドを受け入れる: プロセス内でも全面的に \`async fn\` を使う。
-- 並列の **sync** トレイトを用意し、プロセス内署名者には両方を実装させる。
-
-Alloy は後者を採る:
+Step 4（\`SignerSync\` 分離）:
 
 \`\`\`rust
 pub trait SignerSync<Sig = Signature> {
@@ -1666,19 +1518,9 @@ pub trait SignerSync<Sig = Signature> {
 }
 \`\`\`
 
-\`LocalSigner\` は \`Signer\`（async）と \`SignerSync\`（sync）の両方を実装する。\`AwsSigner\` と \`LedgerSigner\` が実装するのは \`Signer\` のみ — ネットワークに縛られるため、sync では署名できない。
+LocalSigner は両方実装、AwsSigner / LedgerSigner は async のみ。
 
-S 上ジェネリックなコードは、どちらの境界も要求できる: async を許容してよいコードは \`fn foo<S: Signer>\`、安価なパスが必要なコードは \`fn bar<S: SignerSync>\` と書く。
-
-> 🛑 **理解度チェック。** なぜ \`SignerSync\` は、単に非 async の \`sign_hash\` を持つ \`Signer\` ではないのか? なぜ別トレイトなのか?
-
-理由は、**Rust において \`async fn\` を持つトレイトと持たないトレイトは別物だから**。\`async fn foo() -> T\` は実態として \`fn foo() -> impl Future<Output = T>\` — 結果ではなく Future を返す関数で、呼び出し側に \`.await\` を強要する。同じメソッドを sync と async の両方で公開すると、シグネチャが全く別になる。
-
-プロセス内署名者は両方を実装できる — sync メソッドが実作業を行い、async メソッドは互換性のためにそれを \`async\` で包むだけ。ネットワーク束縛の署名者は async トレイトしか実装できない（I/O が走るため）。S 上ジェネリックなコード側で、どちらの契約を要求するかを選べばよい。1 つに統合してしまうと、全署名者が async に縛られ、sync の安価パス（プロセス内なら \`.await\` も Future 確保もスキップできる）での最適化が失われる。
-
-## ステップ 5 — \`Provider\` への接続: \`WalletFiller\`
-
-Provider チェーンを思い出してほしい: \`FillProvider<F: Filler<N>, P, N>\` を使えば、内側のプロバイダの手前にチェーン認識ロジックを積層できる。署名もそうした Filler の 1 つだ:
+Step 5（\`WalletFiller\` で Provider 接続）:
 
 \`\`\`rust
 pub struct WalletFiller<W> {
@@ -1694,10 +1536,6 @@ impl<W: TxSigner<...>, N: Network> Filler<N> for WalletFiller<W> {
 }
 \`\`\`
 
-(あくまでおおよその形 — 本物の alloy では、unsigned tx の組み立てと署名にもう少し細部がある。)
-
-これが橋渡し: \`Signer\`（あるいは \`TxSigner<N>\`）トレイトが *どう署名するか* を抽象化し、\`WalletFiller\` がリクエストフローの正しいタイミングで署名を *呼び出す* Filler 側の機構を担う。
-
 ユーザーコード:
 
 \`\`\`rust
@@ -1710,76 +1548,88 @@ let provider = ProviderBuilder::new()
 provider.send_transaction(tx).await?;  // tx は WalletFiller により署名される
 \`\`\`
 
-\`.wallet(...)\` ビルダーメソッドは Filler の組み込み口で、署名者を \`WalletFiller\` で包んで FillProvider チェーンに積む。ユーザーは \`Signer\` を直接意識せず、「ビルダーにウォレットを渡す」と考えればよい。
+## 失敗例（誤解）
 
-## ここまでに組み立てたもの
+「\`Signer\` だけで tx 署名も賄える」— **間違い**。Tx は \`SignableTransaction\` でチェーン認識必要 → \`Signer\` を \`N: Network\` でジェネリック化すると全 signer signature がふくらむ + チェーン横断再利用不可。**\`TxSigner\` を別トレイトに**。
 
-\`\`\`rust
-// 最低レベル: チェーン非依存のハッシュ/メッセージ署名
-#[async_trait]
-pub trait Signer<Sig = Signature> {
-    async fn sign_hash(&self, hash: &B256) -> Result<Sig>;
-    async fn sign_message(&self, message: &[u8]) -> Result<Sig> { /* デフォルト */ }
-    fn address(&self) -> Address;
-    fn chain_id(&self) -> Option<ChainId>;
-    fn set_chain_id(&mut self, chain_id: Option<ChainId>);
-}
+「sync 版を作る必要なし、async で統一」— **間違い**。プロセス内署名者で async = future オーバーヘッド + ホットループで損。**\`SignerSync\` でプロセス内が両方実装**、ネットワーク束縛は async のみ。
 
-// プロセス内鍵のための Sync ミラー
-pub trait SignerSync<Sig = Signature> { /* 並列 sync API */ }
+「\`sign_message\` を関数（トレイトメソッドではない）にする」— **間違い**。AWS KMS が独自プレフィクシングを実装したい → デフォルト実装ならオーバーライド可能、トレイト外関数では不可能。**「共通挙動 + 実装単位カスタマイズ」がデフォルト実装の正しい用途**。
 
-// Tx 署名: 別トレイト、任意の SignableTransaction に対して動く
-#[async_trait]
-pub trait TxSigner<Sig> {
-    fn address(&self) -> Address;
-    async fn sign_transaction(&self, tx: &mut dyn SignableTransaction<Sig>) -> Result<Sig>;
-}
-\`\`\`
+## ステップで組み立てる
 
-各ピースは存在理由を稼いでいる:
+### Step 1: 素朴 sign 関数の 4 失敗
 
-- **\`Signer\` の async**（ステップ 1）— クラウドとハードウェアの署名者に対応する
-- **\`sign_message\` のデフォルト実装**（ステップ 2）— 共通の EIP-191 パスを提供しつつ、オーバーライドの口を残す
-- **\`TxSigner\` を別トレイトに**（ステップ 3）— \`Signer\` をチェーン非依存に保ち、署名者を複数チェーン向けに実装可能にする
-- **\`SignerSync\` を並列トレイトに**（ステップ 4）— プロセス内鍵で async のオーバーヘッドを回避; ネットワーク束縛の署名者は async のみ
-- **\`WalletFiller\`**（ステップ 5）— Provider チェーンの Filler 機構を介して \`Signer\` / \`TxSigner\` を \`Provider\` のリクエストフローへつなぐ
+AWS KMS + Ledger + マルチチェーン + 多種署名。
 
-次のレッスンでは、alloy 本体の \`Signer\` トレイト、\`PrivateKeySigner\` 実装、\`AwsSigner\` 実装、\`WalletFiller\` のソースを行単位で読みる。
+### Step 2: 3 軸抽象化
 
-## 先に進む前のリコール
+所在 + 何に署名 + async/sync。
 
-スクロールせずに:
+### Step 3: \`Signer\` を async + chain-agnostic に
 
-1. **\`Signer\` が async である理由は?** async が *必須* な本番署名者を 2 つ挙げる。
-2. **\`TxSigner<Sig>\` が \`Signer\` から分離された別トレイトである理由は?** tx 署名が単に \`Signer\` のメソッドだったら、なにが壊れるか?
-3. **\`SignerSync\` が存在する理由は?** プロセス内署名者が \`Signer\` と並べて \`SignerSync\` も実装することで、なにが得られるか?
-4. ユーザーコードの \`ProviderBuilder.wallet(signer)\` は、\`WalletFiller\` や \`Filler\` を直接は言及しない。それらは内部でどう結び付くか?
+\`sign_hash\` のみ必須、\`sign_message\` デフォルト実装。
 
-どれかの答えが揺らぐなら、戻って読み直すこと。次のレッスンでは、alloy 本体の \`Signer\` ソースと具体実装を読みる。
+### Step 4: \`TxSigner\` 別トレイトの 3 理由
 
-> **🧭 ここまでで積み上げたもの:** **暗号認証層の署名者抽象** を組み上げた — ハッシュ用の \`Signer\`、tx エンベロープ用の \`TxSigner<N>\`、クラウドとローカルを切り分ける async / sync 分離、FillProvider チェーンに署名を差し込む \`WalletFiller\`。同じユーザコードが、互いを知らないままローカル鍵・クラウド KMS・ハードウェアウォレットを駆動できる形になった。次のレッスンでは、本物の実装側に踏み込む。
+dapp 利用パターン + chain-agnostic 再利用 + 多態性。
+
+### Step 5: \`SignerSync\` で sync 並列
+
+LocalSigner 両方実装、AWS / Ledger は async のみ。
+
+### Step 6: \`WalletFiller\` で Provider 統合
+
+\`ProviderBuilder.wallet(signer)\` が糖衣、FillProvider チェーンに署名層。
+
+## 答え合わせ
+
+- **\`Signer\` が async である理由**: AWS KMS（ネットワーク呼び出し）+ Ledger（USB + 人間押下）の 2 つが async 必須。プロセス内でも async 統一で 1 トレイトに集約、sync 専用は \`SignerSync\` で並列に。
+- **\`TxSigner\` が別トレイトである 3 理由**: ① 署名操作の大部分は tx 署名ではない（EIP-191 + EIP-712 が dapp で一般的）→ Signer signature ふくらませない、② Signer 実装はチェーン横断再利用可能（LocalSigner は Ethereum / Optimism 両対応）、③ Tx 署名は自然に多態的（1 Signer が \`TxSigner<Ethereum>\` + \`TxSigner<Optimism>\` を別コードパスで実装可能）。
+- **\`WalletFiller\` の役割**: \`Signer\` / \`TxSigner\` は **どう署名するか** を抽象化、\`WalletFiller\` はリクエストフローの正しいタイミング（unsigned tx 構築後）で署名を呼び出す Filler 機構。\`ProviderBuilder.wallet(signer)\` ユーザー API は内部で \`WalletFiller(signer)\` を FillProvider に積む糖衣。
+
+## 合格基準
+
+- 素朴 sign 関数の 4 失敗を即答できる。
+- 3 軸抽象化（所在 + 対象 + async/sync）を言える。
+- \`Signer\` / \`TxSigner\` / \`SignerSync\` の 3 トレイトを役割で言える。
+- \`TxSigner\` 別トレイトの 3 理由を言える。
+- \`WalletFiller\` の役割（Filler 機構経由で Provider 統合）を 1 文で説明できる。
+
+## まとめ（3行）
+
+- 3 トレイト（\`Signer\` chain-agnostic async / \`TxSigner<Sig>\` chain-aware tx 署名 / \`SignerSync\` sync 並列ミラー）= 素朴 sign の 4 失敗（AWS / Ledger / マルチチェーン / 多種署名）を解決する 3 軸抽象化。
+- \`Signer\` の \`sign_message\` デフォルト実装で EIP-191 を共通化 + オーバーライド可能、\`TxSigner\` 別トレイトで chain-agnostic 再利用 + 多態性。
+- \`ProviderBuilder.wallet(signer)\` が \`WalletFiller(signer)\` を FillProvider に積む糖衣、署名層が nonce / gas / chain-id filler と同じ機構で動く。
 `,
                 },
                 {
-                  title: '本物の \`Signer\` トレイト + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\` を読む',
+                  title: 'レッスン8 — 実 `Signer` トレイト + `PrivateKeySigner` / `AwsSigner` / `WalletFiller` を読む',
                   slug: 'alloy-signer-walkthrough-ja',
                   type: 'CONTENT',
                   sortOrder: 10,
                   duration: 10,
                   xpReward: 25,
-                  content: `# 実 \`Signer\` トレイト + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\` を読む
+                  content: `# レッスン8 — 実 \`Signer\` トレイト + \`PrivateKeySigner\` / \`AwsSigner\` / \`WalletFiller\` を読む
 
-3 トレイトへの分割（\`Signer\` / \`TxSigner\` / \`SignerSync\`）と \`WalletFiller\` の橋渡しを動機づけてきました。今度は実ソースを読む — 全境界付きのトレイトヘッダ、プロセス内の \`PrivateKeySigner\`、クラウドの \`AwsSigner\`（AWS が返してくれないリカバリバイトを総当たりで復元しなければならない箇所）、\`SignableTransaction\` の接着剤、\`WalletFiller\` の FillProvider チェーンへの組み込み — そのすべて。
+## 問い
 
-> 📂 **タブで 4 つのファイルを開く:**
-> - \`crates/signer/src/signer.rs\` — \`Signer\` と \`SignerSync\` トレイト
-> - \`crates/signer-local/src/private_key.rs\` — \`PrivateKeySigner\` の実装
-> - \`crates/signer-aws/src/signer.rs\` — \`AwsSigner\` の実装
-> - \`crates/provider/src/fillers/wallet.rs\` — \`WalletFiller\`
->
-> パスはバージョンごとに動くが、構造的な形は変わらない。
+3 トレイト分割 + \`WalletFiller\` 橋渡しを組み立てた。**実ソースで全境界 + \`PrivateKeySigner\` のキャッシュ戦略 + \`AwsSigner\` の recovery-id 復元 + \`SignableTransaction\` 接着剤 + \`WalletFiller\` の FillProvider 組み込み — どこにあるか？**
 
-## トレイトヘッダ（実ソース）
+## 原理（最小モデル）
+
+- **\`Sig = Signature\` デフォルト付きジェネリックパラメータ.** ECDSA secp256k1 がデフォルト、BLS / ed25519 / 耐量子で別実装可能。
+- **\`Sig\` が関連型ではなくジェネリックパラメータの理由.** 同じ署名者が複数 \`Sig\` で \`Signer\` 実装可能（\`Signer<Signature>\` + \`Signer<RawBytes>\` 両方）。
+- **\`auto_impl(&mut, Box, Arc)\` の 3 種.** \`Provider\` の 5 種より狭い。\`&\` なし = \`set_chain_id(&mut self)\` 変更メソッド + \`Rc\` なし = \`Signer: Send + Sync\` で \`Rc<T>\` は \`!Send + !Sync\`。
+- **\`PrivateKeySigner\` の構造.** \`SigningKey\` + キャッシュ済み \`address\` + per-signer \`chain_id\`。5 コンストラクタ（random / from_bytes / from_str / from_signing_key / random_with）。
+- **\`AwsSigner\` の recovery-id 復元.** AWS KMS は \`(r, s)\` のみ返す → \`v\` は v=0 と v=1 を試してキャッシュ済み \`address\` を再現する方を選ぶ。
+- **\`address()\` キャッシュが必要な理由.** すべての tx で複数回呼ばれる、ネットワーク呼び出しだったら tx ごとに往復レイテンシ。
+- **\`SignableTransaction\` 接着剤.** 各チェーン \`UnsignedTx\` が実装、\`TxSigner\` はチェーン非依存で動く（\`signature_hash()\` 呼ぶだけ）。
+- **\`WalletFiller\` = \`TxFiller<N>\`.** nonce / gas / chain-id filler と同じ \`TxFiller<N>\` トレイト、合成可能。
+
+## 具体例
+
+トレイトヘッダ:
 
 \`\`\`rust
 #[async_trait]
@@ -1797,49 +1647,20 @@ pub trait Signer<Sig = Signature>: Send + Sync {
 }
 \`\`\`
 
-押さえるべき点が 3 つ:
+3 注目点:
+- **\`Sig = Signature\` デフォルト**: ECDSA secp256k1 デフォルト、BLS / ed25519 / 耐量子で別実装可能
+- **\`auto_impl(&mut, Box, Arc)\` の 3 種**: \`&\` なし（\`set_chain_id\` が変更メソッド）+ \`Rc\` なし（\`Signer: Send + Sync\` だが Rc は \`!Send + !Sync\`）
+- **\`Send + Sync\` スーパートレイト**: \`Arc<S>\` でタスク間共有
 
-### \`Sig = Signature\` — デフォルト付きのジェネリックパラメータ
-
-組み立てでは \`Signer<Sig = Signature>\` と書いた。\`Sig\` というパラメータがあるのは、すべてのチェーンが ECDSA secp256k1 署名を使うわけではないからだ（Ethereum の曲線 — 65 バイトの (r, s, v) タプル）。レッスン2のなかには BLS（集約に向く）を使うものや、ed25519（Solana の曲線）を使うもの、耐量子計算スキームを使うものもある。\`Signature\`（alloy の secp256k1 型）をデフォルトにすれば、\`impl Signer\` を書くと暗黙に \`impl Signer<Signature>\` になる — 一般ケースの取り回しを保ちつつ、別スキームを差し込める。
-
-> 🛑 **予測。** なぜ \`Sig\` は *関連型* ではなく、*トレイトのジェネリックパラメータ* なのか?（\`Network::TxEnvelope\` のように関連型にせず。)
-
-理由は、**同じ署名者が、操作によって異なる署名型を生成しうる** から。ECDSA 鍵を保持する 1 つの \`PrivateKeySigner\` は \`Signer<Signature>\`（ハッシュ署名用）と \`TxSigner<Signature>\`（tx 署名用）の両方を実装できる — あるいは必要なら、生バイト出力のバリアント用に \`Signer<RawBytes>\` を実装することもできる。ジェネリックパラメータ ＝ 「異なる \`Sig\` でこのトレイトを複数回実装してよい」。関連型 ＝ 「実装ごとに \`Sig\` をひとつだけ確定する」。署名者にはジェネリックパラメータが正しい形だ。
-
-### \`auto_impl(&mut, Box, Arc)\`
-
-ラッパーは 3 種類 — \`Provider\` の 5 種（\`&, &mut, Box, Rc, Arc\`）より狭い。
-
-省略は意図的:
-
-- **\`&\` なし** — \`set_chain_id(&mut self, ...)\` は変更を伴うメソッド。\`&self\` 越しではトレイトを通してコンパイルできない。(\`Provider\` には \`&mut self\` メソッドがないため、より広いリストを持てる。)
-- **\`Rc\` なし** — \`Signer\` は \`Send + Sync\` を要求するが、\`Rc<T>\` は参照カウントが原子的でないため \`!Send\` かつ \`!Sync\`。スレッドセーフな \`Arc<T>\` だけが残る。
-
-2 つの省略、それぞれ別の理由。**auto_impl のリストは、トレイト契約に対する厳密な宣言。**
-
-### \`Send + Sync\` スーパートレイト
-
-\`Provider\` が要求するのと同じ理由から: 本番コードは署名者を \`Arc<S>\` で包んでタスク間で共有する。これらの境界があるおかげで、\`Arc<dyn Signer>\` や \`Arc<S: Signer>\` がそのまま自然な共有プリミティブとして機能する。
-
-## \`PrivateKeySigner\` — プロセス内の実装
+\`PrivateKeySigner\`:
 
 \`\`\`rust
 pub struct PrivateKeySigner {
-    /// k256（Rust BIP-340 secp256k1）の \`SigningKey\`。
     signer: SigningKey,
-    /// 公開鍵から導出された Ethereum アドレス。
-    address: Address,
-    /// EIP-155 リプレイ保護用 Chain ID。
+    address: Address,        // 構築時にキャッシュ
     chain_id: Option<ChainId>,
 }
-\`\`\`
 
-フィールドは 3 つ。\`SigningKey\` が実際の秘密鍵。\`address\` は *構築時にキャッシュ* される（公開鍵からの導出は非自明 — 非圧縮 pubkey を keccak し最後 20 バイトを取る — ので 1 度だけ計算する）。\`chain_id\` は per-signer であって per-call ではない。多くのユーザーは 1 つの署名者を 1 つのチェーンに固定したいからだ。
-
-### コンストラクタ
-
-\`\`\`rust
 impl PrivateKeySigner {
     pub fn random() -> Self { /* OsRng → SigningKey */ }
     pub fn random_with(rng: &mut impl CryptoRng) -> Self { /* tests */ }
@@ -1849,26 +1670,22 @@ impl PrivateKeySigner {
 }
 \`\`\`
 
-5 つのコンストラクタが現実的な鍵ソースを網羅する: テスト用の random、保存済みの鍵用の from-bytes、hex 用の from-string、すでに \`SigningKey\` を持っている呼び出し側のための直接構築。**構築まわりは、\`PrivateKeySigner\` がネットワーク束縛の署名者と振る舞いが分かれる唯一の局面** — 後者には独自の接続 / 設定フローがある。
+\`address\` を構築時キャッシュ理由: 公開鍵からの導出は非自明（非圧縮 pubkey を keccak → 最後 20 バイト）→ 1 度だけ計算。
 
-### \`Signer\` と \`SignerSync\` の両方を実装
-
-\`PrivateKeySigner\` は async の \`Signer\` トレイトと sync の \`SignerSync\` トレイトを *両方* 実装する。S 上ジェネリックなコードからは、どちらでも使える:
+\`Signer\` + \`SignerSync\` の両方実装:
 
 \`\`\`rust
 fn high_throughput_path<S: SignerSync>(signer: &S) { /* sync、future オーバーヘッドなし */ }
 fn cloud_compatible_path<S: Signer>(signer: &S) { /* async、AWS でも動く */ }
 \`\`\`
 
-\`PrivateKeySigner\` の sync パスが実際の署名処理を行い、async パスは \`async\` ブロックの中で sync パスを呼び出すだけの薄いラッパー。**async 実装は sync の上に安価に合成できるが、逆は成り立たない** — これが、より少ない実装しか満たせない \`SignerSync\` が別トレイトとして存在する理由だ。
+sync パスが実作業、async は async ブロックで sync 呼び出すだけ。**async は sync の上に安価に合成可能、逆は不可**。
 
-> 🔍 **リポジトリで確認。** \`alloy-signer-local/src/private_key.rs\` を開く。\`impl Signer for PrivateKeySigner\` と \`impl SignerSync for PrivateKeySigner\` の両方が存在することを確かめる。async の \`sign_hash\` 本体を読む — ただの \`async { self.sign_hash_sync(...) }\` になっているか?
-
-## \`AwsSigner\` — クラウドの実装
+\`AwsSigner\`:
 
 \`\`\`rust
 pub struct AwsSigner {
-    client: Client,         // \`aws-sdk-kms\` Client
+    client: Client,
     key_id: String,
     address: Address,       // キャッシュ済
     chain_id: Option<ChainId>,
@@ -1884,31 +1701,21 @@ impl Signer for AwsSigner {
             .message_type(MessageType::Digest)
             .send()
             .await?;
-        // resp.signature は DER エンコード; alloy Signature に変換
         let sig = der_to_alloy(&resp.signature.as_ref())?;
-        // 両可能性を試しアドレスをマッチさせて recovery id を回復
         let recid = recover_recid(hash, &sig, &self.address)?;
         Ok(Signature { /* ... */ })
     }
-    // ...
 }
 
-// AwsSigner は SignerSync を impl しない — AWS KMS 経由には sync パスがない。
+// AwsSigner は SignerSync を impl しない — AWS KMS 経由には sync パスがない
 \`\`\`
 
-(あくまでおおよその形 — 本物の alloy は DER デコードと recovery-id 復元のあたりがもっと細かい。)
+3 注目点:
+1. **AWS は DER エンコード署名を返す** → alloy の (r, s, v) タプルに変換
+2. **Recovery ID は AWS が返さない** → v=0 と v=1 を試してアドレスマッチで復元
+3. **\`SignerSync\` 実装なし** → ネットワーク越しなので sync 不可能
 
-注目すべき点は 3 つ:
-
-1. **AWS は DER エンコードされた署名を返す**。alloy が使う (r, s, v) タプル形式ではない。デコードして変換するのは署名者側の責務。
-2. **Recovery ID は AWS が返してくれない。** AWS は r と s だけを返す。\`v\`（リカバリバイト）は、両方の可能性を試してキャッシュ済みの \`address\` を再現するほうを選ぶ、という形で *復元* するしかない。**AWS への呼び出し 1 回 → アドレス導出を 2 通り試す → 一致したほうの署名を採用。**
-3. **\`SignerSync\` の実装はない。** AWS 呼び出しはネットワーク越しなので sync パスが存在しない。sync を要求する S 上ジェネリックなコードは、AWS 署名者が使えないことを受け入れなければならない。
-
-> 🛑 **理解度チェック。** \`PrivateKeySigner\` は構築時に \`address\` をキャッシュする（pubkey からの一発導出）。\`AwsSigner\` は \`describe_key\` を一度呼んでキャッシュする。**なぜすべての署名者がアドレスをキャッシュするのか? \`address()\` が毎回ネットワーク呼び出しだったら、なにが壊れるか?**
-
-理由は、\`address()\` が *すべてのトランザクション* で呼ばれ、しばしば *tx ごとに複数回* 呼ばれるから（追跡、ロギング、署名適格性チェック、コールフレームの構築などのため）。これがネットワーク呼び出しだったら、すべてのトランザクションが *誰の鍵で署名したかを知るためだけに* AWS への往復レイテンシを被ることになる。構築時のキャッシュは、一度きりのセットアップコストと、ほぼゼロの per-call コストを交換する取引だ。
-
-## \`SignableTransaction\` — チェーン認識を担う接着剤
+\`SignableTransaction\` 接着剤:
 
 \`\`\`rust
 pub trait SignableTransaction<Sig> {
@@ -1922,7 +1729,7 @@ pub trait SignableTransaction<Sig> {
 }
 \`\`\`
 
-各チェーンの \`UnsignedTx\` 型（Ethereum の \`alloy_consensus::TypedTransaction\`、Optimism の \`OpTypedTransaction\`）が \`SignableTransaction<Signature>\` を実装する。これによって、\`TxSigner::sign_transaction\` はチェーンの種類を知らずに動く対象を得る:
+各チェーン \`UnsignedTx\`（Ethereum \`TypedTransaction\` / Optimism \`OpTypedTransaction\`）が実装。\`TxSigner\` はチェーン非依存で動く:
 
 \`\`\`rust
 async fn sign_transaction(&self, tx: &mut dyn SignableTransaction<Signature>) -> Result<Signature> {
@@ -1931,11 +1738,7 @@ async fn sign_transaction(&self, tx: &mut dyn SignableTransaction<Signature>) ->
 }
 \`\`\`
 
-\`TxSigner\` は、対象がどんな種類の tx かを知らない。トレイトオブジェクトに対して \`signature_hash()\` を呼び、32 バイトのハッシュを取り、それに署名する — それだけ。**SignableTransaction の橋を介して、チェーン非依存の署名者とチェーン固有の UnsignedTx が結びつく。**
-
-> 🔍 **リポジトリで確認。** \`alloy_consensus::TypedTransaction\` を開く。\`impl SignableTransaction<Signature> for TypedTransaction\` を見つける。\`signature_hash\` が tx 型でディスパッチすることを確かめる（Legacy は RLP エンコードした tx を使う、EIP-1559 は \`0x02 || rlp(tx)\` の keccak を使う、など） — エンコードのルールは実装の *内側* にあり、署名者からは見えない。
-
-## \`WalletFiller\` — Provider 機構への橋渡し
+\`WalletFiller\`:
 
 \`\`\`rust
 pub struct WalletFiller<W> {
@@ -1948,19 +1751,15 @@ where
 {
     type Fillable = Sendable<N::TxEnvelope>;
 
-    // ...unsigned tx を構築し、署名し、署名をリクエストに取り付け
     async fn fill(&self, fillable: Self::Fillable, tx: &mut SendableTx<N>) -> TransportResult<...> {
         let envelope = self.wallet.sign_request(/* fillable からの unsigned tx */).await?;
         tx.envelope = Some(envelope);
         Ok(...)
     }
-    // ...
 }
 \`\`\`
 
-(本物の alloy コードは、ここでは省いた他のトレイト — \`NetworkWallet<N>\`、\`TxFiller<N>\`、\`Sendable\` — も絡む。構造上の要点は: \`WalletFiller\` はウォレット型 \`W\` 上ジェネリックで、ネットワーク \`N\` でパラメータ化され、Provider チェーンの nonce / gas / chain-id filler と同じ \`TxFiller<N>\` トレイトを実装するということ。)
-
-ユーザーに見えるビルダーメソッド \`.wallet(signer)\`:
+\`.wallet(signer)\` 糖衣:
 
 \`\`\`rust
 impl<P, N> ProviderBuilder<P, N>
@@ -1974,43 +1773,77 @@ where
 }
 \`\`\`
 
-\`.wallet(signer)\` は \`.layer(WalletFiller::new(signer))\` の糖衣。**nonce / gas / chain-id の filler と同じ合成機構を共有している。** 署名者は \`WalletFiller\` に包まれ、他の filler と並べて積まれることで、FillProvider チェーンへ統合される。
+\`.wallet(signer)\` = \`.layer(WalletFiller::new(signer))\` 糖衣、**nonce / gas / chain-id filler と同じ合成機構共有**。
 
-これが、ユーザーが \`WalletFiller\` を直接目にしない理由だ: 公開された API としては \`ProviderBuilder.wallet(...)\` があり、その下では Provider チェーンと同じ Filler 機構が動いている。
+## 失敗例（誤解）
 
-## \`sign_dynamic_typed_data\` — EIP-712（手短に）
+「\`address()\` を毎回ネットワーク呼び出し」— **致命的**。すべての tx で複数回呼ばれる（追跡 + ロギング + 適格性チェック + コールフレーム構築）→ tx ごとに AWS 往復レイテンシ。**構築時キャッシュで一度きりセットアップ + ほぼゼロの per-call**。
 
-補足として: alloy は EIP-712 署名（ドメインセパレータ付きの typed data。dapps のオフチェーン注文署名で多用される）のために、別途 \`SignerSync::sign_dynamic_typed_data(typed_data: &TypedData) -> Result<Signature>\` を用意している。流れは:
+「\`Rc<Signer>\` で thread-local 共有」— **間違い**。\`Signer: Send + Sync\` 要求 → \`Rc<T>\` は \`!Send + !Sync\`（参照カウントが atomic でない）→ コンパイル拒否。**Arc<Signer> のみ**。
 
-1. EIP-712 ハッシュを計算する（ドメインハッシュ + struct ハッシュに \`0x1901\` プレフィックスを付けたもの）
-2. その結果で \`sign_hash\` を呼ぶ
+「\`AwsSigner\` で recovery-id 不要」— **間違い**。AWS は \`(r, s)\` のみ返す、\`v\` は **両可能性を試して復元** 必要。\`PrivateKeySigner\` は \`k256\` の sign-recoverable で直接得られる、追加コストなし。
 
-\`sign_message\` と同じデフォルト実装のパターン: 低レベルの \`sign_hash\` が実作業を行い、高レベルのメソッドが EIP-712 プレフィクシングを処理して下を呼ぶ。**1 つのトレイト、複数の入力型、最終的にはすべて同じ低レベル署名処理にルーティングされる。**
+## ステップで組み立てる
 
-## クイズ前のリコール
+### Step 1: \`Sig = Signature\` デフォルト + ジェネリック
 
-スクロールせずに:
+ECDSA デフォルト、BLS / ed25519 で別実装可能、ジェネリックパラメータで複数 \`Sig\` 実装可能。
 
-1. \`Signer\` の \`auto_impl\` は \`(&mut, Box, Arc)\`。\`&\` がなく、\`Rc\` もないのはなぜか?
-2. \`PrivateKeySigner\` は構築時に \`address\` をキャッシュする。経路を追う: \`AwsSigner\` の \`address()\` がキャッシュなしだったらどう振る舞うか?
-3. \`AwsSigner\` は KMS から \`(r, s)\` しか得られない。\`PrivateKeySigner::sign_hash\` では不要な、\`AwsSigner::sign_hash\` で必要になる recovery-id 関連の処理はなにか?
-4. ユーザーは \`ProviderBuilder.wallet(signer)\` を呼ぶ。\`WalletFiller\` の機構を通って結果のプロバイダがどんな層構造になるかを追う。署名者の \`sign_transaction\` は実際のところどこで呼ばれるか?
+### Step 2: \`auto_impl(&mut, Box, Arc)\` の 3 種理由
 
-次のレッスンはクイズ。どれかの答えが揺らぐなら、今のうちにリコールに取り組む。
+\`&\` なし = 変更メソッド、\`Rc\` なし = Send/Sync 制約。
+
+### Step 3: \`PrivateKeySigner\` キャッシュ戦略
+
+構築時 \`address\` キャッシュ、5 コンストラクタ。
+
+### Step 4: \`AwsSigner\` の recovery-id 復元
+
+AWS \`(r, s)\` のみ → v=0/v=1 試してアドレスマッチで復元、SignerSync 実装なし。
+
+### Step 5: \`SignableTransaction\` 接着剤
+
+各 UnsignedTx 実装、TxSigner はチェーン非依存。
+
+### Step 6: \`WalletFiller\` = \`TxFiller<N>\`
+
+nonce / gas / chain-id と同機構、\`.wallet(signer)\` 糖衣。
+
+## 答え合わせ
+
+- **\`Sig\` が関連型ではなくジェネリックパラメータの理由**: 同じ署名者が **異なる \`Sig\` で複数回トレイト実装可能** → \`PrivateKeySigner\` が \`Signer<Signature>\`（標準 ECDSA）と \`Signer<RawBytes>\`（生バイト出力）両方を実装可能。関連型なら実装ごとに \`Sig\` ひとつ確定 = 「複数 Sig で同じ署名者」が表現不可能。
+- **\`AwsSigner\` で recovery-id を自前復元する理由**: AWS KMS は \`(r, s)\` のみ返す（DER エンコード）→ \`v\`（リカバリバイト）は API 仕様外。**両可能性（v=0、v=1）を試してアドレスを再現するほう** を選ぶ → AWS 呼び出し 1 回 + アドレス導出 2 通り。\`PrivateKeySigner\` は \`k256::sign_recoverable\` で v が署名の一部として返る → 追加コストなし。
+- **\`address()\` キャッシュが必要な理由**: すべての tx で複数回呼ばれる（追跡 / ロギング / 署名適格性 / コールフレーム構築）→ ネットワーク呼び出しだったら tx ごとに AWS 往復レイテンシ（数百 ms）→ 全 tx が誰の鍵で署名したか知るためだけに遅延。**構築時キャッシュ = 一度きりセットアップ + ほぼゼロ per-call**。
+
+## 合格基準
+
+- \`Sig\` がジェネリックパラメータである理由を即答できる。
+- \`auto_impl(&mut, Box, Arc)\` の 3 種と省略 2 種の理由を言える。
+- \`PrivateKeySigner\` の \`address\` キャッシュ理由を 1 文で説明できる。
+- \`AwsSigner\` の recovery-id 復元手順を言える。
+- \`SignableTransaction\` 接着剤の役割を 1 文で説明できる。
+- \`WalletFiller\` が \`TxFiller<N>\` で nonce filler と同機構と理解している。
+
+## まとめ（3行）
+
+- \`Signer<Sig = Signature>\` ジェネリック + \`auto_impl(&mut, Box, Arc)\`（\`&\` なし = 変更メソッド、\`Rc\` なし = Send/Sync）+ \`Send + Sync\` で \`Arc<S>\` パターン成立。
+- \`PrivateKeySigner\` は \`address\` 構築時キャッシュ + Signer/SignerSync 両方実装、\`AwsSigner\` は recovery-id を v=0/v=1 試行で復元 + async のみ実装。
+- \`SignableTransaction\` 接着剤で \`TxSigner\` がチェーン非依存、\`WalletFiller\` が nonce / gas / chain-id と同じ \`TxFiller<N>\` で FillProvider に積層、\`.wallet(signer)\` ユーザー API はその糖衣。
 `,
                 },
                 {
-                  title: 'クイズ: \`Signer\` トレイトは身についたか?',
+                  title: 'クイズ — Signer',
                   slug: 'alloy-signer-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 11,
                   duration: 4,
                   xpReward: 25,
-                  content: `# クイズ: \`Signer\` トレイトは身についたか?
+                  content: `# クイズ — Signer
 
-Signer の組み立てとウォークスルーにまたがる設計判断を問う 4 問。ほかの中級クイズと同じルール: **クイズはうなずきでは通せない。**
+\`Signer\` / \`TxSigner\` / \`SignerSync\` の 3 トレイト分割、\`PrivateKeySigner\` のキャッシュ戦略、\`AwsSigner\` の recovery-id 復元、\`SignableTransaction\` 接着剤、\`WalletFiller\` の \`TxFiller<N>\` 統合を確認する。
 
-2 問以上落としたら、ドリルへ進む前に *\`Signer\` トレイトをステップごとに組み立てる* に戻ること。`,
+組み立てとウォークスルーにまたがる設計判断を問う 4 問。**クイズはうなずきでは通せない。** 2 問以上落としたら、ドリルへ進む前に \`Signer\` のステップに戻ること。
+`,
                   quizQuestions: [
                     {
                       question: "Alloy は署名を 2 つのトレイトに分けている: \`Signer\`（チェーン非依存。ハッシュ / メッセージに署名）と \`TxSigner<Sig>\`（チェーン認識。\`SignableTransaction\` 経由でトランザクションに署名）。なぜ \`TxSigner\` は \`Signer\` のメソッドではなく、*別の* トレイトなのか?",
@@ -2021,7 +1854,7 @@ Signer の組み立てとウォークスルーにまたがる設計判断を問�
                         "\`Signer\` は外部ライブラリが実装し、\`TxSigner\` は alloy が実装する。明確な境界を保つために分けている。",
                       ],
                       correctIndex: 1,
-                      explanation: "理由は 2 つが重なっている。第一に、署名操作はたいてい tx 署名ではない — 本番コードの大半は EIP-191 メッセージか EIP-712 typed data に署名する。\`Signer\` に tx 署名を載せると、まれなケースのために全署名者をパラメータ化する羽目になる。第二に、\`PrivateKeySigner\` は本質的にチェーン非依存（secp256k1 鍵は Ethereum か Optimism かを気にしない）。\`Signer\` を \`N\` でタグ付けすると、\`PrivateKeySigner<Ethereum>\` と \`PrivateKeySigner<Optimism>\` を別型として要求することになり、ムダが生じる。分割によって \`Signer\` をチェーン非依存で再利用可能に保ちつつ、\`TxSigner<N>\` がチェーン固有の tx 署名能力を担う — *1 つの* \`Signer\` 実装で *複数の* チェーンに対応できる。",
+                      explanation: "理由は 2 つが重なっている。第一に、署名操作はたいてい tx 署名ではない — 本番コードの大半は EIP-191 メッセージか EIP-712 typed data に署名する。\`Signer\` に tx 署名を載せると、まれなケースのために全署名者をパラメータ化する羽目になる。第二に、\`PrivateKeySigner\` は本質的にチェーン非依存(secp256k1 鍵は Ethereum か Optimism かを気にしない)。\`Signer\` を \`N\` でタグ付けすると、\`PrivateKeySigner<Ethereum>\` と \`PrivateKeySigner<Optimism>\` を別型として要求することになり、ムダが生じる。分割によって \`Signer\` をチェーン非依存で再利用可能に保ちつつ、\`TxSigner<N>\` がチェーン固有の tx 署名能力を担う — *1 つの* \`Signer\` 実装で *複数の* チェーンに対応できる。",
                     },
                     {
                       question: "\`Signer<Sig = Signature>\` は \`Sig\` を関連型ではなく、*トレイトのジェネリックパラメータ* としてパラメータ化している（\`Network::TxEnvelope\` のような関連型ではなく）。決定的な理由は?",
@@ -2059,33 +1892,36 @@ Signer の組み立てとウォークスルーにまたがる設計判断を問�
                   ],
                 },
                 {
-                  title: 'ドリル: FillProvider チェーン経由でエンドツーエンドの署名済 tx を出荷',
+                  title: 'レッスン9 — ドリル: FillProvider チェーン経由でエンドツーエンドの署名済 tx',
                   slug: 'alloy-signer-drill-ja',
                   type: 'CONTENT',
                   sortOrder: 12,
-                  xpReward: 25,
                   duration: 12,
-                  content: `# ドリル: FillProvider チェーン経由でエンドツーエンドの署名済 tx を出荷
+                  xpReward: 25,
+                  content: `# レッスン9 — ドリル: FillProvider チェーン経由でエンドツーエンドの署名済 tx
 
-読むだけではリハーサル。**手を動かすことで記憶になる。** このドリルでは、「\`Signer\` と \`WalletFiller\` を読んだ」段階から、「実際の署名者を実際の ProviderBuilder に配線し、Anvil に対して署名済みトランザクションを送り、FillProvider チェーンが nonce / gas / chain-id / 署名をスタック順に処理するのを観察した」段階まで進みる。
+## 問い
 
-これは Provider、Network、Signer 各チェーンの **総決算**: 3 つのトレイトファミリすべてが 1 つの実行可能プログラムに合流しる。
+読むだけではリハーサル、**手を動かすことで記憶**。実際の署名者を ProviderBuilder に配線、Anvil に対して署名済み tx を送信、FillProvider チェーンが nonce / gas / chain-id / 署名をスタック順に処理するのを観察。**Provider + Network + Signer 3 チェーンの総決算 — どう組み合わさるか？**
 
-## セットアップ
+## 原理（最小モデル）
 
-ターミナルを 2 つ:
+- **\`PrivateKeySigner\` で \`sign_hash\` 直接.** \`k256::sign_recoverable\` で \`(r, s, v)\` 全部得られる、追加 recovery 不要。
+- **4 Filler のスタック順序.** NonceFiller → GasFiller → ChainIdFiller → WalletFiller。「fill → sign」順序は譲れない（署名ハッシュ計算前に nonce/gas/chain_id 揃う必要）。
+- **\`with_recommended_fillers()\` + \`.wallet(signer)\`.** nonce + gas + chain-id 自動 + 署名層追加。
+- **3 チェーン総合.** Provider チェーン（\`ProviderBuilder\`）+ Network チェーン（\`TransactionBuilder\` の \`.with_to\` / \`.with_value\`）+ Signer チェーン（\`.wallet()\`）が 1 実行可能プログラム。
+- **Filler 外すと失敗.** NonceFiller なしだと "missing nonce"、GasFiller なしだと "missing gas" 等。各 filler がギャップを 1 つずつ埋める証拠。
+- **タワー型の型レベル具現化.** \`FillProvider<JoinFill<JoinFill<JoinFill<JoinFill<Identity, GasFiller>, NonceFiller>, ChainIdFiller>, WalletFiller<EthereumWallet>>, RootProvider, Ethereum>\` がスタック順序を型でエンコード。
 
-**ターミナル 1 — Anvil:**
+## 具体例
+
+セットアップ:
 
 \`\`\`bash
+# ターミナル 1: Anvil（10 アカウントを prefund）
 anvil
-\`\`\`
 
-(Anvil は起動時に資金が振り込まれた 10 個のアカウントを表示する; 最初の 1 つを使う。)
-
-**ターミナル 2 — プロジェクト:**
-
-\`\`\`bash
+# ターミナル 2: プロジェクト
 cargo new alloy-signer-drill --bin
 cd alloy-signer-drill
 \`\`\`
@@ -2101,11 +1937,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 \`\`\`
 
-## ドリル 1 — \`PrivateKeySigner\` でハッシュに直接署名する
-
-Provider チェーンをまるごと組む前に、最低レベルの \`Signer::sign_hash\` インタフェースを叩いてみる。署名から署名者のアドレスを復元することで動作確認する。
-
-\`src/main.rs\`:
+ドリル 1（ハッシュ直接署名）:
 
 \`\`\`rust
 use alloy::primitives::{B256, keccak256};
@@ -2115,7 +1947,6 @@ use alloy::signers::{Signer, local::PrivateKeySigner};
 async fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt().with_env_filter("info").init();
 
-    // ドリル 1: ハッシュに直接署名
     let signer = PrivateKeySigner::random();
     let signer_addr = signer.address();
     println!("signer address: {signer_addr}");
@@ -2132,26 +1963,13 @@ async fn main() -> eyre::Result<()> {
 }
 \`\`\`
 
-\`cargo run\`。署名者のアドレスに続き、それと一致する復元アドレスが表示されるはず。
-
-> 🛑 **問い（書き留めてから先に進む）:** \`signer.sign_hash(&hash)\` は \`Result<Signature>\` を返す。\`Signature\` は alloy の \`(r, s, v)\` タプル。**署名者は \`v\`（リカバリバイト）を計算するために、内部でなにをしなければならなかったか?**
-
-\`PrivateKeySigner\` では、\`v\` は \`k256\` の ECDSA recoverable 署名プリミティブから直接得られる — secp256k1 の sign-recoverable 関数が署名の一部として返してくれる。**追加の処理は不要。** だから \`PrivateKeySigner::sign_hash\` の暗号処理は実質 1 行: \`(r, s, v) = k256::sign_recoverable(privkey, hash)\`。
-
-\`AwsSigner\` では、\`v\` は *自前で復元* しなければならない（v=0 と v=1 を試し、どちらがキャッシュ済みの \`address\` を再現するか見る）。これがウォークスルーで触れたクラウド署名のコスト。
-
-## ドリル 2 — 署名者を \`ProviderBuilder\` に配線して実 tx を送る
-
-完全な FillProvider チェーンを動かしてみる。\`ProviderBuilder.wallet(signer)\` で署名者を組み込み、さらに \`with_recommended_fillers()\` で nonce / gas / chain-id の filler を加える。
-
-\`main.rs\` に追加（ドリル 1 のコードの後）:
+ドリル 2（FillProvider + 実 tx 送信）:
 
 \`\`\`rust
 use alloy::providers::{Provider, ProviderBuilder};
 use alloy::primitives::{Address, U256, address};
 
 // ドリル 2: FillProvider 経由で実際に署名済みの tx を送る
-// Anvil が起動時に表示する資金入りアカウントの 1 つを使う（秘密鍵は起動ログから取得）
 let funded_pk = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 let funded_signer: PrivateKeySigner = funded_pk.parse()?;
 let funded_addr = funded_signer.address();
@@ -2181,9 +1999,7 @@ let recipient_balance = provider.get_balance(recipient).await?;
 println!("recipient balance: {recipient_balance}");
 \`\`\`
 
-(\`.with_to(...)\` や \`.with_value(...)\` は Network チェーン由来の \`TransactionBuilder<N>\` トレイトのメソッド。すべてがどう組み合わさっているかに注目: Provider チェーンの \`ProviderBuilder\`、Network チェーンの \`TransactionBuilder\`、Signer チェーンの \`.wallet()\` — 3 つのチェーンが、1 つの実行可能プログラムに集約されている。)
-
-\`cargo run\` するとこんな出力になるはず:
+期待出力:
 
 \`\`\`
 signer address: 0x... (ランダム)
@@ -2194,34 +2010,22 @@ status: true
 recipient balance: 1000000000000000000
 \`\`\`
 
-受信者の残高はちょうど 1 ETH（1_000_000_000_000_000_000 wei）。**署名済みトランザクションが着地した; FillProvider チェーンが仕事をした。**
-
-## ドリル 3 — 実行された filler を追う
-
-\`with_recommended_fillers()\` と \`.wallet(signer)\` の呼び出しによって、4 つの \`TxFiller\` がチェーンに積み重ねられた。\`send_transaction\` が実際に送信を始める前に、各 filler が出ていく \`TransactionRequest\` に対してスタック順に実行されたはず。
-
-> 🛑 **予測（スクロール前に書き留める）：** あなたの \`TransactionRequest::default().with_to(recipient).with_value(value)\` は \`to\` と \`value\` しか設定していなかった。レシートを見ると、tx には nonce、ガス上限、ガス価格（または maxFeePerGas）、chain_id、署名が乗っている。**欠けていた各フィールドについて、*どの filler* が埋め、*どんな処理* を行ったかを挙げる。**
-
-4 つの filler と処理内容:
+4 Filler の処理表:
 
 | Filler | 埋めたフィールド | 処理 |
 | :--- | :--- | :--- |
-| \`NonceFiller\` | \`nonce\` | \`eth_getTransactionCount(from, "pending")\` を呼ぶ |
-| \`GasFiller\` | \`gas\`、\`gasPrice\`（legacy）または \`maxFeePerGas\` + \`maxPriorityFeePerGas\`（EIP-1559） | \`eth_estimateGas\` と \`eth_gasPrice\`（あるいは EIP-1559 では \`eth_feeHistory\`）を呼ぶ |
-| \`ChainIdFiller\` | \`chainId\` | \`eth_chainId\` を 1 度呼んでキャッシュ |
-| \`WalletFiller\` | \`signature\`（これが \`TxEnvelope\` となる） | リクエストから \`SignableTransaction\` を構築し、\`signer.sign_transaction()\` を呼び、署名を取り付けて署名済みエンベロープにする |
+| NonceFiller | \`nonce\` | \`eth_getTransactionCount(from, "pending")\` 呼ぶ |
+| GasFiller | \`gas\` / \`gasPrice\` / \`maxFeePerGas\` + \`maxPriorityFeePerGas\` | \`eth_estimateGas\` + \`eth_gasPrice\`（or \`eth_feeHistory\`）呼ぶ |
+| ChainIdFiller | \`chainId\` | \`eth_chainId\` を 1 度呼んでキャッシュ |
+| WalletFiller | \`signature\`（\`TxEnvelope\` 化） | \`SignableTransaction\` 構築 + \`signer.sign_transaction()\` + 署名取り付け |
 
-順序が重要: \`WalletFiller\` はほかの filler の *後* に走らなければならない。署名ハッシュを計算する前に nonce / gas / chain_id がそろっている必要があるからだ。**「fill → sign」の順序は譲れない。**
+**順序が重要**: WalletFiller は他の filler の **後** に走る（署名ハッシュ計算前に nonce/gas/chain_id 揃う必要）。
 
-> 🔍 **リポジトリで確認。** \`crates/provider/src/fillers/\`（または filler が置かれている場所）を開く。\`TxFiller<N>\` トレイトがあり、\`NonceFiller\`、\`GasFiller\`、\`ChainIdFiller\`、\`WalletFiller\` のすべてが \`impl TxFiller<N>\` していることを確かめる。**これらは差し替え可能で、順序は \`with_recommended_fillers\` と \`.wallet()\` がどう挿入するかで決まる。**
-
-## ドリル 4 — 理解度チェック: filler を外して失敗を観察する
-
-コードを変更して \`with_recommended_fillers()\` を *外す*:
+Filler 外して失敗観察:
 
 \`\`\`rust
 let provider_no_fillers = ProviderBuilder::new()
-    .wallet(funded_signer.clone())  // wallet のみ、nonce/gas/chain_id なし
+    .wallet(funded_signer.clone())  // wallet のみ
     .on_http("http://localhost:8545".parse()?);
 
 let result = provider_no_fillers
@@ -2234,68 +2038,105 @@ let result = provider_no_fillers
 println!("no-filler result: {:?}", result);
 \`\`\`
 
-> 🛑 **実行前に予測する。** どんなエラーが出ると思うか? ヒント — WalletFiller は引き続き動く（これは wallet が指定されているから）が、それ以外は欠落している。
+エラー: "missing nonce" or "missing gas" or "missing maxFeePerGas"。**filler が実際に作業している証拠**。
 
-どの検証が最初に発火するかによって、\`"Error: missing nonce"\` か \`"Error: missing gas"\` / \`"missing maxFeePerGas"\` のようなメッセージが見えるはず。**このエラーは、filler が実際に作業をしている証拠** — filler がないとリクエストは不完全。元に戻すとプログラムは動く。
-
-> 🔍 **もう 1 通りバリエーションを試す。** nonce filler だけを追加し、次に何が足りないかを確かめる。続いて gas を追加し、次に何が足りないかを観察する。**各 filler がギャップを 1 つずつ埋めていく。**
-
-## ドリル 5 — 最終的な Provider 型を観察（任意）
-
-積層された FillProvider 型を *目で見たい* なら、次を追加して \`cargo\` に文句を言わせる:
-
-\`\`\`rust
-let _: () = provider;  // 型不一致エラーが実型を表示する
-\`\`\`
-
-コンパイラはこんな感じを表示するはず:
+最終 Provider 型（任意観察）:
 
 \`\`\`
-expected (), found
-  FillProvider<JoinFill<JoinFill<JoinFill<JoinFill<Identity, GasFiller>, NonceFiller>, ChainIdFiller>, WalletFiller<EthereumWallet>>, RootProvider, Ethereum>
+FillProvider<JoinFill<JoinFill<JoinFill<JoinFill<Identity, GasFiller>, NonceFiller>, ChainIdFiller>, WalletFiller<EthereumWallet>>, RootProvider, Ethereum>
 \`\`\`
 
-(正確な型名は alloy 内部の命名による。) 左から右に読む: \`FillProvider\` が内側のプロバイダをラップし、\`JoinFill<...>\` のチェーンが 4 つの filler のスタックを成す。Wallet がもっとも外側に来て、\`send_transaction\` 実行時には最後に適用される。
+左から右に読む: \`FillProvider\` が内側プロバイダラップ、\`JoinFill<...>\` チェーンが 4 filler スタック、Wallet 最外で送信時最後適用。**型レベルでスタック順エンコード**。
 
-**これは Provider チェーンの「正しい塔を組む」レッスンの、型レベルでの具現化** — 型自身が filler のスタック順をエンコードしている。
+## 失敗例（誤解）
 
-## レッスン末のリコール
+「WalletFiller を NonceFiller 前に置いてもよい」— **致命的**。署名ハッシュは nonce / gas / chain_id を含む → これらが埋まる前に署名すると無効署名。**fill → sign 順序譲れない**。
 
-スクロールせずに、自分の言葉で:
+「\`with_recommended_fillers()\` だけで wallet 不要」— **間違い**。署名がない → \`TxEnvelope\` 化できない → broadcast 不可能。両方必要。
 
-1. \`PrivateKeySigner\` は recovery-id の処理を必要としないが、\`AwsSigner\` は必要とする。**アーキテクチャ上の理由はなにか?** それぞれで \`v\` はどこから出てくるか?
-2. ドリル 2 の流れを追う: \`provider.send_transaction(req)\` が呼ばれてから、ネットワークが署名済みエンベロープを目にするまでのあいだ、**どの filler がどの順で動き、どんな RPC 呼び出しを発したか?**
-3. **なぜ \`WalletFiller\` は filler チェーンの *最後* なのか?** \`NonceFiller\` より前に走らせると、なにが壊れるか?
-4. プロバイダの型はコンパイラ表示上、深く入れ子になった \`FillProvider<JoinFill<JoinFill<...>>>\` になる。**この入れ子の深さは、実行時の何に対応するか?**
+「Anvil の prefund 秘密鍵は本番で使える」— **絶対 NG**。Anvil の dev 鍵は **公開済み**、本番で使うと即盗難。**Anvil dev 鍵はテストのみ**。
 
-どれかの答えが揺らぐなら、レッスンはあなたの手中に収まっていない。ドリルをやり直すか、組み立てを読み直すこと。
+## ステップで組み立てる
 
-このドリルを終えた時点で、*完全な Provider / Network / Signer のトリオを通した署名済みトランザクション* を投入したことになる — dapp、MEV ボット、インデクサが本番で使っているのと同じ形だ。**Provider、Network、Signer のチェーンが完走。** 次はコースの最終クイズ。`,
+### Step 1: \`PrivateKeySigner::sign_hash\` を直接
+
+\`k256::sign_recoverable\` で \`(r, s, v)\` 取得、\`recover_address_from_prehash\` で検証。
+
+### Step 2: \`ProviderBuilder.with_recommended_fillers().wallet(signer)\`
+
+4 filler スタック + 署名層追加。
+
+### Step 3: 実 tx 送信
+
+\`TransactionRequest::default().with_to(recipient).with_value(value)\` + \`send_transaction().get_receipt()\`。
+
+### Step 4: 4 Filler 処理表
+
+NonceFiller / GasFiller / ChainIdFiller / WalletFiller の RPC 呼び出しと埋めるフィールド。
+
+### Step 5: Filler 外して失敗観察
+
+NonceFiller なしで "missing nonce"、各 filler のギャップ埋め確認。
+
+### Step 6: 最終 Provider 型のタワー観察
+
+\`FillProvider<JoinFill<JoinFill<...>>>\` がスタック順を型でエンコード。
+
+## 答え合わせ
+
+- **\`PrivateKeySigner\` で recovery-id 不要、\`AwsSigner\` で必要な理由**: \`PrivateKeySigner\` = \`k256::sign_recoverable\` が \`(r, s, v)\` 全部返す → 追加処理なし。\`AwsSigner\` = AWS KMS が \`(r, s)\` のみ → \`v\` は v=0/v=1 試して **キャッシュ済み address を再現するほう** を選ぶ。クラウド署名のコスト。
+- **4 Filler の実行順と RPC 呼び出し**: NonceFiller → \`eth_getTransactionCount\`、GasFiller → \`eth_estimateGas\` + \`eth_gasPrice\`（or \`eth_feeHistory\`）、ChainIdFiller → \`eth_chainId\`（キャッシュ）、WalletFiller → \`signer.sign_transaction\`。**fill → sign 順序が譲れない**。
+- **\`WalletFiller\` が filler チェーン最後の理由**: 署名ハッシュ計算は nonce / gas / chain_id を含む → これらが埋まる前に署名すると **無効署名**。NonceFiller より前に走らせると署名 = 古い nonce → ネットワークが reject。**fill → sign 順序、譲れない**。
+
+## 合格基準
+
+- \`PrivateKeySigner.sign_hash\` の \`(r, s, v)\` 取得を即答できる。
+- 4 Filler の処理表（埋めるフィールド + RPC 呼び出し）を書ける。
+- WalletFiller が最後である理由を 1 文で説明できる。
+- Filler 外したときの "missing nonce" / "missing gas" 失敗パターンを言える。
+- 最終 Provider 型のタワー（\`FillProvider<JoinFill<JoinFill<...>>>\`）が型レベルでスタック順エンコードと理解している。
+
+## まとめ（3行）
+
+- 3 チェーン総決算 = Provider（\`ProviderBuilder\`）+ Network（\`TransactionBuilder\` の \`.with_to\` / \`.with_value\`）+ Signer（\`.wallet()\`）が 1 実行可能プログラム。
+- 4 Filler スタック（NonceFiller → GasFiller → ChainIdFiller → WalletFiller）= **fill → sign 順序譲れない**、署名ハッシュ計算前に nonce/gas/chain_id 揃う必要。
+- 最終 Provider 型タワーが型レベルでスタック順エンコード、Filler 外すと "missing X" で fail = 各 filler のギャップ埋めが実証される、dapp / MEV ボット / インデクサが本番投入する標準パターン。
+`,
                 },
                 {
-                  title: 'alloy 利用側コードのテスト — anvil・Provider モック・トレイト差し替え',
+                  title: 'レッスン10 — alloy 消費者コードのテスト',
                   slug: 'alloy-testing-ja',
                   type: 'CONTENT',
                   sortOrder: 13,
                   duration: 22,
                   xpReward: 45,
-                  content: `# alloy 消費者コードのテスト — anvil・Provider モック・トレイト差し替え
+                  content: `# レッスン10 — alloy 消費者コードのテスト
 
-ここまでで \`Provider\`・\`Network\`・\`Signer\` トレイトの形を一通り歩いてきました。**次の問いは、それらに依存するコードをどうテストするか** である。Building tier で作る全アプリ — MEV searcher、indexer、ウォレットバックエンド、swap aggregator — はすべて \`Provider\` をインスタンス化し、\`Signer\` で署名し、filler chain で穴を埋める。実 RPC エンドポイントを立てずにそのコードをユニットテストできないと、test gate は機能しません。本レッスンがその答えである。
+## 問い
 
-## alloy 消費者コードに対して書く 3 種類のテスト
+Provider / Network / Signer に依存するコード（Building tier の MEV searcher / indexer / wallet backend / swap aggregator）をどうユニットテストするか？ **実 RPC エンドポイントを立てずにテストできないと、test gate は機能しない — どのパターンが本番標準か？**
+
+## 原理（最小モデル）
+
+- **3 種テスト.** プログラム制御 anvil（ほぼ常時）+ Forked anvil（実 mainnet 状態）+ トレイト差し替え（稀、ロジックがチェーンセマンティクスに依存しない）。
+- **\`Anvil::new().spawn()\` で 50ms 起動.** alloy 同梱、テスト内インプロセス、10 アカウント prefund + RPC URL 返す。
+- **\`AnvilApi\` トレイト拡張.** \`anvil_set_balance\` / \`anvil_set_storage_at\` / \`anvil_set_code\` / \`anvil_impersonate_account\` / \`anvil_mine\` / \`anvil_snapshot\`+\`anvil_revert\`。**同じ Provider トレイトの拡張**、本番で使うプロバイダがテストでも走る。
+- **Forked anvil でブロック pin 必須.** pin しなければ非決定的、CI 意味なし。pin すれば assertion 厳しく可能。
+- **手書きモックは稀.** 純粋決定関数を秒間数百バリエーションで回したいときのみ。実務では anvil が十分速くスキップ不要。
+- **Building tier 接続.** 全アプリの test gate スケッチが \`forked_provider_at(...)\` の 1 行ラッパ、本レッスンが Building の前提。
+- **「表面同等性」が mock 中心アプローチに勝つ理由.** 本番プロバイダ + cheat = テストでも本物の Provider トレイトが走る、cheat は同表面に重なる。
+
+## 具体例
+
+3 種テスト:
 
 | テスト種別 | 使う Provider | コスト | いつ使うか |
 | :--- | :--- | :--- | :--- |
-| **プログラム制御の anvil** | \`anvil\` の本物のインスタンスをインプロセスで起動 | 起動 ~50 ms | ほぼ常時。anvil はユニットテストにも十分速い |
-| **fork した anvil** | ブロックを pin した \`anvil --fork-url <RPC>\` | ~200 ms + RPC クォータ | 実 mainnet のコントラクト状態が必要なとき |
-| **トレイトを自作で差し替える** | \`impl Provider for ...\` した自作 struct | なし | 稀。ロジックがチェーンセマンティクスに依存しないときに限る |
+| プログラム制御 anvil | \`anvil\` インプロセス | 起動 ~50ms | ほぼ常時、ユニットテストに十分速い |
+| Forked anvil | \`anvil --fork-url <RPC>\` + ブロック pin | ~200ms + RPC クォータ | 実 mainnet コントラクト状態必要 |
+| トレイト差し替え | \`impl Provider for ...\` の自作 struct | なし | 稀、チェーンセマンティクス非依存 |
 
-テストの 9 割はプログラム制御の anvil で済みる。残り 2 つは逃げ道として用意しておく形である。
-
-## 1. プログラマブル anvil — 本番パターン
-
-Alloy はテスト内から anvil プロセスを起動し、10 アカウントを prefund し、provider の接続先 URL を返す \`Anvil\` ビルダを同梱:
+プログラム制御 anvil:
 
 \`\`\`rust
 use alloy::node_bindings::Anvil;
@@ -2309,17 +2150,13 @@ async fn user_balance_round_trips() {
 
     let addr = anvil.addresses()[0];
     let balance = provider.get_balance(addr).await.unwrap();
-    assert_eq!(balance, U256::from(10_000) * U256::from(10).pow(U256::from(18)));  // デフォルト 10,000 ETH
+    assert_eq!(balance, U256::from(10_000) * U256::from(10).pow(U256::from(18)));
 
     drop(anvil);  // drop で anvil プロセスは終了
 }
 \`\`\`
 
-これだけ。**Building tier テストで Provider に触れる全アサーションがこの形を通る**。
-
-## 2. Provider トレイト経由でアクセスできる anvil cheats
-
-テストで anvil を使う最大の理由は、mainnet では許されない方法で状態を操作できること。Alloy は anvil cheats を **同じ Provider トレイトの拡張**（\`AnvilApi\`）として公開:
+\`AnvilApi\` トレイト拡張:
 
 \`\`\`rust
 use alloy::providers::ext::AnvilApi;
@@ -2331,13 +2168,13 @@ async fn impersonates_a_real_address() {
 
     let vitalik: Address = "0xab5801a7d398351b8be11c439e05c5b3259aec9b".parse().unwrap();
 
-    // Cheat 1: vitalik にこの anvil 上で 100 ETH を与える
+    // Cheat 1: vitalik に 100 ETH 与える
     provider.anvil_set_balance(vitalik, U256::from(100) * U256::from(10).pow(U256::from(18))).await.unwrap();
 
-    // Cheat 2: 1 tx の間 vitalik になりすます
+    // Cheat 2: vitalik になりすます
     provider.anvil_impersonate_account(vitalik).await.unwrap();
 
-    // これで provider は vitalik 発の tx を送れる（署名不要）
+    // 署名不要で vitalik 発の tx を送る
     let tx = TransactionRequest::default().from(vitalik).to(BOB).value(U256::from(1));
     let receipt = provider.send_transaction(tx).await.unwrap().get_receipt().await.unwrap();
     assert!(receipt.status());
@@ -2346,13 +2183,15 @@ async fn impersonates_a_real_address() {
 }
 \`\`\`
 
-cheat の全体像: \`anvil_set_balance\`、\`anvil_set_storage_at\`、\`anvil_set_code\`、\`anvil_impersonate_account\`、\`anvil_mine\`（強制 mine）、\`anvil_snapshot\` / \`anvil_revert\`（状態チェックポイントとロールバック）。**MEV / wallet / indexer のテストを実現可能にする道具立て** — これが無ければ arb シナリオを準備するだけで丸ごとのトランザクション列を構築する羽目になる。
+cheat の全体像:
+- \`anvil_set_balance\` / \`anvil_set_storage_at\` / \`anvil_set_code\` — 状態書き換え
+- \`anvil_impersonate_account\` — なりすまし
+- \`anvil_mine\` — 強制 mine
+- \`anvil_snapshot\` / \`anvil_revert\` — 状態チェックポイントとロールバック
 
-> 🔍 **リポジトリで確認。** [\`alloy-rs/alloy\`](https://github.com/alloy-rs/alloy) を開き、\`AnvilApi\` を検索。これは独立した型ではなく **\`Provider\` のトレイト拡張** である。**本番で使うのと同じ Provider をテストでも使う。cheat は基底トランスポートが anvil のときに（そのときに限り）そのプロバイダ上のメソッド呼び出しになる。**
+**MEV / wallet / indexer のテストを実現可能にする道具立て**。
 
-## 3. Forked anvil — テスト内に実 mainnet コントラクト状態を持ち込む
-
-テスト対象が実 mainnet コントラクト状態に依存するとき — Uniswap V3 pool reserves、Aave の利率モデル、監査済みトークンの balanceOf — pin したブロックで mainnet を fork する:
+Forked anvil（実 mainnet 状態）:
 
 \`\`\`rust
 #[tokio::test]
@@ -2363,18 +2202,16 @@ async fn quotes_against_real_uniswap_v3() {
         .spawn();
     let provider = ProviderBuilder::new().connect_http(anvil.endpoint().parse().unwrap());
 
-    // ブロック 18_500_000 時点の USDC/WETH 0.3% pool アドレス
+    // ブロック 18_500_000 時点の USDC/WETH 0.3% pool
     let pool: Address = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640".parse().unwrap();
     let slot0 = provider.call(/* IUniswapV3Pool::slot0Call */).await.unwrap();
-    // slot0 はブロック 18_500_000 の *本物の* pool 状態 — 実行間で決定的
+    // slot0 は決定的（実行間で）
 }
 \`\`\`
 
-ブロックを pin する。**pin しなければテストは非決定的になり、CI は意味を失う**（pool の price はブロックごとに動く; アサーションの許容幅を広く取らねばならず、それで何を担保したのか分からなくなる）。pin すれば assertion は厳しくできる（QuoterV2 出力との 5 bps 以内、など — Building tier の Swap Aggregator レッスンで使ったテストパターン）。
+**ブロック pin 必須**: pin しないと non-deterministic、CI 意味なし。pin すれば assertion 厳しく（QuoterV2 出力との 5 bps 以内など）。
 
-## 4. 手書きトレイトモックを書くべき場面
-
-たまに、Provider に *触る* がチェーンセマンティクスに依存しないロジックがある — ある残高 / nonce / receipt が与えられたときの純粋な決定関数。そういうケースでは fake Provider を書く:
+手書きモック（稀）:
 
 \`\`\`rust
 struct CannedProvider {
@@ -2384,58 +2221,95 @@ struct CannedProvider {
 
 #[async_trait]
 impl Provider for CannedProvider {
-    fn root(&self) -> &RootProvider {
-        // ...
-    }
+    fn root(&self) -> &RootProvider { /* ... */ }
+
     fn get_balance(&self, _addr: Address) -> ProviderCall<NoParams, U256, U256> {
         let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
         ProviderCall::ready(Ok(self.balance_responses[idx]))
     }
-    // ... 他メソッドは default impl（呼ばれたら panic — それで OK）
+    // 他メソッドはデフォルト実装（呼ばれたら panic）
 }
 \`\`\`
 
-実務でレアな理由は、anvil が十分速くてスキップが要らないから。決定論的な関数を秒間数百バリエーションで回したいときだけこれを使う。
+実務でレア = anvil 十分速い + cheat 充実で大半スキップ不要。
 
-## Building tier との接続
-
-Building tier の全アプリ（MEV searcher、indexer、wallet、sponsor、cheatcode、aggregator、capstone、Revm validator、MPP）の test gate スケッチは次のような形:
+Building tier 接続:
 
 \`\`\`rust
 let svc = test_service().await;
 let provider = forked_provider_at(FORK_RPC, PINNED_BLOCK).await;
 \`\`\`
 
-**\`forked_provider_at(...)\` は §3 の \`Anvil::new().fork(...).spawn()\` パターンの 1 行ラッパ。** Building に着いたとき、test gate スケッチは本レッスンが手中にある前提で書かれている。Building tier の MEV searcher の "find known arb at pinned block" テストは、§3 のパターンに 1 層追加しただけ。
+\`forked_provider_at(...)\` = §3 の \`Anvil::new().fork(...).spawn()\` パターン 1 行ラッパ。
 
-## ドリル
+## 失敗例（誤解）
 
-1. **残高チェッカ関数のユニットテストを書く。** \`async fn alert_if_below<P: Provider>(p: &P, addr: Address, threshold: U256) -> bool\` をテスト。anvil でアドレスに 5 ETH を持たせ閾値 10 ETH（\`true\` を期待）、次に閾値 1 ETH（\`false\` を期待）。30 分。
-2. **anvil cheat を使った integration テストを書く。** 「送信元が既知 whale としてなりすましされていれば transfer する」関数。\`anvil_set_balance\` + \`anvil_impersonate_account\` で setup。成功 receipt を assert。45 分。
-3. **forked-state テストを書く。** 既知 mainnet コントラクト（USDC、WETH）を選ぶ。最近のブロックで fork。\`balanceOf(YOUR_TREASURY_ADDR)\` がそのブロックで Etherscan が示す史実残高と一致することを assert。**ポイント: テスト setup が本物のチェーンと一致することの証明。** 1 時間。
-4. **Provider モックを手書きする。** \`get_balance\` 後 \`get_block_number\` を呼ぶ関数のため、定型値を返し呼び出し順を assert する \`CannedProvider\` を書く。テスト記述コストをドリル 1〜3 と比較する。**ほぼ全てで anvil が勝つ理由が分かる。** 1 時間。
+「Forked anvil のブロック pin なしで OK」— **間違い**。ブロックなしだと pool price が動く → assertion 許容幅広く必要 → 何を担保したか不明。**pin で決定的テスト**。
 
-ドリル 3 まで終えれば、Building tier 任意レッスンの test gate を参照無しで書ける。ドリル 4 はモックを *使わない* べきタイミングを実感させる。
+「手書き mock のほうが速いから本番向き」— **間違い**。anvil ~50ms 起動、十分速い。mock = Provider トレイトを部分実装 → 本番経路と乖離 + cheat 使えない。**anvil 表面同等性が勝つ**。
 
-> 🛑 **最終チェック。** 一文で: なぜ \`Anvil::new().spawn()\` をテストで使う方が手書き \`MockProvider\` よりも忠実度が高いのか? 答えに「本番で使う Provider トレイトがテストでも走り、cheat はその同じ表面上に重なる」が無いなら、§2 を読み直す — その表面同等性こそ、このパターンが mock 中心アプローチに勝る理由の全部。
+「\`AnvilApi\` は独立トレイト」— **間違い**。**Provider のトレイト拡張**、本番で使うのと同じ Provider がテストでも走る。基底トランスポートが anvil のときに（そのときに限り）プロバイダ上のメソッド呼び出しになる。
 
-## 📺 関連リンク
+## ステップで組み立てる
 
-[Alloy book — Anvil chapter](https://alloy.rs/) は programmatic anvil API + cheat surface の全体像。
+### Step 1: 3 種テストを選ぶ
+
+ほぼ常時 = プログラム制御 anvil / 実 mainnet 状態 = Forked anvil / 稀 = トレイト差し替え。
+
+### Step 2: \`Anvil::new().spawn()\` パターン
+
+50ms 起動、10 prefund アカウント、\`anvil.endpoint()\` で URL。
+
+### Step 3: \`AnvilApi\` cheats
+
+\`anvil_set_balance\` + \`anvil_impersonate_account\` で MEV / wallet テスト実現。
+
+### Step 4: Forked anvil でブロック pin
+
+\`.fork(rpc).fork_block_number(N)\` で決定的、実 mainnet コントラクト状態。
+
+### Step 5: 手書きモックは稀
+
+純粋決定関数を秒間数百バリエーション = mock、それ以外 = anvil。
+
+### Step 6: Building tier 接続
+
+全アプリ test gate が \`forked_provider_at(...)\` 1 行、本レッスンが前提。
+
+## 答え合わせ
+
+- **\`Anvil::new().spawn()\` が手書き \`MockProvider\` より忠実度が高い理由**: 本番で使う Provider トレイトがテストでも走る + cheat はその同じ表面に重なる → **表面同等性**。Mock は Provider トレイトを部分実装 → 本番経路と乖離 + cheat 使えない + 手書きコスト。anvil ~50ms 起動で速度差ほぼなし。
+- **Forked anvil でブロック pin 必須な理由**: pin しないと pool price がブロックごとに動く → assertion 許容幅広く必要（QuoterV2 出力との 5%? 10%?）→ **何を担保したか不明**。pin = 決定的 → 厳しい assertion 可能（5 bps 以内）→ CI で意味ある。
+- **\`AnvilApi\` がトレイト拡張で別型でない理由**: 本番で使う Provider をテストでも使う → cheat はその同じ Provider 上のメソッド呼び出しになる（基底トランスポートが anvil のときのみ動く）。別型だとテスト用プロバイダと本番用プロバイダで API 表面が違う → mock 中心アプローチに退化。**表面同等性がパターンの肝**。
+
+## 合格基準
+
+- 3 種テスト（プログラム制御 anvil / Forked anvil / トレイト差し替え）を即答できる。
+- \`Anvil::new().spawn()\` の 50ms 起動 + 10 prefund アカウントを言える。
+- \`AnvilApi\` cheats（\`anvil_set_balance\` / \`anvil_impersonate_account\` 等）を即答できる。
+- Forked anvil のブロック pin 必須理由を 1 文で説明できる。
+- 表面同等性が mock 中心に勝つ理由を 1 文で説明できる。
+
+## まとめ（3行）
+
+- 3 種テスト = プログラム制御 anvil（ほぼ常時、50ms 起動）/ Forked anvil（実 mainnet、ブロック pin 必須）/ トレイト差し替え（稀）。
+- \`AnvilApi\` cheats（set_balance / impersonate_account / snapshot / revert）= MEV / wallet / indexer テストを実現可能にする道具立て、Provider のトレイト拡張で本番と同表面。
+- 「表面同等性」が mock 中心アプローチに勝つ理由 = 本番で使う Provider がテストでも走る + cheat 同表面に重なる、anvil ~50ms で速度差なし、Building tier 全アプリ test gate の前提。
 `,
                 },
                 {
-                  title: 'Inside Alloy ファイナルクイズ',
+                  title: 'クイズ — Inside Alloy 完走',
                   slug: 'alloy-advanced-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 14,
                   duration: 8,
                   xpReward: 25,
-                  content: `# Inside Alloy ファイナルクイズ
+                  content: `# クイズ — Inside Alloy 完走
 
-3 つのチェーンを横断する最終チェック: \`Provider\`、\`Network\`、\`Signer\`。
+3 トピックチェーン（Provider / Network / Signer）+ Testing の構造的事実を確認する。3 中級コース（Revm・Reth・Alloy）完走に向けたゲート。
 
-3 問。同じルール: **クイズはうなずきでは通せない。** 2 問落としたら、Inside Alloy を終えたと言う前に、該当チェーンの組み立てを読み直すこと。`,
+3 問。**クイズはうなずきでは通せない。** 2 問落としたら、Inside Alloy を終えたと言う前に、該当チェーンの組み立てを読み直すこと。
+`,
                   quizQuestions: [
                     {
                       question: "\`Provider\` の \`root()\` メソッドはトレイトで唯一必須のメソッド — ほかの RPC メソッドはすべてデフォルト実装を持つ。設計上、決定的に効いているアーキテクチャ的な意図は?",

@@ -8,14 +8,14 @@ export async function seedRethExpertJA(prisma: PrismaClient) {
       slug: 'reth-expert-ja',
       title: 'Reth Expert — 本番エンジニアリング',
       description:
-        'Rust EVM スタックのすべての層をまたぐハードコアな実装: DB 層 (MDBX 内部、MPT)、並行性層 (Tokio ランタイム)、コンパイラ / VM 層 (カスタム Precompile、zkEVM、Tempo Zones を題材とする EVM プライバシー)、production エンジニアリング (プロファイリング、キャッシュ意識の Rust、本番 MEV パイプライン、手続きマクロ、differential fuzzing)。そして拡張パターン経由で Reth ベース chain (op-stack、alphanet、Tempo) を読み、独自 Reth フォークを出荷する。',
+        'Rust EVM スタックのすべての層をまたぐハードコアな実装: DB 層 (MDBX 内部、MPT)、並行性層 (Tokio ランタイム)、コンパイラ / VM 層 (カスタム Precompile、zkEVM、Tempo Zones を題材とする EVM プライバシー)、production エンジニアリング (プロファイリング、キャッシュ意識の Rust、本番 MEV パイプライン、手続きマクロ、tracing 内部、Reth フォーク運用、differential fuzzing、chaos engineering、systems-code auditing、OSS 貢献ワークフロー)、そして Reth ベース chain の拡張パターン (extension model、OP Stack on Reth、custom ChainSpec / executor / payload builder、Paradigm スタック総覧)。Hyperliquid / Tempo / OP-stack クオリティのバーで Rust EVM コードを ship する準備ができる。なお本コースの一部スニペットは概念説明用で、そのままでは実行できない（擬似コード・省略記法を含む）ため、本文の注記に従って読み解く。',
       difficulty: 'EXPERT',
-      duration: 290,
+      duration: 457,
       xpReward: 815,
       track: 'reth-expert',
       tags,
       isPublished: true,
-      sortOrder: 400,
+      sortOrder: 1400,
       locale: 'ja',
       instructorName: 'RethLab',
       modules: {
@@ -26,30 +26,29 @@ export async function seedRethExpertJA(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Rethのためのパフォーマンスエンジニアリング',
+                  title: 'レッスン0 — Reth のためのパフォーマンスエンジニアリング',
                   slug: 'performance-engineering-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 18,
                   xpReward: 40,
-                  content: `# Rethのためのパフォーマンスエンジニアリング
+                  content: `# レッスン0 — Reth のためのパフォーマンスエンジニアリング
 
-Rethフォークを本番投入。ベンチではブロック取り込み 12ms だったのに、本番では 80ms。残り 68ms はどこに消えた? — 答えられない。誰もプロファイルを取っていなかったから。これこそ本レッスンが防ぐべき失敗モード: **見えない遅さ**。気づかぬ間に積み重なり、バリデータが 200 ブロック遅れるまで誰も気づかない、あの種類。
+## 問い
 
-Rethフォークを本番に出すか、Revmのホットパスをいじるなら、**プロファイリングとベンチマークは必須** である。早すぎる最適化は悪、だが **「見えていない遅さ」はもっと悪い**。
+Reth フォークを本番投入。ベンチではブロック取り込み 12ms だったのに、本番では 80ms。残り 68ms はどこに消えた？ — 答えられない。誰もプロファイルを取っていなかったから。これこそが「見えない遅さ」— 気づかぬ間に積み重なり、バリデータが 200 ブロック遅れるまで誰も気づかない。**測定なしの最適化はどう間違うか？**
 
-> 🛑 **スクロール前に予測。** ジュニアエンジニアが「ノードが遅い気がする、HashMap を BTreeMap に置き換えてみよう」と言ってきました。**そのアプローチの問題点を 3 つ挙げてほしい。** 自分のリストを手元に残してから先へ。
+## 原理（最小モデル）
 
-## 1. 「測ってから直す」
+- **測ってから直す.** flamegraph（「全体としてどこで時間を使っているか？」）と Criterion（「特定の変更で関数 X が速くなったか？」）の 2 ツールで両側面をカバー。
+- **マイクロベンチはシステム効果を測れない.** Criterion で 20% 改善 → ノード全体が 20% 改善する保証はない。ノード全体は schelk（ブロックデバイススナップショット）でディスク状態をロールバックして実測する。
+- **キャッシュラインで考える.** RAM 読み出しはレジスタ演算の ~100 倍遅い。Struct of Arrays > Array of Structs、ホット / コールド分離、64 バイトキャッシュライン単位。
+- **jemalloc は p99 を救う.** スループットではなくテイルレイテンシ。1 行で 10-30% 改善するワークロードが珍しくない。
+- **3 つのリリースプロファイル.** release（日常）/ maxperf（バリデータ・ベンチ）/ maxperf-symbols（本番プロファイリング）。
 
-ルール: 測っていないものは最適化しない。これから問うことになる 2 つの問いを、それぞれカバーするツールが 2 つ：
+## 具体例
 
-| ツール | 用途 |
-| :--- | :--- |
-| **flamegraph** | 「全体としてどこで時間を使っているか？」 |
-| **Criterion** | 「特定の変更で関数Xが速くなったか？」 |
-
-### flamegraphを30秒で
+flamegraph を 30 秒で:
 
 \`\`\`bash
 cargo install flamegraph
@@ -57,9 +56,7 @@ cargo flamegraph --bin reth -- node --chain mainnet
 # flamegraph.svg をブラウザで開く
 \`\`\`
 
-上の方で横に広いバーがホットパス。**そこに見えていない箇所を最適化しても無駄** である。
-
-### Criterion でマイクロベンチマーク
+Criterion でマイクロベンチ:
 
 \`\`\`rust
 // Cargo.toml
@@ -80,27 +77,7 @@ criterion_group!(benches, bench_my_thing);
 criterion_main!(benches);
 \`\`\`
 
-\`cargo bench\` は統計付きの比較レポートを出す。**性能改善を主張するならベンチ結果をコミットに添えてください**。
-
-> 🛑 **理解度チェック。** Criterion ベンチで関数 X が変更後 20% 速くなった。**ノード全体は 20% 速くなる?** ならない可能性は? 具体的に — マイクロベンチが現実への影響について嘘をつく理由を 2 つ挙げてほしい。
-
-### ノード全体のベンチ: ディスクをスナップショット
-
-上の理解度チェックが捉えているのは本物の問題: マイクロベンチはシステム効果を測れない。解決策はノード全体のワークロードをベンチすることだが、それには毎回同じディスク状態が必要 — そして 500 GB の Reth DB を毎ラン再構築するのは数時間かかる。Paradigm はまさにこの目的で [\`tempoxyz/schelk\`](https://github.com/tempoxyz/schelk) を使っている: ブロックデバイスのスナップショット/ロールバックツールで、ベンチが *書き込んだ* ブロックだけを (\`dm-era\` で追跡) virgin ボリュームからコピーして scratch を復元する。ロールバックは数時間ではなく数秒、ワークロード自体は実 NVMe 上の素の ext4 で走る — オーバーレイなし、書き込みリダイレクトなし。
-
-教育的なポイント: Reth の性能主張 (「staged sync を 15% 短縮した」) を読むときは、著者がラン間で schelk のような何かを使っていると想定すること。ロールバック規律のないベンチは再現不可能。間違ったロールバック (LVM thin オーバーレイ、btrfs スナップショット) を使ったベンチは、ワークロードと同じくらいロールバック機構を測ってしまう。
-
-> 🔍 **リポジトリで確認。** [\`tempoxyz/schelk\`](https://github.com/tempoxyz/schelk) を開き、\`docs/SKILL.md\` を読む。**ロールバックの仕方について驚くポイントが 3 つあるはず。** 先に挙げてからリポで検証してほしい。
-
-## 2. 行数ではなくキャッシュラインで考える
-
-現代 CPU では RAM 読み出しがレジスタ上の演算より約 100 倍遅い。だから「コードを短くする」は誤ったツマミで、**メモリレイアウトを CPU に優しく** が正解。CPU が実際にロードする単位はバイトでもフィールドでもなく、固定 **64 バイトのキャッシュライン**。
-
-### 含意
-
-- ホットなループでは **Struct of Arrays > Array of Structs**
-- フォルスシェアリングを避けるため **ホットなフィールドはキャッシュライン分にパディング**
-- **アクセスパターンを予測しやすい順** にデータを並べる
+ホット / コールド分離:
 
 \`\`\`rust
 // 悪い例：1イテレーションごとに200バイト触る
@@ -114,11 +91,7 @@ struct Hot { id: u64, version: u32 }
 struct Cold { big_blob: [u8; 192] }
 \`\`\`
 
-> 🛑 **予測。** 100 万要素の \`Vec<Row>\` がある。\`row.id\` だけ読み出して合計するイテレーション。\`big_blob\` は決して読まない。**CPU が実際にキャッシュ経由でロードするメモリ量はどれくらい?** なぜ?
-
-## 3. アロケータ選定
-
-\`Vec::push\` も \`Box::new\` も、最終的にはグローバルアロケータを呼ぶ。どのアロケータを選ぶかで変わるのはスループットではなく **テイル(p99)レイテンシ**。Reth は **jemalloc**（Facebook 製アロケータ、現在は tikv-jemallocator クレート経由で利用）を Linux のシステムデフォルト(glibc malloc)より優先する。断片化が進んだ状態でも p99 が安定するためである。
+jemalloc 1 行で:
 
 \`\`\`toml
 # Cargo.toml
@@ -132,13 +105,7 @@ tikv-jemallocator = "0.5"
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 \`\`\`
 
-I/O重めのサービスでは、この1行で **テイルレイテンシが10〜30%改善** することが珍しくありません。
-
-> 🛑 **理解度チェック。** jemalloc の 10〜30% はどこで節約されている? **平均**レイテンシ? それとも**テイル**レイテンシ? どんな負荷でその差が広がる? 「速い」だけならアロケータ設計をまだ理解していません — 読み直し。
-
-## 4. Reth の本物の本番ビルドプロファイル
-
-[\`paradigmxyz/reth\` の Cargo.toml](https://github.com/paradigmxyz/reth/blob/main/Cargo.toml) から：
+Reth の実本番プロファイル ([Cargo.toml](https://github.com/paradigmxyz/reth/blob/main/Cargo.toml)):
 
 \`\`\`toml
 [profile.release]
@@ -160,20 +127,7 @@ debug = "full"
 strip = "none"
 \`\`\`
 
-Paradigm が実際に出荷しているもの。3つのプロファイル、3つのトレードオフ：
-
-### \`release\` — 日常ビルド
-\`thin\` LTO + 16 codegen-units でコンパイル速度と実行性能のバランス。開発と多くの本番デプロイにはこれで十分。
-
-### \`maxperf\` — バリデータとベンチマーク
-\`fat\` LTO + 1 codegen-unit。コンパイル時間は大幅に増える（全モジュール跨ぎインライン化）が、バイナリは確実に速くなる — **1サイクルでも惜しいバリデータ向け**。
-
-### \`maxperf-symbols\` — 本番のプロファイリング
-\`maxperf\` と同じ最適化だが、フルデバッグシンボル付き。本番グレードのコードで関数名が見えるflamegraphが必要なときに使う。**「本番で何かが遅い、原因を突き止めたい」時にビルドするプロファイル**。
-
-> 🛑 **予測。** なぜ \`maxperf\` を日常開発ビルドで **絶対に使わない** のか? コストを具体的に。(ヒント: \`codegen-units = 1\` と \`lto = "fat"\` の組み合わせ — コンパイラに何をさせる?)
-
-### 起動方法
+起動:
 
 \`\`\`bash
 cargo build --profile maxperf --bin reth
@@ -181,50 +135,95 @@ cargo build --profile maxperf --bin reth
 RUSTFLAGS="-C target-cpu=native" cargo build --profile maxperf --bin reth
 \`\`\`
 
-前述の \`jemalloc\` と \`asm-keccak\` フィーチャと組み合わせる。
+## 失敗例（誤解）
 
-## 5. 3つのルール
+「コードを短くすると速くなる」— **間違い**。現代 CPU では行数ではなく **メモリレイアウト** が支配的。短い行でも200バイト触れば 1 キャッシュラインでは収まらない。
 
-1. **何かを変える前に必ず測る。** 「速くなった気がする」はデータではない。
-2. **プロファイラーが示すパスだけを最適化する。** それ以外は徒労。
-3. **変更後にもう一度測る。** 手動の最適化がコンパイラの最適化と打ち消し合うこともある。
+「マイクロベンチで関数 X が 20% 速くなった → ノード全体が 20% 速くなる」— **間違い**。マイクロベンチはシステム効果（cache miss、I/O 直列化、aliasing）を測らない。1 関数が速くても他の遅さに飲まれる。
 
-> 最終チェック: 冒頭の「ジュニアエンジニアが HashMap を BTreeMap に置き換えたい」予測に戻る。**測定・プロファイリング・再検証** を挙げたか? 「BTreeMap は時に遅い」と挙げたなら、それも誤った推論 — 反対側で同じ間違い。**ポイントはどのコンテナかではなく、データなしには答えられない問いだということ。**
+「maxperf を日常開発でも使う」— **間違い**。\`codegen-units = 1\` + \`lto = "fat"\` は全モジュール跨ぎインライン化でコンパイル時間が桁違いに長くなる。日常開発は release、出荷時だけ maxperf。
 
-これでRethのパフォーマンス重要ファイル（\`crates/storage/db\`、\`crates/blockchain-tree\` など）を「好奇心」ではなく「目的意識」で開けるようになる。`,
+> 🛑 **予測。** ジュニアエンジニアが「ノードが遅い気がする、HashMap を BTreeMap に置き換えてみよう」と言う。アプローチの問題点を 3 つ挙げよ。（答え: ① 測定なしに原因を仮定している（実際の遅さの原因は HashMap ではないかもしれない）、② BTreeMap も遅い可能性がある（cache 局所性は劣る場合あり）、③ 変更後の再測定計画がない（最適化が打ち消し合う場合あり）。**測定なしの最適化は逆効果になりうる**。）
+
+## ステップで組み立てる
+
+### Step 1: flamegraph を 1 回取れる
+
+\`cargo flamegraph --bin reth\` → svg をブラウザで → 上部の横に広いバーがホットパス。
+
+### Step 2: Criterion ベンチを 1 つ書ける
+
+\`benches/\` 配下に 1 つ。性能改善の主張にはベンチ結果をコミットに添える規律。
+
+### Step 3: schelk でディスク状態をロールバック
+
+500GB Reth DB を毎ラン再構築するのは数時間 → 不可。\`tempoxyz/schelk\` の \`dm-era\` でブロックデバイススナップショット、ロールバックは数秒。**ロールバック規律のないベンチは再現不可能**。
+
+### Step 4: jemalloc + maxperf プロファイル
+
+\`features = ["jemalloc", "asm-keccak"]\` + \`cargo build --profile maxperf\`。バリデータ向けの「1 サイクルでも惜しい」ビルド。
+
+### Step 5: 3 ルール
+
+1. 何かを変える前に必ず測る（「速くなった気がする」はデータではない）
+2. プロファイラが示すパスだけを最適化
+3. 変更後にもう一度測る（手動最適化がコンパイラ最適化と打ち消す場合あり）
+
+## 答え合わせ
+
+- **Criterion 20% → ノード全体 20% は保証されない理由**: マイクロベンチはシステム効果（cache、I/O 直列化、aliasing）を測らない。同じ関数が単独で 20% 速くても、ホットパス全体の中では他の遅さに飲まれて改善が薄まる。
+- **100 万要素 \`Vec<Row>\` で \`row.id\` だけ読むとき CPU がロードする量**: 200 MB（200バイト × 100万）。\`big_blob\` を読まなくても 1 ロウあたり 200 バイト全部キャッシュラインに乗る = キャッシュラインを 200 バイト触ったのと同じ。SoA に分離すれば 12 バイト × 100 万 = 12 MB に縮む（~16 倍速）。
+- **jemalloc の 10-30% はテイル（p99）**: 平均レイテンシではなく、断片化が進んだ状態での p99 が改善する。glibc malloc は arena ロック競合 + 断片化でテイルが暴れる。
+
+## 合格基準
+
+- 2 つのツール（flamegraph + Criterion）の役割を即答できる。
+- 3 つのリリースプロファイル（release / maxperf / maxperf-symbols）の使い分けを言える。
+- 「マイクロベンチがノード全体について嘘をつく理由」を 2 つ言える。
+- jemalloc が救うのは p50 ではなく p99 と説明できる。
+
+## まとめ（3行）
+
+- 測ってから直す = flamegraph（全体）+ Criterion（関数別）。マイクロベンチはシステム効果を測れないので、ノード全体は schelk でロールバックして実測する。
+- メモリレイアウト > 行数。SoA + ホット / コールド分離 + jemalloc がテイルレイテンシを救う。
+- 3 プロファイル（release / maxperf / maxperf-symbols）を使い分け、性能改善の主張にはベンチ結果を必ず添える。
+`,
                 },
                 {
-                  title: 'MDBX & ストレージ内部',
+                  title: 'レッスン1 — MDBX & ストレージ内部',
                   slug: 'mdbx-storage-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 18,
                   xpReward: 40,
-                  content: `# MDBX & ストレージ内部
+                  content: `# レッスン1 — MDBX & ストレージ内部
 
-各アカウントの残高、各ストレージスロット、各レシート — Reth はそれらをすべて **1つの** KV ストアに収める。Postgres でも RocksDB でも独自フォーマットでもなく、**MDBX**。LMDB から派生したメモリマップB+tree(各ノードが複数キーを保持してディスクページに収まる、バランス木)である。500GB の DB 全体が、まるで巨大な in-memory slice であるかのように Rust コードから見える — ディスクと RAM の往復は OS が mmap で処理する。
+## 問い
 
-MDBX を理解できると「Reth を使える」から「Reth を拡張できる」に進化する。
+各アカウントの残高、各ストレージスロット、各レシート — Reth はそれらをすべて **1 つの** KV ストアに収める。Postgres でも RocksDB でも独自フォーマットでもなく、**MDBX**。LMDB から派生したメモリマップ B+tree。500GB の DB 全体が、まるで巨大な in-memory slice であるかのように Rust コードから見える。**なぜ RocksDB ではなく MDBX なのか？**
 
-> 🛑 **スクロール前に予測。** RocksDB は多くのブロックチェーンクライアントで支配的な KV ストア（geth、erigon の歴史的に）。**Reth はなぜ代わりに MDBX を選ぶのか?** 書き込みスループット・読み取りレイテンシ・クラッシュ安全性・mmap・コンパクションのいずれかを引いて仮説を立ててほしい。
+## 原理（最小モデル）
 
-## 1. なぜMDBX（LevelDB / RocksDBではなく）？
+- **MDBX = mmap された B+tree.** OS のページキャッシュが無料の読み取りキャッシュ、ホット読み出しは「ポインタ参照、システムコールなし」。
+- **LSM ツリー（RocksDB）は書き込み速いがコンパクションでストールする.** Ethereum は読み取り重く・レイテンシ敏感 → コンパクションのストールが致命傷。
+- **\`Database\` trait は 2 つの関連型 \`TX\` / \`TXMut\` で読み書きを分離.** 読み取り tx に \`put\` を呼ぶことをコンパイル時に防ぐ。
+- **テーブルは型（\`<T: Table>\`）であって文字列ではない.** タイポは即コンパイルエラー。
+- **\`append\` vs \`put\`.** \`append\` は単調増加キー専用、B+tree 探索を省略して速い。ブロック順次処理は \`append\`、reorg は \`put\` フォールバック。
+- **Cursor が範囲スキャンの正解.** 一度 B+tree に位置決めし隣接エントリを歩く。隣接キーは同じページを共有するのでキャッシュ局所性が効く。
+
+## 具体例
+
+なぜ MDBX か（vs RocksDB）:
 
 | 特徴 | RocksDB | MDBX |
 | :--- | :--- | :--- |
-| **アーキテクチャ** | LSMツリー | **B+tree（mmap）** |
-| **読み取りレイテンシ** | 可変（コンパクション） | **予測可能** |
-| **書き込み増幅** | 高い | **約1倍** |
-| **クラッシュ安全性** | 手動flush | **MVCCでACID** |
-| **読み取り並列性** | ロック | **ロックフリー読み取り** |
+| アーキテクチャ | LSM ツリー | **B+tree（mmap）** |
+| 読み取りレイテンシ | 可変（コンパクション） | **予測可能** |
+| 書き込み増幅 | 高い | **約 1 倍** |
+| クラッシュ安全性 | 手動 flush | **MVCC で ACID** |
+| 読み取り並列性 | ロック | **ロックフリー読み取り** |
 
-Ethereum は **読み取り重く・レイテンシ敏感**。LSM ツリー(RocksDB や LevelDB が採用する log-structured-merge の設計 — 書き込み高速、定期的にバックグラウンドで階層を書き直す)は書き込みは得意だが、**コンパクション** — すべてを止めて階層を再書き出しする瞬間 — でストールする。このストールが sync 速度とバリデータ レイテンシにとって致命傷になる。MDBX のほうが噛み合いる。
-
-> 🛑 **理解度チェック。** LSM ツリーの **コンパクション** とは何? なぜ読み取りをストールさせる? B+tree はコンパクションしない — 代わりに何をやって空間を回収する? 各 2 文で答えられないなら、表を理解せずに鵜呑みにしているだけである。
-
-## 2. Rethの本物の \`Database\` トレイト
-
-[\`crates/storage/db-api/src/database.rs\`](https://github.com/paradigmxyz/reth/blob/main/crates/storage/db-api/src/database.rs) より：
+Reth の本物の \`Database\` trait（[\`crates/storage/db-api/src/database.rs\`](https://github.com/paradigmxyz/reth/blob/main/crates/storage/db-api/src/database.rs)）:
 
 \`\`\`rust
 pub trait Database: Send + Sync + Debug {
@@ -245,31 +244,15 @@ pub trait Database: Send + Sync + Debug {
 }
 \`\`\`
 
-> 🛑 **予測。** なぜこのトレイトには **2 つの** 関連型 (\`TX\` と \`TXMut\`) があり、1 つの \`Tx\` 型ではないのか? 単一型では強制できない不変条件は何?
-
-注意深く読む：
-
-- **2つの関連トランザクション型** — \`TX\`（読み取り専用）と \`TXMut\`（読み書き）。それぞれメソッドが異なる。分離することで、読み取りトランザクションに対して \`put\` を誤って呼ぶことをコンパイル時に防ぐ。
-- **\`oldest_reader_txnid\`** — 最も古い実行中の読み取りトランザクションを公開。運用者がGCを止めている長時間readerを検知するのに使う。
-- **\`#[track_caller]\`** — tx 開設失敗時のパニックは **呼び出し側の行番号** を表示する。本番デバッグの規律。
-
-## 3. \`DbTx\` と \`DbTxMut\` — 実際の操作
-
-[\`crates/storage/db-api/src/transaction.rs\`](https://github.com/paradigmxyz/reth/blob/main/crates/storage/db-api/src/transaction.rs) より：
+\`DbTx\` / \`DbTxMut\` の操作（[\`crates/storage/db-api/src/transaction.rs\`](https://github.com/paradigmxyz/reth/blob/main/crates/storage/db-api/src/transaction.rs)）:
 
 \`\`\`rust
 // DbTx (読み取り専用)
 fn get<T: Table>(&self, key: T::Key) -> Result<Option<T::Value>, DatabaseError>;
-fn get_by_encoded_key<T: Table>(
-    &self,
-    key: &<T::Key as Encode>::Encoded,
-) -> Result<Option<T::Value>, DatabaseError>;
 fn commit(self) -> Result<(), DatabaseError>;
-fn abort(self);
 fn cursor_read<T: Table>(&self) -> Result<Self::Cursor<T>, DatabaseError>;
 fn cursor_dup_read<T: DupSort>(&self) -> Result<Self::DupCursor<T>, DatabaseError>;
 fn entries<T: Table>(&self) -> Result<usize, DatabaseError>;
-fn disable_long_read_transaction_safety(&mut self);
 
 // DbTxMut (読み書き)
 fn put<T: Table>(&self, key: T::Key, value: T::Value) -> Result<(), DatabaseError>;
@@ -277,96 +260,89 @@ fn append<T: Table>(&self, key: T::Key, value: T::Value) -> Result<(), DatabaseE
 fn delete<T: Table>(&self, key: T::Key, value: Option<T::Value>) -> Result<bool, DatabaseError>;
 fn clear<T: Table>(&self) -> Result<(), DatabaseError>;
 fn cursor_write<T: Table>(&self) -> Result<Self::CursorMut<T>, DatabaseError>;
-fn cursor_dup_write<T: DupSort>(&self) -> Result<Self::DupCursorMut<T>, DatabaseError>;
 \`\`\`
 
-最重要ポイントは4つ：
+## 失敗例（誤解）
 
-### \`<T: Table>\` — テーブルは型、文字列ではない
+「\`append\` を任意の順番で呼んでも遅いだけ」— **間違い**。\`append\` は現在の最大より小さいキーで呼ぶと **不変条件違反** で破損する。MDBX ではなく **あなたの責任** で順序を守る（B+tree 探索を省略するため）。逆順なら \`put\` を使う。
 
-各テーブルは \`Table\` トレイトを実装した **Rust型**。コンパイラが「キー/値の型はこのテーブルのスキーマに合致する」を強制する。**テーブル名のタイポは即コンパイルエラー**。
+「state root 検証は pre-execution で十分」— **間違い**。post-execution が知る = 実 EVM 実行の結果。state root は post-execution のみ検証可能。
 
-### \`append\` vs \`put\`
+> 🛑 **予測。** RocksDB は多くのブロックチェーンクライアントで支配的な KV ストア（geth、erigon 歴史的に）。Reth はなぜ代わりに MDBX を選ぶのか？（答え: 読み取りレイテンシ予測可能性 + クラッシュ安全性 + 書き込み増幅 ~1 倍 + ロックフリー読み取り。Ethereum は読み取り重く・レイテンシ敏感 → LSM のコンパクションストールは sync 速度・バリデータレイテンシに致命的。MDBX の B+tree mmap モデルが噛み合う。）
 
-\`put\` は任意のキーで動く。\`append\` は **キーが現在の最大より大きい場合のみ有効** だが、B+tree探索を省略するので速い。ブロックを順次処理するときは \`append\`、reorgのときは \`put\` にフォールバック。
+## ステップで組み立てる
 
-> 🛑 **予測。** 現在の最大より *小さい* キーで \`append\` を呼ぶと何が起きる? クラッシュ? サイレント破損? エラー? なぜこの不変条件の強制が MDBX ではなくあなたの責任なのか? 答えられないなら、なぜ \`append\` が速いのかをまだ理解していません — 読み直し。
+### Step 1: trait の 2 関連型を即答
 
-### Cursors
+\`TX\`（読み取り専用）/ \`TXMut\`（読み書き）— 分離はコンパイル時の型安全のため。
 
-範囲スキャンには \`get\` の繰り返しではなく **cursor** を使う。一度だけB+tree内に位置決めし、隣接エントリを歩く — 独立した get の数桁倍速い。隣接キーは同じページを共有する可能性が高いので。
+### Step 2: \`append\` vs \`put\` を 1 文で
 
-> 🛑 **理解度チェック。** なぜ cursor は隣接キーへの N 回の独立 \`get\` よりこれほど速いのか? 答えには **B+tree 構造** と **ページキャッシュのローカリティ** の両方が含まれる。各 1 文で。
+\`append\` は単調増加キー前提、B+tree 探索省略で速い。\`put\` は任意順、安全。reorg は \`put\` フォールバック。
 
-### \`disable_long_read_transaction_safety\`
+### Step 3: Cursor を使う
 
-実用的なエルゴノミクス。長い読み取りtxはGCをブロックしDBを膨らませる。Rethは通常、開きすぎた読み取りtxを中止する。**本当に** 長いスナップショットが必要な時だけ設定する（コストを承知のうえで）。
+範囲スキャンには \`cursor_read\` を一度位置決めして隣接歩き。N 個の独立 \`get\` よりキャッシュ局所性で数桁速い。
 
-## 4. ホットパスで重要な理由
+### Step 4: ホットパス読みの構造
 
-mmap で読むので：
+mmap → ウォーム読みはポインタ参照（システムコールなし）→ OS ページキャッシュが無料の読み取りキャッシュ。Execution ステージ（アカウント → ストレージ → コード）が温まったページを叩く順序になっている。
 
-- 「ウォーム」なヘッダー検索は **ポインタ参照** で完了（システムコールなし）
-- OSのページキャッシュが無料の読み取りキャッシュになる
-- **ローカリティが効く**：関連データを同じページに
+### Step 5: テーブルを見る
 
-Rethのテーブル設計は、Executionステージの読み取り（アカウント → ストレージ → コード）が温まったページを叩くようになっている。
+[\`crates/storage/db-api/src/tables\`](https://github.com/paradigmxyz/reth/tree/main/crates/storage/db-api/src/tables) を開く:
+- \`Headers\` テーブル: key = \`BlockNumber\`、value = \`Header\`
+- \`DupSort\` テーブル: 1 キーに複数値を許す（ストレージスロット、ログなど）
 
-## 5. 比較対象: MegaETH の SALT
+### Step 6: 設計対比 — SALT
 
-MDBX はバニラ Reth ノードのための正しいデフォルト。しかし「正しいデフォルト」と「どんな chain にも正しい」は別物である。MegaETH は MDBX を完全に置き換え、ディスクバックの B+tree が許す以上のスループットを押し上げるために **[SALT](https://github.com/megaeth-labs/salt)** (Small Authentication Large Trie) を採用しました。
+MegaETH の SALT は B+tree + MPT を、4 段 256-ary trie + SHI バケットで置き換え、認証層を完全メモリ上に持つ。state root 更新中のランダムディスク I/O ゼロ。MDBX は成熟・ACID・クラッシュセーフだが、高 TPS では state root 更新のランダム I/O がボトルネック。**設計判断は対比で初めて見える**。
 
-設計のコントラスト — どちらを読むときも頭に置く価値あり:
+## 答え合わせ
 
-| 観点 | **MDBX** (Reth デフォルト) | **SALT** (MegaETH) |
-| :--- | :--- | :--- |
-| 形 | Memory-mapped B+tree | 2 階層: 4 段の完全 256-ary trie + SHI ハッシュテーブルのバケット |
-| ストレージモデル | 全データがディスク、OS が mmap でページイン | 認証層は **完全にメモリ上** (30 億アイテムで ~1 GB)、データはバケットに |
-| state root 更新 | MPT を歩き、多数のランダムディスクページに触れる | バケット内ローカル更新; ルート再計算中のランダムディスク I/O を排除 |
-| trie の形 | なし — Reth は MDBX の上で MPT を別途維持 | trie *が* ストレージそのもの; commitment が内在 |
-| 挿入順不変性 | 該当なし (KV agnostic) | SHI (Strongly History-Independent) — 挿入順によらず正準的な commitment |
-| 強み | 成熟、クラッシュセーフ、ACID、ツール生態系が深い | 数十億スケールでのメモリ効率良好な authentication、state root のランダム I/O ゼロ |
-| トレードオフ | 高 TPS では state root 更新時のランダム I/O がボトルネックになる | 新しい (~2026 年設計)、デプロイ範囲が狭い、メモリ圧力に敏感 |
+- **LSM コンパクションとは**: log-structured-merge tree が定期的に階層を再書き出しする。書き込みは速いがコンパクション中は読み書きストール。B+tree はコンパクションせず、ページ分割 / マージで空間を回収。
+- **\`oldest_reader_txnid\` の用途**: 最古実行中読み取り tx を公開、長時間 reader が GC をブロックしている検知に使う。長い読み tx は DB を膨らませる。
+- **mmap で 500GB DB が Rust slice に見える理由**: OS が mmap でアドレス空間にマップ、ページフォルト時に該当ページをディスクからロード。ヒット時はメモリアクセスと同コスト、ミスでもシステムコールなしの透過的フォールト。
 
-教育的なポイントは「SALT のほうが良い」ではない。MDBX の設計判断は、**誰かが違う選択をしたものを見て初めて見えるようになる** ということ。ストレージレイヤを 1 つしか読んだことがないと、どの判断が必須でどれが偶発的かを区別できない。
+## 合格基準
 
-[\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) を Reth の MDBX ラッパーと並べて読んでみてほしい。そのとき浮かんでくる問い — 「Reth は高 TPS で必要ないクラッシュ安全性のためにどこで対価を払っているか?」「SALT は authentication をメモリに収めるために何を諦めているか?」 — が、自分の chain のためにストレージレイヤを拡張するときに直面する設計の問いそのものである。
+- LSM vs B+tree のトレードオフを 1 文で言える。
+- \`append\` / \`put\` の使い分けと不変条件を即答できる。
+- Cursor が独立 \`get\` より速い理由（B+tree 構造 + ページキャッシュ局所性）を言える。
+- 「mmap → ポインタ参照、システムコールなし」を OS ページフォルト機構で説明できる。
+- MDBX と SALT の設計対比を 1 つ言える。
 
-## 6. 練習
+## まとめ（3行）
 
-リポジトリで [\`crates/storage/db-api/src/tables\`](https://github.com/paradigmxyz/reth/tree/main/crates/storage/db-api/src/tables) を開く：
-
-> 🛑 **開く前に予測。** \`Headers\` テーブルのキー / 値は何? \`Transactions\` は? \`PlainAccountState\` は? 推測してから検証してほしい。
-
-1. \`Headers\` テーブルを探す — キー（\`BlockNumber\`）と値（\`Header\`）に注目
-2. \`DupSort\` テーブルを探す — 1キーに複数値を許すテーブル。**なぜ \`DupSort\` が存在する? どんな種類のデータがそれを必要とする?**
-3. Executionステージの1回の読み取りを追跡：どのテーブルをどの順で参照する？
-
-これでEthereum状態のすべてのバイトがRethのどこに住んでいるかが分かる。
-
-> 最終チェック: なぜ mmap が 500GB の DB を Rust の slice のように扱えるようにするのか、一文で。**OS はどこで関わる?** ページフォルト → ページロードのメカニズムを説明できないなら、「ポインタ参照、システムコールではない」の主張はあなたにとって言葉のまま、理解になっていません。`,
+- MDBX = mmap された B+tree、Ethereum の読み取り重・レイテンシ敏感ワークロードに合う（LSM のコンパクションストールが致命的）。
+- \`Database\` trait は \`TX\`/\`TXMut\` で読み書き分離、テーブルは型、\`append\` は単調増加専用、Cursor が範囲スキャンの正解。
+- mmap + OS ページキャッシュで「500GB DB が Rust の slice」になる — SALT との対比でこの設計判断の意味が見える。
+`,
                 },
                 {
-                  title: 'Tokioランタイム内部',
+                  title: 'レッスン2 — Tokio ランタイム内部',
                   slug: 'tokio-internals-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 18,
                   xpReward: 40,
-                  content: `# Tokioランタイム内部
+                  content: `# レッスン2 — Tokio ランタイム内部
 
-\`#[tokio::main]\` を書き、あらゆる async 呼び出しに \`.await\` を散りばめてきました。Reth のコードベースには 200 以上の \`.await\` が散らばっていて、ピーク負荷では数千の peer 接続と数十のバックグラウンドタスクを **8 ワーカースレッド** でさばいている。魔法ではない — コンパイラがあなたのために書いたステートマシン、work-stealing スケジューラ、そして epoll ループ。本レッスンは \`.await\` の真下に何があるかである。
+## 問い
 
-> 🛑 **スクロール前に予測。** \`async fn foo() { bar().await; }\` を書く。コンパイラは *何か具体的なもの* を生成する。**それは何?** 具体的に：
-> - 結果の型はどのトレイトを実装する?
-> - 通常の関数呼び出しと比較した実行時コストは?
-> - \`await\` 点を跨いだローカル変数はどこに置かれる?
->
-> どれか曖昧なら、このレッスンが必要なものである。
+\`#[tokio::main]\` を書き、あらゆる async 呼び出しに \`.await\` を散りばめてきた。Reth のコードベースには 200 以上の \`.await\` が散らばっていて、ピーク負荷では数千の peer 接続と数十のバックグラウンドタスクを **8 ワーカースレッド** でさばいている。**\`.await\` の真下に何があるか？**
 
-## 1. ランタイムスタック
+## 原理（最小モデル）
 
-Tokio の構成：
+- **\`async fn\` → コンパイラ生成のステートマシン → \`Future\` trait を実装.** Executor が \`Poll::Ready(value)\` まで \`poll()\` を呼び続ける。
+- **Work-stealing スケジューラ.** 各ワーカーにローカルキュー（競合なし）+ グローバルキュー（フォールバック）+ 空いたワーカーは隣から「盗む」。
+- **\`spawn_blocking\` を CPU 重い処理に使う.** async コンテキストで重い同期処理を直接呼ぶとランタイムが飢えてノード全体が止まる。
+- **チャネルは用途で選ぶ.** mpsc（多生産 1 消費）/ broadcast（チェーンイベント）/ watch（最新値）/ oneshot（リクエスト・レスポンス）。
+- **Reth は \`TaskExecutor\` で Tokio を包み「パニック監視」を追加.** \`spawn_task\`（静かに死ぬ）vs \`spawn_critical_task\`（パニック → ノード停止 + タスク名ログ）。
+
+## 具体例
+
+ランタイムスタック:
 
 \`\`\`
 +--------------------+
@@ -379,11 +355,7 @@ Tokio の構成：
 +--------------------+
 \`\`\`
 
-\`async fn\` を書くと、コンパイラは \`Future\` トレイトを実装する **ステートマシン** を生成する。Executorの仕事は、そのステートマシンに対して \`poll()\` を \`Poll::Ready(value)\` を返すまで呼び続けること。
-
-## 2. work-stealing を60秒で
-
-問題: 8 ワーカースレッド、タスクは数千。1 つの共有キューを 8 スレッドで奪い合わせずに、どう分配する? Tokio の答えは、各ワーカーに自分専用の **ローカルキュー**(競合なし、安価)を持たせ、フォールバックとして **グローバルキュー** を用意する。ワーカーが空になったら忙しい隣人のキューから **タスクを盗む**。
+Work-stealing:
 
 \`\`\`
 ワーカー A: [task1, task2, task3, task4]   ← 忙しい
@@ -392,11 +364,7 @@ Tokio の構成：
 ワーカー B: [task3, task4]
 \`\`\`
 
-これでグローバルロックの競合を避けつつ負荷分散できる。
-
-> 🛑 **理解度チェック。** work-stealing がない場合、ワーカー間でタスクを分配する代替案は何? なぜそれが悪いのか? (ヒント: 単一の共有キューに対するグローバル mutex を考える、競合下のホット。)
-
-## 3. spawn vs blocking
+spawn vs blocking:
 
 \`\`\`rust
 // 並列実行：ランタイムにspawn
@@ -410,26 +378,16 @@ tokio::task::spawn_blocking(|| {
 }).await?
 \`\`\`
 
-**ルール**：CPU重い処理を非同期コンテキストで \`spawn_blocking\` なしに呼ばないこと。ランタイムが飢えてノード全体が止まる。
-
-> 🛑 **予測。** ルールを無視。\`expensive_sync_calc()\` を async fn の中で直接呼ぶ。ノードは動く。**本番での症状は何?** 具体的に — Prometheus / ダッシュボードに何が表示される? oncall はどう発見する? (ヒント: クラッシュではない。)
-
-## 4. チャネル — 適切な選択
+チャネル選定:
 
 | チャネル | 用途 |
 | :--- | :--- |
-| \`tokio::sync::mpsc\` | 多生産者・1消費者 |
-| \`tokio::sync::broadcast\` | 1生産者・多消費者（例：チェーンイベント） |
+| \`tokio::sync::mpsc\` | 多生産者・1 消費者 |
+| \`tokio::sync::broadcast\` | 1 生産者・多消費者（例：チェーンイベント） |
 | \`tokio::sync::watch\` | 最新値ブロードキャスト（例：最新ブロック） |
 | \`tokio::sync::oneshot\` | 単一値、リクエスト/レスポンス |
 
-ExEx はチェーン通知に **broadcast** を使う。すべてのExExがすべてのイベントを受け取るため。
-
-> 🛑 **理解度チェック。** ExEx はなぜ \`mpsc\` を使わない? 3 つの ExEx を登録した場合、\`mpsc\` だとイベント配信に何が起きる? \`broadcast\` が防いでいる失敗モードを書き出してほしい。
-
-## 5. カスタム Executor / Future の手動 poll
-
-いずれ **Future を手で poll したい場面** が出てきます：
+カスタム Future poll:
 
 \`\`\`rust
 use std::pin::Pin;
@@ -446,11 +404,7 @@ match fut.as_mut().poll(&mut cx) {
 }
 \`\`\`
 
-これがReth内部の独自スケジューラ（例：MEVシミュをバッチする）を書く土台になる。
-
-## 6. Rethが本番でTokioをどう使うか
-
-RethはTokioを直接公開せず、**\`TaskExecutor\`** で包んで **パニック監視** を追加している。[\`crates/tasks/src/runtime.rs\`](https://github.com/paradigmxyz/reth/blob/main/crates/tasks/src) より：
+Reth の \`TaskExecutor\`（[\`crates/tasks/src/runtime.rs\`](https://github.com/paradigmxyz/reth/blob/main/crates/tasks/src)）:
 
 \`\`\`rust
 pub fn spawn_task<F>(&self, fut: F) -> JoinHandle<()>
@@ -462,55 +416,79 @@ where
     F: Future<Output = ()> + Send + 'static,
 \`\`\`
 
-2種類：
+## 失敗例（誤解）
 
-- **\`spawn_task\`** — 投げっぱなし。パニックすれば静かに消える（Tokioデフォルト）。
-- **\`spawn_critical_task\`** — 名前付きで登録、パニックすると \`TaskManager\` のチャネルが発火し、**ノード全体が停止し、タスク名がログに残る**。
+「\`spawn_blocking\` なしで CPU 重い処理を async fn で呼んでも動く」— **動くが本番で詰まる**。ランタイムワーカーが飢えて、症状は「クラッシュではなく、ノード全体が静かに減速」。Prometheus で task queue 深さが膨らみ、p99 が爆発する。
 
-> 🛑 **予測。** バックグラウンド「pruner state 検証」タスクを \`spawn_task\` で起動。6 週間後、破損したエントリで panic。Reth は動き続ける。**ユーザに見える症状は何?** なぜインフラでは「大声で失敗」が「静かに失敗」より良いのか?
+「\`spawn_task\` で起動すれば長期タスクが安全」— **間違い**。\`spawn_task\` のパニックは静かに消える（Tokio デフォルト）。pruner 検証などクリティカルなタスクは \`spawn_critical_task\` で「大声で失敗」させる。
 
-これが本番の規律：静かに死んだバックグラウンドタスクのせいで、劣化状態でノードが動き続けるのは避けたい。**クリティカルなタスクは大声で失敗する**。
+「ExEx は mpsc で十分」— **間違い**。3 つの ExEx を登録すると mpsc では 1 つだけがイベントを受け取り他は飢える（1 消費者前提）。チェーンイベントは broadcast（全 ExEx が全イベント受信）。
 
-\`TaskExecutor = Runtime\` のエイリアスは、生Tokio型を引き回さずにステージコードに渡せる — セーフティネット付きのきれいな抽象化。
+> 🛑 **予測。** \`async fn foo() { bar().await; }\` を書く。コンパイラは何を生成する？（① 結果の型が実装する trait、② 通常関数呼び出しと比較した実行時コスト、③ await 点を跨いだローカル変数の置き場所）。（答え: ① \`Future\` trait 実装のステートマシン struct、② アロケーション 1 回 + 各 poll で state 進める（マイクロコスト、ホット）、③ ステートマシン struct のフィールド（スタックではなく struct に saved state として）。）
 
-## 7. 読み物リスト
+## ステップで組み立てる
 
-- \`tokio/tokio/src/runtime/scheduler/multi_thread_alt\` — 現代のマルチスレッドスケジューラ
-- \`reth/crates/tasks/src/runtime.rs\` — RethのTokio監視ラッパ
+### Step 1: ステートマシンの正体を言える
 
-このレッスンを終えると、「Tokio = 魔法」が「Tokio = work-stealing付きステートマシンドライバ。Rethはそれをパニック監視で包んでいる」になる。
+async fn → コンパイラがステートマシン struct を生成 → \`Future\` trait 実装。Executor が \`poll()\` を \`Poll::Ready\` まで呼ぶ。
 
-> 最終チェック: \`async fn\` と \`fn\` の **Rust の型としての** 違いを、一文で。「片方は Future を返し、片方は返さない」と答えたら深掘り — Future とは構造的に *何* なのか? **「Tokio = 魔法」が「Tokio = コンパイラ生成のステートマシンを work-stealing スケジューラで poll する」になるまで、このレッスンはあなたを離しない。**`,
+### Step 2: work-stealing の理由
+
+ローカルキュー = 競合なし、グローバルキュー = フォールバック、stealing = 負荷分散。**シングルキュー + グローバル mutex のホット競合を回避**。
+
+### Step 3: チャネル選定の判断軸
+
+「何個の生産者、何個の消費者、最新値で十分か全イベント必要か」で 4 つに分岐。ExEx チェーンイベント = broadcast、設定変更通知 = watch、ジョブキュー = mpsc、RPC レスポンス = oneshot。
+
+### Step 4: TaskExecutor の規律
+
+「静かに死ぬ」= spawn_task、「大声で失敗 → ノード停止」= spawn_critical_task。**インフラでは大声 > 静か** — 劣化状態でノードが動き続けるのを防ぐ。
+
+## 答え合わせ
+
+- **work-stealing なしの代替**: 単一共有キュー + グローバル mutex。8 ワーカーが mutex 競合 = 性能崩壊。stealing は競合を「忙しいワーカー全員」から「アイドルワーカーが盗みに来た瞬間」だけに減らす。
+- **CPU 重い処理を async で呼んだときの本番症状**: クラッシュではなく **task queue が詰まる**。Prometheus で「task scheduling latency」「queue depth」が単調増加、p99 が爆発、新しいリクエストが処理されなくなる。oncall は「ノードが動いてるのに遅い」を発見、原因究明に数時間。
+- **ExEx + mpsc の失敗モード**: mpsc は 1 消費者前提なので 3 ExEx 登録時、最初の 1 つだけがイベントを受け取り他は飢える。broadcast なら全 ExEx が全イベント受信、ExEx 数に依存せず動く。
+
+## 合格基準
+
+- async fn が生成する 3 要素（Future 実装 + ステートマシン + await 点のフィールド化）を言える。
+- work-stealing がグローバル mutex を回避する仕組みを説明できる。
+- 4 種チャネルを用途で即答できる。
+- spawn_task / spawn_critical_task の使い分けと「大声で失敗」原則を言える。
+
+## まとめ（3行）
+
+- Tokio = コンパイラ生成のステートマシンを work-stealing スケジューラで poll する仕組み。\`.await\` は魔法ではなくステートマシン進行。
+- CPU 重い処理は \`spawn_blocking\`、チャネルは用途で 4 種から選ぶ、Reth は TaskExecutor でパニック監視を追加。
+- 「大声で失敗 > 静かに死ぬ」原則 — クリティカルタスクは \`spawn_critical_task\` でノード停止 + タスク名ログ。
+`,
                 },
                 {
-                  title: '手続きマクロ — `sol!`と`address!`の中身',
+                  title: 'レッスン3 — 手続きマクロ（\`sol!\` と \`address!\` の中身）',
                   slug: 'procedural-macros-ja',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 15,
                   xpReward: 35,
-                  content: `# 手続きマクロ — \`sol!\`と\`address!\`の中身
+                  content: `# レッスン3 — 手続きマクロ（\`sol!\` と \`address!\` の中身）
 
-\`address!("0xabc...")\` は関数呼び出しに見えるが **コンパイル時に走ります**。\`sol! { contract IERC20 { ... } }\` も同じ。
+## 問い
 
-> 🛑 **スクロール前に予測。** \`address!("0xabc123...")\` を書いたとき：
-> - hex のパースは **どこ** で起きる — コンパイル時か実行時か?
-> - コンパイル時なら、Rust コンパイラの **どのツール** がそれをやる?
-> - \`address!("0xZZZ")\` を書いたら、どんなエラーが出る?
->
-> 予想を立ててから先へ。このレッスンには \`address!\` について、世間の説明と意見を異にするサプライズが少なくとも 1 つある。
+\`address!("0xabc...")\` は関数呼び出しに見えるが **コンパイル時に走る**。\`sol! { contract IERC20 { ... } }\` も同じ。**hex のパースはいつ起きるか？コンパイラのどのツールが担うか？無効な hex を書いたら何が起きるか？**
 
-## 1. 3種類
+## 原理（最小モデル）
 
-| 種類 | 見た目 | 例 |
-| :--- | :--- | :--- |
-| **関数風** | \`my_macro!(...)\` | \`address!\`、\`sol!\` |
-| **derive** | \`#[derive(MyTrait)]\` | \`#[derive(Serialize)]\` |
-| **属性** | \`#[my_attr]\` | \`#[tokio::main]\` |
+- **3 種類のマクロ.** 関数風（\`address!\`、\`sol!\`）/ derive（\`#[derive(Serialize)]\`）/ 属性（\`#[tokio::main]\`）。すべて \`crate-type = ["proc-macro"]\` のクレートに住み、\`TokenStream → TokenStream\` の関数として動く。
+- **\`syn\` + \`quote\` の 2 クレート.** \`syn\` が TokenStream を AST にパース、\`quote\` がテンプレートから TokenStream を生成。
+- **\`address!\` は宣言的マクロ（\`macro_rules!\`）.** 本物の手続きマクロは内側で呼ばれる \`hex!\` の方。
+- **\`$d:tt\` のトリック.** マクロ内でマクロを生成するとき内側マクロの \`$\` をハイジーン回避するため。
+- **\`sol!\` がコンパイル時にやること.** Solidity 風構文をパース → セレクタ（keccak256）計算 → ABI エンコード / デコード impl 生成。実行時コストゼロ。
+- **\`cargo expand\` で展開を見る.** 詰まったら必ず使う。
 
-いずれも Cargo.toml に \`crate-type = ["proc-macro"]\` を書いたクレートに住む。コンパイラはそうしたクレートをプラグインのようにロードし、中の関数を呼ぶ。関数は \`TokenStream\`(マクロ入力を字句解析したが型検査はまだのトークン列)を受け取り、別の \`TokenStream\`(コンパイラがその場所で続けてコンパイルしていく代替コード)を返す。
+## 具体例
 
-## 2. ツールチェイン
+ツールチェイン:
 
 \`\`\`mermaid
 flowchart LR
@@ -521,20 +499,7 @@ flowchart LR
     Out -->|コンパイラ続行| Compiled[コンパイル後のバイナリ]
 \`\`\`
 
-ほぼ2クレートで完結：
-
-| クレート | 役割 |
-| :--- | :--- |
-| \`syn\` | TokenStreamをRust ASTにパース |
-| \`quote\` | テンプレートからTokenStreamを生成 |
-
-## 3. 本物の \`address!\` マクロ
-
-驚くかもしれません：**\`address!\` は手続きマクロではありません**。普通の \`macro_rules!\` 宣言的マクロである。
-
-> 🛑 **\`address!\` が宣言的だけなら、何に委譲しているのが手続きマクロ?** 予測 → 下のソースで検証してほしい。
-
-これが [\`crates/primitives/src/bits/macros.rs\`](https://github.com/alloy-rs/core/blob/main/crates/primitives/src/bits/macros.rs) の本物のソース：
+本物の \`address!\` ソース（[\`crates/primitives/src/bits/macros.rs\`](https://github.com/alloy-rs/core/blob/main/crates/primitives/src/bits/macros.rs)）:
 
 \`\`\`rust
 macro_rules! fixed_bytes_macros {
@@ -564,50 +529,7 @@ fixed_bytes_macros! { $
 }
 \`\`\`
 
-2回読んでしてほしい。情報量が多い。
-
-### マクロを定義するマクロ
-
-\`fixed_bytes_macros!\` は **外側のマクロが内側のマクロを生成するマクロ**。最後の1行の呼び出しで7つのマクロを一度に作成：\`address!\`, \`b64!\`, \`b128!\`, \`b256!\`, \`b512!\`, \`bloom!\`, \`fixed_bytes!\`。**メタパターンを1回書いて、型付きの便利マクロが7つもらえる**。
-
-### \`$d:tt\` のトリック
-
-\`$d\` はトークンツリー（実際は \`$\`）にマッチする。これは有名な問題を解いている：マクロ内でマクロを生成するとき、内側マクロの変数のために単に \`$\` を書くと、Rustのマクロパーサーが外側マクロのメタ変数として食べてしまう。だから \`$d\` を \`$\` にバインドし、\`$d ($d t:tt)+\` が生成コードでは \`$ ( $ t:tt )+\` になる。**マクロハイジーン回避の教科書的テクニック**。
-
-> 🛑 **理解度チェック。** \`$d:tt\` のトリックを取り除いて、内側マクロにそのまま \`$\` を書いたら、コンパイラは何のエラーを出す? (ヒント: 「シンタックスエラー」ではない — どっちのマクロがメタ変数を所有するかについてのエラー。) エラークラスを予測できなければ、このトリックはあなたにとってまだ伝承である。
-
-### コンパイル時バリデーションは別のマクロが担当
-
-実際のhexパースは \`$crate::hex!(...)\` に委譲され、こちら **は** 手続きマクロである。\`hex!\` は：
-1. 文字列リテラルをコンパイル時にパース
-2. 各文字が hex digit かバリデーション
-3. 長さが対象型と一致するか確認（\`Address\` なら20バイト、\`B256\` なら32バイト）
-4. \`[u8; N]\` 配列リテラルを生成
-
-何か失敗すれば **コンパイルエラー**。実行時パニックではない。\`Address::new(...)\` がそこで型付きラッパを構築する。
-
-### 空入力ケース
-
-\`\`\`rust
-() => { $crate::$ty::ZERO };
-\`\`\`
-
-\`address!()\`（引数なし）は \`Address::ZERO\` を返す — const。だから書ける：
-
-\`\`\`rust
-const BURN: Address = address!();
-\`\`\`
-
-constとしてバーンアドレスが評価できる。実行時パーサーで **これ** をやるのは無理。
-
-## 4. \`sol!\` — 本物の手続きマクロ
-
-\`address!\` は宣言的、\`sol!\` こそが本物の手続きマクロである。場所は [\`alloy-rs/core/crates/sol-macro\`](https://github.com/alloy-rs/core/tree/main/crates/sol-macro)。中身は：
-
-1. Solidity風の構文をパース（\`syn::ItemImpl\` ではなく独自パーサー — Solidityは Rust ではない）
-2. 関数ごとに struct を生成、**セレクタ**（\`keccak256(signature)\` の先頭4バイト）を計算、ABIエンコード/デコードを impl
-3. イベントごとに **topic0 ハッシュ** を計算、ログデコードを impl
-4. コントラクトごとに \`Provider\` を受けてメソッドを自然に呼べるラッパ struct を吐く
+\`sol!\` の使用例:
 
 \`\`\`rust
 sol! {
@@ -620,52 +542,107 @@ sol! {
 let balance = IERC20::new(token, &provider).balanceOf(owner).call().await?;
 \`\`\`
 
-— この \`.balanceOf(owner)\` は静的型付き、\`uint256\` は本物の \`U256\`、セレクタはコンパイル時計算、ABIエンコードはモノモーフ化済み。**リフレクションなし、実行時パースなし、文字列型エラーなし**。
+const としての address:
 
-> 🛑 **予測。** \`balanceOf(address)\` のセレクタは \`0x70a08231\` — \`keccak256("balanceOf(address)")\` の先頭 4 バイト。**この keccak ハッシュはビルドのどの時点で計算される?** 「実行時、初回 .balanceOf 呼び出し時」と答えたら読み直し — それこそ \`sol!\` が排除する実行時コスト。
+\`\`\`rust
+const BURN: Address = address!();  // Address::ZERO、const で評価
+\`\`\`
 
-## 5. proc macro を書くべき場面
-
-- **何度も同じ定型コード** がコンパクトな1行マクロに圧縮できるとき
-- **コンパイル時バリデーション** ができるとき（例：address のパース）
-- **DSL 級の使い心地** に値する規模感のとき
-
-「1回しか書かない5行を浮かせる」ためには書かない。
-
-## 6. デバッグTip
-
-\`cargo expand\` でマクロが生成しているコードが見える。**詰まったら必ず展開を見る**。
+cargo expand:
 
 \`\`\`bash
 cargo install cargo-expand
 cargo expand --bin my_app
 \`\`\`
 
-コード生成のミスを目で確認できる。
+## 失敗例（誤解）
 
-> 最終チェック: \`macro_rules!\` と手続きマクロの違いを一文で。「片方が古い」だけなら深掘り — 各々が何を操作し、どこで走る? **Rust のエコシステムはこの区別の上に成り立っている。理解せずにバイナリを構築するコードは読めません。**`,
+「\`address!\` は手続きマクロ」— **間違い**。\`address!\` は \`macro_rules!\` 宣言的マクロ。内側で呼ばれる \`hex!\` が本物の手続きマクロ（hex パース + バイト数チェック + \`[u8; N]\` 配列リテラル生成）。
+
+「\`balanceOf\` の keccak は初回呼び出し時に計算」— **間違い**。\`sol!\` がコンパイル時にセレクタ（\`keccak256("balanceOf(address)")\` の先頭 4 バイト = \`0x70a08231\`）を計算してコードに埋め込む。実行時コストゼロ。
+
+「マクロでマクロを生成するとき内側の \`$\` を直接書ける」— **間違い**。外側のメタ変数として食われてシンタックスエラー。\`$d:tt\` を \`$\` にバインドして \`$d ($d t:tt)+\` を生成コードに書く（マクロハイジーン回避）。
+
+> 🛑 **予測。** \`address!("0xZZZ")\` を書いたらどんなエラーが出る？（答え: **コンパイルエラー**（実行時パニックではない）。\`hex!\` 手続きマクロがコンパイル時に hex digit 検証 + バイト数（Address なら 20）チェック。\`Z\` は hex digit でないのでコンパイル時に失敗。デプロイ前にバグが捕まる。）
+
+## ステップで組み立てる
+
+### Step 1: 3 種類を即答
+
+関数風 / derive / 属性。すべて \`crate-type = ["proc-macro"]\` クレートに住む。
+
+### Step 2: 2 クレートの役割
+
+\`syn\` → TokenStream を AST に。\`quote\` → AST から TokenStream 生成。
+
+### Step 3: \`sol!\` がコンパイル時にする 4 つ
+
+1. Solidity 構文パース
+2. 各関数の **セレクタ**（keccak256 先頭 4 バイト）計算
+3. ABI エンコード / デコード impl 生成
+4. 型付きラッパ struct 生成
+
+実行時はリフレクションなし、文字列パースなし。
+
+### Step 4: いつ proc macro を書くか
+
+- 何度も同じ定型コードが圧縮できる
+- コンパイル時バリデーション（address のパースなど）
+- DSL 級の使い心地に値する規模
+
+「1 回しか書かない 5 行を浮かせる」ためには書かない。
+
+### Step 5: デバッグ
+
+詰まったら \`cargo expand\` でマクロ生成コードを目視。
+
+## 答え合わせ
+
+- **hex パースが起きる場所**: コンパイル時、\`hex!\` 手続きマクロが \`syn\` で文字列リテラルを受け取り検証して \`[u8; N]\` を生成。
+- **\`$d:tt\` トリックの理由**: 外側マクロ展開時に内側マクロの \`$\` がメタ変数として食われるのを防ぐ。\`$d\` を \`$\` にバインドすることで「外側にとってのトークン、内側にとってのメタ変数記号」を区別。
+- **マクロを定義するマクロのメリット**: 1 行で 7 つの型付きマクロ（\`address!\` / \`b64!\` / \`b128!\` / \`b256!\` / \`b512!\` / \`bloom!\` / \`fixed_bytes!\`）を作成、メタパターン 1 回書いて 7 倍の便利マクロを得る。
+
+## 合格基準
+
+- 3 種類のマクロを即答できる。
+- \`syn\` と \`quote\` の役割を 1 文で言える。
+- \`sol!\` がコンパイル時にやる 4 つを即答できる。
+- \`address!\` が宣言的 + 内側 \`hex!\` が手続き型、と区別できる。
+- \`cargo expand\` を実行できる。
+
+## まとめ（3行）
+
+- 手続きマクロ = \`TokenStream → TokenStream\` の関数、\`syn\` で AST に + \`quote\` で生成。コンパイル時に走り、実行時コストゼロ。
+- \`sol!\` は Solidity 構文 → セレクタ計算 + ABI エンコード impl 生成、\`address!\` は宣言的 + 内側で \`hex!\` 手続きマクロ呼び出し。
+- 詰まったら \`cargo expand\` で展開コードを目視。proc macro は「コンパイル時バリデーション」「DSL」「定型圧縮」が成立する規模だけ書く。
+`,
                 },
                 {
-                  title: 'Tracing 内部 — Reth は自分自身をどう観測しているか',
+                  title: 'レッスン4 — Tracing 内部（Reth は自分自身をどう観測しているか）',
                   slug: 'tracing-internals-ja',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 20,
                   xpReward: 45,
-                  content: `# Tracing 内部 — Reth は自分自身をどう観測しているか
+                  content: `# レッスン4 — Tracing 内部（Reth は自分自身をどう観測しているか）
 
-性能チューニング、デッドロックのデバッグ、ステージが突然止まった理由の診断 — どれも、ノード自身が「何をしているか」を **教えてくれる** ことが前提になる。Reth がこの問いに用意した答えが \`tracing\`、Rust エコシステムの構造化ログ用 crate である。Reth の主要なコードパスは例外なく \`tracing\` の span と event で計装されていて、可観測性まわり（ログ・メトリクス・分散トレース）はすべてこの一枚岩の基盤の上に乗っている。本レッスンは、その仕組みと拡張方法を扱う。
+## 問い
 
-> 📌 **なぜ Performance & Systems モジュールに置いてあるか。** 計測できないものは最適化できないからである。\`tracing\` が計測層である。続く性能レッスン（flamegraph、MDBX チューニング、Tokio ランタイム）は、稼働中のノードから正しい信号を引き出せる前提で進む。その引き出し口がこの \`tracing\` である。
+性能チューニング、デッドロックのデバッグ、ステージが突然止まった理由の診断 — どれも、ノード自身が「何をしているか」を **教えてくれる** ことが前提。Reth の答えは \`tracing\` crate。**Reth の全可観測性（ログ + メトリクス + 分散トレース）が 1 つの基盤から生えている理由は何か？**
 
-## 1. \`tracing\` crate の 2 つのプリミティブ
+## 原理（最小モデル）
 
-エコシステム全体は、2 つの発想に集約される。
+- **2 プリミティブ.** Span（実行領域、入れ子可）+ Event（ある時点のログ行、span 文脈を引き継ぐ）。
+- **\`RUST_LOG\` で外科的フィルタ.** モジュールパス（crate + モジュール階層）でマッチ。本番デバッグは「グローバル warn + 調査対象だけ debug」。
+- **Subscriber が出力先を決める.** fmt（pretty stdout） / json（本番ログ shipping） / opentelemetry（分散トレース） / カスタムレイヤー。
+- **Async 境界で \`#[instrument]\`.** span は \`.enter()\` で「現在スレッド」にバインド → await で suspend すると span が drop。\`#[instrument]\` が future ラッパで suspend を生き残らせる（**Rust async tracing バグの第 1 位**）。
+- **メトリクスも同じ基盤.** Prometheus メトリクスは \`tracing\` event の特定 target を subscribe して counter / histogram に翻訳。
+- **OpenTelemetry でプロセス境界をまたぐ.** OTLP collector がトレース span を集約、N プロセスの完全リクエストパスを 1 つの Jaeger view に。
+- **\`debug\`/\`trace\` の hot path コスト.** 静的にはコンパイル除外されない（\`RUST_LOG\` 無効でもレベルチェック）。revm opcode に \`debug!\` を入れると 30% 減速。
 
-- **Span** — 実行の *領域* を表す印。「ブロック 100..200 について \`SenderRecoveryStage::execute\` の中にいる」というような範囲を表す。span は入れ子になり、中のすべてのログ行に文脈（ブロック範囲、peer ID、リクエスト ID）を持ち回らせる。
-- **Event** — *ある時点* のログ行。「バッチ 17 を 12,000 件の sender でコミットした」のような一行である。event は現在アクティブな span の中で発火し、その文脈を引き継ぐ。
+## 具体例
 
-コードでは:
+基本パターン（span + event + instrument）:
 
 \`\`\`rust
 use tracing::{info, debug, instrument};
@@ -688,11 +665,7 @@ async fn execute(&mut self, provider: &Provider, input: ExecInput) -> Result<Exe
 }
 \`\`\`
 
-\`#[instrument]\` は手続きマクロ（前レッスンがそのジャンルをカバーした）で、関数本体を自動的に span でラップする。\`info!\` と \`debug!\` は異なるレベルで event を emit する。**Reth ユーザが見る全ログ行はこの 2 つのプリミティブの 1 つから来る。**
-
-## 2. レベルと \`RUST_LOG\` フィルタ
-
-Event はレベルを持つ（\`error\`、\`warn\`、\`info\`、\`debug\`、\`trace\`）。ユーザは実行時に \`RUST_LOG\` 環境変数でどのレベルを表示するか選ぶ:
+\`RUST_LOG\` フィルタ:
 
 \`\`\`bash
 # グローバルに info+、stages モジュールは debug+
@@ -705,24 +678,16 @@ RUST_LOG=reth_exex=trace cargo run --bin reth -- node
 RUST_LOG=info,reth_stages=debug,reth_exex=trace,reth_network=warn
 \`\`\`
 
-マッチエンジンは \`EnvFilter\`（\`tracing-subscriber\` から）。各 event/span の **モジュールパス** に対してマッチし、Rust が crate + モジュール階層から派生させる。\`reth_stages=debug\` は「\`reth_stages\` で始まるモジュールパスを持つ任意の event について debug レベル以上を表示」を意味する。
-
-> 🛑 **予測。** 本番で sender-recovery の停止をデバッグしている。全ログ行は要らない — ディスクが溢れる。\`SenderRecoveryStage\` が emit するものだけ欲しい。**正しい \`RUST_LOG\` は?**
-
-おおよそ: \`RUST_LOG=warn,reth_stages::stages::sender_recovery=debug\` — グローバルに warn レベル（他モジュールからの致命的なものは捕まえる）、調査中のステージだけ debug。モジュールパスはファイルの crate 内位置から来る（\`reth-stages\` crate → \`stages\` モジュール → \`sender_recovery\` サブモジュール）。**外科的フィルタリングが要点。**
-
-## 3. Subscriber: event はどこへ行くか
-
-\`tracing\` crate は event を *記録* するだけ。別の **subscriber**（\`tracing-subscriber\` から）が何をするか決める:
+Subscriber テーブル:
 
 | Subscriber | 何をするか | いつ使うか |
 | :--- | :--- | :--- |
-| **\`fmt\`** | stdout/stderr に pretty-print | ローカル開発、CLI デバッグ |
-| **\`json\`** | 構造化 JSON 出力（1 行 1 event） | 本番ログ shipping (Datadog、Loki、ELK) |
-| **\`opentelemetry\`** | OTLP collector へ export | 複数サービスにまたがる分散トレーシング |
-| **カスタムレイヤー** | event を hook、メトリクス / DB / pager へ送る | 観測可能性インフラ構築 |
+| \`fmt\` | stdout/stderr に pretty-print | ローカル開発 |
+| \`json\` | 構造化 JSON 出力 | 本番 (Datadog、Loki、ELK) |
+| \`opentelemetry\` | OTLP collector へ export | 分散トレース |
+| カスタムレイヤー | event を hook、メトリクス / DB / pager へ | 観測可能性インフラ |
 
-Reth の \`main\` は subscriber を早期に初期化する:
+Subscriber 初期化:
 
 \`\`\`rust
 use tracing_subscriber::{fmt, EnvFilter};
@@ -733,13 +698,7 @@ tracing_subscriber::registry()
     .init();
 \`\`\`
 
-\`registry()\` + \`.with(...)\` パターンは合成可能。\`fmt\`（人間用）と \`json\`（ログ shipping 用）と metrics 層（Prometheus カウント用）を同じ event ストリームに重ねられる。各レイヤーが全 event を見て何をするか決める。
-
-## 4. Span と async — 噛みつく部分
-
-\`tracing\` を async 境界を超えて動かす技: span は \`Send\` でライフタイムを持つ。span を \`.enter()\` すると *現在スレッドに対して* active になる。async タスクが suspend して別スレッドで resume すると、span は追従する必要がある。
-
-\`tracing\` はこれを **\`Instrumented\` future ラッパー**（\`#[instrument]\` が内部で使う）で解決:
+Async 境界で span を生かす:
 
 \`\`\`rust
 // 素朴 — span は最初の poll でのみ active
@@ -762,32 +721,7 @@ async fn easy(input: Input) {
 }
 \`\`\`
 
-**これを忘れるのが Rust async コードにおける \`tracing\` バグの第 1 位。** ログが「バッチ 17 の処理を開始」と言って、その後何もない — 関数が suspend したときに span が exit し、suspend した部分を計装しなかったから。
-
-> 🔍 **リポジトリで確認。** Reth のソースを開いて \`#[instrument(\` を検索。async 作業が起きるところで使われている。各 \`#[instrument]\` annotation が関数の future をラップして span が await ポイントを生き残るようにしている。
-
-## 5. メトリクス統合
-
-Reth はログだけを emit しない — Prometheus メトリクスも公開する。**両方が同じ \`tracing\` 基盤から来る。** メトリクスレイヤーは特定 target（例: \`reth_metrics=info\`）の event を subscribe し、counter / histogram に翻訳する。
-
-\`\`\`rust
-use tracing::info;
-use reth_metrics::metrics::counter;
-
-// 直接メトリクス（hot path に推奨）
-counter!("reth_blocks_processed").increment(1);
-
-// tracing 経由（メトリクスレイヤーで sampling される）
-info!(target: "reth_metrics", block_number = block.number, "block processed");
-\`\`\`
-
-本番 Reth デプロイでは \`http://node:9001/metrics\` を Prometheus で scrape、Grafana ダッシュボードを構築、遅い stage、peer 切断、RPC エラー率にアラートを設定。**ソース内の計装がそのダッシュボードを可能にする。** スキップするとノードが見えない。
-
-## 6. 分散トレース — ノードが多くのうちの 1 つの時
-
-Reth は分散トレーシング向けに [OpenTelemetry](https://opentelemetry.io/) と統合する。ExEx 上に build したインデクサがノード由来の通知を処理するとき、単一リクエストが Jaeger / Tempo / Datadog APM で 1 つのトレースに現れるよう、トレース span が **プロセス境界をまたいで運ばれる** ことが望ましい。
-
-セットアップ:
+OpenTelemetry 統合:
 
 \`\`\`rust
 use tracing_subscriber::prelude::*;
@@ -806,47 +740,65 @@ tracing_subscriber::registry()
     .init();
 \`\`\`
 
-これで全 \`tracing\` span が OTLP span として export される。OTLP collector が複数プロセス（Reth ノード + 下流サービス）からの span を trace ID で集約する。**N プロセスにまたがる完全なリクエストパスが 1 つの Jaeger view で見える。** これが MEV チームが mempool-to-bundle パイプラインを 3+ サービスにまたがってトレースする方法。
+## 失敗例（誤解）
 
-## 7. 性能コスト
+「\`.enter()\` した span は await 越しに有効」— **間違い**。\`.enter()\` は「現在スレッド」バインド、await で suspend → span drop。**Rust async tracing バグの第 1 位**。解決は \`#[instrument]\` または \`.instrument(span).await\`。
 
-\`tracing\` は *無料ではない*。各 event は最低限:
+「\`debug!\` は本番で off だからコストゼロ」— **間違い**。レベルチェックは各 event で走る、静的に除外されない。Revm opcode ループに \`debug!\` を入れると 30% 減速。hot path は \`trace!\` で、本番ビルドの \`max_level_*\` feature でコンパイル除外。
 
-- 現在フィルタで event レベルが通るかのチェック
-- 通るなら構造化 event レコードの確保
-- 各 subscriber レイヤーへのディスパッチ
+> 🛑 **予測。** 本番で sender-recovery の停止をデバッグ中、全ログ行は不要（ディスク溢れ）。\`SenderRecoveryStage\` が emit するものだけ欲しい。**正しい \`RUST_LOG\` は？**（答え: \`RUST_LOG=warn,reth_stages::stages::sender_recovery=debug\` — グローバル warn で他モジュールの致命的問題を捕まえつつ、調査中のステージだけ debug。実際のモジュールパスはリポジトリのバージョンや refactor で変わりうるため、実機ではログ出力元を見て調整する。）
 
-\`info\` 以上では、最も hot な本番ループでもこれは OK。**\`debug\` と \`trace\` は別** — revm のインタープリターループで \`trace\` を有効のままにすると、各 opcode が event を emit するためスループットが 10×+ 落ちる。
+## ステップで組み立てる
 
-規律:
+### Step 1: Span と Event を 1 文で
 
-- **Hot path コードは最深詳細に \`trace!\`。** 本番では off
-- **per-block / per-tx コードは通常運用診断に \`debug!\`。** 調査時に選択的に有効
-- **per-stage / per-batch コードは \`info!\`。** 本番で常時 on
-- **エラーと警告は \`warn!\` / \`error!\`。** 常時 on
+Span = 実行領域（入れ子）/ Event = ある時点のログ行（span 文脈を引き継ぐ）。
 
-このレベル規律が本番高スループットノードで \`tracing\` を実用可能にする。間違えると観測ツールが性能負債になる。
+### Step 2: \`RUST_LOG\` を外科的に書ける
 
-> 🛑 **予測。** revm の \`add\` opcode 内に「今のところ」\`debug!\` 呼び出しを追加。mainnet sync が 30% 遅くなった。**なぜ? それら呼び出しはどのレベルにすべきか?**
+\`warn,reth_stages=debug,reth_exex=trace\` のような組み合わせ。グローバルベースライン + 調査対象だけ詳細。
 
-\`debug\` は静的にコンパイル除外 *されない* — \`RUST_LOG\` が無効にしてもレベルチェックは各 event で起きる。1 ブロックあたり数百万回走る関数では、そのチェック自体が測定可能なコストになる。呼び出しは \`trace!\` にすべき; これは本番ビルドで cargo の \`max_level_*\` feature 経由で完全にコンパイル除外できる。
+### Step 3: 4 種 subscriber の使い分け
 
-## ドリル
+fmt（開発） / json（本番ログ） / opentelemetry（分散） / カスタム（メトリクスインフラ）。
 
-1. **外科的フィルタで Reth を起動。** 3 つの異なる \`RUST_LOG\` 設定で \`reth node --dev\` を起動: (a) \`info\`、(b) \`info,reth_stages=debug\`、(c) \`reth_exex=trace\`。**出力ボリュームと内容がどうシフトするか観察。** 20 分。
-2. **ソース内の \`#[instrument]\` を 1 つ見つける。** Reth を開き \`#[instrument(\` を検索。1 つ選ぶ。関数を読む。**マクロが自動含める span フィールドは何か? \`skip(...)\` で何を除外するか?** 30 分。
-3. **小さな Rust プログラムにカスタム span を追加。** hello-world に \`tracing\` + \`tracing-subscriber\` を使う。関数に \`#[instrument]\` を追加し、インデント出力を観察。**span がどう入れ子になるか観察。** 30 分。
-4. **Reth の Prometheus エンドポイントを叩く。** Reth が走っている状態で \`curl http://localhost:9001/metrics\`。「stage」または「sync」というラベルを持つメトリクスを見つける — それは \`tracing\` 由来の counter または histogram。ソース event まで辿る。45 分。
+### Step 4: async では必ず \`#[instrument]\` か \`.instrument()\`
 
-この後、Reth のソース内の全観測可能性ストーリーを読め、自分のカスタム stage / ExEx を同じイディオムで計装でき、コード変更なしで走っているノードから本番診断を引き出せるようになる。
+\`.enter()\` は await 境界を生き残らない。これを忘れると「バッチ 17 開始 → その後何もない」になる。
 
-> 🛑 **最終チェック。** 一文で: なぜ Reth はどこでも plain \`println!\` ではなく \`tracing\` を使うのか? 答えに「構造化、フィルタ可能、async-aware、1 つの基盤がログ + メトリクス + 分散トレースを feed」が無いなら、§3 と §5 を読み直す — その one-substrate 性質が load-bearing な判断。
+### Step 5: レベル規律
 
-## 📺 関連リンク
+| パス | レベル | 本番運用 |
+| :--- | :--- | :--- |
+| hot path（revm opcode 内）| trace | off（コンパイル除外） |
+| per-block / per-tx | debug | 調査時に選択的に有効 |
+| per-stage / per-batch | info | 常時 on |
+| エラー / 警告 | warn / error | 常時 on |
 
-- [\`tracing\` crate docs](https://docs.rs/tracing/latest/tracing/)
-- [\`tracing-subscriber\` パターン](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/)
-- [Tokio Console](https://github.com/tokio-rs/console) — 同じ \`tracing\` 基盤の上に build された対話型 async ランタイムインスペクタ
+### Step 6: メトリクスと分散トレース
+
+メトリクス: 同じ \`tracing\` event の特定 target を subscribe → counter / histogram。
+分散トレース: \`tracing_opentelemetry\` レイヤー → OTLP collector → Jaeger / Tempo / Datadog APM。
+
+## 答え合わせ
+
+- **\`tracing\` が \`println!\` より優れる理由**: 構造化（key-value で query 可能）+ フィルタ可能（RUST_LOG）+ async-aware（span が await を生き残る）+ 1 基盤がログ + メトリクス + 分散トレースを feed。
+- **revm opcode に \`debug!\` → 30% 減速の理由**: \`debug\` は静的にコンパイル除外されない（\`RUST_LOG\` 無効でもレベルチェックは各 event で走る）。1 ブロック数百万回呼ばれる関数では、チェック自体が測定コスト。→ \`trace!\` にして本番ビルドで \`max_level_*\` feature で除外。
+- **メトリクスと \`tracing\` の関係**: 同じ event ストリームから生える — メトリクスレイヤーが特定 target（例: \`reth_metrics=info\`）の event を subscribe して counter / histogram に翻訳。Prometheus エンドポイントが scrape、Grafana で可視化。
+
+## 合格基準
+
+- Span と Event の違いを即答できる。
+- 外科的 \`RUST_LOG\` を書ける（\`warn,reth_stages=debug\` 形式）。
+- 4 種 subscriber の使い分けを言える。
+- async で \`.enter()\` が壊れる理由と \`#[instrument]\` の解決法を説明できる。
+- 4 段レベル規律（trace / debug / info / warn）を hot path コストと結びつけて言える。
+
+## まとめ（3行）
+
+- \`tracing\` = Span（領域）+ Event（時点）の 2 プリミティブ、\`RUST_LOG\` で外科的フィルタ、subscriber で出力先決定。
+- Async では \`#[instrument]\` か \`.instrument()\` で span を await 境界越しに生かす（\`.enter()\` は drop される）。
+- 同じ基盤からログ + メトリクス + 分散トレース全部が生える — これが Reth が \`println!\` ではなく \`tracing\` を使う構造的理由。
 `,
                 },
               ],
@@ -858,34 +810,47 @@ tracing_subscriber::registry()
             lessons: {
               create: [
                 {
-                  title: 'カスタムPrecompile',
+                  title: 'レッスン5 — カスタム Precompile',
                   slug: 'custom-precompiles-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 15,
                   xpReward: 35,
-                  content: `# カスタムPrecompile
+                  content: `# レッスン5 — カスタム Precompile
 
-EVM の中で SHA-256 を使いたいとする。道は 2 つ: 新しい **Opcode** を足す(命令ストリームに新しいバイトを — \`ADD\` の隣に \`SHA256\`)、あるいは **Precompile** を足す(コントラクトが \`CALL 0x00...02\` した瞬間に EVM が呼び出すネイティブ Rust 関数)。本物の Ethereum は後者を選んだ: アドレス \`0x01\`〜\`0x0a\` に ecrecover、sha256、modexp、BN254 楕円曲線演算が並んでいる。Foundry の cheatcodes (\`vm.deal\`、\`vm.warp\`) も、産業規模での同じトリックである。
+## 問い
 
-カスタム Opcode はあらゆるウォレット・インデクサ・Solidity コンパイラとのコンセンサスを破る。カスタム Precompile は **破らない**。本レッスンは、なぜ答えが違うのか、そして自分で登録する方法である。
+EVM の中で SHA-256 を使いたい。道は 2 つ: 新しい **Opcode** を足す（命令ストリームに新しいバイト）、あるいは **Precompile** を足す（コントラクトが \`CALL 0x00...02\` した瞬間に EVM が呼び出すネイティブ Rust 関数）。**カスタム Opcode はコンセンサスを破るがカスタム Precompile は破らない — なぜか？**
 
-> 🛑 **スクロール前に予測。** カスタム *Opcode* はメインネットとのコンセンサスを破る (中級で見た通り)。カスタム *Precompile* は破らない — 同じく vanilla EVM になかった新コードなのに。**なぜ答えが違う?** EVM バイトコードパーサーを引いて仮説を立ててほしい。
+## 原理（最小モデル）
 
-## 1. Opcode vs Precompile
+- **Opcode vs Precompile.** Opcode はバイトコード命令 → Solidity / ABI / インデクサ全部に影響、コンセンサス破壊。Precompile は特定アドレスへの \`CALL\` → ツーリングほぼ透過、レジストリに登録するだけ。
+- **\`Precompile\` は \`(input: &[u8], gas_limit: u64) -> PrecompileResult\` の関数.** アドレスは \`Precompile::new\` の一部、コンパイル時に固定。
+- **ガス計算は \`base + per_word × ceil(len / 32)\`.** Yellow Paper の標準形。
+- **\`Precompiles::extend\` で登録.** \`optimized_access[short_idx]\` 配列にも書く → 短アドレス（0x01-0x0a）はディスパッチが単一インデックス参照。
+- **\`PrecompileHalt::OutOfGas\` はフレーム全体停止.** リファンドなし、通常 revert とは別物。
+- **Foundry の cheatcode は本番カスタム precompile.** \`vm.deal\` / \`vm.warp\` / \`vm.prank\` は全部 \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\` への CALL。
 
-| | Opcode | Precompile |
-| :--- | :--- | :--- |
-| **呼び出し方** | バイトコード命令 | 特定アドレスへの \`CALL\` |
-| **追加方法** | インタープリター改造 | precompile レジストリへの登録 |
-| **ツールへの影響** | Solidity・ABI 破壊 | ほぼ透過 |
-| **用途** | 内側の高頻度ループ | ペアリング・ハッシュなど重い演算 |
+## 具体例
 
-実Ethereumは既に 0x01〜0x0a に precompile を持つ（ecrecover, sha256, ripemd160, identity, modexp, BN254 ops, BLAKE2F, point eval）。
+ディスパッチフロー:
 
-## 2. 本物のprecompile — identity precompile (0x04)
+\`\`\`mermaid
+sequenceDiagram
+    participant C as コントラクト bytecode
+    participant I as Revm interpreter
+    participant Reg as Precompiles レジストリ
+    participant Fn as カスタム precompile fn
 
-これは [\`crates/precompile/src/identity.rs\`](https://github.com/bluealloy/revm/blob/main/crates/precompile/src/identity.rs) の \`identity_run\` 全体：
+    C->>I: CALL 0x00...ff
+    I->>Reg: lookup アドレス
+    Reg-->>I: 発見 — Precompile
+    I->>Fn: run(input, gas_limit)
+    Fn-->>I: Ok(gas_used, output)
+    I->>C: returndata + gas refund
+\`\`\`
+
+本物の identity precompile（[\`crates/precompile/src/identity.rs\`](https://github.com/bluealloy/revm/blob/main/crates/precompile/src/identity.rs)）:
 
 \`\`\`rust
 use super::calc_linear_cost;
@@ -922,33 +887,7 @@ pub fn identity_run(input: &[u8], gas_limit: u64) -> EthPrecompileResult {
 }
 \`\`\`
 
-これがEthereumメインネットで動いている本番precompile。行ごとに読み解く：
-
-- **アドレス** \`u64_to_address(4)\` → \`0x0000…0004\`。アドレスは \`Precompile::new\` の一部 — どこに置くかを選ぶ自由はなく、コンパイル時に固定。
-- **ガス計算式** \`base + per_word * ceil(len / 32)\`。入力長に対して線形。\`IDENTITY_BASE = 15\`、\`IDENTITY_PER_WORD = 3\` — Yellow Paper の値そのまま。
-- **Halt vs revert** — \`PrecompileHalt::OutOfGas\` はフレーム全体停止（リファンドなし）。通常のrevertとは別物。
-- **\`EthPrecompileOutput\`** は \`(gas_used, output_bytes)\` を運ぶ。
-
-> 🛑 **予測。** identity precompile を 1 KB の入力で CALL する。**ガスコストを計算してほしい。** 計算過程を示す: 何ワード? 計算式は? 答えは? 計算できないなら、ガス計算は数字のままです — 今やってほしい。
-
-## 3. カスタムprecompileを登録する
-
-\`\`\`mermaid
-sequenceDiagram
-    participant C as コントラクト bytecode
-    participant I as Revm interpreter
-    participant Reg as Precompiles レジストリ
-    participant Fn as カスタム precompile fn
-
-    C->>I: CALL 0x00...ff
-    I->>Reg: lookup アドレス
-    Reg-->>I: 発見 — Precompile
-    I->>Fn: run(input, gas_limit)
-    Fn-->>I: Ok(gas_used, output)
-    I->>C: returndata + gas refund
-\`\`\`
-
-[\`crates/precompile/src/lib.rs\`](https://github.com/bluealloy/revm/blob/main/crates/precompile/src/lib.rs) の \`Precompiles\` レジストリにはまさにこのための \`extend\` メソッドがあります：
+カスタム登録（[\`crates/precompile/src/lib.rs\`](https://github.com/bluealloy/revm/blob/main/crates/precompile/src/lib.rs)）:
 
 \`\`\`rust
 pub fn extend(&mut self, other: impl IntoIterator<Item = Precompile>) {
@@ -967,7 +906,7 @@ pub fn extend(&mut self, other: impl IntoIterator<Item = Precompile>) {
 }
 \`\`\`
 
-なので独自precompileの登録はこれだけ：
+登録例:
 
 \`\`\`rust
 let my_pre = Precompile::new(
@@ -978,109 +917,91 @@ let my_pre = Precompile::new(
 precompiles.extend([my_pre]);
 \`\`\`
 
-\`my_function\` は \`identity_run\` と同じ形：\`fn(&[u8], u64) -> EthPrecompileResult\`。precompileセットがロードされるカスタムEvmビルダーに通する。
-
-### \`optimized_access\` 配列
-
-\`optimized_access[short_idx]\` への書き込みに注目。短いアドレスに対しては Revm が hashmap ではなくフラット配列を使い、**ディスパッチが単一インデックス参照に縮約** される。だから標準precompile（0x01〜0x0a）はディスパッチが事実上無料。
-
-## 4. 実例：Foundry の cheatcodes はカスタム precompile
-
-> 🛑 **読む前に予測。** \`vm.deal(addr, 1 ether)\` は状態を変更します — 任意のアカウントに何もないところから ETH を与える。**標準 precompile は状態を変更できません** (\`identity_run\` を見る — 純粋関数、入力 → 出力)。では Foundry はどうやって \`vm.deal\` を実装する? 仮説を立てて。
-
-Rust EVM スタックで最も広くデプロイされているカスタム precompile は Foundry にある。Solidity テストで書いた \`vm.deal\`、\`vm.warp\`、\`vm.prank\` のすべては **カスタム precompile への \`CALL\`**。
-
-[\`forge-std/src/Base.sol\`](https://github.com/foundry-rs/forge-std/blob/master/src/Base.sol) より：
+Foundry の cheatcode アドレス:
 
 \`\`\`solidity
 address internal constant VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
+// = address(uint160(uint256(keccak256("hevm cheat code"))))
 \`\`\`
 
-このアドレスは：
+## 失敗例（誤解）
 
-\`\`\`solidity
-address(uint160(uint256(keccak256("hevm cheat code"))))
-\`\`\`
+「カスタム Opcode を入れればコンセンサスを破らない」— **間違い**。Opcode はバイトコードの 1 バイトを新しい意味に再定義する → Solidity コンパイラ / Wallet / インデクサ / 他クライアントすべてとコンセンサスを破る。Precompile は **executor のレジストリにあなたのビルドだけが持つ追加エントリ** → mainnet との合意は維持される。
 
-として計算される。Foundry はこのアドレスに **カスタム precompile を登録した Revm** を構築。precompile は calldata を cheatcode 呼び出しとしてデコード（例：\`deal(address,uint256)\` のセレクタ）し、Foundry の Rust コードへディスパッチする。「このアカウントに 10 ETH 与える」のような状態変更は、メモリ内の Revm DB を直接書き換えてから実行を続行することで実現。
+「ガスコストは適当でよい、後で調整」— **間違い**。precompile のガスは ChainSpec によって決まる。安すぎる precompile が攻撃者の DoS ベクターになり、後手の価格改定（EIP-2929 のような）はハードフォーク。**現実的に最も遅い入力でベンチ → 悪用係数 2-5 倍 → ガス決定** が最初から必要。
 
-これは **セクション3の登録パターンの本番ケーススタディそのもの**：
+「\`vm.deal\` のような状態変更は precompile では無理」— **間違い**。Foundry はカスタム precompile を Rust で実装、calldata をデコードして Revm DB を直接書き換える。標準 precompile（identity 等）が純粋関数なのは標準仕様の制約で、カスタム precompile はホスト側の状態に何でもできる。
 
-- Foundry は標準 precompile セットを fork
-- \`0x7109...\` に追加エントリを登録、cheatcode ディスパッチャを指す
-- ディスパッチャは calldata を読み、セレクタをマッチ、Rust で EVM 状態を変更
+> 🛑 **予測。** カスタム Opcode はメインネットとのコンセンサスを破る（中級で見た）。カスタム Precompile は破らない — 同じく vanilla EVM になかった新コード。なぜ答えが違うか？（答え: Opcode はバイトコードの命令ストリームに新しい意味を導入 → 既存コードに影響 + ツール / インデクサ / コンパイラ全部が知らない命令を見る → コンセンサス分裂。Precompile は **特定アドレスへの CALL** という既存メカニズム上の動作 → mainnet がそのアドレスに何もない / 別のものを返すだけ、他のすべては変わらない。あなたのビルドだけが追加挙動を持つ。）
 
-本番のカスタム precompile 設計を細部まで見たいなら、[\`foundry-rs/foundry/crates/cheatcodes\`](https://github.com/foundry-rs/foundry/tree/master/crates/cheatcodes) を読んでください — 我々の例と同じパターンを産業規模で（cheatcode 数百個、スナップショット、revert サポート付き）実装したもの。
+## ステップで組み立てる
 
-## 5. precompile を選ぶ場面
+### Step 1: 4 比較項目を即答
 
-- 計算が **純粋なEVMバイトコードでは高すぎる**（BLSペアリング、FRI検証、多桁演算）
-- 同じ操作が **多くのコントラクトから必要** とされる
-- **正しさを証明可能なRust実装** が書ける
+呼び出し方 / 追加方法 / ツール影響 / 用途。
 
-数命令節約のために precompile を足してはいけません。設計コストとコンセンサスリスクが見合うのは「本当に重い処理」だけ。
+### Step 2: identity precompile の構造を読める
 
-## 6. 価格設定
+\`Precompile::new(id, address, fn)\` + \`fn(input, gas_limit) -> Result\` の 50 行未満。
 
-最重要ルール：**ガスコストはCPUコストに追従させる**（理想は最悪ケースの何倍か）。安すぎると攻撃者が1つの変なtxでチェーンをDoSできる。実Ethereumも何度も後手で価格改定しています（EIP-2929 のcold/warm reset）。
+### Step 3: \`extend\` で登録
 
-ワークフロー：
+\`Precompiles::extend([my_pre])\` の 1 行。あとは Evm ビルダーに通す。
 
-1. 現実的に最も遅い入力でベンチマーク
-2. CPU時間に「悪用係数」を掛ける（2〜5倍が一般的）
-3. チェーンの ガス/CPU 比率に変換
-4. 敵対的入力で再ベンチ
+### Step 4: ガス設計
 
-これで通常コードからは安く、悪用には法外に高い precompile になる。
+\`base + per_word × ceil(len / 32)\` の線形コスト。価格設定は ① 現実的最遅入力でベンチ → ② 悪用係数 2-5 倍 → ③ チェーンのガス / CPU 比率に変換 → ④ 敵対的入力で再ベンチ。
 
-> 最終チェック: precompile をガスコスト = 100 でリリース。攻撃者が **同じ 100 ガスで通常の 10 倍の CPU 時間** を要する入力形を発見。**経済攻撃は何? 攻撃者がノード CPU 1 秒あたりにいくら払う?** 計算をスケッチできないなら、precompile を安全に価格設定できません — セクション 6 と Ethereum の EIP-2929 を読み直して、メインネットで実際の安すぎが何のコストになったか確認。`,
+### Step 5: Foundry の cheatcode を読む
+
+\`0x7109...\` への CALL を Foundry の Rust precompile がインターセプト → cheatcode dispatch（calldata セレクタマッチ）→ Revm DB を Rust から直接書き換え。**カスタム precompile の本番ケーススタディ**。
+
+## 答え合わせ
+
+- **1 KB 入力での identity ガス計算**: \`ceil(1024 / 32) = 32\` ワード。\`15 + 3 × 32 = 111\` ガス。
+- **\`vm.deal\` の実装**: Foundry の Rust precompile が calldata から \`deal(address, uint256)\` セレクタをマッチ → Revm DB を直接書き換えてアカウントの残高を更新 → 通常実行を継続。標準 precompile が純粋関数なのは「Ethereum 標準仕様」の選択で、ホスト側の Rust 実装は何でもできる。
+- **precompile ガス 100、攻撃者が 10 倍 CPU 時間の入力を発見**: 攻撃者は 100 ガスで通常の 10 倍 CPU を消費 → ノード 1 秒あたり 10 倍多くの CPU を払う → DoS。ガス / CPU 比率が崩れる。EIP-2929 が cold/warm reset で同様問題に対処（後手で痛いハードフォーク）。
+
+## 合格基準
+
+- Opcode vs Precompile の 4 比較を即答できる。
+- \`Precompile::new(id, address, fn)\` の構造を言える。
+- \`Precompiles::extend\` で登録、\`optimized_access\` で短アドレスが速い理由を説明できる。
+- ガス価格設計の 4 ステップを言える。
+- Foundry の cheatcode が「カスタム precompile + Rust 側 state 書き換え」と分かる。
+
+## まとめ（3行）
+
+- カスタム Precompile = アドレス + Rust 関数（\`(input, gas_limit) -> Result\`）を Revm レジストリに登録、Opcode と違いコンセンサスを破らない。
+- ガス計算は \`base + per_word × ceil(len / 32)\`、価格設計は「最遅入力ベンチ → 悪用係数 → 敵対的再ベンチ」の 4 ステップ。
+- Foundry の cheatcode（\`vm.deal\` / \`vm.warp\`）は本番カスタム precompile の最広デプロイ例 — 同じパターンを自分のチェーンに転用できる。
+`,
                 },
                 {
-                  title: 'Merkle Patricia Trie & 状態証明',
+                  title: 'レッスン6 — Merkle Patricia Trie & 状態証明',
                   slug: 'mpt-state-proofs-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 18,
                   xpReward: 40,
-                  content: `# Merkle Patricia Trie & 状態証明
+                  content: `# レッスン6 — Merkle Patricia Trie & 状態証明
 
-スマホ大のデバイスが「Alice のアカウントは 1 ETH 持っているか?」を知りたい — ただし Ethereum の 500GB 状態は持てない。だからフルノードに問い合わせると、返ってくるのは **数百バイト**。デバイスはハッシュループを回し、結果を **手元の信頼済み 32 バイト** と比較する。暗号学的な答えが得られる: yes か no か。これがライトクライアントである。手元の 32 バイトが Ethereum の **stateRoot**、そしてこれを可能にするデータ構造が **Merkle Patricia Trie (MPT)**。
+## 問い
 
-MPT を理解すれば、stateRoot・ライトクライアント・witness・\`eth_getProof\`・ステートレスクライアントのロードマップがすべて繋がる。自分で実装することもできる。
+スマホ大のデバイスが「Alice のアカウントは 1 ETH 持っているか？」を知りたい — ただし Ethereum の 500GB 状態は持てない。だからフルノードに問い合わせると、返ってくるのは **数百バイト**。デバイスはハッシュループを回し、結果を **手元の信頼済み 32 バイト** と比較する。**手元の 32 バイトは何で、ハッシュループは何を証明するか？**
 
-> 🛑 **スクロール前に予測。** あなたは「アカウント X の残高は Y」を **暗号学的に証明したい** — フル状態を持たず、信頼済み 32 バイトのルートだけ持つ検証者に対して。**プロトコルをスケッチしてほしい。** 検証者に何を送る? 検証者は何をハッシュする? どうやって proof or rejection を結論する?
->
-> 3-4 行書いてから、レッスンを読んで何を取りこぼしたか確認。
+## 原理（最小モデル）
 
-## 1. MPT とは何か
+- **MPT = Trie + Patricia + Merkle.** Trie（経路がキーを綴る木）+ Patricia（単一子ノードを潰す経路圧縮）+ Merkle（各ノードが子のハッシュを保持）。
+- **stateRoot = 256 ビットの世界状態識別子.** 1 バイトでも変わればルートが変わる。
+- **3 ノード種.** Branch（16 子 + 値、分岐点）+ Extension（共有プレフィックス、「次の N ニブルは全員で共通」）+ Leaf（最終値）。キーはニブル（4 ビット）単位。
+- **包含証明 6 ステップ.** ルートから経路ノード収集 → リーフを再ハッシュ → 親を上に再ハッシュ → 結果ルートと信頼済み stateRoot を比較。
+- **Witness = ブロック再実行に必要な trie ノード束.** 「触った部分だけ」、数百 KB - 数 MB。
+- **2 層 MPT.** stateRoot → アカウントリーフ → storage_root → スロットリーフ。各コントラクトが独立ストレージ trie を持つ。
 
-3つの考えを合わせたもの：
+## 具体例
 
-- **Trie**：ルートからリーフへの経路がキーを綴る木
-- **Patricia**：単一子ノードを潰して trie をコンパクトに
-- **Merkle**：各ノードが子のハッシュを保持 → ルートが全データをコミット
-
-結果：**256ビットの \`stateRoot\`** が世界状態を一意に識別する。1バイトでも変えればルートが変わる。
-
-> 🛑 **理解度チェック。** Patricia の経路圧縮は最適化である。**圧縮なしで普通の trie を使うとコストは何?** Ethereum がなぜわざわざ複雑さを足してまで気にするのか? (ヒント: 64 ニブルのキー、ほぼ空の trie。圧縮あり vs なしで経路はいくつのノードを通る?)
-
-## 2. ノードの種類
-
-\`\`\`
-+----------+    Branch (16子 + 値)
-|  Branch  |    キーが分岐する場所で使う
-+----------+
-
-+----------+    Extension (共有プレフィックス)
-| Extension|    "次のNニブルは下にある全員で共通"
-+----------+
-
-+----------+    Leaf (最終値)
-|   Leaf   |
-+----------+
-\`\`\`
-
-キーは **ニブル**（4ビット）単位なので、32バイトのキーは64ニブル。各ノードは自分のkeccakハッシュを知っている。
+trie 構造:
 
 \`\`\`mermaid
 graph TD
@@ -1092,32 +1013,16 @@ graph TD
     B -->|nibble| L3[Leaf<br/>アカウント → 値]
 \`\`\`
 
-各親は子の **ハッシュ** を保持しているので、ルートハッシュは下にある全バイトにコミットしている。どこか1スロット変えれば → 上位の親が全て再ハッシュ → \`stateRoot\` が変わる。
+包含証明の流れ（6 ステップ）:
 
-## 3. 包含証明を6ステップで
-
-「アカウントXの残高がY」を証明するには：
-
-1. ルートからXのキーへ向かって辿り、経路のノードを集める
+1. ルートから X のキーへ向かって辿り、経路のノードを集める
 2. 各ノードは子を **ハッシュ** で参照（ポインタではない）
-3. 検証側に必要なのは経路ノードだけ。trie全体は不要
+3. 検証側に必要なのは経路ノードだけ。trie 全体は不要
 4. リーフを再ハッシュし、上に向かって親を再ハッシュ
 5. 結果のルートを **信頼済み \`stateRoot\`** と比較
-6. 一致 → Xの残高が本当にYだと確認
+6. 一致 → X の残高が本当に Y だと確認
 
-これだけ。**ライトクライアントは「信頼ルートを持つ検証器」** にすぎません。
-
-> 🛑 **予測。** あなたはアカウント X の witness を受け取る — trie ノードのバイトリスト。検証者はルートまでハッシュアップ。**検証者が必要だが witness にないものは何?** 検証者の唯一の secret/trusted な入力は何? 答えられないなら、これを *暗号学的* にしている要素 (「あなたが送ったバイトを信用する」ではない) をまだ理解していません。
-
-## 4. Witness（証人データ）
-
-**Witness** とは、ブロックを *再実行するために* 必要な trie ノードだけを束ねたもの。「500GB の DB を寄越せ」ではなく「このブロックが触った部分だけ寄越せ」。zkEVM プローバが消費(zkVM 内ではディスクを読めない)。ステートレスクライアントが使う(同期せずに検証するため)。一部の MEV サーチャーがフォークシミュレーションに使う。
-
-典型的なブロックの witness は数百 KB 〜 数 MB。
-
-## 5. Reth の本物の証明型
-
-[\`crates/trie/common/src/proofs.rs\`](https://github.com/paradigmxyz/reth/blob/main/crates/trie/common/src/proofs.rs) より：
+Reth の本物の証明型（[\`crates/trie/common/src/proofs.rs\`](https://github.com/paradigmxyz/reth/blob/main/crates/trie/common/src/proofs.rs)）:
 
 \`\`\`rust
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -1147,30 +1052,7 @@ impl StorageProof {
 }
 \`\`\`
 
-これがJSON-RPCの \`eth_getProof\` で流れるデータそのもの。フィールドごとに読み解く：
-
-### \`AccountProof.proof: Vec<Bytes>\`
-ルートからアカウントリーフまでのtrieノードリスト — RLPエンコード。検証側はこれらを順に歩き、各ノードをハッシュし、親の子参照と比較し、最後にルートを確認する。
-
-### \`AccountProof.storage_root: B256\`
-**コントラクトの独立ストレージtrieのルート**。予言通り：2層MPT。アカウントリーフがこのハッシュを持ち、ストレージ証明はこれに対して検証する（グローバル \`stateRoot\` ではない）。
-
-### \`AccountProof.info: Option<Account>\`
-アカウントが存在しなければ \`None\`（「非包含」証明）、存在すれば \`Some\`。**両方とも有効な証明** — 「このアドレスにアカウントがない」を証明することは残高証明と同じくらい重要。
-
-> 🛑 **予測。** 非包含証明が実用で役立つのはいつ? 「このアドレスはトークンを一度も保有していない」を証明したい具体的なシナリオを 1 つ挙げてほしい。(ヒント: airdrop、シビル耐性、slashing 適格性 — 1 つ選んでプロトコルを追跡。)
-
-### \`StorageProof.nibbles: Nibbles\`
-ストレージキーのニブル表現を事前計算してキャッシュ。ニブル変換はホットパスにあるため。
-
-### \`AccountProof::verify(&self, root: B256)\`
-純粋ロジック — 信頼済みstate rootを与えれば、証明を検証する。**これがライトクライアント検査の全て**。数百バイトのバイトコード、ミリ秒で走り、状態に対する暗号学的保証を与える。
-
-## 6. 落とし穴：ストレージtrie
-
-> 🛑 **予測。** 各コントラクトがなぜ **自分専用** のストレージ MPT を持つのか? Ethereum が \`(contract, slot)\` をキーとする 1 つの巨大な MPT を使っていたら? トレードオフを書き出してほしい。
-
-各コントラクトは **自分専用** のMPTをストレージスロット用に持つ。だから世界状態は：
+2 層 MPT:
 
 \`\`\`
 stateRoot
@@ -1179,9 +1061,7 @@ stateRoot
         └── スロットリーフ群（StorageProof.proof で証明）
 \`\`\`
 
-**2層MPT** をまさに \`AccountProof\` がエンコードしている。これを忘れるのが「state proof 検証器が動かない」最大の理由。
-
-## 7. Rethのどこに住んでいるか
+trie crate 構造:
 
 \`\`\`
 crates/trie/
@@ -1192,165 +1072,202 @@ crates/trie/
 └── db/                    ← MDBXバックエンドのtrie
 \`\`\`
 
-この順に読む：\`common\`（型）→ \`trie\`（データ構造）→ \`db\`（本番グルー）。
+## 失敗例（誤解）
 
-## 8. 練習
+「ストレージ証明は stateRoot に対して検証」— **間違い**。**2 層 MPT** なので: ストレージ証明は \`storage_root\` に対して、アカウント証明（\`storage_root\` を含む）が \`stateRoot\` に対して。これを忘れるのが「state proof 検証器が動かない」最大の理由。
 
-1. リポジトリで \`crates/trie/common/src/proofs.rs\` を開く
-2. \`AccountProof\` の \`verify\` メソッドを読む
-3. \`storage_proofs\` 内の各 \`StorageProof::verify\` 呼び出しに注目 — 親が \`storage_root\`（\`root\` ではない）になっている
-4. [EIP-1186](https://eips.ethereum.org/EIPS/eip-1186) を読む — \`AccountProof\` はこの仕様のRust ミラー
+「Patricia 圧縮は最適化」— **半分正しい**。圧縮なしだと 64 ニブルのキーで 64 ノード経路、ほぼ空の trie でも巨大。Patricia は **必須**（最適化ではなく実装可能性）。
 
-これで \`eth_getProof\` が「魔法」ではなく「読めて、書けて、デバッグできる構造」になる。
+「非包含証明は補助的」— **間違い**。\`info: Option<Account>\` が \`None\` → 非包含証明。「このアドレスにアカウントがない」を証明することは残高証明と同じくらい重要（airdrop、シビル耐性、slashing 適格性）。
 
-> 最終チェック: 二文で、なぜ state proof が「私を信じて、ノード運用者だから」より強い保証を与えるのか説明してほしい。Merkle ハッシングが暗号学的でない主張に与えられない性質は何? **ライトクライアントを使ったことがない人を納得させられるまで、このレッスンはあなたを離しない。**`,
+> 🛑 **予測。** ライトクライアントが witness（trie ノードバイトリスト）を受け取り、ルートまでハッシュアップ。検証者が必要だが witness にないものは何？（答え: **信頼済み stateRoot**（過去に何らかの方法で信頼済み — consensus client から、他の検証済みヘッダから、created at genesis から）。これがあるからこそ証明は *暗号学的* — 「あなたが送ったバイトを信用する」ではなく「あなたが送ったバイトをハッシュした結果が、私が独立に信頼している 32 バイトと一致する」。）
+
+## ステップで組み立てる
+
+### Step 1: 3 ノード種を即答
+
+Branch（分岐 + 16 子）/ Extension（共有プレフィックス）/ Leaf（最終値）。キーはニブル単位。
+
+### Step 2: 包含証明 6 ステップを暗唱
+
+経路収集 → ハッシュ参照 → witness 経路のみ → リーフ再ハッシュ → 上に向かって再ハッシュ → 信頼済み stateRoot と比較。
+
+### Step 3: \`AccountProof\` フィールドを読める
+
+- \`address\`: 対象
+- \`info\`: \`Option<Account>\` — None なら非包含証明
+- \`proof\`: ルートからアカウントリーフまでの RLP ノード列
+- \`storage_root\`: コントラクトストレージ trie のルート（**stateRoot ではない**）
+- \`storage_proofs\`: 各スロットの証明（\`storage_root\` に対して検証）
+
+### Step 4: 2 層構造を意識
+
+ストレージ証明は \`storage_root\` に対して、アカウント証明は \`stateRoot\` に対して。**親ハッシュが違う**。
+
+### Step 5: Reth の trie crate を辿る
+
+順序: \`common\`（型）→ \`trie\`（データ構造）→ \`db\`（本番グルー）+ \`parallel\` / \`sparse\` は MEV / witness 用途で別途。
+
+## 答え合わせ
+
+- **stateRoot が世界状態を一意識別する仕組み**: Merkle ハッシュが下にある全バイトに依存。1 スロット変えれば → 上位の親全部を再ハッシュ → ルートが変わる。
+- **非包含証明の実用**: airdrop（「このアドレスは過去 X トークンを保有していない」を証明 = 受給資格）/ slashing 適格性（「この validator はこの slot で signature を出していない」）/ シビル耐性（「このアドレスは新規」）。
+- **各コントラクトに独立ストレージ trie の理由**: ① コントラクト独立性（コントラクト A の更新がコントラクト B の ストレージ証明に影響しない）+ ② ローカル更新コスト最小化（コントラクトを 1 つ更新 = そのストレージ trie のルートだけ + アカウントリーフ 1 つ更新、巨大なグローバル trie 全部触らない）+ ③ ライトクライアントが特定コントラクトの全状態証明をコンパクトに得られる。
+
+## 合格基準
+
+- 3 ノード種を即答できる。
+- 包含証明 6 ステップを暗唱できる。
+- \`AccountProof\` の 5 フィールドを役割で言える。
+- 2 層 MPT（stateRoot → storage_root → スロット）を絵で書ける。
+- 非包含証明の実用例を 2 つ言える。
+
+## まとめ（3行）
+
+- MPT = Trie + Patricia 経路圧縮 + Merkle ハッシュ。stateRoot が世界状態を 256 ビットで一意識別。
+- 包含証明 = ルートから経路ノードを束ねて送る → 検証者が手元の信頼済み stateRoot と再ハッシュ結果を比較。witness は触ったノードだけ、数百 KB-数 MB。
+- 2 層 MPT（コントラクトごと独立ストレージ trie）が独立性 + 効率 + ライトクライアント用途を成立させる。
+`,
                 },
                 {
-                  title: 'Stateless Ethereum — ress と stateless-validator を並べて読む',
+                  title: 'レッスン7 — Stateless Ethereum（ress と stateless-validator を並べて読む）',
                   slug: 'stateless-ethereum-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 18,
                   xpReward: 45,
-                  content: `# Stateless Ethereum — ress と stateless-validator を並べて読む
+                  content: `# レッスン7 — Stateless Ethereum（ress と stateless-validator を並べて読む）
 
-今日のメインネットで Reth フルノードを動かすには **~3 TB のディスク** と、それに見合う IOPS が必要である。このレッスンを読んでいる人のほとんどはそれを動かせません — ラップトップでは無理、一般的な VPS でも無理、趣味の NUC でも無理。だからフルノードを実際に動かす人々は小さな祭司階級になり、Ethereum の「誰でも検証できる」という主張は、バリデータ層では静かに事実でなくなる。
+## 問い
 
-**ステートレスクライアント** がその出口である。Paradigm の [\`ress\`](https://github.com/paradigmxyz/ress) は **14 GB** のディスクでメインネットの全ブロックを再検証する。MegaETH の [\`stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) は高 TPS の レッスン2をコモディティハードウェアで再検証する。両方とも Rust。両方とも Ethereum 等価の状態遷移を検証する。そして興味深いすべてのレイヤで **異なる設計選択** をしています — 並べて読むのが、その選択肢が何なのかを学ぶ最も安い方法である。
+今日のメインネットで Reth フルノードを動かすには **~3 TB のディスク**。多くの開発者はそれを動かせない → バリデータ層では「誰でも検証できる」が静かに事実でなくなる。Paradigm の [\`ress\`](https://github.com/paradigmxyz/ress) は **14 GB** で同じ検証をする。MegaETH の [\`stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) は高 TPS L2 をコモディティハードウェアで再検証する。**2 つの本番品質 Rust 実装が、興味深いすべてのレイヤで違う設計を選んでいる — その対比は何を教えるか？**
 
-> 🛑 **スクロール前に予測。** 「ステートレス」ノードはフル状態を持たずにブロックを検証する。**ブロックプロポーザーは普通のノードに送らないものを、ステートレスノードには何を送らないといけない?** その追加ペイロードは何と呼ばれる? Ethereum の典型的なブロックでサイズを見積もってほしい。両方の答えはセクション 3 で出てくる。
+## 原理（最小モデル）
 
-## 1. 「ディスクが少ない」を超えて、なぜステートレスが大事か
+- **ステートレス = ワールド状態を持たずに検証.** Witness（前ブロックの信頼済み stateRoot に対して、ブロックが触るスロットの値を暗号学的に証明する束）から状態を読む。
+- **Witness ソースの非対称性.** ステートフルでない誰か（Reth フルノード / MegaETH sequencer）が witness を生成、ステートレス検証者は信頼ではなく **暗号学的に** witness を stateRoot で検証する。
+- **ress = フルステートレス（state + bytecode）.** MPT 証明、メインネット、Reth ピアから RLPx で取得、~14 GB ディスク。
+- **stateless-validator = 部分ステートレス（state ステートレス、bytecode 別キャッシュ）.** SALT 証明（Banderwagon + IPA）、MegaETH、sequencer から JSON-RPC で取得、bytecode は \`ContractCache\` ローカル永続化。
+- **並列性の違い.** ress = 1 ブロックずつ（CL ペーシング）/ stateless-validator = ブロック横断 embarrassingly parallel（各ブロックが独立 witness + pre-state root を持つ）。
+- **複数実行エンジン.** stateless-validator は revm + 形式 K-セマンティクスを両方サポート → コンセンサスバグの第二意見、TCB を小さく保つ。
 
-ress に付随する [Paradigm のブログ記事](https://www.paradigm.xyz/2025/03/stateless-reth-nodes) は 4 つのユースケースを挙げている。どれも「HDD を節約する」ではありません。
+## 具体例
 
-- **レッスン1の分散化。** ラップトップを持つ誰もが、完全検証する実行クライアントを動かせる。バリデータ集合がハードウェアでゲートされなくなる。
-- **L1 ガス上限の拡張。** 現在のガス上限は「**ステートフル** なフルノードが追従できる範囲」がボトルネック — state read のランダム I/O が支配的だから。ステートレス検証者はメモリから witness を読む。I/O の天井が動く。
-- **Optimistic レッスン2のセキュリティ。** Fraud-proof の見張り役は、見張る L2 ごとに \`reth\` を動かしたくない。チェーンごとのステートレス検証者なら安い。
-- **Native rollups.** Vitalik が描いた「サービスとしての EVM」方向には、レッスン1に埋め込んだ再実行可能な検証者が要る — そしてその検証者は 3 TB の状態を抱えられない。
+ress（Paradigm）:
 
-つまりステートレスは「小さいノード」のための機能ではない。**検証者層の機能**で、Ethereum を安く・繰り返し・場合によっては zkVM 内で・場合によっては数百のチェーンで同時に — 再実行する必要がある特定クラスのクライアントのためのもの。
+- **対象**: Ethereum メインネット
+- **ディスク**: 14 GB
+- **Witness ソース**: Reth フルノード（\`--ress.enable\`）、専用 RLPx サブプロトコル
+- **Witness フォーマット**: MPT 証明（\`AccountProof\` / \`StorageProof\`）
+- **Bytecode**: ピアから **オンデマンド** + キャッシュ
+- **検証フロー**: CL が \`NewPayload\` → ress が Reth ピアに witness + 不足 bytecode を要求 → メモリ上検証 → \`PayloadStatus\` 返す
+- **本番ステータス**: Holesky でバリデータ実走、Hive Cancun テスト 226/206 パス
 
-## 2. 「ステートレス」の正確な意味
+stateless-validator（MegaETH）:
 
-ステートレスクライアントは、**ワールド状態全体をストレージに持たずに** ブロックを検証する。そのために、ブロックが行うすべての state read (とブロックが再計算しなければならない post-state root) は、**witness** から来なければならない — 前ブロックの信頼済み state root に対して、ブロックが触るスロットにどんな値があったかを暗号学的に証明する束。
+- **対象**: MegaETH（高 TPS L2、OP-Stack 系）
+- **Witness ソース**: MegaETH sequencer の専用 RPC エンドポイント
+- **Witness フォーマット**: SALT 証明（Banderwagon + IPA、~1 GB メモリで 30 億アイテム認証）
+- **Bytecode**: **部分ステートレス** — public RPC から取得 + 有界 \`ContractCache\` 永続化
+- **検証フロー**: 3 ステージパイプライン（FETCH → PROCESS → ADVANCE）、複数ワーカーが異なるブロックを並列処理
+- **実行エンジン**: revm + 形式 K-セマンティクス（プラガブル）+ JIT は sequencer 側
+- **信頼モデル**: state 遷移検査、カノニカル性は \`op-node\` が L1 + DA から導出（**trust-minimized**）
 
-ステートレス側は残りの状態を見ない。post-state root だけは見て・再導出す。そしてそれが *次の* witness の信頼済みルートになる。
-
-witness はどこからか来なくてはならない。あらゆるステートレス設計で、**ステートレスでない誰か** (ress なら Reth フルノード、stateless-validator なら MegaETH の sequencer) がそれを生成する。この非対称性こそが取引の核心: 少数のステートフルな witness 提供者を置くことで、はるかに多くのステートレス検証者が成立する。
-
-> 🛑 **理解度チェック。** 「ステートフルピアからの witness」は信頼に聞こえる。**でも信頼ではない、なぜ?** ステートレスクライアントは witness の中の値に触る *前に* 何を暗号学的に検査するか。 答えが「ピアを信頼する」なら、[MPT レッスン](mpt-state-proofs-ja) のセクション 4 を読み直してほしい — 暗号学的な部分を取りこぼしている。
-
-## 3. 二つの独立した実装
-
-2026 年時点で、本番品質の Rust 製ステートレスクライアントが 2 つ存在する。違うチームが、違うチェーンのために、違う優先順位で作った。**それがプレゼントです** — ほとんどのカリキュラムは参照実装を 1 つしか手にできない。我々には 2 つある。
-
-### Paradigm の \`ress\` (Reth Stateless)
-
-- **リポジトリ:** [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress)
-- **対象チェーン:** Ethereum メインネット、完全検証。
-- **ディスク:** 14 GB (フル Reth の ~3 TB に対して)。
-- **Witness ソース:** \`--ress.enable\` で起動した任意の Reth フルノード。ress は専用 RLPx サブプロトコル \`ress\` でピアリングする — [Reth の \`crates/ress/protocol\`](https://github.com/paradigmxyz/ress) 参照。
-- **Witness フォーマット:** Merkle Patricia Trie の証明 (MPT レッスンで見たもの — \`AccountProof\` / \`StorageProof\` と同じ形)。
-- **バイトコード:** ステートフルピアから **オンデマンド** で取得 (\`GetBytecode\` メッセージ経由)。ress は見たものをキャッシュし、未取得分はピアから引く。
-- **検証フロー:** コンセンサスクライアントが \`NewPayload\` 送信 → ress が Reth ピアに witness と不足バイトコードを要求 → メモリ上で payload を検証 → \`PayloadStatus\` を返す。
-- **本番ステータス:** 実験的。ただし Holesky で ress 駆動バリデータを実走し、Hive Cancun テスト 226 件中 206 件をパス。
-
-### MegaETH の \`stateless-validator\`
-
-- **リポジトリ:** [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator)
-- **対象チェーン:** MegaETH (Ethereum 互換、高 TPS の L2、OP-Stack 系)。
-- **Witness ソース:** MegaETH の sequencer、専用 witness RPC エンドポイント (\`--witness-endpoint\`) で配信。
-- **Witness フォーマット:** **SALT** の証明、MPT ではない — [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) 参照。SALT は静的な 4-レベル 256-ary trie で、葉が SHI ハッシュテーブルのバケット。**Banderwagon + IPA** でコミットする — Banderwagon は Bandersnatch から派生した prime-order elliptic curve (BLS12-381 の scalar field 上で定義され、vector commitment 効率のために選ばれた)、IPA は Inner Product Argument (Bulletproofs 由来の logarithmic-size proof primitive で、Ethereum の Verkle tree 研究にも転用されている)。約 1 GB のメモリで 30 億アイテムを authenticate。
-- **バイトコード:** **部分ステートレス**。コントラクトコードは witness に **含まない**。バリデータはパブリック RPC からオンデマンドで取得し、有界 \`ContractCache\` (\`crates/stateless-db/src/cache.rs\`) にローカルキャッシュする。
-- **検証フロー:** [\`crates/stateless-core/src/pipeline\`](https://github.com/megaeth-labs/stateless-validator/tree/main/crates/stateless-core/src/pipeline) で定義された 3 ステージのパイプライン (FETCH → PROCESS → ADVANCE)。複数の検証ワーカーが異なるブロックを並列処理する — 各ブロックが自分の witness と自分の pre-state root を持つので embarrassingly parallel。
-- **実行エンジン:** **プラガブル**。デフォルトはバニラ revm。第二バックエンドは Pi² と共同開発した [EVM の形式 K セマンティクス](https://github.com/Pi-Squared-Inc/evm-semantics)。JIT コンパイルされた sequencer エクゼキュータと合わせて、MegaETH は同一の状態遷移関数に対して **3 つの独立クライアント実装** を持つ。
-- **信頼モデル:** バリデータは状態遷移だけを検査する。カノニカル性は \`op-node\` が L1 + DA から L2 チェーンを導出すことで担保 — これがバリデータを「単一の RPC プロバイダに対するトラストレス」ではなく **trust-minimized** にしている。
-
-> 🔍 **リポジトリで確認。** [\`bin/stateless-validator/src/app.rs\`](https://github.com/megaeth-labs/stateless-validator/blob/main/bin/stateless-validator/src/app.rs) を開いて、バリデータがパイプラインを組み立てる箇所を探してほしい。ress の main エントリと比較 — 両者がノードの「外側のループ」として何を扱っているか?
-
-## 4. サイドバイサイド
+サイドバイサイド:
 
 | 観点 | \`ress\` (Paradigm) | \`stateless-validator\` (MegaETH) |
 | :--- | :--- | :--- |
-| **対象チェーン** | Ethereum メインネット (レッスン1) | MegaETH (レッスン2) |
-| **Witness フォーマット** | MPT 証明 | SALT 証明 (Banderwagon + IPA) |
-| **Witness ソース** | Reth ピア、\`ress\` RLPx サブプロトコル経由 | Sequencer、\`--witness-endpoint\` JSON-RPC 経由 |
-| **バイトコード処理** | ピアからオンデマンド取得・キャッシュ | RPC からオンデマンド取得、\`ContractCache\` にキャッシュ |
-| **ステートレス度** | フル (state) | **部分** — state はステートレス、bytecode はそうでない |
-| **実行エンジン** | revm (単一) | revm **と** 形式 K-セマンティクス (プラガブル) |
-| **並列性** | 1 ブロックずつ (CL ペーシング) | ブロック横断で embarrassingly parallel (N ワーカー) |
-| **カノニカル性** | コンセンサスクライアントを信頼 (Engine API) | \`op-node\` を信頼 (L1 + DA 導出) |
-| **ディスクフットプリント** | ~14 GB | \`ContractCache\` + redb メタデータで有界 |
+| 対象チェーン | Ethereum メインネット (L1) | MegaETH (L2) |
+| Witness フォーマット | MPT 証明 | SALT 証明 (Banderwagon + IPA) |
+| Witness ソース | Reth ピア、\`ress\` RLPx サブプロトコル経由 | Sequencer、\`--witness-endpoint\` JSON-RPC 経由 |
+| Bytecode 処理 | ピアからオンデマンド取得・キャッシュ | RPC からオンデマンド取得、\`ContractCache\` にキャッシュ |
+| ステートレス度 | フル (state) | **部分** — state はステートレス、bytecode はそうでない |
+| 実行エンジン | revm (単一) | revm **と** 形式 K-セマンティクス (プラガブル) |
+| 並列性 | 1 ブロックずつ (CL ペーシング) | ブロック横断で embarrassingly parallel (N ワーカー) |
+| カノニカル性 | コンセンサスクライアントを信頼 (Engine API) | \`op-node\` を信頼 (L1 + DA 導出) |
+| ディスクフットプリント | ~14 GB | \`ContractCache\` + redb メタデータで有界 |
 
-## 5. 部分ステートレスを選んだ理由を予測
+## 失敗例（誤解）
 
-> 🛑 **予測。** MegaETH は *部分的* ステートレスを選択: state は witness に入れ、bytecode は入れない。**なぜ?** bytecode が state と共有しない性質を 2 つ挙げてほしい。次に自分を検査: どんなワークロードパターンで、毎 witness に bytecode を含めるのが特に無駄になる?
+「ステートレスは小さいノードのための機能」— **間違い**。検証者層の機能で、4 用途: ① L1 分散化（ラップトップで完全検証）+ ② L1 ガス上限拡張（state read のランダム I/O が天井を決めていた）+ ③ Optimistic L2 セキュリティ（fraud-proof 見張りが安く）+ ④ Native rollups（再実行可能な検証者は 3 TB 状態を抱えられない）。
 
-MegaETH の README は明確: コントラクトコードは state に比べて **滅多に変わらない**。ホットな DeFi コントラクトは毎ブロック state を発信・読み込みするが、bytecode はデプロイ以来変わっていない。bytecode を毎 witness に埋めるとは、同じ 100 KB を毎ブロック再送ること。一度取って局所キャッシュするのは明らかな手 — *ただし* バリデータが小さな永続ストアを持つことを受け入れるなら (実際そうしている — \`crates/stateless-db/src/cache.rs\` の有界 \`ContractCache\`)。
+「ピアから witness を受け取るのは信頼」— **間違い**。**暗号学的に** witness を stateRoot に対して検証する。1 バイトでも改竄されれば検証失敗。信頼するのはピアではなく **手元の信頼済み stateRoot**。
 
-ress は同じ簡単な勝ちを得られない。メインネットを対象にしていて、1 チェーン分のコントラクトコードは大きいが無際限ではない、そして「全部 1 つのピアから来る」という対称性がプロトコルを単純にしている。チェーンが違えば、取引も違う。
+「ステートレス = 完全ステートレス」— **間違い**。MegaETH は **部分ステートレス**（state は witness、bytecode は別キャッシュ）。bytecode は state と性質が違う（滅多に変わらない、同じ 100 KB を毎ブロック送るのは無駄）→ 一度取って局所キャッシュが合理的。設計選択の自由度。
 
-## 6. 二つの実行エンジンを選んだ理由を予測
+> 🛑 **予測。** 「ステートレス」ノードはフル状態を持たずにブロックを検証する。ブロックプロポーザーは普通のノードに送らないものを、ステートレスノードには何を送らないといけないか？ その追加ペイロードは何と呼ばれる？（答え: ブロックが触る state 値とその MPT 証明 = **witness**。サイズは数百 KB - 数 MB / ブロック（典型）。フルノードは自分の DB から state を読むので witness は不要、ステートレスノードはこれが state アクセスの唯一の経路。）
 
-> 🛑 **予測。** MegaETH の README はバリデータが **2 つ** の実行エンジン (revm と形式 K-セマンティクス) をサポートし、sequencer がさらに 3 つ目 (JIT コンパイル) を加えると述べている。**同じ STF の独立実装を 3 つ走らせて得られる性質で、十分にテストされた 1 実装で得られないものは何?** 二文で答えてほしい。
+## ステップで組み立てる
 
-revm のコンセンサスバグは、存在するすべての Reth フォーク横断のコンセンサスバグになる。MegaETH が revm 系クライアントだけを走らせていたら、ひとつの微妙なインタプリタバグ — バージョン間で revm 自身が共有しているものですら — がチェーンを分裂か凍結させ、第二意見が得られない事態を生む。形式仕様の K-セマンティクス エクゼキュータは、バギーな revm と **設計上** 異なる動きをする: そのバグは数学的に存在しない。MegaETH の README はこれを **小さな Trusted Computing Base** 原則と呼び、プラガブルなエンジンを single-point-of-failure を防ぐためのものと明示している。
+### Step 1: 「ステートレス」を 1 文で
 
-これがまた、バリデータが **シングルスレッドのバニラ revm インタプリタとメモリ内ストレージ** をデフォルトに選んだ理由でもある — 性能よりシンプルさ。TCB を徹底監査できるほど小さく保つため。JIT コンパイルの sequencer が性能の代価を払うので、バリデータが払わなくていい。
+ワールド状態を持たず、witness（前ブロック stateRoot に対する暗号証明束）から state を読んで検証 + 次の stateRoot を再導出。
 
-## 7. 対比だけが教えること、片方では教えられないこと
+### Step 2: ステートレスの 4 用途
 
-ress しか読まなかったら、こう思い込んでしまう:
+① L1 分散化、② ガス上限拡張、③ Optimistic L2 セキュリティ、④ Native rollups。
 
-- Witness は MPT 証明である (常にそうではない)
-- ステートレス = フルステートレス (そうある必要はない)
-- 実行エンジンは EVM のインタプリタである (それは選択肢)
-- ステートレスクライアントはコンセンサスレイヤにペースを合わせる (そうである必要はない)
+### Step 3: 2 実装の差分軸 9 つ
 
-stateless-validator しか読まなかったら、こう思い込んでしまう:
+対象 chain / Witness ソース / Witness フォーマット / Bytecode / ステートレス度 / 実行エンジン / 並列性 / カノニカル性 / ディスク。
 
-- ステートレスクライアントには常にカスタムコミットメントスキームが必要 (メインネット系は MPT)
-- ステートレスクライアントには常に L2 流の trust-minimized 導出パイプラインが必要 (メインネット系は Engine API)
-- ステートレスは L2 形状である (そうではない — Paradigm の主張は明示的に L1)
+### Step 4: 設計対比の解釈
 
-対比が教えるのは、ステートレス設計の **自由度** である。上の表の各観点は、誰かが下した設計選択であって、ステートレスについての事実ではない。自分のチェーンのためにいずれかをフォークするとき、それがあなたが回すダイヤルになる。
+- **bytecode 別キャッシュ（MegaETH）**: bytecode は滅多に変わらない + 毎 witness に含めるのは無駄 → 一度取って局所キャッシュ。L2 sequencer 集中型なので「単一 RPC からオンデマンド取得」が成立。
+- **複数実行エンジン（MegaETH）**: revm のコンセンサスバグ → 全 Reth 系 chain のコンセンサスバグ。形式 K-セマンティクスは設計上違うバグ → 第二意見。**小さな Trusted Computing Base** 原則。
+- **embarrassingly parallel（MegaETH）**: 各ブロックが独立 witness + pre-state root → N ワーカーで並列、CL ペーシングに縛られない。
 
-> 🔍 **リポジトリで確認。** [\`crates/stateless-core/src/evm_database.rs\`](https://github.com/megaeth-labs/stateless-validator/blob/main/crates/stateless-core/src/evm_database.rs) を開いて \`WitnessDatabase\` を見つけてほしい。\`revm::DatabaseRef\` を実装している — 実行中のすべての state read がここを通る。**witness にない読み込みでは何を返す?** その答えが witness 生成 (sequencer) と witness 消費 (validator) の間の契約。同じ契約が ress にも、別の形で存在する — 探してみてほしい。
+### Step 5: 並べて読まないと見えないこと
 
-## 8. 進む前のリコール
+ress 単独だと「witness は常に MPT」「ステートレス = フル」「実行エンジンは 1 つ」と思い込む。stateless-validator 単独だと「ステートレスには常にカスタム commitment」「L2 流の trust-minimized 導出パイプライン必須」と思い込む。**対比が教えるのはダイヤルの自由度**。
 
-スクロールせずに:
+## 答え合わせ
 
-1. ステートレスクライアントがディスク節約以外で有用な理由は? ディスク以外のユースケースを 2 つ。
-2. Witness とは何か。検証者はその中の値を読む前に、それを *暗号学的に* 何に対して検査する?
-3. \`ress\` と \`stateless-validator\` は bytecode について真逆の判断をした。各々の判断と、その背景にあるワークロード上の理由を述べてほしい。
-4. なぜ MegaETH は同じチェーンに 2 つの実行エンジンを出荷する? それが防ぐ失敗は何?
-5. セクション 4 の表の観点のうち、**1 つだけ**最も多くの下流設計を駆動するのはどれだと思うか? 一文で論じてほしい。
+- **「ピアから witness 信頼」が誤りである理由**: stateRoot に対する MPT 証明として witness を暗号学的に検証する。1 バイト改竄で検証失敗 → 「信用する」ではなく「ハッシュ結果が手元の信頼済み 32 バイトと一致する」。
+- **MegaETH の bytecode 別取り扱い**: bytecode は state と違って滅多に変わらない + ホット DeFi コントラクトは毎ブロック state 発信するが bytecode はデプロイ以来不変 → 毎 witness に含めるのは同じ 100 KB を再送 → ローカル \`ContractCache\` に取得 + キャッシュが合理的。
+- **MegaETH の複数実行エンジンが防ぐもの**: revm 系クライアントを 1 つだけ動かしていると、revm の 1 つのインタプリタバグでチェーン分裂 / 凍結 + 第二意見得られず。形式 K-セマンティクスは数学的に違うバグなので、両者一致が大きな信頼度向上。**小さな Trusted Computing Base** の規律。
 
-1–4 が怪しいなら戻る。5 を論じられないなら、**まだ対比を内在化していない** — 表はフラットなリストだが、各行はいくつもの他の行と繋がっている。そのうち少なくとも 2 つの繋がりを辿れるまで、このレッスンはあなたを離しない。
+## 合格基準
 
-## 追加で読むもの
+- 「ステートレス」を witness 概念で定義できる。
+- ステートレス 4 用途を即答できる。
+- 9 観点の差分を ress / stateless-validator で表で書ける。
+- bytecode 別キャッシュと複数実行エンジンの設計理由を説明できる。
+- 「並べて読む」が単独読みより教える内容を 2 つ言える。
 
-- [Paradigm ブログ: Stateless Reth Nodes](https://www.paradigm.xyz/2025/03/stateless-reth-nodes) — セクション 1 のユースケース整理はここ由来。
-- [\`paradigmxyz/ress\`](https://github.com/paradigmxyz/ress) — README → \`bin/\` のエントリ → [\`paradigmxyz/reth/crates/ress/protocol\`](https://github.com/paradigmxyz/ress) の RLPx サブプロトコル。
-- [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) — README → \`crates/stateless-core/src/pipeline\` → \`crates/stateless-core/src/executor.rs\`。
-- [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) — MegaETH の witness フォーマットで MPT を置き換える authenticated KV store。`,
+## まとめ（3行）
+
+- ステートレス = witness（stateRoot に対する暗号証明束）で state を読み、ワールド状態を持たずに検証 + 次の stateRoot を再導出。
+- ress（フルステートレス、MPT 証明、メインネット）と stateless-validator（部分ステートレス、SALT 証明、L2、複数実行エンジン）の対比が設計の自由度を見せる。
+- 「ステートレスは小さいノードの機能」ではなく、検証者層の機能 — 4 用途（L1 分散化 / ガス上限 / Optimistic L2 / Native rollups）すべてに効く。
+`,
                 },
                 {
-                  title: '本番MEV — Mempool・ExEx・シミュレーション',
+                  title: 'レッスン8 — 本番 MEV（Mempool・ExEx・シミュレーション）',
                   slug: 'mev-in-practice-ja',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 20,
                   xpReward: 45,
-                  content: `# 本番MEV — Mempool・ExEx・シミュレーション
+                  content: `# レッスン8 — 本番 MEV（Mempool・ExEx・シミュレーション）
 
-ペンディング tx が mempool に届く。80 ミリ秒後、あなたのバンドルは当たったか、外れたか — 同じ tx を 5ms 速くデコードし、結果を 10ms 速くシミュレーションし、同じビルダーに 2ms 先に提出した競合サーチャーに敗れる。MEV(Maximal Extractable Value — tx 並び替え権を持つ者がペンディングトランザクションから抽出できる利益)は、**システムエンジニアリングとゲーム理論が 1 桁ミリ秒スケールでぶつかる場**。本レッスンは、2026 年時点の本気のパイプラインの形である。
+## 問い
 
-> 🛑 **スクロール前に予測。** Ethereum のブロックタイムは 12 秒。**にもかかわらず本気の MEV パイプラインは end-to-end で <100ms を狙う。** なぜ予算がそこまでタイトなのか? 残りの ~11.9 秒を何が食う? 競争・ネットワーク伝播・ブロックプロポーザータイミングのいずれかを引いて仮説を立ててほしい。
+ペンディング tx が mempool に届く。80 ミリ秒後、あなたのバンドルは当たったか外れたか — 同じ tx を 5ms 速くデコードし、結果を 10ms 速くシミュレーションし、ビルダーに 2ms 先に提出した競合に敗れる。**Ethereum のブロックタイムは 12 秒なのに、本気の MEV パイプラインは end-to-end <100ms を狙う — なぜそこまでタイトか？**
 
-## 1. パイプライン
+## 原理（最小モデル）
+
+- **6 段パイプライン.** Mempool → デコード → シミュレータ → 戦略 → バンドル組成 → 送信。
+- **Mempool 取り込み 2 経路.** Alloy WebSocket 購読（簡単・遅い） / devp2p 直接参加（最速・最難）。
+- **\`sol!\` マクロが型安全デコードの土台.** \`L1StandardBridgeEvents::decode_raw_log\` が topic0 でバリアントマッチ → 型付きイベントでパターンマッチ。
+- **シミュレーションは parent block ピン.** \`latest\` ではなく **ターゲットスロットの親ブロック** に対して fork DB。シミュレーション内の被害 tx が「もう実行済み」状態にならないように。
+- **ExEx でウォームキャッシュ.** プールリザーブ / 過去 tx インデックス / reorg 対応 state 差分を ExEx で持ち、サーチャーがネットワーク再取得を避ける。
+- **送信経路 2 種.** Flashbots / MEV-share（プライベート、強）/ 特定ビルダー直接（低レイテンシ）。
+- **焼かれる 4 ポイント.** Reorg / シミュレータ古い state / Gas griefing / Toxic flow。
+
+## 具体例
+
+パイプライン:
 
 \`\`\`mermaid
 flowchart LR
@@ -1361,20 +1278,7 @@ flowchart LR
     B --> Sub[送信<br/>Flashbots / 直接]
 \`\`\`
 
-各箱がRustモジュール。本番のレイテンシ予算は **次ブロックまでに< 100ms**。
-
-## 2. Mempool の取り込み
-
-2経路：
-
-- **Alloy WebSocket購読**（\`pending_transactions\` フィルタ）— 簡単・遅い
-- **devp2p に直接参加** — 自分でネットに参加し、生のtxアナウンスを受信、RLPを自分でパース — 最速・最難
-
-本気のサーチャーには devp2p は必須。Reth のネットワーククレートが入り口。
-
-## 3. デコード — 本物のExExパターン
-
-[\`paradigmxyz/reth-exex-examples/op-bridge\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/op-bridge) は本番形のインデクサで、各ブロックからコントラクトイベントをデコードする。コアのデコードパターンを一字一句そのまま：
+本物の ExEx デコードパターン（[\`paradigmxyz/reth-exex-examples/op-bridge\`](https://github.com/paradigmxyz/reth-exex-examples/tree/main/op-bridge) より）:
 
 \`\`\`rust
 use alloy_sol_types::{sol, SolEventInterface};
@@ -1407,15 +1311,7 @@ fn decode_chain_into_events(
 }
 \`\`\`
 
-これが **本番形のMEVデコード**。\`flat_map\` 2 段 + 最後に \`filter_map\` の重ね合わせ：
-
-1. **\`chain.blocks_and_receipts()\`** — コミットされたチェーンの各ブロックとレシートのペア
-2. **各(block, receipt)について** — トランザクションをレシートとzipしてflat化
-3. **各(block, tx, receipt)について** — ログを既知のブリッジアドレスでフィルタ、デコード
-
-最後の \`filter_map\` で **\`sol!\`** の真価が出る。\`L1StandardBridgeEvents::decode_raw_log\` は自動生成 — イベント列挙の各バリアントを試し、topic0が一致するものを \`Ok(Event)\` で返す。**手書きABIパースなし。型安全に出てくる**。
-
-そして型付きイベントでパターンマッチ：
+型付きイベントでパターンマッチ:
 
 \`\`\`rust
 match event {
@@ -1433,13 +1329,7 @@ match event {
 }
 \`\`\`
 
-MEVサーチャーなら、「ブリッジアドレス」を「DEXルーターアドレス」に、「デポジット/引き出し処理」を「swap検出 + サンドイッチ機会スコアリング」に置き換えれば良い。**同じ形、フィルタセットが違うだけ**。
-
-> 🛑 **理解度チェック。** 3 段ネストしたイテレータ ( \`flat_map\` 2 + \`filter_map\` 1 ) を 1 つの \`fold\` に潰せる? 著者がなぜこの形を選んだ? (ヒント: イテレータの遅延評価と、フィルタが早いか遅いかを考える。)
-
-## 4. シミュレーション
-
-事前にRevmでフォーク状態に対してシミュレーション。本物の形：
+シミュレーション:
 
 \`\`\`rust
 use revm::Evm;
@@ -1459,54 +1349,95 @@ let result = evm.transact()?;
 let profit = compute_profit(&result.state);
 \`\`\`
 
-バンドルシミュレーション（自tx + 被害tx + 自tx）でガス支払い前に実利益が分かる。ホットパス。徹底プロファイル。\`forked_db\` は典型的に \`AlloyDB\`（Database traitレッスンで見たもの）+ LRUキャッシュ層で、同じ読み取りをネットワークに繰り返さない。
-
-> 🛑 **予測。** ターゲットスロットの親ブロックではなく、\`latest\` に対してシミュレーションする。**何が壊れる?** 具体的に — シミュレータが見るが実ブロックでは見えないものは何? (ヒント: バンドル内の被害 tx は、シミュレータの「latest」ビューでは既に実行済み。)
-
-## 5. ExEx をプライベートmempoolとして使う
-
-ExEx はゼロレイテンシで **すべてのブロック** を受け取る。これは：
-
-- カスタムDEXトレードインデクサ
-- プールリザーブの「ウォームキャッシュ」（シミュレータが再取得しなくて済む）
-- reorg 対応の状態差分フィード
-
-の置き場として最適。サーチャーはExExフィードを消費し、節約した時間をシミュレーションに使える。
-
-## 6. バンドル送信
+送信経路:
 
 | 経路 | レイテンシ | プライバシー |
 | :--- | :--- | :--- |
-| **Flashbots / MEV-share** | 中 | 強（mempoolに公開しない） |
-| **特定ビルダーへ直接** | 低 | ビルダー次第 |
+| Flashbots / MEV-share | 中 | 強（mempool 公開しない） |
+| 特定ビルダーへ直接 | 低 | ビルダー次第 |
 
-バンドルはJSON-RPC、ワイヤフォーマットは小さい。サーチャー間の競争は **数ミリ秒** で決まる。
+## 失敗例（誤解）
 
-## 7. 焼かれるポイント
+「\`latest\` に対してシミュレーション」— **間違い**。シミュレータの「latest」ビューでは被害 tx が **既に実行済み** に見える → 機会を見逃す or 利益が嘘になる。**ターゲットスロットの正確な親ブロック** に対して fork。
 
-1. **Reorg。** バンドルが当たった後に消える。ExEx の \`ChainReorged\` 通知後に必ず現実と整合させる。
-2. **シミュレータの古い状態。** ターゲットスロットの **正確な親ブロック** を使う。「latest」ではない。
-3. **ガスgriefing。** 攻撃者が無関係な高ガスtxを並べて押し出す。優先手数料カーブをリアルタイムで監視。
-4. **Toxic flow。** 「機会」がサンドイッチの罠であることがある。分類器を回す。すべての利益が本物ではない。
+「mempool 公開で十分」— **間違い**。公開すると競合サーチャーが先回り。Flashbots / MEV-share で **mempool に公開しない** プライベート提出が標準。
 
-> 最終チェック: バンドルがブロック 1000 に当たった。チェーンが reorg してブロック 1000 が置き換えられた。**あなたのお金 — 自分の ETH、被害者の ETH、払ったガス — はどこにある?** P&L を reorg 越しにトレース。できないなら、ExEx に ChainReverted ハンドラがある理由をまだ理解していません — 中級の ExEx レッスンを再読。`,
+「ExEx は通知だけのもの」— **間違い**。ExEx を **プライベート mempool / ウォームキャッシュ** として使うのが本気のパターン。プールリザーブを ExEx で温める → シミュレータが再取得不要 → 数 ms 削減。
+
+> 🛑 **予測。** Ethereum のブロックタイムは 12 秒、なのに本気の MEV パイプラインは end-to-end <100ms を狙う。なぜそこまでタイトか？ 残りの ~11.9 秒を何が食う？（答え: ① 競合サーチャー数千が同じ機会を狙う → 先着順で 1 ms 単位の競争、② ネットワーク伝播（ペンディング tx 検知から自分のマシンまでに既に数十 ms）、③ ブロックプロポーザータイミング（ビルダーは slot 終了直前まで bundle を accept、最後の数 ms が支配的）。「12 秒の予算」ではなく「数千の競争相手より速い予算」。）
+
+## ステップで組み立てる
+
+### Step 1: 6 段パイプラインを順に言える
+
+Mempool → デコード → シミュレータ → 戦略 → バンドル組成 → 送信。各段が Rust モジュール。
+
+### Step 2: \`sol!\` + \`decode_raw_log\` パターン
+
+\`sol!(Bridge, "abi.json")\` → \`BridgeEvents::decode_raw_log(topics, data)\` → 型付きイベント → パターンマッチ。手書き ABI パースなし。
+
+### Step 3: シミュレーション parent block ピン
+
+\`AlloyDB(provider, BlockId::number(parent))\` + LRU キャッシュ → 同じ読み取りをネットワーク再取得しない。
+
+### Step 4: ExEx を 3 用途で使う
+
+① カスタム DEX トレードインデクサ、② プールリザーブのウォームキャッシュ、③ reorg 対応 state 差分フィード。サーチャーが ExEx 出力を消費。
+
+### Step 5: 焼かれる 4 ポイント
+
+| 失敗 | 対策 |
+| :--- | :--- |
+| Reorg | \`ChainReorged\` 通知でバンドル後の整合 |
+| シミュレータ古い state | parent block ピン |
+| Gas griefing | 優先手数料カーブを実時間監視 |
+| Toxic flow | 分類器で罠を弾く |
+
+## 答え合わせ
+
+- **3 段ネストの iterator を fold に潰せるか**: 可能だが選ばない理由は **遅延評価と早期フィルタ**。\`flat_map\` でストリーミング、\`filter\` がブリッジアドレスでないログを早期に削除 → デコードはマッチした少数のログだけ。fold だと全ログを accumulator に積んでから処理 = 余計な仕事。
+- **\`latest\` シミュレーションの破綻**: バンドル \`[自 tx_A, 被害 tx, 自 tx_B\] でシミュレーション、\`latest\` には被害 tx が **既に含まれている**（mempool から確定済み）→ シミュレータの被害 tx は no-op、利益計算が嘘 → 実際に出すと利益ゼロかマイナス。
+- **reorg で当たったバンドルの P&L**: 自 ETH（バンドル先頭で支払い） → 巻き戻し、被害者 ETH → 巻き戻し、ガス → 巻き戻し（バンドル全体が含まれていたブロックが消える）= 全 P&L 巻き戻し。**ただし** バックランの DEX トレードがブロック含むことで価格を動かしていた場合、その状態変化を見て次のブロックで別の機会を見つけられる場合あり。**ExEx の \`ChainReverted\` ハンドラ** で reorg 直後の再評価。
+
+## 合格基準
+
+- 6 段パイプラインを順に言える。
+- \`sol!\` デコードパターン（\`decode_raw_log\` + パターンマッチ）を書ける。
+- シミュレーションを parent block ピンで設計できる。
+- ExEx をプライベート mempool / ウォームキャッシュとして使う発想がある。
+- 焼かれる 4 ポイントを即答できる。
+
+## まとめ（3行）
+
+- 6 段パイプライン（Mempool → デコード → シミュレータ → 戦略 → バンドル → 送信）、end-to-end <100ms 予算、競争相手より速い予算。
+- \`sol!\` 型安全デコード + parent block ピンシミュレーション + ExEx ウォームキャッシュが本気のパターン。
+- 焼かれる 4 点（Reorg / 古い state / Gas griefing / Toxic flow）を全部押さえないと利益が嘘になる。
+`,
                 },
                 {
-                  title: 'zkEVM with Revm',
+                  title: 'レッスン9 — zkEVM with Revm',
                   slug: 'zkevm-revm-ja',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 15,
                   xpReward: 35,
-                  content: `# zkEVM with Revm
+                  content: `# レッスン9 — zkEVM with Revm
 
-Linea、zkSync、Scroll、Polygon zkEVM — どの本番 zkEVM ロールアップも同じ主張をしています: 「verifier は我々を信用しない、verifier は 250 バイトの証明を検査するだけ」。再実行なし、運用者を信用するでもない。32 バイトのコミットメント、SNARK か STARK、そして yes/no を返すスマートコントラクト。
+## 問い
 
-証明を生成する主体を **プローバ** と呼ぶ。プローバが動かすのは geth でも nethermind でもなく — **Revm**、Rust 製の EVM を **RISC-V**(zkVM が安価にモデル化できる、よく整理された縮小命令セット CPU アーキテクチャ)にコンパイルし、zkVM の中で実行する。本レッスンは、なぜ Revm が選ばれるのか、プローバ側のコードが実際にどう書かれるのかである。
+Linea、zkSync、Scroll、Polygon zkEVM — どの本番 zkEVM ロールアップも同じ主張: 「verifier は我々を信用しない、verifier は 250 バイトの証明を検査するだけ」。証明を生成するのが **プローバ** で、動かすのは geth でも nethermind でもなく **Revm**。**zkVM 内で使うのに Revm が選ばれる理由は？**
 
-> 🛑 **スクロール前に予測。** Risc0 と SP1 は Ethereum 実行を zkVM 内で証明するのに **Revm** を使い、geth は使わない。**zkVM 内で使うのに Revm が正しい選択である性質を 3 つ挙げてほしい。** (ヒント: zkVM が罰するもの — 非決定性、syscall、巨大バイナリ、動的ディスパッチ。Revm はこれらすべてに優しい。)
+## 原理（最小モデル）
 
-## 1. プルービングスタック
+- **Revm を RISC-V にコンパイル → zkVM 内で実行 → zkVM が正しい実行の証明を出す.** ホスト（preflight: witness 収集）→ guest（Revm 実行 + journal commit）→ プローバ（STARK / SNARK）→ 検証者コントラクト。
+- **Revm が zkVM に適する 3 性質.** モジュラー（Database trait で witness / oracle パターンが綺麗）+ 決定論的（同入力同出力）+ CPU で速い → サイクル数少 → 証明サイズ小。
+- **Witness パターン.** プローバ内では「ディスクから状態を読む」不可 → 証明前に witness（ブロックが触ったすべての値）を組み立て → in-zkVM Database 実装が witness から読む。witness にない値を読むと証明失敗。
+- **\`env::commit_slice\` で公開出力.** 「証明を持つ誰でも検証できる事実」を journal に。コミットメント（ブロックハッシュ + 番号 + stateRoot）+ アプリ固有データ。
+- **汎用 zkVM vs 専用 zkEVM.** Risc0 / SP1 = 柔軟（任意 Rust）+ 遅い（数秒-数分 / ブロック GPU）/ 専用（Linea、Scroll）= 速い（1 秒未満）+ 不柔軟（全部自作）。
+
+## 具体例
+
+プルービングスタック:
 
 \`\`\`mermaid
 flowchart TB
@@ -1524,11 +1455,7 @@ flowchart TB
     Proof --> Verifier[オンチェーン verifier コントラクト]
 \`\`\`
 
-普通のRustプログラム（中身でRevmを呼ぶ）を **RISC-V** にコンパイルし、zkVMの中で実行 → zkVMが正しい実行の証明を出す。
-
-## 2. 本物のguest — Steel + Risc0
-
-これは [\`boundless-xyz/steel/examples/erc20-counter\`](https://github.com/boundless-xyz/steel/tree/main/examples/erc20-counter) の \`guest/src/main.rs\` 全体：
+本物の guest コード（[\`boundless-xyz/steel/examples/erc20-counter\`](https://github.com/boundless-xyz/steel/tree/main/examples/erc20-counter) の \`guest/src/main.rs\`）:
 
 \`\`\`rust
 use alloy_primitives::U256;
@@ -1566,28 +1493,7 @@ fn main() {
 }
 \`\`\`
 
-これがzkVM guestの **全コード**。約25行。注意深く読む。
-
-### \`env::read()\`
-guestはhostから直列化されたストリームで入力を読む。\`Input\` 構造体：chain ID、対象コントラクトアドレス、EVM入力（コールが触る state proof群）、クエリ対象のアカウント。
-
-### \`input.evm_input.into_env(chain_spec)\`
-ここが魔法の核心。\`evm_input\` は **ブロックヘッダー** と **state witness**（コールが触る各ストレージスロット + そのMPT証明）を保持。\`.into_env(...)\` が **witness をヘッダーの stateRoot に対して検証** — 1バイトでも間違えば失敗。これが「proverが状態について嘘をつけない」保証。
-
-> 🛑 **理解度チェック。** 「1 バイトでも間違えば失敗」。**検証者はそれが間違っているとどうやって知る?** 正確なメカニズムは何 — 検証者は何を何と比較する? MPT レッスンで学んだ — スクロールせずに想起。できないなら、なぜこの証明が *暗号学的* なのかをまだ理解していません。
-
-### \`IERC20::balanceOfCall\`（sol!）
-MEVレッスンで見た同じ \`sol!\` マクロが型付きコールを生成。**ノードとRPC通信する同じコードがzkVM内でも動く**。これが統一性 — ABI、エンコード、型システムがオフチェーンとin-prover世界で共有されている。
-
-### \`Contract::new(...).call_builder(&call).call()\`
-**Revmの中で** view call を実行、検証済みstateに対して。型付き \`U256\` を返す。Revm はwitness経由で読むので、witness になかったスロットを要求すると証明が失敗する。
-
-### \`env::commit_slice(&journal.abi_encode())\`
-「公開出力」 — 検証側が見る情報。ここではコミットメント（ブロックハッシュ・番号・stateRoot）とコントラクトアドレスを含むABIエンコード済み \`Journal\`。証明と journal があれば誰でも「ブロックNでコントラクトXのユーザーYが少なくとも1トークン保有」を検証できる。
-
-## 3. host 側（preflight）
-
-このファイルには host が出てきませんが、mirror：実Ethereumノード（Alloy + Reth RPC）と通信し、コールをシミュレーション、**witnessを収集**、それを \`Input\` としてproverに送る。Steelのhostヘルパが RPC + witness収集を担当するので、あなたのバイナリは要はこれだけ：
+ホスト側（preflight）:
 
 \`\`\`rust
 let input = builder.preflight(&provider, contract, &call).await?;
@@ -1595,17 +1501,7 @@ let env = ExecutorEnv::builder().write(&input)?.build()?;
 let receipt = default_prover().prove(env, ERC20_COUNTER_GUEST_ELF)?;
 \`\`\`
 
-## 4. なぜ Revm なのか
-
-- **モジュラー**（Database トレイトのおかげで witness/oracle パターンが綺麗）
-- **決定論的** — 同じ入力で同じ出力
-- **CPUで速い** → サイクル数が少ない → 証明サイズも小さい
-
-Go製のGethを zkVM 用にコンパイル＆最小化するのは悪夢。Revm は素直に動く。
-
-## 5. Witness パターン
-
-プローバの中では「ディスクから状態を読む」ができない。代わりに、証明前に **witness**（ブロックが触ったすべての状態値）を組み立てる。in-zkVM の Database 実装はこんな形：
+Witness DB パターン:
 
 \`\`\`rust
 struct WitnessDB {
@@ -1622,59 +1518,91 @@ impl Database for WitnessDB {
 }
 \`\`\`
 
-ブロックが witness にない値を読むと証明が失敗する。witness 生成器（インデクサ／Reth ExEx）は **セキュリティモデルの一部**。
+性能比較:
 
-> 🛑 **予測。** 攻撃者が、コールが必要とする 1 つのストレージスロット *以外* はすべて正しい状態を持つ witness を含む Input を提出す。**guest のどこで abort する?** プローバが見える失敗は何? 具体的に — どの行か言ってほしい。
-
-## 6. 性能の現実
-
-2026年のEthereum 1ブロック証明：
-
-| システム | 証明時間（1ブロック） | ハードウェア |
+| システム | 証明時間（1 ブロック） | ハードウェア |
 | :--- | :--- | :--- |
-| **Risc0** | 数秒〜数分 | GPU |
-| **SP1** | 数秒 | GPU + 再帰 |
-| **専用zkEVM (Linea, Scroll)** | 1秒未満/ブロック | 専用インフラ |
+| Risc0 | 数秒〜数分 | GPU |
+| SP1 | 数秒 | GPU + 再帰 |
+| 専用 zkEVM (Linea, Scroll) | 1 秒未満 / ブロック | 専用インフラ |
 
-汎用zkVM（Risc0/SP1）は **柔軟性のために** プローバ速度をある程度諦めています — 任意のRustプログラムを証明できる。専用zkEVMは速いが全部自作。
+## 失敗例（誤解）
 
-> 🛑 **予測。** 専用 zkEVM (Linea, Scroll) は **ブロックあたり Risc0 より桁違いに速い**。**にもかかわらず Risc0 を使う理由は何?** 速度の遅さに対して汎用性が値する本番シナリオを 2 つ挙げてほしい。
+「Go 製 geth を zkVM 用にコンパイルできる」— **動かない**。GC + goroutine + 動的ディスパッチ + 巨大バイナリで zkVM が爆発（サイクル数膨大）。**Revm が選ばれる構造的理由**: \`no_std\` 可能 + \`Database\` trait で IO 抽象 + 非決定性なし + 静的ディスパッチ中心。
 
-## 7. なぜ重要か
+「プローバが state について嘘をつける」— **間違い**。\`evm_input.into_env(chain_spec)\` が **witness をヘッダの stateRoot に対して検証** → 1 バイト改竄で失敗。プローバが嘘をつくと証明が出ない。
 
-- **zkEVM L2** はこのパイプライン上に載る（Linea、zkSync、Scroll、Polygon zkEVM）
-- **Optimistic Rollup** も「妥当性証明によるファストファイナリティ」へ移行中
-- **ステートレスクライアント** は状態保持なしで同期する未来 — witness ＋ 証明依存
+> 🛑 **予測。** 攻撃者が、コールが必要とする 1 つのストレージスロット以外はすべて正しい state を持つ witness を含む Input を提出。guest のどこで abort？（答え: \`Contract::new(...).call_builder(&call).call()\` 実行中、Revm がその欠落スロットを read しようとした瞬間に WitnessDB の \`HashMap::get\` が \`None\` → \`Database::storage\` が「未含有」エラー → call panic → 証明生成失敗。プローバから見える失敗は「guest プログラムが panic で終了」、receipt 生成不可。）
 
-[risc0/risc0-ethereum](https://github.com/risc0/risc0-ethereum) を読むのが zk × Revm の本番版を理解する最短ルート。
+## ステップで組み立てる
 
-## 8. 練習
+### Step 1: スタック 4 層を即答
 
-「分かった」と言う前に、最小の host/guest を書いてみる：
+Host（preflight） → Guest（Revm + commitment） → Prover（STARK/SNARK） → Verifier コントラクト。
 
-1. guest が整数2つを読み和を返す
-2. host が証明を作って検証
-3. guest を 1tx ブロックでRevmを呼ぶ形に拡張
-4. guestのサイクル数を前後で比較 — そこに性能の戦場がある
+### Step 2: Revm が zkVM に適する 3 性質
 
-これで「L2プローバ」が実際にやっていることが分かる。
+モジュラー / 決定論的 / CPU で速い → サイクル数少 → 証明サイズ小。
 
-> 最終チェック: 二文で、EVM 実行の zk 証明を **トラストレス** にしているのは何か説明 — ノード運用者が「ブロックを実行した、これが結果」と主張するだけの場合と比較して。答えに verifier 側のチェック（commitment + verifier コントラクト内での再計算）が出てこなければ、このレッスンはまだあなたを離しない。`,
+### Step 3: Witness パターン
+
+ホストが preflight で witness 収集 → Input にして guest に渡す → guest 内の WitnessDB（\`Database\` 実装）が witness から read。witness にない read は証明失敗 = セキュリティモデルの一部。
+
+### Step 4: \`env::commit_slice\` の意味
+
+公開出力 = 証明を持つ誰でも検証できる事実。Journal に block hash + stateRoot + アプリ固有データを入れる → 検証者は journal + proof で「block N でコントラクト X のユーザ Y が ≥ 1 トークン保有」を知る。
+
+### Step 5: 汎用 vs 専用
+
+Risc0 / SP1 = 柔軟性のためにプローバ速度を諦める（任意 Rust 証明可）/ 専用（Linea / Scroll）= ブロック当たり桁違いに速いが全部自作。Risc0 を選ぶ理由は「証明したいロジックが Solidity 以外でも書ける」「Ethereum 以外の chain も対応」。
+
+## 答え合わせ
+
+- **「1 バイトでも間違えば失敗」のメカニズム**: \`into_env\` が witness（trie ノード列）を MPT 検証 → ヘッダの stateRoot を再導出して入力ヘッダと比較。MPT は Merkle ハッシュなので 1 バイト改竄 → 親ハッシュ変化 → 再導出 root が入力 root と一致しない → 検証エラー → guest abort。
+- **Revm が Geth より zkVM に適する 3 性質**: ① \`no_std\` 可能 + 静的ディスパッチ → 小さく決定論的、② \`Database\` trait が witness 抽象を綺麗に受ける、③ CPU で速い → サイクル数少 → 証明サイズ / 時間が小。Go の Geth は GC + goroutine で zkVM 苦手。
+- **専用 zkEVM が遅い Risc0 を使う 2 シナリオ**: ① 任意 Rust ロジックを証明したい（アプリ固有計算、AI 推論、署名集約など）→ 専用 zkEVM の EVM 縛りから外れる、② 複数チェーン対応 / 新 chain への即移植性が欲しい（Risc0 は Ethereum 以外も chain spec 差し替えで対応）。
+
+## 合格基準
+
+- 4 層スタックを即答できる。
+- Revm が zkVM 適合な 3 性質を言える。
+- Witness パターン（ホスト収集 → WitnessDB read → 欠落は失敗）を説明できる。
+- \`env::commit_slice\` の公開出力の意味を言える。
+- 汎用 vs 専用の使い分けを 2 シナリオで言える。
+
+## まとめ（3行）
+
+- zkEVM プローバは Revm を RISC-V にコンパイル → zkVM 内で実行 → 証明出力。ホスト preflight が witness 収集、guest が Revm + commitment、プローバ + 検証者コントラクトで完結。
+- Revm が選ばれる 3 理由（モジュラー / 決定論的 / CPU で速い）= zkVM が罰する 3 性質（非決定性 / syscall / 巨大バイナリ）の逆。
+- 汎用 zkVM（Risc0 / SP1）は柔軟性のためにプローバ速度を諦め、専用 zkEVM（Linea / Scroll）は速度のために柔軟性を諦める。
+`,
                 },
                 {
-                  title: '本番でのRethフォーク運用',
+                  title: 'レッスン10 — 本番での Reth フォーク運用',
                   slug: 'reth-fork-production-ja',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 18,
                   xpReward: 40,
-                  content: `# 本番でのRethフォーク運用
+                  content: `# レッスン10 — 本番での Reth フォーク運用
 
-午前 3 時。あなたのバリデータは 40 分前からブロックを生成していない。ダッシュボードには: ファイルディスクリプタ枯渇、MDBX ページキャッシュ圧迫、ピア数 2。どれもユニットテストでは引っかからない。出荷した日にも見えない。3 ヶ月目に、まとめてやってくる。本レッスンはその午前 3 時のページャーを防ぐ **運用チェックリスト** — ビルドフラグ、systemd の上限、バニラに対する diff テスト、現実との接触に耐えるためのデプロイトポロジー。
+## 問い
 
-> 🛑 **スクロール前に予測。** あなたはフォークを **デフォルトの \`cargo build --release\`** でリリースする — jemalloc なし、asm-keccak なし、\`target-cpu=native\` なし。**1 週目、4 週目、3 ヶ月目** に見える本番症状をリストアップ。(ヒント: どの症状はゆっくり忍び寄る? どれは即ヒットする?)
+午前 3 時、バリデータは 40 分前からブロックを生成していない。ダッシュボードには: ファイルディスクリプタ枯渇、MDBX ページキャッシュ圧迫、ピア数 2。**ユニットテストでは引っかからない、出荷した日にも見えない、3 ヶ月目にまとめてくる — どんな運用規律でこれを防ぐか？**
 
-## 1. ビルド & リリースパイプライン
+## 原理（最小モデル）
+
+- **本番ビルドフラグ 4 つ.** \`target-cpu=native\` / \`codegen-units=1\` / \`jemalloc\` / \`asm-keccak\`。
+- **systemd の上限が支配的.** \`LimitNOFILE=1048576\`（MDBX ページ + P2P 接続）+ \`LimitNPROC=infinity\`。
+- **3 ストレージ規律.** DB / ログ別ボリューム + NVMe SSD のみ + 定期スナップショット + 成長監視。
+- **絶対値ではなく変化率にアラート.** 同期遅延 / ピア数 / MDBX 空きページ / RSS / ブロック取り込み時間 / ExEx 追従遅延。
+- **Diff テストが最強の安全網.** 同じブロックでバニラ Reth と継続的に diff → 1 ストレージスロットでも乖離はコンセンサスバグ。
+- **App-chain トポロジ.** 3 データセンター + 4 バリデータ以上 + 各バリデータの前に sentry 2 つ + 別 archive node + 別 RPC フリート。
+- **アップグレード = 高さガード + 段階配布.** ブロック高さで切り替え、上げていないバリデータは脱落（自業自得）。
+
+## 具体例
+
+再現可能リリースビルド:
 
 \`\`\`bash
 # 再現可能なリリースビルド
@@ -1684,14 +1612,7 @@ RUSTFLAGS="-C target-cpu=native -C codegen-units=1" \\
 strip target/release/reth   # またはデバッグシンボルを切り離し
 \`\`\`
 
-| フラグ | 理由 |
-| :--- | :--- |
-| \`-C target-cpu=native\` | バリデータがAVX2/AVX512を持つなら使う |
-| \`codegen-units=1\` | ビルド時間と引き換えに最適化 |
-| \`features = [jemalloc]\` | 負荷下のテイルレイテンシ安定 |
-| \`features = [asm-keccak]\` | keccakの手書きアセンブリ — ホットパスで効く |
-
-## 2. systemd ユニット（または同等）
+systemd ユニット:
 
 \`\`\`ini
 [Service]
@@ -1702,38 +1623,21 @@ LimitNPROC=infinity
 TasksMax=infinity
 \`\`\`
 
-ファイルディスクリプタ上限が重要：MDBXページとP2P接続を大量に持つ。
-
-> 🛑 **理解度チェック。** \`LimitNOFILE=8192\`（デフォルト的な値）に設定。Reth は数時間動いて、それから壊れる。**ログでの失敗シグネチャは何?** どのシステムコールがエラーを返し、Reth はそれをどう処理する? エラーメッセージを予測できなければ、それで oncall シフトを 1 つ無駄にする。
-
-## 3. ストレージ運用
-
-- DB と ログは **別ボリューム**。ログでDBパーティションを埋めない
-- **NVMe SSD のみ**。HDDは追従不可能
-- **定期スナップショット**。\`reth db checkpoint\`、または書き込みを止められるならファイルシステム級のスナップショット
-- **成長を見越す**。Rethのフルステートは数百GBで増え続ける
-
-## 4. 監視
-
-アラート対象：
+監視メトリクス:
 
 | メトリクス | アラート条件 |
 | :--- | :--- |
-| 同期遅延（head vs network） | Nブロック以上を Nを超える時間 |
+| 同期遅延（head vs network） | N ブロック以上を N を超える時間 |
 | ピア数 | < 5 |
 | MDBX 空きページ | < 5% |
-| プロセスRSS | 単調増加 |
-| ブロック取り込み時間 | p99が目標を超える |
-| ExEx の追従遅延 | ExEx依存 |
+| プロセス RSS | 単調増加 |
+| ブロック取り込み時間 | p99 が目標を超える |
+| ExEx の追従遅延 | ExEx 依存 |
 
-Reth は Prometheus メトリクスを標準で出す。Grafanaで可視化し **絶対値ではなく変化率** にもアラートを。
-
-## 5. Diff テスト
-
-フォークが実行を変えるなら、同じブロックでバニラRethと **継続的にdiffテスト**：
+Diff テストハーネス（擬似）:
 
 \`\`\`bash
-# diffハーネスの擬似コード
+# diff ハーネスの擬似コード
 for block in mainnet[recent_1000]:
     s1 = reth_vanilla.execute(block)
     s2 = reth_fork.execute(block)
@@ -1741,61 +1645,103 @@ for block in mainnet[recent_1000]:
         alert("divergence at block", block, s1, s2)
 \`\`\`
 
-意図しない差分（1ストレージスロットでも）はコンセンサスバグ。**App-chain ではバグ＝チェーン停止**。
+App-chain 最低トポロジ:
 
-> 🛑 **予測。** あなたの diff ハーネスがブロック N で stateRoot 差分を報告。**あなたのフォークで** 最も疑わしい根本原因を 3 つ挙げてください（バニラ Reth のバグではなく、あなたのフォークの）。具体的に — どの変更が第一容疑者? 第二は? 答えられないなら、フォークのアクティブな変更が多すぎてデバッグ不能 — 自分のコミットを再読。
+- 3 データセンターに 4 バリデータ以上
+- 各バリデータの前に sentry 2 つ
+- 別 archive node（バリデータではない、解析クエリ用）
+- 別 RPC フリート（レート制限 + CDN）
 
-## 6. App-chain の本番トポロジ
-
-最低限：
-
-- **3データセンター** に **4バリデータ以上**
-- 各バリデータの前に sentry を 2つ
-- 別の **archive node**（バリデータではない、解析クエリ用）
-- 別の **RPCフリート**（レート制限とCDN）
-
-バリデータと公開RPCを同じマシンで動かさない。1回のDDoSでチェーンが止まる。
-
-## 7. アップグレード手順
-
-フォークを動かしていて一番難しいのは **チェーンを止めずにアップグレード** すること。
+アップグレード手順:
 
 1. アクティベーションのターゲットブロック高を発表
-2. 設定フラグでオフのまま新バイナリをバリデータに配布
-3. アクティベーションブロックでコンセンサスルールが切り替わる — 高さチェックでガード
-4. アップグレードしていないバリデータは脱落 — だからこそ高さガード＋告知が要る
+2. 設定フラグで off のまま新バイナリをバリデータに配布
+3. アクティベーションブロックでコンセンサスルール切り替え — 高さチェックでガード
+4. アップグレードしていないバリデータは脱落 — だからこそ高さガード + 告知
 
-これが Ethereum のハードフォーク運用そのものである。App-chain も規模が違うだけで構造は同じ。
+## 失敗例（誤解）
 
-> 🛑 **予測。** ブロック 1000 でアクティベーションを発表。4 バリデータのうち 3 が時間内にアップグレード。4 つ目はしない。**ブロック 1001 で各バリデータは何を見る?** チェーンが分岐を検知するのはいつ? 遅れたバリデータの **回復経路** は?
+「\`cargo build --release\` で本番に出せる」— **間違い**。jemalloc なし / asm-keccak なし / \`target-cpu=native\` なしでは負荷下のテイルレイテンシが暴れる + keccak ホットパスが遅い + AVX2 / AVX512 が活用されない。1 週目は気づかない、4 週目で疑問、3 ヶ月目で oncall。
 
-## 8. 読み物
+「ユニットテストが通れば diff テスト不要」— **間違い**。ユニットテスト = 設計者が想像した入力。本番 mainnet ブロックは想像を超える。**Diff テストはバニラ Reth と継続比較**、1 ストレージスロット乖離もコンセンサスバグ。
 
-- [Reth Book "Run a node" + "Custom chain"](https://reth.rs/) のセクション
-- 主要チェーンの障害ポストモーテム — 運用の直感を得る金鉱
+「バリデータと公開 RPC を同マシンで動かしてよい」— **間違い**。1 回の DDoS でチェーン停止。RPC は別フリート（レート制限 + CDN）+ バリデータの前に sentry。
 
-これで「開発・プロファイル・拡張・デプロイ・監視」が全部つながりました。少数派のクラブへようこそ。
+> 🛑 **予測。** あなたのフォークをデフォルトの \`cargo build --release\` でリリース。1 週目、4 週目、3 ヶ月目に見える本番症状は？（答え: **1 週目** = 気づかない（軽負荷）、**4 週目** = p99 レイテンシが断片化で悪化、ユーザは「たまに遅い」と言うが本気の問題と認識されない、**3 ヶ月目** = jemalloc なしの断片化 + ファイルディスクリプタ枯渇 + 累積された symbol 情報なしのデバッグ困難 → 午前 3 時のページャ → 「動いていたものが急に動かない」「直近変更はない」「ログだけでは原因不明」。**ゆっくり忍び寄り、まとめてくる**。）
 
-> 最終チェック: なぜ「バニラ Reth に対する diff テスト」がフォークに対して書ける最も価値の高いテストなのか、一文で。**ユニットテストでは決して捕まえられないバグの種類は何?** 答えに「コンセンサス」または「重要な唯一の出力は stateRoot」と出てこなければ、セクション 5 を再読。`,
+## ステップで組み立てる
+
+### Step 1: 4 ビルドフラグを暗唱
+
+| フラグ | 理由 |
+| :--- | :--- |
+| \`-C target-cpu=native\` | AVX2 / AVX512 活用 |
+| \`codegen-units=1\` | ビルド時間と引き換えに最適化 |
+| \`features = [jemalloc]\` | テイルレイテンシ安定 |
+| \`features = [asm-keccak]\` | keccak ホットパスの手書きアセンブリ |
+
+### Step 2: systemd ファイルディスクリプタ上限
+
+\`LimitNOFILE=1048576\`。デフォルト 1024 や 8192 では数時間で枯渇 → MDBX が \`Too many open files\` → ノードがゾンビ化。
+
+### Step 3: アラートは絶対値より変化率
+
+「現在 1000 ピア」より「過去 1 時間で 50 ピア / 分減少」が意味ある。Prometheus + Grafana で rate / increase 関数。
+
+### Step 4: Diff テスト規律
+
+\`for block in mainnet[recent_1000]: assert reth_vanilla.execute(block).stateRoot == reth_fork.execute(block).stateRoot\`。乖離はフォークの 3 容疑: ① 自分の変更が直接他コードパスに影響、② 共有 utility（gas 計算、precompile）の改変、③ 状態管理の境界条件。
+
+### Step 5: アップグレード規律
+
+高さガード + 段階配布。上げていないバリデータは脱落、回復は再 sync。
+
+## 答え合わせ
+
+- **\`LimitNOFILE=8192\` での失敗シグネチャ**: 数時間後 \`Too many open files\` エラー → MDBX が新規ページオープン失敗 + P2P が新規接続拒否 → ピア数 0 へ + ブロック書き込み停止 → ノードがログ吐きながらゾンビ化、再起動でカウンタリセットで一時回復、根本原因不明。ログを grep して \`EMFILE\` を発見すれば一発、知らないと数時間。
+- **diff テスト発見時の 3 容疑**: ① 自分の最近の変更が他コードパスに副作用、② 共有 utility（gas 計算、precompile、state root 計算）の改変、③ 状態管理の境界条件（reorg、empty block、過去 hardfork 境界）。**自分のコミット履歴を再読** が最初の手。
+- **3 アップグレード未完バリデータが見る現実**: ブロック 1000 で 3 が新ルール、1 が旧ルール → ブロック 1001 で旧ルールバリデータは新ルールブロックを reject → 「自分から見ると」分岐 → quorum 不足で投票しなくなる → 残り 3 で多数決継続 → 旧バリデータは脱落（slashing 対象または inactivity ペナルティ）。回復は新バイナリに上げて DB を再 sync。
+
+## 合格基準
+
+- 4 本番ビルドフラグを暗唱できる。
+- systemd 上限の意味と \`LimitNOFILE\` 値を即答できる。
+- 6 監視メトリクスを変化率視点で言える。
+- Diff テスト規律を「乖離 = 3 容疑」で説明できる。
+- アップグレード手順を高さガード + 段階配布で言える。
+
+## まとめ（3行）
+
+- 本番ビルド = 4 フラグ（\`target-cpu=native\` + \`codegen-units=1\` + \`jemalloc\` + \`asm-keccak\`）+ systemd 上限調整（\`LimitNOFILE=1048576\`）。
+- 監視は絶対値より変化率、6 メトリクス（同期遅延 / ピア数 / MDBX 空き / RSS / 取り込み時間 / ExEx 追従）にアラート。
+- Diff テスト（バニラ Reth と継続比較、1 スロット乖離もコンセンサスバグ）がフォーク最強の安全網 — 加えて App-chain は 3 DC + sentry + 別 RPC フリートのトポロジ + 高さガードアップグレード。
+`,
                 },
                 {
-                  title: 'Differential fuzzing と execution-spec-tests — コンセンサス正しさのツールキット',
+                  title: 'レッスン11 — Differential fuzzing と execution-spec-tests',
                   slug: 'expert-differential-fuzzing-ja',
                   type: 'CONTENT',
                   sortOrder: 6,
                   duration: 26,
                   xpReward: 60,
-                  content: `# Differential fuzzing と execution-spec-tests — コンセンサス正しさのツールキット
+                  content: `# レッスン11 — Differential fuzzing と execution-spec-tests
 
-フォークを ship したとする。カスタム precompile、独自の payload builder、いじったガススケジュール。ユニットテストは通っている。前のレッスンの「バニラ Reth に対する diff テスト」は、*変更した* 部分が *変更していない* パスでも以前と同じに振る舞うことを教えてくれる。**だが、*変更していない* パスが、あなたの変更によって壊れていないことはどう知ればいいのでしょうか?** さらに難しいのは、*誰もテストを書かなかったパス* に潜むバグを見つけることである。
+## 問い
 
-答えは、**2 つの方向からの自動的な正しさの圧力** である。\`execution-spec-tests\` で仕様への準拠を構造的に保証し、**differential fuzzing** で誰も探そうと思わなかったバグを浮かび上がらせる。本番で Revm/Reth フォークを動かしている L1 チームは、全員この 2 つを回している。本レッスンはその方法を扱う。
+フォークを ship した。カスタム precompile、独自 payload builder、いじったガススケジュール。ユニットテストは通っている、バニラ Reth diff テストも通る。**だが、誰もテストを書かなかったパスに潜むバグはどう見つけるか？**
 
-> 📌 **位置付け。** Inside REVM の *Revm 自身のテスト* のレッスンは、フォーマット（state tests、EOF tests、execution-spec-tests）の説明でした。**本レッスンはその本番運用版** — チェーンチームがこれらの道具を *vanilla Revm に対してではなく、自分たちのフォークに* どう適用するか、を扱う。
+## 原理（最小モデル）
 
-## 1. execution-spec-tests を自分のフォークに適用する
+- **2 方向の自動圧力.** EEST（execution-spec-tests）が **仕様に対する準拠** を構造的に保証 + Differential fuzzing が **誰も探さなかったバグ** を浮かび上がらせる。
+- **EEST はフォーク CI の毎 push.** 昨日からの fail デルタが非ゼロなら build break。Triage: 意図的（document）/ 非意図的（バグ）。
+- **Differential fuzz 4 リファレンス.** vanilla Revm（Revm セマンティクス）/ Geth \`debug_traceTransaction\`（mainnet コンセンサス）/ Erigon（系譜逸脱検知）/ 形式仕様（Python EELS）。
+- **24-48 時間走らせる + 縮約.** Foundry スタイルの shrinking で 50-200 byte の最小再現に → 人間が repro を読んで根本原因特定。
+- **両規律は補完であり代替ではない.** EEST = 仕様明示範囲、fuzz = 仕様未定義パス含む。両方が production L1 チーム（Hyperliquid / Tempo / Berachain）の標準。
+- **Fault injection（chaos の前駆体）.** 入力ではなく **環境**（DB read 失敗、ネットワーク分断、部分書き込み、OOM）を fuzz → 「書き込み中 crash でチェーン壊れる」クラス。
 
-vanilla Revm は upstream の EEST スイートを通る。あなたのフォーク — 異なるガススケジュール、独自 precompile、独自 ChainSpec を持つもの — も **同じことを示す必要がある**。EEST をフォークのバイナリに対して走らせ、不一致を「意図的な仕様逸脱（その旨を文書化する）」か「バグ（修正する）」のどちらかに振り分けていく。
+## 具体例
+
+EEST を自分のフォークに走らせる:
 
 \`\`\`bash
 # spec-tests フレームワークを clone
@@ -1812,15 +1758,7 @@ uv run consume direct \\
   -- ./tests/cancun/      # または任意のサブセット
 \`\`\`
 
-出力: **N tests pass、M tests fail、K tests skipped。** 各 fail は、仕様が「state-root \`0xA\` を生むはず」と言う tx に対し、フォークが \`0xB\` を生んだもの。**Triage: 乖離は意図的か（フォークが追加した precompile がガス安 — OK、document）、意図的でないか（ガススケジュールパッチが無関係な opcode の価格を壊した — バグ）?**
-
-> 🔍 **リポジトリで確認。** revm が spec-test runner をどう配線しているか見る: [\`bluealloy/revm\`](https://github.com/bluealloy/revm) で \`statetest\`、\`spectest\`、\`revme\` を検索。runner は JSON テストを取り、Revm 経由で実行し、state-root の一致 / 不一致を報告する。**フォークの runner は同じ形** — ChainSpec が異なるだけ。
-
-規律: **EEST はフォーク CI の毎回 push で走り、昨日からの fail デルタが非ゼロなら build break。** これ無しではフォークは仕様から静かに drift する。
-
-## 2. Differential fuzzing — 誰もテストを書かなかったバグを浮かび上がらせる
-
-EEST は「仕様が明示的に書いた範囲でフォークが仕様と一致する」を証明する。**Differential fuzzing は誰も書かなかったケースのバグを見つける。** パターン:
+Differential fuzz パターン:
 
 \`\`\`
 ランダム tx → [自前フォーク] → state_root_A
@@ -1830,13 +1768,7 @@ EEST は「仕様が明示的に書いた範囲でフォークが仕様と一致
 assert(state_root_A == state_root_B)
 \`\`\`
 
-10 万 tx 分。2 つの root が一度でも乖離したら *どこかに* バグがある。Fuzz harness 出力は縮約（Foundry スタイルの shrinking）で最小再現に絞る: 通常 50〜200 byte の bytecode + 小さな calldata。次に人間が repro を読み、乖離の根本原因を特定する。
-
-**diff 対象のリファレンス実装:**
-- **vanilla Revm** — 変更してないパスで Revm セマンティクスと一致すべきフォーク向け
-- **Geth** (\`debug_traceTransaction\`) — 変更してないパスで mainnet コンセンサスと一致すべきフォーク向け
-- **Erigon** — 同様、Geth と Revm が共通系譜を持ち、それから逃れたい時に有用
-- **形式仕様インタプリタ**（例: Python EELS）— *仕様* と比較したい場合（別実装ではなく）
+Fuzz harness 例:
 
 \`\`\`rust
 // tests/differential_fuzz.rs
@@ -1856,111 +1788,109 @@ fn fuzz_target(input: &[u8]) -> Result<()> {
 }
 \`\`\`
 
-24〜48 時間走らせる; 各 crash は候補のコンセンサスバグ。Fuzzer が 100 byte の tx に縮約; あなたが眺める; カスタム \`MUL_HALF\` precompile が入力先頭ビット立っている場合に丸めが違うと判明する。**人間が書きそうにないテストでバグを捕まえた。**
-
-> 💡 **なぜフォークでこれが特に有用か。** バニラ EVM は何年も fuzz されている。バグはほぼ新機能の未テスト組み合わせに残る。あなたのフォークは *新機能そのもの*。**フォーク誕生から半年は fuzzing のヒット率が最も高い時期。**
-
-## 3. 統合された production の規律
-
-仕様準拠 + fuzzing は代替ではなく補完:
+3 ツール役割表:
 
 | ツール | 捕まえる | 捕まえない |
 | :--- | :--- | :--- |
-| **EEST** | Ethereum 仕様が明示的にカバーするケースの回帰 | 仕様未定義挙動のバグ、フォーク固有エッジケース |
-| **Differential fuzzing** | リファレンスからの乖離（仕様未定義パスを含む） | リファレンスとフォークが *両方* 間違っている仕様違反 |
-| **両方併用** | コンセンサスクリティカルバグの広範囲 | 仕様が黙していて、リファレンスが存在せず、fuzzer が入力に到達しない稀なバグ |
+| EEST | 仕様が明示的カバーするケースの回帰 | 仕様未定義挙動のバグ、フォーク固有エッジケース |
+| Differential fuzzing | リファレンスからの乖離（仕様未定義パス含む） | リファレンスとフォーク両方間違っている仕様違反 |
+| 両方併用 | コンセンサスクリティカルバグの広範囲 | 仕様黙 + リファレンスなし + fuzzer 未到達の稀バグ |
 
-**Production L1 チーム（Hyperliquid、Tempo、Berachain）は両方を毎 CI サイクルで回す。** Spec test 回帰は build break、fuzz 乖離は P0。彼らのフォークがコンセンサス事故無く ship されているのは、概ねこの規律のおかげ。
+## 失敗例（誤解）
 
-## 4. Differential fuzzing の先 — fault injection
+「EEST が通れば fuzz 不要」— **間違い**。EEST は仕様明示範囲だけ。仕様が黙っているパス（カスタム precompile の境界条件、新 opcode 組み合わせ）は fuzz が浮かび上がらせる。
 
-より進んだ変種: 入力を fuzz する代わりに *環境* を fuzz する。データベース read 失敗、ネットワーク分断、部分書き込み、OOM 状況を inject し、フォークの安全性プロパティ（二重支払なし、不正状態の受け入れなし、回復可能シャットダウン）が全部の下で成立することを assert。**「書き込み中に crash してチェーンが壊れた」クラスのバグ — どのユニットテストや differential fuzz にも現れない種類 — を捕まえる。**
+「Differential fuzz は vanilla Revm に対してだけ」— **不十分**。Revm vs Geth の対比で Revm 系全体のバグ（系譜共有バグ）を炙れる。Erigon や EELS（Python 仕様）との対比で更に層を厚く。
 
-Reth ではこれは: 実行中にプロセスを kill し再起動して DB が回復可能なことを assert; MDBX の random page を破壊し起動時の検出を assert; テスト harness で network reorg を強制し indexer/ExEx 状態の整合性を assert。Reth 自身の CI はここまで全部回さない; production フォークチームが追加する。
+「fuzz 24 時間で出ないなら問題なし」— **間違い**。Fuzzer の入力空間カバレッジ依存。crash 0 = バグなしではない。**フォーク誕生から半年が hit 率最高期** = この期間は重点的に。
 
-## 全体への接続
+> 🛑 **予測。** vanilla Revm は何年も fuzz されている、なぜフォークで fuzz が特に有用？（答え: バニラ EVM のバグはほぼ新機能の未テスト組み合わせに残る。あなたのフォークは **新機能そのもの** → fuzz hit 率が最も高い時期。同じ予算でも、vanilla を 1 ヶ月 fuzz する vs フォーク半年目を 1 週間 fuzz する → 後者の発見密度が桁違いに高い。）
 
-これまでの全テストレッスンが本レッスンの前提:
+## ステップで組み立てる
 
-- **Foundry tests**（Fundamentals）— fuzz 入力構築と状態 assertion に使う cheatcode
-- **Inside REVM のテストレッスン** — フォークに対して走らせている EEST フォーマット
-- **Inside Reth のテストレッスン** — fuzzer に Reth をインプロセスで駆動させる harness
-- **Building tier の *Revm シミュレーションを Production Provider で検証する*** — per-tx で適用された differential テスト; 本レッスンはそれを per-input fuzzing にスケール
+### Step 1: EEST を 1 回走らせる
 
-**本レッスンが頂点。** Revm/Reth フォークを production に出荷するとき、「正しいことをどう知るか?」への答えは *このパイプライン全部が毎 commit で走ること*。
+\`uv run consume direct --bin revme -- ./tests/cancun/\` → pass/fail/skip 数 → 昨日との delta → 非ゼロは build break。
 
-## ドリル
+### Step 2: 簡単な fuzz harness を書く
 
-1. **revm 既存 EEST runner を vanilla revm に対して走らせる。** \`bluealloy/revm\` を clone、\`revme\` をビルド、EEST スイートを取得（\`uv tool install eest\` 後 \`uv run consume direct ...\`）、小さなサブセット（例: \`tests/cancun/eip4844_blobs/\`）を実行。**全 pass を確認。** これがベースライン。1 時間。
-2. **Revm の opcode を 1 つ改変して再実行。** 1 つの opcode をパッチ（例: \`ADD\` を \`SUB\` に変えて壊す）。スイートを再実行。**fail が現れるのを観察。** どのテストがなぜ fail したかメモ。revert。1 時間。
-3. **最小 differential fuzz harness を書く。** 2 つの実装を取る（パッチ済み Revm と vanilla; もしくは Revm と Geth の \`debug_traceTransaction\`）。\`proptest\` でランダム tx + pre-state を生成し、両方で実行、state-root 一致を assert。1 時間走らせ、乖離を log。3 時間。
-4. **production の fuzz fix を 1 件読む。** [\`bluealloy/revm\` の issues](https://github.com/bluealloy/revm/issues?q=is%3Aissue+fuzz) で fuzz 発見起源のものを 1 件。バグ・修正・回帰テストを読む。**fuzzing が何を支払うか。** 1 時間。
-5. **フォーク CI マトリクスをスケッチ。** 紙で: 毎 push で走らせる spec-test サブセットは? Fuzz duration は? リファレンス実装は? 失敗 triage はどこで起きるか? 1 時間。*（コードなし; チームに渡す計画 artifact。）*
+\`proptest\` か \`libafl\` で「ランダム tx + pre-state → 両実装で実行 → state_root assert」の 50 行。1 時間走らせて乖離をログ。
 
-ドリル 5 後、production グレードの正しさ保証付きで Revm/Reth フォークを ship する完全なメンタルモデルが揃う。
+### Step 3: 4 リファレンスから選ぶ
 
-> 🛑 **最終チェック。** 一文で: なぜ EEST と differential fuzzing は両方とも「正しさ」からの乖離を探すにもかかわらず **冗長ではない** のか? 答えに「EEST は仕様に対してチェックする; fuzzing は別実装に対してチェックする — 仕様が制約しないパスも含めて」が無いなら §3 を読み直す — このカバレッジギャップの違いが、production チームが両方回す理由。
+- vanilla Revm: Revm 系譜のバグ検知
+- Geth: mainnet コンセンサス検知
+- Erigon: 系譜逸脱検知
+- 形式仕様（Python EELS）: 仕様直接対比
 
-## 📺 関連リンク
+### Step 4: 縮約規律
 
-- [execution-spec-tests docs](https://eest.ethereum.org/) — spec-test フレームワーク
-- [\`bluealloy/revm\` のテストクレート](https://github.com/bluealloy/revm) — differential パターンのリファレンス実装
-- 史的な [Geth Yellow Paper Test Suite](https://github.com/ethereum/tests) — テストコーパス進化を理解するため
+shrinking で 50-200 byte の最小 repro に → 人間が読んで根本原因特定。**24-48 時間 fuzz + shrink + 人間 triage** が標準。
 
+### Step 5: フォーク CI マトリクス
+
+毎 push: EEST サブセット（5 分以内）+ 短い fuzz（5 分）+ diff against vanilla Reth（1000 ブロック）。週次: 24h fuzz + 全 EEST + マルチリファレンス diff。
+
+### Step 6: Fault injection で chaos の前段
+
+入力ではなく環境 fuzz: \`kill -9\` 実行中プロセス、MDBX random page 破壊、ネットワーク分断、OOM 状況。Reth 自身の CI はここまでやらない、production フォークチームが追加。
+
+## 答え合わせ
+
+- **EEST と fuzz の冗長性ではない理由**: EEST は仕様に対してチェック、fuzz は別実装に対してチェック — 仕様が制約しないパスも含めて。仕様が「opcode X の入力 A での挙動は未定義」だと EEST はテストを書けない。fuzz は無作為に A を生成して別実装と比較する → 仕様未定義領域で乖離があれば検知。
+- **fuzz hit 率が「フォーク誕生から半年」で最高な理由**: 新機能は未テスト組み合わせの空間が広い + 設計者の頭の中だけのテスト依存 → 想像外の入力で破綻する。時間が経つほどユーザが trigger する → 公開バグになる → 残りは fuzz が掘る相手が少なくなる。
+- **Fault injection が fuzzing と区別される領域**: fuzzing = 入力空間探索（「どの tx で壊れるか」）、fault injection = 環境探索（「どの障害で安全性プロパティが破られるか」）。「書き込み中に crash してチェーンが壊れた」クラスは fuzzing には現れない（入力は正常）+ 環境が異常。
+
+## 合格基準
+
+- EEST と differential fuzzing が補完である理由を 1 文で言える。
+- 4 リファレンス実装の選び分けを言える。
+- 簡単な fuzz harness（\`proptest\` で 50 行）を書ける。
+- フォーク CI マトリクス（毎 push / 週次）を設計できる。
+- Fault injection が fuzz と違う領域を捕まえる理由を言える。
+
+## まとめ（3行）
+
+- EEST（仕様準拠）+ Differential fuzzing（リファレンス対比）が production フォークの正しさ保証 2 本柱、両方が毎 CI 必須。
+- Fuzz は 24-48h 走らせて shrink、フォーク誕生から半年が hit 率最高、4 リファレンスで層を厚く。
+- Fault injection（環境 fuzz）が chaos engineering の前段、「正常入力 + 環境異常」クラスのバグを捕まえる。
 `,
                 },
                 {
-                  title: 'EVM プライバシー — Tempo Zones を読む',
+                  title: 'レッスン12 — EVM プライバシー（Tempo Zones を読む）',
                   slug: 'evm-privacy-tempo-zones-ja',
                   type: 'CONTENT',
                   sortOrder: 7,
                   duration: 28,
                   xpReward: 60,
-                  content: `# EVM プライバシー — Tempo Zones を読む
+                  content: `# レッスン12 — EVM プライバシー（Tempo Zones を読む）
 
-> 🧭 **systems engineering スタックでの位置:** 3 つの層が交わる場所 — (1) **VM 層の暗号** (暗号化と ZK 検証のためのプリコンパイル)、(2) **分散システム層** (validium スタイルの L2 がベースチェーンに決済される)、(3) **ポリシー / アプリケーション層** (コンプライアンスの継承、プライベート RPC)。EVM におけるプライバシーは単一の機能ではない — 3 つの独立したダイヤルの設定であり、\`tempoxyz/zones\` は機関投資家系のチームが出荷しつつあるひとつの具体的な設定。
+## 問い
 
-> 📌 **動く標的。** Tempo Zones は「現在も活発に開発中で、本番利用は推奨されない」段階。コントラクトのシグネチャ、ガスコスト、メソッド名は変わる可能性がある。以下に示すアーキテクチャ上の選択は安定して残るので、特定のバイトではなく **設計の形** を読むつもりで進む。
+「EVM プライバシー」は crypto が最も語り、エンジニアが最も出荷しないテーマ。多くのチュートリアルは shielded pool が *なにか* を説明する。**production 水準の設計のひとつ — Tempo Zones — の Rust ソースを読み、将来の任意の EVM プライバシースタックを読むためのフレームワークは何か？**
 
-プライバシーは crypto が最も語り、エンジニアが最も出荷しないテーマ。多くの「EVM プライバシー」チュートリアルは shielded pool が *なにか* を説明する。本レッスンでは production 水準の設計のひとつ — Tempo Zones — の Rust ソースを実際に読み、そこから将来の任意の EVM プライバシースタック (Arc、Anomaly、Tempo 後継の世代) を読むための SE フレームワークを引き出す。
+## 原理（最小モデル）
 
-## 1. プライバシーのトレードオフ空間 (3 つのダイヤル)
+- **3 ダイヤルのトレードオフ空間.** 信頼モデル（trustless ↔ オペレータ信頼）/ 暗号プリミティブ（古典暗号 ↔ 完全 ZK）/ DX 面（カスタム DSL ↔ 標準 EVM）。
+- **Tempo の賭け.** シーケンサ信頼 + 古典暗号（Chaum-Pedersen + AES-GCM）+ 標準 EVM。**機関投資家は暗号トラストレス性より、コンプライアンス + 低運用コスト + 標準ツーリング** を必要とする。
+- **Privacy protects against public observers on Tempo, not against the sequencer.** スタック全体で最も重要な設計選択。
+- **Chaum-Pedersen prover アドレスは \`0x1C00...0100\`、~6,000 ガス.** ECDH 共有秘密の正しい導出を証明（シーケンサ秘密鍵を明かさず）。Groth16（~150,000 ガス + trusted setup）の 25× 安。**専用プリミティブ > 汎用 ZK** when 主張が単純。
+- **AES-GCM precompile は速度が劇的に違う箇所のみ.** HKDF は SHA256 precompile（\`0x02\`）+ Solidity で実装、AES は EVM bytecode だと 100× 遅い → precompile 化。**プリコンパイル面を最小化**。
+- **\`IVerifier\` インタフェースで証明系に依存しない settlement.** ZKVM / TEE バックエンド差し替え可能。speed-of-change の異なる層を結合させない。
+- **EVM レベル（RPC レベルではなく）でプライバシー実施.** \`balanceOf\` revert / 固定 100k ガス transfer（タイミングサイドチャネル閉鎖）/ \`CREATE\` 無効化。
+- **コンプライアンス継承（TIP-403）.** Zone は Tempo のレジストリから ポリシーを読む → 発行者は Tempo 上で 1 回凍結 → 全 zone が次の \`advanceTempo\` で継承。
 
-EVM のプライバシー設計は、3 つの独立したダイヤルそれぞれに設定値を選ぶ:
+## 具体例
 
-| ダイヤル | 範囲 | 何を決めるか |
-|---|---|---|
-| **信頼モデル** | trustless ↔ オペレータ信頼 | 誰が平文を見られるか |
-| **暗号プリミティブ** | 古典暗号 ↔ 完全 ZK | VM 層にどの暗号が住むか |
-| **DX 面** | カスタム DSL ↔ 標準 EVM | コントラクト作者が何を新たに学ぶ必要があるか |
-
-公表されている 3 つの設計が、この空間の異なる 3 つの角を占めている:
+3 設計の角:
 
 | 設計 | 信頼 | 暗号 | DX |
-|---|---|---|---|
-| **Aztec L2** | trustless | 完全 ZK (UltraHonk) | カスタム DSL (Noir) |
-| **Railgun** | trustless | EVM 上の SNARKs | 標準コントラクト (shielded ERC-20 のみ) |
+| :--- | :--- | :--- | :--- |
+| Aztec L2 | trustless | 完全 ZK (UltraHonk) | カスタム DSL (Noir) |
+| Railgun | trustless | EVM 上の SNARKs | 標準コントラクト (shielded ERC-20 のみ) |
 | **Tempo Zones** | **シーケンサ信頼** | 古典暗号 (Chaum-Pedersen + AES-GCM) + 差し替え可能な証明 | 標準 EVM 実行 |
 
-Tempo の賭けが、本レッスンを読むうえで最も重要な視点: **機関投資家が必要としているのは、コンプライアンス + 低い運用コスト + 標準 EVM ツーリングであって、暗号的なトラストレス性ではない。** その賭けが報われるかは市場の問題。賭け自体は一貫した SE 上の選択であり、本レッスンの残りはその実装を読む。
-
-## 2. Zones アーキテクチャを 1 段落で
-
-Zone とは、Tempo にアンカーされた **validium スタイルのプライベート L2**。スペックの記述がそのまま要約になっている:
-
-> *"A Tempo Zone is a private execution environment anchored to Tempo. Inside a zone, balances, transfers, and transaction history are invisible to block explorers, indexers, and other users. Each zone is operated by a dedicated sequencer that is the sole block producer, settling back to Tempo through a proof-agnostic verification system."* — [zones spec](https://github.com/tempoxyz/zones/blob/main/specs/spec.md)
-
-資金は Tempo 上の portal コントラクトでロックされる形で zone に入り、zone は同等量のトークンを mint する。ユーザは zone 上でプライベートに取引する。退出時には zone でトークンを burn し、シーケンサが withdrawal と証明をバッチで Tempo に提出し、portal からトークンが解放される。
-
-最も中核的な信頼宣言は、たった 1 文:
-
-> *"Privacy protects against public observers on Tempo, not against the sequencer."*
-
-これがスタック全体で最も重要な設計選択。**Aztec と比較すると、Aztec の証明システムは — 証明者を含めて — 誰も平文を見られない構造になっている。** Tempo はその性質を、コンプライアンス、シンプルさ、約 25× 安い暗号と引き換えに手放している。この取引が正しいかは完全にユースケース次第。規制対象のステーブルコイン発行者と決済レールにとっては合理的。匿名のセルフカストディには合理的でない。
-
-## 3. Chaum-Pedersen プリコンパイル — Rust ソースを読む
-
-\`tempoxyz/zones\` の \`crates/precompiles/src/chaum_pedersen.rs\` を開く。ファイルヘッダがほぼ全てを語っている:
+Chaum-Pedersen precompile（[\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) の \`crates/precompiles/src/chaum_pedersen.rs\`）:
 
 \`\`\`rust
 //! Chaum-Pedersen DLOG equality proof verification precompile.
@@ -1972,11 +1902,7 @@ Zone とは、Tempo にアンカーされた **validium スタイルのプライ
 //! sequencer's private key to the EVM.
 //!
 //! Uses the NCC-audited [\`k256\`] crate (v0.13.4) for secp256k1 operations.
-\`\`\`
 
-プリコンパイル本体は、Inside REVM で見た標準的な Revm のプリコンパイル機構にそのまま乗る:
-
-\`\`\`rust
 pub const CHAUM_PEDERSEN_VERIFY_ADDRESS: Address =
     address!("0x1C00000000000000000000000000000000000100");
 
@@ -1992,27 +1918,7 @@ impl Precompile for ChaumPedersenVerify {
 }
 \`\`\`
 
-このクレートは \`no_std\` — \`lib.rs\` が明示的にそう書いている:
-
-\`\`\`rust
-//! This crate is \`no_std\` compatible so these precompiles can run inside the
-//! SP1 prover guest (RISC-V) as well as in the zone node.
-\`\`\`
-
-これが立ち止まる価値のある SE 上の判断。**プリコンパイルは、稼働中の zone ノードでも、SP1 zkVM の prover guest 内でも、同じソースから動く。** フォークも移植も別実装もない。同じコードがふたつのランタイムで動く — Inside REVM で \`auto_impl\` とトレイト抽象化を通じて学ぶのと同じパターンを、スタックの別の層に当てはめた形。
-
-> 🛑 **読み進める前に予測。** Tempo はここで Groth16、Plonk、その他の汎用 ZK 証明系を使うこともできた。代わりに 1992 年のプロトコルで *単一の特定の主張* — 離散対数の等価性 — だけを証明する Chaum-Pedersen を選んだ。**この選択を正当化する SE 上のトレードオフはなにか?**
-
-Chaum-Pedersen は ~6,000 ガス、~50 行のコード、trusted setup なし、メンテすべき証明系もなし。Groth16 の検証は ~150,000 ガス + 数 MB の verification key + trusted setup ceremony + SOTA がシフトするたびにアップグレードが必要な証明系。**Tempo が証明したいのは 1 つだけ — シーケンサの ECDH 導出が正しいこと — なので、その目的だけを 25× 安いガスで達成する 1992 年のプロトコルを使う。** 汎用の道具を必要のない場面で使わない。これが *退屈な* 暗号であることこそ要点 — 退屈な暗号は監査可能な暗号。
-
-## 4. AES-GCM プリコンパイル — VM レベルの暗号化
-
-\`0x1C00...0101\` にあるコンパニオンプリコンパイルが対称復号を担当する。スペックから:
-
-| | |
-|---|---|
-| **アドレス** | \`0x1c00000000000000000000000000000000000101\` |
-| **ガス** | ~1,000 ベース + 暗号文 32 バイトあたり ~500 |
+AES-GCM precompile signature:
 
 \`\`\`solidity
 function decrypt(
@@ -2024,54 +1930,7 @@ function decrypt(
 ) external view returns (bytes memory plaintext, bool valid);
 \`\`\`
 
-これがプリコンパイル層にあって純粋 EVM ではない理由は性能。AES-256-GCM を EVM バイトコードで実装すると、ネイティブ実装よりおよそ 100× 遅い。Tempo チームは速度向上が劇的に大きい場所だけプリコンパイル化した。象徴的な例: **HKDF-SHA256 (ECDH 共有秘密から AES 鍵を導出すのに使う) はプリコンパイルでは *ない*。** スペックから:
-
-> *"HKDF-SHA256 key derivation (used to derive the AES key from the ECDH shared secret) is implemented in Solidity using the SHA256 precompile at \`0x02\`, keeping this precompile minimal."*
-
-> 🛑 **予測。** なぜ AES-GCM はプリコンパイル化したのに HKDF はしないのか?
-
-HKDF は要するに HMAC-SHA256 を反復するだけで、SHA256 は既に EVM の \`0x02\` にプリコンパイルとして存在する。HKDF を \`0x02\` を呼ぶ Solidity として実装した速度は、専用プリコンパイルとほぼ変わらない。AES はそうではない。**プリコンパイル面を最小化する: 本当に高コストなものだけプリコンパイル化する。** これは EVM のプリコンパイル集合自体 (BN254、BLS、modexp、ecrecover、identity、sha256、ripemd160) を支える規律と同じ — どのプリコンパイルもベンチマークでその存在を正当化している。
-
-## 5. 暗号化デポジットの流れ — 2 つのプリコンパイルを組み合わせる
-
-これで実際のプライバシーユースケースをエンドツーエンドで読める。ユーザは USDC を Zone にデポジットしたいが、Zone 内の受取人を公開したくない。
-
-**Tempo 側 (公開):**
-
-1. ユーザがエフェメラル鍵ペアを生成し、シーケンサの公開鍵と ECDH を実行 → 共有秘密
-2. ユーザが HKDF-SHA256 で共有秘密から AES-256 鍵を導出
-3. ユーザが \`(to || memo || padding)\` を AES-256-GCM で暗号化 → ciphertext + nonce + tag
-4. ユーザが \`ZonePortal.depositEncrypted(token, amount, keyIndex, encryptedPayload, bouncebackRecipient)\` を呼ぶ。portal がトークンをロックし、\`EncryptedDepositMade\` を emit する
-
-Tempo 側のログには \`(token, sender, amount, bouncebackRecipient)\` が公開される — 会計と払い戻しに必須 — が、\`(to, memo)\` は暗号化されている。
-
-**Zone 側 (プライベート実行):**
-
-5. シーケンサが暗号化デポジットを観測し、(自分の秘密鍵 + ユーザのエフェメラル公開鍵から) 実際の共有秘密を計算し、その導出が正しいことの Chaum-Pedersen 証明を生成
-6. Zone が **Chaum-Pedersen Verify プリコンパイル** を、シーケンサの主張する共有秘密と証明とともに呼ぶ。証明が通れば、シーケンサが秘密鍵を明かさずに正しい共有秘密を導出したことが証明される
-7. Zone が Solidity で (標準の \`0x02\` SHA256 プリコンパイルを使って) HKDF-SHA256 を実行し、AES 鍵を導出
-8. Zone が **AES-GCM Decrypt プリコンパイル** を AES 鍵、nonce、ciphertext、tag とともに呼ぶ。GCM タグが検証されれば、プリコンパイルが平文 \`(to, memo)\` を返す
-9. Zone が \`TIP20.mint(decryptedTo, amount)\` を呼ぶ
-
-> 🛑 **予測。** なぜ Chaum-Pedersen 証明が必要なのか? なぜシーケンサに共有秘密を投げさせて信頼してはダメなのか?
-
-なぜなら証明がなければ、シーケンサは *任意の* 共有秘密を提示できてしまうから — 暗号文を別の受取人に復号する共有秘密を含めて — そしてそれを誰も検出できない。証明は共有秘密をシーケンサの公開鍵 (オンチェーン履歴に記録されており、ユーザが提供するものではない) に暗号的に結びつけるので、すり替えは検出可能になる。**シーケンサは liveness とデータ可用性については信頼されるが、資金のリダイレクトについては信頼されない。** 異なる懸念に異なる信頼仮定を立てる — 「シーケンサ」を単一の信頼宣言に潰さない SE の規律。
-
-ユーザが意図的な妨害目的で無効な暗号文を投げてきたら? Chaum-Pedersen 証明は通る (シーケンサは共有秘密を正しく導出した) が、GCM タグが失敗する。デポジットは Tempo 上の \`bouncebackRecipient\` にバウンスバックされる。**証明は「シーケンサが復号について嘘をついた」と「ユーザが無効な暗号文を投げた」を区別する** — 素朴な観察者には同じに見えるが、プロトコル上はまったく異なる対応が必要な 2 つの失敗モード。
-
-## 6. 証明系に依存しない検証器 — \`IVerifier\`
-
-Tempo への settlement 層が、証明系が住む場所。スペックの設計選択:
-
-> *"The proving system is proof-agnostic. The core is a pure state transition function that takes a witness, executes zone blocks, and outputs commitments for onchain verification. ... Any proving backend (ZKVM, TEE, or otherwise) can implement the interface."*
-
-state transition function は、単一の \`no_std\` Rust 関数:
-
-\`\`\`rust
-pub fn prove_zone_batch(witness: BatchWitness) -> Result<BatchOutput, Error>
-\`\`\`
-
-そして Tempo 側の verifier は、実装ではなくインタフェース:
+IVerifier:
 
 \`\`\`solidity
 interface IVerifier {
@@ -2090,27 +1949,13 @@ interface IVerifier {
 }
 \`\`\`
 
-> 🛑 **予測。** なぜ state transition と証明バックエンドを分離するのか? なぜ portal コントラクト層で SP1 / Plonk / Groth16 を直接焼き込まないのか?
-
-証明系市場は速く動いている。UltraHonk、Honk、Boojum、RISC0、SP1、Jolt、Nova — SOTA は 12〜18 ヶ月ごとにシフトする。そして TEE ベースの検証 (Intel SGX、AMD SEV-SNP、Nitro) も、特定のコンプライアンス文脈で有効なバックエンド。portal コントラクト層に証明系を焼き込んだら、SOTA がシフトするたびに再デプロイが必要になる。**verifier をインタフェース化することで、Tempo は portal に手を入れずに証明バックエンドを差し替えられる。** ある層の動く部分 (証明バックエンド) は、別の層の動く部分 (settlement コントラクト) から切り離されているべき。これは Revm の \`Database\` トレイトと同じ SE 原則: 速く動く実装を、安定した抽象に結合させない。
-
-deployment-modes セクションが 1 文で済むのもこの理由から:
-
-> *"The state transition function runs in any backend that can execute the \`no_std\` Rust function. Examples include ZKVMs and TEE environments."*
-
-## 7. Reth フォーク — \`Cargo.toml\` が証拠
-
-\`crates/tempo-zone/Cargo.toml\` を開く。最初の行:
+Zone node の依存（\`crates/tempo-zone/Cargo.toml\`）:
 
 \`\`\`toml
 [package]
 name = "zone"
 description = "Tempo Zone node - a lightweight L2 node built on reth"
-\`\`\`
 
-そして依存ブロック:
-
-\`\`\`toml
 # reth
 reth-basic-payload-builder.workspace = true
 reth-chainspec.workspace = true
@@ -2124,220 +1969,144 @@ reth-rpc-builder.workspace = true
 reth-storage-api.workspace = true
 reth-tasks.workspace = true
 reth-transaction-pool.workspace = true
-# ...
 \`\`\`
 
-これがまさに Inside Reth の Reth SDK パターン (\`with_types\` / \`with_components\` / \`with_add_ons\` / \`launch\`) の、実戦投入版。Tempo Zones は標準の Reth ノードに対して、カスタムプリコンパイル (前述の \`zone-precompiles\` クレート)、カスタムペイロード検証 (プライバシー修正)、プライベート RPC を差し込んで、動く レッスン2を得ている。
+\`no_std\` 宣言（\`crates/precompiles/src/lib.rs\`）:
 
-> 🛑 **予測。** なぜ Tempo Zones は Reth をフォークするのか? なぜノードをゼロから書かないのか?
+\`\`\`rust
+//! This crate is \`no_std\` compatible so these precompiles can run inside the
+//! SP1 prover guest (RISC-V) as well as in the zone node.
+\`\`\`
 
-Reth は退屈な部分 — devp2p、MDBX ストレージ、staged sync、RPC スキャフォールド、トランザクションプール、コンセンサスインタフェース、ガス会計 — をおよそ 50,000 行以上で処理している。Tempo の実際の貢献 — つまり Tempo を特徴づける部分 — は、おそらく 3 つのカスタムプリコンパイル + プライベート RPC 修正 + カスタムブロック検証 + zone 固有のペイロードビルダー。**基盤は、書かずに済んだ全てを通じてその価値を返してくれる。** これは Hyperliquid、OP-Reth、Tempo がいずれも採用している SE 上の判断: スタック全体ではなく、Reth との差分だけを書く。Inside Reth の SDK レッスンが仕組みを教え、本レッスンはその production 適用例を読んでいる。
+## 失敗例（誤解）
 
-## 8. EVM レベルでのプライバシー実施 — RPC レベルではなく
+「プライバシーは完全 ZK でなければ無意味」— **間違い**。機関投資家の用途では「public observers から隠す」「シーケンサにはコンプライアンス目的で見せる」が合理。Tempo の賭けは market 問題、設計は一貫。
 
-スペックの "Privacy Modifications" セクションをそのまま引用する。ここで行われている選択は非自明だから:
+「Chaum-Pedersen は時代遅れ」— **間違い**。1992 年プロトコルだが「DLOG 等価性」という特定主張だけを証明する道具として最適。汎用 ZK（Groth16）の 25× 安 + trusted setup なし + メンテすべき証明系なし。**退屈な暗号 = 監査可能な暗号**。
 
-> *"Zone execution differs from standard Tempo execution in three areas. These changes are enforced at the EVM level, not just at the RPC layer, so they apply to all code paths including user transactions, \`eth_call\` simulations, and prover re-execution."*
+「\`balanceOf\` revert は RPC で十分」— **間違い**。EVM レベル実施でないと \`eth_call\` シミュレーション + prover 再実行を含むすべてのコードパスで強制されない → 漏れる。
 
-3 つの修正:
-- \`balanceOf(account)\` は、\`msg.sender\` がアカウントの所有者またはシーケンサでない限り revert する
-- すべての TIP-20 transfer 操作は、ストレージレイアウトに関係なく固定で 100,000 ガスを課金する
-- \`CREATE\` と \`CREATE2\` は revert する。zone は predeploy のみを実行する
+> 🛑 **予測。** AES-GCM はプリコンパイル化したのに HKDF はしない、なぜ？（答え: HKDF は HMAC-SHA256 反復、SHA256 は既に EVM の \`0x02\` precompile に存在 → Solidity で \`0x02\` を呼ぶ実装で十分速い + 専用 precompile とほぼ変わらない。AES は EVM bytecode だと 100× 遅い → precompile 必須。**プリコンパイル面を最小化** = 本当に高コストなものだけ。Yellow Paper の precompile 集合（BN254 / BLS / modexp / ecrecover / identity / sha256 / ripemd160）と同じ規律。）
 
-> 🛑 **予測。** なぜ受取人のストレージスロットが「warm」か「cold」かに関係なく、transfer に固定で 100,000 ガスを課金するのか?
+## ステップで組み立てる
 
-ストレージスロットの warm 状態 (このトランザクション内でスロットが既に触られたか) は状態を漏らす。フレッシュな受取人への transfer が 20k ガス、既存の受取人への transfer が 5k ガスなら、ガスコストを観察できる相手は事前の残高状態を推測できる。**固定ガスがこのサイドチャネルを閉じる。** 公開バイトコードの VM 上のプライバシーは、値を隠すだけでなく、観察可能なすべてのチャネル (タイミング、リソースコスト含む) を閉じることを意味する。同じ規律は定数時間の暗号実装 (Rust の \`subtle\` クレート、C の libsodium) でも同じ理由で現れる。
+### Step 1: 3 ダイヤルを即答
 
-なぜ \`CREATE\` は無効化されているのか? 任意のコントラクトを書けば、EVM レベルのプライバシー制御を迂回する手段になりうるから。**EVM 層でのプライバシー実施は、EVM が信頼されたコードしか実行しない場合にだけ成立する。** プライバシー付き validium + EVM レベルの規律 + 制限されたデプロイは、一貫したパッケージ; どれかひとつでも外せば、プライバシーの主張は破綻する。
+信頼 / 暗号 / DX。各設計（Aztec / Railgun / Tempo Zones）が空間の異なる角を占める。
 
-## 9. コンプライアンスの角度 — TIP-403 継承
+### Step 2: Tempo の信頼宣言を 1 文で
 
-Tempo Zones を金融機関にとって読みやすくしている角度がこれ。スペックから:
+「Privacy protects against public observers on Tempo, not against the sequencer」。
 
-> *"Zones inherit compliance policies from Tempo automatically. Token issuers set transfer policies once on Tempo, and zones enforce them without any additional configuration."*
+### Step 3: 2 precompile の役割分担
 
-機械的には: zone は Tempo のレジストリと同じアドレスに、読み取り専用の \`TIP403Registry\` プロキシをデプロイする。zone 側の TIP-20 transfer は、実行前に \`isAuthorized(policyId, from)\` と \`isAuthorized(policyId, to)\` をチェックする。プロキシは実際のポリシー状態を \`TempoState.readTempoStorageSlot(...)\` 経由で Tempo から読む。発行者が Tempo 上でアドレスを凍結すると、zone は次の \`advanceTempo\` でその更新を含む Tempo ブロックを取り込んだ時点で凍結を継承する。
+Chaum-Pedersen \`0x1C00...0100\` = ECDH 共有秘密導出証明 / AES-GCM \`0x1C00...0101\` = 対称復号。HKDF は Solidity + \`0x02\` で十分。
 
-> 🛑 **予測。** 規制対象のステーブルコイン発行者が、制裁対象のアドレスを凍結したい。Tempo Zones がなければ、彼らはトークンが乗っているすべてのチェーンに凍結をプッシュする必要がある。Tempo Zones では、何が起きるか?
+### Step 4: \`IVerifier\` の意味
 
-Tempo の TIP-403 レジストリに 1 度凍結をプッシュすればよい。すべての zone が次のブロック (次の \`advanceTempo\` の後) で自動的に凍結を継承する。**コンプライアンスの状態は mainnet とすべての zone をまたぐ単一の共有リソース — 1 度書き、どこでも読む。** これが、機関投資家にとって「プライバシー + コンプライアンス」が矛盾語法ではなく一貫したプロダクトポジションになるアーキテクチャ上の性質。
+State transition function = pure \`no_std\` Rust function（\`prove_zone_batch(witness) -> BatchOutput\`）+ Tempo 側 verifier は interface → ZKVM（Risc0 / SP1 / Jolt）/ TEE（SGX / SEV-SNP / Nitro）どれでも差し替え可能。
 
-## 10. 3 ダイヤルのフレームワーク、埋め直し
+### Step 5: 暗号化デポジット 9 ステップ
 
-最初のトレードオフ表を、具体的な根拠を持って読み直せる:
+Tempo 側: ① ECDH + ② HKDF + ③ AES-GCM 暗号化 + ④ portal \`depositEncrypted\` → Zone 側: ⑤ シーケンサが Chaum-Pedersen 証明生成 + ⑥ precompile で検証 + ⑦ HKDF + ⑧ AES-GCM 復号 + ⑨ \`TIP20.mint\`。
 
-| ダイヤル | Tempo Zones の設定 | 理由 |
-|---|---|---|
-| **信頼モデル** | シーケンサ信頼、平文は単一の主体に見える | コンプライアンス + 監査可能性 + 低い運用コスト |
-| **暗号** | プリコンパイル層に Chaum-Pedersen + AES-GCM、VM 層に汎用 ZK なし | 特定プリミティブは汎用 ZK より 25× 安い; HKDF は Solidity に残してプリコンパイル面を最小化 |
-| **DX** | 標準 EVM、カスタム DSL なし、コントラクトは \`depositEncrypted\` フローでプライバシーに opt-in | Solidity エンジニアは Noir や Cairo を学ばずに出荷できる |
-| **Settlement** | validium スタイルの portal + 証明系に依存しない IVerifier | 再デプロイなしで証明バックエンド (ZKVM または TEE) を差し替え可能 |
-| **コンプライアンス** | TIP-403 read-through プロキシでベースチェーンから継承 | mainnet と zone をまたぐポリシーの単一の真実 |
+### Step 6: EVM レベルプライバシー 3 修正
 
-別の設計 (Aztec、Railgun、将来の Arc) は、同じダイヤルの別の設定。フレームワークが転移し、特定の設計はその 1 インスタンス。
+- \`balanceOf\` revert（所有者 + sequencer 以外）
+- transfer 固定 100k ガス（タイミングサイドチャネル閉鎖）
+- \`CREATE\` 無効化（predeploy のみ）
 
-## 11. 先送りされているもの
+### Step 7: TIP-403 継承
 
-ソースがまだ公開されていないため、本レッスンがまだ扱えないこと:
+Zone が Tempo のレジストリプロキシをデプロイ → \`isAuthorized\` を \`TempoState.readTempoStorageSlot\` 経由で Tempo から読む → 発行者は Tempo に 1 回凍結 → 全 zone が次 \`advanceTempo\` で継承。
 
-- **Circle の Arc** (2025-08 発表): プライバシーサポートを謳っているが、設計は執筆時点で未公開
-- **Anomaly や他のステーブルコイン目的特化チェーン**: 位置取りは Tempo に近いが、ソースレベルで読める設計はまだ公開されていない
-- **Tempo の production 証明バックエンド選定**: スペックは証明系に依存しない; production の選択 (どの ZKVM か、TEE attestation か) は今後
+## 答え合わせ
 
-これらが公開されたら、上の 3 ダイヤルフレームワークがそれらを読むための道具になる。それが本レッスンの実際に持続する成果物 — 動く Tempo のバイトそのものではなく、将来の任意の EVM プライバシースタックを読むためのフレームワーク。
+- **Chaum-Pedersen が必要な理由（シーケンサ信用しない）**: 証明なしだとシーケンサが任意の共有秘密を提示できる → 暗号文を別の受取人に復号する偽 secret を主張 → 誰も検出不能 → 資金リダイレクト可能。証明は秘密をシーケンサ公開鍵に暗号的に結合 → すり替え検出可能。**シーケンサは liveness + DA に信頼されるが、資金リダイレクトには信頼されない** — 異なる懸念に異なる信頼仮定。
+- **無効暗号文の扱い**: Chaum-Pedersen 通過（シーケンサ正しく導出）+ GCM タグ失敗 → bounceback。**証明が「シーケンサが嘘」と「ユーザが無効暗号文」を区別** — 観察者には同じに見えるが対応が違う。
+- **\`IVerifier\` の柔軟性**: portal 層に SP1 / Groth16 を焼き込むと SOTA 移行のたびに portal 再デプロイ → 中断。Interface 化 → 証明バックエンドを差し替え可能（ZKVM SOTA は 12-18 ヶ月でシフト + TEE もコンプライアンス文脈で有効）→ portal 不変。**速く動く層（証明）を遅く動く層（settlement）から切り離す**、Revm の Database trait と同じ規律。
 
-## 想起
+## 合格基準
 
-スクロールせずに:
+- 3 ダイヤルを即答できる。
+- Tempo の信頼宣言を引用できる。
+- 2 precompile の役割と「プリコンパイル面最小化」の理由を言える。
+- \`IVerifier\` インタフェース化の意味を言える。
+- EVM レベル 3 修正と TIP-403 継承の仕組みを言える。
 
-1. **Chaum-Pedersen は何を証明するか? このユースケースで Groth16 より安いのはなぜか?**
-2. **AES-GCM はプリコンパイル化されているが HKDF はそうでない。なぜか?**
-3. **Tempo の verifier は \`IVerifier\` の背後に抽象化されている。これが、ハードコードされた prover では得られない何を可能にするか?**
-4. **\`CREATE\` が Zone で無効化されている理由は? これがなければどの性質が破綻するか?**
-5. **Tempo Zones は Reth をベースに使う。\`Cargo.toml\` から、独自部分 (moat) と基盤 (substrate) の分担について何が読み取れるか?**
+## まとめ（3行）
 
-どれか曖昧なら、該当セクションを読み直す。
-
-## 📂 開いておくべきソースリポ
-
-- [\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) — ケーススタディそのもの、特に \`specs/spec.md\` と \`crates/precompiles/src/\`
-- [\`paradigmxyz/reth\`](https://github.com/paradigmxyz/reth) — Tempo Zones がフォークする基盤
-- [\`bluealloy/revm\`](https://github.com/bluealloy/revm) — Zones プリコンパイルが乗るプリコンパイル機構
-- [\`AztecProtocol/aztec-packages\`](https://github.com/AztecProtocol/aztec-packages) — 対角の対比 (trustless、完全 ZK、カスタム DSL)
-- [\`Railgun-Community\`](https://github.com/Railgun-Community) — 中間の対比 (trustless、EVM 内 SNARKs、標準コントラクト)
-
----
-
-**Reth Expert の終わりに到達。** Building tier は本コースのすべてのパターンを production アプリで運用する; L1 Architect tier (Advanced) は同じ規律をプロトコル設計層で使う。Expert 全体を通じて、performance 内部、MDBX ストレージ、Tokio 並行性、proc macros、tracing、カスタムプリコンパイル、MPT 証明、stateless 実行、production MEV、zkEVM、フォーク運用、differential fuzzing、そして本レッスンで — production のプライバシースタック設計を読んできた。これが、このスタックの上で一緒に働きたいチームが既に共通言語として使っているソースレベルの語彙。`,
+- 3 ダイヤル（信頼 / 暗号 / DX）が EVM プライバシー設計空間、Tempo Zones は「シーケンサ信頼 + 古典暗号 + 標準 EVM」の角（機関投資家賭け）。
+- Chaum-Pedersen + AES-GCM の特定プリミティブ precompile（25× 安 vs Groth16）+ \`IVerifier\` で証明系差し替え可能 + EVM レベルプライバシー実施。
+- TIP-403 コンプライアンス継承（Tempo に 1 回書き、全 zone が次 advanceTempo で読む）が「プライバシー + コンプライアンス」を機関投資家にとって一貫したプロダクトに。
+`,
                 },
                 {
-                  title: 'Chaos engineering を Rust EVM ノードに — 誰かが壊す前に、自分で壊す',
+                  title: 'レッスン13 — Chaos engineering を Rust EVM ノードに',
                   slug: 'chaos-engineering-rust-evm-ja',
                   type: 'CONTENT',
                   sortOrder: 8,
                   duration: 28,
                   xpReward: 60,
-                  content: `# Chaos engineering を Rust EVM ノードに — 誰かが壊す前に、自分で壊す
+                  content: `# レッスン13 — Chaos engineering を Rust EVM ノードに
 
-> 🧭 **systems engineering スタックでの位置:** **他のすべての層を横断する信頼性層**。Netflix の Chaos Monkey がマイクロサービスに対して解いた問題と同じ — 良好な条件下でテストが通っても、部分的な故障下で生き残るとは限らない。レッスン1にとっては失敗モードの空間がさらに広く (Byzantine ピア、ディスク破損、ネットワーク分断、バリデータの時計ずれ)、賭け金もさらに大きい (サイレントな状態破損は分岐したフォークを生み、復旧に何日もかかる)。本レッスンは differential fuzzing のレッスンと対になる — fuzzing は正しさを検証し、chaos は生存を検証する。
+## 問い
 
-> 📌 **動く標的。** ツールセクションは Toxiproxy、chaosfs、libfaketime などの特定プロジェクトを参照する — このスペースのプロジェクトは動き、API も変わる。下に示すパターンは安定しているが、具体的なコマンドは調整が必要になることがある。
+カスタム Reth フォークを出荷しているチームの大半は upstream のテストスイートを回して終わる。それは間違い。upstream のテストはハッピーパス（全ピア正直 / 全ディスク健全 / 全クロック正確）の正しさ。**敵対的条件（DoS / 破損ページ / ずれたクロック / 嘘をつくピア）で生き残ることは別物 — どう検証するか？**
 
-カスタム Reth フォークを出荷しているチームの大半は、upstream のメンテナが回しているのと同じテストスイートを回して終わりにする。それは間違い。Upstream のテストが検証しているのは、Reth が *ハッピーな* ネットワーク (全ピア正直、全ディスク健全、全クロック正確) で正しく動くこと。あなたのフォークは敵対的な条件下で動くことになる — バリデータノードが DoS される、MDBX が破損したページを返す、クロックがずれる、ピアが byzantine ブロックを送る。**システムを意図的に壊さないテストは、システムが壊れたときに何が起きるかを教えてくれない。**
+## 原理（最小モデル）
 
-本レッスンは、そのギャップを埋めることが目的。
+- **Differential fuzzing + Chaos は補完.** Fuzz = 「有効入力で正しい答えか」、Chaos = 「乱れた条件下で正しい答えが返らなくなるか」。両方必要。
+- **4 chaos カテゴリ.** Network（パケット損失 / 分断）+ Disk（MDBX 破損 / write 失敗）+ Time（クロックずれ）+ Byzantine（嘘をつくピア）。各カテゴリにツール + 失敗シグネチャ + 対応パターン。
+- **Network = \`tc\` / Toxiproxy / Pumba.** Linux カーネルレベル / アプリレベルプロキシ / Docker ラッパ。
+- **Disk = chaosfs / カーネル fault injection.** FUSE で破損バイトを返す + \`fail_io_timeout\` で syscall 失敗注入。
+- **Time = libfaketime.** \`LD_PRELOAD\` でクロックずれ注入。単調クロック逆行は VM pause / resume が必要。
+- **Byzantine = カスタム Reth フォーク.** 意図的に間違った state root を提案するペイロードビルダー。\`tc\` や \`chaosfs\` では注入不可。
+- **3 実践レベル.** CI 内 chaos（毎 PR）+ Game day（四半期）+ Production chaos（週次、Netflix 風）。
+- **信頼性トライアングル.** Fuzzing（正しさ）+ Chaos（耐性）+ Auditing（潜在的バグ）= 3 つそろって production-grade。
 
-## 1. Differential fuzzing が取り逃がすもの
+## 具体例
 
-Expert ティアの differential fuzzing のレッスンでは、Revm フォークを reference EVM 実装と数千の歴史的トランザクションで突き合わせる規律を扱った。それが答えるのは: *「私の実装は、有効な入力に対して reference と同じ出力を出すか?」*
+4 chaos カテゴリ表:
 
-それが答えないのは:
-- バリデータがラウンドの途中で落ちたら、どうなる?
-- state-root の計算途中で MDBX が破損ページを返したら、どうなる?
-- 敵対的なピアが、有効なヘッダだが破損したボディを持つブロックを送ってきたら、どうなる?
-- wall-clock の時間が突然 30 秒戻ったら、どうなる?
+| カテゴリ | 何を注入 | 現実世界の等価 |
+| :--- | :--- | :--- |
+| Network chaos | パケット損失、レイテンシ、分断、ピア排除 | クラウドリージョン障害、BGP、DDoS |
+| Disk chaos | MDBX ページ破損、write 失敗、レイテンシ | 故障 SSD、ビット腐敗、FS バグ |
+| Time chaos | クロックずれ、NTP ドリフト、単調逆行 | クロックドリフト、閏秒、VM 仮想化 |
+| Byzantine chaos | 敵対ピアが無効ブロック / 矛盾投票 / 嘘 | 悪意バリデータ、鍵漏洩、MitM |
 
-それらの質問は **chaos engineering** に属する: production が見つける前に、失敗モードを発見するために、意図的に故障を注入する規律。
-
-両方の規律が必要。Fuzzing は「正しい入力に対して間違った答えを返す」バグクラスを捕まえる。Chaos は「乱れた条件下で正しい答えが返らなくなる」バグクラスを捕まえる。**どちらも他方をカバーしない。**
-
-## 2. L1 ノードに対する chaos の 4 カテゴリ
-
-Rust EVM ノードに対するすべての chaos エクササイズは、以下の 4 つのバケットのいずれかに収まる:
-
-| カテゴリ | 何を注入するか | 現実世界の等価 |
-|---|---|---|
-| **Network chaos** | パケット損失、レイテンシスパイク、分断、ピア排除嵐 | クラウドリージョン障害、BGP 誤設定、DDoS |
-| **Disk chaos** | MDBX ページ破損、書き込み失敗、レイテンシスパイク | 故障する SSD、ビット腐敗、ファイルシステムのバグ |
-| **Time chaos** | クロックずれ、NTP ドリフト、単調クロックの逆行 | サーバクロックドリフト、閏秒、仮想化クロックずれ |
-| **Byzantine chaos** | 敵対的ピアが無効ブロック / 矛盾する投票 / 状態についての嘘を送る | 悪意あるバリデータ、鍵漏洩、ネットワーク MitM |
-
-各カテゴリにはそれぞれのツーリング、それぞれの失敗モードのシグネチャ、それぞれの対応パターンがある。完全な chaos の規律は、4 つすべてを exercise する。
-
-## 3. Network chaos — \`tc\`、Toxiproxy、Pumba
-
-最もシンプルな network chaos は Linux 側にある: \`tc\` (traffic control)。バリデータの P2P ポートで 30% のパケットを drop するには:
+Network chaos:
 
 \`\`\`bash
+# tc で 30% パケット損失
 tc qdisc add dev eth0 root netem loss 30%
-\`\`\`
 
-200ms のレイテンシを加えるには:
-
-\`\`\`bash
+# 200ms レイテンシ
 tc qdisc add dev eth0 root netem delay 200ms
-\`\`\`
 
-Docker ベースのテストネットには、**Pumba** がこれらをコンテナフレンドリなコマンドにラップする:
-
-\`\`\`bash
+# Docker コンテナ向け（Pumba）
 pumba netem --duration 5m loss --percent 30 my-reth-validator
 \`\`\`
 
-より細かい制御 (例: 1 つのピア接続だけを切る、インタフェース全体ではない) でアプリケーションレベルでプロキシを噛ませるには、**Toxiproxy** が失敗をプログラマブルに注入できる。Reth ノードは Toxiproxy を経由して接続し、失敗パターンをスクリプトで指定する。
-
-**Chaos エクササイズ:** 4 バリデータの BFT テストネットを立てる。1 つのバリデータを選ぶ。30 秒間、その P2P ポートに 80% のパケット損失を注入する。
-
-**確認すること:**
-- 残りの 3 ノード quorum がブロックを生成し続けるか? (BFT safety: yes、f=1 に対して 3 of 4 は依然として ≥ 2f+1)
-- 落ちたバリデータが復旧したとき、きれいにキャッチアップするか? (Liveness: 手動介入なしで再同期するはず)
-- 落ちたバリデータは inactivity でスラッシュされるか? (Policy: スペック次第 — 想定動作を検証する)
-
-**このクラスのバグが見つかる:** 「全バリデータがほぼ常時到達可能」という前提が、一時的な到達不能性で生き残れないコードパスに焼き込まれている。
-
-## 4. Disk chaos — chaosfs、カーネルの fault injection
-
-大半のチームは、データベースバックエンドが *嘘をついた* ときに何が起きるかをテストしない。**Chaosfs** (特定のファイルに対して意図的に破損したバイトを返す FUSE ファイルシステム) で確かめられる。
+Disk chaos:
 
 \`\`\`bash
-# MDBX データディレクトリに chaosfs をマウントする
+# MDBX データディレクトリに chaosfs をマウント
 chaosfs --backend ./reth-data --mount ./reth-mdbx --corrupt-rate 0.001
-\`\`\`
 
-これで MDBX からの 0.1% の read が破損したバイトを返す。マウントされたディレクトリに対して Reth ノードを走らせて観察する。
-
-**確認すること:**
-- Reth は破損を検出すか? (MDBX ページのチェックサムが大半のケースを捕まえるはず)
-- 検出す場合、ノードを優雅に停止させるか、サイレントに不正な state を serve するか? (サイレントな破損は レッスン1にとって最悪の失敗モード — ノード間で分岐したフォークが生まれる)
-- 破損は release ビルドで表面化するか、debug ビルドだけか?
-
-**Linux カーネルの代替:** \`fail/fail_injection\` で任意の syscall に任意の失敗を注入できる。100 回ごとに \`read()\` を失敗させるには:
-
-\`\`\`bash
+# カーネル fault injection
 echo 1 > /sys/kernel/debug/fail_io_timeout/probability
 echo 100 > /sys/kernel/debug/fail_io_timeout/interval
 \`\`\`
 
-Reth ノードの起動を \`LD_PRELOAD=fail-syscalls.so\` でラップすれば、そのプロセスに対してのみ有効になる。
-
-**このクラスのバグが見つかる:** MDBX の read/write が常に成功する、あるいはサイレントな破損は起きないと仮定するコードパス。
-
-## 5. Time chaos — \`libfaketime\`、カーネルの時間ストレッチ
-
-Reth と Revm はどちらも、時間について仮定を置いている。ブロックタイムスタンプ、reorg window、バリデータのスロットタイミング、コンセンサスのタイムアウト。Wall clock が 30 秒ずれたり後ろに飛んだりすれば、いろいろなものが壊れる。
-
-最もシンプルなツールは \`libfaketime\`:
+Time chaos:
 
 \`\`\`bash
 LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libfaketime.so.1 FAKETIME=+30s reth node
 \`\`\`
 
-これで Reth プロセスは、システムクロックを実時間より 30 秒先に見るようになる。1 つのノードでこのドリフトを有効にしてテストネットを立ち上げ、観察する。
-
-**確認すること:**
-- ずれたバリデータは、ネットワークの残りが拒否するタイムスタンプを持つブロックを生成するか?
-- ずれたバリデータが追いつくのを待っている間、コンセンサスが止まるか?
-- ずれたバリデータは「未来の」ブロックを提案したことでスラッシュされるか?
-
-**より難しいケース:** **単調クロックの逆行**。Rust の \`Instant\` はプロセスごとに単調が保証されているが、サスペンド/レジュームされた VM や、マイグレーションされたコンテナでは、クロックジャンプが見える。\`libfaketime\` ではシミュレートできない; カーネルの時間ストレッチや VM レベルの pause/resume で行う必要がある。
-
-**このクラスのバグが見つかる:** 時間がネットワーク全体で単調かつ一様に進むことを仮定する consensus / networking コード。
-
-## 6. Byzantine chaos — 意図的に振る舞いを誤らせる Reth フォーク
-
-最も注入が難しい chaos は、同時に最も重要でもある: 意図的に嘘をついているピア。信頼性の問いはこうだ: *あなたのノードは、有効なヘッダだが state-root の主張が 1 バイトだけ間違っているブロックを送ってきたピアを、検出して拒否するか?*
-
-これは \`tc\` でも chaosfs でも注入できない — ピアが Reth コードを動かしていて、能動的に誤動作する必要がある。標準的なパターン: ブロック生成コードを上書きして特定のバグを挿入する小さな Reth フォークを作る。
+Byzantine chaos（カスタム Reth フォーク）:
 
 \`\`\`rust
 // byzantine-reth フォークで: 標準のペイロードビルダーを、
@@ -2351,609 +2120,472 @@ impl PayloadBuilder for ByzantinePayloadBuilder {
 }
 \`\`\`
 
-このフォークを 1 つのバリデータで動かすテストネットを立てる。
+3 実践レベル:
 
-**確認すること:**
-- 正直なネットワークは、byzantine ブロックを 1 スロット以内に拒否するか?
-- 誤動作するバリデータはスラッシュされる (あるいはスペックが指定する通りの処分を受ける) か?
-- 正直なノードの state は綺麗なまま — byzantine 入力に対して一時的な「受理してから revert」が起きない — か?
+- **CI 内 Chaos**: chaos サブセット毎 PR、4 ノードテストネットで network loss + clock skew + disk fault、毎 commit
+- **Game day**: 四半期半日、チームが手動 realistic 失敗を staging chain に注入、バグ + runbook ギャップを発見
+- **Production chaos**: Netflix 風週 1、コントロールウィンドウで本番バリデータ意図的 1 台落とす。最も規律ある（Tempo / OP / Hyperliquid）チームが実行。
 
-**このクラスのバグが見つかる:** 検証であるべきだったところに残っている信頼仮定。ピア供給の値 (ブロックハッシュ、トランザクション署名、state-trie ノード) を信頼するたびに、byzantine ピアが嘘をつく機会がある。あなたのテストには嘘をつくピアが含まれているべき。
+## 失敗例（誤解）
 
-## 7. パターン — Chaos を継続的な実践として
+「\`tc\` で Byzantine も注入できる」— **間違い**。\`tc\` はネットワーク層、Byzantine ピアはアプリケーション層（実 Reth コードを動かして能動的に誤動作）。**カスタム Reth フォーク** が必要。
 
-1 回限りの chaos エクササイズは、たまたま注入したバグを見つけるだけ。継続的な chaos は、放っておけば出荷していたであろう regression を見つける。
+「サイレントなディスク破損は気づける」— **間違い**。サイレント = MDBX のチェックサムが捕まえない種類の破損（1 ビット反転で意味的に valid だが間違った値）→ ノードが間違った state を serve → 他ノードと分岐 → フォーク。**「サイレント」 = レッスン1にとって最悪の失敗モード**。
 
-3 つの実践レベル:
+「Production chaos は危険、staging で十分」— **半分間違い**。Production には staging で再現できない条件（実トラフィック / 実クライアント / 実ハードウェア）がある。**規律あるチームは production も chaos する**、ただし on-call が revert 準備済み + コントロールウィンドウ。
 
-- **CI 内の Chaos** — chaos エクササイズのサブセットが、すべての PR で走る。4 ノードテストネットで network loss + clock skew + disk fault を、毎コミット。遅いが、merge 前に regression を捕まえる。
-- **Game day** — 四半期ごとの半日のエクササイズで、チームが手作業で realistic な失敗を staging chain に注入する。バグも、runbook ドキュメントのギャップも見つかる。
-- **Production chaos** — Netflix スタイル。週 1 回、コントロールされたウィンドウで本番バリデータを意図的に 1 台落とす。最も規律のあるチーム (Tempo、OP、Hyperliquid あたり) はこれをやっているはず。教訓: production chaos はツールではなく文化 — エンジニアは on-call で revert の準備ができていなければならない。
+> 🛑 **予測。** 4 バリデータ BFT テストネット、1 バリデータに 80% パケット損失を 30 秒注入。**起きるべき** 3 つと **起きるべきでない** 1 つ？（答え: **起きるべき**: ① 残り 3 ノード quorum がブロック生成継続（BFT safety: f=1 に対して 3 of 4 ≥ 2f+1）、② 落ちたバリデータが復旧時に手動介入なしでキャッチアップ、③ 落ちたバリデータが inactivity でスラッシュ（policy 次第）。**起きるべきでない**: チェーン停止（safety 維持されているのに liveness が止まる = BFT バグ）。）
 
-## 8. Chaos engineering が置き換えないもの
+## ステップで組み立てる
 
-Chaos を補完する 3 つの隣接する規律:
+### Step 1: 4 chaos カテゴリを即答
 
-- **Differential fuzzing** — 良好な入力での正しさをチェックする (Expert ティアのレッスン)。Chaos が fuzzing を置き換えないのは、chaos が小さな数の注入された失敗を exercise する一方、fuzzing は広い入力空間を exercise するから。
-- **Systems-code auditing** — コードを読むことで潜在的な設計バグを見つける (次の Expert レッスン)。Chaos が auditing を置き換えないのは、chaos は注入した失敗の下で表面化するバグしか見つけられないが、auditing はまだトリガされていないバグを見つけられるから。
-- **Formal verification** — 不変量を代数的に証明する (大半のチームにはスコープ外)。Chaos が formal verification を置き換えないのは、chaos が提供するのは経験的な信頼であって証明ではないから。
+Network / Disk / Time / Byzantine。各カテゴリのツール 1-2 つ言える。
 
-完全な信頼性トライアングル: **fuzzing (正しさ) + chaos (耐性) + auditing (潜在的バグ)**。
+### Step 2: \`tc\` で network chaos を 1 回実行
 
-## 想起
+\`tc qdisc add dev eth0 root netem loss 30%\` → 4 バリデータテストネットで観察。
 
-スクロールせずに:
+### Step 3: chaosfs で disk chaos
 
-1. **Differential fuzzing と chaos engineering は、それぞれ異なるクラスのバグを捕まえる。それぞれが捕まえるクラスを挙げる。**
-2. **4 バリデータの BFT テストネットでテストしている。1 つのバリデータに 80% のパケット損失を 30 秒間注入する。**起きるべき** 3 つのことは何か? **起きるべきでない** 1 つのことは?**
-3. **サイレントなディスク破損は「レッスン1にとって最悪の失敗モード」。なぜか? ここで「サイレント」とは何を意味し、どんなカスケード的な帰結を生むか?**
-4. **\`libfaketime\` は何をシミュレートするか? また、シミュレートしない重要な時間関連の失敗モードは何か?**
-5. **Byzantine chaos のために、なぜ \`tc\` や \`chaosfs\` ではなく、カスタム Reth フォークが必要なのか?**
+FUSE でマウント → MDBX が破損バイトを返したとき Reth が検出するか + 優雅に停止するかサイレント不正 state serve か。
 
-どれか曖昧なら、該当セクションを読み直す。
+### Step 4: libfaketime で time chaos
 
-## 📂 開いておくべきリポと参考
+\`LD_PRELOAD\` で 30s 進める → 「未来の」ブロック提案 → ネットワークが reject + スラッシュ。
 
-- [tigerbeetle/tigerbeetle](https://github.com/tigerbeetle/tigerbeetle) — deterministic simulation testing、金融系システム界で最も規律ある chaos 実践
-- [shopify/toxiproxy](https://github.com/Shopify/toxiproxy) — アプリケーションレベルの network chaos
-- [alexei-led/pumba](https://github.com/alexei-led/pumba) — Docker コンテナ chaos
-- [wolfcw/libfaketime](https://github.com/wolfcw/libfaketime) — time chaos
-- [chaos-mesh/chaos-mesh](https://github.com/chaos-mesh/chaos-mesh) — Kubernetes chaos プラットフォーム (クラスタレベル)
+### Step 5: Byzantine フォークで意図 1 bit 反転
 
----
+\`PayloadBuilder\` を override → state root XOR 1 → 正直ノードが 1 スロット以内に reject すべき。
 
-**🧭 ここまでで積み上げたもの:** あなたのツールキットに chaos engineering を加えた。次のレッスンでは、信頼性トライアングルの第 3 の柱を扱う — **systems-code auditing**: まだトリガされていないために fuzzing も chaos も捕まえられない、潜在的な設計バグを見つける規律。これら 3 つの規律をそろえれば、「動く Revm コード」と「レッスン1の心臓部として ship するのに安全な Revm コード」が区別できるようになる。`,
+### Step 6: 3 実践レベルに進化
+
+CI 内 → Game day → Production。**最後は文化、ツールではない**。
+
+### Step 7: 信頼性トライアングルを完成
+
+Fuzz（正しさ）+ Chaos（耐性）+ Auditing（潜在的）= production-grade。1 つ ship なし = 既知の壊れたコード ship。
+
+## 答え合わせ
+
+- **Byzantine chaos がカスタムフォーク必要な理由**: Byzantine ピアは Reth コードを動かして能動的誤動作（state root 1 bit 反転 / 矛盾投票 / 嘘な state）。\`tc\`（ネットワーク層）/ chaosfs（ファイル層）では「アプリが嘘をつく」を表現不能。コードレベルの override が必須。
+- **「サイレント破損」のカスケード**: ① MDBX が間違った値を返す（チェックサムも一致してしまう種類）→ ② Reth が間違った state を計算 + serve → ③ stateRoot 検証が他ノードと一致しない → ④ ピアから「あなたのブロックは無効」とアナウンス → ⑤ ノードが分岐したフォークに居る → ⑥ 復旧は手動診断 + DB 再 sync。**fork は 1 ノードから始まる**。
+- **\`libfaketime\` でできないこと**: 単調クロック逆行（Rust の \`Instant\` は単調保証 + プロセスがサスペンド/resume したり VM がマイグレートすると見える）→ \`LD_PRELOAD\` は実時計は嘘つけるが \`Instant\` は嘘つけない。カーネル時間ストレッチ or VM pause/resume が必要。
+
+## 合格基準
+
+- 4 chaos カテゴリを即答できる。
+- 各カテゴリのツール 1-2 を言える。
+- Byzantine chaos がカスタムフォーク必要な理由を説明できる。
+- 「サイレント破損」のカスケードを 4 ステップで辿れる。
+- 信頼性トライアングルの 3 柱を即答できる。
+
+## まとめ（3行）
+
+- Chaos engineering = 4 カテゴリ（Network / Disk / Time / Byzantine）の失敗注入、ハッピーパステストでは見えない耐性を検証。
+- Network = \`tc\` / Toxiproxy、Disk = chaosfs、Time = libfaketime、Byzantine = カスタム Reth フォーク（コードレベル override 必須）。
+- 信頼性トライアングル（Fuzz + Chaos + Auditing）= production-grade、3 実践レベル（CI / Game day / Production）で文化として実装。
+`,
                 },
                 {
-                  title: 'Systems-code auditing — Reth / Revm / consensus 実装のバグを見つける',
+                  title: 'レッスン14 — Systems-code auditing',
                   slug: 'systems-code-auditing-ja',
                   type: 'CONTENT',
                   sortOrder: 9,
                   duration: 28,
                   xpReward: 60,
-                  content: `# Systems-code auditing — Reth / Revm / consensus 実装のバグを見つける
+                  content: `# レッスン14 — Systems-code auditing
 
-> 🧭 **systems engineering スタックでの位置:** **信頼性トライアングルの第 3 の柱**。Differential fuzzing は「正しい入力で間違った答え」のバグを捕まえる。Chaos engineering は「乱れた条件下で正しい答えが返らなくなる」バグを捕まえる。Auditing は、まだトリガされていないバグを捕まえる — 今は動くが、特定のテストが exercise したことがない条件下で表面化する潜在的設計欠陥。Systems code (Solidity ではない) では、バグの形が違う — レース条件、状態破損、コンセンサス不変量の違反、\`unsafe\` ブロックの正しさ、信頼境界からの漏れ。本レッスンは、それらを読むことで見つける方法について。
+## 問い
 
-> 📌 **スコープの正直な開示。** これは *systems-code* auditing — Reth / Revm / Rust 製の consensus 実装。スマートコントラクト auditing (Solidity のバグ、コントラクト層での EVM exploit) **ではない**。後者は他で十分カバーされている (Trail of Bits、Code4rena、Spearbit の資料); RethLab はコントラクト auditing について独自の角度を持たない。Systems-code auditing は誰も他がカバーしていない角度であり、RethLab のソースファースト thesis が活きる領域。
+Differential fuzz harness と chaos drill を ship した。コードは両方に通る。**これで完了か？** いや — 両規律はコードを *走らせる* ことで exercise する。Audit は走らせるだけでは表面化しないものを捕まえる — まだ exercise されていないコードパス、今日は動くが将来の修正で壊れる不変量、validate されない trust 仮定。**読むことは独立した規律**。
 
-Differential fuzz harness は ship した。Chaos drill は ship した。コードは両方に通る。これで完了か?
+## 原理（最小モデル）
 
-違う。両方の規律は、コードを *走らせる* ことで exercise する。Audit は走らせるだけでは表面化しないものを捕まえる — まだ exercise されていないコードパス、今日は動くが将来の修正で壊れる不変量、validate されない trust 仮定。**読むことは、それ自体が独立した規律。**
+- **Solidity audit と systems-code audit は別仕事.** Solidity = 整数オーバーフロー / reentrancy / アクセス制御 / oracle 操作。Systems = レース条件 / 状態破損 / コンセンサス不変量違反 / \`unsafe\` 正しさ / 信頼境界漏れ。
+- **5 systems バグクラス.** ① 状態破損ウィンドウ（部分更新 + 中断）+ ② 並行性バグ（論理競合、loom + miri）+ ③ コンセンサス不変量違反（vote dedup / モノトニック time / 2f+1 厳密チェック）+ ④ \`unsafe\` ブロック正しさ（不変量 + 違反条件 + 検証）+ ⑤ 信頼境界漏れ（RPC / P2P / CLI / Engine API）。
+- **\`execute\` ↔ \`unwind\` の対称性.** Reth ステージは「\`execute\` の state 変更を \`unwind\` が完全に undo」が不変量。非対称があれば破損ウィンドウ。
+- **すべての \`unsafe\` に 3 問.** どの不変量に依拠? どの条件で違反? どう verify?（テスト / 型 / コメント証明）。「分からない」なら finding。
+- **4 信頼境界.** RPC（認証 + レートリミット + ペイロード検証）+ P2P（state root 検証 + tx 署名 + trie ノード）+ CLI / config（chainspec 内部一貫性）+ Engine API（hardfork rule）。
+- **ツールは reviewer を増幅、置き換えない.** \`cargo audit\` / \`cargo geiger\` / \`kani\` / \`loom\` / \`miri\` / \`cargo clippy\`。
+- **信頼性トライアングルを完成.** Fuzz（正しさ）+ Chaos（耐性）+ Auditing（潜在的）。
 
-## 1. なぜ systems-code auditing はスマートコントラクト auditing と違うか
+## 具体例
 
-スマートコントラクト auditing には well-known な分類がある: 整数オーバーフロー、reentrancy、アクセス制御のバグ、oracle 操作、flash-loan exploit。バグクラスのライブラリは有限でよく整理されている。バグの単位は Solidity / EVM コントラクトのレベル。
+5 バグクラスのチェックリスト:
 
-Systems-code auditing には別の分類がある:
-- レース条件 (Tokio タスクの interleaving が誤った state を生む)
-- 状態破損のウィンドウ (非原子的な書き込みが、間違ったタイミングで中断される)
-- コンセンサス不変量の違反 (safety/liveness の仮定が静かに破られる)
-- \`unsafe\` ブロックの正しさ (すべての \`unsafe\` は soundness の境界)
-- 信頼境界からの漏れ (P2P ピア trust、RPC auth bypass、signer trust)
+| バグクラス | 探す共通パターン |
+| :--- | :--- |
+| 状態破損ウィンドウ | tx ラッパなし複数ステップ書き込み / 「保存 → return」失敗パス / 索引と本体の非同期更新 |
+| 並行性バグ | await 越し \`Arc<Mutex<T>>\` / 共有 \`Arc<AtomicU64>\` の read-then-write / channel 順序前提 / \`spawn\` の古い snapshot キャプチャ |
+| コンセンサス不変量違反 | \`(validator, slot)\` 重複排除なし vote / 単調 timestamp 前提 fork-choice / 2f+1 緩いチェック / slashing-evidence の bandit 検証 |
+| \`unsafe\` 正しさ | 不変量 + 違反条件 + 検証手段の 3 問 |
+| 信頼境界漏れ | RPC 特権メソッド認証 / P2P state 検証 / chainspec 一貫性 / Engine API hardfork rule |
 
-異なるバグの形、異なる思考モデル、異なるツール。Solidity コントラクトの auditor と Reth フォークの auditor は、両方とも「auditing」と呼ばれていても、**別の仕事をしている**。
-
-本レッスンは systems-code 側を扱う。これが Tempo / OP / Hyperliquid のフォークに対して重要になる audit。
-
-## 2. Rust EVM スタックの 5 つのバグクラス
-
-### 2.1 状態破損のウィンドウ
-
-「状態破損のウィンドウ」とは、state が部分的に更新された段階で予期しない中断 (プロセスクラッシュ、MDBX 書き込み失敗、下流呼び出しの panic) が起きるコードパス。部分的な更新が rollback されないと、ディスク上の状態が不整合になる。
-
-Audit の問い: **すべての状態変更について、実行が途中で止まったら何が起きるか?**
-
-探すべき共通パターン:
-- トランザクションラッパなしの複数ステップ書き込み
-- 保存が静かに失敗しうる「保存 → return」シーケンス
-- 基盤ストアが commit される前に更新されるキャッシュ
-- 索引対象のデータと別個に更新されるインデックス
-
-Reth のステージ commit ロジックは audit すべき canonical な例。各ステージの \`execute\` は、\`execute\` がしたことを完全に undo する \`unwind\` と対になっているべき。Auditor は両方を読み、こう問う: **\`execute\` が行う state 変更で、\`unwind\` が undo しないものはないか?** あれば、それが破損のウィンドウ。
-
-### 2.2 並行性バグ
-
-Rust の型システムはコンパイル時にデータ競合を防ぐ。*論理競合* は防がない — 複数の Tokio タスクが interleave した結果、間違った出力を生む状況。
-
-Audit の問い: **すべての共有 state について、誰がいつそれを変更するかの契約は何か?**
-
-探すべき共通パターン:
-- \`await\` を跨いで保持される \`Arc<Mutex<T>>\` (デッドロックリスク; ときには正しさのリスク)
-- 同じ \`Arc<AtomicU64>\` を read-then-write する複数タスク (TOCTOU)
-- 送信側の順序が因果関係を保つと仮定する channel 受信側
-- state の古いスナップショットをキャプチャするタスクの \`tokio::spawn\`
-
-役に立つツール: \`loom\` (並行性順列テスト)、\`miri\` (マルチスレッド実行下での UB 検出)。
-
-### 2.3 コンセンサス不変量の違反
-
-すべてのコンセンサスプロトコルには明示的な不変量 (同じ高さに 2 つの finalize されたブロックがない) と暗黙の不変量 (提案者ローテーションは公平な分布を生む、バリデータの投票はリプレイできない) がある。コンセンサス実装をフォークやカスタマイズすると、これらの不変量を静かに違反するのは容易。
-
-Audit の問い: **すべての consensus 関連のコードパスについて、どの不変量に触れていて、このコードパスがそれを保つか?**
-
-探すべき共通パターン:
-- \`(validator, slot)\` で重複排除しない vote 処理 — リプレイ攻撃
-- 単調なタイムスタンプを仮定する fork-choice コード — クロックドリフトで壊れる
-- 2f+1 quorum を厳密にチェックしない finality ロジック — quorum 未満を受け入れる
-- 「バリデータが署名した」条件を verify しない slashing-evidence ハンドリング — 偽陽性 slashing
-
-HotStuff や Tendermint 実装の audit は重い作業 — プロトコル論文を 1 つのウィンドウで開き、コードを別のウィンドウで開き、「不変量 X は コードパス Y で保たれている」スプレッドシートを持つ必要がある。
-
-### 2.4 \`unsafe\` ブロックの正しさ
-
-Rust のすべての \`unsafe\` ブロックはセキュリティの境界。Borrow checker の保証をオプトアウトし、コンパイラなら強制したはずの安全性不変量をプログラマが手作業で維持したと主張する。
-
-Audit の問い (すべての \`unsafe\` に対して 3 部構成):
-1. **この \`unsafe\` ブロックはどの不変量に依拠しているか?**
-2. **現在または将来のどの条件で、その不変量が違反されうるか?**
-3. **不変量はどう verify されているか — テスト、型、コードコメントの証明?**
-
-どれかの答えが「分からない」なら、その \`unsafe\` ブロックは audit finding。
-
-実例: Revm のスタック操作は性能のために \`unsafe\` \`get_unchecked\` を使うことがある。依拠している不変量は「この呼び出しの前にスタック深さが verify された」。違反しうる条件: スタック深さの verification とスタックアクセスを分離する refactor。Verification 手段: アンダーフロー的シナリオを exercise するテスト。
-
-ツール: \`cargo geiger\` がクレートごとに \`unsafe\` ブロックを数える。Audit は数を 0 に減らすことではない — 各 \`unsafe\` が明確な、ドキュメント化された不変量を持つことを確認すること。
-
-### 2.5 信頼境界からの漏れ
-
-ノードへのすべての外部入力は信頼境界。Auditor はすべての境界をマップし、こう問う: **何が境界で検証され、何が黙って信頼されているか?**
-
-Reth ノードの 4 つの主要な信頼境界:
-- **RPC** — クライアントは任意のリクエストを submit できる。Auth、レートリミット、ペイロード検証はすべてこの境界に置かれるべき。
-- **P2P** — ピアはブロック、トランザクション、state-trie ノードを送ってくる。それぞれは信頼される前に検証されなければならない。
-- **CLI / config** — ノードオペレータの config ファイル。Adversarial 性は低いがそれでも境界 (genesis hash の typo など)。
-- **Engine API** — consensus client がブロック実行リクエストを供給する。Consensus rule に照らして検証されるべき。
-
-各境界での共通のバグ:
-- RPC: 特権メソッド (例: \`admin_addPeer\`) に認証が抜けている
-- P2P: state root に対して検証せずに、ピアの state についての主張を受け入れる
-- CLI: chainspec が内部一貫しているかを検証しない
-- Engine API: EL がまだ知らない hardfork rule に違反するブロックを受け入れる
-
-## 3. Reth PR を読む — 実例
-
-Auditing は常に独立した review session ではない。consensus に影響するコードに触れる *すべての PR* を、正しい問いを持って読むことが auditing。
-
-実例: Reth PR が \`stage commit ロジック\` を refactor して新しい最適化を加える — 1 つずつではなくステージのグループをバッチで commit するもの、と想定する。
-
-読みながら問うべきこと:
-1. **旧 \`execute → commit → unwind\` フローはどうだったか? 新フローは?**
-2. **新しい「バッチ commit」ごとに、どの state に触れるか?**
-3. **バッチ commit が途中で失敗したら何が起きるか?** 具体的には: 新コードは状態破損のウィンドウを導入したか?
-4. **\`unwind\` はバッチ化されたケースに対応するよう更新されたか?** 違うなら、それがバグ。
-5. **「partial-batch を execute、crash、restart」のテストはあるか?** なければ、テストギャップそのものが finding。
-
-PR をバグのために読むとはこういう形。5 つの問いはいつも同じ形 — 単に PR が変える code area に当てはめるだけ。
-
-## 4. コンセンサス実装をその不変量に照らして audit する
-
-コンセンサス実装は構造化された方法で auditable: プロトコルの不変量を列挙し、それぞれの不変量について影響するコードパスをたどる。
-
-例: HotStuff は safety 不変量 *「正しいレプリカは同じ高さの 2 つの矛盾するブロックには vote しない」* を持つ。Audit:
-
-1. **レプリカが vote を produce するすべてのコードパスを見つける。** 通常コードベース内で 1〜3 箇所。
-2. **それぞれについて、vote の前にどの state が consult されるかを確認する。** 具体的には: バリデータの local「高さ N で最後に vote したブロック」がチェックされるか?
-3. **何がこの state を再起動を跨いで永続化するか?** in-memory のみなら、再起動誘発の double-vote はバグ。
-4. **チェックは vote 送信と原子的か?** 「チェック」と「vote 送信」の間にウィンドウがあれば、並行コードパスが 2 回 vote しうる。
-
-プロトコルが指定するすべての不変量について繰り返す。退屈だが mechanical な作業。
-
-## 5. Systems-code auditor のためのツール
-
-小さな道具箱で十分カバーできる:
+ツール表:
 
 | ツール | 何をするか | いつ使うか |
-|---|---|---|
-| \`cargo audit\` | 依存の既知の CVE をチェックする | すべての CI で走らせる; ベースラインの衛生 |
-| \`cargo geiger\` | クレートごとに \`unsafe\` ブロックを数える | Audit のスコーピングに使う — どのクレートが最も \`unsafe\` review が必要か? |
-| \`kani\` | Rust 用のモデルチェッカ | 小さな \`unsafe\` ブロックや critical な関数に使う; プログラム全体にはスケールしない |
-| \`loom\` | 並行性順列テスト | \`Arc<Mutex<T>>\` を多用するコードパスに使う; レース条件を決定論的に見つける |
-| \`miri\` | 実行時 UB 検出 | テストのサブセットを \`miri\` 下で走らせて \`unsafe\` 内の未定義動作を検出 |
-| \`cargo clippy -- -W clippy::all\` | Lint ベースのバグ探し | ベースライン; よくあるミスを捕まえる |
-| 手動 review チェックリスト | 上記の 5 つのバグクラスを体系的に適用 | 常に |
+| :--- | :--- | :--- |
+| \`cargo audit\` | 依存の既知 CVE チェック | 全 CI で走らせる、ベースライン衛生 |
+| \`cargo geiger\` | \`unsafe\` ブロック数カウント | スコーピング: どのクレートが最も review 必要か |
+| \`kani\` | Rust 用モデルチェッカ | 小さな \`unsafe\` ブロックや critical な関数 |
+| \`loom\` | 並行性順列テスト | \`Arc<Mutex<T>>\` 多用パス、レース条件決定論的検知 |
+| \`miri\` | 実行時 UB 検出 | テストサブセットを \`miri\` 下で走らせ \`unsafe\` 内 UB 検出 |
+| \`cargo clippy\` | Lint ベースバグ探し | ベースライン、よくあるミス |
+| 手動 review チェックリスト | 5 バグクラスを体系的適用 | 常に |
 
-これらのツールは、reviewer が探そうと思わないバグは見つけない。**ツールは慎重な auditor を増幅するもので、置き換えるものではない。**
+Audit レポート構造（Sigma Prime / Trail of Bits / OpenZeppelin 共通）:
 
-## 6. Auditor の deliverable
+各 finding:
+- Severity（Critical / High / Medium / Low / Informational）
+- Title（1 行サマリー）
+- Location（ファイル + 行番号）
+- Description（2-3 文）
+- Exploit / consequence
+- Recommendation
+- Status（Open / Acknowledged / Fixed）
 
-Systems-code audit はレポートを produce する。業界標準の構造 (Trail of Bits、Sigma Prime、OpenZeppelin、ConsenSys Diligence、Spearbit が採用):
+レポート全体: Executive summary（1 ページ）+ Methodology + Findings + Out-of-scope。
 
-各 finding について:
-- **Severity** (Critical / High / Medium / Low / Informational)
-- **Title** (1 行のサマリー)
-- **Location** (ファイルと行番号)
-- **Description** (バグが何か、2〜3 文で)
-- **Exploit / consequence** (バグが trigger されたら何が起こりうるか)
-- **Recommendation** (具体的に何を変えるか)
-- **Status** (Open / Acknowledged / Fixed)
-
-レポート全体について:
-- **Executive summary** (1 ページ; 何を audit したか、スコープ、トップレベルの findings)
-- **Methodology** (audit がどう実施されたか)
-- **Findings** (上のリスト)
-- **Out-of-scope items** (意図的に audit しなかったものとその理由)
-
-良い audit レポートは公開されている。Sigma Prime、OpenZeppelin、Spearbit による Reth / Revm / Foundry / その他の Rust EVM コンポーネントの既存 audit を読む — 無料で入手でき、フォーマットはファーム間で共通。
-
-## 7. 信頼性トライアングルを振り返る
-
-3 つの信頼性規律、それぞれが異なるバグクラスを捕まえる:
+信頼性トライアングル振り返り:
 
 | 規律 | 捕まえる | 見逃す |
-|---|---|---|
-| **Differential fuzzing** | 有効な入力で間違った答え | 失敗モード; 潜在的設計バグ |
-| **Chaos engineering** | 乱れた条件下で正しい答えが返らなくなる | 注入されなかったコードパスのバグ; 潜在的バグ |
-| **Systems-code auditing** | まだ exercise されていないコードパスの潜在的設計バグ | 特定のランタイム trigger が必要なバグ; unknown unknown |
+| :--- | :--- | :--- |
+| Differential fuzzing | 有効入力で間違った答え | 失敗モード、潜在的設計バグ |
+| Chaos engineering | 乱れた条件下で正しい答えが返らない | 注入されなかったコードパスのバグ、潜在的 |
+| Systems-code auditing | まだ exercise されていないコードパスの潜在的設計バグ | ランタイム trigger が必要な特定バグ、unknown unknown |
 
-3 つあわせて、serious な L1 チームが自分に課す信頼性のバー。1 つも ship しなければ、既知の壊れたコードを ship したことになる。1 つか 2 つ ship したら、既知のギャップ付きでコードを ship したことになる。3 つすべて ship したら、自分のフォークを「production-grade」と呼ぶ資格を得たことになる。
+## 失敗例（誤解）
 
-## 想起
+「Solidity audit 経験で systems-code も audit できる」— **間違い**。バグクラスが違う。Solidity = ロジック層（reentrancy）/ Systems = システム層（レース条件、unsafe、信頼境界）。別の思考モデル + ツール。
 
-スクロールせずに:
+「\`cargo geiger\` で \`unsafe\` 数を 0 に減らすのが audit」— **間違い**。Audit は数を減らすことではなく **各 \`unsafe\` が明確な + ドキュメント化された不変量を持つこと**。\`unsafe\` 自体は valid な道具、暗黙の仮定が問題。
 
-1. **スマートコントラクト auditing と systems-code auditing は別の仕事。それぞれが他方では捕まえないバグクラスを 3 つずつ挙げる。**
-2. **すべての \`unsafe\` ブロックについて、3 つの問いを問うべき。それは何か?**
-3. **Reth のステージ \`execute\` と \`unwind\` は完全に対称であるべき。この対称性が示唆する audit の問いは何か?**
-4. **Loom と Miri は異なる目的を持つ。それぞれをどんな時に使うか?**
-5. **なぜ「differential fuzzing + chaos engineering + auditing」が信頼性のバーであり、どれか 1 つか 2 つではないのか?**
+「Audit はリリース前の独立 review session」— **半分間違い**。Independent audit も必要だが、**consensus に影響する全 PR を正しい問いを持って読む** ことが日々の auditing。PR review に audit マインドセットを織り込まないと event 駆動になり遅れる。
 
-どれか曖昧なら、該当セクションを読み直す。
+> 🛑 **予測。** Reth の \`execute\` ↔ \`unwind\` 対称性が示唆する audit の問いは？（答え: **\`execute\` が行う state 変更で、\`unwind\` が undo しないものはないか？** あれば破損ウィンドウ。具体的に: ① \`execute\` が書き込むテーブルすべてを列挙、② \`unwind\` がそれぞれを reverse する処理を持つか確認、③ index / cache / 派生データも含めて完全か。**1 つでも非対称があれば finding**。）
 
-## 📂 読む価値のある reference audit
+## ステップで組み立てる
 
-- [Sigma Prime — public audits](https://github.com/sigp/public-audits) — systems-code audit フォーマットに最も近い業界 reference
-- [Trail of Bits — publications](https://github.com/trailofbits/publications) — 多数の Rust 監査; 良い例
-- [OpenZeppelin — security audits](https://blog.openzeppelin.com/security-audits/) — コンセンサス不変量分析が強い
-- [ConsenSys Diligence — audit reports](https://consensys.io/diligence/audits/) — インフラ含む幅広いカバレッジ
-- [Spearbit — audit portfolio](https://github.com/spearbit/portfolio) — Rust / Solidity / consensus
+### Step 1: 5 バグクラスを即答
 
----
+状態破損 / 並行性 / コンセンサス不変量 / \`unsafe\` / 信頼境界。
 
-**🧭 ここまでで積み上げたもの:** 信頼性トライアングルが完成。**differential fuzzing** (正しさ)、**chaos engineering** (耐性)、**systems-code auditing** (潜在的バグ) — 3 つそろった。SE substrate (DB / VM / network / 並行性) と 4 つの力 (敵対的環境 / 検証可能性 / 順序付け / 無停止移行) と組み合わせれば、「Rust EVM コードが書ける」と「Hyperliquid / Tempo / OP-stack 品質のバーで Rust EVM コードを ship できる」を分ける skill set がそろう。Building tier はそのすべてを実アプリに適用する場所。`,
+### Step 2: \`execute\` ↔ \`unwind\` audit
+
+Reth ステージで両方を読み、state 変更の完全対称性を確認。非対称 = finding。
+
+### Step 3: 全 \`unsafe\` に 3 問
+
+不変量 / 違反条件 / 検証手段。1 つでも「分からない」= finding。
+
+### Step 4: 4 信頼境界をマップ
+
+RPC / P2P / CLI / Engine API。各境界で「何が検証され、何が黙って信頼されているか」を問う。
+
+### Step 5: ツールを正しく使う
+
+\`cargo geiger\` でスコーピング → \`loom\` で並行性 → \`miri\` で UB → \`kani\` で critical \`unsafe\` → \`clippy\` で lint。チェックリストが基盤。
+
+### Step 6: コンセンサス実装の不変量 audit
+
+プロトコル不変量（HotStuff の「正しいレプリカは同じ高さで矛盾するブロックに vote しない」）をリスト → 各不変量について影響コードパス追跡 → state 永続化 / 原子性確認。
+
+### Step 7: 信頼性トライアングルを完成
+
+Fuzz + Chaos + Auditing。1 つ ship なし = 既知ギャップ ship。
+
+## 答え合わせ
+
+- **Solidity audit vs systems-code audit のバグクラス差**: Solidity = 整数オーバーフロー / reentrancy / アクセス制御 / oracle 操作（言語 + コントラクト層）vs Systems = レース条件 / 状態破損ウィンドウ / コンセンサス不変量 / \`unsafe\` / 信頼境界（ランタイム + 並行性 + 物理層）。**別仕事、別ツール、別 reviewer**。
+- **3 問が全 \`unsafe\` に適用される理由**: \`unsafe\` は「Rust の安全性保証をプログラマが手作業で維持する」契約 → 不変量明示なしでは契約が不明 → 将来の refactor で違反可能。**契約が明示されていれば違反検出可能**。
+- **Loom と Miri の使い分け**: **Loom** = 並行性順列テスト（複数スレッド interleaving を網羅、レース条件決定論的検知）。**Miri** = 実行時 UB 検出（\`unsafe\` 内の未定義動作、メモリ違反、aliasing 違反）。Loom は「論理が正しいか」、Miri は「メモリ安全性」。
+
+## 合格基準
+
+- 5 systems バグクラスを即答できる。
+- \`execute\` ↔ \`unwind\` audit の問いを言える。
+- 全 \`unsafe\` の 3 問を暗唱できる。
+- 4 信頼境界の各々で問うべきことを言える。
+- 6 ツールの役割を即答できる。
+
+## まとめ（3行）
+
+- Systems-code audit は Solidity audit と別仕事 — 5 バグクラス（状態破損 / 並行性 / コンセンサス不変量 / \`unsafe\` / 信頼境界）。
+- \`execute\` ↔ \`unwind\` 対称性 / 全 \`unsafe\` の 3 問 / 4 信頼境界マップ / 6 ツールの使い分けが日々の audit 道具。
+- 信頼性トライアングル（Fuzz + Chaos + Auditing）3 つそろえて初めて production-grade、1 つ ship なし = 既知ギャップ ship。
+`,
                 },
                 {
-                  title: 'オープンソース貢献のワークフロー — Paradigm 品質の PR を Reth / Revm / Alloy に merge してもらう',
+                  title: 'レッスン15 — OSS 貢献ワークフロー（Reth / Revm / Alloy）',
                   slug: 'oss-contributor-workflow-ja',
                   type: 'CONTENT',
                   sortOrder: 10,
                   duration: 28,
                   xpReward: 60,
-                  content: `# オープンソース貢献のワークフロー — Paradigm 品質の PR を Reth / Revm / Alloy に merge してもらう
+                  content: `# レッスン15 — OSS 貢献ワークフロー（Reth / Revm / Alloy）
 
-> 🧭 **systems engineering スタックでの位置:** **コードの上に乗る社会的グラフの層**。RethLab の他のすべてのレッスンは、コードを読む、または書くことを教える。本レッスンは、書いたコードがどう本番で動くコードになるか — つまり Reth / Revm / Alloy にとっては、Paradigm のレビューバーを通すこと — を教える。良いコードを書く技術スキルと、それを merge してもらう社会スキルは別物で、後者を磨くことが「このスタックを読める」を「このスタックの認知された貢献者である」に変える — それが Paradigm / Tempo / Hyperliquid が採用シグナルとしているまさにそれ。本レッスンは systems-code auditing のレッスンと対になる: auditing はレビュアーが何を見るかを教え、本レッスンはそのレビューに通るコードの書き方を教える。
+## 問い
 
-> 📌 **対象。** Inside Alloy / Revm / Reth の大半を読了し、動く Rust toolchain を持っている前提で書かれている。まだの場合 — 貢献ワークフローの概念は依然として適用できるが、具体例はそれらのコースのパターンを内在化した後でより深く届く。
+crypto 界の大半のエンジニアはコンパイルする Rust を書ける。最初のレビューで Reth / Revm / Alloy に merge される Rust を書けるエンジニアは少ない。**Paradigm は upstream PR queue で見覚えのある人を採用する**。そのギャップはどう埋めるか？
 
-Crypto 界の大半のエンジニアは、コンパイルする Rust コードを書ける。最初のレビューで Reth、Revm、Alloy に merge される Rust コードを書けるエンジニアは少ない。本レッスンが埋めるのは、その間のギャップ。
+## 原理（最小モデル）
 
-なぜそのギャップが重要か: **Paradigm は upstream の PR queue で見覚えのある人を採用する。** Tempo も同じ。Hyperliquid も同じ。GitHub stars ではない。Twitter 投稿でもない。気にしているプロジェクトで実際に merge された PR を見ている。RethLab が 13 コースで教えるスキルは必要 — そのうえで upstream の PR queue で見覚えのある人になることが、学んでいる相手のチームに採用される条件。
+- **PR を無視させる 6 原因.** 不明瞭なタイトル / 「なぜ」抜け description / 非 atomic commit / スタイル不一致 / テスト規約違反 / defensive 応答。
+- **ルーキング期間 2 週.** CONTRIBUTING.md / 直近 20 merged PR / 直近 10 close（無し merge）PR / メンテナの最近の PR / \`good first issue\` / TODO コメント。
+- **エスカレーション梯子 5 段.** Docs/README typo → テストケース追加 → 小バグ修正 → 小機能 → アーキ変更。**#5 から始めると無視される**。
+- **Paradigm 品質 PR の解剖.** Title（命令形、狭スコープ）+ Description 3 セクション（What / Why / How to verify）+ Atomic commits + コード（cargo fmt + clippy + 既存パターン合致）+ テスト（規約合致 + 意味あるエラー）+ 性能主張にはベンチ数字。
+- **非自明変更は RFC.** Motivation / Design / Alternatives / Drawbacks / Prior art。**作業の多くは Alternatives と Drawbacks**。
+- **「チームが書いたものと思うか？」テスト.** 既存 trait-first パターン / 不要新抽象なし / 隣接命名合致 / unsafe 避ける / プロジェクトエラー型一致 / なぜをコメント。
+- **応答パターン.** 速 + 同意 → merge / 遅 + defensive → close。「これを OK にするには何が必要？」が再議論より良い。
+- **Reputation 弧 5 段.** 1 merged（存在）→ 5（認識）→ 10（領域信頼）→ 20（非公式 expert）→ 50+（実質チーム、Paradigm 採用検討）。**月でなく年単位**。
 
-本レッスンは、見覚えのある人になる方法について。
+## 具体例
 
-## 1. なぜこれが独立したスキルなのか
+エスカレーション梯子:
 
-優れた systems エンジニアでも、PR を無視されることはある。理由:
+1. **Docs / README typo** — ほぼ確実 merge。注意深く読む人と印象
+2. **テストケース追加** — edge case カバー。正しさを考える人
+3. **小バグ修正** — \`good first issue\` ラベル。navigate できる人
+4. **小機能追加** — 有用だが load-bearing でない。判断力ある人
+5. **アーキ変更** — 上 4 つの後でなければ無理
 
-- タイトルが不明瞭でレビュアーがスキップする
-- description が *なぜ* を言わないので、レビュアーが評価できない
-- commit が atomic でなく、レビュアーが diff を信頼できない
-- コードが upstream のスタイルに合っていないので、レビュアーが直さなければならない
-- テストがないか、テスト規約に合っていないので、レビュアーが書かなければならない
-- フィードバックへの反応が defensive で、レビュアーは easier な PR に移る
+PR description 3 セクション:
 
-それぞれは小さなこと。合わせると「PR が 3 日でマージ」と「PR が 6 ヶ月開いたまま、その後 close」の差になる。
+\`\`\`
+1. What changed (1段落、diffが何をするか)
+2. Why (1段落、動機; 該当 issue 番号引用)
+3. How to verify (レビュアー向け明示指示: テスト + 手動チェック)
+\`\`\`
 
-良いニュース: これらすべては学べるスキル。大半のエンジニアが学ばないのは、誰も明示的に教えないから。本レッスンが教える。
+RFC 構造（非自明変更）:
 
-## 2. 部屋を読む — 1 行書く前に upstream の規範を知る
+1. Motivation — どんな問題 + なぜ今
+2. Design — 何を提案 + API スケッチ
+3. Alternatives — 他に何を考え + なぜ却下
+4. Drawbacks — 提案の悪い点正直リスト
+5. Prior art — 他プロジェクトの扱い
 
-すべてのプロジェクトには、コードを単独で読んでも推測できない暗黙の規約がある。最初の 2 週間は読むことに使う:
+応答パターン比較:
 
-- **CONTRIBUTING.md** — 公式版のルール
-- **直近 20 件の merged PR** — 実際に accept されるもの (公式ルールと食い違うことが多い)
-- **直近 10 件の merge せずに close された PR** — accept されないもの (こちらの方が示唆的)
-- **メンテナ自身の最近の PR** — 「良い」の gold standard
-- **\`good first issue\` ラベルの issue** — 新参者に向くと明示されているもの
-- **コードベースの TODO / FIXME コメント** — しばしば「誰かが書くのを待っている would-be PR」
+**良い（速 + 同意）:**
+- Reviewer: 「ケース X は？」
+- You: 「指摘ありがとう、テスト追加 + 修正入れる」（数時間以内）
+- You: [push]（1-2 日以内）
+- Reviewer: ✓ merge
 
-Reth specifically:
-- \`paradigmxyz/reth\` の CONTRIBUTING.md (specific なので必読)
-- Discord (\`#contributing\` チャネル)
-- 週次の office hours (Discord で告知)
+**悪い（遅 + defensive）:**
+- Reviewer: 「ケース X は？」
+- You: [元設計が X を正しく扱う 200 単語 defense]
+- Reviewer: [engage せず easier PR に移る]
+- 3 週後: PR が inactivity で close
 
-Revm:
-- \`bluealloy/revm\` の CONTRIBUTING.md
-- メンテナの好みは upstream Reth より厳しい; 直近 PR を読んで校正する
+Reputation 弧:
 
-Alloy:
-- アクティブなプロジェクト; 規約が動く; docs より直近 PR を頻繁にチェックする
+| Merged 数 | 状態 |
+| :--- | :--- |
+| 最初の PR（小修正） | 社会的グラフに存在 |
+| 5 件 | メンテナがハンドル認識、PR を見やすくなる |
+| 10 件 | ある領域で信頼できる contributor |
+| 20 件 | 非公式 expert、新 contributor の例に指される |
+| 50+ 件 | 実質チームの一部、設計判断で相談される、**Paradigm 採用検討** |
 
-このルーキング期間は重要。このステップをスキップして即 PR を投げ始めるエンジニアは無視される — 部屋の空気を知らないから。
+監視 4 情報源:
 
-## 3. 最初の PR を正しく選ぶ
+1. Issue tracker（\`good first issue\` + \`help wanted\` フィルタ）
+2. PR queue（active review コメントは無料の教育）
+3. Discord / Telegram（\`#contributing\`、低リスクの「これは正しい approach か」質問）
+4. コードベース TODO / FIXME（待っている would-be PR）
 
-最初の PR の仕事は大きな技術貢献ではない。**プロジェクトの社会的グラフに自分の存在を確立すること**。だから小さいものを選ぶ。
+週 ~30 分。情報は複利。
 
-エスカレーションの梯子:
+## 失敗例（誤解）
 
-1. **Docs / README の typo** — ほぼ確実に merge される。注意深く読む人だと印象づける。
-2. **テストケースの追加** — 既存テストが見逃している edge case をカバーする。正しさを考える人だと印象づける。
-3. **小さなバグ修正** — \`good first issue\` ラベルが付いた issue に対する。コードベースを navigate できる人だと印象づける。
-4. **小さな機能追加** — 有用だが load-bearing ではない追加。判断力のある人だと印象づける。
-5. **アーキテクチャの変更** — 上の 4 つの後でなければ無理。その履歴なしには無視される。
+「最初の PR で大きな技術貢献を見せる」— **間違い**。最初は **社会的グラフに存在を確立** が仕事。小さい修正で reliability を示す → 5-10 merge で初めて大きな PR の聞いてもらえる地位。
 
-逆パターン: #5 から始めること。「X サブシステムに設計問題 Y があると気づきました、これは refactor です」で最初の PR を開くエンジニアは、技術的に正しくても無視される。評判が先。
+「Refactor PR が技術的に正しいなら受け入れられる」— **間違い**。履歴のない人の refactor は批判として読まれる。「あなたのコードがパターン X を使っているのに気づいた、Y で書き直した」は最悪パターン。
 
-## 4. Paradigm 品質の PR の解剖
+「PR が止まったら ping し続ける」— **間違い**。14 日 + 28 日に 1 度ずつ ping、それ以降は沈黙が答え。**Social capital を nagging で焼かない**。
 
-Reth のメインコントリビュータが書いた merged PR を 1 つ開き、構造を研究する:
+「PR を Twitter で marketing」— **間違い**。merge 前の自己宣伝は協力前の self-promotion として読まれ、メンテナはそれを見る。
 
-**Title** — 命令形、スコープを狭く。悪い: "Some improvements to staging." 良い: "stages: fix unwind for SenderRecoveryStage on partial commit"
+> 🛑 **予測。** Reviewer が「ケース X は？」と聞く。応答パターン 2 つあるが、どちらが merge させる？（答え: **速 + 同意 + 修正 push**（数時間以内応答、1-2 日以内 commit、修正 + テスト追加）。**遅 + defensive**（元設計の 200 単語 defense）はレビュアーが engage せず easier PR に移る → 3 週後 inactivity close。**デフォルトでレビュアーが正しいと仮定**。同意しないなら「これを OK にするには何が必要か？」を聞くのが再議論より良い — レビュアーは多数の PR を扱い、長い議論を相手にする余裕がない。）
 
-**Description** — 3 セクション:
-1. **What changed** — 1 段落、diff が何をするか
-2. **Why** — 1 段落、動機; 該当する場合は issue 番号を引用
-3. **How to verify** — レビュアー向けの明示的な指示: どのテストを走らせるか、手動で何の挙動をチェックするか
+## ステップで組み立てる
 
-**Commits** — それぞれが論理的単位。Commit メッセージが「何が変わったか、なぜか」のストーリーを語る。Commit を 1 行で要約できなければ、commit が大きすぎる。
+### Step 1: 2 週のルーキング期間
 
-**コード** — \`cargo fmt\` と \`cargo clippy -- -W clippy::all\` を通る。プロジェクトの既存パターンに合っている (隣接ファイルを見る)。実際の修正の一部ではない style の「改善」は入れない。
+CONTRIBUTING.md + 直近 20 merged + 直近 10 close + メンテナ最近 PR + \`good first issue\` + TODO。
 
-**テスト** — 新しい挙動には新しいテスト、バグ修正には regression テスト。命名規約はプロジェクトに合わせる (例: Reth は integration テストに \`tests/it/\`、unit に \`#[test]\` を使う)。Failing テストは意味のある形で fail する (「expected X, got Y」)、不透明にではない (「assertion failed」)。
+### Step 2: エスカレーション梯子で最初の PR を選ぶ
 
-**性能の主張** — 「これは速い」と言うなら、ベンチマーク数字を含める。ベンチマークがないなら、性能の主張はしない。
+Typo か edge case テスト追加。「履歴を作る」が仕事。
 
-パターン: すべての選択が正当化できるべき。レビュアーに「なぜこの方法?」と聞かれたら、答えが用意されているべき。
+### Step 3: Paradigm 品質 PR の 5 要素を毎回チェック
 
-## 5. 非自明な変更のための RFC パターン
+Title + Description 3 セクション + Atomic commits + コード（fmt + clippy + パターン）+ テスト（規約合致）。
 
-小さな修正より大きいものには、コードを書く前に RFC (Request for Comments) を書く。規律的な版:
+### Step 4: 非自明変更は RFC
 
-**いつ RFC するか:**
-- 複数 crate にまたがる変更
-- 新しい public trait や型
-- Breaking API 変更
-- 新しい外部依存
-- consensus に影響する挙動に触れるもの
+5 セクション（Motivation / Design / Alternatives / Drawbacks / Prior art）。**Alternatives と Drawbacks に時間を**。
 
-**RFC 構造 (Reth の緩い慣例):**
-1. **Motivation** — どんな問題を解いているか、なぜ今か
-2. **Design** — 何を提案するか、API スケッチ付き
-3. **Alternatives** — 他に何を考え、なぜ却下したか
-4. **Drawbacks** — 自分の提案の悪い点の正直なリスト
-5. **Prior art** — 他の Rust EVM プロジェクト (または非 EVM システム) はどう扱っているか
+### Step 5: 「チームが書いたものと思うか」テスト
 
-**どこに投稿するか:** \`rfc\` ラベル付きの GitHub issue、またはプロジェクト用のフォーラム投稿 (Reth にはフォーラムスレッド構造がある)。
+既存パターン合致 / 不要新抽象なし / 命名合致 / unsafe 避ける / エラー型一致 / なぜをコメント。
 
-規律: レビュー後に再設計が必要な 2000 行のコードを書く *前* に、設計について真剣に考える。シニアコントリビュータの大半は、なしで済む場合でも RFC する — 明確さを強制するから。
+### Step 6: 応答規律
 
-**読書推奨:** Reth または Revm の最近 merged された RFC を見つけて読み、作業の多くが「alternatives」と「drawbacks」セクションにあることに気づく。
+速 + 同意 + 修正 push、deadlock では「これを OK にする方法は？」、止まったら 14 日 + 28 日に ping、以降沈黙が答え。
 
-## 6. Upstream コードのように読めるコードを書く
+### Step 7: 4 情報源を週 ~30 分
 
-レビュアーの隠れたテスト: *「この PR が contributor からだと知らなかったら、チームが書いたものと思うか?」*
+Issue tracker + PR queue + Discord + TODO コメント。複利で効く。
 
-このテストに通るコード:
-- コードベースの残りが使うのと同じ trait-first パターンを使う (\`N: Network\` で generic、適切な場所で \`auto_impl\`、config 用の builder パターン)
-- clever であるために新しい抽象を導入しない
-- 隣接コードの命名に合わせて型と関数を命名する
-- 具体的な perf 正当化を明確に説明できる場合を除いて \`unsafe\` を避ける
-- プロジェクトのエラー型 (\`eyre::Result\`、\`RethError\` など) を隣接コードと一致して使う
-- *なぜ* をコメントする、*何が* ではなく
+## 答え合わせ
 
-Systems-code auditing レッスンで身につけた auditor のマインドセットがそのままここに写る。Auditor が問う質問 (「これはどんな不変量を仮定する?」「エラー時に何が起きる?」「スケールしたとき何が起きる?」) は、レビュアーが問う質問と同じ。**監査しやすいコードはレビューしやすいコード。**
+- **最初の PR が「大きな技術貢献ではない」理由**: メンテナはまだあなたを知らない、レビューに時間投資する正当化がない。小さい修正（typo、edge case テスト）で **存在 + reliability** を確立 → 後の大きい PR が聞かれる地位を作る。技術スキルではなく social capital の構築。
+- **2 応答パターンが merge を決める理由**: レビュアー視点で「engage コスト」が違う。速 + 同意 = 「3 日で merge」、遅 + defensive = 「3 週間議論」。レビュアーは多数 PR を扱う + 長議論の余裕なし → easier PR に移る → 結局 close。「あなたが正しい場合でも、再議論より \`これを OK にする方法は？\` が速い」。
+- **Reputation 弧が年単位な理由**: メンテナの認識は merge ごとに少しずつ更新 → 「ハンドルを記憶 + 過去 PR を例に出せる」までに 10-20 PR + 各 PR が atomic + clean + テスト付き → 1 PR/月でも 1-2 年。Paradigm 採用は「実質チームの一部」の認識（50+ merge）で起きる → 通常 2-3 年。**速い道は存在しない**。
 
-提出前チェックリスト:
-- 自分のコードは周囲のスタイルに合っているか?
-- テストは正しいディレクトリに、正しい命名で置かれているか?
-- Commit はそれぞれストーリーを語っているか?
-- PR description は、レビュアーが自分のコードを走らせなくても verify できる程度に specific か?
-- 最も可能性の高い 2〜3 個のレビュアーの質問を先回りして答えているか?
+## 合格基準
 
-## 7. PR を merge してもらうコミュニケーションパターン
+- ルーキング期間の 6 情報源を即答できる。
+- エスカレーション梯子 5 段を順に言える。
+- Paradigm 品質 PR の 5 要素を毎回チェックできる。
+- RFC 構造 5 セクションを暗唱できる。
+- Reputation 弧 5 段と Paradigm 採用検討段階を即答できる。
 
-PR が上がったら、あなたの仕事はレビュアーの仕事を楽にすること。
+## まとめ（3行）
 
-**速い応答パターン (良い):**
-- レビュアー: 「ケース X はどうか?」
-- あなた: 「指摘ありがとう。テスト追加と修正を入れる。」 (数時間以内)
-- あなた: [commit を push] (1〜2 日以内)
-- レビュアー: ✓ merge
-
-**遅い応答パターン (悪い):**
-- レビュアー: 「ケース X はどうか?」
-- あなた: [元の設計が X を正しく扱う 200 単語の defense]
-- レビュアー: [engage せず、easier な PR に移る]
-- 3 週間後: PR が inactivity で close
-
-パターン: **デフォルトでレビュアーが正しいと仮定する。** 同意しないなら、「これを OK にするには何が必要か?」と聞く方が、再議論より良い。レビュアーは多数の PR を扱う; 長い議論を相手にする余裕はない。
-
-**レビュアー同士で意見が分かれる場合** (multi-maintainer プロジェクトではある): 側を取らない。彼らが整合するのを待つ。1 週間 convergence なしなら、「deadlock を解く方法はあるか — 2 つの PR に split? 今は simpler approach を選んで後で見直す?」と ping する。
-
-**PR が止まった場合:** 14 日後に 1 度 ping。応答なしなら 28 日後にもう 1 度 ping。それ以降、沈黙が答え — メンテナの現在の優先順位ではない。次に進む。Social capital を nagging で焼かない。
-
-## 8. コントリビュータの reputation 弧
-
-**最初の PR (小さな修正、merged):** あなたは社会的グラフに存在する。メンテナはまだ名前を覚えていないかもしれない。
-
-**5 件 merged:** メンテナはあなたのハンドルを認識する。過去の PR が clean だったので、今後の PR を見やすくなる。
-
-**10 件 merged:** あなたはある領域で信頼できるコントリビュータとして知られる。メンテナがあなたの領域に隣接する issue であなたを ping するかもしれない。
-
-**20 件 merged:** あなたはコードベースのある部分について非公式の expert。新しいコントリビュータはあなたの過去の PR を例として指される。
-
-**50+ 件 merged:** あなたは実質チームの一部。メンテナはあなたの領域での設計判断であなたに相談する。**Paradigm が採用を考え始めるのはこのレベル。**
-
-弧は遅い。大半のエンジニアリングアドバイスに反して、「速い道」は存在しない。このスタックから採用するチームはこの弧から採用する; 近道はない。
-
-## 9. してはいけないこと
-
-PR を確実に無視させる方法の non-exhaustive リスト:
-
-- **Drive-by PR** — 1 つ開いて、消える。メンテナは戻ってこないコントリビュータにレビュー時間を投資しないことを学ぶ。
-- **Auto-generated permission asks** — 「こんにちは、X を追加する PR に興味あるか?」単に PR を出す; 答えは「示せ、聞くな」。
-- **最初の貢献として refactor PR** — 「あなたのコードがパターン X を使っているのに気づいた、これは同じコードをパターン Y で書いたもの」。履歴なしには貢献ではなく批判として読まれる。
-- **リサーチなしの issue** — 「Reth は機能 X をサポートしますか?」答えが docs または CONTRIBUTING.md にあるとき。
-- **防御的なレビュー応答** — §7 を参照。
-- **PR の marketing posts** — PR が merge される前に Twitter で「Reth に contribute した!」と投稿。メンテナはそれを見る。協力の前に自己宣伝として読まれる。
-
-## 10. 監視すべき 4 つの情報源
-
-燃え尽きずにコントリビュータフローに留まるために:
-
-1. **Issue tracker** — \`good first issue\` + \`help wanted\` ラベルでフィルタ。理解できる領域の issue を subscribe する。
-2. **PR queue** — open な PR (特に active な議論がある reviewed なもの) を読む。レビューコメントは無料の教育。
-3. **Discord / Telegram** — PR を開く前の「これは正しい approach か?」の質問のための低リスクのチャネル。
-4. **コードベースの TODO / FIXME コメント** — しばしば「誰かが書くのを待っている would-be PR」。
-
-週 ~30 分をこれらに使う。情報は複利で効く。
-
-## 想起
-
-スクロールせずに:
-
-1. **最初の PR の仕事は「大きな技術貢献」ではない理由は? では仕事は何か?**
-2. **レビュアーが「ケース X はどうか?」と聞く。応答パターンが 2 つある。どちらが PR を merge させるか、なぜ?**
-3. **コードを書く前に RFC を書くべきなのはいつか? 2 つのトリガを挙げる。**
-4. **「チームが書いたものと思うか?」テストはレビュアーが心の中で適用する。そのテストに通るために、提出前にチェックすべき 3 つのことを挙げる。**
-5. **Reputation 弧は 5 段階。Paradigm が採用を考え始めるのはどの段階? その段階が月でなく年単位の時間がかかるのはなぜか?**
-
-どれか曖昧なら、該当セクションを読み直す。
-
-## 📂 開いておくべき参考資料
-
-- [paradigmxyz/reth — CONTRIBUTING.md](https://github.com/paradigmxyz/reth/blob/main/CONTRIBUTING.md)
-- [bluealloy/revm — repository + book](https://github.com/bluealloy/revm)
-- [alloy-rs/alloy — CONTRIBUTING.md](https://github.com/alloy-rs/alloy/blob/main/CONTRIBUTING.md)
-- [Reth の最近 merged された PR](https://github.com/paradigmxyz/reth/pulls?q=is%3Apr+is%3Amerged) — calibration ソース
-- [Reth Discord](https://discord.gg/reth) — ルーキング期間の \`#contributing\` チャネル
-
----
-
-**🧭 ここまでで積み上げたもの:** systems-code auditing のレッスンでレビュアーが何を見るかを学んだ。本レッスンでそのレビューに通るコードを書き、その周りの社会的プロセスを navigate する方法を学んだ。2 つあわせて「Paradigm が認知するコントリビュータになる」の両半分。SE substrate (5 層)、4 つの力 (敵対的環境 / 検証可能性 / 順序付け / 無停止移行)、信頼性トライアングル (fuzzing / chaos / auditing)、そして今のコントリビュータワークフロー — これらを揃えれば、このスタックを ship しているチームが実際に採用シグナルとしているスキルセットが完成する。**残りは仕事をすること — 定期的に PR queue に現れる。**`,
+- Paradigm 採用は upstream PR queue で見覚えのある人から → 「コンパイルする Rust」と「merge される Rust」のギャップは独立スキル。
+- 2 週ルーキング + エスカレーション梯子 + Paradigm 品質 PR 5 要素 + 応答規律（速 + 同意）+ 4 情報源 ~30 分/週。
+- Reputation 弧 5 段は年単位、近道なし。50+ merge で実質チームの一部 → 採用検討段階。
+`,
                 },
                 {
-                  title: 'Expertまとめクイズ',
+                  title: 'クイズ — Expert まとめ',
                   slug: 'expert-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 11,
                   duration: 15,
                   xpReward: 50,
-                  content: `# Expertまとめクイズ
+                  content: `# クイズ — Expert まとめ
 
-本番エンジニアリング層の総仕上げ。`,
+本番エンジニアリング層の総仕上げ。
+
+レッスン0-15 を通じて: パフォーマンス（flamegraph / Criterion / jemalloc / maxperf）/ ストレージ（MDBX / B+tree / SALT 対比）/ 並行性（Tokio work-stealing / TaskExecutor）/ コンパイル時（proc macros / sol! / tracing）/ Precompile / MPT / Stateless / MEV / zkEVM / フォーク運用 / Differential fuzzing / EVM プライバシー / Chaos / Auditing / OSS 貢献ワークフロー の構造的事実を確認する。
+`,
                   quizQuestions: [
                     {
-                      question: 'Rethがチェーン状態に RocksDB ではなく MDBX を採用する理由は？',
-                      options: [
-                        'RocksDB の LSM ツリーのコンパクションは書き込みスループットを上げるが読み取りレイテンシを不安定にする — Reth は予測可能なレイテンシとロックフリー読み取りのため MDBX (B+tree + mmap + MVCC) を選ぶ',
-                        'MDBX はネイティブで範囲スキャンをサポートし、RocksDB はセカンダリインデックスの構築が必要',
-                        'MDBX は Rust 製なので Reth の他のスタックと統合しやすい',
-                        'MDBX の mmap 設計は読み取りごとのカーネル/ユーザ空間コピーを排除する — RocksDB ではできない',
+                      "question": "Rethがチェーン状態に RocksDB ではなく MDBX を採用する理由は？",
+                      "options": [
+                        "RocksDB の LSM ツリーのコンパクションは書き込みスループットを上げるが読み取りレイテンシを不安定にする — Reth は予測可能なレイテンシとロックフリー読み取りのため MDBX (B+tree + mmap + MVCC) を選ぶ",
+                        "MDBX はネイティブで範囲スキャンをサポートし、RocksDB はセカンダリインデックスの構築が必要",
+                        "MDBX は Rust 製なので Reth の他のスタックと統合しやすい",
+                        "MDBX の mmap 設計は読み取りごとのカーネル/ユーザ空間コピーを排除する — RocksDB ではできない"
                       ],
-                      correctIndex: 0,
-                      explanation: 'Ethereum は読み取り重く・レイテンシ敏感。MDBX は C 製で Rust ではない (選択肢 3 を除外)。RocksDB はイテレータ経由で範囲スキャンをサポート (選択肢 2 を除外)。選択肢 4 の mmap 主張は部分的に正しいが帰結であって設計の動機ではない — 動機は validator レイテンシのためのコンパクションストール回避。',
+                      "correctIndex": 0,
+                      "explanation": "Ethereum は読み取り重く・レイテンシ敏感。MDBX は C 製で Rust ではない (選択肢 3 を除外)。RocksDB はイテレータ経由で範囲スキャンをサポート (選択肢 2 を除外)。選択肢 4 の mmap 主張は部分的に正しいが帰結であって設計の動機ではない — 動機は validator レイテンシのためのコンパクションストール回避。"
                     },
                     {
-                      question: 'Reth フォークの Rust パフォーマンス最適化で最初にやるべきは？',
-                      options: [
-                        'ホットだと疑う関数に #[inline] ヒントを付ける',
-                        'グローバルアロケータを jemalloc に切り替える — Reth は既にこれをやっている',
-                        'プロファイル (flamegraph) とベンチマーク (Criterion) で **実際の** ホットパスを特定してから何かを変える',
-                        'ホットループを std::simd 組み込みでベクトル化する',
+                      "question": "Reth フォークの Rust パフォーマンス最適化で最初にやるべきは？",
+                      "options": [
+                        "ホットだと疑う関数に #[inline] ヒントを付ける",
+                        "グローバルアロケータを jemalloc に切り替える — Reth は既にこれをやっている",
+                        "プロファイル (flamegraph) とベンチマーク (Criterion) で **実際の** ホットパスを特定してから何かを変える",
+                        "ホットループを std::simd 組み込みでベクトル化する"
                       ],
-                      correctIndex: 2,
-                      explanation: '早すぎる最適化は悪、見えない遅さはもっと悪い。他の 3 つの選択肢はそれぞれ本物の擁護可能な最適化 — しかし測定なしに適用するのが、このレッスンが防ごうとする失敗モードそのもの。',
+                      "correctIndex": 2,
+                      "explanation": "早すぎる最適化は悪、見えない遅さはもっと悪い。他の 3 つの選択肢はそれぞれ本物の擁護可能な最適化 — しかし測定なしに適用するのが、このレッスンが防ごうとする失敗モードそのもの。"
                     },
                     {
-                      question: 'Tokio ランタイム内で CPU 重い処理をやる正しい方法は？',
-                      options: [
-                        'tokio::spawn でラップして他の async タスクと並行に実行する',
-                        'tokio::task::spawn_blocking — ブロッキング作業用にサイズ調整された別のスレッドプールに逃がす',
-                        'std::thread::spawn を直接使い、CPU 作業が Tokio に触らないようにする',
-                        '関数に #[tokio::task] アノテーションを付けて Tokio に適切にルーティングさせる',
+                      "question": "Tokio ランタイム内で CPU 重い処理をやる正しい方法は？",
+                      "options": [
+                        "tokio::spawn でラップして他の async タスクと並行に実行する",
+                        "tokio::task::spawn_blocking — ブロッキング作業用にサイズ調整された別のスレッドプールに逃がす",
+                        "std::thread::spawn を直接使い、CPU 作業が Tokio に触らないようにする",
+                        "関数に #[tokio::task] アノテーションを付けて Tokio に適切にルーティングさせる"
                       ],
-                      correctIndex: 1,
-                      explanation: 'tokio::spawn (選択肢 1) も作業を非同期ワーカープールに置く — 直接呼ぶのと同じくランタイムを飢えさせる。std::thread::spawn (選択肢 3) は Tokio を完全にバイパスし JoinHandle 統合を失う。#[tokio::task] 属性は存在しない (選択肢 4 は捏造)。spawn_blocking が規律。',
+                      "correctIndex": 1,
+                      "explanation": "tokio::spawn (選択肢 1) も作業を非同期ワーカープールに置く — 直接呼ぶのと同じくランタイムを飢えさせる。std::thread::spawn (選択肢 3) は Tokio を完全にバイパスし JoinHandle 統合を失う。#[tokio::task] 属性は存在しない (選択肢 4 は捏造)。spawn_blocking が規律。"
                     },
                     {
-                      question: '手続きマクロはいつ実行される？',
-                      options: [
-                        '実行時、ただし結果は初回呼び出し後にキャッシュされる',
-                        'コンパイル時、入力 TokenStream を出力 TokenStream に変換する',
-                        'パース時、レキサが走る前 — だから proc macro は raw バイトを使える',
-                        'コンパイル後、リンク前、ビルドスクリプトパイプラインの一部として',
+                      "question": "手続きマクロはいつ実行される？",
+                      "options": [
+                        "実行時、ただし結果は初回呼び出し後にキャッシュされる",
+                        "コンパイル時、入力 TokenStream を出力 TokenStream に変換する",
+                        "パース時、レキサが走る前 — だから proc macro は raw バイトを使える",
+                        "コンパイル後、リンク前、ビルドスクリプトパイプラインの一部として"
                       ],
-                      correctIndex: 1,
-                      explanation: 'proc macro はコンパイラがコードをパースする最中に走る — レキサの後 (選択肢 3 を除外)、リンクのずっと前 (選択肢 4 を除外)。実行時には呼ばれない (選択肢 1 を除外)。cargo expand で結果が見える。',
+                      "correctIndex": 1,
+                      "explanation": "proc macro はコンパイラがコードをパースする最中に走る — レキサの後 (選択肢 3 を除外)、リンクのずっと前 (選択肢 4 を除外)。実行時には呼ばれない (選択肢 1 を除外)。cargo expand で結果が見える。"
                     },
                     {
-                      question: 'Revm における「カスタム Opcode」と「カスタム Precompile」の主要な違いは？',
-                      options: [
-                        'Opcode は EVM インタープリターループで実行される; Precompile は別プロセスで動き IPC 経由で通信する',
-                        'Opcode は EVM 命令セットを変更する (バニラ EVM とのコンセンサスを破る); Precompile は予約アドレスへの CALL で呼べるネイティブ関数 (Solidity / ABI ツールにほぼ透過)',
-                        'カスタム Opcode はメインネットで有効; カスタム Precompile は App-chain に限定される',
-                        'Opcode は任意のコントラクトアドレスから呼べる; Precompile は特別な precompile 対応コンパイラを必要とする',
+                      "question": "Revm における「カスタム Opcode」と「カスタム Precompile」の主要な違いは？",
+                      "options": [
+                        "Opcode は EVM インタープリターループで実行される; Precompile は別プロセスで動き IPC 経由で通信する",
+                        "Opcode は EVM 命令セットを変更する (バニラ EVM とのコンセンサスを破る); Precompile は予約アドレスへの CALL で呼べるネイティブ関数 (Solidity / ABI ツールにほぼ透過)",
+                        "カスタム Opcode はメインネットで有効; カスタム Precompile は App-chain に限定される",
+                        "Opcode は任意のコントラクトアドレスから呼べる; Precompile は特別な precompile 対応コンパイラを必要とする"
                       ],
-                      correctIndex: 1,
-                      explanation: '両方とも in-process で動く — IPC はない (選択肢 1 を除外)。カスタム Opcode はコンセンサスを破り、カスタム Precompile は破らない (選択肢 3 の **逆** が正しい)。Precompile は標準 CALL で呼べる — 特別なコンパイラ不要 (選択肢 4 を除外)。',
+                      "correctIndex": 1,
+                      "explanation": "両方とも in-process で動く — IPC はない (選択肢 1 を除外)。カスタム Opcode はコンセンサスを破り、カスタム Precompile は破らない (選択肢 3 の **逆** が正しい)。Precompile は標準 CALL で呼べる — 特別なコンパイラ不要 (選択肢 4 を除外)。"
                     },
                     {
-                      question: 'Ethereum が状態に Merkle Patricia Trie (MPT) を使う理由は？',
-                      options: [
-                        'Patricia trie は任意の 256 ビットキーに対する最速のインデックスデータ構造',
-                        '世界状態全体を単一の 32 バイトハッシュにコミットでき、包含 / 非包含証明が可能で、パス圧縮で空間効率が高い',
-                        'ハッシュ衝突攻撃に強い — 各木のレベルで異なるハッシュ関数を使うから',
-                        'すべての葉を並列に変更でき、ロック不要 — staged sync に critical',
+                      "question": "Ethereum が状態に Merkle Patricia Trie (MPT) を使う理由は？",
+                      "options": [
+                        "Patricia trie は任意の 256 ビットキーに対する最速のインデックスデータ構造",
+                        "世界状態全体を単一の 32 バイトハッシュにコミットでき、包含 / 非包含証明が可能で、パス圧縮で空間効率が高い",
+                        "ハッシュ衝突攻撃に強い — 各木のレベルで異なるハッシュ関数を使うから",
+                        "すべての葉を並列に変更でき、ロック不要 — staged sync に critical"
                       ],
-                      correctIndex: 1,
-                      explanation: 'MPT は最速のルックアップ構造ではない (選択肢 1 を除外 — HashMap のほうが速いが何にもコミットしない)。レベルごとに違うハッシュではなく keccak256 を全レベルで使う (選択肢 3 を除外)。並列変更は MPT の性質ではない — ルートまでの逐次再ハッシュが必要 (選択肢 4 を除外)。暗号学的コミットメントが全てのポイント。',
+                      "correctIndex": 1,
+                      "explanation": "MPT は最速のルックアップ構造ではない (選択肢 1 を除外 — HashMap のほうが速いが何にもコミットしない)。レベルごとに違うハッシュではなく keccak256 を全レベルで使う (選択肢 3 を除外)。並列変更は MPT の性質ではない — ルートまでの逐次再ハッシュが必要 (選択肢 4 を除外)。暗号学的コミットメントが全てのポイント。"
                     },
                     {
-                      question: 'Revm を使った本番 zkEVM プルービングパイプラインで「witness」とは？',
-                      options: [
-                        'mempool でトランザクションを観測したことを証言するノード運用者からの暗号学的署名',
-                        'ブロックがアクセスした状態値 (アカウント・コード・ストレージスロット・最近のブロックハッシュ) の集合 — zkVM 内ではディスクが読めないのでプローバが消費する',
-                        'ブロックで使用された全 Opcode のガスコストを事前計算したテーブル',
-                        '証明対象ブロックでスナップショットされたフルチェーン状態を zkVM に送り込む',
+                      "question": "Revm を使った本番 zkEVM プルービングパイプラインで「witness」とは？",
+                      "options": [
+                        "mempool でトランザクションを観測したことを証言するノード運用者からの暗号学的署名",
+                        "ブロックがアクセスした状態値 (アカウント・コード・ストレージスロット・最近のブロックハッシュ) の集合 — zkVM 内ではディスクが読めないのでプローバが消費する",
+                        "ブロックで使用された全 Opcode のガスコストを事前計算したテーブル",
+                        "証明対象ブロックでスナップショットされたフルチェーン状態を zkVM に送り込む"
                       ],
-                      correctIndex: 1,
-                      explanation: '署名は関係ない (選択肢 1 を除外)。ガスコストは EVM 仕様の定数で witness の一部ではない (選択肢 3 を除外)。*フル* 状態を送ると目的が破綻する — witness は最小サブセット、スナップショットではない (選択肢 4 を除外)。witness にない値をブロックが読めば証明は失敗する。',
+                      "correctIndex": 1,
+                      "explanation": "署名は関係ない (選択肢 1 を除外)。ガスコストは EVM 仕様の定数で witness の一部ではない (選択肢 3 を除外)。*フル* 状態を送ると目的が破綻する — witness は最小サブセット、スナップショットではない (選択肢 4 を除外)。witness にない値をブロックが読めば証明は失敗する。"
                     },
                     {
-                      question: 'MEV サーチャーにとって ExEx が価値ある理由は？',
-                      options: [
-                        '標準のメインネット RPC より速く動く JSON-RPC シミュレーションエンドポイントを内蔵している',
-                        'チェーンの commit / reorg / revert 通知をほぼゼロレイテンシで in-process でフル状態アクセスとともに受け取れる — ウォームキャッシュと高速シミュレーションに最適',
-                        'Ethereum コンセンサスルールをバイパスし、サーチャーが代替順序を決定論的にシミュレーションできる',
-                        'OS スケジューラが予約した CPU コアで動き、他のワークロードがプリエンプトできない',
+                      "question": "MEV サーチャーにとって ExEx が価値ある理由は？",
+                      "options": [
+                        "標準のメインネット RPC より速く動く JSON-RPC シミュレーションエンドポイントを内蔵している",
+                        "チェーンの commit / reorg / revert 通知をほぼゼロレイテンシで in-process でフル状態アクセスとともに受け取れる — ウォームキャッシュと高速シミュレーションに最適",
+                        "Ethereum コンセンサスルールをバイパスし、サーチャーが代替順序を決定論的にシミュレーションできる",
+                        "OS スケジューラが予約した CPU コアで動き、他のワークロードがプリエンプトできない"
                       ],
-                      correctIndex: 1,
-                      explanation: 'ExEx は RPC エンドポイントではない (選択肢 1 を除外) — Rust コードへのコールバック。コンセンサスをバイパスできない; 通知が従うルールそのもの (選択肢 3 を除外)。Tokio スケジューリングは OS レベルの CPU pinning と関係ない (選択肢 4 を除外)。本領は各チェーンイベントで得られる in-process のレイテンシ。',
+                      "correctIndex": 1,
+                      "explanation": "ExEx は RPC エンドポイントではない (選択肢 1 を除外) — Rust コードへのコールバック。コンセンサスをバイパスできない; 通知が従うルールそのもの (選択肢 3 を除外)。Tokio スケジューリングは OS レベルの CPU pinning と関係ない (選択肢 4 を除外)。本領は各チェーンイベントで得られる in-process のレイテンシ。"
                     },
                     {
-                      question: 'カスタム Precompile の価格設定で守るべき大原則は？',
-                      options: [
-                        '同等の Solidity 実装の約 1/10 のガスに設定して採用を促進する',
-                        'ガスコストは CPU コストに追従 — 典型的に最遅の現実的入力でベンチ、2〜5 倍の悪用係数を掛け、敵対的入力で検証',
-                        'ユーザに対してガスモデルを予測可能に保つため、フラットな per-call コストを課す',
-                        '最も似た標準 precompile (例: ecrecover) のガスコストをベースラインとして使う',
+                      "question": "カスタム Precompile の価格設定で守るべき大原則は？",
+                      "options": [
+                        "同等の Solidity 実装の約 1/10 のガスに設定して採用を促進する",
+                        "ガスコストは CPU コストに追従 — 典型的に最遅の現実的入力でベンチ、2〜5 倍の悪用係数を掛け、敵対的入力で検証",
+                        "ユーザに対してガスモデルを予測可能に保つため、フラットな per-call コストを課す",
+                        "最も似た標準 precompile (例: ecrecover) のガスコストをベースラインとして使う"
                       ],
-                      correctIndex: 1,
-                      explanation: '採用のための安すぎ (選択肢 1) こそ EIP-2929 が retrofit を強いられた DoS ベクター。フラットコスト (選択肢 3) は入力サイズが効く瞬間に破綻。他の precompile の数字を借りる (選択肢 4) は健全性チェックとしては良いが自分の CPU プロファイルを無視する。本物のワークフローは ベンチ → 悪用係数 → 敵対的検証。',
+                      "correctIndex": 1,
+                      "explanation": "採用のための安すぎ (選択肢 1) こそ EIP-2929 が retrofit を強いられた DoS ベクター。フラットコスト (選択肢 3) は入力サイズが効く瞬間に破綻。他の precompile の数字を借りる (選択肢 4) は健全性チェックとしては良いが自分の CPU プロファイルを無視する。本物のワークフローは ベンチ → 悪用係数 → 敵対的検証。"
                     },
                     {
-                      question: 'カスタム Reth フォークで App-chain を運用するときの現実的な最低限の本番デプロイは？',
-                      options: [
-                        '単一データセンター内に 1 つのロードバランサ越しに 3 バリデータを共存させる (最低レイテンシ)',
-                        '3 データセンターに ≥4 バリデータを地理分散、各バリデータの前に sentry ノード、解析用に別 archive ノード、レート制限付き RPC フリート — バリデータと公開 RPC は決して同居させない',
-                        '同じクラウドリージョン内に 5 バリデータ (リージョン跨ぎは合意レイテンシが増えすぎる)',
-                        'active-passive failover の 2 バリデータとホットスタンバイ (運用チームを小さく保つ)',
+                      "question": "カスタム Reth フォークで App-chain を運用するときの現実的な最低限の本番デプロイは？",
+                      "options": [
+                        "単一データセンター内に 1 つのロードバランサ越しに 3 バリデータを共存させる (最低レイテンシ)",
+                        "3 データセンターに ≥4 バリデータを地理分散、各バリデータの前に sentry ノード、解析用に別 archive ノード、レート制限付き RPC フリート — バリデータと公開 RPC は決して同居させない",
+                        "同じクラウドリージョン内に 5 バリデータ (リージョン跨ぎは合意レイテンシが増えすぎる)",
+                        "active-passive failover の 2 バリデータとホットスタンバイ (運用チームを小さく保つ)"
                       ],
-                      correctIndex: 1,
-                      explanation: 'BFT 安全性は障害ドメイン跨ぎの定足数を要求 — 単一 DC (選択肢 1) と単一リージョン (選択肢 3) は 1 障害で崩壊。2 バリデータ (選択肢 4) はビザンチン振る舞いに耐えられない。現実的最低限は 地理分散 + sentry 分離 + 専用 RPC フリート、なぜなら公開 RPC への 1 度の DDoS でコンセンサスを止めてはいけないから。',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "BFT 安全性は障害ドメイン跨ぎの定足数を要求 — 単一 DC (選択肢 1) と単一リージョン (選択肢 3) は 1 障害で崩壊。2 バリデータ (選択肢 4) はビザンチン振る舞いに耐えられない。現実的最低限は 地理分散 + sentry 分離 + 専用 RPC フリート、なぜなら公開 RPC への 1 度の DDoS でコンセンサスを止めてはいけないから。"
+                    }
                   ],
                 },
               ],
@@ -2965,213 +2597,278 @@ PR を確実に無視させる方法の non-exhaustive リスト:
             lessons: {
               create: [
                 {
-                  title: 'Reth 拡張パターン — フォークではなくライブラリ',
+                  title: 'レッスン17 — Reth 拡張パターン（フォークではなくライブラリ）',
                   slug: 'reth-extension-pattern-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 14,
                   xpReward: 40,
-                  content: `# Reth 拡張パターン — フォークではなくライブラリ
+                  content: `# レッスン17 — Reth 拡張パターン（フォークではなくライブラリ）
 
-**op-geth**、**bsc-geth**、**bor** (Polygon) を触った経験があれば、geth-fork パターンの苦しみは知っているはずである。upstream をクローンしてパッチを当て、ずっと rebase し続ける。upstream マージのたびに週末がコンフリクト解消で潰れ、監査対象は徐々に mainline からドリフトしていく。
+## 問い
 
-**Reth はこのモデルを終わらせるために設計されました。** Optimism、Base、Berachain、Scroll、Seismic、Sova、alphanet、Tempo — これらはすべて Reth 上で動いていますが、従来の意味での "fork" はほぼ存在しない。いずれも **reth をライブラリとして依存する node crate** であり、必要な部分だけを trait で override する形になっている。
+op-geth / bsc-geth / bor を触った経験があれば、geth-fork パターンの苦しみは知っている。upstream をクローンしてパッチを当て、ずっと rebase。upstream マージのたびに週末がコンフリクト解消で潰れ、監査対象が徐々に mainline からドリフトする。**Reth はこのモデルを終わらせるために設計された — どう機能するか？**
 
-> 🛑 **スクロール前に予測。** geth-fork のチェーンが、upstream から重大な security patch を取り込もうとしている状況を考えてほしい。fork は 18 ヶ月遅れ。**rebase にどれくらい時間がかかるか見積もり**、**rebase 自体が consensus bug を引き起こす経路を 3 つ** 挙げてほしい。
+## 原理（最小モデル）
 
-## 1. 二つのモデル
+- **2 モデル.** Fork（geth 流）= ソース patch + 定期 rebase → ドリフトコスト超線形 / Extension（reth 流）= crate 依存 + trait 別 crate impl → コスト局所化（trait シグネチャ変更時のみ）。
+- **Reth アーキ全体が extension モデル軸.** NodeBuilder / components / ChainSpec パターンはまさに **reth ソース patch せず chain を出荷する** ためにある。
+- **Paradigm が選んだ 3 理由.** ① Rebase 痛みは実証済み（op-geth は Optimism 自身が書き直しに資金 → \`crates/optimism/\`）+ ② 監査範囲（fork = upstream diff + 全 patch 理由づけ vs node crate = 1 repo + trait impl 集合）+ ③ コンポーザビリティ（Berachain PoL / Scroll zk-friendly state / Seismic 暗号化 tx が共存）。
+- **6 カスタマイズスロット.** ChainSpec / ConfigureEvm / BlockExecutionStrategy / PayloadBuilder / Pool / RPC namespace / Consensus。他（P2P / MDBX / staged sync / ExEx / trie commitment）は何もしなくても reth が提供。
+- **読むべき具体例 4 つ.** \`crates/optimism/\`（本番運用最大）/ alphanet（R&D）/ sova-reth（Bitcoin EL）/ seismic-reth（暗号化 tx）。
+- **Tempo は extension モデルの実証.** \`tempoxyz/tempo\` = node crate、\`tempoxyz/reth\` = upstream に 0 commits ahead, 1374 commits behind。L1 全体が依存レベル拡張。
+
+## 具体例
+
+2 モデル比較:
 
 | Model | やり方 | 時間が経つほどのコスト |
 | :--- | :--- | :--- |
-| **Fork model** (geth 流) | upstream をクローン、ソースに patch、定期的に rebase | ドリフトコストは **超線形に増大** — パッチと upstream の距離が開き続け、コンフリクトが複利で効いてくる |
-| **Extension model** (reth 流) | reth crate に依存、chain 固有の trait を別 crate で実装 | ドリフトコストは **局所化** — trait のシグネチャが変わったときだけ手を入れれば済む |
+| Fork model (geth 流) | upstream をクローン、ソースに patch、定期的に rebase | ドリフトコスト **超線形に増大** — パッチと upstream の距離が開き続け、コンフリクトが複利で効く |
+| Extension model (reth 流) | reth crate に依存、chain 固有 trait を別 crate で実装 | ドリフトコスト **局所化** — trait のシグネチャが変わったときだけ手を入れる |
 
-Reth のアーキテクチャ全体は二つ目のモデルを軸に組まれている。中級コースで見た NodeBuilder / components / ChainSpec パターンは、まさに **reth のソースを patch せずに chain を出荷する** ために存在しているのである。
+7 カスタマイズスロット（reth NodeBuilder）:
 
-## 2. Paradigm がこのモデルを選んだ理由
+| スロット | 何を制御 |
+| :--- | :--- |
+| \`ChainSpec\` | fork 高、gas params、precompile schedule、genesis |
+| \`ConfigureEvm\` / block execution strategy | 実行レイヤー、custom precompile、deposit tx |
+| \`PayloadBuilder\` | block 生成（sequencer mode） |
+| Pool / mempool policy | どの tx をどの順序で受け入れるか |
+| Custom RPC namespace | \`extend_rpc_modules\` で chain 固有エンドポイント |
+| Custom consensus | Ethereum-PoS 以外向け |
+| Add-ons | Custom 追加（ExEx、メトリクスなど） |
 
-Paradigm は Reth、alphanet、**そして** Tempo のすべてを自社で開発している。つまり自社が顧客でもある。三つの理由が拡張モデルを後押ししました。
-
-1. **Rebase の痛みは現実。** Optimism の op-geth はフォーク乖離が深刻化し、Optimism 自身が書き直しに資金を投じることになりました — その成果は今 \`crates/optimism/\` として reth 本体に統合されている。
-2. **監査の範囲。** Fork を読む監査人は upstream に対する diff を取り、すべての patch を一つひとつ理由づけしなければならない。Node crate を読む監査人は repo を一つ、実装された trait の集合だけを見れば済む。
-3. **コンポーザビリティ。** Berachain は reth + 独自 consensus を、Scroll は reth + zk-friendly state を、Seismic は reth + 暗号化 tx を必要としている。拡張モデルならこの 3 つが共存できますが、フォークモデルでは各々が独自の分岐コピーを保守し続けることになる。
-
-つまり: **reth の trait アーキテクチャ = chain を作るための API**。
-
-## 3. カスタマイズするのは何か
-
-Reth ベースの chain が典型的に override するスロット:
-
-- **\`ChainSpec\`** — fork 高、gas params、precompile schedule、genesis
-- **\`ConfigureEvm\` / block execution strategy** — 実行レイヤー、custom precompile、deposit tx 処理
-- **\`PayloadBuilder\`** — block 生成 (レッスン2の sequencer mode)
-- **Pool / mempool policy** — どの tx をどの順序で受け入れるか
-- **Custom RPC namespace** — \`extend_rpc_modules\` 経由で chain 固有のエンドポイントを公開
-- **Custom consensus** — Ethereum-PoS 以外の chain 向け
-
-それ以外 (P2P、MDBX storage、staged sync、ExEx、trie commitment) は **何もしなくても reth が提供してくれる**。
-
-> 🛑 **理解度チェック。** 誰かが「Berachain は Proof-of-Liquidity を入れるために reth を fork した」と言ったとする。なぜ "fork" という動詞がほぼ間違いで、どう言い直すべきか? 正しく言い換えられないなら、モデルがまだ入っていません。
-
-## 4. 読むべき具体例
-
-「mainnet 出荷済み」→「R&D」の順:
+実例:
 
 1. **\`crates/optimism/\`** in [paradigmxyz/reth](https://github.com/paradigmxyz/reth) — Optimism / Base / Mode / OP Stack。世界で最も本番運用された extension。
-2. **[paradigmxyz/alphanet](https://github.com/paradigmxyz/alphanet)** — Paradigm 自身が運営する OP Stack 互換テストネット。mainnet に実装される前の custom precompile (EIP-7212 P-256 verify など) を試す場。
-3. **[SovaNetwork/sova-reth](https://github.com/SovaNetwork/sova-reth)** — Reth を Bitcoin の execution layer として動かす。
+2. **[paradigmxyz/alphanet](https://github.com/paradigmxyz/alphanet)** — Paradigm 自身の OP Stack 互換テストネット。mainnet 実装前の precompile（EIP-7212 P-256）試す場。
+3. **[SovaNetwork/sova-reth](https://github.com/SovaNetwork/sova-reth)** — Bitcoin の execution layer として Reth。
 4. **[SeismicSystems/seismic-reth](https://github.com/SeismicSystems/seismic-reth)** — 暗号化 tx 対応の Reth。
 
-いずれも「chain に必要な最小パッチは何か?」を考えるための題材になる。答えは大抵 **node crate 数千行で済む** — execution client 20 万行をフォークする必要はありません。
+Tempo の構造証拠:
 
-## 5. 自分が作るものへの含意
+- \`tempoxyz/tempo\` = node crate（Rust、L1）
+- \`tempoxyz/reth\` = upstream Paradigm Reth に対して **0 commits ahead, 1374 commits behind**
 
-Reth ベース chain に触れるもの (bridge、settlement layer、custom node、sequencer integration など) を作るなら、**バイナリレベルではなく trait レベルで読む** 必要がある。「Tempo は X をどう処理するか?」という問いは、「Tempo の node crate がどの trait を override し、どう実装しているか?」に還元される。
+**Reth を一切 fork していない**。payments 固有カスタマイズすべて \`tempoxyz/tempo\` crate に依存レベル拡張。
 
-**Tempo のソースは現在公開されている** ([\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo))。「この標準スロットのどれをカスタマイズし、なぜか?」というレンズで読んでしてほしい。開く前の参考データ: [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) は upstream Paradigm Reth に対して **0 commits ahead, 1374 commits behind**。Reth を一切 fork していないということ。payments 固有のカスタマイズはすべて \`tempoxyz/tempo\` crate に依存レベル拡張として存在する。
+## 失敗例（誤解）
 
-## 6. 練習
+「Berachain は PoL を入れるために reth を fork した」— **間違い**。bera-reth は依存レベル拡張で reth crate に依存、独自 crate（consensus / evm / chainspec / node / rpc）で PoL を実装。**Reth 本体は触らない**。「fork」ではなく「**extend**」「**compose**」が正しい動詞。
 
-1. [reth ワークスペースの Cargo.toml](https://github.com/paradigmxyz/reth/blob/main/Cargo.toml) を開き、\`reth-optimism-*\` にマッチする crate をすべて探す
-2. それぞれが何を担当しているか (chainspec? evm? payload? rpc?) を確認
-3. 本番 chain を出荷するために埋めるべき 6 つのカスタマイズスロットを列挙
-4. その中で「自分の chain の consensus rule」を担うスロットを特定
+「依存レベル拡張は性能を犠牲にする」— **間違い**。コンパイラがインライン化、性能差なし。trait による拡張は **ゼロコスト抽象** — 静的ディスパッチで最終バイナリは fork と同じ性能。
 
-ここまでできれば、どんな Reth ベース chain repo もディレクトリ構造で怯まずに読めるはず。
+「全 chain は深いカスタマイズが必要」— **間違い**。実例 4 つは深さが違う（alphanet < Optimism < Tempo < MegaETH）。SDK は浅い端から深い端まで対応 + 必要分だけ書く。
 
-> 最終チェック: Reth ベース chain が reth のソースをほぼ patch せずに済む構造的理由を、1 文で答えてほしい。**trait-based extension** と **NodeBuilder composition** に触れていないなら、まだ定着していない — §1、§2 を再読。`,
+> 🛑 **予測。** geth-fork チェーンが 18 ヶ月遅れの security patch を取り込みたい。rebase にどれくらいかかる？ rebase 自体が consensus bug を引き起こす経路 3 つ？（答え: **時間** = 数週間 - 数ヶ月（fork が 18 ヶ月分の patch を持つ → 各 patch をコンフリクト解消 + テスト + 監査）。**bug 経路** = ① patch の意味解釈ミス（upstream の意図と違う形で適用）+ ② 上流の関連変更（chainspec、共通 utility）を引き継ぎ忘れ → 自分の patch が暗黙前提を破る + ③ rebase 後の rebuild で hidden コンパイラ最適化変化 → 確率的バグ。**rebase 自体が consensus-critical**。）
+
+## ステップで組み立てる
+
+### Step 1: 2 モデルの差を即答
+
+Fork = 超線形ドリフトコスト / Extension = 局所化（trait シグネチャ変更時のみ）。
+
+### Step 2: 7 カスタマイズスロット
+
+ChainSpec / ConfigureEvm / PayloadBuilder / Pool / RPC namespace / Consensus / Add-ons。他は reth が提供。
+
+### Step 3: 4 実例を見比べる
+
+\`crates/optimism/\`（本番最大）/ alphanet（R&D 教育）/ sova-reth（Bitcoin）/ seismic-reth（プライバシー）。
+
+### Step 4: Tempo の構造証拠を確認
+
+\`tempoxyz/reth\` の commits ahead / behind を見る → 0 / 1374 → fork ゼロ証明。
+
+### Step 5: 自分の chain 設計
+
+「6 スロットのうちどれを差し替え、どれを継承？」を明示化。**Reth に対する diff だけ書く**。
+
+## 答え合わせ
+
+- **Berachain の正しい言い直し**: 「Berachain は PoL を入れるために bera-reth crate を書き、Reth crate に依存している」または「reth を **extend** した」。fork ではない（reth リポを copy していない、reth-core crate を import している）。
+- **Extension モデルが Reth で成立する構造的理由**: trait-based aggregation（NodeBuilder composition）+ ゼロコスト抽象（静的ディスパッチ）+ chainspec / EVM / payload / consensus / pool / RPC が独立 trait → 各 chain が必要な分だけ別 crate で impl → reth-core は変更不要。
+- **Tempo / MegaETH / Berachain が同じパターンを使う理由**: 各々が異なる深さのカスタマイズ（Tempo 浅、MegaETH 深、Berachain 中）でも **Reth fork なし** で済む = extension モデルは深さに依存しない。MegaETH は MDBX を SALT で完全置換 + 別 validator binary を書きつつ \`megaeth-labs/reth\` は 0 ahead, 7666 behind。
+
+## 合格基準
+
+- 2 モデル（fork / extension）の差を即答できる。
+- 7 カスタマイズスロットを言える。
+- Berachain が「fork ではなく extend」と正しく言える。
+- Tempo の \`0 ahead, 1374 behind\` の意味を即答できる。
+- 4 実例の深さ順を言える。
+
+## まとめ（3行）
+
+- Fork model（geth 流）はドリフトコスト超線形、Extension model（reth 流）は局所化 — Reth アーキ全体が extension 軸。
+- 7 カスタマイズスロット（ChainSpec / ConfigureEvm / PayloadBuilder / Pool / RPC / Consensus / Add-ons）+ 他は reth が提供 + 必要分だけ別 crate で impl。
+- Tempo / MegaETH / Berachain / Seismic / Sova すべて **Reth fork なし** = extension モデルは深さに依存しない実証。
+`,
                 },
                 {
-                  title: 'op-stack-on-reth を読む — Reth ベース レッスン2の解剖',
+                  title: 'レッスン18 — op-stack-on-reth を読む',
                   slug: 'reading-op-stack-on-reth-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 16,
                   xpReward: 45,
-                  content: `# op-stack-on-reth を読む — Reth ベース レッスン2の解剖
+                  content: `# レッスン18 — op-stack-on-reth を読む
 
-Optimism は「Reth ベース L2」の正典である。その node コードは \`paradigmxyz/reth/crates/optimism/\` にある。Tempo の node crate も同様の構造で公開済み ([\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo))、ここを読めれば向こうも読める。本レッスンの目的は、**ディレクトリ構造を一目で読み解けるようにする** ことである。
+## 問い
 
-> 🛑 **スクロール前に予測。** 新しい Reth ベース L2 が node crate を出荷したとして、**そこに並ぶサブディレクトリを 5 つ** とそれぞれの担当を挙げてほしい。出てこなければ前レッスンに戻る。
+Optimism は「Reth ベース L2」の正典。node コードは \`paradigmxyz/reth/crates/optimism/\`。Tempo の node crate も同様の構造で公開済み（\`tempoxyz/tempo\`）。**ここを読めれば向こうも読める — ディレクトリ構造を一目で解く方法は？**
 
-## 1. 見る場所
+## 原理（最小モデル）
 
-ここを開く: [paradigmxyz/reth → crates/optimism/](https://github.com/paradigmxyz/reth)
+- **Reth ベース chain の sub-crate 構造.** chainspec / node / evm / payload / consensus / rpc / txpool / hardforks。
+- **依存関係は extension model の証拠.** \`reth-optimism-node\` は \`reth-node-builder\` + \`reth-chainspec\` などの core crate に依存 + OP 固有 sibling crate に依存、\`reth-node-ethereum\` には依存しない（**並列 mainnet node crate**）。
+- **5 分で辿る背骨.** ① NodeBuilder composition / ② ChainSpec / ③ Executor / EVM config / ④ Payload builder / ⑤ Genesis JSON。
+- **初回読書 4 ステップ.** \`README.md\` + \`Cargo.toml\` → \`chainspec/\` → \`node/\`（NodeBuilder composition）→ NodeBuilder 順に各カスタマイズ crate → tests。
+- **Tempo の構造予測.** tempo-chainspec / tempo-node / tempo-evm / tempo-payload-builder / tempo-pool / tempo-consensus（L1 なので存在）。
 
-ざっくり以下のような sub-crate が並んでいるはず (正確な名前は reth のバージョンで揺れるので、ソースで確認すること):
+## 具体例
+
+OP Stack の sub-crate（reth バージョンで揺れるのでソース確認推奨）:
 
 | Subdirectory | 担当 |
 | :--- | :--- |
 | \`chainspec/\` | OP chain spec — fork、genesis、gas params、precompile schedule |
-| \`node/\` | トップレベルの \`NodeBuilder\` 配線 — 「これが OP node である」を定義 |
+| \`node/\` | トップレベル \`NodeBuilder\` 配線 — 「これが OP node である」 |
 | \`evm/\` | EVM config — custom precompile、deposit tx semantics、L1 cost logic |
 | \`payload/\` | Payload builder — sequencer mode での block 生成 |
-| \`consensus/\` | OP の consensus engine (finality は レッスン1に委ねる) |
-| \`rpc/\` | Custom RPC namespace (\`optimism_*\` メソッド) |
-| \`txpool/\` (または類似) | Deposit-tx を認識する mempool policy |
+| \`consensus/\` | OP の consensus engine（finality は L1 に委ねる） |
+| \`rpc/\` | Custom RPC namespace（\`optimism_*\` メソッド） |
+| \`txpool/\`（または類似） | Deposit-tx を認識する mempool policy |
 | \`hardforks/\` | Bedrock、Canyon、Ecotone、Fjord、... の fork activation logic |
 
-> **現物を確認。** 上の表を鵜呑みにせず、実際の repo を歩いて **自分で表を作り直してほしい**。バージョンは動く — 自分の表だけが信頼できる。
+依存関係探索:
 
-## 2. 依存関係の形
-
-\`cargo tree -p reth-optimism-node\` を実行してみる (正確な crate 名はワークスペースで確認)。
+\`\`\`bash
+cargo tree -p reth-optimism-node
+\`\`\`
 
 見えるもの:
+- \`reth-optimism-node\` → \`reth-node-builder\` / \`reth-chainspec\` / \`reth-evm\` / \`reth-payload-builder\` / \`reth-rpc-builder\` / \`revm\` / \`alloy-*\`
+- OP 固有 sibling: \`reth-optimism-chainspec\` / \`reth-optimism-evm\` / \`reth-optimism-payload-builder\` / ...
+- \`reth-node-ethereum\` には依存しない（並列 mainnet node）
 
-- \`reth-optimism-node\` が依存しているもの: \`reth-node-builder\`、\`reth-chainspec\`、\`reth-evm\`、\`reth-payload-builder\`、\`reth-rpc-builder\`、\`revm\`、\`alloy-*\`
-- OP 固有の兄弟 crate にも依存: \`reth-optimism-chainspec\`、\`reth-optimism-evm\`、\`reth-optimism-payload-builder\`、…
-- \`reth-node-ethereum\` には **依存していない** — これは並列に存在する mainnet 用 node crate
+5 分背骨:
 
-**パターン**: chain の node crate は Ethereum node crate と **兄弟関係** にあり、両者が共有の reth-core crate 群を消費している。これが依存関係として現れる extension model の姿である。
+1. **NodeBuilder composition** — \`*-node/src/lib.rs\` か \`node/builder.rs\`
+2. **ChainSpec** — \`*-chainspec/src/\`
+3. **Executor / EVM config** — \`*-evm/src/\`
+4. **Payload builder** — \`*-payload-builder/src/\` か \`*-payload/src/\`
+5. **Genesis JSON** — chainspec crate インラインまたは独立 \`.json\`
 
-## 3. 5 分で辿り着くべき「背骨」
+初回読書順:
 
-どの Reth ベース chain でも、以下の 5 つは 5 分以内に見つけられるはず:
+1. \`README.md\` + \`Cargo.toml\` — どの crate が存在するか把握
+2. \`chainspec/\` — fork activation を声に出す
+3. \`node/\` — NodeBuilder composition、どこがカスタマイズされているか
+4. **NodeBuilder で名前が出てきた順** に各 crate
+5. Tests — 特に state-transition test
 
-1. **NodeBuilder composition** — chain が「このコンポーネントを使う」と宣言している場所。大抵 \`*-node/src/lib.rs\` か \`node/builder.rs\`。
-2. **ChainSpec** — consensus rule を担う型。大抵 \`*-chainspec/src/\`。
-3. **Executor / EVM config** — 大抵 \`*-evm/src/\`。
-4. **Payload builder** — 大抵 \`*-payload-builder/src/\` か \`*-payload/src/\`。
-5. **Genesis JSON** — chainspec crate にインラインの場合と、独立した \`.json\` の場合がある。
+Tempo 予測構造:
 
-ここまで辿れれば、その chain は読める。
-
-> 🛑 **理解度チェック。** \`node.rs\` というファイルに \`OpNode\` という型を見つけたとする。\`OpNode\` が **何であるか** と **何をするか** を理解するために、次にどこを見ますか? 実装している trait を **予測してから** スクロールしてほしい。
-
-## 4. 初回読書の順序
-
-新しい Reth ベース chain を初めて読むときの推奨シーケンス:
-
-1. **\`README.md\`** と **\`Cargo.toml\`** (chain ルート) — どの crate が存在するかを把握
-2. **\`chainspec/\`** — fork activation の一覧を声に出して読む
-3. **\`node/\`** — NodeBuilder composition を読み、どこがカスタマイズされているかを掴む
-4. **NodeBuilder で名前が出てきた順** に、各カスタマイズコンポーネント crate を読む
-5. **Tests** — 特に state-transition test。実際の振る舞いに対するコミットメントがそこに刻まれている
-
-ステップ 3 が終わった時点で **何が違うか** はわかる。ステップ 4–5 は *どう違うか* を読む段階。
-
-## 5. Tempo を読む — 公開済み
-
-Tempo のソースは [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo)（900+★、Rust）で公開されている。\`crates/optimism/\` と同じ要領で読める。期待される構造（あなた自身で source-of-truth として検証してほしい）:
-
-- \`tempo-chainspec\` 相当 — Tempo の fork 高、gas params、決済固有の precompile
+- \`tempo-chainspec\` 相当 — Tempo 固有 fork 高、gas params、決済固有 precompile
 - \`tempo-node\` 相当 — NodeBuilder composition
-- \`tempo-evm\` 相当 — 決済プリミティブの custom precompile (FX rate oracle? settlement-proof verify? regulated-asset check?)
+- \`tempo-evm\` 相当 — 決済 primitives 用 precompile（FX rate / settlement-proof / regulated-asset）
 - \`tempo-payload-builder\` 相当 — sequencer 用
-- \`tempo-pool\` 相当 — 決済固有の mempool policy (merchant 認可など)
-- \`tempo-consensus\` 相当 — Tempo は L1 なので存在する
+- \`tempo-pool\` 相当 — 決済固有 mempool policy（merchant 認可）
+- \`tempo-consensus\` 相当 — Tempo は L1 なので存在
 
-開く前のメタ観察: [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) は upstream に対して **0 commits ahead, 1374 commits behind**。Reth 本体は触られていない。L1 全体が依存レベルの拡張で実現されているという、SDK の最強の証拠。
+メタ観察: \`tempoxyz/reth\` = **0 commits ahead, 1374 commits behind**。Reth 本体は触られていない。
 
-## 6. 練習
+## 失敗例（誤解）
 
-Reth ベース chain を 1 つ選び、repo を歩いて **§1 の表をその chain ぶん作ってみる**。
+「OP は \`reth-node-ethereum\` に依存する」— **間違い**。並列関係。両者は共有 reth-core crate（\`reth-node-builder\` / \`reth-chainspec\`）を消費するが、互いに依存しない。**OP も Ethereum も「chain」の選択肢**、Ethereum が特権ではない。
 
-読みやすさ順の候補:
-- \`paradigmxyz/reth/crates/optimism/\` (規模最大、最も洗練されている)
-- \`paradigmxyz/alphanet\` (小ぶり、R&D 寄り — end-to-end で通読しやすい)
-- \`SovaNetwork/sova-reth\` (Bitcoin 視点 — chainspec の形が違う)
+「Reth ベース chain の構造は chain ごとに完全に違う」— **間違い**。**SDK が共通骨格を強制**: chainspec / node / evm / payload / consensus / rpc の sub-crate 構造。chain 固有部分は各 sub-crate 内、骨格は同じ。
 
-> 最終チェック: **Reth ベース chain repo の形** を、新人が 10 分で何でも見つけられる言葉で 2 文にしてほしい。「フォルダがあって」から始めたらやり直し — *コンセプト* (trait による拡張 + NodeBuilder composition) から始める。`,
+「Tempo は L2 なので OP と同構造」— **間違い**。Tempo は L1（独立 consensus 持つ）→ tempo-consensus が存在、Deposit tx / L1 cost / L1 block oracle なし。OP は L2（L1 にアンカー）。**観点で違いがある**。
+
+> 🛑 **予測。** \`node.rs\` というファイルに \`OpNode\` という型を見つけた。\`OpNode\` が **何であるか** と **何をするか** を理解するために、次にどこを見る？ 実装している trait を予測してから。（答え: ① \`impl FullNodeTypes for OpNode\` を探す（Node primitives 定義）+ ② \`impl NodeAdapter for OpNode\` または \`impl Node for OpNode\` を探す（NodeBuilder 配線）+ ③ \`OpNode::components()\` メソッド（6 コンポーネント差し替え）。trait は \`reth_node_api\` / \`reth_node_builder\` から来る。**何であるか = NodeBuilder 型パラメータ**、**何をするか = components() で chain 固有部品を差し込む**。）
+
+## ステップで組み立てる
+
+### Step 1: 8 sub-crate を列挙
+
+chainspec / node / evm / payload / consensus / rpc / txpool / hardforks。
+
+### Step 2: \`cargo tree\` で依存可視化
+
+\`cargo tree -p reth-optimism-node\` → 共有 core crate + OP 固有 sibling + Ethereum non-dependency。
+
+### Step 3: 5 分背骨を辿れる
+
+NodeBuilder → ChainSpec → Executor/EVM → Payload → Genesis。
+
+### Step 4: 初回読書 4 ステップ
+
+README+Cargo.toml → chainspec → node → NodeBuilder 順 + tests。
+
+### Step 5: Tempo を予測構造で読む
+
+8 sub-crate 相当を予測 → 実際の repo で検証 → L1 vs L2 観点で違い理解。
+
+## 答え合わせ
+
+- **op と Ethereum が並列関係である構造的理由**: NodeBuilder + ChainSpec が「複数 chain を同 SDK で扱う」設計。Ethereum は「mainnet」chain の実装、OP は「Optimism」chain の実装、両者が同 substrate（reth-node-builder / reth-chainspec / reth-evm）を消費。一方が「親」ではない、両方が「兄弟」。
+- **SDK が骨格を強制する理由**: NodeBuilder の API（\`.with_types::<ChainNode>().with_components(...)\`）が「6 コンポーネント差し替え」パターンを強制 → 各 chain が同じ場所に同じ種類の crate を置く → 新しい chain repo を 5 分で navigate 可能。
+- **L1 vs L2 の観点別差分**: L1（Tempo）= 独立 consensus + Deposit tx なし + L1 cost なし + L1 block oracle なし。L2（OP）= 親 chain consensus 依存 + Deposit tx あり + L1 cost あり + L1 block oracle あり。両者とも extension モデルだが「何を差し替えるか」が違う。
+
+## 合格基準
+
+- 8 sub-crate を即答できる。
+- \`cargo tree\` で extension model を確認できる。
+- 5 分背骨（NodeBuilder → ChainSpec → Executor → Payload → Genesis）を辿れる。
+- 初回読書 4 ステップを言える。
+- L1 と L2 の観点別差分を 4 つ言える。
+
+## まとめ（3行）
+
+- Reth ベース chain は 8 sub-crate 構造（chainspec / node / evm / payload / consensus / rpc / txpool / hardforks）、SDK が骨格を強制。
+- 5 分背骨（NodeBuilder → ChainSpec → Executor → Payload → Genesis）+ 初回読書 4 ステップ（README → chainspec → node → NodeBuilder 順 + tests）。
+- L1（Tempo）と L2（OP）は extension モデル共通だが Deposit / L1 cost / consensus の有無で差分 — 観点で読めば両方読める。
+`,
                 },
                 {
-                  title: 'Custom ChainSpec — fork、genesis、precompile schedule',
+                  title: 'レッスン19 — Custom ChainSpec（fork / genesis / precompile schedule）',
                   slug: 'custom-chainspec-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 14,
                   xpReward: 40,
-                  content: `# Custom ChainSpec — fork、genesis、precompile schedule
+                  content: `# レッスン19 — Custom ChainSpec（fork / genesis / precompile schedule）
 
-mainnet では検証が通るブロックが、あなたの chain では reject される。同じブロック、同じクライアントバイナリ、同じ Revm — なのに結果が違う。なぜか? \`ChainSpec\` のどこかが「この高さでは、ここのルールが違う」と言っているから。fork 高の誤り、precompile schedule のエントリ誤り、base-fee パラメータの誤り — どれか一つでも間違っていれば、あなたの chain は 1 ブロックでネットワークから分岐する。
+## 問い
 
-\`ChainSpec\` は「この chain が **プロトコル** レベルで mainnet Ethereum と何が違うか」を所有する Rust の struct です — chain ID、fork activation、base fee カーブ、genesis allocation、precompile schedule。Reth ベース chain を読むときも書くときも、**最初に読むべき型** である。
+mainnet では検証が通るブロックが、あなたの chain では reject される。同じブロック、同じクライアントバイナリ、同じ Revm — なのに結果が違う。**\`ChainSpec\` のどこかが「この高さでは、ここのルールが違う」と言っているから — 何が入っているか？**
 
-> 🛑 **予測。** "ChainSpec" という名前は config 風に聞こえますが、実際には何が入っているか **カテゴリを 5 つ** 予想してみてほしい。5 つに届かない、あるいは全部 gas 関連、というなら consensus rule が触れる範囲を過小評価している。
+## 原理（最小モデル）
 
-## 1. ChainSpec とは
+- **\`ChainSpec\` = chain のプロトコル定義.** Chain ID / Hardfork activation / Base fee params / Genesis / Precompile schedule / レガシー params。
+- **6 カテゴリ.** Chain ID（EIP-155 replay protection）+ Hardfork activation（block-height / timestamp スイッチ）+ Base fee（EIP-1559 elasticity / change denominator）+ Genesis（初期 allocation / state root / gas limit）+ Precompile schedule（各 fork でアクティブな precompile アドレス）+ レガシー（block gas limit / DAO fork / mining difficulty）。
+- **拡張 ChainSpec.** L2 chain は base \`ChainSpec\` をラップし chain 固有 fork（Bedrock / Canyon / Ecotone / Fjord）+ 独自 precompile schedule を追加。
+- **Hardfork enum がプロトコル史.** 声に出して読むのが chain 理解の最速ルート。
+- **Precompile activation は ChainSpec に住む.** EVM config 単独ではなく ChainSpec → activation 自体がコンセンサスルール。
+- **L2 chainspec の追加項目.** L1 chain ID / L1 block oracle / Sequencer address / Withdrawal config。
 
-\`reth-chainspec\` の \`ChainSpec\` は (chain 固有 crate の拡張型も含めて) 以下を抱える struct です:
+## 具体例
 
-| カテゴリ | 何を制御するか |
+ChainSpec 6 カテゴリ:
+
+| カテゴリ | 何を制御 |
 | :--- | :--- |
-| **Chain ID** | EIP-155 の replay protection キー |
-| **Hardfork activation** | Protocol upgrade を切り替える block-height / timestamp ベースのスイッチ |
-| **Base fee params** | EIP-1559 のパラメータ (elasticity、change denominator) |
-| **Genesis** | 初期 allocation、state root、gas limit |
-| **Precompile schedule** | 各 fork でアクティブになる precompile アドレス |
-| **その他のレガシー params** | Block gas limit、DAO fork、mining difficulty (legacy) |
+| Chain ID | EIP-155 replay protection キー |
+| Hardfork activation | Protocol upgrade を切り替える block-height / timestamp スイッチ |
+| Base fee params | EIP-1559 elasticity、change denominator |
+| Genesis | 初期 allocation、state root、gas limit |
+| Precompile schedule | 各 fork でアクティブな precompile アドレス |
+| その他レガシー | Block gas limit、DAO fork、mining difficulty（legacy） |
 
-Reth ベース レッスン2では、chain は *拡張された* ChainSpec を提供します — たとえば OP chain spec は base \`ChainSpec\` をラップし、OP 固有の fork 追跡 (Bedrock、Canyon、Ecotone、Fjord、…) を追加している。
-
-> 🛑 **現物を確認。** \`crates/optimism/chainspec/\` を開いて、OP chain spec を表す正確な型を特定してほしい。\`ChainSpec\` のラッパー struct ですか? Trait 拡張? **その両方?** 答えが出るまで先に進まない。
-
-## 2. Hardfork のリスト = chain の歴史
-
-Hardfork enum を声に出して読むのが、chain を理解する最速の方法である。
-
-OP Stack ならおよそ以下のような enum が見つかるはず:
+OP Hardfork enum 例:
 
 \`\`\`rust
 pub enum OptimismHardfork {
@@ -3186,101 +2883,117 @@ pub enum OptimismHardfork {
 }
 \`\`\`
 
-各 variant には **activation logic** が紐づいています (mainnet では block height、Sepolia や Base などの各ネットワークでは別の timestamp)。この enum と activation table を読むことが、すなわち chain のプロトコル史全体を読むこと。
-
-Tempo でも同じ形の enum が出てくるはず。名前は違っても、構造は同じである。
-
-## 3. Precompile schedule
-
-Precompile は予約アドレス (mainnet の \`0x00..01\` から \`0x00..0a\`、加えて任意の追加分) に存在する「ネイティブ関数」である。どの fork でどの precompile が存在するかは、各 chain が決める。
-
-OP Stack は Ethereum の precompile の大半を継承し、独自のものを少し追加している。今後の hardfork でさらに追加されていく。Precompile schedule は要するに以下の対応:
+Precompile schedule の対応:
 
 \`\`\`
 Fork F において、アドレス A は ネイティブ関数 impl I にマップされる
 \`\`\`
 
-実体は chain の EVM config crate に置かれます (次レッスン) が、**activation の判定** は ChainSpec にあります — activation 自体が consensus rule だからである。
+実体は chain の EVM config crate、**activation 判定は ChainSpec**（activation 自体がコンセンサスルール）。
 
-> 🛑 **理解度チェック。** なぜ precompile の activation は EVM config 単独ではなく ChainSpec に置かねばならないのか? 答えが「一貫性のため」だけなら掘り下げが足りません。**block N でどの precompile がアクティブかを 2 つのノードが食い違って判定したら、何が壊れますか?**
+Genesis 出荷物:
 
-## 4. Genesis encoding
+- Genesis JSON ファイル（allocation / gas limit / 初期 difficulty/seal）
+- chainspec crate 内 \`Genesis\` Rust struct（JSON からロード可能）
+- 計算済み genesis state root — 全ノード合意が必要
 
-Genesis は要するに「block 0 の state」。Custom chain が出荷するものは:
+L2 chainspec 追加項目:
 
-- Genesis JSON ファイル (allocation、gas limit、初期 difficulty/seal)
-- chainspec crate 内の \`Genesis\` Rust struct (たいていは JSON からロード可能)
-- 計算済みの genesis state root — 全ノードが合意していないと成立しない
-
-chain を監査するなら、**コード上の genesis state root が実ネットワークと一致するか必ず検証** してほしい。ここで食い違えば、全ノードが block 1 で食い違いる。
-
-## 5. L2 chainspec の特殊性
-
-レッスン2の chainspec (Optimism、Base、…) はさらに以下も追跡します:
-
-- **L1 chain ID** — L2 がアンカーされている先 (cross-domain message verification 用)
-- **L1 block oracle** address on L2 — 現在の L1 block hash を記録するコントラクト
+- **L1 chain ID** — L2 がアンカーされている先（cross-domain message verification）
+- **L1 block oracle** address on L2 — 現 L1 block hash を記録するコントラクト
 - **Sequencer address** — sequencer 署名つき batch の検証用
 - **Withdrawal config** — L2 → L1 withdrawal の時間遅延
 
-Tempo のような レッスン1にはこれらは適用されませんが、拡張された ChainSpec にどんな *種類* の情報が住むかという例として参考になる。
+## 失敗例（誤解）
 
-## 6. 読解演習
+「Precompile activation は EVM config 単独で十分」— **間違い**。Block N でどの precompile がアクティブかを 2 ノードが食い違って判定 → 一方が「成功」もう一方が「revert」→ stateRoot 乖離 → コンセンサス分裂。**activation はコンセンサスルール → ChainSpec に置く**（EVM config はその指示を実行するだけ）。
 
-\`crates/optimism/chainspec/\` (または手元の reth チェックアウトの該当箇所) で:
+「Genesis state root はどうでもいい」— **間違い**。コード上の root と実ネットワークの root が食い違えば、全ノードが block 1 で食い違う → chain が起動しない / 1 ブロックで分岐。
 
-1. **特定**: OP chain spec を表す struct
-2. **音読**: hardfork のリストを声に出す
-3. **位置特定**: 「fork F は block height H、timestamp T でアクティブか?」に答える関数
-4. **発見**: OP mainnet と Base の Bedrock activation block がハードコードされている場所
+「ChainSpec は単なる config ファイル」— **半分間違い**。**6 カテゴリすべてがコンセンサスクリティカル**。chain ID 違い = replay 攻撃、hardfork 高さ違い = 分裂、precompile schedule 違い = stateRoot 乖離。「config」より「プロトコル定義」が正確。
 
-そのあと、awesome-reth の "Layer 2" セクションにある任意の chain で同じ作業をしてみてほしい。
+> 🛑 **予測。** "ChainSpec" は config 風に聞こえるが何が入っているか **カテゴリを 5 つ** 予想する。5 つに届かない / 全部 gas 関連 → consensus rule の範囲を過小評価。（答え: Chain ID / Hardfork activation / Base fee params / Genesis / Precompile schedule / レガシー params。**6 カテゴリすべて consensus rule**、ChainSpec 1 つ間違えると chain が分裂する。）
 
-> 最終チェック: 「chain X が block N で使っている fork activation rule は?」と問われたら、どのファイルをどの順序で読みますか? 2 ファイルを超えるなら過剰 — ChainSpec と activation table、それだけで足りる。`,
+## ステップで組み立てる
+
+### Step 1: 6 カテゴリ即答
+
+Chain ID / Hardfork / Base fee / Genesis / Precompile schedule / レガシー。
+
+### Step 2: Hardfork enum を音読
+
+\`OptimismHardfork::Bedrock / Regolith / Canyon / Ecotone / Fjord / ...\` を声に出す → chain のプロトコル史。
+
+### Step 3: 「fork F は block H、timestamp T でアクティブか？」関数
+
+OP chainspec の \`is_fork_active_at_block\` / \`is_fork_active_at_timestamp\` を辿る。
+
+### Step 4: OP mainnet と Base の Bedrock activation block
+
+両方が異なる block を持つ → OP mainnet は本番、Base は別。同じ \`OptimismHardfork::Bedrock\` でも chain ごとに高さが違う。
+
+### Step 5: L2 chainspec の追加 4 項目
+
+L1 chain ID / L1 block oracle / Sequencer address / Withdrawal config。
+
+## 答え合わせ
+
+- **Precompile activation を ChainSpec に置く理由**: 2 ノードが block N で精コンパイル set を食い違うと → 一方が呼び出し成功、もう一方が「アドレスは empty」と revert → stateRoot 乖離 → 分裂。activation はコンセンサスルール → 全ノード合意必要 → ChainSpec（プロトコル定義）に住む。
+- **Genesis state root のコード ↔ 実ネットワーク食い違いの結末**: 新ノード起動時、ChainSpec の genesis root を「正しい root」として使う → 実ネットワークのノードが違う root を持つ → block 1 をネットワークから受信 → 自分の post-state root と食い違う → block 1 を invalid と判定 → ネットワークから孤立。
+- **L1 chainspec と L2 chainspec の追加 4 項目の存在理由**: L2 は親 chain（L1）にアンカーされる → ① L1 chain ID（どの L1）+ ② L1 block oracle（L1 状態へのアクセス）+ ③ Sequencer address（sequencer 認証）+ ④ Withdrawal config（cross-layer 時間遅延）。L1 自体はアンカー先がない → 不要。
+
+## 合格基準
+
+- 6 カテゴリを即答できる。
+- Hardfork enum を音読 → activation table が読める。
+- Precompile activation が ChainSpec に住む理由を説明できる。
+- Genesis state root の重要性を言える。
+- L2 chainspec の追加 4 項目を即答できる。
+
+## まとめ（3行）
+
+- ChainSpec = 6 カテゴリ（Chain ID / Hardfork activation / Base fee / Genesis / Precompile schedule / レガシー）、すべて consensus-critical。
+- Hardfork enum はプロトコル史、activation table は「fork F が block H、timestamp T でアクティブか」を答える関数。
+- L2 chainspec は L1 chain ID / L1 block oracle / Sequencer / Withdrawal の 4 項目を追加 — L1 は自分でアンカーされないので不要。
+`,
                 },
                 {
-                  title: 'Custom executor — execution layer を差し替える',
+                  title: 'レッスン20 — Custom executor（execution layer を差し替える）',
                   slug: 'custom-executor-ja',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 18,
                   xpReward: 45,
-                  content: `# Custom executor — execution layer を差し替える
+                  content: `# レッスン20 — Custom executor（execution layer を差し替える）
 
-Executor とは「実際に tx を実行して post-state を生成するもの」である。Ethereum mainnet では vanilla revm がそれにあたる。Optimism では revm に **deposit-tx 処理**、**L1 cost 計算**、**少し異なる precompile リスト** を足したものになる。本レッスンでは、Reth がこの実行レイヤーをどう差し替えさせてくれるかを見ていく。
+## 問い
 
-> 🛑 **予測。** Reth ベース L2 が "deposit transaction" — L1 起源で L2 側には署名のない tx — を実行する必要があるとき、**L2 がカスタマイズするのはどの層** ですか? mempool? Transaction validator? Executor? **理由づけしてから** 読み進めてほしい。
+Executor は「tx を実行して post-state を生成するもの」。Ethereum mainnet では vanilla revm、Optimism では revm + deposit-tx 処理 + L1 cost 計算 + 異なる precompile。**Reth がこの実行レイヤーをどう差し替えさせるか？**
 
-## 1. Trait の境界
+## 原理（最小モデル）
 
-関連する trait (正確な名前は reth のバージョンで揺れるのでソースで確認):
+- **3 trait の境界.** \`ConfigureEvm\`（block context → 適切な precompile / gas schedule で revm 構成）+ \`BlockExecutionStrategy\`（block から tx 取り出し → revm 流し → receipt + state change 蓄積）+ \`ExecutorBuilder\`（NodeBuilder スロット）。
+- **Optimism が override する 4 つ.** Custom precompile リスト（L1 block hash アクセスなど）+ Deposit transaction 処理（署名検証スキップ）+ L1 cost 計算（calldata の L1 投稿コスト）+ Pre-execution hook（L1 block oracle slot 更新）。
+- **Precompile は \`ConfigureEvm\`、L1 cost は実行戦略.** Custom precompile = config、L1 cost = executor メインループ（precompile に収まらない consensus-critical ロジック）。
+- **配線.** ChainSpec → [どの fork アクティブ？] → EVM config → [アクティブ precompile set] → revm。
+- **Execution loop は mainnet + 2 行差.** Deposit tx 判定 + L1 cost apply 以外は mainnet と同じ。
 
-- **\`ConfigureEvm\`** — block コンテキストを受け取り、適切な precompile セット、gas schedule などを備えた revm インスタンスを構成
-- **\`BlockExecutionStrategy\`** (または類似) — block から tx を取り出して revm に流し、receipt と state change を蓄積していくループ
-- **\`ExecutorBuilder\`** — 動作中の node に executor を供給する NodeBuilder のスロット
+## 具体例
 
-Chain は前者 2 つを自分の crate での trait impl でカスタマイズし、3 つ目を経由して NodeBuilder に登録する。
+3 trait:
 
-## 2. Optimism が override しているもの
+- **\`ConfigureEvm\`** — block コンテキスト → revm インスタンス構成
+- **\`BlockExecutionStrategy\`**（または類似）— block から tx 取り出し → revm 流し → receipt + state change 蓄積
+- **\`ExecutorBuilder\`** — NodeBuilder スロット
 
-\`crates/optimism/evm/\` を読むと、おおむね以下が見つかります:
+Optimism の override:
 
 | Override | 理由 |
 | :--- | :--- |
-| **Custom precompile リスト** | OP は precompile をいくつか追加 (例: L1 block hash アクセス) |
-| **Deposit transaction の処理** | Deposit tx は署名検証をスキップ (L1 側で認証済みのため) |
-| **L1 cost 計算** | OP の tx はすべて、L2 gas に加えて L1 data cost を支払う |
-| **Pre-execution hook** | Block 内の最初の tx 実行前に、L1 block oracle の storage slot を更新する |
-
-最初の 1 つは config。残り 3 つは実行戦略レベルの話で、block executor のメインループに住む。
-
-> 🛑 **現物を確認。** \`crates/optimism/evm/\` の中で「これは deposit tx だから署名検証をスキップ」と判断している関数を特定してほしい。**シグネチャは?** (記憶する必要はない — 見つけられればいい)。
-
-## 3. Custom precompile の話
-
-すでに custom precompile を書いた経験があるはず。問いは: **その precompile はどこで chain に組み込まれるのか?**
-
-答えは: \`ConfigureEvm\` impl が revm に precompile セットを手渡す。Chain の \`ConfigureEvm\` impl が、chain の hardfork schedule で gate された custom precompile をデフォルトセットに足していく形である。
+| Custom precompile リスト | OP は L1 block hash アクセスなど追加 |
+| Deposit transaction 処理 | Deposit tx は署名検証スキップ（L1 で認証済み） |
+| L1 cost 計算 | OP tx は L2 gas に加え L1 data cost 支払い |
+| Pre-execution hook | block 内最初の tx 実行前、L1 block oracle slot 更新 |
 
 配線:
 
@@ -3288,23 +3001,7 @@ Chain は前者 2 つを自分の crate での trait impl でカスタマイズ�
 ChainSpec  ──[どの fork がアクティブ?]──▶  EVM config  ──[アクティブな precompile set]──▶  revm
 \`\`\`
 
-precompile を登録するコードが物理的に住む場所が、この EVM config crate。
-
-## 4. L1 cost 計算 (なぜ良い例か)
-
-OP Stack は tx すべてに *L1 data cost* — その tx の calldata を L1に投稿する分の償却コスト — を課金する。これは厳しい要求で、全ノードが寸分違わず同じ L1 cost を計算できないと block validation が失敗する。
-
-Executor 内では以下のように実装される:
-1. 各 tx の実行前に、既知の storage slot から現在の L1 base fee と blob gas price を読み出す
-2. \`l1_cost = calldata_gas * l1_base_fee + blob_overhead\` を計算
-3. L2 gas の課金に **加えて** 送信者の残高から控除
-4. Fee vault に入金
-
-これは **precompile には収まらない consensus-critical なロジック** の典型例 — executor 自体に置く以外ない。
-
-> 🛑 **理解度チェック。** OP の L1 cost charging はなぜ precompile として実装できないのか? 答えが「performance のため」だけなら掘り下げが足りません — precompile が tx 実行前に任意のアカウントから控除できない **consensus 上の理由** は何ですか?
-
-## 5. Execution loop を擬似コードで
+Execution loop 擬似コード:
 
 \`\`\`
 for tx in block.body:
@@ -3322,357 +3019,430 @@ for tx in block.body:
 return post_state_root(state), receipts
 \`\`\`
 
-Ethereum mainnet では 3 行目と 9 行目が消えるだけ。**他はまったく同じ。** これが extension model のすべて。
+Mainnet では 3 行目（deposit 判定）と 9 行目（L1 cost）が消えるだけ。**他はまったく同じ**。
 
-## 6. Tempo で何が来るか
+L1 cost 計算ステップ:
 
-Tempo は L1 なので、以下は無いはず:
-- "deposit tx" の概念 (deposit 元になる親 chain がない)
-- L1 cost の課金
+1. 各 tx 実行前に既知の storage slot から L1 base fee + blob gas price を読む
+2. \`l1_cost = calldata_gas × l1_base_fee + blob_overhead\` を計算
+3. L2 gas 課金 **に加えて** 送信者残高から控除
+4. Fee vault に入金
 
-逆におそらく "yes":
-- 決済プリミティブ用の custom precompile (FX、settlement attestation など)
-- Tempo に「現在の FX rate」のような oracle slot が組み込まれているなら pre-execution hook (OP の L1 block hash slot と同じ発想)
-- 異なる fee 市場構造 (Tempo は stablecoin-native なので、fee 資産の選択が興味深い)
+Tempo（L1）で予測される差分:
 
-Tempo の executor は現在公開されている — [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) で該当ファイルを開き、上記の仮説を実コードに対して検証してほしい。
+- "deposit tx" 概念なし（親 chain なし）
+- L1 cost 課金なし
+- ただし: 決済 primitives 用 custom precompile（FX、settlement attestation）+ Pre-execution hook（FX rate oracle slot）+ 異なる fee 市場構造（stablecoin-native）
 
-## 7. 練習
+## 失敗例（誤解）
 
-\`crates/optimism/evm/\` で:
+「L1 cost charging を precompile で実装すれば speed が出る」— **間違い**。precompile は「tx 実行中の特定 CALL に応じる」もの → tx 実行 **前** に送信者残高から控除できない。L1 cost は実行戦略レベル → executor メインループ。
 
-1. **特定**: OP の \`ConfigureEvm\` impl
-2. **列挙**: Ethereum mainnet には無い precompile アドレスをすべて
-3. **特定**: L1 cost charge を加える関数
-4. **追跡**: deposit transaction が署名検証をどのようにバイパスしているか
+「Custom precompile は executor に直書きすれば良い」— **間違い**。\`ConfigureEvm\` impl が revm に precompile セットを手渡す → ChainSpec の hardfork schedule で gate → 各 fork で正しい precompile set。直書きすると hardfork transition で壊れる。
 
-> 最終チェック: Reth ベース chain で executor に **必ず** 住む (precompile にも mempool にも置けない) 要素を 2 つ挙げ、それぞれなぜ executor にしか置けないかを説明してほしい。できなければ §4、§5 を再読。`,
+「Deposit tx は通常 tx と同じ実行で良い」— **間違い**。Deposit tx は L1 で既に認証済み（L1 コントラクトが認証）→ L2 側で署名検証する署名がない / 検証する必要なし。**OP の deposit tx は署名フィールドが空または特殊値**、署名検証スキップが必須。
+
+> 🛑 **予測。** OP の L1 cost charging はなぜ precompile として実装できないのか？ 「performance のため」だけなら掘り下げが足りない — precompile が tx 実行前に任意のアカウントから控除できない **consensus 上の理由** は？（答え: precompile は **tx 実行中の特定 CALL に応じる純粋関数** → 任意のアカウント残高を tx 実行 **前** に控除する権限がない（既存の precompile アドレス \`0x01\`-\`0x0a\` も全部入出力ベースで、ホスト state を勝手に書き換えない）。L1 cost は ① tx 実行前、② 送信者残高から、③ block 内全 tx に適用 → これは executor の責務、Yellow Paper の framework 外。**consensus-critical ロジックは executor に住む** — precompile では tx-scoped、executor は block-scoped。）
+
+## ステップで組み立てる
+
+### Step 1: 3 trait 境界を即答
+
+\`ConfigureEvm\` / \`BlockExecutionStrategy\` / \`ExecutorBuilder\`。
+
+### Step 2: Optimism の 4 override
+
+Custom precompile / Deposit tx / L1 cost / Pre-execution hook。
+
+### Step 3: Precompile vs Executor の判断軸
+
+「tx-scoped 入出力か」= precompile / 「block-scoped、tx 実行前後、ホスト state 任意書き換え」= executor。
+
+### Step 4: Execution loop 擬似コード暗唱
+
+mainnet との差分 2 行（deposit 判定 + L1 cost apply）= **extension model の最小差分**。
+
+### Step 5: Tempo の予測差分
+
+L1 なので deposit / L1 cost / L1 block oracle なし、代わりに決済 primitives + FX oracle + stablecoin fee 市場。
+
+## 答え合わせ
+
+- **L1 cost が executor のみに住む理由**: precompile = tx 実行中の特定 CALL に応じる純粋関数（入出力）、executor = block 全体の制御（tx 実行前後、ホスト state 書き換え）。L1 cost は ① 全 tx に適用 + ② tx 実行前に控除 + ③ ホスト state 書き換え → 3 つとも precompile の責務外。
+- **Custom precompile が ChainSpec を経由する理由**: 各 fork で異なる precompile set が必要（hardfork で precompile 追加 / 削除）→ EVM config が単独で hardfork 状態を知らないと正しい precompile set を渡せない → ChainSpec が「現 block での fork 状態」を提供 → EVM config が「fork に対応する precompile set」を選ぶ → revm が受け取る。
+- **mainnet と OP のメインループ差分**: 3 行目（deposit tx 判定 + 署名検証スキップ）+ 9 行目（apply_l1_cost）の 2 行だけ。他のすべて（state load / configure_evm / transact / state.commit / receipts.push）は mainnet と同じ。**extension model の最小差分 = consensus 互換性 + コード共有率最大**。
+
+## 合格基準
+
+- 3 trait（ConfigureEvm / BlockExecutionStrategy / ExecutorBuilder）を即答できる。
+- Optimism の 4 override を即答できる。
+- Precompile vs Executor の判断軸を言える。
+- Execution loop の mainnet との 2 行差分を言える。
+- L1 cost が executor のみに住む理由を 3 つ言える。
+
+## まとheme（3行）
+
+- 3 trait（ConfigureEvm / BlockExecutionStrategy / ExecutorBuilder）が execution layer の差し替え API、ChainSpec → EVM config → revm の配線。
+- Optimism の 4 override（Custom precompile / Deposit tx / L1 cost / Pre-execution hook）= mainnet との最小差分（2 行）。
+- Precompile = tx-scoped 純粋関数、Executor = block-scoped、ホスト state 任意書き換え可 — L1 cost は executor のみ。
+`,
                 },
                 {
-                  title: 'Custom payload builder — sequencer モードの block 生成',
+                  title: 'レッスン21 — Custom payload builder（sequencer モードの block 生成）',
                   slug: 'custom-payload-builder-ja',
                   type: 'CONTENT',
                   sortOrder: 4,
                   duration: 16,
                   xpReward: 45,
-                  content: `# Custom payload builder — sequencer モードの block 生成
+                  content: `# レッスン21 — Custom payload builder（sequencer モードの block 生成）
 
-Ethereum mainnet では、block は **validator** が consensus client を動かし、execution client から提案された payload を pull することで生成される。一方、L2 や中央集権 sequencer の chain では block 生成モデルが違います: **sequencer がそのまま block producer になる**、それだけ。Payload builder は、その「どうやって作るか」を担うコンポーネントである。
+## 問い
 
-> 🛑 **予測。** 中央集権 sequencer の レッスン2において、block 内の **tx ordering を決める** のは誰/何ですか? sequencer は何を最適化していて、MEV 上の含意はどうなる? 自分の予測を立ててから読み進めてほしい。
+Ethereum mainnet では block を **validator** が consensus client 動かして execution client から pull。L2 や中央集権 sequencer chain では **sequencer がそのまま block producer**。**Payload builder が「どうやって作るか」を担う — 何を制御し、何を制御しないか？**
 
-## 1. Trait の境界
+## 原理（最小モデル）
 
-\`PayloadBuilder\` (と関連 trait 群) は、reth NodeBuilder の「block の作り方」を担うスロット。受け取るもの:
+- **\`PayloadBuilder\` の入出力.** 入力 = Parent block / chain state / Pending tx pool / Timestamp / slot、出力 = 構築済み block（"payload"）。
+- **3 種の本番 builder.** Default Ethereum builder（mainnet validator）+ OP payload builder（OP Stack sequencer）+ **op-rbuilder**（[flashbots/rbuilder](https://github.com/flashbots/rbuilder)、OP 向け高性能 external block builder）。
+- **L2 builder の 5 つの追加責務.** ① Deposit tx 強制 include（L1 oracle queue から）+ ② FIFO or priority-fee ソート + ③ L1 block oracle slot 更新（最初の state write）+ ④ L2 gas limit でキャップ + ⑤ Sequencer signature でタグ付け。
+- **Builder と executor の境界.** Builder = **block に何が入るか** を制御、Executor = **block に入っているもの** を実行。
+- **MEV 3 立場.** MEV-blind（厳格 FIFO）/ MEV-aware public（MEV-share bid）/ MEV-extracting（内部 searcher）。**chain の MEV policy は payload builder ソースに現れる**。
+- **op-rbuilder.** Bundle merging + Sealing strategy + Builder API、OP Stack 向け本番グレードリファレンス。
 
-- Parent block (どこから建てるか)
-- 現在の chain state
-- Pending transaction の pool
-- Timestamp / slot
+## 具体例
 
-…返すものは、構築済みの block ("payload")。Mainnet では validator 側の consensus client が Engine API 経由でこれをトリガーする。Sequencer レッスン2では sequencer が直接トリガーする。
-
-## 2. 本番で出てくる 3 種類の builder
-
-Reth エコシステムには複数の payload builder が存在します:
+3 種 builder:
 
 | Builder | 場所 | 用途 |
 | :--- | :--- | :--- |
 | Default Ethereum builder | \`crates/payload/builder/\` | Mainnet validator |
 | OP payload builder | \`crates/optimism/payload/\` | OP Stack sequencer |
-| **op-rbuilder** | [flashbots/rbuilder](https://github.com/flashbots/rbuilder) | OP Stack 向けの高性能な external block builder |
+| **op-rbuilder** | [flashbots/rbuilder](https://github.com/flashbots/rbuilder) | OP Stack 向け高性能 external builder |
 
-最初の 2 つは reth 本体に入っている。**op-rbuilder** は別 repo で、MEV と ordering policy にずっと積極的、複数の OP Stack chain が本番で使用している。
+L2 builder の 5 責務:
 
-## 3. レッスン2の builder が違うこと
+1. Deposit tx を block 先頭に強制 include（既知の L1 oracle queue から）
+2. 残りを FIFO か priority-fee でソート
+3. 最初の state write として L1 block oracle storage slot を更新
+4. L2 gas limit で block をキャップ（mainnet limit ではない）
+5. Sequencer signature で block にタグ付け（一部 L2 は sequencer identity にコミット）
 
-Sequencer モードでの block 生成では、典型的に以下を行います:
-
-1. **Deposit tx を block の先頭に強制 include する** (既知の L1 oracle queue から)
-2. **残りを FIFO か priority-fee でソート**
-3. **最初の state write として L1 block oracle の storage slot を更新**
-4. **レッスン2の gas limit で block をキャップ** (mainnet limit ではない)
-5. **Sequencer signature で block にタグ付け** (一部 L2 は sequencer identity にコミットする)
-
-これらのいくつかは **executor 側にはない** — *builder* 側にある。なぜか。Builder は *block に何が入るか* を制御し、executor は *block に入っているもの* を実行するだけだからである。
-
-> 🛑 **理解度チェック。** ジュニアエンジニアが「mempool を FIFO に流せば sequencer 完成」と言ったとする。**そこに考慮が抜けている攻撃を 3 つ** 挙げてほしい。(ヒント: tx 提出の latency、toxic order flow、reorg)
-
-## 4. MEV の問題
-
-Tx を順序づける sequencer は、validator にはできない形で MEV を抽出できます (block 内で consensus 上の競合相手がいないため)。
-
-Sequencer が取れる立場は 3 つ:
+MEV 3 立場:
 
 | Position | 意味 | 例 |
 | :--- | :--- | :--- |
-| **MEV-blind** | 厳格 FIFO、tx の意味には踏み込まない | 一部の小規模 L2 がそう主張 |
-| **MEV-aware, public** | 公開 order flow、builder が MEV-share 風の bid を受ける | OP Stack + op-rbuilder |
-| **MEV-extracting** | Sequencer が内部 searcher を運用 | (不透明な場合が多い。中央集権 chain は何でもできる) |
+| MEV-blind | 厳格 FIFO、tx 意味に踏み込まない | 一部小規模 L2 が主張 |
+| MEV-aware public | 公開 order flow、builder が MEV-share 風 bid 受ける | OP Stack + op-rbuilder |
+| MEV-extracting | Sequencer が内部 searcher 運用 | 不透明、中央集権 chain は何でも可能 |
 
-どの立場を取るかは **payload builder のソースコード** に現れます — feature flag や外部 builder 統合で gate されている形が多い。Chain の payload builder を読むことは、その chain の MEV policy を読むことと同義である。
+op-rbuilder の特徴:
 
-## 5. op-rbuilder — 本番グレードのリファレンス
+- **Bundle merging**（private order flow + public mempool）
+- **Sealing strategy**（greedy、並列化可能）
+- **Builder API**（第三者 bundle 提出可能）
+- オープンソースで「本物の」本番 block builder に最も近い
 
-[flashbots/rbuilder](https://github.com/flashbots/rbuilder) は、Paradigm が OP Stack 向けに作った external builder。読む価値がある理由:
+Tempo 予測:
 
-- **Bundle merging** が実装されている (private order flow + public mempool)
-- **Sealing strategy** (greedy、並列化可能なアルゴリズム)
-- **Builder API** — 第三者が bundle を提出できる
-- オープンソースの中では「本物の」本番 block builder に最も近い
+- 決済認識型 payload builder — 決済 tx が汎用 tx より優先される可能性
+- Builder レベル merchant 認可フィルタ
+- merchant 単位レート制限
+- ローンチ時公開 mempool なし（sequencer-private）
 
-Tempo が sequencer モード block 生成に op-rbuilder を採用または拡張するなら、最初に学ぶべき codebase である。
+## 失敗例（誤解）
 
-## 6. Tempo 特有のこと
+「mempool を FIFO に流せば sequencer 完成」— **間違い**。3 攻撃が抜けている: ① tx 提出の latency 攻撃（低レイテンシピアが優位）、② toxic order flow（malicious tx が次の被害者を釣る）、③ reorg 攻撃（sequencer 自身が短期 reorg）。**FIFO + 防御層が必要**。
 
-予測:
-- Tempo は **決済認識型の payload builder** を持つ — 決済 tx が汎用 tx より優先される可能性
-- Builder レベルでの **merchant 認可フィルタ** — 認可された merchant だけが特定の tx 種別を提出できる
-- 濫用防止のための **merchant 単位のレート制限**
-- ローンチ時は **公開 mempool 無し** の可能性が高い (sequencer-private)
+「builder と executor は同じこと」— **間違い**。Builder = **何を入れるか**（順序 + フィルタ）、Executor = **入っているものをどう走らせるか**（state 遷移）。順序は builder が決定 + executor が忠実に実行。
 
-これらはそれぞれ、payload-builder crate の一つの trait impl として現れるはずである。
+「MEV-blind が常に倫理的」— **半分間違い**。MEV-blind 主張でも実際は order flow の見え方で抽出可能（mempool 公開 vs sequencer 専有）。**公開された主張ではなく builder source code が真実**。
 
-## 7. 練習
+> 🛑 **予測。** ジュニアエンジニアが「mempool を FIFO に流せば sequencer 完成」と言う。**そこに考慮が抜けている攻撃を 3 つ**。（答え: ① **tx 提出 latency 攻撃** — 低レイテンシピアが MEV 機会を独占（先着 FIFO で）、② **toxic order flow** — bait tx が後続 tx の被害者を釣る、sequencer が一律 FIFO だと罠が成功、③ **reorg / sequencer 自身の MEV** — sequencer 自身が短期 reorg で過去 block を書き換えて利益抽出（中央集権なので何でもできる）。FIFO は **公平に見えて公平でない** — 防御層必要。）
 
-\`crates/optimism/payload/\` を開いて:
+## ステップで組み立てる
 
-1. **特定**: \`PayloadBuilder\` の trait impl
-2. **追跡**: deposit tx が block 先頭にどう include されるか
-3. **特定**: block の gas cap が強制されている箇所
-4. **特定**: 構築した block を sign / seal する関数
+### Step 1: 3 種 builder を即答
 
-そのあと [op-rbuilder の README](https://github.com/flashbots/op-rbuilder) を読み、"external builder" モデルの考え方を掴んでしてほしい。
+Default / OP payload / op-rbuilder（external）。
 
-> 最終チェック: 1 文で、payload builder が **決定する** けれども executor は決定しないものは? 答えに "ordering" または "selection" が出てこないなら §3 を再読。`,
+### Step 2: L2 builder の 5 責務
+
+Deposit tx 強制 / FIFO or priority-fee / L1 oracle slot 更新 / L2 gas cap / Sequencer signature。
+
+### Step 3: Builder vs Executor の境界
+
+Builder = 何を入れるか（順序 + フィルタ）、Executor = 入っているものを実行。
+
+### Step 4: MEV 3 立場の判別
+
+source code を読む — \`extend_builder_with_mev_share\` のような feature flag、external builder 統合の有無、internal searcher hook。
+
+### Step 5: op-rbuilder を読む準備
+
+OP Stack 向けの「本物の」本番 builder 参考実装、Bundle merging + Sealing + Builder API。
+
+## 答え合わせ
+
+- **3 攻撃（latency / toxic flow / reorg）が FIFO で防げない理由**: ① latency は network 層の話 → application 層の順序付けでは介入不能、低レイテンシピアが mempool の自分の tx を先に入れる、② toxic flow は順序付けロジックが意味解釈しない FIFO だと罠 tx + 被害者 tx を順に通す、③ sequencer 自身の reorg は順序付けではなく consensus 層の問題、中央集権 sequencer は何でも可能。**FIFO は平等の幻想**、防御層必要。
+- **Tempo の予測差分（5 つ）**: 決済認識型優先 / merchant 認可フィルタ / merchant rate limit / 公開 mempool なし / sequencer signature。各々が payload-builder crate の trait impl として現れる。
+- **MEV policy が source code に現れる理由**: feature flag や external builder 統合は public API 露出 / 内部 searcher hook は private 関数だが GitHub source で見える / Bundle merging の有無 / Order flow privacy 設定。**主張ではなくコードを読む** — 「MEV-blind」と言いながら \`internal_searcher::bid()\` が呼ばれているかもしれない。
+
+## 合格基準
+
+- 3 種 builder を即答できる。
+- L2 builder の 5 責務を言える。
+- Builder vs Executor の境界を 1 文で説明できる。
+- MEV 3 立場を判別できる。
+- 3 攻撃（latency / toxic / reorg）が FIFO で防げない理由を言える。
+
+## まとめ（3行）
+
+- Payload builder = block 内容（順序 + フィルタ）を制御、Executor = 内容を実行。Mainnet validator vs L2 sequencer で「誰がトリガーするか」が違うだけ。
+- L2 builder の 5 責務（Deposit tx / FIFO or priority-fee / L1 oracle slot / L2 gas cap / Sequencer signature）+ MEV 3 立場が source code に現れる。
+- op-rbuilder が OP Stack 向け本番グレードリファレンス、Bundle merging + Sealing + Builder API。
+`,
                 },
                 {
-                  title: 'ケーススタディ — Paradigm のスタック: alphanet、Tempo、L1 パターン',
+                  title: 'レッスン22 — ケーススタディ（Paradigm スタック: alphanet / Tempo / MegaETH）',
                   slug: 'paradigm-stack-case-study-ja',
                   type: 'CONTENT',
                   sortOrder: 5,
                   duration: 18,
                   xpReward: 50,
-                  content: `# ケーススタディ — Paradigm のスタック: alphanet、Tempo、L1 パターン
+                  content: `# レッスン22 — ケーススタディ（Paradigm スタック: alphanet / Tempo / MegaETH）
 
-ここまでで 4 つの拡張スロット (ChainSpec、executor、payload builder、RPC) と、Reth ベース chain の依存関係の形を見てきました。本レッスンはその **総合編** です: Paradigm の全スタックはどう見えるか、そして **Tempo のソースが公開された今**、先ほど学んだ構造のレンズでそれをどう読むか。
+## 問い
 
-> 🛑 **予測。** Paradigm はこの順で出荷してきました: **revm → alloy → reth → alphanet → op-stack-on-reth → Tempo**。**このシーケンスは何の軌跡か?** 予想してから読み進めてほしい。後で答え合わせする。
+ここまでで 4 つの拡張スロット（ChainSpec / executor / payload / RPC）+ Reth ベース chain の依存形を見てきた。**Paradigm の全スタックはどう見えるか、Tempo / MegaETH のソースをこのレンズでどう読むか？**
 
-## 1. スタックを上から下まで
+## 原理（最小モデル）
+
+- **6 層スタック.** EVM core（revm）→ Toolkit（alloy）→ Execution client（reth）→ Reth ベース chain（\`crates/optimism/\`）→ R&D testnet（alphanet）→ 本番 L1（Tempo）。
+- **下層は上層にしか依存しない.** Tempo は reth を fork しない、**reth の上に建てる**。
+- **alphanet = precompile R&D 遊び場.** OP Stack 互換 testnet、mainnet 実装前の EIP（7212 P-256 / 3074 / 7702）を試す。**「chain に precompile を追加する」最もクリーンな実例**。
+- **Alphanet → 本番への軌跡.** mainnet Ethereum に EIP として graduate / 本番 Reth ベース chain に graduate。Tempo に何が入るかを予測したいなら **最近 alphanet で検証されたもの** を見る。
+- **Tempo（浅い端）.** L1 node crate、3-5 コンポーネント差し替え、残り upstream 継承。\`tempoxyz/reth\` = 0 commits ahead, 1374 commits behind。
+- **MegaETH（深い端）.** カスタム EVM（mega-evm）+ カスタム storage（SALT で MDBX 置換）+ 別 validator binary（stateless-validator）— それでも \`megaeth-labs/reth\` = 0 commits ahead, 7666 commits behind。
+- **SDK はカスタマイズの深さを制約しない.** Tempo 浅、MegaETH 深、両方とも reth fork なし。
+
+## 具体例
+
+スタック層:
 
 | Layer | Component | 役割 |
 | :--- | :--- | :--- |
-| **EVM core** | revm | バイトレベルの EVM インタプリタ |
-| **Toolkit** | alloy | Rust の型、provider、signer、ABI |
-| **Execution client** | reth | フル Ethereum node — staged sync、mempool、RPC、MDBX、P2P |
-| **Reth ベース chain** | reth の \`crates/optimism/\` | OP Stack の execution を reth node crate として実装 |
-| **R&D testnet** | alphanet | 「Ethereum に EIP-X precompile があったら?」を試す遊び場 |
-| **本番 L1** | Tempo | Paradigm の決済レール |
+| EVM core | revm | バイトレベル EVM インタプリタ |
+| Toolkit | alloy | Rust 型 / provider / signer / ABI |
+| Execution client | reth | フル Ethereum node（staged sync / mempool / RPC / MDBX / P2P） |
+| Reth ベース chain | reth \`crates/optimism/\` | OP Stack execution を reth node crate として |
+| R&D testnet | alphanet | EIP-X precompile 試す遊び場 |
+| 本番 L1 | Tempo | Paradigm 決済レール |
 
-**下の層 (table 上の後ろの行) は上の層にしか依存しない** — これが構造的な不変量である。Tempo は reth を fork しない。reth の *上に* 建てる。
+Alphanet の実装事例:
 
-## 2. alphanet — precompile R&D の遊び場
+- EIP-7212 — \`secp256r1\` (P-256) verification precompile（WebAuthn / Passkey）
+- EIP-3074 / 7702 — account abstraction primitives
+- 各種 opcode / gas 微調整
 
-[paradigmxyz/alphanet](https://github.com/paradigmxyz/alphanet) は OP Stack 互換のテストネットロールアップ。明示的な目的は **mainnet に実装される前に EVM 拡張を試す** こと。
+Tempo 公開:
 
-これまでに alphanet で実装・実験されたもの:
-- **EIP-7212** — \`secp256r1\` (P-256) verification precompile (WebAuthn / Passkey 関連)
-- **EIP-3074 / 7702** — account abstraction primitives
-- 各種 opcode / gas の微調整
+- [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo)（900+★、Rust）— "the blockchain for payments"。L1 node crate
+- [\`tempoxyz/reth\`](https://github.com/tempoxyz/reth) — **0 commits ahead, 1374 commits behind** = fork ゼロ証拠
+- Tempo Moderato が公開テストネット
+- Chainlink CCIP（cross-chain rail）
 
-学習対象としての価値: alphanet は **end-to-end で通読できる規模**、カスタマイズも教育目的で設計されている。「chain に precompile を追加するとはこういうこと」という最もクリーンな実例である。
+隣接 crate:
 
-> 🛑 **現物を確認。** alphanet repo を開き、P-256 precompile が **chain に登録されている** ファイルを特定してほしい (math の実装場所ではなく — chain のアクティブな precompile セットに加わるところ)。**なぜそのファイルに置かれているのか。**
+- [\`tempoxyz/zones\`](https://github.com/tempoxyz/zones) — confidential blockchain anchored to Tempo（250ms ブロック、TIP-403 compliance 継承）
+- [\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs) — Machine Payments Protocol（HTTP-402 ベース、IETF draft）
+- [\`tempoxyz/tempo-foundry\`](https://github.com/tempoxyz/tempo-foundry) — Tempo サポート Foundry fork（薄い fork）
+- [\`tempoxyz/tidx\`](https://github.com/tempoxyz/tidx) — PostgreSQL + ClickHouse ハイブリッドインデクサ
 
-## 3. Alphanet から本番へ
+Tempo の予測 4 観点:
 
-軌跡が重要である。alphanet は Paradigm の実験場で、そこで試したものはやがて:
-- **mainnet Ethereum に EIP として graduate** する (例: 7212 はその経路上)、もしくは
-- **本番の Reth ベース chain に graduate** する (例: Tempo)
+- Custom ChainSpec — Tempo 固有 fork + precompile schedule
+- Custom executor — 決済 precompile（FX rate / settlement attestation / regulated-asset）
+- Custom payload builder — merchant 認識 ordering + rate limit
+- Custom RPC namespace — \`tempo_*\` + Machine Payments Protocol 統合
 
-Tempo に何が入っているかを予測したいなら、**最近 alphanet で検証されたもの** を見るのが最短ルートである。技術的な系譜はそのまま繋がっている。
+MegaETH（深い端）:
 
-## 4. Tempo — Paradigm の決済 L1 on Reth
+- [\`megaeth-labs/reth\`](https://github.com/megaeth-labs/reth) — 空 fork（0 ahead, 7666 behind）
+- [\`megaeth-labs/mega-evm\`](https://github.com/megaeth-labs/mega-evm) — revm + op-revm 上に MegaETH 固有仕様（\`EQUIVALENCE\` から \`REX4\`）。sequencer は [\`revmc\`](https://github.com/paradigmxyz/revmc) で JIT/AOT
+- [\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt) — MDBX 置換、30 億アイテム ~1 GB メモリ認証、state-root ランダム I/O ゼロ
+- [\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator) — sequencer と完全別バイナリ、SALT witness 読む + バニラ revm 実行
 
-公開済み。構造はこのモジュールのテーゼをそのまま裏付けています:
+L1 vs L2 observation 表:
 
-- **[\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo)** (900+★、Rust) — "the blockchain for payments"。L1 node crate。
-- **[\`tempoxyz/reth\`](https://github.com/tempoxyz/reth)** — upstream Paradigm Reth に対して **0 commits ahead, 1374 commits behind**。Reth を一切 fork していない。Tempo は upstream Reth をライブラリとして依存。これが「compose, don't fork」の教科書的な実例である。
-- **Tempo Moderato** が公開テストネット。
-- **Chainlink CCIP** が cross-chain rail (CCTP は Tempo をカバーしていない)。
-
-レッスン1と同時に出荷された隣接 crate:
-- **[\`tempoxyz/zones\`](https://github.com/tempoxyz/zones)** — Tempo にアンカーされた confidential blockchain。暗号化された deposit/withdrawal、250ms ブロック時間、レッスン1から継承される compliance ポリシー (TIP-403)。
-- **[\`tempoxyz/mpp-specs\`](https://github.com/tempoxyz/mpp-specs)** — Machine Payments Protocol: agent/machine 決済用の HTTP-402 ベース支払いプロトコル。IETF draft。Payment-method agnostic (Tempo、Stripe、ACH)。
-- **[\`tempoxyz/tempo-foundry\`](https://github.com/tempoxyz/tempo-foundry)** — Tempo サポートつきの Foundry fork (これも薄い fork — 同じ compose-don't-fork パターン)。
-- **[\`tempoxyz/tidx\`](https://github.com/tempoxyz/tidx)** — PostgreSQL + ClickHouse のハイブリッドインデクサ (OLTP の point lookup + OLAP analytics)。
-
-[\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) を開いた時に学んだばかりの構造に対して期待するもの:
-
-- **Custom ChainSpec** — Tempo 固有の fork と precompile schedule
-- **Custom executor** — 決済プリミティブ用 precompile (FX rate 読み出し、settlement attestation の検証、regulated-asset チェック)
-- **Custom payload builder** — merchant 認識つきの ordering とレート制限
-- **Custom RPC namespace** — \`tempo_*\` 系のメソッド、merchant / payment 用エンドポイント、加えて Machine Payments Protocol との統合
-- **Custom mempool policy** — ローンチ時はほぼ間違いなく private mempool、認可された提出者だけ受け付け
-
-*不在* を検証すべきもの (SDK がそれを不在にできるから):
-- Reth core から乖離した独自 fork (確認済み — fork は空)
-- 独自 EVM 実装 (revm が EVM そのもの)
-- 独自ネットワークスタック (reth の P2P を再利用)
-
-## 5. MegaETH — 同じパターン、より深いカスタマイズ
-
-Tempo が SDK の **浅い端** (数コンポーネントだけ差し替え、残りはすべて継承) を見せるなら、[\`megaeth-labs\`](https://github.com/megaeth-labs) は **深い端** を見せます:
-
-- **[\`megaeth-labs/reth\`](https://github.com/megaeth-labs/reth)** — 空 fork (**0 commits ahead, 7666 commits behind**)。Tempo と同じ compose-don't-fork パターン、ただ遅れがさらに大きいだけ。
-- **[\`megaeth-labs/mega-evm\`](https://github.com/megaeth-labs/mega-evm)** — revm と op-revm の上に MegaETH 固有仕様 (\`EQUIVALENCE\` から \`REX4\`) で構築されたカスタム EVM。sequencer は Paradigm の [\`revmc\`](https://github.com/paradigmxyz/revmc) を経由した JIT/AOT コンパイル実行を走らせる。
-- **[\`megaeth-labs/salt\`](https://github.com/megaeth-labs/salt)** — **MDBX をカスタム authenticated KV store で置き換え**。30 億アイテムを ~1 GB のメモリで authenticate、state-root 更新中のランダムディスク I/O を排除。これは標準 6 コンポーネントスロットを大きく超えるカスタマイズ。
-- **[\`megaeth-labs/stateless-validator\`](https://github.com/megaeth-labs/stateless-validator)** — sequencer とは別の **完全に別のバリデータバイナリ**。SALT witness を読み、ブロックをバニラ revm interpreter で実行、コモディティハードウェアで動く。アーキテクチャ的な動き: high-spec sequencer と low-spec validator を、まったく違うノードコードを与えることで分離する。
-
-このレッスンで Tempo の隣に MegaETH を置く理由: **SDK はカスタマイズの深さを制約しない**。Tempo は 3 コンポーネントを差し替えて upstream の ~80% を継承。MegaETH は EVM executor を差し替え、storage layer を置き換え、完全に別の validator client を出荷 — それでも **Reth を fork しない** (\`megaeth-labs/reth\`: 0 ahead, 7666 behind)。天井は最初に読んだときより遥かに高い。
-
-## 6. Extension model における L1 vs L2
-
-op-stack-on-reth を読むこと、そして将来 tempo-on-reth を読むことは、構造的には似ていますが以下の点で異なります:
-
-| 観点 | OP Stack (レッスン2) | Tempo (レッスン1) |
+| 観点 | OP Stack (L2) | Tempo (L1) |
 | :--- | :--- | :--- |
-| **Deposit tx** | あり (レッスン1から) | なし |
-| **L1 cost charge** | あり | なし |
-| **L1 block oracle slot** | あり | なし |
-| **独立 consensus** | なし (レッスン1にアンカー) | あり (Tempo は自前の consensus を持つ) |
-| **Sequencer モデル** | ローンチ時は中央集権、分散化ロードマップあり | おそらく中央集権、決済レールという正当化あり |
-| **ネイティブ資産** | ETH 相当 | おそらく USD ステーブル |
+| Deposit tx | あり（L1 から） | なし |
+| L1 cost charge | あり | なし |
+| L1 block oracle slot | あり | なし |
+| 独立 consensus | なし（L1 にアンカー） | あり（自前 consensus） |
+| Sequencer モデル | ローンチ中央集権、分散化ロードマップ | おそらく中央集権、決済レール正当化 |
+| ネイティブ資産 | ETH 相当 | おそらく USD ステーブル |
 
-Tempo が レッスン1であるということは、**consensus layer もカスタマイズポイントになる** ということ — execution layer だけではありません。これは大半の L2 chain がスキップするスロットである。
+## 失敗例（誤解）
 
-## 7. 自分の作るものへの含意
+「SDK は浅いカスタマイズしかできない」— **間違い**。MegaETH が深い端の証拠: EVM 完全置換 + storage 完全置換 + validator binary 別 = それでも \`megaeth-labs/reth\` は 0 ahead。**深さに依存しない**。
 
-Tempo の上に何かを作るなら:
+「Tempo は L2 と同じ構造」— **間違い**。Tempo = L1 → 独立 consensus + Deposit / L1 cost / L1 oracle なし。L1 と L2 で 6 観点違う。
 
-| プロジェクト | Reth-on-Tempo 知識が効く理由 |
-| :--- | :--- |
-| Cross-VM intent matcher | Intent matching には決定論的な EVM semantics が必要。Tempo の executor crate を読むことで、正確な gas コスト、利用可能な precompile、execution のエッジケースが把握できる。 |
-| Cross-chain settlement layer | EVM 側の settlement proof は Tempo の state と厳密に一致しなければならない。Tempo の chainspec と executor が信頼できる source of truth。 |
-| Merchant treasury / payment ops | Merchant 運用には予測可能な confirmation semantics が必要。Tempo の payload builder と mempool policy が、tx が inclusion-final になるタイミングを教えてくれる。 |
+「alphanet は単なる testnet」— **間違い**。Paradigm が **mainnet 実装前の EIP を試す** R&D 遊び場 → 最近 alphanet で検証されたもの = 「次に本番 chain に来るもの」のヒント。Tempo に何が入るかを予測したい人は alphanet を見る。
 
-Tempo のローンチ時に reth を trait レベルで読まずに現れる誰よりも、**数ヶ月先** にいることになる。
+> 🛑 **予測。** Paradigm はこの順で出荷: revm → alloy → reth → alphanet → op-stack-on-reth → Tempo。このシーケンスは何の軌跡？（答え: **下から上に substrate を構築 → R&D → 本番**。① revm = EVM 解釈器、② alloy = Rust 抽象、③ reth = full client、④ alphanet = R&D 遊び場、⑤ op-stack-on-reth = 本番 L2 リファレンス、⑥ Tempo = Paradigm 自身の L1 本番。各層が次層を可能にし、各層が独立価値を持つ。「製品を縦に切る」より「substrate を横に厚く積む」戦略 — Paradigm 全社が同 substrate に乗る + 外部 chain も同 substrate を使える。）
 
-## 8. 最終練習
+## ステップで組み立てる
 
-このモジュールの成果物: [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) を開いて、1 セッションで以下を読み通して 1 ページのアーキテクチャサマリーを書くこと。
+### Step 1: 6 層スタックを即答
 
-1. Tempo node crate の \`Cargo.toml\` — reth 依存が upstream で fork されていないことを確認
-2. chainspec crate — hardfork + precompile schedule
-3. NodeBuilder composition (\`node/src/lib.rs\` 相当) — 6 コンポーネントのうちどれが差し替えられ、どれが継承されているか
-4. 差し替えられた各 crate を順に — payload、pool、RPC namespace
-5. Tests ディレクトリ — どの振る舞いを assert する価値があると判断したか?
+revm → alloy → reth → \`crates/optimism/\` → alphanet → Tempo。
 
-alphanet を end-to-end で読んだことがないなら、それを先に練習として。規模が小さくクリーン。
+### Step 2: 「下層は上層にしか依存しない」不変量
 
-> 最終チェック: [\`tempoxyz/tempo\`](https://github.com/tempoxyz/tempo) のソースを読んで **検証した具体的な事実を 5 つ**、自分の仕事への重要度順に挙げてほしい。5 つ挙げられないなら、本モジュールはまだ完全には定着していません — §4、§5 を再読してからソースに戻る。`,
+各層が独立価値 + 上層が下層を消費するが下層は上層を知らない。
+
+### Step 3: alphanet で「次に来るもの」を予測
+
+最近実装された EIP / opcode 微調整 → Tempo / 本番 chain に来る可能性。
+
+### Step 4: Tempo の予測 4 観点
+
+ChainSpec / executor / payload / RPC。\`tempoxyz/tempo\` の Cargo.toml で実コンポーネントを検証。
+
+### Step 5: MegaETH を深い端として読む
+
+mega-evm / salt / stateless-validator + \`megaeth-labs/reth\` 0 ahead 証拠。
+
+### Step 6: L1 vs L2 観点 6 つ
+
+Deposit / L1 cost / L1 oracle / 独立 consensus / Sequencer / Native 資産。
+
+## 答え合わせ
+
+- **Paradigm シーケンスの軌跡解釈**: substrate を下から積み上げる戦略 — revm（最小単位）→ alloy（型システム）→ reth（フルノード）→ alphanet（R&D）→ \`crates/optimism/\`（L2 リファレンス）→ Tempo（自社 L1）。**各層が独立価値**を持つ → Paradigm 内製品も外部 chain も同 substrate に乗る。
+- **Tempo / MegaETH の同じ extension model + 異なる深さ**: SDK のカスタマイズスロットを Tempo は 3-5 つ使い（payments 固有 precompile / payload builder / RPC）、MegaETH は全部 + EVM 置換 + storage 置換 + validator binary 別。深さ問わず reth fork なし（0 ahead）= **fork する必要がない設計**。
+- **alphanet 観察の実用**: 最近 alphanet で検証された EIP / precompile / opcode 微調整 → 1-2 年内に Tempo / 本番 chain に graduate する可能性。**「次に来るもの」を予測したい人は alphanet を週次で見る** — 公開 R&D ロードマップ。
+
+## 合格基準
+
+- 6 層スタックを即答できる。
+- alphanet の 3 実装事例（EIP-7212 / 3074 / 7702）を言える。
+- Tempo の予測 4 観点 + 隣接 4 crate を言える。
+- MegaETH の深いカスタマイズ 4 つ（mega-evm / salt / stateless-validator + fork なし）を言える。
+- L1 vs L2 観点 6 つを言える。
+
+## まとめ（3行）
+
+- 6 層スタック（revm → alloy → reth → \`crates/optimism/\` → alphanet → Tempo）、下層は上層に依存しない不変量で各層独立価値。
+- Tempo = 浅いカスタマイズ（3-5 コンポーネント差し替え）、MegaETH = 深いカスタマイズ（EVM 置換 + storage 置換 + validator 別）、両方 reth fork なし = SDK は深さに依存しない。
+- alphanet は Paradigm の R&D 公開遊び場、最近実装された EIP / precompile が本番 chain への graduate 候補 — 「次に来るもの」を予測したい人の必読源。
+`,
                 },
                 {
-                  title: 'クイズ: 拡張パターンは定着したか?',
+                  title: 'クイズ — Reth ベース chain まとめ',
                   slug: 'reth-chains-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 6,
                   duration: 15,
                   xpReward: 50,
-                  content: `# クイズ: 拡張パターンは定着したか?
+                  content: `# クイズ — Reth ベース chain まとめ
 
-拡張モデルと、各カスタマイズの居場所を確認する短いテストである。雰囲気で答えず — 各設問には「どの trait / どの crate」という具体的な答えがある。`,
+拡張パターン総まとめ。
+
+レッスン17-22 を通じて: Extension model（fork ではなくライブラリ）/ op-stack-on-reth 解剖 / Custom ChainSpec / Custom executor / Custom payload builder / Paradigm スタックケーススタディ の構造的事実を確認する。
+`,
                   quizQuestions: [
                     {
-                      question: 'なぜ大半の Reth ベース chain は geth 流のフォークモデルではなく拡張モデルを採用しているのか?',
-                      options: [
-                        'Reth が geth より速いため、性能を求めて chain は採用せざるを得ない',
-                        'Reth のモジュラーな trait アーキテクチャ (NodeBuilder + ChainSpec + ExecutorBuilder + PayloadBuilder) により、必要な部分だけをカスタマイズし、残りはライブラリとして利用できるため — rebase コストが消える',
-                        'Rust のモジュールシステムが source レベルの fork を阻止するため',
-                        'Paradigm が Reth を使うすべての chain に対して「拡張のみ」のポリシーを強制しているため',
+                      "question": "なぜ大半の Reth ベース chain は geth 流のフォークモデルではなく拡張モデルを採用しているのか?",
+                      "options": [
+                        "Reth が geth より速いため、性能を求めて chain は採用せざるを得ない",
+                        "Reth のモジュラーな trait アーキテクチャ (NodeBuilder + ChainSpec + ExecutorBuilder + PayloadBuilder) により、必要な部分だけをカスタマイズし、残りはライブラリとして利用できるため — rebase コストが消える",
+                        "Rust のモジュールシステムが source レベルの fork を阻止するため",
+                        "Paradigm が Reth を使うすべての chain に対して「拡張のみ」のポリシーを強制しているため"
                       ],
-                      correctIndex: 1,
-                      explanation: '速度 (選択肢 1) は副産物であってアーキテクチャ上の理由ではない。Rust は fork を阻止しない (選択肢 3 は誤り)。Paradigm が独立 chain に何かを強制している事実もない (選択肢 4 は誤り)。本当の駆動要因は trait アーキテクチャそのもの — 重要なスロットだけを override し、残りを継承する設計が成り立つ。',
+                      "correctIndex": 1,
+                      "explanation": "速度 (選択肢 1) は副産物であってアーキテクチャ上の理由ではない。Rust は fork を阻止しない (選択肢 3 は誤り)。Paradigm が独立 chain に何かを強制している事実もない (選択肢 4 は誤り)。本当の駆動要因は trait アーキテクチャそのもの — 重要なスロットだけを override し、残りを継承する設計が成り立つ。"
                     },
                     {
-                      question: 'Reth ベース chain の hardfork activation のロジックはどこに住むか?',
-                      options: [
-                        'Payload builder — builder が各 fork で block を生成するため',
-                        'ChainSpec — ある block height / timestamp でどの fork がアクティブかは consensus rule であり、それを所有するのは ChainSpec だから',
-                        'Executor — fork によって execution の振る舞いが変わるため',
-                        'Genesis JSON — 初期 state allocation と並べて記述されるため',
+                      "question": "Reth ベース chain の hardfork activation のロジックはどこに住むか?",
+                      "options": [
+                        "Payload builder — builder が各 fork で block を生成するため",
+                        "ChainSpec — ある block height / timestamp でどの fork がアクティブかは consensus rule であり、それを所有するのは ChainSpec だから",
+                        "Executor — fork によって execution の振る舞いが変わるため",
+                        "Genesis JSON — 初期 state allocation と並べて記述されるため"
                       ],
-                      correctIndex: 1,
-                      explanation: '複数の層が fork state を「読む」が、所有しているのは ChainSpec 一つだけ。Builder (1) や executor (3) は判断のために fork state を参照するが、その都度 ChainSpec に問い合わせる — activation 自体を所有しているわけではない。Genesis (4) は *初期* state を担うもので、fork schedule ではない。',
+                      "correctIndex": 1,
+                      "explanation": "複数の層が fork state を「読む」が、所有しているのは ChainSpec 一つだけ。Builder (1) や executor (3) は判断のために fork state を参照するが、その都度 ChainSpec に問い合わせる — activation 自体を所有しているわけではない。Genesis (4) は *初期* state を担うもので、fork schedule ではない。"
                     },
                     {
-                      question: 'OP Stack は L2 gas に加えて L1 data cost を課金する。このロジックを含む trait の impl はどれで、なぜか?',
-                      options: [
-                        'Custom precompile — precompile が native な fee logic を置く自然な場所だから',
-                        'Mempool policy — fee は admission 時に計算されるため',
-                        'Block execution strategy / executor — tx 実行前にアカウントから控除する操作は consensus-critical な state mutation であり、全ノードが寸分違わず同じ計算を行わなければならないから',
-                        'RPC layer — クライアントが tx 提出前に L1 cost を知る必要があるため',
+                      "question": "OP Stack は L2 gas に加えて L1 data cost を課金する。このロジックを含む trait の impl はどれで、なぜか?",
+                      "options": [
+                        "Custom precompile — precompile が native な fee logic を置く自然な場所だから",
+                        "Mempool policy — fee は admission 時に計算されるため",
+                        "Block execution strategy / executor — tx 実行前にアカウントから控除する操作は consensus-critical な state mutation であり、全ノードが寸分違わず同じ計算を行わなければならないから",
+                        "RPC layer — クライアントが tx 提出前に L1 cost を知る必要があるため"
                       ],
-                      correctIndex: 2,
-                      explanation: 'Precompile (1) は単独では任意アカウントから控除できない — executor の権限が必要。Mempool (2) は cost を *推定* できるが consensus 上の state change を強制することはできない。RPC (4) は情報提供であって consensus-critical ではない。権限と consensus-critical な位置の両方を持っているのは executor だけ。',
+                      "correctIndex": 2,
+                      "explanation": "Precompile (1) は単独では任意アカウントから控除できない — executor の権限が必要。Mempool (2) は cost を *推定* できるが consensus 上の state change を強制することはできない。RPC (4) は情報提供であって consensus-critical ではない。権限と consensus-critical な位置の両方を持っているのは executor だけ。"
                     },
                     {
-                      question: 'Reth ベース L2 が、すべての block の先頭に deposit tx を強制的に含める必要がある。これを処理するのはどの trait か?',
-                      options: [
-                        'ChainSpec — deposit の取り扱いは chain rule の一部だから',
-                        'Payload builder — block に何が入るか、どの順序で入るかを決めるのは payload builder だから',
-                        'Mempool — deposit tx は別 queue にあり、mempool がそこから先に drain するから',
-                        'Custom consensus — ordering を強制できるのは consensus だけだから',
+                      "question": "Reth ベース L2 が、すべての block の先頭に deposit tx を強制的に含める必要がある。これを処理するのはどの trait か?",
+                      "options": [
+                        "ChainSpec — deposit の取り扱いは chain rule の一部だから",
+                        "Payload builder — block に何が入るか、どの順序で入るかを決めるのは payload builder だから",
+                        "Mempool — deposit tx は別 queue にあり、mempool がそこから先に drain するから",
+                        "Custom consensus — ordering を強制できるのは consensus だけだから"
                       ],
-                      correctIndex: 1,
-                      explanation: 'ChainSpec (1) は deposit tx の *定義* を持つが、選び出し方は持たない。Mempool (3) は deposit queue を追跡できるかもしれないが、「先頭に置く」は block composition の決定。Consensus (4) は過剰 — これは選択の問題であって finality の問題ではない。Block composition と順序を決定する単一コンポーネントが payload builder。',
+                      "correctIndex": 1,
+                      "explanation": "ChainSpec (1) は deposit tx の *定義* を持つが、選び出し方は持たない。Mempool (3) は deposit queue を追跡できるかもしれないが、「先頭に置く」は block composition の決定。Consensus (4) は過剰 — これは選択の問題であって finality の問題ではない。Block composition と順序を決定する単一コンポーネントが payload builder。"
                     },
                     {
-                      question: 'Reth ベース chain で custom precompile を書いたとき、その *登録* はどこで行われるか?',
-                      options: [
-                        'Precompile crate 内部、static registry を経由して',
+                      "question": "Reth ベース chain で custom precompile を書いたとき、その *登録* はどこで行われるか?",
+                      "options": [
+                        "Precompile crate 内部、static registry を経由して",
                         "Chain の EVM config (ConfigureEvm impl) 内 — revm にアクティブな precompile セットを手渡し、chain の hardfork schedule で gate する",
-                        'Reth core 内部、precompile dispatch table を直接編集して',
-                        'Genesis JSON、初期 code allocation の一部として',
+                        "Reth core 内部、precompile dispatch table を直接編集して",
+                        "Genesis JSON、初期 code allocation の一部として"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Static registry (1) では chain rule で gate できない。Reth core を編集 (3) は、まさに避けたい fork-model アンチパターンそのもの。Genesis (4) は state を保持する場所であり、protocol レベルの関数を置く場所ではない。EVM config こそが正しいスロット — ChainSpec (どの fork か) と revm (実際に走るもの) を結ぶ役。',
+                      "correctIndex": 1,
+                      "explanation": "Static registry (1) では chain rule で gate できない。Reth core を編集 (3) は、まさに避けたい fork-model アンチパターンそのもの。Genesis (4) は state を保持する場所であり、protocol レベルの関数を置く場所ではない。EVM config こそが正しいスロット — ChainSpec (どの fork か) と revm (実際に走るもの) を結ぶ役。"
                     },
                     {
-                      question: 'alphanet と Tempo の関係を最も正確に表す説明は?',
-                      options: [
-                        '同じプロジェクトの呼び名違い',
-                        'alphanet は Tempo のテストデプロイ',
-                        'alphanet は Paradigm が EVM 拡張 (custom precompile など) を検証する R&D testnet で、そこで成熟した実験は Tempo のような本番 chain に出荷されたり、Ethereum EIP として提案されたりする',
-                        'Tempo は alphanet の上に建てられ、alphanet は Reth の上に建てられている',
-                        'メンテナーが共通である以外はほぼ無関係',
+                      "question": "alphanet と Tempo の関係を最も正確に表す説明は?",
+                      "options": [
+                        "同じプロジェクトの呼び名違い",
+                        "alphanet は Tempo のテストデプロイ",
+                        "alphanet は Paradigm が EVM 拡張 (custom precompile など) を検証する R&D testnet で、そこで成熟した実験は Tempo のような本番 chain に出荷されたり、Ethereum EIP として提案されたりする",
+                        "Tempo は alphanet の上に建てられ、alphanet は Reth の上に建てられている",
+                        "メンテナーが共通である以外はほぼ無関係"
                       ],
-                      correctIndex: 2,
-                      explanation: 'alphanet は遊び場で、Tempo は本番のレール。選択肢 1、2 は両者を混同している。選択肢 4 は依存関係の順序が逆 — どちらも直接 Reth に依存しており、互いに依存しているわけではない。選択肢 5 は弱すぎる: precompile 実験の技術的な系譜は実在し、追跡できる。',
+                      "correctIndex": 2,
+                      "explanation": "alphanet は遊び場で、Tempo は本番のレール。選択肢 1、2 は両者を混同している。選択肢 4 は依存関係の順序が逆 — どちらも直接 Reth に依存しており、互いに依存しているわけではない。選択肢 5 は弱すぎる: precompile 実験の技術的な系譜は実在し、追跡できる。"
                     },
                     {
-                      question: '中央集権 sequencer の レッスン2において、payload builder が決め、executor が決めないことは?',
-                      options: [
-                        'Payload builder は gas pricing を、executor は ordering を決める',
-                        'Payload builder は block にどの tx をどの順序で入れるかを決める。executor は、渡された tx を渡された順序で実行するだけ',
-                        '両者の決定範囲は同じ — builder は executor の薄いラッパーにすぎない',
-                        'Payload builder は署名を検証し、executor は state change を適用する',
+                      "question": "中央集権 sequencer の レッスン2において、payload builder が決め、executor が決めないことは?",
+                      "options": [
+                        "Payload builder は gas pricing を、executor は ordering を決める",
+                        "Payload builder は block にどの tx をどの順序で入れるかを決める。executor は、渡された tx を渡された順序で実行するだけ",
+                        "両者の決定範囲は同じ — builder は executor の薄いラッパーにすぎない",
+                        "Payload builder は署名を検証し、executor は state change を適用する"
                       ],
-                      correctIndex: 1,
-                      explanation: 'Gas pricing (選択肢 1 は逆) は主に chainspec の問題で、builder と executor の対比軸ではない。両者同じ (3) は誤り — この分離こそが要点。署名検証 (4) は executor / tx validator 側の責務で、builder ではない。クリーンな分割: builder = 選択 + 順序づけ、executor = 言われたとおりに実行。',
+                      "correctIndex": 1,
+                      "explanation": "Gas pricing (選択肢 1 は逆) は主に chainspec の問題で、builder と executor の対比軸ではない。両者同じ (3) は誤り — この分離こそが要点。署名検証 (4) は executor / tx validator 側の責務で、builder ではない。クリーンな分割: builder = 選択 + 順序づけ、executor = 言われたとおりに実行。"
                     },
                     {
-                      question: '`tempoxyz/tempo` を初めて開き、Paradigm が「compose, don\'t fork」モデルに従ったかを確認したい。最もシグナルが強い 1 手は?',
-                      options: [
-                        'README と発表ブログを読む',
-                        '`tempoxyz/reth` を開き、`paradigmxyz/reth` に対する commits-ahead/behind を確認する',
-                        '`tempoxyz/tempo` ワークスペース内の crate 数を数える',
-                        'Tempo と upstream Reth のスループットを比較するベンチマークを走らせる',
+                      "question": "`tempoxyz/tempo` を初めて開き、Paradigm が「compose, don't fork」モデルに従ったかを確認したい。最もシグナルが強い 1 手は?",
+                      "options": [
+                        "README と発表ブログを読む",
+                        "`tempoxyz/reth` を開き、`paradigmxyz/reth` に対する commits-ahead/behind を確認する",
+                        "`tempoxyz/tempo` ワークスペース内の crate 数を数える",
+                        "Tempo と upstream Reth のスループットを比較するベンチマークを走らせる"
                       ],
-                      correctIndex: 1,
-                      explanation: 'README / ブログ (1) は正しいことを言っているが証明にはならない。Crate 数 (3) は緩い相関しかなくノイジー。ベンチマーク (4) は性能を測るのであって fork したかどうかではない。Fork チェック (2) が決定的な構造的テスト — そして答えは "0 ahead, 1374 behind"、これが「compose, don\'t fork」テーゼに対する最強の経験的証明。',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "README / ブログ (1) は正しいことを言っているが証明にはならない。Crate 数 (3) は緩い相関しかなくノイジー。ベンチマーク (4) は性能を測るのであって fork したかどうかではない。Fork チェック (2) が決定的な構造的テスト — そして答えは \"0 ahead, 1374 behind\"、これが「compose, don't fork」テーゼに対する最強の経験的証明。"
+                    }
                   ],
                 },
               ],

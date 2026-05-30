@@ -1,41 +1,56 @@
-// AUTO-GENERATED from drafts/foundry_*_ja.md by .github/scripts/build-foundry-seed.ts
-// Do not hand-edit. Re-run the build script when drafts change.
-
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethFoundryJA(prisma: PrismaClient) {
-  const tags = ["foundry","forge","anvil","cast","solidity","testing","invariants","fuzz","l1","reth"];
+  const tags = ['foundry', 'solidity', 'testing', 'fuzz', 'invariant'];
 
   await prisma.course.create({
     data: {
-      slug: "mastering-foundry-ja",
-      title: "Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律",
+      slug: 'mastering-foundry-ja',
+      title: 'Foundry を極める — Rust 規律を Solidity へ移す',
       description:
-        "Rust で培ったテスト規律（保存則、ルーティング契約、byte-for-byte 検証）を Solidity に移植する実践講座である。\n\nforge fuzz / invariant に加え、cheatcode を「REVM を内部操作する precompile」として扱う設計まで踏み込む。最終章では openhl-liquidation の InsuranceFund を Solidity に移植し、10,000 回の invariant テストで同じ規律を 2 言語で検証する。（全 4 モジュール・7 レッスン）",
-      difficulty: "INTERMEDIATE",
+        'rethlab の Rust 規律（proptest! / debug_assert! / 保存則 / byte-for-byte 答え合わせ）を Solidity contract に 1:1 で移植する。`forge test` / `forge fuzz` / `forge invariant` / `cast` / `anvil` + cheatcodes を順に歩き、最後に openhl-liquidation の `InsuranceFund` を Rust → Solidity で port して 4 保存則 invariant を 2 言語で証明する Capstone。3 中級コースのうち Foundry 系の入口。',
+      difficulty: 'INTERMEDIATE',
       duration: 240,
       xpReward: 490,
-      track: "reth-stack",
+      track: 'mastering-foundry',
       tags,
       isPublished: true,
-      sortOrder: 190,
-      locale: "ja",
-      instructorName: "RethLab",
+      sortOrder: 1300,
+      locale: 'ja',
+      instructorName: 'RethLab',
       modules: {
         create: [
           {
-            title: "Orientation",
+            title: 'Orientation',
             sortOrder: 0,
             lessons: {
               create: [
                 {
-                  title: "Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律",
-                  slug: "foundry-orientation-ja",
+                  title: 'Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律',
+                  slug: 'foundry-orientation-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 15,
                   xpReward: 50,
                   content: `# Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律
+
+## 問い
+
+rethlab の openhl 系コースで身についた Rust の規律 — pure-compute プリミティブ / \`debug_assert!\` + \`saturating_arithmetic\` で守る state machine / \`proptest!\` による保存則検証 / byte-for-byte 答え合わせ — を **Solidity contract に 1:1 で移植する**。Foundry はその移植を機械的に回す実行環境。**なぜ Foundry が標準になり、Hardhat / Truffle ではダメで、規律はどう transfer するか？**
+
+## 原理（最小モデル）
+
+- **Foundry が標準になった理由 3 つ.** ① 速度（REVM を in-process embed、IPC なし）、② Fuzzing first-class（shrinking / corpus persistence built-in）、③ Cheatcodes-as-precompiles（\`vm.warp\` / \`vm.deal\` / \`vm.prank\` が precompile call）。
+- **Hardhat との 20-30× 速度差は最適化の積み上げでない.** Process boundary を外したアーキテクチャ差。\`hardhat node\` 別プロセス + IPC round-trip vs Foundry が REVM を直接 in-process embed。
+- **規律の transfer 表.** \`cargo test\` ↔ \`forge test\` / \`proptest!\` (single-input) ↔ \`forge fuzz\` / \`proptest!\` (sequenced) ↔ \`forge invariant\` / \`debug_assert!\` ↔ \`require\` / \`vm.expectRevert\` / saturating_add ↔ Solidity 0.8 unchecked / conservation laws ↔ invariant assertions / byte-for-byte ↔ reference contract + forge corpus。
+- **Capstone (レッスン 6) で証明する.** openhl-liquidation Stage 10b の \`InsuranceFund\` を Rust → Solidity へ port、レッスン 9 の保存則 invariant を Foundry で書き、同じ定理を 2 言語で mechanical に証明。
+- **コース構造 7 lessons / 4 modules.** Orientation (L0) → Test discipline (L1-L3) → CLI + state-aware testing (L4-L5) → Capstone (L6)。
+- **前提知識.** ① 基本 Solidity syntax（\`function\` / \`mapping\` / \`struct\`）、② Rust crate での \`cargo test\`、③ openhl-liquidation コースを **レッスン 9 まで読了**（\`WithdrawOutcome\` proptest の登場点、capstone がそのセマンティクスを前提）。
+- **含まれないもの.** Gas optimization deep dive / Slither / Mythril / formal verification / Frontend (ethers.js / viem) / Foundry script の full deployment workflow。
+
+## 具体例 + ステップで組み立てる
+
+# Foundry を極める — すでに Rust で考えるエンジニアのための Solidity テスト規律
 
 ## このコースで得るもの
 
@@ -209,24 +224,56 @@ Foundry 自体は頻繁に update される。コースは \`foundry-rs/foundry\
 - rethlab の openhl-liquidation コースを少なくとも レッスン9まで読了している (最初の \`WithdrawOutcome\` proptest が登場するレッスン)。レッスン 6 capstone は、そのコースから \`InsuranceFund\` のセマンティクスを内面化していることを前提にする。
 
 どれか心許なくても問題ない。openhl-liquidation コースが自然な前提知識で、基本 Solidity は solidity-by-example.org で 1 日で拾える。
+
+## 合格基準
+
+- Foundry が選ばれた 3 理由（速度 + Fuzzing first-class + cheatcodes-as-precompiles）を即答できる。
+- Hardhat との 20-30× 速度差の根拠（process boundary 削除）を 1 文で説明できる。
+- 規律の transfer 表（\`cargo test\` → \`forge test\`、\`proptest!\` → \`forge fuzz\` / \`forge invariant\`、\`debug_assert!\` → \`vm.expectRevert\` / \`require\`、保存則 → invariant assertion）を即答できる。
+- コース 7 レッスン構造（Orientation / Test discipline 3 / CLI + state-aware 2 / Capstone）を即答できる。
+- 前提知識（Solidity syntax + cargo test + openhl-liquidation L9 まで）を即答できる。
+
+## まとめ（3行）
+
+- Foundry = Rust 製 single binary、REVM を in-process embed = JS 系より 20-30× 速い、Fuzzing first-class + cheatcodes-as-precompiles で \`proptest!\` / \`prop_assume!\` / precompile-as-superpower パターンが Solidity に 1:1 移植。
+- 本コースは「ツールの使い方」ではなく「Rust 規律の Solidity への transfer」が thesis、規律の transfer 表（cargo test / proptest! / debug_assert! / 保存則）が縦糸、Capstone (L6) で \`InsuranceFund\` 2 言語証明が終点。
+- 7 lessons / 4 modules（Orientation / Test discipline 3 / CLI + state-aware 2 / Capstone）、前提 = openhl-liquidation L9 まで読了、Foundry install (\`foundryup\`) 済み。
 `,
                 },
               ],
             },
           },
           {
-            title: "Test discipline",
+            title: 'Test discipline',
             sortOrder: 1,
             lessons: {
               create: [
                 {
-                  title: "レッスン 1 — forge test — cargo test の Solidity 等価物",
-                  slug: "foundry-forge-test-basics-ja",
+                  title: 'レッスン1 — `forge test` — `cargo test` の Solidity 等価物',
+                  slug: 'foundry-forge-test-basics-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 25,
                   xpReward: 50,
-                  content: `# レッスン 1 — \`forge test\` — \`cargo test\` の Solidity 等価物
+                  content: `# レッスン1 — \`forge test\` — \`cargo test\` の Solidity 等価物
+
+## 問い
+
+\`forge init\` のプロジェクト形は \`cargo new --lib\` の Foundry 等価物。\`forge test\` は \`cargo test\` と同じ位置の binary、first compile 後は sub-second feedback、同じ \`--match-*\` filtering。**Solidity の test discovery + assertion + verbosity ladder + negative-path test (\`vm.expectRevert\`) を、Rust 規律と並べて理解する。**
+
+## 原理（最小モデル）
+
+- **プロジェクト形マッピング.** \`Cargo.toml\` → \`foundry.toml\` / \`src/lib.rs\` → \`src/Counter.sol\` / \`tests/integration_test.rs\` → \`test/Counter.t.sol\` / \`target/\` → \`out/\` + \`cache/\`。Foundry チーム自身が Rust 出身 = 意図的な familiar 感覚。
+- **Test discovery は attribute ではなく name で.** \`test*\` で名付けられた関数が test、\`testFuzz_*\` は fuzz test。Solidity に decorator がない → 命名慣例が Rust attribute の等価物。
+- **Assertion 3 primitives.** \`assertEq\`（value equality、全 Solidity primitive 型に overload）/ \`assertTrue\`（boolean）/ \`vm.expectRevert\`（negative-path、次の external call が特定 reason で revert することを assert）。
+- **Verbosity ladder.** \`-v\`（summary）/ \`-vv\`（失敗メッセージ）/ \`-vvv\`（stack trace、daily default）/ \`-vvvv\`（pass/fail 両方の trace）/ \`-vvvvv\`（opcode-level trace）。Rust の \`cargo test -- --nocapture\` 等価。
+- **\`vm.expectRevert\` の 1-call lifetime.** Revert を期待する call の **直前**に呼ぶ。間に挟まる call が arm を先に消費 → 紛らわしく失敗。
+- **Constant-folding 回避.** \`uint256(0) - 1\` リテラルは Solc がコンパイル時に reject → ローカル変数経由で **runtime SUB opcode** に強制 → Solidity 0.8 の overflow check が \`Panic(0x11)\` を trigger。
+- **Panic 発生レイヤーの差.** ローカル評価 panic（テストコントラクト内 = 外部 call はディスパッチされない、trace に現れない）vs 外部コントラクト内 panic（被呼び出し側で発生、revert データが bubble up、trace に明示）。\`vm.expectRevert\` はどちらも捕捉する。
+
+## 具体例 + ステップで組み立てる
+
+# レッスン 1 — \`forge test\` — \`cargo test\` の Solidity 等価物
 
 ## ゴール
 
@@ -269,13 +316,6 @@ forge test
 2. **\`src/Counter.sol\` と \`test/Counter.t.sol\` をそのまま読む** — どちらも \`forge init\` で同梱、慣例を実演している。1 行ずつ理解する。
 3. **\`test/Counter.t.sol\` に test を 1 つ追加** — \`test_RevertWhen_DecrementBelowZero\`。新規の \`Counter\` (\`setUp()\` で \`number = 0\`) に対して、constant-folding を回避するために \`uint256 zero = 0;\` を経由した \`zero - 1\` を \`c.setNumber(...)\` に渡し、\`vm.expectRevert\` で revert を assert する。\`forge test -vvv\` で full trace を見ながら走らせる。
 
-> 🛑 **予測。** 以下の \`forge init\` 出力を読む前に: Rust ファイルの Foundry 等価物を列挙せよ。
-> 
-> - \`Cargo.toml\` →
-> - \`src/lib.rs\` →
-> - \`tests/integration_test.rs\` →
-> - \`target/\` →
-> - \`Cargo.lock\` →
 
 (答え: \`Cargo.toml\` → \`foundry.toml\`、\`src/lib.rs\` → \`src/Counter.sol\`（あるいは main コントラクトとして付けた名前）、\`tests/integration_test.rs\` → \`test/Counter.t.sol\`、\`target/\` → \`out/\` + \`cache/\`、\`Cargo.lock\` → 直接の等価物なし（Foundry は \`lib/\` の git submodule を依存解決に使い、\`lib/forge-std\` は standard testing library として常に存在する）。マッピングは意図的。Foundry チーム自身が Rust 出身で、Rust 開発者に familiar な感覚を作るためにこう構築した。)
 
@@ -610,16 +650,51 @@ Foundry の test isolation が各 test を *fresh* な EVM state に対して走
 - Corpus persistence — \`cache/fuzz/\` が失敗入力を保存し、re-run が同じ counterexample を即座に replay する
 
 レッスン2後、Solidity で最初の保存則 fuzz test を書き終えている。openhl-liquidation レッスン8の \`balance_never_negative\` proptest に 1:1 で map するものだ。
+
+## 合格基準
+
+- プロジェクト形マッピング（\`Cargo.toml\` / \`src/lib.rs\` / \`tests/\` / \`target/\`）の Foundry 等価物を即答できる。
+- Test discovery が naming convention（\`test*\` / \`testFuzz_*\`）で行われる理由を即答できる。
+- \`assertEq\` / \`assertTrue\` / \`vm.expectRevert\` 3 primitives の役割を即答できる。
+- Verbosity ladder（\`-v\` から \`-vvvvv\`）と日常使う \`-vvv\` の理由を即答できる。
+- \`vm.expectRevert\` の 1-call lifetime と arm 消費パターンを 1 文で説明できる。
+- Constant-folding 回避（ローカル変数経由）の仕組みを 1 文で説明できる。
+- ローカル panic vs 外部 panic の trace 上の現れ方の違いを即答できる。
+
+## まとめ（3行）
+
+- \`forge test\` = \`cargo test\` の Solidity 等価物、in-process REVM で sub-second feedback、\`--match-test\` / \`--match-contract\` / \`--match-path\` で filter、\`-vvv\` が daily default。
+- Test discovery は attribute ではなく **name + parameter signature**、\`testFuzz_*\` + parameter = fuzz test、\`test_RevertWhen_*\` = negative-path 慣例、Solidity の decorator 不在を name で代替。
+- \`vm.expectRevert\` は 1-call lifetime で次の external call を arm、constant-folding 回避はローカル変数経由で runtime SUB opcode 強制、panic はテストコントラクト内なら trace に現れず外部コントラクト内なら明示。
 `,
                 },
                 {
-                  title: "レッスン 2 — forge fuzz — Solidity の proptest!",
-                  slug: "foundry-forge-fuzz-ja",
+                  title: 'レッスン2 — `forge fuzz` — Solidity の `proptest!`',
+                  slug: 'foundry-forge-fuzz-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 35,
                   xpReward: 70,
-                  content: `# レッスン 2 — \`forge fuzz\` — Solidity の \`proptest!\`
+                  content: `# レッスン2 — \`forge fuzz\` — Solidity の \`proptest!\`
+
+## 問い
+
+\`forge fuzz\` は別構文の \`proptest!\`。同じ「定理先行」マインドセット = assertion が *すべての valid な入力に対して* 成立すべき、runner に counterexample を探させる。**\`vm.assume\` / shrinking / corpus persistence / profile-per-environment iteration count の 4 規律を Rust と並べて学ぶ。**
+
+## 原理（最小モデル）
+
+- **\`vm.assume(cond)\` は \`prop_assume!\` の Solidity 等価物.** 前提条件に違反する入力を assertion 前に filter、test は property の well-defined regime のみ exercise。Liquidation L9 \`prop_assume!(entry * size > collateral)\` と同パターン。
+- **Default 256 iteration は最小、ゴールでない.** \`foundry.toml\` の \`fuzz.runs = 256\` が OOB デフォルト、production CI は 10K-100K、nightly は 1M。\`[profile.ci.fuzz]\` で profile-per-environment。
+- **Shrinking.** Binary-search スタイル reduction で 32-byte counterexample を最小入力に reduce、出力に minimal counterexample（しばしば 1 桁の数字）。網羅的でない（ヒューリスティック）、per-parameter（multi-axis は局所最適）。
+- **Corpus persistence.** \`cache/fuzz/\` が失敗入力を保存、次回 run で persist された入力を先に re-run。Rust の \`proptest-regressions/\` 等価。
+- **\`vm.assume\` の罠.** ピンポイント値 filter（\`vm.assume(x == 42)\`）は 2²⁵⁶ 空間から偶然引く確率ゼロ → \`max_test_rejects\` 即枯渇 → \`TooManyAssumptions\` 自爆。\`vm.assume\` は **境界条件（< 1%）除外** のみ、特定値検証はユニットテスト。
+- **\`vm.expectRevert\` vs \`vm.assume\` は目的真逆.** \`vm.expectRevert\` = negative-path、revert こそが成功条件。\`vm.assume\` = positive-path の保護機構、revert 引き起こす入力を除外して property assertion を well-defined domain で走らせる。
+- **Per-iteration isolation.** \`setUp()\` が毎 iteration 走る、失敗 iteration が次を poison できない。Reproducible failure の前提。
+- **Gas 統計 (μ / ~) は pass iteration から.** 失敗は寄与しない、fuzz gas は worst-case でなく typical-case。Worst-case は specific unit test で。
+
+## 具体例 + ステップで組み立てる
+
+# レッスン 2 — \`forge fuzz\` — Solidity の \`proptest!\`
 
 ## ゴール
 
@@ -662,7 +737,6 @@ forge test
 2. **レッスン1の \`Counter.t.sol\` の \`testFuzz_SetNumber(uint256 x)\` を読む。** Foundry が fuzz test として扱う理由、runner が各 iteration で何をするか、結果行 \`(runs: 256, μ: 31000, ~: 31161)\` がどう生成されるかを理解する。
 3. **新規 fuzz test を 1 つ追加** — \`testFuzz_IncrementPreservesPlusOne(uint256 x)\`。\`counter\` を \`x\` にセット、\`counter.increment()\` を呼ぶ、\`counter.number() == x + 1\` を assert する。\`vm.assume(x < type(uint256).max)\` で overflow ケースを filter する。\`forge test -vvv\` で走らせる。
 
-> 🛑 **予測。** 続きを読む前に: openhl-liquidation レッスン9の \`proptest!\` で \`CASES\` のデフォルトは \`256\`。\`forge fuzz\` でも \`fuzz.runs\` のデフォルトは \`256\`。Production codebase がよく使う CI-tier の実用値は? \`1_000_000\` に bump するとトレードオフは?
 
 (答え: **ほとんどの production CI は \`10_000\` か \`100_000\` で回す**。Nightly fuzzer は \`1_000_000\` まで push する。トレードオフはこう。各 iteration が full test (setUp → call → assertion → state cleanup) を走らせる。256 iteration なら単一の fuzz test は ~50ms、100_000 で ~20 秒、1_000_000 で ~200 秒。100_000 を超えると収穫逓減（Diminishing returns）が始まる。巨大な入力空間を exercise していない限り、だが。ほとんどの uint256 fuzz test には *de facto* 小さい interesting region があり、100_000 でそこに到達する。**High count は専用 nightly CI で、デフォルト count は PR CI で、低 count はローカル開発で。**)
 
@@ -969,16 +1043,51 @@ Yes。\`bytes\` には shrinker が短いスライスを試す。\`string\` に�
 Key concept: \`Handler\` contract を定義する。その関数が「システムができること」(deposit、withdraw、increment 等) を表す。Foundry に「この Handler を fuzz する surface area として扱え」と告げる。Foundry はランダムなメソッド call *系列* を生成し (\`deposit(100), withdraw(50), increment(), withdraw(75)\`)、各 step 後に \`invariant_*\` 関数を check する。
 
 これが single-call fuzzing が決して見ない multi-call bug を catch する。token-balance reentrancy、ordering-dependent な state corruption、Mt. Gox をスローモーションでクラッシュさせたタイプの bug。**レッスン 3 は \`forge\` が単なるパラメータ生成器ではなく、real な adversary になる場所だ。**
+
+## 合格基準
+
+- \`vm.assume\` と \`prop_assume!\` の役割等価性を 1 文で説明できる。
+- Default 256 iteration が「最小」である理由と profile-per-environment（ローカル 1K / PR CI 10K / nightly 100K-1M）を即答できる。
+- Shrinking のヒューリスティック性質と per-parameter shrink を即答できる。
+- Corpus persistence の仕組みと \`proptest-regressions/\` 等価を即答できる。
+- \`vm.assume\` の罠（ピンポイント値で \`TooManyAssumptions\` 自爆）と「< 1% 除外のみ」規律を即答できる。
+- \`vm.expectRevert\` vs \`vm.assume\` の目的真逆を即答できる。
+- Per-iteration \`setUp\` isolation と reproducible failure の関係を 1 文で説明できる。
+- Fuzz gas (μ / ~) が typical-case で worst-case でない理由を即答できる。
+
+## まとめ（3行）
+
+- \`forge fuzz\` = \`proptest!\` の Solidity 版、\`vm.assume\` = \`prop_assume!\`、shrinking + corpus persistence + profile-per-environment は同じ規律、testFuzz_* 関数名 + parameter signature が fuzz signal。
+- \`vm.assume\` は境界条件 < 1% 除外のみ、ピンポイント値 filter は \`TooManyAssumptions\` 自爆 → 特定値検証はユニットテスト、\`vm.expectRevert\` vs \`vm.assume\` は目的真逆（negative-path success vs positive-path guard）。
+- Default 256 は最小（ローカル開発の sub-second feedback）、production CI 10K-100K、nightly 1M、per-iteration \`setUp\` isolation で reproducible、gas 統計は typical-case、次レッスンで \`forge invariant\` の multi-call 保存則検証へ。
 `,
                 },
                 {
-                  title: "レッスン 3 — forge invariant — Handler パターンによる multi-call invariant testing",
-                  slug: "foundry-forge-invariant-ja",
+                  title: 'レッスン3 — `forge invariant` — Handler パターンによる multi-call invariant testing',
+                  slug: 'foundry-forge-invariant-ja',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 40,
                   xpReward: 80,
-                  content: `# レッスン 3 — \`forge invariant\` — Handler パターンによる multi-call invariant testing
+                  content: `# レッスン3 — \`forge invariant\` — Handler パターンによる multi-call invariant testing
+
+## 問い
+
+\`forge fuzz\` は 1 つの呼び出しに対する property を証明する。**\`forge invariant\` は呼び出しの *列* に対する property を証明する** — \`Handler\` contract がランダムな call sequence を生成、各 step で保存則を検査。Liquidation L13 scanner proptest（per-scan 保存則）と同パターン。**Handler + targetContract + invariant 関数の 3 要素はどう連携するか？**
+
+## 原理（最小モデル）
+
+- **\`forge invariant\` の構造.** ① \`Handler\` contract が public な mutation 関数（fuzz-tested op）を expose、② \`setUp()\` で \`targetContract(handler)\` 登録、③ \`invariant_*\` 関数が各 step 後の保存則を assert、④ runner がランダムな call sequence を \`runs * depth\` 回回す。
+- **Fuzz と Invariant の違い.** Fuzz = 1 call の property（state → state'）/ Invariant = call 列の property（state → state' → state'' → ...、各 step で invariant 成立）。Liquidation L9 \`withdraw_amount_plus_unfilled_equals_shortfall\` は fuzz、L13 scanner per-scan 保存則は invariant。
+- **\`Handler\` パターンの役割.** Contract への entry point を制御、\`vm.assume\` で前提条件 filter、bookkeeping（\`ghost\` 変数）で sequence 全体の不変量を track、無効な call を生成しないように guard。
+- **\`targetContract(addr)\` / \`targetSelector\` / \`targetSender\`.** ファザーが呼ぶ surface を制御、デフォルトは contract 全体、絞ると意味ある call のみ生成。\`excludeSender\` / \`excludeContract\` も併用。
+- **\`invariant.runs\` と \`invariant.depth\`.** \`runs\` = call sequence 数、\`depth\` = 1 sequence あたりの call 数。Default \`runs = 256, depth = 15\`、production CI 1K runs × 50 depth、nightly 10K × 100。
+- **Ghost 変数 (\`uint256 totalDeposited\`).** Handler 内で各 mutation の累積値を track、invariant 関数で \`contract.balanceOf() == totalDeposited\` のような保存則を assert。Rust の \`proptest!\` 内ローカル counter と同パターン。
+- **Bound input.** Handler 内で \`amount = bound(amount, 1, 1e18)\` で fuzz input を 意味ある range に clamp、\`vm.assume\` より bound のほうが「reject せず変換」で生産的。
+
+## 具体例 + ステップで組み立てる
+
+# レッスン 3 — \`forge invariant\` — Handler パターンによる multi-call invariant testing
 
 ## ゴール
 
@@ -1025,7 +1134,6 @@ forge test --match-test invariant
 4. **\`forge test --match-contract CounterInvariantTest -vvv\` を走らせる** — \`(runs: 256, calls: 12800, reverts: 0)\` を観察し、何千ものランダム系列を超えて invariant が成立し続けるのを見る。
 5. **\`setNumber\` を ghost 更新なしで公開して意図的に壊す** — \`wrappedIncrement(), wrappedIncrement(), badSetNumber(0), wrappedIncrement()\` のような multi-call counterexample を Foundry が生成するのを観察する。
 
-> 🛑 **予測。** 続きを読む前に: openhl-liquidation レッスン13の cascade-conservation proptest は、insurance fund に適用される operation 系列にわたって \`before_balance + sum(deposits) - sum(withdrawals) == after_balance\` を assert する。この test を \`InsuranceFund.sol\` contract に対する \`forge invariant\` へ port するとき、Handler は ghost variable として何を track する必要があり、\`invariant_*\` 関数は何を assert する?
 
 (答え: **Handler は \`ghostSumDeposits\` と \`ghostSumWithdrawals\` の両方を track する必要がある。** どちらも \`wrappedDeposit(uint256)\` と \`wrappedWithdraw(uint256)\` の内部で増分する。構築時に 1 回 capture される \`ghostInitialBalance\` も必要。Invariant は \`target.balance() == handler.ghostInitialBalance() + handler.ghostSumDeposits() - handler.ghostSumWithdrawals()\` を assert する。レッスン13 の proptest と *まったく同じ* 算術形状だ。同じ定理、2 言語。本コースの レッスン6 capstone がまさに openhl-liquidation Step 5（Liquidation）中の \`InsuranceFund\` についてこの port を行う。)
 
@@ -1327,24 +1435,58 @@ No。\`view\` か \`pure\` でなければならない。Foundry は Handler cal
 - Full read-eval パターン: contract を書く → forge test → forked anvil に対して cast call を打って real state で挙動を検証する
 
 レッスン 4 完走後は、Solidity script を書かずに shell loop からデプロイされた contract と対話できるようになる。EVM 用の \`curl\`+\`jq\` の CLI 等価物だ。
+
+## 合格基準
+
+- \`forge fuzz\` と \`forge invariant\` の違い（1 call vs call 列）を即答できる。
+- \`Handler\` パターンの 4 役割（entry point 制御 / 前提 filter / bookkeeping / guard）を即答できる。
+- \`targetContract\` / \`targetSelector\` / \`targetSender\` で ファザー surface を絞る理由を即答できる。
+- \`invariant.runs\` × \`invariant.depth\` の意味と default 256 × 15 を即答できる。
+- Ghost 変数（\`totalDeposited\` 等）で sequence 全体の保存則を track する手順を即答できる。
+- \`bound(x, min, max)\` が \`vm.assume\` より生産的な理由（reject せず変換）を即答できる。
+- Liquidation L13 scanner per-scan 保存則と \`forge invariant\` の対応を即答できる。
+
+## まとめ（3行）
+
+- \`forge invariant\` = call 列に対する property、\`Handler\` contract が ランダム sequence を生成 + ghost 変数で track、\`invariant_*\` 関数が各 step で保存則 assert、runner が \`runs × depth\` 回回す。
+- \`Handler\` パターン = entry point 制御 + \`vm.assume\` 前提 filter + ghost bookkeeping + 無効 call の guard、\`targetContract\` / \`targetSelector\` でファザー surface を絞り意味ある call のみ生成、\`bound\` で fuzz input を意味ある range に clamp。
+- Liquidation L13 scanner per-scan 保存則と同パターン、production CI 1K × 50、nightly 10K × 100、次は CLI（\`cast\`）+ state-aware testing（\`anvil\` + cheatcodes）。
 `,
                 },
               ],
             },
           },
           {
-            title: "CLI & state-aware testing",
+            title: 'CLI & state-aware testing',
             sortOrder: 2,
             lessons: {
               create: [
                 {
-                  title: "レッスン 4 — cast — EVM の curl + jq",
-                  slug: "foundry-cast-cli-ja",
+                  title: 'レッスン4 — `cast` — EVM の curl + jq',
+                  slug: 'foundry-cast-cli-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 30,
                   xpReward: 60,
-                  content: `# レッスン 4 — \`cast\` — EVM の \`curl\` + \`jq\`
+                  content: `# レッスン4 — \`cast\` — EVM の curl + jq
+
+## 問い
+
+\`cast\` は Foundry の chain CLI、EVM の curl + jq。**call / send / storage / abi-decode / 4byte の 5 動詞で chain と対話する。** mainnet 状態を読む / tx 送る / storage slot 直接読む / 計算済み calldata を decode / 4-byte signature を逆引き — どれも Rust から shell に降りる瞬間。
+
+## 原理（最小モデル）
+
+- **\`cast call <addr> "fn(args)" <args>\` = read.** State-changing でない関数を呼ぶ、結果を返す、gas 不要、tx 送信なし、\`view\` / \`pure\` 関数の確認に。
+- **\`cast send <addr> "fn(args)" <args> --private-key <key>\` = write.** State 変更 + gas + nonce + 署名、\`--rpc-url\` で network 指定、\`--from\` でなりすまし（cheatcode 等価）。
+- **\`cast storage <addr> <slot>\` = 直接 storage 読み.** 公開 getter なしで storage slot を読む、layout 知識必須、\`mapping\` の slot 計算は \`cast index\` で。
+- **\`cast abi-decode "fn(args)" <calldata>\` = calldata 逆変換.** Tx を receipt から拾い、calldata を function signature で decode、parameter を type で表示。
+- **\`cast 4byte <selector>\` = 4-byte signature 逆引き.** \`0xa9059cbb\` → \`transfer(address,uint256)\`、unknown selector の意味解析。
+- **\`ethereum.reth.rs/rpc\` を mainnet RPC 例として使う.** rethlab 公式 RPC、無料、rate limit 緩い、\`--rpc-url\` で指定。
+- **Tab 補完 (\`cast completions\`).** zsh / bash / fish 用、daily use の friction を消す。
+
+## 具体例 + ステップで組み立てる
+
+# レッスン 4 — \`cast\` — EVM の \`curl\` + \`jq\`
 
 ## ゴール
 
@@ -1391,7 +1533,6 @@ invocation のカテゴリが 5 つ。
 4. **\`cast 4byte\` / \`cast 4byte-decode\`** — function-selector lookup。Calldata の先頭 4 bytes を与えると、public な 4byte directory 経由で人間可読 function 名を見つける。
 5. **ローカル anvil に対する \`cast send\`（preview）** — state-changing transaction。重要なものは deploy しない。この演習は \`cast send\` がチェーンとどう interact するかをデモする (レッスン 5 が anvil 自体を深掘りする)。
 
-> 🛑 **予測。** 続きを読む前に: rethlab の \`alloy-provider\` レッスンで、\`eth_call\` semantics で構築した \`tx\` を使って (paraphrased) \`let supply = provider.call(&tx).await?\` と書いた。同じ結果を mainnet に対して生成する exact な \`cast\` invocation は何か?
 
 (答え: **\`cast call --rpc-url <URL> <contract-address> "<function-signature>" [args...]\`**。各ピースが直接 map する。\`--rpc-url\` フラグは alloy の \`RootProvider\` の underlying transport URL。Contract address は transaction の \`to\` フィールド。Function signature は cast が内部で 4-byte selector に hash する人間可読 ABI 短縮形 (alloy が同じ \`Function::parse\` 機構を使う)。任意の args は positional。Return は raw hex (function signature の後に \`"(...returntypes)"\` で return type を指定しない限り)。指定すれば cast が decode する。**同じ code path、2 つの surface。プログラム用は Rust、shell 用は cast。**)
 
@@ -1705,16 +1846,50 @@ Yes。標準 JSON-RPC interface を喋るものなら何でも動く。Optimism�
 - Full なローカル開発ループ。\`anvil --fork-url\` → forked mainnet に対する \`cast send\` → 検証用の \`cast call\` → real ETH ゼロ消費
 
 レッスン 5 完走後、laptop を離れずに real な mainnet state に対して開発できる。レッスン 5 がコースの test-discipline + CLI 部分を閉じる。レッスン 6 が capstone で、そこで openhl-liquidation Stage 10b の \`InsuranceFund\` を Solidity に port し、同じ 4 つの保存則を \`forge invariant\` で証明する。
+
+## 合格基準
+
+- \`cast\` の 5 動詞（call / send / storage / abi-decode / 4byte）の役割を即答できる。
+- \`cast call\` vs \`cast send\` の違い（state 変更 + gas 必要かどうか）を即答できる。
+- \`cast storage\` で mapping の slot 計算に \`cast index\` を使う理由を即答できる。
+- \`cast abi-decode\` の用途（receipt の calldata を function signature で decode）を即答できる。
+- \`cast 4byte\` で unknown selector を逆引きできる仕組みを即答できる。
+- \`ethereum.reth.rs/rpc\` を mainnet RPC として指定する手順を即答できる。
+
+## まとめ（3行）
+
+- \`cast\` = EVM の curl + jq、5 動詞（call / send / storage / abi-decode / 4byte）で chain と対話、\`cast call\` は read（gas 不要）/ \`cast send\` は write（gas + nonce + 署名）。
+- \`cast storage\` で公開 getter なしで storage 直接読み、\`mapping\` slot は \`cast index\` で計算、\`cast abi-decode\` で calldata 逆変換、\`cast 4byte\` で selector → signature 逆引き。
+- \`--rpc-url ethereum.reth.rs/rpc\` が mainnet RPC 例、tab 補完で friction 削減、次レッスンで \`anvil --fork-url\` + cheatcodes による state-aware testing へ。
 `,
                 },
                 {
-                  title: "レッスン 5 — anvil + cheatcodes — real な mainnet state でのローカル開発",
-                  slug: "foundry-anvil-cheatcodes-ja",
+                  title: 'レッスン5 — `anvil` + cheatcodes — real な mainnet state でのローカル開発',
+                  slug: 'foundry-anvil-cheatcodes-ja',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 35,
                   xpReward: 70,
-                  content: `# レッスン 5 — \`anvil\` + cheatcodes — real な mainnet state でのローカル開発
+                  content: `# レッスン5 — \`anvil\` + cheatcodes — real な mainnet state でのローカル開発
+
+## 問い
+
+\`anvil\` は Foundry の local node + mainnet fork、cheatcodes はテストから EVM 状態を hack する precompile。**\`vm.deal\` / \`vm.warp\` / \`vm.prank\` の 3 cheatcode + \`anvil --fork-url\` で実 mainnet 状態を相手に state-aware testing。** Hardhat の \`evm_snapshot\` JSON-RPC との根本差は cheatcode が precompile であること。
+
+## 原理（最小モデル）
+
+- **\`anvil --fork-url <mainnet RPC>\` でフォーク.** 実 mainnet state を相手に、local で write 可能、\`--fork-block-number\` で固定 block に pin。
+- **Cheatcodes-as-precompiles.** Address \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\`、Foundry の REVM fork がこのアドレスへの call を intercept、同一プロセス、IPC なし、JSON-RPC なし。
+- **\`vm.deal(addr, balance)\`.** 任意 address の ETH 残高を直接書き換え、faucet 不要、prefund 用。
+- **\`vm.warp(timestamp)\`.** Block timestamp を任意値に、時間依存 logic（vesting / auction）の test に。
+- **\`vm.prank(addr)\`.** 次の external call の \`msg.sender\` を任意 address にすり替え、\`onlyOwner\` 関数を任意 EOA から呼ぶテスト、\`vm.startPrank\` / \`vm.stopPrank\` で sequence 全体。
+- **\`vm.deal\` + \`vm.warp\` + \`vm.prank\` の組み合わせ.** 実 mainnet の任意状態を実 mainnet protocol（Uniswap / Aave）相手に再現、E2E integration test を high-fidelity に。
+- **\`vm.snapshot\` / \`vm.revertTo\`.** State checkpoint + rollback、sequence 開始前に snapshot、各 test variant 後に revert で isolation。
+- **Hardhat の \`evm_snapshot\` JSON-RPC との差.** Foundry は precompile = 同一プロセス、Hardhat は別プロセスへの JSON-RPC = IPC コスト、precompile-as-EVM-superpower パターンが Solidity testing で露出されたもの。
+
+## 具体例 + ステップで組み立てる
+
+# レッスン 5 — \`anvil\` + cheatcodes — real な mainnet state でのローカル開発
 
 ## ゴール
 
@@ -1767,7 +1942,6 @@ invocation のカテゴリが 6 つ。
 5. **Forked-impersonation flow** — mainnet を fork → USDC whale を impersonate → 自分の test address に USDC を transfer → contract call でそれを使う。エンドツーエンドのデモ。
 6. **\`vm.*\` ↔ \`anvil_*\` マッピング表** — レッスン4の \`cast\` ↔ \`alloy::Provider\` 表と同じ pedagogical な役割だが、cheatcode 用。
 
-> 🛑 **予測。** 続きを読む前に: レッスン 1 test で \`vm.deal(alice, 10 ether)\` と書き、test 用に alice に fresh 残高を与えた。Anvil は同じ機構を RPC で露出する。\`localhost:8545\` で走っている forked anvil に対して同じことをする \`cast rpc anvil_*\` invocation は何か?
 
 (答え: **\`cast rpc anvil_setBalance 0xAliceAddress 0x8AC7230489E80000 --rpc-url http://localhost:8545\`**。ここで \`0x8AC7230489E80000\` は 10 × 10^18 wei (10 ether) の hex だ。Shape は同一。address を名指して、その balance を value に set する。Anvil RPC は balance を hex-encoded uint256 として取る。Test cheatcode は Solidity の \`uint256\` として取る。**同じ REVM state field に書き込まれている。違いは Foundry test runner の内部 (cheatcode) にいるか、JSON-RPC で anvil と話している (RPC method) かだ。2 つの surface、1 つの機構。書き込む値は exact に同じ \`RevmState::accounts\` map に着地する。**)
 
@@ -2149,24 +2323,58 @@ Mainnet を fork すると、ローカル anvil は Chain ID \`1\` を返す。c
 - \`examples/foundry-capstone/test/InsuranceFund.invariant.t.sol\` — 4 つの \`invariant_*\` 関数: conservation、monotonicity-of-deposits、non-negative-balance、fee-residual-equivalence
 
 レッスン 6 完走後、同じ定理を 2 言語で機械的に証明している。レッスン3で学んだ同じ \`forge invariant\` engine に対してだ。**それが rethlab framework 全体を腹落ちさせる discipline transfer だ: それは決して Rust *か* Solidity の話ではなかった — それは言語境界を survive する保存則規律の話だった。**
+
+## 合格基準
+
+- \`anvil --fork-url <RPC>\` でフォークする手順を即答できる。
+- Cheatcodes が precompile address \`0x71097...\` に住む仕組みを即答できる。
+- \`vm.deal\` / \`vm.warp\` / \`vm.prank\` の 3 役割を即答できる。
+- \`vm.startPrank\` / \`vm.stopPrank\` の sequence 用途を即答できる。
+- \`vm.snapshot\` / \`vm.revertTo\` で test isolation する手順を即答できる。
+- Foundry cheatcode vs Hardhat \`evm_snapshot\` JSON-RPC の根本差（precompile in-process vs IPC）を即答できる。
+- precompile-as-EVM-superpower パターン（openhl Precompiles コース）との対応を即答できる。
+
+## まとめ（3行）
+
+- \`anvil --fork-url\` で実 mainnet state をフォーク、local で write 可能、\`--fork-block-number\` で固定 block に pin、test を実 protocol 相手に high-fidelity に。
+- Cheatcodes は precompile address \`0x71097...\` に住む、Foundry REVM fork が intercept、\`vm.deal\` / \`vm.warp\` / \`vm.prank\` で state を直接 hack、Hardhat の \`evm_snapshot\` JSON-RPC とは IPC 不在で根本差。
+- \`vm.snapshot\` / \`vm.revertTo\` で test isolation、cheatcode-as-precompile は openhl Precompiles コース（Stage 9）の precompile-as-EVM-superpower パターンが Solidity testing で露出されたもの、次は Capstone で \`InsuranceFund\` 2 言語証明。
 `,
                 },
               ],
             },
           },
           {
-            title: "Capstone",
+            title: 'Capstone',
             sortOrder: 3,
             lessons: {
               create: [
                 {
-                  title: "レッスン 6 — Capstone — openhl-liquidation の InsuranceFund を Solidity へ port し、4 つの invariant を証明する",
-                  slug: "foundry-capstone-ja",
+                  title: 'レッスン6 — Capstone — openhl-liquidation の `InsuranceFund` を Solidity へ port し 4 つの invariant を証明する',
+                  slug: 'foundry-capstone-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 60,
                   xpReward: 110,
-                  content: `# レッスン 6 — Capstone — openhl-liquidation の \`InsuranceFund\` を Solidity へ port し、4 つの invariant を証明する
+                  content: `# レッスン6 — Capstone — openhl-liquidation の \`InsuranceFund\` を Solidity へ port し 4 つの invariant を証明する
+
+## 問い
+
+Capstone = openhl-liquidation Stage 10b の \`InsuranceFund\` を Rust から Solidity へ port、レッスン 9 の 4 保存則 invariant を Foundry で書き、\`forge invariant\` で 10K iteration を回す。**同じ定理を 2 言語で mechanical に証明、規律の transfer 完了の証跡。**
+
+## 原理（最小モデル）
+
+- **Capstone target.** openhl-liquidation Stage 10b の \`InsuranceFund\`（Rust）→ \`InsuranceFund.sol\`（Solidity）への port。Saturating arithmetic / shortfall withdrawal / 保存則 4 つを 1:1 で移植。
+- **4 invariants（rethlab/examples/foundry-capstone/）.** ① \`amount + unfilled == shortfall\`（withdraw 保存則）、② \`balance >= 0\`（saturating arithmetic で常に保証）、③ deposit が balance を increase（monotonic）、④ withdraw が balance を decrease（monotonic）。レッスン 9 の 4 proptest と 1:1 対応。
+- **\`InsuranceFund.sol\` の構造.** \`uint64 balance\` state + \`deposit(uint64 amount)\` + \`withdrawShortfall(uint64 shortfall) returns (uint64 amount, uint64 unfilled)\`、Solidity 0.8 unchecked block で saturating arithmetic を表現（\`balance + amount > type(uint64).max ? type(uint64).max : balance + amount\`）。
+- **Test harness.** \`InsuranceFundHandler\` contract が deposit / withdrawShortfall を public expose + ghost 変数 \`totalDeposited\` / \`totalWithdrawn\` を track、\`InsuranceFundInvariantTest\` が \`targetContract(handler)\` + 4 \`invariant_*\` 関数。
+- **10K iteration の意味.** \`[profile.ci.invariant] runs = 10000, depth = 50\` = 50 万 call sequence、production codebase の典型的 CI tier、レッスン 9 proptest の 100K iteration と比較可能。
+- **Byte-for-byte 答え合わせ.** rethlab/examples/foundry-capstone/ pinned に git SHA、\`git checkout <sha>\` で読者と作者の答えが byte-for-byte 一致、レッスン 9 の \`crates/evm\` SHA pinning と同規律。
+- **規律の transfer 完了の証跡.** 4 invariant pass = Rust proptest と Solidity invariant test が同じ定理を独立に証明、規律が言語境界を越えて transfer された証拠。
+
+## 具体例 + ステップで組み立てる
+
+# レッスン 6 — Capstone — openhl-liquidation の \`InsuranceFund\` を Solidity へ port し、4 つの invariant を証明する
 
 ## ゴール
 
@@ -2221,7 +2429,6 @@ forge test --match-contract InsuranceFundInvariantTest -vvv
 6. **\`forge invariant\` を走らせる** — 4 つの invariant すべてが default の 256 runs × 50 depth = 12,800 call で成立する。Proof-of-the-day には 100,000 call まで bump する。
 7. **意図的な break デモ + side-by-side レッスン 13 diff** — Handler の ghost update を 1 つ壊し、multi-call counterexample が現れるのを見る。次に Solidity capstone を レッスン13の Rust に対して \`diff\` し、同じ操作が同じ順序で起きているのを目で確認する。
 
-> 🛑 **予測。** 続きを読む前に: openhl-liquidation レッスン13の cascade-conservation proptest は \`assert_eq!(fund.balance(), initial + sum_deposits - sum_withdrawals - sum_absorbed)\` の形だった。この *exact* な assertion を Solidity に port するなら、最も近い 1 行の forge invariant コードは何か? (Handler が 3 つの sum-of-* ghost を track していると仮定する。)
 
 (答え: **\`assertEq(fund.balance(), handler.ghostSumDeposits() - handler.ghostSumWithdrawn() - handler.ghostSumAbsorbed());\`**。同じ算術、同じオペランド、同じ assert。違いは 2 点。Solidity の \`assertEq\` は (actual, expected) を取る (Rust の \`(left, right)\` 順序ではない)。そして ghost アクセサは明示的な \`handler.X()\` method 呼び出しになる (Solidity は別 contract からのフィールド直接アクセスを持たないため)。**変換が機械的になるのは、下層の定理が言語非依存だからだ。保存則は構文ではなく数学だ。**)
 
@@ -2739,6 +2946,22 @@ Invariant は public ABI と storage layout を保つアップグレードを su
 Capstone を走らせ終わったその瞬間、画面には 4 行の緑が並んでいる。書いたのは Solidity、走らせたのは \`forge invariant\`、証明したのは Rust で先に証明したのと同じ 4 つの保存則。コードは 2 つ、定理は 1 つ。これがコース全体が指していた一点だ。
 
 Foundry は道具だ。規律こそがプロダクトだ。
+
+## 合格基準
+
+- 4 invariants（amount + unfilled / balance >= 0 / monotonic deposit / monotonic withdraw）を即答できる。
+- \`InsuranceFund.sol\` の \`uint64 balance\` state + 2 関数の API を即答できる。
+- Solidity 0.8 unchecked block で saturating arithmetic を書く手順を即答できる。
+- \`InsuranceFundHandler\` + ghost 変数 + \`InsuranceFundInvariantTest\` の 3 ピース構成を即答できる。
+- \`[profile.ci.invariant] runs = 10000, depth = 50\` の意味（50 万 call sequence）を即答できる。
+- rethlab/examples/foundry-capstone/ の SHA pinning と byte-for-byte 答え合わせ規律を即答できる。
+- レッスン 9 proptest（Rust）と本 Capstone（Solidity）が同じ定理を独立に証明した「transfer の証跡」の意味を即答できる。
+
+## まとめ（3行）
+
+- Capstone = openhl-liquidation Stage 10b \`InsuranceFund\` を Rust → Solidity port、レッスン 9 の 4 保存則 invariant を \`forge invariant\` で 10K iteration 検証、規律の transfer の終点。
+- Test harness 3 ピース = \`InsuranceFund.sol\` + \`InsuranceFundHandler\` (ghost 変数 \`totalDeposited\` / \`totalWithdrawn\`) + \`InsuranceFundInvariantTest\` (\`targetContract\` + 4 \`invariant_*\`)、Solidity 0.8 unchecked block で saturating arithmetic を表現。
+- 4 invariant pass = Rust proptest と Solidity invariant test が同じ定理を独立に証明、rethlab/examples/foundry-capstone/ pinned SHA で byte-for-byte 答え合わせ、規律の transfer 完了。
 `,
                 },
               ],
