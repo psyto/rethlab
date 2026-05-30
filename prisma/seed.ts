@@ -67,6 +67,7 @@ import { seedRethSequencerRollupV3JA } from './seed-reth-sequencer-rollup-v3-ja'
 import { seedRethCrossChainBridgesV3JA } from './seed-reth-cross-chain-bridges-v3-ja';
 import { seedRethP2PNetworkingV3JA } from './seed-reth-p2p-networking-v3-ja';
 import { seedRethValidatorOpsV3JA } from './seed-reth-validator-ops-v3-ja';
+import { seedRethAdvancedV3JA } from './seed-reth-advanced-v3-ja';
 import { seedRethFoundryEN } from './seed-reth-foundry-en';
 import { seedRethFoundryJA } from './seed-reth-foundry-ja';
 import { seedRethFoundryV2JA } from './seed-reth-foundry-v2-ja';
@@ -220,6 +221,7 @@ async function main() {
   await seedRethCrossChainBridgesV3JA(prisma);
   await seedRethP2PNetworkingV3JA(prisma);
   await seedRethValidatorOpsV3JA(prisma);
+  await seedRethAdvancedV3JA(prisma);
   console.log('  Seeded Building OpenHL — ADL (EN + JA)');
   await seedRethFoundryEN(prisma);
   await seedRethFoundryJA(prisma);

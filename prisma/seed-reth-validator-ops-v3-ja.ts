@@ -10,7 +10,7 @@ export async function seedRethValidatorOpsV3JA(prisma: PrismaClient) {
       description:
         'コンセンサスのコードを書くことと、本番でコンセンサスを動かし続けることの間にある運用層を扱う。Validator の鍵管理 (hot 鍵、HSM、MPC、閾値署名)、slashing 検知と double-signing の防止、協調 hardfork アップグレードまで。動くコンセンサス実装を、オペレータが stake を失わずに済む本番 L1 に変えるためのスキル。',
       difficulty: 'ADVANCED',
-      duration: 110,
+      duration: 60,
       xpReward: 350,
       track: 'reth-l1-architect',
       tags,
@@ -390,6 +390,8 @@ slashed の ~1/512 → watcher を経済的に動機づけ、市場が形成。
 ## 問い
 
 メインネット hardfork 当日。新バイナリがコンセンサスルールを書き換える。何万もの validator が散らばって稼働、マスタースイッチなし、メンテナンス窓なし、chain は止められない。**それでも 14:13 UTC に canonical chain に残る全 validator が一斉に新ルールでブロック生成 — どうやって？**
+
+> 注: 以下のコード断片は運用フロー理解のための概念スニペットです（\`...\` は省略箇所）。そのまま実行する用途ではありません。
 
 ## 原理（最小モデル）
 
