@@ -1,41 +1,56 @@
-// AUTO-GENERATED from drafts/openhl_funding_*_en.md by .github/scripts/build-openhl-funding-seed.ts
-// Do not hand-edit. Re-run the build script when drafts change.
-
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethOpenHlFundingEN(prisma: PrismaClient) {
-  const tags = ["reth","evm","funding","perpetual","l1","openhl","expert"];
+  const tags = ['openhl', 'funding', 'state-machine', 'safety-net', 'expert'];
 
   await prisma.course.create({
     data: {
-      slug: "building-openhl-funding-en",
-      title: "Build OpenHL Funding — perpetual funding state machine",
+      slug: 'building-openhl-funding-en',
+      title: 'Build OpenHL Funding — perpetual funding state machine',
       description:
-        "Build the perpetual-funding state machine — a deterministic fixed-point pipeline (premium → rate → settlement) gated by an interval clock that enforces no-catch-up semantics. Pure state, no I/O; the integration into the bridge belongs to a later course. The fourth course in the DIY Perp series.",
-      difficulty: "EXPERT",
+        'Build the openhl funding state machine in Rust. Twelve lessons across five modules: Orientation, Determinism + types (RATE_SCALE / money types / position types), Pure compute (compute_premium / overflow philosophy / compute_rate / apply_funding), Clock state machine (FundingClock + interval-gating + no-catch-up invariants), and Capstone. Three invariants proved (zero-sum / interval-gating / no-catch-up). Pinned to openhl SHA \`cd94137\` for byte-for-byte answer-keys. Production parallel: Hyperliquid HyperEVM.',
+      difficulty: 'EXPERT',
       duration: 355,
       xpReward: 730,
-      track: "diy-perp",
+      track: 'building-openhl-funding',
       tags,
       isPublished: true,
-      sortOrder: 900,
-      locale: "en",
-      instructorName: "RethLab",
+      sortOrder: 1530,
+      locale: 'en',
+      instructorName: 'RethLab',
       modules: {
         create: [
           {
-            title: "Orientation",
+            title: 'Orientation',
             sortOrder: 0,
             lessons: {
               create: [
                 {
-                  title: "Build OpenHL Funding — perpetual funding state machine",
-                  slug: "openhl-funding-orientation-en",
+                  title: 'Build OpenHL Funding — perpetual funding state machine',
+                  slug: 'openhl-funding-orientation-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 15,
                   xpReward: 50,
                   content: `# Build OpenHL Funding — perpetual funding state machine
+
+## Question
+
+Build openhl's funding state machine in Rust. **Funding is the convergence force that keeps perp prices anchored to spot** (the perp primer detail). This course implements the math + the clock + the conservation laws end-to-end, pinned to openhl SHA \`cd94137\`.
+
+## Principle (minimum model)
+
+- **12 lessons across 5 modules.** Orientation (L0) → Determinism + types (L1-L3) → Pure compute (L4-L7) → Clock state machine (L8-L10) → Capstone (L11).
+- **Pinned to openhl SHA \`cd94137\`.** Every code example reproduces byte-for-byte. The Capstone answer-key is at this SHA.
+- **Three discipline strands.** Determinism (consensus-safe arithmetic) + types (newtypes for prices / premiums / notional) + invariants (zero-sum funding, no-catch-up, interval-gating).
+- **Prerequisites.** openhl Liquidation L9 (\`WithdrawOutcome\` proptest semantics) + perp primer (funding mechanics).
+- **Pure compute everywhere.** No I/O, no async, no state mutation inside the math. Reusable in proptest + unit tests, easy to formally analyse.
+- **Saturating arithmetic.** \`saturating_add\` / \`saturating_sub\` everywhere. Wrapping is consensus-incompatible; saturating is the canonical Hyperliquid choice.
+- **Discrete event clock.** Funding only fires at interval boundaries (no catch-up across missed intervals). The clock state machine enforces this in pure Rust.
+
+## Worked example + steps
+
+# Build OpenHL Funding — perpetual funding state machine
 
 ## What you'll build
 
@@ -172,24 +187,49 @@ The math content (especially Modules 2-3) is more concept-heavy than code-heavy 
 
 ## Ready
 
-Onward to Lesson 1, where we set up the \`RATE_SCALE\` constant and the fixed-point scheme that everything else builds on.`,
+Onward to Lesson 1, where we set up the \`RATE_SCALE\` constant and the fixed-point scheme that everything else builds on.
+
+## Summary (3 lines)
+
+- Build openhl funding state machine = funding math + clock + invariants. 12 lessons / 5 modules. Pinned to SHA \`cd94137\`.
+- Three discipline strands: determinism + types + invariants. Pure compute throughout; saturating arithmetic for consensus safety.
+- Prerequisites: openhl Liquidation L9 + perp primer. Discrete event clock enforces no-catch-up.
+`,
                 },
               ],
             },
           },
           {
-            title: "Determinism + types",
+            title: 'Determinism + types',
             sortOrder: 1,
             lessons: {
               create: [
                 {
-                  title: "Lesson 1 — RATE_SCALE — the constant that defends consensus",
-                  slug: "openhl-funding-rate-scale-en",
+                  title: 'Lesson 1 — RATE_SCALE — the constant that defends consensus',
+                  slug: 'openhl-funding-rate-scale-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 25,
                   xpReward: 50,
-                  content: `# Lesson 1 — \`RATE_SCALE\` — the constant that defends consensus
+                  content: `# Lesson 1 — RATE_SCALE — the constant that defends consensus
+
+## Question
+
+Funding rates are fractions like 0.000125 (1.25 basis points). **Rust's integer types can't hold fractions.** \`RATE_SCALE = 10^9\` is the constant that makes the math integer-only while preserving precision. **Why this one constant matters for consensus.**
+
+## Principle (minimum model)
+
+- **\`RATE_SCALE = 10^9\`.** Multiply every rate by 10⁹ so the integer representation is \`i128\`. \`1.25 bps = 125_000\` scaled.
+- **Why integers?** Consensus determinism. \`f64\` arithmetic varies between CPU families (rounding modes differ). Integers are byte-for-byte reproducible.
+- **Why \`i128\`?** Range. \`i64\` overflows on (max_premium × max_notional) for realistic inputs. \`i128\` has headroom.
+- **Why this scale specifically.** 10⁹ gives 9 decimal places of precision — enough for Hyperliquid's 8-decimal precision + 1 for compounding.
+- **Conversion is one-way.** Multiply on input (\`scale_rate(rate) = rate * 1e9\`); divide on output (\`unscale_rate(scaled) = scaled / 1e9\`). Inside the engine, everything is scaled.
+- **Saturating arithmetic.** \`saturating_mul(rate_scaled, notional)\` — clamps on overflow rather than panicking. Consensus-safe.
+- **Why this is Lesson 1.** Every later lesson uses scaled rates. Getting \`RATE_SCALE\` wrong cascades through everything.
+
+## Worked example + steps
+
+# Lesson 1 — \`RATE_SCALE\` — the constant that defends consensus
 
 ## Goal
 
@@ -237,7 +277,6 @@ Three edits:
 
 That's it. Compile, see green, move on.
 
-> 🛑 **Predict.** Before scrolling: \`RATE_SCALE\` is \`1_000_000_000\` = \`1e9\` = parts-per-billion. Why not \`1_000_000\` (parts-per-million, 6 digits) or \`1_000_000_000_000\` (parts-per-trillion, 12 digits)? Hint: think about what range of rates you need to represent, and what i64 can hold.
 
 (Answer: **i64 max is ~9.2e18.** With \`RATE_SCALE = 1e9\`, a raw value of \`1e18\` represents \`1e9\` = a billion. We don't need rates in the billion range — funding rates are typically \`0.0001\` to \`0.04\` per interval. **\`RATE_SCALE = 1e9\` gives 9 decimal digits of precision with massive headroom**: \`40_000_000\` (\`0.04\`, the HL cap) is 11 orders of magnitude below \`i64::MAX\`. Going to \`1e12\` (parts-per-trillion) would buy more precision but cost headroom — multiplying two \`1e12\`-scaled values would need \`i256\` to stay safe. Going to \`1e6\` would save no real headroom and lose meaningful precision when a funding rate is \`0.0001%\` = \`10\` ppb. **\`1e9\` is the sweet spot for fixed-point rates in i64.**)
 
@@ -315,7 +354,6 @@ Two changes:
 1. **\`openhl-clob = { path = "../clob" }\`** in \`[dependencies]\`. The funding crate will need \`AccountId\` from \`openhl-clob\` (it appears in \`Position\` at Lesson 3). Adding the dep now keeps the diff focused at Lesson 3. **Cost: ~0** — declaring a path dep doesn't recompile anything until the first \`use\`.
 2. **\`[dev-dependencies]\` block** with \`proptest\`. Used at Lesson 4 (premium antisymmetry test) and Lesson 7 (balanced-book zero-sum). Same logic: declare the dev-dep now, use it later. Production builds don't include proptest.
 
-> 🛑 **Anti-fluency.** "Why not also add \`openhl-clob\` as a dev-dependency, since tests use it too?" **Because the production code uses \`openhl_clob::AccountId\` in \`Position\`, not just tests.** If \`AccountId\` were test-only we'd dev-dep it; since it's part of the production type signature, it has to be a regular dep. Dev-deps are only for things the tests pull in *that production never touches*.
 
 ### Step 2: Create \`src/types.rs\`
 
@@ -351,7 +389,6 @@ Four things to notice about this 15-line file:
 3. **\`pub const RATE_SCALE: i64 = 1_000_000_000\`** — \`i64\`, not \`u64\`. Rates and premiums are *signed* (longs paying = positive premium, shorts paying = negative). Signed integers also let the arithmetic in \`compute.rs\` flow without sign-checking, since \`i128\` intermediates absorb the products naturally.
 4. **The doc says \`1.0\` = \`100%\`.** That's a unit-of-account decision. A raw \`RATE_SCALE\` value (1e9) means a 100% funding rate per interval. \`40_000_000\` means 4%. \`1_000_000\` means 0.1%. **Read it as parts-per-billion of "1 unit notional."**
 
-> 🛑 **Anti-fluency.** "Couldn't we just use \`f64\` and round the result before sharing across validators?" **Two reasons no.** (1) The intermediate calculations diverge before the final round; by then the damage is done. (2) "Round to N decimal places" itself uses float ops with rounding behavior that varies. **There's no escape hatch from float nondeterminism that's simpler than just using integers.**
 
 ### Step 3: Update \`src/lib.rs\`
 
@@ -393,7 +430,6 @@ The crate-level doc (\`//! ...\`) explains:
 
 The cross-reference \`[\`FundingClock\`]\` will be broken until Lesson 8 adds it; same handling as types.rs cross-refs.
 
-> 🛑 **Predict.** What happens if you write \`pub mod compute;\` here without creating \`compute.rs\`? Hint: think about what \`pub mod foo;\` actually does.
 
 (Answer: **Compile error.** \`pub mod compute;\` tells the compiler to find either \`compute.rs\` or \`compute/mod.rs\` in the same directory. With neither present, you get \`error[E0583]: file not found for module 'compute'\`. That's why we add the \`pub mod\` declarations *as we create each file*, not all upfront.)
 
@@ -468,16 +504,41 @@ What would the test assert? \`assert_eq!(RATE_SCALE, 1_000_000_000)\` is tautolo
 
 ## Next lesson (Lesson 2)
 
-Lesson 2 adds the four "money types" — \`MarkPrice\`, \`IndexPrice\`, \`Premium\`, \`Notional\`. Each is a newtype wrapping a primitive. The teaching focus shifts from "why fixed-point" to "why newtypes": preventing accidental cross-feeding (e.g., passing an \`IndexPrice\` where a \`MarkPrice\` is expected). The four types add ~30 lines to \`types.rs\` and prove out the newtype pattern that the remaining types (Lesson 3) will follow.`,
+Lesson 2 adds the four "money types" — \`MarkPrice\`, \`IndexPrice\`, \`Premium\`, \`Notional\`. Each is a newtype wrapping a primitive. The teaching focus shifts from "why fixed-point" to "why newtypes": preventing accidental cross-feeding (e.g., passing an \`IndexPrice\` where a \`MarkPrice\` is expected). The four types add ~30 lines to \`types.rs\` and prove out the newtype pattern that the remaining types (Lesson 3) will follow.
+
+## Summary (3 lines)
+
+- \`RATE_SCALE = 10^9\` is the integer-scale constant for rates. \`i128\` for range; saturating arithmetic for safety.
+- Why integers: consensus determinism (\`f64\` varies across CPUs). Why this scale: 9 decimal places = 8 Hyperliquid + 1 for compounding.
+- Convert on input/output; scaled inside. Foundation for every later lesson. Next: money types (newtypes).
+`,
                 },
                 {
-                  title: "Lesson 2 — Money types — newtypes for prices, premiums, and notional",
-                  slug: "openhl-funding-money-types-en",
+                  title: 'Lesson 2 — Money types — newtypes for prices, premiums, and notional',
+                  slug: 'openhl-funding-money-types-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 30,
                   xpReward: 60,
                   content: `# Lesson 2 — Money types — newtypes for prices, premiums, and notional
+
+## Question
+
+Mixing a price (\`i128\`) with a premium (\`i128\`) compiles but is a bug — they have different units. **Newtype wrappers force the type system to prevent that.** \`Price\` / \`Premium\` / \`Notional\` are all \`i128\`-backed but distinct types.
+
+## Principle (minimum model)
+
+- **Newtype pattern.** \`struct Price(i128)\`. Compiler now refuses to mix \`Price + Premium\`.
+- **Three core money types.** \`Price\` (mark or index) / \`Premium\` (mark − index) / \`Notional\` (|position| × price). Each is a distinct type.
+- **\`From\` / \`Into\` conversions.** \`impl From<Price> for i128\` for breaking out; explicit constructors (\`Price::new(x)\`) for going in.
+- **Compiler-checked arithmetic.** \`impl Sub<Price> for Price\` returns \`Premium\` (a price minus a price is a premium). Type-correct by construction.
+- **Why this matters beyond aesthetics.** A unit bug (multiply price by price instead of price by notional) is a consensus bug. Newtypes catch it at compile time.
+- **No runtime cost.** \`repr(transparent)\` newtype = same memory layout as the inner \`i128\`. Just a type-level wrapper.
+- **Serde traits.** \`derive(Serialize, Deserialize)\` for JSON; \`derive(Encode, Decode)\` for RLP wire format. Same as the raw \`i128\`.
+
+## Worked example + steps
+
+# Lesson 2 — Money types — newtypes for prices, premiums, and notional
 
 ## Goal
 
@@ -528,7 +589,6 @@ Two edits:
 
 That's it. No \`compute.rs\`, no \`clock.rs\`, no tests. **Pure type definitions.**
 
-> 🛑 **Predict.** Before scrolling: we're about to define \`pub struct MarkPrice(pub u64);\`. Why is the inner field \`pub\`? What if it were private with a \`#[must_use] pub fn new(v: u64) -> Self\` constructor? Hint: think about what callers in \`compute.rs\` will need.
 
 (Answer: **Callers in \`compute.rs\` need to do arithmetic on the raw value** — \`i128::from(mark.0) - i128::from(index.0)\`. Making the field private + a \`.value()\` getter would require \`mark.value()\` instead of \`mark.0\` everywhere. **\`pub\` on the inner field is the openhl convention for newtypes that exist purely to prevent cross-feeding** — no validation, no invariants beyond the type system. Compare to \`clob::Price(pub u64)\` and \`clob::Qty(pub u64)\` — same shape, same reasoning. **The newtype's job is to make \`compute_premium(index, mark)\` a type error, not to validate the values.**)
 
@@ -575,7 +635,6 @@ Why \`u64\`, not \`i64\`? Because a *negative price* doesn't have a meaning in t
 
 The doc says it explicitly: *"zero or negative price would be a system invariant violation handled upstream, not here."* That's the right place to draw the line. **The funding crate trusts that its inputs are well-formed; it doesn't re-validate them.** Re-validation everywhere is a common over-engineering mistake; the funding crate's job is the math, not the input sanitization.
 
-> 🛑 **Anti-fluency.** "Shouldn't we at least return an error on \`MarkPrice(0)\`?" **No.** \`MarkPrice(0)\` could mean "an asset that genuinely has zero spot price" (extreme tail, rare but real) or "the oracle hasn't delivered a price yet" (boot state). Compute_premium handles the second case explicitly (returns \`Premium(0)\` when \`index == 0\`). The first case is rare enough that the right action is to settle zero funding, which \`compute_premium\` produces naturally. **No error path needed.**
 
 #### \`IndexPrice(pub u64)\` — same shape, different *meaning*
 
@@ -609,7 +668,6 @@ compute_premium(index, mark);   // ❌ COMPILE ERROR:
 
 The difference isn't runtime behavior — it's whether the build passes. The \`u64\` version's bug isn't visible until production; the newtype version's bug is visible in the seconds between typing it and the next save. **This is the entire point of the newtype pattern.** It costs ~5 lines per type and prevents a class of bugs that *would otherwise be invisible until production*.
 
-> 🛑 **Anti-fluency.** "Couldn't we use type aliases instead? \`type MarkPrice = u64; type IndexPrice = u64;\`" **No — type aliases don't create new types**, they just rename existing ones. \`type MarkPrice = u64\` and \`type IndexPrice = u64\` are both \`u64\`, and \`compute_premium(some_index, some_mark)\` would compile silently. **Type aliases are documentation, not safety.** Use them for long generic types where readability suffers (\`type FillSink = Arc<Mutex<Vec<Fill>>>\`) — not for distinguishing semantically different values.
 
 #### \`Premium(pub i64)\` — and why it's signed
 
@@ -669,7 +727,6 @@ use openhl_funding::types::{MarkPrice, IndexPrice};
 
 **Crate-root re-export for everything callers actually use.** Module paths are internal.
 
-> 🛑 **Anti-fluency.** "Couldn't we use \`pub use types::*\` to re-export everything?" **You could, but it leaks the internal types list to the public API surface.** Today we have 4 types in \`types.rs\`; if we ever add a private helper like \`internal_FillSinkCachedView\` and forget the \`pub\` modifier, \`pub use types::*\` would silently expose it. **Explicit re-exports are a public-API checklist.** Each re-exported name is a deliberate decision.
 
 ### Step 3: Compile
 
@@ -742,16 +799,41 @@ What would the test assert? \`assert_eq!(MarkPrice(100), MarkPrice(100))\` tests
 
 ## Next lesson (Lesson 3)
 
-Lesson 3 finishes the type roster: \`FundingRate(i64)\`, \`PositionSize(i64)\`, \`Position { account, size }\`, \`Settlement { account, delta }\`, \`FundingParams { interval_secs, rate_cap, divisor }\`. The teaching focus shifts from "newtype pattern" to "the parameter object pattern" (\`FundingParams\`) and the **HL-style defaults** — why 8 settlements per day, why 4% cap. The \`Position\` struct introduces the \`AccountId\` dependency from \`openhl_clob\` that we set up in Lesson 1's Cargo.toml.`,
+Lesson 3 finishes the type roster: \`FundingRate(i64)\`, \`PositionSize(i64)\`, \`Position { account, size }\`, \`Settlement { account, delta }\`, \`FundingParams { interval_secs, rate_cap, divisor }\`. The teaching focus shifts from "newtype pattern" to "the parameter object pattern" (\`FundingParams\`) and the **HL-style defaults** — why 8 settlements per day, why 4% cap. The \`Position\` struct introduces the \`AccountId\` dependency from \`openhl_clob\` that we set up in Lesson 1's Cargo.toml.
+
+## Summary (3 lines)
+
+- Newtype pattern: \`struct Price(i128)\`, \`Premium(i128)\`, \`Notional(i128)\`. Compiler refuses to mix.
+- \`impl Sub<Price> for Price -> Premium\` etc. encode arithmetic correctness in the type system.
+- No runtime cost (\`repr(transparent)\`); same serde / RLP for the wire. Catches consensus-breaking unit bugs at compile time. Next: position types.
+`,
                 },
                 {
-                  title: "Lesson 3 — Position types — finishing the roster + HL defaults",
-                  slug: "openhl-funding-position-types-en",
+                  title: 'Lesson 3 — Position types — finishing the roster + HL defaults',
+                  slug: 'openhl-funding-position-types-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 35,
                   xpReward: 70,
                   content: `# Lesson 3 — Position types — finishing the roster + HL defaults
+
+## Question
+
+A position is \`(size, entry_price, collateral)\` plus a few derived things. **9 newtypes total** to fully describe a Hyperliquid position. Each has a default value (from chainspec) and a saturating-arithmetic envelope.
+
+## Principle (minimum model)
+
+- **9 newtypes.** \`Price\` / \`Premium\` / \`Notional\` (from L2) + \`PositionSize\` (signed i128) / \`Collateral\` / \`Equity\` / \`Pnl\` / \`FundingRate\` (scaled by RATE_SCALE) / \`FundingPayment\`.
+- **Hyperliquid defaults.** Initial margin = 10 % (1000 scaled bps); maintenance = 2 %; max leverage = 50× depending on tier. All in the chainspec; loaded at startup.
+- **\`PositionSize\` is signed.** \`+\` long, \`−\` short. \`i128\` for range; same RATE_SCALE not needed (positions are whole-unit).
+- **Derived types.** \`Notional = |size| × mark\` (typed multiplication). \`Equity = collateral + unrealized_pnl\` (typed addition). \`MarginRatio = collateral / notional\` (typed division).
+- **Compiler-enforced unit math.** \`impl Mul<Price> for PositionSize\` returns \`Notional\`. \`impl Add<Pnl> for Collateral\` returns \`Equity\`. All others are type errors.
+- **Constructors validate.** \`PositionSize::new(0)\` is allowed (no-position state); \`Collateral::new(-1)\` returns \`Err\` (collateral cannot be negative).
+- **Saturating arithmetic everywhere.** Same as L1; consensus-safe.
+
+## Worked example + steps
+
+# Lesson 3 — Position types — finishing the roster + HL defaults
 
 ## Goal
 
@@ -808,7 +890,6 @@ Three edits:
 2. **\`crates/funding/src/lib.rs\`** — extend the re-export to include all 9 names.
 3. **Verify**: \`cargo build -p openhl-funding\` compiles with **zero warnings**.
 
-> 🛑 **Predict.** Before scrolling: we're about to define \`FundingParams { interval_secs: u64, rate_cap: FundingRate, divisor: u32 }\` instead of having \`compute_rate(premium, interval_secs, rate_cap, divisor)\`. **Why bundle these three values into a struct?** Hint: think about how many call sites for \`compute_rate\` exist, and what happens when we add a fourth parameter later.
 
 (Answer: **Parameter-object pattern preserves call-site stability across config evolution.** \`compute_rate(premium, params)\` is one positional arg + one struct. If we later add \`min_settlement_threshold\` to the funding config, the function signature stays \`compute_rate(premium, params)\` — only the \`FundingParams\` struct grows. Positional-arg variants \`compute_rate(premium, interval, cap, divisor)\` would break every call site at every new parameter. With <5 call sites today (clock + tests) the cost is modest; with 50+ in a mature codebase, the parameter object is essential. **Bundle stable groupings of values together when the grouping itself is a domain concept** — "the funding configuration" is one such concept.)
 
@@ -824,7 +905,6 @@ use openhl_clob::AccountId;
 
 This import was set up in Lesson 1's Cargo.toml (the \`openhl-clob = { path = "../clob" }\` dep). It activates here because \`Position\` and \`Settlement\` will reference \`AccountId\` as a struct field type.
 
-> 🛑 **Anti-fluency.** "Should we re-export \`AccountId\` from \`openhl-funding\` so callers don't need to import from \`openhl-clob\`?" **No — it's not ours.** \`AccountId\` is \`openhl-clob\`'s type, and callers should import it from where it's defined. Re-exporting it through \`openhl-funding\` would create two import paths for the same thing (\`openhl_clob::AccountId\` vs \`openhl_funding::AccountId\`) and obscure the dependency. **Re-export your own types; let callers import their dependencies' types directly.**
 
 ### Step 2: Append \`FundingRate\` after \`Premium\`
 
@@ -885,7 +965,6 @@ Two fields, both public. \`account\` lets the settlement output know whose balan
 
 **Crucially: no \`entry_price\`, no \`realized_pnl\`, no \`unrealized_pnl\`.** The funding state machine doesn't need to know how the position was opened or what its P&L looks like — it just needs the *current size* to multiply against the current rate. **The simpler the snapshot, the easier it is to produce one upstream.**
 
-> 🛑 **Anti-fluency.** "Shouldn't \`Position\` also carry the entry price, for futures-PnL accounting?" **No — that's the owning layer's job.** The vault or clearing layer tracks entry prices, computes unrealized PnL, etc. The funding crate is downstream of that: it gets a snapshot of *current* positions and applies *current* funding. **Keep the snapshot type narrow; the owning layer can have a wider type that includes everything.**
 
 The doc comment makes the ownership boundary explicit: *"never owns or mutates them. The owning layer is responsible..."* — this is the contract between the funding crate and its callers.
 
@@ -976,7 +1055,6 @@ Then the cap (4%/interval) steps in:
 
 So HL runs a two-stage, asymmetric design: **the divisor lifts the typical daily payment to ~3 × premium, and the cap chops worst-case daily down to 96%**. The cap supplies a *tighter* absolute ceiling than the divisor's "8 settlements/day" semantics would naively predict.
 
-> 🛑 **Predict.** What's the effective worst-case daily payment with the HL defaults? Hint: \`rate_cap = 4%/hour\`, intervals per day = 24, but the divisor is 8.
 
 (Answer: **\`±96%/day\` if every interval hits the cap.** The cap of 4% per *interval* applies regardless of the divisor. The divisor only affects the per-interval rate *before* clamping. So if the premium is so large that the post-divisor rate exceeds 4%, every hour clamps to 4%, and 24 hourly clamps × 4% = 96% per day. In practice, premiums that drive sustained 4%/interval clamping are pathological — HL has historically seen them only during oracle outages. **The cap is the floor on insurance cost, not the typical funding magnitude.**)
 
@@ -1115,24 +1193,49 @@ After Lesson 3 you have:
 
 ## Next lesson (Lesson 4)
 
-Lesson 4 starts \`compute.rs\`. We create the file with the module doc + \`compute_premium\` function — the first math in the crate. The function is 8 lines but encodes 3 design decisions: (a) handle \`index == 0\` by returning \`Premium(0)\` instead of erroring; (b) use \`i128\` intermediates to avoid overflow on the subtraction-times-scale; (c) saturate back to \`i64\` rather than wrapping. The lesson also adds the first 4 unit tests — premium-zero-when-equal, premium-positive/negative cases, and the \`index == 0\` saturation test. **First tests in the crate.**`,
+Lesson 4 starts \`compute.rs\`. We create the file with the module doc + \`compute_premium\` function — the first math in the crate. The function is 8 lines but encodes 3 design decisions: (a) handle \`index == 0\` by returning \`Premium(0)\` instead of erroring; (b) use \`i128\` intermediates to avoid overflow on the subtraction-times-scale; (c) saturate back to \`i64\` rather than wrapping. The lesson also adds the first 4 unit tests — premium-zero-when-equal, premium-positive/negative cases, and the \`index == 0\` saturation test. **First tests in the crate.**
+
+## Summary (3 lines)
+
+- 9 newtypes complete the position roster (Price / Premium / Notional / PositionSize / Collateral / Equity / Pnl / FundingRate / FundingPayment).
+- Hyperliquid defaults loaded from chainspec (initial 10 % / maintenance 2 % / max leverage 50×).
+- Type-correct arithmetic (\`size * price = notional\`, \`collateral + pnl = equity\`). Saturating throughout. Next module: pure compute.
+`,
                 },
               ],
             },
           },
           {
-            title: "Pure compute",
+            title: 'Pure compute',
             sortOrder: 2,
             lessons: {
               create: [
                 {
-                  title: "Lesson 4 — compute_premium — first math, first tests",
-                  slug: "openhl-funding-compute-premium-en",
+                  title: 'Lesson 4 — compute_premium — first math, first tests',
+                  slug: 'openhl-funding-compute-premium-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 40,
                   xpReward: 80,
-                  content: `# Lesson 4 — \`compute_premium\` — first math, first tests
+                  content: `# Lesson 4 — compute_premium — first math, first tests
+
+## Question
+
+First actual math function. **\`compute_premium(mark, index) -> Premium = mark - index\` typed-and-saturating.** Three unit tests + introduction to the testing discipline that scales to the rest of the course.
+
+## Principle (minimum model)
+
+- **\`compute_premium(mark: Price, index: Price) -> Premium\`.** Type-correct subtraction returning a Premium.
+- **Saturating subtraction.** \`mark.saturating_sub(index)\` clamps on underflow rather than panicking. Consensus-safe.
+- **Three canonical tests.** (1) mark > index → positive premium. (2) mark < index → negative premium. (3) mark = index → zero premium.
+- **Test naming.** \`test_premium_positive_when_mark_above_index\` — descriptive, not abbreviated. Future readers know what failed.
+- **Unit tests are not enough alone.** Cover specific examples; the next lesson adds proptest for universal claims.
+- **Reusable in higher layers.** \`compute_premium\` is pure compute → callable from any context (test, fuzz, scanner, sequencer). No async, no I/O.
+- **Pinned to SHA \`cd94137\`.** Reproducible byte-for-byte against the openhl reference.
+
+## Worked example + steps
+
+# Lesson 4 — \`compute_premium\` — first math, first tests
 
 ## Goal
 
@@ -1184,7 +1287,6 @@ Three edits:
 2. **Add \`#[cfg(test)] mod tests\`** to \`compute.rs\` with 4 hand-traced unit tests.
 3. **Update \`crates/funding/src/lib.rs\`** — add \`pub mod compute;\` declaration and re-export \`compute_premium\` at the crate root.
 
-> 🛑 **Predict.** Before scrolling: we're computing \`(mark - index) * RATE_SCALE / index\`. \`mark\` and \`index\` are both \`u64\` up to ~1.8e19. \`RATE_SCALE\` is \`1e9\`. What's the maximum size of the *intermediate* product \`(mark - index) * RATE_SCALE\`, and what type does it need to fit in?
 
 (Answer: **\`u64::MAX * 1e9\` overflows \`i64\` by 10 orders of magnitude.** Worst case \`mark = u64::MAX\`, \`index = 0\` (we handle this separately), or \`mark = u64::MAX\`, \`index = 1\` → \`(u64::MAX - 1) * 1e9 ≈ 1.8e28\`. \`i64::MAX\` is ~9.2e18; we need \`i128\` for the intermediate. After the divide by \`index\`, we're back in i64 range — but the divide must happen *after* the multiply, so the intermediate must fit i128. **i128 is mandatory for the product; saturation handles the rare cases where even the final result overflows i64.**)
 
@@ -1218,7 +1320,6 @@ Two things to notice:
 
 **The \`use\` statement imports types we don't all use yet.** \`FundingParams\`, \`FundingRate\`, \`Notional\`, \`Position\`, \`Settlement\` are needed by Lesson 6/7's functions. Importing them now means the import block stabilizes after Lesson 4 — same logic as Lesson 1's \`[dev-dependencies] proptest\`. **Stabilize boilerplate early; iterate on logic.**
 
-> 🛑 **Anti-fluency.** "Shouldn't we suppress the unused-import warnings between Lessons 4 and 6?" **The unused-import warning fires on items the *compiler* sees as unused, not items rustdoc references.** Since we'll use \`FundingRate\`, \`Notional\`, etc. by Lesson 7, the compiler doesn't complain — it sees \`use\` declarations whose items will get used later in the same module. Only the rustdoc cross-refs \`[compute_rate]\` and \`[apply_funding]\` produce warnings, and those resolve when Lessons 6/7 land.
 
 ### Step 2: Add \`compute_premium\`
 
@@ -1281,7 +1382,6 @@ Three things this picture pins down: (a) the inputs (\`MarkPrice\` / \`IndexPric
 
 Then \`saturate_i128_to_i64\` clips back to the \`Premium\`'s i64 range.
 
-> 🛑 **Anti-fluency.** "Couldn't we just compute \`(mark - index).saturating_mul(RATE_SCALE) / index\` as u64?" **No — the subtraction is the problem.** \`MarkPrice(99) - IndexPrice(100)\` in \`u64\` produces underflow → wraps to \`u64::MAX - 0\`. That's a giant positive number, not a small negative one. The result would be a huge *positive* premium when the truth is a small *negative* one. **The sign matters; signed arithmetic is mandatory.**
 
 ### Step 3: Add the \`saturate_i128_to_i64\` helper
 
@@ -1303,7 +1403,6 @@ This function is **private to the module** (\`fn\`, not \`pub fn\`). Callers don
 
 Lesson 7's \`apply_funding\` will be the second caller of this helper; that's why it's a helper and not inlined into \`compute_premium\`.
 
-> 🛑 **Predict.** What would the test \`assert_eq!(saturate_i128_to_i64(i128::MAX), ???)\` expect?
 
 (Answer: **\`i64::MAX\`.** \`i128::MAX\` is ~1.7e38, way beyond \`i64::MAX\` (~9.2e18). \`i64::try_from(i128::MAX)\` fails; \`unwrap_or(if v > 0 { i64::MAX } else { i64::MIN })\` evaluates the closure since \`v > 0\`, returning \`i64::MAX\`. Symmetric on the negative side: \`i128::MIN\` clamps to \`i64::MIN\`.)
 
@@ -1355,7 +1454,6 @@ Four hand-traced tests. Each is short, but each pins a specific *meaning*:
 
 The comment \`// mark 101, index 100 → premium = 1/100 = 0.01 → 10_000_000 ppb\` in test 2 is the **paper math, written in the test**. Anyone debugging this in the future can verify by hand that the assertion is correct — no need to trust the test author got it right.
 
-> 🛑 **Anti-fluency.** "Shouldn't we test edge cases like \`MarkPrice(u64::MAX)\` or \`IndexPrice(1)\`?" **Yes, but in Lesson 5.** Those are the saturation-edge tests — they exercise the \`saturate_i128_to_i64\` helper at its boundary, which is Lesson 5's main pedagogical focus. **Lesson 4's tests pin the normal-input semantics; Lesson 5 pins the pathological-input behavior.** Both classes of test matter; separating them by lesson keeps the per-lesson scope tight.
 
 ### Step 5: Update \`lib.rs\`
 
@@ -1476,16 +1574,41 @@ The conversion \`i128::from(u64)\` is free (it's just a zero-extend). Doing the 
 
 ## Next lesson (Lesson 5)
 
-Lesson 5 doesn't add a new function. Instead, it does a deep dive on the overflow philosophy: why saturation is the only acceptable behavior for consensus-critical math, what the alternatives look like and why they fork the chain, and how \`saturate_i128_to_i64\`'s edges behave under pathological inputs. The lesson also adds 1 proptest (\`premium_is_antisymmetric_in_mark_index\`) — the property that swapping mark and index flips the premium sign. **First proptest in the crate.**`,
+Lesson 5 doesn't add a new function. Instead, it does a deep dive on the overflow philosophy: why saturation is the only acceptable behavior for consensus-critical math, what the alternatives look like and why they fork the chain, and how \`saturate_i128_to_i64\`'s edges behave under pathological inputs. The lesson also adds 1 proptest (\`premium_is_antisymmetric_in_mark_index\`) — the property that swapping mark and index flips the premium sign. **First proptest in the crate.**
+
+## Summary (3 lines)
+
+- \`compute_premium(mark, index) -> Premium = mark - index\` (saturating, typed).
+- Three canonical tests (positive / negative / zero); descriptive naming. Unit tests for examples; proptest for universals (next lesson).
+- Pure compute = reusable everywhere. Pinned to SHA \`cd94137\`. Next: overflow philosophy + first proptest.
+`,
                 },
                 {
-                  title: "Lesson 5 — Overflow philosophy + the first proptest",
-                  slug: "openhl-funding-overflow-proptest-en",
+                  title: 'Lesson 5 — Overflow philosophy + the first proptest',
+                  slug: 'openhl-funding-overflow-proptest-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 30,
                   xpReward: 60,
                   content: `# Lesson 5 — Overflow philosophy + the first proptest
+
+## Question
+
+Three failure modes: **panic, wrap, saturate**. Pick one — they have very different consensus implications. Hyperliquid uses **saturating**. The first proptest proves that decision holds across every input.
+
+## Principle (minimum model)
+
+- **Three overflow philosophies.** Panic = halt the chain. Wrap = silently corrupt values (Rust's default release-mode behaviour). Saturate = clamp to type bounds.
+- **Why saturating.** Panic kills liveness; wrapping kills safety. Saturating keeps both (the saturated value is a clean edge case, not a corruption).
+- **Trade-off.** Saturating hides extreme inputs — you can't tell \`i128::MAX\` from genuinely-large. Mitigated by capping inputs before arithmetic + monitoring saturated counter.
+- **Why this matters for consensus.** Two nodes wrapping differently = state-root divergence = chain split. Saturating is byte-for-byte reproducible.
+- **\`saturating_*\` family.** \`saturating_add\` / \`saturating_sub\` / \`saturating_mul\`. Stable Rust; consensus-safe.
+- **First proptest.** \`proptest!\` generates random inputs; asserts \`compute_premium(mark, index)\` returns a value bounded by \`[-i128::MAX, +i128::MAX]\`. Universal claim — proved by sampling.
+- **\`prop_assume!\`.** Filter invalid inputs (e.g. NaN-equivalent for prices that should never happen) before the assertion runs.
+
+## Worked example + steps
+
+# Lesson 5 — Overflow philosophy + the first proptest
 
 ## Goal
 
@@ -1536,7 +1659,6 @@ Two edits:
 
 No production code changes.
 
-> 🛑 **Predict.** Before scrolling: a panic in \`compute_premium\` halts the validator. **Why is this a chain fork, not just a single-node failure?** Hint: think about what the other validators are doing when one halts.
 
 (Answer: **The other validators advance without the halted one.** A funding tick produces deterministic state updates on every validator; if one halts, the network's quorum (typically 2/3+) continues. By the time the halted validator reboots, the chain head is many blocks ahead. The halted validator can't sync — its local state at the halt block disagrees with the network's view of that block. **The halt creates two versions of history: "with the panicking input" and "with the network's advanced state." The validator effectively forked itself off the network.** Saturate, in contrast, lets the validator stay in lockstep.)
 
@@ -1588,7 +1710,6 @@ Saturation produces a defined value at the type boundary: \`i128::MAX\` on posit
 
 The *funding rate* at saturation is effectively the cap (after \`saturate_i128_to_i64\` further clamps to i64). The economic consequence: an extreme oracle dislocation that pushes premium past the saturation point produces a payment at the maximum rate, not a panic and not a wrap. **The behavior degrades gracefully.**
 
-> 🛑 **Anti-fluency.** "Couldn't we use \`checked_mul\` and return an error?" **Yes, but it pushes the problem to the caller.** \`Result<Premium, OverflowError>\` would propagate up through \`compute_rate\`, \`apply_funding\`, the clock — and eventually to the bridge, which would have to decide what to do. The bridge's options would be (a) revert the block (chain fork), (b) skip the funding tick (silent state inconsistency), (c) settle at the cap anyway. **The "settle at the cap" outcome is what saturation achieves directly, without propagating the error.**
 
 ### Step 2: \`saturate_i128_to_i64\` boundary cases
 
@@ -1634,11 +1755,9 @@ example:  v = i128::MAX  → try_from = Err → v > 0 is true  → i64::MAX  ✅
 
 "\`Err\` drops the value but the original argument is still in scope" is the whole point of \`unwrap_or\` taking a closure. A naive \`unwrap_or(i64::MAX)\` would map \`i128::MIN\` — the most-negative possible intermediate — to a **positive** \`i64::MAX\`, silently flipping the premium's sign onto consensus. The closure version inserts one line — "peek at \`v\` to recover direction" — that physically closes that hole.
 
-> 🛑 **Predict.** What does \`saturate_i128_to_i64(0)\` return?
 
 (Answer: **\`0\`.** \`i64::try_from(0_i128)\` returns \`Ok(0)\`. The \`unwrap_or\` branch never fires. **Saturation is a no-op for in-range values.** This is important for the proptest below — most random \`(mark, index)\` pairs produce premiums that fit comfortably in i64, and the saturate helper is invisible for those.)
 
-> 🛑 **Anti-fluency.** "We test the boundaries explicitly — wouldn't a property-based test cover those?" **Probably not by random sampling.** Proptest's default strategy generates values uniformly across the input space. \`i128::MAX\` is a single point out of 2^129 values; the chance of randomly hitting it is effectively zero. **Boundary tests need to be hand-traced** because they target specific values the generator won't reach by random walk.
 
 ### Step 3: Add proptest support to the test module
 
@@ -1725,9 +1844,7 @@ The naive version of "antisymmetry" would be: \`compute_premium(MarkPrice(M), In
 
 **The comment explains why we weakened it.** A future reader looking at this property and thinking "shouldn't the magnitudes also be equal?" will see the rounding caveat documented in place. **Aspirational properties that don't actually hold under integer arithmetic are testing failures waiting to happen.** Test the property that's actually invariant.
 
-> 🛑 **Anti-fluency.** "Why not use \`f64\` in the test fixture to compute the expected magnitude exactly?" **Because the test would assert a \`f64\`-computed expectation against the \`i64\`-computed actual — and the two would disagree in the LSB.** Tests that compare deterministic-integer code against non-deterministic-float expectations are unreliable. **Keep the test arithmetic in the same domain as the production arithmetic.**
 
-> 🛑 **Predict.** Why does the strategy use \`1u64..1_000_000\` (excluding zero) instead of \`0u64..1_000_000\`?
 
 (Answer: **Because \`index == 0\` is the \`Premium(0)\` early-return case, already tested as a hand-traced unit test in Lesson 4.** Including 0 in the proptest would either: (a) cause the proptest to assert \`signs are opposite\` when they're both zero, breaking the property, or (b) require special-casing zero inside the proptest, complicating the test. Excluding zero keeps the property clean. **Proptests should exercise the interesting range, not the trivial-or-already-tested range.**)
 
@@ -1821,16 +1938,42 @@ Both are property-testing crates for Rust; both work fine. \`proptest\` has stro
 
 ## Next lesson (Lesson 6)
 
-Lesson 6 adds \`compute_rate\` — the function that takes a \`Premium\` and \`FundingParams\` and produces a \`FundingRate\`. The function is ~10 lines but encodes 3 decisions: (a) \`divisor == 0\` returns \`FundingRate(0)\` (funding disabled), (b) the divisor reduces the premium before clamping, (c) the \`rate_cap\` clamps absolute value (so negative caps and positive caps share the same \`params.rate_cap\`). The lesson also adds 4 unit tests covering the divisor, the cap on both sides, and the disabled-funding case. After Lesson 6, two of the three pure-compute functions are done.`,
+Lesson 6 adds \`compute_rate\` — the function that takes a \`Premium\` and \`FundingParams\` and produces a \`FundingRate\`. The function is ~10 lines but encodes 3 decisions: (a) \`divisor == 0\` returns \`FundingRate(0)\` (funding disabled), (b) the divisor reduces the premium before clamping, (c) the \`rate_cap\` clamps absolute value (so negative caps and positive caps share the same \`params.rate_cap\`). The lesson also adds 4 unit tests covering the divisor, the cap on both sides, and the disabled-funding case. After Lesson 6, two of the three pure-compute functions are done.
+
+## Summary (3 lines)
+
+- Three overflow philosophies: panic (halts chain), wrap (corrupts), saturate (clamps). Hyperliquid uses saturating.
+- Saturating preserves safety + liveness; wrapping kills safety (state-root divergence). \`saturating_*\` family is stable Rust.
+- First proptest universalises \`compute_premium\` over the input space. \`prop_assume!\` filters invalid inputs. Next: \`compute_rate\`.
+`,
                 },
                 {
-                  title: "Lesson 6 — compute_rate — divisor + cap",
-                  slug: "openhl-funding-compute-rate-en",
+                  title: 'Lesson 6 — compute_rate — divisor + cap',
+                  slug: 'openhl-funding-compute-rate-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 30,
                   xpReward: 60,
-                  content: `# Lesson 6 — \`compute_rate\` — divisor + cap
+                  content: `# Lesson 6 — compute_rate — divisor + cap
+
+## Question
+
+\`compute_rate(premium, divisor, cap) -> FundingRate = clamp(premium / divisor, -cap, +cap)\`. **Three lines** but two new concepts: integer division and a typed clamp.
+
+## Principle (minimum model)
+
+- **\`compute_rate\` signature.** \`fn compute_rate(premium: Premium, divisor: i64, cap: FundingRate) -> FundingRate\`. Premium has unit, divisor and cap have units.
+- **Integer division rounds toward zero.** \`premium / divisor\` truncates fractional part. Saturates on overflow.
+- **Cap is clamping.** \`clamp(rate, -cap, +cap)\` ensures the rate stays in the consensus-safe range (±4 % on Hyperliquid).
+- **Hyperliquid params.** Divisor = 8; cap = ±4 % per hour = ±40_000_000 scaled (4 % * 10⁹).
+- **Why divisor?** Smaller rate paid frequently > one big rate paid rarely. Limits per-interval impact on margin.
+- **Why cap?** Worst-case bound. With cap = ±4 %, a position can never lose more than 4 % notional per interval to funding.
+- **Tests cover both axes.** Below-cap regime (rate proportional to premium); above-cap regime (rate = cap).
+- **Proptest.** Universal: |rate| ≤ cap for any premium. Trivially-true but catches sign bugs.
+
+## Worked example + steps
+
+# Lesson 6 — \`compute_rate\` — divisor + cap
 
 ## Goal
 
@@ -1878,7 +2021,6 @@ Two edits:
 2. **Append 5 unit tests** to the existing \`mod tests\` block.
 3. **Update \`lib.rs\`** — add \`compute_rate\` to the \`pub use compute::{...}\` re-export.
 
-> 🛑 **Predict.** Before scrolling: we'll compute \`raw_rate = premium / divisor\`, then clamp to \`±cap\`. **What changes if we clamp first and then divide?** Hint: think about what unit the cap is in.
 
 (Answer: **Clamping first would make the cap mean "the maximum premium," not "the maximum rate."** With \`cap = 4%/interval\` and \`divisor = 8\`, clamping the premium to \`±4%\` and then dividing produces a maximum *rate* of \`0.5%/interval\`. With our approach (divide first, then clamp at the rate level), the cap genuinely binds at \`4%/interval\`. **The cap's unit must match the output's unit.** Premium and rate are both scaled by \`RATE_SCALE\`, so they look numerically similar — but they're semantically different. The divisor changes which one you're capping.)
 
@@ -1916,9 +2058,7 @@ pub fn compute_rate(premium: Premium, params: FundingParams) -> FundingRate {
 
 4. **\`raw.clamp(-cap, cap)\`** — the symmetric clamp. \`i64::clamp(min, max)\` returns \`min\` if \`raw < min\`, \`max\` if \`raw > max\`, else \`raw\`. **Built-in Rust API; no manual \`if/else\` chain needed.**
 
-> 🛑 **Anti-fluency.** "Why bother with \`.abs()\` on the cap? Couldn't we just require the user to pass a positive cap?" **We could, but defensive abs is cheaper than runtime validation.** A user who passes \`FundingRate(-40_000_000)\` thinking "negative cap" or "absolute cap, allow either sign" gets the same behavior as \`FundingRate(40_000_000)\`. The cost is one \`.abs()\` call (~1ns); the benefit is one less footgun. **\`.abs()\` is the API equivalent of saying "I accept either sign for the cap; I'll interpret it as a magnitude."**
 
-> 🛑 **Anti-fluency.** "Why not also handle \`params.rate_cap == 0\` as a special case?" **We don't need to — it falls out naturally.** When \`cap == 0\`, \`clamp(-0, 0)\` produces \`0\` for any input. The result is \`FundingRate(0)\`, which is the disabled-funding semantics we want. **Code that works naturally for the edge case beats code with explicit edge-case branches.**
 
 ### Step 2: Why divide first
 
@@ -1982,7 +2122,6 @@ HL defaults: divisor = 8, cap = ±4%
 
 Same \`premium\` / \`divisor\` / \`cap\` go in, but flipping two lines inside the function yields \`4%\` vs \`0.5%\` — an 8x semantic discrepancy that no compiler warning and no unit-test type signature will surface. The discipline that prevents it compresses into one sentence: **the cap's unit must match the output's unit (rate)**.
 
-> 🛑 **Predict.** With \`params.hyperliquid_default()\` (divisor=8, cap=4%), what's the maximum rate produced from a premium of \`RATE_SCALE\` (100% dislocation)?
 
 (Answer: **\`FundingRate(40_000_000)\` = 4%/interval.** Walk through: premium.0 = 1_000_000_000 (RATE_SCALE). raw = 1_000_000_000 / 8 = 125_000_000 (12.5%/interval). cap = 40_000_000 (4%). clamp(-40_000_000, 40_000_000) on 125_000_000 → 40_000_000. **The cap does its job.** Compare to approach B: clamped_premium = clamp(1_000_000_000) at cap 40_000_000 → 40_000_000. raw = 40_000_000 / 8 = 5_000_000 (0.5%). Way under the spec.)
 
@@ -2044,7 +2183,6 @@ In the \`#[cfg(test)] mod tests\` block, after the existing premium tests (and b
 
 5. **\`rate_zero_when_cap_is_zero_funding_disabled\`** — the disabled-funding case via cap. With \`rate_cap = 0\`, the clamp is \`[0, 0]\`, so any raw rate clamps to 0. **Catches: assuming clamp(0, 0) does something other than return 0.** Also confirms our "no special case for cap == 0" approach works.
 
-> 🛑 **Predict.** What happens if you set \`params.rate_cap = FundingRate(-40_000_000)\` (a negative cap) and run test 2?
 
 (Answer: **Same result — \`FundingRate(40_000_000)\`.** Because \`.abs()\` extracts the magnitude. Negative caps and positive caps with the same absolute value produce identical behavior. **The "negative cap" is silently accepted.** This is the defensive abs at work — the user gets reasonable behavior either way.)
 
@@ -2145,16 +2283,42 @@ There's no obvious algebraic property to test. "Divide and clamp" doesn't have a
 
 ## Next lesson (Lesson 7)
 
-Lesson 7 adds \`apply_funding\` — the third and final pure function. It takes a slice of \`Position\`s, a \`MarkPrice\`, and a \`FundingRate\`, and returns a \`Vec<Settlement>\` (one per non-flat position). The function is ~25 lines but encodes the *longs-pay-shorts* sign convention and includes the **balanced-book zero-sum** proptest — for every set of equal-and-opposite positions, the settlement deltas sum to zero (funding redistributes; it doesn't create or destroy quote currency). This is the second proptest in the crate and closes Module 2.`,
+Lesson 7 adds \`apply_funding\` — the third and final pure function. It takes a slice of \`Position\`s, a \`MarkPrice\`, and a \`FundingRate\`, and returns a \`Vec<Settlement>\` (one per non-flat position). The function is ~25 lines but encodes the *longs-pay-shorts* sign convention and includes the **balanced-book zero-sum** proptest — for every set of equal-and-opposite positions, the settlement deltas sum to zero (funding redistributes; it doesn't create or destroy quote currency). This is the second proptest in the crate and closes Module 2.
+
+## Summary (3 lines)
+
+- \`compute_rate(premium, divisor, cap) -> FundingRate = clamp(premium / divisor, -cap, +cap)\`. Three lines, integer + clamp.
+- Hyperliquid params: divisor 8, cap ±4 %. Divisor → small frequent rates; cap → worst-case bound on per-interval funding.
+- Tests cover both regimes (below cap / above cap). Proptest asserts |rate| ≤ cap. Next: apply_funding + zero-sum proptest.
+`,
                 },
                 {
-                  title: "Lesson 7 — apply_funding — sign convention + zero-sum proptest",
-                  slug: "openhl-funding-apply-funding-en",
+                  title: 'Lesson 7 — apply_funding — sign convention + zero-sum proptest',
+                  slug: 'openhl-funding-apply-funding-en',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 40,
                   xpReward: 80,
-                  content: `# Lesson 7 — \`apply_funding\` — sign convention + zero-sum proptest
+                  content: `# Lesson 7 — apply_funding — sign convention + zero-sum proptest
+
+## Question
+
+Funding payments are a transfer between longs and shorts. \`apply_funding(positions, rate)\` debits longs and credits shorts (or vice versa). **Conservation law: ∑payments = 0.** Prove it via proptest.
+
+## Principle (minimum model)
+
+- **\`apply_funding\` signature.** \`fn apply_funding(positions: &mut Vec<Position>, rate: FundingRate)\`. In-place mutation; payments flow.
+- **Sign convention.** \`rate > 0\` (mark > index) → longs pay shorts. \`rate < 0\` → shorts pay longs. Payment magnitude = \`|notional × rate|\`.
+- **\`payment = saturating_mul(notional, rate) / RATE_SCALE\`.** Scale back to unscaled units; saturating throughout.
+- **Update both sides.** For longs: \`equity -= payment\`. For shorts: \`equity += payment\`. Symmetric.
+- **Zero-sum invariant.** \`Σ payments_received = Σ payments_paid\` exactly. Conservation law.
+- **Proptest: zero-sum holds.** Generate random positions + random rate; apply funding; assert \`Σ payment_changes == 0\`. Catches sign bugs + asymmetry bugs.
+- **Edge cases.** Zero positions (no payment), \`rate = 0\` (no change), extreme rates (saturating fires + still zero-sum).
+- **Why this matters.** A bug in apply_funding leaks money from one side to the other — equivalent to inflation/deflation. Conservation must hold byte-for-byte across nodes.
+
+## Worked example + steps
+
+# Lesson 7 — \`apply_funding\` — sign convention + zero-sum proptest
 
 ## Goal
 
@@ -2208,7 +2372,6 @@ Three edits:
 2. **Append 4 unit tests + 1 proptest** to the existing \`mod tests\` block.
 3. **Update \`lib.rs\`** — add \`apply_funding\` to the re-exports.
 
-> 🛑 **Predict.** Before scrolling: we have \`size: PositionSize(i64)\` (positive = long, negative = short) and \`rate: FundingRate(i64)\` (positive = longs pay shorts). The naive product \`size × rate\` is positive when a long is in a positive-rate world. **But the settlement delta for a long should be *negative* (longs pay).** What's the cleanest way to encode the sign flip?
 
 (Answer: **A single \`-\` in front of the product.** \`delta = -(size × mark × rate / RATE_SCALE)\`. The product \`size × rate\` naturally encodes "magnitude × direction-of-payment-flow," but the sign convention for \`Notional\` is "account-centric" (positive = receives, negative = pays). The \`-\` flips from market-centric to account-centric. **One unary minus carries the entire convention.** Anyone reading the code sees the \`-\` and knows the convention was deliberately inverted at that point.)
 
@@ -2274,11 +2437,9 @@ pub fn apply_funding(
 
 Then \`saturate_i128_to_i64(delta_scaled)\` clips back to i64 (Notional's inner type), and we push a \`Settlement\`.
 
-> 🛑 **Predict.** Why does the function take \`positions: &[Position]\` (a slice) instead of \`positions: Vec<Position>\` (an owned vec)?
 
 (Answer: **The caller owns the position list and re-uses it across ticks.** Taking ownership would force the caller to clone before each call. A slice borrow is zero-cost; the caller retains ownership. **Accept the least-restrictive type the function can use** — slice over Vec when iteration is all you need.)
 
-> 🛑 **Anti-fluency.** "Could we use \`positions.iter().filter(...).map(...).collect()\` instead of the loop?" **Yes, and it would be more idiomatic Rust.** Stage 8b uses the imperative loop because the intermediate calculations are easier to follow when they're separate \`let\` bindings. The functional chain \`positions.iter().filter(|p| p.size.0 != 0).map(|pos| { let notional = ...; Settlement { ... } }).collect()\` works identically. **Readability over idiom — pick whichever shape the team finds easier to debug.**
 
 ### Step 2: Walk through the sign convention
 
@@ -2326,7 +2487,6 @@ No matter the sign of the raw \`size × rate\` product (market-centric: "longs p
 
 **The single \`-\` in front of \`delta_unscaled\` handles all four cases.** Without it, longs would receive when they should pay, and vice versa. **One character; one design decision.**
 
-> 🛑 **Anti-fluency.** "Why not compute the delta without the \`-\` and call it 'market delta', then flip at the storage layer?" **Two sign-flip points double the chance of bugs.** Encoding "account-centric" once at the math layer means everyone downstream (bridge, balances, telemetry) reads \`Notional\` with the consistent convention. **A single conversion point is half the surface area to test.**
 
 ### Step 3: Add the 4 unit tests
 
@@ -2423,13 +2583,9 @@ The proptest exercises this:
 - **Apply funding**. If rate is 0, the output is empty (no settlements at all). Otherwise, exactly 2 settlements.
 - **Assert** the deltas sum to 0.
 
-> 🛑 **Predict.** Why bound \`size\` to \`1i64..1_000_000\` rather than the full i64 range?
 
 (Answer: **At very large \`size\` or \`mark\`, the i128 intermediate can saturate.** When \`i128::saturating_mul\` clips, the round-trip computation \`(size * mark * rate / RATE_SCALE)\` loses information — the long's saturated value won't be exactly the negative of the short's saturated value, breaking the zero-sum property. **The 1M bound keeps inputs in the regime where saturation doesn't kick in.** A real production proptest could be wider but would need to add tolerance for saturation; we chose the simpler "no saturation regime" approach.)
 
-> 🛑 **Anti-fluency.** "Couldn't we test \`sum.abs() < 1\` to allow for integer-division rounding instead of \`== 0\`?" **Within the input range we chose, the property holds exactly.** Because \`size_long == -size_short\`, the i128 products are exact negatives of each other before the divide; the divide by \`RATE_SCALE\` doesn't change that (integer division rounds toward zero, and \`-x / d == -(x / d)\` for any signed \`x\` and positive \`d\`). **We get exact zero-sum within range; no tolerance needed.**
->
-> "But integer division truncates the remainder — wouldn't the sum drift by \`+1\` or \`-1\`?" — no, because the long-side and short-side \`i128\` products form a **perfectly mirrored pair \`(P, -P)\`**, identical in magnitude and opposite in sign. For example, if the products are \`(12_345, -12_345)\`, then \`12_345 / 1_000_000_000 = 0\` remainder \`12_345\`, and \`-12_345 / 1_000_000_000 = 0\` remainder \`-12_345\`. Both quotients are \`0\`, and the truncated remainders are also **equal in magnitude and opposite in sign** — they cancel exactly. As long as the long-side and short-side inputs are strictly symmetric, the identity \`-x / d == -(x / d)\` holds pointwise, and the sum's zero-sum survives without tolerance.
 
 ### Step 5: Update \`lib.rs\`
 
@@ -2541,24 +2697,50 @@ The crate now produces a fully-determined \`Vec<Settlement>\` from a \`(position
 
 ## Next lesson (Lesson 8)
 
-Lesson 8 creates \`crates/funding/src/clock.rs\` — a new module — with the \`FundingClock\` struct + the \`FundingTick\` output type. The first version of \`tick()\` is added: a function that combines \`compute_premium\` + \`compute_rate\` + \`apply_funding\` behind a "has enough time elapsed?" guard. **The clock is the discrete event loop that calls the pure math on the right cadence.** Tests in Lesson 8 are simple sanity tests; the *invariants* (at-most-one-per-interval, no-catch-up) get their own lessons in Lessons 9 and 10.`,
+Lesson 8 creates \`crates/funding/src/clock.rs\` — a new module — with the \`FundingClock\` struct + the \`FundingTick\` output type. The first version of \`tick()\` is added: a function that combines \`compute_premium\` + \`compute_rate\` + \`apply_funding\` behind a "has enough time elapsed?" guard. **The clock is the discrete event loop that calls the pure math on the right cadence.** Tests in Lesson 8 are simple sanity tests; the *invariants* (at-most-one-per-interval, no-catch-up) get their own lessons in Lessons 9 and 10.
+
+## Summary (3 lines)
+
+- \`apply_funding(positions, rate)\` mutates equity per position; rate > 0 = longs pay shorts.
+- Conservation law: Σ payment_changes = 0. Proptest asserts this across random inputs.
+- Edge cases: zero positions, rate = 0, extreme rates (saturating fires + still zero-sum). Bug here = money leak. Next: clock state machine.
+`,
                 },
               ],
             },
           },
           {
-            title: "Clock state machine",
+            title: 'Clock state machine',
             sortOrder: 3,
             lessons: {
               create: [
                 {
-                  title: "Lesson 8 — FundingClock — the discrete event loop",
-                  slug: "openhl-funding-clock-scaffold-en",
+                  title: 'Lesson 8 — FundingClock — the discrete event loop',
+                  slug: 'openhl-funding-clock-scaffold-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 35,
                   xpReward: 70,
-                  content: `# Lesson 8 — \`FundingClock\` — the discrete event loop
+                  content: `# Lesson 8 — FundingClock — the discrete event loop
+
+## Question
+
+Funding only fires at hourly boundaries. **The \`FundingClock\` is the discrete event machine that tracks when the next funding should happen** and what to do if the chain misses one (answer: no catch-up).
+
+## Principle (minimum model)
+
+- **\`FundingClock\` struct.** \`last_funding_timestamp: Timestamp + interval: Duration\`.
+- **\`tick(now: Timestamp) -> Option<FundingEvent>\`.** Returns \`Some(event)\` if it's time to fund; \`None\` otherwise.
+- **Interval-gating.** \`if now - last >= interval { Some(...) } else { None }\`. Strict inequality on the boundary.
+- **Discrete events.** \`enum FundingEvent { Fund(FundingRate), NoOp }\`. Type-level distinguishes "actually fund" from "tick without funding".
+- **State mutation.** On \`Fund\`, \`last_funding_timestamp = now\`. Atomically. The clock's state is updated only on actual funding.
+- **Why discrete events?** Avoids the "you owe me 1.5 intervals of funding" problem. Funding either fires or doesn't.
+- **Test scaffold.** Hand-crafted test for the clock: advance time, assert events fire / don't fire at boundaries.
+- **The clock is pure compute.** Same discipline as the math: no I/O, no async. Reusable in test + production.
+
+## Worked example + steps
+
+# Lesson 8 — \`FundingClock\` — the discrete event loop
 
 ## Goal
 
@@ -2615,7 +2797,6 @@ Two file edits:
 2. **Add \`#[cfg(test)] mod tests\`** to \`clock.rs\` with 3 sanity tests.
 3. **Update \`crates/funding/src/lib.rs\`** — \`pub mod clock;\` + re-export \`FundingClock\`, \`FundingTick\`.
 
-> 🛑 **Predict.** Before scrolling: \`tick()\` will return \`Option<FundingTick>\` — \`Some\` if a settlement happened, \`None\` if not. **Why return \`Option\` instead of always returning \`FundingTick\` (with empty \`settlements\` when no settlement is due)?** Hint: think about what the caller does with the result.
 
 (Answer: **\`None\` signals "no state change happened" without forcing the caller to inspect the result.** A caller wiring funding ticks into a block production loop wants to know cheaply whether to emit a \`FundingApplied\` event, log a settlement, etc. With \`Option\`, \`if let Some(tick) = clock.tick(...)\` is the natural shape. Always-returning would force the caller to check \`if !tick.settlements.is_empty()\` or similar — which doesn't even capture the right meaning (an empty settlement list could mean "tick fired but no positions" *or* "tick didn't fire"). **\`Option\` makes the dichotomy explicit at the type level.**)
 
@@ -2675,7 +2856,6 @@ Two fields, both *private*:
 
 \`#[derive(Clone, Debug)]\` only. **No \`Copy\`** because \`Clone\` is cheap-enough and we don't want to make the clock so easy to duplicate that someone forgets which copy advanced. **No \`Eq\`/\`Hash\`/\`PartialOrd\`** — clocks aren't meaningfully equal-comparable; they're operational state machines.
 
-> 🛑 **Anti-fluency.** "Should we use \`AtomicU64\` for \`last_settled_at\` to support concurrent ticks?" **No — the funding crate is single-threaded by contract.** Concurrent funding ticks would race on \`last_settled_at\` *and* on \`CLOB_STATE\` *and* on whatever balance store the bridge uses downstream. The right answer is "the caller serializes ticks," not "the clock handles concurrency." **Pushing concurrency into the data structure adds complexity for a problem that shouldn't exist.**
 
 ### Step 3: Add \`FundingTick\`
 
@@ -2827,7 +3007,6 @@ The heart of the clock. Three logical phases stack as **temporal guard → state
 
 **Crucially, the clock advances to \`now\`, not to \`last_settled_at + interval_secs\`.** This is the "no catch-up" invariant in action — when ticks fire late, they reset the deadline forward rather than catching up. Lesson 10's lesson explains why this matters.
 
-> 🛑 **Predict.** With \`last_settled_at = 1_000_000\`, \`interval_secs = 3600\`, and a \`tick()\` at \`now = 1_010_000\` (= +10000s, i.e., ~2.8 intervals), what's \`last_settled_at\` after the tick?
 
 (Answer: **\`1_010_000\`.** Not \`1_003_600\` (1 interval after genesis) and not \`1_007_200\` (2 intervals after genesis). The clock advances to \`now\` — see the doc comment in \`tick()\`. The next tick won't fire until \`now ≥ 1_010_000 + 3600 = 1_013_600\`. **This is the design choice; Lesson 10 explains the reasoning.**)
 
@@ -2910,7 +3089,6 @@ Three things to notice about the test setup:
 
 3. **\`empty_positions_yield_empty_settlements_but_still_advance_clock\`** — the composition works even with zero positions. \`apply_funding(&[])\` returns empty; the clock still advances. **Catches: "I gated tick() on having positions"** or any other shortcut that mishandles the empty-input case.
 
-> 🛑 **Anti-fluency.** "Should we test what happens if \`mark\` or \`index\` is zero?" **Already covered by Lesson 4's premium tests.** The clock just passes inputs through to \`compute_premium\`. If we didn't trust \`compute_premium\`, we'd add more tests in \`compute.rs\`, not duplicate them here. **Don't test the same behavior through two abstraction levels.**
 
 ### Step 6: Update \`lib.rs\`
 
@@ -3050,16 +3228,41 @@ Lesson 9 adds 3 more tests to \`clock.rs\`, exercising the **interval-gating inv
 - \`second_tick_requires_another_full_interval\` — after a successful tick, the next one needs another \`interval_secs\`. The interval isn't a one-time check.
 - \`capped_rate_when_premium_extreme\` — at saturation premiums, the rate clamps to the cap. Confirms \`compute_rate\`'s cap behavior surfaces correctly through the clock.
 
-The lesson is mostly about *testing* and the *interval-gating* invariant. **Lesson 10 closes Module 3 with the no-catch-up invariant.**`,
+The lesson is mostly about *testing* and the *interval-gating* invariant. **Lesson 10 closes Module 3 with the no-catch-up invariant.**
+
+## Summary (3 lines)
+
+- \`FundingClock { last_funding_timestamp, interval }\` + \`tick(now) -> Option<FundingEvent>\`. Discrete events fire only at hourly boundaries.
+- On \`Fund\`, \`last_funding_timestamp = now\` atomically. Avoids "1.5 intervals of funding" ambiguity.
+- Pure compute; reusable in test + production. Next: interval-gating invariant tests.
+`,
                 },
                 {
-                  title: "Lesson 9 — Interval-gating invariant — three deeper tests",
-                  slug: "openhl-funding-interval-invariant-en",
+                  title: 'Lesson 9 — Interval-gating invariant — three deeper tests',
+                  slug: 'openhl-funding-interval-invariant-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 30,
                   xpReward: 60,
                   content: `# Lesson 9 — Interval-gating invariant — three deeper tests
+
+## Question
+
+The interval-gating invariant: **funding fires exactly once per interval, never more, never less**. Three tests that prove the FundingClock satisfies it under all input sequences.
+
+## Principle (minimum model)
+
+- **Invariant.** Between two consecutive Funds, exactly one \`interval\` of time has passed. Never more (no catch-up), never less (no double-fire).
+- **Test 1: exact boundary.** Tick at \`last + interval\` → fires. Tick at \`last + interval - 1\` → doesn't. Tick at \`last + interval + 1\` → fires.
+- **Test 2: subsequent boundaries.** After firing at T, next fires at \`T + interval\`. Not at \`T + interval - 1\`, not at \`T + 2 * interval\`.
+- **Test 3: missed interval.** Tick at \`last + 2 * interval\`. Fires once (at \`last + 2 * interval\`); \`last\` is updated to that. **Critical: does not "catch up" to the missed interval.**
+- **Why no catch-up?** Catch-up creates retroactive payments — users would pay funding for a period they didn't expect. Hyperliquid's design: funding is forward-looking, never retroactive.
+- **Proptest version.** Generate a random sequence of ticks; assert the number of Funds equals \`floor(total_elapsed / interval)\`. Universal claim.
+- **Why three tests, not one.** Each test exercises a different boundary condition. Mixing them all into one proptest hides the actual failure cases.
+
+## Worked example + steps
+
+# Lesson 9 — Interval-gating invariant — three deeper tests
 
 ## Goal
 
@@ -3106,7 +3309,6 @@ One file edit:
 
 No production code, no \`lib.rs\` changes, no imports beyond what Lesson 8 already added.
 
-> 🛑 **Predict.** Before scrolling: Lesson 8's \`first_tick_at_exact_interval_fires\` test fires \`tick(1_003_600, ...)\` once and asserts it returned \`Some\`. Why isn't that enough to verify the interval-gating invariant?
 
 (Answer: **One successful tick says the guard *can* return \`Some\`. It doesn't say the guard *re-engages* afterward.** A buggy implementation could fire on the first interval boundary, then never gate again — every subsequent \`tick()\` would return \`Some\` regardless of time. The invariant "at most one settlement per interval" requires testing that the second tick is rejected unless another full interval has passed. **Single-operation tests verify behavior; multi-operation tests verify state machines.**)
 
@@ -3149,7 +3351,6 @@ This is **the full math composition test** for the clock. Every Module 2 functio
 
 **Why does this test exist if every step is already tested individually?** Because composition is its own concern. \`tick()\` could conceivably call the wrong function in the wrong order — e.g., \`apply_funding\` before \`compute_rate\`, or pass \`index\` where \`mark\` is expected. **Composition tests catch wiring errors that unit tests miss.**
 
-> 🛑 **Anti-fluency.** "This test duplicates \`apply_funding\`'s tests. Should we drop the per-account assertions and just check \`out.rate\`?" **No.** The point of this test is the *composition*. If \`apply_funding\`'s tests pass but \`premium_drives_settlement_signs\` fails, the bug is in how \`tick()\` wires the calls — not in \`apply_funding\`. **Each layer needs its own composition tests.** Three layers deep, that's three composition tests at minimum.
 
 ### Step 2: Add \`second_tick_requires_another_full_interval\`
 
@@ -3186,7 +3387,6 @@ After \`premium_drives_settlement_signs\`:
 
 **The minimal counterexample**: between Lesson 8's \`first_tick_at_exact_interval_fires\` and Lesson 9's \`second_tick_requires_another_full_interval\`, the only thing being verified is that \`last_settled_at\` is the *gating reference*, not \`genesis_time\`. **Three calls is the minimum to test state-machine persistence.**
 
-> 🛑 **Predict.** What's \`clock.last_settled_at()\` after each of the three ticks above?
 
 (Answer:
 - After tick 1 (success): \`1_003_600\`.
@@ -3346,16 +3546,41 @@ The math would be identical, but the test would be less helpful. Using \`1_000_0
 
 ## Next lesson (Lesson 10)
 
-Lesson 10 closes Module 3 with the **no-catch-up invariant**: the milestone test \`no_catchup_after_long_gap\`. The scenario: validator reboots after 10 hours of downtime, so \`now - last_settled_at = 36000\` (10 intervals). The naive expectation might be "catch up by replaying 10 ticks," but the design choice is to **settle once and advance to \`now\`**. The lesson explains why catch-up would be worse than skipping ticks, and the test confirms the design choice is enforced. **One test, one invariant, the design philosophy in action.**`,
+Lesson 10 closes Module 3 with the **no-catch-up invariant**: the milestone test \`no_catchup_after_long_gap\`. The scenario: validator reboots after 10 hours of downtime, so \`now - last_settled_at = 36000\` (10 intervals). The naive expectation might be "catch up by replaying 10 ticks," but the design choice is to **settle once and advance to \`now\`**. The lesson explains why catch-up would be worse than skipping ticks, and the test confirms the design choice is enforced. **One test, one invariant, the design philosophy in action.**
+
+## Summary (3 lines)
+
+- Interval-gating invariant: exactly one Fund per interval; never more, never less.
+- Three tests: exact boundary, subsequent boundaries, missed interval (critical: no catch-up). Proptest universalises.
+- No catch-up = forward-looking funding only; matches Hyperliquid's design. Next: no-catch-up invariant proptest.
+`,
                 },
                 {
-                  title: "Lesson 10 — No-catch-up invariant — the design philosophy in one test",
-                  slug: "openhl-funding-no-catchup-en",
+                  title: 'Lesson 10 — No-catch-up invariant — the design philosophy in one test',
+                  slug: 'openhl-funding-no-catchup-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 25,
                   xpReward: 50,
                   content: `# Lesson 10 — No-catch-up invariant — the design philosophy in one test
+
+## Question
+
+The no-catch-up invariant is the **load-bearing design choice** of openhl funding. **One proptest proves it across all input sequences.** Get this wrong, and the whole funding system retroactively charges users — a compliance and UX disaster.
+
+## Principle (minimum model)
+
+- **The claim.** No matter how many intervals are missed (chain halt, validator outage, sequencer downtime), the next Fund pays exactly **one interval** of funding, not the accumulated amount.
+- **Why this matters.** If the chain is offline for 3 hours, users don't want to pay 3 hours of funding when it comes back. The Hyperliquid choice: forgive missed intervals.
+- **The proptest.** Generate a random series of \`tick\` timestamps; record every Fund event's \`payment_amount\`; assert \`payment_amount\` always equals \`notional × rate × 1 interval\` — never 2× or 3×.
+- **Edge cases caught by the proptest.** (1) Long pause then resume. (2) Many fast ticks within one interval. (3) Tick exactly at interval boundary.
+- **Why one test, not a suite.** This invariant is so important — and so subtle — that a single comprehensive proptest is more reliable than a battery of hand-crafted cases. Proptest covers cases you didn't think of.
+- **Trade-off.** Catch-up would maximise protocol revenue; no-catch-up prioritises trader UX. Hyperliquid chose the latter.
+- **Documented in code.** The constant \`NO_CATCH_UP: bool = true\` is referenced in \`apply_funding\`. Removes ambiguity — the design philosophy is encoded explicitly.
+
+## Worked example + steps
+
+# Lesson 10 — No-catch-up invariant — the design philosophy in one test
 
 ## Goal
 
@@ -3467,7 +3692,6 @@ What the state machine does immediately after a large time jump makes Choice A v
 
 The key thing this picture pins down is that **under Choice B, \`last_settled_at\` always advances in a single step**. Ten-hour gap or ten-second gap, \`tick()\` is called once and advances once. That's the actual content of path-independence (the outcome doesn't depend on gap timing), and it's why a *single* test can pin the whole invariant.
 
-> 🛑 **Predict.** Before scrolling: a validator that missed 10 hours of funding due to a node reboot tries to make up for lost time by replaying 10 ticks from the *current* snapshot. **Which kind of trader gets hurt the most by this approach?** Hint: think about who's been losing during the gap.
 
 (Answer: **The losing side gets pummeled 10x.** During a 10-hour gap, suppose mark drifted high relative to index — longs have been overpaying in the "real" world. Choice A replays 10 settlements at the *current* rate, all charging longs. The trader who was already on the losing side of the basis pays 10x what they would have if funding had been applied hourly. Worse, they couldn't have closed their position during the gap (the chain was paused); the catch-up appears to charge them retroactively for time they had no agency. **Choice B says: skip the 10 missed payments and start fresh now. Bad for funding revenue; fair to traders.**)
 
@@ -3523,7 +3747,6 @@ The setup: genesis at \`1_000_000\`, then tick at \`1_036_000\` (= \`1_000_000 +
 
 2. **\`clock.last_settled_at() == way_later\`** — and *crucially*, the clock advances to \`now\`, not to \`1_000_000 + 3600\` (one interval after genesis) or \`1_000_000 + 10*3600\` (ten intervals after genesis — same number but for different reasons). **The clock forgets the missed intervals entirely.**
 
-> 🛑 **Anti-fluency.** "Why doesn't the test also check that there's only one entry in \`out.settlements\`?" **Because the settlements count depends on positions, not on the gap.** With \`balanced_book()\` (long 100, short -100), we get 2 settlements regardless of gap length. The test's job is to verify *one tick* fires, not how many settlements that tick produces. **Test the tick count; settlement count is a separate concern.**
 
 #### Part 2: no re-fire at same \`now\`
 
@@ -3644,24 +3867,49 @@ What's left:
 
 ## Next lesson (Lesson 11)
 
-Lesson 11 is the capstone — no new code. We sketch the architecture, name the items deferred from this course (oracle integration, balance updates, liquidations, multi-market funding, funding-as-EVM-event), and trace where each will live when shipped. The lesson is for cementing the mental model and seeing the funding state machine as a piece of the larger openhl architecture.`,
+Lesson 11 is the capstone — no new code. We sketch the architecture, name the items deferred from this course (oracle integration, balance updates, liquidations, multi-market funding, funding-as-EVM-event), and trace where each will live when shipped. The lesson is for cementing the mental model and seeing the funding state machine as a piece of the larger openhl architecture.
+
+## Summary (3 lines)
+
+- No-catch-up: missed intervals are not paid retroactively. One Fund = one interval, regardless of elapsed time.
+- Proptest covers long pause + fast ticks + boundary timing. Hand-crafted suite isn't reliable; proptest catches subtleties.
+- Trade-off: protocol revenue (catch-up) vs trader UX (no catch-up). Hyperliquid chose UX. Capstone next.
+`,
                 },
               ],
             },
           },
           {
-            title: "Capstone",
+            title: 'Capstone',
             sortOrder: 4,
             lessons: {
               create: [
                 {
-                  title: "Lesson 11 — Capstone — what you built, what's deferred, what comes next",
-                  slug: "openhl-funding-capstone-en",
+                  title: 'Lesson 11 — Capstone — what you built, what\'s deferred, what comes next',
+                  slug: 'openhl-funding-capstone-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 20,
                   xpReward: 40,
                   content: `# Lesson 11 — Capstone — what you built, what's deferred, what comes next
+
+## Question
+
+You've built the openhl funding state machine. **Retrospective + what's deferred to other courses (Liquidation / ADL / Scanner) + the Stage 10 quartet end-to-end view.**
+
+## Principle (minimum model)
+
+- **You built.** 9 newtypes + 4 pure-compute functions (compute_premium / compute_rate / apply_funding + a clock helper) + \`FundingClock\` discrete state machine + 12+ tests including 3+ proptests.
+- **Three invariants proved.** Zero-sum (Σ payments = 0) + interval-gating (exactly one Fund per interval) + no-catch-up (one Fund = one interval regardless of elapsed time).
+- **Pinned to SHA \`cd94137\`.** Byte-for-byte reproducible against the openhl reference. \`git checkout cd94137\` gives the same answer.
+- **What's deferred.** Liquidation scanner (separate course) + insurance fund (separate course) + ADL (separate course). All compose with your funding state machine via the type system.
+- **Stage 10 quartet view.** Funding (this course) + Insurance fund + Liquidation scanner + ADL. Four courses compose into the openhl safety-net cascade.
+- **Composition guarantee.** Each layer's output is the next layer's input. Type-system enforced: \`FundingPayment → AccountState → LiquidationDecision → AdlReport\`.
+- **Production parallels.** Hyperliquid HyperEVM uses this exact discipline (different code, same shape). What you built is operationally close to a production funding engine.
+
+## Worked example + steps
+
+# Lesson 11 — Capstone — what you built, what's deferred, what comes next
 
 ## Goal
 
@@ -3891,7 +4139,14 @@ git checkout main
 
 **That's the entire HL-shape perpetual funding mechanism, in a crate you can drop into any Rust trading system.** The next time someone asks "how does perpetual funding work?" — show them this crate.
 
-Go build perpetuals.`,
+Go build perpetuals.
+
+## Summary (3 lines)
+
+- You built: 9 newtypes + 4 pure-compute functions + FundingClock + 12+ tests including 3 proptests. Three invariants proved.
+- Pinned to SHA \`cd94137\` for byte-for-byte answer-keys. Deferred: scanner / insurance fund / ADL (separate courses).
+- Stage 10 quartet (Funding / Insurance / Scanner / ADL) composes via type system. Production parallel: Hyperliquid HyperEVM. Funding course complete.
+`,
                 },
               ],
             },
