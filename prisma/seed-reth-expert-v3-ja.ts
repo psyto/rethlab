@@ -8,9 +8,9 @@ export async function seedRethExpertV3JA(prisma: PrismaClient) {
       slug: 'reth-expert-v3-ja',
       title: 'Reth Expert — 本番エンジニアリング',
       description:
-        'Rust EVM スタックのすべての層をまたぐハードコアな実装: DB 層 (MDBX 内部、MPT)、並行性層 (Tokio ランタイム)、コンパイラ / VM 層 (カスタム Precompile、zkEVM、Tempo Zones を題材とする EVM プライバシー)、production エンジニアリング (プロファイリング、キャッシュ意識の Rust、本番 MEV パイプライン、手続きマクロ、tracing 内部、Reth フォーク運用、differential fuzzing、chaos engineering、systems-code auditing、OSS 貢献ワークフロー)、そして Reth ベース chain の拡張パターン (extension model、OP Stack on Reth、custom ChainSpec / executor / payload builder、Paradigm スタック総覧)。Hyperliquid / Tempo / OP-stack クオリティのバーで Rust EVM コードを ship する準備ができる。',
+        'Rust EVM スタックのすべての層をまたぐハードコアな実装: DB 層 (MDBX 内部、MPT)、並行性層 (Tokio ランタイム)、コンパイラ / VM 層 (カスタム Precompile、zkEVM、Tempo Zones を題材とする EVM プライバシー)、production エンジニアリング (プロファイリング、キャッシュ意識の Rust、本番 MEV パイプライン、手続きマクロ、tracing 内部、Reth フォーク運用、differential fuzzing、chaos engineering、systems-code auditing、OSS 貢献ワークフロー)、そして Reth ベース chain の拡張パターン (extension model、OP Stack on Reth、custom ChainSpec / executor / payload builder、Paradigm スタック総覧)。Hyperliquid / Tempo / OP-stack クオリティのバーで Rust EVM コードを ship する準備ができる。なお本コースの一部スニペットは概念説明用で、そのままでは実行できない（擬似コード・省略記法を含む）ため、本文の注記に従って読み解く。',
       difficulty: 'EXPERT',
-      duration: 290,
+      duration: 457,
       xpReward: 815,
       track: 'reth-expert',
       tags,
@@ -746,7 +746,7 @@ tracing_subscriber::registry()
 
 「\`debug!\` は本番で off だからコストゼロ」— **間違い**。レベルチェックは各 event で走る、静的に除外されない。Revm opcode ループに \`debug!\` を入れると 30% 減速。hot path は \`trace!\` で、本番ビルドの \`max_level_*\` feature でコンパイル除外。
 
-> 🛑 **予測。** 本番で sender-recovery の停止をデバッグ中、全ログ行は不要（ディスク溢れ）。\`SenderRecoveryStage\` が emit するものだけ欲しい。**正しい \`RUST_LOG\` は？**（答え: \`RUST_LOG=warn,reth_stages::stages::sender_recovery=debug\` — グローバル warn で他モジュールの致命的問題を捕まえつつ、調査中のステージだけ debug。モジュールパスはファイルの crate 内位置から。）
+> 🛑 **予測。** 本番で sender-recovery の停止をデバッグ中、全ログ行は不要（ディスク溢れ）。\`SenderRecoveryStage\` が emit するものだけ欲しい。**正しい \`RUST_LOG\` は？**（答え: \`RUST_LOG=warn,reth_stages::stages::sender_recovery=debug\` — グローバル warn で他モジュールの致命的問題を捕まえつつ、調査中のステージだけ debug。実際のモジュールパスはリポジトリのバージョンや refactor で変わりうるため、実機ではログ出力元を見て調整する。）
 
 ## ステップで組み立てる
 
@@ -1578,6 +1578,149 @@ Risc0 / SP1 = 柔軟性のためにプローバ速度を諦める（任意 Rust 
 `,
                 },
                 {
+                  title: 'レッスン10 — 本番での Reth フォーク運用',
+                  slug: 'reth-fork-production-ja',
+                  type: 'CONTENT',
+                  sortOrder: 5,
+                  duration: 18,
+                  xpReward: 40,
+                  content: `# レッスン10 — 本番での Reth フォーク運用
+
+## 問い
+
+午前 3 時、バリデータは 40 分前からブロックを生成していない。ダッシュボードには: ファイルディスクリプタ枯渇、MDBX ページキャッシュ圧迫、ピア数 2。**ユニットテストでは引っかからない、出荷した日にも見えない、3 ヶ月目にまとめてくる — どんな運用規律でこれを防ぐか？**
+
+## 原理（最小モデル）
+
+- **本番ビルドフラグ 4 つ.** \`target-cpu=native\` / \`codegen-units=1\` / \`jemalloc\` / \`asm-keccak\`。
+- **systemd の上限が支配的.** \`LimitNOFILE=1048576\`（MDBX ページ + P2P 接続）+ \`LimitNPROC=infinity\`。
+- **3 ストレージ規律.** DB / ログ別ボリューム + NVMe SSD のみ + 定期スナップショット + 成長監視。
+- **絶対値ではなく変化率にアラート.** 同期遅延 / ピア数 / MDBX 空きページ / RSS / ブロック取り込み時間 / ExEx 追従遅延。
+- **Diff テストが最強の安全網.** 同じブロックでバニラ Reth と継続的に diff → 1 ストレージスロットでも乖離はコンセンサスバグ。
+- **App-chain トポロジ.** 3 データセンター + 4 バリデータ以上 + 各バリデータの前に sentry 2 つ + 別 archive node + 別 RPC フリート。
+- **アップグレード = 高さガード + 段階配布.** ブロック高さで切り替え、上げていないバリデータは脱落（自業自得）。
+
+## 具体例
+
+再現可能リリースビルド:
+
+\`\`\`bash
+# 再現可能なリリースビルド
+RUSTFLAGS="-C target-cpu=native -C codegen-units=1" \\
+  cargo build --release --features jemalloc,asm-keccak
+
+strip target/release/reth   # またはデバッグシンボルを切り離し
+\`\`\`
+
+systemd ユニット:
+
+\`\`\`ini
+[Service]
+ExecStart=/usr/local/bin/reth node --chain custom --datadir /var/lib/reth
+Restart=on-failure
+LimitNOFILE=1048576
+LimitNPROC=infinity
+TasksMax=infinity
+\`\`\`
+
+監視メトリクス:
+
+| メトリクス | アラート条件 |
+| :--- | :--- |
+| 同期遅延（head vs network） | N ブロック以上を N を超える時間 |
+| ピア数 | < 5 |
+| MDBX 空きページ | < 5% |
+| プロセス RSS | 単調増加 |
+| ブロック取り込み時間 | p99 が目標を超える |
+| ExEx の追従遅延 | ExEx 依存 |
+
+Diff テストハーネス（擬似）:
+
+\`\`\`bash
+# diff ハーネスの擬似コード
+for block in mainnet[recent_1000]:
+    s1 = reth_vanilla.execute(block)
+    s2 = reth_fork.execute(block)
+    if s1.stateRoot != s2.stateRoot:
+        alert("divergence at block", block, s1, s2)
+\`\`\`
+
+App-chain 最低トポロジ:
+
+- 3 データセンターに 4 バリデータ以上
+- 各バリデータの前に sentry 2 つ
+- 別 archive node（バリデータではない、解析クエリ用）
+- 別 RPC フリート（レート制限 + CDN）
+
+アップグレード手順:
+
+1. アクティベーションのターゲットブロック高を発表
+2. 設定フラグで off のまま新バイナリをバリデータに配布
+3. アクティベーションブロックでコンセンサスルール切り替え — 高さチェックでガード
+4. アップグレードしていないバリデータは脱落 — だからこそ高さガード + 告知
+
+## 失敗例（誤解）
+
+「\`cargo build --release\` で本番に出せる」— **間違い**。jemalloc なし / asm-keccak なし / \`target-cpu=native\` なしでは負荷下のテイルレイテンシが暴れる + keccak ホットパスが遅い + AVX2 / AVX512 が活用されない。1 週目は気づかない、4 週目で疑問、3 ヶ月目で oncall。
+
+「ユニットテストが通れば diff テスト不要」— **間違い**。ユニットテスト = 設計者が想像した入力。本番 mainnet ブロックは想像を超える。**Diff テストはバニラ Reth と継続比較**、1 ストレージスロット乖離もコンセンサスバグ。
+
+「バリデータと公開 RPC を同マシンで動かしてよい」— **間違い**。1 回の DDoS でチェーン停止。RPC は別フリート（レート制限 + CDN）+ バリデータの前に sentry。
+
+> 🛑 **予測。** あなたのフォークをデフォルトの \`cargo build --release\` でリリース。1 週目、4 週目、3 ヶ月目に見える本番症状は？（答え: **1 週目** = 気づかない（軽負荷）、**4 週目** = p99 レイテンシが断片化で悪化、ユーザは「たまに遅い」と言うが本気の問題と認識されない、**3 ヶ月目** = jemalloc なしの断片化 + ファイルディスクリプタ枯渇 + 累積された symbol 情報なしのデバッグ困難 → 午前 3 時のページャ → 「動いていたものが急に動かない」「直近変更はない」「ログだけでは原因不明」。**ゆっくり忍び寄り、まとめてくる**。）
+
+## ステップで組み立てる
+
+### Step 1: 4 ビルドフラグを暗唱
+
+| フラグ | 理由 |
+| :--- | :--- |
+| \`-C target-cpu=native\` | AVX2 / AVX512 活用 |
+| \`codegen-units=1\` | ビルド時間と引き換えに最適化 |
+| \`features = [jemalloc]\` | テイルレイテンシ安定 |
+| \`features = [asm-keccak]\` | keccak ホットパスの手書きアセンブリ |
+
+### Step 2: systemd ファイルディスクリプタ上限
+
+\`LimitNOFILE=1048576\`。デフォルト 1024 や 8192 では数時間で枯渇 → MDBX が \`Too many open files\` → ノードがゾンビ化。
+
+### Step 3: アラートは絶対値より変化率
+
+「現在 1000 ピア」より「過去 1 時間で 50 ピア / 分減少」が意味ある。Prometheus + Grafana で rate / increase 関数。
+
+### Step 4: Diff テスト規律
+
+\`for block in mainnet[recent_1000]: assert reth_vanilla.execute(block).stateRoot == reth_fork.execute(block).stateRoot\`。乖離はフォークの 3 容疑: ① 自分の変更が直接他コードパスに影響、② 共有 utility（gas 計算、precompile）の改変、③ 状態管理の境界条件。
+
+### Step 5: アップグレード規律
+
+高さガード + 段階配布。上げていないバリデータは脱落、回復は再 sync。
+
+## 答え合わせ
+
+- **\`LimitNOFILE=8192\` での失敗シグネチャ**: 数時間後 \`Too many open files\` エラー → MDBX が新規ページオープン失敗 + P2P が新規接続拒否 → ピア数 0 へ + ブロック書き込み停止 → ノードがログ吐きながらゾンビ化、再起動でカウンタリセットで一時回復、根本原因不明。ログを grep して \`EMFILE\` を発見すれば一発、知らないと数時間。
+- **diff テスト発見時の 3 容疑**: ① 自分の最近の変更が他コードパスに副作用、② 共有 utility（gas 計算、precompile、state root 計算）の改変、③ 状態管理の境界条件（reorg、empty block、過去 hardfork 境界）。**自分のコミット履歴を再読** が最初の手。
+- **3 アップグレード未完バリデータが見る現実**: ブロック 1000 で 3 が新ルール、1 が旧ルール → ブロック 1001 で旧ルールバリデータは新ルールブロックを reject → 「自分から見ると」分岐 → quorum 不足で投票しなくなる → 残り 3 で多数決継続 → 旧バリデータは脱落（slashing 対象または inactivity ペナルティ）。回復は新バイナリに上げて DB を再 sync。
+
+## 合格基準
+
+- 4 本番ビルドフラグを暗唱できる。
+- systemd 上限の意味と \`LimitNOFILE\` 値を即答できる。
+- 6 監視メトリクスを変化率視点で言える。
+- Diff テスト規律を「乖離 = 3 容疑」で説明できる。
+- アップグレード手順を高さガード + 段階配布で言える。
+
+## まとめ（3行）
+
+- 本番ビルド = 4 フラグ（\`target-cpu=native\` + \`codegen-units=1\` + \`jemalloc\` + \`asm-keccak\`）+ systemd 上限調整（\`LimitNOFILE=1048576\`）。
+- 監視は絶対値より変化率、6 メトリクス（同期遅延 / ピア数 / MDBX 空き / RSS / 取り込み時間 / ExEx 追従）にアラート。
+- Diff テスト（バニラ Reth と継続比較、1 スロット乖離もコンセンサスバグ）がフォーク最強の安全網 — 加えて App-chain は 3 DC + sentry + 別 RPC フリートのトポロジ + 高さガードアップグレード。
+`,
+                },
+              ],
+            },
+          },
+                {
                   title: 'レッスン11 — Differential fuzzing と execution-spec-tests',
                   slug: 'expert-differential-fuzzing-ja',
                   type: 'CONTENT',
@@ -2336,149 +2479,6 @@ Issue tracker + PR queue + Discord + TODO コメント。複利で効く。
 レッスン0-15 を通じて: パフォーマンス（flamegraph / Criterion / jemalloc / maxperf）/ ストレージ（MDBX / B+tree / SALT 対比）/ 並行性（Tokio work-stealing / TaskExecutor）/ コンパイル時（proc macros / sol! / tracing）/ Precompile / MPT / Stateless / MEV / zkEVM / フォーク運用 / Differential fuzzing / EVM プライバシー / Chaos / Auditing / OSS 貢献ワークフロー の構造的事実を確認する。
 `,
                 },
-                {
-                  title: 'レッスン10 — 本番での Reth フォーク運用',
-                  slug: 'reth-fork-production-ja',
-                  type: 'CONTENT',
-                  sortOrder: 5,
-                  duration: 18,
-                  xpReward: 40,
-                  content: `# レッスン10 — 本番での Reth フォーク運用
-
-## 問い
-
-午前 3 時、バリデータは 40 分前からブロックを生成していない。ダッシュボードには: ファイルディスクリプタ枯渇、MDBX ページキャッシュ圧迫、ピア数 2。**ユニットテストでは引っかからない、出荷した日にも見えない、3 ヶ月目にまとめてくる — どんな運用規律でこれを防ぐか？**
-
-## 原理（最小モデル）
-
-- **本番ビルドフラグ 4 つ.** \`target-cpu=native\` / \`codegen-units=1\` / \`jemalloc\` / \`asm-keccak\`。
-- **systemd の上限が支配的.** \`LimitNOFILE=1048576\`（MDBX ページ + P2P 接続）+ \`LimitNPROC=infinity\`。
-- **3 ストレージ規律.** DB / ログ別ボリューム + NVMe SSD のみ + 定期スナップショット + 成長監視。
-- **絶対値ではなく変化率にアラート.** 同期遅延 / ピア数 / MDBX 空きページ / RSS / ブロック取り込み時間 / ExEx 追従遅延。
-- **Diff テストが最強の安全網.** 同じブロックでバニラ Reth と継続的に diff → 1 ストレージスロットでも乖離はコンセンサスバグ。
-- **App-chain トポロジ.** 3 データセンター + 4 バリデータ以上 + 各バリデータの前に sentry 2 つ + 別 archive node + 別 RPC フリート。
-- **アップグレード = 高さガード + 段階配布.** ブロック高さで切り替え、上げていないバリデータは脱落（自業自得）。
-
-## 具体例
-
-再現可能リリースビルド:
-
-\`\`\`bash
-# 再現可能なリリースビルド
-RUSTFLAGS="-C target-cpu=native -C codegen-units=1" \\
-  cargo build --release --features jemalloc,asm-keccak
-
-strip target/release/reth   # またはデバッグシンボルを切り離し
-\`\`\`
-
-systemd ユニット:
-
-\`\`\`ini
-[Service]
-ExecStart=/usr/local/bin/reth node --chain custom --datadir /var/lib/reth
-Restart=on-failure
-LimitNOFILE=1048576
-LimitNPROC=infinity
-TasksMax=infinity
-\`\`\`
-
-監視メトリクス:
-
-| メトリクス | アラート条件 |
-| :--- | :--- |
-| 同期遅延（head vs network） | N ブロック以上を N を超える時間 |
-| ピア数 | < 5 |
-| MDBX 空きページ | < 5% |
-| プロセス RSS | 単調増加 |
-| ブロック取り込み時間 | p99 が目標を超える |
-| ExEx の追従遅延 | ExEx 依存 |
-
-Diff テストハーネス（擬似）:
-
-\`\`\`bash
-# diff ハーネスの擬似コード
-for block in mainnet[recent_1000]:
-    s1 = reth_vanilla.execute(block)
-    s2 = reth_fork.execute(block)
-    if s1.stateRoot != s2.stateRoot:
-        alert("divergence at block", block, s1, s2)
-\`\`\`
-
-App-chain 最低トポロジ:
-
-- 3 データセンターに 4 バリデータ以上
-- 各バリデータの前に sentry 2 つ
-- 別 archive node（バリデータではない、解析クエリ用）
-- 別 RPC フリート（レート制限 + CDN）
-
-アップグレード手順:
-
-1. アクティベーションのターゲットブロック高を発表
-2. 設定フラグで off のまま新バイナリをバリデータに配布
-3. アクティベーションブロックでコンセンサスルール切り替え — 高さチェックでガード
-4. アップグレードしていないバリデータは脱落 — だからこそ高さガード + 告知
-
-## 失敗例（誤解）
-
-「\`cargo build --release\` で本番に出せる」— **間違い**。jemalloc なし / asm-keccak なし / \`target-cpu=native\` なしでは負荷下のテイルレイテンシが暴れる + keccak ホットパスが遅い + AVX2 / AVX512 が活用されない。1 週目は気づかない、4 週目で疑問、3 ヶ月目で oncall。
-
-「ユニットテストが通れば diff テスト不要」— **間違い**。ユニットテスト = 設計者が想像した入力。本番 mainnet ブロックは想像を超える。**Diff テストはバニラ Reth と継続比較**、1 ストレージスロット乖離もコンセンサスバグ。
-
-「バリデータと公開 RPC を同マシンで動かしてよい」— **間違い**。1 回の DDoS でチェーン停止。RPC は別フリート（レート制限 + CDN）+ バリデータの前に sentry。
-
-> 🛑 **予測。** あなたのフォークをデフォルトの \`cargo build --release\` でリリース。1 週目、4 週目、3 ヶ月目に見える本番症状は？（答え: **1 週目** = 気づかない（軽負荷）、**4 週目** = p99 レイテンシが断片化で悪化、ユーザは「たまに遅い」と言うが本気の問題と認識されない、**3 ヶ月目** = jemalloc なしの断片化 + ファイルディスクリプタ枯渇 + 累積された symbol 情報なしのデバッグ困難 → 午前 3 時のページャ → 「動いていたものが急に動かない」「直近変更はない」「ログだけでは原因不明」。**ゆっくり忍び寄り、まとめてくる**。）
-
-## ステップで組み立てる
-
-### Step 1: 4 ビルドフラグを暗唱
-
-| フラグ | 理由 |
-| :--- | :--- |
-| \`-C target-cpu=native\` | AVX2 / AVX512 活用 |
-| \`codegen-units=1\` | ビルド時間と引き換えに最適化 |
-| \`features = [jemalloc]\` | テイルレイテンシ安定 |
-| \`features = [asm-keccak]\` | keccak ホットパスの手書きアセンブリ |
-
-### Step 2: systemd ファイルディスクリプタ上限
-
-\`LimitNOFILE=1048576\`。デフォルト 1024 や 8192 では数時間で枯渇 → MDBX が \`Too many open files\` → ノードがゾンビ化。
-
-### Step 3: アラートは絶対値より変化率
-
-「現在 1000 ピア」より「過去 1 時間で 50 ピア / 分減少」が意味ある。Prometheus + Grafana で rate / increase 関数。
-
-### Step 4: Diff テスト規律
-
-\`for block in mainnet[recent_1000]: assert reth_vanilla.execute(block).stateRoot == reth_fork.execute(block).stateRoot\`。乖離はフォークの 3 容疑: ① 自分の変更が直接他コードパスに影響、② 共有 utility（gas 計算、precompile）の改変、③ 状態管理の境界条件。
-
-### Step 5: アップグレード規律
-
-高さガード + 段階配布。上げていないバリデータは脱落、回復は再 sync。
-
-## 答え合わせ
-
-- **\`LimitNOFILE=8192\` での失敗シグネチャ**: 数時間後 \`Too many open files\` エラー → MDBX が新規ページオープン失敗 + P2P が新規接続拒否 → ピア数 0 へ + ブロック書き込み停止 → ノードがログ吐きながらゾンビ化、再起動でカウンタリセットで一時回復、根本原因不明。ログを grep して \`EMFILE\` を発見すれば一発、知らないと数時間。
-- **diff テスト発見時の 3 容疑**: ① 自分の最近の変更が他コードパスに副作用、② 共有 utility（gas 計算、precompile、state root 計算）の改変、③ 状態管理の境界条件（reorg、empty block、過去 hardfork 境界）。**自分のコミット履歴を再読** が最初の手。
-- **3 アップグレード未完バリデータが見る現実**: ブロック 1000 で 3 が新ルール、1 が旧ルール → ブロック 1001 で旧ルールバリデータは新ルールブロックを reject → 「自分から見ると」分岐 → quorum 不足で投票しなくなる → 残り 3 で多数決継続 → 旧バリデータは脱落（slashing 対象または inactivity ペナルティ）。回復は新バイナリに上げて DB を再 sync。
-
-## 合格基準
-
-- 4 本番ビルドフラグを暗唱できる。
-- systemd 上限の意味と \`LimitNOFILE\` 値を即答できる。
-- 6 監視メトリクスを変化率視点で言える。
-- Diff テスト規律を「乖離 = 3 容疑」で説明できる。
-- アップグレード手順を高さガード + 段階配布で言える。
-
-## まとめ（3行）
-
-- 本番ビルド = 4 フラグ（\`target-cpu=native\` + \`codegen-units=1\` + \`jemalloc\` + \`asm-keccak\`）+ systemd 上限調整（\`LimitNOFILE=1048576\`）。
-- 監視は絶対値より変化率、6 メトリクス（同期遅延 / ピア数 / MDBX 空き / RSS / 取り込み時間 / ExEx 追従）にアラート。
-- Diff テスト（バニラ Reth と継続比較、1 スロット乖離もコンセンサスバグ）がフォーク最強の安全網 — 加えて App-chain は 3 DC + sentry + 別 RPC フリートのトポロジ + 高さガードアップグレード。
-`,
-                },
-              ],
-            },
-          },
           {
             title: 'Reth ベースのチェーン — 拡張パターンを読む',
             sortOrder: 2,
