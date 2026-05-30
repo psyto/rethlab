@@ -10,7 +10,7 @@ export async function seedRethBuildingJA(prisma: PrismaClient) {
       description:
         'ソース読解は前提条件であり、このティアはその実装編である。Rust + Alloy + Revm で 10 本のアプリを作り、systems engineering スタックの各層を少なくとも 1 度ずつ通る。対象は MEV searcher、ExEx インデクサ、カスタム RPC、wallet backend、EIP-7702 sponsor、Foundry スタイル cheatcode、swap aggregator、frontrun-resistant router、cross-client validation、HTTP 402 + MPP endpoint。',
       difficulty: 'EXPERT',
-      duration: 420,
+      duration: 454,
       xpReward: 100,
       track: 'reth-building',
       tags,

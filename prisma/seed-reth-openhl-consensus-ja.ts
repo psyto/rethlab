@@ -10,7 +10,7 @@ export async function seedRethOpenHlConsensusJA(prisma: PrismaClient) {
       description:
         'Hyperliquid シェイプの L1 コンセンサス層をスクラッチで構築する。プロダクションクオリティの Reth (EVM) と Malachite (BFT) を単一の Rust workspace へ統合し、end-to-end でのブロック生成機構を実装。リファレンス実装（psyto/openhl）をベースに手を動かしながら学ぶ、「DIY Perp シリーズ」の記念すべきファーストステップである。',
       difficulty: 'EXPERT',
-      duration: 665,
+      duration: 660,
       xpReward: 1340,
       track: 'diy-perp',
       tags,
@@ -159,7 +159,7 @@ cd ~/code/openhl-reference && cargo check         # Finished
                   slug: 'openhl-workspace-ja',
                   type: 'CONTENT',
                   sortOrder: 0,
-                  duration: 50,
+                  duration: 45,
                   xpReward: 150,
                   content: `# レッスン1 — Workspace + Reth + Malachite
 

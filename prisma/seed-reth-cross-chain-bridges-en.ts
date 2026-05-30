@@ -12,7 +12,7 @@ export async function seedRethCrossChainBridgesEN(prisma: PrismaClient) {
       difficulty: 'ADVANCED',
       duration: 120,
       xpReward: 315,
-      track: 'reth-cross-chain-bridges',
+      track: 'reth-l1-architect',
       tags,
       isPublished: true,
       sortOrder: 1410,

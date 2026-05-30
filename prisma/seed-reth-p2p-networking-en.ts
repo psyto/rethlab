@@ -12,7 +12,7 @@ export async function seedRethP2PNetworkingEN(prisma: PrismaClient) {
       difficulty: 'ADVANCED',
       duration: 61,
       xpReward: 175,
-      track: 'reth-p2p-networking',
+      track: 'reth-l1-architect',
       tags,
       isPublished: true,
       sortOrder: 1430,

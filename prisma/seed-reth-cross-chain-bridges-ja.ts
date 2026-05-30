@@ -10,7 +10,7 @@ export async function seedRethCrossChainBridgesJA(prisma: PrismaClient) {
       description:
         'chain 間で価値がどう動くかを正直に会計する: 「この multisig を信頼」から「source chain のコンセンサスしか信頼しない」までの trust モデル、攻撃の歴史 ($2B+ 盗まれた)、本番 bridge コード (OP Standard Bridge、Chainlink CCIP、Wormhole、IBC) を読み、Reth 上に最小の light-client 検証 bridge を作る。Tempo↔Solana 決済、OP-stack bridge、ZK light client を architect する準備ができる。',
       difficulty: 'ADVANCED',
-      duration: 116,
+      duration: 120,
       xpReward: 450,
       track: 'reth-l1-architect',
       tags,
@@ -1059,7 +1059,7 @@ Trusted setup（初期 checkpoint のみ）+ Replay 防止（claimed mapping）+
                   slug: 'bridges-final-quiz-ja',
                   type: 'QUIZ',
                   sortOrder: 1,
-                  duration: 12,
+                  duration: 16,
                   xpReward: 50,
                   content: `# ファイナルクイズ — クロスチェーン bridge
 

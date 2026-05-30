@@ -12,7 +12,7 @@ export async function seedRethConsensusEngineeringEN(prisma: PrismaClient) {
       difficulty: 'ADVANCED',
       duration: 193,
       xpReward: 530,
-      track: 'reth-consensus-engineering',
+      track: 'reth-l1-architect',
       tags,
       isPublished: true,
       sortOrder: 1400,

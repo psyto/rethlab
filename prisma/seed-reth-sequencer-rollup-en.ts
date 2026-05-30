@@ -12,7 +12,7 @@ export async function seedRethSequencerRollupEN(prisma: PrismaClient) {
       difficulty: 'ADVANCED',
       duration: 114,
       xpReward: 320,
-      track: 'reth-sequencer-rollup',
+      track: 'reth-l1-architect',
       tags,
       isPublished: true,
       sortOrder: 1420,

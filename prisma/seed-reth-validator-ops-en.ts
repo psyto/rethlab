@@ -12,7 +12,7 @@ export async function seedRethValidatorOpsEN(prisma: PrismaClient) {
       difficulty: 'ADVANCED',
       duration: 60,
       xpReward: 170,
-      track: 'reth-validator-ops',
+      track: 'reth-l1-architect',
       tags,
       isPublished: true,
       sortOrder: 1440,
