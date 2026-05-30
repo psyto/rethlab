@@ -1717,9 +1717,6 @@ App-chain 最低トポロジ:
 - Diff テスト（バニラ Reth と継続比較、1 スロット乖離もコンセンサスバグ）がフォーク最強の安全網 — 加えて App-chain は 3 DC + sentry + 別 RPC フリートのトポロジ + 高さガードアップグレード。
 `,
                 },
-              ],
-            },
-          },
                 {
                   title: 'レッスン11 — Differential fuzzing と execution-spec-tests',
                   slug: 'expert-differential-fuzzing-ja',
@@ -2479,6 +2476,9 @@ Issue tracker + PR queue + Discord + TODO コメント。複利で効く。
 レッスン0-15 を通じて: パフォーマンス（flamegraph / Criterion / jemalloc / maxperf）/ ストレージ（MDBX / B+tree / SALT 対比）/ 並行性（Tokio work-stealing / TaskExecutor）/ コンパイル時（proc macros / sol! / tracing）/ Precompile / MPT / Stateless / MEV / zkEVM / フォーク運用 / Differential fuzzing / EVM プライバシー / Chaos / Auditing / OSS 貢献ワークフロー の構造的事実を確認する。
 `,
                 },
+              ],
+            },
+          },
           {
             title: 'Reth ベースのチェーン — 拡張パターンを読む',
             sortOrder: 2,
