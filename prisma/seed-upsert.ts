@@ -80,6 +80,7 @@ import { seedRethExpertV3JA } from './seed-reth-expert-v3-ja';
 import { seedRethSequencerRollupV3JA } from './seed-reth-sequencer-rollup-v3-ja';
 import { seedRethCrossChainBridgesV3JA } from './seed-reth-cross-chain-bridges-v3-ja';
 import { seedRethP2PNetworkingV3JA } from './seed-reth-p2p-networking-v3-ja';
+import { seedRethValidatorOpsV3JA } from './seed-reth-validator-ops-v3-ja';
 import { seedRethOpenHlClobEN } from './seed-reth-openhl-clob-en';
 import { seedRethOpenHlClobJA } from './seed-reth-openhl-clob-ja';
 import { seedRethOpenHlPrecompilesEN } from './seed-reth-openhl-precompiles-en';
@@ -167,6 +168,7 @@ const seeds: Array<(p: any) => Promise<unknown>> = [
   seedRethSequencerRollupV3JA,
   seedRethCrossChainBridgesV3JA,
   seedRethP2PNetworkingV3JA,
+  seedRethValidatorOpsV3JA,
   seedRethFoundryEN,
   seedRethFoundryJA,
   seedRethFoundryV2JA,

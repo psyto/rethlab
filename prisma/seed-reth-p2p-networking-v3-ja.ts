@@ -10,7 +10,7 @@ export async function seedRethP2PNetworkingV3JA(prisma: PrismaClient) {
       description:
         'すべての blockchain が依存するが少ないエンジニアしか理解しないネットワーク層。devp2p vs libp2p、peer discovery (Kademlia、ENR)、RLPx 暗号化、transaction gossip、eth/68 サブプロトコル、reth の network crate を読み、peer scoring、MEV / private orderflow / sequencer coordination 用のカスタム gossip 動作を構築。',
       difficulty: 'ADVANCED',
-      duration: 110,
+      duration: 61,
       xpReward: 350,
       track: 'reth-l1-architect',
       tags,
@@ -166,6 +166,8 @@ devp2p そのまま / カスタムサブプロトコル追加（\`tempo/1\` な�
 ## 問い
 
 自分の chain 向けに、カスタムサブプロトコル — 決済 finality hint や MEV bundle gossip など — を追加したい。**そのコードを reth ツリーのどこに置き、既存のどのピースにつなぐか？** Reth のネットワーク層は [\`crates/net/\`](https://github.com/paradigmxyz/reth/tree/main/crates/net) にあり、6 つのサブ crate に分散した Rust ~30k 行。
+
+> 注: 以下のコード断片は構造理解のための概念スニペットです（\`...\` は省略箇所）。そのまま実行する用途ではありません。
 
 ## 原理（最小モデル）
 
