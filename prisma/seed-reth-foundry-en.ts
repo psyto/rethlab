@@ -1,41 +1,56 @@
-// AUTO-GENERATED from drafts/foundry_*_en.md by .github/scripts/build-foundry-seed.ts
-// Do not hand-edit. Re-run the build script when drafts change.
-
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethFoundryEN(prisma: PrismaClient) {
-  const tags = ["foundry","forge","anvil","cast","solidity","testing","invariants","fuzz","l1","reth"];
+  const tags = ['foundry', 'solidity', 'testing', 'fuzz', 'invariant'];
 
   await prisma.course.create({
     data: {
-      slug: "mastering-foundry-en",
-      title: "Mastering Foundry — Solidity testing discipline for engineers who already think in Rust",
+      slug: 'mastering-foundry-en',
+      title: 'Mastering Foundry — Solidity testing discipline for engineers who already think in Rust',
       description:
-        "The rigorous-testing discipline you learned in rethlab's openhl courses (proptest! conservation laws, debug_assert! routing contracts, byte-for-byte answer keys against openhl SHAs) transfers to Solidity contracts almost 1:1 — and Foundry is the tool that makes the transfer mechanical. This course teaches forge test / fuzz / invariant + cast + anvil for L1 / contract / engine engineers who already think in Rust. By the Lesson 6 capstone, you'll have ported openhl-liquidation Stage 10b's InsuranceFund from Rust to Solidity and proven the same 4 conservation invariants with forge — same theorem, two languages, both mechanically proven. Foundry mastery is now a commodity prerequisite for serious L1 work; this course assumes you already have the discipline and gives you the Solidity syntax. 7 lessons across 4 modules, openhl SHA references via Lesson 6 capstone, in-repo answer keys at examples/foundry-capstone/.",
-      difficulty: "INTERMEDIATE",
+        'Port the rethlab Rust discipline (proptest! / debug_assert! / conservation laws / byte-for-byte answer keys) to Solidity contracts. `forge test` / `forge fuzz` / `forge invariant` / `cast` / `anvil` + cheatcodes in order, finishing with a Capstone that ports openhl-liquidation\'s `InsuranceFund` from Rust to Solidity and proves the same four conservation-law invariants in both languages. One of three intermediate-tier courses; the Foundry entry point.',
+      difficulty: 'INTERMEDIATE',
       duration: 240,
       xpReward: 490,
-      track: "reth-stack",
+      track: 'mastering-foundry',
       tags,
       isPublished: true,
-      sortOrder: 190,
-      locale: "en",
-      instructorName: "RethLab",
+      sortOrder: 1300,
+      locale: 'en',
+      instructorName: 'RethLab',
       modules: {
         create: [
           {
-            title: "Orientation",
+            title: 'Orientation',
             sortOrder: 0,
             lessons: {
               create: [
                 {
-                  title: "Mastering Foundry — Solidity testing discipline for engineers who already think in Rust",
-                  slug: "foundry-orientation-en",
+                  title: 'Mastering Foundry — Solidity testing discipline for engineers who already think in Rust',
+                  slug: 'foundry-orientation-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 15,
                   xpReward: 50,
                   content: `# Mastering Foundry — Solidity testing discipline for engineers who already think in Rust
+
+## Question
+
+The Rust discipline you internalised in the openhl tracks — pure-compute primitives, state machines guarded by \`debug_assert!\` + saturating arithmetic, conservation laws checked by \`proptest!\`, byte-for-byte answer keys — needs to **port to Solidity contracts**. Foundry is the runtime that runs that discipline mechanically. **Why has Foundry become the standard, and what cannot Hardhat/Truffle do?**
+
+## Principle (minimum model)
+
+- **Three reasons Foundry became the standard.** (1) Speed (REVM embedded in-process — no IPC). (2) Fuzzing as a first-class primitive (shrinking + corpus persistence built-in). (3) Cheatcodes-as-precompiles (\`vm.warp\` / \`vm.deal\` / \`vm.prank\` are precompile calls).
+- **The 20–30× speed gap vs Hardhat is architectural, not micro-optimisations.** \`hardhat node\` runs in a separate process; Hardhat tests talk to it over IPC. Foundry embeds REVM directly into the test runner process — no IPC, no serialisation.
+- **Discipline transfer table.** \`cargo test\` ↔ \`forge test\`; \`proptest!\` (single-input) ↔ \`forge fuzz\`; \`proptest!\` (sequenced) ↔ \`forge invariant\`; \`debug_assert!\` ↔ \`require\` / \`vm.expectRevert\`; saturating_add ↔ Solidity 0.8 unchecked; conservation laws ↔ invariant assertions; byte-for-byte answer keys ↔ reference contract + forge corpus.
+- **The Capstone (Lesson 6) is the proof.** Port openhl-liquidation Stage 10b's \`InsuranceFund\` from Rust to Solidity, write the four conservation-law invariants in Foundry, run 10 K iterations — same theorem proved twice in two languages.
+- **7-lesson, 4-module structure.** Orientation (L0) → Test discipline (L1–L3) → CLI + state-aware testing (L4–L5) → Capstone (L6).
+- **Prerequisites.** (1) Basic Solidity syntax (read a \`function\` definition, distinguish \`mapping\` from \`struct\`). (2) \`cargo test\` in a Rust crate. (3) Read the openhl-liquidation track at least through Lesson 9 (the lesson where \`WithdrawOutcome\` proptest appears — the Capstone assumes you have internalised those semantics).
+- **Out of scope.** Gas-optimisation deep dives / Slither + Mythril + formal verification / frontend (ethers.js / viem) / full \`forge script\` deployment workflow.
+
+## Worked example + steps
+
+# Mastering Foundry — Solidity testing discipline for engineers who already think in Rust
 
 ## What you'll build
 
@@ -197,24 +212,48 @@ You should already be comfortable with:
 - Reading rethlab's openhl-liquidation course at least through Lesson 9 (where the first \`WithdrawOutcome\` proptest appears). Lesson 6's capstone assumes you've internalized the \`InsuranceFund\` semantics from that course.
 
 If any of those feel shaky, no problem — the openhl-liquidation course is the natural pre-req, and basic Solidity can be picked up from solidity-by-example.org in an afternoon.
+
+## Summary (3 lines)
+
+- Foundry = a Rust-native single binary that embeds REVM in-process → 20–30× faster than JS toolchains. Fuzzing is first-class; cheatcodes are precompiles. The \`proptest!\` / \`prop_assume!\` / precompile-as-superpower patterns port 1:1 to Solidity.
+- This course is not "how to use Foundry". It is "how to transfer the Rust discipline from openhl into Solidity contracts". The discipline-transfer table is the spine; the Capstone is the proof.
+- 7 lessons / 4 modules. Prerequisite: openhl-liquidation through L9. Setup: \`foundryup\` installed before Lesson 1.
 `,
                 },
               ],
             },
           },
           {
-            title: "Test discipline",
+            title: 'Test discipline',
             sortOrder: 1,
             lessons: {
               create: [
                 {
-                  title: "Lesson 1 — forge test — the Solidity equivalent of cargo test",
-                  slug: "foundry-forge-test-basics-en",
+                  title: 'Lesson 1 — forge test — the Solidity equivalent of cargo test',
+                  slug: 'foundry-forge-test-basics-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 25,
                   xpReward: 50,
-                  content: `# Lesson 1 — \`forge test\` — the Solidity equivalent of \`cargo test\`
+                  content: `# Lesson 1 — forge test — the Solidity equivalent of cargo test
+
+## Question
+
+The \`forge init\` project layout is the Foundry equivalent of \`cargo new --lib\`. \`forge test\` sits in the same slot as \`cargo test\` — sub-second feedback after first compile, same \`--match-*\` filtering. **Understand Solidity's test discovery + assertion primitives + verbosity ladder + negative-path tests (\`vm.expectRevert\`) side by side with the Rust analogues.**
+
+## Principle (minimum model)
+
+- **Project-layout mapping.** \`Cargo.toml\` → \`foundry.toml\` / \`src/lib.rs\` → \`src/Counter.sol\` / \`tests/integration_test.rs\` → \`test/Counter.t.sol\` / \`target/\` → \`out/\` + \`cache/\`. The Foundry team is Rust-native; the mapping is intentional.
+- **Test discovery is by name, not by attribute.** Functions named \`test*\` are tests; \`testFuzz_*\` are fuzz tests. Solidity has no decorators, so a naming convention does the job a Rust attribute would.
+- **Three assertion primitives.** \`assertEq\` (value equality, overloaded for every Solidity primitive) / \`assertTrue\` (boolean) / \`vm.expectRevert\` (negative-path — asserts the next external call reverts with a specific reason).
+- **Verbosity ladder.** \`-v\` (summary) / \`-vv\` (failure messages) / \`-vvv\` (stack traces — daily default) / \`-vvvv\` (traces for pass + fail) / \`-vvvvv\` (opcode-level trace). Equivalent of \`cargo test -- --nocapture\` + storage diffs.
+- **\`vm.expectRevert\` has a one-call lifetime.** It must be called immediately before the call that should revert. An intervening call eats the arm → confusing failure.
+- **Constant-folding workaround.** \`uint256(0) - 1\` as a literal is rejected at compile time by Solc 0.8. Stash zero in a local variable → the SUB is now a runtime opcode → Solidity 0.8 triggers \`Panic(0x11)\`.
+- **Where does the panic land?** When evaluation happens *inside the test contract* (e.g. arguments to \`setNumber(zero - 1)\`), the panic fires inside the test contract's frame — the external call is never dispatched and \`-vvvv\` shows no trace into the target. When evaluation happens *inside the target contract* (e.g. \`counter.decrement()\`), the panic fires there and reverts bubble up. Both are caught by \`vm.expectRevert\`; the trace distinguishes them.
+
+## Worked example + steps
+
+# Lesson 1 — \`forge test\` — the Solidity equivalent of \`cargo test\`
 
 ## Goal
 
@@ -257,13 +296,6 @@ Three edits:
 2. **Read \`src/Counter.sol\` and \`test/Counter.t.sol\`** as-is — they ship with \`forge init\` and demonstrate the conventions. Understand each line.
 3. **Append one new test** to \`test/Counter.t.sol\`: \`test_RevertWhen_DecrementBelowZero\` that triggers a runtime underflow via the constant-folding-resistant \`uint256 zero = 0; counter.setNumber(zero - 1);\` pattern, with \`vm.expectRevert\` armed beforehand. Run with \`forge test -vvv\` to see the full trace.
 
-> 🛑 **Predict.** Before reading the \`forge init\` output below: list the Foundry equivalents of these Rust files:
-> 
-> - \`Cargo.toml\` →
-> - \`src/lib.rs\` →
-> - \`tests/integration_test.rs\` →
-> - \`target/\` →
-> - \`Cargo.lock\` →
 
 (Answer: \`Cargo.toml\` → \`foundry.toml\`, \`src/lib.rs\` → \`src/Counter.sol\` (or whatever you named your main contract), \`tests/integration_test.rs\` → \`test/Counter.t.sol\`, \`target/\` → \`out/\` + \`cache/\`, \`Cargo.lock\` → no direct equivalent (Foundry uses git submodules in \`lib/\` for dependencies, with \`lib/forge-std\` as the standard testing library always present). The mapping is intentional: the Foundry team built it to feel familiar to Rust developers because that's their own background.)
 
@@ -596,16 +628,41 @@ Lesson 2 turns the \`testFuzz_SetNumber\` test into a real working example of pr
 - Corpus persistence — \`cache/fuzz/\` saves failing inputs so re-runs immediately replay the same counterexamples
 
 After Lesson 2 you'll have written your first conservation-law fuzz test in Solidity, mapping 1:1 to the \`balance_never_negative\` proptest from openhl-liquidation Lesson 8.
+
+## Summary (3 lines)
+
+- \`forge test\` = the Solidity-side \`cargo test\`. In-process REVM gives sub-second feedback; \`--match-test\` / \`--match-contract\` / \`--match-path\` filter; \`-vvv\` is the daily default.
+- Test discovery is name + parameter signature: \`testFuzz_*\` + parameter = fuzz test, \`test_RevertWhen_*\` = negative-path convention.
+- \`vm.expectRevert\` has a one-call lifetime — arm it immediately before the call you expect to revert. Constant folding is dodged via a local variable. Panic location (test contract vs target contract) is visible in \`-vvvv\` traces.
 `,
                 },
                 {
-                  title: "Lesson 2 — forge fuzz — Solidity's proptest!",
-                  slug: "foundry-forge-fuzz-en",
+                  title: 'Lesson 2 — forge fuzz — Solidity\'s proptest!',
+                  slug: 'foundry-forge-fuzz-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 35,
                   xpReward: 70,
-                  content: `# Lesson 2 — \`forge fuzz\` — Solidity's \`proptest!\`
+                  content: `# Lesson 2 — forge fuzz — Solidity's proptest!
+
+## Question
+
+\`forge fuzz\` is \`proptest!\` with a different syntax. Same theorem-first mindset — assertions must hold *over the entire valid input space*, not over hand-picked examples. **Four disciplines from \`proptest!\` port directly: \`vm.assume\`, shrinking, corpus persistence, and profile-per-environment iteration counts.**
+
+## Principle (minimum model)
+
+- **\`vm.assume(cond)\` is the Solidity \`prop_assume!\`.** Filters out inputs that violate preconditions before the assertion runs. The test only exercises the well-defined regime of the property.
+- **Default 256 iterations is a *floor*, not a goal.** \`foundry.toml\`'s \`fuzz.runs = 256\` is the OOB default. Production CIs run 10 K – 100 K. Nightly fuzzers push to 1 M. \`[profile.ci.fuzz]\` enables profile-per-environment.
+- **Shrinking.** When the fuzzer finds a counterexample (e.g. \`x = 0xa3b8...4d2f\`), it doesn't stop — it binary-search-shrinks to the smallest input that still triggers the failure (often a single-digit number). Heuristic, not exhaustive. Per-parameter.
+- **Corpus persistence.** \`cache/fuzz/\` stores failing inputs; the next run replays them first. Equivalent to Rust's \`proptest-regressions/\`.
+- **The \`vm.assume\` trap.** A pinpoint filter like \`vm.assume(x == 42)\` exhausts \`max_test_rejects\` instantly (random sampling from 2²⁵⁶ never lands on 42) → \`TooManyAssumptions\`. **\`vm.assume\` is only for excluding boundary conditions (< 1 %), not for selecting specific values — that's a unit test.**
+- **\`vm.expectRevert\` and \`vm.assume\` are opposite roles.** \`vm.expectRevert\` = negative-path test where the revert IS the success criterion. \`vm.assume\` = positive-path guard that excludes revert-causing inputs so the assertion runs on a well-defined domain. Same physical event (the contract reverts on this input); opposite test discipline.
+- **Per-iteration isolation.** \`setUp()\` runs before every iteration → a failing iteration cannot poison the next. Reproducibility depends on this.
+- **Gas stats (μ / ~) come from passing iterations.** Failing iterations don't contribute. So fuzz gas is typical-case, not worst-case. For worst-case, write a specific unit test.
+
+## Worked example + steps
+
+# Lesson 2 — \`forge fuzz\` — Solidity's \`proptest!\`
 
 ## Goal
 
@@ -648,7 +705,6 @@ Three edits:
 2. **Read \`testFuzz_SetNumber(uint256 x)\` from Lesson 1's \`Counter.t.sol\`**. Understand why Foundry treats it as a fuzz test, what the runner does each iteration, and how the result line \`(runs: 256, μ: 31000, ~: 31161)\` is generated.
 3. **Append one new fuzz test**: \`testFuzz_IncrementPreservesPlusOne(uint256 x)\`. Set \`counter\` to \`x\`, call \`counter.increment()\`, assert \`counter.number() == x + 1\`. Use \`vm.assume(x < type(uint256).max)\` to filter out the overflow case. Run with \`forge test -vvv\`.
 
-> 🛑 **Predict.** Before reading further: in \`proptest!\` from openhl-liquidation Lesson 9, the default number of \`CASES\` is \`256\`. In \`forge fuzz\`, the default \`fuzz.runs\` is also \`256\`. What's the practical CI-tier value most production codebases use? And what's the trade-off if you bump it to 1_000_000?
 
 (Answer: **Most production CI runs at \`10_000\` or \`100_000\`**; nightly fuzzers push to \`1_000_000\`. The trade-off: each iteration runs the full test (setUp → call → assertion → state cleanup). At 256 iterations a single fuzz test takes ~50ms; at 100_000 it takes ~20 seconds; at 1_000_000 it takes ~200 seconds. Past 100_000 the diminishing returns kick in unless your test is exercising a vast input space — most uint256 fuzz tests have *de facto* small interesting regions, and 100_000 hits them already. **Run high counts on dedicated nightly CI, default counts on PR CI, low counts during local development.**)
 
@@ -955,16 +1011,40 @@ Lesson 3 graduates from single-call fuzz testing to *multi-call invariant testin
 The key concept: define a \`Handler\` contract whose functions are the "things the system can do" (deposit, withdraw, increment, etc.). Tell Foundry "treat this Handler as the surface area to fuzz." Foundry then generates random *sequences* of method calls — \`deposit(100), withdraw(50), increment(), withdraw(75)\` — and checks an \`invariant_*\` function after each step.
 
 This is what catches multi-call bugs that single-call fuzzing never sees: token-balance reentrancy, ordering-dependent state corruption, the kind of bug that crashed Mt. Gox in slow-motion. **Lesson 3 is where \`forge\` becomes a real adversary, not just a parameter generator.**
+
+## Summary (3 lines)
+
+- \`forge fuzz\` = Solidity-side \`proptest!\`. \`vm.assume\` = \`prop_assume!\`; shrinking, corpus persistence, profile-per-environment are the same disciplines. Function-name + parameter signature = fuzz signal.
+- \`vm.assume\` is for excluding boundary conditions (< 1 %), never for pinning specific values (→ \`TooManyAssumptions\`). \`vm.expectRevert\` and \`vm.assume\` invert each other — negative-path success vs positive-path guard.
+- Default 256 is the local-dev sweet spot (sub-second). Production CI 10 K – 100 K; nightly 1 M. Per-iteration \`setUp\` isolation makes failures reproducible; fuzz gas is typical-case. Next lesson: \`forge invariant\` for multi-call conservation laws.
 `,
                 },
                 {
-                  title: "Lesson 3 — forge invariant — multi-call invariant testing via the Handler pattern",
-                  slug: "foundry-forge-invariant-en",
+                  title: 'Lesson 3 — forge invariant — multi-call invariant testing via the Handler pattern',
+                  slug: 'foundry-forge-invariant-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 40,
                   xpReward: 80,
-                  content: `# Lesson 3 — \`forge invariant\` — multi-call invariant testing via the Handler pattern
+                  content: `# Lesson 3 — forge invariant — multi-call invariant testing via the Handler pattern
+
+## Question
+
+\`forge fuzz\` proves a property over single calls. **\`forge invariant\` proves properties over *sequences* of calls** — a \`Handler\` contract generates random call sequences, an invariant function checks a conservation law at every step. Same shape as openhl-liquidation's Lesson 13 scanner proptest (per-scan conservation law). **How do Handler + targetContract + invariant_* compose?**
+
+## Principle (minimum model)
+
+- **\`forge invariant\` structure.** (1) A \`Handler\` contract exposes the public mutations (the fuzz-tested ops). (2) \`setUp()\` registers \`targetContract(handler)\`. (3) \`invariant_*\` functions assert the conservation law after every step. (4) The runner fires \`runs * depth\` random sequences.
+- **Fuzz vs invariant.** Fuzz = property over a single call (\`state → state'\`). Invariant = property over a call sequence (\`state → state' → state'' → ...\`; the invariant holds at every step). Liquidation's \`withdraw_amount_plus_unfilled_equals_shortfall\` is fuzz; Lesson 13's scanner per-scan conservation law is an invariant.
+- **Handler pattern, four roles.** Control the entry point, filter preconditions with \`vm.assume\`, track sequence-wide invariants with \`ghost\` variables, and guard against generating invalid calls.
+- **\`targetContract(addr)\` / \`targetSelector\` / \`targetSender\`.** Restrict what the fuzzer calls. Default = the whole contract; narrowing forces meaningful calls only. \`excludeSender\` / \`excludeContract\` are the negative complement.
+- **\`invariant.runs\` and \`invariant.depth\`.** \`runs\` = number of call sequences; \`depth\` = calls per sequence. Defaults \`runs = 256, depth = 15\`. Production CIs run 1 K × 50; nightly 10 K × 100.
+- **Ghost variables (\`uint256 totalDeposited\`).** The Handler keeps a running tally for every mutation; the invariant asserts a conservation law like \`contract.balanceOf() == totalDeposited\`. Same pattern as a local counter inside a Rust \`proptest!\`.
+- **Bounded inputs.** Inside the Handler, \`amount = bound(amount, 1, 1e18)\` clamps fuzzed input into a meaningful range. \`bound\` is more productive than \`vm.assume\` because it transforms instead of rejecting.
+
+## Worked example + steps
+
+# Lesson 3 — \`forge invariant\` — multi-call invariant testing via the Handler pattern
 
 ## Goal
 
@@ -1011,7 +1091,6 @@ Five edits across two new files:
 4. **Run \`forge test --match-contract CounterInvariantTest -vvv\`** — observe \`(runs: 256, calls: 12800, reverts: 0)\` and watch the invariant hold across thousands of random sequences.
 5. **Deliberately break by exposing raw \`setNumber\` without ghost update** — see Foundry produce a multi-call counterexample like \`wrappedIncrement(), wrappedIncrement(), badSetNumber(0), wrappedIncrement()\`.
 
-> 🛑 **Predict.** Before reading on: in openhl-liquidation Lesson 13, the cascade-conservation proptest asserts \`before_balance + sum(deposits) - sum(withdrawals) == after_balance\` across a random sequence of operations applied to the insurance fund. If that test were ported to \`forge invariant\` against an \`InsuranceFund.sol\` contract, what would the Handler need to track as ghost variables, and what would the \`invariant_*\` function assert?
 
 (Answer: **The Handler would need \`ghostSumDeposits\` and \`ghostSumWithdrawals\`, both incremented inside \`wrappedDeposit(uint256)\` and \`wrappedWithdraw(uint256)\`.** It would also need \`ghostInitialBalance\` captured once at construction time. The invariant would assert \`target.balance() == handler.ghostInitialBalance() + handler.ghostSumDeposits() - handler.ghostSumWithdrawals()\` — the *exact* arithmetic shape of the Lesson 13 proptest. Same theorem, two languages. The Lesson 6 capstone of this course does precisely this port for openhl-liquidation Stage 10b's \`InsuranceFund\`.)
 
@@ -1313,24 +1392,48 @@ You'll learn:
 - The full read-eval pattern: write contract → forge test → cast call against a forked anvil to verify behavior on real state
 
 After Lesson 4 you can interact with deployed contracts from a shell loop without writing a Solidity script — the CLI equivalent of \`curl\`+\`jq\` for the EVM.
+
+## Summary (3 lines)
+
+- \`forge invariant\` = property over call sequences. The Handler exposes mutations + ghost variables; \`invariant_*\` checks the conservation law every step. The runner fires \`runs × depth\` sequences.
+- The Handler pattern has four roles (entry-point control / \`vm.assume\` filter / ghost bookkeeping / invalid-call guard). \`targetContract\` / \`targetSelector\` narrow the fuzz surface to meaningful calls; \`bound\` is more productive than \`vm.assume\`.
+- Same pattern as Liquidation Lesson 13's per-scan scanner conservation law. Production CI 1 K × 50; nightly 10 K × 100. Next module: CLI (\`cast\`) and state-aware testing (\`anvil\` + cheatcodes).
 `,
                 },
               ],
             },
           },
           {
-            title: "CLI & state-aware testing",
+            title: 'CLI & state-aware testing',
             sortOrder: 2,
             lessons: {
               create: [
                 {
-                  title: "Lesson 4 — cast — the EVM's curl + jq",
-                  slug: "foundry-cast-cli-en",
+                  title: 'Lesson 4 — cast — the EVM\'s curl + jq',
+                  slug: 'foundry-cast-cli-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 30,
                   xpReward: 60,
-                  content: `# Lesson 4 — \`cast\` — the EVM's \`curl\` + \`jq\`
+                  content: `# Lesson 4 — cast — the EVM's curl + jq
+
+## Question
+
+\`cast\` is Foundry's chain CLI — the EVM's curl + jq. **Five verbs (call / send / storage / abi-decode / 4byte) for talking to a chain.** Read mainnet state, send a tx, read a storage slot directly, decode arbitrary calldata, reverse-look-up a 4-byte selector — the moments where Rust gives way to the shell.
+
+## Principle (minimum model)
+
+- **\`cast call <addr> "fn(args)" <args>\` = read.** Calls a non-state-changing function and returns the result. No gas. Best for sanity-checking \`view\` / \`pure\` functions.
+- **\`cast send <addr> "fn(args)" <args> --private-key <key>\` = write.** State-changing, gas + nonce + signature. \`--rpc-url\` picks the network; \`--from\` impersonates (cheatcode-equivalent on local anvil forks).
+- **\`cast storage <addr> <slot>\` = direct storage read.** No public getter required; assumes you know the storage layout. For \`mapping\` slots compute the index with \`cast index\`.
+- **\`cast abi-decode "fn(args)" <calldata>\` = calldata-to-types.** Pull a tx out of a receipt, decode the calldata using the function signature, see arguments printed by type.
+- **\`cast 4byte <selector>\` = selector-to-signature reverse lookup.** \`0xa9059cbb\` → \`transfer(address,uint256)\`. Resolves unknown selectors via the openchain.xyz registry.
+- **\`ethereum.reth.rs/rpc\` as the default mainnet RPC.** Free, rate-limit-friendly, run by the RethLab team. Pass via \`--rpc-url\`.
+- **Tab completion (\`cast completions\`).** zsh / bash / fish. Removes daily friction.
+
+## Worked example + steps
+
+# Lesson 4 — \`cast\` — the EVM's \`curl\` + \`jq\`
 
 ## Goal
 
@@ -1377,7 +1480,6 @@ Five categories of invocation:
 4. **\`cast 4byte\` / \`cast 4byte-decode\`** — function-selector lookup. Given the first 4 bytes of calldata, find the human-readable function name via the public 4byte directory.
 5. **\`cast send\` against a local anvil (preview)** — state-changing transactions. We won't deploy anything significant; the exercise demonstrates how \`cast send\` interacts with a chain (Lesson 5 covers anvil itself in depth).
 
-> 🛑 **Predict.** Before reading on: in the rethlab \`alloy-provider\` lesson, you wrote (paraphrased) \`let supply = provider.call(&tx).await?\` where \`tx\` was built with \`eth_call\` semantics. What's the exact \`cast\` invocation that produces the same result against mainnet?
 
 (Answer: **\`cast call --rpc-url <URL> <contract-address> "<function-signature>" [args...]\`**. The pieces map directly: the \`--rpc-url\` flag is the alloy \`RootProvider\`'s underlying transport URL, the contract address is the \`to\` field in the transaction, the function signature is the human-readable ABI shorthand that cast hashes into a 4-byte selector internally (alloy uses the same \`Function::parse\` machinery), and any args are positional. The return is raw hex unless you specify return types as \`"(...returntypes)"\` after the function signature, in which case cast decodes for you. **Same code path, two surfaces — Rust for programs, cast for the shell.**)
 
@@ -1691,16 +1793,41 @@ Lesson 5 wires the last piece: local development against *real* mainnet state vi
 - The full local-dev loop: \`anvil --fork-url\` → \`cast send\` against forked mainnet → \`cast call\` to verify → no real ETH spent
 
 After Lesson 5 you can develop against mainnet state without leaving your laptop. Lesson 5 closes the test-discipline + CLI portion of the course; Lesson 6 is the capstone where you port openhl-liquidation Stage 10b's \`InsuranceFund\` to Solidity and prove the same 4 conservation invariants with \`forge invariant\`.
+
+## Summary (3 lines)
+
+- \`cast\` = the EVM's curl + jq. Five verbs (call / send / storage / abi-decode / 4byte) for chain interaction. \`cast call\` reads (no gas); \`cast send\` writes (gas + nonce + signature).
+- \`cast storage\` reads slots directly; \`cast index\` computes mapping slots; \`cast abi-decode\` reverses calldata; \`cast 4byte\` reverses selectors.
+- \`--rpc-url ethereum.reth.rs/rpc\` is the default mainnet RPC. Tab completion removes friction. Next lesson: \`anvil --fork-url\` + cheatcodes for state-aware testing.
 `,
                 },
                 {
-                  title: "Lesson 5 — anvil + cheatcodes — local development with mainnet state",
-                  slug: "foundry-anvil-cheatcodes-en",
+                  title: 'Lesson 5 — anvil + cheatcodes — local development with mainnet state',
+                  slug: 'foundry-anvil-cheatcodes-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 35,
                   xpReward: 70,
-                  content: `# Lesson 5 — \`anvil\` + cheatcodes — local development with mainnet state
+                  content: `# Lesson 5 — anvil + cheatcodes — local development with mainnet state
+
+## Question
+
+\`anvil\` is Foundry's local node + mainnet fork; cheatcodes are precompiles that hack EVM state from inside a test. **\`vm.deal\` / \`vm.warp\` / \`vm.prank\` + \`anvil --fork-url\` lets you state-aware-test against real mainnet state.** The structural difference from Hardhat's \`evm_snapshot\` is that cheatcodes are precompiles, not JSON-RPC.
+
+## Principle (minimum model)
+
+- **\`anvil --fork-url <mainnet RPC>\` forks mainnet.** Real mainnet state, writeable locally, \`--fork-block-number\` pins to a fixed block for determinism.
+- **Cheatcodes-as-precompiles.** Address \`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D\`. Foundry's REVM fork intercepts calls to that address. Same process, no IPC, no JSON-RPC trust boundary.
+- **\`vm.deal(addr, balance)\`.** Rewrite any address's ETH balance. No faucet needed — useful for pre-funding test accounts.
+- **\`vm.warp(timestamp)\`.** Set the block timestamp to anything you want. Essential for time-dependent logic (vesting / auctions).
+- **\`vm.prank(addr)\`.** Make the next external call appear to come from \`addr\` as \`msg.sender\`. Test \`onlyOwner\` from any EOA. \`vm.startPrank\` / \`vm.stopPrank\` cover sequences.
+- **Compose them.** \`vm.deal\` + \`vm.warp\` + \`vm.prank\` lets you reproduce any mainnet state against the real mainnet protocols (Uniswap / Aave) — high-fidelity E2E integration tests.
+- **\`vm.snapshot\` / \`vm.revertTo\`.** State checkpoint + rollback. Snapshot at the start of a sequence, revert between test variants for isolation.
+- **Contrast with Hardhat's \`evm_snapshot\` JSON-RPC.** Hardhat = separate process, IPC for every cheatcode call. Foundry = same process, precompile call. Same precompile-as-EVM-superpower pattern as openhl's Precompiles course (Stage 9), exposed for Solidity testing.
+
+## Worked example + steps
+
+# Lesson 5 — \`anvil\` + cheatcodes — local development with mainnet state
 
 ## Goal
 
@@ -1753,7 +1880,6 @@ Six categories of invocation:
 5. **The forked-impersonation flow** — fork mainnet → impersonate USDC whale → transfer USDC to your test address → use it in a contract call. The end-to-end demo.
 6. **The \`vm.*\` ↔ \`anvil_*\` mapping table** — same pedagogical role as Lesson 4's \`cast\` ↔ \`alloy::Provider\` table, but for cheatcodes.
 
-> 🛑 **Predict.** Before reading on: in your Lesson 1 test you wrote \`vm.deal(alice, 10 ether)\` to give alice a fresh balance for the test. Anvil exposes the same machinery via RPC. What's the \`cast rpc anvil_*\` invocation that does the same thing against a running forked anvil at \`localhost:8545\`?
 
 (Answer: **\`cast rpc anvil_setBalance 0xAliceAddress 0x8AC7230489E80000 --rpc-url http://localhost:8545\`** — where \`0x8AC7230489E80000\` is hex for 10 × 10^18 wei (10 ether). The shape is identical: name an address, set its balance to a value. Anvil's RPC takes the balance as a hex-encoded uint256; the test cheatcode takes it as a Solidity \`uint256\`. **Same REVM state field is being written. The difference is whether you're inside Foundry's test runner (cheatcode) or talking to anvil over JSON-RPC (RPC method). Two surfaces, one machinery — and the values you write end up in the exact same \`RevmState::accounts\` map.**)
 
@@ -2135,24 +2261,48 @@ Lesson 6 is the capstone where everything in Lesson 0–Lesson 5 comes together.
 - \`examples/foundry-capstone/test/InsuranceFund.invariant.t.sol\` — the 4 \`invariant_*\` functions: conservation, monotonicity-of-deposits, non-negative-balance, fee-residual-equivalence
 
 By the end of Lesson 6 you'll have proven the same theorem in two languages, mechanically, against the same \`forge invariant\` engine you learned in Lesson 3. **That's the discipline transfer that makes the whole rethlab framework click: it was never about Rust *or* Solidity — it was about the conservation-law discipline that survives the language boundary.**
+
+## Summary (3 lines)
+
+- \`anvil --fork-url\` forks mainnet state locally; \`--fork-block-number\` pins for determinism. State-aware tests run against real protocols, high fidelity.
+- Cheatcodes live at \`0x71097...\` as precompiles. Foundry's REVM fork intercepts. \`vm.deal\` / \`vm.warp\` / \`vm.prank\` rewrite state directly — no IPC, no JSON-RPC, structurally different from Hardhat's \`evm_snapshot\`.
+- \`vm.snapshot\` / \`vm.revertTo\` isolate test variants. Cheatcode-as-precompile is openhl's Stage 9 precompile-as-EVM-superpower pattern, surfaced for testing. Next lesson: Capstone — prove the four \`InsuranceFund\` invariants in Solidity.
 `,
                 },
               ],
             },
           },
           {
-            title: "Capstone",
+            title: 'Capstone',
             sortOrder: 3,
             lessons: {
               create: [
                 {
-                  title: "Lesson 6 — Capstone — port openhl-liquidation's InsuranceFund to Solidity, prove the 4 invariants",
-                  slug: "foundry-capstone-en",
+                  title: 'Lesson 6 — Capstone — port openhl-liquidation\'s InsuranceFund to Solidity, prove the 4 invariants',
+                  slug: 'foundry-capstone-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 60,
                   xpReward: 110,
-                  content: `# Lesson 6 — Capstone — port openhl-liquidation's \`InsuranceFund\` to Solidity, prove the 4 invariants
+                  content: `# Lesson 6 — Capstone — port openhl-liquidation's InsuranceFund to Solidity, prove the 4 invariants
+
+## Question
+
+The Capstone = port openhl-liquidation Stage 10b's \`InsuranceFund\` from Rust to Solidity, write Lesson 9's four conservation-law invariants in Foundry, and run \`forge invariant\` for 10 K iterations. **Same theorem proved twice, in two languages, mechanically. Discipline transfer complete.**
+
+## Principle (minimum model)
+
+- **Capstone target.** Port openhl-liquidation Stage 10b's \`InsuranceFund\` (Rust) → \`InsuranceFund.sol\` (Solidity). Saturating arithmetic, shortfall withdrawal, four conservation laws — all 1:1.
+- **Four invariants (in rethlab/examples/foundry-capstone/).** (1) \`amount + unfilled == shortfall\` (withdraw conservation). (2) \`balance >= 0\` (always, via saturating arithmetic). (3) deposit monotonically increases balance. (4) withdraw monotonically decreases balance. 1:1 with Lesson 9's four \`proptest\`s.
+- **\`InsuranceFund.sol\` shape.** \`uint64 balance\` state + \`deposit(uint64 amount)\` + \`withdrawShortfall(uint64 shortfall) returns (uint64 amount, uint64 unfilled)\`. Saturating arithmetic via Solidity 0.8 unchecked blocks (\`balance + amount > type(uint64).max ? type(uint64).max : balance + amount\`).
+- **Test harness.** \`InsuranceFundHandler\` contract exposes deposit / withdrawShortfall + maintains ghost variables \`totalDeposited\` / \`totalWithdrawn\`. \`InsuranceFundInvariantTest\` registers \`targetContract(handler)\` + four \`invariant_*\` functions.
+- **10 K iterations.** \`[profile.ci.invariant] runs = 10000, depth = 50\` → 500 K call sequences. Production-CI tier, comparable to Lesson 9 proptest's 100 K runs.
+- **Byte-for-byte answer key.** \`rethlab/examples/foundry-capstone/\` is git-SHA-pinned. \`git checkout <sha>\` gives byte-for-byte the same answer as the author — same discipline as Lesson 9's \`crates/evm\` SHA pinning.
+- **The Capstone is the proof.** All four invariants pass = the Rust proptest and the Solidity invariant test prove the same theorem independently. Discipline crosses the language boundary — proven mechanically.
+
+## Worked example + steps
+
+# Lesson 6 — Capstone — port openhl-liquidation's \`InsuranceFund\` to Solidity, prove the 4 invariants
 
 ## Goal
 
@@ -2207,7 +2357,6 @@ Seven steps across three Solidity files:
 6. **Run \`forge invariant\`** — all 4 invariants should hold at the default 256 runs × 50 depth = 12,800 calls. Bump to 100,000 calls for the proof-of-the-day.
 7. **Deliberate-break demo + side-by-side Lesson 13 diff** — break one ghost update in the Handler, watch the multi-call counterexample appear. Then \`diff\` the Solidity capstone against Lesson 13's Rust to see the same operations in the same order.
 
-> 🛑 **Predict.** Before reading on: in openhl-liquidation Lesson 13, the cascade-conservation proptest had the form \`assert_eq!(fund.balance(), initial + sum_deposits - sum_withdrawals - sum_absorbed)\`. If you port this *exact* assertion to Solidity, what's the closest single line of forge invariant code? (Assume the Handler tracks the three sum-of-* ghosts.)
 
 (Answer: **\`assertEq(fund.balance(), handler.ghostSumDeposits() - handler.ghostSumWithdrawn() - handler.ghostSumAbsorbed());\`** — same arithmetic, same operands, same assert. The only differences: Solidity's \`assertEq\` takes (actual, expected) instead of Rust's \`(left, right)\` ordering, and the ghost accessors are explicit \`handler.X()\` method calls because Solidity doesn't have field-direct access from another contract. **The transformation is mechanical because the underlying theorem is language-agnostic — conservation laws are math, not syntax.**)
 
@@ -2723,6 +2872,12 @@ Where to go next:
 - **Read the Building OpenHL ADL course's Lesson 4 capstone — the Rust-side sibling of this lesson.** Same theorem (conservation laws across a cascade), same Handler-shaped discipline, different tooling: \`proptest!\` in Rust, \`forge invariant\` here. The two capstones together prove that the discipline transfers in *both* directions — Rust → Solidity here, and the Stage 10 quartet retrospective there.
 
 Foundry is a tool. The discipline is the product.
+
+## Summary (3 lines)
+
+- Capstone = port openhl-liquidation Stage 10b's \`InsuranceFund\` to Solidity, prove Lesson 9's four conservation-law invariants via \`forge invariant\` (10 K iterations). End of the discipline-transfer arc.
+- Test harness has three pieces: \`InsuranceFund.sol\` + \`InsuranceFundHandler\` (ghost variables \`totalDeposited\` / \`totalWithdrawn\`) + \`InsuranceFundInvariantTest\` (targetContract + four \`invariant_*\`). Saturating arithmetic via Solidity 0.8 unchecked.
+- All four invariants pass = the same theorem proved twice in two languages. \`rethlab/examples/foundry-capstone/\` pinned to a git SHA gives byte-for-byte answer-key. Discipline transfer complete.
 `,
                 },
               ],
