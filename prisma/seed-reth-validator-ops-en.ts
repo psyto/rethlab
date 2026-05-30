@@ -1,21 +1,21 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethValidatorOpsEN(prisma: PrismaClient) {
-  const tags = ['reth', 'validator', 'hsm', 'mpc', 'slashing', 'hot-upgrade', 'ops', 'l1', 'expert'];
+  const tags = ['validator', 'ops', 'slashing', 'hardfork', 'advanced'];
 
   await prisma.course.create({
     data: {
       slug: 'reth-validator-ops-en',
       title: 'Validator Operations — Keys, Slashing, and Coordinated Upgrades',
       description:
-        "The operational layer between writing consensus code and running consensus in production. Validator key management (hot keys, HSM, MPC, threshold signatures), slashing detection and double-signing prevention, and coordinated hardfork upgrades. The skills that turn a working consensus implementation into a production L1 that doesn't lose its operators' stake.",
+        'The validator-operations triangle for production teams: key management (config file → HSM → MPC → threshold sigs + the two-key pattern), slashing avoidance (DB + fail-closed under partition), and coordinated chain upgrades (height-gated chain spec, four emergency tiers). By the end you can defend a validator stack from the three failure modes that actually take operators down at 3 AM.',
       difficulty: 'ADVANCED',
-      duration: 110,
-      xpReward: 350,
-      track: 'reth-l1-architect',
+      duration: 60,
+      xpReward: 170,
+      track: 'reth-validator-ops',
       tags,
       isPublished: true,
-      sortOrder: 340,
+      sortOrder: 350,
       locale: 'en',
       instructorName: 'RethLab',
       modules: {
@@ -26,19 +26,36 @@ export async function seedRethValidatorOpsEN(prisma: PrismaClient) {
             lessons: {
               create: [
                 {
-                  title: 'Validator key management — hot keys, HSM, MPC, threshold signatures',
+                  title: 'Lesson 1 — Validator key management: hot keys, HSM, MPC, threshold signatures',
                   slug: 'validator-keys-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 18,
                   xpReward: 45,
-                  content: `# Validator key management — hot keys, HSM, MPC, threshold signatures
+                  content: `# Lesson 1 — Validator key management: hot keys, HSM, MPC, threshold signatures
+
+## Question
+
+It is 3 AM. The staking operator gets paged. A second validator process accidentally started on the standby box — same key, both online, both signed an attestation at the same height. The network sees two valid signatures from the same identity → **equivocation** → $2 M penalty. **The validator signing key is the validator's economic identity. How do production teams protect it?**
+
+## Principle (minimum model)
+
+- **Five requirements that no single solution satisfies.** Can sign + never signs twice at the same height/round + not exposed on the public internet + survives operator turnover + survives disaster (HW failure / DC loss).
+- **Four solutions, ordered by sophistication.** Config-file hot keys (dev only) → HSM (tamper-resistant hardware, key never leaves) → MPC (split across N-of-M devices) → threshold signatures (BLS, cryptographic share, no reconstruction required).
+- **MPC ≠ threshold signatures.** MPC = general-purpose protocol (compute any function over secret shares) / threshold signatures = a specific cryptographic primitive (the signature scheme itself supports secret-sharing natively).
+- **The "two keys" pattern.** Withdrawal key (cold, controls stake funds) + signing key (hot, votes / proposes / slashable). **Blast radius is bounded:** even if the signing key leaks, the funds can't be moved (only slashed).
+- **Four anti-slashing rules.** Exactly one signer per identity + slashing-protection DB + fail-closed under uncertainty + survives network partition.
+- **Remote-signer pattern.** The validator node holds no keys → it asks the remote signer → the HSM signs after enforcing slashing protection. Web3Signer / Eth-Signer / Tetuna are production examples.
+- **Multi-region active-passive.** DC1 active + DC2 standby + DC3 cold backup. **Transition is manual + only via consensus** (to avoid both signing at the same time).
+
+## Worked example + steps
+
+# Validator key management — hot keys, HSM, MPC, threshold signatures
 
 A staking operator gets paged at 3 AM. A second validator process accidentally started on the standby box — same key, both online, both signing attestations at height 9,801,442. By the time anyone notices, the network has already seen two valid signatures from one identity. That's **equivocation** (the consensus term for signing two conflicting messages at the same slot), and the protocol slashes them for it. They wake up to a $2M penalty for a duplicate process.
 
 A validator's signing key is its **economic identity**. Lose it → lose your stake. Leak it → attacker double-signs → slashing → lose your stake. Reuse it → same. This lesson is the operational reality: how production teams keep keys safe, what fails when they don't, and the cryptographic primitives that scale validator sets.
 
-> 🛑 **Predict before scrolling.** A validator runs 100 nodes. **How many copies of the signing key exist?** If your first instinct is "1 (the original) + 100 (running)," what attack does that allow?
 
 ## 1. The validator key threat model
 
@@ -105,7 +122,6 @@ Cons: Complex setup, key generation ceremony required.
 
 **Used by Ethereum's beacon chain validators with multi-node setups, and by chains like Aleo, Filecoin, etc.**
 
-> 🛑 **Anti-fluency.** "MPC is the same as threshold signatures." **Wrong.** They're different. State the difference. (Hint: one is a protocol over arbitrary signatures, the other is a cryptographic property.)
 
 MPC is a **general protocol** to compute functions over secret shares without revealing them — works for any function, including signing. Threshold signatures are a **specific cryptographic primitive** where signature schemes natively support secret-sharing. Threshold sigs are cleaner; MPC is more flexible.
 
@@ -136,7 +152,6 @@ These four rules are what separates "validator that earns rewards" from "validat
 
 \`crates/ethereum/blockchain-tree\` in reth has slashing-protection logic for Ethereum PoS. Custom L1s need their own (Cosmos uses CometBFT's; Solana uses gulp-style ledger replay).
 
-> 🛑 **Predict.** A validator runs duplicate processes on two machines for redundancy. **What's the slashable offense waiting to happen?** Walk through the failure scenario.
 
 Both machines have the same key. Both sign the same epoch's attestation. One is the canonical. The other gets seen by the network as a **double-signing event**. Slashed. The redundancy attempt becomes the slashing offense.
 
@@ -212,20 +227,56 @@ Relayers in CCIP, soltempo, mppsol use their own keys. Same principles apply:
 - [Web3Signer](https://github.com/Consensys/web3signer)
 - [Cosmos validator security](https://hub.cosmos.network/main/validators/security.html)
 
-> Final check: in one sentence, why is "having backups of the signing key" a slashing vulnerability rather than a feature? **If your answer doesn't include "duplicate signers can produce slashable equivocations," re-read §4.**`,
+> Final check: in one sentence, why is "having backups of the signing key" a slashing vulnerability rather than a feature? **If your answer doesn't include "duplicate signers can produce slashable equivocations," re-read §4.**
+
+## Pass criteria
+
+- List the five requirements and explain why no single solution satisfies all of them.
+- Walk the four solutions in order and the trade-off each makes.
+- Explain why MPC and threshold signatures are not the same thing.
+- Describe the two-key pattern and why it bounds the blast radius.
+- State the four anti-slashing rules with one sentence each.
+- Sketch the remote-signer pattern and which production tools implement it.
+- Explain why active-passive failover must run through consensus, not a load balancer.
+
+## Summary (3 lines)
+
+- Validator key management is bounded by five hard requirements; no single tool solves all of them, so production stacks layer HSM + slashing-protection DB + remote signer + active-passive multi-region.
+- MPC and threshold signatures are different primitives; both solve secret-sharing, but threshold sigs are scheme-native and operationally simpler.
+- The two-key pattern (withdrawal cold / signing hot) bounds blast radius — even a full signing-key leak cannot move funds, only slash them. Next lesson reads what actually triggers a slashing event.
+`,
                 },
                 {
-                  title: 'Slashing detection and the offline validator',
+                  title: 'Lesson 2 — Slashing detection and the offline validator',
                   slug: 'validator-slashing-detection-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 16,
                   xpReward: 40,
-                  content: `# Slashing detection and the offline validator
+                  content: `# Lesson 2 — Slashing detection and the offline validator
+
+## Question
+
+There are exactly two ways a validator loses stake. The expensive one: **sign two contradictory messages** (slashing — one event burns the bulk of the stake). The slow one: **be offline when the network needs you** (inactivity penalty — a few basis points a day). **Every operational decision is "pick the smaller of these two losses." What are the decision axes?**
+
+## Principle (minimum model)
+
+- **Two paths to losing stake.** Active (slashing — cryptographically provable, catastrophic) + passive (inactivity — gradual, small per epoch).
+- **Three flavours of slashable violation.** Double voting (same height, different blocks) + surround voting (Casper FFG — a later vote brackets an earlier one) + BFT equivocation (same height/round, different pre-commit).
+- **Slashing-protection DB is standard.** Before signing, check whether a different message at this (H, R) was already signed → if yes, refuse → if no, sign + record.
+- **The DB must be persistent + restart-safe + soft-update-safe + backed up.**
+- **DB write and signature must be atomic.** A network-remote DB introduces a window where atomicity breaks → it has to live on the same machine.
+- **Remote signer + DB = defence in depth.** Even if the validator node has a bug, the remote signer's DB is the last line.
+- **Whistleblower reward.** On Ethereum the reporter gets ~1/512 of the slashed amount — so a $1 M slashing pays ~$2 k to watchers, creating economic incentive to monitor.
+- **Inactivity leak.** When >1/3 are offline, finality stalls → every epoch shaves the offline stake → the chain self-heals back to >2/3 online.
+- **During a network partition, fail-closed is the right answer.** Keep signing (slashing risk) vs stop (small inactivity penalty) → stopping is always correct.
+
+## Worked example + steps
+
+# Slashing detection and the offline validator
 
 There are exactly two ways to lose validator stake. The expensive way: **sign two conflicting messages** (slashing — one event, big chunk of stake gone). The slow way: **be offline when the network needs you** (inactivity penalty — drips out over days). Every operational decision in this lesson comes down to picking the smaller of those two losses when something goes wrong.
 
-> 🛑 **Predict before scrolling.** A validator goes offline for 2 days. **How much do they lose?** What if they go offline during a partition that takes a third of validators with them?
 
 ## 1. The two ways to lose stake
 
@@ -307,7 +358,6 @@ This gives **defense in depth**. The validator node might have a bug, but the re
 
 Web3Signer (Ethereum) implements this. CometBFT validators have their own variant.
 
-> 🛑 **Anti-fluency.** Why does the slashing-protection DB need to be **on the same machine as the signer**? Can it be remote (network call)? If your answer doesn't reference "atomicity" or "network failure during signing," reread §3-4.
 
 The DB and signer must commit in **one atomic operation**. If you sign, then try to record but the network fails, you've signed without recording — and on retry you might sign again. Atomicity = both succeed or neither. Network-remote DBs add a window where atomicity is broken.
 
@@ -350,7 +400,6 @@ Mitigations:
 
 A well-built validator has multiple of these checks. Compromised validator software (where these checks are disabled) is a real risk.
 
-> 🛑 **Predict.** Your validator is in DC1. DC1 loses internet for 30 minutes. **Should the validator continue signing?** What are the failure modes if it does? What if it doesn't?
 
 If it continues signing: it might be on a partition and producing blocks the rest of the network doesn't see. Eventually network heals, the validator's chain is the wrong one, double-sign equivalent → slashed.
 
@@ -384,22 +433,59 @@ There may be a market for slashing watchers on Tempo (assuming it has slashing o
 - [Web3Signer](https://github.com/Consensys/web3signer)
 - [Inactivity leak design](https://eth2book.info/altair/part2/incentives/inactivity)
 
-> Final check: in one sentence, why is "stop signing if uncertain" the correct default for a validator? **If your answer doesn't reference "slashing > inactivity penalty," re-read §7.**`,
+> Final check: in one sentence, why is "stop signing if uncertain" the correct default for a validator? **If your answer doesn't reference "slashing > inactivity penalty," re-read §7.**
+
+## Pass criteria
+
+- Name the two paths to losing stake and the order of magnitude of each.
+- Distinguish double-vote, surround-vote, and BFT equivocation in one sentence each.
+- Explain why the slashing-protection DB must be local (atomicity with the signature).
+- Sketch the four DB durability requirements.
+- Explain why remote-signer + local DB is defence in depth, not duplication.
+- Recall the Ethereum whistleblower share and what behaviour it incentivises.
+- Walk the inactivity-leak self-healing mechanism.
+- State the fail-closed rule for network partitions and why it dominates.
+
+## Summary (3 lines)
+
+- Two paths to losing stake: slashing (catastrophic, cryptographically provable) and inactivity (gradual, small). All operational decisions reduce to picking the smaller of the two.
+- Slashing-protection DB is the standard defence — it must be local for atomicity, persistent, restart-safe, and backed up. Remote signer + DB stacks them for defence in depth.
+- Network partitions: fail-closed (stop signing) every time — the inactivity tax is always smaller than the slashing risk. Next lesson covers chain-wide coordinated upgrades.
+`,
                 },
                 {
-                  title: 'Hot upgrades and coordinated chain upgrades',
+                  title: 'Lesson 3 — Hot upgrades and coordinated chain upgrades',
                   slug: 'validator-hot-upgrades-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 16,
                   xpReward: 45,
-                  content: `# Hot upgrades and coordinated chain upgrades
+                  content: `# Lesson 3 — Hot upgrades and coordinated chain upgrades
+
+## Question
+
+It's mainnet hardfork day. The new binary rewrites consensus rules. Tens of thousands of validators are scattered across the world — no master switch, no maintenance window, the chain doesn't stop. **And yet at 14:13 UTC, every validator still on the canonical chain simultaneously starts producing blocks under the new rules. How?**
+
+## Principle (minimum model)
+
+- **The coordination mechanism is not "everyone upgrades at the same time".** **The binary itself knows when to switch** = the rules are height-gated.
+- **Four activation methods.** Block height (deterministic, works for PoW and PoS) + timestamp (wall-clock, less precise) + difficulty (PoW historical) + total difficulty (Ethereum Merge, one-shot).
+- **Upgrade *before* activation, and it's fine.** After activation, upgraded validators apply new rules; un-upgraded ones produce a stale fork and drop off the network.
+- **Five-step rollout.** Receive announcement → download + verify new binary → deploy before activation → verify deployment → wait for activation.
+- **What is being upgraded is the chain spec.** The \`activation_block_number\` table ships with the binary.
+- **Pre-fork dry run.** Testnet does the same fork 2–3 weeks earlier → any issue delays mainnet (Pectra was delayed twice).
+- **Hot fork ≠ hot software update.** Hot fork = consensus rules change / hot software update = no restart. A short restart is fine — the slashing-protection DB survives it.
+- **Four emergency tiers.** Stale blocks (self-heals) / invalid state (coordinated rollback) / fund theft (emergency hardfork) / consensus halt (coordinated reset — rare).
+- **BFT chains are halt-and-recover by design.** >1/3 offline → halt → operators recover → resume. **Halting is acceptable** (no fork, safety preserved).
+
+## Worked example + steps
+
+# Hot upgrades and coordinated chain upgrades
 
 Picture mainnet hardfork day. The new binary changes consensus rules. Tens of thousands of validators run it, spread across every continent, every cloud, every home setup. There is no master switch. There is no scheduled maintenance window. The chain cannot pause. And yet at 14:13 UTC, **every validator that's going to stay on the canonical chain starts producing blocks under the new rules at the same time** — and the ones that didn't upgrade quietly fork off into irrelevance. How?
 
 That coordination problem is the **hardest operational problem in blockchains**: validators must switch rules in lockstep without ever talking to each other directly. This lesson covers the protocol mechanisms and operational drills that make it work.
 
-> 🛑 **Predict before scrolling.** Ethereum has executed 10+ hardforks without major outages. **What's the protocol mechanism that makes this work?** It's not "everyone upgrades at the same time" — that's impossible to coordinate. Something stronger.
 
 ## 1. The core mechanism — height-gated rules
 
@@ -446,7 +532,6 @@ If any validator misses step 3, they **fall off the chain** at activation. They 
 
 For Ethereum: this is exactly how Merge, Shanghai, Cancun, Pectra activations worked. Validators have 1-2 weeks of warning to upgrade.
 
-> 🛑 **Anti-fluency.** "If 99% of validators upgrade and 1% don't, the chain forks." **Yes, but...** What happens to the 1%? Do they ever come back? Trace the recovery scenario.
 
 The 1% produce a "stale fork" with old rules. The 99% follow the canonical chain with new rules. From the perspective of the 99%, the 1% are simply offline (their blocks are rejected). To recover:
 1. Operator notices "my validator is producing rejected blocks"
@@ -552,96 +637,135 @@ For Tempo: this means **outages are by design** during big incidents. Better hal
 - [Ethereum execution-apis EngineAPI](https://github.com/ethereum/execution-apis) — how EL/CL coordinate fork activation
 - [Cosmos chain upgrade docs](https://docs.cosmos.network/)
 
-> Final check: in one sentence, why is "all validators upgrade at the exact same time" the wrong mental model for a hardfork? **If your answer doesn't reference "height-gated rules in the chain spec," re-read §1-2.**`,
+> Final check: in one sentence, why is "all validators upgrade at the exact same time" the wrong mental model for a hardfork? **If your answer doesn't reference "height-gated rules in the chain spec," re-read §1-2.**
+
+## Pass criteria
+
+- Explain why "everyone simultaneously upgrades" is not the actual coordination mechanism.
+- List the four activation methods and which chains use each.
+- State what happens to validators that upgrade after activation, vs before.
+- Walk the five-step rollout for a mainnet hardfork.
+- Explain what is actually upgraded (the chain spec / activation_block_number).
+- Describe the role of testnet dry runs and the Pectra precedent.
+- Distinguish hot fork from hot software update.
+- Name the four emergency tiers and the response posture for each.
+
+## Summary (3 lines)
+
+- Coordinated upgrades work because the binary knows the activation height (chain spec); operators upgrade ahead of activation, and the chain switches itself at the gate.
+- Four activation methods, four emergency tiers, five-step rollout. Hot fork ≠ hot software update — short restarts are routine because the slashing-protection DB survives them.
+- BFT chains are halt-and-recover; halting is acceptable because it preserves safety over liveness. Final quiz tests recall across keys / slashing / upgrades.
+`,
                 },
                 {
-                  title: 'Final quiz: validator operations',
+                  title: 'Quiz — Validator Operations',
                   slug: 'validator-final-quiz-en',
                   type: 'QUIZ',
                   sortOrder: 3,
                   duration: 10,
                   xpReward: 40,
-                  content: `# Final quiz: validator operations
+                  content: `# Quiz — Validator Operations
 
-The validator ops final check. You'll need this to operate any validator, design L1 economics, or understand why production chains fail.`,
+## Question
+
+Recap the three lessons: key management (HSM / MPC / threshold sigs), slashing detection (the DB + fail-closed rule), and coordinated upgrades (height-gated chain spec).
+
+## Principle (minimum model)
+
+- **Key management recap.** Five requirements, four solutions (config file → HSM → MPC → threshold sigs), two-key pattern (withdrawal cold / signing hot), remote signer + active-passive multi-region.
+- **Slashing recap.** Two paths to losing stake (slashing vs inactivity), three slashable violations (double / surround / equivocation), slashing-protection DB is local + atomic + persistent.
+- **Upgrade recap.** Height-gated chain spec, four activation methods, five-step rollout, four emergency tiers, BFT halt-and-recover.
+
+## Worked example + steps
+
+# Final quiz: validator operations
+
+The validator ops final check. You'll need this to operate any validator, design L1 economics, or understand why production chains fail.
+
+## Summary (3 lines)
+
+- Seven questions spanning keys, slashing, and upgrades — the operational triangle for validators.
+- Get two or more wrong → re-read the relevant lesson before moving on.
+- Pass → advance to the bootcamp courses for hands-on labs (or to Production Security & Governance for the org-level view).
+`,
                   quizQuestions: [
                     {
-                      question: "Why is **MPC (Multi-Party Computation)** for validator keys structurally different from just **distributing a key across N hosts**?",
-                      options: [
+                      "question": "Why is **MPC (Multi-Party Computation)** for validator keys structurally different from just **distributing a key across N hosts**?",
+                      "options": [
                         "MPC is faster.",
-                        'MPC ensures **no single device ever has the full key** — each holds a share, signing requires N-of-M cooperation, attacking one device gives the attacker a useless fraction. Distributing a key across N hosts means N hosts each have the full key (or pieces that can be reconstructed) — attacking any one is catastrophic.',
-                        'MPC is required by EIP-2335.',
-                        "MPC uses less storage.",
+                        "MPC ensures **no single device ever has the full key** — each holds a share, signing requires N-of-M cooperation, attacking one device gives the attacker a useless fraction. Distributing a key across N hosts means N hosts each have the full key (or pieces that can be reconstructed) — attacking any one is catastrophic.",
+                        "MPC is required by EIP-2335.",
+                        "MPC uses less storage."
                       ],
-                      correctIndex: 1,
-                      explanation: "MPC is cryptographically guaranteed not to reconstruct the key during signing. Distributed keys (poorly designed) leak full keys to multiple hosts. MPC is one of the few ways to genuinely scale validator key security without single points of trust.",
+                      "correctIndex": 1,
+                      "explanation": "MPC is cryptographically guaranteed not to reconstruct the key during signing. Distributed keys (poorly designed) leak full keys to multiple hosts. MPC is one of the few ways to genuinely scale validator key security without single points of trust."
                     },
                     {
-                      question: "Why does running **duplicate validators on two machines** typically result in **slashing**, not redundancy?",
-                      options: [
-                        'Slashing is unrelated to validator setup.',
-                        'Both machines have the same key. Both sign attestations for the same height/round. Both signatures are valid. The network sees two conflicting signatures from the same identity — **slashable equivocation**. The redundancy attempt becomes the slashing offense.',
-                        'Two-machine setups are forbidden by Ethereum spec.',
-                        "Duplicate validators consume too much bandwidth.",
+                      "question": "Why does running **duplicate validators on two machines** typically result in **slashing**, not redundancy?",
+                      "options": [
+                        "Slashing is unrelated to validator setup.",
+                        "Both machines have the same key. Both sign attestations for the same height/round. Both signatures are valid. The network sees two conflicting signatures from the same identity — **slashable equivocation**. The redundancy attempt becomes the slashing offense.",
+                        "Two-machine setups are forbidden by Ethereum spec.",
+                        "Duplicate validators consume too much bandwidth."
                       ],
-                      correctIndex: 1,
-                      explanation: 'This is the classic "trying to be careful, getting slashed" outcome. The fix is active-passive with strict failover (only one node ever has signing authority at a time, transition via consensus protocol). Even better: remote signer architecture where the key holder enforces single-signing at the protocol level.',
+                      "correctIndex": 1,
+                      "explanation": "This is the classic \"trying to be careful, getting slashed\" outcome. The fix is active-passive with strict failover (only one node ever has signing authority at a time, transition via consensus protocol). Even better: remote signer architecture where the key holder enforces single-signing at the protocol level."
                     },
                     {
-                      question: "Why is the **slashing-protection database** required to be on the **same machine as the signer**?",
-                      options: [
-                        'For latency reasons only.',
+                      "question": "Why is the **slashing-protection database** required to be on the **same machine as the signer**?",
+                      "options": [
+                        "For latency reasons only.",
                         "The DB write and the signing operation must be **atomic** — either both succeed or neither. A network-remote DB introduces a window where you sign first but DB update fails (e.g., network glitch), then retry could sign again. Atomicity is required to prevent double-sign on retry.",
-                        'Required by EIP-3076 specifically.',
-                        "Network calls are too slow.",
+                        "Required by EIP-3076 specifically.",
+                        "Network calls are too slow."
                       ],
-                      correctIndex: 1,
-                      explanation: 'Atomic operation requirement. Local DB + signer in one process = atomic. Remote DB = race condition. The "atomic" guarantee is the entire security model of slashing-protection.',
+                      "correctIndex": 1,
+                      "explanation": "Atomic operation requirement. Local DB + signer in one process = atomic. Remote DB = race condition. The \"atomic\" guarantee is the entire security model of slashing-protection."
                     },
                     {
-                      question: 'A validator is on one side of a network partition. **Should it continue signing during the partition?**',
-                      options: [
-                        'Yes, immediately resume signing.',
+                      "question": "A validator is on one side of a network partition. **Should it continue signing during the partition?**",
+                      "options": [
+                        "Yes, immediately resume signing.",
                         "**No, stop signing during partition.** If it continues signing, it might be on a fork and producing blocks the rest of the network doesn't see. When the network heals, the validator's chain is wrong → equivocates with canonical chain → slashed. Better to lose inactivity penalty (small) than slashing penalty (large).",
                         "Stop signing only if the operator says so.",
-                        'Signing during partition is impossible.',
+                        "Signing during partition is impossible."
                       ],
-                      correctIndex: 1,
-                      explanation: 'Stop-signing is the correct default. Inactivity penalty is tiny; slashing penalty is large. The validator must detect "I might be on a partition" and refuse to sign until it can verify connectivity to >2/3 of peers. This is "fail-closed on uncertainty" — a core safety property.',
+                      "correctIndex": 1,
+                      "explanation": "Stop-signing is the correct default. Inactivity penalty is tiny; slashing penalty is large. The validator must detect \"I might be on a partition\" and refuse to sign until it can verify connectivity to >2/3 of peers. This is \"fail-closed on uncertainty\" — a core safety property."
                     },
                     {
-                      question: 'In a coordinated hardfork, **why do validators not all upgrade simultaneously**? What ensures they all switch to new rules at the right moment?',
-                      options: [
-                        'Hardforks require manual coordination via a chat room.',
-                        'The chain spec encodes **activation block height (or timestamp)**: at that block, the new rules apply. Validators upgrade *before* the activation — they could be early or late. At the activation block, new rules become consensus-enforced. Validators who haven\'t upgraded continue with old rules and fork off; they can rejoin by upgrading and syncing.',
-                        'Forks are triggered by majority vote at runtime.',
-                        'Only Ethereum supports hardforks.',
+                      "question": "In a coordinated hardfork, **why do validators not all upgrade simultaneously**? What ensures they all switch to new rules at the right moment?",
+                      "options": [
+                        "Hardforks require manual coordination via a chat room.",
+                        "The chain spec encodes **activation block height (or timestamp)**: at that block, the new rules apply. Validators upgrade *before* the activation — they could be early or late. At the activation block, new rules become consensus-enforced. Validators who haven't upgraded continue with old rules and fork off; they can rejoin by upgrading and syncing.",
+                        "Forks are triggered by majority vote at runtime.",
+                        "Only Ethereum supports hardforks."
                       ],
-                      correctIndex: 1,
-                      explanation: 'Height-gated rules are the magic. Operators have weeks to upgrade individually. At the activation block, everyone runs the same rules — those who don\'t fall off. Recovery is straightforward (upgrade + sync). This is how every major chain coordinates upgrades.',
+                      "correctIndex": 1,
+                      "explanation": "Height-gated rules are the magic. Operators have weeks to upgrade individually. At the activation block, everyone runs the same rules — those who don't fall off. Recovery is straightforward (upgrade + sync). This is how every major chain coordinates upgrades."
                     },
                     {
-                      question: 'Why does the **withdrawal key** stay cold while the **signing key** stays online?',
-                      options: [
+                      "question": "Why does the **withdrawal key** stay cold while the **signing key** stays online?",
+                      "options": [
                         "Cold storage is mandatory for all keys.",
                         "Separation of concerns. The signing key needs to be online for attestations/proposals (slashable if leaked → at worst lose hot stake). The withdrawal key controls the actual staked funds — keeping it cold means even if a signing key is compromised, the funds can't be moved by the attacker.",
-                        'Withdrawal keys are required to be cold by EIP-2335.',
-                        "Hot keys cannot be used for withdrawals.",
+                        "Withdrawal keys are required to be cold by EIP-2335.",
+                        "Hot keys cannot be used for withdrawals."
                       ],
-                      correctIndex: 1,
-                      explanation: 'Defense in depth. Worst case if signing key is leaked: validator gets slashed. The full staked balance is still safe because the withdrawal credential is cold. This is the standard for serious validator setups; without it, a key leak is catastrophic.',
+                      "correctIndex": 1,
+                      "explanation": "Defense in depth. Worst case if signing key is leaked: validator gets slashed. The full staked balance is still safe because the withdrawal credential is cold. This is the standard for serious validator setups; without it, a key leak is catastrophic."
                     },
                     {
-                      question: 'What\'s the **whistleblower reward** in PoS chains, and what does it enable?',
-                      options: [
+                      "question": "What's the **whistleblower reward** in PoS chains, and what does it enable?",
+                      "options": [
                         "A fixed daily payment to all validators.",
                         "When someone submits a slashing proof (the two conflicting signatures), they get a small fraction (typically ~1/512) of the slashed stake. This creates an economic incentive for **independent watchers** to monitor the chain and submit slashing proofs — enforcing the protocol without requiring everyone to do so. Permissionless enforcement.",
-                        'A bonus paid to validators who maintain perfect uptime.',
-                        'A penalty for late attestations.',
+                        "A bonus paid to validators who maintain perfect uptime.",
+                        "A penalty for late attestations."
                       ],
-                      correctIndex: 1,
-                      explanation: 'Whistleblower rewards turn slashing detection into an economic game. Anyone can profit by spotting double-signs. This means the protocol\'s integrity isn\'t dependent on a central party — anyone watching can enforce. Critical for permissionless decentralization.',
-                    },
+                      "correctIndex": 1,
+                      "explanation": "Whistleblower rewards turn slashing detection into an economic game. Anyone can profit by spotting double-signs. This means the protocol's integrity isn't dependent on a central party — anyone watching can enforce. Critical for permissionless decentralization."
+                    }
                   ],
                 },
               ],
