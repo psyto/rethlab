@@ -10,7 +10,7 @@ export async function seedRethConsensusEngineeringV3JA(prisma: PrismaClient) {
       description:
         '「reth を読める」から「L1 chain を出荷できる」までの最大のギャップを埋めるコース。コンセンサスは Rust EVM スタックの残りの層 — DB、VM、ネットワーク、並行性 — を **ひとつのチェーンとして束ねる** 層。コンセンサス理論を一から (BFT、safety/liveness、FLP)、Rust 製コンセンサスエンジンの実コード (reth の Consensus trait、Malachite、bera-reth の Proof-of-Liquidity) を読み、Reth ベース chain にカスタムコンセンサスを配線する。HyperBFT を読んで Tempo クラスの L1 chain を出荷する準備ができる。',
       difficulty: 'ADVANCED',
-      duration: 220,
+      duration: 193,
       xpReward: 650,
       track: 'reth-l1-architect',
       tags,
