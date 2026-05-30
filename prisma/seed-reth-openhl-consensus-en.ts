@@ -1,41 +1,55 @@
-// AUTO-GENERATED from drafts/openhl_*_en.md by .github/scripts/build-openhl-seed.ts
-// Do not hand-edit. Re-run the build script when drafts change.
-
 import { PrismaClient } from '@prisma/client';
 
 export async function seedRethOpenHlConsensusEN(prisma: PrismaClient) {
-  const tags = ["reth","malachite","bft","evm","clob","l1","openhl","expert"];
+  const tags = ['openhl', 'consensus', 'malachite', 'reth', 'expert'];
 
   await prisma.course.create({
     data: {
-      slug: "reth-openhl-consensus-en",
-      title: "Build OpenHL — from `cargo init` to a single-validator devnet",
+      slug: 'reth-openhl-consensus-en',
+      title: 'Build OpenHL — from \`cargo init\` to a single-validator devnet',
       description:
-        "Build the consensus substrate for an HL-shape L1 from scratch — wire real Reth (EVM) and real Malachite (BFT) into a single Rust workspace that produces blocks end-to-end. The reference implementation is `psyto/openhl`. The first course in the DIY Perp series.",
-      difficulty: "EXPERT",
+        'Build the openhl track\'s keystone — a single-validator devnet integrating Reth (execution) + Malachite (Tendermint-style BFT consensus). Sixteen lessons across eight modules: Orientation, Foundations (workspace + Reth + Malachite pinning), Contract types (shared vocabulary + ConsensusBridge trait), EL test double (InMemory + RethEvmBridge with alloy), CL types (OpenHlContext + 10 Malachite sub-types + SigningProvider + Codec + OpenHlNode), Engine integration (run_engine_app + first block through actor pipeline), Live Reth (bootstrap + LiveRethEvmBridge + validate_payload via EthBeaconConsensus + commit via Engine API forkchoice), and Capstone. Production parallel: Hyperliquid HyperBFT + HyperEVM.',
+      difficulty: 'EXPERT',
       duration: 660,
       xpReward: 1270,
-      track: "diy-perp",
+      track: 'reth-openhl-consensus',
       tags,
       isPublished: true,
-      sortOrder: 600,
-      locale: "en",
-      instructorName: "RethLab",
+      sortOrder: 1510,
+      locale: 'en',
+      instructorName: 'RethLab',
       modules: {
         create: [
           {
-            title: "Orientation",
+            title: 'Orientation',
             sortOrder: 0,
             lessons: {
               create: [
                 {
-                  title: "Build OpenHL — from cargo init to a single-validator devnet",
-                  slug: "openhl-orientation-en",
+                  title: 'Build OpenHL — from cargo init to a single-validator devnet',
+                  slug: 'openhl-orientation-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 20,
                   xpReward: 60,
-                  content: `# Build OpenHL — from \`cargo init\` to a single-validator devnet
+                  content: `# Build OpenHL — from cargo init to a single-validator devnet
+
+## Question
+
+Build openhl — **the open-source reference Hyperliquid implementation** — from \`cargo init\` to a running single-validator devnet that produces real blocks via a real Malachite consensus + real Reth execution. **The keystone of the openhl track**.
+
+## Principle (minimum model)
+
+- **16 lessons across 8 modules**: Orientation → Foundations → Contract types → EL test double → CL types → Engine integration → Live Reth → Capstone.
+- **Three sub-systems integrated.** Reth (execution engine) + Malachite (Tendermint-style BFT consensus) + the openhl orchestration glue.
+- **Pinned to openhl SHAs at each stage.** Stages 1-3 (workspace + Malachite setup), Stage 4 (contracts), Stage 5 (CL types), Stage 6+ (live Reth integration).
+- **Outcome.** A single-validator devnet that boots, produces blocks via BFT consensus, executes via Reth, and survives restart.
+- **Prerequisites.** openhl Funding + CLOB + Precompiles + perp primer + consensus-engineering Advanced course.
+- **Production parallel.** Hyperliquid HyperBFT + HyperEVM use this exact pattern (different code, same shape).
+
+## Worked example + steps
+
+# Build OpenHL — from \`cargo init\` to a single-validator devnet
 
 This is not a course you read. This is a course you **build**.
 
@@ -154,7 +168,6 @@ cargo check  # this WILL take a long time the first time — Reth is big
 
 If \`cargo check\` in \`openhl-reference\` passes, you have the right toolchain. Move on. If it fails, fix toolchain version first — \`rust-toolchain.toml\` in that repo pins Rust 1.95.0, and you've just dropped the same pin into \`my-openhl/\`, so \`rustup\` should auto-install the required toolchain for both.
 
-> 🛑 **Anti-fluency.** "I'll just edit \`openhl-reference\` directly." **No.** That repo is your answer key, not your workspace. Treat it as read-only. Edits to \`my-openhl/\` are yours; edits to \`openhl-reference/\` are confusing — you'll lose track of what you wrote vs what was already there.
 
 ## 6. The 16-lesson map
 
@@ -194,7 +207,6 @@ diff -ru ~/code/my-openhl/crates/types ./crates/types
 
 Your code will differ in trivial ways (whitespace, variable names, comment wording). What matters: types, signatures, control flow are equivalent. If those diverge meaningfully, the lesson didn't land; re-read the design-reflection section and adjust.
 
-> 🛑 **Anti-fluency.** "I should just type from the answer key." **No, that's the worst path.** If you copy from \`openhl-reference\`, you'll finish in 30 minutes and learn nothing. The point is to type from the lesson description, run into the friction the lesson describes, and arrive at code that happens to match the answer key. The matching is evidence, not the goal.
 
 ## 8. Setup confirmation — the actual Lesson 0 exercise
 
@@ -217,24 +229,49 @@ If all three pass, you are set up correctly. Move to Lesson 1.
 >
 > In one sentence, can you state the difference between \`~/code/my-openhl\` and \`~/code/openhl-reference\`?
 >
-> If you can't say in your own words "**one is the real workspace I write line by line, the other is the mirror I only consult when I'm stuck**," re-read §5 before starting Lesson 1. If you blur this distinction now, you'll eventually write code into \`openhl-reference\` by mistake and lose the boundary between what you wrote and what you borrowed. **Make the boundary muscle memory before moving on.**`,
+> If you can't say in your own words "**one is the real workspace I write line by line, the other is the mirror I only consult when I'm stuck**," re-read §5 before starting Lesson 1. If you blur this distinction now, you'll eventually write code into \`openhl-reference\` by mistake and lose the boundary between what you wrote and what you borrowed. **Make the boundary muscle memory before moving on.**
+
+## Summary (3 lines)
+
+- Build openhl = single-validator devnet integrating Reth + Malachite. 16 lessons / 8 modules.
+- Pinned to openhl SHAs at each stage; outcome is a running devnet with real BFT + real Reth.
+- Prerequisites: openhl other courses + consensus-engineering. Production parallel: Hyperliquid HyperBFT + HyperEVM.
+`,
                 },
               ],
             },
           },
           {
-            title: "Foundations",
+            title: 'Foundations',
             sortOrder: 1,
             lessons: {
               create: [
                 {
-                  title: "Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)",
-                  slug: "openhl-workspace-en",
+                  title: 'Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)',
+                  slug: 'openhl-workspace-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 45,
                   xpReward: 80,
                   content: `# Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)
+
+## Question
+
+**Build the cargo workspace, add Reth + Malachite + openhl crates.** Three pinned SHAs; one \`Cargo.toml\`; one \`cargo build\`. Stages 1-3 of openhl.
+
+## Principle (minimum model)
+
+- **\`Cargo.toml\` workspace.** Three member crates: \`openhl-types\` (shared) + \`openhl-node\` (orchestrator) + \`openhl-tests\`. Workspace deps pin Reth + Malachite.
+- **Reth dep.** \`reth = { git = "https://github.com/paradigmxyz/reth", rev = "..." }\`. Pin to a specific commit; reproducible.
+- **Malachite dep.** \`informalsystems-malachitebft-core-consensus = { git = "...", rev = "..." }\`. Same pinning pattern.
+- **Why pinned SHAs.** Reth and Malachite are fast-moving upstream. Without pinning, your build may break overnight. With pinning, byte-for-byte reproducible.
+- **\`cargo build\` succeeds.** All deps resolved; openhl-node + openhl-types compile (empty stubs); openhl-tests runs zero tests. Foundation laid.
+- **Three SHAs.** Stage 1 = Reth pin. Stage 2 = Malachite pin. Stage 3 = openhl workspace + module wiring. Each stage in its own commit.
+- **Why three stages, not one.** Bisection. If Stage 2 fails, you know Malachite's integration is the issue; not Reth, not openhl.
+
+## Worked example + steps
+
+# Lesson 1 — Workspace + Reth + Malachite (Stages 1-3)
 
 ## Goal
 
@@ -275,7 +312,6 @@ This lesson edits files in \`~/code/my-openhl/\`. **Never** touch \`openhl-refer
 
 Dependency resolution is the most common source of friction in a Rust workspace. Reth and Malachite are big crates with deep transitive dep trees — getting them to compile cleanly together is non-trivial. **If we deferred this to "later," we'd discover the conflicts in the middle of writing application code and have to backtrack.** Getting the deps right first means every subsequent lesson focuses on the lesson's actual topic, not yak-shaving dependencies. *That's why the stage order below front-loads dep setup before any application code.*
 
-> 🛑 **Predict.** Before you scroll, sketch: how many \`members\` should the workspace Cargo.toml have, and what should they be? Hint: 10 library crates + 1 binary crate. You learned the 5 subsystems in Lesson 0 §3; what 10 crates implement them? (Look at Lesson 0 §4 if you need to.)
 
 So you'll do three things, in this order:
 
@@ -475,7 +511,6 @@ The 9 remaining crates and their doc comments:
 
 For \`clob\`, \`oracle\`, \`funding\`, \`liquidation\`, \`vault\`, \`node\`: the \`[dependencies]\` section can be empty (\`[dependencies]\` line followed by a blank \`[lints]\` block). For \`codec\`, \`evm\`, \`consensus\`: also empty initially — the actual dependencies land in later lessons when we write code that uses them.
 
-> 🛑 **Anti-fluency.** "Why not write all dependencies up front and avoid edits later?" **No.** A crate with an unused dependency is technical debt: it slows builds, confuses readers, and invites version conflicts. Add dependencies exactly when the code that needs them lands. The workspace \`Cargo.toml\` declares the *available* dependencies; each crate's \`Cargo.toml\` declares the *used* ones.
 
 ### Step 6: Create \`bin/openhl\`
 
@@ -581,10 +616,6 @@ alloy-rlp                 = { version = "0.3", default-features = false }
 
 **Why pin to a release-tag SHA, not main HEAD?** Main HEAD can be broken at any moment. Release tags are tested and stable. The comment in the file (\`# Bump in a dedicated PR. Always pin to a release-tag SHA, never main HEAD.\`) is a process discipline note for future bumps.
 
-> 🛑 **Predict.** What happens to \`cargo check --workspace\` when you run it now? Pick one before scrolling:
-> - (a) Same as before — no change since no crate uses any Reth dep yet
-> - (b) Massively slower the first time — fetches and compiles ~600 transitive Reth deps
-> - (c) Errors out — Reth needs explicit configuration we haven't provided
 
 The answer is (b). Cargo's \`workspace.dependencies\` declarations cause **resolution** but not **compilation** of unused deps. However, \`cargo check\` does walk the dep graph and fetch the git source. That's the 5-15 minute first-run cost. The good news: subsequent runs use the cached source.
 
@@ -719,24 +750,49 @@ git commit -m "Lesson 1 — workspace + Reth + Malachite pinned"
 
 ## Next lesson (Lesson 2)
 
-You have a workspace that compiles. No application logic yet. In Lesson 2 we write the first application code — \`openhl-types\`'s \`BlockHash\`, \`PayloadId\`, \`PayloadAttrs\`, \`ExecutedBlock\`, and \`PayloadStatus\`. These are the **shared vocabulary** of the consensus↔EVM contract. After Lesson 2, the contract types compile and have basic tests. Then Lesson 3 writes the trait that uses them.`,
+You have a workspace that compiles. No application logic yet. In Lesson 2 we write the first application code — \`openhl-types\`'s \`BlockHash\`, \`PayloadId\`, \`PayloadAttrs\`, \`ExecutedBlock\`, and \`PayloadStatus\`. These are the **shared vocabulary** of the consensus↔EVM contract. After Lesson 2, the contract types compile and have basic tests. Then Lesson 3 writes the trait that uses them.
+
+## Summary (3 lines)
+
+- Workspace = 3 crates (openhl-types + openhl-node + openhl-tests) + pinned Reth + pinned Malachite. \`cargo build\` succeeds.
+- Three stages (Reth pin / Malachite pin / openhl wiring) for bisection. Each in its own commit.
+- Foundation for everything after. Next: shared contract types in openhl-types.
+`,
                 },
               ],
             },
           },
           {
-            title: "Contract types",
+            title: 'Contract types',
             sortOrder: 2,
             lessons: {
               create: [
                 {
-                  title: "Lesson 2 — Shared contract types in openhl-types",
-                  slug: "openhl-contract-types-en",
+                  title: 'Lesson 2 — Shared contract types in openhl-types',
+                  slug: 'openhl-contract-types-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 30,
                   xpReward: 60,
-                  content: `# Lesson 2 — Shared contract types in \`openhl-types\`
+                  content: `# Lesson 2 — Shared contract types in openhl-types
+
+## Question
+
+**\`openhl-types\` is the shared vocabulary** between consensus (Malachite) and execution (Reth). Without it, the two systems speak different languages. Build the 10 core contract types (Block, BlockHeader, Tx, Receipt, etc.).
+
+## Principle (minimum model)
+
+- **10 contract types.** \`Block\` + \`BlockHeader\` + \`Transaction\` + \`Receipt\` + \`Address\` + \`B256\` + \`Bytes\` + \`U256\` + \`Signature\` + \`ValidatorId\`.
+- **Why "contract" types.** They're the shared schema both sides agree on. Changing one requires re-coordinating both sides.
+- **Serde for JSON; ssz for wire.** SSZ is the Ethereum-PoS-canonical serialization; openhl uses it for the consensus-side wire format.
+- **Trait impls.** \`Hash + Eq + Clone + Serialize + Deserialize + Encode + Decode\`. Match what both Reth and Malachite expect.
+- **No conversions; just shared types.** Both sides import from \`openhl-types\`. If a conversion is needed, it's a bug.
+- **Tests.** Round-trip serde + ssz for every type. Fail if encoding breaks.
+- **Production parallel.** Hyperliquid has the same separation; CL types live in a shared crate that both consensus + execution depend on.
+
+## Worked example + steps
+
+# Lesson 2 — Shared contract types in \`openhl-types\`
 
 ## Goal
 
@@ -801,7 +857,6 @@ Plus 4 unit tests covering: BlockHash hex display, PayloadStatus equality, Execu
 
 These five types are the **shared vocabulary** of the CL↔EL contract. Both the consensus crate and the evm crate will import them. They live in \`openhl-types\` (a third crate) — not in \`openhl-consensus\` and not in \`openhl-evm\` — for a reason explored in §Design reflection below.
 
-> 🛑 **Predict.** Look at the 5 types in the table above. **Why is \`PayloadStatus\` an enum with three variants (Valid/Invalid/Syncing), not just \`bool\`?** Hint: think about what a consensus node should do when the EL gives each answer. Three different actions, not two.
 
 ## Walk-through
 
@@ -880,7 +935,6 @@ Same newtype pattern, smaller backing type. No \`Display\` impl — \`Debug\` (\
 
 No \`PartialOrd, Ord\` here. Block hashes need ordering (for sorting); payload IDs don't (they're just opaque tokens between \`build_payload\` and \`payload_ready\`).
 
-> 🛑 **Anti-fluency.** "Why not just use \`u64\` directly? PayloadId is just a number." **Because newtypes prevent footguns.** If you use \`u64\`, you can write \`build_payload(..., some_random_u64)\` and Cargo won't catch it. With \`PayloadId(u64)\`, the compiler forces you to spell out \`PayloadId(some_random_u64)\`, making the intent visible. The cost is one extra \`(...)\` per construction; the benefit is that every payload ID in your code is provably a payload ID, not someone's mis-typed integer.
 
 ### Step 6: Add \`PayloadAttrs\`
 
@@ -1113,16 +1167,41 @@ It can (\`Default\` for \`[u8; 32]\` is all-zeros), but **we don't here** — th
 
 ## Next lesson (Lesson 3)
 
-\`openhl-types\` now has 5 contract types. Lesson 3 is the \`ConsensusBridge\` trait — the 4-method API surface that consensus calls into. The trait will reference the types you just wrote: \`build_payload(BlockHash, PayloadAttrs) -> PayloadId\`, \`payload_ready(PayloadId) -> ExecutedBlock\`, etc. After Lesson 3 the contract is fully specified at the type level; Lesson 4 starts implementing it.`,
+\`openhl-types\` now has 5 contract types. Lesson 3 is the \`ConsensusBridge\` trait — the 4-method API surface that consensus calls into. The trait will reference the types you just wrote: \`build_payload(BlockHash, PayloadAttrs) -> PayloadId\`, \`payload_ready(PayloadId) -> ExecutedBlock\`, etc. After Lesson 3 the contract is fully specified at the type level; Lesson 4 starts implementing it.
+
+## Summary (3 lines)
+
+- \`openhl-types\` = 10 contract types (Block / BlockHeader / Tx / Receipt / Address / B256 / Bytes / U256 / Signature / ValidatorId).
+- Serde for JSON; ssz for wire. Trait impls match both Reth + Malachite expectations.
+- No conversions; shared types. Round-trip tests. Next: ConsensusBridge trait.
+`,
                 },
                 {
-                  title: "Lesson 3 — The ConsensusBridge trait",
-                  slug: "openhl-bridge-trait-en",
+                  title: 'Lesson 3 — The ConsensusBridge trait',
+                  slug: 'openhl-bridge-trait-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 30,
                   xpReward: 60,
-                  content: `# Lesson 3 — The \`ConsensusBridge\` trait
+                  content: `# Lesson 3 — The ConsensusBridge trait
+
+## Question
+
+**\`ConsensusBridge\` is the trait that Malachite calls into the execution side** through. Build the interface; later lessons supply concrete impls (InMemory test double + RethEvmBridge production).
+
+## Principle (minimum model)
+
+- **\`ConsensusBridge\` trait.** ~7 methods: \`propose(parent_hash) -> Block\`, \`validate_payload(payload) -> Result<()>\`, \`apply_payload(payload) -> Receipts\`, \`commit(block_hash)\`, \`get_parent(hash)\`, \`get_best_block()\`, \`genesis_hash()\`.
+- **Why a trait, not a struct.** Allows multiple impls — test double for unit tests + RethEvmBridge for production. Malachite is decoupled from execution choice.
+- **\`propose\` builds a block.** Called when this validator is leader; gathers pending txs from mempool; builds Block; returns to Malachite for consensus.
+- **\`validate_payload\` checks before applying.** Stateless validation (signature checks, basic structure).
+- **\`apply_payload\` executes.** Reth (or test double) runs every tx; returns Receipts. Drives the state machine.
+- **\`commit\` finalises.** When Malachite has consensus, commit the block; persist.
+- **\`async fn\`.** Tokio-based. All methods async; Malachite drives in a tokio runtime.
+
+## Worked example + steps
+
+# Lesson 3 — The \`ConsensusBridge\` trait
 
 ## Goal
 
@@ -1177,7 +1256,6 @@ You'll do three things:
 
 This trait is the **single most-referenced artifact in the entire course**. Lesson 4 implements it (\`InMemoryEvmBridge\`). Lesson 5 implements it again (\`RethEvmBridge\`). Lesson 9 calls into it from the actor pipeline. Lessons 11–13 implement it a third time (\`LiveRethEvmBridge\`). **The signatures you write now propagate everywhere downstream.**
 
-> 🛑 **Predict.** Look at the four method names again: \`build_payload\`, \`payload_ready\`, \`validate_payload\`, \`commit\`. **Three of them are CL → EL (consensus calling execution); one is EL → CL (execution responding). Which one is the EL → CL direction, and why?** Hint: think about which method's *return value* the consensus side is waiting on.
 
 ## Walk-through
 
@@ -1272,7 +1350,6 @@ pub trait ConsensusBridge: Send + Sync {
 
 **\`: Send + Sync\`** are super-trait bounds. They say: every type that implements \`ConsensusBridge\` must also be \`Send\` (movable across thread boundaries) and \`Sync\` (referenceable from multiple threads). We need this because the bridge will be held in an \`Arc<dyn ConsensusBridge>\` shared between actor tasks; each actor may live on a different thread.
 
-> 🛑 **Anti-fluency.** "Can't I just write \`async fn\` directly without the macro?" **As of Rust 1.75 you can, but with caveats.** Native async-fn-in-trait doesn't yet give you \`Send\` bounds on the returned future automatically, and \`dyn Trait\` for traits with native async fns has rough edges. \`#[async_trait]\` is the boring, working solution. When the native feature matures (likely 1.95-2025+), we can revisit. For now: macro.
 
 ### Step 4: Understand the four method signatures
 
@@ -1468,24 +1545,50 @@ You can in your own code, but you'll diverge from openhl. The names match the Et
 
 ## Next lesson (Lesson 4)
 
-The contract is now fully specified at the type level. Lesson 4 starts implementing it. We write \`InMemoryEvmBridge\` — a test double that stores fake blocks in a \`Mutex<HashMap>\` and returns synthesized hashes. No real EVM, no real state — just enough to make the trait satisfiable and the consensus side testable. **Critically, the same trait \`ConsensusBridge\` covers both \`InMemoryEvmBridge\` (Lesson 4) and \`LiveRethEvmBridge\` (Lesson 11 onward) — that's the polymorphism win we're paying for with the \`Send + Sync\` bound and \`async_trait\` macro.**`,
+The contract is now fully specified at the type level. Lesson 4 starts implementing it. We write \`InMemoryEvmBridge\` — a test double that stores fake blocks in a \`Mutex<HashMap>\` and returns synthesized hashes. No real EVM, no real state — just enough to make the trait satisfiable and the consensus side testable. **Critically, the same trait \`ConsensusBridge\` covers both \`InMemoryEvmBridge\` (Lesson 4) and \`LiveRethEvmBridge\` (Lesson 11 onward) — that's the polymorphism win we're paying for with the \`Send + Sync\` bound and \`async_trait\` macro.**
+
+## Summary (3 lines)
+
+- \`ConsensusBridge\` trait = ~7 async methods. propose builds; validate_payload checks; apply_payload executes; commit finalises.
+- Decouples Malachite from execution. Test double (InMemory) + production (RethEvmBridge) both impl this trait.
+- Tokio async throughout. Next module: EL test double.
+`,
                 },
               ],
             },
           },
           {
-            title: "EL test double",
+            title: 'EL test double',
             sortOrder: 3,
             lessons: {
               create: [
                 {
-                  title: "Lesson 4 — InMemoryEvmBridge — first impl of the trait",
-                  slug: "openhl-in-memory-bridge-en",
+                  title: 'Lesson 4 — InMemoryEvmBridge — first impl of the trait',
+                  slug: 'openhl-in-memory-bridge-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 40,
                   xpReward: 70,
-                  content: `# Lesson 4 — \`InMemoryEvmBridge\` — first impl of the trait
+                  content: `# Lesson 4 — InMemoryEvmBridge — first impl of the trait
+
+## Question
+
+**\`InMemoryEvmBridge\` is the first concrete \`ConsensusBridge\` impl.** No real EVM; just enough state (HashMap + a tiny tx history) to drive Malachite end-to-end in tests.
+
+## Principle (minimum model)
+
+- **Struct.** \`blocks: HashMap<B256, Block>\` + \`current_head: B256\` + \`mempool: VecDeque<Transaction>\`. ~50 lines.
+- **\`propose\` impl.** Build a Block with the next pending tx; return it. Synchronous compute wrapped in async fn.
+- **\`validate_payload\`.** Check the block's parent_hash exists in \`blocks\`. Cheap.
+- **\`apply_payload\`.** Update state; insert block into HashMap; advance current_head. No real EVM execution.
+- **\`commit\`.** Already committed at apply time (no separate phase needed for the test double).
+- **Why a test double matters.** Lets us run Malachite + the engine pipeline without spinning up Reth. Faster + simpler debugging during development.
+- **Tests.** Boot Malachite with InMemoryEvmBridge; propose + validate + apply + commit through 3 blocks; assert state advances.
+- **Production swap.** Lesson 11+ replaces this with LiveRethEvmBridge — same trait, real Reth backing.
+
+## Worked example + steps
+
+# Lesson 4 — \`InMemoryEvmBridge\` — first impl of the trait
 
 ## Goal
 
@@ -1535,7 +1638,6 @@ You'll do four things:
 
 This is the first time you write a Rust impl. The pattern you encode here repeats: \`RethEvmBridge\` in Lesson 5 uses the same skeleton, and \`LiveRethEvmBridge\` in Lesson 11 onward does too. **The state-management pattern (Mutex<State> with pending vs chain maps) propagates to those impls too.**
 
-> 🛑 **Predict.** Before scrolling: what does the test double's \`build_payload\` need to **fake**, vs what can it **actually do**? Hint: it can't run an EVM, but it can: assign a \`PayloadId\`, increment a block number, synthesize a hash, remember the pending block. The fake-vs-real distinction matters in Lesson 5 and Lesson 11.
 
 ## Walk-through
 
@@ -1706,7 +1808,6 @@ Step by step:
 5. **Build the \`ExecutedBlock\`** and stash it in \`pending\`. The block has parent_hash, number, hash, and a zero state_root (we didn't run an EVM).
 6. **Return \`Ok(PayloadId(id))\`**.
 
-> 🛑 **Anti-fluency.** "I should use a real cryptographic hash for \`BlockHash\`." **No** — this is a test double. Real hashing requires running the EVM to compute the post-state root, which is what we're avoiding by using a test double in the first place. The synthesized hash satisfies the *uniqueness* requirement of \`BlockHash\` without satisfying the *cryptographic-commitment* requirement, which is fine for unit tests. Module 1 Lesson 11 onward (LiveRethEvmBridge) does real hashing — but it depends on Reth doing the work.
 
 ### Step 5: Implement \`payload_ready\`
 
@@ -1970,16 +2071,41 @@ Make sure each import is actually used somewhere in your code. The boilerplate I
 
 ## Next lesson (Lesson 5)
 
-You have a working \`ConsensusBridge\` impl, but it doesn't use Reth at all. Lesson 5 writes the next impl: \`RethEvmBridge\`. Same trait, but the \`ExecutedBlock\` is now built from a real \`alloy_consensus::Header\` (not synthesized), and the \`BlockHash\` is a real \`B256\` hashed via Reth's \`Header::hash_slow\`. Still in-memory state (no live Reth provider), but the **types are real**. This is the bridge between toy types (Lesson 4) and live integration (Lesson 11 onward).`,
+You have a working \`ConsensusBridge\` impl, but it doesn't use Reth at all. Lesson 5 writes the next impl: \`RethEvmBridge\`. Same trait, but the \`ExecutedBlock\` is now built from a real \`alloy_consensus::Header\` (not synthesized), and the \`BlockHash\` is a real \`B256\` hashed via Reth's \`Header::hash_slow\`. Still in-memory state (no live Reth provider), but the **types are real**. This is the bridge between toy types (Lesson 4) and live integration (Lesson 11 onward).
+
+## Summary (3 lines)
+
+- \`InMemoryEvmBridge\` = HashMap + VecDeque mempool + 7 trait methods. ~50 lines. No real EVM.
+- Lets us drive Malachite end-to-end without Reth. Faster debugging.
+- Tests boot Malachite + drive 3 blocks; assert state advances. Production swap to RethEvmBridge later. Next: RethEvmBridge with real alloy types.
+`,
                 },
                 {
-                  title: "Lesson 5 — RethEvmBridge with real alloy types",
-                  slug: "openhl-reth-bridge-en",
+                  title: 'Lesson 5 — RethEvmBridge with real alloy types',
+                  slug: 'openhl-reth-bridge-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 40,
                   xpReward: 70,
-                  content: `# Lesson 5 — \`RethEvmBridge\` with real alloy types
+                  content: `# Lesson 5 — RethEvmBridge with real alloy types
+
+## Question
+
+**Swap the InMemory bridge to one that uses real Alloy types** (\`Block\`, \`Transaction\`, \`Receipt\`). Same trait; different storage. Still no Reth node yet — that comes in Lesson 11.
+
+## Principle (minimum model)
+
+- **\`RethEvmBridge\` struct.** Reuses InMemory storage (HashMap) but now keyed by \`alloy::Block::hash()\` instead of B256.
+- **Conversion-free.** \`openhl-types\` shared types are designed to be aliases for Alloy types where possible. No conversions needed.
+- **\`propose\` builds an Alloy \`Block\`.** Same shape as InMemory; uses Alloy's Block builder.
+- **\`apply_payload\` uses Alloy's tx execution.** Still no real EVM; just inserts into HashMap. Production swap is Lesson 11.
+- **Tests verify Alloy compatibility.** Round-trip serialization; SSZ encoding. Same blocks as InMemory; just typed differently.
+- **Why this intermediate step.** Going from InMemory → real Reth in one jump is too big. Intermediate step verifies types alignment first.
+- **Production swap path.** Lesson 11 booots an actual Reth EthereumNode + Lesson 12 wires this bridge to it.
+
+## Worked example + steps
+
+# Lesson 5 — \`RethEvmBridge\` with real alloy types
 
 ## Goal
 
@@ -2030,7 +2156,6 @@ Six things:
 
 The key step is #2 — the **shape of internal state changes**. Lesson 4 stored \`ExecutedBlock\` directly. Lesson 5 stores \`(B256, Header)\`: the alloy-native types, with conversion to/from \`ExecutedBlock\` only at the trait boundary. **The alloy types are the source of truth; \`ExecutedBlock\` is just the contract serialization.** This separation is what Lesson 11 onward extends — \`LiveRethEvmBridge\` keeps the same internal-vs-boundary split, just adds a real Reth provider behind it.
 
-> 🛑 **Predict.** Lesson 4's \`InMemoryEvmBridge\` synthesized a hash from \`(id, number)\`. Lesson 5's \`RethEvmBridge\` calls \`header.hash_slow()\` — real RLP encoding + Keccak-256. **What testable behavior does this difference enable?** Hint: think about what happens to the hash if you change a single field on the header.
 
 ## Walk-through
 
@@ -2210,7 +2335,6 @@ Walk through:
 
 **This block hash is real.** If any field of the header changes between two \`build_payload\` calls — even by one byte — the resulting hash differs. The Lesson 4 synthesized hash didn't have this property; the Lesson 5 hash does. The test in Step 9 proves this.
 
-> 🛑 **Anti-fluency.** "Why not store \`hash\` separately from \`header\` instead of as a tuple — it's clearer." **You could, with one more field on \`State\`. But the tuple captures the relationship: this hash is the hash *of this exact header*.** Storing them separately invites the bug where someone mutates the header and forgets to recompute the hash. The tuple makes them inseparable.
 
 ### Step 5: Implement \`payload_ready\`, \`validate_payload\`, \`commit\`
 
@@ -2295,7 +2419,6 @@ Three small helpers:
 
 **Why three separate helpers instead of one big conversion function?** Each does one thing. \`to_b256\` and \`from_b256\` are pure type-system bridges (no logic). \`to_executed_block\` knows which fields of \`Header\` map to which fields of \`ExecutedBlock\`. Splitting them makes each obviously correct.
 
-> 🛑 **Anti-fluency.** "\`B256\` and \`BlockHash\` both wrap \`[u8; 32]\`. Can't I just \`transmute\` between them?" **Don't.** Even though the byte layout is identical, the types are distinct in the type system — that's the point. The conversion functions document where the boundaries are. If a future change makes \`BlockHash\` carry additional metadata (e.g., a checksum), \`transmute\` becomes a bug; \`to_b256\` becomes a place to update.
 
 ### Step 7: Wire \`engine\` into the crate
 
@@ -2502,24 +2625,49 @@ The key contrast:
 1. \`ConsensusBridge\` (Lesson 3) is a trait we (openhl) own.
 2. \`Context\` (Lesson 6) is a trait Malachite owns.
 
-Implementing your own contract versus implementing an external library's contract for your types are mirror-image design forces. The next lesson is where that asymmetry becomes muscle memory.`,
+Implementing your own contract versus implementing an external library's contract for your types are mirror-image design forces. The next lesson is where that asymmetry becomes muscle memory.
+
+## Summary (3 lines)
+
+- \`RethEvmBridge\` = same storage as InMemory but Alloy-typed. Conversion-free thanks to shared types.
+- Verifies types compatibility before jumping to real Reth. Tests assert Alloy round-trip works.
+- Production swap: Lesson 11 boots Reth + Lesson 12 wires the bridge. Next module: CL types.
+`,
                 },
               ],
             },
           },
           {
-            title: "CL types",
+            title: 'CL types',
             sortOrder: 4,
             lessons: {
               create: [
                 {
-                  title: "Lesson 6 — OpenHlContext and the 10 Malachite sub-types",
-                  slug: "openhl-malachite-context-en",
+                  title: 'Lesson 6 — OpenHlContext and the 10 Malachite sub-types',
+                  slug: 'openhl-malachite-context-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 50,
                   xpReward: 90,
-                  content: `# Lesson 6 — \`OpenHlContext\` and the 10 Malachite sub-types
+                  content: `# Lesson 6 — OpenHlContext and the 10 Malachite sub-types
+
+## Question
+
+**\`OpenHlContext\` is the \`Context\` trait impl for openhl** — Malachite's generic plug-in interface. 10 associated sub-types must be defined (Address / Height / ProposalPart / Vote / etc.).
+
+## Principle (minimum model)
+
+- **Malachite's \`Context\` trait.** Defines 10 associated types that the host application provides. Malachite is generic over them.
+- **10 sub-types.** \`Address + Height + ProposalPart + Proposal + Vote + Validator + ValidatorSet + Block + BlockHash + Extension\`. Each must satisfy Malachite's trait bounds.
+- **Trait bound discipline.** \`Send + Sync + Clone + Debug + serde\`. Each sub-type defined in \`openhl-types\`; reused by both the bridge and the consensus.
+- **\`OpenHlContext\` struct.** Holds references to validators + signing provider + codec. Passed by reference to Malachite.
+- **Why a trait, not a fixed type set.** Lets Cosmos / openhl / other chains use Malachite with their own type sets. Compile-time polymorphism.
+- **Production matches.** Hyperliquid's HyperBFT has analogous sub-types; the patterns transfer directly.
+- **Tests.** Round-trip serde for every sub-type; verify Malachite's trait bounds hold (the compiler enforces).
+
+## Worked example + steps
+
+# Lesson 6 — \`OpenHlContext\` and the 10 Malachite sub-types
 
 ## Goal
 
@@ -2586,11 +2734,6 @@ You'll build (in this order):
 
 The shape of these types **propagates everywhere downstream**. Lesson 7 (SigningProvider) signs \`OpenHlVote\` and \`OpenHlProposal\`. Lesson 8 (Codec) encodes them. Lesson 9 (run_engine_app) handles AppMsg variants parameterized over \`OpenHlContext\`. **The design decisions you encode here propagate through 8 more lessons.**
 
-> 🛑 **Predict.** Look at the type list above. Two of the 10 types deserve special attention because they encode load-bearing decisions:
-> - \`OpenHlValidatorSet\` has a **specific sort order** that every validator must agree on
-> - \`OpenHlContext::select_proposer\` uses a **specific algorithm**
->
-> **Why must these two agree across validators?** Hint: what happens to the chain if validators pick different proposers for the same (height, round)?
 
 By the end of this lesson, the layout under \`crates/consensus/src/\` looks like this. Holding the final tree in mind — which step produces which file, and how the seven type files sit inside \`types/\` — keeps you from losing your place as you walk through the steps:
 
@@ -2770,7 +2913,6 @@ impl Value for OpenHlValue {
 
 \`OpenHlValue\` wraps \`BlockHash\` (from Lesson 2). The \`Value::Id\` associated type is what gets put in votes — consensus doesn't vote on the full value, it votes on the value's *identifier* (the hash). Here \`Id = BlockHash\`, so the value and its ID happen to be the same data.
 
-> 🛑 **Anti-fluency.** "Why isn't \`Value\` just \`BlockHash\` directly — why wrap it?" **Because the \`Value\` trait has its own bounds**. Specifically \`Value: Clone + Debug + Eq + Ord + Send + Sync\`, and the \`Value::Id\` associated type adds its own bounds. By having \`OpenHlValue\` as a wrapper, we can independently evolve what "value" means without changing \`BlockHash\`. Module 2 (CLOB) will likely add fields here that aren't in \`BlockHash\` (e.g., a list of off-EVM fills).
 
 Run \`cargo check -p openhl-consensus\` after typing these three. Should pass.
 
@@ -2873,7 +3015,6 @@ Because \`OpenHlContext::select_proposer\` (which we write in Step 8) does \`val
 
 Other BFT chains (CometBFT, every Cosmos chain) use the exact same sort. Following the convention isn't just convenience — it makes our chain *behave identically* to the BFT canon on the same input set.
 
-> 🛑 **Anti-fluency.** "Why descend by power, ascend by address? Why not both ascending?" **Because higher-stake validators should propose proportionally more often** — \`(height + round) % count\` is uniform across indices, so higher-power validators at lower indices proposing more is a property of the sort. Address as tiebreaker (ascending) is just a stable deterministic choice; any total ordering would work, but address-ascending is what CometBFT picked.
 
 ### Step 5: Write the message types — \`proposal.rs\`, \`proposal_part.rs\`, \`vote.rs\`
 
@@ -3376,16 +3517,41 @@ Because openhl v0 doesn't use vote extensions. Production BFT chains use them fo
 
 ## Next lesson (Lesson 7)
 
-You have all 10 Context sub-types and the 4 factory methods. Malachite knows what your chain's addresses, heights, values, validators, and messages look like. But **nothing is signed yet**. Lesson 7 implements \`OpenHlSigningProvider\` — the trait that produces Ed25519 signatures over \`OpenHlVote\` and \`OpenHlProposal\` messages. This is the **other half** of the bidirectional Context surface — Context says "here are my types," SigningProvider says "here's how to sign them."`,
+You have all 10 Context sub-types and the 4 factory methods. Malachite knows what your chain's addresses, heights, values, validators, and messages look like. But **nothing is signed yet**. Lesson 7 implements \`OpenHlSigningProvider\` — the trait that produces Ed25519 signatures over \`OpenHlVote\` and \`OpenHlProposal\` messages. This is the **other half** of the bidirectional Context surface — Context says "here are my types," SigningProvider says "here's how to sign them."
+
+## Summary (3 lines)
+
+- \`OpenHlContext\` impl of Malachite's \`Context\` trait. 10 associated sub-types (Address / Height / Proposal / Vote / ...).
+- Trait bounds: Send + Sync + Clone + Debug + serde. Each sub-type from openhl-types.
+- Lets Malachite be generic across hosts (Cosmos / openhl / others). Next: OpenHlSigningProvider.
+`,
                 },
                 {
-                  title: "Lesson 7 — OpenHlSigningProvider and canonical encoding",
-                  slug: "openhl-signing-provider-en",
+                  title: 'Lesson 7 — OpenHlSigningProvider and canonical encoding',
+                  slug: 'openhl-signing-provider-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 40,
                   xpReward: 80,
-                  content: `# Lesson 7 — \`OpenHlSigningProvider\` and canonical encoding
+                  content: `# Lesson 7 — OpenHlSigningProvider and canonical encoding
+
+## Question
+
+**\`OpenHlSigningProvider\` provides BLS signatures + verification + canonical encoding** for consensus messages. The bridge between Malachite's sign/verify needs and Hyperliquid's key management.
+
+## Principle (minimum model)
+
+- **\`SigningProvider\` trait (Malachite).** \`sign(msg, private_key) -> Signature\` + \`verify(msg, signature, public_key) -> bool\`. Plus a key generator.
+- **BLS signatures.** Used by Hyperliquid; aggregation + batch verification benefit. openhl uses \`blst\` crate for BLS.
+- **Canonical encoding.** Messages must serialize the same way on every node. Use SSZ (canonical, fixed-order); no JSON.
+- **\`OpenHlSigningProvider\` impl.** Wraps \`blst\` calls; handles aggregation for vote-counting.
+- **Key management.** Public/private key pairs generated at validator setup; private keys stored encrypted; public keys in ValidatorSet.
+- **Tests.** Sign + verify round-trip; aggregate multiple signatures + verify aggregate; canonical encoding produces same bytes on every machine.
+- **Hardware module hooks.** Production uses HSM (hardware security module) for signing keys; the trait allows swapping \`blst\` → HSM call.
+
+## Worked example + steps
+
+# Lesson 7 — \`OpenHlSigningProvider\` and canonical encoding
 
 ## Goal
 
@@ -3439,7 +3605,6 @@ This lesson teaches **two patterns** that propagate:
 - **Canonical encoding** — turning a typed message into a deterministic byte sequence that every validator computes identically. The signature commits to *the bytes*, not *the struct*; if any field's encoding changes, the signature stops verifying.
 - **Trait-trait wiring** — Malachite's \`SigningProvider\` is a trait that **wraps** the lower-level signing logic in \`signing.rs\`. The provider holds runtime state (the key), and delegates to pure functions that don't. This is the same separation as \`ConsensusBridge\` (trait) vs \`InMemoryEvmBridge\` (struct that impls it).
 
-> 🛑 **Predict.** Before scrolling: the canonical encoding for a \`Vote\` needs to capture which fields? Hint: think about what a signature is committing to. If two votes differ in any way that consensus cares about, their signing bytes must differ — otherwise a valid signature for one verifies against the other, and an attacker can replay or swap votes.
 
 ## Walk-through
 
@@ -3527,7 +3692,6 @@ Drawing the 70-byte layout for the \`value_id = Val(...)\` case as a memory diag
 
 **Why little-endian?** Convention for x86 / ARM hosts. **Why length-byte tags?** Because \`NilOrVal::Nil\` produces 1 byte (tag 0) while \`NilOrVal::Val\` produces 33 bytes (tag 1 + 32-byte hash). The tag tells the parser which it is. **Why include the validator address?** Because a vote is *whose* vote, not just *which* vote — the same proposal can be voted on by 100 different validators, and each produces a different signing-bytes string.
 
-> 🛑 **Anti-fluency.** "Can I just \`bincode::serialize(v)\` and sign the result?" **No.** Off-the-shelf serialization formats can change between library versions — what you sign today might not be what you sign tomorrow even though the struct is identical. A **canonical** encoding is one you control byte-by-byte. Production chains define their encoding in a protobuf schema or write it manually like this; either way, the encoding becomes part of the chain's wire format spec.
 
 ### Step 3: Write the canonical encoding for \`OpenHlProposal\`
 
@@ -3796,7 +3960,6 @@ Eight methods, four pairs:
 - **\`sign_proposal_part\` / \`verify_signed_proposal_part\`** — **sign empty bytes.** Why? Because \`OpenHlProposalPart\` is a unit struct — there's no data to commit to. Signing an empty payload still produces a valid Ed25519 signature (it's deterministic from the private key alone), and verifying it confirms "yes, this provider produced this signature." The signature has no informational content but the trait surface is satisfied.
 - **\`sign_vote_extension\` / \`verify_signed_vote_extension\`** — same as proposal_part. Vote extensions are \`()\` (unused at v0), so we sign empty bytes.
 
-> 🛑 **Anti-fluency.** "Signing empty bytes feels wrong — what's the point?" **The point is honoring the trait surface without committing to data we don't have.** Malachite's engine will call these methods at runtime; if we panicked or returned errors, the engine would crash. By signing empty bytes and returning a valid signature, we say "yes, this is a real signature from us, but it commits to nothing additional beyond what's already in the rest of the message." Production chains that use these features fill them with real bytes; we don't, but the trait surface stays intact.
 
 ### Step 9: Add 7 tests for \`signing_provider.rs\`
 
@@ -4026,16 +4189,41 @@ Because cloning a private key is something we want to be explicit about — \`le
 
 ## Next lesson (Lesson 8)
 
-You have the signing surface complete. Malachite can ask your provider to sign messages, and verification round-trips work. But **Malachite doesn't know how to talk over the wire yet** — sending votes between validators requires encoding/decoding. Lesson 8 implements \`OpenHlCodec\`: the trait that translates between in-memory types and bytes for network transport, write-ahead logging, and state sync. After Lesson 8, the engine has everything it needs to spawn (codec + signing + context + node config); we'll wire \`OpenHlNode\` and prove \`start_engine\` works in the same lesson.`,
+You have the signing surface complete. Malachite can ask your provider to sign messages, and verification round-trips work. But **Malachite doesn't know how to talk over the wire yet** — sending votes between validators requires encoding/decoding. Lesson 8 implements \`OpenHlCodec\`: the trait that translates between in-memory types and bytes for network transport, write-ahead logging, and state sync. After Lesson 8, the engine has everything it needs to spawn (codec + signing + context + node config); we'll wire \`OpenHlNode\` and prove \`start_engine\` works in the same lesson.
+
+## Summary (3 lines)
+
+- \`OpenHlSigningProvider\` = BLS sign/verify + canonical SSZ encoding. Bridges Malachite + Hyperliquid key management.
+- \`blst\` crate for BLS; SSZ for canonical messages. Aggregation for vote-counting.
+- HSM hooks via trait swap. Tests cover sign/verify + aggregate + canonical bytes. Next: codec slot.
+`,
                 },
                 {
-                  title: "Lesson 8 — OpenHlCodec — codec slot the engine demands",
-                  slug: "openhl-codec-en",
+                  title: 'Lesson 8 — OpenHlCodec — codec slot the engine demands',
+                  slug: 'openhl-codec-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 35,
                   xpReward: 70,
-                  content: `# Lesson 8 — \`OpenHlCodec\` — codec slot the engine demands
+                  content: `# Lesson 8 — OpenHlCodec — codec slot the engine demands
+
+## Question
+
+**\`OpenHlCodec\` provides encode/decode for the wire formats Malachite needs** — Proposal, Vote, Extension, etc. SSZ canonical encoding throughout.
+
+## Principle (minimum model)
+
+- **\`Codec\` trait (Malachite).** \`encode_X(...) -> Bytes\` + \`decode_X(&Bytes) -> X\` for each wire type.
+- **SSZ everywhere.** Same encoding as Ethereum consensus layer. Deterministic; canonical.
+- **\`OpenHlCodec\` struct.** Stateless; just a marker type. All methods are pure.
+- **\`encode_proposal\`.** Build SSZ-encoded Proposal bytes. Use \`ssz_rs::Encode\`. Wire-format identical across all nodes.
+- **\`decode_proposal\`.** Inverse; fail fast on invalid bytes.
+- **Why a slot.** Malachite is generic over codec; you can swap SSZ for Borsh / Cap'n Proto / etc. Hyperliquid chose SSZ for Ethereum compat.
+- **Tests.** Round-trip every wire type; assert encode → decode → encode produces same bytes.
+
+## Worked example + steps
+
+# Lesson 8 — \`OpenHlCodec\` — codec slot the engine demands
 
 ## Goal
 
@@ -4089,7 +4277,6 @@ Five things:
 
 This lesson teaches **one pattern that matters more than any specific impl**: **stub trait methods with a clear failure mode**. When you need to satisfy a large trait bound but the methods aren't on your hot path, you can stub them. The stub error message should name what was called so the reader knows what to implement next. This is **incremental development at the type-system level** — you don't have to implement every codec at once; you provide enough to compile, fail loudly on the actual call sites.
 
-> 🛑 **Predict.** Before scrolling: why does Malachite force the engine to know how to encode network messages when our single-validator devnet has no network to send them on? Hint: trait bounds are about *types*, not *runtime behavior*. The engine is generic over your codec because validators that don't gossip in your devnet *would* gossip in a multi-validator deployment. The codec slot is required because the engine doesn't know whether it has peers; the impl needn't be complete because in our test, the gossip code path never fires.
 
 ## Walk-through
 
@@ -4149,7 +4336,6 @@ pub struct CodecStub(pub &'static str);
 
 \`OpenHlCodec\` is a unit struct — no state. Codecs in Malachite are pure functions; the receiver only exists so the trait can dispatch. \`CodecStub\` is the error type that all eight Codec impls share. The \`&'static str\` field carries the name of the type whose codec is missing, so when an unimplemented path *does* fire, the error message tells you exactly what to write.
 
-> 🛑 **Anti-fluency.** "Why is \`CodecStub\` a struct holding a \`&'static str\` instead of an enum with one variant per stub?" **Because adding new stubs would require editing two places** — the enum definition and every callsite. A \`&'static str\` argument is open-ended; you can stub any new \`Codec<T>\` impl by passing its type name as a literal, no enum changes needed. Trade-off: less type-safety (you could pass any string), but the trait surface itself enforces what \`T\` is, so the string is just a human-readable label.
 
 ### Step 3: The one real impl — \`ProposalPart\`
 
@@ -4284,7 +4470,6 @@ Three categories:
 - **WAL (crash recovery)** — \`ProposedValue\`. The engine writes proposals to disk for crash recovery. We run in-process tests so this never fires.
 - **Sync (peer catch-up)** — \`Status\`, \`Request\`, \`Response\`. When a validator falls behind it asks peers to send it past blocks. No peers means no falling-behind means no sync.
 
-> 🛑 **Anti-fluency.** "Couldn't I just \`#[derive(Serialize, Deserialize)]\` on these types and use bincode?" **You can — for some.** But many of these types contain generics, \`Box<dyn Trait>\` fields, or other items serde can't easily handle. The reference implementation in Malachite's \`test\` crate uses ~400 lines of hand-written Protobuf encoding to handle them all. Our stub approach skips that work for now; when you need a real network or persistent WAL, this is where you swap in the protobuf or borsh implementation, one method at a time.
 
 ### Step 5: Add the test module
 
@@ -4327,7 +4512,6 @@ Two tests:
 - **\`openhl_codec_satisfies_all_three_super_traits\`** — this is a *compile-time* assertion disguised as a test. \`WalCodec<Ctx>\`, \`ConsensusCodec<Ctx>\`, and \`SyncCodec<Ctx>\` are super-traits in Malachite — they're automatically satisfied if a type implements *all the right* \`Codec<T>\` constituent impls. The three \`assert_*\` functions exist only to force the compiler to check the bound. If you forgot a single \`Codec<T>\` impl, this would fail to compile, **not** fail at runtime. The runtime test body is just a no-op — the verification happens at type-check time.
 - **\`proposal_part_round_trips\`** — exercises the one *real* codec impl. Encode an empty \`ProposalPart\`, decode the resulting bytes, assert equality. This proves the real impl works; the seven stub impls aren't tested at runtime here because they're meant to panic-via-error if anything ever calls them.
 
-> 🛑 **Anti-fluency.** "Why does the test pass — it's empty?" **Because the assertion is in the type-checker, not the runtime.** When you write \`assert_wal_codec::<OpenHlCodec>()\`, Rust must check that \`OpenHlCodec: WalCodec<OpenHlContext>\` at compile time. If that bound fails, the file doesn't compile, and \`cargo test\` reports a **compile error**, not a test failure. This is a common pattern in Rust: convert a runtime check into a compile check by calling a function with the bound you want to verify.
 
 ### Step 6: Wire codec into \`lib.rs\`
 
@@ -4460,16 +4644,41 @@ When the engine actually calls it. Lesson 9's smoke test will spawn the actor sy
 
 ## Next lesson (Lesson 9)
 
-You've satisfied the codec trait bound — \`start_engine\`'s signature is now satisfiable. But you don't yet have the *value* you'd pass for the codec, the node config, or the validator set, all of which \`start_engine\` also requires. Lesson 9 implements \`Node\` trait on \`OpenHlNode\`: ~300 lines covering \`OpenHlConfig\` (NodeConfig impl), \`OpenHlGenesis\`, \`OpenHlPrivateKeyFile\`, \`OpenHlNodeHandle\`, and the \`Node\` impl itself with 5 associated types and 12 methods. The capstone of Lesson 9 is \`start_engine_smoke_spawns_and_kills\` — a test that calls \`start_engine\` and proves the actor system spawns and tears down cleanly in ~0.02 seconds. After Lesson 9, the engine boots; we'll spend Lessons 10–15 wiring the AppMsg loop and the live Reth integration.`,
+You've satisfied the codec trait bound — \`start_engine\`'s signature is now satisfiable. But you don't yet have the *value* you'd pass for the codec, the node config, or the validator set, all of which \`start_engine\` also requires. Lesson 9 implements \`Node\` trait on \`OpenHlNode\`: ~300 lines covering \`OpenHlConfig\` (NodeConfig impl), \`OpenHlGenesis\`, \`OpenHlPrivateKeyFile\`, \`OpenHlNodeHandle\`, and the \`Node\` impl itself with 5 associated types and 12 methods. The capstone of Lesson 9 is \`start_engine_smoke_spawns_and_kills\` — a test that calls \`start_engine\` and proves the actor system spawns and tears down cleanly in ~0.02 seconds. After Lesson 9, the engine boots; we'll spend Lessons 10–15 wiring the AppMsg loop and the live Reth integration.
+
+## Summary (3 lines)
+
+- \`OpenHlCodec\` impls Malachite's \`Codec\` trait via SSZ. encode/decode each wire type (Proposal / Vote / Extension).
+- Stateless; marker type only. SSZ everywhere for Ethereum compat + canonicalisation.
+- Round-trip tests assert byte-identity. Codec slot lets you swap encodings; SSZ is the choice. Next: OpenHlNode.
+`,
                 },
                 {
-                  title: "Lesson 9 — OpenHlNode and the first start_engine call",
-                  slug: "openhl-node-en",
+                  title: 'Lesson 9 — OpenHlNode and the first start_engine call',
+                  slug: 'openhl-node-en',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 55,
                   xpReward: 100,
-                  content: `# Lesson 9 — \`OpenHlNode\` and the first \`start_engine\` call
+                  content: `# Lesson 9 — OpenHlNode and the first start_engine call
+
+## Question
+
+**\`OpenHlNode\` is the top-level type** that wires everything together: ConsensusBridge + Context + SigningProvider + Codec. **\`start_engine\` is the first call** that actually drives Malachite + the bridge end-to-end.
+
+## Principle (minimum model)
+
+- **\`OpenHlNode\` struct.** Holds bridge (Arc), signing provider, codec, context. Cloned per-task.
+- **\`start_engine\`.** Spawns Malachite's event loop; passes references to all the components. Returns a handle.
+- **\`Handle\` type.** Lets the caller \`.await\` on Malachite's lifecycle; gracefully shut down; query state.
+- **Channels.** Tokio mpsc + oneshot. Malachite needs an inbox (for received messages) + an outbox (for messages to send).
+- **Validator key.** Loaded at startup; private key stays in process memory; public key registered with ValidatorSet.
+- **End-to-end test.** Boot OpenHlNode with a single validator; assert it produces blocks; assert the bridge's state advances.
+- **Single-validator BFT.** Specially handled: with one validator, no votes needed; proposals immediately commit. Lets us test the pipeline before adding multi-validator complexity.
+
+## Worked example + steps
+
+# Lesson 9 — \`OpenHlNode\` and the first \`start_engine\` call
 
 ## Goal
 
@@ -4529,7 +4738,6 @@ Six things:
 
 This lesson teaches **the bridge pattern between your code and Malachite**. The engine — written by someone else, generic over your \`Context\` and \`Codec\` — needs five things to spawn: an instance of your context, an instance of your node (to get config, signing, address derivation), a config value, a codec value, an initial height, and a validator set. The \`Node\` trait is the **handshake interface** that lets Malachite ask your code for those things uniformly. Once you implement it, \`start_engine\` works for any chain that follows the same handshake.
 
-> 🛑 **Predict.** Before scrolling: why does Malachite ask for a separate \`OpenHlConfig\` rather than just letting \`OpenHlNode\` carry its own config fields? Hint: think about who *owns* the config and when it can change. The node is created once at process startup, but configuration (listen address, value payload mode, value sync settings) might be reloaded from disk on signal. Separating \`OpenHlConfig\` from \`OpenHlNode\` lets the config be loaded via \`Node::load_config()\` — re-callable, returning a fresh value each time — without re-instantiating the node.
 
 ## Walk-through
 
@@ -4721,7 +4929,6 @@ Two types:
 - **\`OpenHlGenesis\`** — a unit struct. At v0 we have no genesis content (no allocations, no precompiles registered at boot — those come later in Module 6). The validator set is passed directly to \`start_engine\` rather than via genesis. When OpenHL adds a real genesis format, this becomes the type that \`load_genesis()\` deserializes.
 - **\`OpenHlPrivateKeyFile\`** — a wire-friendly wrapper around the 32-byte private key. \`PrivateKey\` itself (from \`malachitebft_signing_ed25519\`) doesn't implement \`Serialize\`/\`Deserialize\` by default; the wrapper does, and the conversions \`from_private_key\` / \`into_private_key\` are explicit. **The manual \`Debug\` impl** redacts the bytes — \`{:?}\` printing the actual private key in a log would be a serious security bug. The \`[redacted]\` token is the convention.
 
-> 🛑 **Anti-fluency.** "Why not just \`#[derive(Debug)]\`?" **Because the default derived \`Debug\` for \`[u8; 32]\` prints all 32 bytes.** If anyone ever wraps an \`OpenHlPrivateKeyFile\` in another \`Debug\`-derived struct and logs it, the key leaks into stderr / log files / Sentry. A manual \`Debug\` with \`[redacted]\` makes this impossible without conscious effort. **Treat private keys like passwords — never let them print.**
 
 The relationship between \`OpenHlNode\` and \`OpenHlNodeHandle\` in one diagram makes the central design choice of this lesson — **separating construction (static config) from execution (dynamic actor system) into two distinct types** — immediately intuitive:
 
@@ -4965,7 +5172,6 @@ What \`start_engine\` returns: \`(Channels<OpenHlContext>, EngineHandle)\`. We w
 
 **Why is \`run()\` unimplemented?** Because Malachite's \`Node::run\` is meant to combine \`start()\` with the app loop into one async future. Since the app loop doesn't exist until Lesson 10, we return an error pointing to Lesson 10. Once Lesson 10 is done, \`run()\` will look like: call \`start()\`, take the channels, drive the app loop, await termination.
 
-> 🛑 **Anti-fluency.** "Why does \`start()\` take the codec twice?" **Because the engine has separate codec slots for WAL and Network gossip.** They could be different types — e.g., your WAL might use bincode, your network might use protobuf. In our case both use the same \`OpenHlCodec\`, but the API doesn't assume they'll be the same. Passing them separately lets you swap one without the other.
 
 ### Step 6: Wire \`node.rs\` into \`lib.rs\`
 
@@ -5067,8 +5273,6 @@ Four tests:
 
 The smoke test is roughly **0.02 seconds** wall-clock. The bulk is libp2p setting up the local listener — even on a tcp/0 ephemeral port, libp2p's negotiation has a fixed cost.
 
-> 🛑 **Anti-fluency.** "Why \`flavor = 'multi_thread'\`?" **Because the engine spawns multiple actors, each on its own task.** A single-threaded runtime can run them all on one thread — but the engine has internal \`block_on\` patterns that would deadlock under single-thread. Multi-thread runtime works around this. **This is the kind of detail that's invisible at the API level but lethal at the test-failure level.**
-> In \`current_thread\`, a \`block_on(...)\` can occupy the only worker and starve the future it is waiting on, so initialization hangs forever. In \`multi_thread\`, another worker can drive the remaining future and unblock the pattern. The Malachite / ractor / libp2p stack hits this shape internally, so tests must force multi-threaded execution.
 
 ## Test
 
@@ -5158,24 +5362,49 @@ Because \`take_channels\` is called *from the outside* — the app loop wants to
 
 ## Next lesson (Lesson 10)
 
-You now have the engine running. But — critically — **the engine is sending you messages and you're ignoring them**. The actor system is parked, waiting for the app loop to consume from \`Channels<OpenHlContext>\` and respond to \`AppMsg::ProposeValue\`, \`AppMsg::Decided\`, etc. Lesson 10 implements the app loop: a \`tokio::select\` over the channel + a state struct + handlers that route engine messages to \`InMemoryEvmBridge\`. When Lesson 10 ships, \`cargo test first_block_via_engine_actors\` produces an actual block through the full engine pipeline.`,
+You now have the engine running. But — critically — **the engine is sending you messages and you're ignoring them**. The actor system is parked, waiting for the app loop to consume from \`Channels<OpenHlContext>\` and respond to \`AppMsg::ProposeValue\`, \`AppMsg::Decided\`, etc. Lesson 10 implements the app loop: a \`tokio::select\` over the channel + a state struct + handlers that route engine messages to \`InMemoryEvmBridge\`. When Lesson 10 ships, \`cargo test first_block_via_engine_actors\` produces an actual block through the full engine pipeline.
+
+## Summary (3 lines)
+
+- \`OpenHlNode\` = top-level glue. Bridge + Context + Signing + Codec. \`start_engine\` spawns Malachite's event loop.
+- Tokio mpsc + oneshot channels for in/out messages. Single-validator BFT simplifies first test.
+- End-to-end test boots OpenHlNode; produces blocks; state advances. Next module: engine integration.
+`,
                 },
               ],
             },
           },
           {
-            title: "Engine integration",
+            title: 'Engine integration',
             sortOrder: 5,
             lessons: {
               create: [
                 {
-                  title: "Lesson 10 — run_engine_app and the first block through the actor pipeline",
-                  slug: "openhl-engine-app-en",
+                  title: 'Lesson 10 — run_engine_app and the first block through the actor pipeline',
+                  slug: 'openhl-engine-app-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 55,
                   xpReward: 100,
-                  content: `# Lesson 10 — \`run_engine_app\` and the first block through the actor pipeline
+                  content: `# Lesson 10 — run_engine_app and the first block through the actor pipeline
+
+## Question
+
+**\`run_engine_app\` drives the actor pipeline end-to-end**. The first block flows: Proposal → Vote → Vote (others) → Commit → Bridge::apply → state advances. **End-to-end consensus working**.
+
+## Principle (minimum model)
+
+- **\`run_engine_app\` orchestrator.** Spawns OpenHlNode in a tokio task + a test driver that simulates Malachite's perception of "I am the leader at height 1".
+- **Actor pattern.** Malachite + bridge + signing provider each run as actors with their own mpsc channels. Loose coupling; testable.
+- **First block flow.** Driver → "you are leader at height 1" → Malachite calls bridge.propose → Block built → Vote (single validator passes 2/3) → bridge.apply → state stored. ~5 ms.
+- **Assertion: block 1 committed.** Bridge.get_best_block returns the new block.
+- **Assertion: state advanced.** Bridge's internal HashMap has the new block hash → block mapping.
+- **Multi-block test.** Repeat for blocks 2, 3, 4. Asserts chain continues; parent hashes link correctly.
+- **Performance.** Single-validator devnet should produce one block per ~100ms (network simulation in-process). Real production is ~1s.
+
+## Worked example + steps
+
+# Lesson 10 — \`run_engine_app\` and the first block through the actor pipeline
 
 ## Goal
 
@@ -5236,7 +5465,6 @@ Five things:
 
 This lesson teaches **the actor-message-loop pattern**. Most consensus engines (CometBFT, Hotstuff, Aura) have *some* "application interface" but they vary: callbacks, gRPC services, FFI bindings. Malachite's approach is \`tokio::mpsc\` channels of typed messages — strongly typed, async-native, single-threaded per channel. Your \`run_engine_app\` is the *consumer* of those messages; the engine actors are the *producer*. **Once you understand this pattern, every chain framework's "application interface" reduces to a variant of it.**
 
-> 🛑 **Predict.** Before scrolling: when the engine sends \`AppMsg::GetValue\` ("propose the next block"), why does the app reply with \`LocallyProposedValue(height, round, value)\` rather than just \`BlockHash\`? Hint: the value the engine wires through the rest of consensus is what it commits to. If we sent only a hash, the engine would have no way to gossip the proposal contents to other validators or include them in the certificate. **The wrapping is what makes the value first-class in the BFT machine.** (Even though in our single-validator devnet, no other validators receive the gossip — the engine doesn't *know* it's running solo.)
 
 ## Walk-through
 
@@ -5453,7 +5681,6 @@ The engine asks "propose a value for height H, round R, with timeout T." We:
 
 The \`?\` operator on \`build_payload\` and \`payload_ready\` propagates \`BridgeError\` up to \`eyre::Result\`. If the EL crashes mid-build, the app loop returns an error and the test fails loudly.
 
-> 🛑 **Anti-fluency.** "Why does \`GetValue\` reply with \`LocallyProposedValue\` instead of just \`OpenHlValue\`?" **Because the engine needs to *gossip* what we proposed in addition to using it locally.** \`LocallyProposedValue\` is a typed wrapper that says "this is the value *we* proposed for height H round R." In multi-validator mode, the engine then sends this to peers as a \`Proposal\`. In single-validator mode, no peers — but the API doesn't bifurcate, so we honor the wrapper.
 
 ### Step 5: The \`Decided\` arm — the moment a block becomes final
 
@@ -5495,7 +5722,6 @@ The engine says "a value was decided at height H — here's the certificate." We
 4. **Check exit condition** — if we've hit \`stop_after_decisions\`, reply with \`Next::Start(next_height, ...)\` (so the engine doesn't hang waiting) and return. **This is what makes the test exit cleanly in 0.02s.**
 5. **Otherwise** reply with \`Next::Start(next_height, validator_set)\` — "yes, please continue at the next height, here's the validator set" — and loop.
 
-> 🛑 **Predict.** Why send a reply on the exit path even though we're about to return? **Because \`oneshot::Sender::send\` is the only thing that unblocks the engine actor that's waiting for our reply.** If we just \`return Ok(decided)\` without sending, the engine actor is stuck in \`await\` on a now-dropped sender, which would cause a slow tear-down (eventually a \`kill_and_wait\` cleans it up). Replying first means the engine actor finishes naturally, and \`handle.kill(None)\` is just confirming the inevitable.
 
 ### Step 6: The other 7 arms — stubs and no-ops
 
@@ -5724,9 +5950,6 @@ Three pieces:
   6. **Assert three things**: decisions is exactly 1 entry, bridge committed that exact hash, bridge built exactly that hash. Together these prove the full pipeline: engine → app → bridge → engine → app.
   7. \`handle.kill(None)\` for cleanup.
 
-> 🛑 **Anti-fluency.** "Why \`worker_threads = 4\` here when Lesson 9's smoke test used 2?" **Because the integration test runs MORE actors concurrently.** The smoke test only spawned + killed; we never produced messages. The integration test additionally runs our \`run_engine_app\` task (consuming + replying), the bridge's \`async fn\` calls, AND the multiple internal engine actors. 4 threads gives them all room. If you go lower, you can hit contention (slower) or deadlock (hang). 4 is comfortable.
->
-> *(Background: integration tests combining the actor model with async channels routinely create patterns where multiple tasks **block on each other's replies** (the engine waits on the app's \`reply.send(...)\`, the app \`.await\`s the bridge, the bridge waits on the engine's next instruction). If worker threads are scarce, **every worker can end up parked on a "waiting for reply" task while the scheduler has nowhere to place the task that would actually send the reply** — a "thread-starvation deadlock." The code looks correct but the test hangs; this isn't a design bug, it's a runtime under-provision. With 4 workers, the whole pipeline (2-3 internal engine actors + the app loop + the bridge's async work) lands on distinct physical cores simultaneously, and this entire class of deadlock is impossible by construction.)*
 
 ## Test
 
@@ -5804,24 +6027,49 @@ The \`?\` operator propagates the \`BridgeError\` up as \`eyre::Result::Err(...)
 
 ## Next lesson (Lesson 11)
 
-Stage 6 is now done. Stage 7 starts: replace \`InMemoryEvmBridge\` with a real Reth EthereumNode. Lesson 11 covers the **dev node bootstrap** — getting Reth to spawn as a tokio task alongside our consensus actors, sharing the same runtime. Lesson 12 wires \`LiveRethEvmBridge\` (the live Reth equivalent of Lesson 5's \`RethEvmBridge\`). After Lesson 12 you'll have a Reth-backed devnet that processes the SAME \`AppMsg\` loop you just wrote — same \`run_engine_app\`, swap one trait impl, get a real EVM execution layer.`,
+Stage 6 is now done. Stage 7 starts: replace \`InMemoryEvmBridge\` with a real Reth EthereumNode. Lesson 11 covers the **dev node bootstrap** — getting Reth to spawn as a tokio task alongside our consensus actors, sharing the same runtime. Lesson 12 wires \`LiveRethEvmBridge\` (the live Reth equivalent of Lesson 5's \`RethEvmBridge\`). After Lesson 12 you'll have a Reth-backed devnet that processes the SAME \`AppMsg\` loop you just wrote — same \`run_engine_app\`, swap one trait impl, get a real EVM execution layer.
+
+## Summary (3 lines)
+
+- \`run_engine_app\` drives actor pipeline end-to-end. First block: Proposal → Vote → Commit → bridge.apply → state advances.
+- Actor pattern with mpsc channels. Single-validator means votes pass immediately. Multi-block test verifies chain continuation.
+- Performance: ~100ms per block in test; ~1s production. Next module: live Reth.
+`,
                 },
               ],
             },
           },
           {
-            title: "Live Reth",
+            title: 'Live Reth',
             sortOrder: 6,
             lessons: {
               create: [
                 {
-                  title: "Lesson 11 — Booting a live Reth EthereumNode in your workspace",
-                  slug: "openhl-reth-bootstrap-en",
+                  title: 'Lesson 11 — Booting a live Reth EthereumNode in your workspace',
+                  slug: 'openhl-reth-bootstrap-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 40,
                   xpReward: 80,
-                  content: `# Lesson 11 — Booting a live Reth \`EthereumNode\` in your workspace
+                  content: `# Lesson 11 — Booting a live Reth EthereumNode in your workspace
+
+## Question
+
+**Boot an actual Reth \`EthereumNode\`** in the same process as OpenHlNode. Two tokio tasks; same workspace. **First time real Reth runs in openhl.**
+
+## Principle (minimum model)
+
+- **\`EthereumNode::new\` config.** Chainspec (custom openhl chainspec), data dir, network config. ~30 lines.
+- **Spawn as a tokio task.** Reth runs in its own task; logs to stdout.
+- **Bind to a local port.** Reth's JSON-RPC server on port 8545; Engine API on 8551.
+- **Wait for ready.** Poll Engine API's \`engine_getStatus\` until "ready". ~3 seconds at startup.
+- **Tests.** Boot Reth; assert JSON-RPC responds; assert Engine API responds. No real consensus driving yet.
+- **Why bootstrap as a separate lesson.** Reth boot involves disk IO, network binding, db migrations. Easier to debug in isolation.
+- **Production parallel.** Hyperliquid HyperEVM is started the same way; the boot pattern is shared.
+
+## Worked example + steps
+
+# Lesson 11 — Booting a live Reth \`EthereumNode\` in your workspace
 
 ## Goal
 
@@ -5880,7 +6128,6 @@ Four things:
 
 This lesson teaches **the dependency-coexistence validation pattern**. When you depend on two large infrastructure crates (Reth and Malachite, in our case), you don't find out they conflict until you write the integration code — by which point you've invested heavily in code that *should* work but doesn't compile. **The validation pattern is to write the smallest possible test that exercises both at once, before writing the integration.** If the test passes, both deps resolve and link. If it fails, the failure is visible immediately, with a small blast radius.
 
-> 🛑 **Predict.** Before scrolling: why is the bootstrap test marked \`--release\` in the goal command? Hint: think about compile times and what dominates them. Reth's MDBX bindings + libp2p + alloy + rocksdb-style storage stack are *enormous* — the first compile saturates the machine and **even a fast multi-core workstation lands around ~2:34 for the debug build; on laptops or resource-constrained environments, 5-10 minutes is not unusual** (~600 crates in Reth alone). Release is similar in wall-clock time but the resulting binary runs significantly faster. The test itself only does a bootstrap and a chain-ID check, so we want fast runtime over fast compile *after the first compile*. Run \`--release\` after that first cold build. If the progress log appears stuck, it isn't — go do something else while it runs.
 
 ## Walk-through
 
@@ -5921,7 +6168,6 @@ What each adds:
 
 **The Reth SHA \`88505c7f...\` is the v2.2.0 release tag** — same SHA we've used in Lesson 1 for \`reth-evm\`, \`reth-evm-ethereum\`, etc. **Pinning to a release-tag SHA, not main HEAD, is the invariant.** Bumping Reth happens in a dedicated PR.
 
-> 🛑 **Anti-fluency.** "Why pin to the SHA when there's a published v2.2.0 crate on crates.io?" **Because Reth's release cadence on crates.io lags behind GitHub by weeks-to-months.** The v2.2.0 git tag is the latest tested binary; the published crate is often older. Pinning to git+SHA means you get the exact commit the maintainers stamped as v2.2.0, with no surprises from a stale crates.io upload. This is standard practice for fast-moving infra crates.
 
 ### Step 2: Update \`crates/evm/Cargo.toml\`
 
@@ -6068,7 +6314,6 @@ A handful of things to notice:
 
 The JSON is parsed via \`serde_json::from_str(...)\` into \`Genesis\`, then converted to \`ChainSpec\` via \`genesis.into()\` (alloy-genesis provides the impl). \`Arc::new(...)\` because the node holds it as \`Arc<ChainSpec>\` — multiple subsystems share it.
 
-> 🛑 **Anti-fluency.** "Why a raw JSON string instead of constructing a \`ChainSpec\` directly in Rust?" **Because Reth's \`ChainSpec\` builder has 50+ fields and complex internal invariants.** Constructing one programmatically means catching up to every recent fork's required fields. Constructing from JSON via the \`Genesis\` deserializer means letting Reth's own type system enforce defaults and validity. **The JSON format is the chain's external interface anyway** — production chains all use the same JSON shape (look at \`reth-chainspec/res/genesis/mainnet.json\`).
 
 What Lesson 11's test is actually booting becomes obvious if you draw the task layout on the shared Tokio runtime. Up through Lessons 9–10 only the left half (Malachite) was running; Lesson 11 onward **the right half (Reth) coexists on the same runtime**:
 
@@ -6146,7 +6391,6 @@ Walk through:
 6. **\`node.chain_spec().chain.id()\` assertion** — the simplest possible "did the node start correctly?" check. If we can fetch the chain ID off the live \`BlockchainProvider\`, the node booted.
 7. **\`node_exit_future: _\`** — we *don't* await this future. Awaiting would block waiting for the node to shut down (which it never will until killed). Instead, we drop \`NodeHandle\` at end-of-function and let the runtime tear down the background tasks.
 
-> 🛑 **Anti-fluency.** "What does \`NodeConfig::test().dev()\` actually disable?" **Crucially: peer discovery via libp2p Kademlia and the full mempool gossip protocol.** A non-test, non-dev node would attempt to dial peers, sync the chain, and respond to libp2p requests. In our test, none of that — the node is fully isolated. This is essential because our chain ID (2600) doesn't match any public network, so any peer dial would either time out or get rejected.
 
 ### Step 6: The test itself
 
@@ -6262,16 +6506,41 @@ Because the \`NodeHandle\` Reth returns doesn't have a \`kill()\` method on the 
 
 ## Next lesson (Lesson 12)
 
-Reth and Malachite now coexist. **But the bridge still doesn't talk to Reth.** Lesson 12 builds \`LiveRethEvmBridge::with_live_node()\` — a constructor that takes the \`node\` we just bootstrapped and exposes its \`BlockchainProvider\` so \`build_payload\` (Lessons 4–5's stubbed bridge methods) can do *real* parent-block lookups against the live MDBX state. This is the moment when "Reth is in our workspace" becomes "Reth is producing data the consensus engine reads."`,
+Reth and Malachite now coexist. **But the bridge still doesn't talk to Reth.** Lesson 12 builds \`LiveRethEvmBridge::with_live_node()\` — a constructor that takes the \`node\` we just bootstrapped and exposes its \`BlockchainProvider\` so \`build_payload\` (Lessons 4–5's stubbed bridge methods) can do *real* parent-block lookups against the live MDBX state. This is the moment when "Reth is in our workspace" becomes "Reth is producing data the consensus engine reads."
+
+## Summary (3 lines)
+
+- Boot a live Reth \`EthereumNode\` in the same process. Tokio task; chainspec + data dir + network config.
+- Wait for Engine API ready before continuing. Tests assert JSON-RPC + Engine API respond.
+- Reth bootstrap is its own lesson for isolated debugging. Production parallel: HyperEVM. Next: LiveRethEvmBridge.
+`,
                 },
                 {
-                  title: "Lesson 12 — LiveRethEvmBridge reads parents from the real chain",
-                  slug: "openhl-live-bridge-en",
+                  title: 'Lesson 12 — LiveRethEvmBridge reads parents from the real chain',
+                  slug: 'openhl-live-bridge-en',
                   type: 'CONTENT',
                   sortOrder: 1,
                   duration: 50,
                   xpReward: 100,
-                  content: `# Lesson 12 — \`LiveRethEvmBridge\` reads parents from the real chain
+                  content: `# Lesson 12 — LiveRethEvmBridge reads parents from the real chain
+
+## Question
+
+**Replace the InMemory bridge with \`LiveRethEvmBridge\`** — calls Reth's Engine API for parent lookups. Real chain state behind the trait; Malachite doesn't know the difference.
+
+## Principle (minimum model)
+
+- **\`LiveRethEvmBridge\`.** Holds an \`Arc<EthereumNode>\` (or RPC client). Methods call into Reth's Engine API.
+- **\`get_parent(hash) -> Block\`.** Calls \`engine_getBlockByHash\` via Reth's Engine API. Real chain lookup.
+- **\`get_best_block() -> Block\`.** Calls \`engine_getBlockByNumber("latest")\`.
+- **Caching.** Lookups can be slow; cache recent results. LRU with 1000 entries.
+- **Same trait.** Malachite still calls \`bridge.get_parent(...)\`; doesn't know it now goes to Reth. The abstraction holds.
+- **Async; doesn't block.** Engine API calls are async; bridge methods are async; Malachite's event loop unblocks during the await.
+- **Tests.** Boot Reth + LiveRethEvmBridge; assert \`get_parent\` returns the genesis block.
+
+## Worked example + steps
+
+# Lesson 12 — \`LiveRethEvmBridge\` reads parents from the real chain
 
 ## Goal
 
@@ -6332,9 +6601,6 @@ Six things:
 
 This lesson teaches **the generic-over-provider pattern** that makes the bridge testable in isolation. \`LiveRethEvmBridge<P>\` is generic over \`P: BlockNumReader + Clone + Sync + 'static\`. In production, \`P\` is the live node's \`BlockchainProvider\`. In tests, \`P\` could be a \`MockProvider\` that returns a deterministic set of \`(hash → number)\` mappings. **The bridge itself doesn't care which** — it just calls \`provider.block_number(...)\`. This is the same pattern as \`run_engine_app<B: ConsensusBridge>\` in Lesson 10: depend on the trait, not the concrete type.
 
-> 🛑 **Predict.** Before scrolling: why does \`LiveRethEvmBridge\` still hold an internal \`Mutex<State>\` with \`pending\`, \`chain\`, and \`head\` fields if \`build_payload\` reads from the live provider? Hint: \`build_payload\` returns a \`PayloadId\`, and the engine later calls \`payload_ready(id)\` to fetch the actual block. The pending state is what bridges those two calls — Reth's payload-builder takes 10-50ms to assemble blocks, and the bridge needs to hold the *result* somewhere while the engine waits. **Lesson 13 replaces this in-memory pending state with Reth's actual payload-builder.** For now, it's a placeholder that proves the build-then-fetch shape works.
->
-> *(More concretely: the consensus-side actor task fires \`build_payload\`, grabs only the \`PayloadId\`, and immediately moves on — broadcasting the proposal, doing other work. A separate actor task (possibly on a different worker thread) later calls \`payload_ready(id)\`. While Reth assembles the block in the background and Malachite drives other rounds elsewhere, both run as **independent async-task lifetimes**. The single \`Mutex<State>::pending\` map is the **seam** that safely splices together two distinct protocol moments — "the instant \`build_payload\` returned" and "the instant \`payload_ready\` is invoked" — at the type level. Lesson 13 swaps in the real payload-builder, but the **need** for this seam doesn't vanish; \`pending\` simply evolves into a real async channel / oneshot.)*
 
 ## Walk-through
 
@@ -6489,7 +6755,6 @@ Two pieces:
 - **\`LiveRethEvmBridge<P>\`** holds the provider by value and a \`Mutex<State>\` for the build/commit bookkeeping. **Generic over \`P\`** — no concrete provider type baked in.
 - **\`State\`** mirrors what \`InMemoryEvmBridge\` had (Lesson 4) — a \`next_payload_id\` counter, a \`pending\` map (payload_id → built header awaiting fetch), a \`chain\` map (commit history), and a \`head\` pointer. Lessons 13–15 replace each of these with live Reth structures.
 
-> 🛑 **Anti-fluency.** "Why not put \`provider\` inside \`State\` and use one mutex?" **Because \`BlockNumReader\` impls are typically \`Sync + Clone\` — they're meant to be shared across many async tasks at once.** Putting the provider inside the mutex would serialize every \`block_number\` lookup. Keeping it outside lets concurrent calls to \`build_payload\` race for the (cheap) state lock without blocking each other's (potentially expensive) provider reads. **The lock guards what's mutated, not what's read.**
 
 ### Step 5: The \`ConsensusBridge\` impl — \`build_payload\` is the live read
 
@@ -6548,7 +6813,6 @@ The \`build_payload\` body has three phases:
 
 3. **Header synthesis**. Build a child \`Header\` with \`number = parent_number + 1\` (taken from the live read), \`parent_hash = parent_b256\`, and the attrs the engine passed. Compute the hash via \`header.hash_slow()\`. Store the \`(id → (hash, header))\` mapping in \`pending\`.
 
-> 🛑 **Anti-fluency.** "Why is the parent lookup \`Result<Option<u64>, _>\` instead of just \`Result<u64, _>\`?" **Because "the provider couldn't find this hash" and "the provider crashed" are different failure modes, and the consumer should treat them differently.** A missing hash is a *protocol* problem ("we got asked to build on something we don't know about" — possibly a malicious peer or a stale message). A provider error is an *operational* problem ("our DB is broken" — operational alert). The two-layer \`Result<Option<...>>\` lets the caller distinguish — and we map each to a different \`BridgeError\` variant (\`Rejected\` vs. \`Internal\`).
 
 ### Step 6: \`payload_ready\` + \`commit\` stubs
 
@@ -6739,7 +7003,6 @@ Walk through the test:
 4. **Happy path**: build a payload on the real genesis hash, fetch via \`payload_ready\`, assert \`parent_hash == genesis_hash\` and \`number == 1\`. **This proves the live read happened** — if it were an in-memory synthesis, the parent_hash would have been whatever we passed in (still correct) but \`number\` could be anything we chose. \`1\` only comes out if \`provider.block_number(genesis_hash)\` returned \`Some(0)\`.
 5. **Negative path**: \`BlockHash([0xee; 32])\` is a fabricated hash the chain has never seen. \`build_payload\` must return \`BridgeError::Rejected\`. \`matches!(err, BridgeError::Rejected(_))\` is the exhaustive check — any other error variant would fail the test.
 
-> 🛑 **Anti-fluency.** "Why test the negative path at all?" **Because the test that doesn't test rejection only proves the happy path works — it can't catch the bug where the bridge accidentally falls back to in-memory state and produces a child block on any parent at all.** A bridge that silently builds on garbage parents would compile, the happy path would pass, and consensus would happily commit blocks at corrupted heights. The negative path is the one that proves the live read is actually load-bearing.
 
 ## Test
 
@@ -6819,16 +7082,41 @@ It already has — \`RethEvmBridge\` (Lesson 5) is now superseded by \`LiveRethE
 
 ## Next lesson (Lesson 13)
 
-The bridge reads from Reth on \`build_payload\`. But the \`pending\` HashMap is still just an in-process synthesis — the engine asks for "the next block to propose" and we hand back a header we made up. **Lesson 13 replaces \`pending\` with Reth's actual \`PayloadBuilder\`** — the same machinery Reth uses to assemble blocks for the JSON-RPC \`engine_getPayloadV4\` call. By the end of Lesson 13, the bridge produces blocks that real Ethereum tooling could accept (full transaction lists, receipts, gas usage, state root). This is the transition from "the bridge talks to Reth's storage" to "the bridge is fully integrated with Reth's execution pipeline."`,
+The bridge reads from Reth on \`build_payload\`. But the \`pending\` HashMap is still just an in-process synthesis — the engine asks for "the next block to propose" and we hand back a header we made up. **Lesson 13 replaces \`pending\` with Reth's actual \`PayloadBuilder\`** — the same machinery Reth uses to assemble blocks for the JSON-RPC \`engine_getPayloadV4\` call. By the end of Lesson 13, the bridge produces blocks that real Ethereum tooling could accept (full transaction lists, receipts, gas usage, state root). This is the transition from "the bridge talks to Reth's storage" to "the bridge is fully integrated with Reth's execution pipeline."
+
+## Summary (3 lines)
+
+- \`LiveRethEvmBridge\` impls the trait via Reth's Engine API. get_parent + get_best_block hit the real chain.
+- LRU cache mitigates latency. Async throughout; Malachite's event loop unblocks.
+- Same trait, real backing. Tests assert basic lookups work. Next: validate_payload runs EthBeaconConsensus.
+`,
                 },
                 {
-                  title: "Lesson 13 — validate_payload runs Reth's EthBeaconConsensus",
-                  slug: "openhl-validate-payload-en",
+                  title: 'Lesson 13 — validate_payload runs Reth\'s EthBeaconConsensus',
+                  slug: 'openhl-validate-payload-en',
                   type: 'CONTENT',
                   sortOrder: 2,
                   duration: 55,
                   xpReward: 100,
-                  content: `# Lesson 13 — \`validate_payload\` runs Reth's \`EthBeaconConsensus\`
+                  content: `# Lesson 13 — validate_payload runs Reth's EthBeaconConsensus
+
+## Question
+
+**\`validate_payload\` calls Reth's \`EthBeaconConsensus\` to validate proposed payloads** against the chain spec. Real Ethereum consensus rules running inside openhl. **The integration lights up.**
+
+## Principle (minimum model)
+
+- **\`EthBeaconConsensus\`.** Reth's implementation of the Consensus trait for Ethereum PoS. Validates header + block + state.
+- **\`bridge.validate_payload(payload)\`.** Calls \`EthBeaconConsensus::validate_block(payload)\`. If valid, accept; if not, reject with reason.
+- **Real validation.** Parent hash + timestamp + gas limit + state root + receipts root + transactions root. All canonical Ethereum.
+- **Test scenario.** Build a Block; validate it; modify state root; validate; assert second call fails.
+- **Why this matters.** Malachite + Reth integration is bidirectional: Malachite produces blocks; Reth validates them. Both must agree.
+- **Production parallel.** Hyperliquid HyperEVM uses this exact pattern; HyperBFT proposes; HyperEVM validates.
+- **Async + blocking.** Validation can be slow (state root recomputation); bridge.validate_payload is async; doesn't block Malachite's event loop.
+
+## Worked example + steps
+
+# Lesson 13 — \`validate_payload\` runs Reth's \`EthBeaconConsensus\`
 
 ## Goal
 
@@ -6927,7 +7215,6 @@ Drawing how the build side and validate side of \`LiveRethEvmBridge\` share the 
 
 Because both sides hold **the same \`Arc<ChainSpec>\` instance**, no matter how the base-fee formula evolves across hard forks or how network-specific \`gas_limit\` / elasticity changes, **the build and validate logics can never drift apart** with one side stuck on the old rule. Conversely, if the build side computed base fees inline while the validate side went through \`ChainSpec\`, every fork starting from Cancun would silently start producing "blocks I built that my own validator rejects" — a silent fork at the bridge level. **"Self-consistency isn't bought through an API; it's bought through a shared source of truth"** is the discipline this crate carries in its bones.
 
-> 🛑 **Predict.** Before scrolling: why does \`EthBeaconConsensus::validate_header_against_parent\` need the parent's *full* sealed header (with gas_limit, timestamp, base_fee_per_gas, all the fields), but \`BlockNumReader::block_number\` only gives us a \`u64\`? Hint: think about the four sub-checks Reth's validator runs. Number monotonicity only needs parent.number. But timestamp monotonicity needs parent.timestamp. Gas-limit drift needs parent.gas_limit. EIP-1559 base fee needs parent.base_fee_per_gas + parent.gas_used + parent.gas_limit. **As soon as you need to validate at all, you need the whole header — not just the number.** That's why Lesson 13 widens the trait bound from \`BlockNumReader\` to *also* \`HeaderProvider<Header = Header>\`.
 
 ## Walk-through
 
@@ -6955,9 +7242,6 @@ Three deps, three roles:
 - **\`reth-ethereum-consensus\`** — provides \`EthBeaconConsensus<ChainSpec>\` — Reth's production header validator for post-merge Ethereum.
 - **\`reth-primitives-traits\` from crates.io \`0.3\`** — provides \`SealedHeader\`, the wrapper that pairs \`Header\` with its hash. **This one comes from crates.io, not git** — it's been spun out as a stable foundation crate.
 
-> 🛑 **Anti-fluency.** "Why is \`reth-primitives-traits\` from crates.io while everything else is git-pinned?" **Because \`reth-primitives-traits\` is the part of Reth that's been *stabilized* as a public Rust ecosystem crate.** Other crates (alloy, foundry, custom L2s) all depend on it. Pinning it to the git SHA would force version conflicts with anyone who imports it from crates.io — which is everyone. **The git-pinned reth-* deps are mainly Reth's "internal" surface; \`reth-primitives-traits\` is the *external* one.**
->
-> *(The underlying mechanism is a strict Cargo constraint: **a package published to crates.io cannot have a dependency tree that includes any crate referenced by a Git revision (\`git = "...", rev = "..."\`)** — \`cargo publish\` rejects it. If an ecosystem-wide shared trait crate (\`SealedHeader\` / \`BlockHeader\` / …) stayed Git-pinned, it would be effectively unusable from every other library on crates.io. That's why this one "external surface" layer gets spun out of Reth early and published independently on crates.io. We inherit the workspace-pinned version on our side to avoid type-layout mismatches.)*
 
 ### Step 2: Update \`crates/evm/Cargo.toml\`
 
@@ -7154,7 +7438,6 @@ Three changes from Lesson 12:
    - \`base_fee_per_gas = next_base_fee\` — computed via \`chain_spec.next_block_base_fee(...)\`, the *same helper* the validator uses.
    - \`..Default::default()\` — everything else (gas_used, transactions_root, etc.) stays at zero. They'd matter for full execution validation in a future stage, not for header-against-parent.
 
-> 🛑 **Anti-fluency.** "Why does the build call \`chain_spec.next_block_base_fee(parent, timestamp)\` instead of doing the EIP-1559 math inline?" **Because the validator does the SAME call.** If you wrote the math by hand, you'd have to keep your impl in sync with Reth's whenever the formula changes (which it does — Cancun changed \`BASE_FEE_MAX_CHANGE_DENOMINATOR\`, future forks will tweak again). **By calling the chain spec's helper, your builder is guaranteed to agree with the validator forever — including across hardforks the chain spec knows about and your builder doesn't.**
 
 ### Step 6: Rewrite \`validate_payload\`
 
@@ -7219,7 +7502,6 @@ Four phases:
 
 If any fails, the validator returns \`Err(...)\`. We don't propagate the specific error — at this layer the engine just needs to know "valid or not." Future debugging could log the error type.
 
-> 🛑 **Anti-fluency.** "Why map \`Err(_)\` to \`PayloadStatus::Invalid\` instead of \`BridgeError::Internal\`?" **Because validation failure is a protocol-level signal, not an operational failure.** "This block doesn't pass the rules" is what the validator is *for* — it's the answer to a question, not a crash. \`BridgeError::Internal\` would propagate up and kill the engine app loop. \`PayloadStatus::Invalid\` lets the engine continue and treat the block as a rejected proposal. **Match the error type to the conversational level.**
 
 ### Step 7: Update the test — 2 new assertions
 
@@ -7377,16 +7659,41 @@ The validator and the chain would disagree on what hardfork is active. \`ChainSp
 
 ## Next lesson (Lesson 14)
 
-Two of the four \`ConsensusBridge\` methods now hit live Reth. **The third one — \`commit\` — still records hashes into an in-process \`chain: HashMap\`.** Lesson 14 (the last big lesson) replaces that with a real **Engine API forkchoice update**, the JSON-RPC call that Reth uses to commit blocks in production. After Lesson 14, our bridge produces the same wire-format actions that any Ethereum CL client (Lighthouse, Prysm, Teku) would. **Lesson 15 is then the capstone** — a one-page recap, an "everything you built" diagram, and the optional production-readiness checklist (block bodies, gossip codecs, real WAL).`,
+Two of the four \`ConsensusBridge\` methods now hit live Reth. **The third one — \`commit\` — still records hashes into an in-process \`chain: HashMap\`.** Lesson 14 (the last big lesson) replaces that with a real **Engine API forkchoice update**, the JSON-RPC call that Reth uses to commit blocks in production. After Lesson 14, our bridge produces the same wire-format actions that any Ethereum CL client (Lighthouse, Prysm, Teku) would. **Lesson 15 is then the capstone** — a one-page recap, an "everything you built" diagram, and the optional production-readiness checklist (block bodies, gossip codecs, real WAL).
+
+## Summary (3 lines)
+
+- \`validate_payload\` calls Reth's \`EthBeaconConsensus::validate_block\`. Real Ethereum consensus rules; canonical validation.
+- Test: modify state root → validation fails. Malachite + Reth integration is bidirectional and must agree.
+- Production parallel: HyperBFT proposes, HyperEVM validates. Next: commit drives Engine API forkchoice.
+`,
                 },
                 {
-                  title: "Lesson 14 — commit drives Reth's Engine API forkchoice",
-                  slug: "openhl-commit-forkchoice-en",
+                  title: 'Lesson 14 — commit drives Reth\'s Engine API forkchoice',
+                  slug: 'openhl-commit-forkchoice-en',
                   type: 'CONTENT',
                   sortOrder: 3,
                   duration: 50,
                   xpReward: 90,
-                  content: `# Lesson 14 — \`commit\` drives Reth's Engine API forkchoice
+                  content: `# Lesson 14 — commit drives Reth's Engine API forkchoice
+
+## Question
+
+**\`bridge.commit(block_hash)\` calls Reth's Engine API \`engine_forkchoiceUpdatedV3\`** to finalise the block. State persisted; head advanced. **The full integration loop is now closed**.
+
+## Principle (minimum model)
+
+- **Engine API \`forkchoiceUpdatedV3\`.** Updates Reth's head + finalised + safe block hashes.
+- **\`bridge.commit(block_hash)\`.** Computes the forkchoice state (head = block_hash; finalised = block_hash; safe = block_hash). Calls Engine API.
+- **State persisted.** Reth flushes to disk; survives restart. The block is now part of the canonical chain.
+- **Single-validator simplification.** All three hashes (head / finalised / safe) are the same. Multi-validator separates them.
+- **End-to-end test.** Boot Reth + OpenHlNode; produce 3 blocks; restart; assert the 3 blocks are still in Reth.
+- **Closing the loop.** Block flow: Malachite → bridge.propose → bridge.validate_payload (Reth check) → bridge.commit (Reth Engine API) → Reth flushes to disk → block on canonical chain.
+- **Why end-to-end matters.** All prior work could have hidden integration bugs. This lesson + the persistence test prove they're absent.
+
+## Worked example + steps
+
+# Lesson 14 — \`commit\` drives Reth's Engine API forkchoice
 
 ## Goal
 
@@ -7506,7 +7813,6 @@ Laying out what happens when \`commit\` is called — Phase 1 (must succeed) and
 
 Three things this picture pins down: (a) **Phase 1's \`state.chain.insert\` + \`state.head\` update is the consensus-side "committed" source-of-truth** — past this line, downstream code (\`payload_ready\`, the next \`build_payload\`) reads from these structures immediately. (b) **Phase 2's \`fork_choice_updated\` is a downstream-notification side effect; \`SYNCING\` / connection failures / panics get logged but are *not* turned into \`Err\`** — if a Phase 2 failure surfaced as \`Err\`, consensus would treat "commit failed" as true and try to roll back already-finalized state, breaking safety. (c) **When \`engine_handle: Option<...>\` is \`None\`, Phase 2 is skipped entirely** — unit tests can exercise "Phase 1 only, no Reth bootstrap." Lesson 14's integration test passes \`Some(handle)\` and asserts that both phases fire.
 
-> 🛑 **Predict.** Before scrolling: why does the test only assert \`commit().await.expect(...)\` succeeds, instead of asserting that Reth's canonical chain head moved? Hint: think about what's missing from our \`build_payload\` output. The \`ExecutedBlock\` we hand the engine is just a header — no transactions, no receipts, no state root. Reth's engine needs *the actual block body* to advance its canonical chain. Without \`engine_newPayload\` first, \`fork_choice_updated\` responds \`SYNCING\` ("I don't know this block yet, fetch me the body"). The wire is connected; the data isn't. **Lesson 14 proves the connection; payload execution is deferred to a future course.**
 
 ## Walk-through
 
@@ -7611,7 +7917,6 @@ pub struct LiveRethEvmBridge<P> {
 
 \`State\` is unchanged.
 
-> 🛑 **Anti-fluency.** "Why is \`engine_handle\` \`Option<...>\` instead of just always required?" **Because not every consumer of \`LiveRethEvmBridge\` is a production node that bootstraps Reth.** Unit tests (Lessons 12, 13) just want the bridge against a provider; they don't need a running engine. Forcing every caller to provide an engine handle would either (a) require every test to bootstrap a full node, or (b) require a no-op "fake handle" type that's hard to construct. \`Option\` lets the same struct serve both worlds: tests pass \`None\`, production passes \`Some(handle)\`. **Optionality at the type level is how you avoid leaky API surface.**
 
 ### Step 4: Update \`new()\` and add the builder methods
 
@@ -7723,7 +8028,6 @@ Two phases:
 
 **For Lesson 14, all three responses lead to the same code path: continue.** Our local bookkeeping already happened.
 
-> 🛑 **Anti-fluency.** "Why discard the engine's response instead of returning an error on \`INVALID\`?" **Because the bridge's local state is the consensus layer's source of truth, not Reth's.** If Reth says \`INVALID\` and we roll back our local state, we'd be telling Malachite "actually that decided block doesn't exist," which would break the chain. The right response to a disagreement at this layer is to *log it loudly* and *alert an operator* — but never roll back the consensus commit. **Reth's view of the chain is downstream of consensus, not the other way around.**
 
 ### Step 6: Update the test (rename + add engine wiring)
 
@@ -7825,7 +8129,6 @@ Walk through what's new:
 5. **\`commit(block.hash).await.expect("commit failed")\`** — the main assertion. **Note we don't check what the engine returned** — only that \`commit\` returns \`Ok(())\`. The engine's SYNCING response is discarded inside \`commit\` per Step 5.
 6. **Negative case retained** — unknown hash still yields \`BridgeError::Rejected\`. The engine path never fires because the bridge bails before reaching it.
 
-> 🛑 **Anti-fluency.** "Couldn't I just use \`launch_with_debug_capabilities\` and hope add_ons_handle is there?" **No — different launch paths produce different handle shapes.** \`launch_with_debug_capabilities\` returns \`NodeHandle\` with debug RPC but doesn't expose add_ons. The explicit builder chain (\`.with_types().with_components().with_add_ons().launch()\`) is the form that gives you \`add_ons_handle\`. **Knowing which launch path produces which handle shape is the kind of detail that's invisible until you need a specific field.**
 
 ## Test
 
@@ -7905,24 +8208,49 @@ You could — \`tokio::spawn(handle.fork_choice_updated(...))\` would fire-and-f
 
 ## Next lesson (Lesson 15 — capstone)
 
-You now have a complete consensus↔EVM bridge. **All four \`ConsensusBridge\` methods reach real Reth code paths.** Lesson 15 is the capstone: a one-page recap showing the full system, the things you skipped that production needs (block bodies via \`newPayload\`, real Codec impls instead of stubs, gossip codecs, persistent WAL), and the natural next courses to take. No new code — just a victory lap and a roadmap.`,
+You now have a complete consensus↔EVM bridge. **All four \`ConsensusBridge\` methods reach real Reth code paths.** Lesson 15 is the capstone: a one-page recap showing the full system, the things you skipped that production needs (block bodies via \`newPayload\`, real Codec impls instead of stubs, gossip codecs, persistent WAL), and the natural next courses to take. No new code — just a victory lap and a roadmap.
+
+## Summary (3 lines)
+
+- \`bridge.commit(block_hash)\` calls Reth's Engine API forkchoice; finalises the block; state persisted.
+- Single-validator: head = finalised = safe. End-to-end test: 3 blocks + restart + still in Reth.
+- Loop closed: Malachite → bridge methods → Reth → disk. Integration verified. Capstone next.
+`,
                 },
               ],
             },
           },
           {
-            title: "Capstone",
+            title: 'Capstone',
             sortOrder: 7,
             lessons: {
               create: [
                 {
-                  title: "Lesson 15 — What you built, what's still stub, where to go next",
-                  slug: "openhl-capstone-en",
+                  title: 'Lesson 15 — What you built, what\'s still stub, where to go next',
+                  slug: 'openhl-capstone-en',
                   type: 'CONTENT',
                   sortOrder: 0,
                   duration: 25,
                   xpReward: 60,
                   content: `# Lesson 15 — What you built, what's still stub, where to go next
+
+## Question
+
+**Retrospective**. Single-validator devnet running on Malachite + Reth, end-to-end. **What's built, what's stub, the openhl track in context.**
+
+## Principle (minimum model)
+
+- **You built.** Cargo workspace + Reth pin + Malachite pin + shared contract types + ConsensusBridge trait + InMemory bridge + RethEvmBridge with Alloy + OpenHlContext + 10 Malachite sub-types + SigningProvider + Codec + OpenHlNode + run_engine_app + Reth bootstrap + LiveRethEvmBridge + validate_payload via EthBeaconConsensus + commit via Engine API forkchoice. ~16 lessons of integration.
+- **Stubs.** Multi-validator BFT (only single-validator working) + persistence beyond restart (not yet GC'd) + production-tier signing (HSM not wired) + adversarial vote-counting + GossipSub for inter-validator messaging.
+- **Hyperliquid parallel.** What you built parallels HyperBFT + HyperEVM at the architectural level. Different code; same shape.
+- **Career angle.** Custom-L1 builders + perp engine engineers are highly demanded; openhl is the only open-source reference. This course is the differentiator.
+- **Where to go next.** Funding (Stage 10) + Liquidation (Stage 11) + CLOB (Stage 12) + Precompiles (Stage 9) are the rest of the openhl stack. Or apply this pattern to your own custom L1.
+- **Composition guarantee.** Every stub above is a known-deferred piece; the deferral list is explicit; no hidden gotchas.
+- **Devnet running.** \`cargo run -p openhl-node\` produces blocks. Hyperliquid-shaped node running locally.
+
+## Worked example + steps
+
+# Lesson 15 — What you built, what's still stub, where to go next
 
 ## The system you built
 
@@ -8121,7 +8449,14 @@ You wrote roughly 1,400 lines of Rust across the consensus and EVM crates, plus 
 
 The hardest part of an L1 isn't writing the engine — Malachite did most of it, and we just wired it. The hardest part is being honest about what your code can and can't do, and writing tests that prove the can side. Every lesson in this course had a happy-path assertion and a negative-path assertion. That's the discipline that takes you from "the test passes" to "the system works."
 
-Now go build something that uses this.`,
+Now go build something that uses this.
+
+## Summary (3 lines)
+
+- You built: cargo workspace + Reth + Malachite + bridge trait + InMemory & Reth impls + Context + 10 sub-types + Signing + Codec + Node + engine app + live Reth + forkchoice. 16 lessons.
+- Stubs: multi-validator BFT / persistence / HSM / adversarial votes / GossipSub. Hyperliquid parallel = HyperBFT + HyperEVM architecturally.
+- Devnet running: \`cargo run -p openhl-node\` produces blocks. Next: Funding / Liquidation / CLOB / Precompiles for the rest of the openhl stack.
+`,
                 },
               ],
             },
